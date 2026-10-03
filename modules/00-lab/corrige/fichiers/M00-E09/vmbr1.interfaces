@@ -1,0 +1,13 @@
+# =============================================================================
+# Strophe à AJOUTER à /etc/network/interfaces de pve01 (M00-E09)
+# Ne modifie aucune autre strophe. Appliquer : ifreload -a
+# =============================================================================
+
+auto vmbr1
+iface vmbr1 inet manual
+        bridge-ports none
+        bridge-stp off
+        bridge-fd 0
+        bridge-vlan-aware yes
+        bridge-vids 2-4094
+#Lab MédiSphère — VLANs du workbook

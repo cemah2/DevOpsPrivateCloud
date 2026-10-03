@@ -1,0 +1,21 @@
+# /etc/sudoers.d/90-workbook — gw01 (M00-E10 ; seul fichier sudoers posé à la main dans le lab)
+# Installer :  visudo -cf 90-workbook && install -m 0440 -o root -g root 90-workbook /etc/sudoers.d/
+# Attention : un fichier de /etc/sudoers.d/ dont le nom contient un point ou
+# finit par « ~ » est IGNORÉ par sudo.
+#
+# Convention du lab : admin a sudo sans mot de passe sur les VMs Debian, pour
+# que les vérifications (lab/bin/check), les pannes (lab/bin/break) puis Ansible
+# (M04) puissent utiliser « sudo -n » sans interaction. Sur adm01, dns01 et les
+# clones du template, c'est cloud-init qui le fournit (/etc/sudoers.d/90-cloud-init-users) ;
+# gw01, installé à la main, a besoin de ce fichier.
+#
+# Choix assumé pour le lab (discuté en M00-E15) : NOPASSWD sur tout, compensé par
+#   - authentification SSH par clé uniquement (PasswordAuthentication no) ;
+#   - SSH vers gw01 filtré par nftables (MGMT, VPN, LAN maison) ;
+#   - clé privée de adm01 protégée par phrase de passe, chargée dans un agent.
+# Une liste blanche de commandes a été écartée : les scripts de panne modifient
+# des fichiers arbitraires, et « sudo vi », « sudo tee » ou « sudo systemctl »
+# en liste blanche équivalent de toute façon à un accès root complet.
+# En production, on préférerait une élévation tracée (certificats SSH courts,
+# module 06 ; journalisation des sessions).
+admin ALL=(ALL:ALL) NOPASSWD: ALL

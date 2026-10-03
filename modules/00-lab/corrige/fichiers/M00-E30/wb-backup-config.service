@@ -1,0 +1,14 @@
+# /etc/systemd/system/wb-backup-config.service — M00-E30
+[Unit]
+Description=Sauvegarde de la configuration de l'hyperviseur vers PBS (pbs-par2)
+Documentation=file:///usr/local/sbin/wb-backup-config.sh
+Wants=network-online.target
+After=network-online.target pve-cluster.service
+Requires=pve-cluster.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wb-backup-config.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

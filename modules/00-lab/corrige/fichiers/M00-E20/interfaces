@@ -1,0 +1,25 @@
+# /etc/network/interfaces — pbs01 (= hp01 réinstallé en PBS 4.x), M00-E20
+# Appliquer : ifreload -a   (ifupdown2 ; vérifier : dpkg -l ifupdown2)
+# ⚠️ Garde un accès console (iLO ou écran) ouvert pendant toute modification réseau.
+
+auto lo
+iface lo inet loopback
+
+# Interface LAN créée par l'installateur : la garder telle qu'elle a été générée
+# (nom réel de la carte : ip -br link). Elle porte l'adresse du LAN maison,
+# extrémité WireGuard du site PAR2 et sortie Internet (mises à jour).
+auto <NIC-HP01-LAN>
+iface <NIC-HP01-LAN> inet static
+	address <IP-HP01-LAN>/<CIDR-LAN-MAISON>
+	gateway <IP-BOX>
+
+# Adresse « site PAR2 » : bridge sans port physique, joignable uniquement à
+# travers le tunnel wg0 (M00-E21). Pas de passerelle ici : la route vers PAR1
+# (10.10.0.0/16, avec cette adresse comme source) est posée au démarrage du
+# tunnel (PostUp du wg0.conf de M00-E21).
+auto vmbr1
+iface vmbr1 inet static
+	address 10.20.10.10/24
+	bridge-ports none
+	bridge-stp off
+	bridge-fd 0

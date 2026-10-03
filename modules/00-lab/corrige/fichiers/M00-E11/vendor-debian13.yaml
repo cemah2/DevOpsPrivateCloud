@@ -1,0 +1,33 @@
+#cloud-config
+# =============================================================================
+# vendor-debian13.yaml — vendor-data commun aux VMs Debian 13 du lab (M00-E11)
+# Emplacement : stockage hdd-bulk, contenu « snippets »
+#   -> /mnt/hdd-bulk/snippets/vendor-debian13.yaml
+# Référencé par : qm set 9000 --cicustom "vendor=hdd-bulk:snippets/vendor-debian13.yaml"
+#
+# Pourquoi du vendor-data et pas du user-data ?
+#   Proxmox génère lui-même le user-data (utilisateur, clé SSH, nom d'hôte,
+#   mise à jour des paquets) à partir de ciuser, sshkeys, etc. Un user-data
+#   personnalisé (cicustom user=…) le REMPLACERAIT entièrement. Le vendor-data,
+#   lui, est fusionné par cloud-init avec le user-data, qui garde la priorité.
+#
+# Premier démarrage uniquement (modules « per-instance » de cloud-init).
+# =============================================================================
+
+# Fuseau horaire des serveurs MédiSphère (journaux lisibles par l'astreinte).
+timezone: Europe/Paris
+
+# Rafraîchir les index APT avant d'installer quoi que ce soit.
+package_update: true
+
+# L'image genericcloud ne contient pas l'agent QEMU : sans lui, Proxmox ne voit
+# pas l'IP de la VM, ne peut pas l'arrêter proprement ni geler ses systèmes de
+# fichiers pendant une sauvegarde.
+packages:
+  - qemu-guest-agent
+
+# L'agent est normalement démarré par udev quand le port virtio
+# « org.qemu.guest_agent.0 » apparaît, c'est-à-dire au démarrage. Il vient
+# d'être installé après ce moment : on le démarre explicitement, une fois.
+runcmd:
+  - [systemctl, start, qemu-guest-agent]

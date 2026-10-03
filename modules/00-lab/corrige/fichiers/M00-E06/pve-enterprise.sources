@@ -1,0 +1,9 @@
+# /etc/apt/sources.list.d/pve-enterprise.sources — pve01, Proxmox VE 9 (M00-E06)
+# Dépôt enterprise conservé mais DÉSACTIVÉ (pas d'abonnement) : on garde la
+# trace de la configuration d'origine, réactivable en une ligne.
+Types: deb
+URIs: https://enterprise.proxmox.com/debian/pve
+Suites: trixie
+Components: pve-enterprise
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: no

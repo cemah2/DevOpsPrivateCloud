@@ -1,0 +1,18 @@
+# Configuration locale de l'apprenant
+lab/lab.env
+lab/inventaire-local.md
+
+# Secrets éventuels
+*.key
+*.pem
+!**/ressources/**/*.pem
+.env
+
+# Divers
+.DS_Store
+*.swp
+__pycache__/
+.venv/
+.terraform/
+*.tfstate
+*.tfstate.backup

@@ -1,0 +1,9 @@
+# /etc/apt/sources.list.d/pbs-enterprise.sources — pbs01, M00-E20
+# Dépôt d'entreprise désactivé (pas d'abonnement) : sans cette ligne, chaque
+# « apt update » échoue en 401. On garde le fichier pour le jour où il servira.
+Types: deb
+URIs: https://enterprise.proxmox.com/debian/pbs
+Suites: trixie
+Components: pbs-enterprise
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: no

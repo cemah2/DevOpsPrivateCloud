@@ -1,0 +1,14 @@
+# =============================================================================
+# M00-E20 — Extrait à intégrer dans /etc/nftables.conf de gw01 (fichier de M00-E10)
+# adm01 doit joindre hp01/pbs01 par son adresse LAN tant que le tunnel (E21)
+# n'existe pas : la règle « lab vers Internet » de E10 exclut le LAN maison.
+# =============================================================================
+
+# --- (1) En tête de fichier ---------------------------------------------------
+define HP01_LAN = 192.168.1.30       # <IP-HP01-LAN>
+
+# --- (2) Table inet filter, chaîne forward, avant la journalisation finale ---
+#     Transitoire : utile tant que le tunnel n'est pas en place, inoffensif ensuite
+#     (pbs01 ferme lui-même ces ports sur son adresse LAN en E21). Le masquage de
+#     E10 (lab vers LAN maison) s'applique : hp01 voit <IP-GW01-WAN> et sait y répondre.
+		iifname $V_MGMT oifname $WAN ip daddr $HP01_LAN tcp dport { 22, 8007 } accept comment "adm01 vers hp01 par le LAN (transition E20)"

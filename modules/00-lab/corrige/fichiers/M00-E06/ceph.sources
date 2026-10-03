@@ -1,0 +1,10 @@
+# /etc/apt/sources.list.d/ceph.sources — pve01, Proxmox VE 9 (M00-E06)
+# Présent sur une installation récente même sans Ceph. La version de Ceph dans
+# l'URI dépend de ta version de PVE (ceph-squid, ceph-tentacle…) : garde celle
+# de ton fichier d'origine, ne change que la strophe enterprise -> désactivée.
+Types: deb
+URIs: https://enterprise.proxmox.com/debian/ceph-squid
+Suites: trixie
+Components: enterprise
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+Enabled: no

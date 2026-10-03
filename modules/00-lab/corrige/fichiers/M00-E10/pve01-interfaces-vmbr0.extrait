@@ -1,0 +1,26 @@
+# =============================================================================
+# Extrait de /etc/network/interfaces — pve01 (M00-E10)
+# Ajoute UNIQUEMENT les trois lignes « up » et les trois lignes « down » dans la
+# strophe EXISTANTE de vmbr0. Ne modifie rien d'autre (adresse, port, passerelle).
+#
+# Valeurs À ADAPTER : tout ce qui est entre chevrons ; les autres lignes de la
+# strophe sont un exemple de configuration par défaut.
+# Appliquer : ifreload -a   puis vérifier : ip route show 10.10.0.0/16
+# =============================================================================
+
+auto vmbr0
+iface vmbr0 inet static
+        address <IP-PVE01>/24
+        gateway <IP-BOX>
+        bridge-ports <CARTE-RESEAU>
+        bridge-stp off
+        bridge-fd 0
+        # Lab MédiSphère, tout par gw01 : PAR1 (VLANs du lab), PAR2 (via le tunnel, M00-E21)
+        # et VPN d'administration (retour vers les postes en wg1, M00-E16).
+        # « replace » est idempotent : pas d'erreur si la route existe déjà.
+        up ip route replace 10.10.0.0/16 via <IP-GW01-WAN> dev vmbr0
+        up ip route replace 10.20.0.0/16 via <IP-GW01-WAN> dev vmbr0
+        up ip route replace 10.255.1.0/24 via <IP-GW01-WAN> dev vmbr0
+        down ip route del 10.10.0.0/16 via <IP-GW01-WAN> dev vmbr0 || true
+        down ip route del 10.20.0.0/16 via <IP-GW01-WAN> dev vmbr0 || true
+        down ip route del 10.255.1.0/24 via <IP-GW01-WAN> dev vmbr0 || true

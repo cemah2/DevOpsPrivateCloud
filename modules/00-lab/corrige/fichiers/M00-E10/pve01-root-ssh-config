@@ -1,0 +1,30 @@
+# =============================================================================
+# /root/.ssh/config — pve01 (M00-E10 pour gw01, M00-E12 pour adm01 et dns01)
+# Alias utilisés par les vérifications lancées depuis pve01 (E01 à E14).
+# Mode 600. N'ajoute PAS de bloc « Host * » : Proxmox utilise SSH en root pour
+# ses propres besoins (migrations, réplication, cluster), ne le perturbe pas.
+#
+# Valeur À ADAPTER : <IP-GW01-WAN>
+# =============================================================================
+
+Host gw01
+    # Adresse WAN : joignable même si le routage vers le lab est cassé.
+    HostName <IP-GW01-WAN>
+    User admin
+
+Host adm01
+    HostName 10.10.10.10
+    User admin
+
+Host dns01
+    HostName 10.10.20.10
+    User admin
+
+Host gw01 adm01 dns01
+    IdentityFile /root/.ssh/id_ed25519_lab
+    IdentitiesOnly yes
+    # Première connexion : clé d'hôte acceptée et mémorisée ; refus si elle change.
+    StrictHostKeyChecking accept-new
+    # Fichier séparé : on ne mélange pas les clés du lab avec celles que
+    # Proxmox gère pour ses nœuds.
+    UserKnownHostsFile /root/.ssh/known_hosts_lab

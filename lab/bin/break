@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# break — injecte une panne pour un exercice de break & fix.
+# Usage : lab/bin/break <module> <exercice> [--variante N] [--annuler]
+#
+# ⚠️ Ne lis pas le script de panne : il révèle la cause. Le symptôme affiché suffit.
+set -euo pipefail
+
+usage() { echo "Usage : $0 <module|FN> <exercice> [--variante N] [--annuler]" >&2; exit 2; }
+[[ $# -ge 2 ]] || usage
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+mod="$1"; ex="$2"; shift 2
+
+if [[ "$mod" =~ ^[Ff][0-9]$ ]]; then
+  base="finaux"; mod="${mod^^}"; prefix="S"
+else
+  base="modules"; mod="$(printf '%02d' "$((10#$mod))")"; prefix="E"
+fi
+ex="$(printf '%02d' "$((10#$ex))")"
+
+shopt -s nullglob
+dirs=("$ROOT/$base/$mod"-*)
+[[ ${#dirs[@]} -eq 1 ]] || { echo "Module introuvable : $mod" >&2; exit 2; }
+script="${dirs[0]}/corrige/pannes/break-${prefix}${ex}.sh"
+[[ -f "$script" ]] || { echo "Pas de panne définie pour ${mod}-${prefix}${ex}" >&2; exit 2; }
+
+# shellcheck disable=SC1091
+[[ -f "$ROOT/lab/lab.env" ]] && source "$ROOT/lab/lab.env"
+# shellcheck source=lab/lib/check-lib.sh
+source "$ROOT/lab/lib/check-lib.sh"
+export WB_ROOT="$ROOT"
+# Le script de panne définit une fonction main() qui accepte --variante N et --annuler.
+# shellcheck disable=SC1090
+source "$script"
+main "$@"

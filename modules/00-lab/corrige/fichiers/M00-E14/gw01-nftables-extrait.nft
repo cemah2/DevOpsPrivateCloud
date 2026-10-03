@@ -1,0 +1,21 @@
+# =============================================================================
+# M00-E14 — Extrait à intégrer dans /etc/nftables.conf de gw01 (fichier de M00-E10)
+# Variables existantes : voir l'extrait de E13 et la référence M00-E26.
+# =============================================================================
+
+# --- (1) En tête de fichier ---------------------------------------------------
+define V_SANDBOX = "ens19.99"
+
+# --- (2) Table inet filter, chaîne input, avant la journalisation finale -----
+#     Requêtes des clients : 0.0.0.0:68 → 255.255.255.255:67 sur ens19.99.
+		iifname $V_SANDBOX udp sport 68 udp dport 67 accept comment "clients DHCP du VLAN 99 vers le relais"
+#     Réponses du serveur : 10.10.20.10:67 → 10.10.99.1:67 (le giaddr).
+#     Le relais a émis depuis 10.10.20.1 : conntrack attend une réponse vers
+#     10.10.20.1, pas vers 10.10.99.1. Le paquet est NEW, la règle « established »
+#     ne le laisse pas passer : il faut cette règle explicite.
+		iifname $V_INFRA ip saddr $DNS01 ip daddr 10.10.99.1 udp sport 67 udp dport 67 accept comment "réponses de dns01 adressées au giaddr"
+
+# --- (3) Table inet filter, chaîne forward, avant la journalisation finale ---
+#     Au renouvellement (T1, mi-bail), le client écrit DIRECTEMENT au serveur
+#     (server-id = 10.10.20.10) en unicast : ce flux est routé, pas relayé.
+		iifname $V_SANDBOX ip daddr $DNS01 udp sport 68 udp dport 67 accept comment "renouvellements DHCP (T1) en unicast vers dns01"

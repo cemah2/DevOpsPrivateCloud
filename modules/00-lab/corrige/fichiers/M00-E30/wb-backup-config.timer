@@ -1,0 +1,14 @@
+# /etc/systemd/system/wb-backup-config.timer — M00-E30
+# Quotidien à 01:15 (+ jusqu'à 15 min aléatoires), hors de la fenêtre des sauvegardes
+# de VMs de M00-E22 (à adapter à ton planning). Persistent=true rattrape une exécution
+# manquée si pve01 était éteint à l'heure prévue.
+[Unit]
+Description=Sauvegarde quotidienne de la configuration de l'hyperviseur
+
+[Timer]
+OnCalendar=*-*-* 01:15:00
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

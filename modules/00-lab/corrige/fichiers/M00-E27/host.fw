@@ -1,0 +1,16 @@
+# /etc/pve/nodes/pve01/host.fw — pare-feu Proxmox, niveau hôte (M00-E27)
+# Le pare-feu hôte est actif par défaut dès que le datacenter l'est ; on l'écrit
+# explicitement pour que l'intention soit lisible et versionnable.
+
+[OPTIONS]
+enable: 1
+# Rejette les paquets « smurf » (source broadcast) et les combinaisons de drapeaux TCP illégales.
+nosmurfs: 1
+tcpflags: 1
+log_level_in: nolog
+# Nouveau moteur nftables (proxmox-firewall), à activer seulement après lecture
+# de la documentation de ta version :
+# nftables: 1
+
+[RULES]
+# Pas de règle spécifique à l'hôte : tout est porté par le datacenter (un seul nœud).

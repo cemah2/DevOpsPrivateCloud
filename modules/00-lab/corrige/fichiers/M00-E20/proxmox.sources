@@ -1,0 +1,7 @@
+# /etc/apt/sources.list.d/proxmox.sources — pbs01 (PBS 4.x, Debian 13 « trixie »), M00-E20
+# Dépôt sans abonnement : adapté au lab, pas à la production (paquets moins éprouvés).
+Types: deb
+URIs: http://download.proxmox.com/debian/pbs
+Suites: trixie
+Components: pbs-no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg

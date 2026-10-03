@@ -1,0 +1,6 @@
+# /etc/chrony/sources.d/lab.sources — M00-E31
+# adm01 : server 10.10.10.1 ; dns01 : server 10.10.20.1 (passerelle du VLAN de la VM)
+# pbs01 : server 10.10.10.1 (via le tunnel wg0)
+# Les lignes « pool » de /etc/chrony/chrony.conf sont commentées.
+# Recharger : chronyc reload sources
+server 10.10.10.1 iburst

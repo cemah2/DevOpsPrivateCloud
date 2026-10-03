@@ -1,0 +1,35 @@
+# =============================================================================
+# M00-E21 — Extrait à intégrer dans /etc/nftables.conf de gw01 (fichier de M00-E10)
+# Variables existantes : E10, E13 (V_INFRA, DNS01, NETS_PAR2, NET_VPN), E14
+# (V_SANDBOX), E16 (WG_ADM), E20 (HP01_LAN). Référence complète : M00-E26/nftables.conf.
+# pbs01 émet vers PAR1 depuis 10.20.10.10 (routes « src » de son wg0.conf) : les
+# règles qui désignent PAR2 par $NETS_PAR2 le reconnaissent sans exception.
+# =============================================================================
+
+# --- (1) En tête de fichier ---------------------------------------------------
+define WG_S2S    = "wg0"
+define PBS01     = 10.20.10.10
+define PAR2_MGMT = 10.20.10.0/24
+
+# --- (2) Table inet filter, chaîne input, avant la journalisation finale -----
+		iifname $WAN ip saddr $HP01_LAN udp dport 51820 accept comment "wg0 : tunnel vers PAR2"
+#     (le NTP pour PAR2 sera ajouté en M00-E31, quand gw01 deviendra serveur de temps)
+
+# --- (3) Table inet filter, chaîne forward, avant la journalisation finale ---
+#     (le DNS de PAR2 vers dns01 est déjà couvert par la règle DNS de E13)
+#     REMPLACE la règle M5 de E10 (MGMT vers les VLANs), étendue au tunnel :
+		iifname $V_MGMT oifname { $LAB_IFS, $WG_S2S } accept comment "bastion (MGMT) vers tout le lab et PAR2"
+		iifname $WG_ADM oifname $WG_S2S ip daddr $PAR2_MGMT accept comment "VPN d'admin vers PAR2 MGMT"
+		iifname $WAN ip saddr $PVE01 oifname $WG_S2S ip daddr $PBS01 tcp dport 8007 accept comment "pve01 vers PBS"
+
+# --- (4) Table ip nat, chaîne postrouting -------------------------------------
+#     hp01 est AUSSI sur le LAN maison : sans ce masquage, il répondrait à pve01
+#     directement par le LAN (en clair, et hors de l'état conntrack de gw01).
+#     Masqué derrière 10.255.0.1, le retour repasse par le tunnel.
+		oifname $WG_S2S ip saddr $LAN_MAISON masquerade comment "LAN maison vers PAR2 : retour symétrique par le tunnel"
+
+# --- Remarque MTU -------------------------------------------------------------
+#     wg0 a une MTU de 1420. Un flux TCP venu de pve01 (MSS 1460) dépend de la
+#     découverte de MTU (PMTUD) : gw01 doit pouvoir émettre ses ICMP « fragmentation
+#     needed » et rien ne doit les jeter en chemin. Le réglage fin (clamping MSS)
+#     fait l'objet de M00-E41.

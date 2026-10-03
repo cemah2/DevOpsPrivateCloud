@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# check — lance le script de vérification d'un exercice.
+# Usage : lab/bin/check <module> <exercice>     ex. lab/bin/check 00 12
+#         lab/bin/check F1 3                     (scénario d'un workbook final)
+set -euo pipefail
+
+usage() { echo "Usage : $0 <module|FN> <exercice>   (ex. $0 05 17)" >&2; exit 2; }
+[[ $# -eq 2 ]] || usage
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+mod="$1"; ex="$2"
+
+if [[ "$mod" =~ ^[Ff][0-9]$ ]]; then
+  base="finaux"; mod="${mod^^}"; prefix="S"
+else
+  base="modules"; mod="$(printf '%02d' "$((10#$mod))")"; prefix="E"
+fi
+ex="$(printf '%02d' "$((10#$ex))")"
+
+shopt -s nullglob
+dirs=("$ROOT/$base/$mod"-*)
+[[ ${#dirs[@]} -eq 1 ]] || { echo "Module introuvable : $mod" >&2; exit 2; }
+script="${dirs[0]}/checks/check-${prefix}${ex}.sh"
+[[ -f "$script" ]] || { echo "Pas de script de vérification pour ${mod}-${prefix}${ex} (exercice auto-évalué ?)" >&2; exit 2; }
+
+# Configuration locale facultative
+# shellcheck disable=SC1091
+[[ -f "$ROOT/lab/lab.env" ]] && source "$ROOT/lab/lab.env"
+# shellcheck source=lab/lib/check-lib.sh
+source "$ROOT/lab/lib/check-lib.sh"
+# shellcheck disable=SC1090
+source "$script"
+summary

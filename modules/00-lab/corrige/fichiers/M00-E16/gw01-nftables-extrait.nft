@@ -1,0 +1,33 @@
+# =============================================================================
+# M00-E16 — Extrait à intégrer dans /etc/nftables.conf de gw01 (fichier de M00-E10)
+# Variables existantes : WAN, V_MGMT, LAB_IFS, LAN_MAISON, PVE01 (E10),
+# V_INFRA, NET_VPN (E13). Référence complète : M00-E26/nftables.conf.
+# =============================================================================
+
+# --- (1) En tête de fichier ---------------------------------------------------
+define WG_ADM = "wg1"
+
+# --- (2) Table inet filter, chaîne input, avant la journalisation finale -----
+		iifname $WAN ip saddr $LAN_MAISON udp dport 51821 accept comment "wg1 : VPN d'administration"
+#     REMPLACE la règle M3 de E10 (SSH depuis MGMT), étendue au VPN :
+		iifname { $V_MGMT, $WG_ADM } tcp dport 22 accept comment "SSH depuis MGMT (adm01) et le VPN d'admin"
+
+# --- (3) Table inet filter, chaîne forward, avant la journalisation finale ---
+#     Pas de « iifname wg1 accept » global : le VPN n'ouvre que les réseaux
+#     d'administration. PAR2 sera ajouté en E21.
+		iifname $WG_ADM oifname { $V_MGMT, $V_INFRA } accept comment "VPN d'admin vers MGMT et INFRA"
+#     Administration de l'hyperviseur depuis le VPN (poste hors du LAN maison).
+#     Pas de masquage (voir (5)) : pve01 voit 10.255.1.x et répond par sa route
+#     10.255.1.0/24 via gw01 (posée en E10) ; l'IPSet « management » de E27 l'autorise.
+		iifname $WG_ADM oifname $WAN ip daddr $PVE01 tcp dport { 22, 8006 } accept comment "VPN d'admin vers pve01 (SSH, API)"
+#     REMPLACE la règle M8 de E10 (ping d'administration), étendue au VPN :
+		ip saddr { 10.10.10.0/24, $NET_VPN, $PVE01 } icmp type echo-request accept comment "ping d'administration"
+
+# --- (4) Fin de l'accès direct du LAN maison au lab --------------------------
+#     La règle provisoire M7 de E10 (« SSH LAN maison vers lab ») est REMPLACÉE :
+#     seul pve01 garde un accès direct (pas de client VPN sur l'hyperviseur).
+		iifname $WAN ip saddr $PVE01 oifname $LAB_IFS tcp dport 22 accept comment "pve01 vers les VMs (vérifications avant E15)"
+
+# --- (5) Table ip nat, chaîne postrouting : RIEN à ajouter --------------------
+#     Pas de masquerade pour wg1 : les VMs voient 10.255.1.2 (traçabilité) et y
+#     répondent via leur passerelle, gw01, qui connaît la route vers wg1.

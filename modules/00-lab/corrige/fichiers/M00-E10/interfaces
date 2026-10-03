@@ -1,0 +1,79 @@
+# =============================================================================
+# /etc/network/interfaces — gw01 (M00-E10)
+# ifupdown (paquet par défaut de Debian 13 installé par l'ISO netinst).
+# Les interfaces dont le nom contient un point (ens19.20) sont créées
+# automatiquement comme sous-interfaces VLAN 802.1Q de l'interface avant le point
+# (man interfaces, section « VLAN AND BRIDGE INTERFACES ») : le paquet « vlan »
+# n'est pas nécessaire.
+#
+# Valeurs À ADAPTER : <IP-GW01-WAN>, <MASQUE> (souvent 24), <IP-BOX>.
+# Appliquer depuis la CONSOLE (noVNC) : systemctl restart networking
+# =============================================================================
+
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+# --- WAN : LAN maison (net0 -> vmbr0) ----------------------------------------
+# Adresse fixe, choisie hors de la plage DHCP de la box.
+auto ens18
+iface ens18 inet static
+    address <IP-GW01-WAN>/<MASQUE>
+    gateway <IP-BOX>
+
+# --- Trunk vers vmbr1 (net1, sans tag) ----------------------------------------
+# Pas d'adresse sur l'interface parente : elle ne transporte que des trames
+# étiquetées. On la monte explicitement (méthode manual = aucune configuration).
+auto ens19
+iface ens19 inet manual
+    up ip link set dev $IFACE up
+    down ip link set dev $IFACE down
+
+# --- Passerelles des VLANs routés (10.10.<VLAN>.1/24) -------------------------
+# VLANs 31, 32, 41, 51 : non routés, volontairement absents.
+
+# VLAN 10 — MGMT : hyperviseurs imbriqués, interfaces d'admin, bastion
+auto ens19.10
+iface ens19.10 inet static
+    address 10.10.10.1/24
+
+# VLAN 20 — INFRA : services socle (DNS, PKI, GitLab, NetBox…)
+auto ens19.20
+iface ens19.20 inet static
+    address 10.10.20.1/24
+
+# VLAN 30 — STOR-PUB : réseau public Ceph, NFS, iSCSI
+auto ens19.30
+iface ens19.30 inet static
+    address 10.10.30.1/24
+
+# VLAN 40 — K8S : nœuds Kubernetes
+auto ens19.40
+iface ens19.40 inet static
+    address 10.10.40.1/24
+
+# VLAN 50 — OS-API : OpenStack management / API
+auto ens19.50
+iface ens19.50 inet static
+    address 10.10.50.1/24
+
+# VLAN 52 — OS-EXT : OpenStack provider / IP flottantes
+auto ens19.52
+iface ens19.52 inet static
+    address 10.10.52.1/24
+
+# VLAN 60 — PROV : provisioning PXE (module 11)
+auto ens19.60
+iface ens19.60 inet static
+    address 10.10.60.1/24
+
+# VLAN 70 — DMZ : points d'entrée exposés
+auto ens19.70
+iface ens19.70 inet static
+    address 10.10.70.1/24
+
+# VLAN 99 — SANDBOX : exercices jetables, break & fix
+auto ens19.99
+iface ens19.99 inet static
+    address 10.10.99.1/24

@@ -1,0 +1,12 @@
+# Extrait de /etc/nftables.conf sur gw01 — chaîne input de « table inet filter » (M00-E31).
+# Variables : celles du fichier de référence corrige/fichiers/M00-E26/nftables.conf
+# (LAB_IFS, WG_S2S, NETS_PAR2) ; rien à définir en plus.
+# À placer avec les autres services rendus par le routeur (par exemple avant le
+# relais DHCP), donc avant la journalisation et le compteur finals.
+# NTP accepté uniquement depuis les VLANs routés du lab et depuis PAR2 par le
+# tunnel ; jamais depuis le WAN (ens18).
+
+		iifname $LAB_IFS udp dport 123 accept comment "NTP (chrony) pour les VLANs du lab"
+#     pbs01 émet vers PAR1 depuis 10.20.10.10 (routes « src » de son wg0.conf, M00-E21) :
+#     la source est dans $NETS_PAR2, sans exception pour 10.255.0.0/30.
+		iifname $WG_S2S ip saddr $NETS_PAR2 udp dport 123 accept comment "NTP pour PAR2 (via wg0)"

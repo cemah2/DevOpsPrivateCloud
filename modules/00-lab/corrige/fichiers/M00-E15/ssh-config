@@ -1,0 +1,52 @@
+# =============================================================================
+# ~/.ssh/config — admin@adm01 (M00-E15)
+# Convention du workbook : root vers les hôtes Proxmox (pve01, pbs01),
+# admin + sudo -n vers les VMs Debian. Mode 600.
+#
+# HostName en adresses IP, volontairement : les vérifications et les accès de
+# secours doivent fonctionner même quand le DNS est en panne (M00-E40).
+# =============================================================================
+
+# --- Hôtes physiques Proxmox --------------------------------------------------
+Host pve01
+    HostName <IP-PVE01>
+    User root
+
+Host pbs01
+    # Adresse PAR2, joignable uniquement par le tunnel wg0 (après M00-E21).
+    # Avant le tunnel : ssh root@<IP-HP01-LAN>
+    HostName 10.20.10.10
+    User root
+
+# --- VMs du socle -------------------------------------------------------------
+Host gw01
+    HostName 10.10.10.1
+    User admin
+
+Host dns01
+    HostName 10.10.20.10
+    User admin
+
+# --- VMs jetables (sandbox, restaurations de test) ----------------------------
+# Recréées sans cesse avec de nouvelles clés d'hôte : on ne pollue pas
+# known_hosts et on accepte les clés à la volée. JAMAIS pour le socle.
+Host sbx* 10.10.99.*
+    User admin
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+
+# --- Valeurs par défaut (en dernier : la première valeur trouvée l'emporte) ----
+Host *
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    # Clés d'hôte inconnues : accepter la première fois, refuser si elles changent.
+    StrictHostKeyChecking accept-new
+    HashKnownHosts no
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    # Multiplexage : une connexion TCP par hôte réutilisée 5 min. Les scripts de
+    # vérification ouvrent des dizaines de sessions : gain de temps net.
+    ControlMaster auto
+    ControlPath ~/.ssh/cm-%C
+    ControlPersist 5m

@@ -1,0 +1,36 @@
+# =============================================================================
+# M00-E41 — Extrait à intégrer dans /etc/nftables.conf de gw01 (fichier de référence M00-E26)
+# MSS clamping des connexions TCP qui ENTRENT dans le tunnel wg0 (MTU 1420).
+#
+# Place la règle en TÊTE de la chaîne forward de « table inet filter », avant
+# « ct state { established, related } accept » : seuls les SYN sont concernés, et
+# ils doivent être réécrits avant d'être acceptés.
+#
+# « rt mtu » = MTU de la route de sortie du paquet (ici wg0) moins les en-têtes :
+# 1380 en IPv4, 1360 en IPv6. Elle protège le sens RETOUR (ce que l'autre extrémité
+# nous enverra). La même règle sur pbs01 (oifname "wg0") protège l'autre sens.
+#
+# Ce que cette règle ne fait PAS : remplacer la PMTUD. Les ICMP « destination
+# unreachable / fragmentation needed » (et ICMPv6 « packet too big ») doivent
+# continuer à passer : « ct state related accept » les couvre, à condition
+# qu'aucune règle placée avant ne les jette (cause de la panne M00-E41).
+#
+# Syntaxe vérifiée pour nftables ≥ 1.0 (Debian 13 : 1.1.x).
+# Appliquer : nft -c -f /etc/nftables.conf && systemctl reload nftables
+# =============================================================================
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+
+		# (M00-E41) MSS des SYN qui entrent dans le tunnel inter-sites
+		oifname $WG_S2S tcp flags syn / syn,rst tcp option maxseg size set rt mtu comment "MSS clamping vers PAR2 (M00-E41)"
+
+		ct state invalid drop
+		ct state { established, related } accept comment "réponses et ICMP liés (dont PMTUD)"
+		# … suite inchangée du fichier de référence …
+	}
+
+# Contrôle après rechargement (depuis pve01, à travers le tunnel) :
+#   root@pve01:~# ping -c 2 -M do -s 1392 10.20.10.10      # 1420 octets : doit passer
+#   root@pve01:~# ping -c 2 -M do -s 1393 10.20.10.10      # doit afficher « Frag needed and DF set (mtu = 1420) »
+# Le second test prouve que les ICMP de PMTUD reviennent bien jusqu'à l'émetteur.

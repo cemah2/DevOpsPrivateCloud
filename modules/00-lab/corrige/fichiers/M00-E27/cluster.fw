@@ -1,0 +1,20 @@
+# /etc/pve/firewall/cluster.fw — pare-feu Proxmox, niveau datacenter (M00-E27, SEC-127)
+# Remplace <LAN-MAISON> par ton réseau domestique (ex. 192.168.1.0/24).
+# Ordre d'application conseillé : IPSet et règles d'abord, « enable: 1 » en dernier.
+
+[OPTIONS]
+enable: 1
+policy_in: DROP
+policy_out: ACCEPT
+
+[IPSET management] # Réseaux autorisés à administrer les hôtes (8006, 22, 3128, 5900-5999)
+<LAN-MAISON> # LAN maison
+10.10.10.0/24 # PAR1 MGMT (adm01)
+10.255.1.0/24 # VPN d'administration wg1
+
+[RULES]
+# Règles explicites : redondantes avec l'IPSet spécial « management » pour 8006/22,
+# mais elles documentent l'intention et survivent à un renommage de l'IPSet.
+IN ACCEPT -source +management -p tcp -dport 8006 -log nolog # Interface web et API
+IN ACCEPT -source +management -p tcp -dport 22 -log nolog # SSH
+IN ACCEPT -source +management -p icmp -icmp-type echo-request -log nolog # Ping depuis l'administration

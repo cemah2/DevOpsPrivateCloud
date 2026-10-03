@@ -1,0 +1,15 @@
+# .gitignore du dépôt ~/medisphere (créé en M00-E25, complété en M00-E50) — à copier en .gitignore à la racine du dépôt.
+# Rien de secret ne doit être commité : ces motifs sont un filet, pas une politique.
+*.key
+*.pem
+*.enc
+*.pw
+*.token
+*secret*
+*.env
+!*.env.exemple
+wg*.conf
+# Exports bruts (captures, JSON fio) : on commite les extraits annotés, pas les fichiers bruts
+*.pcap
+*.pcapng
+resultats-fio/

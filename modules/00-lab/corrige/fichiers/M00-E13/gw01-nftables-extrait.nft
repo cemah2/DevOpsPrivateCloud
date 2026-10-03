@@ -1,0 +1,27 @@
+# =============================================================================
+# M00-E13 — Extrait à intégrer dans /etc/nftables.conf de gw01 (fichier de M00-E10)
+#
+# Variables déjà définies en E10, réutilisées ici sans les redéfinir (nft refuse
+# une double définition) : WAN, V_MGMT, LAB_IFS, LAN_MAISON, PVE01, NETS_LAB.
+# Les noms ajoutés ici sont ceux de la configuration de référence
+# (corrige/fichiers/M00-E26/nftables.conf).
+# Vérifier puis appliquer : nft -c -f /etc/nftables.conf && systemctl reload nftables
+# =============================================================================
+
+# --- (1) En tête de fichier, après les « define » de E10 ---------------------
+define V_INFRA   = "ens19.20"
+define DNS01     = 10.10.20.10
+define NETS_PAR2 = 10.20.0.0/16      # site PAR2 ; pbs01 y émet depuis 10.20.10.10 (route avec « src », E21)
+define NET_VPN   = 10.255.1.0/24     # VPN d'administration wg1 (E16)
+
+# --- (2) Table inet filter, chaîne forward ------------------------------------
+#     APRÈS « ct state invalid … drop » et « ct state { established, related } accept »,
+#     AVANT la journalisation et le compteur final.
+#     PAR2 et le VPN n'existent pas encore : les inclure dès maintenant évite
+#     d'oublier cette règle en E16 et E21.
+
+		ip saddr { $NETS_LAB, $NETS_PAR2, $NET_VPN } ip daddr $DNS01 meta l4proto { tcp, udp } th dport 53 accept comment "DNS du lab (UDP et TCP) vers dns01"
+
+#     La règle « lab vers Internet » de E10 exclut le LAN maison. Si <DNS-AMONT>
+#     est ta box (adresse du LAN maison), dns01 a besoin de cette règle en plus :
+		iifname $V_INFRA ip saddr $DNS01 oifname $WAN meta l4proto { tcp, udp } th dport 53 accept comment "dns01 vers les résolveurs amont"

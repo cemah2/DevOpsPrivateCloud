@@ -1,0 +1,8 @@
+# /etc/apt/sources.list.d/proxmox.sources — pve01, Proxmox VE 9 (M00-E06)
+# Dépôt sans abonnement : paquets identiques au dépôt enterprise, mais publiés
+# plus tôt (moins de recul). Adapté à un lab ; en production, abonnement.
+Types: deb
+URIs: http://download.proxmox.com/debian/pve
+Suites: trixie
+Components: pve-no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg

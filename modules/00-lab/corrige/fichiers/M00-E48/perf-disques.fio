@@ -1,0 +1,53 @@
+; perf-disques.fio — Profils P1 à P5 de M00-E48 (le profil etcd P6 est lancé par mesurer.sh).
+;
+; ⚠️ ÉCRIT SUR LE PÉRIPHÉRIQUE BRUT : uniquement sur un disque de données dédié de la VM 5048,
+;    jamais sur le disque système de la VM, jamais sur l'hôte.
+;
+; Usage (dans la VM, en root) :
+;   DISQUE=/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_nvme48 fio --output-format=json perf-disques.fio
+; Préconditionner le disque AVANT (écriture séquentielle complète), voir le corrigé.
+
+[global]
+filename=${DISQUE}
+direct=1
+ioengine=libaio
+time_based=1
+runtime=60
+ramp_time=10
+group_reporting=1
+percentile_list=50:99:99.9
+
+[P1-randread-4k-qd32x4]
+stonewall
+rw=randread
+bs=4k
+iodepth=32
+numjobs=4
+
+[P2-randwrite-4k-qd32x4]
+stonewall
+rw=randwrite
+bs=4k
+iodepth=32
+numjobs=4
+
+[P3-randwrite-4k-qd1]
+stonewall
+rw=randwrite
+bs=4k
+iodepth=1
+numjobs=1
+
+[P4-seqread-1m-qd8]
+stonewall
+rw=read
+bs=1M
+iodepth=8
+numjobs=1
+
+[P5-seqwrite-1m-qd8]
+stonewall
+rw=write
+bs=1M
+iodepth=8
+numjobs=1

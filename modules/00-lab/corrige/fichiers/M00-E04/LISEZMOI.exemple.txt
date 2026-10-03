@@ -1,0 +1,30 @@
+SAUVEGARDE DES PHOTOS DE hp01 — LISEZMOI
+========================================
+
+Origine
+  Hôte source        : hp01 (HP ProLiant, site PAR2), <IP-HP01-LAN>
+  Chemin source      : /srv/photos            (exemple)
+  Système source     : Debian 12, disque HDD 2 To (exemple)
+
+Copie
+  Destination        : pve01:/mnt/hdd-bulk/sauvegarde-photos-hp01/donnees/
+  Date de la copie   : 2026-10-05
+  Commande           : rsync -aHAX --numeric-ids --partial root@hp01:/srv/photos/ donnees/
+  Fichiers           : 48 213
+  Volume             : 412 Go (du -sh donnees/)
+
+Intégrité
+  Manifeste          : MANIFEST.sha256, calculé SUR hp01 le 2026-10-05 avant la copie
+                       (find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
+  Vérification       : VERIFICATION-2026-10-06.txt — 48 213 « OK », 0 échec
+  Contrôle croisé    : rsync --checksum --dry-run hp01 -> pve01 : aucune différence (2026-10-06)
+
+Autres copies (règle 3-2-1)
+  Copie 1            : hp01 (original) — sera EFFACÉE lors de M00-E20
+  Copie 2            : ce dossier, HDD de pve01
+  Copie 3            : disque USB externe « PHOTOS-B », vérifié le 2026-10-07 (sha256sum -c),
+                       rangé hors de la pièce du serveur, débranché
+  Prochaine vérification complète prévue : 2027-04
+
+Contact
+  <TON-NOM>
