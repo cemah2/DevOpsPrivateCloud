@@ -614,7 +614,7 @@ Pour tester un port sans outil : `timeout 3 bash -c '</dev/tcp/10.20.10.10/8007'
 - Côté `pve01` : stockage `pbs-par2` (serveur 10.20.10.10, datastore `ds-lab`, namespace `par1`).
 - Tâche de sauvegarde : pool `lab`, mode `snapshot`, chaque nuit à 02:30.
 - Rétention : `keep-daily 7`, `keep-weekly 4`, `keep-monthly 6`.
-- `hp01` a un seul cœur de calcul modeste et des disques mécaniques : les tâches lourdes ne doivent pas se chevaucher.
+- `hp01` a un processeur modeste (2 cœurs / 4 threads, PLAN §3.1), 16 Go de RAM et des disques mécaniques : les tâches lourdes ne doivent pas se chevaucher.
 
 **Travail demandé**
 1. Crée le datastore sur l'espace dédié. Explore sa structure (`ls -la`, `ls .chunks | head`, `ls .chunks | wc -l`) : pourquoi ces 65 536 sous-répertoires créés d'avance ?

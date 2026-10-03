@@ -11,6 +11,9 @@ check_ssh_output "pve01 : un filtre sélectionne les notifications de sauvegarde
   'type=vzdump' "pvesh get /cluster/notifications/matchers --output-format json"
 check_ssh "pve01 : aucune tâche de sauvegarde n'utilise l'ancien envoi de mail direct" "$WB_PVE_HOST" \
   "! grep -Eq '^[[:space:]]+notification-mode[[:space:]]+legacy-sendmail' /etc/pve/jobs.cfg"
+# En mode « auto » (défaut), une tâche qui garde un champ mailto repasse par l'ancien envoi direct.
+check_ssh "pve01 : aucune tâche vzdump en mode auto avec un mailto résiduel" "$WB_PVE_HOST" \
+  "! awk '/^[a-z]+: / {if (m && !ns) bad=1; m=0; ns=0} /^[[:space:]]+mailto[[:space:]]/ {m=1} /^[[:space:]]+notification-mode[[:space:]]+notification-system/ {ns=1} END {if (m && !ns) bad=1; exit !bad}' /etc/pve/jobs.cfg"
 check_ssh_output "pve01 : au moins une tâche de sauvegarde planifiée existe" "$WB_PVE_HOST" \
   '^vzdump: ' "cat /etc/pve/jobs.cfg"
 

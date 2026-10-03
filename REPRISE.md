@@ -2,10 +2,6 @@
 
 Ouvre une nouvelle conversation Claude, et colle **un** des messages ci-dessous. C'est tout.
 
-## Terminer la relecture du module 00 (à faire en premier)
-
-> Dépôt GitHub `cemah2/DevOpsPrivateCloud`. Lis `CLAUDE.md` puis `REPRISE.md`, et termine la relecture du module 00 selon la grille §11 de `CONVENTIONS.md`, puis mets à jour `AVANCEMENT.md` et pousse.
-
 ## Produire un bloc
 
 > Dépôt GitHub `cemah2/DevOpsPrivateCloud`. Lis `CLAUDE.md` puis `REPRISE.md`, et produis le bloc **A** (modules 01 à 06).

@@ -219,3 +219,7 @@ Un module n'est marqué « relu » dans `AVANCEMENT.md` que si :
 6. **Scripts** : un check par exercice vérifiable, une panne par `BF`, `shellcheck` propre, `--annuler` présent.
 7. **Exactitude** : pas d'option inventée, commandes plausibles pour les versions de référence.
 8. **Fil rouge** : le mini-projet intègre la brique dans MédiSphère et prépare les modules suivants.
+9. **Changements de version** : au démarrage du bloc, lister les changements de comportement des versions de référence (valeurs par défaut, composants renommés ou dépréciés, API modifiées) et vérifier que les exercices en tiennent compte.
+10. **Pannes vérifiées** : chaque script de panne contrôle sur place que l'injection a réellement eu lieu ; en cas d'échec, il annule et le signale (jamais de ticket annonçant une panne inexistante).
+11. **Effets de bord** : avertissement obligatoire avant toute action qui peut réveiller ou modifier un état existant de l'apprenant (pare-feu datacenter, réseau de l'hôte, stockages partagés), avec procédure de retour arrière.
+12. **Pas de faux positif** : chaque check doit pouvoir passer au rouge sur un cas réaliste ; un contrôle qui passe sur une valeur par défaut ne vérifie rien.
