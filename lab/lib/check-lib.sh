@@ -9,6 +9,7 @@
 #   WB_PBS_HOST   hôte SSH du Proxmox Backup Server  (défaut : pbs01)
 #   WB_SSH_OPTS   options SSH supplémentaires
 #   WB_TIMEOUT    délai max (s) pour les tests réseau (défaut : 5)
+#   WB_GITLAB_URL, WB_GITLAB_TOKEN_FILE, WB_NETBOX_URL, WB_NETBOX_TOKEN_FILE  (bloc A, voir lab.env.example)
 
 # shellcheck disable=SC2034  # variables utilisées par les scripts qui sourcent la lib
 WB_PVE_HOST="${WB_PVE_HOST:-pve01}"
@@ -135,6 +136,24 @@ require_cmd() {
     echo "Installe les outils manquants puis relance la vérification."
     exit 2
   fi
+}
+
+# gitlab_api "chemin" — GET sur l'API GitLab v4 avec le jeton en lecture des checks (bloc A).
+#   Exemple : gitlab_api "projects/plateforme%2Foutils" | jq -r .default_branch
+gitlab_api() {
+  local f="${WB_GITLAB_TOKEN_FILE:-$HOME/.config/workbook/gitlab-checks.token}"
+  [[ -r "$f" ]] || { echo "jeton GitLab des checks illisible : $f" >&2; return 1; }
+  curl -sf --max-time "$WB_TIMEOUT" -H "PRIVATE-TOKEN: $(<"$f")" \
+    "${WB_GITLAB_URL:-https://git01.par1.medisphere.internal}/api/v4/$1"
+}
+
+# netbox_api "chemin" — GET sur l'API REST NetBox avec le jeton v2 en lecture des checks (M06).
+#   Exemple : netbox_api "ipam/prefixes/?prefix=10.10.20.0/24" | jq .count
+netbox_api() {
+  local f="${WB_NETBOX_TOKEN_FILE:-$HOME/.config/workbook/netbox-checks.token}"
+  [[ -r "$f" ]] || { echo "jeton NetBox des checks illisible : $f" >&2; return 1; }
+  curl -sf --max-time "$WB_TIMEOUT" -H "Authorization: Bearer $(<"$f")" -H "Accept: application/json" \
+    "${WB_NETBOX_URL:-https://nbx01.par1.medisphere.internal}/api/$1"
 }
 
 # summary — affiche le bilan et renvoie 0 si aucun KO
