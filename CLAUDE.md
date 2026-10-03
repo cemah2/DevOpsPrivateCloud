@@ -14,6 +14,13 @@ Ce dépôt est un workbook de formation DevOps / cloud privé, en français, pro
 5. Toute nouvelle décision structurante (hôte permanent, IP, VMID, convention) va dans `PLAN.md` (et son journal des décisions).
 6. Mettre à jour `AVANCEMENT.md`, committer et pousser **après chaque module** (pas seulement en fin de bloc), pour ne rien perdre en cas d'interruption.
 
+## Enchaînement automatique des blocs
+Ordre : bloc A (01-06) → B (07-11) → C (12-18) → D+E (19-23) → F (24-26) → G (27-29) → finaux F1-F4 → finaux F5-F7.
+La session tourne sans l'apprenant : ne pas poser de questions, prendre la lecture la plus raisonnable et la consigner dans `AVANCEMENT.md`.
+Quand le bloc est terminé (relu, poussé, `AVANCEMENT.md` à jour), créer une **tâche planifiée ponctuelle** (quelques minutes plus tard) qui lance une nouvelle session avec ce message, en remplaçant le bloc par le suivant :
+> Dépôt GitHub `cemah2/DevOpsPrivateCloud` (attache-le avec accès en écriture et clone-le). Lis `CLAUDE.md`, `PLAN.md`, `CONVENTIONS.md` et `AVANCEMENT.md`, puis produis le bloc <X> en suivant `CLAUDE.md`, y compris l'enchaînement automatique.
+Ne jamais lancer le bloc suivant si le bloc courant n'est pas entièrement poussé. Après le dernier bloc, ne rien planifier. Si la session s'arrête avant la fin (limite d'utilisation), l'apprenant relance avec `REPRISE.md` et la production reprend d'après `AVANCEMENT.md`.
+
 ## Corriger après retour de l'apprenant
 Reproduire le raisonnement, corriger énoncé + corrigé + check concernés, vérifier l'impact sur les exercices et modules suivants, consigner dans `AVANCEMENT.md`.
 
