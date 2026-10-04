@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# ms-attendre — relance une commande jusqu'à ce qu'elle réussisse, dans un délai total borné
+# (M02-E30, PLAT-360). Cas typique : attendre qu'une VM fraîchement créée réponde en SSH.
+#
+# Usage : ms-attendre [-d|--delai S] [-i|--intervalle S] [-e|--essai S] -- COMMANDE [ARG...]
+#   -d S   délai total maximal, en secondes (1 à 3600, défaut 300)
+#   -i S   pause entre deux essais (1 à 300, défaut 5)
+#   -e S   durée maximale d'UN essai : au-delà, l'essai est tué (1 à 600, défaut 30)
+# Exemple : ms-attendre -d 300 -- ssh -o BatchMode=yes -o ConnectTimeout=5 admin@10.10.99.123 true
+#
+# Codes retour : 0 la commande a réussi ; 1 délai total dépassé ; 2 usage ;
+#                130 interrompu (SIGINT) ; 143 arrêté (SIGTERM). Dans les deux derniers cas, l'essai
+#                en cours (et ses sous-processus) est tué avant la sortie.
+#
+# Différence avec retry (lib/ms-commun.sh) : retry borne le nombre d'essais, pas la durée totale,
+# et un essai bloqué (SSH qui ne répond pas) le bloque indéfiniment.
+
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_pid_essai=""
+
+usage() {
+  echo "Usage : ms-attendre [-d|--delai S] [-i|--intervalle S] [-e|--essai S] -- COMMANDE [ARG...]" >&2
+  exit 2
+}
+
+# entier VALEUR MIN MAX — vrai si VALEUR est un entier décimal compris entre MIN et MAX.
+entier() { [[ "$1" =~ ^[1-9][0-9]{0,3}$ ]] && (($1 >= $2 && $1 <= $3)); }
+
+# arreter SIGNAL CODE — tue l'essai en cours puis sort. timeout transmet le signal reçu à la
+# commande surveillée (et à son groupe de processus) avant de se terminer.
+arreter() {
+  if [[ -n "$_pid_essai" ]] && kill -0 "$_pid_essai" 2>/dev/null; then
+    kill -TERM "$_pid_essai" 2>/dev/null || true
+    wait "$_pid_essai" 2>/dev/null || true
+  fi
+  log_warn "interrompu par $1 : essai en cours arrêté"
+  exit "$2"
+}
+
+main() {
+  set -Eeuo pipefail
+  local delai=300 intervalle=5 essai=30
+  while (($#)); do
+    case "$1" in
+      -d | --delai) [[ $# -ge 2 ]] || usage; delai="$2"; shift 2 ;;
+      -i | --intervalle) [[ $# -ge 2 ]] || usage; intervalle="$2"; shift 2 ;;
+      -e | --essai) [[ $# -ge 2 ]] || usage; essai="$2"; shift 2 ;;
+      --) shift; break ;;
+      *) usage ;;
+    esac
+  done
+  (($# > 0)) || usage
+  entier "$delai" 1 3600 || { log_err "--delai : entier de 1 à 3600 attendu"; exit 2; }
+  entier "$intervalle" 1 300 || { log_err "--intervalle : entier de 1 à 300 attendu"; exit 2; }
+  entier "$essai" 1 600 || { log_err "--essai : entier de 1 à 600 attendu"; exit 2; }
+  require_cmd timeout
+
+  trap 'arreter SIGINT 130' INT
+  trap 'arreter SIGTERM 143' TERM
+
+  local fin=$((SECONDS + delai)) n=0 rc restant duree
+  while :; do
+    n=$((n + 1))
+    restant=$((fin - SECONDS))
+    duree=$((essai < restant ? essai : restant))
+    ((duree >= 1)) || duree=1
+    # En arrière-plan + wait : bash exécute les traps dès réception du signal. Avec la commande au
+    # premier plan, il attendrait la fin de l'essai (jusqu'à « essai » secondes) avant de réagir.
+    timeout --kill-after=5 "$duree" "$@" &
+    _pid_essai=$!
+    rc=0
+    wait "$_pid_essai" || rc=$?
+    _pid_essai=""
+    if ((rc == 0)); then
+      log_info "réussite à l'essai $n après $((delai - (fin - SECONDS))) s"
+      return 0
+    fi
+    if ((rc == 124 || rc == 137)); then
+      log_warn "essai $n : pas de réponse en ${duree} s, essai tué"
+    else
+      log_warn "essai $n : échec (code $rc)"
+    fi
+    if ((SECONDS + intervalle >= fin)); then
+      log_err "délai de ${delai} s dépassé après $n essai(s) : $*"
+      exit 1
+    fi
+    # Même raison : une pause interruptible.
+    sleep "$intervalle" &
+    _pid_essai=$!
+    wait "$_pid_essai" || true
+    _pid_essai=""
+  done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

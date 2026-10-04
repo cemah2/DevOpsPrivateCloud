@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Faux « curl » pour les tests bats (M02-E14) : simule l'API Proxmox, sans réseau.
+#
+# Placé en tête du PATH par helpers/commun.bash. Il comprend les options utilisées
+# par pve_api (lib/ms-commun.sh) et répond comme pveproxy : ligne de statut HTTP
+# (avec le motif d'erreur), en-têtes, ligne vide en CRLF, corps JSON.
+#
+# Variables (posées par helpers/commun.bash) :
+#   FAUX_PVE_BASE      préfixe d'URL attendu (ex. https://pve.test:8006/api2/json)
+#   FAUX_PVE_FIXTURES  dossier des réponses : ressources.json, snapshots-<VMID>.json
+#   FAUX_PVE_ETAT      dossier d'état (instantanés créés, compteurs, échecs simulés)
+#   FAUX_PVE_JOURNAL   journal des appels : « MÉTHODE CHEMIN DONNÉES » par ligne
+#   FAUX_PVE_SECRET    secret du jeton : s'il apparaît dans les arguments → ligne
+#                      « SECRET_DANS_ARGV » au journal (le test échoue alors)
+# Échecs simulés (fichiers dans FAUX_PVE_ETAT) :
+#   tache-ko           toute tâche se termine en erreur
+#   snapshot-ko-<VMID> la création d'instantané renvoie HTTP 500
+#   config-ko-<VMID>   la lecture de la configuration renvoie HTTP 500
+#   reseau-ko          sortie 7 (« Failed to connect »), comme curl
+# =============================================================================
+set -euo pipefail
+
+methode=GET
+url=""
+donnees=()
+entete_auth=""
+while (($# > 0)); do
+  case "$1" in
+    -X)
+      methode="$2"
+      shift
+      ;;
+    --data-urlencode)
+      donnees+=("$2")
+      shift
+      ;;
+    -H)
+      if [[ "$2" == @* ]]; then entete_auth="$(cat -- "${2#@}")"; else entete_auth="$2"; fi
+      shift
+      ;;
+    --max-time | --cacert) shift ;;
+    https://*) url="$1" ;;
+    *) ;;
+  esac
+  shift
+done
+
+# Le secret ne doit jamais être passé en argument (visible dans « ps »).
+if [[ -n "${FAUX_PVE_SECRET:-}" ]] && printf '%s\n' "${donnees[@]}" "$url" | grep -qF -- "$FAUX_PVE_SECRET"; then
+  echo "SECRET_DANS_ARGV" >>"$FAUX_PVE_JOURNAL"
+fi
+if [[ "$entete_auth" != "Authorization: PVEAPIToken="* ]]; then
+  echo "SANS_JETON" >>"$FAUX_PVE_JOURNAL"
+fi
+
+if [[ -e "$FAUX_PVE_ETAT/reseau-ko" ]]; then
+  echo "curl: (7) Failed to connect to pve.test port 8006" >&2
+  exit 7
+fi
+
+chemin="${url#"$FAUX_PVE_BASE"}"
+chemin="$(printf '%b' "${chemin//%/\\x}")" # décodage %XX (UPID)
+echo "$methode $chemin ${donnees[*]}" >>"$FAUX_PVE_JOURNAL"
+
+repondre() { # repondre "CODE MOTIF" CORPS
+  printf 'HTTP/1.1 %s\r\nContent-Type: application/json;charset=UTF-8\r\n\r\n%s\n' "$1" "$2"
+  exit 0
+}
+valeur() { # valeur CLÉ — valeur d'un paramètre --data-urlencode
+  local kv
+  for kv in "${donnees[@]}"; do
+    if [[ "$kv" == "$1="* ]]; then
+      printf '%s' "${kv#*=}"
+      return 0
+    fi
+  done
+}
+upid() { # upid NŒUD TYPE ID
+  printf 'UPID:%s:0000A1B2:00C0FFEE:6720F00D:%s:%s:wb-automation@pve!lab:' "$1" "$2" "$3"
+}
+
+case "$methode $chemin" in
+  "GET /version")
+    repondre "200 OK" '{"data":{"version":"9.0.10","release":"9.0","repoid":"deadbeef"}}'
+    ;;
+  "GET /cluster/resources")
+    repondre "200 OK" "$(jq -c '{data: .}' "$FAUX_PVE_FIXTURES/ressources.json")"
+    ;;
+  "GET /interdit")
+    repondre "403 Permission check failed (/interdit, Sys.Audit)" '{"data":null}'
+    ;;
+  "POST /parametres")
+    repondre "400 Parameter verification failed." '{"data":null,"errors":{"vmid":"invalid format"}}'
+    ;;
+  "GET /instable")
+    # 503 aux deux premiers appels, puis 200 (tests de retry)
+    n=$(($(cat "$FAUX_PVE_ETAT/instable" 2>/dev/null || echo 0) + 1))
+    echo "$n" >"$FAUX_PVE_ETAT/instable"
+    if ((n < 3)); then repondre "503 Service Unavailable" '{"data":null}'; fi
+    repondre "200 OK" '{"data":"stable"}'
+    ;;
+  GET\ /nodes/*/tasks/*/status)
+    if [[ -e "$FAUX_PVE_ETAT/tache-ko" ]]; then
+      repondre "200 OK" '{"data":{"status":"stopped","exitstatus":"snapshot feature is not available"}}'
+    fi
+    repondre "200 OK" '{"data":{"status":"stopped","exitstatus":"OK"}}'
+    ;;
+  POST\ /nodes/*/qemu/*/snapshot)
+    IFS=/ read -r _ _ noeud _ vmid _ <<<"$chemin"
+    if [[ -e "$FAUX_PVE_ETAT/snapshot-ko-$vmid" ]]; then
+      repondre "500 snapshot feature is not available" '{"data":null}'
+    fi
+    jq -cn --arg n "$(valeur snapname)" --argjson t "$(date +%s)" '{name: $n, snaptime: $t}' \
+      >>"$FAUX_PVE_ETAT/crees-$vmid.jsonl"
+    repondre "200 OK" "$(jq -cn --arg u "$(upid "$noeud" qmsnapshot "$vmid")" '{data: $u}')"
+    ;;
+  GET\ /nodes/*/qemu/*/snapshot)
+    IFS=/ read -r _ _ _ _ vmid _ <<<"$chemin"
+    f="$FAUX_PVE_FIXTURES/snapshots-$vmid.json"
+    [[ -f "$f" ]] || f=/dev/null
+    corps="$({
+      cat "$f"
+      cat "$FAUX_PVE_ETAT/crees-$vmid.jsonl" 2>/dev/null || true
+    } \
+      | jq -cs '(if length > 0 and (.[0] | type) == "array" then .[0] + .[1:] else . end) as $l
+              | {data: ($l + [{name: "current", description: "You are here!"}])}')"
+    repondre "200 OK" "$corps"
+    ;;
+  DELETE\ /nodes/*/qemu/*/snapshot/*)
+    IFS=/ read -r _ _ noeud _ vmid _ _ <<<"$chemin"
+    repondre "200 OK" "$(jq -cn --arg u "$(upid "$noeud" qmdelsnapshot "$vmid")" '{data: $u}')"
+    ;;
+  GET\ /nodes/*/qemu/*/config)
+    IFS=/ read -r _ _ _ _ vmid _ <<<"$chemin"
+    if [[ -e "$FAUX_PVE_ETAT/config-ko-$vmid" ]]; then
+      repondre "500 unable to read configuration" '{"data":null}'
+    fi
+    repondre "200 OK" "$(jq -c --argjson id "$vmid" \
+      '{data: ((.[] | select(.vmid == $id) | {name, cores: 1, memory: "1024", tags: (.tags // "")}) // null)}' \
+      "$FAUX_PVE_FIXTURES/ressources.json")"
+    ;;
+  *)
+    repondre "501 Method '$methode $chemin' not implemented" '{"data":null}'
+    ;;
+esac

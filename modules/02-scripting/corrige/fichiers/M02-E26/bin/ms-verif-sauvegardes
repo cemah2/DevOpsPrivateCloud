@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# ms-verif-sauvegardes — vérifie que chaque VM du socle a une sauvegarde PBS récente (M02-E26, PLAT-356).
+#
+# Pour chaque VM du pool « lab » portant l'étiquette « socle » (API Proxmox VE, jeton en LECTURE
+# SEULE wb-automation@pve!lecture), cherche sur Proxmox Backup Server (API PBS, jeton en LECTURE
+# SEULE wb-verif@pbs!lecture) le dernier instantané « vm/<VMID> » du namespace par1 de ds-lab,
+# et contrôle son âge et l'état de sa dernière vérification.
+#
+# Usage : ms-verif-sauvegardes [-a|--age-max HEURES] [-e|--etiquette ETIQUETTE] [-h|--help]
+#
+# Configuration (fichiers 600, jamais dans un dépôt) :
+#   ~/.config/workbook/pve-lecture.env  PVE_API_URL, PVE_TOKEN_ID, PVE_TOKEN_SECRET, PVE_CACERT
+#                                       (chemin modifiable : MS_PVE_ENV)
+#   ~/.config/workbook/pbs-lecture.env  PBS_API_URL, PBS_DATASTORE, PBS_NAMESPACE, PBS_TOKEN_ID,
+#                                       PBS_TOKEN_SECRET, PBS_PINNEDPUBKEY (chemin : MS_PBS_ENV)
+# Variable : MS_VERIF_AGE_MAX_H (défaut 26), équivalent de --age-max.
+#
+# Codes retour : 0 toutes les VMs du socle ont une sauvegarde récente et non en échec de vérification ;
+#                1 au moins une VM en défaut, ou contrôle impossible (API, droits, liste vide) ;
+#                2 usage.
+
+# Chargement de la bibliothèque commune. BASH_SOURCE plutôt que $0 : le script reste chargeable
+# par « source » depuis les tests bats (où $0 vaut le chemin de bats).
+# SC1091 désactivé : dans le corrigé, la bibliothèque vit dans fichiers/M02-E10/ ; dans le projet,
+# ShellCheck la suit normalement (option -x).
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-sauvegardes [-a|--age-max HEURES] [-e|--etiquette ETIQUETTE] [-h|--help]
+
+Vérifie que chaque VM du pool « lab » portant l'étiquette ETIQUETTE (défaut : socle) possède,
+sur Proxmox Backup Server, une sauvegarde de moins de HEURES heures (défaut : 26) dont la
+dernière vérification n'a pas échoué.
+
+Configuration : ~/.config/workbook/pve-lecture.env et ~/.config/workbook/pbs-lecture.env
+(jetons en lecture seule ; chemins modifiables par MS_PVE_ENV et MS_PBS_ENV).
+
+Codes retour : 0 tout est sauvegardé, 1 au moins une VM en défaut ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
+FIN
+}
+
+# pbs_api CHEMIN — GET sur l'API PBS, affiche le champ « data » (JSON). Lecture seule par construction.
+# Le certificat autosigné de PBS est épinglé par sa clé publique (--pinnedpubkey) : c'est l'équivalent
+# de l'empreinte enregistrée dans le stockage pbs-par2 de pve01. Avec l'épinglage, curl refuse tout
+# autre certificat même si -k désactive la vérification de la chaîne et du nom.
+# Le secret passe par un fichier de configuration lu sur l'entrée standard : il n'apparaît pas dans ps.
+pbs_api() {
+  local chemin="$1" reponse
+  [[ "${PBS_PINNEDPUBKEY:-}" == sha256//* ]] || die "PBS_PINNEDPUBKEY absent ou invalide dans $MS_PBS_ENV" 1
+  reponse="$(curl -sS --fail-with-body --max-time 30 -k --pinnedpubkey "$PBS_PINNEDPUBKEY" -K - \
+    "${PBS_API_URL%/}${chemin}" \
+    <<<"header = \"Authorization: PBSAPIToken=${PBS_TOKEN_ID}:${PBS_TOKEN_SECRET}\"")" ||
+    { log_err "API PBS : échec de GET ${chemin} : ${reponse:-pas de réponse}"; return 1; }
+  jq -e '.data' <<<"$reponse"
+}
+
+# charger_env FICHIER — charge un fichier de variables en refusant un fichier lisible par d'autres.
+charger_env() {
+  local f="$1" mode
+  [[ -r "$f" ]] || die "fichier de configuration illisible : $f" 1
+  mode="$(stat -c '%a' "$f")"
+  [[ "$mode" =~ ^[4-7]00$ ]] || die "$f est lisible par d'autres utilisateurs (mode $mode) : chmod 600" 1
+  # shellcheck source=/dev/null
+  source "$f"
+}
+
+# vms_socle ETIQUETTE — liste JSON [{vmid, name}] des VMs (hors templates) du pool lab portant l'étiquette.
+vms_socle() {
+  local etiquette="$1" ressources
+  ressources="$(pve_api GET '/cluster/resources?type=vm')" || return 1
+  jq -c --arg e "$etiquette" '
+    [ .[]
+      | select(.pool == "lab" and (.template // 0) != 1)
+      | select(((.tags // "") | split(";")) | index($e))
+      | {vmid: (.vmid | tonumber), name} ]
+    | sort_by(.vmid)' <<<"$ressources"
+}
+
+# instantanes_pbs — liste JSON des instantanés « vm » du namespace configuré.
+instantanes_pbs() {
+  pbs_api "/admin/datastore/${PBS_DATASTORE}/snapshots?ns=${PBS_NAMESPACE}&backup-type=vm"
+}
+
+# evaluer VMS_JSON INSTANTANES_JSON MAINTENANT AGE_MAX_S — produit une ligne JSON par VM :
+# {vmid, name, derniere, age_h, verif, etat, raison}. Logique pure : testée par bats.
+evaluer() {
+  jq -c --argjson snaps "$2" --argjson now "$3" --argjson max "$4" '
+    .[] as $vm
+    | [ $snaps[] | select(.["backup-id"] == ($vm.vmid | tostring)) ]
+    | (max_by(.["backup-time"]) // null) as $der
+    | if $der == null then
+        {vmid: $vm.vmid, name: $vm.name, derniere: null, age_h: null, verif: "-",
+         etat: "KO", raison: "aucune sauvegarde"}
+      else
+        ($now - $der["backup-time"]) as $age
+        | ($der.verification.state // "jamais") as $v
+        | {vmid: $vm.vmid, name: $vm.name, derniere: $der["backup-time"],
+           age_h: (($age / 360 | floor) / 10), verif: $v,
+           etat: (if $age > $max or $v == "failed" then "KO" else "OK" end),
+           raison: (if $age > $max then "trop ancienne"
+                    elif $v == "failed" then "vérification en échec"
+                    else "" end)}
+      end' <<<"$1"
+}
+
+# afficher — rapport lisible à partir des lignes JSON de evaluer (sur l'entrée standard).
+afficher() {
+  # En-tête écrit à la main : printf compte des octets, et les lettres accentuées en font deux.
+  echo "VMID   NOM          DERNIÈRE           ÂGE (h) VÉRIF.        ÉTAT"
+  local ligne vmid nom der age verif etat raison
+  while IFS= read -r ligne; do
+    vmid="$(jq -r .vmid <<<"$ligne")"
+    nom="$(jq -r .name <<<"$ligne")"
+    der="$(jq -r '.derniere // empty' <<<"$ligne")"
+    age="$(jq -r '.age_h // "-"' <<<"$ligne")"
+    verif="$(jq -r .verif <<<"$ligne")"
+    etat="$(jq -r .etat <<<"$ligne")"
+    raison="$(jq -r .raison <<<"$ligne")"
+    if [[ -n "$der" ]]; then der="$(date -d "@$der" '+%Y-%m-%d %H:%M')"; else der="-"; fi
+    printf '%-6s %-12s %-17s %8s %-13s %s%s\n' "$vmid" "$nom" "$der" "$age" "$verif" "$etat" \
+      "${raison:+ ($raison)}"
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  local age_max_h="${MS_VERIF_AGE_MAX_H:-26}" etiquette="socle"
+  while (($#)); do
+    case "$1" in
+      -a | --age-max) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; age_max_h="$2"; shift 2 ;;
+      -e | --etiquette) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; etiquette="$2"; shift 2 ;;
+      -h | --help) usage; exit 0 ;;
+      *) log_err "option inconnue : $1"; usage >&2; exit 2 ;;
+    esac
+  done
+  [[ "$age_max_h" =~ ^[1-9][0-9]{0,3}$ ]] || die "--age-max attend un nombre entier d'heures (1 à 9999)" 2
+  [[ "$etiquette" =~ ^[a-z0-9_-]+$ ]] || die "étiquette invalide : $etiquette" 2
+  require_cmd curl jq
+
+  export MS_PVE_ENV="${MS_PVE_ENV:-$HOME/.config/workbook/pve-lecture.env}"
+  MS_PBS_ENV="${MS_PBS_ENV:-$HOME/.config/workbook/pbs-lecture.env}"
+  charger_env "$MS_PBS_ENV"
+  local v
+  for v in PBS_API_URL PBS_DATASTORE PBS_NAMESPACE PBS_TOKEN_ID PBS_TOKEN_SECRET PBS_PINNEDPUBKEY; do
+    [[ -n "${!v:-}" ]] || die "variable $v absente de $MS_PBS_ENV" 1
+  done
+
+  local vms snaps
+  vms="$(vms_socle "$etiquette")" || die "API Proxmox VE injoignable ou refus : liste des VMs impossible" 1
+  # Une liste vide n'est jamais « tout va bien » : droits insuffisants, étiquette absente ou mauvais pool.
+  [[ "$(jq length <<<"$vms")" -gt 0 ]] ||
+    die "aucune VM du pool lab avec l'étiquette « $etiquette » n'est visible : droits du jeton ou étiquettes ?" 1
+  snaps="$(instantanes_pbs)" || die "API PBS injoignable ou refus : contrôle impossible" 1
+
+  local resultats nb_ko
+  resultats="$(evaluer "$vms" "$snaps" "$(date +%s)" "$((age_max_h * 3600))")"
+  afficher <<<"$resultats"
+  nb_ko="$(grep -c '"etat":"KO"' <<<"$resultats" || true)"
+  if ((nb_ko > 0)); then
+    log_err "$nb_ko VM(s) du socle sans sauvegarde valable de moins de ${age_max_h} h"
+    exit 1
+  fi
+  log_info "$(jq -s length <<<"$resultats") VM(s) du socle sauvegardées depuis moins de ${age_max_h} h"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -1,0 +1,4 @@
+# ~/.config/git/allowed_signers — signataires de confiance pour « git verify-commit » (M01-E03)
+# Format : <principal> [options] <type> <clé publique> [commentaire]  (man ssh-keygen, ALLOWED SIGNERS)
+# Une ligne par personne et par clé ; ajouter ici les clés publiques de signature des collègues.
+<MOI>@medisphere.internal namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA…<clé publique de ~/.ssh/id_ed25519_signature.pub>… <MOI> signature Git

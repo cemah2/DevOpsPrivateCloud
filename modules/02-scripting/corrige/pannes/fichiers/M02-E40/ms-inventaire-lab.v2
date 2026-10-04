@@ -1,0 +1,53 @@
+#!/bin/bash
+# ms-inventaire-lab — inventaire Markdown des VMs du pool lab (repris du script InfoGér
+# « inventaire_vm.sh » par Lucas Martin, PLAT-381).
+# Usage : ms-inventaire-lab [-o FICHIER|-]
+set -u
+
+CONF="$(dirname "$0")/../etc/inventaire.conf"
+. "$CONF"
+. "$API_ENV"
+if [ "${1:-}" = "-o" ]; then
+  SORTIE="$2"
+fi
+[ "$SORTIE" = "-" ] && SORTIE=/dev/stdout
+
+# Appel robuste : on réessaie avec un délai croissant (l'API peut être lente).
+api() {
+  local essai=1 delai=1
+  while true; do
+    if curl -sf --max-time 10 --cacert "$PVE_CACERT" \
+      -H "Authorization: PVEAPIToken=$PVE_TOKEN_ID=$PVE_TOKEN_SECRET" "$PVE_API_URL$1"; then
+      return 0
+    fi
+    if [ "$essai" -ge 6 ]; then
+      return 1
+    fi
+    sleep "$delai"
+    essai=$((essai + 1))
+    delai=$((delai * 2))
+  done
+}
+
+{
+  echo "# Inventaire du pool $POOL — $(date '+%F %T')"
+  echo
+  echo "| VMID | Nom | État | vCPU | RAM (Mio) | Étiquettes | IPv4 | Dernière sauvegarde |"
+  echo "|---|---|---|---|---|---|---|---|"
+  vms=$(api "/cluster/resources?type=vm" | jq -r --arg p "$POOL" '.data[] | select(.pool == $p) | "\(.vmid) \(.node)"')
+  while read -r vmid node; do
+    [ -n "$vmid" ] || continue
+    config=$(api "/nodes/$node/qemu/$vmid/config")
+    statut=$(api "/nodes/$node/qemu/$vmid/status/current")
+    nom=$(echo "$statut" | jq -r '.data.name')
+    etat=$(echo "$statut" | jq -r '.data.status')
+    vcpu=$(echo "$statut" | jq -r '.data.cpus')
+    ram=$(echo "$statut" | jq -r '.data.maxmem / 1048576 | floor')
+    tags=$(echo "$config" | jq -r '.data.tags // ""')
+    ip=$(api "/nodes/$node/qemu/$vmid/agent/network-get-interfaces" \
+      | jq -r '[.data.result[]?."ip-addresses"[]? | select(."ip-address-type" == "ipv4") | ."ip-address" | select(startswith("127.") | not)] | join(" ")')
+    sauv=$(api "/nodes/$node/storage/pbs-par2/content?content=backup&vmid=$vmid" \
+      | jq -r '[.data[]?.ctime] | max // empty | todate')
+    echo "| $vmid | $nom | $etat | $vcpu | $ram | $tags | $ip | ${sauv:-?} |"
+  done <<<"$vms"
+} >"$SORTIE"

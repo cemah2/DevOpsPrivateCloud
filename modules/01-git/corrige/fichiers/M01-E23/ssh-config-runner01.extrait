@@ -1,0 +1,4 @@
+# ~/.ssh/config sur adm01 — ajout M01-E23 (avant le bloc « Host * »)
+Host runner01
+    HostName 10.10.20.15
+    User admin

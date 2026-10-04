@@ -1,0 +1,122 @@
+# Taskfile.yml — tâches du projet plateforme/outils (M02-E20). Task 3.x : https://taskfile.dev
+#
+#   task              liste des tâches
+#   task lint         ShellCheck, shfmt, ruff (analyse + format)
+#   task test         bats et pytest (rapports JUnit dans rapports/)
+#   task build        paquet medictl (wheel + sdist) dans dist/, seulement si les sources ont changé
+#   task install      copie FIGÉE des scripts dans /usr/local (sudo) + medictl en outil uv
+#   task ci           ce que la CI exécute (lint, test, build), dans cet ordre
+#
+# Les mêmes commandes tournent sur adm01 et sur runner01 (CI, M02-E24) : la CI
+# appelle « task <tâche> », jamais une copie des commandes.
+version: '3'
+
+vars:
+  REPORTS: rapports
+  PREFIX: /usr/local
+
+tasks:
+  default:
+    desc: Liste les tâches disponibles
+    silent: true
+    cmds:
+      - task --list
+
+  setup:
+    desc: Crée ou met à jour .venv exactement selon uv.lock
+    run: once
+    sources:
+      - pyproject.toml
+      - uv.lock
+    cmds:
+      - uv sync --locked
+
+  lint:sh:
+    desc: ShellCheck et shfmt sur les scripts Bash et les tests bats
+    vars:
+      # Tous les fichiers shell du dépôt (shfmt les reconnaît à l'extension ou au shebang).
+      SCRIPTS_SH:
+        sh: shfmt -f bin lib tests | sort | tr '\n' ' '
+    preconditions:
+      - sh: command -v shellcheck && command -v shfmt
+        msg: "shellcheck et shfmt doivent être installés (voir M02-E04)"
+    cmds:
+      # Configuration lue dans .shellcheckrc et .editorconfig : aucune option ici.
+      - shellcheck {{.SCRIPTS_SH}}
+      - shfmt -d {{.SCRIPTS_SH}}
+
+  lint:py:
+    desc: ruff (règles du pyproject.toml) et vérification du format
+    deps: [setup]
+    cmds:
+      - uv run --locked ruff check .
+      - uv run --locked ruff format --check .
+
+  lint:
+    desc: Toutes les analyses statiques
+    deps: [lint:sh, lint:py]
+
+  test:bats:
+    desc: Tests des scripts Bash (API Proxmox simulée)
+    preconditions:
+      - sh: command -v bats
+        msg: "bats-core 1.13 doit être installé"
+    cmds:
+      - mkdir -p {{.REPORTS}}
+      - bats --report-formatter junit --output {{.REPORTS}} tests/bats
+
+  test:py:
+    desc: Tests de medictl avec couverture (aucun appel au vrai Proxmox)
+    deps: [setup]
+    cmds:
+      - mkdir -p {{.REPORTS}}
+      - >-
+        uv run --locked pytest
+        --junitxml={{.REPORTS}}/junit-pytest.xml
+        --cov=medictl --cov-report=term-missing
+        {{.CLI_ARGS}}
+
+  test:
+    desc: Tous les tests (« task test:py -- -k garde » pour filtrer pytest)
+    deps: [test:bats, test:py]
+
+  build:
+    desc: Construit dist/medictl-*.whl et .tar.gz si les sources ont changé
+    deps: [setup]
+    sources:
+      - pyproject.toml
+      - uv.lock
+      - README.md
+      - src/**/*.py
+    generates:
+      - dist/*.whl
+    cmds:
+      - rm -rf dist
+      - uv build
+
+  install:
+    desc: Installe une copie figée de bin/ et lib/ dans /usr/local (sudo) et medictl (uv tool)
+    preconditions:
+      - sh: git diff --quiet HEAD -- bin lib
+        msg: "bin/ ou lib/ contient des modifications non commitées : on n'installe que du code versionné"
+    cmds:
+      # Copie, pas lien symbolique : un service planifié (M02-E26) ne doit pas changer
+      # parce qu'on édite le clone. Les scripts trouvent lib/ par « readlink -f $0/../lib ».
+      - sudo install -d -m 755 {{.PREFIX}}/bin {{.PREFIX}}/lib
+      - sudo install -m 644 lib/ms-commun.sh {{.PREFIX}}/lib/ms-commun.sh
+      - sudo install -m 755 bin/ms-* {{.PREFIX}}/bin/
+      # --reinstall : reconstruit même si le numéro de version n'a pas changé (copie de travail).
+      - uv tool install --force --reinstall --from {{.ROOT_DIR}} medictl
+      - echo "Installé depuis $(git describe --always --dirty). medictl --version pour vérifier."
+
+  ci:
+    desc: Enchaînement de la CI (lint, puis tests, puis paquet)
+    cmds:
+      - task: lint
+      - task: test
+      - task: build
+
+  clean:
+    desc: Supprime les produits de construction et les rapports
+    cmds:
+      - rm -rf dist {{.REPORTS}} .pytest_cache .ruff_cache .coverage .task

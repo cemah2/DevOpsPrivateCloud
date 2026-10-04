@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# ms-verif-socle — contrôle de santé des hôtes du socle (M02-E34, solution de référence du CHRONO).
+#
+# Usage : ms-verif-socle [-j|--json] [HOTE...]
+#   HOTE : alias SSH de adm01 (défaut : gw01 dns01 git01 runner01 pbs01).
+#
+# Contrôles, pour chaque hôte :
+#   dns     <hote>.par1.medisphere.internal résout (via 10.10.20.10) vers l'adresse de l'alias SSH,
+#           et le PTR de cette adresse commence par « <hote>. »
+#   ssh     connexion par clé, sans interaction, en moins de 5 s
+#   temps   chrony synchronisé (Leap status Normal) et écart < 0,5 s
+#   disque  système de fichiers racine utilisé à moins de 85 %
+#   tls     si le port 443 répond : certificat valide (chaîne et nom) pour au moins 30 jours ; sinon NA
+# Sortie : une ligne TSV « HOTE CONTROLE ETAT DETAIL » par contrôle (ETAT : OK, KO, NA), puis un
+# bilan sur la sortie d'erreur ; --json : un tableau JSON d'objets {hote, controle, etat, detail}.
+# Codes retour : 0 aucun KO ; 1 au moins un KO ; 2 usage.
+
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+readonly DNS_SOCLE=10.10.20.10
+readonly DOMAINE=par1.medisphere.internal
+readonly SEUIL_DISQUE=85
+readonly SEUIL_ECART=0.5
+readonly JOURS_CERT=30
+
+# --- Accès au monde extérieur : une fonction par outil, remplaçable dans les tests -------------
+ip_alias() { ssh -G "$1" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }'; }
+resoudre_a() { dig +short +time=2 +tries=1 "@$DNS_SOCLE" "$1" A 2>/dev/null | grep -E '^[0-9.]+$' | head -n 1; }
+resoudre_ptr() { dig +short +time=2 +tries=1 "@$DNS_SOCLE" -x "$1" 2>/dev/null | head -n 1; }
+executer_distant() {
+  ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$1" \
+    'LC_ALL=C chronyc -n tracking 2>&1; echo "@@disque $(df --output=pcent / | tail -n 1 | tr -dc 0-9)"'
+}
+port_ouvert() { timeout 3 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
+# tester_tls IP NOM — 0 si la chaîne et le nom sont valides et que le certificat vit encore JOURS_CERT jours
+tester_tls() {
+  local cert
+  cert="$(timeout 10 openssl s_client -connect "$1:443" -servername "$2" -verify_hostname "$2" \
+    -verify_return_error </dev/null 2>/dev/null | openssl x509 2>/dev/null)" || return 1
+  [[ -n "$cert" ]] && openssl x509 -noout -checkend $((JOURS_CERT * 86400)) <<<"$cert" >/dev/null
+}
+
+# resultat HOTE CONTROLE ETAT DETAIL
+resultat() { printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"; }
+
+verifier_hote() {
+  local h="$1" fqdn="$1.$DOMAINE" ip a ptr sortie leap ecart pct
+  ip="$(ip_alias "$h")"
+  a="$(resoudre_a "$fqdn")"
+  ptr="$(resoudre_ptr "${a:-0.0.0.0}")"
+  if [[ -z "$a" ]]; then
+    resultat "$h" dns KO "$fqdn ne résout pas"
+  elif [[ "$a" != "$ip" ]]; then
+    resultat "$h" dns KO "$fqdn → $a, mais l'alias SSH vise ${ip:-?}"
+  elif [[ "$ptr" != "$h."* ]]; then
+    resultat "$h" dns KO "PTR de $a : ${ptr:-absent}"
+  else
+    resultat "$h" dns OK "$fqdn → $a → $ptr"
+  fi
+
+  if ! sortie="$(executer_distant "$h")"; then
+    resultat "$h" ssh KO "connexion impossible (${ip:-adresse inconnue})"
+    resultat "$h" temps KO "non vérifiable sans SSH"
+    resultat "$h" disque KO "non vérifiable sans SSH"
+  else
+    resultat "$h" ssh OK "${ip}"
+    leap="$(awk -F': ' '/^Leap status/ { print $2 }' <<<"$sortie")"
+    ecart="$(awk '/^System time/ { print $4 }' <<<"$sortie")"
+    if [[ "$leap" != Normal ]]; then
+      resultat "$h" temps KO "chrony non synchronisé (${leap:-chronyc absent ?})"
+    elif awk -v e="${ecart:-99}" -v s="$SEUIL_ECART" 'BEGIN { exit !(e < s) }'; then
+      resultat "$h" temps OK "écart ${ecart} s"
+    else
+      resultat "$h" temps KO "écart ${ecart:-inconnu} s ≥ ${SEUIL_ECART} s"
+    fi
+    pct="$(sed -n 's/^@@disque //p' <<<"$sortie")"
+    if [[ ! "$pct" =~ ^[0-9]+$ ]]; then
+      resultat "$h" disque KO "occupation illisible"
+    elif ((pct < SEUIL_DISQUE)); then
+      resultat "$h" disque OK "racine à ${pct} %"
+    else
+      resultat "$h" disque KO "racine à ${pct} % (seuil ${SEUIL_DISQUE} %)"
+    fi
+  fi
+
+  if [[ -z "$ip" ]] || ! port_ouvert "$ip" 443; then
+    resultat "$h" tls NA "port 443 fermé"
+  elif tester_tls "$ip" "$fqdn"; then
+    resultat "$h" tls OK "certificat valide encore ${JOURS_CERT} jours au moins"
+  else
+    resultat "$h" tls KO "certificat invalide, mauvais nom ou expirant sous ${JOURS_CERT} jours"
+  fi
+}
+
+main() {
+  set -Eeuo pipefail
+  local json=0 hotes=() h
+  while (($#)); do
+    case "$1" in
+      -j | --json) json=1; shift ;;
+      -h | --help) echo "Usage : ms-verif-socle [-j|--json] [HOTE...]"; exit 0 ;;
+      -*) log_err "option inconnue : $1"; exit 2 ;;
+      *)
+        [[ "$1" =~ ^[a-z][a-z0-9-]{0,30}$ ]] || { log_err "nom d'hôte invalide : $1"; exit 2; }
+        hotes+=("$1"); shift ;;
+    esac
+  done
+  ((${#hotes[@]})) || hotes=(gw01 dns01 git01 runner01 pbs01)
+  require_cmd ssh dig openssl jq awk timeout
+
+  local lignes nb_ko
+  lignes="$(for h in "${hotes[@]}"; do verifier_hote "$h"; done)"
+  if ((json)); then
+    jq -R -s 'split("\n") | map(select(length > 0) | split("\t")
+      | {hote: .[0], controle: .[1], etat: .[2], detail: .[3]})' <<<"$lignes"
+  else
+    printf '%s\n' "$lignes"
+  fi
+  nb_ko="$(cut -f3 <<<"$lignes" | grep -c '^KO$' || true)"
+  log_info "bilan : $(grep -c . <<<"$lignes") contrôles, $nb_ko KO"
+  ((nb_ko == 0)) || exit 1
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

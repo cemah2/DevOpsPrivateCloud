@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# ms-collecte-config — archive les fichiers de configuration d'hôtes du socle (M02-E03).
+#
+# Pour chaque hôte (alias SSH de ~/.ssh/config), lit une liste fixe de fichiers de
+# configuration avec « sudo -n tar » et l'enregistre sur adm01 dans une archive
+# <hôte>-AAAAMMJJ-HHMMSS.tar.gz (mode 600). Les archives contiennent des secrets
+# (clés WireGuard, jeton du runner…) : elles ne doivent jamais entrer dans un dépôt Git.
+#
+# Codes retour : 0 tout collecté · 1 au moins un hôte en échec · 2 usage · 3 refus d'un garde-fou
+set -Eeuo pipefail
+umask 077
+
+readonly PROG="${0##*/}"
+
+# Fichiers et dossiers collectés (chemins relatifs à /). Les absents sont ignorés.
+readonly CHEMINS=(
+  etc/hostname etc/hosts etc/resolv.conf
+  etc/network/interfaces etc/network/interfaces.d
+  etc/nftables.conf etc/dnsmasq.d etc/chrony etc/wireguard
+  etc/ssh/sshd_config etc/ssh/sshd_config.d etc/sudoers.d
+  etc/systemd/system
+  etc/gitlab/gitlab.rb etc/gitlab-runner/config.toml
+)
+
+DOSSIER="${HOME}/collectes"
+TRAVAIL=""
+
+usage() {
+  cat <<FIN
+Usage : $PROG [-o DOSSIER] HÔTE...
+        $PROG -h
+
+Archive les fichiers de configuration de chaque HÔTE (alias SSH, accès sudo -n)
+dans DOSSIER/<HÔTE>-AAAAMMJJ-HHMMSS.tar.gz.
+
+Options :
+  -o, --dossier DOSSIER  dossier de destination (défaut : ~/collectes, créé en 700)
+  -h, --help             affiche cette aide
+
+Sortie standard : le chemin de chaque archive créée, une par ligne.
+Messages : sur la sortie d'erreur.
+Codes retour : 0 tout collecté, 1 au moins un hôte en échec, 2 usage,
+               3 refus (destination dans un dépôt Git).
+FIN
+}
+
+journal() { printf '%s %s : %s\n' "$(date -Is)" "$PROG" "$*" >&2; }
+erreur_usage() {
+  journal "erreur : $*"
+  echo "Essaie « $PROG --help »." >&2
+  exit 2
+}
+
+nettoyer() {
+  if [[ -n "$TRAVAIL" && -d "$TRAVAIL" ]]; then
+    rm -rf -- "$TRAVAIL"
+  fi
+}
+sur_erreur() {
+  # Erreur inattendue (set -e) : on dit où, au lieu de mourir en silence.
+  journal "erreur inattendue ligne $1 (code $2) : $3"
+}
+trap nettoyer EXIT
+trap 'sur_erreur "$LINENO" "$?" "$BASH_COMMAND"' ERR
+trap 'journal "interrompu"; exit 130' INT
+trap 'journal "arrêté (SIGTERM)"; exit 143' TERM
+
+# collecter HÔTE — crée l'archive de HÔTE et affiche son chemin.
+# Appelée dans un « if » : set -e y est inactif, chaque étape est donc testée.
+collecter() {
+  local hote="$1" horodatage tmp final err liste commande
+  horodatage="$(date +%Y%m%d-%H%M%S)"
+  final="${DOSSIER}/${hote}-${horodatage}.tar.gz"
+  tmp="${TRAVAIL}/${hote}.tar.gz"
+  err="${TRAVAIL}/${hote}.err"
+  liste="${TRAVAIL}/${hote}.liste"
+
+  # La commande distante est une chaîne interprétée par le shell de l'hôte :
+  # chaque argument est protégé avec %q.
+  printf -v commande '%q ' sudo -n tar -C / --create --file=- --ignore-failed-read "${CHEMINS[@]}"
+
+  if ! ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 \
+    "$hote" "$commande" 2>"$err" | gzip -c >"$tmp"; then
+    journal "$hote : échec de la collecte ($(tail -n 1 "$err" 2>/dev/null || echo 'sans message'))"
+    return 1
+  fi
+  # Une archive illisible ou vide est un échec, même si ssh a rendu 0.
+  # (Pas de « tar -t | grep -q » : grep -q ferme le tube dès la première
+  # correspondance, tar reçoit SIGPIPE et pipefail transforme ce succès en échec.)
+  if ! tar -tzf "$tmp" >"$liste" 2>/dev/null || ! grep -qx 'etc/hostname' "$liste"; then
+    journal "$hote : archive invalide ou incomplète"
+    return 1
+  fi
+  if grep -q 'Cannot stat' "$err"; then
+    journal "$hote : $(grep -c 'Cannot stat' "$err") chemin(s) absent(s) ignoré(s)"
+  fi
+  if [[ -e "$final" ]]; then
+    journal "$hote : $final existe déjà (deux collectes dans la même seconde ?)"
+    return 1
+  fi
+  # TRAVAIL est dans DOSSIER (même système de fichiers) : mv est un renommage
+  # atomique, on ne voit jamais d'archive à moitié écrite sous son nom final.
+  mv -f -- "$tmp" "$final" || return 1
+  printf '%s\n' "$final"
+}
+
+main() {
+  local -a hotes=()
+  while (($#)); do
+    case "$1" in
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -o | --dossier)
+        (($# >= 2)) || erreur_usage "l'option $1 attend un dossier"
+        DOSSIER="$2"
+        shift 2
+        ;;
+      --dossier=*)
+        DOSSIER="${1#*=}"
+        shift
+        ;;
+      --)
+        shift
+        hotes+=("$@")
+        break
+        ;;
+      -*) erreur_usage "option inconnue : $1" ;;
+      *)
+        hotes+=("$1")
+        shift
+        ;;
+    esac
+  done
+  ((${#hotes[@]})) || erreur_usage "aucun hôte indiqué"
+
+  local h
+  for h in "${hotes[@]}"; do
+    # Un nom qui commence par « - » serait lu par ssh comme une option.
+    [[ "$h" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || erreur_usage "nom d'hôte invalide : $h"
+  done
+
+  for c in ssh gzip tar git; do
+    command -v "$c" >/dev/null || {
+      journal "outil manquant : $c"
+      exit 1
+    }
+  done
+
+  # Garde-fou : jamais d'archive de secrets dans une copie de travail Git.
+  # Contrôlé sur le premier dossier existant, AVANT de créer quoi que ce soit.
+  local existant="$DOSSIER"
+  while [[ ! -d "$existant" ]]; do existant="$(dirname -- "$existant")"; done
+  if git -C "$existant" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    journal "refus : $DOSSIER est dans un dépôt Git (les archives contiennent des secrets)"
+    exit 3
+  fi
+  mkdir -p -- "$DOSSIER" # umask 077 : dossiers créés en 700
+  # Dossier de travail DANS la destination : même système de fichiers, mv atomique.
+  TRAVAIL="$(mktemp -d "${DOSSIER}/.ms-collecte.XXXXXX")"
+
+  local echecs=0
+  for h in "${hotes[@]}"; do
+    if collecter "$h"; then
+      journal "$h : collecte terminée"
+    else
+      echecs=$((echecs + 1))
+    fi
+  done
+
+  if ((echecs)); then
+    journal "$echecs hôte(s) en échec sur ${#hotes[@]}"
+    exit 1
+  fi
+}
+
+main "$@"

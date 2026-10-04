@@ -1,0 +1,2 @@
+# /etc/nftables.conf sur pbs01 — ajout M01-E28, chaîne input, après la règle « pve01 (masqué par gw01) »
+		iifname "wg0" ip saddr 10.10.20.12 tcp dport 8007 accept comment "git01 : sauvegarde applicative GitLab (M01-E28)"

@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# ms-etat-hotes — état rapide des hôtes du socle, version parallèle (M02-E28, PLAT-358).
+#
+# Usage : ms-etat-hotes [-j|--jobs N] HOTE...
+#   HOTE : alias SSH de adm01 (gw01, dns01, git01…) ou utilisateur@adresse.
+#   -j N : nombre maximal de connexions SSH simultanées (1 à 32, défaut 4).
+#
+# Sortie : une ligne par hôte, champs séparés par une tabulation, DANS L'ORDRE DES ARGUMENTS :
+#   HOTE  ETAT  NOYAU  DEMARRAGE  DISQUE_RACINE_%  MAJ_EN_ATTENTE
+#   ETAT vaut « ok », « injoignable » (échec de la connexion SSH) ou « erreur ».
+# Codes retour : 0 tous les hôtes « ok » ; 1 au moins un hôte non « ok » ; 2 usage ; 130/143 interrompu.
+#
+# Parallélisme en Bash pur (wait -n) : chaque hôte écrit dans SON fichier d'un répertoire temporaire,
+# l'assemblage final suit l'ordre des arguments, et le code retour se déduit des résultats (pas des
+# codes des sous-processus, qui peuvent se perdre). Variantes xargs et GNU parallel : voir le corrigé.
+
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+readonly COMMANDE_DISTANTE='uname -r; uptime -s; df --output=pcent / | tail -n 1 | tr -d " %"; apt-get -s -o Debug::NoLocking=1 dist-upgrade 2>/dev/null | grep -c "^Inst " || true'
+
+_tmp=""
+
+# etat_hote HOTE — affiche la ligne de l'hôte (identique à la version séquentielle).
+etat_hote() {
+  local hote="$1" sortie rc=0 champs
+  sortie="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$hote" "$COMMANDE_DISTANTE" 2>/dev/null)" || rc=$?
+  if ((rc == 255)); then
+    printf '%s\tinjoignable\t-\t-\t-\t-\n' "$hote"
+    return 1
+  fi
+  mapfile -t champs <<<"$sortie"
+  if ((rc != 0 || ${#champs[@]} != 4)); then
+    printf '%s\terreur\t-\t-\t-\t-\n' "$hote"
+    return 1
+  fi
+  printf '%s\tok\t%s\t%s\t%s\t%s\n' "$hote" "${champs[@]}"
+}
+
+nettoyer() {
+  [[ -n "$_tmp" ]] && rm -rf -- "$_tmp"
+  return 0
+}
+
+# arreter CODE — tue les connexions en cours puis sort. Les jobs d'un script non interactif ignorent
+# SIGINT : sans ce ménage, les ssh lancés survivraient au Ctrl-C. On tue d'abord les enfants de chaque
+# job (le ssh), puis le job (le sous-shell).
+arreter() {
+  local pid
+  for pid in $(jobs -p); do
+    pkill -TERM -P "$pid" 2>/dev/null || true
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  wait 2>/dev/null || true
+  log_warn "interrompu : résultats partiels abandonnés"
+  exit "$1"
+}
+
+main() {
+  set -Eeuo pipefail
+  local jobs_max=4
+  while (($#)); do
+    case "$1" in
+      -j | --jobs) [[ $# -ge 2 ]] || { echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2; exit 2; }; jobs_max="$2"; shift 2 ;;
+      -h | --help) echo "Usage : ms-etat-hotes [-j|--jobs N] HOTE..."; exit 0 ;;
+      --) shift; break ;;
+      -*) log_err "option inconnue : $1"; exit 2 ;;
+      *) break ;;
+    esac
+  done
+  (($# > 0)) || { echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2; exit 2; }
+  [[ "$jobs_max" =~ ^([1-9]|[12][0-9]|3[0-2])$ ]] || die "-j attend un entier de 1 à 32" 2
+  require_cmd ssh
+
+  _tmp="$(mktemp -d -t ms-etat-hotes.XXXXXX)"
+  trap nettoyer EXIT
+  trap 'arreter 130' INT
+  trap 'arreter 143' TERM
+
+  local hotes=("$@") i
+  for i in "${!hotes[@]}"; do
+    # Pas plus de jobs_max connexions en vol : on attend qu'UNE se termine (wait -n, bash ≥ 4.3).
+    while (($(jobs -rp | wc -l) >= jobs_max)); do
+      wait -n || true # le code d'un hôte en échec ne doit pas arrêter le script (set -e)
+    done
+    etat_hote "${hotes[$i]}" >"$_tmp/$i" &
+  done
+  wait || true
+
+  # Assemblage dans l'ordre des arguments ; un fichier vide (job tué) compte comme une erreur.
+  local code=0 ligne
+  for i in "${!hotes[@]}"; do
+    ligne="$(<"$_tmp/$i")"
+    [[ -n "$ligne" ]] || ligne="$(printf '%s\terreur\t-\t-\t-\t-' "${hotes[$i]}")"
+    printf '%s\n' "$ligne"
+    [[ "$(cut -f2 <<<"$ligne")" == ok ]] || code=1
+  done
+  exit "$code"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -1,0 +1,10 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/medisphere (état de fin de M01-E24)
+# Les contrôles viennent des gabarits partagés ; ce fichier ne contient que ce
+# qui est propre au projet. M01-E25 ajoute templates/release.yml.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file: templates/qualite.yml

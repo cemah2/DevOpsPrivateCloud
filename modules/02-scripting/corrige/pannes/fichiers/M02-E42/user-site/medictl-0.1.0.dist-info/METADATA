@@ -1,0 +1,5 @@
+Metadata-Version: 2.1
+Name: medictl
+Version: 0.1.0
+Summary: Prototype d'outil d'inventaire du lab MédiSphère
+Requires-Python: >=3.9

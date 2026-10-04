@@ -1,0 +1,112 @@
+#!/bin/bash
+# =============================================================================
+# 10-messages-conventionnels — hook global pre-receive de la forge MédiSphère
+# (M01-E26, ticket SEC-253)
+#
+# Refuse un push qui introduit dans un projet du groupe « plateforme » un commit
+# dont l'en-tête (première ligne du message) ne suit pas Conventional Commits.
+#
+# Installé sur git01 dans <custom_hooks_dir>/pre-receive.d/ (propriétaire git,
+# exécutable). Versionné dans plateforme/medisphere : forge/hooks/.
+#
+# Entrée standard (format Git) : une ligne par référence mise à jour
+#   <ancien-sha> <nouveau-sha> <référence>
+# Variables fournies par Gitaly : GL_PROJECT_PATH, GL_USERNAME, GL_PROTOCOL…
+# Les messages destinés à l'utilisateur commencent par « GL-HOOK-ERR: ».
+#
+# Règles alignées sur commitlint + @commitlint/config-conventional (M01-E14) :
+#   - types : build chore ci docs feat fix perf refactor revert style test ;
+#   - en-tête de 100 caractères au plus ;
+#   - commits ignorés comme par commitlint : fusions et retours arrière générés
+#     par Git/GitLab, fixup!/squash!/amend! (nettoyés avant fusion, voir E12).
+# Le contrôle complet (casse du sujet, pied de page…) reste celui de la CI.
+#
+# Dérogation tracée (import d'un historique existant, urgence) :
+#   git push -o derogation=<TICKET> …
+#   acceptée seulement si GL_USERNAME figure dans /etc/gitlab/wb-hooks/derogations.txt
+#   (un identifiant par ligne, fichier géré par root) ; journalisée dans syslog.
+# =============================================================================
+set -u
+
+PERIMETRE='^plateforme/'
+TYPES='build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test'
+LONGUEUR_MAX=100
+FICHIER_DEROGATIONS=/etc/gitlab/wb-hooks/derogations.txt
+
+# Hors périmètre : rien à contrôler.
+[[ "${GL_PROJECT_PATH:-}" =~ $PERIMETRE ]] || exit 0
+
+# Binaire git : celui du système (paquet Debian), sinon celui embarqué par GitLab.
+if command -v git >/dev/null 2>&1; then
+  GIT=git
+elif [[ -x /opt/gitlab/embedded/bin/git ]]; then
+  GIT=/opt/gitlab/embedded/bin/git
+else
+  echo "GL-HOOK-ERR: contrôle des messages indisponible (git introuvable sur le serveur) : préviens l'équipe Plateforme."
+  exit 1
+fi
+
+# Dérogation : option de push « derogation=<ticket> » d'un utilisateur autorisé.
+derogation=""
+for ((i = 0; i < ${GIT_PUSH_OPTION_COUNT:-0}; i++)); do
+  opt_var="GIT_PUSH_OPTION_$i"
+  case "${!opt_var}" in
+    derogation=?*) derogation="${!opt_var#derogation=}" ;;
+  esac
+done
+if [[ -n "$derogation" ]]; then
+  if [[ -r "$FICHIER_DEROGATIONS" ]] && grep -qxF -- "${GL_USERNAME:-}" "$FICHIER_DEROGATIONS"; then
+    logger -t wb-hooks "dérogation messages : ${GL_USERNAME:-?} sur ${GL_PROJECT_PATH} (ticket ${derogation})" 2>/dev/null || true
+    echo "Dérogation acceptée (ticket ${derogation}) : contrôle des messages non appliqué, action journalisée."
+    exit 0
+  fi
+  echo "GL-HOOK-ERR: dérogation refusée : ${GL_USERNAME:-cet utilisateur} n'est pas autorisé à déroger aux règles de la forge."
+  exit 1
+fi
+
+# Commits ignorés (mêmes motifs que les « defaultIgnores » de commitlint).
+est_ignore() {
+  local e="$1"
+  [[ "$e" =~ ^Merge\ (branch|tag|remote-tracking\ branch|pull\ request)\  ]] && return 0
+  [[ "$e" =~ ^Merge\ .+\ into\ .+ ]] && return 0
+  [[ "$e" =~ ^[Rr]evert\  ]] && return 0
+  [[ "$e" =~ ^[Rr]eapply\  ]] && return 0
+  [[ "$e" =~ ^(fixup|squash|amend)! ]] && return 0
+  return 1
+}
+
+regex_entete="^(${TYPES})(\([[:alnum:]._/-]+\))?!?: [^[:space:]].*$"
+declare -A vus=()
+fautifs=()
+
+while read -r ancien nouveau ref; do
+  : "$ancien"
+  # Suppression d'une référence : rien à contrôler.
+  [[ "$nouveau" =~ ^0+$ ]] && continue
+  # Commits nouveaux pour le dépôt (absents de toutes les références existantes).
+  # Pendant pre-receive, les objets reçus sont en quarantaine et les références
+  # pas encore mises à jour : « --not --all » exclut tout ce qui était déjà là.
+  while IFS= read -r -d '' enregistrement; do
+    sha="${enregistrement%%$'\n'*}"
+    reste="${enregistrement#*$'\n'}"
+    entete="${reste%%$'\n'*}"
+    [[ -n "$sha" && -z "${vus[$sha]:-}" ]] || continue
+    vus[$sha]=1
+    est_ignore "$entete" && continue
+    if [[ ! "$entete" =~ $regex_entete ]]; then
+      fautifs+=("${sha:0:10} « ${entete:0:72} » (${ref#refs/heads/}) : en-tête non conforme")
+    elif ((${#entete} > LONGUEUR_MAX)); then
+      fautifs+=("${sha:0:10} « ${entete:0:72}… » (${ref#refs/heads/}) : en-tête de ${#entete} caractères (max. ${LONGUEUR_MAX})")
+    fi
+  done < <("$GIT" log -z --format='%H%n%B' "$nouveau" --not --all 2>/dev/null)
+done
+
+((${#fautifs[@]} == 0)) && exit 0
+
+echo "GL-HOOK-ERR: push refusé par la forge MédiSphère : messages de commit non conformes (projets plateforme/*)."
+for f in "${fautifs[@]}"; do
+  echo "GL-HOOK-ERR:   $f"
+done
+echo "GL-HOOK-ERR: format attendu : <type>(<portée>)!: <description>, types ${TYPES//|/, }."
+echo "GL-HOOK-ERR: corrige avec « git rebase -i » (reword) puis repousse ; voir CONTRIBUTING.md."
+exit 1

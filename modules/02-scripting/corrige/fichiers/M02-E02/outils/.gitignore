@@ -1,0 +1,25 @@
+# Python (M02-E07)
+.venv/
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Rapports produits par les tests et la CI
+rapports/
+
+# Éditeurs
+*.swp
+*~
+.idea/
+.vscode/
+
+# Filet de sécurité : les fichiers d'environnement contiennent des secrets.
+# Seuls les modèles (*.env.exemple) sont versionnés.
+*.env
+!*.env.exemple

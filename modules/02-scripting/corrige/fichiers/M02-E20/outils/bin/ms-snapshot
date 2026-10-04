@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-snapshot — instantanés des VMs du lab avant intervention (M02-E11, verrou M02-E13)
+#
+# Usage : ms-snapshot [-n|--dry-run] [-k|--keep N] [-p|--prefix PRÉFIXE] (--pool lab | VMID...)
+#
+# Pour chaque VM ciblée (QEMU, membre du pool « lab », pas un template) :
+#   1. crée l'instantané <PRÉFIXE>-AAAAMMJJ-HHMMSS (même horodatage pour toutes les VMs)
+#      et attend la fin de la tâche Proxmox (UPID) ;
+#   2. supprime les instantanés du MÊME préfixe au-delà des N plus récents (défaut 3).
+#      Les instantanés d'un autre préfixe, ou posés à la main, ne sont jamais touchés.
+#
+# Codes retour : 0 succès, 1 au moins une VM en échec, 2 usage, 3 refus d'un garde-fou
+# (VMID hors pool lab, template, autre exécution en cours).
+# Dépendances : bash 5, curl, jq, flock ; accès API par lib/ms-commun.sh (pve_api).
+# =============================================================================
+set -euo pipefail
+
+# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+readonly POOL_AUTORISE=lab
+
+usage() {
+  cat <<'FIN'
+Usage : ms-snapshot [options] (--pool lab | VMID...)
+
+Crée un instantané <préfixe>-AAAAMMJJ-HHMMSS des VMs ciblées, puis ne garde
+que les N instantanés les plus récents de ce préfixe.
+
+Options :
+  -n, --dry-run        affiche ce qui serait fait, sans rien modifier
+  -k, --keep N         nombre d'instantanés du préfixe à conserver (défaut 3, minimum 1)
+  -p, --prefix P       préfixe du nom (défaut « avant ») : une lettre, puis lettres,
+                       chiffres, « _ » ou « - », 24 caractères au plus
+      --pool lab       toutes les VMs du pool lab (hors templates)
+  -h, --help           cette aide
+
+Codes retour : 0 succès, 1 échec d'au moins une VM, 2 usage, 3 refus (garde-fou).
+Exemple : ms-snapshot --prefix avant-maj --keep 2 1002 1004
+FIN
+}
+
+erreur_usage() {
+  log_err "$1"
+  usage >&2
+  exit 2
+}
+
+# prefixe_valide PRÉFIXE — format « pve-configid » de Proxmox ([a-z][a-z0-9_-]*,
+# insensible à la casse) et longueur totale du nom ≤ 40 (16 caractères d'horodatage).
+prefixe_valide() {
+  [[ "$1" =~ ^[A-Za-z][A-Za-z0-9_-]*$ ]] && ((${#1} <= 24))
+}
+
+# cibles RESSOURCES_JSON [VMID...] — affiche « vmid nœud nom » des VMs à traiter.
+# Sans VMID : toutes les VMs QEMU du pool, hors templates. Avec des VMID : chacun
+# doit être une VM QEMU visible, du pool, et pas un template ; sinon refus (3)
+# AVANT toute action : tout ou rien.
+cibles() {
+  local ressources="$1"
+  shift
+  if (($# == 0)); then
+    jq -r --arg p "$POOL_AUTORISE" \
+      '.[] | select(.type == "qemu" and .pool == $p and ((.template // 0) | tostring) != "1")
+           | "\(.vmid) \(.node) \(.name // "?")"' <<<"$ressources"
+    return 0
+  fi
+  local vmid ligne
+  for vmid in "$@"; do
+    ligne="$(jq -r --argjson id "$vmid" --arg p "$POOL_AUTORISE" '
+        [.[] | select(.vmid == $id)] | first
+        | if . == null then "absente"
+          elif .type != "qemu" then "pas une VM QEMU"
+          elif .pool != $p then "hors du pool \($p)"
+          elif ((.template // 0) | tostring) == "1" then "template"
+          else "ok \(.node) \(.name // "?")" end' <<<"$ressources")"
+    case "$ligne" in
+      ok\ *) printf '%s %s\n' "$vmid" "${ligne#ok }" ;;
+      absente) die "VM $vmid introuvable (ou invisible pour le jeton : hors du pool $POOL_AUTORISE) : refus" 3 ;;
+      *) die "VM $vmid : $ligne : refus" 3 ;;
+    esac
+  done
+}
+
+# a_purger PRÉFIXE N — lit sur stdin la liste JSON des instantanés d'une VM
+# (GET …/snapshot), affiche les noms à supprimer, du plus ancien au plus récent.
+# Seuls les noms EXACTEMENT de la forme PRÉFIXE-AAAAMMJJ-HHMMSS sont candidats :
+# « avant » ne capture ni « avant-maj-… » ni « avant-20260101 » (posé à la main).
+a_purger() {
+  jq -r --arg p "$1" --argjson n "$2" '
+      [ .[] | select(.name | test("^" + $p + "-[0-9]{8}-[0-9]{6}$")) ]
+      | sort_by(.snaptime // 0, .name)
+      | .[0:(if length > $n then length - $n else 0 end)]
+      | .[].name'
+}
+
+# traiter_vm VMID NŒUD NOM SNAPNAME — crée puis purge ; 0 si tout s'est bien passé.
+traiter_vm() {
+  local vmid="$1" noeud="$2" nom="$3" snap="$4" upid liste a_suppr s echec=0
+  local base="/nodes/$noeud/qemu/$vmid/snapshot"
+
+  if ((DRY_RUN)); then
+    log_info "[simulation] $vmid ($nom) : créerait l'instantané $snap"
+  else
+    log_info "$vmid ($nom) : création de l'instantané $snap"
+    if ! upid="$(pve_api POST "$base" "snapname=$snap" \
+      "description=ms-snapshot par ${USER:-?} depuis $(hostname -s)")" \
+      || ! pve_wait_task "$(jq -r '.' <<<"$upid")"; then
+      # Jamais de purge si la création a échoué : on garderait moins de N points de retour.
+      log_err "$vmid ($nom) : instantané NON créé, purge annulée pour cette VM"
+      return 1
+    fi
+  fi
+
+  liste="$(pve_api GET "$base")" || {
+    log_err "$vmid ($nom) : liste des instantanés illisible, purge annulée"
+    return 1
+  }
+  if ((DRY_RUN)); then
+    # Simulation fidèle : la purge doit tenir compte de l'instantané qui serait créé.
+    liste="$(jq -c --arg s "$snap" --argjson t "$(date +%s)" '. + [{name: $s, snaptime: $t}]' <<<"$liste")" || return 1
+  fi
+  # Fonction appelée dans un « if » : set -e y est suspendu, chaque échec est testé.
+  a_suppr="$(a_purger "$PREFIXE" "$KEEP" <<<"$liste")" || {
+    log_err "$vmid ($nom) : liste des instantanés inexploitable, purge annulée"
+    return 1
+  }
+  while IFS= read -r s; do
+    [[ -n "$s" ]] || continue
+    if ((DRY_RUN)); then
+      log_info "[simulation] $vmid ($nom) : supprimerait l'ancien instantané $s"
+      continue
+    fi
+    log_info "$vmid ($nom) : suppression de l'ancien instantané $s"
+    if ! upid="$(pve_api DELETE "$base/$s")" || ! pve_wait_task "$(jq -r '.' <<<"$upid")"; then
+      log_err "$vmid ($nom) : suppression de $s en échec"
+      echec=1
+    fi
+  done <<<"$a_suppr"
+  return "$echec"
+}
+
+main() {
+  DRY_RUN=0
+  KEEP=3
+  PREFIXE=avant
+  local pool="" vmids=()
+
+  while (($# > 0)); do
+    case "$1" in
+      -n | --dry-run) DRY_RUN=1 ;;
+      -k | --keep)
+        (($# >= 2)) || erreur_usage "l'option $1 attend une valeur"
+        KEEP="$2"
+        shift
+        ;;
+      --keep=*) KEEP="${1#*=}" ;;
+      -p | --prefix)
+        (($# >= 2)) || erreur_usage "l'option $1 attend une valeur"
+        PREFIXE="$2"
+        shift
+        ;;
+      --prefix=*) PREFIXE="${1#*=}" ;;
+      --pool)
+        (($# >= 2)) || erreur_usage "l'option $1 attend une valeur"
+        pool="$2"
+        shift
+        ;;
+      --pool=*) pool="${1#*=}" ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        vmids+=("$@")
+        break
+        ;;
+      -*) erreur_usage "option inconnue : $1" ;;
+      *) vmids+=("$1") ;;
+    esac
+    shift
+  done
+
+  # --- Validation des arguments (usage : code 2 ; garde-fous : code 3) ---
+  [[ "$KEEP" =~ ^[1-9][0-9]*$ ]] || die "--keep attend un entier ≥ 1 (reçu : « $KEEP »)" 2
+  prefixe_valide "$PREFIXE" || die "préfixe invalide « $PREFIXE » (une lettre, puis lettres, chiffres, _ ou - ; 24 caractères au plus)" 2
+  if [[ -n "$pool" && ${#vmids[@]} -gt 0 ]]; then
+    die "--pool et une liste de VMID sont exclusifs" 2
+  fi
+  if [[ -z "$pool" && ${#vmids[@]} -eq 0 ]]; then
+    erreur_usage "aucune cible : indique --pool $POOL_AUTORISE ou des VMID"
+  fi
+  if [[ -n "$pool" && "$pool" != "$POOL_AUTORISE" ]]; then
+    die "seul le pool « $POOL_AUTORISE » est autorisé (reçu : « $pool »)" 3
+  fi
+  local v
+  for v in "${vmids[@]}"; do
+    [[ "$v" =~ ^[1-9][0-9]{2,8}$ ]] || die "VMID invalide : « $v »" 2
+  done
+
+  require_cmd curl jq flock
+  # Une seule exécution à la fois : deux purges concurrentes supprimeraient trop (M02-E13).
+  lock_or_die ms-snapshot
+
+  local ressources liste_cibles
+  ressources="$(pve_api GET /cluster/resources type=vm)" || die "inventaire des VMs illisible"
+  liste_cibles="$(cibles "$ressources" "${vmids[@]}")" || exit $?
+  [[ -n "$liste_cibles" ]] || die "aucune VM à traiter dans le pool $POOL_AUTORISE"
+
+  local snap total=0 echecs=0 vmid noeud nom
+  snap="${PREFIXE}-$(date +%Y%m%d-%H%M%S)"
+  while read -r vmid noeud nom; do
+    total=$((total + 1))
+    if ! traiter_vm "$vmid" "$noeud" "$nom" "$snap"; then
+      echecs=$((echecs + 1))
+    fi
+  done <<<"$liste_cibles"
+
+  if ((echecs > 0)); then
+    log_err "bilan : $echecs VM(s) en échec sur $total — instantané $snap"
+    exit 1
+  fi
+  local mode=""
+  if ((DRY_RUN)); then
+    mode=" (simulation, rien n'a été modifié)"
+  fi
+  log_info "bilan : $total VM(s) traitée(s)$mode — instantané $snap"
+}
+
+# Exécuté : on lance main. Chargé par « source » (tests bats) : on expose seulement les fonctions.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

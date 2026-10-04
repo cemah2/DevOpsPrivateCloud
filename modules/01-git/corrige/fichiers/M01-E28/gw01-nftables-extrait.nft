@@ -1,0 +1,10 @@
+# /etc/nftables.conf sur gw01 — ajouts M01-E28 (à intégrer, puis nft -c -f avant rechargement)
+
+# --- Adresses (section des « define ») ---
+define GIT01 = 10.10.20.12
+
+# --- Chaîne forward, section « Sauvegardes vers PAR2 » ---
+		iifname $V_INFRA ip saddr $GIT01 oifname $WG_S2S ip daddr $PBS01 tcp dport 8007 accept comment "git01 vers PBS : sauvegarde applicative GitLab (M01-E28)"
+
+# Pas de masquage : postrouting ne masque vers wg0 que le LAN maison ;
+# pbs01 voit donc la vraie source 10.10.20.12 (et y répond par sa route 10.10.0.0/16 via wg0).

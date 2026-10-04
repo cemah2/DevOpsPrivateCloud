@@ -1,0 +1,15 @@
+# ~/.config/git/ignore — ignorés GLOBAUX, propres à ce poste (M01-E03)
+# Filet de sécurité personnel : ne remplace pas le .gitignore de chaque projet,
+# qui est versionné et vaut pour toute l'équipe.
+
+# Éditeurs
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Secrets : ne doivent jamais être dans un dépôt
+.env
+.env.*
+*.token

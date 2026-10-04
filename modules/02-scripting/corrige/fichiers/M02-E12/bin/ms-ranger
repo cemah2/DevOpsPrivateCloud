@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-ranger — range les vieux fichiers d'un dossier par mois, avec preuve d'intégrité
+# (M02-E12)
+#
+# Usage : ms-ranger [-n|--dry-run] [-a|--age JOURS] [--] SOURCE DESTINATION
+#
+# Chaque fichier ORDINAIRE de SOURCE (sous-dossiers compris, fichiers cachés
+# compris) modifié il y a plus de JOURS jours (défaut 90, au sens de find -mtime +JOURS)
+# est déplacé vers DESTINATION/AAAA-MM/<chemin relatif dans SOURCE>, AAAA-MM étant
+# le mois de sa dernière modification.
+#   - Les liens symboliques ne sont ni suivis ni déplacés (signalés).
+#   - Un fichier n'en écrase jamais un autre : conflit signalé, source laissée en place.
+#   - L'empreinte SHA-256 est calculée AVANT le déplacement et ajoutée au manifeste
+#     DESTINATION/MANIFESTE-AAAAMMJJ-HHMMSS-PID.sha256 (format sha256sum, chemins relatifs
+#     à DESTINATION), puis tout le manifeste est revérifié APRÈS les déplacements.
+#   - Tous les noms sont acceptés : espaces, tiret initial, *, ?, [, retour à la ligne…
+#
+# Codes retour : 0 succès, 1 au moins un fichier en erreur ou manifeste invalide,
+#                2 usage, 3 refus (DESTINATION dans SOURCE, ou l'inverse).
+# =============================================================================
+set -euo pipefail
+
+# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+usage() {
+  cat <<'FIN'
+Usage : ms-ranger [-n|--dry-run] [-a|--age JOURS] [--] SOURCE DESTINATION
+
+Déplace les fichiers de SOURCE modifiés il y a plus de JOURS jours (défaut 90)
+vers DESTINATION/AAAA-MM/<chemin relatif>, avec un manifeste SHA-256 vérifié.
+FIN
+}
+
+# ligne_manifeste EMPREINTE NOM — ligne au format de sha256sum, y compris pour
+# les noms contenant « \ » ou un retour à la ligne (préfixe « \ » et échappements,
+# exactement comme sha256sum les écrit et les relit avec --check).
+ligne_manifeste() {
+  local h="$1" nom="$2"
+  if [[ "$nom" == *$'\n'* || "$nom" == *\\* ]]; then
+    nom="${nom//\\/\\\\}"
+    nom="${nom//$'\n'/\\n}"
+    printf '\\%s  %s\n' "$h" "$nom"
+  else
+    printf '%s  %s\n' "$h" "$nom"
+  fi
+}
+
+main() {
+  local dry_run=0 age=90
+  while (($# > 0)); do
+    case "$1" in
+      -n | --dry-run) dry_run=1 ;;
+      -a | --age)
+        (($# >= 2)) || die "--age attend une valeur" 2
+        age="$2"
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+      *) break ;;
+    esac
+    shift
+  done
+  if (($# != 2)); then
+    usage >&2
+    exit 2
+  fi
+  [[ "$age" =~ ^[0-9]+$ ]] || die "--age attend un nombre de jours (reçu : « $age »)" 2
+  require_cmd find sha256sum realpath
+
+  # Chemins absolus et canoniques : comparaisons fiables, chemins relatifs propres.
+  local source dest
+  source="$(realpath -e -- "$1")" || die "SOURCE introuvable : $1" 2
+  [[ -d "$source" ]] || die "SOURCE n'est pas un dossier : $1" 2
+  [[ "$source" != / ]] || die "SOURCE ne peut pas être / " 3
+  dest="$(realpath -m -- "$2")"
+  if [[ "$dest/" == "$source/"* || "$source/" == "$dest/"* ]]; then
+    # Sinon find retrouverait les fichiers déjà rangés et les rangerait encore.
+    die "SOURCE et DESTINATION ne doivent pas être l'un dans l'autre" 3
+  fi
+
+  # Liste séparée par des NUL : le seul séparateur qu'un nom de fichier ne peut
+  # pas contenir. Le code de retour de find est récupéré (wait sur $!), sinon
+  # un « Permission denied » passerait inaperçu.
+  local fichiers=()
+  mapfile -d '' -t fichiers < <(find "$source" -type f -mtime +"$age" -print0)
+  wait "$!" || die "find a échoué en parcourant $source : rien n'a été déplacé" 1
+  local liens
+  liens="$(find "$source" -type l -printf . | wc -c)"
+
+  local horodatage manifeste f rel mois cible h n=0 erreurs=0 octets=0
+  horodatage="$(date +%Y%m%d-%H%M%S)"
+  manifeste="$dest/MANIFESTE-$horodatage-$$.sha256"
+  if ((! dry_run)); then
+    mkdir -p -- "$dest"
+    [[ ! -e "$manifeste" ]] || die "le manifeste $manifeste existe déjà" 1
+  fi
+
+  for f in "${fichiers[@]}"; do
+    rel="${f#"$source"/}"
+    mois="$(date -r "$f" +%Y-%m)"
+    cible="$dest/$mois/$rel"
+    if [[ -e "$cible" || -L "$cible" ]]; then
+      log_err "conflit, fichier laissé en place : $(printf '%q' "$rel") (existe déjà dans $mois/)"
+      erreurs=$((erreurs + 1))
+      continue
+    fi
+    if ((dry_run)); then
+      printf '[simulation] %q -> %q\n' "$rel" "$mois/$rel"
+      n=$((n + 1))
+      continue
+    fi
+    if ! h="$(sha256sum <"$f")"; then
+      log_err "lecture impossible : $(printf '%q' "$rel")"
+      erreurs=$((erreurs + 1))
+      continue
+    fi
+    if ! mkdir -p -- "$(dirname -- "$cible")" || ! mv -- "$f" "$cible"; then
+      log_err "déplacement impossible : $(printf '%q' "$rel")"
+      erreurs=$((erreurs + 1))
+      continue
+    fi
+    ligne_manifeste "${h%% *}" "$mois/$rel" >>"$manifeste"
+    octets=$((octets + $(stat -c %s -- "$cible")))
+    n=$((n + 1))
+  done
+
+  if ((dry_run)); then
+    log_info "simulation : $n fichier(s) seraient rangés, $erreurs conflit(s), $liens lien(s) symbolique(s) ignoré(s)"
+    ((erreurs == 0)) || exit 1
+    return 0
+  fi
+  if ((n > 0)); then
+    # Preuve : on relit chaque fichier À SA NOUVELLE PLACE et on compare à
+    # l'empreinte calculée avant le déplacement.
+    if ! (cd -- "$dest" && sha256sum --check --quiet --strict -- "$(basename -- "$manifeste")"); then
+      log_err "manifeste $manifeste : au moins une empreinte ne correspond plus"
+      exit 1
+    fi
+  fi
+  local preuve=""
+  if ((n > 0)); then
+    preuve=" ; manifeste vérifié : $manifeste"
+  fi
+  log_info "$n fichier(s) rangé(s) ($octets octets), $erreurs erreur(s), $liens lien(s) symbolique(s) ignoré(s)$preuve"
+  ((erreurs == 0)) || exit 1
+}
+
+main "$@"

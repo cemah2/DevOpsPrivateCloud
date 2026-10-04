@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-purge-rapports — purge des rapports applicatifs selon la politique PLAT-384
+# (version corrigée après INC-2843 ; remplace la version 0.1 de Lucas).
+#
+# Usage : ms-purge-rapports [-n|--dry-run] [-c FICHIER_CONF] [-h|--help]
+#
+# Configuration (syntaxe shell) : RACINE (chemin absolu), RETENTION_JOURS (entier ≥ 1),
+# APPLIS_RETIREES (noms séparés par des espaces).
+# Règles : 1) dossiers des applications retirées ; 2) contenu des tmp/ ; 3) *.json et
+# *.pdf de plus de RETENTION_JOURS jours, jamais dans a-conserver/, jamais hors RACINE.
+#
+# Codes retour : 0 succès, 1 erreur, 2 usage, 3 refus d'un garde-fou.
+# =============================================================================
+set -euo pipefail
+shopt -s nullglob
+
+PROG="${0##*/}"
+DRY_RUN=0
+CONF="$(dirname "$(readlink -f "$0")")/../etc/purge.conf"
+
+log() { printf '%s %s: %s\n' "$(date -Is)" "$PROG" "$*" >&2; }
+die() { log "ERREUR : $1"; exit "${2:-1}"; }
+usage() {
+  printf 'Usage : %s [-n|--dry-run] [-c FICHIER_CONF] [-h|--help]\n' "$PROG"
+  printf '  -n, --dry-run   affiche ce qui serait supprimé, ne supprime rien\n'
+  printf '  -c FICHIER      configuration (défaut : %s)\n' "$CONF"
+}
+
+while (($#)); do
+  case "$1" in
+    -n | --dry-run) DRY_RUN=1; shift ;;
+    -c)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      CONF="$2"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+
+# --- Configuration : lue puis validée, jamais utilisée telle quelle ----------------
+[[ -r "$CONF" ]] || die "configuration illisible : $CONF" 1
+RACINE="" RETENTION_JOURS="" APPLIS_RETIREES=""
+# shellcheck source=/dev/null
+source "$CONF"
+[[ "$RACINE" == /* ]] || die "RACINE doit être un chemin absolu (lu : « $RACINE »)" 3
+[[ "$RETENTION_JOURS" =~ ^[1-9][0-9]*$ ]] || die "RETENTION_JOURS invalide : « $RETENTION_JOURS »" 3
+RACINE="$(readlink -f -- "$RACINE")"
+[[ "$RACINE" != *[][*?]* ]] || die "RACINE ne doit pas contenir de caractère de motif (* ? [ ])" 3
+[[ -d "$RACINE" && "$RACINE" != / ]] || die "racine absente ou interdite : $RACINE" 3
+# Garde-fou : on ne travaille que sur une racine explicitement marquée purgeable.
+[[ -f "$RACINE/.zone-de-test" || -f "$RACINE/.zone-purgeable" ]] \
+  || die "$RACINE n'est pas marquée purgeable (.zone-purgeable absent) : refus" 3
+read -r -a retirees <<<"$APPLIS_RETIREES"
+for app in "${retirees[@]}"; do
+  [[ "$app" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "nom d'application retirée invalide : « $app »" 3
+done
+
+# supprimer CHEMIN... — supprime (ou annonce, en dry-run) des chemins SOUS la racine.
+supprimer() {
+  local c
+  for c in "$@"; do
+    [[ "$c" == "$RACINE"/?* ]] || die "chemin hors racine refusé : $c" 3
+    if ((DRY_RUN)); then
+      printf 'supprimerait : %s\n' "$c"
+    else
+      rm -rf -- "$c"
+      printf 'supprimé : %s\n' "$c"
+    fi
+  done
+}
+
+log "début (racine $RACINE, rétention ${RETENTION_JOURS} j, dry-run=$DRY_RUN)"
+
+# --- 1. Applications retirées ----------------------------------------------------
+for app in "${retirees[@]}"; do
+  if [[ -d "${RACINE:?}/${app:?}" ]]; then
+    supprimer "$RACINE/$app"
+  fi
+done
+
+# --- 2. Contenu des dossiers tmp/ (s'ils existent) ---------------------------------
+for tmp in "$RACINE"/*/tmp; do
+  [[ -d "$tmp" ]] || continue
+  for f in "$tmp"/* "$tmp"/.[!.]* "$tmp"/..?*; do
+    supprimer "$f"
+  done
+done
+
+# --- 3. Rapports anciens, hors a-conserver/ ----------------------------------------
+# Exclusion par chemin plutôt que « -prune » : combiné à -delete (qui impose -depth),
+# -prune est inopérant et GNU find refuse de s'exécuter. Les -name sont groupés entre
+# parenthèses ; seuls les fichiers ordinaires sont traités. Les motifs de -path portent
+# sur le chemin COMPLET : « */tmp/* » exclurait tout si la racine était sous /tmp, d'où
+# le préfixe $RACINE (validé plus haut : sans caractère de motif).
+# mapfile + wait "$!" : l'échec de find, lancé dans une substitution de processus, n'est
+# pas ignoré (bash ≥ 5.1).
+mapfile -d '' -t anciens < <(find "$RACINE" -mindepth 2 -type f \
+  ! -path "$RACINE/*/a-conserver/*" ! -path "$RACINE/*/tmp/*" \
+  \( -name '*.json' -o -name '*.pdf' \) \
+  -mtime +"$RETENTION_JOURS" -print0)
+wait "$!" || die "échec de la recherche des rapports anciens" 1
+if ((${#anciens[@]})); then
+  supprimer "${anciens[@]}"
+fi
+
+log "terminé"

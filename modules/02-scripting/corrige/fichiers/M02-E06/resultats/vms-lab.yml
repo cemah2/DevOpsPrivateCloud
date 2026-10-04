@@ -1,0 +1,35 @@
+- vmid: 1000
+  nom: gw01
+  etiquettes:
+    - socle
+    - role-routeur
+- vmid: 1001
+  nom: adm01
+  etiquettes:
+    - socle
+    - role-bastion
+- vmid: 1002
+  nom: dns01
+  etiquettes:
+    - socle
+    - role-dns
+- vmid: 1004
+  nom: git01
+  etiquettes:
+    - socle
+    - role-gitlab
+- vmid: 1007
+  nom: runner01
+  etiquettes:
+    - role-runner
+    - socle
+- vmid: 2021
+  nom: m02-essai
+  etiquettes:
+    - env-m02
+- vmid: 2022
+  nom: m02-sans-etiquette
+  etiquettes: []
+- vmid: 5003
+  nom: sbx03
+  etiquettes: []

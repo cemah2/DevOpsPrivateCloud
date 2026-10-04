@@ -1,0 +1,20 @@
+# /etc/systemd/system/ms-alerte@.service — M02-E26 (PLAT-356)
+# Gestionnaire d'échec générique : OnFailure=ms-alerte@%n.service dans l'unité surveillée.
+# L'instance (%i) est le nom de l'unité en échec. Configuration facultative : /etc/ms-alerte.env
+# (MS_ALERTE_WEBHOOK=https://…), mode 600, root.
+
+[Unit]
+Description=MédiSphère : alerte d'échec de %i
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/ms-alerte.env
+ExecStart=/usr/local/bin/ms-alerte %i
+# Utilisateur éphémère sans privilège, autorisé à lire le journal système.
+DynamicUser=yes
+SupplementaryGroups=systemd-journal
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+TimeoutStartSec=1min

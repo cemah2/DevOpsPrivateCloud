@@ -1,0 +1,18 @@
+# ~/.gitconfig sur adm01 — EXTRAIT (M01-E27) : signature SSH des commits et étiquettes
+# (si M01-E03 a déjà posé gpg.format et user.signingkey, vérifie-les simplement)
+[user]
+	# DOIT être une adresse VÉRIFIÉE de ton compte GitLab, sinon « Unverified »
+	email = <PRÉNOM.NOM>@medisphere.internal
+	# Clé DÉDIÉE à la signature (chemin de la clé publique ; la privée est à côté)
+	signingkey = ~/.ssh/id_ed25519_signature.pub
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	# Fichier de confiance LOCAL, mis à jour volontairement depuis
+	# plateforme/medisphere:docs/socle/securite/allowed_signers (jamais le fichier
+	# du dépôt directement : une branche pourrait y ajouter une clé)
+	allowedSignersFile = ~/.config/git/allowed_signers
+[commit]
+	gpgsign = true
+[tag]
+	gpgsign = true

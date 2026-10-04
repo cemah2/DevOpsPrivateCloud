@@ -1,0 +1,10 @@
+# docs/socle/securite/allowed_signers — plateforme/medisphere (M01-E27)
+# Clés PUBLIQUES de signature de l'équipe Plateforme (format ssh-keygen ALLOWED SIGNERS).
+# Une ligne par clé : adresse(s), options, type, clé, commentaire.
+# Modification : par MR relue par Sophie Laurent (RSSI). Une clé retirée reste
+# ici avec valid-before pour que les anciens commits restent vérifiables.
+#
+# Exemple (clé fictive, à remplacer par la tienne : cat ~/.ssh/id_ed25519_signature.pub) :
+<PRÉNOM.NOM>@medisphere.internal namespaces="git" valid-after="20261003" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI<…> signature <MOI> 2026
+# Clé retirée (rotation du AAAA-MM-JJ) : valide pour les signatures antérieures seulement
+#<PRÉNOM.NOM>@medisphere.internal namespaces="git" valid-before="20261003" ssh-ed25519 AAAA<…> ancienne clé

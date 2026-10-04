@@ -1,0 +1,47 @@
+# .gitlab-ci.yml — plateforme/outils (proposition de Lucas Martin, MR !1 « ci: première CI »)
+# « J'ai tout mis : qualité, tests, secrets, release. Ça marche sur ma branche. »
+
+include:
+  - project: plateforme/ci-templates
+    ref: main
+    file: templates/qualite.yml
+
+variables:
+  GIT_DEPTH: 1
+  # jeton du bot pour la release (je le mettrai dans les variables plus tard)
+  # (copie du workbook : la valeur réelle a été remplacée par des x)
+  GITLAB_TOKEN: "glpat-xxxxxxxxxxxxxxxx"
+
+stages:
+  - lint
+  - test
+  - release
+
+debug:
+  stage: lint
+  tags: [shell]
+  script:
+    - env | sort
+
+secrets:
+  stage: lint
+  tags: [shell]
+  script:
+    - gitleaks dir . --no-banner
+  allow_failure: true
+
+tests:
+  stage: test
+  only:
+    - merge_requests
+  script:
+    - pip install -r requirements.txt
+    - pytest -q
+
+release:
+  stage: release
+  tags: [shell]
+  when: always
+  script:
+    - npm install -g semantic-release @semantic-release/gitlab @semantic-release/changelog @semantic-release/git
+    - semantic-release

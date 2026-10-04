@@ -1,0 +1,18 @@
+# .gitlab-ci.yml d'essai du runner (M01-E23), dans un projet jetable de formation/
+# (ex. formation/git-labo, branche essai-runner). À retirer après l'essai.
+
+etiquette-shell:
+  tags: [shell]
+  script:
+    - id
+    - hostname -f
+    - pwd
+    - git --version
+    - pre-commit --version
+    - gitleaks version
+    - uv --version
+    - echo "Clone fait par le runner depuis $CI_SERVER_URL (TLS vérifié par le magasin du système)"
+
+sans-etiquette:
+  script:
+    - echo "Ce job ne devrait jamais démarrer : aucun runner n'accepte les jobs sans étiquette."

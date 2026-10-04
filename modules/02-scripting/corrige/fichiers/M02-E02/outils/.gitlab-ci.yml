@@ -1,0 +1,18 @@
+# .gitlab-ci.yml — plateforme/outils (M02-E02)
+#
+# Gabarits communs de la plateforme (M01-E24, M01-E25), figés sur l'étiquette v1 :
+#   qualite.yml : pre-commit, commitlint, gitleaks (étape lint)
+#   release.yml : semantic-release sur la branche par défaut (étape release)
+# Les jobs propres au projet (shellcheck, bats, ruff, pytest, build) arrivent en M02-E24.
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+stages:
+  - lint
+  - test
+  - build
+  - release

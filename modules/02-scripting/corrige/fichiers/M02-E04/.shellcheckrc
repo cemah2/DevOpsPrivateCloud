@@ -1,0 +1,16 @@
+# .shellcheckrc — configuration ShellCheck du projet plateforme/outils (M02-E04).
+# ShellCheck la trouve en remontant depuis le dossier du script analysé :
+# elle s'applique donc à tout le dépôt, en local, dans pre-commit et en CI.
+
+# Suivre les « source » vers d'autres fichiers (ex. lib/ms-commun.sh),
+# en résolvant les chemins relatifs depuis le dossier du script analysé.
+external-sources=true
+source-path=SCRIPTDIR
+
+# Vérifications optionnelles retenues (liste complète : shellcheck --list-optional).
+# [[ ]] partout : nos scripts sont en Bash, pas en sh POSIX.
+enable=require-double-brackets
+# [[ "$x" ]] → [[ -n "$x" ]] : l'intention se lit.
+enable=avoid-nullary-conditions
+# « which » n'est pas standard : command -v.
+enable=deprecate-which

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# ms-etat-hotes — état rapide des hôtes du socle, VERSION SÉQUENTIELLE fournie (M02-E28).
+#
+# Usage : ms-etat-hotes HOTE...
+#   HOTE : alias SSH de adm01 (gw01, dns01, git01…) ou utilisateur@adresse.
+#
+# Sortie : une ligne par hôte, champs séparés par une tabulation, DANS L'ORDRE DES ARGUMENTS :
+#   HOTE  ETAT  NOYAU  DEMARRAGE  DISQUE_RACINE_%  MAJ_EN_ATTENTE
+#   ETAT vaut « ok », « injoignable » (échec de la connexion SSH) ou « erreur » (commande distante en
+#   échec ou réponse incomplète) ; les autres champs valent « - » si ETAT n'est pas « ok ».
+# Codes retour : 0 tous les hôtes « ok » ; 1 au moins un hôte injoignable ou en erreur ; 2 usage.
+#
+# À copier dans bin/ du projet plateforme/outils, puis à paralléliser (M02-E28).
+
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+# Commande lancée sur chaque hôte : quatre lignes (noyau, démarrage, % disque racine, mises à jour).
+# apt-get -s (simulation) ne demande pas les droits root.
+readonly COMMANDE_DISTANTE='uname -r; uptime -s; df --output=pcent / | tail -n 1 | tr -d " %"; apt-get -s -o Debug::NoLocking=1 dist-upgrade 2>/dev/null | grep -c "^Inst " || true'
+
+# etat_hote HOTE — affiche la ligne de l'hôte ; code 1 si l'hôte n'est pas « ok ».
+etat_hote() {
+  local hote="$1" sortie rc=0 champs
+  # -n : ssh ne lit pas l'entrée standard (sinon il avalerait celle d'une boucle « while read »).
+  sortie="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$hote" "$COMMANDE_DISTANTE" 2>/dev/null)" || rc=$?
+  if ((rc == 255)); then
+    printf '%s\tinjoignable\t-\t-\t-\t-\n' "$hote"
+    return 1
+  fi
+  mapfile -t champs <<<"$sortie"
+  if ((rc != 0 || ${#champs[@]} != 4)); then
+    printf '%s\terreur\t-\t-\t-\t-\n' "$hote"
+    return 1
+  fi
+  printf '%s\tok\t%s\t%s\t%s\t%s\n' "$hote" "${champs[@]}"
+}
+
+main() {
+  set -Eeuo pipefail
+  (($# > 0)) || { echo "Usage : ms-etat-hotes HOTE..." >&2; exit 2; }
+  require_cmd ssh
+  local hote code=0
+  for hote in "$@"; do
+    etat_hote "$hote" || code=1
+  done
+  exit "$code"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

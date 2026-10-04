@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-export-config — photographie la configuration des VMs du pool lab (M02-E13)
+#
+# Usage : ms-export-config [-g|--garder N]
+#
+# Écrit un export complet dans $MS_EXPORT_DIR/AAAAMMJJ-HHMMSS/ :
+#   <VMID>-<nom>.json   configuration Proxmox de la VM (clés triées : diff lisible)
+#   index.json          liste des VMs exportées (vmid, nom, nœud, état, étiquettes)
+# puis fait pointer le lien « dernier » sur ce nouvel export et ne garde que les
+# N exports les plus récents (défaut 14).
+#
+# Garanties pour les lecteurs (diff, revue, autre script) :
+#   - un export n'apparaît sous son nom définitif que COMPLET (construit dans un
+#     dossier temporaire du même système de fichiers, puis renommé : rename(2)
+#     est atomique) ;
+#   - « dernier » est remplacé atomiquement (nouveau lien puis mv -T) ;
+#   - une interruption (Ctrl-C, kill, erreur) ne laisse aucun dossier temporaire ;
+#   - deux exécutions ne se chevauchent jamais (verrou, code 3 pour la seconde).
+#
+# Codes retour : 0 succès, 1 erreur, 2 usage, 3 autre exécution en cours.
+# Variables : MS_EXPORT_DIR (défaut ~/exports/config-vms), et celles de lib/ms-commun.sh.
+# =============================================================================
+set -euo pipefail
+umask 077
+
+# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+readonly BASE="${MS_EXPORT_DIR:-$HOME/exports/config-vms}"
+GARDER=14
+TMP=""
+
+usage() {
+  cat <<'FIN'
+Usage : ms-export-config [-g|--garder N]
+
+Exporte la configuration de chaque VM du pool lab dans un dossier horodaté
+de $MS_EXPORT_DIR (défaut ~/exports/config-vms), met à jour le lien « dernier »
+et ne garde que les N exports les plus récents (défaut 14).
+FIN
+}
+
+# Nettoyage unique, quelle que soit la cause de la sortie. Les signaux sont
+# convertis en sortie avec le code conventionnel (128 + numéro), ce qui
+# déclenche le piège EXIT : un seul endroit pour nettoyer.
+nettoyer() {
+  if [[ -n "$TMP" && -d "$TMP" ]]; then
+    rm -rf -- "$TMP"
+    log_warn "export interrompu : dossier temporaire supprimé, « dernier » inchangé"
+  fi
+}
+trap nettoyer EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+exporter() {
+  local ressources liste horodatage vmid noeud nom config n=0
+  ressources="$(pve_api GET /cluster/resources type=vm)" || die "inventaire des VMs illisible"
+  liste="$(jq -r '.[] | select(.type == "qemu" and .pool == "lab") | "\(.vmid) \(.node) \(.name // "sans-nom")"' <<<"$ressources")"
+  [[ -n "$liste" ]] || die "aucune VM visible dans le pool lab"
+
+  mkdir -p -- "$BASE"
+  horodatage="$(date +%Y%m%d-%H%M%S)"
+  [[ ! -e "$BASE/$horodatage" ]] || die "un export $horodatage existe déjà"
+  # Même dossier parent que la destination : le renommage final reste atomique
+  # (un mv entre deux systèmes de fichiers serait une copie, visible à moitié).
+  TMP="$(mktemp -d -- "$BASE/.en-cours.XXXXXX")"
+
+  while read -r vmid noeud nom; do
+    config="$(pve_api GET "/nodes/$noeud/qemu/$vmid/config")" || die "configuration de $vmid ($nom) illisible : export abandonné"
+    jq -S . <<<"$config" >"$TMP/$vmid-$nom.json"
+    n=$((n + 1))
+  done <<<"$liste"
+  jq -S '[.[] | select(.type == "qemu" and .pool == "lab")
+          | {vmid, name, node, status, template: ((.template // 0) == 1), tags: (.tags // "")}]
+         | sort_by(.vmid)' <<<"$ressources" >"$TMP/index.json"
+
+  # Publication : un seul rename, puis bascule atomique du lien « dernier ».
+  chmod 750 -- "$TMP"
+  mv -T -- "$TMP" "$BASE/$horodatage"
+  TMP=""
+  ln -s -- "$horodatage" "$BASE/.dernier.$$"
+  mv -T -- "$BASE/.dernier.$$" "$BASE/dernier"
+  log_info "export $horodatage publié : $n VM(s) dans $BASE/$horodatage"
+}
+
+# Rotation : seuls les dossiers au format exact AAAAMMJJ-HHMMSS sont candidats
+# (jamais « dernier », ni un dossier posé à la main). Les noms se trient comme les dates.
+rotation() {
+  local anciens=() d
+  mapfile -t anciens < <(find "$BASE" -mindepth 1 -maxdepth 1 -type d \
+    -regextype posix-extended -regex '.*/[0-9]{8}-[0-9]{6}' -printf '%f\n' | sort -r | tail -n +"$((GARDER + 1))")
+  for d in "${anciens[@]}"; do
+    rm -rf -- "${BASE:?}/$d"
+    log_info "ancien export supprimé : $d"
+  done
+}
+
+main() {
+  while (($# > 0)); do
+    case "$1" in
+      -g | --garder)
+        (($# >= 2)) || die "--garder attend une valeur" 2
+        GARDER="$2"
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        usage >&2
+        exit 2
+        ;;
+    esac
+    shift
+  done
+  [[ "$GARDER" =~ ^[1-9][0-9]*$ ]] || die "--garder attend un entier ≥ 1" 2
+
+  require_cmd curl jq flock
+  lock_or_die ms-export-config
+  exporter
+  rotation
+}
+
+main "$@"

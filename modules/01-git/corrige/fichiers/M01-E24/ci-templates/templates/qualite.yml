@@ -1,0 +1,112 @@
+# =============================================================================
+# templates/qualite.yml — contrôles de qualité communs aux projets de la plateforme
+# Projet plateforme/ci-templates (M01-E24, ticket PLAT-251)
+#
+# Inclusion, dans le .gitlab-ci.yml d'un projet :
+#
+#   include:
+#     - project: plateforme/ci-templates
+#       ref: v1
+#       file: templates/qualite.yml
+#
+# Exige un runner d'étiquette « shell » (runner01) qui fournit : pre-commit,
+# gitleaks 8.30.x, Node.js 24 et /opt/release-tools (commitlint, voir README.md).
+#
+# Ce que fait ce gabarit :
+#   - workflow : pipelines de MR, pipelines de branche sans MR ouverte, pas de doublon ;
+#   - stages standard lint, test, build, release (un projet peut les redéfinir) ;
+#   - pre-commit  : les mêmes contrôles qu'en local, sur tout le dépôt ;
+#   - commitlint  : les messages des commits de la plage (MR ou push) ;
+#   - gitleaks    : les secrets dans les commits de la plage (pas seulement l'état final).
+# =============================================================================
+
+workflow:
+  rules:
+    # Pipelines de MR : ce sont eux qui conditionnent la fusion (« Pipelines must succeed »).
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Branche qui a une MR ouverte : le pipeline de MR suffit, pas de pipeline en double.
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    # Branche par défaut, branche sans MR, lancement manuel ou planifié.
+    - if: $CI_COMMIT_BRANCH
+    # Pas de pipeline sur les étiquettes : la release est faite par le pipeline de main.
+
+stages:
+  - lint
+  - test
+  - build
+  - release
+
+.qualite:
+  stage: lint
+  tags: [shell]
+  interruptible: true
+
+# Calcul de la plage de commits à contrôler, commun à commitlint et gitleaks.
+# DEBUT = commit exclu de la plage ; vide = premier push (tout l'historique accessible).
+.plage-commits: &plage-commits |
+  DEBUT=""
+  if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+    # Pipeline de MR : les commits de la MR, depuis le point de divergence avec la cible.
+    DEBUT="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+  elif [ "${CI_COMMIT_BRANCH:-}" != "$CI_DEFAULT_BRANCH" ]; then
+    # Branche sans MR : depuis le point de divergence avec la branche par défaut.
+    git fetch --quiet origin "$CI_DEFAULT_BRANCH"
+    DEBUT="$(git merge-base FETCH_HEAD "$CI_COMMIT_SHA")"
+  elif ! printf '%s' "${CI_COMMIT_BEFORE_SHA:-0}" | grep -Eq '^0+$' \
+       && git cat-file -e "${CI_COMMIT_BEFORE_SHA}^{commit}" 2>/dev/null; then
+    # Branche par défaut : ce qui vient d'arriver.
+    DEBUT="$CI_COMMIT_BEFORE_SHA"
+  fi
+  echo "Plage contrôlée : ${DEBUT:-<origine>}..${CI_COMMIT_SHA}"
+
+pre-commit:
+  extends: .qualite
+  variables:
+    # Le hook gitleaks ne regarde que les modifications indexées : en CI il n'y en a
+    # aucune. Les secrets sont cherchés par le job gitleaks, sur l'historique.
+    SKIP: gitleaks
+  script:
+    - pre-commit --version
+    - pre-commit run --all-files --show-diff-on-failure
+  rules:
+    - exists:
+        - .pre-commit-config.yaml
+
+commitlint:
+  extends: .qualite
+  variables:
+    # Historique complet : la base de la MR doit être présente dans le clone.
+    GIT_DEPTH: "0"
+    # commitlint résout « extends » depuis le répertoire du projet : NODE_PATH lui
+    # fait trouver @commitlint/config-conventional installé dans /opt/release-tools.
+    NODE_PATH: /opt/release-tools/node_modules
+  script:
+    - export PATH="/opt/release-tools/node_modules/.bin:$PATH"
+    - commitlint --version
+    - *plage-commits
+    - |
+      # --default-config : configuration conventionnelle intégrée si le projet n'en a pas.
+      if [ -n "$DEBUT" ]; then
+        commitlint --default-config --verbose --from "$DEBUT" --to "$CI_COMMIT_SHA"
+      else
+        commitlint --default-config --verbose --last
+      fi
+
+gitleaks:
+  extends: .qualite
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - gitleaks version
+    - *plage-commits
+    - |
+      if [ -n "$DEBUT" ]; then PLAGE="${DEBUT}..${CI_COMMIT_SHA}"; else PLAGE="$CI_COMMIT_SHA"; fi
+      # --redact : le secret trouvé n'apparaît jamais en clair dans le journal du job.
+      gitleaks git --no-banner --redact --verbose --log-opts="$PLAGE" \
+        --report-format junit --report-path gl-gitleaks.xml .
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit: gl-gitleaks.xml

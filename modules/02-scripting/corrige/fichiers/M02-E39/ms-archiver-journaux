@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-archiver-journaux — archive les journaux collectés, un tar.gz par hôte, puis
+# retire du spool les fichiers archivés (version corrigée après INC-2844).
+#
+# Usage : ms-archiver-journaux [-s SPOOL] [-a ARCHIVES] [-h]
+#   SPOOL     dossier contenant un sous-dossier par hôte (défaut : ../spool)
+#   ARCHIVES  destination des archives (défaut : ../archives)
+#
+# Contrat : un fichier n'est retiré du spool que s'il figure dans une archive vérifiée.
+# Un hôte en erreur n'empêche pas de traiter les autres, mais le code retour le signale.
+# Codes retour : 0 succès, 1 au moins un hôte en erreur, 2 usage, 3 refus d'un garde-fou.
+# =============================================================================
+set -euo pipefail
+shopt -s nullglob inherit_errexit
+
+PROG="${0##*/}"
+BASE="$(dirname "$(readlink -f "$0")")/.."
+SPOOL="$BASE/spool"
+ARCHIVES="$BASE/archives"
+
+log() { printf '%s %s: %s\n' "$(date -Is)" "$PROG" "$*" >&2; }
+die() { log "ERREUR : $1"; exit "${2:-1}"; }
+usage() { printf 'Usage : %s [-s SPOOL] [-a ARCHIVES] [-h]\n' "$PROG"; }
+
+while getopts ':s:a:h' opt; do
+  case "$opt" in
+    s) SPOOL="$OPTARG" ;;
+    a) ARCHIVES="$OPTARG" ;;
+    h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+shift $((OPTIND - 1))
+(($# == 0)) || { usage >&2; exit 2; }
+
+SPOOL="$(readlink -f -- "$SPOOL")"
+[[ -d "$SPOOL" && "$SPOOL" != / ]] || die "spool absent ou interdit : $SPOOL" 3
+[[ -f "$SPOOL/.zone-de-test" || -f "$SPOOL/.zone-archivable" ]] \
+  || die "$SPOOL n'est pas marqué archivable : refus" 3
+mkdir -p -- "$ARCHIVES"
+
+# archiver_hote HÔTE — appelée dans un contexte « || » : set -e n'y agit PAS (le shell
+# ignore errexit dans toute fonction appelée là où son code retour est testé). Chaque
+# étape teste donc explicitement son résultat.
+archiver_hote() {
+  local h="$1" src archive partiel
+  local -a fichiers=()
+  src="$SPOOL/$h"
+  archive="$ARCHIVES/$h-$(date +%Y%m%d-%H%M%S).tar.gz"
+  partiel="$archive.partiel"
+
+  mapfile -t fichiers < <(find "$src" -mindepth 1 -maxdepth 1 -type f -printf '%P\n' | sort)
+  wait "$!" || { log "$h : lecture du spool impossible"; return 1; }
+  if ((${#fichiers[@]} == 0)); then
+    log "$h : rien à archiver"
+    return 0
+  fi
+
+  if ! tar -C "$src" -czf "$partiel" -- "${fichiers[@]}"; then
+    log "$h : échec de tar, spool conservé"
+    rm -f -- "$partiel"
+    return 1
+  fi
+  # Vérification : l'archive se relit ET contient exactement les fichiers prévus.
+  if ! diff <(tar -tzf "$partiel" | sort) <(printf '%s\n' "${fichiers[@]}") >/dev/null; then
+    log "$h : archive incomplète ou illisible, spool conservé"
+    rm -f -- "$partiel"
+    return 1
+  fi
+  mv -- "$partiel" "$archive" || return 1
+  log "$h : ${#fichiers[@]} fichier(s) archivé(s) dans $archive"
+
+  # On ne retire que ce qui a été archivé (un fichier arrivé entre-temps reste).
+  local f
+  for f in "${fichiers[@]}"; do
+    rm -f -- "${src:?}/${f:?}" || { log "$h : impossible de retirer $f"; return 1; }
+  done
+}
+
+echecs=()
+for d in "$SPOOL"/*/; do
+  h="$(basename "$d")"
+  archiver_hote "$h" || echecs+=("$h")
+done
+
+if ((${#echecs[@]})); then
+  log "terminé AVEC ERREURS : ${echecs[*]}"
+  exit 1
+fi
+log "terminé : tous les hôtes sont archivés"

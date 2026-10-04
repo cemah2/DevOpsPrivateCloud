@@ -1,0 +1,33 @@
+#cloud-config
+# Gabarit user-data des VMs jetables de la sandbox (InfoGér, 2024).
+# NE PAS SUPPRIMER la première ligne : sans « #cloud-config », cloud-init ignore le fichier.
+
+hostname: sbx-modele
+timezone: Europe/Paris
+users:
+  - name: admin
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL" # aligné sur le template 9000
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExempleDeCleNonValidePourLeCorrige admin@adm01
+ntp: # clés ajoutées au déploiement
+  enabled: true
+  servers:
+    - 10.10.99.1
+package_update: true
+write_files:
+  - path: /etc/motd
+    permissions: '0644'
+    owner: root:root
+    content: |
+      VM jetable du lab MédiSphère (VLAN 99 SANDBOX).
+      Toute donnée ici peut disparaître sans préavis.
+  - path: /etc/sudoers.d/10-audit
+    permissions: '0440'
+    content: |
+      Defaults log_output
+runcmd:
+  - [systemctl, enable, --now, qemu-guest-agent]
+package_upgrade: true

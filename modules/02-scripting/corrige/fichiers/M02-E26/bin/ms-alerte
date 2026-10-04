@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ms-alerte — signale l'échec d'une unité systemd (M02-E26, PLAT-356).
+#
+# Lancé par ms-alerte@<unité>.service, déclenché par « OnFailure=ms-alerte@%n.service ».
+# systemd (≥ 251) fournit au gestionnaire d'échec les variables MONITOR_UNIT, MONITOR_INVOCATION_ID,
+# MONITOR_SERVICE_RESULT, MONITOR_EXIT_CODE et MONITOR_EXIT_STATUS.
+#
+# Volontairement autonome (ne charge pas lib/ms-commun.sh) : le chemin d'alerte doit dépendre du
+# moins de choses possible. Il écrit une alerte de priorité « crit » dans le journal, avec les
+# dernières lignes de l'exécution en échec, et l'envoie en option à un webhook
+# (MS_ALERTE_WEBHOOK, dans /etc/ms-alerte.env).
+#
+# Usage : ms-alerte UNITÉ        (UNITÉ : nom de l'unité en échec, %i de l'instance)
+set -Eeuo pipefail
+
+unite="${1:-${MONITOR_UNIT:-inconnue}}"
+resultat="${MONITOR_SERVICE_RESULT:-?}"
+code="${MONITOR_EXIT_CODE:-?}/${MONITOR_EXIT_STATUS:-?}"
+hote="$(hostname -s)"
+
+# Dernières lignes de l'exécution en échec : par identifiant d'invocation si connu (précis),
+# sinon les dernières lignes de l'unité.
+if [[ -n "${MONITOR_INVOCATION_ID:-}" ]]; then
+  extrait="$(journalctl --no-pager -q -o cat -n 15 "_SYSTEMD_INVOCATION_ID=${MONITOR_INVOCATION_ID}" 2>&1 || true)"
+else
+  extrait="$(journalctl --no-pager -q -o cat -n 15 -u "$unite" 2>&1 || true)"
+fi
+
+titre="ÉCHEC ${unite} sur ${hote} (résultat ${resultat}, code ${code})"
+{
+  echo "$titre"
+  echo "Journal : journalctl -u ${unite} -n 50 --no-pager   — guide : docs/astreinte.md (plateforme/outils)"
+  echo "--- dernières lignes ---"
+  echo "$extrait"
+} | logger -t ms-alerte -p user.crit
+
+if [[ -n "${MS_ALERTE_WEBHOOK:-}" ]]; then
+  # Corps JSON construit par jq : aucun risque d'injection par le contenu du journal.
+  jq -n --arg titre "$titre" --arg texte "$extrait" --arg hote "$hote" --arg unite "$unite" \
+    '{titre: $titre, hote: $hote, unite: $unite, severite: "error", message: $texte}' |
+    curl -sS --fail --max-time 10 -H 'Content-Type: application/json' --data-binary @- \
+      "$MS_ALERTE_WEBHOOK" >/dev/null ||
+    logger -t ms-alerte -p user.err "webhook injoignable : ${MS_ALERTE_WEBHOOK%%\?*}"
+fi

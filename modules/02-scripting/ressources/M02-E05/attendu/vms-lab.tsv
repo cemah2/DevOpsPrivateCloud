@@ -1,0 +1,8 @@
+1000	gw01	running	1024	socle;role-routeur
+1001	adm01	running	2048	socle;role-bastion
+1002	dns01	running	1024	socle;role-dns
+1004	git01	running	8192	socle;role-gitlab
+1007	runner01	running	4096	role-runner;socle
+2021	m02-essai	stopped	1024	env-m02
+2022	m02-sans-etiquette	stopped	1024	
+5003	sbx03	running	512	

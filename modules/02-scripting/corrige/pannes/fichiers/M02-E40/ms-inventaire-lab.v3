@@ -1,0 +1,45 @@
+#!/bin/bash
+# ms-inventaire-lab — inventaire Markdown des VMs du pool lab (repris du script InfoGér
+# « inventaire_vm.sh » par Lucas Martin, PLAT-381).
+# Usage : ms-inventaire-lab [-o FICHIER|-]
+# InfoGér passait par SSH sur l'hyperviseur : pas de jeton à gérer.
+set -u
+
+CONF="$(dirname "$0")/../etc/inventaire.conf"
+. "$CONF"
+if [ "${1:-}" = "-o" ]; then
+  SORTIE="$2"
+fi
+[ "$SORTIE" = "-" ] && SORTIE=/dev/stdout
+
+# champ CHEMIN_API FILTRE_JQ — lit un champ via pvesh sur l'hyperviseur
+champ() {
+  ssh pve01 "pvesh get $1 --output-format json" | jq -r "$2"
+}
+
+{
+  echo "# Inventaire du pool $POOL — $(date '+%F %T')"
+  echo
+  echo "| VMID | Nom | État | vCPU | RAM (Mio) | Étiquettes | Disque | Réseau | Démarrage auto | IPv4 | FQDN |"
+  echo "|---|---|---|---|---|---|---|---|---|---|---|"
+  vms=$(champ "/cluster/resources --type vm" ".[] | select(.pool == \"$POOL\") | \"\(.vmid) \(.node)\"")
+  while read -r vmid node; do
+    [ -n "$vmid" ] || continue
+    base="/nodes/$node/qemu/$vmid"
+    nom=$(champ "$base/config" '.name')
+    etat=$(champ "$base/status/current" '.status')
+    vcpu=$(champ "$base/config" '.cores // 1')
+    ram=$(champ "$base/config" '.memory // ""')
+    tags=$(champ "$base/config" '.tags // ""')
+    disque=$(champ "$base/config" '.scsi0 // .virtio0 // "" | split(",") | .[0]')
+    reseau=$(champ "$base/config" '.net0 // "" | split(",") | map(select(startswith("bridge="))) | join("")')
+    auto=$(champ "$base/config" '.onboot // 0')
+    ip=""
+    if [ "$etat" = running ]; then
+      ip=$(champ "$base/agent/network-get-interfaces" \
+        '[.result[]?."ip-addresses"[]? | select(."ip-address-type" == "ipv4") | ."ip-address" | select(startswith("127.") | not)] | join(" ")' 2>/dev/null)
+    fi
+    fqdn=$(getent hosts "$nom.$DOMAINE" | awk '{print $2}')
+    echo "| $vmid | $nom | $etat | $vcpu | $ram | $tags | $disque | $reseau | $auto | $ip | ${fqdn:-?} |"
+  done <<<"$vms"
+} >"$SORTIE"

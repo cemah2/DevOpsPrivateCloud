@@ -16,8 +16,8 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | # | Module | Statut | Exercices | Remarques |
 |---|---|---|---|---|
 | 00 | Positionnement et montage du lab | relu | 50 | Relecture indépendante complète (§11). Restent à confirmer sur matériel réel : `GET /pools/{poolid}` déprécié (check-E17, E50), statut du stockage PBS avec ACL limitée au namespace (E22), format de la paperkey (E36), résolveur de l'image genericcloud Debian 13. Points « à vérifier sur ta version » signalés dans les corrigés |
-| 01 | Git et workflow professionnel | en cours | 46 + mini-projet | |
-| 02 | Scripting d'automatisation | en cours | 45 + mini-projet | |
+| 01 | Git et workflow professionnel | en cours | 46 + mini-projet | Rédaction partielle commitée (WIP) : palier 1 complet ; paliers 2, 3, 4-5 en cours. Reprise : compléter les fichiers manquants d'après le README du module, puis harmonisation et relecture |
+| 02 | Scripting d'automatisation | en cours | 45 + mini-projet | Rédaction partielle commitée (WIP) : intro et palier 1 rédigés ; paliers 2, 3, 4-5 en cours |
 | 03 | Images dorées | à faire | 24 + mini-projet | |
 | 04 | Gestion de configuration (Ansible) | à faire | 45 + mini-projet | |
 | 05 | Infrastructure as Code (OpenTofu) | à faire | 45 + mini-projet | |

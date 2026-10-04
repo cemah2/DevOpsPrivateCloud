@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-inventaire-lab — inventaire Markdown des VMs du pool lab (version corrigée, PLAT-381).
+#
+# Usage : ms-inventaire-lab [-o FICHIER|-] [-h]
+#   -o FICHIER   destination (défaut : SORTIE de etc/inventaire.conf ; « - » = sortie standard)
+#
+# Coût : 1 appel pour la liste (/cluster/resources), puis 1 appel à l'agent par VM démarrée
+# qui a l'agent activé, borné à AGENT_DELAI secondes, sans reprise (une erreur 4xx/5xx de
+# l'API n'est pas transitoire). Résolution DNS par le résolveur système (dns01).
+# Codes retour : 0 succès, 1 erreur, 2 usage.
+# =============================================================================
+set -euo pipefail
+
+PROG="${0##*/}"
+CONF="$(dirname "$(readlink -f "$0")")/../etc/inventaire.conf"
+AGENT_DELAI=5
+
+log() { printf '%s %s: %s\n' "$(date -Is)" "$PROG" "$*" >&2; }
+die() { log "ERREUR : $1"; exit "${2:-1}"; }
+
+[[ -r "$CONF" ]] || die "configuration illisible : $CONF"
+API_ENV="" POOL="" DOMAINE="" SORTIE=""
+# shellcheck source=/dev/null
+source "$CONF"
+while getopts ':o:h' opt; do
+  case "$opt" in
+    o) SORTIE="$OPTARG" ;;
+    h) printf 'Usage : %s [-o FICHIER|-]\n' "$PROG"; exit 0 ;;
+    *) printf 'Usage : %s [-o FICHIER|-]\n' "$PROG" >&2; exit 2 ;;
+  esac
+done
+[[ -n "$POOL" && -n "$DOMAINE" && -n "$SORTIE" ]] || die "POOL, DOMAINE et SORTIE sont obligatoires dans $CONF"
+[[ -r "$API_ENV" ]] || die "fichier d'accès à l'API illisible : $API_ENV"
+for c in curl jq getent; do
+  command -v "$c" >/dev/null || die "outil manquant : $c"
+done
+
+# Secret lu dans un sous-shell et passé à curl par un descripteur (-H @fichier) :
+# il n'apparaît ni dans « ps », ni dans l'environnement du script.
+ENTETE="$(mktemp)"
+trap 'rm -f -- "$ENTETE"' EXIT
+(
+  # shellcheck source=/dev/null
+  source "$API_ENV"
+  printf 'Authorization: PVEAPIToken=%s=%s\n' "$PVE_TOKEN_ID" "$PVE_TOKEN_SECRET"
+) >"$ENTETE"
+# shellcheck source=/dev/null
+PVE_API_URL="$(source "$API_ENV" && printf '%s' "$PVE_API_URL")"
+# shellcheck source=/dev/null
+PVE_CACERT="$(source "$API_ENV" && printf '%s' "$PVE_CACERT")"
+
+# api CHEMIN [DÉLAI] — GET, corps JSON sur la sortie standard, code ≠ 0 sur erreur HTTP.
+api() {
+  curl -sS --fail --max-time "${2:-15}" --cacert "$PVE_CACERT" -H "@$ENTETE" "$PVE_API_URL$1"
+}
+
+dest="$SORTIE"
+if [[ "$dest" == - ]]; then
+  dest=/dev/stdout
+fi
+liste="$(api '/cluster/resources?type=vm')" || die "API Proxmox injoignable ou refus (voir le message de curl)"
+
+{
+  printf '# Inventaire du pool %s — %s\n\n' "$POOL" "$(date '+%F %T')"
+  printf '| VMID | Nom | État | vCPU | RAM (Mio) | Étiquettes | IPv4 | FQDN |\n'
+  printf '|---|---|---|---|---|---|---|---|\n'
+  jq -r --arg p "$POOL" '.data[] | select(.pool == $p)
+      | [.vmid, .node, .name, .status, (.template // 0), .maxcpu, (.maxmem / 1048576 | floor), (.tags // "")]
+      | @tsv' <<<"$liste" | sort -n \
+    | while IFS=$'\t' read -r vmid node nom etat modele vcpu ram tags; do
+      ip=""
+      if [[ "$etat" == running && "$modele" == 0 ]]; then
+        # Pas de reprise : une VM sans agent répond 500 immédiatement, inutile d'insister.
+        ip="$(api "/nodes/$node/qemu/$vmid/agent/network-get-interfaces" "$AGENT_DELAI" 2>/dev/null \
+          | jq -r '[.data.result[]?."ip-addresses"[]? | select(."ip-address-type" == "ipv4")
+                    | ."ip-address" | select(startswith("127.") | not)] | join(" ")')" || ip=""
+      fi
+      fqdn="$(getent hosts "$nom.$DOMAINE" | awk '{print $2; exit}')" || fqdn=""
+      printf '| %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+        "$vmid" "$nom" "$etat" "$vcpu" "$ram" "${tags//;/, }" "${ip:--}" "${fqdn:--}"
+    done
+} >"$dest"
+
+log "inventaire produit ($(jq --arg p "$POOL" '[.data[] | select(.pool == $p)] | length' <<<"$liste") VMs)"

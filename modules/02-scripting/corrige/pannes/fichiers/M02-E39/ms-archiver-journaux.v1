@@ -1,0 +1,49 @@
+#!/bin/bash
+# ms-archiver-journaux v0.2 — archive les journaux du spool (un tar.gz par hôte), puis vide le spool.
+# Auteur : Lucas Martin. Revue de Karim : « mode strict activé, donc ça s'arrête à la moindre erreur ».
+# Usage : ms-archiver-journaux [-s SPOOL] [-a ARCHIVES]
+set -eu
+
+BASE="$(dirname "$0")/.."
+SPOOL="$BASE/spool"
+ARCHIVES="$BASE/archives"
+while getopts 's:a:' opt; do
+  case "$opt" in
+    s) SPOOL="$OPTARG" ;;
+    a) ARCHIVES="$OPTARG" ;;
+    *) echo "Usage : $0 [-s SPOOL] [-a ARCHIVES]" >&2; exit 2 ;;
+  esac
+done
+
+if [ ! -f "$SPOOL/.zone-de-test" ]; then
+  echo "Spool non marqué : $SPOOL" >&2
+  exit 3
+fi
+mkdir -p "$ARCHIVES"
+
+log() { echo "$(date '+%F %T') $*"; }
+
+purger() {
+  local h="$1"
+  rm -f "$SPOOL/$h"/*
+  log "$h : spool vidé"
+}
+
+archiver() {
+  local h="$1" archive
+  archive="$ARCHIVES/$h-$(date +%Y%m%d).tar.gz"
+  # gzip -9 : meilleure compression que tar -z
+  tar -C "$SPOOL/$h" -cf - . | gzip -9 >"$archive"
+  gzip -t "$archive"
+  log "$h : archive $archive vérifiée"
+}
+
+n=0
+for d in "$SPOOL"/*/; do
+  h=$(basename "$d")
+  archiver "$h"
+  purger "$h"
+  n=$((n + 1))
+done
+
+log "Terminé : $n hôte(s) archivé(s)"

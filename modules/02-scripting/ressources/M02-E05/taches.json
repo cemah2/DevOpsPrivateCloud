@@ -1,0 +1,11 @@
+{
+  "data": [
+    {"upid": "UPID:pve01:00039DF2:0215C3B1:6AC0AF5C:qmshutdown:2021:wb-automation@pve!lab:", "node": "pve01", "pid": 237042, "pstart": 34980785, "starttime": 1791012700, "type": "qmshutdown", "id": "2021", "user": "wb-automation@pve!lab"},
+    {"upid": "UPID:pve01:00039CB4:0215B9E2:6AC0AEF8:qmstart:2021:wb-automation@pve!lab:", "node": "pve01", "pid": 236724, "pstart": 34978274, "starttime": 1791012600, "endtime": 1791012603, "type": "qmstart", "id": "2021", "user": "wb-automation@pve!lab", "status": "OK"},
+    {"upid": "UPID:pve01:00039A77:02159A01:6AC0ACA0:qmclone:9000:wb-automation@pve!lab:", "node": "pve01", "pid": 236151, "pstart": 34970113, "starttime": 1791012000, "endtime": 1791012001, "type": "qmclone", "id": "9000", "user": "wb-automation@pve!lab", "status": "unable to create VM 2021: config file already exists"},
+    {"upid": "UPID:pve01:00038F12:0213E4C8:6AC04710:vzdump::root@pam:", "node": "pve01", "pid": 233234, "pstart": 34858184, "starttime": 1790986000, "endtime": 1790987745, "type": "vzdump", "id": "", "user": "root@pam", "status": "WARNINGS: 1"},
+    {"upid": "UPID:pve01:00038E01:0213D1A2:6AC04328:qmsnapshot:1004:wb-automation@pve!lab:", "node": "pve01", "pid": 232961, "pstart": 34853282, "starttime": 1790985000, "endtime": 1790985000, "type": "qmsnapshot", "id": "1004", "user": "wb-automation@pve!lab", "status": "VM is locked (backup)"},
+    {"upid": "UPID:pve01:000371AA:0210F0E1:6ABF28C0:aptupdate::root@pam:", "node": "pve01", "pid": 225706, "pstart": 34664673, "starttime": 1790912704, "endtime": 1790912731, "type": "aptupdate", "id": "", "user": "root@pam", "status": "OK"},
+    {"upid": "UPID:pve01:00035C2D:020E19A4:6ABBE9E0:qmdestroy:5003:wb-automation@pve!lab:", "node": "pve01", "pid": 220205, "pstart": 34478500, "starttime": 1790700000, "endtime": 1790700010, "type": "qmdestroy", "id": "5003", "user": "wb-automation@pve!lab", "status": "can't lock file '/var/lock/qemu-server/lock-5003.conf' - got timeout"}
+  ]
+}

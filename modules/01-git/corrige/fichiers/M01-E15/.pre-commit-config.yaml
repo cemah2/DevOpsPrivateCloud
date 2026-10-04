@@ -1,0 +1,52 @@
+# .pre-commit-config.yaml — configuration de référence des projets de la plateforme MédiSphère.
+# M01-E15. Copiée dans chaque projet plateforme/* (M02 et suivants), puis complétée par
+# les contrôles propres au projet (ShellCheck, ruff, ansible-lint, tflint…).
+#
+# Installation dans un clone : pre-commit install   (installe pre-commit ET commit-msg)
+# Tout vérifier à la main   : pre-commit run --all-files --show-diff-on-failure
+# Rejouer commitlint sur un message (CI, M01-E24) :
+#   pre-commit run commitlint --hook-stage commit-msg --commit-msg-filename FICHIER_MESSAGE
+#
+# Les « rev » sont figées sur une empreinte de commit (pre-commit autoupdate --freeze) :
+# une étiquette Git peut être déplacée par l'amont, une empreinte non. La version lisible
+# est en commentaire. Mise à jour : MR dédiée « build: mise à jour des hooks pre-commit ».
+minimum_pre_commit_version: "4.0.0"
+default_install_hook_types: [pre-commit, commit-msg]
+# Sans cette ligne, les hooks qui ne déclarent pas de « stages » (detect-private-key, gitleaks…)
+# tourneraient aussi à l'étape commit-msg.
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        # garde les deux espaces finaux qui forcent un saut de ligne en Markdown
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files   # 500 Ko par défaut ; ne contrôle que les fichiers AJOUTÉS
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      # Compilé depuis les sources par pre-commit (langage golang) à la première utilisation :
+      # même version partout, quel que soit le binaire installé sur le poste.
+      # Lit .gitleaks.toml à la racine du dépôt (M01-E16).
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: commitlint
+        name: commitlint (Conventional Commits)
+        language: node
+        language_version: system          # Node.js 24 LTS de NodeSource (M01-E14)
+        entry: commitlint --edit
+        stages: [commit-msg]
+        # Installés par pre-commit dans un environnement isolé : la version est figée ici,
+        # et commitlint y trouve @commitlint/config-conventional (résolution « globale »).
+        additional_dependencies:
+          - "@commitlint/cli@21.2.3"
+          - "@commitlint/config-conventional@21.2.3"

@@ -1,0 +1,46 @@
+# .editorconfig — style commun du dépôt plateforme/outils (M02-E04).
+# Lu par les éditeurs ET par shfmt. shfmt ignore ces réglages dès qu'on lui
+# passe une option de formatage (-i, -ci, -bn…) : ne lui en passe aucune.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Scripts Bash : fichiers .sh/.bash, à toute profondeur…
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+
+# … et scripts sans extension de bin/ (un motif qui contient « / » est
+# relatif au dossier de ce fichier : il ne peut pas être fusionné avec le précédent)
+[bin/**]
+indent_style = space
+indent_size = 2
+shell_variant = bash
+binary_next_line = true
+switch_case_indent = true
+
+# Tests bats (M02-E14) : même style, dialecte bats (blocs @test)
+[*.bats]
+indent_style = space
+indent_size = 2
+shell_variant = bats
+binary_next_line = true
+switch_case_indent = true
+
+[*.py]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json,toml,jq}]
+indent_style = space
+indent_size = 2
+
+[{Makefile,*.mk}]
+indent_style = tab

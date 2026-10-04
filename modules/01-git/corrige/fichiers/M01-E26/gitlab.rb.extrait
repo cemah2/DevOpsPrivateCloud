@@ -1,0 +1,33 @@
+# =============================================================================
+# /etc/gitlab/gitlab.rb — EXTRAIT (M01-E26) : hooks globaux de Gitaly
+#
+# ⚠️ gitaly['configuration'] est UN SEUL hash Ruby. Le profil « mémoire
+# contrainte » appliqué en M01-E04 l'a peut-être déjà défini (clé concurrency).
+# Une seconde affectation « gitaly['configuration'] = { hooks: … } » plus bas
+# dans le fichier REMPLACERAIT la première : la limitation de concurrence
+# disparaîtrait sans message d'erreur. On complète donc le hash existant.
+#
+# Après modification :
+#   sudo cp -a /etc/gitlab/gitlab.rb /etc/gitlab/gitlab.rb.$(date +%F-%H%M)
+#   sudo gitlab-ctl reconfigure          # redémarre Gitaly (coupure de quelques secondes)
+#   sudo grep -A1 '^\[hooks\]' /var/opt/gitlab/gitaly/config.toml
+# =============================================================================
+
+gitaly['configuration'] = {
+  # --- Profil « mémoire contrainte » (M01-E04), conservé tel quel ---------------
+  concurrency: [
+    {
+      'rpc' => "/gitaly.SmartHTTPService/PostReceivePack",
+      'max_per_repo' => 3,
+    }, {
+      'rpc' => "/gitaly.SSHService/SSHUploadPack",
+      'max_per_repo' => 3,
+    },
+  ],
+  # --- Hooks globaux (M01-E26) ---------------------------------------------------
+  # Valeur suggérée par la documentation ; les hooks vont dans pre-receive.d/,
+  # propriétaire git, exécutables, exécutés par ordre alphabétique.
+  hooks: {
+    custom_hooks_dir: '/var/opt/gitlab/gitaly/custom_hooks',
+  },
+}

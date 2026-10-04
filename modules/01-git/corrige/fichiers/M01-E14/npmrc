@@ -1,0 +1,5 @@
+# ~/.npmrc sur adm01 (M01-E14), écrit par : npm config set prefix ~/.local
+# Paquets npm « globaux » de l'utilisateur, sans sudo : binaires dans ~/.local/bin,
+# modules dans ~/.local/lib/node_modules. commitlint lit aussi ce préfixe pour résoudre
+# « extends » quand le dépôt n'a pas de node_modules : garde un chemin absolu (pas de ${HOME}).
+prefix=/home/admin/.local

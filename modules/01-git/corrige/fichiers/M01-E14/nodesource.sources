@@ -1,0 +1,8 @@
+# /etc/apt/sources.list.d/nodesource.sources — dépôt NodeSource, branche Node.js 24 LTS (M01-E14)
+# Clé : /usr/share/keyrings/nodesource.gpg (depuis https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key)
+Types: deb
+URIs: https://deb.nodesource.com/node_24.x
+Suites: nodistro
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/nodesource.gpg

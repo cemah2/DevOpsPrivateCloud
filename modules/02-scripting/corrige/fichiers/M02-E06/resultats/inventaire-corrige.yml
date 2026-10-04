@@ -1,0 +1,33 @@
+# Inventaire « historique » transmis par InfoGér (format YAML d'Ansible).
+# Les variables communes sont factorisées par une ancre YAML (&defaut)
+# et fusionnées dans chaque hôte par la clé de fusion « << ».
+# Ne pas réordonner : l'ordre des hôtes est celui des redémarrages.
+all:
+  vars:
+    defaut: &defaut
+      ansible_user: admin
+      ansible_python_interpreter: /usr/bin/python3
+      version_python: "3.10" # version « validée » par InfoGér
+      ntp_serveur: 10.10.20.1
+      sauvegarde: true # inclure l'hôte dans la sauvegarde nocturne
+      mode_cles: "0600" # droits des clés déposées
+  children:
+    socle:
+      hosts:
+        gw01:
+          <<: *defaut
+          ansible_host: 10.10.10.1
+          ntp_serveur: pool.ntp.org # le routeur se synchronise sur Internet
+        adm01:
+          <<: *defaut
+          ansible_host: 10.10.10.10
+          ntp_serveur: 10.10.10.1
+        dns01:
+          <<: *defaut
+          ansible_host: 10.10.20.10
+    sandbox:
+      hosts:
+        sbx01:
+          <<: *defaut
+          ansible_host: 10.10.99.20
+          sauvegarde: false # VM jetable

@@ -1,0 +1,11 @@
+[
+  {"id": "qemu/1000", "type": "qemu", "vmid": 1000, "name": "gw01", "node": "pve01", "pool": "lab", "status": "running", "template": 0, "maxcpu": 2, "maxmem": 2147483648, "maxdisk": 10737418240, "tags": "role-routeur;socle", "uptime": 864000},
+  {"id": "qemu/1001", "type": "qemu", "vmid": 1001, "name": "adm01", "node": "pve01", "pool": "lab", "status": "running", "template": 0, "maxcpu": 2, "maxmem": 4294967296, "maxdisk": 34359738368, "tags": "role-bastion;socle", "uptime": 864000},
+  {"id": "qemu/1002", "type": "qemu", "vmid": 1002, "name": "dns01", "node": "pve01", "pool": "lab", "status": "running", "template": 0, "maxcpu": 1, "maxmem": 1073741824, "maxdisk": 10737418240, "tags": "role-dns;socle", "uptime": 864000},
+  {"id": "qemu/1004", "type": "qemu", "vmid": 1004, "name": "git01", "node": "pve01", "pool": "lab", "status": "running", "template": 0, "maxcpu": 4, "maxmem": 8589934592, "maxdisk": 64424509440, "tags": "role-gitlab;socle", "uptime": 432000},
+  {"id": "qemu/1007", "type": "qemu", "vmid": 1007, "name": "runner01", "node": "pve01", "pool": "lab", "status": "running", "template": 0, "maxcpu": 2, "maxmem": 4294967296, "maxdisk": 32212254720, "tags": "role-runner;socle", "uptime": 432000},
+  {"id": "qemu/2020", "type": "qemu", "vmid": 2020, "name": "m02-cobaye", "node": "pve01", "pool": "lab", "status": "running", "template": 0, "maxcpu": 1, "maxmem": 1073741824, "maxdisk": 3758096384, "tags": "env-m02", "uptime": 3600},
+  {"id": "qemu/2021", "type": "qemu", "vmid": 2021, "name": "m02-test", "node": "pve01", "pool": "lab", "status": "stopped", "template": 0, "maxcpu": 1, "maxmem": 1073741824, "maxdisk": 3758096384, "tags": "env-m02", "uptime": 0},
+  {"id": "qemu/2029", "type": "qemu", "vmid": 2029, "name": "m02-horspool", "node": "pve01", "status": "stopped", "template": 0, "maxcpu": 1, "maxmem": 1073741824, "maxdisk": 3758096384, "uptime": 0},
+  {"id": "qemu/9000", "type": "qemu", "vmid": 9000, "name": "tpl-debian13", "node": "pve01", "pool": "lab", "status": "stopped", "template": 1, "maxcpu": 1, "maxmem": 1073741824, "maxdisk": 3758096384, "tags": "debian13", "uptime": 0}
+]

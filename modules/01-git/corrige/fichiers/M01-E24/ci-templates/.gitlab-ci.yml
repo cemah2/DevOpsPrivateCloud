@@ -1,0 +1,21 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/ci-templates (état de fin de M01-E24)
+#
+# Le projet des gabarits s'applique ses propres gabarits, depuis la branche en
+# cours (include: local) : une modification d'un gabarit est testée dans sa
+# propre MR avant d'être publiée aux autres projets (branche v1).
+# M01-E25 ajoute templates/release.yml et la publication de la branche v1.
+# =============================================================================
+
+include:
+  - local: templates/qualite.yml
+
+# Vérifie que l'outillage Node du runner correspond au verrou versionné ici :
+# une mise à jour de package-lock.json sans réinstallation sur runner01 échoue ici.
+outils-a-jour:
+  stage: test
+  tags: [shell]
+  script:
+    - node --version
+    - cmp outils/release-tools/package-lock.json /opt/release-tools/package-lock.json
+    - npm ls --prefix /opt/release-tools --depth=0

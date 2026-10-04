@@ -1,0 +1,37 @@
+#!/bin/bash
+# ms-purge-rapports v0.1 — purge des rapports applicatifs (PLAT-384)
+# Auteur : Lucas Martin. Testé sur mon dossier de rapports, ça marche.
+# Usage : ms-purge-rapports [-c fichier.conf]
+
+CONF=$(dirname "$0")/../etc/purge.conf
+if [ "$1" = "-c" ]; then
+  CONF=$2
+fi
+. "$CONF"
+
+# Sécurité : on ne travaille que dans une zone marquée
+if [ ! -f "$RACINE/.zone-de-test" ]; then
+  echo "Zone non marquée : $RACINE, j'arrête." >&2
+  exit 3
+fi
+
+echo "Purge de $RACINE (rétention : $RETENTION_JOURS jours)"
+
+# 1. Applications retirées
+for appli_retiree in $APPLIS_RETIREES; do
+  echo "  application retirée : $appli_retiree"
+  rm -rf "$RACINE/$appli_retiree"
+done
+
+# 2. On vide les dossiers tmp
+cd "$RACINE" || exit 1
+for app in */; do
+  cd "$app/tmp"
+  rm -rf ./*
+  cd "$RACINE"
+done
+
+# 3. Rapports trop vieux (sauf a-conserver)
+find "$RACINE" -type f -not -path '*/a-conserver/*' \( -name '*.json' -o -name '*.pdf' \) -mtime +"$RETENTION_JOURS" -delete
+
+echo "Purge terminée."

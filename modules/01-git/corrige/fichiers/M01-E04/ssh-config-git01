@@ -1,0 +1,6 @@
+# Bloc à ajouter dans ~/.ssh/config de adm01 (M01-E04), avant « Host * ».
+# Alias d'ADMINISTRATION de la VM (utilisateur admin). Les URL Git utilisent le nom complet
+# git@git01.par1.medisphere.internal, qui ne correspond pas à cet alias : voulu.
+Host git01
+    HostName 10.10.20.12
+    User admin

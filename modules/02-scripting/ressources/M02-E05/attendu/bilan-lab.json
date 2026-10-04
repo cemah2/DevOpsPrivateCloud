@@ -1,0 +1,18 @@
+{
+  "en_marche": 6,
+  "memoire_en_marche_mio": 16896,
+  "par_etiquette": {
+    "env-m02": 1,
+    "role-bastion": 1,
+    "role-dns": 1,
+    "role-gitlab": 1,
+    "role-routeur": 1,
+    "role-runner": 1,
+    "socle": 5
+  },
+  "sans_etiquette": [
+    2022,
+    5003
+  ],
+  "vms": 8
+}

@@ -1,0 +1,11 @@
+# /etc/sudoers.d/ms-diag — M02-E29 (SEC-359) : collecte de diagnostic par l'astreinte.
+# Installation : sudo install -m 0440 -o root -g root ms-diag /etc/sudoers.d/ms-diag
+# Validation AVANT toute session fermée : sudo visudo -cf /etc/sudoers.d/ms-diag
+#
+# Un seul programme, en root uniquement (pas « (ALL) »), chemin absolu d'un fichier appartenant à root.
+# Sans arguments listés : sudo accepte n'importe quels arguments, c'est le script qui les valide
+# (liste blanche). Alternative plus stricte (sudo ≥ 1.9.10) : une expression régulière d'arguments
+# commençant par « ^ » et finissant par « $ », voir man sudoers, section « Regular expressions ».
+
+Cmnd_Alias MS_DIAG = /usr/local/sbin/ms-diag
+%astreinte ALL=(root) NOPASSWD: MS_DIAG

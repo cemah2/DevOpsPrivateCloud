@@ -1,0 +1,14 @@
+# /etc/systemd/system/wb-backup-gitlab.timer — git01, M01-E28
+# 01:15 : avant la sauvegarde des VMs (lab-nuit, 02:30) et les tâches de PBS
+# (purge 04:00, GC 05:00) ; jamais deux gros flux en même temps dans le tunnel.
+[Unit]
+Description=Sauvegarde applicative quotidienne de GitLab (M01-E28)
+
+[Timer]
+OnCalendar=*-*-* 01:15:00
+RandomizedDelaySec=5min
+# Rattrapage si git01 était éteinte à l'heure prévue.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

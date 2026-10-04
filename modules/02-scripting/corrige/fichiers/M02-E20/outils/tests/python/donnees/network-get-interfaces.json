@@ -1,0 +1,20 @@
+{
+  "result": [
+    {
+      "name": "lo",
+      "hardware-address": "00:00:00:00:00:00",
+      "ip-addresses": [
+        {"ip-address": "127.0.0.1", "ip-address-type": "ipv4", "prefix": 8},
+        {"ip-address": "::1", "ip-address-type": "ipv6", "prefix": 128}
+      ]
+    },
+    {
+      "name": "eth0",
+      "hardware-address": "bc:24:11:2a:5e:01",
+      "ip-addresses": [
+        {"ip-address": "10.10.20.10", "ip-address-type": "ipv4", "prefix": 24},
+        {"ip-address": "fe80::be24:11ff:fe2a:5e01", "ip-address-type": "ipv6", "prefix": 64}
+      ]
+    }
+  ]
+}

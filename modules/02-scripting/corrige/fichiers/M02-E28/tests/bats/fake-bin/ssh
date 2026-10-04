@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Faux ssh pour les tests de ms-etat-hotes (M02-E28) : aucun accès réseau.
+#   hôte contenant « injoignable » → code 255 (comme un échec de connexion) ;
+#   hôte contenant « erreur »      → code 1 ;
+#   autre hôte                     → les quatre lignes attendues.
+# Chaque appel dure FAKE_SSH_DELAI secondes (défaut 1) et est journalisé dans FAKE_SSH_JOURNAL.
+while [[ "${1:-}" == -* ]]; do
+  case "$1" in
+    -o | -i | -p | -l | -F | -J) shift 2 ;;
+    *) shift ;;
+  esac
+done
+hote="${1:?hôte manquant}"
+[[ -n "${FAKE_SSH_JOURNAL:-}" ]] && echo "$hote" >>"$FAKE_SSH_JOURNAL"
+sleep "${FAKE_SSH_DELAI:-1}"
+case "$hote" in
+  *injoignable*) echo "ssh: connect to host $hote port 22: Connection timed out" >&2; exit 255 ;;
+  *erreur*) exit 1 ;;
+esac
+printf '%s\n' "6.12.48+deb13-amd64" "2026-10-01 08:00:00" "42" "3"

@@ -1,0 +1,49 @@
+# pki-provisoire.cnf — configuration OpenSSL de la PKI provisoire MédiSphère (M01-E04)
+# Emplacement : ~/pki-provisoire/pki-provisoire.cnf sur adm01 (pas de secret : versionnable).
+# Utilisé par pki-provisoire.sh. Retiré au module 06 (step-ca).
+
+# --- Demande de la CA (section par défaut « req ») -------------------------------------
+[req]
+distinguished_name = dn_ca
+prompt             = no
+utf8               = yes
+string_mask        = utf8only
+default_md         = sha256
+
+[dn_ca]
+O  = MédiSphère
+CN = MédiSphère CA provisoire
+
+# --- Demande du serveur git01 (openssl req -section req_git01) ---------------------------
+[req_git01]
+distinguished_name = dn_git01
+prompt             = no
+utf8               = yes
+string_mask        = utf8only
+default_md         = sha256
+
+[dn_git01]
+O  = MédiSphère
+CN = git01.par1.medisphere.internal
+
+# --- Extensions du certificat de la CA -------------------------------------------------
+[v3_ca]
+# CA, et seulement pour signer des certificats finaux (pathlen:0 : pas de sous-CA)
+basicConstraints     = critical, CA:true, pathlen:0
+keyUsage             = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+
+# --- Extensions du certificat serveur de git01 -----------------------------------------
+[v3_serveur_git01]
+basicConstraints       = critical, CA:false
+# Clé ECDSA : signature seulement. Pour une clé RSA, ajouter keyEncipherment.
+keyUsage               = critical, digitalSignature
+extendedKeyUsage       = serverAuth
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always
+subjectAltName         = @san_git01
+
+[san_git01]
+DNS.1 = git01.par1.medisphere.internal
+DNS.2 = git01
+IP.1  = 10.10.20.12

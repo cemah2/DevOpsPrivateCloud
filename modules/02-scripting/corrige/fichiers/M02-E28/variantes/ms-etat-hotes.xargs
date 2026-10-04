@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ms-etat-hotes — variante xargs -P (M02-E28). Comparaison seulement : la version retenue est bin/ms-etat-hotes.
+#
+# Le script s'appelle lui-même pour un hôte (--un INDEX HOTE) : xargs ne sait lancer que des
+# programmes, pas des fonctions Bash. Chaque ligne est préfixée de son index pour retrouver l'ordre.
+# Piège traité : si une invocation sort avec le code 255, xargs ARRÊTE de lire la suite (les hôtes
+# restants ne sont jamais interrogés). Or ssh renvoie 255 quand la connexion échoue : --un renvoie
+# donc toujours 0 et l'état est porté par la ligne elle-même.
+
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+readonly COMMANDE_DISTANTE='uname -r; uptime -s; df --output=pcent / | tail -n 1 | tr -d " %"; apt-get -s -o Debug::NoLocking=1 dist-upgrade 2>/dev/null | grep -c "^Inst " || true'
+
+etat_hote() {
+  local hote="$1" sortie rc=0 champs
+  sortie="$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$hote" "$COMMANDE_DISTANTE" 2>/dev/null)" || rc=$?
+  if ((rc == 255)); then printf '%s\tinjoignable\t-\t-\t-\t-\n' "$hote"; return 0; fi
+  mapfile -t champs <<<"$sortie"
+  if ((rc != 0 || ${#champs[@]} != 4)); then printf '%s\terreur\t-\t-\t-\t-\n' "$hote"; return 0; fi
+  printf '%s\tok\t%s\t%s\t%s\t%s\n' "$hote" "${champs[@]}"
+}
+
+main() {
+  set -Eeuo pipefail
+  if [[ "${1:-}" == --un ]]; then
+    # Une seule écriture (printf) de moins de PIPE_BUF octets dans un tube : elle n'est pas entrelacée
+    # avec celles des autres processus.
+    printf '%s\t%s\n' "$2" "$(etat_hote "$3")"
+    exit 0
+  fi
+  local jobs_max=4
+  if [[ "${1:-}" == -j ]]; then jobs_max="$2"; shift 2; fi
+  [[ "$jobs_max" =~ ^([1-9]|[12][0-9]|3[0-2])$ ]] || die "-j attend un entier de 1 à 32" 2
+  (($# > 0)) || { echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2; exit 2; }
+  local hotes=("$@") i resultats
+  # -0 : séparateur NUL (aucun nom ne peut le contenir) ; -n 2 : deux arguments (index, hôte) par appel.
+  resultats="$(for i in "${!hotes[@]}"; do printf '%s\0%s\0' "$i" "${hotes[$i]}"; done |
+    xargs -0 -n 2 -P "$jobs_max" "$(readlink -f "${BASH_SOURCE[0]}")" --un |
+    sort -n -k1,1 | cut -f2-)"
+  printf '%s\n' "$resultats"
+  ! cut -f2 <<<"$resultats" | grep -qv '^ok$'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

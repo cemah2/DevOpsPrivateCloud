@@ -1,0 +1,37 @@
+# .gitleaks.toml — configuration Gitleaks de référence des projets de la plateforme MédiSphère.
+# M01-E16, Gitleaks 8.30.x. Lu automatiquement à la racine du dépôt (hook pre-commit, CI,
+# « gitleaks git » lancé à la racine) ; sinon : gitleaks git --config .gitleaks.toml
+#
+# Principe : on garde TOUTES les règles par défaut et on ajoute ce qui est propre à notre
+# socle. Une exception (allowlist) se justifie en commentaire, ligne par ligne, et passe en revue.
+title = "Gitleaks — plateforme MédiSphère"
+
+[extend]
+useDefault = true
+
+# Secret d'un jeton d'API Proxmox VE (M00-E17) : un UUID après « PVEAPIToken=user@realm!id= »
+# (en-tête HTTP) ou après PVE_TOKEN_SECRET= (fichier d'environnement).
+# Les règles par défaut voient parfois l'affectation (generic-api-key), jamais l'en-tête.
+[[rules]]
+id = "proxmox-api-token"
+description = "Secret de jeton d'API Proxmox VE"
+regex = '''(?i)(?:PVEAPIToken=[\w.@-]+![\w.-]+=|PVE_TOKEN_SECRET["']?\s*[=:]\s*["']?)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'''
+secretGroup = 1
+keywords = ["pveapitoken", "pve_token_secret"]
+tags = ["proxmox", "medisphere"]
+
+# Clé privée WireGuard (M00-E16, M00-E21) : 32 octets en base64 après « PrivateKey = ».
+[[rules]]
+id = "wireguard-private-key"
+description = "Clé privée WireGuard"
+regex = '''(?i)PrivateKey\s*=\s*([A-Za-z0-9+/]{42}[AEIMQUYcgkosw480]=)'''
+secretGroup = 1
+keywords = ["privatekey"]
+tags = ["wireguard", "medisphere"]
+
+# Exception : l'UUID nul sert d'exemple dans la documentation (docs/socle/runbooks/…).
+# Ce n'est jamais un vrai secret Proxmox.
+[[allowlists]]
+description = "Valeurs d'exemple de la documentation (UUID nul)"
+targetRules = ["proxmox-api-token"]
+regexes = ['''^0{8}-0{4}-0{4}-0{4}-0{12}$''']

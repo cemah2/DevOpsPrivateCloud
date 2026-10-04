@@ -1,0 +1,47 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/ci-templates (état de fin de M01-E25)
+#
+# - Le projet s'applique ses propres gabarits depuis la branche en cours
+#   (include: local) : un gabarit modifié est testé dans sa propre MR.
+# - Chaque version publiée par semantic-release (vX.Y.Z) déplace la branche
+#   « majeure » vX sur le commit publié : les projets qui incluent « ref: v1 »
+#   reçoivent les versions 1.x.y, jamais une rupture.
+# =============================================================================
+
+include:
+  - local: templates/qualite.yml
+  - local: templates/release.yml
+
+# L'outillage Node du runner correspond-il au verrou versionné ici ?
+outils-a-jour:
+  stage: test
+  tags: [shell]
+  script:
+    - node --version
+    - cmp outils/release-tools/package-lock.json /opt/release-tools/package-lock.json
+    - npm ls --prefix /opt/release-tools --depth=0
+
+publier-branche-majeure:
+  stage: release
+  needs: [release]
+  tags: [shell]
+  resource_group: release
+  variables:
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+  script:
+    - git fetch --quiet --tags --force origin
+    - VERSION="$(git tag --points-at "$CI_COMMIT_SHA" --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)"
+    - |
+      if [ -z "$VERSION" ]; then
+        echo "Aucune version publiée par ce pipeline : branches majeures inchangées."
+        exit 0
+      fi
+      MAJEURE="${VERSION%%.*}"
+      echo "Version $VERSION publiée : la branche $MAJEURE avance sur $CI_COMMIT_SHORT_SHA."
+      # Avance rapide uniquement (pas de --force) ; ci.skip : pas de pipeline sur vX.
+      git push -o ci.skip \
+        "https://bot-release:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" \
+        "${CI_COMMIT_SHA}:refs/heads/${MAJEURE}"

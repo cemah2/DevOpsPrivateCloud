@@ -1,0 +1,16 @@
+# Paramètres communs à tous les sites (valeurs PAR1 par défaut).
+# Surcharges propres au site de secours PAR2.
+dns:
+  resolveurs: [10.10.20.10]
+  domaine: par2.medisphere.internal
+ntp:
+  serveurs: [10.20.20.1]
+sauvegarde:
+  stockage: pbs-par2
+  retention:
+    jours: 14
+    semaines: 4
+    mois: 6
+supervision:
+  actif: true
+  contacts: [astreinte@medisphere.internal]

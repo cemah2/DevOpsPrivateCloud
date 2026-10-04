@@ -1,0 +1,31 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/outils, version corrigée de la proposition de Lucas (M01-E32)
+#
+# Tout ce qui est commun (workflow, stages, pre-commit, commitlint, gitleaks,
+# release) vient des gabarits partagés, figés sur la branche v1. Ce fichier ne
+# contient que ce qui est propre au projet : ses tests.
+# GITLAB_TOKEN : variable CI du projet, protégée et masquée (jeton bot-release).
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+tests:
+  stage: test
+  tags: [shell]
+  interruptible: true
+  variables:
+    # Cache de uv dans le dossier du build : pas de partage entre projets sur le runner shell.
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  script:
+    - uv --version
+    # Environnement du projet, versions exactes du verrou (échec si uv.lock est périmé).
+    - uv sync --locked
+    - uv run pytest -q
+  rules:
+    - exists:
+        - pyproject.toml

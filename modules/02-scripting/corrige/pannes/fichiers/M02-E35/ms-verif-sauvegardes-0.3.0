@@ -1,0 +1,31 @@
+#!/bin/bash
+# ms-verif-sauvegardes 0.3.0 — contrôle des sauvegardes PBS des VMs du socle.
+# Copie déployée à la main avant la bibliothèque commune (lib/ms-commun.sh) et le jeton
+# en lecture seule. Lit ~/.config/workbook/pve-api.env.
+set -euo pipefail
+
+ENV_FILE="$HOME/.config/workbook/pve-api.env"
+SEUIL_H=26
+. "$ENV_FILE"
+
+api() {
+  curl -sS -f --max-time 20 --cacert "$PVE_CACERT" \
+    -H "Authorization: PVEAPIToken=$PVE_TOKEN_ID=$PVE_TOKEN_SECRET" "$PVE_API_URL$1"
+}
+
+socle=$(api "/cluster/resources?type=vm" \
+  | jq -r '.data[] | select(.pool == "lab" and ((.tags // "") | split(";") | index("socle"))) | .vmid')
+contenu=$(api "/nodes/$PVE_NODE/storage/pbs-par2/content?content=backup")
+
+ko=0
+limite=$(($(date +%s) - SEUIL_H * 3600))
+for vmid in $socle; do
+  derniere=$(echo "$contenu" | jq -r --argjson v "$vmid" '[.data[] | select(.vmid == $v) | .ctime] | max // 0')
+  if [ "$derniere" -lt "$limite" ]; then
+    echo "KO  VM $vmid : pas de sauvegarde de moins de ${SEUIL_H} h"
+    ko=1
+  else
+    echo "OK  VM $vmid : $(date -d "@$derniere" '+%F %T')"
+  fi
+done
+exit "$ko"

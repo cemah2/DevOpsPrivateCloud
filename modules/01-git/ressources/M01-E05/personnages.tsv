@@ -1,0 +1,8 @@
+# personnages.tsv — comptes GitLab des personnages (M01-E05). Séparateur : tabulation.
+# Colonnes : identifiant, nom affiché, adresse (fictive, aucun SMTP), rôle dans « plateforme », rôle dans « formation » (- = non membre).
+claire.morel	Claire Morel	claire.morel@medisphere.internal	Reporter	-
+karim.benali	Karim Benali	karim.benali@medisphere.internal	Maintainer	Maintainer
+sophie.laurent	Sophie Laurent	sophie.laurent@medisphere.internal	Reporter	-
+julien.petit	Julien Petit	julien.petit@medisphere.internal	Reporter	-
+nadia.roussel	Nadia Roussel	nadia.roussel@medisphere.internal	Reporter	-
+lucas.martin	Lucas Martin	lucas.martin@medisphere.internal	Developer	Developer

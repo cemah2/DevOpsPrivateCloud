@@ -1,0 +1,14 @@
+# /etc/systemd/system/ms-verif-sauvegardes.timer — M02-E26 (PLAT-356)
+# Tous les jours à 07:30 (heure locale de adm01), après la tâche de sauvegarde lab-nuit de 02:30.
+
+[Unit]
+Description=MédiSphère : contrôle quotidien des sauvegardes PBS (07:30)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00
+# Si adm01 était éteinte à 07:30, le contrôle part dès le démarrage suivant.
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

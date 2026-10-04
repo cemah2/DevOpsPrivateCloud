@@ -1,0 +1,47 @@
+# ~/.gitconfig — admin@adm01 (M01-E03). Exemple commenté : <…> à remplacer.
+# Les commentaires ne sont pas produits par « git config » : ce fichier se lit, il ne se colle pas.
+
+[user]
+	name = <Prénom Nom>
+	email = <MOI>@medisphere.internal
+	# Clé PUBLIQUE de signature, chemin absolu (la privée reste dans l'agent)
+	signingKey = /home/admin/.ssh/id_ed25519_signature.pub
+[init]
+	defaultBranch = main
+[core]
+	editor = vim
+	# ~/.config/git/ignore est lu par défaut : pas besoin de core.excludesFile
+[pull]
+	# Divergence locale/distante : refuser plutôt que fusionner ou rebaser en silence.
+	# On choisit ensuite consciemment (git rebase origin/main, ou git merge).
+	ff = only
+[fetch]
+	# Les branches supprimées sur la forge disparaissent aussi de origin/*
+	prune = true
+[push]
+	# Premier push d'une nouvelle branche : crée la branche distante de suivi
+	autoSetupRemote = true
+[merge]
+	# Marqueurs de conflit avec la version ancêtre commune (|||||||)
+	conflictStyle = zdiff3
+[diff]
+	algorithm = histogram
+	colorMoved = default
+[gpg]
+	format = ssh
+[gpg "ssh"]
+	allowedSignersFile = /home/admin/.config/git/allowed_signers
+[commit]
+	gpgSign = true
+	verbose = true
+[tag]
+	gpgSign = true
+	sort = version:refname
+[branch]
+	sort = -committerdate
+[alias]
+	lg = log --graph --oneline --decorate --all
+	st = status -sb
+	ds = diff --staged
+	last = log -1 --stat --show-signature
+	quoi = show --stat --format=fuller

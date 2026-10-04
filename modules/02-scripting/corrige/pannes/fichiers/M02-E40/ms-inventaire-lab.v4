@@ -1,0 +1,41 @@
+#!/bin/bash
+# ms-inventaire-lab — inventaire Markdown des VMs du pool lab (repris du script InfoGér
+# « inventaire_vm.sh » par Lucas Martin, PLAT-381).
+# Usage : ms-inventaire-lab [-o FICHIER|-]
+set -u
+
+CONF="$(dirname "$0")/../etc/inventaire.conf"
+. "$CONF"
+. "$API_ENV"
+if [ "${1:-}" = "-o" ]; then
+  SORTIE="$2"
+fi
+[ "$SORTIE" = "-" ] && SORTIE=/dev/stdout
+
+api() {
+  curl -sf --max-time 10 --cacert "$PVE_CACERT" \
+    -H "Authorization: PVEAPIToken=$PVE_TOKEN_ID=$PVE_TOKEN_SECRET" "$PVE_API_URL$1"
+}
+
+{
+  echo "# Inventaire du pool $POOL — $(date '+%F %T')"
+  echo
+  echo "| VMID | Nom | État | vCPU | RAM (Mio) | Étiquettes | IPv4 | FQDN (DNS) | Nom inverse (PTR) |"
+  echo "|---|---|---|---|---|---|---|---|---|"
+  api "/cluster/resources?type=vm" \
+    | jq -r --arg p "$POOL" '.data[] | select(.pool == $p) | [.vmid, .node, .name, .status, .maxcpu, (.maxmem / 1048576 | floor), (.tags // "")] | @tsv' \
+    | while IFS=$'\t' read -r vmid node nom etat vcpu ram tags; do
+      ip=""
+      if [ "$etat" = running ]; then
+        ip=$(api "/nodes/$node/qemu/$vmid/agent/network-get-interfaces" \
+          | jq -r '[.data.result[]?."ip-addresses"[]? | select(."ip-address-type" == "ipv4") | ."ip-address" | select(startswith("127.") | not)] | first // ""')
+      fi
+      # Résolution sur le DNS de référence de l'inventaire (cf. inventaire.conf)
+      fqdn=$(dig +short @"$DNS_INVENTAIRE" "$nom.$DOMAINE" A | head -n 1)
+      ptr=""
+      if [ -n "$ip" ]; then
+        ptr=$(dig +short @"$DNS_INVENTAIRE" -x "$ip" | head -n 1)
+      fi
+      echo "| $vmid | $nom | $etat | $vcpu | $ram | $tags | $ip | ${fqdn:-?} | ${ptr:-?} |"
+    done
+} >"$SORTIE"

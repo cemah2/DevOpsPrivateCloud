@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# ms-diag — collecte de diagnostic pour le support (version de Lucas Martin, M02-E29)
+#
+# Usage : sudo ms-diag UNITE [FICHIER_SORTIE]
+# Exemple : sudo ms-diag gitlab-runner /tmp/diag-runner.tar.gz
+#
+# Installation proposée par Lucas :
+#   sudo ln -s ~/src/outils/bin/ms-diag /usr/local/bin/ms-diag
+#   echo '%astreinte ALL=(ALL) NOPASSWD: /usr/local/bin/ms-diag *' | sudo tee /etc/sudoers.d/ms-diag
+#
+# ⚠️ Script volontairement fragile et dangereux : à étudier, ne pas installer tel quel.
+
+source "$(dirname "$(readlink -f "$0")")/../lib/ms-commun.sh"
+
+UNITE=$1
+SORTIE=${2:-/tmp/diag-$(hostname)-$UNITE.tar.gz}
+TMP=/tmp/ms-diag
+
+log_info "collecte pour $UNITE"
+rm -rf $TMP
+mkdir $TMP
+journalctl -u $UNITE --since "-2h" > $TMP/journal.txt
+systemctl status $UNITE > $TMP/statut.txt
+cp -r /etc/ssh /etc/systemd/system $TMP/
+ss -tlnp > $TMP/ports.txt
+df -h > $TMP/disques.txt
+cd /tmp && tar czf $SORTIE ms-diag
+rm -rf $TMP
+log_info "archive : $SORTIE"
+
+# Pour que l'astreinte voie tout de suite l'état du service
+systemctl status $UNITE

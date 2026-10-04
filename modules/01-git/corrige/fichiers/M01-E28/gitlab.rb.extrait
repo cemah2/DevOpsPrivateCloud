@@ -1,0 +1,4 @@
+# /etc/gitlab/gitlab.rb — EXTRAIT (M01-E28) : rétention locale des sauvegardes
+# 3 jours en local (restauration rapide sans passer par PBS) ; l'historique long
+# est à PAR2. S'applique à gitlab-backup ET à « gitlab-ctl backup-etc --delete-old-backups ».
+gitlab_rails['backup_keep_time'] = 259200

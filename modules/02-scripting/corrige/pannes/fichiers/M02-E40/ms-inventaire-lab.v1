@@ -1,0 +1,42 @@
+#!/bin/bash
+# ms-inventaire-lab — inventaire Markdown des VMs du pool lab (repris du script InfoGér
+# « inventaire_vm.sh » par Lucas Martin, PLAT-381).
+# Usage : ms-inventaire-lab [-o FICHIER|-]
+set -u
+
+CONF="$(dirname "$0")/../etc/inventaire.conf"
+. "$CONF"
+. "$API_ENV"
+if [ "${1:-}" = "-o" ]; then
+  SORTIE="$2"
+fi
+[ "$SORTIE" = "-" ] && SORTIE=/dev/stdout
+
+api() {
+  curl -sf --max-time 10 --cacert "$PVE_CACERT" \
+    -H "Authorization: PVEAPIToken=$PVE_TOKEN_ID=$PVE_TOKEN_SECRET" "$PVE_API_URL$1"
+}
+
+{
+  echo "# Inventaire du pool $POOL — $(date '+%F %T')"
+  echo
+  echo "| VMID | Nom | État | vCPU | RAM (Mio) | Étiquettes | IPv4 | FQDN |"
+  echo "|---|---|---|---|---|---|---|---|"
+  # Toutes les plages de VMID du PLAN (socle, environnements, sandbox, templates)
+  for vmid in $(seq 1000 9999); do
+    statut=$(api "/nodes/$PVE_NODE/qemu/$vmid/status/current") || continue
+    config=$(api "/nodes/$PVE_NODE/qemu/$vmid/config") || continue
+    nom=$(echo "$statut" | jq -r '.data.name')
+    etat=$(echo "$statut" | jq -r '.data.status')
+    vcpu=$(echo "$statut" | jq -r '.data.cpus')
+    ram=$(echo "$statut" | jq -r '.data.maxmem / 1048576 | floor')
+    tags=$(echo "$config" | jq -r '.data.tags // ""')
+    ip=""
+    if [ "$etat" = running ] && echo "$config" | jq -e '.data.agent // "" | tostring | startswith("1")' >/dev/null; then
+      ip=$(api "/nodes/$PVE_NODE/qemu/$vmid/agent/network-get-interfaces" \
+        | jq -r '[.data.result[]?."ip-addresses"[]? | select(."ip-address-type" == "ipv4") | ."ip-address" | select(startswith("127.") | not)] | join(" ")')
+    fi
+    fqdn=$(getent hosts "$nom.$DOMAINE" | awk '{print $2}')
+    echo "| $vmid | $nom | $etat | $vcpu | $ram | $tags | $ip | ${fqdn:-?} |"
+  done
+} >"$SORTIE"

@@ -1,0 +1,11 @@
+# EXTRAIT — à ajouter à la liste « repos: » du .pre-commit-config.yaml de
+# plateforme/outils (après les dépôts hérités de M01-E15 et ceux de M02-E04).
+#
+# rev = MÊME version de ruff que celle verrouillée dans uv.lock (uv tree | grep ruff) :
+# sinon pre-commit, la CI et « uv run ruff » ne donnent pas les mêmes résultats.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check        # ancien identifiant : « ruff »
+        args: [--fix]         # corrige ce qui est sûr, échoue s'il reste des erreurs
+      - id: ruff-format       # APRÈS ruff-check : les corrections peuvent changer la mise en forme

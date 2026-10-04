@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-collecte-etc — copie de /etc des VMs du socle (version corrigée de
+# collecte-etc.sh, revue M02-E22)
+#
+# Usage : ms-collecte-etc [-g|--garder N] [-d|--dest DOSSIER]
+#
+# Pour chaque VM du pool lab étiquetée « socle » et démarrée :
+#   ssh <nom> sudo tar … /etc  →  DEST/AAAAMMJJ-HHMMSS/<nom>.tar.gz (archive vérifiée)
+# Les fichiers secrets (/etc/shadow, clés privées SSH et TLS…) sont EXCLUS :
+# ils sont dans les sauvegardes PBS chiffrées, pas besoin d'une seconde copie
+# en clair sur le bastion. Les collectes au-delà des N plus récentes sont purgées.
+#
+# Codes retour : 0 tout collecté, 1 au moins une VM en échec, 2 usage, 3 autre
+# exécution en cours. Variables : MS_COLLECTE_DIR (défaut ~/collectes/etc).
+# =============================================================================
+set -euo pipefail
+umask 077 # archives et dossiers lisibles par leur seul propriétaire
+
+# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+DEST="${MS_COLLECTE_DIR:-$HOME/collectes/etc}"
+GARDER=7
+# Motifs relatifs à / (tar -C / … etc) : GNU tar les applique avec jokers par défaut.
+readonly EXCLUSIONS=(
+  --exclude=etc/shadow --exclude=etc/shadow- --exclude=etc/gshadow --exclude=etc/gshadow-
+  '--exclude=etc/ssh/ssh_host_*_key' --exclude=etc/ssl/private
+  --exclude=etc/wireguard --exclude=etc/gitlab/gitlab-secrets.json
+)
+EN_COURS=""
+
+nettoyer() {
+  if [[ -n "$EN_COURS" && -d "$EN_COURS" ]]; then
+    rm -rf -- "$EN_COURS"
+  fi
+}
+trap nettoyer EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+collecter() { # collecter NOM FICHIER
+  # La commande distante est relue par le shell de la VM : chaque mot est protégé (%q).
+  # « || [ $? -eq 1 ] » : le code 1 de GNU tar signale un fichier modifié pendant la lecture.
+  local distante
+  distante="sudo -n tar -C / --create --gzip --file=- $(printf '%q ' "${EXCLUSIONS[@]}") etc || [ \$? -eq 1 ]"
+  # -n : ssh ne lit pas l'entrée standard (sinon il avalerait la boucle « while read »).
+  # BatchMode : jamais de question ; clé d'hôte inconnue = refus (pas de StrictHostKeyChecking=no).
+  ssh -n -o BatchMode=yes -o ConnectTimeout=10 -- "$1" "$distante" >"$2" &&
+    [[ -s "$2" ]] && gzip --test -- "$2"
+}
+
+main() {
+  while (($# > 0)); do
+    case "$1" in
+      -g | --garder)
+        (($# >= 2)) || die "--garder attend une valeur" 2
+        GARDER="$2"
+        shift
+        ;;
+      -d | --dest)
+        (($# >= 2)) || die "--dest attend une valeur" 2
+        DEST="$2"
+        shift
+        ;;
+      -h | --help)
+        sed -n '3,16s/^# \{0,1\}//p' "$0"
+        exit 0
+        ;;
+      *) die "argument inattendu : $1 (voir --help)" 2 ;;
+    esac
+    shift
+  done
+  [[ "$GARDER" =~ ^[1-9][0-9]*$ ]] || die "--garder attend un entier ≥ 1" 2
+  [[ -n "$DEST" && "$DEST" == /* ]] || die "DEST doit être un chemin absolu (reçu : « $DEST »)" 2
+  require_cmd curl jq ssh gzip flock
+  lock_or_die ms-collecte-etc
+
+  local ressources hotes
+  ressources="$(pve_api GET /cluster/resources type=vm)" || die "inventaire des VMs illisible : rien n'a été collecté"
+  hotes="$(jq -r '.[] | select(.type == "qemu" and .pool == "lab" and .status == "running")
+                       | select((.tags // "") | split(";") | index("socle")) | .name' <<<"$ressources")"
+  [[ -n "$hotes" ]] || die "aucune VM « socle » démarrée n'est visible : vérifie le jeton et les étiquettes"
+
+  mkdir -p -- "$DEST"
+  local horodatage h ok=0 echecs=0
+  horodatage="$(date +%Y%m%d-%H%M%S)"
+  EN_COURS="$(mktemp -d -- "$DEST/.en-cours.XXXXXX")"
+  while IFS= read -r h; do
+    if collecter "$h" "$EN_COURS/$h.tar.gz"; then
+      log_info "$h : /etc collecté ($(stat -c %s -- "$EN_COURS/$h.tar.gz") octets)"
+      ok=$((ok + 1))
+    else
+      log_err "$h : collecte en échec (SSH, sudo ou archive invalide)"
+      rm -f -- "$EN_COURS/$h.tar.gz"
+      echecs=$((echecs + 1))
+    fi
+  done <<<"$hotes"
+  mv -T -- "$EN_COURS" "$DEST/$horodatage"
+  EN_COURS=""
+
+  # Purge : seulement les dossiers au format exact de nos collectes, dans DEST.
+  find "$DEST" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
+    -regex '.*/[0-9]{8}-[0-9]{6}' -printf '%f\n' | sort -r | tail -n +"$((GARDER + 1))" |
+    while IFS= read -r ancien; do
+      rm -rf -- "${DEST:?}/$ancien"
+      log_info "ancienne collecte supprimée : $ancien"
+    done
+
+  if ((echecs > 0)); then
+    log_err "bilan : $ok VM(s) collectée(s), $echecs en échec — $DEST/$horodatage"
+    exit 1
+  fi
+  log_info "bilan : $ok VM(s) collectée(s) — $DEST/$horodatage"
+}
+
+main "$@"

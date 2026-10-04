@@ -1,0 +1,2 @@
+# /etc/dnsmasq.d/medisphere.conf sur dns01 — ajout M01-E23 (A + PTR)
+host-record=runner01.par1.medisphere.internal,10.10.20.15

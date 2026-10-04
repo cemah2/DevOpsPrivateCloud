@@ -1,0 +1,9 @@
+[
+  {"name": "avant-20260101-080000", "snaptime": 1767254400, "description": "ms-snapshot", "vmstate": 0},
+  {"name": "avant-20260102-080000", "snaptime": 1767340800, "description": "ms-snapshot", "vmstate": 0, "parent": "avant-20260101-080000"},
+  {"name": "avant-20260103-080000", "snaptime": 1767427200, "description": "ms-snapshot", "vmstate": 0, "parent": "avant-20260102-080000"},
+  {"name": "avant-20260104-080000", "snaptime": 1767513600, "description": "ms-snapshot", "vmstate": 0, "parent": "avant-20260103-080000"},
+  {"name": "avant-maj-20251231-235900", "snaptime": 1767221940, "description": "avant la montée de version", "vmstate": 0},
+  {"name": "avant-migration", "snaptime": 1767100000, "description": "posé à la main par Karim", "vmstate": 0},
+  {"name": "avant-20251201", "snaptime": 1764576000, "description": "nom non conforme : jamais purgé", "vmstate": 0}
+]

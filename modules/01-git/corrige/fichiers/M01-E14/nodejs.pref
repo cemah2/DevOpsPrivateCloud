@@ -1,0 +1,4 @@
+# /etc/apt/preferences.d/nodejs — préférer le paquet nodejs de NodeSource à celui de Debian (20.x)
+Package: nodejs
+Pin: origin deb.nodesource.com
+Pin-Priority: 600

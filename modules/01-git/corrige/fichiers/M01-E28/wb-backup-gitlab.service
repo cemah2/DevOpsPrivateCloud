@@ -1,0 +1,14 @@
+# /etc/systemd/system/wb-backup-gitlab.service — git01, M01-E28
+[Unit]
+Description=Sauvegarde applicative de GitLab vers PBS (M01-E28)
+Documentation=https://docs.gitlab.com/administration/backup_restore/
+Wants=network-online.target
+After=network-online.target gitlab-runsvdir.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wb-backup-gitlab.sh
+# Priorité basse : la forge reste utilisable pendant la sauvegarde.
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=3h

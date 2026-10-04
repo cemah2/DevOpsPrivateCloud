@@ -1,0 +1,14 @@
+# EXTRAIT — à ajouter à la liste « repos: » du .pre-commit-config.yaml de
+# plateforme/outils, après les dépôts hérités de M01-E15 (pre-commit-hooks,
+# gitleaks, commitlint).
+#
+# Les deux hooks apportent LEUR binaire (épinglé par « rev ») : ils ne dépendent
+# pas de la version installée sur le poste ni sur runner01.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1              # ShellCheck 0.11.0
+    hooks:
+      - id: shellcheck          # lit .shellcheckrc à la racine du dépôt
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.14.1-1              # shfmt 3.14.1
+    hooks:
+      - id: shfmt               # binaire amont ; réécrit les fichiers (-w) selon .editorconfig

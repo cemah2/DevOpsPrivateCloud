@@ -1,0 +1,9 @@
+#!/bin/sh
+# .git/hooks/commit-msg — hook « artisanal » de M01-E14 (remplacé par pre-commit en M01-E15).
+# Git appelle ce script avec le chemin du fichier qui contient le message ; un code non nul
+# annule le commit. Ce fichier n'est PAS versionné : chaque clone doit l'installer à la main.
+command -v commitlint >/dev/null 2>&1 || {
+  echo "commit-msg : commitlint introuvable dans le PATH (voir M01-E14)" >&2
+  exit 1
+}
+exec commitlint --edit "$1"

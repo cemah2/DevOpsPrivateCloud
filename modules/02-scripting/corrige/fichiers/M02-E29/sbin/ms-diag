@@ -1,0 +1,101 @@
+#!/bin/bash
+# ms-diag — collecte de diagnostic d'un service pour le support, version durcie (M02-E29, SEC-359).
+#
+# Usage : sudo /usr/local/sbin/ms-diag [--depuis HEURES] UNITE... > diag.tar.gz
+#
+# Prévu pour être lancé par sudo par le groupe « astreinte » (/etc/sudoers.d/ms-diag). Règles :
+#   - installé par COPIE dans /usr/local/sbin, root:root 0755 ; aucun fichier chargé ou exécuté
+#     n'est modifiable par un utilisateur non privilégié (pas de bibliothèque du clone de travail) ;
+#   - shebang absolu, PATH et environnement fixés par le script lui-même ;
+#   - arguments validés par liste blanche ; aucun chemin choisi par l'appelant ;
+#   - l'archive sort sur la sortie standard : c'est le shell de l'APPELANT qui écrit le fichier,
+#     avec SES droits (aucune écriture arbitraire en root) ; refus si la sortie est un terminal ;
+#   - aucun programme interactif (pager) ; contenu collecté limité et expurgé (pas de clés, pas de secrets) ;
+#   - chaque utilisation est tracée dans le journal (facility auth).
+# Codes retour : 0 succès ; 1 erreur ; 2 usage ; 3 refus (pas root, sortie sur un terminal).
+
+set -Eeuo pipefail
+# Environnement maîtrisé, quel que soit l'appelant (sudo, systemd, cron, root direct).
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH LC_ALL=C SYSTEMD_PAGER='' SYSTEMD_COLORS=0 PAGER=cat
+unset IFS CDPATH GLOBIGNORE BASH_ENV ENV
+umask 077
+
+nom="ms-diag"
+erreur() { printf '%s : %s\n' "$nom" "$1" >&2; exit "${2:-1}"; }
+
+usage() {
+  cat >&2 <<'FIN'
+Usage : sudo /usr/local/sbin/ms-diag [--depuis HEURES] UNITE... > diag.tar.gz
+  UNITE    unité systemd existante (ex. ssh.service, gitlab-runner.service), 1 à 5 unités
+  HEURES   profondeur du journal, de 1 à 72 (défaut 2)
+L'archive est écrite sur la sortie standard : redirige-la vers un fichier.
+FIN
+  exit 2
+}
+
+[[ "$EUID" -eq 0 ]] || erreur "à lancer avec sudo (droits root nécessaires pour lire les journaux)" 3
+[[ ! -t 1 ]] || erreur "la sortie est un terminal : redirige-la, ex. « sudo ms-diag ssh.service > diag.tar.gz »" 3
+
+depuis=2
+unites=()
+while (($#)); do
+  case "$1" in
+    --depuis)
+      [[ $# -ge 2 && "$2" =~ ^([1-9]|[1-6][0-9]|7[0-2])$ ]] || usage
+      depuis="$2"
+      shift 2
+      ;;
+    -h | --help) usage ;;
+    -*) usage ;;
+    *)
+      # Liste blanche : caractères d'un nom d'unité, suffixe connu. Exclut espaces, « / », « .. », options.
+      [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9:_.@-]{0,99}\.(service|timer|socket|mount|path)$ ]] ||
+        erreur "nom d'unité refusé : $1" 2
+      unites+=("$1")
+      shift
+      ;;
+  esac
+done
+((${#unites[@]} >= 1 && ${#unites[@]} <= 5)) || usage
+
+for u in "${unites[@]}"; do
+  [[ "$(systemctl show --property=LoadState --value -- "$u")" == loaded ]] ||
+    erreur "unité inconnue sur $(hostname -s) : $u" 2
+done
+
+# Trace d'audit : qui (SUDO_USER est posé par sudo), quoi, quand.
+logger -t "$nom" -p auth.notice -- "collecte demandée par ${SUDO_USER:-root} (uid ${SUDO_UID:-0}) : ${unites[*]}, ${depuis} h"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf -- "$tmp"' EXIT
+mkdir "$tmp/diag"
+d="$tmp/diag"
+
+# expurger — masque les valeurs qui ressemblent à des secrets (Environment=…TOKEN=…, password=…).
+expurger() {
+  sed -E 's/((pass(word)?|secret|token|key|credential)[A-Za-z0-9_]*[[:space:]]*[=:][[:space:]]*)[^[:space:]"]+/\1***EXPURGÉ***/Ig'
+}
+
+{
+  echo "hôte : $(hostname -f 2>/dev/null || hostname)"
+  echo "date : $(date -Iseconds)"
+  echo "demandeur : ${SUDO_USER:-root}"
+  echo "unités : ${unites[*]}"
+  uptime
+} >"$d/contexte.txt"
+
+for u in "${unites[@]}"; do
+  systemctl status --no-pager --full --lines=50 -- "$u" >"$d/$u.statut.txt" 2>&1 || true
+  systemctl cat --no-pager -- "$u" 2>&1 | expurger >"$d/$u.unite.txt" || true
+  journalctl --no-pager -o short-iso -n 5000 --since "-${depuis}h" -u "$u" 2>&1 |
+    expurger >"$d/$u.journal.txt" || true
+done
+systemctl --failed --no-pager >"$d/unites-en-echec.txt" 2>&1 || true
+ss -tlnp >"$d/ports-en-ecoute.txt" 2>&1 || true
+df -hT -x tmpfs -x devtmpfs >"$d/disques.txt" 2>&1 || true
+free -m >"$d/memoire.txt" 2>&1 || true
+ip -br address >"$d/reseau.txt" 2>&1 || true
+
+# Les fichiers de l'archive appartiennent à root mais l'archive elle-même est créée par l'appelant.
+tar -C "$tmp" --owner=0 --group=0 -czf - diag

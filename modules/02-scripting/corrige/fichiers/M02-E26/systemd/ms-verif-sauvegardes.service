@@ -1,0 +1,33 @@
+# /etc/systemd/system/ms-verif-sauvegardes.service — M02-E26 (PLAT-356)
+# Contrôle des sauvegardes PBS du socle. Déclenché par ms-verif-sauvegardes.timer.
+# Test manuel : sudo systemctl start ms-verif-sauvegardes.service ; journalctl -u ms-verif-sauvegardes -n 30
+
+[Unit]
+Description=MédiSphère : contrôle des sauvegardes PBS des VMs du socle
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+# En cas d'échec (code ≠ 0, délai dépassé, signal) : alerte. %n = nom complet de cette unité.
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+# Version installée et figée (tâche « install » du Taskfile), jamais le clone de travail.
+ExecStart=/usr/local/bin/ms-verif-sauvegardes
+# Le contrôle dure quelques secondes : au-delà, quelque chose est bloqué (réseau, API).
+TimeoutStartSec=2min
+SyslogIdentifier=ms-verif-sauvegardes
+# Durcissement : le script ne fait que lire ses fichiers de configuration et appeler deux API.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

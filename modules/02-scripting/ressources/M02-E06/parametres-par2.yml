@@ -1,0 +1,10 @@
+# Surcharges propres au site de secours PAR2.
+dns:
+  domaine: par2.medisphere.internal
+ntp:
+  serveurs: [10.20.20.1]
+sauvegarde:
+  retention:
+    jours: 14
+supervision:
+  contacts: [astreinte@medisphere.internal]

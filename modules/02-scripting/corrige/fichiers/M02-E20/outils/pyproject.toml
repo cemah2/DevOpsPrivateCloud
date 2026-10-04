@@ -1,0 +1,59 @@
+[project]
+name = "medictl"
+version = "0.1.0"  # M02-E25 : la version publiée suit les étiquettes posées par semantic-release
+description = "Outillage d'exploitation de l'équipe Plateforme MédiSphère (API Proxmox VE)."
+readme = "README.md"
+authors = [
+    { name = "Équipe Plateforme MédiSphère", email = "plateforme@medisphere.internal" },
+]
+requires-python = ">=3.13"
+dependencies = [
+    "proxmoxer>=2.3.0",
+    "requests>=2.34.2",
+    "typer>=0.27.2",
+]
+
+[project.scripts]
+medictl = "medictl.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",   # M02-E18 : mesure de couverture (task test:py)
+    "responses>=0.26.3",
+    "ruff>=0.16.10",
+]
+
+[tool.uv]
+# Python 3.13 de Debian 13 (mis à jour par apt), jamais un Python téléchargé.
+python-preference = "only-system"
+python-downloads = "never"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+# Liste explicite : le jeu par défaut de ruff change d'une version à l'autre.
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # tri des imports
+    "B",       # bugbear (pièges courants)
+    "UP",      # syntaxe moderne pour la version cible
+    "S",       # bandit (sécurité : verify=False, requêtes sans délai, secrets en dur…)
+    "SIM",     # simplifications
+    "RUF",     # règles propres à ruff
+]
+
+[tool.ruff.lint.per-file-ignores]
+# assert est le mécanisme de pytest ; S105/S106 : faux secrets des jeux de test
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-ra --strict-markers"

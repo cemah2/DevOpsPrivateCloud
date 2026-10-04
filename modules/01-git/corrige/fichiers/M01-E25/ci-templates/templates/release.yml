@@ -1,0 +1,52 @@
+# =============================================================================
+# templates/release.yml — publication automatique des versions (semantic-release)
+# Projet plateforme/ci-templates (M01-E25, ticket DEV-252)
+#
+# Inclusion, en plus de templates/qualite.yml (qui définit les stages) :
+#
+#   include:
+#     - project: plateforme/ci-templates
+#       ref: v1
+#       file:
+#         - templates/qualite.yml
+#         - templates/release.yml
+#
+# Le projet doit avoir :
+#   - un .releaserc.json (référence : M01-E25) — sans lui, le job n'est pas créé ;
+#   - une variable CI GITLAB_TOKEN, PROTÉGÉE et MASQUÉE, contenant le jeton
+#     d'accès de projet « bot-release » (rôle Maintainer, portées api et
+#     write_repository) ;
+#   - des étiquettes v* protégées (création réservée aux Maintainers).
+#
+# Le job ne tourne que sur la branche par défaut, protégée : c'est la seule
+# référence où la variable protégée existe, et la seule d'où l'on publie.
+# Rien n'est commité dans main : les notes de version vont dans les Releases.
+# =============================================================================
+
+release:
+  stage: release
+  tags: [shell]
+  # Deux pipelines de main rapprochés ne publient jamais en même temps.
+  resource_group: release
+  variables:
+    # semantic-release a besoin de tout l'historique et de toutes les étiquettes,
+    # et d'un clone propre (pas d'étiquettes locales périmées d'un ancien job).
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+    # Node.js n'utilise pas le magasin de certificats du système : on lui fournit le
+    # paquet de certificats de Debian, qui contient la racine de la PKI interne
+    # (provisoire en M01, step-ca à partir du M06) sans avoir à changer ce gabarit.
+    NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-certificates.crt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+      exists:
+        - .releaserc.json
+  script:
+    - export PATH="/opt/release-tools/node_modules/.bin:$PATH"
+    - |
+      if [ -z "${GITLAB_TOKEN:-}" ]; then
+        echo "GITLAB_TOKEN absent : crée la variable CI du projet (protégée, masquée) avec le jeton bot-release." >&2
+        exit 1
+      fi
+    - npm ls --prefix /opt/release-tools --depth=0
+    - semantic-release

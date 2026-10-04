@@ -1,0 +1,41 @@
+# =============================================================================
+# /etc/gitlab/gitlab.rb — EXTRAIT (M01-E30) : sondes et métriques, à coût mémoire mesuré
+#
+# Point de départ (M01-E04, profil « mémoire contrainte ») :
+#   prometheus_monitoring['enable'] = false   # coupe Prometheus ET tous ses exporteurs
+#
+# Choix retenu : pas de serveur Prometheus local (la supervision centrale arrive au
+# module 21 et viendra chercher les métriques) ; on rouvre seulement les sondes
+# HTTP et un exporteur système léger. Mesuré sur git01 (8 Go) :
+#   - serveur Prometheus + Alertmanager embarqués : ~250 à 400 Mo  -> NON
+#   - gitlab-exporter (Ruby) : ~100 à 150 Mo                        -> NON (plus tard si besoin)
+#   - redis/postgres exporters : ~20 à 40 Mo chacun                  -> NON pour l'instant
+#   - node_exporter : ~15 à 25 Mo                                     -> OUI
+# (ordres de grandeur, à remesurer chez toi : ps -o rss,cmd -u gitlab-prometheus)
+# =============================================================================
+
+# Sondes /-/readiness, /-/liveness, /-/metrics : localhost + adm01 (+ futur Prometheus du M21).
+gitlab_rails['monitoring_whitelist'] = ['127.0.0.0/8', '::1/128', '10.10.10.10/32']
+
+# Interrupteur général des composants de supervision : il doit être vrai pour que
+# node_exporter puisse démarrer ; on éteint ensuite un par un ce qu'on ne veut pas.
+prometheus_monitoring['enable'] = true
+prometheus['enable'] = false
+alertmanager['enable'] = false
+gitlab_exporter['enable'] = false
+redis_exporter['enable'] = false
+postgres_exporter['enable'] = false
+pgbouncer_exporter['enable'] = false
+
+# Exporteur système, écoute sur l'adresse INFRA (le pare-feu de gw01 ne laisse
+# entrer dans INFRA que MGMT : seul adm01 — et le Prometheus du M21 une fois
+# le flux ouvert — peut le joindre depuis un autre VLAN).
+node_exporter['enable'] = true
+node_exporter['listen_address'] = '10.10.20.12:9100'
+
+# ⚠️ À vérifier sur ta version : l'effet exact de prometheus_monitoring['enable']
+# sur chaque exporteur (gitlab-ctl status après reconfigure fait foi).
+#
+# Variante sans toucher à GitLab : paquet Debian prometheus-node-exporter sur git01
+# (indépendant des mises à jour de GitLab, écoute à restreindre dans
+# /etc/default/prometheus-node-exporter, ARGS="--web.listen-address=10.10.20.12:9100").

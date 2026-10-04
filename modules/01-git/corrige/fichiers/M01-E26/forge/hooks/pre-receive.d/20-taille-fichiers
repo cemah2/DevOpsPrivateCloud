@@ -1,0 +1,64 @@
+#!/bin/bash
+# =============================================================================
+# 20-taille-fichiers — hook global pre-receive de la forge MédiSphère
+# (M01-E26, ticket SEC-253)
+#
+# Refuse un push qui introduit dans un projet du groupe « plateforme » un fichier
+# (blob) de plus de 5 Mio, quelle que soit sa place dans l'historique poussé :
+# un gros fichier ajouté puis supprimé dans le commit suivant reste dans le dépôt.
+#
+# Installé sur git01 dans <custom_hooks_dir>/pre-receive.d/ (propriétaire git,
+# exécutable). Versionné dans plateforme/medisphere : forge/hooks/.
+# Dérogation : même mécanisme que 10-messages-conventionnels.
+# =============================================================================
+set -u
+
+PERIMETRE='^plateforme/'
+TAILLE_MAX=$((5 * 1024 * 1024))   # 5 Mio = 5 242 880 octets
+FICHIER_DEROGATIONS=/etc/gitlab/wb-hooks/derogations.txt
+
+[[ "${GL_PROJECT_PATH:-}" =~ $PERIMETRE ]] || exit 0
+
+if command -v git >/dev/null 2>&1; then
+  GIT=git
+elif [[ -x /opt/gitlab/embedded/bin/git ]]; then
+  GIT=/opt/gitlab/embedded/bin/git
+else
+  echo "GL-HOOK-ERR: contrôle de taille indisponible (git introuvable sur le serveur) : préviens l'équipe Plateforme."
+  exit 1
+fi
+
+for ((i = 0; i < ${GIT_PUSH_OPTION_COUNT:-0}; i++)); do
+  opt_var="GIT_PUSH_OPTION_$i"
+  case "${!opt_var}" in
+    derogation=?*)
+      if [[ -r "$FICHIER_DEROGATIONS" ]] && grep -qxF -- "${GL_USERNAME:-}" "$FICHIER_DEROGATIONS"; then
+        logger -t wb-hooks "dérogation taille : ${GL_USERNAME:-?} sur ${GL_PROJECT_PATH} (ticket ${!opt_var#derogation=})" 2>/dev/null || true
+        exit 0
+      fi
+      echo "GL-HOOK-ERR: dérogation refusée : ${GL_USERNAME:-cet utilisateur} n'est pas autorisé à déroger aux règles de la forge."
+      exit 1
+      ;;
+  esac
+done
+
+trop_gros=()
+while read -r ancien nouveau ref; do
+  : "$ancien" "$ref"
+  [[ "$nouveau" =~ ^0+$ ]] && continue
+  # Objets nouveaux (commits, arbres, blobs) avec leur chemin, puis type et taille.
+  while read -r type sha taille chemin; do
+    [[ "$type" == blob ]] || continue
+    ((taille > TAILLE_MAX)) || continue
+    trop_gros+=("${chemin:-<chemin inconnu>} : $((taille / 1048576)),$(((taille % 1048576) * 10 / 1048576)) Mio (objet ${sha:0:10})")
+  done < <("$GIT" rev-list --objects "$nouveau" --not --all 2>/dev/null \
+             | "$GIT" cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' 2>/dev/null)
+done
+
+((${#trop_gros[@]} == 0)) && exit 0
+
+echo "GL-HOOK-ERR: push refusé par la forge MédiSphère : fichier(s) de plus de 5 Mio (projets plateforme/*)."
+printf 'GL-HOOK-ERR:   %s\n' "${trop_gros[@]}" | sort -u
+echo "GL-HOOK-ERR: un binaire n'a pas sa place dans Git : artefact de CI, registre de paquets ou stockage S3 (M05)."
+echo "GL-HOOK-ERR: retire le fichier de TOUS les commits poussés (git rebase -i), pas seulement du dernier."
+exit 1

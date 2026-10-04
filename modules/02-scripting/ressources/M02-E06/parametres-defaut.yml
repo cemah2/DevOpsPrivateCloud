@@ -1,0 +1,15 @@
+# Paramètres communs à tous les sites (valeurs PAR1 par défaut).
+dns:
+  resolveurs: [10.10.20.10]
+  domaine: par1.medisphere.internal
+ntp:
+  serveurs: [10.10.20.1]
+sauvegarde:
+  stockage: pbs-par2
+  retention:
+    jours: 7
+    semaines: 4
+    mois: 6
+supervision:
+  actif: true
+  contacts: [plateforme@medisphere.internal]

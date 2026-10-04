@@ -1,0 +1,2 @@
+[console_scripts]
+medictl = medictl.cli:main
