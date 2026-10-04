@@ -10,16 +10,17 @@
 #      (#!/usr/bin/python3) et le paquet est dans le site utilisateur ;
 #   3. dans ~/src/outils/.venv, le dossier du paquet typer a disparu mais ses métadonnées
 #      (dist-info) sont restées : uv croit l'environnement à jour ;
-#   4. dans ~/src/outils/.venv, un fichier 00-compat-infoger.pth ajoute en tête de sys.path un
-#      vieux module « medictl » d'InfoGér (/opt/workbook/m02/e42/compat-infoger) qui masque
-#      le paquet du projet.
+#   4. dans ~/src/outils/.venv, un fichier 00-compat-infoger.pth ajoute à sys.path un vieux
+#      module « medictl » d'InfoGér (/opt/workbook/m02/e42/compat-infoger). Les .pth sont lus
+#      par ordre alphabétique : « 00-… » passe avant le .pth de l'installation éditable du
+#      projet (« medictl.pth » avec uv_build), donc le vieux module masque le paquet du projet.
 # Sauvegardes : /var/lib/workbook/M02-E42.* sur adm01 (fichiers via sauver, dossier typer
 # déplacé, liste des dossiers créés). Annulation : tout est remis à l'identique.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
 
-_E42_FICHIERS="$WB_ROOT/modules/02-scripting/corrige/pannes/fichiers/M02-E42"
+_E42_FICHIERS="$WB_ROOT/modules/02-scripting/corrige/fichiers/M02-E42/panne"
 _E42_PROJET="${WB_SRC:-$HOME/src}/outils"
 
 # _e42_lanceur — chemin du lanceur medictl installé par uv tool (~/.local/bin/medictl par défaut).
@@ -118,7 +119,7 @@ chown -R "$U:" /opt/workbook/m02/e42
 sauver "$SITE/00-compat-infoger.pth"
 install -m 644 -o "$U" -g "$(id -gn "$U")" "$SRC/00-compat-infoger.pth" "$SITE/00-compat-infoger.pth"
 touch -d 'yesterday 17:52' "$SITE/00-compat-infoger.pth"
-journal "chemin $c ajouté en tête de sys.path par $SITE/00-compat-infoger.pth"
+journal "chemin $c ajouté à sys.path (avant le projet) par $SITE/00-compat-infoger.pth"
 EOF
 }
 

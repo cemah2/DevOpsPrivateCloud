@@ -10,7 +10,10 @@
 #      aucun déclencheur, systemd refuse de le charger (bad-setting) ;
 #   3. drop-in du service 90-gel.conf : ConditionPathExists= vers un fichier absent (« gel de
 #      l'outillage » jamais levé) : le timer se déclenche, le service est sauté en silence,
-#      sans échec ni notification.
+#      sans échec ni notification ;
+#   4. drop-in du timer 20-audit.conf : OnCalendar remplacé par « Mon *-*-* 07:30:00 » (crontab
+#      InfoGér « 30 7 * * 1 » recopiée pendant l'audit) : le timer est sain, actif, mais ne se
+#      déclenche plus que le lundi.
 # Sauvegardes : /var/lib/workbook/M02-E41.* sur adm01 (drop-ins créés notés ABSENT).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -57,6 +60,20 @@ UNIT
     systemctl start "$S" 2>/dev/null || true
     journal "drop-in $f : condition jamais remplie"
     ;;
+  4)
+    d="/etc/systemd/system/$T.d"; f="$d/20-audit.conf"
+    mkdir -p "$d"; sauver "$f"
+    cat >"$f" <<'UNIT'
+# CHG-384 : pendant l'audit HDS, contrôle aligné sur l'ancienne planification InfoGér
+# (crontab « 30 7 * * 1 ») pour réduire le bruit. À retirer après l'audit.
+[Timer]
+OnCalendar=
+OnCalendar=Mon *-*-* 07:30:00
+UNIT
+    systemctl daemon-reload
+    systemctl restart "$T"
+    journal "drop-in $f : déclenchement hebdomadaire"
+    ;;
 esac
 EOF
 }
@@ -64,6 +81,7 @@ EOF
 panne_E41_v1() { _e41_injecter 1; }
 panne_E41_v2() { _e41_injecter 2; }
 panne_E41_v3() { _e41_injecter 3; }
+panne_E41_v4() { _e41_injecter 4; }
 
 verifier_E41() {
   # shellcheck disable=SC2031  # WB_VAR est fixé par wb_main (ou par l'astreinte) avant l'appel
@@ -72,6 +90,8 @@ verifier_E41() {
     2) [[ "$(systemctl show "$_E41_TIMER" -p LoadState --value)" == bad-setting ]] \
          || ! systemctl is-active -q "$_E41_TIMER" ;;
     3) [[ "$(systemctl show "$_E41_SVC" -p ConditionResult --value)" == no ]] ;;
+    4) systemctl is-active -q "$_E41_TIMER" \
+         && ! systemctl show "$_E41_TIMER" -p TimersCalendar --value | grep -q 'OnCalendar=\*-\*-\* 07:30:00' ;;
     *) return 1 ;;
   esac
 }
@@ -82,7 +102,9 @@ restaurer_fichiers
 rmdir "/etc/systemd/system/$T.d" "/etc/systemd/system/$S.d" 2>/dev/null || true
 systemctl daemon-reload
 systemctl reset-failed "$T" 2>/dev/null || true
-systemctl start "$T" || echo "le timer $T ne redémarre pas" >&2
+systemctl restart "$T" || echo "le timer $T ne redémarre pas" >&2
+# Un passage réel du contrôle efface un éventuel « sauté par condition » (variante 3).
+timeout 300 systemctl start "$S" || echo "le contrôle $S échoue après annulation" >&2
 journal "annulation : timer et service rétablis"
 exit 0
 EOF
@@ -103,5 +125,5 @@ symptome_E41() {
 }
 
 if [[ -z "${WB_PANNES_LIB:-}" ]]; then
-  main() { wb_main 02 E41 3 "$@"; }
+  main() { wb_main 02 E41 4 "$@"; }
 fi

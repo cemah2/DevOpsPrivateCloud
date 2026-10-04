@@ -3,8 +3,12 @@
 #
 # Sourcé par break-EXX.sh APRÈS lab/lib/pannes-lib.sh (wb_avert, WB_EX…).
 #   - m01_api / m01_api_json : appels à l'API GitLab avec le jeton d'ADMINISTRATION de l'apprenant
-#     (fichier WB_GITLAB_ADMIN_TOKEN_FILE, portée api). Le jeton ne passe jamais dans la ligne de
-#     commande (en-tête lu par curl dans un descripteur), il n'apparaît donc pas dans `ps`.
+#     (fichier WB_GITLAB_ADMIN_TOKEN_FILE, jeton « workbook-admin » de M01-E05, portée api, plus
+#     admin_mode une fois l'Admin Mode activé en M01-E31). Même lecture du jeton que
+#     ressources/lib/gitlab-ressources.sh (blancs retirés). Le jeton ne passe jamais dans la ligne
+#     de commande (en-tête lu par curl dans un descripteur), il n'apparaît donc pas dans `ps`.
+#     Les jetons d'emprunt d'identité (personnages, non administrateurs) n'ont pas besoin
+#     d'admin_mode ; leur CRÉATION, si (API d'administration).
 #   - m01_etat EXX : dossier d'état local de la panne sur adm01 (700), pour les sauvegardes
 #     faites côté poste (dépôts, ~/.ssh, identifiants de ressources GitLab).
 #   - m01_ssh_fermer_maitre : ferme la connexion SSH maîtresse (ControlMaster de M00-E15) vers la
@@ -36,7 +40,7 @@ m01_api() {
   else
     f="${WB_GITLAB_ADMIN_TOKEN_FILE:-$HOME/.config/workbook/gitlab-admin.token}"
     [[ -r "$f" ]] || { wb_avert "jeton d'administration GitLab illisible : $f"; return 1; }
-    t="$(<"$f")"
+    t="$(tr -d '[:space:]' < "$f")"
   fi
   curl -sf --max-time 30 -X "$m" -H @<(printf 'PRIVATE-TOKEN: %s\n' "$t") \
     "$_M01_GITLAB/api/v4/$p" "$@"

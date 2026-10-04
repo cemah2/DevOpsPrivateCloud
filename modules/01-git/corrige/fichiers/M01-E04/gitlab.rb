@@ -17,8 +17,10 @@ letsencrypt['enable'] = false
 
 # Emplacements par défaut, écrits pour la lisibilité. Le .crt contient la chaîne :
 # certificat de git01 puis certificat de la CA provisoire (MédiSphère CA provisoire).
-nginx['ssl_certificate']     = '/etc/gitlab/ssl/git01.par1.medisphere.internal.crt'
-nginx['ssl_certificate_key'] = '/etc/gitlab/ssl/git01.par1.medisphere.internal.key'
+# Depuis GitLab 19.2, les réglages NGINX de l'application sont sous gitlab_rails['nginx'][…]
+# (les anciennes clés nginx['…'] sont encore traduites, avec un avertissement de dépréciation).
+gitlab_rails['nginx']['ssl_certificate']     = '/etc/gitlab/ssl/git01.par1.medisphere.internal.crt'
+gitlab_rails['nginx']['ssl_certificate_key'] = '/etc/gitlab/ssl/git01.par1.medisphere.internal.key'
 
 # --- Divers ----------------------------------------------------------------------------
 gitlab_rails['time_zone'] = 'Europe/Paris'

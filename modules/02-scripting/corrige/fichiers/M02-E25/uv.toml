@@ -1,0 +1,6 @@
+# ~/.config/uv/uv.toml sur adm01 — M02-E25 (DEV-355)
+# Configuration utilisateur de uv : s'applique à toutes les commandes uv de admin.
+
+# Le certificat de git01 est signé par la PKI interne, installée dans le magasin du système
+# (update-ca-certificates). Par défaut, uv n'utilise que les racines Mozilla qu'il embarque.
+system-certs = true

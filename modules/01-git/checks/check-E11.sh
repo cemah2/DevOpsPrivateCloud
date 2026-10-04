@@ -23,8 +23,8 @@ check_cmd "main : le push forcé est interdit" _m01_jq '.allow_force_push == fal
 _m01_proj="$(gitlab_api "$_m01_p" 2>/dev/null)" || _m01_proj="{}"
 check_cmd "fusion impossible tant qu'un fil de discussion est ouvert" \
   _m01_jq '.only_allow_merge_if_all_discussions_are_resolved == true' "$_m01_proj"
-check_cmd "méthode de fusion : commit de fusion semi-linéaire ou fast-forward" \
-  _m01_jq '.merge_method == "rebase_merge" or .merge_method == "ff"' "$_m01_proj"
+check_cmd "méthode de fusion : commit de fusion avec historique semi-linéaire (décision de l'équipe)" \
+  _m01_jq '.merge_method == "rebase_merge"' "$_m01_proj"
 check_cmd "message des suggestions appliquées conforme à Conventional Commits" \
   _m01_jq '(.suggestion_commit_message // "") | test("^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\\([^)]+\\))?: ")' "$_m01_proj"
 if _m01_jq '.squash_option == "always" or .squash_option == "default_on"' "$_m01_proj"; then

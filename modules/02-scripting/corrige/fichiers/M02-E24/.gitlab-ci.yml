@@ -1,0 +1,106 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/outils (état de fin de M02-E24, ticket PLAT-354)
+#
+# - Contrôles communs (pre-commit, commitlint, gitleaks) et release : gabarits partagés
+#   de plateforme/ci-templates, version majeure v1 (M01-E24/E25). Ils fixent aussi le
+#   « workflow » (pipelines de MR et de branche, pas de doublon) et les stages.
+# - Jobs propres au projet : ils appellent les tâches du Taskfile (M02-E20), exactement
+#   comme en local. Aucune commande n'est recopiée ici.
+# - Runner : runner01, exécuteur shell, étiquette « shell ». Outils attendus : ShellCheck
+#   0.11, shfmt 3.14, bats-core 1.13, Task 3.x, uv (voir installer-outils-runner01.sh).
+# - Aucun test ne joint le vrai Proxmox : bats et pytest simulent l'API ; aucune variable
+#   PVE_* n'est définie dans ce projet ; runner01 (VLAN INFRA) ne joint pas pve01.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+variables:
+  # Rapports et paquets toujours au même endroit (cf. Taskfile.yml).
+  REPORTS: reports
+
+.outils:
+  tags: [shell]
+  interruptible: true
+
+# Dans une MR, un job ne tourne que si ses fichiers ont changé ; sur main, toujours.
+# (Avec « Pipelines must succeed », un job absent ne bloque pas la fusion.)
+.si-bash:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - bin/**/*
+        - lib/**/*
+        - tests/bats/**/*
+        - .shellcheckrc
+        - .editorconfig
+        - Taskfile.yml
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+.si-python:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - src/**/*
+        - tests/python/**/*
+        - pyproject.toml
+        - uv.lock
+        - Taskfile.yml
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+shellcheck:
+  extends: [.outils, .si-bash]
+  stage: lint
+  script:
+    - shellcheck --version | sed -n 2p
+    - shfmt --version
+    - task lint:sh
+
+ruff:
+  extends: [.outils, .si-python]
+  stage: lint
+  script:
+    - task lint:py
+
+bats:
+  extends: [.outils, .si-bash]
+  stage: test
+  script:
+    - bats --version
+    - task test:bats
+  artifacts:
+    # « always » : le rapport est surtout utile quand un test échoue.
+    when: always
+    expire_in: 1 week
+    reports:
+      junit: reports/report.xml
+
+pytest:
+  extends: [.outils, .si-python]
+  stage: test
+  script:
+    - task test:py
+  # Taux de couverture lu dans la sortie de pytest-cov (ligne TOTAL), affiché dans les MR.
+  coverage: '/^TOTAL\s+.*\s+(\d+(?:\.\d+)?)%$/'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      junit: reports/junit-pytest.xml
+
+build:
+  extends: [.outils, .si-python]
+  stage: build
+  script:
+    - task build
+    - ls -l dist/
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - dist/

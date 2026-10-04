@@ -17,7 +17,7 @@ source "$WB_ROOT/lab/lib/pannes-lib.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/_m01-commun.sh"
 
 _E42_depot() { printf '%s\n' "${WB_SRC:-$HOME/src}/labo-e42"; }
-_E42_g() { git -C "$(_E42_depot)" -c core.hooksPath=/dev/null -c commit.gpgsign=false "$@"; }
+_E42_g() { git -C "$(_E42_depot)" -c core.hooksPath=/dev/null -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 
 _E42_preparer() {
   local d etat

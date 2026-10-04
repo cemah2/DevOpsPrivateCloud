@@ -96,11 +96,13 @@ _m02_e46_shellcheck() {
   ((${#s[@]} > 0)) && (cd "$_m02_e46_outils" && shellcheck -x "${s[@]}" lib/*.sh)
 }
 
-# Chaque script bin/ms-* est cité par au moins un fichier de tests bats.
-_m02_e46_bats_couvre() {
+# Chaque script bin/ms-* est cité par au moins un fichier de tests (bats, ou pytest pour les
+# scripts pilotés par subprocess comme ms-attendre en M02-E30).
+_m02_e46_tests_couvrent() {
   local f
   while IFS= read -r f; do
-    grep -lqF -- "$(basename "$f")" "$_m02_e46_outils"/tests/bats/*.bats 2>/dev/null || return 1
+    grep -qF -- "$(basename "$f")" "$_m02_e46_outils"/tests/bats/*.bats \
+      "$_m02_e46_outils"/tests/python/test_*.py 2>/dev/null || return 1
   done < <(_m02_e46_scripts)
 }
 
@@ -118,7 +120,7 @@ if command -v shellcheck >/dev/null 2>&1; then
 else
   skip "ShellCheck des scripts" "shellcheck absent de ce poste"
 fi
-check_cmd "chaque bin/ms-* est couvert par des tests bats" _m02_e46_bats_couvre
+check_cmd "chaque bin/ms-* est couvert par des tests (bats ou pytest)" _m02_e46_tests_couvrent
 check_cmd "tests pytest présents (tests/python/test_*.py)" \
   bash -c 'ls "$1"/tests/python/test_*.py >/dev/null 2>&1' _ "$_m02_e46_outils"
 check_cmd "Taskfile.yml : tâches lint, test, build et install" _m02_e46_taches

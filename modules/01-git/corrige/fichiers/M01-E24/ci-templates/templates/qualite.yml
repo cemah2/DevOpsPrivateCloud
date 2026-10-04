@@ -92,6 +92,13 @@ commitlint:
       else
         commitlint --default-config --verbose --last
       fi
+    - |
+      # commitlint ignore fixup!/squash!/amend! (defaultIgnores, M01-E12/E14) : avec la fusion
+      # semi-linéaire, un tel commit oublié arriverait tel quel dans main. On le refuse ici.
+      if [ -n "$DEBUT" ] && git log --format=%s "${DEBUT}..${CI_COMMIT_SHA}" | grep -E '^(fixup|squash|amend)!'; then
+        echo "Commits à intégrer avant fusion : git rebase -i --autosquash ${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-$CI_DEFAULT_BRANCH}" >&2
+        exit 1
+      fi
 
 gitleaks:
   extends: .qualite

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2016  # scripts de bash -c et filtres jq : développés par le sous-shell, pas ici
 #
 # check-E27.sh — M01-E27 « Signer commits et étiquettes, vérifier dans GitLab »
 # Lancé depuis adm01 (ton compte, ta configuration Git). Lecture seule : l'étiquette

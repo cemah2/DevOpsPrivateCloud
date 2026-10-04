@@ -21,6 +21,11 @@
 # =============================================================================
 set -euo pipefail
 
+# Le secret ne doit jamais être passé en argument (visible dans « ps ») : on regarde TOUS les arguments.
+if [[ -n "${FAUX_PVE_SECRET:-}" ]] && printf '%s\n' "$@" | grep -qF -- "$FAUX_PVE_SECRET"; then
+  echo "SECRET_DANS_ARGV" >>"$FAUX_PVE_JOURNAL"
+fi
+
 methode=GET
 url=""
 donnees=()
@@ -46,10 +51,6 @@ while (($# > 0)); do
   shift
 done
 
-# Le secret ne doit jamais être passé en argument (visible dans « ps »).
-if [[ -n "${FAUX_PVE_SECRET:-}" ]] && printf '%s\n' "${donnees[@]}" "$url" | grep -qF -- "$FAUX_PVE_SECRET"; then
-  echo "SECRET_DANS_ARGV" >>"$FAUX_PVE_JOURNAL"
-fi
 if [[ "$entete_auth" != "Authorization: PVEAPIToken="* ]]; then
   echo "SANS_JETON" >>"$FAUX_PVE_JOURNAL"
 fi

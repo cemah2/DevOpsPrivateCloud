@@ -39,8 +39,8 @@ if git ls-remote --heads origin 'e08/*' | grep -q .; then
 fi
 git rev-parse -q --verify origin/main >/dev/null || die "origin/main introuvable."
 
-# Commits non signés pour la fabrication uniquement
-gitf() { git -c commit.gpgsign=false "$@"; }
+# Fabrication uniquement : ni signature (commits, étiquettes) ni hooks locaux
+gitf() { git -c commit.gpgsign=false -c tag.gpgsign=false -c core.hooksPath=/dev/null "$@"; }
 
 # --- Situation « publiée » : commits de Karim, poussés --------------------------------------
 gitf switch -q --no-track -c e08/publiee origin/main

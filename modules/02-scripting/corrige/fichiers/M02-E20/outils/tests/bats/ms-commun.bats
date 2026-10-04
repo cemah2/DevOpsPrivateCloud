@@ -74,6 +74,11 @@ avec_lib() {
   [[ "$(cat "$compteur")" -eq 3 ]]
 }
 
+@test "retry ne masque pas les variables de la commande appelée (portée dynamique)" {
+  run -0 avec_lib 'n=0; essai() { n=$((n + 1)); ((n >= 2)); }; retry 5 0 essai; echo "n=$n"'
+  [[ "$output" == *"n=2"* ]]
+}
+
 @test "retry abandonne après N tentatives et renvoie le dernier code" {
   run -4 avec_lib 'retry 3 0 bash -c "exit 4"'
   [[ "$(grep -c 'AVERT' <<<"$output")" -eq 2 ]]

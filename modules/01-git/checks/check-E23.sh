@@ -3,6 +3,8 @@
 #
 # check-E23.sh — M01-E23 « Installer GitLab Runner sur runner01 »
 # Lancé depuis adm01. Lecture seule (Proxmox, DNS, runner01 en SSH, API GitLab).
+# Les runners se lisent par l'API d'administration : après M01-E31 (Admin Mode), le jeton
+# des checks doit porter la portée admin_mode en plus de read_api.
 
 title "M01-E23 — Installer GitLab Runner sur runner01"
 require_cmd ssh dig jq curl

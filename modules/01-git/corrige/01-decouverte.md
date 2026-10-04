@@ -827,7 +827,7 @@ Dans les deux derniers cas, GitLab propose un bouton *Rebase* dans la MR quand l
 1. Une seule branche durable : `main`, protégée, toujours applicable.
 2. Branches courtes `<type>/<sujet>` (`feat/…`, `fix/…`, `docs/…`, `chore/…`), deux à trois jours au plus.
 3. Tout passe par une MR, petite, relue par un autre membre, discussions résolues, pipeline vert.
-4. Méthode de fusion : celle arrêtée en E11 (commit de fusion avec historique semi-linéaire, ou *fast-forward*), la même sur tous les projets `plateforme/*`.
+4. Méthode de fusion : commit de fusion avec historique semi-linéaire (décision appliquée en E11), la même sur tous les projets `plateforme/*`.
 5. Branche mise à jour par rebase sur `main` avant fusion ; jamais de rebase d'une branche partagée sans accord.
 6. Commits et titres de MR en Conventional Commits.
 7. Versions et étiquettes `vX.Y.Z` posées par semantic-release, étiquettes protégées.

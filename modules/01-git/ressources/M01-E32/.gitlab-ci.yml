@@ -9,8 +9,8 @@ include:
 variables:
   GIT_DEPTH: 1
   # jeton du bot pour la release (je le mettrai dans les variables plus tard)
-  # (copie du workbook : la valeur réelle a été remplacée par des x)
-  GITLAB_TOKEN: "glpat-xxxxxxxxxxxxxxxx"
+  # (copie du workbook : valeur tronquée ; le jeton de Lucas était bien réel)
+  GITLAB_TOKEN: "glpat-XXXX…"
 
 stages:
   - lint

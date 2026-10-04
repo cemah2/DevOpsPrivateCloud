@@ -10,7 +10,7 @@
 #
 # Configuration (fichiers 600, jamais dans un dépôt) :
 #   ~/.config/workbook/pve-lecture.env  PVE_API_URL, PVE_TOKEN_ID, PVE_TOKEN_SECRET, PVE_CACERT
-#                                       (chemin modifiable : MS_PVE_ENV)
+#                                       (chemin modifiable : MS_PVE_ENV_FILE, cf. lib/ms-commun.sh)
 #   ~/.config/workbook/pbs-lecture.env  PBS_API_URL, PBS_DATASTORE, PBS_NAMESPACE, PBS_TOKEN_ID,
 #                                       PBS_TOKEN_SECRET, PBS_PINNEDPUBKEY (chemin : MS_PBS_ENV)
 # Variable : MS_VERIF_AGE_MAX_H (défaut 26), équivalent de --age-max.
@@ -35,7 +35,7 @@ sur Proxmox Backup Server, une sauvegarde de moins de HEURES heures (défaut : 2
 dernière vérification n'a pas échoué.
 
 Configuration : ~/.config/workbook/pve-lecture.env et ~/.config/workbook/pbs-lecture.env
-(jetons en lecture seule ; chemins modifiables par MS_PVE_ENV et MS_PBS_ENV).
+(jetons en lecture seule ; chemins modifiables par MS_PVE_ENV_FILE et MS_PBS_ENV).
 
 Codes retour : 0 tout est sauvegardé, 1 au moins une VM en défaut ou contrôle impossible, 2 usage.
 Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
@@ -70,7 +70,7 @@ charger_env() {
 # vms_socle ETIQUETTE — liste JSON [{vmid, name}] des VMs (hors templates) du pool lab portant l'étiquette.
 vms_socle() {
   local etiquette="$1" ressources
-  ressources="$(pve_api GET '/cluster/resources?type=vm')" || return 1
+  ressources="$(pve_api GET /cluster/resources type=vm)" || return 1
   jq -c --arg e "$etiquette" '
     [ .[]
       | select(.pool == "lab" and (.template // 0) != 1)
@@ -140,7 +140,10 @@ main() {
   [[ "$etiquette" =~ ^[a-z0-9_-]+$ ]] || die "étiquette invalide : $etiquette" 2
   require_cmd curl jq
 
-  export MS_PVE_ENV="${MS_PVE_ENV:-$HOME/.config/workbook/pve-lecture.env}"
+  # Toujours le jeton en lecture seule : des variables PVE_* héritées (un « source pve-api.env »
+  # dans un shell, une variable CI) l'emporteraient sur le fichier (cf. lib/ms-commun.sh).
+  unset PVE_API_URL PVE_NODE PVE_TOKEN_ID PVE_TOKEN_SECRET PVE_CACERT
+  export MS_PVE_ENV_FILE="${MS_PVE_ENV_FILE:-$HOME/.config/workbook/pve-lecture.env}"
   MS_PBS_ENV="${MS_PBS_ENV:-$HOME/.config/workbook/pbs-lecture.env}"
   charger_env "$MS_PBS_ENV"
   local v

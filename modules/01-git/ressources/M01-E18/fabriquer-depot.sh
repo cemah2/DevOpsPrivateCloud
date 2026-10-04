@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # fabriquer-depot.sh — M01-E18 : te met « au milieu d'un travail » dans un clone dédié.
 #
 # Usage (depuis adm01) :
@@ -65,7 +66,7 @@ cd "$CLONE"
 git config user.name >/dev/null || gl_erreur "identité Git absente (voir M01-E03)"
 git switch -q -c e18/rapport-capacite
 # commits fabriqués dans TON clone : sans signature ni hooks, sans toucher à sa configuration
-SANS=(-c commit.gpgsign=false -c core.hooksPath=/dev/null)
+SANS=(-c commit.gpgsign=false -c tag.gpgsign=false -c core.hooksPath=/dev/null)
 
 cat > worktrees/rapport-capacite.sh <<'EOF'
 #!/usr/bin/env bash

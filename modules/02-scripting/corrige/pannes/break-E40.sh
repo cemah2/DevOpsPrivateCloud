@@ -5,14 +5,14 @@
 # Dépose dans /opt/workbook/m02/e40/ de adm01 le script d'inventaire repris d'InfoGér par
 # Lucas (bin/ms-inventaire-lab + etc/inventaire.conf). Il interroge le VRAI Proxmox, en
 # lecture seule (jeton wb-automation@pve!lab de ~/.config/workbook/pve-api.env).
-# Variantes (corrige/pannes/fichiers/M02-E40/ms-inventaire-lab.vN) :
+# Variantes (corrige/fichiers/M02-E40/panne/ms-inventaire-lab.vN) :
 #   1. balayage de toute la plage de VMID 1000-9999 (≈ 9 000 appels refusés) au lieu de lister ;
-#   2. reprises à délai exponentiel (6 essais, 63 s) sur TOUTES les erreurs, y compris les
+#   2. reprises à délai exponentiel (6 essais, 31 s d'attente cumulée par appel) sur TOUTES les erreurs, y compris les
 #      réponses définitives (403 sur pbs-par2, 500 « VM not running » sur l'agent) ;
 #   3. un « ssh pve01 pvesh get » par champ et par VM (connexion SSH + démarrage de pvesh) ;
 #   4. résolution DNS sur la passerelle 10.10.10.1 (DNS_INVENTAIRE de inventaire.conf) :
 #      gw01 jette en silence, chaque requête attend le délai complet de dig.
-# Vérification : le script ne termine pas en 45 s. Annulation : la zone est déplacée
+# Vérification : le script ne termine pas en 30 s (le seuil du contrôle et du ticket). Annulation : la zone est déplacée
 # (e40.annule-<date>) ; rien n'est supprimé, rien n'est modifié sur pve01.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -37,7 +37,7 @@ fi
 journal "préparation de la zone $Z"
 EOF
   mkdir -p "$z/bin" "$z/etc" "$z/sortie" || return 1
-  install -m 755 "$_E40_MOD/corrige/pannes/fichiers/M02-E40/ms-inventaire-lab.v$v" "$z/bin/ms-inventaire-lab" || return 1
+  install -m 755 "$_E40_MOD/corrige/fichiers/M02-E40/panne/ms-inventaire-lab.v$v" "$z/bin/ms-inventaire-lab" || return 1
   if ((v == 4)); then dns=10.10.10.1; fi
   {
     echo '# Configuration de l'"'"'inventaire (reprise du script InfoGér, PLAT-381)'
@@ -57,11 +57,11 @@ panne_E40_v2() { _e40_injecter 2; }
 panne_E40_v3() { _e40_injecter 3; }
 panne_E40_v4() { _e40_injecter 4; }
 
-# verifier_E40 — l'inventaire ne se termine pas en 45 secondes.
+# verifier_E40 — l'inventaire ne se termine pas en 30 secondes (seuil du contrôle check-E40).
 verifier_E40() {
   local rc=0
-  echo "Mesure de la durée de l'inventaire (45 s au plus)…" >&2
-  (cd "$_E40_ZONE" && timeout 45 bin/ms-inventaire-lab -o /dev/null) >/dev/null 2>&1 || rc=$?
+  echo "Mesure de la durée de l'inventaire (30 s au plus)…" >&2
+  (cd "$_E40_ZONE" && timeout 30 bin/ms-inventaire-lab -o /dev/null) >/dev/null 2>&1 || rc=$?
   ((rc == 124))
 }
 
@@ -80,7 +80,7 @@ symptome_E40() {
   wb_symptome "Ticket PLAT-381 — De : Karim Benali" \
     "Lucas a repris le script d'inventaire d'InfoGér : /opt/workbook/m02/e40/bin/ms-inventaire-lab." \
     "Le résultat est juste, mais il met une dizaine de minutes pour une dizaine de VMs. Je veux" \
-    "le lancer avant chaque intervention et en CI de recette : il doit tenir en moins de 30 s." \
+    "le lancer avant chaque intervention et pendant les astreintes : il doit tenir en moins de 30 s." \
     "Mesure d'abord où passe le temps (pas d'optimisation à l'aveugle), corrige, et montre-moi" \
     "les chiffres avant/après." \
     "" \

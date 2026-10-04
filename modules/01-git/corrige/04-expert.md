@@ -300,7 +300,7 @@ Chaîne d'une requête HTTPS : NGINX (TLS, port 443) → Workhorse (socket `/var
 
 **En production chez MédiSphère**
 
-`git01` est géré par Ansible à partir du M04 : `gitlab.rb` vient d'un modèle versionné, `reconfigure` n'est lancé que par le rôle, et les fichiers générés ne sont jamais touchés. Toute modification d'urgence est reportée dans `gitlab.rb` dans la journée, par MR. Le runbook « GitLab répond 502 » (RB-011 du mini-projet) suit exactement l'ordre de l'étape 3.
+`git01` est géré par Ansible à partir du M04 : `gitlab.rb` vient d'un modèle versionné, `reconfigure` n'est lancé que par le rôle, et les fichiers générés ne sont jamais touchés. Toute modification d'urgence est reportée dans `gitlab.rb` dans la journée, par MR. Le runbook « GitLab répond 502 » (section de RB-013, mini-projet) suit exactement l'ordre de l'étape 3.
 
 ---
 
@@ -880,7 +880,7 @@ Inversement, une correction peut faire **apparaître** un symptôme : il était 
 
 > **[INC-2788] 08:20 — Résolu.** Runner rétabli à 08:12 (réglage « branches protégées seulement » retiré). MR de test fusionnée, pipeline vert. Surveillance renforcée jusqu'à midi. Post-mortem demain.
 
-**6. Post-mortem.** Exemple complet : [`fichiers/M01-E43/post-mortem-exemple.md`](fichiers/M01-E43/post-mortem-exemple.md) (paire E37 V2 + E38 V4). La grille d'évaluation de M00-E46 s'applique (sans recherche de coupable, chronologie sourcée, **deux** causes racines prouvées, détection, actions typées avec responsable et échéance, explication du masquage). Une sonde de triage réutilisable est fournie : [`fichiers/M01-E43/sonde-forge.sh`](fichiers/M01-E43/sonde-forge.sh).
+**6. Post-mortem.** Exemple complet : [`fichiers/M01-E43/post-mortem-exemple.md`](fichiers/M01-E43/post-mortem-exemple.md) (paire E37 V2 + E38 V4). La grille d'évaluation de M00-E46 s'applique (sans recherche de coupable, chronologie sourcée, **deux** causes racines prouvées, détection, actions typées avec responsable et échéance, explication du masquage). Une sonde de triage réutilisable est fournie : [`fichiers/M01-E43/triage-forge.sh`](fichiers/M01-E43/triage-forge.sh).
 
 **Annulation** si nécessaire : `lab/bin/break 01 43 --annuler`.
 
@@ -898,7 +898,7 @@ La forge concentre les dépendances : quand elle tombe, on perd aussi la revue, 
 
 **En production chez MédiSphère**
 
-La forge a un niveau de service défini (heures ouvrées, rétablissement en 4 h), un runbook par symptôme (RB-011 du mini-projet), et figure dans le PRA (F5) : sa restauration (E28) est testée deux fois par an.
+La forge a un niveau de service défini (heures ouvrées, rétablissement en 4 h), un runbook par symptôme (RB-013 du mini-projet), et figure dans le PRA (F5) : sa restauration (E28) est testée deux fois par an.
 
 ---
 
@@ -906,7 +906,7 @@ La forge a un niveau de service défini (heures ouvrées, rétablissement en 4 h
 
 **Solution**
 
-Dépôt fabriqué : 115 commits sur `main` (109 en ne suivant que le premier parent), 3 branches fusionnées, `v1.0.0` au 11e commit. Toutes les sorties ci-dessous sont réelles et reproductibles (dates fixes : mêmes empreintes chez toi).
+Dépôt fabriqué : 113 commits atteignables depuis `main` (107 en ne suivant que le premier parent), 3 branches fusionnées, `v1.0.0` au 11e commit. Toutes les sorties ci-dessous sont réelles et reproductibles (dates fixes : mêmes empreintes chez toi).
 
 *1. Constat.*
 
@@ -919,10 +919,10 @@ admin@adm01:~/src/labo-e44$ tests/test.sh
 +10.10.10.10 -> 10.10.40.0/24 tcp dport { 6443, 30000-30000 }  # API et NodePorts Kubernetes (futur)
 tests : ÉCHEC
 admin@adm01:~/src/labo-e44$ git rev-list --count v1.0.0..main
-104
+102
 ```
 
-Environ log2(104) ≈ 7 étapes pour un historique linéaire.
+Environ log2(102) ≈ 7 étapes pour un historique linéaire.
 
 *3. Script de test* ([`fichiers/M01-E44/bisect-e44.sh`](fichiers/M01-E44/bisect-e44.sh)) :
 
@@ -956,7 +956,7 @@ admin@adm01:~/src/labo-e44$ git bisect log > /tmp/bisect-e44.log ; git bisect re
 
 *5. Contre-épreuve, script naïf* (`tests/test.sh` seul) : il désigne `1d404cb feat(export): préparer l'export JSON`, en 7 étapes. Faux : ce commit casse **tout** le programme (erreur de syntaxe), donc le test échoue, et la bisection en conclut que la régression est là ; or ce bogue a été corrigé 23 commits plus tard, et la régression des plages est bien postérieure. Un test qui échoue pour une autre raison que celle recherchée **ment** à la bisection. C'est tout l'intérêt du code 125.
 
-*6. `--first-parent`* : désigne `c343e9e Merge branch 'refactor/ports'` (18 étapes, dont 10 sauts : en ne suivant que les parents principaux, les commits cassés de la période `export` sont plus nombreux sur le chemin). La bisection ne descend pas dans la branche fusionnée : elle indique **quelle fusion** a fait entrer la régression dans `main`. Préférable quand les branches de fonctionnalité contiennent des commits intermédiaires non testables (pratique de l'équipe : on ne garantit que les commits de `main`), ou quand on veut savoir quelle livraison est en cause.
+*6. `--first-parent`* : désigne `c343e9e Merge branch 'refactor/ports'` (18 étapes, dont 10 sauts : chaque proposition qui tombe dans la période cassée coûte une étape de plus, et le chemin des premiers parents en contient davantage en proportion). La bisection ne descend pas dans la branche fusionnée : elle indique **quelle fusion** a fait entrer la régression dans `main`. Préférable quand les branches de fonctionnalité contiennent des commits intermédiaires non testables (pratique de l'équipe : on ne garantit que les commits de `main`), ou quand on veut savoir quelle livraison est en cause.
 
 *7. Correctif.*
 
@@ -1005,7 +1005,7 @@ Annuler la fusion (`git revert -m 1 c343e9e`) aurait aussi corrigé, mais en ret
 
 **En production chez MédiSphère**
 
-La bisection n'est fiable que si chaque commit de `main` est testable : c'est un argument de plus pour le pipeline obligatoire (M01-E24) et pour la méthode de fusion choisie en E11 (avec *squash* ou historique semi-linéaire, chaque commit de `main` a passé la CI). Le script de test de bisection rejoint les outils de l'équipe, à côté des tests (module 02 : bats, pytest).
+La bisection n'est fiable que si chaque commit de `main` est testable : c'est un argument de plus pour le pipeline obligatoire (M01-E24, qui contrôle chaque commit de la MR) et pour la méthode de fusion de l'équipe (M01-E11 : historique semi-linéaire, chaque branche est à jour de `main` au moment de la fusion, donc chaque commit a été construit sur l'état réel de `main`). Le script de test de bisection rejoint les outils de l'équipe, à côté des tests (module 02 : bats, pytest).
 
 ---
 
@@ -1131,7 +1131,7 @@ Règle de la forge : pas de fichier de plus de 5 Mio dans Git (hook de M01-E26 s
 
 **6.** `git fsck` (défaut) signale les objets **orphelins** (*dangling*) : inatteignables et non référencés par un autre objet inatteignable (les « sommets »). `--unreachable` liste **tous** les objets inatteignables (un commit orphelin, son arbre, ses blobs). `--lost-found` écrit les objets orphelins dans `.git/lost-found/commit/` et `.git/lost-found/other/`. Par défaut, les reflogs comptent comme des références (un commit retenu par un reflog n'est pas orphelin) ; `--no-reflogs` les ignore, et fait donc apparaître les commits abandonnés récemment (stash supprimé, `reset`).
 
-**7.** Dichotomie : à chaque étape, Git choisit le commit qui coupe au mieux en deux l'ensemble des suspects (ancêtres du mauvais, non ancêtres du bon). 1 000 commits linéaires : ⌈log2(1000)⌉ = 10 étapes. Un commit « non testable » est sauté (Git en propose un voisin) mais reste suspect : il peut coûter des étapes et, s'il est le dernier candidat, empêcher de conclure. Avec des fusions, les suspects forment un graphe : la bisection peut proposer des commits des branches fusionnées. `--first-parent` ne suit que les premiers parents des fusions : il désigne la fusion qui a introduit la régression dans la branche principale (M01-E44 : 115 commits, 11 étapes avec 4 sauts ; 18 étapes avec `--first-parent`).
+**7.** Dichotomie : à chaque étape, Git choisit le commit qui coupe au mieux en deux l'ensemble des suspects (ancêtres du mauvais, non ancêtres du bon). 1 000 commits linéaires : ⌈log2(1000)⌉ = 10 étapes. Un commit « non testable » est sauté (Git en propose un voisin) mais reste suspect : il peut coûter des étapes et, s'il est le dernier candidat, empêcher de conclure. Avec des fusions, les suspects forment un graphe : la bisection peut proposer des commits des branches fusionnées. `--first-parent` ne suit que les premiers parents des fusions : il désigne la fusion qui a introduit la régression dans la branche principale (M01-E44 : 113 commits, 11 étapes avec 4 sauts ; 18 étapes avec `--first-parent`).
 
 **8.** `--force` écrase la référence distante quoi qu'elle contienne. `--force-with-lease` n'écrase que si la référence distante vaut toujours ce que **ta référence de suivi** (`origin/branche`) en dit : si quelqu'un a poussé entre-temps, refus. Faille : si un `git fetch` (lancé automatiquement par ton éditeur) a mis à jour `origin/branche` avec le travail du collègue, sans que tu l'aies intégré, la « location » correspond et ton push écrase son travail. `--force-if-includes` (Git ≥ 2.30) ajoute la vérification que la valeur distante a bien été **intégrée** dans ta branche locale (présente dans son reflog). Combinaison recommandée : `--force-with-lease --force-if-includes`.
 

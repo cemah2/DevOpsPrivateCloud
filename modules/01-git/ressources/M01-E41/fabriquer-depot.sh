@@ -34,7 +34,7 @@ export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_AUTHOR_NAME="Lucas Martin" GIT_AUTHOR_EMAIL="lucas.martin@medisphere.internal"
 export GIT_COMMITTER_NAME="Lucas Martin" GIT_COMMITTER_EMAIL="lucas.martin@medisphere.internal"
 t=1775030400   # 2026-04-01T08:00:00Z
-g() { git -c init.defaultBranch=main -c core.hooksPath=/dev/null -c commit.gpgsign=false "$@"; }
+g() { git -c init.defaultBranch=main -c core.hooksPath=/dev/null -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 commit() {
   t=$((t + 5400))
   GIT_AUTHOR_DATE="@$t +0200" GIT_COMMITTER_DATE="@$t +0200" g commit -q --no-verify -m "$1"

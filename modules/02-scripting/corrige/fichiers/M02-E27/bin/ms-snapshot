@@ -23,7 +23,7 @@
 # rien aggraver.
 #
 # Codes retour : 0 succès, 1 au moins une VM en échec, 2 usage, 3 refus d'un garde-fou
-# (VMID hors pool lab, template, préfixe invalide, autre exécution en cours).
+# (VMID hors pool lab, template, autre exécution en cours).
 # Dépendances : bash 5, curl, jq, flock ; accès API par lib/ms-commun.sh.
 # =============================================================================
 set -euo pipefail
@@ -217,7 +217,7 @@ main() {
     die "--fenetre attend un nombre de minutes de 0 à 1440 (reçu : « $FENETRE »)" 2
   fi
   FENETRE=$((10#$FENETRE))
-  prefixe_valide "$PREFIXE" || die "préfixe invalide « $PREFIXE » (une lettre, puis lettres, chiffres, _ ou - ; 24 caractères au plus)" 3
+  prefixe_valide "$PREFIXE" || die "préfixe invalide « $PREFIXE » (une lettre, puis lettres, chiffres, _ ou - ; 24 caractères au plus)" 2
   if [[ -n "$pool" && ${#vmids[@]} -gt 0 ]]; then
     die "--pool et une liste de VMID sont exclusifs" 2
   fi

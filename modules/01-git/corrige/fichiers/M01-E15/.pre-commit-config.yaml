@@ -4,8 +4,11 @@
 #
 # Installation dans un clone : pre-commit install   (installe pre-commit ET commit-msg)
 # Tout vérifier à la main   : pre-commit run --all-files --show-diff-on-failure
-# Rejouer commitlint sur un message (CI, M01-E24) :
+# Rejouer le hook commitlint sur un message (diagnostic local, sans commit) :
 #   pre-commit run commitlint --hook-stage commit-msg --commit-msg-filename FICHIER_MESSAGE
+# En CI (templates/qualite.yml de plateforme/ci-templates, M01-E24), commitlint n'est pas
+# lancé par pre-commit : le job commitlint appelle /opt/release-tools sur la plage de commits
+# de la MR, avec le même commitlint.config.mjs (21.2.3, versions identiques).
 #
 # Les « rev » sont figées sur une empreinte de commit (pre-commit autoupdate --freeze) :
 # une étiquette Git peut être déplacée par l'amont, une empreinte non. La version lisible

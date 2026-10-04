@@ -7,7 +7,7 @@
 # sauvegarde du spool faite par root, et le script d'archivage de Lucas (« mode strict
 # activé »), puis le lance comme la tâche de cette nuit. tar échoue sur le fichier illisible,
 # le script continue, annonce « Terminé », rend 0 et vide le spool de dns01.
-# Variantes (corrige/pannes/fichiers/M02-E39/ms-archiver-journaux.vN) — l'erreur de tar est
+# Variantes (corrige/fichiers/M02-E39/panne/ms-archiver-journaux.vN) — l'erreur de tar est
 # masquée par :
 #   1. un pipeline « tar -cf - | gzip » sans pipefail ;
 #   2. une fonction appelée comme condition d'un « if » (errexit ignoré dans tout son corps) ;
@@ -36,7 +36,7 @@ journal "préparation de la zone $Z"
 EOF
   bash "$_E39_MOD/ressources/M02-E39/fabriquer-spool.sh" "$z" >/dev/null || return 1
   mkdir -p "$z/bin" "$z/journal" "$z/sauvegardes" || return 1
-  install -m 755 "$_E39_MOD/corrige/pannes/fichiers/M02-E39/ms-archiver-journaux.v$v" "$z/bin/ms-archiver-journaux" || return 1
+  install -m 755 "$_E39_MOD/corrige/fichiers/M02-E39/panne/ms-archiver-journaux.v$v" "$z/bin/ms-archiver-journaux" || return 1
   touch -d 'yesterday 15:47' "$z/bin/ms-archiver-journaux"
   # Sauvegarde du spool faite par root (elle seule lit le fichier en mode 000), avant l'archivage.
   wb_exec localhost U="$(id -un)" Z="$z" >/dev/null <<'EOF' || return 1

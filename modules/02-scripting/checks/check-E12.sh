@@ -24,7 +24,8 @@ _m02_dst="$_m02_tmp/archive"
 # nb FICHIERS : compte des NUL, pas des lignes (certains noms contiennent un retour à la ligne)
 _m02_nb() { find "$@" -print0 | tr -cd '\0' | wc -c; }
 
-if bash "$_m02_jeu" "$_m02_tmp" >/dev/null 2>&1; then
+check_cmd "jeu de données de test fabriqué (ressources/M02-E12/fabriquer-jeu.sh)" bash "$_m02_jeu" "$_m02_tmp"
+if [[ -d "$_m02_src" ]]; then
   _m02_anciens="$(_m02_nb "$_m02_src" -type f -mtime +90)"
   _m02_recents="$(_m02_nb "$_m02_src" -type f -mtime -91)"
 
@@ -56,12 +57,10 @@ if bash "$_m02_jeu" "$_m02_tmp" >/dev/null 2>&1; then
     cd "$1" && m=(MANIFESTE*.sha256) && [[ -f "${m[0]}" ]] && sha256sum --check --strict --quiet -- "${m[@]}"' _ "$_m02_dst"
   check_output "le manifeste couvre les $_m02_anciens fichiers rangés" "^${_m02_anciens}\$" \
     bash -c 'cd "$1" && cat MANIFESTE*.sha256 | grep -c .' _ "$_m02_dst"
-  check_cmd "seconde exécution : rien à faire, code 0, rien de déplacé" bash -c '
-    avant="$(find "$3" -type f -print0 | tr -cd "\0" | wc -c)"
+  check_cmd "seconde exécution : code 0 et rien de déplacé" bash -c '
+    compte() { find "$1" -type f ! -name "MANIFESTE*" -print0 | tr -cd "\0" | wc -c; }
+    src="$(compte "$2")"; dst="$(compte "$3")"
     "$1" "$2" "$3" </dev/null >/dev/null 2>&1 || exit 1
-    apres="$(find "$3" -type f ! -name "MANIFESTE*" -print0 | tr -cd "\0" | wc -c)"
-    [[ -n "$avant" ]] && ((apres <= avant))' _ "$_m02_ranger" "$_m02_src" "$_m02_dst"
-else
-  skip "contrôles fonctionnels de ms-ranger" "jeu de données impossible à fabriquer ($_m02_jeu)"
+    [[ "$(compte "$2")" == "$src" && "$(compte "$3")" == "$dst" ]]' _ "$_m02_ranger" "$_m02_src" "$_m02_dst"
 fi
 rm -rf -- "${_m02_tmp:?}"

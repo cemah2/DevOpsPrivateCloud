@@ -428,7 +428,7 @@ Dans `gitlab.rb`, chaque réglage est une affectation Ruby. Une clé affectée d
 Si `gitlab-ctl reconfigure` échoue, la fin de sa sortie nomme la ressource *Chef* en échec et le fichier de journal ; une clé mal orthographiée dans `gitlab.rb` produit une erreur explicite. Si le navigateur refuse le certificat alors que `curl` l'accepte depuis `adm01`, c'est que ton **poste** ne fait pas confiance à la CA provisoire : importe `ca.crt` dans son magasin (ou dans celui du navigateur), en connaissance de cause, et retire-le au M06.
 </details>
 
-**Pour aller plus loin** (facultatif) : prends un instantané Proxmox de `git01` juste avant l'installation du paquet, et supprime-le une fois l'E05 validée (un instantané oublié grossit sans fin). Lis la documentation d'`nginx['ssl_protocols']` et des en-têtes HSTS, et note ce que tu durciras en E31. Réfléchis aux *name constraints* (`nameConstraints`) pour limiter une CA à `medisphere.internal` : pourquoi le SAN `git01` imposé ici serait-il alors refusé ?
+**Pour aller plus loin** (facultatif) : prends un instantané Proxmox de `git01` juste avant l'installation du paquet, et supprime-le une fois l'E05 validée (un instantané oublié grossit sans fin). Lis la documentation de `gitlab_rails['nginx']['ssl_protocols']` (clés NGINX regroupées sous `gitlab_rails['nginx']` depuis la 19.2) et des en-têtes HSTS, et note ce que tu durciras en E31. Réfléchis aux *name constraints* (`nameConstraints`) pour limiter une CA à `medisphere.internal` : pourquoi le SAN `git01` imposé ici serait-il alors refusé ?
 Documentation : <https://docs.gitlab.com/install/package/debian/>, <https://docs.gitlab.com/omnibus/settings/memory_constrained_envs/>, <https://docs.gitlab.com/omnibus/settings/ssl/>, <https://docs.gitlab.com/omnibus/settings/smtp/>.
 
 ---
@@ -468,7 +468,7 @@ Les deux groupes sont **privés**. `plateforme` accueillera les projets de l'éq
 | `workbook-checks` | `read_api` uniquement | 1 an au plus | `~/.config/workbook/gitlab-checks.token` |
 | `workbook-admin` | `api` | 90 jours au plus | `~/.config/workbook/gitlab-admin.token` |
 
-Les deux fichiers sont en 600, sans retour à la ligne superflu, et ne contiennent que le jeton.
+Les deux fichiers sont en 600, sans retour à la ligne superflu, et ne contiennent que le jeton. Ces deux noms de jetons sont repris par tout le workbook ; quand tu activeras l'*Admin Mode* (M01-E31), tu les recréeras sous les mêmes noms avec la portée `admin_mode` en plus.
 
 *Paramètres de l'instance* (*Admin → Settings → General*) : inscriptions désactivées ; niveau de visibilité **Public** interdit ; visibilité par défaut des nouveaux projets et groupes : **Private**.
 
@@ -491,7 +491,7 @@ Les deux fichiers sont en 600, sans retour à la ligne superflu, et ne contienne
 **Critères de réussite**
 - [ ] Les inscriptions sont fermées, la visibilité **Public** est interdite, les nouveaux projets sont privés par défaut.
 - [ ] Ton compte `<MOI>` est administrateur, son adresse est `<MOI>@medisphere.internal`, identique à ton `user.email` Git.
-- [ ] Le jeton des checks n'a que la portée `read_api` et expire dans moins d'un an ; le jeton `workbook-admin` a la portée `api` et expire dans moins de 90 jours ; les deux fichiers sont en 600 dans un dossier en 700.
+- [ ] Le jeton des checks n'a que la portée `read_api` (plus `admin_mode` après M01-E31) et expire dans moins d'un an ; le jeton `workbook-admin` a la portée `api` et expire dans moins de 90 jours ; les deux fichiers sont en 600 dans un dossier en 700.
 - [ ] Les six comptes des personnages existent et sont actifs.
 - [ ] Les groupes `plateforme` et `formation` sont privés et leurs membres ont les rôles du tableau.
 - [ ] `/etc/gitlab/initial_root_password` n'existe plus.
@@ -513,7 +513,7 @@ Pour écrire un jeton dans un fichier sans qu'il passe par l'historique ni par u
 Les niveaux d'accès s'expriment par des entiers : 10, 20, 30, 40, 50 (voir *Group and project members API*, *Roles*). Les membres d'un groupe s'ajoutent par `POST /groups/:id/members` avec `user_id` et `access_level` ; l'identifiant numérique d'un compte s'obtient par `GET /users?username=…`.
 </details>
 
-**Pour aller plus loin** (facultatif) : active l'authentification à deux facteurs pour `<MOI>` ; lis la documentation du « mode administrateur » (*Admin Mode*), qui impose une ré-authentification avant les actions d'administration, et ce qu'il change pour les jetons (portée `admin_mode`). Ne l'active pas maintenant : les scripts du workbook supposent qu'il est désactivé.
+**Pour aller plus loin** (facultatif) : active l'authentification à deux facteurs pour `<MOI>` ; lis la documentation du « mode administrateur » (*Admin Mode*), qui impose une ré-authentification avant les actions d'administration, et ce qu'il change pour les jetons (portée `admin_mode`). Ne l'active pas maintenant : tu le feras en M01-E31, après avoir recréé les deux jetons du workbook avec cette portée (sinon checks, scripts de ressources et pannes reçoivent des refus 403 sur l'API d'administration).
 
 ---
 

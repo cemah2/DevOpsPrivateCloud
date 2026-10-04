@@ -21,7 +21,7 @@
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
 
 _E35_SVC=ms-verif-sauvegardes.service
-_E35_FICHIERS="$WB_ROOT/modules/02-scripting/corrige/pannes/fichiers/M02-E35"
+_E35_FICHIERS="$WB_ROOT/modules/02-scripting/corrige/fichiers/M02-E35/panne"
 
 # _e35_precondition — le contrôle doit réussir AVANT la panne (sinon le diagnostic est faussé).
 _e35_precondition() {

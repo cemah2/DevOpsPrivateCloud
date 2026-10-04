@@ -6,7 +6,7 @@
 # (ressources/M02-E37/fabriquer-donnees.sh), sa « sauvegarde de la nuit », et le script de
 # purge de Lucas (version 0.1, défectueuse), puis le lance comme Lucas l'a fait hier soir.
 # Aucune donnée réelle n'est touchée : le script ne travaille que sur une racine marquée
-# .zone-de-test. Variantes (fichiers corrige/pannes/fichiers/M02-E37/ms-purge-rapports.vN) :
+# .zone-de-test. Variantes (fichiers corrige/fichiers/M02-E37/panne/ms-purge-rapports.vN) :
 #   1. variable mal orthographiée dans la règle « applications retirées » (rm -rf "$RACINE/$appli"
 #      avec $appli jamais définie) : toute la racine disparaît ;
 #   2. précédence de find (-o sans parenthèses) : tous les PDF partent, y compris récents et
@@ -43,13 +43,14 @@ _e37_injecter() {
   mkdir -p "$z/bin" "$z/etc" "$z/sauvegardes" "$z/journal" || return 1
   printf '%s\n' '# Configuration de ms-purge-rapports (PLAT-384)' \
     "RACINE=$z/rapports" 'RETENTION_JOURS=30' 'APPLIS_RETIREES="legacy-rdv"' >"$z/etc/purge.conf"
-  install -m 755 "$_E37_MOD/corrige/pannes/fichiers/M02-E37/ms-purge-rapports.v$v" "$z/bin/ms-purge-rapports" || return 1
+  install -m 755 "$_E37_MOD/corrige/fichiers/M02-E37/panne/ms-purge-rapports.v$v" "$z/bin/ms-purge-rapports" || return 1
   touch -d 'yesterday 16:12' "$z/bin/ms-purge-rapports" "$z/etc/purge.conf"
   # Sauvegarde « de la nuit » (avant la purge) : les dates de modification sont conservées.
   tar -C "$z" -czf "$z/sauvegardes/rapports-$(date -d yesterday +%F)-0215.tar.gz" rapports || return 1
   # Hier soir, 18 h 30 : Lucas lance son script « pour de vrai ».
   j="$z/journal/purge-$(date -d yesterday +%F)-1830.log"
-  (cd "$z" && bin/ms-purge-rapports) >"$j" 2>&1
+  # Le code retour du script de Lucas n'a pas d'importance ici : verifier_E37 constate l'effet.
+  (cd "$z" && bin/ms-purge-rapports) >"$j" 2>&1 || true
 }
 
 panne_E37_v1() { _e37_injecter 1; }

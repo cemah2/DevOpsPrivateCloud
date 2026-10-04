@@ -17,7 +17,8 @@
 set -euo pipefail
 umask 077 # archives et dossiers lisibles par leur seul propriétaire
 
-# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+# Dans le corrigé, ce fichier est seul : à placer dans bin/ du projet, où ShellCheck suit la bibliothèque.
+# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh disable=SC1091
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
 
 DEST="${MS_COLLECTE_DIR:-$HOME/collectes/etc}"
@@ -46,8 +47,8 @@ collecter() { # collecter NOM FICHIER
   distante="sudo -n tar -C / --create --gzip --file=- $(printf '%q ' "${EXCLUSIONS[@]}") etc || [ \$? -eq 1 ]"
   # -n : ssh ne lit pas l'entrée standard (sinon il avalerait la boucle « while read »).
   # BatchMode : jamais de question ; clé d'hôte inconnue = refus (pas de StrictHostKeyChecking=no).
-  ssh -n -o BatchMode=yes -o ConnectTimeout=10 -- "$1" "$distante" >"$2" &&
-    [[ -s "$2" ]] && gzip --test -- "$2"
+  ssh -n -o BatchMode=yes -o ConnectTimeout=10 -- "$1" "$distante" >"$2" \
+    && [[ -s "$2" ]] && gzip --test -- "$2"
 }
 
 main() {
@@ -101,8 +102,8 @@ main() {
 
   # Purge : seulement les dossiers au format exact de nos collectes, dans DEST.
   find "$DEST" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
-    -regex '.*/[0-9]{8}-[0-9]{6}' -printf '%f\n' | sort -r | tail -n +"$((GARDER + 1))" |
-    while IFS= read -r ancien; do
+    -regex '.*/[0-9]{8}-[0-9]{6}' -printf '%f\n' | sort -r | tail -n +"$((GARDER + 1))" \
+    | while IFS= read -r ancien; do
       rm -rf -- "${DEST:?}/$ancien"
       log_info "ancienne collecte supprimée : $ancien"
     done

@@ -1,0 +1,13 @@
+# /etc/systemd/system/ms-verif-fraicheur.timer — M02-E41 (INC-2845)
+# Toutes les heures : un contrôle quotidien muet depuis plus de 26 h est signalé dans l'heure.
+
+[Unit]
+Description=MédiSphère : fraîcheur des contrôles planifiés (toutes les heures)
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

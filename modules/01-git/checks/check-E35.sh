@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2016  # scripts de bash -c et filtres jq : développés par le sous-shell, pas ici
 #
 # check-E35.sh — M01-E35 « Workflow complet en temps limité »
 # Lancé depuis adm01. Lecture seule : l'historique est relu dans un clone nu

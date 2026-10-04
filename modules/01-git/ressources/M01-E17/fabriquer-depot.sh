@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # fabriquer-depot.sh — M01-E17 : crée formation/labo-fuite, un dépôt où un secret a été poussé.
 #
 # Usage (depuis adm01) :

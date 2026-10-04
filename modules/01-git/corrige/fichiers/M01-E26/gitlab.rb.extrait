@@ -1,11 +1,12 @@
 # =============================================================================
 # /etc/gitlab/gitlab.rb — EXTRAIT (M01-E26) : hooks globaux de Gitaly
 #
-# ⚠️ gitaly['configuration'] est UN SEUL hash Ruby. Le profil « mémoire
-# contrainte » appliqué en M01-E04 l'a peut-être déjà défini (clé concurrency).
+# ⚠️ gitaly['configuration'] est UN SEUL hash Ruby. Le gitlab.rb de M01-E04
+# (profil « mémoire contrainte ») le définit déjà (clé concurrency).
 # Une seconde affectation « gitaly['configuration'] = { hooks: … } » plus bas
 # dans le fichier REMPLACERAIT la première : la limitation de concurrence
-# disparaîtrait sans message d'erreur. On complète donc le hash existant.
+# disparaîtrait sans message d'erreur. On ajoute donc la clé hooks: dans le
+# hash existant : le bloc ci-dessous REMPLACE celui de M01-E04, il ne s'y ajoute pas.
 #
 # Après modification :
 #   sudo cp -a /etc/gitlab/gitlab.rb /etc/gitlab/gitlab.rb.$(date +%F-%H%M)

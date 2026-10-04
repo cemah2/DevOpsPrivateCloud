@@ -81,6 +81,8 @@ archiver_hote() {
 echecs=()
 for d in "$SPOOL"/*/; do
   h="$(basename "$d")"
+  # Appel voulu dans un « || » : archiver_hote vérifie chaque étape elle-même (voir son en-tête).
+  # shellcheck disable=SC2310
   archiver_hote "$h" || echecs+=("$h")
 done
 

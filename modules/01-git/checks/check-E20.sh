@@ -31,8 +31,8 @@ done
 
 # --- Jeton des checks -----------------------------------------------------------------------------
 _m01_c="$(_m01_self "$_m01_fc")" || _m01_c="{}"
-check_cmd "jeton des checks : actif, portée read_api seule" \
-  _m01_jq '.active == true and .scopes == ["read_api"]' "$_m01_c"
+check_cmd "jeton des checks : actif, portée read_api seule (plus admin_mode après M01-E31)" \
+  _m01_jq '.active == true and ((.scopes | sort) == ["read_api"] or (.scopes | sort) == ["admin_mode", "read_api"])' "$_m01_c"
 check_cmd "jeton des checks : expire dans un an au plus" _m01_exp_max "$_m01_c" "$(_m01_dans 366)"
 
 # --- Jeton d'administration ------------------------------------------------------------------------

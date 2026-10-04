@@ -13,7 +13,7 @@ La forge tourne : `git01` sert l'équipe, `runner01` fait passer les pipelines, 
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `/var/lib/workbook/` sur `git01` et `runner01`, ni `~/.local/state/workbook/` sur `adm01` : ils contiennent la cause.
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 01 36 --annuler` remet l'état sain (filet de sécurité, pas un correctif : compte l'exercice comme non réussi).
 - Les pannes agissent sur `git01`, `runner01`, sur GitLab par l'API (avec ton jeton d'administration, `WB_GITLAB_ADMIN_TOKEN_FILE`), et sur `adm01` : configuration de `~/medisphere`, `~/.ssh/config` et `~/.ssh/known_hosts` (sauvegardés avant modification), dépôts d'exercice de `~/src`. Elles ne suppriment aucun projet, ne lancent jamais `gitlab-ctl reconfigure` et ne détruisent aucune donnée.
-- Ton **jeton d'administration** doit être valide (il expire au plus tard 90 jours après sa création, M01-E05) : s'il a expiré, les injections échouent proprement. Renouvelle-le d'abord.
+- Ton **jeton d'administration** doit être valide (il expire au plus tard 90 jours après sa création, M01-E05) et porter la portée `admin_mode` (Admin Mode activé en M01-E31) : sinon, les injections échouent proprement. Renouvelle-le d'abord.
 - N'injecte pas pendant qu'un pipeline tourne : certaines variantes redémarrent des services.
 - **Tiens un journal de diagnostic** pour chaque panne, comme au module 00, dans `docs/socle/journal/` de ton clone `~/medisphere` : heure, hypothèse, commande, résultat observé, conclusion. Tu le publieras par MR (le dépôt est maintenant sur la forge). Ce journal alimente le post-mortem de M01-E43.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.

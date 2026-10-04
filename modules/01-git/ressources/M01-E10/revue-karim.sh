@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # revue-karim.sh — M01-E10 : Karim Benali relit ta merge request « fiche de la forge ».
 #
 # Usage (depuis adm01, à la racine du dépôt du workbook ou ailleurs) :

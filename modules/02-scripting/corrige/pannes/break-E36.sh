@@ -4,7 +4,7 @@
 #
 # Variantes :
 #   1. jeton wb-automation@pve!lab expiré (date d'expiration passée) — pve01 ;
-#   2. ACL de l'UTILISATEUR wb-automation@pve retirée sur /pool/lab (celle du jeton reste :
+#   2. ACL de l'UTILISATEUR wb-automation@pve retirées sur /pool/lab (celles du jeton restent :
 #      jeton à privilèges séparés = intersection des deux → plus aucun droit sur le pool) — pve01 ;
 #   3. fichier de CA PVE_CACERT de adm01 remplacé par la racine de la PKI provisoire
 #      (« mise à jour des certificats ») : la vérification TLS échoue — adm01 ;
@@ -65,16 +65,18 @@ panne_E36_v2() {
   _e36_precondition || return 1
   [[ "$(_e36_nb_vms)" =~ ^[1-9] ]] || { wb_avert "le jeton ne voit déjà aucune VM : lab/bin/check 02 36"; return 1; }
   wb_exec "$WB_PVE_HOST" >/dev/null <<'EOF'
-ligne="$(pveum acl list --output-format json | perl -MJSON::PP -0777 -ne '
+# Toutes les ACL de l'UTILISATEUR sur /pool/lab (rôle et propagation), une par ligne.
+lignes="$(pveum acl list --output-format json | perl -MJSON::PP -0777 -ne '
   for (@{decode_json($_)}) {
     print "$_->{roleid} ", ($_->{propagate} // 1), "\n"
       if $_->{path} eq "/pool/lab" && $_->{type} eq "user" && $_->{ugid} eq "wb-automation\@pve";
-  }' | head -n 1)"
-[ -n "$ligne" ] || { echo "aucune ACL utilisateur wb-automation@pve sur /pool/lab" >&2; exit 1; }
-[ -f "$WB_DIR/M02-E36.acl" ] || printf '%s\n' "$ligne" >"$WB_DIR/M02-E36.acl"
-role="${ligne%% *}"
-pveum acl delete /pool/lab --users wb-automation@pve --roles "$role" || exit 1
-journal "ACL utilisateur wb-automation@pve ($role) retirée de /pool/lab (celle du jeton conservée)"
+  }')"
+[ -n "$lignes" ] || { echo "aucune ACL utilisateur wb-automation@pve sur /pool/lab" >&2; exit 1; }
+[ -f "$WB_DIR/M02-E36.acl" ] || printf '%s\n' "$lignes" >"$WB_DIR/M02-E36.acl"
+printf '%s\n' "$lignes" | while read -r role _; do
+  pveum acl delete /pool/lab --users wb-automation@pve --roles "$role" || exit 1
+done || exit 1
+journal "ACL utilisateur wb-automation@pve retirées de /pool/lab ($(printf '%s' "$lignes" | tr '\n' ' ')) ; celles du jeton conservées"
 EOF
 }
 
@@ -141,10 +143,13 @@ if [ -f "$WB_DIR/M02-E36.expire" ]; then
   journal "annulation : expiration du jeton rétablie"
 fi
 if [ -f "$WB_DIR/M02-E36.acl" ]; then
-  read -r role prop <"$WB_DIR/M02-E36.acl"
-  pveum acl modify /pool/lab --users wb-automation@pve --roles "$role" --propagate "${prop:-1}" \
-    && rm -f "$WB_DIR/M02-E36.acl"
-  journal "annulation : ACL utilisateur sur /pool/lab rétablie"
+  ok=1
+  while read -r role prop; do
+    [ -n "$role" ] || continue
+    pveum acl modify /pool/lab --users wb-automation@pve --roles "$role" --propagate "${prop:-1}" || ok=0
+  done <"$WB_DIR/M02-E36.acl"
+  [ "$ok" = 1 ] && rm -f "$WB_DIR/M02-E36.acl"
+  journal "annulation : ACL utilisateur sur /pool/lab rétablies"
 fi
 if [ -f "$WB_DIR/M02-E36.enable" ]; then
   pveum user modify wb-automation@pve --enable "$(cat "$WB_DIR/M02-E36.enable")" \

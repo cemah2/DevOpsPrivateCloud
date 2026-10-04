@@ -117,5 +117,5 @@ nb_ecritures() { grep -cE "^$1 " "$FAKE_PVE/ecritures.log" || true; }
   run main --keep 0 2027
   [ "$status" -eq 2 ]
   run main --prefix 'av*nt' 2027
-  [ "$status" -eq 3 ]
+  [ "$status" -eq 2 ]
 }

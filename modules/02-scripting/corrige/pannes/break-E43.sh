@@ -35,7 +35,7 @@ source "$_WB_E43_DIR/break-E41.sh"
 source "$_WB_E43_DIR/break-E42.sh"
 unset WB_PANNES_LIB
 
-declare -A _E43_NB=([E35]=4 [E36]=4 [E37]=4 [E38]=4 [E39]=4 [E40]=4 [E41]=3 [E42]=4)
+declare -A _E43_NB=([E35]=4 [E36]=4 [E37]=4 [E38]=4 [E39]=4 [E40]=4 [E41]=4 [E42]=4)
 _E43_ORDRE=(E35 E41 E37 E39 E40 E42 E38 E36)
 
 _E43_paires() {

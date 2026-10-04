@@ -5,6 +5,6 @@
 # ici avec valid-before pour que les anciens commits restent vérifiables.
 #
 # Exemple (clé fictive, à remplacer par la tienne : cat ~/.ssh/id_ed25519_signature.pub) :
-<PRÉNOM.NOM>@medisphere.internal namespaces="git" valid-after="20261003" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI<…> signature <MOI> 2026
+<MOI>@medisphere.internal namespaces="git" valid-after="20261003" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI<…> signature <MOI> 2026
 # Clé retirée (rotation du AAAA-MM-JJ) : valide pour les signatures antérieures seulement
-#<PRÉNOM.NOM>@medisphere.internal namespaces="git" valid-before="20261003" ssh-ed25519 AAAA<…> ancienne clé
+#<MOI>@medisphere.internal namespaces="git" valid-before="20261003" ssh-ed25519 AAAA<…> ancienne clé

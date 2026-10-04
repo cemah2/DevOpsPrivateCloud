@@ -1,0 +1,22 @@
+# /etc/systemd/system/ms-verif-fraicheur.service — M02-E41 (INC-2845)
+# Chien de garde des contrôles planifiés : alerte si un contrôle n'a pas tourné ou n'a pas
+# réussi récemment (timer arrêté, mal planifié, service sauté par une condition…).
+
+[Unit]
+Description=MédiSphère : fraîcheur des contrôles planifiés
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ms-verif-fraicheur --age-max 26 ms-verif-sauvegardes.timer
+TimeoutStartSec=1min
+SyslogIdentifier=ms-verif-fraicheur
+# Lecture des propriétés systemd seulement : utilisateur éphémère, sans privilège.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX

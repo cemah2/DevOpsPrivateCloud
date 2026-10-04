@@ -3,6 +3,9 @@
 #
 # Point de départ (M01-E04, profil « mémoire contrainte ») :
 #   prometheus_monitoring['enable'] = false   # coupe Prometheus ET tous ses exporteurs
+# Les lignes ci-dessous REMPLACENT celles du bloc « Supervision embarquée désactivée »
+# de M01-E04 (une clé, une seule affectation) ; puma['exporter_enabled'] et
+# sidekiq['metrics_enabled'] restent à false.
 #
 # Choix retenu : pas de serveur Prometheus local (la supervision centrale arrive au
 # module 21 et viendra chercher les métriques) ; on rouvre seulement les sondes

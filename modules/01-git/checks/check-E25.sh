@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2016  # scripts de bash -c et filtres jq : développés par le sous-shell, pas ici
 #
 # check-E25.sh — M01-E25 « semantic-release : versions, changelog et releases automatiques »
 # Lancé depuis adm01. Lecture seule (API GitLab). Les valeurs des variables CI ne

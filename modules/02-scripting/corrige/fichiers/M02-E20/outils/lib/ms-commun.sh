@@ -107,25 +107,28 @@ confirm() {
 # retry N DÉLAI CMD... — N tentatives au plus, délai initial DÉLAI secondes,
 # doublé après chaque échec. Renvoie le code du dernier échec.
 # Seul le nom de la commande est journalisé (ses arguments peuvent être sensibles).
-# Attention : CMD est exécutée dans un contexte où « set -e » est suspendu ; une
-# fonction passée à retry doit donc signaler ses échecs par son code de retour.
+# Attention :
+#  - CMD est exécutée dans un contexte où « set -e » est suspendu ; une fonction
+#    passée à retry doit donc signaler ses échecs par son code de retour ;
+#  - les variables locales de Bash sont visibles des fonctions appelées (portée
+#    dynamique) : d'où les noms préfixés _ms_, qui ne masquent pas celles de CMD.
 retry() {
   if (($# < 3)) || [[ ! "$1" =~ ^[1-9][0-9]*$ || ! "$2" =~ ^[0-9]+$ ]]; then
     die "retry : usage retry TENTATIVES DÉLAI COMMANDE [ARG...]" 2
   fi
-  local max="$1" delai="$2" n=1 rc=0
+  local _ms_max="$1" _ms_delai="$2" _ms_essai=1 _ms_rc=0
   shift 2
   while :; do
     "$@" && return 0
-    rc=$?
-    if ((n >= max)); then
-      log_err "« $1 » en échec après $n tentative(s) (code $rc)"
-      return "$rc"
+    _ms_rc=$?
+    if ((_ms_essai >= _ms_max)); then
+      log_err "« $1 » en échec après $_ms_essai tentative(s) (code $_ms_rc)"
+      return "$_ms_rc"
     fi
-    log_warn "« $1 » en échec (code $rc), tentative $n/$max ; nouvel essai dans ${delai}s"
-    sleep "$delai"
-    n=$((n + 1))
-    delai=$((delai * 2))
+    log_warn "« $1 » en échec (code $_ms_rc), tentative $_ms_essai/$_ms_max ; nouvel essai dans ${_ms_delai}s"
+    sleep "$_ms_delai"
+    _ms_essai=$((_ms_essai + 1))
+    _ms_delai=$((_ms_delai * 2))
   done
 }
 

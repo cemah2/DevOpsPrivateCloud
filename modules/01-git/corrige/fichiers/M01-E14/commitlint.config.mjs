@@ -13,7 +13,9 @@
 // Résolution de « extends » : commitlint cherche @commitlint/config-conventional depuis le dossier
 // courant (le dépôt), puis dans le dossier des paquets npm « globaux » (préfixe npm). Le dépôt
 // n'a pas de node_modules : le paquet doit donc être installé en global (sur adm01 : préfixe npm
-// ~/.local, M01-E14), ou dans l'environnement isolé du hook pre-commit (M01-E15).
+// ~/.local, M01-E14), ou dans l'environnement isolé du hook pre-commit (M01-E15). En CI
+// (runner01, M01-E24), il est dans /opt/release-tools : le job commitlint le rend trouvable
+// par NODE_PATH=/opt/release-tools/node_modules.
 export default {
   extends: ['@commitlint/config-conventional'],
   helpUrl:

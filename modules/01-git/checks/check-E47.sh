@@ -62,7 +62,10 @@ while IFS= read -r _m01_p; do
   _m01_e="projects/$(jq -rn --arg p "$_m01_p" '$p|@uri')"
   check_cmd "$_m01_p : branche par défaut main, fusion conditionnée au pipeline et aux discussions" \
     _m01_api_ok "$_m01_e" '.default_branch == "main" and .only_allow_merge_if_pipeline_succeeds
-       and .only_allow_merge_if_all_discussions_are_resolved'
+       and .only_allow_merge_if_all_discussions_are_resolved and (.allow_merge_on_skipped_pipeline | not)'
+  check_cmd "$_m01_p : méthode de fusion de l'équipe (commit de fusion, historique semi-linéaire)" \
+    _m01_api_ok "$_m01_e" '.merge_method == "rebase_merge"'
+  check_cmd "$_m01_p : étiquettes v* protégées" _m01_api_existe "$_m01_e/protected_tags/v%2A"
   check_cmd "$_m01_p : main protégée, poussée directe interdite" \
     _m01_api_ok "$_m01_e/protected_branches/main" '[.push_access_levels[].access_level] | length > 0 and all(. == 0)'
   check_cmd "$_m01_p : .pre-commit-config.yaml sur main" \
@@ -83,30 +86,33 @@ for _m01_p in plateforme/medisphere plateforme/ci-templates; do
   _m01_e="projects/$(jq -rn --arg p "$_m01_p" '$p|@uri')"
   check_cmd "$_m01_p : au moins une Release vX.Y.Z" \
     _m01_api_ok "$_m01_e/releases?per_page=1" '.[0].tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")'
-  check_cmd "$_m01_p : étiquettes v* protégées" _m01_api_existe "$_m01_e/protected_tags/v%2A"
 done
-check_cmd "plateforme/medisphere : étiquette forge-v1 publiée" \
-  _m01_api_existe "$_M01_P_MED/repository/tags/forge-v1"
+check_cmd "plateforme/medisphere : étiquette annotée forge-v1 publiée" \
+  _m01_api_ok "$_M01_P_MED/repository/tags/forge-v1" '(.message // "") != ""'
 
 # --- 7. Sauvegarde ---------------------------------------------------------------------------
 title "7/8 Sauvegarde de GitLab"
 check_ssh "git01 : sauvegarde gitlab-backup de moins de 48 h" git01 \
   'sudo -n find /var/opt/gitlab/backups -maxdepth 1 -name "*_gitlab_backup.tar" -mmin -2880 | grep -q .'
 check_ssh "git01 : sauvegarde de la configuration (backup-etc) de moins de 8 jours" git01 \
-  'sudo -n find /etc/gitlab/config_backup /var/opt/gitlab/backups -name "gitlab_config_*.tar" -mtime -8 2>/dev/null | grep -q .'
+  'sudo -n find /etc/gitlab/config_backup /var/opt/gitlab/config_backup /var/opt/gitlab/backups -name "gitlab_config_*.tar" -mtime -8 2>/dev/null | grep -q .'
 check_ssh "git01 → pbs01 : API PBS joignable (TCP/8007)" git01 "timeout 5 bash -c '</dev/tcp/10.20.10.10/8007'"
-check_ssh "pbs01 : instantané de moins de 8 jours dans l'espace de noms par1/git01" "$WB_PBS_HOST" '
+check_ssh "pbs01 : instantané de moins de 48 h dans l'espace de noms par1/git01" "$WB_PBS_HOST" '
   p=$(proxmox-backup-manager datastore show ds-lab --output-format json | perl -MJSON::PP -0777 -ne "print decode_json(\$_)->{path}")
-  [ -n "$p" ] && find "$p/ns/par1/ns/git01" -mindepth 3 -maxdepth 3 -type d -mtime -8 2>/dev/null | grep -q .'
+  [ -n "$p" ] && find "$p/ns/par1/ns/git01" -mindepth 3 -maxdepth 3 -type d -mmin -2880 2>/dev/null | grep -q .'
 
 # --- 8. Dossier de livraison et hygiène ----------------------------------------------------------
 title "8/8 Dossier de livraison (plateforme/medisphere) et hygiène"
 _m01_depot="${WB_DEPOT:-$HOME/medisphere}"
 _m01_doc="$_m01_depot/docs/socle"
 check_output "dépôt local : aucune modification non commitée" '^$' git -C "$_m01_depot" status --porcelain
+check_cmd "fiche de service docs/socle/forge.md : composants, sauvegarde et RTO" bash -c \
+  'for m in git01 runner01 RB-010 RTO; do grep -qF "$m" "$1" || exit 1; done' _ "$_m01_doc/forge.md"
+check_cmd "test de restauration de GitLab consigné (tests/restauration.md : git01, durée mesurée)" bash -c \
+  'grep -qi "git01" "$1" && grep -Eq "([0-9]+ ?min|[0-9]+:[0-9]{2}|RTO)" "$1"' _ "$_m01_doc/tests/restauration.md"
 check_cmd "ADR-0010 présent (docs/socle/adr/)" bash -c 'ls "$1"/ADR-0010*.md >/dev/null 2>&1' _ "$_m01_doc/adr"
-check_cmd "au moins deux runbooks du module (RB-010…)" \
-  bash -c '[ "$(ls "$1"/RB-01[0-9]*.md 2>/dev/null | wc -l)" -ge 2 ]' _ "$_m01_doc/runbooks"
+check_cmd "runbooks du module RB-010 à RB-013 présents" \
+  bash -c 'for r in RB-010 RB-011 RB-012 RB-013; do ls "$1/$r"*.md >/dev/null 2>&1 || exit 1; done' _ "$_m01_doc/runbooks"
 check_cmd "post-mortem de l'astreinte INC-2788 présent" \
   bash -c 'ls "$1"/*INC-2788*.md >/dev/null 2>&1' _ "$_m01_doc/post-mortems"
 check_cmd "inventaire : git01 (10.10.20.12) et runner01 (10.10.20.15)" bash -c \

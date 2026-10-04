@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # creer-mr-lucas.sh — M01-E21 : Lucas Martin (stagiaire) ouvre une merge request à relire.
 #
 # Usage (depuis adm01) :

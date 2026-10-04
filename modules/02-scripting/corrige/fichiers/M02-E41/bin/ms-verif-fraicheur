@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# ms-verif-fraicheur — vérifie qu'un contrôle planifié a réellement tourné (M02-E41, INC-2845).
+#
+# Un contrôle planifié qui ne tourne plus ne déclenche aucune alerte d'échec : il n'échoue pas,
+# il n'existe plus. Ce script observe, pour chaque timer donné, l'état du timer ET le dernier
+# passage du service qu'il déclenche, et échoue si l'un des deux n'est pas « frais ».
+#
+# Usage : ms-verif-fraicheur [-a|--age-max HEURES] TIMER...      (ex. ms-verif-sauvegardes.timer)
+#
+# Pour chaque TIMER : unité chargée sans erreur, active, activée au démarrage ; prochaine
+# échéance dans moins de HEURES ; service déclenché : dernier passage exécuté (pas sauté par une
+# condition), réussi, terminé il y a moins de HEURES (défaut 26).
+#
+# Volontairement autonome (pas de lib/ms-commun.sh) : un chien de garde dépend du moins de
+# choses possible. Lecture seule (systemctl show). Limite assumée : s'il tourne sur la même
+# machine que le contrôle, il ne voit pas la panne de la machine entière (voir le corrigé).
+#
+# Codes retour : 0 tout est frais ; 1 au moins un timer en défaut ; 2 usage.
+#
+# SC2310 (vérification optionnelle check-set-e-suppressed) : les fonctions appelées dans des
+# conditions (prop, horodatage, verifier_timer) testent elles-mêmes leurs résultats.
+# shellcheck disable=SC2310
+
+set -Eeuo pipefail
+shopt -s inherit_errexit
+
+PROG="${0##*/}"
+log() { printf '%s %s: %s\n' "$(date -Iseconds)" "$PROG" "$*" >&2; }
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-fraicheur [-a|--age-max HEURES] TIMER...
+
+Vérifie que chaque TIMER (ex. ms-verif-sauvegardes.timer) est chargé, actif, activé, que sa
+prochaine échéance est à moins de HEURES heures, et que le dernier passage du service qu'il
+déclenche a été exécuté et réussi il y a moins de HEURES heures (défaut : 26).
+
+Codes retour : 0 tout est frais, 1 au moins un timer en défaut, 2 usage.
+FIN
+}
+
+# prop UNITÉ PROPRIÉTÉ — valeur brute d'une propriété systemd (vide si inconnue).
+prop() { systemctl show "$1" -p "$2" --value 2>/dev/null || true; }
+
+# horodatage UNITÉ PROPRIÉTÉ — secondes depuis l'époque, ou vide.
+horodatage() {
+  local v
+  v="$(systemctl show "$1" -p "$2" --value --timestamp=unix 2>/dev/null || true)"
+  v="${v#@}"
+  if [[ "$v" =~ ^[0-9]+$ ]]; then printf '%s\n' "$v"; fi
+}
+
+# verifier_timer TIMER AGE_MAX_S — affiche une ligne de rapport ; code 0 si frais.
+verifier_timer() {
+  local t="$1" max="$2" maintenant svc v prochaine fin
+  local -a defauts=()
+  maintenant="$(date +%s)"
+
+  v="$(prop "$t" LoadState)"
+  if [[ "$v" != loaded ]]; then
+    printf '%-34s KO  timer non chargé (%s)\n' "$t" "${v:-inconnu}"
+    return 1
+  fi
+  [[ "$(prop "$t" ActiveState)" == active ]] || defauts+=("timer inactif")
+  [[ "$(prop "$t" UnitFileState)" == enabled ]] || defauts+=("timer non activé au démarrage")
+  prochaine="$(horodatage "$t" NextElapseUSecRealtime)"
+  if [[ -z "$prochaine" ]]; then
+    defauts+=("aucune prochaine échéance")
+  elif ((prochaine - maintenant > max)); then
+    defauts+=("prochaine échéance dans $(((prochaine - maintenant) / 3600)) h")
+  fi
+
+  svc="$(prop "$t" Triggers)"
+  svc="${svc%% *}"
+  if [[ -z "$svc" ]]; then
+    defauts+=("service déclenché inconnu")
+  else
+    [[ "$(prop "$svc" ConditionResult)" == yes ]] || defauts+=("dernier passage sauté (condition non remplie)")
+    [[ "$(prop "$svc" Result)" == success ]] || defauts+=("dernier passage en échec ($(prop "$svc" Result))")
+    fin="$(horodatage "$svc" ExecMainExitTimestamp)"
+    if [[ -z "$fin" ]]; then
+      defauts+=("aucun passage enregistré")
+    elif ((maintenant - fin > max)); then
+      defauts+=("dernier passage il y a $(((maintenant - fin) / 3600)) h")
+    fi
+  fi
+
+  if ((${#defauts[@]})); then
+    local msg
+    msg="$(printf '%s ; ' "${defauts[@]}")"
+    printf '%-34s KO  %s\n' "$t" "${msg% ; }"
+    return 1
+  fi
+  printf '%-34s OK  prochaine %s, dernier passage %s\n' "$t" \
+    "$(date -d "@$prochaine" '+%F %H:%M')" "$(date -d "@$fin" '+%F %H:%M')"
+}
+
+main() {
+  local age_h=26
+  local -a timers=()
+  while (($#)); do
+    case "$1" in
+      -a | --age-max)
+        (($# >= 2)) || { usage >&2; exit 2; }
+        age_h="$2"
+        shift 2
+        ;;
+      -h | --help) usage; exit 0 ;;
+      -*) log "option inconnue : $1"; usage >&2; exit 2 ;;
+      *) timers+=("$1"); shift ;;
+    esac
+  done
+  [[ "$age_h" =~ ^[1-9][0-9]{0,3}$ ]] || { log "--age-max attend un nombre entier d'heures"; exit 2; }
+  ((${#timers[@]})) || { usage >&2; exit 2; }
+  local t
+  for t in "${timers[@]}"; do
+    [[ "$t" =~ ^[A-Za-z0-9@_.:-]+\.timer$ ]] || { log "nom de timer invalide : $t"; exit 2; }
+  done
+  command -v systemctl >/dev/null || { log "systemctl introuvable"; exit 1; }
+
+  local ko=0
+  for t in "${timers[@]}"; do
+    verifier_timer "$t" "$((age_h * 3600))" || ko=$((ko + 1))
+  done
+  if ((ko)); then
+    log "$ko contrôle(s) planifié(s) sans passage récent réussi : voir docs/astreinte.md"
+    exit 1
+  fi
+}
+
+main "$@"

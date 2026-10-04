@@ -3,7 +3,8 @@
 #
 # check-E05.sh — M01-E05 : administration de GitLab (comptes, groupes, jetons, paramètres).
 # Lancé depuis adm01. Lecture seule : API GitLab avec le jeton des checks (read_api, compte
-# administrateur <MOI>), fichiers de ~/.config/workbook, et git01 par l'alias SSH.
+# administrateur <MOI> ; + admin_mode une fois l'Admin Mode activé en M01-E31, sinon
+# application/settings est refusé), fichiers de ~/.config/workbook, et git01 par l'alias SSH.
 
 title "M01-E05 — Premiers pas d'administration GitLab"
 require_cmd curl jq git
@@ -37,7 +38,8 @@ _m01_jq "adresse du compte = <MOI>@medisphere.internal = git config user.email" 
   '.email == ($u + "@medisphere.internal") and .email == $g' "$_m01_user" \
   --arg u "${WB_MOI:-}" --arg g "$(git config --global --get user.email 2>/dev/null)"
 _m01_self="$(gitlab_api personal_access_tokens/self 2>/dev/null || true)"
-_m01_jq "jeton des checks : portée read_api, et elle seule" '.scopes == ["read_api"]' "$_m01_self"
+_m01_jq "jeton des checks : portée read_api seule (plus admin_mode après M01-E31)" \
+  '(.scopes | sort) == ["read_api"] or (.scopes | sort) == ["admin_mode", "read_api"]' "$_m01_self"
 _m01_jq "jeton des checks : expiration dans moins d'un an" \
   '.expires_at != null and .expires_at <= $m' "$_m01_self" --arg m "$_m01_max365"
 _m01_uid="$(jq -r '.id // empty' <<<"${_m01_user:-null}" 2>/dev/null)"

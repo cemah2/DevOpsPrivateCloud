@@ -82,10 +82,10 @@ Les VLANs INFRA ne joignent pas MGMT : `git01` ne peut pas initier de connexion 
 | PKI provisoire | `~/pki-provisoire/` sur `adm01` (700) ; racine installée sous `/usr/local/share/ca-certificates/medisphere-provisoire.crt` | E04 |
 | `runner01` | VMID 1007, 10.10.20.15/24 (VNet `vinfra`), 2 vCPU, 4 Go, disque 30 Go, étiquettes `socle;role-runner` | E23 |
 | Groupes GitLab | `plateforme` (projets de l'équipe), `formation` (bac à sable des exercices Git) | E05 |
-| Projets | `plateforme/medisphere` (E06), `formation/git-labo` (E07), `plateforme/ci-templates` (E24) | |
+| Projets | `plateforme/medisphere` (E06), `plateforme/ci-templates` (E24) ; bac à sable : `formation/git-labo` (E07), `formation/labo-fuite` (E17), `formation/chrono-…` (E35), `formation/legacy-rdv` (E45) | |
 | Comptes GitLab | `root` (bris de glace), `<MOI>` (ton compte, administrateur), `claire.morel`, `karim.benali`, `sophie.laurent`, `julien.petit`, `nadia.roussel`, `lucas.martin` | E05 |
 | VMs jetables | 2010-2019 (pool `lab`), dont 2010 `git-restore` (E28) | |
-| Documentation | `docs/socle/` de `plateforme/medisphere` : ADR à partir d'`ADR-0010`, runbooks à partir de `RB-010` | |
+| Documentation | `docs/socle/` de `plateforme/medisphere` : ADR à partir d'`ADR-0010`, runbooks `RB-010` (restaurer GitLab, E28), `RB-011` (mettre à jour, E29), `RB-012` (diagnostiquer, E30), `RB-013` (forge en panne, E47) | |
 
 `<MOI>` désigne **ton identifiant** sur la forge (par exemple `camille.durand`, sur le modèle des comptes des personnages). Tu le choisis en E03 et tu ne le changes plus : il apparaît dans ton adresse Git, ton compte GitLab et `lab/lab.env`.
 
@@ -99,7 +99,7 @@ Les VLANs INFRA ne joignent pas MGMT : `git01` ne peut pas initier de connexion 
 | `~/medisphere` | clone de `plateforme/medisphere` (`WB_DEPOT`) | |
 | `~/src/<projet>` | clones des autres projets (`WB_SRC`) : `labo-objets` (E02), `git-labo` (E07), `ci-templates` (E24)… | |
 
-Le dossier `~/.config/workbook/` (700) existe depuis M00-E17 et contient déjà `pve-api.env`. **Aucun de ces fichiers n'entre jamais dans un dépôt.**
+Le dossier `~/.config/workbook/` (700) existe depuis M00-E17 et contient déjà `pve-api.env`. **Aucun de ces fichiers n'entre jamais dans un dépôt.** À partir de M01-E31 (*Admin Mode* activé), les deux jetons GitLab portent aussi la portée `admin_mode`, sans laquelle un jeton d'administrateur n'accède plus aux points d'administration de l'API.
 
 ---
 

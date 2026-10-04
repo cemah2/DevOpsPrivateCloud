@@ -10,8 +10,8 @@ Dernière revue : <AAAA-MM-JJ> par <MOI>.
 
 | Identifiant | Type | Propriétaire | Portée / rôle | Stockage | Expiration | Rotation |
 |---|---|---|---|---|---|---|
-| `gitlab-checks` | jeton d'accès personnel | `<MOI>` | `read_api` | `adm01:~/.config/workbook/gitlab-checks.token` (600) | ≤ 1 an | interface (Profil > Jetons d'accès > Faire tourner), réécrire le fichier |
-| `gitlab-admin` | jeton d'accès personnel | `<MOI>` (administrateur) | `api` (+ `admin_mode` si le mode admin est actif) | `adm01:~/.config/workbook/gitlab-admin.token` (600) | ≤ 90 jours | `gitlab-rotation-jeton.sh ~/.config/workbook/gitlab-admin.token 90` |
+| `workbook-checks` | jeton d'accès personnel | `<MOI>` | `read_api` (+ `admin_mode` une fois l'Admin Mode activé, M01-E31) | `adm01:~/.config/workbook/gitlab-checks.token` (600) | ≤ 1 an | interface (Profil > Jetons d'accès > Faire tourner), réécrire le fichier |
+| `workbook-admin` | jeton d'accès personnel | `<MOI>` (administrateur) | `api` (+ `admin_mode` une fois l'Admin Mode activé, M01-E31) | `adm01:~/.config/workbook/gitlab-admin.token` (600) | ≤ 90 jours | `gitlab-rotation-jeton.sh ~/.config/workbook/gitlab-admin.token 90` |
 | jetons d'emprunt d'identité `workbook-M01-…` | jeton d'emprunt (admin) | comptes des personnages | `api` | jamais stockés (mémoire du script) | 1 jour | révoqués à la fin de chaque script de `ressources/` |
 | `labo-lecture` | clé de déploiement SSH | projet `formation/git-labo` | lecture seule | `adm01:~/.ssh/id_ed25519_deploy_gitlabo` (600) | sans (clé SSH) : revue trimestrielle | nouvelle clé, ajout, test, retrait de l'ancienne |
 | `bot-release` | jeton d'accès de projet | projets `plateforme/*` (M01-E25) | Maintainer, `api`, `write_repository` | variable CI `GITLAB_TOKEN` protégée et masquée | ≤ 1 an | rotation dans le projet, mise à jour de la variable |

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # fabriquer-depot.sh — M01-E19 : prépare une branche de maintenance 1.x dans formation/git-labo.
 #
 # Usage (depuis adm01) :

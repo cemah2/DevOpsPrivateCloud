@@ -7,10 +7,11 @@
 # d'identité, révoqué à l'annulation) pousse une branche et ouvre une MR dont le pipeline
 # échoue sur runner01 alors que tout passe sur adm01 :
 #   1. dépendance ajoutée dans pyproject.toml (tabulate) SANS mettre à jour uv.lock : en local,
-#      « uv run » reverrouille en silence ; en CI, « uv sync --locked » refuse ;
-#   2. test pytest qui appelle le vrai « medictl vm list » : en local il lit
-#      ~/.config/workbook/pve-api.env et interroge Proxmox ; en CI, pas de configuration ;
-#   3. test pytest qui dépend de yq, présent sur adm01 (M02-E06), absent de runner01.
+#      « uv run pytest » reverrouille et synchronise en silence ; en CI, la tâche setup du
+#      Taskfile (« uv sync --locked ») refuse ;
+#   2. test pytest qui invoque « medictl vm list » sans fixture (CliRunner) : en local il lit
+#      ~/.config/workbook/pve-api.env et interroge le vrai Proxmox ; en CI, pas de configuration ;
+#   3. test pytest qui lance yq (subprocess), présent sur adm01 (M02-E06), absent de runner01.
 # Variante 4 : variable CI de GROUPE « SHELLCHECK_OPTS=--enable=all --severity=style » sur
 #   plateforme (ShellCheck la lit) : tous les pipelines du groupe rougissent sur le lint
 #   ShellCheck, main compris ; en local, rien. Un pipeline est relancé sur main.
@@ -75,6 +76,10 @@ _e38_lucas() {
 # _e38_mr BRANCHE TITRE DESCRIPTION ACTIONS_JSON — branche + commit + MR au nom de Lucas.
 _e38_mr() {
   local br="$1" titre="$2" desc="$3" actions="$4" corps sha iid
+  if _e38_api GET "projects/$_E38_PROJ/repository/branches/${br//\//%2F}" >/dev/null 2>&1; then
+    wb_avert "la branche $br existe déjà sur plateforme/outils (panne précédente non annulée ?) : supprime-la d'abord"
+    return 1
+  fi
   _e38_lucas || return 1
   _e38_api --lucas POST "projects/$_E38_PROJ/repository/branches" \
     --data-urlencode "branch=$br" --data-urlencode "ref=main" >/dev/null || return 1
@@ -155,7 +160,7 @@ PY
     <(_e38_action create tests/python/test_rapport.py "$t/test_rapport.py"))"
   local rc=0
   _e38_mr lucas/rendu-tableau "feat(medictl): rendu tabulaire des rapports" \
-    "Ajoute medictl.rapport.tableau() (tabulate) pour les sorties Markdown. Testé en local : task test OK." \
+    "Ajoute medictl.rapport.tableau() (tabulate) pour les sorties Markdown. Testé en local : uv run pytest OK." \
     "$actions" || rc=$?
   rm -rf -- "$t"
   return "$rc"
@@ -165,31 +170,27 @@ panne_E38_v2() {
   _e38_precondition || return 1
   local t actions
   t="$(mktemp -d)"
+  # Test « de bout en bout » dans le processus (CliRunner) : sans fixture, medictl lit la
+  # vraie configuration de l'utilisateur (~/.config/workbook/pve-api.env) et appelle Proxmox.
   cat >"$t/test_cli_vm_list.py" <<'PY'
 """Test de bout en bout de « medictl vm list » (PLAT-380)."""
 
 import json
-import shutil
-import subprocess
+
+from typer.testing import CliRunner
+
+from medictl.cli import app
 
 
 def test_vm_list_json_valide() -> None:
-    medictl = shutil.which("medictl")
-    assert medictl is not None
-    resultat = subprocess.run(
-        [medictl, "vm", "list", "--pool", "lab", "--format", "json"],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=60,
-    )
-    assert resultat.returncode == 0, resultat.stderr
-    assert json.loads(resultat.stdout) is not None
+    resultat = CliRunner().invoke(app, ["vm", "list", "--pool", "lab", "--format", "json"])
+    assert resultat.exit_code == 0, resultat.output
+    assert isinstance(json.loads(resultat.stdout), list)
 PY
   actions="$(jq -s '.' <(_e38_action create tests/python/test_cli_vm_list.py "$t/test_cli_vm_list.py"))"
   local rc=0
   _e38_mr lucas/test-vm-list "test(medictl): test de bout en bout de vm list" \
-    "Vérifie que la sortie JSON de « vm list » est valide. Testé en local : task test OK." \
+    "Vérifie que la sortie JSON de « vm list » est valide. Testé en local : uv run pytest OK." \
     "$actions" || rc=$?
   rm -rf -- "$t"
   return "$rc"
@@ -197,31 +198,27 @@ PY
 
 panne_E38_v3() {
   _e38_precondition || return 1
-  local t actions
+  local t actions pp nq603="  # noqa: S603" nq607="  # noqa: S607"
   t="$(mktemp -d)"
-  cat >"$t/test_taskfile.py" <<'PY'
-"""Le Taskfile expose les tâches standard de l'équipe (PLAT-380)."""
-
-import subprocess
-from pathlib import Path
-
-RACINE = Path(__file__).resolve().parents[2]
-
-
-def test_taches_standard_presentes() -> None:
-    requete = '.tasks | has("lint") and has("test") and has("build")'
-    resultat = subprocess.run(
-        ["yq", "-e", requete, str(RACINE / "Taskfile.yml")],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert resultat.returncode == 0, resultat.stderr
-PY
+  # Lucas a fait passer ruff : il a ajouté les « noqa » nécessaires, sauf si le projet ignore
+  # déjà ces règles dans ses tests (sinon RUF100 signalerait des noqa inutiles).
+  pp="$(_e38_api GET "projects/$_E38_PROJ/repository/files/pyproject.toml/raw?ref=main")" || pp=""
+  if grep -q '"S603"' <<<"$pp"; then nq603=""; fi
+  if grep -q '"S607"' <<<"$pp"; then nq607=""; fi
+  {
+    printf '%s\n' '"""Le Taskfile expose les tâches standard de l'"'"'équipe (PLAT-380)."""' '' \
+      'import subprocess' 'from pathlib import Path' '' 'RACINE = Path(__file__).resolve().parents[2]' '' '' \
+      'def test_taches_standard_presentes() -> None:' \
+      "    requete = '.tasks | (has(\"lint\") and has(\"test\") and has(\"build\"))'"
+    printf '    resultat = subprocess.run(%s\n' "$nq603"
+    printf '        ["yq", "-e", requete, str(RACINE / "Taskfile.yml")],%s\n' "$nq607"
+    printf '%s\n' '        capture_output=True,' '        text=True,' '        check=False,' '    )' \
+      '    assert resultat.returncode == 0, resultat.stderr'
+  } >"$t/test_taskfile.py"
   actions="$(jq -s '.' <(_e38_action create tests/python/test_taskfile.py "$t/test_taskfile.py"))"
   local rc=0
   _e38_mr lucas/test-taskfile "test: vérifier les tâches standard du Taskfile" \
-    "Garde-fou : lint, test et build doivent exister dans le Taskfile. Testé en local : task test OK." \
+    "Garde-fou : lint, test et build doivent exister dans le Taskfile. Testé en local : uv run pytest OK." \
     "$actions" || rc=$?
   rm -rf -- "$t"
   return "$rc"
@@ -308,7 +305,7 @@ symptome_E38() {
   else
     wb_symptome "Ticket PLAT-380 — De : Lucas Martin" \
       "Ma MR sur plateforme/outils (branche $(_e38_etat branche)) est rouge en CI, mais chez" \
-      "moi tout passe : « task test » est vert sur adm01, je l'ai lancé trois fois. C'est" \
+      "moi tout passe : « uv run pytest » est vert sur adm01, je l'ai lancé trois fois. C'est" \
       "runner01 qui doit avoir un problème ? Tu peux regarder ? J'aimerais la fusionner aujourd'hui." \
       "" \
       "Temps cible : 30 min. Contrôle : lab/bin/check 02 38"

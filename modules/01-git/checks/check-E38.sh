@@ -6,6 +6,8 @@
 # Côté runner01 (service, résolution, TLS, jeton) et côté GitLab (réglages du runner).
 # Lecture seule : la vérification du jeton utilise POST /runners/verify, qui ne modifie rien
 # d'autre que la date de dernier contact du runner (ce que fait le runner toutes les 3 s).
+# Les réglages du runner se lisent par l'API d'administration (jeton des checks + admin_mode
+# une fois l'Admin Mode activé, M01-E31).
 
 # shellcheck source=_m01-palier4.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m01-palier4.sh"

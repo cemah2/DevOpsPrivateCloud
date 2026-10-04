@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # fabriquer-depot.sh — M01-E12 : prépare une branche « en vrac » dans formation/git-labo.
 #
 # Usage (depuis adm01) :

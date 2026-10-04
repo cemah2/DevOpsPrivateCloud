@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 # fabriquer-depot.sh — M01-E13 : prépare des conflits dans formation/git-labo.
 #
 # Usage (depuis adm01) :
