@@ -4,7 +4,12 @@
 #   task lint         ShellCheck, shfmt, ruff (analyse + format)
 #   task test         bats et pytest (rapports JUnit dans rapports/)
 #   task build        paquet medictl (wheel + sdist) dans dist/, seulement si les sources ont changé
-#   task install      copie FIGÉE des scripts dans /usr/local (sudo) + medictl en outil uv
+#   task install      poste de développement : install:systeme + install:dev
+#     install:systeme copie FIGÉE de bin/ et lib/ dans /usr/local (sudo) : ce qu'exécutent
+#                     les services planifiés (M02-E26) ; ne touche pas à medictl
+#     install:dev     medictl depuis la copie de travail (uv tool). À partir de M02-E25,
+#                     medictl s'installe depuis le registre de paquets : sur adm01, on
+#                     n'utilise plus que « task install:systeme »
 #   task ci           ce que la CI exécute (lint, test, build), dans cet ordre
 #
 # Les mêmes commandes tournent sur adm01 et sur runner01 (CI, M02-E24) : la CI
@@ -34,9 +39,10 @@ tasks:
   lint:sh:
     desc: ShellCheck et shfmt sur les scripts Bash et les tests bats
     vars:
-      # Tous les fichiers shell du dépôt (shfmt les reconnaît à l'extension ou au shebang).
+      # Tous les fichiers shell du dépôt (shfmt les reconnaît à l'extension ou au shebang),
+      # dans les dossiers présents (sbin/ n'arrive qu'en M02-E29).
       SCRIPTS_SH:
-        sh: shfmt -f bin lib tests | sort | tr '\n' ' '
+        sh: shfmt -f $(ls -d bin lib sbin tests 2>/dev/null) | sort | tr '\n' ' '
     preconditions:
       - sh: command -v shellcheck && command -v shfmt
         msg: "shellcheck et shfmt doivent être installés (voir M02-E04)"
@@ -94,8 +100,8 @@ tasks:
       - rm -rf dist
       - uv build
 
-  install:
-    desc: Installe une copie figée de bin/ et lib/ dans /usr/local (sudo) et medictl (uv tool)
+  install:systeme:
+    desc: Copie figée de bin/ et lib/ dans /usr/local (sudo, root) — ce qu'exécutent les services planifiés
     preconditions:
       - sh: git diff --quiet HEAD -- bin lib
         msg: "bin/ ou lib/ contient des modifications non commitées : on n'installe que du code versionné"
@@ -103,11 +109,23 @@ tasks:
       # Copie, pas lien symbolique : un service planifié (M02-E26) ne doit pas changer
       # parce qu'on édite le clone. Les scripts trouvent lib/ par « readlink -f $0/../lib ».
       - sudo install -d -m 755 {{.PREFIX}}/bin {{.PREFIX}}/lib
-      - sudo install -m 644 lib/ms-commun.sh {{.PREFIX}}/lib/ms-commun.sh
-      - sudo install -m 755 bin/ms-* {{.PREFIX}}/bin/
+      - sudo install -m 644 -o root -g root lib/ms-commun.sh {{.PREFIX}}/lib/ms-commun.sh
+      - sudo install -m 755 -o root -g root bin/ms-* {{.PREFIX}}/bin/
+      - echo "bin/ et lib/ installés depuis $(git describe --always --dirty)."
+
+  install:dev:
+    desc: medictl depuis la copie de travail (uv tool) — installation de développement
+    cmds:
       # --reinstall : reconstruit même si le numéro de version n'a pas changé (copie de travail).
+      # Remplace un medictl installé depuis le registre (M02-E25) : à réserver au développement.
       - uv tool install --force --reinstall --from {{.ROOT_DIR}} medictl
-      - echo "Installé depuis $(git describe --always --dirty). medictl --version pour vérifier."
+      - medictl --version
+
+  install:
+    desc: "Poste de développement : install:systeme puis install:dev (pas sur un poste où medictl vient du registre)"
+    cmds:
+      - task: install:systeme
+      - task: install:dev
 
   ci:
     desc: Enchaînement de la CI (lint, puis tests, puis paquet)

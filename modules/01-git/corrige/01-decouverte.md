@@ -5,7 +5,7 @@
 Ce corrigé suit l'ordre de l'énoncé. Pour les questionnaires (E01, E09), chaque réponse est argumentée et les QCM expliquent pourquoi les autres options sont fausses. Pour les labs, la section **Solution** donne une démarche complète ; les scripts et fichiers complets sont dans [`fichiers/`](fichiers/).
 
 Points non testés en conditions réelles au moment de la rédaction, à vérifier sur ta version et à signaler s'ils diffèrent :
-- E04 : le paquet `gitlab-ce` conserve un `/etc/gitlab/gitlab.rb` créé **avant** son installation (comportement documenté pour les mises à jour, déduit pour une première installation) ; le nom exact du fichier de dépôt créé par `script.deb.sh` sur Debian 13 ; le titre des processus Puma en mode simple (utilisé par le check) ; la mémoire consommée au repos avec ce profil.
+- E04 : le paquet `gitlab-ce` conserve un `/etc/gitlab/gitlab.rb` créé **avant** son installation (comportement documenté pour les mises à jour, déduit pour une première installation) ; le titre des processus Puma en mode simple (utilisé par le check) ; la mémoire consommée au repos avec ce profil.
 - E05 : la lecture de `GET /application/settings` avec un jeton `read_api` d'administrateur (le check a un repli en base si elle est refusée) ; la confirmation automatique de l'adresse d'un compte créé depuis *Admin → Users*.
 - E06 : la forme exacte du champ `key` renvoyé par `GET /user/keys` (avec ou sans commentaire ; le check compare seulement la partie base64).
 
@@ -341,11 +341,11 @@ admin@adm01:~$ ssh git01 sudo bash preparer-git01.sh
 admin@git01:~$ curl -fsSLo /tmp/script.deb.sh https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh
 admin@git01:~$ less /tmp/script.deb.sh
 ```
-Ce que fait le script : il détecte la distribution (`/etc/os-release`), installe les prérequis (`curl`, `gnupg`, `apt-transport-https` selon les versions), télécharge la clé de signature du dépôt dans `/usr/share/keyrings/` et écrit une source APT qui y fait référence (`signed-by=`), puis lance `apt-get update`. Rien d'autre : c'est vérifiable, et c'est la raison de le lire.
+Ce que fait le script (version relevée en octobre 2026 ; relis la tienne) : il détecte la distribution (`/etc/os-release`), installe les prérequis (`gnupg`, `debian-archive-keyring`, `apt-transport-https`), télécharge la source APT propre à ta distribution dans `/etc/apt/sources.list.d/gitlab_gitlab-ce.list`, la clé de signature du dépôt (`https://packages.gitlab.com/gpgkey/gpg.key`, désarmurée) dans `/etc/apt/keyrings/gitlab_gitlab-ce-archive-keyring.gpg` (référencée par `signed-by=` dans la source), puis lance `apt-get update`. Rien d'autre : c'est vérifiable, et c'est la raison de le lire.
 ```
 admin@git01:~$ sudo bash /tmp/script.deb.sh
 admin@git01:~$ apt-cache madison gitlab-ce | grep ' 19\.3\.' | head -n 3
- gitlab-ce | 19.3.X-ce.0 | https://packages.gitlab.com/gitlab/gitlab-ce/debian trixie/main amd64 Packages
+ gitlab-ce | 19.3.X-ce.0 | https://packages.gitlab.com/gitlab/gitlab-ce/debian/trixie trixie/main amd64 Packages
 admin@git01:~$ sudo install -m 600 -o root -g root gitlab.rb /etc/gitlab/gitlab.rb      # fichier du corrigé, copié par scp
 admin@git01:~$ sudo EXTERNAL_URL="https://git01.par1.medisphere.internal" apt-get install gitlab-ce=19.3.X-ce.0
 admin@git01:~$ sudo apt-mark hold gitlab-ce
@@ -381,6 +381,8 @@ admin@adm01:~/medisphere$ git commit -m "docs(socle): ajouter git01 à l'inventa
 *Pourquoi `gitlab.rb` avant le paquet.* À la première installation, le paquet lance une configuration complète (base PostgreSQL initialisée, services démarrés). Si `gitlab.rb` existe déjà, cette première configuration applique directement le bon profil : Prometheus ne démarre jamais, Puma démarre en mode simple, et Let's Encrypt n'est jamais tenté. La variable `EXTERNAL_URL` passée à `apt-get` ne fait que réécrire la ligne `external_url`, ici avec la même valeur. Le `gitlab-ctl reconfigure` final est idempotent : il garantit que la configuration appliquée est bien celle du fichier, quelle que soit la façon dont le paquet s'est comporté.
 
 *Un `gitlab.rb` court.* Le modèle complet (plus de 3 000 lignes, presque toutes commentées) reste disponible dans `/opt/gitlab/etc/gitlab.rb.template`. Un fichier qui ne contient que les écarts aux valeurs par défaut se relit en une minute, se compare facilement entre deux versions, et se versionnera (sans secret : `gitlab.rb` n'en contient pas ici ; les secrets sont dans `gitlab-secrets.json`). Point d'attention pour la suite : une clé affectée deux fois garde la **dernière** valeur. Le hash `gitaly['configuration']` sera enrichi en E26 (hooks côté serveur) : on y ajoute une clé, on n'écrit pas une seconde affectation.
+
+*Clés NGINX.* Depuis GitLab 19.2, les réglages NGINX propres à l'application (certificat, protocoles et suites TLS, en-têtes…) s'écrivent `gitlab_rails['nginx'][…]` ; les réglages du démon lui-même (nombre de *workers*, *keepalive*, `server_tokens`, `gzip`) restent sous `nginx[…]`. Les anciennes clés `nginx['ssl_certificate']`… sont encore traduites, avec un avertissement de dépréciation à la reconfiguration. Les tutoriels antérieurs à 19.2 utilisent tous l'ancienne forme : c'est exactement le genre de changement que liste `annexes/versions-bloc-A.md`. Ici, les deux chemins sont ceux par défaut : les écrire documente l'intention.
 
 *Le profil mémoire.* Puma en mode simple : un seul processus Ruby au lieu d'un maître et de plusieurs *workers* (gain de 100 à 400 Mo selon la documentation ; contrepartie : un seul processus traite les requêtes web, suffisant pour une équipe de cinq). Sidekiq à 10 fils. Gitaly limité dans ses opérations simultanées par dépôt et dans le nombre de processus Git lancés en parallèle. `MALLOC_CONF` règle jemalloc pour rendre la mémoire libérée plus vite au système. La supervision embarquée (Prometheus et ses *exporters*) coûte à elle seule plusieurs centaines de Mo : l'E30 la réintroduira de façon mesurée.
 

@@ -128,7 +128,7 @@ avec_lib() {
 }
 
 @test "pve_api refuse un fichier d'accès lisible par les autres" {
-  chmod 644 "$MS_PVE_ENV"
+  chmod 644 "$MS_PVE_ENV_FILE"
   run -1 avec_lib 'pve_api GET /version'
   [[ "$output" == *"mode 644"* ]]
   [[ "$(appels '^GET')" -eq 0 ]]

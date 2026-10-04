@@ -12,6 +12,7 @@ La forge tourne : `git01` sert l'équipe, `runner01` fait passer les pipelines, 
 - **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 01 36`) : il doit être vert. Exception : E41 et E42 fabriquent eux-mêmes le dépôt de Lucas à l'injection ; leur contrôle n'a de sens qu'après.
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `/var/lib/workbook/` sur `git01` et `runner01`, ni `~/.local/state/workbook/` sur `adm01` : ils contiennent la cause.
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 01 36 --annuler` remet l'état sain (filet de sécurité, pas un correctif : compte l'exercice comme non réussi).
+- Une fois la panne **réparée par toi** et le contrôle vert, clos-la aussi avec `lab/bin/break 01 36 --annuler` : sur un lab réparé, l'annulation ne défait pas ta correction, elle supprime les sauvegardes et le marqueur de panne active (que le contrôle de M01-E43 et le mini-projet vérifient). Elle peut redémarrer un service de la forge (une à trois minutes pour E37) : relance ensuite le contrôle.
 - Les pannes agissent sur `git01`, `runner01`, sur GitLab par l'API (avec ton jeton d'administration, `WB_GITLAB_ADMIN_TOKEN_FILE`), et sur `adm01` : configuration de `~/medisphere`, `~/.ssh/config` et `~/.ssh/known_hosts` (sauvegardés avant modification), dépôts d'exercice de `~/src`. Elles ne suppriment aucun projet, ne lancent jamais `gitlab-ctl reconfigure` et ne détruisent aucune donnée.
 - Ton **jeton d'administration** doit être valide (il expire au plus tard 90 jours après sa création, M01-E05) et porter la portée `admin_mode` (Admin Mode activé en M01-E31) : sinon, les injections échouent proprement. Renouvelle-le d'abord.
 - N'injecte pas pendant qu'un pipeline tourne : certaines variantes redémarrent des services.
@@ -159,7 +160,7 @@ Le message d'un job bloqué liste trois familles de causes : aucun runner en lig
 
 <details><summary>Indice 2</summary>
 
-Sur `runner01`, `journalctl -u gitlab-runner --since -10min` : une ligne toutes les quelques secondes avec `forbidden`, `dial tcp`, `x509` ou `no route to host` ne raconte pas la même histoire qu'un journal silencieux. Si le runner semble joindre « GitLab », vérifie que c'est le bon (`getent hosts`, `curl -v`).
+Sur `runner01`, `journalctl -u gitlab-runner --since -1h` : des lignes avec `forbidden`, `dial tcp`, `x509` ou `no route to host` (répétées, ou de plus en plus espacées) ne racontent pas la même histoire qu'un journal silencieux. Regarde aussi le tout début de la panne, pas seulement les dernières lignes. Si le runner semble joindre « GitLab », vérifie que c'est le bon (`getent hosts`, `curl -v`).
 </details>
 
 **Pour aller plus loin** : dans GitLab, le statut « en ligne » d'un runner tolère un long silence. Écris une sonde qui détecte en moins de 5 minutes qu'aucun job n'a démarré alors que des jobs attendent (API : `GET /projects/:id/jobs?scope[]=pending` et dates de création).

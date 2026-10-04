@@ -11,8 +11,8 @@ setup() {
   source "$BATS_TEST_DIRNAME/../../bin/ms-verif-sauvegardes"
   DONNEES="$BATS_TEST_TMPDIR"
   MAINTENANT="$(date +%s)"
-  export MS_PBS_ENV="$DONNEES/pbs.env"
-  cat >"$MS_PBS_ENV" <<'FIN'
+  export MS_PBS_ENV_FILE="$DONNEES/pbs.env"
+  cat >"$MS_PBS_ENV_FILE" <<'FIN'
 PBS_API_URL=https://pbs.invalid:8007/api2/json
 PBS_DATASTORE=ds-lab
 PBS_NAMESPACE=par1
@@ -20,7 +20,7 @@ PBS_TOKEN_ID=test@pbs!lecture
 PBS_TOKEN_SECRET=secret-de-test
 PBS_PINNEDPUBKEY=sha256//AAAA
 FIN
-  chmod 600 "$MS_PBS_ENV"
+  chmod 600 "$MS_PBS_ENV_FILE"
   # Trois VMs du socle (dont une hors pool et un template à ignorer)
   cat >"$DONNEES/ressources.json" <<'FIN'
 [
@@ -48,7 +48,7 @@ instantane() {
   printf '[%s,%s,%s,%s]' "$(instantane 1000 5 ok)" "$(instantane 1000 30 ok)" \
     "$(instantane 1002 4)" "$(instantane 1004 6 ok)" >"$DONNEES/instantanes.json"
   run main
-  [ "$status" -eq 0 ]
+  [[ "$status" -eq 0 ]]
   [[ "$output" == *"gw01"* && "$output" == *"dns01"* && "$output" == *"git01"* ]]
   # Le template, la VM hors pool et la VM sans étiquette socle sont ignorés
   [[ "$output" != *"tpl"* && "$output" != *"perso"* && "$output" != *"m02-x"* ]]
@@ -58,14 +58,14 @@ instantane() {
   printf '[%s,%s,%s]' "$(instantane 1000 5)" "$(instantane 1002 27)" "$(instantane 1004 6)" \
     >"$DONNEES/instantanes.json"
   run main
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
   [[ "$output" == *"dns01"*"trop ancienne"* ]]
 }
 
 @test "une VM sans aucune sauvegarde : code 1" {
   printf '[%s,%s]' "$(instantane 1000 5)" "$(instantane 1004 6)" >"$DONNEES/instantanes.json"
   run main
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
   [[ "$output" == *"dns01"*"aucune sauvegarde"* ]]
 }
 
@@ -73,7 +73,7 @@ instantane() {
   printf '[%s,%s,%s]' "$(instantane 1000 5)" "$(instantane 1002 4 failed)" "$(instantane 1004 6)" \
     >"$DONNEES/instantanes.json"
   run main
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
   [[ "$output" == *"vérification en échec"* ]]
 }
 
@@ -81,7 +81,7 @@ instantane() {
   printf '[%s,%s,%s]' "$(instantane 1000 5)" "$(instantane 1002 3)" "$(instantane 1004 2)" \
     >"$DONNEES/instantanes.json"
   run main --age-max 4
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
   [[ "$output" == *"gw01"*"trop ancienne"* ]]
 }
 
@@ -89,27 +89,27 @@ instantane() {
   echo '[]' >"$DONNEES/ressources.json"
   echo '[]' >"$DONNEES/instantanes.json"
   run main
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
   [[ "$output" == *"aucune VM"* ]]
 }
 
 @test "API PBS en erreur : code 1" {
   pbs_api() { return 1; }
   run main
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
 }
 
 @test "fichier de configuration PBS lisible par tous : refus" {
-  chmod 644 "$MS_PBS_ENV"
+  chmod 644 "$MS_PBS_ENV_FILE"
   printf '[%s]' "$(instantane 1000 5)" >"$DONNEES/instantanes.json"
   run main
-  [ "$status" -eq 1 ]
+  [[ "$status" -eq 1 ]]
   [[ "$output" == *"chmod 600"* ]]
 }
 
 @test "usage : option inconnue et seuil invalide renvoient 2" {
   run main --nimporte-quoi
-  [ "$status" -eq 2 ]
+  [[ "$status" -eq 2 ]]
   run main --age-max 08h
-  [ "$status" -eq 2 ]
+  [[ "$status" -eq 2 ]]
 }

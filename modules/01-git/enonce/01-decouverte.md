@@ -588,7 +588,7 @@ La clé d'hôte que présente `git@git01…` est celle du sshd du système de `g
 
 **Contexte technique**
 - Script de fabrication : [`ressources/M01-E07/fabriquer-depot.sh`](../ressources/M01-E07/fabriquer-depot.sh). Il construit le dépôt **en local** dans `~/src/git-labo`, avec des auteurs et des dates fixés : ton historique est identique, empreinte pour empreinte, à celui du corrigé.
-- Projet cible : `formation/git-labo`, privé, **vide**. C'est un bac à sable : sa branche `main` n'est pas protégée, et plusieurs exercices du module y créeront des branches `eXX/…`.
+- Projet cible : `formation/git-labo`, privé, **vide**. C'est un bac à sable : sa branche `main` garde seulement la protection que GitLab pose par défaut sur la branche principale (en Owner, tu peux y pousser, mais pas en force) ; les règles de l'équipe (E11) ne s'y appliquent pas. Plusieurs exercices du module y créeront des branches `eXX/…`.
 
 **Travail demandé**
 

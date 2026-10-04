@@ -88,15 +88,17 @@ _E39_ouvrir_mr() {
 
 panne_E39_v1() {
   m01_prerequis || return 1
-  local pid etat tid porteur r jeton
+  local pid etat tid porteur r jeton expire
   pid="$(m01_projet_id)" || return 1
   etat="$(m01_etat E39)"
   tid="$(_E39_bot_id)"
   [[ -n "$tid" ]] || { wb_avert "jeton de projet bot-release actif introuvable sur $_M01_PROJET"; return 1; }
   porteur="$(_E39_porteur_variable)" || { wb_avert "variable CI GITLAB_TOKEN introuvable"; return 1; }
+  expire="$(m01_api GET "projects/$pid/access_tokens/$tid" | jq -r '.expires_at // empty')" || return 1
   _E39_ouvrir_mr || return 1
   # Rotation : l'ancien jeton (celui de la variable CI) est révoqué immédiatement.
-  r="$(m01_api POST "projects/$pid/access_tokens/$tid/rotate")" || return 1
+  # Sans expires_at, le nouveau jeton expirerait dans une semaine : on garde l'échéance d'origine.
+  r="$(m01_api POST "projects/$pid/access_tokens/$tid/rotate" ${expire:+--data-urlencode "expires_at=$expire"})" || return 1
   jeton="$(jq -r '.token // empty' <<<"$r")"
   [[ -n "$jeton" ]] || return 1
   ( umask 077; printf '%s' "$jeton" > "$etat/bot-release.nouveau" )

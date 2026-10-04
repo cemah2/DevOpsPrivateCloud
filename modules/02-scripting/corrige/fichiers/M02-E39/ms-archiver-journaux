@@ -20,19 +20,31 @@ SPOOL="$BASE/spool"
 ARCHIVES="$BASE/archives"
 
 log() { printf '%s %s: %s\n' "$(date -Is)" "$PROG" "$*" >&2; }
-die() { log "ERREUR : $1"; exit "${2:-1}"; }
+die() {
+  log "ERREUR : $1"
+  exit "${2:-1}"
+}
 usage() { printf 'Usage : %s [-s SPOOL] [-a ARCHIVES] [-h]\n' "$PROG"; }
 
 while getopts ':s:a:h' opt; do
   case "$opt" in
     s) SPOOL="$OPTARG" ;;
     a) ARCHIVES="$OPTARG" ;;
-    h) usage; exit 0 ;;
-    *) usage >&2; exit 2 ;;
+    h)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
   esac
 done
 shift $((OPTIND - 1))
-(($# == 0)) || { usage >&2; exit 2; }
+(($# == 0)) || {
+  usage >&2
+  exit 2
+}
 
 SPOOL="$(readlink -f -- "$SPOOL")"
 [[ -d "$SPOOL" && "$SPOOL" != / ]] || die "spool absent ou interdit : $SPOOL" 3
@@ -51,7 +63,10 @@ archiver_hote() {
   partiel="$archive.partiel"
 
   mapfile -t fichiers < <(find "$src" -mindepth 1 -maxdepth 1 -type f -printf '%P\n' | sort)
-  wait "$!" || { log "$h : lecture du spool impossible"; return 1; }
+  wait "$!" || {
+    log "$h : lecture du spool impossible"
+    return 1
+  }
   if ((${#fichiers[@]} == 0)); then
     log "$h : rien à archiver"
     return 0
@@ -74,7 +89,10 @@ archiver_hote() {
   # On ne retire que ce qui a été archivé (un fichier arrivé entre-temps reste).
   local f
   for f in "${fichiers[@]}"; do
-    rm -f -- "${src:?}/${f:?}" || { log "$h : impossible de retirer $f"; return 1; }
+    rm -f -- "${src:?}/${f:?}" || {
+      log "$h : impossible de retirer $f"
+      return 1
+    }
   done
 }
 

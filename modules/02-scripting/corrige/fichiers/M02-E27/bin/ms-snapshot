@@ -130,8 +130,8 @@ appliquer() {
       creer)
         log_info "$vmid : création de l'instantané $nom"
         if ! upid="$(pve_api POST "$base" "snapname=$nom" \
-          "description=ms-snapshot par ${USER:-?} depuis $(hostname -s)")" ||
-          ! _tache_en_cours="$(jq -r . <<<"$upid")" || ! pve_wait_task "$_tache_en_cours"; then
+          "description=ms-snapshot par ${USER:-?} depuis $(hostname -s)")" \
+          || ! _tache_en_cours="$(jq -r . <<<"$upid")" || ! pve_wait_task "$_tache_en_cours"; then
           # Jamais de purge si la création a échoué : on garderait moins de N points de retour.
           log_err "$vmid : instantané NON créé, purge annulée pour cette VM"
           return 1
@@ -251,9 +251,9 @@ main() {
   local total=0 echecs=0 vmid noeud nom config snaps plan ligne
   while read -r vmid noeud nom <&3; do
     total=$((total + 1))
-    if ! config="$(pve_api GET "/nodes/$noeud/qemu/$vmid/config")" ||
-      ! snaps="$(pve_api GET "/nodes/$noeud/qemu/$vmid/snapshot")" ||
-      ! plan="$(planifier "$config" "$snaps" "$cible" "$maintenant")"; then
+    if ! config="$(pve_api GET "/nodes/$noeud/qemu/$vmid/config")" \
+      || ! snaps="$(pve_api GET "/nodes/$noeud/qemu/$vmid/snapshot")" \
+      || ! plan="$(planifier "$config" "$snaps" "$cible" "$maintenant")"; then
       log_err "$vmid ($nom) : état illisible, VM ignorée"
       echecs=$((echecs + 1))
       continue

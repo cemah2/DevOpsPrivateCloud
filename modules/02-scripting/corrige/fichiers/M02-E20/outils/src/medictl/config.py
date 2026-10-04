@@ -9,7 +9,9 @@ Règles de sécurité :
 - le fichier est LU, jamais exécuté (pas de ``source``, pas d'``eval``) ;
 - un fichier accessible au groupe ou aux autres est refusé ;
 - le secret n'apparaît ni dans ``repr()``, ni dans les journaux, ni en argument ;
-- TLS toujours vérifié : ``PVE_CACERT`` si défini, sinon le magasin du système.
+- TLS toujours vérifié : ``PVE_CACERT`` si défini, sinon le magasin du système
+  (paquet ``ca-certificates`` de Debian). Le chemin est passé à CHAQUE requête : les
+  variables ``REQUESTS_CA_BUNDLE``/``CURL_CA_BUNDLE`` ne peuvent pas le remplacer.
 """
 
 from __future__ import annotations
@@ -24,6 +26,9 @@ from urllib.parse import urlsplit
 from medictl.erreurs import ConfigError
 
 FICHIER_DEFAUT = "~/.config/workbook/pve-api.env"
+# Magasin de certificats du système (Debian) : requests, livré avec certifi, ne l'utilise
+# pas de lui-même avec verify=True.
+MAGASIN_SYSTEME = "/etc/ssl/certs/ca-certificates.crt"
 CLES = ("PVE_API_URL", "PVE_NODE", "PVE_TOKEN_ID", "PVE_TOKEN_SECRET", "PVE_CACERT")
 OBLIGATOIRES = ("PVE_API_URL", "PVE_NODE", "PVE_TOKEN_ID", "PVE_TOKEN_SECRET")
 
@@ -55,8 +60,13 @@ class PveConfig:
 
     @property
     def verification_tls(self) -> str | bool:
-        """Valeur passée à requests (``verify``) : un chemin de CA, ou True. Jamais False."""
-        return self.cacert or True
+        """Valeur passée à requests (``verify``) : un chemin de CA, ou True. Jamais False.
+
+        Sans PVE_CACERT : le magasin du système s'il existe ; sinon True (racines de certifi).
+        """
+        if self.cacert:
+            return self.cacert
+        return MAGASIN_SYSTEME if os.path.isfile(MAGASIN_SYSTEME) else True
 
     def affichable(self) -> dict[str, str]:
         """Configuration effective, secret masqué, avec l'origine de chaque valeur."""

@@ -64,7 +64,7 @@ Fichier complet : [`fichiers/M02-E10/lib/ms-commun.sh`](fichiers/M02-E10/lib/ms-
    - `args` contient `--silent --show-error --include --suppress-connect-headers --max-time 30 -X MÉTHODE`, `--cacert "$PVE_CACERT"` si défini, `--get` pour GET et DELETE, et un `--data-urlencode clé=valeur` par paramètre.
    - `printf` est une commande interne : le secret n'apparaît dans aucun `argv` ; `<(…)` est un descripteur (`/dev/fd/63`), pas un fichier sur disque.
    - `--include` place la ligne de statut et les en-têtes avant le corps : le **motif** que Proxmox écrit dans la ligne de statut est restitué tel quel. Le champ `errors` des réponses 400 est ajouté au message.
-   - Chargement du fichier d'accès : `${MS_PVE_ENV:-~/.config/workbook/pve-api.env}`, refusé si `mode & 077` ; les `PVE_*` déjà définies dans l'environnement sont sauvegardées avant le `source` puis restaurées (priorité à l'environnement). `PVE_API_URL` doit commencer par `https://`.
+   - Chargement du fichier d'accès : `${MS_PVE_ENV_FILE:-~/.config/workbook/pve-api.env}`, refusé si `mode & 077` ; les `PVE_*` déjà définies dans l'environnement sont sauvegardées avant le `source` puis restaurées (priorité à l'environnement). `PVE_API_URL` doit commencer par `https://`.
    - Sortie : `jq -c '.data'`.
    ```
    admin@adm01:~/src/outils$ bash -c 'source lib/ms-commun.sh; pve_api GET /version'
@@ -368,7 +368,7 @@ Fichiers : [`fichiers/M02-E14/tests/bats/`](fichiers/M02-E14/tests/bats/) — 60
 
 | Fichier | Rôle |
 |---|---|
-| `helpers/commun.bash` | `preparer_faux_pve` : fichier d'accès factice (600), `MS_PVE_ENV`, `MS_LOCK_DIR`, `MS_PVE_POLL=0`, `PATH` avec le faux `curl` en tête, variables `PVE_*` neutralisées ; `appels MOTIF` compte les appels journalisés |
+| `helpers/commun.bash` | `preparer_faux_pve` : fichier d'accès factice (600), `MS_PVE_ENV_FILE`, `MS_LOCK_DIR`, `MS_PVE_POLL=0`, `PATH` avec le faux `curl` en tête, variables `PVE_*` neutralisées ; `appels MOTIF` compte les appels journalisés |
 | `helpers/bin/curl` | faux `curl` : comprend `-X`, `--data-urlencode`, `-H @fichier`, l'URL ; journalise `MÉTHODE CHEMIN DONNÉES` ; répond comme pveproxy (statut avec motif, CRLF) ; état dans un dossier (instantanés créés) ; échecs simulés par fichiers témoins (`tache-ko`, `snapshot-ko-<VMID>`, `config-ko-<VMID>`, `reseau-ko`) ; signale `SECRET_DANS_ARGV` si le secret factice apparaît en argument |
 | `fixtures/ressources.json`, `fixtures/snapshots-2020.json` | réponses enregistrées (pool `lab`, template, VM hors pool ; instantanés de plusieurs préfixes) |
 | `ms-commun.bats` (29 tests) | journal, `die`, `require_cmd`, `confirm`, `retry` (dont la portée dynamique), `pve_api` (données, 403, 400, réseau, mode 644, priorité de l'environnement, https obligatoire, secret absent des arguments), `pve_wait_task`, `lock_or_die` |
@@ -757,7 +757,7 @@ Version consolidée : [`config.py`](fichiers/M02-E20/outils/src/medictl/config.p
        assert not temoin.exists()
    ```
    (Côté Bash, `lib/ms-commun.sh` **source** le fichier : c'est acceptable seulement parce qu'il refuse tout fichier accessible à d'autres. C'est l'écart à noter dans la MR.)
-2. `charger_config(environ=None)` : chemin `MEDICTL_ENV_FILE` (défaut `~/.config/workbook/pve-api.env`) ; s'il existe, contrôle `stat.S_IMODE(mode) & 0o077` (sinon `ConfigError` « … mode 644 … corrige ses droits ») puis lecture ; ensuite chaque `PVE_*` non vide de l'environnement l'emporte ; validations ; `PveConfig(api_url, node, token_id, token_secret=field(repr=False), cacert, sources)` où `sources` dit, pour chaque clé, « fichier » ou « environnement ». La configuration a quitté `pve.py` ; les noms de E08 (`PveConfig`, `ConfigError`) sont conservés.
+2. `charger_config(environ=None)` : chemin `MEDICTL_ENV_FILE` (défaut `~/.config/workbook/pve-api.env`) ; s'il existe, contrôle `stat.S_IMODE(mode) & 0o077` (sinon `ConfigError` « … mode 644 … corrige ses droits ») puis lecture ; ensuite chaque `PVE_*` non vide de l'environnement l'emporte ; validations ; `PveConfig(api_url, node, token_id, token_secret=field(repr=False), cacert, sources)` où `sources` dit, pour chaque clé, « fichier » ou « environnement ». La configuration a quitté `pve.py` ; les noms de E08 (`PveConfig`, `ConfigError`) sont conservés. Le paramètre change par rapport à E08 (`environ` au lieu de `chemin` : le fichier se choisit désormais par `MEDICTL_ENV_FILE`, comme en production) ; un appel sans argument, le seul que font la CLI et la vérification de E08, se comporte comme avant. `pve.py` réimporte `PveConfig`, `ConfigError` et `charger_config`, et garde `connexion()` : `from medictl.pve import ConfigError, charger_config, connexion` fonctionne toujours.
 3. `medictl config` :
    ```
    admin@adm01:~$ PVE_NODE=pve02 medictl config
@@ -819,10 +819,12 @@ Fichiers : [`fichiers/M02-E20/outils/Taskfile.yml`](fichiers/M02-E20/outils/Task
    * ci:              Enchaînement de la CI (lint, puis tests, puis paquet)
    * clean:           Supprime les produits de construction et les rapports
    * default:         Liste les tâches disponibles
-   * install:         Installe une copie figée de bin/ et lib/ dans /usr/local (sudo) et medictl (uv tool)
+   * install:         Poste de développement : install:systeme puis install:dev (pas sur un poste où medictl vient du registre)
    * lint:            Toutes les analyses statiques
    * setup:           Crée ou met à jour .venv exactement selon uv.lock
    * test:            Tous les tests (« task test:py -- -k garde » pour filtrer pytest)
+   * install:dev:     medictl depuis la copie de travail (uv tool) — installation de développement
+   * install:systeme: Copie figée de bin/ et lib/ dans /usr/local (sudo, root) — ce qu'exécutent les services planifiés
    * lint:py:         ruff (règles du pyproject.toml) et vérification du format
    * lint:sh:         ShellCheck et shfmt sur les scripts Bash et les tests bats
    * test:bats:       Tests des scripts Bash (API Proxmox simulée)
@@ -841,25 +843,32 @@ Fichiers : [`fichiers/M02-E20/outils/Taskfile.yml`](fichiers/M02-E20/outils/Task
    ```
    Deuxième `task build` : `task: Task "build" is up to date`. `task --status build` sort en 0 si la tâche est à jour (non nul sinon) : c'est une question, pas une exécution.
 2. `setup` (`uv sync --locked`, `run: once`) : `--locked` refuse de continuer si `uv.lock` ne correspond plus à `pyproject.toml`, au lieu de le réécrire en silence ; en CI comme en local, on teste exactement les versions verrouillées.
-3. `install` :
+3. Installation, en trois tâches :
    ```yaml
-   install:
+   install:systeme:
      preconditions:
        - sh: git diff --quiet HEAD -- bin lib
          msg: "bin/ ou lib/ contient des modifications non commitées : on n'installe que du code versionné"
      cmds:
        - sudo install -d -m 755 {{.PREFIX}}/bin {{.PREFIX}}/lib
-       - sudo install -m 644 lib/ms-commun.sh {{.PREFIX}}/lib/ms-commun.sh
-       - sudo install -m 755 bin/ms-* {{.PREFIX}}/bin/
+       - sudo install -m 644 -o root -g root lib/ms-commun.sh {{.PREFIX}}/lib/ms-commun.sh
+       - sudo install -m 755 -o root -g root bin/ms-* {{.PREFIX}}/bin/
+   install:dev:
+     cmds:
        - uv tool install --force --reinstall --from {{.ROOT_DIR}} medictl
+   install:
+     cmds:
+       - task: install:systeme
+       - task: install:dev
    ```
-   Une copie, parce qu'un service planifié (E26) qui exécute le clone change de comportement dès qu'on change de branche ou qu'on édite un fichier ; et parce qu'on doit pouvoir dire **quelle version** tourne. La précondition garantit que ce qui est installé correspond à un commit. (M02-E25 remplacera l'installation de `medictl` depuis le clone par le registre de paquets.)
+   Une copie, parce qu'un service planifié (E26) qui exécute le clone change de comportement dès qu'on change de branche ou qu'on édite un fichier ; et parce qu'on doit pouvoir dire **quelle version** tourne. La précondition garantit que ce qui est installé correspond à un commit. Les deux moitiés sont séparées dès maintenant parce qu'elles n'ont pas le même avenir : en M02-E25, `medictl` s'installera depuis le registre de paquets, et `install:dev` (donc `task install`) remplacerait alors la version publiée par celle du clone. Sur `adm01`, on n'utilisera plus que `task install:systeme` (E26, E46) ; `task install` reste la commande d'un poste de développement.
+
 4. Arguments : `{{.CLI_ARGS}}` dans la commande pytest de `test:py` ; `task test:py -- -k garde -x`.
-5. `Makefile` : cibles `.PHONY`, `SHELL := bash` avec `.SHELLFLAGS := -euo pipefail -c`, `$(shell shfmt -f bin lib tests)`, cible fichier `dist/.construit: pyproject.toml uv.lock README.md $(SOURCES_PY) | setup`, `help` qui extrait les commentaires `##`. Trois différences concrètes :
+5. `Makefile` : cibles `.PHONY`, `SHELL := bash` avec `.SHELLFLAGS := -euo pipefail -c`, `$(shell shfmt -f $(wildcard bin lib sbin tests))`, cible fichier `dist/.construit: pyproject.toml uv.lock README.md $(SOURCES_PY) | setup`, `help` qui extrait les commentaires `##`. Trois différences concrètes :
    - Make raisonne en **fichiers et dates** (cibles, prérequis) ; Task en **tâches**, avec des empreintes de contenu optionnelles (`sources`/`generates`, `method: checksum` par défaut). Une tâche sans fichier produit est naturelle dans Task, artificielle dans Make (`.PHONY`).
    - Make exécute chaque ligne de recette dans un shell séparé, exige une tabulation et double les `$` (`$$f`) ; Task exécute ses commandes avec un interpréteur shell intégré (mvdan/sh), sans ces pièges, mais ce n'est pas exactement Bash.
    - Make est installé partout ; Task est un binaire de plus à installer (et à figer) sur chaque machine.
-6. README : section « Démarrer » complétée (`task lint`, `task test`, `task build`, `task install`).
+6. README : section « Démarrer » complétée (`task lint`, `task test`, `task build`, `task install`, et `task install:systeme` pour les seuls scripts).
 7. Vérifications :
    ```
    admin@adm01:~/src/outils$ task ci && task install
@@ -1063,7 +1072,7 @@ admin@adm01:~/m02/e23$ ls
 | 14 | 67-69 | Fichier écrit dans le dossier courant (en cron : `~`), nom avec espaces et `:`, jamais fermé, CSV assemblé à la main | Maintenabilité | Faible | Fichiers mal nommés qui s'accumulent ; écriture partielle possible | Option `--csv`, module `csv`, `with`, écriture atomique |
 | 15 | 57-73 | Code au niveau du module, analyse manuelle de `sys.argv` | Maintenabilité | Faible | Impossible d'importer le module dans un test sans lancer le rapport ; `--seuil` sans valeur → `IndexError` | `main(argv)` + `if __name__ == "__main__"`, `argparse` |
 
-**Version corrigée** : [`fichiers/M02-E23/rapport_capacite.py`](fichiers/M02-E23/rapport_capacite.py) — `argparse`, configuration lue sans exécution (droits vérifiés, aucun secret par défaut), session requests avec CA, délai et `Retry` borné sur GET, fonctions pures (`ram_hote`, `calculer`), `--ram-hote-gio` quand les nœuds sont invisibles, CSV par le module `csv` (et écriture atomique avec `--csv`), codes de sortie : 0 sous le seuil, 1 seuil dépassé ou erreur, 2 usage.
+**Version corrigée** : [`fichiers/M02-E23/rapport_capacite.py`](fichiers/M02-E23/rapport_capacite.py) — `argparse`, configuration lue sans exécution (droits vérifiés, aucun secret par défaut), session requests avec `Retry` borné sur GET, autorité passée à **chaque** requête (`verify=PVE_CACERT` : fixée sur la session, `REQUESTS_CA_BUNDLE` la remplacerait), délai, fonctions pures (`ram_hote`, `calculer`), `--ram-hote-gio` quand les nœuds sont invisibles, CSV par le module `csv` (et écriture atomique avec `--csv`), codes de sortie : 0 sous le seuil, 1 seuil dépassé ou erreur, 2 usage.
 ```
 admin@adm01:~/m02/e23$ python3 rapport_capacite.py --depuis-fichier …/cluster-resources-admin.json --seuil 50; echo "code $?"
 pool,ram_gio,pourcentage

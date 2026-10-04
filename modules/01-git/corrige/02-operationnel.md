@@ -145,7 +145,7 @@ Les scripts de fabrication (E12, E13, E18, E19), les configurations commitlint, 
    |---|---|---|
    | Approbation obligatoire (N relecteurs) | non (Premium) | règle d'équipe (CONTRIBUTING), approbateurs inscrits dans le commit de fusion (`%{approved_by}`), contrôle a posteriori par une requête API mensuelle |
    | Interdire l'approbation par l'auteur | non (Premium) | idem, la requête mensuelle compare auteur et approbateurs |
-   | *Code Owners* obligatoires | non (Premium ; le fichier `CODEOWNERS` est lu mais pas bloquant) | relecteurs désignés dans CONTRIBUTING par dossier |
+   | *Code Owners* obligatoires | non (toute la fonction *Code Owners* est Premium : dans CE, un fichier `CODEOWNERS` n'a aucun effet) | relecteurs désignés dans CONTRIBUTING par dossier |
    | *Push rules* : format des messages, taille des fichiers, secrets, commits signés | non (Premium) | pre-commit (E15), Gitleaks (E16), pipeline obligatoire (E24), hooks côté serveur (E26), signature vérifiée (E27) |
    | Interdire le push direct et le push forcé | **oui** | branche protégée « No one », push forcé interdit |
    | Fils résolus avant fusion | **oui** | réglage du projet |
@@ -640,7 +640,7 @@ Les scripts de fabrication (E12, E13, E18, E19), les configurations commitlint, 
    ```
    Rétablir aussitôt l'interdiction. GitLab gère lui-même `refs/merge-requests/*` (et d'autres références internes) : un push ne peut pas les réécrire. ⚠️ À vérifier sur ta version : le libellé exact du refus.
    Variante sans `--mirror` : `git push --force origin 'refs/heads/*' 'refs/tags/*'` (les références internes ne sont alors même pas tentées).
-5. **Purger côté GitLab** : *Settings > Repository > Repository maintenance > Remove blobs*, coller le contenu de `blobs.txt`, confirmer avec le chemin du projet ; attendre la fin ; puis *Settings > General > Advanced > Run housekeeping*, et enfin *Prune unreachable objects*. Les blobs disparaissent aussi des références internes (MR). La MR !1 : ses anciennes versions de diff sont stockées en base de GitLab et peuvent encore afficher le contenu supprimé ; la solution la plus sûre est de la **fermer et la supprimer** (Owner : *Edit > Delete*), puis de demander à Julien de la recréer depuis la branche réécrite. ⚠️ À vérifier sur ta version : ce que *Remove blobs* fait des diffs déjà stockés en base.
+5. **Purger côté GitLab** : *Settings > Repository > Repository maintenance > Remove blobs*, coller le contenu de `blobs.txt`, confirmer avec le chemin du projet ; attendre la fin ; puis *Settings > General > Advanced > Run housekeeping*, et enfin *Prune unreachable objects*. L'opération réécrit l'historique côté serveur (elle supprime au passage les signatures des commits réécrits et peut empêcher la fusion des MR ouvertes) ; elle doit aussi atteindre les références internes comme `refs/merge-requests/1/head` : ⚠️ à vérifier sur ta version, c'est précisément ce que contrôle le clone miroir de l'étape 6. La MR !1 : ses anciennes versions de diff sont stockées en base de GitLab et peuvent encore afficher le contenu supprimé ; la solution la plus sûre est de la **fermer et la supprimer** (Owner : *Edit > Delete*), puis de demander à Julien de la recréer depuis la branche réécrite. ⚠️ À vérifier sur ta version : ce que *Remove blobs* fait des diffs déjà stockés en base.
    Alternative serveur : *Redact text* avec la valeur du jeton et du mot de passe (le texte est remplacé par `***REMOVED***` dans tout l'historique), puis ménage et élagage. Elle évite la réécriture locale mais laisse le fichier (vidé de ses secrets) dans l'historique.
 6. **Vérifier** :
    ```
@@ -858,13 +858,12 @@ Les scripts de fabrication (E12, E13, E18, E19), les configurations commitlint, 
    ```
    Déclaration dans `formation/git-labo` > *Settings > Repository > Deploy keys*, titre `labo-lecture`, **sans** « Grant write permissions ». Test :
    ```
-   admin@adm01:~$ GIT_SSH_COMMAND='ssh -i ~/.ssh/id_ed25519_deploy_gitlabo -o IdentitiesOnly=yes' \
-       git clone git@git01.par1.medisphere.internal:formation/git-labo.git /tmp/labo-deploy
-   admin@adm01:/tmp/labo-deploy$ git commit --allow-empty -m "test: écriture" && \
-       GIT_SSH_COMMAND='ssh -i ~/.ssh/id_ed25519_deploy_gitlabo -o IdentitiesOnly=yes' git push
+   admin@adm01:~$ export GIT_SSH_COMMAND='ssh -i ~/.ssh/id_ed25519_deploy_gitlabo -o IdentitiesOnly=yes -o ControlPath=none'
+   admin@adm01:~$ git clone git@git01.par1.medisphere.internal:formation/git-labo.git /tmp/labo-deploy
+   admin@adm01:~$ cd /tmp/labo-deploy && git commit --allow-empty -m "test: écriture" && git push
    remote: … This deploy key does not have write access to this project.
    ```
-   Sans phrase de passe, parce qu'elle sert à une machine sans humain pour la saisir : compensée par les droits du fichier (600), la lecture seule et le périmètre d'un seul projet. ⚠️ Libellé exact du refus à vérifier sur ta version.
+   Puis `unset GIT_SSH_COMMAND`. `-o ControlPath=none` est indispensable avec le `~/.ssh/config` de M00-E15 : son bloc `Host *` active le multiplexage (`ControlMaster auto`, `ControlPersist 5m`), et le chemin du socket ne dépend que de l'hôte, du port et de l'utilisateur (`git`), pas de la clé. Si tu as poussé avec ta clé personnelle dans les cinq dernières minutes, la connexion maîtresse est réutilisée, ton identité aussi, et le push « avec la clé de déploiement » réussit : le test ne prouverait rien. Sans phrase de passe, parce qu'elle sert à une machine sans humain pour la saisir : compensée par les droits du fichier (600), la lecture seule et le périmètre d'un seul projet. ⚠️ Libellé exact du refus à vérifier sur ta version.
 7. Jeton de projet `lecture-labo` (*Settings > Access tokens*, Reporter, `read_repository`, 7 jours). Clone sans exposer le jeton :
    ```
    admin@adm01:~$ install -m 600 /dev/null /tmp/jeton-labo && $EDITOR /tmp/jeton-labo      # coller le jeton
@@ -889,7 +888,7 @@ Les scripts de fabrication (E12, E13, E18, E19), les configurations commitlint, 
 - Rotation sans `expires_at` : le nouveau jeton expire au bout d'une semaine, et les checks tombent en panne le samedi suivant.
 - Jeton dans l'URL du dépôt (`https://user:glpat-…@…`) : il reste dans `.git/config`, dans l'historique du shell et dans les journaux de proxy.
 - Clé de déploiement en écriture « pour plus tard » : une machine compromise peut alors réécrire le dépôt.
-- Tester la clé de déploiement sans `IdentitiesOnly=yes` : l'agent propose ta clé personnelle, le clone marche, le test ne prouve rien.
+- Tester la clé de déploiement sans `IdentitiesOnly=yes` : l'agent propose ta clé personnelle, le clone marche, le test ne prouve rien. Même effet avec le multiplexage SSH de M00-E15 si une connexion vers `git@git01…` est encore ouverte : `-o ControlPath=none`.
 
 **En production chez MédiSphère**
 - Politique d'instance : durée maximale des jetons réduite (90 jours pour les jetons d'administration), revue trimestrielle du registre, alertes d'expiration (sans SMTP dans le lab : un job planifié qui interroge l'API).

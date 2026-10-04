@@ -51,6 +51,9 @@ sauver "$f"
 # Dernier caractère du premier jeton changé (a → b, sinon → a) : même longueur, même préfixe.
 perl -pi -e 'if (!$fait && s/^(\s*token\s*=\s*"glrt-[^"]*)(.)"/$1.($2 eq "a" ? "b" : "a")."\""/e) { $fait = 1 }' "$f"
 cmp -s "$f" "$WB_DIR/$WB_EX._etc_gitlab-runner_config.toml.orig" && { restaurer_fichiers; exit 1; }
+# Empreinte de l'état injecté : l'annulation ne restaure que si le fichier est encore celui-là
+# (si l'apprenant a réinitialisé le jeton dans GitLab, l'ancien config.toml ne vaut plus rien).
+sha256sum "$f" | cut -d' ' -f1 > "$WB_DIR/$WB_EX.config-injecte"
 journal "config.toml : dernier caractère du jeton glrt- modifié"
 EOF
 }
@@ -104,11 +107,29 @@ annuler_E38() {
   etat="$(m01_etat E38)"
   if [[ "${WB_VAR:-}" != 3 && "${WB_VAR:-}" != 4 ]]; then
     wb_exec runner01 >/dev/null <<'EOF' || wb_avert "annulation incomplète sur runner01"
-if [ -f "$WB_DIR/$WB_EX.manifeste" ]; then
-  restaurer_fichiers
-  systemctl restart gitlab-runner
-  journal "annulation : /etc/hosts et config.toml rétablis, gitlab-runner redémarré"
+m="$WB_DIR/$WB_EX.manifeste"
+if [ -f "$m" ]; then
+  # On ne restaure que ce qui porte encore la marque de la panne : une réparation faite
+  # entre-temps par l'apprenant (jeton réinitialisé, /etc/hosts nettoyé) est conservée.
+  panne=0
+  grep -q '^10\.10\.20\.120[[:space:]]' /etc/hosts && panne=1
+  if [ -f "$WB_DIR/$WB_EX.config-injecte" ] \
+     && [ "$(sha256sum /etc/gitlab-runner/config.toml | cut -d' ' -f1)" = "$(cat "$WB_DIR/$WB_EX.config-injecte")" ]; then
+    panne=1
+  fi
+  if [ "$panne" = 1 ]; then
+    restaurer_fichiers
+    systemctl restart gitlab-runner
+    journal "annulation : /etc/hosts et config.toml rétablis, gitlab-runner redémarré"
+  else
+    while IFS="$(printf '\t')" read -r _src dst; do
+      [ "$dst" = ABSENT ] || rm -f "$dst"
+    done < "$m"
+    rm -f "$m"
+    journal "annulation : panne déjà réparée, sauvegardes supprimées sans rien restaurer"
+  fi
 fi
+rm -f "$WB_DIR/$WB_EX.config-injecte"
 exit 0
 EOF
   fi

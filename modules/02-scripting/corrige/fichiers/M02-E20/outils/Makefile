@@ -11,13 +11,13 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 
 REPORTS := rapports
-SCRIPTS_SH = $(shell shfmt -f bin lib tests | sort)
+SCRIPTS_SH = $(shell shfmt -f $(wildcard bin lib sbin tests) | sort)
 SOURCES_PY := $(shell find src -name '*.py')
 
-.PHONY: help setup lint lint-sh lint-py test test-bats test-py install ci clean
+.PHONY: help setup lint lint-sh lint-py test test-bats test-py install install-systeme install-dev ci clean
 
 help: ## Liste les cibles
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
 
 # Cible fichier : refaite seulement si pyproject.toml ou uv.lock sont plus récents.
 .venv/pyvenv.cfg: pyproject.toml uv.lock
@@ -57,12 +57,16 @@ build: dist/.construit ## Paquet medictl dans dist/
 
 PREFIX ?= /usr/local
 
-install: ## Copie figée de bin/ et lib/ dans $(PREFIX) (sudo), medictl (uv tool)
+install-systeme: ## Copie figée de bin/ et lib/ dans $(PREFIX) (sudo, root)
 	git diff --quiet HEAD -- bin lib || { echo "bin/ ou lib/ non commités" >&2; exit 1; }
 	sudo install -d -m 755 $(PREFIX)/bin $(PREFIX)/lib
-	sudo install -m 644 lib/ms-commun.sh $(PREFIX)/lib/ms-commun.sh
-	sudo install -m 755 bin/ms-* $(PREFIX)/bin/
+	sudo install -m 644 -o root -g root lib/ms-commun.sh $(PREFIX)/lib/ms-commun.sh
+	sudo install -m 755 -o root -g root bin/ms-* $(PREFIX)/bin/
+
+install-dev: ## medictl depuis la copie de travail (uv tool, développement)
 	uv tool install --force --reinstall --from $(CURDIR) medictl
+
+install: install-systeme install-dev ## Poste de développement : les deux
 
 ci: ## Enchaînement de la CI
 	$(MAKE) lint

@@ -50,7 +50,7 @@ journal dns01 dnsmasq-dhcp.log 120 dnsmasq-dhcp
 journal git01 gitlab-nginx.log 600 nginx
 journal git01 sshd.log 90 sshd
 
-if ((!sain)); then
+if ((! sain)); then
   chmod 000 "$zone/spool/dns01/dnsmasq.log.1"
 fi
 printf 'Zone de test du workbook (M02-E39) : données fictives.\n' >"$zone/spool/.zone-de-test"

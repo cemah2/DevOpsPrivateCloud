@@ -39,8 +39,10 @@ admin@adm01:~$ uv tool upgrade medictl          # mise à jour vers la dernière
 Prérequis : jeton de déploiement en lecture du registre enregistré par `uv auth login`, et
 `system-certs = true` dans `~/.config/uv/uv.toml` (PKI interne). Détails : M02-E25.
 
-Scripts planifiés : `sudo task install:systeme` (copie dans `/usr/local/bin` et
+Scripts planifiés : `task install:systeme` (copie, par `sudo`, dans `/usr/local/bin` et
 `/usr/local/lib`, jamais de lien vers un clone de travail), puis unités systemd de `systemd/`.
+Pas de `task install` sur ce poste : il installerait aussi `medictl` depuis le clone, à la place
+de la version publiée (réservé au développement).
 
 ### Développement
 

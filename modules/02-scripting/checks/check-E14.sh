@@ -22,6 +22,6 @@ check_output "les tests sont fusionnés dans main (GitLab)" '\.bats"' \
 _m02_tmp="$(mktemp -d)"
 check_cmd "tous les tests passent, sans accès au vrai Proxmox" bash -c '
   cd "$1" && env -u PVE_API_URL -u PVE_NODE -u PVE_TOKEN_ID -u PVE_TOKEN_SECRET -u PVE_CACERT \
-    HOME="$2" MS_PVE_ENV="$2/absent.env" https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 \
+    HOME="$2" MS_PVE_ENV_FILE="$2/absent.env" https_proxy=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 \
     no_proxy= NO_PROXY= bats tests/bats </dev/null >/dev/null 2>&1' _ "$_m02_r" "$_m02_tmp"
 rm -rf -- "${_m02_tmp:?}"

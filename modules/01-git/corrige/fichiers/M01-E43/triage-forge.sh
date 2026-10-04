@@ -28,9 +28,14 @@ ligne() {   # ligne "porte" commande...
   fi
 }
 
+# Runner unique, en ligne, actif, et qui a contacté GitLab il y a moins de 3 min (« online »
+# tolère deux heures de silence ; contacted_at, lui, est rafraîchi à chaque demande de jobs).
 runner_ok() {
-  api 'runners/all?type=instance_type&tag_list=shell,socle' \
-    | jq -e 'length == 1 and .[0].status == "online" and (.[0].paused | not)'
+  local id
+  id="$(api 'runners/all?type=instance_type&tag_list=shell,socle' \
+    | jq -r 'if length == 1 and .[0].status == "online" and (.[0].paused | not) then .[0].id else empty end')"
+  [ -n "$id" ] && api "runners/$id" \
+    | jq -e '(.contacted_at // "") | length > 0 and (now - (sub("\\.[0-9]+"; "") | fromdateiso8601)) < 180'
 }
 web_ok() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time "$T" "$URL/users/sign_in")" = 200 ]; }
 
@@ -49,7 +54,7 @@ ligne "git01 : aucun service omnibus arrêté" \
   ssh -o BatchMode=yes git01 '! sudo -n gitlab-ctl status | grep -q "^down:"'
 ligne "git01 : puma stable (> 60 s)" \
   ssh -o BatchMode=yes git01 's=$(sudo -n gitlab-ctl status puma | sed -nE "s/^run: puma: \(pid [0-9]+\) ([0-9]+)s.*/\1/p"); [ -n "$s" ] && [ "$s" -ge 60 ]'
-ligne "GitLab : runner shell+socle en ligne, actif" runner_ok
+ligne "GitLab : runner shell+socle actif, contact récent" runner_ok
 ligne "runner01 : service gitlab-runner actif" \
   ssh -o BatchMode=yes runner01 'systemctl is-active -q gitlab-runner'
 ligne "runner01 : forge résolue vers 10.10.20.12" \

@@ -20,10 +20,10 @@ preparer_faux_pve() {
   mkdir -p "$FAUX_PVE_ETAT"
   : >"$FAUX_PVE_JOURNAL"
 
-  export MS_PVE_ENV="$BATS_TEST_TMPDIR/pve-api.env"
+  export MS_PVE_ENV_FILE="$BATS_TEST_TMPDIR/pve-api.env"
   (
     umask 077
-    cat >"$MS_PVE_ENV" <<FIN
+    cat >"$MS_PVE_ENV_FILE" <<FIN
 PVE_API_URL="$FAUX_PVE_BASE"
 PVE_NODE="pve01"
 PVE_TOKEN_ID="wb-automation@pve!lab"

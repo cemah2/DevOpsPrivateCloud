@@ -37,8 +37,8 @@ titre="ÉCHEC ${unite} sur ${hote} (résultat ${resultat}, code ${code})"
 if [[ -n "${MS_ALERTE_WEBHOOK:-}" ]]; then
   # Corps JSON construit par jq : aucun risque d'injection par le contenu du journal.
   jq -n --arg titre "$titre" --arg texte "$extrait" --arg hote "$hote" --arg unite "$unite" \
-    '{titre: $titre, hote: $hote, unite: $unite, severite: "error", message: $texte}' |
-    curl -sS --fail --max-time 10 -H 'Content-Type: application/json' --data-binary @- \
-      "$MS_ALERTE_WEBHOOK" >/dev/null ||
-    logger -t ms-alerte -p user.err "webhook injoignable : ${MS_ALERTE_WEBHOOK%%\?*}"
+    '{titre: $titre, hote: $hote, unite: $unite, severite: "error", message: $texte}' \
+    | curl -sS --fail --max-time 10 -H 'Content-Type: application/json' --data-binary @- \
+      "$MS_ALERTE_WEBHOOK" >/dev/null \
+    || logger -t ms-alerte -p user.err "webhook injoignable : ${MS_ALERTE_WEBHOOK%%\?*}"
 fi

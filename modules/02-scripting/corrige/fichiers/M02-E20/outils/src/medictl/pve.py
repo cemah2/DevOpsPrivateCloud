@@ -18,11 +18,36 @@ from typing import Any
 import requests
 from proxmoxer import ProxmoxAPI, ResourceException
 
-from medictl.config import PveConfig
-from medictl.erreurs import ErreurApi, VmIntrouvable
+from medictl.config import PveConfig, charger_config
+from medictl.erreurs import ConfigError, ErreurApi, VmIntrouvable
 from medictl.reprises import avec_reprises
 
+# Interface de M02-E08, conservée quand la configuration est partie dans config.py (E19) :
+# « from medictl.pve import ConfigError, PveConfig, charger_config, connexion » marche toujours.
+__all__ = ["ClientPVE", "ConfigError", "PveConfig", "charger_config", "connexion", "traduire"]
+
 log = logging.getLogger(__name__)
+
+
+def connexion(cfg: PveConfig, timeout: float = 10) -> ProxmoxAPI:
+    """Client proxmoxer authentifié par jeton (M02-E08). Aucun appel réseau ici.
+
+    verify_ssl reçoit le chemin de l'autorité (PVE_CACERT, l'ancre de M02-E08) ou True :
+    jamais False. proxmoxer le transmet comme ``verify=`` de CHAQUE requête, si bien que
+    REQUESTS_CA_BUNDLE / CURL_CA_BUNDLE ne peuvent pas le remplacer (contrairement à un
+    ``session.verify``).
+    """
+    verification = cfg.verification_tls
+    return ProxmoxAPI(
+        cfg.hote,
+        port=cfg.port,
+        service="PVE",
+        user=cfg.utilisateur,
+        token_name=cfg.nom_jeton,
+        token_value=cfg.token_secret,
+        verify_ssl=str(verification) if verification is not True else True,
+        timeout=timeout,
+    )
 
 
 def traduire(exc: Exception, operation: str) -> ErreurApi:
@@ -60,17 +85,7 @@ class ClientPVE:
 
     @classmethod
     def depuis_config(cls, cfg: PveConfig, *, timeout: int = 15) -> ClientPVE:
-        api = ProxmoxAPI(
-            cfg.hote,
-            port=cfg.port,
-            service="PVE",
-            user=cfg.utilisateur,
-            token_name=cfg.nom_jeton,
-            token_value=cfg.token_secret,
-            verify_ssl=cfg.verification_tls,  # chemin de la CA ou True, jamais False
-            timeout=timeout,
-        )
-        return cls(api)
+        return cls(connexion(cfg, timeout=timeout))
 
     # --- plomberie -------------------------------------------------------------
     def _lire(self, operation: str, appel: Callable[[], Any]) -> Any:

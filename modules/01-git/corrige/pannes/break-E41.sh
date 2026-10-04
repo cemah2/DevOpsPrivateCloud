@@ -66,13 +66,28 @@ verifier_E41() {
   ! { git -C "$d" status --porcelain >/dev/null 2>&1 && git -C "$d" fsck --full >/dev/null 2>&1; }
 }
 
+# Le dépôt est-il déjà réparé (intègre, et rien de Lucas n'est perdu) ?
+_E41_repare() {
+  local d sujets
+  d="$(_E41_depot)"
+  git -C "$d" status --porcelain >/dev/null 2>&1 && git -C "$d" fsck --full >/dev/null 2>&1 || return 1
+  sujets="$(git -C "$d" log --format=%s origin/main..feature/sauvegarde-gitlab 2>/dev/null)" || return 1
+  [[ "$(grep -c . <<<"$sujets")" -ge 3 ]] || return 1
+  git -C "$d" stash list 2>/dev/null | grep -qF 'essai option --dry-run'
+}
+
 annuler_E41() {
   local d etat
   d="$(_E41_depot)"
   etat="$(m01_etat E41)"
   if [[ -f "$etat/depot-sain.tar" ]]; then
-    rm -rf "$d" "$d-origine.git"
-    tar -C "$(dirname "$d")" -xf "$etat/depot-sain.tar" && rm -f "$etat/depot-sain.tar"
+    if _E41_repare; then
+      # Réparation de l'apprenant conservée (y compris la branche poussée sur l'origine).
+      rm -f "$etat/depot-sain.tar"
+    else
+      rm -rf "$d" "$d-origine.git"
+      tar -C "$(dirname "$d")" -xf "$etat/depot-sain.tar" && rm -f "$etat/depot-sain.tar"
+    fi
   fi
   return 0
 }

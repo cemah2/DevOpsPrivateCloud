@@ -17,17 +17,18 @@ shell_variant = bash
 binary_next_line = true
 switch_case_indent = true
 
-# … et scripts sans extension de bin/ (un motif qui contient « / » est
-# relatif au dossier de ce fichier : il ne peut pas être fusionné avec le précédent)
-[bin/**]
+# … et scripts sans extension de bin/ et sbin/ (M02-E29) (un motif qui contient « / »
+# est relatif au dossier de ce fichier : il ne peut pas être fusionné avec le précédent)
+[{bin,sbin}/**]
 indent_style = space
 indent_size = 2
 shell_variant = bash
 binary_next_line = true
 switch_case_indent = true
 
-# Faux exécutables des tests bats (M02-E14, ex. tests/bats/helpers/bin/curl) : sans extension
-[tests/bats/helpers/bin/**]
+# Faux exécutables des tests bats, sans extension (M02-E14 : tests/bats/helpers/bin/curl ;
+# M02-E28 : tests/bats/fake-bin/ssh)
+[tests/bats/{helpers/bin,fake-bin}/**]
 indent_style = space
 indent_size = 2
 shell_variant = bash

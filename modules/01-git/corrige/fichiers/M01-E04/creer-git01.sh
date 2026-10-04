@@ -29,7 +29,7 @@ fi
 # 2. Clone complet du template, rangé dans le pool lab
 pve qm clone 9000 "$VMID" --name "$NOM" --pool lab --full 1 --storage "$STOCKAGE"
 
-# 3. Matériel, réseau (VNet SDN vinfra), cloud-init, démarrage après dns01 (ordre 2)
+# 3. Matériel, réseau (VNet SDN vinfra), cloud-init, démarrage après gw01 (1), dns01 (2) et adm01 (3) : ordre 4
 pve qm set "$VMID" --cores 4 --memory "$MEMOIRE" --balloon 0 --tags "socle;role-gitlab" \
   --net0 virtio,bridge=vinfra --ipconfig0 "ip=${IP}/24,gw=10.10.20.1" \
   --onboot 1 --startup order=4

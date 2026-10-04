@@ -12,7 +12,7 @@
 #   ~/.config/workbook/pve-lecture.env  PVE_API_URL, PVE_TOKEN_ID, PVE_TOKEN_SECRET, PVE_CACERT
 #                                       (chemin modifiable : MS_PVE_ENV_FILE, cf. lib/ms-commun.sh)
 #   ~/.config/workbook/pbs-lecture.env  PBS_API_URL, PBS_DATASTORE, PBS_NAMESPACE, PBS_TOKEN_ID,
-#                                       PBS_TOKEN_SECRET, PBS_PINNEDPUBKEY (chemin : MS_PBS_ENV)
+#                                       PBS_TOKEN_SECRET, PBS_PINNEDPUBKEY (chemin : MS_PBS_ENV_FILE)
 # Variable : MS_VERIF_AGE_MAX_H (défaut 26), équivalent de --age-max.
 #
 # Codes retour : 0 toutes les VMs du socle ont une sauvegarde récente et non en échec de vérification ;
@@ -35,7 +35,7 @@ sur Proxmox Backup Server, une sauvegarde de moins de HEURES heures (défaut : 2
 dernière vérification n'a pas échoué.
 
 Configuration : ~/.config/workbook/pve-lecture.env et ~/.config/workbook/pbs-lecture.env
-(jetons en lecture seule ; chemins modifiables par MS_PVE_ENV_FILE et MS_PBS_ENV).
+(jetons en lecture seule ; chemins modifiables par MS_PVE_ENV_FILE et MS_PBS_ENV_FILE).
 
 Codes retour : 0 tout est sauvegardé, 1 au moins une VM en défaut ou contrôle impossible, 2 usage.
 Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
@@ -49,11 +49,14 @@ FIN
 # Le secret passe par un fichier de configuration lu sur l'entrée standard : il n'apparaît pas dans ps.
 pbs_api() {
   local chemin="$1" reponse
-  [[ "${PBS_PINNEDPUBKEY:-}" == sha256//* ]] || die "PBS_PINNEDPUBKEY absent ou invalide dans $MS_PBS_ENV" 1
+  [[ "${PBS_PINNEDPUBKEY:-}" == sha256//* ]] || die "PBS_PINNEDPUBKEY absent ou invalide dans $MS_PBS_ENV_FILE" 1
   reponse="$(curl -sS --fail-with-body --max-time 30 -k --pinnedpubkey "$PBS_PINNEDPUBKEY" -K - \
     "${PBS_API_URL%/}${chemin}" \
-    <<<"header = \"Authorization: PBSAPIToken=${PBS_TOKEN_ID}:${PBS_TOKEN_SECRET}\"")" ||
-    { log_err "API PBS : échec de GET ${chemin} : ${reponse:-pas de réponse}"; return 1; }
+    <<<"header = \"Authorization: PBSAPIToken=${PBS_TOKEN_ID}:${PBS_TOKEN_SECRET}\"")" \
+    || {
+      log_err "API PBS : échec de GET ${chemin} : ${reponse:-pas de réponse}"
+      return 1
+    }
   jq -e '.data' <<<"$reponse"
 }
 
@@ -130,10 +133,31 @@ main() {
   local age_max_h="${MS_VERIF_AGE_MAX_H:-26}" etiquette="socle"
   while (($#)); do
     case "$1" in
-      -a | --age-max) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; age_max_h="$2"; shift 2 ;;
-      -e | --etiquette) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; etiquette="$2"; shift 2 ;;
-      -h | --help) usage; exit 0 ;;
-      *) log_err "option inconnue : $1"; usage >&2; exit 2 ;;
+      -a | --age-max)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        age_max_h="$2"
+        shift 2
+        ;;
+      -e | --etiquette)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        etiquette="$2"
+        shift 2
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
     esac
   done
   [[ "$age_max_h" =~ ^[1-9][0-9]{0,3}$ ]] || die "--age-max attend un nombre entier d'heures (1 à 9999)" 2
@@ -144,18 +168,18 @@ main() {
   # dans un shell, une variable CI) l'emporteraient sur le fichier (cf. lib/ms-commun.sh).
   unset PVE_API_URL PVE_NODE PVE_TOKEN_ID PVE_TOKEN_SECRET PVE_CACERT
   export MS_PVE_ENV_FILE="${MS_PVE_ENV_FILE:-$HOME/.config/workbook/pve-lecture.env}"
-  MS_PBS_ENV="${MS_PBS_ENV:-$HOME/.config/workbook/pbs-lecture.env}"
-  charger_env "$MS_PBS_ENV"
+  MS_PBS_ENV_FILE="${MS_PBS_ENV_FILE:-$HOME/.config/workbook/pbs-lecture.env}"
+  charger_env "$MS_PBS_ENV_FILE"
   local v
   for v in PBS_API_URL PBS_DATASTORE PBS_NAMESPACE PBS_TOKEN_ID PBS_TOKEN_SECRET PBS_PINNEDPUBKEY; do
-    [[ -n "${!v:-}" ]] || die "variable $v absente de $MS_PBS_ENV" 1
+    [[ -n "${!v:-}" ]] || die "variable $v absente de $MS_PBS_ENV_FILE" 1
   done
 
   local vms snaps
   vms="$(vms_socle "$etiquette")" || die "API Proxmox VE injoignable ou refus : liste des VMs impossible" 1
   # Une liste vide n'est jamais « tout va bien » : droits insuffisants, étiquette absente ou mauvais pool.
-  [[ "$(jq length <<<"$vms")" -gt 0 ]] ||
-    die "aucune VM du pool lab avec l'étiquette « $etiquette » n'est visible : droits du jeton ou étiquettes ?" 1
+  [[ "$(jq length <<<"$vms")" -gt 0 ]] \
+    || die "aucune VM du pool lab avec l'étiquette « $etiquette » n'est visible : droits du jeton ou étiquettes ?" 1
   snaps="$(instantanes_pbs)" || die "API PBS injoignable ou refus : contrôle impossible" 1
 
   local resultats nb_ko

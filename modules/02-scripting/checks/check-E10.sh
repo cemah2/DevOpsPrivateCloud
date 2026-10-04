@@ -10,7 +10,7 @@ require_cmd bash jq curl shellcheck git
 
 _m02_r="${WB_SRC:-$HOME/src}/outils"
 _m02_lib="$_m02_r/lib/ms-commun.sh"
-_m02_env="${MS_PVE_ENV:-$HOME/.config/workbook/pve-api.env}"
+_m02_env="${MS_PVE_ENV_FILE:-$HOME/.config/workbook/pve-api.env}"
 
 # _m02_lib_code ATTENDU CODE — vrai si CODE, exécuté après chargement de la bibliothèque
 # dans un bash neuf en mode strict (entrée standard hors terminal), sort avec le code ATTENDU.
@@ -71,7 +71,7 @@ if [[ -r "$_m02_env" ]]; then
   install -m 644 "$_m02_env" "$_m02_tmp/pve-api-644.env"
 fi
 check_cmd "pve_api refuse un fichier d'accès lisible par les autres (mode 644)" \
-  _m02_lib_code 0 "MS_PVE_ENV='$_m02_tmp/pve-api-644.env'; ! pve_api GET /version"
+  _m02_lib_code 0 "MS_PVE_ENV_FILE='$_m02_tmp/pve-api-644.env'; ! pve_api GET /version"
 
 # Faux curl qui note ses arguments : le secret ne doit jamais y figurer (il serait visible dans ps).
 cat >"$_m02_tmp/curl" <<'FIN'

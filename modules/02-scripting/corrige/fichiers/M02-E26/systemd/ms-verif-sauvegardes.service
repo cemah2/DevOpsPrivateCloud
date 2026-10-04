@@ -14,7 +14,7 @@ OnFailure=ms-alerte@%n.service
 Type=oneshot
 User=admin
 Group=admin
-# Version installée et figée (tâche « install » du Taskfile), jamais le clone de travail.
+# Version installée et figée (tâche « install:systeme » du Taskfile), jamais le clone de travail.
 ExecStart=/usr/local/bin/ms-verif-sauvegardes
 # Le contrôle dure quelques secondes : au-delà, quelque chose est bloqué (réseau, API).
 TimeoutStartSec=2min

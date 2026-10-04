@@ -134,8 +134,8 @@ Ressources : *BashGuide* et *BashPitfalls* (<https://mywiki.wooledge.org/BashGui
    | Fichier | Décision | Référence |
    |---|---|---|
    | `.pre-commit-config.yaml` | copié, puis **complété** par le projet (E04, E07) | [`M01-E15`](../../01-git/corrige/fichiers/M01-E15/.pre-commit-config.yaml) |
-   | `commitlint.config.mjs` | copié à l'identique | [`M01-E14`](../../01-git/corrige/fichiers/M01-E14/commitlint.config.mjs), ou [`fichiers/M02-E02/outils/commitlint.config.mjs`](fichiers/M02-E02/outils/commitlint.config.mjs) |
-   | `.releaserc.json` | copié à l'identique | `M01-E25`, ou [`fichiers/M02-E02/outils/.releaserc.json`](fichiers/M02-E02/outils/.releaserc.json) (version minimale équivalente) |
+   | `commitlint.config.mjs` | copié à l'identique | [`M01-E14`](../../01-git/corrige/fichiers/M01-E14/commitlint.config.mjs) (copie : [`fichiers/M02-E02/outils/commitlint.config.mjs`](fichiers/M02-E02/outils/commitlint.config.mjs)) |
+   | `.releaserc.json` | copié à l'identique | [`M01-E25`](../../01-git/corrige/fichiers/M01-E25/.releaserc.json) (copie : [`fichiers/M02-E02/outils/.releaserc.json`](fichiers/M02-E02/outils/.releaserc.json)) |
    | `CONTRIBUTING.md`, modèle de MR | copiés, la section « projet » **adaptée** (scripts, `medictl`, codes retour) | [`M01-E22`](../../01-git/corrige/fichiers/M01-E22/CONTRIBUTING.md) |
    | `.gitlab-ci.yml` | **écrit** : trois lignes d'inclusion | [`fichiers/M02-E02/outils/.gitlab-ci.yml`](fichiers/M02-E02/outils/.gitlab-ci.yml) |
    | `.gitignore` | **écrit** pour Python et contre les secrets | [`fichiers/M02-E02/outils/.gitignore`](fichiers/M02-E02/outils/.gitignore) |
@@ -385,10 +385,10 @@ Script complet : [`fichiers/M02-E03/bin/ms-collecte-config`](fichiers/M02-E03/bi
    ```
    Questions, une commande chacune :
    ```
-   jq -r '[.data[] | select(.pool == "lab" and .type == "qemu")] | max_by(.maxmem) | "\(.name) \(.maxmem / 1073741824) Gio"' reel.json
-   jq '[.data[] | select(.pool == "lab" and .type == "qemu" and (.template // 0) != 1)]
+   admin@adm01:~/m02/e05$ jq -r '[.data[] | select(.pool == "lab" and .type == "qemu")] | max_by(.maxmem) | "\(.name) \(.maxmem / 1073741824) Gio"' reel.json
+   admin@adm01:~/m02/e05$ jq '[.data[] | select(.pool == "lab" and .type == "qemu" and (.template // 0) != 1)]
        | (map(select((.tags // "") | split(";") | index("socle"))) | map(.maxmem) | add) / (map(.maxmem) | add) * 100 | round' reel.json
-   jq -r '.data[] | select(.pool == "lab" and .status == "stopped" and (.template // 0) != 1) | "\(.vmid) \(.name)"' reel.json
+   admin@adm01:~/m02/e05$ jq -r '.data[] | select(.pool == "lab" and .status == "stopped" and (.template // 0) != 1) | "\(.vmid) \(.name)"' reel.json
    ```
    (Dans le lab, c'est en principe `git01`, avec 8 Gio, qui réserve le plus.)
 
@@ -579,7 +579,7 @@ Tout est rejouable avec [`fichiers/M02-E06/commandes-yq.sh`](fichiers/M02-E06/co
    `pyproject.toml` reçoit des contraintes minimales (`typer>=0.27.2`…) et un groupe `[dependency-groups] dev`. `uv.lock` contient pour **chaque** paquet, dépendances transitives comprises : version exacte, source (index PyPI), empreintes SHA-256 des archives et *wheels*, dépendances et marqueurs. `uv tree` montre que `rich` (et `shellingham`) viennent de `typer`. Depuis Typer 0.26, Click est intégré à Typer : `click` n'apparaît plus comme dépendance.
 5. **Code** : [`fichiers/M02-E07/outils/src/medictl/`](fichiers/M02-E07/outils/src/medictl/). `__init__.py` lit la version installée avec `importlib.metadata.version("medictl")` ; `cli.py` déclare l'application Typer, son *callback* et l'option `--version` (`is_eager=True`, rappel qui affiche puis lève `typer.Exit()`). Dans `pyproject.toml` : `medictl = "medictl.cli:app"`. `uv run medictl --version` → `medictl 0.1.0`. Avant d'exécuter, `uv run` vérifie que le verrou correspond à `pyproject.toml` (et le met à jour si besoin), synchronise `.venv` sur le verrou (en y installant le projet lui-même en mode éditable), puis lance la commande dans cet environnement. Sans argument, `medictl` affiche l'aide et sort en 2 (convention « usage »).
 6. **ruff et pytest** : `pyproject.toml` complet dans [`fichiers/M02-E07/outils/pyproject.toml`](fichiers/M02-E07/outils/pyproject.toml) (`select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "RUF"]`, `S101` autorisé dans les tests, `testpaths = ["tests/python"]`).
-7. **pre-commit** : extrait [`fichiers/M02-E07/pre-commit-extrait.yaml`](fichiers/M02-E07/pre-commit-extrait.yaml), `rev: v0.16.10` = la version de ruff dans `uv.lock`. `.gitignore` (E02) contient déjà `.venv/` et les caches.
+7. **pre-commit** : extrait [`fichiers/M02-E07/pre-commit-extrait.yaml`](fichiers/M02-E07/pre-commit-extrait.yaml), `rev` figée sur l'étiquette `v0.16.10` (empreinte de commit, `pre-commit autoupdate --freeze`, règle de M01-E15) = la version de ruff dans `uv.lock`. `.gitignore` (E02) contient déjà `.venv/` et les caches.
 8. **Reproductibilité** :
    ```
    admin@adm01:~/src/outils$ rm -rf .venv && uv sync --locked

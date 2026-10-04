@@ -76,13 +76,39 @@ verifier_E42() {
   esac
 }
 
+# Le travail de Lucas est-il de nouveau atteignable (branche, 4 commits, notes du stash) ?
+_E42_repare() {
+  local d sujets s
+  d="$(_E42_depot)"
+  sujets="$(_E42_g log --format=%s origin/main..feature/rotation-jetons 2>/dev/null)" || return 1
+  for s in "feat(jetons): signaler les jetons qui expirent sous 30 jours" \
+           "feat(jetons): renouveler un jeton de projet par l'API" \
+           "docs(jetons): rappeler la mise à jour de la variable CI après rotation" \
+           "feat(jetons): produire le rapport hebdomadaire des expirations"; do
+    grep -qxF -- "$s" <<<"$sujets" || return 1
+  done
+  _E42_g log --all -p --diff-merges=first-parent 2>/dev/null | grep -qF "Conception retenue" \
+    || grep -qF "Conception retenue" "$d/notes/idees.md" 2>/dev/null
+}
+
 annuler_E42() {
   local d etat
   d="$(_E42_depot)"
   etat="$(m01_etat E42)"
   if [[ -f "$etat/depot-avant.tar" ]]; then
-    rm -rf "$d" "$d-origine.git"
-    tar -C "$(dirname "$d")" -xf "$etat/depot-avant.tar" && rm -f "$etat/depot-avant.tar"
+    local repare=1
+    _E42_repare || repare=0
+    if [[ "${WB_VAR:-}" == 4 ]] && [[ ! -e "$d/scripts/purge-jetons.sh" ]] \
+       && ! _E42_g log --all -p 2>/dev/null | grep -qF "Purge des jetons révoqués"; then
+      repare=0
+    fi
+    if ((repare)); then
+      # Récupération de l'apprenant conservée.
+      rm -f "$etat/depot-avant.tar"
+    else
+      rm -rf "$d" "$d-origine.git"
+      tar -C "$(dirname "$d")" -xf "$etat/depot-avant.tar" && rm -f "$etat/depot-avant.tar"
+    fi
   fi
   return 0
 }

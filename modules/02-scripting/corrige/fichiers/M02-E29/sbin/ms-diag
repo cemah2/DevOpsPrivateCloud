@@ -22,46 +22,58 @@ unset IFS CDPATH GLOBIGNORE BASH_ENV ENV
 umask 077
 
 nom="ms-diag"
-erreur() { printf '%s : %s\n' "$nom" "$1" >&2; exit "${2:-1}"; }
+erreur() {
+  printf '%s : %s\n' "$nom" "$1" >&2
+  exit "${2:-1}"
+}
 
 usage() {
-  cat >&2 <<'FIN'
+  cat <<'FIN'
 Usage : sudo /usr/local/sbin/ms-diag [--depuis HEURES] UNITE... > diag.tar.gz
   UNITE    unité systemd existante (ex. ssh.service, gitlab-runner.service), 1 à 5 unités
   HEURES   profondeur du journal, de 1 à 72 (défaut 2)
 L'archive est écrite sur la sortie standard : redirige-la vers un fichier.
+Codes retour : 0 succès, 1 erreur, 2 usage, 3 refus (pas root, sortie sur un terminal).
 FIN
+}
+erreur_usage() {
+  usage >&2
   exit 2
 }
 
-[[ "$EUID" -eq 0 ]] || erreur "à lancer avec sudo (droits root nécessaires pour lire les journaux)" 3
-[[ ! -t 1 ]] || erreur "la sortie est un terminal : redirige-la, ex. « sudo ms-diag ssh.service > diag.tar.gz »" 3
-
+# Arguments d'abord (aucune action privilégiée ici) : une erreur d'usage se signale de la même
+# façon avec ou sans sudo, et les tests bats valident ce filtre sans droits root (M02-E29).
 depuis=2
 unites=()
 while (($#)); do
   case "$1" in
     --depuis)
-      [[ $# -ge 2 && "$2" =~ ^([1-9]|[1-6][0-9]|7[0-2])$ ]] || usage
+      [[ $# -ge 2 && "$2" =~ ^([1-9]|[1-6][0-9]|7[0-2])$ ]] || erreur_usage
       depuis="$2"
       shift 2
       ;;
-    -h | --help) usage ;;
-    -*) usage ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -*) erreur_usage ;;
     *)
       # Liste blanche : caractères d'un nom d'unité, suffixe connu. Exclut espaces, « / », « .. », options.
-      [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9:_.@-]{0,99}\.(service|timer|socket|mount|path)$ ]] ||
-        erreur "nom d'unité refusé : $1" 2
+      [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9:_.@-]{0,99}\.(service|timer|socket|mount|path)$ ]] \
+        || erreur "nom d'unité refusé : $1" 2
       unites+=("$1")
       shift
       ;;
   esac
 done
-((${#unites[@]} >= 1 && ${#unites[@]} <= 5)) || usage
+((${#unites[@]} >= 1 && ${#unites[@]} <= 5)) || erreur_usage
+
+[[ "$EUID" -eq 0 ]] || erreur "à lancer avec sudo (droits root nécessaires pour lire les journaux)" 3
+[[ ! -t 1 ]] || erreur "la sortie est un terminal : redirige-la, ex. « sudo ms-diag ssh.service > diag.tar.gz »" 3
 
 for u in "${unites[@]}"; do
-  [[ "$(systemctl show --property=LoadState --value -- "$u")" == loaded ]] ||
-    erreur "unité inconnue sur $(hostname -s) : $u" 2
+  [[ "$(systemctl show --property=LoadState --value -- "$u")" == loaded ]] \
+    || erreur "unité inconnue sur $(hostname -s) : $u" 2
 done
 
 # Trace d'audit : qui (SUDO_USER est posé par sudo), quoi, quand.
@@ -88,8 +100,8 @@ expurger() {
 for u in "${unites[@]}"; do
   systemctl status --no-pager --full --lines=50 -- "$u" >"$d/$u.statut.txt" 2>&1 || true
   systemctl cat --no-pager -- "$u" 2>&1 | expurger >"$d/$u.unite.txt" || true
-  journalctl --no-pager -o short-iso -n 5000 --since "-${depuis}h" -u "$u" 2>&1 |
-    expurger >"$d/$u.journal.txt" || true
+  journalctl --no-pager -o short-iso -n 5000 --since "-${depuis}h" -u "$u" 2>&1 \
+    | expurger >"$d/$u.journal.txt" || true
 done
 systemctl --failed --no-pager >"$d/unites-en-echec.txt" 2>&1 || true
 ss -tlnp >"$d/ports-en-ecoute.txt" 2>&1 || true

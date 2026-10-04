@@ -5,7 +5,7 @@
 # puis medictl lui-même. Lecture seule (API en GET, pveum en lecture sur pve01).
 
 title "M02-E36 — medictl parle à Proxmox"
-require_cmd curl jq ssh
+require_cmd curl jq ssh openssl
 
 _m02_e36_env="${MEDICTL_ENV_FILE:-$HOME/.config/workbook/pve-api.env}"
 
@@ -19,11 +19,17 @@ _m02_e36_get() {
 
 _m02_e36_mode_600() { [[ "$(stat -c %a "$_m02_e36_env" 2>/dev/null)" == 600 ]]; }
 
-_m02_e36_ca_identique() {
-  local ca
+# La CA de adm01 peut être l'ancre « conforme » fabriquée en M02-E08 (même sujet et même
+# clé que celle de pve01, extensions différentes) : on compare sujet et clé publique,
+# pas le fichier ni son empreinte.
+_m02_e36_ca_de_pve01() {
+  local ca ici la_bas
   # shellcheck source=/dev/null
   ca="$(source "$_m02_e36_env" && printf '%s' "$PVE_CACERT")"
-  [[ -f "$ca" ]] && cmp -s "$ca" <(remote "$WB_PVE_HOST" cat /etc/pve/pve-root-ca.pem)
+  [[ -f "$ca" ]] || return 1
+  ici="$(openssl x509 -in "$ca" -noout -subject -pubkey 2>/dev/null)" || return 1
+  la_bas="$(remote "$WB_PVE_HOST" 'openssl x509 -in /etc/pve/pve-root-ca.pem -noout -subject -pubkey')" || return 1
+  [[ -n "$ici" && "$ici" == "$la_bas" ]]
 }
 
 _m02_e36_voit_le_pool() {
@@ -35,7 +41,7 @@ _m02_e36_medictl() {
 }
 
 check_cmd "fichier d'accès $_m02_e36_env présent, mode 600" _m02_e36_mode_600
-check_cmd "le fichier de CA de adm01 est celui de pve01 (TLS vérifiable)" _m02_e36_ca_identique
+check_cmd "le fichier de CA de adm01 porte le sujet et la clé de la CA de pve01" _m02_e36_ca_de_pve01
 check_cmd "API Proxmox : authentification par jeton acceptée (GET /version)" _m02_e36_get /version
 check_cmd "API Proxmox : le jeton voit les VMs du pool lab" _m02_e36_voit_le_pool
 check_ssh "pve01 : compte wb-automation@pve actif" "$WB_PVE_HOST" \

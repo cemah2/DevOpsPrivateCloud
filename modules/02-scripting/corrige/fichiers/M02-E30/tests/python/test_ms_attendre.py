@@ -19,7 +19,9 @@ OUTIL = Path(__file__).resolve().parents[2] / "bin" / "ms-attendre"
 def lancer(*args: str, delai: float = 30) -> tuple[int, float]:
     """Exécute ms-attendre jusqu'au bout ; renvoie (code retour, durée en secondes)."""
     debut = time.monotonic()
-    res = subprocess.run(
+    # S603 (ruff/bandit) : appel sans shell, d'un programme du dépôt, arguments écrits
+    # dans les tests eux-mêmes : aucune entrée non maîtrisée.
+    res = subprocess.run(  # noqa: S603
         [str(OUTIL), *args], capture_output=True, text=True, timeout=delai, check=False
     )
     return res.returncode, time.monotonic() - debut
@@ -64,14 +66,12 @@ def test_usage():
     assert lancer("-d", "10")[0] == 2
 
 
-@pytest.mark.parametrize(
-    ("sig", "code_attendu"), [(signal.SIGTERM, 143), (signal.SIGINT, 130)]
-)
+@pytest.mark.parametrize(("sig", "code_attendu"), [(signal.SIGTERM, 143), (signal.SIGINT, 130)])
 def test_signal_sans_orphelin(sig, code_attendu):
     # Durée « signature » pour retrouver le sous-processus sans confusion possible.
     signature = "47.25" if sig == signal.SIGTERM else "47.75"
     # Nouvelle session : en cas d'échec, le test tue le groupe sans se tuer lui-même.
-    proc = subprocess.Popen(
+    proc = subprocess.Popen(  # noqa: S603 (même raison que dans lancer())
         [str(OUTIL), "-d", "60", "-e", "50", "--", "sleep", signature],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,

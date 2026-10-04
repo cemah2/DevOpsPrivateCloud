@@ -25,7 +25,7 @@
 # Codes retour communs à tous les outils : 0 succès, 1 erreur, 2 usage, 3 refus d'un garde-fou.
 #
 # Variables d'environnement reconnues
-#   MS_PVE_ENV  fichier d'accès à l'API (défaut ~/.config/workbook/pve-api.env, format M00-E17)
+#   MS_PVE_ENV_FILE  fichier d'accès à l'API (défaut ~/.config/workbook/pve-api.env, format M00-E17)
 #   PVE_API_URL, PVE_NODE, PVE_TOKEN_ID, PVE_TOKEN_SECRET, PVE_CACERT
 #                    si elles sont déjà définies, elles l'emportent sur le fichier (CI)
 #   MS_PVE_TIMEOUT   délai maximal d'un appel HTTP, en secondes (défaut 30)
@@ -140,7 +140,7 @@ _ms_pve_charger() {
   if [[ -n "${_MS_PVE_CHARGE:-}" ]]; then
     return 0
   fi
-  local fichier="${MS_PVE_ENV:-$HOME/.config/workbook/pve-api.env}" v mode
+  local fichier="${MS_PVE_ENV_FILE:-$HOME/.config/workbook/pve-api.env}" v mode
   local -A avant=()
   for v in "${_MS_PVE_VARS[@]}"; do
     if [[ -n "${!v:-}" ]]; then

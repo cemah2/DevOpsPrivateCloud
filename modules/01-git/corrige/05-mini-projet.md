@@ -25,7 +25,7 @@ Il n'y a pas « une » solution : il y a une forge saine et un dossier qui perme
 **Démarche recommandée** (8 à 12 h) :
 
 1. **Assainir d'abord** (1 à 2 h). `lab/bin/check 01 47`, puis chaque KO à la racine. KO typiques à ce stade :
-   - une panne du palier 4 encore marquée active (`lab/bin/break 01 XX --annuler` seulement si tu l'as réellement abandonnée ; sinon, termine-la) ;
+   - une panne du palier 4 encore marquée active : si tu l'as réparée, clos-la par `lab/bin/break 01 XX --annuler` (sur un lab réparé, l'annulation ne défait pas ta correction : elle retire le marqueur et les sauvegardes) ; si elle est encore là, répare-la d'abord ;
    - la VM 2010 `git-restore` oubliée après M01-E28 (`qm destroy 2010 --purge` sur `pve01`, après avoir vérifié qu'il s'agit bien d'elle : `qm config 2010 | grep name`) ;
    - un dernier pipeline de `main` rouge sur `plateforme/ci-templates` (job jamais relancé après une mise à jour) ;
    - `formation/legacy-rdv-brut` de M01-E45 non supprimé (pas un KO du contrôle global, mais Sophie le trouvera) ;

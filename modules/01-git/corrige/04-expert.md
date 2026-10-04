@@ -8,7 +8,7 @@ Les scripts d'injection sont dans `corrige/pannes/` : `break-E36.sh` à `break-E
 
 Les sorties de commandes reproduites ci-dessous sont **représentatives** : identifiants, empreintes, horodatages et formulations exactes varient selon ta version et ton installation. Les sorties de E41, E42, E44 et E45 ont été obtenues réellement (Git 2.43 et 2.47 produisent les mêmes empreintes pour les dépôts fabriqués à dates fixes).
 
-**Points non testés en conditions réelles** (signale-les si ton comportement diffère) : mise en forme exacte des messages renvoyés au client par GitLab 19 (`remote: GitLab: …`, cadre `=====` de gitlab-shell, affichage du préfixe `GL-HOOK-ERR:`) ; message de sshd pour un compte expiré (E40 v1) ; message de `gitlab-shell` quand l'API interne est injoignable (E40 v3) ; nom du fichier de configuration NGINX qui porte l'amont `gitlab-workhorse` (E37 v3, le script le cherche) ; possibilité de renouveler (*rotate*) un jeton de projet avec un jeton personnel d'administrateur non membre du projet (E39 v1) ; comportement de la suppression différée des projets dans GitLab 19 (E45).
+**Points non testés en conditions réelles** (signale-les si ton comportement diffère) : mise en forme exacte des messages renvoyés au client par GitLab 19 (`remote: GitLab: …`, cadre `=====` de gitlab-shell, affichage du préfixe `GL-HOOK-ERR:`) ; message de sshd pour un compte expiré (E40 v1) ; nom du fichier de configuration NGINX qui porte l'amont `gitlab-workhorse` (E37 v3, le script le cherche) ; possibilité de renouveler (*rotate*) un jeton de projet avec un jeton personnel d'administrateur non membre du projet (E39 v1) ; comportement de la suppression différée des projets dans GitLab 19 (E45).
 
 ---
 
@@ -67,11 +67,13 @@ Quatre causes, quatre périmètres : un réglage de **projet** (V1, V3), toute l
 **Variante 1 — règle de protection générique « `*` ».**
 
 ```
-remote: GitLab: You can only create protected branches using the web interface and API.
+remote: GitLab: You can only use an existing protected branch ref as the basis of a new protected branch.
 To git01.par1.medisphere.internal:plateforme/medisphere.git
  ! [remote rejected] fix/essai-e36 -> fix/essai-e36 (pre-receive hook declined)
 error: failed to push some refs to 'git01.par1.medisphere.internal:plateforme/medisphere.git'
 ```
+
+(Si tu pousses une branche qui ne contient **aucun** commit nouveau, par exemple `git push origin main:fix/essai`, le message devient « You can only create protected branches using the web interface and API. » : c'est le contrôle suivant de la même fonction, `Gitlab::Checks::BranchCheck#protected_branch_creation_checks`.)
 
 Le message parle de branches **protégées** alors que tu crées une branche de travail : il faut donc qu'une règle couvre son nom. **Settings > Repository > Protected branches** (ou l'API) en liste deux :
 
@@ -83,7 +85,7 @@ main	No one	Maintainers
 *	No one	Maintainers
 ```
 
-La règle `*` capture **toutes** les branches. Comme personne ne peut y pousser mais que tu peux y fusionner (Maintainer), GitLab considère que tu tentes de **créer une branche protégée** par Git, ce qui n'est permis que par l'interface ou l'API. Pour une branche existante, le message aurait été « You are not allowed to push code to protected branches on this project. » Le refus s'applique à tout le monde, administrateurs compris : le niveau « No one » n'a pas d'exception (c'est ce que dit le code de GitLab, `ProtectedRefAccess#check_access`).
+La règle `*` capture **toutes** les branches. Comme personne ne peut y pousser mais que tu peux y fusionner (Maintainer), GitLab considère que tu tentes de **créer une branche protégée** par Git : il n'accepte alors qu'un commit déjà présent dans une branche protégée, et seulement depuis l'interface ou l'API. Pour une branche existante, le message aurait été « You are not allowed to push code to protected branches on this project. » Le refus s'applique à tout le monde, administrateurs compris : le niveau « No one » n'a pas d'exception (c'est ce que dit le code de GitLab, `ProtectedRefAccess#check_access`).
 
 Cause racine : une règle de protection `*` ajoutée sur le projet (l'histoire plausible : quelqu'un voulait protéger `release/*` et a saisi `*`). Correctif : la supprimer (**Unprotect**), puis, si le besoin réel existe, créer la règle voulue. Le journal d'audit (**Admin > Monitoring > Audit events** en CE : événements limités, à vérifier sur ta version) et la date de création de la règle aident à répondre « depuis quand ». Tous les membres du projet étaient touchés ; les autres projets non.
 
@@ -341,13 +343,13 @@ admin@runner01:~$ sudo gitlab-runner verify
 
 | Observation | V1 | V2 | V3 | V4 |
 |---|---|---|---|---|
-| Journal du runner | `dial tcp 10.10.20.120:443: … no route to host` (ou délai) | `… forbidden` / `403 Forbidden` | calme | calme |
+| Journal du runner | `dial tcp 10.10.20.120:443: … no route to host` (ou délai), toutes les ~3 s | quelques `… forbidden` (`403 Forbidden`), puis de rares nouvelles tentatives | calme | calme |
 | `gitlab-runner verify` | erreur de connexion | `is not valid` | `is valid` | `is valid` |
 | Étiquettes du runner | `shell, socle` | `shell, socle` | **`bash, socle`** | `shell, socle` |
 | `access_level` | `not_protected` | `not_protected` | `not_protected` | **`ref_protected`** |
 | Pipeline de `main` | bloqué | bloqué | bloqué | **passe** |
 
-Le statut « en ligne » ne t'aide pas en V1 et V2 : GitLab garde un runner « online » tant qu'il l'a contacté dans les deux dernières heures (valeur à vérifier sur ta version). C'est le champ `contacted_at`, qui ne bouge plus, qui trahit la panne.
+Le statut « en ligne » ne t'aide pas en V1 et V2 : GitLab garde un runner « online » tant qu'il l'a contacté dans les deux dernières heures (constante `ONLINE_CONTACT_TIMEOUT` du modèle `Ci::Runner`). C'est le champ `contacted_at`, qui ne bouge plus, qui trahit la panne.
 
 **Variante 1 — le runner joint une mauvaise adresse.**
 
@@ -361,11 +363,11 @@ NN+1:10.10.20.120	git01.par1.medisphere.internal git01
 
 `/etc/hosts` passe avant le DNS (`hosts: files dns` dans `/etc/nsswitch.conf`). L'entrée renvoie le nom de la forge vers une adresse qui ne répond pas. Le service a été redémarré : les connexions déjà ouvertes vers la bonne adresse ont disparu, d'où une panne franche. Correctif : retirer l'entrée (après avoir vérifié qu'elle ne sert à rien d'autre), sans redémarrer : le runner relit la résolution à la connexion suivante. Vérifie avec `getent hosts` et le journal.
 
-**Variante 2 — jeton refusé.** Le journal montre des `403 Forbidden` toutes les trois secondes. Le jeton de `/etc/gitlab-runner/config.toml` ne correspond plus à aucun runner de GitLab. Il diffère d'un caractère de celui que GitLab connaît : une mauvaise copie (restauration d'un `config.toml` de travail, édition à la main). On ne peut pas relire le vrai jeton dans GitLab (il n'est affiché qu'à la création). Deux corrections propres :
+**Variante 2 — jeton refusé.** Le journal montre quelques `403 Forbidden`, puis presque plus rien : après `unhealthy_requests_limit` refus consécutifs, GitLab Runner **désactive** le *worker* concerné et ne retente qu'après 30 s, puis après des délais croissants (jusqu'à `unhealthy_interval`) — c'est voulu (jeton expiré, mise à jour de GitLab en cours), et c'est aussi ce qui rend la panne discrète. Le jeton de `/etc/gitlab-runner/config.toml` ne correspond plus à aucun runner de GitLab. Il diffère d'un caractère de celui que GitLab connaît : une mauvaise copie (restauration d'un `config.toml` de travail, édition à la main). On ne peut pas relire le vrai jeton dans GitLab (il n'est affiché qu'à la création). Deux corrections propres :
 - restaurer `config.toml` depuis la sauvegarde de `runner01` (VM sauvegardée chaque nuit par `lab-nuit`, M00) si elle est saine ;
-- sinon, **réinitialiser le jeton d'authentification** du runner dans GitLab (**Admin > CI/CD > Runners > le runner > Edit** ; l'API propose aussi `POST /runners/:id/reset_authentication_token`, à vérifier sur ta version) et reporter le nouveau jeton dans `config.toml` (root:root 600). Le runner garde son identifiant, ses étiquettes et son historique, contrairement à un réenregistrement.
+- sinon, **réinitialiser le jeton d'authentification** du runner dans GitLab (**Admin > CI/CD > Runners > le runner > Edit** ; ou API d'administration `POST /runners/:id/reset_authentication_token`) et reporter le nouveau jeton dans `config.toml` (root:root 600). Le runner garde son identifiant, ses étiquettes et son historique, contrairement à un réenregistrement.
 
-Le runner relit `config.toml` automatiquement quand le fichier change ; `sudo gitlab-runner verify` confirme.
+Le runner relit `config.toml` automatiquement quand le fichier change, mais le *worker* désactivé ne reprend qu'à sa prochaine tentative, qui peut être lointaine : `sudo systemctl restart gitlab-runner` le réactive tout de suite (hors de tout job en cours). `sudo gitlab-runner verify` confirme le jeton ; côté GitLab, `contacted_at` du runner redevient récent (c'est ce que lit `lab/bin/check 01 38`). ⚠️ À vérifier sur ta version : les valeurs par défaut de `unhealthy_requests_limit` et `unhealthy_interval` (documentation *Advanced configuration* de GitLab Runner).
 
 **Variante 3 — étiquette renommée.** Le job demande `tags: [shell]` (gabarit `templates/qualite.yml`), le runner porte `bash` et `socle` : aucun runner ne porte **toutes** les étiquettes du job. Correctif : remettre l'étiquette `shell` sur le runner (interface ou `PUT /runners/:id` avec `tag_list`). Changer les gabarits CI pour demander `bash` serait corriger le mauvais côté : les étiquettes sont un contrat entre l'équipe et la flotte de runners, défini en E23.
 
@@ -437,12 +439,13 @@ Correctif : renouveler à nouveau (le jeton actif est inconnu de tous, il est in
 ```
 admin@adm01:~$ A=$(cat ~/.config/workbook/gitlab-admin.token)
 admin@adm01:~$ ID=$(curl -s -H "PRIVATE-TOKEN: $A" "$U/projects/$P/access_tokens?state=active" | jq -r '.[] | select(.name=="bot-release") | .id')
-admin@adm01:~$ curl -sf -X POST -H "PRIVATE-TOKEN: $A" "$U/projects/$P/access_tokens/$ID/rotate" | jq -j .token \
+admin@adm01:~$ EXP=$(curl -s -H "PRIVATE-TOKEN: $A" "$U/projects/$P/access_tokens/$ID" | jq -r .expires_at)   # garder l'échéance
+admin@adm01:~$ curl -sf -X POST -H "PRIVATE-TOKEN: $A" "$U/projects/$P/access_tokens/$ID/rotate" --data-urlencode "expires_at=$EXP" | jq -j .token \
   | curl -sf -X PUT -H "PRIVATE-TOKEN: $A" "$U/projects/$P/variables/GITLAB_TOKEN" --data-urlencode value@- >/dev/null \
   && echo "jeton renouvelé et variable mise à jour"
 ```
 
-Le jeton ne passe ni par l'écran, ni par un fichier, ni par l'historique du shell. L'interface (**Settings > Access tokens > Rotate**, puis **CI/CD > Variables > Edit**) convient aussi, à condition de ne coller la valeur nulle part ailleurs.
+Le jeton ne passe ni par l'écran, ni par un fichier, ni par l'historique du shell. Sans `expires_at`, l'API donne au nouveau jeton une expiration **à une semaine** (documentation *Project access tokens API*, « Rotate ») : la release retomberait en panne sept jours plus tard. L'interface (**Settings > Access tokens > Rotate**, puis **CI/CD > Variables > Edit**) convient aussi, à condition de ne coller la valeur nulle part ailleurs.
 
 **Variante 2 — étiquettes `v*` interdites à la création.** semantic-release calcule bien la version (`The next release version is 1.4.1`), crée l'étiquette localement, et la poussée est refusée par GitLab. Les étiquettes protégées : `v*` avec `create_access_levels: [{access_level: 0, "No one"}]`. Le bot est Maintainer, mais « No one », c'est personne. L'API n'a pas de modification d'une protection d'étiquette : on la retire et on la recrée avec le bon niveau (dans l'interface : **Unprotect**, puis **Protect** `v*` avec « Maintainers »). Pendant les quelques secondes entre les deux, les étiquettes `v*` ne sont pas protégées : fais-le hors de toute release en cours (le `resource_group: release` du gabarit sérialise les jobs `release`, pas les actions humaines).
 
@@ -480,7 +483,7 @@ semantic-release enchaîne : `verifyConditions` (chaque plugin vérifie ses pré
 
 **Alternatives**
 - Tester le jeton sans l'exposer : un job manuel (`when: manual`, branche protégée) qui appelle `curl -sf -H "PRIVATE-TOKEN: $GITLAB_TOKEN" "$CI_API_V4_URL/projects/$CI_PROJECT_ID"` et n'affiche que le code de retour.
-- `semantic-release --dry-run --no-ci` sur un clone local, avec un jeton de test : vérifie `verifyConditions` et l'analyse sans publier.
+- `semantic-release --dry-run --no-ci` sur un clone local, avec un jeton de test **et** `GITLAB_URL=https://git01.par1.medisphere.internal` : hors de la CI, `@semantic-release/gitlab` vise `https://gitlab.com` par défaut (et y enverrait le jeton). Vérifie `verifyConditions` et l'analyse sans publier.
 
 **Pièges classiques**
 - Mettre ton jeton personnel d'administrateur dans `GITLAB_TOKEN` « pour que ça marche » : il donne tous les droits sur toute la forge à chaque job de `main`, et il expirera avec ton compte.
@@ -582,7 +585,7 @@ remote:
 remote: ========================================================================
 ```
 
-(formulation à vérifier ; si tu as activé la recherche rapide des clés en base, `AuthorizedKeysCommand`, l'authentification elle-même échoue avec `Permission denied (publickey)`, car la recherche de la clé passe aussi par l'API). Sur `git01` :
+(message de gitlab-shell, `internalAPIUnreachable` dans `client/gitlabnet.go` ; si tu as activé la recherche rapide des clés en base, `AuthorizedKeysCommand`, l'authentification elle-même échoue avec `Permission denied (publickey)`, car la recherche de la clé passe aussi par l'API). Sur `git01` :
 
 ```
 admin@git01:~$ sudo tail -n 3 /var/log/gitlab/gitlab-shell/gitlab-shell.log
@@ -1141,13 +1144,13 @@ Règle de la forge : pas de fichier de plus de 5 Mio dans Git (hook de M01-E26 s
 
 **11.** Le fichier versionné est un pointeur texte (`version https://git-lfs.github.com/spec/v1`, `oid sha256:<empreinte>`, `size <octets>`). Le filtre `clean` (au `git add`) remplace le contenu par le pointeur et range le contenu dans `.git/lfs/objects` ; le filtre `smudge` (à l'extraction) fait l'inverse, en téléchargeant si besoin ; le hook `pre-push` envoie les objets LFS au serveur avant les références. Pertes : les binaires ne sont plus dans le paquet Git (pas de delta, pas de `git log -p` utile, `git blame` sans objet), le dépôt dépend d'un second service (stockage LFS : sauvegarde, quotas), et un clone sans `git-lfs` installé n'a que des pointeurs.
 
-**12.** En protocole v0, le serveur annonce **toutes** ses références dès la connexion, même pour récupérer une seule branche. Le v2 (par défaut côté client depuis Git 2.26) sépare les commandes : `ls-refs` avec des préfixes (`ref-prefix refs/heads/main`), puis `fetch`, et prend en charge les filtres (clone partiel), les *bundle URIs*. Avec des milliers d'étiquettes, l'annonce v0 représente des mégaoctets à chaque `fetch` ; en v2, seules les références demandées circulent.
+**12.** En protocole v0, le serveur annonce **toutes** ses références dès la connexion, même pour récupérer une seule branche. Le v2 (par défaut côté client depuis Git 2.26, avec un retour temporaire au v0 en 2.27 à cause d'un bogue) sépare les commandes : `ls-refs` avec des préfixes (`ref-prefix refs/heads/main`), puis `fetch`, et prend en charge les filtres (clone partiel), les *bundle URIs*. Avec des milliers d'étiquettes, l'annonce v0 représente des mégaoctets à chaque `fetch` ; en v2, seules les références demandées circulent.
 
 **13.** `ort` (*Ostensibly Recursive's Twin*), stratégie par défaut depuis Git 2.34 : même résultat que `recursive` dans la plupart des cas, beaucoup plus rapide (surtout avec des renommages), sans toucher à l'arbre de travail pendant le calcul, et une gestion plus juste de certains conflits de renommage. `rerere` (*reuse recorded resolution*) mémorise la résolution d'un conflit (image du conflit → résolution) dans `.git/rr-cache/` et la rejoue quand le même conflit réapparaît (rebase répétés, M01-E13) ; activé par `rerere.enabled=true`.
 
 **14.** Fichiers libres : un fichier par référence (problèmes avec beaucoup de références, noms insensibles à la casse sur certains systèmes, pas de mise à jour atomique de plusieurs références). `packed-refs` : un fichier texte unique pour les références anciennes, réécrit en entier à chaque suppression. *reftable* : format binaire en blocs, mises à jour atomiques de plusieurs références, lectures rapides même avec des millions de références, reflogs intégrés. Avec Git 2.47 : `git refs migrate --ref-format=reftable` (commande apparue en 2.46 ; certaines situations, comme les *worktrees*, peuvent bloquer la migration : à vérifier dans `git help refs`). Le format par défaut reste `files` jusqu'à Git 3.0.
 
-**15.** SHAttered (2017) a produit deux PDF de même SHA-1 par une attaque à préfixe choisi coûteuse ; Git utilise depuis la version 2.13 l'implémentation `sha1dc`, qui **détecte** les motifs de collision de ce type et refuse l'objet : l'attaque connue ne passe pas. Mais SHA-1 reste affaibli, d'où le travail sur SHA-256 : `git init --object-format=sha256` existe depuis Git 2.29 (`extensions.objectFormat`), l'interopérabilité entre dépôts SHA-1 et SHA-256 (traduction des empreintes) est en cours, et la prise en charge par les forges est partielle (GitLab : prise en charge expérimentale, à vérifier sur ta version). Git 3.0 prévoit SHA-256 par défaut pour les nouveaux dépôts.
+**15.** SHAttered (2017) a produit deux PDF de même SHA-1 par une collision à **préfixe identique**, très coûteuse (la collision à préfixe choisi, plus dangereuse, est venue en 2020 avec « SHA-1 is a Shambles ») ; Git utilise depuis la version 2.13 l'implémentation `sha1dc`, qui **détecte** les motifs de collision de ce type et refuse l'objet : l'attaque connue ne passe pas. Mais SHA-1 reste affaibli, d'où le travail sur SHA-256 : `git init --object-format=sha256` existe depuis Git 2.29 (`extensions.objectFormat`), l'interopérabilité entre dépôts SHA-1 et SHA-256 (traduction des empreintes) est en cours, et la prise en charge par les forges est partielle (GitLab : prise en charge expérimentale, à vérifier sur ta version). Git 3.0 prévoit SHA-256 par défaut pour les nouveaux dépôts.
 
 **16.** Est signé : l'objet commit lui-même (arbre, parents, auteur, *committer*, message), hors l'en-tête `gpgsig` qui contient la signature (`ssh-keygen -Y sign`, espace de noms `git`). GitLab affiche « Verified » si la signature est valide, si la clé est déclarée sur le compte avec l'usage « Signing » ou « Authentication & Signing », et si l'adresse du *committer* est une adresse **vérifiée** du compte. Supprimer la clé du compte ne change pas le statut des commits déjà signés ; la **révoquer** les fait passer à « Unverified » (documentation de GitLab, « Sign commits with SSH keys »).
 

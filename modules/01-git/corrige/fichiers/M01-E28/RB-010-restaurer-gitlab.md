@@ -58,6 +58,10 @@ admin@<HÔTE>:~$ sudo systemctl restart ssh
 admin@<HÔTE>:~$ sudo ls -l /etc/gitlab/gitlab-secrets.json /etc/gitlab/ssl/
 ```
 
+Les clés d'hôte de `git01` sont maintenant celles de l'hôte cible : ta prochaine connexion d'administration à son adresse affichera « REMOTE HOST IDENTIFICATION HAS CHANGED ». C'est attendu ici (vérifie que l'empreinte présentée est celle de `git01`), et c'est une raison de plus pour ne jamais donner à une VM de test l'adresse ou le nom de `git01`.
+
+Installe aussi la racine de la PKI interne sur l'hôte cible (M01-E04 : `/usr/local/share/ca-certificates/medisphere-provisoire.crt`, puis `update-ca-certificates`) : les contrôles de l'étape 7 en ont besoin.
+
 Le paquet lira `gitlab.rb` (même `external_url`, même profil mémoire, mêmes hooks) et **`gitlab-secrets.json`** lors de son premier `reconfigure` : sans ce fichier, les variables CI, les jetons de runner et les secrets 2FA restaurés seraient indéchiffrables.
 
 ### 5. Installer exactement la même version de GitLab CE
@@ -66,8 +70,11 @@ Le paquet lira `gitlab.rb` (même `external_url`, même profil mémoire, mêmes 
 admin@<HÔTE>:~$ curl -fsSL https://packages.gitlab.com/install/repositories/gitlab/gitlab-ce/script.deb.sh -o /tmp/gitlab-ce.sh   # relire, puis :
 admin@<HÔTE>:~$ sudo bash /tmp/gitlab-ce.sh
 admin@<HÔTE>:~$ sudo apt-get install gitlab-ce=<VERSION>-ce.0 && sudo apt-mark hold gitlab-ce
+admin@<HÔTE>:~$ sudo chown -R git:git /var/opt/gitlab/gitaly/custom_hooks   # restaurés AVANT la création du compte git
 admin@<HÔTE>:~$ sudo gitlab-ctl status
 ```
+
+Les hooks globaux ont été extraits à l'étape 4, quand le compte `git` n'existait pas encore : `tar` leur a laissé l'identifiant numérique de `git01`, qui n'est pas forcément celui du compte `git` créé par le paquet. Un hook qui n'appartient pas à `git` ne s'exécute pas : d'où le `chown`.
 
 ### 6. Restaurer les données
 
@@ -87,7 +94,7 @@ admin@<HÔTE>:~$ sudo gitlab-ctl reconfigure && sudo gitlab-ctl restart
 admin@<HÔTE>:~$ sudo gitlab-rake gitlab:check SANITIZE=true
 admin@<HÔTE>:~$ sudo gitlab-rake gitlab:doctor:secrets          # 0 erreur de déchiffrement attendue
 admin@<HÔTE>:~$ sudo gitlab-rake gitlab:artifacts:check gitlab:uploads:check
-admin@<HÔTE>:~$ curl -s localhost/-/readiness?all=1
+admin@<HÔTE>:~$ curl -s --resolve git01.par1.medisphere.internal:443:127.0.0.1 "https://git01.par1.medisphere.internal/-/readiness?all=1"
 ```
 
 Depuis `adm01`, sans toucher au DNS (le nom reste `git01.par1.medisphere.internal`) :

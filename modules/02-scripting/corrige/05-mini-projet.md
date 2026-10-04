@@ -20,7 +20,8 @@ Il n'y a pas « une » solution : il y a un projet qui passe ses contrôles et u
 | Scripts corrigés du palier 4 et leurs tests | [`M02-E37`](fichiers/M02-E37/), [`M02-E39`](fichiers/M02-E39/), [`M02-E40`](fichiers/M02-E40/), chien de garde [`M02-E41`](fichiers/M02-E41/) |
 | Spécification exécutable de Bash | [`fichiers/M02-E44/`](fichiers/M02-E44/) |
 | Guide d'astreinte v1 (palier 4 intégré) | [`fichiers/M02-E46/docs/astreinte.md`](fichiers/M02-E46/docs/astreinte.md) |
-| Tests de `ms-alerte` (script qui n'en avait pas) | [`fichiers/M02-E46/tests/bats/ms-alerte.bats`](fichiers/M02-E46/tests/bats/ms-alerte.bats) |
+| Tests des scripts qui n'en avaient pas : `ms-alerte`, chien de garde `ms-verif-fraicheur` | [`ms-alerte.bats`](fichiers/M02-E46/tests/bats/ms-alerte.bats), [`ms-verif-fraicheur.bats`](fichiers/M02-E46/tests/bats/ms-verif-fraicheur.bats) |
+| Taskfile final (`install:systeme` pour `adm01`, `install` pour un poste de développement) | [`fichiers/M02-E20/outils/Taskfile.yml`](fichiers/M02-E20/outils/Taskfile.yml) |
 
 **Démarche recommandée** (8 à 12 h)
 
@@ -29,7 +30,7 @@ Il n'y a pas « une » solution : il y a un projet qui passe ses contrôles et u
    - `feat(purge): ms-purge-rapports conforme à la politique PLAT-384` ;
    - `feat(journaux): ms-archiver-journaux sans échec silencieux` ;
    - `feat(systemd): chien de garde ms-verif-fraicheur` ;
-   - `test: spécification exécutable de Bash` et `test(alerte): tests de ms-alerte` ;
+   - `test: spécification exécutable de Bash` et `test: tests de ms-alerte et ms-verif-fraicheur` ;
    - `docs: guide d'astreinte v1, grille de revue`.
 3. **Mesurer** (30 min) : le dernier pipeline de `main` (onglet *Tests* : suites `bats` et `pytest`, zéro échec ; couverture affichée sur le job `pytest`). Une couverture de 80 à 90 % sur `medictl` est réaliste ; ce qui reste non couvert est en général le client HTTP réel et le point d'entrée : le dire dans le README plutôt que viser 100 % avec des tests qui ne testent rien.
 4. **Publier** (30 min) : la fusion du dernier `feat:` déclenche la release (version mineure), puis `publier-pypi`. Vérifier dans *Deploy → Package registry* : roue et archive source de la version.
@@ -41,7 +42,7 @@ Il n'y a pas « une » solution : il y a un projet qui passe ses contrôles et u
    admin@adm01:~$ sudo systemctl enable --now ms-verif-sauvegardes.timer ms-verif-fraicheur.timer
    admin@adm01:~$ sudo systemctl start ms-verif-sauvegardes.service ms-verif-fraicheur.service
    ```
-   `install:systeme` (M02-E26) copie seulement `bin/` et `lib/` dans `/usr/local` : la tâche `install` de M02-E20 réinstalle aussi `medictl` **depuis le clone** (`uv tool install --from .`), ce qui remplacerait la version du registre par une installation de développement (le contrôle le détecte). Après M02-E25, garde `install` pour le poste de développement et sépare clairement les deux usages dans le Taskfile et le README.
+   `install:systeme` (M02-E20, utilisée en M02-E26) copie seulement `bin/` et `lib/` dans `/usr/local` : `task install` enchaîne aussi `install:dev`, qui réinstalle `medictl` **depuis le clone** (`uv tool install --from .`) et remplacerait la version du registre par une installation de développement (le contrôle le détecte). `task install` reste la commande d'un poste de développement ; le README distingue les deux usages.
    Retour arrière documenté et testé : `uv tool install --force medictl==<VERSION-PRÉCÉDENTE> --index outils=<URL-REGISTRE>` pour la CLI ; pour les scripts, `git switch --detach v<VERSION-PRÉCÉDENTE> && task install:systeme`, puis `systemctl start` des services et lecture du résultat ; retour sur `main` ensuite.
 6. **Documenter** (2 h) : README, guide d'astreinte, CONTRIBUTING, ADR-0020 ; puis l'inventaire (`medictl inventaire --format markdown` entre les repères de M02-E21) et sa section « comptes et jetons » :
 

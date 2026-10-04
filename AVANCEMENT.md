@@ -16,7 +16,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | # | Module | Statut | Exercices | Remarques |
 |---|---|---|---|---|
 | 00 | Positionnement et montage du lab | relu | 50 | Relecture indépendante complète (§11). Restent à confirmer sur matériel réel : `GET /pools/{poolid}` déprécié (check-E17, E50), statut du stockage PBS avec ACL limitée au namespace (E22), format de la paperkey (E36), résolveur de l'image genericcloud Debian 13. Points « à vérifier sur ta version » signalés dans les corrigés |
-| 01 | Git et workflow professionnel | en cours | 46 + mini-projet | Rédaction partielle commitée (WIP) : palier 1 complet ; paliers 2, 3, 4-5 en cours. Reprise : compléter les fichiers manquants d'après le README du module, puis harmonisation et relecture |
+| 01 | Git et workflow professionnel | relu | 46 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~50 vérifications sur la doc officielle et le code source de GitLab). À confirmer sur le lab : conservation d'un `gitlab.rb` pré-installation, titre des processus Puma, lecture de `application/settings` en `read_api`, libellés exacts des refus (hooks, ref cachée), effet de *Remove blobs* sur les diffs de MR, valeurs `unhealthy_*` du runner, `python3` sur `pbs01`, suppression différée des projets |
 | 02 | Scripting d'automatisation | en cours | 45 + mini-projet | Rédaction partielle commitée (WIP) : intro et palier 1 rédigés ; paliers 2, 3, 4-5 en cours |
 | 03 | Images dorées | à faire | 24 + mini-projet | |
 | 04 | Gestion de configuration (Ansible) | à faire | 45 + mini-projet | |
@@ -41,7 +41,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | Date | Conversation | Travail |
 |---|---|---|
 | 2026-10-03/04 | 1 (fondations) | Plan, conventions, outillage lab, module 00 complet (4 rédacteurs + harmonisation + relecture indépendante), règles 9-12 ajoutées à la grille de relecture |
-| 2026-10-03 | 2 (bloc A) | Versions du bloc A figées (recherche web), décisions structurantes dans PLAN §4.8 et journal (MinIO → SeaweedFS, `runner01`, `dns02`, AWX en fiche/Semaphore, Molecule sur VMs Proxmox), README et cartes d'exercices des modules 01 à 06, bibliothèque de pannes commune |
+| 2026-10-03/04 | 2 (bloc A) | Versions du bloc A figées (recherche web), décisions structurantes dans PLAN §4.8 et journal (MinIO → SeaweedFS, `runner01`, `dns02`, AWX en fiche/Semaphore, Molecule sur VMs Proxmox), README et cartes d'exercices des modules 01 à 06, bibliothèque de pannes commune ; module 01 rédigé, harmonisé, relu (session interrompue une fois par la limite d'utilisation, reprise sans perte) |
 
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
@@ -52,3 +52,4 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 - **CI du bloc A** : un runner `shell` permanent (`runner01`) ; les exécuteurs Docker/Kubernetes viendront aux modules 12 et 19.
 - **TLS avant step-ca** : une CA provisoire `openssl` (M01) remplacée au M06.
 - **Versions éditeur plutôt que Debian** pour PowerDNS (5.x), Kea (3.0), step-ca (0.30), NetBox (4.6, la 4.7 n'étant pas encore validée par la collection Ansible et le provider) : les paquets de Debian 13 sont obsolètes ou en fin de vie.
+- **Module 01** : méthode de fusion d'équipe `rebase_merge` (commit de fusion, historique semi-linéaire) ; Admin Mode activé en E31 (jetons avec portée `admin_mode` ensuite) ; hooks serveur sur `plateforme/*` seulement ; sauvegarde applicative de GitLab vers PBS (`proxmox-backup-client`) en plus de la sauvegarde de VM ; runbooks RB-010 à RB-013.

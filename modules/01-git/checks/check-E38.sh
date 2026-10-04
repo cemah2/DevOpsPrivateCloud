@@ -3,11 +3,11 @@
 # shellcheck disable=SC2016  # les commandes entre apostrophes sont évaluées sur l'hôte distant
 #
 # check-E38.sh — M01-E38 « Panne : le runner ne prend plus les jobs »
-# Côté runner01 (service, résolution, TLS, jeton) et côté GitLab (réglages du runner).
-# Lecture seule : la vérification du jeton utilise POST /runners/verify, qui ne modifie rien
-# d'autre que la date de dernier contact du runner (ce que fait le runner toutes les 3 s).
-# Les réglages du runner se lisent par l'API d'administration (jeton des checks + admin_mode
-# une fois l'Admin Mode activé, M01-E31).
+# Côté runner01 (service, résolution, TLS) et côté GitLab (réglages du runner, dernier contact).
+# Lecture seule : le jeton du runner n'est jamais lu ni rejoué ; on constate qu'il est accepté
+# par la date de dernier contact que GitLab enregistre à chaque demande de jobs authentifiée
+# (contacted_at, toutes les ~3 s pour un runner sain). Les réglages du runner se lisent par
+# l'API d'administration (jeton des checks + admin_mode une fois l'Admin Mode activé, M01-E31).
 
 # shellcheck source=_m01-palier4.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m01-palier4.sh"
@@ -21,13 +21,6 @@ check_ssh "runner01 : git01.par1.medisphere.internal résout vers 10.10.20.12" r
   "getent ahostsv4 $_M01_FQDN_GIT | awk '{print \$1}' | sort -u | grep -qx '10\.10\.20\.12'"
 check_ssh "runner01 : GitLab joignable en HTTPS, certificat vérifié" runner01 \
   "curl -sf -o /dev/null --max-time 10 https://$_M01_FQDN_GIT/users/sign_in"
-check_ssh "runner01 : le jeton du runner est accepté par GitLab" runner01 '
-  t=$(sudo -n awk -F"\"" "/^[[:space:]]*token[[:space:]]*=/ {print \$2; exit}" /etc/gitlab-runner/config.toml)
-  s=$(sudo -n cat /etc/gitlab-runner/.runner_system_id 2>/dev/null || true)
-  [ -n "$t" ] || exit 1
-  printf "token=%s&system_id=%s" "$t" "$s" | curl -sf -o /dev/null --max-time 10 -X POST --data @- \
-    https://git01.par1.medisphere.internal/api/v4/runners/verify'
-
 _m01_rid="$(gitlab_api 'runners/all?type=instance_type&tag_list=shell,socle&per_page=100' 2>/dev/null \
   | jq -r 'if length == 1 then .[0].id else empty end' 2>/dev/null)" || _m01_rid=""
 check_cmd "GitLab : exactement un runner d'instance étiqueté shell et socle" test -n "$_m01_rid"
@@ -38,6 +31,11 @@ if [[ -n "$_m01_rid" ]]; then
     _m01_api_ok "runners/$_m01_rid" '.access_level == "not_protected"'
   check_cmd "runner $_m01_rid : ne prend pas les jobs sans étiquette" \
     _m01_api_ok "runners/$_m01_rid" '.run_untagged == false'
+  # Un jeton refusé (403) ou une forge injoignable n'actualisent plus contacted_at. Seuil de
+  # 180 s : marge pour l'interrogation longue de Workhorse (jusqu'à 60 s si elle est activée).
+  check_cmd "runner $_m01_rid : a contacté GitLab avec un jeton valide il y a moins de 3 min" \
+    _m01_api_ok "runners/$_m01_rid" \
+    '(.contacted_at // "") | length > 0 and (now - (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601)) < 180'
 else
   skip "réglages du runner dans GitLab" "runner du socle non identifié"
 fi

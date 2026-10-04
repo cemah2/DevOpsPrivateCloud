@@ -105,7 +105,8 @@ check_ssh "tous les services de gitlab-ctl sont en marche" git01 \
 check_ssh "supervision embarquée arrêtée (ni prometheus, ni alertmanager, ni node-exporter)" git01 \
   's=$(sudo -n gitlab-ctl status) && ! grep -Eq "^[a-z]+: (prometheus|alertmanager|node-exporter):" <<<"$s"'
 check_ssh "Puma en mode simple (aucun processus « cluster worker »)" git01 \
-  'pgrep -f "puma .*gitlab" >/dev/null && ! pgrep -f "puma: cluster worker" >/dev/null'
+  'pgrep -f "[p]uma .*gitlab" >/dev/null && ! pgrep -f "[p]uma: cluster worker" >/dev/null'
+# (les crochets empêchent pgrep de reconnaître le shell distant qui porte cette commande)
 
 # --- 5. HTTPS vu depuis adm01 --------------------------------------------------------------
 title "5/5 HTTPS depuis adm01"

@@ -35,7 +35,7 @@ API à fournir (les vérifications, les autres scripts du module et les tests de
 | `pve_wait_task UPID [DÉLAI_MAX]` | attend la fin de la tâche ; 0 si `exitstatus` vaut `OK` (ou `WARNINGS…`), 1 si elle échoue ou dépasse DÉLAI_MAX secondes (défaut 600) |
 
 - Chargement, en tête de chaque script de `bin/` (après le mode strict) : `source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"`. `readlink -f` résout les liens symboliques ; `BASH_SOURCE[0]` plutôt que `$0` permet aussi de charger un script par `source` dans les tests (E14).
-- Fichier d'accès à l'API : `${MS_PVE_ENV:-~/.config/workbook/pve-api.env}` (format M00-E17). Les variables `PVE_*` déjà présentes dans l'environnement l'emportent (cas de la CI). Un fichier accessible au groupe ou aux autres est **refusé**. Le contrôle planifié de E26 utilisera `MS_PVE_ENV` pour pointer vers un jeton en lecture seule.
+- Fichier d'accès à l'API : `${MS_PVE_ENV_FILE:-~/.config/workbook/pve-api.env}` (format M00-E17). Les variables `PVE_*` déjà présentes dans l'environnement l'emportent (cas de la CI). Un fichier accessible au groupe ou aux autres est **refusé**. Le contrôle planifié de E26 utilisera `MS_PVE_ENV_FILE` pour pointer vers un jeton en lecture seule.
 - TLS vérifié avec `PVE_CACERT` ; le secret ne doit apparaître ni dans la liste des processus, ni dans `set -x`, ni dans un fichier temporaire lisible.
 - Codes retour communs : 0, 1, 2 (usage), 3 (garde-fou).
 
@@ -296,7 +296,7 @@ Un seul piège `EXIT` qui nettoie, et des pièges `INT`/`TERM` qui se contentent
 
 **Travail demandé**
 1. Choisis ta stratégie de double et justifie-la dans le fichier d'aide : faux exécutable `curl` en tête du `PATH` (il teste aussi `pve_api`), ou redéfinition de `pve_api` après `source` (plus simple, mais ne teste pas la plomberie HTTP). Tu peux combiner les deux.
-2. Prépare un environnement par test : fichier d'accès factice (mode 600, faux secret), `MS_PVE_ENV`, `MS_LOCK_DIR` et dossiers de travail dans `$BATS_TEST_TMPDIR`, variables `PVE_*` de l'appelant neutralisées.
+2. Prépare un environnement par test : fichier d'accès factice (mode 600, faux secret), `MS_PVE_ENV_FILE`, `MS_LOCK_DIR` et dossiers de travail dans `$BATS_TEST_TMPDIR`, variables `PVE_*` de l'appelant neutralisées.
 3. Tests de la bibliothèque (au moins 12) : format et destination des journaux, codes de `die`, `require_cmd`, `confirm` sans terminal et avec `MS_YES=1`, `retry` (nombre d'essais, délais croissants sans attendre vraiment, variable `n` de l'appelant), `pve_api` (données, erreur 403 avec motif, erreur 400 avec détail, erreur réseau, fichier 644 refusé, priorité de l'environnement, **secret absent des arguments**), `pve_wait_task` (OK, échec), `lock_or_die` (second détenteur refusé en 3, verrou libéré à la sortie).
 4. Tests de `ms-snapshot` (au moins 10) : codes d'usage et de refus, aucune écriture envoyée en cas de refus, fonction de sélection (préfixe qui en prolonge un autre, moins de N instantanés), exécution complète (une création, deux suppressions des plus anciens), `--dry-run`, échec de création sans purge, tâche en échec, API injoignable, exécution concurrente refusée.
 5. Ajoute au moins un test pour `ms-ranger` ou `ms-export-config`.
@@ -578,7 +578,7 @@ Avec `responses.RequestsMock()` comme gestionnaire de contexte, enregistre plusi
 - Priorité, du plus faible au plus fort : fichier `MEDICTL_ENV_FILE` (défaut `~/.config/workbook/pve-api.env`), puis variables d'environnement `PVE_*` (la CI de E24 et E25 n'aura que des variables).
 - Nouvelle commande : `medictl config` affiche la configuration **effective** (une ligne par variable), le secret masqué (`****`) et l'origine de chaque valeur (fichier ou environnement).
 - Un fichier accessible au groupe ou aux autres est refusé (code 1, message qui dit quoi corriger). `PVE_CACERT` absent : magasin de certificats du système ; jamais de vérification désactivée.
-- La configuration quitte `pve.py` (E08) pour un module `medictl/config.py` ; garde les noms de E08 (`PveConfig`, `ConfigError`) pour ne pas casser les imports.
+- La configuration quitte `pve.py` (E08) pour un module `medictl/config.py` ; garde les noms de E08 (`PveConfig`, `ConfigError`, `charger_config()`, `connexion()`) et laisse-les importables depuis `medictl.pve`, pour ne casser ni les imports ni la vérification de E08.
 - Le `.gitignore` du projet (E02) ignore déjà `*.env`.
 
 **Travail demandé**
@@ -634,13 +634,13 @@ Un `logging.Filter` posé sur le gestionnaire (pas sur un journal) voit tous les
 **Contexte technique**
 - Task 3 : https://taskfile.dev (« Guide », « Usage », notamment `deps`, `preconditions`, `sources`/`generates`, `--status`, `--list`) ; `version: '3'` reste obligatoire.
 - Tâches attendues (noms imposés, réutilisés par la CI en E24 et par les exercices suivants) : `lint` (ShellCheck et shfmt sans option, réglages lus dans `.shellcheckrc` et `.editorconfig` ; `ruff check` et `ruff format --check`), `test` (bats et pytest, rapports JUnit dans `rapports/`, déjà ignoré par Git), `build` (paquet `medictl` dans `dist/` avec `uv build`, **seulement** si les sources ont changé), `install`, `ci` (lint, test, build dans cet ordre), `clean`. Chaque tâche a une description (`desc`).
-- `task install` installe une copie **figée** : `bin/ms-*` dans `/usr/local/bin`, `lib/ms-commun.sh` dans `/usr/local/lib` (les scripts trouvent la bibliothèque par `readlink -f`, donc `/usr/local/bin/../lib`), et `medictl` comme outil uv (`uv tool install`). Le contrôle planifié de E26 exécutera `/usr/local/bin/ms-verif-sauvegardes`, jamais le clone de travail.
-- `sudo` sur `adm01` : l'utilisateur `admin` l'a sans mot de passe (cloud-init) ; `task install` est la seule tâche qui l'utilise.
+- L'installation se fait en deux tâches, réunies par `task install` : `install:systeme` copie une version **figée** des scripts (`bin/ms-*` dans `/usr/local/bin`, `lib/ms-commun.sh` dans `/usr/local/lib` ; les scripts trouvent la bibliothèque par `readlink -f`, donc `/usr/local/bin/../lib`), `install:dev` installe `medictl` depuis la copie de travail comme outil uv (`uv tool install`). Le contrôle planifié de E26 exécutera `/usr/local/bin/ms-verif-sauvegardes`, jamais le clone de travail. À partir de E25, `medictl` viendra du registre de paquets : sur `adm01`, seule `install:systeme` servira encore.
+- `sudo` sur `adm01` : l'utilisateur `admin` l'a sans mot de passe (cloud-init) ; `install:systeme` est la seule tâche qui l'utilise (lance `task` en `admin`, jamais `sudo task`).
 
 **Travail demandé**
 1. Écris `Taskfile.yml`. Pour `build`, déclare les sources et le produit ; lance deux fois et observe. Que fait `task --status build` ?
 2. Les tâches `lint` et `test` dépendent d'un environnement Python synchronisé : une tâche `setup` (`uv sync --locked`) appelée une seule fois même si plusieurs tâches en dépendent. Pourquoi `--locked` en CI comme en local ?
-3. `task install` : copie, pas lien symbolique. Ajoute une précondition qui refuse d'installer si `bin/` ou `lib/` ont des modifications non commitées. Justifie dans ton journal.
+3. `install:systeme` : copie, pas lien symbolique. Ajoute une précondition qui refuse d'installer si `bin/` ou `lib/` ont des modifications non commitées. Justifie dans ton journal, et explique pourquoi `medictl` a sa propre tâche (`install:dev`).
 4. Passe des arguments à pytest à travers Task (`task test:py -- -k garde`) : comment ?
 5. Écris le `Makefile` équivalent (`make lint`, `make test`, `make build` avec une vraie cible fichier, `make install`, `make ci`, `make help`). Note dans ton journal trois différences concrètes avec Task, et ce qui t'a fait perdre du temps.
 6. Mets à jour `README.md` (section « Démarrer ») : une ligne par tâche.
@@ -648,7 +648,7 @@ Un `logging.Filter` posé sur le gestionnaire (pas sur un journal) voit tous les
 8. MR `build: Taskfile et Makefile du projet`, fusion.
 
 **Critères de réussite**
-- [ ] `task --list` décrit au moins `lint`, `test`, `build`, `install` ; `task lint` et `task test` réussissent ; `task test` produit des rapports JUnit dans `rapports/`.
+- [ ] `task --list` décrit au moins `lint`, `test`, `build`, `install`, `install:systeme`, `install:dev` ; `task lint` et `task test` réussissent ; `task test` produit des rapports JUnit dans `rapports/`.
 - [ ] Après `task build`, `task --status build` indique qu'il n'y a rien à refaire ; `dist/` contient la roue `medictl`.
 - [ ] `make -n lint` et `make -n test` sont valides.
 - [ ] `/usr/local/bin/ms-snapshot` est un fichier (pas un lien), qui trouve sa bibliothèque ; `uv tool list` montre `medictl`.

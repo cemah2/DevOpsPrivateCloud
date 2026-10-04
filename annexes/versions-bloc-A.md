@@ -8,6 +8,7 @@
 |---|---|
 | Git 2.47 (Debian 13) | La branche par défaut reste `master` tant que Git 3.0 n'est pas sorti : le workbook fixe `init.defaultBranch=main`. Les changements annoncés pour Git 3.0 (SHA-256 et reftable par défaut, `safe.bareRepository=explicit`) ne sont pas actifs. |
 | GitLab CE 19.x | Paquet officiel pour Debian 13 depuis la 18.5. PostgreSQL 17 minimum (embarqué par omnibus). Mattermost retiré de l'omnibus. 8 Go de RAM au strict minimum (profil « mémoire contrainte » de la doc), 16 Go recommandés. Les jetons d'accès personnels ont une **date d'expiration obligatoire** (365 jours max. par défaut). |
+| GitLab 19.2+ (NGINX) | Les réglages NGINX propres à l'application (certificat, redirection HTTP, en-têtes) passent sous `gitlab_rails['nginx'][…]` ; les clés `nginx[…]` restent pour le démon (workers, gzip). Les anciennes clés fonctionnent encore avec un avertissement de dépréciation : beaucoup de tutoriels les utilisent. |
 | GitLab Runner 19.x | Enregistrement par **jeton d'authentification `glrt-`** créé dans l'interface (`gitlab-runner register --token …`) ; l'ancien `--registration-token` est déprécié (suppression prévue en 20.0). Installer aussi `gitlab-runner-helper-images`. |
 | Fonctions Premium | Approbations obligatoires, règles de push (*push rules*), propriétaires de code obligatoires : **pas dans CE**. Les exercices s'en passent (hooks côté serveur, CI obligatoire, protections de branches). |
 | pre-commit 4.x | Noms de stages `pre-commit`, `pre-push`, `commit-msg` (les anciens `commit`, `push` sont dépréciés). |

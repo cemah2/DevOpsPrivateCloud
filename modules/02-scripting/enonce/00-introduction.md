@@ -73,8 +73,10 @@ outils/
 ├── .shellcheckrc             règles ShellCheck du projet (E04)
 ├── .editorconfig             style commun, lu aussi par shfmt (E04)
 ├── .releaserc.json, commitlint.config.mjs, CONTRIBUTING.md, .gitlab/   standard M01 (E02)
-├── Taskfile.yml              tâches lint, test, build, install (E20) ; Makefile équivalent pour comparaison
+├── Taskfile.yml              tâches lint, test, build, install, install:systeme (E20) ; Makefile équivalent
 ├── bin/                      scripts Bash exécutables, préfixe ms- (E03, E11, E26…)
+├── sbin/, sudoers.d/         ms-diag, outil autorisé par sudo, et sa règle (E29)
+├── outils-ci/                installation des outils de la CI sur runner01 (E24)
 ├── lib/
 │   ├── ms-commun.sh          bibliothèque Bash commune (E10)
 │   └── jq/                   filtres jq réutilisables (E05)
@@ -84,7 +86,7 @@ outils/
 │   └── python/               tests de medictl (E18)
 ├── pyproject.toml, uv.lock, .python-version   projet Python géré par uv (E07)
 ├── src/medictl/              CLI Python (E07, E08, E15-E19, E21)
-└── docs/                     README, guide d'astreinte (E31)
+└── docs/                     guide d'astreinte (E31), analyses (E44) ; README.md à la racine
 ```
 
 ### Conventions communes à tous les outils
@@ -121,6 +123,7 @@ Rien de nouveau à renseigner si tu as suivi le module 01 ; vérifie simplement 
 | `WB_GITLAB_TOKEN_FILE` | `~/.config/workbook/gitlab-checks.token` | Jeton en lecture (`read_api`) utilisé par les vérifications |
 | `WB_GITLAB_ADMIN_TOKEN_FILE` | `~/.config/workbook/gitlab-admin.token` | Jeton d'administration : scripts de ressources et de panne |
 | `WB_PVE_HOST` | `pve01` | Alias SSH de l'hyperviseur (vérifications) |
+| `WB_PBS_HOST` | `pbs01` | Alias SSH de Proxmox Backup Server (vérification de E26) |
 
 ---
 

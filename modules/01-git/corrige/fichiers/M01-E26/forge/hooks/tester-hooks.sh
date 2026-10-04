@@ -20,6 +20,14 @@ set -euo pipefail
 ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS="${1:-$ICI/pre-receive.d}"
 [[ -d "$HOOKS" ]] || { echo "Répertoire de hooks introuvable : $HOOKS" >&2; exit 2; }
+# Chemin absolu : le script change de répertoire plus bas (un chemin relatif ne
+# trouverait plus aucun hook, et tous les scénarios « accepté » passeraient à tort).
+HOOKS="$(cd "$HOOKS" && pwd)"
+_nb_hooks=0
+for _h in "$HOOKS"/*; do
+  [[ -f "$_h" && -x "$_h" && "$_h" != *~ ]] && _nb_hooks=$((_nb_hooks + 1))
+done
+((_nb_hooks > 0)) || { echo "Aucun hook exécutable dans $HOOKS : rien à tester." >&2; exit 2; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

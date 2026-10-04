@@ -79,7 +79,7 @@ Un runner ne reçoit aucune connexion : il **interroge** GitLab (`POST /api/v4/j
 - Runner créé par l'API (`POST /user/runners`, portée `create_runner`), reproductible par script.
 
 **Pièges classiques**
-- Coller le jeton `glrt-` dans la commande : il reste dans `~/.bash_history` et dans `ps` pendant l'exécution.
+- Coller le jeton `glrt-` en clair dans la commande : il reste dans `~/.bash_history`. Passé par une variable (`--token "$JETON"`), il n'est plus dans l'historique mais reste lisible dans `ps` le temps de l'enregistrement (quelques secondes, sur une VM sans autre utilisateur : risque accepté). ⚠️ À vérifier sur ta version : `gitlab-runner register --help` indique la variable d'environnement associée à `--token`, qui éviterait aussi `ps`.
 - Passer `--tag-list` ou `--run-untagged` à `register` avec un jeton `glrt-` : sans effet, les réglages sont côté serveur.
 - Versions différentes de `gitlab-runner` et `gitlab-runner-helper-images` : apt refuse (dépendances non satisfaites).
 - Installer les outils pour root seulement (`pip install --user`, `uv tool install` sans variables) : « command not found » dans les jobs.
@@ -189,13 +189,14 @@ Que des `docs:` et `chore:` : aucune version (« There are no relevant changes �
 admin@adm01:~$ mkdir -p ~/.local/release-tools && cp ~/src/ci-templates/outils/release-tools/package*.json ~/.local/release-tools/
 admin@adm01:~$ (cd ~/.local/release-tools && npm ci --omit=dev --ignore-scripts)
 admin@adm01:~/medisphere$ GITLAB_TOKEN="$(<~/.config/workbook/gitlab-admin.token)" \
+    GITLAB_URL=https://git01.par1.medisphere.internal \
     NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
     ~/.local/release-tools/node_modules/.bin/semantic-release --dry-run --no-ci
 … The next release version is 1.0.0
 … Release note for version 1.0.0: …
 ```
 
-La variable n'existe que pour cette commande (pas d'`export`) et n'est pas affichée. Le mode simulation vérifie quand même les droits et l'accès en push (`git push --dry-run`) : c'est utile.
+La variable n'existe que pour cette commande (pas d'`export`) et n'est pas affichée. **`GITLAB_URL` est indispensable** : hors d'un job GitLab CI, `@semantic-release/gitlab` (fichier `lib/resolve-config.js`, version 13) prend `gitlabUrl`, puis `GL_URL`/`GITLAB_URL`, sinon `https://gitlab.com` ; sans elle, ton jeton d'administration partirait vers `gitlab.com` (et la simulation échouerait). Dans un job, l'extension déduit l'adresse de `CI_PROJECT_URL` et `CI_API_V4_URL`. Le mode simulation vérifie quand même les droits et l'accès en push (`git push --dry-run`) : c'est utile.
 
 *3. Jeton et protections.* *Settings → Access tokens* : nom `bot-release`, rôle *Maintainer*, portées `api` et `write_repository`, expiration dans un an au plus (note la date dans le runbook et dans l'agenda de l'équipe). *Settings → CI/CD → Variables* : `GITLAB_TOKEN`, *Protect variable* et *Mask variable* cochés (et *Masked and hidden* si ta version le propose : la valeur ne se relit plus dans l'interface). *Settings → Repository → Protected tags* : `v*`, *Allowed to create* : Maintainers.
 - Maintainer : seuls les Maintainers peuvent créer des étiquettes `v*` protégées ; Developer suffirait pour l'API des Releases, pas pour l'étiquette.
@@ -228,6 +229,7 @@ Résolution des extensions : semantic-release charge ses extensions et ses prér
 - Variable masquée refusée : la valeur doit respecter les contraintes de masquage (longueur, caractères) ; un jeton de projet les respecte.
 - Jeton Developer : la création de l'étiquette protégée `v*` échoue.
 - Oublier `preset: conventionalcommits` dans **les deux** extensions : analyse et notes incohérentes.
+- Simulation sur `adm01` sans `GITLAB_URL` : l'extension GitLab vise `gitlab.com` et lui présente ton jeton.
 - `semantic-release --version` affiche parfois la version du `package.json` du dossier courant : pour connaître la version installée, `npm ls --prefix /opt/release-tools --depth=0`.
 
 **En production chez MédiSphère**
@@ -305,6 +307,7 @@ Le hook serveur est le seul contrôle que le client ne peut pas contourner : il 
 - Contrôler seulement l'arbre du dernier commit pour la taille : un gros fichier ajouté puis supprimé reste dans le dépôt.
 - Hook non exécutable, ou appartenant à root : ignoré (ou erreur) selon les cas — un contrôle qui ne tourne pas.
 - `echo` du message sans le préfixe `GL-HOOK-ERR:` : selon la version, l'utilisateur ne voit qu'un refus générique.
+- Un banc d'essai qui ne trouve aucun hook (chemin relatif, droits d'exécution perdus à la copie) « réussit » tous les scénarios d'acceptation : il doit échouer s'il n'a rien exécuté (c'est ce que fait `tester-hooks.sh`).
 - Écrire le hook sur `git01` à la main sans le versionner : perdu à la prochaine reconstruction (E28 sauvegarde le dossier, mais la source de vérité est le dépôt).
 
 **En production chez MédiSphère**
@@ -406,13 +409,13 @@ La sauvegarde de VM (`lab-nuit`) restaure **toute la machine telle qu'elle étai
 
 ```
 admin@git01:~$ sudo gitlab-backup create GZIP_RSYNCABLE=yes
-… Backup 1759446000_2026_10_03_19.3.2 is done.
+… Backup 1759446000_2026_10_03_19.3.2-ce is done.
 admin@git01:~$ sudo gitlab-ctl backup-etc --backup-path /var/opt/gitlab/config_backup
 admin@git01:~$ sudo tar -tf /var/opt/gitlab/backups/*_gitlab_backup.tar | head
 admin@git01:~$ sudo tar -xOf /var/opt/gitlab/backups/<ID>_gitlab_backup.tar backup_information.yml
 ```
 
-(Format exact de l'identifiant à vérifier sur ta version : horodatage, date, version, et un suffixe d'édition selon les versions.) `GZIP_RSYNCABLE=yes` rend la compression « resynchronisable » : une petite modification ne change qu'une petite partie du fichier compressé, et la déduplication de PBS (blocs de taille variable) retrouve le reste.
+(Format de l'identifiant : horodatage, date, version suivie de l'édition, `-ce` ici ; c'est lui qu'attend `gitlab-backup restore BACKUP=…`.) `GZIP_RSYNCABLE=yes` rend la compression « resynchronisable » : une petite modification ne change qu'une petite partie du fichier compressé, et la déduplication de PBS (blocs de taille variable) retrouve le reste.
 
 *3. PBS* :
 
@@ -672,7 +675,7 @@ SSO avec MFA (M24), revue trimestrielle des comptes, jetons et clés, journaux d
 | 11 | `.gitlab-ci.yml` : `variables` | `GIT_DEPTH: 1` global | Fonctionnement | Moyenne | Casse les jobs propres au projet qui ont besoin d'historique (release : « no previous release », version fausse) | Supprimer (chaque job du gabarit fixe ce dont il a besoin) |
 | 12 | `.pre-commit-config.yaml` | Pas de `default_install_hook_types` | Fonctionnement | Moyenne | `pre-commit install` n'installe que le type `pre-commit` : commitlint ne tourne jamais | `default_install_hook_types: [pre-commit, commit-msg]` |
 | 13 | `.pre-commit-config.yaml` : commitlint | `stages: [commit]` | Fonctionnement | Moyenne | Nom de stage obsolète (`pre-commit` 4), et mauvais stage : commitlint a besoin du message, donc de `commit-msg` | `stages: [commit-msg]` |
-| 14 | `.pre-commit-config.yaml` : `rev: main` | Référence mobile | Reproductibilité / sécurité | Moyenne | pre-commit la résout une fois et ne la met plus à jour (avertissement « mutable reference ») : chaque poste a une version différente ; et on exécute le code de la branche du jour | Étiquette (`v6.0.0`), mise à jour par `pre-commit autoupdate` en MR |
+| 14 | `.pre-commit-config.yaml` : `rev: main` | Référence mobile | Reproductibilité / sécurité | Moyenne | pre-commit la résout une fois et ne la met plus à jour (avertissement « mutable reference ») : chaque poste a une version différente ; et on exécute le code de la branche du jour | Version figée : empreinte de commit (`pre-commit autoupdate --freeze`, comme la référence de M01-E15) ou au minimum une étiquette (`v6.0.0`), mise à jour par MR |
 | 15 | `.pre-commit-config.yaml` : gitleaks | `v8.16.0` et `gitleaks-docker` | Fonctionnement | Moyenne | Docker absent sur `adm01` (M12) : hook en échec, donc contourné ; version ancienne (règles de détection périmées) | `gitleaks` 8.30.x, hook `gitleaks` |
 | 16 | `.pre-commit-config.yaml` : `--maxkb=50000` | Seuil de 50 Mo | Cohérence | Faible | Incohérent avec le hook serveur (5 Mio, E26) : le développeur découvre le refus au push au lieu du commit | `--maxkb=5120` |
 | 17 | `.pre-commit-config.yaml` : `pytest` | Tests complets à chaque commit | Fonctionnement | Faible | Plusieurs secondes à minutes par commit : l'équipe finit par utiliser `--no-verify`, qui contourne aussi les autres hooks | Tests en CI (job `tests`) |
@@ -686,7 +689,7 @@ Remarques mineures, non comptées : `fail_fast: true` (masque les autres erreurs
 
 **Ordre de traitement** : ce qui expose (1, 2, 3, 4), puis ce qui bloque ou fausse le service (5, 18, 6, 7, 12, 13, 19, 9), puis la reproductibilité et la cohérence (8, 10, 11, 14, 15, 16, 17, 20).
 
-**Version corrigée** : [`.gitlab-ci.yml`](fichiers/M01-E32/.gitlab-ci.yml) (gabarits `v1` + job `tests` étiqueté, `uv sync --locked`), [`.pre-commit-config.yaml`](fichiers/M01-E32/.pre-commit-config.yaml) (exemple autonome ; dans le projet réel, reprendre la référence de M01-E15), [`.releaserc.json`](fichiers/M01-E32/.releaserc.json) (= référence de E25). Validation : `pre-commit validate-config` (aucun avertissement) et éditeur de pipeline de GitLab.
+**Version corrigée** : [`.gitlab-ci.yml`](fichiers/M01-E32/.gitlab-ci.yml) (gabarits `v1` + job `tests` étiqueté, `uv sync --locked`), [`.pre-commit-config.yaml`](fichiers/M01-E32/.pre-commit-config.yaml) (référence de M01-E15, avec la limite de taille alignée sur le hook serveur), [`.releaserc.json`](fichiers/M01-E32/.releaserc.json) (= référence de E25). Validation : `pre-commit validate-config` (aucun avertissement) et éditeur de pipeline de GitLab.
 
 **Conseils à Lucas**
 - « Ça marche sur ma branche » ne teste qu'un événement : déroule les autres (MR, fusion, collègue, nouveau poste, nouvelle version d'outil) et vérifie ce qui **ne doit pas** se produire.

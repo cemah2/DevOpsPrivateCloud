@@ -62,7 +62,8 @@ def lire_env(chemin: Path) -> dict[str, str]:
 def session_api(cfg: dict[str, str]) -> requests.Session:
     """Session avec TLS vérifié, jeton dans un en-tête, reprises bornées sur GET."""
     session = requests.Session()
-    session.verify = cfg.get("PVE_CACERT") or True  # jamais False
+    # Pas de « session.verify = … » : requests le remplacerait par REQUESTS_CA_BUNDLE ou
+    # CURL_CA_BUNDLE s'ils sont définis. L'autorité est passée à chaque requête (verify=).
     session.headers["Authorization"] = (
         f"PVEAPIToken={cfg['PVE_TOKEN_ID']}={cfg['PVE_TOKEN_SECRET']}"
     )
@@ -82,7 +83,11 @@ def lire_ressources(fichier: Path | None) -> list[dict]:
     cfg = lire_env(FICHIER_ENV)
     url = cfg["PVE_API_URL"].rstrip("/") + "/cluster/resources"
     try:
-        reponse = session_api(cfg).get(url, timeout=(5, 30))
+        reponse = session_api(cfg).get(
+            url,
+            timeout=(5, 30),
+            verify=cfg.get("PVE_CACERT") or True,  # jamais False
+        )
     except requests.exceptions.SSLError as exc:
         raise Erreur(f"certificat de Proxmox refusé (PVE_CACERT ?) : {exc}") from exc
     except requests.exceptions.RequestException as exc:

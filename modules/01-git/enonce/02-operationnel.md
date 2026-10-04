@@ -109,7 +109,7 @@ Si le script répond « aucune MR ouverte depuis la branche docs/fiche-forge »,
 | Pipeline réussi obligatoire | pas encore : il arrive en E24 |
 
 - Script à écrire : `~/lab-scripts/gitlab-proteger-projet.sh GROUPE/PROJET`, qui applique ces règles par l'API avec le jeton d'administration, sans l'afficher. Il doit être **idempotent** (relancé, il ne casse rien et le dit), proposer un mode `--dry-run`, et passer `shellcheck`.
-- Le bac à sable `formation/git-labo` reste **sans protection** : n'y applique pas ces règles.
+- Le bac à sable `formation/git-labo` garde la protection par défaut de GitLab (les scripts de `ressources/` y poussent sur `main` avec ton compte) : n'y applique pas ces règles.
 - Approbations obligatoires, règles d'approbation, *push rules* (contrôle du message, de la taille des fichiers, des secrets, de la signature au push) et *Code Owners* obligatoires sont des fonctions **Premium** : elles n'existent pas dans GitLab CE.
 
 > ⚠️ **Attention** : une fois `main` protégée en « No one », **toi non plus** ne peux plus y pousser, même en administrateur. Tout passe par une MR. Si une urgence l'exige, un Maintainer peut lever la protection le temps d'une opération : c'est visible, et il faut la remettre aussitôt. Avant de commencer, vérifie que ton clone `~/medisphere` n'a aucun commit local non publié sur `main`.
@@ -668,7 +668,7 @@ Un cherry-pick applique la différence entre un commit et son parent. Si les lig
 **Contexte technique**
 - Préfixes des jetons GitLab (documentation « GitLab token overview ») : `glpat-` (jetons d'accès personnels, d'emprunt d'identité, de projet et de groupe), `gldt-` (jeton de déploiement), `glrt-` (runner, E23)…
 - Jetons existants (E05) : `workbook-checks` (`read_api`, 1 an au plus) et `workbook-admin` (`api`, 90 jours au plus), fichiers `~/.config/workbook/gitlab-checks.token` et `gitlab-admin.token` (600, dossier 700). Quand l'*Admin Mode* sera activé (M01-E31), ils seront recréés avec la portée `admin_mode` en plus : c'est la seule portée supplémentaire admise.
-- Rotation par l'API : sans date explicite, GitLab donne au nouveau jeton une validité d'**une semaine**. Faire tourner un jeton déjà révoqué révoque toute sa « famille » (détection de réutilisation).
+- Rotation par l'API : sans date explicite, GitLab donne au nouveau jeton une validité d'**une semaine** (avec la politique par défaut, qui impose une date d'expiration). Faire tourner un jeton déjà révoqué révoque toute sa « famille » (détection de réutilisation).
 - Clé de déploiement : `~/.ssh/id_ed25519_deploy_gitlabo` (ed25519, usage machine), déclarée en **lecture seule** sur `formation/git-labo`, titre `labo-lecture`.
 - Jeton de projet de test : `lecture-labo` sur `formation/git-labo`, rôle Reporter, portée `read_repository`, 7 jours.
 - Registre : `docs/socle/registre-secrets.md` dans `plateforme/medisphere`, par MR.
@@ -701,7 +701,7 @@ API : `GET /personal_access_tokens` (avec `user_id` pour un administrateur), `GE
 
 <details><summary>Indice 2</summary>
 
-Pour forcer une clé SSH précise : `GIT_SSH_COMMAND='ssh -i <clé> -o IdentitiesOnly=yes'`. Sans `IdentitiesOnly`, ton agent propose aussi ta clé personnelle, et le test ne prouve rien.
+Pour forcer une clé SSH précise : `GIT_SSH_COMMAND='ssh -i <clé> -o IdentitiesOnly=yes'`. Sans `IdentitiesOnly`, ton agent propose aussi ta clé personnelle, et le test ne prouve rien. Relis aussi le bloc `Host *` de ton `~/.ssh/config` (M00-E15) : une connexion déjà ouverte vers le même hôte et le même utilisateur peut être **réutilisée**, avec l'identité qui l'a ouverte.
 </details>
 
 <details><summary>Indice 3</summary>

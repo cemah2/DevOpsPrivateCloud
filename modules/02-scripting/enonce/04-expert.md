@@ -113,7 +113,7 @@ Un message d'erreur qui cite un chemin te dit aussi **qui** cherchait ce chemin,
 
 <details><summary>Indice 3</summary>
 
-Une erreur de vérification TLS alors que `pve01` n'a pas changé de certificat : compare l'autorité que **tu** présentes à `curl` (`PVE_CACERT`) avec celle de `pve01` (`/etc/pve/pve-root-ca.pem`) : sujet, empreinte, dates.
+Une erreur de vérification TLS alors que `pve01` n'a pas changé de certificat : compare l'autorité que **tu** présentes à `curl` (`PVE_CACERT`) avec celle de `pve01` (`/etc/pve/pve-root-ca.pem`) : sujet et clé publique. Souviens-toi de M02-E08 : ton ancre peut légitimement différer du fichier de `pve01` par ses extensions et son empreinte.
 </details>
 
 **Pour aller plus loin** (facultatif) : ajoute à `medictl config` une vérification de bout en bout (TLS, authentification, nombre de VMs visibles, date d'expiration du jeton) qui rend un code ≠ 0 au moindre maillon cassé. [API Proxmox VE](https://pve.proxmox.com/pve-docs/api-viewer/), [gestion des utilisateurs](https://pve.proxmox.com/wiki/User_Management).

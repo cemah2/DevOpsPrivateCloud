@@ -44,17 +44,41 @@ main() {
   local delai=300 intervalle=5 essai=30
   while (($#)); do
     case "$1" in
-      -d | --delai) [[ $# -ge 2 ]] || usage; delai="$2"; shift 2 ;;
-      -i | --intervalle) [[ $# -ge 2 ]] || usage; intervalle="$2"; shift 2 ;;
-      -e | --essai) [[ $# -ge 2 ]] || usage; essai="$2"; shift 2 ;;
-      --) shift; break ;;
+      -d | --delai)
+        [[ $# -ge 2 ]] || usage
+        delai="$2"
+        shift 2
+        ;;
+      -i | --intervalle)
+        [[ $# -ge 2 ]] || usage
+        intervalle="$2"
+        shift 2
+        ;;
+      -e | --essai)
+        [[ $# -ge 2 ]] || usage
+        essai="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        break
+        ;;
       *) usage ;;
     esac
   done
   (($# > 0)) || usage
-  entier "$delai" 1 3600 || { log_err "--delai : entier de 1 à 3600 attendu"; exit 2; }
-  entier "$intervalle" 1 300 || { log_err "--intervalle : entier de 1 à 300 attendu"; exit 2; }
-  entier "$essai" 1 600 || { log_err "--essai : entier de 1 à 600 attendu"; exit 2; }
+  entier "$delai" 1 3600 || {
+    log_err "--delai : entier de 1 à 3600 attendu"
+    exit 2
+  }
+  entier "$intervalle" 1 300 || {
+    log_err "--intervalle : entier de 1 à 300 attendu"
+    exit 2
+  }
+  entier "$essai" 1 600 || {
+    log_err "--essai : entier de 1 à 600 attendu"
+    exit 2
+  }
   require_cmd timeout
 
   trap 'arreter SIGINT 130' INT

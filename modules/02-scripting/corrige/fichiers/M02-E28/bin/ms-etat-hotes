@@ -61,14 +61,33 @@ main() {
   local jobs_max=4
   while (($#)); do
     case "$1" in
-      -j | --jobs) [[ $# -ge 2 ]] || { echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2; exit 2; }; jobs_max="$2"; shift 2 ;;
-      -h | --help) echo "Usage : ms-etat-hotes [-j|--jobs N] HOTE..."; exit 0 ;;
-      --) shift; break ;;
-      -*) log_err "option inconnue : $1"; exit 2 ;;
+      -j | --jobs)
+        [[ $# -ge 2 ]] || {
+          echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2
+          exit 2
+        }
+        jobs_max="$2"
+        shift 2
+        ;;
+      -h | --help)
+        echo "Usage : ms-etat-hotes [-j|--jobs N] HOTE..."
+        exit 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        log_err "option inconnue : $1"
+        exit 2
+        ;;
       *) break ;;
     esac
   done
-  (($# > 0)) || { echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2; exit 2; }
+  (($# > 0)) || {
+    echo "Usage : ms-etat-hotes [-j N] HOTE..." >&2
+    exit 2
+  }
   [[ "$jobs_max" =~ ^([1-9]|[12][0-9]|3[0-2])$ ]] || die "-j attend un entier de 1 à 32" 2
   require_cmd ssh
 

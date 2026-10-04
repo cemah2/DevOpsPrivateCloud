@@ -98,7 +98,7 @@ check_ssh "git01 : sauvegarde de la configuration (backup-etc) de moins de 8 jou
   'sudo -n find /etc/gitlab/config_backup /var/opt/gitlab/config_backup /var/opt/gitlab/backups -name "gitlab_config_*.tar" -mtime -8 2>/dev/null | grep -q .'
 check_ssh "git01 → pbs01 : API PBS joignable (TCP/8007)" git01 "timeout 5 bash -c '</dev/tcp/10.20.10.10/8007'"
 check_ssh "pbs01 : instantané de moins de 48 h dans l'espace de noms par1/git01" "$WB_PBS_HOST" '
-  p=$(proxmox-backup-manager datastore show ds-lab --output-format json | perl -MJSON::PP -0777 -ne "print decode_json(\$_)->{path}")
+  p=$(proxmox-backup-manager datastore show ds-lab --output-format json | sed -nE "s/.*\"path\" *: *\"([^\"]+)\".*/\1/p")
   [ -n "$p" ] && find "$p/ns/par1/ns/git01" -mindepth 3 -maxdepth 3 -type d -mmin -2880 2>/dev/null | grep -q .'
 
 # --- 8. Dossier de livraison et hygiène ----------------------------------------------------------

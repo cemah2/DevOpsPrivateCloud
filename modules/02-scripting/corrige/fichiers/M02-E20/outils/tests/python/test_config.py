@@ -5,7 +5,7 @@ import logging
 import pytest
 import responses
 
-from medictl import journal
+from medictl import config, journal
 from medictl.cli import app
 from medictl.config import charger_config, lire_fichier_env
 from medictl.erreurs import ConfigError
@@ -62,7 +62,8 @@ def test_config_uniquement_par_l_environnement(tmp_path, monkeypatch):
     monkeypatch.setenv("PVE_TOKEN_SECRET", SECRET)
     monkeypatch.delenv("PVE_CACERT", raising=False)
     cfg = charger_config()
-    assert cfg.verification_tls is True  # magasin système, jamais False
+    # Magasin du système s'il existe (Debian), sinon True (certifi) : jamais False.
+    assert cfg.verification_tls in (config.MAGASIN_SYSTEME, True)
 
 
 @pytest.mark.parametrize(

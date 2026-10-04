@@ -1,9 +1,28 @@
 {
-  "branches": ["main"],
+  "branches": [
+    "main"
+  ],
   "tagFormat": "v${version}",
   "plugins": [
-    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
-    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
-    "@semantic-release/gitlab"
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    [
+      "@semantic-release/gitlab",
+      {
+        "successComment": "Livré dans la version ${nextRelease.version} (notes : page Releases du projet).",
+        "failTitle": "La release automatique échoue",
+        "labels": "release,automatisation"
+      }
+    ]
   ]
 }

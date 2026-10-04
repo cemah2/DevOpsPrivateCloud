@@ -13,8 +13,8 @@ _m02_r="${WB_SRC:-$HOME/src}/outils"
 check_output "Task 3.x sur adm01" '(^|[^0-9])3\.[0-9]+' task --version
 check_cmd "Taskfile.yml et Makefile versionnés" git -C "$_m02_r" ls-files --error-unmatch Taskfile.yml Makefile
 _m02_liste="$(cd "$_m02_r" && task --list 2>/dev/null || true)"
-for _m02_t in lint test build install; do
-  check_output "tâche « $_m02_t » décrite (task --list)" "^\\* $_m02_t:" printf '%s\n' "$_m02_liste"
+for _m02_t in lint test build install install:systeme install:dev; do
+  check_output "tâche « $_m02_t » décrite (task --list)" "^\\* $_m02_t:([[:space:]]|\$)" printf '%s\n' "$_m02_liste"
 done
 check_cmd "task lint réussit" bash -c 'cd "$1" && task lint </dev/null >/dev/null 2>&1' _ "$_m02_r"
 check_cmd "task test réussit" bash -c 'cd "$1" && task test </dev/null >/dev/null 2>&1' _ "$_m02_r"

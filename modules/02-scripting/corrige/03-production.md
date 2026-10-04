@@ -44,7 +44,7 @@ include:
 .si-bash:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes: [bin/**/*, lib/**/*, tests/bats/**/*, .shellcheckrc, .editorconfig, Taskfile.yml, .gitlab-ci.yml]
+      changes: [bin/**/*, sbin/**/*, lib/**/*, tests/bats/**/*, .shellcheckrc, .editorconfig, Taskfile.yml, .gitlab-ci.yml]
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 bats:
@@ -55,7 +55,7 @@ bats:
   artifacts:
     when: always
     reports:
-      junit: reports/report.xml
+      junit: rapports/report.xml
 ```
 
 `stages` et `workflow` ne sont pas redéfinis : ceux de `qualite.yml` conviennent (pipelines de MR, pipelines de branche sans MR, pas de doublon). Réponses du journal :
@@ -108,7 +108,7 @@ Les runners sont des machines gérées par Ansible, sans état, recréées depui
 
 Retenu : (c). Il respecte « rien n'est commité dans `main` », n'ajoute aucun outil, et l'étiquette reste l'unique source de vérité. Son seul défaut : `medictl --version` d'une installation de développement affiche la version repère du `pyproject.toml` (ici `0.1.0`), pas « la dernière étiquette + des commits » ; acceptable, une installation de développement n'est pas une version publiée.
 
-*2. Le paquet.* `pyproject.toml` de E07/E15 convient : backend `uv_build`, point d'entrée `medictl = "medictl.cli:app"`, et `medictl/__init__.py` lit sa version par `importlib.metadata.version("medictl")`. La roue ne contient que `src/medictl/` et ses métadonnées : ni `tests/`, ni `bin/`, ni `lib/`. Les scripts Bash ne sont **pas** distribués par ce paquet (ils s'installent par le Taskfile, E26). `uv build` produit aussi l'archive source (`.tar.gz`).
+*2. Le paquet.* `pyproject.toml` de E07/E15 convient : backend `uv_build`, point d'entrée `medictl = "medictl.cli:app"`, et `medictl/__init__.py` lit sa version par `importlib.metadata.version("medictl")`. La roue ne contient que `src/medictl/` et ses métadonnées : ni `tests/`, ni `bin/`, ni `lib/`. Les scripts Bash ne sont **pas** distribués par ce paquet (ils s'installent par `task install:systeme`, E20 et E26). `uv build` produit aussi l'archive source (`.tar.gz`).
 
 *3. La publication* : job `publier-pypi` de [`fichiers/M02-E25/.gitlab-ci.yml`](fichiers/M02-E25/.gitlab-ci.yml) :
 
@@ -265,16 +265,7 @@ VMID   NOM          DERNIÈRE           ÂGE (h) VÉRIF.        ÉTAT
 2026-10-04T07:30:04+02:00 ms-verif-sauvegardes[2211] ERREUR 1 VM(s) du socle sans sauvegarde valable de moins de 26 h
 ```
 
-*4. L'installation* (extrait à ajouter au `Taskfile.yml` de E20) :
-
-```yaml
-  install:systeme:
-    desc: Installe les scripts planifiés et la bibliothèque dans /usr/local (copie, root)
-    cmds:
-      - sudo install -d -m 0755 /usr/local/lib
-      - sudo install -m 0644 -o root -g root lib/ms-commun.sh /usr/local/lib/ms-commun.sh
-      - sudo install -m 0755 -o root -g root bin/ms-verif-sauvegardes bin/ms-alerte /usr/local/bin/
-```
+*4. L'installation* : la tâche `install:systeme` de E20 ([`Taskfile.yml`](fichiers/M02-E20/outils/Taskfile.yml)) copie `bin/ms-*` (dont `ms-verif-sauvegardes` et `ms-alerte`) et `lib/ms-commun.sh` dans `/usr/local`, en root ; rien à ajouter. Elle ne touche pas à `medictl`, installé depuis le registre depuis E25 (c'est pour cela qu'on ne lance plus `task install` sur `adm01`).
 
 Le script retrouve sa bibliothèque par `readlink -f` : depuis `/usr/local/bin`, c'est `/usr/local/lib/ms-commun.sh`. Un lien vers `~/src/outils` ferait exécuter chaque matin l'état courant du clone (branche en cours, vieille version remise par `git checkout`, fichier à moitié édité), et rendrait le durcissement `ProtectHome` impossible. La version installée ne change que par une installation délibérée.
 
@@ -377,12 +368,12 @@ admin@adm01:~$ ms-snapshot --dry-run --keep 2 2027
 2026-10-04T09:21:40+02:00 ms-snapshot[3121] INFO [simulation] 2027 (m02-idem) : supprimerait l'ancien instantané avant-20261004-085011
 ```
 
-*Tests* : [`tests/bats/ms-snapshot-idempotence.bats`](fichiers/M02-E27/tests/bats/ms-snapshot-idempotence.bats) et un faux Proxmox **avec état** en mémoire, [`fake-pve.bash`](fichiers/M02-E27/tests/bats/fake-pve.bash) (les instantanés créés et supprimés persistent d'une exécution à l'autre : on peut tester des relances). Dix tests, dont : aucune écriture en dry-run ; plan annoncé = requêtes réellement envoyées (comparaison automatique) ; trois exécutions → N instantanés, manuels intacts ; relance dans la fenêtre → réutilisation ; même seconde → pas de doublon ; reprise après interruption entre création et purge ; VM verrouillée ; création en échec sans suppression. Les tests de E14 qui appelaient la fonction interne `a_purger` sont remplacés par ceux-ci : tester le **contrat** laisse la liberté de restructurer l'implémentation.
+*Tests* : [`tests/bats/ms-snapshot-idempotence.bats`](fichiers/M02-E27/tests/bats/ms-snapshot-idempotence.bats) et un faux Proxmox **avec état** en mémoire, [`fake-pve.bash`](fichiers/M02-E27/tests/bats/fake-pve.bash) (les instantanés créés et supprimés persistent d'une exécution à l'autre : on peut tester des relances). Dix tests, dont : aucune écriture en dry-run ; plan annoncé = requêtes réellement envoyées (comparaison automatique) ; trois exécutions → N instantanés, manuels intacts ; relance dans la fenêtre → réutilisation ; même seconde → pas de doublon ; reprise après interruption entre création et purge ; VM verrouillée ; création en échec sans suppression. Les trois tests de E14 qui appelaient la fonction interne `a_purger` (disparue au profit de `planifier`) sont retirés de [`ms-snapshot.bats`](fichiers/M02-E27/tests/bats/ms-snapshot.bats), dont les autres tests passent sans changement : tester le **contrat** laisse la liberté de restructurer l'implémentation.
 
 *Démonstration sur la VM 2027* (journal, exemple) :
 
 ```
-admin@adm01:~$ medictl vm create m02-idem --vmid 2027 --template 9000 --vnet vsandbox --wait
+admin@adm01:~$ medictl vm create m02-idem --vmid 2027 --template 9000 --vnet vsandbox --tags env-m02 --wait
 root@pve01:~# qm snapshot 2027 avant-manuel && qm snapshot 2027 avant-maj-demo
 admin@adm01:~$ ms-snapshot -n -k 2 2027     # plan : creer avant-…-091502
 admin@adm01:~$ ms-snapshot -k 2 2027        # 1. création
@@ -539,7 +530,7 @@ astreinte01$ sudo ms-diag /etc/shadow                     # refus (nom d'unité 
 astreinte01$ sudo ms-diag ssh.service > /dev/pts/0        # refus (sortie = terminal)
 ```
 
-*6. Le projet.* Script versionné (`sbin/ms-diag`) et règle (`sudoers.d/ms-diag`) dans `plateforme/outils`, avec des tests bats de la validation des arguments. Livraison sur une machine : par **copie** (Ansible au module 04), jamais par lien ; seul root peut modifier le fichier installé.
+*6. Le projet.* Script versionné (`sbin/ms-diag`) et règle (`sudoers.d/ms-diag`) dans `plateforme/outils`, avec des tests bats de la validation des arguments : [`tests/bats/ms-diag.bats`](fichiers/M02-E29/tests/bats/ms-diag.bats). Ils tournent sans root (en CI) parce que le script valide ses arguments **avant** de vérifier qu'il est root : la validation ne fait rien de privilégié, et l'ordre rend le filtre testable. `sbin/` rejoint la tâche `lint:sh` du Taskfile, `.editorconfig` et les règles `changes` de la CI (fichiers de référence de E20 et E24). Livraison sur une machine : par **copie** (Ansible au module 04), jamais par lien ; seul root peut modifier le fichier installé.
 
 **Explications**
 
@@ -592,12 +583,12 @@ Lecture : (a) un `trap` ne s'exécute qu'**entre** deux commandes ; tant que Bas
 - `trap 'arreter SIGINT 130' INT` / `'arreter SIGTERM 143' TERM` : `arreter` tue l'essai en cours (`kill -TERM "$_pid_essai"`, que `timeout` relaie à la commande), attend, puis sort avec le bon code ; aucun orphelin ;
 - l'en-tête explique pourquoi `retry` (E10) ne suffisait pas : `retry` borne le **nombre** d'essais, pas la **durée**, et un essai bloqué (SSH sans réponse) le bloque indéfiniment.
 
-*5. Les tests, en Python* : [`tests/python/test_ms_attendre.py`](fichiers/M02-E30/tests/python/test_ms_attendre.py). `pytest` pilote l'outil par `subprocess` : succès immédiat, délai total dépassé, essai bloqué tué, usage ; puis, pour SIGTERM **et** SIGINT (paramétré), l'outil est lancé dans une nouvelle session, on lui donne une signature unique (`sleep 47.25`), on lui envoie le signal, et on vérifie le code de sortie, le délai de réaction (< 3 s) et l'**absence d'orphelin** (parcours de `/proc`). Le `finally` du test tue le groupe en cas d'échec.
+*5. Les tests, en Python* : [`tests/python/test_ms_attendre.py`](fichiers/M02-E30/tests/python/test_ms_attendre.py). `pytest` pilote l'outil par `subprocess` : succès immédiat, délai total dépassé, essai bloqué tué, usage ; puis, pour SIGTERM **et** SIGINT (paramétré), l'outil est lancé dans une nouvelle session, on lui donne une signature unique (`sleep 47.25`), on lui envoie le signal, et on vérifie le code de sortie, le délai de réaction (< 3 s) et l'**absence d'orphelin** (parcours de `/proc`). Le `finally` du test tue le groupe en cas d'échec. Avec les règles `S` (bandit) du `pyproject.toml`, ruff signale les deux appels à `subprocess` (S603, « exécution d'une entrée non maîtrisée ») : ici, le programme lancé est celui du dépôt et ses arguments sont écrits dans le test ; on le justifie par un `# noqa: S603` commenté sur chaque appel, plutôt que de désactiver S603 pour tous les tests.
 
 *6. Utilisation.*
 
 ```
-admin@adm01:~$ medictl vm create m02-attente --vmid 2028 --template 9000 --vnet vsandbox --no-wait
+admin@adm01:~$ medictl vm create m02-attente --vmid 2028 --template 9000 --vnet vsandbox --tags env-m02 --no-wait
 admin@adm01:~$ ms-attendre -d 300 -i 5 -- ssh -o BatchMode=yes -o ConnectTimeout=5 admin@<IP-VM> true
 2026-10-04T10:12:07+02:00 ms-attendre[4120] INFO réussite à l'essai 7 après 41 s
 admin@adm01:~$ medictl vm destroy 2028 --yes

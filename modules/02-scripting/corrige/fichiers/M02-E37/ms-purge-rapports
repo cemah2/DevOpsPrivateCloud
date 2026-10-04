@@ -20,7 +20,10 @@ DRY_RUN=0
 CONF="$(dirname "$(readlink -f "$0")")/../etc/purge.conf"
 
 log() { printf '%s %s: %s\n' "$(date -Is)" "$PROG" "$*" >&2; }
-die() { log "ERREUR : $1"; exit "${2:-1}"; }
+die() {
+  log "ERREUR : $1"
+  exit "${2:-1}"
+}
 usage() {
   printf 'Usage : %s [-n|--dry-run] [-c FICHIER_CONF] [-h|--help]\n' "$PROG"
   printf '  -n, --dry-run   affiche ce qui serait supprimé, ne supprime rien\n'
@@ -29,12 +32,26 @@ usage() {
 
 while (($#)); do
   case "$1" in
-    -n | --dry-run) DRY_RUN=1; shift ;;
+    -n | --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
     -c)
-      (($# >= 2)) || { usage >&2; exit 2; }
-      CONF="$2"; shift 2 ;;
-    -h | --help) usage; exit 0 ;;
-    *) usage >&2; exit 2 ;;
+      (($# >= 2)) || {
+        usage >&2
+        exit 2
+      }
+      CONF="$2"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
   esac
 done
 

@@ -163,7 +163,7 @@ Les règles de sécurité du lab (introduction du module 00) restent valables. S
 ## Vérifications, pannes, corrigé
 
 - **Checks** : `lab/bin/check 01 <XX>`, depuis `adm01`, comme pour la fin du module 00. Les checks qui interrogent GitLab utilisent le jeton en lecture (`WB_GITLAB_TOKEN_FILE`) : ils ne fonctionnent qu'à partir de l'E05. Ils sont en lecture seule.
-- **Pannes** (palier 4) : `lab/bin/break 01 <XX>`, depuis `adm01`, `lab/bin/break 01 <XX> --annuler` pour abandonner. Elles agissent sur `git01`, `runner01`, sur GitLab avec ton jeton d'administration, ou sur tes clones de `~/src` après les avoir sauvegardés.
+- **Pannes** (palier 4) : `lab/bin/break 01 <XX>`, depuis `adm01`, `lab/bin/break 01 <XX> --annuler` pour abandonner **ou pour clore une panne que tu as réparée** (le marqueur de panne active resterait sinon en place et bloquerait l'astreinte E43 et le mini-projet ; l'annulation ne défait pas ta réparation). Elles agissent sur `git01`, `runner01`, sur GitLab avec ton jeton d'administration, ou sur tes clones de `~/src` après les avoir sauvegardés.
 - **Corrigé** : même règle qu'au module 00. Cherche honnêtement d'abord ; lis ensuite, même quand le check est vert, les sections « Pièges classiques » et « En production chez MédiSphère ».
 
 ## Ordre conseillé

@@ -98,12 +98,26 @@ main() {
   local json=0 hotes=() h
   while (($#)); do
     case "$1" in
-      -j | --json) json=1; shift ;;
-      -h | --help) echo "Usage : ms-verif-socle [-j|--json] [HOTE...]"; exit 0 ;;
-      -*) log_err "option inconnue : $1"; exit 2 ;;
+      -j | --json)
+        json=1
+        shift
+        ;;
+      -h | --help)
+        echo "Usage : ms-verif-socle [-j|--json] [HOTE...]"
+        exit 0
+        ;;
+      -*)
+        log_err "option inconnue : $1"
+        exit 2
+        ;;
       *)
-        [[ "$1" =~ ^[a-z][a-z0-9-]{0,30}$ ]] || { log_err "nom d'hôte invalide : $1"; exit 2; }
-        hotes+=("$1"); shift ;;
+        [[ "$1" =~ ^[a-z][a-z0-9-]{0,30}$ ]] || {
+          log_err "nom d'hôte invalide : $1"
+          exit 2
+        }
+        hotes+=("$1")
+        shift
+        ;;
     esac
   done
   ((${#hotes[@]})) || hotes=(gw01 dns01 git01 runner01 pbs01)

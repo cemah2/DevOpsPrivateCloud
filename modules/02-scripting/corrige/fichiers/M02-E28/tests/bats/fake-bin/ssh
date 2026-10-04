@@ -14,7 +14,10 @@ hote="${1:?hôte manquant}"
 [[ -n "${FAKE_SSH_JOURNAL:-}" ]] && echo "$hote" >>"$FAKE_SSH_JOURNAL"
 sleep "${FAKE_SSH_DELAI:-1}"
 case "$hote" in
-  *injoignable*) echo "ssh: connect to host $hote port 22: Connection timed out" >&2; exit 255 ;;
+  *injoignable*)
+    echo "ssh: connect to host $hote port 22: Connection timed out" >&2
+    exit 255
+    ;;
   *erreur*) exit 1 ;;
 esac
 printf '%s\n' "6.12.48+deb13-amd64" "2026-10-01 08:00:00" "42" "3"

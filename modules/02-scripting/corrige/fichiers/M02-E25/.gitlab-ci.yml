@@ -19,9 +19,8 @@ include:
       - templates/qualite.yml
       - templates/release.yml
 
-variables:
-  # Rapports et paquets toujours au même endroit (cf. Taskfile.yml).
-  REPORTS: reports
+# Rapports JUnit : écrits par les tâches du Taskfile dans rapports/ (variable REPORTS du
+# Taskfile, M02-E20). Les chemins ci-dessous doivent rester alignés sur elle.
 
 .outils:
   tags: [shell]
@@ -34,6 +33,7 @@ variables:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes:
         - bin/**/*
+        - sbin/**/*
         - lib/**/*
         - tests/bats/**/*
         - .shellcheckrc
@@ -48,6 +48,8 @@ variables:
       changes:
         - src/**/*
         - tests/python/**/*
+        # ms-attendre (M02-E30) est testé par pytest
+        - bin/ms-attendre
         - pyproject.toml
         - uv.lock
         - Taskfile.yml
@@ -79,7 +81,7 @@ bats:
     when: always
     expire_in: 1 week
     reports:
-      junit: reports/report.xml
+      junit: rapports/report.xml
 
 pytest:
   extends: [.outils, .si-python]
@@ -92,7 +94,7 @@ pytest:
     when: always
     expire_in: 1 week
     reports:
-      junit: reports/junit-pytest.xml
+      junit: rapports/junit-pytest.xml
 
 build:
   extends: [.outils, .si-python]
