@@ -43,7 +43,7 @@ Et une règle de sécurité : **avant de relancer, `--check --diff --limit`**. D
 ```
 admin@adm01:~/src/ansible$ uv run ansible socle -m ansible.builtin.ping -o
 gw01 | SUCCESS => {"changed": false,"ping": "pong"}
-dns01 | UNREACHABLE!: Failed to connect to the host via ssh: ssh: connect to host 10.10.20.16 port 22: No route to host
+dns01 | UNREACHABLE!: Failed to connect to the host via ssh: ssh: connect to host 10.10.20.253 port 22: No route to host
 …
 ```
 
@@ -58,8 +58,8 @@ admin@adm01:~/src/ansible$ git status --short
 
 ```
 admin@adm01:~/src/ansible$ uv run ansible dns01 -m ansible.builtin.ping -vvvv 2>&1 | grep -m1 'SSH: EXEC'
-<10.10.20.16> SSH: EXEC ssh -vvv -C -o ControlMaster=auto -o ControlPersist=60s -o KbdInteractiveAuthentication=no … -o 'User="admin"' -o ConnectTimeout=10 -o 'ControlPath="/home/admin/.ansible/cp/4f2a1c9e0b"' 10.10.20.16 '/bin/sh -c '"'"'echo ~admin && sleep 0'"'"''
-admin@adm01:~$ ssh -o ControlPath=none -v admin@10.10.20.16 true
+<10.10.20.253> SSH: EXEC ssh -vvv -C -o ControlMaster=auto -o ControlPersist=60s -o KbdInteractiveAuthentication=no … -o 'User="admin"' -o ConnectTimeout=10 -o 'ControlPath="/home/admin/.ansible/cp/4f2a1c9e0b"' 10.10.20.253 '/bin/sh -c '"'"'echo ~admin && sleep 0'"'"''
+admin@adm01:~$ ssh -o ControlPath=none -v admin@10.10.20.253 true
 ```
 
 Le `-o ControlPath=none` n'est pas un détail : une connexion maîtresse encore ouverte (multiplexage de `~/.ssh/config` ou socket d'Ansible dans `~/.ansible/cp`) ferait **réussir** le test à la main alors que toute nouvelle connexion échoue.
@@ -107,15 +107,15 @@ admin@adm01:~/src/ansible$ uv run ansible-inventory --host runner01 | jq .ansibl
 
 `root` est refusé par `sshd` (`PermitRootLogin no` du rôle `ssh_durci`). Si ton rôle ne l'impose pas encore, c'est la commande forcée que cloud-init place dans `/root/.ssh/authorized_keys` qui répond (« Please login as the user "admin" rather than the user "root" ») : la tâche échoue alors autrement, mais la cause est la même. Cause racine : une variable de connexion posée au niveau d'un groupe (et `group_vars/<groupe>` l'emporte sur `group_vars/all`). Correctif : supprimer le fichier, et répondre à l'argument de Lucas : on se connecte en `admin` et on **élève** (`become`) seulement ce qui en a besoin ; la documentation de GitLab Runner parle de l'utilisateur du **service**, pas de celui de la connexion d'administration.
 
-**Variante 3 — `ansible_host` de `dns01` pointé vers 10.10.20.16.**
+**Variante 3 — `ansible_host` de `dns01` pointé vers 10.10.20.253.**
 
 ```
-dns01 | UNREACHABLE!: Failed to connect to the host via ssh: ssh: connect to host 10.10.20.16 port 22: No route to host
+dns01 | UNREACHABLE!: Failed to connect to the host via ssh: ssh: connect to host 10.10.20.253 port 22: No route to host
 admin@adm01:~/src/ansible$ grep -rn ansible_host inventories/lab/host_vars/dns01/
-inventories/lab/host_vars/dns01/zz-migration.yml:3:ansible_host: 10.10.20.16
+inventories/lab/host_vars/dns01/zz-migration.yml:3:ansible_host: 10.10.20.253
 ```
 
-`No route to host` (et non `Connection timed out`) : `gw01` route bien vers le VLAN 20 mais personne ne répond à l'ARP pour .16 ; il renvoie un ICMP « hôte injoignable ». `host_vars/dns01/` (dossier) est chargé **après** une éventuelle valeur du fichier d'inventaire et l'emporte (`inventory host_vars` > `inventory file host vars`). Cause racine : un brouillon pour `dns02` (M06) rangé sous `dns01`. Correctif : supprimer le fichier ; s'il servira, le préparer dans `host_vars/dns02/` le moment venu.
+`No route to host` (et non `Connection timed out`) : `gw01` route bien vers le VLAN 20 mais personne ne répond à l'ARP pour .253 ; il renvoie un ICMP « hôte injoignable ». `host_vars/dns01/` (dossier) est chargé **après** une éventuelle valeur du fichier d'inventaire et l'emporte (`inventory host_vars` > `inventory file host vars`). Cause racine : un reste d'essai de migration (adresse de la plage de tests .250-.254) rangé sous `dns01`. Correctif : supprimer le fichier ; une migration se prépare sur une copie de l'inventaire, jamais dans `host_vars/` du socle.
 
 **Variante 4 — compte `admin` expiré sur `runner01`.**
 

@@ -8,7 +8,7 @@
 #   2. copie de travail : inventories/lab/group_vars/role_runner/zz-connexion.yml impose
 #      ansible_user: root (« la doc de GitLab Runner dit root ») — runner01 refuse root ;
 #   3. copie de travail : inventories/lab/host_vars/dns01/zz-migration.yml fixe ansible_host sur
-#      10.10.20.16 (brouillon de dns02, M06, recopié au mauvais endroit) — aucune machine n'y répond ;
+#      10.10.20.253 (adresse de la plage de tests .250-.254, recopiée par erreur d'un essai de migration) — aucune machine n'y répond ;
 #   4. runner01 : compte admin expiré (chage -E 0, « revue des comptes ») — sshd refuse la session.
 # Sauvegardes : clés d'hôte de git01 et date d'expiration de admin dans /var/lib/workbook/M04-E35.*
 # (git01, runner01) ; fichiers de la copie de travail dans ~/.local/state/workbook/M04-E35/.
@@ -76,9 +76,9 @@ YML
       m04_poser E35 "$_M04_SRC/inventories/lab/host_vars/dns01/zz-migration.yml" <<'YML' || return 1
 ---
 # Préparation de la bascule DNS (M06) : adresse du futur serveur.
-ansible_host: 10.10.20.16
+ansible_host: 10.10.20.253
 YML
-      m04_journal E35 "host_vars/dns01/zz-migration.yml : ansible_host 10.10.20.16"
+      m04_journal E35 "host_vars/dns01/zz-migration.yml : ansible_host 10.10.20.253"
       ;;
     4)
       wb_exec runner01 >/dev/null <<'EOF' || return 1
