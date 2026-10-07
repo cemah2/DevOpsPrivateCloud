@@ -1,0 +1,4 @@
+---
+# molecule/pare_feu_local/molecule.yml (M06-E30) — une instance, VMID 2066.
+scenario:
+  name: pare_feu_local

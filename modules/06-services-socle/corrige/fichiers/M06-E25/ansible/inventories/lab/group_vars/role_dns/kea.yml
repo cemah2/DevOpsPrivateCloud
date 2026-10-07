@@ -1,0 +1,50 @@
+---
+# group_vars/role_dns/kea.yml — DHCP du lab servi par Kea (M06-E16, E17), en PAIRE haute
+# disponibilité depuis M06-E25 : dns01 (primary) et dns02 (standby), même configuration générée
+# par le même gabarit ; seuls this-server-name et l'adresse de service diffèrent (faits de l'hôte).
+# Secrets (Vault « critique », group_vars/role_dns/vault.yml) : vault_kea_api_mot_de_passe,
+# vault_kea_api_supervision (E25), vault_kea_tsig_ddns.
+
+kea_dhcp4_sous_reseaux:
+  - id: 99            # = numéro du VLAN : stable, lisible dans les baux ; IDENTIQUE sur les deux pairs
+    reseau: 10.10.99.0/24
+    plages: ["10.10.99.100 - 10.10.99.199"]
+    routeur: 10.10.99.1
+    ntp: 10.10.99.1
+    ddns: true
+    commentaire: "VLAN 99 SANDBOX, relayé par gw01 (giaddr 10.10.99.1), M00-E14"
+
+# (E24) les deux résolveurs, dans l'ordre de préférence.
+kea_dhcp4_dns: [10.10.20.10, 10.10.20.16]
+kea_dhcp4_domaine: par1.medisphere.internal
+
+# --- API de contrôle (E17) : (E25) HTTPS sur l'adresse de service, joignable depuis adm01 ------------
+kea_dhcp4_api: true
+kea_dhcp4_api_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+kea_dhcp4_api_port: 8004
+kea_dhcp4_api_mot_de_passe: "{{ vault_kea_api_mot_de_passe }}"
+kea_dhcp4_api_comptes_supplementaires:
+  - {utilisateur: supervision, mot_de_passe: "{{ vault_kea_api_supervision }}"}
+kea_dhcp4_hooks:
+  - libdhcp_lease_cmds.so
+
+# --- (E25) TLS et haute disponibilité -------------------------------------------------------------
+kea_dhcp4_tls: true
+kea_dhcp4_ha: true
+kea_dhcp4_ha_mode: hot-standby
+kea_dhcp4_ha_pairs:
+  - {nom: dns01, ip: 10.10.20.10, role: primary}
+  - {nom: dns02, ip: 10.10.20.16, role: standby}
+
+# --- DDNS (E17) : sur les DEUX hôtes ; mises à jour toujours vers le PRIMAIRE PowerDNS ------------
+kea_dhcp4_ddns: true
+kea_ddns_tsig_nom: ddns-kea
+kea_ddns_tsig_secret: "{{ vault_kea_tsig_ddns }}"
+kea_ddns_zone_directe: par1.medisphere.internal.
+kea_ddns_zone_inverse: 10.10.in-addr.arpa.
+kea_ddns_serveur: 10.10.20.10
+kea_ddns_port: 5300
+# Adresses autorisées à mettre à jour les zones (métadonnée ALLOW-DNSUPDATE-FROM, posée sur dns01).
+kea_ddns_autorises:
+  - 127.0.0.1/32
+  - 10.10.20.16/32

@@ -1,0 +1,22 @@
+---
+# molecule/kea_dhcp4/converge.yml — Kea sur une instance jetable de vsandbox.
+# ⚠️ Un serveur DHCP de test sur un VLAN partagé peut répondre aux autres VMs. Ici, aucun risque :
+# le seul sous-réseau servi est 192.0.2.0/24 (TEST-NET-1, RFC 5737), qui ne correspond ni à
+# l'interface de l'instance ni à aucun relais : Kea ne trouve aucun sous-réseau pour un client
+# de vsandbox et ne répond pas. Le DDNS (rôle kea_ddns) exige PowerDNS sur l'hôte : il est prouvé
+# sur dns01 par le contrôle de bout en bout du rôle (nsupdate signé) et par lab/bin/check 06 17.
+- name: Converge — rôle kea_dhcp4
+  hosts: molecule
+  become: true
+  vars:
+    kea_dhcp4_sous_reseaux:
+      - id: 9
+        reseau: 192.0.2.0/24
+        plages: ["192.0.2.100 - 192.0.2.199"]
+        routeur: 192.0.2.1
+        commentaire: "Sous-réseau de test Molecule (TEST-NET-1)"
+    kea_dhcp4_api: true
+    kea_dhcp4_api_mot_de_passe: molecule-mot-de-passe-de-test
+    kea_dhcp4_hooks: [libdhcp_lease_cmds.so]
+  roles:
+    - role: kea_dhcp4

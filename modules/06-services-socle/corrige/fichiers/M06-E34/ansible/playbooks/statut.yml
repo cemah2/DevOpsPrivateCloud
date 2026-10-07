@@ -1,0 +1,14 @@
+---
+# playbooks/statut.yml — service temporaire stat01 (M06-E34), groupe role_statut (étiquette
+# role-statut dans NetBox et Proxmox). Ordre : rôles communs, identité SSH, filtrage local,
+# certificat (port 80 encore libre au premier passage), puis le service qui le lit.
+- name: Page d'information interne
+  hosts: role_statut
+  become: true
+  roles:
+    - role: base
+    - role: ssh_durci
+    - role: ssh_ca_hote
+    - role: pare_feu_local
+    - role: certificats_acme
+    - role: statut

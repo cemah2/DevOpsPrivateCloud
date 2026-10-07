@@ -1,0 +1,4 @@
+# playbooks/site.yml — import AJOUTÉ en M06-E18, après les services (le certificat est servi
+# par nginx/GitLab/SeaweedFS, déjà configurés) et avant gw01 :
+- name: Certificats TLS (ACME)
+  ansible.builtin.import_playbook: certificats.yml

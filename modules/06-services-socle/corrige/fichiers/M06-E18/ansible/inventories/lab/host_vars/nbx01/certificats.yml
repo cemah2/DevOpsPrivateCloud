@@ -1,0 +1,11 @@
+---
+# host_vars/nbx01/certificats.yml — certificat TLS de NetBox par ACME (M06-E18).
+# ⚠️ Chemins : ceux du gabarit nginx de ton rôle netbox (M06-E04) ; adapte les deux lignes.
+certificats_acme_certificats:
+  - id: netbox
+    noms: [nbx01.par1.medisphere.internal]
+    certificat: /etc/ssl/netbox/nbx01.par1.medisphere.internal.crt
+    cle: /etc/ssl/netbox/nbx01.par1.medisphere.internal.key
+    avant_emission: /usr/bin/systemctl stop nginx
+    apres_emission: /usr/bin/systemctl start nginx
+    recharger: /usr/bin/systemctl reload nginx

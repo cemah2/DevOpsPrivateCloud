@@ -1,0 +1,14 @@
+#!/bin/sh
+# /usr/local/sbin/pare-feu-local-retour — filet de sécurité du rôle pare_feu_local (M06-E30).
+# Lancé par la minuterie transitoire pare-feu-local-retour.timer si la nouvelle configuration
+# n'a pas été confirmée à temps, ou à la main (console) pour revenir en arrière.
+set -eu
+precedent=/var/lib/pare-feu-local/nftables.conf.precedent
+if [ ! -s "$precedent" ]; then
+  logger -t pare-feu-local-retour "aucune configuration précédente ($precedent) : vidage du filtrage"
+  /usr/sbin/nft flush ruleset
+  exit 1
+fi
+cp -p "$precedent" /etc/nftables.conf
+/usr/sbin/nft -f /etc/nftables.conf
+logger -t pare-feu-local-retour "configuration nftables précédente restaurée et chargée (changement non confirmé)"

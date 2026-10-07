@@ -1,0 +1,2 @@
+# host_vars/dns01/powerdns.yml — ligne AJOUTÉE en M06-E17 :
+powerdns_auth_dnsupdate: true

@@ -1,0 +1,32 @@
+proxmox_virtual_environment_vm.socle["adm01"]: Refreshing state... [id=1001]
+proxmox_virtual_environment_vm.socle["dns01"]: Refreshing state... [id=1002]
+proxmox_virtual_environment_vm.socle["git01"]: Refreshing state... [id=1004]
+proxmox_virtual_environment_vm.socle["runner01"]: Refreshing state... [id=1007]
+module.s3_01.data.proxmox_virtual_environment_vms.image[0]: Reading...
+module.s3_01.data.proxmox_virtual_environment_vms.image[0]: Read complete after 0s [id=c41e9a07-2d5b-4f3e-8a6c-1b9d0e7f2a35]
+module.s3_01.proxmox_virtual_environment_vm.vm: Refreshing state... [id=1006]
+
+OpenTofu used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  ~ update in-place
+
+OpenTofu will perform the following actions:
+
+  # proxmox_virtual_environment_vm.s3_01 has moved to module.s3_01.proxmox_virtual_environment_vm.vm
+  ~ resource "proxmox_virtual_environment_vm" "vm" {
+      ~ description             = "Stockage objet S3 du socle (SeaweedFS) — géré par OpenTofu (plateforme/infra, état socle). Ne pas modifier à la main." -> <<-EOT
+            Stockage objet S3 du socle (SeaweedFS), état OpenTofu.
+            Gérée par OpenTofu (module vm-debian, plateforme/tofu-modules). Ne pas modifier à la main.
+        EOT
+        id                      = "1006"
+        name                    = "s3-01"
+        tags                    = [
+            "role-s3",
+            "socle",
+        ]
+        # (28 unchanged attributes hidden)
+
+        # (13 unchanged blocks hidden)
+    }
+
+Plan: 0 to add, 1 to change, 0 to destroy.

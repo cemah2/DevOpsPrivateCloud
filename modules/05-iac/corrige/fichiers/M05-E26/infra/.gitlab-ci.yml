@@ -1,0 +1,227 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/infra (état de fin de M05-E26, ticket PLAT-656)
+#
+# Étapes :
+#   lint    gabarits communs (pre-commit avec tofu fmt / validate, tflint, terraform-docs
+#           depuis E20 ; commitlint ; gitleaks)
+#   test    securite : Checkov et Trivy (E25), Trivy contrôlé par son empreinte
+#   plan    un plan ENREGISTRÉ par configuration, sur les MR et sur main
+#   apply   un apply MANUEL par configuration, sur main seulement, qui applique le plan
+#           enregistré du même pipeline, puis vérifie que le plan suivant est vide
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell », compte gitlab-runner). Outils
+# installés par le rôle Ansible gitlab_runner (versions de outils/versions-outils.env).
+# Flux : runner01 → pve01:8006 (M03-E15), → s3-01:8333 et → git01 (même VLAN).
+#
+# Secrets — variables du projet, toutes PROTÉGÉES :
+#   PROXMOX_VE_ENDPOINT                         https://<IP-PVE01>:8006/
+#   PROXMOX_VE_API_TOKEN   (masquée et cachée)  wb-tofu@pve!tofu=<SECRET> (« Expand » décoché)
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (masquée et cachée)   identité S3 tofu-etat
+# Elles n'existent que sur main, sur conf/* (branches protégées) et dans les pipelines de MR
+# issues de conf/* (option « Allow merge request pipelines to access protected variables and
+# runners »). PROXMOX_VE_API_TOKEN sert d'INDICATEUR de leur présence dans les règles.
+#
+# GitLab CE n'a pas d'environnements protégés : un job manuel de main ne peut être lancé que
+# par qui peut fusionner dans main (Maintainers). Régler aussi « Prevent outdated deployment
+# jobs » (Settings > CI/CD > General pipelines) : l'apply d'un ancien pipeline est refusé.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+
+stages:
+  - lint
+  - test
+  - plan
+  - apply
+
+variables:
+  # Empreinte du binaire Trivy autorisé (0.75.0, voir outils/versions-outils.env et E25).
+  # Le job « securite » refuse de lancer un trivy dont l'empreinte diffère.
+  TRIVY_EMPREINTE: "sha256:93f9da8e4ba5e0c1c76d8234ed2494cf9afb0a96fd21953e424bb795f3299b8e"
+  # (La variable SKIP posée en E20 a disparu : runner01 a maintenant tofu, tflint et
+  # terraform-docs, tous les hooks de pre-commit tournent en CI.)
+
+# --- Modèles --------------------------------------------------------------------------------
+.tofu:
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - . outils/ci-preparer.sh
+
+# Le job pre-commit du gabarit lance aussi « outils/tofu-valider.sh », qui télécharge les
+# modules de plateforme/tofu-modules : il lui faut le jeton du job (sans secret du projet).
+pre-commit:
+  before_script:
+    - . outils/ci-preparer.sh
+
+# Règles des jobs qui ont besoin des secrets : MR ou main, et secrets présents.
+.regles-avec-secrets:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $PROXMOX_VE_API_TOKEN
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $PROXMOX_VE_API_TOKEN
+
+# --- test -----------------------------------------------------------------------------------
+securite:
+  extends: .tofu
+  stage: test
+  script:
+    - outils/analyse-securite.sh
+    - outils/analyse-securite.sh --tests
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: rapports/*-junit.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# Une MR issue d'une branche NON protégée ne reçoit pas les secrets : pas de plan. Plutôt
+# qu'un pipeline vert trompeur, un échec qui explique quoi faire.
+secrets-indisponibles:
+  stage: plan
+  tags: [shell]
+  script:
+    - echo "Cette MR vient de « $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME », branche non protégée."
+    - echo "Les plans exigent les accès du projet (Proxmox, S3), réservés aux branches conf/*."
+    - echo "Pousse le même travail sur une branche conf/<sujet> et ouvre la MR depuis elle."
+    - exit 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $PROXMOX_VE_API_TOKEN == null
+
+# --- plan -----------------------------------------------------------------------------------
+# Un plan par configuration (un état chacune). Le plan est ENREGISTRÉ (plan.tfplan) : c'est
+# lui, et lui seul, que l'apply du même pipeline appliquera.
+# plan.code : 0 aucun changement, 2 changements (1 = erreur : le job échoue).
+# rapport-terraform.json (racine du dépôt) : résumé {create, update, delete} affiché dans le
+# widget de la MR (artifacts:reports:terraform, disponible dans GitLab CE).
+.plan:
+  extends: [.tofu, .regles-avec-secrets]
+  stage: plan
+  script:
+    - cd "$DOSSIER"
+    - tofu init -input=false -lockfile=readonly
+    - |
+      rc=0
+      tofu plan -input=false -lock-timeout=10m -detailed-exitcode -out=plan.tfplan || rc=$?
+      if [ "$rc" -eq 1 ]; then
+        echo "Plan en ERREUR pour $DOSSIER : rien ne sera appliqué."
+        exit 1
+      fi
+      echo "$rc" > plan.code
+    - tofu show -no-color plan.tfplan > plan.txt
+    - |
+      tofu show -json plan.tfplan | jq -c '
+        [.resource_changes[]?.change.actions] | flatten
+        | {create: map(select(. == "create")) | length,
+           update: map(select(. == "update")) | length,
+           delete: map(select(. == "delete")) | length}' > "$CI_PROJECT_DIR/rapport-terraform.json"
+    - echo "Résumé ($DOSSIER) :" && grep -E '^(Plan:|No changes)' plan.txt || true
+    - |
+      # Garde-fou de relecture : toute destruction est signalée en tête du journal.
+      if jq -e '.delete > 0' "$CI_PROJECT_DIR/rapport-terraform.json" >/dev/null; then
+        echo "⚠️  CE PLAN DÉTRUIT $(jq .delete "$CI_PROJECT_DIR/rapport-terraform.json") RESSOURCE(S) : lire chaque ligne « - » ou « -/+ » de plan.txt."
+      fi
+  artifacts:
+    name: "${CI_JOB_NAME_SLUG}-${CI_COMMIT_SHORT_SHA}"
+    # Le plan enregistré contient l'état et les valeurs des variables : pas pour les Guests
+    # ni les Reporters. Les Developers relisent les MR et peuvent déjà, en poussant sur
+    # conf/*, faire exécuter du code avec les secrets : l'accès n'élargit rien pour eux.
+    access: developer
+    expire_in: 30 days
+    paths:
+      - $DOSSIER/plan.tfplan
+      - $DOSSIER/plan.txt
+      - $DOSSIER/plan.code
+    reports:
+      terraform: rapport-terraform.json
+
+plan:socle:
+  extends: .plan
+  variables:
+    DOSSIER: socle
+
+plan:lab-m05:
+  extends: .plan
+  variables:
+    DOSSIER: envs/lab-m05
+
+plan:recette-m05:
+  extends: .plan
+  variables:
+    DOSSIER: envs/recette-m05
+
+# --- apply ----------------------------------------------------------------------------------
+# Manuel, sur main seulement. resource_group : un seul apply à la fois par état, tous
+# pipelines confondus (la détection de dérive de E28 partage ces groupes). Le plan appliqué
+# est celui du job plan: du MÊME pipeline (needs) ; s'il est périmé (l'état a changé depuis),
+# OpenTofu refuse (« Saved plan is stale ») : relancer le pipeline de main.
+# Un plan vide s'applique aussi : rien ne change dans l'infrastructure, mais l'état est
+# réécrit (utile pour une migration de chiffrement, E27, ou un nouveau provider, E31).
+.apply:
+  extends: .tofu
+  stage: apply
+  interruptible: false
+  timeout: 1h
+  script:
+    - cd "$DOSSIER"
+    - test -s plan.tfplan
+    - echo "Plan relu dans le job plan du pipeline $CI_PIPELINE_ID (code $(cat plan.code))."
+    - tofu init -input=false -lockfile=readonly
+    - tofu apply -input=false -lock-timeout=10m plan.tfplan
+    - |
+      # Convergence : juste après l'apply, un nouveau plan doit être vide.
+      rc=0
+      tofu plan -input=false -lock-timeout=10m -detailed-exitcode -no-color > controle.txt 2>&1 || rc=$?
+      grep -E '^(Plan:|No changes)' controle.txt || true
+      if [ "$rc" -ne 0 ]; then
+        echo "Après l'apply, le plan n'est pas vide (code $rc) : voir controle.txt."
+        exit 1
+      fi
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 1 year
+    paths:
+      - $DOSSIER/controle.txt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $PROXMOX_VE_API_TOKEN
+      when: manual
+
+apply:socle:
+  extends: .apply
+  needs: ["plan:socle"]
+  variables:
+    DOSSIER: socle
+  resource_group: tofu-socle
+  environment:
+    name: lab/socle
+    deployment_tier: production
+
+apply:lab-m05:
+  extends: .apply
+  needs: ["plan:lab-m05"]
+  variables:
+    DOSSIER: envs/lab-m05
+  resource_group: tofu-lab-m05
+  environment:
+    name: lab/lab-m05
+    deployment_tier: testing
+
+apply:recette-m05:
+  extends: .apply
+  needs: ["plan:recette-m05"]
+  variables:
+    DOSSIER: envs/recette-m05
+  resource_group: tofu-recette-m05
+  environment:
+    name: lab/recette-m05
+    deployment_tier: staging

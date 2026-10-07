@@ -1,0 +1,16 @@
+---
+# collections/requirements.yml — collections externes du projet (M04-E02, versions figées en
+# M04-E18, netbox.netbox ajoutée en M06-E12).
+# Installation (dans ./collections, collections_path d'ansible.cfg) :
+#   ansible-galaxy collection install -r collections/requirements.yml -p collections
+# medisphere.socle n'est pas listée : elle vit dans ce dépôt.
+collections:
+  - name: community.proxmox
+    version: "==2.1.0"
+  - name: community.general
+    version: "==13.5.0"
+  - name: ansible.posix
+    version: "==2.2.2"
+  # Inventaire NetBox (plugin nb_inventory) ; 3.23 : intégration testée avec NetBox 4.5.
+  - name: netbox.netbox
+    version: "==3.23.0"

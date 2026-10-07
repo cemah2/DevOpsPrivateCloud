@@ -1,0 +1,9 @@
+---
+# Rôle statut — page d'information interne servie par nginx en HTTPS (M06-E34).
+# Le certificat est émis et renouvelé par le rôle certificats_acme (entrée « statut »), appliqué
+# AVANT ce rôle (playbooks/statut.yml) : ce rôle ne fait que le lire.
+statut_nom: "{{ inventory_hostname }}.par1.medisphere.internal"
+statut_racine_web: /var/www/statut
+statut_certificat: /etc/nginx/tls/statut.crt
+statut_cle: /etc/nginx/tls/statut.key
+statut_racine_confiance: /usr/local/share/ca-certificates/medisphere-root-ca.crt

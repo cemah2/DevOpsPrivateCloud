@@ -1,0 +1,16 @@
+---
+# Ordre de déclaration = ordre d'exécution : si les deux sont notifiés, le redémarrage
+# (qui relit aussi s3.json) suit le rechargement, sans dommage.
+# En --check sur un hôte neuf, l'unité n'existe pas encore : rien à simuler.
+- name: Recharger seaweedfs
+  ansible.builtin.systemd_service:
+    name: seaweedfs.service
+    state: reloaded
+  when: seaweedfs_unite.stat.exists | default(false) or not ansible_check_mode
+
+- name: Redémarrer seaweedfs
+  ansible.builtin.systemd_service:
+    name: seaweedfs.service
+    state: restarted
+    daemon_reload: true
+  when: seaweedfs_unite.stat.exists | default(false) or not ansible_check_mode

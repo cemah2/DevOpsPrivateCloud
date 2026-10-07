@@ -1,0 +1,7 @@
+# .trivyignore — exceptions de Trivy pour plateforme/infra (M05-E25).
+# Format : un identifiant par ligne, éventuellement suivi de « exp:AAAA-MM-JJ » (date au-delà
+# de laquelle l'exception cesse de s'appliquer et l'alerte revient). Chaque ligne a sa
+# justification et une expiration : une exception sans date devient permanente par oubli.
+#
+# Aucune exception en vigueur au 2026-10-07. Exemple de forme attendue :
+# MS-PVE-002 exp:2026-11-30   # jamais : la vérification TLS ne souffre pas d'exception

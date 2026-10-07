@@ -1,0 +1,19 @@
+---
+# Rôle powerdns_recursor — point d'entrée (M06-E07).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - powerdns_recursor_ecoute | length > 0
+      - powerdns_recursor_autorises | length > 0
+      - powerdns_recursor_dnssec in ['off', 'process-no-validate', 'process', 'log-fail', 'validate']
+    fail_msg: "powerdns_recursor_ecoute, powerdns_recursor_autorises et un mode DNSSEC valide sont requis."
+    quiet: true
+
+- name: Dépôt PowerDNS et paquet
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [powerdns_recursor_paquets]
+
+- name: Configuration YAML et service
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [powerdns_recursor_config]

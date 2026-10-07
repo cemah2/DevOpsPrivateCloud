@@ -1,0 +1,25 @@
+# /etc/powerdns/recursor.yml — dns21 (maquette PAR2) — Lucas
+incoming:
+  listen:
+    - 0.0.0.0
+  allow_from:
+    - 0.0.0.0/0
+
+recursor:
+  forward_zones:
+    - zone: par2.medisphere.internal
+      forwarders:
+        - 10.20.20.10
+    - zone: par1.medisphere.internal
+      forwarders:
+        - 10.10.20.10:5300
+  forward_zones_recurse:
+    - zone: .
+      forwarders:
+        - 8.8.8.8
+
+dnssec:
+  validation: "off"
+
+logging:
+  loglevel: 6

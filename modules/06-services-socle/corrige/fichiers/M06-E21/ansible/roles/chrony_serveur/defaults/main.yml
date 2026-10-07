@@ -1,0 +1,34 @@
+---
+# Rôle chrony_serveur — gw01, serveur de temps du lab, authentifié par NTS (M06-E21).
+# Reprend en code la configuration manuelle de M00-E31 (pools Internet + conf.d/10-serveur-lab.conf)
+# et y ajoute NTS dans les deux sens :
+#   - en AMONT : gw01 n'accepte l'heure que de serveurs NTS (RFC 8915), authentifiés par TLS ;
+#   - en AVAL : gw01 sert NTS au lab (NTS-KE sur TCP 4460) avec un certificat de ca01.
+
+chrony_serveur_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# Sources NTS publiques (au moins quatre, opérateurs et pays différents : chrony écarte un
+# serveur faux s'il en a assez de bons). Vérifie la liste à jour avant de la changer.
+chrony_serveur_sources_nts:
+  - time.cloudflare.com
+  - nts.netnod.se
+  - ptbtime1.ptb.de
+  - ntppool1.time.nl
+
+# Clients autorisés (NTP UDP 123) : PAR1 et PAR2, comme en M00-E31.
+chrony_serveur_clients: [10.10.0.0/16, 10.20.0.0/16]
+# Sans Internet, gw01 continue de servir son horloge (le lab reste cohérent avec lui-même).
+chrony_serveur_strate_locale: 10
+
+# Service NTS pour le lab : certificat et clé posés par le rôle certificats_acme (id « chrony »),
+# lisibles par l'utilisateur _chrony (groupe), sous /etc/chrony (profil AppArmor de chronyd).
+chrony_serveur_nts: true
+chrony_serveur_nts_certificat: /etc/chrony/nts/gw01.crt
+chrony_serveur_nts_cle: /etc/chrony/nts/gw01.key
+
+# Fichier posé à la main en M00-E31, remplacé par ce rôle.
+chrony_serveur_fichiers_obsoletes:
+  - /etc/chrony/conf.d/10-serveur-lab.conf
+
+chrony_serveur_fichier: /etc/chrony/chrony.conf

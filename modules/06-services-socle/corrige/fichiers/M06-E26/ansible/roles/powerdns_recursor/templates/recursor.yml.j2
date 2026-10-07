@@ -1,0 +1,34 @@
+{#- recursor.yml construit comme une structure, puis sérialisé : YAML toujours valide.
+    Les noms de clés sont ceux de la documentation « YAML settings » du Recursor 5.4.
+    M06-E07, étendu en M06-E26 : ancres de confiance positives (dnssec.trustanchors). -#}
+{%- set ns = namespace(relais=[], ntas=[], tas=[]) -%}
+{%- for z in powerdns_recursor_zones_relayees -%}
+{%-   set ns.relais = ns.relais + [{"zone": z.zone, "forwarders": z.serveurs}] -%}
+{%- endfor -%}
+{%- for n in powerdns_recursor_nta -%}
+{%-   set ns.ntas = ns.ntas + [{"name": n.nom, "reason": n.raison}] -%}
+{%- endfor -%}
+{%- for a in powerdns_recursor_ancres -%}
+{%-   set ns.tas = ns.tas + [{"name": a.nom, "dsrecords": a.ds}] -%}
+{%- endfor -%}
+{%- set recursor = {"threads": powerdns_recursor_threads | int, "forward_zones": ns.relais} -%}
+{%- if powerdns_recursor_amont | length > 0 -%}
+{%-   set recursor = recursor | combine({"forward_zones_recurse": [{"zone": ".", "forwarders": powerdns_recursor_amont}]}) -%}
+{%- endif -%}
+{%- set dnssec = {"validation": powerdns_recursor_dnssec, "log_bogus": true} -%}
+{%- if ns.tas | length > 0 -%}
+{%-   set dnssec = dnssec | combine({"trustanchors": ns.tas}) -%}
+{%- endif -%}
+{%- if ns.ntas | length > 0 -%}
+{%-   set dnssec = dnssec | combine({"negative_trustanchors": ns.ntas}) -%}
+{%- endif -%}
+{%- set conf = {
+  "incoming": {"listen": powerdns_recursor_ecoute, "allow_from": powerdns_recursor_autorises},
+  "recursor": recursor,
+  "dnssec": dnssec
+} -%}
+# {{ ansible_managed }}
+# /etc/powerdns/recursor.yml — PowerDNS Recursor de {{ inventory_hostname }} (rôle powerdns_recursor).
+# Présent, ce fichier est lu À LA PLACE de recursor.conf (format YAML, Recursor 5.x).
+# Ancres : « rec_control get-tas » et « rec_control get-ntas » montrent ce qui est chargé.
+{{ conf | to_nice_yaml(indent=2) }}

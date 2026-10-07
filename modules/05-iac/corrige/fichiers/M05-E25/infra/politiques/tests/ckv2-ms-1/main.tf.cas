@@ -1,0 +1,4 @@
+# Cas fautif : vérification TLS désactivée.
+provider "proxmox" {
+  insecure = true
+}

@@ -1,0 +1,12 @@
+---
+# EXTRAITS de group_vars/role_dns/ après la bascule (M06-E08, CHG-708) — la MR de bascule.
+# Deux changements, et seulement ces deux-là : ils décrivent l'état APRÈS. La bascule elle-même
+# (l'ordre des redémarrages) est l'affaire de playbooks/bascule-dns.yml.
+
+# --- dnsmasq.yml : plus de DNS, le DHCP reste (jusqu'à Kea, M06-E16) -------------------------
+dnsmasq_dns_actif: false
+
+# --- powerdns_recursor.yml : le Recursor prend le port 53 sur les deux adresses ----------------
+powerdns_recursor_ecoute:
+  - 127.0.0.1
+  - 10.10.20.10

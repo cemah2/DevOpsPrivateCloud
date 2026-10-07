@@ -1,0 +1,12 @@
+---
+# group_vars/env_m05/connexion.yml — VMs d'environnement du module 05 (M05-E23).
+# Groupe créé par l'étiquette env-m05 (keyed_groups : « - » remplacé par « _ »).
+#
+# Ces VMs sont recréées souvent, en DHCP : leur adresse et leur clé d'hôte changent d'une
+# génération à l'autre. Même choix que pour Molecule (M04-E24) : clé d'hôte acceptée à la
+# première connexion (accept-new) dans un known_hosts DÉDIÉ, jamais StrictHostKeyChecking=no
+# (une clé qui CHANGE pour une même adresse pendant la vie d'une VM reste refusée).
+# Après un « tofu destroy », purger ce fichier : rm ~/.ssh/known_hosts_env-m05
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=accept-new
+  -o UserKnownHostsFile=~/.ssh/known_hosts_env-m05

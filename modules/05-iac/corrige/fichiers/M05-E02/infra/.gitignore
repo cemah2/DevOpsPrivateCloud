@@ -1,0 +1,42 @@
+# .gitignore — plateforme/infra (M05-E02)
+
+# Dossier de travail d'OpenTofu (providers téléchargés, modules, configuration du backend) :
+# reconstruit par « tofu init ». Le fichier de verrouillage, lui, est VERSIONNÉ.
+.terraform/
+
+# États et leurs sauvegardes : ils contiennent toute la description réelle des ressources,
+# souvent des secrets (mots de passe cloud-init, jetons…). Jamais dans Git.
+# L'état vit en local sur adm01 jusqu'à M05-E11, puis sur s3-01.
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+errored.tfstate
+crash.log
+crash.*.log
+
+# Plans enregistrés (tofu plan -out=…) : binaires, ils embarquent des valeurs sensibles.
+*.tfplan
+tfplan
+*.plan.json
+
+# Fichiers de surcharge locaux (exceptions personnelles à ne pas partager)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+override.tofu
+*_override.tofu
+
+# Filet de sécurité : jamais de secret dans le dépôt. Les accès vivent dans
+# ~/.config/workbook/ (pve-tofu.env, M05-E03) ; terraform.tfvars est versionné car il ne
+# contient RIEN de secret ; un fichier de variables secret porterait l'extension ci-dessous.
+*.env
+*.secret.tfvars
+*.secret.auto.tfvars
+!*.exemple
+
+# Éditeurs
+*.swp
+*~
+.idea/
+.vscode/

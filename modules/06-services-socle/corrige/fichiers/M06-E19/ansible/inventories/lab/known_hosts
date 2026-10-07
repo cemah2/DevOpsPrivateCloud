@@ -1,0 +1,7 @@
+# inventories/lab/known_hosts — confiance SSH des contrôleurs du projet (M04-E27, remplacé en M06-E19).
+# Depuis M06-E19, une seule ligne : la CA d'HÔTE. Toute clé d'hôte du socle doit être présentée
+# avec un certificat signé par elle, pour un principal égal à l'adresse utilisée (ansible_host).
+# Les clés brutes vérifiées en M04-E27 sont retirées : une clé brute acceptée ici court-circuiterait
+# la CA (et resterait valide après une régénération, sans alerte).
+# 10.20.* : pbs01 n'est pas géré par ce projet ; motif présent pour PAR2 demain.
+@cert-authority *.par1.medisphere.internal,10.10.*,10.20.* ecdsa-sha2-nistp256 <CLE-PUBLIQUE-CA-HOTES> CA d'hôte MédiSphère

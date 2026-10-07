@@ -1,0 +1,15 @@
+# host_vars/gw01/pare_feu.yml — AJOUTS de M06-E21 (SEC-731).
+
+# pare_feu_definitions : nouvelle adresse
+  - {nom: CA01, valeur: 10.10.20.11}
+
+# pare_feu_entree (chaîne input de gw01) : à côté des règles NTP de M00-E31
+  - {entree: $LAB_IFS, proto: tcp, ports: 4460,
+     motif: "NTS-KE (chrony) pour les VLANs du lab", ref: M06-E21}
+  - {entree: $WG_S2S, source: $NETS_PAR2, proto: tcp, ports: 4460,
+     motif: "NTS-KE pour PAR2 (via wg0)", ref: M06-E21}
+  - {entree: $V_INFRA, source: $CA01, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers gw01 (certificat NTS, toutes ses adresses)", ref: M06-E21}
+
+# Rien en sortie : la chaîne output de gw01 est en « accept » ; NTS-KE vers Internet (TCP 4460)
+# et NTP (UDP 123) partent donc sans règle. Report dans docs/socle/matrice-flux.md.

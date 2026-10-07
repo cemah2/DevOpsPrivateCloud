@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+# Repris de contrib/netbox-rq.service de NetBox {{ netbox_version }} : exécute les tâches de fond
+# (scripts, synchronisations, tâches de maintenance planifiées par NetBox lui-même).
+[Unit]
+Description=NetBox Request Queue Worker
+Documentation=https://docs.netbox.dev/
+After=network-online.target postgresql.service valkey-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ netbox_utilisateur }}
+Group={{ netbox_utilisateur }}
+WorkingDirectory={{ netbox_racine }}
+ExecStart={{ netbox_racine }}/venv/bin/python3 {{ netbox_racine }}/netbox/manage.py rqworker high default low
+Restart=on-failure
+RestartSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

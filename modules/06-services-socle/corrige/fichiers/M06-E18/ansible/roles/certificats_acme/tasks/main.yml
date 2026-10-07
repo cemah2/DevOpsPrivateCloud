@@ -1,0 +1,110 @@
+---
+# Rôle certificats_acme (M06-E18).
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - item.id is match('^[a-z0-9-]+$')
+      - item.noms | length > 0
+      - item.certificat is match('^/') and item.cle is match('^/')
+    fail_msg: "Certificat mal décrit dans certificats_acme_certificats : {{ item }}"
+    quiet: true
+  loop: "{{ certificats_acme_certificats }}"
+  loop_control:
+    label: "{{ item.id | default('?') }}"
+
+- name: Client step de l'hôte (dépôt vérifié, step-cli, confiance dans la racine)
+  ansible.builtin.import_tasks: client.yml
+
+# 0755 : traversables (le service lit sous son propre utilisateur) ; c'est le mode que la doc
+# d'omnibus donne aussi pour /etc/gitlab/ssl. La protection est sur la clé (0640).
+- name: Dossiers des certificats et des clés
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ (certificats_acme_certificats | map(attribute='certificat') | map('dirname')
+             + certificats_acme_certificats | map(attribute='cle') | map('dirname')) | unique }}"
+
+- name: Vérifier chaque certificat (chaîne vers la racine, nom, validité)
+  ansible.builtin.command: >-
+    step certificate verify {{ item.certificat }}
+    --roots {{ certificats_acme_racine }} --host {{ item.noms[0] }}
+  register: _certificats_acme_verif
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ certificats_acme_certificats }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Émettre les certificats manquants ou invalides (ACME, défi HTTP-01)
+  ansible.builtin.include_tasks: emettre.yml
+  loop: "{{ _certificats_acme_verif.results | selectattr('rc', 'ne', 0) | map(attribute='item') | list }}"
+  loop_control:
+    loop_var: certificat
+    label: "{{ certificat.id }}"
+
+- name: Modèles systemd du renouvellement (Smallstep, adaptés)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - cert-renewer@.service
+    - cert-renewer@.timer
+  register: _certificats_acme_modeles
+
+- name: Dossiers des surcharges par certificat
+  ansible.builtin.file:
+    path: "/etc/systemd/system/cert-renewer@{{ item.id }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ certificats_acme_certificats }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+- name: Surcharge par certificat (emplacements, rechargement du service consommateur)
+  ansible.builtin.template:
+    src: surcharge.conf.j2
+    dest: "/etc/systemd/system/cert-renewer@{{ item.id }}.service.d/medisphere.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ certificats_acme_certificats }}"
+  loop_control:
+    label: "{{ item.id }}"
+  register: _certificats_acme_surcharges
+
+- name: Relire les unités systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: _certificats_acme_modeles is changed or _certificats_acme_surcharges is changed
+
+- name: Minuteries de renouvellement actives
+  ansible.builtin.systemd_service:
+    name: "cert-renewer@{{ item.id }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ certificats_acme_certificats }}"
+  loop_control:
+    label: "{{ item.id }}"
+
+# Preuve que la chaîne de renouvellement fonctionne (et pas seulement l'émission) : un
+# renouvellement forcé passe par le même chemin que celui de la minuterie dans 20 jours.
+- name: Le certificat se vérifie maintenant contre la racine
+  ansible.builtin.command: >-
+    step certificate verify {{ item.certificat }}
+    --roots {{ certificats_acme_racine }} --host {{ item.noms[0] }}
+  changed_when: false
+  check_mode: false
+  loop: "{{ certificats_acme_certificats }}"
+  loop_control:
+    label: "{{ item.id }}"
+  when: not ansible_check_mode

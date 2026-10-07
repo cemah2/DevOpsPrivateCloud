@@ -1,0 +1,29 @@
+# .checkov.yaml — configuration de Checkov pour plateforme/infra (M05-E25).
+# Lu par « checkov --config-file .checkov.yaml » (outils/analyse-securite.sh). Les clés sont
+# les noms longs des options de la CLI. Les dossiers à analyser sont passés par le script.
+
+framework:
+  - terraform
+  - secrets
+
+# Règles maison : conventions MédiSphère pour Proxmox (aucune règle fournie ne les couvre).
+external-checks-dir:
+  - politiques/checkov
+
+# Modules distants (vm-debian sur git01) : Checkov les télécharge pour analyser les VMs qu'ils
+# déclarent (avec la clé SSH de admin sur adm01, le jeton de job en CI : M05-E14). Dossier de
+# téléchargement : rapports/modules-checkov (donné par outils/analyse-securite.sh, non versionné).
+download-external-modules: true
+
+# Exceptions — une ligne par règle, avec sa justification. Revue à chaque montée de version.
+skip-check:
+  # CKV_TF_1 exige une empreinte de commit dans la source des modules. Nos modules sont
+  # référencés par étiquette vX.Y.Z (lisible, comparée par semantic-release) dans
+  # plateforme/tofu-modules, où les étiquettes v* sont PROTÉGÉES (M01-E11) : seule la
+  # release du projet les pose, personne ne peut les déplacer. CKV_TF_2 (étiquette de
+  # version obligatoire) reste actif. Décision revue si un module tiers entre dans le dépôt :
+  # lui serait épinglé par empreinte.
+  - CKV_TF_1
+
+compact: true
+quiet: true

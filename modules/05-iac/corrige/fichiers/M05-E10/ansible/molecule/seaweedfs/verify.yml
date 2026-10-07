@@ -1,0 +1,93 @@
+---
+# molecule/seaweedfs/verify.yml — vérifie le SERVICE rendu, comme un client (M05-E10) :
+# écoute réseau, TLS vérifié avec la CA de test, refus de l'anonyme, versionnage, et la
+# propriété dont dépend le verrou d'OpenTofu : une écriture conditionnelle (If-None-Match: *)
+# sur un objet existant est refusée (412).
+- name: Vérifier le rôle seaweedfs
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['seaweedfs.service']['state'] == 'running'
+          - ansible_facts['services']['seaweedfs.service']['status'] == 'enabled'
+
+    - name: Lire les ports en écoute
+      ansible.builtin.command:
+        cmd: ss -Hltn
+      register: ecoutes
+      changed_when: false
+
+    - name: Seule la passerelle S3 écoute hors de 127.0.0.1
+      ansible.builtin.assert:
+        that:
+          - ecoutes.stdout is search(adresse | regex_escape ~ ':8333\\s')
+          - ecoutes.stdout is not search('(0\\.0\\.0\\.0|\\*|\\[::\\]):(8333|9333|8080|8888)\\s')
+          - ecoutes.stdout is not search(adresse | regex_escape ~ ':(9333|8080|8888)\\s')
+        fail_msg: "{{ ecoutes.stdout }}"
+
+    - name: Copier la CA de test sur l'instance
+      ansible.builtin.copy:
+        src: "{{ eph }}/ca-test.crt"
+        dest: /tmp/ca-test.crt
+        mode: "0644"
+
+    # ca_path : le certificat est VÉRIFIÉ avec la CA de test (nom = adresse de l'instance).
+    - name: TLS valide et accès anonyme refusé (pas de mode « Allow-All »)
+      ansible.builtin.uri:
+        url: "https://{{ adresse }}:8333/"
+        ca_path: /tmp/ca-test.crt
+        status_code: 403
+
+    - name: Lire le versionnage du compartiment de test
+      ansible.builtin.command:
+        cmd: weed shell -master=127.0.0.1:9333
+        stdin: s3.bucket.versioning -name essai-etat
+      register: versionnage
+      changed_when: false
+
+    - name: Le compartiment est versionné
+      ansible.builtin.assert:
+        that: versionnage.stdout is search('Versioning:\\s+Enabled')
+        fail_msg: "{{ versionnage.stdout }}"
+
+    # boto3 du dépôt Debian, pour le test seulement (l'instance est détruite ensuite).
+    - name: Client S3 de test
+      ansible.builtin.apt:
+        name: python3-boto3
+        state: present
+
+    - name: Deux écritures conditionnelles de la même clé
+      ansible.builtin.command:
+        cmd: python3 -
+        stdin: |
+          import boto3, botocore, sys
+          s3 = boto3.client("s3", endpoint_url="https://{{ adresse }}:8333", region_name="us-east-1",
+                            verify="/tmp/ca-test.crt",
+                            config=botocore.config.Config(s3={"addressing_style": "path"}))
+          s3.put_object(Bucket="essai-etat", Key="verrou", Body=b"1", IfNoneMatch="*")
+          try:
+              s3.put_object(Bucket="essai-etat", Key="verrou", Body=b"2", IfNoneMatch="*")
+          except botocore.exceptions.ClientError as e:
+              print(e.response["ResponseMetadata"]["HTTPStatusCode"])
+              sys.exit(0)
+          print("ACCEPTEE")
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ lookup('ansible.builtin.file', eph ~ '/s3-etat-acces') }}"
+        AWS_SECRET_ACCESS_KEY: "{{ lookup('ansible.builtin.file', eph ~ '/s3-etat-secret') }}"
+      register: conditionnelle
+      changed_when: false
+      no_log: true
+
+    - name: La seconde écriture est refusée (412), le verrou d'OpenTofu sera fiable
+      ansible.builtin.assert:
+        that: conditionnelle.stdout | trim == '412'
+        fail_msg: "Seconde écriture conditionnelle : {{ conditionnelle.stdout | trim }} (attendu : 412)"

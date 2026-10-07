@@ -1,0 +1,13 @@
+# CKV2_MS_2 — toute VM déclare ses étiquettes (M05-E25).
+# Sans étiquettes déclarées, un clone hérite de celles du template (dont « current ») et
+# l'inventaire dynamique Ansible (M04-E13) le range n'importe où.
+metadata:
+  id: "CKV2_MS_2"
+  name: "Les VMs Proxmox déclarent leurs étiquettes (tags)"
+  category: "GENERAL_SECURITY"
+definition:
+  cond_type: "attribute"
+  resource_types:
+    - "proxmox_virtual_environment_vm"
+  attribute: "tags"
+  operator: "exists"

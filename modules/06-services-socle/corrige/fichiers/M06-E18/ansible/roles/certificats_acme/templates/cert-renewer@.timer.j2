@@ -1,0 +1,13 @@
+# {{ certificats_acme_entete }}
+# Modèle officiel Smallstep : toutes les 15 minutes, avec un étalement aléatoire.
+[Unit]
+Description=Minuterie de renouvellement du certificat %I
+
+[Timer]
+Persistent=true
+OnCalendar=*:1/15
+AccuracySec=1us
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

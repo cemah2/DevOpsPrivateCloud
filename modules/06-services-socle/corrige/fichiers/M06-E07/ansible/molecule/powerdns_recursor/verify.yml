@@ -1,0 +1,54 @@
+---
+# molecule/powerdns_recursor/verify.yml — la chaîne client → récurseur → autoritaire, et Internet
+# validé par DNSSEC.
+- name: Vérifier le rôle powerdns_recursor
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    dig: dig +time=3 +tries=2 @127.0.0.1
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service pdns-recursor actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['pdns-recursor.service']['state'] == 'running'
+          - ansible_facts['services']['pdns-recursor.service']['status'] == 'enabled'
+
+    - name: Version 5.4 du dépôt officiel
+      ansible.builtin.command: rec_control version
+      register: version
+      changed_when: false
+      failed_when: version.stdout is not search('^5\.4\.')
+
+    - name: Nom interne résolu par relais vers l'autoritaire
+      ansible.builtin.command: "{{ dig }} +short test01.par1.medisphere.internal A"
+      register: interne
+      changed_when: false
+      failed_when: interne.stdout != '10.10.20.250'
+
+    - name: Inverse interne (10.10.in-addr.arpa relayée malgré serve_rfc1918)
+      ansible.builtin.command: "{{ dig }} +short -x 10.10.20.250"
+      register: inverse
+      changed_when: false
+      failed_when: inverse.stdout != 'test01.par1.medisphere.internal.'
+
+    - name: Nom interne inexistant — NXDOMAIN (pas de SERVFAIL « bogus »)
+      ansible.builtin.command: "{{ dig }} absent.par1.medisphere.internal A"
+      register: nx
+      changed_when: false
+      failed_when: nx.stdout is not search('status. NXDOMAIN')
+
+    - name: Nom Internet signé — réponse validée (drapeau ad)
+      ansible.builtin.command: "{{ dig }} +dnssec www.isc.org A"
+      register: signe
+      changed_when: false
+      failed_when: signe.stdout is not search('flags. [^;]*\bad\b')
+
+    - name: Domaine volontairement mal signé — SERVFAIL (validation stricte)
+      ansible.builtin.command: "{{ dig }} dnssec-failed.org A"
+      register: bogus
+      changed_when: false
+      failed_when: bogus.stdout is not search('status. SERVFAIL')

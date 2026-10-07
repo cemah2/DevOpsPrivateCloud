@@ -1,0 +1,12 @@
+# /etc/systemd/system/wb-backup-socle.timer — {{ inventory_hostname }} (M06-E28)
+# Après la sauvegarde de git01 (01:15), avant lab-nuit (02:30) et les tâches de PBS (04:00, 05:00).
+[Unit]
+Description=Sauvegarde applicative quotidienne vers PBS (M06-E28)
+
+[Timer]
+OnCalendar=*-*-* {{ sauvegarde_pbs_heure }}:00
+RandomizedDelaySec=3min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

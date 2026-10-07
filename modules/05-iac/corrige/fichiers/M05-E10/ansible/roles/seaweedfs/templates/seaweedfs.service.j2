@@ -1,0 +1,59 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle seaweedfs).') }}
+# SeaweedFS en un processus : master, volume, filer et passerelle S3 (rôle seaweedfs, M05-E10).
+[Unit]
+Description=SeaweedFS (stockage objet S3 du socle)
+Documentation=https://github.com/seaweedfs/seaweedfs/wiki
+Wants=network-online.target
+After=network-online.target
+# Pas de démarrage sans le disque de données : jamais d'écriture sur le disque système.
+RequiresMountsFor={{ seaweedfs_dossier }}
+
+[Service]
+Type=simple
+User={{ seaweedfs_utilisateur }}
+Group={{ seaweedfs_utilisateur }}
+# -ip / -ip.bind 127.0.0.1 : master (9333), volume (8080), filer (8888) et leurs ports gRPC
+#   n'écoutent qu'en local ; -s3.ip.bind : seule la passerelle S3 écoute sur le réseau.
+# -master.telemetry=false : pas de statistiques envoyées à l'éditeur (données de santé).
+# -s3.port.iceberg=0, -s3.port.lance=0 : catalogues Iceberg et Lance inutiles, fermés.
+# -s3.autoCreateBucket=false : un compartiment se crée explicitement, jamais par une écriture.
+ExecStart=/usr/local/bin/weed server \
+    -dir={{ seaweedfs_dossier }} \
+    -ip=127.0.0.1 -ip.bind=127.0.0.1 \
+    -master.telemetry=false \
+    -master.volumeSizeLimitMB={{ seaweedfs_volume_taille_mo }} \
+    -volume.max=0 \
+    -s3 \
+    -s3.ip.bind={{ seaweedfs_s3_ecoute }} \
+    -s3.port={{ seaweedfs_s3_port }} \
+    -s3.config={{ seaweedfs_config }}/s3.json \
+    -s3.cert.file={{ seaweedfs_config }}/tls/s3.crt \
+    -s3.key.file={{ seaweedfs_config }}/tls/s3.key \
+    -s3.port.iceberg=0 \
+    -s3.port.lance=0 \
+    -s3.autoCreateBucket=false{% for o in seaweedfs_options_sup %} \
+    {{ o }}{% endfor %}
+
+
+# SIGHUP : relecture de s3.json (identités) sans couper les clients.
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+LimitNOFILE=65536
+
+# Durcissement : le service n'écrit que dans son dossier de données.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths={{ seaweedfs_dossier }}
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,40 @@
+{{ chrony_serveur_entete | comment }}
+#
+# chrony de gw01 : serveur de temps du lab MédiSphère (rôle chrony_serveur, M06-E21 ;
+# reprend M00-E31). Validé avant installation par : chronyd -p -f <fichier>
+
+# --- Sources : NTS uniquement ------------------------------------------------------------
+# « nts » : clés établies par NTS-KE (TLS, TCP 4460), paquets NTP authentifiés. Un serveur
+# NTS injoignable ou dont le certificat est refusé n'est JAMAIS utilisé en clair.
+{% for source in chrony_serveur_sources_nts %}
+server {{ source }} iburst nts
+{% endfor %}
+# Au moins deux sources concordantes avant de corriger l'horloge.
+minsources 2
+
+# --- Service pour le lab -------------------------------------------------------------------
+{% for reseau in chrony_serveur_clients %}
+allow {{ reseau }}
+{% endfor %}
+local stratum {{ chrony_serveur_strate_locale }}
+ratelimit interval 1 burst 16
+{% if chrony_serveur_nts %}
+# NTS-KE pour les clients du lab (TCP 4460). Le certificat contient le nom de gw01 ET les
+# adresses des passerelles (.1 de chaque VLAN) : les clients y joignent « leur » passerelle.
+# chronyd ne relit PAS ces fichiers à chaud : redémarrage après chaque renouvellement.
+ntsservercert {{ chrony_serveur_nts_certificat }}
+ntsserverkey {{ chrony_serveur_nts_cle }}
+ntsratelimit interval 3 burst 1
+{% endif %}
+
+# --- Fonctionnement --------------------------------------------------------------------------
+keyfile /etc/chrony/chrony.keys
+driftfile /var/lib/chrony/chrony.drift
+# Cookies NTS (client) et clés du serveur conservés : un redémarrage ne coûte pas un nouvel
+# échange NTS-KE à chaque client.
+ntsdumpdir /var/lib/chrony
+logdir /var/log/chrony
+maxupdateskew 100.0
+rtcsync
+makestep 1 3
+leapseclist /usr/share/zoneinfo/leap-seconds.list

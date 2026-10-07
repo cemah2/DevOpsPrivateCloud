@@ -1,0 +1,14 @@
+---
+# host_vars/git01/certificats.yml — certificat TLS de GitLab par ACME (M06-E18).
+# Chemins par défaut d'omnibus (gitlab_rails['nginx']['ssl_certificate…'], M01) : aucune
+# reconfiguration, nginx relit le certificat sur « gitlab-ctl hup nginx ».
+# Le port 80 est tenu par le nginx d'omnibus (redirection) : arrêté le temps du défi seulement,
+# à la PREMIÈRE émission (les renouvellements passent par TLS mutuel, sans port 80).
+certificats_acme_certificats:
+  - id: gitlab
+    noms: [git01.par1.medisphere.internal]
+    certificat: /etc/gitlab/ssl/git01.par1.medisphere.internal.crt
+    cle: /etc/gitlab/ssl/git01.par1.medisphere.internal.key
+    avant_emission: /usr/bin/gitlab-ctl stop nginx
+    apres_emission: /usr/bin/gitlab-ctl start nginx
+    recharger: /usr/bin/gitlab-ctl hup nginx

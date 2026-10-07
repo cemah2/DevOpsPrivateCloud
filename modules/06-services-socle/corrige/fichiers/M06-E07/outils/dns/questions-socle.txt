@@ -1,0 +1,41 @@
+# questions-socle.txt — questions de référence pour comparer-resolveurs.sh (M06-E07, M06-E08).
+# Une question par ligne, arguments de dig : « nom type » ou « -x adresse ».
+# Couvre : chaque nom du socle (A), chaque inverse (PTR), les noms courts n'ont pas lieu d'être
+# (le domaine de recherche est appliqué par le client, pas par le serveur), les NXDOMAIN
+# internes, et quelques noms Internet.
+
+# --- A ---
+dns01.par1.medisphere.internal A
+gw01.par1.medisphere.internal A
+adm01.par1.medisphere.internal A
+ca01.par1.medisphere.internal A
+git01.par1.medisphere.internal A
+nbx01.par1.medisphere.internal A
+s3-01.par1.medisphere.internal A
+runner01.par1.medisphere.internal A
+pve01.par1.medisphere.internal A
+pbs01.par2.medisphere.internal A
+pbs01.par1.medisphere.internal A
+
+# --- PTR ---
+-x 10.10.10.1
+-x 10.10.20.1
+-x 10.10.99.1
+-x 10.10.10.10
+-x 10.10.20.10
+-x 10.10.20.11
+-x 10.10.20.12
+-x 10.10.20.13
+-x 10.10.20.14
+-x 10.10.20.15
+-x 10.20.10.10
+
+# --- Ce qui n'existe pas doit rester NXDOMAIN, sans partir sur Internet ---
+nexistepas.par1.medisphere.internal A
+nexistepas.medisphere.internal A
+-x 10.10.99.254
+
+# --- Internet (les données changent d'un serveur à l'autre pour certains noms très répartis :
+#     un écart ici se juge à l'œil, pas comme une erreur) ---
+deb.debian.org A
+repo.powerdns.com A

@@ -1,0 +1,14 @@
+# /etc/wb-backup/socle.conf — {{ inventory_hostname }} : paramètres NON secrets de la sauvegarde applicative
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle sauvegarde_pbs).') }}
+WB_HOTE={{ inventory_hostname }}
+WB_NS={{ sauvegarde_pbs_espace }}
+WB_ELEMENTS="{{ sauvegarde_pbs_elements | join(' ') }}"
+WB_ENV=/etc/wb-backup/pbs-{{ inventory_hostname }}.env
+WB_CLE=/etc/wb-backup/pbs-{{ inventory_hostname }}.key
+WB_TRAVAIL=/var/lib/wb-backup/travail
+WB_PDNS_BASE={{ sauvegarde_pbs_pdns_base }}
+WB_KEA_SOCKET={{ sauvegarde_pbs_kea_socket }}
+WB_NETBOX_DOSSIER={{ sauvegarde_pbs_netbox_dossier }}
+WB_NETBOX_BASE={{ sauvegarde_pbs_netbox_base }}
+WB_STEPCA_DOSSIER={{ sauvegarde_pbs_stepca_dossier }}
+WB_STEPCA_EXCLURE="{{ sauvegarde_pbs_stepca_exclure | join(' ') }}"

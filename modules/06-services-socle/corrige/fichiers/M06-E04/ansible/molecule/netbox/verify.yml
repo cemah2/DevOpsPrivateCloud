@@ -1,0 +1,86 @@
+---
+# molecule/netbox/verify.yml — NetBox rend le service : API joignable avec un jeton v2
+# (preuve que API_TOKEN_PEPPERS est en place), base et file de tâches opérationnelles,
+# exposition réseau minimale.
+- name: Vérifier le rôle netbox
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    url: https://nbx.molecule.test
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Services actifs
+      ansible.builtin.assert:
+        that: ansible_facts['services'][item]['state'] == 'running'
+      loop:
+        - netbox.service
+        - netbox-rq.service
+        - nginx.service
+        # Sous Debian, postgresql.service est une unité « parapluie » (oneshot) : le serveur
+        # réel est l'instance du cluster 17/main, démarrée par elle.
+        - postgresql@17-main.service
+        - valkey-server.service
+
+    - name: Services lancés au démarrage
+      ansible.builtin.assert:
+        that: ansible_facts['services'][item]['status'] == 'enabled'
+      loop:
+        - netbox.service
+        - netbox-rq.service
+        - nginx.service
+        - postgresql.service
+        - valkey-server.service
+
+    - name: Créer un jeton v2 de test pour le compte admin (shell Django)
+      ansible.builtin.command:
+        argv:
+          - /opt/netbox/venv/bin/python
+          - /opt/netbox/netbox/manage.py
+          - shell
+          - --no-imports
+          - -c
+          - >-
+            from users.models import User, Token;
+            t = Token(user=User.objects.get(username='admin'), version=2, write_enabled=False, description='molecule');
+            t.save(); print('nbt_' + t.key + '.' + t.token)
+      become: true
+      become_user: netbox
+      register: jeton
+      changed_when: false
+      no_log: true
+
+    - name: /api/status/ répond avec le jeton v2 (TLS vérifié)
+      ansible.builtin.uri:
+        url: "{{ url }}/api/status/"
+        headers:
+          Authorization: "Bearer {{ jeton.stdout_lines | last }}"
+          Accept: application/json
+        use_proxy: false
+        return_content: true
+      register: statut
+
+    - name: Version, Python et file de tâches attendus
+      ansible.builtin.assert:
+        that:
+          - statut.json['netbox-version'] is match('4\.6\.')
+          - statut.json['python-version'] is match('3\.13\.')
+          - statut.json['rq-workers-running'] | int >= 1
+
+    - name: Sans jeton, l'API refuse (403)
+      ansible.builtin.uri:
+        url: "{{ url }}/api/dcim/sites/"
+        use_proxy: false
+        status_code: 403
+
+    - name: Écoutes réseau (seuls 80 et 443 hors boucle locale)
+      ansible.builtin.command: ss -Hltn
+      register: ecoutes
+      changed_when: false
+
+    - name: PostgreSQL, Valkey et gunicorn restent sur la boucle locale
+      ansible.builtin.assert:
+        that:
+          - ecoutes.stdout is not search('(0\.0\.0\.0|\*|\[::\]):(5432|6379|8001)\s')

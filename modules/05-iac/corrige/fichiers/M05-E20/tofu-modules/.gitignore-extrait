@@ -1,0 +1,5 @@
+# Ajouts au .gitignore de plateforme/tofu-modules (M05-E20)
+.terraform/
+# Un module réutilisable ne fixe pas les versions exactes de ses providers : c'est le
+# .terraform.lock.hcl de chaque configuration RACINE qui le fait.
+.terraform.lock.hcl

@@ -1,0 +1,32 @@
+---
+# Rôle powerdns_auth — point d'entrée (M06-E06).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - powerdns_auth_zones | length > 0
+      - powerdns_auth_ecoute | length > 0
+      - powerdns_auth_ecoute | select('search', ':53$') | list | length == 0
+      - powerdns_auth_cle_api | length >= 24
+    fail_msg: >-
+      powerdns_auth_zones, powerdns_auth_ecoute (jamais le port 53, réservé au récurseur) et
+      powerdns_auth_cle_api (24 caractères minimum, Vault critique) doivent être définis.
+    quiet: true
+  no_log: true
+  tags: [critique]
+
+- name: Dépôt PowerDNS et paquets
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [powerdns_auth_paquets]
+
+- name: Base gsqlite3 et configuration
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [powerdns_auth_config, critique]
+
+- name: Zones et contenu
+  ansible.builtin.import_tasks: zones.yml
+  tags: [powerdns_auth_zones]
+
+- name: Vérifications
+  ansible.builtin.import_tasks: verifications.yml
+  tags: [powerdns_auth_verifications, critique]

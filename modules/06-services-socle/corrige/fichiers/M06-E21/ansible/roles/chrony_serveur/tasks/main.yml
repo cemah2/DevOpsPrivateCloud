@@ -1,0 +1,79 @@
+---
+# Rôle chrony_serveur (M06-E21).
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - chrony_serveur_sources_nts | length >= 3
+      - chrony_serveur_clients | length > 0
+    fail_msg: "Au moins trois sources NTS et une plage de clients sont nécessaires."
+    quiet: true
+
+- name: Paquet chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+
+- name: Le certificat NTS est présent (rôle certificats_acme, id « chrony »)
+  ansible.builtin.stat:
+    path: "{{ chrony_serveur_nts_certificat }}"
+  register: _chrony_serveur_cert
+  when: chrony_serveur_nts | bool
+
+- name: Refuser de configurer NTS sans certificat
+  ansible.builtin.assert:
+    that: _chrony_serveur_cert.stat.exists
+    fail_msg: >-
+      {{ chrony_serveur_nts_certificat }} absent : appliquer d'abord certificats_acme sur
+      {{ inventory_hostname }} (playbooks/gw01-temps.yml le fait dans l'ordre).
+    quiet: true
+  when:
+    - chrony_serveur_nts | bool
+    - not ansible_check_mode
+
+- name: Configuration de chrony (validée avant d'être posée)
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: "{{ chrony_serveur_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    validate: chronyd -p -f %s
+  notify: Redémarrer chrony
+
+- name: Retirer la configuration manuelle de M00-E31
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ chrony_serveur_fichiers_obsoletes }}"
+  notify: Redémarrer chrony
+
+- name: Service chrony démarré et activé
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Appliquer maintenant le redémarrage
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre la synchronisation (correction < 0,1 s)
+  ansible.builtin.command: chronyc -n waitsync 30 0.1 0 4
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+# « authdata » : colonne Mode = NTS et KeyID non nul pour une source authentifiée.
+- name: Lire l'état d'authentification des sources
+  ansible.builtin.command: chronyc -n authdata
+  register: _chrony_serveur_auth
+  changed_when: false
+  check_mode: false
+
+- name: Au moins deux sources authentifiées par NTS
+  ansible.builtin.assert:
+    that: _chrony_serveur_auth.stdout_lines | select('search', '\\sNTS\\s') | list | length >= 2
+    fail_msg: "{{ _chrony_serveur_auth.stdout }}"
+    quiet: true
+  when: not ansible_check_mode

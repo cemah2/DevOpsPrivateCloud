@@ -1,0 +1,19 @@
+---
+# Rôle medisphere.socle.ca_lab — autorités de certification du lab (M04-E18, étendu en M06-E03).
+#
+# ca_lab_certificats : autorités à INSTALLER. Chaque élément : nom (fichier .crt créé dans
+#   /usr/local/share/ca-certificates/) et source (fichier PEM sur le CONTRÔLEUR).
+# ca_lab_retirer : noms d'autorités à RETIRER (fichier /usr/local/share/ca-certificates/<nom>.crt),
+#   par exemple une ancienne racine après une bascule. Retirer une autorité qui est aussi à
+#   installer est refusé (incohérence de l'inventaire).
+# Depuis M06-E03, la racine du socle est la racine step-ca « MédiSphère Root CA » ; la CA
+# provisoire (M01) est retirée en fin de bascule.
+ca_lab_certificats:
+  - nom: medisphere-root-ca
+    source: "{{ playbook_dir }}/../pki/medisphere-root-ca.crt"
+
+ca_lab_retirer: []
+
+# Vérifier, après reconstruction du magasin, que chaque autorité installée y figure et que
+# chaque autorité retirée n'y figure plus (lecture du bundle /etc/ssl/certs/ca-certificates.crt).
+ca_lab_verifier: true

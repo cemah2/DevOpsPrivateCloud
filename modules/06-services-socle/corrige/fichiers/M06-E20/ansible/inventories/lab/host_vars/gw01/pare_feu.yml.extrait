@@ -1,0 +1,15 @@
+# host_vars/gw01/pare_feu.yml — section pare_feu_transit, M06-E20 (SEC-730) : adm01 devient le
+# SEUL point d'entrée SSH depuis le VPN d'administration.
+#
+# AVANT (M00-E16) — à SUPPRIMER :
+#  - {entree: $WG_ADM, sortie: [$V_MGMT, $V_INFRA],
+#     motif: "VPN d'admin vers MGMT et INFRA", ref: M00-E16}
+#
+# APRÈS — à mettre à sa place :
+  - {entree: $WG_ADM, sortie: $V_MGMT, destination: $ADM01, proto: tcp, ports: 22,
+     motif: "VPN d'admin vers le bastion adm01 (SSH, ProxyJump)", ref: M06-E20}
+  - {entree: $WG_ADM, sortie: $V_INFRA, proto: tcp, ports: 443,
+     motif: "VPN d'admin vers les interfaces web du socle (GitLab, NetBox, ca01)", ref: M06-E20}
+# Inchangés et toujours utiles : DNS du lab vers dns01 (NET_VPN compris, M00-E13), ping traversant,
+# VPN vers pve01 (22, 8006) et vers PAR2 MGMT.
+# Pense à reporter le changement dans docs/socle/matrice-flux.md (renvoi à ce fichier).

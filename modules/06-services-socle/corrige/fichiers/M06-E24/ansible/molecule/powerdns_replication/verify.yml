@@ -1,0 +1,80 @@
+---
+# molecule/powerdns_replication/verify.yml — le SERVICE répliqué, pas les fichiers (M06-E24).
+# 1. même numéro de série des deux côtés ; 2. une modification du primaire arrive sur le
+# secondaire par NOTIFY (bien avant le rafraîchissement du SOA) ; 3. AXFR sans TSIG refusé ;
+# 4. AXFR avec la clé accepté.
+
+- name: Vérifier la réplication
+  hosts: mol_secondaire
+  become: true
+  gather_facts: true
+  vars:
+    mol_ip_a: "{{ hostvars[groups['mol_primaire'][0]]['ansible_facts']['default_ipv4']['address'] }}"
+    zone: essai.molecule.internal
+  tasks:
+    - name: Numéro de série du primaire
+      ansible.builtin.command: dig +short +norecurse @{{ mol_ip_a }} -p 5300 {{ zone }} SOA
+      register: mol_soa_a
+      changed_when: false
+
+    - name: Le secondaire sert le même numéro de série
+      ansible.builtin.command: dig +short +norecurse @127.0.0.1 -p 5300 {{ zone }} SOA
+      register: mol_soa_b
+      changed_when: false
+      until: mol_soa_b.stdout.split()[2] | default('') == mol_soa_a.stdout.split()[2]
+      retries: 10
+      delay: 3
+
+    - name: Modifier le témoin sur le primaire (le numéro de série augmente, NOTIFY part)
+      ansible.builtin.command: >-
+        pdnsutil rrset replace {{ zone }} temoin.{{ zone }}. TXT 60 '"v-{{ ansible_facts['date_time']['epoch'] }}"'
+      delegate_to: "{{ groups['mol_primaire'][0] }}"
+      become_user: pdns
+      changed_when: true
+
+    - name: Faire avancer le numéro de série (rrset replace ne le fait pas)
+      ansible.builtin.command: pdnsutil zone increase-serial {{ zone }}
+      delegate_to: "{{ groups['mol_primaire'][0] }}"
+      become_user: pdns
+      changed_when: true
+
+    # Une écriture par pdnsutil n'est vue par le primaire qu'au cycle suivant (xfr-cycle-interval,
+    # 60 s) : on déclenche le NOTIFY tout de suite (une écriture par l'API, elle, notifie seule).
+    - name: Notifier maintenant
+      ansible.builtin.command: pdns_control notify {{ zone }}
+      delegate_to: "{{ groups['mol_primaire'][0] }}"
+      changed_when: true
+
+    - name: Le témoin modifié arrive sur le secondaire en moins de 30 s (NOTIFY, pas le SOA refresh)
+      ansible.builtin.command: dig +short +norecurse @127.0.0.1 -p 5300 temoin.{{ zone }} TXT
+      register: mol_temoin
+      changed_when: false
+      until: ('v-' ~ ansible_facts['date_time']['epoch']) in mol_temoin.stdout
+      retries: 10
+      delay: 3
+
+    - name: AXFR sans TSIG depuis le secondaire
+      ansible.builtin.command: dig +time=3 +tries=1 @{{ mol_ip_a }} -p 5300 {{ zone }} AXFR
+      register: mol_axfr_nu
+      changed_when: false
+      failed_when: "'Transfer failed' not in mol_axfr_nu.stdout and 'SOA' in mol_axfr_nu.stdout"
+
+    - name: Fichier de clé TSIG temporaire (format dig -k)
+      ansible.builtin.copy:
+        dest: /root/axfr-essai.key
+        mode: "0600"
+        content: |
+          key "axfr-essai" { algorithm hmac-sha256; secret "bW9sZWN1bGUtdGVzdC1ub24tc2VjcmV0LXRzaWcta2V5"; };
+      changed_when: false
+
+    - name: AXFR avec la clé
+      ansible.builtin.command: dig -k /root/axfr-essai.key +time=3 +tries=1 @{{ mol_ip_a }} -p 5300 {{ zone }} AXFR
+      register: mol_axfr_tsig
+      changed_when: false
+      failed_when: "'temoin.' + zone not in mol_axfr_tsig.stdout"
+
+    - name: Supprimer le fichier de clé
+      ansible.builtin.file:
+        path: /root/axfr-essai.key
+        state: absent
+      changed_when: false

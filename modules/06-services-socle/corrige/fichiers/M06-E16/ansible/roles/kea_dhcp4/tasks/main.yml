@@ -1,0 +1,87 @@
+---
+# Rôle kea_dhcp4 (M06-E16, E17).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - kea_dhcp4_sous_reseaux | length > 0
+      - kea_dhcp4_sous_reseaux | map(attribute='id') | select('integer') | list | length == kea_dhcp4_sous_reseaux | length
+      - kea_dhcp4_sous_reseaux | map(attribute='id') | unique | list | length == kea_dhcp4_sous_reseaux | length
+      - not kea_dhcp4_api or kea_dhcp4_api_mot_de_passe | length >= 16
+    fail_msg: >-
+      kea_dhcp4_sous_reseaux vide ou sans « id » entier unique (obligatoire en Kea 3.0), ou API
+      activée sans mot de passe d'au moins 16 caractères (vault_kea_api_mot_de_passe).
+    quiet: true
+
+- name: Dépôt ISC (Cloudsmith)
+  ansible.builtin.import_tasks: depot.yml
+
+- name: Paquets Kea 3.0 (serveur DHCPv4, hooks libres)
+  ansible.builtin.apt:
+    name:
+      - "isc-kea-dhcp4={{ kea_dhcp4_version }}"
+      - "isc-kea-hooks={{ kea_dhcp4_version }}"
+    state: present
+
+# Le paquet démarre le service avec sa configuration d'EXEMPLE (sous-réseau 192.0.2.0/24) :
+# sans danger ici (aucune interface déclarée), mais on ne laisse pas tourner ce qu'on n'a pas écrit.
+- name: Mot de passe de l'API (lu par kea-dhcp4, utilisateur _kea)
+  ansible.builtin.copy:
+    dest: /etc/kea/kea-api-mdp
+    content: "{{ kea_dhcp4_api_mot_de_passe }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+  no_log: true
+  when: kea_dhcp4_api | bool
+  notify: Redémarrer kea-dhcp4
+
+- name: Retirer le mot de passe de l'API si l'API est désactivée
+  ansible.builtin.file:
+    path: /etc/kea/kea-api-mdp
+    state: absent
+  when: not kea_dhcp4_api | bool
+
+- name: Configuration de kea-dhcp4 (validée par « kea-dhcp4 -t » avant d'être posée)
+  ansible.builtin.template:
+    src: kea-dhcp4.conf.j2
+    dest: "{{ kea_dhcp4_fichier }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+    backup: true
+    # -t vérifie aussi que les interfaces existent et que les hooks se chargent.
+    validate: kea-dhcp4 -t %s
+  notify: Redémarrer kea-dhcp4
+
+- name: Service actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: "{{ kea_dhcp4_service }}"
+    enabled: true
+    state: started
+
+- name: Appliquer maintenant les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# Contrôles sur le service RENDU, pas sur le fichier.
+- name: Le service kea-dhcp4 répond sur sa socket de contrôle (configuration chargée)
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf '{ "command": "config-hash-get" }' | socat - UNIX-CONNECT:/run/kea/kea4-ctrl-socket
+  args:
+    executable: /bin/bash
+  register: _kea_dhcp4_empreinte
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _kea_dhcp4_empreinte.rc != 0
+    or (_kea_dhcp4_empreinte.stdout | from_json).result != 0
+  when: not ansible_check_mode
+
+- name: Kea écoute le port 67 en UDP
+  ansible.builtin.command: ss -Hlunp 'sport = :67'
+  register: _kea_dhcp4_ecoute
+  changed_when: false
+  check_mode: false
+  failed_when: _kea_dhcp4_ecoute.stdout is not search('kea-dhcp4')
+  when: not ansible_check_mode

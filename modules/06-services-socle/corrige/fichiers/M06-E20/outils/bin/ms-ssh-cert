@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-ssh-cert — certificat SSH d'utilisateur de 16 h pour la journée (M06-E20)
+#
+# Usage : ms-ssh-cert [-p|--principal NOM]... [-k|--cle FICHIER.pub] [-d|--duree DURÉE]
+#                     [--statut]
+#
+# Signe la clé publique (par défaut ~/.ssh/id_ed25519.pub) par la CA SSH d'utilisateur de
+# step-ca (provisioner JWK « admin », mot de passe dans ~/.config/workbook/step-admin.pass),
+# écrit <clé>-cert.pub à côté de la clé, puis recharge la clé ET le certificat dans l'agent
+# (l'ancien certificat, expiré ou non, en est retiré : sinon ssh le présenterait d'abord et
+# consommerait un des MaxAuthTries de sshd).
+#   --cle permet aussi de signer la clé publique d'un AUTRE poste (copiée sur adm01) : le
+#   certificat produit est à rapporter sur ce poste (ProxyJump par adm01).
+#   --statut affiche le certificat en cours (validité, principaux) et ne signe rien.
+#
+# Codes retour : 0 succès, 1 erreur, 2 usage.
+# Dépendances : step (step-cli), ssh-keygen, ssh-add ; ~/.step configuré (step ca bootstrap).
+# =============================================================================
+set -euo pipefail
+
+# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+readonly MDP="${MS_STEP_ADMIN_PASS:-$HOME/.config/workbook/step-admin.pass}"
+readonly PROVISIONER="${MS_STEP_PROVISIONER:-admin}"
+
+usage() {
+  sed -n '4,9p' "$0" | sed 's/^# \{0,1\}//'
+  exit "${1:-2}"
+}
+
+cle="$HOME/.ssh/id_ed25519.pub"
+duree=16h
+statut=0
+principaux=()
+while (($# > 0)); do
+  case "$1" in
+    -p | --principal) [[ $# -ge 2 ]] || usage; principaux+=("$2"); shift 2 ;;
+    -k | --cle) [[ $# -ge 2 ]] || usage; cle="$2"; shift 2 ;;
+    -d | --duree) [[ $# -ge 2 ]] || usage; duree="$2"; shift 2 ;;
+    --statut) statut=1; shift ;;
+    -h | --help) usage 0 ;;
+    *) log_err "option inconnue : $1"; usage ;;
+  esac
+done
+((${#principaux[@]} > 0)) || principaux=(admin)
+[[ "$cle" == *.pub && -r "$cle" ]] || die "clé publique illisible : $cle (fichier .pub attendu)" 2
+certificat="${cle%.pub}-cert.pub"
+
+require_cmd step ssh-keygen ssh-add
+
+if ((statut)); then
+  [[ -r "$certificat" ]] || die "aucun certificat : $certificat"
+  ssh-keygen -L -f "$certificat" | sed -n -E '/Key ID|Valid|Principals/,/Critical/p' | grep -v Critical
+  exit 0
+fi
+
+[[ -r "$MDP" ]] || die "mot de passe du provisioner illisible : $MDP"
+[[ "$(stat -c %a "$MDP")" == 600 ]] || die "$MDP doit être en mode 600"
+
+args=()
+for p in "${principaux[@]}"; do args+=("--principal=$p"); done
+
+log_info "signature de $cle pour ${principaux[*]} ($duree)"
+# Identité du certificat (Key ID) : le compte qui demande, visible dans les journaux de sshd.
+step ssh certificate "$(id -un)@$(hostname -s)" "$cle" --sign --force --no-agent \
+  --not-after "$duree" --provisioner "$PROVISIONER" --provisioner-password-file "$MDP" \
+  "${args[@]}" >/dev/null
+
+# Rechargement dans l'agent, seulement pour la clé de ce poste (clé privée présente).
+if [[ -r "${cle%.pub}" ]] && ssh-add -l >/dev/null 2>&1; then
+  ssh-add -d "$certificat" >/dev/null 2>&1 || true
+  ssh-add "${cle%.pub}" >/dev/null 2>&1 || log_warn "ssh-add a échoué : recharge la clé à la main (phrase de passe ?)"
+fi
+ssh-keygen -L -f "$certificat" | sed -n -E 's/^[[:space:]]+(Valid: .*)/\1/p'

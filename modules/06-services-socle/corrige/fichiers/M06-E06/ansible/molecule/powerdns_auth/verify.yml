@@ -1,0 +1,80 @@
+---
+# molecule/powerdns_auth/verify.yml — vérifie les RÉPONSES DNS et l'API, pas les fichiers.
+- name: Vérifier le rôle powerdns_auth
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    dig: dig +norecurse +time=2 +tries=1 -p 5300 @127.0.0.1
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service pdns actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['pdns.service']['state'] == 'running'
+          - ansible_facts['services']['pdns.service']['status'] == 'enabled'
+
+    - name: Rien n'écoute sur le port 53 (réservé au récurseur)
+      ansible.builtin.command: ss -Hlnu "sport = :53"
+      register: port53
+      changed_when: false
+      failed_when: port53.stdout | length > 0
+
+    - name: Réponses attendues
+      ansible.builtin.command: "{{ dig }} +short {{ item.q }}"
+      register: rep
+      changed_when: false
+      failed_when: rep.stdout != item.r
+      loop:
+        - {q: "test01.par1.medisphere.internal A", r: "10.10.20.250"}
+        - {q: "alias01.par1.medisphere.internal A", r: "10.10.20.250"}
+        - {q: "-x 10.10.20.250", r: "test01.par1.medisphere.internal."}
+        - {q: "-x 10.10.99.1", r: "gw01.par1.medisphere.internal."}
+        - {q: "externe.par1.medisphere.internal A", r: "192.168.1.20"}
+        - {q: "par1.medisphere.internal NS", r: "dns01.par1.medisphere.internal."}
+      loop_control:
+        label: "{{ item.q }}"
+
+    - name: Nom inexistant d'une zone servie — NXDOMAIN avec autorité
+      ansible.builtin.command: "{{ dig }} absent.par1.medisphere.internal A"
+      register: nx
+      changed_when: false
+      failed_when: >-
+        nx.stdout is not search('status: NXDOMAIN')
+        or nx.stdout is not search('flags:[^;]* aa')
+
+    - name: Zone non servie — REFUSED (un serveur faisant autorité ne fait pas de récursion)
+      ansible.builtin.command: "{{ dig }} www.debian.org A"
+      register: hors_zone
+      changed_when: false
+      failed_when: >-
+        hors_zone.stdout is not search('status: REFUSED')
+
+    - name: Numéro de série au format AAAAMMJJnn
+      ansible.builtin.command: "{{ dig }} +short par1.medisphere.internal SOA"
+      register: soa
+      changed_when: false
+      failed_when: soa.stdout.split()[2] is not match('^20[0-9]{8}$')
+
+    - name: La zone pilotée par API existe mais reste vide (SOA et NS seulement)
+      ansible.builtin.command: pdnsutil zone list zone-api.test
+      become: true
+      become_user: pdns
+      register: zone_api
+      changed_when: false
+      failed_when: zone_api.stdout_lines | reject('match', '^\\$') | select('search', '\\sIN\\s') | reject('search', '\\s(SOA|NS)\\s') | list | length > 0
+
+    - name: API avec la clé — liste des zones
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/api/v1/servers/localhost/zones
+        headers:
+          X-API-Key: molecule-cle-api-de-test-0123456789
+        return_content: true
+        use_proxy: false
+      register: api
+
+    - name: Toutes les zones sont visibles par l'API
+      ansible.builtin.assert:
+        that: api.json | map(attribute='name') | sort == ['10.10.in-addr.arpa.', 'medisphere.internal.', 'par1.medisphere.internal.', 'zone-api.test.']

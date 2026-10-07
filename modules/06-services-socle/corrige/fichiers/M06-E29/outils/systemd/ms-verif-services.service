@@ -1,0 +1,31 @@
+# /etc/systemd/system/ms-verif-services.service — M06-E29 (PLAT-755)
+# Sonde des services socle. Déclenchée par ms-verif-services.timer (toutes les 15 minutes).
+# Test manuel : sudo systemctl start ms-verif-services.service ; journalctl -u ms-verif-services -n 40
+
+[Unit]
+Description=MédiSphère : sonde des services socle (DNS, DHCP, NetBox, PKI, certificats)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+# Version installée par « task install:systeme », jamais le clone de travail.
+ExecStart=/usr/local/bin/ms-verif-services --quiet
+# Une sonde complète dure quelques secondes ; au-delà, un service bloque (délais DNS, TLS).
+TimeoutStartSec=3min
+SyslogIdentifier=ms-verif-services
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

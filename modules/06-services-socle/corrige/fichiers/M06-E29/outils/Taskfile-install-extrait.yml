@@ -1,0 +1,12 @@
+# Taskfile.yml de plateforme/outils — EXTRAIT : la tâche install:systeme de M02-E20, complétée
+# pour installer aussi la configuration de ms-verif-services (M06-E29).
+  install:systeme:
+    desc: Installe les scripts dans /usr/local (root:root), pour les services systemd
+    cmds:
+      - sudo install -D -o root -g root -m 0644 lib/ms-commun.sh /usr/local/lib/ms-commun.sh
+      - for: { var: SCRIPTS }
+        cmd: sudo install -o root -g root -m 0755 bin/{{.ITEM}} /usr/local/bin/{{.ITEM}}
+      # Configuration de la sonde : versionnée ici, relue en MR, installée telle quelle.
+      - sudo install -D -o root -g root -m 0644 etc/ms-verif-services.conf /usr/local/etc/ms-verif-services.conf
+    vars:
+      SCRIPTS: ms-snapshot ms-verif-sauvegardes ms-alerte ms-verif-services

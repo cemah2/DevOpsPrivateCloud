@@ -1,0 +1,13 @@
+---
+# roles/gitlab_runner/tasks/step.yml — AJOUTÉ en M06-E19, importé par tasks/main.yml du rôle
+# (« - ansible.builtin.import_tasks: step.yml »). runner01 exécute le playbook ssh-ca.yml en CI :
+# il signe les clés d'hôte, donc il lui faut step-cli (même dépôt vérifié que ca01).
+- name: Dépôt Smallstep vérifié (tâches du rôle step_ca)
+  ansible.builtin.include_role:
+    name: step_ca
+    tasks_from: depot.yml
+
+- name: step-cli à la version figée
+  ansible.builtin.apt:
+    name: "step-cli={{ step_ca_cli_paquet_version }}"
+    state: present

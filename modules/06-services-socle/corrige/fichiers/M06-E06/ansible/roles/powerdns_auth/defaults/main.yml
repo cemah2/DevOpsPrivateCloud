@@ -1,0 +1,62 @@
+---
+# Rôle powerdns_auth (M06-E06) — serveur DNS FAISANT AUTORITÉ PowerDNS 5.0 (dépôt officiel),
+# backend gsqlite3, API HTTP. Il ne fait AUCUNE récursion : c'est le travail du récurseur
+# (rôle powerdns_recursor, M06-E07), qui lui transmet les questions sur les zones internes.
+# Les valeurs du socle sont dans inventories/lab/group_vars/role_dns/powerdns_auth.yml.
+
+# --- Dépôt APT repo.powerdns.com ------------------------------------------------------------------
+powerdns_auth_depot_url: http://repo.powerdns.com/debian
+powerdns_auth_depot_suite: trixie-auth-50
+powerdns_auth_depot_cle_url: https://repo.powerdns.com/FD380FBB-pub.asc
+# « PowerDNS Release Signing Key » : empreinte vérifiée avant usage (dépôt en HTTP : la
+# signature des index est la seule garantie d'intégrité).
+powerdns_auth_depot_cle_empreinte: 9FAAA5577E8FCF62093D036C1B0C6205FD380FBB
+
+# --- Écoute DNS (jamais le port 53 : il appartient au récurseur) ---------------------------------
+powerdns_auth_ecoute:
+  - 127.0.0.1:5300
+
+# --- Backend ----------------------------------------------------------------------------------------
+powerdns_auth_base: /var/lib/powerdns/pdns.sqlite3
+
+# --- API HTTP ---------------------------------------------------------------------------------------
+powerdns_auth_api_adresse: 127.0.0.1
+powerdns_auth_api_port: 8081
+# Clients autorisés à se connecter au serveur web (en plus de la clé d'API exigée).
+powerdns_auth_api_autorises:
+  - 127.0.0.1
+# Clé d'API (Vault « critique ») : qui la détient peut réécrire toutes les zones.
+powerdns_auth_cle_api: ""
+
+# --- Zones ------------------------------------------------------------------------------------------
+powerdns_auth_ttl: 300
+powerdns_auth_soa:
+  primaire: "{{ inventory_hostname }}"
+  contact: hostmaster.{{ inventory_hostname }}
+  rafraichissement: 3600
+  nouvel_essai: 900
+  expiration: 1209600
+  ttl_negatif: 300
+# Serveurs de noms annoncés (NS) dans chaque zone.
+powerdns_auth_ns:
+  - "{{ inventory_hostname }}"
+# Zones servies. Chaque élément :
+#   nom            nom de la zone, sans point final (ex. par1.medisphere.internal)
+#   type           native | primary | secondary (défaut native ; primary pour notifier un secondaire)
+#   contenu        fichier | api (défaut fichier)
+#                    fichier : le rôle génère TOUT le contenu (hôtes + enregistrements ci-dessous)
+#                              et recharge la zone quand il change ;
+#                    api     : le rôle crée la zone si elle manque et ne touche plus jamais à son
+#                              contenu (OpenTofu, synchronisation NetBox… M06-E14/E15).
+#   enregistrements  liste de {nom (absolu, avec ou sans point final), type, contenu, ttl?}
+powerdns_auth_zones: []
+# Hôtes : un A par nom dans la zone la plus précise qui le contient, et le PTR de l'adresse vers
+# le PREMIER nom (comme host-record de dnsmasq). a: false = PTR seulement (adresses secondaires).
+#   - {noms: [dns01.par1.medisphere.internal], ip: 10.10.20.10}
+powerdns_auth_hotes: []
+
+# --- Divers -----------------------------------------------------------------------------------------
+# Réponse à « version.bind » : ne rien révéler.
+powerdns_auth_version: anonymous
+# false : le rôle prépare la configuration sans redémarrer le service (changement planifié).
+powerdns_auth_redemarrer: true

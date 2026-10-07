@@ -1,0 +1,138 @@
+{#- kea-dhcp4.conf construit comme une structure puis sérialisé : JSON toujours valide.
+    Les commentaires sont dans « user-context » (Kea les conserve et les rend par config-get).
+    M06-E16 (base), M06-E17 (API, DDNS), M06-E25 (API en HTTPS sur l'adresse de service avec
+    plusieurs comptes, haute disponibilité hot-standby avec TLS mutuel entre pairs). -#}
+{%- set tls = {
+      "trust-anchor": kea_dhcp4_tls_racine,
+      "cert-file": kea_dhcp4_tls_certificat,
+      "key-file": kea_dhcp4_tls_cle
+    } if kea_dhcp4_tls | bool else {} -%}
+{#- Listes construites dans des boucles : namespace() obligatoire (une variable affectée dans une
+    boucle Jinja n'existe plus après la boucle : sans namespace, la liste resterait vide). -#}
+{%- set ns = namespace(sous_reseaux=[], clients=[], pairs=[]) -%}
+{%- for s in kea_dhcp4_sous_reseaux -%}
+{%-   set options = [{"name": "routers", "data": s.routeur}] -%}
+{%-   if s.ntp is defined -%}
+{%-     set options = options + [{"name": "ntp-servers", "data": s.ntp}] -%}
+{%-   endif -%}
+{%-   set sr = {
+        "id": s.id,
+        "subnet": s.reseau,
+        "pools": s.plages | map('community.general.dict_kv', 'pool') | list,
+        "option-data": options,
+        "user-context": {"commentaire": s.commentaire | default('')}
+      } -%}
+{%-   if kea_dhcp4_ddns | bool -%}
+{%-     set sr = sr | combine({"ddns-send-updates": s.ddns | default(false) | bool}) -%}
+{%-   endif -%}
+{%-   set ns.sous_reseaux = ns.sous_reseaux + [sr] -%}
+{%- endfor -%}
+{%- set sockets = [{"socket-type": "unix", "socket-name": "kea4-ctrl-socket"}] -%}
+{%- if kea_dhcp4_api | bool -%}
+{#-   (E25) comptes supplémentaires (supervision…) : un fichier de mot de passe chacun. -#}
+{%-   set ns.clients = [{"user": kea_dhcp4_api_utilisateur, "password-file": "kea-api-mdp"}] -%}
+{%-   for c in kea_dhcp4_api_comptes_supplementaires -%}
+{%-     set ns.clients = ns.clients + [{"user": c.utilisateur, "password-file": "kea-api-mdp-" ~ c.utilisateur}] -%}
+{%-   endfor -%}
+{%-   set socket_api = {
+        "socket-type": "https" if kea_dhcp4_tls | bool else "http",
+        "socket-address": kea_dhcp4_api_adresse,
+        "socket-port": kea_dhcp4_api_port | int,
+        "authentication": {
+          "type": "basic",
+          "realm": "kea-dhcpv4-server",
+          "directory": "/etc/kea",
+          "clients": ns.clients
+        }
+      } -%}
+{#-   (E25) Serveur authentifié par TLS ; clients (curl, sonde) par mot de passe : pas de
+      certificat client exigé sur CE socket. -#}
+{%-   if kea_dhcp4_tls | bool -%}
+{%-     set socket_api = socket_api | combine(tls, {"cert-required": false}) -%}
+{%-   endif -%}
+{%-   set sockets = sockets + [socket_api] -%}
+{%- endif -%}
+{%- set dhcp4 = {
+  "user-context": {"gere-par": kea_dhcp4_entete},
+  "interfaces-config": {
+    "interfaces": kea_dhcp4_interfaces,
+    "dhcp-socket-type": kea_dhcp4_type_socket
+  },
+  "control-sockets": sockets,
+  "lease-database": {
+    "type": "memfile",
+    "persist": true,
+    "name": kea_dhcp4_fichier_baux,
+    "lfc-interval": 3600
+  },
+  "valid-lifetime": kea_dhcp4_duree_bail | int,
+  "renew-timer": (kea_dhcp4_duree_bail | int) // 2,
+  "rebind-timer": (kea_dhcp4_duree_bail | int) * 7 // 8,
+  "authoritative": kea_dhcp4_autoritaire | bool,
+  "option-data": [
+    {"name": "domain-name-servers", "data": kea_dhcp4_dns | join(', ')},
+    {"name": "domain-name", "data": kea_dhcp4_domaine},
+    {"name": "domain-search", "data": kea_dhcp4_domaine}
+  ],
+  "subnet4": ns.sous_reseaux,
+  "loggers": [{
+    "name": "kea-dhcp4",
+    "output-options": [{"output": "stdout", "pattern": "%-5p %m\n"}],
+    "severity": "INFO"
+  }]
+} -%}
+{%- set hooks = kea_dhcp4_hooks | map('community.general.dict_kv', 'library') | list -%}
+{%- if kea_dhcp4_ha | bool -%}
+{#-   (E25) HA hot-standby. lease_cmds DOIT précéder ha (commandes lease4-update… entre pairs). -#}
+{%-   for p in kea_dhcp4_ha_pairs -%}
+{%-     set ns.pairs = ns.pairs + [{
+          "name": p.nom,
+          "url": ("https" if kea_dhcp4_tls | bool else "http") ~ "://" ~ p.ip ~ ":" ~ (kea_dhcp4_ha_port | string) ~ "/",
+          "role": p.role,
+          "auto-failover": true
+        }] -%}
+{%-   endfor -%}
+{%-   set relation = {
+        "this-server-name": kea_dhcp4_ha_nom_local,
+        "mode": kea_dhcp4_ha_mode,
+        "heartbeat-delay": kea_dhcp4_ha_heartbeat_ms | int,
+        "max-response-delay": kea_dhcp4_ha_max_response_ms | int,
+        "max-ack-delay": kea_dhcp4_ha_max_ack_ms | int,
+        "max-unacked-clients": kea_dhcp4_ha_max_unacked | int,
+        "restrict-commands": true,
+        "multi-threading": {
+          "enable-multi-threading": true,
+          "http-dedicated-listener": true,
+          "http-listener-threads": kea_dhcp4_ha_fils | int,
+          "http-client-threads": kea_dhcp4_ha_fils | int
+        },
+        "peers": ns.pairs
+      } -%}
+{#-   TLS mutuel : c'est LUI qui authentifie les pairs (l'écouteur dédié ne vérifie pas de mot de passe). -#}
+{%-   if kea_dhcp4_tls | bool -%}
+{%-     set relation = relation | combine(tls, {"require-client-certs": true}) -%}
+{%-   endif -%}
+{%-   if 'libdhcp_lease_cmds.so' not in kea_dhcp4_hooks -%}
+{%-     set hooks = hooks + [{"library": "libdhcp_lease_cmds.so"}] -%}
+{%-   endif -%}
+{%-   set hooks = hooks + [{"library": "libdhcp_ha.so", "parameters": {"high-availability": [relation]}}] -%}
+{%-   set dhcp4 = dhcp4 | combine({"multi-threading": {"enable-multi-threading": true}}) -%}
+{%- endif -%}
+{%- if hooks | length > 0 -%}
+{%-   set dhcp4 = dhcp4 | combine({"hooks-libraries": hooks}) -%}
+{%- endif -%}
+{%- if kea_dhcp4_ddns | bool -%}
+{%-   set dhcp4 = dhcp4 | combine({
+        "dhcp-ddns": {"enable-updates": true, "server-ip": "127.0.0.1", "server-port": 53001},
+        "ddns-send-updates": false,
+        "ddns-qualifying-suffix": kea_dhcp4_ddns_suffixe,
+        "ddns-override-client-update": true,
+        "ddns-override-no-update": true,
+        "ddns-replace-client-name": "when-not-present",
+        "ddns-generated-prefix": kea_dhcp4_ddns_prefixe_genere,
+        "ddns-conflict-resolution-mode": "check-with-dhcid",
+        "hostname-char-set": "[^A-Za-z0-9.-]",
+        "hostname-char-replacement": "-"
+      }) -%}
+{%- endif -%}
+{{ {"Dhcp4": dhcp4} | to_nice_json(indent=2) }}

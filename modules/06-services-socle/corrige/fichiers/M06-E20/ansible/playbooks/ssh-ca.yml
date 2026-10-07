@@ -1,0 +1,14 @@
+---
+# playbooks/ssh-ca.yml — SSH par certificats sur le socle (M06-E19, complété en M06-E20).
+# Le contrôleur (adm01 ou runner01) doit avoir step-cli : il signe les clés d'hôte.
+# serial: 2 et aucun échec toléré : un problème de sshd ne touche jamais tout le socle d'un coup.
+- name: Certificats SSH d'hôte et d'utilisateur
+  hosts: socle
+  become: true
+  serial: 2
+  max_fail_percentage: 0
+  roles:
+    - role: ssh_ca_hote
+      tags: [ssh_ca, ssh_ca_hote]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca, ssh_ca_utilisateur]

@@ -1,0 +1,104 @@
+---
+# Dépôt officiel (procédure de repo.powerdns.com) : clé dans /etc/apt/keyrings, source signée,
+# épinglage à 600 pour préférer ces paquets à ceux de Debian (pdns 4.9 dans trixie).
+
+- name: Outils de vérification de clé et client SQLite
+  ansible.builtin.apt:
+    name: [gpg, sqlite3, bind9-dnsutils]
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Clé de signature PowerDNS
+  ansible.builtin.get_url:
+    url: "{{ powerdns_auth_depot_cle_url }}"
+    dest: /etc/apt/keyrings/auth-50-pub.asc
+    mode: "0644"
+  register: powerdns_auth_cle
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/auth-50-pub.asc
+  register: powerdns_auth_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that: powerdns_auth_cle_colonnes.stdout is search('^fpr:+' ~ powerdns_auth_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: "La clé /etc/apt/keyrings/auth-50-pub.asc n'a pas l'empreinte attendue : ne pas installer."
+    quiet: true
+
+- name: Source APT PowerDNS Authoritative 5.0
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pdns-auth-50.list
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle powerdns_auth)
+      deb [signed-by=/etc/apt/keyrings/auth-50-pub.asc] {{ powerdns_auth_depot_url }} {{ powerdns_auth_depot_suite }} main
+  register: powerdns_auth_source
+
+- name: Préférer les paquets pdns du dépôt officiel
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/pdns-auth-50
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle powerdns_auth)
+      Package: pdns-*
+      Pin: origin repo.powerdns.com
+      Pin-Priority: 600
+  register: powerdns_auth_pin
+
+- name: Relire les index APT
+  ansible.builtin.apt:
+    update_cache: true
+  when: powerdns_auth_source is changed or powerdns_auth_cle is changed or powerdns_auth_pin is changed
+
+# Le paquet démarre pdns dès l'installation, avec SA configuration (DNS sur 0.0.0.0:53, pas de
+# backend) : au mieux un service en échec, au pire un conflit avec le DNS en service. On
+# empêche ce démarrage (politique Debian « policy-rc.d », respectée par deb-systemd-invoke),
+# le rôle démarrera le service une fois configuré.
+- name: Paquets PowerDNS déjà installés ?
+  ansible.builtin.command: dpkg-query -W -f='${db:Status-Abbrev}\n' pdns-server pdns-backend-sqlite3
+  register: powerdns_auth_dpkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Un policy-rc.d existe-t-il déjà ? (ne jamais toucher à celui d'un autre)
+  ansible.builtin.stat:
+    path: /usr/sbin/policy-rc.d
+  register: powerdns_auth_policy
+
+- name: Installer sans démarrer (premier passage seulement)
+  when: powerdns_auth_dpkg.stdout_lines | select('match', '^ii') | list | length < 2
+  block:
+    - name: Interdire temporairement le démarrage des services par les paquets
+      ansible.builtin.copy:
+        dest: /usr/sbin/policy-rc.d
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # Posé temporairement par le rôle powerdns_auth : aucun service démarré par dpkg.
+          exit 101
+      when:
+        - not powerdns_auth_policy.stat.exists
+        - not ansible_check_mode
+
+    # Sans les paquets « recommandés » : pdns-server recommande pdns-backend-bind, qui ajoute
+    # /etc/powerdns/pdns.d/bind.conf (« launch+=bind ») : un second backend inutile, consulté
+    # avant gsqlite3 pour chaque question.
+    - name: Installer PowerDNS Authoritative et le backend SQLite
+      ansible.builtin.apt:
+        name: [pdns-server, pdns-backend-sqlite3]
+        state: present
+        install_recommends: false
+  always:
+    - name: Rétablir le démarrage normal des services
+      ansible.builtin.file:
+        path: /usr/sbin/policy-rc.d
+        state: absent
+      when: not powerdns_auth_policy.stat.exists

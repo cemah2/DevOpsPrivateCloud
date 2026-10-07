@@ -1,0 +1,48 @@
+---
+- name: Lire l'unité systemd actuelle
+  ansible.builtin.stat:
+    path: /etc/systemd/system/seaweedfs.service
+  register: seaweedfs_unite
+
+- name: Unité systemd de SeaweedFS
+  ansible.builtin.template:
+    src: seaweedfs.service.j2
+    dest: /etc/systemd/system/seaweedfs.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer seaweedfs
+
+- name: Service activé et démarré
+  ansible.builtin.systemd_service:
+    name: seaweedfs.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  # En --check sur un hôte neuf, l'unité n'existe pas encore : rien à simuler.
+  when: seaweedfs_unite.stat.exists or not ansible_check_mode
+
+# Appliquer les redémarrages maintenant : les compartiments et les sondes en dépendent.
+- name: Appliquer les changements en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre la passerelle S3
+  ansible.builtin.wait_for:
+    host: "{{ seaweedfs_s3_ecoute }}"
+    port: "{{ seaweedfs_s3_port }}"
+    timeout: 120
+  when: not ansible_check_mode
+
+# Une requête anonyme doit être REFUSÉE (403) : c'est la preuve que les identités sont
+# chargées. 200 voudrait dire « Allow-All ». La chaîne de confiance TLS est contrôlée depuis
+# les clients (adm01, runner01), qui ont la CA ; ici on ne vérifie que le comportement.
+- name: La passerelle répond en HTTPS et refuse l'accès anonyme
+  ansible.builtin.uri:
+    url: "https://{{ seaweedfs_s3_ecoute }}:{{ seaweedfs_s3_port }}/"
+    validate_certs: false
+    status_code: 403
+  register: seaweedfs_sonde
+  retries: 12
+  delay: 5
+  until: seaweedfs_sonde.status == 403
+  when: not ansible_check_mode

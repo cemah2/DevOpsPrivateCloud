@@ -1,0 +1,80 @@
+---
+- name: Liste cohérente (rien n'est à la fois à installer et à retirer)
+  ansible.builtin.assert:
+    that:
+      - ca_lab_certificats | map(attribute='nom') | intersect(ca_lab_retirer) | length == 0
+    fail_msg: >-
+      Autorité(s) à la fois à installer et à retirer :
+      {{ ca_lab_certificats | map(attribute='nom') | intersect(ca_lab_retirer) | join(', ') }}.
+    quiet: true
+
+- name: Paquet ca-certificates
+  ansible.builtin.apt:
+    name: ca-certificates
+    state: present
+
+- name: Installer les autorités de certification du lab
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.nom }}.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ca_lab_certificats }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _ca_lab_copie
+
+# M06-E03 : une autorité qu'on ne fait plus confiance doit DISPARAÎTRE du magasin, pas
+# seulement cesser d'être déployée (retirer une ligne de l'inventaire ne retire rien).
+- name: Retirer les autorités qui ne sont plus de confiance
+  ansible.builtin.file:
+    path: "/usr/local/share/ca-certificates/{{ item }}.crt"
+    state: absent
+  loop: "{{ ca_lab_retirer }}"
+  register: _ca_lab_retrait
+
+# Immédiatement (pas en handler) : la suite du play peut avoir besoin de la nouvelle
+# autorité (téléchargement depuis git01, appel à l'API de pve01…). --fresh après un retrait :
+# reconstruit tous les liens au lieu de les mettre à jour.
+- name: Reconstruire le magasin système  # noqa: no-handler
+  ansible.builtin.command: >-
+    update-ca-certificates{{ ' --fresh' if _ca_lab_retrait is changed else '' }}
+  when: _ca_lab_copie is changed or _ca_lab_retrait is changed
+  changed_when: true
+
+- name: Vérifier le contenu du magasin système
+  when:
+    - ca_lab_verifier | bool
+    - not ansible_check_mode
+  block:
+    - name: Lire le magasin consolidé
+      ansible.builtin.slurp:
+        src: /etc/ssl/certs/ca-certificates.crt
+      register: _ca_lab_bundle
+
+    - name: Chaque autorité installée est dans le magasin
+      ansible.builtin.assert:
+        that:
+          # 2e ligne du PEM (début du corps base64) : assez distinctive pour reconnaître le certificat.
+          - (lookup('ansible.builtin.file', item.source).splitlines()[1]) in (_ca_lab_bundle.content | b64decode)
+        fail_msg: "{{ item.nom }} n'apparaît pas dans /etc/ssl/certs/ca-certificates.crt après reconstruction."
+        quiet: true
+      loop: "{{ ca_lab_certificats }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Aucun lien vers une autorité retirée ne subsiste
+      ansible.builtin.stat:
+        path: "/etc/ssl/certs/{{ item }}.pem"
+      loop: "{{ ca_lab_retirer }}"
+      register: _ca_lab_liens
+
+    - name: Refuser un magasin qui fait encore confiance à une autorité retirée
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        fail_msg: "/etc/ssl/certs/{{ item.item }}.pem existe encore : le magasin n'a pas été reconstruit."
+        quiet: true
+      loop: "{{ _ca_lab_liens.results }}"
+      loop_control:
+        label: "{{ item.item }}"

@@ -1,0 +1,47 @@
+---
+# EXTRAIT de playbooks/site.yml à la fin du palier 1 du module 06 (M06-E02 à E08).
+# Seuls les changements par rapport à ta version (M04-E46, complétée en M05 pour s3-01) :
+#   - le garde-fou compte les nouveaux hôtes (ca01, nbx01) et leurs groupes ;
+#   - outils-pki.yml juste après les rôles communs (adm01 reçoit la commande step) ;
+#   - dns01.yml applique désormais dnsmasq (DHCP seul), powerdns_auth et powerdns_recursor ;
+#   - ca01.yml AVANT les services qui demanderont des certificats (git01, nbx01 en ACME, E18) ;
+#   - nbx01.yml après ca01.yml.
+# bascule-dns.yml N'EST PAS importé : c'est une opération ponctuelle (CHG-708), pas un état.
+
+- name: Garde-fou d'inventaire
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Les huit hôtes du socle sont dans l'inventaire, chacun dans son groupe
+      ansible.builtin.assert:
+        that:
+          - groups['socle'] | default([]) | length == 8
+          - groups['role_routeur'] | default([]) | length == 1
+          - groups['role_bastion'] | default([]) | length == 1
+          - groups['role_dns'] | default([]) | length >= 1
+          - groups['role_pki'] | default([]) | length == 1
+          - groups['role_gitlab'] | default([]) | length == 1
+          - groups['role_netbox'] | default([]) | length == 1
+          - groups['role_s3'] | default([]) | length == 1
+          - groups['role_runner'] | default([]) | length == 1
+        fail_msg: >-
+          Inventaire incomplet ({{ groups['socle'] | default([]) | length }} hôte(s) dans socle) :
+          passage annulé. Voir RB-040, section « inventaire ».
+        quiet: true
+
+- name: Rôles communs (base, ssh_durci, ca_lab)
+  ansible.builtin.import_playbook: socle-base.yml
+
+- name: Outils de la PKI sur le poste d'administration
+  ansible.builtin.import_playbook: outils-pki.yml
+
+- name: DNS (PowerDNS) et DHCP (dnsmasq jusqu'à Kea)
+  ansible.builtin.import_playbook: dns01.yml
+
+- name: Autorité de certification
+  ansible.builtin.import_playbook: ca01.yml
+
+- name: Source de vérité
+  ansible.builtin.import_playbook: nbx01.yml
+
+# … puis, inchangés : git01.yml, runner01.yml, le playbook de s3-01 (M05), gw01-pare-feu.yml en dernier.

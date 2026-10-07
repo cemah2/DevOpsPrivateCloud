@@ -1,0 +1,30 @@
+{#- kea-dhcp-ddns.conf construit comme une structure puis sérialisé : JSON toujours valide. -#}
+{%- set serveur = [{"ip-address": kea_ddns_serveur, "port": kea_ddns_port | int}] -%}
+{%- set d2 = {
+  "user-context": {"gere-par": kea_ddns_entete},
+  "ip-address": "127.0.0.1",
+  "port": 53001,
+  "dns-server-timeout": 500,
+  "control-sockets": [{"socket-type": "unix", "socket-name": "kea-ddns-ctrl-socket"}],
+  "tsig-keys": [{
+    "name": kea_ddns_tsig_nom,
+    "algorithm": kea_ddns_tsig_algorithme | upper,
+    "secret-file": kea_ddns_tsig_fichier
+  }],
+  "forward-ddns": {"ddns-domains": [{
+    "name": kea_ddns_zone_directe,
+    "key-name": kea_ddns_tsig_nom,
+    "dns-servers": serveur
+  }]},
+  "reverse-ddns": {"ddns-domains": [{
+    "name": kea_ddns_zone_inverse,
+    "key-name": kea_ddns_tsig_nom,
+    "dns-servers": serveur
+  }]},
+  "loggers": [{
+    "name": "kea-dhcp-ddns",
+    "output-options": [{"output": "stdout", "pattern": "%-5p %m\n"}],
+    "severity": "INFO"
+  }]
+} -%}
+{{ {"DhcpDdns": d2} | to_nice_json(indent=2) }}

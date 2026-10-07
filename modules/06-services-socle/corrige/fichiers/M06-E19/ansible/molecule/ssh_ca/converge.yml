@@ -1,0 +1,67 @@
+---
+# molecule/ssh_ca/converge.yml — CA de test avec CA SSH, puis les deux rôles sur l'instance.
+- name: Converge — CA de test (rôle step_ca, CA SSH active)
+  hosts: molecule
+  become: true
+  vars:
+    pki: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/pki-test"
+    step_ca_noms_dns:
+      - ca.molecule.test
+      - "{{ ansible_facts['default_ipv4']['address'] }}"
+    step_ca_racine_crt: "{{ pki }}/root_ca.crt"
+    step_ca_intermediaire_crt: "{{ pki }}/intermediate_ca.crt"
+    step_ca_mot_de_passe: molecule-inter-mot-de-passe-de-test
+    step_ca_provisioners:
+      - type: JWK
+        name: admin
+        key: "{{ lookup('ansible.builtin.file', pki ~ '/admin.pub.json') | from_json }}"
+        encryptedKey: "{{ lookup('ansible.builtin.file', pki ~ '/admin.enc') }}"
+        claims:
+          enableSSHCA: true
+      - type: SSHPOP
+        name: sshpop
+        claims:
+          enableSSHCA: true
+  roles:
+    - role: step_ca
+
+- name: Converge — certificats SSH d'hôte et d'utilisateur
+  hosts: molecule
+  become: true
+  vars:
+    pki: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/pki-test"
+    ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+    # Côté hôte : client step vers la CA de test (adresse IP présente dans son certificat TLS).
+    certificats_acme_ca_url: "https://{{ ip }}"
+    certificats_acme_racine: /usr/local/share/ca-certificates/molecule-root-ca.crt
+    # Côté contrôleur : signature avec la racine et le mot de passe jetables du scénario.
+    ssh_ca_hote_ca_url: "https://{{ ip }}"
+    ssh_ca_hote_racine_controleur: "{{ pki }}/root_ca.crt"
+    ssh_ca_hote_mot_de_passe_provisioner: "{{ lookup('ansible.builtin.file', pki ~ '/admin.pass') }}"
+    ssh_ca_hote_principaux: ["{{ inventory_hostname }}", "{{ ip }}"]
+  pre_tasks:
+    - name: Racine de test dans le magasin du système (rôle ca_lab en production)
+      ansible.builtin.copy:
+        src: "{{ pki }}/root_ca.crt"
+        dest: /usr/local/share/ca-certificates/molecule-root-ca.crt
+        mode: "0644"
+      register: racine
+
+    - name: Reconstruire le magasin  # noqa: no-handler
+      ansible.builtin.command: update-ca-certificates
+      when: racine is changed
+      changed_when: true
+
+    - name: Clés publiques des deux CA SSH de test (lues sur l'instance, comme step ssh config --roots)
+      ansible.builtin.slurp:
+        src: "/etc/step-ca/certs/{{ item }}"
+      loop: [ssh_host_ca_key.pub, ssh_user_ca_key.pub]
+      register: cles_ca
+
+    - name: Les rôles reçoivent ces clés comme si elles venaient de group_vars/all
+      ansible.builtin.set_fact:
+        ssh_ca_hote_cles_ca: ["{{ cles_ca.results[0].content | b64decode | trim }}"]
+        ssh_ca_utilisateur_cles_ca: ["{{ cles_ca.results[1].content | b64decode | trim }}"]
+  roles:
+    - role: ssh_ca_hote
+    - role: ssh_ca_utilisateur

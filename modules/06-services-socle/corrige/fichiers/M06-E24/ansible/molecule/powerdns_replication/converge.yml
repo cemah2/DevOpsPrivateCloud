@@ -1,0 +1,73 @@
+---
+# molecule/powerdns_replication/converge.yml — un primaire, un secondaire, une zone d'essai (M06-E24).
+# Les adresses viennent des faits des instances (DHCP de vsandbox). Clé TSIG et clé d'API : valeurs
+# de TEST, sans usage hors du scénario (jamais un secret de production dans un test).
+# Chaque jeu est idempotent : l'étape « idempotence » de Molecule rejoue tout le fichier.
+
+- name: Faits des deux instances
+  hosts: molecule
+  gather_facts: true
+  tasks: []
+
+- name: Primaire (zone d'essai pilotée « par l'API », comme par1 après M06-E14)
+  hosts: mol_primaire
+  become: true
+  vars: &mol_communes
+    mol_ip_a: "{{ hostvars[groups['mol_primaire'][0]]['ansible_facts']['default_ipv4']['address'] }}"
+    mol_ip_b: "{{ hostvars[groups['mol_secondaire'][0]]['ansible_facts']['default_ipv4']['address'] }}"
+    powerdns_auth_ecoute: ["127.0.0.1:5300", "{{ ansible_facts['default_ipv4']['address'] }}:5300"]
+    powerdns_auth_soa:
+      primaire: ns1.essai.molecule.internal
+      contact: hostmaster.essai.molecule.internal
+      rafraichissement: 3600
+      nouvel_essai: 900
+      expiration: 1209600
+      ttl_negatif: 300
+    powerdns_auth_ns: [ns1.essai.molecule.internal, ns2.essai.molecule.internal]
+    powerdns_auth_hotes: []
+    powerdns_auth_tsig:
+      nom: axfr-essai
+      algorithme: hmac-sha256
+      secret: bW9sZWN1bGUtdGVzdC1ub24tc2VjcmV0LXRzaWcta2V5
+  roles:
+    - role: powerdns_auth
+      vars:
+        powerdns_auth_mode: primaire
+        powerdns_auth_zones: [{nom: essai.molecule.internal, type: primary, contenu: api}]
+        powerdns_auth_notifier: ["{{ mol_ip_b }}:5300"]
+        powerdns_auth_api_active: true
+        powerdns_auth_api_adresse: 127.0.0.1
+        powerdns_auth_cle_api: molecule-cle-api-de-test-0123456789
+
+- name: Enregistrement témoin sur le primaire (ajouté une seule fois)
+  hosts: mol_primaire
+  become: true
+  tasks:
+    - name: Le témoin existe-t-il ?
+      ansible.builtin.command: dig +short +norecurse @127.0.0.1 -p 5300 temoin.essai.molecule.internal TXT
+      register: mol_temoin
+      changed_when: false
+
+    - name: "Ajouter le témoin (syntaxe pdnsutil 5.0 : nom ABSOLU)"
+      ansible.builtin.command: pdnsutil rrset add essai.molecule.internal temoin.essai.molecule.internal. TXT 60 '"v1"'
+      become_user: pdns
+      when: mol_temoin.stdout | length == 0
+      changed_when: true
+
+    - name: Faire avancer le numéro de série (NOTIFY vers le secondaire)
+      ansible.builtin.command: pdnsutil zone increase-serial essai.molecule.internal
+      become_user: pdns
+      when: mol_temoin.stdout | length == 0
+      changed_when: true
+
+- name: Secondaire
+  hosts: mol_secondaire
+  become: true
+  vars: *mol_communes
+  roles:
+    - role: powerdns_auth
+      vars:
+        powerdns_auth_mode: secondaire
+        powerdns_auth_zones: [{nom: essai.molecule.internal, type: secondary}]
+        powerdns_auth_primaire: "{{ mol_ip_a }}:5300"
+        powerdns_auth_api_active: false

@@ -1,0 +1,8 @@
+---
+# molecule/seaweedfs/molecule.yml — scénario du rôle « seaweedfs » (M05-E10)
+# Tout le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml
+# (M04-E24). Lancement, depuis la racine du projet, fichier d'accès Proxmox chargé :
+#   set -a; . ~/.config/workbook/pve-ansible.env; set +a
+#   uv run molecule test -s seaweedfs
+scenario:
+  name: seaweedfs

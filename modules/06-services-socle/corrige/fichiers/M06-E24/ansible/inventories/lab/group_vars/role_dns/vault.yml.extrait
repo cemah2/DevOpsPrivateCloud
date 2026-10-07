@@ -1,0 +1,5 @@
+# group_vars/role_dns/vault.yml (Vault « critique ») — variable AJOUTÉE en M06-E24.
+#   uv run ansible-vault edit --vault-id critique@outils/vault-pass-client.sh inventories/lab/group_vars/role_dns/vault.yml
+# Génération sans passer par l'historique du shell : openssl rand -base64 32
+# Inscrire le secret au registre (docs/socle/registre-secrets.md) : portée dns01+dns02, rotation annuelle.
+vault_powerdns_tsig_axfr_par1: "<SECRET-TSIG-BASE64-32-OCTETS>"

@@ -1,0 +1,14 @@
+---
+# host_vars/stat01/certificats.yml — certificat TLS de la page d'information (rôle certificats_acme,
+# M06-E18). nginx tient le port 80 (redirection) : arrêté le temps du défi, à l'émission seulement
+# (les renouvellements passent par TLS mutuel). « try-restart »/« --no-block » : sans effet et sans
+# erreur au tout premier passage, quand nginx n'est pas encore installé.
+certificats_acme_certificats:
+  - id: statut
+    noms: [stat01.par1.medisphere.internal]
+    certificat: /etc/nginx/tls/statut.crt
+    cle: /etc/nginx/tls/statut.key
+    groupe: www-data
+    avant_emission: /bin/sh -c "systemctl stop nginx.service 2>/dev/null || true"
+    apres_emission: /bin/sh -c "systemctl start nginx.service 2>/dev/null || true"
+    recharger: /bin/sh -c "systemctl try-reload-or-restart nginx.service"

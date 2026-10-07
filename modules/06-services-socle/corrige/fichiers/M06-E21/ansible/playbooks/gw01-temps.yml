@@ -1,0 +1,11 @@
+---
+# playbooks/gw01-temps.yml — gw01, serveur de temps NTS du lab (M06-E21).
+# Ordre : certificat (ACME) PUIS chrony, qui refuse de démarrer son service NTS sans lui.
+- name: Serveur de temps du lab (chrony + NTS)
+  hosts: role_routeur
+  become: true
+  roles:
+    - role: certificats_acme
+      tags: [certificats_acme]
+    - role: chrony_serveur
+      tags: [chrony_serveur]

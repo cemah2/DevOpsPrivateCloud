@@ -1,0 +1,145 @@
+---
+# Rôle kea_dhcp4 (M06-E16, E17 ; M06-E25 : comptes supplémentaires de l'API, TLS, haute disponibilité).
+# Ce fichier REMPLACE celui de M06-E16.
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - kea_dhcp4_sous_reseaux | length > 0
+      - kea_dhcp4_sous_reseaux | map(attribute='id') | select('integer') | list | length == kea_dhcp4_sous_reseaux | length
+      - kea_dhcp4_sous_reseaux | map(attribute='id') | unique | list | length == kea_dhcp4_sous_reseaux | length
+      - not kea_dhcp4_api or kea_dhcp4_api_mot_de_passe | length >= 16
+      - kea_dhcp4_api_comptes_supplementaires | rejectattr('mot_de_passe', 'defined') | list | length == 0
+      - kea_dhcp4_api_comptes_supplementaires | map(attribute='mot_de_passe') | map('length') | min | default(16) >= 16
+      - not kea_dhcp4_ha or (kea_dhcp4_ha_pairs | length == 2 and kea_dhcp4_ha_nom_local in kea_dhcp4_ha_pairs | map(attribute='nom'))
+      - not kea_dhcp4_ha or kea_dhcp4_ha_port | int != kea_dhcp4_api_port | int
+    fail_msg: >-
+      kea_dhcp4_sous_reseaux vide ou sans « id » entier unique (obligatoire en Kea 3.0), API
+      activée sans mot de passe d'au moins 16 caractères (Vault), compte supplémentaire sans mot de
+      passe, ou HA mal décrite (deux pairs dont cet hôte ; port HA distinct du port de l'API).
+    quiet: true
+
+- name: Dépôt ISC (Cloudsmith)
+  ansible.builtin.import_tasks: depot.yml
+
+- name: Paquets Kea 3.0 (serveur DHCPv4, hooks libres)
+  ansible.builtin.apt:
+    name:
+      - "isc-kea-dhcp4={{ kea_dhcp4_version }}"
+      - "isc-kea-hooks={{ kea_dhcp4_version }}"
+    state: present
+
+# Le paquet démarre le service avec sa configuration d'EXEMPLE (sous-réseau 192.0.2.0/24) :
+# sans danger ici (aucune interface déclarée), mais on ne laisse pas tourner ce qu'on n'a pas écrit.
+- name: Mot de passe de l'API (lu par kea-dhcp4, utilisateur _kea)
+  ansible.builtin.copy:
+    dest: /etc/kea/kea-api-mdp
+    content: "{{ kea_dhcp4_api_mot_de_passe }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+  no_log: true
+  when: kea_dhcp4_api | bool
+  notify: Redémarrer kea-dhcp4
+
+- name: (E25) Mots de passe des comptes supplémentaires de l'API (supervision…)
+  ansible.builtin.copy:
+    dest: /etc/kea/kea-api-mdp-{{ item.utilisateur }}
+    content: "{{ item.mot_de_passe }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+  loop: "{{ kea_dhcp4_api_comptes_supplementaires }}"
+  loop_control:
+    label: "{{ item.utilisateur }}"
+  no_log: true
+  when: kea_dhcp4_api | bool
+  notify: Redémarrer kea-dhcp4
+
+# (E25) Le certificat est émis et renouvelé par le rôle certificats_acme (M06-E18, entrée « kea »
+# de host_vars/<hôte>/certificats.yml), appliqué AVANT ce rôle : ici, on vérifie seulement.
+- name: (E25) Certificat TLS de Kea présent et lisible par le service
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ kea_dhcp4_tls_certificat }}"
+    - "{{ kea_dhcp4_tls_cle }}"
+  register: _kea_dhcp4_tls_fichiers
+  when: kea_dhcp4_tls | bool
+
+- name: (E25) Échouer clairement si le certificat manque
+  ansible.builtin.assert:
+    that: _kea_dhcp4_tls_fichiers.results | map(attribute='stat.exists') | min
+    fail_msg: >-
+      {{ kea_dhcp4_tls_certificat }} ou {{ kea_dhcp4_tls_cle }} absent : applique d'abord le rôle
+      certificats_acme (entrée « kea » de host_vars/{{ inventory_hostname }}/certificats.yml).
+    quiet: true
+  when: kea_dhcp4_tls | bool
+
+- name: Retirer le mot de passe de l'API si l'API est désactivée
+  ansible.builtin.file:
+    path: /etc/kea/kea-api-mdp
+    state: absent
+  when: not kea_dhcp4_api | bool
+
+- name: Configuration de kea-dhcp4 (validée par « kea-dhcp4 -t » avant d'être posée)
+  ansible.builtin.template:
+    src: kea-dhcp4.conf.j2
+    dest: "{{ kea_dhcp4_fichier }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+    backup: true
+    # -t vérifie aussi que les interfaces existent et que les hooks se chargent.
+    validate: kea-dhcp4 -t %s
+  notify: Redémarrer kea-dhcp4
+
+- name: Service actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: "{{ kea_dhcp4_service }}"
+    enabled: true
+    state: started
+
+- name: Appliquer maintenant les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# Contrôles sur le service RENDU, pas sur le fichier.
+- name: Le service kea-dhcp4 répond sur sa socket de contrôle (configuration chargée)
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf '{ "command": "config-hash-get" }' | socat - UNIX-CONNECT:/run/kea/kea4-ctrl-socket
+  args:
+    executable: /bin/bash
+  register: _kea_dhcp4_empreinte
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _kea_dhcp4_empreinte.rc != 0
+    or (_kea_dhcp4_empreinte.stdout | from_json).result != 0
+  when: not ansible_check_mode
+
+- name: Kea écoute le port 67 en UDP
+  ansible.builtin.command: ss -Hlunp 'sport = :67'
+  register: _kea_dhcp4_ecoute
+  changed_when: false
+  check_mode: false
+  failed_when: _kea_dhcp4_ecoute.stdout is not search('kea-dhcp4')
+  when: not ansible_check_mode
+
+# (E25) État de la paire : jamais « terminated » (la paire a cessé de coopérer : horloges, réseau).
+- name: (E25) État HA lu sur la socket locale
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf '{ "command": "status-get" }' | socat - UNIX-CONNECT:/run/kea/kea4-ctrl-socket
+  args:
+    executable: /bin/bash
+  register: _kea_dhcp4_ha_etat
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _kea_dhcp4_ha_etat.rc != 0
+    or ((_kea_dhcp4_ha_etat.stdout | from_json).arguments['high-availability'][0]['ha-servers'].local.state
+        | default('?')) == 'terminated'
+  when:
+    - kea_dhcp4_ha | bool
+    - not ansible_check_mode

@@ -1,0 +1,55 @@
+---
+# Rôle powerdns_auth — point d'entrée (M06-E06, complété en M06-E24 et M06-E26).
+# Changements de M06-E24 : l'API et la clé ne sont exigées que si l'API est active (pas sur le
+# secondaire) ; les zones générées (zones.yml) ne concernent que le PRIMAIRE — le secondaire
+# reçoit tout par transfert (replication.yml) ; signature DNSSEC (M06-E26) sur le primaire.
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - powerdns_auth_zones | length > 0
+      - powerdns_auth_ecoute | length > 0
+      - powerdns_auth_ecoute | select('search', ':53$') | list | length == 0
+      - powerdns_auth_mode in ['primaire', 'secondaire']
+      - not powerdns_auth_api_active | bool or powerdns_auth_cle_api | length >= 24
+      - powerdns_auth_mode == 'primaire' or not powerdns_auth_api_active | bool
+    fail_msg: >-
+      powerdns_auth_zones, powerdns_auth_ecoute (jamais le port 53, réservé au récurseur),
+      powerdns_auth_mode (primaire|secondaire) et, si l'API est active, powerdns_auth_cle_api
+      (24 caractères minimum, Vault critique) doivent être définis ; pas d'API sur un secondaire.
+    quiet: true
+  no_log: true
+  tags: [critique]
+
+- name: Dépôt PowerDNS et paquets
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [powerdns_auth_paquets]
+
+- name: Base gsqlite3 et configuration
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [powerdns_auth_config, critique]
+
+- name: Zones et contenu (primaire seulement)
+  ansible.builtin.import_tasks: zones.yml
+  when: powerdns_auth_mode == 'primaire'
+  tags: [powerdns_auth_zones]
+
+- name: Réplication primaire/secondaire et TSIG (M06-E24)
+  ansible.builtin.import_tasks: replication.yml
+  when: powerdns_auth_replication | bool
+  tags: [powerdns_auth_replication]
+
+# include (dynamique) : le fichier n'existe qu'à partir de M06-E26 et n'est lu que s'il sert.
+- name: Signature DNSSEC (M06-E26, primaire seulement)
+  ansible.builtin.include_tasks:
+    file: dnssec.yml
+    apply:
+      tags: [powerdns_auth_dnssec]
+  when:
+    - powerdns_auth_mode == 'primaire'
+    - powerdns_auth_zones_signees | length > 0
+  tags: [powerdns_auth_dnssec]
+
+- name: Vérifications
+  ansible.builtin.import_tasks: verifications.yml
+  tags: [powerdns_auth_verifications, critique]

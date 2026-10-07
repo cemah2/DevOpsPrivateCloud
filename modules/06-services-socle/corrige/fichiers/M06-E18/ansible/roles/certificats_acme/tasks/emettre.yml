@@ -1,0 +1,46 @@
+---
+# Émission d'UN certificat par ACME (appelée en boucle par main.yml, variable « certificat »).
+# Le port 80 est libéré le temps du défi : block/always garantit que le service repart,
+# même si l'émission échoue.
+
+- name: "Émission de {{ certificat.id }}"
+  block:
+    - name: "Libérer le port 80 ({{ certificat.id }})"
+      ansible.builtin.command: "{{ certificat.avant_emission }}"
+      changed_when: true
+      when: certificat.avant_emission | default('') | length > 0
+
+    - name: "Demander le certificat à ca01 ({{ certificat.id }})"
+      ansible.builtin.command:
+        argv: >-
+          {{ ['step', 'ca', 'certificate', certificat.noms[0], certificat.certificat, certificat.cle,
+              '--provisioner', certificats_acme_provisioner, '--force']
+             + (certificat.noms | map('regex_replace', '^', '--san=') | list) }}
+      environment:
+        STEPPATH: "{{ certificats_acme_steppath }}"
+      changed_when: true
+
+  always:
+    - name: "Rendre le port 80 ({{ certificat.id }})"
+      ansible.builtin.command: "{{ certificat.apres_emission }}"
+      changed_when: true
+      when: certificat.apres_emission | default('') | length > 0
+
+- name: "Droits du certificat, public ({{ certificat.id }})"
+  ansible.builtin.file:
+    path: "{{ certificat.certificat }}"
+    owner: root
+    group: "{{ certificat.groupe | default('root') }}"
+    mode: "0644"
+
+- name: "Droits de la clé privée ({{ certificat.id }})"
+  ansible.builtin.file:
+    path: "{{ certificat.cle }}"
+    owner: root
+    group: "{{ certificat.groupe | default('root') }}"
+    mode: "0640"
+
+- name: "Recharger le service consommateur ({{ certificat.id }})"
+  ansible.builtin.command: "{{ certificat.recharger }}"
+  changed_when: true
+  when: certificat.recharger | default('') | length > 0

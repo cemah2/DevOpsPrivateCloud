@@ -1,0 +1,42 @@
+---
+# Rôle ssh_ca_hote — certificat SSH de l'hôte signé par la CA SSH de step-ca (M06-E19).
+#
+# La clé PRIVÉE d'hôte ne quitte jamais l'hôte : le rôle lit la clé PUBLIQUE, la fait signer
+# SUR LE CONTRÔLEUR (adm01 ou runner01) avec le provisioner JWK « admin », et dépose le
+# certificat. Le renouvellement est ensuite autonome : minuterie locale, « step ssh renew »
+# authentifié par le certificat en cours (provisioner SSHPOP, M06-E02).
+# Les clients font confiance à la CA d'hôte (@cert-authority) au lieu de chaque clé.
+
+ssh_ca_hote_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# Clé d'hôte certifiée (ed25519 : celle que les clients du lab négocient).
+ssh_ca_hote_cle: /etc/ssh/ssh_host_ed25519_key
+
+# Principaux du certificat : TOUS les noms sous lesquels on joint l'hôte. ssh compare le nom
+# qu'il a utilisé (HostName : souvent une ADRESSE IP sur adm01, M00-E15 ; ansible_host : IP)
+# aux principaux ; un nom absent = « Certificate invalid: name is not a listed principal ».
+ssh_ca_hote_principaux: >-
+  {{ [inventory_hostname, inventory_hostname ~ '.' ~ (ms_domaine | default('par1.medisphere.internal'))]
+     + ([ansible_host] if ansible_host is defined and ansible_host != inventory_hostname else []) }}
+
+# Signature sur le contrôleur : CA, racine (pour vérifier la CA en TLS), provisioner.
+ssh_ca_hote_ca_url: https://ca01.par1.medisphere.internal
+ssh_ca_hote_racine_controleur: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+ssh_ca_hote_provisioner: admin
+# Mot de passe du provisioner (Vault « critique », vault_step_ca_mot_de_passe_admin, M06-E02).
+ssh_ca_hote_mot_de_passe_provisioner: ""
+
+# Re-signature par Ansible si le certificat est absent, invalide, ou au-delà de ce seuil
+# (step ssh needs-renewal : défaut 66 % de la durée de vie ; la minuterie locale renouvelle avant).
+ssh_ca_hote_seuil: 75%
+
+# Clé publique de la CA d'HÔTE (step ssh config --host --roots), versionnée dans
+# group_vars/all : posée dans /etc/ssh/ssh_known_hosts pour que les hôtes se fassent
+# confiance entre eux (runner01 → socle, par exemple). Liste : deux clés pendant une rotation.
+ssh_ca_hote_cles_ca: []
+# Motifs de noms/adresses couverts par la confiance dans la CA d'hôte.
+ssh_ca_hote_motifs: ["*.par1.medisphere.internal", "10.10.*", "10.20.*"]
+
+ssh_ca_hote_fichier_conf: /etc/ssh/sshd_config.d/02-ssh-ca-hote.conf
+ssh_ca_hote_service_sshd: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"

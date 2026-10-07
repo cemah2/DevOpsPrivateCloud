@@ -1,0 +1,87 @@
+data.proxmox_version.pve01: Reading...
+data.proxmox_virtual_environment_vms.image_courante: Reading...
+data.proxmox_version.pve01: Read complete after 0s [id=version]
+data.proxmox_virtual_environment_vms.image_courante: Read complete after 0s [id=6d2a9f13-0e4b-4c8d-a5f7-91b3e2c0d4a8]
+module.app["app01"].proxmox_virtual_environment_vm.vm: Refreshing state... [id=2051]
+module.app["app02"].proxmox_virtual_environment_vm.vm: Refreshing state... [id=2052]
+module.app["app03"].proxmox_virtual_environment_vm.vm: Refreshing state... [id=2053]
+
+Note: Objects have changed outside of OpenTofu
+
+OpenTofu detected the following changes made outside of OpenTofu since the
+last "tofu apply" which may have affected this plan:
+
+  # module.app["app02"].proxmox_virtual_environment_vm.vm has changed
+  ~ resource "proxmox_virtual_environment_vm" "vm" {
+        id                      = "2052"
+        name                    = "m05-app02"
+        # (27 unchanged attributes hidden)
+
+      ~ memory {
+          ~ dedicated      = 1024 -> 4096
+            # (4 unchanged attributes hidden)
+        }
+
+        # (11 unchanged blocks hidden)
+    }
+
+  # module.app["app03"].proxmox_virtual_environment_vm.vm has been deleted
+  - resource "proxmox_virtual_environment_vm" "vm" {
+      - id                      = "2053" -> null
+        name                    = "m05-app03"
+        # (27 unchanged attributes hidden)
+    }
+
+
+Unless you have made equivalent changes to your configuration, or ignored the
+relevant attributes using ignore_changes, the following plan may include
+actions to undo or respond to these changes.
+
+─────────────────────────────────────────────────────────────────────────────
+
+OpenTofu used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+  ~ update in-place
+
+OpenTofu will perform the following actions:
+
+  # module.app["app02"].proxmox_virtual_environment_vm.vm will be updated in-place
+  ~ resource "proxmox_virtual_environment_vm" "vm" {
+        id                      = "2052"
+        name                    = "m05-app02"
+        # (27 unchanged attributes hidden)
+
+      ~ memory {
+          ~ dedicated      = 4096 -> 1024
+            # (4 unchanged attributes hidden)
+        }
+
+        # (11 unchanged blocks hidden)
+    }
+
+  # module.app["app03"].proxmox_virtual_environment_vm.vm will be created
+  + resource "proxmox_virtual_environment_vm" "vm" {
+      + id                      = (known after apply)
+      + ipv4_addresses          = (known after apply)
+      + name                    = "m05-app03"
+      + node_name               = "pve01"
+      + pool_id                 = "lab"
+      + tags                    = [
+          + "env-m05",
+        ]
+      + vm_id                   = 2053
+        # (34 unchanged attributes hidden)
+
+      + clone {
+          + datastore_id = "local-nvme"
+          + full         = true
+          + node_name    = null
+          + retries      = 1
+          + vm_id        = 9013
+        }
+
+        # (11 unchanged blocks hidden)
+    }
+
+Plan: 1 to add, 1 to change, 0 to destroy.

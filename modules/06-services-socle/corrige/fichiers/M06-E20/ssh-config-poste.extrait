@@ -1,0 +1,32 @@
+# ~/.ssh/config de TON POSTE (Linux, macOS ou Windows/OpenSSH) — M06-E20 : saut par le bastion.
+# Le VPN (wg1) n'ouvre plus SSH que vers adm01. Le saut final est authentifié par TON poste :
+# il lui faut un certificat. Sur adm01 : « ms-ssh-cert --cle ~/poste.pub » (après avoir copié la
+# clé publique du poste), puis rapporte ~/poste-cert.pub à côté de la clé privée du poste
+# (~/.ssh/id_ed25519-cert.pub).
+Host adm01
+    HostName 10.10.10.10
+    User admin
+    IdentityFile ~/.ssh/id_ed25519
+
+# Tout le reste du socle, par adm01. Mêmes alias que sur adm01, mêmes adresses.
+Host dns01 ca01 git01 nbx01 s3-01 runner01 dns02 gw01
+    User admin
+    ProxyJump adm01
+    IdentityFile ~/.ssh/id_ed25519
+    CertificateFile ~/.ssh/id_ed25519-cert.pub
+Host dns01
+    HostName 10.10.20.10
+Host ca01
+    HostName 10.10.20.11
+Host git01
+    HostName 10.10.20.12
+Host nbx01
+    HostName 10.10.20.13
+Host s3-01
+    HostName 10.10.20.14
+Host runner01
+    HostName 10.10.20.15
+Host dns02
+    HostName 10.10.20.16
+Host gw01
+    HostName 10.10.10.1

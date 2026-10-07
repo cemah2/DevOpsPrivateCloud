@@ -1,0 +1,2 @@
+# Ligne ajoutée à envs/lab-m05/terraform.tfvars (M05-E19) : <IP-PVE01>, adresse SSH de pve01.
+pve01_ssh = "<IP-PVE01>"

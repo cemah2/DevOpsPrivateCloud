@@ -1,0 +1,8 @@
+# host_vars/adm01/base.yml — lignes MODIFIÉES en M06-E20 (fichier de M04-E10/E27).
+# adm01 est le BASTION : on y entre depuis le poste (VPN) avec la clé du poste ; c'est le seul
+# hôte du socle qui garde une clé personnelle (point d'entrée unique, journalisé). Plus de clé
+# quotidienne de adm01 lui-même : les autres hôtes reçoivent le certificat.
+ms_cles_admin:
+  - 'ssh-ed25519 <CLE-PUBLIQUE-DU-POSTE> moi@poste'
+  - 'from="10.10.10.10,<IP-PVE01>" ssh-ed25519 <CLE-PUBLIQUE-BRIS-DE-GLACE> bris-de-glace@medisphere'
+  - 'from="10.10.20.15" ssh-ed25519 <CLE-PUBLIQUE-ANSIBLE-CI> ansible-ci'

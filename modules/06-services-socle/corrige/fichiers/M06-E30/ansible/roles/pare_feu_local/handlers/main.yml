@@ -1,0 +1,3 @@
+---
+# Rôle pare_feu_local : pas de gestionnaire (le chargement est fait, et confirmé, dans appliquer.yml).
+[]

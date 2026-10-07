@@ -1,0 +1,17 @@
+---
+# playbooks/dns01.yml — DNS du socle (groupe role_dns), M04-E46 puis M06-E06/E07.
+# Pendant la transition (jusqu'à M06-E08) : dnsmasq sert toujours le port 53 et le DHCP ;
+# PowerDNS Authoritative (port 5300) et Recursor (port 5301 en essai) tournent à côté.
+# serial: 1 et any_errors_fatal : quand dns02 existera (M06-E24), jamais les deux à la fois.
+- name: DNS du socle (dnsmasq, PowerDNS Authoritative, PowerDNS Recursor)
+  hosts: role_dns
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: dnsmasq
+      tags: [dnsmasq]
+    - role: powerdns_auth
+      tags: [powerdns_auth]
+    - role: powerdns_recursor
+      tags: [powerdns_recursor]

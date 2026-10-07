@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+# /etc/powerdns/pdns.d/medisphere.conf — PowerDNS Authoritative de {{ inventory_hostname }} (rôle powerdns_auth).
+# Lu après /etc/powerdns/pdns.conf (include-dir du paquet), qui ne contient que « launch= ».
+# Fichier SECRET (clé d'API) : root:pdns 0640.
+
+# --- Backend : base SQLite avec les métadonnées DNSSEC (M06-E26) -----------------------------
+launch+=gsqlite3
+gsqlite3-database={{ powerdns_auth_base }}
+gsqlite3-dnssec=yes
+
+# --- Écoute : jamais le port 53 (réservé au récurseur, seul point d'entrée des clients) ---------
+local-address={{ powerdns_auth_ecoute | join(', ') }}
+
+# --- Zones créées sans SOA explicite (API, pdnsutil zone create) ---------------------------------
+default-soa-content={{ powerdns_auth_soa.primaire }}. {{ powerdns_auth_soa.contact }}. 0 {{ powerdns_auth_soa.rafraichissement }} {{ powerdns_auth_soa.nouvel_essai }} {{ powerdns_auth_soa.expiration }} {{ powerdns_auth_soa.ttl_negatif }}
+default-ttl={{ powerdns_auth_ttl }}
+
+# --- API HTTP (le serveur web démarre avec api=yes) ---------------------------------------------
+api=yes
+api-key={{ powerdns_auth_cle_api }}
+webserver-address={{ powerdns_auth_api_adresse }}
+webserver-port={{ powerdns_auth_api_port }}
+webserver-allow-from={{ powerdns_auth_api_autorises | join(',') }}
+
+# --- Discrétion ------------------------------------------------------------------------------
+version-string={{ powerdns_auth_version }}

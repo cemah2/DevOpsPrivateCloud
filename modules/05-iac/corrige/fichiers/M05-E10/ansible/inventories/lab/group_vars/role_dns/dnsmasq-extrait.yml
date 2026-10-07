@@ -1,0 +1,7 @@
+---
+# Extrait de inventories/lab/group_vars/role_dns/dnsmasq.yml (M04-E46) : ligne ajoutée pour
+# s3-01 (M05-E10), après runner01. Le rôle dnsmasq crée le A et le PTR (premier nom).
+dnsmasq_hotes:
+  # … entrées existantes (dns01 en premier : sonde du rôle), gw01, adm01, git01, runner01 …
+  - { noms: [s3-01.par1.medisphere.internal], ip: 10.10.20.14 }
+  # … pve01, pbs01 …

@@ -1,0 +1,3 @@
+# ~/.ssh/known_hosts de adm01 — ligne AJOUTÉE en M06-E19 (avant de retirer les clés brutes du socle
+# avec « ssh-keygen -R <adresse> » pour chaque hôte du socle ; pve01 et pbs01 gardent leurs clés brutes).
+@cert-authority *.par1.medisphere.internal,10.10.*,10.20.* ecdsa-sha2-nistp256 <CLE-PUBLIQUE-CA-HOTES> CA d'hôte MédiSphère

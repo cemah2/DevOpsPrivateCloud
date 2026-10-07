@@ -1,0 +1,16 @@
+---
+# EXTRAIT de group_vars/role_dns/dnsmasq.yml (rôle dnsmasq, M04-E46) — ajout de ca01 (M06-E02).
+# Jusqu'à la bascule vers PowerDNS (M06-E08), un nouvel hôte du socle se déclare ICI, dans
+# la liste dnsmasq_hotes (A + PTR), puis s'applique par le pipeline de plateforme/ansible.
+# M06-E04 ajoute nbx01 de la même façon. La liste complète reste celle de ton dépôt.
+dnsmasq_hotes:
+  - { noms: [dns01.par1.medisphere.internal], ip: 10.10.20.10 }   # premier : sonde du rôle
+  - { noms: [gw01.par1.medisphere.internal], ip: 10.10.10.1 }
+  - { noms: [adm01.par1.medisphere.internal], ip: 10.10.10.10 }
+  - { noms: [ca01.par1.medisphere.internal], ip: 10.10.20.11 }    # M06-E02
+  - { noms: [git01.par1.medisphere.internal], ip: 10.10.20.12 }
+  - { noms: [nbx01.par1.medisphere.internal], ip: 10.10.20.13 }   # M06-E04
+  - { noms: [s3-01.par1.medisphere.internal], ip: 10.10.20.14 }   # M05-E10
+  - { noms: [runner01.par1.medisphere.internal], ip: 10.10.20.15 }
+  - { noms: [pve01.par1.medisphere.internal], ip: "<IP-PVE01>" }
+  - { noms: [pbs01.par2.medisphere.internal, pbs01.par1.medisphere.internal], ip: 10.20.10.10 }

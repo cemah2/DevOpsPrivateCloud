@@ -1,0 +1,13 @@
+# /etc/systemd/system/ms-verif-services.timer — M06-E29 (PLAT-755)
+[Unit]
+Description=MédiSphère : sonde des services socle toutes les 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+# Si adm01 était arrêtée, une sonde part au démarrage.
+Persistent=true
+AccuracySec=30s
+RandomizedDelaySec=60s
+
+[Install]
+WantedBy=timers.target

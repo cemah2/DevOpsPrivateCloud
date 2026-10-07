@@ -1,0 +1,9 @@
+---
+# step-ca relit ca.json sur SIGHUP, mais pas ses clés ni son adresse d'écoute : on redémarre.
+# step_ca_redemarrer: false (changement planifié) laisse le redémarrage à l'opérateur.
+- name: Redémarrer step-ca
+  ansible.builtin.systemd_service:
+    name: step-ca.service
+    state: restarted
+    daemon_reload: true
+  when: step_ca_redemarrer | bool

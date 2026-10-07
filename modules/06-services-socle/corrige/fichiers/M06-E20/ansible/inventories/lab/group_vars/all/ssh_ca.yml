@@ -1,0 +1,17 @@
+---
+# group_vars/all/ssh_ca.yml — CA SSH du socle (M06-E19, complété en M06-E20).
+# Clés PUBLIQUES des CA, versionnées (revue, historique, rotation par MR) :
+#   step ssh config --host --roots  → CA d'HÔTE         (ssh_ca_hote_cles_ca)
+#   step ssh config --roots         → CA d'UTILISATEUR  (ssh_ca_utilisateur_cles_ca)
+# Les confondre est une panne classique (M06-E38) : l'une signe les serveurs, l'autre les personnes.
+
+ssh_ca_hote_cles_ca:
+  - "ecdsa-sha2-nistp256 <CLE-PUBLIQUE-CA-HOTES> CA d'hôte MédiSphère"
+ssh_ca_hote_mot_de_passe_provisioner: "{{ hostvars[groups['role_pki'][0]]['vault_step_ca_mot_de_passe_admin'] }}"
+
+# --- (E20) Certificats d'utilisateur --------------------------------------------------------------
+ssh_ca_utilisateur_cles_ca:
+  - "ecdsa-sha2-nistp256 <CLE-PUBLIQUE-CA-UTILISATEURS> CA d'utilisateur MédiSphère"
+# Principaux acceptés par compte. « astreinte » : certificat d'astreinte (Nadia), même compte.
+ssh_ca_utilisateur_principaux:
+  admin: [admin, astreinte]

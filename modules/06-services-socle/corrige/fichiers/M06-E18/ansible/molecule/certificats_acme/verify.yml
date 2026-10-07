@@ -1,0 +1,51 @@
+---
+# molecule/certificats_acme/verify.yml — émission ET renouvellement (le second est ce qui casse
+# en production, trente jours plus tard).
+- name: Vérifier le rôle certificats_acme
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    crt: /etc/ssl/essai/web.crt
+    cle: /etc/ssl/essai/web.key
+    racine: /usr/local/share/ca-certificates/molecule-root-ca.crt
+  tasks:
+    - name: Le certificat se vérifie contre la racine, pour son nom
+      ansible.builtin.command: step certificate verify {{ crt }} --roots {{ racine }} --host web.molecule.test
+      changed_when: false
+
+    - name: La clé privée n'est lisible que par root et son groupe
+      ansible.builtin.stat:
+        path: "{{ cle }}"
+      register: verif_cle
+      failed_when: verif_cle.stat.mode != '0640'
+
+    - name: Lire le numéro de série actuel
+      ansible.builtin.command: step certificate inspect --format json {{ crt }}
+      register: avant
+      changed_when: false
+
+    - name: Renouvellement forcé par le même chemin que la minuterie (mTLS, sans ACME)
+      ansible.builtin.command: step ca renew --force {{ crt }} {{ cle }}
+      environment:
+        STEPPATH: /etc/step
+      changed_when: true
+
+    - name: Lire le nouveau numéro de série
+      ansible.builtin.command: step certificate inspect --format json {{ crt }}
+      register: apres
+      changed_when: false
+
+    - name: Un NOUVEAU certificat a été délivré
+      ansible.builtin.assert:
+        that: (avant.stdout | from_json).serial_number != (apres.stdout | from_json).serial_number
+
+    - name: La minuterie de renouvellement est active
+      ansible.builtin.command: systemctl is-active cert-renewer@essai.timer  # noqa: command-instead-of-module
+      changed_when: false
+
+    # ExecCondition (needs-renewal) répond « pas encore » : le service est sauté, sans échec.
+    - name: Le service de renouvellement s'exécute sans erreur (sauté, car trop tôt pour renouveler)
+      ansible.builtin.systemd_service:
+        name: cert-renewer@essai.service
+        state: started

@@ -1,0 +1,24 @@
+---
+# Rôle ssh_ca_utilisateur — connexion des personnes par certificat SSH d'utilisateur (M06-E20).
+#
+# sshd accepte un certificat signé par la CA d'UTILISATEUR (TrustedUserCAKeys) si l'un de ses
+# principaux figure dans le fichier du compte visé (AuthorizedPrincipalsFile). Les clés
+# autorisées classiques (authorized_keys) restent lues : elles ne portent plus que la clé de
+# bris de glace et les clés de machines (ansible-ci), gérées par le rôle base.
+
+ssh_ca_utilisateur_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# Clé(s) publique(s) de la CA d'utilisateur (step ssh config --roots), versionnées dans
+# group_vars/all. Deux pendant une rotation de la CA.
+ssh_ca_utilisateur_cles_ca: []
+ssh_ca_utilisateur_fichier_ca: /etc/ssh/ca-utilisateurs.pub
+
+# Principaux acceptés pour chaque compte local : { compte: [principal, …] }.
+# Un compte absent de cette table n'accepte AUCUN certificat (fichier vide).
+ssh_ca_utilisateur_principaux:
+  admin: [admin, astreinte]
+ssh_ca_utilisateur_dossier_principaux: /etc/ssh/principaux
+
+ssh_ca_utilisateur_fichier_conf: /etc/ssh/sshd_config.d/03-ssh-ca-utilisateur.conf
+ssh_ca_utilisateur_service_sshd: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"

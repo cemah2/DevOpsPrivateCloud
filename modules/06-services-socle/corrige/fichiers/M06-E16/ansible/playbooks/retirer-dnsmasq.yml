@@ -1,0 +1,31 @@
+---
+# playbooks/retirer-dnsmasq.yml — fin de dnsmasq sur dns01 (M06-E16, CHG-726).
+# À lancer UNE fois, juste avant le premier passage de kea_dhcp4 : Kea ne peut pas ouvrir le
+# port 67 tant que dnsmasq le tient. Rejouable sans effet (paquet déjà absent).
+# Les baux de dnsmasq sont conservés dans /var/lib/workbook/ pour l'analyse (pas de reprise :
+# Kea répond NAK aux demandes de bail inconnues, le client repart en DISCOVER).
+- name: Retirer dnsmasq de dns01
+  hosts: role_dns
+  become: true
+  serial: 1
+  tasks:
+    - name: Conserver les derniers baux de dnsmasq
+      ansible.builtin.copy:
+        src: /var/lib/misc/dnsmasq.leases
+        dest: /var/lib/workbook/dnsmasq.leases.avant-kea
+        remote_src: true
+        mode: "0600"
+      failed_when: false
+
+    - name: Arrêter et désactiver dnsmasq
+      ansible.builtin.systemd_service:
+        name: dnsmasq.service
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Désinstaller dnsmasq (configuration comprise)
+      ansible.builtin.apt:
+        name: dnsmasq
+        state: absent
+        purge: true

@@ -1,0 +1,12 @@
+{#- s3.json — identités de la passerelle S3 de SeaweedFS (rôle seaweedfs, M05-E10).
+    Format : wiki SeaweedFS, page « S3 Credentials ». Actions globales (Admin, Read, Write…)
+    ou limitées à un compartiment (« Read:tofu-state »). Relu sur SIGHUP. -#}
+{%- set identites = [] -%}
+{%- for i in seaweedfs_identites -%}
+{%-   set _ = identites.append({
+        'name': i.nom,
+        'credentials': [{'accessKey': i.cle_acces, 'secretKey': i.cle_secrete}],
+        'actions': i.actions
+      }) -%}
+{%- endfor -%}
+{{ {'identities': identites} | to_nice_json(indent=2) }}

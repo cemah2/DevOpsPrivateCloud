@@ -1,0 +1,37 @@
+---
+# Outils IaC de runner01 hors binaires de release (M05-E26). Les binaires (terragrunt, tflint,
+# terraform-docs, trivy) passent par gitlab_runner_outils (outils_binaires.yml).
+
+# unzip : nécessaire au module unarchive pour l'archive .zip de tflint (à installer AVANT
+# outils_binaires.yml, voir l'ordre dans main.yml). awscli : AWS CLI v2 du paquet Debian 13
+# (sauvegarde des états, M05-E29). jq est déjà installé (outils_binaires.yml).
+- name: Paquets Debian des pipelines IaC
+  ansible.builtin.apt:
+    name: [unzip, awscli]
+    state: present
+
+- name: Lister les outils uv installés (Checkov)
+  ansible.builtin.command: uv tool list
+  environment: &uv_env
+    UV_TOOL_DIR: "{{ gitlab_runner_uv_outils_dossier }}"
+    UV_TOOL_BIN_DIR: /usr/local/bin
+  register: _gitlab_runner_uv_iac
+  changed_when: false
+  check_mode: false
+
+# Version EXACTE : Checkov n'a pas de mise à jour de règles à l'exécution, ses règles sont
+# celles du paquet. Monter de version = changer gitlab_runner_checkov_version (et
+# CHECKOV_VERSION dans plateforme/infra).
+- name: Installer Checkov {{ gitlab_runner_checkov_version }}
+  ansible.builtin.command:
+    argv:
+      - uv
+      - tool
+      - install
+      - --force
+      - --python
+      - /usr/bin/python3
+      - "checkov=={{ gitlab_runner_checkov_version }}"
+  environment: *uv_env
+  when: ('checkov v' ~ gitlab_runner_checkov_version) not in _gitlab_runner_uv_iac.stdout_lines
+  changed_when: true

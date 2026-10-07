@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+# Repris de contrib/netbox.service de NetBox {{ netbox_version }}.
+[Unit]
+Description=NetBox WSGI Service
+Documentation=https://docs.netbox.dev/
+After=network-online.target postgresql.service valkey-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ netbox_utilisateur }}
+Group={{ netbox_utilisateur }}
+PIDFile=/var/tmp/netbox.pid
+WorkingDirectory={{ netbox_racine }}
+ExecStart={{ netbox_racine }}/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath {{ netbox_racine }}/netbox --config {{ netbox_racine }}/gunicorn.py netbox.wsgi
+Restart=on-failure
+RestartSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

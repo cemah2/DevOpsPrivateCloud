@@ -1,0 +1,54 @@
+---
+# Rôle seaweedfs (M05-E10) — stockage objet S3 du socle (s3-01) : SeaweedFS en un seul
+# processus « weed server » (master + volume + filer + passerelle S3), passerelle S3 en HTTPS.
+# Valeurs du socle : inventories/lab/host_vars/s3-01/seaweedfs.yml ; secrets : vault*.yml.
+
+# --- Binaire ---------------------------------------------------------------------------------
+# Version ET empreinte vont ensemble : changer l'une sans l'autre fait échouer le rôle.
+# L'empreinte se calcule sur l'archive téléchargée, après comparaison avec le fichier .md5
+# publié à côté d'elle sur la page de la version (procédure : corrigé de M05-E10).
+seaweedfs_version: "4.45"
+seaweedfs_archive: linux_amd64.tar.gz
+seaweedfs_archive_sha256: "<SHA256-DE-L-ARCHIVE>"
+seaweedfs_url: "https://github.com/seaweedfs/seaweedfs/releases/download/{{ seaweedfs_version }}/{{ seaweedfs_archive }}"
+
+# --- Compte et emplacements --------------------------------------------------------------
+seaweedfs_utilisateur: seaweedfs
+seaweedfs_dossier: /srv/seaweedfs # données, métadonnées du master et du filer
+seaweedfs_config: /etc/seaweedfs # s3.json et certificat
+
+# Disque de données dédié (vide : les données restent sur le disque système, ex. Molecule).
+# Formaté en ext4 UNIQUEMENT s'il ne porte aucun système de fichiers, puis monté par étiquette.
+seaweedfs_disque: ""
+seaweedfs_disque_etiquette: s3-donnees
+
+# --- Réseau -----------------------------------------------------------------------------------
+# Seule la passerelle S3 écoute sur le réseau ; master, volume et filer restent sur 127.0.0.1.
+seaweedfs_s3_ecoute: "{{ ansible_facts['default_ipv4']['address'] }}"
+seaweedfs_s3_port: 8333
+
+# Taille maximale d'un volume SeaweedFS (Mo). Le défaut (30 Go) est fait pour des disques de
+# plusieurs To : sur 100 Go, il ne laisse que 3 volumes, et chaque compartiment en réclame
+# plusieurs dès sa première écriture (« No writable volumes »).
+seaweedfs_volume_taille_mo: 1024
+
+# --- TLS de la passerelle S3 (PEM ; la clé vient du coffre) ------------------------------------
+seaweedfs_tls_certificat: ""
+seaweedfs_tls_cle: ""
+
+# --- Identités S3 (fichier s3.json) -------------------------------------------------------------
+# Liste OBLIGATOIRE et non vide : sans aucune identité, la passerelle accepte TOUT, sans
+# authentification (mode « Allow-All » de SeaweedFS).
+#   - nom: tofu-etat
+#     cle_acces: "{{ vault_… }}"
+#     cle_secrete: "{{ vault_… }}"
+#     actions: [Read:tofu-state, Write:tofu-state, List:tofu-state]
+seaweedfs_identites: []
+
+# --- Compartiments créés par le rôle (weed shell, en local) ---------------------------------------
+#   - nom: tofu-state
+#     versionnage: true
+seaweedfs_compartiments: []
+
+# Options supplémentaires passées telles quelles à « weed server » (ex. -metricsPort=9327).
+seaweedfs_options_sup: []

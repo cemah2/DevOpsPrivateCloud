@@ -1,0 +1,28 @@
+---
+# Modifications de inventories/lab/proxmox.yml (M04-E13) pour les VMs d'environnement créées
+# par OpenTofu (M05-E23). Seules les clés modifiées sont reprises ici.
+
+# 1. Filtre : le socle, et les VMs d'environnement de N'IMPORTE QUEL module (env-mNN), au
+#    lieu du seul env-m04. Toujours ni templates ni instances Molecule.
+filters:
+  - not proxmox_template
+  - >-
+    'socle' in (proxmox_tags_parsed | default([]))
+    or (proxmox_tags_parsed | default([]) | select('match', '^env-m[0-9]{2}$') | list | length) > 0
+  - "'molecule' not in (proxmox_tags_parsed | default([]))"
+
+# 2. Adresse de connexion : celle de ipconfig0 si elle est statique (socle) ; sinon (DHCP,
+#    VMs d'environnement) la première adresse IPv4 du lab remontée par l'agent QEMU
+#    (fait proxmox_agent_interfaces, lu par le plugin quand l'agent est activé ; le jeton
+#    wb-ansible doit avoir VM.GuestAgent.Audit). Une VM dont l'agent ne répond pas encore n'a
+#    pas d'adresse : elle reste dans l'inventaire, mais injoignable (UNREACHABLE).
+compose:
+  ansible_host: >-
+    (proxmox_ipconfig0.ip.split('/') | first)
+    if (proxmox_ipconfig0.ip | default('dhcp')) != 'dhcp'
+    else (proxmox_agent_interfaces | default([])
+          | rejectattr('name', 'equalto', 'lo')
+          | map(attribute='ip-addresses') | flatten
+          | select('match', '^10[.]10[.]')
+          | first | default('')).split('/') | first
+  vmid: proxmox_vmid

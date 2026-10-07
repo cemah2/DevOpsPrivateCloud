@@ -1,0 +1,11 @@
+---
+# host_vars/gw01/pare_feu.yml — EXTRAIT : ajouts de M06-E28 (section « Sauvegardes vers PAR2 »).
+pare_feu_definitions:
+  # … définitions existantes …
+  - {nom: CA01, valeur: 10.10.20.11}
+  - {nom: NBX01, valeur: 10.10.20.13}
+
+pare_feu_transit:
+  # … règles existantes (pve01 → PBS, git01 → PBS) …
+  - {entree: $V_INFRA, source: [$DNS01, $CA01, $NBX01], sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "dns01, ca01, nbx01 vers PBS : sauvegardes applicatives", ref: M06-E28}

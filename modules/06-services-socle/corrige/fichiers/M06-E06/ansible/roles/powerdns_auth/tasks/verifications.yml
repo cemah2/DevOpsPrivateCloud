@@ -1,0 +1,45 @@
+---
+# Le service rendu : chaque zone répond avec autorité sur la première adresse d'écoute, et
+# l'API répond avec la clé (et refuse sans elle).
+- name: Chaque zone répond avec autorité (drapeau aa)
+  ansible.builtin.command: >-
+    dig +norecurse +time=2 +tries=2
+    -p {{ powerdns_auth_ecoute[0].split(':') | last }} @{{ powerdns_auth_ecoute[0].split(':') | first }}
+    {{ item.nom }} SOA
+  loop: "{{ powerdns_auth_zones }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: powerdns_auth_soa_rep
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    powerdns_auth_soa_rep.stdout is not search('status: NOERROR')
+    or powerdns_auth_soa_rep.stdout is not search('flags:[^;]* aa')
+  when: not ansible_check_mode
+
+- name: L'API répond avec la clé
+  ansible.builtin.uri:
+    url: "http://{{ powerdns_auth_api_adresse }}:{{ powerdns_auth_api_port }}/api/v1/servers/localhost/zones"
+    headers:
+      X-API-Key: "{{ powerdns_auth_cle_api }}"
+    use_proxy: false
+    return_content: true
+  register: powerdns_auth_api
+  no_log: true
+  when: not ansible_check_mode
+
+- name: L'API connaît toutes les zones
+  ansible.builtin.assert:
+    that: >-
+      (powerdns_auth_api.json | map(attribute='name') | list)
+      is superset(powerdns_auth_zones | map(attribute='nom') | map('regex_replace', '$', '.') | list)
+    fail_msg: "Zones absentes de l'API : comparer « pdnsutil zone list-all » et powerdns_auth_zones."
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Sans clé, l'API refuse (401)
+  ansible.builtin.uri:
+    url: "http://{{ powerdns_auth_api_adresse }}:{{ powerdns_auth_api_port }}/api/v1/servers/localhost/zones"
+    use_proxy: false
+    status_code: 401
+  when: not ansible_check_mode

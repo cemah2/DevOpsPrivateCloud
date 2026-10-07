@@ -1,0 +1,25 @@
+---
+# host_vars/dns01/powerdns_auth.yml — dns01, serveur faisant autorité PRIMAIRE (M06-E06, E17, E24).
+powerdns_auth_mode: primaire
+powerdns_auth_ecoute:
+  - 127.0.0.1:5300
+  - 10.10.20.10:5300
+
+# NOTIFY : uniquement le serveur faisant autorité de dns02, sur son port 5300.
+powerdns_auth_notifier:
+  - 10.10.20.16:5300
+
+# API (M06-E06) : sur l'adresse de service. Clients : dns01 lui-même, adm01, runner01.
+powerdns_auth_api_active: true
+powerdns_auth_api_adresse: 10.10.20.10
+powerdns_auth_api_autorises:
+  - 127.0.0.1
+  - 10.10.20.10
+  - 10.10.10.10
+  - 10.10.20.15
+
+# Mises à jour dynamiques (M06-E17) ; dns02 autorisé en M06-E25 (bascule de Kea).
+powerdns_auth_dnsupdate: true
+powerdns_auth_dnsupdate_autorises:
+  - 127.0.0.1
+  - 10.10.20.16

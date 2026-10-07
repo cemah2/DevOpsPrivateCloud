@@ -1,0 +1,41 @@
+{#- Zone générée par le rôle powerdns_auth. Noms ABSOLUS partout (point final).
+    zone_de(nom) : la zone la PLUS PRÉCISE de powerdns_auth_zones qui contient nom ;
+    un enregistrement n'est écrit que dans cette zone (sinon il serait caché sous une délégation). -#}
+{%- macro zone_de(nom) -%}
+{%- set n = nom | lower | regex_replace('\\.$', '') -%}
+{%- set ns = namespace(meilleure='') -%}
+{%- for z in powerdns_auth_zones | map(attribute='nom') -%}
+{%- if (n == z or n.endswith('.' ~ z)) and z | length > ns.meilleure | length -%}
+{%- set ns.meilleure = z -%}
+{%- endif -%}
+{%- endfor -%}
+{{ ns.meilleure }}
+{%- endmacro -%}
+{%- macro absolu(nom) -%}{{ nom if nom.endswith('.') else nom ~ '.' }}{%- endmacro -%}
+; {{ ansible_managed }}
+; Zone {{ zone.nom }} — générée par Ansible (rôle powerdns_auth). Ne pas modifier dans PowerDNS :
+; le prochain passage la recharge entièrement. Le numéro de série est posé au chargement.
+$ORIGIN {{ zone.nom }}.
+$TTL {{ powerdns_auth_ttl }}
+@ IN SOA {{ absolu(powerdns_auth_soa.primaire) }} {{ absolu(powerdns_auth_soa.contact) }} @SERIAL@ {{ powerdns_auth_soa.rafraichissement }} {{ powerdns_auth_soa.nouvel_essai }} {{ powerdns_auth_soa.expiration }} {{ powerdns_auth_soa.ttl_negatif }}
+{% for ns_nom in powerdns_auth_ns %}
+@ IN NS {{ absolu(ns_nom) }}
+{% endfor %}
+; --- Hôtes (A dans la zone la plus précise ; PTR vers le premier nom) ---
+{% for h in powerdns_auth_hotes %}
+{%   if h.a | default(true) %}
+{%     for nom in h.noms if zone_de(nom) == zone.nom %}
+{{ absolu(nom) }} IN A {{ h.ip }}
+{%     endfor %}
+{%   endif %}
+{%   set inverse = (h.ip.split('.') | reverse | join('.')) ~ '.in-addr.arpa' %}
+{%   if zone_de(inverse) == zone.nom %}
+{{ absolu(inverse) }} IN PTR {{ absolu(h.noms[0]) }}
+{%   endif %}
+{% endfor %}
+{% if zone.enregistrements | default([]) | length > 0 %}
+; --- Enregistrements propres à la zone ---
+{%   for e in zone.enregistrements %}
+{{ absolu(e.nom) }} {{ e.ttl | default(powerdns_auth_ttl) }} IN {{ e.type }} {{ e.contenu }}
+{%   endfor %}
+{% endif %}

@@ -1,0 +1,44 @@
+---
+# Rôle netbox — point d'entrée (M06-E04). Ordre de la documentation d'installation :
+# PostgreSQL, Redis (ici Valkey), NetBox, gunicorn, serveur HTTP. Les tâches qui consomment
+# un secret « critique » portent l'étiquette « critique » (convention de M04-E30).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - netbox_secret_key | length >= 50
+      - netbox_api_token_peppers | length > 0
+      - netbox_api_token_peppers.values() | map('length') | min >= 50
+      - netbox_bdd_mot_de_passe | length >= 16
+      - netbox_admin_mot_de_passe | length >= 16
+      - not netbox_tls_gerer or (netbox_tls_certificat | length > 0 and netbox_tls_cle | length > 0)
+    fail_msg: >-
+      Secrets NetBox manquants ou trop courts (SECRET_KEY et poivres : 50 caractères minimum,
+      documentation NetBox) ou certificat TLS absent : voir group_vars/role_netbox/.
+    quiet: true
+  no_log: true
+  tags: [critique]
+
+- name: Paquets système
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [netbox_paquets]
+
+- name: Base de données PostgreSQL
+  ansible.builtin.import_tasks: postgresql.yml
+  tags: [netbox_bdd]
+
+- name: Application NetBox
+  ansible.builtin.import_tasks: application.yml
+  tags: [netbox_application, critique]
+
+- name: Services gunicorn et file de tâches
+  ansible.builtin.import_tasks: services.yml
+  tags: [netbox_services]
+
+- name: Serveur HTTP (nginx, TLS)
+  ansible.builtin.import_tasks: nginx.yml
+  tags: [netbox_nginx, critique]
+
+- name: Vérifications de bout en bout
+  ansible.builtin.import_tasks: verifications.yml
+  tags: [netbox_verifications]

@@ -1,0 +1,5 @@
+# versions.tf de envs/lab-m06 — bloc required_providers complété en M06-E14 :
+    powerdns = {
+      source  = "mmianl/powerdns"
+      version = "~> 2.5.0"
+    }

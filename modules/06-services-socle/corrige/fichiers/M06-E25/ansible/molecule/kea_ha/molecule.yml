@@ -1,0 +1,5 @@
+---
+# molecule/kea_ha/molecule.yml — paire Kea DHCPv4 en hot-standby (M06-E25)
+#   uv run molecule test -s kea_ha
+scenario:
+  name: kea_ha

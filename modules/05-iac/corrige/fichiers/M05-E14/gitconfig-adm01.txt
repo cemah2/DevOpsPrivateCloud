@@ -1,0 +1,6 @@
+# Extrait de ~/.gitconfig sur adm01 (M05-E14) : l'URL HTTPS des sources de modules est
+# réécrite en SSH, avec la clé de admin (aucun jeton à stocker sur le poste).
+# Commande équivalente :
+#   git config --global url."ssh://git@git01.par1.medisphere.internal/".insteadOf "https://git01.par1.medisphere.internal/"
+[url "ssh://git@git01.par1.medisphere.internal/"]
+	insteadOf = https://git01.par1.medisphere.internal/

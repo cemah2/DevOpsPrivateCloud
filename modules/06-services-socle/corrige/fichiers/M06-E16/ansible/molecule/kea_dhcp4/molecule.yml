@@ -1,0 +1,6 @@
+---
+# molecule/kea_dhcp4/molecule.yml — scénario des rôles « kea_dhcp4 » et « kea_ddns » (M06-E16, E17)
+# Le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml (M04-E24).
+#   uv run molecule test -s kea_dhcp4
+scenario:
+  name: kea_dhcp4

@@ -1,0 +1,8 @@
+---
+# molecule/powerdns_replication/molecule.yml — réplication primaire/secondaire de PowerDNS (M06-E24)
+# Deux instances (VMID 2066 et 2067). Le commun (create/destroy, séquence, ansible.cfg) vient de
+# .config/molecule/config.yml (M04-E24). Lancement, depuis la racine du projet :
+#   set -a; . ~/.config/workbook/pve-ansible.env; set +a
+#   uv run molecule test -s powerdns_replication
+scenario:
+  name: powerdns_replication

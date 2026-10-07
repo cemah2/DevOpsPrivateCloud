@@ -1,0 +1,14 @@
+# .gitlab-ci.yml de plateforme/ansible — ajouts de M06-E12.
+# Variable CI : NETBOX_TOKEN (protégée, masquée, cachée) = jeton v2 en lecture de svc-automatisation.
+# Les jobs qui lisent l'inventaire (check-socle, appliquer, derive) l'ont déjà dans leur environnement :
+# nb_inventory la lit par lookup('env', …). Nouveau job de contrôle :
+
+inventaires:
+  stage: test
+  tags: [shell, socle]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - uv sync --frozen
+    - outils/comparer-inventaires.sh

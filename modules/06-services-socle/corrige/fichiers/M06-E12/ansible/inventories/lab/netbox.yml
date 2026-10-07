@@ -1,0 +1,50 @@
+---
+# inventories/lab/netbox.yml — inventaire du lab tiré de NetBox, la source de vérité (M06-E12).
+# Inventaire PAR DÉFAUT du projet (ansible.cfg) ; inventories/lab/proxmox.yml reste le contrôle
+# de cohérence (outils/comparer-inventaires.sh, en CI) et le secours si NetBox est indisponible.
+#
+# Jeton : variable d'environnement NETBOX_TOKEN (~/.config/workbook/netbox-ansible.env sur adm01,
+# variable protégée et masquée en CI). Jeton v2 de svc-automatisation, LECTURE SEULE.
+# Contrôle : uv run ansible-inventory -i inventories/lab/netbox.yml --graph
+plugin: netbox.netbox.nb_inventory
+# URL racine, sans /api (non secrète). Option non « templatisée » par le plugin : valeur en dur.
+api_endpoint: https://nbx01.par1.medisphere.internal
+validate_certs: true   # magasin du système : la racine MédiSphère y est (M06-E03)
+
+# Jeton v2 : le plugin écrit « Authorization: Token <jeton> » si on lui passe une chaîne (format
+# v1, refusé par NetBox pour un jeton nbt_…). Sous forme de dictionnaire, il écrit
+# « Authorization: <Type> <valeur> ». La valeur, elle, EST évaluée par Jinja.
+token:
+  type: Bearer
+  value: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+
+# Variables à plat (une valeur, pas une liste d'un élément) et pas de requêtes inutiles.
+plurals: false
+racks: false
+services: false
+interfaces: false
+config_context: false
+
+# Périmètre : ce qui porte l'étiquette « socle » (équipements et VMs), et pour les VMs, celles
+# qui sont actives. pve01 et hp01 (équipements) ne portent pas l'étiquette : ils n'entrent pas.
+query_filters:
+  - tag: socle
+vm_query_filters:
+  - status: active
+
+# Le plugin pose une variable « tags » (liste des étiquettes) : c'est un mot réservé d'Ansible
+# (avertissement à chaque exécution). On la renomme avant tout usage.
+rename_variables:
+  - pattern: "^tags$"
+    repl: netbox_etiquettes
+
+# Mêmes groupes que proxmox.yml : un groupe par étiquette, « - » remplacé par « _ ».
+keyed_groups:
+  - key: netbox_etiquettes | map('replace', '-', '_') | list
+    prefix: ""
+    separator: ""
+
+compose:
+  vmid: custom_fields.vmid
+# ansible_host = IP primaire, posée par le plugin lui-même (sans le masque).
+strict: false

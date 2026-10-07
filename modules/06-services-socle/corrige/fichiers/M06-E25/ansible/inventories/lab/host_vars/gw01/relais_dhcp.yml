@@ -1,0 +1,7 @@
+---
+# host_vars/gw01/relais_dhcp.yml — relais DHCP du VLAN 99 vers la paire Kea (M06-E25).
+relais_dhcp_interface: ens19.99
+relais_dhcp_adresse_locale: 10.10.99.1
+relais_dhcp_serveurs:
+  - 10.10.20.10   # dns01, primary
+  - 10.10.20.16   # dns02, standby

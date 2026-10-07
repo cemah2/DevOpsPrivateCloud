@@ -1,0 +1,8 @@
+# pyproject.toml — dépendance AJOUTÉE en M06-E12 (section [project] ou groupe de l'environnement
+# d'exécution, selon ta structure de M04-E02), puis « uv lock » et « uv sync ».
+# nb_inventory importe pytz au chargement : sans lui, « pytz must be installed to use this plugin »
+# (et, avec unparsed_is_failed, plus aucun inventaire).
+dependencies = [
+    # … lignes existantes (ansible-core, ansible-lint, molecule…) …
+    "pytz>=2025.2",
+]

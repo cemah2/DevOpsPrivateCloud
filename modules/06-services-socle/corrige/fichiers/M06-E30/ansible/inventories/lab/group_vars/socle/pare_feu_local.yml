@@ -1,0 +1,8 @@
+---
+# group_vars/socle/pare_feu_local.yml — flux d'entrée COMMUNS des hôtes filtrés localement
+# (rôle pare_feu_local, M06-E30). Ne s'applique qu'aux hôtes du jeu playbooks/pare-feu-local.yml.
+pare_feu_local_communes:
+  - {source: [10.10.10.10, 10.10.20.15], proto: tcp, ports: 22,
+     motif: "SSH depuis le bastion adm01 et runner01 (clé ansible-ci)", ref: M06-E30}
+# Après application, depuis le contrôleur : SSH (toujours testé) + ports propres à l'hôte.
+pare_feu_local_verifications: []

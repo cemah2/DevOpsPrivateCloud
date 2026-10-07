@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MédiSphère — Socle PAR1</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1d2733; }
+    h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+    .sous-titre { color: #5a6775; margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #d6dde4; }
+    code { background: #eef2f5; padding: 0 .25rem; border-radius: 3px; }
+    footer { margin-top: 2rem; font-size: .85rem; color: #5a6775; }
+  </style>
+</head>
+<body>
+  <h1>Socle MédiSphère — site PAR1</h1>
+  <p class="sous-titre">Page d'information interne de l'équipe Plateforme (M06-E34).</p>
+
+  <table>
+    <thead><tr><th>Service</th><th>Adresse</th><th>Contact</th></tr></thead>
+    <tbody>
+      <tr><td>Forge GitLab</td><td><code>https://git01.par1.medisphere.internal</code></td><td>Plateforme</td></tr>
+      <tr><td>Source de vérité NetBox</td><td><code>https://nbx01.par1.medisphere.internal</code></td><td>Plateforme</td></tr>
+      <tr><td>PKI (ACME)</td><td><code>https://ca01.par1.medisphere.internal/acme/acme/directory</code></td><td>Sécurité</td></tr>
+      <tr><td>Résolveurs DNS</td><td><code>10.10.20.10</code>, <code>10.10.20.16</code></td><td>Plateforme</td></tr>
+      <tr><td>Astreinte</td><td>Nadia Roussel (support)</td><td>Support</td></tr>
+    </tbody>
+  </table>
+
+  <!-- Témoin vérifié par lab/bin/check 06 34 : ne pas modifier. -->
+  <p id="temoin">temoin-stat01-m06e34</p>
+
+  <footer>Servi par <code>stat01</code> — certificat émis par la PKI interne MédiSphère.</footer>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{#- kea-dhcp4.conf construit comme une structure puis sérialisé : JSON toujours valide.
+    Les commentaires sont dans « user-context » (Kea les conserve et les rend par config-get). -#}
+{%- set sous_reseaux = [] -%}
+{%- for s in kea_dhcp4_sous_reseaux -%}
+{%-   set options = [{"name": "routers", "data": s.routeur}] -%}
+{%-   if s.ntp is defined -%}
+{%-     set options = options + [{"name": "ntp-servers", "data": s.ntp}] -%}
+{%-   endif -%}
+{%-   set sr = {
+        "id": s.id,
+        "subnet": s.reseau,
+        "pools": s.plages | map('community.general.dict_kv', 'pool') | list,
+        "option-data": options,
+        "user-context": {"commentaire": s.commentaire | default('')}
+      } -%}
+{%-   if kea_dhcp4_ddns | bool -%}
+{%-     set sr = sr | combine({"ddns-send-updates": s.ddns | default(false) | bool}) -%}
+{%-   endif -%}
+{%-   set sous_reseaux = sous_reseaux + [sr] -%}
+{%- endfor -%}
+{%- set sockets = [{"socket-type": "unix", "socket-name": "kea4-ctrl-socket"}] -%}
+{%- if kea_dhcp4_api | bool -%}
+{%-   set sockets = sockets + [{
+        "socket-type": "http",
+        "socket-address": kea_dhcp4_api_adresse,
+        "socket-port": kea_dhcp4_api_port | int,
+        "authentication": {
+          "type": "basic",
+          "realm": "kea-dhcpv4-server",
+          "directory": "/etc/kea",
+          "clients": [{"user": kea_dhcp4_api_utilisateur, "password-file": "kea-api-mdp"}]
+        }
+      }] -%}
+{%- endif -%}
+{%- set dhcp4 = {
+  "user-context": {"gere-par": kea_dhcp4_entete},
+  "interfaces-config": {
+    "interfaces": kea_dhcp4_interfaces,
+    "dhcp-socket-type": kea_dhcp4_type_socket
+  },
+  "control-sockets": sockets,
+  "lease-database": {
+    "type": "memfile",
+    "persist": true,
+    "name": kea_dhcp4_fichier_baux,
+    "lfc-interval": 3600
+  },
+  "valid-lifetime": kea_dhcp4_duree_bail | int,
+  "renew-timer": (kea_dhcp4_duree_bail | int) // 2,
+  "rebind-timer": (kea_dhcp4_duree_bail | int) * 7 // 8,
+  "authoritative": kea_dhcp4_autoritaire | bool,
+  "option-data": [
+    {"name": "domain-name-servers", "data": kea_dhcp4_dns | join(', ')},
+    {"name": "domain-name", "data": kea_dhcp4_domaine},
+    {"name": "domain-search", "data": kea_dhcp4_domaine}
+  ],
+  "subnet4": sous_reseaux,
+  "loggers": [{
+    "name": "kea-dhcp4",
+    "output-options": [{"output": "stdout", "pattern": "%-5p %m\n"}],
+    "severity": "INFO"
+  }]
+} -%}
+{%- if kea_dhcp4_hooks | length > 0 -%}
+{%-   set dhcp4 = dhcp4 | combine({"hooks-libraries": kea_dhcp4_hooks | map('community.general.dict_kv', 'library') | list}) -%}
+{%- endif -%}
+{%- if kea_dhcp4_ddns | bool -%}
+{%-   set dhcp4 = dhcp4 | combine({
+        "dhcp-ddns": {"enable-updates": true, "server-ip": "127.0.0.1", "server-port": 53001},
+        "ddns-send-updates": false,
+        "ddns-qualifying-suffix": kea_dhcp4_ddns_suffixe,
+        "ddns-override-client-update": true,
+        "ddns-override-no-update": true,
+        "ddns-replace-client-name": "when-not-present",
+        "ddns-generated-prefix": kea_dhcp4_ddns_prefixe_genere,
+        "ddns-conflict-resolution-mode": "check-with-dhcid",
+        "hostname-char-set": "[^A-Za-z0-9.-]",
+        "hostname-char-replacement": "-"
+      }) -%}
+{%- endif -%}
+{{ {"Dhcp4": dhcp4} | to_nice_json(indent=2) }}

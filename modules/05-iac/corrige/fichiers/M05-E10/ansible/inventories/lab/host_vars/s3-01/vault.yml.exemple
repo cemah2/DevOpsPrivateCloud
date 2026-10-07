@@ -1,0 +1,13 @@
+# host_vars/s3-01/vault.yml — CONTENU EN CLAIR, à chiffrer AVANT tout commit (M05-E10) :
+#   uv run ansible-vault encrypt --encrypt-vault-id lab inventories/lab/host_vars/s3-01/vault.yml
+# Générer les clés : openssl rand -hex 10 | tr a-f A-F   (clé d'accès, 20 caractères)
+#                    openssl rand -base64 30             (clé secrète, 40 caractères)
+# La clé d'accès et la clé secrète de tofu-etat sont aussi dans ~/.config/workbook/s3-tofu.env.
+---
+vault_seaweedfs_tofu_etat_cle_acces: "<CLE-ACCES-TOFU-ETAT>"
+vault_seaweedfs_tofu_etat_cle_secrete: "<CLE-SECRETE-TOFU-ETAT>"
+# Le certificat est public, mais il vit avec sa clé : même cycle de vie, même fichier d'origine.
+vault_seaweedfs_tls_certificat: |
+  -----BEGIN CERTIFICATE-----
+  <CONTENU-DE-~/pki-provisoire/s3-01.crt>
+  -----END CERTIFICATE-----

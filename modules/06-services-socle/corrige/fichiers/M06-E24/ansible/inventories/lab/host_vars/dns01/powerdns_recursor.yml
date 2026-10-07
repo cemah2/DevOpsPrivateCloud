@@ -1,0 +1,10 @@
+---
+# host_vars/dns01/powerdns_recursor.yml — récurseur de dns01 (état après la bascule de M06-E08 :
+# port 53), relais internes complétés en M06-E24.
+powerdns_recursor_ecoute:
+  - 127.0.0.1
+  - 10.10.20.10
+# Zones internes : d'abord l'autoritaire local, puis celui de dns02.
+dns_relais_internes:
+  - 127.0.0.1:5300
+  - 10.10.20.16:5300

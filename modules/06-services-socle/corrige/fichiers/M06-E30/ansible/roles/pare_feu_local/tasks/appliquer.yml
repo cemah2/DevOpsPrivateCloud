@@ -1,0 +1,87 @@
+---
+# Application avec filet de sécurité (copie du mécanisme de M04-E17, rôle pare_feu) :
+# sauvegarde → minuterie de retour armée → chargement → confirmation par une NOUVELLE connexion
+# SSH et des flux de contrôle → minuterie désarmée. Sans confirmation, l'hôte revient seul.
+
+- name: Appliquer et confirmer
+  block:
+    - name: Sauvegarder la configuration en place
+      ansible.builtin.copy:
+        src: "{{ pare_feu_local_fichier }}"
+        dest: "{{ pare_feu_local_dossier_etat }}/nftables.conf.precedent"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Nettoyer une minuterie restée d'un passage interrompu  # noqa: command-instead-of-module
+      ansible.builtin.shell: |
+        systemctl stop pare-feu-local-retour.timer 2>/dev/null || true
+        systemctl reset-failed pare-feu-local-retour.service pare-feu-local-retour.timer 2>/dev/null || true
+      changed_when: false
+
+    - name: Armer le retour automatique, délai en secondes {{ pare_feu_local_delai_retour }}
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=pare-feu-local-retour
+          - --description=Retour automatique du filtrage local (rôle pare_feu_local)
+          - --on-active={{ pare_feu_local_delai_retour }}s
+          - --collect
+          - /usr/local/sbin/pare-feu-local-retour
+      changed_when: true
+
+    - name: Poser la nouvelle configuration
+      ansible.builtin.template:
+        src: nftables.conf.j2
+        dest: "{{ pare_feu_local_fichier }}"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: /usr/sbin/nft -c -f %s
+
+    - name: Charger la nouvelle configuration
+      ansible.builtin.command: /usr/sbin/nft -f {{ pare_feu_local_fichier }}
+      changed_when: true
+
+    - name: Fermer la connexion existante
+      ansible.builtin.meta: reset_connection
+
+    - name: Confirmer par une nouvelle connexion SSH
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ pare_feu_local_delai_confirmation }}"
+
+    - name: Confirmer les flux de contrôle depuis le contrôleur
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host | default(inventory_hostname) }}"
+        port: "{{ item.port }}"
+        timeout: 5
+      loop: "{{ pare_feu_local_verifications }}"
+      loop_control:
+        label: "{{ item.motif | default(item.port) }}"
+      delegate_to: localhost
+      become: false
+
+    - name: Désarmer le retour automatique (changement confirmé)
+      ansible.builtin.systemd_service:
+        name: pare-feu-local-retour.timer
+        state: stopped
+
+  rescue:
+    - name: Revenir en arrière tout de suite si l'hôte répond encore
+      ansible.builtin.command: /usr/local/sbin/pare-feu-local-retour
+      register: _pare_feu_local_retour
+      changed_when: _pare_feu_local_retour.rc | default(1) == 0
+      failed_when: false
+      ignore_unreachable: true
+
+    - name: Attendre que l'hôte soit de nouveau joignable (retour immédiat ou minuterie)
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ pare_feu_local_delai_retour | int + 60 }}"
+
+    - name: Échouer en expliquant
+      ansible.builtin.fail:
+        msg: >-
+          Le nouveau filtrage local de {{ inventory_hostname }} n'a pas été confirmé (tâche
+          « {{ ansible_failed_task.name }} ») : configuration précédente restaurée. Corrige
+          host_vars/{{ inventory_hostname }}/pare_feu_local.yml, regarde « journalctl -t pare-feu-local-retour ».

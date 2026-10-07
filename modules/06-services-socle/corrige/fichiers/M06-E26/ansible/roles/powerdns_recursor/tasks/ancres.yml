@@ -1,0 +1,32 @@
+---
+# roles/powerdns_recursor/tasks/ancres.yml — vérification après application des ancres (M06-E26).
+# Le gabarit recursor.yml (étendu en M06-E26) écrit les ancres ; le gestionnaire du rôle
+# (M06-E07) redémarre le Recursor quand le fichier change. À la main, « rec_control reload-yaml »
+# recharge les ancres SANS redémarrage (cache conservé) : utile lors d'un roulement (RB-064).
+# À inclure à la fin du bloc « Appliquer et vérifier » de tasks/configuration.yml (M06-E07),
+# après la sonde, pour que l'échec déclenche la remise en place de la configuration précédente :
+#     - name: Ancres de confiance
+#       ansible.builtin.include_tasks: ancres.yml
+#       when: powerdns_recursor_ancres | length > 0
+
+- name: Ancres positives chargées
+  ansible.builtin.command: rec_control get-tas
+  register: powerdns_recursor_tas
+  changed_when: false
+  check_mode: false
+
+- name: Chaque zone signée a son ancre
+  ansible.builtin.assert:
+    that: powerdns_recursor_ancres | map(attribute='nom') | reject('in', powerdns_recursor_tas.stdout) | list | length == 0
+    fail_msg: "Ancre(s) absente(s) du récurseur de {{ inventory_hostname }} : {{ powerdns_recursor_tas.stdout }}"
+    quiet: true
+
+- name: Une réponse de chaque zone signée est validée (drapeau ad)
+  ansible.builtin.command: dig +dnssec +time=2 +tries=2 @127.0.0.1 {{ item.nom }} SOA
+  loop: "{{ powerdns_recursor_ancres }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: powerdns_recursor_ad
+  changed_when: false
+  check_mode: false
+  failed_when: powerdns_recursor_ad.stdout is not search('flags:[a-z ]* ad[ ;]')

@@ -1,0 +1,105 @@
+---
+- name: Configuration de la CA (ca.json)
+  ansible.builtin.template:
+    src: ca.json.j2
+    dest: "{{ step_ca_repertoire }}/config/ca.json"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0640"
+    # JSON valide et lisible par jq : la structure est sérialisée, mais on le prouve.
+    validate: jq empty %s
+    backup: true
+  register: step_ca_conf
+  notify: Redémarrer step-ca
+
+- name: Empreinte de la racine (pour les clients)
+  ansible.builtin.command: step certificate fingerprint {{ step_ca_repertoire }}/certs/root_ca.crt
+  register: step_ca_empreinte
+  changed_when: false
+  check_mode: false
+
+- name: Réglages du client step local (step ca … sur l'hôte lui-même)
+  ansible.builtin.copy:
+    dest: "{{ step_ca_repertoire }}/config/defaults.json"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0644"
+    content: >-
+      {{ {'ca-url': step_ca_url, 'fingerprint': step_ca_empreinte.stdout,
+          'root': step_ca_repertoire ~ '/certs/root_ca.crt'} | to_nice_json(indent=2) }}
+
+- name: Unité systemd step-ca
+  ansible.builtin.template:
+    src: step-ca.service.j2
+    dest: /etc/systemd/system/step-ca.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer step-ca
+
+- name: Service activé au démarrage
+  ansible.builtin.systemd_service:
+    name: step-ca.service
+    enabled: true
+    daemon_reload: true
+
+- name: Appliquer et vérifier la configuration
+  block:
+    - name: Redémarrer maintenant si quelque chose a changé
+      ansible.builtin.meta: flush_handlers
+
+    - name: Service démarré
+      ansible.builtin.systemd_service:
+        name: step-ca.service
+        state: started
+      when: step_ca_redemarrer | bool
+
+    # Connexion locale (--resolve) mais nom ET chaîne vérifiés : le test ne dépend pas du DNS
+    # et prouve que le certificat servi est valide pour le premier nom de step_ca_noms_dns.
+    - name: La CA répond « ok » sur /health, avec un TLS vérifié par la racine
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --fail
+          - --silent
+          - --show-error
+          - --noproxy
+          - "*"
+          - --cacert
+          - "{{ step_ca_repertoire }}/certs/root_ca.crt"
+          - --resolve
+          - "{{ step_ca_noms_dns[0] }}:{{ step_ca_port }}:127.0.0.1"
+          - "https://{{ step_ca_noms_dns[0] }}:{{ step_ca_port }}/health"
+      register: step_ca_sante
+      changed_when: false
+      until: step_ca_sante.rc == 0 and 'ok' in step_ca_sante.stdout
+      retries: 10
+      delay: 2
+      check_mode: false
+      when:
+        - step_ca_redemarrer | bool
+        - not ansible_check_mode
+
+  rescue:
+    - name: Remettre la configuration précédente
+      ansible.builtin.copy:
+        src: "{{ step_ca_conf.backup_file }}"
+        dest: "{{ step_ca_repertoire }}/config/ca.json"
+        remote_src: true
+        owner: "{{ step_ca_utilisateur }}"
+        group: "{{ step_ca_utilisateur }}"
+        mode: "0640"
+      when: step_ca_conf.backup_file is defined
+
+    - name: Redémarrer avec la configuration précédente
+      ansible.builtin.systemd_service:
+        name: step-ca.service
+        state: restarted
+      when: step_ca_conf.backup_file is defined
+
+    - name: Échouer en le disant
+      ansible.builtin.fail:
+        msg: >-
+          step-ca ne répond pas après le changement sur {{ inventory_hostname }}
+          ({{ 'configuration précédente remise' if step_ca_conf.backup_file is defined else 'première installation' }}).
+          Lire : journalctl -u step-ca -n 50.

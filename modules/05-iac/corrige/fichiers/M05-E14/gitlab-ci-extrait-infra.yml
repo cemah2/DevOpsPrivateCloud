@@ -1,0 +1,12 @@
+# Extrait pour le .gitlab-ci.yml de plateforme/infra (M05-E14) : accès aux modules de
+# plateforme/tofu-modules avec le jeton du job, SANS toucher au ~/.gitconfig de
+# l'utilisateur gitlab-runner (exécuteur shell partagé entre tous les projets).
+# GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n (Git >= 2.31) : configuration
+# Git limitée au processus du job.
+# Prérequis : plateforme/infra dans la liste d'autorisation des jetons de job de
+# plateforme/tofu-modules (Settings > CI/CD > Job token permissions).
+.acces-modules:
+  before_script:
+    - export GIT_CONFIG_COUNT=1
+    - export GIT_CONFIG_KEY_0="url.https://gitlab-ci-token:${CI_JOB_TOKEN}@git01.par1.medisphere.internal/.insteadOf"
+    - export GIT_CONFIG_VALUE_0="https://git01.par1.medisphere.internal/"

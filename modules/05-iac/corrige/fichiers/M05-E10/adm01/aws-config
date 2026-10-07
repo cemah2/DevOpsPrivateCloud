@@ -1,0 +1,11 @@
+# ~/.aws/config sur adm01 — client S3 du socle (AWS CLI v2) (M05-E10)
+# Aucune clé ici : elles viennent de l'environnement (s3-tofu.env ou s3-admin.env).
+[profile s3-socle]
+region = us-east-1
+endpoint_url = https://s3-01.par1.medisphere.internal:8333
+# La CLI v2 embarque SA propre liste d'autorités : sans cette ligne, elle ignore la CA
+# provisoire installée dans le magasin système et refuse le certificat de s3-01.
+# Attention : la variable d'environnement AWS_CA_BUNDLE, si elle existe, l'emporte.
+ca_bundle = /etc/ssl/certs/ca-certificates.crt
+s3 =
+  addressing_style = path

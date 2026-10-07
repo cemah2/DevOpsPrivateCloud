@@ -1,0 +1,10 @@
+---
+# host_vars/nbx01/pare_feu_local.yml — flux d'entrée de nbx01 (M06-E30).
+# PostgreSQL (5432) et Valkey (6379) n'écoutent que sur la boucle locale : aucune règle.
+pare_feu_local_regles:
+  - {source: [10.10.10.0/24, 10.255.1.0/24, 10.10.20.15], proto: tcp, ports: 443,
+     motif: "NetBox : MGMT, VPN, runner01 (inventaire, OpenTofu, synchronisations)", ref: M06-E04}
+  - {source: [10.10.10.0/24, 10.10.20.11], proto: tcp, ports: 80,
+     motif: "HTTP : redirection (MGMT) et défi ACME HTTP-01 (ca01)", ref: M06-E18}
+pare_feu_local_verifications:
+  - {port: 443, motif: "NetBox"}

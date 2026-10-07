@@ -1,0 +1,12 @@
+---
+# M06-E04 — Source de vérité du socle (nbx01, groupe role_netbox).
+# Premier passage : 10 à 15 minutes (upgrade.sh télécharge les dépendances Python).
+#   uv run ansible-playbook playbooks/nbx01.yml --check --diff
+#   uv run ansible-playbook playbooks/nbx01.yml
+- name: NetBox
+  hosts: role_netbox
+  become: true
+  serial: 1
+  roles:
+    - role: netbox
+      tags: [netbox]

@@ -1,0 +1,10 @@
+---
+# host_vars/ca01/pare_feu_local.yml — flux d'entrée de ca01 (M06-E30).
+pare_feu_local_regles:
+  - {source: [10.10.0.0/16, 10.255.1.0/24], proto: tcp, ports: 443,
+     motif: "API de step-ca : ACME, renouvellements, SSH (lab et VPN)", ref: M06-E02}
+  - {source: 10.10.0.0/16, proto: tcp, ports: 80,
+     motif: "CRL en HTTP (insecureAddress) ; le VPN n'atteint que le 443 d'INFRA (M06-E20)", ref: M06-E27}
+pare_feu_local_verifications:
+  - {port: 443, motif: "API de step-ca"}
+  - {port: 80, motif: "CRL"}

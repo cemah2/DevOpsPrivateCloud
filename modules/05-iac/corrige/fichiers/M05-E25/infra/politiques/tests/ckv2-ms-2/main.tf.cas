@@ -1,0 +1,15 @@
+# Cas fautif : aucune étiquette déclarée.
+resource "proxmox_virtual_environment_vm" "cas" {
+  name      = "m05-cas-de-test"
+  node_name = "pve01"
+  vm_id     = 2059
+
+  clone {
+    vm_id = 9010
+    full  = true
+  }
+
+  agent {
+    enabled = true
+  }
+}

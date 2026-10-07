@@ -1,0 +1,51 @@
+---
+- name: Dossier des données de PowerDNS (base SQLite, fichiers de zone générés)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: pdns
+    group: pdns
+    mode: "0750"
+  loop:
+    - "{{ powerdns_auth_base | dirname }}"
+    - "{{ powerdns_auth_base | dirname }}/zones"
+
+# Base créée par le compte pdns lui-même : en mode WAL, SQLite crée à côté des fichiers -wal
+# et -shm ; s'ils appartenaient à root, pdns ne pourrait plus écrire (piège classique).
+- name: Créer la base gsqlite3 avec le schéma du paquet (une seule fois)
+  ansible.builtin.shell:
+    cmd: sqlite3 {{ powerdns_auth_base }} < /usr/share/pdns-backend-sqlite3/schema/schema.sqlite3.sql
+    creates: "{{ powerdns_auth_base }}"
+  become: true
+  become_user: pdns
+
+- name: Configuration du serveur faisant autorité
+  ansible.builtin.template:
+    src: medisphere.conf.j2
+    dest: /etc/powerdns/pdns.d/medisphere.conf
+    owner: root
+    group: pdns
+    mode: "0640"
+  no_log: true
+  notify: Redémarrer pdns
+
+- name: Script de chargement d'une zone (numéro de série croissant)
+  ansible.builtin.copy:
+    src: pdns-charger-zone
+    dest: /usr/local/sbin/pdns-charger-zone
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Service pdns activé au démarrage
+  ansible.builtin.systemd_service:
+    name: pdns.service
+    enabled: true
+
+- name: Appliquer maintenant un redémarrage en attente (les zones en dépendent)
+  ansible.builtin.meta: flush_handlers
+
+- name: Service pdns démarré
+  ansible.builtin.systemd_service:
+    name: pdns.service
+    state: started

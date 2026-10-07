@@ -1,0 +1,4 @@
+# Cas fautif : ressource expérimentale.
+resource "proxmox_vm" "cas" {
+  name = "m05-cas-de-test"
+}

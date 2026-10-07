@@ -1,0 +1,26 @@
+{#- ca.json de step-ca, construit comme une structure puis sérialisé : JSON toujours valide. -#}
+{%- set config = {
+  "root": step_ca_repertoire ~ "/certs/root_ca.crt",
+  "crt": step_ca_repertoire ~ "/certs/intermediate_ca.crt",
+  "key": step_ca_repertoire ~ "/secrets/intermediate_ca_key",
+  "address": step_ca_adresse,
+  "insecureAddress": "",
+  "dnsNames": step_ca_noms_dns,
+  "logger": {"format": "text"},
+  "db": {
+    "type": "badgerv2",
+    "dataSource": step_ca_repertoire ~ "/db"
+  },
+  "authority": {
+    "claims": step_ca_claims,
+    "provisioners": step_ca_provisioners
+  },
+  "tls": step_ca_tls
+} -%}
+{%- if step_ca_ssh | bool -%}
+{%- set config = config | combine({"ssh": {
+  "hostKey": step_ca_repertoire ~ "/secrets/ssh_host_ca_key",
+  "userKey": step_ca_repertoire ~ "/secrets/ssh_user_ca_key"
+}}) -%}
+{%- endif -%}
+{{ config | to_nice_json(indent=2) }}

@@ -1,0 +1,11 @@
+---
+# molecule/step_ca/molecule.yml — scénario du rôle « step_ca » (M06-E02)
+# Le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml (M04-E24).
+# Préparation propre au scénario : une PKI de TEST fabriquée sur l'instance (racine jetable,
+# intermédiaire, provisioner JWK), pour que le rôle trouve ce que la cérémonie fournit en vrai.
+#   uv run molecule test -s step_ca
+scenario:
+  name: step_ca
+ansible:
+  playbooks:
+    prepare: prepare.yml

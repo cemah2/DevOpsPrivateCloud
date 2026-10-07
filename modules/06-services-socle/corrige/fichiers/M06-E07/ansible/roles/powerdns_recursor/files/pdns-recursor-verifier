@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# pdns-recursor-verifier FICHIER — valide un recursor.yml AVANT de le mettre en place
+# (paramètre validate du module template, rôle powerdns_recursor).
+# Le Recursor ne sait vérifier que « recursor.yml » d'un dossier de configuration : on copie le
+# fichier candidat dans un dossier temporaire sous ce nom, puis « pdns_recursor --config=check ».
+set -euo pipefail
+candidat="${1:?usage : pdns-recursor-verifier FICHIER}"
+dossier="$(mktemp -d)"
+trap 'rm -rf "$dossier"' EXIT
+cp "$candidat" "$dossier/recursor.yml"
+exec pdns_recursor --config-dir="$dossier" --config=check

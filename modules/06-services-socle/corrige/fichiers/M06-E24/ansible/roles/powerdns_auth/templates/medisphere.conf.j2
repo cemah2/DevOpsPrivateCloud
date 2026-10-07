@@ -1,0 +1,66 @@
+# {{ ansible_managed }}
+# /etc/powerdns/pdns.d/medisphere.conf — PowerDNS Authoritative de {{ inventory_hostname }} (rôle powerdns_auth).
+# Lu après /etc/powerdns/pdns.conf (include-dir du paquet), qui ne contient que « launch= ».
+# Fichier SECRET (clé d'API) : root:pdns 0640.
+# M06-E06 (base), M06-E17 (mises à jour dynamiques), M06-E24 (réplication), M06-E26 (DNSSEC).
+# Mode de ce serveur : {{ powerdns_auth_mode }}.
+
+# --- Backend : base SQLite avec les métadonnées (TSIG, M06-E24) et DNSSEC (M06-E26) -----------
+launch+=gsqlite3
+gsqlite3-database={{ powerdns_auth_base }}
+gsqlite3-dnssec=yes
+
+# --- Écoute : jamais le port 53 (réservé au récurseur, seul point d'entrée des clients) ---------
+local-address={{ powerdns_auth_ecoute | join(', ') }}
+
+# --- Zones créées sans SOA explicite (API, pdnsutil zone create) ---------------------------------
+default-soa-content={{ powerdns_auth_soa.primaire }}. {{ powerdns_auth_soa.contact }}. 0 {{ powerdns_auth_soa.rafraichissement }} {{ powerdns_auth_soa.nouvel_essai }} {{ powerdns_auth_soa.expiration }} {{ powerdns_auth_soa.ttl_negatif }}
+default-ttl={{ powerdns_auth_ttl }}
+
+# --- Réplication (M06-E24) -----------------------------------------------------------------------
+{% if powerdns_auth_mode == 'primaire' %}
+primary=yes
+secondary=no
+# Aucun NOTIFY automatique vers les adresses des NS : sur dns01 et dns02, le port 53 est celui
+# des RÉCURSEURS. Seuls les destinataires explicites (port 5300) sont notifiés.
+only-notify=
+also-notify={{ powerdns_auth_notifier | join(', ') }}
+{% else %}
+primary=no
+secondary=yes
+# Un secondaire ne notifie personne.
+only-notify=
+{% endif %}
+# AXFR sans TSIG : boucle locale seulement. Un AXFR signé TSIG ne consulte PAS cette liste.
+allow-axfr-ips={{ powerdns_auth_axfr_sans_tsig | join(',') }}
+# NOTIFY signés par la clé TSIG de la zone (valeur par défaut, rendue explicite).
+send-signed-notify=yes
+
+# --- DNSSEC (M06-E26) ------------------------------------------------------------------------------
+# Numéro de série servi des zones signées : suit la date d'émission des signatures (renouvelées
+# chaque semaine), pour que le secondaire (zone pré-signée) retransfère avant leur expiration.
+default-soa-edit-signed={{ powerdns_auth_soa_edit_signees }}
+
+# --- Mises à jour dynamiques (M06-E17) -------------------------------------------------------------
+{% if powerdns_auth_dnsupdate %}
+dnsupdate=yes
+allow-dnsupdate-from={{ powerdns_auth_dnsupdate_autorises | join(',') }}
+{% else %}
+dnsupdate=no
+{% endif %}
+
+# --- API HTTP (le serveur web démarre avec api=yes) ---------------------------------------------
+{% if powerdns_auth_api_active %}
+api=yes
+api-key={{ powerdns_auth_cle_api }}
+webserver-address={{ powerdns_auth_api_adresse }}
+webserver-port={{ powerdns_auth_api_port }}
+webserver-allow-from={{ powerdns_auth_api_autorises | join(',') }}
+{% else %}
+# Pas d'API sur ce serveur (M06-E24) : surface d'attaque réduite, données reçues par AXFR.
+api=no
+webserver=no
+{% endif %}
+
+# --- Discrétion ------------------------------------------------------------------------------
+version-string={{ powerdns_auth_version }}

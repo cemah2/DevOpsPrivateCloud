@@ -1,0 +1,12 @@
+---
+# Racine de la PKI du socle (clone HTTPS de git01, API des runners, état OpenTofu sur s3-01)
+# et autorité de pve01 (Packer, API Proxmox). Depuis M04-E18 : rôle partagé de la collection
+# interne ; depuis M06-E03 : la racine step-ca remplace la CA provisoire, retirée par
+# group_vars/all/pki.yml (ca_lab_retirer). Les variables de la liste viennent de l'inventaire.
+- name: Autorités de certification du lab
+  ansible.builtin.include_role:
+    name: medisphere.socle.ca_lab
+  vars:
+    ca_lab_certificats:
+      - {nom: medisphere-root-ca, source: "{{ ms_pki_racine }}"}
+      - {nom: pve01-root-ca, source: "{{ gitlab_runner_ca_pve01 }}"}

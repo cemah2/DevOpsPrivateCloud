@@ -1,0 +1,6 @@
+# ansible.cfg — ligne MODIFIÉE en M06-E12.
+[defaults]
+# L'inventaire par défaut devient NetBox (l'intention relue et historisée) ; Proxmox (la réalité
+# d'exécution) sert de contrôle : outils/comparer-inventaires.sh, en CI.
+# Secours (NetBox indisponible) : -i inventories/lab/proxmox.yml
+inventory = inventories/lab/netbox.yml

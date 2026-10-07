@@ -1,0 +1,63 @@
+{
+  "DhcpDdns": {
+    "control-sockets": [
+      {
+        "socket-name": "kea-ddns-ctrl-socket",
+        "socket-type": "unix"
+      }
+    ],
+    "dns-server-timeout": 500,
+    "forward-ddns": {
+      "ddns-domains": [
+        {
+          "dns-servers": [
+            {
+              "ip-address": "127.0.0.1",
+              "port": 5300
+            }
+          ],
+          "key-name": "ddns-kea",
+          "name": "par1.medisphere.internal."
+        }
+      ]
+    },
+    "ip-address": "127.0.0.1",
+    "loggers": [
+      {
+        "name": "kea-dhcp-ddns",
+        "output-options": [
+          {
+            "output": "stdout",
+            "pattern": "%-5p %m\n"
+          }
+        ],
+        "severity": "INFO"
+      }
+    ],
+    "port": 53001,
+    "reverse-ddns": {
+      "ddns-domains": [
+        {
+          "dns-servers": [
+            {
+              "ip-address": "127.0.0.1",
+              "port": 5300
+            }
+          ],
+          "key-name": "ddns-kea",
+          "name": "10.10.in-addr.arpa."
+        }
+      ]
+    },
+    "tsig-keys": [
+      {
+        "algorithm": "HMAC-SHA256",
+        "name": "ddns-kea",
+        "secret-file": "/etc/kea/tsig-ddns-kea.secret"
+      }
+    ],
+    "user-context": {
+      "gere-par": "Fichier g\u00e9r\u00e9 par Ansible."
+    }
+  }
+}

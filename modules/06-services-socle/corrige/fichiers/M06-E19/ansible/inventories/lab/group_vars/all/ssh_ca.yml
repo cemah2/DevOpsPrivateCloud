@@ -1,0 +1,14 @@
+---
+# group_vars/all/ssh_ca.yml — CA SSH du socle (M06-E19 ; CA d'utilisateur en M06-E20).
+# Les clés PUBLIQUES des CA sont versionnées ici : relues en MR, historisées, et une rotation
+# de CA est une MR qui ajoute la nouvelle clé à côté de l'ancienne (puis retire l'ancienne).
+# Valeurs : sur adm01, « step ssh config --host --roots » (hôtes) et « step ssh config --roots »
+# (utilisateurs). Ne jamais les confondre : D'HÔTE ici, D'UTILISATEUR dans ssh_ca_utilisateur_cles_ca.
+
+ssh_ca_hote_cles_ca:
+  - "ecdsa-sha2-nistp256 <CLE-PUBLIQUE-CA-HOTES> CA d'hôte MédiSphère"
+
+# Signature initiale des clés d'hôte : provisioner JWK « admin » (M06-E02). Son mot de passe est
+# dans le Vault « critique » de role_pki (vault_step_ca_mot_de_passe_admin) ; on le lit par
+# hostvars pour ne pas le dupliquer. Il n'est utilisé que sur le CONTRÔLEUR (delegate_to: localhost).
+ssh_ca_hote_mot_de_passe_provisioner: "{{ hostvars[groups['role_pki'][0]]['vault_step_ca_mot_de_passe_admin'] }}"

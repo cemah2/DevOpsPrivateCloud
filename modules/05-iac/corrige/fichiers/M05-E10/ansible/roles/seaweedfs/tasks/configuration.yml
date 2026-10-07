@@ -1,0 +1,52 @@
+---
+- name: Dossier des données, au service seul
+  ansible.builtin.file:
+    path: "{{ seaweedfs_dossier }}"
+    state: directory
+    owner: "{{ seaweedfs_utilisateur }}"
+    group: "{{ seaweedfs_utilisateur }}"
+    mode: "0750"
+
+- name: Dossiers de configuration (lisibles par le service, modifiables par root)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ seaweedfs_utilisateur }}"
+    mode: "0750"
+  loop:
+    - "{{ seaweedfs_config }}"
+    - "{{ seaweedfs_config }}/tls"
+
+- name: Certificat de la passerelle S3
+  ansible.builtin.copy:
+    content: "{{ seaweedfs_tls_certificat | trim ~ '\n' }}"
+    dest: "{{ seaweedfs_config }}/tls/s3.crt"
+    owner: root
+    group: "{{ seaweedfs_utilisateur }}"
+    mode: "0644"
+  notify: Redémarrer seaweedfs
+
+- name: Clé privée de la passerelle S3
+  ansible.builtin.copy:
+    content: "{{ seaweedfs_tls_cle | trim ~ '\n' }}"
+    dest: "{{ seaweedfs_config }}/tls/s3.key"
+    owner: root
+    group: "{{ seaweedfs_utilisateur }}"
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Redémarrer seaweedfs
+
+# Les clés secrètes sont dans ce fichier : jamais affichées (no_log), jamais en --diff.
+# Prise en compte par SIGHUP (rechargement), sans couper les clients.
+- name: Identités S3 (s3.json)
+  ansible.builtin.template:
+    src: s3.json.j2
+    dest: "{{ seaweedfs_config }}/s3.json"
+    owner: root
+    group: "{{ seaweedfs_utilisateur }}"
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Recharger seaweedfs

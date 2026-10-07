@@ -1,0 +1,13 @@
+---
+# group_vars/all/pki.yml — confiance dans la PKI du socle (M06-E03).
+# Racine step-ca « MédiSphère Root CA » : certificat PUBLIC versionné dans pki/ (M06-E02).
+ms_pki_racine: "{{ playbook_dir }}/../pki/medisphere-root-ca.crt"
+
+ca_lab_certificats:
+  - {nom: medisphere-root-ca, source: "{{ ms_pki_racine }}"}
+
+# Étape 3 de la bascule (après vérification que plus aucun service ne présente de certificat
+# de la CA provisoire) : la CA provisoire n'est plus de confiance, nulle part.
+# Pendant la période de recouvrement (étapes 1 et 2), cette liste reste VIDE.
+ca_lab_retirer:
+  - medisphere-provisoire

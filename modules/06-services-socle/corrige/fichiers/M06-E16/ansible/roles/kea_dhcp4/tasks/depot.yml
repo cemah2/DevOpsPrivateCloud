@@ -1,0 +1,63 @@
+---
+# Dépôt APT de l'ISC pour Kea 3.0, clé vérifiée par son empreinte (même méthode que le
+# dépôt Smallstep du rôle step_ca, M06-E02). Réutilisable seul (rôle kea_ddns, Molecule).
+
+- name: Outils de vérification de la clé et socat (socket de contrôle)
+  ansible.builtin.apt:
+    name:
+      - gpg
+      - ca-certificates
+      - socat
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clé de signature du dépôt ISC Kea 3.0
+  ansible.builtin.get_url:
+    url: "{{ kea_dhcp4_depot_cle_url }}"
+    dest: /etc/apt/keyrings/isc-kea-3-0.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: _kea_dhcp4_cle_depot
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/isc-kea-3-0.asc
+  register: _kea_dhcp4_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that:
+      - _kea_dhcp4_cle_colonnes.stdout is search('^fpr:+' ~ kea_dhcp4_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: >-
+      La clé /etc/apt/keyrings/isc-kea-3-0.asc n'a pas l'empreinte attendue
+      ({{ kea_dhcp4_depot_cle_empreinte }}) : ne rien installer, vérifier la source.
+    quiet: true
+
+- name: Source APT ISC Kea 3.0 (format deb822)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/isc-kea-3-0.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle kea_dhcp4) — dépôt officiel de l'ISC (Kea 3.0)
+      Types: deb
+      URIs: {{ kea_dhcp4_depot_url }}
+      Suites: {{ ansible_facts['distribution_release'] }}
+      Components: main
+      Signed-By: /etc/apt/keyrings/isc-kea-3-0.asc
+  register: _kea_dhcp4_source
+
+- name: Relire les index APT si le dépôt vient d'être déclaré
+  ansible.builtin.apt:
+    update_cache: true
+  when: _kea_dhcp4_source is changed or _kea_dhcp4_cle_depot is changed

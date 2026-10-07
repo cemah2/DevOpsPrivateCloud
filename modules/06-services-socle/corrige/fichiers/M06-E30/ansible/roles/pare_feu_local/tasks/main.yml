@@ -1,0 +1,72 @@
+---
+# Rôle pare_feu_local (M06-E30) : génère /etc/nftables.conf (filtrage d'entrée de l'hôte) et
+# l'applique sans jamais pouvoir couper durablement l'accès (retour automatique).
+
+- name: Ne jamais s'appliquer au routeur
+  ansible.builtin.assert:
+    that: "'role_routeur' not in group_names"
+    fail_msg: "gw01 a son propre rôle (pare_feu) : pare_feu_local ne s'y applique pas."
+    quiet: true
+
+- name: Vérifier les flux
+  ansible.builtin.assert:
+    that:
+      - (pare_feu_local_communes + pare_feu_local_regles) | rejectattr('motif', 'defined') | list | length == 0
+      - (pare_feu_local_communes + pare_feu_local_regles) | selectattr('entree', 'defined') | list | length == 0
+      - (pare_feu_local_communes + pare_feu_local_regles) | selectattr('sortie', 'defined') | list | length == 0
+      # Garde-fou : SSH doit rester ouvert depuis au moins une source explicite.
+      - (pare_feu_local_communes + pare_feu_local_regles) | selectattr('ports', 'defined') | selectattr('ports', 'equalto', 22) | list | length > 0
+      - pare_feu_local_delai_retour | int >= pare_feu_local_delai_confirmation | int + 30
+    fail_msg: >-
+      Chaque flux local doit avoir un motif, pas d'interface (entree/sortie), et un flux SSH (port 22)
+      doit exister : sans lui, le rôle couperait Ansible.
+    quiet: true
+
+- name: Installer nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Service nftables activé (charge /etc/nftables.conf au démarrage)
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+
+- name: Dossier d'état du rôle
+  ansible.builtin.file:
+    path: "{{ pare_feu_local_dossier_etat }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Script de retour arrière
+  ansible.builtin.copy:
+    src: pare-feu-local-retour
+    dest: /usr/local/sbin/pare-feu-local-retour
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Valider la configuration générée (nft -c)
+  ansible.builtin.command:
+    cmd: /usr/sbin/nft -c -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'nftables.conf.j2') }}"
+  changed_when: false
+  check_mode: false
+
+- name: Prévoir la nouvelle configuration
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: "{{ pare_feu_local_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+  check_mode: true
+  register: _pare_feu_local_prevision
+
+- name: Appliquer avec le filet de sécurité
+  ansible.builtin.include_tasks: appliquer.yml
+  when:
+    - _pare_feu_local_prevision is changed
+    - not ansible_check_mode

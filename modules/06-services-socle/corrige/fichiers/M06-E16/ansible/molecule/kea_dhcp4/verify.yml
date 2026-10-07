@@ -1,0 +1,62 @@
+---
+# molecule/kea_dhcp4/verify.yml — le service rendu : configuration chargée, API authentifiée.
+- name: Vérifier le rôle kea_dhcp4
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    api: "http://127.0.0.1:8004/"
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['isc-kea-dhcp4-server.service']['state'] == 'running'
+          - ansible_facts['services']['isc-kea-dhcp4-server.service']['status'] == 'enabled'
+
+    - name: L'API refuse une requête sans identifiants (401)
+      ansible.builtin.uri:
+        url: "{{ api }}"
+        method: POST
+        body_format: json
+        body: {command: version-get}
+        status_code: 401
+
+    - name: L'API répond avec les identifiants
+      ansible.builtin.uri:
+        url: "{{ api }}"
+        method: POST
+        body_format: json
+        body: {command: config-get}
+        url_username: kea-api
+        url_password: molecule-mot-de-passe-de-test
+        force_basic_auth: true
+      register: kea_verif_config
+
+    - name: Le sous-réseau de test est chargé avec son id
+      ansible.builtin.assert:
+        that:
+          - kea_verif_config.json[0].result == 0
+          - kea_verif_config.json[0].arguments.Dhcp4.subnet4[0].id == 9
+        fail_msg: "{{ kea_verif_config.json }}"
+
+    - name: Le hook lease_cmds répond (liste des baux, vide)
+      ansible.builtin.uri:
+        url: "{{ api }}"
+        method: POST
+        body_format: json
+        body: {command: lease4-get-all}
+        url_username: kea-api
+        url_password: molecule-mot-de-passe-de-test
+        force_basic_auth: true
+      register: kea_verif_baux
+      # result 3 = « aucun bail » : la commande existe, donc le hook est chargé.
+      failed_when: kea_verif_baux.json[0].result not in [0, 3]
+
+    - name: Le fichier de configuration n'est lisible ni par tous ni modifiable par _kea
+      ansible.builtin.stat:
+        path: /etc/kea/kea-dhcp4.conf
+      register: kea_verif_fichier
+      failed_when: kea_verif_fichier.stat.mode != '0640' or kea_verif_fichier.stat.pw_name != 'root'

@@ -1,0 +1,13 @@
+---
+# host_vars/s3-01/certificats.yml — certificat TLS de la passerelle S3 par ACME (M06-E18).
+# Rien n'écoute sur le port 80 de s3-01 : pas d'arrêt pendant le défi.
+# SeaweedFS ne relit pas son certificat à chaud : redémarrage du service (quelques secondes ;
+# un « tofu apply » en cours réessaie, le verrou d'état est un objet du compartiment).
+# ⚠️ Chemins, groupe et nom du service : ceux de ton rôle seaweedfs (M05-E10) ; adapte.
+certificats_acme_certificats:
+  - id: s3
+    noms: [s3-01.par1.medisphere.internal]
+    certificat: /etc/seaweedfs/tls/s3-01.par1.medisphere.internal.crt
+    cle: /etc/seaweedfs/tls/s3-01.par1.medisphere.internal.key
+    groupe: seaweedfs
+    recharger: /usr/bin/systemctl try-restart seaweedfs.service

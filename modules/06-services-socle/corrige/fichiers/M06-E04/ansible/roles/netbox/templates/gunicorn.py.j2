@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+# gunicorn.py — repris de contrib/gunicorn.py de NetBox {{ netbox_version }}.
+# Adresse d'écoute LOCALE : seul nginx (TLS) est joignable depuis le réseau.
+bind = {{ netbox_gunicorn_adresse | to_json }}
+workers = {{ netbox_gunicorn_workers | int }}
+threads = {{ netbox_gunicorn_threads | int }}
+timeout = 120
+max_requests = 5000
+max_requests_jitter = 500

@@ -1,0 +1,13 @@
+---
+# M06-E02 — Client step (commande « step ») sur le poste d'administration.
+# adm01 demande des certificats (provisioner admin) et signe hors ligne avec la racine ;
+# il n'héberge AUCUNE CA en ligne. Importé par site.yml après socle-base.yml.
+#   uv run ansible-playbook playbooks/outils-pki.yml --check --diff
+- name: Outils de la PKI sur le poste d'administration
+  hosts: role_bastion
+  become: true
+  tasks:
+    - name: Client step (dépôt Smallstep, version figée)
+      ansible.builtin.include_role:
+        name: step_ca
+        tasks_from: client.yml

@@ -1,0 +1,55 @@
+---
+# Rôle netbox (M06-E04) — NetBox installé nativement (documentation officielle « Installation »),
+# sur Debian 13 : Python 3.13, PostgreSQL 17 et Valkey 8 de Debian, gunicorn, nginx (TLS).
+# Les valeurs du socle sont dans inventories/lab/group_vars/role_netbox/netbox.yml.
+
+# --- Version (figée, PLAN §6) ------------------------------------------------------------------
+netbox_version: "4.6.9"
+# Commit de l'étiquette v4.6.9 (git ls-remote https://github.com/netbox-community/netbox
+# refs/tags/v4.6.9) : le clone est refusé s'il ne correspond pas (étiquette déplacée, miroir altéré).
+netbox_commit: f8b00e9aae7fab01dae1bb15ec85b95d1ba7c127
+netbox_depot: https://github.com/netbox-community/netbox.git
+
+# --- Emplacements (installation « par version » + lien, recommandée par la doc) -----------------
+netbox_base: /opt
+netbox_racine_version: "{{ netbox_base }}/netbox-{{ netbox_version }}"
+netbox_racine: "{{ netbox_base }}/netbox"
+netbox_utilisateur: netbox
+
+# --- configuration.py ----------------------------------------------------------------------------
+netbox_allowed_hosts: ["{{ inventory_hostname }}"]
+netbox_fuseau_horaire: Europe/Paris
+# Secrets (Vault) : clé Django, poivres des jetons v2, mot de passe PostgreSQL.
+netbox_secret_key: ""
+# Dictionnaire {identifiant: poivre} ; le plus grand identifiant sert aux nouveaux jetons.
+netbox_api_token_peppers: {}
+netbox_bdd_nom: netbox
+netbox_bdd_utilisateur: netbox
+netbox_bdd_mot_de_passe: ""
+# Valkey local (compatible avec le protocole Redis : NetBox l'utilise sans le savoir).
+netbox_valkey_hote: localhost
+netbox_valkey_port: 6379
+
+# --- Compte d'administration initial (bris de glace ; usage courant : comptes nominatifs) --------
+netbox_admin_utilisateur: admin
+netbox_admin_courriel: plateforme@medisphere.internal
+netbox_admin_mot_de_passe: ""
+
+# --- gunicorn ------------------------------------------------------------------------------------
+netbox_gunicorn_adresse: 127.0.0.1:8001
+# Doc : 2n+1 workers. Ici 2 vCPU, mais 4 Go partagés avec PostgreSQL et Valkey : 3 suffisent.
+netbox_gunicorn_workers: 3
+netbox_gunicorn_threads: 3
+
+# --- nginx et TLS ----------------------------------------------------------------------------------
+netbox_nginx_nom: "{{ netbox_allowed_hosts[0] }}"
+# Écoute aussi en IPv6 (pile IPv6 présente sur les VMs Debian, même sans adresse routée).
+netbox_nginx_ipv6: true
+# true : le rôle dépose le certificat et la clé ci-dessous. false : ils sont gérés ailleurs
+# (renouvellement ACME sur l'hôte, M06-E18) ; le rôle ne les touche plus, nginx les lit.
+netbox_tls_gerer: true
+netbox_tls_certificat_chemin: /etc/ssl/netbox/netbox.crt
+netbox_tls_cle_chemin: /etc/ssl/netbox/netbox.key
+# Contenus PEM : certificat suivi de l'intermédiaire (fichier public du dépôt) ; clé (Vault).
+netbox_tls_certificat: ""
+netbox_tls_cle: ""

@@ -1,0 +1,24 @@
+---
+argument_specs:
+  main:
+    short_description: Serveur DHCPv4 Kea 3.0 (sous-réseaux relayés)
+    options:
+      kea_dhcp4_sous_reseaux:
+        type: list
+        elements: dict
+        required: true
+        description: Sous-réseaux servis ({id, reseau, plages, routeur, ntp, ddns, commentaire}).
+      kea_dhcp4_interfaces:
+        type: list
+        elements: str
+        description: Interfaces d'écoute de dns01 (celle qui reçoit le trafic relayé).
+      kea_dhcp4_api:
+        type: bool
+        description: Socket de contrôle HTTP authentifiée (M06-E17).
+      kea_dhcp4_api_mot_de_passe:
+        type: str
+        no_log: true
+        description: Mot de passe de l'API (Vault « critique »).
+      kea_dhcp4_ddns:
+        type: bool
+        description: Transmettre les baux à kea-dhcp-ddns (M06-E17).

@@ -1,0 +1,33 @@
+---
+# Rôle kea_ddns — kea-dhcp-ddns (« D2 ») et autorisations côté PowerDNS (M06-E17).
+# kea-dhcp4 envoie à D2 une demande par bail (NameChangeRequest, UDP 127.0.0.1:53001) ;
+# D2 la traduit en mise à jour DNS RFC 2136 signée TSIG vers le serveur faisant autorité.
+# Prérequis : rôle kea_dhcp4 (dépôt et paquets ISC), rôle powerdns_auth avec
+# powerdns_auth_dnsupdate: true (dnsupdate=yes, allow-dnsupdate-from=127.0.0.1).
+
+kea_ddns_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.') }}
+
+kea_ddns_version: "{{ kea_dhcp4_version | default('3.0.*') }}"
+
+# Clé TSIG partagée avec PowerDNS : même nom des deux côtés, secret en Vault « critique »
+# (vault_kea_tsig_ddns, group_vars/role_dns/vault.yml). Génération : openssl rand -base64 32
+kea_ddns_tsig_nom: ddns-kea
+kea_ddns_tsig_algorithme: hmac-sha256
+kea_ddns_tsig_secret: ""
+kea_ddns_tsig_fichier: /etc/kea/tsig-ddns-kea.secret
+
+# Serveur faisant autorité qui reçoit les mises à jour (local : port 5300, M06-E06).
+kea_ddns_serveur: 127.0.0.1
+kea_ddns_port: 5300
+
+# Zones mises à jour : directe et inverse (avec point final).
+kea_ddns_zone_directe: par1.medisphere.internal.
+kea_ddns_zone_inverse: 10.10.in-addr.arpa.
+# Adresses autorisées à envoyer des mises à jour, zone par zone (métadonnée ALLOW-DNSUPDATE-FROM).
+kea_ddns_autorises:
+  - 127.0.0.1/32
+
+kea_ddns_fichier: /etc/kea/kea-dhcp-ddns.conf
+kea_ddns_service: isc-kea-dhcp-ddns-server.service

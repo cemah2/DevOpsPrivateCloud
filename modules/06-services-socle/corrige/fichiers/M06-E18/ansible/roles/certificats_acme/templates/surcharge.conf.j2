@@ -1,0 +1,14 @@
+# {{ certificats_acme_entete }}
+# cert-renewer@{{ item.id }} : emplacements du certificat de {{ item.noms[0] }}.
+[Service]
+Environment=CERT_LOCATION={{ item.certificat }} \
+            KEY_LOCATION={{ item.cle }}
+# step réécrit les fichiers au renouvellement : on remet les droits attendus par le service
+# (ex. chrony lit sa clé sous l'utilisateur _chrony après avoir abandonné les droits root).
+ExecStartPost=/bin/chown root:{{ item.groupe | default('root') }} ${CERT_LOCATION} ${KEY_LOCATION}
+ExecStartPost=/bin/chmod 0644 ${CERT_LOCATION}
+ExecStartPost=/bin/chmod 0640 ${KEY_LOCATION}
+{% if item.recharger | default('') | length > 0 %}
+# Puis le service consommateur relit le nouveau certificat.
+ExecStartPost={{ item.recharger }}
+{% endif %}

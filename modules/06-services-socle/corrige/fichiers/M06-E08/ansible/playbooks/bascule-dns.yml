@@ -1,0 +1,158 @@
+---
+# playbooks/bascule-dns.yml — BASCULE du port 53 de dnsmasq vers PowerDNS Recursor (M06-E08, CHG-708).
+#
+# Préalable : la MR de bascule est fusionnée (group_vars/role_dns : dnsmasq_dns_actif: false,
+# powerdns_recursor_ecoute sur le port 53) et comparer-resolveurs.sh ne montre aucun écart.
+# Ce playbook est le SEUL moment où le port 53 change de propriétaire :
+#   1. les deux rôles écrivent leur nouvelle configuration SANS redémarrer (fichiers validés) ;
+#   2. pendant la fenêtre où le port 53 n'a plus de propriétaire (deux redémarrages, environ une
+#      seconde), dns01 ne REFUSE plus les questions (pas d'ICMP « port unreachable », pas de RST
+#      TCP) : il se tait. Un client qui reçoit un refus abandonne aussitôt (échec) ; un client
+#      qui n'a pas de réponse attend et réessaie (glibc : 5 s, 2 essais) : il obtient sa réponse,
+#      en retard. Règles nftables TEMPORAIRES, dans une table à part, retirées à la fin ;
+#   3. dnsmasq redémarre sans DNS (le port 53 se libère), le Recursor redémarre aussitôt et le prend ;
+#   4. contrôles ; en cas d'échec, retour automatique aux deux configurations précédentes.
+# Ensuite, site.yml (ou dns01.yml) repasse sans rien changer : c'est la preuve que le code décrit
+# bien le nouvel état.
+#   uv run ansible-playbook playbooks/bascule-dns.yml --check --diff
+#   uv run ansible-playbook playbooks/bascule-dns.yml
+- name: Bascule du DNS du lab vers PowerDNS Recursor
+  hosts: role_dns
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    # Configuration écrite, redémarrage différé : c'est ce playbook qui enchaîne les deux.
+    dnsmasq_redemarrer: false
+    powerdns_recursor_redemarrer: false
+    # Adresse de service et sonde : celles du socle, sauf si l'inventaire (répétition sur une VM
+    # d'essai) en donne d'autres. Les variables de play l'emportent sur l'inventaire : d'où ces
+    # « default » sur des noms propres à l'inventaire.
+    bascule_adresse: "{{ dns_adresse_service | default('10.10.20.10') }}"
+    bascule_sonde: dns01.par1.medisphere.internal
+    bascule_sonde_attendue: "{{ dns_sonde_attendue | default('10.10.20.10') }}"
+    # Table nftables temporaire, propre à la bascule (ne touche à aucune autre règle de dns01).
+    bascule_table_nft: |
+      table inet bascule_dns {
+        chain sortie {
+          type filter hook output priority filter; policy accept;
+          icmp type destination-unreachable icmp code port-unreachable drop
+          tcp sport 53 tcp flags rst drop
+        }
+      }
+  pre_tasks:
+    - name: La nouvelle configuration est bien celle de la bascule (MR fusionnée ?)
+      ansible.builtin.assert:
+        that:
+          - not dnsmasq_dns_actif
+          - powerdns_recursor_ecoute | select('match', '^[0-9.]+$') | list | length > 0
+        fail_msg: >-
+          group_vars/role_dns ne décrit pas l'état après bascule (dnsmasq_dns_actif: false,
+          Recursor sur le port 53). Rien n'a été touché.
+        quiet: true
+
+    - name: L'autoritaire répond (zones internes)
+      ansible.builtin.command: dig +short +time=2 -p 5300 @127.0.0.1 {{ bascule_sonde }} A
+      register: bascule_auth
+      changed_when: false
+      check_mode: false
+      failed_when: bascule_auth.stdout | length == 0
+
+  roles:
+    - role: dnsmasq
+    - role: powerdns_recursor
+
+  tasks:
+    - name: Paquet nftables disponible sur l'hôte (règles temporaires de la bascule)
+      ansible.builtin.apt:
+        name: nftables
+        state: present
+
+    - name: Basculer le port 53
+      when: not ansible_check_mode
+      block:
+        - name: Silence plutôt que refus pendant la bascule (table nftables temporaire)
+          ansible.builtin.command:
+            cmd: nft -f -
+            stdin: "{{ bascule_table_nft }}"
+          changed_when: true
+
+        - name: Redémarrer dnsmasq sans DNS (libère le port 53, garde le DHCP)
+          ansible.builtin.systemd_service:
+            name: dnsmasq.service
+            state: restarted
+
+        - name: Recursor sur le port 53
+          ansible.builtin.systemd_service:
+            name: pdns-recursor.service
+            state: restarted
+
+        - name: Le port 53 répond (Recursor)
+          ansible.builtin.wait_for:
+            host: "{{ bascule_adresse }}"
+            port: 53
+            timeout: 10
+
+        - name: Nom interne résolu sur l'adresse du lab
+          ansible.builtin.command: dig +short +time=2 +tries=3 @{{ bascule_adresse }} {{ bascule_sonde }} A
+          register: bascule_interne
+          changed_when: false
+          failed_when: bascule_interne.stdout != bascule_sonde_attendue
+
+        - name: Nom Internet résolu sur l'adresse du lab
+          ansible.builtin.command: dig +short +time=3 +tries=3 @{{ bascule_adresse }} deb.debian.org A
+          register: bascule_internet
+          changed_when: false
+          failed_when: bascule_internet.stdout | length == 0
+
+        - name: C'est bien PowerDNS Recursor qui tient le port 53
+          ansible.builtin.command: ss -Hlnup "sport = :53"
+          register: bascule_ecoute
+          changed_when: false
+          failed_when: >-
+            bascule_ecoute.stdout is not search('pdns_recursor')
+            or bascule_ecoute.stdout is search('dnsmasq')
+
+        - name: Retirer la table nftables temporaire (dns01 refuse de nouveau normalement)
+          ansible.builtin.command: nft delete table inet bascule_dns
+          changed_when: true
+
+      rescue:
+        - name: Retour arrière — configuration précédente de dnsmasq
+          ansible.builtin.copy:
+            src: "{{ dnsmasq_conf.backup_file }}"
+            dest: "{{ dnsmasq_fichier }}"
+            remote_src: true
+            mode: "0644"
+          when: dnsmasq_conf.backup_file is defined
+
+        - name: Retour arrière — configuration précédente du Recursor
+          ansible.builtin.copy:
+            src: "{{ powerdns_recursor_conf.backup_file }}"
+            dest: /etc/powerdns/recursor.yml
+            remote_src: true
+            owner: root
+            group: pdns
+            mode: "0640"
+          when: powerdns_recursor_conf.backup_file is defined
+
+        # Ordre inverse : le Recursor rend le port 53 (retour sur 5301), puis dnsmasq le reprend.
+        - name: Retour arrière — redémarrer le Recursor puis dnsmasq
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: restarted
+          loop:
+            - pdns-recursor.service
+            - dnsmasq.service
+
+        - name: Retirer la table nftables temporaire
+          ansible.builtin.command: nft delete table inet bascule_dns
+          changed_when: true
+          failed_when: false
+
+        - name: Signaler l'échec de la bascule
+          ansible.builtin.fail:
+            msg: >-
+              Bascule annulée sur {{ inventory_hostname }} : configurations précédentes remises,
+              dnsmasq sert de nouveau le port 53. Revenir sur la MR (git revert) avant tout
+              nouveau passage de site.yml, puis analyser (journalctl -u pdns-recursor -u dnsmasq).

@@ -1,0 +1,36 @@
+---
+# Rôle step_ca — point d'entrée (M06-E02).
+# Les tâches qui manipulent le mot de passe des clés (Vault « critique ») portent l'étiquette
+# « critique » : un --check de MR sans cette identité les saute (convention de M04-E30).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - step_ca_racine_crt | length > 0
+      - step_ca_racine_crt is file
+      - step_ca_provisioners | length > 0
+      - step_ca_noms_dns | length > 0
+    fail_msg: >-
+      step_ca_racine_crt (certificat PUBLIC de la racine, fichier du dépôt), step_ca_noms_dns et
+      step_ca_provisioners doivent être définis (group_vars/role_pki/step_ca.yml).
+    quiet: true
+
+- name: Dépôt Smallstep
+  ansible.builtin.import_tasks: depot.yml
+  tags: [step_ca_paquets]
+
+- name: Paquets step-ca et step-cli (versions figées)
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [step_ca_paquets]
+
+- name: Compte de service et arborescence
+  ansible.builtin.import_tasks: arborescence.yml
+  tags: [step_ca_pki]
+
+- name: Clés en ligne et certificats de la PKI
+  ansible.builtin.import_tasks: pki.yml
+  tags: [step_ca_pki, critique]
+
+- name: Configuration de la CA et service
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [step_ca_config, critique]

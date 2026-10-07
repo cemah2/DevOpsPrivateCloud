@@ -1,0 +1,6 @@
+---
+# Surcharge, pour les scénarios du module 06, des bornes et étiquettes de molecule/_commun
+# (M04-E24 : 2045-2049, env-m04). Cette source d'inventaire est lue APRÈS la commune : elle gagne.
+mol_vmid_min: 2066
+mol_vmid_max: 2067
+mol_etiquettes: [molecule, env-m06]

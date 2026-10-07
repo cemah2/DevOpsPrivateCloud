@@ -1,0 +1,105 @@
+---
+# Zones : existence, type, métadonnées (pdnsutil, sous le compte pdns), puis contenu des zones
+# en mode « fichier » (généré, rechargé seulement s'il change).
+
+- name: Zones existantes
+  ansible.builtin.command: pdnsutil zone list-all
+  become: true
+  become_user: pdns
+  register: powerdns_auth_existantes
+  changed_when: false
+  check_mode: false
+
+- name: Créer les zones manquantes
+  ansible.builtin.command: pdnsutil zone create {{ item.nom }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_zones }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  # list-all affiche les noms SANS point final
+  when: item.nom not in powerdns_auth_existantes.stdout_lines
+  register: powerdns_auth_creees
+  changed_when: true
+  # Le cache des zones du serveur (zone-cache-refresh-interval, 300 s) ignore une zone créée
+  # par pdnsutil jusqu'à son prochain rafraîchissement : elle répondrait REFUSED. Un
+  # redémarrage la rend visible tout de suite (« pdns_control rediscover » ne suffit pas).
+  notify: Redémarrer pdns
+
+- name: Lire le type et les métadonnées de chaque zone
+  ansible.builtin.command: pdnsutil zone show {{ item.nom }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_zones }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: powerdns_auth_details
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or item.nom in powerdns_auth_existantes.stdout_lines
+
+- name: Type de zone (native, primary, secondary)
+  ansible.builtin.command: pdnsutil zone set-kind {{ item.item.nom }} {{ item.item.type | default('native') }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_details.results | selectattr('stdout', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+  when: item.stdout is not search('This is a ' ~ (item.item.type | default('native')) ~ ' zone', ignorecase=True)
+  changed_when: true
+
+# SOA-EDIT-API DEFAULT : toute modification par l'API (OpenTofu, synchronisation NetBox,
+# M06-E14/E15) incrémente le numéro de série, condition pour que les secondaires la voient.
+- name: Lire SOA-EDIT-API
+  ansible.builtin.command: pdnsutil metadata get {{ item.nom }} SOA-EDIT-API
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_zones }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: powerdns_auth_soa_edit
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode or item.nom in powerdns_auth_existantes.stdout_lines
+
+- name: Numéro de série incrémenté par les modifications via l'API
+  ansible.builtin.command: pdnsutil metadata set {{ item.item.nom }} SOA-EDIT-API DEFAULT
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_soa_edit.results | selectattr('stdout', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+  when: item.stdout is not search('SOA-EDIT-API = DEFAULT')
+  changed_when: true
+
+- name: Contenu généré des zones en mode « fichier »
+  ansible.builtin.template:
+    src: zone.j2
+    dest: "{{ powerdns_auth_base | dirname }}/zones/{{ zone.nom }}.zone"
+    owner: root
+    group: pdns
+    mode: "0640"
+  # Zones sans « contenu » (défaut : fichier) et zones « contenu: fichier ».
+  loop: >-
+    {{ powerdns_auth_zones | rejectattr('contenu', 'defined') | list
+       + powerdns_auth_zones | selectattr('contenu', 'defined') | selectattr('contenu', 'equalto', 'fichier') | list }}
+  loop_control:
+    loop_var: zone
+    label: "{{ zone.nom }}"
+  register: powerdns_auth_fichiers
+
+- name: Charger les zones dont le contenu a changé (ou qui viennent d'être créées)
+  ansible.builtin.command: /usr/local/sbin/pdns-charger-zone {{ item.zone.nom }} {{ item.dest | default(item.path) }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_fichiers.results }}"
+  loop_control:
+    label: "{{ item.zone.nom }}"
+  when: >-
+    item is changed
+    or item.zone.nom in (powerdns_auth_creees.results | default([]) | selectattr('changed', 'defined')
+                         | selectattr('changed') | map(attribute='item.nom') | list)
+  changed_when: true
+
+- name: Rendre visibles tout de suite les zones créées
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,11 @@
+---
+# molecule/ssh_ca/molecule.yml — scénario des rôles « ssh_ca_hote » et « ssh_ca_utilisateur »
+# (M06-E19, E20). L'instance porte une CA de test (rôle step_ca, PKI jetable du scénario
+# step_ca) : la signature se fait depuis le CONTRÔLEUR, comme en production.
+# Prérequis sur le contrôleur (adm01, runner01) : step-cli (M06-E03), accès à l'instance en 443.
+#   uv run molecule test -s ssh_ca
+scenario:
+  name: ssh_ca
+ansible:
+  playbooks:
+    prepare: ../step_ca/prepare.yml

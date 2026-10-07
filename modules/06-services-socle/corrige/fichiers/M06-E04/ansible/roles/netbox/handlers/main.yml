@@ -1,0 +1,16 @@
+---
+# Ordre de définition = ordre d'exécution : NetBox avant nginx.
+- name: Redémarrer NetBox
+  ansible.builtin.systemd_service:
+    name: "{{ item }}.service"
+    state: restarted
+    daemon_reload: true
+  loop:
+    - netbox
+    - netbox-rq
+
+# reload : nginx relit sa configuration et ses certificats sans couper les connexions.
+- name: Recharger nginx
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    state: reloaded

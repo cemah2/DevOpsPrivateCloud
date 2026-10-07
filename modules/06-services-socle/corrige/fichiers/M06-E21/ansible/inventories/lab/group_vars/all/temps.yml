@@ -1,0 +1,5 @@
+---
+# group_vars/all/temps.yml — temps authentifié sur tout le socle (M06-E21).
+# Déploiement progressif : d'abord host_vars/adm01 (base_ntp_nts: true), contrôle de
+# « chronyc -N authdata », puis ici pour tous. gw01 n'est pas concerné (base_chrony_client: false).
+base_ntp_nts: true

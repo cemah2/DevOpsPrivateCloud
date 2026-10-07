@@ -1,0 +1,29 @@
+# Sections à AJOUTER à ~/pki-provisoire/pki-provisoire.cnf sur adm01 (M05-E10).
+# Même modèle que git01 (M01-E04) : clé ECDSA P-256, usage serveur, SAN complet.
+
+# --- Demande du serveur s3-01 (openssl req -section req_s3_01) ---------------------------
+[req_s3_01]
+distinguished_name = dn_s3_01
+prompt             = no
+utf8               = yes
+string_mask        = utf8only
+default_md         = sha256
+
+[dn_s3_01]
+O  = MédiSphère
+CN = s3-01.par1.medisphere.internal
+
+# --- Extensions du certificat serveur de s3-01 ------------------------------------------
+[v3_serveur_s3_01]
+basicConstraints       = critical, CA:false
+keyUsage               = critical, digitalSignature
+extendedKeyUsage       = serverAuth
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always
+subjectAltName         = @san_s3_01
+
+[san_s3_01]
+# Le nom utilisé par OpenTofu et la CLI aws (backend, profil s3-socle) DOIT y figurer.
+DNS.1 = s3-01.par1.medisphere.internal
+DNS.2 = s3-01
+IP.1  = 10.10.20.14

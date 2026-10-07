@@ -1,0 +1,8 @@
+# {{ ssh_ca_utilisateur_entete }}
+# {{ ssh_ca_utilisateur_fichier_conf }} (rôle ssh_ca_utilisateur, M06-E20)
+# sshd retient la PREMIÈRE valeur lue : rien dans 01-ssh-durci.conf ni 02-ssh-ca-hote.conf ne
+# fixe ces mots-clés. Effet réel : sudo sshd -T | grep -E 'trustedusercakeys|authorizedprincipalsfile'
+TrustedUserCAKeys {{ ssh_ca_utilisateur_fichier_ca }}
+# %u = compte visé. Pour un certificat, le principal doit figurer dans ce fichier
+# (sans cette directive, il devrait être ÉGAL au nom du compte).
+AuthorizedPrincipalsFile {{ ssh_ca_utilisateur_dossier_principaux }}/%u

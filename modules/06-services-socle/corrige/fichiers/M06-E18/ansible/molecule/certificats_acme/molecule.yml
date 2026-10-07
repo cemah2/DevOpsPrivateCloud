@@ -1,0 +1,10 @@
+---
+# molecule/certificats_acme/molecule.yml — scénario du rôle « certificats_acme » (M06-E18).
+# L'instance porte À LA FOIS une CA de test (rôle step_ca et PKI jetable de son scénario,
+# M06-E02) et le client ACME : le défi HTTP-01 se joue sur l'instance elle-même.
+#   uv run molecule test -s certificats_acme
+scenario:
+  name: certificats_acme
+ansible:
+  playbooks:
+    prepare: ../step_ca/prepare.yml

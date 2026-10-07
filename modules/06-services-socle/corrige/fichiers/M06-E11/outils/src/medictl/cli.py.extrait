@@ -1,0 +1,8 @@
+# src/medictl/cli.py — lignes AJOUTÉES en M06-E11, à la FIN du fichier (après la définition
+# de « app » et de toutes ses commandes). L'import est tardif pour éviter un import circulaire :
+# cli_netbox.py importe medictl.cli à l'intérieur de ses commandes seulement.
+
+# --- M06-E11 : NetBox ---------------------------------------------------------------------
+from medictl.cli_netbox import netbox_app  # noqa: E402  (après la définition de app)
+
+app.add_typer(netbox_app, name="netbox")

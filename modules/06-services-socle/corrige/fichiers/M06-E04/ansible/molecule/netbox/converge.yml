@@ -1,0 +1,17 @@
+---
+# molecule/netbox/converge.yml — applique le rôle netbox avec des secrets JETABLES.
+- name: Converge — rôle netbox
+  hosts: molecule
+  become: true
+  vars:
+    tls: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/tls-test"
+    netbox_allowed_hosts: [nbx.molecule.test]
+    netbox_secret_key: molecule-cle-django-de-test-0123456789-abcdefghijklmnopqrstuvwxyz
+    netbox_api_token_peppers:
+      1: molecule-poivre-de-test-0123456789-abcdefghijklmnopqrstuvwxyz-ABCDEF
+    netbox_bdd_mot_de_passe: molecule-mot-de-passe-pg
+    netbox_admin_mot_de_passe: molecule-mot-de-passe-admin
+    netbox_tls_certificat: "{{ lookup('ansible.builtin.file', tls ~ '/nbx.crt') }}"
+    netbox_tls_cle: "{{ lookup('ansible.builtin.file', tls ~ '/nbx.key') }}"
+  roles:
+    - role: netbox

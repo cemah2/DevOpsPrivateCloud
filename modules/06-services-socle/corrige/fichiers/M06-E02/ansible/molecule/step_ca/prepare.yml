@@ -1,0 +1,104 @@
+---
+# molecule/step_ca/prepare.yml — préparation commune, puis une PKI de TEST sur l'instance.
+# Ce que la cérémonie fournit en production (certificat de la racine, intermédiaire signé,
+# provisioner JWK) est fabriqué ici avec des secrets jetables, puis rapatrié dans le dossier
+# éphémère du scénario, d'où converge.yml le relit. Rien de tout cela ne sert hors du test.
+
+- name: Préparation commune
+  ansible.builtin.import_playbook: ../_commun/prepare.yml
+
+- name: PKI de test sur l'instance
+  hosts: molecule
+  become: true
+  vars:
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    test: /root/pki-test
+  tasks:
+    - name: Dépôt Smallstep et step-cli (tâches du rôle)
+      ansible.builtin.include_role:
+        name: step_ca
+        tasks_from: depot.yml
+
+    - name: Installer step-cli
+      ansible.builtin.apt:
+        name: step-cli
+        state: present
+
+    # Le nom de test de la CA n'existe dans aucun DNS : verify.yml l'utilise avec step ca.
+    - name: Nom de test de la CA résolu localement
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1 ca.molecule.test"
+
+    - name: Dossier de travail (root seul)
+      ansible.builtin.file:
+        path: "{{ test }}"
+        state: directory
+        mode: "0700"
+
+    - name: Mots de passe jetables
+      ansible.builtin.copy:
+        dest: "{{ test }}/{{ item }}.pass"
+        content: "molecule-{{ item }}-mot-de-passe-de-test\n"
+        mode: "0600"
+      loop: [racine, inter, admin]
+
+    - name: Racine de test
+      ansible.builtin.command:
+        cmd: >-
+          step certificate create "Molecule Root CA" {{ test }}/root_ca.crt {{ test }}/root_ca_key
+          --profile root-ca --kty EC --curve P-256 --not-after 24h --password-file {{ test }}/racine.pass
+        creates: "{{ test }}/root_ca.crt"
+
+    # Comme en production : la clé de l'intermédiaire est créée À SA PLACE définitive,
+    # chiffrée avec le mot de passe que le rôle déploiera (converge.yml).
+    - name: Arborescence attendue par le rôle
+      ansible.builtin.file:
+        path: /etc/step-ca/secrets
+        state: directory
+        mode: "0700"
+
+    - name: Clé et CSR de l'intermédiaire de test
+      ansible.builtin.command:
+        cmd: >-
+          step certificate create "Molecule Intermediate CA" {{ test }}/inter.csr /etc/step-ca/secrets/intermediate_ca_key
+          --csr --kty EC --curve P-256 --password-file {{ test }}/inter.pass
+        creates: /etc/step-ca/secrets/intermediate_ca_key
+
+    - name: Signer l'intermédiaire avec la racine de test
+      ansible.builtin.shell:
+        cmd: >-
+          step certificate sign --profile intermediate-ca --path-len 0 --not-after 24h
+          --password-file {{ test }}/racine.pass {{ test }}/inter.csr {{ test }}/root_ca.crt {{ test }}/root_ca_key
+          > {{ test }}/intermediate_ca.crt
+        creates: "{{ test }}/intermediate_ca.crt"
+
+    - name: Clé du provisioner JWK de test
+      ansible.builtin.command:
+        cmd: >-
+          step crypto jwk create {{ test }}/admin.pub.json {{ test }}/admin.priv.json
+          --kty EC --crv P-256 --use sig --password-file {{ test }}/admin.pass
+        creates: "{{ test }}/admin.pub.json"
+
+    - name: Forme compacte de la clé chiffrée (encryptedKey)
+      ansible.builtin.shell:
+        cmd: step crypto jose format < {{ test }}/admin.priv.json > {{ test }}/admin.enc
+        creates: "{{ test }}/admin.enc"
+
+    - name: Rapatrier les pièces publiques et la clé chiffrée dans le dossier éphémère
+      ansible.builtin.fetch:
+        src: "{{ test }}/{{ item }}"
+        dest: "{{ eph }}/pki-test/"
+        flat: true
+      loop:
+        - root_ca.crt
+        - intermediate_ca.crt
+        - admin.pub.json
+        - admin.enc
+        - admin.pass
+
+    # Le rôle ne doit jamais trouver une clé de racine : on la retire de l'instance.
+    - name: Supprimer la clé de la racine de test de l'instance
+      ansible.builtin.file:
+        path: "{{ test }}/root_ca_key"
+        state: absent

@@ -1,0 +1,83 @@
+---
+- name: Groupe système du service
+  ansible.builtin.group:
+    name: "{{ seaweedfs_utilisateur }}"
+    system: true
+
+- name: Compte système du service (sans shell ni dossier personnel)
+  ansible.builtin.user:
+    name: "{{ seaweedfs_utilisateur }}"
+    group: "{{ seaweedfs_utilisateur }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ seaweedfs_dossier }}"
+    create_home: false
+
+- name: Dossiers du cache de téléchargement et de la version
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /var/cache/seaweedfs
+    - "/opt/seaweedfs/{{ seaweedfs_version }}"
+
+# En --check, une version pas encore installée (hôte neuf, montée de version) ne peut pas
+# être simulée : rien n'est téléchargé, donc rien à extraire. On saute ces tâches ; le
+# compte rendu du --check l'annonce par la tâche suivante.
+- name: Lire le binaire de la version demandée
+  ansible.builtin.stat:
+    path: "/opt/seaweedfs/{{ seaweedfs_version }}/weed"
+  register: seaweedfs_binaire_version
+
+- name: Noter si l'installation est simulable
+  ansible.builtin.set_fact:
+    seaweedfs_simulation_impossible: "{{ ansible_check_mode and not seaweedfs_binaire_version.stat.exists }}"
+
+- name: Signaler l'installation à venir (--check)
+  ansible.builtin.debug:
+    msg: "--check : SeaweedFS {{ seaweedfs_version }} n'est pas installé, il le sera au passage réel."
+  when: seaweedfs_simulation_impossible
+
+# get_url vérifie l'empreinte : une archive altérée (ou une autre version publiée sous le
+# même nom) fait échouer la tâche, rien n'est installé.
+- name: Télécharger l'archive de la version (empreinte vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ seaweedfs_url }}"
+    dest: "/var/cache/seaweedfs/seaweedfs-{{ seaweedfs_version }}-{{ seaweedfs_archive }}"
+    checksum: "sha256:{{ seaweedfs_archive_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: not seaweedfs_simulation_impossible
+
+- name: Extraire weed dans le dossier de la version
+  ansible.builtin.unarchive:
+    src: "/var/cache/seaweedfs/seaweedfs-{{ seaweedfs_version }}-{{ seaweedfs_archive }}"
+    dest: "/opt/seaweedfs/{{ seaweedfs_version }}"
+    remote_src: true
+    creates: "/opt/seaweedfs/{{ seaweedfs_version }}/weed"
+    owner: root
+    group: root
+  when: not seaweedfs_simulation_impossible
+
+- name: Binaire exécutable par tous, modifiable par root seul
+  ansible.builtin.file:
+    path: "/opt/seaweedfs/{{ seaweedfs_version }}/weed"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not seaweedfs_simulation_impossible
+
+# Le lien désigne la version active : une montée de version (ou un retour arrière) ne
+# change que ce lien, l'ancienne version reste sur le disque.
+- name: Version active de weed
+  ansible.builtin.file:
+    src: "/opt/seaweedfs/{{ seaweedfs_version }}/weed"
+    dest: /usr/local/bin/weed
+    state: link
+    force: true
+  notify: Redémarrer seaweedfs
+  when: not seaweedfs_simulation_impossible

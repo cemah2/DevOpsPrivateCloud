@@ -1,0 +1,55 @@
+---
+- name: Au moins un serveur DHCP à relayer
+  ansible.builtin.assert:
+    that:
+      - relais_dhcp_serveurs | length > 0
+      - relais_dhcp_adresse_locale is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+    fail_msg: "relais_dhcp_serveurs (liste d'adresses) et relais_dhcp_adresse_locale sont requis (host_vars/gw01)."
+    quiet: true
+
+- name: Paquet dnsmasq
+  ansible.builtin.apt:
+    name: dnsmasq
+    state: present
+
+# Le fichier seul est validé avant installation, puis la configuration COMPLÈTE (fichier principal
+# et tous les fichiers inclus) : leçon de M04-E40.
+- name: Fichier de relais
+  block:
+    - name: Fichier de relais (syntaxe validée seule)
+      ansible.builtin.template:
+        src: relais-dhcp.conf.j2
+        dest: "{{ relais_dhcp_fichier }}"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: dnsmasq --test --conf-file=%s
+        backup: true
+      register: relais_dhcp_conf
+      notify: Redémarrer dnsmasq
+
+    - name: Configuration complète valide
+      ansible.builtin.command: dnsmasq --test
+      changed_when: false
+      check_mode: false
+
+  rescue:
+    - name: Remettre le fichier précédent
+      ansible.builtin.copy:
+        src: "{{ relais_dhcp_conf.backup_file }}"
+        dest: "{{ relais_dhcp_fichier }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: relais_dhcp_conf.backup_file is defined
+
+    - name: Échouer sans redémarrer dnsmasq
+      ansible.builtin.fail:
+        msg: "Configuration de dnsmasq invalide sur {{ inventory_hostname }} : fichier précédent remis, relais non redémarré."
+
+- name: Service actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: dnsmasq.service
+    enabled: true
+    state: started

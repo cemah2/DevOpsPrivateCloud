@@ -1,0 +1,99 @@
+---
+# Même dépôt officiel que l'Authoritative (procédure de repo.powerdns.com), suite rec-54.
+
+- name: Outils de vérification de clé et client DNS
+  ansible.builtin.apt:
+    name: [gpg, bind9-dnsutils]
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Clé de signature PowerDNS
+  ansible.builtin.get_url:
+    url: "{{ powerdns_recursor_depot_cle_url }}"
+    dest: /etc/apt/keyrings/rec-54-pub.asc
+    mode: "0644"
+  register: powerdns_recursor_cle
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/rec-54-pub.asc
+  register: powerdns_recursor_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that: powerdns_recursor_cle_colonnes.stdout is search('^fpr:+' ~ powerdns_recursor_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: "La clé /etc/apt/keyrings/rec-54-pub.asc n'a pas l'empreinte attendue : ne pas installer."
+    quiet: true
+
+- name: Source APT PowerDNS Recursor 5.4
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pdns-rec-54.list
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle powerdns_recursor)
+      deb [signed-by=/etc/apt/keyrings/rec-54-pub.asc] {{ powerdns_recursor_depot_url }} {{ powerdns_recursor_depot_suite }} main
+  register: powerdns_recursor_source
+
+- name: Préférer le Recursor du dépôt officiel (Debian 13 livre la 5.2)
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/pdns-rec-54
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle powerdns_recursor)
+      Package: pdns-*
+      Pin: origin repo.powerdns.com
+      Pin-Priority: 600
+  register: powerdns_recursor_pin
+
+- name: Relire les index APT
+  ansible.builtin.apt:
+    update_cache: true
+  when: powerdns_recursor_source is changed or powerdns_recursor_cle is changed or powerdns_recursor_pin is changed
+
+- name: Recursor déjà installé ?
+  ansible.builtin.command: dpkg-query -W -f='${db:Status-Abbrev}' pdns-recursor
+  register: powerdns_recursor_dpkg
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Un policy-rc.d existe-t-il déjà ? (ne jamais toucher à celui d'un autre)
+  ansible.builtin.stat:
+    path: /usr/sbin/policy-rc.d
+  register: powerdns_recursor_policy
+
+# Le paquet démarre le Recursor dès l'installation, sur 127.0.0.1:53 : port déjà tenu par le
+# DNS en service (dnsmasq) jusqu'à la bascule. Échec, puis redémarrages en boucle (l'unité a
+# Restart=on-failure sans limite). On empêche ce démarrage ; le rôle démarre le service une
+# fois SA configuration en place.
+- name: Installer sans démarrer (premier passage seulement)
+  when: powerdns_recursor_dpkg.stdout is not match('^ii')
+  block:
+    - name: Interdire temporairement le démarrage des services par les paquets
+      ansible.builtin.copy:
+        dest: /usr/sbin/policy-rc.d
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # Posé temporairement par le rôle powerdns_recursor : aucun service démarré par dpkg.
+          exit 101
+      when:
+        - not powerdns_recursor_policy.stat.exists
+        - not ansible_check_mode
+
+    - name: Installer PowerDNS Recursor
+      ansible.builtin.apt:
+        name: pdns-recursor
+        state: present
+  always:
+    - name: Rétablir le démarrage normal des services
+      ansible.builtin.file:
+        path: /usr/sbin/policy-rc.d
+        state: absent
+      when: not powerdns_recursor_policy.stat.exists

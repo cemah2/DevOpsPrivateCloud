@@ -1,0 +1,27 @@
+---
+# Rôle pare_feu_local — filtrage d'ENTRÉE sur un hôte du VLAN INFRA (M06-E30, SEC-756).
+#
+# Pourquoi : gw01 ne voit pas le trafic interne à un VLAN. Dans le VLAN INFRA, tout hôte joint
+# tout service des autres hôtes. Ce rôle ajoute une chaîne d'entrée en politique « drop » sur
+# l'hôte lui-même (défense en profondeur), décrite comme la matrice de gw01 : une règle = un flux,
+# avec un motif et une référence, rendue par le filtre medisphere.socle.regle_nft (M04-E18).
+#
+# Il POSSÈDE /etc/nftables.conf de l'hôte (ne l'applique pas à un hôte où un autre outil gère
+# nftables). Ne s'applique jamais à gw01 (rôle pare_feu).
+
+pare_feu_local_fichier: /etc/nftables.conf
+
+# Flux communs à tous les hôtes concernés (group_vars/socle/pare_feu_local.yml) et flux propres
+# à l'hôte (host_vars/<hôte>/pare_feu_local.yml). Champs : ceux de la matrice de gw01 (source,
+# proto, ports, ports_source, icmp, motif, ref) ; entree/sortie n'ont pas de sens ici.
+pare_feu_local_communes: []
+pare_feu_local_regles: []
+
+pare_feu_local_journaliser_rejets: true
+
+# Filet anti-coupure (même mécanisme que le rôle pare_feu, M04-E17).
+pare_feu_local_delai_retour: 120
+pare_feu_local_delai_confirmation: 30
+pare_feu_local_dossier_etat: /var/lib/pare-feu-local
+# Flux testés DEPUIS LE CONTRÔLEUR après application : [{port, motif}] (hôte = l'hôte configuré)
+pare_feu_local_verifications: []

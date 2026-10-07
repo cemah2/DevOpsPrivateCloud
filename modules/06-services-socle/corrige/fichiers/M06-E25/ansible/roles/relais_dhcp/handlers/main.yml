@@ -1,0 +1,7 @@
+---
+# dnsmasq ne relit pas ses fichiers de configuration sur SIGHUP : redémarrage (coupure du relais
+# de l'ordre de la seconde ; les clients DHCP réémettent leurs requêtes).
+- name: Redémarrer dnsmasq
+  ansible.builtin.systemd_service:
+    name: dnsmasq.service
+    state: restarted

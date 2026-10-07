@@ -1,0 +1,59 @@
+---
+# molecule/certificats_acme/converge.yml — une CA de test, puis un certificat ACME pour un nom
+# de test résolu localement (le défi HTTP-01 revient sur l'instance, port 80).
+- name: Converge — CA de test (rôle step_ca, mêmes valeurs que son scénario)
+  hosts: molecule
+  become: true
+  vars:
+    pki: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/pki-test"
+    step_ca_noms_dns: [ca.molecule.test]
+    step_ca_racine_crt: "{{ pki }}/root_ca.crt"
+    step_ca_intermediaire_crt: "{{ pki }}/intermediate_ca.crt"
+    step_ca_mot_de_passe: molecule-inter-mot-de-passe-de-test
+    step_ca_provisioners:
+      - type: ACME
+        name: acme
+        claims:
+          maxTLSCertDuration: 720h
+          defaultTLSCertDuration: 720h
+  roles:
+    - role: step_ca
+
+- name: Converge — rôle certificats_acme
+  hosts: molecule
+  become: true
+  vars:
+    pki: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/pki-test"
+    certificats_acme_ca_url: https://ca.molecule.test
+    certificats_acme_racine: /usr/local/share/ca-certificates/molecule-root-ca.crt
+    certificats_acme_certificats:
+      - id: essai
+        noms: [web.molecule.test]
+        certificat: /etc/ssl/essai/web.crt
+        cle: /etc/ssl/essai/web.key
+        recharger: /bin/true
+  pre_tasks:
+    - name: Nom de test du service résolu localement
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1 web.molecule.test"
+
+    - name: Racine de test dans le magasin du système (rôle ca_lab en production)
+      ansible.builtin.copy:
+        src: "{{ pki }}/root_ca.crt"
+        dest: /usr/local/share/ca-certificates/molecule-root-ca.crt
+        mode: "0644"
+      register: racine
+
+    - name: Reconstruire le magasin  # noqa: no-handler
+      ansible.builtin.command: update-ca-certificates
+      when: racine is changed
+      changed_when: true
+
+    - name: Dossier du certificat
+      ansible.builtin.file:
+        path: /etc/ssl/essai
+        state: directory
+        mode: "0755"
+  roles:
+    - role: certificats_acme

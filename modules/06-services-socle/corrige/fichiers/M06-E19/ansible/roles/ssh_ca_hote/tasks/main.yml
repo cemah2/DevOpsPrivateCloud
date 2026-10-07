@@ -1,0 +1,171 @@
+---
+# Rôle ssh_ca_hote (M06-E19).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - ssh_ca_hote_principaux | length > 0
+      - ssh_ca_hote_cles_ca | length > 0
+    fail_msg: >-
+      ssh_ca_hote_cles_ca vide : copie dans group_vars/all la sortie de
+      « step ssh config --host --roots » (clé publique de la CA d'hôte).
+    quiet: true
+
+- name: Client step de l'hôte (renouvellement autonome)
+  ansible.builtin.include_role:
+    name: certificats_acme
+    tasks_from: client.yml
+
+- name: Lire la clé publique d'hôte
+  ansible.builtin.slurp:
+    src: "{{ ssh_ca_hote_cle }}.pub"
+  register: _ssh_ca_hote_pub
+
+- name: Lire le certificat d'hôte actuel
+  ansible.builtin.command: ssh-keygen -L -f {{ ssh_ca_hote_cle }}-cert.pub
+  register: _ssh_ca_hote_actuel
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Le certificat actuel approche-t-il de sa fin ?
+  ansible.builtin.command: >-
+    step ssh needs-renewal {{ ssh_ca_hote_cle }}-cert.pub --expires-in {{ ssh_ca_hote_seuil }}
+  register: _ssh_ca_hote_echeance
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Décider s'il faut (re)signer
+  ansible.builtin.set_fact:
+    _ssh_ca_hote_principaux_actuels: >-
+      {{ _ssh_ca_hote_actuel.stdout
+         | regex_search('Principals:\s*\n((?:\s{16}\S+\n?)+)', '\1') | default([''], true) | first
+         | split | sort }}
+    # Empreinte de la clé publique d'hôte, telle que ssh-keygen -L la cite (« Public key: »).
+    _ssh_ca_hote_cle_certifiee: >-
+      {{ _ssh_ca_hote_actuel.stdout | regex_search('Public key: \S+ (SHA256:\S+)', '\1')
+         | default([''], true) | first }}
+
+- name: Empreinte de la clé publique d'hôte
+  ansible.builtin.command: ssh-keygen -l -f {{ ssh_ca_hote_cle }}.pub
+  register: _ssh_ca_hote_empreinte
+  changed_when: false
+  check_mode: false
+
+- name: Signer la clé d'hôte (sur le contrôleur, provisioner admin)
+  when: >-
+    _ssh_ca_hote_actuel.rc != 0
+    or _ssh_ca_hote_echeance.rc != 1
+    or _ssh_ca_hote_principaux_actuels != (ssh_ca_hote_principaux | sort)
+    or _ssh_ca_hote_cle_certifiee != (_ssh_ca_hote_empreinte.stdout.split()[1])
+  block:
+    - name: Dossier temporaire sur le contrôleur
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: ssh-ca-hote
+      delegate_to: localhost
+      become: false
+      register: _ssh_ca_hote_tmp
+
+    - name: Clé publique d'hôte à signer
+      ansible.builtin.copy:
+        content: "{{ _ssh_ca_hote_pub.content | b64decode }}"
+        dest: "{{ _ssh_ca_hote_tmp.path }}/hote.pub"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+    # Mot de passe par l'entrée standard : jamais sur la ligne de commande (ps) ni dans un fichier.
+    - name: Demander le certificat d'hôte à ca01
+      ansible.builtin.command:
+        argv: >-
+          {{ ['step', 'ssh', 'certificate', ssh_ca_hote_principaux[1] | default(ssh_ca_hote_principaux[0]),
+              _ssh_ca_hote_tmp.path ~ '/hote.pub', '--host', '--sign', '--force',
+              '--provisioner', ssh_ca_hote_provisioner, '--provisioner-password-file', '/dev/stdin',
+              '--ca-url', ssh_ca_hote_ca_url, '--root', ssh_ca_hote_racine_controleur]
+             + (ssh_ca_hote_principaux | map('regex_replace', '^', '--principal=') | list) }}
+        stdin: "{{ ssh_ca_hote_mot_de_passe_provisioner }}"
+        stdin_add_newline: false
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      no_log: true
+
+    - name: Déposer le certificat sur l'hôte
+      ansible.builtin.copy:
+        src: "{{ _ssh_ca_hote_tmp.path }}/hote-cert.pub"
+        dest: "{{ ssh_ca_hote_cle }}-cert.pub"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Recharger sshd (certificat d'hôte)
+
+  always:
+    - name: Effacer le dossier temporaire du contrôleur
+      ansible.builtin.file:
+        path: "{{ _ssh_ca_hote_tmp.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      when: _ssh_ca_hote_tmp.path is defined
+
+- name: Le service sshd présente le certificat (fichier validé avant d'être posé)
+  ansible.builtin.template:
+    src: ssh-ca-hote.conf.j2
+    dest: "{{ ssh_ca_hote_fichier_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Recharger sshd (certificat d'hôte)
+
+- name: Confiance de l'hôte dans la CA d'hôte (connexions sortantes de cet hôte)
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/ssh_known_hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    marker: "# {mark} CA d'hôte MédiSphère (rôle ssh_ca_hote)"
+    block: |
+      {% for cle in ssh_ca_hote_cles_ca %}
+      @cert-authority {{ ssh_ca_hote_motifs | join(',') }} {{ cle }}
+      {% endfor %}
+
+- name: Renouvellement autonome (minuterie quotidienne)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - ssh-cert-hote.service
+    - ssh-cert-hote.timer
+  register: _ssh_ca_hote_unites
+
+- name: Relire les unités systemd  # noqa: no-handler
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: _ssh_ca_hote_unites is changed
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: ssh-cert-hote.timer
+    enabled: true
+    state: started
+
+- name: Appliquer maintenant le rechargement de sshd
+  ansible.builtin.meta: flush_handlers
+
+- name: Le certificat est bien présenté (vu depuis le contrôleur)
+  ansible.builtin.command: >-
+    ssh-keyscan -T 5 -c -t ed25519 {{ ansible_host | default(inventory_hostname) }}
+  delegate_to: localhost
+  become: false
+  register: _ssh_ca_hote_scan
+  changed_when: false
+  check_mode: false
+  failed_when: "'ssh-ed25519-cert-v01@openssh.com' not in _ssh_ca_hote_scan.stdout"
+  when: not ansible_check_mode

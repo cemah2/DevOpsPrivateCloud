@@ -1,0 +1,11 @@
+---
+# host_vars/dns02/powerdns_auth.yml — dns02, serveur faisant autorité SECONDAIRE (M06-E24).
+powerdns_auth_mode: secondaire
+powerdns_auth_ecoute:
+  - 127.0.0.1:5300
+  - 10.10.20.16:5300
+# Primaire des zones (adresse:port du serveur faisant autorité de dns01).
+powerdns_auth_primaire: 10.10.20.10:5300
+# Pas d'API sur le secondaire ; pas de mises à jour dynamiques (un secondaire les refuse).
+powerdns_auth_api_active: false
+powerdns_auth_dnsupdate: false

@@ -1,0 +1,24 @@
+---
+# molecule/pare_feu_local/converge.yml (M06-E30)
+# SSH autorisé depuis adm01 et runner01 (contrôleurs possibles du test) ; un service témoin sur
+# 8080 que PERSONNE n'est autorisé à joindre, et 8443 autorisé depuis les contrôleurs.
+- name: Converge — pare_feu_local
+  hosts: molecule
+  become: true
+  pre_tasks:
+    - name: Services témoins (python3 -m http.server), lancés en unités transitoires
+      ansible.builtin.command: >-
+        systemd-run --unit=temoin-{{ item }} --collect
+        /usr/bin/python3 -m http.server {{ item }} --bind 0.0.0.0 --directory /tmp
+      args:
+        creates: /run/systemd/transient/temoin-{{ item }}.service
+      loop: [8080, 8443]
+  roles:
+    - role: pare_feu_local
+      vars:
+        pare_feu_local_communes:
+          - {source: [10.10.10.10, 10.10.20.15], proto: tcp, ports: 22, motif: "SSH depuis les contrôleurs", ref: test}
+        pare_feu_local_regles:
+          - {source: [10.10.10.10, 10.10.20.15], proto: tcp, ports: 8443, motif: "témoin autorisé", ref: test}
+        pare_feu_local_verifications:
+          - {port: 8443, motif: "témoin autorisé"}

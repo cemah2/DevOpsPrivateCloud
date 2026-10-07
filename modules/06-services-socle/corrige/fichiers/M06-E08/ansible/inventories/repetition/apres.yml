@@ -1,0 +1,4 @@
+---
+# État « après » de la répétition, passé en -e à bascule-dns.yml (en production, c'est la MR).
+dnsmasq_dns_actif: false
+powerdns_recursor_ecoute: ["127.0.0.1", "{{ ansible_host }}"]

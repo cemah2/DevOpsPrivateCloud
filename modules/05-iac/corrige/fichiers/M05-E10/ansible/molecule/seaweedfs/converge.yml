@@ -1,0 +1,71 @@
+---
+# molecule/seaweedfs/converge.yml — applique le rôle seaweedfs à l'instance (M05-E10).
+#
+# Données de TEST, fabriquées pour chaque scénario dans le dossier éphémère de Molecule :
+#   - une CA jetable et un certificat pour l'adresse de l'instance (le rôle exige un certificat) ;
+#   - deux identités S3 aux clés aléatoires (jamais les clés du socle).
+# Pas de disque de données (seaweedfs_disque vide) : les données restent sur le disque système.
+- name: Préparer les données de test (sur le poste qui lance Molecule)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    instance: "{{ groups['molecule'][0] }}"
+  tasks:
+    - name: CA de test
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2
+          -subj "/CN=CA de test Molecule" -addext "basicConstraints=critical,CA:TRUE"
+          -addext "keyUsage=critical,keyCertSign,cRLSign"
+          -keyout {{ eph }}/ca-test.key -out {{ eph }}/ca-test.crt
+        creates: "{{ eph }}/ca-test.crt"
+
+    - name: Demande de certificat de l'instance
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes
+          -subj "/CN={{ instance }}" -keyout {{ eph }}/s3-test.key -out {{ eph }}/s3-test.csr
+        creates: "{{ eph }}/s3-test.csr"
+
+    - name: Extensions du certificat (SAN = adresse de l'instance)
+      ansible.builtin.copy:
+        dest: "{{ eph }}/s3-test.ext"
+        content: |
+          basicConstraints=critical,CA:false
+          keyUsage=critical,digitalSignature
+          extendedKeyUsage=serverAuth
+          subjectAltName=IP:{{ hostvars[instance]['ansible_host'] }}
+        mode: "0600"
+
+    - name: Certificat de l'instance signé par la CA de test
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -req -in {{ eph }}/s3-test.csr -CA {{ eph }}/ca-test.crt
+          -CAkey {{ eph }}/ca-test.key -CAcreateserial -days 2 -sha256
+          -extfile {{ eph }}/s3-test.ext -out {{ eph }}/s3-test.crt
+        creates: "{{ eph }}/s3-test.crt"
+
+- name: Converge — rôle seaweedfs
+  hosts: molecule
+  become: true
+  vars:
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    seaweedfs_disque: ""
+    seaweedfs_tls_certificat: "{{ lookup('ansible.builtin.file', eph ~ '/s3-test.crt') }}"
+    seaweedfs_tls_cle: "{{ lookup('ansible.builtin.file', eph ~ '/s3-test.key') }}"
+    seaweedfs_identites:
+      - nom: test-etat
+        cle_acces: "{{ lookup('ansible.builtin.password', eph ~ '/s3-etat-acces chars=ascii_uppercase,digits length=20') }}"
+        cle_secrete: "{{ lookup('ansible.builtin.password', eph ~ '/s3-etat-secret chars=ascii_letters,digits length=40') }}"
+        actions: [Read:essai-etat, Write:essai-etat, List:essai-etat]
+      - nom: test-admin
+        cle_acces: "{{ lookup('ansible.builtin.password', eph ~ '/s3-admin-acces chars=ascii_uppercase,digits length=20') }}"
+        cle_secrete: "{{ lookup('ansible.builtin.password', eph ~ '/s3-admin-secret chars=ascii_letters,digits length=40') }}"
+        actions: [Admin, Read, Write, List, Tagging]
+    seaweedfs_compartiments:
+      - nom: essai-etat
+        versionnage: true
+  roles:
+    - role: seaweedfs

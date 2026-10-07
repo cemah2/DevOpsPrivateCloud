@@ -1,0 +1,11 @@
+---
+# molecule/netbox/molecule.yml — scénario du rôle « netbox » (M06-E04)
+# Le commun vient de .config/molecule/config.yml (M04-E24). Préparation propre au scénario :
+# une autorité de TEST et un certificat pour nginx (prepare.yml).
+# Long (upgrade.sh télécharge les dépendances Python) : compter 10 à 15 minutes.
+#   uv run molecule test -s netbox
+scenario:
+  name: netbox
+ansible:
+  playbooks:
+    prepare: prepare.yml

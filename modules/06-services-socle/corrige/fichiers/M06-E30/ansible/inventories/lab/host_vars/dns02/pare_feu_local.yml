@@ -1,0 +1,19 @@
+---
+# host_vars/dns02/pare_feu_local.yml — flux d'entrée de dns02 (M06-E30).
+pare_feu_local_regles:
+  - {source: [10.10.0.0/16, 10.20.0.0/16, 10.255.1.0/24], proto: tcp_udp, ports: 53,
+     motif: "DNS (récurseur) pour le lab, PAR2 et le VPN", ref: M06-E24}
+  - {source: [10.10.20.10, 10.10.10.10], proto: tcp_udp, ports: 5300,
+     motif: "serveur faisant autorité : NOTIFY de dns01, diagnostic adm01", ref: M06-E24}
+  - {source: 10.10.20.1, proto: udp, ports_source: 67, ports: 67,
+     motif: "DHCP relayé par gw01 (source = son adresse INFRA)", ref: M06-E25}
+  - {source: 10.10.99.0/24, proto: udp, ports_source: 68, ports: 67,
+     motif: "renouvellements DHCP en unicast (VLAN 99)", ref: M06-E25}
+  - {source: 10.10.10.10, proto: tcp, ports: 8004,
+     motif: "socket de contrôle Kea : adm01 (administration, supervision)", ref: M06-E25}
+  - {source: 10.10.20.10, proto: tcp, ports: 8001,
+     motif: "Kea HA : écouteur dédié, depuis le pair dns01", ref: M06-E25}
+  - {source: 10.10.20.11, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 depuis ca01 (certificat de Kea)", ref: M06-E25}
+pare_feu_local_verifications:
+  - {port: 53, motif: "DNS"}

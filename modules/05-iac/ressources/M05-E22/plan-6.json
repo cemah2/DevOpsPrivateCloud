@@ -1,0 +1,65 @@
+[
+  {
+    "address": "proxmox_virtual_environment_vm.socle[\"adm01\"]",
+    "actions": [
+      "no-op"
+    ],
+    "reason": null,
+    "importing": {
+      "id": "pve01/1001"
+    },
+    "previous_address": null
+  },
+  {
+    "address": "proxmox_virtual_environment_vm.socle[\"dns01\"]",
+    "actions": [
+      "update"
+    ],
+    "reason": null,
+    "importing": {
+      "id": "pve01/1002"
+    },
+    "previous_address": null
+  },
+  {
+    "address": "proxmox_virtual_environment_vm.socle[\"git01\"]",
+    "actions": [
+      "no-op"
+    ],
+    "reason": null,
+    "importing": {
+      "id": "pve01/1004"
+    },
+    "previous_address": null
+  },
+  {
+    "address": "proxmox_virtual_environment_vm.socle[\"runner01\"]",
+    "actions": [
+      "delete",
+      "create"
+    ],
+    "reason": "replace_because_cannot_update",
+    "importing": {
+      "id": "pve01/1007"
+    },
+    "previous_address": null
+  },
+  {
+    "address": "module.s3_01.proxmox_virtual_environment_vm.vm",
+    "actions": [
+      "no-op"
+    ],
+    "reason": null,
+    "importing": null,
+    "previous_address": "proxmox_virtual_environment_vm.s3_01"
+  },
+  {
+    "address": "proxmox_virtual_environment_vm.essai_karim",
+    "actions": [
+      "forget"
+    ],
+    "reason": "delete_because_no_resource_config",
+    "importing": null,
+    "previous_address": null
+  }
+]

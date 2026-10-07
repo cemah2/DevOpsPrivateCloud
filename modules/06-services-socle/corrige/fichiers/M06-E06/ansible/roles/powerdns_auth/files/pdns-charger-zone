@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# pdns-charger-zone — charge une zone générée par Ansible dans PowerDNS (rôle powerdns_auth).
+#
+#   pdns-charger-zone ZONE FICHIER
+#
+# FICHIER est une zone au format BIND dont le SOA porte « @SERIAL@ » à la place du numéro de
+# série. Le script choisit le numéro (format AAAAMMJJnn, toujours plus grand que l'actuel, pour
+# que les secondaires voient le changement), charge la zone d'un bloc (« pdnsutil zone load »
+# est atomique), recalcule les champs DNSSEC (rectify), vérifie la zone et vide le cache.
+# À lancer sous le compte pdns (propriétaire de la base SQLite).
+set -euo pipefail
+
+zone="${1:?usage : pdns-charger-zone ZONE FICHIER}"
+modele="${2:?usage : pdns-charger-zone ZONE FICHIER}"
+[[ -r "$modele" ]] || { echo "pdns-charger-zone : $modele illisible" >&2; exit 2; }
+
+# Numéro actuel : 7e champ de la ligne SOA (nom, TTL, classe, type, mname, rname, série…).
+actuel="$(pdnsutil zone list "$zone" 2>/dev/null | awk '$4 == "SOA" { print $7; exit }')"
+actuel="${actuel:-0}"
+aujourdhui="$(date +%Y%m%d)00"
+if (( actuel >= aujourdhui )); then
+  serie=$(( actuel + 1 ))
+else
+  serie=$aujourdhui
+fi
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+sed "s/@SERIAL@/$serie/" "$modele" >"$tmp"
+
+pdnsutil zone load "$zone" "$tmp"
+pdnsutil zone rectify "$zone" >/dev/null
+pdnsutil zone check "$zone"
+# Vider le cache de paquets du serveur pour cette zone : sinon les anciennes réponses (dont
+# l'ancien SOA) restent servies jusqu'à 20 s (cache-ttl). Sans effet si pdns est arrêté.
+pdns_control purge "$zone\$" >/dev/null 2>&1 || true
+echo "pdns-charger-zone : $zone chargée, numéro de série $actuel -> $serie"

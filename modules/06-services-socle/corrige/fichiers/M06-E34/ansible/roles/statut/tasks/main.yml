@@ -1,0 +1,77 @@
+---
+# Rôle statut (M06-E34) : nginx en HTTPS avec le certificat ACME posé par certificats_acme.
+
+- name: Le certificat de la page est présent (rôle certificats_acme, entrée « statut »)
+  ansible.builtin.stat:
+    path: "{{ statut_certificat }}"
+  register: statut_cert
+
+- name: Échouer clairement sinon
+  ansible.builtin.assert:
+    that: statut_cert.stat.exists
+    fail_msg: "{{ statut_certificat }} absent : applique d'abord certificats_acme (playbooks/statut.yml)."
+    quiet: true
+
+- name: Paquet nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Répertoire de la page
+  ansible.builtin.file:
+    path: "{{ statut_racine_web }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Page fournie (témoin compris), telle quelle
+  ansible.builtin.copy:
+    src: index.html
+    dest: "{{ statut_racine_web }}/index.html"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Site nginx
+  ansible.builtin.template:
+    src: statut.conf.j2
+    dest: /etc/nginx/sites-available/statut
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger nginx
+
+- name: Activer le site, retirer le site par défaut
+  ansible.builtin.file:
+    path: "{{ item.lien }}"
+    src: "{{ item.cible | default(omit) }}"
+    state: "{{ item.etat }}"
+  loop:
+    - {lien: /etc/nginx/sites-enabled/statut, cible: /etc/nginx/sites-available/statut, etat: link}
+    - {lien: /etc/nginx/sites-enabled/default, etat: absent}
+  notify: Recharger nginx
+
+- name: Configuration nginx valide
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: nginx actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    enabled: true
+    state: started
+
+- name: Appliquer maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: La page est servie en HTTPS avec un certificat de la PKI interne (vu du contrôleur)
+  ansible.builtin.uri:
+    url: https://{{ statut_nom }}/
+    ca_path: "{{ statut_racine_confiance }}"
+    return_content: true
+  register: statut_page
+  failed_when: "'temoin-stat01-m06e34' not in statut_page.content"
+  delegate_to: localhost
+  become: false
+  when: not ansible_check_mode

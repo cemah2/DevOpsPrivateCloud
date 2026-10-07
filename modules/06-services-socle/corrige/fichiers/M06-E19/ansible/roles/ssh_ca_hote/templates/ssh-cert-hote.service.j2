@@ -1,0 +1,17 @@
+# {{ ssh_ca_hote_entete }}
+[Unit]
+Description=Renouvellement du certificat SSH de l'hôte (step-ca, SSHPOP)
+After=network-online.target
+Wants=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+Environment=STEPPATH={{ certificats_acme_steppath | default('/etc/step') }}
+# Rien à faire avant les deux tiers de la durée de vie (code 1 = pas encore).
+ExecCondition=/usr/bin/step ssh needs-renewal {{ ssh_ca_hote_cle }}-cert.pub
+# Authentifié par le certificat en cours et la clé d'hôte (SSHPOP) : aucun secret à stocker.
+# Un certificat déjà expiré ne peut plus se renouveler ainsi : Ansible le re-signe.
+ExecStart=/usr/bin/step ssh renew --force {{ ssh_ca_hote_cle }}-cert.pub {{ ssh_ca_hote_cle }}
+ExecStartPost=/usr/sbin/sshd -t
+ExecStartPost=/bin/systemctl reload {{ ssh_ca_hote_service_sshd }}.service

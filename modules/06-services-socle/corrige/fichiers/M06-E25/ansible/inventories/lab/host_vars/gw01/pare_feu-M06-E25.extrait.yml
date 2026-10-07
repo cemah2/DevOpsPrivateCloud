@@ -1,0 +1,22 @@
+---
+# host_vars/gw01/pare_feu.yml — EXTRAIT : lignes ajoutées ou modifiées en M06-E24 et M06-E25.
+# La matrice complète après le module 06 est dans fichiers/M06-E30/.
+
+pare_feu_definitions:
+  # … définitions existantes …
+  - {nom: DNS02, valeur: 10.10.20.16}
+
+pare_feu_entree:
+  # Remplace la règle M00-E14 « réponses de dns01 adressées au giaddr » :
+  - {entree: $V_INFRA, source: [$DNS01, $DNS02], destination: 10.10.99.1, proto: udp, ports_source: 67, ports: 67,
+     motif: "réponses des serveurs Kea adressées au giaddr", ref: M06-E25}
+
+pare_feu_transit:
+  # Remplacent les règles DNS de M00-E13 :
+  - {source: [$NETS_LAB, $NETS_PAR2, $NET_VPN], destination: [$DNS01, $DNS02], proto: tcp_udp, ports: 53,
+     motif: "DNS du lab (UDP et TCP) vers les deux récurseurs", ref: M06-E24}
+  - {entree: $V_INFRA, source: [$DNS01, $DNS02], sortie: $WAN, proto: tcp_udp, ports: 53,
+     motif: "récurseurs vers Internet (récursion depuis la racine)", ref: M06-E24}
+  # Remplace la règle M00-E14 des renouvellements en unicast :
+  - {entree: $V_SANDBOX, destination: [$DNS01, $DNS02], proto: udp, ports_source: 68, ports: 67,
+     motif: "renouvellements DHCP (T1) en unicast vers le serveur qui a accordé le bail", ref: M06-E25}

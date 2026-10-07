@@ -1,0 +1,81 @@
+---
+# Rôle ssh_ca_utilisateur (M06-E20).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - ssh_ca_utilisateur_cles_ca | length > 0
+      - ssh_ca_utilisateur_cles_ca | select('match', '^(ssh-|ecdsa-)') | list | length == ssh_ca_utilisateur_cles_ca | length
+    fail_msg: >-
+      ssh_ca_utilisateur_cles_ca vide ou invalide : copie dans group_vars/all la sortie de
+      « step ssh config --roots » (CA d'UTILISATEUR, pas celle d'hôte).
+    quiet: true
+
+- name: Clé(s) de la CA d'utilisateur
+  ansible.builtin.copy:
+    dest: "{{ ssh_ca_utilisateur_fichier_ca }}"
+    content: |
+      # {{ ssh_ca_utilisateur_entete }}
+      {% for cle in ssh_ca_utilisateur_cles_ca %}
+      {{ cle }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger sshd (certificats d'utilisateur)
+
+- name: Dossier des principaux autorisés
+  ansible.builtin.file:
+    path: "{{ ssh_ca_utilisateur_dossier_principaux }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Fichier propriété de root, non modifiable par le compte : un utilisateur ne doit pas pouvoir
+# s'ajouter des principaux (sshd l'exige d'ailleurs avec StrictModes).
+- name: Principaux acceptés pour chaque compte
+  ansible.builtin.copy:
+    dest: "{{ ssh_ca_utilisateur_dossier_principaux }}/{{ item.key }}"
+    content: |
+      {% for p in item.value %}
+      {{ p }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ssh_ca_utilisateur_principaux | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Configuration de sshd (validée avant d'être posée)
+  ansible.builtin.template:
+    src: ssh-ca-utilisateur.conf.j2
+    dest: "{{ ssh_ca_utilisateur_fichier_conf }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Recharger sshd (certificats d'utilisateur)
+
+- name: Appliquer maintenant le rechargement de sshd
+  ansible.builtin.meta: flush_handlers
+
+- name: Lire la configuration effective de sshd
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: _ssh_ca_utilisateur_effectif
+  changed_when: false
+  check_mode: false
+
+# Un fichier lu AVANT le nôtre (ordre alphabétique de sshd_config.d) qui fixerait déjà ces
+# mots-clés gagnerait en silence : on contrôle la configuration effective.
+- name: Les réglages du rôle sont ceux que sshd applique
+  ansible.builtin.assert:
+    that:
+      - ('trustedusercakeys ' ~ ssh_ca_utilisateur_fichier_ca) in _ssh_ca_utilisateur_effectif.stdout_lines
+      - ('authorizedprincipalsfile ' ~ ssh_ca_utilisateur_dossier_principaux ~ '/%u') in _ssh_ca_utilisateur_effectif.stdout_lines
+    fail_msg: >-
+      sshd -T ne montre pas TrustedUserCAKeys/AuthorizedPrincipalsFile du rôle : un autre fichier de
+      sshd_config.d les fixe avant {{ ssh_ca_utilisateur_fichier_conf }}.
+    quiet: true
+  when: not ansible_check_mode

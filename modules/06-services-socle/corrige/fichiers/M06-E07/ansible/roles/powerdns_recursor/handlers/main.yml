@@ -1,0 +1,9 @@
+---
+# Les adresses d'écoute, les zones relayées et le mode DNSSEC ne se rechargent pas tous à chaud
+# (rec_control reload-zones / reload-yaml n'en couvrent qu'une partie) : on redémarre.
+# powerdns_recursor_redemarrer: false (bascule planifiée, M06-E08) laisse ce geste à la procédure.
+- name: Redémarrer le Recursor
+  ansible.builtin.systemd_service:
+    name: pdns-recursor.service
+    state: restarted
+  when: powerdns_recursor_redemarrer | bool

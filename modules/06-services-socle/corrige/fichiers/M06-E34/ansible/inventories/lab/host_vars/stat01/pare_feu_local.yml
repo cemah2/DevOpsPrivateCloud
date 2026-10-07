@@ -1,0 +1,11 @@
+---
+# host_vars/stat01/pare_feu_local.yml — flux d'entrée de stat01 (M06-E34).
+# Aucune règle sur gw01 : MGMT joint tout le lab et le VPN d'admin joint INFRA (règles M00) ;
+# SANDBOX ne doit pas y accéder (refusé par gw01 par défaut).
+pare_feu_local_regles:
+  - {source: [10.10.10.0/24, 10.255.1.0/24, 10.10.20.0/24], proto: tcp, ports: 443,
+     motif: "page d'information : MGMT, VPN d'admin, INFRA", ref: M06-E34}
+  - {source: 10.10.20.11, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 depuis ca01", ref: M06-E34}
+pare_feu_local_verifications:
+  - {port: 443, motif: "page HTTPS"}

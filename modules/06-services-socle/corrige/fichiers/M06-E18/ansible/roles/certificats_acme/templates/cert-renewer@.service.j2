@@ -1,0 +1,27 @@
+# {{ certificats_acme_entete }}
+# Modèle officiel Smallstep (github.com/smallstep/cli, dossier systemd/), adapté :
+#   - STEPPATH du CLIENT de l'hôte ({{ certificats_acme_steppath }}), pas celui d'une CA ;
+#   - rechargement du service consommateur dans la surcharge de chaque instance.
+[Unit]
+Description=Renouvellement du certificat %I (step-ca, MédiSphère)
+After=network-online.target
+Wants=network-online.target
+Documentation=https://smallstep.com/docs/step-ca/renewal/
+StartLimitIntervalSec=0
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=STEPPATH={{ certificats_acme_steppath }} \
+            CERT_LOCATION={{ certificats_acme_steppath }}/certs/%i.crt \
+            KEY_LOCATION={{ certificats_acme_steppath }}/certs/%i.key
+
+# Ne rien faire tant que le certificat n'a pas atteint les deux tiers de sa vie.
+ExecCondition=/usr/bin/step certificate needs-renewal ${CERT_LOCATION}
+
+# Renouvellement authentifié par le certificat en cours (mTLS) : ni secret ni port 80.
+ExecStart=/usr/bin/step ca renew --force ${CERT_LOCATION} ${KEY_LOCATION}
+
+[Install]
+WantedBy=multi-user.target

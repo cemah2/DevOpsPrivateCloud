@@ -1,0 +1,122 @@
+---
+# NetBox lui-même (« NetBox Installation », option B : clone Git d'une étiquette), dans un
+# dossier par version (/opt/netbox-4.6.9) désigné par le lien /opt/netbox : une montée de
+# version prépare le nouveau dossier à côté, puis bascule le lien.
+
+- name: Compte système netbox
+  ansible.builtin.user:
+    name: "{{ netbox_utilisateur }}"
+    system: true
+    create_home: false
+    home: "{{ netbox_racine }}"
+    shell: /usr/sbin/nologin
+
+- name: Code de NetBox à l'étiquette v{{ netbox_version }}
+  ansible.builtin.git:
+    repo: "{{ netbox_depot }}"
+    dest: "{{ netbox_racine_version }}"
+    version: "v{{ netbox_version }}"
+    depth: 1
+    update: false
+  register: netbox_clone
+
+# Lecture seule : le module git ne sait pas seulement LIRE le commit d'un dépôt existant.
+- name: Lire le commit extrait  # noqa: command-instead-of-module
+  ansible.builtin.command: git -C {{ netbox_racine_version }} rev-parse HEAD
+  register: netbox_head
+  changed_when: false
+  check_mode: false
+
+- name: Refuser un code qui n'est pas celui de l'étiquette attendue
+  ansible.builtin.assert:
+    that: netbox_head.stdout | trim == netbox_commit
+    fail_msg: >-
+      {{ netbox_racine_version }} est au commit {{ netbox_head.stdout | trim }}, pas {{ netbox_commit }}
+      (v{{ netbox_version }}). Ne pas continuer : vérifier l'étiquette sur GitHub avant de changer netbox_commit.
+    quiet: true
+
+- name: Dossiers où NetBox écrit (fichiers téléversés, scripts, rapports)
+  ansible.builtin.file:
+    path: "{{ netbox_racine_version }}/netbox/{{ item }}"
+    state: directory
+    owner: "{{ netbox_utilisateur }}"
+    recurse: true
+  loop: [media, reports, scripts]
+
+- name: Configuration de NetBox (configuration.py)
+  ansible.builtin.template:
+    src: configuration.py.j2
+    dest: "{{ netbox_racine_version }}/netbox/netbox/configuration.py"
+    owner: root
+    group: "{{ netbox_utilisateur }}"
+    mode: "0640"
+    # Validation de la SYNTAXE Python seulement (la connexion à la base est testée plus loin).
+    validate: python3 -m py_compile %s
+  notify: Redémarrer NetBox
+
+- name: Paramètres de gunicorn
+  ansible.builtin.template:
+    src: gunicorn.py.j2
+    dest: "{{ netbox_racine_version }}/gunicorn.py"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer NetBox
+
+# upgrade.sh (fourni par NetBox) : venv, dépendances de requirements.txt, migrations,
+# documentation locale, fichiers statiques. Une seule fois par version : son venv est la preuve.
+# Plusieurs minutes (téléchargements PyPI) : async évite la coupure SSH sur un réseau lent.
+- name: Installer les dépendances et migrer la base (upgrade.sh, une fois par version)
+  ansible.builtin.command:
+    cmd: "{{ netbox_racine_version }}/upgrade.sh"
+    creates: "{{ netbox_racine_version }}/venv/bin/gunicorn"
+  environment:
+    PYTHON: /usr/bin/python3
+  async: 1800
+  poll: 15
+  notify: Redémarrer NetBox
+
+- name: Version courante désignée par /opt/netbox
+  ansible.builtin.file:
+    src: "{{ netbox_racine_version }}"
+    dest: "{{ netbox_racine }}"
+    state: link
+    force: true
+  notify: Redémarrer NetBox
+
+- name: Le compte d'administration initial existe-t-il ?
+  ansible.builtin.command:
+    argv:
+      - "{{ netbox_racine }}/venv/bin/python"
+      - "{{ netbox_racine }}/netbox/manage.py"
+      - shell
+      - --no-imports
+      - -c
+      - >-
+        import sys; from users.models import User;
+        sys.exit(0 if User.objects.filter(username='{{ netbox_admin_utilisateur }}').exists() else 3)
+  become: true
+  become_user: "{{ netbox_utilisateur }}"
+  register: netbox_admin_existe
+  changed_when: false
+  failed_when: netbox_admin_existe.rc not in [0, 3]
+  check_mode: false
+
+# createsuperuser --noinput lit le mot de passe dans DJANGO_SUPERUSER_PASSWORD (Django) :
+# il ne passe ni en argument ni dans un fichier.
+- name: Créer le compte d'administration initial
+  ansible.builtin.command:
+    argv:
+      - "{{ netbox_racine }}/venv/bin/python"
+      - "{{ netbox_racine }}/netbox/manage.py"
+      - createsuperuser
+      - --noinput
+      - --username={{ netbox_admin_utilisateur }}
+      - --email={{ netbox_admin_courriel }}
+  environment:
+    DJANGO_SUPERUSER_PASSWORD: "{{ netbox_admin_mot_de_passe }}"
+  become: true
+  become_user: "{{ netbox_utilisateur }}"
+  when: netbox_admin_existe.rc == 3
+  changed_when: true
+  no_log: true

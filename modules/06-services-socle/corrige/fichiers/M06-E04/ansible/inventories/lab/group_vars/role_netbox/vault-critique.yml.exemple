@@ -1,0 +1,20 @@
+---
+# group_vars/role_netbox/vault-critique.yml — STRUCTURE seulement (valeurs factices).
+# Chiffré sous l'identité « critique » :
+#   uv run ansible-vault create --encrypt-vault-id critique inventories/lab/group_vars/role_netbox/vault-critique.yml
+# Générer chaque valeur avec le script de NetBox (50 caractères et plus) :
+#   python3 -c 'import secrets, string; a = string.ascii_letters + string.digits + "!@#$%^&*(-_=+)"; print("".join(secrets.choice(a) for _ in range(60)))'
+
+# Clé Django : la perdre déconnecte les sessions ; la divulguer permet de forger des sessions.
+vault_netbox_secret_key: "<60-CARACTERES-ALEATOIRES>"
+
+# Poivres des jetons API v2 : perdre le dictionnaire invalide TOUS les jetons v2 ; la fuite
+# (avec une copie de la base) permet d'attaquer les empreintes des jetons.
+# Rotation : ajouter un identifiant 2 ; les nouveaux jetons l'utilisent ; retirer 1 quand plus
+# aucun jeton ne s'en sert.
+vault_netbox_api_token_peppers:
+  1: "<60-CARACTERES-ALEATOIRES>"
+
+# Clé privée TLS de nbx01 (certificat émis par step-ca, M06-E04).
+vault_netbox_tls_cle: |
+  <CLÉ-PRIVÉE-PEM-DE-NBX01>

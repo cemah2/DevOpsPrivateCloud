@@ -1,0 +1,27 @@
+---
+# playbooks/env-m05.yml — configuration des VMs d'environnement du module 05 (M05-E23).
+# Création : OpenTofu (plateforme/infra, envs/lab-m05) ; configuration : ce playbook.
+# Lancé par outils/configurer-env.sh (plateforme/infra) après un apply, ou à la main :
+#   uv run ansible-playbook playbooks/env-m05.yml --limit m05-jetable
+- name: Attendre les VMs fraîchement créées
+  hosts: env_m05
+  gather_facts: false
+  tasks:
+    - name: SSH et Python utilisables
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    # cloud-init installe encore des paquets au premier démarrage : apt serait verrouillé.
+    - name: Attendre la fin de cloud-init
+      ansible.builtin.command:
+        cmd: cloud-init status --wait
+      register: env_m05_cloud_init
+      changed_when: false
+      failed_when: env_m05_cloud_init.rc not in [0, 2]
+
+- name: Configuration commune (rôle base)
+  hosts: env_m05
+  become: true
+  roles:
+    - role: base
+      tags: [base]

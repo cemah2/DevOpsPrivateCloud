@@ -1,0 +1,16 @@
+# {{ relais_dhcp_fichier }} — {{ inventory_hostname }} : dnsmasq en RELAIS DHCP uniquement
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle relais_dhcp).') }}
+# M00-E14 (un serveur), M06-E25 (paire Kea en haute disponibilité : relais vers les deux).
+
+# Pas de service DNS sur le routeur.
+port=0
+
+# N'écouter (DHCP) que sur le VLAN des clients.
+interface={{ relais_dhcp_interface }}
+
+# Chaque requête reçue sur l'interface portant {{ relais_dhcp_adresse_locale }} est relayée à chaque
+# serveur ci-dessous ({{ relais_dhcp_adresse_locale }} inscrit comme giaddr). En hot-standby, le
+# serveur en veille reçoit donc aussi le trafic : il en a besoin pour détecter un primaire muet.
+{% for s in relais_dhcp_serveurs %}
+dhcp-relay={{ relais_dhcp_adresse_locale }},{{ s }}{{ (',' ~ relais_dhcp_interface_serveurs) if relais_dhcp_interface_serveurs | length > 0 else '' }}
+{% endfor %}

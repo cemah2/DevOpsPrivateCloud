@@ -1,0 +1,11 @@
+# host_vars/s3-01/vault-critique.yml — CONTENU EN CLAIR, à chiffrer avec l'identité critique :
+#   uv run ansible-vault encrypt --encrypt-vault-id critique inventories/lab/host_vars/s3-01/vault-critique.yml
+# Critique : la clé TLS permet d'usurper s3-01 (et de lire les états en transit) ; admin-s3
+# ouvre tout SeaweedFS, historique des états compris (M04-E30 : classement des secrets).
+---
+vault_seaweedfs_admin_cle_acces: "<CLE-ACCES-ADMIN-S3>"
+vault_seaweedfs_admin_cle_secrete: "<CLE-SECRETE-ADMIN-S3>"
+vault_seaweedfs_tls_cle: |
+  -----BEGIN PRIVATE KEY-----
+  <CONTENU-DE-~/pki-provisoire/s3-01.key>
+  -----END PRIVATE KEY-----

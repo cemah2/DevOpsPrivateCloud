@@ -1,0 +1,20 @@
+---
+# playbooks/pare-feu-local.yml — filtrage d'entrée local des services socle du VLAN INFRA (M06-E30).
+# UN hôte à la fois ; dns01 en DERNIER, dans un jeu séparé : si un filtrage casse le DNS de dns02,
+# dns01 sert encore pendant qu'on répare. Les vérifications du rôle sont faites depuis le
+# contrôleur (adm01 ou runner01) : voir pare_feu_local_verifications.
+- name: Filtrage local — dns02, ca01, nbx01
+  hosts: dns02:ca01:nbx01
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: pare_feu_local
+      tags: [pare_feu_local]
+
+- name: Filtrage local — dns01 (en dernier)
+  hosts: dns01
+  become: true
+  roles:
+    - role: pare_feu_local
+      tags: [pare_feu_local]

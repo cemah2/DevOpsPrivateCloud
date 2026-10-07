@@ -1,0 +1,7 @@
+# {{ ssh_ca_hote_entete }}
+# {{ ssh_ca_hote_fichier_conf }} (rôle ssh_ca_hote, M06-E19)
+# Pas de ligne HostKey : en écrire une remplacerait la liste par défaut (rsa, ecdsa, ed25519).
+# Le certificat est présenté AVEC la clé : un client qui ne connaît que l'ancienne clé brute
+# (known_hosts) continue de se connecter ; un client qui fait confiance à la CA vérifie le
+# certificat. Contrôle : ssh-keyscan -c <hôte>
+HostCertificate {{ ssh_ca_hote_cle }}-cert.pub

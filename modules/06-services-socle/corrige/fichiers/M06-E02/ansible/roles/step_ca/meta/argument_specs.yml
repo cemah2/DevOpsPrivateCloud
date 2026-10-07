@@ -1,0 +1,46 @@
+---
+argument_specs:
+  main:
+    short_description: Autorité de certification step-ca (intermédiaire en ligne d'une racine hors ligne)
+    options:
+      step_ca_racine_crt:
+        type: path
+        required: true
+        description: Certificat PUBLIC de la racine, sur le contrôleur.
+      step_ca_intermediaire_crt:
+        type: str
+        default: ""
+        description: Certificat signé de l'intermédiaire, sur le contrôleur. Absent = phase 1 (CSR).
+      step_ca_csr_locale:
+        type: str
+        default: ""
+        description: Où rapatrier la CSR de l'intermédiaire sur le contrôleur (phase 1).
+      step_ca_mot_de_passe:
+        type: str
+        required: true
+        no_log: true
+        description: Mot de passe des clés en ligne (Vault « critique »).
+      step_ca_noms_dns:
+        type: list
+        elements: str
+        description: Noms et adresses du certificat TLS de la CA ; le premier forme l'URL.
+      step_ca_port:
+        type: int
+        default: 443
+        description: Port d'écoute HTTPS de la CA.
+      step_ca_provisioners:
+        type: list
+        elements: dict
+        required: true
+        description: Provisioners, objets JSON de ca.json (authority.provisioners).
+      step_ca_claims:
+        type: dict
+        description: Durées globales (authority.claims).
+      step_ca_ssh:
+        type: bool
+        default: true
+        description: Active la CA SSH (clés d'hôte et d'utilisateur générées sur l'hôte).
+      step_ca_redemarrer:
+        type: bool
+        default: true
+        description: false = préparer sans redémarrer la CA.

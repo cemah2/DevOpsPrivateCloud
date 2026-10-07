@@ -1,0 +1,12 @@
+# vms-socle.graphql — M06-E10 : les VMs du socle en UNE requête (NetBox 4.6, syntaxe de filtres ≥ 4.3).
+# Envoi : jq -Rs '{query: .}' vms-socle.graphql | curl -s -H "Authorization: Bearer $JETON" \
+#           -H 'Content-Type: application/json' --data @- https://nbx01.par1.medisphere.internal/graphql/
+query VmsDuSocle {
+  virtual_machine_list(filters: {tags: {slug: {exact: "socle"}}}) {
+    name
+    status
+    cluster { name }
+    custom_fields
+    primary_ip4 { address dns_name }
+  }
+}

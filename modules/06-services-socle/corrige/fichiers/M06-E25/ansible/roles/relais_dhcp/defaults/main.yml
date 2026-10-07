@@ -1,0 +1,13 @@
+---
+# Rôle relais_dhcp — relais DHCP de gw01 (dnsmasq en mode relais seul), M06-E25.
+# Reprend en code le fichier posé à la main en M00-E14 (/etc/dnsmasq.d/relais-dhcp.conf).
+
+relais_dhcp_fichier: /etc/dnsmasq.d/relais-dhcp.conf
+# Interface côté clients (VLAN SANDBOX) et adresse locale inscrite comme giaddr.
+relais_dhcp_interface: ens19.99
+relais_dhcp_adresse_locale: 10.10.99.1
+# Serveurs DHCP : chaque requête est relayée à CHACUN d'eux (une directive dhcp-relay par serveur).
+relais_dhcp_serveurs: []
+# Facultatif : n'accepter les réponses des serveurs que sur cette interface (anti-usurpation,
+# 3e champ de dhcp-relay ; vérifie « man dnsmasq » de ta version). Vide = non utilisé.
+relais_dhcp_interface_serveurs: ""

@@ -1,0 +1,42 @@
+---
+# Dépendances de la documentation (« Install System Packages ») + services de Debian 13 :
+# PostgreSQL 17 (paquet postgresql), Valkey 8 (valkey-server, à la place de redis-server), nginx.
+- name: Paquets nécessaires à NetBox
+  ansible.builtin.apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - python3-dev
+      - build-essential
+      - libxml2-dev
+      - libxslt1-dev
+      - libffi-dev
+      - libpq-dev
+      - libssl-dev
+      - zlib1g-dev
+      - git
+      - postgresql
+      - valkey-server
+      - nginx
+    state: present
+
+- name: PostgreSQL et Valkey actifs et lancés au démarrage
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - postgresql.service
+    - valkey-server.service
+
+# NetBox exécute des tâches lues dans Valkey : quiconque peut y écrire exécute du code
+# (avertissement de la documentation). Valkey n'écoute donc que sur la boucle locale.
+- name: Valkey n'écoute que sur la boucle locale
+  ansible.builtin.command: valkey-cli CONFIG GET bind
+  register: netbox_valkey_bind
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    netbox_valkey_bind.rc != 0
+    or (netbox_valkey_bind.stdout_lines | last | split | reject('match', '^-?(127\.0\.0\.1|::1)$') | list | length) > 0

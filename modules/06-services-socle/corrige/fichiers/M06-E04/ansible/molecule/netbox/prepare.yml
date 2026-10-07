@@ -1,0 +1,64 @@
+---
+# molecule/netbox/prepare.yml — préparation commune, puis TLS de test :
+# une autorité jetable (installée dans le magasin de l'instance, comme ca_lab le fait en
+# production) et un certificat pour nbx.molecule.test, rapatriés pour converge.yml.
+- name: Préparation commune
+  ansible.builtin.import_playbook: ../_commun/prepare.yml
+
+- name: TLS de test
+  hosts: molecule
+  become: true
+  vars:
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    d: /root/tls-test
+  tasks:
+    - name: Nom de test résolu localement
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "127.0.0.1 nbx.molecule.test"
+
+    - name: Dossier de travail
+      ansible.builtin.file:
+        path: "{{ d }}"
+        state: directory
+        mode: "0700"
+
+    - name: Autorité de test
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 2
+          -subj "/CN=Molecule Test CA" -addext "basicConstraints=critical,CA:true"
+          -addext "keyUsage=critical,keyCertSign,cRLSign"
+          -keyout {{ d }}/ca.key -out {{ d }}/ca.crt
+        creates: "{{ d }}/ca.crt"
+
+    - name: Certificat de nbx.molecule.test signé par l'autorité de test
+      ansible.builtin.shell:
+        cmd: >-
+          set -e;
+          openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes
+          -subj "/CN=nbx.molecule.test" -keyout {{ d }}/nbx.key -out {{ d }}/nbx.csr;
+          printf 'subjectAltName=DNS:nbx.molecule.test\nextendedKeyUsage=serverAuth\nbasicConstraints=CA:false\n' > {{ d }}/ext.cnf;
+          openssl x509 -req -in {{ d }}/nbx.csr -CA {{ d }}/ca.crt -CAkey {{ d }}/ca.key -CAcreateserial
+          -days 2 -extfile {{ d }}/ext.cnf -out {{ d }}/nbx.crt
+        creates: "{{ d }}/nbx.crt"
+
+    - name: Autorité de test dans le magasin de l'instance
+      ansible.builtin.copy:
+        src: "{{ d }}/ca.crt"
+        dest: /usr/local/share/ca-certificates/molecule-test-ca.crt
+        remote_src: true
+        mode: "0644"
+      register: ca_test
+
+    - name: Reconstruire le magasin  # noqa: no-handler
+      ansible.builtin.command: update-ca-certificates
+      when: ca_test is changed
+      changed_when: true
+
+    - name: Rapatrier le certificat et la clé de test
+      ansible.builtin.fetch:
+        src: "{{ d }}/{{ item }}"
+        dest: "{{ eph }}/tls-test/"
+        flat: true
+      loop: [nbx.crt, nbx.key, ca.crt]

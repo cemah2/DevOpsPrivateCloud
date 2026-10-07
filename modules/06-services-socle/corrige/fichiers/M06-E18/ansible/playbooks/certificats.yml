@@ -1,0 +1,11 @@
+---
+# playbooks/certificats.yml — certificats TLS des services du socle par ACME (M06-E18 ; gw01 en M06-E21).
+# serial: 1 : une émission à la fois (et une seule coupure du port 80 à la fois).
+#   uv run ansible-playbook playbooks/certificats.yml --limit git01 --check --diff
+- name: Certificats TLS automatiques (step-ca, ACME)
+  hosts: role_gitlab:role_netbox:role_s3
+  become: true
+  serial: 1
+  roles:
+    - role: certificats_acme
+      tags: [certificats_acme]

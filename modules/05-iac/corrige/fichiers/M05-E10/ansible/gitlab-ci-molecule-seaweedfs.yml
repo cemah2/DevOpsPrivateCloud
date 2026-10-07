@@ -1,0 +1,16 @@
+# Extrait à ajouter à .gitlab-ci.yml de plateforme/ansible (modèle des jobs Molecule, M04-E27).
+molecule:seaweedfs:
+  extends: .molecule
+  # VMID 2049 partagé avec dnsmasq et node_exporter (M04-E46) : même resource_group.
+  resource_group: molecule-vmid-2049
+  variables:
+    SCENARIO: seaweedfs
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/seaweedfs/**/*
+        - molecule/seaweedfs/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+        - collections/requirements.yml
+        - uv.lock

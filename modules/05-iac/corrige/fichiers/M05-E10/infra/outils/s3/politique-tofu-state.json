@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProtegerHistoriqueEtat",
+      "Effect": "Deny",
+      "Principal": { "AWS": ["arn:aws:iam::000000000000:user/tofu-etat"] },
+      "Action": [
+        "s3:DeleteObjectVersion",
+        "s3:PutBucketVersioning",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": ["arn:aws:s3:::tofu-state", "arn:aws:s3:::tofu-state/*"]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# roles/base/defaults/main.yml — variable AJOUTÉE en M06-E21 (section « Temps »).
+# NTS vers la passerelle (gw01, M06-E21) : le client vérifie le certificat de gw01 par le magasin
+# du système (racine MédiSphère, M06-E03) et l'ADRESSE de base_ntp_serveurs (SAN de type IP).
+# Faux par défaut : une instance Molecule ou un hôte sans racine MédiSphère n'aurait aucune source.
+base_ntp_nts: false

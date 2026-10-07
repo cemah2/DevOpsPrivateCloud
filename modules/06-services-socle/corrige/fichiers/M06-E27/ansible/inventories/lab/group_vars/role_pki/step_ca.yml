@@ -1,0 +1,76 @@
+---
+# group_vars/role_pki/step_ca.yml — la PKI du socle (rôle step_ca, M06-E02 ; politique de durées
+# et CRL en M06-E27). Ce fichier REMPLACE celui de M06-E02.
+# Données PUBLIQUES seulement. Les secrets sont dans vault-critique.yml (même dossier).
+
+step_ca_noms_dns:
+  - ca01.par1.medisphere.internal   # premier : URL de la CA (https://ca01.par1.medisphere.internal)
+  - ca01
+  - 10.10.20.11
+
+# Certificats publics versionnés à la racine du projet (pki/). La CSR y est déposée en phase 1.
+step_ca_racine_crt: "{{ playbook_dir }}/../pki/medisphere-root-ca.crt"
+step_ca_intermediaire_crt: "{{ playbook_dir }}/../pki/medisphere-intermediate-ca.crt"
+step_ca_csr_locale: "{{ playbook_dir }}/../pki/medisphere-intermediate-ca.csr"
+
+step_ca_mot_de_passe: "{{ vault_step_ca_mot_de_passe }}"
+
+# Politique MédiSphère (M06-E27, reprise par la politique de certification M06-E33) :
+#   - certificats serveur ACME : 30 jours (720 h) par défaut et au plus ;
+#   - certificats émis à la main par le provisioner admin : 24 h par défaut, 7 jours au plus
+#     (l'ACME couvre désormais les services : M06-E18) ;
+#   - certificats SSH : hôtes 30 jours, utilisateurs 16 heures (M06-E19, E20) ;
+#   - un certificat expiré se réémet (ACME), il ne se renouvelle pas.
+# Durées au format de step-ca : h, m, s (pas de « d »). Défaut ≤ maximum ≤ maximum global, sinon
+# step-ca refuse de démarrer (le rôle remet alors l'ancien ca.json, M06-E02).
+step_ca_claims:
+  minTLSCertDuration: 5m
+  maxTLSCertDuration: 720h
+  defaultTLSCertDuration: 24h
+  disableRenewal: false
+  allowRenewalAfterExpiry: false
+  enableSSHCA: true
+  minHostSSHCertDuration: 5m
+  maxHostSSHCertDuration: 720h
+  defaultHostSSHCertDuration: 720h
+  minUserSSHCertDuration: 5m
+  maxUserSSHCertDuration: 16h
+  defaultUserSSHCertDuration: 16h
+
+# Provisioners de M06-E02 (et ceux ajoutés en M06-E19/E20 : à garder tels quels), durées resserrées.
+step_ca_provisioners:
+  - type: JWK
+    name: admin
+    # Partie publique de la clé créée sur adm01 (step crypto jwk create, M06-E02).
+    key:
+      use: sig
+      kty: EC
+      kid: "<KID-DE-TA-CLE>"
+      crv: P-256
+      alg: ES256
+      x: "<X-DE-TA-CLE>"
+      y: "<Y-DE-TA-CLE>"
+    # Clé privée chiffrée par le mot de passe du provisioner (step crypto jose format).
+    encryptedKey: "{{ vault_step_ca_admin_cle_chiffree }}"
+    claims:
+      maxTLSCertDuration: 168h       # (E27) 7 jours, au lieu de 90 jours en M06-E02
+      defaultTLSCertDuration: 24h    # (E27)
+      enableSSHCA: true
+  - type: ACME
+    name: acme
+    claims:
+      maxTLSCertDuration: 720h
+      defaultTLSCertDuration: 720h
+  - type: SSHPOP
+    name: sshpop
+    claims:
+      enableSSHCA: true
+
+# (E27) Révocation active : écouteur HTTP sur le port 80 (CAP_NET_BIND_SERVICE déjà accordée pour
+# 443, M06-E02) et CRL régénérée à chaque révocation, valable 24 h.
+step_ca_adresse_http: ":80"
+step_ca_crl:
+  enabled: true
+  generateOnRevoke: true
+  cacheDuration: 24h
+  idpURL: http://ca01.par1.medisphere.internal/1.0/crl

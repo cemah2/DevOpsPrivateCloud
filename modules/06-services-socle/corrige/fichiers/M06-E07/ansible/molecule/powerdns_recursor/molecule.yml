@@ -1,0 +1,7 @@
+---
+# molecule/powerdns_recursor/molecule.yml — scénario du rôle « powerdns_recursor » (M06-E07)
+# Le récurseur est testé AVEC un serveur faisant autorité (rôle powerdns_auth) sur la même
+# instance, comme sur dns01 : c'est la chaîne complète qui est vérifiée.
+#   uv run molecule test -s powerdns_recursor
+scenario:
+  name: powerdns_recursor

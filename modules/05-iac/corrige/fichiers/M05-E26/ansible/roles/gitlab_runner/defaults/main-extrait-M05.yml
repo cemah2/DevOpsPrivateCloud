@@ -1,0 +1,45 @@
+# EXTRAIT — à intégrer à roles/gitlab_runner/defaults/main.yml de plateforme/ansible (M05-E26).
+# Versions et empreintes : celles de outils/versions-outils.env de plateforme/infra (M05-E25),
+# source unique ; une montée de version touche les deux fichiers dans la même journée.
+
+# --- 1. À AJOUTER à la liste gitlab_runner_outils existante (même mécanique que gitleaks) ---
+gitlab_runner_outils:
+  # … entrées existantes (gitleaks, shfmt, jq, task, uv) inchangées …
+  - nom: terragrunt
+    version: 1.1.6
+    url: https://github.com/gruntwork-io/terragrunt/releases/download/v1.1.6/terragrunt_linux_amd64
+    sha256: d75a80bb264758ba00dabcb17f4b507fcdab4ca90d9e41f96750df036bf69b04  # SHA256SUMS (signé Sigstore)
+    archive: false
+    binaires: [{lien: terragrunt, chemin: terragrunt}]
+  - nom: tflint
+    version: 0.64.0
+    url: https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip
+    sha256: cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537  # checksums.txt
+    archive: true
+    binaires: [{lien: tflint, chemin: tflint}]
+  - nom: terraform-docs
+    version: 0.24.0
+    url: https://github.com/terraform-docs/terraform-docs/releases/download/v0.24.0/terraform-docs-v0.24.0-linux-amd64.tar.gz
+    sha256: 9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3  # terraform-docs-v0.24.0.sha256sum
+    archive: true
+    binaires: [{lien: terraform-docs, chemin: terraform-docs}]
+  # Trivy : l'archive est vérifiée ici ; le BINAIRE est revérifié par chaque job (TRIVY_EMPREINTE
+  # de .gitlab-ci.yml). Le dossier de version garde contrib/junit.tpl à côté du binaire.
+  - nom: trivy
+    version: 0.75.0
+    url: https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz
+    sha256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f  # trivy_0.75.0_checksums.txt + Sigstore
+    archive: true
+    binaires: [{lien: trivy, chemin: trivy}]
+
+# --- 2. Variables nouvelles -----------------------------------------------------------------
+# OpenTofu depuis le dépôt APT officiel, série épinglée (même méthode que M05-E02 sur adm01).
+gitlab_runner_opentofu: true
+gitlab_runner_opentofu_serie: "1.13"
+gitlab_runner_opentofu_cle_url: https://get.opentofu.org/opentofu.gpg
+gitlab_runner_opentofu_empreinte: E3E6E43D84CB852EADB0051D0C0AF313E5FD9F80
+gitlab_runner_opentofu_depot_cle_url: https://packages.opentofu.org/opentofu/tofu/gpgkey
+gitlab_runner_opentofu_depot_empreinte: F4AF70F66EAC4337EEECC97407D3DFCD4C61499F
+
+# Checkov (PyPI), version exacte, en outil uv partagé comme pre-commit.
+gitlab_runner_checkov_version: 3.3.26

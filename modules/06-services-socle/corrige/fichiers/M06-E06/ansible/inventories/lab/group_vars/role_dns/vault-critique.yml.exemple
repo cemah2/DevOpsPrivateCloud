@@ -1,0 +1,7 @@
+---
+# group_vars/role_dns/vault-critique.yml — STRUCTURE seulement (valeur factice).
+# Chiffré sous l'identité « critique » :
+#   uv run ansible-vault create --encrypt-vault-id critique inventories/lab/group_vars/role_dns/vault-critique.yml
+# Qui détient cette clé peut réécrire toutes les zones internes (détourner n'importe quel nom).
+#   openssl rand -base64 33 | tr -d '/+=' | cut -c1-40
+vault_powerdns_api_cle: "<40-CARACTERES-ALEATOIRES>"

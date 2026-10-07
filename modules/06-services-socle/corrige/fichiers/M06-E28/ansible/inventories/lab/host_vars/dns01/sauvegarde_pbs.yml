@@ -1,0 +1,7 @@
+---
+# host_vars/dns01/sauvegarde_pbs.yml — sauvegarde applicative de dns01 (M06-E28).
+sauvegarde_pbs_elements: [powerdns, kea]
+sauvegarde_pbs_heure: "01:55"
+sauvegarde_pbs_jeton_secret: "{{ vault_pbs_jeton_dns01 }}"
+sauvegarde_pbs_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_pbs_cle: "{{ vault_pbs_cle_dns01 }}"

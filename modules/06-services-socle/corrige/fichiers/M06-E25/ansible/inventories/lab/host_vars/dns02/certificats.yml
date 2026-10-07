@@ -1,0 +1,12 @@
+---
+# host_vars/dns02/certificats.yml — certificat TLS de Kea par ACME (rôle certificats_acme, M06-E18 ;
+# entrée ajoutée en M06-E25). Nom DNS ET adresse IP : les URL des pairs HA sont des adresses.
+# Rien n'écoute sur le port 80 de dns02 : défi HTTP-01 sans arrêt de service.
+# Groupe _kea : kea-dhcp4 lit la clé après avoir abandonné les droits root.
+certificats_acme_certificats:
+  - id: kea
+    noms: [dns02.par1.medisphere.internal, 10.10.20.16]
+    certificat: /etc/kea/tls/kea.crt
+    cle: /etc/kea/tls/kea.key
+    groupe: _kea
+    recharger: /usr/bin/systemctl try-restart isc-kea-dhcp4-server.service

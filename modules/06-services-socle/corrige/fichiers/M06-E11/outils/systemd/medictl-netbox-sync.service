@@ -1,0 +1,24 @@
+# /etc/systemd/system/medictl-netbox-sync.service — M06-E11 (PLAT-721)
+# Synchronisation Proxmox → NetBox sur adm01, avec le jeton Proxmox en LECTURE et le jeton
+# NetBox de svc-automatisation (restreint aux adresses de adm01 et runner01).
+# Installé par le rôle de adm01 (ou à la main : install -m 644 …, systemctl daemon-reload).
+
+[Unit]
+Description=MédiSphère : synchronisation Proxmox vers NetBox
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/netbox.md
+After=network-online.target
+Wants=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Environment=MEDICTL_ENV_FILE=/home/admin/.config/workbook/pve-lecture.env
+Environment=MEDICTL_NETBOX_TOKEN_FILE=/home/admin/.config/workbook/netbox-auto.token
+# medictl installé par « uv tool install » (M02-E25) dans ~/.local/bin de admin.
+ExecStart=/home/admin/.local/bin/medictl -v netbox sync
+TimeoutStartSec=5min
+SyslogIdentifier=medictl-netbox-sync
+NoNewPrivileges=yes
+ProtectSystem=strict
+PrivateTmp=yes

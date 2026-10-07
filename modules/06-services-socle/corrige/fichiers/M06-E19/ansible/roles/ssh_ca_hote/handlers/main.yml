@@ -1,0 +1,12 @@
+---
+# Validation de la configuration COMPLÈTE, puis rechargement (les sessions ouvertes restent).
+- name: Recharger sshd (certificat d'hôte)
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  listen: Recharger sshd (certificat d'hôte)
+
+- name: Recharger le service sshd (certificat d'hôte)
+  ansible.builtin.systemd_service:
+    name: "{{ ssh_ca_hote_service_sshd }}"
+    state: reloaded
+  listen: Recharger sshd (certificat d'hôte)

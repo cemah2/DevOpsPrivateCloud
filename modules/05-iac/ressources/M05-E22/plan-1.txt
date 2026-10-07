@@ -1,0 +1,64 @@
+module.s3_01.data.proxmox_virtual_environment_vms.image[0]: Reading...
+proxmox_virtual_environment_vm.socle["adm01"]: Refreshing state... [id=1001]
+proxmox_virtual_environment_vm.socle["dns01"]: Refreshing state... [id=1002]
+proxmox_virtual_environment_vm.socle["git01"]: Refreshing state... [id=1004]
+proxmox_virtual_environment_vm.socle["runner01"]: Refreshing state... [id=1007]
+module.s3_01.data.proxmox_virtual_environment_vms.image[0]: Read complete after 0s [id=a3f1c2d4-7b8e-4c1a-9d0e-5f6a7b8c9d0e]
+module.s3_01.proxmox_virtual_environment_vm.vm: Refreshing state... [id=1006]
+
+OpenTofu used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+-/+ destroy and then create replacement
+
+OpenTofu will perform the following actions:
+
+  # proxmox_virtual_environment_vm.socle["dns01"] must be replaced
+-/+ resource "proxmox_virtual_environment_vm" "socle" {
+      ~ id                      = "1002" -> (known after apply)
+      ~ ipv4_addresses          = [
+          - [
+              - "127.0.0.1",
+            ],
+          - [
+              - "10.10.20.10",
+            ],
+        ] -> (known after apply)
+      ~ mac_addresses           = [
+          - "BC:24:11:3A:7F:02",
+        ] -> (known after apply)
+        name                    = "dns01"
+      ~ network_interface_names = [
+          - "lo",
+          - "ens18",
+        ] -> (known after apply)
+        tags                    = [
+            "role-dns",
+            "socle",
+        ]
+        # (24 unchanged attributes hidden)
+
+      ~ initialization {
+          ~ vendor_data_file_id = "hdd-bulk:snippets/vendor-debian13.yaml" -> "hdd-bulk:snippets/vendor-socle.yaml" # forces replacement
+            # (5 unchanged attributes hidden)
+
+            # (3 unchanged blocks hidden)
+        }
+
+        # (9 unchanged blocks hidden)
+    }
+
+Plan: 1 to add, 0 to change, 1 to destroy.
+
+╷
+│ Error: Resource instance cannot be destroyed
+│
+│   on socle-importe.tf line 61:
+│   61: resource "proxmox_virtual_environment_vm" "socle" {
+│
+│ Resource instance proxmox_virtual_environment_vm.socle["dns01"] has
+│ prevent_destroy set, but the plan calls for it to be destroyed.
+│
+│ To proceed, either disable prevent_destroy for this resource or exclude
+│ instances of this resource from this round using:
+│     -exclude="proxmox_virtual_environment_vm.socle[\"dns01\"]"
+╵

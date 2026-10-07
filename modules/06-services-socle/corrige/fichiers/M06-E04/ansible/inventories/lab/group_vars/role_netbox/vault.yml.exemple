@@ -1,0 +1,9 @@
+---
+# group_vars/role_netbox/vault.yml — STRUCTURE seulement (valeurs factices). Identité « lab ».
+#   uv run ansible-vault create --encrypt-vault-id lab inventories/lab/group_vars/role_netbox/vault.yml
+
+# Rôle PostgreSQL « netbox » : la base n'écoute que sur la boucle locale de nbx01.
+vault_netbox_bdd_mot_de_passe: "<32-CARACTERES-ALEATOIRES>"
+
+# Compte « admin » de NetBox : bris de glace seulement (comptes nominatifs pour l'usage courant).
+vault_netbox_admin_mot_de_passe: "<32-CARACTERES-ALEATOIRES>"

@@ -1,0 +1,7 @@
+---
+# host_vars/nbx01/sauvegarde_pbs.yml — sauvegarde applicative de nbx01 (M06-E28).
+sauvegarde_pbs_elements: [netbox]
+sauvegarde_pbs_heure: "02:05"
+sauvegarde_pbs_jeton_secret: "{{ vault_pbs_jeton_nbx01 }}"
+sauvegarde_pbs_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_pbs_cle: "{{ vault_pbs_cle_nbx01 }}"

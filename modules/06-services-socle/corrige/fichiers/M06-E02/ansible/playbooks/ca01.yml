@@ -1,0 +1,13 @@
+---
+# M06-E02 — Autorité de certification du socle (ca01, groupe role_pki).
+# Premier passage : phase 1 (clé et CSR de l'intermédiaire, rapatriée dans pki/), la CA ne
+# démarre pas. Après la cérémonie de signature et le dépôt du certificat : la CA démarre.
+#   uv run ansible-playbook playbooks/ca01.yml --check --diff
+#   uv run ansible-playbook playbooks/ca01.yml
+- name: Autorité de certification (step-ca)
+  hosts: role_pki
+  become: true
+  serial: 1
+  roles:
+    - role: step_ca
+      tags: [step_ca]

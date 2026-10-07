@@ -1,0 +1,10 @@
+---
+# playbooks/sauvegardes.yml — sauvegardes applicatives des services socle (M06-E28).
+# dns02 n'a pas de sauvegarde applicative : zones = copie de dns01 (AXFR), baux = copie de
+# dns01 (HA), configuration = code. La sauvegarde de VM (lab-nuit) suffit (décision RB-061).
+- name: Sauvegardes applicatives vers PBS
+  hosts: dns01:ca01:nbx01
+  become: true
+  roles:
+    - role: sauvegarde_pbs
+      tags: [sauvegarde_pbs]

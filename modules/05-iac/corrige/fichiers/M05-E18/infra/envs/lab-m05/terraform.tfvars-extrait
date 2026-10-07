@@ -1,0 +1,2 @@
+# Ligne ajoutée à envs/lab-m05/terraform.tfvars (M05-E18) : la changer recrée m05-jetable.
+generation_jetable = "2026-10-12"

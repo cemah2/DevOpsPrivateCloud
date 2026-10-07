@@ -1,0 +1,56 @@
+---
+# molecule/kea_ha/verify.yml — la paire atteint hot-standby et chaque serveur voit l'autre (M06-E25).
+
+- name: Vérifier la paire Kea
+  hosts: molecule
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Lire l'état HA (status-get sur le socket de contrôle)
+      ansible.builtin.uri:
+        url: "http://{{ ansible_facts['default_ipv4']['address'] }}:8004/"
+        method: POST
+        body_format: json
+        body: { command: status-get }
+        url_username: kea-api
+        url_password: molecule-test-api-0123456789
+        force_basic_auth: true
+        return_content: true
+      register: mol_statut
+      # La synchronisation initiale des baux prend quelques secondes.
+      until: >-
+        mol_statut.status == 200
+        and (mol_statut.json[0].arguments['high-availability'][0]['ha-servers'].local.state | default('')) == 'hot-standby'
+      retries: 20
+      delay: 3
+
+    - name: État attendu (rôle, état, pair en contact)
+      ansible.builtin.assert:
+        that:
+          - ha.local.role == mol_kea_role
+          - ha.local.state == 'hot-standby'
+          - ha.remote['in-touch'] | bool
+      vars:
+        ha: "{{ mol_statut.json[0].arguments['high-availability'][0]['ha-servers'] }}"
+
+    - name: Le socket de contrôle refuse une requête sans identifiants
+      ansible.builtin.uri:
+        url: "http://{{ ansible_facts['default_ipv4']['address'] }}:8004/"
+        method: POST
+        body_format: json
+        body: { command: status-get }
+        status_code: 401
+
+    - name: L'écouteur HA (8001) refuse une commande d'administration (restrict-commands)
+      ansible.builtin.uri:
+        url: "http://{{ ansible_facts['default_ipv4']['address'] }}:8001/"
+        method: POST
+        body_format: json
+        body: { command: config-get }
+        return_content: true
+        status_code: [200, 400, 403]
+      register: mol_restreint
+
+    - name: La commande n'a pas été exécutée
+      ansible.builtin.assert:
+        that: "(mol_restreint.json[0].result | default(1)) != 0"

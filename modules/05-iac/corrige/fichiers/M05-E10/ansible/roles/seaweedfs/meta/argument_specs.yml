@@ -1,0 +1,63 @@
+---
+# Contrat du rôle (vérifié par Ansible avant la première tâche).
+argument_specs:
+  main:
+    short_description: SeaweedFS en un processus, passerelle S3 en HTTPS
+    options:
+      seaweedfs_version:
+        type: str
+        required: true
+      seaweedfs_archive_sha256:
+        type: str
+        required: true
+        description: Empreinte SHA-256 de l'archive de la version.
+      seaweedfs_disque:
+        type: str
+        description: Périphérique du disque de données (vide = disque système).
+      seaweedfs_s3_ecoute:
+        type: str
+        description: Adresse d'écoute de la passerelle S3.
+      seaweedfs_s3_port:
+        type: int
+      seaweedfs_volume_taille_mo:
+        type: int
+      seaweedfs_tls_certificat:
+        type: str
+        required: true
+      seaweedfs_tls_cle:
+        type: str
+        required: true
+        no_log: true
+      seaweedfs_identites:
+        type: list
+        elements: dict
+        required: true
+        options:
+          nom:
+            type: str
+            required: true
+          cle_acces:
+            type: str
+            required: true
+            no_log: true
+          cle_secrete:
+            type: str
+            required: true
+            no_log: true
+          actions:
+            type: list
+            elements: str
+            required: true
+      seaweedfs_compartiments:
+        type: list
+        elements: dict
+        options:
+          nom:
+            type: str
+            required: true
+          versionnage:
+            type: bool
+            default: true
+      seaweedfs_options_sup:
+        type: list
+        elements: str

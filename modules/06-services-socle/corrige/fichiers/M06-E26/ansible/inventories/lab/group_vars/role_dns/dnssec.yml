@@ -1,0 +1,28 @@
+---
+# group_vars/role_dns/dnssec.yml — DNSSEC de la zone interne (M06-E26).
+# Données PUBLIQUES (le DS d'une zone n'est pas un secret) : en clair dans l'inventaire.
+
+# Primaire (dns01) : zones à signer. NSEC (défaut) : zone interne, l'énumération n'apprend rien
+# qu'un client du lab ne puisse déjà demander ; diagnostic plus simple (dig montre les noms voisins).
+powerdns_auth_zones_signees:
+  - par1.medisphere.internal
+powerdns_auth_nsec3: false
+powerdns_auth_soa_edit_signees: INCEPTION-INCREMENT
+
+# Récurseurs (dns01, dns02) : ancre positive de la zone signée.
+# Valeur relevée sur dns01 avec « sudo -u pdns pdnsutil zone export-ds par1.medisphere.internal »,
+# ligne « … IN DS <keytag> 13 2 <empreinte SHA-256> ». REMPLACE l'exemple ci-dessous.
+powerdns_recursor_ancres:
+  - nom: par1.medisphere.internal
+    ds:
+      - "<KEYTAG> 13 2 <EMPREINTE-SHA256-EN-HEXADÉCIMAL>"
+
+# Ancres négatives (variable de M06-E07, liste reprise) : AUCUNE ne porte sur par1. La zone
+# parente medisphere.internal (M06-E06) reste non signée : son ancre négative couvre aussi par2 ;
+# pour les noms de par1, l'ancre positive (plus proche) s'applique — preuve par le drapeau « ad »
+# (si ta version ne le confirme pas : voir le corrigé de M06-E26, replis). Les zones inverses
+# gardent la leur (choix de M06-E07).
+powerdns_recursor_nta:
+  - {nom: medisphere.internal, raison: "Zone parente interne non signée (M06-E06), par2 comprise"}
+  - {nom: 10.10.in-addr.arpa, raison: "Inverse interne PAR1 (RFC 1918)"}
+  - {nom: 20.10.in-addr.arpa, raison: "Inverse interne PAR2 (RFC 1918)"}

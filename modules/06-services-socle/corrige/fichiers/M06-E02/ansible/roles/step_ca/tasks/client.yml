@@ -1,0 +1,17 @@
+---
+# Point d'entrée « client » du rôle step_ca : dépôt Smallstep et commande step seulement,
+# pour les postes qui DEMANDENT des certificats (adm01, runner01…), sans CA.
+#   - ansible.builtin.include_role: {name: step_ca, tasks_from: client}
+
+- name: Dépôt Smallstep
+  ansible.builtin.import_tasks: depot.yml
+
+- name: Installer step-cli à la version figée
+  ansible.builtin.apt:
+    name: "step-cli={{ step_ca_cli_paquet_version }}"
+    state: present
+
+- name: Bloquer les mises à jour automatiques de step-cli
+  ansible.builtin.dpkg_selections:
+    name: step-cli
+    selection: hold

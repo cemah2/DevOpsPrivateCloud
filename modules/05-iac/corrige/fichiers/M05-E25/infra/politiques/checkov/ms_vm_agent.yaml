@@ -1,0 +1,14 @@
+# CKV2_MS_4 — l'agent QEMU est activé (M05-E25).
+# Sans agent : pas d'adresse IP remontée (sorties ipv4, inventaire), arrêt brutal au lieu
+# d'un arrêt propre, pas de gel du système de fichiers pendant la sauvegarde PBS.
+metadata:
+  id: "CKV2_MS_4"
+  name: "L'agent QEMU des VMs Proxmox est activé (agent.enabled = true)"
+  category: "GENERAL_SECURITY"
+definition:
+  cond_type: "attribute"
+  resource_types:
+    - "proxmox_virtual_environment_vm"
+  attribute: "agent.enabled"
+  operator: "equals"
+  value: true

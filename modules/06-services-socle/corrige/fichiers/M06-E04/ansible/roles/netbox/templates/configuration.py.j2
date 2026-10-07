@@ -1,0 +1,49 @@
+# {{ ansible_managed }}
+# configuration.py de NetBox {{ netbox_version }} — {{ inventory_hostname }} (rôle netbox, M06-E04).
+# Seuls les paramètres qui s'écartent des valeurs par défaut sont ici (doc : « Configuration »).
+# Fichier SECRET (clé Django, poivres des jetons, mot de passe de la base) : root:netbox 0640.
+
+# Noms sous lesquels NetBox est joint (contrôle de l'en-tête Host, pas un filtre d'accès).
+ALLOWED_HOSTS = {{ netbox_allowed_hosts | to_json }}
+
+DATABASES = {
+    'default': {
+        'NAME': {{ netbox_bdd_nom | to_json }},
+        'USER': {{ netbox_bdd_utilisateur | to_json }},
+        'PASSWORD': {{ netbox_bdd_mot_de_passe | to_json }},
+        'HOST': 'localhost',
+        'PORT': '',
+        'CONN_MAX_AGE': 300,
+    }
+}
+
+# Deux bases distinctes du même Valkey : file de tâches et cache.
+REDIS = {
+    'tasks': {
+        'HOST': {{ netbox_valkey_hote | to_json }},
+        'PORT': {{ netbox_valkey_port | int }},
+        'PASSWORD': '',
+        'DATABASE': 0,
+        'SSL': False,
+    },
+    'caching': {
+        'HOST': {{ netbox_valkey_hote | to_json }},
+        'PORT': {{ netbox_valkey_port | int }},
+        'PASSWORD': '',
+        'DATABASE': 1,
+        'SSL': False,
+    },
+}
+
+# Clé Django (sessions, jetons CSRF…). La changer déconnecte tout le monde.
+SECRET_KEY = {{ netbox_secret_key | to_json }}
+
+# Poivres des jetons d'API v2 (NetBox 4.5+). Un jeton v2 n'est stocké que sous forme d'empreinte
+# calculée avec un poivre : perdre ce dictionnaire invalide tous les jetons v2.
+API_TOKEN_PEPPERS = {
+{% for ident, poivre in netbox_api_token_peppers | dictsort %}
+    {{ ident | int }}: {{ poivre | to_json }},
+{% endfor %}
+}
+
+TIME_ZONE = {{ netbox_fuseau_horaire | to_json }}

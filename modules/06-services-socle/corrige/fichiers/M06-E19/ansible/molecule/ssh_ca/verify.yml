@@ -1,0 +1,74 @@
+---
+# molecule/ssh_ca/verify.yml — preuves côté CLIENT, comme un humain sur adm01 :
+#   1. connexion qui ne fait confiance qu'à la CA d'hôte (known_hosts sans clé brute) ;
+#   2. connexion par certificat d'utilisateur (clé absente de authorized_keys) ;
+#   3. refus d'un certificat dont le principal n'est pas autorisé.
+- name: Vérifier ssh_ca_hote et ssh_ca_utilisateur
+  hosts: molecule
+  gather_facts: true
+  vars:
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    pki: "{{ eph }}/pki-test"
+    ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+    ssh_commun: >-
+      ssh -F /dev/null -o BatchMode=yes -o ControlPath=none -o IdentitiesOnly=yes
+      -o IdentityAgent=none -o StrictHostKeyChecking=yes
+      -o UserKnownHostsFile={{ eph }}/known_hosts_ca
+  tasks:
+    - name: Lire la clé publique de la CA d'hôte
+      ansible.builtin.slurp:
+        src: /etc/step-ca/certs/ssh_host_ca_key.pub
+      register: ca_hote
+      become: true
+
+    - name: Fichier known_hosts qui ne contient QUE la CA d'hôte
+      ansible.builtin.copy:
+        content: "@cert-authority {{ ip }} {{ ca_hote.content | b64decode | trim }}\n"
+        dest: "{{ eph }}/known_hosts_ca"
+        mode: "0644"
+      delegate_to: localhost
+
+    - name: Deux identités jetables sur le contrôleur (principaux admin, puis intrus)
+      ansible.builtin.command:
+        cmd: ssh-keygen -q -t ed25519 -N "" -C "{{ item }}" -f {{ eph }}/id_{{ item }}
+        creates: "{{ eph }}/id_{{ item }}"
+      loop: [admin, intrus]
+      delegate_to: localhost
+
+    - name: Certificats d'utilisateur de test (16 h)
+      ansible.builtin.command:
+        argv:
+          - step
+          - ssh
+          - certificate
+          - "{{ item }}"
+          - "{{ eph }}/id_{{ item }}.pub"
+          - --sign
+          - --force
+          - --principal={{ item }}
+          - --not-after=16h
+          - --provisioner=admin
+          - --provisioner-password-file={{ pki }}/admin.pass
+          - --ca-url=https://{{ ip }}
+          - --root={{ pki }}/root_ca.crt
+      loop: [admin, intrus]
+      delegate_to: localhost
+      changed_when: true
+
+    - name: Connexion par certificat, hôte reconnu par sa CA
+      ansible.builtin.command: "{{ ssh_commun }} -i {{ eph }}/id_admin admin@{{ ip }} id -un"
+      delegate_to: localhost
+      register: connexion
+      changed_when: false
+      failed_when: connexion.stdout != 'admin'
+
+    - name: Principal non autorisé refusé
+      ansible.builtin.command: "{{ ssh_commun }} -i {{ eph }}/id_intrus admin@{{ ip }} true"
+      delegate_to: localhost
+      register: refus
+      changed_when: false
+      failed_when: refus.rc == 0
+
+    - name: La minuterie de renouvellement du certificat d'hôte est active
+      ansible.builtin.command: systemctl is-active ssh-cert-hote.timer  # noqa: command-instead-of-module
+      changed_when: false

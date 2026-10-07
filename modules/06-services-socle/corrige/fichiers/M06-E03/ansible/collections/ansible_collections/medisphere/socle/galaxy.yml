@@ -1,0 +1,19 @@
+---
+# Métadonnées de la collection interne medisphere.socle (M04-E18, M06-E03).
+namespace: medisphere
+name: socle
+version: 1.1.0
+readme: README.md
+authors:
+  - Équipe Plateforme MédiSphère
+description: Plugins et rôles partagés par les projets Ansible de la plateforme MédiSphère.
+# Code interne, non diffusé : pas de licence SPDX, un fichier de licence à la place.
+license_file: LICENCE
+tags:
+  - infrastructure
+  - networking
+repository: https://git01.par1.medisphere.internal/plateforme/ansible
+dependencies: {}
+build_ignore:
+  - tests
+  - "*.tar.gz"

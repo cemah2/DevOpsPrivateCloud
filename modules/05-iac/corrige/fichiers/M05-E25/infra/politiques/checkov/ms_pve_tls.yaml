@@ -1,0 +1,13 @@
+# CKV2_MS_1 — le provider Proxmox vérifie le certificat de l'API (M05-E25).
+# Convention du module : insecure = false, l'autorité de pve01 est dans le magasin du système.
+metadata:
+  id: "CKV2_MS_1"
+  name: "Le provider proxmox vérifie le certificat TLS de l'API (insecure absent ou false)"
+  category: "NETWORKING"
+definition:
+  cond_type: "attribute"
+  resource_types:
+    - "provider.proxmox"
+  attribute: "insecure"
+  operator: "not_equals"
+  value: true

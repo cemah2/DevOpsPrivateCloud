@@ -1,0 +1,18 @@
+---
+- name: Installer step-ca et step-cli aux versions figées
+  ansible.builtin.apt:
+    name:
+      - "step-ca={{ step_ca_paquet_version }}"
+      - "step-cli={{ step_ca_cli_paquet_version }}"
+      - jq
+    state: present
+    # Une montée de version est un changement (MR sur les variables), pas un effet de bord.
+    allow_downgrade: false
+
+- name: Bloquer les mises à jour automatiques de la CA
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - step-ca
+    - step-cli

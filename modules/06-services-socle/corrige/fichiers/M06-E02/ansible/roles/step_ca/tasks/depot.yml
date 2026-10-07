@@ -1,0 +1,64 @@
+---
+# Dépôt APT Smallstep, clé vérifiée par son empreinte (et non « téléchargée et crue »).
+# Fichier réutilisable seul : include_role … tasks_from: depot (scénario Molecule, M06-E19).
+
+- name: Outils de vérification de la clé du dépôt
+  ansible.builtin.apt:
+    name:
+      - gpg
+      - ca-certificates
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clé de signature du dépôt Smallstep
+  ansible.builtin.get_url:
+    url: "{{ step_ca_depot_cle_url }}"
+    dest: /etc/apt/keyrings/smallstep.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: step_ca_cle_depot
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/smallstep.asc
+  register: step_ca_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that:
+      # Ligne « fpr » du format --with-colons : l'empreinte est le 10e champ.
+      - step_ca_cle_colonnes.stdout is search('^fpr:+' ~ step_ca_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: >-
+      La clé /etc/apt/keyrings/smallstep.asc n'a pas l'empreinte attendue
+      ({{ step_ca_depot_cle_empreinte }}). Ne pas installer : vérifier la source (doc Smallstep)
+      avant de changer step_ca_depot_cle_empreinte.
+    quiet: true
+
+- name: Source APT Smallstep (format deb822)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/smallstep.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle step_ca) — dépôt officiel Smallstep (step-ca, step-cli)
+      Types: deb
+      URIs: {{ step_ca_depot_url }}
+      Suites: debs
+      Components: main
+      Signed-By: /etc/apt/keyrings/smallstep.asc
+  register: step_ca_source
+
+- name: Relire les index APT si le dépôt vient d'être déclaré
+  ansible.builtin.apt:
+    update_cache: true
+  when: step_ca_source is changed or step_ca_cle_depot is changed

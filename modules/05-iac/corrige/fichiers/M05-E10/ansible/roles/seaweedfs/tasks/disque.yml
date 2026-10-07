@@ -1,0 +1,31 @@
+---
+- name: Lire le disque de données
+  ansible.builtin.stat:
+    path: "{{ seaweedfs_disque }}"
+    follow: true
+  register: seaweedfs_disque_stat
+
+- name: Le disque de données existe
+  ansible.builtin.assert:
+    that: seaweedfs_disque_stat.stat.exists and seaweedfs_disque_stat.stat.isblk
+    fail_msg: "{{ seaweedfs_disque }} n'est pas un périphérique bloc : disque de données absent (OpenTofu, M05-E10) ?"
+    quiet: true
+
+# community.general.filesystem ne reformate JAMAIS un disque qui porte déjà un système de
+# fichiers (force: false par défaut) : un second passage, ou une reconstruction de la VM
+# avec son ancien disque de données, conserve les données.
+- name: Système de fichiers ext4 étiqueté (disque vierge seulement)
+  community.general.filesystem:
+    dev: "{{ seaweedfs_disque }}"
+    fstype: ext4
+    opts: "-L {{ seaweedfs_disque_etiquette }}"
+
+# nofail : un disque absent ne bloque pas le démarrage de la VM (on garde SSH pour réparer) ;
+# le service, lui, ne démarre pas sans ce montage (RequiresMountsFor dans l'unité).
+- name: Monter le disque de données par son étiquette
+  ansible.posix.mount:
+    path: "{{ seaweedfs_dossier }}"
+    src: "LABEL={{ seaweedfs_disque_etiquette }}"
+    fstype: ext4
+    opts: defaults,noatime,nofail
+    state: mounted

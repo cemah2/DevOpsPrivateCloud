@@ -1,0 +1,13 @@
+# /etc/systemd/system/medictl-dns-sync.timer — M06-E15
+# Toutes les 5 minutes : un changement d'adresse dans NetBox est publié en moins de 5 min
+# (+ TTL de 300 s côté résolveurs). Une lecture de NetBox et de 4 zones par passage.
+[Unit]
+Description=MédiSphère : DNS généré depuis NetBox (5 min)
+
+[Timer]
+OnCalendar=*:0/5
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

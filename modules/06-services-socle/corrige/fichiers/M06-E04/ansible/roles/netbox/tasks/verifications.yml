@@ -1,0 +1,35 @@
+---
+# Bout en bout, depuis l'hôte : nginx (TLS vérifié par le magasin système, donc la racine de
+# la PKI du socle) → gunicorn → Django → PostgreSQL et Valkey.
+- name: La page de connexion répond en HTTPS (TLS vérifié)
+  ansible.builtin.command:
+    argv:
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --noproxy
+      - "*"
+      - --output
+      - /dev/null
+      - --write-out
+      - "%{http_code}"
+      - --resolve
+      - "{{ netbox_nginx_nom }}:443:127.0.0.1"
+      - "https://{{ netbox_nginx_nom }}/login/"
+  register: netbox_login
+  changed_when: false
+  check_mode: false
+  until: netbox_login.rc == 0 and netbox_login.stdout == '200'
+  retries: 15
+  delay: 4
+  when: not ansible_check_mode
+
+- name: Gunicorn n'écoute que sur la boucle locale
+  ansible.builtin.command: ss -Hltn "sport = :{{ netbox_gunicorn_adresse.split(':') | last }}"
+  register: netbox_ecoute
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    netbox_ecoute.stdout | length == 0
+    or netbox_ecoute.stdout is search('(0\.0\.0\.0|\*|\[::\]):' ~ (netbox_gunicorn_adresse.split(':') | last))

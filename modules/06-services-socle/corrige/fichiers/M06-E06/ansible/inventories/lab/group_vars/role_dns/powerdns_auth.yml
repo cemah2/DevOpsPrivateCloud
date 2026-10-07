@@ -1,0 +1,46 @@
+---
+# group_vars/role_dns/powerdns_auth.yml — zones internes du socle (rôle powerdns_auth, M06-E06).
+# Les HÔTES viennent de dns_hotes (group_vars/role_dns/dns.yml), liste unique partagée avec le
+# rôle dnsmasq pendant la transition : un nom ajouté là apparaît dans les deux serveurs.
+
+powerdns_auth_ecoute:
+  - 127.0.0.1:5300
+  - 10.10.20.10:5300
+
+# API : sur l'adresse de service (le serveur web n'a qu'une adresse d'écoute). Clients : dns01
+# lui-même (sa connexion locale part de 10.10.20.10), adm01, runner01 (pipelines, M06-E14).
+powerdns_auth_api_adresse: 10.10.20.10
+powerdns_auth_api_autorises:
+  - 127.0.0.1
+  - 10.10.20.10
+  - 10.10.10.10
+  - 10.10.20.15
+powerdns_auth_cle_api: "{{ vault_powerdns_api_cle }}"
+
+powerdns_auth_soa:
+  primaire: dns01.par1.medisphere.internal
+  contact: hostmaster.medisphere.internal
+  rafraichissement: 3600
+  nouvel_essai: 900
+  expiration: 1209600
+  ttl_negatif: 300
+
+# dns02 (M06-E24) s'ajoutera ici, et le type des zones passera à « primary ».
+powerdns_auth_ns:
+  - dns01.par1.medisphere.internal
+
+powerdns_auth_zones:
+  # Zone parente : sans elle, une question sur xxx.medisphere.internal (faute de frappe,
+  # domaine de recherche) partirait vers les serveurs racine. Elle délègue par1 et par2.
+  - nom: medisphere.internal
+    enregistrements:
+      - {nom: par1.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
+      - {nom: par2.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
+      # Colle (glue) : le serveur de noms est DANS la zone déléguée.
+      - {nom: dns01.par1.medisphere.internal, type: A, contenu: 10.10.20.10}
+  - nom: par1.medisphere.internal
+  - nom: par2.medisphere.internal
+  - nom: 10.10.in-addr.arpa
+  - nom: 20.10.in-addr.arpa
+
+powerdns_auth_hotes: "{{ dns_hotes }}"

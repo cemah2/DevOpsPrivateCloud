@@ -1,0 +1,33 @@
+---
+# group_vars/role_dns/kea.yml — DHCP du lab servi par Kea (M06-E16, complété en M06-E17).
+# Plan d'adressage : PLAN.md §4.2 (SANDBOX 10.10.99.0/24, DHCP .100-.199) ; relais : gw01
+# (dnsmasq en mode relais, M00-E14), giaddr 10.10.99.1 — inchangé.
+# Secrets (Vault « critique », group_vars/role_dns/vault.yml) : vault_kea_api_mot_de_passe,
+# vault_kea_tsig_ddns.
+
+kea_dhcp4_sous_reseaux:
+  - id: 99            # = numéro du VLAN : stable, lisible dans les baux et les journaux
+    reseau: 10.10.99.0/24
+    plages: ["10.10.99.100 - 10.10.99.199"]
+    routeur: 10.10.99.1
+    ntp: 10.10.99.1
+    ddns: true        # (E17) noms sbxNN.par1.medisphere.internal tenus à jour par Kea
+    commentaire: "VLAN 99 SANDBOX, relayé par gw01 (giaddr 10.10.99.1), M00-E14"
+
+kea_dhcp4_dns: [10.10.20.10]
+kea_dhcp4_domaine: par1.medisphere.internal
+
+# --- (E17) API de contrôle : boucle locale seulement, authentification obligatoire ----------------
+kea_dhcp4_api: true
+kea_dhcp4_api_adresse: 127.0.0.1
+kea_dhcp4_api_port: 8004
+kea_dhcp4_api_mot_de_passe: "{{ vault_kea_api_mot_de_passe }}"
+kea_dhcp4_hooks:
+  - libdhcp_lease_cmds.so
+
+# --- (E17) DDNS : baux du VLAN 99 publiés dans par1.medisphere.internal et 10.10.in-addr.arpa -----
+kea_dhcp4_ddns: true
+kea_ddns_tsig_nom: ddns-kea
+kea_ddns_tsig_secret: "{{ vault_kea_tsig_ddns }}"
+kea_ddns_zone_directe: par1.medisphere.internal.
+kea_ddns_zone_inverse: 10.10.in-addr.arpa.

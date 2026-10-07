@@ -1,0 +1,15 @@
+---
+# playbooks/gw01-pare-feu.yml — routeur gw01 (M04-E17, complété en M06-E25).
+# Ordre : le relais d'abord (il ne coupe rien), le pare-feu ensuite (filet anti-coupure).
+# Le relais vers dns02 ne sert à rien tant que le pare-feu n'accepte pas ses réponses : les deux
+# changements partent dans la même MR, appliqués dans ce jeu.
+- name: Routeur et pare-feu du site PAR1
+  hosts: role_routeur
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: relais_dhcp
+      tags: [relais_dhcp]
+    - role: pare_feu
+      tags: [pare_feu]

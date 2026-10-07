@@ -1,0 +1,13 @@
+# CKV2_MS_3 — les VMs clonées sont des clones complets (M05-E25).
+# Règle du PLAN (M03) : un clone lié lie la VM à son template et ne se détecte pas par l'API.
+metadata:
+  id: "CKV2_MS_3"
+  name: "Les VMs Proxmox clonées sont des clones complets (clone.full différent de false)"
+  category: "GENERAL_SECURITY"
+definition:
+  cond_type: "attribute"
+  resource_types:
+    - "proxmox_virtual_environment_vm"
+  attribute: "clone.full"
+  operator: "not_equals"
+  value: false

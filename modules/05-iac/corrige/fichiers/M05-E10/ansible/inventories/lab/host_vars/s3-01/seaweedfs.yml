@@ -1,0 +1,35 @@
+---
+# host_vars/s3-01/seaweedfs.yml — valeurs NON secrètes du rôle seaweedfs (M05-E10).
+# Les secrets sont dans vault.yml (identité lab) et vault-critique.yml (identité critique).
+
+# Disque de données de 100 Go (scsi1, créé par OpenTofu, stockage hdd-bulk) : chemin stable,
+# indépendant de l'ordre de détection des disques (/dev/sdb peut devenir /dev/sda).
+seaweedfs_disque: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
+seaweedfs_s3_ecoute: 10.10.20.14
+
+seaweedfs_tls_certificat: "{{ vault_seaweedfs_tls_certificat }}"
+seaweedfs_tls_cle: "{{ vault_seaweedfs_tls_cle }}"
+
+seaweedfs_identites:
+  # OpenTofu (adm01, puis CI) : le seul compartiment de l'état, rien d'autre.
+  - nom: tofu-etat
+    cle_acces: "{{ vault_seaweedfs_tofu_etat_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_tofu_etat_cle_secrete }}"
+    actions:
+      - Read:tofu-state
+      - Write:tofu-state
+      - List:tofu-state
+  # Bris de glace : création des compartiments et de leurs politiques, restauration, incident.
+  - nom: admin-s3
+    cle_acces: "{{ vault_seaweedfs_admin_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_admin_cle_secrete }}"
+    actions:
+      - Admin
+      - Read
+      - Write
+      - List
+      - Tagging
+
+seaweedfs_compartiments:
+  - nom: tofu-state
+    versionnage: true

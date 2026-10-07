@@ -1,0 +1,20 @@
+# EXTRAIT — modifications de roles/gitlab_runner/tasks/main.yml (M05-E26).
+#
+# 1. AVANT la tâche « Outils binaires (…) » : unzip doit exister pour l'archive de tflint.
+- name: Outils IaC (paquets Debian, Checkov)
+  ansible.builtin.import_tasks: outils_iac.yml
+  tags: [runner_outils]
+
+# 2. APRÈS la tâche « Packer » :
+- name: OpenTofu
+  ansible.builtin.import_tasks: opentofu.yml
+  when: gitlab_runner_opentofu
+  tags: [runner_outils]
+
+# 3. Dans verifier.yml, compléter la liste des commandes vues par gitlab-runner :
+#    loop: [git, uv, uvx, pre-commit, gitleaks, shellcheck, shfmt, jq, bats, task, node, npm,
+#           packer, tofu, terragrunt, tflint, terraform-docs, checkov, trivy, aws]
+#    (une liste d'outils qui ne compte pas tofu n'a rien vérifié pour l'IaC).
+#
+# Le rôle est testé par son scénario Molecule (M04-E24) : le job molecule:gitlab_runner de
+# plateforme/ansible tourne sur la MR, puis « appliquer » (--limit runner01) après fusion.

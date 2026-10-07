@@ -1,0 +1,27 @@
+---
+# host_vars/gw01/certificats.yml — certificat du service NTS de gw01 par ACME (M06-E21).
+# Noms : le nom de gw01 ET chaque adresse de passerelle (.1 des VLANs routés, PLAN §4.2) : les
+# clients du lab interrogent « leur » passerelle PAR ADRESSE (rôle base) et chrony vérifie
+# l'adresse contre les SAN de type IP du certificat.
+# Défi HTTP-01 : ca01 joint chacune de ces adresses sur le port 80 (règle d'entrée de pare_feu.yml) ;
+# rien n'écoute sur le port 80 de gw01 : pas d'arrêt.
+# Fichiers sous /etc/chrony (profil AppArmor de chronyd), lisibles par le groupe _chrony.
+certificats_acme_certificats:
+  - id: chrony
+    noms:
+      - gw01.par1.medisphere.internal
+      - 10.10.10.1
+      - 10.10.20.1
+      - 10.10.30.1
+      - 10.10.40.1
+      - 10.10.50.1
+      - 10.10.52.1
+      - 10.10.60.1
+      - 10.10.70.1
+      - 10.10.99.1
+    certificat: /etc/chrony/nts/gw01.crt
+    cle: /etc/chrony/nts/gw01.key
+    groupe: _chrony
+    # chronyd ne relit pas ntsservercert à chaud ; les cookies des clients survivent au
+    # redémarrage grâce à ntsdumpdir (clés du serveur conservées).
+    recharger: /usr/bin/systemctl try-restart chrony.service

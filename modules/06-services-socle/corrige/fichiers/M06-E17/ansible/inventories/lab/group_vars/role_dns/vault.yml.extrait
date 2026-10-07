@@ -1,0 +1,6 @@
+# group_vars/role_dns/vault.yml (Vault « critique ») — variables AJOUTÉES en M06-E17.
+#   uv run ansible-vault edit --vault-id critique@outils/vault-pass-client.sh inventories/lab/group_vars/role_dns/vault.yml
+# Génération sans passer par l'historique du shell : openssl rand -base64 32
+# Inscrire les deux secrets au registre (docs/socle/registre-secrets.md).
+vault_kea_api_mot_de_passe: "<32-CARACTERES-ALEATOIRES>"
+vault_kea_tsig_ddns: "<SECRET-TSIG-BASE64-32-OCTETS>"

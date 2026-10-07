@@ -1,0 +1,43 @@
+# À AJOUTER à .pre-commit-config.yaml de plateforme/tofu-modules (M05-E20), liste « repos: ».
+# Même principe que plateforme/infra : hooks locaux, outils du poste, sautés en CI (SKIP)
+# jusqu'à M05-E26. Le script tofu-valider.sh est copié depuis plateforme/infra (outils/).
+  - repo: local
+    hooks:
+      - id: tofu-fmt
+        name: tofu fmt (format canonique)
+        language: system
+        entry: tofu fmt -check -recursive -diff
+        pass_filenames: false
+        files: \.(tf|tofu|tftest\.hcl)$
+
+      - id: tofu-validate
+        name: tofu validate (chaque module et chaque exemple)
+        language: system
+        entry: outils/tofu-valider.sh
+        pass_filenames: false
+        files: \.(tf|tofu)$
+
+      - id: tflint
+        name: tflint (structure standard des modules, conventions)
+        language: system
+        entry: tflint --recursive --config .tflint.hcl
+        pass_filenames: false
+        files: (\.(tf|tofu)|\.tflint\.hcl)$
+
+      - id: terraform-docs
+        name: terraform-docs (README des modules à jour)
+        language: system
+        entry: outils/docs-verifier.sh
+        pass_filenames: false
+        files: (\.(tf|tofu)|README\.md|\.terraform-docs\.yml)$
+
+      # Tests unitaires (provider simulé, aucun accès à Proxmox) : avant de pousser seulement,
+      # ils téléchargent le provider et prennent quelques secondes. Ajouter pre-push à
+      # default_install_hook_types en tête du fichier, puis relancer « pre-commit install ».
+      - id: tofu-test
+        name: tofu test (modules)
+        language: system
+        entry: bash -c 'for d in */; do [ -d "$d/tests" ] || continue; (cd "$d" && tofu init -backend=false -input=false >/dev/null && tofu test) || exit 1; done'
+        pass_filenames: false
+        files: \.(tf|tofu|tftest\.hcl)$
+        stages: [pre-push]

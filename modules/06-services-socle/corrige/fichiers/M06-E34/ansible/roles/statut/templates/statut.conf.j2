@@ -1,0 +1,29 @@
+# /etc/nginx/sites-available/statut — {{ inventory_hostname }} (M06-E34)
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle statut).') }}
+
+# Port 80 : redirection vers HTTPS seulement (le défi ACME est servi par step lui-même, nginx arrêté).
+server {
+    listen 80 default_server;
+    server_name {{ statut_nom }};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name {{ statut_nom }};
+
+    ssl_certificate     {{ statut_certificat }};
+    ssl_certificate_key {{ statut_cle }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
+
+    root {{ statut_racine_web }};
+    index index.html;
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

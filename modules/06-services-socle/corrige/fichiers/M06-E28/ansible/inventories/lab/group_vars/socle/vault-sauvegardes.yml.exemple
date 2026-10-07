@@ -1,0 +1,15 @@
+---
+# group_vars/socle/vault-sauvegardes.yml — MODÈLE EN CLAIR, à chiffrer (identité « critique »).
+# Chaque clé de chiffrement : contenu du fichier produit sur adm01 par
+#   proxmox-backup-client key create /tmp/pbs-<hôte>.key --kdf none
+# (paperkey et copie hors ligne AVANT de l'ajouter ici ; puis shred -u du fichier temporaire).
+vault_pbs_empreinte: "<EMPREINTE-SHA256-DU-CERTIFICAT-DE-PBS>"
+vault_pbs_jeton_dns01: "<SECRET-DU-JETON-wb-backup@pbs!dns01>"
+vault_pbs_jeton_ca01: "<SECRET-DU-JETON-wb-backup@pbs!ca01>"
+vault_pbs_jeton_nbx01: "<SECRET-DU-JETON-wb-backup@pbs!nbx01>"
+vault_pbs_cle_dns01: |
+  <CONTENU-JSON-DE-pbs-dns01.key>
+vault_pbs_cle_ca01: |
+  <CONTENU-JSON-DE-pbs-ca01.key>
+vault_pbs_cle_nbx01: |
+  <CONTENU-JSON-DE-pbs-nbx01.key>

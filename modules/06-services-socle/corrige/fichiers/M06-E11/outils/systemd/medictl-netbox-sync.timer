@@ -1,0 +1,13 @@
+# /etc/systemd/system/medictl-netbox-sync.timer — M06-E11
+# Toutes les 15 minutes : une VM créée ou redimensionnée apparaît dans NetBox dans le quart
+# d'heure ; au-delà, l'API Proxmox serait interrogée pour rien (l'inventaire bouge peu).
+[Unit]
+Description=MédiSphère : synchronisation Proxmox vers NetBox (15 min)
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

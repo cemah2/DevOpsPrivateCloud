@@ -1,0 +1,5 @@
+# /etc/systemd/system/ms-verif-services.service.d/zz-test.conf — TEST TEMPORAIRE (M06-E29, étape 5)
+# Fait échouer la sonde sans rien casser : tous les certificats de 30 jours deviennent « trop
+# proches » d'un seuil de 400 jours. À supprimer juste après (puis systemctl daemon-reload).
+[Service]
+Environment=MS_VERIF_SEUIL_CERTS=400

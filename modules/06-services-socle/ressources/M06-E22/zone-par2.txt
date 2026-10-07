@@ -1,0 +1,11 @@
+$ pdnsutil zone list par2.medisphere.internal
+$ORIGIN .
+par2.medisphere.internal	60	IN	SOA	dns21.par2.medisphere.internal hostmaster.par2.medisphere.internal 1 60 60 60 60
+par2.medisphere.internal	60	IN	NS	10.20.20.10
+par2.medisphere.internal	60	IN	A	10.20.20.10
+*.par2.medisphere.internal	60	IN	A	10.20.20.10
+dns21.par2.medisphere.internal	60	IN	A	10.20.20.10
+pbs01.par2.medisphere.internal	60	IN	A	10.20.10.10
+hp01.par2.medisphere.internal	60	IN	CNAME	pbs01
+ilo.par2.medisphere.internal	60	IN	A	10.20.10.11
+pbs01.par2.medisphere.internal.par2.medisphere.internal	60	IN	A	10.20.10.10

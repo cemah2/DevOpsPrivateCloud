@@ -1,0 +1,82 @@
+---
+# OpenTofu sur runner01 (M05-E26) : dépôt APT officiel, clés vérifiées par EMPREINTE, série
+# épinglée. Mêmes fichiers que installer-opentofu.sh de M05-E02 (adm01) : les deux machines
+# ont la même configuration APT, et un passage de ce rôle reprend une installation manuelle.
+#
+# Pas de cle_apt.yml ici : la clé d'OpenTofu est publiée en binaire (opentofu.gpg) et celle du
+# dépôt en ASCII ; cle_apt.yml range tout en .asc, ce qu'apt lirait mal pour la première.
+
+- name: Télécharger les clés candidates d'OpenTofu
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "/var/tmp/{{ item.fichier }}"
+    mode: "0644"
+  loop: &cles_opentofu
+    - {fichier: opentofu.gpg.candidat, url: "{{ gitlab_runner_opentofu_cle_url }}",
+       empreinte: "{{ gitlab_runner_opentofu_empreinte }}", cible: opentofu.gpg}
+    - {fichier: opentofu-repo.asc.candidat, url: "{{ gitlab_runner_opentofu_depot_cle_url }}",
+       empreinte: "{{ gitlab_runner_opentofu_depot_empreinte }}", cible: opentofu-repo.gpg}
+  loop_control:
+    label: "{{ item.cible }}"
+  check_mode: false
+
+- name: Lire les empreintes des clés candidates
+  ansible.builtin.command: gpg --batch --show-keys --with-colons /var/tmp/{{ item.fichier }}
+  loop: *cles_opentofu
+  loop_control:
+    label: "{{ item.cible }}"
+  register: _gitlab_runner_tofu_gpg
+  changed_when: false
+  check_mode: false
+
+- name: Vérifier les empreintes attendues
+  ansible.builtin.assert:
+    that:
+      - item.item.empreinte | upper in item.stdout_lines | select('match', '^fpr:')
+        | map('regex_replace', '^fpr:+([0-9A-F]+):.*$', '\\1') | list
+    fail_msg: "La clé {{ item.item.url }} n'a pas l'empreinte {{ item.item.empreinte }} : ARRÊT."
+    quiet: true
+  loop: "{{ _gitlab_runner_tofu_gpg.results }}"
+  loop_control:
+    label: "{{ item.item.cible }}"
+
+# Trousseaux au format binaire (comme M05-E02) : « gpg --dearmor » accepte aussi une clé déjà
+# binaire et la recopie telle quelle.
+- name: Installer les trousseaux d'OpenTofu
+  ansible.builtin.command:
+    argv: [gpg, --batch, --yes, --dearmor, -o, "/etc/apt/keyrings/{{ item.cible }}", "/var/tmp/{{ item.fichier }}"]
+  loop: *cles_opentofu
+  loop_control:
+    label: "{{ item.cible }}"
+  changed_when: false
+
+- name: Dépôt APT d'OpenTofu (clés limitées à ce dépôt)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/opentofu.list
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ gitlab_runner_entete }}
+      deb [signed-by=/etc/apt/keyrings/opentofu.gpg,/etc/apt/keyrings/opentofu-repo.gpg] https://packages.opentofu.org/opentofu/tofu/any/ any main
+  register: _gitlab_runner_tofu_depot
+
+- name: Épingler la série {{ gitlab_runner_opentofu_serie }}
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/opentofu
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ gitlab_runner_entete }}
+      # OpenTofu : série {{ gitlab_runner_opentofu_serie }} seulement. Changer de série = MR dans
+      # plateforme/infra (required_version) ET dans ce rôle (M05-E02, M05-E26).
+      Package: tofu
+      Pin: version {{ gitlab_runner_opentofu_serie }}.*
+      Pin-Priority: 1001
+
+- name: Installer OpenTofu {{ gitlab_runner_opentofu_serie }}
+  ansible.builtin.apt:
+    name: tofu
+    state: present
+    update_cache: "{{ _gitlab_runner_tofu_depot is changed }}"

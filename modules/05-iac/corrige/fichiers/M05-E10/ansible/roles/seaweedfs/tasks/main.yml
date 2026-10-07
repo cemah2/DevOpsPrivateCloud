@@ -1,0 +1,38 @@
+---
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - seaweedfs_archive_sha256 is match('^[0-9a-f]{64}$')
+      - seaweedfs_identites | length > 0
+      - seaweedfs_tls_certificat is search('BEGIN CERTIFICATE')
+      - seaweedfs_tls_cle is search('PRIVATE KEY')
+      - seaweedfs_s3_ecoute | length > 0
+    fail_msg: >-
+      seaweedfs : empreinte SHA-256 de l'archive, au moins une identité S3 (sinon la passerelle
+      accepte tout sans authentification), certificat et clé TLS sont obligatoires
+      (host_vars/s3-01/seaweedfs.yml et vault*.yml).
+    quiet: true
+
+- name: Installer le binaire weed
+  ansible.builtin.include_tasks: installer.yml
+
+- name: Préparer le disque de données
+  ansible.builtin.include_tasks: disque.yml
+  when: seaweedfs_disque | length > 0
+
+- name: Écrire la configuration (identités S3, TLS)
+  ansible.builtin.include_tasks: configuration.yml
+
+- name: Installer et démarrer le service
+  ansible.builtin.include_tasks: service.yml
+
+- name: "Lire la présence de weed (premier passage en --check : rien n'est encore installé)"
+  ansible.builtin.stat:
+    path: /usr/local/bin/weed
+  register: seaweedfs_binaire
+
+- name: Créer les compartiments et leur versionnage
+  ansible.builtin.include_tasks: compartiments.yml
+  when:
+    - seaweedfs_compartiments | length > 0
+    - seaweedfs_binaire.stat.exists or not ansible_check_mode

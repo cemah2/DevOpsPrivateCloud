@@ -1,0 +1,85 @@
+---
+# roles/powerdns_auth/tasks/dnssec.yml — signature des zones (M06-E26). Primaire seulement.
+#
+# pdnsutil sous le compte pdns, propriétaire de la base (comme zones.yml, M06-E06).
+# Règle d'or : ce fichier ne GÉNÈRE une clé que pour une zone qui n'est pas encore signée.
+# Il ne régénère, ne supprime ni ne roule jamais une clé : un roulement est une procédure
+# (RB-064), pas un effet de bord d'un passage du pipeline. Une nouvelle clé sans mise à jour
+# des ancres de confiance = SERVFAIL sur toute la zone.
+
+- name: Le backend est configuré pour DNSSEC
+  ansible.builtin.command: grep -Eq '^gsqlite3-dnssec=yes' /etc/powerdns/pdns.d/medisphere.conf
+  changed_when: false
+  check_mode: false
+
+- name: Lire l'état DNSSEC de chaque zone à signer
+  ansible.builtin.command: pdnsutil zone show {{ item }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_zones_signees }}"
+  register: powerdns_auth_dnssec_etat
+  changed_when: false
+  check_mode: false
+
+# « zone show » indique « Zone is not actively secured » pour une zone sans clé active.
+- name: Signer les zones qui ne le sont pas encore (une CSK ECDSA P-256, algorithme 13)
+  ansible.builtin.command: pdnsutil zone secure {{ item.item }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_dnssec_etat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: "'not actively secured' in item.stdout"
+  register: powerdns_auth_signees
+  changed_when: true
+
+- name: NSEC3 (si choisi) sur les zones nouvellement signées — mode « broad » (le mode narrow n'est pas transférable au secondaire)
+  ansible.builtin.command: pdnsutil zone set-nsec3 {{ item.item }} '1 0 0 -'
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_signees.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - powerdns_auth_nsec3 | bool
+    - item is changed
+  changed_when: true
+
+# « zone secure » rectifie déjà la zone ; ce rattrapage couvre des données insérées hors API.
+# Les écritures par l'API (OpenTofu, synchronisation NetBox) et par DNS UPDATE (Kea) sont
+# rectifiées par PowerDNS lui-même.
+- name: Rectifier les zones nouvellement signées
+  ansible.builtin.command: pdnsutil zone rectify {{ item.item }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_signees.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item is changed
+  changed_when: true
+
+- name: Faire repartir un NOTIFY (le secondaire récupère la zone signée)
+  ansible.builtin.command: pdnsutil zone increase-serial {{ item.item }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_signees.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item is changed
+  changed_when: true
+
+- name: Relire les DS publiables (à reporter dans les ancres des récurseurs)
+  ansible.builtin.command: pdnsutil zone export-ds {{ item }}
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_zones_signees }}"
+  register: powerdns_auth_ds
+  changed_when: false
+  check_mode: false
+
+- name: Rappeler le DS SHA-256 de chaque zone signée
+  ansible.builtin.debug:
+    msg: "{{ item.item }} : {{ item.stdout_lines | select('search', ' IN DS [0-9]+ 13 2 ') | list }}"
+  loop: "{{ powerdns_auth_ds.results }}"
+  loop_control:
+    label: "{{ item.item }}"

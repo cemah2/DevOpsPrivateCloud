@@ -1,0 +1,35 @@
+# À AJOUTER à la fin de .pre-commit-config.yaml de plateforme/infra (M05-E20), dans la
+# liste « repos: ». Hooks LOCAUX (language: system) : ils appellent les outils installés
+# sur le poste (tofu 1.13, tflint 0.64, terraform-docs 0.24), aux versions de l'équipe,
+# plutôt qu'un dépôt de hooks tiers de plus à épingler et à surveiller.
+# En CI, ils sont sautés (variable SKIP de .gitlab-ci.yml) tant que runner01 n'a pas ces
+# outils : M05-E26 les installe et retire SKIP.
+  - repo: local
+    hooks:
+      - id: tofu-fmt
+        name: tofu fmt (format canonique)
+        language: system
+        entry: tofu fmt -check -recursive -diff
+        pass_filenames: false
+        files: \.(tf|tofu|tfvars|tftest\.hcl)$
+
+      - id: tofu-validate
+        name: tofu validate (chaque configuration, sans backend)
+        language: system
+        entry: outils/tofu-valider.sh
+        pass_filenames: false
+        files: (\.(tf|tofu)|\.terraform\.lock\.hcl)$
+
+      - id: tflint
+        name: tflint (règles de .tflint.hcl)
+        language: system
+        entry: tflint --recursive --config .tflint.hcl
+        pass_filenames: false
+        files: (\.(tf|tofu)|\.tflint\.hcl)$
+
+      - id: terraform-docs
+        name: terraform-docs (documentation générée à jour)
+        language: system
+        entry: outils/docs-verifier.sh
+        pass_filenames: false
+        files: (\.(tf|tofu)|README\.md|\.terraform-docs\.yml)$

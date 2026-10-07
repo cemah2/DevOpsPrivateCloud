@@ -1,0 +1,6 @@
+# src/medictl/cli.py — lignes AJOUTÉES en M06-E15, à la FIN du fichier (après celles de M06-E11).
+
+# --- M06-E15 : DNS généré depuis NetBox ------------------------------------------------------
+from medictl.cli_dns import dns_app  # noqa: E402
+
+app.add_typer(dns_app, name="dns")

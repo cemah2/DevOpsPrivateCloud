@@ -1,0 +1,21 @@
+# Extrait à AJOUTER à .pre-commit-config.yaml de plateforme/infra (M05-E25), dans « repos: ».
+# Les analyseurs prennent 20 à 40 s : ils tournent avant un push, pas à chaque commit.
+# Ajouter aussi « pre-push » à default_install_hook_types, puis relancer « pre-commit install ».
+#   default_install_hook_types: [pre-commit, commit-msg, pre-push]
+  - repo: local
+    hooks:
+      - id: analyse-securite
+        name: Checkov et Trivy (règles MédiSphère)
+        language: system
+        entry: outils/analyse-securite.sh
+        pass_filenames: false
+        stages: [pre-push]
+        files: (\.(tf|tofu|hcl)|^\.checkov\.yaml|^\.trivyignore|^politiques/.*|^outils/versions-outils\.env)$
+
+      - id: analyse-securite-tests
+        name: règles maison refusant leurs cas fautifs
+        language: system
+        entry: outils/analyse-securite.sh --tests
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(politiques/|outils/analyse-securite\.sh)

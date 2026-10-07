@@ -1,0 +1,18 @@
+---
+# group_vars/role_netbox/netbox.yml — NetBox du socle (rôle netbox, M06-E04).
+# Données publiques ; secrets dans vault.yml (lab) et vault-critique.yml (critique), même dossier.
+
+netbox_allowed_hosts:
+  - nbx01.par1.medisphere.internal
+  - nbx01
+  - 10.10.20.13
+
+netbox_secret_key: "{{ vault_netbox_secret_key }}"
+netbox_api_token_peppers: "{{ vault_netbox_api_token_peppers }}"
+netbox_bdd_mot_de_passe: "{{ vault_netbox_bdd_mot_de_passe }}"
+netbox_admin_mot_de_passe: "{{ vault_netbox_admin_mot_de_passe }}"
+
+# Certificat émis à la main par step-ca (provisioner admin, 90 jours, M06-E03/E04) jusqu'à ACME
+# (M06-E18, qui passe netbox_tls_gerer à false). Certificat public versionné ; clé dans Vault.
+netbox_tls_certificat: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../pki/certs/nbx01.crt') }}"
+netbox_tls_cle: "{{ vault_netbox_tls_cle }}"

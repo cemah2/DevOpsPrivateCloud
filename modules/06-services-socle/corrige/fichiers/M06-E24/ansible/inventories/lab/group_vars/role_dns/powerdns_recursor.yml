@@ -1,0 +1,33 @@
+---
+# group_vars/role_dns/powerdns_recursor.yml — récurseurs de dns01 ET dns02 (rôle powerdns_recursor
+# de M06-E07, inchangé). Ce fichier REMPLACE celui de M06-E07/E08 : les zones internes sont
+# désormais relayées vers les DEUX serveurs faisant autorité, dans l'ordre propre à chaque hôte
+# (dns_relais_internes, host_vars/dns0X/powerdns_recursor.yml) : d'abord l'autoritaire local.
+
+# Tous les réseaux internes qui interrogent les résolveurs (même liste que la règle DNS de gw01).
+powerdns_recursor_autorises:
+  - 127.0.0.0/8
+  - 10.10.0.0/16     # PAR1
+  - 10.20.0.0/16     # PAR2 (pbs01)
+  - 10.255.1.0/24    # VPN d'administration
+
+# Zones internes : relayées sans récursion (RD=0). Si l'autoritaire local est arrêté, le
+# récurseur interroge l'autre ; les deux servent les mêmes données (AXFR/NOTIFY, M06-E24).
+powerdns_recursor_zones_relayees:
+  - {zone: medisphere.internal, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: par1.medisphere.internal, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: par2.medisphere.internal, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: 10.10.in-addr.arpa, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: 20.10.in-addr.arpa, serveurs: "{{ dns_relais_internes }}"}
+
+# Internet : résolution itérative depuis la racine (choix de M06-E07). gw01 laisse sortir
+# dns01 ET dns02 en UDP/TCP 53 (pare_feu.yml, M06-E24).
+powerdns_recursor_amont: []
+
+powerdns_recursor_dnssec: validate
+# Inchangé depuis M06-E07 ; M06-E26 remplace l'ancre négative par une ancre de confiance pour
+# la zone signée.
+powerdns_recursor_nta:
+  - {nom: medisphere.internal, raison: "Zone interne MédiSphère, non déléguée depuis la racine"}
+  - {nom: 10.10.in-addr.arpa, raison: "Inverse interne PAR1 (RFC 1918)"}
+  - {nom: 20.10.in-addr.arpa, raison: "Inverse interne PAR2 (RFC 1918)"}

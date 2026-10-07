@@ -1,0 +1,189 @@
+---
+# Clés en ligne et certificats. Les commandes step tournent en root (pas de become_user :
+# Ansible créerait son dossier temporaire dans /etc/step-ca) ; les droits sont fixés après.
+#   - Racine : certificat public seulement. Sa clé ne vient JAMAIS ici.
+#   - Intermédiaire : clé générée sur l'hôte (si absente) ; CSR rapatriée ; certificat signé
+#     hors ligne puis fourni par step_ca_intermediaire_crt. Tant qu'il manque, le rôle s'arrête
+#     proprement pour cet hôte (phase 1), sans démarrer la CA.
+#   - CA SSH : deux clés (hôtes, utilisateurs) générées sur l'hôte si absentes.
+
+- name: Mot de passe des clés en ligne fourni (Vault « critique »)
+  ansible.builtin.assert:
+    that: step_ca_mot_de_passe | length >= 20
+    fail_msg: "step_ca_mot_de_passe absent ou trop court (20 caractères minimum, Vault critique)."
+    quiet: true
+  no_log: true
+
+- name: Fichier de mot de passe lu par le service
+  ansible.builtin.copy:
+    dest: "{{ step_ca_repertoire }}/password.txt"
+    content: "{{ step_ca_mot_de_passe }}\n"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0400"
+  no_log: true
+  notify: Redémarrer step-ca
+
+- name: Certificat public de la racine
+  ansible.builtin.copy:
+    src: "{{ step_ca_racine_crt }}"
+    dest: "{{ step_ca_repertoire }}/certs/root_ca.crt"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0644"
+  notify: Redémarrer step-ca
+
+- name: La clé privée de la racine n'est pas sur la CA en ligne
+  ansible.builtin.find:
+    paths: "{{ step_ca_repertoire }}"
+    patterns: ["root_ca_key*", "*root*key*"]
+    recurse: true
+  register: step_ca_cle_racine
+
+- name: Refuser une clé de racine présente sur l'hôte
+  ansible.builtin.assert:
+    that: step_ca_cle_racine.matched == 0
+    fail_msg: >-
+      Une clé de racine semble présente sur {{ inventory_hostname }}
+      ({{ step_ca_cle_racine.files | map(attribute='path') | join(', ') }}). La racine doit rester
+      hors ligne : retirer ce fichier (après l'avoir archivé chiffré hors de l'hôte) et la considérer compromise.
+    quiet: true
+
+# --- Intermédiaire ------------------------------------------------------------------------------
+- name: État de la clé de l'intermédiaire
+  ansible.builtin.stat:
+    path: "{{ step_ca_repertoire }}/secrets/intermediate_ca_key"
+  register: step_ca_cle_inter
+
+- name: Modèle de la CSR de l'intermédiaire (sujet accentué, sans SAN)
+  ansible.builtin.template:
+    src: csr-intermediaire.json.j2
+    dest: "{{ step_ca_repertoire }}/templates/csr-intermediaire.json"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0640"
+
+- name: Générer la clé et la CSR de l'intermédiaire (une seule fois)
+  ansible.builtin.command:
+    argv:
+      - step
+      - certificate
+      - create
+      - "{{ step_ca_intermediaire_cn }}"
+      - "{{ step_ca_repertoire }}/intermediate.csr"
+      - "{{ step_ca_repertoire }}/secrets/intermediate_ca_key"
+      - --csr
+      - --template={{ step_ca_repertoire }}/templates/csr-intermediaire.json
+      - --kty=EC
+      - --curve=P-256
+      - --password-file={{ step_ca_repertoire }}/password.txt
+    creates: "{{ step_ca_repertoire }}/secrets/intermediate_ca_key"
+  when: not step_ca_cle_inter.stat.exists
+
+- name: Clé de l'intermédiaire lisible par le seul compte de service
+  ansible.builtin.file:
+    path: "{{ step_ca_repertoire }}/secrets/intermediate_ca_key"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0600"
+  when: not ansible_check_mode or step_ca_cle_inter.stat.exists
+
+- name: Certificat signé de l'intermédiaire disponible sur le contrôleur ?
+  ansible.builtin.set_fact:
+    step_ca_inter_fourni: "{{ step_ca_intermediaire_crt | length > 0 and step_ca_intermediaire_crt is file }}"
+
+- name: Phase 1 — rapatrier la CSR pour la cérémonie de signature
+  ansible.builtin.fetch:
+    src: "{{ step_ca_repertoire }}/intermediate.csr"
+    dest: "{{ step_ca_csr_locale }}"
+    flat: true
+  when:
+    - not step_ca_inter_fourni
+    - step_ca_csr_locale | length > 0
+
+- name: Phase 1 — consigne
+  ansible.builtin.debug:
+    msg: >-
+      CSR de l'intermédiaire prête{{ (' : ' ~ step_ca_csr_locale) if step_ca_csr_locale | length > 0 else '' }}.
+      Signe-la avec la racine hors ligne (cérémonie M06-E02), dépose le certificat à l'emplacement
+      de step_ca_intermediaire_crt puis relance : la CA ne démarre pas sans lui.
+  when: not step_ca_inter_fourni
+
+- name: Phase 1 — arrêter ici pour cet hôte
+  ansible.builtin.meta: end_host
+  when: not step_ca_inter_fourni
+
+- name: Certificat de l'intermédiaire
+  ansible.builtin.copy:
+    src: "{{ step_ca_intermediaire_crt }}"
+    dest: "{{ step_ca_repertoire }}/certs/intermediate_ca.crt"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0644"
+  notify: Redémarrer step-ca
+
+- name: L'intermédiaire est signé par la racine déployée
+  ansible.builtin.command:
+    argv:
+      - step
+      - certificate
+      - verify
+      - "{{ step_ca_repertoire }}/certs/intermediate_ca.crt"
+      - --roots={{ step_ca_repertoire }}/certs/root_ca.crt
+  changed_when: false
+  check_mode: false
+
+- name: Lire la clé publique du certificat de l'intermédiaire
+  ansible.builtin.command: step certificate key {{ step_ca_repertoire }}/certs/intermediate_ca.crt
+  register: step_ca_pub_crt
+  changed_when: false
+  check_mode: false
+
+- name: Lire la clé publique de la clé privée de l'intermédiaire
+  ansible.builtin.command:
+    argv:
+      - step
+      - crypto
+      - key
+      - public
+      - "{{ step_ca_repertoire }}/secrets/intermediate_ca_key"
+      - --password-file={{ step_ca_repertoire }}/password.txt
+  register: step_ca_pub_cle
+  changed_when: false
+  check_mode: false
+
+- name: Le certificat correspond à la clé présente sur l'hôte
+  ansible.builtin.assert:
+    that: step_ca_pub_crt.stdout == step_ca_pub_cle.stdout
+    fail_msg: >-
+      Le certificat de l'intermédiaire ne correspond pas à la clé de {{ inventory_hostname }} :
+      il a été signé pour une autre CSR (ancienne clé ?). Refaire la signature avec la CSR actuelle.
+    quiet: true
+
+# --- CA SSH ---------------------------------------------------------------------------------------
+- name: Générer les clés de la CA SSH (hôtes, utilisateurs) si absentes
+  ansible.builtin.command:
+    argv:
+      - step
+      - crypto
+      - keypair
+      - "{{ step_ca_repertoire }}/certs/ssh_{{ item }}_ca_key.pub"
+      - "{{ step_ca_repertoire }}/secrets/ssh_{{ item }}_ca_key"
+      - --kty=EC
+      - --curve=P-256
+      - --password-file={{ step_ca_repertoire }}/password.txt
+    creates: "{{ step_ca_repertoire }}/secrets/ssh_{{ item }}_ca_key"
+  loop: [host, user]
+  when: step_ca_ssh | bool
+  notify: Redémarrer step-ca
+
+- name: Droits des clés privées de la CA SSH
+  ansible.builtin.file:
+    path: "{{ step_ca_repertoire }}/secrets/ssh_{{ item }}_ca_key"
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "0600"
+  loop: [host, user]
+  when:
+    - step_ca_ssh | bool
+    - not ansible_check_mode

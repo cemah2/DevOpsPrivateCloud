@@ -1,0 +1,18 @@
+---
+# group_vars/role_pki/vault-critique.yml — STRUCTURE seulement (valeurs factices).
+# Le vrai fichier est chiffré sous l'identité « critique » :
+#   uv run ansible-vault create --encrypt-vault-id critique inventories/lab/group_vars/role_pki/vault-critique.yml
+# Registre des secrets (docs/socle/registre-secrets.md) : une ligne par variable.
+
+# Mot de passe des clés EN LIGNE de ca01 (intermédiaire, CA SSH). 32 caractères aléatoires :
+#   openssl rand -base64 32
+vault_step_ca_mot_de_passe: "<MOT-DE-PASSE-DES-CLES-EN-LIGNE>"
+
+# Clé privée JWK du provisioner « admin », CHIFFRÉE par son propre mot de passe
+# (une ligne JWE compacte « eyJ… »). Son mot de passe n'est PAS ici : il est sur adm01
+# (~/.config/workbook/step-admin.pass) et dans vault_step_ca_mot_de_passe_admin.
+vault_step_ca_admin_cle_chiffree: "<JWE-COMPACT-eyJhbGciOiJQQkVTMi1IUzI1NitBMTI4S1ciLCJ…>"
+
+# Mot de passe du provisioner « admin » : utilisé par l'automatisation qui demande des
+# certificats (certificats SSH d'hôte, M06-E19). Jamais déployé sur ca01.
+vault_step_ca_mot_de_passe_admin: "<MOT-DE-PASSE-DU-PROVISIONER-ADMIN>"

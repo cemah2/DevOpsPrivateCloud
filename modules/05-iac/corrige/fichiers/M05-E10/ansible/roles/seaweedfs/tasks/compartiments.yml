@@ -1,0 +1,50 @@
+---
+# weed shell parle au master et au filer par 127.0.0.1 (gRPC) : aucune identité S3 n'est
+# nécessaire, et rien de ceci n'est exposé sur le réseau.
+- name: Lister les compartiments
+  ansible.builtin.command:
+    cmd: weed shell -master=127.0.0.1:9333
+    stdin: s3.bucket.list
+  register: seaweedfs_liste
+  changed_when: false
+  check_mode: false
+  failed_when: seaweedfs_liste.rc != 0 or seaweedfs_liste.stdout is search('(?i)error')
+
+- name: Créer les compartiments absents
+  ansible.builtin.command:
+    cmd: weed shell -master=127.0.0.1:9333
+    stdin: "s3.bucket.create -name {{ item.nom }}"
+  register: seaweedfs_creation
+  changed_when: true
+  failed_when: seaweedfs_creation.rc != 0 or 'created bucket' not in seaweedfs_creation.stdout
+  loop: "{{ seaweedfs_compartiments }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  when: seaweedfs_liste.stdout is not search('(^|\\s)' ~ (item.nom | regex_escape) ~ '\\s')
+
+- name: Lire le versionnage de chaque compartiment
+  ansible.builtin.command:
+    cmd: weed shell -master=127.0.0.1:9333
+    stdin: "s3.bucket.versioning -name {{ item.nom }}"
+  register: seaweedfs_versionnage
+  changed_when: false
+  check_mode: false
+  loop: "{{ seaweedfs_compartiments }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+# Le versionnage ne se désactive jamais ici (« Suspended » se décide à la main, en MR) :
+# c'est lui qui permet de restaurer un état écrasé ou supprimé (M05-E29, M05-E42).
+- name: Activer le versionnage
+  ansible.builtin.command:
+    cmd: weed shell -master=127.0.0.1:9333
+    stdin: "s3.bucket.versioning -name {{ item.item.nom }} -enable"
+  register: seaweedfs_activation
+  changed_when: true
+  failed_when: seaweedfs_activation.rc != 0 or 'Enabled' not in seaweedfs_activation.stdout
+  loop: "{{ seaweedfs_versionnage.results | selectattr('stdout', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+  when:
+    - item.item.versionnage | default(true)
+    - item.stdout is not search('Versioning:\\s+Enabled')

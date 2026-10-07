@@ -1,0 +1,68 @@
+---
+- name: Dossier des fichiers TLS de NetBox
+  ansible.builtin.file:
+    path: "{{ netbox_tls_cle_chemin | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when: netbox_tls_gerer | bool
+
+- name: Certificat TLS (serveur + intermédiaire)
+  ansible.builtin.copy:
+    dest: "{{ netbox_tls_certificat_chemin }}"
+    content: "{{ netbox_tls_certificat | trim }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when: netbox_tls_gerer | bool
+  notify: Recharger nginx
+
+- name: Clé privée TLS (lue par nginx au démarrage, en root)
+  ansible.builtin.copy:
+    dest: "{{ netbox_tls_cle_chemin }}"
+    content: "{{ netbox_tls_cle | trim }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  when: netbox_tls_gerer | bool
+  no_log: true
+  notify: Recharger nginx
+
+- name: Site nginx de NetBox
+  ansible.builtin.template:
+    src: nginx-netbox.conf.j2
+    dest: /etc/nginx/sites-available/netbox
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger nginx
+
+- name: Activer le site NetBox
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/netbox
+    dest: /etc/nginx/sites-enabled/netbox
+    state: link
+  notify: Recharger nginx
+
+- name: Désactiver le site par défaut de nginx
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Recharger nginx
+
+# nginx -t valide la configuration COMPLÈTE (tous les sites, certificats lisibles) avant tout
+# rechargement : une erreur arrête le rôle sans toucher au service en cours.
+- name: Configuration nginx valide
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  check_mode: false
+
+- name: Service nginx actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    enabled: true
+    state: started
+
+- name: Appliquer le rechargement de nginx avant les vérifications
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,19 @@
+---
+# playbooks/dns01.yml — DNS et DHCP du lab (groupe role_dns), version M06-E17.
+# Ordre : le serveur faisant autorité doit accepter les mises à jour (dnsupdate) AVANT que
+# kea-dhcp-ddns ne lui en envoie ; kea_ddns avant kea_dhcp4, pour que D2 écoute déjà quand
+# kea-dhcp4 redémarre avec « enable-updates ».
+- name: DNS (PowerDNS) et DHCP (Kea)
+  hosts: role_dns
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: powerdns_auth
+      tags: [powerdns, powerdns_auth]
+    - role: powerdns_recursor
+      tags: [powerdns, powerdns_recursor]
+    - role: kea_ddns
+      tags: [kea, kea_ddns]
+    - role: kea_dhcp4
+      tags: [kea, kea_dhcp4]

@@ -1,0 +1,40 @@
+---
+- name: Vérifier le filtrage local
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Règles chargées
+      ansible.builtin.command: nft list chain inet filtre_local entree
+      register: mol_chaine
+      changed_when: false
+
+    - name: Politique drop et règle SSH présentes
+      ansible.builtin.assert:
+        that:
+          - mol_chaine.stdout is search('policy drop')
+          - mol_chaine.stdout is search('tcp dport 22 accept')
+
+    - name: Le témoin autorisé (8443) est joignable depuis le contrôleur
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 8443
+        timeout: 5
+      delegate_to: localhost
+      become: false
+
+    - name: Le témoin non autorisé (8080) ne l'est pas
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 8080
+        timeout: 5
+      delegate_to: localhost
+      become: false
+      register: mol_8080
+      failed_when: mol_8080 is succeeded
+
+    - name: Aucune minuterie de retour restée armée
+      ansible.builtin.command: systemctl is-active pare-feu-local-retour.timer
+      register: mol_minuterie
+      changed_when: false
+      failed_when: mol_minuterie.rc == 0

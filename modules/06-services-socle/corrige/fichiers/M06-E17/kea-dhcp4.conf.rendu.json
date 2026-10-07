@@ -1,0 +1,91 @@
+{
+  "Dhcp4": {
+    "authoritative": true,
+    "control-sockets": [
+      {
+        "socket-name": "kea4-ctrl-socket",
+        "socket-type": "unix"
+      },
+      {
+        "authentication": {
+          "clients": [
+            {
+              "password-file": "kea-api-mdp",
+              "user": "kea-api"
+            }
+          ],
+          "directory": "/etc/kea",
+          "realm": "kea-dhcpv4-server",
+          "type": "basic"
+        },
+        "socket-address": "127.0.0.1",
+        "socket-port": 8004,
+        "socket-type": "http"
+      }
+    ],
+    "ddns-conflict-resolution-mode": "check-with-dhcid",
+    "ddns-generated-prefix": "dhcp",
+    "ddns-override-client-update": true,
+    "ddns-override-no-update": true,
+    "ddns-qualifying-suffix": "par1.medisphere.internal.",
+    "ddns-replace-client-name": "when-not-present",
+    "ddns-send-updates": false,
+    "dhcp-ddns": {
+      "enable-updates": true,
+      "server-ip": "127.0.0.1",
+      "server-port": 53001
+    },
+    "hooks-libraries": [
+      {
+        "library": "libdhcp_lease_cmds.so"
+      }
+    ],
+    "hostname-char-replacement": "-",
+    "hostname-char-set": "[^A-Za-z0-9.-]",
+    "interfaces-config": {
+      "dhcp-socket-type": "udp",
+      "interfaces": [
+        "ens18"
+      ]
+    },
+    "lease-database": {
+      "lfc-interval": 3600,
+      "name": "kea-leases4.csv",
+      "persist": true,
+      "type": "memfile"
+    },
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output-options": [
+          {
+            "output": "stdout",
+            "pattern": "%-5p %m\n"
+          }
+        ],
+        "severity": "INFO"
+      }
+    ],
+    "option-data": [
+      {
+        "data": "10.10.20.10",
+        "name": "domain-name-servers"
+      },
+      {
+        "data": "par1.medisphere.internal",
+        "name": "domain-name"
+      },
+      {
+        "data": "par1.medisphere.internal",
+        "name": "domain-search"
+      }
+    ],
+    "rebind-timer": 37800,
+    "renew-timer": 21600,
+    "subnet4": [],
+    "user-context": {
+      "gere-par": "Fichier g\u00e9r\u00e9 par Ansible (projet plateforme/ansible)."
+    },
+    "valid-lifetime": 43200
+  }
+}

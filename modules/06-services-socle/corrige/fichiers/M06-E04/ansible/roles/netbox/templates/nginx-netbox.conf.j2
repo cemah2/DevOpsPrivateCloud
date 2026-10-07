@@ -1,0 +1,36 @@
+# {{ ansible_managed }}
+# Repris de contrib/nginx.conf de NetBox {{ netbox_version }}, TLS et noms du socle.
+server {
+    listen 443 ssl;
+{% if netbox_nginx_ipv6 | bool %}
+    listen [::]:443 ssl;
+{% endif %}
+    server_name {{ netbox_nginx_nom }};
+
+    ssl_certificate {{ netbox_tls_certificat_chemin }};
+    ssl_certificate_key {{ netbox_tls_cle_chemin }};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 25m;
+
+    location /static/ {
+        alias {{ netbox_racine }}/netbox/static/;
+    }
+
+    location / {
+        proxy_pass http://{{ netbox_gunicorn_adresse }};
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    # HTTP redirigé vers HTTPS
+    listen 80;
+{% if netbox_nginx_ipv6 | bool %}
+    listen [::]:80;
+{% endif %}
+    server_name _;
+    return 301 https://$host$request_uri;
+}

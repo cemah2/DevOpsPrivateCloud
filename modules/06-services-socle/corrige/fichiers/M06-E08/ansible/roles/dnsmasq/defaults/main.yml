@@ -1,0 +1,47 @@
+---
+# Rôle dnsmasq (M04-E46, M06-E08) — DNS provisoire et DHCP du VLAN 99 sur dns01, jusqu'au module 06.
+# M06-E08 : dnsmasq_dns_actif: false rend le port 53 au récurseur PowerDNS ; dnsmasq ne garde
+# que le DHCP (jusqu'à Kea, M06-E16), puis le rôle est retiré de site.yml.
+# Les valeurs du socle sont dans inventories/lab/group_vars/role_dns/dnsmasq.yml.
+
+dnsmasq_fichier: /etc/dnsmasq.d/medisphere.conf
+
+# false : plus de DNS (port=0) ; seul le DHCP reste servi.
+dnsmasq_dns_actif: true
+# false : le rôle écrit la configuration sans redémarrer dnsmasq (bascule planifiée, M06-E08).
+dnsmasq_redemarrer: true
+
+# Écoute : boucle locale + adresse de service (bind-interfaces)
+dnsmasq_ecoute:
+  - 127.0.0.1
+
+# Résolveurs amont (obligatoire : pas de valeur par défaut raisonnable)
+dnsmasq_amont: []
+
+dnsmasq_cache: 1000
+dnsmasq_ttl_local: 60
+
+# Zones répondues localement (jamais transmises en amont)
+dnsmasq_zones_locales: []
+
+# Domaine des clients DHCP
+dnsmasq_domaine: ""
+
+# Enregistrements A + PTR : le PTR va vers le PREMIER nom
+#   - noms: [gw01.par1.medisphere.internal]
+#     ip: 10.10.10.1
+dnsmasq_hotes: []
+
+# PTR supplémentaires : { ptr: 1.20.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+dnsmasq_ptr: []
+
+# Plages DHCP servies (à distance, par relais) :
+#   - etiquette: sandbox
+#     debut: 10.10.99.100
+#     fin: 10.10.99.199
+#     masque: 255.255.255.0
+#     bail: 12h
+#     options: [ "option:router,10.10.99.1", … ]
+dnsmasq_dhcp: []
+dnsmasq_dhcp_autoritaire: true
+dnsmasq_log_dhcp: true

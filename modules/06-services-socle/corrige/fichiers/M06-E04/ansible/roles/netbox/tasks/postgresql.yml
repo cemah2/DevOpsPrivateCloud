@@ -1,0 +1,70 @@
+---
+# Base et rôle PostgreSQL (« PostgreSQL Database Installation »), sans collection supplémentaire :
+# psql en tant que postgres, requêtes idempotentes (on teste avant de créer).
+
+- name: Le rôle PostgreSQL de NetBox existe-t-il ?
+  ansible.builtin.command:
+    argv: [psql, -tAc, "SELECT 1 FROM pg_roles WHERE rolname = '{{ netbox_bdd_utilisateur }}'"]
+  become: true
+  become_user: postgres
+  register: netbox_pg_role
+  changed_when: false
+  check_mode: false
+
+- name: Créer le rôle PostgreSQL de NetBox
+  ansible.builtin.command:
+    argv: [psql, -v, ON_ERROR_STOP=1, -c, "CREATE ROLE {{ netbox_bdd_utilisateur }} LOGIN"]
+  become: true
+  become_user: postgres
+  when: netbox_pg_role.stdout | trim != '1'
+  changed_when: true
+
+- name: La base de NetBox existe-t-elle ?
+  ansible.builtin.command:
+    argv: [psql, -tAc, "SELECT 1 FROM pg_database WHERE datname = '{{ netbox_bdd_nom }}'"]
+  become: true
+  become_user: postgres
+  register: netbox_pg_base
+  changed_when: false
+  check_mode: false
+
+- name: Créer la base de NetBox (propriétaire = rôle NetBox)
+  ansible.builtin.command:
+    argv: [createdb, "--owner={{ netbox_bdd_utilisateur }}", "{{ netbox_bdd_nom }}"]
+  become: true
+  become_user: postgres
+  when: netbox_pg_base.stdout | trim != '1'
+  changed_when: true
+
+# Le mot de passe ne se lit pas dans PostgreSQL : on essaie de se connecter avec lui, et on
+# ne le (re)définit que si la connexion échoue. Le mot de passe passe par l'environnement
+# (jamais en argument : il serait visible dans ps).
+- name: Le mot de passe du rôle NetBox est-il le bon ?
+  ansible.builtin.command:
+    argv: [psql, -h, localhost, -U, "{{ netbox_bdd_utilisateur }}", -d, "{{ netbox_bdd_nom }}", -tAc, "SELECT 1"]
+  environment:
+    PGPASSWORD: "{{ netbox_bdd_mot_de_passe }}"
+  register: netbox_pg_connexion
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Définir le mot de passe du rôle NetBox
+  ansible.builtin.command:
+    argv: [psql, -v, ON_ERROR_STOP=1, -v, "mdp={{ netbox_bdd_mot_de_passe }}", -f, "-"]
+    stdin: "ALTER ROLE {{ netbox_bdd_utilisateur }} PASSWORD :'mdp';"
+  become: true
+  become_user: postgres
+  when: netbox_pg_connexion.rc != 0
+  changed_when: true
+  no_log: true
+
+# PostgreSQL 15+ : le schéma public n'est plus accessible en création à tous ; la base
+# appartient au rôle NetBox, qui y crée donc ses tables (étape GRANT de la doc incluse).
+- name: Droit de création sur le schéma public
+  ansible.builtin.command:
+    argv: [psql, -d, "{{ netbox_bdd_nom }}", -v, ON_ERROR_STOP=1, -c, "GRANT CREATE ON SCHEMA public TO {{ netbox_bdd_utilisateur }}"]
+  become: true
+  become_user: postgres
+  changed_when: false

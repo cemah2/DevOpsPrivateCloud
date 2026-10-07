@@ -1,0 +1,14 @@
+---
+# playbooks/dns01.yml — DNS du socle (groupe role_dns), M04-E46 puis M06-E06.
+# M06-E06 : PowerDNS Authoritative s'installe À CÔTÉ de dnsmasq (port 5300), qui continue de
+# servir le port 53 et le DHCP. M06-E07 ajoute le Recursor, M06-E08 fait la bascule.
+- name: DNS du socle (dnsmasq, PowerDNS Authoritative)
+  hosts: role_dns
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: dnsmasq
+      tags: [dnsmasq]
+    - role: powerdns_auth
+      tags: [powerdns_auth]

@@ -1,0 +1,30 @@
+---
+# Client step de l'hôte : dépôt Smallstep vérifié, step-cli figé, configuration pointant sur
+# ca01 avec l'empreinte de la racine MédiSphère. Réutilisable seul :
+#   include_role: { name: certificats_acme, tasks_from: client.yml }   (ssh_ca_hote, chrony_serveur)
+
+- name: Client step (dépôt Smallstep vérifié par empreinte, tâches du rôle step_ca)
+  ansible.builtin.include_role:
+    name: step_ca
+    tasks_from: depot.yml
+
+- name: Installer step-cli à la version figée
+  ansible.builtin.apt:
+    name: "step-cli={{ step_ca_cli_paquet_version }}"
+    state: present
+
+- name: Lire l'empreinte de la racine MédiSphère installée sur l'hôte
+  ansible.builtin.command: step certificate fingerprint {{ certificats_acme_racine }}
+  register: _certificats_acme_empreinte
+  changed_when: false
+  check_mode: false
+
+# Le client ne fait confiance à la CA qu'au vu de l'empreinte de SA racine (pas de TOFU).
+- name: Configurer le client step de l'hôte (bootstrap)
+  ansible.builtin.command:
+    cmd: >-
+      step ca bootstrap --force --ca-url {{ certificats_acme_ca_url }}
+      --fingerprint {{ _certificats_acme_empreinte.stdout | trim }}
+    creates: "{{ certificats_acme_steppath }}/config/defaults.json"
+  environment:
+    STEPPATH: "{{ certificats_acme_steppath }}"

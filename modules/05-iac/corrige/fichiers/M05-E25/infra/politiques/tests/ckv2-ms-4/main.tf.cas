@@ -1,0 +1,15 @@
+# Cas fautif : agent QEMU désactivé.
+resource "proxmox_virtual_environment_vm" "cas" {
+  name      = "m05-cas-de-test"
+  node_name = "pve01"
+  vm_id     = 2059
+  tags      = ["env-m05"]
+  clone {
+    vm_id = 9010
+    full  = true
+  }
+
+  agent {
+    enabled = false
+  }
+}

@@ -1,0 +1,44 @@
+---
+# molecule/kea_ha/converge.yml — deux serveurs Kea en hot-standby, SANS TLS (M06-E25).
+#
+# Limites assumées du test (écrites, pas cachées) :
+#  - pas de TLS : les instances, sur vsandbox, ne joignent pas ca01. Le TLS mutuel est vérifié
+#    en production (check M06-E25) ; ici on teste la logique HA du gabarit ;
+#  - sous-réseau de DOCUMENTATION (192.0.2.0/24, RFC 5737) : il ne correspond pas à l'interface
+#    des instances, donc Kea ne répondra jamais à un vrai client de vsandbox. Un serveur DHCP de
+#    test qui servirait 10.10.99.0/24 sur vsandbox ferait concurrence au vrai !
+#  - pas de DDNS.
+
+- name: Faits des deux instances
+  hosts: molecule
+  gather_facts: true
+  tasks: []
+
+- name: Converge — kea_dhcp4 en paire hot-standby
+  hosts: molecule
+  become: true
+  vars:
+    kea_dhcp4_tls: false
+    kea_dhcp4_ddns: false
+    kea_dhcp4_api: true
+    kea_dhcp4_api_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+    kea_dhcp4_api_mot_de_passe: molecule-test-api-0123456789
+    kea_dhcp4_hooks: [libdhcp_lease_cmds.so]
+    kea_dhcp4_sous_reseaux:
+      - id: 99
+        reseau: 192.0.2.0/24
+        plages: ["192.0.2.100 - 192.0.2.199"]
+        routeur: 192.0.2.1
+        ntp: 192.0.2.1
+        commentaire: "sous-réseau de documentation (test Molecule)"
+    kea_dhcp4_dns: [192.0.2.53]
+    kea_dhcp4_ha: true
+    kea_dhcp4_ha_pairs:
+      - nom: m06-mol-a
+        ip: "{{ hostvars['m06-mol-a']['ansible_facts']['default_ipv4']['address'] }}"
+        role: primary
+      - nom: m06-mol-b
+        ip: "{{ hostvars['m06-mol-b']['ansible_facts']['default_ipv4']['address'] }}"
+        role: standby
+  roles:
+    - role: kea_dhcp4

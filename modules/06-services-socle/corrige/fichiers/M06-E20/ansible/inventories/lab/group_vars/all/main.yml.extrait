@@ -1,0 +1,9 @@
+# group_vars/all/main.yml — lignes MODIFIÉES en M06-E20 (fichier de M04-E14).
+# Clés autorisées CLASSIQUES du compte admin : plus aucune clé quotidienne de personne.
+#   - bris de glace : clé ed25519 dédiée, clé privée chiffrée HORS de adm01 (procédure : RB-060
+#     annexe / registre des secrets) ; utilisable depuis adm01 ou la console de pve01 (from=).
+#   - ansible-ci : clé de la CI, depuis runner01 seulement (M04-E27).
+# L'accès quotidien passe par un certificat d'utilisateur de 16 h (ms-ssh-cert).
+ms_cles_admin:
+  - 'from="10.10.10.10,<IP-PVE01>" ssh-ed25519 <CLE-PUBLIQUE-BRIS-DE-GLACE> bris-de-glace@medisphere'
+  - 'from="10.10.20.15" ssh-ed25519 <CLE-PUBLIQUE-ANSIBLE-CI> ansible-ci'

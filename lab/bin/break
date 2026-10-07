@@ -21,6 +21,7 @@ ex="$(printf '%02d' "$((10#$ex))")"
 shopt -s nullglob
 dirs=("$ROOT/$base/$mod"-*)
 [[ ${#dirs[@]} -eq 1 ]] || { echo "Module introuvable : $mod" >&2; exit 2; }
+shopt -u nullglob   # les scripts sourcés comptent sur le comportement par défaut des motifs
 script="${dirs[0]}/corrige/pannes/break-${prefix}${ex}.sh"
 [[ -f "$script" ]] || { echo "Pas de panne définie pour ${mod}-${prefix}${ex}" >&2; exit 2; }
 

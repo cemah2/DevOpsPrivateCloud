@@ -1,0 +1,33 @@
+---
+# group_vars/role_dns/dns.yml — LES NOMS DU SOCLE, liste unique (M06-E06).
+# Lue par le rôle dnsmasq (jusqu'à la bascule, M06-E08) et par le rôle powerdns_auth.
+# Chaque entrée : A pour chaque nom, PTR de l'adresse vers le PREMIER nom.
+# a: false = PTR seulement (les autres adresses de gw01 : les traceroutes affichent gw01).
+# À partir de M06-E15, ces données viendront de NetBox ; cette liste disparaîtra alors.
+# À adapter : <IP-PVE01> (adresse de pve01 sur le LAN maison : A seulement, pas de zone inverse).
+
+dns_hotes:
+  - {noms: [dns01.par1.medisphere.internal], ip: 10.10.20.10}   # premier : sonde du rôle dnsmasq
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.10.1}
+  - {noms: [adm01.par1.medisphere.internal], ip: 10.10.10.10}
+  - {noms: [ca01.par1.medisphere.internal], ip: 10.10.20.11}
+  - {noms: [git01.par1.medisphere.internal], ip: 10.10.20.12}
+  - {noms: [nbx01.par1.medisphere.internal], ip: 10.10.20.13}
+  - {noms: [s3-01.par1.medisphere.internal], ip: 10.10.20.14}
+  - {noms: [runner01.par1.medisphere.internal], ip: 10.10.20.15}
+  - {noms: [pve01.par1.medisphere.internal], ip: "<IP-PVE01>"}
+  - {noms: [pbs01.par2.medisphere.internal, pbs01.par1.medisphere.internal], ip: 10.20.10.10}
+  # Autres adresses de gw01 (ex-ptr-record de dnsmasq)
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.20.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.30.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.40.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.50.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.52.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.60.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.70.1, a: false}
+  - {noms: [gw01.par1.medisphere.internal], ip: 10.10.99.1, a: false}
+
+# Transition : le rôle dnsmasq lit la même liste (ses PTR supplémentaires deviennent inutiles :
+# le modèle de dnsmasq ignore la clé « a », il faut donc lui passer les seules entrées avec A,
+# et garder ses dnsmasq_ptr tels quels jusqu'à son retrait).
+dnsmasq_hotes: "{{ dns_hotes | rejectattr('a', 'defined') | list }}"

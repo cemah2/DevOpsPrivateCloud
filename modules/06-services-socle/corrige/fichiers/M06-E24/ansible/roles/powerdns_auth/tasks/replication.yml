@@ -1,0 +1,193 @@
+---
+# roles/powerdns_auth/tasks/replication.yml — réplication primaire/secondaire et TSIG (M06-E24).
+#
+# Sur le PRIMAIRE, zones.yml (M06-E06) a déjà créé les zones et posé leur type (variable
+# « type » de chaque zone : primary) ; on y ajoute la clé TSIG et son autorisation, et les NS
+# des zones dont le contenu est piloté par l'API (les zones générées ont leurs NS dans le fichier).
+# Sur le SECONDAIRE, rien n'est généré : les zones sont déclarées secondaires et transférées.
+#
+# Comme dans zones.yml : pdnsutil SOUS LE COMPTE pdns (propriétaire de la base SQLite : lancé en
+# root, il créerait des fichiers -wal/-shm que pdns ne pourrait plus écrire).
+# Idempotence : chaque modification est précédée d'une lecture. Le secret TSIG n'apparaît jamais
+# dans la sortie d'Ansible (no_log) ni dans la liste des processus (variable d'environnement).
+
+- name: Paramètres de réplication cohérents
+  ansible.builtin.assert:
+    that:
+      - powerdns_auth_mode == 'primaire' or powerdns_auth_primaire | length > 0
+      - powerdns_auth_tsig.nom is defined and powerdns_auth_tsig.secret | default('') | length >= 32
+      - powerdns_auth_zones | map(attribute='type', default='native') | unique | list
+        == [('primary' if powerdns_auth_mode == 'primaire' else 'secondary')]
+    fail_msg: >-
+      Réplication mal décrite pour {{ inventory_hostname }} : powerdns_auth_primaire (secondaire),
+      powerdns_auth_tsig (nom, algorithme, secret de 32 caractères au moins, en Vault), et toutes
+      les zones de type « primary » sur le primaire, « secondary » sur le secondaire.
+    quiet: true
+  no_log: true
+
+# --- Clé TSIG (les deux côtés) --------------------------------------------------------------------
+- name: Lire les clés TSIG connues
+  ansible.builtin.command: pdnsutil tsigkey list
+  become: true
+  become_user: pdns
+  register: powerdns_auth_tsig_liste
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+# Ligne « nom. algorithme. secret » : clé absente, ou secret changé (rotation dans Vault) → import.
+- name: Importer ou mettre à jour la clé TSIG {{ powerdns_auth_tsig.nom }}
+  ansible.builtin.shell: |
+    set -o pipefail
+    pdnsutil tsigkey delete "{{ powerdns_auth_tsig.nom }}" >/dev/null 2>&1 || true
+    pdnsutil tsigkey import "{{ powerdns_auth_tsig.nom }}" "{{ powerdns_auth_tsig.algorithme | default('hmac-sha256') }}" "$SECRET"
+  args:
+    executable: /bin/bash
+  environment:
+    SECRET: "{{ powerdns_auth_tsig.secret }}"
+  become: true
+  become_user: pdns
+  when: >-
+    (powerdns_auth_tsig_liste.stdout_lines
+     | select('search', '^' ~ (powerdns_auth_tsig.nom | regex_escape) ~ '\.? ')
+     | select('search', ' ' ~ (powerdns_auth_tsig.secret | regex_escape) ~ '$') | list | length) == 0
+  changed_when: true
+  no_log: true
+
+# --- Primaire ------------------------------------------------------------------------------------------
+- name: Primaire — transferts signés et NS
+  when: powerdns_auth_mode == 'primaire'
+  block:
+    - name: Lire la clé autorisée à transférer chaque zone (TSIG-ALLOW-AXFR)
+      ansible.builtin.command: pdnsutil metadata get {{ item.nom }} TSIG-ALLOW-AXFR
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_zones }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      register: powerdns_auth_meta_axfr
+      changed_when: false
+      check_mode: false
+
+    - name: Autoriser le transfert signé par la clé {{ powerdns_auth_tsig.nom }}
+      ansible.builtin.command: pdnsutil tsigkey activate {{ item.item.nom }} {{ powerdns_auth_tsig.nom }} primary
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_meta_axfr.results }}"
+      loop_control:
+        label: "{{ item.item.nom }}"
+      when: powerdns_auth_tsig.nom not in item.stdout
+      changed_when: true
+
+    # Zones pilotées par l'API (contenu: api, M06-E14/E15) : leurs NS ne viennent pas d'un fichier
+    # généré. On les aligne sur powerdns_auth_ns (même liste que les zones générées).
+    - name: Lire les NS des zones pilotées par l'API
+      ansible.builtin.command: >-
+        dig +short +norecurse +time=2 +tries=2
+        -p {{ powerdns_auth_ecoute[0].split(':') | last }} @{{ powerdns_auth_ecoute[0].split(':') | first }}
+        {{ item.nom }} NS
+      loop: "{{ powerdns_auth_zones | selectattr('contenu', 'defined') | selectattr('contenu', 'equalto', 'api') | list }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      register: powerdns_auth_ns_api
+      changed_when: false
+      check_mode: false
+
+    - name: NS des zones pilotées par l'API = powerdns_auth_ns
+      ansible.builtin.command:
+        argv: >-
+          {{ ['pdnsutil', 'rrset', 'replace', item.item.nom, item.item.nom ~ '.', 'NS', powerdns_auth_ttl | string]
+             + (powerdns_auth_ns | map('regex_replace', '\.?$', '.') | list) }}
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_ns_api.results }}"
+      loop_control:
+        label: "{{ item.item.nom }}"
+      when: >-
+        (item.stdout_lines | map('lower') | sort)
+        != (powerdns_auth_ns | map('lower') | map('regex_replace', '\.?$', '.') | sort)
+      register: powerdns_auth_ns_changes
+      changed_when: true
+
+    # « rrset replace » ne touche pas au SOA : on le fait avancer pour que le secondaire le voie.
+    - name: Faire avancer le numéro de série des zones dont les NS ont changé
+      ansible.builtin.command: pdnsutil zone increase-serial {{ item.item.item.nom }}
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_ns_changes.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.item.nom | default('') }}"
+      when: item is changed
+      changed_when: true
+
+# --- Secondaire ----------------------------------------------------------------------------------------
+- name: Secondaire — zones transférées depuis {{ powerdns_auth_primaire }}
+  when: powerdns_auth_mode == 'secondaire'
+  block:
+    - name: Lire les zones de type secondaire
+      ansible.builtin.command: pdnsutil zone list-all secondary
+      become: true
+      become_user: pdns
+      register: powerdns_auth_secondaires
+      changed_when: false
+      check_mode: false
+
+    - name: Déclarer les zones secondaires
+      ansible.builtin.command: pdnsutil zone create-secondary {{ item.nom }} {{ powerdns_auth_primaire }}
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_zones }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      # list-all affiche les noms avec leur point final
+      when: (item.nom ~ '.') not in powerdns_auth_secondaires.stdout_lines
+      register: powerdns_auth_nouvelles
+      changed_when: true
+
+    - name: Lire la clé utilisée pour transférer chaque zone (AXFR-MASTER-TSIG)
+      ansible.builtin.command: pdnsutil metadata get {{ item.nom }} AXFR-MASTER-TSIG
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_zones }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      register: powerdns_auth_meta_master
+      changed_when: false
+      check_mode: false
+
+    - name: Transférer avec la clé {{ powerdns_auth_tsig.nom }}
+      ansible.builtin.command: pdnsutil tsigkey activate {{ item.item.nom }} {{ powerdns_auth_tsig.nom }} secondary
+      become: true
+      become_user: pdns
+      loop: "{{ powerdns_auth_meta_master.results }}"
+      loop_control:
+        label: "{{ item.item.nom }}"
+      when: powerdns_auth_tsig.nom not in item.stdout
+      register: powerdns_auth_cles_posees
+      changed_when: true
+
+    # Premier transfert immédiat plutôt qu'au prochain cycle de rafraîchissement. pdns_control
+    # parle au serveur par sa socket de contrôle (root).
+    - name: Demander le transfert des zones nouvellement déclarées ou nouvellement signées par la clé
+      ansible.builtin.command: pdns_control retrieve {{ item }}
+      loop: >-
+        {{ ((powerdns_auth_nouvelles.results | default([]) | select('changed') | map(attribute='item.nom') | list)
+           + (powerdns_auth_cles_posees.results | default([]) | select('changed') | map(attribute='item.item.nom') | list))
+           | unique }}
+      changed_when: true
+
+    - name: Attendre que chaque zone soit servie (SOA présent sur le secondaire)
+      ansible.builtin.command: >-
+        dig +short +norecurse +time=2 +tries=1
+        -p {{ powerdns_auth_ecoute[0].split(':') | last }} @{{ powerdns_auth_ecoute[0].split(':') | first }}
+        {{ item.nom }} SOA
+      loop: "{{ powerdns_auth_zones }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      register: powerdns_auth_soa_secondaire
+      until: powerdns_auth_soa_secondaire.stdout | length > 0
+      retries: 10
+      delay: 3
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode

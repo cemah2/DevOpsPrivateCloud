@@ -1,0 +1,29 @@
+#cloud-config
+# Généré par OpenTofu (plateforme/infra, envs/lab-m05, M05-E19) — ne pas modifier sur pve01.
+# Avec un user-data personnalisé, Proxmox n'écrit PLUS le compte ni les clés (ciuser,
+# sshkeys) : c'est ce fichier qui les crée. Le réseau (ipconfig0) reste généré par Proxmox.
+hostname: ${nom}
+fqdn: ${nom}.${domaine}
+manage_etc_hosts: true
+
+users:
+  - name: admin
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+%{ for cle in cles ~}
+      - ${cle}
+%{ endfor ~}
+
+package_update: true
+packages: ${jsonencode(paquets)}
+
+write_files:
+  - path: /etc/medisphere/generation
+    owner: root:root
+    permissions: "0644"
+    content: |
+      generation=${generation}
+      cree_par=opentofu

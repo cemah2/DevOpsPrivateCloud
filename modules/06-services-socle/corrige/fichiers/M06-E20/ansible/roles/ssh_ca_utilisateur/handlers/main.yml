@@ -1,0 +1,11 @@
+---
+- name: Recharger sshd (certificats d'utilisateur)
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  listen: Recharger sshd (certificats d'utilisateur)
+
+- name: Recharger le service sshd (certificats d'utilisateur)
+  ansible.builtin.systemd_service:
+    name: "{{ ssh_ca_utilisateur_service_sshd }}"
+    state: reloaded
+  listen: Recharger sshd (certificats d'utilisateur)

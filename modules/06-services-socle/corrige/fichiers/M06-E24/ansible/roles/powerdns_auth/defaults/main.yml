@@ -1,0 +1,93 @@
+---
+# Rôle powerdns_auth (M06-E06, complété en M06-E17, M06-E24 et M06-E26) — serveur DNS FAISANT AUTORITÉ PowerDNS 5.0 (dépôt officiel),
+# backend gsqlite3, API HTTP. Il ne fait AUCUNE récursion : c'est le travail du récurseur
+# (rôle powerdns_recursor, M06-E07), qui lui transmet les questions sur les zones internes.
+# Ce fichier REMPLACE celui de M06-E06 : variables de M06-E06 et M06-E17 inchangées, ajouts
+# marqués (E24) et (E26).
+# Les valeurs du socle sont dans inventories/lab/group_vars/role_dns/powerdns_auth.yml.
+
+# --- Dépôt APT repo.powerdns.com ------------------------------------------------------------------
+powerdns_auth_depot_url: http://repo.powerdns.com/debian
+powerdns_auth_depot_suite: trixie-auth-50
+powerdns_auth_depot_cle_url: https://repo.powerdns.com/FD380FBB-pub.asc
+# « PowerDNS Release Signing Key » : empreinte vérifiée avant usage (dépôt en HTTP : la
+# signature des index est la seule garantie d'intégrité).
+powerdns_auth_depot_cle_empreinte: 9FAAA5577E8FCF62093D036C1B0C6205FD380FBB
+
+# --- Écoute DNS (jamais le port 53 : il appartient au récurseur) ---------------------------------
+powerdns_auth_ecoute:
+  - 127.0.0.1:5300
+
+# --- Backend ----------------------------------------------------------------------------------------
+powerdns_auth_base: /var/lib/powerdns/pdns.sqlite3
+
+# --- API HTTP ---------------------------------------------------------------------------------------
+powerdns_auth_api_adresse: 127.0.0.1
+powerdns_auth_api_port: 8081
+# Clients autorisés à se connecter au serveur web (en plus de la clé d'API exigée).
+powerdns_auth_api_autorises:
+  - 127.0.0.1
+# Clé d'API (Vault « critique ») : qui la détient peut réécrire toutes les zones.
+powerdns_auth_cle_api: ""
+
+# --- Zones ------------------------------------------------------------------------------------------
+powerdns_auth_ttl: 300
+powerdns_auth_soa:
+  primaire: "{{ inventory_hostname }}"
+  contact: hostmaster.{{ inventory_hostname }}
+  rafraichissement: 3600
+  nouvel_essai: 900
+  expiration: 1209600
+  ttl_negatif: 300
+# Serveurs de noms annoncés (NS) dans chaque zone.
+powerdns_auth_ns:
+  - "{{ inventory_hostname }}"
+# Zones servies. Chaque élément :
+#   nom            nom de la zone, sans point final (ex. par1.medisphere.internal)
+#   type           native | primary | secondary (défaut native ; primary pour notifier un secondaire)
+#   contenu        fichier | api (défaut fichier)
+#                    fichier : le rôle génère TOUT le contenu (hôtes + enregistrements ci-dessous)
+#                              et recharge la zone quand il change ;
+#                    api     : le rôle crée la zone si elle manque et ne touche plus jamais à son
+#                              contenu (OpenTofu, synchronisation NetBox… M06-E14/E15).
+#   enregistrements  liste de {nom (absolu, avec ou sans point final), type, contenu, ttl?}
+powerdns_auth_zones: []
+# Hôtes : un A par nom dans la zone la plus précise qui le contient, et le PTR de l'adresse vers
+# le PREMIER nom (comme host-record de dnsmasq). a: false = PTR seulement (adresses secondaires).
+#   - {noms: [dns01.par1.medisphere.internal], ip: 10.10.20.10}
+powerdns_auth_hotes: []
+
+# --- Divers -----------------------------------------------------------------------------------------
+# Réponse à « version.bind » : ne rien révéler.
+powerdns_auth_version: anonymous
+# false : le rôle prépare la configuration sans redémarrer le service (changement planifié).
+powerdns_auth_redemarrer: true
+
+# --- Mises à jour dynamiques (M06-E17) -----------------------------------------------------------
+powerdns_auth_dnsupdate: false
+powerdns_auth_dnsupdate_autorises:
+  - 127.0.0.1
+
+# --- (E24) Réplication primaire/secondaire ------------------------------------------------------
+# primaire : sert et notifie ; secondaire : reçoit les zones par AXFR, n'a ni API ni zones générées.
+powerdns_auth_mode: primaire
+# (E24) API HTTP active (le secondaire n'en a pas : il ne reçoit ses données que par transfert).
+powerdns_auth_api_active: true
+# (E24) primaire : destinataires des NOTIFY (adresse:port). Aucun NOTIFY automatique vers les NS.
+powerdns_auth_notifier: []
+# (E24) secondaire : adresse:port du serveur faisant autorité primaire.
+powerdns_auth_primaire: ""
+# (E24) AXFR sans TSIG autorisés (un transfert signé TSIG ne consulte PAS cette liste).
+powerdns_auth_axfr_sans_tsig:
+  - 127.0.0.0/8
+# (E24) clé TSIG des transferts et des NOTIFY : {nom, algorithme, secret} ; vide = pas de TSIG.
+powerdns_auth_tsig: {}
+# (E24) false : installer et configurer sans toucher à la réplication (Molecule, premier passage).
+powerdns_auth_replication: true
+
+# --- (E26) DNSSEC -----------------------------------------------------------------------------------
+# Zones à signer (primaire seulement), méthode de déni d'existence, SOA-EDIT des zones signées
+# (le numéro de série servi suit la date d'émission des signatures : le secondaire retransfère).
+powerdns_auth_zones_signees: []
+powerdns_auth_nsec3: false
+powerdns_auth_soa_edit_signees: INCEPTION-INCREMENT

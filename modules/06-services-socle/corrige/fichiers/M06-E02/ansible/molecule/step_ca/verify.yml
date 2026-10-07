@@ -1,0 +1,85 @@
+---
+# molecule/step_ca/verify.yml — vérifie le SERVICE rendu : la CA émet, applique sa politique,
+# publie ses racines et sa CA SSH ; pas seulement « le fichier existe ».
+- name: Vérifier le rôle step_ca
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    test: /root/pki-test
+    nom: ca.molecule.test
+    racine: /etc/step-ca/certs/root_ca.crt
+    curl_base: >-
+      curl --fail --silent --show-error --noproxy * --cacert {{ racine }}
+      --resolve {{ nom }}:443:127.0.0.1
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service step-ca actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['step-ca.service']['state'] == 'running'
+          - ansible_facts['services']['step-ca.service']['status'] == 'enabled'
+
+    - name: Le processus tourne sous « step », pas sous root
+      ansible.builtin.command: ps -o user= -C step-ca
+      register: proprietaire
+      changed_when: false
+      failed_when: proprietaire.stdout | trim != 'step'
+
+    - name: Aucune clé de racine sur l'instance
+      ansible.builtin.shell: set -o pipefail; find /etc/step-ca /root -name 'root_ca_key*' | wc -l
+      args:
+        executable: /bin/bash
+      register: cles_racine
+      changed_when: false
+      failed_when: cles_racine.stdout | trim != '0'
+
+    - name: Santé de la CA
+      ansible.builtin.command: "{{ curl_base }} https://{{ nom }}/health"
+      register: sante
+      changed_when: false
+      failed_when: "'ok' not in sante.stdout"
+
+    - name: Annuaire ACME publié pour le provisioner « acme »
+      ansible.builtin.command: "{{ curl_base }} https://{{ nom }}/acme/acme/directory"
+      register: acme
+      changed_when: false
+      failed_when: (acme.stdout | from_json).newOrder is not defined
+
+    - name: Clés publiques de la CA SSH publiées
+      ansible.builtin.command: "{{ curl_base }} https://{{ nom }}/ssh/roots"
+      register: ssh_roots
+      changed_when: false
+      failed_when: >-
+        (ssh_roots.stdout | from_json).hostKey | default([]) | length != 1
+        or (ssh_roots.stdout | from_json).userKey | default([]) | length != 1
+
+    - name: Émettre un certificat de 30 jours avec le provisioner admin
+      ansible.builtin.command:
+        cmd: >-
+          step ca certificate test.molecule.test /root/test.crt /root/test.key
+          --ca-url https://{{ nom }} --root {{ racine }}
+          --provisioner admin --provisioner-password-file {{ test }}/admin.pass
+          --not-after 720h --force
+      environment:
+        STEPPATH: /root/.step-test
+      changed_when: false
+
+    - name: Le certificat émis est signé par l'intermédiaire et vérifiable jusqu'à la racine
+      ansible.builtin.command: step certificate verify /root/test.crt --roots {{ racine }}
+      changed_when: false
+
+    - name: Refus au-delà du plafond du provisioner admin (90 jours)
+      ansible.builtin.command:
+        cmd: >-
+          step ca certificate trop-long.molecule.test /root/long.crt /root/long.key
+          --ca-url https://{{ nom }} --root {{ racine }}
+          --provisioner admin --provisioner-password-file {{ test }}/admin.pass
+          --not-after 2400h --force
+      environment:
+        STEPPATH: /root/.step-test
+      register: trop_long
+      changed_when: false
+      failed_when: trop_long.rc == 0 or 'duration' not in (trop_long.stderr | lower)

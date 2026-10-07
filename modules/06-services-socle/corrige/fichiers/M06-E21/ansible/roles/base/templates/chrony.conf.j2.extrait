@@ -1,0 +1,4 @@
+{# roles/base/templates/chrony.conf.j2 — boucle des sources MODIFIÉE en M06-E21. #}
+{% for serveur in base_ntp_serveurs %}
+server {{ serveur }} iburst{{ ' nts' if base_ntp_nts | bool else '' }}
+{% endfor %}

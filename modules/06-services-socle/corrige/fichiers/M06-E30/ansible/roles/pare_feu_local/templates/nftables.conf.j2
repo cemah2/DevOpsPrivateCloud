@@ -1,0 +1,32 @@
+#!/usr/sbin/nft -f
+# /etc/nftables.conf — {{ inventory_hostname }} : filtrage d'entrée local (VLAN INFRA)
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle pare_feu_local, M06-E30).') }}
+# Source : group_vars/socle/pare_feu_local.yml + host_vars/{{ inventory_hostname }}/pare_feu_local.yml
+# Secours (console) : nft flush ruleset   — ou /usr/local/sbin/pare-feu-local-retour
+
+flush ruleset
+
+table inet filtre_local {
+	chain entree {
+		type filter hook input priority filter; policy drop;
+
+		ct state invalid drop
+		ct state { established, related } accept comment "réponses aux connexions sortantes (NTP, DNS amont, PBS, ACME)"
+		iif "lo" accept
+		icmp type { echo-request, destination-unreachable, time-exceeded, parameter-problem } limit rate 20/second accept
+		icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+
+{% for f in pare_feu_local_communes + pare_feu_local_regles %}
+		{{ f | medisphere.socle.regle_nft }}
+{% endfor %}
+
+{% if pare_feu_local_journaliser_rejets %}
+		limit rate 10/minute burst 20 packets log prefix "nft-local-drop: " level info
+{% endif %}
+		counter comment "rejeté par la politique"
+	}
+
+	chain sortie {
+		type filter hook output priority filter; policy accept;
+	}
+}

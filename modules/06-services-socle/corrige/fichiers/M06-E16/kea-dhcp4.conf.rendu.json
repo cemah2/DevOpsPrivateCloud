@@ -1,0 +1,56 @@
+{
+  "Dhcp4": {
+    "authoritative": true,
+    "control-sockets": [
+      {
+        "socket-name": "kea4-ctrl-socket",
+        "socket-type": "unix"
+      }
+    ],
+    "interfaces-config": {
+      "dhcp-socket-type": "udp",
+      "interfaces": [
+        "ens18"
+      ]
+    },
+    "lease-database": {
+      "lfc-interval": 3600,
+      "name": "kea-leases4.csv",
+      "persist": true,
+      "type": "memfile"
+    },
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output-options": [
+          {
+            "output": "stdout",
+            "pattern": "%-5p %m\n"
+          }
+        ],
+        "severity": "INFO"
+      }
+    ],
+    "option-data": [
+      {
+        "data": "10.10.20.10",
+        "name": "domain-name-servers"
+      },
+      {
+        "data": "par1.medisphere.internal",
+        "name": "domain-name"
+      },
+      {
+        "data": "par1.medisphere.internal",
+        "name": "domain-search"
+      }
+    ],
+    "rebind-timer": 37800,
+    "renew-timer": 21600,
+    "subnet4": [],
+    "user-context": {
+      "gere-par": "Fichier g\u00e9r\u00e9 par Ansible (projet plateforme/ansible)."
+    },
+    "valid-lifetime": 43200
+  }
+}

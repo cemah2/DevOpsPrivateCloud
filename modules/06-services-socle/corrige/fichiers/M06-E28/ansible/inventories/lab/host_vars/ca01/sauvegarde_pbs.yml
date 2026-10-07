@@ -1,0 +1,7 @@
+---
+# host_vars/ca01/sauvegarde_pbs.yml — sauvegarde applicative de ca01 (M06-E28).
+sauvegarde_pbs_elements: [stepca]
+sauvegarde_pbs_heure: "02:00"
+sauvegarde_pbs_jeton_secret: "{{ vault_pbs_jeton_ca01 }}"
+sauvegarde_pbs_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_pbs_cle: "{{ vault_pbs_cle_ca01 }}"

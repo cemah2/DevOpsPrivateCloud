@@ -1,0 +1,6 @@
+# Extrait de .gitlab-ci.yml de plateforme/infra (M05-E20) : à ajouter sous « include: ».
+# runner01 n'a pas encore OpenTofu, tflint ni terraform-docs (installés en M05-E26) : le job
+# pre-commit de qualite.yml saute ces hooks. Ils restent OBLIGATOIRES en local (pre-commit
+# install) ; M05-E26 retire cette ligne.
+variables:
+  SKIP: tofu-fmt,tofu-validate,tflint,terraform-docs

@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# ms-verif-services — sonde de service des services socle (M06-E29, PLAT-755).
+#
+# Vérifie que chaque service socle REND ce qu'on attend de lui (pas seulement qu'un processus
+# tourne) : résolution DNS sur chaque récurseur, NXDOMAIN local, réplication des zones (même
+# numéro de série), validation DNSSEC, paire Kea en hot-standby et adresses libres, NetBox,
+# step-ca, et certificats TLS (chaîne, nom, expiration).
+#
+# Usage : ms-verif-services [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+# Variable : MS_VERIF_SEUIL_CERTS (défaut 10), équivalent de --seuil-certificats (pour un drop-in).
+#
+# Configuration :
+#   /usr/local/etc/ms-verif-services.conf  ce qui est surveillé (MS_CONF pour un autre chemin)
+#   ~/.config/workbook/kea-supervision.env KEA_API_USER, KEA_API_PASSWORD (600) — MS_KEA_ENV_FILE
+#   ~/.config/workbook/netbox-supervision.token  jeton v2 en LECTURE seule (600) — MS_NETBOX_TOKEN_FILE
+#
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien » — une réponse vide, un outil
+# absent, une identité illisible sont des KO.
+
+# shellcheck source=../lib/ms-commun.sh disable=SC1091
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-services [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+
+Sonde des services socle : DNS (récurseurs, réplication, DNSSEC), DHCP (paire Kea), NetBox,
+step-ca et certificats TLS. Un certificat qui expire dans moins de JOURS jours (défaut 10) est
+une anomalie.
+
+  -s, --seuil-certificats JOURS   seuil d'expiration des certificats (1 à 999)
+  -q, --quiet                     n'afficher que les anomalies et le bilan
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
+FIN
+}
+
+# ok/ko DOMAINE MESSAGE — une ligne lisible par contrôle (sur stdout : c'est le rapport).
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+
+# charger_secret_env FICHIER — charge un fichier de variables 600 (refus sinon).
+charger_secret_env() {
+  local f="$1" mode
+  [[ -r "$f" ]] || return 1
+  mode="$(stat -c '%a' "$f")"
+  [[ "$mode" =~ ^[4-7]00$ ]] || return 1
+  # shellcheck source=/dev/null
+  source "$f"
+}
+
+# --- DNS ---------------------------------------------------------------------------------------
+
+verifier_resolution() {
+  local r rep inex
+  for r in "${MS_RESOLVEURS[@]}"; do
+    rep="$(dig +short +time=2 +tries=2 "@$r" "$MS_NOM_INTERNE" A 2>/dev/null | grep -E '^[0-9.]+$' | head -n 1)"
+    if [[ -n "$rep" ]]; then ok dns "$r résout $MS_NOM_INTERNE ($rep)"; else ko dns "$r ne résout pas $MS_NOM_INTERNE"; fi
+    rep="$(dig +short +time=2 +tries=2 "@$r" "$MS_NOM_INTERNET" A 2>/dev/null | grep -E '^[0-9.]+$' | head -n 1)"
+    if [[ -n "$rep" ]]; then ok dns "$r résout $MS_NOM_INTERNET"; else ko dns "$r ne résout pas $MS_NOM_INTERNET (récursion Internet)"; fi
+    # Un nom interne inexistant : NXDOMAIN rapide, venu des serveurs faisant autorité (pas un délai).
+    inex="sonde-inexistante-$RANDOM.${MS_ZONES[0]}"
+    rep="$(dig +time=2 +tries=1 "@$r" "$inex" A 2>/dev/null)"
+    if grep -q 'status: NXDOMAIN' <<<"$rep"; then
+      ok dns "$r répond NXDOMAIN pour un nom interne inexistant"
+    else
+      ko dns "$r : pas de NXDOMAIN pour $inex ($(grep -oE 'status: [A-Z]+' <<<"$rep" || echo 'pas de réponse'))"
+    fi
+  done
+}
+
+verifier_replication() {
+  local z a serial ref
+  for z in "${MS_ZONES[@]}"; do
+    ref=""
+    for a in "${MS_AUTORITAIRES[@]}"; do
+      serial="$(dig +short +norecurse +time=2 +tries=2 "@$a" -p "$MS_PORT_AUTORITAIRE" "$z" SOA 2>/dev/null | awk 'NR == 1 {print $3}')"
+      if [[ -z "$serial" ]]; then
+        ko replication "$z : pas de SOA sur $a:$MS_PORT_AUTORITAIRE"
+        continue 2
+      fi
+      if [[ -z "$ref" ]]; then
+        ref="$serial"
+      elif [[ "$serial" != "$ref" ]]; then
+        ko replication "$z : numéros de série différents (${MS_AUTORITAIRES[0]} $ref, $a $serial)"
+        continue 2
+      fi
+    done
+    ok replication "$z : même numéro de série partout ($ref)"
+  done
+}
+
+verifier_dnssec() {
+  local r z rep
+  for r in "${MS_RESOLVEURS[@]}"; do
+    for z in "${MS_ZONES_SIGNEES[@]}"; do
+      rep="$(dig +dnssec +time=2 +tries=2 "@$r" "$z" SOA 2>/dev/null)"
+      if grep -Eq 'flags:[a-z ]* ad[ ;]' <<<"$rep"; then
+        ok dnssec "$r valide $z (drapeau ad)"
+      else
+        ko dnssec "$r ne valide pas $z ($(grep -oE 'status: [A-Z]+' <<<"$rep" || echo 'pas de réponse'))"
+      fi
+    done
+  done
+}
+
+# --- DHCP --------------------------------------------------------------------------------------
+
+# kea_cmd SERVEUR COMMANDE [ARGUMENTS_JSON] — réponse JSON (premier élément de la liste renvoyée).
+# Identifiants passés à curl par un fichier de configuration lu sur stdin : absents de « ps ».
+kea_cmd() {
+  local s="$1" cmd="$2" args="${3:-}" corps
+  if [[ -n "$args" ]]; then corps="{\"command\": \"$cmd\", \"arguments\": $args}"; else corps="{\"command\": \"$cmd\"}"; fi
+  curl -sS --fail --max-time 10 --cacert "$MS_RACINE" -K - -H 'Content-Type: application/json' \
+    --data "$corps" "https://$s:$MS_KEA_PORT/" <<<"user = \"${KEA_API_USER}:${KEA_API_PASSWORD}\"" \
+    | jq -e '.[0]'
+}
+
+verifier_kea() {
+  local s rep etat role contact total occupees nom
+  if ! charger_secret_env "${MS_KEA_ENV_FILE:-$HOME/.config/workbook/kea-supervision.env}" \
+      || [[ -z "${KEA_API_USER:-}" || -z "${KEA_API_PASSWORD:-}" ]]; then
+    ko dhcp "identité de supervision Kea illisible ou pas en 600 : contrôle impossible"
+    return
+  fi
+  for s in "${MS_KEA[@]}"; do
+    if ! rep="$(kea_cmd "$s" status-get 2>/dev/null)"; then
+      ko dhcp "$s : socket de contrôle injoignable ou refus"
+      continue
+    fi
+    etat="$(jq -r '.arguments["high-availability"][0]["ha-servers"].local.state // "?"' <<<"$rep")"
+    role="$(jq -r '.arguments["high-availability"][0]["ha-servers"].local.role // "?"' <<<"$rep")"
+    contact="$(jq -r '.arguments["high-availability"][0]["ha-servers"].remote["in-touch"] // false' <<<"$rep")"
+    if [[ "$etat" == hot-standby && "$contact" == true ]]; then
+      ok dhcp "$s ($role) en hot-standby, en contact avec son pair"
+    else
+      ko dhcp "$s ($role) : état $etat, contact avec le pair : $contact"
+    fi
+    nom="subnet[$MS_KEA_SOUS_RESEAU]"
+    if rep="$(kea_cmd "$s" statistic-get "{\"name\": \"$nom.total-addresses\"}" 2>/dev/null)" \
+        && total="$(jq -er --arg n "$nom.total-addresses" '.arguments[$n][0][0]' <<<"$rep")" \
+        && rep="$(kea_cmd "$s" statistic-get "{\"name\": \"$nom.assigned-addresses\"}" 2>/dev/null)" \
+        && occupees="$(jq -er --arg n "$nom.assigned-addresses" '.arguments[$n][0][0]' <<<"$rep")"; then
+      if ((total - occupees >= MS_KEA_LIBRES_MIN)); then
+        ok dhcp "$s : $((total - occupees)) adresse(s) libre(s) sur $total dans le sous-réseau $MS_KEA_SOUS_RESEAU"
+      else
+        ko dhcp "$s : plus que $((total - occupees)) adresse(s) libre(s) sur $total (seuil $MS_KEA_LIBRES_MIN)"
+      fi
+    else
+      ko dhcp "$s : statistiques du sous-réseau $MS_KEA_SOUS_RESEAU illisibles"
+    fi
+  done
+}
+
+# --- NetBox, PKI -------------------------------------------------------------------------------
+
+verifier_netbox() {
+  local f="${MS_NETBOX_TOKEN_FILE:-$HOME/.config/workbook/netbox-supervision.token}" rep version
+  if [[ ! -r "$f" || ! "$(stat -c '%a' "$f")" =~ ^[4-7]00$ ]]; then
+    ko netbox "jeton de supervision illisible ou pas en 600 ($f) : contrôle impossible"
+    return
+  fi
+  if rep="$(curl -sS --fail --max-time 10 --cacert "$MS_RACINE" -K - -H 'Accept: application/json' \
+      "$MS_NETBOX_URL/api/status/" <<<"header = \"Authorization: Bearer $(<"$f")\"" 2>/dev/null)" \
+      && version="$(jq -er '.["netbox-version"]' <<<"$rep")"; then
+    if [[ "$version" =~ $MS_NETBOX_VERSION ]]; then
+      ok netbox "API de statut : NetBox $version"
+    else
+      ko netbox "version inattendue : $version (attendu $MS_NETBOX_VERSION)"
+    fi
+  else
+    ko netbox "$MS_NETBOX_URL/api/status/ ne répond pas correctement"
+  fi
+}
+
+verifier_ca() {
+  local rep
+  if rep="$(curl -sS --fail --max-time 10 --cacert "$MS_RACINE" "$MS_CA_URL/health" 2>/dev/null)" \
+      && [[ "$(jq -r '.status // empty' <<<"$rep")" == ok ]]; then
+    ok pki "$MS_CA_URL/health : ok"
+  else
+    ko pki "$MS_CA_URL/health ne répond pas « ok »"
+  fi
+}
+
+# verifier_certificats SEUIL_JOURS — chaîne vers la racine MédiSphère, nom, et marge d'expiration.
+verifier_certificats() {
+  local seuil_j="$1" point nom port pem fin
+  for point in "${MS_POINTS_TLS[@]}"; do
+    nom="${point%:*}"
+    port="${point##*:}"
+    # -verify_return_error : la poignée de main ÉCHOUE si la chaîne ou le nom ne sont pas bons.
+    if ! pem="$(openssl s_client -connect "$nom:$port" -servername "$nom" -CAfile "$MS_RACINE" \
+        -verify_hostname "$nom" -verify_return_error </dev/null 2>/dev/null | openssl x509 2>/dev/null)" \
+        || [[ -z "$pem" ]]; then
+      ko certificat "$nom:$port : injoignable, chaîne non reconnue par la racine MédiSphère, ou nom incorrect"
+      continue
+    fi
+    fin="$(openssl x509 -noout -enddate <<<"$pem" | cut -d= -f2)"
+    if openssl x509 -noout -checkend $((seuil_j * 86400)) <<<"$pem" >/dev/null; then
+      ok certificat "$nom:$port valide jusqu'au $fin"
+    else
+      ko certificat "$nom:$port expire dans moins de $seuil_j jours ($fin)"
+    fi
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  local seuil_j="${MS_VERIF_SEUIL_CERTS:-10}"
+  while (($#)); do
+    case "$1" in
+      -s | --seuil-certificats)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        seuil_j="$2"
+        shift 2
+        ;;
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  [[ "$seuil_j" =~ ^[1-9][0-9]{0,2}$ ]] || die "--seuil-certificats attend un nombre de jours entre 1 et 999" 2
+  require_cmd dig curl jq openssl
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-services.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-services.conf
+  source "$conf"
+  # Une configuration vide ne doit jamais donner « tout va bien ».
+  ((${#MS_RESOLVEURS[@]} > 0 && ${#MS_ZONES[@]} > 0 && ${#MS_KEA[@]} > 0 && ${#MS_POINTS_TLS[@]} > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+
+  verifier_resolution
+  verifier_replication
+  verifier_dnssec
+  verifier_kea
+  verifier_netbox
+  verifier_ca
+  verifier_certificats "$seuil_j"
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur les services socle"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

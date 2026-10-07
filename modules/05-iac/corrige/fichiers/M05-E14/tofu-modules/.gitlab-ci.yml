@@ -1,0 +1,17 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/tofu-modules (M05-E14)
+# Qualité et release automatique par les gabarits partagés (M01) : chaque fusion dans
+# main qui contient un feat:/fix: publie une version vX.Y.Z (semantic-release).
+# Les consommateurs épinglent une étiquette : ?ref=vX.Y.Z.
+#
+# Les jobs propres aux modules (tofu validate / tofu test) arrivent quand runner01 aura
+# OpenTofu (M05-E26) ; d'ici là, ces contrôles tournent en local (M05-E13) et dans les
+# hooks pre-commit de adm01 (M05-E20).
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml

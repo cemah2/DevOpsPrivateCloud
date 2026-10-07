@@ -1,0 +1,9 @@
+---
+# Redémarrage plutôt que rechargement : simple et sûr (config-reload garde l'ancienne
+# configuration en cas d'erreur, mais la configuration est déjà validée par -t). Les baux sont
+# dans /var/lib/kea et survivent ; un client qui renouvelle pendant la seconde de coupure
+# réessaie (T1 = 6 h).
+- name: Redémarrer kea-dhcp4
+  ansible.builtin.systemd_service:
+    name: "{{ kea_dhcp4_service }}"
+    state: restarted

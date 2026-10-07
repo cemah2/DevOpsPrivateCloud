@@ -1,0 +1,8 @@
+---
+# pdns ne relit pas pdns.conf à chaud (écoute, backend, API) : redémarrage. Les clients ne
+# passent pas par lui directement (ils interrogent le récurseur, qui réessaie) : impact réduit.
+- name: Redémarrer pdns
+  ansible.builtin.systemd_service:
+    name: pdns.service
+    state: restarted
+  when: powerdns_auth_redemarrer | bool

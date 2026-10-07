@@ -1,0 +1,10 @@
+# MR sur plateforme/outils (M06-E34) : une ligne ajoutée à etc/ms-verif-services.conf, retirée au retrait.
+ MS_POINTS_TLS=(
+   git01.par1.medisphere.internal:443
+   nbx01.par1.medisphere.internal:443
+   ca01.par1.medisphere.internal:443
+   s3-01.par1.medisphere.internal:8333
+   dns01.par1.medisphere.internal:8004
+   dns02.par1.medisphere.internal:8004
++  stat01.par1.medisphere.internal:443
+ )

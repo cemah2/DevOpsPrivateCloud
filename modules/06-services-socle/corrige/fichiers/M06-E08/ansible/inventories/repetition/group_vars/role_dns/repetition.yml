@@ -1,0 +1,31 @@
+---
+# Variables de la répétition : les MÊMES données que le socle (copie de group_vars/role_dns de
+# inventories/lab, sans les fichiers Vault), avec l'adresse de la VM d'essai à la place de 10.10.20.10.
+# La clé d'API est jetable : la répétition n'utilise aucun secret du socle.
+repetition_ip: "{{ ansible_host }}"
+
+dnsmasq_ecoute: [127.0.0.1, "{{ repetition_ip }}"]
+dnsmasq_amont: ["<DNS-AMONT-1>"]
+dnsmasq_zones_locales: [medisphere.internal, 10.10.in-addr.arpa, 20.10.in-addr.arpa]
+dnsmasq_domaine: par1.medisphere.internal
+dnsmasq_hotes: "{{ dns_hotes | rejectattr('a', 'defined') | list }}"
+dnsmasq_ptr: []
+# Une plage DHCP factice (aucun relais n'y mène) : dnsmasq doit garder un rôle après la bascule.
+dnsmasq_dhcp:
+  - {etiquette: repetition, debut: 10.10.98.100, fin: 10.10.98.199, masque: 255.255.255.0, bail: 1h}
+
+powerdns_auth_ecoute: ["127.0.0.1:5300", "{{ repetition_ip }}:5300"]
+powerdns_auth_api_adresse: 127.0.0.1
+powerdns_auth_api_autorises: [127.0.0.1]
+powerdns_auth_cle_api: repetition-cle-api-jetable-0123456789
+
+powerdns_recursor_ecoute: ["127.0.0.1:5301", "{{ repetition_ip }}:5301"]
+
+# bascule-dns.yml interroge l'adresse de la VM ; la sonde (dns01.par1…) doit valoir 10.10.20.10.
+dns_adresse_service: "{{ repetition_ip }}"
+dns_sonde_attendue: 10.10.20.10
+
+# dns_hotes, powerdns_auth_zones, powerdns_auth_soa, powerdns_auth_ns, powerdns_recursor_* :
+# copier les fichiers dns.yml, powerdns_auth.yml (sans la ligne de la clé) et
+# powerdns_recursor.yml de inventories/lab/group_vars/role_dns/ dans ce dossier. Ce fichier-ci
+# (repetition.yml) est lu APRÈS eux (ordre alphabétique) : ses valeurs l'emportent.

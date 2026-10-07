@@ -1,0 +1,39 @@
+---
+# group_vars/role_dns/powerdns_recursor.yml — résolveur du lab (rôle powerdns_recursor, M06-E07).
+#
+# PHASE D'ESSAI (M06-E07) : port 5301, à côté de dnsmasq qui sert toujours le port 53.
+# La bascule (M06-E08) remplace ces deux adresses par 127.0.0.1 et 10.10.20.10 (port 53).
+powerdns_recursor_ecoute:
+  - 127.0.0.1:5301
+  - 10.10.20.10:5301
+
+# Tous les réseaux internes qui interrogent dns01 (même liste que la règle DNS de gw01, M00-E13).
+powerdns_recursor_autorises:
+  - 127.0.0.0/8
+  - 10.10.0.0/16     # PAR1
+  - 10.20.0.0/16     # PAR2 (pbs01)
+  - 10.255.1.0/24    # VPN d'administration
+
+# Zones internes : relayées sans récursion vers l'autoritaire local (rôle powerdns_auth).
+# dns02 (M06-E24) s'ajoutera comme second serveur de chaque zone.
+powerdns_recursor_zones_relayees:
+  - {zone: medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+  - {zone: par1.medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+  - {zone: par2.medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+  - {zone: 10.10.in-addr.arpa, serveurs: ["127.0.0.1:5300"]}
+  - {zone: 20.10.in-addr.arpa, serveurs: ["127.0.0.1:5300"]}
+
+# Internet : résolution itérative depuis la racine (gw01 laisse déjà sortir dns01 en UDP et TCP
+# 53, M00-E13). Pour passer par <DNS-AMONT> à la place : powerdns_recursor_amont: ["<DNS-AMONT>"].
+powerdns_recursor_amont: []
+
+powerdns_recursor_dnssec: validate
+# medisphere.internal n'existe pas dans la racine signée : sans ancre négative, toute réponse
+# de cette zone serait « bogus » (SERVFAIL). Les deux zones inverses sont sous 10.in-addr.arpa,
+# déléguée sans signature (preuve d'insécurité possible) : l'ancre négative évite seulement de
+# dépendre de la chaîne DNSSEC publique pour résoudre une adresse interne. M06-E26 (zone signée)
+# remplace l'ancre négative de medisphere.internal par une ancre de confiance.
+powerdns_recursor_nta:
+  - {nom: medisphere.internal, raison: "Zone interne MédiSphère, non déléguée depuis la racine"}
+  - {nom: 10.10.in-addr.arpa, raison: "Inverse interne PAR1 (RFC 1918)"}
+  - {nom: 20.10.in-addr.arpa, raison: "Inverse interne PAR2 (RFC 1918)"}

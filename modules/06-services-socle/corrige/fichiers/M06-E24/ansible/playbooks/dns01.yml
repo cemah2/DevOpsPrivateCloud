@@ -1,0 +1,34 @@
+---
+# playbooks/dns01.yml — DNS et DHCP du lab (groupe role_dns), version M06-E24 : dns01 ET dns02.
+# Nom du fichier conservé (M06-E16, E17) : il configure tout le groupe role_dns.
+#
+# serial: 1 + order: sorted → dns01 d'abord, dns02 ensuite, JAMAIS les deux en même temps :
+# pendant qu'un serveur redémarre, l'autre résout et distribue les baux. any_errors_fatal :
+# si dns01 échoue, on ne touche pas à dns02 (il reste le filet).
+# Ordre des rôles (M06-E17) : le serveur faisant autorité accepte les mises à jour AVANT que
+# kea-dhcp-ddns ne lui en envoie ; kea_ddns avant kea_dhcp4.
+- name: DNS (PowerDNS) et DHCP (Kea)
+  hosts: role_dns
+  become: true
+  serial: 1
+  order: sorted
+  any_errors_fatal: true
+  roles:
+    - role: powerdns_auth
+      tags: [powerdns, powerdns_auth]
+    - role: powerdns_recursor
+      tags: [powerdns, powerdns_recursor]
+    - role: kea_ddns
+      tags: [kea, kea_ddns]
+    - role: kea_dhcp4
+      tags: [kea, kea_dhcp4]
+  post_tasks:
+    - name: Le récurseur de cet hôte résout un nom interne et un nom Internet
+      ansible.builtin.command: "dig +short +time=2 +tries=2 @127.0.0.1 {{ item }} A"
+      loop:
+        - git01.par1.medisphere.internal
+        - deb.debian.org
+      register: dns_sonde
+      changed_when: false
+      failed_when: dns_sonde.stdout | length == 0
+      when: not ansible_check_mode

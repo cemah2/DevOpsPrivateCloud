@@ -1,0 +1,43 @@
+# Extrait à ajouter à .gitlab-ci.yml de plateforme/ansible (modèle des jobs Molecule de M04-E27).
+# Les scénarios à deux nœuds du module 06 partagent les VMID 2066-2067 : un seul resource_group
+# pour tous, jamais deux en même temps.
+.molecule-m06:
+  extends: .molecule
+  resource_group: molecule-vmid-2066-2067
+
+molecule:powerdns_replication:
+  extends: .molecule-m06
+  variables:
+    SCENARIO: powerdns_replication
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/powerdns_auth/**/*
+        - molecule/powerdns_replication/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+
+molecule:kea_ha:
+  extends: .molecule-m06
+  variables:
+    SCENARIO: kea_ha
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/kea_dhcp4/**/*
+        - molecule/kea_ha/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+
+molecule:pare_feu_local:
+  extends: .molecule-m06
+  variables:
+    SCENARIO: pare_feu_local
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/pare_feu_local/**/*
+        - molecule/pare_feu_local/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+

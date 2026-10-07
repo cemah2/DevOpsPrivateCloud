@@ -1,0 +1,28 @@
+---
+# Compte et dossiers du guide de production Smallstep (« Running step-ca as a daemon »).
+
+- name: Compte de service de la CA (sans connexion)
+  ansible.builtin.user:
+    name: "{{ step_ca_utilisateur }}"
+    system: true
+    home: "{{ step_ca_repertoire }}"
+    create_home: false
+    shell: /usr/sbin/nologin
+    comment: "step-ca (autorite de certification)"
+
+- name: Arborescence de la CA
+  ansible.builtin.file:
+    path: "{{ step_ca_repertoire }}/{{ item.chemin }}"
+    state: directory
+    owner: "{{ step_ca_utilisateur }}"
+    group: "{{ step_ca_utilisateur }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {chemin: "", mode: "0750"}
+    - {chemin: certs, mode: "0755"}
+    - {chemin: config, mode: "0750"}
+    - {chemin: secrets, mode: "0700"}
+    - {chemin: db, mode: "0700"}
+    - {chemin: templates, mode: "0750"}
+  loop_control:
+    label: "{{ step_ca_repertoire }}/{{ item.chemin }}"

@@ -1,0 +1,6 @@
+---
+# molecule/powerdns_auth/molecule.yml — scénario du rôle « powerdns_auth » (M06-E06)
+# Tout le commun vient de .config/molecule/config.yml (M04-E24).
+#   uv run molecule test -s powerdns_auth
+scenario:
+  name: powerdns_auth

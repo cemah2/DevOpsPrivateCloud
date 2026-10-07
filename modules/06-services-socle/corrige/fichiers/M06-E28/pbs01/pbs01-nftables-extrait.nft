@@ -1,0 +1,4 @@
+# /etc/nftables.conf sur pbs01 — ajouts M06-E28, chaîne input, à côté de la règle git01 (M01-E28).
+# pbs01 n'est pas géré par Ansible (hôte physique de PAR2) : modification à la main, avec les
+# précautions de M00-E21 (nft -c -f, session ouverte, retour arrière programmé).
+		iifname "wg0" ip saddr { 10.10.20.10, 10.10.20.11, 10.10.20.13 } tcp dport 8007 accept comment "dns01, ca01, nbx01 : sauvegardes applicatives (M06-E28)"
