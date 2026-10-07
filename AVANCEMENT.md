@@ -43,7 +43,6 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 2026-10-03/04 | 1 (fondations) | Plan, conventions, outillage lab, module 00 complet (4 rédacteurs + harmonisation + relecture indépendante), règles 9-12 ajoutées à la grille de relecture |
 | 2026-10-03/04 | 2 (bloc A) | Versions du bloc A figées (recherche web), décisions structurantes dans PLAN §4.8 et journal (MinIO → SeaweedFS, `runner01`, `dns02`, AWX en fiche/Semaphore, Molecule sur VMs Proxmox), README et cartes d'exercices des modules 01 à 06, bibliothèque de pannes commune ; modules 01 à 06 rédigés, harmonisés, relus (session interrompue une fois par la limite d'utilisation, reprise sans perte) |
 | 2026-10-07 | 2 (bloc A, clôture) | Annexes du bloc A ; contrôle global de cohérence : hôtes/VMID/IP conformes à PLAN §4.5, PLAN précisé (rôle DHCP de `dns01`, zone parente `medisphere.internal`, emplacement de l'ancre TLS de `pve01`), `lab.env.example` complet, `shellcheck -x` et `bash -n` propres sur tous les scripts, aucun secret ni cache versionné (`dump.rdb` retiré, `.gitignore` complété), README racine et REPRISE mis à jour |
-
 | 2026-10-07 | 2 (bloc A, fin) | **Bloc A terminé** : modules 01 à 06 relus et poussés, annexes et topologie, contrôle global de cohérence (474 scripts ShellCheck propres). Tâche planifiée créée pour lancer le bloc B |
 
 ## Choix faits en l'absence de l'apprenant (bloc A)
