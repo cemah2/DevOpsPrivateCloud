@@ -1,4 +1,4 @@
-# RB-038 — Diagnostiquer un build d'image ou un premier démarrage
+# RB-031 — Diagnostiquer un build d'image ou un premier démarrage
 
 | | |
 |---|---|

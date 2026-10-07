@@ -13,6 +13,9 @@ exclude_paths:
   - collections/ansible_collections/ansible/
   - "**/*.exemple"
   - "**/*.extrait"
+  # Configuration GitLab CI, pas du code Ansible : ses étiquettes YAML propres à GitLab
+  # (!reference, utilisé dès M04-E27) sont illisibles pour ansible-lint (load-failure).
+  - .gitlab-ci.yml
 
 # Les collections de requirements.yml sont installées par le job (et par chacun en local) :
 # ansible-lint n'a pas à les télécharger lui-même.

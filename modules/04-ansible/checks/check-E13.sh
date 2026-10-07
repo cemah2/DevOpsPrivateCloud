@@ -31,11 +31,11 @@ check_ssh "pve01 : sur « / », le jeton n'a que Sys.Audit (exigé par /cluster/
   'j="$(pveum user token permissions wb-ansible@pve ansible --path / --output-format json)"; grep -q "Sys.Audit" <<<"$j" && ! grep -Eq "VM\.|Datastore\.|Sys\.Modify|Permissions" <<<"$j"'
 
 # --- Fichier d'accès sur adm01 ----------------------------------------------------------------------
-check_cmd "fichier d'accès présent : $_M04O_ENV_PVE" test -s "$_M04O_ENV_PVE"
-check_output "fichier d'accès en mode 600" '^600$' stat -c '%a' "$_M04O_ENV_PVE"
+check_cmd "fichier d'accès présent : $_M04_ENV_PVE" test -s "$_M04_ENV_PVE"
+check_output "fichier d'accès en mode 600" '^600$' stat -c '%a' "$_M04_ENV_PVE"
 check_cmd "fichier d'accès : URL, utilisateur, jeton et secret renseignés" \
   bash -c 'for v in PROXMOX_URL PROXMOX_USER PROXMOX_TOKEN_ID PROXMOX_TOKEN_SECRET; do grep -Eq "^(export[[:space:]]+)?$v=\"?[^\"<]" "$1" || exit 1; done' \
-  _ "$_M04O_ENV_PVE"
+  _ "$_M04_ENV_PVE"
 
 # --- Le fichier d'inventaire ---------------------------------------------------------------------------
 check_cmd "inventories/lab/proxmox.yml publié sur main" _m04_fichier_main inventories/lab/proxmox.yml

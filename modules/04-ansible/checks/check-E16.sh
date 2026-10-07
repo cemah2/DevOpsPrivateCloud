@@ -16,8 +16,21 @@ check_cmd "roles/gitlab_runner : tasks, defaults et meta présents" _m04o_role_c
 check_cmd "roles/gitlab_runner publié sur main" _m04_fichier_main roles/gitlab_runner/tasks/main.yml
 check_cmd "un playbook applique gitlab_runner au groupe role_runner" \
   bash -c 'grep -rlE "gitlab_runner" "$1/playbooks" | xargs -r grep -lE "hosts:[[:space:]]*role_runner" | grep -q .' _ "$_M04_SRC"
-check_cmd "le jeton du runner est dans le Vault (vault_gitlab_runner_jeton)" \
-  _m04o_vault_contient '^vault_gitlab_runner_jeton:[[:space:]]*"?glrt-'
+# Le jeton peut avoir migré vers un fichier chiffré sous l'identité « critique » (M04-E30) :
+# on le cherche dans tous les vault*.yml de l'inventaire déchiffrables avec la configuration
+# du projet (le contenu n'est jamais affiché).
+_m04o_e16_jeton_vault() {
+  local f clair
+  for f in "$_M04_SRC"/inventories/lab/group_vars/all/vault*.yml \
+    "$_M04_SRC"/inventories/lab/host_vars/runner01/vault*.yml \
+    "$_M04_SRC"/inventories/lab/group_vars/role_runner/vault*.yml; do
+    [[ -f "$f" ]] || continue
+    clair="$(_m04_ans ansible-vault view "${f#"$_M04_SRC/"}" </dev/null 2>/dev/null)" || continue
+    grep -Eq '^vault_gitlab_runner_jeton:[[:space:]]*"?glrt-' <<<"$clair" && return 0
+  done
+  return 1
+}
+check_cmd "le jeton du runner est dans le Vault (vault_gitlab_runner_jeton)" _m04o_e16_jeton_vault
 check_cmd "aucun jeton glrt- en clair dans l'historique du projet" \
   bash -c '! git -C "$1" log --all -p 2>/dev/null | grep -Eq "glrt-[A-Za-z0-9_-]{20,}"' _ "$_M04_SRC"
 

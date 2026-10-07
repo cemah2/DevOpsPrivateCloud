@@ -220,7 +220,7 @@ Ton script client de M04-E30 refuse certains fichiers, et le dit ; un fichier de
 ### M04-E39 — Panne : l'inventaire dynamique est vide  `BF` `★★`
 
 > **Ticket INC-3145** — *De : Karim Benali*
-> Le contrôle de dérive de cette nuit dit « 0 hôte, 0 changement » : trop beau pour être vrai. `ansible-inventory -i inventories/lab/proxmox.yml --graph` ne montre plus aucun hôte dans `socle` ni dans les groupes `role_*`, alors que toutes les VMs tournent dans Proxmox. Un inventaire vide qui ne lève pas d'erreur, c'est une supervision aveugle : trouve la cause, et dis-moi comment on fera pour qu'un inventaire vide fasse **échouer** le contrôle.
+> Le contrôle de dérive de cette nuit n'a rien contrôlé : pas un seul hôte vérifié dans son rapport. Et `ansible-inventory -i inventories/lab/proxmox.yml --graph` ne me donne plus aucun hôte dans `socle` ni dans les groupes `role_*`, alors que toutes les VMs tournent dans Proxmox. Un inventaire qui peut se vider sans faire **échouer** franchement la vérification, c'est une supervision aveugle : trouve la cause, et dis-moi comment on s'assure qu'un inventaire vide ou illisible arrête tout.
 
 **Objectifs pédagogiques**
 - Comprendre le fonctionnement d'un plugin d'inventaire (`community.proxmox.proxmox`) : vérification du nom du fichier, appels d'API, faits collectés, groupes construits (`keyed_groups`, `groups`, `compose`, `filters`).
@@ -248,7 +248,7 @@ Ton script client de M04-E30 refuse certains fichiers, et le dit ; un fichier de
 
 <details><summary>Indice 1</summary>
 
-Un plugin d'inventaire qui échoue **n'arrête pas** Ansible : l'erreur devient un avertissement (`Unable to parse … as an inventory source`) et l'exécution continue avec ce qui reste (parfois rien). Un plugin qui réussit avec une réponse vide n'affiche rien du tout.
+Par défaut, un plugin d'inventaire qui échoue **n'arrête pas** Ansible : l'erreur devient un avertissement (`Unable to parse … as an inventory source`) et l'exécution continue avec ce qui reste (parfois rien). Ton `ansible.cfg` de M04-E13 (`unparsed_is_failed`) rend déjà fatal le cas « plus aucune source analysable » : toutes les variantes ne se présentent donc pas de la même façon. Un plugin qui réussit avec une réponse **vide**, lui, ne lève rien, nulle part.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -363,7 +363,7 @@ Si `sudo` est lent sur une seule machine : `journalctl -t sudo`, `/etc/pam.d/sud
 
 ### M04-E42 — Panne : Molecule échoue avant même de tester  `BF` `★★`
 
-> **Ticket DEV-580** — *De : Julien Petit*
+> **Ticket DEV-582** — *De : Julien Petit*
 > Toutes les MR de `plateforme/ansible` sont bloquées : le job `molecule` échoue, et pas sur mes tests, il n'arrive même pas à les lancer. En local, `molecule test` sur le rôle `base` fait pareil : il s'arrête pendant la création des instances. Personne n'a touché à `molecule/` depuis des semaines. Il faut débloquer la CI, et que ça ne se reproduise pas sans prévenir.
 
 **Objectifs pédagogiques**
@@ -450,7 +450,7 @@ Les contrôles `lab/bin/check 04 35` à `04 42` sont des sondes de triage. Certa
 
 ### M04-E44 — Sous le capot : AnsiballZ et un module maison  `LAB` `★★★★`
 
-> **Ticket PLAT-580** — *De : Karim Benali*
+> **Ticket PLAT-583** — *De : Karim Benali*
 > Deux choses. Un : pendant les pannes, j'ai entendu trop de « Ansible exécute le module sur la machine ». Je veux que tu saches **montrer** ce qui part de `adm01`, ce qui est écrit sur la cible, ce qui est exécuté et ce qui revient. Deux : Nadia veut que `chrony` redémarre tout seul s'il tombe, sur tout le socle. Fais-le avec un **module maison** de notre collection `medisphere.socle`, `systemd_dropin`, qui gère un fichier de surcharge systemd proprement : idempotent, `--check`, `--diff`, testé. Oui, un `template` et un handler suffiraient ; justement, je veux qu'on sache quand un module vaut mieux, et qu'on sache l'écrire.
 
 **Objectifs pédagogiques**

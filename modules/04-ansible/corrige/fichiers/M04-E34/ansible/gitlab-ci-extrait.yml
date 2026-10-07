@@ -2,6 +2,10 @@
 # autres jobs molecule:<rôle> (modèle .molecule de M04-E27).
 molecule:node_exporter:
   extends: .molecule
+  # Le VMID 2049 est partagé avec le scénario dnsmasq (M04-E46) : un même resource_group
+  # pour les deux jobs, au lieu du molecule-$SCENARIO hérité, pour qu'ils ne tournent
+  # jamais en même temps.
+  resource_group: molecule-vmid-2049
   variables:
     SCENARIO: node_exporter
   rules:

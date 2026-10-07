@@ -65,7 +65,7 @@ CONF
   3)
     f="$d/40-ecoute.conf"; sauver "$f"
     cat >"$f" <<'CONF'
-# SEC-582 : sshd n'écoute que sur l'interface d'administration (Lucas)
+# SEC-585 : sshd n'écoute que sur l'interface d'administration (Lucas)
 ListenAddress 10.10.20.115
 CONF
     chmod 644 "$f"; noter_injecte "$f"

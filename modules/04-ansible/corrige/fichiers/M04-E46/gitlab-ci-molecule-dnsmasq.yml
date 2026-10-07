@@ -1,6 +1,9 @@
 # Extrait à ajouter à .gitlab-ci.yml de plateforme/ansible (modèle des jobs Molecule de M04-E27).
 molecule:dnsmasq:
   extends: .molecule
+  # Le VMID 2049 est partagé avec le scénario node_exporter (M04-E34) : même resource_group
+  # pour les deux jobs (au lieu du molecule-$SCENARIO hérité), jamais en même temps.
+  resource_group: molecule-vmid-2049
   variables:
     SCENARIO: dnsmasq
   rules:

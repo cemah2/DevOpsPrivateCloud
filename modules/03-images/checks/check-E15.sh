@@ -17,10 +17,15 @@ title "runner01 : outils et flux"
 check_ssh_output "runner01 : Packer 1.16 installé" runner01 '^Packer v1\.16\.' "packer version"
 check_ssh_output "runner01 : plugin proxmox installé pour gitlab-runner" runner01 'github\.com/hashicorp/proxmox' \
   "sudo -n -u gitlab-runner -H packer plugins installed"
-check_ssh "runner01 → pve01 : API (TCP 8006) joignable" runner01 \
-  'ip=$(getent ahostsv4 pve01.par1.medisphere.internal | awk "NR==1{print \$1}"); [ -n "$ip" ] && timeout 5 bash -c "exec 3<>/dev/tcp/$ip/8006"'
+# L'API est jointe par l'adresse présente dans le certificat de pve01 (<IP-PVE01>), lue dans
+# l'URL de pve-packer.env (le certificat ne porte aucun nom DNS du lab). Le secret n'est pas lu.
+_m03_e15_url="$(sed -nE '0,/^(export +)?PKR_VAR_proxmox_url=/s/^(export +)?PKR_VAR_proxmox_url="?([^"]*)"?.*/\2/p' \
+  "$HOME/.config/workbook/pve-packer.env" 2>/dev/null)" || _m03_e15_url=""
+_m03_e15_hote="$(sed -E 's|^https?://||; s|/.*$||; s|:[0-9]+$||' <<<"$_m03_e15_url")"
+check_ssh "runner01 → pve01 : API (TCP 8006) joignable sur <IP-PVE01> (${_m03_e15_hote:-URL de pve-packer.env illisible})" runner01 \
+  "timeout 5 bash -c 'exec 3<>/dev/tcp/$_m03_e15_hote/8006'"
 check_ssh "runner01 : le certificat de l'API de pve01 est approuvé par le magasin système (TLS vérifié)" runner01 \
-  'ip=$(getent ahostsv4 pve01.par1.medisphere.internal | awk "NR==1{print \$1}"); curl -s -o /dev/null --max-time 5 "https://$ip:8006/api2/json/version"'
+  "curl -s -o /dev/null --max-time 5 'https://$_m03_e15_hote:8006/api2/json/version'"
 check_ssh_output "pve01 : IPSet automation du pare-feu contient runner01" "$WB_PVE_HOST" '10\.10\.20\.15' \
   "pvesh get /cluster/firewall/ipset/automation --output-format json"
 check_ssh_output "gw01 : règle vsandbox → runner01 TCP 8100-8199 (serveur HTTP de Packer)" gw01 \
@@ -39,7 +44,7 @@ check_cmd ".gitlab-ci.yml sur main : l'image est testée avant publication" \
 check_cmd "pipeline planifié actif sur main" _m03_api_ok "$_M03_PROJET/pipeline_schedules" \
   'any(.[]; .active and (.ref == "main" or .ref == "refs/heads/main"))'
 check_cmd "secret PKR_VAR_proxmox_token : variable protégée et masquée" \
-  _m03_api_ok "$_M03_PROJET/variables/PKR_VAR_proxmox_token" '.protected and (.masked or (.masked_and_hidden // false))'
+  _m03_api_ok "$_M03_PROJET/variables/PKR_VAR_proxmox_token" '.protected and (.masked or (.hidden // false))'
 check_cmd "aucun secret Proxmox dans les fichiers du dépôt (vars/)" \
   bash -c '! grep -REqi "token[^=]*= *\"[0-9a-f]{8}-[0-9a-f]{4}-" "$1/vars" "$1/.gitlab-ci.yml" 2>/dev/null' _ "$_M03_SRC"
 

@@ -233,7 +233,7 @@ L'IPSet porte le nom `automation` imposé par PLAN.md §4.8 ; s'il existait déj
 
 `when:` au niveau d'un job qui a des `rules` est refusé par GitLab (« config key may not be used with `rules`: when ») : il se met dans la règle. La rotation n'existe pas encore au début de E15 : commente la ligne jusqu'à E16, ou fais E16 juste après.
 
-*5. La planification.* *Build → Pipeline schedules → New schedule* : description « Images dorées hebdomadaires », intervalle personnalisé `40 5 * * 1` (lundi 5 h 40), fuseau *Europe/Paris*, branche `main`. Le pipeline tourne **avec les droits du propriétaire** de la planification : il doit pouvoir fusionner sur `main` (branche protégée), et s'il quitte le projet ou est bloqué, la planification devient inactive. Propriétaire recommandé : un compte de service de l'équipe (ou au minimum le référent, avec la reprise de propriété — *Take ownership* — décrite dans RB-038).
+*5. La planification.* *Build → Pipeline schedules → New schedule* : description « Images dorées hebdomadaires », intervalle personnalisé `40 5 * * 1` (lundi 5 h 40), fuseau *Europe/Paris*, branche `main`. Le pipeline tourne **avec les droits du propriétaire** de la planification : il doit pouvoir fusionner sur `main` (branche protégée), et s'il quitte le projet ou est bloqué, la planification devient inactive. Propriétaire recommandé : un compte de service de l'équipe (ou au minimum le référent, avec la reprise de propriété — *Take ownership* — décrite dans RB-031).
 
 *6. La preuve.* Pendant un build manuel, un second pipeline de `main` lancé à la main montre son job de build en état « *Waiting for resource: packer-pve01* », puis il démarre quand le premier se termine.
 
@@ -264,7 +264,7 @@ La chaîne d'images est un service : son pipeline planifié est supervisé (aler
 
 **Solution**
 
-Fichiers : [`fichiers/M03-E16/images/outils/rotation-images.sh`](fichiers/M03-E16/images/outils/rotation-images.sh), [`fichiers/M03-E16/docs/socle/runbooks/RB-037-retrait-image.md`](fichiers/M03-E16/docs/socle/runbooks/RB-037-retrait-image.md).
+Fichiers : [`fichiers/M03-E16/images/outils/rotation-images.sh`](fichiers/M03-E16/images/outils/rotation-images.sh), [`fichiers/M03-E16/docs/socle/runbooks/RB-030-retrait-image.md`](fichiers/M03-E16/docs/socle/runbooks/RB-030-retrait-image.md).
 
 *1. Où est le lien ?* Sur un stockage **LVM-thin** (cas le plus courant pour `local-nvme`) :
 
@@ -298,9 +298,9 @@ admin@adm01:~/src/images$ outils/rotation-images.sh --retirer <VMID-CURRENT>
 
 Sur ZFS, le premier appel refuse déjà, sans `--ssh-pve`. Puis `qm destroy 2033 --purge`, et `outils/rotation-images.sh --famille debian13 --appliquer`.
 
-*5. En CI.* Ligne `outils/rotation-images.sh --famille "$FAMILLE" --appliquer` dans `.publish` (fichier de E15). Un refus (code 3) fait échouer le job de publication **après** la publication : c'est le signal qu'il faut lire RB-037, pas un échec de l'image.
+*5. En CI.* Ligne `outils/rotation-images.sh --famille "$FAMILLE" --appliquer` dans `.publish` (fichier de E15). Un refus (code 3) fait échouer le job de publication **après** la publication : c'est le signal qu'il faut lire RB-030, pas un échec de l'image.
 
-*6. Le runbook.* RB-037 (fichier de référence) : règles, rotation en échec, retrait d'urgence (republier d'abord la version précédente, qui est retestée), communication, VMs créées depuis l'image retirée, et l'explication LVM-thin.
+*6. Le runbook.* RB-030 (fichier de référence) : règles, rotation en échec, retrait d'urgence (republier d'abord la version précédente, qui est retestée), communication, VMs créées depuis l'image retirée, et l'explication LVM-thin.
 
 **Explications**
 
@@ -339,7 +339,7 @@ Exemple complet : [`fichiers/M03-E17/ADR-0030-strategie-images.md`](fichiers/M03
 | Facteurs de décision | 3 | mesurables ou vérifiables (délai de correctif, temps de mise à disposition, coût, preuve, dérive) |
 | Options | 4 | au moins trois, dont image par rôle et image du fournisseur ; avantages **et** inconvénients de chacune |
 | Décision | 5 | contenu / jamais dans l'image ; familles et règle d'ajout ; rythme base et dorée ; version et publication ; consommation (étiquettes, clone complet, VMs existantes) ; rétention et retrait ; outil et licence |
-| Conséquences et risques | 4 | négatives nommées (délai d'une semaine, deux mécanismes, sérialisation, BUSL) ; risques avec traitement (LVM-thin, dérive, runner) |
+| Conséquences et risques | 4 | négatives nommées (délai d'une semaine, deux mécanismes, sérialisation, BUSL) ; risques avec traitement (LVM-thin, dérive, runner, pool `lab` unique pour le jeton) |
 | Forme | 2 | format des ADR précédents, liens vers les livrables, relecteurs nommés |
 
 **Explications**

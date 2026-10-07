@@ -109,6 +109,7 @@ images/
 ├── scripts/          preparer-clonage.sh (E07), gold-debian13.sh (E09), manifeste-paquets.sh (E10), durcir.sh (E13)
 ├── fichiers/         déposés dans les images : CA provisoire, sshd_config.d/, chrony, journald, apt (E09)
 ├── vars/lab.pkrvars.hcl   valeurs NON secrètes de l'environnement (pool, stockages, VNet, ports)
+├── docs/durcissement.md   mesures de durcissement, références, exceptions (E13)
 ├── tests/tester-image.sh  test automatique d'une image (E10, complété en E14)
 ├── outils/           deposer-iso.sh (E05), construire.sh (E08), publier-image.sh, version-image.sh (E10), rotation-images.sh (E16)
 └── manifests/        journaux et manifestes de build (artefacts, ignorés par git)

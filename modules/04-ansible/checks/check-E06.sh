@@ -5,6 +5,8 @@
 # check-E06.sh — M04-E06 : Variables et précédence
 # À lancer depuis adm01. Lecture seule : valeurs EFFECTIVES des variables (module debug,
 # évalué sur adm01 sans connexion aux hôtes), playbook en --check, dpkg-query sur gw01.
+# Après M04-E10, les variables trousse_* sont renommées base_* et le playbook disparaît :
+# ces contrôles-là sont ignorés ; les variables du site (ms_*) et l'état de gw01 restent.
 
 # shellcheck source=_m04-decouverte.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m04-decouverte.sh"
@@ -29,17 +31,21 @@ check_output "gw01 : ms_serveurs_ntp ne contient aucune adresse du lab (ni gw01 
   _m04_debug gw01 "ms_serveurs_ntp | select('match', '^10[.]') | list"
 
 # --- Trousse pilotée par l'inventaire -----------------------------------------------------------
-check_output "trousse_paquets : liste commune définie pour tout le socle (8 outils au moins)" \
-  '^([89]|[1-9][0-9])$' _m04_debug git01 "trousse_paquets | length"
-check_output "trousse_paquets_role : vide par défaut (dns01)" '^\[\]$' _m04_debug dns01 trousse_paquets_role
-check_output "trousse_paquets_role de gw01 : conntrack et ethtool" '^2$' \
-  _m04_debug gw01 "trousse_paquets_role | select('in', ['conntrack', 'ethtool']) | list | length"
-check_cmd "le playbook ne fixe plus les listes dans « vars: » (elles écraseraient l'inventaire)" \
-  bash -c '! grep -Eq "^[[:space:]]+trousse_paquets[a-z_]*:" "$1"' _ "$_M04_SRC/playbooks/trousse-diagnostic.yml"
-_m04_sortie="$(_m04_simuler playbooks/trousse-diagnostic.yml)"
-for _m04_h in $_M04_SOCLE; do
-  check_cmd "--check de la trousse sur $_m04_h : aucun changement, aucun échec" _m04_recap "$_m04_sortie" "$_m04_h"
-done
+if _m04_role_base_en_place; then
+  skip "contrôles des variables trousse_* et du playbook de la trousse" "renommées base_* et repris par le rôle base en M04-E10"
+else
+  check_output "trousse_paquets : liste commune définie pour tout le socle (8 outils au moins)" \
+    '^([89]|[1-9][0-9])$' _m04_debug git01 "trousse_paquets | length"
+  check_output "trousse_paquets_role : vide par défaut (dns01)" '^\[\]$' _m04_debug dns01 trousse_paquets_role
+  check_output "trousse_paquets_role de gw01 : conntrack et ethtool" '^2$' \
+    _m04_debug gw01 "trousse_paquets_role | select('in', ['conntrack', 'ethtool']) | list | length"
+  check_cmd "le playbook ne fixe plus les listes dans « vars: » (elles écraseraient l'inventaire)" \
+    bash -c '! grep -Eq "^[[:space:]]+trousse_paquets[a-z_]*:" "$1"' _ "$_M04_SRC/playbooks/trousse-diagnostic.yml"
+  _m04_sortie="$(_m04_simuler playbooks/trousse-diagnostic.yml)"
+  for _m04_h in $_M04_SOCLE; do
+    check_cmd "--check de la trousse sur $_m04_h : aucun changement, aucun échec" _m04_recap "$_m04_sortie" "$_m04_h"
+  done
+fi
 for _m04_p in conntrack ethtool; do
   check_cmd "gw01 : $_m04_p installé (outil propre au routeur)" _m04_paquet gw01 "$_m04_p"
 done

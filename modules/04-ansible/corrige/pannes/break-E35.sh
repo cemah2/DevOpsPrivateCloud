@@ -31,9 +31,10 @@ _e35_cible() {
 }
 
 # _e35_ping HÔTE — 0 si Ansible joint l'hôte (module ping, sans élévation).
+# Callback par défaut (« hôte | SUCCESS => ») : -o / oneline dépréciés depuis ansible-core 2.19.
 _e35_ping() {
   local o
-  o="$(m04_ansible ansible "$1" -m ansible.builtin.ping -o 2>/dev/null)" || return 1
+  o="$(m04_ansible ansible "$1" -m ansible.builtin.ping 2>/dev/null)" || return 1
   grep -Eq "^$1 \| SUCCESS" <<<"$o"
 }
 
@@ -66,7 +67,7 @@ EOF
       m04_poser E35 "$_M04_SRC/inventories/lab/group_vars/role_runner/zz-connexion.yml" <<'YML' || return 1
 ---
 # Connexion à runner01 : la documentation de GitLab Runner installe et enregistre le runner
-# en root, on se connecte donc directement en root (Lucas, CHG-583).
+# en root, on se connecte donc directement en root (Lucas, CHG-586).
 ansible_user: root
 YML
       m04_journal E35 "group_vars/role_runner/zz-connexion.yml : ansible_user root"

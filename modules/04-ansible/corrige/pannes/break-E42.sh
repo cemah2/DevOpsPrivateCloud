@@ -162,7 +162,7 @@ resume_E42() {
 }
 
 symptome_E42() {
-  wb_symptome "Ticket DEV-580 — De : Julien Petit" \
+  wb_symptome "Ticket DEV-582 — De : Julien Petit" \
     "Toutes les MR de plateforme/ansible sont bloquées : le job molecule échoue, et pas sur mes" \
     "tests, il n'arrive même pas à les lancer. En local, « molecule test » sur le rôle base fait" \
     "pareil : il s'arrête pendant la création des instances. Personne n'a touché à molecule/" \

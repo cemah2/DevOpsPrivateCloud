@@ -459,7 +459,7 @@ root@pve01:~# pveum acl list | grep wb-ansible
 
 Avec un jeton à **privilèges séparés**, les droits effectifs sont l'**intersection** de ceux de l'utilisateur et de ceux du jeton (M02-E36) : sans ACL utilisateur, l'intersection est vide. Correctif : remettre l'ACL **de l'utilisateur** sur `/pool/lab` avec le rôle `WBAnsible` (celle de M04-E13, pas un rôle plus large) : `pveum acl modify /pool/lab --users wb-ansible@pve --roles WBAnsible`. Puis documenter dans l'inventaire des comptes pourquoi cette ACL est nécessaire, pour que la prochaine revue des accès ne la retire pas.
 
-**Variante 2 — jeton expiré (401).** L'avertissement du plugin cite `401 Client Error: authentication failure for url: …/api2/json/cluster/resources?type=vm` ; `curl` : `401`.
+**Variante 2 — jeton expiré (401).** L'avertissement du plugin cite `401 Client Error: authentication failure for url: …/api2/json/cluster/resources?type=vm` ; `curl` : `401`. Comme `proxmox.yml` est la seule source, le `unparsed_is_failed` posé en M04-E13 transforme cet avertissement en erreur finale (`No inventory was parsed`, code 1) : la dérive de la nuit a dû dire « erreur », pas « conforme ».
 
 ```
 root@pve01:~# pveum user token list wb-ansible@pve
@@ -487,10 +487,10 @@ Skipping due to inventory source not ending in "proxmox.yaml" nor "proxmox.yml"
 [WARNING]: Failed to parse inventory with 'auto' plugin: inventory source '…/pve-lab.yml' could not be verified by inventory plugin 'community.proxmox.proxmox'
 ```
 
-(Et `-i inventories/lab/proxmox.yml` : le fichier n'existe plus, `Unable to parse … as an inventory source`.) Le plugin n'accepte que des fichiers dont le nom finit par `proxmox.yml` ou `proxmox.yaml`. Correctif : `git mv` inverse (ou `lab.proxmox.yml` si la convention de nommage l'exige vraiment, et mettre à jour toutes les références).
+(Et `-i inventories/lab/proxmox.yml` : le fichier n'existe plus, `Unable to parse … as an inventory source`, puis, `unparsed_is_failed` oblige, `No inventory was parsed` et code 1.) Le plugin n'accepte que des fichiers dont le nom finit par `proxmox.yml` ou `proxmox.yaml`. Correctif : `git mv` inverse (ou `lab.proxmox.yml` si la convention de nommage l'exige vraiment, et mettre à jour toutes les références).
 
 **Rendre l'inventaire vide bloquant** (étape 5) :
-- `[inventory] any_unparsed_is_failed = True` dans `ansible.cfg` : toute source qui ne s'analyse pas fait **échouer** la commande (variantes 2 et 4) ;
+- `unparsed_is_failed = True` (posé en M04-E13) couvre déjà les variantes 2 et 4 **tant que `proxmox.yml` est la seule source** ; `[inventory] any_unparsed_is_failed = True` va plus loin : toute source illisible fait échouer la commande, même quand une autre (`-i hosts.yml` de secours, inventaire de la flotte) s'analyse encore ;
 - `strict: true` n'est **pas** la solution ici : M04-E13 le laisse à `false` exprès (le `compose` d'`ansible_host` échoue pour `gw01`, installé sans cloud-init), et il ne verrait pas la variante 3 (le `default([])` des filtres ne lève aucune erreur) ;
 - et surtout une **assertion de nombre**, seule défense contre la variante 1 (réponse vide valide), en tête du playbook de dérive :
 
@@ -509,12 +509,12 @@ Skipping due to inventory source not ending in "proxmox.yaml" nor "proxmox.yml"
 
 **Explications**
 
-Le plugin appelle d'abord `/cluster/resources?type=vm`, puis, avec `want_facts`, la configuration et l'état de chaque VM ; il construit des groupes `proxmox_*` (nœud, état, pool), puis les groupes du projet par `keyed_groups`/`groups`, et filtre par `filters`. Un échec du plugin n'est qu'un **avertissement** pour Ansible (une source parmi d'autres) ; une réponse vide n'est pas un échec du tout. D'où l'adage : un contrôle qui ne voit rien doit le dire.
+Le plugin appelle d'abord `/cluster/resources?type=vm`, puis, avec `want_facts`, la configuration et l'état de chaque VM ; il construit des groupes `proxmox_*` (nœud, état, pool), puis les groupes du projet par `keyed_groups`/`groups`, et filtre par `filters`. Par défaut, un échec du plugin n'est qu'un **avertissement** pour Ansible (une source parmi d'autres) — M04-E13 a déjà durci ce cas (`unparsed_is_failed`). Mais une réponse **vide** n'est pas un échec du tout : aucun réglage d'analyse ne la voit. D'où l'adage : un contrôle qui ne voit rien doit le dire.
 
 **Pièges classiques**
 - Donner `PVEAuditor` sur `/` au jeton « pour que ça marche » : il verrait les VMs personnelles de `pve01`.
 - Désactiver la séparation des privilèges du jeton (même cause, effet plus large).
-- Se fier au code retour de `ansible-inventory` (0 dans les quatre variantes).
+- Se fier au code retour de `ansible-inventory` : non nul pour les variantes 2 et 4 (grâce à `unparsed_is_failed`), mais 0 pour les variantes 1 et 3 — les plus sournoises.
 
 **En production chez MédiSphère**
 Le contrôle de dérive et la CI commencent par l'assertion de nombre ; `any_unparsed_is_failed` est activé ; l'expiration des jetons d'automatisation est suivie (registre des secrets, alerte à J-30) ; une revue des accès Proxmox se fait par MR sur un fichier d'ACL décrit en code (module 05 : provider Proxmox).

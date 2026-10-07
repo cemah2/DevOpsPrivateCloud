@@ -17,10 +17,10 @@ Il n'y a pas « une » solution : il y a un catalogue qui passe ses contrôles e
 | Durcissement (Debian et RHEL), `docs/durcissement.md`, build Debian durci | [`M03-E13`](fichiers/M03-E13/images/) |
 | Test complet (deux clones, JUnit, familles Debian et Rocky) | [`M03-E14`](fichiers/M03-E14/images/tests/tester-image.sh) |
 | Pipeline (deux familles), installation de `runner01`, règles `gw01` | [`M03-E15`](fichiers/M03-E15/) |
-| Rotation, RB-037 | [`M03-E16`](fichiers/M03-E16/) |
+| Rotation, RB-030 | [`M03-E16`](fichiers/M03-E16/) |
 | ADR-0030 | [`M03-E17`](fichiers/M03-E17/ADR-0030-strategie-images.md) |
 | **Image dorée Rocky** : `rocky10-gold/build.pkr.hcl`, `variables.pkr.hcl`, `scripts/gold-rocky10.sh`, `fichiers/dnf/automatic.conf` | [`M03-E25/images/`](fichiers/M03-E25/images/) |
-| Catalogue `docs/socle/images.md`, RB-038 | [`M03-E25/medisphere/`](fichiers/M03-E25/medisphere/docs/socle/) |
+| Catalogue `docs/socle/images.md`, RB-031 | [`M03-E25/medisphere/`](fichiers/M03-E25/medisphere/docs/socle/) |
 
 **Démarche recommandée** (8 à 12 h, dont beaucoup d'attente)
 
@@ -40,7 +40,7 @@ Il n'y a pas « une » solution : il y a un catalogue qui passe ses contrôles e
 
    ⚠️ À vérifier sur ta version : le format de `/etc/dnf/automatic.conf` (dnf 4 sur Rocky 10 ; un passage à dnf 5 changerait le nom du service et de la configuration).
 3. **La chaîne** (1 h + attente) : le pipeline de E15 prend en charge `rocky10-gold` dès que le dossier existe (`rules:exists`). Build manuel d'abord, puis une exécution planifiée complète (*Run pipeline schedule* pour ne pas attendre lundi), avec test et publication des deux familles, puis rotation.
-4. **Le catalogue et l'exploitation** (2 h) : `docs/socle/images.md`, RB-038 (synthèse des pannes E19 à E22), ADR-0030 relu, inventaire (section « Templates » : VMID, nom, rôle, étiquettes), matrice des flux, registre des secrets (`wb-packer@pve!packer` : emplacement sur `adm01`, variables CI protégées et masquées, propriétaire, expiration, procédure de rotation de E02).
+4. **Le catalogue et l'exploitation** (2 h) : `docs/socle/images.md`, RB-031 (synthèse des pannes E19 à E22), ADR-0030 relu, inventaire (section « Templates » : VMID, nom, rôle, étiquettes), matrice des flux, registre des secrets (`wb-packer@pve!packer` : emplacement sur `adm01`, variables CI protégées et masquées, propriétaire, expiration, procédure de rotation de E02).
 5. **La preuve d'usage** (30 min) : en suivant **uniquement** `images.md`, clone complet de chaque `current` en 2030 et 2031, connexion, nom, heure (`chronyc -n sources`), CA (`openssl verify`), durcissement (`sshd -T`), SELinux sur Rocky ; chaque écart entre la promesse et la réalité est corrigé dans l'image **ou** dans le document. Puis destruction.
 6. **Hygiène** (30 min) :
    ```
@@ -62,7 +62,7 @@ Barème sur 100. Seuil de recette : 70, **et** aucun critère éliminatoire.
 | 2 | Qualité et tests | 20 | test minimal de E10 | test complet, deux clones, JUnit, test du test documenté | chaque promesse du catalogue a son contrôle ; chaque incident du palier 4 a ajouté le sien |
 | 3 | Chaîne | 20 | builds lancés depuis un poste | pipeline planifié, sérialisé, publication après test, rotation | pré-vol, alerte sur absence de succès, artefacts d'audit conservés |
 | 4 | Sécurité | 15 | durcissement non documenté | SEC-450 vérifié, exceptions justifiées, secrets inventoriés | mesure avant/après, revue avec la RSSI, droits du jeton discutés (pool unique) |
-| 5 | Documentation | 15 | README du projet seul | catalogue, ADR, RB-037, RB-038, inventaire et flux à jour | Julien crée une VM de chaque famille avec la seule documentation, sans question |
+| 5 | Documentation | 15 | README du projet seul | catalogue, ADR, RB-030, RB-031, inventaire et flux à jour | Julien crée une VM de chaque famille avec la seule documentation, sans question |
 | 6 | Présentation et défense | 10 | lecture des fichiers | 10 min structurées, démonstration réussie | limites, risques et dette assumés, préparation des modules 04-06 |
 
 **Questions de revue typiques et éléments de réponse attendus**

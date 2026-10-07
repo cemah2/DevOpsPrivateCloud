@@ -4,6 +4,8 @@
 
 Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argumentés et les QCM expliquent pourquoi les autres options sont fausses. Les fichiers complets du projet sont dans [`fichiers/`](fichiers/), exercice par exercice (`fichiers/M04-EXX/ansible/` reproduit l'arborescence du projet : ne copie que ce que l'exercice ajoute ou modifie).
 
+> **Durée de vie de ce palier.** Les playbooks de E05 à E08 et les variables `trousse_*` sont **repris et remplacés** par le rôle `base` dès M04-E10 (les listes deviennent `base_paquets`, `base_paquets_role`, `base_paquets_interdits`). C'est voulu : un playbook isolé est la bonne taille pour apprendre, un rôle est la bonne taille pour durer. Les vérifications `lab/bin/check 04 05` à `04 08` détectent cette migration : après E10, elles ignorent les contrôles des playbooks disparus et continuent de vérifier l'état des hôtes.
+
 Ce qui a été testé à la rédaction : tous les playbooks passent `ansible-playbook --syntax-check` avec ansible-core **2.21.5 et 2.19.14**, et `ansible-lint` 26.9 avec le profil `production` ; l'inventaire, les variables (`ansible-inventory`, module `debug`) et le rendu des templates (`--check --diff`) ont été vérifiés avec des hôtes simulés en connexion locale ; le bac à sable de E06 a été exécuté et ses résultats sont ceux du corrigé ; la validation `chronyd -p` a été testée avec un vrai binaire chrony. Les collections et l'environnement uv ont été installés et verrouillés pour de vrai.
 
 Points **non testés en conditions réelles**, à vérifier sur ta version et à signaler s'ils diffèrent :

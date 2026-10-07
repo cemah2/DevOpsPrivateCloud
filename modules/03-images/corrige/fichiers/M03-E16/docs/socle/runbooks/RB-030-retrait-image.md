@@ -1,4 +1,4 @@
-# RB-037 — Retirer une image dorée (rotation, retrait d'urgence)
+# RB-030 — Retirer une image dorée (rotation, retrait d'urgence)
 
 | | |
 |---|---|

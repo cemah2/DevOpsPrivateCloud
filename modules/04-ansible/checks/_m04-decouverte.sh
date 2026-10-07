@@ -12,6 +12,24 @@ _M04_PROJET="projects/plateforme%2Fansible"
 _M04_SRC="${WB_SRC:-$HOME/src}/ansible"
 _M04_SOCLE="gw01 adm01 dns01 git01 runner01"
 
+# Dès M04-E13, l'inventaire par défaut du projet est l'inventaire dynamique Proxmox : les
+# commandes Ansible des checks ont alors besoin des mêmes variables que l'apprenant
+# (PROXMOX_*, REQUESTS_CA_BUNDLE). Chargées ici si le fichier existe (inoffensif avant E13).
+_M04_ENV_PVE="$HOME/.config/workbook/pve-ansible.env"
+if [[ -r "$_M04_ENV_PVE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$_M04_ENV_PVE"
+  set +a
+fi
+
+# _m04_role_base_en_place — vrai une fois M04-E10 fait : le rôle base a repris (et remplacé)
+# les playbooks du palier 1. Les checks E05 à E08 sautent alors leurs contrôles de playbook
+# (fichiers supprimés, variables trousse_* renommées base_*) et ne gardent que l'état des hôtes.
+_m04_role_base_en_place() {
+  [[ -s "$_M04_SRC/roles/base/tasks/main.yml" && ! -e "$_M04_SRC/playbooks/trousse-diagnostic.yml" ]]
+}
+
 # _m04_ans COMMANDE [ARGS…] — exécute un outil de l'environnement du projet, depuis sa racine.
 _m04_ans() {
   (

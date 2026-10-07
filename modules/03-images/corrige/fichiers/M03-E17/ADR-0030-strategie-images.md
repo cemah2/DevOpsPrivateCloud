@@ -66,7 +66,7 @@ complets** ; les clones liés sont réservés aux VMs éphémères (tests, Molec
 l'heure.
 
 **Rétention** — 3 versions non rejetées + `current` par famille (rotation automatique après chaque
-publication) ; retrait d'urgence par runbook (RB-037).
+publication) ; retrait d'urgence par runbook (RB-030).
 
 ### Conséquences
 
@@ -80,8 +80,11 @@ publication) ; retrait d'urgence par runbook (RB-037).
   hyperviseur et un runner uniques sérialisent tout ; Packer est sous BUSL (usage interne permis).
 - Risques suivis : dérive des VMs anciennes (traitée par Ansible et la reconstruction périodique
   des VMs, modules 04-05) ; clones liés non détectables par l'API sur LVM-thin (règle « durables =
-  clones complets », vérification `lvs` dans RB-037) ; disponibilité du runner (build manuel depuis
-  `adm01` par `outils/construire.sh` en secours).
+  clones complets », vérification `lvs` dans RB-030) ; disponibilité du runner (build manuel depuis
+  `adm01` par `outils/construire.sh` en secours) ; **périmètre du jeton `wb-packer`** : le pool
+  `lab` est unique (PLAN.md), donc `VM.Allocate` sur `/pool/lab` porte aussi sur le socle — risque
+  accepté (variable CI protégée et masquée, runner réservé aux projets de la plateforme) ; un pool
+  séparé pour les templates et les VMs de build sera proposé au bloc B si le besoin se confirme.
 
 ## Avantages et inconvénients des options
 
@@ -112,7 +115,7 @@ publication) ; retrait d'urgence par runbook (RB-037).
 
 - `plateforme/images` : `docs/durcissement.md`, `tests/tester-image.sh`, `.gitlab-ci.yml`,
   `outils/rotation-images.sh`.
-- `docs/socle/images.md` (catalogue), RB-037 (retrait d'une image), ADR-0010 (organisation des
+- `docs/socle/images.md` (catalogue), RB-030 (retrait d'une image), ADR-0010 (organisation des
   dépôts), ADR-0020 (langages des outils).
 - Modules suivants : 04 (Ansible, Molecule sur clones liés), 05 (OpenTofu : sélection par
   étiquettes, clones complets), 13 (signature et SBOM pour les images de conteneurs), 26

@@ -2,7 +2,7 @@
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-Scripts de panne : [`pannes/break-E19.sh`](pannes/break-E19.sh) à [`pannes/break-E22.sh`](pannes/break-E22.sh) (fonctions communes : [`pannes/_m03-commun.sh`](pannes/_m03-commun.sh)). Synthèse d'astreinte : [`fichiers/M03-E25/medisphere/docs/socle/runbooks/RB-038-diagnostic-build-demarrage.md`](fichiers/M03-E25/medisphere/docs/socle/runbooks/RB-038-diagnostic-build-demarrage.md).
+Scripts de panne : [`pannes/break-E19.sh`](pannes/break-E19.sh) à [`pannes/break-E22.sh`](pannes/break-E22.sh) (fonctions communes : [`pannes/_m03-commun.sh`](pannes/_m03-commun.sh)). Synthèse d'astreinte : [`fichiers/M03-E25/medisphere/docs/socle/runbooks/RB-031-diagnostic-build-demarrage.md`](fichiers/M03-E25/medisphere/docs/socle/runbooks/RB-031-diagnostic-build-demarrage.md).
 
 ---
 
@@ -81,7 +81,7 @@ La copie de travail a été modifiée (les « essais de Lucas ») : `--brouillon
 **Prévention**
 - Faire échouer vite : une étape de contrôle avant le build (`outils/construire.sh` ou un job CI) qui vérifie depuis la machine de build le DHCP (bail d'une VM de sonde), la résolution DNS et l'accès au serveur HTTP ; ou une limite de temps courte pour l'installation (`ssh_timeout` adapté à la durée réelle mesurée, marge comprise).
 - `gw01` : alerte quand règles chargées et fichier divergent ; règles du lab commentées avec leur exercice (une règle altérée se repère à son commentaire).
-- RB-038, tableau « console → étape → commande ».
+- RB-031, tableau « console → étape → commande ».
 
 **Explications**
 

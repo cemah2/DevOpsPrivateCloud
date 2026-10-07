@@ -30,8 +30,10 @@ check_output "groupe role_bastion : adm01" '^adm01$' _m04_groupe role_bastion
 check_output "groupe role_dns : dns01" '^dns01$' _m04_groupe role_dns
 check_output "groupe role_gitlab : git01" '^git01$' _m04_groupe role_gitlab
 check_output "groupe role_runner : runner01" '^runner01$' _m04_groupe role_runner
+# Les six groupes attendus, tous enfants directs de all (un groupe de plus — role_semaphore
+# après M04-E28 — ne gêne pas ; ce qui est contrôlé : aucun role_* imbriqué sous socle).
 check_output "groupes socle et role_* au même niveau (enfants directs de all, comme en dynamique)" '^6$' \
-  jq -r '[.all.children[] | select(. == "socle" or startswith("role_"))] | length' <<<"$_m04_inv"
+  jq -r '[.all.children[] | select(IN("socle", "role_routeur", "role_bastion", "role_dns", "role_gitlab", "role_runner"))] | length' <<<"$_m04_inv"
 
 # _m04_hv HÔTE VARIABLE — valeur brute d'une variable d'hôte dans l'inventaire
 _m04_hv() { jq -r --arg h "$1" --arg v "$2" '._meta.hostvars[$h][$v] // empty' <<<"$_m04_inv" 2>/dev/null || true; }

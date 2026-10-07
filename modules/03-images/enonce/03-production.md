@@ -210,7 +210,7 @@ Le build connaît son VMID avant même de lancer Packer (`outils/version-image.s
 - Règle de rétention : par famille, les **3 versions les plus récentes non rejetées**, plus la version `current` (où qu'elle soit), plus la plus récente version `rejete` (analyse). Plages : Debian 9010-9029, Rocky 9030-9049.
 - Outil attendu : `outils/rotation-images.sh`, accès par `outils/pve.sh` (jeton `wb-packer`). Simulation par défaut ; suppression seulement avec une option explicite ; mode « retrait d'une version précise ».
 - Refus obligatoires : supprimer la version `current` ; supprimer un template dont des clones liés sont détectés ; tout VMID hors des plages des images dorées.
-- Runbook : `docs/socle/runbooks/RB-037-retrait-image.md` dans `plateforme/medisphere`.
+- Runbook : `docs/socle/runbooks/RB-030-retrait-image.md` dans `plateforme/medisphere`.
 
 **Travail demandé**
 1. **Comprendre le lien.** Crée un clone lié de la version la plus ancienne (VMID 2033, nom `m03-lien`), puis compare, en root sur `pve01`, `qm config 2033`, `pvesm list local-nvme` et (selon ton stockage) `lvs -o lv_name,origin` ou `zfs list -o name,origin`. Où est inscrit le lien entre le clone et son template ? Est-il visible par l'API (`GET /nodes/<NOEUD>/qemu/2033/config`, `GET …/storage/local-nvme/content`) ? Note tes observations : elles décident de la méthode de détection.
@@ -218,7 +218,7 @@ Le build connaît son VMID avant même de lancer Packer (`outils/version-image.s
 3. **La détection des clones liés.** Implémente la détection par l'API pour les stockages où elle est possible, et décide (en le justifiant dans l'en-tête du script et dans le runbook) ce que fait l'outil quand le stockage ne laisse aucune trace dans l'API.
 4. **Les essais.** Avec la VM 2033 en place, lance l'outil en mode retrait sur la version la plus ancienne : selon ton stockage, il doit refuser, ou expliquer pourquoi il ne peut pas savoir. Essaie aussi de retirer la version `current` : refus. Détruis 2033, puis applique la rotation.
 5. **En CI.** Ajoute la rotation au job de publication (après la pose de `current`).
-6. **Le runbook.** Rédige RB-037 : rotation en échec, retrait d'urgence de la version `current` (republier la précédente d'abord), communication, VMs déjà créées depuis l'image retirée.
+6. **Le runbook.** Rédige RB-030 : rotation en échec, retrait d'urgence de la version `current` (republier la précédente d'abord), communication, VMs déjà créées depuis l'image retirée.
 
 > ⚠️ **Attention** : une suppression de template est définitive (pas de corbeille, et les sauvegardes PBS du pool `lab` ne couvrent un template que s'il était présent lors de la dernière sauvegarde). Lance toujours la simulation d'abord, et lis la liste.
 
@@ -226,7 +226,7 @@ Le build connaît son VMID avant même de lancer Packer (`outils/version-image.s
 - [ ] `outils/rotation-images.sh` est sur `main` (ShellCheck propre, `--help`), appelé par le job de publication.
 - [ ] Le catalogue Debian respecte la règle de rétention, avec une seule version `current`.
 - [ ] Ton journal montre les refus (clone lié ou impossibilité de savoir, version `current`) et la rotation appliquée.
-- [ ] RB-037 est fusionné dans `plateforme/medisphere`.
+- [ ] RB-030 est fusionné dans `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 03 16`
 

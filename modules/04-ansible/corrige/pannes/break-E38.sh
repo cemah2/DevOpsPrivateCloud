@@ -94,7 +94,7 @@ _mE38_une() {
       if ! grep -Eqi '^[[:space:]]*vault_id_match[[:space:]]*[=:][[:space:]]*(true|yes|1)' "$_M04_SRC/ansible.cfg"; then
         m04_sauver E38 "$_M04_SRC/ansible.cfg" || return 1
         m04_ini_set "$_M04_SRC/ansible.cfg" defaults vault_id_match True \
-          "SEC-581 : chaque fichier chiffré n'est déchiffré que par le secret de son identifiant" || return 1
+          "SEC-584 : chaque fichier chiffré n'est déchiffré que par le secret de son identifiant" || return 1
         m04_noter E38 "$_M04_SRC/ansible.cfg"
       fi
       # En-tête 1.2 avec une autre étiquette (le corps chiffré ne dépend pas de l'étiquette).

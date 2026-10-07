@@ -3,7 +3,7 @@
 > Document de `plateforme/medisphere` (M03-E25). Source de vérité du **code** : `plateforme/images`.
 > Source de vérité de l'**état** : Proxmox (étiquettes et notes des templates). Ce document dit ce
 > qui existe, comment le consommer, et qui fait quoi ; il ne remplace pas `pvesh`.
-> Décision : ADR-0030. Retrait : RB-037. Durcissement : `plateforme/images` → `docs/durcissement.md`.
+> Décision : ADR-0030. Retrait : RB-030. Durcissement : `plateforme/images` → `docs/durcissement.md`.
 
 ## Familles et templates
 
@@ -58,7 +58,7 @@ source, paquets) et dans l'artefact `manifests/` du pipeline qui l'a construite 
 1. MR sur `plateforme/images` → `packer validate` et contrôles de qualité.
 2. Fusion, puis pipeline planifié (lundi matin) ou manuel : build → `tests/tester-image.sh` →
    `outils/publier-image.sh` (rejoue le test, pose `current`) → `outils/rotation-images.sh`.
-3. Rétention : 3 versions non rejetées + `current` par famille ; retrait d'urgence : RB-037.
+3. Rétention : 3 versions non rejetées + `current` par famille ; retrait d'urgence : RB-030.
 
 ## Responsabilités
 
@@ -66,7 +66,7 @@ source, paquets) et dans l'artefact `manifests/` du pipeline qui l'a construite 
 |---|---|
 | Équipe Plateforme (Karim Benali, référent) | code, pipeline, publication, rotation, ce document |
 | Sophie Laurent (RSSI) | référentiel de durcissement, revue des exceptions, demandes de retrait d'urgence |
-| Nadia Roussel (astreinte) | RB-037, alertes du pipeline planifié |
+| Nadia Roussel (astreinte) | RB-030, alertes du pipeline planifié |
 | Consommateurs (M04, M05, équipes) | sélection par étiquettes, clones complets pour le durable |
 
 ## Registre des versions publiées

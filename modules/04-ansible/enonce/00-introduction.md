@@ -82,7 +82,7 @@ Arborescence visée en fin de module (chaque exercice indique ce qu'il ajoute) :
 
 ```
 ansible/
-├── ansible.cfg                  configuration d'Ansible pour le projet (E02, complétée en E12, E26)
+├── ansible.cfg                  configuration d'Ansible pour le projet (E02, complétée en E12, E13, E26, E30)
 ├── pyproject.toml, uv.lock      environnement d'exécution : ansible-core, ansible-lint, Molecule (E02)
 ├── .python-version              3.13 (Python de Debian)
 ├── collections/
@@ -95,8 +95,13 @@ ansible/
 │   ├── group_vars/role_<rôle>/  spécificités d'un rôle (E06…)
 │   └── host_vars/<hôte>/        spécificités d'un hôte (E03, E06…)
 ├── playbooks/                   trousse-diagnostic.yml (E05), identite-hotes.yml (E07),
-│   └── templates/               chrony-client.yml (E08), puis site.yml et les playbooks par rôle
+│   └── templates/               chrony-client.yml (E08) — repris par le rôle base en E10 —,
+│                                puis site.yml et les playbooks par rôle
 ├── roles/                       base, ssh_durci, pare_feu, gitlab_runner… (E10 →)
+├── molecule/                    tests des rôles : _commun/ + un dossier par rôle (E24) ;
+│                                base commune dans .config/molecule/config.yml
+├── outils/                      scripts d'exploitation : mesure, dérive, Vault (E26, E29, E30)
+├── docs/                        exploitation.md (E19), performances.md (E26), analyses/ (E44)
 ├── .ansible-lint, .pre-commit-config.yaml, .gitlab-ci.yml   qualité et CI (E02, E20, E27)
 └── README.md
 ```

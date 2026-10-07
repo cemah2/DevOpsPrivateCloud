@@ -78,7 +78,7 @@ Sur `dns01` : `journalctl -u dnsmasq` pendant le démarrage de la VM (`DHCPDISCO
 Si la console montre une invite de connexion (`login:`), l'installation est **terminée** : le problème est entre le système installé et Packer. Depuis la console, connecte-toi n'est pas possible (aucun mot de passe connu)… mais `qm guest cmd 9090 ping` en root sur `pve01` répond-il ?
 </details>
 
-**Pour aller plus loin** : ajoute au build une limite de temps plus courte pour la seule étape d'installation (et pas pour les provisioners), et documente-la dans RB-038 « Diagnostiquer un build d'image » (ce runbook est un livrable du mini-projet).
+**Pour aller plus loin** : ajoute au build une limite de temps plus courte pour la seule étape d'installation (et pas pour les provisioners), et documente-la dans RB-031 « Diagnostiquer un build d'image » (ce runbook est un livrable du mini-projet).
 
 ---
 
@@ -233,7 +233,7 @@ Quatre étapes, quatre familles de messages : le micrologiciel (« No bootable d
 **Prérequis** : M03-E04, M03-E14.
 **Durée indicative** : 3 h.
 
-**Contexte technique** : VM de mesure **2034 `m03-boot`**, clone de la version Debian `current` (lié, puis complet pour une comparaison), VNet `vsandbox`, utilisateur `admin` et ta clé, étiquette `env-m03`. Toutes les mesures se font **au moins trois fois** ; on note la médiane.
+**Contexte technique** : VM de mesure **2034 `m03-boot`**, clone de la version Debian `current` (lié, puis complet pour une comparaison), VNet `vsandbox`, utilisateur `admin` et ta clé, étiquette `env-m03`. Le VMID 2034 doit être libre (la VM de recette de E09 a été détruite à la fin de cet exercice) : vérifie avec `qm list`. Toutes les mesures se font **au moins trois fois** ; on note la médiane.
 
 **Travail demandé**
 1. **Vu de l'extérieur.** Écris un petit script (brouillon dans `~/m03/e23/`) qui, pour une VM donnée, horodate : appel de démarrage → première réponse de l'agent (`qm guest cmd <VMID> ping` ou API) → premier accès SSH réussi → `cloud-init status --wait` terminé. Mesure un premier démarrage de 2034 avec `ciupgrade=0`.

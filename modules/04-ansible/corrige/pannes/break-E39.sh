@@ -148,11 +148,12 @@ resume_E39() {
 
 symptome_E39() {
   wb_symptome "Ticket INC-3145 — De : Karim Benali" \
-    "Le contrôle de dérive de cette nuit dit « 0 hôte, 0 changement » : trop beau pour être vrai." \
-    "« ansible-inventory -i inventories/lab/proxmox.yml --graph » ne montre plus aucun hôte dans" \
-    "socle ni dans les groupes role_*, alors que toutes les VMs tournent dans Proxmox. Un" \
-    "inventaire vide qui ne lève pas d'erreur, c'est une supervision aveugle : trouve la cause," \
-    "et dis-moi comment on fera pour qu'un inventaire vide fasse ÉCHOUER le contrôle." \
+    "Le contrôle de dérive de cette nuit n'a rien contrôlé : pas un seul hôte vérifié dans son" \
+    "rapport. Et « ansible-inventory -i inventories/lab/proxmox.yml --graph » ne me donne plus" \
+    "aucun hôte dans socle ni dans les groupes role_*, alors que toutes les VMs tournent dans" \
+    "Proxmox. Un inventaire qui peut se vider sans faire ÉCHOUER franchement la vérification," \
+    "c'est une supervision aveugle : trouve la cause, et dis-moi comment on s'assure qu'un" \
+    "inventaire vide ou illisible arrête tout." \
     "" \
     "Temps cible : 30 min. Contrôle : lab/bin/check 04 39"
 }

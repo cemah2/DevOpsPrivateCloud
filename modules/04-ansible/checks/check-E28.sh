@@ -32,6 +32,19 @@ title "M04-E28 — Semaphore UI"
 require_cmd jq ssh curl dig openssl
 _m04_charger
 
+# Fin de module (M04-E46) : sem01 est détruite (ADR-0040) et sa configuration documentée.
+# Ce contrôle ne s'applique alors plus ; il vérifie seulement que la documentation existe.
+# (Si pve01 ne répond pas, on ne conclut rien : les contrôles normaux le diront en rouge.)
+if _m04_vms >/dev/null && ! _m04_existe 2041; then
+  if _m04_doc_contient "$_M04_DOC/configuration.md" '[Ss]emaphore'; then
+    skip "vérifications de sem01 et du projet Semaphore" \
+      "sem01 détruite en fin de module (ADR-0040), recréation documentée dans configuration.md"
+  else
+    check_cmd "sem01 (2041) existe, ou sa destruction est documentée (configuration.md, ADR-0040)" false
+  fi
+  return 0
+fi
+
 title "VM sem01 (2041)"
 check_cmd "VM 2041 nommée sem01, dans le pool lab" _m04_vm_filtre 2041 '.name == "sem01" and .pool == "lab"'
 check_cmd "VM 2041 : étiquettes env-m04 et role-semaphore, sans gold ni current" \

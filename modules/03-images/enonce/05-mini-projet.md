@@ -20,20 +20,20 @@ Fin du troisième chantier. Le template fait à la main du module 00 a des succe
 **Contexte technique**
 - Projet : `plateforme/images` (`~/src/images`) ; documentation : `plateforme/medisphere` (`~/medisphere`). Arborescence de référence : [`00-introduction.md`](00-introduction.md).
 - Image dorée Rocky : `rocky10-gold/`, clone de 9002, VMID 9030-9049, nom `rocky10-gold-AAAAMMJJ-N`, étiquettes `gold` + `rocky10`. CPU `x86-64-v3` minimum. Contenu équivalent à l'image Debian : agent, cloud-init, chrony sur la passerelle du VLAN, CA provisoire dans le magasin du système, sshd de base et durci, journal persistant, correctifs de sécurité automatiques (équivalent Rocky d'`unattended-upgrades`), SELinux en mode *enforcing*, durcissement SEC-450.
-- Catalogue documentaire : `docs/socle/images.md` (nouveau). Runbooks attendus : RB-037 (retrait, E16) et RB-038 « Diagnostiquer un build ou un premier démarrage » (à partir de tes journaux du palier 4).
+- Catalogue documentaire : `docs/socle/images.md` (nouveau). Runbooks attendus : RB-030 (retrait, E16) et RB-031 « Diagnostiquer un build ou un premier démarrage » (à partir de tes journaux du palier 4).
 - Le contrôle global vérifie notamment : bases 9001 et 9002, une seule version `current` par famille (moins de 8 jours), rotation appliquée, manifeste dans les notes, CPU de l'image Rocky, pipeline planifié réussi dans les 8 derniers jours, secret protégé, fichiers clés sur `main`, documentation, hygiène.
 
 **Travail demandé**
 1. **La seconde famille.** Ajoute l'image dorée Rocky Linux 10 : build, script de contenu, durcissement (ton `durcir.sh` gère les deux familles, sans copie), test (`tests/tester-image.sh` connaît les différences de la famille RHEL). Fais-la construire, tester et publier **par la CI**.
 2. **La chaîne.** Les deux familles sont reconstruites chaque semaine par le même pipeline planifié, testées, publiées, puis la rotation s'applique. Laisse tourner au moins **une** exécution planifiée complète avant la recette.
 3. **Le catalogue.** `docs/socle/images.md` : familles et templates, étiquettes, comment consommer une image (sélection, type de clone, paramètres cloud-init à fournir, particularités Rocky), contenu de chaque famille, cycle de vie, responsabilités, registre des versions publiées. ADR-0030 fusionné et cohérent avec ce document.
-4. **L'exploitation.** RB-037 et RB-038 fusionnés ; inventaire (`docs/socle/inventaire.md`) et matrice des flux à jour ; jeton `wb-packer` et variables CI inscrits au registre des secrets (propriétaire, expiration, rotation).
+4. **L'exploitation.** RB-030 et RB-031 fusionnés ; inventaire (`docs/socle/inventaire.md`) et matrice des flux à jour ; jeton `wb-packer` et variables CI inscrits au registre des secrets (propriétaire, expiration, rotation).
 5. **La preuve d'usage.** Avec la seule documentation, crée une VM de chaque famille (VMID 2030 et 2031, clones **complets** de `current`), vérifie que tout ce que promet le catalogue est vrai sur elles (connexion, nom, heure, CA, durcissement), puis détruis-les.
 6. **L'hygiène.** Aucune panne `M03` active (clos-les avec `--annuler`), aucune VM 2030-2039, aucun template 9090-9099, aucun secret dans les dépôts, fichiers de `~/.config/workbook/` en 600.
-7. **La revue.** 10 minutes de présentation (ce qui est livré, ce qui ne l'est pas, les risques), démonstration (un pipeline, une VM de chaque famille, un retrait d'image en simulation), puis Nadia tire une panne de M03-E19 à M03-E22 que tu résous avec RB-038.
+7. **La revue.** 10 minutes de présentation (ce qui est livré, ce qui ne l'est pas, les risques), démonstration (un pipeline, une VM de chaque famille, un retrait d'image en simulation), puis Nadia tire une panne de M03-E19 à M03-E22 que tu résous avec RB-031.
 
 **Contraintes**
-- Aucune image n'est publiée depuis un poste : seule la CI pose `current` (sauf retrait d'urgence documenté par RB-037).
+- Aucune image n'est publiée depuis un poste : seule la CI pose `current` (sauf retrait d'urgence documenté par RB-030).
 - Aucun secret dans les dépôts, les images, les notes des templates, les journaux de CI ou la documentation (des **emplacements**, jamais des valeurs).
 - La logique commune aux deux familles n'est pas dupliquée (scripts, tests, pipeline) ; les différences sont explicites et commentées.
 - Tout changement passe par une MR relue avec pipeline vert ; les écarts aux exercices sont justifiés (ADR ou description de MR).

@@ -267,14 +267,15 @@ Fichiers : [`.gitlab-ci.yml`](fichiers/M04-E27/ansible/.gitlab-ci.yml), [`outils
 admin@adm01:~$ ssh-keygen -t ed25519 -C ansible-ci -N "" -f ~/.config/workbook/ansible-ci
 ```
 
-(Sans phrase de passe : c'est une identité de machine, protégée par GitLab ; la copie de `adm01` est supprimée une fois la variable CI créée.) Dans les clés autorisées du rôle `base` (variables de l'E10), une entrée :
+(Sans phrase de passe : c'est une identité de machine, protégée par GitLab ; la copie de `adm01` est supprimée une fois la variable CI créée.) Dans `ms_cles_admin` (E10/E14 : une liste de lignes au format `authorized_keys`, consommée par `base_utilisateurs`), une entrée de plus :
 
 ```yaml
-- cle: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA…XXXX ansible-ci"
-  options: 'from="10.10.20.15"'
+ms_cles_admin:
+  - "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+  - 'from="10.10.20.15" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA…XXXX ansible-ci'
 ```
 
-(Le format exact suit ta structure de variables de l'E10 ; le module `ansible.posix.authorized_key` prend `key_options: 'from="10.10.20.15"'`.) Variables CI (*Settings > CI/CD > Variables*) : `ANSIBLE_CI_SSH_KEY` (type fichier, protégée ; une clé multiligne ne peut pas être masquée), `VAULT_PASS_LAB` (fichier, protégée, masquée si ton mot de passe satisfait les règles de masquage), `PROXMOX_URL`, `PROXMOX_USER`, `PROXMOX_TOKEN_ID` (protégées), `PROXMOX_TOKEN_SECRET` (protégée, masquée et cachée).
+(Les options comme `from=` se placent en tête de ligne, comme dans le fichier `authorized_keys` lui-même : `ansible.posix.authorized_key` les accepte telles quelles dans `key`. Sur `adm01`, `host_vars/adm01/base.yml` remplace `ms_cles_admin` : il doit lui aussi recevoir la ligne `ansible-ci`.) Variables CI (*Settings > CI/CD > Variables*) : `ANSIBLE_CI_SSH_KEY` (type fichier, protégée ; une clé multiligne ne peut pas être masquée), `VAULT_PASS_LAB` (fichier, protégée, masquée si ton mot de passe satisfait les règles de masquage), `PROXMOX_URL`, `PROXMOX_USER`, `PROXMOX_TOKEN_ID` (protégées), `PROXMOX_TOKEN_SECRET` (protégée, masquée et cachée).
 
 `adm01` : `ansible_connection` devient une expression évaluée sur le contrôleur, `local` seulement si le contrôleur **est** `adm01`. Sans cela, `appliquer` exécuterait sur `runner01` les tâches prévues pour `adm01` (sshd, utilisateurs, outils), en local.
 

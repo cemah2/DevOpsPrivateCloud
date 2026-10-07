@@ -9,15 +9,8 @@
 # shellcheck source=_m04-decouverte.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m04-decouverte.sh"
 
-# Inventaire dynamique (M04-E13) : les commandes Ansible des checks ont besoin des mêmes
-# variables que l'apprenant (PROXMOX_*, REQUESTS_CA_BUNDLE). Elles restent dans ce processus.
-_M04O_ENV_PVE="$HOME/.config/workbook/pve-ansible.env"
-if [[ -r "$_M04O_ENV_PVE" ]]; then
-  set -a
-  # shellcheck source=/dev/null
-  source "$_M04O_ENV_PVE"
-  set +a
-fi
+# Inventaire dynamique (M04-E13) : les variables PROXMOX_* / REQUESTS_CA_BUNDLE nécessaires
+# aux commandes Ansible sont chargées par _m04-decouverte.sh (sourcé ci-dessus).
 
 _M04O_VAULT="inventories/lab/group_vars/all/vault.yml"
 _M04O_PASS="$HOME/.config/workbook/ansible-vault.pass"

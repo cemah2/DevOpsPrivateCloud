@@ -47,7 +47,7 @@ Les playbooks du palier 1 marchent, mais ce sont des fichiers isolés : chacun r
 - [ ] `chronyc -n sources` : chaque client est synchronisé sur sa passerelle ; `gw01` sert toujours le temps au lab.
 - [ ] Un second passage de `socle-base.yml` donne `changed=0` sur les cinq hôtes.
 
-**Vérification** : `lab/bin/check 04 10` (les vérifications de M04-E05 à E08 ne passent plus après cet exercice : leurs playbooks n'existent plus, c'est normal.)
+**Vérification** : `lab/bin/check 04 10` (le rôle `base` **reprend et remplace** les playbooks du palier 1 : les vérifications de M04-E05 à E08 le détectent, ignorent leurs contrôles de playbook disparus et continuent de vérifier l'état des hôtes, que ton rôle doit maintenir.)
 
 <details><summary>Indice 1</summary>
 

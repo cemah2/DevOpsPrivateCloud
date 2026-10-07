@@ -9,7 +9,7 @@
 # shellcheck source=_m04-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m04-expert.sh"
 
-title "M04-E41 — Performances d'Ansible"
+title "M04-E41 — Ansible tourne à vitesse normale"
 require_cmd jq ssh
 
 _m04_e41_base="$(_m04x_ansible ansible-config dump 2>/dev/null)" || _m04_e41_base=""
@@ -38,10 +38,11 @@ _m04_e41_mesure() {
   local d f
   local o
   d="$(date +%s)"
-  o="$(_m04x_ansible ansible socle -b -m ansible.builtin.command -a true -o 2>/dev/null)" || return 1
+  # Callback par défaut (« hôte | CHANGED | rc=0 >> ») : -o / oneline dépréciés depuis 2.19.
+  o="$(_m04x_ansible ansible socle -b -m ansible.builtin.command -a true 2>/dev/null)" || return 1
   f="$(date +%s)"
   # Les cinq hôtes ont répondu (un groupe vide répondrait vite… et à tort).
-  (($(grep -Ec ' \| (CHANGED|SUCCESS) ' <<<"$o") >= 5)) && ((f - d <= 20))
+  (($(grep -Ec '^[a-z0-9_-]+ \| (CHANGED|SUCCESS) ' <<<"$o") >= 5)) && ((f - d <= 20))
 }
 
 check_cmd "forks effectif ≥ 5" _m04_e41_forks

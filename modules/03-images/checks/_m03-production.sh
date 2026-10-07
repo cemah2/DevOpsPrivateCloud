@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# _m03-production.sh — fonctions partagées par les checks M03-E13 à M03-E25 (lecture seule).
+# _m03-production.sh — fonctions partagées par les checks du module 03 (lecture seule).
 # Sourcé par les check-EXX.sh concernés (lab/bin/check ne lance que les check-EXX.sh).
 # Rappel : les checks tournent sous « set -euo pipefail » (lab/bin/check) : toute commande
 # qui peut échouer hors des fonctions check_* est protégée (|| true, ou dans une fonction).

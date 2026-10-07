@@ -18,7 +18,7 @@
 set -euo pipefail
 
 racine="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source-path=SCRIPTDIR source=pve.sh
+# shellcheck source=/dev/null  # outils/pve.sh du projet (version M03-E10, inchangée)
 . "$racine/outils/pve.sh"
 
 usage() { sed -n '4,18s/^# \{0,1\}//p' "${BASH_SOURCE[0]}"; }

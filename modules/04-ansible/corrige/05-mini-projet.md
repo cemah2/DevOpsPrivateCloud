@@ -52,7 +52,7 @@ Les fichiers nouveaux passent `ansible-lint` (profil `production`) et `ansible-p
    | handler de redémarrage à chaque passage | notifié par une tâche non idempotente | corriger la tâche, pas le handler |
    | `apt` `changed` | `update_cache: true` sans `cache_valid_time` | `cache_valid_time: 3600` |
 
-6. **Tests et CI** (2 h) : un scénario Molecule par rôle maison, sur le modèle de M04-E24 (`molecule/<rôle>/`, inventaire avec un VMID réservé, `create`/`destroy` communs), qui vérifie l'**état effectif** : [`molecule/dnsmasq/verify.yml`](fichiers/M04-E46/molecule/dnsmasq/verify.yml) interroge le DNS, il n'inspecte pas le fichier. VMID du scénario `dnsmasq` : 2049, laissé libre par M04-E24 (et utilisé ponctuellement par le CHRONO M04-E34 : ne lance pas les deux en même temps). Un job `molecule:dnsmasq` sur le modèle des autres, déclenché par les changements du rôle ; `ansible-lint` en profil `production` (ou `shared`, justifié dans `.ansible-lint`).
+6. **Tests et CI** (2 h) : un scénario Molecule par rôle maison, sur le modèle de M04-E24 (`molecule/<rôle>/`, inventaire avec un VMID réservé, `create`/`destroy` communs), qui vérifie l'**état effectif** : [`molecule/dnsmasq/verify.yml`](fichiers/M04-E46/molecule/dnsmasq/verify.yml) interroge le DNS, il n'inspecte pas le fichier. VMID du scénario `dnsmasq` : 2049, laissé libre par M04-E24 (et utilisé ponctuellement par le CHRONO M04-E34 : ne lance pas les deux en même temps ; en CI, les deux jobs partagent le `resource_group: molecule-vmid-2049`, voir [`gitlab-ci-molecule-dnsmasq.yml`](fichiers/M04-E46/gitlab-ci-molecule-dnsmasq.yml)). Un job `molecule:dnsmasq` sur le modèle des autres, déclenché par les changements du rôle ; `ansible-lint` en profil `production` (ou `shared`, justifié dans `.ansible-lint`).
 
 7. **Inventaire, secrets, dérive** (1 h) : `[inventory] any_unparsed_is_failed = True` dans `ansible.cfg`, garde-fou de nombre dans `site.yml` et dans le playbook de dérive (M04-E39) ; registre des secrets complété ; démonstration de dérive (exemple : `sudo sed -i 's/^MaxAuthTries 3$/MaxAuthTries 6/' /etc/ssh/sshd_config.d/01-ssh-durci.conf` sur `runner01`, annoncé dans le journal, puis lancement de la planification `derive` : le job échoue avec le `--diff` qui montre la ligne, le ticket « derive » est ouvert ; correction par le job `appliquer`).
 
@@ -65,7 +65,7 @@ Les fichiers nouveaux passent `ansible-lint` (profil `production`) et `ansible-p
    admin@adm01:~/src/ansible$ git status --short && gitleaks git --no-banner --redact .
    admin@adm01:~$ find ~/.config/workbook -type f ! -perm 600
    ```
-   ⚠️ Avant de détruire `sem01` (2041) : exporter sa configuration (projets, modèles, inventaires, environnements) dans `configuration.md` et révoquer sa clé de déploiement et sa clé SSH (registre des secrets) ; retirer son `host-record` (rôle `dnsmasq`, par MR) et ses flux (`pare_feu`, par MR) **après** la destruction de la VM.
+   ⚠️ Avant de détruire `sem01` (2041) : exporter sa configuration (projets, modèles, inventaires, environnements) dans `configuration.md` et révoquer sa clé de déploiement et sa clé SSH (registre des secrets) ; retirer **après** la destruction de la VM, par MR : son `host-record` (rôle `dnsmasq`), ses flux (`pare_feu`), et son entrée de l'inventaire statique (hôte `sem01`, groupe `role_semaphore`) — sinon `site.yml` échouerait sur un hôte injoignable.
 
 **Grille d'évaluation de la revue** (Claire, Karim, Sophie, Nadia ; en auto-évaluation si tu travailles seul)
 

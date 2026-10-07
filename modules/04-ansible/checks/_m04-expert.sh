@@ -32,9 +32,11 @@ _m04x_ansible() {
 
 _m04x_inv_host() { _m04x_ansible ansible-inventory --host "$1" 2>/dev/null; }
 # _m04x_ping HÔTE — l'hôte existe dans l'inventaire ET répond (un motif sans hôte renvoie 0).
+# Sortie du callback par défaut (« hôte | SUCCESS => ») : l'option -o et le callback oneline
+# sont dépréciés depuis ansible-core 2.19.
 _m04x_ping() {
   local o
-  o="$(_m04x_ansible ansible "$1" -m ansible.builtin.ping -o 2>/dev/null)" || return 1
+  o="$(_m04x_ansible ansible "$1" -m ansible.builtin.ping 2>/dev/null)" || return 1
   grep -Eq "^$1 \| SUCCESS" <<<"$o"
 }
 _m04x_ssh_neuf() { ssh -o ControlPath=none -o BatchMode=yes -o ConnectTimeout=8 "$1" true >/dev/null 2>&1; }
