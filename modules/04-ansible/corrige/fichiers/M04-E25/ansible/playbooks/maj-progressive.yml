@@ -40,9 +40,12 @@
   hosts: flotte
   become: true
   gather_facts: false
-  # Canari (1 nœud), puis le reste par lots de 2. Avec 3 nœuds : [web1], [web2, web3].
-  # Le dernier élément de la liste se répète si la flotte grandit.
-  serial: [1, 2]
+  # Canari = premier lot, puis le reste nœud par nœud. Sur une flotte de trois, un lot de
+  # deux ferait tomber le service à 1 nœud sur 3 (constaté à l'étape 3 avec serial: [1, 2]
+  # et la sonde : la taille de lot fixe la capacité minimale pendant la mise à jour).
+  # À plus grande échelle : serial: [1, "20%"] si la capacité supporte 20 % de nœuds
+  # hors service (le dernier élément de la liste se répète).
+  serial: 1
   # Un seul nœud en échec dans un lot (> 0 %) arrête le play avant le lot suivant.
   max_fail_percentage: 0
   # Ordre déterministe : le canari est toujours le même nœud (on sait où regarder).

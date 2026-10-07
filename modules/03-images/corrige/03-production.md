@@ -231,7 +231,7 @@ L'IPSet porte le nom `automation` imposé par PLAN.md §4.8 ; s'il existait déj
 | HTTP de Packer sur le runner | `PKR_VAR_http_bind_address: "10.10.20.15"` |
 | traçabilité | artefacts `manifests/` (journal, manifeste JSON, paquets) conservés 90 jours |
 
-`when:` au niveau d'un job qui a des `rules` est refusé par GitLab (« config key may not be used with `rules`: when ») : il se met dans la règle. La rotation n'existe pas encore au début de E15 : commente la ligne jusqu'à E16, ou fais E16 juste après.
+`when:` se met **dans la règle**, pas au niveau du job : un `when` de job sert de valeur par défaut à toutes les règles qui n'en définissent pas (les anciennes versions de GitLab refusaient carrément la combinaison). Avec `when: manual` au niveau du job, la règle `schedule` deviendrait manuelle elle aussi : plus aucun build hebdomadaire. La rotation n'existe pas encore au début de E15 : commente la ligne jusqu'à E16, ou fais E16 juste après.
 
 *5. La planification.* *Build → Pipeline schedules → New schedule* : description « Images dorées hebdomadaires », intervalle personnalisé `40 5 * * 1` (lundi 5 h 40), fuseau *Europe/Paris*, branche `main`. Le pipeline tourne **avec les droits du propriétaire** de la planification : il doit pouvoir fusionner sur `main` (branche protégée), et s'il quitte le projet ou est bloqué, la planification devient inactive. Propriétaire recommandé : un compte de service de l'équipe (ou au minimum le référent, avec la reprise de propriété — *Take ownership* — décrite dans RB-031).
 

@@ -75,7 +75,7 @@ source "proxmox-clone" "rocky10" {
 
   # Template final : lecteur cloud-init vide ; pas de mise à niveau complète au premier
   # démarrage de chaque clone (ciupgrade=0) : l'image est reconstruite chaque semaine et
-  # unattended-upgrades applique les correctifs de sécurité.
+  # dnf-automatic applique les correctifs de sécurité.
   cloud_init                          = true
   cloud_init_storage_pool             = var.storage_vm
   cloud_init_disable_upgrade_packages = true

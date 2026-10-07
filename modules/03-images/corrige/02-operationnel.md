@@ -61,15 +61,15 @@ variable "cpu_type" {
   default = "x86-64-v3"
   validation {
     condition     = contains(["x86-64-v3", "x86-64-v4", "host"], var.cpu_type)
-    error_message = "Rocky Linux 10 ne démarre pas sous x86-64-v3 : utilise x86-64-v3, x86-64-v4 ou host."
+    error_message = "Rocky Linux 10 exige au moins le niveau x86-64-v3 : utilise x86-64-v3, x86-64-v4 ou host."
   }
 }
 ```
 ```
 admin@adm01:~/src/images/rocky10-base$ packer validate -var-file=../vars/lab.pkrvars.hcl -var cpu_type=x86-64-v2-AES .
-Error: Invalid value for variable
+Error: Invalid value for cmd variable
 …
-Rocky Linux 10 ne démarre pas sous x86-64-v3 : utilise x86-64-v3, x86-64-v4 ou host.
+Rocky Linux 10 exige au moins le niveau x86-64-v3 : utilise x86-64-v3, x86-64-v4 ou host.
 ```
 Packer exige que le message soit une phrase complète (majuscule initiale, point final) : sinon, c'est la règle elle-même qui est refusée.
 
@@ -227,7 +227,7 @@ variable "vm_id" {
 et règles analogues sur `proxmox_url` (`^https://[^/]+:8006/api2/json$`) et `proxmox_username` (`^[^@!]+@[^@!]+![A-Za-z0-9_-]+$`). Essais :
 ```
 admin@adm01:~/src/images/debian13-base$ packer validate -var-file=../vars/lab.pkrvars.hcl -var vm_id=1001 .
-Error: Invalid value for variable
+Error: Invalid value for cmd variable
 …
 Le VMID doit être dans la plage des templates construits (9001-9099).
 ```

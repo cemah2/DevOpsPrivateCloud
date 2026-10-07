@@ -6,7 +6,7 @@
 | **Niveau** | Secondaire |
 | **Profil de lab** | Socle (builds sur les VMID 9001-9099, VMs de test 2030-2039) |
 | **Prérequis** | Module 02 (outillage, CI du projet outils) ; M00-E11 (template manuel `tpl-debian13`) |
-| **Durée indicative** | 20 à 25 heures |
+| **Durée indicative** | 30 à 40 heures (dont beaucoup d'attente de builds) |
 
 ## Contexte MédiSphère
 

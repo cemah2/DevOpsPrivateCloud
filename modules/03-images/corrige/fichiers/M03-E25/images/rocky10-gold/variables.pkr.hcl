@@ -116,6 +116,6 @@ variable "cpu_type" {
 
   validation {
     condition     = contains(["x86-64-v3", "x86-64-v4", "host"], var.cpu_type)
-    error_message = "Rocky Linux 10 ne démarre pas sous x86-64-v3 : utilise x86-64-v3, x86-64-v4 ou host."
+    error_message = "Rocky Linux 10 exige au moins le niveau x86-64-v3 : utilise x86-64-v3, x86-64-v4 ou host."
   }
 }

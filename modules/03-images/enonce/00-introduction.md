@@ -176,7 +176,7 @@ E01 ─ E02 ─ E03 ─ E04 ─ E05 ─┬─ E06 (Rocky) ───────�
 4. **E05** — l'installation automatisée depuis l'ISO : l'exercice le plus long du palier 1.
 5. **E06 à E12** — dans l'ordre ; E06 (Rocky) peut se faire en parallèle de E07-E08 si un build tourne pendant que tu écris l'autre.
 
-Durée indicative des paliers 1 et 2 : 12 à 15 heures, dont beaucoup d'attente de builds : prévois de lire la documentation pendant ce temps.
+Durée indicative des paliers 1 et 2 : 15 à 20 heures, dont beaucoup d'attente de builds : prévois de lire la documentation pendant ce temps.
 
 ## Pour aller plus loin
 

@@ -20,5 +20,6 @@ rm -f m03-e11-config.rendu.yaml
 cloud-init devel make-mime \
   -a m03-e11-config.yaml:jinja2 \
   -a m03-e11-inscription.sh:x-shellscript > m03-e11-vendor.mime
-grep -c '^Content-Type' m03-e11-vendor.mime
+# Nombre de parties (l'en-tête « multipart/mixed » de l'enveloppe n'est pas compté)
+grep -c '^Content-Type: text/' m03-e11-vendor.mime
 echo "m03-e11-vendor.mime prêt"

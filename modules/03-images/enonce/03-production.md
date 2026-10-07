@@ -180,7 +180,7 @@ Dans un pipeline de MR, les variables protégées ne sont pas injectées (la bra
 
 <details><summary>Indice 2</summary>
 
-Le build connaît son VMID avant même de lancer Packer (`outils/version-image.sh`). Un fichier `build.env` déclaré en `artifacts:reports:dotenv` le transmet aux jobs qui ont le build dans leurs `needs`. Et `when:` ne se met pas au niveau d'un job qui a des `rules` : il se met dans la règle.
+Le build connaît son VMID avant même de lancer Packer (`outils/version-image.sh`). Un fichier `build.env` déclaré en `artifacts:reports:dotenv` le transmet aux jobs qui ont le build dans leurs `needs`. Et mets `when:` dans la règle concernée, pas au niveau du job : il y servirait de valeur par défaut à **toutes** les règles sans `when`.
 </details>
 
 <details><summary>Indice 3</summary>

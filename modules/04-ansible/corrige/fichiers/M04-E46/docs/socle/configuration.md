@@ -17,7 +17,7 @@
 ## 2. Organisation du projet
 
 - `inventories/lab/` : `hosts.yml` (statique, secours), `proxmox.yml` (dynamique, **par défaut** en CI et pour la dérive), `group_vars/`, `host_vars/`. Les groupes `socle` et `role_*` viennent des étiquettes Proxmox (`socle`, `role-…`).
-- `roles/` : un rôle par fonction ; variables préfixées par le nom du rôle ; valeurs par défaut dans `defaults/` ; scénario Molecule dans `molecule/default/`.
+- `roles/` : un rôle par fonction ; variables préfixées par le nom du rôle ; valeurs par défaut dans `defaults/` ; scénario Molecule dans `molecule/<rôle>/` (commun dans `molecule/_commun/`, base dans `.config/molecule/config.yml`).
 - `collections/ansible_collections/medisphere/socle/` : collection interne (module `systemd_dropin`, M04-E44).
 - `playbooks/site.yml` : tout le socle (garde-fou d'inventaire, rôles communs, DNS, forge, runner, routeur en dernier) ; un playbook par fonction pour les interventions ciblées.
 

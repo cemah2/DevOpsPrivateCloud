@@ -101,7 +101,8 @@ packer-validate:
 
 # Quand construire une image dorée : chaque semaine (pipeline planifié de main) ou à la
 # main sur main. Les jobs qui suivent (test, publish) tournent sans intervention.
-# (« when » est interdit au niveau d'un job qui a des « rules » : il se met dans la règle.)
+# (« when » se met dans la règle : posé au niveau du job, il deviendrait la valeur par
+# défaut de TOUTES les règles sans « when » — le build planifié serait manuel lui aussi.)
 .regles-debian13:
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -66,11 +66,14 @@
       become: false
       tags: [always]
 
+    # check_mode: false — wait_for ne sait pas simuler (il serait SAUTÉ en --check) ;
+    # c'est une lecture : le test de port doit tourner aussi pendant une simulation.
     - name: SSH de l'hôte joignable depuis adm01
       ansible.builtin.wait_for:
         host: "{{ ansible_host }}"
         port: 22
         timeout: 10
+      check_mode: false
       delegate_to: localhost
       become: false
       tags: [always]

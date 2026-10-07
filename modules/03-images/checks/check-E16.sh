@@ -25,8 +25,8 @@ check_cmd "le pipeline applique la rotation après publication (.gitlab-ci.yml s
 
 title "Catalogue Debian 13 (9010-9029)"
 _m03_e16_nb() { _m03_gold debian13 | jq 'length'; }
-_m03_e16_max4() { local n; n="$(_m03_e16_nb)"; [[ "$n" -ge 1 && "$n" -le 4 ]]; }
-check_cmd "entre 1 et 4 images dorées Debian (3 dernières + current)" _m03_e16_max4
+_m03_e16_max5() { local n; n="$(_m03_e16_nb)"; [[ "$n" -ge 1 && "$n" -le 5 ]]; }
+check_cmd "entre 1 et 5 images dorées Debian (3 dernières + current + au plus une rejetée)" _m03_e16_max5
 _m03_e16_noms() {
   _m03_gold debian13 | jq -e 'all(.[]; (.name | test("^deb13-gold-[0-9]{8}-[0-9]+$")) and .vmid >= 9010 and .vmid <= 9029)' >/dev/null
 }

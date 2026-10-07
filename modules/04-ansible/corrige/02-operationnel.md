@@ -936,6 +936,7 @@ Fichiers : [`fichiers/M04-E19/ansible/playbooks/site.yml`](fichiers/M04-E19/ansi
          …
    ```
    Les `pre_tasks` (`always`) et la validation des arguments du rôle `base` (Ansible l'étiquette `always` d'office) s'exécutent quand même sur les cinq hôtes : c'est voulu, elles ne modifient rien.
+   ```
    admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/site.yml --list-tasks --tags base_temps --limit dns01
    admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/site.yml --list-tags
      play #1 (socle): Configuration commune du socle	TAGS: []
@@ -1180,7 +1181,7 @@ Fichier : [`fichiers/M04-E23/ansible/playbooks/changement-socle.yml`](fichiers/M
      become: false
    ```
    Dans la tâche déléguée, `inventory_hostname`, `ansible_host` et toutes les variables sont **celles de l'hôte du play** (`git01` par exemple) ; seules la **connexion** et l'exécution sont celles de `dns01` (son adresse, son compte `admin`). C'est pourquoi `ansible_host` vaut 10.10.20.12 dans la comparaison, alors que la commande tourne sur 10.10.20.10. Sans `become: false`, la commande serait lancée par `sudo` sur `dns01` (si le play avait `become`).
-   Le test de port : `ansible.builtin.wait_for` délégué à `localhost`. Puis `set_fact: _chg_verifie: true`.
+   Le test de port : `ansible.builtin.wait_for` délégué à `localhost`, avec `check_mode: false` (le module ne sait pas simuler : sans ce mot-clé, il serait **sauté** en `--check`, alors que c'est une simple lecture et que l'enveloppe promet ses vérifications même en simulation). Puis `set_fact: _chg_verifie: true`.
 3. **Play « journal »** sur `localhost` (`gather_facts: false`, `become: false`) : il s'exécute même si tous les hôtes du socle ont échoué (un play dont tous les hôtes sont en échec est sauté ; `localhost` n'a pas échoué). Il lit les hôtes visés et vérifiés dans `hostvars` (`groups['socle'] | map('extract', hostvars) | selectattr('_chg_vise', 'defined') …`), crée le fichier (`copy`, `force: false`) puis ajoute la ligne (`lineinfile`). En `--check`, `copy` et `lineinfile` n'écrivent rien.
 4. Étiquette `always` sur toutes les tâches de l'enveloppe.
 5. Changement réel :
