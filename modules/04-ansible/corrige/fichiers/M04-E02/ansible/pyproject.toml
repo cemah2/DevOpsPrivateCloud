@@ -1,0 +1,31 @@
+# pyproject.toml — environnement d'exécution d'Ansible pour plateforme/ansible (M04-E02)
+# Ce n'est pas un paquet Python : uv gère seulement l'environnement (.venv) et le verrou.
+#   uv sync --locked          crée ou remet .venv à l'identique de uv.lock
+#   uv run ansible-playbook … exécute un outil de l'environnement (PATH ajusté)
+[project]
+name = "medisphere-ansible"
+version = "0.0.0"
+description = "Configuration du socle MédiSphère : environnement d'exécution d'Ansible."
+requires-python = ">=3.13"
+dependencies = [
+    # Moteur : 2.21.x seulement (une mise à jour mineure = une MR testée).
+    "ansible-core~=2.21.0",
+    # Inventaire dynamique et modules community.proxmox (E13, E24).
+    "proxmoxer>=2.3.0",
+    "requests>=2.32.0",
+]
+
+[dependency-groups]
+# Outils de qualité et de test : postes de développement et CI (uv sync les installe
+# par défaut ; « uv sync --no-dev » pour un exécutant qui n'en a pas besoin).
+dev = [
+    "ansible-lint>=26.9,<27",
+    "molecule>=26.9,<27",
+]
+
+[tool.uv]
+# Projet « virtuel » : uv n'essaie pas de construire ni d'installer le projet lui-même.
+package = false
+# Python 3.13 de Debian 13 (mis à jour par apt), jamais un Python téléchargé.
+python-preference = "only-system"
+python-downloads = "never"

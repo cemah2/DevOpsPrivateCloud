@@ -1,0 +1,21 @@
+---
+- name: Dossier de cache des paquets
+  ansible.builtin.file:
+    path: /var/cache/semaphore
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# get_url vérifie l'empreinte AVANT de garder le fichier : un paquet altéré n'est jamais installé.
+- name: Télécharger le paquet officiel (empreinte SHA-256 vérifiée)
+  ansible.builtin.get_url:
+    url: "https://github.com/semaphoreui/semaphore/releases/download/v{{ semaphore_version }}/semaphore_{{ semaphore_version }}_linux_amd64.deb"
+    dest: "/var/cache/semaphore/semaphore_{{ semaphore_version }}_linux_amd64.deb"
+    checksum: "sha256:{{ semaphore_sha256 }}"
+    mode: "0644"
+
+- name: Installer Semaphore
+  ansible.builtin.apt:
+    deb: "/var/cache/semaphore/semaphore_{{ semaphore_version }}_linux_amd64.deb"
+  notify: Redémarrer semaphore

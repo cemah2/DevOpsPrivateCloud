@@ -1,0 +1,3 @@
+# HELP medisphere_info Inventaire MédiSphère de l'hôte (rôle Ansible node_exporter).
+# TYPE medisphere_info gauge
+medisphere_info{role="{{ (group_names | select('match', '^role_') | list | join(',')) or 'aucun' }}",site="{{ node_exporter_site }}"} 1

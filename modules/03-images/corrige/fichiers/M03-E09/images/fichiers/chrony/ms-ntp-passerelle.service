@@ -1,0 +1,13 @@
+# /etc/systemd/system/ms-ntp-passerelle.service — source NTP = passerelle du VLAN (M03-E09)
+[Unit]
+Description=MédiSphère : chrony sur la passerelle du VLAN
+Wants=network-online.target
+After=network-online.target chrony.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ms-ntp-passerelle
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

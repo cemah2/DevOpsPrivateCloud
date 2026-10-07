@@ -1,0 +1,16 @@
+---
+# Rôle gitlab_hote (M04-E46) — l'HÔTE git01 autour de GitLab, pas GitLab lui-même.
+# GitLab reste géré par /etc/gitlab/gitlab.rb + gitlab-ctl reconfigure (module 01) : ce rôle
+# ne touche ni à gitlab.rb ni au service, il garantit ce qui l'entoure et vérifie en lecture.
+
+# La montée de version de GitLab suit le chemin officiel (M01-E29) : jamais par un « apt upgrade ».
+gitlab_hote_paquet: gitlab-ce
+gitlab_hote_bloquer_paquet: true
+
+# Fichiers sensibles de /etc/gitlab (secrets d'application, clés de chiffrement des données)
+gitlab_hote_fichiers_secrets:
+  - /etc/gitlab/gitlab-secrets.json
+  - /etc/gitlab/gitlab.rb
+
+# Vérification de l'état de GitLab (lecture seule) à chaque passage
+gitlab_hote_verifier_services: true

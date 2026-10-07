@@ -1,0 +1,18 @@
+---
+- name: Vérifier les variables obligatoires
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_version is ansible.builtin.match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - gitlab_runner_bats_sha256 is ansible.builtin.match('^[0-9a-f]{64}$')
+      - gitlab_runner_outils | rejectattr('sha256', 'match', '^[0-9a-f]{64}$') | list | length == 0
+    fail_msg: >-
+      Version de GitLab Runner invalide, ou empreinte SHA-256 manquante (bats : la tienne,
+      relevée en M02-E24 ; jamais d'outil de CI installé sans empreinte).
+    quiet: true
+
+- name: Paquets nécessaires au rôle
+  ansible.builtin.apt:
+    name: [ca-certificates, curl, git, gnupg, python3-debian]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600

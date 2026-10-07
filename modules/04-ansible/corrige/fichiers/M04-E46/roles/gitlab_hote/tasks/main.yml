@@ -1,0 +1,33 @@
+---
+- name: GitLab est installé (ce rôle ne l'installe pas)
+  ansible.builtin.stat:
+    path: /opt/gitlab/version-manifest.txt
+  register: gitlab_hote_manifeste
+
+- name: Refuser un hôte sans GitLab
+  ansible.builtin.assert:
+    that: gitlab_hote_manifeste.stat.exists
+    fail_msg: "GitLab n'est pas installé sur {{ inventory_hostname }} : installation par la procédure du module 01, pas par ce rôle"
+    quiet: true
+
+- name: Version de GitLab maîtrisée (pas de mise à jour par apt upgrade ni unattended-upgrades)
+  ansible.builtin.dpkg_selections:
+    name: "{{ gitlab_hote_paquet }}"
+    selection: "{{ 'hold' if gitlab_hote_bloquer_paquet else 'install' }}"
+
+- name: Fichiers sensibles de /etc/gitlab lisibles par root seul
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+    state: file
+  loop: "{{ gitlab_hote_fichiers_secrets }}"
+
+- name: Composants de GitLab en fonctionnement (lecture seule)
+  ansible.builtin.command: gitlab-ctl status
+  register: gitlab_hote_status
+  changed_when: false
+  check_mode: false
+  failed_when: gitlab_hote_status.rc != 0 or 'down:' in gitlab_hote_status.stdout
+  when: gitlab_hote_verifier_services | bool

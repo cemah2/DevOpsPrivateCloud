@@ -1,0 +1,34 @@
+---
+# playbooks/trousse-diagnostic.yml — même trousse de diagnostic sur tout le socle
+# (M04-E05, listes déplacées dans l'inventaire en M04-E06).
+#
+#   uv run ansible-playbook playbooks/trousse-diagnostic.yml --check --diff
+#   uv run ansible-playbook playbooks/trousse-diagnostic.yml
+#
+# Variables (inventories/lab/group_vars/) : trousse_paquets, trousse_paquets_role,
+# trousse_paquets_interdits. Pas de « vars: » ici : elles écraseraient l'inventaire.
+
+- name: Trousse de diagnostic sur le socle
+  hosts: socle
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Installer les outils de diagnostic (communs et propres au rôle)
+      ansible.builtin.apt:
+        name: "{{ trousse_paquets + trousse_paquets_role }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Retirer les clients de protocoles en clair
+      ansible.builtin.apt:
+        name: "{{ trousse_paquets_interdits }}"
+        state: absent
+
+    - name: Horodater l'historique bash (traçabilité des interventions)
+      ansible.builtin.lineinfile:
+        path: /etc/bash.bashrc
+        regexp: '^export HISTTIMEFORMAT='
+        line: "export HISTTIMEFORMAT='%F %T '"
+        state: present

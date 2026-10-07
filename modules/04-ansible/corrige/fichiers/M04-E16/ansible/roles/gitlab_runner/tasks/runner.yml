@@ -1,0 +1,124 @@
+---
+# --- Dépôt -----------------------------------------------------------------------------
+- name: Clé du dépôt GitLab Runner
+  ansible.builtin.include_tasks: cle_apt.yml
+  vars:
+    _cle:
+      nom: gitlab-runner
+      url: "{{ gitlab_runner_cle_url }}"
+      empreinte: "{{ gitlab_runner_cle_empreinte }}"
+
+# Le script officiel de M01-E23 avait écrit un fichier .list avec un autre trousseau :
+# deux déclarations du même dépôt avec deux Signed-By différents font échouer « apt update ».
+- name: Retirer l'ancienne déclaration du dépôt (script de M01-E23)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/runner_gitlab-runner.list
+    - /etc/apt/keyrings/runner_gitlab-runner-archive-keyring.gpg
+    - /usr/share/keyrings/runner_gitlab-runner-archive-keyring.gpg
+
+- name: Dépôt GitLab Runner
+  ansible.builtin.deb822_repository:
+    name: gitlab-runner
+    types: [deb]
+    uris: "{{ gitlab_runner_depot_url }}"
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    architectures: [amd64]
+    signed_by: /etc/apt/keyrings/gitlab-runner.asc
+  register: _gitlab_runner_depot
+
+# --- Paquets ---------------------------------------------------------------------------
+# Version exacte des deux paquets (ils dépendent l'un de l'autre à la version près).
+# allow_change_held_packages : le paquet est figé (hold) ; on lève le blocage pour le
+# changement voulu, et seulement pour lui.
+- name: Installer GitLab Runner et ses images d'assistance, version {{ gitlab_runner_version }}
+  ansible.builtin.apt:
+    name:
+      - "gitlab-runner={{ gitlab_runner_version }}-1"
+      - "gitlab-runner-helper-images={{ gitlab_runner_version }}-1"
+    state: present
+    update_cache: "{{ _gitlab_runner_depot is changed }}"
+    allow_change_held_packages: true
+    allow_downgrade: false
+
+- name: Figer les paquets (pas de mise à jour non planifiée par apt upgrade)
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: [gitlab-runner, gitlab-runner-helper-images]
+
+- name: Vérifier que le compte des jobs n'a aucun privilège
+  ansible.builtin.command: id -nG gitlab-runner
+  register: _gitlab_runner_groupes
+  changed_when: false
+  check_mode: false
+  failed_when: _gitlab_runner_groupes.stdout.split() | intersect(['sudo', 'adm', 'docker', 'root']) | length > 0
+
+# --- Enregistrement --------------------------------------------------------------------
+# config.toml appartient au runner : il le réécrit (rotation automatique du jeton, id…).
+# On ne le génère donc PAS par template ; on enregistre seulement si notre runner manque.
+- name: Lire la configuration du runner
+  ansible.builtin.slurp:
+    src: /etc/gitlab-runner/config.toml
+  register: _gitlab_runner_config
+  failed_when: false
+
+- name: Déterminer si runner01 est déjà enregistré
+  ansible.builtin.set_fact:
+    _gitlab_runner_enregistre: >-
+      {{ _gitlab_runner_config.content is defined
+         and (_gitlab_runner_config.content | b64decode) is search('name = "' ~ gitlab_runner_nom ~ '"') }}
+
+- name: Refuser d'enregistrer sans jeton
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_jeton is ansible.builtin.match('^glrt-')
+    fail_msg: >-
+      {{ gitlab_runner_nom }} n'est pas enregistré et gitlab_runner_jeton est vide ou invalide :
+      crée le runner dans GitLab (Admin → CI/CD → Runners) et range son jeton glrt- dans le Vault.
+    quiet: true
+  when: not _gitlab_runner_enregistre
+
+# Jeton passé par l'environnement (CI_SERVER_TOKEN, lu par « register ») et non en argument :
+# il n'apparaît ni dans « ps », ni dans la sortie d'Ansible (no_log).
+- name: Enregistrer le runner
+  ansible.builtin.command:
+    argv:
+      - gitlab-runner
+      - register
+      - --non-interactive
+      - --url
+      - "{{ gitlab_runner_url }}"
+      - --executor
+      - "{{ gitlab_runner_executeur }}"
+      - --description
+      - "{{ gitlab_runner_nom }}"
+  environment:
+    CI_SERVER_TOKEN: "{{ gitlab_runner_jeton }}"
+  no_log: true
+  changed_when: true
+  when: not _gitlab_runner_enregistre
+
+- name: Nombre de jobs simultanés
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab-runner/config.toml
+    regexp: '^concurrent\s*='
+    line: "concurrent = {{ gitlab_runner_concurrent }}"
+    insertbefore: BOF
+  notify: Redémarrer gitlab-runner
+
+- name: Rendre config.toml lisible par root seulement (il contient le jeton)
+  ansible.builtin.file:
+    path: /etc/gitlab-runner/config.toml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Service gitlab-runner démarré et activé
+  ansible.builtin.systemd_service:
+    name: gitlab-runner
+    state: started
+    enabled: true

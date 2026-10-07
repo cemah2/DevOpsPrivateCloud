@@ -1,0 +1,13 @@
+# /etc/fail2ban/jail.d/medisphere.local
+# {{ fail2ban_entete }}
+# Lu APRÈS jail.d/defaults-debian.conf : on ne surcharge que ce qui nous est propre.
+# Debian 13 fournit déjà ce qu'il faut pour sshd : backend = systemd (pas de /var/log/auth.log
+# sans rsyslog) et banaction = nftables. Ne pas les remplacer.
+[DEFAULT]
+ignoreip = {{ fail2ban_jamais_bannis | join(' ') }}
+maxretry = {{ fail2ban_maxretry }}
+findtime = {{ fail2ban_findtime }}
+bantime = {{ fail2ban_bantime }}
+
+[sshd]
+enabled = true

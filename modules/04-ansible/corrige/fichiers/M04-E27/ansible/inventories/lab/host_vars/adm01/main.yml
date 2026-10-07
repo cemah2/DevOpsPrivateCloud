@@ -1,0 +1,8 @@
+---
+# inventories/lab/host_vars/adm01/main.yml (M04-E03, modifié en M04-E27)
+#
+# Ansible tourne sur adm01 : pas de connexion SSH vers soi-même… mais seulement quand c'est
+# VRAIMENT adm01 qui exécute. Depuis runner01 (CI) ou sem01 (Semaphore), « local » ferait
+# appliquer la configuration de adm01 au contrôleur lui-même (sshd, utilisateurs, motd de
+# adm01 posés sur runner01 !). L'expression est évaluée sur le CONTRÔLEUR (lookup).
+ansible_connection: "{{ 'local' if lookup('ansible.builtin.pipe', 'hostname -s') == 'adm01' else 'ssh' }}"

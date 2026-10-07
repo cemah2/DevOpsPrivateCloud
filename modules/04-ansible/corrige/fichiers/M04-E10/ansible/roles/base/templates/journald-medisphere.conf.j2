@@ -1,0 +1,6 @@
+{{ base_entete | comment }}
+# /etc/systemd/journald.conf.d/50-medisphere.conf (rôle base)
+# Journaux conservés au redémarrage (/var/log/journal), avec un plafond d'espace.
+[Journal]
+Storage=persistent
+SystemMaxUse={{ base_journal_taille_max }}

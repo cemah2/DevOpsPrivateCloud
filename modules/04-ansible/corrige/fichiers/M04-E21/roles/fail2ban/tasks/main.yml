@@ -1,0 +1,21 @@
+---
+- name: Installer fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+
+# Pas de jail.local qui écrase tout : un fichier de jail.d, à côté de celui de Debian.
+- name: Réglages MédiSphère de fail2ban
+  ansible.builtin.template:
+    src: medisphere.local.j2
+    dest: /etc/fail2ban/jail.d/medisphere.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger fail2ban
+
+- name: Service fail2ban démarré et activé
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: started
+    enabled: true

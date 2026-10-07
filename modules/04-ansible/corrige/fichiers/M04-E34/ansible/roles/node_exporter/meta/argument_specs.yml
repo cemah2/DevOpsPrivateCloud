@@ -1,0 +1,33 @@
+---
+argument_specs:
+  main:
+    short_description: Installe et configure prometheus-node-exporter (Debian 13).
+    description:
+      - Écoute sur l'adresse IPv4 principale seulement, collecteurs choisis, métrique medisphere_info.
+      - Ni TLS, ni authentification, ni filtrage réseau (module 21).
+    options:
+      node_exporter_port:
+        type: int
+        default: 9100
+        description: Port d'écoute (1024-65535, contrôlé par la première tâche).
+      node_exporter_adresse:
+        type: str
+        description: Adresse IPv4 d'écoute ; par défaut celle de la route par défaut.
+      node_exporter_collecteurs_desactives:
+        type: list
+        elements: str
+        default: [infiniband, zfs, nfs, nfsd]
+        description: Collecteurs désactivés (--no-collector.<nom>) ; liste vide permise.
+      node_exporter_unites_systemd:
+        type: list
+        elements: str
+        default: [ssh, chrony, nftables, dnsmasq, gitlab-runner, semaphore]
+        description: Unités systemd publiées (noms sans suffixe .service).
+      node_exporter_site:
+        type: str
+        default: par1
+        description: Valeur de l'étiquette site de medisphere_info.
+      node_exporter_dossier_textfile:
+        type: path
+        default: /var/lib/prometheus/node-exporter
+        description: Dossier lu par le collecteur textfile.

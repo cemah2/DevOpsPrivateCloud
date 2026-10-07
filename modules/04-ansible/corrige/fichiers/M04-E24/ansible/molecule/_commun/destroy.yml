@@ -1,0 +1,84 @@
+---
+# molecule/_commun/destroy.yml — détruit les instances d'un scénario Molecule (M04-E24)
+#
+# Appelé au début ET à la fin de « molecule test » (y compris après un échec : stratégie
+# --destroy=always par défaut), et par « molecule destroy ». Il doit donc :
+#   - réussir quand il n'y a rien à détruire (premier passage, instance déjà supprimée) ;
+#   - ne JAMAIS supprimer autre chose qu'une instance Molecule : VMID dans 2045-2049, ET nom
+#     de l'instance ou étiquette « molecule » ; sinon il refuse et échoue bruyamment.
+- name: Détruire les instances Molecule
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    instances: "{{ groups['molecule'] | default([]) }}"
+    commun: "{{ hostvars[instances[0]] }}"
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    inventaire_scenario: "{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_DIRECTORY') }}/inventaire"
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ commun.mol_pve_hote }}"
+      validate_certs: true
+      ca_path: "{{ commun.mol_pve_ca }}"
+      api_timeout: 30
+  tasks:
+    - name: Vérifier l'accès à l'API (sans lui, la destruction n'est pas garantie)
+      ansible.builtin.assert:
+        that:
+          - instances | length > 0
+          - commun.mol_pve_hote | length > 0
+          - lookup('ansible.builtin.env', 'PROXMOX_TOKEN_SECRET') | length > 0
+        fail_msg: >-
+          Accès Proxmox absent : impossible de garantir la destruction des instances.
+          Charge ~/.config/workbook/pve-ansible.env puis relance « molecule destroy ».
+        quiet: true
+
+    - name: Lire l'état actuel de chaque VMID d'instance
+      community.proxmox.proxmox_vm_info:
+        vmid: "{{ hostvars[item].mol_vmid }}"
+        config: current
+      loop: "{{ instances }}"
+      register: etats
+
+    - name: Refuser de détruire une VM qui n'est pas une instance Molecule
+      ansible.builtin.assert:
+        that:
+          - item.proxmox_vms[0].vmid | int >= commun.mol_vmid_min | int
+          - item.proxmox_vms[0].vmid | int <= commun.mol_vmid_max | int
+          - not (item.proxmox_vms[0].template | bool)
+          - >-
+            item.proxmox_vms[0].name == item.item
+            or (item.proxmox_vms[0].tags | default('')) is search('(^|;)molecule(;|$)')
+        fail_msg: >-
+          REFUS : le VMID {{ item.proxmox_vms[0].vmid }} (« {{ item.proxmox_vms[0].name }} »)
+          n'est pas une instance Molecule de ce scénario. Rien n'a été supprimé.
+      loop: "{{ etats.results | selectattr('proxmox_vms') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Arrêter et supprimer les instances (disques compris, retirées des tâches de sauvegarde)
+      community.proxmox.proxmox_kvm:
+        vmid: "{{ item.proxmox_vms[0].vmid }}"
+        state: absent
+        force: true
+        purge: true
+        timeout: 120
+      loop: "{{ etats.results | selectattr('proxmox_vms') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Effacer les adresses écrites dans l'inventaire du scénario
+      ansible.builtin.file:
+        path: "{{ inventaire_scenario }}/host_vars/{{ item }}/execution.yml"
+        state: absent
+      loop: "{{ instances }}"
+
+    - name: Effacer la clé éphémère et le known_hosts du scénario
+      ansible.builtin.file:
+        path: "{{ eph }}/{{ item }}"
+        state: absent
+      loop:
+        - id_molecule
+        - id_molecule.pub
+        - known_hosts
+      when: eph | length > 0

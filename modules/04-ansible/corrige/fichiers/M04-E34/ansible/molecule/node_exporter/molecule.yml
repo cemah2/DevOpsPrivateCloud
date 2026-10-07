@@ -1,0 +1,5 @@
+---
+# molecule/node_exporter/molecule.yml — scénario du rôle node_exporter (M04-E34)
+#   uv run molecule test -s node_exporter
+scenario:
+  name: node_exporter

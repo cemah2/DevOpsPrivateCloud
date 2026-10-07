@@ -1,0 +1,6 @@
+---
+- hosts: all
+  become: yes
+  roles:
+    - fail2ban
+    - comptes_equipe

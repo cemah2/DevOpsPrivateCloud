@@ -1,0 +1,13 @@
+# trousse-lucas.yml — premier playbook de Lucas Martin (stagiaire), fourni pour M04-E05.
+# NE PAS LANCER : lis-le, prédis ce que donnerait un second passage, puis réécris-le.
+- hosts: all
+  tasks:
+  - shell: sudo apt-get update
+  - shell: sudo apt-get install -y bind9-dnsutils tcpdump mtr-tiny curl jq lsof strace htop
+  - shell: sudo apt-get remove -y telnet inetutils-telnet rsh-client
+    ignore_errors: yes
+  - shell: echo "export HISTTIMEFORMAT='%F %T '" | sudo tee -a /etc/bash.bashrc
+  - command: dpkg -l tcpdump
+    register: res
+  - debug: msg="tcpdump est installé"
+    when: res.rc == 0

@@ -1,0 +1,4 @@
+---
+# host_vars/gw01/ssh_durci.yml — le fichier posé à la main en M00-E10 est repris par le rôle.
+ssh_durci_fichiers_obsoletes:
+  - /etc/ssh/sshd_config.d/10-durcissement.conf

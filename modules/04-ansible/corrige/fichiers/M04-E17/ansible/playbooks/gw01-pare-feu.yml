@@ -1,0 +1,13 @@
+---
+# playbooks/gw01-pare-feu.yml — pare-feu de gw01 (M04-E17).
+# Toujours dans cet ordre :
+#   ansible-playbook playbooks/gw01-pare-feu.yml --check --diff   (relire le diff)
+#   ansible-playbook playbooks/gw01-pare-feu.yml                  (filet de sécurité armé)
+# serial: 1 et un seul routeur aujourd'hui ; avec gw02 (M07), jamais les deux à la fois.
+- name: Pare-feu du routeur
+  hosts: role_routeur
+  become: true
+  serial: 1
+  roles:
+    - role: pare_feu
+      tags: [pare_feu]

@@ -1,0 +1,7 @@
+---
+# molecule/dnsmasq/molecule.yml — scénario du rôle « dnsmasq » (M04-E46)
+# Tout le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml
+# (M04-E24). Lancement, depuis la racine du projet, fichier d'accès Proxmox chargé :
+#   uv run molecule test -s dnsmasq
+scenario:
+  name: dnsmasq

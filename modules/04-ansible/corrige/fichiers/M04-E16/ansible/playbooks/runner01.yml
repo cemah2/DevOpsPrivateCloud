@@ -1,0 +1,11 @@
+---
+# playbooks/runner01.yml — runner de CI du socle (M04-E16).
+# Usage : ansible-playbook playbooks/runner01.yml [--check --diff] [--tags runner_outils]
+# ⚠️ Un passage qui change GitLab Runner redémarre le service : les jobs en cours sont
+# attendus (arrêt gracieux), mais lance-le hors des heures de pipelines.
+- name: Runner de CI du socle
+  hosts: role_runner
+  become: true
+  roles:
+    - role: gitlab_runner
+      tags: [runner]

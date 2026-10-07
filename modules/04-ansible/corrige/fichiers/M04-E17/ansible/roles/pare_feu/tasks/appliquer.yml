@@ -1,0 +1,107 @@
+---
+# Application d'une nouvelle configuration nftables avec filet de sécurité (M04-E17).
+#   1. sauvegarder la configuration en place ;
+#   2. ARMER une minuterie qui la restaurera dans pare_feu_delai_retour secondes ;
+#   3. poser et charger la nouvelle configuration ;
+#   4. CONFIRMER : nouvelle connexion SSH (pas la session déjà ouverte, que conntrack
+#      laisse passer quoi qu'il arrive) et flux de contrôle depuis le contrôleur ;
+#   5. désarmer la minuterie. Sans confirmation, gw01 revient en arrière tout seul.
+
+- name: Appliquer et confirmer
+  block:
+    - name: Sauvegarder la configuration en place
+      ansible.builtin.copy:
+        src: "{{ pare_feu_fichier }}"
+        dest: "{{ pare_feu_dossier_etat }}/nftables.conf.precedent"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+
+    # Pas de module pour « reset-failed » ; l'unité peut ne pas exister (cas normal).
+    - name: Nettoyer une minuterie restée d'un passage interrompu  # noqa: command-instead-of-module
+      ansible.builtin.shell: |
+        systemctl stop pare-feu-retour.timer 2>/dev/null || true
+        systemctl reset-failed pare-feu-retour.service pare-feu-retour.timer 2>/dev/null || true
+      changed_when: false
+
+    - name: Armer le retour automatique, délai en secondes {{ pare_feu_delai_retour }}
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=pare-feu-retour
+          - --description=Retour automatique de la configuration nftables (rôle pare_feu)
+          - --on-active={{ pare_feu_delai_retour }}s
+          - --collect
+          - /usr/local/sbin/pare-feu-retour
+      changed_when: true
+
+    - name: Poser la nouvelle configuration
+      ansible.builtin.template:
+        src: nftables.conf.j2
+        dest: "{{ pare_feu_fichier }}"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: /usr/sbin/nft -c -f %s
+
+    - name: Charger la nouvelle configuration
+      ansible.builtin.command: /usr/sbin/nft -f {{ pare_feu_fichier }}
+      changed_when: true
+
+    # Ferme la connexion SSH persistante (ControlPersist) : la suivante sera NOUVELLE et
+    # devra passer la chaîne input telle qu'elle est maintenant.
+    - name: Fermer la connexion existante
+      ansible.builtin.meta: reset_connection
+
+    - name: Confirmer par une nouvelle connexion SSH
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ pare_feu_delai_confirmation }}"
+
+    - name: Confirmer les flux de contrôle depuis le contrôleur
+      ansible.builtin.wait_for:
+        host: "{{ item.hote }}"
+        port: "{{ item.port }}"
+        timeout: 5
+      loop: "{{ pare_feu_verifications }}"
+      loop_control:
+        label: "{{ item.motif | default(item.hote ~ ':' ~ item.port) }}"
+      delegate_to: localhost
+      become: false
+
+    - name: Désarmer le retour automatique (changement confirmé)
+      ansible.builtin.systemd_service:
+        name: pare-feu-retour.timer
+        state: stopped
+
+  rescue:
+    # La connexion peut être coupée : ces deux tâches ne doivent pas arrêter le rescue.
+    - name: Revenir en arrière tout de suite si gw01 répond encore
+      ansible.builtin.command: /usr/local/sbin/pare-feu-retour
+      register: _pare_feu_retour_immediat
+      changed_when: _pare_feu_retour_immediat.rc | default(1) == 0
+      failed_when: false
+      ignore_unreachable: true
+
+    - name: Désarmer la minuterie si le retour immédiat a eu lieu
+      ansible.builtin.systemd_service:
+        name: pare-feu-retour.timer
+        state: stopped
+      when: _pare_feu_retour_immediat.rc | default(1) == 0
+      failed_when: false
+      ignore_unreachable: true
+
+    - name: Attendre que gw01 soit de nouveau joignable (retour immédiat ou minuterie)
+      ansible.builtin.wait_for_connection:
+        timeout: "{{ pare_feu_delai_retour | int + 60 }}"
+
+    - name: Vérifier que la configuration précédente est en place
+      ansible.builtin.command: cmp -s {{ pare_feu_dossier_etat }}/nftables.conf.precedent {{ pare_feu_fichier }}
+      changed_when: false
+
+    - name: Échouer en expliquant
+      ansible.builtin.fail:
+        msg: >-
+          La nouvelle configuration nftables n'a pas été confirmée (tâche « {{ ansible_failed_task.name }} »).
+          gw01 est revenu à la configuration précédente. Corrige la matrice des flux
+          (host_vars/gw01/pare_feu.yml), regarde « journalctl -t pare-feu-retour » sur gw01, puis relance.

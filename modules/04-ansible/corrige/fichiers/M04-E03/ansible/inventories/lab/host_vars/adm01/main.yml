@@ -1,0 +1,5 @@
+---
+# inventories/lab/host_vars/adm01/main.yml (M04-E03)
+# Ansible s'exécute SUR adm01 : pas de connexion SSH vers soi-même.
+# Placé ici (et non dans hosts.yml) pour s'appliquer aussi avec l'inventaire dynamique (E13).
+ansible_connection: local

@@ -1,0 +1,7 @@
+---
+# Rôle medisphere.socle.ca_lab — autorités de certification du lab (M04-E18).
+# Chaque élément : nom (fichier .crt créé dans /usr/local/share/ca-certificates/) et
+# source (fichier PEM sur le CONTRÔLEUR).
+ca_lab_certificats:
+  - nom: medisphere-provisoire
+    source: "{{ lookup('ansible.builtin.env', 'HOME') }}/pki-provisoire/ca.crt"

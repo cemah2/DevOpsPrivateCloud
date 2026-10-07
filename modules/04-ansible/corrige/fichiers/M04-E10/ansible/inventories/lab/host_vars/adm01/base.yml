@@ -1,0 +1,7 @@
+---
+# host_vars/adm01/base.yml (M04-E10) — on se connecte à adm01 depuis TON POSTE (VPN wg1,
+# M00-E16) : c'est cette clé-là qu'il faut autoriser (Ansible gère adm01 en connexion
+# locale, sans SSH). ⚠️ Liste exclusive : oublie ta clé de poste et tu perds l'accès SSH
+# à adm01 (il reste la console : qm terminal 1001).
+ms_cles_admin:
+  - "ssh-ed25519 <CLE-PUBLIQUE-POSTE> <MOI>@poste"

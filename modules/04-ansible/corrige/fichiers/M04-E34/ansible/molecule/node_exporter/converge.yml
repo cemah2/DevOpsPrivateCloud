@@ -1,0 +1,8 @@
+---
+# molecule/node_exporter/converge.yml (M04-E34)
+- name: Converge — rôle node_exporter
+  hosts: molecule
+  become: true
+  gather_facts: true
+  roles:
+    - role: node_exporter

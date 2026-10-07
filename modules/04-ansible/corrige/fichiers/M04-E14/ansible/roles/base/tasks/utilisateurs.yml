@@ -1,0 +1,77 @@
+---
+# Comptes pilotés par les données (M04-E14). Une seule liste décrit les comptes ; les
+# tâches ne connaissent aucun nom de compte.
+
+# Chaque compte reçoit les valeurs par défaut, puis ses propres champs par-dessus :
+# product() forme les paires (défaut, compte), combine() les fusionne de gauche à droite.
+- name: Assembler les comptes de cet hôte
+  ansible.builtin.set_fact:
+    _base_comptes: >-
+      {{ [base_compte_defaut]
+         | product(base_utilisateurs + base_utilisateurs_hote)
+         | map('ansible.builtin.combine')
+         | list }}
+
+- name: Contrôler la liste des comptes
+  ansible.builtin.assert:
+    that:
+      - _base_comptes | map(attribute='nom') | unique | length == _base_comptes | length
+      - _base_comptes | map(attribute='etat') | difference(['present', 'absent']) | length == 0
+      - _base_comptes | selectattr('nom', 'equalto', base_admin_utilisateur)
+        | selectattr('etat', 'equalto', 'present') | map(attribute='cles') | first | default([]) | length > 0
+    fail_msg: >-
+      Liste de comptes incohérente : nom en double, état inconnu, ou compte
+      {{ base_admin_utilisateur }} absent ou sans clé (risque de verrouillage).
+    quiet: true
+  # Liste vide : le rôle ne gère aucun compte (instance de test, M04-E24).
+  when: _base_comptes | length > 0
+
+- name: Comptes présents
+  ansible.builtin.user:
+    name: "{{ item.nom }}"
+    state: present
+    comment: "{{ item.commentaire | default(omit) }}"
+    shell: "{{ item.shell | default(omit) }}"
+    groups: "{{ item.groupes | default(omit) }}"
+    append: "{{ true if item.groupes is defined else omit }}"
+  loop: "{{ _base_comptes | selectattr('etat', 'equalto', 'present') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+# no_log : ni empreinte ni diff dans la sortie. Une tâche à part, pour que la précédente
+# reste lisible (no_log masque TOUT le résultat, y compris les noms).
+- name: Mots de passe (empreintes lues dans le Vault)
+  ansible.builtin.user:
+    name: "{{ item.nom }}"
+    password: "{{ item.mdp_hash }}"
+    update_password: always
+  loop: "{{ _base_comptes | selectattr('etat', 'equalto', 'present') | selectattr('mdp_hash', 'defined') | list }}"
+  no_log: true
+
+- name: Clés SSH autorisées (liste exclusive)
+  ansible.posix.authorized_key:
+    user: "{{ item.nom }}"
+    key: "{{ item.cles | join('\n') }}"
+    exclusive: true
+  loop: >-
+    {{ _base_comptes | selectattr('etat', 'equalto', 'present') | selectattr('ssh')
+       | selectattr('cles', 'truthy') | list }}
+  loop_control:
+    label: "{{ item.nom }} ({{ item.cles | length }} clé(s))"
+
+- name: Aucune clé pour les comptes sans SSH
+  ansible.builtin.file:
+    path: "~{{ item.nom }}/.ssh/authorized_keys"
+    state: absent
+  loop: "{{ _base_comptes | selectattr('etat', 'equalto', 'present') | rejectattr('ssh') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Comptes supprimés (et leur dossier personnel)
+  ansible.builtin.user:
+    name: "{{ item.nom }}"
+    state: absent
+    remove: true
+  loop: "{{ _base_comptes | selectattr('etat', 'equalto', 'absent') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"

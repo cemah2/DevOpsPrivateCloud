@@ -1,0 +1,30 @@
+---
+# Rôle base — point d'entrée (M04-E10).
+# Il reprend les playbooks du palier 1 (trousse E05/E06, identité E07, chrony E08) et
+# ajoute le fuseau horaire, le journal persistant, les mises à jour de sécurité et les clés
+# du compte d'administration. Chaque thème dans son fichier ; import_tasks (statique) :
+# l'étiquette posée ici s'applique à toutes les tâches importées.
+
+- name: Paquets communs
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [base_paquets]
+
+- name: Fuseau horaire et temps
+  ansible.builtin.import_tasks: temps.yml
+  tags: [base_temps]
+
+- name: Journal persistant
+  ansible.builtin.import_tasks: journal.yml
+  tags: [base_journal]
+
+- name: Mises à jour de sécurité automatiques
+  ansible.builtin.import_tasks: mises_a_jour.yml
+  tags: [base_maj]
+
+- name: Comptes et clés autorisées
+  ansible.builtin.import_tasks: utilisateurs.yml
+  tags: [base_utilisateurs]
+
+- name: Identité de l'hôte
+  ansible.builtin.import_tasks: identite.yml
+  tags: [base_identite]

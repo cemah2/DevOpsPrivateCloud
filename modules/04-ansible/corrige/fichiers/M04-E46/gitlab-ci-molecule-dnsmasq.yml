@@ -1,0 +1,14 @@
+# Extrait à ajouter à .gitlab-ci.yml de plateforme/ansible (modèle des jobs Molecule de M04-E27).
+molecule:dnsmasq:
+  extends: .molecule
+  variables:
+    SCENARIO: dnsmasq
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/dnsmasq/**/*
+        - molecule/dnsmasq/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+        - collections/requirements.yml
+        - uv.lock

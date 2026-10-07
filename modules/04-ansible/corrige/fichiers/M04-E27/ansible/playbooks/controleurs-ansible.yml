@@ -1,0 +1,20 @@
+---
+# playbooks/controleurs-ansible.yml — prépare les machines qui exécutent Ansible pour le socle (M04-E27)
+#
+# runner01 (CI, E27) et sem01 (Semaphore, E28) se connectent au socle avec la vérification des
+# clés d'hôte ACTIVE. Ils reçoivent les clés d'hôte du socle depuis inventories/lab/known_hosts,
+# fichier PUBLIC versionné : un changement de clé d'hôte passe donc par une MR relue.
+# Le fichier est produit et vérifié sur adm01 par outils/cles-hote-socle.sh.
+#   uv run ansible-playbook playbooks/controleurs-ansible.yml --limit runner01 --diff
+- name: Clés d'hôte du socle connues des contrôleurs Ansible
+  hosts: role_runner:role_semaphore
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Installer les clés d'hôte du socle (connues de tous les comptes de la machine)
+      ansible.builtin.copy:
+        src: "{{ inventory_dir }}/known_hosts"
+        dest: /etc/ssh/ssh_known_hosts
+        owner: root
+        group: root
+        mode: "0644"

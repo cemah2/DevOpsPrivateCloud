@@ -1,0 +1,8 @@
+---
+# M04-E46 — hôte de la forge (git01) : autour de GitLab, sans GitLab lui-même.
+- name: Hôte de la forge
+  hosts: role_gitlab
+  become: true
+  roles:
+    - role: gitlab_hote
+      tags: [gitlab_hote]

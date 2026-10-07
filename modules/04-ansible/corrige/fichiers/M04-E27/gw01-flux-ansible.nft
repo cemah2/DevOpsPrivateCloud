@@ -1,0 +1,15 @@
+# Règles nftables attendues sur gw01 après M04-E27 (runner01) et M04-E28 (sem01).
+# Ce n'est PAS un fichier à copier : depuis M04-E17, /etc/nftables.conf est GÉNÉRÉ par le rôle
+# pare_feu à partir de la description des flux (variables de gw01). Ces lignes montrent ce que
+# le rendu doit contenir ; ajoute les flux dans TA structure de variables, puis applique avec le
+# playbook gw01-pare-feu.yml (filet anti-coupure actif), depuis adm01.
+# Variables du fichier de référence (M00-E26) : V_INFRA, V_MGMT ; plus :
+#   define ADM01     = 10.10.10.10   (M03-E05)
+#   define RUNNER01  = 10.10.20.15   (M03-E15)
+#   define SEM01     = 10.10.20.41   (M04-E28)
+
+# --- chaîne input (destination gw01 lui-même) -----------------------------------------------
+		iifname $V_INFRA ip saddr { $RUNNER01, $SEM01 } tcp dport 22 accept comment "contrôleurs Ansible (CI, Semaphore) vers gw01 : SSH (M04-E27, E28)"
+
+# --- chaîne forward ---------------------------------------------------------------------------
+		iifname $V_INFRA ip saddr { $RUNNER01, $SEM01 } oifname $V_MGMT ip daddr $ADM01 tcp dport 22 accept comment "contrôleurs Ansible (CI, Semaphore) vers adm01 : SSH (M04-E27, E28)"

@@ -1,0 +1,8 @@
+---
+# molecule/ssh_durci/converge.yml (M04-E24)
+- name: Converge — rôle ssh_durci
+  hosts: molecule
+  become: true
+  gather_facts: true
+  roles:
+    - role: ssh_durci

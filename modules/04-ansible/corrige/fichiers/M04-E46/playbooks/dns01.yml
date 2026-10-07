@@ -1,0 +1,11 @@
+---
+# M04-E46 — DNS provisoire et DHCP du VLAN 99 (dns01), jusqu'au module 06.
+# serial: 1 et any_errors_fatal : le jour où dns02 existera (M06), jamais les deux à la fois.
+- name: DNS provisoire (dnsmasq)
+  hosts: role_dns
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: dnsmasq
+      tags: [dnsmasq]

@@ -1,0 +1,19 @@
+---
+# Contrôle final, tel que le verra un job : sous le compte gitlab-runner, avec son PATH de
+# shell de connexion. « command -v » réussi en root ou en admin ne prouve rien (M02-E24).
+- name: Outils visibles par le compte des jobs
+  ansible.builtin.command:
+    argv: [sudo, -u, gitlab-runner, -H, bash, -lc, "command -v {{ item }}"]
+  loop: [git, uv, uvx, pre-commit, gitleaks, shellcheck, shfmt, jq, bats, task, node, npm, packer]
+  register: _gitlab_runner_outils_visibles
+  changed_when: false
+  check_mode: false
+  when: item != 'packer' or gitlab_runner_packer
+
+- name: /opt/release-tools non modifiable par les jobs
+  ansible.builtin.command:
+    argv: [sudo, -u, gitlab-runner, test, -w, /opt/release-tools/node_modules]
+  register: _gitlab_runner_release_ecriture
+  changed_when: false
+  check_mode: false
+  failed_when: _gitlab_runner_release_ecriture.rc == 0

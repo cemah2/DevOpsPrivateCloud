@@ -1,0 +1,13 @@
+# ansible.cfg — lignes MODIFIÉES ou AJOUTÉES en M04-E13 (fichier créé en M04-E02).
+
+[defaults]
+# L'inventaire par défaut devient l'inventaire dynamique. Pointer le FICHIER, pas le dossier :
+# avec le dossier, hosts.yml et proxmox.yml seraient chargés tous les deux.
+# Secours (API Proxmox indisponible) : -i inventories/lab/hosts.yml
+inventory = inventories/lab/proxmox.yml
+
+[inventory]
+# Une source d'inventaire illisible (API injoignable, jeton refusé) est une ERREUR, pas un
+# avertissement suivi d'un play sur « aucun hôte ». Sans ce réglage, ansible-playbook affiche
+# « No inventory was parsed » et termine sans rien faire… avec le code 0.
+unparsed_is_failed = True

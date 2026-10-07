@@ -1,0 +1,8 @@
+---
+# Le runner relit config.toml tout seul pour la plupart des réglages ; un redémarrage
+# garantit la prise en compte de « concurrent ». Les jobs en cours sont attendus (arrêt
+# gracieux, dans la limite de shutdown_timeout).
+- name: Redémarrer gitlab-runner
+  ansible.builtin.systemd_service:
+    name: gitlab-runner
+    state: restarted

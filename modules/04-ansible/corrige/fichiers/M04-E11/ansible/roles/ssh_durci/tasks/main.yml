@@ -1,0 +1,49 @@
+---
+# Rôle ssh_durci (M04-E11) : un fichier de sshd_config.d, validé avant d'être posé,
+# rechargé (jamais redémarré), puis contrôlé sur la configuration EFFECTIVE.
+
+# validate : sshd lit le fichier candidat SEUL (-f) avant qu'il remplace l'ancien.
+# Un fichier invalide n'est jamais posé ; la tâche échoue avec l'erreur de sshd.
+- name: Fichier de durcissement de sshd
+  ansible.builtin.template:
+    src: ssh-durci.conf.j2
+    dest: "{{ ssh_durci_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Recharger sshd
+
+# Après (et seulement après) la pose du nouveau fichier : si la validation avait échoué,
+# l'ancien durcissement serait resté en place.
+- name: Retirer les anciens fichiers de durcissement posés à la main
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ ssh_durci_fichiers_obsoletes }}"
+  notify: Recharger sshd
+
+# Le contrôle ci-dessous doit porter sur la configuration rechargée, pas l'ancienne.
+- name: Appliquer maintenant les changements en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Lire la configuration effective de sshd
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: _ssh_durci_effectif
+  changed_when: false
+  # En mode --check, rien n'a été rechargé : le contrôle n'aurait pas de sens.
+  when: not ansible_check_mode
+
+- name: Vérifier les réglages qui comptent
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in _ssh_durci_effectif.stdout_lines"
+      - "'passwordauthentication no' in _ssh_durci_effectif.stdout_lines"
+      - "'kbdinteractiveauthentication no' in _ssh_durci_effectif.stdout_lines"
+      - "('maxauthtries ' ~ ssh_durci_max_essais) in _ssh_durci_effectif.stdout_lines"
+      - "('allowtcpforwarding ' ~ ('yes' if ssh_durci_transfert_tcp else 'no')) in _ssh_durci_effectif.stdout_lines"
+    fail_msg: >-
+      La configuration effective de sshd ne correspond pas au fichier {{ ssh_durci_fichier }} :
+      un autre fichier lu avant lui fixe ces valeurs (sudo sshd -T ; grep -r dans /etc/ssh).
+    quiet: true
+  when: not ansible_check_mode

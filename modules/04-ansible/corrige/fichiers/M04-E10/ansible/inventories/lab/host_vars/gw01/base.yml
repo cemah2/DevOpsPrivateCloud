@@ -1,0 +1,6 @@
+---
+# host_vars/gw01/base.yml (M04-E10) — gw01 est le SERVEUR de temps du lab (M00-E31) :
+# son chrony.conf de Debian (pools Internet) et conf.d/10-serveur-lab.conf (allow) ne sont
+# pas ceux d'un client. Le rôle base n'y touche pas (playbooks/chrony-client.yml l'excluait
+# déjà, M04-E08).
+base_chrony_client: false

@@ -1,0 +1,29 @@
+---
+# Bac à sable de précédence des variables (M04-E06).
+#   ansible-playbook precedence.yml
+#   ansible-playbook precedence.yml -e couleur=extra
+- name: Variables de play, rôle et set_fact
+  hosts: all
+  gather_facts: false
+  vars:
+    couleur: "play : vars"
+  roles:
+    - demo
+  tasks:
+    - name: Valeur vue par les tâches du play
+      ansible.builtin.debug:
+        var: couleur
+
+    - name: Valeur vue par une tâche qui a ses propres vars
+      ansible.builtin.debug:
+        var: couleur
+      vars:
+        couleur: "tâche : vars"
+
+    - name: Fixer la variable par set_fact
+      ansible.builtin.set_fact:
+        couleur: "set_fact"
+
+    - name: Valeur vue après set_fact
+      ansible.builtin.debug:
+        var: couleur

@@ -1,0 +1,20 @@
+# m03-e11-network.yaml — network-config v2 de la VM 2032 m03-ci-avance (M03-E11).
+# Remplace ENTIÈREMENT la configuration réseau que Proxmox générerait (ipconfig0, nameserver
+# et searchdomain sont alors ignorés). Emplacement : hdd-bulk:snippets/m03-e11-network.yaml
+# Validation : cloud-init schema -t network-config -c m03-e11-network.yaml
+# Adresse statique de la plage « tests » du VLAN SANDBOX (.250-.254, PLAN.md §4.2).
+network:
+  version: 2
+  ethernets:
+    lan:
+      match:
+        macaddress: "bc:24:11:03:20:32"
+      set-name: eth0
+      addresses:
+        - 10.10.99.251/24
+      routes:
+        - to: default
+          via: 10.10.99.1
+      nameservers:
+        addresses: [10.10.20.10]
+        search: [par1.medisphere.internal]

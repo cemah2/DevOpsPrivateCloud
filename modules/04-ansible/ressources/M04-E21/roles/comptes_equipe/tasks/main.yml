@@ -1,0 +1,38 @@
+---
+- name: groupe equipe
+  group: name=equipe
+
+- name: creer les comptes
+  shell: "useradd -m -s /bin/bash -G equipe {{ item }}"
+  with_items: "{{ equipe }}"
+  ignore_errors: yes
+
+- name: mot de passe
+  user:
+    name: "{{ item }}"
+    password: "{{ mot_de_passe | password_hash('sha512') }}"
+  with_items: "{{ equipe }}"
+
+- name: recuperer les cles depuis gitlab
+  get_url:
+    url: "{{ gitlab_url }}/{{ item }}.keys"
+    dest: "/tmp/{{ item }}.keys"
+    validate_certs: no
+  with_items: "{{ equipe }}"
+
+- name: installer les cles
+  authorized_key:
+    user: "{{ item }}"
+    key: "{{ lookup('file', '/tmp/' + item + '.keys') }}"
+  with_items: "{{ equipe }}"
+
+- name: sudo pour l'equipe
+  copy:
+    src: sudoers-equipe
+    dest: /etc/sudoers.d/equipe
+    mode: 644
+
+- name: sudo dans sudoers aussi au cas ou
+  lineinfile:
+    path: /etc/sudoers
+    line: "%equipe ALL=(ALL) NOPASSWD: ALL"

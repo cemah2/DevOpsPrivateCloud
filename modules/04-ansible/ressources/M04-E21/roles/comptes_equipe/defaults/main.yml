@@ -1,0 +1,9 @@
+---
+equipe:
+  - claire.morel
+  - karim.benali
+  - lucas.martin
+  - <MOI>
+# mot de passe commun provisoire, à changer à la première connexion
+mot_de_passe: "Medisphere2026!"
+gitlab_url: https://git01.par1.medisphere.internal

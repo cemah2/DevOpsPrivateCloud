@@ -1,0 +1,33 @@
+---
+# molecule/dnsmasq/verify.yml — vérifie le SERVICE rendu (réponses DNS), pas le fichier (M04-E46).
+- name: Vérifier le rôle dnsmasq
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['dnsmasq.service']['state'] == 'running'
+          - ansible_facts['services']['dnsmasq.service']['status'] == 'enabled'
+
+    - name: Enregistrement A servi
+      ansible.builtin.command: dig +short @127.0.0.1 test01.par1.medisphere.internal A
+      register: dnsmasq_verif_a
+      changed_when: false
+      failed_when: dnsmasq_verif_a.stdout != "10.10.20.250"
+
+    - name: PTR servi vers le premier nom
+      ansible.builtin.command: dig +short @127.0.0.1 -x 10.10.20.250
+      register: dnsmasq_verif_ptr
+      changed_when: false
+      failed_when: dnsmasq_verif_ptr.stdout != "test01.par1.medisphere.internal."
+
+    - name: Zone locale non transmise en amont (NXDOMAIN, pas de délai)
+      ansible.builtin.command: dig +time=2 +tries=1 @127.0.0.1 inconnu.medisphere.internal A
+      register: dnsmasq_verif_nx
+      changed_when: false
+      failed_when: "'status: NXDOMAIN' not in dnsmasq_verif_nx.stdout"

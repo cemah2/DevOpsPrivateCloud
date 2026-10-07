@@ -1,0 +1,16 @@
+---
+# « Recharger sshd » déclenche deux handlers, dans l'ordre de définition :
+# d'abord la validation de la configuration COMPLÈTE (sshd_config + tous les fichiers
+# de sshd_config.d), puis le rechargement. validate: n'a contrôlé que notre fichier seul.
+
+- name: Valider la configuration complète de sshd
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  listen: Recharger sshd
+
+# reload (SIGHUP) : les sessions ouvertes, dont celle d'Ansible, ne sont pas coupées.
+- name: Recharger le service sshd
+  ansible.builtin.systemd_service:
+    name: "{{ ssh_durci_service }}"
+    state: reloaded
+  listen: Recharger sshd

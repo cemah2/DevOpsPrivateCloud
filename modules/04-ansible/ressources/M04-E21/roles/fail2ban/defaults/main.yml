@@ -1,0 +1,6 @@
+---
+fail2ban_actif: true
+fail2ban_maxretry: 3
+fail2ban_bantime: 3600
+fail2ban_jails:
+  - sshd

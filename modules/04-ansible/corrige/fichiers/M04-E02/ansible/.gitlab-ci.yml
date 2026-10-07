@@ -1,0 +1,13 @@
+# .gitlab-ci.yml — plateforme/ansible (M04-E02)
+#
+# Gabarits communs de la plateforme (M01-E24, M01-E25), branche v1 :
+#   qualite.yml : stages standard (lint, test, build, release) + pre-commit, commitlint, gitleaks
+#   release.yml : semantic-release sur la branche par défaut
+# Les jobs propres au projet (ansible-lint, Molecule, --check du socle, application)
+# arrivent en M04-E20 et M04-E27.
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml

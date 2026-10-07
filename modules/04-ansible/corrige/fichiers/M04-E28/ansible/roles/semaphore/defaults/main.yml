@@ -1,0 +1,22 @@
+---
+# roles/semaphore/defaults/main.yml (M04-E28)
+# Version et empreinte du paquet officiel : semaphore_<version>_checksums.txt de la version
+# (https://github.com/semaphoreui/semaphore/releases). Changer de version = changer les DEUX.
+semaphore_version: "2.19.16"
+semaphore_sha256: "56c4ac99b712b3fde11a7d600a0789870a3b945bab0c12f41d91864e0aeb85b8"
+
+# URL publique (web_host) : sert aux redirections, au cookie Secure et au contrôle d'origine.
+semaphore_fqdn: "{{ inventory_hostname }}.par1.medisphere.internal"
+semaphore_fuseau: Europe/Paris
+
+# Certificat (chaîne serveur + CA provisoire), PUBLIC : fichier sur le contrôleur.
+semaphore_tls_certificat_src: "{{ inventory_dir }}/files/{{ inventory_hostname }}-chaine.crt"
+
+# Compte administrateur initial (créé une seule fois).
+semaphore_admin_login: admin-plateforme
+semaphore_admin_nom: Administrateur Plateforme
+semaphore_admin_email: plateforme@medisphere.internal
+
+# Secrets SANS valeur par défaut (meta/argument_specs.yml les exige) : à fournir depuis Vault.
+#   semaphore_db_mot_de_passe, semaphore_cookie_hash, semaphore_cookie_encryption,
+#   semaphore_access_key_encryption, semaphore_tls_cle, semaphore_admin_mot_de_passe

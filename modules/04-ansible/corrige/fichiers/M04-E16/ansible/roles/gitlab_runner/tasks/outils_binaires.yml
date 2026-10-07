@@ -1,0 +1,85 @@
+---
+# Chaque version dans son propre dossier (/opt/ci-outils/<nom>-<version>/) : le
+# téléchargement n'a lieu que si le fichier manque ou n'a pas la bonne empreinte ;
+# changer de version ne fait que déplacer les liens de /usr/local/bin (retour arrière
+# immédiat en remettant l'ancienne ligne).
+- name: Dossiers des outils
+  ansible.builtin.file:
+    path: "{{ gitlab_runner_outils_dossier }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: >-
+    {{ ['archives', 'bats-' ~ gitlab_runner_bats_version]
+       + gitlab_runner_outils | map(attribute='nom') | zip(gitlab_runner_outils | map(attribute='version'))
+         | map('join', '-') | list }}
+
+- name: Télécharger les outils (empreinte SHA-256 vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: >-
+      {{ gitlab_runner_outils_dossier }}/{{ ('archives/' ~ (item.url | basename)) if item.archive
+         else (item.nom ~ '-' ~ item.version ~ '/' ~ item.binaires[0].chemin) }}
+    checksum: "sha256:{{ item.sha256 }}"
+    owner: root
+    group: root
+    mode: "{{ '0644' if item.archive else '0755' }}"
+  loop: "{{ gitlab_runner_outils }}"
+  loop_control:
+    label: "{{ item.nom }} {{ item.version }}"
+
+- name: Extraire les archives
+  ansible.builtin.unarchive:
+    src: "{{ gitlab_runner_outils_dossier }}/archives/{{ item.url | basename }}"
+    dest: "{{ gitlab_runner_outils_dossier }}/{{ item.nom }}-{{ item.version }}"
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ gitlab_runner_outils_dossier }}/{{ item.nom }}-{{ item.version }}/{{ item.binaires[0].chemin }}"
+  loop: "{{ gitlab_runner_outils | selectattr('archive') | list }}"
+  loop_control:
+    label: "{{ item.nom }} {{ item.version }}"
+
+# force : remplace aussi les fichiers ordinaires posés par les scripts de M01 et M02.
+- name: Liens dans /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ gitlab_runner_outils_dossier }}/{{ item.0.nom }}-{{ item.0.version }}/{{ item.1.chemin }}"
+    dest: "/usr/local/bin/{{ item.1.lien }}"
+    state: link
+    force: true
+  loop: "{{ gitlab_runner_outils | subelements('binaires') }}"
+  loop_control:
+    label: "{{ item.1.lien }} → {{ item.0.nom }} {{ item.0.version }}"
+
+# --- bats-core : archive de l'étiquette, installée par son propre install.sh ---------------
+# Empreinte : celle que tu as relevée en M02-E24.
+- name: Télécharger bats-core {{ gitlab_runner_bats_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/bats-core/bats-core/archive/refs/tags/v{{ gitlab_runner_bats_version }}.tar.gz"
+    dest: "{{ gitlab_runner_outils_dossier }}/archives/bats-core-{{ gitlab_runner_bats_version }}.tar.gz"
+    checksum: "sha256:{{ gitlab_runner_bats_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extraire bats-core
+  ansible.builtin.unarchive:
+    src: "{{ gitlab_runner_outils_dossier }}/archives/bats-core-{{ gitlab_runner_bats_version }}.tar.gz"
+    dest: "{{ gitlab_runner_outils_dossier }}/archives"
+    remote_src: true
+    creates: "{{ gitlab_runner_outils_dossier }}/archives/bats-core-{{ gitlab_runner_bats_version }}/install.sh"
+
+- name: Installer bats-core dans son dossier de version
+  ansible.builtin.command:
+    argv:
+      - "{{ gitlab_runner_outils_dossier }}/archives/bats-core-{{ gitlab_runner_bats_version }}/install.sh"
+      - "{{ gitlab_runner_outils_dossier }}/bats-{{ gitlab_runner_bats_version }}"
+    creates: "{{ gitlab_runner_outils_dossier }}/bats-{{ gitlab_runner_bats_version }}/bin/bats"
+
+- name: Lien bats
+  ansible.builtin.file:
+    src: "{{ gitlab_runner_outils_dossier }}/bats-{{ gitlab_runner_bats_version }}/bin/bats"
+    dest: /usr/local/bin/bats
+    state: link
+    force: true

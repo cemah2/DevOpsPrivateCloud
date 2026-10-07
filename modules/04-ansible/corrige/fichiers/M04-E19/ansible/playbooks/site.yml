@@ -1,0 +1,13 @@
+---
+# playbooks/site.yml — tout le socle, dans l'ordre (M04-E19 ; complété au mini-projet M04-E46).
+# Exploitation courante : voir docs/exploitation.md.
+#   ansible-playbook playbooks/site.yml --check --diff
+#   ansible-playbook playbooks/site.yml --limit dns01 --tags base
+- name: Configuration commune (base, ssh_durci)
+  ansible.builtin.import_playbook: socle-base.yml
+
+- name: Pare-feu du routeur
+  ansible.builtin.import_playbook: gw01-pare-feu.yml
+
+- name: Runner de CI
+  ansible.builtin.import_playbook: runner01.yml

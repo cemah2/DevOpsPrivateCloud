@@ -1,0 +1,32 @@
+---
+# molecule/_commun/prepare.yml — met une instance fraîche en état d'être testée (M04-E24)
+# Ce qui n'appartient PAS au rôle testé mais que la production garantit déjà : cloud-init
+# terminé (il écrit le compte, les clés, le réseau), cache APT à jour.
+- name: Préparer les instances
+  hosts: molecule
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Attendre que la connexion SSH et Python soient utilisables
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    # cloud-init status --wait : 0 = terminé sans erreur, 1 = erreur, 2 = terminé avec des
+    # erreurs récupérables (« degraded »). Un test sur une instance mal initialisée ne
+    # prouverait rien : on s'arrête sur 1, on signale 2.
+    - name: Attendre la fin de cloud-init
+      ansible.builtin.command:
+        cmd: cloud-init status --wait
+      register: cloud_init
+      changed_when: false
+      failed_when: cloud_init.rc not in [0, 2]
+
+    - name: Signaler un cloud-init dégradé
+      ansible.builtin.debug:
+        msg: "cloud-init terminé avec des erreurs récupérables : {{ cloud_init.stdout }}"
+      when: cloud_init.rc == 2
+
+    - name: Mettre à jour le cache APT
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600

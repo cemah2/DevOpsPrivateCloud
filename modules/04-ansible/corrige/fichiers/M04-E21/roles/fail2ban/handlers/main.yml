@@ -1,0 +1,13 @@
+---
+# validate: ne peut pas servir ici : fail2ban ne sait tester que la configuration COMPLÈTE
+# (/etc/fail2ban), pas un fichier isolé. On la teste donc avant de recharger.
+- name: Tester la configuration complète de fail2ban
+  ansible.builtin.command: fail2ban-client --test
+  changed_when: false
+  listen: Recharger fail2ban
+
+- name: Recharger le service fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: reloaded
+  listen: Recharger fail2ban

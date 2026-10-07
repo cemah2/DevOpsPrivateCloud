@@ -1,0 +1,37 @@
+---
+# Rôle pare_feu — valeurs par défaut (M04-E17).
+# La matrice des flux devient du code : /etc/nftables.conf est GÉNÉRÉ à partir des listes
+# ci-dessous (renseignées dans host_vars/gw01/pare_feu.yml). Personne ne l'édite plus à la main.
+
+pare_feu_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.') }}
+pare_feu_fichier: /etc/nftables.conf
+
+# Variables nftables (« define »), dans l'ordre : [{nom, valeur, commentaire}].
+pare_feu_definitions: []
+
+# Flux autorisés. Chaque flux : un dictionnaire dont les champs deviennent des critères :
+#   entree / sortie        iifname / oifname (chaîne, ou liste)
+#   source / destination   ip saddr / ip daddr (chaîne, ou liste ; « != X » permis)
+#   proto                  tcp | udp | tcp_udp | icmp
+#   ports / ports_source   port(s) de destination / de source (nombre, « a-b », ou liste)
+#   icmp                   type ICMP (avec proto: icmp)
+#   action                 défaut accept
+#   motif, ref             commentaire de la règle (motif obligatoire ; ref = exercice/ticket)
+pare_feu_entree: []      # vers gw01 lui-même (chaîne input)
+pare_feu_transit: []     # à travers gw01 (chaîne forward)
+# Traduction d'adresses (chaîne postrouting de « table ip nat ») : [{regle, motif}].
+pare_feu_nat: []
+
+pare_feu_journaliser_rejets: true
+
+# --- Filet de sécurité anti-coupure ------------------------------------------------------
+# Avant d'appliquer, une minuterie systemd est armée : si la nouvelle configuration n'est pas
+# CONFIRMÉE (nouvelle connexion SSH réussie + vérifications) avant pare_feu_delai_retour
+# secondes, gw01 recharge tout seul la configuration précédente.
+pare_feu_delai_retour: 120
+pare_feu_delai_confirmation: 30
+pare_feu_dossier_etat: /var/lib/pare-feu
+# Flux testés DEPUIS LE CONTRÔLEUR après application : [{hote, port, motif}].
+pare_feu_verifications: []

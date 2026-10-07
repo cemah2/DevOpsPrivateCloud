@@ -1,0 +1,37 @@
+{
+  "dialect": "postgres",
+  "postgres": {
+    "host": "127.0.0.1:5432",
+    "user": "semaphore",
+    "pass": {{ semaphore_db_mot_de_passe | to_json }},
+    "name": "semaphore",
+    "options": {
+      "sslmode": "disable"
+    }
+  },
+  "port": ":443",
+  "tls": {
+    "enabled": true,
+    "cert_file": "/etc/semaphore/tls/serveur.crt",
+    "key_file": "/etc/semaphore/tls/serveur.key",
+    "http_redirect_port": 80
+  },
+  "web_host": {{ ('https://' ~ semaphore_fqdn) | to_json }},
+  "tmp_path": "/var/lib/semaphore/tmp",
+  "git_client": "cmd_git",
+  "cookie_hash": {{ semaphore_cookie_hash | to_json }},
+  "cookie_encryption": {{ semaphore_cookie_encryption | to_json }},
+  "access_key_encryption": {{ semaphore_access_key_encryption | to_json }},
+  "schedule": {
+    "timezone": {{ semaphore_fuseau | to_json }}
+  },
+  "mfa": {
+    "totp": {
+      "enabled": true,
+      "allow_recovery": true
+    }
+  },
+  "env_vars": {
+    "ANSIBLE_HOST_KEY_CHECKING": "True"
+  }
+}

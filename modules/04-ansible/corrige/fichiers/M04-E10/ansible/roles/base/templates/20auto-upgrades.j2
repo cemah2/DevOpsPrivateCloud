@@ -1,0 +1,4 @@
+{{ base_entete | comment(decoration='// ') }}
+// /etc/apt/apt.conf.d/20auto-upgrades (rôle base)
+APT::Periodic::Update-Package-Lists "{{ '1' if base_maj_auto else '0' }}";
+APT::Periodic::Unattended-Upgrade "{{ '1' if base_maj_auto else '0' }}";

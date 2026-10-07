@@ -1,0 +1,19 @@
+---
+- name: Installer les paquets communs et ceux du rôle de l'hôte
+  ansible.builtin.apt:
+    name: "{{ base_paquets + base_paquets_role }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Retirer les clients de protocoles en clair
+  ansible.builtin.apt:
+    name: "{{ base_paquets_interdits }}"
+    state: absent
+
+- name: Horodater l'historique bash (traçabilité des interventions)
+  ansible.builtin.lineinfile:
+    path: /etc/bash.bashrc
+    regexp: '^export HISTTIMEFORMAT='
+    line: "export HISTTIMEFORMAT='%F %T '"
+    state: present

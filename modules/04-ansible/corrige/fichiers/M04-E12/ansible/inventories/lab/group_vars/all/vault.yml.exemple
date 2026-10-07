@@ -1,0 +1,12 @@
+---
+# MODÈLE EN CLAIR de inventories/lab/group_vars/all/vault.yml (M04-E12).
+# Le vrai fichier n'existe dans le dépôt que CHIFFRÉ (ligne 1 : $ANSIBLE_VAULT;1.2;AES256;lab).
+# Crée-le avec :  ansible-vault create --encrypt-vault-id lab inventories/lab/group_vars/all/vault.yml
+# Modifie-le avec : ansible-vault edit inventories/lab/group_vars/all/vault.yml
+# Les valeurs ci-dessous sont des EXEMPLES non fonctionnels.
+
+# Empreinte du mot de passe du compte de secours (mkpasswd -m yescrypt ; jamais le mot de passe).
+vault_secours_mdp_hash: "$y$j9T$<SEL>$<EMPREINTE>"
+
+# Jeton d'authentification du runner runner01-shell (M04-E16), commence par glrt-.
+vault_gitlab_runner_jeton: "glrt-XXXX…"

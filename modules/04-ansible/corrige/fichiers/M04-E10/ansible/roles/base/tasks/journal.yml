@@ -1,0 +1,18 @@
+---
+- name: Dossier des réglages de journald
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Même nom que le fichier de l'image dorée (M03-E09) : les deux convergent.
+- name: Journal persistant avec plafond d'espace
+  ansible.builtin.template:
+    src: journald-medisphere.conf.j2
+    dest: /etc/systemd/journald.conf.d/50-medisphere.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer journald

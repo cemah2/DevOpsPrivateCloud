@@ -1,0 +1,14 @@
+---
+# collections/requirements.yml — collections externes du projet (M04-E02, versions figées en M04-E18).
+# Installation (dans ./collections, collections_path d'ansible.cfg) :
+#   ansible-galaxy collection install -r collections/requirements.yml -p collections
+# Versions EXACTES : la CI et les postes installent la même chose. Monter une version =
+# une MR qui change cette ligne (et dont la CI rejoue lint et tests).
+# medisphere.socle n'est pas listée : elle vit dans ce dépôt (collections/ansible_collections/medisphere/socle).
+collections:
+  - name: community.proxmox
+    version: "==2.1.0"
+  - name: community.general
+    version: "==13.5.0"
+  - name: ansible.posix
+    version: "==2.2.2"

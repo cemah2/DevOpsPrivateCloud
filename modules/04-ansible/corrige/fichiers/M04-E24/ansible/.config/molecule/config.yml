@@ -1,0 +1,76 @@
+---
+# .config/molecule/config.yml — base commune des scénarios Molecule de plateforme/ansible (M04-E24)
+#
+# Molecule cherche ce fichier à la racine du dépôt Git et le fusionne (fusion profonde)
+# SOUS le molecule.yml de chaque scénario : un scénario ne déclare que ce qui lui est propre.
+#
+# Approche « ansible-native » de Molecule 26 : pilote « default », pas de section platforms.
+# Les instances sont des VMs Proxmox clonées depuis l'image dorée « current » (M03) par nos
+# propres playbooks create.yml / destroy.yml (molecule/_commun/), décrites par un inventaire
+# Ansible ordinaire :
+#   molecule/_commun/inventaire/   variables communes du groupe « molecule » (connexion, VNet…)
+#   molecule/<scénario>/inventaire/ l'instance du scénario et son VMID (2045-2049, PLAN §4.8)
+#
+# Toujours lancer Molecule depuis la racine du projet (MOLECULE_PROJECT_DIRECTORY = dossier
+# courant), avec le fichier d'accès Proxmox chargé :
+#   set -a; . ~/.config/workbook/pve-ansible.env; set +a
+#   uv run molecule test -s base
+#
+# Molecule écrit son propre ansible.cfg (ANSIBLE_CONFIG) dans son dossier éphémère : celui du
+# projet n'est PAS lu. Ce qui en compte pour les tests est donc repris dans « cfg » ci-dessous.
+
+# Pas d'installation automatique de dépendances dans .cache/ : les collections sont déjà dans
+# ./collections (collections/requirements.yml, E02), exactement celles de la production.
+prerun: false
+
+ansible:
+  executor:
+    backend: ansible-playbook
+    args:
+      ansible_playbook:
+        # Deux sources d'inventaire : le commun (group_vars du groupe molecule), puis celle du
+        # scénario. Les group_vars/ voisins de chaque source sont chargés.
+        - --inventory=${MOLECULE_PROJECT_DIRECTORY}/molecule/_commun/inventaire/
+        - --inventory=${MOLECULE_SCENARIO_DIRECTORY}/inventaire/
+  cfg:
+    defaults:
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/roles
+      collections_path: ${MOLECULE_PROJECT_DIRECTORY}/collections
+      interpreter_python: auto_silent
+      inject_facts_as_vars: false
+      callback_result_format: yaml
+      # Molecule désactive la vérification des clés d'hôte par défaut. On la garde : les
+      # instances sont acceptées à la première connexion dans un known_hosts propre au
+      # scénario (voir molecule/_commun/inventaire/group_vars/molecule.yml), effacé au destroy.
+      host_key_checking: true
+      forks: 5
+    connection:
+      pipelining: true
+  playbooks:
+    create: ../_commun/create.yml
+    prepare: ../_commun/prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+    destroy: ../_commun/destroy.yml
+
+scenario:
+  # destroy en tête : repart d'une ardoise propre si un test précédent a été interrompu.
+  # « molecule test » rejoue destroy à la fin même en cas d'échec (--destroy=always, défaut).
+  test_sequence:
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - destroy
+  converge_sequence:
+    - create
+    - prepare
+    - converge
+  create_sequence:
+    - create
+    - prepare
+  destroy_sequence:
+    - destroy

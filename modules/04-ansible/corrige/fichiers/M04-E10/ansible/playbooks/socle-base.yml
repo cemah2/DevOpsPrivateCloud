@@ -1,0 +1,12 @@
+---
+# playbooks/socle-base.yml — configuration commune de tout le socle (M04-E10).
+# Remplace trousse-diagnostic.yml (E05), identite-hotes.yml (E07) et chrony-client.yml (E08),
+# supprimés du projet une fois le rôle appliqué.
+#   uv run ansible-playbook playbooks/socle-base.yml --check --diff [--limit dns01]
+#   uv run ansible-playbook playbooks/socle-base.yml
+- name: Configuration commune du socle
+  hosts: socle
+  become: true
+  roles:
+    - role: base
+      tags: [base]

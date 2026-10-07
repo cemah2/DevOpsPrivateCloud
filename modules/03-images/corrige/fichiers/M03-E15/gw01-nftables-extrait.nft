@@ -1,0 +1,14 @@
+# Extrait de /etc/nftables.conf sur gw01 — chaîne forward de « table inet filter » (M03-E15).
+# Complète la règle de M03-E05 (vsandbox → adm01). Variables du fichier de référence
+# (modules/00-lab/corrige/fichiers/M00-E26/nftables.conf), plus :
+#
+#   define ADM01    = 10.10.10.10     (M03-E05)
+#   define RUNNER01 = 10.10.20.15
+#
+# À placer dans « Services socle », avant la sortie Internet et la journalisation finale.
+# Retours : « ct state established,related ». Procédure de M00-E21 (session ouverte, retour
+# arrière programmé, sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables).
+
+		iifname $V_SANDBOX ip daddr $RUNNER01 tcp dport 8100-8199 accept comment "VMs de build Packer vers le serveur HTTP de Packer sur runner01 (M03-E15)"
+		iifname $V_INFRA ip saddr $RUNNER01 oifname $V_SANDBOX tcp dport 22 accept comment "runner01 vers les VMs de build et de test : SSH de Packer et des tests (M03-E15)"
+		iifname $V_INFRA ip saddr $RUNNER01 oifname $WAN ip daddr $PVE01 tcp dport 8006 accept comment "runner01 vers l'API de pve01 (M03-E15)"

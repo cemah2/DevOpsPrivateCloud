@@ -1,0 +1,39 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/ansible (état de fin de M04-E20 ; complété en M04-E27)
+# Contrôles communs et release : gabarits de plateforme/ci-templates (v1).
+# Runner : runner01 (exécuteur shell, étiquette « shell »), uv déjà installé (M04-E16).
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+# Le hook ansible-lint de pre-commit est local (uv run) : en CI, c'est le job dédié qui
+# l'exécute, avec les collections installées. Le job pre-commit du gabarit le saute.
+pre-commit:
+  variables:
+    SKIP: gitleaks,ansible-lint
+
+ansible-lint:
+  stage: lint
+  tags: [shell]
+  interruptible: true
+  variables:
+    # Le lint (et le --syntax-check qu'il lance) n'interroge pas Proxmox : inventaire statique.
+    ANSIBLE_INVENTORY: inventories/lab/hosts.yml
+  script:
+    # ansible.cfg déclare l'identité Vault « lab » : sans fichier de mot de passe, toute
+    # commande ansible s'arrête. Le lint ne déchiffre rien : un mot de passe FACTICE suffit,
+    # et le vrai secret n'est pas exposé à ce job (variable vide : erreur « can not be a directory »).
+    - export ANSIBLE_VAULT_IDENTITY_LIST="lab@$(mktemp)" && printf 'factice\n' > "${ANSIBLE_VAULT_IDENTITY_LIST#lab@}"
+    - uv sync --frozen
+    - uv run ansible --version
+    - uv run ansible-galaxy collection install -r collections/requirements.yml -p collections
+    - uv run ansible-lint --version
+    - uv run ansible-lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,37 @@
+---
+# inventories/lab/proxmox.yml — inventaire dynamique du lab (M04-E13).
+# Le nom DOIT finir par « proxmox.yml » : sinon le plugin ignore le fichier (verify_file).
+# Identifiants : variables d'environnement PROXMOX_URL, PROXMOX_USER, PROXMOX_TOKEN_ID,
+# PROXMOX_TOKEN_SECRET (~/.config/workbook/pve-ansible.env) ; aucun secret ici.
+# Contrôle : ansible-inventory -i inventories/lab/proxmox.yml --graph
+plugin: community.proxmox.proxmox
+
+validate_certs: true          # défaut en 2.x ; écrit pour qu'on ne l'oublie pas
+want_facts: true              # config de chaque VM : ipconfig0, étiquettes analysées…
+exclude_nodes: true           # pve01 n'est pas géré par ce projet
+group_prefix: proxmox_
+facts_prefix: proxmox_
+
+# Seules les VMs du socle et celles d'environnement du module, jamais les templates ni les
+# instances jetables de Molecule (M04-E24, adresse DHCP). Le jeton ne voit que le pool lab.
+# Chaque filtre doit être vrai pour que la VM entre dans l'inventaire.
+filters:
+  - not proxmox_template
+  - "'socle' in (proxmox_tags_parsed | default([])) or 'env-m04' in (proxmox_tags_parsed | default([]))"
+  - "'molecule' not in (proxmox_tags_parsed | default([]))"
+
+# Mêmes noms de groupes que l'inventaire statique : socle, role_routeur, role_bastion…
+# Le « - » n'est pas permis dans un nom de groupe Ansible : on le remplace explicitement
+# plutôt que de dépendre du réglage TRANSFORM_INVALID_GROUP_CHARS.
+keyed_groups:
+  - key: proxmox_tags_parsed | map('replace', '-', '_') | list
+    prefix: ""
+    separator: ""
+
+compose:
+  # Adresse de connexion = IP de ipconfig0 (cloud-init), sans le masque : l'inventaire
+  # marche même si le DNS est en panne. gw01, installé à la main, n'a pas d'ipconfig0 :
+  # l'expression échoue et est ignorée (strict: false), host_vars/gw01 fournit l'adresse.
+  ansible_host: proxmox_ipconfig0.ip.split('/') | first
+  vmid: proxmox_vmid
+strict: false

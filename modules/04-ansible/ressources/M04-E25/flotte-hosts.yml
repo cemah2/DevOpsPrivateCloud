@@ -1,0 +1,22 @@
+---
+# flotte-hosts.yml — inventaire de la flotte de démonstration (M04-E25, fourni)
+# À copier dans ~/m04/e25/ ; s'utilise avec -i ~/m04/e25/flotte-hosts.yml.
+# La flotte est jetable et n'appartient pas au socle : son inventaire reste hors du projet.
+all:
+  children:
+    flotte:
+      hosts:
+        m04-web1:
+          ansible_host: 10.10.99.42
+        m04-web2:
+          ansible_host: 10.10.99.43
+        m04-web3:
+          ansible_host: 10.10.99.44
+      vars:
+        ansible_user: admin
+        # VMs neuves, adresses fixes : la clé d'hôte est acceptée à la PREMIÈRE connexion
+        # seulement (une clé qui change ensuite est refusée), dans un fichier dédié pour ne
+        # pas polluer ~/.ssh/known_hosts (supprime-le quand tu détruis la flotte).
+        ansible_ssh_common_args: >-
+          -o StrictHostKeyChecking=accept-new
+          -o UserKnownHostsFile=~/m04/e25/known_hosts

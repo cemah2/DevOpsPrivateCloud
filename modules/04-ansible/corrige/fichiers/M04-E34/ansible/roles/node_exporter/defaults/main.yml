@@ -1,0 +1,21 @@
+---
+# roles/node_exporter/defaults/main.yml (M04-E34) — voir README.md et meta/argument_specs.yml
+node_exporter_port: 9100
+# Adresse d'écoute : l'IPv4 de la route par défaut (X2). Jamais 0.0.0.0.
+node_exporter_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+node_exporter_collecteurs_desactives:
+  - infiniband
+  - zfs
+  - nfs
+  - nfsd
+# Unités publiées par le collecteur systemd (noms sans « .service »).
+node_exporter_unites_systemd:
+  - ssh
+  - chrony
+  - nftables
+  - dnsmasq
+  - gitlab-runner
+  - semaphore
+node_exporter_site: par1
+# Dossier « textfile » par défaut du paquet Debian (prometheus-node-exporter --help).
+node_exporter_dossier_textfile: /var/lib/prometheus/node-exporter

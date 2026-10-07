@@ -1,0 +1,43 @@
+---
+# M04-E46 — converge TOUT le socle. Second passage attendu : changed=0 partout.
+# Noms des playbooks importés : ceux du projet de référence (paliers 2-3) ; adapte-les aux tiens.
+#
+# Ordre :
+#   1. garde-fou d'inventaire (M04-E39) : rien ne part si le socle n'est pas complet ;
+#   2. rôles communs (base, ssh_durci) sur tout le socle ;
+#   3. services par fonction : DNS d'abord (les autres en dépendent), forge, runner ;
+#   4. gw01 (pare-feu) en DERNIER : son rôle a un filet anti-coupure (M04-E17), mais si
+#      quelque chose devait mal tourner, tout le reste a déjà convergé.
+
+- name: Garde-fou d'inventaire
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Les cinq hôtes du socle sont dans l'inventaire, chacun dans son groupe
+      ansible.builtin.assert:
+        that:
+          - groups['socle'] | default([]) | length == 5
+          - groups['role_routeur'] | default([]) | length == 1
+          - groups['role_bastion'] | default([]) | length == 1
+          - groups['role_dns'] | default([]) | length >= 1
+          - groups['role_gitlab'] | default([]) | length == 1
+          - groups['role_runner'] | default([]) | length == 1
+        fail_msg: >-
+          Inventaire incomplet ({{ groups['socle'] | default([]) | length }} hôte(s) dans socle) :
+          passage annulé. Voir RB-040, section « inventaire ».
+        quiet: true
+
+- name: Rôles communs
+  ansible.builtin.import_playbook: socle-base.yml
+
+- name: DNS provisoire
+  ansible.builtin.import_playbook: dns01.yml
+
+- name: Forge
+  ansible.builtin.import_playbook: git01.yml
+
+- name: Runner
+  ansible.builtin.import_playbook: runner01.yml
+
+- name: Routeur et pare-feu (en dernier)
+  ansible.builtin.import_playbook: gw01-pare-feu.yml

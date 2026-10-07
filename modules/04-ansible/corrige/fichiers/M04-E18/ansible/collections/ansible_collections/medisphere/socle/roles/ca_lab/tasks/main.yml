@@ -1,0 +1,24 @@
+---
+- name: Paquet ca-certificates
+  ansible.builtin.apt:
+    name: ca-certificates
+    state: present
+
+- name: Installer les autorités de certification du lab
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.nom }}.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ca_lab_certificats }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _ca_lab_copie
+
+# Immédiatement (pas en handler) : la suite du play peut avoir besoin de la nouvelle
+# autorité (téléchargement depuis git01, appel à l'API de pve01…).
+- name: Reconstruire le magasin système  # noqa: no-handler
+  ansible.builtin.command: update-ca-certificates
+  when: _ca_lab_copie is changed
+  changed_when: true

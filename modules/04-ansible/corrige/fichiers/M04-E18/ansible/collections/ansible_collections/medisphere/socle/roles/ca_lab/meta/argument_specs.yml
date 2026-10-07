@@ -1,0 +1,18 @@
+---
+argument_specs:
+  main:
+    short_description: Installe des autorités de certification dans le magasin système
+    options:
+      ca_lab_certificats:
+        type: list
+        elements: dict
+        description: Autorités à installer.
+        options:
+          nom:
+            type: str
+            required: true
+            description: Nom du fichier .crt dans /usr/local/share/ca-certificates/.
+          source:
+            type: path
+            required: true
+            description: Certificat PEM sur le contrôleur.

@@ -1,0 +1,17 @@
+---
+# inventories/lab/host_vars/sem01/vault.yml.exemple — MODÈLE EN CLAIR, sans aucun secret (M04-E28)
+# Copier en vault.yml, remplacer chaque <…>, puis chiffrer AVANT tout commit :
+#   cp vault.yml.exemple vault.yml && $EDITOR vault.yml
+#   uv run ansible-vault encrypt --vault-id lab@~/.config/workbook/ansible-vault.pass vault.yml
+# (en E30, ce fichier passera sous l'identité « critique »).
+# Générer :
+#   mot de passe PostgreSQL : openssl rand -hex 24
+#   clés de Semaphore       : head -c32 /dev/urandom | base64   (une par clé)
+#   mot de passe admin      : ton gestionnaire de mots de passe
+vault_semaphore_db_mot_de_passe: <48-CARACTERES-HEXADECIMAUX>
+vault_semaphore_cookie_hash: <BASE64-32-OCTETS>
+vault_semaphore_cookie_encryption: <BASE64-32-OCTETS>
+vault_semaphore_access_key_encryption: <BASE64-32-OCTETS>
+vault_semaphore_admin_mot_de_passe: <MOT-DE-PASSE-ADMIN>
+vault_semaphore_tls_cle: |
+  <CONTENU-DE-~/pki-provisoire/sem01.key>

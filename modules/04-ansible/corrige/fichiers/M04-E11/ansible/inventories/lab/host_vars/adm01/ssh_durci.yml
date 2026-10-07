@@ -1,0 +1,4 @@
+---
+# host_vars/adm01/ssh_durci.yml — adm01 est le bastion : ProxyJump (ssh -J adm01) ouvre un
+# canal « direct-tcpip », refusé si AllowTcpForwarding vaut no.
+ssh_durci_transfert_tcp: true

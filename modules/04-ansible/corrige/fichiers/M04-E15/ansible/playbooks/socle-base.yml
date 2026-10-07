@@ -1,0 +1,38 @@
+---
+# playbooks/socle-base.yml — configuration commune de tout le socle (M04-E10, E11, E15).
+# Remplace trousse-diagnostic.yml (E05), identite-hotes.yml (E07) et chrony-client.yml (E08).
+#   uv run ansible-playbook playbooks/socle-base.yml --check --diff [--limit dns01] [--tags ssh]
+#   uv run ansible-playbook playbooks/socle-base.yml
+- name: Configuration commune du socle
+  hosts: socle
+  become: true
+
+  # M04-E15 : préconditions vérifiées AVANT toute modification. Un hôte qui ne les remplit
+  # pas sort du play (les autres continuent) et apparaît « failed » dans le récapitulatif.
+  pre_tasks:
+    - name: Vérifier le système de l'hôte
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+        fail_msg: >-
+          {{ inventory_hostname }} est en {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_version'] }} : ces rôles visent Debian 13.
+        quiet: true
+      tags: [always]
+
+    - name: Vérifier l'adresse de connexion (l'inventaire ne doit pas dépendre du DNS)
+      ansible.builtin.assert:
+        that:
+          - ansible_host is ansible.builtin.match('^10\.10\.[0-9]{1,3}\.[0-9]{1,3}$')
+        fail_msg: >-
+          ansible_host de {{ inventory_hostname }} vaut « {{ ansible_host | default('non défini') }} » :
+          une adresse IPv4 du lab (10.10.0.0/16) est attendue.
+        quiet: true
+      tags: [always]
+
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]

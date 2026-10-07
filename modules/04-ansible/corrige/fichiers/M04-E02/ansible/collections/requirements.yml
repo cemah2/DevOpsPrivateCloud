@@ -1,0 +1,21 @@
+---
+# collections/requirements.yml — collections Ansible du projet (M04-E02)
+#
+# Installation dans ./collections (collections_path de ansible.cfg) :
+#   uv run ansible-galaxy collection install -r collections/requirements.yml -p collections
+#
+# Versions EXACTES : pas de lockfile pour les collections, l'épinglage en tient lieu.
+# Une mise à jour = une MR « build(deps): … » relue, passée par ansible-lint et Molecule.
+# Toutes ces versions acceptent ansible-core 2.19 (Debian 13) et 2.21 (meta/runtime.yml).
+collections:
+  # Inventaire dynamique Proxmox (E13), instances Molecule (E24). Modules sortis de
+  # community.general ; validate_certs vaut true par défaut. Demande proxmoxer >= 2.3.
+  - name: community.proxmox
+    version: "2.1.0"
+  # Modules et filtres d'usage général. Installe aussi sa dépendance
+  # community.library_inventory_filtering_v1.
+  - name: community.general
+    version: "13.5.0"
+  # authorized_key, sysctl, mount, callbacks de profilage (E26)…
+  - name: ansible.posix
+    version: "2.2.2"

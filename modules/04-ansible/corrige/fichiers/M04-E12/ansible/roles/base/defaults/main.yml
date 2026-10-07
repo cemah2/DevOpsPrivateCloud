@@ -1,0 +1,71 @@
+---
+# Rôle base — valeurs par défaut (M04-E10 ; compte de secours en M04-E12).
+# Les defaults ont la précédence la plus FAIBLE : tout se surcharge dans l'inventaire.
+# Quand le projet fournit une donnée du site (ms_…, group_vars/all, M04-E06/E07), le rôle
+# la reprend ; sinon il a une valeur raisonnable à lui. Il fonctionne donc aussi sans
+# l'inventaire du projet (instance de test Molecule, M04-E24).
+
+base_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.') }}
+
+# --- Paquets (trousse de diagnostic de M04-E05/E06 + socle commun) --------------------
+base_paquets:
+  - qemu-guest-agent
+  - chrony
+  - unattended-upgrades
+  - ca-certificates
+  - sudo
+  - curl
+  - bind9-dnsutils
+  - tcpdump
+  - mtr-tiny
+  - jq
+  - lsof
+  - strace
+  - htop
+# Outils propres à un rôle : group_vars/role_<rôle>/ (ex. conntrack sur le routeur).
+base_paquets_role: []
+# Clients de protocoles en clair, refusés par la RSSI.
+base_paquets_interdits:
+  - telnet
+  - inetutils-telnet
+  - rsh-client
+
+# --- Fuseau horaire -------------------------------------------------------------------
+base_fuseau_horaire: Europe/Paris
+
+# --- Temps : client chrony (PLAN.md §4.3 bis) -------------------------------------------
+# gw01 est le SERVEUR de temps du lab (M00-E31) : base_chrony_client: false dans ses host_vars.
+base_chrony_client: true
+# Sources : celles du site (ms_serveurs_ntp, M04-E06), sinon la passerelle par défaut de l'hôte.
+base_ntp_serveurs: "{{ ms_serveurs_ntp | default([ansible_facts['default_ipv4']['gateway']]) }}"
+
+# --- Journal ------------------------------------------------------------------------------
+base_journal_taille_max: 200M
+
+# --- Mises à jour automatiques : sécurité seulement, jamais de redémarrage --------------
+base_maj_auto: true
+
+# --- Compte d'administration --------------------------------------------------------------
+base_admin_utilisateur: admin
+# Clés publiques autorisées pour ce compte, liste EXCLUSIVE (toute autre clé est retirée).
+# Vide = le rôle ne touche pas aux clés (instance de test, hôte pas encore inventorié).
+base_admin_cles: []
+
+# --- Compte de secours (M04-E12) -------------------------------------------------------
+# Connexion à la CONSOLE seulement (qm terminal, noVNC), quand SSH ne répond plus.
+# EMPREINTE du mot de passe (yescrypt ou SHA-512 crypt), jamais le mot de passe, fournie
+# par Ansible Vault. Vide = compte non géré.
+base_secours_utilisateur: secours
+base_secours_mdp_hash: ""
+
+# --- Identité de l'hôte (M04-E07) ---------------------------------------------------------
+base_site: "{{ ms_site | default('par1') }}"
+base_domaine: "{{ ms_domaine | default('par1.medisphere.internal') }}"
+base_environnement: "{{ ms_environnement | default('lab') }}"
+base_role_hote: >-
+  {{ ms_role | default(group_names | select('match', '^role_') | map('regex_replace', '^role_', '')
+     | first | default('aucun')) }}
+base_contact_astreinte: "{{ ms_contact_astreinte | default('astreinte Plateforme') }}"
+base_runbooks: "{{ ms_runbooks | default({}) }}"

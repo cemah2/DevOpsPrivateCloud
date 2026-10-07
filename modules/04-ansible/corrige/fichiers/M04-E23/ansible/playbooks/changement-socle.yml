@@ -1,0 +1,118 @@
+---
+# playbooks/changement-socle.yml — enveloppe d'un changement sur le socle (M04-E23, CHG-533).
+#
+#   ansible-playbook playbooks/changement-socle.yml -e changement=CHG-533 --limit dns01 --tags base_temps
+#
+# 1. avant : numéro de changement exigé, un instantané Proxmox par VM visée (UNE commande,
+#    lancée une fois depuis adm01) ;
+# 2. le changement : site.yml, avec les --limit et --tags donnés ;
+# 3. après : chaque hôte est vérifié DE L'EXTÉRIEUR (son nom résolu par dns01, son SSH vu
+#    depuis adm01) ;
+# 4. une ligne dans le journal des changements du dépôt de documentation, une seule fois.
+# Les tâches de l'enveloppe portent l'étiquette « always » : --tags ne les saute pas.
+
+- name: Avant le changement
+  hosts: socle
+  gather_facts: false
+  tasks:
+    - name: Exiger un numéro de changement (CHG-… ou INC-…)
+      ansible.builtin.assert:
+        that:
+          - changement is defined
+          - changement is ansible.builtin.match('^(CHG|INC)-[0-9]+$')
+        fail_msg: "Indique le changement : -e changement=CHG-533"
+        quiet: true
+      run_once: true
+      delegate_to: localhost
+      tags: [always]
+
+    - name: Retenir les hôtes visés par ce changement
+      ansible.builtin.set_fact:
+        _chg_vise: true
+      tags: [always]
+
+    # run_once + delegate_to : une seule exécution, sur adm01, pour TOUTES les VMs du play.
+    # ms-snapshot (M02) parle à l'API Proxmox avec le jeton wb-automation, qui a le droit de
+    # prendre des instantanés (le jeton d'inventaire d'Ansible, lui, ne l'a pas).
+    - name: Instantané Proxmox de chaque VM visée
+      ansible.builtin.command:
+        argv: >-
+          {{ ['ms-snapshot', '--prefix', changement | lower, '--keep', '2']
+             + (ansible_play_hosts | map('extract', hostvars, 'vmid') | map('string') | list) }}
+      run_once: true
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      when: not ansible_check_mode
+      tags: [always]
+
+- name: Le changement
+  ansible.builtin.import_playbook: site.yml
+
+- name: Après le changement
+  hosts: socle
+  gather_facts: false
+  tasks:
+    # Exécutée sur dns01, pour chaque hôte : les variables (inventory_hostname, ansible_host)
+    # restent celles de l'hôte du play ; seule la machine qui exécute change. ansible_host est
+    # défini pour tous les hôtes par l'inventaire dynamique (M04-E13), adm01 compris.
+    - name: Le nom de l'hôte est résolu par dns01
+      ansible.builtin.command: dig +short +time=3 @10.10.20.10 {{ inventory_hostname }}.par1.medisphere.internal A
+      register: _chg_dns
+      changed_when: false
+      check_mode: false
+      failed_when: _chg_dns.stdout_lines | first | default('') != ansible_host
+      delegate_to: dns01
+      become: false
+      tags: [always]
+
+    - name: SSH de l'hôte joignable depuis adm01
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Retenir les hôtes vérifiés
+      ansible.builtin.set_fact:
+        _chg_verifie: true
+      tags: [always]
+
+# Play sur localhost : il s'exécute même si tous les hôtes du socle ont échoué, et lit
+# l'état de chacun dans hostvars.
+- name: Journal du changement
+  hosts: localhost
+  gather_facts: false
+  become: false
+  vars:
+    _chg_vises: >-
+      {{ groups['socle'] | map('extract', hostvars) | selectattr('_chg_vise', 'defined')
+         | map(attribute='inventory_hostname') | list }}
+    _chg_ok: >-
+      {{ groups['socle'] | map('extract', hostvars) | selectattr('_chg_verifie', 'defined')
+         | map(attribute='inventory_hostname') | list }}
+    _chg_journal: "{{ lookup('ansible.builtin.env', 'HOME') }}/medisphere/docs/socle/journal/changements-ansible.md"
+  tasks:
+    - name: Fichier du journal
+      ansible.builtin.copy:
+        dest: "{{ _chg_journal }}"
+        content: |
+          # Journal des changements appliqués par Ansible
+
+          | Date (UTC) | Changement | Hôtes visés | Vérifiés après | En échec |
+          |---|---|---|---|---|
+        force: false
+        mode: "0644"
+      when: changement is defined
+      tags: [always]
+
+    - name: Ligne du changement
+      ansible.builtin.lineinfile:
+        path: "{{ _chg_journal }}"
+        line: >-
+          | {{ now(utc=true).strftime('%Y-%m-%d %H:%M') }} | {{ changement }} | {{ _chg_vises | join(', ') }}
+          | {{ _chg_ok | join(', ') }} | {{ _chg_vises | difference(_chg_ok) | join(', ') or '—' }} |
+      when: changement is defined
+      tags: [always]

@@ -1,0 +1,69 @@
+---
+# Rôle pare_feu (M04-E17) : génère /etc/nftables.conf depuis la matrice des flux et
+# l'applique sans jamais pouvoir couper durablement l'accès à gw01.
+
+- name: Vérifier la matrice des flux
+  ansible.builtin.assert:
+    that:
+      - (pare_feu_entree + pare_feu_transit) | rejectattr('motif', 'defined') | list | length == 0
+      - (pare_feu_entree + pare_feu_transit + pare_feu_nat) | map(attribute='motif') | select('search', '"') | list | length == 0
+      - (pare_feu_entree + pare_feu_transit) | map(attribute='motif') | map('length') | max | default(0) <= 100
+      - pare_feu_delai_retour | int >= pare_feu_delai_confirmation | int + 30
+    fail_msg: >-
+      Chaque flux doit avoir un motif (sans guillemet, 100 caractères au plus : nftables limite
+      les commentaires à 128 octets), et le délai de retour doit dépasser largement celui de confirmation.
+    quiet: true
+
+- name: Installer nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Service nftables activé (charge /etc/nftables.conf au démarrage)
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+
+- name: Dossier d'état du rôle
+  ansible.builtin.file:
+    path: "{{ pare_feu_dossier_etat }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Script de retour arrière
+  ansible.builtin.copy:
+    src: pare-feu-retour
+    dest: /usr/local/sbin/pare-feu-retour
+    owner: root
+    group: root
+    mode: "0755"
+
+# Validation par nft lui-même (-c : vérifie sans rien charger), y compris en --check :
+# le fichier rendu est passé sur l'entrée standard, rien n'est écrit sur gw01.
+- name: Valider la configuration générée (nft -c)
+  ansible.builtin.command:
+    cmd: /usr/sbin/nft -c -f -
+    stdin: "{{ lookup('ansible.builtin.template', 'nftables.conf.j2') }}"
+  changed_when: false
+  check_mode: false
+
+# Prévision SANS écriture (check_mode forcé) : dit s'il y a un changement et, avec --diff,
+# montre lequel.
+- name: Prévoir la nouvelle configuration
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: "{{ pare_feu_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+  check_mode: true
+  register: _pare_feu_prevision
+
+# include_tasks (dynamique) : si rien ne change, le fichier n'est même pas chargé.
+- name: Appliquer avec le filet de sécurité
+  ansible.builtin.include_tasks: appliquer.yml
+  when:
+    - _pare_feu_prevision is changed
+    - not ansible_check_mode

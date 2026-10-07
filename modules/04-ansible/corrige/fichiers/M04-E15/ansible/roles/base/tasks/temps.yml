@@ -1,0 +1,105 @@
+---
+- name: Fuseau horaire
+  community.general.timezone:
+    name: "{{ base_fuseau_horaire }}"
+
+# Client chrony (toutes les VMs sauf gw01, le serveur). M04-E15 : changer la source de temps
+# est risqué (une VM sans heure juste refuse TLS, Kerberos, les jetons TOTP…). Le bloc
+# applique, VÉRIFIE, et revient tout seul à l'état précédent si la vérification échoue.
+- name: Client chrony
+  when: base_chrony_client
+  block:
+    - name: Vérifier les sources de temps (adresses IPv4 ou noms, sans espace)
+      ansible.builtin.assert:
+        that:
+          - base_ntp_serveurs | length > 0
+          - base_ntp_serveurs | reject('match', '^[A-Za-z0-9.:-]+$') | list | length == 0
+        fail_msg: "base_ntp_serveurs de {{ inventory_hostname }} est vide ou invalide : {{ base_ntp_serveurs }}"
+        quiet: true
+
+    # backup: true garde une copie horodatée de l'ancienne version : c'est le point de retour.
+    - name: Configuration de chrony (validée avant d'être mise en place)
+      ansible.builtin.template:
+        src: chrony.conf.j2
+        dest: /etc/chrony/chrony.conf
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+        validate: chronyd -p -f %s
+      register: _base_chrony_conf
+
+    - name: Repérer le mécanisme de l'image dorée (ms-ntp-passerelle, M03-E09)
+      ansible.builtin.stat:
+        path: /etc/systemd/system/ms-ntp-passerelle.service
+      register: _base_ntp_image
+
+    - name: Désactiver ms-ntp-passerelle (Ansible décide désormais de la source)
+      ansible.builtin.systemd_service:
+        name: ms-ntp-passerelle.service
+        enabled: false
+      when: _base_ntp_image.stat.exists
+
+    # Pas de handler ici : il ne passerait qu'en fin de play, APRÈS la vérification.
+    - name: Redémarrer chrony maintenant (configuration modifiée)  # noqa: no-handler
+      ansible.builtin.systemd_service:
+        name: chrony
+        state: restarted
+        enabled: true
+      when: _base_chrony_conf is changed
+
+    - name: Chrony démarré et activé
+      ansible.builtin.systemd_service:
+        name: chrony
+        state: started
+        enabled: true
+
+    - name: Attendre la synchronisation (correction < 0,1 s)
+      ansible.builtin.command: chronyc -n waitsync {{ base_chrony_essais_sync }} 0.1 0 3
+      changed_when: false
+      check_mode: false
+      # En --check, la nouvelle configuration n'a pas été posée : rien à attendre.
+      when:
+        - base_chrony_attendre_sync
+        - not ansible_check_mode
+
+    # Seulement une fois la synchronisation constatée : en cas de retour arrière, l'ancienne
+    # configuration retrouve sa source intacte. (Le template n'a pas de « sourcedir » : ce
+    # fichier n'est de toute façon plus lu par la nouvelle configuration.)
+    - name: Retirer la source posée à la main (M00-E31), remplacée par le template
+      ansible.builtin.file:
+        path: /etc/chrony/sources.d/lab.sources
+        state: absent
+
+  rescue:
+    - name: Remettre la configuration précédente de chrony
+      ansible.builtin.copy:
+        src: "{{ _base_chrony_conf.backup_file }}"
+        dest: /etc/chrony/chrony.conf
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: _base_chrony_conf.backup_file is defined
+
+    - name: Redémarrer chrony sur la configuration précédente
+      ansible.builtin.systemd_service:
+        name: chrony
+        state: restarted
+      when: _base_chrony_conf.backup_file is defined
+
+    - name: Échouer en expliquant
+      ansible.builtin.fail:
+        msg: >-
+          {{ inventory_hostname }} : la tâche « {{ ansible_failed_task.name }} » a échoué
+          ({{ ansible_failed_result.msg | default('voir ci-dessus') }}).
+          {{ 'La configuration précédente de chrony a été remise (' ~ _base_chrony_conf.backup_file ~ ').'
+             if _base_chrony_conf.backup_file is defined else 'Aucune configuration n’avait été changée.' }}
+          Vérifie le service NTP de {{ base_ntp_serveurs | join(', ') }} et le flux UDP 123 sur gw01.
+
+- name: Chrony démarré et activé (gw01, serveur de temps)
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: started
+    enabled: true
+  when: not base_chrony_client

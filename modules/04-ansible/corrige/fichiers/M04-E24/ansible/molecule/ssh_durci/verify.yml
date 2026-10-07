@@ -1,0 +1,69 @@
+---
+# molecule/ssh_durci/verify.yml (M04-E24)
+# On vérifie la configuration EFFECTIVE (sshd -T), puis le comportement vu d'un client :
+# un fichier présent mais jamais lu (Include absent, ordre des fichiers) ne prouve rien.
+- name: Vérifier le rôle ssh_durci
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: La configuration de sshd est valide
+      ansible.builtin.command:
+        cmd: sshd -t
+      changed_when: false
+
+    - name: Lire la configuration effective de sshd
+      ansible.builtin.command:
+        cmd: sshd -T
+      register: sshd_t
+      changed_when: false
+
+    - name: Les directives durcies sont effectives
+      ansible.builtin.assert:
+        that:
+          - sshd_t.stdout_lines is contains('permitrootlogin no')
+          - sshd_t.stdout_lines is contains('passwordauthentication no')
+          - sshd_t.stdout_lines is contains('kbdinteractiveauthentication no')
+        fail_msg: "{{ sshd_t.stdout_lines | select('match', '^(permitrootlogin|passwordauthentication|kbdinteractiveauthentication) ') | list }}"
+
+    - name: Le service ssh tourne
+      ansible.builtin.systemd_service:
+        name: ssh
+      register: service_ssh
+
+    - name: Le service ssh est actif
+      ansible.builtin.assert:
+        that: service_ssh.status.ActiveState == 'active'
+        quiet: true
+
+    # Vu d'un client (le contrôleur) : le serveur ne doit proposer que la clé publique.
+    - name: Demander une authentification par mot de passe depuis le contrôleur
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - BatchMode=yes
+          - -o
+          - PreferredAuthentications=password,keyboard-interactive
+          - -o
+          - PubkeyAuthentication=no
+          - -o
+          - StrictHostKeyChecking=accept-new
+          - -o
+          - "UserKnownHostsFile={{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/known_hosts"
+          - -o
+          - ConnectTimeout=10
+          - "admin@{{ ansible_host }}"
+          - "true"
+      delegate_to: localhost
+      become: false
+      register: essai_mdp
+      changed_when: false
+      failed_when: false
+
+    - name: Le serveur refuse et n'annonce que publickey
+      ansible.builtin.assert:
+        that:
+          - essai_mdp.rc != 0
+          - essai_mdp.stderr is search('Permission denied \\(publickey\\)')
+        fail_msg: "{{ essai_mdp.stderr }}"

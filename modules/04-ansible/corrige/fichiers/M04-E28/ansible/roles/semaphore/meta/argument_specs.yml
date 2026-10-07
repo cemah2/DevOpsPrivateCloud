@@ -1,0 +1,65 @@
+---
+argument_specs:
+  main:
+    short_description: Installe et configure Semaphore UI sur une VM Debian 13.
+    options:
+      semaphore_version:
+        type: str
+        default: "2.19.16"
+        description: Version du paquet .deb officiel.
+      semaphore_sha256:
+        type: str
+        default: "56c4ac99b712b3fde11a7d600a0789870a3b945bab0c12f41d91864e0aeb85b8"
+        description: Empreinte SHA-256 du paquet, du fichier checksums de la version.
+      semaphore_fqdn:
+        type: str
+        description: Nom public (URL https://<fqdn>), présent dans le certificat.
+      semaphore_fuseau:
+        type: str
+        default: Europe/Paris
+        description: Fuseau des planifications de Semaphore.
+      semaphore_tls_certificat_src:
+        type: path
+        description: Chaîne de certificats (serveur puis CA) sur le contrôleur.
+      semaphore_tls_cle:
+        type: str
+        required: true
+        no_log: true
+        description: Clé privée TLS (PEM), depuis Vault.
+      semaphore_db_mot_de_passe:
+        type: str
+        required: true
+        no_log: true
+        description: Mot de passe PostgreSQL du compte semaphore (lettres, chiffres, _ et -, 24 caractères au moins).
+      semaphore_cookie_hash:
+        type: str
+        required: true
+        no_log: true
+        description: Clé de signature des cookies (head -c32 /dev/urandom | base64).
+      semaphore_cookie_encryption:
+        type: str
+        required: true
+        no_log: true
+        description: Clé de chiffrement des cookies (head -c32 /dev/urandom | base64).
+      semaphore_access_key_encryption:
+        type: str
+        required: true
+        no_log: true
+        description: Clé de chiffrement du magasin de clés (head -c32 /dev/urandom | base64). Perdue, tout le magasin est perdu.
+      semaphore_admin_login:
+        type: str
+        default: admin-plateforme
+        description: Identifiant du compte administrateur initial.
+      semaphore_admin_nom:
+        type: str
+        default: Administrateur Plateforme
+        description: Nom affiché de l'administrateur initial.
+      semaphore_admin_email:
+        type: str
+        default: plateforme@medisphere.internal
+        description: Adresse de l'administrateur initial.
+      semaphore_admin_mot_de_passe:
+        type: str
+        required: true
+        no_log: true
+        description: Mot de passe initial de l'administrateur, depuis Vault (à changer à la première connexion).

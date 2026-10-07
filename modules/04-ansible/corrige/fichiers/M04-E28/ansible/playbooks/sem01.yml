@@ -1,0 +1,12 @@
+---
+# playbooks/sem01.yml — orchestrateur Semaphore UI (M04-E28)
+#   uv run ansible-playbook playbooks/sem01.yml --diff
+# sem01 est une VM d'environnement du module (2041, groupe role_semaphore), pas un hôte du
+# socle : site.yml ne la touche pas. Elle reçoit la même base que le socle.
+- name: Sem01 — base commune, SSH durci, Semaphore UI
+  hosts: role_semaphore
+  become: true
+  roles:
+    - role: base
+    - role: ssh_durci
+    - role: semaphore

@@ -1,0 +1,71 @@
+---
+# M04-E40 — renforcement du rôle ssh_durci de M04-E11 (roles/ssh_durci/tasks/main.yml).
+# Le rôle valide déjà son fichier seul (validate:) et la configuration COMPLÈTE avant de
+# recharger (handler « Valider la configuration complète de sshd »). Ce qu'il ne couvre pas :
+#   - un défaut introduit APRÈS son passage, révélé au prochain redémarrage de ssh
+#     (mise à jour d'openssh-server, redémarrage de la machine) : variantes 1, 2 et 4 ;
+#   - ce que « sshd -t » ne teste pas : l'adresse d'écoute (variante 3) ;
+#   - la preuve que sshd écoute encore après le rechargement.
+# Bloc A : à placer EN TÊTE du fichier de tâches. Bloc B : juste APRÈS la tâche
+# « Appliquer maintenant les changements en attente » (meta: flush_handlers).
+
+# --- Bloc A ------------------------------------------------------------------------------------
+- name: Les adresses d'écoute demandées existent sur la machine
+  vars:
+    _ssh_durci_ecoute: >-
+      {{ [ssh_durci_options['ListenAddress']] | flatten
+         | map('regex_replace', ':[0-9]+$', '') | list }}
+  ansible.builtin.assert:
+    that:
+      - _ssh_durci_ecoute | difference(ansible_facts['all_ipv4_addresses'] + ['0.0.0.0']) | length == 0
+    fail_msg: >-
+      ListenAddress {{ _ssh_durci_ecoute | join(', ') }} : adresse(s) absente(s) de {{ inventory_hostname }}
+      ({{ ansible_facts['all_ipv4_addresses'] | join(', ') }}) ; sshd ne pourrait plus démarrer.
+    quiet: true
+  when: "'ListenAddress' in ssh_durci_options"
+
+- name: Trouver les clés privées d'hôte
+  ansible.builtin.find:
+    paths: /etc/ssh
+    patterns: "ssh_host_*_key"
+  register: _ssh_durci_cles
+
+- name: Au moins une clé d'hôte (sinon sshd refuse de démarrer)
+  ansible.builtin.assert:
+    that: _ssh_durci_cles.matched > 0
+    fail_msg: >-
+      Aucune clé d'hôte dans /etc/ssh sur {{ inventory_hostname }} : NE PAS régénérer à l'aveugle,
+      voir RB-040 (empreintes connues des clients, known_hosts de la CI).
+    quiet: true
+
+- name: Clés privées d'hôte lisibles par root seul
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ _ssh_durci_cles.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Recharger sshd
+
+# Lecture seule, à CHAQUE passage, y compris en --check (contrôle de dérive nocturne) : un
+# fichier ajouté à la main dans sshd_config.d après le dernier passage est vu AVANT que la
+# prochaine mise à jour d'openssh-server ne redémarre le service.
+- name: Configuration complète de sshd valide (dérive comprise)
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  check_mode: false
+
+# --- Bloc B ------------------------------------------------------------------------------------
+# « sshd -T » (déjà dans le rôle) lit la configuration ; il ne prouve pas que le démon écoute.
+- name: Le démon sshd accepte encore les connexions (vu depuis le contrôleur)
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host | default(inventory_hostname) }}"
+    port: 22
+    timeout: 15
+  delegate_to: localhost
+  become: false
+  when:
+    - not ansible_check_mode
+    - ansible_connection | default('ssh') != 'local'

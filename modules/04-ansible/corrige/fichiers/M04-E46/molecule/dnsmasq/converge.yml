@@ -1,0 +1,17 @@
+---
+# molecule/dnsmasq/converge.yml — applique le rôle dnsmasq à l'instance (M04-E46).
+# Données de test minimales : l'instance écoute sur sa propre adresse (calculée à partir de ses
+# faits) et sert un enregistrement fictif ; pas de DHCP (il n'y a pas de relais vers vsandbox).
+- name: Converge — rôle dnsmasq
+  hosts: molecule
+  become: true
+  vars:
+    dnsmasq_ecoute: ["127.0.0.1", "{{ ansible_facts['default_ipv4']['address'] }}"]
+    dnsmasq_amont: ["10.10.20.10"]
+    dnsmasq_zones_locales: [medisphere.internal]
+    dnsmasq_domaine: par1.medisphere.internal
+    dnsmasq_hotes:
+      - { noms: [test01.par1.medisphere.internal], ip: 10.10.20.250 }
+    dnsmasq_dhcp: []
+  roles:
+    - role: dnsmasq

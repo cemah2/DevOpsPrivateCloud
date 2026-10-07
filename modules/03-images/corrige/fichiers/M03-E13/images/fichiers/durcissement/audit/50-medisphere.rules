@@ -1,0 +1,24 @@
+## /etc/audit/rules.d/50-medisphere.rules — traçabilité minimale de l'image dorée (M03-E13, SEC-450)
+## Chargées par augenrules au démarrage d'auditd. Clés (-k) : recherche par « ausearch -k <clé> ».
+
+## Identités et droits
+-w /etc/passwd -p wa -k identite
+-w /etc/group -p wa -k identite
+-w /etc/shadow -p wa -k identite
+-w /etc/gshadow -p wa -k identite
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d/ -p wa -k sudoers
+
+## Accès distant et configuration de l'image
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd
+-w /etc/cloud/ -p wa -k cloud-init
+-w /etc/sysctl.d/ -p wa -k sysctl
+-w /etc/modprobe.d/ -p wa -k modprobe
+
+## Chargement de modules noyau (pas de règle sur l'heure : chronyd ajuste l'horloge en
+## permanence, une règle sur adjtimex noierait le journal)
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modules
+
+## Commandes lancées avec des droits élevés par un utilisateur humain (uid >= 1000)
+-a always,exit -F arch=b64 -S execve -C uid!=euid -F euid=0 -F auid>=1000 -F auid!=unset -k elevation

@@ -1,0 +1,40 @@
+---
+# Rôle gitlab_runner (M04-E16) — reprend en code ce que les scripts de M01-E23, M01-E24,
+# M02-E24 et M03-E15 ont installé sur runner01, et le rend rejouable.
+
+- name: Préconditions
+  ansible.builtin.import_tasks: preconditions.yml
+  tags: [runner_preconditions]
+
+- name: Autorités de certification
+  ansible.builtin.import_tasks: ca.yml
+  tags: [runner_ca]
+
+- name: GitLab Runner (dépôt, paquets, enregistrement)
+  ansible.builtin.import_tasks: runner.yml
+  tags: [runner_service]
+
+- name: Outils APT (git, ShellCheck rétroporté)
+  ansible.builtin.import_tasks: outils_apt.yml
+  tags: [runner_outils]
+
+- name: Outils binaires (gitleaks, shfmt, jq, Task, uv, bats)
+  ansible.builtin.import_tasks: outils_binaires.yml
+  tags: [runner_outils]
+
+- name: Outils Python (pre-commit)
+  ansible.builtin.import_tasks: outils_python.yml
+  tags: [runner_outils]
+
+- name: Node.js et /opt/release-tools
+  ansible.builtin.import_tasks: outils_node.yml
+  tags: [runner_outils]
+
+- name: Packer
+  ansible.builtin.import_tasks: packer.yml
+  when: gitlab_runner_packer
+  tags: [runner_outils]
+
+- name: Contrôle des outils tels que les jobs les voient
+  ansible.builtin.import_tasks: verifier.yml
+  tags: [runner_outils, runner_verifier]

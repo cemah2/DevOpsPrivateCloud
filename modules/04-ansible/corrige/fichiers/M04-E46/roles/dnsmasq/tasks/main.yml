@@ -1,0 +1,70 @@
+---
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - dnsmasq_amont | length > 0
+      - dnsmasq_hotes | length > 0
+      - dnsmasq_ecoute | length > 0
+    fail_msg: "dnsmasq_amont, dnsmasq_hotes et dnsmasq_ecoute doivent être définis (group_vars/role_dns)"
+    quiet: true
+
+- name: Paquets (dnsmasq, dig pour la sonde)
+  ansible.builtin.apt:
+    name:
+      - dnsmasq
+      - bind9-dnsutils
+    state: present
+
+- name: Configuration du DNS provisoire et du DHCP
+  block:
+    - name: Fichier de configuration (syntaxe validée seule)
+      ansible.builtin.template:
+        src: medisphere.conf.j2
+        dest: "{{ dnsmasq_fichier }}"
+        owner: root
+        group: root
+        mode: "0644"
+        validate: dnsmasq --test --conf-file=%s
+        backup: true
+      register: dnsmasq_conf
+      notify: Redémarrer dnsmasq
+
+    # Leçon de M04-E40 : la configuration COMPLÈTE (fichier principal + tous les fichiers inclus)
+    - name: Configuration complète valide
+      ansible.builtin.command: dnsmasq --test
+      changed_when: false
+      check_mode: false
+
+  rescue:
+    - name: Remettre le fichier précédent
+      ansible.builtin.copy:
+        src: "{{ dnsmasq_conf.backup_file }}"
+        dest: "{{ dnsmasq_fichier }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: dnsmasq_conf.backup_file is defined
+
+    - name: Échouer sans redémarrer dnsmasq
+      ansible.builtin.fail:
+        msg: "Configuration complète de dnsmasq invalide sur {{ inventory_hostname }} : fichier précédent remis, service non redémarré."
+
+- name: Service actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: dnsmasq.service
+    enabled: true
+    state: started
+
+# Appliquer maintenant (et pas en fin de jeu) : les vérifications suivantes en dépendent.
+- name: Redémarrage si la configuration a changé
+  ansible.builtin.meta: flush_handlers
+
+- name: Le DNS répond sur chaque adresse d'écoute
+  ansible.builtin.command: "dig +short +time=2 +tries=2 @{{ item }} {{ dnsmasq_hotes[0].noms[0] }} A"
+  register: dnsmasq_sonde
+  changed_when: false
+  check_mode: false
+  failed_when: dnsmasq_sonde.stdout != dnsmasq_hotes[0].ip
+  loop: "{{ dnsmasq_ecoute }}"
+  when: not ansible_check_mode

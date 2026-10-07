@@ -1,0 +1,12 @@
+---
+# inventories/lab/host_vars/sem01/main.yml (M04-E28)
+# Paramètres du rôle semaphore. Les secrets viennent de vault.yml (même dossier, chiffré) ;
+# en clair ici, seulement la correspondance variable du rôle ↔ variable chiffrée.
+semaphore_fqdn: sem01.par1.medisphere.internal
+# Certificat public : inventories/lab/files/sem01-chaine.crt (versionné).
+semaphore_tls_cle: "{{ vault_semaphore_tls_cle }}"
+semaphore_db_mot_de_passe: "{{ vault_semaphore_db_mot_de_passe }}"
+semaphore_cookie_hash: "{{ vault_semaphore_cookie_hash }}"
+semaphore_cookie_encryption: "{{ vault_semaphore_cookie_encryption }}"
+semaphore_access_key_encryption: "{{ vault_semaphore_access_key_encryption }}"
+semaphore_admin_mot_de_passe: "{{ vault_semaphore_admin_mot_de_passe }}"

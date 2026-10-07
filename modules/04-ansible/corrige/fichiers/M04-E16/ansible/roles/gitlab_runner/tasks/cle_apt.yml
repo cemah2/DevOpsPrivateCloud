@@ -1,0 +1,34 @@
+---
+# Installe une clé de signature de dépôt APT après avoir vérifié son EMPREINTE.
+# Variable attendue : _cle = { nom, url, empreinte }. Le candidat est téléchargé à part :
+# une clé inattendue n'est jamais placée dans /etc/apt/keyrings.
+- name: "Télécharger la clé candidate {{ _cle.nom }}"
+  ansible.builtin.get_url:
+    url: "{{ _cle.url }}"
+    dest: "/var/tmp/cle-{{ _cle.nom }}.asc"
+    mode: "0644"
+  check_mode: false
+
+- name: "Lire les empreintes de la clé {{ _cle.nom }}"
+  ansible.builtin.command: gpg --batch --show-keys --with-colons /var/tmp/cle-{{ _cle.nom }}.asc
+  register: _gitlab_runner_cle_gpg
+  changed_when: false
+  check_mode: false
+
+- name: "Vérifier l'empreinte attendue de la clé {{ _cle.nom }}"
+  ansible.builtin.assert:
+    that:
+      # Lignes « fpr:::::::::<EMPREINTE>: » de la sortie --with-colons (clé et sous-clés).
+      - _cle.empreinte | upper in _gitlab_runner_cle_gpg.stdout_lines | select('match', '^fpr:')
+        | map('regex_replace', '^fpr:+([0-9A-F]+):.*$', '\\1') | list
+    fail_msg: "La clé téléchargée depuis {{ _cle.url }} n'a pas l'empreinte {{ _cle.empreinte }} : ARRÊT."
+    quiet: true
+
+- name: "Installer la clé {{ _cle.nom }}"
+  ansible.builtin.copy:
+    src: "/var/tmp/cle-{{ _cle.nom }}.asc"
+    dest: "/etc/apt/keyrings/{{ _cle.nom }}.asc"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"

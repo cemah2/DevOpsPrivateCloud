@@ -1,0 +1,247 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/images (état de fin de M03-E15, ticket PLAT-455 ; rotation M03-E16)
+#
+# Étapes :
+#   lint      gabarits communs (pre-commit avec les hooks Packer, commitlint, gitleaks)
+#   validate  packer validate de chaque image (MR et main) — sans secret
+#   build     construction : dorées chaque semaine (pipeline planifié) ou à la main sur main ;
+#             images de base à la main seulement (elles remplacent 9001/9002)
+#   test      tests/tester-image.sh sur le template construit (rapport JUnit)
+#   publish   outils/publier-image.sh (rejoue le test, pose « current »), puis rotation
+#   release   versions du PROJET (vX.Y.Z, semantic-release) — indépendantes des images
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell »), Packer 1.16 + plugin proxmox
+# installés par M03-E15 (installer-packer-runner01.sh). Flux : vsandbox → runner01 TCP
+# 8100-8199, runner01 → vsandbox TCP 22, runner01 → pve01 TCP 8006.
+# Secrets : PKR_VAR_proxmox_token (protégée, masquée et cachée), PKR_VAR_proxmox_url,
+# PKR_VAR_proxmox_username, PKR_VAR_proxmox_node (protégées) : variables du projet,
+# disponibles seulement sur les branches protégées (main). Jamais dans ce fichier.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+# Les gabarits définissent lint, test, build, release : on insère validate et publish.
+stages:
+  - lint
+  - validate
+  - build
+  - test
+  - publish
+  - release
+
+variables:
+  CHECKPOINT_DISABLE: "1"        # Packer n'appelle pas HashiCorp pour vérifier les versions
+  # Serveur HTTP de Packer : l'adresse de runner01 (la valeur par défaut des variables est adm01).
+  PKR_VAR_http_bind_address: "10.10.20.15"
+
+# Dette de M03-E02 soldée : Packer est sur runner01, pre-commit joue aussi les hooks Packer.
+pre-commit:
+  variables:
+    SKIP: gitleaks
+
+.packer:
+  tags: [shell]
+  before_script:
+    - packer version
+    - test "$(id -un)" = gitlab-runner
+
+# --- validate : syntaxe et cohérence, sans aucun secret -------------------------------------
+# Les variables protégées n'existent pas dans un pipeline de MR : on fournit des valeurs
+# factices de la bonne forme (les validations des variables les contrôlent quand même).
+packer-validate:
+  extends: .packer
+  stage: validate
+  interruptible: true
+  variables:
+    PKR_VAR_proxmox_url: "https://192.0.2.1:8006/api2/json"
+    PKR_VAR_proxmox_username: "validation@pve!ci"
+    PKR_VAR_proxmox_token: "validation-sans-secret"
+    PKR_VAR_proxmox_node: "validation"
+  script:
+    - |
+      set -eu
+      for d in debian13-base rocky10-base debian13-gold rocky10-gold; do
+        [ -f "$d/build.pkr.hcl" ] || continue
+        echo "== $d"
+        packer init "$d"
+        # Les images dorées exigent vm_id et version : valeurs fictives dans leur plage.
+        case "$d" in
+          debian13-gold) extra="-var vm_id=9010 -var version=20260101-1" ;;
+          rocky10-gold)  extra="-var vm_id=9030 -var version=20260101-1" ;;
+          *)             extra="" ;;
+        esac
+        # shellcheck disable=SC2086
+        packer validate -var-file=vars/lab.pkrvars.hcl $extra "$d"
+      done
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# --- build -----------------------------------------------------------------------------------
+# Un seul build à la fois sur pve01, tous pipelines confondus : resource_group. Le build
+# n'est jamais interrompu par un pipeline plus récent (il laisserait une VM à moitié faite).
+.build:
+  extends: .packer
+  stage: build
+  resource_group: packer-pve01
+  interruptible: false
+  timeout: 1h 30m
+  artifacts:
+    when: always
+    expire_in: 90 days        # traces d'audit : journal de build, manifeste, liste des paquets
+    paths:
+      - manifests/
+    reports:
+      dotenv: build.env       # IMAGE_VMID et IMAGE_VERSION pour les jobs suivants
+
+# Quand construire une image dorée : chaque semaine (pipeline planifié de main) ou à la
+# main sur main. Les jobs qui suivent (test, publish) tournent sans intervention.
+# (« when » est interdit au niveau d'un job qui a des « rules » : il se met dans la règle.)
+.regles-debian13:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+
+.regles-rocky10:              # mêmes conditions, dès que l'image dorée Rocky existe (M03-E25)
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      exists: [rocky10-gold/build.pkr.hcl]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      exists: [rocky10-gold/build.pkr.hcl]
+
+.build-gold:
+  extends: .build
+  script:
+    - out="$(outils/version-image.sh "$FAMILLE")"
+    - read -r vmid version <<<"$out"
+    - echo "Image $FAMILLE : VMID $vmid, version $version"
+    - printf 'IMAGE_VMID=%s\nIMAGE_VERSION=%s\n' "$vmid" "$version" > build.env
+    - outils/construire.sh "$FAMILLE-gold" -var "vm_id=$vmid" -var "version=$version"
+
+build:debian13:
+  extends: .build-gold
+  variables:
+    FAMILLE: debian13
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: manual
+      allow_failure: true     # un job manuel non lancé ne bloque pas le pipeline de main
+
+build:rocky10:
+  extends: .build-gold
+  variables:
+    FAMILLE: rocky10
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      exists: [rocky10-gold/build.pkr.hcl]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      exists: [rocky10-gold/build.pkr.hcl]
+      when: manual
+      allow_failure: true
+
+# Images de base : remplacent 9001/9002 (packer build -force). Jamais planifiées : on les
+# reconstruit à la sortie d'une version intermédiaire de la distribution, à la main.
+.build-base:
+  extends: .build
+  script:
+    - outils/construire.sh "$IMAGE"
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths:
+      - manifests/
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event" && $CI_PIPELINE_SOURCE != "schedule"
+      when: manual
+      allow_failure: true
+
+build-base:debian13:
+  extends: .build-base
+  variables:
+    IMAGE: debian13-base
+
+build-base:rocky10:
+  extends: .build-base
+  variables:
+    IMAGE: rocky10-base
+
+# --- test : un clone de l'image fraîche, avec rapport JUnit ---------------------------------
+.test:
+  extends: .packer
+  stage: test
+  interruptible: false
+  script:
+    - tests/tester-image.sh --junit rapports/test-image.xml "$IMAGE_VMID"
+  artifacts:
+    when: always
+    expire_in: 90 days
+    reports:
+      junit: rapports/test-image.xml
+
+test:debian13:
+  extends: [.test, .regles-debian13]
+  needs: [build:debian13]
+
+test:rocky10:
+  extends: [.test, .regles-rocky10]
+  needs: [build:rocky10]
+
+# Un template qui a échoué à ses tests reste dans sa plage, SANS current : on l'étiquette
+# « rejete » pour que personne ne le prenne pour une version utilisable (la rotation le retire).
+.rejeter:
+  extends: .packer
+  stage: publish
+  script:
+    - |
+      [ -n "${IMAGE_VMID:-}" ] || { echo "pas de VMID (le build a échoué avant)"; exit 0; }
+      . outils/pve.sh && pve_charger_acces
+      c="$(pve_api GET "/nodes/$PKR_VAR_proxmox_node/qemu/$IMAGE_VMID/config")"
+      t="$(jq -r '.tags // ""' <<<"$c" | tr ',; ' '\n' | grep -vx current | sed '/^$/d'; echo rejete)"
+      pve_api PUT "/nodes/$PKR_VAR_proxmox_node/qemu/$IMAGE_VMID/config" "tags=$(sort -u <<<"$t" | paste -sd ';')" >/dev/null
+      echo "Template $IMAGE_VMID étiqueté rejete"
+
+rejeter:debian13:
+  extends: .rejeter
+  needs: [build:debian13, test:debian13]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: on_failure
+
+rejeter:rocky10:
+  extends: .rejeter
+  needs: [build:rocky10, test:rocky10]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      exists: [rocky10-gold/build.pkr.hcl]
+      when: on_failure
+
+# --- publish : current, puis rotation (M03-E16) ----------------------------------------------
+# publier-image.sh rejoue le test avant de poser current (la règle « pas de current sans
+# test » ne dépend pas de la CI) : coût ~3 min, assumé. resource_group : une seule
+# publication à la fois (déplacement de current atomique du point de vue du catalogue).
+.publish:
+  extends: .packer
+  stage: publish
+  resource_group: publication-images
+  interruptible: false
+  script:
+    - outils/publier-image.sh "$IMAGE_VMID"
+    - outils/rotation-images.sh --famille "$FAMILLE" --appliquer
+
+publish:debian13:
+  extends: [.publish, .regles-debian13]
+  needs: [build:debian13, test:debian13]
+  variables:
+    FAMILLE: debian13
+
+publish:rocky10:
+  extends: [.publish, .regles-rocky10]
+  needs: [build:rocky10, test:rocky10]
+  variables:
+    FAMILLE: rocky10

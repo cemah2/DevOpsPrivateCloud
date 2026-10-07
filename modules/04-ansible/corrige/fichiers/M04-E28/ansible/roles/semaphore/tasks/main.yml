@@ -1,0 +1,60 @@
+---
+# roles/semaphore/tasks/main.yml (M04-E28)
+# Semaphore UI : paquet officiel vérifié, PostgreSQL local, configuration et TLS depuis Vault,
+# service systemd sous un compte dédié, administrateur initial. Idempotent : un second
+# passage ne change rien et ne redémarre rien.
+
+- name: Vérifier la forme du mot de passe PostgreSQL (il est passé dans du SQL)
+  ansible.builtin.assert:
+    that: semaphore_db_mot_de_passe is match('^[A-Za-z0-9_-]{24,}$')
+    fail_msg: "semaphore_db_mot_de_passe : 24 caractères au moins, lettres, chiffres, _ et - seulement."
+    quiet: true
+  no_log: true
+
+- name: Installer les paquets (git pour les dépôts, ansible-core pour les tâches, PostgreSQL, acl)
+  ansible.builtin.apt:
+    name:
+      - git
+      - ansible-core
+      - postgresql
+      - acl
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Compte système semaphore
+  ansible.builtin.user:
+    name: semaphore
+    system: true
+    home: /var/lib/semaphore
+    create_home: true
+    shell: /usr/sbin/nologin
+
+- name: Dossiers de Semaphore
+  ansible.builtin.file:
+    path: "{{ item.chemin }}"
+    state: directory
+    owner: "{{ item.proprietaire }}"
+    group: semaphore
+    mode: "{{ item.mode }}"
+  loop:
+    - { chemin: /var/lib/semaphore, proprietaire: semaphore, mode: "0750" }
+    - { chemin: /var/lib/semaphore/tmp, proprietaire: semaphore, mode: "0750" }
+    - { chemin: /var/lib/semaphore/.ssh, proprietaire: semaphore, mode: "0700" }
+    - { chemin: /etc/semaphore, proprietaire: root, mode: "0750" }
+    - { chemin: /etc/semaphore/tls, proprietaire: root, mode: "0750" }
+  loop_control:
+    label: "{{ item.chemin }}"
+
+- name: Paquet officiel et PostgreSQL
+  ansible.builtin.import_tasks: paquet.yml
+
+- name: Base de données
+  ansible.builtin.import_tasks: postgresql.yml
+
+- name: Configuration, TLS et service
+  ansible.builtin.import_tasks: service.yml
+
+- name: Administrateur initial
+  ansible.builtin.import_tasks: administrateur.yml

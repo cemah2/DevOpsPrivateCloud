@@ -1,0 +1,55 @@
+---
+# inventories/lab/group_vars/all/main.yml — variables communes à tout le lab
+# (M04-E03, complété en M04-E06, M04-E07, puis M04-E10 : rôle base).
+#
+# Règles de rangement (M04-E06) :
+#   - valeurs par défaut ici (group_vars/all : le niveau le plus bas de l'inventaire) ;
+#   - spécificités d'un rôle dans group_vars/role_<rôle>/, d'un hôte dans host_vars/<hôte>/ ;
+#   - PAS de group_vars/socle/ : « socle » et « role_* » sont au même niveau, une variable
+#     définie dans les deux serait tranchée par l'ordre alphabétique des groupes ;
+#   - jamais de « vars: » de play pour une valeur qui dépend de l'hôte : elles écrasent
+#     group_vars et host_vars ;
+#   - préfixe ms_ pour les faits du site, préfixe du playbook ou du rôle pour le reste.
+
+# --- Connexion ------------------------------------------------------------------
+ansible_user: admin
+
+# --- Site (PLAN.md §4) -------------------------------------------------------------
+ms_site: par1
+ms_domaine: par1.medisphere.internal
+ms_resolveur: 10.10.20.10
+# Passerelle du VLAN de l'hôte : son adresse avec .1 en dernier octet (PLAN.md §4.2).
+# Évaluée au moment de l'usage, pour chaque hôte (ansible_host est propre à l'hôte).
+ms_passerelle: "{{ (ansible_host.split('.')[:3] + ['1']) | join('.') }}"
+# Sources de temps : la passerelle du VLAN (PLAN.md §4.3 bis, M00-E31).
+# gw01, lui, se synchronise sur Internet : voir host_vars/gw01/.
+ms_serveurs_ntp:
+  - "{{ ms_passerelle }}"
+
+# --- Rôle base (M04-E10) ---------------------------------------------------------------
+# La trousse de diagnostic (E05/E06) est devenue base_paquets / base_paquets_role /
+# base_paquets_interdits (defaults du rôle) : les variables trousse_* sont supprimées.
+# Clés publiques autorisées pour admin sur tout le socle (liste EXCLUSIVE dans le rôle).
+# Une clé PUBLIQUE se versionne ; remplace la ligne par le contenu de ~/.ssh/id_ed25519.pub.
+ms_cles_admin:
+  - "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+base_admin_cles: "{{ ms_cles_admin }}"
+
+# --- Identité des hôtes (M04-E07) -------------------------------------------------------
+ms_environnement: lab
+# Rôle de l'hôte, déduit de son groupe role_<rôle> (même source que l'étiquette Proxmox).
+# « aucun » si l'hôte n'appartient à aucun groupe role_*.
+ms_role: "{{ group_names | select('match', '^role_') | map('regex_replace', '^role_', '') | first | default('aucun') }}"
+# En-tête des fichiers gérés (filtre « comment » dans les templates). Remplace le réglage
+# ansible_managed de ansible.cfg, déprécié depuis ansible-core 2.19 (retrait en 2.23).
+ms_gere_par: >-
+  Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.
+ms_contact_astreinte: "astreinte Plateforme (Nadia Roussel) — runbooks : plateforme/medisphere, docs/socle/runbooks/"
+# Runbooks à rappeler à la connexion, par rôle (clés = valeurs possibles de ms_role).
+ms_runbooks:
+  gitlab:
+    - RB-010 Restaurer GitLab
+    - RB-011 Mettre à jour GitLab
+    - RB-012 Diagnostiquer la forge
+    - RB-013 La forge est en panne

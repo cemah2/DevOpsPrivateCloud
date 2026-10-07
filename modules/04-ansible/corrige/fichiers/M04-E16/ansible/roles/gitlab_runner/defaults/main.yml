@@ -1,0 +1,95 @@
+---
+# Rôle gitlab_runner — valeurs par défaut (M04-E16).
+# runner01 : GitLab Runner (exécuteur shell) et tous les outils des pipelines des modules
+# 01 à 03, aux versions et provenances de M01-E23, M01-E24, M02-E24 et M03-E15.
+
+gitlab_runner_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.') }}
+
+# --- GitLab Runner -------------------------------------------------------------------
+# Version EXACTE, de même major.minor que GitLab sur git01 (règle de compatibilité, M01-E29).
+# ⚠️ Remplace par la version installée (apt-cache policy gitlab-runner sur runner01).
+gitlab_runner_version: "19.4.0"
+gitlab_runner_url: https://git01.par1.medisphere.internal
+gitlab_runner_nom: runner01-shell
+gitlab_runner_executeur: shell
+# Jeton d'authentification glrt- de l'objet runner créé dans GitLab (Admin → Runners).
+# Ne sert qu'à l'ENREGISTREMENT (runner absent de config.toml) ; à fournir depuis le Vault.
+gitlab_runner_jeton: ""
+gitlab_runner_concurrent: 2
+
+# Dépôt de paquets officiel et clé de signature (empreinte relevée le 2026-10-07 ;
+# à comparer avec https://docs.gitlab.com/omnibus/update/package_signatures/).
+gitlab_runner_depot_url: https://packages.gitlab.com/runner/gitlab-runner/debian
+gitlab_runner_cle_url: https://packages.gitlab.com/gpgkey/gpg.key
+gitlab_runner_cle_empreinte: F6403F6544A38863DAA0B6E03F01618A51312F3F
+
+# --- Autorités de certification (fichiers sur le contrôleur, adm01) ------------------------
+gitlab_runner_ca_provisoire: "{{ lookup('ansible.builtin.env', 'HOME') }}/pki-provisoire/ca.crt"
+gitlab_runner_ca_pve01: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/workbook/pve-root-ca.pem"
+
+# --- Outils des jobs -----------------------------------------------------------------------
+# Binaires de release : téléchargés dans un dossier VERSIONNÉ, empreinte SHA-256 vérifiée,
+# puis liés dans /usr/local/bin. Changer de version = changer la ligne, rien d'autre.
+# archive: false → le fichier téléchargé est le binaire, enregistré sous binaires[0].chemin.
+# binaires : liens à poser dans /usr/local/bin (lien) vers un chemin du dossier de version.
+gitlab_runner_outils_dossier: /opt/ci-outils
+gitlab_runner_outils:
+  - nom: gitleaks
+    version: 8.30.1
+    url: https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+    sha256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  # gitleaks_8.30.1_checksums.txt
+    archive: true
+    binaires: [{lien: gitleaks, chemin: gitleaks}]
+  - nom: shfmt
+    version: 3.14.1
+    url: https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64
+    sha256: 76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf  # page de la release
+    archive: false
+    binaires: [{lien: shfmt, chemin: shfmt}]
+  - nom: jq
+    version: 1.8.2
+    url: https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64
+    sha256: b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f  # sha256sum.txt
+    archive: false
+    binaires: [{lien: jq, chemin: jq}]
+  - nom: task
+    version: 3.54.0
+    url: https://github.com/go-task/task/releases/download/v3.54.0/task_linux_amd64.tar.gz
+    sha256: 680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb  # task_checksums.txt
+    archive: true
+    binaires: [{lien: task, chemin: task}]
+  - nom: uv
+    version: 0.12.23
+    url: https://github.com/astral-sh/uv/releases/download/0.12.23/uv-x86_64-unknown-linux-gnu.tar.gz
+    sha256: 9167d72b3319674b6303c4cbe071854bba13ebdf3d76b1a7cbdc175471fb66d6  # fichier .sha256 de l'archive
+    archive: true
+    binaires:
+      - {lien: uv, chemin: uv-x86_64-unknown-linux-gnu/uv}
+      - {lien: uvx, chemin: uv-x86_64-unknown-linux-gnu/uvx}
+
+# bats-core : archive de l'étiquette, AUCUNE empreinte publiée → la tienne (M02-E24).
+gitlab_runner_bats_version: 1.13.0
+gitlab_runner_bats_sha256: ""
+
+# Outils Python installés par « uv tool » pour tous les comptes (M01-E23).
+gitlab_runner_uv_outils_dossier: /opt/uv-tools
+gitlab_runner_precommit_version: 4.6.2
+
+# ShellCheck 0.11 depuis trixie-backports (Debian 13 livre la 0.10, M02).
+gitlab_runner_shellcheck_version: "0.11.*"
+gitlab_runner_trousseau_debian: /usr/share/keyrings/debian-archive-keyring.pgp
+
+# Node.js 24 LTS (NodeSource) et /opt/release-tools (semantic-release, commitlint, M01-E24).
+gitlab_runner_node_majeure: 24
+gitlab_runner_nodesource_cle_url: https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key
+gitlab_runner_nodesource_empreinte: 6F71F525282841EEDAF851B42F59B5F99B1BE0B4
+# Le verrou npm vit dans plateforme/ci-templates (source unique) : clone sur le contrôleur.
+gitlab_runner_release_tools_source: "{{ lookup('ansible.builtin.env', 'HOME') }}/src/ci-templates/outils/release-tools"
+
+# Packer (M03-E15) depuis le dépôt APT HashiCorp.
+gitlab_runner_packer: true
+gitlab_runner_packer_version: "1.16.*"
+gitlab_runner_hashicorp_cle_url: https://apt.releases.hashicorp.com/gpg
+gitlab_runner_hashicorp_empreinte: D55C0D1AC78A8D8126CB631CFC9CA96ACA026560

@@ -1,0 +1,3 @@
+# {{ ansible_managed }}
+# prometheus-node-exporter — paramètres posés par le rôle Ansible node_exporter (M04-E34).
+ARGS="--web.listen-address={{ node_exporter_adresse }}:{{ node_exporter_port }}{% for c in node_exporter_collecteurs_desactives %} --no-collector.{{ c }}{% endfor %} --collector.systemd --collector.systemd.unit-include=({{ node_exporter_unites_systemd | join('|') }})[.]service --collector.textfile.directory={{ node_exporter_dossier_textfile }}"

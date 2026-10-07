@@ -1,0 +1,4 @@
+---
+- name: Valeur vue dans le rôle demo
+  ansible.builtin.debug:
+    var: couleur

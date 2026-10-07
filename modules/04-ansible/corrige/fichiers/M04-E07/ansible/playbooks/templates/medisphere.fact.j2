@@ -1,0 +1,10 @@
+{#
+  Fait local lu par le module setup (M04-E07) : /etc/ansible/facts.d/medisphere.fact.
+  Fichier NON exécutable contenant du JSON → ansible_facts['ansible_local']['medisphere'].
+#}
+{{ {
+     'role': ms_role,
+     'site': ms_site,
+     'environnement': ms_environnement,
+     'gere_par': 'plateforme/ansible',
+   } | to_nice_json(indent=2) }}

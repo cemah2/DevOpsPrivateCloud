@@ -1,0 +1,18 @@
+## template: jinja
+#cloud-config
+# m03-e11-config.yaml — vendor-data MédiAgenda, partie 1 : configuration (M03-E11).
+# Gabarit Jinja rendu PAR LA VM au démarrage, avec ses données d'instance
+# (cloud-init query --all) : la même partie sert à toutes les VMs de l'équipe.
+write_files:
+  - path: /etc/motd
+    permissions: "0644"
+    content: |
+      VM de développement MédiAgenda — instance {{ v1.instance_id }}
+      {{ v1.distro }} {{ v1.distro_release }}, plateforme {{ v1.platform }}.
+      Aucune donnée de patient réelle sur cette VM.
+# git pour cloner les dépôts de l'équipe (installé au premier démarrage seulement)
+packages:
+  - git
+# À chaque démarrage (module bootcmd, fréquence « always »)
+bootcmd:
+  - [sh, -c, 'echo "demarrage $(date --iso-8601=seconds)" >> /var/log/mediagenda-demarrages.log']

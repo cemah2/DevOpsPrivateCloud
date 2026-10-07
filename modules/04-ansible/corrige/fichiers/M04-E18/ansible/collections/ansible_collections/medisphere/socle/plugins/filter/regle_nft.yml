@@ -1,0 +1,34 @@
+DOCUMENTATION:
+  name: regle_nft
+  author: Équipe Plateforme MédiSphère
+  version_added: 1.0.0
+  short_description: Transforme un flux de la matrice des flux en règle nftables
+  description:
+    - Prend un dictionnaire décrivant un flux autorisé et rend une ligne de règle nftables.
+    - Refuse les champs inconnus (fautes de frappe), les motifs absents ou trop longs et les
+      combinaisons incohérentes (ports sans protocole, ports avec ICMP).
+  positional: _input
+  options:
+    _input:
+      description: >-
+        Le flux. Champs reconnus : entree, sortie (iifname/oifname), source, destination
+        (ip saddr/daddr ; chaîne ou liste), proto (tcp, udp, tcp_udp, icmp), ports,
+        ports_source (nombre, plage « a-b » ou liste), icmp (type ICMP), action
+        (accept par défaut, drop, reject), motif (obligatoire), ref.
+      type: dict
+      required: true
+
+EXAMPLES: |
+  # Dans un template :
+  #   {% for f in pare_feu_transit %}
+  #   {{ f | medisphere.socle.regle_nft }}
+  #   {% endfor %}
+  # {entree: $V_MGMT, sortie: $WAN, destination: $PVE01, proto: tcp, ports: [22, 8006],
+  #  motif: "adm01 vers pve01", ref: M00-E15}
+  # donne :
+  # iifname $V_MGMT oifname $WAN ip daddr $PVE01 tcp dport { 22, 8006 } accept comment "adm01 vers pve01 (M00-E15)"
+
+RETURN:
+  _value:
+    description: La règle nftables, sur une ligne.
+    type: str

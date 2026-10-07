@@ -1,0 +1,68 @@
+---
+# playbooks/mesure-perf.yml — charge de mesure des performances d'Ansible (M04-E26)
+#
+# Une collecte de faits puis dix tâches courtes SANS EFFET : chaque exécution doit donner
+# changed=0 sur tous les hôtes. Sert de référence stable pour comparer des réglages.
+#   uv run ansible-playbook -i inventories/lab/hosts.yml -i ~/m04/e25/flotte-hosts.yml playbooks/mesure-perf.yml
+# Paramètres (extra vars) :
+#   collecte      true|false        collecte des faits (défaut true)
+#   sous_ensemble liste             gather_subset (défaut ['all'])
+#   avec_sudo     true|false        become sur les tâches (défaut true, comme nos rôles)
+- name: Mesure — collecte de faits et tâches en lecture
+  hosts: socle:flotte
+  gather_facts: "{{ collecte | default(true) }}"
+  # gather_subset de la collecte IMPLICITE (celle que gathering=smart peut éviter) : passé par
+  # module_defaults, qui s'applique aussi à elle (un setup explicite ignorerait le cache).
+  module_defaults:
+    ansible.builtin.setup:
+      gather_subset: "{{ sous_ensemble | default(['all']) }}"
+  become: "{{ avec_sudo | default(true) }}"
+  tasks:
+    - name: Lire l'état de /etc/hostname
+      ansible.builtin.stat:
+        path: /etc/hostname
+
+    - name: Lire /etc/os-release
+      ansible.builtin.slurp:
+        src: /etc/os-release
+
+    - name: Lire la charge
+      ansible.builtin.command:
+        cmd: cat /proc/loadavg
+      changed_when: false
+
+    - name: Lire la version du noyau
+      ansible.builtin.command:
+        cmd: uname -r
+      changed_when: false
+
+    - name: Lire le compte admin
+      ansible.builtin.getent:
+        database: passwd
+        key: admin
+
+    - name: Lister les fichiers de configuration de sshd
+      ansible.builtin.find:
+        paths: /etc/ssh
+        patterns: "*.conf"
+        recurse: true
+
+    - name: Lire l'état de chrony
+      ansible.builtin.systemd_service:
+        name: chrony
+      check_mode: true
+
+    - name: Lire l'espace disque de la racine
+      ansible.builtin.command:
+        cmd: df --output=pcent /
+      changed_when: false
+
+    - name: Lire la date du système
+      ansible.builtin.command:
+        cmd: date --iso-8601=seconds
+      changed_when: false
+
+    - name: Vérifier une évidence
+      ansible.builtin.assert:
+        that: true
+        quiet: true

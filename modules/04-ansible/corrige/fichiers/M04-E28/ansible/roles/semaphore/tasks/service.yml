@@ -1,0 +1,61 @@
+---
+- name: Certificat TLS (chaîne serveur puis CA provisoire, public)
+  ansible.builtin.copy:
+    src: "{{ semaphore_tls_certificat_src }}"
+    dest: /etc/semaphore/tls/serveur.crt
+    owner: root
+    group: semaphore
+    mode: "0644"
+  notify: Redémarrer semaphore
+
+- name: Clé privée TLS (depuis Vault)
+  ansible.builtin.copy:
+    content: "{{ semaphore_tls_cle | trim }}\n"
+    dest: /etc/semaphore/tls/serveur.key
+    owner: root
+    group: semaphore
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Redémarrer semaphore
+
+# config.json contient le mot de passe de la base et les clés de chiffrement : jamais de
+# diff (il serait affiché par --diff, en CI comme dans Semaphore lui-même).
+- name: Configuration de Semaphore
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: /etc/semaphore/config.json
+    owner: root
+    group: semaphore
+    mode: "0640"
+  diff: false
+  notify: Redémarrer semaphore
+
+- name: Unité systemd
+  ansible.builtin.template:
+    src: semaphore.service.j2
+    dest: /etc/systemd/system/semaphore.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer semaphore
+
+- name: Semaphore démarre avec la VM
+  ansible.builtin.systemd_service:
+    name: semaphore
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Appliquer les changements en attente avant les contrôles
+  ansible.builtin.meta: flush_handlers
+
+- name: L'API répond en HTTPS, certificat vérifié
+  ansible.builtin.uri:
+    url: "https://{{ semaphore_fqdn }}/api/ping"
+    return_content: true
+  register: semaphore_ping
+  until: semaphore_ping.status == 200 and (semaphore_ping.content | trim) == 'pong'
+  retries: 20
+  delay: 3
+  check_mode: false

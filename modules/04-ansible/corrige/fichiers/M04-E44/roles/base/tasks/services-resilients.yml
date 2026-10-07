@@ -1,0 +1,25 @@
+---
+# M04-E44 — extrait du rôle base : services critiques redémarrés automatiquement par systemd.
+# À inclure depuis roles/base/tasks/main.yml :
+#   - name: Services critiques redémarrés automatiquement
+#     ansible.builtin.import_tasks: services-resilients.yml
+#     tags: [base, resilience]
+# Variable (roles/base/defaults/main.yml) : base_services_resilients (voir defaults-extrait.yml).
+# Handler : « Redémarrer chrony », déjà présent dans roles/base/handlers/main.yml (M04-E10).
+
+- name: Surcharge systemd de redémarrage automatique
+  medisphere.socle.systemd_dropin:
+    unit: "{{ item.unite }}"
+    name: 50-redemarrage
+    settings:
+      Unit:
+        # Au plus 5 redémarrages en 5 minutes, puis systemd abandonne (et l'échec se voit).
+        StartLimitIntervalSec: 300
+        StartLimitBurst: 5
+      Service:
+        Restart: on-failure
+        RestartSec: 5s
+  loop: "{{ base_services_resilients }}"
+  loop_control:
+    label: "{{ item.unite }}"
+  notify: "{{ item.handler }}"

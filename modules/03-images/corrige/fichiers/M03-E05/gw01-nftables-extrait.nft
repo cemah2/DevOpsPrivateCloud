@@ -1,0 +1,16 @@
+# Extrait de /etc/nftables.conf sur gw01 — chaîne forward de « table inet filter » (M03-E05).
+# Variables : celles du fichier de référence modules/00-lab/corrige/fichiers/M00-E26/nftables.conf
+# (V_SANDBOX…), plus la définition ci-dessous, à placer avec les autres « define » :
+#
+#   define ADM01 = 10.10.10.10
+#
+# Règle à placer dans la section « Services socle » (après les règles d'état, avant la
+# sortie Internet et la journalisation finale). Le retour (adm01 → VM, réponses HTTP) passe
+# par « ct state established,related ». adm01 → vsandbox TCP/22 (communicateur SSH de
+# Packer) est déjà couvert par « bastion (MGMT) vers tout le lab ».
+#
+# Procédure (M00-E21) : session SSH ouverte sur gw01, retour arrière programmé
+#   (systemd-run --on-active=5min ... ou « at »), puis :
+#   sudo nft -c -f /etc/nftables.conf && sudo systemctl reload nftables
+
+		iifname $V_SANDBOX ip daddr $ADM01 tcp dport 8100-8199 accept comment "VMs de build Packer vers le serveur HTTP de Packer sur adm01 (M03-E05)"

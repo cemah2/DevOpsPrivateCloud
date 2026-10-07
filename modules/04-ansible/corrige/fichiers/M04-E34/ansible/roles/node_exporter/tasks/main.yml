@@ -1,0 +1,61 @@
+---
+# roles/node_exporter/tasks/main.yml (M04-E34)
+- name: Refuser un port hors de 1024-65535 avant toute action (X7)
+  ansible.builtin.assert:
+    that:
+      - node_exporter_port | int >= 1024
+      - node_exporter_port | int <= 65535
+      - node_exporter_adresse is match('^[0-9]{1,3}([.][0-9]{1,3}){3}$')
+    fail_msg: "node_exporter_port doit être compris entre 1024 et 65535, node_exporter_adresse être une IPv4."
+    quiet: true
+
+# Sans les « recommends » : pas de prometheus-node-exporter-collectors et de ses minuteurs.
+- name: Installer prometheus-node-exporter (X1)
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+
+# Lu par systemd (EnvironmentFile) : les barres obliques inverses devraient y être doublées
+# deux fois ; on les évite ([.] pour un point littéral). Valeur entre guillemets, sans espace
+# dans un argument : systemd découpe $ARGS sur les espaces.
+- name: Paramètres de l'exportateur (X2, X3, X4)
+  ansible.builtin.template:
+    src: prometheus-node-exporter.default.j2
+    dest: /etc/default/prometheus-node-exporter
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer prometheus-node-exporter
+
+- name: Dossier du collecteur textfile
+  ansible.builtin.file:
+    path: "{{ node_exporter_dossier_textfile }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Le module template écrit dans un fichier temporaire du même dossier puis le renomme : le
+# collecteur ne lit jamais un fichier à moitié écrit (et ignore ce qui ne finit pas en .prom).
+# Pas de redémarrage : le fichier est relu à chaque collecte.
+- name: Métrique d'inventaire medisphere_info (X5)
+  ansible.builtin.template:
+    src: medisphere.prom.j2
+    dest: "{{ node_exporter_dossier_textfile }}/medisphere.prom"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Le service démarre avec la machine et tourne (X1)
+  ansible.builtin.systemd_service:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true
+
+# Au premier passage, le paquet a démarré le service avec ses paramètres par défaut
+# (toutes les adresses) : on applique les nôtres tout de suite, pas en fin de play.
+- name: Appliquer les nouveaux paramètres maintenant (X6)
+  ansible.builtin.meta: flush_handlers

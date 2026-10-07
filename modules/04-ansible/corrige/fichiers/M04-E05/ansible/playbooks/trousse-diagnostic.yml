@@ -1,0 +1,53 @@
+---
+# playbooks/trousse-diagnostic.yml — même trousse de diagnostic sur tout le socle (M04-E05)
+#
+# Toujours dans cet ordre :
+#   uv run ansible-playbook playbooks/trousse-diagnostic.yml --check --diff
+#   uv run ansible-playbook playbooks/trousse-diagnostic.yml
+# Un second passage doit afficher changed=0 sur tous les hôtes.
+# Version suivante (M04-E06) : les listes passent dans l'inventaire (group_vars).
+
+- name: Trousse de diagnostic sur le socle
+  hosts: socle
+  become: true
+  # Aucune tâche n'utilise de fait : on économise la collecte (quelques secondes par hôte).
+  gather_facts: false
+  vars:
+    trousse_paquets:
+      - bind9-dnsutils
+      - tcpdump
+      - mtr-tiny
+      - curl
+      - jq
+      - lsof
+      - strace
+      - htop
+    # Clients de protocoles en clair, refusés par la RSSI.
+    trousse_paquets_interdits:
+      - telnet
+      - inetutils-telnet
+      - rsh-client
+
+  tasks:
+    - name: Installer les outils de diagnostic
+      ansible.builtin.apt:
+        name: "{{ trousse_paquets }}"
+        state: present
+        # Rafraîchit l'index APT s'il a plus d'une heure, dans la même tâche :
+        # la tâche ne compte « changed » que si un paquet est réellement installé.
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Retirer les clients de protocoles en clair
+      ansible.builtin.apt:
+        name: "{{ trousse_paquets_interdits }}"
+        state: absent
+
+    - name: Horodater l'historique bash (traçabilité des interventions)
+      ansible.builtin.lineinfile:
+        path: /etc/bash.bashrc
+        # La regexp repère une ligne existante (même différente) pour la remplacer
+        # au lieu d'en ajouter une seconde.
+        regexp: '^export HISTTIMEFORMAT='
+        line: "export HISTTIMEFORMAT='%F %T '"
+        state: present

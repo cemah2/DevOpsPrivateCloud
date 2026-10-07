@@ -1,0 +1,29 @@
+# .gitignore — plateforme/ansible (M04-E02)
+
+# Environnement Python géré par uv : reconstruit par « uv sync --locked »
+.venv/
+__pycache__/
+*.py[cod]
+
+# Collections de Galaxy : reconstruites depuis collections/requirements.yml.
+# Seule la collection interne medisphere.* (E18) est versionnée.
+/collections/ansible_collections/*
+!/collections/ansible_collections/medisphere/
+
+# Fichiers de travail d'Ansible et de ses outils
+*.retry
+.ansible/
+.cache/
+
+# Filet de sécurité : jamais de secret dans le dépôt (mot de passe Vault, fichiers d'accès).
+# Les secrets vivent dans ~/.config/workbook/ (E12) ; seuls les modèles *.exemple sont versionnés.
+*.env
+*.pass
+*vault-pass*
+!*.exemple
+
+# Éditeurs
+*.swp
+*~
+.idea/
+.vscode/

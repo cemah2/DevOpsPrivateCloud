@@ -1,0 +1,23 @@
+---
+# .ansible-lint — règles du projet plateforme/ansible (M04-E20).
+# Profil « production » : le plus exigeant (FQCN, noms de tâches, modes de fichiers explicites,
+# pas de « latest », changed_when sur les commandes, métadonnées des rôles et collections…).
+profile: production
+
+# Les collections externes sont installées dans ./collections : ce n'est pas notre code.
+# On analyse en revanche notre collection medisphere.socle.
+exclude_paths:
+  - .venv/
+  - .cache/
+  - collections/ansible_collections/community/
+  - collections/ansible_collections/ansible/
+  - "**/*.exemple"
+  - "**/*.extrait"
+
+# Les collections de requirements.yml sont installées par le job (et par chacun en local) :
+# ansible-lint n'a pas à les télécharger lui-même.
+offline: true
+
+# Aucune règle désactivée globalement. Une exception se justifie au cas par cas, sur la ligne,
+# avec « # noqa: <règle> » et un commentaire qui dit pourquoi.
+skip_list: []

@@ -1,0 +1,64 @@
+---
+- name: Fuseau horaire
+  community.general.timezone:
+    name: "{{ base_fuseau_horaire }}"
+
+# --- Client chrony (repris de playbooks/chrony-client.yml, M04-E08) ----------------------
+- name: Au moins une source de temps est définie
+  ansible.builtin.assert:
+    that:
+      - base_ntp_serveurs | length > 0
+    fail_msg: "base_ntp_serveurs est vide pour {{ inventory_hostname }} : chrony n'aurait aucune source"
+    quiet: true
+  when: base_chrony_client
+
+- name: Configuration de chrony (validée avant d'être mise en place)
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    validate: chronyd -p -f %s
+  notify: Redémarrer chrony
+  when: base_chrony_client
+
+- name: Retirer la source posée à la main (M00-E31), remplacée par le template
+  ansible.builtin.file:
+    path: /etc/chrony/sources.d/lab.sources
+    state: absent
+  notify: Redémarrer chrony
+  when: base_chrony_client
+
+# VMs issues de l'image dorée (M03-E09) : un service recalcule la source au démarrage.
+# Sans « sourcedir » dans le template, son fichier ne serait plus lu ; on l'arrête quand
+# même, pour qu'une seule mécanique décide de la source.
+- name: Repérer le mécanisme de l'image dorée
+  ansible.builtin.stat:
+    path: /etc/systemd/system/ms-ntp-passerelle.service
+  register: _base_ntp_image
+  when: base_chrony_client
+
+- name: Désactiver ms-ntp-passerelle (Ansible décide désormais de la source)
+  ansible.builtin.systemd_service:
+    name: ms-ntp-passerelle.service
+    enabled: false
+  when:
+    - base_chrony_client
+    - _base_ntp_image.stat.exists
+
+- name: Chrony démarré et activé
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Appliquer maintenant les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre la synchronisation (20 essais espacés de 3 s, correction < 0,1 s)
+  ansible.builtin.command: chronyc -n waitsync 20 0.1 0 3
+  changed_when: false
+  check_mode: false
+  when: base_chrony_client

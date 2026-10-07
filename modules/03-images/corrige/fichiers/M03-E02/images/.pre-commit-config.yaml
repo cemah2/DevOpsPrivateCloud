@@ -1,0 +1,60 @@
+# .pre-commit-config.yaml — plateforme/images (M03-E02).
+# Base : configuration de référence de la plateforme (M01-E15), « rev » figées par empreinte,
+# plus ShellCheck/shfmt (M02-E04) pour les scripts, plus les contrôles Packer du projet.
+minimum_pre_commit_version: "4.0.0"
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files   # une ISO ou une image disque n'a rien à faire ici
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1 (ShellCheck 0.11.0)
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: 479be5958357ba5ab65ce47172117348516860e9  # frozen: v3.14.1-1 (shfmt 3.14.1)
+    hooks:
+      - id: shfmt
+
+  - repo: local
+    hooks:
+      - id: commitlint
+        name: commitlint (Conventional Commits)
+        language: node
+        language_version: system
+        entry: commitlint --edit
+        stages: [commit-msg]
+        additional_dependencies:
+          - "@commitlint/cli@21.2.3"
+          - "@commitlint/config-conventional@21.2.3"
+      # Packer est un binaire système (dépôt APT HashiCorp) : « language: system ».
+      # Sur runner01, Packer n'est installé qu'en M03-E15 : d'ici là, le job CI saute ces
+      # deux hooks (variable SKIP dans .gitlab-ci.yml).
+      - id: packer-fmt
+        name: packer fmt (formatage HCL)
+        language: system
+        entry: packer fmt -check -diff -recursive .
+        pass_filenames: false
+        files: '\.pkr(vars)?\.hcl$'
+      - id: packer-validate
+        name: packer validate -syntax-only (chaque image)
+        language: system
+        entry: outils/valider-syntaxe.sh
+        pass_filenames: false
+        files: '(\.pkr(vars)?\.hcl|/http/.*)$'

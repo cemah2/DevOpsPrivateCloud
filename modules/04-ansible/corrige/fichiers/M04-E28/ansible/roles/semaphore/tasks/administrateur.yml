@@ -1,0 +1,35 @@
+---
+- name: Lister les comptes Semaphore
+  ansible.builtin.command:
+    argv: [semaphore, users, list, --config, /etc/semaphore/config.json]
+  become: true
+  become_user: semaphore
+  register: semaphore_comptes
+  changed_when: false
+  check_mode: false
+
+# La CLI n'accepte le mot de passe qu'en argument : il est visible dans la liste des processus
+# de sem01 pendant une fraction de seconde. Risque accepté (VM d'un seul administrateur), à
+# changer à la première connexion ; no_log l'écarte des journaux d'Ansible.
+- name: Créer l'administrateur initial
+  ansible.builtin.command:
+    argv:
+      - semaphore
+      - users
+      - add
+      - --admin
+      - --login
+      - "{{ semaphore_admin_login }}"
+      - --name
+      - "{{ semaphore_admin_nom }}"
+      - --email
+      - "{{ semaphore_admin_email }}"
+      - --password
+      - "{{ semaphore_admin_mot_de_passe }}"
+      - --config
+      - /etc/semaphore/config.json
+  become: true
+  become_user: semaphore
+  when: semaphore_admin_login not in semaphore_comptes.stdout_lines
+  changed_when: true
+  no_log: true

@@ -1,0 +1,23 @@
+---
+# Liste EXCLUSIVE : toute clé absente de base_admin_cles est retirée. Liste vide : le rôle
+# ne touche à rien (sinon il retirerait TOUTES les clés et verrouillerait le compte).
+- name: Clés autorisées du compte d'administration (liste exclusive)
+  ansible.posix.authorized_key:
+    user: "{{ base_admin_utilisateur }}"
+    key: "{{ base_admin_cles | join('\n') }}"
+    exclusive: true
+  when: base_admin_cles | length > 0
+
+# M04-E12 — compte de secours. no_log : ni l'empreinte, ni le diff, ni l'erreur éventuelle
+# (qui recopie les arguments) n'apparaissent dans la sortie ou les journaux d'exécution.
+- name: Compte de secours (console uniquement, refusé par SSH)
+  ansible.builtin.user:
+    name: "{{ base_secours_utilisateur }}"
+    comment: "Compte de secours MédiSphère (console uniquement)"
+    shell: /bin/bash
+    groups: [sudo]
+    append: true
+    password: "{{ base_secours_mdp_hash }}"
+    update_password: always
+  no_log: true
+  when: base_secours_mdp_hash | length > 0

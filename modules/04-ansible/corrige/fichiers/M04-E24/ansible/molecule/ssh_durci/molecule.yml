@@ -1,0 +1,5 @@
+---
+# molecule/ssh_durci/molecule.yml — scénario du rôle « ssh_durci » (M04-E24)
+#   uv run molecule test -s ssh_durci
+scenario:
+  name: ssh_durci

@@ -1,0 +1,54 @@
+---
+# Données du DNS provisoire du socle (rôle dnsmasq, M04-E46). Reprend exactement
+# /etc/dnsmasq.d/medisphere.conf de M00-E13/E14, complété aux modules 01 à 04.
+# À adapter : <DNS-AMONT-1>, <DNS-AMONT-2> (résolveurs amont choisis en M00-E13), <IP-PVE01>.
+
+dnsmasq_ecoute:
+  - 127.0.0.1
+  - 10.10.20.10
+
+dnsmasq_amont:
+  - "<DNS-AMONT-1>"
+  - "<DNS-AMONT-2>"
+
+dnsmasq_zones_locales:
+  - medisphere.internal
+  - 10.10.in-addr.arpa
+  - 20.10.in-addr.arpa
+
+dnsmasq_domaine: par1.medisphere.internal
+
+dnsmasq_hotes:
+  - { noms: [dns01.par1.medisphere.internal], ip: 10.10.20.10 }   # premier : sert à la sonde du rôle
+  - { noms: [gw01.par1.medisphere.internal], ip: 10.10.10.1 }
+  - { noms: [adm01.par1.medisphere.internal], ip: 10.10.10.10 }
+  - { noms: [git01.par1.medisphere.internal], ip: 10.10.20.12 }
+  - { noms: [runner01.par1.medisphere.internal], ip: 10.10.20.15 }
+  # sem01 (10.10.20.41, M04-E28) : retiré avec la VM en fin de module (voir ADR-0040)
+  - { noms: [pve01.par1.medisphere.internal], ip: "<IP-PVE01>" }
+  - { noms: [pbs01.par2.medisphere.internal, pbs01.par1.medisphere.internal], ip: 10.20.10.10 }
+
+# PTR des autres adresses de gw01 (les traceroutes affichent gw01 à chaque saut)
+dnsmasq_ptr:
+  - { ptr: 1.20.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.30.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.40.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.50.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.52.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.60.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.70.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.99.10.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.0.255.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+  - { ptr: 1.1.255.10.in-addr.arpa, nom: gw01.par1.medisphere.internal }
+
+dnsmasq_dhcp:
+  - etiquette: sandbox
+    debut: 10.10.99.100
+    fin: 10.10.99.199
+    masque: 255.255.255.0
+    bail: 12h
+    options:
+      - option:router,10.10.99.1
+      - option:dns-server,10.10.20.10
+      - option:ntp-server,10.10.99.1
+      - option:domain-search,par1.medisphere.internal

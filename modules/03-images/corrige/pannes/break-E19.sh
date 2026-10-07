@@ -50,8 +50,8 @@ reparer_si_casse() { # 0 si le fichier a été restauré, 1 s'il avait déjà é
 }
 FICHIER
 
-_e19_gw01() { { printf '%s\n' "$_E19_FICHIER"; cat; } | wb_exec gw01 "$@"; }
-_e19_dns01() { { printf '%s\n' "$_E19_FICHIER"; cat; } | wb_exec dns01 "$@"; }
+_e19_gw01() { { printf '%s\n' "$_E19_FICHIER"; cat; } | wb_exec gw01; }
+_e19_dns01() { { printf '%s\n' "$_E19_FICHIER"; cat; } | wb_exec dns01; }
 _e19_local() { { printf '%s\n' "$_E19_FICHIER"; cat; } | wb_exec localhost "$@"; }
 
 panne_E19_v1() {

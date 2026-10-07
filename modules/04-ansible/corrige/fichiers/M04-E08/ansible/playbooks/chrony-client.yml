@@ -1,0 +1,65 @@
+---
+# playbooks/chrony-client.yml — client de temps chrony sur le socle (M04-E08)
+#
+# Cible : tout le socle SAUF le routeur. gw01 est le serveur de temps du lab
+# (M00-E31, fichier de /etc/chrony/conf.d/) : il n'est pas géré par ce playbook.
+#
+#   uv run ansible-playbook playbooks/chrony-client.yml --check --diff
+#   uv run ansible-playbook playbooks/chrony-client.yml
+#
+# Mécanisme : la configuration est VALIDÉE avant d'être mise en place (chronyd -p) ;
+# un changement NOTIFIE un handler qui redémarre chrony une seule fois, même si
+# plusieurs tâches l'ont demandé ; on force les handlers avant la vérification finale.
+
+- name: Client de temps chrony
+  hosts: socle:!role_routeur
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Au moins une source de temps est définie
+      ansible.builtin.assert:
+        that:
+          - ms_serveurs_ntp | length > 0
+        fail_msg: "ms_serveurs_ntp est vide pour {{ inventory_hostname }} : chrony n'aurait aucune source"
+        quiet: true
+
+    - name: Installer chrony
+      ansible.builtin.apt:
+        name: chrony
+        state: present
+
+    - name: Configuration de chrony (validée avant d'être mise en place)
+      ansible.builtin.template:
+        src: chrony.conf.j2
+        dest: /etc/chrony/chrony.conf
+        owner: root
+        group: root
+        mode: "0644"
+        # Copie horodatée de l'ancienne version à côté du fichier : retour arrière rapide.
+        backup: true
+        # %s = fichier temporaire rendu ; s'il est invalide, la tâche échoue et le fichier
+        # en place n'est pas touché.
+        validate: chronyd -p -f %s
+      notify: Redémarrer chrony
+
+    - name: Retirer la source posée à la main (M00-E31), remplacée par le template
+      ansible.builtin.file:
+        path: /etc/chrony/sources.d/lab.sources
+        state: absent
+      notify: Redémarrer chrony
+
+    - name: Appliquer maintenant les redémarrages en attente
+      ansible.builtin.meta: flush_handlers
+
+    - name: Attendre la synchronisation (20 essais espacés de 3 s, correction < 0,1 s)
+      ansible.builtin.command: chronyc -n waitsync 20 0.1 0 3
+      # Commande de lecture : jamais « changed », exécutée aussi en --check.
+      changed_when: false
+      check_mode: false
+
+  handlers:
+    - name: Redémarrer chrony
+      ansible.builtin.systemd_service:
+        name: chrony
+        state: restarted

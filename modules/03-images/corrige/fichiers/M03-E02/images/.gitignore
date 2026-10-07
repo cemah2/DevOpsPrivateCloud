@@ -1,0 +1,19 @@
+# .gitignore — plateforme/images (M03-E02)
+
+# Sorties de build : journaux, manifestes du post-processor, verrous (artefacts CI, M03-E15)
+manifests/
+
+# Cache de Packer (ISO téléchargées, clés de débogage) et fichiers de plantage
+packer_cache/
+crash.log
+*.pem
+
+# Valeurs locales ou secrètes : jamais versionnées. Seul vars/lab.pkrvars.hcl (non secret) l'est.
+*.auto.pkrvars.hcl
+secrets*.pkrvars.hcl
+*.env
+
+# ISO et images disque
+*.iso
+*.qcow2
+*.img

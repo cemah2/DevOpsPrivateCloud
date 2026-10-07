@@ -1,0 +1,17 @@
+---
+# Rôle fail2ban — version corrigée de la proposition de Lucas (M04-E21).
+fail2ban_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.') }}
+fail2ban_maxretry: 5
+fail2ban_findtime: 10m
+fail2ban_bantime: 1h
+# Adresses JAMAIS bannies : les postes et automates qui administrent le socle. Sans elles,
+# trois échecs d'un agent SSH chargé de plusieurs clés (MaxAuthTries 3) bannissent adm01 et
+# Ansible perd tout le socle d'un coup.
+fail2ban_jamais_bannis:
+  - 127.0.0.1/8
+  - ::1
+  - 10.10.10.0/24      # MGMT (adm01)
+  - 10.255.1.0/24      # VPN d'administration
+  - 10.10.20.15        # runner01 (CI Ansible, M04-E27)

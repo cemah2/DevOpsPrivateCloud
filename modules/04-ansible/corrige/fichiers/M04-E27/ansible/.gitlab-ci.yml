@@ -1,0 +1,245 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/ansible (état de fin de M04-E27, ticket PLAT-558)
+#
+# Étapes :
+#   lint       gabarits communs (pre-commit, commitlint, gitleaks) + ansible-lint
+#   test       Molecule, un job par rôle testé, seulement si le rôle ou l'outillage change
+#   verifier   check-socle : site.yml --check --diff (aperçu exact des changements)
+#   release    versions du projet (semantic-release, gabarit commun)
+#   appliquer  application manuelle sur main, environnement lab/socle, contrôle de convergence
+# Planifié : ménage des instances Molecule orphelines (variable de planification PLANIF).
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell », utilisateur gitlab-runner, uv).
+# Flux (M03-E15 + M04-E27) : runner01 → pve01:8006, → vsandbox:22, → gw01:22, → adm01:22,
+# et dns01, git01, runner01 dans son VLAN.
+#
+# Secrets — variables du projet, toutes PROTÉGÉES :
+#   ANSIBLE_CI_SSH_KEY    (fichier)  clé privée « ansible-ci » (from=10.10.20.15 sur le socle)
+#   VAULT_PASS_LAB        (fichier)  mot de passe de l'identité Vault « lab »
+#   PROXMOX_URL, PROXMOX_USER, PROXMOX_TOKEN_ID, PROXMOX_TOKEN_SECRET (masquée et cachée)
+# Elles n'existent que sur main, sur conf/* (branches protégées) et dans les pipelines de MR
+# issues de conf/* (option « Allow merge request pipelines to access protected variables and
+# runners », GitLab ≥ 18.1). PROXMOX_TOKEN_SECRET sert d'INDICATEUR de leur présence dans les
+# règles : une variable protégée indisponible est simplement absente.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+stages:
+  - lint
+  - test
+  - verifier
+  - build
+  - release
+  - appliquer
+
+variables:
+  # Faits frais à chaque exécution : jamais le cache de faits du poste (E26).
+  ANSIBLE_CACHE_PLUGIN: memory
+  ANSIBLE_GATHERING: implicit
+  # Journaux lisibles dans les artefacts (et analysables par outils/recap-ansible.sh).
+  ANSIBLE_NOCOLOR: "1"
+  # Rapport JUnit des jobs qui touchent au socle (onglet « Tests » du pipeline).
+  JUNIT_OUTPUT_DIR: rapports/junit
+  JUNIT_HIDE_TASK_ARGUMENTS: "true"
+
+# --- Modèles --------------------------------------------------------------------------------
+.ansible:
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - test "$(id -un)" = gitlab-runner
+    - uv sync --locked
+    - uv run ansible-galaxy collection install -r collections/requirements.yml -p collections
+    - uv run ansible --version
+
+# Jobs qui se connectent au socle : clé ansible-ci et mot de passe Vault préparés par
+# outils/ci-secrets.sh ; la copie de la clé est effacée même si le job échoue ou est annulé.
+.socle:
+  extends: .ansible
+  before_script:
+    - !reference [.ansible, before_script]
+    - . outils/ci-secrets.sh
+    - mkdir -p rapports
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.ci-cle-ssh"
+  artifacts:
+    when: always
+    paths:
+      - rapports/
+    reports:
+      junit: rapports/junit/*.xml
+
+# --- lint -----------------------------------------------------------------------------------
+ansible-lint:
+  extends: .ansible
+  stage: lint
+  script:
+    - uv run ansible-lint --version
+    - |
+      # Rapport au format Code Climate pour le widget « Code Quality » de la MR, et lisible ici.
+      code=0
+      uv run ansible-lint --offline -q -f codeclimate > gl-code-quality-report.json || code=$?
+      jq -r '.[] | "\(.location.path):\(.location.positions.begin.line // .location.lines.begin // "?") [\(.check_name)] \(.description)"' \
+        gl-code-quality-report.json
+      exit "$code"
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      codequality: gl-code-quality-report.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# Une MR issue d'une branche NON protégée ne reçoit pas les secrets : Molecule et check-socle
+# n'auraient pas lieu. Plutôt qu'un pipeline vert trompeur, un échec qui explique.
+secrets-indisponibles:
+  stage: lint
+  tags: [shell]
+  script:
+    - echo "Cette MR vient de « $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME », branche non protégée."
+    - echo "Les tests sur VMs et l'aperçu du socle exigent les secrets du projet, réservés aux branches conf/*."
+    - echo "Pousse le même travail sur une branche conf/<sujet> et ouvre la MR depuis elle."
+    - exit 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $PROXMOX_TOKEN_SECRET == null
+
+# --- test : Molecule ------------------------------------------------------------------------
+# Un scénario par job (une VM au VMID du scénario, 2045-2049) ; jamais deux fois le même
+# scénario en même temps, tous pipelines confondus (resource_group). Après le job, même échoué
+# ou annulé, after_script détruit l'instance (nouveau shell : uv run à nouveau). Pas après un
+# dépassement de délai (failure_reason ≠ script_failure) : le ménage planifié s'en charge.
+.molecule:
+  extends: .ansible
+  stage: test
+  resource_group: molecule-$SCENARIO
+  timeout: 45m
+  script:
+    - uv run molecule --version
+    - uv run molecule test -s "$SCENARIO"
+  after_script:
+    - uv run molecule destroy -s "$SCENARIO" || echo "Destroy en échec : le ménage planifié supprimera l'instance."
+
+molecule:base:
+  extends: .molecule
+  variables:
+    SCENARIO: base
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/base/**/*
+        - molecule/base/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+        - collections/requirements.yml
+        - uv.lock
+
+molecule:ssh_durci:
+  extends: .molecule
+  variables:
+    SCENARIO: ssh_durci
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/ssh_durci/**/*
+        - molecule/ssh_durci/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+        - collections/requirements.yml
+        - uv.lock
+
+# Ajouter un rôle testé = un job de plus sur ce modèle (scénario molecule/<rôle>/).
+
+# Instances orphelines (job tué par son délai, runner redémarré) : chaque nuit.
+molecule-menage:
+  extends: .ansible
+  stage: test
+  script:
+    - uv run ansible-playbook molecule/_commun/menage.yml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PLANIF == "menage-molecule" && $PROXMOX_TOKEN_SECRET
+
+# --- verifier : aperçu des changements --------------------------------------------------------
+# Dans une MR : exactement ce que l'application ferait sur chaque hôte (relu par le relecteur).
+# Sur main : l'état juste avant la décision d'appliquer. Des changements sont attendus ; un
+# hôte en échec ou injoignable fait échouer le job.
+check-socle:
+  extends: .socle
+  stage: verifier
+  variables:
+    ANSIBLE_CALLBACKS_ENABLED: ansible.builtin.junit,ansible.posix.timer
+  script:
+    - |
+      code=0
+      uv run ansible-playbook playbooks/site.yml --check --diff > rapports/check-socle.log 2>&1 || code=$?
+      cat rapports/check-socle.log
+      rc=0
+      outils/recap-ansible.sh rapports/check-socle.log --json rapports/check-socle.json || rc=$?
+      if [ "$rc" -ge 2 ]; then
+        echo "Simulation en échec (hôte injoignable, tâche en erreur ou exécution interrompue), code ansible $code."
+        exit 1
+      fi
+  artifacts:
+    expire_in: 90 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $PROXMOX_TOKEN_SECRET
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $PROXMOX_TOKEN_SECRET
+
+# --- appliquer ------------------------------------------------------------------------------
+# GitLab CE n'a pas d'environnements protégés : la protection vient de la branche (un job
+# manuel de main ne peut être lancé que par qui peut fusionner dans main, les Maintainers),
+# des variables protégées et de resource_group (une application à la fois, détection de dérive
+# comprise, E29). Régler aussi « Prevent outdated deployment jobs » (Settings > CI/CD >
+# General pipelines) : un ancien pipeline ne peut plus réappliquer une version dépassée.
+appliquer:
+  extends: .socle
+  stage: appliquer
+  interruptible: false
+  resource_group: socle-lab
+  timeout: 1h
+  environment:
+    name: lab/socle
+    deployment_tier: production
+  variables:
+    ANSIBLE_CALLBACKS_ENABLED: ansible.builtin.junit,ansible.posix.timer
+  script:
+    - |
+      # Ré-application ciblée (astreinte) : variable LIMITE saisie au lancement du job manuel.
+      limite=()
+      if [ -n "${LIMITE:-}" ]; then limite=(--limit "$LIMITE"); echo "Application limitée à : $LIMITE"; fi
+      code=0
+      uv run ansible-playbook playbooks/site.yml --diff "${limite[@]}" > rapports/appliquer.log 2>&1 || code=$?
+      cat rapports/appliquer.log
+      rc=0
+      outils/recap-ansible.sh rapports/appliquer.log --json rapports/appliquer.json || rc=$?
+      if [ "$code" -ne 0 ] || [ "$rc" -ge 2 ]; then
+        echo "Application en échec (code ansible $code, récapitulatif $rc) : rien d'autre n'est tenté."
+        exit 1
+      fi
+    - |
+      # Convergence : une seconde passe en simulation ne doit plus rien changer. Sinon, un rôle
+      # n'est pas idempotent, ou quelqu'un a modifié un hôte pendant l'application.
+      limite=()
+      if [ -n "${LIMITE:-}" ]; then limite=(--limit "$LIMITE"); fi
+      code=0
+      uv run ansible-playbook playbooks/site.yml --check --diff "${limite[@]}" > rapports/convergence.log 2>&1 || code=$?
+      cat rapports/convergence.log
+      rc=0
+      outils/recap-ansible.sh rapports/convergence.log --json rapports/convergence.json || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        echo "Après application, la simulation annonce encore des changements ou des erreurs (récapitulatif $rc)."
+        exit 1
+      fi
+  artifacts:
+    expire_in: 1 year
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $PROXMOX_TOKEN_SECRET
+      when: manual

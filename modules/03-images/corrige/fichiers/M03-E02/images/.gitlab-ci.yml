@@ -1,0 +1,20 @@
+# .gitlab-ci.yml — plateforme/images (état de fin de M03-E02)
+#
+# Gabarits communs de la plateforme (M01-E24, M01-E25), branche v1 :
+#   qualite.yml : pre-commit, commitlint, gitleaks ; release.yml : versions du PROJET (vX.Y.Z).
+# Les IMAGES ont leur propre version (AAAAMMJJ-N, M03-E10), indépendante de celle du code.
+# Les jobs de construction, de test et de publication arrivent en M03-E15.
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+# DETTE TEMPORAIRE (M03-E02 → M03-E15) : runner01 n'a pas encore Packer. Le job pre-commit
+# saute les deux hooks Packer (ils tournent sur adm01 à chaque commit). La surcharge
+# remplace la variable SKIP du gabarit : on y garde gitleaks (contrôlé par son propre job).
+# À SUPPRIMER en M03-E15, quand Packer est installé sur runner01.
+pre-commit:
+  variables:
+    SKIP: "gitleaks,packer-fmt,packer-validate"

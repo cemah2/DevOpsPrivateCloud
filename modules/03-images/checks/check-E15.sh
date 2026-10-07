@@ -19,8 +19,8 @@ check_ssh_output "runner01 : plugin proxmox installé pour gitlab-runner" runner
   "sudo -n -u gitlab-runner -H packer plugins installed"
 check_ssh "runner01 → pve01 : API (TCP 8006) joignable" runner01 \
   'ip=$(getent ahostsv4 pve01.par1.medisphere.internal | awk "NR==1{print \$1}"); [ -n "$ip" ] && timeout 5 bash -c "exec 3<>/dev/tcp/$ip/8006"'
-check_ssh "runner01 : l'API de pve01 est approuvée par le magasin système (TLS vérifié)" runner01 \
-  'curl -s -o /dev/null --max-time 5 https://pve01.par1.medisphere.internal:8006/api2/json/version'
+check_ssh "runner01 : le certificat de l'API de pve01 est approuvé par le magasin système (TLS vérifié)" runner01 \
+  'ip=$(getent ahostsv4 pve01.par1.medisphere.internal | awk "NR==1{print \$1}"); curl -s -o /dev/null --max-time 5 "https://$ip:8006/api2/json/version"'
 check_ssh_output "pve01 : IPSet automation du pare-feu contient runner01" "$WB_PVE_HOST" '10\.10\.20\.15' \
   "pvesh get /cluster/firewall/ipset/automation --output-format json"
 check_ssh_output "gw01 : règle vsandbox → runner01 TCP 8100-8199 (serveur HTTP de Packer)" gw01 \

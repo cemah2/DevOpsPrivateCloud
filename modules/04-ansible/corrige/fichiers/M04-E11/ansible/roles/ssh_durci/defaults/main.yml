@@ -1,0 +1,35 @@
+---
+# Rôle ssh_durci — valeurs par défaut (M04-E11).
+ssh_durci_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
+  Toute modification manuelle sera écrasée au prochain passage.') }}
+
+# Préfixe « 01- » : sshd lit sshd_config.d/*.conf par ordre alphabétique, AVANT la suite
+# de sshd_config, et retient la PREMIÈRE valeur de chaque mot-clé. Ce fichier passe donc
+# devant 05-durcissement.conf et 10-medisphere.conf (image dorée, M03), 10-durcissement.conf
+# (gw01, M00-E10) et 50-cloud-init.conf.
+ssh_durci_fichier: /etc/ssh/sshd_config.d/01-ssh-durci.conf
+
+# Nom du service : « ssh » sur Debian, « sshd » sur la famille Red Hat.
+ssh_durci_service: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
+
+# Transfert TCP (ProxyJump, tunnels) : seulement sur le bastion (host_vars/adm01).
+ssh_durci_transfert_tcp: false
+
+ssh_durci_max_essais: 3
+ssh_durci_delai_authentification: 30
+# Session coupée après intervalle × max secondes sans réponse du client.
+ssh_durci_vivacite_intervalle: 300
+ssh_durci_vivacite_max: 3
+
+# Comptes à qui SSH est refusé quoi qu'il arrive (ex. le compte de secours, M04-E12).
+ssh_durci_utilisateurs_refuses: []
+
+# Bannière avant authentification (chemin d'un fichier existant), vide = aucune.
+ssh_durci_banniere: ""
+
+# Anciens fichiers de durcissement posés à la main, à retirer (ex. gw01, M00-E10).
+ssh_durci_fichiers_obsoletes: []
+
+# Options supplémentaires { Mot-clé: valeur } (ex. listes d'algorithmes).
+ssh_durci_options: {}

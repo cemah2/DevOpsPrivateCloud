@@ -1,0 +1,6 @@
+# ansible.cfg — lignes AJOUTÉES en M04-E12 dans la section [defaults] existante (M04-E02).
+# Identité « lab » : son mot de passe est lu dans un fichier hors du dépôt (700/600).
+# Ansible essaie les identités de la liste pour déchiffrer, et chiffre avec la seule
+# identité déclarée (sinon il faut préciser --encrypt-vault-id).
+[defaults]
+vault_identity_list = lab@~/.config/workbook/ansible-vault.pass

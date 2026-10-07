@@ -1,0 +1,22 @@
+---
+# Racine de la PKI provisoire (M01 : clone HTTPS de git01, API des runners) et autorité de
+# pve01 (M03-E15 : Packer et l'API Proxmox). Toutes deux dans le magasin système.
+- name: Installer les autorités de certification du lab
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.nom }}.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - {nom: medisphere-provisoire, source: "{{ gitlab_runner_ca_provisoire }}"}
+    - {nom: pve01-root-ca, source: "{{ gitlab_runner_ca_pve01 }}"}
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _gitlab_runner_ca
+
+# Immédiatement, pas en handler : la suite du rôle télécharge depuis des serveurs HTTPS.
+- name: Reconstruire le magasin système  # noqa: no-handler
+  ansible.builtin.command: update-ca-certificates
+  when: _gitlab_runner_ca is changed
+  changed_when: true

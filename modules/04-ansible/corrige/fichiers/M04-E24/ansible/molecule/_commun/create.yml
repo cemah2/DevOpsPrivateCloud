@@ -1,0 +1,224 @@
+---
+# molecule/_commun/create.yml — crée les instances d'un scénario Molecule (M04-E24)
+#
+# Pour chaque hôte du groupe « molecule » de l'inventaire du scénario :
+#   1. trouve l'image dorée courante (template étiqueté gold + <famille> + current, M03) ;
+#   2. la clone (clone lié) sous le VMID de l'instance, dans le pool lab ;
+#   3. pose les étiquettes et injecte par cloud-init le compte admin et une clé éphémère ;
+#   4. démarre la VM, attend son adresse IPv4 (agent QEMU) puis son port SSH ;
+#   5. écrit l'adresse dans inventaire/host_vars/<instance>/execution.yml : les playbooks
+#      suivants (prepare, converge, verify…) sont des processus ansible-playbook distincts,
+#      ils ne voient que ce qui est écrit dans une source d'inventaire.
+#
+# Garde-fous : VMID dans 2045-2049 seulement, et refus de toucher une VM existante qui
+# n'est pas une instance Molecule.
+- name: Créer les instances Molecule sur Proxmox
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    instances: "{{ groups['molecule'] | default([]) }}"
+    commun: "{{ hostvars[instances[0]] }}"
+    eph: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}"
+    scenario: "{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_NAME') }}"
+    inventaire_scenario: "{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_DIRECTORY') }}/inventaire"
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ commun.mol_pve_hote }}"
+      validate_certs: true
+      ca_path: "{{ commun.mol_pve_ca }}"
+      api_timeout: 30
+  tasks:
+    - name: Vérifier les prérequis (instances déclarées, accès à l'API)
+      ansible.builtin.assert:
+        that:
+          - instances | length > 0
+          - eph | length > 0
+          - commun.mol_pve_hote | length > 0
+          - lookup('ansible.builtin.env', 'PROXMOX_TOKEN_SECRET') | length > 0
+        fail_msg: >-
+          Aucune instance dans le groupe molecule, ou accès Proxmox absent : charge
+          ~/.config/workbook/pve-ansible.env (PROXMOX_URL ou PROXMOX_HOST, PROXMOX_USER,
+          PROXMOX_TOKEN_ID, PROXMOX_TOKEN_SECRET) avant de lancer Molecule.
+        quiet: true
+
+    - name: Vérifier que chaque instance a un VMID réservé à Molecule
+      ansible.builtin.assert:
+        that:
+          - hostvars[item].mol_vmid is defined
+          - hostvars[item].mol_vmid | int >= commun.mol_vmid_min | int
+          - hostvars[item].mol_vmid | int <= commun.mol_vmid_max | int
+        fail_msg: "{{ item }} : mol_vmid doit être compris entre {{ commun.mol_vmid_min }} et {{ commun.mol_vmid_max }}."
+        quiet: true
+      loop: "{{ instances }}"
+
+    - name: Lister les VMs et templates du cluster
+      community.proxmox.proxmox_vm_info:
+        type: qemu
+      register: pve_vms
+
+    - name: Retenir l'image dorée courante et les VMs qui occupent déjà nos VMID
+      ansible.builtin.set_fact:
+        modeles: >-
+          {{ pve_vms.proxmox_vms
+             | selectattr('template')
+             | selectattr('tags', 'defined')
+             | selectattr('tags', 'search', '(^|;)gold(;|$)')
+             | selectattr('tags', 'search', '(^|;)' ~ commun.mol_famille ~ '(;|$)')
+             | selectattr('tags', 'search', '(^|;)current(;|$)')
+             | list }}
+        occupees: >-
+          {{ pve_vms.proxmox_vms
+             | selectattr('vmid', 'in', instances | map('extract', hostvars, 'mol_vmid') | map('int') | list)
+             | list }}
+
+    - name: Exiger une et une seule image dorée « current »
+      ansible.builtin.assert:
+        that: modeles | length == 1
+        fail_msg: >-
+          {{ modeles | length }} template(s) gold/{{ commun.mol_famille }}/current trouvé(s) :
+          il en faut exactement un (catalogue d'images, M03-E10).
+
+    - name: Refuser de réutiliser un VMID occupé par autre chose qu'une instance de ce scénario
+      ansible.builtin.assert:
+        that:
+          - item.name in instances
+          - not (item.template | bool)
+        fail_msg: >-
+          Le VMID {{ item.vmid }} est occupé par « {{ item.name }} », qui n'est pas une
+          instance de ce scénario. Rien n'a été modifié : libère ce VMID ou corrige l'inventaire.
+      loop: "{{ occupees }}"
+      loop_control:
+        label: "{{ item.vmid }}"
+
+    - name: Générer la clé SSH éphémère du scénario
+      ansible.builtin.command:
+        cmd: ssh-keygen -q -t ed25519 -N "" -C "molecule-{{ scenario }}" -f "{{ eph }}/id_molecule"
+        creates: "{{ eph }}/id_molecule"
+
+    - name: Cloner l'image dorée (clone lié, pool lab)
+      community.proxmox.proxmox_kvm:
+        node: "{{ modeles[0].node }}"
+        vmid: "{{ modeles[0].vmid }}"
+        clone: "{{ modeles[0].name }}"
+        newid: "{{ hostvars[item].mol_vmid }}"
+        name: "{{ item }}"
+        full: false
+        pool: "{{ commun.mol_pool }}"
+        timeout: 300
+        state: present
+      loop: "{{ instances }}"
+      register: clones
+
+    - name: Étiqueter et préparer cloud-init (compte admin, clé éphémère, DHCP)
+      community.proxmox.proxmox_kvm:
+        node: "{{ modeles[0].node }}"
+        vmid: "{{ hostvars[item].mol_vmid }}"
+        update: true
+        # Le clone hérite des étiquettes du template (gold, current…) : on les REMPLACE,
+        # sinon l'instance passerait pour une image dorée dans les inventaires et le catalogue.
+        tags: "{{ commun.mol_etiquettes }}"
+        description: "Instance Molecule du scénario {{ scenario }} (plateforme/ansible) — jetable"
+        memory: "{{ commun.mol_memoire }}"
+        cores: "{{ commun.mol_coeurs }}"
+        onboot: false
+        ciuser: admin
+        # Image testée telle qu'elle est publiée : pas de mise à niveau au premier démarrage.
+        ciupgrade: false
+        sshkeys: "{{ lookup('ansible.builtin.file', eph ~ '/id_molecule.pub') }}"
+        ipconfig:
+          ipconfig0: ip=dhcp
+        timeout: 60
+        state: present
+      loop: "{{ instances }}"
+
+    - name: Lire la configuration des instances
+      community.proxmox.proxmox_vm_info:
+        vmid: "{{ hostvars[item].mol_vmid }}"
+        config: current
+      loop: "{{ instances }}"
+      register: configs
+
+    - name: Vérifier que les instances sont sur le VNet de test (hérité du template)
+      ansible.builtin.assert:
+        that: item.proxmox_vms[0].config.net0 is search('bridge=' ~ commun.mol_vnet ~ '(,|$)')
+        fail_msg: >-
+          {{ item.item }} : net0 = « {{ item.proxmox_vms[0].config.net0 | default('?') }} ».
+          Le template doré devrait être sur {{ commun.mol_vnet }} (M03) : instance non démarrée.
+      loop: "{{ configs.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Démarrer les instances
+      community.proxmox.proxmox_kvm:
+        vmid: "{{ hostvars[item].mol_vmid }}"
+        state: started
+        timeout: 120
+      loop: "{{ instances }}"
+
+    # L'adresse vient de l'agent QEMU (network-get-interfaces) : proxmox_vm_info ne
+    # l'interroge que si config est demandé ET que la VM tourne. Tant que l'agent ne
+    # répond pas, le module renvoie une liste vide (avec un avertissement) : on réessaie.
+    - name: Attendre l'adresse IPv4 de chaque instance (agent QEMU)
+      community.proxmox.proxmox_vm_info:
+        vmid: "{{ hostvars[item].mol_vmid }}"
+        config: current
+        network: true
+      loop: "{{ instances }}"
+      register: reseaux
+      until: >-
+        reseaux.proxmox_vms | length > 0
+        and (reseaux.proxmox_vms[0].network | default([])
+             | rejectattr('name', 'equalto', 'lo')
+             | map(attribute='ip-addresses', default=[]) | flatten
+             | selectattr('ip-address-type', 'equalto', 'ipv4')
+             | map(attribute='ip-address')
+             | select('match', commun.mol_prefixe_reseau | regex_escape)
+             | list | length) > 0
+      retries: 40
+      delay: 5
+
+    - name: Calculer l'adresse de chaque instance
+      ansible.builtin.set_fact:
+        adresses: >-
+          {{ adresses | default({}) | combine({
+               item.item: (item.proxmox_vms[0].network
+                           | rejectattr('name', 'equalto', 'lo')
+                           | map(attribute='ip-addresses', default=[]) | flatten
+                           | selectattr('ip-address-type', 'equalto', 'ipv4')
+                           | map(attribute='ip-address')
+                           | select('match', commun.mol_prefixe_reseau | regex_escape)
+                           | first) }) }}
+      loop: "{{ reseaux.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Préparer les dossiers host_vars des instances
+      ansible.builtin.file:
+        path: "{{ inventaire_scenario }}/host_vars/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ instances }}"
+
+    - name: Écrire l'adresse de chaque instance dans l'inventaire du scénario
+      ansible.builtin.copy:
+        dest: "{{ inventaire_scenario }}/host_vars/{{ item }}/execution.yml"
+        content: |
+          ---
+          # Écrit par molecule/_commun/create.yml, effacé par destroy.yml — ne pas versionner.
+          ansible_host: {{ adresses[item] }}
+        mode: "0644"
+      loop: "{{ instances }}"
+
+    - name: Attendre que SSH réponde
+      ansible.builtin.wait_for:
+        host: "{{ adresses[item] }}"
+        port: 22
+        search_regex: OpenSSH
+        timeout: 300
+      loop: "{{ instances }}"
+
+    - name: Résumé
+      ansible.builtin.debug:
+        msg: "{{ item }} : VMID {{ hostvars[item].mol_vmid }}, {{ adresses[item] }}, depuis {{ modeles[0].name }} ({{ modeles[0].vmid }})"
+      loop: "{{ instances }}"

@@ -1,0 +1,50 @@
+---
+# trixie-backports : déjà déclaré par certaines images (Suites de debian.sources), pas par
+# d'autres. Le déclarer deux fois donne des avertissements d'apt : on regarde d'abord.
+- name: Chercher une déclaration de trixie-backports hors de notre fichier
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    grep -rls --exclude=debian-backports.sources -- '{{ ansible_facts['distribution_release'] }}-backports'
+    /etc/apt/sources.list /etc/apt/sources.list.d/ | head -n 1
+  args:
+    executable: /bin/bash
+  register: _gitlab_runner_backports_ailleurs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Dépôt des rétroportages de Debian
+  ansible.builtin.deb822_repository:
+    name: debian-backports
+    types: [deb]
+    uris: http://deb.debian.org/debian
+    suites: ["{{ ansible_facts['distribution_release'] }}-backports"]
+    components: [main]
+    signed_by: "{{ gitlab_runner_trousseau_debian }}"
+  register: _gitlab_runner_backports
+  when: _gitlab_runner_backports_ailleurs.stdout | length == 0
+
+# Le cache doit connaître les rétroportages AVANT l'installation : avec default_release, le
+# module apt refuse une version de Debian absente du cache (« invalid for
+# APT::Default-Release »). On regarde le cache plutôt que « le dépôt vient d'être ajouté » :
+# un passage interrompu juste après l'ajout laisserait sinon un cache périmé pour toujours.
+- name: Lire les dépôts connus du cache APT
+  ansible.builtin.command: apt-cache policy
+  register: _gitlab_runner_policy
+  changed_when: false
+  check_mode: false
+
+- name: Mettre à jour le cache APT (rétroportages absents du cache)
+  ansible.builtin.apt:
+    update_cache: true
+  when: >-
+    _gitlab_runner_backports is changed
+    or (ansible_facts['distribution_release'] ~ '-backports') not in _gitlab_runner_policy.stdout
+
+# Les rétroportages ne s'installent qu'à la demande (default_release) ; une fois installés,
+# ils suivent les mises à jour du rétroportage.
+- name: ShellCheck depuis les rétroportages, version {{ gitlab_runner_shellcheck_version }}
+  ansible.builtin.apt:
+    name: "shellcheck={{ gitlab_runner_shellcheck_version }}"
+    default_release: "{{ ansible_facts['distribution_release'] }}-backports"
+    state: present

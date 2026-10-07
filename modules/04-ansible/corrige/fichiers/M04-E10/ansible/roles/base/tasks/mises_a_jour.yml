@@ -1,0 +1,18 @@
+---
+# Mêmes noms de fichiers que l'image dorée (M03-E09) : une VM issue de l'image et une VM
+# installée à la main convergent vers le même état.
+- name: Activer les mises à jour automatiques
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Limiter unattended-upgrades aux mises à jour de sécurité
+  ansible.builtin.template:
+    src: 52medisphere-unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/52medisphere-unattended-upgrades
+    owner: root
+    group: root
+    mode: "0644"

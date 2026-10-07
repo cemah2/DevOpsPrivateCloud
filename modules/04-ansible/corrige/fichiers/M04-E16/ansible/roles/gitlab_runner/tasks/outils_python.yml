@@ -1,0 +1,43 @@
+---
+# pre-commit en outil uv partagé (M01-E23) : environnement dans /opt/uv-tools, commande dans
+# /usr/local/bin, Python du système (un Python téléchargé par uv irait dans le dossier
+# personnel de root, illisible par gitlab-runner).
+- name: Lister les outils uv installés
+  ansible.builtin.command: uv tool list
+  environment: &uv_env
+    UV_TOOL_DIR: "{{ gitlab_runner_uv_outils_dossier }}"
+    UV_TOOL_BIN_DIR: /usr/local/bin
+  register: _gitlab_runner_uv_outils
+  changed_when: false
+  check_mode: false
+
+- name: Installer pre-commit {{ gitlab_runner_precommit_version }}
+  ansible.builtin.command:
+    argv:
+      - uv
+      - tool
+      - install
+      - --python
+      - /usr/bin/python3
+      - "pre-commit=={{ gitlab_runner_precommit_version }}"
+  environment: *uv_env
+  when: ('pre-commit v' ~ gitlab_runner_precommit_version) not in _gitlab_runner_uv_outils.stdout_lines
+  changed_when: true
+
+# uv crée ses fichiers avec l'umask de root : on vérifie d'abord (file en mode récursif
+# se déclare toujours « changed » en --check, ce qui fausserait le contrôle d'idempotence).
+- name: Chercher des fichiers d'outils uv illisibles par les autres comptes
+  ansible.builtin.command:
+    argv: [find, "{{ gitlab_runner_uv_outils_dossier }}", "(", -type, d, "!", -perm, -o=rx, ")",
+           -o, "(", "!", -type, d, "!", -perm, -o=r, ")", -print, -quit]
+  register: _gitlab_runner_uv_illisibles
+  changed_when: false
+  check_mode: false
+
+- name: Rendre les environnements uv lisibles par tous les comptes
+  ansible.builtin.file:
+    path: "{{ gitlab_runner_uv_outils_dossier }}"
+    state: directory
+    mode: "u=rwX,go=rX"
+    recurse: true
+  when: _gitlab_runner_uv_illisibles.stdout | length > 0

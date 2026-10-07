@@ -1,0 +1,28 @@
+# Extrait à AJOUTER à ~/pki-provisoire/pki-provisoire.cnf sur adm01 (M04-E28)
+# Même modèle que git01 (M01-E04) : demande, extensions serveur, noms alternatifs.
+
+# --- Demande du serveur sem01 (openssl req -section req_sem01) ---------------------------
+[req_sem01]
+distinguished_name = dn_sem01
+prompt             = no
+utf8               = yes
+string_mask        = utf8only
+default_md         = sha256
+
+[dn_sem01]
+O  = MédiSphère
+CN = sem01.par1.medisphere.internal
+
+# --- Extensions du certificat serveur de sem01 -----------------------------------------
+[v3_serveur_sem01]
+basicConstraints       = critical, CA:false
+keyUsage               = critical, digitalSignature
+extendedKeyUsage       = serverAuth
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always
+subjectAltName         = @san_sem01
+
+[san_sem01]
+DNS.1 = sem01.par1.medisphere.internal
+DNS.2 = sem01
+IP.1  = 10.10.20.41

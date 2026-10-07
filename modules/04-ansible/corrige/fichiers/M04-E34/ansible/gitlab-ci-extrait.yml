@@ -1,0 +1,15 @@
+# Extrait à AJOUTER à .gitlab-ci.yml de plateforme/ansible (M04-E34, exigence X10), à côté des
+# autres jobs molecule:<rôle> (modèle .molecule de M04-E27).
+molecule:node_exporter:
+  extends: .molecule
+  variables:
+    SCENARIO: node_exporter
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" || ($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push")) && $PROXMOX_TOKEN_SECRET
+      changes:
+        - roles/node_exporter/**/*
+        - molecule/node_exporter/**/*
+        - molecule/_commun/**/*
+        - .config/molecule/**/*
+        - collections/requirements.yml
+        - uv.lock

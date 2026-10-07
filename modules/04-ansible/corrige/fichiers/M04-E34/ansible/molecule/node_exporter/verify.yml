@@ -1,0 +1,63 @@
+---
+# molecule/node_exporter/verify.yml (M04-E34) — une vérification par exigence observable
+- name: Vérifier le rôle node_exporter
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+  tasks:
+    - name: Lire l'état du service (X1)
+      ansible.builtin.systemd_service:
+        name: prometheus-node-exporter
+      register: service
+
+    - name: Le service est actif et activé (X1)
+      ansible.builtin.assert:
+        that:
+          - service.status.ActiveState == 'active'
+          - service.status.UnitFileState == 'enabled'
+        quiet: true
+
+    - name: Lire les sockets en écoute sur le port 9100 (X2)
+      ansible.builtin.command:
+        cmd: ss -Hltn sport = :9100
+      register: ecoute
+      changed_when: false
+
+    - name: Écoute sur l'adresse principale seulement (X2)
+      ansible.builtin.assert:
+        that:
+          - ecoute.stdout is search(adresse | regex_escape ~ ':9100')
+          - ecoute.stdout is not search('(0\.0\.0\.0|\*|\[::\]|127\.0\.0\.1):9100')
+        fail_msg: "{{ ecoute.stdout }}"
+
+    # Depuis l'instance vers SON adresse principale : depuis runner01, seul SSH est ouvert
+    # vers vsandbox (M03-E15) ; la requête prouve quand même l'écoute sur cette adresse.
+    - name: Lire /metrics sur l'adresse principale (X3, X4, X5)
+      ansible.builtin.uri:
+        url: "http://{{ adresse }}:9100/metrics"
+        return_content: true
+      register: metriques
+
+    - name: Les métriques attendues sont présentes, les collecteurs désactivés absents
+      ansible.builtin.assert:
+        that:
+          - metriques.content is search('node_exporter_build_info')
+          - metriques.content is search('medisphere_info\{role="role_test",site="par1"\} 1')
+          - metriques.content is search('node_systemd_unit_state\{name="ssh\.service"')
+          - metriques.content is not search('node_systemd_unit_state\{name="cron\.service"')
+          - metriques.content is not search('node_zfs_')
+        fail_msg: "Contenu de /metrics non conforme (voir la sortie de la tâche précédente)."
+
+    - name: Lire les droits du fichier medisphere.prom (X5)
+      ansible.builtin.stat:
+        path: /var/lib/prometheus/node-exporter/medisphere.prom
+      register: prom
+
+    - name: Le fichier est lisible par l'exportateur (X5)
+      ansible.builtin.assert:
+        that:
+          - prom.stat.exists
+          - prom.stat.mode == '0644'
+        quiet: true

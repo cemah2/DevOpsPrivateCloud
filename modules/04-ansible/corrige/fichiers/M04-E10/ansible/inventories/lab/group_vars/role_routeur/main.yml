@@ -1,0 +1,7 @@
+---
+# inventories/lab/group_vars/role_routeur/main.yml — routeur et pare-feu (M04-E06, M04-E10)
+# Outils de diagnostic propres au routeur : table de suivi des connexions (conntrack),
+# état et compteurs des interfaces (ethtool). Variable du rôle base depuis M04-E10.
+base_paquets_role:
+  - conntrack
+  - ethtool

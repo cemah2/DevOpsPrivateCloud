@@ -1,0 +1,15 @@
+#!/bin/sh
+# /usr/local/sbin/pare-feu-retour — filet de sécurité du rôle pare_feu (M04-E17).
+# Lancé par la minuterie transitoire pare-feu-retour.timer (systemd-run) si la nouvelle
+# configuration n'a pas été confirmée à temps, ou à la main pour revenir en arrière.
+# Restaure le fichier précédent PUIS le charge : un redémarrage ultérieur ne ramène pas
+# la configuration fautive.
+set -eu
+precedent=/var/lib/pare-feu/nftables.conf.precedent
+if [ ! -s "$precedent" ]; then
+  logger -t pare-feu-retour "aucune configuration précédente ($precedent) : rien à restaurer"
+  exit 1
+fi
+cp -p "$precedent" /etc/nftables.conf
+/usr/sbin/nft -f /etc/nftables.conf
+logger -t pare-feu-retour "configuration nftables précédente restaurée et chargée (changement non confirmé)"

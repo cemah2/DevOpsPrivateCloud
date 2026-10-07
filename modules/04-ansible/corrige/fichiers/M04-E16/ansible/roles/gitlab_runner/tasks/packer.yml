@@ -1,0 +1,31 @@
+---
+- name: Clé du dépôt HashiCorp
+  ansible.builtin.include_tasks: cle_apt.yml
+  vars:
+    _cle:
+      nom: hashicorp
+      url: "{{ gitlab_runner_hashicorp_cle_url }}"
+      empreinte: "{{ gitlab_runner_hashicorp_empreinte }}"
+
+# Même nom de fichier que M03-E15 : le fichier posé par le script est repris.
+- name: Dépôt HashiCorp
+  ansible.builtin.deb822_repository:
+    name: hashicorp
+    types: [deb]
+    uris: https://apt.releases.hashicorp.com
+    suites: ["{{ ansible_facts['distribution_release'] }}"]
+    components: [main]
+    architectures: [amd64]
+    signed_by: /etc/apt/keyrings/hashicorp.asc
+  register: _gitlab_runner_hashicorp
+
+- name: Retirer l'ancien trousseau de M03-E15
+  ansible.builtin.file:
+    path: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    state: absent
+
+- name: Installer Packer {{ gitlab_runner_packer_version }}
+  ansible.builtin.apt:
+    name: "packer={{ gitlab_runner_packer_version }}"
+    state: present
+    update_cache: "{{ _gitlab_runner_hashicorp is changed }}"

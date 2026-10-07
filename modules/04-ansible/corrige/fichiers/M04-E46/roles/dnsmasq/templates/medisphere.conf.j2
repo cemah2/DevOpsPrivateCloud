@@ -1,0 +1,53 @@
+# {{ ansible_managed }}
+# /etc/dnsmasq.d/medisphere.conf — {{ inventory_hostname }} : DNS provisoire du lab MédiSphère
+# Généré par le rôle dnsmasq de plateforme/ansible (M04-E46). Remplacé par PowerDNS/Kea au module 06.
+
+# --- Écoute ---------------------------------------------------------------------
+listen-address={{ dnsmasq_ecoute | join(',') }}
+bind-interfaces
+
+# --- Relais récursif --------------------------------------------------------------
+no-resolv
+{% for s in dnsmasq_amont %}
+server={{ s }}
+{% endfor %}
+domain-needed
+bogus-priv
+cache-size={{ dnsmasq_cache }}
+local-ttl={{ dnsmasq_ttl_local }}
+
+# --- Zones servies localement -----------------------------------------------------
+{% for z in dnsmasq_zones_locales %}
+local=/{{ z }}/
+{% endfor %}
+{% if dnsmasq_domaine %}
+domain={{ dnsmasq_domaine }}
+{% endif %}
+
+# --- Enregistrements A + PTR (PTR vers le premier nom) -------------------------------
+{% for h in dnsmasq_hotes %}
+host-record={{ h.noms | join(',') }},{{ h.ip }}
+{% endfor %}
+{% if dnsmasq_ptr | length > 0 %}
+
+# --- PTR supplémentaires -----------------------------------------------------------
+{% for p in dnsmasq_ptr %}
+ptr-record={{ p.ptr }},{{ p.nom }}
+{% endfor %}
+{% endif %}
+{% if dnsmasq_dhcp | length > 0 %}
+
+# --- DHCP (servi à distance via le relais de gw01) ----------------------------------
+{% for d in dnsmasq_dhcp %}
+dhcp-range=set:{{ d.etiquette }},{{ d.debut }},{{ d.fin }},{{ d.masque }},{{ d.bail }}
+{% for o in d.options | default([]) %}
+dhcp-option=tag:{{ d.etiquette }},{{ o }}
+{% endfor %}
+{% endfor %}
+{% if dnsmasq_dhcp_autoritaire %}
+dhcp-authoritative
+{% endif %}
+{% if dnsmasq_log_dhcp %}
+log-dhcp
+{% endif %}
+{% endif %}

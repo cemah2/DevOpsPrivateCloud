@@ -1,0 +1,39 @@
+{{ ssh_durci_entete | comment }}
+# {{ ssh_durci_fichier }} (rôle ssh_durci, M04-E11)
+# sshd retient la PREMIÈRE valeur lue pour chaque mot-clé : ce fichier (01-) l'emporte sur
+# les autres fichiers de sshd_config.d et sur sshd_config. Effet réel : sudo sshd -T
+
+# --- Authentification : clés uniquement, jamais root --------------------------------
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitEmptyPasswords no
+AuthenticationMethods publickey
+HostbasedAuthentication no
+IgnoreRhosts yes
+MaxAuthTries {{ ssh_durci_max_essais }}
+LoginGraceTime {{ ssh_durci_delai_authentification }}
+MaxStartups 10:30:60
+{% if ssh_durci_utilisateurs_refuses | length > 0 %}
+DenyUsers {{ ssh_durci_utilisateurs_refuses | join(' ') }}
+{% endif %}
+
+# --- Fonctions inutiles sur un serveur -----------------------------------------------
+PermitUserEnvironment no
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding {{ 'yes' if ssh_durci_transfert_tcp else 'no' }}
+AllowStreamLocalForwarding no
+PermitTunnel no
+
+# --- Sessions et traces ----------------------------------------------------------------
+ClientAliveInterval {{ ssh_durci_vivacite_intervalle }}
+ClientAliveCountMax {{ ssh_durci_vivacite_max }}
+LogLevel VERBOSE
+{% if ssh_durci_banniere | length > 0 %}
+Banner {{ ssh_durci_banniere }}
+{% endif %}
+{% for option, valeur in ssh_durci_options.items() %}
+{{ option }} {{ valeur }}
+{% endfor %}

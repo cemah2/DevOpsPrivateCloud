@@ -1,0 +1,12 @@
+---
+# host_vars/runner01/gitlab_runner.yml — valeurs propres à runner01 (M04-E16).
+
+# Version installée aujourd'hui (même major.minor que GitLab sur git01).
+gitlab_runner_version: "19.4.<Z>"
+
+# Ne sert que si le runner doit être (ré)enregistré (VM recréée, config.toml perdu).
+gitlab_runner_jeton: "{{ vault_gitlab_runner_jeton }}"
+
+# Empreinte de l'archive de l'étiquette v1.13.0 de bats-core : celle que tu as relevée et
+# notée en M02-E24 (aucune n'est publiée par le projet).
+gitlab_runner_bats_sha256: "<EMPREINTE-BATS>"

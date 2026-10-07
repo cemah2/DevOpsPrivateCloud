@@ -1,0 +1,8 @@
+---
+# molecule/base/molecule.yml — scénario du rôle « base » (M04-E24)
+# Tout le commun (playbooks create/destroy, séquence, ansible.cfg) vient de
+# .config/molecule/config.yml. Lancement, depuis la racine du projet :
+#   uv run molecule test -s base
+# Ici, seulement ce qui est propre au scénario (rien de plus pour l'instant).
+scenario:
+  name: base

@@ -1,0 +1,29 @@
+{{ base_entete | comment }}
+{#
+  Message d'accueil des hôtes du socle (rôle base, M04-E10 ; modèle de M04-E07).
+  Rien qui change d'un passage à l'autre (date, heure, uptime) : le fichier serait
+  réécrit à chaque exécution et le playbook ne serait plus idempotent.
+  Le module template active trim_blocks : la fin de ligne qui suit une balise {% … %}
+  est supprimée. Les balises sont donc placées en début de ligne.
+#}
+
+  MédiSphère — site {{ base_site | upper }} — environnement {{ base_environnement }}
+
+  Hôte    : {{ inventory_hostname }}.{{ base_domaine }} ({{ ansible_host | default(inventory_hostname) }})
+  Rôle    : {{ base_role_hote }}
+  Système : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_major_version'] }}
+{% if 'role_routeur' in group_names %}
+
+  /!\ Routeur et pare-feu du lab : une erreur ici coupe TOUT le lab.
+      Valider avant de recharger : nft -c -f /etc/nftables.conf
+{% endif %}
+
+  Accès réservé aux personnes autorisées. Toute action est journalisée.
+  Astreinte : {{ base_contact_astreinte }}
+{% if base_runbooks[base_role_hote] is defined %}
+  Runbooks de ce rôle :
+{% for runbook in base_runbooks[base_role_hote] %}
+    - {{ runbook }}
+{% endfor %}
+{% endif %}
+

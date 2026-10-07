@@ -1,0 +1,6 @@
+---
+# inventories/lab/host_vars/gw01/main.yml (M04-E06)
+# gw01 est la source de temps du lab (M00-E31) : il se synchronise sur Internet, pas sur
+# sa propre adresse (ms_passerelle vaudrait 10.10.10.1, c'est-à-dire lui-même).
+ms_serveurs_ntp:
+  - 2.debian.pool.ntp.org

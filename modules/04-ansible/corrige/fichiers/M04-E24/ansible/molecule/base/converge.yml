@@ -1,0 +1,11 @@
+---
+# molecule/base/converge.yml — applique le rôle testé, comme en production (M04-E24)
+# Aucune variable de test : les valeurs par défaut du rôle doivent suffire sur une VM issue
+# de l'image dorée. Si le rôle EXIGE une variable, c'est son meta/argument_specs.yml qui doit
+# le dire (et converge.yml la fournit) : ce test documente aussi le contrat du rôle.
+- name: Converge — rôle base
+  hosts: molecule
+  become: true
+  gather_facts: true
+  roles:
+    - role: base

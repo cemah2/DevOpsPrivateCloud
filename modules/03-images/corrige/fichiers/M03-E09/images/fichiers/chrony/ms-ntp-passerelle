@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# /usr/local/sbin/ms-ntp-passerelle — chrony se synchronise sur la passerelle du VLAN (M03-E09)
+# Règle du lab (PLAN.md §4.3 bis) : chaque VM prend l'heure sur la passerelle de son VLAN
+# (gw01, 10.10.<VLAN>.1). L'image ne connaît pas le VLAN de ses futurs clones : on lit la
+# passerelle par défaut au démarrage, quelle que soit sa provenance (DHCP ou cloud-init).
+# Lancé par ms-ntp-passerelle.service ; écrit /etc/chrony/sources.d/passerelle.sources.
+set -euo pipefail
+
+fichier=/etc/chrony/sources.d/passerelle.sources
+route="$(ip -4 route show default)"
+passerelle="$(awk '{ for (i = 1; i < NF; i++) if ($i == "via") { print $(i + 1); exit } }' <<<"$route")"
+if [[ ! "$passerelle" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+  echo "ms-ntp-passerelle : aucune passerelle IPv4 par défaut" >&2
+  exit 1
+fi
+
+nouveau="server $passerelle iburst"
+if [[ "$(cat "$fichier" 2>/dev/null || true)" != "$nouveau" ]]; then
+  install -d -m 755 "$(dirname "$fichier")"
+  printf '%s\n' "$nouveau" > "$fichier.tmp"
+  mv -f "$fichier.tmp" "$fichier"
+  echo "ms-ntp-passerelle : source NTP = $passerelle"
+fi
+# chronyd relit les sources sans redémarrer ; s'il ne tourne pas encore, il lira le fichier au démarrage.
+chronyc reload sources >/dev/null 2>&1 || true

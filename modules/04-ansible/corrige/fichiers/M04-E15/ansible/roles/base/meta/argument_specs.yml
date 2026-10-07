@@ -1,0 +1,110 @@
+---
+# Contrat d'entrée du rôle base (M04-E15). Ansible le vérifie AVANT la première tâche du
+# rôle (tâche implicite « Validating arguments against arg spec main ») : une variable du
+# mauvais type ou une valeur hors liste arrête le rôle avec un message clair.
+argument_specs:
+  main:
+    short_description: Configuration commune des VMs du socle MédiSphère
+    options:
+      base_entete:
+        type: str
+        description: En-tête des fichiers gérés (défaut ms_gere_par).
+      base_paquets:
+        type: list
+        elements: str
+        description: Paquets communs (dont la trousse de diagnostic de M04-E05).
+      base_paquets_role:
+        type: list
+        elements: str
+        description: Paquets propres au rôle de l'hôte (group_vars/role_<rôle>).
+      base_paquets_interdits:
+        type: list
+        elements: str
+        description: Paquets à retirer (clients de protocoles en clair).
+      base_agent_qemu:
+        type: bool
+        description: Installer l'agent QEMU sur les VMs KVM.
+      base_fuseau_horaire:
+        type: str
+        description: Fuseau horaire (ex. Europe/Paris).
+      base_chrony_client:
+        type: bool
+        description: Configurer chrony en client (false sur gw01, serveur de temps).
+      base_ntp_serveurs:
+        type: list
+        elements: str
+        description: Sources de temps (défaut ms_serveurs_ntp, sinon la passerelle par défaut).
+      base_chrony_attendre_sync:
+        type: bool
+        description: Attendre la synchronisation après un changement (retour arrière sinon).
+      base_chrony_essais_sync:
+        type: int
+        description: Nombre d'essais de chronyc waitsync, espacés de 3 s.
+      base_journal_taille_max:
+        type: str
+        description: Valeur de SystemMaxUse pour journald (ex. 200M).
+      base_maj_auto:
+        type: bool
+        description: Activer les mises à jour de sécurité automatiques.
+      base_utilisateurs:
+        type: list
+        elements: dict
+        description: Comptes gérés (liste commune). Vide = aucun compte géré.
+        options: &compte
+          nom:
+            type: str
+            required: true
+            description: Nom du compte.
+          etat:
+            type: str
+            choices: [present, absent]
+            description: Présent ou supprimé (avec son dossier personnel).
+          commentaire:
+            type: str
+            description: Champ GECOS.
+          shell:
+            type: str
+            description: Interpréteur de connexion.
+          groupes:
+            type: list
+            elements: str
+            description: Groupes supplémentaires (ajoutés).
+          mdp_hash:
+            type: str
+            description: Empreinte du mot de passe (depuis le Vault).
+          cles:
+            type: list
+            elements: str
+            description: Clés publiques autorisées (liste exclusive).
+          ssh:
+            type: bool
+            description: Le compte peut-il se connecter par SSH ?
+      base_utilisateurs_hote:
+        type: list
+        elements: dict
+        description: Comptes propres à l'hôte, ajoutés à la liste commune.
+        options: *compte
+      base_admin_utilisateur:
+        type: str
+        description: Compte qui doit toujours garder au moins une clé.
+      base_compte_defaut:
+        type: dict
+        description: Valeurs par défaut de chaque compte.
+      base_site:
+        type: str
+        description: Site (défaut ms_site).
+      base_domaine:
+        type: str
+        description: Domaine DNS du site (défaut ms_domaine).
+      base_environnement:
+        type: str
+        description: Environnement (défaut ms_environnement).
+      base_role_hote:
+        type: str
+        description: Rôle de l'hôte affiché et publié en fait local (défaut ms_role).
+      base_contact_astreinte:
+        type: str
+        description: Contact d'astreinte affiché à la connexion.
+      base_runbooks:
+        type: dict
+        description: Runbooks à rappeler, par rôle d'hôte.

@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+# Site de démonstration MédiSphère (M04-E25) — /etc/nginx/sites-available/medisphere-demo
+#   /        page d'accueil (version déployée)
+#   /sante   contrôle de santé : 503 si le fichier MAINTENANCE existe, sinon « ok <version> »
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    root /var/www/medisphere-demo;
+    index index.html;
+
+    location = /sante {
+        default_type text/plain;
+        access_log off;
+        if (-f /var/www/medisphere-demo/MAINTENANCE) {
+            return 503 "maintenance\n";
+        }
+        return 200 "ok {{ demo_version }}\n";
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

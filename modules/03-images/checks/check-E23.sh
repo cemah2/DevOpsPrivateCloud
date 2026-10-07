@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 # shellcheck source-path=SCRIPTDIR
+# shellcheck disable=SC2016  # arguments évalués par bash -c
 #
 # check-E23.sh — M03-E23 « Sous le capot : mesurer un premier démarrage »
 # Le rapport de mesure existe, contient les mesures et les analyses demandées, et la VM de

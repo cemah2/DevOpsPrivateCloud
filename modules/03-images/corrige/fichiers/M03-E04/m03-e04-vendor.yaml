@@ -1,0 +1,22 @@
+#cloud-config
+# m03-e04-vendor.yaml — vendor-data de la VM 2032 m03-ci (M03-E04).
+# Emplacement : /mnt/hdd-bulk/snippets/ (référence hdd-bulk:snippets/m03-e04-vendor.yaml).
+# Reprend le vendor-data du template 9000 (agent QEMU, fuseau) : un cicustom posé sur le
+# clone REMPLACE celui du template, il ne s'y ajoute pas.
+# Validation dans une VM : cloud-init schema -c m03-e04-vendor.yaml
+
+package_update: true
+packages:
+  - qemu-guest-agent
+timezone: Europe/Paris
+
+# bootcmd : module « bootcmd » (étape Network), fréquence ALWAYS : à CHAQUE démarrage,
+# très tôt (avant le réseau complet et avant SSH).
+bootcmd:
+  - [sh, -c, 'echo "bootcmd $(date --iso-8601=seconds) $(cat /proc/sys/kernel/random/boot_id)" >> /var/log/m03-e04.log']
+
+# runcmd : écrit par le module « runcmd » (étape Config), exécuté par
+# « scripts_user » (étape Final), fréquence PER_INSTANCE : une seule fois par instance.
+runcmd:
+  - [sh, -c, 'echo "runcmd $(date --iso-8601=seconds) instance=$(cloud-init query instance_id)" >> /var/log/m03-e04.log']
+  - [systemctl, start, qemu-guest-agent]

@@ -1,0 +1,75 @@
+---
+# molecule/_commun/menage.yml — supprime les instances Molecule orphelines (M04-E24, E27)
+#
+# Un job CI tué par son délai maximal, un runner redémarré, un poste éteint en plein test :
+# le destroy de Molecule n'a pas lieu et une VM 2045-2049 reste allumée. Ce playbook, lancé
+# hors de Molecule (pipeline planifié la nuit, ou à la main), supprime les VMs :
+#   - de VMID 2045-2049, ET étiquetées « molecule », ET non-templates ;
+#   - créées depuis plus de « menage_age_heures » heures (champ meta.ctime de Proxmox).
+#   uv run ansible-playbook molecule/_commun/menage.yml            # supprime
+#   uv run ansible-playbook molecule/_commun/menage.yml --check    # liste seulement
+- name: Ménage des instances Molecule orphelines
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    menage_age_heures: 3
+    menage_vmid_min: 2045
+    menage_vmid_max: 2049
+    pve_hote: >-
+      {{ lookup('ansible.builtin.env', 'PROXMOX_HOST')
+         or (lookup('ansible.builtin.env', 'PROXMOX_URL') | urlsplit('hostname'))
+         or '' }}
+    maintenant: "{{ lookup('ansible.builtin.pipe', 'date +%s') | int }}"
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ pve_hote }}"
+      validate_certs: true
+      ca_path: /etc/ssl/certs/ca-certificates.crt
+      api_timeout: 30
+  tasks:
+    - name: Vérifier l'accès à l'API
+      ansible.builtin.assert:
+        that:
+          - pve_hote | length > 0
+          - lookup('ansible.builtin.env', 'PROXMOX_TOKEN_SECRET') | length > 0
+        fail_msg: Charge ~/.config/workbook/pve-ansible.env (ou les variables CI) avant le ménage.
+        quiet: true
+
+    - name: Lister les VMs avec leur configuration
+      community.proxmox.proxmox_vm_info:
+        type: qemu
+        config: current
+      register: pve_vms
+
+    - name: Retenir les instances Molecule trop anciennes
+      ansible.builtin.set_fact:
+        orphelines: "{{ orphelines | default([]) + [item] }}"
+      loop: "{{ pve_vms.proxmox_vms }}"
+      loop_control:
+        label: "{{ item.vmid }} {{ item.name | default('') }}"
+      when:
+        - item.vmid | int >= menage_vmid_min | int
+        - item.vmid | int <= menage_vmid_max | int
+        - not (item.template | bool)
+        - (item.tags | default('')) is search('(^|;)molecule(;|$)')
+        # meta = « creation-qemu=…,ctime=<epoch> » ; sans ctime, la VM est considérée ancienne.
+        - >-
+          (maintenant | int)
+          - ((item.config.meta | default('') | regex_search('ctime=([0-9]+)', '\\1') | default(['0'], true) | first) | int)
+          > (menage_age_heures | int) * 3600
+
+    - name: Instances orphelines trouvées
+      ansible.builtin.debug:
+        msg: "{{ orphelines | default([]) | map(attribute='vmid') | list }}"
+
+    - name: Supprimer les instances orphelines
+      community.proxmox.proxmox_kvm:
+        vmid: "{{ item.vmid }}"
+        state: absent
+        force: true
+        purge: true
+        timeout: 120
+      loop: "{{ orphelines | default([]) }}"
+      loop_control:
+        label: "{{ item.vmid }} {{ item.name }}"

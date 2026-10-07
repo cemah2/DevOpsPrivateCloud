@@ -1,0 +1,95 @@
+#!/usr/sbin/nft -f
+# /etc/nftables.conf — gw01, routeur/pare-feu du site PAR1 (lab MédiSphère)
+# {{ pare_feu_entete }}
+# Source : plateforme/ansible, host_vars/gw01/pare_feu.yml (la matrice des flux).
+# Appliqué par le rôle pare_feu avec retour automatique ; à la main, en secours seulement :
+#   nft -c -f /etc/nftables.conf && systemctl reload nftables
+{#- Une règle nftables à partir d'un flux de la matrice (voir defaults/main.yml). #}
+{%- macro ensemble(valeur) -%}
+{%- if valeur is string or valeur is number -%}{{ valeur }}{%- else -%}{ {{ valeur | join(', ') }} }{%- endif -%}
+{%- endmacro -%}
+{%- macro regle(f) -%}
+{%- set c = [] -%}
+{%- if f.entree is defined %}{% set _ = c.append('iifname ' ~ ensemble(f.entree)) %}{% endif -%}
+{%- if f.sortie is defined %}{% set _ = c.append('oifname ' ~ ensemble(f.sortie)) %}{% endif -%}
+{%- if f.source is defined %}{% set _ = c.append('ip saddr ' ~ ensemble(f.source)) %}{% endif -%}
+{%- if f.destination is defined %}{% set _ = c.append('ip daddr ' ~ ensemble(f.destination)) %}{% endif -%}
+{%- if f.proto | default('') == 'icmp' -%}
+{%- set _ = c.append('icmp type ' ~ ensemble(f.icmp | default('echo-request'))) -%}
+{%- elif f.proto | default('') == 'tcp_udp' -%}
+{%- set _ = c.append('meta l4proto { tcp, udp }') -%}
+{%- if f.ports_source is defined %}{% set _ = c.append('th sport ' ~ ensemble(f.ports_source)) %}{% endif -%}
+{%- if f.ports is defined %}{% set _ = c.append('th dport ' ~ ensemble(f.ports)) %}{% endif -%}
+{%- elif f.proto is defined -%}
+{%- if f.ports_source is defined %}{% set _ = c.append(f.proto ~ ' sport ' ~ ensemble(f.ports_source)) %}{% endif -%}
+{%- if f.ports is defined %}{% set _ = c.append(f.proto ~ ' dport ' ~ ensemble(f.ports)) %}{% endif -%}
+{%- if f.ports is not defined and f.ports_source is not defined %}{% set _ = c.append('meta l4proto ' ~ f.proto) %}{% endif -%}
+{%- endif -%}
+{%- set _ = c.append(f.action | default('accept')) -%}
+{%- set _ = c.append('comment "' ~ f.motif ~ ((' (' ~ f.ref ~ ')') if f.ref is defined else '') ~ '"') -%}
+{{ c | join(' ') }}
+{%- endmacro %}
+
+
+# Repart d'une feuille blanche à chaque chargement (sinon les règles s'ajoutent aux anciennes).
+flush ruleset
+
+{% for d in pare_feu_definitions %}
+define {{ d.nom }} = {{ d.valeur }}{{ ('    # ' ~ d.commentaire) if d.commentaire is defined else '' }}
+{% endfor %}
+
+table inet filter {
+
+	# Trafic à destination de gw01 lui-même
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		ct state invalid drop comment "hors état connu : jamais légitime"
+		ct state { established, related } accept comment "réponses et ICMP liés (dont PMTUD)"
+		iif "lo" accept
+		icmp type { echo-request, destination-unreachable, time-exceeded, parameter-problem } limit rate 20/second accept
+		icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+
+{% for f in pare_feu_entree %}
+		{{ regle(f) }}
+{% endfor %}
+
+{% if pare_feu_journaliser_rejets %}
+		limit rate 10/minute burst 20 packets log prefix "nft-in-drop: " level info
+{% endif %}
+		counter comment "rejeté par la politique"
+	}
+
+	# Trafic routé à travers gw01
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+
+		ct state invalid drop
+		ct state { established, related } accept comment "réponses et ICMP liés (dont PMTUD)"
+
+{% for f in pare_feu_transit %}
+		{{ regle(f) }}
+{% endfor %}
+
+{% if pare_feu_journaliser_rejets %}
+		limit rate 10/minute burst 20 packets log prefix "nft-fwd-drop: " level info
+{% endif %}
+		counter comment "rejeté par la politique"
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}
+{% if pare_feu_nat | length > 0 %}
+
+table ip nat {
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+
+{% for n in pare_feu_nat %}
+		{{ n.regle }} comment "{{ n.motif }}"
+{% endfor %}
+	}
+}
+{% endif %}

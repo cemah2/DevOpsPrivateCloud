@@ -1,0 +1,26 @@
+---
+# Repris de playbooks/identite-hotes.yml (M04-E07).
+- name: Message d'accueil
+  ansible.builtin.template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dossier des faits locaux
+  ansible.builtin.file:
+    path: /etc/ansible/facts.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Non exécutable : setup lit le fichier comme du JSON au lieu de l'exécuter.
+- name: Fait local medisphere
+  ansible.builtin.template:
+    src: medisphere.fact.j2
+    dest: /etc/ansible/facts.d/medisphere.fact
+    owner: root
+    group: root
+    mode: "0644"

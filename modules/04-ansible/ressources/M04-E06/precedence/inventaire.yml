@@ -1,0 +1,20 @@
+---
+# Trois hôtes fictifs, tous exécutés en local. alpha est dans DEUX groupes de même niveau.
+all:
+  vars:
+    couleur: "inventaire : all"
+  children:
+    socle:
+      vars:
+        couleur: "inventaire : groupe socle"
+      hosts:
+        alpha:
+          ansible_connection: local
+        beta:
+          ansible_connection: local
+          couleur: "inventaire : hôte beta"
+    role_web:
+      hosts:
+        alpha:
+        gamma:
+          ansible_connection: local

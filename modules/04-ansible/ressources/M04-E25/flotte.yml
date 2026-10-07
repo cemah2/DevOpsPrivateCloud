@@ -1,0 +1,158 @@
+---
+# flotte.yml — crée ou détruit la flotte de démonstration de M04-E25/E26 (fourni)
+#
+# Trois VMs m04-web1..3, VMID 2042-2044, 10.10.99.42-44/24 sur vsandbox, clones liés de
+# l'image dorée Debian « current », étiquettes env-m04 + flotte. Clé SSH : celle de adm01.
+#
+# À lancer depuis la racine du projet (pour son ansible.cfg et ses collections), avec
+# l'accès Proxmox d'Ansible chargé :
+#   set -a; . ~/.config/workbook/pve-ansible.env; set +a
+#   uv run ansible-playbook ~/m04/e25/flotte.yml -e etat=present
+#   uv run ansible-playbook ~/m04/e25/flotte.yml -e etat=absent
+#
+# Garde-fous : ne touche qu'aux VMID 2042-2044, refuse de supprimer une VM qui n'a pas
+# l'étiquette « flotte », refuse de créer par-dessus une VM qui ne s'appelle pas comme prévu.
+- name: Flotte de démonstration (M04-E25)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    etat: present
+    flotte:
+      - { nom: m04-web1, vmid: 2042, ip: 10.10.99.42 }
+      - { nom: m04-web2, vmid: 2043, ip: 10.10.99.43 }
+      - { nom: m04-web3, vmid: 2044, ip: 10.10.99.44 }
+    passerelle: 10.10.99.1
+    cle_publique: "{{ lookup('ansible.builtin.env', 'HOME') }}/.ssh/id_ed25519.pub"
+    pve_hote: >-
+      {{ lookup('ansible.builtin.env', 'PROXMOX_HOST')
+         or (lookup('ansible.builtin.env', 'PROXMOX_URL') | urlsplit('hostname'))
+         or '' }}
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ pve_hote }}"
+      validate_certs: true
+      ca_path: /etc/ssl/certs/ca-certificates.crt
+      api_timeout: 30
+  tasks:
+    - name: Vérifier les paramètres et l'accès à l'API
+      ansible.builtin.assert:
+        that:
+          - etat in ['present', 'absent']
+          - pve_hote | length > 0
+          - lookup('ansible.builtin.env', 'PROXMOX_TOKEN_SECRET') | length > 0
+          - flotte | map(attribute='vmid') | map('int') | select('ge', 2042) | select('le', 2044) | list | length == flotte | length
+        fail_msg: "etat=present|absent, accès Proxmox chargé (pve-ansible.env), VMID 2042-2044 seulement."
+        quiet: true
+
+    - name: Lister les VMs et templates
+      community.proxmox.proxmox_vm_info:
+        type: qemu
+      register: pve_vms
+
+    - name: Repérer l'image dorée courante et les VMID déjà occupés
+      ansible.builtin.set_fact:
+        modeles: >-
+          {{ pve_vms.proxmox_vms | selectattr('template') | selectattr('tags', 'defined')
+             | selectattr('tags', 'search', '(^|;)gold(;|$)')
+             | selectattr('tags', 'search', '(^|;)debian13(;|$)')
+             | selectattr('tags', 'search', '(^|;)current(;|$)') | list }}
+        existantes: >-
+          {{ pve_vms.proxmox_vms
+             | selectattr('vmid', 'in', flotte | map(attribute='vmid') | list) | list }}
+
+    # ---------------------------------------------------------------- destruction
+    - name: Détruire la flotte
+      when: etat == 'absent'
+      block:
+        - name: Refuser de supprimer une VM qui n'est pas de la flotte
+          ansible.builtin.assert:
+            that: (item.tags | default('')) is search('(^|;)flotte(;|$)')
+            fail_msg: "REFUS : {{ item.vmid }} ({{ item.name }}) n'a pas l'étiquette flotte. Rien n'a été supprimé."
+          loop: "{{ existantes }}"
+          loop_control:
+            label: "{{ item.vmid }}"
+
+        - name: Supprimer les VMs de la flotte
+          community.proxmox.proxmox_kvm:
+            vmid: "{{ item.vmid }}"
+            state: absent
+            force: true
+            purge: true
+            timeout: 120
+          loop: "{{ existantes }}"
+          loop_control:
+            label: "{{ item.vmid }} {{ item.name }}"
+
+    # ---------------------------------------------------------------- création
+    - name: Créer la flotte
+      when: etat == 'present'
+      block:
+        - name: Exiger une et une seule image dorée Debian « current »
+          ansible.builtin.assert:
+            that: modeles | length == 1
+            fail_msg: "{{ modeles | length }} template(s) gold/debian13/current : il en faut exactement un."
+
+        - name: Refuser d'utiliser un VMID occupé par une autre VM
+          ansible.builtin.assert:
+            that: item.name in (flotte | map(attribute='nom') | list)
+            fail_msg: "Le VMID {{ item.vmid }} est occupé par {{ item.name }} : rien n'a été modifié."
+          loop: "{{ existantes }}"
+          loop_control:
+            label: "{{ item.vmid }}"
+
+        - name: Cloner l'image dorée
+          community.proxmox.proxmox_kvm:
+            node: "{{ modeles[0].node }}"
+            vmid: "{{ modeles[0].vmid }}"
+            clone: "{{ modeles[0].name }}"
+            newid: "{{ item.vmid }}"
+            name: "{{ item.nom }}"
+            full: false
+            pool: lab
+            timeout: 300
+            state: present
+          loop: "{{ flotte }}"
+          loop_control:
+            label: "{{ item.nom }}"
+          register: clones
+
+        - name: Étiquettes, ressources et cloud-init (adresse fixe, clé de adm01)
+          community.proxmox.proxmox_kvm:
+            node: "{{ modeles[0].node }}"
+            vmid: "{{ item.item.vmid }}"
+            update: true
+            tags: [env-m04, flotte]
+            memory: 1024
+            cores: 1
+            onboot: false
+            ciuser: admin
+            ciupgrade: false
+            sshkeys: "{{ lookup('ansible.builtin.file', cle_publique) }}"
+            ipconfig:
+              ipconfig0: "ip={{ item.item.ip }}/24,gw={{ passerelle }}"
+            timeout: 60
+            state: present
+          # Seulement les VMs qui viennent d'être clonées : une VM existante garde sa configuration.
+          loop: "{{ clones.results | selectattr('changed') | list }}"
+          loop_control:
+            label: "{{ item.item.nom }}"
+
+        - name: Démarrer la flotte
+          community.proxmox.proxmox_kvm:
+            vmid: "{{ item.vmid }}"
+            state: started
+            timeout: 120
+          loop: "{{ flotte }}"
+          loop_control:
+            label: "{{ item.nom }}"
+
+        - name: Attendre que SSH réponde
+          ansible.builtin.wait_for:
+            host: "{{ item.ip }}"
+            port: 22
+            search_regex: OpenSSH
+            timeout: 300
+          loop: "{{ flotte }}"
+          loop_control:
+            label: "{{ item.nom }}"

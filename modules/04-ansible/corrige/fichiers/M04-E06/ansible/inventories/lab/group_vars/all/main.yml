@@ -1,0 +1,45 @@
+---
+# inventories/lab/group_vars/all/main.yml — variables communes à tout le lab
+# (M04-E03, complété en M04-E06 ; M04-E07 ajoute l'identité des hôtes).
+#
+# Règles de rangement (M04-E06) :
+#   - valeurs par défaut ici (group_vars/all : le niveau le plus bas de l'inventaire) ;
+#   - spécificités d'un rôle dans group_vars/role_<rôle>/, d'un hôte dans host_vars/<hôte>/ ;
+#   - PAS de group_vars/socle/ : « socle » et « role_* » sont au même niveau, une variable
+#     définie dans les deux serait tranchée par l'ordre alphabétique des groupes ;
+#   - jamais de « vars: » de play pour une valeur qui dépend de l'hôte : elles écrasent
+#     group_vars et host_vars ;
+#   - préfixe ms_ pour les faits du site, préfixe du playbook ou du rôle pour le reste.
+
+# --- Connexion ------------------------------------------------------------------
+ansible_user: admin
+
+# --- Site (PLAN.md §4) -------------------------------------------------------------
+ms_site: par1
+ms_domaine: par1.medisphere.internal
+ms_resolveur: 10.10.20.10
+# Passerelle du VLAN de l'hôte : son adresse avec .1 en dernier octet (PLAN.md §4.2).
+# Évaluée au moment de l'usage, pour chaque hôte (ansible_host est propre à l'hôte).
+ms_passerelle: "{{ (ansible_host.split('.')[:3] + ['1']) | join('.') }}"
+# Sources de temps : la passerelle du VLAN (PLAN.md §4.3 bis, M00-E31).
+# gw01, lui, se synchronise sur Internet : voir host_vars/gw01/.
+ms_serveurs_ntp:
+  - "{{ ms_passerelle }}"
+
+# --- Trousse de diagnostic (M04-E05, M04-E06) ------------------------------------------
+trousse_paquets:
+  - bind9-dnsutils
+  - tcpdump
+  - mtr-tiny
+  - curl
+  - jq
+  - lsof
+  - strace
+  - htop
+# Outils propres à un rôle : liste vide par défaut, remplie dans group_vars/role_<rôle>/.
+trousse_paquets_role: []
+# Clients de protocoles en clair, refusés par la RSSI.
+trousse_paquets_interdits:
+  - telnet
+  - inetutils-telnet
+  - rsh-client

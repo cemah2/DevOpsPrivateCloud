@@ -1,0 +1,7 @@
+---
+# dnsmasq ne relit pas ses fichiers de configuration sur SIGHUP (seulement /etc/hosts et les
+# fichiers addn-hosts) : un changement de host-record ou de dhcp-range demande un redémarrage.
+- name: Redémarrer dnsmasq
+  ansible.builtin.systemd_service:
+    name: dnsmasq.service
+    state: restarted

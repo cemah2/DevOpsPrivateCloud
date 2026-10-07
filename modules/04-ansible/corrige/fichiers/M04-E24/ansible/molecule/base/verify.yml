@@ -1,0 +1,62 @@
+---
+# molecule/base/verify.yml — vérifie l'ÉTAT obtenu, pas les tâches exécutées (M04-E24)
+# Chaque contrôle lit le système comme le ferait un auditeur. Les valeurs attendues sont
+# celles du rôle base de M04-E10 : adapte-les si ton rôle a d'autres paramètres.
+- name: Vérifier le rôle base
+  hosts: molecule
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Lire le fuseau horaire
+      ansible.builtin.command:
+        cmd: timedatectl show --property=Timezone --value
+      register: fuseau
+      changed_when: false
+
+    - name: Le fuseau est Europe/Paris
+      ansible.builtin.assert:
+        that: fuseau.stdout == 'Europe/Paris'
+        fail_msg: "Fuseau : {{ fuseau.stdout }}"
+
+    - name: Lire les sources de chrony
+      ansible.builtin.command:
+        cmd: chronyc -n sources
+      register: sources
+      changed_when: false
+
+    - name: Chrony interroge la passerelle du VLAN de l'instance, et elle seule
+      ansible.builtin.assert:
+        that:
+          - sources.stdout is search('\\^.\\s+' ~ (ansible_facts['default_ipv4']['gateway'] | regex_escape) ~ '\\s')
+          - sources.stdout_lines | select('match', '^\\^') | list | length == 1
+        fail_msg: "{{ sources.stdout }}"
+
+    - name: Lire la configuration effective de journald
+      ansible.builtin.command:
+        cmd: systemd-analyze cat-config systemd/journald.conf
+      register: journald
+      changed_when: false
+
+    - name: Le journal est persistant
+      ansible.builtin.assert:
+        that: journald.stdout_lines | select('match', '^Storage=persistent$') | list | length > 0
+        fail_msg: "Storage=persistent absent de la configuration effective de journald"
+
+    - name: Inventorier les paquets
+      ansible.builtin.package_facts:
+
+    - name: Le paquet unattended-upgrades est installé
+      ansible.builtin.assert:
+        that: "'unattended-upgrades' in ansible_facts['packages']"
+        quiet: true
+
+    - name: Lire la configuration APT périodique
+      ansible.builtin.command:
+        cmd: apt-config dump APT::Periodic::Unattended-Upgrade
+      register: periodic
+      changed_when: false
+
+    - name: Unattended-upgrades est déclenché chaque jour
+      ansible.builtin.assert:
+        that: periodic.stdout is search('APT::Periodic::Unattended-Upgrade "1";')
+        fail_msg: "{{ periodic.stdout }}"

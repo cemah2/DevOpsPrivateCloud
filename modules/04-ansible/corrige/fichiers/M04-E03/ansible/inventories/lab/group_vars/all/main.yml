@@ -1,0 +1,7 @@
+---
+# inventories/lab/group_vars/all/main.yml — variables communes à tout le lab (M04-E03)
+# Complété en M04-E06 et M04-E07 (voir fichiers/M04-E06/ et fichiers/M04-E07/).
+
+# Compte de connexion des VMs du lab (cloud-init du template, et gw01 depuis M00-E10) :
+# sudo sans mot de passe. L'élévation (become) est demandée par chaque play, pas ici.
+ansible_user: admin

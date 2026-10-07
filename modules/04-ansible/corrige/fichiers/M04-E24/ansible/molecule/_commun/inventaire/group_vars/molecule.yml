@@ -1,0 +1,45 @@
+---
+# molecule/_commun/inventaire/group_vars/molecule.yml — instances Molecule (M04-E24)
+#
+# Attribution des VMID (PLAN §4.8 : 2045-2049, pool lab, étiquettes molecule + env-m04) :
+#   2045 base · 2046 ssh_durci · 2047 pare_feu · 2048 gitlab_runner · 2049 libre (E34)
+# Un VMID par scénario : deux scénarios peuvent tourner en parallèle ; le même scénario,
+# jamais (resource_group en CI, E27).
+
+# --- Connexion aux instances ---------------------------------------------------------------
+# Compte créé par cloud-init au clonage (jamais cuit dans l'image, M03-E09), avec une clé
+# ÉPHÉMÈRE générée par create.yml dans le dossier éphémère du scénario : le test ne dépend
+# ni de la clé de adm01 ni de celle de runner01, et rien ne survit au destroy.
+ansible_user: admin
+ansible_ssh_private_key_file: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/id_molecule"
+# Clé d'hôte acceptée à la première connexion (accept-new) dans un known_hosts PROPRE au
+# scénario : les adresses DHCP de vsandbox sont réutilisées d'une VM à l'autre, il ne faut
+# ni polluer ~/.ssh/known_hosts, ni désactiver la vérification (une clé qui CHANGE pendant
+# un test est toujours refusée).
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=accept-new
+  -o UserKnownHostsFile={{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/known_hosts
+  -o IdentitiesOnly=yes
+
+# --- Paramètres des instances (lus par create.yml / destroy.yml via hostvars) ---------------
+mol_famille: debian13            # image dorée : étiquettes gold + <famille> + current
+mol_pool: lab
+mol_vnet: vsandbox               # celui du template doré ; vérifié, jamais modifié
+mol_prefixe_reseau: "10.10.99."  # DHCP de dns01 sur vsandbox (10.10.99.100-199)
+mol_memoire: 2048
+mol_coeurs: 2
+mol_etiquettes: [molecule, env-m04]
+mol_vmid_min: 2045
+mol_vmid_max: 2049
+
+# --- Accès à l'API Proxmox ----------------------------------------------------------------
+# Utilisateur et jeton : lus par les modules dans PROXMOX_USER, PROXMOX_TOKEN_ID et
+# PROXMOX_TOKEN_SECRET (~/.config/workbook/pve-ansible.env sur adm01, variables CI protégées
+# et masquées sur runner01). Ils n'apparaissent dans aucune variable Ansible.
+# Hôte : PROXMOX_HOST s'il existe, sinon l'hôte de PROXMOX_URL (variable de l'inventaire
+# dynamique, E13). TLS vérifié avec le magasin système (autorité de pve01 ajoutée en M03).
+mol_pve_hote: >-
+  {{ lookup('ansible.builtin.env', 'PROXMOX_HOST')
+     or (lookup('ansible.builtin.env', 'PROXMOX_URL') | urlsplit('hostname'))
+     or '' }}
+mol_pve_ca: /etc/ssl/certs/ca-certificates.crt

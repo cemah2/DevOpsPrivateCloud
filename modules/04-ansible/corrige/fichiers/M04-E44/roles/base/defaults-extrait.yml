@@ -1,0 +1,5 @@
+---
+# M04-E44 — à ajouter à roles/base/defaults/main.yml
+base_services_resilients:
+  - unite: chrony.service
+    handler: Redémarrer chrony

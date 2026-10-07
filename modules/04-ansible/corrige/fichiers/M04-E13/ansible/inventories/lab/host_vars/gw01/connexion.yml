@@ -1,0 +1,4 @@
+---
+# host_vars/gw01/connexion.yml — gw01 a plusieurs adresses ; Ansible le joint, comme l'alias
+# SSH de adm01, par son adresse MGMT. Commun aux inventaires statique et dynamique.
+ansible_host: 10.10.10.1

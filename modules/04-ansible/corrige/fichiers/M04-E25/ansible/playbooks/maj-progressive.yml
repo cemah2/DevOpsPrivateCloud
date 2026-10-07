@@ -1,0 +1,173 @@
+---
+# playbooks/maj-progressive.yml — mise à jour progressive d'une flotte de frontaux (M04-E25)
+#
+#   uv run ansible-playbook -i ~/m04/e25/flotte-hosts.yml playbooks/maj-progressive.yml -e version=2.0
+#   … -e version=2.1 -e '{"echec_sur": ["m04-web2"]}'     # panne simulée sur un nœud
+#
+# Patron : par lots (canari d'abord), chaque nœud est sorti de la répartition, mis à jour,
+# vérifié DEPUIS LE CONTRÔLEUR (le point de vue du répartiteur), puis remis en service. Le
+# moindre échec arrête le play à la fin du lot en cours ; un nœud en échec reste hors service.
+#
+# Les modèles du site de démonstration sont ceux fournis dans ~/m04/e25/demo/ (ressources
+# M04-E25) : la flotte est jetable, son contenu ne rejoint pas le projet.
+
+# ------------------------------------------------------------------------------------------
+# Play 1 — une ligne de journal par EXÉCUTION. Dans le play suivant, run_once s'exécuterait
+# une fois par LOT (serial découpe le play en plusieurs passes) : d'où ce play séparé.
+# ------------------------------------------------------------------------------------------
+- name: Journaliser le déploiement
+  hosts: flotte
+  gather_facts: false
+  vars:
+    journal: "{{ lookup('ansible.builtin.env', 'HOME') }}/m04/e25/deploiements.log"
+  tasks:
+    - name: Ajouter une ligne au journal des déploiements (une seule fois)
+      ansible.builtin.lineinfile:
+        path: "{{ journal }}"
+        line: >-
+          {{ now(fmt='%Y-%m-%dT%H:%M:%S%z') }} version={{ version | mandatory }}
+          operateur={{ lookup('ansible.builtin.env', 'USER') }}
+          cibles={{ ansible_play_hosts_all | join(',') }}
+        create: true
+        mode: "0644"
+      delegate_to: localhost
+      run_once: true
+
+# ------------------------------------------------------------------------------------------
+# Play 2 — la mise à jour, lot par lot
+# ------------------------------------------------------------------------------------------
+- name: Mettre à jour la flotte un lot à la fois
+  hosts: flotte
+  become: true
+  gather_facts: false
+  # Canari (1 nœud), puis le reste par lots de 2. Avec 3 nœuds : [web1], [web2, web3].
+  # Le dernier élément de la liste se répète si la flotte grandit.
+  serial: [1, 2]
+  # Un seul nœud en échec dans un lot (> 0 %) arrête le play avant le lot suivant.
+  max_fail_percentage: 0
+  # Ordre déterministe : le canari est toujours le même nœud (on sait où regarder).
+  order: sorted
+  vars:
+    demo_version: "{{ version | mandatory }}"
+    demo_racine: /var/www/medisphere-demo
+    demo_modeles: "{{ lookup('ansible.builtin.env', 'HOME') }}/m04/e25/demo"
+    echec_sur: []
+
+  pre_tasks:
+    - name: Créer la racine du site
+      ansible.builtin.file:
+        path: "{{ demo_racine }}"
+        state: directory
+        mode: "0755"
+
+    - name: Sortir le nœud de la répartition (drapeau de maintenance)
+      ansible.builtin.copy:
+        content: "maintenance\n"
+        dest: "{{ demo_racine }}/MAINTENANCE"
+        mode: "0644"
+
+    # Le répartiteur doit avoir CONSTATÉ le retrait avant qu'on touche au service ; au premier
+    # déploiement nginx n'existe pas encore (connexion refusée) : c'est aussi « hors service ».
+    - name: Attendre que le contrôleur voie le nœud hors service
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}/sante"
+        timeout: 2
+      register: sante_avant
+      until: sante_avant.status != 200
+      retries: 10
+      delay: 1
+      failed_when: false
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+  tasks:
+    # throttle : au plus un nœud à la fois télécharge depuis le miroir, même dans un lot de 2
+    # (exemple de ressource partagée ; sans effet dans le lot du canari).
+    - name: Installer nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      throttle: 1
+
+    - name: Simuler une panne de mise à jour (variable de test echec_sur)
+      ansible.builtin.fail:
+        msg: "Panne simulée de la mise à jour sur {{ inventory_hostname }}"
+      when: inventory_hostname in echec_sur
+
+    - name: Déployer la page d'accueil
+      ansible.builtin.template:
+        src: "{{ demo_modeles }}/index.html.j2"
+        dest: "{{ demo_racine }}/index.html"
+        mode: "0644"
+
+    - name: Déployer la configuration du site
+      ansible.builtin.template:
+        src: "{{ demo_modeles }}/medisphere-demo.conf.j2"
+        dest: /etc/nginx/sites-available/medisphere-demo
+        mode: "0644"
+      notify:
+        - Valider la configuration de nginx
+        - Recharger nginx
+
+    - name: Activer le site de démonstration
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/medisphere-demo
+        dest: /etc/nginx/sites-enabled/medisphere-demo
+        state: link
+      notify:
+        - Valider la configuration de nginx
+        - Recharger nginx
+
+    - name: Désactiver le site par défaut
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify:
+        - Valider la configuration de nginx
+        - Recharger nginx
+
+    - name: Nginx est démarré et activé
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: started
+        enabled: true
+
+    # Les handlers tournent ICI, avant la remise en service : on ne remet pas dans la
+    # répartition un nœud dont la nouvelle configuration n'est pas chargée.
+    - name: Appliquer les changements en attente
+      ansible.builtin.meta: flush_handlers
+
+  post_tasks:
+    - name: Remettre le nœud en service
+      ansible.builtin.file:
+        path: "{{ demo_racine }}/MAINTENANCE"
+        state: absent
+
+    - name: Contrôle de santé depuis le contrôleur (la NOUVELLE version doit répondre)
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}/sante"
+        return_content: true
+        timeout: 2
+      register: sante_apres
+      until: sante_apres.status == 200 and (sante_apres.content | trim) == ('ok ' ~ demo_version)
+      retries: 15
+      delay: 2
+      changed_when: false
+      delegate_to: localhost
+      become: false
+
+  handlers:
+    # Définis dans cet ordre, ils s'exécutent dans cet ordre : une configuration invalide
+    # fait échouer le nœud AVANT le rechargement, l'ancienne configuration reste en service.
+    - name: Valider la configuration de nginx
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Recharger nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded

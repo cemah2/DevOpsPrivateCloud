@@ -1,0 +1,11 @@
+{{ base_entete | comment(decoration='// ') }}
+// /etc/apt/apt.conf.d/52medisphere-unattended-upgrades (rôle base) — SÉCURITÉ SEULEMENT
+// La liste par défaut (50unattended-upgrades) contient aussi « label=Debian » (versions
+// intermédiaires). Une liste déclarée dans un second fichier S'AJOUTE à la première :
+// « #clear » la vide d'abord. Contrôle : apt-config dump | grep Origins-Pattern
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+};
+// Pas de redémarrage automatique : il se planifie (fenêtre de maintenance).
+Unattended-Upgrade::Automatic-Reboot "false";

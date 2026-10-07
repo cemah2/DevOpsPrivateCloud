@@ -1,0 +1,10 @@
+---
+# Racine de la PKI provisoire (clone HTTPS de git01, API des runners) et autorité de pve01
+# (Packer, API Proxmox). Depuis M04-E18 : rôle partagé de la collection interne.
+- name: Autorités de certification du lab
+  ansible.builtin.include_role:
+    name: medisphere.socle.ca_lab
+  vars:
+    ca_lab_certificats:
+      - {nom: medisphere-provisoire, source: "{{ gitlab_runner_ca_provisoire }}"}
+      - {nom: pve01-root-ca, source: "{{ gitlab_runner_ca_pve01 }}"}

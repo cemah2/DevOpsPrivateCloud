@@ -1,0 +1,54 @@
+---
+# playbooks/identite-hotes.yml — identité des hôtes du socle (M04-E07)
+#   - /etc/motd : qui suis-je, quel rôle, qui appeler, quels runbooks ;
+#   - fait local /etc/ansible/facts.d/medisphere.fact, relu par Ansible et par les outils.
+#
+#   uv run ansible-playbook playbooks/identite-hotes.yml --check --diff
+#   uv run ansible-playbook playbooks/identite-hotes.yml
+
+- name: Identité des hôtes du socle
+  hosts: socle
+  become: true
+  # Le motd affiche la distribution : faits nécessaires.
+  gather_facts: true
+
+  tasks:
+    - name: Message d'accueil
+      ansible.builtin.template:
+        src: motd.j2
+        dest: /etc/motd
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Dossier des faits locaux
+      ansible.builtin.file:
+        path: /etc/ansible/facts.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Fait local medisphere
+      ansible.builtin.template:
+        src: medisphere.fact.j2
+        dest: /etc/ansible/facts.d/medisphere.fact
+        owner: root
+        group: root
+        # Non exécutable : setup lit le fichier comme du JSON au lieu de l'exécuter.
+        mode: "0644"
+
+    # Les faits ont été collectés AVANT l'écriture du fichier : on relit les seuls faits
+    # locaux (rapide). Un « when: … is changed » ferait la même chose, mais ansible-lint
+    # (règle no-handler) préfère alors un handler.
+    - name: Relire les faits locaux
+      ansible.builtin.setup:
+        filter: ansible_local
+
+    - name: Le fait local décrit bien l'hôte
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['ansible_local']['medisphere']['role'] == ms_role
+        quiet: true
+      # En --check, le fichier n'est pas écrit : rien à relire.
+      when: not ansible_check_mode

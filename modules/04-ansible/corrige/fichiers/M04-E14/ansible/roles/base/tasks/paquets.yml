@@ -1,0 +1,37 @@
+---
+- name: Installer les paquets communs et ceux du rôle de l'hôte
+  ansible.builtin.apt:
+    name: "{{ base_paquets + base_paquets_role }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Retirer les clients de protocoles en clair
+  ansible.builtin.apt:
+    name: "{{ base_paquets_interdits }}"
+    state: absent
+
+- name: Horodater l'historique bash (traçabilité des interventions)
+  ansible.builtin.lineinfile:
+    path: /etc/bash.bashrc
+    regexp: '^export HISTTIMEFORMAT='
+    line: "export HISTTIMEFORMAT='%F %T '"
+    state: present
+
+# Condition sur les faits (M04-E14) : l'agent n'a de sens que dans une VM KVM/QEMU.
+# Un serveur physique (M11) ou un conteneur ne le reçoit pas.
+- name: Agent QEMU (VM KVM uniquement)
+  when:
+    - base_agent_qemu
+    - ansible_facts['virtualization_role'] == 'guest'
+    - ansible_facts['virtualization_type'] == 'kvm'
+  block:
+    - name: Installer l'agent QEMU
+      ansible.builtin.apt:
+        name: qemu-guest-agent
+        state: present
+
+    - name: Démarrer l'agent QEMU
+      ansible.builtin.systemd_service:
+        name: qemu-guest-agent
+        state: started

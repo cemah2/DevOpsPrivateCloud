@@ -38,5 +38,4 @@ title "Après l'essai"
 check_cmd "aucune VM d'essai restante (9090-9099)" _m03_aucune_vm 9090 9099
 _m03_est_template() { _m03_conf "$1" | grep -q '^template: 1'; }
 check_cmd "template 9001 (tpl-debian13-base) toujours présent" _m03_est_template 9001
-check_cmd "journal de diagnostic de l'incident (docs/socle/journal/, INC-3001)" \
-  bash -c 'grep -rqs "INC-3001" "$1"' _ "$_M03_DOC/journal"
+# Le journal de diagnostic (INC-3001) est auto-évalué : ce contrôle doit être vert AVANT l'injection.

@@ -1,0 +1,11 @@
+---
+# Les handlers s'exécutent dans l'ordre où ils sont DÉFINIS ici, pas dans l'ordre des notify.
+- name: Redémarrer chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: restarted
+
+- name: Redémarrer journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted

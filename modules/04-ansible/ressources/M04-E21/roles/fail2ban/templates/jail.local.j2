@@ -1,0 +1,12 @@
+# fail2ban - config Lucas
+[DEFAULT]
+ignoreip = {{ fail2ban_ignoreip }}
+bantime = {{ fail2ban_bantime }}
+maxretry = {{ fail2ban_maxretry }}
+banaction = iptables-multiport
+
+{% for jail in fail2ban_jails %}
+[{{ jail }}]
+enabled = true
+backend = auto
+{% endfor %}

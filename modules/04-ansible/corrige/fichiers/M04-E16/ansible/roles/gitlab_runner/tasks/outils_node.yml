@@ -1,0 +1,82 @@
+---
+- name: Clé du dépôt NodeSource
+  ansible.builtin.include_tasks: cle_apt.yml
+  vars:
+    _cle:
+      nom: nodesource
+      url: "{{ gitlab_runner_nodesource_cle_url }}"
+      empreinte: "{{ gitlab_runner_nodesource_empreinte }}"
+
+# Même nom de fichier que sur adm01 (M01-E14) : le fichier posé à la main est repris.
+- name: Dépôt NodeSource de Node.js {{ gitlab_runner_node_majeure }}
+  ansible.builtin.deb822_repository:
+    name: nodesource
+    types: [deb]
+    uris: "https://deb.nodesource.com/node_{{ gitlab_runner_node_majeure }}.x"
+    suites: [nodistro]
+    components: [main]
+    architectures: [amd64]
+    signed_by: /etc/apt/keyrings/nodesource.asc
+  register: _gitlab_runner_nodesource
+
+- name: Préférer le paquet nodejs de NodeSource à celui de Debian
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/nodejs
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ gitlab_runner_entete }}
+      Package: nodejs
+      Pin: origin deb.nodesource.com
+      Pin-Priority: 600
+  register: _gitlab_runner_nodejs_pref
+
+- name: Installer Node.js {{ gitlab_runner_node_majeure }}
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+    update_cache: "{{ _gitlab_runner_nodesource is changed or _gitlab_runner_nodejs_pref is changed }}"
+
+- name: Vérifier la version majeure de Node.js
+  ansible.builtin.command: node -p "process.versions.node.split('.')[0]"
+  register: _gitlab_runner_node
+  changed_when: false
+  check_mode: false
+  failed_when: _gitlab_runner_node.stdout | int != gitlab_runner_node_majeure
+
+# /opt/release-tools : le verrou npm et le script d'installation viennent de
+# plateforme/ci-templates (source unique, M01-E24). Le script n'est relancé que si le
+# verrou a changé ou si l'installation n'existe pas.
+- name: Dossier source de /opt/release-tools
+  ansible.builtin.file:
+    path: /opt/release-tools-src
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copier le verrou et le script d'installation depuis ci-templates
+  ansible.builtin.copy:
+    src: "{{ gitlab_runner_release_tools_source }}/{{ item.fichier }}"
+    dest: "/opt/release-tools-src/{{ item.fichier }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {fichier: package.json, mode: "0644"}
+    - {fichier: package-lock.json, mode: "0644"}
+    - {fichier: installer-release-tools.sh, mode: "0755"}
+  loop_control:
+    label: "{{ item.fichier }}"
+  register: _gitlab_runner_release_src
+
+- name: Installation existante de /opt/release-tools
+  ansible.builtin.stat:
+    path: /opt/release-tools/node_modules/.bin/semantic-release
+  register: _gitlab_runner_release_bin
+
+- name: Installer /opt/release-tools (npm ci --ignore-scripts, bascule atomique)
+  ansible.builtin.command: /opt/release-tools-src/installer-release-tools.sh
+  when: _gitlab_runner_release_src is changed or not _gitlab_runner_release_bin.stat.exists
+  changed_when: true

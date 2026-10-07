@@ -1,0 +1,7 @@
+---
+# molecule/_commun/inventaire/00-groupes.yml (M04-E24)
+# Déclare le groupe « molecule » pour que ses group_vars (voisins) s'appliquent aux instances
+# que chaque scénario déclare dans molecule/<scénario>/inventaire/.
+all:
+  children:
+    molecule:

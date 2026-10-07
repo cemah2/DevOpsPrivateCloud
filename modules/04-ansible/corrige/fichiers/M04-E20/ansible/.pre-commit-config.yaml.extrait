@@ -1,0 +1,11 @@
+# .pre-commit-config.yaml — hook ajouté en M04-E20 (à la suite des dépôts de la configuration de
+# référence M01-E15). Hook LOCAL : il utilise l'ansible-lint et l'ansible-core du projet
+# (uv.lock), donc exactement les mêmes versions qu'en CI, au lieu d'un environnement à part.
+  - repo: local
+    hooks:
+      - id: ansible-lint
+        name: ansible-lint (profil production)
+        language: system
+        entry: uv run --frozen ansible-lint
+        pass_filenames: false        # ansible-lint analyse tout le projet (dépendances entre fichiers)
+        files: \.(ya?ml|j2)$|^\.ansible-lint$

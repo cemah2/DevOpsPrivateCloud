@@ -1,0 +1,67 @@
+---
+# Sans collection supplémentaire : des requêtes psql en lecture décident, des requêtes en
+# écriture n'agissent qu'en cas de besoin (idempotence explicite). Le mot de passe ne passe
+# JAMAIS dans la ligne de commande (visible dans ps) : environnement ou entrée standard.
+- name: PostgreSQL démarre avec la VM
+  ansible.builtin.systemd_service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Le rôle PostgreSQL semaphore existe-t-il ?
+  ansible.builtin.command:
+    argv: [psql, -XAtc, "SELECT 1 FROM pg_roles WHERE rolname = 'semaphore'"]
+  become: true
+  become_user: postgres
+  register: semaphore_pg_role
+  changed_when: false
+  check_mode: false
+
+- name: Créer le rôle PostgreSQL semaphore
+  ansible.builtin.command:
+    argv: [psql, -XAtc, "CREATE ROLE semaphore LOGIN"]
+  become: true
+  become_user: postgres
+  when: semaphore_pg_role.stdout != '1'
+  changed_when: true
+
+- name: La base semaphore existe-t-elle ?
+  ansible.builtin.command:
+    argv: [psql, -XAtc, "SELECT 1 FROM pg_database WHERE datname = 'semaphore'"]
+  become: true
+  become_user: postgres
+  register: semaphore_pg_base
+  changed_when: false
+  check_mode: false
+
+- name: Créer la base semaphore
+  ansible.builtin.command:
+    argv: [createdb, --owner=semaphore, --encoding=UTF8, semaphore]
+  become: true
+  become_user: postgres
+  when: semaphore_pg_base.stdout != '1'
+  changed_when: true
+
+# Le mot de passe en place est-il le bon ? On essaie de se connecter comme Semaphore le fera
+# (TCP local, authentification scram-sha-256 par défaut sur Debian).
+- name: Tester le mot de passe du compte semaphore
+  ansible.builtin.command:
+    argv: [psql, -h, 127.0.0.1, -U, semaphore, -d, semaphore, -XAtc, "SELECT 1"]
+  environment:
+    PGPASSWORD: "{{ semaphore_db_mot_de_passe }}"
+  register: semaphore_pg_test
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Définir le mot de passe du compte semaphore
+  ansible.builtin.command:
+    argv: [psql, -XAt, -v, ON_ERROR_STOP=1]
+    stdin: "ALTER ROLE semaphore WITH PASSWORD '{{ semaphore_db_mot_de_passe }}';"
+  become: true
+  become_user: postgres
+  when: semaphore_pg_test.rc != 0
+  changed_when: true
+  no_log: true
+  notify: Redémarrer semaphore
