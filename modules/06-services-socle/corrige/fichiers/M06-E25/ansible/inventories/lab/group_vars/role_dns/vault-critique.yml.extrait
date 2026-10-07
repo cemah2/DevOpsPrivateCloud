@@ -1,4 +1,4 @@
-# group_vars/role_dns/vault.yml (Vault « critique ») — variable AJOUTÉE en M06-E25.
+# group_vars/role_dns/vault-critique.yml (Vault « critique ») — variable AJOUTÉE en M06-E25.
 # Compte « supervision » de l'API de Kea (lecture d'état par ms-verif-services, M06-E29) ; la
 # même valeur va dans ~/.config/workbook/kea-supervision.env sur adm01 (600). Registre des secrets.
 vault_kea_api_supervision: "<24-CARACTERES-ALEATOIRES>"

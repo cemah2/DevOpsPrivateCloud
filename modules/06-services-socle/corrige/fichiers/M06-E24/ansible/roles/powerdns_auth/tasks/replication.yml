@@ -110,7 +110,8 @@
       changed_when: true
 
     # « rrset replace » ne touche pas au SOA : on le fait avancer pour que le secondaire le voie.
-    - name: Faire avancer le numéro de série des zones dont les NS ont changé
+    # Par zone modifiée (élément de boucle) : pas de handler possible (no-handler accepté).
+    - name: Faire avancer le numéro de série des zones dont les NS ont changé  # noqa: no-handler
       ansible.builtin.command: pdnsutil zone increase-serial {{ item.item.item.nom }}
       become: true
       become_user: pdns

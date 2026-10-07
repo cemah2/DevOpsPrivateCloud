@@ -3,6 +3,8 @@
 # backend gsqlite3, API HTTP. Il ne fait AUCUNE récursion : c'est le travail du récurseur
 # (rôle powerdns_recursor, M06-E07), qui lui transmet les questions sur les zones internes.
 # Les valeurs du socle sont dans inventories/lab/group_vars/role_dns/powerdns_auth.yml.
+# Évolution : M06-E17 (mises à jour dynamiques), M06-E24 (réplication) et M06-E26 (DNSSEC) ;
+# état final des variables : M06-E24/ansible/roles/powerdns_auth/defaults/main.yml.
 
 # --- Dépôt APT repo.powerdns.com ------------------------------------------------------------------
 powerdns_auth_depot_url: http://repo.powerdns.com/debian

@@ -7,7 +7,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 - **L'état est une donnée de production.** Il se sauvegarde avant d'être modifié, il ne se modifie qu'avec les commandes prévues pour cela (`tofu state …`, `import`, `moved`, `removed`), il ne s'édite jamais à la main, et une copie en clair (`tofu state pull`) contient des secrets : elle se traite comme tel.
 - **Un verrou appartient à quelqu'un.** Avant de le forcer, tu prouves que son détenteur n'existe plus.
 
-> **Rappels** : tout se lance depuis `adm01`, dans le clone `~/src/infra` (variable `WB_SRC`) : configurations `socle/` (état `socle/terraform.tfstate`) et `envs/lab-m05/` (état `envs/lab-m05/terraform.tfstate`), compartiment `tofu-state` de `s3-01` (`https://s3-01.par1.medisphere.internal:8333`, versionné). L'environnement de travail se charge comme au palier 3 : `~/.config/workbook/pve-tofu.env`, `~/.config/workbook/s3-tofu.env`, phrase de chiffrement de l'état lue dans `~/.config/workbook/tofu-chiffrement.pass` (M05-E27). Client S3 : AWS CLI v2, profil `s3-socle` (M05-E10). Tout correctif durable passe par une MR fusionnée dans `main`, plan relu et pipeline vert.
+> **Rappels** : tout se lance depuis `adm01`, dans le clone `~/src/infra` (variable `WB_SRC`) : configurations `socle/` (état `socle/terraform.tfstate`) et `envs/lab-m05/` (état `envs/lab-m05/terraform.tfstate`), compartiment `tofu-state` de `s3-01` (`https://s3-01.par1.medisphere.internal:8333`, versionné). L'environnement de travail se charge comme au palier 3, par `. outils/charger-acces.sh` (M05-E27) : `~/.config/workbook/pve-tofu.env`, `~/.config/workbook/s3-tofu.env`, et `TF_ENCRYPTION` construit à partir de la phrase de `~/.config/workbook/tofu-chiffrement.pass`. Les vérifications et les scripts de panne chargent les accès de la même façon (ton `outils/charger-acces.sh` s'il existe, sinon les fichiers de `~/.config/workbook/`). Client S3 : AWS CLI v2, profil `s3-socle` (M05-E10). Tout correctif durable passe par une MR fusionnée dans `main`, plan relu et pipeline vert.
 
 ## Règles du jeu des pannes (M05-E35 à M05-E43)
 
@@ -302,7 +302,7 @@ Sur `gw01`, `tcpdump -ni ens19.99 port 67 or port 68` pendant le démarrage de l
 5. Explique dans ton journal pourquoi `tofu apply -refresh-only` n'aurait **pas** suffi à régler ta variante, ou dans quel cas il aurait suffi.
 
 **Critères de réussite**
-- [ ] Les VMs étiquetées `env-m05` dans Proxmox et les VMs de l'état `envs/lab-m05` sont exactement les mêmes ; la VM demandée existe.
+- [ ] Les VMs étiquetées `env-m05` dans Proxmox et les VMs des états `envs/lab-m05` et `envs/recette-m05` sont exactement les mêmes ; la VM demandée existe.
 - [ ] `tofu plan` dans `envs/lab-m05/` est vide ; aucune VM d'environnement préexistante n'a été recréée.
 - [ ] Ton journal classe chaque écart et justifie la réconciliation choisie.
 
@@ -420,7 +420,7 @@ Dans la sortie de `list-object-versions`, la version courante est celle qui port
 Supprimer un marqueur de suppression (avec son `VersionId`) rend sa place à la version précédente ; recopier une ancienne version la rend courante en ajoutant une version. Les deux conservent les versions de données : lequel laisse la meilleure trace pour le post-mortem ?
 </details>
 
-**Pour aller plus loin** : écris `outils/restaurer-etat.sh <clé> <VersionId>` qui sauvegarde la liste des versions, copie la version actuelle sous `_sauvegardes/`, recopie la version demandée comme version courante et affiche le `serial` avant/après ; référence-le dans RB-050 ou dans un nouveau runbook RB-051.
+**Pour aller plus loin** : rejoue ta variante avec `outils/restaurer-etat.sh` de M05-E29. A-t-il fait ce qu'il fallait, ou t'a-t-il arrêté ? Complète-le (par exemple : enregistrer la liste complète des versions avant d'agir, afficher le `serial` avant/après) et prépare les notes d'un runbook RB-051 « restaurer un état », que le mini-projet demande.
 
 ---
 

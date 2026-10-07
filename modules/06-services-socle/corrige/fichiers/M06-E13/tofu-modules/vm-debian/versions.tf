@@ -7,9 +7,11 @@ terraform {
   required_version = ">= 1.13.0"
 
   required_providers {
+    # Contrainte large, comme en v1 (M05-E13) : un module trop strict empêcherait ses
+    # consommateurs de monter de version (M05-E31 : racines en ~> 0.116.0).
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.115.0"
+      version = ">= 0.115.0, < 1.0.0"
     }
     netbox = {
       source = "e-breuninger/netbox"

@@ -82,7 +82,20 @@ Points structurants :
 | `dns01` | 1002 | 10.10.20.10 | existant (2 Go conseillés) | `socle`, `role-dns` | `powerdns_auth`, `powerdns_recursor` (puis `kea_dhcp4`) | E06-E08 |
 | `dns02` | 1008 | 10.10.20.16 | 1 vCPU, 2 Go, 10 Go | `socle`, `role-dns` | mêmes rôles (secondaire) | E24 |
 
-VMs d'essai : 2060-2069 (pool `lab`, étiquette `env-m06`, VNet `vsandbox` sauf mention). Instances Molecule : la plage 2045-2049 du projet `plateforme/ansible` (M04-E24), partagée entre scénarios.
+VMs d'essai : 2060-2069 (pool `lab`, étiquette `env-m06`, VNet `vsandbox` sauf mention), chacune réservée à un usage pour qu'aucun exercice n'en trouve une déjà prise ; détruite dès qu'elle ne sert plus (recréée au besoin), toutes au plus tard à la livraison du mini-projet. Instances Molecule à une VM : la plage 2045-2049 du projet `plateforme/ansible` (M04-E24), partagée entre scénarios (jamais deux scénarios sur le même VMID en même temps).
+
+| VMID | Nom | Exercices |
+|---|---|---|
+| 2060 | `m06-repetition` (répétition de la bascule DNS), puis VM de démonstration du mini-projet | E08, E46 |
+| 2061 | `m06-essai` (synchronisation, essais manuels ACME et SSH, répétition de RB-060) | E11, E18, E19, E23 |
+| 2062 | libre (essais personnels) | — |
+| 2063 | `m06-ipam01` (adresse allouée par NetBox, nom par OpenTofu) | E13, E14 |
+| 2064 | `m06-sonde-dhcp`, créée et détruite par les scripts de panne | E36, E43 |
+| 2065 | `m06-client` (client DHCP de test) | E25, E42 |
+| 2066 | `sbx66` (client DHCP), puis première instance des scénarios Molecule à deux VMs | E16-E17, puis E24, E25, E30 |
+| 2067 | seconde instance des scénarios Molecule à deux VMs | E24, E25, E30 |
+| 2068 | `m06-restau` (restauration de test) | E28, E46 |
+| 2069 | `stat01` (service temporaire de l'exercice chronométré) | E34 |
 
 ### Ports et flux du palier 1
 
@@ -143,6 +156,7 @@ Une synthèse pour se repérer ; les exercices et les liens « Pour aller plus l
 | PKI | racine « MédiSphère Root CA » (hors ligne, `~/pki-racine` sur `adm01`), intermédiaire « MédiSphère Intermediate CA » sur `ca01` ; step-ca dans `/etc/step-ca` (compte `step`), `https://ca01.par1.medisphere.internal` (port 443) ; certificats publics de la PKI versionnés dans `pki/` du projet `plateforme/ansible` ; racine installée sous `/usr/local/share/ca-certificates/medisphere-root-ca.crt` sur tous les hôtes (rôle `medisphere.socle.ca_lab`) |
 | Provisioners step-ca | `admin` (JWK, émission manuelle, mot de passe dans `~/.config/workbook/step-admin.pass`), `acme` (ACME, 30 jours au plus), `sshpop` (renouvellement SSH) |
 | NetBox | `https://nbx01.par1.medisphere.internal` ; installation dans `/opt/netbox-<version>` désignée par `/opt/netbox` ; services `netbox`, `netbox-rq`, `nginx`, `postgresql`, `valkey-server` ; jetons **v2** : `Authorization: Bearer nbt_<clé>.<jeton>` |
+| Identités NetBox (jetons v2, fichiers 600 de `~/.config/workbook/` sur `adm01`) | `netbox-checks.token` : compte `wb-checks`, lecture seule, réservé aux vérifications du workbook (`WB_NETBOX_TOKEN_FILE`, E04) ; `netbox-moi.token` : ton compte `<MOI>`, écriture, 7 jours, renouvelé à chaque besoin (modélisation E05, gestes manuels) ; `netbox-auto.token` : compte de service `svc-automatisation`, écriture limitée aux VMs, interfaces, disques et adresses, depuis `adm01` et `runner01` (synchronisations E11 et E15, OpenTofu E13 sous la forme `netbox-tofu.env`) ; `netbox-ansible.env` : second jeton de `svc-automatisation`, lecture seule (`NETBOX_TOKEN`, inventaire Ansible E12) ; `netbox-supervision.token` : compte `svc-supervision`, lecture seule (sondes E29). Tous inscrits au registre des secrets |
 | DNS | `dns01` : Recursor sur 127.0.0.1:53 et 10.10.20.10:53 (après E08), Authoritative sur 127.0.0.1:5300 et 10.10.20.10:5300, API sur 10.10.20.10:8081 (clients : `dns01`, `adm01`, `runner01`) ; zones `medisphere.internal`, `par1.medisphere.internal`, `par2.medisphere.internal`, `10.10.in-addr.arpa`, `20.10.in-addr.arpa` |
 | Groupes d'inventaire | `role_pki` (`ca01`), `role_netbox` (`nbx01`), `role_dns` (`dns01`, puis `dns02`) : étiquettes Proxmox `role-pki`, `role-netbox`, `role-dns` |
 | Secrets du palier 1 | Vault `critique` : mots de passe des clés en ligne de `ca01`, clé chiffrée et mot de passe du provisioner `admin`, clé Django et poivres des jetons de NetBox, clé TLS de `nbx01`, clé de l'API PowerDNS. Vault `lab` : mots de passe PostgreSQL et `admin` de NetBox. Sur `adm01` : `~/.config/workbook/step-admin.pass`, `netbox-checks.token`, `netbox-moi.token` (600) |

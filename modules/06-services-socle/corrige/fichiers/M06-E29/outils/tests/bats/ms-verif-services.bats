@@ -2,6 +2,10 @@
 # Tests de bin/ms-verif-services (M06-E29). Aucun accès réseau : dig, curl et openssl sont
 # remplacés par des fonctions (prioritaires sur les commandes du PATH) qui répondent selon des
 # variables d'état préparées par chaque test. Chaque domaine a au moins un test « rouge ».
+# Prérequis : bin/ms-verif-services charge lib/ms-commun.sh, la bibliothèque de plateforme/outils
+# (M02-E20 ; dans le workbook : modules/02-scripting/corrige/fichiers/M02-E20/outils/lib/ms-commun.sh).
+# Les tests tournent donc dans le projet plateforme/outils (task test:bats, CI), pas dans le dossier
+# du corrigé seul : pour les y lancer, copie ce fichier dans outils/lib/ à côté de bin/ et tests/.
 # Les fonctions de remplacement sont appelées indirectement (par main) :
 # shellcheck disable=SC2329,SC2317
 # shellcheck source-path=SCRIPTDIR
@@ -53,8 +57,8 @@ FIN
       *sonde-inexistante*) echo ';; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 4242' ;;
       *+dnssec*)
         if ((AD)); then echo ';; flags: qr rd ra ad; QUERY: 1, ANSWER: 2'; else echo ';; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 1'; fi ;;
-      *@10.10.20.10*SOA*) echo "dns01.par1.medisphere.internal. hostmaster.par1.medisphere.internal. $SERIAL_A 10800 3600 604800 300" ;;
-      *@10.10.20.16*SOA*) echo "dns01.par1.medisphere.internal. hostmaster.par1.medisphere.internal. $SERIAL_B 10800 3600 604800 300" ;;
+      *@10.10.20.10*SOA*) echo "dns01.par1.medisphere.internal. hostmaster.medisphere.internal. $SERIAL_A 10800 3600 604800 300" ;;
+      *@10.10.20.16*SOA*) echo "dns01.par1.medisphere.internal. hostmaster.medisphere.internal. $SERIAL_B 10800 3600 604800 300" ;;
       *) echo '10.10.20.12' ;;
     esac
   }

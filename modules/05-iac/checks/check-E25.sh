@@ -54,6 +54,7 @@ _m05_e25_exceptions_justifiees() {
 }
 check_cmd ".checkov.yaml : chaque règle ignorée est précédée de sa justification" _m05_e25_exceptions_justifiees
 check_cmd "outils/analyse-securite.sh présent" _m05p_fichier_main outils/analyse-securite.sh
+check_cmd ".gitignore : rapports/ ignoré par Git" _m05p_main_contient .gitignore '^/?rapports/?'
 check_cmd "analyse-securite.sh : contrôle d'empreinte de Trivy, aucune mise à jour de règles" \
   _m05p_main_contient outils/analyse-securite.sh 'sha256sum' '--skip-check-update'
 check_cmd "au moins 4 règles Checkov maison (politiques/checkov/)" _m05p_nb_fichiers_main politiques/checkov '\.ya?ml$' 4

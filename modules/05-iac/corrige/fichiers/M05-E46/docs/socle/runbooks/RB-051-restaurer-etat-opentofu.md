@@ -36,7 +36,9 @@ Un verrou présent : RB-050 d'abord.
 ## 3. Lister et enregistrer les versions
 
 ```
-admin@adm01:~/src/infra$ outils/restaurer-etat.sh lister <CLÉ>
+admin@adm01:~/src/infra$ umask 077; mkdir -p ~/m05/rb051
+admin@adm01:~/src/infra$ aws s3api list-object-versions --bucket tofu-state --prefix <CLÉ> > ~/m05/rb051/versions-avant.json
+admin@adm01:~/src/infra$ outils/restaurer-etat.sh --lister <CLÉ>
 ```
 
 Choisir la **dernière version de données saine** : celle du dernier apply connu (date et heure du job d'apply dans GitLab), de taille cohérente avec les précédentes. Un marqueur de suppression ne se restaure pas : on restaure la version de données qui le précède. Noter le `VersionId` choisi et la raison dans le ticket.
@@ -44,10 +46,18 @@ Choisir la **dernière version de données saine** : celle du dernier apply conn
 ## 4. Restaurer
 
 ```
-admin@adm01:~/src/infra$ outils/restaurer-etat.sh restaurer <CLÉ> <VersionId>
+admin@adm01:~/src/infra$ outils/restaurer-etat.sh --version <CLÉ> <VersionId>
 ```
 
-Le script refuse si un verrou existe, enregistre la liste des versions et l'objet courant dans `~/m05/sauvegardes-etat/` (600), recopie la version choisie comme nouvelle version courante. Il ne supprime **rien**.
+Le script (M05-E29) refuse si un verrou existe ou si le `lineage` de la version choisie diffère de celui de l'objet courant, copie l'objet courant dans `~/.local/state/infra-restaurations/<date>/` avec un journal, demande confirmation, puis recopie la version choisie comme **nouvelle** version courante (`copy-object`). Il ne supprime **rien**.
+
+Cas particulier : l'objet courant est **un autre état** (lineage différent, par exemple l'état d'un environnement copié sur la clé du socle) ou un marqueur de suppression. Le script refuse le premier cas : après avoir prouvé que la version choisie est la bonne (taille, date, `serial` et `lineage` en clair dans l'enveloppe chiffrée), fais la copie à la main, en gardant l'historique :
+
+```
+admin@adm01:~$ aws s3api copy-object --bucket tofu-state --key <CLÉ> --copy-source 'tofu-state/<CLÉ>?versionId=<VersionId>'
+```
+
+Pour un marqueur de suppression, le script convient aussi (il recopie la version de données choisie par-dessus le marqueur).
 
 ## 5. Prouver
 
@@ -64,7 +74,7 @@ Message de fin dans `#plateforme` ; ticket complété (version restaurée, preuv
 
 ## Retour arrière
 
-La restauration ajoute une version : pour revenir à l'état d'avant la restauration, recommencer l'étape 4 avec le `VersionId` de l'objet courant enregistré à l'étape 4 (fichier `*.versions.json` de `~/m05/sauvegardes-etat/`).
+La restauration ajoute une version : pour revenir à l'état d'avant la restauration, recommencer l'étape 4 avec le `VersionId` de l'ancienne version courante (dans `~/m05/rb051/versions-avant.json` et dans le journal du script).
 
 ## Interdits
 

@@ -29,12 +29,14 @@
       ansible.builtin.command: >-
         pdnsutil rrset replace {{ zone }} temoin.{{ zone }}. TXT 60 '"v-{{ ansible_facts['date_time']['epoch'] }}"'
       delegate_to: "{{ groups['mol_primaire'][0] }}"
+      become: true
       become_user: pdns
       changed_when: true
 
     - name: Faire avancer le numéro de série (rrset replace ne le fait pas)
       ansible.builtin.command: pdnsutil zone increase-serial {{ zone }}
       delegate_to: "{{ groups['mol_primaire'][0] }}"
+      become: true
       become_user: pdns
       changed_when: true
 

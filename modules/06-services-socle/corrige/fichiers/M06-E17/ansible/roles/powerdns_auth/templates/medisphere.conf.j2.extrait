@@ -1,4 +1,5 @@
-{# roles/powerdns_auth/templates/pdns.conf.j2 — bloc AJOUTÉ en M06-E17 (gabarit de M06-E06).
+{# roles/powerdns_auth/templates/medisphere.conf.j2 (/etc/powerdns/pdns.d/) — bloc AJOUTÉ en M06-E17
+   (gabarit de M06-E06 ; version complète, réplication et DNSSEC compris : M06-E24).
    Par défaut (dnsupdate=no), PowerDNS ignore les mises à jour SANS rien journaliser :
    le premier symptôme d'un oubli est un DDNS « qui n'écrit rien » (doc PowerDNS 5.0). #}
 # --- Mises à jour dynamiques (M06-E17) -----------------------------------------------

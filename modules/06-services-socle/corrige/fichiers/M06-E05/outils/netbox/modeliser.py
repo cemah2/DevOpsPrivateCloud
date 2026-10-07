@@ -14,8 +14,10 @@ Usage (depuis le dossier du script, sur adm01) :
     uv run modeliser.py                    # applique
 
 Accès : URL dans NETBOX_URL (défaut https://nbx01.par1.medisphere.internal), jeton v2 en
-écriture dans le fichier NETBOX_TOKEN_FILE (défaut ~/.config/workbook/netbox-auto.token,
-contenu « nbt_<clé>.<jeton> »), TLS vérifié avec le magasin système (racine de la PKI du
+écriture dans le fichier NETBOX_TOKEN_FILE (défaut ~/.config/workbook/netbox-moi.token : ton
+jeton personnel de M06-E05, contenu « nbt_<clé>.<jeton> » ; après M06-E10, le jeton de
+svc-automatisation, netbox-auto.token, ne suffit pas : il n'écrit que VMs, interfaces et
+adresses), TLS vérifié avec le magasin système (racine de la PKI du
 socle), pas avec le magasin de certifi embarqué par requests.
 
 Codes retour : 0 succès ; 1 erreur d'API ; 2 usage ou configuration.
@@ -73,7 +75,9 @@ class NetBox:
             raise ErreurNetBox(f"{chemin} {filtres} : {res['count']} objets, clé non unique")
         return res["results"][0] if res["count"] == 1 else None
 
-    def assurer(self, chemin: str, cle: dict[str, Any], voulu: dict[str, Any], libelle: str) -> dict:
+    def assurer(
+        self, chemin: str, cle: dict[str, Any], voulu: dict[str, Any], libelle: str
+    ) -> dict:
         """Crée ou met à jour l'objet ; renvoie l'objet (factice en simulation de création)."""
         actuel = self.chercher(chemin, cle)
         if actuel is None:
@@ -188,10 +192,16 @@ def modeliser(nb: NetBox, m: dict) -> None:
         garder(
             "rack",
             b["name"],
-            nb.assurer("dcim/racks/", {"name": b["name"], "site_id": voulu["site"]}, voulu, b["name"]),
+            nb.assurer(
+                "dcim/racks/", {"name": b["name"], "site_id": voulu["site"]}, voulu, b["name"]
+            ),
         )
     for f in m["fabricants"]:
-        garder("fabricant", f["slug"], nb.assurer("dcim/manufacturers/", {"slug": f["slug"]}, f, f["name"]))
+        garder(
+            "fabricant",
+            f["slug"],
+            nb.assurer("dcim/manufacturers/", {"slug": f["slug"]}, f, f["name"]),
+        )
     for ty in m["types_equipement"]:
         voulu = {
             "model": ty["model"],
@@ -199,9 +209,17 @@ def modeliser(nb: NetBox, m: dict) -> None:
             "manufacturer": ids["fabricant"][ty["fabricant"]],
             "u_height": ty["u_height"],
         }
-        garder("type", ty["slug"], nb.assurer("dcim/device-types/", {"slug": ty["slug"]}, voulu, ty["model"]))
+        garder(
+            "type",
+            ty["slug"],
+            nb.assurer("dcim/device-types/", {"slug": ty["slug"]}, voulu, ty["model"]),
+        )
     for ro in m["roles_equipement"]:
-        garder("role_eq", ro["slug"], nb.assurer("dcim/device-roles/", {"slug": ro["slug"]}, ro, ro["name"]))
+        garder(
+            "role_eq",
+            ro["slug"],
+            nb.assurer("dcim/device-roles/", {"slug": ro["slug"]}, ro, ro["name"]),
+        )
     for tc in m["types_cluster"]:
         garder(
             "type_cluster",
@@ -242,12 +260,19 @@ def modeliser(nb: NetBox, m: dict) -> None:
 
     print("Adressage : VLAN, préfixes, plages")
     for ri in m["roles_ipam"]:
-        garder("role_ipam", ri["slug"], nb.assurer("ipam/roles/", {"slug": ri["slug"]}, ri, ri["name"]))
+        garder(
+            "role_ipam", ri["slug"], nb.assurer("ipam/roles/", {"slug": ri["slug"]}, ri, ri["name"])
+        )
     g = m["groupe_vlan"]
     groupe = nb.assurer(
         "ipam/vlan-groups/",
         {"slug": g["slug"]},
-        {"name": g["name"], "slug": g["slug"], "scope_type": "dcim.site", "scope_id": ids["site"][g["site"]]},
+        {
+            "name": g["name"],
+            "slug": g["slug"],
+            "scope_type": "dcim.site",
+            "scope_id": ids["site"][g["site"]],
+        },
         g["name"],
     )
     for v in m["vlans"]:
@@ -260,7 +285,10 @@ def modeliser(nb: NetBox, m: dict) -> None:
             "description": v["description"],
         }
         vlan = nb.assurer(
-            "ipam/vlans/", {"vid": v["vid"], "group_id": groupe["id"]}, voulu, f"{v['vid']} {v['name']}"
+            "ipam/vlans/",
+            {"vid": v["vid"], "group_id": groupe["id"]},
+            voulu,
+            f"{v['vid']} {v['name']}",
         )
         reseau = ipaddress.ip_network(f"10.10.{v['vid']}.0/24")
         nb.assurer(
@@ -317,7 +345,9 @@ def modeliser(nb: NetBox, m: dict) -> None:
             "tags": [{"slug": s} for s in vm["tags"]],
             "custom_fields": {"vmid": vm["vmid"]},
         }
-        objet = nb.assurer("virtualization/virtual-machines/", {"name": vm["name"]}, voulu, vm["name"])
+        objet = nb.assurer(
+            "virtualization/virtual-machines/", {"name": vm["name"]}, voulu, vm["name"]
+        )
         primaire = None
         for itf in vm["interfaces"]:
             interface = nb.assurer(
@@ -355,16 +385,24 @@ def modeliser(nb: NetBox, m: dict) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Décrit MédiSphère dans NetBox (idempotent).")
-    parser.add_argument("--modele", type=Path, default=Path(__file__).with_name("modele-medisphere.yml"))
-    parser.add_argument("--dry-run", action="store_true", help="ne rien écrire, montrer les différences")
     parser.add_argument(
-        "--ca", default=os.environ.get("NETBOX_CA", MAGASIN_SYSTEME), help="magasin de confiance TLS"
+        "--modele", type=Path, default=Path(__file__).with_name("modele-medisphere.yml")
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="ne rien écrire, montrer les différences"
+    )
+    parser.add_argument(
+        "--ca",
+        default=os.environ.get("NETBOX_CA", MAGASIN_SYSTEME),
+        help="magasin de confiance TLS",
     )
     args = parser.parse_args()
 
     url = os.environ.get("NETBOX_URL", "https://nbx01.par1.medisphere.internal")
     jeton = lire_jeton(
-        Path(os.environ.get("NETBOX_TOKEN_FILE", "~/.config/workbook/netbox-auto.token")).expanduser()
+        Path(
+            os.environ.get("NETBOX_TOKEN_FILE", "~/.config/workbook/netbox-moi.token")
+        ).expanduser()
     )
     try:
         modele = yaml.safe_load(args.modele.read_text(encoding="utf-8"))
@@ -380,7 +418,9 @@ def main() -> int:
         return 1
     c = nb.compteurs
     mode = " (simulation : rien n'a été écrit)" if args.dry_run else ""
-    print(f"\nBilan{mode} : {c['crees']} créé(s), {c['modifies']} modifié(s), {c['inchanges']} inchangé(s)")
+    print(
+        f"\nBilan{mode} : {c['crees']} créé(s), {c['modifies']} modifié(s), {c['inchanges']} inchangé(s)"
+    )
     return 0
 
 

@@ -1,8 +1,0 @@
-# roles/step_ca/defaults/main.yml — variables AJOUTÉES en M06-E27 (rôle de M06-E02).
-
-# Écouteur HTTP (insecureAddress de ca.json) : vide = aucun. Il ne sert que des routes publiques
-# (CRL, ⚠️ vérifie la liste dans la documentation de ta version).
-step_ca_adresse_http: ""
-# CRL (bloc « crl » de ca.json) : désactivée par défaut.
-step_ca_crl:
-  enabled: false

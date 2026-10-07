@@ -16,7 +16,10 @@ _m05_e41_lock_complet() {
   awk '/provider ".*bpg\/proxmox"/ { p = 1 } p && /"zh:/ { z++ } p && /^}/ { p = 0 } END { exit !(z > 0) }' "$1/.terraform.lock.hcl" 2>/dev/null
 }
 _m05_e41_pipeline() {
-  gitlab_api "projects/plateforme%2Finfra/pipelines?ref=main&per_page=1" | jq -e '.[0].status == "success"' >/dev/null
+  # Pipelines de push sur main (pas les planifiés de dérive/sauvegarde) ; « manual » = réussi, applys
+  # manuels non lancés.
+  gitlab_api "projects/plateforme%2Finfra/pipelines?ref=main&source=push&per_page=1" \
+    | jq -e '.[0].status == "success" or .[0].status == "manual"' >/dev/null
 }
 
 check_cmd "socle : « tofu plan » aboutit sans changement" _m05x_plan_vide "$_m05x_socle"

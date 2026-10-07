@@ -32,7 +32,9 @@
 
 - name: L'API connaît toutes les zones
   ansible.builtin.assert:
-    that: (powerdns_auth_api_rep.json | map(attribute='name') | list) is superset(powerdns_auth_zones | map(attribute='nom') | map('regex_replace', '$', '.') | list)
+    that: >-
+      (powerdns_auth_api_rep.json | map(attribute='name') | list)
+      is superset(powerdns_auth_zones | map(attribute='nom') | map('regex_replace', '$', '.') | list)
     fail_msg: "Zones absentes de l'API : comparer « pdnsutil zone list-all » et powerdns_auth_zones."
     quiet: true
   when: not ansible_check_mode and powerdns_auth_api_active | bool

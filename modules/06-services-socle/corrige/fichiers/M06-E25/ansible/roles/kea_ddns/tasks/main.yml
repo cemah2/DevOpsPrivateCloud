@@ -1,0 +1,155 @@
+---
+# Rôle kea_ddns (M06-E17, complété en M06-E25) : D2 côté Kea, puis autorisations côté PowerDNS.
+# Ce fichier REMPLACE celui de M06-E17. Changement de M06-E25 : sur dns02, le PowerDNS LOCAL est
+# secondaire (il refuse les mises à jour dynamiques) : D2 envoie au PRIMAIRE (kea_ddns_serveur:
+# 10.10.20.10, port 5300) et les tâches « côté PowerDNS » (clé TSIG, métadonnées des zones) ne
+# s'exécutent que sur le primaire. dns01 autorise 10.10.20.16 (kea_ddns_autorises, et
+# powerdns_auth_dnsupdate_autorises dans host_vars/dns01/powerdns_auth.yml, M06-E24).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - kea_ddns_tsig_secret | length >= 32
+      - kea_ddns_tsig_secret | b64decode | length >= 32
+    fail_msg: >-
+      kea_ddns_tsig_secret absent ou trop court : 32 octets aléatoires en base64
+      (openssl rand -base64 32), dans vault_kea_tsig_ddns (Vault « critique »).
+    quiet: true
+  no_log: true
+
+- name: Dépôt ISC (tâches du rôle kea_dhcp4)
+  ansible.builtin.include_role:
+    name: kea_dhcp4
+    tasks_from: depot.yml
+    public: false
+
+- name: Paquet kea-dhcp-ddns
+  ansible.builtin.apt:
+    name: "isc-kea-dhcp-ddns={{ kea_ddns_version }}"
+    state: present
+
+# --- Côté Kea ------------------------------------------------------------------------------
+- name: Secret TSIG dans un fichier à part (jamais dans kea-dhcp-ddns.conf)
+  ansible.builtin.copy:
+    dest: "{{ kea_ddns_tsig_fichier }}"
+    content: "{{ kea_ddns_tsig_secret }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+  no_log: true
+  notify: Redémarrer kea-dhcp-ddns
+
+- name: Configuration de kea-dhcp-ddns (validée par « kea-dhcp-ddns -t »)
+  ansible.builtin.template:
+    src: kea-dhcp-ddns.conf.j2
+    dest: "{{ kea_ddns_fichier }}"
+    owner: root
+    group: _kea
+    mode: "0640"
+    backup: true
+    validate: kea-dhcp-ddns -t %s
+  notify: Redémarrer kea-dhcp-ddns
+
+- name: Service actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: "{{ kea_ddns_service }}"
+    enabled: true
+    state: started
+
+# --- Côté PowerDNS (pdnsutil 5.0 : sous-commandes « tsigkey » et « metadata ») --------------------
+# pdnsutil SOUS LE COMPTE pdns, propriétaire de la base SQLite (M06-E06) : lancé en root, il
+# créerait des fichiers -wal/-shm que le service ne pourrait plus écrire.
+- name: Côté PowerDNS (primaire seulement)
+  when: powerdns_auth_mode | default('primaire') == 'primaire'
+  block:
+    - name: Lire les clés TSIG connues de PowerDNS
+      ansible.builtin.command: pdnsutil tsigkey list
+      become: true
+      become_user: pdns
+      register: _kea_ddns_cles
+      changed_when: false
+      check_mode: false
+      no_log: true
+
+    # Sortie : « nom. algorithme. secret ». Clé absente ou secret différent (rotation) : on la remplace.
+    - name: Clé TSIG ddns-kea dans PowerDNS (même secret que Kea)
+      ansible.builtin.shell: |
+        set -o pipefail
+        pdnsutil tsigkey delete "{{ kea_ddns_tsig_nom }}" >/dev/null 2>&1 || true
+        pdnsutil tsigkey import "{{ kea_ddns_tsig_nom }}" "{{ kea_ddns_tsig_algorithme }}" "$SECRET"
+      args:
+        executable: /bin/bash
+      environment:
+        SECRET: "{{ kea_ddns_tsig_secret }}"
+      become: true
+      become_user: pdns
+      when: >-
+        (_kea_ddns_cles.stdout_lines | select('search', '^' ~ (kea_ddns_tsig_nom | regex_escape) ~ '\.? ')
+         | select('search', ' ' ~ (kea_ddns_tsig_secret | regex_escape) ~ '$') | list | length) == 0
+      changed_when: true
+      no_log: true
+
+    - name: Lire les autorisations de mise à jour des zones
+      ansible.builtin.command: pdnsutil metadata get {{ item }} TSIG-ALLOW-DNSUPDATE ALLOW-DNSUPDATE-FROM
+      become: true
+      become_user: pdns
+      loop:
+        - "{{ kea_ddns_zone_directe }}"
+        - "{{ kea_ddns_zone_inverse }}"
+      register: _kea_ddns_meta
+      changed_when: false
+      check_mode: false
+
+    # Les deux conditions doivent être vraies pour qu'une mise à jour soit acceptée : adresse source
+    # autorisée ET signature par la clé (doc PowerDNS 5.0, « Dynamic DNS Update »).
+    - name: Mises à jour de la zone réservées à la clé ddns-kea
+      ansible.builtin.command: pdnsutil metadata set {{ item.item }} TSIG-ALLOW-DNSUPDATE {{ kea_ddns_tsig_nom }}
+      become: true
+      become_user: pdns
+      loop: "{{ _kea_ddns_meta.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stdout is not search('TSIG-ALLOW-DNSUPDATE = ' ~ (kea_ddns_tsig_nom | regex_escape) ~ '\.?$', multiline=True)
+      changed_when: true
+
+    - name: Mises à jour de la zone acceptées depuis la boucle locale seulement
+      ansible.builtin.command: pdnsutil metadata set {{ item.item }} ALLOW-DNSUPDATE-FROM {{ kea_ddns_autorises | join(' ') }}
+      become: true
+      become_user: pdns
+      loop: "{{ _kea_ddns_meta.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: item.stdout is not search('ALLOW-DNSUPDATE-FROM = ' ~ (kea_ddns_autorises | join(', ') | regex_escape) ~ '$', multiline=True)
+      changed_when: true
+
+- name: Appliquer maintenant les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# Preuve de bout en bout, comme le fera D2 : mise à jour signée d'un TXT de sonde, puis retrait.
+# Clé dans un fichier temporaire 600 écrit par printf (commande interne) : « nsupdate -y » mettrait
+# le secret dans la liste des processus, lisible par tous les comptes de l'hôte.
+- name: Une mise à jour signée par la clé est acceptée par PowerDNS
+  ansible.builtin.shell: |
+    set -o pipefail
+    zone="{{ kea_ddns_zone_directe | regex_replace('\\.$', '') }}"
+    nom="sonde-ansible-ddns.$zone"
+    cle="$(mktemp)"
+    trap 'rm -f "$cle"' EXIT
+    printf 'key "%s" { algorithm %s; secret "%s"; };\n' \
+      "{{ kea_ddns_tsig_nom }}" "{{ kea_ddns_tsig_algorithme }}" "$SECRET" >"$cle"
+    {
+      echo "server {{ kea_ddns_serveur }} {{ kea_ddns_port }}"
+      echo "zone $zone"
+      echo "update add $nom 60 TXT \"kea_ddns\""
+      echo "send"
+      echo "update delete $nom TXT"
+      echo "send"
+    } | nsupdate -t 5 -k "$cle"
+  args:
+    executable: /bin/bash
+  environment:
+    SECRET: "{{ kea_ddns_tsig_secret }}"
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when: not ansible_check_mode

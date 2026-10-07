@@ -30,10 +30,21 @@ _m05o_env() {
     if [[ -r "$f" ]]; then source "$f"; fi
   done
   set +a
-  # Phrase de chiffrement de l'état (M05-E27), si elle existe déjà.
-  if [[ -r "$_m05o_cfg/tofu-chiffrement.pass" ]]; then
-    TF_VAR_phrase_chiffrement="$(<"$_m05o_cfg/tofu-chiffrement.pass")"
-    export TF_VAR_phrase_chiffrement
+  # Chiffrement de l'état (M05-E27) : TF_ENCRYPTION (fournisseur de clé « pbkdf2 etat »), jamais
+  # une variable TF_VAR_ (recopiée en clair dans chaque plan). Source de référence : le chargeur
+  # de l'apprenant, outils/charger-acces.sh (il suit une rotation de phrase) ; à défaut, la
+  # phrase de tofu-chiffrement.pass. Une valeur héritée du shell appelant est ignorée.
+  unset TF_ENCRYPTION
+  if [[ -r "$_m05o_infra/outils/charger-acces.sh" ]]; then
+    # shellcheck source=/dev/null
+    . "$_m05o_infra/outils/charger-acces.sh" >/dev/null 2>&1 || unset TF_ENCRYPTION
+  fi
+  if [[ -z "${TF_ENCRYPTION:-}" && -r "$_m05o_cfg/tofu-chiffrement.pass" ]]; then
+    # Guillemets voulus : le contenu est du HCL.
+    # shellcheck disable=SC2089,SC2090
+    printf -v TF_ENCRYPTION 'key_provider "pbkdf2" "etat" { passphrase = "%s" }' "$(tr -d '\n' < "$_m05o_cfg/tofu-chiffrement.pass")"
+    # shellcheck disable=SC2090
+    export TF_ENCRYPTION
   fi
   unset AWS_PROFILE
   export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt AWS_DEFAULT_REGION=us-east-1

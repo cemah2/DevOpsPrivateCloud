@@ -19,7 +19,11 @@
 # =============================================================================
 set -euo pipefail
 
-# shellcheck source-path=SCRIPTDIR source=../lib/ms-commun.sh
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20). Référence dans le
+# workbook : modules/02-scripting/corrige/fichiers/M02-E20/outils/lib/ms-commun.sh (le second
+# source-path ne sert qu'à ShellCheck dans le dépôt du workbook ; dans plateforme/outils, le
+# premier suffit).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
 
 readonly MDP="${MS_STEP_ADMIN_PASS:-$HOME/.config/workbook/step-admin.pass}"

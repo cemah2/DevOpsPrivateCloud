@@ -2,7 +2,7 @@
 # group_vars/role_dns/kea.yml — DHCP du lab servi par Kea (M06-E16, complété en M06-E17).
 # Plan d'adressage : PLAN.md §4.2 (SANDBOX 10.10.99.0/24, DHCP .100-.199) ; relais : gw01
 # (dnsmasq en mode relais, M00-E14), giaddr 10.10.99.1 — inchangé.
-# Secrets (Vault « critique », group_vars/role_dns/vault.yml) : vault_kea_api_mot_de_passe,
+# Secrets (Vault « critique », group_vars/role_dns/vault-critique.yml) : vault_kea_api_mot_de_passe,
 # vault_kea_tsig_ddns.
 
 kea_dhcp4_sous_reseaux:

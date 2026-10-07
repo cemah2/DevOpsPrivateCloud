@@ -1,6 +1,6 @@
 # Module 06 — Palier 2 : Opérationnel
 
-Le palier 1 a posé les briques : une PKI à deux niveaux sur `ca01`, NetBox sur `nbx01` avec le socle modélisé, PowerDNS sur `dns01` à la place du DNS de dnsmasq. Chaque brique marche, mais aucune ne parle encore aux autres : NetBox décrit le socle sans savoir ce qui tourne vraiment, OpenTofu reçoit ses adresses IP d'une variable, les noms DNS s'écrivent à la main, dnsmasq distribue toujours les baux du VLAN 99, les certificats viennent encore de la CA provisoire et chaque nouvelle VM t'oblige à accepter une empreinte SSH « à l'aveugle ». Ce palier relie les services entre eux et à l'automatisation : NetBox devient la source des adresses, des noms et de l'inventaire ; Kea remplace dnsmasq et publie ses baux dans le DNS ; step-ca délivre et renouvelle seul les certificats TLS et SSH ; `gw01` distribue une heure authentifiée. Tu termines par le runbook qui enchaîne tout cela pour ajouter un hôte au socle, sans geste manuel.
+Le palier 1 a posé les briques : une PKI à deux niveaux sur `ca01`, NetBox sur `nbx01` avec le socle modélisé, PowerDNS sur `dns01` à la place du DNS de dnsmasq. Chaque brique marche, mais aucune ne parle encore aux autres : NetBox décrit le socle sans savoir ce qui tourne vraiment, OpenTofu reçoit ses adresses IP d'une variable, les noms DNS s'écrivent à la main, dnsmasq distribue toujours les baux du VLAN 99, les certificats de GitLab, de `s3-01` et de NetBox sont émis à la main pour 90 jours (la CA provisoire, elle, a disparu en M06-E03) et chaque nouvelle VM t'oblige à accepter une empreinte SSH « à l'aveugle ». Ce palier relie les services entre eux et à l'automatisation : NetBox devient la source des adresses, des noms et de l'inventaire ; Kea remplace dnsmasq et publie ses baux dans le DNS ; step-ca délivre et renouvelle seul les certificats TLS et SSH ; `gw01` distribue une heure authentifiée. Tu termines par le runbook qui enchaîne tout cela pour ajouter un hôte au socle, sans geste manuel.
 
 > **Rappels du module** (introduction) : toute nouvelle VM passe par OpenTofu, toute configuration par un rôle Ansible testé par Molecule et appliqué par le pipeline de `plateforme/ansible`, tout nouveau flux par `host_vars/gw01/pare_feu.yml`. Les vérifications se lancent depuis `adm01`. Les VMs d'essai du module sont dans la plage 2060-2069 (pool `lab`, étiquette `env-m06`).
 
@@ -93,7 +93,7 @@ GraphQL : un seul point d'entrée `/graphql/`, une requête `POST` dont le corps
 - Écrire un outil idempotent, avec simulation, testé sans réseau, sûr en cas d'erreur.
 - L'exploiter comme un service : exécution planifiée, journal, alerte.
 
-**Prérequis** : M06-E10 ; M02 (`medictl`, tests, CI de `plateforme/outils`) ; M02-E41 (alertes `ms-alerte@`).
+**Prérequis** : M06-E10 ; M02 (`medictl`, tests, CI de `plateforme/outils`) ; M02-E26 (alertes `ms-alerte@`).
 **Durée indicative** : 4 h à 6 h.
 
 **Contexte technique**
@@ -110,7 +110,7 @@ Livre, par MR sur le projet de ton choix (justifie ce choix), un outil de synchr
 - les secrets ne sont ni sur la ligne de commande, ni dans le journal, ni dans le dépôt ; TLS vérifié des deux côtés ;
 - des tests automatisés qui couvrent les cas ci-dessus, sans accès réseau, exécutés par la CI ;
 - une exécution planifiée (fréquence argumentée), journalisée, qui **alerte** en cas d'échec ;
-- la démonstration : change les vCPU d'une VM d'essai 206x (crée-la si besoin, avec `medictl vm create`), et montre la mise à jour de NetBox au passage suivant, puis un second passage vide.
+- la démonstration : change les vCPU de la VM d'essai 2061 `m06-essai` (crée-la si besoin, avec `medictl vm create`), et montre la mise à jour de NetBox au passage suivant, puis un second passage vide.
 
 **Critères de réussite**
 - [ ] Pour toutes les VMs du socle, NetBox porte le bon VMID, le bon statut, les bons vCPU et la bonne mémoire.
@@ -269,6 +269,7 @@ Chaque champ que deux écrivains se disputent fait osciller le plan. `lifecycle 
 - Copie de travail de la clé : `~/.config/workbook/powerdns-api.env` (600), avec `PDNS_SERVER_URL`, `PDNS_API_KEY`, et la variable OpenTofu de ton choix pour la clé.
 - Fournisseur `mmianl/powerdns` `~> 2.5.0` (le fournisseur historique `pan-net/powerdns` est abandonné) : ressource `powerdns_record` (`zone`, `name`, `type`, `ttl`, `records`, `comments`).
 - Zones : `par1.medisphere.internal.`, inverse `10.10.in-addr.arpa.` (10.10.0.0/16).
+- Rappel de M06-E06 : ton rôle `powerdns_auth` génère le contenu de certaines zones et les recharge quand ce contenu change, ou ne fait que les créer (`contenu` de chaque zone). Décide ce qu'il doit faire des zones où OpenTofu va écrire, avant le premier `apply`.
 
 **Travail demandé**
 1. Explore l'API avec `curl` et `jq` : liste des zones, leurs métadonnées (`SOA-EDIT-API`), le contenu de `par1.medisphere.internal.`. Note le numéro de série de la zone.
@@ -479,14 +480,14 @@ Le troisième enregistrement est un DHCID (RFC 4701). Lis le paramètre `ddns-co
 ### M06-E18 — Certificats automatiques par ACME pour GitLab et NetBox  `LAB` `★★`
 
 > **Ticket SEC-728** — *De : Sophie Laurent*
-> Les certificats de GitLab et de `s3-01` sortent encore de la CA provisoire, celui de NetBox aussi, et tous ont une durée d'un an. Pour l'audit HDS, je veux trois choses : des certificats de la nouvelle PKI, d'une durée courte (30 jours au plus, c'est la politique), et un renouvellement que **personne** n'a à faire. Un certificat expiré en production, c'est un incident évitable, et je ne veux plus en voir.
+> Les certificats de GitLab, de `s3-01` et de NetBox viennent bien de la nouvelle PKI, mais ils ont été émis à la main (M06-E03, E04) pour 90 jours, et leur renouvellement est noté… dans un tableau. Pour l'audit HDS, je veux deux choses : des certificats d'une durée courte (30 jours au plus, c'est la politique), et un renouvellement que **personne** n'a à faire. Un certificat expiré en production, c'est un incident évitable, et je ne veux plus en voir.
 
 **Objectifs pédagogiques**
 - Obtenir un certificat par ACME (défi HTTP-01) auprès de step-ca, et comprendre ce que le défi prouve.
 - Renouveler automatiquement, avant l'échéance, avec rechargement du service consommateur.
 - Choisir un client ACME et un mode de défi adaptés à chaque service.
 
-**Prérequis** : M06-E02, M06-E03 (racine sur tous les hôtes), M06-E08 (DNS), M01 (certificat de GitLab), M05-E10 (`s3-01`).
+**Prérequis** : M06-E02, M06-E03 (racine sur tous les hôtes, certificats émis à la main), M06-E04 (`nbx01`), M06-E08 (DNS), M01 (certificat de GitLab), M05-E10 (`s3-01`).
 **Durée indicative** : 3 h.
 
 **Contexte technique**
@@ -498,18 +499,18 @@ Le troisième enregistrement est un DHCID (RFC 4701). Lis le paramètre `ddns-co
 
 **Travail demandé**
 1. Lis ce que fait l'intégration Let's Encrypt d'omnibus (`letsencrypt['…']` dans `gitlab.rb`). Peut-on la pointer sur `ca01` ? Est-ce documenté ? Décide et justifie dans ton journal.
-2. À la main, une fois, sur une VM d'essai 206x : obtiens un certificat ACME pour un nom de test, et observe dans les journaux de `ca01` la commande, le défi, la validation. Puis renouvelle-le avec `step ca renew` : le défi HTTP-01 se rejoue-t-il ? Que prouve le renouvellement, et que se passerait-il après expiration ?
+2. À la main, une fois, sur la VM d'essai 2061 `m06-essai` : obtiens un certificat ACME pour un nom de test, et observe dans les journaux de `ca01` la commande, le défi, la validation. Puis renouvelle-le avec `step ca renew` : le défi HTTP-01 se rejoue-t-il ? Que prouve le renouvellement, et que se passerait-il après expiration ?
 3. Écris le rôle `certificats_acme` : client `step` installé depuis le dépôt vérifié, confiance dans la CA établie par l'**empreinte** de la racine, émission seulement si le certificat manque ou ne se vérifie plus contre la racine MédiSphère pour son nom, port 80 libéré **le temps du défi** seulement (et rendu même en cas d'échec), droits de la clé, minuterie de renouvellement par certificat, rechargement du service après chaque renouvellement. Écris son scénario Molecule (une CA de test sur l'instance suffit : le scénario de `step_ca` en fabrique une).
 4. Décris dans `host_vars` les certificats de `git01`, `nbx01` et `s3-01`, et applique par le pipeline, hôte par hôte. Pour GitLab, la reconfiguration n'est pas nécessaire : pourquoi ?
 5. Contrôle depuis `adm01` avec `openssl s_client` puis `curl` sans option `-k` : émetteur, durée, chaîne complète (intermédiaire compris).
 6. Force un renouvellement sur `s3-01` (`systemctl start cert-renewer@<id>` ne suffit pas tant que le certificat est jeune : pourquoi ? que faut-il faire ?) et vérifie que OpenTofu accède toujours à son état.
-7. Retire la CA provisoire des hôtes qui n'en ont plus besoin (rôle `ca_lab`, M06-E03) quand plus aucun service ne présente de certificat qu'elle a signé. Comment le prouves-tu ?
+7. Fais le ménage des certificats émis à la main : plus aucun service du socle ne doit en présenter un, et leurs clés n'ont plus rien à faire dans Vault ni sur `adm01`. Comment le prouves-tu ? Mets à jour l'inventaire des échéances (M06-E03) et le registre des secrets.
 
 **Critères de réussite**
 - [ ] `git01`, `nbx01` et `s3-01` présentent un certificat émis par « MédiSphère Intermediate CA », de 30 jours au plus, avec la chaîne complète.
 - [ ] Sur chacun, une minuterie de renouvellement est active, et son dernier passage n'est pas en échec.
 - [ ] Un renouvellement forcé est pris en compte par le service sans action manuelle.
-- [ ] Plus aucun service du socle ne présente de certificat de la CA provisoire.
+- [ ] Plus aucun service HTTPS du socle ne présente un certificat émis à la main (provisioner `admin`, 90 jours), ni de la CA provisoire retirée en M06-E03.
 - [ ] Le rôle `certificats_acme` a son scénario Molecule, vert en CI.
 
 **Vérification** : `lab/bin/check 06 18`
@@ -553,7 +554,7 @@ Le modèle `cert-renewer@.service` lit `CERT_LOCATION` et `KEY_LOCATION` ; une s
 - Périmètre : les hôtes du socle gérés par Ansible (`gw01` compris). Pas `pve01` ni `pbs01`.
 
 **Travail demandé**
-1. À la main, sur une VM d'essai 206x : signe sa clé d'hôte ed25519 avec `step ssh certificate --host --sign` (sur `adm01`), dépose le certificat, ajoute `HostCertificate`. Depuis `adm01`, connecte-toi avec un `known_hosts` **temporaire** qui ne contient qu'une ligne `@cert-authority`, d'abord par le nom complet, puis par l'adresse IP. Explique l'échec du second essai, et ce qu'il impose pour nos principaux.
+1. À la main, sur la VM d'essai 2061 `m06-essai` : signe sa clé d'hôte ed25519 avec `step ssh certificate --host --sign` (sur `adm01`), dépose le certificat, ajoute `HostCertificate`. Depuis `adm01`, connecte-toi avec un `known_hosts` **temporaire** qui ne contient qu'une ligne `@cert-authority`, d'abord par le nom complet, puis par l'adresse IP. Explique l'échec du second essai, et ce qu'il impose pour nos principaux.
 2. Écris le rôle `ssh_ca_hote` : la clé publique d'hôte est lue sur l'hôte, signée **sur le contrôleur** (le mot de passe du provisioner ne quitte pas le contrôleur et n'apparaît ni dans la ligne de commande ni dans le journal), le certificat est déposé ; re-signature seulement si le certificat manque, ne correspond plus à la clé ou aux principaux, ou approche de sa fin ; `sshd` présente le certificat (fichier de `sshd_config.d` validé) ; une minuterie locale renouvelle par SSHPOP ; les hôtes eux-mêmes font confiance à la CA d'hôte (`/etc/ssh/ssh_known_hosts`). Scénario Molecule.
 3. Où mets-tu la clé publique de la CA d'hôte : récupérée à chaque passage sur `ca01`, ou versionnée dans l'inventaire ? Pense à la rotation de la CA et à la revue.
 4. Applique au socle par le pipeline (le contrôleur de CI a besoin de `step` : ajoute-le à `runner01` par son rôle). Vérifie avec `ssh-keyscan -c`.
@@ -771,7 +772,7 @@ Dans le script, suis la clé d'API (où est-elle écrite, où passe-t-elle, qui 
 - Le runbook remplace la procédure « ajout d'un hôte permanent » des modules précédents (`host-record` dnsmasq, alias SSH, `inventaire.md`) : signale ce qui disparaît.
 
 **Travail demandé**
-Rédige RB-060 avec au moins : quand l'utiliser (création, reconstruction à l'identique, et ce qui n'en relève pas), prérequis (accès, secrets, outils, droits), schéma ou liste des dépendances entre étapes, étapes numérotées avec pour chacune la commande ou l'écran, le résultat attendu et quoi faire sinon (NetBox, OpenTofu et DNS, Proxmox, synchronisation, inventaire Ansible, certificats SSH d'hôte, configuration par le pipeline, certificat TLS, pare-feu, sauvegardes, supervision, documentation), contrôle final, retour arrière par étape (et l'ordre inverse pour une suppression), pièges connus. Joue-le toi-même avec une VM d'essai 206x, corrige chaque hésitation, puis fais-le relire par MR (Nadia et Karim).
+Rédige RB-060 avec au moins : quand l'utiliser (création, reconstruction à l'identique, et ce qui n'en relève pas), prérequis (accès, secrets, outils, droits), schéma ou liste des dépendances entre étapes, étapes numérotées avec pour chacune la commande ou l'écran, le résultat attendu et quoi faire sinon (NetBox, OpenTofu et DNS, Proxmox, synchronisation, inventaire Ansible, certificats SSH d'hôte, configuration par le pipeline, certificat TLS, pare-feu, sauvegardes, supervision, documentation), contrôle final, retour arrière par étape (et l'ordre inverse pour une suppression), pièges connus. Joue-le toi-même avec la VM d'essai 2061, corrige chaque hésitation, puis fais-le relire par MR (Nadia et Karim).
 
 **Critères de réussite** (auto-évaluation avec le corrigé)
 - [ ] Quelqu'un qui n'a pas fait le module l'exécute sans question ; chaque étape a son contrôle.

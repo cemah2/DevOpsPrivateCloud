@@ -10,8 +10,10 @@
 #   3. copie de travail ~/src/ansible : « virtual_machines: false » dans le fichier d'inventaire NetBox
 #      (exemple recopié d'un inventaire d'équipements physiques).
 # Le script essaie la variante tirée, puis les suivantes, jusqu'à en trouver une qui vide le groupe
-# socle de ton inventaire NetBox. Écritures NetBox avec le jeton d'automatisation
-# (~/.config/workbook/netbox-auto.token) ; valeurs d'origine dans ~/.local/state/workbook/M06-E40/.
+# socle de ton inventaire NetBox. Écritures NetBox : variante 1 (geste humain dans l'interface) avec
+# ton jeton personnel (~/.config/workbook/netbox-moi.token : svc-automatisation n'a pas le droit de
+# modifier les étiquettes) ; variante 2 (script de synchronisation) avec le jeton d'automatisation
+# (~/.config/workbook/netbox-auto.token). Valeurs d'origine dans ~/.local/state/workbook/M06-E40/.
 # L'annulation ne rétablit que ce qui porte encore la valeur posée par la panne.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -19,9 +21,11 @@ source "$WB_ROOT/lab/lib/pannes-lib.sh"
 # shellcheck source=_m06-commun.sh
 source "$WB_ROOT/modules/06-services-socle/corrige/pannes/_m06-commun.sh"
 
-_E40_JETON="$_M06_CFG/netbox-auto.token"
+_E40_JETON_AUTO="$_M06_CFG/netbox-auto.token"
+_E40_JETON_MOI="$_M06_CFG/netbox-moi.token"
+_E40_JETON="$_E40_JETON_AUTO"
 
-# _e40_nb MÉTHODE CHEMIN [JSON] — appel de l'API NetBox avec le jeton d'écriture.
+# _e40_nb MÉTHODE CHEMIN [JSON] — appel de l'API NetBox avec le jeton de $_E40_JETON.
 _e40_nb() {
   local m="$1" p="$2" d="${3:-}"
   [[ -r "$_E40_JETON" ]] || return 1
@@ -65,6 +69,11 @@ _mE40_une() {
   d="$(m06_etat E40)"
   case "$n" in
     1)
+      _E40_JETON="$_E40_JETON_MOI"
+      if ! _e40_nb GET 'status/' >/dev/null; then
+        wb_avert "variante 1 impossible : jeton personnel $_E40_JETON_MOI absent ou expiré (crée-en un de 7 jours, comme en M06-E05)"
+        return 10
+      fi
       j="$(_e40_nb GET 'extras/tags/?slug=socle')" || return 10
       id="$(jq -r '.results[0].id // empty' <<<"$j")"
       [[ -n "$id" ]] || return 10
@@ -73,6 +82,7 @@ _mE40_une() {
       m06_journal E40 "étiquette NetBox $id : socle → socle-par1"
       ;;
     2)
+      _E40_JETON="$_E40_JETON_AUTO"
       j="$(_e40_nb GET 'virtualization/virtual-machines/?tag=socle&limit=0')" || return 10
       jq -c '[.results[] | select(.status.value != "planned") | {id, status: .status.value}]' <<<"$j" >"$d/statuts"
       ids="$(jq -c '[.[] | {id, status: "planned"}]' "$d/statuts")"
@@ -107,6 +117,7 @@ _e40_defaire() {
   case "$1" in
     1)
       [[ -f "$d/etiquette" ]] || return 0
+      _E40_JETON="$_E40_JETON_MOI"
       id="$(jq -r .id "$d/etiquette")"
       cur="$(_e40_nb GET "extras/tags/$id/" | jq -r '.slug // empty')" || cur=""
       if [[ "$cur" == socle-par1 ]]; then
@@ -120,6 +131,7 @@ _e40_defaire() {
       ;;
     2)
       [[ -f "$d/statuts" ]] || return 0
+      _E40_JETON="$_E40_JETON_AUTO"
       j="$(_e40_nb GET 'virtualization/virtual-machines/?status=planned&limit=0')" || j='{"results":[]}'
       # Seules les VMs encore en « planned » retrouvent leur statut d'origine.
       cur="$(jq -c --argjson orig "$(cat "$d/statuts")" \

@@ -33,6 +33,13 @@ check_cmd "artefacts : aucun accès « all » explicite" _m05p_main_sans "$_m05_
 check_cmd "analyse de sécurité : job securite et empreinte de Trivy" \
   _m05p_main_contient "$_m05_e26_ci" '^securite:' 'analyse-securite\.sh' 'sha256:[0-9a-f]{64}'
 check_cmd "variable SKIP de E20 retirée" _m05p_main_sans "$_m05_e26_ci" '^[[:space:]]*SKIP:'
+# _m05_e26_skip_modules — le .gitlab-ci.yml de plateforme/tofu-modules (main) n'a plus de SKIP.
+_m05_e26_skip_modules() {
+  local c
+  c="$(gitlab_api "projects/plateforme%2Ftofu-modules/repository/files/.gitlab-ci.yml/raw?ref=main" 2>/dev/null)" || return 1
+  [[ -n "$c" ]] && ! grep -Eq '^[[:space:]]*SKIP:' <<<"$c"
+}
+check_cmd "plateforme/tofu-modules : variable SKIP de E20 retirée" _m05_e26_skip_modules
 
 title "Secrets et protections (GitLab)"
 check_cmd "PROXMOX_VE_API_TOKEN : protégée et masquée" \

@@ -1,0 +1,85 @@
+---
+# roles/powerdns_recursor/tasks/configuration.yml — M06-E07, complété en M06-E26 (vérification des
+# ancres de confiance). Ce fichier remplace celui de M06-E07.
+- name: Script de validation de la configuration
+  ansible.builtin.copy:
+    src: pdns-recursor-verifier
+    dest: /usr/local/sbin/pdns-recursor-verifier
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configuration YAML du Recursor (validée avant mise en place)
+  ansible.builtin.template:
+    src: recursor.yml.j2
+    dest: /etc/powerdns/recursor.yml
+    owner: root
+    group: pdns
+    mode: "0640"
+    validate: /usr/local/sbin/pdns-recursor-verifier %s
+    backup: true
+  register: powerdns_recursor_conf
+  notify: Redémarrer le Recursor
+
+- name: Service pdns-recursor activé au démarrage
+  ansible.builtin.systemd_service:
+    name: pdns-recursor.service
+    enabled: true
+
+- name: Appliquer et vérifier
+  when: powerdns_recursor_redemarrer | bool
+  block:
+    - name: Redémarrer maintenant si la configuration a changé
+      ansible.builtin.meta: flush_handlers
+
+    - name: Service pdns-recursor démarré
+      ansible.builtin.systemd_service:
+        name: pdns-recursor.service
+        state: started
+
+    # Sonde sur la première zone relayée (ne dépend pas d'Internet), à défaut sur la racine.
+    - name: Le Recursor répond sur chaque adresse d'écoute
+      ansible.builtin.command: >-
+        dig +time=2 +tries=3
+        -p {{ item.split(':')[1] if ':' in item else 53 }} @{{ item.split(':')[0] }}
+        {{ (powerdns_recursor_zones_relayees | first).zone if powerdns_recursor_zones_relayees | length > 0 else '.' }}
+        {{ 'SOA' if powerdns_recursor_zones_relayees | length > 0 else 'NS' }}
+      loop: "{{ powerdns_recursor_ecoute }}"
+      register: powerdns_recursor_sonde
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        powerdns_recursor_sonde.stdout is not search('status: NOERROR')
+      when: not ansible_check_mode
+
+    # (E26) Ancres positives chargées et zones signées validées : un échec ici remet aussi la
+    # configuration précédente (rescue), comme une sonde en échec.
+    - name: Ancres de confiance (M06-E26)
+      ansible.builtin.include_tasks: ancres.yml
+      when:
+        - powerdns_recursor_ancres | length > 0
+        - not ansible_check_mode
+
+  rescue:
+    - name: Remettre la configuration précédente
+      ansible.builtin.copy:
+        src: "{{ powerdns_recursor_conf.backup_file }}"
+        dest: /etc/powerdns/recursor.yml
+        remote_src: true
+        owner: root
+        group: pdns
+        mode: "0640"
+      when: powerdns_recursor_conf.backup_file is defined
+
+    - name: Redémarrer avec la configuration précédente
+      ansible.builtin.systemd_service:
+        name: pdns-recursor.service
+        state: restarted
+      when: powerdns_recursor_conf.backup_file is defined
+
+    - name: Échouer en le disant
+      ansible.builtin.fail:
+        msg: >-
+          Le Recursor ne répond pas après le changement sur {{ inventory_hostname }}
+          ({{ 'configuration précédente remise' if powerdns_recursor_conf.backup_file is defined else 'première installation' }}).
+          Lire : journalctl -u pdns-recursor -n 50.

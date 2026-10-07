@@ -5,7 +5,7 @@
 # « current », étiquettes socle + role-pki (groupe Ansible role_pki), protection Proxmox.
 # Version du module : la dernière publiée dans plateforme/tofu-modules (adapter ?ref=).
 module "ca01" {
-  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-debian?ref=v1.0.0"
+  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-debian?ref=v1.1.0"
 
   nom         = "ca01"
   vm_id       = 1003

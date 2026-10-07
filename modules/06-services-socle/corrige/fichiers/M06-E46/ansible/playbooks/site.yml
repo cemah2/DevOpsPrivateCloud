@@ -1,0 +1,83 @@
+---
+# playbooks/site.yml — converge TOUT le socle v1 (état de référence en fin de module 06).
+# Second passage attendu : changed=0 partout. Noms des playbooks importés : ceux des corrigés
+# (M04-E46, M05-E10, M06-E02 à E30) ; adapte-les aux tiens.
+#
+# Ordre (chaque étape s'appuie sur la précédente) :
+#   1. garde-fou d'inventaire (M04-E39) : neuf hôtes, dns02 compris (M06-E24) ;
+#   2. rôles communs (base, ssh_durci, ca_lab : la racine MédiSphère partout, la CA provisoire nulle
+#      part) et client step du poste d'administration ;
+#   3. DNS et DHCP (role_dns : powerdns_auth, powerdns_recursor, certificats_acme pour Kea,
+#      kea_ddns, kea_dhcp4), puis la CA, NetBox, la forge, le runner, S3 ;
+#   4. certificats ACME des services HTTPS, certificats SSH d'hôte et d'utilisateur, temps (NTS) ;
+#   5. sauvegardes applicatives, filtrage local des hôtes INFRA ;
+#   6. gw01 (relais DHCP puis pare-feu) en DERNIER : filet anti-coupure (M04-E17).
+# Hors de site.yml : bascule-dns.yml (CHG-708) et retirer-dnsmasq.yml (CHG-726), opérations
+# ponctuelles ; statut.yml (service temporaire de M06-E34, retiré). Le rôle dnsmasq n'existe plus.
+# Reconstruction à partir de rien : RB-060 et RB-061 (l'ACME de role_dns suppose ca01 en service,
+# ca01 suppose le DNS : en reprise complète, appliquer d'abord dns01.yml avec --skip-tags
+# certificats_acme, puis ca01.yml, puis site.yml).
+
+- name: Garde-fou d'inventaire
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Les neuf hôtes du socle sont dans l'inventaire, chacun dans son groupe
+      ansible.builtin.assert:
+        that:
+          - groups['socle'] | default([]) | length == 9
+          - groups['role_routeur'] | default([]) | length == 1
+          - groups['role_bastion'] | default([]) | length == 1
+          - groups['role_dns'] | default([]) | length == 2
+          - groups['role_pki'] | default([]) | length == 1
+          - groups['role_gitlab'] | default([]) | length == 1
+          - groups['role_netbox'] | default([]) | length == 1
+          - groups['role_s3'] | default([]) | length == 1
+          - groups['role_runner'] | default([]) | length == 1
+        fail_msg: >-
+          Inventaire incomplet ({{ groups['socle'] | default([]) | length }} hôte(s) dans socle) :
+          passage annulé. Inventaire par défaut : NetBox (M06-E12) ; comparer avec
+          inventories/lab/proxmox.yml (outils/comparer-inventaires.sh). Voir RB-040.
+        quiet: true
+
+- name: Rôles communs (base, ssh_durci, ca_lab)
+  ansible.builtin.import_playbook: socle-base.yml
+
+- name: Outils de la PKI sur le poste d'administration
+  ansible.builtin.import_playbook: outils-pki.yml
+
+- name: DNS (PowerDNS) et DHCP (Kea), dns01 puis dns02
+  ansible.builtin.import_playbook: dns01.yml
+
+- name: Autorité de certification
+  ansible.builtin.import_playbook: ca01.yml
+
+- name: Source de vérité
+  ansible.builtin.import_playbook: nbx01.yml
+
+- name: Forge
+  ansible.builtin.import_playbook: git01.yml
+
+- name: Runner
+  ansible.builtin.import_playbook: runner01.yml
+
+- name: Stockage objet S3
+  ansible.builtin.import_playbook: s3-01.yml
+
+- name: Certificats TLS des services (ACME)
+  ansible.builtin.import_playbook: certificats.yml
+
+- name: Certificats SSH d'hôte et d'utilisateur
+  ansible.builtin.import_playbook: ssh-ca.yml
+
+- name: Temps de référence authentifié (NTS)
+  ansible.builtin.import_playbook: gw01-temps.yml
+
+- name: Sauvegardes applicatives
+  ansible.builtin.import_playbook: sauvegardes.yml
+
+- name: Filtrage local des services socle
+  ansible.builtin.import_playbook: pare-feu-local.yml
+
+- name: Routeur, relais DHCP et pare-feu (en dernier)
+  ansible.builtin.import_playbook: gw01-pare-feu.yml

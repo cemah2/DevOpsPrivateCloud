@@ -369,7 +369,7 @@ La documentation d'OpenTofu elle-même prévient que les espaces de travail ne c
 2. Dans une branche, écris **seulement** quatre blocs `import` (pas de ressource), puis `tofu plan -generate-config-out=genere.tf`. Lis le fichier produit : que pourrais-tu commiter tel quel ? Que faut-il absolument en garder ?
 3. Réécris la configuration proprement (une ressource par VM ou une ressource avec `for_each` et un bloc `import` en boucle : choisis et justifie), sans `genere.tf`. Itère sur `tofu plan` jusqu'au résultat attendu : `4 to import, 0 to add, 0 to change, 0 to destroy`. Pour chaque écart rencontré, note dans ton journal sa cause et ta décision : recopier la valeur réelle dans le code, ou l'ignorer (`ignore_changes`) ? Une règle : on ne change **jamais** la VM pour faire plaisir au code.
 4. Protège ces VMs : aucun plan ne doit pouvoir les détruire. Prouve-le avec `tofu plan -destroy` (rien n'est appliqué par cette commande : lis pourquoi).
-5. `gw01` : importé, laissé dehors, ou suivi en lecture seule ? Écris ta décision (ADR court dans `plateforme/medisphere`, numéro ADR-0051) et mets-la en œuvre. Que peut faire un bloc `check` d'OpenTofu ici ?
+5. `gw01` : importé, laissé dehors, ou suivi en lecture seule ? Écris ta décision (ADR court dans `docs/socle/adr/` de `plateforme/medisphere`, numéro ADR-0051) et mets-la en œuvre. Que peut faire un bloc `check` d'OpenTofu ici ?
 6. MR (avec le plan dans la description), relecture par Karim, fusion, apply. Puis `tofu plan` doit être vide. Supprime les instantanés.
 
 **Critères de réussite**

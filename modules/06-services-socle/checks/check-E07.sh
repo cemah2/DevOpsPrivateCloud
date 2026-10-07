@@ -14,7 +14,7 @@ require_cmd dig
 
 # Port du Recursor : 5301 pendant l'essai, 53 après la bascule (M06-E08). On suit celui qui répond.
 _m06d_e07_port=5301
-if remote dns01 'ss -Hlnup "sport = :53" | grep -q pdns_recursor' >/dev/null 2>&1; then
+if remote dns01 'sudo -n ss -Hlnup "sport = :53" | grep -q pdns_recursor' >/dev/null 2>&1; then
   _m06d_e07_port=53
 fi
 _m06d_e07_rec="10.10.20.10:$_m06d_e07_port"
@@ -27,9 +27,9 @@ check_ssh_output "dns01 : PowerDNS Recursor 5.4 du dépôt officiel" dns01 '^5\.
 check_ssh "dns01 : configuration au format YAML (/etc/powerdns/recursor.yml)" dns01 \
   'sudo -n test -s /etc/powerdns/recursor.yml && sudo -n pdns_recursor --config-dir=/etc/powerdns --config=check >/dev/null 2>&1'
 check_ssh_output "dns01 : le Recursor écoute sur 127.0.0.1 et 10.10.20.10 (port $_m06d_e07_port), pas ailleurs" dns01 '^2$' \
-  "ss -Hlnup | grep pdns_recursor | awk '{print \$4}' | sort -u | grep -Ec '^(127\.0\.0\.1|10\.10\.20\.10):$_m06d_e07_port\$'"
+  "sudo -n ss -Hlnup | grep pdns_recursor | awk '{print \$4}' | sort -u | grep -Ec '^(127\.0\.0\.1|10\.10\.20\.10):$_m06d_e07_port\$'"
 check_ssh "dns01 : aucune écoute du Recursor sur toutes les adresses" dns01 \
-  '! ss -Hlnup | grep pdns_recursor | grep -Eq "(0\.0\.0\.0|\*|\[::\]):"'
+  '! sudo -n ss -Hlnup | grep pdns_recursor | grep -Eq "(0\.0\.0\.0|\*|\[::\]):"'
 
 # --- 2. Zones internes relayées vers l'autoritaire ------------------------------------------------
 check_output "Nom interne résolu par le Recursor ($_m06d_e07_rec)" '^10\.10\.20\.12$' \

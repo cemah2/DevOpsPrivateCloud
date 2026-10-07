@@ -1,5 +1,0 @@
-# --- Ajout M06-E26 à roles/powerdns_recursor/defaults/main.yml (après powerdns_recursor_nta) ---
-# Ancres de confiance POSITIVES : zones internes signées dont le parent n'est pas signé
-# (.internal n'existe pas dans la racine). {nom, ds: ["<keytag> <algo> <type> <empreinte>"]}
-# Une ancre qui ne correspond plus à la clé de la zone = SERVFAIL sur toute la zone.
-powerdns_recursor_ancres: []

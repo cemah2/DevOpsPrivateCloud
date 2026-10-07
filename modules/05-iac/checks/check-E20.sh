@@ -37,9 +37,10 @@ check_output "tflint : modules épinglés par étiquette (terraform_module_pinne
 
 # --- CI : le dernier pipeline de main est vert --------------------------------------------------------
 _m05o_dernier_pipeline() {
-  gitlab_api "$(_m05o_projet "$1")/pipelines?ref=main&per_page=1" | jq -r '.[0].status // empty'
+  gitlab_api "$(_m05o_projet "$1")/pipelines?ref=main&source=push&per_page=1" | jq -r '.[0].status // empty'
 }
-check_output "forge : dernier pipeline de main de plateforme/infra réussi" '^success$' \
+# « manual » : pipeline réussi dont les jobs apply manuels (E26) n'ont pas été lancés.
+check_output "forge : dernier pipeline de main de plateforme/infra réussi" '^(success|manual)$' \
   _m05o_dernier_pipeline plateforme/infra
 check_output "forge : dernier pipeline de main de plateforme/tofu-modules réussi" '^success$' \
   _m05o_dernier_pipeline plateforme/tofu-modules

@@ -27,8 +27,9 @@ _M06_ANSIBLE="$_M06_SRC/ansible"
 _M06_CFG="$HOME/.config/workbook"
 _M06_NETBOX_URL="${WB_NETBOX_URL:-https://nbx01.par1.medisphere.internal}"
 _M06_ZONE="par1.medisphere.internal"
-# VM jetable des pannes du module (sonde DHCP de M06-E36), plage env-m06 2060-2069
-_M06_VMID_SONDE=2069
+# VM jetable des pannes du module (sonde DHCP de M06-E36), plage env-m06 2060-2069 : 2064, que
+# n'utilise aucun autre exercice (2069 est stat01, M06-E34)
+_M06_VMID_SONDE=2064
 
 # Adresses (PLAN.md §4.5) et VMID du socle
 # shellcheck disable=SC2034  # utilisées par les scripts qui sourcent ce fichier
@@ -147,18 +148,24 @@ m06_restaurer() {
 
 # m06_ansible COMMANDE [args…] — ansible-inventory, ansible-playbook… comme l'apprenant : racine du
 # projet, environnement uv du projet, accès Proxmox de M04 et jeton NetBox (NETBOX_TOKEN de ton
-# environnement, à défaut le jeton en lecture des checks ; NETBOX_API à défaut WB_NETBOX_URL).
+# environnement, sinon netbox-ansible.env de M06-E12, à défaut le jeton en lecture des checks ;
+# NETBOX_API à défaut WB_NETBOX_URL).
 m06_ansible() {
   local cmd="$1"
   shift
   (
     cd "$_M06_ANSIBLE" || exit 1
+    # Accès de l'inventaire comme l'apprenant : Proxmox (M04) et NetBox (M06-E12, NETBOX_TOKEN).
+    set -a
     if [[ -r "$_M06_CFG/pve-ansible.env" ]]; then
-      set -a
       # shellcheck source=/dev/null
       source "$_M06_CFG/pve-ansible.env"
-      set +a
     fi
+    if [[ -z "${NETBOX_TOKEN:-}" && -r "$_M06_CFG/netbox-ansible.env" ]]; then
+      # shellcheck source=/dev/null
+      source "$_M06_CFG/netbox-ansible.env"
+    fi
+    set +a
     if [[ -z "${NETBOX_TOKEN:-}" && -r "${WB_NETBOX_TOKEN_FILE:-$_M06_CFG/netbox-checks.token}" ]]; then
       NETBOX_TOKEN="$(<"${WB_NETBOX_TOKEN_FILE:-$_M06_CFG/netbox-checks.token}")"
       export NETBOX_TOKEN
@@ -248,6 +255,15 @@ m06_existe() {
 # Hôtes distants : aide ajoutée au script envoyé (après le prélude de wb_exec)
 # ---------------------------------------------------------------------------
 read -r -d '' _M06_AIDE_DISTANTE <<'AIDE' || true
+# pdnsutil sous le compte pdns, propriétaire de la base SQLite (comme le rôle powerdns_auth) : lancé
+# en root, il pourrait laisser des fichiers -wal/-shm que le service ne saurait plus écrire.
+pdnsutil() {
+  if id pdns >/dev/null 2>&1 && [ "$(id -u)" = 0 ]; then
+    runuser -u pdns -- /usr/bin/pdnsutil "$@"
+  else
+    command pdnsutil "$@"
+  fi
+}
 # empreinte CHEMIN — « lien:<cible> », « sha256:<somme>:<mode>:<propriétaire> » ou « absent »
 empreinte() {
   if [ -L "$1" ]; then

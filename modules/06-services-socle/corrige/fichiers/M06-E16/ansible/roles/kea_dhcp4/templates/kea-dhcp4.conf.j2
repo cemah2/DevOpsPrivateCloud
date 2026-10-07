@@ -1,6 +1,8 @@
 {#- kea-dhcp4.conf construit comme une structure puis sérialisé : JSON toujours valide.
-    Les commentaires sont dans « user-context » (Kea les conserve et les rend par config-get). -#}
-{%- set sous_reseaux = [] -%}
+    Les commentaires sont dans « user-context » (Kea les conserve et les rend par config-get).
+    Listes construites dans une boucle : namespace() obligatoire (une variable affectée dans une
+    boucle Jinja n'existe plus après la boucle : sans namespace, « subnet4 » resterait vide). -#}
+{%- set ns = namespace(sous_reseaux=[]) -%}
 {%- for s in kea_dhcp4_sous_reseaux -%}
 {%-   set options = [{"name": "routers", "data": s.routeur}] -%}
 {%-   if s.ntp is defined -%}
@@ -16,7 +18,7 @@
 {%-   if kea_dhcp4_ddns | bool -%}
 {%-     set sr = sr | combine({"ddns-send-updates": s.ddns | default(false) | bool}) -%}
 {%-   endif -%}
-{%-   set sous_reseaux = sous_reseaux + [sr] -%}
+{%-   set ns.sous_reseaux = ns.sous_reseaux + [sr] -%}
 {%- endfor -%}
 {%- set sockets = [{"socket-type": "unix", "socket-name": "kea4-ctrl-socket"}] -%}
 {%- if kea_dhcp4_api | bool -%}
@@ -54,7 +56,7 @@
     {"name": "domain-name", "data": kea_dhcp4_domaine},
     {"name": "domain-search", "data": kea_dhcp4_domaine}
   ],
-  "subnet4": sous_reseaux,
+  "subnet4": ns.sous_reseaux,
   "loggers": [{
     "name": "kea-dhcp4",
     "output-options": [{"output": "stdout", "pattern": "%-5p %m\n"}],

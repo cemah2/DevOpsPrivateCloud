@@ -1,4 +1,0 @@
-# roles/certificats_acme/defaults/main.yml — variable AJOUTÉE en M06-E27 (rôle de M06-E18).
-# Seuil de renouvellement, en durée (heures : step n'accepte pas « d ») : 15 jours avant
-# l'expiration. Politique de certification (M06-E33), §5.
-certificats_acme_seuil: 360h

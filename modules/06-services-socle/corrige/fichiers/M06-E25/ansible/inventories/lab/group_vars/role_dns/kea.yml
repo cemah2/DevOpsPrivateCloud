@@ -2,7 +2,7 @@
 # group_vars/role_dns/kea.yml — DHCP du lab servi par Kea (M06-E16, E17), en PAIRE haute
 # disponibilité depuis M06-E25 : dns01 (primary) et dns02 (standby), même configuration générée
 # par le même gabarit ; seuls this-server-name et l'adresse de service diffèrent (faits de l'hôte).
-# Secrets (Vault « critique », group_vars/role_dns/vault.yml) : vault_kea_api_mot_de_passe,
+# Secrets (Vault « critique », group_vars/role_dns/vault-critique.yml) : vault_kea_api_mot_de_passe,
 # vault_kea_api_supervision (E25), vault_kea_tsig_ddns.
 
 kea_dhcp4_sous_reseaux:

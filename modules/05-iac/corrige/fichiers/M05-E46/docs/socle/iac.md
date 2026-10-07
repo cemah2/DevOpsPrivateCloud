@@ -14,13 +14,14 @@
 
 | Configuration | Clé d'état | Contenu | Qui applique |
 |---|---|---|---|
-| `socle/` | `socle/terraform.tfstate` | VMs permanentes : `adm01` (1001), `dns01` (1002), `git01` (1004), `s3-01` (1006), `runner01` (1007) | job `apply` protégé, `resource_group` `infra-socle` |
-| `envs/lab-m05/` | `envs/lab-m05/terraform.tfstate` | VMs d'environnement 2050-2059 (vides en fin de module) | job `apply` protégé ou `adm01` pour les essais |
-| `terragrunt/` | (mêmes clés, via `root.hcl`) | <si retenu : factorisation des backends et providers, M05-E24> | — |
+| `socle/` | `socle/terraform.tfstate` | VMs permanentes : `adm01` (1001), `dns01` (1002), `git01` (1004), `runner01` (1007) importées (`proxmox_virtual_environment_vm.socle["…"]`), `s3-01` (1006, `module.s3_01`) | job manuel `apply:socle`, `resource_group` `tofu-socle` |
+| `envs/lab-m05/` | `envs/lab-m05/terraform.tfstate` | VMs d'environnement du module (vides en fin de module) | `apply:lab-m05`, ou `adm01` pour les essais |
+| `envs/recette-m05/` | `envs/recette-m05/terraform.tfstate` | recette de Julien (M05-E15, E17 ; vide en fin de module) | `apply:recette-m05` |
+| `terragrunt/live/<env>/<unité>` | `envs/<env>/<unité>/terraform.tfstate` (clé déduite du chemin par `root.hcl`) | environnements factorisés (M05-E24, E34) | `adm01` (`terragrunt run --all …`), hors pipeline |
 
 Rayon d'impact : un état = un verrou = un périmètre. Les VMs jetables ne partagent jamais l'état du socle.
 
-`gw01` (1000) : <hors IaC / importé en lecture seule> — décision : <ADR ou paragraphe>, raison : cœur réseau construit à la main au module 00, sa recréation couperait tout le lab, sa configuration est gérée par Ansible (rôle `pare_feu`).
+`gw01` (1000) : <hors IaC, surveillé en lecture par un bloc `check`, selon le corrigé de M05-E16> — décision : ADR-0051, raison : cœur réseau construit à la main au module 00, sa recréation couperait tout le lab, sa configuration est gérée par Ansible (rôle `pare_feu`).
 
 ## 3. Modules (`plateforme/tofu-modules`)
 
@@ -34,11 +35,12 @@ Publication par semantic-release (étiquettes protégées) ; mise à jour par MR
 
 | Étape | Job | Quand | Garde-fous |
 |---|---|---|---|
-| Qualité | `fmt`, `validate`, `tflint`, `terraform-docs`, pre-commit | MR | bloquant |
-| Sécurité | `checkov`, `trivy` (image **épinglée par empreinte**) | MR | exceptions justifiées dans `.checkov.yaml` / `.trivyignore` |
-| Plan | `plan:socle`, `plan:envs` | MR et `main` | plan chiffré en artefact, résumé en commentaire de MR ; échec si destruction d'une VM 1000-1099 |
-| Apply | `apply:socle`, `apply:envs` | `main`, manuel | environnement protégé, `resource_group`, applique **le plan sauvegardé** du pipeline, `interruptible: false` |
-| Dérive | `derive:socle` | planifié chaque nuit | `plan -detailed-exitcode` : 2 = écart, alerte et ticket |
+| Qualité | `pre-commit` (`tofu fmt`, `tofu validate`, tflint, terraform-docs), `commitlint`, `gitleaks` | MR et branches | bloquant |
+| Sécurité | `securite` : Checkov et Trivy (binaire de `runner01` **contrôlé par empreinte**, `TRIVY_EMPREINTE`) | MR et branches | exceptions justifiées dans `.checkov.yaml` / `.trivyignore` |
+| Plan | `plan:socle`, `plan:lab-m05`, `plan:recette-m05` | MR (branches `conf/*`) et `main` | `plan.tfplan` (chiffré) et `plan.txt` en artefacts (`access: developer`), résumé dans le widget « terraform » de la MR ; <si ajouté : échec si destruction d'une VM 1000-1099> |
+| Apply | `apply:socle`, `apply:lab-m05`, `apply:recette-m05` | `main`, manuel | réservé à qui peut fusionner dans `main` (pas d'environnement protégé en CE), `resource_group` par état, applique **le plan enregistré** du même pipeline, `interruptible: false`, plan de contrôle vide ensuite |
+| Dérive | `derive:socle`, `derive:lab-m05`, `derive:recette-m05`, puis `derive:alerte` | planifié chaque nuit (`PLANIF=derive`) | `outils/derive.sh` : 2 = dérive, 3 = écart de code (orange), ticket `derive` unique |
+| Sauvegarde | `sauvegarde-etats` | planifié chaque nuit (`PLANIF=sauvegarde-etats`) | copie des objets **chiffrés**, artefact `access: maintainer`, 90 jours |
 
 ## 5. L'état
 
@@ -47,7 +49,7 @@ Publication par semantic-release (étiquettes protégées) ; mise à jour par MR
 | Verrou | `use_lockfile = true` (objet `<clé>.tflock`, écriture conditionnelle) | script `outils/s3-tester-ecriture-conditionnelle.sh` après chaque mise à jour de SeaweedFS |
 | Chiffrement | bloc `encryption` : `pbkdf2` + `aes_gcm`, `state` et `plan`, phrase dans `~/.config/workbook/tofu-chiffrement.pass` et en variable CI protégée et masquée | `aws s3 cp s3://tofu-state/socle/terraform.tfstate - \| jq 'keys'` ne montre que l'enveloppe |
 | Versionnage | compartiment versionné | `aws s3api get-bucket-versioning --bucket tofu-state` |
-| Sauvegarde | <M05-E29 : copie quotidienne hors de `s3-01`, vers …> ; disque de données de `s3-01` dans la sauvegarde PBS `lab-nuit` | restauration testée le <date> par <qui> |
+| Sauvegarde | job planifié `sauvegarde-etats` (M05-E29, `outils/sauvegarder-etats.sh`) : copie des objets chiffrés hors de `s3-01` ; disque de données de `s3-01` dans la sauvegarde PBS `lab-nuit` | restauration testée le <date> par <qui> (`outils/restaurer-etat.sh`, RB-051) |
 | Droits | identité S3 `tofu-etat` limitée à `tofu-state` ; `admin-s3` réservée au bris de glace | revue trimestrielle |
 
 Restauration : **RB-051**. Verrou bloqué : **RB-050**. Rotation de la phrase : nouvelle méthode + `fallback`, réécriture des états, retrait du `fallback` (procédure dans le registre des secrets).

@@ -380,7 +380,7 @@ La CA restaurée sur la VM 2068 a la **même** clé d'intermédiaire que `ca01` 
 - Script : `bin/ms-verif-services` dans `plateforme/outils`, avec ses tests bats, installé sous `/usr/local/bin` par `task install:systeme`. Options : `-s|--seuil-certificats JOURS` (défaut 10), `-q|--quiet` (n'affiche que les anomalies). Codes 0 (tout va bien), 1 (au moins une anomalie **ou** un contrôle impossible), 2 (usage).
 - Ce qui est surveillé (résolveurs, zones, serveurs Kea, points TLS…) est décrit dans un fichier de configuration **versionné** du projet, `etc/ms-verif-services.conf`, installé en `/usr/local/etc/ms-verif-services.conf` par la même tâche : ajouter un service à surveiller ne doit jamais demander de modifier le script.
 - Unités sur `adm01` : `ms-verif-services.service` (oneshot, `User=admin`, `OnFailure=ms-alerte@%n.service`) et `ms-verif-services.timer` (toutes les 15 minutes, rattrapage).
-- Identités en lecture : jeton NetBox **dédié** en lecture seule dans `~/.config/workbook/netbox-supervision.token` ; compte Kea `supervision` dans `~/.config/workbook/kea-supervision.env` (M06-E25). Fichiers en 600.
+- Identités en lecture : jeton NetBox **dédié** en lecture seule (compte de service `svc-supervision`) dans `~/.config/workbook/netbox-supervision.token` ; compte Kea `supervision` dans `~/.config/workbook/kea-supervision.env` (M06-E25). Fichiers en 600.
 - Contrôles attendus (au minimum) :
 
   | Domaine | Contrôle |

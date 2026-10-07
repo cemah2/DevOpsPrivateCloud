@@ -120,7 +120,7 @@ Dans `root.hcl`, la fonction `path_relative_to_include()` renvoie le chemin de l
 2. **Premier passage.** Lance Checkov puis Trivy sur `socle/`, `envs/` et `terragrunt/composants/`, d'abord sans configuration. Combien de règles s'appliquent vraiment à des ressources Proxmox ? Que signalent-ils sur les sources de modules (`?ref=v1.1.0`) ? Les règles `CKV_TF_1` et `CKV_TF_2` se contredisent-elles ? Décide laquelle tu retiens, au regard de ce que tu sais des étiquettes de `plateforme/tofu-modules` (protégées, M01) et de l'incident de mars.
 3. **Règles maison.** Écris au moins quatre règles Checkov (YAML) et deux règles Trivy (Rego) qui traduisent nos conventions (introduction du module, M03) : par exemple TLS vérifié par le provider, étiquettes toujours déclarées, clone complet, agent QEMU actif, ressource expérimentale `proxmox_vm` interdite. Pour **chaque** règle, crée dans `politiques/tests/` un fichier qui la viole : une règle qu'on n'a jamais vue échouer ne prouve rien.
 4. **Exceptions.** S'il reste des alertes justifiées par un choix de l'équipe, ignore-les **une par une** (jamais une famille entière), avec la raison et une date d'expiration dans `.trivyignore`, et la raison en commentaire dans `.checkov.yaml`. Vérifie qu'une exception expirée fait réapparaître l'alerte.
-5. **Script.** `outils/analyse-securite.sh` lance les deux analyseurs avec la configuration du dépôt, sans téléchargement implicite, refuse de tourner si le Trivy installé n'a pas l'empreinte attendue, écrit des rapports JUnit dans `rapports/`, et sort en erreur s'il y a la moindre alerte. Il passe sur le code du dépôt et échoue sur `politiques/tests/`. Branche-le dans pre-commit à l'étape `pre-push`.
+5. **Script.** `outils/analyse-securite.sh` lance les deux analyseurs avec la configuration du dépôt, sans téléchargement implicite, refuse de tourner si le Trivy installé n'a pas l'empreinte attendue, écrit des rapports JUnit dans `rapports/` (dossier ignoré par Git : complète le `.gitignore`), et sort en erreur s'il y a la moindre alerte. Il passe sur le code du dépôt et échoue sur `politiques/tests/`. Branche-le dans pre-commit à l'étape `pre-push`.
 6. Ouvre une MR (le job de CI viendra en E26).
 
 **Critères de réussite**
@@ -173,7 +173,7 @@ Trivy et Checkov essaient de télécharger les modules distants qu'ils trouvent 
   - `artifacts:access` accepte `all`, `developer`, `maintainer` (depuis 18.4) et `none` ; `artifacts:expose_as` affiche un artefact dans la MR ;
   - une variable masquée doit tenir sur une ligne, sans espace, 8 caractères au moins ; désactive « Expand variable reference » pour pouvoir y mettre `!` ou `=`.
 - Variables CI du projet, toutes **protégées** : `PROXMOX_VE_ENDPOINT`, `PROXMOX_VE_API_TOKEN` (masquée et cachée), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (masquée et cachée). Branches protégées : `main` et `conf/*` (comme `plateforme/ansible`), option *Allow merge request pipelines to access protected variables and runners* activée.
-- E20 a mis `SKIP: tofu-fmt,tofu-validate,tflint,terraform-docs` dans le `.gitlab-ci.yml` en attendant les outils de `runner01` : c'est le moment de le retirer.
+- E20 a mis `SKIP: tofu-fmt,tofu-validate,tflint,terraform-docs` dans le `.gitlab-ci.yml` de `plateforme/infra` **et** de `plateforme/tofu-modules` en attendant les outils de `runner01` : c'est le moment de le retirer des deux.
 - Configurations à traiter par le pipeline : `socle/`, `envs/lab-m05/`, `envs/recette-m05/`. Les environnements Terragrunt restent hors pipeline dans cet exercice (voir « Pour aller plus loin »).
 
 > ⚠️ **Attention** : à la fin de cet exercice, quiconque peut faire exécuter du code à `runner01` sur une branche protégée détient les droits de `wb-tofu` sur le pool `lab` et l'accès en écriture à tous les états. Vérifie qui peut pousser sur `conf/*` et fusionner dans `main` **avant** de créer les variables. Le premier apply du socle par le pipeline se fait sur une MR dont le plan est vide ou ne change qu'une description.
@@ -192,7 +192,7 @@ Trivy et Checkov essaient de télécharger les modules distants qu'ils trouvent 
 6. **Retour à la règle.** Écris dans `CONTRIBUTING.md` du projet le chemin normal d'un changement d'infrastructure et ce qui reste permis depuis `adm01` (lecture, plan, environnements Terragrunt de test ; jamais d'apply du socle hors bris de glace).
 
 **Critères de réussite**
-- [ ] Sur `main`, `.gitlab-ci.yml` contient `securite`, un `plan:` et un `apply:` par configuration ; les `apply:` sont manuels, sur `main`, avec environnement et `resource_group` ; le `SKIP` de E20 a disparu et le job `pre-commit` réussit ; l'empreinte de Trivy y figure.
+- [ ] Sur `main`, `.gitlab-ci.yml` contient `securite`, un `plan:` et un `apply:` par configuration ; les `apply:` sont manuels, sur `main`, avec environnement et `resource_group` ; le `SKIP` de E20 a disparu (aussi de `plateforme/tofu-modules`) et le job `pre-commit` réussit dans les deux projets ; l'empreinte de Trivy y figure.
 - [ ] Un déploiement réussi existe pour l'environnement `lab/socle` ; un pipeline de MR a exécuté `plan:socle` avec succès et publié un rapport `terraform`.
 - [ ] `PROXMOX_VE_API_TOKEN` et `AWS_SECRET_ACCESS_KEY` sont protégées et masquées ; `main` et `conf/*` sont protégées.
 - [ ] Les artefacts des jobs `plan:` ne sont pas accessibles à tous.

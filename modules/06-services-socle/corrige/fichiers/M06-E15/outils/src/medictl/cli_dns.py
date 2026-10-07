@@ -2,8 +2,11 @@
 
   medictl dns sync [--dry-run]     zones PowerDNS générées depuis l'IPAM de NetBox
 
-Lecture NetBox : le jeton en lecture suffit (MEDICTL_NETBOX_TOKEN_FILE=…/netbox-checks.token
-ou mieux, un jeton de lecture propre à l'outil). Écriture : API de PowerDNS (powerdns.py).
+Lecture NetBox : même configuration que « medictl netbox » (jeton de svc-automatisation,
+~/.config/workbook/netbox-auto.token par défaut, ou MEDICTL_NETBOX_TOKEN_FILE) ; un jeton de
+lecture propre à l'outil serait encore mieux. Jamais le jeton des vérifications du workbook
+(netbox-checks.token, compte wb-checks) : il appartient aux contrôles, pas à l'exploitation.
+Écriture : API de PowerDNS (powerdns.py).
 
 Codes de sortie : 0 succès, 1 erreur, 4 conflits signalés (rien n'a été écrit pour eux) :
 une exécution planifiée qui échoue en 4 alerte sans bloquer les autres enregistrements.

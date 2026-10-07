@@ -16,7 +16,7 @@ Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argum
 - la résolution d'Internet et la validation DNSSEC (drapeau `ad`, `dnssec-failed.org`) : l'environnement de rédaction bloquait le DNS sortant en TCP ; la configuration suit la documentation du Recursor 5.4, les comportements décrits en E07 sont ceux de cette documentation ;
 - les commandes de GitLab pour son magasin de confiance (`/etc/gitlab/trusted-certs/`, `gitlab-ctl reconfigure`) et le rôle `seaweedfs` de M05 (noms de ses variables de certificat : reprends les tiens) ;
 - le texte exact des messages d'erreur de step-ca (durée refusée) et des écrans de l'interface de NetBox (création des jetons) ;
-- la référence du module `vm-debian` (`?ref=v1.0.0` dans les fichiers) : mets la dernière étiquette que tu as publiée en M05.
+- la référence du module `vm-debian` (`?ref=v1.1.0` dans les fichiers, dernière version du corrigé de M05) : mets la dernière étiquette que tu as publiée en M05.
 
 ---
 
@@ -359,7 +359,6 @@ Sauvegarde PostgreSQL (`pg_dump` quotidien, chiffré, vers `s3-01`) et de `media
 3. Script : [`outils/netbox/modeliser.py`](fichiers/M06-E05/outils/netbox/modeliser.py) (PEP 723, `requests` et `pyyaml`). Une classe `NetBox` avec `assurer(point, cle, voulu)` : cherche par filtre de clé naturelle, crée (`+`), compare **seulement** les champs voulus après normalisation (objets imbriqués → identifiant, choix → `value`, étiquettes → ensemble de slugs) et envoie un `PATCH` des seuls champs différents (`~`), ou ne fait rien (`=`). L'IP primaire est posée en dernier.
 4. Exécution :
    ```
-   admin@adm01:~/src/outils/netbox$ export NETBOX_TOKEN_FILE=~/.config/workbook/netbox-moi.token
    admin@adm01:~/src/outils/netbox$ uv run modeliser.py --dry-run
    admin@adm01:~/src/outils/netbox$ uv run modeliser.py
    …
@@ -369,7 +368,7 @@ Sauvegarde PostgreSQL (`pg_dump` quotidien, chiffré, vers `s3-01`) et de `media
    Bilan : 0 créé(s), 0 modifié(s), 167 inchangé(s)
    ```
    (Chiffres obtenus sur une base vide ; avec tes objets de l'étape 1, quelques `=` ou `~` remplacent des `+`.) Les objets faits à la main sont **repris**, pas dupliqués, si leur clé naturelle (slug, `vid` dans le groupe, préfixe) est celle du fichier ; un slug différent (`par-1` au lieu de `par1`) donne un doublon : supprime l'objet manuel.
-   Le script lit par défaut `netbox-auto.token` : c'est le jeton du compte de service qui arrive en M06-E10 ; pour cet exercice, `NETBOX_TOKEN_FILE` désigne ton jeton personnel.
+   Le script lit par défaut ton jeton personnel `netbox-moi.token` (variable `NETBOX_TOKEN_FILE` pour en désigner un autre). Le compte de service de M06-E10 (`svc-automatisation`) ne le remplacera pas : il n'a le droit d'écrire que les VMs, leurs interfaces et leurs adresses, pas les sites, VLAN ou préfixes ; un nouveau passage du script se fait donc avec un jeton personnel renouvelé.
 5. Contrôles dans l'interface : « IPAM → Prefixes » (colonne *Utilization*), chaque VM (onglet *Interfaces*, IP primaire), « IP Ranges » filtrées par rôle. MR dans `plateforme/outils` (pipeline : `ruff`, ShellCheck).
 
 **Explications**

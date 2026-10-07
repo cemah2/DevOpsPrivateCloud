@@ -18,7 +18,11 @@
 # Principe (M02-E26) : « rien vu » n'est jamais « tout va bien » — une réponse vide, un outil
 # absent, une identité illisible sont des KO.
 
-# shellcheck source=../lib/ms-commun.sh disable=SC1091
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20). Référence dans le
+# workbook : modules/02-scripting/corrige/fichiers/M02-E20/outils/lib/ms-commun.sh (le second
+# source-path ne sert qu'à ShellCheck dans le dépôt du workbook ; dans plateforme/outils, le
+# premier suffit).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
 
 _NB_OK=0
@@ -121,8 +125,8 @@ verifier_dnssec() {
 # kea_cmd SERVEUR COMMANDE [ARGUMENTS_JSON] — réponse JSON (premier élément de la liste renvoyée).
 # Identifiants passés à curl par un fichier de configuration lu sur stdin : absents de « ps ».
 kea_cmd() {
-  local s="$1" cmd="$2" args="${3:-}" corps
-  if [[ -n "$args" ]]; then corps="{\"command\": \"$cmd\", \"arguments\": $args}"; else corps="{\"command\": \"$cmd\"}"; fi
+  local s="$1" cmd="$2" arguments_json="${3:-}" corps
+  if [[ -n "$arguments_json" ]]; then corps="{\"command\": \"$cmd\", \"arguments\": $arguments_json}"; else corps="{\"command\": \"$cmd\"}"; fi
   curl -sS --fail --max-time 10 --cacert "$MS_RACINE" -K - -H 'Content-Type: application/json' \
     --data "$corps" "https://$s:$MS_KEA_PORT/" <<<"user = \"${KEA_API_USER}:${KEA_API_PASSWORD}\"" \
     | jq -e '.[0]'

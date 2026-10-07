@@ -50,12 +50,14 @@
 
     - name: "Ajouter le témoin (syntaxe pdnsutil 5.0 : nom ABSOLU)"
       ansible.builtin.command: pdnsutil rrset add essai.molecule.internal temoin.essai.molecule.internal. TXT 60 '"v1"'
+      become: true
       become_user: pdns
       when: mol_temoin.stdout | length == 0
       changed_when: true
 
     - name: Faire avancer le numéro de série (NOTIFY vers le secondaire)
       ansible.builtin.command: pdnsutil zone increase-serial essai.molecule.internal
+      become: true
       become_user: pdns
       when: mol_temoin.stdout | length == 0
       changed_when: true

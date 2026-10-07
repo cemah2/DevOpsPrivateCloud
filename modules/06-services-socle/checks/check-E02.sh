@@ -52,7 +52,7 @@ check_output "Intermédiaire : « MédiSphère Intermediate CA », ne peut signe
 check_ssh "ca01 : service step-ca actif et lancé au démarrage" ca01 \
   'systemctl is-active --quiet step-ca && systemctl is-enabled --quiet step-ca'
 check_ssh_output "ca01 : step-ca tourne sous le compte « step »" ca01 '^step$' 'ps -o user= -C step-ca | sort -u'
-check_ssh_output "ca01 : step-ca écoute sur le port 443" ca01 ':443[[:space:]]' 'ss -Hltnp "sport = :443"'
+check_ssh_output "ca01 : step-ca écoute sur le port 443" ca01 ':443[[:space:]]' 'sudo -n ss -Hltnp "sport = :443"'
 check_ssh "ca01 : aucune clé de racine sur la CA en ligne" ca01 \
   '! sudo -n find /etc /root /home /opt /srv /var/tmp /tmp -xdev \( -name "root_ca_key*" -o -name "*root*ca*.key" \) -print -quit 2>/dev/null | grep -q .'
 check_ssh_output "ca01 : secrets/ ne contient que les clés en ligne (intermédiaire, CA SSH)" ca01 \

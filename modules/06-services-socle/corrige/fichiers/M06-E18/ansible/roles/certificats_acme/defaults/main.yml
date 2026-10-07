@@ -9,7 +9,10 @@
 #      port 80 ni d'un secret ; lancé par la minuterie cert-renewer@<id>.timer (modèle officiel
 #      Smallstep) aux deux tiers de la durée de vie, puis le service consommateur est rechargé.
 # Le rôle ne réémet un certificat que s'il manque, ou s'il ne se vérifie plus contre la racine
-# MédiSphère pour ses noms (certificat de la CA provisoire, expiré, autre nom).
+# MédiSphère pour ses noms (autre CA, expiré, autre nom), ou s'il dure plus que la politique ACME
+# (certificat de 90 jours émis à la main en M06-E03/E04).
+# Évolution : M06-E27 (seuil de renouvellement) ; état final des variables :
+# M06-E27/ansible/roles/certificats_acme/defaults/main.yml.
 
 certificats_acme_ca_url: https://ca01.par1.medisphere.internal
 certificats_acme_provisioner: acme
@@ -17,6 +20,9 @@ certificats_acme_provisioner: acme
 certificats_acme_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
 # Configuration du client step de l'hôte (STEPPATH) : config/defaults.json, certs/root_ca.crt.
 certificats_acme_steppath: /etc/step
+# Durée maximale admise (heures) d'un certificat en place : au-delà, il a été émis à la main
+# (provisioner admin, 90 jours) et le rôle le remplace par un certificat ACME.
+certificats_acme_duree_max_h: 720
 
 # Liste des certificats de l'hôte (host_vars/<hôte>/certificats.yml) :
 #   - id: gitlab                       # instance de cert-renewer@<id> (lettres, chiffres, -)

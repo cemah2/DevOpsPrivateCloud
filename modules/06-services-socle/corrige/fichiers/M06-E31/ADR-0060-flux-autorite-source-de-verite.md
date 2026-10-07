@@ -31,8 +31,9 @@ Option retenue : **1, « NetBox fait foi pour l'intention »**, avec une précis
 |---|---|---|---|---|
 | Existence d'une VM du socle, VMID, ressources visées | NetBox (objets créés par OpenTofu, `socle/*.tf`) | OpenTofu (pipeline `plateforme/infra`) | Proxmox (réalité), inventaire Ansible | Git → OpenTofu → NetBox **et** Proxmox |
 | Adresse IP d'une VM du socle | NetBox (adresse réservée ou allouée, M06-E13) | OpenTofu (même ressource que la VM) | cloud-init de la VM, PowerDNS (A/PTR), Ansible (`ansible_host`) | NetBox → OpenTofu → VM, PowerDNS |
-| Nom DNS (A, PTR) d'une VM du socle | NetBox (`dns_name` de l'adresse) | OpenTofu (`powerdns_record`) ; la synchronisation NetBox → PowerDNS (M06-E15) **seulement** pour les objets non gérés par OpenTofu (étiquette `hors-iac`) | PowerDNS, récurseurs | NetBox → PowerDNS |
+| Nom DNS (A, PTR) d'une VM du socle | NetBox (`dns_name` de l'adresse) | OpenTofu (`powerdns_record`) ; la synchronisation NetBox → PowerDNS (M06-E15) **seulement** pour les noms qu'aucun code OpenTofu ne porte (hôtes importés en M05, `pbs01`) : chaque *rrset* a un seul propriétaire, inscrit dans son commentaire PowerDNS | PowerDNS, récurseurs | NetBox → PowerDNS |
 | Rôle, étiquettes | NetBox (étiquettes `socle`, `role-*`) | OpenTofu (identiques aux étiquettes Proxmox) | Proxmox (étiquettes), inventaire Ansible (groupes) | NetBox/Git → Proxmox |
+| Inventaire Ansible (hôtes, groupes, `ansible_host`) | NetBox : inventaire **par défaut** du projet (`inventories/lab/netbox.yml`, M06-E12) | — (lu par le plugin `nb_inventory`, jeton en lecture) | inventaire Proxmox (M04), contrôle de cohérence en CI (`comparer-inventaires.sh`) et secours si NetBox est indisponible | NetBox → Ansible |
 | Statut (planifiée, active, décommissionnée) | NetBox | humain (planned, decommissioning) ou OpenTofu (active à la création) | — | NetBox seul |
 | Ressources **réelles** (CPU, mémoire, disque effectifs), état d'exécution | Proxmox | Proxmox | NetBox, champ personnalisé `reel_*` et journal (M06-E11) | Proxmox → NetBox (à côté, jamais à la place) |
 | Adresse MAC | Proxmox (générée à la création) | Proxmox | NetBox (interface), par la synchronisation | Proxmox → NetBox |
@@ -48,7 +49,7 @@ flowchart LR
   TF --> PDNS[(PowerDNS)]
   PVE -- "sync : réel_*, MAC, écarts" --> NB
   NB -- "inventaire" --> ANS[Ansible]
-  NB -- "objets hors-iac" --> PDNS
+  NB -- "noms hors OpenTofu" --> PDNS
   KEA[(Kea : baux)] -- DDNS --> PDNS
   HUM[Humain] -- "préfixes, plages, statut" --> NB
 ```

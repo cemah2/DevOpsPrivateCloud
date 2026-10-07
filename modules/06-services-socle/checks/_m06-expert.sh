@@ -82,18 +82,24 @@ _m06x_ssh_neuf() {
 _m06x_existe() { remote "$1" true >/dev/null 2>&1; }
 
 # _m06x_ansible COMMANDE [args…] — comme l'apprenant : racine du projet, environnement du projet ;
-# jeton NetBox : NETBOX_TOKEN de l'environnement, à défaut le jeton en lecture des checks.
+# jeton NetBox : NETBOX_TOKEN de l'environnement, sinon netbox-ansible.env (M06-E12), à défaut le
+# jeton en lecture des checks.
 _m06x_ansible() {
   local cmd="$1"
   shift
   (
     cd "$_m06x_ansible_dir" || exit 1
+    # Accès de l'inventaire comme l'apprenant : Proxmox (M04) et NetBox (M06-E12, NETBOX_TOKEN).
+    set -a
     if [[ -r "$_m06x_cfg/pve-ansible.env" ]]; then
-      set -a
       # shellcheck source=/dev/null
       source "$_m06x_cfg/pve-ansible.env"
-      set +a
     fi
+    if [[ -z "${NETBOX_TOKEN:-}" && -r "$_m06x_cfg/netbox-ansible.env" ]]; then
+      # shellcheck source=/dev/null
+      source "$_m06x_cfg/netbox-ansible.env"
+    fi
+    set +a
     if [[ -z "${NETBOX_TOKEN:-}" && -r "${WB_NETBOX_TOKEN_FILE:-$_m06x_cfg/netbox-checks.token}" ]]; then
       NETBOX_TOKEN="$(<"${WB_NETBOX_TOKEN_FILE:-$_m06x_cfg/netbox-checks.token}")"
       export NETBOX_TOKEN
@@ -127,7 +133,7 @@ _m06x_hotes_groupe() {
 _m06x_aucune_panne_active() {
   local d="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/pannes-actives" e
   if (($# == 0)); then
-    # Pas de glob ici : lab/bin/check active nullglob (un motif sans correspondance disparaîtrait).
+    # find plutôt qu'un motif : indépendant de nullglob (lab/bin/check le désactive avant de sourcer).
     [[ -z "$(find "$d" -maxdepth 1 -name 'M06-E*' 2>/dev/null)" ]]
     return
   fi

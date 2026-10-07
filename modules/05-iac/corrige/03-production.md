@@ -234,7 +234,7 @@ Les deux modes se complètent : `--tests` prouve qu'une règle **échoue** sur u
 
 *4. Exceptions.* `.trivyignore` accepte `ID exp:AAAA-MM-JJ` : passé la date, l'alerte revient (vérifié : une ligne `MS-PVE-001 exp:2026-01-01` ne masque plus rien). Checkov n'a pas d'expiration native dans `skip-check` : la justification et la date de revue vont en commentaire, et le check de l'exercice vérifie que chaque exception est commentée. Pour une exception **ponctuelle** sur une ressource, Checkov accepte aussi un commentaire en ligne dans le code (`#checkov:skip=CKV2_MS_4:raison`), plus précis qu'une exclusion globale.
 
-*5. Le script.* [`outils/analyse-securite.sh`](fichiers/M05-E25/infra/outils/analyse-securite.sh) : refuse (code 3) un Trivy dont l'empreinte diffère de `TRIVY_EMPREINTE` (CI) ou de `TRIVY_BINAIRE_SHA256` (poste), vérifie les versions, lance Checkov (`--config-file .checkov.yaml`, rapports JUnit) puis Trivy sur chaque dossier avec `--skip-check-update` (règles **embarquées** dans le binaire vérifié) et le modèle `contrib/junit.tpl`. Branché à l'étape `pre-push` ([`pre-commit-extrait.yaml`](fichiers/M05-E25/infra/pre-commit-extrait.yaml)) : 20 à 40 s, trop long à chaque commit. Ajouter `rapports/` au `.gitignore`.
+*5. Le script.* (`rapports/` s'ajoute au `.gitignore` : rapports JUnit, modules téléchargés par Checkov, puis rapports de dérive de E28.) [`outils/analyse-securite.sh`](fichiers/M05-E25/infra/outils/analyse-securite.sh) : refuse (code 3) un Trivy dont l'empreinte diffère de `TRIVY_EMPREINTE` (CI) ou de `TRIVY_BINAIRE_SHA256` (poste), vérifie les versions, lance Checkov (`--config-file .checkov.yaml`, rapports JUnit) puis Trivy sur chaque dossier avec `--skip-check-update` (règles **embarquées** dans le binaire vérifié) et le modèle `contrib/junit.tpl`. Branché à l'étape `pre-push` ([`pre-commit-extrait.yaml`](fichiers/M05-E25/infra/pre-commit-extrait.yaml)) : 20 à 40 s, trop long à chaque commit. Ajouter `rapports/` au `.gitignore`.
 
 **Explications**
 
@@ -275,6 +275,8 @@ Version: 0.75.0
 ```
 
 *2. Variables et protections.* Dans *Settings → CI/CD → Variables* de `plateforme/infra`, toutes **protégées** : `PROXMOX_VE_ENDPOINT` ; `PROXMOX_VE_API_TOKEN` (*Masked and hidden*, « Expand variable reference » décoché, car le jeton contient `!` et `=`) ; `AWS_ACCESS_KEY_ID` ; `AWS_SECRET_ACCESS_KEY` (masquée et cachée). Branches protégées `main` (personne ne pousse, Maintainers fusionnent) et `conf/*` (Developers et Maintainers poussent) ; *Allow merge request pipelines to access protected variables and runners* activé. Qui lit désormais le jeton `wb-tofu` : tout compte qui peut pousser sur `conf/*` (il fait exécuter son code par `runner01` avec les variables), tout Maintainer, et quiconque a un accès `root` à `runner01`. C'est le vrai périmètre à surveiller.
+
+*Retrait du `SKIP` de E20.* Tant que `runner01` n'avait ni `tofu`, ni `tflint`, ni `terraform-docs`, le job `pre-commit` des deux projets sautait leurs hooks (`SKIP: tofu-fmt,tofu-validate,tflint,terraform-docs`) : la qualité n'était garantie que par les hooks des postes, qu'un `git commit --no-verify` contourne. Les outils étant désormais sur `runner01`, on retire la variable de `plateforme/infra` (dans cette MR) **et** de `plateforme/tofu-modules` (MR séparée, qui y ajoute au passage `tofu test` sur le module si tu le souhaites) : le pipeline redevient le contrôle qui fait foi. Le hook `tofu-validate` télécharge les modules de `plateforme/tofu-modules` : d'où le `before_script` du job `pre-commit`, qui fournit le jeton de job (`ci-preparer.sh`), sans aucun secret du projet.
 
 *3. Le pipeline.* Structure (voir le fichier, commenté) :
 
@@ -349,7 +351,7 @@ Fichiers : [`socle/chiffrement.tf`](fichiers/M05-E27/infra/socle/chiffrement.tf)
 ```
 admin@adm01:~$ aws s3 cp s3://tofu-state/envs/dev-agenda/acces/terraform.tfstate - | jq -r '.resources[].instances[].attributes.private_key_openssh' | head -2
 -----BEGIN OPENSSH PRIVATE KEY-----
-b3BlbnNzaC1rZXktdjEAAAAA… (contenu de la clé privée)
+<CLÉ PRIVÉE EN CLAIR : corps base64 de la clé, ici volontairement omis>
 ```
 
 (Sortie tronquée.) L'état du socle donne à un attaquant la carte du lab : VMID, noms, adresses IP et MAC, VNets, stockages, nœud, empreintes des clés publiques, configuration cloud-init, chemins des snippets. `sensitive = true` ne change que l'**affichage** (plan, sorties) : le provider rend la valeur à OpenTofu, qui l'enregistre telle quelle dans l'état pour pouvoir la comparer au prochain plan.

@@ -1,4 +1,4 @@
-# roles/powerdns_auth/defaults/main.yml — variables AJOUTÉES en M06-E17 (rôle de M06-E06).
+# roles/powerdns_auth/defaults/main.yml — variables AJOUTÉES en M06-E17 (rôle de M06-E06 ; état final : M06-E24).
 # Mises à jour dynamiques RFC 2136 ; adresses autorisées globalement (le contrôle fin est fait
 # zone par zone par les métadonnées ALLOW-DNSUPDATE-FROM et TSIG-ALLOW-DNSUPDATE, rôle kea_ddns).
 powerdns_auth_dnsupdate: false

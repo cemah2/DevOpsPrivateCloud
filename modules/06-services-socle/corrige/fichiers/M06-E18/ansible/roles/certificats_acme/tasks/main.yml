@@ -28,10 +28,18 @@
   loop: "{{ (certificats_acme_certificats | map(attribute='certificat') | map('dirname')
              + certificats_acme_certificats | map(attribute='cle') | map('dirname')) | unique }}"
 
-- name: Vérifier chaque certificat (chaîne vers la racine, nom, validité)
-  ansible.builtin.command: >-
-    step certificate verify {{ item.certificat }}
-    --roots {{ certificats_acme_racine }} --host {{ item.noms[0] }}
+# Réémission si le certificat manque, ne se vérifie pas (autre CA, expiré, autre nom) ou dure plus
+# que la politique ACME : un certificat de 90 jours émis à la main (provisioner admin, M06-E03/E04)
+# se vérifie très bien, mais son renouvellement garderait ses 90 jours.
+- name: Vérifier chaque certificat (chaîne vers la racine, nom, validité, durée)
+  ansible.builtin.shell: |
+    set -o pipefail
+    step certificate verify "{{ item.certificat }}" --roots "{{ certificats_acme_racine }}" --host "{{ item.noms[0] }}" || exit 1
+    debut=$(date -d "$(openssl x509 -in "{{ item.certificat }}" -noout -startdate | cut -d= -f2)" +%s)
+    fin=$(date -d "$(openssl x509 -in "{{ item.certificat }}" -noout -enddate | cut -d= -f2)" +%s)
+    [ $(( (fin - debut) / 3600 )) -le {{ certificats_acme_duree_max_h | int }} ]
+  args:
+    executable: /bin/bash
   register: _certificats_acme_verif
   changed_when: false
   failed_when: false

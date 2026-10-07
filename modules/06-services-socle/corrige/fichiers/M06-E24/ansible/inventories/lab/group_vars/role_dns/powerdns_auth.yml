@@ -3,9 +3,11 @@
 # M06-E06, puis M06-E24 : dns02 (secondaire) rejoint dns01 (primaire). Ce fichier REMPLACE
 # celui de M06-E06 ; ce qui est propre à chaque hôte (mode, écoute, API) est dans
 # host_vars/dns01/powerdns_auth.yml et host_vars/dns02/powerdns_auth.yml.
-# Les HÔTES viennent de dns_hotes (group_vars/role_dns/dns.yml) tant que les zones sont générées.
+# Contenu des zones : depuis M06-E14/E15, par1, par2 et les deux zones inverses sont écrites par
+# l'API (OpenTofu, medictl dns sync, Kea) : « contenu: api », le rôle ne fait que les créer.
+# Seule la zone parente medisphere.internal (délégations et colle) reste générée par le rôle.
 
-powerdns_auth_cle_api: "{{ vault_powerdns_auth_cle_api }}"
+powerdns_auth_cle_api: "{{ vault_powerdns_api_cle }}"
 
 powerdns_auth_soa:
   primaire: dns01.par1.medisphere.internal
@@ -21,13 +23,13 @@ powerdns_auth_ns:
   - dns02.par1.medisphere.internal
 
 # (E24) même liste de zones des deux côtés ; seul le type change : primary sur dns01, secondary
-# sur dns02 (calculé à partir du mode de l'hôte). Si une zone est passée en « contenu: api »
-# en M06-E14/E15, garde cette clé ici telle quelle.
-powerdns_auth_type_zones: "{{ 'primary' if powerdns_auth_mode == 'primaire' else 'secondary' }}"
+# sur dns02, calculé à partir du mode de l'hôte. Variable d'INVENTAIRE (préfixe dns_, comme
+# dns_hotes et dns_relais_internes), pas une variable du rôle.
+dns_type_zones: "{{ 'primary' if powerdns_auth_mode == 'primaire' else 'secondary' }}"
 powerdns_auth_zones:
   # Zone parente : délègue par1 et par2 aux DEUX serveurs (NS + colle).
   - nom: medisphere.internal
-    type: "{{ powerdns_auth_type_zones }}"
+    type: "{{ dns_type_zones }}"
     enregistrements:
       - {nom: par1.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
       - {nom: par1.medisphere.internal, type: NS, contenu: dns02.par1.medisphere.internal.}
@@ -36,12 +38,14 @@ powerdns_auth_zones:
       # Colle (glue) : les serveurs de noms sont DANS la zone déléguée.
       - {nom: dns01.par1.medisphere.internal, type: A, contenu: 10.10.20.10}
       - {nom: dns02.par1.medisphere.internal, type: A, contenu: 10.10.20.16}
-  - {nom: par1.medisphere.internal, type: "{{ powerdns_auth_type_zones }}"}
-  - {nom: par2.medisphere.internal, type: "{{ powerdns_auth_type_zones }}"}
-  - {nom: 10.10.in-addr.arpa, type: "{{ powerdns_auth_type_zones }}"}
-  - {nom: 20.10.in-addr.arpa, type: "{{ powerdns_auth_type_zones }}"}
+  - {nom: par1.medisphere.internal, type: "{{ dns_type_zones }}", contenu: api}
+  - {nom: par2.medisphere.internal, type: "{{ dns_type_zones }}", contenu: api}
+  - {nom: 10.10.in-addr.arpa, type: "{{ dns_type_zones }}", contenu: api}
+  - {nom: 20.10.in-addr.arpa, type: "{{ dns_type_zones }}", contenu: api}
 
-powerdns_auth_hotes: "{{ dns_hotes }}"
+# Plus aucun hôte généré par le rôle : depuis M06-E15, les A et PTR du socle viennent de NetBox
+# (medictl dns sync) ; la liste dns_hotes de M06-E06 a été retirée de l'inventaire.
+powerdns_auth_hotes: []
 
 # (E24) clé TSIG des transferts et des NOTIFY, la même des deux côtés (Vault « critique »).
 powerdns_auth_tsig:

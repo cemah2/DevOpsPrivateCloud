@@ -42,8 +42,10 @@ Lundi, 9 h 20. La revue de capacité de Nadia a tourné court.
 
 ```
                 ┌──────────────── git01 (1004) · 10.10.20.12 ─────────────────┐
-                │ GitLab — plateforme/infra : MR (plan en commentaire), apply  │
-                │ protégé (E26) ; plateforme/tofu-modules : vm-debian vX.Y.Z   │
+                │ GitLab — plateforme/infra : MR (plan en artefact + widget    │
+                │ « terraform » de la MR, toutes éditions), apply manuel sur   │
+                │ main, réservé aux Maintainers (E26)                          │
+                │ plateforme/tofu-modules : vm-debian vX.Y.Z                   │
                 └───────────────┬──────────────────────────────▲──────────────┘
                                 │ jobs (étiquette shell)        │ source = "git::https://…?ref=vX.Y.Z"
            ┌────────────────────▼──── runner01 (1007) · 10.10.20.15 ───────────┐
@@ -105,7 +107,7 @@ Chaque dossier racine (`envs/lab-m05/`, `socle/`) est une **configuration** Open
 
 | Convention | Règle |
 |---|---|
-| Lancement | Depuis le dossier de la configuration (`cd ~/src/infra/envs/lab-m05`), après avoir chargé les accès : `set -a; . ~/.config/workbook/pve-tofu.env; set +a` |
+| Lancement | Depuis le dossier de la configuration (`cd ~/src/infra/envs/lab-m05`), après avoir chargé les accès : `set -a; . ~/.config/workbook/pve-tofu.env; set +a` (puis `s3-tofu.env` à partir de E11 ; à partir de E27, un seul geste : `. outils/charger-acces.sh`) |
 | Versions | `required_version = "~> 1.13.0"` ; provider `bpg/proxmox` `~> 0.115.0` ; `.terraform.lock.hcl` **versionné** |
 | Ressource VM | `proxmox_virtual_environment_vm` uniquement ; **jamais** `proxmox_vm` (ressource expérimentale du provider) |
 | Nommage | Ressources, variables et sorties en `snake_case` français (`vm_essai`, `cles_ssh_admin`) ; noms de VM conformes à PLAN §4.4 (`m05-…` pour l'environnement du module) |
@@ -154,8 +156,9 @@ Une synthèse pour se repérer, pas un cours : les exercices et les liens « Pou
 | État distant (E11, E12) | `https://s3-01.par1.medisphere.internal:8333`, compartiment `tofu-state` versionné, clés `socle/terraform.tfstate` et `envs/<env>/terraform.tfstate`, verrou natif `use_lockfile = true` ; identifiants dans `~/.config/workbook/s3-tofu.env` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) |
 | Chiffrement de l'état (E27) | phrase secrète dans `~/.config/workbook/tofu-chiffrement.pass` (600) et en variable CI protégée et masquée |
 | Projets | `plateforme/infra` (`~/src/infra`), `plateforme/tofu-modules` (`~/src/tofu-modules`, étiquettes `vX.Y.Z` par semantic-release) |
+| Pipeline (E26) | plan enregistré par configuration, en artefact, et résumé dans le widget « terraform » de la MR (`artifacts:reports:terraform`, disponible dans GitLab CE) ; apply = job manuel de `main` qui applique ce plan. Les environnements protégés et les approbations de déploiement sont réservés aux éditions payantes : en CE, c'est la protection de `main` qui limite l'apply aux Maintainers |
 | Outils de qualité | tflint 0.64, terraform-docs 0.24, Checkov 3.3, Trivy 0.75 (**épinglé par empreinte**), Terragrunt 1.1 |
-| Documentation | `plateforme/medisphere` : `docs/socle/iac.md`, ADR-0050 (stockage S3, E30), runbooks RB-050 et suivants, registre des secrets |
+| Documentation | `plateforme/medisphere` : `docs/socle/iac.md`, ADR-0050 (stockage S3, E30), ADR-0051 (`gw01` hors IaC, E16), runbooks RB-050 (verrou d'état bloqué, E33) et RB-051 (restaurer un état, E46), registre des secrets |
 | Brouillons | `~/m05/eXX/` sur `adm01` (non versionnés) |
 
 ### Valeurs à adapter
@@ -169,7 +172,7 @@ Une synthèse pour se repérer, pas un cours : les exercices et les liens « Pou
 
 ### Variables de `lab/lab.env`
 
-Rien de nouveau. Les vérifications utilisent `WB_SRC` (elles cherchent `$WB_SRC/infra` et `$WB_SRC/tofu-modules`), `WB_PVE_HOST` (état réel de Proxmox, lu **en root sur `pve01`**, jamais avec ton jeton : une vérification peut ainsi diagnostiquer un jeton en panne), `WB_GITLAB_URL` et `WB_GITLAB_TOKEN_FILE` (projets sur la forge), `WB_DEPOT` (documentation) et `WB_S3_ENDPOINT` (stockage objet, à partir de E10). Quand une vérification lance `tofu`, elle charge **tes** accès (`~/.config/workbook/pve-tofu.env`, puis `s3-tofu.env`) et ne lance que des commandes de lecture : `tofu validate`, `tofu plan` sans enregistrement ni verrou, lecture de l'état.
+Rien de nouveau. Les vérifications utilisent `WB_SRC` (elles cherchent `$WB_SRC/infra` et `$WB_SRC/tofu-modules`), `WB_PVE_HOST` (état réel de Proxmox, lu **en root sur `pve01`**, jamais avec ton jeton : une vérification peut ainsi diagnostiquer un jeton en panne), `WB_GITLAB_URL` et `WB_GITLAB_TOKEN_FILE` (projets sur la forge), `WB_DEPOT` (documentation) et `WB_S3_ENDPOINT` (stockage objet, à partir de E10). Quand une vérification lance `tofu`, elle charge **tes** accès (`~/.config/workbook/pve-tofu.env`, puis `s3-tofu.env`, puis à partir de E27 le chiffrement de l'état par ton `outils/charger-acces.sh`) et ne lance que des commandes de lecture : `tofu validate`, `tofu plan` sans enregistrement ni verrou, lecture de l'état.
 
 ---
 

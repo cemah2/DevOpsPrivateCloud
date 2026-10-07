@@ -6,7 +6,7 @@ Les corrigés des pannes suivent la trame habituelle : **symptômes → hypothè
 
 Les scripts d'injection sont dans `corrige/pannes/` (`_m05-commun.sh` contient les fonctions partagées). Toute modification de l'état distant est précédée d'une copie de l'objet courant et de la liste de ses versions dans `/var/lib/workbook/M05-EXX/` sur `adm01` ; les fichiers modifiés sur les hôtes sont sauvegardés dans `/var/lib/workbook/M05-EXX.*` ; la copie de travail et `~/.config/workbook/` dans `~/.local/state/workbook/M05-EXX/`. Plusieurs pannes vérifient leur effet par un vrai plan : une variante sans effet sur ton code (par exemple parce que ton module ignore déjà l'attribut visé) est défaite et remplacée par la suivante.
 
-Les sorties de commandes reproduites ci-dessous sont **représentatives** : VersionId, handles, compteurs, ID de verrou et formulation exacte des messages varient selon ta version (OpenTofu 1.13.x, bpg/proxmox 0.115.x, SeaweedFS 4.4x) et ton code.
+Les sorties de commandes reproduites ci-dessous sont **représentatives** : VersionId, handles, compteurs, ID de verrou et formulation exacte des messages varient selon ta version (OpenTofu 1.13.x, bpg/proxmox 0.116.x depuis M05-E31, SeaweedFS 4.4x) et ton code.
 
 **Points non testés en conditions réelles** (signale-les si ton comportement diffère) : texte exact de l'erreur « Required plugins are not installed » d'OpenTofu 1.13 quand le paquet en cache ne correspond plus au lock (E41 v2/v3) ; comportement de `tofu console` sur `SIGINT`/`SIGTERM` et libération du verrou (E36 v2) ; texte de l'erreur d'OpenTofu sur un objet de verrou illisible (E36 v4, tiré du code source 1.10 du backend S3) ; code d'erreur renvoyé par SeaweedFS quand l'identité n'a pas `Write` (E37 v4 : `AccessDenied` attendu) ; réécriture de l'état par un `tofu apply` sans changement pendant une rotation de phrase (E41 v4) ; message de Proxmox VE 9 à la création d'une VM dont le VMID existe (E40) ; présence du champ `replace_paths` dans `tofu show -json` d'OpenTofu 1.13 (E44).
 
@@ -50,26 +50,26 @@ Règle d'or avant toute écriture dans l'état (`state mv/rm`, `untaint`, `impor
 
 *Hypothèses* : changement de configuration non fusionné (fichier local), changement de valeur de variable, état modifié, réalité modifiée sur un attribut qui force le remplacement (*ForceNew*), nouvelle image `current` (écartée d'office si ton code ignore `clone`, comme celui du corrigé de M05-E10).
 
-**Étape 1 — Lire le plan, ou l'erreur.** Selon la variante, deux formes :
+**Étape 1 — Lire le plan, ou l'erreur.** Selon la variante, deux formes (adresses du corrigé de M05-E16/E17 : VMs importées `proxmox_virtual_environment_vm.socle["…"]`, `s3-01` dans `module.s3_01`) :
 
 ```
 admin@adm01:~/src/infra/socle$ tofu plan -lock=false
 …
 │ Error: Instance cannot be destroyed
 │
-│   on s3-01.tf line 11:
-│   11: resource "proxmox_virtual_environment_vm" "s3_01" {
+│   on socle-importe.tf line 58:
+│   58: resource "proxmox_virtual_environment_vm" "socle" {
 │
-│ Resource proxmox_virtual_environment_vm.s3_01 has lifecycle.prevent_destroy set, but the plan calls for this
-│ resource to be destroyed. To avoid this error and continue with the plan, either disable
+│ Resource proxmox_virtual_environment_vm.socle["dns01"] has lifecycle.prevent_destroy set, but the plan
+│ calls for this resource to be destroyed. To avoid this error and continue with the plan, either disable
 │ lifecycle.prevent_destroy or reduce the scope of the plan using the -target option.
 ```
 
 ou bien un plan qui **aboutit** :
 
 ```
-  # proxmox_virtual_environment_vm.s3_01 will be created
-  + resource "proxmox_virtual_environment_vm" "s3_01" {
+  # module.s3_01.proxmox_virtual_environment_vm.vm will be created
+  + resource "proxmox_virtual_environment_vm" "vm" {
   …
   # proxmox_virtual_environment_vm.s3_01_avant_refacto will be destroyed
   # (because proxmox_virtual_environment_vm.s3_01_avant_refacto is not in configuration)
@@ -78,7 +78,7 @@ ou bien un plan qui **aboutit** :
 Plan: 1 to add, 0 to change, 1 to destroy.
 ```
 
-La seconde forme est la plus dangereuse : **aucune** erreur, un plan « propre » qui détruit `s3-01`. `prevent_destroy` est lu dans le bloc de configuration ; une adresse qui n'a **plus** de bloc n'a plus de `prevent_destroy`. Ce qui sauverait la VM à l'apply : la protection Proxmox (`protection = true` dans le corrigé de M05-E10), qui fait échouer la suppression… après que le plan a été approuvé.
+La seconde forme est la plus dangereuse : **aucune** erreur, un plan « propre » qui détruit `s3-01`. `prevent_destroy` est lu dans le bloc de configuration ; une adresse qui n'a **plus** de bloc n'a plus de `prevent_destroy` (et `s3-01`, gérée par le module depuis M05-E17, n'en a pas : un appel de module ne porte pas de `lifecycle`). Ce qui sauverait la VM à l'apply : la protection Proxmox (`protection = true`, M05-E10 puis argument du module en M05-E17), qui fait échouer la suppression… après que le plan a été approuvé.
 
 **Étape 2 — Couper le problème en deux.**
 
@@ -119,12 +119,12 @@ admin@adm01:~/src/infra/socle$ echo 'var.noeud' | tofu console
 
 ```
 admin@adm01:~/src/infra/socle$ tofu state list | grep vm
-proxmox_virtual_environment_vm.adm01
-…
 proxmox_virtual_environment_vm.s3_01_avant_refacto
+proxmox_virtual_environment_vm.socle["adm01"]
+…
 ```
 
-L'adresse `s3_01` (ou `module.s3_01…` après M05-E17) a disparu de l'état, une adresse sans bloc est apparue. Correctif, après avoir noté le `VersionId` courant :
+L'adresse `module.s3_01.proxmox_virtual_environment_vm.vm` a disparu de l'état, une adresse sans bloc est apparue. Correctif, après avoir noté le `VersionId` courant :
 
 ```
 admin@adm01:~/src/infra/socle$ tofu state mv proxmox_virtual_environment_vm.s3_01_avant_refacto <ADRESSE-DU-CODE>
@@ -132,20 +132,20 @@ admin@adm01:~/src/infra/socle$ tofu plan
 No changes. Your infrastructure matches the configuration.
 ```
 
-`<ADRESSE-DU-CODE>` est l'adresse que le plan voulait créer (`proxmox_virtual_environment_vm.s3_01` ou `module.s3_01.proxmox_virtual_environment_vm.this`, selon ton état d'avancement de M05-E17).
+`<ADRESSE-DU-CODE>` est l'adresse que le plan voulait créer : `module.s3_01.proxmox_virtual_environment_vm.vm` avec le corrigé de M05-E17 (mets l'adresse entre apostrophes dès qu'elle contient des crochets et des guillemets).
 
 **Variante 3 — la VM est marquée `tainted`.**
 
 ```
-admin@adm01:~/src/infra/socle$ tofu state show proxmox_virtual_environment_vm.s3_01 | head -n 2
-# proxmox_virtual_environment_vm.s3_01: (tainted)
-resource "proxmox_virtual_environment_vm" "s3_01" {
+admin@adm01:~/src/infra/socle$ tofu state show module.s3_01.proxmox_virtual_environment_vm.vm | head -n 2
+# module.s3_01.proxmox_virtual_environment_vm.vm: (tainted)
+resource "proxmox_virtual_environment_vm" "vm" {
 ```
 
 Une ressource `tainted` est remplacée au prochain apply, sans que rien n'ait changé dans le code ni dans Proxmox : c'est une marque de l'**état** (posée par `tofu taint` ou par une création qui a échoué à mi-chemin, cf. M05-E38). Avant de la retirer, vérifie que la VM est saine (`qm status 1006`, service S3 qui répond). Puis :
 
 ```
-admin@adm01:~/src/infra/socle$ tofu untaint proxmox_virtual_environment_vm.s3_01
+admin@adm01:~/src/infra/socle$ tofu untaint module.s3_01.proxmox_virtual_environment_vm.vm
 ```
 
 **Variante 4 — un fichier de surcharge.**
@@ -154,12 +154,12 @@ admin@adm01:~/src/infra/socle$ tofu untaint proxmox_virtual_environment_vm.s3_01
 admin@adm01:~/src/infra/socle$ cat zz_lucas_override.tf
 # Essai Lucas : préparation du futur cluster Proxmox (module 09).
 # Fichier local, NE PAS COMMITER.
-resource "proxmox_virtual_environment_vm" "dns01" {
+resource "proxmox_virtual_environment_vm" "socle" {
   node_name = "pve02"
 }
 ```
 
-Les fichiers `override.tf` et `*_override.tf` sont **fusionnés** dans les blocs de même adresse, après tous les autres fichiers. Ils sont prévus pour des exceptions locales… et ton `.gitignore` (M05-E02) les ignore : `git status` sans `--ignored` ne les montre pas. Correctif : supprimer le fichier.
+Le bloc visé est le premier bloc VM de la racine de ton code (`socle`, qui porte les quatre VMs importées, dans le corrigé) : les quatre VMs seraient remplacées, `prevent_destroy` arrête le plan. Les fichiers `override.tf` et `*_override.tf` sont **fusionnés** dans les blocs de même adresse, après tous les autres fichiers. Ils sont prévus pour des exceptions locales… et ton `.gitignore` (M05-E02) les ignore : `git status` sans `--ignored` ne les montre pas. Correctif : supprimer le fichier.
 
 **Correctif commun et vérification** : plan vide ; `qm config 1006 | grep -E '^(name|meta)'` montre la même date de création (`meta: … ctime=`) qu'avant l'incident ; `lab/bin/check 05 35`, puis `lab/bin/break 05 35 --annuler` pour clore.
 
@@ -175,7 +175,7 @@ Les fichiers `override.tf` et `*_override.tf` sont **fusionnés** dans les blocs
 Le provider, pas OpenTofu, décide qu'un changement d'attribut exige un remplacement : il le signale dans sa réponse à `PlanResourceChange` (M05-E44). Dans bpg/proxmox 0.115, la ressource VM marque ainsi `node_name` (sauf `migrate = true`), `vm_id`, tout le bloc `clone`, les identifiants de fichiers cloud-init (`initialization.*_data_file_id`) et quelques cas (TPM, disque EFI). C'est pourquoi les modules ignorent `clone` : la nouvelle image hebdomadaire recréerait sinon chaque VM.
 
 **Alternatives**
-- Variante 2 : un bloc `moved { from = proxmox_virtual_environment_vm.s3_01_avant_refacto  to = … }` en MR répare aussi, et laisse une trace relue ; mais il garde dans le code la mémoire d'une adresse qui n'a jamais existé que par erreur. Restaurer la version précédente de l'état (M05-E42) est équivalent si **rien d'autre** n'a été écrit depuis (compare les `serial`).
+- Variante 2 : un bloc `moved { from = proxmox_virtual_environment_vm.s3_01_avant_refacto  to = module.s3_01.proxmox_virtual_environment_vm.vm }` en MR répare aussi, et laisse une trace relue ; mais il garde dans le code la mémoire d'une adresse qui n'a jamais existé que par erreur. Restaurer la version précédente de l'état (M05-E42) est équivalent si **rien d'autre** n'a été écrit depuis (compare les `serial`).
 - Variante 3 : `tofu apply -replace=…` est le geste moderne pour forcer un remplacement ; `tofu taint` existe encore mais laisse une marque invisible dans le code, que le prochain venu découvre par surprise.
 
 **Pièges classiques**
@@ -397,7 +397,7 @@ admin@s3-01:~$ sudo jq '.identities[] | select(.name == "tofu-etat") | .actions'
 **Étape 1 — Lire l'erreur et l'apply partiel.**
 
 ```
-proxmox_virtual_environment_vm.app["app04"]: Creating...
+module.app["app04"].proxmox_virtual_environment_vm.vm: Creating...
 ╷
 │ Error: error updating VM: received an HTTP 403 response - Reason: Permission check failed (/vms/2051, VM.Config.Memory)
 ```
@@ -413,8 +413,8 @@ Selon la variante, le chemin et le privilège cités :
 
 ```
 admin@adm01:~/src/infra/envs/lab-m05$ tofu state list
-admin@adm01:~/src/infra/envs/lab-m05$ tofu state show 'proxmox_virtual_environment_vm.app["app04"]' | head -n 1
-# proxmox_virtual_environment_vm.app["app04"]: (tainted)
+admin@adm01:~/src/infra/envs/lab-m05$ tofu state show 'module.app["app04"].proxmox_virtual_environment_vm.vm' | head -n 1
+# module.app["app04"].proxmox_virtual_environment_vm.vm: (tainted)
 ```
 
 En variante 4, la VM existe dans Proxmox et dans l'état, marquée `tainted` : le prochain plan propose de la **remplacer**.
@@ -457,7 +457,7 @@ root@pve01:~# pveum acl modify /sdn/zones/lab/vsandbox --roles PVESDNUser --toke
 root@pve01:~# pveum acl modify /storage/local-nvme --roles PVEDatastoreUser --tokens 'wb-tofu@pve!tofu'
 ```
 
-**Étape 3 — Terminer proprement l'apply partiel.** Variante 4 : la VM créée est saine (même configuration que les autres) ; `tofu untaint 'proxmox_virtual_environment_vm.app["app04"]'` évite une destruction inutile, puis l'apply la démarre. Si tu préfères repartir d'une VM neuve (elle est jetable), laisse OpenTofu la remplacer : c'est aussi correct, à condition de le **décider**. Puis la demande de Julien par la chaîne normale ; plan vide ; `tofu show -json | jq '[..|objects|select(.tainted?==true)]|length'` vaut 0.
+**Étape 3 — Terminer proprement l'apply partiel.** Variante 4 : la VM créée est saine (même configuration que les autres) ; `tofu untaint 'module.app["app04"].proxmox_virtual_environment_vm.vm'` évite une destruction inutile, puis l'apply la démarre. Si tu préfères repartir d'une VM neuve (elle est jetable), laisse OpenTofu la remplacer : c'est aussi correct, à condition de le **décider**. Puis la demande de Julien par la chaîne normale ; plan vide ; `tofu show -json | jq '[..|objects|select(.tainted?==true)]|length'` vaut 0.
 
 **Vérification** : `lab/bin/check 05 38` (privilèges effectifs du jeton, absence de droits d'administration, environnement appliqué).
 
@@ -485,8 +485,8 @@ root@pve01:~# pveum acl modify /storage/local-nvme --roles PVEDatastoreUser --to
 **Étape 1 — Relire le plan de l'apply.** En variante 4, il contenait **plus** que la nouvelle VM :
 
 ```
-  # proxmox_virtual_environment_vm.app["app01"] will be updated in-place
-  ~ resource "proxmox_virtual_environment_vm" "app" {
+  # module.app["app01"].proxmox_virtual_environment_vm.vm will be updated in-place
+  ~ resource "proxmox_virtual_environment_vm" "vm" {
       ~ initialization {
           ~ user_account {
               ~ keys     = [
@@ -519,7 +519,7 @@ Les demandes arrivent sur `ens19.99` ; `tcpdump` voit les paquets **avant** le f
 
 ```
 root@gw01:~# nft list chain inet filter input | grep -E 'dport (67|bootps)'
-		iifname "ens19.99" udp dport 67 counter packets 14 bytes 4704 drop comment "SEC-650 test filtrage DHCP sandbox (LM)"
+		iifname "ens19.99" udp dport 67 counter packets 14 bytes 4704 drop comment "SEC-683 test filtrage DHCP sandbox (LM)"
 ```
 
 *Variante 1* : le relais ne reçoit jamais les demandes, jetées en entrée de `gw01`. Correctif : réappliquer le rôle `pare_feu` (M04), qui recharge le jeu de règles de référence.
@@ -530,10 +530,10 @@ root@gw01:~# nft list chain inet filter input | grep -E 'dport (67|bootps)'
 admin@dns01:~$ sudo journalctl -u dnsmasq --since -10min | grep -i dhcp
 dnsmasq-dhcp[612]: DHCPDISCOVER(ens18) 10.10.99.1 bc:24:11:5a:1c:03 ignored
 admin@dns01:~$ grep -rn dhcp-ignore /etc/dnsmasq.d/
-/etc/dnsmasq.d/90-sec-650.conf:3:dhcp-ignore=tag:!known
+/etc/dnsmasq.d/90-sec-683.conf:3:dhcp-ignore=tag:!known
 ```
 
-`dhcp-ignore=tag:!known` ignore toute machine sans réservation `dhcp-host` : exactement toutes les VMs d'environnement. Sophie voulait réserver les adresses aux machines **déclarées** ; dans un VLAN de bac à sable créé par l'IaC, c'est contradictoire avec le DHCP dynamique. Correctif : retirer ce fichier (rôle `dnsmasq` de M04 appliqué, qui ne connaît pas ce fichier : vérifie s'il purge le dossier ou non), et répondre à SEC-650 : la déclaration des machines viendra de NetBox et des réservations Kea au module 06.
+`dhcp-ignore=tag:!known` ignore toute machine sans réservation `dhcp-host` : exactement toutes les VMs d'environnement. Sophie voulait réserver les adresses aux machines **déclarées** ; dans un VLAN de bac à sable créé par l'IaC, c'est contradictoire avec le DHCP dynamique. Correctif : retirer ce fichier (rôle `dnsmasq` de M04 appliqué, qui ne connaît pas ce fichier : vérifie s'il purge le dossier ou non), et répondre à SEC-683 : la déclaration des machines viendra de NetBox et des réservations Kea au module 06.
 
 **Étape 4 — Chemin `adm01` → VM (variante 2).**
 
@@ -542,7 +542,7 @@ admin@adm01:~$ ping -c 2 10.10.99.142        # répond
 admin@adm01:~$ ssh -o ControlPath=none -o ConnectTimeout=5 admin@10.10.99.142
 ssh: connect to host 10.10.99.142 port 22: Connection timed out
 root@gw01:~# nft list chain inet filter forward | grep 10.10.99.0/24
-		ip saddr 10.10.10.0/24 ip daddr 10.10.99.0/24 tcp dport 22 counter packets 9 bytes 540 drop comment "SEC-650 test isolement sandbox (LM)"
+		ip saddr 10.10.10.0/24 ip daddr 10.10.99.0/24 tcp dport 22 counter packets 9 bytes 540 drop comment "SEC-683 test isolement sandbox (LM)"
 ```
 
 ICMP passe, TCP/22 non, le compteur monte : filtrage à chaud. Correctif : rôle `pare_feu`.
@@ -587,7 +587,7 @@ La clé injectée est celle de Lucas, et seulement elle. Correctif : rétablir `
 
 | Variante | Ligne non demandée | Écart |
 |---|---|---|
-| 1 | `# proxmox_virtual_environment_vm.app["app02"] will be created` | la VM 2052 existe dans Proxmox, l'état ne la connaît plus |
+| 1 | `# module.app["app02"].proxmox_virtual_environment_vm.vm will be created` | la VM 2052 existe dans Proxmox, l'état ne la connaît plus |
 | 2 | `~ memory { ~ dedicated = 2048 -> 1024 }`, `~ tags = [ - "essai-perf", … ]`, `~ description` | la VM a été modifiée à la main |
 | 3 | aucune ; l'apply échoue : `unable to create VM <VMID>: config file already exists` (formulation selon la version de Proxmox) | une VM inconnue de l'état occupe le VMID |
 
@@ -613,7 +613,7 @@ admin@adm01:~$ aws --profile s3-socle s3api list-object-versions --bucket tofu-s
 ```hcl
 # envs/lab-m05/imports.tf — réimport de la VM sortie de l'état par erreur (DEV-682)
 import {
-  to = proxmox_virtual_environment_vm.app["app02"]
+  to = module.app["app02"].proxmox_virtual_environment_vm.vm
   id = "<NOEUD>/2052"
 }
 ```
@@ -624,7 +624,7 @@ Le plan doit annoncer `1 to import, 0 to change` (plus la VM demandée) ; s'il a
 
 *Variante 3 — supprimer l'orphelin.* La VM manuelle est un clone **lié** (interdit pour une VM durable, règle de M03), sans données utiles (Julien le confirme : il voulait « juste tester »). On la détruit (`qm destroy <VMID> --purge 1`, après `qm config` gardé dans le journal), puis la VM demandée est créée par la chaîne. L'importer aurait fait entrer dans l'état une VM que le code ne sait pas décrire (pas de `clone` complet, disques liés au template).
 
-**Vérification** : VMs `env-m05` de Proxmox = VMs de l'état ; plan vide ; aucune VM préexistante recréée (dates de création inchangées) ; `lab/bin/check 05 40`.
+**Vérification** : VMs `env-m05` de Proxmox = VMs des états `envs/lab-m05` et `envs/recette-m05` ; plan vide ; aucune VM préexistante recréée (dates de création inchangées) ; `lab/bin/check 05 40`.
 
 **Prévention** : détection de dérive planifiée (M05-E28) étendue aux **objets orphelins** (« Pour aller plus loin ») ; `tofu state rm` réservé au runbook, remplacé en équipe par un bloc `removed` relu en MR ; règle « une VM d'environnement se crée par l'environnement, jamais à la main ».
 
@@ -659,7 +659,7 @@ Le plan doit annoncer `1 to import, 0 to change` (plus la VM demandée) ; s'il a
 | Événement | Commande qui tranche |
 |---|---|
 | Publication d'image | `ssh pve01 "pvesh get /cluster/resources --type vm --output-format json" \| jq -r '.[] \| select(.template == 1) \| "\(.vmid) \(.name) \(.tags)"'` |
-| Lucas : place disque et providers | `git -C ~/src/infra status --ignored`, `git diff`, `ls -l socle/.terraform/providers/registry.opentofu.org/bpg/proxmox/0.115.*/linux_amd64/`, `df -h` |
+| Lucas : place disque et providers | `git -C ~/src/infra status --ignored`, `git diff`, `ls -l socle/.terraform/providers/registry.opentofu.org/bpg/proxmox/*/linux_amd64/`, `df -h` |
 | Rotation des secrets | `ls -l --time-style=full-iso ~/.config/workbook/`, `tofu state list` (lit **et déchiffre**) |
 | Mises à jour de la nuit | `tofu version` sur `adm01` et `runner01` (la série 1.13 est épinglée en E02 : rien n'a changé), `grep -h ' install \| upgrade ' /var/log/dpkg.log` |
 
@@ -683,19 +683,19 @@ C'est ta postcondition de M05-E08 qui parle : elle transforme une liste vide en 
 │ Error: Required plugins are not installed
 │
 │ The installed provider plugins are not consistent with the packages selected in the dependency lock file:
-│   - registry.opentofu.org/bpg/proxmox: the cached package for registry.opentofu.org/bpg/proxmox 0.115.0
+│   - registry.opentofu.org/bpg/proxmox: the cached package for registry.opentofu.org/bpg/proxmox 0.116.0
 │     (in .terraform/providers) does not match any of the checksums recorded in the dependency lock file
 admin@adm01:~/src/infra$ git diff --stat
  socle/.terraform.lock.hcl | 30 +-----
 ```
 
-Le lock ne contient plus que deux empreintes `h1:` inconnues, et aucune `zh:`. Correctif : `git restore socle/.terraform.lock.hcl` puis `tofu init` (sans `-upgrade`). `tofu init -upgrade` choisirait la version la plus récente autorisée par la contrainte et réécrirait le lock : on masquerait la panne en changeant **aussi** de version de provider, sans MR. Un lock commun à `adm01` (linux_amd64) et à d'autres postes s'obtient par `tofu providers lock -platform=linux_amd64 -platform=darwin_arm64 …`, dans une MR.
+Le lock ne contient plus que deux empreintes `h1:` inconnues, et aucune `zh:`. Correctif : `git restore socle/.terraform.lock.hcl` puis `tofu init` (sans `-upgrade`). `tofu init -upgrade` choisirait la version la plus récente autorisée par la contrainte (`~> 0.116.0` depuis M05-E31 : un correctif 0.116.x plus récent, s'il existe) et réécrirait le lock : on masquerait la panne en changeant **aussi** de version de provider, sans MR. Une montée de version est un changement délibéré, traité comme en M05-E31 (journal relu, plan comparé, MR), jamais un effet de bord d'une réparation. Les numéros de version ci-dessous supposent M05-E31 fait (0.116.0) ; avant, lis 0.115.x. Un lock commun à `adm01` (linux_amd64) et à d'autres postes s'obtient par `tofu providers lock -platform=linux_amd64 -platform=darwin_arm64 …`, dans une MR.
 
 **Variante 3 — paquet en cache tronqué.** Même message, mais `git status` est propre. Le binaire du provider fait 1 Mio :
 
 ```
-admin@adm01:~/src/infra/socle$ ls -l .terraform/providers/registry.opentofu.org/bpg/proxmox/0.115.0/linux_amd64/
--rwxr-xr-x 1 admin admin 1048576 … terraform-provider-proxmox_v0.115.0
+admin@adm01:~/src/infra/socle$ ls -l .terraform/providers/registry.opentofu.org/bpg/proxmox/0.116.0/linux_amd64/
+-rwxr-xr-x 1 admin admin 1048576 … terraform-provider-proxmox_v0.116.0
 ```
 
 Correctif : `rm -rf .terraform/providers` puis `tofu init` ; OpenTofu retélécharge le paquet et le vérifie contre le lock **intact**. Vérifie aussi `df -h` : un disque plein pendant un `init` produit exactement cela.
@@ -707,42 +707,58 @@ Correctif : `rm -rf .terraform/providers` puis `tofu init` ; OpenTofu retéléch
 │ cipher: message authentication failed
 ```
 
-`tofu-chiffrement.pass` date d'hier soir ; la CI, qui a encore l'ancienne phrase, déchiffre. La nouvelle phrase est légitime (rotation de Sophie) : il faut **terminer** la rotation, pas revenir en arrière en silence. Récupère l'ancienne phrase (variable CI, ou copie de secours indiquée par le registre des secrets), et dans une MR :
+`tofu-chiffrement.pass` date d'hier soir ; la CI, qui a encore l'ancienne phrase (`TOFU_PHRASE_CHIFFREMENT`), déchiffre. `outils/charger-acces.sh` a construit `TF_ENCRYPTION` avec la **nouvelle** phrase sous le nom de fournisseur `etat` : or chaque état chiffré garde le sel PBKDF2 sous le nom de son fournisseur, et il a été chiffré avec l'ancienne phrase. La nouvelle phrase est légitime (rotation de Sophie) : il faut **terminer** la rotation, pas revenir en arrière en silence. C'est la procédure « Rotation de la phrase » du registre des secrets (M05-E27) :
+
+1. Récupère l'ancienne phrase (coffre de l'équipe, d'après le registre ; la variable CI est cachée, donc non relisible) dans un second fichier 600, par exemple `~/.config/workbook/tofu-chiffrement-ancienne.pass`, et inscris-le au registre.
+2. MR : dans `socle/chiffrement.tf` (copié tel quel dans `envs/*` et généré pour Terragrunt par `root.hcl`), un **nouveau** couple sous un autre nom devient principal, l'ancien couple `etat` passe en `fallback`. Toujours aucune phrase dans le code :
 
 ```hcl
-# Rotation trimestrielle de la phrase (SEC-6xx). Ne JAMAIS renommer un fournisseur de clé déjà
-# utilisé : ses métadonnées sont enregistrées sous son nom dans l'état chiffré.
+# Rotation de la phrase (SEC-6xx, AAAA-MM-JJ). Ne JAMAIS donner une nouvelle phrase à un
+# fournisseur déjà utilisé : ses métadonnées sont enregistrées sous son nom dans l'état chiffré.
 terraform {
   encryption {
-    key_provider "pbkdf2" "etat" {            # nom d'origine : désormais l'ANCIENNE phrase
-      passphrase = var.phrase_chiffrement_ancienne
-    }
-    key_provider "pbkdf2" "etat_2026t4" {     # nouvelle phrase
-      passphrase = var.phrase_chiffrement
-    }
-    method "aes_gcm" "etat" {
+    method "aes_gcm" "etat" {          # ancienne phrase : lecture seulement
       keys = key_provider.pbkdf2.etat
     }
-    method "aes_gcm" "etat_2026t4" {
-      keys = key_provider.pbkdf2.etat_2026t4
+    method "aes_gcm" "etat_2027" {     # nouvelle phrase
+      keys = key_provider.pbkdf2.etat_2027
     }
     state {
-      method = method.aes_gcm.etat_2026t4
+      method   = method.aes_gcm.etat_2027
+      enforced = true
       fallback {
         method = method.aes_gcm.etat
       }
     }
     plan {
-      method = method.aes_gcm.etat_2026t4
+      method   = method.aes_gcm.etat_2027
+      enforced = true
       fallback {
         method = method.aes_gcm.etat
+      }
+    }
+    remote_state_data_sources {
+      default {
+        method = method.aes_gcm.etat_2027
+        fallback {
+          method = method.aes_gcm.etat
+        }
       }
     }
   }
 }
 ```
 
-(Adapte les noms à ton bloc de M05-E27.) Le pipeline reçoit la nouvelle phrase et, temporairement, l'ancienne ; un `tofu apply` réécrit chaque état (`socle`, `envs/lab-m05`) avec la nouvelle méthode. Vérifie qu'une **nouvelle version** de chaque objet est apparue dans le compartiment (⚠️ à vérifier sur ta version : si un apply sans changement ne réécrit pas l'état, un changement anodin, une description par exemple, le fera). Puis, dans une seconde MR, retire le `fallback` et l'ancienne phrase partout (CI, registre).
+3. `outils/charger-acces.sh` (et `ci-preparer.sh`, avec une seconde variable CI protégée et cachée pour l'ancienne phrase) déclare désormais **deux** fournisseurs dans `TF_ENCRYPTION` :
+
+```
+key_provider "pbkdf2" "etat"      { passphrase = "<ANCIENNE>" }
+key_provider "pbkdf2" "etat_2027" { passphrase = "<NOUVELLE>" }
+```
+
+   Les vérifications et les scripts de panne du module utilisent ton `outils/charger-acces.sh` quand il existe : c'est lui qui doit suivre la rotation.
+4. Apply de chaque état par le pipeline (`socle`, `envs/lab-m05`, `envs/recette-m05`, unités Terragrunt encore présentes) : le plan est vide, mais l'apply réécrit l'état avec la nouvelle méthode. Vérifie qu'une **nouvelle version** de chaque objet est apparue dans le compartiment (⚠️ à vérifier sur ta version : si un apply sans changement ne réécrit pas l'état, un changement anodin, une description par exemple, le fera), puis que `tofu state list` réussit avec la **seule** nouvelle phrase.
+5. Seconde MR : retrait du `fallback` et du couple `etat` ; `charger-acces.sh` et `ci-preparer.sh` ne déclarent plus que `etat_2027` ; l'ancienne phrase quitte `~/.config/workbook/` et les variables CI, et reste au coffre pour les copies externes antérieures (E29), comme le prévoit le registre.
 
 **Vérification** : plans vides des deux côtés, pipeline vert, `git status` propre, `lab/bin/check 05 41`.
 
@@ -795,12 +811,12 @@ admin@adm01:~/m05/e42$ jq -r '(.Versions // [] | map(select(.Key == "socle/terra
 ```
 admin@adm01:~$ aws --profile s3-socle s3api head-object --bucket tofu-state --key envs/lab-m05/terraform.tfstate --query ETag
 admin@adm01:~/src/infra/socle$ tofu state list
-proxmox_virtual_environment_vm.app["app01"]
+module.app["app01"].proxmox_virtual_environment_vm.vm
 …
-proxmox_virtual_environment_vm.essai
+proxmox_virtual_environment_vm.jetable
 ```
 
-Le plan du socle voulait donc **détruire** les VMs d'environnement (dans l'état, absentes du code du socle) et importer ou créer les VMs du socle. Un apply aurait détruit 2050-2053.
+Le plan du socle voulait donc **détruire** les VMs d'environnement (dans l'état, absentes du code du socle) et importer ou créer les VMs du socle. Un apply aurait détruit les VMs de `envs/lab-m05` (2051-2054 avec le corrigé du palier 2).
 
 **Étape 3 — Prouver la version saine.** La dernière version avant l'incident correspond au dernier apply connu (job du pipeline, même heure) ; sa taille est cohérente avec les précédentes. Pour en lire le contenu **sans** la restaurer, copie-la sous une clé d'examen et lis-la par une configuration jetable (même chiffrement, backend sur `_examen/socle.tfstate`), ou contente-toi de la cohérence date/taille/ETag avec l'historique du pipeline.
 
@@ -821,7 +837,7 @@ admin@adm01:~$ aws --profile s3-socle s3api copy-object --bucket tofu-state --ke
     --copy-source 'tofu-state/socle/terraform.tfstate?versionId=v_1b7c…'
 ```
 
-Le script `corrige/fichiers/M05-E42/infra/outils/restaurer-etat.sh` enchaîne ces précautions (refus si un verrou existe, liste des versions et copie de l'objet courant enregistrées, `copy-object`, version avant/après) ; il sert de base à un runbook RB-051 « restaurer l'état ».
+Le script de M05-E29, [`outils/restaurer-etat.sh`](fichiers/M05-E29/infra/outils/restaurer-etat.sh), enchaîne ces précautions (`--lister` ; `--version` : refus si un verrou existe ou si le `lineage` diffère, copie de l'objet courant, confirmation, `copy-object`). Il convient à la variante 1 ; en variante 2 il **refuse**, parce que l'objet courant est un autre état (autre `lineage`) : c'est voulu, la copie se fait alors à la main comme ci-dessus, une fois la version saine prouvée. Il sert de base au runbook RB-051 (mini-projet).
 
 **Étape 5 — Prouver la restauration, lever le gel.** `tofu state list` (cinq VMs du socle), `tofu plan` vide, `serial` identique à celui du dernier apply connu (`tofu state pull | jq .serial` **dans** `~/m05/e42`, puis `shred -u` du fichier si tu l'as écrit). Ensuite seulement : levée du gel.
 
@@ -983,7 +999,7 @@ admin@adm01:~/m05/e44/lecture$ grep -E 'plugin started|using plugin|protocol ver
 admin@adm01:~/m05/e44/lecture$ grep -oE 'GRPCProvider(\.v[0-9]+)?: [A-Za-z]+' ~/m05/e44/trace.log | sort | uniq -c
 ```
 
-Tu y vois, dans l'ordre : le lancement du binaire `terraform-provider-proxmox_v0.115.0` depuis `.terraform/providers/…` (le provider est un **processus séparé**, lancé et arrêté par OpenTofu, éventuellement plusieurs fois au cours d'une commande), la poignée de main du protocole de plugin (version **6** : bpg sert l'ancienne implémentation SDKv2, remontée en v6, et le Plugin Framework derrière un multiplexeur unique), puis les appels `GetProviderSchema`, `ValidateProviderConfig`, `ValidateDataResourceConfig`, `ConfigureProvider`, `ReadDataSource`, et enfin l'arrêt du plugin. Avant d'extraire un passage dans le compte rendu : `grep -n -iE 'authorization|PVEAPIToken|api_token|secret'` sur l'extrait, et remplace ce qui sort.
+Tu y vois, dans l'ordre : le lancement du binaire `terraform-provider-proxmox_v0.116.0` (la version de ton lock) depuis `.terraform/providers/…` (le provider est un **processus séparé**, lancé et arrêté par OpenTofu, éventuellement plusieurs fois au cours d'une commande), la poignée de main du protocole de plugin (version **6** : bpg sert l'ancienne implémentation SDKv2, remontée en v6, et le Plugin Framework derrière un multiplexeur unique), puis les appels `GetProviderSchema`, `ValidateProviderConfig`, `ValidateDataResourceConfig`, `ConfigureProvider`, `ReadDataSource`, et enfin l'arrêt du plugin. Avant d'extraire un passage dans le compte rendu : `grep -n -iE 'authorization|PVEAPIToken|api_token|secret'` sur l'extrait, et remplace ce qui sort.
 
 *État* (bac à sable) :
 

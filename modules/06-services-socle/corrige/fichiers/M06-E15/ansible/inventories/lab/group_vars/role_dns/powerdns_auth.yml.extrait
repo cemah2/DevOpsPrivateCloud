@@ -1,0 +1,15 @@
+# group_vars/role_dns/powerdns_auth.yml — lignes MODIFIÉES en M06-E15, après l'adoption des noms
+# du socle par « medictl dns sync ». Toutes les zones de noms d'hôtes sont désormais écrites par
+# l'API ; la liste dns_hotes (group_vars/role_dns/dns.yml, M06-E06) n'a plus de lecteur : elle
+# est retirée du dépôt (et dnsmasq_hotes avec elle au plus tard en M06-E16).
+powerdns_auth_zones:
+  - nom: medisphere.internal          # seule zone encore générée par le rôle
+    enregistrements:
+      - {nom: par1.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
+      - {nom: par2.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
+      - {nom: dns01.par1.medisphere.internal, type: A, contenu: 10.10.20.10}
+  - {nom: par1.medisphere.internal, contenu: api}
+  - {nom: par2.medisphere.internal, contenu: api}      # (E15) pbs01 vient de NetBox
+  - {nom: 10.10.in-addr.arpa, contenu: api}
+  - {nom: 20.10.in-addr.arpa, contenu: api}            # (E15)
+powerdns_auth_hotes: []

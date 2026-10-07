@@ -93,7 +93,7 @@ Le `NXDOMAIN` porte le SOA **de la racine**, et le drapeau `ad` : la racine a pr
 admin@dns01:~$ dig @127.0.0.1 -p 5300 git01.par1.medisphere.internal
 ;; status: NXDOMAIN
 ;; AUTHORITY SECTION:
-par1.medisphere.internal. 3600 IN SOA dns01.par1.medisphere.internal. hostmaster.par1.medisphere.internal. 2026100705 …
+par1.medisphere.internal. 300 IN SOA dns01.par1.medisphere.internal. hostmaster.medisphere.internal. 2026100705 …
 admin@dns01:~$ dig @10.10.20.16 -p 5300 git01.par1.medisphere.internal +short      # le secondaire a suivi (NOTIFY)
 admin@dns01:~$ sudo -u pdns pdnsutil zone list par1.medisphere.internal | grep -c git01
 0
@@ -106,7 +106,7 @@ Puis le piège : l'autoritaire répond de nouveau `10.10.20.12`, mais le récurs
 ```
 admin@adm01:~$ dig @10.10.20.10 git01.par1.medisphere.internal | grep -E 'status|SOA'
 ;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN
-par1.medisphere.internal. 2874 IN SOA …
+par1.medisphere.internal. 274 IN SOA …
 ```
 
 Le TTL de la ligne SOA **décroît** d'une requête à l'autre : c'est la réponse négative mise en cache (RFC 2308), pour la plus petite des deux valeurs : TTL du SOA et champ *minimum* du SOA, plafonnée par `recordcache.max_negative_ttl` (3600 s par défaut). Correctif ciblé :
@@ -116,7 +116,7 @@ admin@dns01:~$ sudo rec_control wipe-cache git01.par1.medisphere.internal
 wiped 2 records, 1 negative records, 1 packets
 ```
 
-(Même chose sur le récurseur de `dns02`.) Prévention : un SOA *minimum* court pour la zone interne (300 s par exemple), et la synchronisation qui vide le cache des noms qu'elle crée.
+(Même chose sur le récurseur de `dns02`.) Avec le SOA de M06-E06 (TTL et *minimum* de 300 s), la réponse négative disparaît seule en cinq minutes au plus ; un *minimum* d'une heure ou plus, fréquent dans les modèles, ferait durer la panne bien après la réparation. Prévention : garder ce *minimum* court pour la zone interne, et faire vider par la synchronisation le cache des noms qu'elle crée.
 
 **Variante 4 — base de l'autoritaire illisible.**
 
@@ -161,20 +161,20 @@ Sondes par maillon (récurseurs, autoritaires sur 5300, série du secondaire), a
 
 **Démarche de diagnostic**
 
-*Symptôme* : les nouvelles VMs du VLAN 99 n'ont qu'une adresse `fe80::` ; la VM sonde 2069 non plus.
+*Symptôme* : les nouvelles VMs du VLAN 99 n'ont qu'une adresse `fe80::` ; la VM sonde 2064 non plus.
 
 *Hypothèses*, dans l'ordre du chemin : le DISCOVER n'atteint pas le relais ; le relais ne le transmet pas ; il est filtré en route ; Kea ne le reçoit pas ; Kea le reçoit mais ne répond pas (configuration, plage, sous-réseau) ; la réponse n'atteint pas le relais ; le relais ne la renvoie pas au client.
 
 **Étape 1 — Deux points de capture pendant un redémarrage de la sonde.**
 
 ```
-root@pve01:~# qm reboot 2069 &
-root@pve01:~# tcpdump -c 10 -eni tap2069i0 port 67 or port 68
+root@pve01:~# qm reboot 2064 &
+root@pve01:~# tcpdump -c 10 -eni tap2064i0 port 67 or port 68
 root@gw01:~# tcpdump -c 10 -ni any port 67 or port 68
 admin@dns01:~$ sudo tcpdump -c 10 -ni ens18 port 67
 ```
 
-Lecture : sur `tap2069i0`, des `DHCP-Discover` en broadcast depuis `0.0.0.0.68`. Sur `gw01`, le même DISCOVER arrive sur `ens19.99`, puis (si le relais fait son travail) repart en unicast `10.10.99.1.67 > 10.10.20.10.67`, avec `giaddr 10.10.99.1`. Sur `dns01`, il arrive, et l'OFFER repart vers `10.10.99.1.67`. Le premier point où le paquet n'apparaît plus désigne l'étage.
+Lecture : sur `tap2064i0`, des `DHCP-Discover` en broadcast depuis `0.0.0.0.68`. Sur `gw01`, le même DISCOVER arrive sur `ens19.99`, puis (si le relais fait son travail) repart en unicast `10.10.99.1.67 > 10.10.20.10.67`, avec `giaddr 10.10.99.1`. Sur `dns01`, il arrive, et l'OFFER repart vers `10.10.99.1.67`. Le premier point où le paquet n'apparaît plus désigne l'étage.
 
 **Variante 1 — relais qui n'écoute plus pour le VLAN 99.** Le DISCOVER arrive sur `ens19.99` de `gw01`, rien ne repart vers `dns01`.
 
@@ -225,7 +225,7 @@ admin@dns01:~$ sudo journalctl -u isc-kea-dhcp4-server -n 20 --no-pager
 
 Depuis Kea 2.7.9 (donc en 3.0), les fichiers de baux doivent résider dans le dossier de données compilé (`/var/lib/kea` pour les paquets ISC) : c'est une correction de sécurité (un fichier de configuration modifié ne doit pas permettre d'écrire n'importe où avec les droits de Kea). Beaucoup de tutoriels plus anciens écrivent un chemin libre. Correctif : nom de fichier seul (`"name": "kea-leases4.csv"`) dans le rôle, appliquer sur les deux serveurs. Les baux en cours n'ont pas été perdus (le fichier de `/var/lib/kea` est intact).
 
-**Vérification** : redémarre la sonde, `qm guest cmd 2069 network-get-interfaces` → adresse 10.10.99.1xx ; le bail apparaît dans `/var/lib/kea/kea-leases4.csv` ; `lab/bin/check 06 36` ; puis `lab/bin/break 06 36 --annuler` (détruit la VM 2069).
+**Vérification** : redémarre la sonde, `qm guest cmd 2064 network-get-interfaces` → adresse 10.10.99.1xx ; le bail apparaît dans `/var/lib/kea/kea-leases4.csv` ; `lab/bin/check 06 36` ; puis `lab/bin/break 06 36 --annuler` (détruit la VM 2064).
 
 **Explications**
 

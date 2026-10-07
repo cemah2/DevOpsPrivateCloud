@@ -3,11 +3,8 @@
 # Le gabarit recursor.yml (étendu en M06-E26) écrit les ancres ; le gestionnaire du rôle
 # (M06-E07) redémarre le Recursor quand le fichier change. À la main, « rec_control reload-yaml »
 # recharge les ancres SANS redémarrage (cache conservé) : utile lors d'un roulement (RB-064).
-# À inclure à la fin du bloc « Appliquer et vérifier » de tasks/configuration.yml (M06-E07),
-# après la sonde, pour que l'échec déclenche la remise en place de la configuration précédente :
-#     - name: Ancres de confiance
-#       ansible.builtin.include_tasks: ancres.yml
-#       when: powerdns_recursor_ancres | length > 0
+# Inclus par tasks/configuration.yml (M06-E26), à la fin du bloc « Appliquer et vérifier » : un
+# échec déclenche la remise en place de la configuration précédente.
 
 - name: Ancres positives chargées
   ansible.builtin.command: rec_control get-tas

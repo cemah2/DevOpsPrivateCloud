@@ -2,6 +2,8 @@
 # Rôle kea_dhcp4 — serveur DHCPv4 Kea 3.0 (M06-E16 ; API de contrôle et DDNS en M06-E17).
 # Remplace le DHCP de dnsmasq pour le VLAN SANDBOX (relayé par gw01, giaddr 10.10.99.1).
 # Valeurs du site dans inventories/lab/group_vars/role_dns/kea.yml.
+# Évolution : M06-E25 (API en HTTPS sur l'adresse de service, TLS, haute disponibilité) ; état
+# final des variables : M06-E25/ansible/roles/kea_dhcp4/defaults/main.yml.
 
 kea_dhcp4_entete: >-
   {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).

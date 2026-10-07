@@ -7,8 +7,9 @@
 #
 # 1. OpenTofu et S3 comme l'apprenant :
 #      m05_tofu DOSSIER args…   lance tofu depuis DOSSIER avec ~/.config/workbook/pve-tofu.env,
-#                               s3-tofu.env et la phrase de chiffrement (TF_VAR_phrase_chiffrement,
-#                               lue dans tofu-chiffrement.pass) ; jamais d'interaction (TF_INPUT=0).
+#                               s3-tofu.env et le chiffrement de l'état (TF_ENCRYPTION, construit par
+#                               outils/charger-acces.sh ou à partir de tofu-chiffrement.pass) ;
+#                               jamais d'interaction (TF_INPUT=0).
 #      m05_aws args…            AWS CLI v2 vers s3-01 (endpoint, ancre TLS système, région factice).
 # 2. Copie de travail ~/src/infra : m05_sauver / m05_noter / m05_poser / m05_restaurer
 #    (sauvegarde exacte avant modification ; l'annulation ne restaure que ce qui est ENCORE dans
@@ -78,10 +79,21 @@ m05_charger_env() {
     if [[ -r "$f" ]]; then source "$f"; fi
   done
   set +a
-  # La phrase de chiffrement de l'état (M05-E27) est lue dans son fichier, qui fait référence.
-  if [[ -r "$_M05_CFG/tofu-chiffrement.pass" ]]; then
-    TF_VAR_phrase_chiffrement="$(<"$_M05_CFG/tofu-chiffrement.pass")"
-    export TF_VAR_phrase_chiffrement
+  # Chiffrement de l'état (M05-E27) : TF_ENCRYPTION (fournisseur de clé « pbkdf2 etat »), jamais
+  # une variable TF_VAR_ (recopiée en clair dans chaque plan). Source de référence : le chargeur
+  # de l'apprenant, outils/charger-acces.sh (il suit une rotation de phrase) ; à défaut, la
+  # phrase de tofu-chiffrement.pass. Une valeur héritée du shell appelant est ignorée.
+  unset TF_ENCRYPTION
+  if [[ -r "$_M05_INFRA/outils/charger-acces.sh" ]]; then
+    # shellcheck source=/dev/null
+    . "$_M05_INFRA/outils/charger-acces.sh" >/dev/null 2>&1 || unset TF_ENCRYPTION
+  fi
+  if [[ -z "${TF_ENCRYPTION:-}" && -r "$_M05_CFG/tofu-chiffrement.pass" ]]; then
+    # Guillemets voulus : le contenu est du HCL.
+    # shellcheck disable=SC2089,SC2090
+    printf -v TF_ENCRYPTION 'key_provider "pbkdf2" "etat" { passphrase = "%s" }' "$(tr -d '\n' < "$_M05_CFG/tofu-chiffrement.pass")"
+    # shellcheck disable=SC2090
+    export TF_ENCRYPTION
   fi
   export AWS_CA_BUNDLE="${AWS_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
   export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"

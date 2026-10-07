@@ -5,7 +5,7 @@
 # « current », étiquettes socle + role-netbox (groupe Ansible role_netbox), protection Proxmox.
 # Version du module : la dernière publiée dans plateforme/tofu-modules (adapter ?ref=).
 module "nbx01" {
-  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-debian?ref=v1.0.0"
+  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-debian?ref=v1.1.0"
 
   nom         = "nbx01"
   vm_id       = 1005

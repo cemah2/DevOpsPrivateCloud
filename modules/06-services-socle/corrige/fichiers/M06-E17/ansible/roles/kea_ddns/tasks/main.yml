@@ -52,8 +52,12 @@
     state: started
 
 # --- Côté PowerDNS (pdnsutil 5.0 : sous-commandes « tsigkey » et « metadata ») --------------------
+# pdnsutil SOUS LE COMPTE pdns, propriétaire de la base SQLite (M06-E06) : lancé en root, il
+# créerait des fichiers -wal/-shm que le service ne pourrait plus écrire.
 - name: Lire les clés TSIG connues de PowerDNS
   ansible.builtin.command: pdnsutil tsigkey list
+  become: true
+  become_user: pdns
   register: _kea_ddns_cles
   changed_when: false
   check_mode: false
@@ -69,6 +73,8 @@
     executable: /bin/bash
   environment:
     SECRET: "{{ kea_ddns_tsig_secret }}"
+  become: true
+  become_user: pdns
   when: >-
     (_kea_ddns_cles.stdout_lines | select('search', '^' ~ (kea_ddns_tsig_nom | regex_escape) ~ '\.? ')
      | select('search', ' ' ~ (kea_ddns_tsig_secret | regex_escape) ~ '$') | list | length) == 0
@@ -77,6 +83,8 @@
 
 - name: Lire les autorisations de mise à jour des zones
   ansible.builtin.command: pdnsutil metadata get {{ item }} TSIG-ALLOW-DNSUPDATE ALLOW-DNSUPDATE-FROM
+  become: true
+  become_user: pdns
   loop:
     - "{{ kea_ddns_zone_directe }}"
     - "{{ kea_ddns_zone_inverse }}"
@@ -88,6 +96,8 @@
 # autorisée ET signature par la clé (doc PowerDNS 5.0, « Dynamic DNS Update »).
 - name: Mises à jour de la zone réservées à la clé ddns-kea
   ansible.builtin.command: pdnsutil metadata set {{ item.item }} TSIG-ALLOW-DNSUPDATE {{ kea_ddns_tsig_nom }}
+  become: true
+  become_user: pdns
   loop: "{{ _kea_ddns_meta.results }}"
   loop_control:
     label: "{{ item.item }}"
@@ -96,6 +106,8 @@
 
 - name: Mises à jour de la zone acceptées depuis la boucle locale seulement
   ansible.builtin.command: pdnsutil metadata set {{ item.item }} ALLOW-DNSUPDATE-FROM {{ kea_ddns_autorises | join(' ') }}
+  become: true
+  become_user: pdns
   loop: "{{ _kea_ddns_meta.results }}"
   loop_control:
     label: "{{ item.item }}"
@@ -106,11 +118,17 @@
   ansible.builtin.meta: flush_handlers
 
 # Preuve de bout en bout, comme le fera D2 : mise à jour signée d'un TXT de sonde, puis retrait.
+# Clé dans un fichier temporaire 600 écrit par printf (commande interne) : « nsupdate -y » mettrait
+# le secret dans la liste des processus, lisible par tous les comptes de l'hôte.
 - name: Une mise à jour signée par la clé est acceptée par PowerDNS
   ansible.builtin.shell: |
     set -o pipefail
     zone="{{ kea_ddns_zone_directe | regex_replace('\\.$', '') }}"
     nom="sonde-ansible-ddns.$zone"
+    cle="$(mktemp)"
+    trap 'rm -f "$cle"' EXIT
+    printf 'key "%s" { algorithm %s; secret "%s"; };\n' \
+      "{{ kea_ddns_tsig_nom }}" "{{ kea_ddns_tsig_algorithme }}" "$SECRET" >"$cle"
     {
       echo "server {{ kea_ddns_serveur }} {{ kea_ddns_port }}"
       echo "zone $zone"
@@ -118,7 +136,7 @@
       echo "send"
       echo "update delete $nom TXT"
       echo "send"
-    } | nsupdate -t 5 -y "{{ kea_ddns_tsig_algorithme }}:{{ kea_ddns_tsig_nom }}:$SECRET"
+    } | nsupdate -t 5 -k "$cle"
   args:
     executable: /bin/bash
   environment:

@@ -34,7 +34,7 @@ _e35_precondition() {
   fi
   m06_wb_exec dns01 >/dev/null <<'EOF' || { wb_avert "dns01 : PowerDNS Recursor (recursor.yml) ou Authoritative introuvable"; return 1; }
 [ -f /etc/powerdns/recursor.yml ] && systemctl is-active -q pdns-recursor && systemctl is-active -q pdns \
-  && command -v pdnsutil >/dev/null && command -v dig >/dev/null
+  && [ -x /usr/bin/pdnsutil ] && command -v dig >/dev/null
 EOF
 }
 

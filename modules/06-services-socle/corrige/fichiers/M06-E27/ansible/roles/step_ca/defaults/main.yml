@@ -1,0 +1,85 @@
+---
+# Rôle step_ca (M06-E02, complété en M06-E27 : écouteur HTTP et CRL) — ÉTAT FINAL des variables du
+# rôle ; ce fichier remplace celui de M06-E02. Autorité de certification en ligne du socle (ca01).
+# PKI à deux niveaux : la RACINE est hors ligne (jamais sur l'hôte : seul son certificat
+# public est déployé) ; l'INTERMÉDIAIRE signe en ligne. Sa clé est générée SUR l'hôte et ne
+# le quitte jamais : le rôle produit une CSR, que la cérémonie de signature (M06-E02,
+# ~/pki-racine sur adm01) transforme en certificat, déposé dans le dépôt Ansible.
+# Les valeurs du socle sont dans inventories/lab/group_vars/role_pki/step_ca.yml.
+
+# --- Paquets (dépôt APT Smallstep) ---------------------------------------------------------
+step_ca_depot_url: https://packages.smallstep.com/stable/debian
+step_ca_depot_cle_url: https://packages.smallstep.com/keys/apt/repo-signing-key.gpg
+# Empreinte attendue de la clé de signature du dépôt (vérifiée avant usage).
+step_ca_depot_cle_empreinte: 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3
+# Versions figées (PLAN §6) : chaîne complète affichée par « apt-cache madison step-ca ».
+step_ca_paquet_version: "0.30.2-1"
+step_ca_cli_paquet_version: "0.31.0-1"
+
+# --- Emplacements (guide de production Smallstep : STEPPATH=/etc/step-ca) -----------------
+step_ca_repertoire: /etc/step-ca
+step_ca_utilisateur: step
+
+# --- Service ---------------------------------------------------------------------------------
+# Port d'écoute (toutes les adresses de l'hôte : address = ":PORT" dans ca.json).
+step_ca_port: 443
+step_ca_adresse: ":{{ step_ca_port }}"
+# Noms et adresses présents dans le certificat TLS de la CA elle-même (dnsNames de ca.json).
+# Le PREMIER nom est celui de l'URL de la CA.
+step_ca_noms_dns:
+  - "{{ inventory_hostname }}"
+step_ca_url: "https://{{ step_ca_noms_dns[0] }}{{ '' if step_ca_port | int == 443 else ':' ~ step_ca_port }}"
+
+# --- PKI ---------------------------------------------------------------------------------------
+# Certificats PUBLICS, chemins sur le CONTRÔLEUR (fichiers versionnés du dépôt Ansible).
+step_ca_racine_crt: ""
+step_ca_intermediaire_crt: ""
+# Où déposer la CSR de l'intermédiaire sur le contrôleur, tant que le certificat signé
+# n'existe pas (phase 1 de la cérémonie). Vide = pas de rapatriement.
+step_ca_csr_locale: ""
+# Sujet de la CSR de l'intermédiaire (nom accentué : il passe par un modèle de CSR).
+step_ca_intermediaire_cn: "MédiSphère Intermediate CA"
+step_ca_intermediaire_o: "MédiSphère"
+# Mot de passe des clés en ligne (intermédiaire, clés de la CA SSH) : Vault « critique ».
+step_ca_mot_de_passe: ""
+
+# --- CA SSH (certificats d'hôte et d'utilisateur, M06-E19/E20) ------------------------------------
+step_ca_ssh: true
+
+# --- Politique de durées (« claims » globales ; un provisioner peut les resserrer) --------------
+step_ca_claims:
+  minTLSCertDuration: 5m
+  maxTLSCertDuration: 720h
+  defaultTLSCertDuration: 720h
+  disableRenewal: false
+  enableSSHCA: "{{ step_ca_ssh }}"
+  minHostSSHCertDuration: 5m
+  maxHostSSHCertDuration: 720h
+  defaultHostSSHCertDuration: 720h
+  minUserSSHCertDuration: 5m
+  maxUserSSHCertDuration: 16h
+  defaultUserSSHCertDuration: 16h
+
+# --- Provisioners : liste d'objets JSON tels qu'attendus dans ca.json (authority.provisioners).
+# Le rôle ne génère pas de matériel de provisioner : une clé JWK se crée une fois, sur adm01
+# (step crypto jwk create), sa partie publique va dans l'inventaire, sa partie privée
+# CHIFFRÉE (encryptedKey) dans Vault. Vide = refus (une CA sans provisioner n'émet rien).
+step_ca_provisioners: []
+
+# --- TLS de l'API de la CA --------------------------------------------------------------------------
+step_ca_tls:
+  minVersion: 1.2
+  maxVersion: 1.3
+  renegotiation: false
+
+# --- Redémarrage ---------------------------------------------------------------------------------------
+# false : le rôle prépare la configuration sans redémarrer (changement planifié).
+step_ca_redemarrer: true
+
+# --- (E27) Révocation active ----------------------------------------------------------------------
+# Écouteur HTTP (insecureAddress de ca.json) : vide = aucun. Il ne sert que des routes publiques
+# (CRL, ⚠️ vérifie la liste dans la documentation de ta version).
+step_ca_adresse_http: ""
+# CRL (bloc « crl » de ca.json) : désactivée par défaut.
+step_ca_crl:
+  enabled: false

@@ -4,6 +4,7 @@
 # D2 la traduit en mise à jour DNS RFC 2136 signée TSIG vers le serveur faisant autorité.
 # Prérequis : rôle kea_dhcp4 (dépôt et paquets ISC), rôle powerdns_auth avec
 # powerdns_auth_dnsupdate: true (dnsupdate=yes, allow-dnsupdate-from=127.0.0.1).
+# Variables inchangées en M06-E25 (seules les tâches évoluent : M06-E25/ansible/roles/kea_ddns/).
 
 kea_ddns_entete: >-
   {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).
@@ -12,7 +13,7 @@ kea_ddns_entete: >-
 kea_ddns_version: "{{ kea_dhcp4_version | default('3.0.*') }}"
 
 # Clé TSIG partagée avec PowerDNS : même nom des deux côtés, secret en Vault « critique »
-# (vault_kea_tsig_ddns, group_vars/role_dns/vault.yml). Génération : openssl rand -base64 32
+# (vault_kea_tsig_ddns, group_vars/role_dns/vault-critique.yml). Génération : openssl rand -base64 32
 kea_ddns_tsig_nom: ddns-kea
 kea_ddns_tsig_algorithme: hmac-sha256
 kea_ddns_tsig_secret: ""

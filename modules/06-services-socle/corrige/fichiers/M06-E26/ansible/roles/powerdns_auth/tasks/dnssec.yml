@@ -48,7 +48,9 @@
 # « zone secure » rectifie déjà la zone ; ce rattrapage couvre des données insérées hors API.
 # Les écritures par l'API (OpenTofu, synchronisation NetBox) et par DNS UPDATE (Kea) sont
 # rectifiées par PowerDNS lui-même.
-- name: Rectifier les zones nouvellement signées
+# Boucles sur les zones qui viennent de changer : un handler ne sait pas recevoir l'élément
+# de boucle, d'où ces tâches conditionnées (no-handler accepté).
+- name: Rectifier les zones nouvellement signées  # noqa: no-handler
   ansible.builtin.command: pdnsutil zone rectify {{ item.item }}
   become: true
   become_user: pdns
@@ -58,7 +60,7 @@
   when: item is changed
   changed_when: true
 
-- name: Faire repartir un NOTIFY (le secondaire récupère la zone signée)
+- name: Faire repartir un NOTIFY (le secondaire récupère la zone signée)  # noqa: no-handler
   ansible.builtin.command: pdnsutil zone increase-serial {{ item.item }}
   become: true
   become_user: pdns

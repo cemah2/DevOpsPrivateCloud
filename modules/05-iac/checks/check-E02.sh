@@ -89,8 +89,10 @@ check_cmd ".gitlab-ci.yml n'inclut pas le gabarit release.yml" \
 _m05_mr="$(gitlab_api "$_M05_PROJET/merge_requests?state=merged&target_branch=main&per_page=1" 2>/dev/null)" \
   || _m05_mr=""
 check_output "au moins une merge request fusionnée dans main" '^[1-9]' _m05_val "$_m05_mr" 'length'
-_m05_pl="$(gitlab_api "$_M05_PROJET/pipelines?ref=main&per_page=1" 2>/dev/null)" || _m05_pl=""
-check_output "dernier pipeline de main réussi" '^success$' _m05_val "$_m05_pl" '.[0].status'
+# Pipelines de push sur main seulement (les pipelines planifiés de E28/E29 ne comptent pas) ;
+# « manual » = réussi, avec des jobs apply manuels non lancés (E26).
+_m05_pl="$(gitlab_api "$_M05_PROJET/pipelines?ref=main&source=push&per_page=1" 2>/dev/null)" || _m05_pl=""
+check_output "dernier pipeline de main réussi" '^(success|manual)$' _m05_val "$_m05_pl" '.[0].status'
 
 # --- Copie de travail et .gitignore --------------------------------------------------------------
 check_cmd "copie de travail ~/src/infra (dépôt Git)" git -C "$_M05_SRC" rev-parse --is-inside-work-tree

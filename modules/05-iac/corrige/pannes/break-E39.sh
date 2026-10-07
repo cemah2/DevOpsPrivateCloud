@@ -9,7 +9,7 @@
 #      relais ne reçoit plus les demandes du VLAN 99, la VM n'a pas d'adresse IPv4 ;
 #   2. gw01 : règle en tête de la chaîne forward qui jette MGMT → 10.10.99.0/24 en TCP/22 : la VM
 #      a une adresse et répond au ping, SSH expire ;
-#   3. dns01 : /etc/dnsmasq.d/90-sec-650.conf « dhcp-ignore=tag:!known » (durcissement demandé
+#   3. dns01 : /etc/dnsmasq.d/90-sec-683.conf « dhcp-ignore=tag:!known » (durcissement demandé
 #      par Sophie, appliqué trop large) : dnsmasq ignore les machines non déclarées ;
 #   4. copie de travail : dans envs/lab-m05/terraform.tfvars, la liste cles_ssh_admin est remplacée
 #      par la seule clé publique de Lucas (« j'ai ajouté ma clé » — en remplaçant au lieu
@@ -23,8 +23,8 @@ source "$WB_ROOT/lab/lib/pannes-lib.sh"
 # shellcheck source=_m05-commun.sh
 source "$WB_ROOT/modules/05-iac/corrige/pannes/_m05-commun.sh"
 
-_E39_COMM_DHCP="SEC-650 test filtrage DHCP sandbox (LM)"
-_E39_COMM_SSH="SEC-650 test isolement sandbox (LM)"
+_E39_COMM_DHCP="SEC-683 test filtrage DHCP sandbox (LM)"
+_E39_COMM_SSH="SEC-683 test isolement sandbox (LM)"
 
 # _e39_fichier_cles — fichier .tfvars de envs/lab-m05 qui affecte cles_ssh_admin.
 _e39_fichier_cles() {
@@ -43,12 +43,12 @@ _m05E39_une() {
       ;;
     3)
       m05_wb_exec dns01 >/dev/null <<'EOF' || rc=$?
-f=/etc/dnsmasq.d/90-sec-650.conf
+f=/etc/dnsmasq.d/90-sec-683.conf
 [ -e "$f" ] && exit 10
 grep -rqs '^[[:space:]]*dhcp-ignore' /etc/dnsmasq.conf /etc/dnsmasq.d/ && exit 10
 sauver "$f"
 cat > "$f" <<'CONF'
-# SEC-650 (Sophie Laurent) : n'attribuer d'adresse qu'aux machines déclarées.
+# SEC-683 (Sophie Laurent) : n'attribuer d'adresse qu'aux machines déclarées.
 # Appliqué par Lucas le 06/10, en attente de revue.
 dhcp-ignore=tag:!known
 CONF
@@ -106,7 +106,7 @@ verifier_E39() {
   case "${WB_VAR:-}" in
     1) m05_nft_present "$_E39_COMM_DHCP" ;;
     2) m05_nft_present "$_E39_COMM_SSH" ;;
-    3) remote dns01 'systemctl is-active -q dnsmasq && grep -qs "^dhcp-ignore=tag:!known" /etc/dnsmasq.d/90-sec-650.conf' ;;
+    3) remote dns01 'systemctl is-active -q dnsmasq && grep -qs "^dhcp-ignore=tag:!known" /etc/dnsmasq.d/90-sec-683.conf' ;;
     4) f="$(m05_lire E39 fichier)"; [[ -n "$f" ]] && grep -q 'lucas.martin@poste-lucas' "$f" && ! m05_fichier_modifie E39 "$f" ;;
     *) return 1 ;;
   esac

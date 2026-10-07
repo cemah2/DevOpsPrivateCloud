@@ -85,10 +85,11 @@ check_output "le jeton joint l'API de pve01, certificat vérifié par le magasin
 check_cmd "envs/lab-m05/versions.tf : required_version limité à la série 1.13" \
   grep -Eq 'required_version[[:space:]]*=[[:space:]]*"(~>[[:space:]]*1\.13\.[0-9]+|>=[[:space:]]*1\.13[^"]*<[[:space:]]*1\.14[^"]*)"' \
   "$_M05_ENV/versions.tf"
-check_cmd "envs/lab-m05/versions.tf : provider bpg/proxmox contraint à ~> 0.115.0" \
+# 0.115.x en M05-E03 ; 0.116.x après la montée de version délibérée de M05-E31.
+check_cmd "envs/lab-m05/versions.tf : provider bpg/proxmox épinglé (~> 0.115.0, ou ~> 0.116.0 après E31)" \
   bash -c 'grep -Eq "source[[:space:]]*=[[:space:]]*\"bpg/proxmox\"" "$1" \
-    && grep -Eq "version[[:space:]]*=[[:space:]]*\"~>[[:space:]]*0\.115\.[0-9]+\"" "$1"' _ "$_M05_ENV/versions.tf"
-check_output ".terraform.lock.hcl : bpg/proxmox 0.115.x du registre OpenTofu" '^0\.115\.[0-9]+$' \
+    && grep -Eq "version[[:space:]]*=[[:space:]]*\"~>[[:space:]]*0\.11[56]\.[0-9]+\"" "$1"' _ "$_M05_ENV/versions.tf"
+check_output ".terraform.lock.hcl : bpg/proxmox 0.115.x (0.116.x après E31) du registre OpenTofu" '^0\.11[56]\.[0-9]+$' \
   bash -c 'sed -n "/registry\.opentofu\.org\/bpg\/proxmox/,/^}/ s/^[[:space:]]*version[[:space:]]*=[[:space:]]*\"\(.*\)\"/\1/p" "$1"' \
   _ "$_M05_ENV/.terraform.lock.hcl"
 check_cmd "main contient envs/lab-m05/.terraform.lock.hcl (versions et empreintes partagées)" \

@@ -14,12 +14,12 @@ require_cmd dig ssh
 check_cmd "dns01 : SOA de $_m06x_zone validé (drapeau ad)" _m06x_valide 10.10.20.10 "$_m06x_zone" SOA
 check_cmd "dns01 : git01.$_m06x_zone validé (drapeau ad)" _m06x_valide 10.10.20.10 "git01.$_m06x_zone" A
 check_ssh "dns01 : la zone n'est pas en mode PRESIGNED" dns01 \
-  "! sudo -n pdnsutil metadata get $_m06x_zone PRESIGNED 2>/dev/null | grep -q '= 1'"
+  "! sudo -n -u pdns pdnsutil metadata get $_m06x_zone PRESIGNED 2>/dev/null | grep -q '= 1'"
 check_ssh "dns01 : au moins une clé active, pdnsutil zone check sans erreur" dns01 \
-  "sudo -n pdnsutil zone show $_m06x_zone | grep -Eq '^ID = [0-9]+ .*[[:space:]]Active' && sudo -n pdnsutil zone check $_m06x_zone >/dev/null"
+  "sudo -n -u pdns pdnsutil zone show $_m06x_zone | grep -Eq '^ID = [0-9]+ .*[[:space:]]Active' && sudo -n -u pdns pdnsutil zone check $_m06x_zone >/dev/null"
 check_ssh "dns01 : l'ancre de confiance du récurseur correspond au DS d'une clé active" dns01 '
   ta=$(sudo -n rec_control get-tas 2>/dev/null)
-  sudo -n pdnsutil zone export-ds '"$_m06x_zone"' 2>/dev/null | awk "{ for (i = 1; i <= NF; i++) if (\$i == \"DS\" && \$(i + 3) == 2) print tolower(\$(i + 4)) }" | while read -r d; do
+  sudo -n -u pdns pdnsutil zone export-ds '"$_m06x_zone"' 2>/dev/null | awk "{ for (i = 1; i <= NF; i++) if (\$i == \"DS\" && \$(i + 3) == 2) print tolower(\$(i + 4)) }" | while read -r d; do
     echo "$ta" | tr "A-F" "a-f" | grep -qF "$d" && exit 10
   done; [ $? -eq 10 ]'
 if _m06x_existe dns02; then

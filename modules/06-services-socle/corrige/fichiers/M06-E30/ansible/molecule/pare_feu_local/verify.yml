@@ -33,7 +33,7 @@
       register: mol_8080
       failed_when: mol_8080 is succeeded
 
-    - name: Aucune minuterie de retour restée armée
+    - name: Aucune minuterie de retour restée armée  # noqa: command-instead-of-module (lecture d'état seule)
       ansible.builtin.command: systemctl is-active pare-feu-local-retour.timer
       register: mol_minuterie
       changed_when: false

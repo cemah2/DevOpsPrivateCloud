@@ -37,10 +37,10 @@ for _m06_e36_h in dns01 dns02; do
   check_ssh "$_m06_e36_h : kea-dhcp4 écoute sur UDP/67" "$_m06_e36_h" \
     "sudo -n ss -lunp 'sport = :67' | grep -q kea-dhcp4"
 done
-if remote "$WB_PVE_HOST" "qm status 2069" >/dev/null 2>&1; then
-  check_ssh "VM sonde 2069 : adresse obtenue sur le VLAN 99" "$WB_PVE_HOST" \
-    "qm guest cmd 2069 network-get-interfaces | grep -Eq '\"ip-address\" *: *\"10\\.10\\.99\\.'"
+if remote "$WB_PVE_HOST" "qm status 2064" >/dev/null 2>&1; then
+  check_ssh "VM sonde 2064 : adresse obtenue sur le VLAN 99" "$WB_PVE_HOST" \
+    "qm guest cmd 2064 network-get-interfaces | grep -Eq '\"ip-address\" *: *\"10\\.10\\.99\\.'"
 else
-  skip "VM sonde 2069" "absente (détruite par --annuler)"
+  skip "VM sonde 2064" "absente (détruite par --annuler)"
 fi
 check_cmd "panne M06-E36 close (lab/bin/break 06 36 --annuler après réparation)" _m06x_aucune_panne_active E36

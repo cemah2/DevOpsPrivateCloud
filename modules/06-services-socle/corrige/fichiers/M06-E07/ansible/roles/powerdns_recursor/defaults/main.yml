@@ -3,6 +3,8 @@
 # configuration YAML (recursor.yml). Il résout Internet lui-même (ou par des résolveurs amont)
 # et RELAIE les zones internes vers le serveur faisant autorité (rôle powerdns_auth).
 # Les valeurs du socle sont dans inventories/lab/group_vars/role_dns/powerdns_recursor.yml.
+# Évolution : M06-E26 (ancres positives) ; état final des variables :
+# M06-E26/ansible/roles/powerdns_recursor/defaults/main.yml.
 
 # --- Dépôt APT repo.powerdns.com (même clé que l'Authoritative) -----------------------------------
 powerdns_recursor_depot_url: http://repo.powerdns.com/debian

@@ -29,7 +29,8 @@ for _m06o_cible in git01:443 nbx01:443 s3-01:8333; do
     '! systemctl list-units --failed --no-legend "cert-renewer@*" | grep -q cert-renewer@'
 done
 
-# Plus aucun service HTTPS du socle ne présente un certificat de la CA provisoire.
+# Non-régression : la CA provisoire, retirée en M06-E03, ne signe plus rien de ce que sert le socle
+# (les certificats émis à la main pour 90 jours sont écartés plus haut par le contrôle de durée).
 for _m06o_cible in git01:443 nbx01:443 s3-01:8333 ca01:443; do
   _m06o_x509="$(_m06o_cert_tls "${_m06o_cible%%:*}.$_M06O_ZONE" "${_m06o_cible#*:}")"
   check_cmd "${_m06o_cible%%:*} : pas de certificat signé par la CA provisoire" \

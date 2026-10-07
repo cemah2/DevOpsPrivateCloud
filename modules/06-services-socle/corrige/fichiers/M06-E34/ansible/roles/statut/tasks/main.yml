@@ -42,21 +42,24 @@
     mode: "0644"
   notify: Recharger nginx
 
-- name: Activer le site, retirer le site par défaut
+- name: Activer le site
   ansible.builtin.file:
-    path: "{{ item.lien }}"
-    src: "{{ item.cible | default(omit) }}"
-    state: "{{ item.etat }}"
-  loop:
-    - {lien: /etc/nginx/sites-enabled/statut, cible: /etc/nginx/sites-available/statut, etat: link}
-    - {lien: /etc/nginx/sites-enabled/default, etat: absent}
+    path: /etc/nginx/sites-enabled/statut
+    src: /etc/nginx/sites-available/statut
+    state: link
+  notify: Recharger nginx
+
+- name: Retirer le site par défaut
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
   notify: Recharger nginx
 
 - name: Configuration nginx valide
   ansible.builtin.command: nginx -t
   changed_when: false
 
-- name: nginx actif et lancé au démarrage
+- name: Service nginx actif et lancé au démarrage
   ansible.builtin.systemd_service:
     name: nginx.service
     enabled: true

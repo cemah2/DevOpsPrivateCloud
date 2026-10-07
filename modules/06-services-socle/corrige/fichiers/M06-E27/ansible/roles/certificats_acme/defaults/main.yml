@@ -1,0 +1,44 @@
+---
+# Rôle certificats_acme — certificats TLS émis par step-ca (ACME) et renouvelés seuls (M06-E18 ;
+# seuil de renouvellement en M06-E27). ÉTAT FINAL des variables ; remplace le fichier de M06-E18.
+# Utilisé aussi pour gw01 (NTS, M06-E21) et pour Kea (identifiant « kea », M06-E25).
+#
+# Cycle de vie d'un certificat :
+#   1. ÉMISSION par ACME (défi HTTP-01) : « step ca certificate … --provisioner acme ». ca01
+#      vient chercher le jeton sur http://<nom>:80/.well-known/acme-challenge/ : le port 80 de
+#      l'hôte doit être libre (serveur autonome de step) le temps de l'émission ;
+#   2. RENOUVELLEMENT par le certificat lui-même (mTLS, « step ca renew ») : plus besoin du
+#      port 80 ni d'un secret ; lancé par la minuterie cert-renewer@<id>.timer (modèle officiel
+#      Smallstep) aux deux tiers de la durée de vie, puis le service consommateur est rechargé.
+# Le rôle ne réémet un certificat que s'il manque, ou s'il ne se vérifie plus contre la racine
+# MédiSphère pour ses noms (autre CA, expiré, autre nom), ou s'il dure plus que la politique ACME
+# (certificat de 90 jours émis à la main en M06-E03/E04).
+
+certificats_acme_ca_url: https://ca01.par1.medisphere.internal
+certificats_acme_provisioner: acme
+# Racine installée par le rôle ca_lab (medisphere.socle, étendu en M06-E03).
+certificats_acme_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+# Configuration du client step de l'hôte (STEPPATH) : config/defaults.json, certs/root_ca.crt.
+certificats_acme_steppath: /etc/step
+# Durée maximale admise (heures) d'un certificat en place : au-delà, il a été émis à la main
+# (provisioner admin, 90 jours) et le rôle le remplace par un certificat ACME.
+certificats_acme_duree_max_h: 720
+
+# Liste des certificats de l'hôte (host_vars/<hôte>/certificats.yml) :
+#   - id: gitlab                       # instance de cert-renewer@<id> (lettres, chiffres, -)
+#     noms: [git01.par1.medisphere.internal]   # le premier est le sujet ; tous en SAN
+#     certificat: /etc/gitlab/ssl/git01.par1.medisphere.internal.crt   # chaîne complète
+#     cle: /etc/gitlab/ssl/git01.par1.medisphere.internal.key
+#     groupe: root                     # groupe propriétaire de la clé (mode 0640)
+#     avant_emission: "gitlab-ctl stop nginx"     # libérer le port 80 (facultatif)
+#     apres_emission: "gitlab-ctl start nginx"    # (facultatif)
+#     recharger: "gitlab-ctl hup nginx"           # après émission ET après chaque renouvellement
+certificats_acme_certificats: []
+
+certificats_acme_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# --- (E27) Renouvellement ------------------------------------------------------------------------
+# Seuil de renouvellement, en durée (heures : step n'accepte pas « d ») : 15 jours avant
+# l'expiration. Politique de certification (M06-E33), §5.
+certificats_acme_seuil: 360h

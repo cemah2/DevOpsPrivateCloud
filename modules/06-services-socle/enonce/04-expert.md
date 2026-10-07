@@ -20,7 +20,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 - **Ta copie de travail `~/src/ansible` doit être propre** (`git status` sans modification) pour M06-E40 et l'astreinte : l'injection le vérifie.
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `/var/lib/workbook/` sur les hôtes, ni `~/.local/state/workbook/` sur `adm01` : ils contiennent la cause.
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 06 35 --annuler` remet l'état sain (filet de sécurité, pas un correctif : compte l'exercice comme non réussi). **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne (sinon elle reste marquée active et bloque la suivante, l'astreinte M06-E43 et le mini-projet) : l'annulation ne rétablit que ce qui est encore dans l'état cassé et ne revient jamais sur ta réparation.
-- Les pannes agissent sur les hôtes du socle (fichiers sauvegardés avant modification sous `/var/lib/workbook/`, règles nftables posées à chaud et retirées à l'annulation), sur les données de NetBox (avec le jeton d'automatisation `~/.config/workbook/netbox-auto.token`, valeurs d'origine conservées), sur ta copie de travail `~/src/ansible` (sauvegardée, jamais de commit) et sur la VM jetable 2069 (`m06-sonde-dhcp`, pool `lab`, étiquette `env-m06`). Jamais sur `pve01`, son réseau ou son pare-feu, jamais sur une VM hors du pool `lab`. Aucune donnée n'est détruite : en particulier, **aucune clé de zone DNSSEC** n'est supprimée sans avoir été exportée, et aucune clé de la PKI n'est touchée.
+- Les pannes agissent sur les hôtes du socle (fichiers sauvegardés avant modification sous `/var/lib/workbook/`, règles nftables posées à chaud et retirées à l'annulation), sur les données de NetBox (avec le jeton d'automatisation `~/.config/workbook/netbox-auto.token` et, pour les gestes « humains », ton jeton personnel `netbox-moi.token` : renouvelle-le avant le palier s'il a expiré ; valeurs d'origine conservées), sur ta copie de travail `~/src/ansible` (sauvegardée, jamais de commit) et sur la VM jetable 2064 (`m06-sonde-dhcp`, pool `lab`, étiquette `env-m06`). Jamais sur `pve01`, son réseau ou son pare-feu, jamais sur une VM hors du pool `lab`. Aucune donnée n'est détruite : en particulier, **aucune clé de zone DNSSEC** n'est supprimée sans avoir été exportée, et aucune clé de la PKI n'est touchée.
 - **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Il alimente le post-mortem de M06-E43.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
@@ -83,7 +83,7 @@ Si l'autoritaire répond juste et que le récurseur répond encore faux, ce n'es
 ### M06-E36 — Panne : les VMs sandbox n'obtiennent plus d'adresse  `BF` `★★`
 
 > **Ticket INC-3342** — *De : Julien Petit*
-> Mes VMs de test sur le VLAN sandbox démarrent sans adresse IPv4 depuis ce matin : seule une adresse `fe80::` apparaît sur `ens18`. Les VMs démarrées hier gardent leur adresse. Pour que tu puisses reproduire, une VM de test `m06-sonde-dhcp` (VMID 2069, VNet `vsandbox`) vient d'être démarrée : elle n'a pas d'adresse non plus.
+> Mes VMs de test sur le VLAN sandbox démarrent sans adresse IPv4 depuis ce matin : seule une adresse `fe80::` apparaît sur `ens18`. Les VMs démarrées hier gardent leur adresse. Pour que tu puisses reproduire, une VM de test `m06-sonde-dhcp` (VMID 2064, VNet `vsandbox`) vient d'être démarrée : elle n'a pas d'adresse non plus.
 
 **Objectifs pédagogiques**
 - Suivre un échange DHCP relayé de bout en bout : client (VLAN 99) → relais `gw01` (`giaddr` 10.10.99.1) → Kea sur `dns01`/`dns02` → retour vers le relais → client.
@@ -93,27 +93,27 @@ Si l'autoritaire répond juste et que le récurseur répond encore faux, ce n'es
 **Prérequis** : M00-E14 (relais), M06-E16, M06-E25 ; `lab/bin/check 06 36` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : la VM 2069 est une VM jetable (clone lié de l'image dorée `current`, étiquette `env-m06`) ; pour retester après une correction, redémarre-la (`qm reboot 2069`) puis lis ses adresses par l'agent (`qm guest cmd 2069 network-get-interfaces`). Les baux de Kea sont dans `/var/lib/kea/` (fichier `memfile`). Le relais de `gw01` est la configuration dnsmasq de M00-E14, gérée depuis M06-E25 par le code Ansible ; le pare-feu de `gw01` est celui du rôle `pare_feu`.
+**Contexte technique** : la VM 2064 est une VM jetable (clone lié de l'image dorée `current`, étiquette `env-m06`) ; pour retester après une correction, redémarre-la (`qm reboot 2064`) puis lis ses adresses par l'agent (`qm guest cmd 2064 network-get-interfaces`). Les baux de Kea sont dans `/var/lib/kea/` (fichier `memfile`). Le relais de `gw01` est la configuration dnsmasq de M00-E14, gérée depuis M06-E25 par le code Ansible ; le pare-feu de `gw01` est celui du rôle `pare_feu`.
 
-**Injection** : `lab/bin/break 06 36` (4 variantes ; l'injection crée la VM 2069 et prend 2 à 4 minutes).
+**Injection** : `lab/bin/break 06 36` (4 variantes ; l'injection crée la VM 2064 et prend 2 à 4 minutes).
 
 **Travail demandé**
-1. Reproduis le symptôme avec la VM 2069. Pendant un redémarrage de la VM, observe le trafic DHCP en deux points : là où le client émet (dans quel équipement le captures-tu ?) et là où le serveur devrait recevoir. Note jusqu'où le DISCOVER arrive.
+1. Reproduis le symptôme avec la VM 2064. Pendant un redémarrage de la VM, observe le trafic DHCP en deux points : là où le client émet (dans quel équipement le captures-tu ?) et là où le serveur devrait recevoir. Note jusqu'où le DISCOVER arrive.
 2. Déduis l'étage en cause : relais, filtrage, serveur. Confirme par une seconde mesure (journal, compteurs, état du service) avant de toucher à quoi que ce soit.
 3. Corrige à la racine. Si le défaut est dans un fichier géré par Ansible, la correction durable passe par le rôle ; si c'est une règle posée à chaud, explique comment la détection de dérive l'aurait (ou non) vue.
-4. Prouve le retour à la normale : la VM 2069 obtient une adresse dans 10.10.99.100-199 après redémarrage, et le bail apparaît chez Kea.
-5. Clos la panne (`--annuler` détruit aussi la VM 2069).
+4. Prouve le retour à la normale : la VM 2064 obtient une adresse dans 10.10.99.100-199 après redémarrage, et le bail apparaît chez Kea.
+5. Clos la panne (`--annuler` détruit aussi la VM 2064).
 
 **Critères de réussite**
-- [ ] La VM 2069 obtient une adresse du VLAN 99 après redémarrage.
+- [ ] La VM 2064 obtient une adresse du VLAN 99 après redémarrage.
 - [ ] Kea est actif sur `dns01` et `dns02`, sa configuration passe `kea-dhcp4 -t`, il écoute sur UDP/67 ; le relais de `gw01` relaie le VLAN 99 et rien ne filtre ses réponses.
 - [ ] Ton journal contient les deux captures (ou leurs extraits commentés) qui localisent la panne.
 
-**Vérification** : `lab/bin/check 06 36` (avant `--annuler` : le contrôle regarde aussi l'adresse de la VM 2069).
+**Vérification** : `lab/bin/check 06 36` (avant `--annuler` : le contrôle regarde aussi l'adresse de la VM 2064).
 
 <details><summary>Indice 1</summary>
 
-Sur `pve01`, l'interface de la carte de la VM 2069 s'appelle `tap2069i0` ; sur `dns01`, `tcpdump -ni ens18 port 67 or port 68`. Le relais transforme un broadcast en unicast : ce que tu vois d'un côté ne ressemble pas à ce que tu vois de l'autre (adresse source, `giaddr`, ports).
+Sur `pve01`, l'interface de la carte de la VM 2064 s'appelle `tap2064i0` ; sur `dns01`, `tcpdump -ni ens18 port 67 or port 68`. Le relais transforme un broadcast en unicast : ce que tu vois d'un côté ne ressemble pas à ce que tu vois de l'autre (adresse source, `giaddr`, ports).
 </details>
 
 <details><summary>Indice 2</summary>
@@ -376,7 +376,7 @@ Dans l'interface : *Other → Change Log* (ou `/api/core/object-changes/?time_af
 **Prérequis** : M06-E16, M06-E17, M06-E25 ; `lab/bin/check 06 42` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : `kea-dhcp4` transmet les NCR à `kea-dhcp-ddns` (`/etc/kea/kea-dhcp-ddns.conf`, clé `ddns-kea`), qui met à jour la zone directe et la zone inverse sur l'autoritaire local (127.0.0.1:5300). Côté PowerDNS : réglage global `dnsupdate`, clé importée (`pdnsutil tsigkey list`), métadonnées de zone `TSIG-ALLOW-DNSUPDATE` et `ALLOW-DNSUPDATE-FROM`. Pour obtenir un bail neuf, crée une VM de test de la plage 2060-2068 sur `vsandbox` (ou redémarre une VM existante après avoir libéré son bail).
+**Contexte technique** : `kea-dhcp4` transmet les NCR à `kea-dhcp-ddns` (`/etc/kea/kea-dhcp-ddns.conf`, clé `ddns-kea`), qui met à jour la zone directe et la zone inverse sur l'autoritaire local (127.0.0.1:5300). Côté PowerDNS : réglage global `dnsupdate`, clé importée (`pdnsutil tsigkey list`), métadonnées de zone `TSIG-ALLOW-DNSUPDATE` et `ALLOW-DNSUPDATE-FROM`. Pour obtenir un bail neuf, crée (ou recrée) la VM de test 2065 `m06-client` sur `vsandbox`, comme en M06-E25 (ou redémarre une VM existante après avoir libéré son bail).
 
 > ⚠️ **Attention** : un secret TSIG ne s'affiche ni dans un ticket, ni dans ton journal, ni dans une commande qui finit dans l'historique du shell. Pour `nsupdate`, préfère `-k <fichier de clé>` (mode 600) à `-y`.
 

@@ -1,0 +1,44 @@
+---
+# Rôle powerdns_recursor (M06-E07, complété en M06-E26 : ancres de confiance positives) — ÉTAT
+# FINAL des variables ; remplace le fichier de M06-E07. RÉSOLVEUR récursif PowerDNS Recursor 5.4 (dépôt officiel),
+# configuration YAML (recursor.yml). Il résout Internet lui-même (ou par des résolveurs amont)
+# et RELAIE les zones internes vers le serveur faisant autorité (rôle powerdns_auth).
+# Les valeurs du socle sont dans inventories/lab/group_vars/role_dns/powerdns_recursor.yml.
+
+# --- Dépôt APT repo.powerdns.com (même clé que l'Authoritative) -----------------------------------
+powerdns_recursor_depot_url: http://repo.powerdns.com/debian
+powerdns_recursor_depot_suite: trixie-rec-54
+powerdns_recursor_depot_cle_url: https://repo.powerdns.com/FD380FBB-pub.asc
+powerdns_recursor_depot_cle_empreinte: 9FAAA5577E8FCF62093D036C1B0C6205FD380FBB
+
+# --- Écoute et clients autorisés ------------------------------------------------------------------
+# Adresses, avec un port facultatif (« adresse:port ») ; sans port : 53.
+powerdns_recursor_ecoute:
+  - 127.0.0.1
+powerdns_recursor_autorises:
+  - 127.0.0.0/8
+
+# --- Zones relayées vers un serveur faisant autorité (requêtes sans récursion, RD=0) ------------
+#   - {zone: par1.medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+powerdns_recursor_zones_relayees: []
+
+# --- Internet ------------------------------------------------------------------------------------------
+# Vide : résolution itérative depuis les serveurs racine (indices intégrés au Recursor).
+# Sinon : tout le reste est relayé vers ces résolveurs, avec récursion (forward_zones_recurse « . »).
+powerdns_recursor_amont: []
+
+# --- DNSSEC ---------------------------------------------------------------------------------------------
+# validate : réponse SERVFAIL pour toute réponse « bogus », quel que soit le client.
+powerdns_recursor_dnssec: validate
+# Ancres de confiance négatives : sous-arbres NON validés (zones internes non déléguées depuis
+# la racine signée : sans elles, leurs réponses seraient « bogus »). {nom, raison}
+powerdns_recursor_nta: []
+# (E26) Ancres de confiance POSITIVES : zones internes signées dont le parent n'est pas signé
+# (.internal n'existe pas dans la racine). {nom, ds: ["<keytag> <algo> <type> <empreinte>"]}
+# Une ancre qui ne correspond plus à la clé de la zone = SERVFAIL sur toute la zone.
+powerdns_recursor_ancres: []
+
+# --- Divers -----------------------------------------------------------------------------------------------
+powerdns_recursor_threads: 2
+# false : le rôle prépare la configuration sans redémarrer (bascule planifiée, M06-E08).
+powerdns_recursor_redemarrer: true

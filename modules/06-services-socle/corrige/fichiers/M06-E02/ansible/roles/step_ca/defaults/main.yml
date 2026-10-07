@@ -5,6 +5,8 @@
 # le quitte jamais : le rôle produit une CSR, que la cérémonie de signature (M06-E02,
 # ~/pki-racine sur adm01) transforme en certificat, déposé dans le dépôt Ansible.
 # Les valeurs du socle sont dans inventories/lab/group_vars/role_pki/step_ca.yml.
+# Évolution : M06-E27 (écouteur HTTP, CRL) ; état final des variables :
+# M06-E27/ansible/roles/step_ca/defaults/main.yml.
 
 # --- Paquets (dépôt APT Smallstep) ---------------------------------------------------------
 step_ca_depot_url: https://packages.smallstep.com/stable/debian

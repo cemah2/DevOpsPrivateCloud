@@ -1,0 +1,16 @@
+# group_vars/role_dns/powerdns_auth.yml — lignes MODIFIÉES en M06-E14, AVANT le premier « tofu apply ».
+# Le rôle powerdns_auth (M06-E06) recharge ENTIÈREMENT une zone « contenu: fichier » dès que son
+# contenu généré change : les enregistrements écrits par l'API (OpenTofu ici, Kea en M06-E17)
+# disparaîtraient au premier changement de dns_hotes. Les deux zones où OpenTofu écrit passent donc
+# en « contenu: api » : le rôle les crée si elles manquent et ne touche plus jamais à leur contenu.
+# Ce qui y a été chargé au palier 1 reste en place, sans propriétaire (reprise en M06-E15).
+powerdns_auth_zones:
+  - nom: medisphere.internal          # inchangée (délégations et colle, générées)
+    enregistrements:
+      - {nom: par1.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
+      - {nom: par2.medisphere.internal, type: NS, contenu: dns01.par1.medisphere.internal.}
+      - {nom: dns01.par1.medisphere.internal, type: A, contenu: 10.10.20.10}
+  - {nom: par1.medisphere.internal, contenu: api}      # (E14) OpenTofu, puis Kea (E17)
+  - nom: par2.medisphere.internal                      # générée jusqu'à M06-E15
+  - {nom: 10.10.in-addr.arpa, contenu: api}            # (E14) PTR écrits par OpenTofu, puis Kea
+  - nom: 20.10.in-addr.arpa                            # générée jusqu'à M06-E15

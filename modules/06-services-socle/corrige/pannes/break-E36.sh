@@ -10,7 +10,7 @@
 #   3. Kea (dns01, et dns02 s'il porte Kea) : interfaces-config pointe vers ens19, qui n'existe pas ;
 #   4. Kea (dns01, et dns02 s'il porte Kea) : fichier de baux déplacé dans /tmp (« tutoriel ») →
 #      Kea 3.0 refuse les chemins hors de /var/lib/kea et ne démarre plus.
-# Dans tous les cas, une VM jetable 2069 « m06-sonde-dhcp » (clone lié de l'image dorée current,
+# Dans tous les cas, une VM jetable 2064 « m06-sonde-dhcp » (clone lié de l'image dorée current,
 # VNet vsandbox, étiquette env-m06) est créée APRÈS l'injection pour constater l'absence de bail ;
 # elle reste à disposition de l'apprenant et est détruite par --annuler.
 # Sauvegardes : /var/lib/workbook/M06-E36.* sur gw01, dns01, dns02 (texte d'origine, handle nftables).
@@ -40,7 +40,7 @@ systemctl is-active -q dnsmasq && grep -Ehqs '^[[:space:]]*dhcp-relay=10\.10\.99
 EOF
 }
 
-# _e36_sonde — (re)crée la VM 2069 et affiche l'adresse IPv4 qu'elle obtient sur vsandbox (vide si
+# _e36_sonde — (re)crée la VM 2064 et affiche l'adresse IPv4 qu'elle obtient sur vsandbox (vide si
 # aucune après 60 s de fonctionnement). Code 2 si elle ne démarre pas, 3 si le VMID est pris.
 _e36_sonde() {
   wb_exec "$WB_PVE_HOST" ID="$_M06_VMID_SONDE" <<'EOF'
@@ -203,7 +203,7 @@ symptome_E36() {
   wb_symptome "Ticket INC-3342 — De : Julien Petit" \
     "Mes VMs de test sur le VLAN sandbox démarrent sans adresse IPv4 depuis ce matin : seule" \
     "une adresse fe80:: apparaît sur ens18. Les VMs démarrées hier gardent leur adresse." \
-    "Pour que tu puisses reproduire, une VM de test m06-sonde-dhcp (VMID 2069, VNet vsandbox)" \
+    "Pour que tu puisses reproduire, une VM de test m06-sonde-dhcp (VMID 2064, VNet vsandbox)" \
     "vient d'être démarrée : elle n'a pas d'adresse non plus. Redémarre-la pour retester." \
     "" \
     "Temps cible : 30 min. Contrôle : lab/bin/check 06 36"

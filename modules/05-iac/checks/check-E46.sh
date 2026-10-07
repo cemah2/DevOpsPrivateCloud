@@ -28,7 +28,10 @@ _m05_e46_mr_pipeline() {
 }
 _m05_e46_pipeline_main() {
   local id j
-  id="$(gitlab_api "projects/$_m05_e46_infra/pipelines?ref=main&per_page=1" | jq -r '.[0] | select(.status == "success") | .id')" || return 1
+  # Seuls les pipelines de push sur main comptent : les pipelines planifiés (dérive E28,
+  # sauvegarde E29) n'ont ni plan ni apply. « manual » = réussi, applys manuels non tous lancés.
+  id="$(gitlab_api "projects/$_m05_e46_infra/pipelines?ref=main&source=push&per_page=1" \
+    | jq -r '.[0] | select(.status == "success" or .status == "manual") | .id')" || return 1
   [[ -n "$id" ]] || return 1
   j="$(gitlab_api "projects/$_m05_e46_infra/pipelines/$id/jobs?per_page=100")" || return 1
   jq -e '[.[].name] as $n | ($n | any(test("plan"))) and ($n | any(test("apply")))' >/dev/null <<<"$j"
@@ -42,7 +45,7 @@ _m05_e46_planif() {
   gitlab_api "projects/$_m05_e46_infra/pipeline_schedules?scope=active" | jq -e 'length > 0' >/dev/null
 }
 _m05_e46_planif_verte() {
-  gitlab_api "projects/$_m05_e46_infra/pipelines?source=schedule&per_page=1" | jq -e '.[0].status == "success"' >/dev/null
+  gitlab_api "projects/$_m05_e46_infra/pipelines?source=schedule&ref=main&per_page=1" | jq -e '.[0].status == "success"' >/dev/null
 }
 _m05_e46_release_mods() {
   gitlab_api "projects/$_m05_e46_mods/releases?per_page=1" | jq -e '.[0].tag_name | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")' >/dev/null
@@ -124,6 +127,7 @@ check_cmd "docs/socle/iac.md présent" test -s "$_m05_e46_doc/iac.md"
 check_cmd "iac.md : état, verrou, chiffrement, restauration, dérive et import traités" \
   bash -c 'for m in verrou chiffr restaur dérive import; do grep -qi -- "$m" "$1" || exit 1; done' _ "$_m05_e46_doc/iac.md"
 check_cmd "ADR-0050 présent" bash -c 'ls "$1"/adr/ADR-0050*.md >/dev/null 2>&1' _ "$_m05_e46_doc"
+check_cmd "ADR-0051 présent (décision sur gw01, M05-E16)" bash -c 'ls "$1"/adr/ADR-0051*.md >/dev/null 2>&1' _ "$_m05_e46_doc"
 check_cmd "RB-050 présent" bash -c 'ls "$1"/runbooks/RB-050*.md >/dev/null 2>&1' _ "$_m05_e46_doc"
 check_cmd "inventaire : s3-01 (10.10.20.14) recensée" \
   bash -c 'grep -q "s3-01" "$1" && grep -q "10\.10\.20\.14" "$1"' _ "$_m05_e46_doc/inventaire.md"
