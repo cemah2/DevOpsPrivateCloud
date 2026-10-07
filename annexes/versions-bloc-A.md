@@ -65,7 +65,7 @@
 
 | Outil | Ce qui change pour toi |
 |---|---|
-| NetBox 4.5+ | Jetons **v2** (`Authorization: Bearer nbt_<clé>.<jeton>`, nécessite `API_TOKEN_PEPPERS`) ; le jeton en clair n'est plus récupérable après création ; jetons v1 dépréciés (retrait en 5.0). NetBox 4.7 exige PostgreSQL ≥ 15 et change plusieurs champs d'API : le workbook fige la 4.6. |
+| NetBox 4.5+ | Jetons **v2** (`Authorization: Bearer nbt_<clé>.<jeton>`, nécessite `API_TOKEN_PEPPERS`) ; le jeton en clair n'est plus récupérable après création ; le mot-clé `Token` reste accepté pour un jeton `nbt_` (la version est reconnue au préfixe) ; jetons v1 dépréciés (retrait en 5.0). NetBox 4.7 exige PostgreSQL ≥ 15 et change plusieurs champs d'API : le workbook fige la 4.6. |
 | PowerDNS Recursor 5.2+ | L'ancien format de configuration est désactivé par défaut : **YAML** (`recursor.yml`). 5.4 : `any_to_tcp` vrai par défaut. |
 | PowerDNS Authoritative 5.0 | Vues (backend LMDB) ; API normalisée. Debian 13 livre la 4.9 : le workbook utilise le dépôt officiel. |
 | Provider OpenTofu PowerDNS | `pan-net/powerdns` abandonné : utiliser le fork **`mmianl/powerdns`**. |

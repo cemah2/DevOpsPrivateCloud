@@ -8,6 +8,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
 - toutes les configurations OpenTofu des fichiers de solution passent `tofu fmt -check` et `tofu validate` (schéma réel du provider 0.115.0), `tflint --recursive` avec les `.tflint.hcl` de E20, et les tests `tofu test` du module (8 tests, provider simulé) ;
 - contre une instance SeaweedFS 4.45 locale, lancée avec les options exactes de l'unité du rôle : HTTPS sur le port S3 (et refus du HTTP clair), refus de l'anonyme (403) dès qu'une identité existe, droits limités à un compartiment, versionnage, **écritures conditionnelles** (`If-None-Match: *` → 412, par AWS CLI comme par boto3), verrou `use_lockfile` d'OpenTofu (second `apply` refusé avec « Error acquiring the state lock »), politique de compartiment `Deny` sur une identité, rechargement de `s3.json` par SIGHUP, création de compartiments et versionnage par `weed shell` ;
 - le rôle `seaweedfs` passe `ansible-lint` (profil `production`), et un `--check` sur hôte neuf jusqu'au service (le reste demande systemd) ; le gabarit `s3.json` et l'unité systemd ont été rendus et contrôlés ;
+- la règle sudoers de E19 éprouvée avec sudo 1.9.15 (`sudo -l -U`) : la forme glob de la documentation du provider laisse écrire hors du dossier, la forme ancrée `^…$` non ; `prevent_destroy = var.proteger` (module `vm-debian`) vérifié avec OpenTofu 1.13.1 ; le contrôle `Sys.Modify` sur `/` de l'option `startup` relevé dans le code de `PVE::API2::Qemu` ;
 - le *user-data* de E19 passe `cloud-init schema` ; l'expression `compose` de E23 a été évaluée sur des données d'inventaire réalistes ; tous les scripts passent `shellcheck -x` et `bash -n`.
 
 **Non testé en conditions réelles** (pas d'hyperviseur dans l'environnement de rédaction ; à confirmer par tes retours) : les plans et applies réels contre `pve01` (création de `s3-01`, imports de E16, `moved` de E17, snippets de E19), le scénario Molecule sur une VM Proxmox, et les points marqués « ⚠️ À vérifier ».
@@ -34,10 +35,12 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
    protection = true
    lifecycle {
      prevent_destroy = true
-     ignore_changes  = [clone]
+     ignore_changes  = [clone, startup]
    }
    ```
    (Écrit ici sur une ligne pour la lecture ; HCL demande un attribut par ligne dans un bloc.) Format du disque de données : `hdd-bulk` est un stockage de type **répertoire** ; un disque `raw` y interdit les instantanés de VM, donc `ms-snapshot` (M02-E11) échouerait sur `s3-01`. `qcow2` les permet, pour un léger coût en performances, sans importance ici.
+
+   **Rang de démarrage** : pas de bloc `startup` dans le code de création. Le contrôle de `PUT/POST …/config` de Proxmox traite `startup` à part (« it changes host behaviour ») et exige **`Sys.Modify` sur `/`**, en plus de `VM.Config.Options` (code de `PVE::API2::Qemu`, inchangé depuis 2016 et toujours présent en PVE 9). Avec le bloc, l'apply échouerait sur `Permission check failed (/, Sys.Modify)` **au milieu** de la création (VM clonée, marquée *tainted*). Donner `Sys.Modify` sur `/` au jeton serait pire : c'est le privilège qui permet de modifier les options du datacenter et son pare-feu. Le rang se pose donc une fois en root après l'apply (`qm set 1006 --startup order=4`), et `ignore_changes` contient `startup` pour qu'OpenTofu ne tente jamais de l'effacer.
 
 3. **Plan et apply** :
    ```
@@ -53,7 +56,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
          …
    Plan: 1 to add, 0 to change, 0 to destroy.
    ```
-   MR (plan collé dans la description), fusion, puis depuis `main` à jour : `tofu plan -out=…` et `tofu apply …tfplan`. Contrôle : `ssh pve01 qm config 1006`.
+   MR (plan collé dans la description), fusion, puis depuis `main` à jour : `tofu plan -out=…` et `tofu apply …tfplan`. Rang de démarrage en root : `ssh pve01 qm set 1006 --startup order=4`. Contrôle : `ssh pve01 qm config 1006`, puis `tofu plan` vide.
 
 4. **DNS, SSH, inventaire.** Une ligne dans `group_vars/role_dns/dnsmasq.yml` ([extrait](fichiers/M05-E10/ansible/inventories/lab/group_vars/role_dns/dnsmasq-extrait.yml)), appliquée par la chaîne de M04 (`playbooks/dns01.yml`). Alias SSH sur `adm01` (`Host s3-01`, `HostName 10.10.20.14`, `User admin`), puis `ssh s3-01` une première fois pour enregistrer la clé d'hôte (et `ssh-keyscan` dans `inventories/lab/known_hosts` du projet Ansible). L'inventaire dynamique fabrique ses groupes **à partir des étiquettes** (`keyed_groups`) : sans `role-s3`, aucune raison d'entrer dans `role_s3`, et sans `socle`, le filtre de `proxmox.yml` l'exclut.
    ```
@@ -72,7 +75,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
      admin@adm01:~/m05/e10$ cat linux_amd64.tar.gz.md5; md5sum linux_amd64.tar.gz
      admin@adm01:~/m05/e10$ sha256sum linux_amd64.tar.gz        # → seaweedfs_archive_sha256
      ```
-     ⚠️ À vérifier sur la page de la version : le nom exact du fichier de somme publié à côté de l'archive. MD5 ne protège que contre la corruption, pas contre une substitution délibérée (collisions) : la SHA-256 calculée **une fois** sur une archive dont la MD5 correspond, puis figée dans le code relu en MR, protège les passages suivants. Ce n'est pas une signature : si la page de l'éditeur est compromise le jour du calcul, on fige la mauvaise empreinte.
+     Le fichier de somme publié à côté de l'archive s'appelle `linux_amd64.tar.gz.md5` (vérifié sur la version 4.45 : il contient la seule somme, sans nom de fichier). MD5 ne protège que contre la corruption, pas contre une substitution délibérée (collisions) : la SHA-256 calculée **une fois** sur une archive dont la MD5 correspond, puis figée dans le code relu en MR, protège les passages suivants. Ce n'est pas une signature : si la page de l'éditeur est compromise le jour du calcul, on fige la mauvaise empreinte.
    - **Unité systemd** ([gabarit](fichiers/M05-E10/ansible/roles/seaweedfs/templates/seaweedfs.service.j2)) : un processus `weed server`. Les options qui portent les exigences :
      ```
      -ip=127.0.0.1 -ip.bind=127.0.0.1        master, volume, filer : en local seulement
@@ -189,7 +192,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
    | `skip_metadata_api_check` | ne pas interroger 169.254.169.254 (métadonnées EC2) pour des identifiants |
    | `use_lockfile` | ajouté en E12 |
 
-   Non écrits : `access_key`/`secret_key` (secrets : environnement), `profile` (OpenTofu lit les variables `AWS_*` ; le profil `s3-socle` sert à la CLI), `skip_s3_checksum` (inutile avec SeaweedFS 4.45 : l'état et le verrou s'écrivent avec les sommes de contrôle par défaut du SDK, vérifié), `custom_ca_bundle` (OpenTofu, programme Go, lit le magasin du système, qui contient la CA provisoire).
+   Non écrits : `access_key`/`secret_key` (secrets : environnement), `profile` (OpenTofu lit les variables `AWS_*`, y compris `AWS_PROFILE` : sur `adm01`, le profil `s3-socle` exporté par `s3-tofu.env` est donc lu aussi par le backend, sans inconvénient ; en CI, où `~/.aws/config` n'existe pas, on n'exporte pas `AWS_PROFILE`, sinon « failed to get shared config profile »), `skip_s3_checksum` (inutile avec SeaweedFS 4.45 : l'état et le verrou s'écrivent avec les sommes de contrôle par défaut du SDK, vérifié), `custom_ca_bundle` (OpenTofu, programme Go, lit le magasin du système, qui contient la CA provisoire).
 3. Migration :
    ```
    admin@adm01:~/src/infra/socle$ set -a; . ~/.config/workbook/pve-tofu.env; . ~/.config/workbook/s3-tofu.env; set +a
@@ -241,6 +244,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
 - Supprimer l'état local **avant** d'avoir vérifié l'objet distant.
 - Copier le bloc `backend` d'une configuration à une autre sans changer la clé (E21).
 - Croire qu'un `terraform.tfstate` vide ou absent en local signifie « pas d'état » : depuis la migration, `tofu state list` lit S3.
+- Une variable `AWS_CA_BUNDLE` (ou un `ca_bundle` dans le profil `AWS_PROFILE`) qui désigne un **autre** fichier d'autorités que le magasin système : le SDK AWS du backend s3 l'utilise **à la place** du magasin, et `tofu init` échoue sur `x509: certificate signed by unknown authority` alors que `curl` passe (constaté avec OpenTofu 1.13.1). Le profil `s3-socle` pointe le magasin système : il ne gêne pas.
 
 **En production chez MédiSphère**
 
@@ -354,7 +358,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
    }
    ```
    Contrainte de version du module : `>= 0.115.0, < 1.0.0`. Un module ne fixe pas la version exacte : c'est le `.terraform.lock.hcl` de chaque **racine** qui le fait. Avec `~> 0.115.0` dans le module, une racine qui voudrait passer à 0.116 (E31) ne le pourrait qu'en publiant d'abord une nouvelle version du module. L'image : source de données avec `count` (lue seulement si `image.vm_id` est nul) ; imposer un VMID sert à essayer une image **candidate** avant sa publication (M03) ou à reconstruire une VM à l'identique.
-3. `lifecycle` n'accepte que des valeurs **littérales** (OpenTofu le vérifie avant toute évaluation) : `prevent_destroy = var.proteger` est refusé. Et un appel de module n'a pas de bloc `lifecycle`. Le module expose donc `protection` (drapeau Proxmox) ; la relecture du plan fait le reste. Les VMs importées (E16) gardent `prevent_destroy` : ce sont des ressources directes.
+3. Un appel de module n'a pas de bloc `lifecycle` : l'appelant ne peut pas ajouter `prevent_destroy` de l'extérieur. Le module doit donc l'offrir lui-même. Jusqu'à OpenTofu 1.11, `prevent_destroy` n'acceptait qu'un littéral ; **depuis OpenTofu 1.12**, il peut citer une variable du module (vérifié avec 1.13.1 : `prevent_destroy = var.proteger` à `true` fait échouer `tofu plan -destroy` sur « Resource instance cannot be destroyed »). Le module expose donc deux variables : `proteger` (`prevent_destroy`, vérifié par OpenTofu au plan) et `protection` (drapeau Proxmox, vérifié par l'API), et exige `required_version >= 1.12.0`. Pour `s3-01` : les deux à `true`. Limite commune : si l'appel de module est supprimé ou renommé sans `moved`, il n'y a plus de bloc pour porter `prevent_destroy` (E35) ; `protection` refuse alors encore la suppression côté Proxmox.
 4. [`exemples/minimal/`](fichiers/M05-E13/tofu-modules/vm-debian/exemples/minimal/) : `main.tf`, `variables.tf` (vide, commenté), `outputs.tf` (structure demandée par tflint en E20).
 5. terraform-docs : [`.terraform-docs.yml`](fichiers/M05-E13/tofu-modules/.terraform-docs.yml) (format tableau, mode injection, sections requirements, providers, modules, inputs, outputs, resources, data-sources), `terraform-docs vm-debian` depuis la racine du projet. Le texte autour du tableau (« Choix et limites ») est écrit à la main : `ignore_changes` sur `clone` et la commande `-replace`, absence de `prevent_destroy`, effet d'un snippet, numérotation des disques.
 6. Tests : [`tests/vm-debian.tftest.hcl`](fichiers/M05-E13/tofu-modules/vm-debian/tests/vm-debian.tftest.hcl), 8 cas, tous verts :
@@ -613,7 +617,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
      to   = module.s3_01.proxmox_virtual_environment_vm.vm
    }
    ```
-   le plan affiche `# proxmox_virtual_environment_vm.s3_01 has moved to module.s3_01.proxmox_virtual_environment_vm.vm` et, au plus, une modification sur place de la `description` (texte ajouté par le module) : acceptable, sans effet sur la VM en marche. Les garde-fous : `protection = true` passe par la variable du module ; `prevent_destroy` est **perdu** (impossible dans un module, E13) ; `ignore_changes = [clone]` est dans le module.
+   le plan affiche `# proxmox_virtual_environment_vm.s3_01 has moved to module.s3_01.proxmox_virtual_environment_vm.vm` et, au plus, une modification sur place de la `description` (texte ajouté par le module) : acceptable, sans effet sur la VM en marche. Les garde-fous sont conservés : `protection = true` et `proteger = true` (le `prevent_destroy` du module, E13) passent par les variables ; `ignore_changes = [clone, startup]` est dans le module. L'appel ne passe pas `ordre_demarrage` : le rang posé en root en E10 est conservé et ignoré.
 2. **Serveurs d'application** : [`envs/lab-m05/app.tf`](fichiers/M05-E17/infra/envs/lab-m05/app.tf) et [`envs/lab-m05/refactorisation.tf`](fichiers/M05-E17/infra/envs/lab-m05/refactorisation.tf). Un `moved` n'accepte ni `for_each` ni `count` : un bloc par instance. L'appel du module reproduit les VMs du palier 1 : disques `raw` sur `local-nvme` présentés en SSD (`format = "raw"`, `ssd = true`), système de 10 Go, `demarrage_auto = false`, `arret_force = true`. Il reste au plan une modification sur place de l'`agent` (le palier 1 écrivait `timeout = "5m"`, le module laisse la valeur par défaut) et de la `description` : réglages du provider et texte, sans effet sur les VMs. La sortie `apps` de `outputs.tf` lit désormais le module : `{ for k, m in module.app : m.nom => { vmid = m.vm_id, ipv4 = m.ipv4 } }` (sinon `tofu validate` signale une référence à une ressource qui n'existe plus).
 3. **`m05-essai`** : ressource et sortie `essai` retirées de `lab-m05`, bloc `removed` :
    ```hcl
@@ -636,7 +640,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
 
 **Alternatives**
 
-- Garder la ressource directe pour `s3-01` (avec `prevent_destroy`) et n'utiliser le module que pour les nouvelles VMs : défendable ; on perd l'uniformité, on garde la protection d'OpenTofu.
+- Garder la ressource directe pour `s3-01` et n'utiliser le module que pour les nouvelles VMs : défendable ; on perd l'uniformité sans rien gagner en protection depuis que le module porte `proteger` (OpenTofu ≥ 1.12).
 - `tofu state mv` en bris de glace, quand une MR est impossible (forge en panne), avec copie de l'état avant.
 
 **Pièges classiques**
@@ -701,7 +705,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
    La nouvelle VM est clonée depuis l'image courante **du jour** : `ignore_changes = [clone]` ignore le changement pour décider s'il faut remplacer, mais une ressource **créée** utilise la valeur actuelle du code (`local.image_vmid`). C'est exactement le « reconstruire à neuf sur l'image du jour » de Nadia.
 4. `create_before_destroy` : le plan affiche `+/-` (créer puis détruire). À l'apply, la création de la nouvelle VM 2054 échouerait (« VM 2054 already exists ») puisque l'ancienne vit encore : le VMID et le nom sont fixes. Le méta-argument n'a de sens que pour des objets dont l'identité est générée (VMID choisi par Proxmox, nom avec suffixe), ou pour des objets sans identité unique (le snippet de E19 : un nouveau nom de fichier à chaque contenu).
 5. `tofu apply -replace=proxmox_virtual_environment_vm.jetable` : remplacement ponctuel sans changer le code (dépannage, VM abîmée). Le déclencheur, lui, est **dans le code** : relu en MR, historisé, rejoué par la chaîne. Pour une reconstruction planifiée, le déclencheur ; pour une réparation, `-replace`.
-6. `depends_on = [module.bdd]` sur une source de données : OpenTofu ne peut plus la lire au plan dès que `module.bdd` a un changement en attente ; il la lit « during apply ». Tout ce qui dépend de cette lecture devient « known after apply » : modification sur place à chaque plan, et **remplacement** si la valeur alimente un attribut à remplacement forcé (plan 5 de E22). On remplace `depends_on` par une vraie référence, ou on retire la dépendance. `prevent_destroy` ne peut pas venir d'une variable parce qu'OpenTofu évalue les blocs `lifecycle` avant les variables : la protection doit être visible dans le code, pas dépendre d'une valeur passée à l'exécution.
+6. `depends_on = [module.bdd]` sur une source de données : OpenTofu ne peut plus la lire au plan dès que `module.bdd` a un changement en attente ; il la lit « during apply ». Tout ce qui dépend de cette lecture devient « known after apply » : modification sur place à chaque plan, et **remplacement** si la valeur alimente un attribut à remplacement forcé (plan 5 de E22). On remplace `depends_on` par une vraie référence, ou on retire la dépendance. `prevent_destroy` **peut** venir d'une variable depuis OpenTofu 1.12 (c'est ce que fait `proteger` dans `vm-debian`, E13) ; avant, seul un littéral était accepté. La question devient : **qui** fixe la variable ? Une variable de module fixée en dur par l'appelant (`proteger = true` dans `socle/`) reste visible et relue en MR. Une variable **racine** alimentée de l'extérieur (`-var`, `TF_VAR_…`, CI) permettrait de lever la protection sans modifier le code : à refuser pour le socle (littéral ou valeur figée dans le code). Les autres méta-arguments de `lifecycle` (`ignore_changes`, `create_before_destroy`, `replace_triggered_by`) restent, eux, statiques.
 
 **Explications**
 
@@ -739,8 +743,9 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
    Il crée le stockage `tofu-snippets` (`pvesm add dir … --content snippets --is_mountpoint /mnt/hdd-bulk`), le compte `wb-tofu` (sans mot de passe : connexion par clé seulement, `from="10.10.10.10"`), le fichier sudoers **validé avant installation** :
    ```
    wb-tofu ALL=(root) NOPASSWD: /usr/sbin/pvesm apiinfo
-   wb-tofu ALL=(root) NOPASSWD: /usr/bin/tee /mnt/hdd-bulk/tofu-snippets/snippets/[a-zA-Z0-9_][a-zA-Z0-9_.-]*
+   wb-tofu ALL=(root) NOPASSWD: /usr/bin/tee ^/mnt/hdd-bulk/tofu-snippets/snippets/[A-Za-z0-9_][A-Za-z0-9_.-]*$
    ```
+   ⚠️ **La règle `tee` est une expression régulière ancrée** (`^…$`, reconnue par sudo depuis la 1.9.10 ; Debian 13 a la 1.9.16), **pas** le motif glob que donne la documentation du provider (`…/snippets/[a-zA-Z0-9_][a-zA-Z0-9_.-]*`). Dans sudoers, le `*` d'un argument glob couvre **aussi les espaces et les `/`** : avec le glob, `sudo tee /mnt/hdd-bulk/tofu-snippets/snippets/ab /etc/sudoers.d/x` (deux fichiers écrits) et `…/snippets/ab/../../../../etc/shadow` sont acceptés, et `wb-tofu` devient root en une commande. Vérifié avec sudo 1.9.15 (`sudo -l -U <compte> <commande>`) : la forme glob accepte les deux, la forme ancrée les refuse et accepte `…/snippets/m05-jetable-0123456789ab.yaml`. Le script éprouve la règle de cette façon après l'avoir installée, et la retire si elle laisse passer une écriture hors du dossier.
    et le rôle `WBTofuSnippets` (`Datastore.Allocate`, `Datastore.AllocateSpace`, `Datastore.Audit`) sur `/storage/tofu-snippets`, pour l'utilisateur **et** le jeton (séparation des privilèges, E03). Contrôles :
    ```
    root@pve01:~# pveum user token permissions wb-tofu@pve tofu --path /storage/hdd-bulk
@@ -791,7 +796,7 @@ Les fichiers complets cités ici sont dans [`fichiers/`](fichiers/), rangés com
 
 **Pièges classiques**
 
-- Règle sudoers `tee /var/lib/vz/*` copiée d'un tutoriel : chemin du stockage `local`, pas du nôtre, et motif trop large (`*` accepte `../`).
+- Règle sudoers `tee /var/lib/vz/*` copiée d'un tutoriel : chemin du stockage `local`, pas du nôtre, et motif trop large (`*` accepte `../`). Le motif « strict » de la documentation du provider (`[a-zA-Z0-9_][a-zA-Z0-9_.-]*`) a le même défaut : en glob sudoers, le `*` final accepte espaces, `/` et `..`. Seule une expression régulière ancrée (`^…$`) limite vraiment l'argument ; on la prouve par `sudo -l -U wb-tofu /usr/bin/tee <dossier>/snippets/ab /etc/x` (doit être refusé).
 - Oublier `-o ControlPath=none` en testant la connexion de `wb-tofu` : le multiplexage SSH réutilise la connexion de `root@pve01` et le test « réussit » à tort.
 - Clé de `admin@adm01` non chargée dans l'agent : le provider échoue sur « unable to authenticate » au moment de l'envoi, pas avant.
 - Le provider accepte une clé d'hôte inconnue et l'ajoute à `~/.ssh/known_hosts` (vérifié dans son code) ; il refuse une clé **changée** : un `pve01` réinstallé bloque l'envoi des snippets jusqu'à ce qu'on vérifie et mette à jour la clé.

@@ -236,7 +236,12 @@ variable "demarrage_auto" {
 }
 
 variable "ordre_demarrage" {
-  description = "Rang dans l'ordre de démarrage de Proxmox (null : non ordonné). Socle : gw01 1, dns01 2, adm01 3, git01/s3-01 4, runner01 5."
+  description = <<-EOT
+    Rang dans l'ordre de démarrage de Proxmox (null : non ordonné), posé à la CRÉATION seulement.
+    Proxmox exige Sys.Modify sur « / » pour régler « startup » (réglage de l'hôte) : le jeton
+    wb-tofu ne l'a pas, laisse null et pose le rang en root (qm set VMID --startup order=N).
+    Les changements ultérieurs du rang sont ignorés par le module.
+  EOT
   type        = number
   default     = null
 }
@@ -251,4 +256,11 @@ variable "protection" {
   description = "Drapeau « protection » de Proxmox : refuse la suppression de la VM et de ses disques, même par l'API. À true pour le socle."
   type        = bool
   default     = false
+}
+
+variable "proteger" {
+  description = "Interdire à OpenTofu tout plan qui détruit ou remplace la VM (lifecycle.prevent_destroy, variable acceptée depuis OpenTofu 1.12). À true pour le socle, avec protection."
+  type        = bool
+  default     = false
+  nullable    = false
 }

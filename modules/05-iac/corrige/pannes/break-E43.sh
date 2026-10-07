@@ -8,8 +8,9 @@
 # bibliothèque (WB_PANNES_LIB=1).
 #
 #   --variante N  (1 à 27) force la paire n° N, dans l'ordre de _E43_paires (1 = E35+E36,
-#                 2 = E35+E37, …) ; la paire E35+E41 est exclue (les deux déplacent l'étiquette
-#                 current de l'image dorée) ; les sous-variantes restent aléatoires.
+#                 2 = E35+E37, …) ; la paire E35+E41 est exclue (deux pannes qui cassent le
+#                 plan du socle sans commit, et check-E35 contrôle aussi l'image current
+#                 que retire E41 v1 : leurs diagnostics se confondent) ; les sous-variantes restent aléatoires.
 #   --annuler     annule les deux pannes (et toute panne M05-E35 à E42 encore marquée active).
 #
 # Ordre d'injection (dépendances) : E38 (droits Proxmox, sans OpenTofu), E39, E40 (lit l'état

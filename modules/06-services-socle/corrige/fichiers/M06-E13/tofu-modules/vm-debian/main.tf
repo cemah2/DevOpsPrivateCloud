@@ -68,12 +68,10 @@ resource "proxmox_virtual_environment_vm" "vm" {
     type = "l26"
   }
 
-  dynamic "startup" {
-    for_each = var.ordre_demarrage == null ? [] : [var.ordre_demarrage]
-    content {
-      order = startup.value
-    }
-  }
+  # Pas de bloc startup : régler l'ordre de démarrage exige Sys.Modify sur « / »
+  # (refus 403 pour wb-tofu, voir M05-E10). Il est posé en root après création :
+  #   root@pve01:~# qm set <VMID> --startup order=<N>
+  # et ignoré ci-dessous pour qu'OpenTofu ne l'efface pas.
 
   initialization {
     datastore_id = var.stockage
@@ -96,6 +94,6 @@ resource "proxmox_virtual_environment_vm" "vm" {
   lifecycle {
     # Une nouvelle image « current » ne doit pas faire recréer les VMs existantes : on la
     # prend au prochain remplacement volontaire (taint / replace), jamais par surprise.
-    ignore_changes = [clone]
+    ignore_changes = [clone, startup]
   }
 }

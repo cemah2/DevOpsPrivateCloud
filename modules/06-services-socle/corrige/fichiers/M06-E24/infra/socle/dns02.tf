@@ -24,7 +24,8 @@ module "dns02" {
   description = "DNS secondaire et DHCP de secours (M06-E24, M06-E25)."
 
   # Même ordre que dns01 : après gw01 (1), avant adm01 (3) et la forge (4, 5).
-  ordre_demarrage = 2
+  # Ordre de démarrage 2 posé en root après création (Sys.Modify sur « / ») :
+  #   root@pve01:~# qm set 1008 --startup order=2
 
   # Adresse FIXÉE par le PLAN : enregistrée telle quelle dans NetBox, pas allouée dans la plage.
   reseau_prefixe = "10.10.20.0/24"

@@ -137,7 +137,7 @@ Une synthèse pour se repérer, pas un cours : les exercices et les liens « Pou
 
 **Dérive.** Toute modification faite hors d'OpenTofu (un `qm set` en urgence, un réglage dans l'interface) écarte la réalité de l'état et du code. Le prochain plan la révèle, et le prochain apply l'annule, ou recrée la ressource. Détecter la dérive régulièrement (E28) et la ramener dans le code, c'est l'hygiène de base d'une infrastructure déclarée.
 
-**OpenTofu et Terraform.** OpenTofu est né en 2023 du fork de Terraform 1.5, quand HashiCorp est passé à la licence BUSL. Le langage, les commandes et le format d'état sont compatibles pour l'essentiel ; les providers sont les mêmes binaires, servis par un autre registre. Depuis, les deux divergent : OpenTofu apporte le verrou S3 natif (`use_lockfile`), le chiffrement de l'état, les valeurs éphémères, le méta-argument `enabled`, l'extension `.tofu` (E09). Le workbook utilise OpenTofu ; Terraform n'est cité que pour comparaison.
+**OpenTofu et Terraform.** OpenTofu est né en 2023 du fork de Terraform 1.5, quand HashiCorp est passé à la licence BUSL. Le langage, les commandes et le format d'état sont compatibles pour l'essentiel ; les providers sont les mêmes binaires, servis par un autre registre. Depuis, les deux évoluent chacun de leur côté : certaines nouveautés existent des deux côtés (verrou S3 natif `use_lockfile`, valeurs éphémères — Terraform les a même eues en premier), d'autres sont propres à OpenTofu, comme le chiffrement de l'état côté client, le méta-argument `enabled` ou l'extension `.tofu` (E09). Le workbook utilise OpenTofu ; Terraform n'est cité que pour comparaison.
 
 ---
 

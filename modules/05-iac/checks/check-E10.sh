@@ -31,6 +31,7 @@ check_output "VM 1006 : carte sur le VNet vinfra" '^net0: virtio=[^,]+,bridge=vi
 check_output "VM 1006 : adresse 10.10.20.14/24, passerelle 10.10.20.1 (cloud-init)" \
   '^ipconfig0: (ip=10\.10\.20\.14/24,gw=10\.10\.20\.1|gw=10\.10\.20\.1,ip=10\.10\.20\.14/24)$' printf '%s\n' "$_m05o_c"
 check_output "VM 1006 : démarre avec l'hôte" '^onboot: 1$' printf '%s\n' "$_m05o_c"
+check_output "VM 1006 : rang de démarrage 4 (comme git01)" '^startup: order=4([,]|$)' printf '%s\n' "$_m05o_c"
 check_output "VM 1006 : protégée contre la suppression" '^protection: 1$' printf '%s\n' "$_m05o_c"
 check_ssh "VM 1006 : démarrée, agent QEMU actif" "$WB_PVE_HOST" 'qm status 1006 | grep -q running && qm guest cmd 1006 ping'
 

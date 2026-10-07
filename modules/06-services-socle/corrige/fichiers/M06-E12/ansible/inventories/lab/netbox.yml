@@ -11,9 +11,11 @@ plugin: netbox.netbox.nb_inventory
 api_endpoint: https://nbx01.par1.medisphere.internal
 validate_certs: true   # magasin du système : la racine MédiSphère y est (M06-E03)
 
-# Jeton v2 : le plugin écrit « Authorization: Token <jeton> » si on lui passe une chaîne (format
-# v1, refusé par NetBox pour un jeton nbt_…). Sous forme de dictionnaire, il écrit
-# « Authorization: <Type> <valeur> ». La valeur, elle, EST évaluée par Jinja.
+# Jeton v2 : passé en chaîne, le plugin écrit « Authorization: Token <jeton> » (mot-clé des jetons
+# v1), que NetBox 4.5/4.6 accepte encore pour un jeton nbt_… (la version se déduit du préfixe nbt_,
+# pas du mot-clé). Sous forme de dictionnaire, il écrit « Authorization: <Type> <valeur> » : on
+# envoie explicitement « Bearer », la forme documentée des jetons v2, qui ne dépend pas de cette
+# tolérance. La valeur, elle, EST évaluée par Jinja.
 token:
   type: Bearer
   value: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"

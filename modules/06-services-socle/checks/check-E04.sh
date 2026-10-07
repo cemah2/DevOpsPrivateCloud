@@ -35,8 +35,10 @@ check_ssh_output "nbx01 : /opt/netbox désigne une installation 4.6.x versionné
   'readlink -f /opt/netbox'
 check_ssh "nbx01 : configuration.py illisible par les autres comptes (root:netbox, 640)" nbx01 \
   '[ "$(stat -c %U:%G:%a /opt/netbox/netbox/netbox/configuration.py)" = "root:netbox:640" ]'
+# Toute écoute de 5432, 6379 ou 8001 sur une adresse autre que 127.0.0.1 ou ::1 (y compris
+# 10.10.20.13) est un échec, pas seulement les écoutes sur toutes les adresses.
 check_ssh "nbx01 : PostgreSQL, Valkey et gunicorn n'écoutent que sur la boucle locale" nbx01 \
-  's=$(ss -Hltn); ! grep -Eq "(0\.0\.0\.0|\*|\[::\]):(5432|6379|8001)[[:space:]]" <<<"$s" && grep -Eq "127\.0\.0\.1:8001[[:space:]]" <<<"$s"'
+  's=$(ss -Hltn); ! awk "{print \$4}" <<<"$s" | grep -E ":(5432|6379|8001)$" | grep -Evq "^(127\.0\.0\.1|\[::1\]):" && grep -Eq "127\.0\.0\.1:8001[[:space:]]" <<<"$s"'
 check_ssh "nbx01 : poivre des jetons API v2 configuré" nbx01 \
   'sudo -n grep -Eq "^API_TOKEN_PEPPERS[[:space:]]*=[[:space:]]*\{" /opt/netbox/netbox/netbox/configuration.py'
 

@@ -22,6 +22,8 @@ check_cmd "trace du récurseur, capture et étapes ACME citées (trace-regex, 53
 check_cmd "compte rendu commité, sans modification en attente" \
   bash -c 'cd "$1" && git ls-files --error-unmatch docs/socle/analyses/resolution-et-acme.md >/dev/null 2>&1 && [ -z "$(git status --porcelain -- docs/socle/analyses)" ]' _ "$_m06_e44_depot"
 check_ssh "dns01 : aucune capture tcpdump en cours" dns01 '! pgrep -x tcpdump >/dev/null'
-check_ssh "ca01 : aucune capture tcpdump ni client ACME autonome en cours" ca01 \
-  '! pgrep -x tcpdump >/dev/null && ! sudo -n ss -ltnp "sport = :80" | grep -q step'
+check_ssh "ca01 : aucune capture tcpdump en cours" ca01 '! pgrep -x tcpdump >/dev/null'
+# Le client autonome s'appelle « step » ; step-ca (écouteur CRL de M06-E27) s'appelle « step-ca ».
+check_ssh "dns02 : aucune capture tcpdump ni client ACME autonome en cours, clé d'essai supprimée" dns02 \
+  '! pgrep -x tcpdump >/dev/null && ! pgrep -x step >/dev/null && ! sudo -n find /tmp /root /home -xdev -name "essai.key" 2>/dev/null | grep -q .'
 check_cmd "aucune clé privée dans le compte rendu" bash -c '! grep -q "PRIVATE KEY" "$1"' _ "$_m06_e44_cr"

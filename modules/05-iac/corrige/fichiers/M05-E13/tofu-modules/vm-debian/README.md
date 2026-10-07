@@ -19,8 +19,8 @@ module "s3_01" {
   disques_donnees = [{ taille_go = 100 }]
   reseau          = { vnet = "vinfra", ipv4 = "10.10.20.14/24", passerelle = "10.10.20.1" }
   cles_ssh        = var.cles_ssh_admin
-  ordre_demarrage = 4
-  protection      = true
+  protection      = true # Proxmox refuse la suppression
+  proteger        = true # OpenTofu refuse tout plan qui détruit la VM
 }
 ```
 
@@ -30,9 +30,15 @@ module "s3_01" {
   Une VM existante n'est donc **jamais** recréée parce que `current` a changé de template.
   Pour la reconstruire sur la nouvelle image : `tofu apply -replace='module.<nom>.proxmox_virtual_environment_vm.vm'`,
   après avoir vérifié ce qu'elle perd (données hors disques de données).
-- **Pas de `prevent_destroy`** : un bloc `lifecycle` n'accepte que des valeurs fixes, il ne
-  peut pas dépendre d'une variable. Les VMs du socle utilisent `protection = true`
-  (Proxmox refuse alors toute suppression, même par l'API) ; la relecture du plan fait le reste.
+- **Deux protections pour le socle** : `proteger = true` pose `prevent_destroy` (OpenTofu
+  refuse tout plan qui détruit ou remplace la VM ; une variable n'est acceptée là que depuis
+  OpenTofu 1.12, d'où `required_version >= 1.12.0`) et `protection = true` pose le drapeau
+  Proxmox (refus de suppression même hors d'OpenTofu). Aucune des deux ne protège une VM
+  dont l'appel de module est supprimé ou renommé sans bloc `moved` : la relecture du plan
+  reste indispensable.
+- **Rang de démarrage** : Proxmox exige `Sys.Modify` sur `/` pour régler `startup`, que le
+  jeton d'OpenTofu n'a pas. `ordre_demarrage` reste donc `null` avec `wb-tofu` : le rang se
+  pose une fois en root (`qm set <vmid> --startup order=N`) et le module l'ignore ensuite.
 - **Snippets cloud-init** : `user_data_file_id` remplace `utilisateur`/`cles_ssh` ; le
   changer recrée la VM (attribut à remplacement forcé du provider).
 - Disques de données : `scsi1`, `scsi2`… dans l'ordre de la liste ; dans la VM :
@@ -49,7 +55,7 @@ module "s3_01" {
 
 | Name | Version |
 | ---- | ------- |
-| terraform | >= 1.10.0 |
+| terraform | >= 1.12.0 |
 | proxmox | >= 0.115.0, < 1.0.0 |
 
 ### Providers
@@ -87,9 +93,10 @@ module "s3_01" {
 | etiquettes | Étiquettes Proxmox supplémentaires. | `list(string)` | `[]` | no |
 | image | Image source. Par défaut, le template doré courant de la famille (étiquettes gold + <famille> + current, M03). Fixer vm\_id pour cloner un template précis (essai d'une image candidate, reconstruction à l'identique). | ```object({ famille = optional(string, "debian13") vm_id = optional(number) })``` | `{}` | no |
 | memoire\_mo | Mémoire en Mo. | `number` | `2048` | no |
-| ordre\_demarrage | Rang dans l'ordre de démarrage de Proxmox (null : non ordonné). Socle : gw01 1, dns01 2, adm01 3, git01/s3-01 4, runner01 5. | `number` | `null` | no |
+| ordre\_demarrage | Rang dans l'ordre de démarrage de Proxmox (null : non ordonné), posé à la CRÉATION seulement. Proxmox exige Sys.Modify sur « / » pour régler « startup » (réglage de l'hôte) : le jeton wb-tofu ne l'a pas, laisse null et pose le rang en root (qm set VMID --startup order=N). Les changements ultérieurs du rang sont ignorés par le module. | `number` | `null` | no |
 | pool | Pool Proxmox de la VM. | `string` | `"lab"` | no |
 | protection | Drapeau « protection » de Proxmox : refuse la suppression de la VM et de ses disques, même par l'API. À true pour le socle. | `bool` | `false` | no |
+| proteger | Interdire à OpenTofu tout plan qui détruit ou remplace la VM (lifecycle.prevent\_destroy, variable acceptée depuis OpenTofu 1.12). À true pour le socle, avec protection. | `bool` | `false` | no |
 | role | Rôle de la VM (ajoute l'étiquette role-<role>, groupe Ansible role\_<role>), ex. s3. null si aucun. | `string` | `null` | no |
 | socle | VM permanente du socle : ajoute l'étiquette « socle » (inventaire Ansible). | `bool` | `false` | no |
 | type\_cpu | Type de CPU émulé. Celui de l'image dorée Debian (M03) ; Rocky 10 exige x86-64-v3 ou host. | `string` | `"x86-64-v2-AES"` | no |

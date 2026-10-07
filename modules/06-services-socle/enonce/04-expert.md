@@ -56,7 +56,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 
 **Critères de réussite**
 - [ ] `dig @10.10.20.10 git01.par1.medisphere.internal` répond `10.10.20.12`, comme les autres noms du socle, en UDP et en TCP ; idem sur `dns02`.
-- [ ] L'autoritaire local de `dns01` sert la zone sur 127.0.0.1:5300, sa base est lisible par le compte du service, et le récurseur relaie la zone interne vers lui.
+- [ ] L'autoritaire local de `dns01` sert la zone sur 127.0.0.1:5300 (celui de `dns02` aussi, sur 10.10.20.16:5300), sa base est lisible par le compte du service, et le récurseur relaie la zone interne vers lui.
 - [ ] Ton journal contient les réponses `dig` initiales commentées (statut, autorité), la cause racine et l'endroit de la correction durable.
 
 **Vérification** : `lab/bin/check 06 35`
@@ -469,17 +469,17 @@ Les contrôles `lab/bin/check 06 35` à `06 42` sont des sondes ciblées : lance
 
 **Contexte technique**
 - Récurseur : `rec_control trace-regex '<expression>' <fichier>` (sur `dns01`, en root) écrit la trace détaillée des résolutions des noms correspondants (`-` comme fichier : la sortie standard) ; sans argument, il arrête la trace. L'autoritaire local écoute sur 127.0.0.1:5300, joint en interne par l'interface `lo`.
-- ACME : provisioner `acme` de `ca01`, annuaire `https://ca01.par1.medisphere.internal/acme/acme/directory`. Pour l'essai, le client ACME tourne **sur `ca01` lui-même**, pour le nom `ca01.par1.medisphere.internal`, en mode autonome (`step ca certificate … --provisioner acme --standalone`, qui écoute sur le port 80 de `ca01` le temps du défi) : la validation `http-01` va de step-ca vers `ca01:80`, sans flux réseau nouveau. step-ca journalise chaque requête (`journalctl -u step-ca`).
+- ACME : provisioner `acme` de `ca01`, annuaire `https://ca01.par1.medisphere.internal/acme/acme/directory`. Pour l'essai, le client ACME tourne **sur `dns02`**, pour le nom `dns02.par1.medisphere.internal`, en mode autonome (`step ca certificate … --provisioner acme --standalone`, qui écoute sur le port 80 de `dns02` le temps du défi) : la validation `http-01` va de `ca01` vers `dns02:80`, flux déjà ouvert pour les certificats de Kea (M06-E25, filtrage local de M06-E30). Pas sur `ca01` lui-même : depuis M06-E27, son port 80 est pris par l'écouteur HTTP de la CRL. step-ca journalise chaque requête (`journalctl -u step-ca` sur `ca01`).
 - Validateur indépendant : `delv` (paquet `bind9-dnsutils`).
 
-> ⚠️ **Attention** : le certificat et la clé produits par l'essai ACME sont des fichiers **jetables** : génère-les dans un dossier temporaire en mode 700 sur `ca01`, ne les installe nulle part, et supprime-les à la fin. Arrête toute capture `tcpdump` et toute trace du récurseur (`rec_control trace-regex` sans argument) avant de terminer : une trace oubliée remplit un disque.
+> ⚠️ **Attention** : le certificat et la clé produits par l'essai ACME sont des fichiers **jetables** : génère-les dans un dossier temporaire en mode 700 sur `dns02`, ne les installe nulle part (surtout pas à la place de `/etc/kea/tls/kea.crt`), et supprime-les à la fin. Vérifie avant de lancer que l'unité `cert-renewer@kea` n'est pas en train de tourner (elle utilise le même port 80). Arrête toute capture `tcpdump` et toute trace du récurseur (`rec_control trace-regex` sans argument) avant de terminer : une trace oubliée remplit un disque.
 
 **Travail demandé**
 1. **Résolution d'un nom interne.** Sur `dns01`, vide du cache le nom `nbx01.par1.medisphere.internal`, active la trace du récurseur pour ce nom et capture le trafic de l'autoritaire (`tcpdump -ni lo port 5300`). Depuis `adm01`, résous le nom deux fois. Relève : la requête relayée (drapeaux, EDNS, bit DO), les requêtes DNSKEY/DS supplémentaires dues à la validation, et ce qui change à la seconde résolution.
 2. **Résolution d'un nom d'Internet.** Même démarche pour un nom jamais demandé (par exemple un sous-domaine aléatoire d'un domaine signé connu). Relève la descente racine → TLD → domaine, et la réponse négative (NSEC/NSEC3) qui prouve l'absence du nom. Valide la même réponse avec `delv`.
 3. **Cache négatif.** Mesure, avec `dig` et le TTL affiché, combien de temps une réponse `NXDOMAIN` de ta zone interne restera en cache. D'où vient ce nombre (SOA de la zone, plafond du récurseur) ?
 4. **ACME, côté protocole.** Avec `curl` seulement, interroge l'annuaire ACME de `ca01`, obtiens un *nonce* (`newNonce`), et explique pourquoi tu ne peux pas aller plus loin avec `curl` seul (JWS).
-5. **ACME, de bout en bout.** Sur `ca01`, lance l'émission ACME pour `ca01.par1.medisphere.internal` en mode autonome, en suivant en parallèle le journal de step-ca et une capture du port 80 sur `lo`. Associe chaque ligne de journal à une étape de RFC 8555 (`newAccount`, `newOrder`, autorisation, défi `http-01`, `finalize`, téléchargement). Inspecte le certificat obtenu (`step certificate inspect`) : durée, SAN, émetteur, extensions. Supprime-le.
+5. **ACME, de bout en bout.** Sur `dns02`, lance l'émission ACME pour `dns02.par1.medisphere.internal` en mode autonome, en suivant en parallèle le journal de step-ca (sur `ca01`) et une capture du port 80 sur `dns02` (interface `ens18`). Associe chaque ligne de journal à une étape de RFC 8555 (`newAccount`, `newOrder`, autorisation, défi `http-01`, `finalize`, téléchargement). Inspecte le certificat obtenu (`step certificate inspect`) : durée, SAN, émetteur, extensions. Supprime-le.
 6. **Compte rendu.** Rédige `docs/socle/analyses/resolution-et-acme.md` : une section `## Résolution DNS` (schéma et extraits annotés), une section `## Émission ACME` (séquence annotée), puis `## Réponses aux questions`.
 
 **Questions d'analyse** (à traiter dans le compte rendu)
@@ -494,7 +494,7 @@ Les contrôles `lab/bin/check 06 35` à `06 42` sont des sondes ciblées : lance
 **Critères de réussite**
 - [ ] Le compte rendu existe, est commité, et contient les trois sections avec des extraits annotés de trace du récurseur, de capture sur le port 5300, de journal de step-ca (dont `newOrder`, `http-01` et `finalize`).
 - [ ] Les 7 questions sont traitées.
-- [ ] Aucune capture, trace ou client ACME autonome ne reste actif ; aucun fichier de clé n'est resté sur `ca01` ni dans le dépôt.
+- [ ] Aucune capture, trace ou client ACME autonome ne reste actif ; aucun fichier de clé d'essai n'est resté sur `dns02` ni dans le dépôt.
 
 **Vérification** : `lab/bin/check 06 44`
 

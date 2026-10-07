@@ -139,7 +139,8 @@ _m05p_aucune_vm() {
 # _m05p_vm_conf VMID 'regex' — la configuration Proxmox de la VM correspond (qm config).
 _m05p_vm_conf() { remote "$WB_PVE_HOST" "qm config $1" 2>/dev/null | grep -Eq -- "$2"; }
 
-# _m05p_tache_pve TYPE VMID — une tâche Proxmox TYPE (qmclone, qmdestroy…) réussie existe pour VMID.
+# _m05p_tache_pve TYPE VMID — une tâche Proxmox TYPE (qmstart, qmdestroy…) réussie existe pour VMID.
+#   Attention : une tâche qmclone porte le VMID de la source (template), pas celui de la copie.
 _m05p_tache_pve() {
   remote "$WB_PVE_HOST" "pvesh get /nodes/\$(hostname)/tasks --typefilter $1 --vmid $2 --limit 50 --output-format json" 2>/dev/null \
     | jq -e 'any(.[]; .status == "OK")' >/dev/null

@@ -145,10 +145,16 @@ resource "proxmox_virtual_environment_vm" "vm" {
   }
 
   lifecycle {
-    # Une nouvelle image « current » (chaque semaine, M03) change clone.vm_id, qui force le
-    # remplacement : sans cette ligne, chaque publication d'image recréerait toutes les VMs.
-    # On reconstruit une VM sur la nouvelle image volontairement (tofu apply -replace=…).
-    ignore_changes = [clone]
+    # Protection d'OpenTofu au choix de l'appelant (socle : true). Depuis OpenTofu 1.12,
+    # prevent_destroy accepte une variable du module ; avant, seulement un littéral.
+    prevent_destroy = var.proteger
+
+    # clone : une nouvelle image « current » (chaque semaine, M03) change clone.vm_id, qui
+    # force le remplacement : sans cette ligne, chaque publication d'image recréerait toutes
+    # les VMs. On reconstruit une VM sur la nouvelle image volontairement (-replace=…).
+    # startup : réglage de l'hôte (Sys.Modify sur « / ») que le jeton d'OpenTofu ne peut pas
+    # modifier ; posé en root, il ne doit pas faire échouer les applies suivants.
+    ignore_changes = [clone, startup]
 
     precondition {
       condition     = length(var.cles_ssh) > 0 || var.user_data_file_id != null

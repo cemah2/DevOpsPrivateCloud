@@ -26,7 +26,7 @@ est noté dans la MR avec sa raison et une date de réexamen. Karim Benali tranc
    reporter la montée.
 5. **Noter le retour arrière** dans la MR : pour chaque état, le `VersionId` courant de l'objet
    dans `tofu-state` (`outils/restaurer-etat.sh --lister <clé>`).
-6. **Fusion**, puis jobs `apply:` (plans vides : l'état est réécrit avec le nouveau provider),
+6. **Fusion**, puis jobs `apply:` (plans vides ; une nouvelle version de l'état n'apparaît que si son contenu change, par exemple une `schema_version` relevée),
    contrôle de convergence vert.
 
 **Retour arrière**

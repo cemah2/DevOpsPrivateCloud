@@ -64,6 +64,11 @@
   no_log: true
 
 # Sortie : « nom. algorithme. secret ». Clé absente ou secret différent (rotation) : on la remplace.
+# Limite connue : « pdnsutil tsigkey import » n'accepte le secret QU'EN ARGUMENT : il est visible
+# dans la liste des processus de dns01 le temps de la commande (une fraction de seconde, à chaque
+# rotation seulement). Écart à la règle 5 du module, accepté et inscrit au registre des risques ;
+# l'alternative sans argument est l'API (POST /api/v1/servers/localhost/tsigkeys, secret dans le
+# corps de la requête, module uri), au prix de la clé d'API dans le rôle kea_ddns.
 - name: Clé TSIG ddns-kea dans PowerDNS (même secret que Kea)
   ansible.builtin.shell: |
     set -o pipefail

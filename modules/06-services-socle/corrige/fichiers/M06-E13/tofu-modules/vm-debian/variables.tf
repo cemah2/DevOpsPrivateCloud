@@ -86,12 +86,6 @@ variable "demarrage_auto" {
   default     = true
 }
 
-variable "ordre_demarrage" {
-  description = "Ordre de démarrage Proxmox (null = aucun)."
-  type        = number
-  default     = null
-}
-
 variable "cle_ssh_admin" {
   description = "Clé publique SSH injectée pour le compte admin par cloud-init."
   type        = string

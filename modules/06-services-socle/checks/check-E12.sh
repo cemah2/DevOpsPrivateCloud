@@ -17,7 +17,7 @@ _m06o_req="$_M06O_ANSIBLE/collections/requirements.yml"
 _m06o_env="$_M06O_CFG/netbox-ansible.env"
 
 _m06o_version_figee() {
-  grep -A1 -E 'name:[[:space:]]*netbox\.netbox' "$_m06o_req" | grep -Eq 'version:[[:space:]]*"?==3\.23\.0'
+  grep -A2 -E 'name:[[:space:]]*netbox\.netbox' "$_m06o_req" | grep -Eq 'version:[[:space:]]*["'"'"']?(==)?3\.23\.0["'"'"']?[[:space:]]*(#.*)?$'
 }
 _m06o_sans_secret() {
   [[ -s "$_m06o_inv" ]] && ! grep -Eq 'nbt_[A-Za-z0-9]+\.|validate_certs:[[:space:]]*(false|no)' "$_m06o_inv"
@@ -25,14 +25,13 @@ _m06o_sans_secret() {
 # Jeton de netbox-ansible.env (lu sans exécuter le fichier) en lecture seule ?
 _m06o_jeton_lecture() {
   sed -nE 's/^(export[[:space:]]+)?NETBOX_TOKEN="?([^"]*)"?.*/\2/p' "$_m06o_env" | head -n 1 >"$_M06O_TMP/jeton"
-  _m06o_nb "$_M06O_TMP/jeton" users/tokens/ \
-    | jq -e '[.results[] | .write_enabled] | length > 0 and all(. == false)' >/dev/null
+  _m06o_jeton_lecture_seule "$_M06O_TMP/jeton"
 }
 _m06o_ci_compare() { _m06o_contenu_main "$_M06O_PROJET_ANSIBLE" .gitlab-ci.yml | grep -q 'comparer-inventaires'; }
 
 check_cmd "collections/requirements.yml : collection netbox.netbox déclarée" \
   grep -Eq 'name:[[:space:]]*netbox\.netbox' "$_m06o_req"
-check_cmd "collections/requirements.yml : version figée ==3.23.0" _m06o_version_figee
+check_cmd "collections/requirements.yml : version figée 3.23.0 (exacte, pas une plage)" _m06o_version_figee
 check_cmd "inventories/lab/netbox.yml publié sur main" \
   _m06o_fichier_main "$_M06O_PROJET_ANSIBLE" inventories/lab/netbox.yml
 check_cmd "netbox.yml : plugin netbox.netbox.nb_inventory" \

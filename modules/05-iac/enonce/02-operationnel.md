@@ -23,7 +23,7 @@ Le palier 1 a donné un outil, un compte, un environnement et un langage. Tout c
 **Durée indicative** : 5 à 6 h.
 
 **Contexte technique**
-- `s3-01` (PLAN §4.5) : VMID **1006**, `10.10.20.14/24`, passerelle `10.10.20.1`, VNet `vinfra`, 2 vCPU, 2 Go, disque système 20 Go sur `local-nvme`, **disque de données 100 Go sur `hdd-bulk`**, étiquettes `socle` et `role-s3`, démarrage avec l'hôte (rang 4, comme `git01`). Code dans `~/src/infra/socle/` (nouvelle configuration, état **local** pour l'instant : E11 le migre).
+- `s3-01` (PLAN §4.5) : VMID **1006**, `10.10.20.14/24`, passerelle `10.10.20.1`, VNet `vinfra`, 2 vCPU, 2 Go, disque système 20 Go sur `local-nvme`, **disque de données 100 Go sur `hdd-bulk`**, étiquettes `socle` et `role-s3`, démarrage avec l'hôte (rang 4, comme `git01`). Avant d'écrire le rang de démarrage dans le code, cherche dans le code de l'API (`PVE/API2/Qemu.pm`, contrôle des options de configuration) quel privilège exige l'option `startup`, et décide qui la pose. Code dans `~/src/infra/socle/` (nouvelle configuration, état **local** pour l'instant : E11 le migre).
 - Le compte `wb-tofu` ne connaît que `vsandbox` et `local-nvme` (E03). Son script le prévoit : `VNETS="vsandbox vinfra" STOCKAGES="local-nvme hdd-bulk" ./pve-tofu-compte.sh` en root sur `pve01`.
 - SeaweedFS **4.4x** (référence : 4.45), binaire unique `weed`, archive `linux_amd64.tar.gz` de la page des versions (<https://github.com/seaweedfs/seaweedfs/releases>). Mode retenu : **un seul processus** `weed server -s3` (master, volume, filer et passerelle S3). Port S3 : **8333**, en HTTPS.
 - Identités S3 (fichier JSON de la passerelle, format de la page « S3 Credentials » du wiki) :
@@ -60,7 +60,7 @@ Le palier 1 a donné un outil, un compte, un environnement et un langage. Tout c
 > ⚠️ **Attention** : l'étape 8 modifie la configuration de `tofu-state` avec l'identité d'administration. Fais-le dans un sous-shell (`( set -a; . ~/.config/workbook/s3-admin.env; set +a; aws … )`) pour ne pas laisser ces clés dans ton environnement. Si tu suspends le versionnage par erreur, réactive-le aussitôt : les objets écrits entre-temps n'auront pas d'historique.
 
 **Critères de réussite**
-- [ ] `qm config 1006` : `s3-01`, 2 vCPU, 2048 Mo, `scsi0` 20 Go sur `local-nvme`, `scsi1` 100 Go sur `hdd-bulk`, `vinfra`, `ip=10.10.20.14/24,gw=10.10.20.1`, `protection: 1`, `onboot: 1`, étiquettes `role-s3;socle`, aucun disque adossé à un template.
+- [ ] `qm config 1006` : `s3-01`, 2 vCPU, 2048 Mo, `scsi0` 20 Go sur `local-nvme`, `scsi1` 100 Go sur `hdd-bulk`, `vinfra`, `ip=10.10.20.14/24,gw=10.10.20.1`, `protection: 1`, `onboot: 1`, `startup: order=4`, étiquettes `role-s3;socle`, aucun disque adossé à un template.
 - [ ] La VM 1006 est dans l'état de `socle/`.
 - [ ] `s3-01.par1.medisphere.internal` se résout (A et PTR) ; `ssh s3-01 sudo -n true` aboutit.
 - [ ] `curl https://s3-01.par1.medisphere.internal:8333/` aboutit **sans** `-k` et répond 403 ; en HTTP clair, la passerelle refuse.
@@ -217,7 +217,7 @@ Dans le script, la seconde commande doit échouer : sous `set -e`, isole-la (`se
    - une nouvelle image `current` ne recrée **aucune** VM ;
    - étiquettes dans l'ordre que Proxmox leur donne ;
    - disques de données en nombre variable, `scsi1`, `scsi2`… dans l'ordre.
-3. Le module ne peut pas porter `prevent_destroy` selon le souhait de l'appelant : pourquoi ? Quelle protection proposes-tu à la place pour `s3-01` ?
+3. Un appel de module n'a pas de bloc `lifecycle` : comment l'appelant peut-il quand même obtenir `prevent_destroy` sur la VM de `s3-01` ? Lis dans le `CHANGELOG` d'OpenTofu 1.12 ce qui a changé pour `prevent_destroy`, et ce que cela impose à `required_version` du module. Quelle seconde protection, indépendante d'OpenTofu, ajoutes-tu ?
 4. Écris un exemple d'appel minimal (`exemples/minimal/`) qui sert aussi de test de validation.
 5. Installe terraform-docs, génère le README. Écris à la main, autour du tableau généré, ce que le tableau ne dit pas : choix, limites, comment reconstruire une VM sur une nouvelle image.
 6. Écris au moins quatre tests `tofu test` avec un provider simulé : étiquettes triées, image courante par défaut, image imposée, une validation qui doit échouer (`expect_failures`).
@@ -473,7 +473,7 @@ Si le plan veut modifier les disques des serveurs d'application, compare le form
 3. Change la génération. Lis le plan : quelle ligne dit pourquoi la VM sera remplacée ? Applique. La nouvelle VM a-t-elle été clonée depuis la même image que l'ancienne ?
 4. Ajoute `create_before_destroy = true` à la VM, lance un plan après un changement de génération, **n'applique pas**. Que se passerait-il à l'apply ? Retire-le. Dans quel cas ce méta-argument est-il utile avec Proxmox ?
 5. Pour comparer, reconstruis la VM sans changer le code (`tofu apply -replace=…`). Quand préférer l'un ou l'autre ?
-6. Questions par écrit : un collègue ajoute `depends_on = [module.bdd]` sur une **source de données** utilisée par une autre VM : qu'arrive-t-il aux plans suivants ? (Le plan 5 de M05-E22 le montre.) Pourquoi `prevent_destroy` ne se règle-t-il pas par variable ?
+6. Questions par écrit : un collègue ajoute `depends_on = [module.bdd]` sur une **source de données** utilisée par une autre VM : qu'arrive-t-il aux plans suivants ? (Le plan 5 de M05-E22 le montre.) `prevent_destroy` accepte une variable depuis OpenTofu 1.12 : pour le socle, qui doit pouvoir fixer cette valeur, et par quel canal ne doit-elle **jamais** arriver ?
 
 **Critères de réussite**
 - [ ] `m05-jetable` (2054) existe dans l'état de `lab-m05`, avec une adresse 10.10.99.x ; sa description porte la génération de `terraform.tfvars`.
@@ -530,7 +530,7 @@ Une postcondition voit l'objet créé sous le nom `self`. L'attribut qui porte l
 7. Vérifie dans la VM (`qm guest exec 2054 -- cat /etc/medisphere/generation`, `cloud-init status`) que le snippet a bien été appliqué.
 
 **Critères de réussite**
-- [ ] `pve01` : stockage `tofu-snippets` (snippets seulement), compte `wb-tofu` sans mot de passe, `sudo` limité à `pvesm apiinfo` et à `tee` dans le dossier des snippets ; le jeton a `Datastore.Allocate` sur `tofu-snippets`, pas sur `hdd-bulk`.
+- [ ] `pve01` : stockage `tofu-snippets` (snippets seulement), compte `wb-tofu` sans mot de passe, `sudo` limité à `pvesm apiinfo` et à `tee` dans le dossier des snippets (une écriture hors de ce dossier est refusée par `sudo -l`) ; le jeton a `Datastore.Allocate` sur `tofu-snippets`, pas sur `hdd-bulk`.
 - [ ] `m05-jetable` a `cicustom: user=tofu-snippets:snippets/…` ; le fichier commence par `#cloud-config` ; dans la VM, `/etc/medisphere/generation` existe et `cloud-init status` dit `done`.
 - [ ] Le snippet est une ressource de l'état de `lab-m05` ; `socle/` n'en gère aucun ; aucune clé privée ni mot de passe dans le code.
 - [ ] `tofu plan` est vide dans `envs/lab-m05`.
@@ -539,7 +539,7 @@ Une postcondition voit l'objet créé sous le nom `self`. L'attribut qui porte l
 
 <details><summary>Indice 1</summary>
 
-Les règles `sudo` recommandées par la documentation du provider sont très précises (chemin absolu de la commande, motif sur le nom du fichier). Adapte le chemin au stockage dédié : `<chemin du stockage>/snippets/<nom>`.
+Les règles `sudo` recommandées par la documentation du provider sont très précises (chemin absolu de la commande, motif sur le nom du fichier). Adapte le chemin au stockage dédié : `<chemin du stockage>/snippets/<nom>`. Puis **éprouve** ta règle au lieu de la croire : en root, `sudo -l -U wb-tofu /usr/bin/tee <dossier>/snippets/ab /etc/sudoers.d/x` doit être refusé, de même qu'un chemin contenant `..`. Lis dans `man sudoers` comment les jokers (`*`) s'appliquent aux arguments, et ce que permet un argument qui commence par `^` et finit par `$`.
 </details>
 
 <details><summary>Indice 2</summary>

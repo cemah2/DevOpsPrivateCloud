@@ -67,7 +67,9 @@ Who = gitlab-runner@runner01 ?
 ├── Who = admin@adm01 (ou un autre compte humain)
 │     → étape 3 sur la machine indiquée ; prévenir la personne (canal de l'équipe)
 │         ├── un tofu/terragrunt tourne (même dans un tmux oublié) → VIVANT : la personne termine
-│         │     ou interrompt proprement (Ctrl+C, qui rend le verrou). FIN.
+│         │     ou interrompt proprement (Ctrl+C pour un plan ou un apply ; « exit » ou Ctrl+D
+│         │     pour une tofu console : détachée de son terminal, elle ignore kill -INT et
+│         │     kill -TERM). Jamais kill -9. FIN.
 │         └── aucun processus → ORPHELIN
 └── Who inconnu / machine inconnue
       → ne rien lever ; escalade (étape 8) : quelqu'un écrit dans l'état depuis un poste non prévu.
@@ -135,7 +137,7 @@ détruit une VM ; force-unlock refusé deux fois ; verrou qui réapparaît sans 
 | Interdit | Pourquoi |
 |---|---|
 | `-lock=false` sur `apply`, `import`, `state …` | deux écritures concurrentes du même état : la seconde écrase la première |
-| Supprimer l'objet `.tflock` à la main (`aws s3 rm`) | contourne la vérification d'ID de `force-unlock` ; à réserver au cas où OpenTofu ne peut plus s'initialiser, avec accord d'un Maintainer et l'ID relu |
+| Supprimer l'objet `.tflock` à la main (`aws s3 rm`) | contourne la vérification d'ID de `force-unlock` ; à réserver au cas où OpenTofu ne peut pas lire le verrou (objet illisible : « unable to json parse the lock info », donc pas d'ID pour `force-unlock`), après les étapes 2 à 4 et avec l'accord d'un Maintainer |
 | Lever un verrou parce qu'il est « vieux » | un apply long ou bloqué sur une API lente est vivant ; l'âge n'est pas une preuve |
 | Annuler un job `apply:` pour « débloquer » | c'est exactement ce qui fabrique un verrou orphelin et un état partiel |
 | Relancer un ancien pipeline après la levée | son plan est périmé (« Saved plan is stale ») ou, pire, décrit une autre réalité |

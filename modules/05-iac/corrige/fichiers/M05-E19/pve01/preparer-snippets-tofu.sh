@@ -13,6 +13,11 @@
 #   2. un compte Linux sans privilège, wb-tofu, joignable en SSH depuis adm01 seulement ;
 #   3. un sudo limité à ce que le provider exécute : « pvesm apiinfo » (test de sudo) et
 #      « tee » vers le dossier des snippets, rien d'autre (jamais qm ni pvesm en entier).
+#      La règle « tee » est une EXPRESSION RÉGULIÈRE ancrée (^…$, sudo >= 1.9.10) : avec un
+#      motif glob (…/snippets/[a-zA-Z0-9_][a-zA-Z0-9_.-]*, forme de la documentation du
+#      provider), le « * » de sudoers couvre aussi les espaces et les « / » : « sudo tee
+#      …/snippets/ab /etc/sudoers.d/x » ou « …/snippets/ab/../../../etc/shadow » seraient
+#      acceptés, et wb-tofu deviendrait root. Le script le vérifie à la fin (sudo -l).
 #
 # Variables : CLE_PUBLIQUE (obligatoire, clé de admin@adm01), DOSSIER (/mnt/hdd-bulk/tofu-snippets)
 set -euo pipefail
@@ -42,18 +47,36 @@ printf 'from="10.10.10.10",no-agent-forwarding,no-port-forwarding,no-X11-forward
 chown "$COMPTE:$COMPTE" "/home/$COMPTE/.ssh/authorized_keys"
 chmod 0600 "/home/$COMPTE/.ssh/authorized_keys"
 
-# --- 3. sudo minimal (fichier validé avant installation) -------------------------------------
+# --- 3. sudo minimal (fichier validé avant installation, puis éprouvé) -----------------------
+command -v visudo >/dev/null || { echo "sudo absent de pve01 : apt install sudo, puis relance." >&2; exit 1; }
 tmp="$(mktemp)"
 cat > "$tmp" <<SUDO
 # /etc/sudoers.d/wb-tofu — OpenTofu (provider bpg/proxmox) : écriture des snippets (M05-E19)
 # Test de disponibilité de sudo par le provider (lecture seule)
 $COMPTE ALL=(root) NOPASSWD: /usr/sbin/pvesm apiinfo
-# Écriture d'un snippet, et uniquement dans le stockage dédié (nom de fichier sans « / »)
-$COMPTE ALL=(root) NOPASSWD: /usr/bin/tee $DOSSIER/snippets/[a-zA-Z0-9_][a-zA-Z0-9_.-]*
+# Écriture d'un snippet dans le stockage dédié, et nulle part ailleurs. Expression régulière
+# ancrée (sudo >= 1.9.10) : UN seul argument, un nom de fichier sans espace ni « / ».
+# Jamais de glob ici : le « * » de sudoers accepte espaces et « / » (élévation vers root).
+$COMPTE ALL=(root) NOPASSWD: /usr/bin/tee ^$DOSSIER/snippets/[A-Za-z0-9_][A-Za-z0-9_.-]*\$
 SUDO
 visudo -cf "$tmp"
 install -m 0440 -o root -g root "$tmp" /etc/sudoers.d/wb-tofu
 rm -f "$tmp"
+
+# Épreuve de la règle (sudo -l en root : lecture seule, rien n'est exécuté).
+autorise() { sudo -l -U "$COMPTE" "$@" >/dev/null 2>&1; }
+autorise /usr/bin/tee "$DOSSIER/snippets/essai-0123456789ab.yaml" \
+  || { echo "ÉCHEC : la règle refuse l'écriture d'un snippet légitime." >&2; exit 1; }
+for interdit in "$DOSSIER/snippets/ab /etc/sudoers.d/x" "$DOSSIER/snippets/ab/../../../../etc/shadow" \
+  "-a $DOSSIER/snippets/ab" "/etc/passwd"; do
+  # shellcheck disable=SC2086 # découpage voulu : chaque cas est une liste d'arguments
+  if autorise /usr/bin/tee $interdit; then
+    echo "DANGER : sudo accepte « tee $interdit » : règle retirée." >&2
+    rm -f /etc/sudoers.d/wb-tofu
+    exit 1
+  fi
+done
+echo "sudoers de $COMPTE : écriture des snippets seule, éprouvée."
 
 # --- 4. Droits Proxmox sur le seul stockage dédié (utilisateur ET jeton, privsep) -----------
 if pvesh get /access/roles/WBTofuSnippets >/dev/null 2>&1; then

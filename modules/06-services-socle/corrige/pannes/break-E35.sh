@@ -5,16 +5,19 @@
 # Variantes (toutes sur dns01) :
 #   1. récurseur : les relais (forwarders) des zones internes pointent vers le port 5301 au lieu de
 #      5300 (« faute de frappe » d'un changement) → SERVFAIL sur les noms internes ;
-#   2. récurseur : la zone relayée est écrite « par1.medisphere.interne » → les noms internes partent
-#      vers la racine d'Internet → NXDOMAIN signé par la racine ;
+#   2. récurseur : les zones relayées medisphere.internal et par1.medisphere.internal sont écrites
+#      « …medisphere.interne » (les deux : la zone parente, relayée elle aussi, servirait sinon par1)
+#      → les noms de par1 partent vers la racine d'Internet → NXDOMAIN de la racine (ou SERVFAIL si
+#      l'ancre positive de par1, M06-E26, ne trouve aucune clé) ;
 #   3. autoritaire : l'enregistrement A de git01 supprimé (« nettoyage » par pdnsutil, série incrémentée,
 #      NOTIFY vers dns02), puis interrogé une fois → NXDOMAIN partout, et réponse négative en cache
 #      dans le récurseur (même quand la source est réparée) ;
-#   4. autoritaire : base du backend (gsqlite3 ou LMDB) repassée en root:root 600 (« restauration
-#      faite en root ») → PowerDNS Authoritative ne sert plus rien. Sans effet si le récurseur relaie
-#      aussi vers dns02 (le secondaire répond) : le script passe alors à une autre variante.
+#   4. autoritaire : base du backend (gsqlite3 ou LMDB) repassée en root:root 600 sur dns01 ET dns02
+#      (« script d'audit des droits » passé sur les deux serveurs DNS) → aucun serveur faisant autorité
+#      ne sert plus rien (les récurseurs relaient vers les deux : une seule base cassée serait masquée).
 # Sauvegardes : /var/lib/workbook/M06-E35.* sur dns01 (texte d'origine de recursor.yml, RRset de git01,
-# propriétaire et droits de la base). Rien n'est rétabli qui a déjà été réparé.
+# propriétaire et droits de la base) et sur dns02 (droits de la base, variante 4). Rien n'est rétabli
+# qui a déjà été réparé.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -53,9 +56,12 @@ EOF
       ;;
     2)
       m06_wb_exec dns01 ZONE="$_M06_ZONE" >/dev/null <<'EOF' || rc=$?
-subst /etc/powerdns/recursor.yml '(zone:[ \t]*["'"'"']?)par1\.medisphere\.internal(?=\.?["'"'"']?([ \t]*$|[ \t]*[,}#]))' '\1par1.medisphere.interne' || exit $?
+rx='(zone:[ \t]*["'"'"']?)((?:par1\.)?medisphere\.)internal(?=\.?["'"'"']?([ \t]*$|[ \t]*[,}#]))'
+subst /etc/powerdns/recursor.yml "$rx" '\1\2interne' || exit $?
+# medisphere.internal ET par1.medisphere.internal : la zone parente relayée servirait encore par1.
+while subst /etc/powerdns/recursor.yml "$rx" '\1\2interne'; do :; done
 systemctl restart pdns-recursor
-journal "recursor.yml : zone relayée renommée par1.medisphere.interne"
+journal "recursor.yml : zones relayées renommées (medisphere.interne, par1.medisphere.interne)"
 EOF
       ;;
     3)
@@ -77,7 +83,11 @@ journal "RRset A de $nom supprimé ($(tr '\n' ' ' <"$f")), série incrémentée,
 EOF
       ;;
     4)
-      m06_wb_exec dns01 >/dev/null <<'EOF' || rc=$?
+      local h4
+      for h4 in dns01 dns02; do
+        # dns02 facultatif (avant M06-E24) ; dns01 obligatoire.
+        if [[ "$h4" == dns02 ]] && ! m06_existe dns02; then continue; fi
+        m06_wb_exec "$h4" >/dev/null <<'EOF' || rc=$?
 b="$(pdns_reglage launch)"
 case "$b" in
   *gsqlite3*) base="$(pdns_reglage gsqlite3-database)" ;;
@@ -90,6 +100,10 @@ chown root:root "$base" && chmod 600 "$base"
 systemctl restart pdns >/dev/null 2>&1 || true
 journal "base $base passée en root:root 600, pdns redémarré"
 EOF
+        ((rc == 0)) || break
+      done
+      # Sans vidage, le cache des récurseurs masquerait la panne jusqu'à expiration des TTL.
+      ((rc != 0)) || m06_vider_caches_rec "$_M06_ZONE"
       ;;
   esac
   ((rc == 0)) || return "$rc"
@@ -131,7 +145,10 @@ EOF
       m06_vider_caches_rec "git01.$_M06_ZONE"
       ;;
     4)
-      m06_wb_exec dns01 >/dev/null <<'EOF' || wb_avert "annulation incomplète sur dns01 (base PowerDNS)"
+      local h4
+      for h4 in dns01 dns02; do
+        if [[ "$h4" == dns02 ]] && ! m06_existe dns02; then continue; fi
+        m06_wb_exec "$h4" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur $h4 (base PowerDNS)"
 f="$WB_DIR/M06-E35.base"
 [ -f "$f" ] || exit 0
 IFS="$(printf '\t')" read -r base droits <"$f"
@@ -145,6 +162,7 @@ else
 fi
 rm -f "$f"
 EOF
+      done
       ;;
   esac
 }

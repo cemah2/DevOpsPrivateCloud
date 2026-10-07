@@ -57,7 +57,7 @@ Hôte du socle : `ipv4_imposee = "10.10.20.16"` à la place de `plage_adresses`.
 | `ipv4_imposee` | string | `null` | adresse imposée (hôte du socle) |
 | `coeurs`, `memoire_mo`, `disque_go` | number | 1, 1024, 10 | ressources |
 | `stockage`, `pool`, `domaine`, `resolveurs` | | `local-nvme`, `lab`, `par1.medisphere.internal`, `[10.10.20.10]` | |
-| `demarrage_auto`, `ordre_demarrage` | bool, number | `true`, `null` | démarrage avec l'hyperviseur |
+| `demarrage_auto` | bool | `true` | démarrage avec l'hyperviseur (l'ordre de démarrage se pose en root : `qm set <VMID> --startup order=<N>`) |
 
 ## Sorties
 

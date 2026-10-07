@@ -309,7 +309,7 @@ L'ordre est la clé : d'abord la confiance (nouvelle racine partout, y compris d
 - [ ] `nbx01` est créée par OpenTofu, conforme au tableau, résolue en A et PTR.
 - [ ] `https://nbx01.par1.medisphere.internal/login/` répond 200 avec un TLS vérifié (chaîne de la PKI MédiSphère) ; `http://` redirige vers `https://`.
 - [ ] `/api/status/` (jeton des checks) annonce NetBox 4.6.x, Python 3.13 et au moins un *worker* de file de tâches.
-- [ ] Sur `nbx01`, `netbox`, `netbox-rq`, `nginx`, PostgreSQL et Valkey tournent ; seuls les ports 80 et 443 écoutent hors de la boucle locale ; `configuration.py` est en `root:netbox` 640 et définit `API_TOKEN_PEPPERS`.
+- [ ] Sur `nbx01`, `netbox`, `netbox-rq`, `nginx`, PostgreSQL et Valkey tournent ; hors SSH, seuls les ports 80 et 443 écoutent hors de la boucle locale ; `configuration.py` est en `root:netbox` 640 et définit `API_TOKEN_PEPPERS`.
 - [ ] Le jeton des checks est un jeton v2 en lecture seule, dans un fichier en 600.
 - [ ] Le rôle `netbox` et son scénario Molecule sont sur `main` ; les secrets `critique` de NetBox sont chiffrés sous cette identité ; un second passage donne `changed=0`.
 

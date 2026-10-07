@@ -27,9 +27,10 @@ t = re.sub(r"(\"(?:\\.|[^\"\\])*\")|//[^\n]*|#[^\n]*|/\*.*?\*/", lambda m: m.gro
 k = json.loads(t)["DhcpDdns"]["tsig-keys"][0]
 nom = k["name"].rstrip(".")
 sec = k.get("secret") or open(k["secret-file"], encoding="utf-8").read().strip()
-cles = subprocess.run(["pdnsutil", "tsigkey", "list"], capture_output=True, text=True).stdout.splitlines()
+pdns = ["runuser", "-u", "pdns", "--", "pdnsutil"]  # comme le rôle : jamais pdnsutil en root sur la base
+cles = subprocess.run(pdns + ["tsigkey", "list"], capture_output=True, text=True).stdout.splitlines()
 ok = any(l.split()[0].rstrip(".") == nom and l.split()[-1] == sec for l in cles if len(l.split()) >= 3)
-m = subprocess.run(["pdnsutil", "metadata", "get", sys.argv[1], "TSIG-ALLOW-DNSUPDATE"], capture_output=True, text=True).stdout
+m = subprocess.run(pdns + ["metadata", "get", sys.argv[1], "TSIG-ALLOW-DNSUPDATE"], capture_output=True, text=True).stdout
 autorise = (not re.search(r"=\s*\S", m)) or re.search(r"(^|[\s=,])%s\.?(\s|,|$)" % re.escape(nom), m)
 sys.exit(0 if ok and autorise else 1)
 PY'

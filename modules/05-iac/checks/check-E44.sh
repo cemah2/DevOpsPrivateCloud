@@ -9,16 +9,25 @@
 source "$(dirname "${BASH_SOURCE[0]}")/_m05-expert.sh"
 
 title "M05-E44 — Sous le capot : graphe, providers et état"
-require_cmd git
+require_cmd git jq
 
 _m05_e44_dir="$_m05x_depot/docs/socle/analyses"
 _m05_e44_cr="$_m05_e44_dir/opentofu-sous-le-capot.md"
 
-# Copies d'état en clair hors des endroits prévus (le bac à sable ~/m05/e44 est permis).
+# Copies d'état EN CLAIR hors des endroits prévus (le bac à sable ~/m05/e44 est permis). Un état
+# chiffré (M05-E27, par exemple l'expérience de ~/m05/e27) n'a pas de clé « resources » : il n'est
+# pas compté.
 _m05_e44_pas_detat() {
-  [[ -z "$(find "$_m05x_infra" "$_m05x_depot" "$HOME" -maxdepth 4 \
+  local f
+  while IFS= read -r -d '' f; do
+    if jq -e 'has("resources")' "$f" >/dev/null 2>&1; then
+      echo "état en clair : $f" >&2
+      return 1
+    fi
+  done < <(find "$_m05x_infra" "$_m05x_depot" "$HOME" -maxdepth 4 \
     \( -path "$HOME/m05/e44" -o -name .terraform -o -name .git \) -prune -o \
-    -type f \( -name '*.tfstate' -o -name '*.tfstate.backup' -o -name '*.tfstate.json' \) -print 2>/dev/null)" ]]
+    -type f \( -name '*.tfstate' -o -name '*.tfstate.backup' -o -name '*.tfstate.json' \) -print0 2>/dev/null)
+  return 0
 }
 _m05_e44_pas_de_trace() {
   ! grep -lqs -m1 '\[TRACE\] provider' "$HOME"/*.log "$HOME"/*/*.log /tmp/*.log 2>/dev/null

@@ -40,6 +40,8 @@
   ansible.builtin.shell: |
     set -o pipefail
     pdnsutil tsigkey delete "{{ powerdns_auth_tsig.nom }}" >/dev/null 2>&1 || true
+    # ⚠️ pdnsutil reçoit le secret en argument : il est visible un instant dans « ps » sur l\'hôte.
+    # Accepté ici (hôte dédié, aucun autre utilisateur interactif) ; alternative : l\'API (POST /tsigkeys).
     pdnsutil tsigkey import "{{ powerdns_auth_tsig.nom }}" "{{ powerdns_auth_tsig.algorithme | default('hmac-sha256') }}" "$SECRET"
   args:
     executable: /bin/bash

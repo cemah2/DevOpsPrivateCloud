@@ -28,6 +28,8 @@ check_ssh "dns01 : le récurseur relaie la zone $_m06x_zone vers le port 5300" d
   "sudo -n grep -A6 -E 'zone:[[:space:]]*[\"'\'']?par1\\.medisphere\\.internal\\.?[\"'\'']?([[:space:]]|,|\$)' /etc/powerdns/recursor.yml | grep -q ':5300'"
 if _m06x_existe dns02; then
   check_cmd "dns02 : git01.$_m06x_zone → 10.10.20.12" _m06x_resout "git01.$_m06x_zone" 10.10.20.12 10.10.20.16
+  check_output "dns02 : le serveur faisant autorité (10.10.20.16:5300) sert git01" '^10\.10\.20\.12$' \
+    dig +short +norecurse +time=3 @10.10.20.16 -p 5300 "git01.$_m06x_zone" A
 else
   skip "dns02 : résolution de git01" "dns02 absent (M06-E24)"
 fi

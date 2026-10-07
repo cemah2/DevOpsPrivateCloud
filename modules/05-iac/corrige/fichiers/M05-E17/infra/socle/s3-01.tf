@@ -28,9 +28,12 @@ module "s3_01" {
   dns      = var.dns
   cles_ssh = var.cles_ssh_admin
 
-  demarrage_auto  = true
-  ordre_demarrage = 4
-  # Le module ne peut pas porter prevent_destroy (valeur fixe d'un bloc lifecycle) :
-  # Proxmox refuse la suppression tant que ce drapeau est posé.
+  demarrage_auto = true
+  # Pas d'ordre_demarrage : le rang 4 a été posé en root en M05-E10 (Proxmox exige
+  # Sys.Modify sur « / » pour « startup ») ; le module ignore ce réglage.
+
+  # Les deux garde-fous de M05-E10 sont conservés : prevent_destroy (proteger, variable
+  # acceptée dans lifecycle depuis OpenTofu 1.12) et le drapeau Proxmox (protection).
+  proteger   = true
   protection = true
 }

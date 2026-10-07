@@ -32,7 +32,7 @@ for _m06_h in dns01 dns02; do
   check_ssh "$_m06_h : pairs HA en HTTPS sur le port 8001, certificats clients exigés" "$_m06_h" \
     'f=/etc/kea/kea-dhcp4.conf; [ "$(sudo -n grep -cE "\"url\": *\"https://10\.10\.20\.(10|16):8001/\"" $f)" -eq 2 ] && sudo -n grep -Eq "\"require-client-certs\": *true" $f'
   check_ssh "$_m06_h : certificat de Kea émis par la PKI interne" "$_m06_h" \
-    "sudo -n openssl verify -CAfile $_M06P_RACINE -untrusted /etc/kea/tls/kea.crt /etc/kea/tls/kea.crt"
+    "sudo -n bash -c 'openssl verify -CAfile $_M06P_RACINE -untrusted <(cat /etc/kea/tls/*.crt /etc/kea/tls/*/*.crt 2>/dev/null) /etc/kea/tls/kea.crt'"
   check_ssh "$_m06_h : renouvellement automatique du certificat de Kea actif" "$_m06_h" \
     'systemctl is-active --quiet cert-renewer@kea.timer'
 done

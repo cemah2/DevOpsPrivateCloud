@@ -24,10 +24,11 @@ resource "proxmox_virtual_environment_vm" "s3_01" {
   }
 
   on_boot = true
-  startup {
-    order    = 4 # après gw01 (1), dns01 (2), adm01 (3) ; même rang que git01
-    up_delay = 0
-  }
+  # Pas de bloc startup : Proxmox exige Sys.Modify sur « / » pour régler l'ordre de démarrage
+  # (réglage de l'HÔTE), privilège que le jeton wb-tofu n'a pas et ne doit pas avoir. Le rang 4
+  # (après gw01 1, dns01 2, adm01 3 ; comme git01) est posé UNE fois en root après la création :
+  #   root@pve01:~# qm set 1006 --startup order=4
+  # et ignoré ensuite par OpenTofu (ignore_changes ci-dessous).
 
   # Matériel de l'image dorée (M03-E09)
   operating_system {
@@ -107,6 +108,7 @@ resource "proxmox_virtual_environment_vm" "s3_01" {
     prevent_destroy = true
     # L'image « current » change chaque semaine (M03) et clone.vm_id force le remplacement
     # (ForceNew) : sans cette ligne, chaque nouvelle image dorée recréerait s3-01.
-    ignore_changes = [clone]
+    # startup : posé en root (voir plus haut) ; OpenTofu ne doit ni l'effacer ni le modifier.
+    ignore_changes = [clone, startup]
   }
 }

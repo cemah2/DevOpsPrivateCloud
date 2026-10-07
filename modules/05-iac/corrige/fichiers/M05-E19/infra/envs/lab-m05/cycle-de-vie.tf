@@ -15,7 +15,8 @@ variable "generation_jetable" {
 }
 
 # terraform_data : une « ressource » sans infrastructure, qui ne fait que porter une valeur
-# dans l'état. Quand input change, elle est remplacée… et entraîne la VM avec elle.
+# dans l'état. Quand input change, elle est modifiée sur place (son output devient inconnu) :
+# cette modification suffit à déclencher le remplacement de la VM (replace_triggered_by).
 resource "terraform_data" "generation_jetable" {
   input = var.generation_jetable
 }

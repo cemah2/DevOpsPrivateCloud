@@ -22,7 +22,13 @@ check_ssh "pve01 : compte Linux wb-tofu, sans mot de passe utilisable" "$WB_PVE_
 check_ssh "pve01 : clé de wb-tofu limitée à adm01 (from=)" "$WB_PVE_HOST" \
   'grep -q "from=\"10\.10\.10\.10\"" ~wb-tofu/.ssh/authorized_keys'
 check_ssh "pve01 : sudoers de wb-tofu valide et limité (tee vers les snippets, pvesm apiinfo)" "$WB_PVE_HOST" \
-  'f=/etc/sudoers.d/wb-tofu; visudo -cf "$f" >/dev/null && grep -q "/usr/bin/tee /mnt/hdd-bulk/tofu-snippets/snippets/" "$f" && ! grep -Eq "NOPASSWD:[[:space:]]*ALL|/usr/sbin/qm|pvesm[[:space:]]*$|/usr/bin/tee /var/lib/vz/\*" "$f"'
+  'f=/etc/sudoers.d/wb-tofu; visudo -cf "$f" >/dev/null && ! grep -Eq "NOPASSWD:[[:space:]]*ALL|/usr/sbin/qm|pvesm[[:space:]]*$" "$f"'
+# Preuve par sudo lui-même (sudo -l en root : lecture seule, rien n'est exécuté) : l'écriture
+# d'un snippet est permise, une écriture hors du dossier (second fichier, « .. ») ne l'est pas.
+check_ssh "pve01 : sudo permet à wb-tofu d'écrire un snippet dans tofu-snippets" "$WB_PVE_HOST" \
+  'sudo -l -U wb-tofu /usr/bin/tee /mnt/hdd-bulk/tofu-snippets/snippets/m05-essai-0123456789ab.yaml >/dev/null 2>&1'
+check_ssh "pve01 : sudo refuse à wb-tofu toute écriture hors du dossier des snippets (pas d'élévation)" "$WB_PVE_HOST" \
+  'd=/mnt/hdd-bulk/tofu-snippets/snippets; ! sudo -l -U wb-tofu /usr/bin/tee "$d/ab" /etc/sudoers.d/essai >/dev/null 2>&1 && ! sudo -l -U wb-tofu /usr/bin/tee "$d/ab/../../../../etc/shadow" >/dev/null 2>&1 && ! sudo -l -U wb-tofu /usr/bin/tee /etc/passwd >/dev/null 2>&1'
 check_ssh "pve01 : jeton wb-tofu!tofu avec Datastore.Allocate sur tofu-snippets" "$WB_PVE_HOST" \
   'pveum user token permissions wb-tofu@pve tofu --path /storage/tofu-snippets --output-format json | grep -q "Datastore.Allocate\""'
 check_ssh "pve01 : jeton wb-tofu!tofu SANS Datastore.Allocate sur ${WB_STORAGE_BULK:-hdd-bulk}" "$WB_PVE_HOST" \

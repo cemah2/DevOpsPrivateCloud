@@ -82,9 +82,26 @@ _e36_fermer_console() {
       ps -o args= -p "$pid" 2>/dev/null | grep -q 'tofu console' || break
       sleep 1
     done
+    # La console ignore SIGINT et SIGTERM (vérifié avec OpenTofu 1.13.1) ; SIGHUP/SIGKILL la
+    # tueraient sans rendre le verrou. Elle se ferme proprement sur « exit » lu sur son entrée.
     if ps -o args= -p "$pid" 2>/dev/null | grep -q 'tofu console'; then
-      kill -INT "$pid" 2>/dev/null || true
-      sleep 3
+      # shellcheck disable=SC2016  # $1 développé par le bash enfant
+      timeout 5 bash -c 'echo exit > "/proc/$1/fd/0"' _ "$pid" 2>/dev/null || true
+      for i in $(seq 1 10); do
+        ps -o args= -p "$pid" 2>/dev/null | grep -q 'tofu console' || break
+        sleep 1
+      done
+    fi
+    if ps -o args= -p "$pid" 2>/dev/null | grep -q 'tofu console'; then
+      # Dernier recours : arrêt brutal, puis retrait du verrou s'il est bien celui d'une console
+      # (OperationTypeInvalid) posée depuis ce compte sur cet hôte.
+      kill -KILL "$pid" 2>/dev/null || true
+      sleep 1
+      if m05_aws s3 cp "s3://$_M05_BUCKET/$_M05_CLE_SOCLE.tflock" - 2>/dev/null \
+         | jq -e --arg w "$(id -un)@$(hostname)" '.Operation == "OperationTypeInvalid" and .Who == $w' >/dev/null 2>&1; then
+        m05_aws s3api delete-object --bucket "$_M05_BUCKET" --key "$_M05_CLE_SOCLE.tflock" >/dev/null 2>&1 || true
+        m05_journal E36 "annulation : console tuée, son verrou retiré"
+      fi
     fi
     m05_journal E36 "annulation : console OpenTofu (pid $pid) fermée"
   fi

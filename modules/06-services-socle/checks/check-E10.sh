@@ -24,10 +24,6 @@ _m06o_depuis_dns01() {
   printf 'Authorization: Bearer %s\n' "$(tr -d '\n' <"$_m06o_auto")" \
     | remote dns01 "curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H @- $_M06O_NB/api/status/" 2>/dev/null || true
 }
-_m06o_checks_lecture() {
-  _m06o_nb "$_m06o_checks" users/tokens/ \
-    | jq -e '[.results[] | .write_enabled] | length > 0 and all(. == false)' >/dev/null
-}
 _m06o_essai_supprime() { _m06o_nb "$_m06o_checks" 'extras/tags/?slug=essai-api' | jq -r .count; }
 _m06o_registre() { grep -qi 'svc-automatisation' "${WB_DEPOT:-$HOME/medisphere}/docs/socle/registre-secrets.md"; }
 
@@ -41,7 +37,8 @@ check_output "svc-automatisation ne peut pas lire la liste des utilisateurs (dro
   _m06o_nb_code "$_m06o_auto" users/users/
 check_output "svc-automatisation lit les VMs du socle" '^[1-9][0-9]*$' _m06o_nb_vms_socle
 
-# --- Restrictions du jeton (vues par le jeton lui-même : /users/tokens/ ne montre que les siens) ----
+# --- Restrictions du jeton (vues par le jeton lui-même : sans permission sur users | token, un compte
+# ne voit que ses propres jetons, DEFAULT_PERMISSIONS de NetBox) ----------------------------------
 _m06o_jetons="$(_m06o_nb "$_m06o_auto" users/tokens/ 2>/dev/null || true)"
 check_cmd "le compte a un jeton d'écriture qui expire" \
   jq -e '[.results[] | select(.write_enabled == true and .expires != null)] | length > 0' <<<"$_m06o_jetons"
@@ -53,7 +50,7 @@ check_cmd "le jeton d'écriture est restreint aux adresses de adm01 et runner01 
 check_output "depuis dns01, le jeton d'écriture est refusé (adresse non autorisée)" '^(401|403)$' _m06o_depuis_dns01
 
 # --- Jeton des checks : lecture seule -----------------------------------------------------------
-check_cmd "le jeton des checks est en lecture seule (write_enabled = false)" _m06o_checks_lecture
+check_cmd "le jeton des checks est en lecture seule (write_enabled = false)" _m06o_jeton_lecture_seule "$_m06o_checks"
 
 # --- GraphQL ----------------------------------------------------------------------------------------
 _m06o_gql="$(_m06o_graphql '{ virtual_machine_list(filters: {tags: {slug: {exact: "socle"}}}) { name primary_ip4 { address } } }' || true)"

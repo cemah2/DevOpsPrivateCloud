@@ -35,4 +35,4 @@ check_cmd "socle : plan sans aucun changement (l'état migré décrit bien la r�
 check_cmd "Git : aucun fichier d'état suivi dans plateforme/infra" \
   bash -c '[ -z "$(git -C "$1" ls-files "*.tfstate" "*.tfstate.*")" ]' _ "$_m05o_infra"
 check_cmd "Git : le backend est sur origin/main (MR fusionnée)" \
-  bash -c 'git -C "$1" grep -q "use_lockfile" origin/main -- socle envs/lab-m05' _ "$_m05o_infra"
+  bash -c 'for d in socle envs/lab-m05; do git -C "$1" grep -Eq "backend[[:space:]]+\"s3\"" origin/main -- "$d" || exit 1; done' _ "$_m05o_infra"

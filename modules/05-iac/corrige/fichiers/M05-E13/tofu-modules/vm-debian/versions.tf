@@ -5,7 +5,7 @@
 # version. Un module trop strict empêcherait ses consommateurs de monter de version.
 # Pas de bloc provider ici : il est hérité de la racine.
 terraform {
-  required_version = ">= 1.10.0"
+  required_version = ">= 1.12.0" # prevent_destroy = var.proteger
 
   required_providers {
     proxmox = {

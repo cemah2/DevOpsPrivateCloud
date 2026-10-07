@@ -164,8 +164,9 @@ plan:recette-m05:
 # pipelines confondus (la détection de dérive de E28 partage ces groupes). Le plan appliqué
 # est celui du job plan: du MÊME pipeline (needs) ; s'il est périmé (l'état a changé depuis),
 # OpenTofu refuse (« Saved plan is stale ») : relancer le pipeline de main.
-# Un plan vide s'applique aussi : rien ne change dans l'infrastructure, mais l'état est
-# réécrit (utile pour une migration de chiffrement, E27, ou un nouveau provider, E31).
+# Un plan vide s'applique aussi : rien ne change dans l'infrastructure ; l'état n'est
+# réécrit que si son contenu change ou s'il a été lu par un « fallback » de chiffrement
+# (migration ou rotation de phrase, E27, E41).
 .apply:
   extends: .tofu
   stage: apply

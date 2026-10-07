@@ -142,6 +142,10 @@ resource "proxmox_virtual_environment_vm" "socle" {
       initialization[0].user_account,
       # Description : notes libres de l'équipe dans l'interface Proxmox.
       description,
+      # Ordre de démarrage : réglage de l'hôte, que Proxmox ne laisse modifier qu'avec
+      # Sys.Modify sur « / » (le jeton wb-tofu ne l'a pas). Déclaré ci-dessus pour la
+      # documentation ; s'il diffère un jour, c'est root qui le change (qm set --startup).
+      startup,
     ]
   }
 }

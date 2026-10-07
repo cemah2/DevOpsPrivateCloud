@@ -22,6 +22,8 @@ check_cmd "NetBox lisible (VMs du cluster pve01)" jq -e '.count > 0' <<<"$_m06o_
 _m06o_statut_pve() { case "$1" in running) echo active ;; stopped) echo offline ;; *) echo "$1" ;; esac; }
 
 # Pour chaque VM du socle visible dans Proxmox : même VMID, statut, vCPU et mémoire dans NetBox.
+# NetBox renvoie les vCPU en décimal (2.0) et jq ≥ 1.7 conserve l'écriture d'un nombre non
+# recalculé : « floor » des deux côtés pour comparer 2 et 2.0 sans faux écart.
 for _m06o_h in $_M06O_SOCLE; do
   _m06o_ligne="$(jq -c --arg n "$_m06o_h" '.[] | select(.name == $n and (.template // 0) == 0)' <<<"$_m06o_pve" 2>/dev/null | head -n 1 || true)"
   if [[ -z "$_m06o_ligne" ]]; then
@@ -29,9 +31,9 @@ for _m06o_h in $_M06O_SOCLE; do
     continue
   fi
   _m06o_attendu="$(jq -c --arg s "$(_m06o_statut_pve "$(jq -r .status <<<"$_m06o_ligne")")" \
-    '{vmid: .vmid, status: $s, vcpus: (.maxcpu | tonumber), memory: ((.maxmem / 1048576) | floor)}' <<<"$_m06o_ligne")"
+    '{vmid: .vmid, status: $s, vcpus: (.maxcpu | tonumber | floor), memory: ((.maxmem / 1048576) | floor)}' <<<"$_m06o_ligne")"
   _m06o_vu="$(jq -c --arg n "$_m06o_h" '.results[] | select(.name == $n)
-      | {vmid: .custom_fields.vmid, status: .status.value, vcpus: (.vcpus // 0 | tonumber), memory: .memory}' \
+      | {vmid: .custom_fields.vmid, status: .status.value, vcpus: (.vcpus // 0 | tonumber | floor), memory: .memory}' \
       <<<"$_m06o_nbvms" 2>/dev/null | head -n 1 || true)"
   check_cmd "$_m06o_h : NetBox porte le VMID, le statut, les vCPU et la mémoire de Proxmox" \
     test "$_m06o_attendu" == "$_m06o_vu"

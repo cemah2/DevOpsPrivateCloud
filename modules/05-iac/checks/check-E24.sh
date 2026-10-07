@@ -59,7 +59,10 @@ for _m05_e24_cle in envs/dev-agenda/acces envs/dev-agenda/vms envs/dev-doc/acces
 done
 
 title "VMs (historique des tâches de pve01)"
+# Une tâche « qmclone » est enregistrée sous le VMID de la SOURCE (le template), pas sous celui de la
+# VM créée (fork_worker('qmclone', $vmid…) dans PVE/API2/Qemu.pm) : on cherche donc le premier
+# démarrage (qmstart), enregistré sous le VMID de la VM elle-même.
 for _m05_e24_id in 2057 2058 2059; do
-  check_cmd "VM $_m05_e24_id : clonage réussi" _m05p_tache_pve qmclone "$_m05_e24_id"
+  check_cmd "VM $_m05_e24_id : créée et démarrée (tâche qmstart réussie)" _m05p_tache_pve qmstart "$_m05_e24_id"
 done
 check_cmd "VM 2059 (dev-doc) : destruction réussie" _m05p_tache_pve qmdestroy 2059

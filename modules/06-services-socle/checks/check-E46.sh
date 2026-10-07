@@ -81,10 +81,11 @@ for _m06_e46_h in dns01 ca01 git01 nbx01 s3-01 runner01 dns02; do
     _m06_e46_ssh_ca "$_m06_e46_h"
 done
 rm -f "$_m06_e46_ca_hotes"
+# step-ca antidate les certificats SSH (« backdate », 1 min par défaut) : 16 h + 5 min de tolérance.
 check_cmd "adm01 : certificat d'utilisateur de 16 h au plus" bash -c '
   c=$(ls "$HOME"/.ssh/*-cert.pub 2>/dev/null | head -n 1); [ -n "$c" ] || exit 1
   v=$(ssh-keygen -Lf "$c" | sed -nE "s/.*Valid: from ([0-9T:-]+) to ([0-9T:-]+).*/\1 \2/p")
-  set -- $v; [ $# = 2 ] && [ $(( $(date -d "$2" +%s) - $(date -d "$1" +%s) )) -le 57600 ]'
+  set -- $v; [ $# = 2 ] && [ $(( $(date -d "$2" +%s) - $(date -d "$1" +%s) )) -le 57900 ]'
 
 # --- 4. NetBox ---------------------------------------------------------------------------------
 title "4/11 NetBox, source de vérité"
@@ -164,7 +165,8 @@ done
 
 # --- 8. Sauvegardes ----------------------------------------------------------------------------
 title "8/11 Sauvegardes applicatives (PBS, espaces de noms par1/<hôte>)"
-for _m06_e46_h in ca01 nbx01 dns01; do
+# git01 : sauvegarde applicative de GitLab (M01-E28), acquis revérifié.
+for _m06_e46_h in git01 ca01 nbx01 dns01; do
   check_ssh "pbs01 : instantané de moins de 48 h dans par1/$_m06_e46_h" "$WB_PBS_HOST" '
     p=$(proxmox-backup-manager datastore show ds-lab --output-format json | sed -nE "s/.*\"path\" *: *\"([^\"]+)\".*/\1/p")
     [ -n "$p" ] && find "$p/ns/par1/ns/'"$_m06_e46_h"'" -mindepth 3 -maxdepth 3 -type d -mmin -2880 2>/dev/null | grep -q .'
@@ -192,8 +194,10 @@ _m06_e46_runner() {
   gitlab_api 'runners/all?type=instance_type&tag_list=shell,socle&per_page=100' \
     | jq -e 'any(.[]; .status == "online" and (.paused | not))' >/dev/null
 }
+# « manual » = réussi, avec des jobs manuels non lancés (apply d'OpenTofu, appliquer d'Ansible).
 _m06_e46_pipeline() {
-  gitlab_api "projects/plateforme%2F$1/pipelines?ref=main&per_page=1" | jq -e '.[0].status == "success"' >/dev/null
+  gitlab_api "projects/plateforme%2F$1/pipelines?ref=main&per_page=1" \
+    | jq -e '.[0].status == "success" or .[0].status == "manual"' >/dev/null
 }
 check_cmd "GitLab 19.4.x répond (API, jeton des checks)" _m06_e46_gitlab
 check_cmd "runner d'instance shell+socle en ligne" _m06_e46_runner
@@ -228,5 +232,6 @@ check_cmd "plateforme/medisphere : étiquette socle-v1 publiée" _m06_e46_etique
 check_cmd "aucun secret évident dans docs/socle (clé privée, jeton NetBox, jeton GitLab)" bash -c \
   '! grep -REq "(BEGIN [A-Z ]*PRIVATE KEY|nbt_[A-Za-z0-9]{8,}\.[A-Za-z0-9]{16,}|glpat-[A-Za-z0-9_-]{20})" "$1"' _ "$_m06_e46_doc"
 check_cmd "aucune panne M06 encore active (lab/bin/break)" _m06x_aucune_panne_active
+# Secrets seulement (*.env, *.token, *.pass) : pve-root-ca.pem (public, M00) peut rester en 640.
 check_cmd "fichiers de secrets de ~/.config/workbook en mode 600" \
-  bash -c '! find "$HOME/.config/workbook" -maxdepth 1 -type f ! -perm 600 | grep -q .'
+  bash -c '! find "$HOME/.config/workbook" -maxdepth 1 -type f \( -name "*.env" -o -name "*.token" -o -name "*.pass" \) ! -perm 600 | grep -q .'

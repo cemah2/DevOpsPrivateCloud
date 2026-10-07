@@ -30,7 +30,8 @@ module "nbx01" {
 
   demarrage_auto = true
   # Après les services dont il dépend : DNS (2), PKI (3), forge et S3 (4), runner (5).
-  ordre_demarrage = 6
+  # Ordre de démarrage 6 posé en root après création (Sys.Modify sur « / ») :
+  #   root@pve01:~# qm set 1005 --startup order=6
   protection      = true
 }
 

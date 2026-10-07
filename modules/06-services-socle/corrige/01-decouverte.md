@@ -14,8 +14,8 @@ Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argum
 
 **Points non testés en conditions réelles**, à vérifier sur ta version et à signaler s'ils diffèrent :
 - la résolution d'Internet et la validation DNSSEC (drapeau `ad`, `dnssec-failed.org`) : l'environnement de rédaction bloquait le DNS sortant en TCP ; la configuration suit la documentation du Recursor 5.4, les comportements décrits en E07 sont ceux de cette documentation ;
-- les commandes de GitLab pour son magasin de confiance (`/etc/gitlab/trusted-certs/`, `gitlab-ctl reconfigure`) et le rôle `seaweedfs` de M05 (noms de ses variables de certificat : reprends les tiens) ;
-- le texte exact des messages d'erreur de step-ca (durée refusée) et des écrans de l'interface de NetBox (création des jetons) ;
+- le rôle `seaweedfs` de M05 (noms de ses variables de certificat : reprends les tiens) ;
+- le texte exact des écrans de l'interface de NetBox (création des jetons) ; le message de step-ca 0.30.2 pour une durée refusée a été relevé à la relecture ;
 - la référence du module `vm-debian` (`?ref=v1.1.0` dans les fichiers, dernière version du corrigé de M05) : mets la dernière étiquette que tu as publiée en M05.
 
 ---
@@ -188,9 +188,9 @@ admin@adm01:/tmp/tmp.Y$ step certificate verify test.crt --roots ~/src/ansible/p
 admin@adm01:/tmp/tmp.Y$ step ca certificate test.par1.medisphere.internal test2.crt test2.key \
     --provisioner admin --provisioner-password-file ~/.config/workbook/step-admin.pass --not-after 2400h
 ```
-La seconde demande est refusée : le message (sur la sortie d'erreur) indique que la durée (*duration*) demandée dépasse le maximum autorisé par le provisioner (2160 h) ; ⚠️ sa formulation exacte varie selon les versions. `step certificate verify` ne dit rien en cas de succès (code retour 0). Puis `rm -r` du dossier.
+La seconde demande est refusée ; avec step-ca 0.30.2 : `The request was forbidden by the certificate authority: requested duration of 2400h1m0s is more than the authorized maximum certificate duration of 2160h1m0s.` (la minute en plus vient de l'antidatage d'une minute du début de validité, appliqué des deux côtés). `step certificate verify` ne dit rien en cas de succès (code retour 0). Puis `rm -r` du dossier.
 
-13. La matrice des flux ne change pas : `ca01` est dans `vinfra`, joint par `adm01` (VLAN ADMIN → INFRA, déjà ouvert pour les hôtes du socle en 443 et 22) et, plus tard, par les hôtes du socle (même VLAN). Si ta matrice ouvre hôte par hôte plutôt que par VLAN, ajoute les lignes 443 et 22 vers 10.10.20.11.
+13. La matrice des flux ne change pas : `ca01` est dans `vinfra`, joint par `adm01` (MGMT → INFRA : MGMT joint tout le lab depuis M00) et, plus tard, par les hôtes du socle (même VLAN). Si ta matrice ouvre hôte par hôte plutôt que par VLAN, ajoute les lignes 443 et 22 vers 10.10.20.11.
 
 Le check vérifie la VM, la racine, l'intermédiaire, l'absence de clé de racine sur `ca01`, la santé, les provisioners et les durées.
 
@@ -243,7 +243,7 @@ Cérémonie à deux personnes (au moins), sur un poste dédié jamais connecté,
 
 2. **Le rôle.** [`ca_lab`](fichiers/M06-E03/ansible/collections/ansible_collections/medisphere/socle/roles/ca_lab/) : `ca_lab_certificats` (par défaut la racine MédiSphère, depuis `pki/`), `ca_lab_retirer` (noms à enlever), `update-ca-certificates --fresh` quand on retire, vérification que chaque autorité voulue est dans le magasin consolidé et qu'aucune retirée n'y reste. Version **1.1.0** : on ajoute une fonction (retirer) et on change une valeur par défaut sans casser les appels existants (un appel avec `ca_lab_certificats` explicite fonctionne pareil) ; pas de suppression ni de renommage de variable. [`CHANGELOG.md`](fichiers/M06-E03/ansible/collections/ansible_collections/medisphere/socle/CHANGELOG.md), [`galaxy.yml`](fichiers/M06-E03/ansible/collections/ansible_collections/medisphere/socle/galaxy.yml). Le rôle est ajouté aux rôles communs ([`playbooks/socle-base.yml`](fichiers/M06-E03/ansible/playbooks/socle-base.yml), étiquette `pki`) avec [`group_vars/all/pki.yml`](fichiers/M06-E03/ansible/inventories/lab/group_vars/all/pki.yml) ; [`gitlab_runner/tasks/ca.yml`](fichiers/M06-E03/ansible/roles/gitlab_runner/tasks/ca.yml) suit. Pendant le recouvrement, `ca_lab_retirer` est vide et les deux autorités sont installées (la provisoire par l'ancien appel, la nouvelle par le rôle commun).
 
-3. **Recouvrement.** Sur chaque hôte : `grep -c "$(sed -n 2p pki/medisphere-root-ca.crt)" /etc/ssl/certs/ca-certificates.crt` (ou `openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt pki/medisphere-intermediate-ca.crt`). Pour GitLab : copie de la racine dans `/etc/gitlab/trusted-certs/medisphere-root-ca.crt`, puis `gitlab-ctl reconfigure` dans le créneau annoncé, après l'instantané, puis `gitlab-ctl status` (⚠️ à vérifier sur ta version de GitLab : la documentation « Install custom public certificates » décrit ce dossier et l'effet de `reconfigure`).
+3. **Recouvrement.** Sur chaque hôte : `grep -c "$(sed -n 2p pki/medisphere-root-ca.crt)" /etc/ssl/certs/ca-certificates.crt` (ou `openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt pki/medisphere-intermediate-ca.crt`). Pour GitLab : copie de la racine dans `/etc/gitlab/trusted-certs/medisphere-root-ca.crt`, puis `gitlab-ctl reconfigure` dans le créneau annoncé, après l'instantané, puis `gitlab-ctl status` (procédure de la documentation d'omnibus, « Install custom public certificates » : `reconfigure` lie les certificats de `trusted-certs` dans `/opt/gitlab/embedded/ssl/certs/`, magasin des services embarqués).
 
 4. **Bascule des certificats** avec [`adm01/emettre-certificat.sh`](fichiers/M06-E03/adm01/emettre-certificat.sh) :
    ```
@@ -257,7 +257,7 @@ Cérémonie à deux personnes (au moins), sur un poste dédié jamais connecté,
    admin@adm01:~$ curl -sS --cacert ~/src/ansible/pki/medisphere-root-ca.crt -o /dev/null -w '%{http_code}\n' https://s3-01.par1.medisphere.internal:8333/
    ```
    puis depuis `runner01` (même commande), un `tofu plan` de l'état `socle` et un pipeline. Supprime ensuite les clés de `~/m06/certs/`. Échéance notée dans l'inventaire (`# expire le …`).
-5. **Images** : dans `plateforme/images`, remplace le fichier de `fichiers/ca/` par `medisphere-root-ca.crt` (et son nom dans le gabarit Packer), MR, pipeline, publication `current`. Contrôle sur une VM neuve : `ls /usr/local/share/ca-certificates/`.
+5. **Images** : dans `plateforme/images`, remplace le fichier de `fichiers/ca/` par `medisphere-root-ca.crt` et suis son nom partout où il est cité (`grep -rn provisoire` dans le projet : `scripts/gold-debian13.sh` de M03-E09, `scripts/gold-rocky10.sh` de M03-E25 — magasin `/etc/pki/ca-trust/source/anchors/` et `update-ca-trust` sur Rocky —, `tests/tester-image.sh` de M03-E14, `fichiers/ca/LISEZMOI.md`), MR, pipeline, publication `current` des **deux** familles. Contrôle sur une VM neuve : `ls /usr/local/share/ca-certificates/` (Debian), `ls /etc/pki/ca-trust/source/anchors/` (Rocky).
 6. **Retrait** : `ca_lab_retirer: [medisphere-provisoire]` (déjà prévu dans `group_vars/all/pki.yml`), suppression de l'appel « provisoire » de `gitlab_runner`, passage des rôles communs par le pipeline ; retrait du fichier de `/etc/gitlab/trusted-certs/` puis `gitlab-ctl reconfigure`. Archive :
    ```
    admin@adm01:~$ tar -C ~ -cf - pki-provisoire | gpg --symmetric --cipher-algo AES256 -o ~/pki-racine/archives/pki-provisoire-AAAAMMJJ.tar.gpg
@@ -447,7 +447,7 @@ Le fichier de données devient un **amorçage** : à partir du palier 2, NetBox 
 
 - **`gpgsql`** : réplication native par PostgreSQL, sauvegardes à chaud, mais une base à exploiter ; **`lmdb`** : rapide, sans dépendance, réplication par transferts de zone. Pour deux serveurs, le plan choisit des transferts de zone primaire → secondaire (M06-E24), indépendants du backend.
 - **Zones entièrement par l'API** (module `uri` ou OpenTofu) au lieu de fichiers BIND : pas de `pdnsutil` local, mais plus d'appels et un état à comparer ; on y vient pour les zones écrites par OpenTofu et NetBox.
-- **`api-key` hachée** : la 4.6+ accepte une valeur produite par `pdnsutil hash-password` ; ⚠️ vérifie la syntaxe dans la documentation 5.0 (`api-key`), c'est une bonne amélioration.
+- **`api-key` hachée** : depuis la 4.6, `api-key` accepte une valeur hachée et salée produite par `pdnsutil hash-password` (lit le mot de passe sur l'entrée standard, rend une chaîne `$scrypt$…` ; commande toujours présente en 5.0) : le fichier de configuration ne contient plus la clé elle-même. C'est une bonne amélioration (M06-E30).
 
 **Pièges classiques**
 
@@ -510,7 +510,7 @@ Deux serveurs (M06-E24), supervision de chaque zone (SOA identique sur les deux,
 
 **Pièges classiques**
 
-- Garder `recursor.conf` et ajouter `recursor.yml` : le YAML est lu, l'ancien fichier ignoré (et inversement si le YAML est absent) : un seul des deux doit exister.
+- Croire que le `recursor.conf` livré est encore l'ancien format : le paquet 5.4 de repo.powerdns.com y met déjà du **YAML** (`dnssec.trustanchorfile: /usr/share/dns/root.key`, `recursor.hint_file`, `recursor.include_dir`, vérifié à la relecture). Dès que `recursor.yml` existe, c'est lui qui est lu et `recursor.conf` est ignoré en entier : ces trois réglages disparaissent (le Recursor revient à ses ancres et à ses indices racine intégrés, ce qui est voulu ici, voir E09 question 12). Un seul des deux fichiers doit porter la configuration : le rôle peut retirer l'autre, ou le laisser en le documentant.
 - Oublier les zones inverses dans `forward_zones` : `serve_rfc1918` répond `NXDOMAIN` pour les PTR internes.
 - Laisser le paquet démarrer le Recursor par défaut sur 127.0.0.1:53 : conflit avec dnsmasq (qui écoute aussi sur la boucle locale).
 - Comparer les TTL dans le script : écarts permanents qui masquent les vrais.
@@ -611,6 +611,6 @@ Deux résolveurs (`dns01`, `dns02`) annoncés aux clients : on bascule l'un apr�
 
 **11. Renouvellement de l'intermédiaire à mi-vie.** Dans l'ordre : fiche de changement ; sur `ca01`, archiver l'ancienne clé et son certificat, relancer le rôle (phase 1 : nouvelle clé, nouvelle CSR) ; cérémonie (racine, `ceremonie-pki.sh signer`), nouveau certificat dans `pki/` ; phase 2 : step-ca signe désormais avec le nouvel intermédiaire ; vérifier `/health` et une émission. Garder l'ancien certificat d'intermédiaire publié tant que des certificats émis par lui sont en service (au plus 90 jours) : les services servent la chaîne avec laquelle ils ont été émis. Les clients ne voient **rien** : ils ne font confiance qu'à la racine, et chaque service présente une chaîne complète valide. Seuls les services qui auraient « épinglé » l'intermédiaire (à éviter) casseraient. Le faire à mi-vie laisse une marge large : l'intermédiaire doit vivre plus longtemps que le plus long certificat qu'il signe.
 
-**12. KSK-2024.** Oui, si le Recursor a l'ancre de la nouvelle clé. La version 5.4 l'intègre : ses ancres intégrées contiennent les DS de KSK-2017 (étiquette 20326) **et** de KSK-2024 (38696) ; le Recursor ne suit pas les changements de clé selon la RFC 5011, c'est donc la version installée (ou un fichier d'ancres comme `/usr/share/dns/root.key` du paquet `dns-root-data`, s'il est configuré par `dnssec.trustanchorfile`) qui compte. Avant, on aurait vérifié : `rec_control get-tas` (ou la question `trustanchor.server CH TXT` si `recursor.allow_trust_anchor_query` est activé) liste `. 20326 38696` ; et que l'horloge de `dns01` est juste (dates des signatures). Le paquet de Debian 13 (5.2) a lui aussi la nouvelle clé : ⚠️ à vérifier sur ta version si tu n'utilises pas le dépôt officiel.
+**12. KSK-2024.** Oui, si le Recursor a l'ancre de la nouvelle clé. La version 5.4 l'intègre : ses ancres intégrées contiennent les DS de KSK-2017 (étiquette 20326) **et** de KSK-2024 (38696) ; le Recursor ne suit pas les changements de clé selon la RFC 5011, c'est donc la version installée (ou un fichier d'ancres comme `/usr/share/dns/root.key` du paquet `dns-root-data`, s'il est configuré par `dnssec.trustanchorfile`, comme dans le `recursor.conf` livré par le paquet, ignoré dès que le rôle pose `recursor.yml`) qui compte. Relevé à la relecture sur le Recursor 5.4.7 : `rec_control get-tas` affiche bien `20326` et `38696` pour la racine. Avant, on aurait vérifié : `rec_control get-tas` (ou la question `trustanchor.server CH TXT` si `recursor.allow_trust_anchor_query` est activé) liste `. 20326 38696` ; et que l'horloge de `dns01` est juste (dates des signatures). Le paquet de Debian 13 (5.2) a lui aussi la nouvelle clé : ⚠️ à vérifier sur ta version si tu n'utilises pas le dépôt officiel.
 
 **Pour aller plus loin — registre des risques (exemple pour la question 2)** : *Fuite du mot de passe du provisioner `admin`* ; probabilité faible (fichier 600 sur `adm01`) ; impact élevé (certificats valides 90 jours pour n'importe quel nom interne) ; mesures en place : fichier hors dépôt, plafond de 90 jours, journal d'émission ; à venir : ACME (E18) puis retrait ou restriction du provisioner `admin` (politique de noms, M06-E33), alerte sur les émissions manuelles.

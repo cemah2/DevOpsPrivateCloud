@@ -43,7 +43,7 @@ check_ssh_output "gw01 : DNS vers dns02 dans la chaîne forward" gw01 \
 check_ssh_output "gw01 : renouvellements DHCP vers dns02 dans la chaîne forward" gw01 \
   'daddr \{[^}]*10\.10\.20\.16[^}]*\}.*dport 67|daddr 10\.10\.20\.16 .*dport 67' 'sudo -n nft list chain inet filter forward'
 check_ssh_output "gw01 : sauvegardes applicatives du module 06 vers PBS" gw01 \
-  'saddr \{[^}]*10\.10\.20\.1[13][^}]*\}.*dport 8007' 'sudo -n nft list chain inet filter forward'
+  'saddr \{[^}]*10\.10\.20\.1[13][^}]*\}.*dport 8007|saddr 10\.10\.20\.1[13] .*dport 8007' 'sudo -n nft list chain inet filter forward'
 check_ssh "gw01 : /etc/nftables.conf valide" gw01 'sudo -n nft -c -f /etc/nftables.conf'
 
 title "Documentation"

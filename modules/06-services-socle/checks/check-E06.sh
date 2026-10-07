@@ -28,7 +28,7 @@ check_ssh "dns01 : configuration (clé d'API) illisible par les autres comptes" 
 
 # --- 2. Écoute : jamais le port 53 -------------------------------------------------------------
 check_ssh_output "dns01 : pdns écoute sur 127.0.0.1:5300 et 10.10.20.10:5300" dns01 '^2$' \
-  'sudo -n ss -Hlnup "sport = :5300" | grep pdns_server | grep -Ec "(127\.0\.0\.1|10\.10\.20\.10):5300"'
+  'sudo -n ss -Hlnup "sport = :5300" | grep pdns_server | awk "{print \$4}" | sort -u | grep -Ec "^(127\.0\.0\.1|10\.10\.20\.10):5300$"'
 check_ssh "dns01 : pdns n'écoute pas sur le port 53" dns01 '! sudo -n ss -Hlnup "sport = :53" | grep -q pdns_server'
 
 # --- 3. Les zones, servies avec autorité -------------------------------------------------------

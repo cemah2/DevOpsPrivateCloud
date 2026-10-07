@@ -50,7 +50,7 @@ Le palier 1 a posé les briques : une PKI à deux niveaux sur `ca01`, NetBox sur
    ```
    Inscris le jeton au registre des secrets. Puis prouve les restrictions : la même requête depuis `dns01` (avec une copie temporaire du jeton, effacée ensuite) ; une lecture de `/api/users/users/` depuis `adm01`.
 4. REST, en lecture : liste les VMs du socle avec seulement leur nom, leur statut et leur IP primaire ; compte les adresses IP du préfixe INFRA ; parcours une liste avec `limit=2` en suivant les liens `next`. Note la différence entre `?brief=true` et `?fields=…`.
-5. REST, en écriture, avec le jeton d'écriture : crée une étiquette `essai-api`, modifie sa description deux fois en envoyant à chaque fois l'`ETag` obtenu **avant** la première modification (`If-Match`). Note le code de la seconde réponse et explique ce qu'il protège. Retrouve tes écritures dans le journal des changements de l'API (`/api/core/object-changes/`), puis supprime l'étiquette.
+5. REST, en écriture : essaie d'abord de créer une étiquette `essai-api` avec le jeton de `svc-automatisation` (code obtenu ? pourquoi est-ce le bon résultat ?), puis crée-la avec ton jeton personnel (`netbox-moi.token`, M06-E05). Modifie sa description deux fois en envoyant à chaque fois l'`ETag` obtenu **avant** la première modification (`If-Match`). Note le code de la seconde réponse et explique ce qu'il protège. Retrouve tes écritures dans le journal des changements de l'API (`/api/core/object-changes/`, lu avec le jeton des checks), puis supprime l'étiquette.
 6. Vérifie que le jeton **des checks** ne peut pas écrire, sans risquer de créer quoi que ce soit (lis ses propriétés par `/api/users/tokens/`).
 7. GraphQL : en **une** requête, obtiens pour chaque VM étiquetée `socle` son nom, son statut, son cluster, son VMID (champ personnalisé) et l'adresse de son IP primaire. Combien de requêtes REST faudrait-il pour le même résultat ? Dans quel cas GraphQL ne convient pas (pense aux écritures) ?
 
@@ -160,12 +160,12 @@ Comment retrouver « la même VM » des deux côtés ? Par le nom (NetBox l'impo
 - L'URL de NetBox n'est pas un secret : elle s'écrit dans le fichier d'inventaire.
 
 **Travail demandé**
-1. Lis la documentation du plugin : options `token`, `group_by`, `query_filters`/`vm_query_filters`, `plurals`, `keyed_groups`, `compose`, `rename_variables`. Repère comment le plugin forme l'en-tête `Authorization` selon la forme donnée à `token` : c'est le premier piège avec un jeton v2.
+1. Lis la documentation du plugin : options `token`, `group_by`, `query_filters`/`vm_query_filters`, `plurals`, `keyed_groups`, `compose`, `rename_variables`. Repère comment le plugin forme l'en-tête `Authorization` selon la forme donnée à `token` (chaîne ou dictionnaire), et compare avec ce que la documentation de NetBox 4.6 montre pour un jeton v2.
 2. Ajoute la collection (version exacte), installe-la dans `./collections`, et ajoute au projet ce qu'il faut côté Python.
 3. Écris `inventories/lab/netbox.yml` : VMs actives étiquetées `socle` seulement (pas les équipements `pve01`/`hp01`), groupes identiques à ceux de `proxmox.yml`, variable `vmid`, aucun secret dans le fichier.
 4. Compare les deux inventaires (groupes, membres, `ansible_host`) avec `ansible-inventory --list` et `jq`, jusqu'à ce qu'ils ne diffèrent que par les variables propres à chaque plugin. Écris ce contrôle en script (`outils/comparer-inventaires.sh`) et ajoute-le au pipeline.
 5. Fais de NetBox l'inventaire par défaut du projet ; mets à jour le pipeline (variable `NETBOX_TOKEN`), puis lance `site.yml --check` depuis la CI.
-6. Expériences (note les résultats) : (a) retire l'étiquette `socle` d'une VM d'essai dans NetBox ; (b) mets un jeton faux ; (c) lance l'inventaire avec `token: "{{ … }}"` en simple chaîne au lieu de la forme que tu as retenue. Que fait Ansible dans chaque cas ? Que te protège de (b) ?
+6. Expériences (note les résultats) : (a) retire l'étiquette `socle` d'une VM d'essai dans NetBox ; (b) mets un jeton faux ; (c) lance l'inventaire avec `token: "{{ … }}"` en simple chaîne au lieu de la forme que tu as retenue, et regarde l'en-tête réellement envoyé. Que fait Ansible dans chaque cas ? Que te protège de (b) ? Pourquoi (c) fonctionne-t-il (ou non) avec NetBox 4.6 ?
 
 **Critères de réussite**
 - [ ] `ansible-inventory --graph` (inventaire par défaut) liste les VMs du socle dans les mêmes groupes que l'inventaire Proxmox.
@@ -177,7 +177,7 @@ Comment retrouver « la même VM » des deux côtés ? Par le nom (NetBox l'impo
 
 <details><summary>Indice 1</summary>
 
-Le plugin envoie `Authorization: Token …` (format v1) quand `token` est une simple chaîne. Lis la partie du code ou de la documentation qui traite d'un `token` donné sous forme de dictionnaire.
+Le plugin envoie `Authorization: Token …` (le mot-clé des jetons v1) quand `token` est une simple chaîne, et `Authorization: <type> <valeur>` quand c'est un dictionnaire. Pour savoir ce que NetBox en fait, lis la classe d'authentification de l'API de NetBox (`netbox/api/authentication.py`) : sur quoi s'appuie-t-elle pour distinguer un jeton v1 d'un jeton v2 ?
 </details>
 
 <details><summary>Indice 2</summary>
@@ -413,7 +413,7 @@ Une configuration générée par `to_nice_json` est toujours du JSON valide ; un
 
 <details><summary>Indice 3</summary>
 
-`printf '{ "command": "config-get" }' | sudo socat - UNIX-CONNECT:/run/kea/kea4-ctrl-socket` : la socket UNIX répond par un objet JSON. Le nom de la socket dans la configuration ne comporte **pas** de chemin en Kea 3.0.
+`printf '{ "command": "config-get" }' | sudo socat - UNIX-CONNECT:/run/kea/kea4-ctrl-socket` : la socket UNIX répond par un objet JSON. En Kea 3.0, la socket ne peut vivre que dans le dossier fixé à la compilation (`/run/kea`) : le plus simple est de n'écrire que son **nom**, sans chemin.
 </details>
 
 **Pour aller plus loin** (facultatif) : lis la section *Host Reservations* et réserve une adresse fixe à `sbx66` par son adresse MAC. Puis réfléchis : où cette réservation devrait-elle vivre, dans Kea ou dans NetBox ?

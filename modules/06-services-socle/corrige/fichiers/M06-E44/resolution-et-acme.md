@@ -47,13 +47,13 @@ Trace du récurseur (`rec_control trace-regex`) : `.` (NS en cache) → serveurs
 ### Séquence
 
 ```
-step CLI (ca01)                        step-ca (ca01:443)                 step CLI autonome (ca01:80)
+step CLI (dns02)                       step-ca (ca01:443)                 step CLI autonome (dns02:80)
   GET  /acme/acme/directory  ───────▶
   HEAD /acme/acme/new-nonce  ───────▶  Replay-Nonce
   POST /acme/acme/new-account (JWS) ─▶ compte (kid)
   POST /acme/acme/new-order   (JWS) ─▶ order: identifiers, authorizations, finalize
   POST …/authz/<id>           (JWS) ─▶ défi http-01 : token
-  POST …/challenge/<id>       (JWS) ─▶ step-ca résout ca01.par1… ─▶ GET /.well-known/acme-challenge/<token> ─▶ token.empreinte_clé_compte
+  POST …/challenge/<id>       (JWS) ─▶ step-ca résout dns02.par1… ─▶ GET /.well-known/acme-challenge/<token> ─▶ token.empreinte_clé_compte
   POST …/order/<id>/finalize  (CSR) ─▶ certificat émis
   POST …/certificate/<id>     (JWS) ─▶ chaîne (feuille + intermédiaire)
 ```
@@ -66,11 +66,11 @@ step CLI (ca01)                        step-ca (ca01:443)                 step C
 … "method":"POST","path":"/acme/acme/order/…/finalize","status":200 …    ← finalize avec la CSR (§7.4)
 ```
 
-Capture du port 80 sur `lo` : `GET /.well-known/acme-challenge/<token>` venant de step-ca, réponse `200` de `step` contenant `<token>.<empreinte JWK du compte>` (§8.3).
+Capture du port 80 sur `ens18` de `dns02` : `GET /.well-known/acme-challenge/<token>` venant de `ca01` (10.10.20.11), réponse `200` de `step` contenant `<token>.<empreinte JWK du compte>` (§8.3).
 
 ### Certificat obtenu
 
-`step certificate inspect --short` : sujet et SAN `ca01.par1.medisphere.internal`, émetteur « MédiSphère Intermediate CA », validité = durée par défaut du provisioner `acme` (24 h si `defaultTLSCertDuration` n'est pas fixé), EKU `serverAuth, clientAuth`. Fichiers supprimés après l'essai.
+`step certificate inspect --short` : sujet et SAN `dns02.par1.medisphere.internal`, émetteur « MédiSphère Intermediate CA », validité = durée par défaut du provisioner `acme` (30 jours, `defaultTLSCertDuration` de M06-E27), EKU `serverAuth, clientAuth`. Fichiers supprimés après l'essai.
 
 ## Réponses aux questions
 

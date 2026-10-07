@@ -296,7 +296,7 @@ Sur `gw01`, `tcpdump -ni ens19.99 port 67 or port 68` pendant le démarrage de l
 
 **Travail demandé**
 1. Écris la modification demandée sur une branche et lance le plan. Classe chaque ligne du plan : demandée, ou non demandée. Pour chaque ligne non demandée, formule l'écart (« l'état dit X, Proxmox dit Y, le code dit Z »).
-2. Mesure sans rien écrire : `tofu plan -refresh-only`, `tofu state list`, `tofu state show`, et côté Proxmox `qm config`, `qm list`, les étiquettes `env-m05`, les tâches récentes de `pve01` (`pvesh get /nodes/<NŒUD>/tasks`) qui disent qui a fait quoi et quand.
+2. Mesure sans rien écrire : `tofu plan -refresh-only`, `tofu state list`, `tofu state show`, et côté Proxmox `qm config`, `qm list`, les étiquettes `env-m05`, les tâches récentes de `pve01` (`pvesh get /nodes/<NŒUD>/tasks`) qui disent qui a fait quoi et quand (toutes les opérations n'en laissent pas : vérifie lesquelles dans la documentation de l'API).
 3. Pour chaque écart, choisis la réconciliation et justifie-la dans ton journal (« Julien confirme que… ») : import, adoption de la valeur réelle dans le code, retour de la réalité à la valeur du code, suppression d'un objet orphelin. **Aucune** VM existante ne doit être détruite pour être recréée.
 4. Applique la réconciliation puis la demande de Julien par la chaîne normale. Plan vide.
 5. Explique dans ton journal pourquoi `tofu apply -refresh-only` n'aurait **pas** suffi à régler ta variante, ou dans quel cas il aurait suffi.
@@ -508,7 +508,7 @@ Une panne d'état (verrou, état disparu, état désynchronisé) se règle **ava
 8. Que contient le champ `private` d'une instance, et pourquoi ne faut-il jamais le modifier ?
 9. `schema_version` d'une instance : que se passe-t-il quand un provider plus récent change ce numéro ?
 10. Que vérifie OpenTofu avec les empreintes `h1:` à chaque exécution, et avec les `zh:` à l'installation ? Pourquoi un lock créé sur un seul poste peut-il casser la CI ?
-11. Pourquoi l'état chiffré (M05-E27) ne contient-il plus `serial` ni `lineage` lisibles dans l'objet S3, et que reste-t-il de visible pour un attaquant qui lit le compartiment ?
+11. Dans un objet d'état chiffré (M05-E27), qu'est-ce qui reste **en clair** (lis ses clés de premier niveau) ? Pourquoi OpenTofu laisse-t-il `serial` et `lineage` lisibles, et que voit en tout un attaquant qui lit le compartiment ?
 12. `-parallelism` : quelle valeur par défaut, et pourquoi la réduire face à l'API Proxmox ?
 
 **Critères de réussite**

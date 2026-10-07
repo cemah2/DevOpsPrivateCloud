@@ -85,7 +85,7 @@ admin@adm01:~$ dig @10.10.20.10 git01.par1.medisphere.internal
 .                       86400   IN      SOA     a.root-servers.net. nstld.verisign-grs.com. 2026100700 …
 ```
 
-Le `NXDOMAIN` porte le SOA **de la racine**, et le drapeau `ad` : la racine a prouvé (NSEC signé) que `internal.` n'existe pas. La question est donc partie sur Internet : le récurseur ne relaie plus la zone. `rec_control get-parameter recursor.forward_zones` montre `zone: par1.medisphere.interne` (faute de frappe francisée). Ici, la glibc **ne bascule pas** sur `dns02` (NXDOMAIN est définitif) : selon l'ordre des résolveurs, tout ou partie des clients échoue. Cause racine et correctif : comme la variante 1 (modification hors du rôle ; application du rôle). Pense au cache négatif : après correction, les noms demandés pendant la panne restent `NXDOMAIN` jusqu'à expiration ; `rec_control wipe-cache 'par1.medisphere.internal$'` (le `$` vide toute la zone) le règle.
+Le `NXDOMAIN` porte le SOA **de la racine** : la racine a prouvé (NSEC signé) que `internal.` n'existe pas. La question est donc partie sur Internet : le récurseur ne relaie plus la zone. `rec_control get-parameter recursor` (ou le fichier `recursor.yml`) montre `zone: medisphere.interne` et `zone: par1.medisphere.interne` (faute de frappe francisée, sur la zone parente aussi : relayée seule, elle aurait continué de servir `par1`). Selon tes ancres (M06-E26), le récurseur rend ce `NXDOMAIN` (avec ou sans `ad`) ou un `SERVFAIL` (l'ancre positive de `par1` ne trouve plus aucune clé) : dans les deux cas, `dig +cd` montre le SOA de la racine en autorité, et c'est lui qui signe le diagnostic. ⚠️ À vérifier sur ta version (interaction ancre négative de `medisphere.internal` / ancre positive de `par1`, voir M06-E26). Avec un `NXDOMAIN`, la glibc **ne bascule pas** sur `dns02` (réponse définitive) : selon l'ordre des résolveurs, tout ou partie des clients échoue ; avec un `SERVFAIL`, elle bascule, d'où les jobs qui passent. Cause racine et correctif : comme la variante 1 (modification hors du rôle ; application du rôle). Pense au cache négatif : après correction, les noms demandés pendant la panne restent `NXDOMAIN` jusqu'à expiration ; `rec_control wipe-cache 'par1.medisphere.internal$'` (le `$` vide toute la zone) le règle.
 
 **Variante 3 — enregistrement supprimé, puis cache négatif.**
 
@@ -133,7 +133,7 @@ admin@dns01:~$ ls -l /var/lib/powerdns/
 -rw------- 1 root root 1638400 … pdns.sqlite3
 ```
 
-Le service tourne sous le compte `pdns` et ne peut plus ouvrir sa base (propriétaire `root`, mode 600). Les dates (`ls -l --time-style=full-iso`, `stat`) et le journal racontent une « restauration » faite en root (M06-E28). Correctif : `sudo chown pdns:pdns /var/lib/powerdns/pdns.sqlite3 && sudo chmod 640 …` (les droits exacts que pose ton rôle `powerdns_auth`), puis `systemctl restart pdns`. Mieux : le rôle gère le propriétaire et le mode de la base, et la procédure de restauration (RB de M06-E28) se termine par un `chown` et un contrôle `pdnsutil zone check`. Note : si ton récurseur relaie aussi vers `dns02`, cette variante ne se voit pas côté clients (le secondaire répond) ; le script passe alors à une autre variante. C'est exactement le rôle de la redondance… et la raison pour laquelle il faut une sonde **par maillon**.
+Le service tourne sous le compte `pdns` et ne peut plus ouvrir sa base (propriétaire `root`, mode 600). Même constat sur `dns02` (`dig @10.10.20.16 -p 5300 …` ne répond plus, `ls -l` identique) : le récurseur, qui relaie vers les deux serveurs faisant autorité, n'en trouve aucun qui réponde, d'où le `SERVFAIL`. Les dates (`ls -l --time-style=full-iso`, `stat`) et le journal racontent un « script d'audit des droits » passé en root sur les deux serveurs DNS. Correctif : `sudo chown pdns:pdns /var/lib/powerdns/pdns.sqlite3 && sudo chmod 640 …` (les droits exacts que pose ton rôle `powerdns_auth`), puis `systemctl restart pdns`, **sur les deux hôtes**. Mieux : le rôle `powerdns_auth` gère le propriétaire et le mode de la base (un passage du pipeline aurait corrigé, et la détection de dérive l'aurait signalé), et toute procédure qui touche la base (restauration RB-061, M06-E28) se termine par un `chown` et un contrôle `pdnsutil zone check`. Note : si un seul des deux serveurs avait été touché, les clients n'auraient rien vu (le récurseur interroge l'autre) : c'est le rôle de la redondance… et la raison pour laquelle il faut une sonde **par maillon**.
 
 **Vérification** : `lab/bin/check 06 35`, puis `lab/bin/break 06 35 --annuler` pour clore.
 
@@ -728,7 +728,7 @@ admin@dns01:~$ sudo grep -n '"enable-updates"' /etc/kea/kea-dhcp4.conf
 
 `dhcp-ddns.enable-updates` contrôle la connexion de `kea-dhcp4` à D2 ; `ddns-send-updates` (vrai par défaut) contrôle l'envoi par portée. Les deux doivent être vrais (manuel de Kea, tableau « Enabling and disabling DDNS updates »). Correctif par le rôle `kea_dhcp4`, sur `dns01` **et** `dns02`.
 
-**Rattraper les baux accordés pendant la panne.** Options : attendre leur renouvellement (avec `ddns-update-on-renew: false`, le renouvellement ne republie pas le nom s'il n'a pas changé : les noms resteraient absents jusqu'à un nouveau bail) ; forcer un nouveau bail côté client (`networkctl renew` ou redémarrage de la VM) ; ou republier depuis l'API de Kea (crochet `lease_cmds` : `lease4-resend-ddns`, disponible en Kea 3, à vérifier dans le manuel). La dernière est la seule qui n'impose rien aux clients.
+**Rattraper les baux accordés pendant la panne.** Options : attendre leur renouvellement (avec `ddns-update-on-renew: false`, le renouvellement ne republie pas le nom s'il n'a pas changé : les noms resteraient absents jusqu'à un nouveau bail) ; forcer un nouveau bail côté client (`networkctl renew` ou redémarrage de la VM) ; ou republier depuis l'API de Kea (commande `lease4-resend-ddns` du hook `lease_cmds`, chargé depuis M06-E25 : une commande par bail, par le socket de contrôle). La dernière est la seule qui n'impose rien aux clients.
 
 **Vérification** : un bail neuf apparaît dans le DNS direct et inverse ; `lab/bin/check 06 42` ; `lab/bin/break 06 42 --annuler`.
 
@@ -806,21 +806,24 @@ Chaque requête suivante est un objet JWS (RFC 7515) signé par la clé du compt
 *5. ACME de bout en bout.*
 
 ```
-admin@ca01:~$ sudo journalctl -u step-ca -f &
-admin@ca01:~$ sudo tcpdump -ni lo -A port 80 -c 20 &
-admin@ca01:~$ d=$(mktemp -d) && chmod 700 "$d"
-admin@ca01:~$ sudo step ca certificate ca01.par1.medisphere.internal "$d/essai.crt" "$d/essai.key" \
+admin@ca01:~$ sudo journalctl -u step-ca -f                     # dans un second terminal
+admin@dns02:~$ systemctl is-active cert-renewer@kea.service      # « inactive » : le port 80 est libre
+admin@dns02:~$ sudo tcpdump -ni ens18 -A 'tcp port 80 and host 10.10.20.11' -c 20 &
+admin@dns02:~$ d=$(sudo mktemp -d) && sudo chmod 700 "$d"
+admin@dns02:~$ sudo step ca certificate dns02.par1.medisphere.internal "$d/essai.crt" "$d/essai.key" \
     --provisioner acme --standalone --ca-url https://ca01.par1.medisphere.internal --root /usr/local/share/ca-certificates/medisphere-root-ca.crt
 ✔ Provisioner: acme (ACME)
-Using Standalone Mode HTTP challenge to validate ca01.par1.medisphere.internal .. done!
+Using Standalone Mode HTTP challenge to validate dns02.par1.medisphere.internal .. done!
 Waiting for Order to be 'ready' for finalization .. done!
 Finalizing Order .. done!
 ✔ Certificate: …/essai.crt
-admin@ca01:~$ step certificate inspect "$d/essai.crt" --short
-admin@ca01:~$ sudo rm -rf "$d"
+admin@dns02:~$ sudo step certificate inspect "$d/essai.crt" --short
+admin@dns02:~$ sudo rm -rf "$d"
 ```
 
-Correspondance journal ↔ RFC 8555 : `new-nonce` (§7.2) → `new-account` (§7.3) → `new-order` (§7.4, liste des identifiants) → `authz` (§7.5, une autorisation par nom) → `challenge` (§7.5.1, le client signale qu'il est prêt) → requête de step-ca vers `http://ca01.par1.medisphere.internal/.well-known/acme-challenge/<jeton>` (visible dans la capture sur `lo`, réponse = jeton + empreinte de la clé du compte, §8.3) → `finalize` (§7.4, CSR) → `certificate` (téléchargement de la chaîne). Le certificat : 24 h ou la durée par défaut du provisioner (`defaultTLSCertDuration`), SAN `ca01.par1.medisphere.internal`, émetteur « MédiSphère Intermediate CA », EKU `serverAuth, clientAuth`.
+Pourquoi `dns02` et pas `ca01` : depuis M06-E27, l'écouteur HTTP de la CRL (`insecureAddress`) occupe le port 80 de `ca01`, et le client autonome ne pourrait pas s'y lier.
+
+Correspondance journal ↔ RFC 8555 : `new-nonce` (§7.2) → `new-account` (§7.3) → `new-order` (§7.4, liste des identifiants) → `authz` (§7.5, une autorisation par nom) → `challenge` (§7.5.1, le client signale qu'il est prêt) → requête de step-ca vers `http://dns02.par1.medisphere.internal/.well-known/acme-challenge/<jeton>` (visible dans la capture sur `dns02`, réponse = jeton + empreinte de la clé du compte, §8.3) → `finalize` (§7.4, CSR) → `certificate` (téléchargement de la chaîne). Le certificat : la durée par défaut du provisioner `acme` (`defaultTLSCertDuration`, 30 jours depuis M06-E27), SAN `dns02.par1.medisphere.internal`, émetteur « MédiSphère Intermediate CA », EKU `serverAuth, clientAuth`.
 
 **Réponses aux questions d'analyse**
 

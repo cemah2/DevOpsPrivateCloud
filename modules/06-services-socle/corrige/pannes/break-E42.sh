@@ -64,8 +64,14 @@ essai_maj() {
   local nom alg sec ip port
   read -r nom alg sec ip port <<<"$(d2_info)"
   [ -n "$nom" ] && [ -n "$sec" ] && [ -n "$ip" ] || return 2
+  # Clé dans un fichier 600 (jamais en argument : visible dans ps), supprimé aussitôt.
+  local kf rc=0
+  kf="$(umask 077; mktemp "$WB_DIR/M06-E42.cle.XXXXXX")" || return 2
+  printf 'key "%s" { algorithm %s; secret "%s"; };\n' "$nom" "${alg:-hmac-sha256}" "$sec" >"$kf"
   printf 'server %s %s\nzone %s\nupdate add wb-sonde-m06-e42.%s 60 TXT "sonde du workbook"\nsend\nupdate delete wb-sonde-m06-e42.%s TXT\nsend\n' \
-    "$ip" "$port" "$1" "$1" "$1" | nsupdate -t 5 -y "$alg:$nom:$sec" >/dev/null 2>&1
+    "$ip" "$port" "$1" "$1" "$1" | nsupdate -t 5 -k "$kf" >/dev/null 2>&1 || rc=$?
+  rm -f -- "$kf"
+  return "$rc"
 }
 AIDE
 

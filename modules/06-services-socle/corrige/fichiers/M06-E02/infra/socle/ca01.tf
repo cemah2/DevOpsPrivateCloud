@@ -30,7 +30,8 @@ module "ca01" {
 
   demarrage_auto = true
   # Après gw01 (1) et dns01 (2) ; avant git01 et s3-01 (4), dont les certificats en dépendent.
-  ordre_demarrage = 3
+  # Ordre de démarrage 3 posé en root après création (Sys.Modify sur « / ») :
+  #   root@pve01:~# qm set 1003 --startup order=3
   protection      = true
 }
 

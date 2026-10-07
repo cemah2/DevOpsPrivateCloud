@@ -156,7 +156,9 @@ m05_prerequis() {
       wb_avert "$d n'est pas initialisé (tofu init)"
       return 1
     fi
-    if ! m05_tofu "$d" state list >/dev/null 2>&1; then
+    # Pendant l'astreinte (M05-E43), la première panne injectée peut rendre l'état illisible
+    # (M05-E41 v4, phrase changée) : la lisibilité a été contrôlée une fois avant la première.
+    if [[ -z "${_M05_ASTREINTE:-}" ]] && ! m05_tofu "$d" state list >/dev/null 2>&1; then
       wb_avert "« tofu state list » échoue dans $d avec l'environnement standard (~/.config/workbook/pve-tofu.env, s3-tofu.env, tofu-chiffrement.pass) : le lab doit être sain avant l'injection"
       return 1
     fi

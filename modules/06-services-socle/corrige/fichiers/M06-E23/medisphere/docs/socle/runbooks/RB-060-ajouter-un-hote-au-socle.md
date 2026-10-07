@@ -55,7 +55,9 @@ admin@adm01:~$ curl -s -H "$T" "$NB/api/ipam/ip-addresses/?address=<IP>" | jq '.
 
 ### Étape 2 — Déclarer l'hôte dans `plateforme/infra`
 
-Dans `socle/`, un bloc `module "<HOTE>"` (source `vm-debian`, étiquette de version en cours) avec `vmid`, `vnet`, ressources, `etiquettes = ["socle", "role-<ROLE>"]`, `reseau_prefixe`, **`ipv4_imposee = "<IP>"`**, `ordre_demarrage`, et un bloc `module "dns_<HOTE>"` (source `enregistrement-dns`). Si une adresse `reserved` existe déjà (étape 1), supprime-la d'abord dans NetBox (le module crée la sienne) ou importe-la (`import {}`) : sinon `apply` échoue sur un doublon.
+Dans `socle/`, un bloc `module "<HOTE>"` (source `vm-debian`, étiquette de version en cours) avec `vmid`, `vnet`, ressources, `etiquettes = ["socle", "role-<ROLE>"]`, `reseau_prefixe`, **`ipv4_imposee = "<IP>"`**, et un bloc `module "dns_<HOTE>"` (source `enregistrement-dns`). Si une adresse `reserved` existe déjà (étape 1), supprime-la d'abord dans NetBox (le module crée la sienne) ou importe-la (`import {}`) : sinon `apply` échoue sur un doublon.
+
+Après l'apply, pose l'ordre de démarrage en root (le jeton `wb-tofu` n'a pas `Sys.Modify` sur `/`) : `root@pve01:~# qm set <VMID> --startup order=<N>`.
 MR → pipeline : relis le **plan** dans la MR. **Attendu** : uniquement des créations (`+`) : `netbox_virtual_machine`, `netbox_interface`, `netbox_ip_address`, `netbox_primary_ip`, `proxmox_virtual_environment_vm`, deux `powerdns_record`. **Sinon** (une destruction `-` ou un remplacement `-/+` d'une autre ressource du socle) : **arrêt**, ne pas fusionner.
 
 ### Étape 3 — Appliquer

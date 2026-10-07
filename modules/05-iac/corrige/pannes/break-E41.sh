@@ -104,7 +104,9 @@ _e41_v4() {
   local out
   [[ -f "$_E41_PASS" ]] || return 10
   m05_sauver E41 "$_E41_PASS" || return 1
-  (umask 077 && head -c 48 /dev/urandom | base64 | tr -d '/+=\n' | head -c 40 >"$_E41_PASS") || return 1
+  # Même forme que la phrase d'origine (openssl rand -hex 32, M05-E27) : 64 caractères
+  # hexadécimaux, acceptés par outils/ci-preparer.sh si l'apprenant la reporte en variable CI.
+  (umask 077 && head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' >"$_E41_PASS") || return 1
   chmod 600 "$_E41_PASS"
   m05_noter E41 "$_E41_PASS"
   m05_journal E41 "$_E41_PASS : nouvelle phrase (rotation non terminée)"

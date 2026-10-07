@@ -27,8 +27,8 @@ Message dans `#plateforme` : « Gel des apply sur `<CONFIG>` (INC-xxxx), restaur
 ## 2. Vérifier l'absence de verrou
 
 ```
-admin@adm01:~$ set -a; . ~/.config/workbook/s3-tofu.env; set +a
-admin@adm01:~$ aws s3api head-object --bucket tofu-state --key <CLÉ>.tflock
+admin@adm01:~/src/infra$ . outils/charger-acces.sh      # accès S3, Proxmox et TF_ENCRYPTION (étape 5)
+admin@adm01:~/src/infra$ aws s3api head-object --bucket tofu-state --key <CLÉ>.tflock
 ```
 
 Un verrou présent : RB-050 d'abord.

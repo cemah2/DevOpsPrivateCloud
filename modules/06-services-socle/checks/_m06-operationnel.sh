@@ -46,6 +46,18 @@ _m06o_nb_code() {
     | curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" -H @- "$_M06O_NB/api/$2" || true
 }
 
+# _m06o_jeton_lecture_seule FICHIER_JETON — CE jeton (retrouvé par sa clé, partie entre « nbt_ » et
+# le point) existe et n'a pas le droit d'écrire. Le filtre par clé est indispensable : un compte voit
+# au moins ses propres jetons (dont, pour svc-automatisation, le jeton d'écriture), et wb-checks,
+# qui a « view » sur tous les types d'objets, voit ceux de tout le monde.
+_m06o_jeton_lecture_seule() {
+  local cle
+  cle="$(sed -n 's/^nbt_\([A-Za-z0-9]*\)\..*/\1/p' "$1" 2>/dev/null | head -n 1)"
+  [[ -n "$cle" ]] || return 1
+  _m06o_nb "$1" "users/tokens/?key=$cle" \
+    | jq -e '.results | length == 1 and (.[0].write_enabled == false)' >/dev/null
+}
+
 # _m06o_graphql REQUÊTE — requête GraphQL (lecture) avec le jeton des checks ; JSON de réponse.
 _m06o_graphql() {
   local f="${WB_NETBOX_TOKEN_FILE:-$_M06O_CFG/netbox-checks.token}"

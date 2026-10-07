@@ -104,8 +104,9 @@ CONF
   4)
     [ -n "$CLES" ] || exit 10
     # Jamais la clé de bris de glace : si le compte secours l'autorise, on ne révoque rien.
+    # (« if » : un « grep … && exit 1 » en fin de boucle rendrait la boucle toujours en échec.)
     printf '%s\n' "$CLES" | while read -r ty cle _; do
-      grep -qsF "$ty $cle" /home/secours/.ssh/authorized_keys && exit 1
+      if grep -qsF "$ty $cle" /home/secours/.ssh/authorized_keys; then exit 1; fi
     done || exit 10
     printf '%s\n' "$CLES" >"$WB_DIR/M06-E38.cles-revoquees"
     k="$(sshd -T 2>/dev/null | awk '$1 == "revokedkeys" { print $2 }')"

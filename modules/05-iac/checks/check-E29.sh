@@ -20,12 +20,14 @@ _m05_e29_sauvegarde_ok() {
   jq -e '.status == "success"' >/dev/null <<<"$j" && _m05p_artefacts_conserves "$j" 80
 }
 
-# _m05_e29_versions_lab — l'état d'envs/lab-m05 a au moins 3 versions (écriture erronée, puis
-#   restauration : deux écritures de plus que l'état d'origine).
+# _m05_e29_versions_lab — l'état d'envs/lab-m05 porte la trace d'une restauration par copie d'une
+#   version : deux versions de même ETag (la copie côté serveur d'une version garde son contenu,
+#   donc son empreinte ; deux écritures d'OpenTofu, elles, diffèrent toujours par leur serial).
+#   Le simple nombre de versions ne prouverait rien : l'état en a déjà beaucoup depuis le palier 2.
 _m05_e29_versions_lab() {
-  local n
-  n="$(_m05p_nb_versions envs/lab-m05/terraform.tfstate)"
-  [[ "${n:-0}" -ge 3 ]]
+  _m05p_aws s3api list-object-versions --bucket "$_M05P_BUCKET" --prefix envs/lab-m05/terraform.tfstate 2>/dev/null \
+    | jq -e '[(.Versions // [])[] | select(.Key == "envs/lab-m05/terraform.tfstate") | .ETag]
+             | (length > (unique | length))' >/dev/null 2>&1
 }
 
 # _m05_e29_pas_de_copie — aucun fichier d'état ni de sauvegarde d'état dans ~/src/infra.
@@ -46,7 +48,7 @@ check_cmd "sauvegarder-etats.sh ne déchiffre rien (pas de « state pull »)" \
   _m05p_main_sans outils/sauvegarder-etats.sh 'state[[:space:]]+pull'
 
 title "Restaurations"
-check_cmd "envs/lab-m05 : historique de l'objet (écriture erronée et restauration)" _m05_e29_versions_lab
+check_cmd "envs/lab-m05 : une version précédente a été restaurée (copie d'une version dans l'historique)" _m05_e29_versions_lab
 check_cmd "envs/lab-m05 : « tofu plan » ne propose aucun changement" _m05p_plan_vide "$_M05P_INFRA/envs/lab-m05"
 check_cmd "aucun objet laissé sous _restauration/" _m05p_aucune_cle_prefixe _restauration/
 check_cmd "aucune copie d'état dans ~/src/infra" _m05_e29_pas_de_copie
