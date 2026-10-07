@@ -9,7 +9,9 @@
 #
 # Pour chaque TIMER : unité chargée sans erreur, active, activée au démarrage ; prochaine
 # échéance dans moins de HEURES ; service déclenché : dernier passage exécuté (pas sauté par une
-# condition), réussi, terminé il y a moins de HEURES (défaut 26).
+# condition), réussi, terminé il y a moins de HEURES (défaut 26). Après un redémarrage de la
+# machine, systemd a oublié le résultat du service : on se rabat sur le dernier déclenchement
+# du timer (conservé sur disque par Persistent=true), à moins de HEURES lui aussi.
 #
 # Volontairement autonome (pas de lib/ms-commun.sh) : un chien de garde dépend du moins de
 # choses possible. Lecture seule (systemctl show). Limite assumée : s'il tourne sur la même
@@ -52,7 +54,7 @@ horodatage() {
 
 # verifier_timer TIMER AGE_MAX_S — affiche une ligne de rapport ; code 0 si frais.
 verifier_timer() {
-  local t="$1" max="$2" maintenant svc v prochaine fin
+  local t="$1" max="$2" maintenant svc v prochaine fin avant_redemarrage=""
   local -a defauts=()
   maintenant="$(date +%s)"
 
@@ -75,13 +77,29 @@ verifier_timer() {
   if [[ -z "$svc" ]]; then
     defauts+=("service déclenché inconnu")
   else
-    [[ "$(prop "$svc" ConditionResult)" == yes ]] || defauts+=("dernier passage sauté (condition non remplie)")
-    [[ "$(prop "$svc" Result)" == success ]] || defauts+=("dernier passage en échec ($(prop "$svc" Result))")
     fin="$(horodatage "$svc" ExecMainExitTimestamp)"
-    if [[ -z "$fin" ]]; then
-      defauts+=("aucun passage enregistré")
-    elif ((maintenant - fin > max)); then
-      defauts+=("dernier passage il y a $(((maintenant - fin) / 3600)) h")
+    if [[ -n "$fin" ]]; then
+      [[ "$(prop "$svc" ConditionResult)" == yes ]] || defauts+=("dernier passage sauté (condition non remplie)")
+      [[ "$(prop "$svc" Result)" == success ]] || defauts+=("dernier passage en échec ($(prop "$svc" Result))")
+      if ((maintenant - fin > max)); then
+        defauts+=("dernier passage il y a $(((maintenant - fin) / 3600)) h")
+      fi
+    else
+      # systemd ne garde le résultat d'un service qu'en mémoire : après un redémarrage, il ne le
+      # connaît plus tant que le service n'a pas tourné. Seul le dernier déclenchement du timer
+      # (LastTriggerUSec, conservé sur disque grâce à Persistent=true) survit ; son résultat, s'il
+      # était un échec, a déjà déclenché OnFailure= à l'époque. Sans lui : rien vu = défaut.
+      fin="$(horodatage "$t" LastTriggerUSec)"
+      # Un démarrage tenté depuis le redémarrage mais sauté par une condition laisse, lui, une trace.
+      if [[ -n "$(horodatage "$svc" ConditionTimestamp)" && "$(prop "$svc" ConditionResult)" != yes ]]; then
+        defauts+=("dernier passage sauté (condition non remplie)")
+      elif [[ -z "$fin" ]]; then
+        defauts+=("aucun passage enregistré")
+      elif ((maintenant - fin > max)); then
+        defauts+=("dernier déclenchement il y a $(((maintenant - fin) / 3600)) h")
+      else
+        avant_redemarrage=1
+      fi
     fi
   fi
 
@@ -91,8 +109,9 @@ verifier_timer() {
     printf '%-34s KO  %s\n' "$t" "${msg% ; }"
     return 1
   fi
-  printf '%-34s OK  prochaine %s, dernier passage %s\n' "$t" \
-    "$(date -d "@$prochaine" '+%F %H:%M')" "$(date -d "@$fin" '+%F %H:%M')"
+  printf '%-34s OK  prochaine %s, dernier passage %s%s\n' "$t" \
+    "$(date -d "@$prochaine" '+%F %H:%M')" "$(date -d "@$fin" '+%F %H:%M')" \
+    "${avant_redemarrage:+ (avant le redémarrage : résultat dans le journal)}"
 }
 
 main() {

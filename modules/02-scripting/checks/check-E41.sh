@@ -39,3 +39,7 @@ check_output "timer : déclenchement quotidien à 07:30" 'OnCalendar=\*-\*-\* 07
   systemctl show "$_m02_e41_t" -p TimersCalendar --value
 check_cmd "timer : prochaine exécution dans moins de 25 h" _m02_e41_prochaine
 check_cmd "service : dernier passage exécuté (non sauté), réussi, il y a moins de 26 h" _m02_e41_dernier
+# Résultat du dernier passage gardé en mémoire par systemd seulement : perdu au redémarrage.
+if [[ "$(systemctl show "$_m02_e41_s" -p ExecMainStartTimestampMonotonic --value 2>/dev/null)" == 0 ]]; then
+  printf '         (aucun passage depuis le démarrage de adm01 : sudo systemctl start %s, puis relance)\n' "$_m02_e41_s"
+fi

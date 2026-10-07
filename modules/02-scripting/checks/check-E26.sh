@@ -29,10 +29,14 @@ check_output "le timer est planifié tous les jours à 07:30" 'OnCalendar=\*-\*-
   systemctl show -p TimersCalendar "$_m02_tim"
 check_output "le timer rattrape une échéance manquée (Persistent)" '^Persistent=yes$' \
   systemctl show -p Persistent "$_m02_tim"
+# Depuis le démarrage (propriété en mémoire) ou, après un redémarrage de adm01, d'après le journal.
 check_cmd "le service a déjà été exécuté par systemd" bash -c \
-  '[[ "$(systemctl show -p ExecMainStartTimestampMonotonic --value "$1")" != 0 ]]' _ "$_m02_svc"
-check_output "la chaîne d'alerte a été testée (journal de ms-alerte@$_m02_svc sur 30 jours)" 'ÉCHEC|ECHEC' \
-  sudo -n journalctl -q --no-pager --since -30d -u "ms-alerte@$_m02_svc" -t ms-alerte
+  '[[ "$(systemctl show -p ExecMainStartTimestampMonotonic --value "$1")" != 0 ]] \
+     || sudo -n journalctl -q --no-pager --since -30d -u "$1" -t ms-verif-sauvegardes | grep -q .' _ "$_m02_svc"
+# OnFailure=ms-alerte@%n.service : l'instance s'appelle ms-alerte@ms-verif-sauvegardes.service.service.
+check_output "la chaîne d'alerte a été testée (alerte ms-alerte sur ce service, 30 jours)" \
+  "(ÉCHEC|ECHEC) $_m02_svc" \
+  sudo -n journalctl -q --no-pager --since -30d -t ms-alerte -o cat
 
 # --- Secrets et jetons en lecture seule ---------------------------------------------
 for _m02_f in "$_m02_pve_env" "$_m02_pbs_env"; do

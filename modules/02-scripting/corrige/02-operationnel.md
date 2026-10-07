@@ -150,7 +150,7 @@ La bibliothèque est versionnée avec le projet et testée en CI (E14, E24) ; to
 6. Réponses du journal :
    - **Préfixe et motif** : avec `test("^" + préfixe)` seul, `avant` capturerait `avant-maj-…` et la rotation de l'un supprimerait les instantanés de l'autre. Le motif complet ancré (`^avant-[0-9]{8}-[0-9]{6}$`) ne reconnaît que les noms de l'outil, pour ce préfixe exact.
    - **Deux exécutions simultanées** : chacune lit la liste avant que l'autre n'ait fini ; elles peuvent supprimer chacune « le plus ancien » (donc deux), ou tenter de supprimer le même (erreur de verrou de VM « VM is locked (snapshot-delete) »). Traité en E13 par un verrou.
-   - **Cohérence** : sans `vmstate`, l'instantané fige les disques comme après une coupure de courant (*crash-consistent*). Un journal de système de fichiers s'en remet ; une base de données qui n'a pas écrit ses tampons, pas forcément. ⚠️ À vérifier sur ta version : Proxmox peut geler les systèmes de fichiers de l'invité par l'agent QEMU lors d'un instantané ; lis la documentation de `qm snapshot` et l'option `freeze-fs` de l'agent. Pour une base, on préfère un vidage applicatif avant l'instantané.
+   - **Cohérence** : sans `vmstate`, l'instantané fige les disques comme après une coupure de courant (*crash-consistent*). Un journal de système de fichiers s'en remet ; une base de données qui n'a pas écrit ses tampons, pas forcément. Proxmox VE 9 améliore un peu les choses : quand l'agent QEMU est activé dans la configuration de la VM (c'est le cas des clones du template 9000) et répond, un instantané **sans** RAM est encadré par `guest-fsfreeze-freeze`/`thaw` (option `freeze-fs` de `agent`, vraie par défaut ; l'ancien nom `freeze-fs-on-backup` en est un alias). Les systèmes de fichiers sont alors cohérents, pas les applications : pour une base, on préfère un vidage applicatif (ou un script de gel côté invité) avant l'instantané.
 
 Exécution type :
 ```
@@ -351,7 +351,7 @@ Fichiers : [`fichiers/M02-E13/lib/ms-commun.sh`](fichiers/M02-E13/lib/ms-commun.
 - Prendre le verrou **avant** la validation des arguments : une faute de frappe attend un verrou ou bloque l'exécution planifiée.
 - Fichier temporaire dans `/tmp` puis `mv` vers un autre système de fichiers : la publication redevient une copie, visible à moitié.
 - `trap 'rm -rf $TMP' EXIT` avec `TMP` vide ou non initialisée : `rm -rf` sans argument ne fait rien, mais `rm -rf "$TMP"/*` avec `TMP` vide vise `/*`. Toujours tester la variable, et `${VAR:?}` dans les `rm -rf`.
-- Oublier qu'un processus d'arrière-plan hérite du descripteur du verrou.
+- Oublier qu'un processus d'arrière-plan hérite du descripteur du verrou. Même piège à l'étape 6 : `kill` du `flock` lancé par `flock fichier sleep 60 &` ne libère **pas** le verrou, le `sleep` qu'il a lancé tient toujours le descripteur ; tue aussi l'enfant (`pkill -P <PID>`), ou utilise `flock -o` (le descripteur est fermé avant de lancer la commande, seul `flock` tient le verrou).
 - Rotation par `ls | tail` qui supprime aussi `dernier` ou un dossier ajouté à la main.
 
 **En production chez MédiSphère**

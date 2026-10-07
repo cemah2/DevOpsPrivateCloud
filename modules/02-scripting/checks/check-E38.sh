@@ -43,5 +43,6 @@ if command -v uv >/dev/null 2>&1; then
 else
   skip "clone local : uv.lock à jour" "uv absent de ce poste"
 fi
-check_ssh "runner01 : outils du pipeline présents (shellcheck, shfmt, bats, task, uv)" runner01 \
-  'for c in shellcheck shfmt bats task uv; do command -v "$c" >/dev/null || exit 1; done'
+# Vu par le compte qui exécute les jobs (son PATH de shell de connexion), pas par admin (M02-E24).
+check_ssh "runner01 : outils du pipeline présents pour gitlab-runner (shellcheck, shfmt, bats, task, uv)" runner01 \
+  'sudo -n -u gitlab-runner -H bash -lc '"'"'for c in shellcheck shfmt bats task uv; do command -v "$c" >/dev/null || exit 1; done'"'"

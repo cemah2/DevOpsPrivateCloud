@@ -78,6 +78,30 @@ unite() {
   [[ "$output" == *"aucun passage enregistré"* ]]
 }
 
+@test "après un redémarrage (résultat oublié par systemd), déclenchement récent du timer : code 0" {
+  rm -f "$FAUX_SYSTEMD/ms-verif-sauvegardes.service/ExecMainExitTimestamp"
+  unite ms-verif-sauvegardes.service ConditionResult no
+  unite ms-verif-sauvegardes.timer LastTriggerUSec "@$((maintenant - 5 * 3600))"
+  run -0 "$VERIF" ms-verif-sauvegardes.timer
+  [[ "$output" == *" OK "*"avant le redémarrage"* ]]
+}
+
+@test "après un redémarrage, démarrage sauté par une condition : code 1" {
+  rm -f "$FAUX_SYSTEMD/ms-verif-sauvegardes.service/ExecMainExitTimestamp"
+  unite ms-verif-sauvegardes.timer LastTriggerUSec "@$((maintenant - 1 * 3600))"
+  unite ms-verif-sauvegardes.service ConditionTimestamp "@$((maintenant - 1 * 3600))"
+  unite ms-verif-sauvegardes.service ConditionResult no
+  run -1 "$VERIF" ms-verif-sauvegardes.timer
+  [[ "$output" == *"sauté"* ]]
+}
+
+@test "après un redémarrage, dernier déclenchement trop ancien (30 h) : code 1" {
+  rm -f "$FAUX_SYSTEMD/ms-verif-sauvegardes.service/ExecMainExitTimestamp"
+  unite ms-verif-sauvegardes.timer LastTriggerUSec "@$((maintenant - 30 * 3600))"
+  run -1 "$VERIF" ms-verif-sauvegardes.timer
+  [[ "$output" == *"dernier déclenchement il y a 30 h"* ]]
+}
+
 @test "prochaine échéance trop lointaine (planification modifiée) : code 1" {
   unite ms-verif-sauvegardes.timer NextElapseUSecRealtime "@$((maintenant + 72 * 3600))"
   run -1 "$VERIF" ms-verif-sauvegardes.timer

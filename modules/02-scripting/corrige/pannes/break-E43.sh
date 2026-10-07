@@ -11,9 +11,9 @@
 #   --annuler     annule les deux pannes (et toute panne M02-E35 à E42 encore marquée active).
 #
 # Ordre d'injection : E35 d'abord (elle exige un contrôle des sauvegardes sain au départ),
-# E36 en dernier (elle coupe l'accès de l'automatisation à Proxmox). Les vérifications
-# individuelles (verifier_EXX) ne sont pas rejouées : E38 attendrait un pipeline et E40
-# mesurerait 45 s ; le contrôle final de l'exercice porte sur l'état sain.
+# E36 en dernier (elle coupe l'accès de l'automatisation à Proxmox). Chaque panne est constatée
+# sur place (verifier_EXX) juste après son injection, sauf E38 (attente d'un pipeline) et E40
+# (mesure de 30 s) ; en cas d'échec, les deux pannes sont annulées.
 
 _WB_E43_DIR="$(dirname "${BASH_SOURCE[0]}")"
 WB_PANNES_LIB=1
@@ -130,6 +130,13 @@ main() {
     wb_marqueur_ecrire "M02-$ex" "$WB_VAR"
     liste+="$ex:$WB_VAR "
     wb_marqueur_ecrire M02-E43 "$liste"
+    # Contrôle sur place, tout de suite (avant que la panne suivante ne brouille l'état),
+    # sauf E38 (attente d'un pipeline) et E40 (mesure de 30 s) : CONVENTIONS §11.10.
+    if [[ "$ex" != E38 && "$ex" != E40 ]] && ! "verifier_$ex" 2>/dev/null; then
+      echo "La panne $ex n'a pas pu être constatée après injection : remise en état, rien n'est cassé." >&2
+      _E43_annuler >/dev/null
+      return 1
+    fi
     choisies+=("$ex")
   done
 

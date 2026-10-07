@@ -10,7 +10,9 @@ Fichiers de solution : [`fichiers/M02-E37/`](fichiers/M02-E37/), [`M02-E39/`](fi
 
 Les sorties de commandes reproduites sont **représentatives** : horodatages, PID, numéros de tâche et libellés exacts varient selon tes versions.
 
-**Points non testés en conditions réelles** (signale-les si ton comportement diffère) : le message exact de `pveproxy` pour un jeton expiré ou un compte désactivé (E36), la durée réelle d'un `pvesh` par SSH sur ton matériel (E40 v3 : si l'inventaire passe sous 30 s, l'injection le signale et s'annule), le libellé de `systemctl status` pour un service sauté par une condition (E41 v3), le nom du fichier `.pth` d'installation éditable selon la version de uv (E42 v4).
+**Points non testés en conditions réelles** (signale-les si ton comportement diffère) : le message exact de `pveproxy` pour un jeton expiré ou un compte désactivé (E36), la durée réelle d'un `pvesh` par SSH sur ton matériel (E40 v3 : si l'inventaire passe sous 30 s, l'injection le signale et s'annule), le libellé de `systemctl status` pour un service sauté par une condition (E41 v3). Vérifiés par essai : le nom `medictl.pth` de l'installation éditable avec `uv_build` (E42 v4), les remarques de ShellCheck 0.11 sur chaque script défectueux (E37, E39), le comportement de `xargs` sur un code 255.
+
+**Annulation et réparation** : `lab/bin/break 02 XX --annuler` sert aussi à clore une panne que tu as réparée. Les scripts ne rétablissent que ce qui est **encore** dans l'état cassé (un drop-in que tu as corrigé, un jeton que tu as prolongé, un compte réactivé avec un commentaire, une MR que tu as reprise restent tels quels).
 
 ---
 
@@ -54,7 +56,7 @@ admin@adm01:~$ systemd-delta --type=extended,overridden | grep ms-verif
 ```
 admin@adm01:~$ sudo systemd-run --wait --pipe --collect -p User=admin -p ProtectHome=yes \
                  ls -l /home/admin/.config/workbook/
-ls: cannot access '/home/admin/.config/workbook/': No such file or directory
+ls: cannot access '/home/admin/.config/workbook/': Permission denied
 admin@adm01:~$ sudo systemd-run --wait --pipe --collect -p User=admin -p ProtectHome=read-only \
                  /usr/local/bin/ms-verif-sauvegardes
 ```
@@ -67,7 +69,7 @@ admin@adm01:~$ systemctl show ms-verif-sauvegardes -p ProtectHome
 ProtectHome=yes
 ```
 
-Un drop-in `20-durcissement.conf` (« SEC-380 ») remplace `ProtectHome=read-only` de l'unité par `yes` : `/home`, `/root` et `/run/user` deviennent vides et inaccessibles pour le service. Dans un terminal, aucune protection : le script lit ses fichiers. Correctif : retirer le drop-in (`sudo rm …/20-durcissement.conf && sudo systemctl daemon-reload`) ; l'intention de durcissement est déjà satisfaite par l'unité (`ProtectHome=read-only`, `ProtectSystem=strict`, `NoNewPrivileges=yes`…). Si l'on veut aller plus loin sans casser : `ProtectHome=tmpfs` **avec** `BindReadOnlyPaths=/home/admin/.config/workbook`, testé par `systemctl start`.
+Un drop-in `20-durcissement.conf` (« SEC-380 ») remplace `ProtectHome=read-only` de l'unité par `yes` : `/home`, `/root` et `/run/user` deviennent vides et inaccessibles pour le service (un dossier sans aucun droit est monté par-dessus : `Permission denied` pour `admin`). Dans un terminal, aucune protection : le script lit ses fichiers. Correctif : retirer le drop-in (`sudo rm …/20-durcissement.conf && sudo systemctl daemon-reload`) ; l'intention de durcissement est déjà satisfaite par l'unité (`ProtectHome=read-only`, `ProtectSystem=strict`, `NoNewPrivileges=yes`…). Si l'on veut aller plus loin sans casser : `ProtectHome=tmpfs` **avec** `BindReadOnlyPaths=/home/admin/.config/workbook`, testé par `systemctl start`.
 
 **Variante 2 — le service tourne en root (`User=root`).**
 
@@ -105,7 +107,7 @@ admin@adm01:~$ head -n 4 /usr/local/sbin/ms-verif-sauvegardes
 # en lecture seule. Lit ~/.config/workbook/pve-api.env.
 ```
 
-Le terminal exécute `/usr/local/bin/ms-verif-sauvegardes` (premier dans le `PATH`), le service une copie 0.3.0 d'avant M02-E26, posée dans `/usr/local/sbin` et rendue active par un `systemctl edit` (le `ExecStart=` vide remet la liste à zéro, la ligne suivante la remplace). Cette copie lit `pve-api.env` (le jeton **d'écriture**) et interroge le contenu de `pbs-par2` par l'API de `pve01`, ce que le jeton ne voit pas (filtrage de M02-E26) : échec. Correctif : retirer `override.conf`, mettre la vieille copie de côté comme pièce du dossier (puis la supprimer), `daemon-reload`, relancer. Signale à Sophie qu'un service planifié a tourné avec le jeton d'écriture.
+Le terminal exécute `/usr/local/bin/ms-verif-sauvegardes` (premier dans le `PATH`), le service une copie 0.3.0 d'avant M02-E26, posée dans `/usr/local/sbin` et rendue active par un `systemctl edit` (le `ExecStart=` vide remet la liste à zéro, la ligne suivante la remplace). Cette copie lit `pve-api.env` (le jeton **d'écriture**) et interroge le contenu de `pbs-par2` par l'API de `pve01`, ce que le jeton ne voit pas (filtrage de M02-E26) : échec. Correctif : retirer `override.conf`, mettre la vieille copie de côté comme pièce du dossier (puis la supprimer), `daemon-reload`, relancer. Signale à Sophie qu'un service planifié a tourné avec le jeton d'écriture, et que cette vieille copie passait le secret en argument de `curl` (`-H "Authorization: …"`, lisible dans `ps` par tout utilisateur de `adm01` pendant l'appel) : rotation du jeton `!lab` à envisager. Selon les droits de `WBAutomation` sur `pbs-par2`, l'appel au contenu échoue en `403` (aucun droit sur le stockage) ou renvoie une liste filtrée, donc des lignes `KO  VM …` : dans les deux cas, échec.
 
 **Après chaque correctif**
 
@@ -276,6 +278,8 @@ Ordres de grandeur obtenus en rejouant les variantes sur le jeu fourni (35 fichi
 | 3 | `cd "$app/tmp"` non vérifié : `medi-notif` n'a pas de `tmp/`, le `cd` échoue, `rm -rf ./*` vide la racine | **SC2164** (`cd … \|\| exit`) |
 | 4 | `-mtime -"$RETENTION_JOURS"` : « modifié il y a **moins** de 30 jours » | rien : c'est une erreur de logique, seul un test sur données la voit |
 
+Dans les quatre versions, ShellCheck 0.11 signale **aussi** SC1090 (`. "$CONF"` non suivi) et SC2115 (`rm -rf "$RACINE/…"` sans `${RACINE:?}`) : des remarques qui ne pointent pas le bogue de la variante, mais qu'une CI où ShellCheck est bloquant aurait refusées avant la fusion (constaté avec ShellCheck 0.11.0 sur les quatre scripts).
+
 Reproduction sur un jeu neuf, dans un dossier jetable :
 
 ```
@@ -306,7 +310,7 @@ admin@adm01:/opt/workbook/m02/e37$ bin/ms-purge-rapports -n && bin/ms-purge-rapp
 Tests bats à verser dans `plateforme/outils` : [`fichiers/M02-E37/tests/bats/ms-purge-rapports.bats`](fichiers/M02-E37/tests/bats/ms-purge-rapports.bats) (11 tests) et son jeu de données [`tests/bats/fixtures/fabriquer-donnees.sh`](fichiers/M02-E37/tests/bats/fixtures/fabriquer-donnees.sh), copié dans le projet (un test ne dépend pas du workbook). Ils vérifient l'état exact de la politique, l'idempotence, le `--dry-run`, les refus (racine non marquée, configuration invalide, nom d'application dangereux), l'usage, et un test de régression par variante. Contrôle de leur pertinence : rejoués contre les quatre versions de Lucas, ils échouent à chaque fois (9 à 10 tests en échec sur 11).
 
 **Prévention**
-- ShellCheck **bloquant** en CI (trois variantes sur quatre étaient signalées) ; un script de purge sans tests sur données fabriquées ne passe pas en revue.
+- ShellCheck **bloquant** en CI : les quatre scripts auraient été refusés (SC2115 partout), et le défaut lui-même était nommé pour trois variantes sur quatre ; un script de purge sans tests sur données fabriquées ne passe pas en revue.
 - Pour tout script destructeur : `--dry-run` obligatoire, premier passage réel sous surveillance, sauvegarde vérifiée juste avant ; politique de rétention traduite en **tests**, pas seulement en code.
 - Marqueur de zone purgeable (`.zone-purgeable`) : une erreur de configuration (`RACINE=/`) devient un refus.
 
@@ -456,14 +460,14 @@ admin@adm01:~$ shellcheck --list-optional | grep -A1 -E 'set-e|masked'
 admin@adm01:~$ shellcheck -o check-set-e-suppressed,check-extra-masked-returns bin/ms-archiver-journaux
 ```
 
-`check-set-e-suppressed` signale la variante 2 (**SC2310** : « This function is invoked in an 'if' condition so set -e will be disabled »). La variante 4 (`x=$(fonction)` dans une simple affectation) n'est pas signalée par ShellCheck 0.11 (SC2311 vise d'autres formes d'appel en substitution ; à vérifier sur ta version), la variante 1 (absence de `pipefail`) non plus. Conclusion : ShellCheck réduit le risque, il ne remplace pas la vérification explicite du résultat.
+`check-set-e-suppressed` signale la variante 2 (**SC2310** : « This function is invoked in an 'if' condition so set -e will be disabled »). `check-extra-masked-returns` signale la variante 1 (**SC2312** sur `tar … | gzip …` : « Consider invoking this command separately to avoid masking its return value »), noyée parmi d'autres SC2312 (`$(date …)` dans `log`). La variante 4 (`archive=$(archiver "$h")`) n'est **pas** signalée : SC2311 (« Bash implicitly disabled set -e for this function invocation because it's inside a command substitution ») vise exactement cette forme, mais ShellCheck 0.11.0 ne l'émet que si le script active `-e` par `set -e` ou `set -eu` ; avec `set -euo pipefail`, comme ici, il se tait (constaté sur 0.11.0 : essaie les deux en-têtes sur un script de trois lignes). Conclusion : ShellCheck réduit le risque, il ne remplace pas la vérification explicite du résultat.
 
-**Étape 4 — Récupérer les journaux.** La sauvegarde de 01:00 a été faite par root ; elle contient le fichier en mode 000 :
+**Étape 4 — Récupérer les journaux.** La sauvegarde de 01:00 a été faite par root, qui seul pouvait lire le fichier en mode 000 (propriétaire `admin`, aucun droit) ; elle le contient :
 
 ```
 admin@adm01:/opt/workbook/m02/e39$ tar -tzvf sauvegardes/spool-*.tar.gz | grep dns01
----------- root/root  … spool/dns01/dnsmasq.log.1
--rw-r--r-- root/root  … spool/dns01/dnsmasq.log
+---------- admin/admin  … spool/dns01/dnsmasq.log.1
+-rw-r--r-- admin/admin  … spool/dns01/dnsmasq.log
 …
 admin@adm01:/opt/workbook/m02/e39$ r="$(mktemp -d)"; tar -C "$r" -xzf sauvegardes/spool-*.tar.gz spool/dns01/dnsmasq.log.1
 admin@adm01:/opt/workbook/m02/e39$ chmod 640 "$r/spool/dns01/dnsmasq.log.1" && cp -a "$r/spool/dns01/dnsmasq.log.1" spool/dns01/
@@ -619,7 +623,7 @@ admin@adm01:~$ systemctl list-timers ms-verif-sauvegardes.timer      # NEXT : de
 
 **Pourquoi aucune alerte** : `OnFailure=` ne se déclenche que si le service **échoue** ; un service jamais démarré (v1, v2, v4) ou sauté par une condition (v3) n'échoue pas. Les notifications PBS signalent les échecs de sauvegarde, pas l'absence de contrôle.
 
-**Chien de garde** : [`fichiers/M02-E41/bin/ms-verif-fraicheur`](fichiers/M02-E41/bin/ms-verif-fraicheur), avec [`ms-verif-fraicheur.service`](fichiers/M02-E41/systemd/ms-verif-fraicheur.service) et [`.timer`](fichiers/M02-E41/systemd/ms-verif-fraicheur.timer) (toutes les heures, `OnFailure=ms-alerte@%n.service`, utilisateur éphémère). Pour chaque timer donné, il vérifie : chargé, actif, activé, prochaine échéance à moins de 26 h, dernier passage du service déclenché exécuté (`ConditionResult=yes`), réussi, terminé il y a moins de 26 h. Il détecte les quatre variantes.
+**Chien de garde** : [`fichiers/M02-E41/bin/ms-verif-fraicheur`](fichiers/M02-E41/bin/ms-verif-fraicheur), avec [`ms-verif-fraicheur.service`](fichiers/M02-E41/systemd/ms-verif-fraicheur.service) et [`.timer`](fichiers/M02-E41/systemd/ms-verif-fraicheur.timer) (toutes les heures, `OnFailure=ms-alerte@%n.service`, utilisateur éphémère). Pour chaque timer donné, il vérifie : chargé, actif, activé, prochaine échéance à moins de 26 h, dernier passage du service déclenché exécuté (`ConditionResult=yes`), réussi, terminé il y a moins de 26 h. Il détecte les quatre variantes. Piège rencontré en l'écrivant : systemd ne garde le résultat d'un service (`Result`, `ExecMainExitTimestamp`, `ConditionResult`) qu'**en mémoire** ; après un redémarrage de `adm01`, ces propriétés sont vides jusqu'au prochain passage, et un chien de garde naïf alerterait toutes les heures pendant près d'une journée. Il se rabat alors sur le dernier déclenchement du timer (`LastTriggerUSec`, conservé sur disque grâce à `Persistent=true`) : le résultat de ce passage-là, s'il était un échec, a déjà déclenché `OnFailure=` à l'époque.
 
 ```
 admin@adm01:~$ /usr/local/bin/ms-verif-fraicheur ms-verif-sauvegardes.timer
@@ -710,8 +714,12 @@ admin@adm01:~/src/outils$ uv run --no-sync python -c 'import medictl; print(medi
 admin@adm01:~/src/outils$ uv run --no-sync python -c 'import sys; print("\n".join(sys.path))'
 admin@adm01:~/src/outils$ grep -H . .venv/lib/python3.13/site-packages/*.pth
 …/00-compat-infoger.pth:/opt/workbook/m02/e42/compat-infoger
+…/_virtualenv.pth:import _virtualenv
+…/a1_coverage.pth:import sys; exec(…)
 …/medictl.pth:/home/admin/src/outils/src
 ```
+
+Les deux `.pth` du milieu sont normaux : `_virtualenv.pth` vient de la création de l'environnement, `a1_coverage.pth` de coverage (pytest-cov), et tous deux sont des lignes `import` (exécutées). Seul `00-compat-infoger.pth` ajoute un chemin étranger au projet.
 
 Au démarrage, le module `site` lit les fichiers `.pth` de `site-packages` **par ordre alphabétique** : chaque ligne qui est un chemin existant est ajoutée à `sys.path`, chaque ligne qui commence par `import` est **exécutée**. `00-compat-infoger.pth` passe avant le `.pth` de l'installation éditable du projet : le vieux module InfoGér est trouvé en premier, sans `cli`, d'où `No module named 'medictl.cli'`. Correctif : retirer le `.pth` (ou recréer `.venv`), puis traiter le besoin « compatibilité InfoGér » autrement (un module distinct, nommé autrement, dans le projet). Note de sécurité : un `.pth` est un moyen discret d'exécuter du code dans **chaque** interpréteur de l'environnement ; un fichier `.pth` inattendu se traite comme une alerte.
 
@@ -908,7 +916,7 @@ Seule a) arrête le script. Morale : le corps d'une fonction ne doit jamais comp
 | E37 v2 (précédence de `find`) | ShellCheck (SC2146) ; test sur données | revue rapide (la ligne « a l'air juste ») |
 | E37 v3 (`cd` non vérifié) | ShellCheck (SC2164) ; test avec une application sans `tmp/` | test sur un jeu où toutes les applications ont `tmp/` |
 | E37 v4 (`-mtime -30`) | **seulement** un test sur données datées, ou une revue attentive | ShellCheck |
-| E39 (`set -e` contourné) | test « fichier illisible » ; partiellement ShellCheck avec `check-set-e-suppressed` (v2) et SC2155 (v3) | ShellCheck par défaut (v1, v2, v4), revue qui « fait confiance au mode strict » |
+| E39 (`set -e` contourné) | test « fichier illisible » ; partiellement ShellCheck : SC2155 par défaut (v3), `check-set-e-suppressed` (v2), `check-extra-masked-returns` (v1) | ShellCheck par défaut (v1, v2, v4), ShellCheck même avec toutes les options (v4, en `set -euo pipefail`), revue qui « fait confiance au mode strict » |
 | E42 (environnement) | rien dans le code : contrôle de l'environnement (`lab/bin/check 02 42`), règles d'hygiène, gestion de configuration | ruff, pytest en CI (environnement neuf à chaque job), revue de code |
 
 Conclusion : l'analyse statique attrape vite et pour rien les erreurs **de forme** ; les tests sur données attrapent les erreurs **de logique** ; la revue attrape les erreurs **d'intention** (« pourquoi supprimer tout `tmp/` ? ») ; et aucun ne voit l'**environnement**, qui relève de la gestion de configuration et de la supervision. Il faut les quatre.

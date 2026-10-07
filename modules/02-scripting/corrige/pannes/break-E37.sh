@@ -15,7 +15,8 @@
 #      s'exécute à la racine ;
 #   4. signe inversé (-mtime -30) : les rapports RÉCENTS sont supprimés, les vieux restent.
 # Réinjection : une zone existante est déplacée (e37.precedent-<date>), jamais supprimée.
-# Annulation : la zone est déplacée (e37.annule-<date>) ; rien n'est supprimé.
+# Annulation : la zone encore cassée est déplacée (e37.annule-<date>) ; rien n'est supprimé ;
+# une zone réparée reste en place.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -68,10 +69,15 @@ verifier_E37() {
   return 1
 }
 
+# annuler_E37 — zone encore cassée (un rapport à conserver manque) : mise de côté, rien n'est
+# supprimé. Zone réparée par l'apprenant : laissée en place (c'est elle que vérifie le contrôle).
 annuler_E37() {
   local z="$_E37_ZONE"
-  if [[ -e "$z" ]]; then
+  [[ -e "$z" ]] || return 0
+  if [[ ! -f "$z/attendu.tsv" ]] || verifier_E37; then
     mv -- "$z" "$z.annule-$(date +%Y%m%d-%H%M%S)" || wb_avert "zone $z non déplacée"
+  else
+    echo "Zone $z réparée : laissée en place." >&2
   fi
 }
 

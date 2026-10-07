@@ -62,7 +62,11 @@ Il n'y a pas « une » solution : il y a un projet qui passe ses contrôles et u
    admin@adm01:~/src/outils$ gitleaks git --no-banner --redact .
    admin@adm01:~$ find ~/.config/workbook -type f ! -perm 600
    ```
-   Les zones `/opt/workbook/m02/eXX*` ne contiennent que des données fictives : supprime-les quand tu n'en as plus l'usage (`sudo rm -rf /opt/workbook/m02/e37*` après vérification du chemin).
+   Les zones `/opt/workbook/m02/eXX*` ne contiennent que des données fictives : supprime-les quand tu n'en as plus l'usage. Elles t'appartiennent (les pannes donnent `/opt/workbook/m02` à `admin`) : pas besoin de `sudo`. ⚠️ Liste d'abord ce que le motif désigne, puis supprime exactement cela :
+   ```
+   admin@adm01:~$ ls -d /opt/workbook/m02/e3[79]* /opt/workbook/m02/e4[02]*
+   admin@adm01:~$ rm -rf -- /opt/workbook/m02/e37.annule-*     # par exemple, motif vérifié juste avant
+   ```
 
 **Grille d'évaluation de la revue** (Claire, Karim, Sophie, Nadia ; en auto-évaluation si tu travailles seul)
 

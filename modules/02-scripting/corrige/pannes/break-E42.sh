@@ -15,10 +15,13 @@
 #      par ordre alphabétique : « 00-… » passe avant le .pth de l'installation éditable du
 #      projet (« medictl.pth » avec uv_build), donc le vieux module masque le paquet du projet.
 # Sauvegardes : /var/lib/workbook/M02-E42.* sur adm01 (fichiers via sauver, dossier typer
-# déplacé, liste des dossiers créés). Annulation : tout est remis à l'identique.
+# déplacé, liste des dossiers créés). Annulation : ce qui est encore dans l'état cassé est remis
+# à l'identique ; ce que l'apprenant a déjà réparé (lien, lanceur, .venv recréés) est laissé.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
+# shellcheck source=_m02-reparations.sh
+source "$WB_ROOT/modules/02-scripting/corrige/pannes/_m02-reparations.sh"
 
 _E42_FICHIERS="$WB_ROOT/modules/02-scripting/corrige/fichiers/M02-E42/panne"
 _E42_PROJET="${WB_SRC:-$HOME/src}/outils"
@@ -57,12 +60,13 @@ panne_E42_v1() {
   local outil
   outil="$(uv tool dir)/medictl"
   [[ -L "$outil/bin/python" ]] || { wb_avert "$outil/bin/python n'est pas un lien"; return 1; }
-  wb_exec localhost P="$outil/bin/python" U="$(id -un)" \
+  _m02_wb_exec localhost P="$outil/bin/python" U="$(id -un)" \
     CIBLE="$HOME/.local/share/uv/python/cpython-3.13.5-linux-x86_64-gnu/bin/python3.13" >/dev/null <<'EOF'
 [ ! -e "$CIBLE" ] || { echo "$CIBLE existe : variante inapplicable" >&2; exit 1; }
 sauver "$P"
 ln -sfn "$CIBLE" "$P"
 chown -h "$U:" "$P"
+noter_injecte "$P"
 journal "lien $P → $CIBLE (interpréteur inexistant)"
 EOF
 }
@@ -73,7 +77,7 @@ panne_E42_v2() {
   usite="$(python3 -c 'import site; print(site.getusersitepackages())')" || return 1
   lanceur="$(_e42_lanceur)"
   [[ ! -e "$usite/medictl" ]] || { wb_avert "un paquet medictl existe déjà dans $usite"; return 1; }
-  wb_exec localhost US="$usite" L="$lanceur" U="$(id -un)" SRC="$_E42_FICHIERS" >/dev/null <<'EOF'
+  _m02_wb_exec localhost US="$usite" L="$lanceur" U="$(id -un)" SRC="$_E42_FICHIERS" >/dev/null <<'EOF'
 # Dossiers créés par la panne (supprimés à l'annulation, et eux seuls)
 d="$US"; manquants=""
 while [ ! -d "$d" ]; do manquants="$d $manquants"; d="$(dirname "$d")"; done
@@ -87,6 +91,7 @@ sauver "$L"
 rm -f -- "$L"
 install -m 755 -o "$U" -g "$(id -gn "$U")" "$SRC/lanceur-pip-medictl" "$L"
 touch -d '2026-04-02 10:14' "$L" "$US/medictl" "$US/medictl-0.1.0.dist-info"
+noter_injecte "$L"
 journal "prototype medictl 0.1.0 installé dans $US, lanceur $L remplacé"
 EOF
 }
@@ -108,7 +113,7 @@ panne_E42_v4() {
   _e42_precondition_projet || return 1
   local site
   site="$(_e42_site_venv)"
-  wb_exec localhost SITE="$site" U="$(id -un)" SRC="$_E42_FICHIERS" >/dev/null <<'EOF'
+  _m02_wb_exec localhost SITE="$site" U="$(id -un)" SRC="$_E42_FICHIERS" >/dev/null <<'EOF'
 c=/opt/workbook/m02/e42/compat-infoger
 [ ! -e /opt/workbook/m02/e42 ] || { echo "/opt/workbook/m02/e42 existe déjà" >&2; exit 1; }
 mkdir -p /opt/workbook/m02 && chown "$U:" /opt/workbook/m02
@@ -119,6 +124,7 @@ chown -R "$U:" /opt/workbook/m02/e42
 sauver "$SITE/00-compat-infoger.pth"
 install -m 644 -o "$U" -g "$(id -gn "$U")" "$SRC/00-compat-infoger.pth" "$SITE/00-compat-infoger.pth"
 touch -d 'yesterday 17:52' "$SITE/00-compat-infoger.pth"
+noter_injecte "$SITE/00-compat-infoger.pth"
 journal "chemin $c ajouté à sys.path (avant le projet) par $SITE/00-compat-infoger.pth"
 EOF
 }
@@ -136,7 +142,8 @@ verifier_E42() {
 }
 
 annuler_E42() {
-  wb_exec localhost >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+  _m02_wb_exec localhost >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+garder_reparations
 restaurer_fichiers
 if [ -d "$WB_DIR/M02-E42.typer" ] && [ -f "$WB_DIR/M02-E42.typer.chemin" ]; then
   t="$(cat "$WB_DIR/M02-E42.typer.chemin")"

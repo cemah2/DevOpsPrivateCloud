@@ -93,7 +93,7 @@ d'erreur) :
 
 | Maillon | Symptôme | Vérification | Remède |
 |---|---|---|---|
-| TLS | `certificate verify failed` | `openssl s_client -connect <IP-PVE01>:8006 -CAfile ~/.config/workbook/pve-root-ca.pem` | recopier `/etc/pve/pve-root-ca.pem` de `pve01` (par SSH) dans `PVE_CACERT` |
+| TLS | `certificate verify failed` | `openssl s_client -connect <IP-PVE01>:8006 -CAfile ~/.config/workbook/pve-root-ca.pem` | remettre dans `PVE_CACERT` l'ancre de `pve01` reçue par SSH : l'ancre conforme de M02-E08 (même sujet, même clé que `/etc/pve/pve-root-ca.pem`), ou une simple copie de ce fichier s'il porte l'extension *Key Usage* ; contrôler sujet et clé publique, puis `medictl` **et** `curl` |
 | authentification | `401` | `pveum user token list wb-automation@pve` (expiration), `pveum user list` (compte actif) | prolonger ou renouveler le jeton (≤ 1 an), réactiver le compte **avec** Sophie |
 | autorisation | liste **vide** sans erreur, `403`, refus « hors pool » | `pveum user token permissions wb-automation@pve lab --path /pool/lab` | ACL de l'utilisateur **et** du jeton sur `/pool/lab` (`WBAutomation`) |
 

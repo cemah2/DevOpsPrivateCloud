@@ -211,7 +211,7 @@ Contrat de l'outil (les vérifications s'y fient) :
 |---|---|
 | Fichier | `bin/ms-collecte-config` dans `plateforme/outils`, exécutable, première ligne `#!/usr/bin/env bash` |
 | Usage | `ms-collecte-config [-o DOSSIER] HÔTE...` ; `-h` / `--help` affiche une aide qui commence par `Usage` |
-| Hôtes | alias SSH de `adm01` (`gw01`, `dns01`, `git01`, `runner01`…) ; lecture des fichiers avec `sudo -n` ; un nom qui commence par `-` est refusé |
+| Hôtes | alias SSH de `adm01` (`gw01`, `dns01`, `git01`, `runner01`…) ; lecture des fichiers avec `sudo -n` ; un nom qui commence par `-` est refusé (erreur d'usage, code 2) |
 | Fichiers collectés | `etc/hostname etc/hosts etc/resolv.conf etc/network/interfaces etc/network/interfaces.d etc/nftables.conf etc/dnsmasq.d etc/chrony etc/wireguard etc/ssh/sshd_config etc/ssh/sshd_config.d etc/sudoers.d etc/systemd/system etc/gitlab/gitlab.rb etc/gitlab-runner/config.toml` (chemins relatifs à `/` ; les absents sont ignorés) |
 | Archive | une par hôte : `DOSSIER/<HÔTE>-AAAAMMJJ-HHMMSS.tar.gz`, mode 600 ; `DOSSIER` vaut `~/collectes` par défaut et est créé en 700 s'il manque |
 | Sorties | sortie standard : le chemin de chaque archive créée, une par ligne, **rien d'autre** ; tous les messages sur la sortie d'erreur |

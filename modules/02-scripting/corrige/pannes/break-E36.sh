@@ -12,9 +12,14 @@
 # Sauvegardes : /var/lib/workbook/M02-E36.* sur pve01 (expiration, ACL, état du compte) et
 # sur adm01 (copie du fichier de CA). Effet de bord voulu : tout ce qui utilise ce compte,
 # ce jeton ou ce fichier de CA (ms-snapshot, timer de M02-E26…) est touché aussi.
+# Annulation : seul ce qui est encore dans l'état cassé est rétabli (jeton encore expiré, compte
+# encore désactivé, aucune ACL utilisateur sur /pool/lab, fichier de CA encore celui de la panne) ;
+# une réparation de l'apprenant (nouvelle expiration, commentaire documenté…) n'est pas écrasée.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
+# shellcheck source=_m02-reparations.sh
+source "$WB_ROOT/modules/02-scripting/corrige/pannes/_m02-reparations.sh"
 
 _E36_ENV="${MEDICTL_ENV_FILE:-$HOME/.config/workbook/pve-api.env}"
 
@@ -85,7 +90,7 @@ panne_E36_v3() {
   local ca
   ca="$(_e36_cacert)"
   [[ -f "$ca" ]] || { wb_avert "fichier de CA $ca absent"; return 1; }
-  wb_exec localhost CA="$ca" U="$(id -un)" >/dev/null <<'EOF'
+  _m02_wb_exec localhost CA="$ca" U="$(id -un)" >/dev/null <<'EOF'
 sauver "$CA"
 src=/usr/local/share/ca-certificates/medisphere-provisoire.crt
 if [ -s "$src" ] && ! cmp -s "$src" "$CA"; then
@@ -99,6 +104,7 @@ else
   rm -rf -- "$t"
 fi
 chown "$U" "$CA"
+noter_injecte "$CA"
 journal "fichier de CA $CA remplacé par une autre racine"
 EOF
 }
@@ -138,28 +144,57 @@ verifier_E36() {
 
 annuler_E36() {
   wb_exec "$WB_PVE_HOST" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur pve01"
+# Chaque élément n'est rétabli que s'il est ENCORE dans l'état cassé : une réparation de
+# l'apprenant (expiration prolongée, compte réactivé avec un commentaire documenté, ACL remise)
+# n'est jamais écrasée ; la sauvegarde est alors simplement oubliée.
 if [ -f "$WB_DIR/M02-E36.expire" ]; then
-  pveum user token modify wb-automation@pve lab --expire "$(cat "$WB_DIR/M02-E36.expire")" && rm -f "$WB_DIR/M02-E36.expire"
-  journal "annulation : expiration du jeton rétablie"
+  actuel="$(pveum user token list wb-automation@pve --output-format json | perl -MJSON::PP -0777 -ne '
+    for (@{decode_json($_)}) { print $_->{expire} // 0 if $_->{tokenid} eq "lab" }')"
+  if [ -n "$actuel" ] && [ "$actuel" != 0 ] && [ "$actuel" -le "$(date +%s)" ]; then
+    pveum user token modify wb-automation@pve lab --expire "$(cat "$WB_DIR/M02-E36.expire")" \
+      && rm -f "$WB_DIR/M02-E36.expire" && journal "annulation : expiration du jeton rétablie"
+  else
+    rm -f "$WB_DIR/M02-E36.expire"
+    journal "annulation : jeton déjà prolongé (réparation), laissé tel quel"
+  fi
 fi
 if [ -f "$WB_DIR/M02-E36.acl" ]; then
-  ok=1
-  while read -r role prop; do
-    [ -n "$role" ] || continue
-    pveum acl modify /pool/lab --users wb-automation@pve --roles "$role" --propagate "${prop:-1}" || ok=0
-  done <"$WB_DIR/M02-E36.acl"
-  [ "$ok" = 1 ] && rm -f "$WB_DIR/M02-E36.acl"
-  journal "annulation : ACL utilisateur sur /pool/lab rétablies"
+  nb="$(pveum acl list --output-format json | perl -MJSON::PP -0777 -ne '
+    my $n = 0;
+    for (@{decode_json($_)}) {
+      $n++ if $_->{path} eq "/pool/lab" && $_->{type} eq "user" && $_->{ugid} eq "wb-automation\@pve";
+    }
+    print $n')"
+  if [ "${nb:-0}" = 0 ]; then
+    ok=1
+    while read -r role prop; do
+      [ -n "$role" ] || continue
+      pveum acl modify /pool/lab --users wb-automation@pve --roles "$role" --propagate "${prop:-1}" || ok=0
+    done <"$WB_DIR/M02-E36.acl"
+    [ "$ok" = 1 ] && rm -f "$WB_DIR/M02-E36.acl"
+    journal "annulation : ACL utilisateur sur /pool/lab rétablies"
+  else
+    rm -f "$WB_DIR/M02-E36.acl"
+    journal "annulation : ACL utilisateur déjà remise (réparation), laissée telle quelle"
+  fi
 fi
 if [ -f "$WB_DIR/M02-E36.enable" ]; then
-  pveum user modify wb-automation@pve --enable "$(cat "$WB_DIR/M02-E36.enable")" \
-    --comment "$(cat "$WB_DIR/M02-E36.commentaire" 2>/dev/null)" \
-    && rm -f "$WB_DIR/M02-E36.enable" "$WB_DIR/M02-E36.commentaire"
-  journal "annulation : compte wb-automation@pve réactivé"
+  en="$(pveum user list --output-format json | perl -MJSON::PP -0777 -ne '
+    for (@{decode_json($_)}) { print $_->{enable} // 1 if $_->{userid} eq "wb-automation\@pve" }')"
+  if [ "$en" = 0 ]; then
+    pveum user modify wb-automation@pve --enable "$(cat "$WB_DIR/M02-E36.enable")" \
+      --comment "$(cat "$WB_DIR/M02-E36.commentaire" 2>/dev/null)" \
+      && rm -f "$WB_DIR/M02-E36.enable" "$WB_DIR/M02-E36.commentaire" \
+      && journal "annulation : compte wb-automation@pve réactivé"
+  else
+    rm -f "$WB_DIR/M02-E36.enable" "$WB_DIR/M02-E36.commentaire"
+    journal "annulation : compte déjà réactivé (réparation), laissé tel quel"
+  fi
 fi
 exit 0
 EOF
-  wb_exec localhost >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+  _m02_wb_exec localhost >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+garder_reparations
 restaurer_fichiers
 exit 0
 EOF

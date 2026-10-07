@@ -89,7 +89,9 @@ pytest:
   script:
     - task test:py
   # Taux de couverture lu dans la sortie de pytest-cov (ligne TOTAL), affiché dans les MR.
-  coverage: '/^TOTAL\s+.*\s+(\d+(?:\.\d+)?)%$/'
+  # GitLab applique l'expression ligne par ligne au journal du job ; pas d'ancre « ^ » : une
+  # ligne de journal peut porter un préfixe (horodatage, séquence de couleur).
+  coverage: '/TOTAL\s.*\s(\d+(?:\.\d+)?)%/'
   artifacts:
     when: always
     expire_in: 1 week

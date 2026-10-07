@@ -16,3 +16,5 @@ __pycache__/
 .terraform/
 *.tfstate
 *.tfstate.backup
+.ruff_cache/
+.pytest_cache/

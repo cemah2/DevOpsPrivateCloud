@@ -23,8 +23,8 @@ _m02_code() {
   [[ "$rc" -eq "$attendu" ]]
 }
 
-check_cmd "les garde-fous sont dans le code (garde_fous.py ou équivalent) et fusionnés dans main" \
-  gitlab_api "projects/plateforme%2Foutils/repository/files/src%2Fmedictl%2Fcli.py?ref=main"
+check_cmd "les garde-fous sont dans un module dédié (src/medictl/garde_fous.py) fusionné dans main" \
+  gitlab_api "projects/plateforme%2Foutils/repository/files/src%2Fmedictl%2Fgarde_fous.py?ref=main"
 check_output "vm create --help mentionne --vmid, --template, --vnet et --wait/--no-wait" \
   '--no-wait' "$_m02_m" vm create --help
 

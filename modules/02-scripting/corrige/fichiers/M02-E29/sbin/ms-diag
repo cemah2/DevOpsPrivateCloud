@@ -98,7 +98,9 @@ expurger() {
 } >"$d/contexte.txt"
 
 for u in "${unites[@]}"; do
-  systemctl status --no-pager --full --lines=50 -- "$u" >"$d/$u.statut.txt" 2>&1 || true
+  # Le statut montre aussi les lignes de commande des processus et des extraits du journal :
+  # expurgé comme le reste.
+  systemctl status --no-pager --full --lines=50 -- "$u" 2>&1 | expurger >"$d/$u.statut.txt" || true
   systemctl cat --no-pager -- "$u" 2>&1 | expurger >"$d/$u.unite.txt" || true
   journalctl --no-pager -o short-iso -n 5000 --since "-${depuis}h" -u "$u" 2>&1 \
     | expurger >"$d/$u.journal.txt" || true

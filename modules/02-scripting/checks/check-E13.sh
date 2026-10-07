@@ -26,18 +26,26 @@ export MS_LOCK_DIR="$_m02_tmp/verrous" MS_EXPORT_DIR="$_m02_tmp/exports"
 mkdir -p "$MS_LOCK_DIR"
 
 # --- Exclusion mutuelle : le contrôle tient lui-même le verrou, l'outil doit refuser (3) ---
-flock "$MS_LOCK_DIR/ms-export-config.lock" sleep 30 &
+# « flock -o » : le verrou est tenu par flock seul, pas par le « sleep » qu'il lance ; tuer
+# flock (et son enfant) libère donc vraiment le verrou avant l'export réel ci-dessous.
+flock -o "$MS_LOCK_DIR/ms-export-config.lock" sleep 30 &
 _m02_pid=$!
 sleep 0.5
 check_cmd "verrou tenu : ms-export-config refuse avec le code 3 et n'écrit rien" bash -c '
   rc=0; "$1" </dev/null >/dev/null 2>&1 || rc=$?; ((rc == 3)) && [[ ! -e "$2/dernier" ]]' _ "$_m02_exp" "$MS_EXPORT_DIR"
-flock "$MS_LOCK_DIR/ms-snapshot.lock" sleep 30 &
+flock -o "$MS_LOCK_DIR/ms-snapshot.lock" sleep 30 &
 _m02_pid2=$!
 sleep 0.5
+# Cible valide et permanente (adm01, 1001) en simulation : seul le verrou peut justifier
+# un refus en 3 (avec 2020, détruite en M02-E16, le refus « VM invisible » masquerait l'absence de verrou).
 check_cmd "verrou tenu : ms-snapshot --dry-run refuse avec le code 3" bash -c '
-  rc=0; "$1" --dry-run 2020 </dev/null >/dev/null 2>&1 || rc=$?; ((rc == 3))' _ "$_m02_snap"
+  rc=0; "$1" --dry-run 1001 </dev/null >/dev/null 2>&1 || rc=$?; ((rc == 3))' _ "$_m02_snap"
+pkill -P "$_m02_pid" 2>/dev/null || true
+pkill -P "$_m02_pid2" 2>/dev/null || true
 kill "$_m02_pid" "$_m02_pid2" 2>/dev/null || true
 wait "$_m02_pid" "$_m02_pid2" 2>/dev/null || true
+check_cmd "verrou libéré : ms-snapshot --dry-run 1001 n'est plus refusé (le code 3 venait bien du verrou)" bash -c '
+  rc=0; "$1" --dry-run 1001 </dev/null >/dev/null 2>&1 || rc=$?; ((rc != 3))' _ "$_m02_snap"
 
 # --- Export réel (lectures API) dans le dossier temporaire ------------------------------------
 _m02_rc=0

@@ -15,15 +15,18 @@
 #      InfoGér « 30 7 * * 1 » recopiée pendant l'audit) : le timer est sain, actif, mais ne se
 #      déclenche plus que le lundi.
 # Sauvegardes : /var/lib/workbook/M02-E41.* sur adm01 (drop-ins créés notés ABSENT).
+# Annulation : un drop-in modifié par l'apprenant depuis l'injection (réparation) est laissé.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
+# shellcheck source=_m02-reparations.sh
+source "$WB_ROOT/modules/02-scripting/corrige/pannes/_m02-reparations.sh"
 
 _E41_TIMER=ms-verif-sauvegardes.timer
 _E41_SVC=ms-verif-sauvegardes.service
 
 _e41_injecter() {
-  WB_VAR="$1" wb_exec localhost T="$_E41_TIMER" S="$_E41_SVC" N="$1" >/dev/null <<'EOF'
+  WB_VAR="$1" _m02_wb_exec localhost T="$_E41_TIMER" S="$_E41_SVC" N="$1" >/dev/null <<'EOF'
 systemctl cat "$T" "$S" >/dev/null 2>&1 || { echo "unités $T / $S absentes (M02-E26 non fait ?)" >&2; exit 1; }
 systemctl is-active -q "$T" || { echo "le timer $T n'est déjà pas actif : lab/bin/check 02 26" >&2; exit 1; }
 case "$N" in
@@ -40,6 +43,7 @@ case "$N" in
 OnCalendar=
 OnCalendar=*-*-* 30:07:00
 UNIT
+    noter_injecte "$f"
     systemctl daemon-reload
     systemctl restart "$T" 2>/dev/null || true
     journal "drop-in $f : OnCalendar invalide"
@@ -55,6 +59,7 @@ UNIT
 [Unit]
 ConditionPathExists=/etc/ms-outils/controle-actif
 UNIT
+    noter_injecte "$f"
     systemctl daemon-reload
     # Le passage de 07:30 : sauté.
     systemctl start "$S" 2>/dev/null || true
@@ -70,6 +75,7 @@ UNIT
 OnCalendar=
 OnCalendar=Mon *-*-* 07:30:00
 UNIT
+    noter_injecte "$f"
     systemctl daemon-reload
     systemctl restart "$T"
     journal "drop-in $f : déclenchement hebdomadaire"
@@ -97,7 +103,8 @@ verifier_E41() {
 }
 
 annuler_E41() {
-  wb_exec localhost T="$_E41_TIMER" S="$_E41_SVC" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+  _m02_wb_exec localhost T="$_E41_TIMER" S="$_E41_SVC" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+garder_reparations
 restaurer_fichiers
 rmdir "/etc/systemd/system/$T.d" "/etc/systemd/system/$S.d" 2>/dev/null || true
 systemctl daemon-reload

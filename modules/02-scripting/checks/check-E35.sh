@@ -83,4 +83,9 @@ check_cmd "le service a accès au dossier personnel de admin (secrets, clone)" _
 check_cmd "aucun proxy n'intercepte les appels du service aux API Proxmox VE et PBS" _m02_e35_proxy_ok
 check_cmd "le service exécute la copie installée du script (/usr/local/bin), identique à main" _m02_e35_meme_script
 check_cmd "dernier passage du service réussi, il y a moins de 26 h" _m02_e35_dernier_ok
+# systemd ne garde le résultat du dernier passage qu'en mémoire : après un redémarrage de adm01,
+# il n'y en a plus tant que le service n'a pas tourné.
+if [[ "$(_m02_e35_prop ExecMainStartTimestampMonotonic)" == 0 ]]; then
+  printf '         (aucun passage depuis le démarrage de adm01 : sudo systemctl start %s, puis relance)\n' "$_m02_e35_svc"
+fi
 check_cmd "le timer ms-verif-sauvegardes est actif" systemctl is-active -q ms-verif-sauvegardes.timer

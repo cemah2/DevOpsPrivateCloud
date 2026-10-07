@@ -24,8 +24,12 @@ for _m02_f in purge_logs.sh check_disk.sh sauvegarde_config.sh; do
     bash -c '[[ $(grep -c "shellcheck disable" "$1") -le 1 ]] && ! grep -Eq "disable=all" "$1"' _ "$_m02_e04/$_m02_f"
   check_cmd "$_m02_f : syntaxe Bash valide" bash -n "$_m02_e04/$_m02_f"
 done
-check_cmd "check_disk.sh avec un seuil de 0 % : les alertes donnent un code retour non nul" \
-  bash -c '! "$1" 0 >/dev/null 2>&1' _ "$_m02_e04/check_disk.sh"
+# Seuil de 1 % (valeur valide pour toute interface raisonnable) : la racine le dépasse
+# forcément ; un code non nul ne peut donc pas venir d'un refus du seuil lui-même.
+check_cmd "check_disk.sh avec un seuil de 1 % : les alertes donnent un code retour non nul" \
+  bash -c '! "$1" 1 >/dev/null 2>&1' _ "$_m02_e04/check_disk.sh"
+check_output "check_disk.sh avec un seuil de 1 % : la partition racine est signalée sur la sortie standard" \
+  '(^|[[:space:]])/([[:space:]:]|$)' bash -c '"$1" 1 2>/dev/null || true' _ "$_m02_e04/check_disk.sh"
 
 # --- Configuration du dépôt plateforme/outils ---------------------------------------
 check_cmd ".shellcheckrc versionné à la racine du dépôt" \

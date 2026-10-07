@@ -4,7 +4,7 @@
 
 Fichiers complets : [`fichiers/M02-E24/`](fichiers/M02-E24/) à [`fichiers/M02-E34/`](fichiers/M02-E34/), à placer aux mêmes chemins dans `~/src/outils` (ils s'appuient sur `lib/ms-commun.sh` de M02-E10/E13 et sur le Taskfile de M02-E20). Ils ont été vérifiés avec ShellCheck 0.11 (`-x`), bats-core 1.13 contre la bibliothèque de E13, pytest, ruff, `systemd-analyze verify` et `visudo -c`.
 
-Points non testés en conditions réelles (signale tes retours) : la publication dans le registre PyPI de GitLab 19.4 (dont `--check-url` avec un registre privé), la reprise des identifiants du magasin `uv auth` par `uv tool upgrade`, l'option d'expiration de `proxmox-backup-manager user generate-token`, et les droits PBS posés sur un namespace plutôt que sur le datastore. Ils sont marqués « ⚠️ À vérifier sur ta version ».
+Points non testés en conditions réelles (signale tes retours) : la publication dans le registre PyPI de GitLab 19.4 (dont `--check-url` avec un registre privé), la reprise des identifiants du magasin `uv auth` par `uv tool upgrade`, la visibilité des instantanés PBS avec une ACL posée sur le namespace `par1` (documentée par l'API de PBS, non essayée sur `pbs01`). Ils sont marqués « ⚠️ À vérifier sur ta version ». Vérifiés sur la documentation officielle ou par essai : `uv version --frozen`, `uv auth login`/`uv auth dir`, le contenu du reçu `uv-receipt.toml`, `--expire` de `proxmox-backup-manager user generate-token`, les privilèges de `GET /admin/datastore/{store}/snapshots`, le filtrage de `check_volume_access`, `--pinnedpubkey` avec `-k`, la règle sudo à expression régulière (sudo 1.9.15).
 
 ---
 
@@ -62,7 +62,7 @@ bats:
 - un job **absent** d'un pipeline (règle non satisfaite) ne bloque pas la fusion : « Pipelines must succeed » ne regarde que le statut du pipeline, qui ne contient pas ce job. C'est ce qui rend `rules:changes` utilisable sans casser les MR ;
 - un job **en échec** fait échouer le pipeline (sauf `allow_failure`), donc bloque la fusion.
 
-La couverture : `coverage: '/^TOTAL\s+.*\s+(\d+(?:\.\d+)?)%$/'` lit la dernière colonne de la ligne `TOTAL` que `pytest --cov … --cov-report=term-missing` (tâche `test:py`) affiche ; GitLab l'affiche dans la MR et dans la liste des jobs.
+La couverture : `coverage: '/TOTAL\s.*\s(\d+(?:\.\d+)?)%/'` lit le pourcentage de la ligne `TOTAL` que `pytest --cov … --cov-report=term-missing` (tâche `test:py`) affiche (`TOTAL   460   47   90%`) ; GitLab applique l'expression ligne par ligne au journal du job et l'affiche dans la MR et dans la liste des jobs. Pas d'ancre `^` : une ligne de journal peut commencer par un préfixe (horodatage, séquence de couleur), et l'expression ne trouverait plus rien.
 
 *3. Doublon* (exemple de justification) : on garde les jobs dédiés `shellcheck` et `ruff`. Ils utilisent les **mêmes binaires** que les développeurs (installés depuis la même source, mêmes versions), leurs échecs sont lisibles d'un coup d'œil dans la MR, et le surcoût est de quelques secondes. Le hook pre-commit reste la barrière locale. Le prix : deux endroits où une version peut dériver (le `rev` du hook et le binaire du runner) ; on le contrôle en revue lors de chaque montée de version. Choix inverse défendable : laisser pre-commit seul juge du formatage et de l'analyse statique, et garder en CI seulement ce que pre-commit ne fait pas (tests, construction).
 
@@ -150,7 +150,7 @@ Points clés :
 
 *5. Le registre en lecture.*
 - Groupe `plateforme` → *Settings → Packages and registries → Package forwarding* : décocher « Forward PyPI package requests » (rôle Owner du groupe).
-- Projet → *Settings → Repository → Deploy tokens* : nom `medictl-lecture`, expiration, portée **`read_package_registry` seule**.
+- Projet → *Settings → Repository → Deploy tokens* : nom `medictl-lecture`, expiration, portée **`read_package_registry` seule** ; inscrit au registre des secrets (emplacement : magasin `uv auth` de `admin` sur `adm01` ; révocation : bouton *Revoke* de la même page).
 - Le risque de la redirection : un nom inconnu du registre interne est cherché sur pypi.org. Un paquet publié là-bas sous le nom d'un outil interne **pas encore publié**, ou un nom mal orthographié, se ferait installer comme s'il était interne (confusion de dépendances). Côté uv, la stratégie par défaut `first-index` protège `medictl` lui-même (trouvé dans le premier index qui le connaît) ; elle ne protège pas d'un registre qui va, lui, chercher ailleurs.
 
 *6. L'installation sur `adm01`.*
@@ -219,13 +219,14 @@ admin@adm01:~$ MS_PVE_ENV_FILE=~/.config/workbook/pve-lecture.env bash -c \
 
 Zéro, avec un code HTTP 200, alors que l'interface (en `wb-admin`) montre des dizaines de sauvegardes. La documentation de `GET /nodes/{node}/storage/{storage}/content` exige `Datastore.Audit` **ou** `Datastore.AllocateSpace` sur le stockage pour **appeler** la liste. Mais chaque volume est ensuite filtré par `check_volume_access` (`PVE/Storage.pm`) : pour une sauvegarde de VM, il faut `Datastore.Allocate` sur le stockage, **ou** `Datastore.AllocateSpace` sur le stockage **et** `VM.Backup` sur `/vms/<VMID>`. Les volumes refusés sont **silencieusement** retirés de la liste.
 
-Voir les sauvegardes par cette voie demanderait donc `Datastore.AllocateSpace` + `VM.Backup` : avec eux, le jeton peut lancer des sauvegardes, en restaurer par-dessus des VMs et **supprimer** des sauvegardes non protégées. Confier cela à un contrôle qui tourne sans surveillance est exactement ce qu'il faut éviter. Conclusion présentée à Sophie : interroger **PBS directement** (source de vérité des sauvegardes) avec un jeton PBS `DatastoreAudit` (lister groupes et instantanés, rien de plus), et garder un jeton Proxmox VE `PVEAuditor` sur `/pool/lab` pour savoir **quelles** VMs doivent être sauvegardées. On retire ensuite l'ACL devenue inutile sur `/storage/pbs-par2`.
+Voir les sauvegardes par cette voie demanderait donc `Datastore.AllocateSpace` + `VM.Backup` (ou `Datastore.Allocate`, pire encore) : avec eux, le jeton peut lancer des sauvegardes, écrire sur le stockage et **supprimer** des sauvegardes non protégées (`DELETE …/content/{volume}` accepte justement ce couple de privilèges pour un volume de sauvegarde). Confier cela à un contrôle qui tourne sans surveillance est exactement ce qu'il faut éviter. Conclusion présentée à Sophie : interroger **PBS directement** (source de vérité des sauvegardes) avec un jeton PBS `DatastoreAudit` (lister groupes et instantanés, rien de plus), et garder un jeton Proxmox VE `PVEAuditor` sur `/pool/lab` pour savoir **quelles** VMs doivent être sauvegardées. On retire ensuite l'ACL devenue inutile sur `/storage/pbs-par2`.
 
 *2. Les bons jetons.* Proxmox VE : `wb-automation@pve!lecture` avec `PVEAuditor` sur `/pool/lab`. Ses droits effectifs (intersection avec `WBAutomation`) : `VM.Audit`, `Pool.Audit`, `VM.GuestAgent.Audit`. PBS :
 
 ```
 root@pbs01:~# proxmox-backup-manager user create wb-verif@pbs --comment "Contrôle des sauvegardes depuis adm01 (PLAT-356)"
-root@pbs01:~# proxmox-backup-manager user generate-token wb-verif@pbs lecture --comment "ms-verif-sauvegardes"
+root@pbs01:~# proxmox-backup-manager user generate-token wb-verif@pbs lecture --comment "ms-verif-sauvegardes" \
+                 --expire "$(date -d '+1 year' +%s)"
 root@pbs01:~# proxmox-backup-manager acl update /datastore/ds-lab/par1 DatastoreAudit --auth-id wb-verif@pbs
 root@pbs01:~# proxmox-backup-manager acl update /datastore/ds-lab/par1 DatastoreAudit --auth-id 'wb-verif@pbs!lecture'
 root@pbs01:~# proxmox-backup-manager user permissions 'wb-verif@pbs!lecture' --path /datastore/ds-lab/par1
@@ -233,7 +234,9 @@ Path: /datastore/ds-lab/par1
 - Datastore.Audit (*)
 ```
 
-`DatastoreAudit` ne donne que `Datastore.Audit` : lister groupes, instantanés, état de vérification ; pas `Datastore.Read` (télécharger le contenu), ni `Backup`, `Modify`, `Prune`. ⚠️ À vérifier sur ta version : l'expiration d'un jeton PBS et la visibilité avec des ACL limitées au namespace (sinon, poser l'ACL sur `/datastore/ds-lab`, comme pour `wb-backup` en M00-E22).
+`DatastoreAudit` ne donne que `Datastore.Audit` : lister groupes, instantanés, état de vérification ; pas `Datastore.Read` (télécharger le contenu), ni `Backup`, `Modify`, `Prune`. C'est exactement ce qu'exige `GET /admin/datastore/{store}/snapshots` (documentation de l'API : `Datastore.Audit` sur `/datastore/{store}[/{namespace}]` pour tout voir ; `Datastore.Backup` ne montrerait que les groupes dont le jeton est propriétaire). ⚠️ À vérifier sur ta version : la visibilité avec une ACL posée sur le seul namespace `par1` (sinon, poser l'ACL sur `/datastore/ds-lab`, comme pour `wb-backup` en M00-E22). Le jeton expire dans un an.
+
+Les deux nouveaux secrets (`wb-automation@pve!lecture`, `wb-verif@pbs!lecture`) entrent dans le registre des secrets de `plateforme/medisphere` (`docs/socle/registre-secrets.md`, M01 : nom, portée, emplacement, expiration, rotation), avec leur révocation, à portée de main le jour où un fichier fuit : `pveum user token remove wb-automation@pve lecture` sur `pve01`, `proxmox-backup-manager user delete-token wb-verif@pbs lecture` sur `pbs01` (puis `acl update … --delete` pour retirer les ACL devenues inutiles).
 
 Confiance TLS envers le certificat autosigné de `pbs01` :
 
@@ -297,7 +300,7 @@ NEXT                         LEFT     LAST PASSED UNIT                        AC
 Sun 2026-10-05 07:30:00 CEST 21h left -    -      ms-verif-sauvegardes.timer  ms-verif-sauvegardes.service
 ```
 
-`ProtectHome=read-only` laisse le service lire `~admin/.config/workbook/` sans rien écrire dans `/home` ; `ProtectSystem=strict` met tout le reste en lecture seule. `ms-alerte@.service` tourne avec un utilisateur éphémère (`DynamicUser=yes`) membre de `systemd-journal` pour lire le journal de l'unité en échec ; il reçoit de systemd `MONITOR_UNIT`, `MONITOR_SERVICE_RESULT`, `MONITOR_EXIT_STATUS` et `MONITOR_INVOCATION_ID`, et extrait ainsi les lignes de **cette** exécution (`journalctl _SYSTEMD_INVOCATION_ID=…`). Pourquoi un gabarit `@` : la documentation précise que si plusieurs unités désignent le même gestionnaire unique, les variables `MONITOR_*` ne sont pas transmises ; et une instance par unité surveillée permet de réutiliser `ms-alerte@` pour les futurs contrôles.
+`ProtectHome=read-only` laisse le service lire `~admin/.config/workbook/` sans rien écrire dans `/home` ; `ProtectSystem=strict` met tout le reste en lecture seule. `ms-alerte@.service` tourne avec un utilisateur éphémère (`DynamicUser=yes`) membre de `systemd-journal` pour lire le journal de l'unité en échec ; il reçoit de systemd `MONITOR_UNIT`, `MONITOR_SERVICE_RESULT`, `MONITOR_EXIT_STATUS` et `MONITOR_INVOCATION_ID`, et extrait ainsi les lignes de **cette** exécution (`journalctl _SYSTEMD_INVOCATION_ID=…`). Avec `%n` (nom complet, suffixe compris), l'instance s'appelle `ms-alerte@ms-verif-sauvegardes.service.service` : pour lire son journal, `journalctl -u 'ms-alerte@ms-verif-sauvegardes.service.service'`, ou plus simplement `journalctl -t ms-alerte`. Pourquoi un gabarit `@` : la documentation précise que si plusieurs unités désignent le même gestionnaire unique, les variables `MONITOR_*` ne sont pas transmises ; et une instance par unité surveillée permet de réutiliser `ms-alerte@` pour les futurs contrôles.
 
 *6. Les deux chemins.*
 
@@ -569,7 +572,7 @@ Les collectes de diagnostic passent par un outil versionné, livré par Ansible 
 
 Lecture : (a) un `trap` ne s'exécute qu'**entre** deux commandes ; tant que Bash attend une commande de premier plan, le signal attend ; le builtin `wait`, lui, est interrompu. (b) Ctrl-C va à tout le **groupe de processus** du terminal (le `sleep` de premier plan le reçoit directement) ; `kill` à un seul PID ne touche pas les enfants. (c) les tâches d'arrière-plan d'un script non interactif **ignorent SIGINT** : d'où le mode « propre » qui les tue explicitement.
 
-*2. `timeout`.* Codes : `124` si le délai est atteint (`SIGTERM` envoyé), `137` si il a fallu `SIGKILL` (`--kill-after`), sinon le code de la commande. Par défaut `timeout` met la commande dans **son propre groupe** et lui relaie les signaux qu'il reçoit ; `--foreground` la laisse dans le groupe courant (utile quand on veut qu'un Ctrl-C du clavier l'atteigne directement). Pour une commande qui crée elle-même des enfants, c'est à elle de les propager.
+*2. `timeout`.* Codes : `124` si le délai est atteint (`SIGTERM` envoyé), `137` si il a fallu `SIGKILL` (`--kill-after`), sinon le code de la commande. Par défaut `timeout` se place, avec la commande, dans **son propre groupe de processus** ; à l'échéance, ou quand il reçoit lui-même un signal (TERM, INT, HUP…), il l'envoie à la commande **et à tout ce groupe** : les petits-enfants restés dans le groupe sont touchés aussi. Conséquence au clavier : lancé depuis un **script** (pas de contrôle des tâches), ce groupe n'est pas celui du terminal, donc un Ctrl-C n'atteint ni `timeout` ni la commande, seulement le script, qui doit les arrêter lui-même (c'est le rôle du `trap` de `ms-attendre`) ; lancé à l'invite d'un shell interactif, il est le groupe de premier plan et reçoit le Ctrl-C. `--foreground` laisse la commande dans le groupe courant (elle peut lire le terminal et reçoit le Ctrl-C directement), au prix d'une limite écrite dans `man timeout` : les enfants de la commande ne sont plus tués à l'échéance.
 
 *3. Python, observation.* De [`ressources/M02-E30/demo_sous_processus.py`](../ressources/M02-E30/demo_sous_processus.py) :
 - **cas 1** : `subprocess.run(..., shell=True, timeout=2)` lève `TimeoutExpired` et tue le **shell**, mais le petit-enfant (`sleep 301` lancé par ce shell) survit : Python ne tue que le processus qu'il a directement créé.

@@ -12,8 +12,9 @@
 #   3. un « ssh pve01 pvesh get » par champ et par VM (connexion SSH + démarrage de pvesh) ;
 #   4. résolution DNS sur la passerelle 10.10.10.1 (DNS_INVENTAIRE de inventaire.conf) :
 #      gw01 jette en silence, chaque requête attend le délai complet de dig.
-# Vérification : le script ne termine pas en 30 s (le seuil du contrôle et du ticket). Annulation : la zone est déplacée
-# (e40.annule-<date>) ; rien n'est supprimé, rien n'est modifié sur pve01.
+# Vérification : le script ne termine pas en 30 s (le seuil du contrôle et du ticket). Annulation : la zone
+# encore cassée est déplacée (e40.annule-<date>) ; rien n'est supprimé, rien n'est modifié sur pve01 ;
+# une zone réparée reste en place.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -65,10 +66,20 @@ verifier_E40() {
   ((rc == 124))
 }
 
+# annuler_E40 — script (et, en variante 4, configuration) encore tels que la panne les a déposés :
+# zone mise de côté. Modifiés par l'apprenant (réparation) : zone laissée en place.
 annuler_E40() {
-  local z="$_E40_ZONE"
-  if [[ -e "$z" ]]; then
+  local z="$_E40_ZONE" v
+  [[ -e "$z" ]] || return 0
+  # shellcheck disable=SC2031  # WB_VAR est fixé par wb_main (ou par l'astreinte) avant l'appel
+  v="${WB_VAR:-}"
+  if [[ ! "$v" =~ ^[1-4]$ ]] || {
+    cmp -s "$z/bin/ms-inventaire-lab" "$_E40_MOD/corrige/fichiers/M02-E40/panne/ms-inventaire-lab.v$v" \
+      && { [[ "$v" != 4 ]] || grep -q '^DNS_INVENTAIRE=10\.10\.10\.1$' "$z/etc/inventaire.conf" 2>/dev/null; }
+  }; then
     mv -- "$z" "$z.annule-$(date +%Y%m%d-%H%M%S)" || wb_avert "zone $z non déplacée"
+  else
+    echo "Zone $z réparée (script modifié) : laissée en place." >&2
   fi
 }
 

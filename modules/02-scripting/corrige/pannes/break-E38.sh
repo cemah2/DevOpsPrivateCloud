@@ -245,6 +245,9 @@ verifier_E38() {
   pid="$(_e38_etat pipeline)"
   echo "Attente du pipeline sur runner01 (jusqu'à 20 min)…" >&2
   while ((SECONDS < fin)); do
+    # D'abord attendre : le pipeline de MR est créé quelques secondes après la MR, et un
+    # pipeline de branche déjà réussi ne doit pas faire conclure trop tôt à l'absence de panne.
+    sleep 20
     if [[ -n "$pid" ]]; then
       st="$(_e38_api GET "projects/$_E38_PROJ/pipelines/$pid" | jq -r '.status')"
     elif [[ -n "$sha" ]]; then
@@ -256,7 +259,6 @@ verifier_E38() {
       failed) return 0 ;;
       success | skipped | canceled) return 1 ;;
     esac
-    sleep 20
   done
   return 1
 }
@@ -268,11 +270,25 @@ annuler_E38() {
   uid="$(_e38_etat uid)"
   jid="$(_e38_etat jeton_id)"
   var="$(_e38_etat variable)"
+  # La MR et sa branche ne sont retirées que si elles sont encore dans l'état laissé par la panne
+  # (MR ouverte, branche au commit de Lucas) : une MR corrigée par l'apprenant (nouveau commit),
+  # fusionnée ou déjà fermée avec un commentaire n'est pas touchée.
+  local sha etat tete
+  sha="$(_e38_etat sha)"
   if [[ -n "$mr" ]]; then
-    _e38_api PUT "projects/$_E38_PROJ/merge_requests/$mr" --data-urlencode "state_event=close" >/dev/null 2>&1 || true
+    etat="$(_e38_api GET "projects/$_E38_PROJ/merge_requests/$mr" 2>/dev/null | jq -r '"\(.state) \(.sha)"')" || etat=""
+    if [[ "$etat" == "opened $sha" ]]; then
+      _e38_api PUT "projects/$_E38_PROJ/merge_requests/$mr" --data-urlencode "state_event=close" >/dev/null 2>&1 || true
+    elif [[ -n "$etat" ]]; then
+      echo "MR !$mr laissée telle quelle ($etat) : elle a été reprise après la panne." >&2
+      br=""
+    fi
   fi
   if [[ -n "$br" ]]; then
-    _e38_api DELETE "projects/$_E38_PROJ/repository/branches/${br//\//%2F}" >/dev/null 2>&1 || true
+    tete="$(_e38_api GET "projects/$_E38_PROJ/repository/branches/${br//\//%2F}" 2>/dev/null | jq -r '.commit.id')" || tete=""
+    if [[ -n "$tete" && "$tete" == "$sha" ]]; then
+      _e38_api DELETE "projects/$_E38_PROJ/repository/branches/${br//\//%2F}" >/dev/null 2>&1 || true
+    fi
   fi
   if [[ -n "$uid" && -n "$jid" ]]; then
     _e38_api DELETE "users/$uid/impersonation_tokens/$jid" >/dev/null 2>&1 \

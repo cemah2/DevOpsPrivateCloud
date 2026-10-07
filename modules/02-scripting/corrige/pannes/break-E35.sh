@@ -16,9 +16,13 @@
 # essayée : la variante enregistrée est celle qui a réellement cassé le service.
 # Sauvegardes : /var/lib/workbook/M02-E35.* sur adm01 (fichiers créés notés ABSENT).
 # L'injection lance une fois le service (l'échec « de la nuit » apparaît dans le journal).
+# Annulation : seuls les fichiers encore identiques à ceux posés par la panne sont retirés
+# (une réparation de l'apprenant, ex. un drop-in corrigé, est laissée en place).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
+# shellcheck source=_m02-reparations.sh
+source "$WB_ROOT/modules/02-scripting/corrige/pannes/_m02-reparations.sh"
 
 _E35_SVC=ms-verif-sauvegardes.service
 _E35_FICHIERS="$WB_ROOT/modules/02-scripting/corrige/fichiers/M02-E35/panne"
@@ -41,7 +45,7 @@ _e35_une() {
   if ((n == 4)); then
     ancien="$(base64 -w0 "$_E35_FICHIERS/ms-verif-sauvegardes-0.3.0")" || return 1
   fi
-  WB_VAR="$n" wb_exec localhost SVC="$_E35_SVC" N="$n" ANCIEN="$ancien" >/dev/null <<'EOF'
+  WB_VAR="$n" _m02_wb_exec localhost SVC="$_E35_SVC" N="$n" ANCIEN="$ancien" >/dev/null <<'EOF'
 d="/etc/systemd/system/$SVC.d"
 mkdir -p "$d"
 case "$N" in
@@ -85,11 +89,14 @@ ExecStart=/usr/local/sbin/ms-verif-sauvegardes
 UNIT
     ;;
 esac
+noter_injecte "$f"
+if [ "$N" = 4 ]; then noter_injecte /usr/local/sbin/ms-verif-sauvegardes; fi
 systemctl daemon-reload
 journal "drop-in $f posé sur $SVC"
 # Le passage « de la nuit » : il doit échouer.
 if timeout 300 systemctl start "$SVC" 2>/dev/null; then
   journal "variante $N sans effet sur ce lab : retrait"
+  oublier_injecte
   restaurer_fichiers
   systemctl daemon-reload
   exit 10
@@ -129,7 +136,8 @@ verifier_E35() {
 }
 
 annuler_E35() {
-  wb_exec localhost SVC="$_E35_SVC" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+  _m02_wb_exec localhost SVC="$_E35_SVC" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur adm01"
+garder_reparations
 restaurer_fichiers
 rmdir "/etc/systemd/system/$SVC.d" 2>/dev/null || true
 systemctl daemon-reload

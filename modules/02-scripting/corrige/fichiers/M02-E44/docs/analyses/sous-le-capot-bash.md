@@ -89,8 +89,8 @@
 10. **`/dev/fd/63`.** `<(cmd)` lance `cmd` avec sa sortie reliée à un tube, et remplace
     l'expression par un chemin `/dev/fd/N` qui désigne l'autre extrémité [14] ; `diff` ouvre ces
     chemins comme des fichiers. Le code retour de `cmd` n'est pas celui de la commande principale.
-    Depuis Bash 4.4, `$!` contient le PID de la dernière substitution de processus, et depuis
-    Bash 5.1 `wait "$!"` rend son code retour : c'est ce que font `ms-purge-rapports` (E37) et
+    Depuis Bash 4.4, `$!` contient le PID de la dernière substitution de processus et
+    `wait "$!"` rend son code retour : c'est ce que font `ms-purge-rapports` (E37) et
     `ms-archiver-journaux` (E39) après `mapfile … < <(find …)`.
 
 11. **`read`.** Sans `-r`, `\` est un caractère d'échappement (et `\` en fin de ligne joint la

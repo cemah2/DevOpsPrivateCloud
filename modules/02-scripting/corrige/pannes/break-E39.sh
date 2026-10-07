@@ -15,7 +15,7 @@
 #   4. une substitution de commande « x=$(fonction) » (bash y désactive errexit, faute
 #      d'inherit_errexit).
 # Réinjection : une zone existante est déplacée (e39.precedent-<date>). Annulation : la zone
-# est déplacée (e39.annule-<date>) ; rien n'est supprimé.
+# encore cassée est déplacée (e39.annule-<date>) ; rien n'est supprimé ; réparée, elle reste.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -66,10 +66,37 @@ verifier_E39() {
   ! tar -tzf "$a" 2>/dev/null | grep -q 'dnsmasq\.log\.1$'
 }
 
+# _e39_journal_perdu — vrai si un journal attendu n'est ni dans le spool ni dans une archive
+# lisible de son hôte (état cassé laissé par la panne).
+_e39_journal_perdu() {
+  local z="$_E39_ZONE" h f a trouve
+  for h in gw01 dns01 git01; do
+    [[ -f "$z/attendu/$h.liste" ]] || return 0
+    while IFS= read -r f; do
+      [[ -e "$z/spool/$h/$f" ]] && continue
+      trouve=0
+      for a in "$z/archives/$h"-*.tar.gz; do
+        [[ -f "$a" ]] || continue
+        if tar -tzf "$a" 2>/dev/null | sed 's#^\./##' | grep -qxF -- "$f"; then
+          trouve=1
+          break
+        fi
+      done
+      ((trouve)) || return 0
+    done <"$z/attendu/$h.liste"
+  done
+  return 1
+}
+
+# annuler_E39 — zone encore cassée : mise de côté, rien n'est supprimé. Zone réparée par
+# l'apprenant (journaux récupérés) : laissée en place.
 annuler_E39() {
   local z="$_E39_ZONE"
-  if [[ -e "$z" ]]; then
+  [[ -e "$z" ]] || return 0
+  if _e39_journal_perdu; then
     mv -- "$z" "$z.annule-$(date +%Y%m%d-%H%M%S)" || wb_avert "zone $z non déplacée"
+  else
+    echo "Zone $z réparée : laissée en place." >&2
   fi
 }
 

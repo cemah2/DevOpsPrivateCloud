@@ -53,6 +53,7 @@ if [[ -n "$_m02_pid" ]]; then
       and ([.test_suites[] | select(.name == "pytest") | .total_count] | add // 0) > 0'
   check_output "rapport de tests du pipeline : aucun échec" '^0$' \
     _m02_val "$_m02_tr" '(.total.failed // 0) + (.total.error // 0)'
+  # Le journal du job (file_type « trace ») figure aussi dans .artifacts : on exige une archive.
   check_output "le job build a archivé un paquet (artefacts)" '^true$' \
-    _m02_val "$_m02_jobs" 'any(.[]; .name == "build" and ((.artifacts // []) | length > 0))'
+    _m02_val "$_m02_jobs" 'any(.[]; .name == "build" and any((.artifacts // [])[]; .file_type == "archive"))'
 fi
