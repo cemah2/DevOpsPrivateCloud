@@ -22,7 +22,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 04 | Gestion de configuration (Ansible) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~80 vérifications ; ansible-core 2.21.5/2.19, ansible-lint 26.9 profil production, Molecule 26.9 et Semaphore 2.19 exécutés, pytest de la collection et du module maison verts, filet anti-coupure du pare-feu testé). À confirmer sur le lab : ACL Proxmox de `wb-ansible`, enregistrement réel du runner, `qm terminal` sur `gw01`, délai `logger --tcp` (E41 v4), API `/project/users` de Semaphore |
 | 05 | Infrastructure as Code (OpenTofu) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~65 vérifications ; OpenTofu 1.13.1, Terragrunt 1.1.6, SeaweedFS 4.45/4.48 et AWS CLI exécutés : `validate`, `tofu test` 8/8, verrou `use_lockfile` et 412 `If-None-Match` constatés, chiffrement de l'état éprouvé ; règle sudo de `wb-tofu` corrigée et éprouvée). À confirmer sur le lab : `ciupgrade` avec un jeton non-root, attente de l'agent sur un clone, message de PVE 9 pour un VMID existant, affichage du rapport `terraform` en MR |
 | 06 | Services socle | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~50 vérifications ; Kea 3.0.4, PowerDNS 5.0.7/Recursor 5.4.7, step-ca 0.30.2 et NetBox 4.6 exécutés, 138 pytest, ansible-lint production sur tous les rôles). À confirmer sur le lab : formats de sortie de `pdnsutil` 5.0, coexistence ancre `par1` / NTA `medisphere.internal`, authentification de l'écouteur HA de Kea, écrans NetBox de création des jetons, relecture à chaud des certificats NTS par chrony |
-| 07-11 | Bloc B | à faire | | |
+| 07-11 | Bloc B | à faire | | Prochain bloc (lancé automatiquement par une tâche planifiée à la fin du bloc A). État d'entrée : `socle-v1` (M06-E46), voir `lab/topologie.md` |
 | 12-18 | Bloc C | à faire | | |
 | 19-20 | Bloc D | à faire | | |
 | 21-23 | Bloc E | à faire | | |
@@ -43,6 +43,8 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 2026-10-03/04 | 1 (fondations) | Plan, conventions, outillage lab, module 00 complet (4 rédacteurs + harmonisation + relecture indépendante), règles 9-12 ajoutées à la grille de relecture |
 | 2026-10-03/04 | 2 (bloc A) | Versions du bloc A figées (recherche web), décisions structurantes dans PLAN §4.8 et journal (MinIO → SeaweedFS, `runner01`, `dns02`, AWX en fiche/Semaphore, Molecule sur VMs Proxmox), README et cartes d'exercices des modules 01 à 06, bibliothèque de pannes commune ; modules 01 à 06 rédigés, harmonisés, relus (session interrompue une fois par la limite d'utilisation, reprise sans perte) |
 | 2026-10-07 | 2 (bloc A, clôture) | Annexes du bloc A ; contrôle global de cohérence : hôtes/VMID/IP conformes à PLAN §4.5, PLAN précisé (rôle DHCP de `dns01`, zone parente `medisphere.internal`, emplacement de l'ancre TLS de `pve01`), `lab.env.example` complet, `shellcheck -x` et `bash -n` propres sur tous les scripts, aucun secret ni cache versionné (`dump.rdb` retiré, `.gitignore` complété), README racine et REPRISE mis à jour |
+
+| 2026-10-07 | 2 (bloc A, fin) | **Bloc A terminé** : modules 01 à 06 relus et poussés, annexes et topologie, contrôle global de cohérence (474 scripts ShellCheck propres). Tâche planifiée créée pour lancer le bloc B |
 
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
