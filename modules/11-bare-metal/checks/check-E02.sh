@@ -37,8 +37,7 @@ check_ssh "TFTP et HTTP n'écoutent pas sur toutes les adresses" pxe01 \
   's="$(ss -Hlun "sport = :69"; ss -Hltn "sport = :80")"; [ -n "$s" ] && ! grep -Eq "(0\.0\.0\.0|\*|\[::\]):(69|80)\b" <<<"$s"'
 _m11d_racine="$(_m11d_http pki/medisphere-root-ca.crt | sha256sum | cut -d ' ' -f 1)"
 check_output "HTTP sert la racine de la PKI (identique à celle de adm01)" "^$(_m11d_sha_racine_locale)\$" echo "$_m11d_racine"
-check_output "HTTP ne liste pas les répertoires (/preseed/ : 403 ou 404)" '^(403|404)$' \
-  curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" "$_M11D_PXE_URL/preseed/"
+check_output "HTTP ne liste pas les répertoires (/preseed/ : 403 ou 404)" '^(403|404)$' _m11d_http_code preseed/
 
 # --- Kea : configuration chargée sur les deux pairs ---------------------------------------------------
 for _m11d_h in dns01 dns02; do
@@ -74,7 +73,7 @@ else
 fi
 
 # --- La matrice des flux ---------------------------------------------------------------------------------
-_m11d_pf="$(_m11d_contenu_main "$_M11D_PROJET_ANSIBLE" inventories/lab/host_vars/gw01/pare_feu.yml)"
+_m11d_pf="$(_m11d_contenu_main "$_M11D_PROJET_ANSIBLE" inventories/lab/group_vars/role_routeur/pare_feu.yml)"
 check_output "matrice de la bordure (main) : clients DHCP du VLAN 60 vers le relais" \
   '(PROV|prov|ens19\.60|10\.10\.60).*ports: 67\b' echo "$_m11d_pf"
 check_cmd "documentation : matrice-flux.md décrit le DHCP du VLAN 60" \

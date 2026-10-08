@@ -10,6 +10,9 @@ _M11D_PVE="${WB_PVE_HOST:-pve01}"
 _M11D_PROJET_PROV="projects/plateforme%2Fprovisioning"
 _M11D_PROJET_ANSIBLE="projects/plateforme%2Fansible"
 _M11D_PXE_URL="http://pxe01.par1.medisphere.internal"
+# À partir de M11-E13, pxe01 sert en HTTPS (racine MédiSphère du magasin de adm01) et son port 80
+# ne fait plus que rediriger : les lectures essaient HTTPS d'abord.
+_M11D_PXE_URLS="https://pxe01.par1.medisphere.internal $_M11D_PXE_URL"
 _M11D_RACINE_PKI="/usr/local/share/ca-certificates/medisphere-root-ca.crt"
 
 # Dossier temporaire du check (effacé à la sortie) : known_hosts des serveurs fraîchement installés.
@@ -64,7 +67,21 @@ _m11d_fichier_main() {
 
 # _m11d_http CHEMIN — contenu servi par nginx sur pxe01 (lu depuis adm01, MGMT autorisé), vide sinon.
 _m11d_http() {
-  curl -sf --max-time "$WB_TIMEOUT" "$_M11D_PXE_URL/$1" 2>/dev/null || true
+  local u
+  for u in $_M11D_PXE_URLS; do
+    if curl -sf --max-time "$WB_TIMEOUT" --proto-redir '-all' "$u/$1" 2>/dev/null; then return 0; fi
+  done
+  return 0
+}
+
+# _m11d_http_code CHEMIN — code HTTP de pxe01 pour CHEMIN (HTTPS d'abord, 000 si rien ne répond).
+_m11d_http_code() {
+  local u c
+  for u in $_M11D_PXE_URLS; do
+    c="$(curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" "$u/$1" 2>/dev/null || true)"
+    if [[ -n "$c" && "$c" != 000 ]]; then printf '%s\n' "$c"; return 0; fi
+  done
+  printf '000\n'
 }
 
 # _m11d_sha_pxe CHEMIN — empreinte SHA-256 d'un fichier de pxe01 (vide si absent).

@@ -14,7 +14,7 @@ La brique est le module `openstack-env-app` de `plateforme/tofu-modules` ; ton d
 
 ## Comment l'utiliser
 
-1. Demander à la plateforme (une fois) : un projet GitLab dans le groupe de ton équipe, un identifiant d'application du projet OpenStack de ton équipe (rôle `member`, expiration à un an), un compartiment d'état S3 et son identité, la phrase de chiffrement de l'état. Tout arrive en variables **protégées et masquées** du projet GitLab : tu ne vois jamais les secrets, et tu n'en as pas besoin.
+1. Demander à la plateforme (une fois) : un projet GitLab dans le groupe de ton équipe, une application credential du projet OpenStack de ton équipe (rôle `member`, expiration à un an), un compartiment d'état S3 et son identité, la phrase de chiffrement de l'état. Tout arrive en variables **protégées et masquées** du projet GitLab : tu ne vois jamais les secrets, et tu n'en as pas besoin.
 2. Copier le dépôt modèle (`mediagenda/recette-infra`), changer `prefixe`, `cidr`, les variables.
 3. MR : le pipeline montre le plan dans la MR ; après fusion, lancer `appliquer` (manuel). L'URL est dans la sortie du job.
 4. Détruire : pipeline lancé à la main sur `main` avec la variable `DETRUIRE=<prefixe>`, puis job `detruire`.

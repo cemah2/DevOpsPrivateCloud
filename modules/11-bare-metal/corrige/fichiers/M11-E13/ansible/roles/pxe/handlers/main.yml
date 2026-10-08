@@ -1,7 +1,7 @@
 ---
 - name: Redémarrer tftpd-hpa
   ansible.builtin.systemd_service:
-    name: tftpd-hpa
+    name: tftpd-hpa.service
     state: restarted
 
 # Toute modification de nginx passe par « nginx -t » avant le rechargement : une configuration
@@ -13,6 +13,6 @@
 
 - name: Recharger le service nginx
   ansible.builtin.systemd_service:
-    name: nginx
+    name: nginx.service
     state: reloaded
   listen: Recharger nginx

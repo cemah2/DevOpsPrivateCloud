@@ -1,8 +1,8 @@
 # host_vars/gw01/pare_feu.yml — EXTRAIT à intégrer (M07-E13, PLAT-823) : publication de GitLab et
-# de NetBox par les répartiteurs. Valeurs d'exemple : 192.168.1.10 = <IP-GW01-WAN>.
+# de NetBox par les répartiteurs. Valeurs d'exemple : 192.168.1.40 = <IP-GW01-WAN>.
 
 # pare_feu_definitions :
-  - {nom: GW01_WAN, valeur: 192.168.1.10, commentaire: "<IP-GW01-WAN> (VIP WAN <IP-GW-WAN-VIP> à partir de M07-E26)"}
+  - {nom: GW01_WAN, valeur: 192.168.1.40, commentaire: "<IP-GW01-WAN> (VIP WAN <IP-GW-WAN-VIP> à partir de M07-E26)"}
 
 # pare_feu_transit, nouvelle section « Publication (répartiteurs) » :
   - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: [$GIT01, $NBX01], proto: tcp, ports: 443,

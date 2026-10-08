@@ -14,7 +14,7 @@ require_cmd git
 _m10_e43_pm="$_m10x_depot/docs/cloud/post-mortems"
 check_cmd "post-mortem rédigé (docs/cloud/post-mortems/*INC-3750*.md)" \
   bash -c 'ls "$1"/*INC-3750*.md >/dev/null 2>&1' _ "$_m10_e43_pm"
-for _m10_e43_s in 'chronologie:[Cc]hronologie' 'causes:[Cc]auses?' 'détection:[Dd][ée]tection' 'actions:[Aa]ctions'; do
+for _m10_e43_s in 'chronologie:[Cc]hronologie' 'causes:[Cc]auses?' 'détection:[Dd](é|e)tection' 'actions:[Aa]ctions'; do
   check_output "post-mortem : section ${_m10_e43_s%%:*} présente" "^#+ .*${_m10_e43_s#*:}" \
     bash -c 'cat "$1"/*INC-3750*.md 2>/dev/null' _ "$_m10_e43_pm"
 done
@@ -24,7 +24,7 @@ check_cmd "runbook RB-103 rédigé et commité (docs/cloud/runbooks/RB-103*.md)"
   bash -c 'cd "$1" && f=$(ls docs/cloud/runbooks/RB-103*.md 2>/dev/null | head -n 1) && [ -n "$f" ] && git ls-files --error-unmatch "$f" >/dev/null 2>&1 && [ -z "$(git status --porcelain -- "$f")" ]' _ "$_m10x_depot"
 check_cmd "RB-103 : couvre No valid host, réseau, métadonnées, volumes et authentification" \
   bash -c 'f=$(ls "$1"/docs/cloud/runbooks/RB-103*.md 2>/dev/null | head -n 1); [ -n "$f" ] || exit 1
-    for m in "No valid host" "IP flottante" "[Mm][ée]tadonn" "[Vv]olume" "[Jj]eton|[Aa]uthentif"; do grep -Eq "$m" "$f" || exit 1; done' _ "$_m10x_depot"
+    for m in "No valid host" "IP flottante" "[Mm](é|e)tadonn" "[Vv]olume" "[Jj]eton|[Aa]uthentif"; do grep -Eq "$m" "$f" || exit 1; done' _ "$_m10x_depot"
 check_cmd "aucune panne M10 encore marquée active (lab/bin/break)" _m10x_aucune_panne_active
 
 _m10_e43_checks="$(dirname "${BASH_SOURCE[0]}")"

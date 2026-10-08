@@ -220,7 +220,7 @@ Types par classe de service (`ssd`, `hdd`, chiffré), QoS par défaut sur **tous
 
 **Solution**
 
-Fichiers : [`neutron.conf`](fichiers/M10-E12/openstack/etc/kolla/config/neutron.conf), [`neutron/ml2_conf.ini`](fichiers/M10-E12/openstack/etc/kolla/config/neutron/ml2_conf.ini), [`pare_feu.yml.extrait`](fichiers/M10-E12/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait), [`docs/cloud/reseau-externe.md`](fichiers/M10-E12/medisphere/docs/cloud/reseau-externe.md).
+Fichiers : [`neutron.conf`](fichiers/M10-E12/openstack/etc/kolla/config/neutron.conf), [`neutron/ml2_conf.ini`](fichiers/M10-E12/openstack/etc/kolla/config/neutron/ml2_conf.ini), [`pare_feu.yml.extrait`](fichiers/M10-E12/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), [`docs/cloud/reseau-externe.md`](fichiers/M10-E12/medisphere/docs/cloud/reseau-externe.md).
 
 1. **Le chemin.**
    ```
@@ -315,7 +315,7 @@ Fichiers : [`docs/cloud/capacite.md`](fichiers/M10-E13/medisphere/docs/cloud/cap
 
 4. **Preuve.** Avec le cloud d'un membre (`medisphere-mediagenda-dev`) :
    ```
-   admin@adm01:~$ openstack --os-cloud medisphere-mediagenda-dev server create --flavor m1.grand --image debian-13 --network <réseau> e13-trop
+   admin@adm01:~$ openstack --os-cloud medisphere-mediagenda-dev server create --flavor m1.grand --image debian-13 --no-network e13-trop
    Quota exceeded for ram: Requested 4096, but already used 0 of 3072 ram (HTTP 403) (Request-ID: req-…)
    ```
    Le refus vient de **l'API** (`nova-api` contrôle le quota avant de créer quoi que ce soit), code 403, immédiat. À l'inverse, un manque de **capacité** (quota respecté mais calculs pleins) est détecté plus tard par l'ordonnanceur : instance en `ERROR`, « No valid host was found » (M10-E35).
@@ -433,7 +433,7 @@ Fichiers : [`envs/openstack-projets/`](fichiers/M10-E15/infra/envs/openstack-pro
    ```
    « 0 to change » prouve que `terraform.tfvars` reprend exactement les quotas de E13. ⚠️ À vérifier sur ton lab : l'identifiant d'import référence une source de données ; si ta version d'OpenTofu refuse (valeur inconnue au plan), écris les identifiants des projets en dur dans le bloc. Après l'apply, retirer `imports.tf` (MR suivante).
 
-4. **Pipeline** : extrait `.gitlab-ci.yml` (`plan:openstack-projets` en MR, `apply:openstack-projets` manuel sur `main`, `resource_group`). Variables protégées et masquées : `OS_APPLICATION_CREDENTIAL_ID`, `OS_APPLICATION_CREDENTIAL_SECRET`. `runner01` doit joindre la VIP externe 10.10.50.201 sur 5000 (Keystone) et les ports des API de Nova (8774), Neutron (9696), Cinder (8776) : flux INFRA → VLAN 50 à ouvrir dans la matrice (motif « runner01 vers les API d'OpenStack », ref M10-E15) ; et le catalogue doit annoncer des points d'accès **publics** que `runner01` résout (`OS_INTERFACE=public`).
+4. **Pipeline** : extrait `.gitlab-ci.yml` (`plan:openstack-projets` en MR, `apply:openstack-projets` manuel sur `main`, `resource_group`). Variables protégées et masquées : `OS_APPLICATION_CREDENTIAL_ID`, `OS_APPLICATION_CREDENTIAL_SECRET`. `runner01` doit joindre la VIP externe 10.10.50.201 sur 5000 (Keystone) et les ports des API de Nova (8774), Neutron (9696), Cinder (8776) : flux INFRA → VLAN 50 à ouvrir dans la matrice ([extrait](fichiers/M10-E15/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), ref M10-E15 ; Octavia 9876 y figure déjà pour E16) ; et le catalogue doit annoncer des points d'accès **publics** que `runner01` résout (`OS_INTERFACE=public`).
 
 5. **Vérification.**
    ```
@@ -449,7 +449,7 @@ Fichiers : [`envs/openstack-projets/`](fichiers/M10-E15/infra/envs/openstack-pro
 
 **Explications**
 
-Une application credential est un secret **lié à un utilisateur et à un projet**, révocable sans toucher au mot de passe de l'utilisateur, avec expiration, et éventuellement limité par des règles d'accès : c'est l'équivalent d'un jeton d'API. OpenTofu ne fait qu'appeler les mêmes API que la CLI ; ce qu'il ajoute, c'est l'état (ce qu'il possède), le plan (ce qu'il va faire) et la revue. Séparer la création des **projets** (RB-100, CLI) du **socle** (OpenTofu) évite qu'un `destroy` raté supprime un projet et tout ce qu'il contient.
+Une application credential est un secret **lié à un utilisateur et à un projet**, révocable sans toucher au mot de passe de l'utilisateur, avec expiration, et éventuellement limité par des règles d'accès : c'est l'équivalent d'un jeton d'API. OpenTofu ne fait qu'appeler les mêmes API que la CLI ; ce qu'il ajoute, c'est l'état (ce qu'il possède), le plan (ce qu'il va faire) et la revue. Séparer la création des **projets** (code d'identité de E05, Ansible) du **socle** (OpenTofu) évite qu'un `destroy` raté supprime un projet et tout ce qu'il contient.
 
 **Alternatives**
 - *Projets aussi en code* (`openstack_identity_project_v3`, attributions par `openstack_identity_role_assignment_v3`) : tout en un endroit ; un état qui peut supprimer un projet, donc `prevent_destroy` obligatoire.
@@ -542,7 +542,7 @@ Quotas Octavia par projet, contrôle de santé obligatoire (politique de revue),
 
 **Solution**
 
-Fichiers : [`globals.d/17-horizon.yml`](fichiers/M10-E17/openstack/etc/kolla/globals.d/17-horizon.yml), [`horizon/_9999-custom-settings.py`](fichiers/M10-E17/openstack/etc/kolla/config/horizon/_9999-custom-settings.py), [`pare_feu.yml.extrait`](fichiers/M10-E17/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait).
+Fichiers : [`globals.d/17-horizon.yml`](fichiers/M10-E17/openstack/etc/kolla/globals.d/17-horizon.yml), [`horizon/_9999-custom-settings.py`](fichiers/M10-E17/openstack/etc/kolla/config/horizon/_9999-custom-settings.py), [`pare_feu.yml.extrait`](fichiers/M10-E17/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait).
 
 1. **Depuis le VPN** : délai dépassé. Horizon appelle Keystone, Nova, Neutron **depuis le conteneur `horizon`** (points d'accès internes, VIP .200) : le navigateur n'a besoin que du port 443 de la VIP externe… et du 6080 (noVNC) dès qu'il ouvre une console, car la page de console charge un `iframe` vers `https://openstack.par1.medisphere.internal:6080/`. Deux flux, rien d'autre.
 2. **Multi-domaines** : `horizon_keystone_multidomain: "yes"` et `horizon_keystone_domain_choices` à deux entrées (liste déroulante, `medisphere` d'abord) ; `_9999-custom-settings.py` : `SESSION_TIMEOUT = 1800`, `SESSION_COOKIE_AGE = 1800`, `OPENSTACK_KEYSTONE_DEFAULT_DOMAIN = "medisphere"`. Vérifié par `python3 -m py_compile` avant la MR. `kolla-ansible deploy -t horizon` (ou `reconfigure -t horizon`), puis :
@@ -554,7 +554,7 @@ Fichiers : [`globals.d/17-horizon.yml`](fichiers/M10-E17/openstack/etc/kolla/glo
    ```
 3. **Flux** : une ligne, VPN → 10.10.50.201, TCP 443 et 6080 (extrait). Les ports des API ne sont pas ouverts au VPN : décision de sécurité reportée au palier 3.
 4. **Julien** : domaine `medisphere`, il voit ses projets dans le sélecteur ; console et redémarrage dans `mediagenda-dev` ; `mediagenda-prod` : en `reader` (E13), il voit les instances sans les boutons d'action (Horizon évalue les politiques). S'il n'a aucun rôle sur un projet, ce projet n'apparaît pas.
-5. **clouds.yaml** : *Identité → Identifiants d'application → Créer*, puis « Télécharger le fichier clouds.yaml » : `auth_type: v3applicationcredential`, `auth_url`, identifiant et **secret**, `region_name`, `interface`. Il manque la confiance TLS : sur le poste de Julien, la racine MédiSphère dans le magasin du système, ou `cacert:` dans le fichier. Le secret est dans ce fichier : il se range comme une clé privée (600, hors de tout dépôt).
+5. **clouds.yaml** : *Identité → Application credentials → Créer*, puis « Télécharger le fichier clouds.yaml » : `auth_type: v3applicationcredential`, `auth_url`, identifiant et **secret**, `region_name`, `interface`. Il manque la confiance TLS : sur le poste de Julien, la racine MédiSphère dans le magasin du système, ou `cacert:` dans le fichier. Le secret est dans ce fichier : il se range comme une clé privée (600, hors de tout dépôt).
 6. **Contrôles.**
    ```
    admin@adm01:~$ curl -sI https://openstack.par1.medisphere.internal/auth/login/ | grep -iE 'set-cookie|strict-transport|x-frame'

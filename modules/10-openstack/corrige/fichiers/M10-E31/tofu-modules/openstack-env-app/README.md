@@ -14,7 +14,7 @@ module "recette" {
 }
 ```
 
-Le provider `openstack` est configuré par la configuration racine (identifiant d'application du projet, rôle `member`, variables `OS_*`).
+Le provider `openstack` est configuré par la configuration racine (application credential du projet, rôle `member`, variables `OS_*`).
 
 ## Variables
 

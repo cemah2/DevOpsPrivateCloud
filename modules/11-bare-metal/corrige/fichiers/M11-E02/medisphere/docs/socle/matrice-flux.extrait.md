@@ -1,4 +1,6 @@
-<!-- À intégrer dans docs/socle/matrice-flux.md (plateforme/medisphere), section « Bordure » — M11-E02. -->
+<!-- M11-E02 — lignes attendues dans docs/socle/matrice-flux.md (plateforme/medisphere) : la partie
+     « bordure » est GÉNÉRÉE par ms-matrice-flux depuis group_vars/role_routeur/pare_feu.yml (M07-E30) ;
+     les lignes « pare_feu_local » et « même VLAN » se complètent à la main dans leurs sections. -->
 
 | Source | Destination | Protocole / port | Motif | Où c'est appliqué | Réf. |
 |---|---|---|---|---|---|

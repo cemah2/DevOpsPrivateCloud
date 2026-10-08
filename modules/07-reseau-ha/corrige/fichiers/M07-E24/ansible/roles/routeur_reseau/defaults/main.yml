@@ -19,6 +19,10 @@ routeur_reseau_wan_interface: ens18
 routeur_reseau_wan_adresse: ""        # ex. 192.168.1.40/24 (<IP-GW01-WAN>/<MASQUE>)
 routeur_reseau_wan_passerelle: ""     # <IP-BOX>
 
+# Renommage des cartes par adresse MAC (pile netplan seulement) : {nom voulu: MAC}. Vide pour gw01
+# (ISO : ens18/ens19 natifs). gw02 (image dorée : eth0/eth1) : voir host_vars/gw02.
+routeur_reseau_renommage: {}
+
 # Trunk et VLAN routés (PLAN §4.2, §4.9). Le MTU de chaque VLAN ne peut pas dépasser celui du trunk.
 routeur_reseau_trunk: ens19
 routeur_reseau_trunk_mtu: 9000

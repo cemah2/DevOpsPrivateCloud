@@ -12,7 +12,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m10-decouverte.sh"
 title "M10-E07 — Nova : gabarits, clés et première instance"
 require_cmd jq openstack ssh-keygen
 
-_m10d_e07_p="medisphere-plateforme"
+_m10d_e07_p="$_M10D_CLOUD_PLAT"
 
 # --- 1. Gabarits ---------------------------------------------------------------------------------
 # _m10d_e07_gabarit NOM VCPU RAM DISQUE — gabarit public avec exactement ces ressources.

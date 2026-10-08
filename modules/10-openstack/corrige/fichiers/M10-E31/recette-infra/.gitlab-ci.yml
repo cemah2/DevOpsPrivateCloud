@@ -11,7 +11,7 @@
 # les secrets. Aucune n'est un secret de la plateforme :
 #   OS_AUTH_TYPE=v3applicationcredential  OS_AUTH_URL=https://openstack.par1.medisphere.internal:5000/v3
 #   OS_REGION_NAME=RegionOne  OS_CACERT=/usr/local/share/ca-certificates/medisphere-root-ca.crt
-#   OS_APPLICATION_CREDENTIAL_ID           identifiant d'application du projet mediagenda-dev (rôle member)
+#   OS_APPLICATION_CREDENTIAL_ID           application credential du projet mediagenda-dev (rôle member)
 #   OS_APPLICATION_CREDENTIAL_SECRET       (masquée, cachée)
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  identité S3 « tofu-mediagenda » (compartiment tofu-state-mediagenda seul)
 #   TF_ENCRYPTION                          key_provider "pbkdf2" "etat" { passphrase = "…" } (masquée, cachée)

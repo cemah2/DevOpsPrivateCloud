@@ -14,7 +14,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m09-production.sh"
 title "M09-E46 — Virtualisation MédiSphère v1 : contrôle global"
 require_cmd jq ssh openssl
 _m09p_charger
-_m09_e46_ref="root@$(_m09p_noeud 2>/dev/null || echo hv01).$_M09P_ZONE"
+_m09_e46_ref="$(_m09p_noeud 2>/dev/null || echo hv01)"
 
 # --- 1. Reconstruction ----------------------------------------------------------------------------
 title "1/9 Nœuds reconstruits depuis le code"
@@ -43,7 +43,7 @@ check_cmd "cluster hv-par1 quorate, trois nœuds en ligne" _m09p_pvesh_jq /clust
 check_ssh "corosync.conf : deux liens par nœud, pas de QDevice" "$_m09_e46_ref" \
   '[ "$(grep -c "ring0_addr: *10\.10\.32\." /etc/pve/corosync.conf)" = 3 ] && [ "$(grep -c "ring1_addr: *10\.10\.10\.5" /etc/pve/corosync.conf)" = 3 ] && ! grep -q "device" /etc/pve/corosync.conf'
 for _m09_e46_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e46_n : liens Corosync connectés, i6300esb chargé, sauvegarde de configuration active" "root@$_m09_e46_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e46_n : liens Corosync connectés, i6300esb chargé, sauvegarde de configuration active" "$_m09_e46_n" \
     's=$(corosync-cfgtool -s); ! printf "%s\n" "$s" | grep -qi disconnected && lsmod | grep -q "^i6300esb " && systemctl is-active --quiet wb-backup-socle.timer'
 done
 check_cmd "VIP portée par un seul nœud" _m09p_vip_unique

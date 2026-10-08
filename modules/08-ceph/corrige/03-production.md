@@ -7,7 +7,7 @@
 - procédure cephx de 20.2.4 (`aes256k`) : ce que cephadm fait **seul** pendant la mise à jour (clés des démons) ; capacité des clients de Debian 13 (bibliothèques Ceph 18.2 du paquet `ceph-common` de Debian, noyau 6.12 pour krbd et CephFS) à utiliser une clé `aes256k` — le corrigé suppose que **non** (hypothèse prudente) ; syntaxe d'une capacité moniteur combinant `profile rbd` et `allow r fsname=…` (E31) ;
 - comportement d'un mgr en attente du module `prometheus` avec `standby_behaviour = default` (le corrigé ne s'appuie que sur le mode `error`, documenté) ; présence des métriques `ceph_pool_stored` / `ceph_pool_max_avail` / `ceph_pg_clean` sous ces noms en 20.2 ;
 - application du certificat du tableau de bord par l'entrée standard (`ceph dashboard set-ssl-certificate -i -` à travers ssh) et relecture après `mgr module disable/enable` ; politique `x509.allow.dns` du provisioner `ceph-dashboard` avec trois noms ;
-- `cephadm version` qui affiche la version du **binaire** sans lancer de conteneur ; URL `download.ceph.com/rpm-20.2.4/el9/noarch/cephadm` (pas de somme de contrôle publiée à côté au moment de la rédaction) ;
+- `cephadm version` qui affiche la version du paquet `cephadm` installé sans lancer de conteneur ; disponibilité du dépôt RPM signé `download.ceph.com/rpm-20.2.4/el10/` (même méthode qu'en E02 : seule la variable `ceph_noeud_version` change) ;
 - redéploiement d'un OSD chiffré par `ceph orch osd rm --replace --zap` avec une spécification `encrypted: true` (identifiant conservé) ;
 - noms et réglages posés par les paliers précédents et repris ici : règles CRUSH `ssd-baie` / `hdd-baie` (domaine `rack`, une baie par nœud, E14), seuils 0,75 / 0,85 / 0,95 (E20), image de test `rbd-test/disque01` (E06), étiquette `mgr` sur les trois nœuds et deux mgr (E23), `outils/lib.sh`, `config/cluster.yaml` et `outils/pool-repliquee.sh` de `plateforme/ceph` (E05, E23), rôle des nœuds Ceph (E02). Si les tiens diffèrent, la logique est la même.
 
@@ -68,16 +68,16 @@ admin@adm01:~$ sudo systemctl enable --now ceph-cert-dashboard.timer
 
 Aucun flux nouveau : `adm01` joint `ca01` et le VLAN 30. Pourquoi pas l'ACME **sur** les nœuds ? Le défi HTTP-01 demande le port 80 de chaque nœud (ouvert dans `firewalld` et dans `pare_feu.yml` depuis `ca01`), un client `step` sur Rocky et un crochet qui pousse le certificat dans Ceph depuis chaque nœud : trois fois plus de pièces pour le même résultat. C'est l'alternative si la politique de certification interdit les provisioners JWK pour des serveurs.
 
-Comptes (mot de passe dans un fichier temporaire 600 sur un hôte `_admin`, puis `shred`) :
+Comptes (même méthode qu'en E03 : mot de passe généré dans un fichier 600 de `adm01`, passé par l'entrée standard de ssh, jamais sur une ligne de commande ni sur le disque des nœuds) :
 
 ```
-[root@ceph01 ~]# install -m 600 /dev/null /root/mdp ; vi /root/mdp           # mot de passe tiré de Vault
-[root@ceph01 ~]# ceph dashboard ac-user-create <MOI> -i /root/mdp read-only
-[root@ceph01 ~]# ceph dashboard ac-user-set-password admin -i /root/mdp-admin   # même méthode, autre fichier
-[root@ceph01 ~]# ceph dashboard set-pwd-policy-enabled true
-[root@ceph01 ~]# shred -u /root/mdp /root/mdp-admin
-[root@ceph01 ~]# ceph dashboard ac-user-show <MOI>
+admin@adm01:~$ (umask 077; openssl rand -base64 24 > ~/.config/workbook/ceph-dashboard-moi.pass)
+admin@adm01:~$ ssh ceph01 'sudo ceph dashboard ac-user-create <MOI> -i - read-only' < ~/.config/workbook/ceph-dashboard-moi.pass
+admin@adm01:~$ ssh ceph01 'sudo ceph dashboard set-pwd-policy-enabled true'
+admin@adm01:~$ ssh ceph01 'sudo ceph dashboard ac-user-show <MOI>'
 ```
+
+Le mot de passe de `<MOI>` rejoint `group_vars/env_m08/vault-lab.yml` (`vault_ceph_dashboard_moi_mdp`, ajouté par `uv run ansible-vault edit` : le fichier existe depuis E03) et le registre des secrets.
 
 Connecté en `<MOI>`, les boutons de création et de modification sont absents ou grisés ; une action forcée par l'API renvoie 403. Le mot de passe d'`admin` reste en Vault `lab` (`vault_ceph_dashboard_admin_mdp`, E03) et dans `~/.config/workbook/ceph-dashboard.pass` : compte de bris de glace, usage tracé.
 
@@ -111,7 +111,7 @@ Moissonnage des métriques du mgr actif par Prometheus (M21), règles d'alerte r
 
 **Solution**
 
-Fichiers : rôle [`sauvegarde_ceph`](fichiers/M08-E25/ansible/roles/sauvegarde_ceph/) (script [`wb-backup-ceph.sh`](fichiers/M08-E25/ansible/roles/sauvegarde_ceph/files/wb-backup-ceph.sh), gabarits, unités) pour `cephcli01` ; rôle [`ceph_export_config`](fichiers/M08-E25/ansible/roles/ceph_export_config/) (script [`wb-ceph-export-config`](fichiers/M08-E25/ansible/roles/ceph_export_config/files/wb-ceph-export-config)) pour `ceph01` ; variables [`cephcli01`](fichiers/M08-E25/ansible/inventories/lab/host_vars/cephcli01/sauvegarde_ceph.yml) et [`ceph01`](fichiers/M08-E25/ansible/inventories/lab/host_vars/ceph01/ceph_export_config.yml), [modèle de Vault](fichiers/M08-E25/ansible/inventories/lab/vault-critique-m08-e25.yml.exemple), [`playbooks/sauvegarde-ceph.yml`](fichiers/M08-E25/ansible/playbooks/sauvegarde-ceph.yml) ; PBS : [`pbs-jeton-ceph.sh`](fichiers/M08-E25/pbs01/pbs-jeton-ceph.sh), [règle d'entrée](fichiers/M08-E25/pbs01/pbs01-nftables-extrait.nft) ; [extrait de `pare_feu.yml`](fichiers/M08-E25/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait) ; documentation : [`sauvegarde.md`](fichiers/M08-E25/medisphere/docs/stockage/sauvegarde.md), [`tests/restauration-ceph.md`](fichiers/M08-E25/medisphere/docs/stockage/tests/restauration-ceph.md).
+Fichiers : rôle [`sauvegarde_ceph`](fichiers/M08-E25/ansible/roles/sauvegarde_ceph/) (script [`wb-backup-ceph.sh`](fichiers/M08-E25/ansible/roles/sauvegarde_ceph/files/wb-backup-ceph.sh), gabarits, unités) pour `cephcli01` ; rôle [`ceph_export_config`](fichiers/M08-E25/ansible/roles/ceph_export_config/) (script [`wb-ceph-export-config`](fichiers/M08-E25/ansible/roles/ceph_export_config/files/wb-ceph-export-config)) pour `ceph01` ; variables [`cephcli01`](fichiers/M08-E25/ansible/inventories/lab/host_vars/cephcli01/sauvegarde_ceph.yml) et [`ceph01`](fichiers/M08-E25/ansible/inventories/lab/host_vars/ceph01/ceph_export_config.yml), [modèle de Vault](fichiers/M08-E25/ansible/inventories/lab/host_vars/cephcli01/vault-critique.yml.exemple) (`host_vars/cephcli01/vault-critique.yml`), [`playbooks/sauvegarde-ceph.yml`](fichiers/M08-E25/ansible/playbooks/sauvegarde-ceph.yml) ; PBS : [`pbs-jeton-ceph.sh`](fichiers/M08-E25/pbs01/pbs-jeton-ceph.sh), [règle d'entrée](fichiers/M08-E25/pbs01/pbs01-nftables-extrait.nft) ; [extrait de `pare_feu.yml`](fichiers/M08-E25/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) ; documentation : [`sauvegarde.md`](fichiers/M08-E25/medisphere/docs/stockage/sauvegarde.md), [`tests/restauration-ceph.md`](fichiers/M08-E25/medisphere/docs/stockage/tests/restauration-ceph.md).
 
 *1. Lecture* (réponses attendues) :
 - `export-diff` **sans** `--from-snap` : tous les blocs écrits depuis la création de l'image jusqu'à l'instantané (un « complet », mais au format différentiel, qui s'applique sur une image vide) ; **avec** : seulement les blocs modifiés entre les deux instantanés. Les zones jamais écrites ne sont pas transportées ; `rbd export` (image brute) les écrit comme des zéros ou des trous selon la destination.
@@ -191,7 +191,7 @@ Sauvegarde des compartiments S3 de MédiDoc (ADR-0080, action F5), restauration 
 
 **Solution**
 
-Fichiers : [RB-082](fichiers/M08-E26/medisphere/docs/stockage/runbooks/RB-082-mettre-a-jour-ceph.md), [boucles témoins](fichiers/M08-E26/cephcli01/boucles-temoins.sh), [variables de version](fichiers/M08-E26/ansible/inventories/lab/group_vars/env_m08/ceph.yml.extrait) (`ceph_image`, `ceph_noeud_version`).
+Fichiers : [RB-082](fichiers/M08-E26/medisphere/docs/stockage/runbooks/RB-082-mettre-a-jour-ceph.md), [boucles témoins](fichiers/M08-E26/cephcli01/boucles-temoins.sh), variables de version : [`group_vars/env_m08/ceph.yml`](fichiers/M08-E26/ansible/inventories/lab/group_vars/env_m08/ceph.yml.extrait) (`ceph_image`) et [`group_vars/role_ceph/ceph_noeud.yml`](fichiers/M08-E26/ansible/inventories/lab/group_vars/role_ceph/ceph_noeud.yml.extrait) (`ceph_noeud_version`).
 
 *1. Lecture des avis* (à la date de rédaction ; relis-les, ils peuvent avoir évolué) :
 
@@ -238,7 +238,7 @@ cephfs   3900 opérations, 0 échec(s), 4 lente(s), max 5.104 s à …
 s3       3880 opérations, 0 échec(s), 9 lente(s), max 4.870 s à …
 ```
 
-(Valeurs indicatives.) Les latences hautes tombent pendant les redémarrages d'OSD primaires (le client attend la nouvelle carte et le nouveau primaire), la bascule de MDS et le redémarrage du RGW derrière haproxy ; **aucun échec** est le critère. Paquets des nœuds : fusion de la MR (`ceph_image`, `ceph_noeud_version: "20.2.4"`), pipeline de `plateforme/ansible`, rôle `ceph_noeud` appliqué aux trois nœuds (dépôt `rpm-20.2.4`, `cephadm` et `ceph-common` mis à jour, contrôle de `cephadm version` par le rôle lui-même). `ceph-common` en 20.2.4 sur les hôtes `_admin`, c'est aussi le client qui utilisera la nouvelle clé `client.admin` en E27. La MR n'est fusionnée qu'**après** la mise à jour : avant, le code aurait décrit un état que le cluster n'avait pas encore.
+(Valeurs indicatives.) Les latences hautes tombent pendant les redémarrages d'OSD primaires (le client attend la nouvelle carte et le nouveau primaire), la bascule de MDS et le redémarrage du RGW derrière haproxy ; **aucun échec** est le critère. Paquets des nœuds : fusion de la MR (`ceph_image`, `ceph_noeud_version: "20.2.4"`), pipeline de `plateforme/ansible`, rôle `ceph_noeud` appliqué à tous les nœuds, `ceph04` compris (dépôt `rpm-20.2.4`, `cephadm` et `ceph-common` mis à jour, contrôle de `cephadm version` par le rôle lui-même). `ceph-common` en 20.2.4 sur les hôtes `_admin`, c'est aussi le client qui utilisera la nouvelle clé `client.admin` en E27. La MR n'est fusionnée qu'**après** la mise à jour : avant, le code aurait décrit un état que le cluster n'avait pas encore.
 
 *6. RB-082* : voir le fichier.
 
@@ -268,7 +268,7 @@ Miroir local des images (Harbor, M13) avec empreintes figées, mise à jour d'ab
 
 **Solution**
 
-Fichiers : [`specs/osd.yaml`](fichiers/M08-E27/ceph/specs/osd.yaml) (`plateforme/ceph`), [clé de l'orchestrateur](fichiers/M08-E27/ansible/inventories/lab/group_vars/env_m08/cle-orchestrateur.yml.extrait) (variable du rôle `ceph_noeud`, `plateforme/ansible`).
+Fichiers : [`specs/osd.yaml`](fichiers/M08-E27/ceph/specs/osd.yaml) (`plateforme/ceph`), [clé de l'orchestrateur](fichiers/M08-E27/ansible/inventories/lab/group_vars/role_ceph/ceph_noeud.yml.extrait) (variable `ceph_noeud_cle_orchestrateur` du rôle `ceph_noeud`, `group_vars/role_ceph/ceph_noeud.yml` de `plateforme/ansible`).
 
 *1. État des lieux* :
 

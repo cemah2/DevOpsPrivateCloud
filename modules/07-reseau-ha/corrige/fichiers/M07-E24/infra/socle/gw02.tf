@@ -144,18 +144,25 @@ resource "proxmox_virtual_environment_vm" "gw02" {
     iothread     = true
   }
 
+  # Noms dans l'invité : l'image dorée nomme les cartes eth0, eth1 (configuration réseau cloud-init
+  # de Proxmox, M03). gw01 (installée depuis l'ISO) a ens18/ens19, et la matrice des flux commune
+  # (pare_feu), keepalived et conntrackd désignent les interfaces par leur NOM : gw02 doit porter
+  # les MÊMES. Les adresses MAC sont donc fixées ici, et le rôle routeur_reseau renomme les cartes
+  # par leur MAC (host_vars/gw02/routeur_reseau.yml, mêmes valeurs).
   # net0 → ens18 : WAN, sur le pont du LAN maison.
   network_device {
-    bridge = "vmbr0"
-    model  = "virtio"
+    bridge      = "vmbr0"
+    model       = "virtio"
+    mac_address = "BC:24:11:10:09:00"
   }
 
   # net1 → ens19 : trunk, SANS étiquette (les VLAN sont des sous-interfaces dans l'invité),
   # MTU 9000 comme vmbr1 et le trunk de gw01 (M07-E15).
   network_device {
-    bridge = "vmbr1"
-    model  = "virtio"
-    mtu    = 9000
+    bridge      = "vmbr1"
+    model       = "virtio"
+    mac_address = "BC:24:11:10:09:01"
+    mtu         = 9000
   }
 
   serial_device {}

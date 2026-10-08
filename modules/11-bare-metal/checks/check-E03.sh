@@ -38,7 +38,7 @@ for _m11d_h in dns01 dns02; do
   _m11d_k="$(_m11d_kea "$_m11d_h")"
   check_cmd "$_m11d_h : une classe pour iPXE (option 77) qui renvoie l'URL de boot.ipxe" \
     jq -e '[.arguments.Dhcp4["client-classes"][]? | select((.test | test("option\\[77\\]"))
-            and (.test | test("not") | not) and (.["boot-file-name"] // "" | test("^http://pxe01\\.par1\\.medisphere\\.internal/boot\\.ipxe$")))] | length == 1' <<<"$_m11d_k"
+            and (.test | test("not") | not) and (.["boot-file-name"] // "" | test("^https?://pxe01\\.par1\\.medisphere\\.internal/boot\\.ipxe$")))] | length == 1' <<<"$_m11d_k"
   check_cmd "$_m11d_h : une classe BIOS (option 93 = 0x0000) → undionly.kpxe, qui exclut iPXE" \
     jq -e '[.arguments.Dhcp4["client-classes"][]? | select((.test | test("option\\[93\\]\\.hex == 0x0000"))
             and (.test | test("not")) and .["boot-file-name"] == "undionly.kpxe")] | length == 1' <<<"$_m11d_k"
@@ -65,6 +65,6 @@ check_ssh "pxe01 : boot.ipxe a été téléchargé par un client du VLAN 60" pxe
   'sudo -n sh -c "cat /var/log/nginx/pxe-acces.log /var/log/nginx/pxe-acces.log.1 2>/dev/null" | grep -Eq "^10\.10\.60\.[0-9]+ .*\"GET /boot\.ipxe HTTP/[0-9.]+\" 200"'
 
 # --- La note ---------------------------------------------------------------------------------------------
-_m11d_note="${WB_DEPOT:-$HOME/medisphere}/docs/socle/provisioning/demarrage-reseau.md"
+_m11d_note="${WB_DEPOT:-$HOME/medisphere}/docs/provisioning/demarrage-reseau.md"
 check_cmd "documentation : demarrage-reseau.md décrit les séquences UEFI et BIOS" \
   bash -c 'grep -qi "uefi" "$1" && grep -qi "bios" "$1" && grep -qi "tftp" "$1"' _ "$_m11d_note"

@@ -1,0 +1,8 @@
+# Extrait de group_vars/role_routeur/pare_feu.yml (matrice commune à gw01 et gw02) — M10-E17 (DEV-1127).
+# Déjà définis : $WG_ADM, $V_OSAPI (M07-E30), $OS_VIP_EXT (M10-E04).
+# pare_feu_transit : AJOUTER (bloc « OpenStack »)
+  - {entree: $WG_ADM, sortie: $V_OSAPI, destination: $OS_VIP_EXT, proto: tcp, ports: [443, 6080],
+     motif: "VPN d'administration vers Horizon (443) et la console noVNC (6080)", ref: M10-E17}
+# MGMT (adm01) joint déjà tout le lab. Les API (5000, 8774, 9292, 9696, 8776, 9876…) ne sont PAS
+# ouvertes au VPN : les équipes utilisent Horizon ; l'ouverture de la CLI depuis les postes est
+# une décision de sécurité reportée au palier 3 (M10-E27).

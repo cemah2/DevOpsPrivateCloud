@@ -12,7 +12,7 @@ Claire Morel veut une plateforme que l'on peut confier à l'astreinte. Nadia Rou
 
 **Budget mémoire** : `pve01` porte le socle (≈ 27 Go) et les trois nœuds (36 Go). `ceph01-03` restent **arrêtées** pendant tout le palier.
 
-Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 09 XX`) ; elles se connectent en `root` aux nœuds (`root@hvNN.par1.medisphere.internal`, clé de `adm01` posée par le fichier de réponse, M09-E03) et lisent `pve01` comme dans les modules précédents.
+Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 09 XX`) ; elles se connectent en `root` aux nœuds par leurs alias SSH `hv01`, `hv02`, `hv03` (`~/.ssh/config` de `adm01`, M09-E03 ; clé de `adm01` posée par le fichier de réponse) et lisent `pve01` comme dans les modules précédents.
 
 ---
 
@@ -166,6 +166,7 @@ Pour les tests bats, inspire-toi de ceux de `ms-verif-services` : la fonction `p
 5. **Certificats.** Compare les deux outils candidats au regard des contraintes du contexte (noms à couvrir, défi ACME possible pour un nom flottant, fréquence de renouvellement avec des certificats de 30 jours, secrets sur les nœuds). Mets en œuvre ton choix **par le code** (rôles et playbooks de `plateforme/ansible`, variables du groupe des nœuds), avec ce qu'il faut dans `pare_feu.yml` et dans `pve_pare_feu`. Vérifie depuis `adm01` avec la seule racine MédiSphère, sur chaque nœud **et** sur la VIP. Passe ensuite la sonde de E25 et OpenTofu (`hv-invites`) sur cette racine.
 6. **SSH.** Vérifie que l'authentification par mot de passe est refusée sur les nœuds, que `root` ne se connecte que par clé (les nœuds en ont besoin entre eux) et que les clés d'hôte sont signées (M06-E19). Applique par le rôle `pve_noeud`, sans casser les connexions entre nœuds (migration, réplication).
 7. **Qui a fait quoi ?** Arrête puis redémarre la VM 120 depuis l'interface avec ton compte. Retrouve, en moins de cinq minutes et sans connaître l'heure exacte, le compte, l'adresse source, l'heure et le nœud, à partir des journaux (`/var/log/pveproxy/access.log`, tâches du cluster). Écris la procédure en tête de la matrice documentée.
+8. **La bordure.** Clos l'écart inscrit au registre en M09-E05 : la règle « bastion (MGMT) vers tout le lab, PAR2 et LYO1 » de `pare_feu.yml` n'a pas de source. Maintenant que tu connais tous les flux sortants des nœuds, décide ce qui doit avoir sa propre ligne avant de restreindre cette règle, fais-le dans une seule MR, et prouve qu'aucun flux légitime des nœuds ne s'est perdu (sauvegarde, certificats, résolution de noms, heure, dépôts).
 
 **Critères de réussite**
 - [ ] Le pare-feu est actif au niveau du cluster et sur les trois nœuds, géré par le rôle `pve_pare_feu` ; l'IPSet `management` contient `adm01`, le VPN d'administration et `runner01`.
@@ -173,6 +174,7 @@ Pour les tests bats, inspire-toi de ceux de `ms-verif-services` : la fonction `p
 - [ ] Les certificats présentés sur 8006 par chaque nœud et par la VIP sont émis par la PKI MédiSphère, valides pour leurs noms, pour 31 jours au plus, avec plus de 10 jours restants ; leur renouvellement est automatique.
 - [ ] `root@pam` et chaque membre de `hv-admins` ont un facteur TOTP ; `PasswordAuthentication no` est effectif sur les nœuds.
 - [ ] La matrice des flux du cluster et la procédure d'enquête sont sur `main` de `plateforme/medisphere`.
+- [ ] Dans `pare_feu.yml`, la règle du bastion a une source ; chaque flux des nœuds qui traverse la bordure a sa ligne (motif, référence) ; une sauvegarde vers `pbs01` et un renouvellement de certificat passent toujours ; l'écart de M09-E05 est clos au registre.
 
 **Vérification** : `lab/bin/check 09 26`
 
@@ -511,7 +513,7 @@ Les réponses argumentées sont dans le corrigé.
 **Travail demandé**
 Dans `plateforme/medisphere`, par MR relue (joue Nadia avec la grille du corrigé) :
 1. `docs/virtualisation/changements/CHG-1059-mise-a-jour-hv-par1.md` : fiche de changement **standard** pour les mises à jour **mineures** et de sécurité de Proxmox VE et de Ceph sur `hv-par1` : objet, périmètre (ce qui en est **exclu** et devient un changement normal : version majeure de Proxmox VE ou de Ceph, noyau avec changement de pilote, changement de configuration), conditions préalables avec leur preuve, fenêtre, déroulé (renvoi à RB-092), critères de réussite, critères d'arrêt, retour arrière, communication, compte rendu.
-2. `docs/virtualisation/runbooks/RB-092-mettre-a-jour-hv-par1.md` (s'il existe depuis E19, complète-le) : préalables (sauvegardes de configuration d'E29, santé, place disque, lecture des notes de version et des « known issues », dépôts), ordre des nœuds et raison, traitement d'un nœud (maintenance, `apt full-upgrade` ou équivalent, noyau et redémarrage, contrôles, fin de maintenance), cas Ceph (`noout`, ordre des démons, renvoi au playbook d'E28 pour une majeure), contrôle final, retour arrière (paquets épinglés, noyau précédent au démarrage, ce qui n'est **pas** réversible), et une section « montée majeure » qui renvoie au guide officiel de la version (`pve8to9` pour la précédente) et à un changement normal.
+2. `docs/virtualisation/runbooks/RB-092-mettre-a-jour-hv-par1.md` (nouveau : E19 a écrit le playbook `hv-mise-a-jour.yml`, pas de runbook ; RB-092 dit quand et comment le lancer, et quoi faire quand il s'arrête) : préalables (sauvegardes de configuration d'E29, santé, place disque, lecture des notes de version et des « known issues », dépôts), ordre des nœuds et raison, traitement d'un nœud (maintenance, `apt full-upgrade` ou équivalent, noyau et redémarrage, contrôles, fin de maintenance), cas Ceph (`noout`, ordre des démons, renvoi au playbook d'E28 pour une majeure), contrôle final, retour arrière (paquets épinglés, noyau précédent au démarrage, ce qui n'est **pas** réversible), et une section « montée majeure » qui renvoie au guide officiel de la version (`pve8to9` pour la précédente) et à un changement normal.
 3. Une **répétition** sur `hv-par1` de la fiche (même s'il n'y a qu'une mise à jour de sécurité disponible), compte rendu rempli.
 
 **Critères de réussite**

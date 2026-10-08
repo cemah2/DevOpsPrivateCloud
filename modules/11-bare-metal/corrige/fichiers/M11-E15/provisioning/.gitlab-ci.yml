@@ -1,55 +1,81 @@
-# .gitlab-ci.yml — plateforme/provisioning (M11-E06, complété en M11-E15).
-# valider   : à chaque MR — ShellCheck, rendu de TOUS les équipements dans un dossier temporaire,
-#             validation du rendu (ksvalidator, debconf-set-selections -c, scripts iPXE).
-# deployer  : sur main — rendu et dépôt sur pxe01 (outils/netbox-provision.py deployer, M11-E06).
-# provisionner : job MANUEL sur main, variable EQUIPEMENT (nom NetBox) — outils/provisionner.py.
-# Secrets : variables protégées et masquées du projet (NETBOX_TOKEN : svc-automatisation ;
-# PVE_ENV_FICHIER : variable de type « fichier » au format pve-provision.env ; clé SSH de déploiement
-# vers pxe01). Exécuteur : runner01 (shell), uv et Ansible installés (M04).
-stages: [valider, deployer, provisionner]
+# plateforme/provisioning — pipeline (M11-E03 ; preseed E04 ; kickstart E05 ; générateur NetBox E06 ;
+# version M11-E15 : déploiement par la CI et job manuel « provisionner »). Remplace celui de M11-E06.
+#   qualite      : pre-commit, Gitleaks (gabarits partagés, M01) ;
+#   tests        : ruff, pytest (contrôle et rendu sur données simulées, sans réseau) ;
+#   verifier     : rendu sur données simulées, outils/verifier.sh (en-têtes iPXE, mots de passe,
+#                  debconf, ksvalidator, ShellCheck) et outils/verifier-rendu.sh (contrôles
+#                  sémantiques : partitionnement confirmé, disque désigné, HTTPS seulement) ;
+#   deployer     : sur main — rendu depuis NetBox, mêmes contrôles, publication sur pxe01 (publier.sh) ;
+#   provisionner : job MANUEL sur main, variable EQUIPEMENT (nom NetBox) — outils/provisionner.py.
+# Secrets (variables protégées et masquées du projet, jamais dans ce fichier) : NETBOX_TOKEN (jeton
+# en écriture de svc-automatisation, M11-E15) ; PVE_ENV_FICHIER (type « fichier », format de
+# pve-provision.env) ; clé SSH de déploiement vers pxe01 (agent du runner). Exécuteur : runner01
+# (shell), uv, Ansible, shellcheck, debconf installés (M04) ; flux runner01 → VLAN 60 en SSH (M11-E15).
+include:
+  - project: plateforme/ci-templates
+    file: qualite.yml
+
+stages: [qualite, tests, verifier, deployer, provisionner]
 
 variables:
+  UV_FROZEN: "1"
   NETBOX_URL: https://nbx01.par1.medisphere.internal
-  ANSIBLE_PROJET: $CI_BUILDS_DIR/ansible
 
 default:
-  tags: [shell]
+  tags: [shell, socle]
 
-shellcheck:
-  stage: valider
-  script:
-    - shellcheck -x outils/*.sh ipxe/*.sh
-
-rendu:
-  stage: valider
-  script:
-    - uv sync --frozen
-    - uv run outils/netbox-provision.py rendre --sortie rendu/
-    - uv run --with pykickstart outils/verifier-rendu.sh rendu/
+.regles: &regles
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+python:
+  stage: tests
+  <<: *regles
+  script:
+    - uv sync --group dev
+    - uv run ruff check outils tests
+    - uv run ruff format --check outils tests
+    - uv run pytest -q
+
+verifier:
+  stage: verifier
+  <<: *regles
+  script:
+    - uv sync --group dev
+    - uv run outils/netbox-provision.py rendre --depuis-json tests/donnees/netbox.json
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier.sh
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier-rendu.sh rendu/http
+  artifacts:
+    when: on_failure
+    paths: [rendu/]
+    expire_in: 1 week
 
 deployer:
   stage: deployer
   resource_group: pxe01
-  script:
-    - uv sync --frozen
-    - uv run outils/netbox-provision.py rendre --sortie rendu/
-    - uv run --with pykickstart outils/verifier-rendu.sh rendu/
-    - uv run outils/netbox-provision.py deployer --depuis rendu/
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "web"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+  script:
+    - uv sync --group dev
+    - uv run outils/netbox-provision.py rendre
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier.sh
+    - PATH="$CI_PROJECT_DIR/.venv/bin:$PATH" outils/verifier-rendu.sh rendu/http
+    - outils/publier.sh
 
 provisionner:
   stage: provisionner
   resource_group: provisioning   # une seule installation à la fois (lab : mémoire de pve01)
   timeout: 2h
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web"
+      when: manual
+  variables:
+    ANSIBLE_PROJET: $CI_BUILDS_DIR/ansible-accueil
   script:
     - test -n "$EQUIPEMENT" || { echo "Variable EQUIPEMENT (nom NetBox) obligatoire"; exit 2; }
+    - rm -rf "$ANSIBLE_PROJET"
     - git clone --depth 1 "https://gitlab-ci-token:${CI_JOB_TOKEN}@git01.par1.medisphere.internal/plateforme/ansible.git" "$ANSIBLE_PROJET"
-    - uv sync --frozen
+    - (cd "$ANSIBLE_PROJET" && uv sync --frozen)
+    - uv sync
     - PVE_ENV="$PVE_ENV_FICHIER" uv run outils/provisionner.py "$EQUIPEMENT"
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: manual

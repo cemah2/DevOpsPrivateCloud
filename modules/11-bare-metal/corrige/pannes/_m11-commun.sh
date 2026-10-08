@@ -23,7 +23,7 @@ _M11_ZONE="par1.medisphere.internal"
 _M11_PXE_FQDN="pxe01.$_M11_ZONE"
 _M11_PXE_IP=10.10.60.10
 _M11_MAAS_URL="${WB_MAAS_URL:-http://10.10.60.11:5240/MAAS}"
-_M11_MAAS_CLE="${WB_MAAS_APIKEY_FILE:-$HOME/.config/workbook/maas-api.key}"
+_M11_MAAS_CLE="${WB_MAAS_KEY_FILE:-$HOME/.config/workbook/maas-api.key}"
 # shellcheck disable=SC2034  # utilisées par les scripts qui sourcent ce fichier
 declare -A _M11_VMID=([pxe01]=2111 [bm01]=2112 [bm02]=2113 [bm03]=2114 [bm04]=2115 [maas01]=2116)
 

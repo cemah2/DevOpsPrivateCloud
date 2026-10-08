@@ -12,7 +12,7 @@
 #   mesure-continuite.sh lancer   -d DOSSIER -f IP_FLOTTANTE [-p IP_PRIVEE] [-u UTILISATEUR] [-c CLOUD]
 #   mesure-continuite.sh arreter  -d DOSSIER
 #   mesure-continuite.sh analyser -d DOSSIER
-# UTILISATEUR : compte de l'image (debian par défaut) ; CLOUD : nuage de clouds.yaml
+# UTILISATEUR : compte de l'image (debian par défaut) ; CLOUD : cloud de clouds.yaml
 # (medisphere-plateforme par défaut). L'horloge de l'instance doit être synchronisée (chrony).
 set -euo pipefail
 

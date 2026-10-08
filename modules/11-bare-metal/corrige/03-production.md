@@ -2,7 +2,7 @@
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-Les fichiers de référence sont dans [`fichiers/`](fichiers/) : `M11-E13/` (rôle `pxe` en HTTPS, construction d'iPXE, gabarits sans secret, entrées de la matrice des flux, ADR-0111), `M11-E14/` (fichier de réponse PVE, rôle `pve_reponses`, préparation), `M11-E15/` (orchestrateur, inventaire des serveurs bare-metal, accueil Ansible, pipeline), `M11-E16/` (ADR-0110), `M11-E18/` (inventaire Redfish). Ils prolongent ceux des paliers 1 et 2 : les **noms de variables** de tes rôles `pxe` et `kea_dhcp4` et les sous-commandes de ton `outils/netbox-provision.py` (M11-E06) peuvent différer ; aligne-les plutôt que de tout remplacer.
+Les fichiers de référence sont dans [`fichiers/`](fichiers/) : `M11-E13/` (rôle `pxe` en HTTPS et son scénario Molecule, classes de Kea, construction d'iPXE, outil de rendu et gabarits sans secret, entrées de la matrice des flux, ADR-0111), `M11-E14/` (fichier de réponse PVE, rôle `pve_reponses`, préparation, gabarit iPXE), `M11-E15/` (orchestrateur, inventaire des serveurs bare-metal, accueil Ansible, pipeline), `M11-E16/` (ADR-0110), `M11-E18/` (inventaire Redfish). Ils **prolongent** ceux des paliers 1 et 2, avec les mêmes noms : le rôle `pxe` de E13 reprend toutes les variables de celui de E02 (installateurs vérifiés compris) et en ajoute ; `outils/netbox-provision.py` de E13 est celui de E06, qui rend en plus un preseed par machine, choisit le gabarit d'après la plate-forme et applique la règle « qui s'installe » de `parametres.yml` (`regle_installation`, changée en E15) ; ses tests sont mis à jour en conséquence.
 
 Commandes représentatives de iPXE (amont 2.0), Kea 3.0, nginx 1.26, Proxmox VE 9.2, NetBox 4.6, iLO 4 2.x. Les sorties exactes varient.
 
@@ -10,6 +10,9 @@ Commandes représentatives de iPXE (amont 2.0), Kea 3.0, nginx 1.26, Proxmox VE 
 - prise en charge des signatures **ECDSA** (racine et intermédiaire step-ca en P-256) par la version d'iPXE construite : le script de construction refuse une source sans code ECDSA, mais seul l'essai `imgfetch https://…` dans le shell iPXE le prouve ; si ta version échoue, essaie la dernière étiquette de l'amont et signale-le ;
 - construction automatique d'une archive cpio par iPXE autour d'un fichier dont la ligne de commande est un chemin (`initrd <url> /preseed.cfg`), en BIOS **et** en UEFI (passage de plusieurs initrd au noyau par le micrologiciel UEFI) ;
 - valeur `!` de `passwd/user-password-crypted` dans le preseed (compte `admin` verrouillé) ;
+- classe d'utilisateur annoncée par le script intégré au binaire (`set user-class iPXE-MediSphere`, réglage décrit sur ipxe.org/cfg/user-class) : à confirmer par une capture du second DISCOVER ;
+- remise de plusieurs initrd au noyau en UEFI sans paramètre `initrd=` (protocole LoadFile2, noyaux ≥ 5.8) ;
+- vérification par Python (`requests`/urllib3) d'un certificat d'iLO épinglé qui n'est pas autosigné (chaîne partielle), dans `inventaire-redfish.py` ;
 - nom exact du fichier et arguments du script iPXE produits par `prepare-iso --pxe-loader ipxe` (PVE 9.2), et format du corps JSON envoyé par l'installateur (le service ne dépend que de la présence des MAC) ;
 - privilège `VM.GuestAgent.FileRead` (PVE 9) et point d'API `agent/file-read` utilisés par l'orchestrateur ;
 - emplacement exact du réglage « IPMI/DCMI over LAN » dans l'interface de l'iLO 4 selon la version du firmware, et présence de `IPMI.ProtocolEnabled` dans `Managers/1/NetworkService` ;
@@ -23,7 +26,7 @@ Commandes représentatives de iPXE (amont 2.0), Kea 3.0, nginx 1.26, Proxmox VE 
 
 *1. Analyse* — modèle : [`fichiers/M11-E13/medisphere/docs/provisioning/securite-chaine.md`](fichiers/M11-E13/medisphere/docs/provisioning/securite-chaine.md). Le point clé : HTTPS ne protège qu'**à partir du chargeur iPXE**. DHCP et TFTP restent usurpables ; ce qui les compense ici, c'est l'isolation du VLAN 60, et en production la surveillance DHCP des commutateurs et Secure Boot.
 
-*2. Certificat de `pxe01`* — rôle [`pxe`](fichiers/M11-E13/ansible/roles/pxe/) (version E13), [`host_vars/pxe01/certificats.yml`](fichiers/M11-E13/ansible/inventories/lab/host_vars/pxe01/certificats.yml), [`playbooks/pxe01.yml`](fichiers/M11-E13/ansible/playbooks/pxe01.yml). Ordre du premier passage : le rôle `pxe` installe nginx avec le seul port 80 (le site HTTPS n'est rendu que si le certificat existe) ; `certificats_acme` arrête nginx, laisse le client `step` répondre au défi HTTP-01 sur le port 80, émet le certificat (chaîne complète), redémarre nginx ; le playbook rappelle `nginx.yml`, qui rend cette fois le serveur 443. Flux (fragment [`pare_feu-vlan60.yml`](fichiers/M11-E13/ansible/inventories/lab/host_vars/gw01/pare_feu-vlan60.yml)) : `pxe01` → `ca01:443` et `ca01` → `pxe01:80`.
+*2. Certificat de `pxe01`* — rôle [`pxe`](fichiers/M11-E13/ansible/roles/pxe/) (version E13), [`host_vars/pxe01/certificats.yml`](fichiers/M11-E13/ansible/inventories/lab/host_vars/pxe01/certificats.yml), [`playbooks/pxe.yml`](fichiers/M11-E13/ansible/playbooks/pxe.yml) (groupe `role_pxe`), scénario Molecule mis à jour ([`molecule/pxe/`](fichiers/M11-E13/ansible/molecule/pxe/) : certificat autosigné de test comme ancre, jamais de vérification désactivée). Ordre du premier passage : le rôle `pxe` installe nginx avec la seule redirection du port 80 (le site HTTPS n'est rendu que si le certificat existe) ; `certificats_acme` arrête nginx, laisse le client `step` répondre au défi HTTP-01 sur le port 80, émet le certificat (chaîne complète), redémarre nginx ; le playbook rappelle `nginx.yml`, qui rend cette fois le serveur 443. Flux (extrait de la matrice commune, [`group_vars/role_routeur/pare_feu.yml.extrait`](fichiers/M11-E13/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait)) : `pxe01` → `ca01:443` et `ca01` → `pxe01:80`. Le site HTTPS garde les restrictions de E02 (VLAN 60 et MGMT) ; les fichiers de réponse et `pve/` sont réservés au VLAN 60 et à `adm01` ; journaux `pxe-acces.log` et `pxe-erreurs.log`.
 
 ```
 admin@adm01:~$ openssl s_client -connect 10.10.60.10:443 -servername pxe01.par1.medisphere.internal </dev/null 2>/dev/null \
@@ -63,7 +66,9 @@ admin@adm01:~$ for f in undionly.kpxe ipxe.efi; do
   done
 ```
 
-Les empreintes vont dans [`host_vars/pxe01/pxe.yml`](fichiers/M11-E13/ansible/inventories/lab/host_vars/pxe01/pxe.yml) : le rôle télécharge les binaires **sur le contrôleur** (`pxe01` ne joint plus la forge), vérifie l'empreinte, les copie, puis vérifie à nouveau l'empreinte du fichier en place. Test dans le shell iPXE de `bm01` (Ctrl-B) :
+Les empreintes vont dans [`host_vars/pxe01/pxe.yml`](fichiers/M11-E13/ansible/inventories/lab/host_vars/pxe01/pxe.yml) (variable `pxe_chargeurs` ; tant qu'elle est vide, le rôle copie les binaires du paquet Debian comme en E02) : le rôle télécharge les binaires **sur le contrôleur** (`pxe01` ne joint plus la forge), vérifie l'empreinte, les copie, puis vérifie à nouveau l'empreinte du fichier en place.
+
+**Le piège de la ROM de QEMU.** Les VMs SeaBIOS démarrent avec l'iPXE intégré à QEMU (M11-E03), qui s'annonce `iPXE` et ne connaît que la racine du projet iPXE : si Kea lui donnait l'URL HTTPS, il échouerait. Le binaire construit embarque donc un petit script (`EMBED=`) qui annonce la classe d'utilisateur `iPXE-MediSphere` avant son DHCP ; les classes de Kea ([`group_vars/role_dns/kea.yml`](fichiers/M11-E13/ansible/inventories/lab/group_vars/role_dns/kea.yml), version E13) ne donnent l'URL HTTPS qu'à cette classe, et traitent tout autre client (ROM PXE, iPXE quelconque) comme un client PXE : il reçoit `undionly.kpxe` ou `ipxe.efi` en TFTP et charge **notre** iPXE. Sur un vrai serveur, c'est aussi ce qui protège d'une carte réseau dont la ROM serait un iPXE récent. Test dans le shell iPXE de `bm01` (Ctrl-B, une fois **notre** iPXE chargé : sa bannière affiche la version construite) :
 
 ```
 iPXE> dhcp
@@ -77,9 +82,9 @@ https://ipxe.org/... Permission denied (https://ipxe.org/0216eb3c)
 
 Le second essai **doit** échouer : la racine du projet iPXE n'est plus de confiance (c'est le but de `TRUST=`). Le code exact varie ; décode-le sur `https://ipxe.org/err/<code>`.
 
-*4. Chaîne en HTTPS* — [`ipxe/boot.ipxe`](fichiers/M11-E13/provisioning/ipxe/boot.ipxe), gabarits [`ipxe-debian.ipxe.j2`](fichiers/M11-E13/provisioning/gabarits/ipxe-debian.ipxe.j2) et [`ipxe-rocky.ipxe.j2`](fichiers/M11-E13/provisioning/gabarits/ipxe-rocky.ipxe.j2). Dans Kea, la classe iPXE (option 77) désigne `https://pxe01.par1.medisphere.internal/boot.ipxe` (variable de la classe dans `group_vars/role_dns/kea.yml`). Le preseed est ajouté à l'initrd par iPXE (`initrd …/preseed/bm01.cfg /preseed.cfg`) : d-i lit `/preseed.cfg` à la racine de son initrd avant même le réseau. Le kickstart aussi (`inst.ks=file:/ks.cfg`) : dracut le lit dans l'initrd. Pour Rocky, le dépôt officiel est en HTTPS : Anaconda vérifie le certificat avec les autorités publiques qu'il connaît. Pour Debian, le miroir reste en HTTP : `Release` est signé par l'archive, et les clés de l'archive sont **dans l'initrd** que nous avons servi en HTTPS ; les paquets sont vérifiés par leurs sommes. La racine MédiSphère et la clé publique d'`adm01` sont, elles aussi, remises par iPXE (`/medisphere-root-ca.crt`, `/authorized_keys`) et copiées par `late_command`.
+*4. Chaîne en HTTPS* — [`ipxe/boot.ipxe`](fichiers/M11-E13/provisioning/ipxe/boot.ipxe) (plus de menu : une MAC inconnue rend la main au micrologiciel ; `ipxe/menu.ipxe` est supprimé du dépôt, et `publier.sh` le retire de `pxe01`), outil [`outils/netbox-provision.py`](fichiers/M11-E13/provisioning/outils/netbox-provision.py) version E13 et ses [tests](fichiers/M11-E13/provisioning/tests/test_netbox_provision.py), [`parametres.yml`](fichiers/M11-E13/provisioning/parametres.yml) (URL en `https://`, racine publique, plus aucune empreinte de mot de passe), gabarit [`ipxe-hote.ipxe.j2`](fichiers/M11-E13/provisioning/gabarits/ipxe-hote.ipxe.j2) ; [`outils/publier.sh`](fichiers/M11-E13/provisioning/outils/publier.sh) ne publie plus que les fichiers servis (`*.ipxe`, `*.cfg`, `*.ks`), et [`outils/verifier.sh`](fichiers/M11-E13/provisioning/outils/verifier.sh) passe aussi ShellCheck sur `ipxe/construire-ipxe.sh`. Les fichiers statiques `preseed/debian13.cfg` et `kickstart/rocky10.ks` (E04, E05) sont retirés : chaque machine a désormais son fichier rendu (les contrôles de E04 et E05, qui les cherchent, ne sont plus à relancer). Dans Kea, la classe iPXE désigne `https://pxe01.par1.medisphere.internal/boot.ipxe`. Le preseed est ajouté à l'initrd par iPXE (`initrd …/preseed/bm01.cfg /preseed.cfg`) : d-i lit `/preseed.cfg` à la racine de son initrd avant même le réseau. Le kickstart aussi (`inst.ks=file:/ks.cfg`) : dracut le lit dans l'initrd. Pour Rocky, le dépôt officiel est en HTTPS : Anaconda vérifie le certificat avec les autorités publiques qu'il connaît. Pour Debian, le miroir reste en HTTP : `Release` est signé par l'archive, et les clés de l'archive sont **dans l'initrd** que nous avons servi en HTTPS ; les paquets sont vérifiés par leurs sommes. La racine MédiSphère est, elle aussi, remise par iPXE (`/medisphere-root-ca.crt`), vérifiée par son empreinte et copiée par `late_command` ; la clé publique d'`adm01` est écrite dans le preseed. Le kickstart, lui, porte le certificat de la racine (public) : `%post` ne pourrait pas le télécharger en HTTPS, le système installé ne le connaît pas encore.
 
-*5. Secrets* — [`preseed.cfg.j2`](fichiers/M11-E13/provisioning/gabarits/preseed.cfg.j2), [`kickstart.ks.j2`](fichiers/M11-E13/provisioning/gabarits/kickstart.ks.j2). Choix retenu : **aucun** mot de passe. root verrouillé (`passwd/root-login false` ; `rootpw --lock`), `admin` verrouillé (`!` ; `user --lock`), connexion par la clé d'`adm01`, sudo par une règle `90-admin` (comme les images dorées), accès console de secours par le compte `secours` qu'apporte le rôle `base` au premier passage d'Ansible. Historique :
+*5. Secrets* — [`debian13.cfg.j2`](fichiers/M11-E13/provisioning/gabarits/debian13.cfg.j2) (nouveau : un preseed par machine), [`rocky10.ks.j2`](fichiers/M11-E13/provisioning/gabarits/rocky10.ks.j2). Choix retenu : **aucun** mot de passe. root verrouillé (`passwd/root-login false` ; `rootpw --lock`), `admin` verrouillé (`!` ; `user --lock`), connexion par la clé d'`adm01`, sudo par une règle `90-admin` (comme les images dorées), accès console de secours par le compte `secours` qu'apporte le rôle `base` au premier passage d'Ansible. Historique :
 
 ```
 admin@adm01:~/src/provisioning$ git log -p --all -S 'password' -- preseed kickstart gabarits | grep -E '^\+.*(passw|rootpw|--password)'
@@ -87,7 +92,7 @@ admin@adm01:~/src/provisioning$ git log -p --all -S 'password' -- preseed kickst
 
 Un mot de passe en clair trouvé dans l'historique est compromis : il ne sert plus (comptes verrouillés), on le note au registre des secrets comme « révoqué », et on décide (avec Sophie) s'il faut réécrire l'historique (perturbant pour tous les clones) ; ne réécris pas sans décision.
 
-*6. VLAN 60* — fragment [`pare_feu-vlan60.yml`](fichiers/M11-E13/ansible/inventories/lab/host_vars/gw01/pare_feu-vlan60.yml) : la règle « lab vers Internet » ne s'applique plus au VLAN 60, qui ne sort qu'en 80/443 ; `pxe01` seul joint `ca01:443`. Vérification depuis `pxe01` :
+*6. VLAN 60* — [extrait de la matrice](fichiers/M11-E13/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) : les règles « lab vers Internet » et « services publiés depuis le lab » ne s'appliquent plus au VLAN 60 (`LAB_IFS_INTERNET`), qui ne sort qu'en 80/443 vers Internet ; `pxe01` seul joint `ca01:443` ; `runner01` joint le VLAN 60 en SSH (publication et accueil Ansible de E15, ouverts ici une fois pour toutes). Vérification depuis `pxe01` :
 
 ```
 admin@pxe01:~$ dig +short @10.10.20.10 deb.debian.org | head -n 1          # DNS : oui
@@ -99,19 +104,18 @@ admin@pxe01:~$ timeout 3 bash -c '</dev/tcp/10.10.20.11/443' && echo ouvert || e
 *7. iLO* — dans l'interface de l'iLO 4 (compte administrateur), section *Administration → Access Settings* (selon le firmware : *Security → Access Settings*), décocher **IPMI/DCMI over LAN** et appliquer (l'iLO peut redémarrer : le serveur, non). Vérification en Redfish, identifiants hors de la ligne de commande (`curl -K-` lit sa configuration sur l'entrée standard) :
 
 ```
-admin@adm01:~$ set -a; source ~/.config/workbook/ilo-hp01.env; set +a
-admin@adm01:~$ printf 'user = "%s:%s"\n' "$ILO_USER" "$ILO_PASSWORD" \
-  | curl -sS -K- --cacert "$ILO_CACERT" "https://$ILO_HOST/redfish/v1/Managers/1/NetworkService/" | jq '.IPMI'
+admin@adm01:~/src/provisioning$ outils/redfish.sh /redfish/v1/Managers/1/NetworkService/ | jq '.IPMI'
 { "Port": 623, "ProtocolEnabled": false }
-admin@adm01:~$ IPMI_PASSWORD="$ILO_PASSWORD" ipmitool -I lanplus -H "$ILO_HOST" -U "$ILO_USER" -E chassis status
+admin@adm01:~$ ( set -a; . <(sed -n 's/^ILO_PASSWORD=/IPMI_PASSWORD=/p' ~/.config/workbook/ilo-hp01.env); set +a
+    ipmitool -I lanplus -H <IP-ILO-HP01> -U wb-redfish -E -L USER chassis status )
 Error: Unable to establish IPMI v2 / RMCP+ session
 ```
 
-(`--cacert "$ILO_CACERT"` si tu as épinglé le certificat de l'iLO en M11-E07 ; rien si tu l'as remplacé par un certificat step-ca.) Compte `wb-redfish` : seul *Login* reste coché ; *Virtual Power and Reset*, donné en M11-E08 pour l'essai facultatif de redémarrage, est retiré (plus aucun exercice ne pilote l'alimentation de `hp01`). Fiche CHG-1230 : avant, après, retour arrière (recocher la case).
+(`redfish.sh` de M11-E07 : identifiants lus dans `ilo-hp01.env` sans l'exécuter, certificat épinglé `ilo-hp01.pem`, nom `ILO_NOM_TLS` résolu vers l'adresse de l'iLO. Le flux UDP 623 n'existe déjà plus dans la matrice : la session IPMI échoue de toute façon depuis `adm01` ; la preuve qui compte est le `ProtocolEnabled: false` lu sur l'iLO.) Compte `wb-redfish` : seul *Login* reste coché ; *Virtual Power and Reset*, s'il a été ajouté pour l'essai facultatif de redémarrage de M11-E08, est retiré (plus aucun exercice ne pilote l'alimentation de `hp01`). Fiche CHG-1230 : avant, après, retour arrière (recocher la case).
 
-*8. ADR-0111* — modèle : [`ADR-0111-confiance-demarrage-reseau.md`](fichiers/M11-E13/medisphere/docs/socle/adr/ADR-0111-confiance-demarrage-reseau.md).
+*8. ADR-0111* — modèle : [`ADR-0111-confiance-demarrage-reseau.md`](fichiers/M11-E13/medisphere/docs/provisioning/adr/ADR-0111-confiance-demarrage-reseau.md).
 
-*9.* Réinstallation de `bm01` et `bm03` : la console montre `https://pxe01.par1.medisphere.internal/…` pour chaque téléchargement après le chargeur, et `pxe-access.log` sur `pxe01` les requêtes correspondantes.
+*9.* Réinstallation de `bm01` et `bm03` : la console montre `https://pxe01.par1.medisphere.internal/…` pour chaque téléchargement après le chargeur, et `pxe-acces.log` sur `pxe01` les requêtes correspondantes.
 
 **Vérification** : `lab/bin/check 11 13`.
 
@@ -171,23 +175,23 @@ proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso --fetch-from htt
 
 `--pxe-loader ipxe` implique `--pxe` : la sortie est un **dossier** contenant `vmlinuz`, `initrd.img` et un script pour iPXE. L'outil n'accepte le jeton qu'en argument : exception documentée dans le script et au registre des secrets (outil lancé sur `adm01`, jeton à usage unique renouvelé après l'installation). Dépôt sur `pxe01` : [`playbooks/pve-installateur.yml`](fichiers/M11-E14/ansible/playbooks/pve-installateur.yml) (`/srv/http/pve/9.2/`, réservé au VLAN 60 et à `adm01` par le rôle `pxe`).
 
-*4. Script iPXE* — [`gabarits/ipxe-pve.ipxe.j2`](fichiers/M11-E14/provisioning/gabarits/ipxe-pve.ipxe.j2) : recopie les arguments de la ligne `kernel` du script produit par l'outil (ils dépendent de la version de l'ISO). Mémoire de `bm04` portée à 8 Go et disque à 32 Go dans `~/src/infra` (`tofu plan` montre une modification en place, pas un remplacement), puis démarrage par la chaîne (statut `staged` + `pxe_action=installer` si l'orchestrateur de E15 est déjà en place, sinon rendu manuel du script de `bm04`).
+*4. Script iPXE* — [`gabarits/ipxe-pve.ipxe.j2`](fichiers/M11-E14/provisioning/gabarits/ipxe-pve.ipxe.j2) : recopie les arguments de la ligne `kernel` du script produit par l'outil (ils dépendent de la version de l'ISO). Les valeurs `pve_version` et `pve_noyau_arguments` vont dans [`parametres.yml`](fichiers/M11-E14/provisioning/parametres.yml) ; la plate-forme NetBox de `bm04` passe à `proxmox-ve-9` le temps de l'exercice : l'outil de rendu (version E13) lui sert alors ce gabarit au lieu de celui de Rocky. Mémoire de `bm04` portée à 8 Go dans `~/src/infra` (son disque fait déjà 32 Go ; `tofu plan` montre une modification en place, pas un remplacement), puis rendu, publication et démarrage par la chaîne (`bm04` à `planned` : la règle de rendu de E06 et E13).
 
 *5. Vérification du nœud* :
 
 ```
-admin@adm01:~$ ssh root@<IP-BM04> pveversion
+admin@adm01:~$ ssh root@10.10.60.104 pveversion
 pve-manager/9.2.x/… (running kernel: 6.17…)
-admin@adm01:~$ ssh root@<IP-BM04> cat /etc/pve/pve-root-ca.pem > /tmp/bm04-ca.pem
+admin@adm01:~$ ssh root@10.10.60.104 cat /etc/pve/pve-root-ca.pem > /tmp/bm04-ca.pem
 admin@adm01:~$ curl -sS -o /dev/null -w '%{http_code}\n' --cacert /tmp/bm04-ca.pem https://bm04.par1.medisphere.internal:8006/
 200
 ```
 
 Le premier `ssh root@…` présente une clé inconnue : compare son empreinte à celle affichée sur la console de `bm04` (agent QEMU absent sur un nœud fraîchement installé) avant d'accepter.
 
-*6. Renouvellement* — modèle : [`docs/provisioning/pve-pxe.md`](fichiers/M11-E14/medisphere/docs/provisioning/pve-pxe.md). L'empreinte épinglée est celle du **certificat**, renouvelé tous les 20 jours environ : l'initrd se prépare au moment de l'installation et ne se garde pas.
+*6. Renouvellement* — modèle : [`docs/provisioning/pve-pxe.md`](fichiers/M11-E14/medisphere/docs/provisioning/pve-pxe.md). L'empreinte épinglée est celle du **certificat**, valable 30 jours et renouvelé 15 jours avant son échéance (M06-E27) : l'initrd se prépare au moment de l'installation et ne se garde pas.
 
-*7. Nettoyage* : `tofu apply -replace=<adresse de bm04>` avec la mémoire et le disque d'origine (VM vide, même MAC), NetBox `bm04` → `planned`, `ansible-playbook playbooks/pve-installateur.yml -e pve_version=9.2 -e pve_etat=absent`, nouveau jeton dans le Vault, rôle `pve_reponses` réappliqué.
+*7. Nettoyage* : `tofu apply -replace=<adresse de bm04>` avec la mémoire d'origine (4 Go ; VM vide, même MAC), NetBox `bm04` → `planned`, plate-forme `rocky-10`, `ansible-playbook playbooks/pve-installateur.yml -e pve_version=9.2 -e pve_etat=absent`, nouveau jeton dans le Vault, rôle `pve_reponses` réappliqué.
 
 **Vérification** : `lab/bin/check 11 14`.
 
@@ -201,7 +205,7 @@ L'installateur PXE de Proxmox n'est pas un installateur réseau au sens de d-i :
 - Installer Debian 13 par preseed puis ajouter les paquets Proxmox (méthode documentée « Install Proxmox VE on Debian ») : chemin unique avec les autres serveurs, mais plus long et moins standard pour le support.
 
 **Pièges classiques**
-- Laisser `bm04` à 2 Go : chargement interrompu ou panique du noyau, sans message explicite côté iPXE.
+- Laisser `bm04` à 4 Go : chargement interrompu ou panique du noyau, sans message explicite côté iPXE.
 - Épingler l'empreinte de la **clé** (ou d'un ancien certificat) : refus après le renouvellement suivant.
 - Servir `/pve/` à tout le lab : l'initrd contient le jeton.
 - Oublier le *kebab-case* (avertissements en 9.1+, refus à terme).
@@ -218,9 +222,9 @@ Nœuds PVE installés par le même pipeline que les autres serveurs (orchestrate
 
 *Conception* — modèle : [`docs/provisioning/orchestration.md`](fichiers/M11-E15/medisphere/docs/provisioning/orchestration.md). Deux idées portent tout :
 1. **La machine ne rappelle personne.** Les installateurs **éteignent** la machine en fin d'installation (`d-i debian-installer/exit/poweroff boolean true`, `poweroff` du kickstart) ; l'orchestrateur, qui pilote déjà l'alimentation, observe l'état `stopped`. Aucun jeton sur la machine.
-2. **Ce qui est servi à une MAC dépend de NetBox.** Un champ personnalisé `pxe_action` (`installer` ou `local`) sur les équipements, écrit par l'orchestrateur seul ; le rendu (M11-E06, à modifier) sert le gabarit d'installation si `status = staged` **et** `pxe_action = installer`, et [`ipxe-local.ipxe.j2`](fichiers/M11-E13/provisioning/gabarits/ipxe-local.ipxe.j2) (`exit` : le micrologiciel passe au disque) dans **tous** les autres cas. Un équipement `active` ne peut donc jamais se réinstaller, et une machine `planned` qui démarre par accident non plus.
+2. **Ce qui est servi à une MAC dépend de NetBox.** Un champ personnalisé `pxe_action` (`installer` ou `local`) sur les équipements, écrit par l'orchestrateur seul ; le rendu (outil de E13, avec `regle_installation: pxe_action` dans [`parametres.yml`](fichiers/M11-E15/provisioning/parametres.yml)) sert le gabarit d'installation si `status = staged` **et** `pxe_action = installer`, et la branche « disque local » de `gabarits/ipxe-hote.ipxe.j2` (`exit` : le micrologiciel passe au disque) dans **tous** les autres cas. Un équipement `active` ne peut donc jamais se réinstaller, et une machine `planned` qui démarre par accident non plus.
 
-*Outils* — [`outils/provisionner.py`](fichiers/M11-E15/provisioning/outils/provisionner.py) (états, délais, reprise, journal NetBox, code de retour), [`outils/verifier-rendu.sh`](fichiers/M11-E15/provisioning/outils/verifier-rendu.sh) (validation du rendu dans le pipeline), [`.gitlab-ci.yml`](fichiers/M11-E15/provisioning/.gitlab-ci.yml) (job manuel `provisionner`, variable `EQUIPEMENT`, `resource_group`), [`playbooks/accueil-bm.yml`](fichiers/M11-E15/ansible/playbooks/accueil-bm.yml) et [`inventories/lab/netbox-bm.yml`](fichiers/M11-E15/ansible/inventories/lab/netbox-bm.yml) (équipements `serveur-bm` aux statuts `staged` et `active`, groupe `role_serveur_bm`).
+*Outils* — [`outils/provisionner.py`](fichiers/M11-E15/provisioning/outils/provisionner.py) (états, délais, reprise, journal NetBox, code de retour), [`outils/verifier-rendu.sh`](fichiers/M11-E15/provisioning/outils/verifier-rendu.sh) (validation du rendu dans le pipeline), [`.gitlab-ci.yml`](fichiers/M11-E15/provisioning/.gitlab-ci.yml) (version complète : tests, validation du rendu, job `deployer` sur `main` qui rend depuis NetBox et publie par `publier.sh`, job manuel `provisionner` avec la variable `EQUIPEMENT` et un `resource_group`), [`playbooks/accueil-bm.yml`](fichiers/M11-E15/ansible/playbooks/accueil-bm.yml) et [`inventories/lab/netbox-bm.yml`](fichiers/M11-E15/ansible/inventories/lab/netbox-bm.yml) (équipements `serveur-bm` aux statuts `staged` et `active`, groupe `role_serveur_bm`).
 
 *Premier contact SSH sans confiance aveugle* — après l'installation, la clé d'hôte n'est pas encore signée. Plutôt que `StrictHostKeyChecking=accept-new`, l'orchestrateur lit `/etc/ssh/ssh_host_ed25519_key.pub` **dans** la machine par l'agent QEMU (API Proxmox `agent/file-read`, canal qui ne passe pas par le réseau du VLAN 60) et exige que `sshd` présente cette clé-là. Les VMs `bm*` ont l'option `agent` activée dans OpenTofu et le paquet `qemu-guest-agent` est installé par les deux gabarits. Sur un serveur physique, ce canal serait la console série de l'iLO.
 
@@ -240,8 +244,7 @@ Le secret s'affiche une seule fois : il va dans `~/.config/workbook/pve-provisio
 *Démonstration* :
 
 ```
-admin@adm01:~/src/provisioning$ set -a; source ~/.config/workbook/netbox-provision.env; set +a   # NETBOX_URL, NETBOX_TOKEN
-admin@adm01:~/src/provisioning$ uv run outils/provisionner.py bm01
+admin@adm01:~/src/provisioning$ uv run outils/provisionner.py bm01   # jeton : ~/.config/workbook/netbox-auto.token
 10:02:11 installation : début (statut staged, script iPXE d'installation)
 10:19:40 installation : terminée (machine éteinte)
 10:21:02 premier démarrage : SSH ouvert, nom résolu
@@ -255,7 +258,7 @@ admin@adm01:~$ ssh -o StrictHostKeyChecking=yes bm01.par1.medisphere.internal ho
 admin@adm01:~/src/ansible$ uv run ansible-inventory -i inventories/lab/netbox-bm.yml --graph role_serveur_bm
 ```
 
-(`netbox-provision.env` est un nom d'exemple : utilise le fichier où tu ranges le jeton `svc-automatisation` en écriture.) En CI : *Build → Pipelines → Run pipeline* sur `main`, variable `EQUIPEMENT=bm03`, puis le job manuel `provisionner`. Redémarrage de contrôle : `qm reboot 2112` → la console montre « en service, démarrage sur le disque local », puis le système installé.
+(L'orchestrateur lit le jeton en écriture de `svc-automatisation` dans `netbox-auto.token`, M06-E10, ou dans la variable `NETBOX_TOKEN` en CI ; le rendu et l'inventaire de l'accueil gardent le jeton en lecture de `netbox-ansible.env`.) En CI : *Build → Pipelines → Run pipeline* sur `main`, variable `EQUIPEMENT=bm04` (UEFI, Rocky), puis le job manuel `provisionner`. Redémarrage de contrôle : `qm reboot 2112` → la console montre « en service, démarrage sur le disque local », puis le système installé.
 
 **Vérification** : `lab/bin/check 11 15`.
 
@@ -284,7 +287,7 @@ Même chaîne, alimentation par Redfish (`ComputerSystem.Reset`, `BootSourceOver
 
 **Solution**
 
-Modèle : [`ADR-0110-outil-de-provisioning.md`](fichiers/M11-E16/medisphere/docs/socle/adr/ADR-0110-outil-de-provisioning.md). La décision du modèle (chaîne maison, MAAS retiré, Tinkerbell en veille) n'est pas la seule défendable : une équipe qui prévoit des centaines de serveurs, plusieurs constructeurs et peu de temps de développement peut retenir MAAS, à condition de dire comment NetBox et MAAS se partagent la vérité (MAAS fait foi pour l'état de déploiement, NetBox pour l'intention, synchronisation à écrire) et ce que devient Kea sur le VLAN de provisioning.
+Modèle : [`ADR-0110-outil-de-provisioning.md`](fichiers/M11-E16/medisphere/docs/provisioning/adr/ADR-0110-outil-de-provisioning.md). La décision du modèle (chaîne maison, MAAS retiré, Tinkerbell en veille) n'est pas la seule défendable : une équipe qui prévoit des centaines de serveurs, plusieurs constructeurs et peu de temps de développement peut retenir MAAS, à condition de dire comment NetBox et MAAS se partagent la vérité (MAAS fait foi pour l'état de déploiement, NetBox pour l'intention, synchronisation à écrire) et ce que devient Kea sur le VLAN de provisioning.
 
 **Grille d'auto-évaluation**
 
@@ -336,9 +339,7 @@ L'ADR est relue à la première palette réelle : temps mesurés sur du vrai mat
 *1. Exploration* (identifiants hors de la ligne de commande, comme en E13) :
 
 ```
-admin@adm01:~$ set -a; source ~/.config/workbook/ilo-hp01.env; set +a
-admin@adm01:~$ ilo() { printf 'user = "%s:%s"\n' "$ILO_USER" "$ILO_PASSWORD" \
-    | curl -sS -K- --cacert "$ILO_CACERT" "https://$ILO_HOST$1"; }
+admin@adm01:~$ ilo() { ~/src/provisioning/outils/redfish.sh "$1"; }   # M11-E07 : TLS épinglé, identifiants hors ligne de commande
 admin@adm01:~$ ilo /redfish/v1/ | jq '{Systems, Managers, Chassis}'
 admin@adm01:~$ ilo /redfish/v1/Systems/1/ | jq '{Model, SerialNumber, BiosVersion, ProcessorSummary, MemorySummary, Oem: (.Oem.Hp.links // .Oem.Hp.Links)}'
 admin@adm01:~$ ilo /redfish/v1/Managers/1/ | jq '{FirmwareVersion}'
@@ -378,13 +379,13 @@ admin@adm01:~/src/provisioning$ uv run outils/inventaire-redfish.py && uv run ou
 0
 ```
 
-*4. Planification* — job `inventaire` du pipeline, déclenché par une planification hebdomadaire (*Build → Pipeline schedules*), variables protégées `NETBOX_TOKEN` et `ILO_ENV` (type fichier) ; flux `runner01` → iLO 443 (fragment de E13). Échec : le job échoue (code ≠ 0), notification de la forge.
+*4. Planification* — job `inventaire` ajouté au `.gitlab-ci.yml` de E15, déclenché par une planification hebdomadaire (*Build → Pipeline schedules*, variable `TACHE=inventaire`), variables protégées `NETBOX_TOKEN`, `ILO_ENV` et `ILO_PEM` (ces deux-là de type fichier) ; flux `runner01` → iLO 443 (extrait de la matrice de E13). Échec : le job échoue (code ≠ 0), notification de la forge.
 
 ```yaml
 inventaire:
-  stage: valider
+  stage: verifier
   script:
-    - uv sync --frozen
+    - uv sync
     - uv run outils/inventaire-redfish.py
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule" && $TACHE == "inventaire"

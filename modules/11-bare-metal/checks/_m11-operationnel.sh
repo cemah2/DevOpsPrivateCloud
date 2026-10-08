@@ -12,6 +12,17 @@ _M11O_NB="${WB_NETBOX_URL:-https://nbx01.par1.medisphere.internal}"
 _M11O_PROJET_PROV="projects/plateforme%2Fprovisioning"
 _M11O_PROJET_ANSIBLE="projects/plateforme%2Fansible"
 _M11O_PXE_URL="http://pxe01.par1.medisphere.internal"
+# HTTPS à partir de M11-E13 (le port 80 ne fait plus que rediriger) : HTTPS d'abord.
+_M11O_PXE_URLS="https://pxe01.par1.medisphere.internal $_M11O_PXE_URL"
+
+# _m11o_http CHEMIN — contenu servi par pxe01 (HTTPS d'abord), vide sinon.
+_m11o_http() {
+  local u
+  for u in $_M11O_PXE_URLS; do
+    if curl -sf --max-time "$WB_TIMEOUT" --proto-redir '-all' "$u/$1" 2>/dev/null; then return 0; fi
+  done
+  return 0
+}
 _M11O_ILO_ENV="${WB_ILO_ENV_FILE:-$_M11O_CFG/ilo-hp01.env}"
 _M11O_ILO_PEM="$_M11O_CFG/ilo-hp01.pem"
 _M11O_PVE_MAAS_ENV="$_M11O_CFG/pve-maas.env"

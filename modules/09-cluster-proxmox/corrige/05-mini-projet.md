@@ -35,10 +35,10 @@ admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/hv-cluster.yml --ch
 4. **Sauvegardes et test de restauration** avant la destruction finale :
    ```
    root@hv01:~# vzdump 101 110 --storage pbs-par2 --mode snapshot
-   root@hv01:~# qmrestore pbs-par2:backup/vm/101/<DATE> 197 --storage ceph-vm --unique 1    # VMID libre, réseau débranché
-   root@hv01:~# qm set 197 --net0 virtio,bridge=vmbr1,link_down=1 ; qm start 197 ; qm guest cmd 197 ping ; qm destroy 197 --purge
+   root@hv01:~# qmrestore pbs-par2:backup/vm/101/<DATE> 128 --storage ceph-vm --unique 1    # VMID libre, réseau débranché
+   root@hv01:~# qm set 128 --net0 virtio,bridge=vmbr1,link_down=1 ; qm start 128 ; qm guest cmd 128 ping ; qm stop 128 ; qm destroy 128 --purge
    ```
-   (101 `app01`, VM HA sur `ceph-vm`, et 110 `rep01`, VM répliquée, du palier 2 ; 197 : VMID libre de test ; `--unique 1` change les adresses MAC, `link_down=1` évite tout conflit d'adresse avec l'original.)
+   (101 `app01`, VM HA sur `ceph-vm`, et 110 `rep01`, VM répliquée, du palier 2 ; 128 : VMID libre de test, réservé au palier 3 et inutilisé (191-197 sont aux pannes) ; `--unique 1` change les adresses MAC, `link_down=1` évite tout conflit d'adresse avec l'original.)
 5. **Reconstruction de recette** chronométrée, puis **essais fonctionnels** (§ 5 de l'énoncé), consignés dans `reconstruction-hv-par1.md`.
 6. **Documentation et livraison** : `hv-par1.md` (modèle), runbooks, ADR-0090, matrices des flux, registre des secrets ; pipelines verts ; étiquette `virtualisation-v1`.
 7. **Nettoyage** après la recette (voir plus bas).
@@ -101,6 +101,18 @@ La reconstruction complète devient un exercice semestriel (sur un environnement
 | Nadia | Supervision | `ms-verif-cluster` au vert et branchée sur l'alerte ; tableau des indicateurs pour M21 |
 | Julien | Usage | réponse argumentée à une demande (capacité, ADR-0090) |
 | Tous | Présentation | 10 minutes : ce qui a changé, mesures, risques, ce que la suite consommera |
+
+**Nettoyage de `pbs01`** (⚠️ serveur de sauvegarde du site : hors de la fenêtre des sauvegardes nocturnes, session SSH gardée ouverte ; retour arrière : `apt install corosync-qnetd`, inutile puisque le cluster est détruit). Le service est arrêté et désactivé, et la règle 5403 retirée, depuis M09-E08 ; il reste le paquet :
+
+```
+root@pbs01:~# systemctl is-enabled corosync-qnetd; systemctl is-active corosync-qnetd   # disabled, inactive (E08)
+root@pbs01:~# apt purge corosync-qnetd && apt autoremove --purge
+root@pbs01:~# ls /etc/corosync/qnetd 2>/dev/null || echo "rien"                            # base NSS de l'arbitre
+root@pbs01:~# ss -tlnp | grep -c ':5403 ' ; nft list ruleset | grep -c 5403                 # 0 et 0
+root@pbs01:~# proxmox-backup-manager task list --limit 3                                     # le PBS travaille toujours
+```
+
+Si la base NSS de `/etc/corosync/qnetd/` a survécu à la purge, supprime ce dossier (il ne contient que l'autorité et le certificat de l'arbitre, sans usage hors QDevice). Clos CHG-1005 par une ligne « paquet désinstallé le `<date>` (M09-E46) ».
 
 **Grille du nettoyage d'après-recette** (auto-évaluée, pas de contrôle automatique)
 

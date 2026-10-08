@@ -1,0 +1,10 @@
+# Extrait de group_vars/role_routeur/pare_feu.yml (matrice commune à gw01 et gw02 depuis M07-E24).
+# M10-E15 (PLAT-1125) : le pipeline de plateforme/infra (runner01) pilote l'API d'OpenStack.
+# Déjà définis : $V_INFRA, $V_OSAPI, $RUNNER01 (M07-E30), $OS_VIP_EXT (M10-E04).
+#
+# pare_feu_transit : AJOUTER (bloc « OpenStack »)
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_OSAPI, destination: $OS_VIP_EXT, proto: tcp,
+     ports: [5000, 8774, 8776, 9696, 9876],
+     motif: "runner01 vers les API publiques d'OpenStack (Keystone, Nova, Cinder, Neutron, Octavia) : OpenTofu", ref: M10-E15}
+# 9876 (Octavia) sert à partir de M10-E16 (quotas de répartiteurs dans envs/openstack-projets).
+# M10-E27 étend cette règle (Glance, Placement, Heat, Horizon) quand la matrice du cloud est revue.

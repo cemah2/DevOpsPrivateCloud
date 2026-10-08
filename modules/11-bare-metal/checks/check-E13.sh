@@ -87,9 +87,9 @@ else
   check_cmd "iLO : IPMI sur IP désactivé (Redfish NetworkService)" test "$_m11_e13_ipmi" = false
 fi
 check_cmd "matrice des flux : plus de flux UDP 623 (IPMI) dans pare_feu.yml" \
-  bash -c '[ -s "$1" ] && ! grep -Eq "\b623\b" "$1"' _ "$_m11p_src/ansible/inventories/lab/host_vars/gw01/pare_feu.yml"
+  bash -c '[ -s "$1" ] && ! grep -Eq "\b623\b" "$1"' _ "$_m11p_src/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml"
 
 # --- Documentation ------------------------------------------------------------------------------------
 check_cmd "docs/provisioning/securite-chaine.md sur main de plateforme/medisphere" \
   _m11p_gitlab_fichier plateforme/medisphere docs/provisioning/securite-chaine.md
-check_output "ADR-0111 sur main (docs/socle/adr/)" '^ADR-0111' _m11p_gitlab_ls plateforme/medisphere docs/socle/adr
+check_output "ADR-0111 sur main (docs/provisioning/adr/)" '^ADR-0111' _m11p_gitlab_ls plateforme/medisphere docs/provisioning/adr

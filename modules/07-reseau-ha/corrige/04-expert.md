@@ -8,7 +8,7 @@ Les scripts d'injection sont dans `corrige/pannes/` (`_m07-commun.sh` contient l
 
 Les runbooks issus des pannes sont dans `corrige/fichiers/M07-E35/` à `M07-E42/` (`medisphere/docs/socle/runbooks/RB-073` à `RB-079`), le post-mortem d'exemple de l'astreinte dans `corrige/fichiers/M07-E43/`, le compte rendu d'exemple du voyage d'un paquet dans `corrige/fichiers/M07-E44/`.
 
-Les sorties reproduites sont **représentatives** : numéros, horodatages et formulations exactes varient selon les versions. Les noms d'interfaces de la maquette sont ceux de l'introduction (`eth0` administration sur `vsandbox`, `eth1`… vers la fabric) ; adapte-les si ta maquette les nomme autrement (`ens18`…). Sur le socle : `ens18`/`ens19`. Elles suivent la documentation de FRR 10.7, keepalived 2.3, HAProxy 3.2, Open vSwitch 3.5, WireGuard (noyau 6.12 de Debian 13) et iproute2 de Debian 13.
+Les sorties reproduites sont **représentatives** : numéros, horodatages et formulations exactes varient selon les versions. Les noms d'interfaces sont ceux de l'introduction : maquette et répartiteurs (image dorée) `eth0` (administration ou DMZ), `eth1`… vers la fabric ; passerelles `ens18` (WAN) et `ens19` (trunk) et ses sous-interfaces `ens19.<VLAN>`. Elles suivent la documentation de FRR 10.7, keepalived 2.3, HAProxy 3.2, Open vSwitch 3.5, WireGuard (noyau 6.12 de Debian 13) et iproute2 de Debian 13.
 
 **Points non testés en conditions réelles** (signale-les si ton comportement diffère) :
 - champs `pfxRcd`, `pfxSnt`, `remoteAs`, `hostname` de `show bgp ipv4 unicast summary json` (FRR 10.7), sur lesquels s'appuient les scripts et les contrôles de E35, E36, E38 et E42 ;
@@ -286,7 +286,7 @@ Pour keepalived, une annonce d'un autre VRID concerne un **autre** routeur virtu
 **Variante 3 — `unicast_peer` faux sur le répartiteur maître.** `tcpdump` sur `lb01` montre ses annonces partir vers **10.10.70.12** ; sur `lb02`, aucune annonce de `lb01` n'arrive, et `lb02` est passé maître ; `lb01` reçoit celles de `lb02` (priorité inférieure) et reste maître.
 
 ```
-admin@lb01:~$ sudo timeout 10 tcpdump -ni ens18 -vv vrrp
+admin@lb01:~$ sudo timeout 10 tcpdump -ni eth0 -vv vrrp
 … 10.10.70.10 > 10.10.70.12: VRRPv3, Advertisement, vrid 170, prio 150, …
 … 10.10.70.11 > 10.10.70.10: VRRPv3, Advertisement, vrid 170, prio 100, …
 admin@lb01:~$ sudo grep -A3 unicast_peer /etc/keepalived/keepalived.conf

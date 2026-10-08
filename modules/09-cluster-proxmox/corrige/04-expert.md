@@ -22,7 +22,7 @@ Les sorties reproduites sont **représentatives** : identifiants, horodatages, n
 
 1. **Vue par nœud.** Sur chacun des trois nœuds, dans cet ordre : `corosync-quorumtool -s` (membre, votes, quorum), `corosync-cfgtool -s` (liens), `systemctl status corosync pve-cluster`, `findmnt /etc/pve`. Une boucle depuis `adm01` suffit :
    ```
-   admin@adm01:~$ for n in 51 52 53; do echo "== 10.10.10.$n"; ssh root@10.10.10.$n 'corosync-quorumtool -s | grep -E "Quorate|votes|Quorum:"; corosync-cfgtool -s | grep -E "LINK|nodeid"'; done
+   admin@adm01:~$ for n in hv01 hv02 hv03; do echo "== $n"; ssh $n 'corosync-quorumtool -s | grep -E "Quorate|votes|Quorum:"; corosync-cfgtool -s | grep -E "LINK|nodeid"'; done
    ```
 2. **Couche par couche.** Corosync (réseau, clé, configuration) → votequorum (votes) → pmxcfs (`/etc/pve`, `.members`) → API (`pveproxy`, tickets, certificats) → stockage (Ceph, ZFS, PBS) → HA (CRM, LRM, règles) → opérations (migration, réplication, sauvegarde). Le premier étage qui échoue est ton suspect.
 3. **État chargé, pas seulement le fichier.** `corosync-cmapctl` (configuration réellement chargée), `nft list ruleset` (règles réellement actives), `ha-manager status -v`, `ceph health detail`, `pvesr status`, `pvesm status`.
@@ -144,7 +144,7 @@ root@hv02:~# journalctl -u corosync --since -2h | tail -n 5
 … [KNET  ] link: host: 1 link: 0 is down
 … [KNET  ] host: host: 1 has no active links
 … [KNET  ] rx: … Unable to decrypt/authenticate packet …  (libellé selon la version de knet)
-admin@adm01:~$ for n in 51 52 53; do ssh root@10.10.10.$n 'sha256sum < /etc/corosync/authkey'; done
+admin@adm01:~$ for n in hv01 hv02 hv03; do ssh $n 'sha256sum < /etc/corosync/authkey'; done
 3f6c…  -
 a09d…  -
 71be…  -
@@ -232,7 +232,7 @@ root@hv03:~# openssl x509 -noout -pubkey -in /etc/pve/nodes/hv03/pveproxy-ssl.pe
 root@hv03:~# openssl pkey -pubout -in /etc/pve/nodes/hv03/pveproxy-ssl.key | sha256sum
 ```
 
-Deux sommes différentes. `openssl x509 -noout -issuer -dates` montre un certificat autosigné tout neuf. Correctif selon le fichier touché : pour `pveproxy-ssl.pem` (certificat ACME de M09-E26), le redemander par le client ACME intégré (`pvenode acme cert order --force`) ; pour `pve-ssl.pem`, le régénérer avec la CA du cluster (`pvecm updatecerts --force`), puis `systemctl restart pveproxy`. Ne pas copier le certificat d'un autre nœud : il porte un autre nom et une autre clé.
+Deux sommes différentes. `openssl x509 -noout -issuer -dates` montre un certificat autosigné tout neuf. Correctif selon le fichier touché : pour `pveproxy-ssl.pem` (certificat ACME de M09-E26, émis par le rôle `certificats_acme`), le réinstaller depuis sa copie de référence (`pvenode cert set /etc/wb-certs/pveproxy.crt /etc/wb-certs/pveproxy.key --force 1 --restart 1`, la commande `recharger` du rôle), ou repasser `playbooks/hv-certificats.yml --limit hv03` si cette copie est elle aussi abîmée ; pour `pve-ssl.pem`, le régénérer avec la CA du cluster (`pvecm updatecerts --force`), puis `systemctl restart pveproxy`. Ne pas copier le certificat d'un autre nœud : il porte un autre nom et une autre clé.
 
 **Variante 4 — `/etc/hosts` faux sur hv03.**
 
@@ -395,7 +395,7 @@ root@hv01:~# grep -E '^(migration|bwlimit):' /etc/pve/datacenter.cfg
 … ERROR: migration aborted …
 root@hv01:~# ssh -o BatchMode=yes -o ConnectTimeout=5 -o HostKeyAlias=hv02 root@10.10.30.72 true
 ssh: connect to host 10.10.30.72 port 22: Connection timed out
-admin@adm01:~$ ssh root@10.10.10.52 true        # fonctionne : le filtre vise les nœuds, pas adm01
+admin@adm01:~$ ssh hv02 true                    # fonctionne : le filtre vise les nœuds, pas adm01
 root@hv02:~# nft list table inet infoger_durcissement
 … ip saddr { 10.10.10.51, 10.10.10.53, 10.10.32.51, … } tcp dport 22 counter packets 12 … drop …
 ```
@@ -601,7 +601,7 @@ Le client PBS de Proxmox VE enchaîne : TCP 8007 → TLS (empreinte épinglée o
 **Démarche de diagnostic**
 
 ```
-admin@adm01:~$ for n in 51 52 53; do ssh root@10.10.10.$n 'hostname; ip -br a | grep -c 10.10.10.200'; done
+admin@adm01:~$ for n in hv01 hv02 hv03; do ssh $n 'hostname; ip -br a | grep -c 10.10.10.200'; done
 root@<cible>:~# qm set <vmid> --description essai
 root@<cible>:~# corosync-quorumtool -s | grep Quorate
 root@<cible>:~# systemctl status pve-cluster --no-pager

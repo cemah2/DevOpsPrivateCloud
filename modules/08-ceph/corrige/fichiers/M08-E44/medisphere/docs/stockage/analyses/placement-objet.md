@@ -19,7 +19,7 @@ osdmap e431 pool 'rbd-test' (2) object 'analyse-placement' -> pg 2.7d1c5a3e (2.1
 | Pool | 2 (`rbd-test`) | `ceph osd pool ls detail` |
 | Hachage du nom | `0x7d1c5a3e` | rjenkins du nom de l'objet |
 | PG réel | **2.1e** | `ceph_stable_mod(0x7d1c5a3e, pg_num = 32, masque 31)` = `0x1e` |
-| Ensembles *up* / *acting* | `[5,1,7]` / `[5,1,7]` | CRUSH (règle 0, domaine `host`), aucun *pg_temp* ni *upmap* |
+| Ensembles *up* / *acting* | `[5,1,7]` / `[5,1,7]` | CRUSH (règle `ssd-baie`, domaine `rack`), aucun *pg_temp* ni *upmap* |
 | Primaire | `osd.5` (`ceph02`) | premier de l'ensemble *acting* |
 
 Hors ligne, avec la carte des OSD seule :
@@ -35,21 +35,23 @@ Même résultat que le cluster : le client n'a besoin que de la carte pour calcu
 
 ## Simulations CRUSH
 
+Règle du pool `rbd-test` : `ssd-baie` (identifiant numérique donné par `ceph osd crush rule dump ssd-baie`, ici `<ID>` ; les sorties l'affichent).
+
 ```
 # ceph osd getcrushmap -o crush.bin && crushtool -d crush.bin -o crush.txt
-# crushtool -i crush.bin --test --rule 0 --num-rep 3 --min-x 0 --max-x 9 --show-mappings
-CRUSH rule 0 x 0 [5,1,7]
-CRUSH rule 0 x 1 [2,6,4]
+# crushtool -i crush.bin --test --rule <ID> --num-rep 3 --min-x 0 --max-x 9 --show-mappings
+CRUSH rule <ID> x 0 [5,1,7]
+CRUSH rule <ID> x 1 [2,6,4]
 …
-# crushtool -i crush.bin --test --rule 0 --num-rep 3 --min-x 0 --max-x 1023 --show-utilization
+# crushtool -i crush.bin --test --rule <ID> --num-rep 3 --min-x 0 --max-x 1023 --show-utilization
   device 0:  stored : 337  expected : 341.333
   …
-# crushtool -i crush.bin --test --rule 0 --num-rep 4 --show-bad-mappings | head -n 2
-bad mapping rule 0 x 0 num_rep 4 result [5,1,7]
-bad mapping rule 0 x 1 num_rep 4 result [2,6,4]
+# crushtool -i crush.bin --test --rule <ID> --num-rep 4 --show-bad-mappings | head -n 2
+bad mapping rule <ID> x 0 num_rep 4 result [5,1,7]
+bad mapping rule <ID> x 1 num_rep 4 result [2,6,4]
 ```
 
-- 4 copies sur 3 hôtes avec un domaine `host` : **toutes** les entrées sont de mauvaises correspondances. C'est exactement la variante « size 4 » de M08-E36 : la règle ne peut pas placer ce que le pool demande.
+- 4 copies sur 3 baies avec un domaine `rack` : **toutes** les entrées sont de mauvaises correspondances. C'est exactement la variante « size 4 » de M08-E36 : la règle ne peut pas placer ce que le pool demande.
 - Perte simulée de `ceph02` (`--weight 3 0 --weight 4 0 --weight 5 0`) : 1024 entrées sur 1024 changent d'ensemble (chaque PG a une copie sur chaque hôte) et toutes restent à 2 copies : les PG seraient `undersized+degraded` jusqu'au retour de l'hôte.
 
 ## Une image RBD en objets

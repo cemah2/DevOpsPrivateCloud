@@ -14,8 +14,10 @@ require_cmd jq
 # --- pve01 : pont et zone ----------------------------------------------------------------------------------
 check_output "pve01 : vmbr1 en MTU 9000" '^9000$' _m07o_mtu "$_M07O_PVE" vmbr1
 check_output "pve01 : vmbr0 inchangé (1500)" '^1500$' _m07o_mtu "$_M07O_PVE" vmbr0
-check_output "pve01 : zone SDN lab en MTU 9000" '^9000$' bash -c \
-  'jq -r ".mtu // empty" <<<"$1" 2>/dev/null || true' _ \
+# La zone peut porter « mtu 9000 » ou rien (selon ce que fait l'option pour une zone VLAN : corrigé) ;
+# jamais une valeur plus petite, qui plafonnerait toutes les VNets.
+check_output "pve01 : zone SDN lab sans MTU inférieur à 9000" '^(9000|aucun)$' bash -c \
+  'jq -r ".mtu // \"aucun\"" <<<"$1" 2>/dev/null || true' _ \
   "$(remote "$_M07O_PVE" 'pvesh get /cluster/sdn/zones/lab --output-format json' 2>/dev/null || true)"
 check_output "pve01 : la VNet vstopub (VLAN 30) accepte 9000" '^9000$' _m07o_mtu "$_M07O_PVE" vstopub
 

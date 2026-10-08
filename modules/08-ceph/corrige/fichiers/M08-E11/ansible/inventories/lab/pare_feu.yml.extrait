@@ -1,9 +1,0 @@
-# pare_feu.yml.extrait — M08-E11 (PLAT-921) : flux à ajouter à la matrice des flux (pare_feu.yml
-# de gw01 ET gw02, même matrice ; rôle pare_feu), section « À travers les passerelles ».
-# Définitions à ajouter si elles n'existent pas encore :
-#   - {nom: V_STOPUB, valeur: '"ens19.30"'}
-#   - {nom: RGW_VIP, valeur: 10.10.30.200, commentaire: "rgw.par1.medisphere.internal (ingress cephadm)"}
-pare_feu_transit:
-  - {entree: $V_INFRA, sortie: $V_STOPUB, source: $RUNNER01, destination: $RGW_VIP, proto: tcp, ports: 443,
-     motif: "runner01 → S3 de ceph-par1 (tests de la CI de MédiDoc)", ref: M08-E11}
-# Matrice documentaire (docs/socle/matrice-flux.md) : même ligne, avec le ticket PLAT-921.

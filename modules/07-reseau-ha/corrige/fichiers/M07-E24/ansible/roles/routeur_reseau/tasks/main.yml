@@ -75,6 +75,53 @@
   notify: Générer la configuration netplan
   when: routeur_reseau_pile == 'netplan'
 
+# Le fichier de cloud-init nomme les cartes eth0/eth1 (set-name par MAC) : il entrerait en conflit
+# avec le renommage ci-dessus. Il disparaît une fois le fichier du rôle en place.
+- name: Retirer la configuration réseau écrite par cloud-init (netplan)
+  ansible.builtin.file:
+    path: /etc/netplan/50-cloud-init.yaml
+    state: absent
+  notify: Générer la configuration netplan
+  when: routeur_reseau_pile == 'netplan'
+
+# Premier passage sur gw02 seulement : les cartes s'appellent encore eth0/eth1. Le renommage ne se
+# fait qu'au démarrage (udev) : un redémarrage, permis uniquement tant que la passerelle ne porte
+# aucune instance VRRP (elle n'est pas encore en service).
+- name: Renommer les cartes (premier passage, redémarrage)
+  when:
+    - routeur_reseau_pile == 'netplan'
+    - routeur_reseau_renommage | length > 0
+    - routeur_reseau_trunk not in ansible_facts['interfaces']
+  block:
+    - name: Pas de redémarrage d'une passerelle en service
+      ansible.builtin.assert:
+        that:
+          - keepalived_instances | default([]) | length == 0
+        fail_msg: >-
+          {{ inventory_hostname }} : cartes à renommer alors que keepalived est configuré ; refus de
+          redémarrer une passerelle en service. Renomme dans une fenêtre de changement (RB-071).
+        quiet: true
+
+    - name: Générer la configuration netplan avant le redémarrage
+      ansible.builtin.command: netplan generate
+      changed_when: true
+
+    - name: Redémarrer pour appliquer les noms ens18/ens19
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+
+    - name: Relire les interfaces
+      ansible.builtin.setup:
+        gather_subset: [network]
+
+    - name: Les cartes portent leur nom de passerelle
+      ansible.builtin.assert:
+        that:
+          - routeur_reseau_wan_interface in ansible_facts['interfaces']
+          - routeur_reseau_trunk in ansible_facts['interfaces']
+        fail_msg: "Renommage des cartes échoué sur {{ inventory_hostname }} : vérifie les MAC (qm config) et /etc/netplan."
+        quiet: true
+
 # --- État courant, à chaud, sans rien retirer ---------------------------------------------------
 
 - name: Script d'application à chaud

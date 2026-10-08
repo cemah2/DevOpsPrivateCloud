@@ -4,8 +4,8 @@
 # Rappel : les checks tournent sous « set -euo pipefail » (lab/bin/check) : toute commande qui
 # peut échouer hors des fonctions check_* est protégée (|| true, ou dans une fonction testée).
 #
-# Accès : root sur les nœuds imbriqués (root@hvNN.par1.medisphere.internal, clé de adm01 posée par
-# le fichier de réponse, M09-E03) ; root sur pve01 et pbs01 comme dans les modules précédents ;
+# Accès : root sur les nœuds imbriqués par leurs alias SSH hv01, hv02, hv03 (~/.ssh/config de adm01,
+# HostName = IP MGMT, User root ; clé de adm01 posée par le fichier de réponse, M09-E03) ; root sur pve01 et pbs01 comme dans les modules précédents ;
 # API GitLab en lecture (jeton des checks). Le traitement JSON se fait sur adm01 (jq), jamais sur
 # les nœuds (jq n'y est pas forcément installé).
 # Variables de lab/lab.env utilisées : WB_PVE_HOST, WB_PBS_HOST, WB_SRC, WB_GITLAB_*.
@@ -23,7 +23,7 @@ _M09P_SRC="${WB_SRC:-$HOME/src}"
 _m09p_hv() {
   local n="$1"
   shift
-  remote "root@$n.$_M09P_ZONE" "$@"
+  remote "$n" "$@"
 }
 
 _M09P_NOEUD=""

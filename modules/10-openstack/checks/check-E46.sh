@@ -71,8 +71,8 @@ check_cmd "Octavia : fournisseur ovn seul" _m10_ovn_seul
 
 # --- 4. Ceph (acquis du M08) ------------------------------------------------------------------------
 title "4/10 Stockage ceph-par1 (acquis du M08)"
-check_ssh_output "ceph-par1 : HEALTH_OK" ceph01 '^HEALTH_OK' 'sudo -n cephadm shell -- ceph health 2>/dev/null'
-check_ssh "pools images, volumes, vms, backups présents" ceph01 \
+check_ssh_output "ceph-par1 : HEALTH_OK" "$_M10P_CEPH" '^HEALTH_OK' 'sudo -n cephadm shell -- ceph health 2>/dev/null'
+check_ssh "pools images, volumes, vms, backups présents" "$_M10P_CEPH" \
   'p=$(sudo -n cephadm shell -- ceph osd pool ls 2>/dev/null); for x in images volumes vms backups; do printf "%s\n" "$p" | grep -qx "$x" || exit 1; done'
 
 # --- 5. TLS ---------------------------------------------------------------------------------------

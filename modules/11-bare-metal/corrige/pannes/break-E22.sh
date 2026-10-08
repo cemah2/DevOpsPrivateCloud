@@ -2,14 +2,14 @@
 # shellcheck source-path=SCRIPTDIR
 # break-E22.sh — M11-E22 « Panne : MAAS ne pilote plus les machines »
 #
-# Préalable : MAAS démarré sur maas01, machines bm01-bm04 avec le pilote d'alimentation Proxmox,
-# clé d'API de MAAS lisible sur adm01 ($WB_MAAS_APIKEY_FILE, défaut ~/.config/workbook/maas-api.key).
+# Préalable : MAAS démarré sur maas01, machines bm* (bm01 et bm03 depuis M11-E10) avec le pilote Proxmox,
+# clé d'API de MAAS lisible sur adm01 ($WB_MAAS_KEY_FILE, défaut ~/.config/workbook/maas-api.key).
 # Variantes :
 #   1. pve01 : le jeton wb-maas@pve!maas expire (date d'expiration passée, « rotation des jetons »)
 #      → 401 sur toutes les requêtes de MAAS ;
 #   2. pve01 : VM.Audit retiré du rôle WBMaas (« ménage des privilèges : MAAS n'a besoin que
 #      d'allumer et d'éteindre ») → 403 sur la lecture de l'état des VMs ;
-#   3. pve01 : une VM bm* que MAAS désigne par son NOM est renommée (« bm02-ancien ») → MAAS ne la
+#   3. pve01 : une VM bm* que MAAS désigne par son NOM est renommée (« <nom>-ancien », bm03 dans le corrigé de M11-E10) → MAAS ne la
 #      trouve plus ; sans effet si MAAS désigne les VMs par leur identifiant : variante suivante ;
 #   4. maas01 : l'ancre TLS de pve01 retirée du magasin système (update-ca-certificates --fresh)
 #      → vérification TLS refusée ; sans effet si le snap n'utilise pas ce magasin : variante suivante.
@@ -220,7 +220,7 @@ symptome_E22() {
   local -a l
   case "${WB_VAR:-0}" in
     3) l=("Dans MAAS, une des machines bm* est passée en état d'alimentation « Error » (ou « Unknown »)"
-      "et refuse toute action : « Failed to query node's BMC ». Les trois autres répondent"
+      "et refuse toute action : « Failed to query node's BMC ». L'autre machine répond"
       "normalement. Il y a eu du rangement dans les VMs de pve01 cette semaine.") ;;
     1) l=("Dans MAAS, toutes les machines bm* sont passées en état d'alimentation « Error » :"
       "« Failed to query node's BMC », aucune action possible. Rien n'a changé dans MAAS."

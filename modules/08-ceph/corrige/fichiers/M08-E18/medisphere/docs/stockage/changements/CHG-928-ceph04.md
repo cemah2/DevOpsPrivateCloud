@@ -28,7 +28,7 @@ Ajouter `ceph04` (VMID 2084, 10.10.30.54 / 10.10.31.54) dans la baie `par1-baie-
 ## Étapes
 1. VM par le pipeline de `plateforme/infra` (état `ceph`) ; NetBox (VM, `ens18`/`ens19`, deux adresses) ;
    DNS : `dig +short ceph04.par1.medisphere.internal` → 10.10.30.54.
-2. Rôle de préparation des nœuds (Podman, chrony, LVM, clé SSH de cephadm pour `root`).
+2. Rôle de préparation des nœuds (Podman, chrony, LVM, clé publique de l'orchestrateur pour le compte `cephadm`).
    Contrôle : `ping -M do -s 8972` vers `ceph01` sur 10.10.30.51 **et** 10.10.31.51.
 3. `ceph config set osd osd_crush_initial_weight 0` ; `ceph config set osd osd_mclock_profile balanced`.
 4. `hosts.yaml` (document `ceph04`, `location: {rack: par1-baie-a}`) : `--dry-run`, puis application.

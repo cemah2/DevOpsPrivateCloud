@@ -10,7 +10,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/_m11-production.sh"
 
 _m11x_maas_url="${WB_MAAS_URL:-http://10.10.60.11:5240/MAAS}"
-_m11x_maas_cle="${WB_MAAS_APIKEY_FILE:-$_m11p_cfg/maas-api.key}"
+_m11x_maas_cle="${WB_MAAS_KEY_FILE:-$_m11p_cfg/maas-api.key}"
 
 # _m11x_maas GET CHEMIN — corps de la réponse si 2xx (API 2.0 de MAAS, OAuth 1.0 PLAINTEXT ;
 # en-tête écrit dans un fichier temporaire 600, jamais en argument).

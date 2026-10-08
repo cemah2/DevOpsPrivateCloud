@@ -1,5 +1,8 @@
-# /etc/default/tftpd-hpa — {{ pxe_entete }}
+# /etc/default/tftpd-hpa — {{ inventory_hostname }}
+# {{ pxe_entete }}
 TFTP_USERNAME="tftp"
-TFTP_DIRECTORY="{{ pxe_tftp_racine }}"
+TFTP_DIRECTORY="{{ pxe_racine_tftp }}"
+# Une seule adresse : celle du VLAN 60 (next-server annoncé par Kea).
 TFTP_ADDRESS="{{ pxe_adresse }}:69"
+# --secure : chroot dans TFTP_DIRECTORY ; --verbose : chaque lecture journalisée. Pas de --create.
 TFTP_OPTIONS="{{ pxe_tftp_options }}"

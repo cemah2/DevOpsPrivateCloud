@@ -13,12 +13,17 @@ Lecture (Redfish, en suivant les liens @odata.id depuis /redfish/v1/, sans chemi
   les éléments saisis à la main (discovered=false) ne sont jamais touchés.
 
 Identités (jamais en argument) :
-  iLO    : fichier ILO_ENV (défaut ~/.config/workbook/ilo-hp01.env, 600) : ILO_HOST, ILO_USER,
-           ILO_PASSWORD et, si le certificat de l'iLO est épinglé (M11-E07), ILO_CACERT ;
-           sinon le magasin système (certificat de l'iLO émis par step-ca). Jamais verify=False.
-  NetBox : NETBOX_URL, NETBOX_TOKEN (svc-automatisation, droits étendus en M11-E18).
+  iLO    : fichier ILO_ENV (défaut ~/.config/workbook/ilo-hp01.env, 600) : ILO_HOST (adresse),
+           ILO_NOM_TLS (nom porté par le certificat), ILO_USER, ILO_PASSWORD ; certificat ÉPINGLÉ
+           ILO_PEM (défaut ~/.config/workbook/ilo-hp01.pem, M11-E07). La connexion se fait à
+           l'adresse, mais SNI et vérification du nom portent sur ILO_NOM_TLS (équivalent de
+           « curl --resolve ») : la vérification TLS reste complète. Jamais verify=False.
+  NetBox : NETBOX_URL ; jeton en écriture de svc-automatisation (droits étendus en M11-E18) :
+           variable NETBOX_TOKEN (CI), à défaut fichier ~/.config/workbook/netbox-auto.token.
+           TLS vérifié avec le magasin du système (racine MédiSphère ; pas celui de certifi).
 Code de retour : 0 sans écart (ou écarts écrits), 3 écarts trouvés en --dry-run, 1 erreur.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,6 +33,25 @@ import sys
 from pathlib import Path
 
 import requests
+from requests.adapters import HTTPAdapter
+
+MAGASIN_SYSTEME = "/etc/ssl/certs/ca-certificates.crt"
+
+
+class AdaptateurNomTLS(HTTPAdapter):
+    """Connexion à l'adresse de l'iLO, SNI et vérification du certificat sur son NOM (urllib3 2.x :
+    server_hostname, assert_hostname). ⚠️ À vérifier sur ton lab : le certificat épinglé n'est pas
+    autosigné (émetteur « Default Issuer ») ; la vérification exige que la bibliothèque TLS accepte
+    une chaîne partielle (VERIFY_X509_PARTIAL_CHAIN, comme curl depuis 7.68)."""
+
+    def __init__(self, nom: str, **kw):
+        self.nom = nom
+        super().__init__(**kw)
+
+    def init_poolmanager(self, *args, **kw):
+        kw["server_hostname"] = self.nom
+        kw["assert_hostname"] = self.nom
+        super().init_poolmanager(*args, **kw)
 
 
 def lire_env(fichier: Path) -> dict[str, str]:
@@ -46,10 +70,14 @@ class Redfish:
     def __init__(self, env: dict[str, str]):
         self.base = f"https://{env['ILO_HOST']}"
         self.s = requests.Session()
-        self.s.verify = env.get("ILO_CACERT") or True
+        self.s.mount(self.base, AdaptateurNomTLS(env["ILO_NOM_TLS"]))
+        self.s.verify = os.environ.get("ILO_PEM", str(Path.home() / ".config/workbook/ilo-hp01.pem"))
         # Session Redfish (jeton X-Auth-Token) plutôt que l'authentification basique à chaque appel
-        r = self.s.post(f"{self.base}/redfish/v1/SessionService/Sessions/",
-                        json={"UserName": env["ILO_USER"], "Password": env["ILO_PASSWORD"]}, timeout=20)
+        r = self.s.post(
+            f"{self.base}/redfish/v1/SessionService/Sessions/",
+            json={"UserName": env["ILO_USER"], "Password": env["ILO_PASSWORD"]},
+            timeout=20,
+        )
         r.raise_for_status()
         self.session = r.headers.get("Location")
         self.s.headers["X-Auth-Token"] = r.headers["X-Auth-Token"]
@@ -66,7 +94,9 @@ class Redfish:
     def fermer(self) -> None:
         if self.session:
             try:
-                self.s.delete(self.session if self.session.startswith("https://") else self.base + self.session, timeout=10)
+                self.s.delete(
+                    self.session if self.session.startswith("https://") else self.base + self.session, timeout=10
+                )
             except requests.RequestException:
                 pass
 
@@ -104,8 +134,13 @@ def lire_inventaire(rf: Redfish) -> dict:
         for p in rf.membres(systeme["Processors"]["@odata.id"]):
             if (p.get("Status") or {}).get("State") == "Absent":
                 continue
-            inv["composants"].append({"nom": f"CPU {p.get('Socket') or p.get('Id')}",
-                                      "modele": p.get("Model", ""), "serie": p.get("SerialNumber", "")})
+            inv["composants"].append(
+                {
+                    "nom": f"CPU {p.get('Socket') or p.get('Id')}",
+                    "modele": p.get("Model", ""),
+                    "serie": p.get("SerialNumber", ""),
+                }
+            )
     memoire = (systeme.get("Memory") or {}).get("@odata.id") or trouver_lien(systeme, "Memory")
     if memoire:
         for m in rf.membres(memoire):
@@ -113,9 +148,13 @@ def lire_inventaire(rf: Redfish) -> dict:
             if etat in ("Absent", "NotPresent"):
                 continue
             taille = m.get("CapacityMiB") or m.get("SizeMB") or ""
-            inv["composants"].append({"nom": f"DIMM {m.get('DeviceLocator') or m.get('Name') or m.get('Id')}",
-                                      "modele": f"{m.get('PartNumber') or m.get('Manufacturer') or ''} {taille} Mio".strip(),
-                                      "serie": (m.get("SerialNumber") or "").strip()})
+            inv["composants"].append(
+                {
+                    "nom": f"DIMM {m.get('DeviceLocator') or m.get('Name') or m.get('Id')}",
+                    "modele": f"{m.get('PartNumber') or m.get('Manufacturer') or ''} {taille} Mio".strip(),
+                    "serie": (m.get("SerialNumber") or "").strip(),
+                }
+            )
     # iLO 4 : inventaire des firmwares propre à HPE (lien dans Oem du système) ; absent ailleurs.
     lien = trouver_lien(systeme, "FirmwareInventory")
     if lien:
@@ -131,6 +170,7 @@ class NetBox:
         self.url = url.rstrip("/") + "/api"
         self.s = requests.Session()
         self.s.headers.update({"Authorization": f"Bearer {jeton}", "Accept": "application/json"})
+        self.s.verify = MAGASIN_SYSTEME
 
     def req(self, methode: str, chemin: str, **kw):
         r = self.s.request(methode, f"{self.url}/{chemin}", timeout=20, **kw)
@@ -145,10 +185,16 @@ def main() -> int:
     a = ap.parse_args()
 
     ilo_env = lire_env(Path(os.environ.get("ILO_ENV", Path.home() / ".config/workbook/ilo-hp01.env")))
-    if not os.environ.get("NETBOX_TOKEN"):
-        print("NETBOX_TOKEN absent", file=sys.stderr)
+    jeton = os.environ.get("NETBOX_TOKEN", "")
+    fichier_jeton = Path.home() / ".config/workbook/netbox-auto.token"
+    if not jeton and fichier_jeton.exists():
+        if fichier_jeton.stat().st_mode & 0o077:
+            raise SystemExit(f"{fichier_jeton} doit être en 600")
+        jeton = fichier_jeton.read_text(encoding="utf-8").strip()
+    if not jeton:
+        print("Jeton NetBox absent (NETBOX_TOKEN ou ~/.config/workbook/netbox-auto.token)", file=sys.stderr)
         return 1
-    nb = NetBox(os.environ.get("NETBOX_URL", "https://nbx01.par1.medisphere.internal"), os.environ["NETBOX_TOKEN"])
+    nb = NetBox(os.environ.get("NETBOX_URL", "https://nbx01.par1.medisphere.internal"), jeton)
 
     rf = Redfish(ilo_env)
     try:
@@ -162,9 +208,14 @@ def main() -> int:
         return 1
     dev = devs[0]
     cf = dev.get("custom_fields") or {}
-    voulu = {"serial": inv["serie"],
-             "custom_fields": {"firmware_bios": inv["bios"], "firmware_ilo": inv["ilo"],
-                               "inventaire_maj": dt.date.today().isoformat()}}
+    voulu = {
+        "serial": inv["serie"],
+        "custom_fields": {
+            "firmware_bios": inv["bios"],
+            "firmware_ilo": inv["ilo"],
+            "inventaire_maj": dt.date.today().isoformat(),
+        },
+    }
     ecarts = []
     if dev.get("serial", "") != inv["serie"]:
         ecarts.append(f"serial : {dev.get('serial')!r} → {inv['serie']!r}")
@@ -172,14 +223,23 @@ def main() -> int:
         if cf.get(k) != voulu["custom_fields"][k]:
             ecarts.append(f"{k} : {cf.get(k)!r} → {voulu['custom_fields'][k]!r}")
 
-    existants = {i["name"]: i for i in nb.req("GET", "dcim/inventory-items/",
-                                                params={"device_id": dev["id"], "discovered": "true", "limit": 500})["results"]}
+    existants = {
+        i["name"]: i
+        for i in nb.req(
+            "GET", "dcim/inventory-items/", params={"device_id": dev["id"], "discovered": "true", "limit": 500}
+        )["results"]
+    }
     vus = set()
     for c in inv["composants"]:
         vus.add(c["nom"])
-        corps = {"device": dev["id"], "name": c["nom"], "part_id": c["modele"][:50],
-                 "serial": c["serie"][:50], "discovered": True,
-                 "description": "Inventaire Redfish (outils/inventaire-redfish.py)"}
+        corps = {
+            "device": dev["id"],
+            "name": c["nom"],
+            "part_id": c["modele"][:50],
+            "serial": c["serie"][:50],
+            "discovered": True,
+            "description": "Inventaire Redfish (outils/inventaire-redfish.py)",
+        }
         ancien = existants.get(c["nom"])
         if ancien is None:
             ecarts.append(f"élément d'inventaire à créer : {c['nom']}")

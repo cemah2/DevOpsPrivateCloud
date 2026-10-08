@@ -23,7 +23,7 @@ Le socle v1 savait tout faire, mais sur une seule passerelle et sans point d'ent
 - Bordure : VIP `.1` sur les VLAN 10, 20, 30, 40, 50, 52, 60, 70, 99 (VRID = VLAN), `gw01` `.2` priorité 150, `gw02` `.3` priorité 100, VIP WAN `<IP-GW-WAN-VIP>` (VRID 250), groupe de synchronisation unique, `conntrackd` (FTFW, VLAN 10, UDP 3780), tunnels `wg0`/`wg1`/`wg2` sur le maître, traduction sortante vers la VIP WAN.
 - Points d'entrée : VIP 10.10.70.200 (`lb.par1.medisphere.internal`, VRID 170), `gitlab.par1.medisphere.internal` et `netbox.par1.medisphere.internal`, redirection 443 depuis la VIP WAN.
 - Routage : FRR 10.7 sur les deux passerelles, AS 65000, plage d'écoute `K8S` prête (10.10.40.0/24, sans voisin), politiques qui n'acceptent de la fabric que 10.10.255.0/24 et 10.10.41.0/24 ; BGP avec Lyon (65030) dans `wg2`.
-- MTU 9000 de bout en bout sur les VLAN 30, 31 et 51 (`vmbr1`, trunk des passerelles, `ens19.30`, `ens19.51`) ; 1500 ailleurs.
+- MTU 9000 de bout en bout sur les VLAN 30, 31 et 51 (`vmbr1`, zone `lab`, trunk `ens19` des passerelles et `ens19.30`, cartes des VMs de ces VLAN ; les VLAN 31 et 51 ne sont pas routés : aucune sous-interface sur les passerelles) ; 1500 ailleurs.
 - Maquette : décision du module, **détruire 2070-2079**, y compris `lyo-gw01` et `lyo-pc01`. La configuration de Lyon côté PAR1 (pair `wg2`, voisin BGP, flux) **reste** dans le code, en attente : sa session est simplement absente.
 - Le contrôle global `lab/bin/check 07 46` vérifie la bordure, les répartiteurs, FRR, le MTU, la supervision, l'absence de maquette, **revérifie les acquis du module 06 à travers la nouvelle bordure** (DNS par les deux résolveurs, PKI, NetBox et GitLab par leurs noms publiés) puis la documentation et l'hygiène. Il prend quelques minutes.
 

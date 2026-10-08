@@ -1,0 +1,59 @@
+---
+# molecule/pxe/converge.yml — le rôle pxe (version M11-E13) sur une instance jetable de vsandbox.
+# Aucun DHCP ici ; pas d'installateur (260 Mo) ; chargeurs du paquet Debian (pxe_chargeurs vide :
+# le registre de paquets n'est pas joignable depuis vsandbox).
+# Le certificat ACME est remplacé par un certificat AUTOSIGNÉ de test, créé avant le rôle : il sert
+# d'ancre à curl dans verify.yml (vérification TLS complète, jamais désactivée).
+- name: Converge — rôle pxe (HTTPS)
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    pxe_nom_serveur: pxe-molecule.par1.medisphere.internal
+    pxe_http_autorises: [10.10.99.0/24, 10.10.10.0/24]
+    pxe_reponses_autorises: [10.10.99.0/24]
+    # Le magasin du système tient lieu de racine de la PKI sur l'instance de test.
+    pxe_racine_pki: /etc/ssl/certs/ca-certificates.crt
+    pxe_installateurs: []
+    pxe_chargeurs: []
+    # Ni DNS du lab ni racine MédiSphère sur l'instance : le HTTPS est vérifié par verify.yml.
+    pxe_controle_https: false
+  pre_tasks:
+    - name: Dossier du certificat de test
+      ansible.builtin.file:
+        path: /etc/ssl/pxe
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Certificat autosigné de test (ECDSA P-256, deux jours)
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - req
+          - -x509
+          - -newkey
+          - ec
+          - -pkeyopt
+          - ec_paramgen_curve:P-256
+          - -nodes
+          - -days
+          - "2"
+          - -subj
+          - "/CN={{ pxe_nom_serveur }}"
+          - -addext
+          - "subjectAltName=DNS:{{ pxe_nom_serveur }}"
+          - -keyout
+          - "/etc/ssl/pxe/{{ pxe_nom_serveur }}.key"
+          - -out
+          - "/etc/ssl/pxe/{{ pxe_nom_serveur }}.crt"
+        creates: "/etc/ssl/pxe/{{ pxe_nom_serveur }}.crt"
+
+    - name: Nom de test résolu vers l'instance (le DNS du lab n'est pas joignable de vsandbox)
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ ansible_facts['default_ipv4']['address'] }} {{ pxe_nom_serveur }}"
+        regexp: " {{ pxe_nom_serveur | regex_escape }}$"
+  roles:
+    - role: pxe

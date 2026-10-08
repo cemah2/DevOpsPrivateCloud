@@ -20,7 +20,7 @@ Les sorties reproduites sont **représentatives** : messages des ROM PXE, codes 
 ## Méthode commune aux pannes de provisioning
 
 1. **Situer l'étage à la console.** Le dernier message lisible dit où l'on est : micrologiciel (DHCP de la ROM), TFTP, iPXE (DHCP d'iPXE, HTTPS, script), noyau, installateur. Note-le mot pour mot.
-2. **Chercher le témoin de l'étage chez son serveur.** Kea (journal, baux), `tftpd-hpa` (journal en `--verbose`), nginx (`pxe-access.log`, `pxe-error.log`), installateur (consoles secondaires). Aucune trace = l'étape n'a pas eu lieu.
+2. **Chercher le témoin de l'étage chez son serveur.** Kea (journal, baux), `tftpd-hpa` (journal en `--verbose`), nginx (`pxe-acces.log`, `pxe-erreurs.log`), installateur (consoles secondaires). Aucune trace = l'étape n'a pas eu lieu.
 3. **Capturer quand les journaux ne suffisent pas.** Sur `pve01`, `tcpdump -ni tapNNNNi0` voit tout ce qu'émet et reçoit la VM, sans rien changer.
 4. **Comparer le servi au rendu.** `diff` entre le fichier servi par `pxe01` (`curl` depuis `adm01`) et le rendu du code (`netbox-provision.py rendre` dans un dossier temporaire) ; `--check --diff` du rôle Ansible concerné. Un écart **est** souvent la panne ; il faut ensuite trouver **qui** l'a introduit.
 5. **Corriger à la source, puis faire converger.** Une correction à chaud est permise pour rétablir le service ; le second passage du code doit donner `changed=0`.
@@ -113,21 +113,21 @@ Sonde PXE de bout en bout (VM de test sur le VLAN de provisioning qui démarre j
 iPXE> dhcp
 iPXE> imgfetch https://pxe01.par1.medisphere.internal/boot.ipxe
 iPXE> imgstat
-iPXE> imgfetch https://pxe01.par1.medisphere.internal/ipxe/mac-${mac:hexhyp}.ipxe
+iPXE> imgfetch https://pxe01.par1.medisphere.internal/ipxe/mac-${netX/mac:hexhyp}.ipxe
 ```
 
 **Étape 3 — Comparer avec `adm01` et lire nginx** :
 
 ```
 admin@adm01:~$ curl -sS -v https://pxe01.par1.medisphere.internal/boot.ipxe 2>&1 | grep -E 'issuer|HTTP/|^#!'
-admin@pxe01:~$ sudo tail -n 20 /var/log/nginx/pxe-access.log /var/log/nginx/pxe-error.log
+admin@pxe01:~$ sudo tail -n 20 /var/log/nginx/pxe-acces.log /var/log/nginx/pxe-erreurs.log
 ```
 
 **Variante 1 — en-tête du script.** `imgfetch` réussit, `imgstat` montre `boot.ipxe : 789 bytes` **sans** `[script]` ; `chain` répond « Exec format error ». La première ligne servie est `#! ipxe` : iPXE ne reconnaît un script qu'à la chaîne exacte `#!ipxe` en tête de fichier. `diff` avec `ipxe/boot.ipxe` du dépôt : la ligne modifiée à la main sur `pxe01`. Correctif : redéployer depuis le code (job `deployer`) ; chercher qui a modifié le fichier (`stat`, journal d'audit, `last`). Prévention : `outils/verifier-rendu.sh` dans le pipeline, et une sonde qui compare les empreintes servies et rendues.
 
-**Variante 2 — scripts par MAC interdits.** `boot.ipxe` passe (ligne de bienvenue avec la MAC), puis « Permission denied » sur `mac-….ipxe`. `pxe-access.log` : `GET /ipxe/mac-bc-24-11-…ipxe HTTP/1.1" 403` ; `pxe-error.log` : `open() "/srv/http/ipxe/mac-….ipxe" failed (13: Permission denied)`. Les fichiers sont en `0600 root:root` : nginx (`www-data`) ne peut pas les lire. Cause : rendu déposé avec un umask restrictif. Correctif : redéployer avec des droits explicites (`mode: "0644"` dans la tâche de dépôt). Prévention : la tâche de dépôt fixe toujours le mode ; la sonde lit un script par MAC.
+**Variante 2 — scripts par MAC interdits.** `boot.ipxe` passe (ligne de bienvenue avec la MAC), puis « Permission denied » sur `mac-….ipxe`. `pxe-acces.log` : `GET /ipxe/mac-02-4d-53-60-00-01.ipxe HTTP/1.1" 403` ; `pxe-erreurs.log` : `open() "/srv/http/ipxe/mac-….ipxe" failed (13: Permission denied)`. Les fichiers sont en `0600 root:root` : nginx (`www-data`) ne peut pas les lire. Cause : rendu déposé avec un umask restrictif. Correctif : redéployer avec des droits explicites (`mode: "0644"` dans la tâche de dépôt). Prévention : la tâche de dépôt fixe toujours le mode ; la sonde lit un script par MAC.
 
-**Variante 3 — certificat d'une autre autorité.** « Permission denied » dès `boot.ipxe`, aucune ligne dans `pxe-access.log` (la poignée de main TLS échoue avant la requête HTTP). Depuis `adm01` :
+**Variante 3 — certificat d'une autre autorité.** « Permission denied » dès `boot.ipxe`, aucune ligne dans `pxe-acces.log` (la poignée de main TLS échoue avant la requête HTTP). Depuis `adm01` :
 
 ```
 admin@adm01:~$ openssl s_client -connect 10.10.60.10:443 -servername pxe01.par1.medisphere.internal -showcerts </dev/null 2>/dev/null \
@@ -171,8 +171,8 @@ Sonde qui démarre une VM jusqu'au script de la MAC ; empreintes servies compar�
 
 ```
 admin@adm01:~/src/provisioning$ uv run outils/netbox-provision.py rendre --sortie /tmp/rendu
-admin@adm01:~$ curl -sS https://pxe01.par1.medisphere.internal/kickstart/bm03.ks | diff -u /tmp/rendu/kickstart/bm03.ks -
-admin@adm01:~$ curl -sS https://pxe01.par1.medisphere.internal/preseed/bm01.cfg | diff -u /tmp/rendu/preseed/bm01.cfg -
+admin@adm01:~$ curl -sS https://pxe01.par1.medisphere.internal/kickstart/bm04.ks | diff -u /tmp/rendu/http/kickstart/bm04.ks -
+admin@adm01:~$ curl -sS https://pxe01.par1.medisphere.internal/preseed/bm01.cfg | diff -u /tmp/rendu/http/preseed/bm01.cfg -
 ```
 
 **Variante 1 — preseed : confirmation du partitionnement absente.** Écran : « Écrire les modifications sur les disques ? » (partman). Alt-F4 : `debconf (developer): <-- INPUT critical partman/confirm`. Le preseed servi a la ligne `#d-i partman/confirm boolean true` (commentée). `debconf-set-selections -c` l'accepte : une ligne commentée est une ligne valide. C'est la limite des validateurs syntaxiques. Correctif : redéployer depuis le code ; trouver l'auteur. Prévention : `verifier-rendu.sh` exige `partman/confirm` et `partman/confirm_nooverwrite` (contrôle **sémantique**), et le pipeline teste une installation complète.
@@ -210,17 +210,17 @@ Installation de test de chaque gabarit à chaque MR (VM éphémère), délai max
 **Étape 1 — Reproduire dans MAAS** :
 
 ```
-admin@maas01:~$ maas admin machines read | jq -r '.[] | "\(.system_id) \(.hostname) \(.power_state)"'
-admin@maas01:~$ maas admin machine query-power-state <SYSTEM_ID>
-admin@maas01:~$ maas admin machine power-parameters <SYSTEM_ID>
+admin@maas01:~$ maas maas01 machines read | jq -r '.[] | "\(.system_id) \(.hostname) \(.power_state)"'
+admin@maas01:~$ maas maas01 machine query-power-state <SYSTEM_ID>
+admin@maas01:~$ maas maas01 machine power-parameters <SYSTEM_ID>
 ```
 
-(`admin` = nom de ton profil CLI.) **Étape 2 — Côté Proxmox** :
+(`maas01` = le profil CLI de M11-E09.) **Étape 2 — Côté Proxmox** :
 
 ```
 root@pve01:~# tail -n 20 /var/log/pveproxy/access.log | grep 'wb-maas'
-… "GET /api2/json/nodes/pve01/qemu/2113/status/current HTTP/1.1" 401 …    (identité)
-… "GET /api2/json/nodes/pve01/qemu/2113/status/current HTTP/1.1" 403 …    (droits)
+… "GET /api2/json/cluster/resources?type=vm HTTP/1.1" 401 …    (identité)
+… "GET /api2/json/cluster/resources?type=vm HTTP/1.1" 200 …    (droits : liste VIDE si VM.Audit manque)
 root@pve01:~# pveum user token list wb-maas@pve
 root@pve01:~# pveum user token permissions wb-maas@pve maas
 root@pve01:~# pveum role list | grep WBMaas
@@ -230,19 +230,20 @@ root@pve01:~# pveum role list | grep WBMaas
 
 ```
 admin@maas01:~$ umask 077; printf 'Authorization: PVEAPIToken=wb-maas@pve!maas=%s\n' "$(read -rs s; echo "$s")" > /tmp/entete-pve
-admin@maas01:~$ curl -sS -H @/tmp/entete-pve https://<IP-PVE01>:8006/api2/json/nodes/pve01/qemu/2113/status/current | jq .data.status
+admin@maas01:~$ curl -sS -H @/tmp/entete-pve 'https://<IP-PVE01>:8006/api2/json/cluster/resources?type=vm' | jq -r '.data[] | "\(.vmid) \(.name) \(.status)"'
+admin@maas01:~$ curl -sS -H @/tmp/entete-pve https://<IP-PVE01>:8006/api2/json/nodes/<NOEUD>/qemu/2114/status/current | jq .data.status
 admin@maas01:~$ rm -f /tmp/entete-pve
 ```
 
 **Variante 1 — jeton expiré.** `401` dans `access.log` pour toutes les VMs. `pveum user token list wb-maas@pve` : `expire` dans le passé (une heure avant l'injection). Cause : « campagne de rotation » qui a mis une expiration sans renouveler. Correctif : décision avec Sophie — soit une nouvelle expiration raisonnable (`pveum user token modify wb-maas@pve maas --expire <EPOCH>`), soit un nouveau jeton (secret à mettre dans MAAS et au registre des secrets). Prévention : alerte à J-15 sur l'expiration des jetons, rotation outillée (nouveau jeton, mise à jour du consommateur, révocation de l'ancien).
 
-**Variante 2 — privilège retiré.** `403` sur `status/current` ; `pveum user token permissions` ne montre plus `VM.Audit` sur `/vms/2112`… Le rôle `WBMaas` a perdu `VM.Audit` lors d'une revue : MAAS doit **lire** l'état avant d'agir. Correctif : `pveum role modify WBMaas --privs "VM.Audit,VM.PowerMgmt"` (exactement la liste du code ou du registre), et documenter pourquoi chaque privilège est nécessaire. Prévention : le rôle est décrit dans le code (rôle Ansible de configuration de `pve01` ou ADR-0030) avec la justification de chaque privilège.
+**Variante 2 — privilège retiré.** `cluster/resources` répond `200` mais avec une liste **vide** (l'API filtre ce qu'on ne peut pas voir), et `status/current` répond `403` ; MAAS dit « No VMs returned! Are permissions set correctly? ». `pveum user token permissions` ne montre plus `VM.Audit` sur `/vms/2112`… Le rôle `WBMaas` a perdu `VM.Audit` lors d'une revue : le pilote doit **trouver** la VM (et lire son état) avant d'agir. Correctif : `pveum role modify WBMaas --privs "VM.Audit,VM.PowerMgmt"` (exactement la liste du code ou du registre), et documenter pourquoi chaque privilège est nécessaire. Prévention : le rôle est décrit dans le code (rôle Ansible de configuration de `pve01` ou ADR-0030) avec la justification de chaque privilège.
 
-**Variante 3 — VM renommée.** Une seule machine en erreur. `access.log` : aucune requête pour sa VM, ou une recherche par nom qui échoue ; `power-parameters` montre que MAAS désigne la VM par son **nom** (`bm02`), or `qm config 2113` donne `name: bm02-ancien`. Correctif : rendre son nom à la VM (le code OpenTofu le fait : `tofu plan` dans l'état `provisioning` le montre en écart) ; mieux, désigner les VMs par leur **identifiant** dans MAAS, stable. Prévention : la dérive OpenTofu (plan planifié) aurait signalé le renommage.
+**Variante 3 — VM renommée.** Une seule machine en erreur (`bm03`). `access.log` : la liste `cluster/resources` est bien lue, mais aucune requête ne suit pour sa VM : le pilote ne la trouve pas dans la liste ; `power-parameters` montre que MAAS désigne la VM par son **nom** (`bm03`, choix de M11-E10), or `qm config 2114` donne `name: bm03-ancien`. `bm01`, désignée par son VMID, n'a rien vu. Correctif : rendre son nom à la VM (le code OpenTofu le fait : `tofu plan` dans l'état `provisioning` le montre en écart) ; mieux, désigner les VMs par leur **identifiant** dans MAAS, stable. Prévention : la dérive OpenTofu (plan planifié) aurait signalé le renommage.
 
 **Variante 4 — ancre TLS retirée de `maas01`.** Aucune requête dans `access.log` (la poignée de main échoue avant). `curl` sur `maas01` : `SSL certificate problem: unable to get local issuer certificate`. Le fichier de l'ancre de `pve01` a disparu de `/usr/local/share/ca-certificates/` (mises à jour + `update-ca-certificates --fresh`). Correctif : réinstaller l'ancre par le code (rôle Ansible de `maas01`), `update-ca-certificates`, `snap restart maas`. Ne **jamais** décocher *verify SSL*. Prévention : la racine fait partie de la configuration convergée de `maas01`, pas d'un geste d'installation.
 
-**Vérification** : `query-power-state` réussit pour les quatre machines ; un cycle arrêt/démarrage de `bm02` par MAAS ; `lab/bin/check 11 22` ; `lab/bin/break 11 22 --annuler` ; puis arrêt de MAAS (`sudo snap stop maas`).
+**Vérification** : `query-power-state` réussit pour `bm01` et `bm03` ; un cycle arrêt/démarrage de `bm03` par MAAS ; `lab/bin/check 11 22` ; `lab/bin/break 11 22 --annuler` ; puis arrêt de MAAS (`sudo snap stop maas`).
 
 **Explications**
 
@@ -278,7 +279,7 @@ Après le démarrage du noyau de l'installateur : `qm stop 2112`, rapatriement d
 
 *Compte rendu* — modèle : [`demarrage-pxe.md`](fichiers/M11-E23/medisphere/docs/provisioning/analyses/demarrage-pxe.md). Réponses attendues aux questions :
 
-a. Deux DHCP : la ROM obtient adresse et chargeur ; iPXE ne réutilise pas l'état de la ROM et refait un DHCP en s'annonçant (option 77 `iPXE`, option 175) ; Kea le classe et lui donne l'URL HTTPS. Sans cette classe, iPXE recevrait `undionly.kpxe` et se rechargerait en boucle.
+a. Deux DHCP : la ROM obtient adresse et chargeur ; notre iPXE ne réutilise pas l'état de la ROM et refait un DHCP en s'annonçant (option 77 `iPXE-MediSphere`, posée par son script intégré, et option 175) ; Kea le classe et lui donne l'URL HTTPS. Sans cette classe, il recevrait `undionly.kpxe` et se rechargerait en boucle. En BIOS sur le lab, le premier DHCP est celui de l'iPXE de QEMU (option 77 `iPXE`), traité comme un client PXE ordinaire depuis M11-E13 : c'est lui qui charge le nôtre en TFTP.
 b. Le relais renseigne `giaddr` (son adresse dans le VLAN 60), envoie en unicast depuis le port 67 vers chaque serveur Kea ; Kea choisit le sous-réseau `id: 60` d'après `giaddr` et répond au relais, qui rediffuse au client. Côté `dns01`, l'adresse source est celle de la passerelle, jamais celle du client.
 c. `tsize` (taille annoncée, RFC 2349) et `blksize` (RFC 2348), confirmés par un OACK (RFC 2347). À 512 octets, il faut environ trois fois plus d'allers-retours qu'à 1 432 ; sur un réseau local, le gain se mesure en dixièmes de seconde pour un chargeur de 70 à 1 000 Kio.
 d. TLS 1.2 (iPXE ne parle pas TLS 1.3), suite ECDHE-ECDSA avec AES-GCM (celle que tu observes) ; le nom apparaît en clair dans la requête DNS puis dans l'extension SNI du ClientHello.
@@ -315,7 +316,7 @@ Capture à la demande sur les ports des commutateurs (*port mirroring*), jamais 
 10. **b.** Anaconda refuse un `ignoredisk` qui désigne un disque inexistant, ou ne trouve aucun disque utilisable, et s'arrête. a : `--only-use` exclut tous les autres disques ; c : non ; d : un kickstart sans disque utilisable ne peut pas réussir.
 11. RAKP (IPMI 2.0) : le contrôleur renvoie, à quiconque donne un nom de compte valide, une empreinte HMAC-SHA1 dérivée du mot de passe, attaquable hors ligne ; cela n'exige aucune authentification préalable, juste l'accès à UDP 623. S'y ajoutent *cipher 0*, les comptes par défaut et l'absence de TLS. Redfish passe par HTTPS avec authentification de session ou basique sur TLS : l'attaque hors ligne disparaît (restent les mots de passe faibles).
 12. `@odata.id` est l'URI de chaque ressource ; un client suit les liens depuis `/redfish/v1/` au lieu de construire des chemins. `Actions` décrit les opérations possibles (ex. `#ComputerSystem.Reset` avec sa `target`) et `ResetType@Redfish.AllowableValues` la liste des valeurs acceptées **par ce contrôleur** (`On`, `ForceOff`, `GracefulShutdown`, `ForceRestart`, `Nmi`, `PushPowerButton`…) : toutes ne sont pas implémentées partout, d'où la lecture préalable.
-13. Lire la liste des VMs et leur état (`VM.Audit`), les démarrer et les arrêter (`VM.PowerMgmt`) ; selon la version, modifier l'ordre de démarrage pour un démarrage réseau (`VM.Config.Options`, à confirmer). Un jeton à séparation des privilèges sans ACL propre n'a **aucun** droit : toutes les requêtes répondent 403, même si le compte a les droits.
+13. Lire la liste des VMs et leur état (`VM.Audit` : sans lui, la VM n'apparaît même pas dans `cluster/resources`), les démarrer et les arrêter (`VM.PowerMgmt`). Le pilote de MAAS 3.7 ne change **pas** l'ordre de démarrage (`can_set_boot_order = False`, lu en M11-E08) : aucun `VM.Config.*`, la VM doit démarrer sur le réseau d'abord. Un jeton à séparation des privilèges sans ACL propre n'a **aucun** droit : toutes les requêtes répondent 403, même si le compte a les droits.
 14. *Enlistment* : une machine inconnue démarre sur le réseau, MAAS lui sert une image éphémère qui l'enregistre ; *commissioning* : la machine redémarre sur l'image éphémère, qui inventorie le matériel (processeurs, mémoire, disques, cartes, LLDP) et lance des tests. La chaîne maison perd l'inventaire automatique et les tests avant mise en service ; on le remplace par un démarrage sur une image d'inventaire (Debian live + script qui remonte `lshw`/`lsblk`/`ip link` vers NetBox par l'orchestrateur), ou par l'inventaire Redfish du contrôleur (E18) pour ce qu'il expose.
 15. Écrasement (`shred`, une passe suffit sur les disques modernes, mais ne couvre pas les zones remappées des SSD) ; effacement sécurisé du firmware (ATA Secure Erase par `hdparm`, NVMe Format avec `--ses=1` ou Sanitize par `nvme-cli`) ; effacement cryptographique (disque chiffré, destruction de la clé, ou `--ses=2` en NVMe). Intégration : un gabarit iPXE « effacement » servi aux équipements `decommissioning`, qui démarre une image dédiée, efface, produit un rapport (numéro de série, méthode, horodatage) remonté au journal NetBox, puis éteint ; la preuve d'effacement est une exigence HDS.
 

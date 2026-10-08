@@ -2,7 +2,7 @@
 # shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # commandes entre apostrophes évaluées sur pve01 ou par bash -c
 # check-E22.sh — M11-E22 « Panne : MAAS ne pilote plus les machines » (MAAS démarré) : état
-# d'alimentation interrogeable pour les quatre machines bm*, vérification TLS active, jeton
+# d'alimentation interrogeable pour les machines bm* de MAAS (bm01 et bm03 depuis M11-E10), vérification TLS active, jeton
 # wb-maas@pve!maas valide, rôle WBMaas et ACL au plus juste, noms des VMs d'origine ; panne close.
 # Lecture seule (query_power_state interroge l'alimentation sans la modifier).
 
@@ -16,7 +16,7 @@ if [[ ! -r "$_m11x_maas_cle" ]]; then
   check_cmd "clé d'API de MAAS lisible sur adm01 ($_m11x_maas_cle)" false
 fi
 mapfile -t _m11_e22_bm < <(_m11x_maas_bm)
-check_cmd "MAAS répond et connaît les quatre machines bm01-bm04" test "${#_m11_e22_bm[@]}" -eq 4
+check_cmd "MAAS répond et connaît au moins deux machines bm* (bm01 et bm03, M11-E10)" test "${#_m11_e22_bm[@]}" -ge 2
 for _m11_e22_l in "${_m11_e22_bm[@]}"; do
   read -r _m11_e22_id _m11_e22_nom <<<"$_m11_e22_l"
   _m11_e22_etat="$(_m11x_maas GET "machines/$_m11_e22_id/?op=query_power_state" | jq -r '.state // empty' 2>/dev/null)" || true

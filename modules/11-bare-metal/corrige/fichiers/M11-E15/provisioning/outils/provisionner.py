@@ -10,26 +10,31 @@ Cycle de vie (statut NetBox de l'équipement, rôle « serveur-bm ») :
                    │  arrêt en fin d'installation   │  SSH, accueil Ansible, vérifications
                    └──────────── échec à n'importe quelle étape ──► failed (+ journal NetBox)
 
-Le champ personnalisé « pxe_action » dit au rendu (outils/netbox-provision.py) quel script iPXE
-servir pour la MAC : « installer » (gabarit du système) ou « local » (rendre la main au
-micrologiciel). Un équipement active est toujours rendu en « local » : il ne se réinstalle jamais.
+Le champ personnalisé « pxe_action » dit au rendu (outils/netbox-provision.py, regle_installation:
+pxe_action dans parametres.yml) quel script iPXE servir pour la MAC : installation si l'équipement
+est « staged » avec pxe_action=installer, disque local (rendre la main au micrologiciel) dans tous
+les autres cas. Un équipement active ne se réinstalle donc jamais.
 
 La machine installée ne rappelle personne : l'orchestrateur observe ce qu'il contrôle déjà
 (alimentation par l'API de Proxmox, port SSH, DNS). Aucun secret n'est posé sur la machine.
 
 Identités (jamais en argument de ligne de commande) :
-  NetBox  : NETBOX_URL, NETBOX_TOKEN (svc-automatisation : statut, champs et journal des
-            équipements « serveur-bm » seulement) ; en CI, variables protégées et masquées.
+  NetBox  : NETBOX_URL (défaut https://nbx01.par1.medisphere.internal) ; jeton en écriture de
+            svc-automatisation (statut, champs et journal des équipements « serveur-bm » seulement) :
+            variable NETBOX_TOKEN (CI : protégée et masquée), à défaut fichier NETBOX_TOKEN_FILE
+            (défaut ~/.config/workbook/netbox-auto.token, 600, M06-E10).
   Proxmox : fichier PVE_ENV (défaut ~/.config/workbook/pve-provision.env : PVE_API_URL, PVE_NODE,
             PVE_TOKEN_ID, PVE_TOKEN_SECRET, PVE_CACERT), jeton wb-provision@pve!provision
             (rôle WBProvision : VM.Audit, VM.PowerMgmt, VM.GuestAgent.FileRead sur /vms/2112 à
             /vms/2115). La lecture de fichier par l'agent QEMU sert à confirmer la clé d'hôte SSH
             par un canal qui ne passe pas par le réseau (premier contact sans « accept-new »).
 Commandes externes (variables d'environnement, valeurs par défaut adaptées au lab) :
-  PROVISION_RENDRE   rendu et dépôt des fichiers servis par pxe01 (M11-E06)
+  PROVISION_RENDRE   rendu des fichiers servis par pxe01 (outils/netbox-provision.py, M11-E06/E13)
+  PROVISION_PUBLIER  dépôt du rendu sur pxe01 (outils/publier.sh, M11-E03)
   PROVISION_ACCUEIL  accueil Ansible de la machine (clé d'hôte signée, racine, rôle base)
 Code de retour : 0 en service (ou déjà en service), 1 échec (équipement « failed »), 2 usage.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,15 +55,15 @@ DELAIS = {  # secondes
     "demarrage": int(os.environ.get("PROVISION_DELAI_DEMARRAGE", "600")),
     "arret": 120,
 }
-RENDRE = os.environ.get("PROVISION_RENDRE", "uv run outils/netbox-provision.py deployer")
+RENDRE = os.environ.get("PROVISION_RENDRE", "uv run outils/netbox-provision.py rendre")
+PUBLIER = os.environ.get("PROVISION_PUBLIER", "outils/publier.sh")
 ACCUEIL = os.environ.get(
     "PROVISION_ACCUEIL",
-    "ansible-playbook playbooks/accueil-bm.yml --limit {nom} -e accueil_known_hosts={known_hosts}",
+    "uv run ansible-playbook -i inventories/lab/netbox-bm.yml playbooks/accueil-bm.yml"
+    " --limit {nom} -e accueil_known_hosts={known_hosts}",
 )
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "provisionner"
-ANSIBLE_PROJET = os.environ.get(
-    "ANSIBLE_PROJET", str(Path(os.environ.get("WB_SRC", Path.home() / "src")) / "ansible")
-)
+ANSIBLE_PROJET = os.environ.get("ANSIBLE_PROJET", str(Path(os.environ.get("WB_SRC", Path.home() / "src")) / "ansible"))
 
 
 class Echec(Exception):
@@ -146,8 +151,9 @@ class Proxmox:
 
     def lire_fichier(self, vmid: int, chemin: str) -> str:
         """Lit un fichier de l'invité par l'agent QEMU (privilège VM.GuestAgent.FileRead)."""
-        r = self.s.get(f"{self.url}/nodes/{self.noeud}/qemu/{vmid}/agent/file-read",
-                       params={"file": chemin}, timeout=30)
+        r = self.s.get(
+            f"{self.url}/nodes/{self.noeud}/qemu/{vmid}/agent/file-read", params={"file": chemin}, timeout=30
+        )
         r.raise_for_status()
         return r.json()["data"]["content"]
 
@@ -157,7 +163,9 @@ class Proxmox:
             return
         r = self.s.post(f"{self.url}/nodes/{self.noeud}/qemu/{vmid}/status/{quoi}", timeout=30)
         if r.status_code in (401, 403):
-            raise Echec(f"Proxmox refuse « {quoi} » sur {vmid} ({r.status_code}) : jeton wb-provision, rôle WBProvision")
+            raise Echec(
+                f"Proxmox refuse « {quoi} » sur {vmid} ({r.status_code}) : jeton wb-provision, rôle WBProvision"
+            )
         r.raise_for_status()
 
 
@@ -178,13 +186,47 @@ def port_ouvert(ip: str, port: int) -> bool:
         return False
 
 
-def lancer(commande: str, quoi: str, cwd: str | None = None, dry_run: bool = False) -> None:
+def lancer(
+    commande: str, quoi: str, cwd: str | None = None, dry_run: bool = False, env: dict[str, str] | None = None
+) -> None:
     if dry_run:
         journal_local(f"[dry-run] {quoi} : {commande}")
         return
-    r = subprocess.run(shlex.split(commande), cwd=cwd, check=False)
+    # Commandes fixées par le code ou par l'exploitant (variables PROVISION_*), jamais par NetBox.
+    r = subprocess.run(shlex.split(commande), cwd=cwd, env=env, check=False)  # noqa: S603
     if r.returncode != 0:
         raise Echec(f"{quoi} : « {commande} » a échoué (code {r.returncode})")
+
+
+def rendre_publier(quoi: str, dry_run: bool) -> None:
+    """Rend depuis NetBox (état qui vient d'être écrit) puis publie sur pxe01 : ce que sert pxe01
+    pour la MAC doit avoir changé AVANT que la machine ne démarre."""
+    lancer(RENDRE, f"rendu ({quoi})", dry_run=dry_run)
+    lancer(PUBLIER, f"publication sur pxe01 ({quoi})", dry_run=dry_run)
+
+
+def env_inventaire() -> dict[str, str]:
+    """Environnement de l'accueil Ansible : l'inventaire NetBox (netbox-bm.yml) lit NETBOX_TOKEN.
+    Sur adm01, c'est le jeton en LECTURE de svc-automatisation (netbox-ansible.env), pas celui de
+    l'orchestrateur ; en CI, la variable du projet."""
+    env = dict(os.environ)
+    if not env.get("NETBOX_TOKEN"):
+        fichier = Path.home() / ".config/workbook/netbox-ansible.env"
+        if fichier.exists():
+            env["NETBOX_TOKEN"] = lire_env(fichier).get("NETBOX_TOKEN", "")
+    return env
+
+
+def jeton_netbox() -> str:
+    jeton = os.environ.get("NETBOX_TOKEN", "")
+    if jeton:
+        return jeton
+    fichier = Path(os.environ.get("NETBOX_TOKEN_FILE", Path.home() / ".config/workbook/netbox-auto.token"))
+    if not fichier.exists():
+        return ""
+    if fichier.stat().st_mode & 0o077:
+        raise Echec(f"{fichier} doit être en 600")
+    return fichier.read_text(encoding="utf-8").strip()
 
 
 def _essai(fonction) -> bool:
@@ -203,11 +245,20 @@ def resolu(fqdn: str, ip: str) -> bool:
 
 def ssh_certificat_ok(nom: str) -> bool:
     """Connexion neuve, clé d'hôte vérifiée (certificat d'hôte et @cert-authority d'adm01)."""
-    r = subprocess.run(
-        ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ControlPath=none",
-         "-o", "ConnectTimeout=8", f"admin@{nom}.{DOMAINE}", "true"],
-        check=False, capture_output=True,
-    )
+    commande = [
+        "ssh",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "ControlPath=none",
+        "-o",
+        "ConnectTimeout=8",
+        f"admin@{nom}.{DOMAINE}",
+        "true",
+    ]
+    r = subprocess.run(commande, check=False, capture_output=True)  # noqa: S603
     return r.returncode == 0
 
 
@@ -218,11 +269,15 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true")
     a = p.parse_args()
 
-    for v in ("NETBOX_URL", "NETBOX_TOKEN"):
-        if not os.environ.get(v):
-            print(f"Variable {v} absente", file=sys.stderr)
-            return 2
-    nb = NetBox(os.environ["NETBOX_URL"], os.environ["NETBOX_TOKEN"], a.dry_run)
+    try:
+        jeton = jeton_netbox()
+    except Echec as e:
+        print(e, file=sys.stderr)
+        return 2
+    if not jeton:
+        print("Jeton NetBox absent (NETBOX_TOKEN ou ~/.config/workbook/netbox-auto.token)", file=sys.stderr)
+        return 2
+    nb = NetBox(os.environ.get("NETBOX_URL", "https://nbx01.par1.medisphere.internal"), jeton, a.dry_run)
     pve_env = Path(os.environ.get("PVE_ENV", Path.home() / ".config/workbook/pve-provision.env"))
     pve = Proxmox(lire_env(pve_env), a.dry_run)
 
@@ -259,24 +314,32 @@ def main() -> int:
             etape = "installation"
             nb.modifier(dev, status="staged", custom_fields={"pxe_action": "installer"})
             nb.journal(dev, "info", f"{etape} : début (statut staged, script iPXE d'installation)")
-            lancer(RENDRE, "rendu des fichiers servis", dry_run=a.dry_run)
+            rendre_publier("installation", a.dry_run)
             if pve.etat(vmid) == "running":
                 pve.action(vmid, "stop")
                 attendre(lambda: pve.etat(vmid) == "stopped", DELAIS["arret"], 5, "arrêt de la VM")
             pve.action(vmid, "start")
             if not a.dry_run:
-                attendre(lambda: pve.etat(vmid) == "stopped", DELAIS["installation"], 30,
-                         "fin d'installation (la machine s'éteint) : regarde sa console")
+                attendre(
+                    lambda: pve.etat(vmid) == "stopped",
+                    DELAIS["installation"],
+                    30,
+                    "fin d'installation (la machine s'éteint) : regarde sa console",
+                )
             nb.journal(dev, "info", f"{etape} : terminée (machine éteinte)")
 
         etape = "premier démarrage"
         nb.modifier(dev, status="staged", custom_fields={"pxe_action": "local"})
-        lancer(RENDRE, "rendu des fichiers servis (démarrage local)", dry_run=a.dry_run)
+        rendre_publier("démarrage local", a.dry_run)
         if pve.etat(vmid) == "stopped":
             pve.action(vmid, "start")
         if not a.dry_run:
-            attendre(lambda: port_ouvert(ip, 22), DELAIS["demarrage"], 10,
-                     f"SSH de {ip} (si la console montre une réinstallation : rendu « local » non déployé)")
+            attendre(
+                lambda: port_ouvert(ip, 22),
+                DELAIS["demarrage"],
+                10,
+                f"SSH de {ip} (si la console montre une réinstallation : rendu « local » non déployé)",
+            )
             attendre(lambda: resolu(f"{nom}.{DOMAINE}", ip), 120, 10, f"DNS {nom}.{DOMAINE} → {ip}")
         nb.journal(dev, "info", f"{etape} : SSH ouvert, nom résolu")
 
@@ -286,21 +349,31 @@ def main() -> int:
         if not a.dry_run:
             # Clé publique lue DANS la machine par l'agent QEMU, pas sur le réseau : c'est elle
             # qu'Ansible exigera de sshd (StrictHostKeyChecking=yes) au premier contact.
-            attendre(lambda: _essai(lambda: pve.lire_fichier(vmid, "/etc/ssh/ssh_host_ed25519_key.pub")),
-                     120, 10, "agent QEMU de la machine (paquet qemu-guest-agent, option agent de la VM)")
+            attendre(
+                lambda: _essai(lambda: pve.lire_fichier(vmid, "/etc/ssh/ssh_host_ed25519_key.pub")),
+                120,
+                10,
+                "agent QEMU de la machine (paquet qemu-guest-agent, option agent de la VM)",
+            )
             cle = pve.lire_fichier(vmid, "/etc/ssh/ssh_host_ed25519_key.pub").split()
             known_hosts.write_text(f"{nom},{nom}.{DOMAINE},{ip} {cle[0]} {cle[1]}\n", encoding="utf-8")
         nb.journal(dev, "info", f"{etape} : clé ED25519 lue par l'agent QEMU")
 
         etape = "accueil Ansible"
-        lancer(ACCUEIL.format(nom=nom, known_hosts=known_hosts), etape, cwd=ANSIBLE_PROJET, dry_run=a.dry_run)
+        lancer(
+            ACCUEIL.format(nom=nom, known_hosts=known_hosts),
+            etape,
+            cwd=ANSIBLE_PROJET,
+            dry_run=a.dry_run,
+            env=env_inventaire(),
+        )
         if not a.dry_run and not ssh_certificat_ok(nom):
             raise Echec("clé d'hôte non reconnue après l'accueil (certificat d'hôte, @cert-authority)")
         nb.journal(dev, "info", f"{etape} : racine, clé d'hôte signée, rôle base")
 
         etape = "mise en service"
         nb.modifier(dev, status="active", custom_fields={"pxe_action": "local"})
-        lancer(RENDRE, "rendu des fichiers servis (en service)", dry_run=a.dry_run)
+        rendre_publier("en service", a.dry_run)
         nb.journal(dev, "success", f"{etape} : {nom} en service ({ip})")
         return 0
     except (Echec, requests.RequestException) as e:

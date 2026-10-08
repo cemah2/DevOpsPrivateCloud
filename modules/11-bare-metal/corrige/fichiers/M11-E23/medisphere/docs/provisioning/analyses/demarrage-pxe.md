@@ -6,22 +6,22 @@
 
 | t (s) | De → vers | Protocole | Contenu significatif |
 |---|---|---|---|
-| 0,00 | 0.0.0.0:68 → 255.255.255.255:67 | DHCP DISCOVER | option 53=1, **option 93 = 0x0000** (BIOS x86), option 60 `PXEClient:Arch:00000:UNDI:002001`, option 97 (UUID) |
-| <…> | 10.10.60.1 (relais) → 10.10.20.10:67 | DHCP relayé | même message, **`giaddr` = 10.10.60.<2 ou 1>**, source UDP 67 (vu sur `ens18` de `dns01`) |
-| <…> | 10.10.20.10 → relais → client | DHCP OFFER | `yiaddr` 10.10.60.1xx (réservation), **`siaddr` = 10.10.60.10**, **`file` = `undionly.kpxe`**, option 54 (identifiant du serveur) |
+| 0,00 | 0.0.0.0:68 → 255.255.255.255:67 | DHCP DISCOVER | option 53=1, **option 93 = 0x0000** (BIOS x86), option 60 `PXEClient:Arch:00000:UNDI:002001`, option 97 (UUID), option 77 = `iPXE` (la ROM de QEMU est un iPXE, mais pas le nôtre : classe `pxe-bios`) |
+| <…> | 10.10.20.<2 ou 3> (relais) → 10.10.20.10:67 | DHCP relayé | même message, **`giaddr` = 10.10.60.<2 ou 3>** (une copie par passerelle), source UDP 67 (vu sur `ens18` de `dns01`) |
+| <…> | 10.10.20.10 → relais → client | DHCP OFFER | `yiaddr` 10.10.60.101 (réservation), **`siaddr` = 10.10.60.10**, **`file` = `undionly.kpxe`**, option 54 (identifiant du serveur) |
 | <…> | client ↔ Kea | REQUEST / ACK | — |
 | <…> | client → 10.10.60.10:69 | TFTP RRQ `undionly.kpxe` | options `tsize 0`, `blksize 1432` (ou 1468) |
 | <…> | 10.10.60.10:<éphémère> → client | TFTP OACK | `tsize <octets>`, `blksize <n>` ; puis DATA/ACK numérotés |
-| <…> | client | DHCP DISCOVER (2e) | **option 77 (user-class) = `iPXE`**, option 175 (options iPXE) |
-| <…> | Kea → client | OFFER | `file` = `https://pxe01.par1.medisphere.internal/boot.ipxe` (classe iPXE) |
+| <…> | client | DHCP DISCOVER (2e) | **option 77 (user-class) = `iPXE-MediSphere`** (script intégré à notre binaire, M11-E13), option 175 (options iPXE) |
+| <…> | Kea → client | OFFER | `file` = `https://pxe01.par1.medisphere.internal/boot.ipxe` (classe `ipxe`) |
 | <…> | client → 10.10.20.10:53 | DNS A `pxe01.par1.medisphere.internal` | réponse 10.10.60.10 |
 | <…> | client → 10.10.60.10:443 | TLS ClientHello | **SNI `pxe01.par1.medisphere.internal`**, version proposée TLS 1.2 |
 | <…> | pxe01 → client | ServerHello, Certificate… | suite `<ex. TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384>` |
-| <…> | client ↔ pxe01 | TLS Application Data | `GET /boot.ipxe`, `/ipxe/mac-…ipxe`, noyau, initrd, preseed (journal nginx : `pxe-access.log`) |
+| <…> | client ↔ pxe01 | TLS Application Data | `GET /boot.ipxe`, `/ipxe/mac-…ipxe`, noyau, initrd, preseed (journal nginx : `pxe-acces.log`) |
 
 ## Démarrage UEFI (`bm03`, OVMF)
 
-Mêmes étapes ; différences : option 93 = **0x0007** (EFI x86-64), fichier `ipxe.efi`, chargeur plus gros (<…> Kio contre <…> Kio), <autres différences observées>.
+Mêmes étapes ; différences : option 93 = **0x0007** (EFI x86-64), pas d'option 77 dans le premier DISCOVER (pile PXE d'OVMF), fichier `ipxe.efi`, chargeur plus gros (<…> Kio contre <…> Kio), <autres différences observées>.
 
 ## Temps par étage
 
@@ -35,7 +35,7 @@ Mêmes étapes ; différences : option 93 = **0x0007** (EFI x86-64), fichier `ip
 
 ## Réponses aux questions
 
-a. Deux échanges DHCP : la ROM PXE obtient adresse et chargeur ; iPXE, une fois chargé, **refait** un DHCP (il ne réutilise pas l'état de la ROM) et s'annonce par l'option 77 *user-class* « iPXE » (RFC 3004) ; Kea classe ce client (`option[77]`) et lui donne l'URL HTTPS au lieu du chargeur, sans quoi iPXE rechargerait iPXE en boucle.
+a. Deux échanges DHCP : la ROM obtient adresse et chargeur ; notre iPXE, une fois chargé, **refait** un DHCP (il ne réutilise pas l'état de la ROM) et s'annonce par l'option 77 *user-class* « iPXE-MediSphere » (RFC 3004, sans l'en-tête de longueur) ; Kea classe ce client (`option[77]`) et lui donne l'URL HTTPS au lieu du chargeur, sans quoi il rechargerait iPXE en boucle. La ROM iPXE de QEMU, qui s'annonce « iPXE », reste traitée comme une ROM PXE : elle ne connaît pas notre racine.
 b. Le relais reçoit le broadcast sur `ens19.60`, renseigne `giaddr` avec son adresse sur le VLAN 60, et envoie le message en **unicast** depuis le port 67 vers chaque serveur Kea ; Kea choisit le sous-réseau `id: 60` d'après `giaddr`, et répond au relais (port 67), qui rediffuse vers le client.
 c. `tsize` (RFC 2349) et `blksize` (RFC 2348), acceptés par un OACK (RFC 2347). À 512 octets par bloc, un fichier de <…> Kio demande <…> allers-retours ; à 1432, <…> : <mesure>.
 d. TLS 1.2, suite `<…>` ; le nom apparaît en clair dans l'extension SNI du ClientHello (et dans la requête DNS juste avant).

@@ -25,7 +25,7 @@ title "État"
 check_cmd "drapeau noout retiré" _m09p_ceph_jq "osd dump" '((.flags // "") | split(",") | index("noout")) == null'
 check_cmd "Ceph en HEALTH_OK" _m09p_ceph_ok
 for _m09_e28_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e28_n : dépôt ceph-tentacle, plus aucun dépôt ceph-squid" "root@$_m09_e28_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e28_n : dépôt ceph-tentacle, plus aucun dépôt ceph-squid" "$_m09_e28_n" \
     'grep -rqs "ceph-tentacle" /etc/apt/sources.list.d/ && ! grep -rqs "ceph-squid" /etc/apt/sources.list /etc/apt/sources.list.d/'
   _m09_e28_id="${_M09P_VMID[$_m09_e28_n]}"
   check_ssh "VM $_m09_e28_id ($_m09_e28_n) : aucun instantané de filet restant" "$WB_PVE_HOST" \

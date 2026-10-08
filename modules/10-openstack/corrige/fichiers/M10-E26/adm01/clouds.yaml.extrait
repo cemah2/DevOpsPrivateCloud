@@ -1,5 +1,5 @@
-# ~/.config/openstack/clouds.yaml — EXTRAIT : nuage de la sonde (M10-E26). Aucun secret ici :
-# le secret de l'identifiant d'application est dans secure.yaml (600), fusionné par la CLI.
+# ~/.config/openstack/clouds.yaml — EXTRAIT : cloud de la sonde (M10-E26). Aucun secret ici :
+# le secret de l'application credential est dans secure.yaml (600), fusionné par la CLI.
 clouds:
   medisphere-supervision:
     auth_type: v3applicationcredential

@@ -12,7 +12,7 @@
 #
 # Configuration :
 #   /usr/local/etc/ms-verif-openstack.conf   ce qui est surveillé (MS_CONF pour un autre chemin)
-#   ~/.config/openstack/clouds.yaml + secure.yaml (600) : nuage MS_OS_CLOUD, identifiant
+#   ~/.config/openstack/clouds.yaml + secure.yaml (600) : cloud MS_OS_CLOUD, identifiant
 #   d'application de svc-supervision restreint aux GET (règles d'accès de Keystone)
 #   SSH vers les nœuds : compte courant, BatchMode, « sudo -n docker » en lecture
 #
@@ -54,7 +54,7 @@ ko() {
   printf 'KO  %-12s %s\n' "$1" "$2"
 }
 
-# os ARGS… — CLI openstack avec le nuage de supervision, sortie JSON, délai borné.
+# os ARGS… — CLI openstack avec le cloud de supervision, sortie JSON, délai borné.
 os() {
   timeout 60 openstack --os-cloud "$MS_OS_CLOUD" "$@" -f json 2>/dev/null
 }
@@ -70,9 +70,9 @@ noeud() {
 
 verifier_keystone() {
   if timeout 30 openstack --os-cloud "$MS_OS_CLOUD" token issue -f value -c expires >/dev/null 2>&1; then
-    ok keystone "jeton délivré pour le nuage $MS_OS_CLOUD"
+    ok keystone "jeton délivré pour le cloud $MS_OS_CLOUD"
   else
-    ko keystone "aucun jeton pour le nuage $MS_OS_CLOUD (Keystone, HAProxy, identifiant d'application ?)"
+    ko keystone "aucun jeton pour le cloud $MS_OS_CLOUD (Keystone, HAProxy, application credential ?)"
   fi
 }
 

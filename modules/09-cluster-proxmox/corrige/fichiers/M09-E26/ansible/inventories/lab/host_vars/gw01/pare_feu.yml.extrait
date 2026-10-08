@@ -1,15 +1,26 @@
 ---
-# host_vars/gw01/pare_feu.yml — EXTRAIT : lignes ajoutées en M09-E26 (matrice commune gw01/gw02).
-# Les nœuds hv01-03 sont dans MGMT ; ca01 et runner01 dans INFRA : ces flux traversent la bordure.
-
-pare_feu_definitions:
-  # … définitions existantes …
-  - {nom: HV_NOEUDS, valeur: [10.10.10.51, 10.10.10.52, 10.10.10.53]}
+# host_vars/gw01/pare_feu.yml — EXTRAIT : lignes ajoutées ou modifiées en M09-E26 (matrice commune
+# gw01/gw02). Les nœuds hv01-03 sont dans MGMT ; ca01 et runner01 dans INFRA : ces flux traversent
+# la bordure. Définitions déjà présentes : HV_NOEUDS (M09-E05), HV_VIP (M09-E18), ADM01, CA01,
+# RUNNER01, PBS01 (socle).
 
 pare_feu_transit:
-  - {entree: $V_INFRA, source: $CA01, destination: $HV_NOEUDS, proto: tcp, ports: 80,
-     motif: "ca01 → nœuds : défis ACME HTTP-01 (émission initiale des certificats 8006)", ref: M09-E26}
+  # 1) Flux propres aux certificats de l'interface 8006 (ACME step-ca, rôle certificats_acme).
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_MGMT, destination: $HV_NOEUDS, proto: tcp, ports: 80,
+     motif: "ca01 → nœuds hv-par1 : défis ACME HTTP-01 (émission initiale des certificats 8006)", ref: M09-E26}
   - {entree: $V_MGMT, source: $HV_NOEUDS, destination: $CA01, proto: tcp, ports: 443,
-     motif: "nœuds → ca01 : ACME et renouvellement des certificats (step ca renew)", ref: M09-E26}
-  - {entree: $V_INFRA, source: $RUNNER01, destination: [$HV_NOEUDS, 10.10.10.200], proto: tcp, ports: [8006, 22],
-     motif: "runner01 → nœuds et VIP : OpenTofu hv-invites (8006), pipeline Ansible (22)", ref: M09-E18}
+     motif: "nœuds hv-par1 → ca01 : ACME et renouvellement des certificats (step ca renew)", ref: M09-E26}
+
+  # 2) Pipeline Ansible vers les nœuds (rôles pve_noeud, pve_cluster, pve_pare_feu). La ligne 8006
+  #    de M09-E18 (runner01 → VIP et nœuds, OpenTofu) reste telle quelle : on ne la duplique pas.
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_MGMT, destination: $HV_NOEUDS, proto: tcp, ports: 22,
+     motif: "runner01 → nœuds hv-par1 : SSH (pipeline Ansible)", ref: M09-E26}
+
+  # 3) Écart de M09-E05 (registre) : la règle du bastion n'avait pas de source, donc tout hôte de
+  #    MGMT (les nœuds compris) joignait tout le lab, PAR2 et LYO1. Les flux légitimes des nœuds
+  #    à travers la bordure ont maintenant chacun leur ligne : sauvegardes PBS 8007 (M09-E15), ACME
+  #    (ci-dessus) ; DNS (« DNS du lab… », source NETS_LAB), NTP (chaîne input) et dépôts (sortie
+  #    WAN) sont couverts par des règles qui ne dépendent pas de celle-ci. La règle est donc
+  #    restreinte au bastion. MODIFICATION de la ligne existante (source ajoutée, ref mise à jour) :
+  - {entree: $V_MGMT, source: $ADM01, sortie: [$LAB_IFS, $WG_S2S, $WG_LYO],
+     motif: "bastion (MGMT) vers tout le lab, PAR2 et LYO1", ref: M09-E26}

@@ -1,16 +1,17 @@
 #!ipxe
 # boot.ipxe — point d'entrée commun de la chaîne MédiSphère (M11-E13).
-# Servi par pxe01 en HTTPS ; Kea le désigne aux clients de la classe iPXE (option 77 « iPXE »).
+# Servi par pxe01 en HTTPS ; Kea le désigne aux clients de la classe ipxe (option 77 « iPXE-MediSphere »,
+# annoncée par le script intégré à NOTRE binaire).
 # Il ne décide de rien : il passe la main au script propre à la MAC, rendu depuis NetBox
-# (outils/netbox-provision.py) — installation si l'équipement est planned/staged, disque local
-# s'il est active (M11-E15).
+# (outils/netbox-provision.py) — installation ou disque local selon la règle de parametres.yml
+# (statut planned jusqu'à M11-E15, puis staged + pxe_action=installer) ; plus de menu.
 
 set base https://pxe01.par1.medisphere.internal
-echo MediSphere : demarrage reseau de ${mac} (${platform}/${buildarch}), adresse ${ip}
-chain --autofree ${base}/ipxe/mac-${mac:hexhyp}.ipxe || goto inconnu
+echo MediSphere : demarrage reseau de ${netX/mac} (${platform}/${buildarch}), adresse ${netX/ip}
+chain --autofree ${base}/ipxe/mac-${netX/mac:hexhyp}.ipxe || goto inconnu
 
 :inconnu
 # Aucune machine inconnue ne s'installe : on rend la main au micrologiciel (disque suivant).
-echo Aucun script pour ${mac} (machine non declaree dans NetBox ?). Retour au micrologiciel.
+echo Aucun script pour ${netX/mac} (machine non declaree dans NetBox ?). Retour au micrologiciel.
 sleep 15
 exit

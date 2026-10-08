@@ -15,7 +15,7 @@ if _m08x_cluster_repond; then
   check_cmd "aucun PG inactif (PG_AVAILABILITY absent)" _m08x_jq '.health.checks | has("PG_AVAILABILITY") | not'
   check_cmd "tous les PG sont active+clean" \
     _m08x_jq '[.status.pgmap.pgs_by_state[] | select(.state_name | startswith("active+clean") | not)] | length == 0'
-  check_cmd "rbd-test : size 3 (trois hôtes, domaine de panne host)" \
+  check_cmd "rbd-test : size 3 (trois baies, domaine de panne rack)" \
     _m08x_jq '.pools[] | select(.pool_name == "rbd-test") | .size == 3'
   check_cmd "rbd-test : min_size 2" _m08x_jq '.pools[] | select(.pool_name == "rbd-test") | .min_size == 2'
   check_cmd "rbd-test : sa règle CRUSH part de la racine « default »" \

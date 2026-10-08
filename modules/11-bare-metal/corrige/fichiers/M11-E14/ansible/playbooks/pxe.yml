@@ -1,0 +1,23 @@
+---
+# playbooks/pxe.yml — serveur de démarrage réseau pxe01 (M11-E02, E13) ; M11-E14 : service de
+# réponse de l'installateur Proxmox VE (rôle pve_reponses), inclus dans le site HTTPS du rôle pxe.
+- name: Serveur de démarrage réseau du VLAN 60
+  hosts: role_pxe
+  become: true
+  roles:
+    - role: base
+    - role: ssh_durci
+    - role: ssh_ca_hote
+    - role: pxe
+    - role: certificats_acme
+  tasks:
+    - name: Site HTTPS (le certificat existe désormais)
+      ansible.builtin.include_role:
+        name: pxe
+        tasks_from: nginx.yml
+
+- name: Service de réponse de l'installateur Proxmox VE
+  hosts: role_pxe
+  become: true
+  roles:
+    - role: pve_reponses

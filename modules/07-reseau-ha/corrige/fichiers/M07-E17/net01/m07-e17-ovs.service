@@ -5,6 +5,8 @@
 Description=Maquette M07-E17 : LACP, VLAN et miroir dans Open vSwitch
 After=openvswitch-switch.service
 Requires=openvswitch-switch.service
+# Mêmes noms (ns-srv, bond0, br-lab) que les labos de M07-E04 et E05 : jamais en même temps.
+Conflicts=m07-bond.service m07-ovs.service
 
 [Service]
 Type=oneshot

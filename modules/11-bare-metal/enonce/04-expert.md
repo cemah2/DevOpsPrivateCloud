@@ -7,7 +7,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 - **Une étape, un témoin.** DHCP : les journaux de Kea et une capture ; TFTP : le journal de `tftpd-hpa` ; HTTP : le journal d'accès de nginx ; installateur : sa console secondaire (Alt-F4 pour d-i, Alt-F2 et `/tmp/*.log` pour Anaconda). Une étape qui ne laisse **aucune** trace chez son serveur n'a pas eu lieu.
 - **Le code d'abord, la machine ensuite.** Les fichiers servis sont rendus depuis `plateforme/provisioning` et la configuration de Kea et de `pxe01` vient de `plateforme/ansible` : un écart entre ce que le code produirait et ce qui est servi **est** souvent la panne. La correction durable passe par le code.
 
-> **Rappels** : tout se lance depuis `adm01`. Projets : `~/src/provisioning`, `~/src/ansible`, `~/src/infra`, documentation `~/medisphere` (variable `WB_DEPOT`). Machines de test : `bm01` (2112, SeaBIOS, Debian) et `bm03` (2114, OVMF, Rocky). **Avant chaque injection**, mets-les en position d'installation : statut `staged` et `pxe_action` à `installer` dans NetBox, rendu déployé sur `pxe01` (job `deployer`), VMs éteintes. Pour reproduire un symptôme, démarre la machine toi-même (bouton *Start* ou `qm start`), console ouverte, sans relancer ni le rendu ni l'orchestrateur de M11-E15 : ils réécrivent ce que sert `pxe01` et changeraient les conditions de l'observation. Le rendu et l'orchestrateur reviennent **après** le diagnostic, pour valider ta correction de bout en bout. Quand tu as fini, remets les équipements à `planned` (VMs vides recréées). Console : interface web de `pve01`, VM concernée, « Console ».
+> **Rappels** : tout se lance depuis `adm01`. Projets : `~/src/provisioning`, `~/src/ansible`, `~/src/infra`, documentation `~/medisphere` (variable `WB_DEPOT`). Machines de test : `bm01` (2112, SeaBIOS, Debian) et `bm03` (2114, OVMF, Debian) ; pour M11-E21, aussi `bm04` (2115, OVMF, Rocky). **Avant chaque injection**, mets-les en position d'installation selon ta conception de M11-E15 (le script iPXE servi pour leur MAC doit être celui d'une installation ; dans le corrigé : statut `staged` et champ `pxe_action` à `installer`), rendu déployé sur `pxe01` (job `deployer` du pipeline), VMs éteintes. Pour reproduire un symptôme, démarre la machine toi-même (bouton *Start* ou `qm start`), console ouverte, sans relancer ni le rendu ni l'orchestrateur de M11-E15 : ils réécrivent ce que sert `pxe01` et changeraient les conditions de l'observation. Le rendu et l'orchestrateur reviennent **après** le diagnostic, pour valider ta correction de bout en bout. Quand tu as fini, remets les équipements à `planned` (VMs vides recréées). Console : interface web de `pve01`, VM concernée, « Console ».
 
 ## Règles du jeu des pannes (M11-E19 à M11-E22)
 
@@ -25,7 +25,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 
 > ⚠️ **M11-E22 et `pve01`** : le diagnostic se fait en **lecture** sur `pve01` (`pveum user token list`, `pveum role list`, `pveum acl list`, `qm config`). La correction touche seulement le compte `wb-maas@pve`, son jeton, le rôle `WBMaas` et le nom d'une VM `bm*` : rien d'autre. Si tu dois régénérer le jeton, son secret va dans MAAS et dans le registre des secrets (emplacement, jamais la valeur).
 
-- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/provisioning/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Les pannes de ce palier alimentent **RB-111** « Diagnostiquer un démarrage réseau » (`docs/socle/runbooks/RB-111-diagnostiquer-demarrage-reseau.md`), à écrire au fil des exercices : un étage par section (DHCP, TFTP, iPXE, HTTP, installateur, contrôle d'alimentation), le symptôme visible à la console, le témoin à consulter, les causes rencontrées.
+- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/provisioning/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Les pannes de ce palier alimentent **RB-111** « Diagnostiquer un démarrage réseau » (`docs/provisioning/runbooks/RB-111-diagnostiquer-demarrage-reseau.md`), à écrire au fil des exercices : un étage par section (DHCP, TFTP, iPXE, HTTP, installateur, contrôle d'alimentation), le symptôme visible à la console, le témoin à consulter, les causes rencontrées.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 ---
@@ -88,7 +88,7 @@ Les messages des ROM PXE sont très normés. « No DHCP or proxyDHCP offers were
 **Prérequis** : M11-E03, E06, E13 ; `lab/bin/check 11 20` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : nginx sur `pxe01` (`nginx -T`, journaux `/var/log/nginx/access.log` et `error.log`) ; arborescence servie sous `/srv/http` ; certificat de `pxe01` délivré par `ca01` (rôle `certificats_acme`). Le code d'erreur iPXE (8 chiffres hexadécimaux) se décode sur `https://ipxe.org/err/<code>` ; la page dit souvent quel module d'iPXE l'a émis.
+**Contexte technique** : nginx sur `pxe01` (`nginx -T`, journaux `/var/log/nginx/pxe-acces.log` et `pxe-erreurs.log`) ; arborescence servie sous `/srv/http` ; certificat de `pxe01` délivré par `ca01` (rôle `certificats_acme`). Le code d'erreur iPXE (8 chiffres hexadécimaux) se décode sur `https://ipxe.org/err/<code>` ; la page dit souvent quel module d'iPXE l'a émis.
 
 **Injection** : `lab/bin/break 11 20` (3 variantes).
 
@@ -134,7 +134,7 @@ Une erreur TLS dans iPXE ne dit pas « certificat refusé » en toutes lettres :
 **Prérequis** : M11-E04, E05, E06, E13 ; `lab/bin/check 11 21` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : `bm01` (Debian 13, preseed) et `bm03` (Rocky 10, kickstart) ; les fichiers de réponse sont rendus depuis `plateforme/provisioning` et servis par `pxe01` ; iPXE les remet aux installateurs (M11-E13). Sur la console d'une VM Proxmox, les combinaisons de touches (Alt-F2…) s'envoient par le menu du clavier virtuel de *noVNC*.
+**Contexte technique** : `bm01` (BIOS, Debian 13, preseed) et `bm04` (UEFI, Rocky 10, kickstart) ; les fichiers de réponse sont rendus depuis `plateforme/provisioning` et servis par `pxe01` ; iPXE les remet aux installateurs (M11-E13). Sur la console d'une VM Proxmox, les combinaisons de touches (Alt-F2…) s'envoient par le menu du clavier virtuel de *noVNC*.
 
 **Injection** : `lab/bin/break 11 21` (3 variantes).
 
@@ -179,19 +179,19 @@ Anaconda attend souvent sur un écran texte qui ressemble à une simple pause. S
 **Prérequis** : M11-E08, E09, E10 ; MAAS **démarré** sur `maas01` pour la durée de l'exercice (sans réactiver son DHCP : le VLAN 60 reste servi par Kea) ; `lab/bin/check 11 22` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : MAAS 3.7 (snap) sur `maas01` (10.10.60.11) ; journaux du snap : `journalctl -u snap.maas.pebble` et les fichiers de `/var/snap/maas/common/log/` (`regiond.log`, `rackd.log`) ; CLI `maas` (profil de ton compte administrateur). Proxmox : compte `wb-maas@pve`, jeton `wb-maas@pve!maas`, rôle `WBMaas` sur `/vms/2112` à `/vms/2115`. Côté Proxmox, `/var/log/pveproxy/access.log` sur `pve01` montre chaque requête d'API, son identité et son statut. Les paramètres d'alimentation d'une machine se lisent par `maas <profil> machine power-parameters <id-système>`. L'injection et le contrôle interrogent MAAS par son API avec la clé de ton compte administrateur : `~/.config/workbook/maas-api.key` (600, sortie de `sudo maas apikey --username <TON-COMPTE-MAAS>` sur `maas01` ; variable `WB_MAAS_APIKEY_FILE` de `lab/lab.env`), à l'adresse `WB_MAAS_URL` (défaut `http://10.10.60.11:5240/MAAS`).
+**Contexte technique** : MAAS 3.7 (snap) sur `maas01` (10.10.60.11) ; journaux du snap : `journalctl -u snap.maas.pebble` et les fichiers de `/var/snap/maas/common/log/` (`regiond.log`, `rackd.log`) ; CLI `maas` (profil de ton compte administrateur). Proxmox : compte `wb-maas@pve`, jeton `wb-maas@pve!maas`, rôle `WBMaas` sur `/vms/2112` à `/vms/2115`. Côté Proxmox, `/var/log/pveproxy/access.log` sur `pve01` montre chaque requête d'API, son identité et son statut. Les paramètres d'alimentation d'une machine se lisent par `maas <profil> machine power-parameters <id-système>`. Machines confiées à MAAS depuis M11-E10 : `bm01` (VM désignée par son VMID) et `bm03` (désignée par son nom). L'injection et le contrôle interrogent MAAS par son API avec la clé de ton compte administrateur : `~/.config/workbook/maas-api.key` (600, M11-E09 ; variable `WB_MAAS_KEY_FILE` de `lab/lab.env`), à l'adresse `WB_MAAS_URL` (défaut `http://10.10.60.11:5240/MAAS`).
 
 **Injection** : `lab/bin/break 11 22` (4 variantes ; l'injection vérifie d'abord que MAAS interroge correctement l'alimentation des machines `bm*`).
 
 **Travail demandé**
-1. Reproduis : depuis la CLI de MAAS, demande l'état d'alimentation de chaque machine `bm*` (`query-power-state`) ; note lesquelles échouent et le message.
+1. Reproduis : depuis la CLI de MAAS (profil `maas01`), demande l'état d'alimentation de chaque machine `bm*` (`query-power-state`) ; note lesquelles échouent et le message.
 2. Trouve où la requête s'arrête : journaux de MAAS (rack), journal d'accès de `pveproxy` sur `pve01` (la requête est-elle arrivée ? avec quel statut ?).
 3. Reproduis la requête **hors de MAAS** depuis `maas01`, avec la même URL et la même confiance TLS (le secret du jeton ne passe pas en argument de commande : lis-le depuis un fichier temporaire 600, supprimé ensuite, ou dans une variable d'environnement de ta session).
-4. Corrige à la racine (côté Proxmox, côté MAAS ou sur `maas01`, selon la cause) sans élargir les droits du compte au-delà du nécessaire, puis prouve : toutes les machines `bm*` répondent à `query-power-state`, et un cycle arrêt/démarrage par MAAS fonctionne sur `bm02`.
+4. Corrige à la racine (côté Proxmox, côté MAAS ou sur `maas01`, selon la cause) sans élargir les droits du compte au-delà du nécessaire, puis prouve : toutes les machines `bm*` de MAAS répondent à `query-power-state`, et un cycle arrêt/démarrage par MAAS fonctionne sur `bm03`.
 5. Clos la panne, puis **arrête MAAS** (`maas01` revient à son état de fin de M11-E10). Ajoute à RB-111 une section « Contrôle d'alimentation ».
 
 **Critères de réussite**
-- [ ] Les quatre machines `bm*` de MAAS ont un état d'alimentation connu (`on` ou `off`), interrogé avec succès.
+- [ ] Les machines `bm*` de MAAS (`bm01`, `bm03`) ont un état d'alimentation connu (`on` ou `off`), interrogé avec succès.
 - [ ] Le jeton `wb-maas@pve!maas` est valide, son rôle `WBMaas` contient exactement les privilèges nécessaires, sur les seules VMs 2112-2115 ; les VMs `bm*` portent leur nom d'origine.
 - [ ] `maas01` vérifie le certificat de `pve01` (pas de *verify SSL* désactivé).
 - [ ] Ton journal contient la ligne du journal de `pveproxy` (ou l'erreur TLS) qui désigne la cause.

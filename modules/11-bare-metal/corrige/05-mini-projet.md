@@ -11,9 +11,9 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail**, les 
 *Plan de travail recommandé* (dans cet ordre)
 
 1. **État des lieux** (1 h) : `lab/bin/check 11 25`, puis les contrôles détaillés rouges (`11 13`, `11 18` à `11 21`). Liste ce qui est encore fait à la main : fichiers déposés sur `pxe01` hors du pipeline, modifications de Kea ou du relais hors du code, jetons sans échéance, VMs de test oubliées.
-2. **Aligner le code** (2 à 3 h) : `ansible-playbook playbooks/pxe01.yml --check --diff` et le playbook de `role_dns` à `changed=0` ; job `deployer` vert ; `tofu plan` de l'état `provisioning` sans écart ; `outils/verifier-rendu.sh` dans le pipeline (contrôles sémantiques ajoutés au palier 4).
-3. **Répéter la démonstration** (2 à 3 h, au moins deux fois) : VMs vides recréées (`tofu apply -replace=…`), équipements `planned`, puis job `provisionner` pour `bm01` (Debian) et `bm03` (Rocky). Chronomètre chaque étape d'après le journal NetBox et note chaque intervention : chacune devient une correction de RB-110 ou du code. Une répétition doit partir d'un `pxe01` **reconstruit** (VM détruite puis recréée par OpenTofu et Ansible, rendu redéployé) : c'est le test de reprise que fera le final F5.
-4. **Sécurité** (1 h) : relecture de `securite-chaine.md` et de l'ADR-0111 contre l'état réel ; registre des secrets (jeton de `wb-provision`, jeton du service de réponse PVE, droits étendus de `svc-automatisation`, compte iLO `wb-redfish`, clé de déploiement vers `pxe01`) ; matrice des flux identique sur `gw01` et `gw02`.
+2. **Aligner le code** (2 à 3 h) : `ansible-playbook playbooks/pxe.yml --check --diff` et le playbook de `role_dns` à `changed=0` ; job `deployer` vert ; `tofu plan` de l'état `provisioning` sans écart ; `outils/verifier-rendu.sh` dans le pipeline (contrôles sémantiques ajoutés au palier 4).
+3. **Répéter la démonstration** (2 à 3 h, au moins deux fois) : VMs vides recréées (`tofu apply -replace=…`), équipements `planned`, puis job `provisionner` pour `bm01` (BIOS, Debian) et `bm04` (UEFI, Rocky). Chronomètre chaque étape d'après le journal NetBox et note chaque intervention : chacune devient une correction de RB-110 ou du code. Une répétition doit partir d'un `pxe01` **reconstruit** (VM détruite puis recréée par OpenTofu et Ansible, rendu redéployé) : c'est le test de reprise que fera le final F5.
+4. **Sécurité** (1 h) : relecture de `securite-chaine.md` et de l'ADR-0111 contre l'état réel ; registre des secrets (jeton de `wb-provision` et `pve-provision.env`, jeton du service de réponse PVE, droits étendus de `svc-automatisation`, compte iLO `wb-redfish`, clé de déploiement de `runner01` vers `pxe01`) ; matrice des flux identique sur `gw01` et `gw02`.
 5. **Inventaire** (30 min) : job planifié `inventaire` vert, `hp01` à jour, `firmware.md` daté.
 6. **Décision et nettoyage** (1 à 2 h) : ADR-0110 acceptée ; puis, si MAAS est retiré :
 
@@ -23,7 +23,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail**, les 
    | Template | 9050 `tpl-ubuntu2404` | suppression justifiée (plus aucun consommateur) ou conservation documentée (base pour un futur besoin Ubuntu) |
    | NetBox | VM `maas01`, son adresse 10.10.60.11 | statut `decommissioning` puis suppression |
    | DNS | `maas01.par1.medisphere.internal` et son inverse | par le chemin du M06 (le code), jamais à la main |
-   | Bordure | flux `maas01` → `pve01:8006` | ligne retirée de `pare_feu.yml`, MR, pipeline |
+   | Bordure | flux `maas01` → `pve01:8006` et définition `MAAS01` | lignes retirées de `group_vars/role_routeur/pare_feu.yml`, MR, pipeline, `matrice-flux.md` régénérée |
    | Pare-feu de Proxmox | IPSet `maas` ou entrée de `automation` | retrait sur `pve01` (⚠️ pare-feu du datacenter : session ouverte, retour arrière noté) |
    | Proxmox | `wb-maas@pve`, jeton `maas`, rôle `WBMaas`, ACL | `pveum user delete wb-maas@pve` (supprime jeton et ACL), `pveum role delete WBMaas` |
    | Kea et relais | sous-réseau 60 et relais du VLAN 60 | déjà rendus en fin de M11-E10 : vérifier (`lab/bin/check 11 19`) |
@@ -37,12 +37,12 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail**, les 
 
 | Étape | Action | Preuve |
 |---|---|---|
-| 1 | NetBox : `bm01` et `bm03` à `planned` (interface `eno1` et MAC renseignées, adresse réservée) | objets NetBox |
-| 2 | Pipeline de `plateforme/provisioning` : *Run pipeline*, `EQUIPEMENT=bm01`, job manuel `provisionner` ; idem `bm03` | journal du job |
-| 3 | Console de `bm01` : chargeur en TFTP, puis tout en `https://pxe01…` ; installateur sans question ; arrêt | console, `pxe-access.log` |
+| 1 | NetBox : `bm01` et `bm04` à `planned` (interface `eno1` et MAC renseignées, adresse réservée) | objets NetBox |
+| 2 | Pipeline de `plateforme/provisioning` : *Run pipeline*, `EQUIPEMENT=bm01`, job manuel `provisionner` ; idem `bm04` | journal du job |
+| 3 | Console de `bm01` : chargeur en TFTP, puis tout en `https://pxe01…` ; installateur sans question ; arrêt | console, `pxe-acces.log` |
 | 4 | L'orchestrateur rallume : la console montre « en service, démarrage sur le disque local » | console |
 | 5 | Accueil : clé lue par l'agent, rôles `ca_lab`, `ssh_ca_hote`, `base` | journal du job |
-| 6 | `active` dans NetBox ; `ssh bm01.par1.medisphere.internal` sans question ; `ansible-inventory --graph role_serveur_bm` | journal NetBox, terminal |
+| 6 | `active` dans NetBox ; `ssh bm01.par1.medisphere.internal` sans question ; `ansible-inventory -i inventories/lab/netbox-bm.yml --graph role_serveur_bm` | journal NetBox, terminal |
 
 Temps typiques en lab : 15 à 25 min pour Debian, 15 à 30 min pour Rocky (téléchargement des paquets depuis Internet), dont deux minutes au plus pour toute la partie réseau.
 

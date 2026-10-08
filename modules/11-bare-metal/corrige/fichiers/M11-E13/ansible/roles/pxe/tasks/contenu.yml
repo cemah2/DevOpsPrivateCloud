@@ -1,18 +1,56 @@
 ---
-- name: Arborescence servie
+- name: Racine HTTP et dossiers du rôle
   ansible.builtin.file:
-    path: "{{ pxe_http_racine }}/{{ item }}"
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
-  loop: "{{ [''] + pxe_http_dossiers }}"
+  loop:
+    - "{{ pxe_racine_http }}"
+    - "{{ pxe_racine_http }}/pki"
+
+# Dossiers PUBLIÉS par plateforme/provisioning : le rôle les crée, il n'en gère pas le contenu.
+- name: Dossiers alimentés par plateforme/provisioning
+  ansible.builtin.file:
+    path: "{{ pxe_racine_http }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ pxe_dossiers_publies }}"
 
 - name: Racine de la PKI (publique) servie aux installateurs
   ansible.builtin.copy:
-    src: /usr/local/share/ca-certificates/medisphere-root-ca.crt
-    dest: "{{ pxe_http_racine }}/pki/medisphere-root-ca.crt"
+    src: "{{ pxe_racine_pki }}"
+    dest: "{{ pxe_racine_http }}/pki/medisphere-root-ca.crt"
     remote_src: true
     owner: root
     group: root
     mode: "0644"
+
+# --- Installateurs vérifiés (M11-E04, E05) ------------------------------------------------------
+- name: Outil de téléchargement vérifié des installateurs
+  ansible.builtin.copy:
+    src: pxe-installateurs
+    dest: /usr/local/sbin/pxe-installateurs
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Installateurs téléchargés et vérifiés (signature, empreintes)
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/pxe-installateurs
+      - "{{ item.type }}"
+      - "{{ item.nom }}"
+      - "{{ item.version }}"
+      - "{{ item.miroir }}"
+      - "{{ pxe_racine_http }}"
+  loop: "{{ pxe_installateurs }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: pxe_resultat_installateurs
+  changed_when: "'mis à jour' in pxe_resultat_installateurs.stdout"
+  # En mode --check, rien n'est téléchargé.
+  when: not ansible_check_mode

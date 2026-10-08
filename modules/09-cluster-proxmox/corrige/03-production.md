@@ -8,7 +8,6 @@
 - libellé du journal de migration « use dedicated network address for sending migration traffic (…) » ;
 - règles automatiques du pare-feu pour Corosync quand le lien 0 n'est pas dans `local_network` (le corrigé ajoute une règle explicite par prudence) ; écriture de `cluster.fw` par le module `template` d'Ansible dans `/etc/pve` (renommage atomique dans `pmxcfs`) ;
 - détection du chien de garde émulé par l'identifiant PCI `8086:25ab` ; comportement de `pveceph install --version tentacle` sur un nœud reconstruit après la montée d'E28 ;
-- nom des jetons PBS et des variables Vault d'E15 (le corrigé suppose `wb-hv@pbs!hv-par1`, `vault_pbs_hv_par1_jeton_secret`, `vault_pbs_hv_par1_cle`) et nom du groupe d'inventaire des nœuds (`hv_par1`, surchargeable par `hv_groupe`) : adapte aux noms de ton palier 2 ;
 - présence de `ms-alerte` (M02-E26) sur les nœuds, nécessaire à `OnFailure=ms-alerte@%n.service` de la sauvegarde de configuration ; `jq` sur les nœuds (utilisé dans certaines commandes de diagnostic : `apt install jq` si absent).
 
 **Rappel des VMID du palier** (dans `hv-par1`) : 120 `fence01`, 121 `fence02` (E24, conservées jusqu'au mini-projet comme témoins), 122 `migr01` (E27), 123-126 `charge01-04` (E31), 127 `restau01` (E29).
@@ -269,6 +268,8 @@ root@hv02:~# grep 'qemu/120/status/stop' /var/log/pveproxy/access.log
 ```
 
 L'adresse source est celle du poste de l'apprenant via le VPN ; si la requête est passée par la VIP ou par un autre nœud, `access.log` de **ce** nœud la contient (le nœud qui reçoit la requête la relaie au nœud cible) : regarder les trois.
+
+*8. La bordure* : inventaire des flux **sortants** des nœuds qui traversent `gw01`/`gw02` : sauvegardes vers `pbs01` 8007 (ligne explicite depuis M09-E15), ACME et renouvellement vers `ca01` 443 (ligne de cet exercice) ; DNS (règle « DNS du lab… », source `NETS_LAB`), NTP (servi par la passerelle elle-même, chaîne `input`) et dépôts (sortie `WAN`) ne dépendent pas de la règle du bastion. Rien d'autre (le QDevice est retiré depuis E08). Une seule MR : les lignes manquantes, puis la règle du bastion restreinte à `source: $ADM01` (voir l'[extrait](fichiers/M09-E26/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait)), pipeline sur les deux passerelles. Preuves : depuis un nœud, `timeout 3 bash -c '</dev/tcp/10.10.20.12/22'` (SSH de `git01`) échoue désormais, une sauvegarde `vzdump 120 --storage pbs-par2` réussit, `step ca health --ca-url https://ca01.par1.medisphere.internal --root /usr/local/share/ca-certificates/medisphere-root-ca.crt` répond `ok` ; depuis `adm01`, tout le lab reste joignable. Écart clos au registre (date, MR).
 
 **Explications**
 

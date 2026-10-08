@@ -2,7 +2,7 @@
 
 Le palier 1 a monté `ceph-par1` : trois nœuds Rocky Linux 10, trois moniteurs, deux gestionnaires, neuf OSD décrits par une spécification, des pools répliqués, du bloc RBD consommé par `cephcli01`. Le cluster est sain, mais il ne rend encore qu'un service, à un seul client, avec une clé trop large, et ses données sont placées par la règle CRUSH par défaut, qui mélange SSD et HDD. Ce palier fait de `ceph-par1` un service de stockage d'entreprise : du **fichier** (CephFS, NFS), de l'**objet** (RGW et son point d'entrée haute disponibilité, comptes et quotas pour MédiDoc), du **bloc** pour un client qui ne parle pas Ceph (iSCSI) ; des accès **cephx minimaux** ; un placement **maîtrisé** (règles CRUSH par classe et par baie, codes d'effacement) ; les gestes d'exploitation courants (ajouter un nœud, remplacer un disque, surveiller la capacité). Tu termines en relisant le travail de Lucas, en écrivant le runbook de remplacement de disque et en mettant tout le cluster sous forme de code dans `plateforme/ceph`.
 
-> **Rappels du module** (introduction) : toute nouvelle VM passe par OpenTofu (état `ceph` de `plateforme/infra`), toute configuration d'hôte par un rôle Ansible, toute nouvelle adresse et tout nouveau nom par NetBox (puis PowerDNS), tout certificat par step-ca, tout secret par Ansible Vault et le registre des secrets, tout nouveau flux traversant les passerelles par la matrice des flux (`pare_feu.yml` de `gw01` et `gw02`). Les commandes Ceph se lancent en root sur un nœud `_admin` (`[root@ceph01 ~]#`, `ceph-common` 20.2.3 du palier 1) ; `crushtool` (paquet `ceph-base`, absent des nœuds) se lance dans `sudo cephadm shell`. Les spécifications vivent dans `plateforme/ceph` (clone `~/src/ceph`) et passent par une MR. Les vérifications se lancent depuis `adm01`. **Aucune commande destructive** (`ceph osd purge`, `ceph orch device zap`, `ceph osd pool delete`, `ceph fs volume rm`) sans avoir vérifié deux fois la cible.
+> **Rappels du module** (introduction) : toute nouvelle VM passe par OpenTofu (état `ceph` de `plateforme/infra`), toute configuration d'hôte par un rôle Ansible, toute nouvelle adresse et tout nouveau nom par NetBox (puis PowerDNS), tout certificat par step-ca, tout secret par Ansible Vault et le registre des secrets, tout nouveau flux traversant les passerelles par la matrice des flux (`group_vars/role_routeur/pare_feu.yml`, commune à `gw01` et `gw02` depuis M07-E24). Les commandes Ceph se lancent en root sur un nœud `_admin` (`[root@ceph01 ~]#`, `ceph-common` 20.2.3 du palier 1) ; `crushtool` (paquet `ceph-base`, absent des nœuds) se lance dans `sudo cephadm shell`. Les spécifications vivent dans `plateforme/ceph` (clone `~/src/ceph`) et passent par une MR. Les vérifications se lancent depuis `adm01`. **Aucune commande destructive** (`ceph osd purge`, `ceph orch device zap`, `ceph osd pool delete`, `ceph fs volume rm`) sans avoir vérifié deux fois la cible.
 
 **Faits communs du palier**
 
@@ -513,12 +513,13 @@ Dans `targetcli`, les objets s'empilent : `/backstores/block create …`, `/iscs
 5. Ajoute l'hôte par une spécification (`hosts.yaml` : adresse, étiquettes, `location`), avec `--dry-run` d'abord.
 6. Suis l'arrivée : `ceph orch host ls`, `ceph orch ps ceph04`, `ceph osd tree`, `ceph -s` (objets *misplaced*, débit de *backfill*), `ceph osd df tree`. Mesure la durée du rééquilibrage et compare à ton estimation.
 7. Si tu as fait entrer les OSD à poids nul, augmente leur poids par paliers jusqu'à leur taille. Remets les réglages de récupération par défaut. Ferme la fiche (résultat, écarts).
+8. Tire de la fiche un runbook générique `RB-081 — ajouter un nœud` dans `docs/stockage/runbooks/` (n'importe quel nœud, n'importe quelle baie : prérequis, estimation du mouvement, ajout, suivi, retour arrière, critères de fin). Il servira aussi, en sens inverse, à retirer `ceph04` au mini-projet.
 
 **Critères de réussite**
 - [ ] `ceph04` est un hôte du cluster (10.10.30.54, étiquette `osd`), dans la baie `par1-baie-a` de la carte CRUSH.
 - [ ] Ses trois OSD (deux `ssd`, un `hdd`) sont `up` et `in`, avec un poids CRUSH égal à leur taille.
 - [ ] `ceph04` est dans NetBox avec ses deux adresses, et son nom se résout ; MTU 9000 sur ses deux interfaces.
-- [ ] Le cluster est revenu à `HEALTH_OK` ; la fiche CHG-928 est fermée dans `plateforme/medisphere`.
+- [ ] Le cluster est revenu à `HEALTH_OK` ; la fiche CHG-928 est fermée et RB-081 publié dans `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 08 18`
 

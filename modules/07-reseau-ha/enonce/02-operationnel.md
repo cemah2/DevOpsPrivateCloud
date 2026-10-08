@@ -19,7 +19,7 @@ Le palier 1 t'a fait manipuler chaque brique à part, sur la maquette : un agré
 | Site LYO1 (E18, E19) | `lyo-gw01` (2077) : `eth0` 10.10.99.250 sur `vsandbox` (son « Internet »), `eth1` 10.30.10.1/24 sur `vfab8` ; `lyo-pc01` (2078) : `eth0` administration (DHCP), `eth1` 10.30.10.10/24 ; tunnel `wg2` UDP 51822 des deux côtés, `gw01` 10.255.2.1/24, `lyo-gw01` 10.255.2.2 ; AS 65030 ; réseaux de PAR1 ouverts à l'agence : 10.10.20.0/24 et 10.10.70.0/24 |
 | Inventaires Ansible | socle : `inventories/lab/netbox.yml` (inventaire par défaut, M06-E12) ; maquette : `inventories/lab/proxmox.yml` (groupes `env_m07`, `m07_fabric`, `m07_leaf`, `m07_web`, `m07_lyo`, `m07_hap`…, M07-E03) ; les deux ensemble pour ce qui traverse (E18, E19) ; variables dans `inventories/lab/group_vars` et `host_vars` |
 | Rôles réutilisés du palier 1 | `frr` (M07-E06/E07 : configuration décrite en variables, validée par `vtysh --dryrun`), `keepalived` et `nginx_web` (M07-E08) : ce palier change surtout leurs **données** |
-| Molecule | instances 2046 (scénario `haproxy`) et 2049 (scénario `frr_bordure`) de la plage du projet (2045-2049) |
+| Molecule | instances 2046 (scénario `haproxy`) et 2047 (scénario `frr_bordure`, comme le scénario `frr` de E06) de la plage du projet (2045-2049) |
 | Documentation | ADR-0071 (E12), RB-070 (E22), RB-072 (E20), fiche CHG-825 (E15) dans `plateforme/medisphere` |
 
 Ordre conseillé : **E10 → E11 → E12 → E13** (les répartiteurs) ; **E14 → E16** (FRR) ; **E15** quand tu disposes d'une fenêtre calme (il touche `pve01` et `gw01`) ; **E17** à tout moment ; **E18 → E19** (Lyon) ; **E20** après avoir pratiqué ; **E21 à E23** en dernier. Durée indicative du palier : 22 à 28 heures.
@@ -338,7 +338,7 @@ Une interface qui tombe est vue immédiatement par zebra ; un lien qui ne transm
 **Durée indicative** : 2 h 30.
 
 **Contexte technique**
-- `vmbr1` (pont VLAN-aware sans port physique) porte tous les VLAN du lab ; les VNets de la zone SDN `lab` sont construites dessus. Une zone SDN a une option `mtu` (lis la documentation SDN de Proxmox VE 9 : options communes des zones).
+- `vmbr1` (pont VLAN-aware sans port physique) porte tous les VLAN du lab ; les VNets de la zone SDN `lab` sont construites dessus. L'API des zones SDN accepte un paramètre `mtu` (champ « MTU » de la fenêtre d'édition d'une zone) ; la page SDN de la documentation ne le décrit en détail que pour les zones QinQ, VXLAN et EVPN : vérifie ce qu'il fait pour une zone VLAN sur ton `pve01` (`pvesh usage /cluster/sdn/zones/{zone} -v`, MTU des ponts des VNets avant et après).
 - Une carte virtio Proxmox a une option `mtu=` (valeur, ou `1` pour reprendre le MTU du pont). Sans elle, l'invité reste à 1500.
 - `gw01` : `ens19` (trunk) et ses sous-interfaces `ens19.<VLAN>`, déclarées dans `/etc/network/interfaces` ; `gw01` est hors d'OpenTofu (ADR-0051). Les VLAN 31 et 51 ne sont pas routés.
 - VMs de test : ajoute à `srv01` et `srv02`, **à la fin** de leurs cartes dans `envs/m07-maquette/` (pour ne pas renuméroter `eth1`), une carte sur `vstopub` (VLAN 30, `eth2`) et une sur `vstoclu` (VLAN 31, `eth3`), adresses dans les faits du palier. La description de la maquette ne sait pas encore donner un MTU à une carte : ajoute-le.
@@ -356,7 +356,7 @@ Une interface qui tombe est vue immédiatement par zebra ; un lien qui ne transm
 7. Réponds dans ton journal : dans quel cas un MTU différent ne produit-il **aucun** message d'erreur ? Que fait un client TCP de son MSS, et pourquoi l'overlay Geneve d'OpenStack (M10) a-t-il besoin de plus de 1500 sur le VLAN 51 ?
 
 **Critères de réussite**
-- [ ] `vmbr1` et la zone SDN `lab` sont à 9000 ; `vmbr0` est inchangé.
+- [ ] `vmbr1` est à 9000 et les VNets de la zone `lab` acceptent 9000 (la zone n'impose aucun MTU inférieur) ; `vmbr0` est inchangé.
 - [ ] Sur `gw01`, `ens19` et `ens19.30` sont à 9000, toutes les autres sous-interfaces à 1500.
 - [ ] `srv01` et `srv02` ont une interface à 9000 dans les VLAN 30 et 31 ; `ping -M do -s 8972` passe entre eux (VLAN 31) et vers 10.10.30.1.
 - [ ] `adm01` et `dns01` restent à 1500.
@@ -407,7 +407,7 @@ L'API Proxmox applique une zone SDN modifiée seulement après `pvesh set /clust
 
 **Travail demandé**
 1. Dessine (dans ton journal) qui annonce quoi à qui : bordure, `leaf01`, spines, demain les nœuds K8s. Pour chaque flèche, la liste de préfixes qui la filtre.
-2. Écris `group_vars/role_routeur/frr.yml` et le `host_vars` de `gw01` (router-id, adresse source de la session avec `leaf01`) : listes de préfixes, route-maps (un refus explicite là où rien ne doit sortir), voisin `leaf01`, groupe `K8S` en écoute fermée, réseau annoncé. Écris le scénario Molecule `frr_bordure` (instance 2049) qui applique **ces données** à une instance jetable et vérifie ce que FRR a chargé.
+2. Écris `group_vars/role_routeur/frr.yml` et le `host_vars` de `gw01` (router-id, adresse source de la session avec `leaf01`) : listes de préfixes, route-maps (un refus explicite là où rien ne doit sortir), voisin `leaf01`, groupe `K8S` en écoute fermée, réseau annoncé. Écris le scénario Molecule `frr_bordure` (instance 2047) qui applique **ces données** à une instance jetable et vérifie ce que FRR a chargé.
 3. Ajoute à `leaf01` la session vers la bordure et ses politiques (et la propagation de 10.10.20.0/24 vers les spines). Pourquoi fixer dès maintenant, côté bordure, l'adresse source de la session, alors que `gw01` n'a qu'une adresse sur le VLAN 99 (pense à E25) ?
 4. Ouvre le port 179 dans `pare_feu.yml` pour `leaf01` seulement. Applique pare-feu, puis FRR, par le pipeline (playbook `bordure-frr.yml`), après les précautions de l'avertissement.
 5. Vérifie : session établie ; préfixes reçus et acceptés (`show bgp neighbors 10.10.99.251 received-routes` exige une option : laquelle, et pourquoi ne l'as-tu pas ?) ; routes installées dans le noyau de `gw01` (`ip route show proto bgp`) ; ping de `adm01` vers la boucle de `spine01`.
@@ -456,7 +456,7 @@ Une session BGP « directe » (eBGP, TTL 1) part de l'adresse **principale** de 
 **Durée indicative** : 2 h.
 
 **Contexte technique**
-- Tout se passe **dans** `net01` (le pont Linux de `pve01` ne relaie pas LACP entre VMs, PLAN §4.9). Repars d'un `net01` propre : démonte les constructions de E04 et E05.
+- Tout se passe **dans** `net01` (le pont Linux de `pve01` ne relaie pas LACP entre VMs, PLAN §4.9). Repars d'un `net01` propre : démonte les constructions de E04 et E05 **et désactive leurs unités** (`m07-bond.service`, `m07-ovs.service`) ; ne rejoue plus `playbooks/m07-net01.yml` sur `net01` (il les réactiverait). Les mêmes noms (`ns-srv`, `bond0`, `br-lab`) sont repris : au redémarrage, l'unité de E05 reconstruirait sa topologie sur `br-lab` et remettrait sa table OpenFlow à zéro. À partir d'ici, les vérifications de E04 et E05 passent légitimement au rouge ; celle de E40 (palier 4) repose sur la construction de E17.
 - `ovs-vswitchd` ne voit que les interfaces de **son** espace de noms (l'espace racine) : le côté « commutateur » des paires veth reste dans l'espace racine, les machines (serveur `ns-srv`, postes `ns-a10`, `ns-a20`) dans leurs espaces de noms.
 - Plan : pont OVS `br-lab` ; serveur : bond `bond0` (802.3ad) sur deux paires veth, sous-interfaces `bond0.10` (172.16.10.1/24) et `bond0.20` (172.16.20.1/24) ; côté OVS : bond `bond-srv` en trunk 10, 20 ; postes : `ns-a10` 172.16.10.2 (accès VLAN 10), `ns-a20` 172.16.20.2 (accès VLAN 20) ; miroir `miroir-srv` du bond vers un port interne `mir0`. Adresses de laboratoire internes à `net01`, jamais routées.
 - Construction en script idempotent (`monter`, `demonter`, `etat`) déposé dans `/usr/local/sbin/`, lancé au démarrage par une unité systemd. `net01` est une VM de maquette : pas de rôle Ansible exigé.

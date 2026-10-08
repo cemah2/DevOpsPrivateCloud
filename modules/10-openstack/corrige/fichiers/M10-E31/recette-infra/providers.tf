@@ -1,4 +1,4 @@
-# providers.tf — authentification par IDENTIFIANT D'APPLICATION du projet mediagenda-dev, rôle
+# providers.tf — authentification par APPLICATION CREDENTIAL du projet mediagenda-dev, rôle
 # member, sans aucun secret ici. Variables d'environnement (CI : variables protégées et masquées
 # du projet GitLab ; poste : fichier 600 hors dépôt) :
 #   OS_AUTH_TYPE=v3applicationcredential

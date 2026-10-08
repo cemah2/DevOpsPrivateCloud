@@ -56,7 +56,7 @@ _m10_dispense() {
   u="$(_m10p_os user show "$1" --domain Default)" || return 1
   jq -e '.options.ignore_lockout_failure_attempts == true' >/dev/null <<<"$u"
 }
-for _m10_u in nova neutron glance cinder placement svc-supervision; do
+for _m10_u in nova neutron glance cinder placement svc-supervision svc-tofu; do
   check_cmd "compte $_m10_u : dispensé du verrouillage" _m10_dispense "$_m10_u"
 done
 _m10_essai_absent() {
@@ -67,6 +67,8 @@ _m10_essai_absent() {
 check_cmd "le compte essai-verrou n'existe plus" _m10_essai_absent
 check_ssh "Horizon : sessions de 30 minutes (SESSION_TIMEOUT = 1800)" osctl01 \
   'sudo -n grep -rEqs "^SESSION_TIMEOUT[[:space:]]*=[[:space:]]*1800" /etc/kolla/horizon/'
+check_ssh "Horizon : limite absolue, non prolongée par l'activité (SESSION_REFRESH = False)" osctl01 \
+  'sudo -n grep -rEqs "^SESSION_REFRESH[[:space:]]*=[[:space:]]*False" /etc/kolla/horizon/'
 
 title "Documentation et ménage"
 check_cmd "plateforme/medisphere : docs/cloud/securite.md (ce qui reste en clair, rotation)" \

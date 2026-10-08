@@ -13,7 +13,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m10-decouverte.sh"
 title "M10-E08 — Neutron et OVN : réseaux, routeurs, IP flottantes"
 require_cmd jq openstack ping
 
-_m10d_e08_p="medisphere-plateforme"
+_m10d_e08_p="$_M10D_CLOUD_PLAT"
 
 # --- 1. Réseau externe ----------------------------------------------------------------------------
 _m10d_e08_ext="$(_m10d_os network show ext-net)"
@@ -41,8 +41,8 @@ check_cmd "routeur-plateforme : passerelle sur ext-net" _m10d_jq "$_m10d_e08_rt"
   "(.external_gateway_info | if type == \"string\" then fromjson else . end).network_id == \"$_m10d_e08_extid\""
 check_cmd "routeur-plateforme : interface sur sous-reseau-plateforme" _m10d_jq "$_m10d_e08_rt" \
   "(.interfaces_info | tostring) | contains(\"$_m10d_e08_snid\")"
-check_cmd "reseau-plateforme : MTU 1442 (Geneve)" \
-  _m10d_jq "$(_m10d_os --os-cloud "$_m10d_e08_p" network show reseau-plateforme)" '.mtu == 1442'
+check_cmd "reseau-plateforme : MTU 1442 (Geneve ; 1500 après M10-E12)" \
+  _m10d_jq "$(_m10d_os --os-cloud "$_m10d_e08_p" network show reseau-plateforme)" '.mtu == 1442 or .mtu == 1500'
 
 # --- 3. Groupe de sécurité ------------------------------------------------------------------------
 _m10d_e08_sg="$(_m10d_os --os-cloud "$_m10d_e08_p" security group show ssh-icmp-admin)"

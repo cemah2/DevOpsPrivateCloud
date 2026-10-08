@@ -1,4 +1,12 @@
 ---
+- name: Racine TFTP (lecture seule pour le compte tftp)
+  ansible.builtin.file:
+    path: "{{ pxe_racine_tftp }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Configuration de tftpd-hpa
   ansible.builtin.template:
     src: tftpd-hpa.j2
@@ -8,14 +16,19 @@
     mode: "0644"
   notify: Redémarrer tftpd-hpa
 
-- name: Racine TFTP
-  ansible.builtin.file:
-    path: "{{ pxe_tftp_racine }}"
-    state: directory
+# --- M11-E02 : binaires du paquet Debian, tant qu'aucun chargeur construit n'est déclaré ---------
+- name: Binaires iPXE du paquet Debian à la racine TFTP
+  ansible.builtin.copy:
+    src: "/usr/lib/ipxe/{{ item }}"
+    dest: "{{ pxe_racine_tftp }}/{{ item }}"
+    remote_src: true
     owner: root
     group: root
-    mode: "0755"
+    mode: "0644"
+  loop: "{{ pxe_binaires_ipxe }}"
+  when: pxe_chargeurs | length == 0
 
+# --- M11-E13 : chargeurs construits par la procédure versionnée -------------------------------------
 - name: Cache local des chargeurs iPXE (contrôleur)
   ansible.builtin.file:
     path: "{{ pxe_chargeurs_cache }}"
@@ -39,11 +52,13 @@
   delegate_to: localhost
   become: false
   run_once: true
+  # Les en-têtes contiennent un jeton : rien dans les journaux d'Ansible ni de la CI.
+  no_log: true
 
 - name: Chargeurs iPXE déposés (lisibles par le compte tftp)
   ansible.builtin.copy:
     src: "{{ pxe_chargeurs_cache }}/{{ item.nom }}"
-    dest: "{{ pxe_tftp_racine }}/{{ item.nom }}"
+    dest: "{{ pxe_racine_tftp }}/{{ item.nom }}"
     owner: root
     group: root
     mode: "0644"
@@ -53,7 +68,7 @@
 
 - name: Empreinte des chargeurs déposés
   ansible.builtin.stat:
-    path: "{{ pxe_tftp_racine }}/{{ item.nom }}"
+    path: "{{ pxe_racine_tftp }}/{{ item.nom }}"
     checksum_algorithm: sha256
   loop: "{{ pxe_chargeurs }}"
   loop_control:
@@ -62,15 +77,9 @@
 
 - name: Les chargeurs servis sont exactement ceux de la procédure versionnée
   ansible.builtin.assert:
-    that: item.stat.checksum == item.item.sha256
+    that: item.stat.checksum | default('') == item.item.sha256
     fail_msg: "{{ item.item.nom }} : empreinte {{ item.stat.checksum | default('absente') }} au lieu de {{ item.item.sha256 }}"
     quiet: true
   loop: "{{ pxe_chargeurs_deposes.results }}"
   loop_control:
     label: "{{ item.item.nom }}"
-
-- name: Service tftpd-hpa actif
-  ansible.builtin.systemd_service:
-    name: tftpd-hpa
-    state: started
-    enabled: true

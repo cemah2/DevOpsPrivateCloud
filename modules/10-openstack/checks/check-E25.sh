@@ -56,7 +56,7 @@ check_cmd "le projet essai-restauration n'existe pas (domaine medisphere)" _m10p
 _m10_orphelins() {
   local cinder rbd
   cinder="$(_m10p_os volume list --all-projects)" || return 1
-  rbd="$(remote ceph01 'sudo -n cephadm shell -- rbd ls volumes' 2>/dev/null)" || return 1
+  rbd="$(remote "$_M10P_CEPH" 'sudo -n cephadm shell -- rbd ls volumes' 2>/dev/null)" || return 1
   # Images RBD « volume-<id> » sans volume Cinder (les autres noms ne sont pas des volumes Cinder).
   ! comm -13 <(jq -r '.[].ID' <<<"$cinder" | sed 's/^/volume-/' | sort) \
              <(grep -E '^volume-[0-9a-f-]{36}$' <<<"$rbd" | sort) | grep -q .

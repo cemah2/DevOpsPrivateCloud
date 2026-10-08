@@ -14,7 +14,7 @@ kea_dhcp4_sous_reseaux:
     routeur: 10.10.99.1
     ntp: 10.10.99.1
     ddns: true
-    commentaire: "VLAN 99 SANDBOX, relayé par gw01 (giaddr 10.10.99.1), M00-E14"
+    commentaire: "VLAN 99 SANDBOX, relayé par gw01 et gw02 (giaddr 10.10.99.2 et .3, M07-E25), M00-E14"
   # (M11-E02) VLAN 60 PROV : serveurs nus démarrés sur le réseau. Pas de DDNS : les noms des
   # serveurs viennent de NetBox (medictl dns sync, M06-E15) ; deux écrivains pour un même nom,
   # c'est un conflit assuré. Bail : la durée globale du rôle (12 h) ; les serveurs connus ont une réservation.

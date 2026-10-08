@@ -282,6 +282,8 @@ Fichiers : [`CHG-825`](fichiers/M07-E15/medisphere/docs/socle/changements/CHG-82
 6. **Rien n'a bougé** : `adm01`, `dns01` à 1500 ; `vmbr0` à 1500 ; sous-interfaces 10, 20, 40, 50, 52, 60, 70, 99 de `gw01` à 1500.
 7. **Journal** : un MTU différent **sur un même lien** (deux extrémités d'un même domaine de diffusion) ne produit aucun message : la trame trop grande est simplement jetée par le récepteur ou le pont ; seuls les **routeurs** émettent des ICMP. TCP annonce un MSS (MTU de l'interface − 40) à l'ouverture : deux hôtes à 9000 échangent des segments de 8960 ; s'ils traversent un lien à 1500 sans PMTUD fonctionnelle, la connexion s'établit (petits paquets) puis se fige au premier gros segment — le symptôme d'E38. Geneve ajoute ≈ 50 octets d'en-têtes (plus les options) : avec 1500 sur le VLAN 51, les VMs d'OpenStack devraient descendre à ≈ 1450 ; avec 9000, elles gardent 1500 (M10).
 
+⚠️ À confirmer sur ton lab : la documentation SDN de Proxmox VE ne décrit l'option `mtu` que pour les zones QinQ, VXLAN et EVPN ; l'API l'accepte pour une zone VLAN (`pvesh usage /cluster/sdn/zones/{zone} -v`). Si, après `pvesh set /cluster/sdn`, les ponts des VNets (`/sys/class/net/vstopub/mtu`) restent à 1500, c'est que la zone VLAN n'applique pas l'option : retire-la (`sdn-zone-lab.sh --annuler`), et note que les ponts des VNets suivent alors le plus petit MTU de leurs ports (sous-interface de `vmbr1` créée à 9000, ports `tap` des VMs) — la vérification de bout en bout de l'étape 5 reste le seul juge.
+
 **Explications**
 
 Le MTU d'un pont est un **plafond** : un pont à 9000 transporte des trames de 1500 sans rien changer ; c'est l'extrémité (carte de VM, sous-interface du routeur) qui décide. D'où l'approche : infrastructure capable de 9000 partout (zone `lab` entière), MTU effectif choisi VLAN par VLAN aux extrémités.
@@ -363,7 +365,7 @@ Supervision des sessions et du nombre de préfixes reçus par voisin (E29), BFD 
 
 Fichiers : [`net01/m07-e17-ovs.sh`](fichiers/M07-E17/net01/m07-e17-ovs.sh), [`net01/m07-e17-ovs.service`](fichiers/M07-E17/net01/m07-e17-ovs.service).
 
-1. **Script** : `monter` crée ce qui manque (`ip netns add`, paires veth, `ip link add bond0 type bond mode 802.3ad miimon 100 lacp_rate fast xmit_hash_policy layer3+4`, sous-interfaces `bond0.10/20`, `ovs-vsctl --may-exist add-br/add-bond/add-port`), crée le miroir s'il n'existe pas ; `demonter` défait tout ; `etat` affiche LACP et bonds des deux côtés. Installation : script dans `/usr/local/sbin/`, unité dans `/etc/systemd/system/`, `systemctl enable --now m07-e17-ovs.service`.
+1. **Script** : `monter` crée ce qui manque (`ip netns add`, paires veth, `ip link add bond0 type bond mode 802.3ad miimon 100 lacp_rate fast xmit_hash_policy layer3+4`, sous-interfaces `bond0.10/20`, `ovs-vsctl --may-exist add-br/add-bond/add-port`), crée le miroir s'il n'existe pas ; `demonter` défait tout ; `etat` affiche LACP et bonds des deux côtés. Installation : `systemctl disable --now m07-bond.service m07-ovs.service` (labos de E04 et E05, mêmes noms d'espaces de noms et de pont), script dans `/usr/local/sbin/`, unité dans `/etc/systemd/system/`, `systemctl enable --now m07-e17-ovs.service`. Oublier la désactivation de `m07-ovs.service` : au redémarrage suivant, deux unités se disputent `br-lab` et celle de E05 vide la table OpenFlow.
 2. **LACP** :
    ```
    root@net01:~# ovs-appctl lacp/show bond-srv

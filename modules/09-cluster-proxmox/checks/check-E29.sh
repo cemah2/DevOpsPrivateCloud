@@ -15,9 +15,9 @@ _m09p_charger
 
 title "Sauvegarde de configuration des nœuds"
 for _m09_e29_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e29_n : minuterie wb-backup-socle active, dernier passage réussi" "root@$_m09_e29_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e29_n : minuterie wb-backup-socle active, dernier passage réussi" "$_m09_e29_n" \
     'systemctl is-active --quiet wb-backup-socle.timer && [ "$(systemctl show -p Result --value wb-backup-socle.service)" = success ] && [ "$(systemctl show -p ExecMainStartTimestampMonotonic --value wb-backup-socle.service)" != 0 ]'
-  check_ssh "$_m09_e29_n : élément pve configuré, secrets PBS en root:root 600" "root@$_m09_e29_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e29_n : élément pve configuré, secrets PBS en root:root 600" "$_m09_e29_n" \
     'grep -Eq "^WB_ELEMENTS=\"?([a-z]+ )*pve" /etc/wb-backup/socle.conf && for f in /etc/wb-backup/pbs-$(hostname -s).env /etc/wb-backup/pbs-$(hostname -s).key; do [ "$(stat -c %U:%a "$f")" = root:600 ] || exit 1; done'
 done
 
@@ -36,13 +36,13 @@ done
 title "Reconstruction de hv03"
 check_cmd "VM 2093 recréée (au moins deux créations dans le journal de pve01)" _m09p_creations_min 2093 2
 check_cmd "cluster quorate, trois nœuds en ligne" _m09p_quorate_3
-check_ssh "aucun nœud fantôme (/etc/pve/nodes = hv01, hv02, hv03)" "root@hv01.$_M09P_ZONE" \
+check_ssh "aucun nœud fantôme (/etc/pve/nodes = hv01, hv02, hv03)" "hv01" \
   '[ "$(ls /etc/pve/nodes | sort | tr "\n" " ")" = "hv01 hv02 hv03 " ]'
 check_cmd "Ceph en HEALTH_OK" _m09p_ceph_ok
 check_cmd "Ceph : 3 MON en quorum, 6 OSD existants, 6 up et in" _m09p_ceph_jq status \
   '(.quorum_names | length) == 3 and .osdmap.num_osds == 6 and .osdmap.num_up_osds == 6 and .osdmap.num_in_osds == 6'
 check_cmd "Ceph : hv03 porte un MON" _m09p_ceph_jq status '.quorum_names | index("hv03") != null'
-check_ssh "Ceph : hv03 porte deux OSD" "root@hv01.$_M09P_ZONE" '[ "$(ceph osd ls-tree hv03 | wc -l)" -eq 2 ]'
+check_ssh "Ceph : hv03 porte deux OSD" "hv01" '[ "$(ceph osd ls-tree hv03 | wc -l)" -eq 2 ]'
 
 title "Restaurations et réplication"
 check_cmd "VM 127 en marche sur hv03" _m09p_vm_cluster 127 '.node == "hv03" and .status == "running"'

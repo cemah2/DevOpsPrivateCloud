@@ -12,7 +12,7 @@
 
 locals {
   noeuds = {
-    osctl01 = { vmid = 2101, suffixe = 51, coeurs = 4, memoire_mo = 16384, disque_go = 80, type_cpu = "x86-64-v2-AES", externe = true,
+    osctl01 = { vmid = 2101, suffixe = 51, coeurs = 4, memoire_mo = 16384, disque_go = 80, type_cpu = null, externe = true,
     description = "OpenStack : contrôle et réseau (passerelle OVN). Kolla-Ansible, plateforme/openstack." }
     oscmp01 = { vmid = 2102, suffixe = 52, coeurs = 4, memoire_mo = 8192, disque_go = 40, type_cpu = "host", externe = false,
     description = "OpenStack : calcul (KVM imbriqué, CPU host)." }
@@ -29,41 +29,40 @@ locals {
 }
 
 module "noeud" {
-  source   = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-debian?ref=v2.2.0"
+  # vm-noeud (M08-E02), complété en v2.3.0 par M10-E02 (MAC, carte sans adresse). Mets l'étiquette
+  # publiée par ta MR sur plateforme/tofu-modules si la numérotation diffère.
+  source   = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-noeud?ref=v2.3.0"
   for_each = local.noeuds
 
   nom         = each.key
   vmid        = each.value.vmid
   noeud       = var.noeud
+  famille     = "debian13"
   description = each.value.description
   etiquettes  = ["env-m10", "role-openstack"]
 
+  # null = CPU de la famille (x86-64-v2-AES) ; host sur les calculs (KVM imbriqué).
   type_cpu   = each.value.type_cpu
   coeurs     = each.value.coeurs
   memoire_mo = each.value.memoire_mo
   disque_go  = each.value.disque_go
   stockage   = "local-nvme"
 
-  # Carte principale : OS-API (VLAN 50), adresse imposée par le PLAN, passerelle déduite (.1).
-  vnet                 = "vosapi"
-  mac_adresse          = local.mac[each.key].api
-  interface_principale = "ens18"
-  reseau_prefixe       = "10.10.50.0/24"
-  ipv4_imposee         = "10.10.50.${each.value.suffixe}"
-  resolveurs           = ["10.10.20.10", "10.10.20.16"]
-
   # Cartes adressées d'abord, carte externe (sans adresse) en dernier (règle du module).
-  cartes_supplementaires = concat(
+  cartes = concat(
     [
-      { vnet = "vostun", interface = "ens19", mac_adresse = local.mac[each.key].tun, mtu = 9000,
-      ipv4_imposee = "10.10.51.${each.value.suffixe}", prefixe = "10.10.51.0/24" },
-      { vnet = "vstopub", interface = "ens20", mac_adresse = local.mac[each.key].sto, mtu = 9000,
-      ipv4_imposee = "10.10.30.${each.value.suffixe + 10}", prefixe = "10.10.30.0/24" },
+      { vnet = "vosapi", prefixe = "10.10.50.0/24", ipv4 = "10.10.50.${each.value.suffixe}",
+      mac = local.mac[each.key].api, passerelle = true },
+      { vnet = "vostun", prefixe = "10.10.51.0/24", ipv4 = "10.10.51.${each.value.suffixe}",
+      mac = local.mac[each.key].tun, mtu = 9000 },
+      { vnet = "vstopub", prefixe = "10.10.30.0/24", ipv4 = "10.10.30.${each.value.suffixe + 10}",
+      mac = local.mac[each.key].sto, mtu = 9000 },
     ],
     each.value.externe ? [
-      { vnet = "vosext", interface = "ens21", mac_adresse = local.mac[each.key].ext, mtu = 1500 },
+      { vnet = "vosext", mac = local.mac[each.key].ext },
     ] : []
   )
+  resolveurs = ["10.10.20.10", "10.10.20.16"]
 
   cle_ssh_admin  = var.cle_ssh_admin
   demarrage_auto = true

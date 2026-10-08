@@ -5,7 +5,7 @@
 | Cluster | `ceph-par1` (Tentacle 20.2) |
 | Déclencheur | clients qui attendent sans erreur ; `OSD_FULL`, `POOL_FULL`, `OSD_BACKFILLFULL`, `OSDMAP_FLAGS` (pause) |
 | Rédigé | M08-E37 (INC-3543) |
-| Valeurs de référence | `nearfull` 0,85 · `backfillfull` 0,90 · `full` 0,95 (politique de stockage, M08-E33) ; quotas : voir `plateforme/ceph` |
+| Valeurs de référence | `nearfull` 0,75 · `backfillfull` 0,85 · `full` 0,95 (M08-E20, `config/cluster.yaml` de `plateforme/ceph`, politique de stockage M08-E33) ; quotas : voir `plateforme/ceph` |
 
 ## 1. Diagnostic en trois commandes
 
@@ -27,11 +27,11 @@
 L'occupation réelle (`%USE` de `ceph osd df`) est loin du seuil, ou le pool est loin de la capacité.
 
 1. Retrouver le changement : `ceph log last 200 debug audit | grep -E 'set-(near|backfill)?full-ratio|set-quota|osd (un)?set'`.
-2. Remettre les valeurs de référence (dans l'ordre qui garde les seuils ordonnés) :
+2. Remettre les valeurs de référence (dans l'ordre qui garde les seuils ordonnés), puis confirmer l'absence d'écart avec le dépôt (`outils/config-cluster.sh --verifier` sur `adm01`) :
    ```
    [root@ceph01 ~]# ceph osd set-full-ratio 0.95
-   [root@ceph01 ~]# ceph osd set-backfillfull-ratio 0.90
-   [root@ceph01 ~]# ceph osd set-nearfull-ratio 0.85
+   [root@ceph01 ~]# ceph osd set-backfillfull-ratio 0.85
+   [root@ceph01 ~]# ceph osd set-nearfull-ratio 0.75
    ```
 3. Quota : remettre la valeur de `plateforme/ceph` (`ceph osd pool set-quota <pool> max_bytes <octets>`, `0` = aucun) après accord du propriétaire du pool.
 4. Drapeaux : `ceph osd unset pause` ; vérifier aussi `noout`, `norebalance`, `nobackfill`, `norecover` et les retirer s'ils ne correspondent à aucune maintenance en cours.

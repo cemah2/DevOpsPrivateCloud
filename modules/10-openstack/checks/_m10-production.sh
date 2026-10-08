@@ -4,14 +4,16 @@
 # Rappel : les checks tournent sous « set -euo pipefail » (lab/bin/check) : toute commande qui
 # peut échouer hors des fonctions check_* est protégée (|| true, ou dans une fonction testée).
 #
-# Variables de lab/lab.env utilisées : WB_OS_CLOUD (nuage clouds.yaml de lecture globale, défaut
-# medisphere-admin), WB_SRC, WB_DEPOT, WB_PVE_HOST, WB_PBS_HOST, WB_GITLAB_URL, WB_GITLAB_TOKEN_FILE.
+# Variables de lab/lab.env utilisées : WB_OS_CLOUD (cloud clouds.yaml de lecture globale, défaut
+# medisphere-admin), WB_CEPH_ADMIN (défaut ceph01, M08), WB_SRC, WB_DEPOT, WB_PVE_HOST, WB_PBS_HOST,
+# WB_GITLAB_URL, WB_GITLAB_TOKEN_FILE.
 # La CLI openstack (10.x) et ses greffons (octavia, placement) doivent être installés sur adm01.
 
 _M10P_RACINE=/usr/local/share/ca-certificates/medisphere-root-ca.crt
 _M10P_CLOUD="${WB_OS_CLOUD:-medisphere-admin}"
 _M10P_SRC="${WB_SRC:-$HOME/src}"
 _M10P_DEPOT="${WB_DEPOT:-$HOME/medisphere}"
+_M10P_CEPH="${WB_CEPH_ADMIN:-ceph01}"
 _M10P_NOEUDS=(osctl01 oscmp01 oscmp02)
 _M10P_VIP_INT=10.10.50.200
 _M10P_VIP_EXT=10.10.50.201
@@ -20,7 +22,7 @@ _M10P_NOM_EXT=openstack.par1.medisphere.internal
 
 # --- OpenStack --------------------------------------------------------------------------------
 
-# _m10p_os ARGS… — CLI openstack, nuage des checks, JSON, délai borné. Échoue si l'appel échoue.
+# _m10p_os ARGS… — CLI openstack, cloud des checks, JSON, délai borné. Échoue si l'appel échoue.
 _m10p_os() {
   timeout 90 openstack --os-cloud "$_M10P_CLOUD" "$@" -f json 2>/dev/null
 }

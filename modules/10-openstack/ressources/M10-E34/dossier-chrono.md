@@ -11,7 +11,7 @@ L'équipe MédiNotif (service d'envoi de notifications SMS et courriel) démarre
 **Identité et projet** (durable : par le code de la plateforme)
 1. Projet `medinotif-essai` dans le domaine `medisphere`, description qui cite `CHG-1160`.
 2. Quotas : 3 instances, 4 vCPU, 6 144 Mo de mémoire, 2 volumes, 30 Go de volumes, 1 IP flottante, 1 routeur, 2 réseaux.
-3. Groupe `equipe-medinotif` (domaine `medisphere`) avec le rôle `member` sur le projet ; utilisateur `lucas.martin` avec le rôle `reader` sur le projet (s'il n'existe pas encore dans le domaine `medisphere`, crée-le par le même chemin que les autres personnages en M10-E05/E13).
+3. Groupe `equipe-medinotif` (domaine `medisphere`) avec le rôle `member` sur le projet ; utilisateur `lucas.martin` avec le rôle `reader` sur le projet (s'il n'existe pas encore dans le domaine `medisphere`, crée-le par le même chemin que les autres personnages : le code d'identité de M10-E05/E23).
 
 **Réseau**
 4. Réseau `medinotif-net`, sous-réseau `medinotif-sn` en 192.168.60.0/24, DNS du socle (10.10.20.10, 10.10.20.16).
@@ -29,14 +29,14 @@ L'équipe MédiNotif (service d'envoi de notifications SMS et courriel) démarre
 12. Avec les identifiants de `lucas.martin` : la liste des instances du projet s'affiche ; la création d'un volume est **refusée**.
 
 **Retrait** (après la vérification)
-13. Tout est retiré : ressources du projet, puis projet, groupe et rôles par le code ; le compte `lucas.martin` reste s'il existait avant.
+13. Tout est retiré : ressources du projet, puis quotas, projet, groupe et rôles par le code (dans l'ordre de RB-100) ; le compte `lucas.martin` reste s'il existait avant.
 
 ## Feuille de temps
 
 | Jalon | Heure | Remarques (gestes manuels et leur raison, blocages) |
 |---|---|---|
 | T0 — ouverture du dossier | | |
-| T1 — projet, quotas, groupe et rôles en place (MR fusionnée, apply fait) | | |
+| T1 — projet, groupe et rôles (code d'identité), quotas (état `openstack-projets`) en place : MR fusionnées, playbook et apply faits | | |
 | T2 — réseau, routeur, groupe de sécurité | | |
 | T3 — instances, IP flottante, volume monté | | |
 | T4 — preuves faites, `lab/bin/check 10 34` vert | | |

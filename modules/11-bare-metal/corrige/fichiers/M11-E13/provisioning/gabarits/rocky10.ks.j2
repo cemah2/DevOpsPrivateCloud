@@ -1,0 +1,61 @@
+{# gabarits/rocky10.ks.j2 — kickstart Rocky Linux 10 propre à une machine (M11-E05/E06, sécurisé en
+   M11-E13). Rendu par outils/netbox-provision.py dans kickstart/<nom>.ks, remis par iPXE dans
+   l'initrd (inst.ks=file:/ks.cfg) : Anaconda ne télécharge rien depuis pxe01.
+   Variables : m (machine NetBox), p (parametres.yml : rocky_miroir, rocky_version, ntp, disque,
+   cle_ssh_admin, racine_pem, empreinte_racine).
+   AUCUN mot de passe : root verrouillé, admin verrouillé (clé SSH seulement, sudo par règle).
+   La racine de la PKI est ÉCRITE dans le fichier (certificat public, remis par la chaîne HTTPS) :
+   %post ne peut pas la télécharger en HTTPS depuis pxe01, le système installé ne la connaît pas encore.
+   Validation dans le pipeline : ksvalidator -v RHEL10 sur le rendu. -#}
+# kickstart/{{ m.nom }}.ks — GÉNÉRÉ par outils/netbox-provision.py depuis NetBox : ne pas modifier.
+# {{ m.fqdn }}, {{ m.ip }}
+text
+eula --agreed
+
+url --url={{ p.rocky_miroir }}/{{ p.rocky_version }}/BaseOS/x86_64/os/
+repo --name=AppStream --baseurl={{ p.rocky_miroir }}/{{ p.rocky_version }}/AppStream/x86_64/os/
+
+lang fr_FR.UTF-8
+keyboard --vckeymap=fr --xlayouts=fr
+timezone Europe/Paris --utc
+timesource --ntp-server={{ p.ntp | default('10.10.60.1') }}
+
+network --bootproto=dhcp --device=link --activate --onboot=yes --hostname={{ m.fqdn }}
+
+# Comptes : rien en clair, rien à deviner
+rootpw --lock
+user --name=admin --groups=wheel --lock
+sshkey --username=admin "{{ p.cle_ssh_admin }}"
+
+# Disque : uniquement celui prévu, effacé sans question
+ignoredisk --only-use={{ p.disque | default('sda') }}
+zerombr
+clearpart --all --initlabel --drives={{ p.disque | default('sda') }}
+autopart --type=lvm
+bootloader --boot-drive={{ p.disque | default('sda') }}
+
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=sshd,chronyd,qemu-guest-agent
+
+%packages
+@^minimal-environment
+qemu-guest-agent
+chrony
+sudo
+%end
+
+%post --erroronfail --log=/root/ks-post.log
+set -eu
+cat > /tmp/racine.crt <<'PEM'
+{{ p.racine_pem | trim }}
+PEM
+test "$(sha256sum /tmp/racine.crt | cut -d ' ' -f 1)" = "{{ p.empreinte_racine }}"
+install -m 644 /tmp/racine.crt /etc/pki/ca-trust/source/anchors/medisphere-root-ca.crt
+update-ca-trust
+echo 'admin ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-admin
+chmod 440 /etc/sudoers.d/90-admin
+%end
+
+# Arrêt en fin d'installation (orchestrateur, M11-E15)
+poweroff

@@ -38,7 +38,7 @@ Lundi, 8 h 50. Le socle v2 est en service : deux passerelles en VRRP, deux répa
 
 - **`ceph-par1`** : Ceph **Tentacle 20.2** déployé par **cephadm** (conteneurs Podman) sur trois nœuds **Rocky Linux 10**, `ceph01-03`, avec un réseau public (VLAN 30) et un réseau de réplication (VLAN 31) en MTU 9000 ; 3 moniteurs, 2 gestionnaires, 9 OSD répartis en deux classes de disques (`ssd`, `hdd`) ;
 - le **bloc** (RBD), le **fichier** (CephFS, exports NFS) et l'**objet** (RGW derrière un point d'entrée haute disponibilité, `rgw.par1.medisphere.internal`, en HTTPS) ;
-- les spécifications cephadm dans le projet GitLab **`plateforme/ceph`**, appliquées par un pipeline ;
+- les spécifications cephadm et l'état déclaratif du cluster dans le projet GitLab **`plateforme/ceph`**, validés par un pipeline qui détecte aussi la dérive, appliqués depuis `adm01` par une procédure unique (M08-E23) ;
 - la supervision, la sauvegarde hors du cluster, la montée de version en 20.2.4, le chiffrement, la politique de stockage, l'ADR-0080, les runbooks RB-080 et suivants.
 
 Le **palier 1** (ce fichier et `01-decouverte.md`) prépare les nœuds par le code, amorce le cluster, déploie les OSD par spécification, crée un premier pool et une première image RBD consommée par un client, puis apprend à lire l'état d'un cluster. Un détour par **ZFS** rappelle ce qu'est un stockage local bien fait, pour mieux voir ce que Ceph change.
@@ -59,7 +59,7 @@ Le **palier 1** (ce fichier et `01-decouverte.md`) prépare les nœuds par le co
   │ Rocky 10 · Podman   │  │ Rocky 10 · Podman   │  │ Rocky 10 · Podman   │   │ Debian 13         │
   │ MON  MGR(actif)     │  │ MON  MGR(attente)   │  │ MON                 │   │ ceph-common (rbd) │
   │ OSD×3 crash         │  │ OSD×3 crash         │  │ OSD×3 crash         │   │ ZFS (E08)         │
-  │ (palier 2 : MDS,    │  │ (RGW, ingress)      │  │ (RGW, ingress)      │   └───────────────────┘
+  │ (palier 2 : MDS,    │  │ (MDS, RGW, ingress) │  │ (RGW, ingress)      │   └───────────────────┘
   │  NFS…)              │  │                     │  │                     │
   │ sdb ssd │sdc ssd│sdd│  │ sdb ssd │sdc ssd│sdd│  │ sdb ssd │sdc ssd│sdd│   sdb, sdc : 64 Gio sur ssd-lab
   │  64 Gio │64 Gio │hdd│  │                     │  │                     │   sdd      : 64 Gio sur hdd-bulk
@@ -108,7 +108,7 @@ Aucun flux nouveau sur les passerelles au palier 1 : tout se passe dans le VLAN 
 
 1. **OpenTofu** : les VMs sont déclarées dans l'état **`envs/ceph`** de `plateforme/infra` (un état à part : détruire le cluster ne peut jamais toucher le socle), avec le module **`vm-noeud`** de `plateforme/tofu-modules`, que tu écris en E02 (plusieurs cartes, MTU, disques de données, famille Rocky ou Debian) ; les noms DNS par le module `enregistrement-dns` (M06-E14) ; les adresses dans NetBox (M06-E13).
 2. **Ansible** : les nœuds entrent dans l'inventaire par leurs étiquettes NetBox (`env-m08`, `role-ceph`) ; le rôle `ceph_noeud` (testé par Molecule) les prépare ; les rôles communs `ssh_durci`, `ca_lab`, `ssh_ca_hote`, `ssh_ca_utilisateur` s'appliquent comme au socle.
-3. **cephadm** : ce que Ceph fait tourner est décrit dans `plateforme/ceph` (`specs/`), relu en MR, appliqué par `ceph orch apply -i` depuis un nœud `_admin` (puis par un pipeline, M08-E23).
+3. **cephadm** : ce que Ceph fait tourner est décrit dans `plateforme/ceph` (`specs/`), relu en MR, appliqué par `ceph orch apply -i` depuis un nœud `_admin` (puis, à partir de M08-E23, par le script d'application du projet lancé depuis `adm01` ; le pipeline valide et détecte la dérive, il n'applique pas).
 4. **Secrets** : clés cephx et mots de passe en Vault (`lab` pour les clés des clients de test, `critique` pour `client.admin` et ce qui permet de réécrire le cluster), inscrits au registre des secrets. Un trousseau ne quitte jamais un nœud `_admin` autrement que par Ansible.
 5. **Documentation** : dans `plateforme/medisphere`, dossier **`docs/stockage/`** (fiches, runbooks RB-080 et suivants, ADR-0080, politique de stockage).
 
@@ -155,7 +155,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Projets | `plateforme/infra` : `envs/ceph/` (état `envs/ceph/terraform.tfstate`) ; `plateforme/tofu-modules` : module `vm-noeud` (E02) ; `plateforme/ansible` : rôles `ceph_noeud`, `ceph_client`, playbooks `ceph-noeuds.yml`, `ceph-clients.yml`, source d'inventaire `inventories/lab/netbox-ceph.yml`, `group_vars/env_m08/ceph.yml` (faits partagés du cluster) ; **`plateforme/ceph`** (créé en E03) : `bootstrap/`, `specs/`, `outils/` ; `plateforme/medisphere` : `docs/stockage/` |
 | Groupes d'inventaire | `env_m08` (nœuds et client), `role_ceph` (`ceph01-03`, puis `ceph04`), `role_ceph_client` (`cephcli01`) |
 | Secrets du palier 1 | Vault `lab` : `vault_ceph_dashboard_admin_mdp` (`group_vars/env_m08/`), `vault_ceph_cle_rbd_test` (`group_vars/role_ceph_client/`) ; sur les nœuds `_admin` : `/etc/ceph/ceph.client.admin.keyring` (600) — jamais copié ailleurs ; la clé SSH privée de l'orchestrateur reste dans le cluster |
-| Documentation | `docs/stockage/` dans `plateforme/medisphere` : fiche d'astreinte (E07), puis runbooks RB-080 (remplacer un disque), RB-081 (ajouter un nœud), RB-082 (mettre à jour Ceph), ADR-0080, politique de stockage |
+| Documentation | `docs/stockage/` dans `plateforme/medisphere` : fiche d'astreinte (E07), puis `runbooks/` RB-080 (remplacer un disque), RB-081 (ajouter un nœud), RB-082 (mettre à jour Ceph), RB-083 et suivants (pannes du palier 4), `adr/` ADR-0080, `changements/` (fiches CHG), politique de stockage ; le journal de diagnostic et les post-mortems restent aux emplacements communs à tous les modules, `docs/socle/journal/` et `docs/socle/post-mortems/` |
 | Brouillons | `~/m08/eXX/` sur `adm01` (non versionnés, sans secret) |
 
 ### Valeurs à adapter
@@ -194,7 +194,7 @@ Si `ceph01` est arrêté (panne, maintenance), mets `WB_CEPH_ADMIN=ceph02` le te
 4. **Un nœud à la fois.** Redémarrage, changement réseau, mise à jour de paquets : un seul nœud, et le suivant seulement quand `ceph -s` est revenu à `HEALTH_OK` (ou à l'état de départ). Le playbook des nœuds est en `serial: 1`.
 5. **Pas de vérification TLS désactivée** (`curl -k`, `--insecure`, `verify=False`) ni de secret en argument de commande (mots de passe du tableau de bord, clés cephx) : fichier en 600, entrée standard (`-i -`), ou Vault.
 6. **Le trousseau `client.admin` ne quitte pas les nœuds `_admin`.** Un client reçoit une clé à lui, aux droits minimaux. Les vérifications du workbook lisent l'état du cluster par SSH sur un nœud `_admin`, avec `sudo -n`, sans jamais copier le trousseau.
-7. **Mémoire.** Le module demande socle v2 (≈ 27 Go) + 3 × 6 Go + `cephcli01` (2 Go) ≈ 47 Go, puis jusqu'à 55 Go avec `ceph04` (E18-E19). Avant de commencer, arrête la maquette réseau du module 07 si elle tourne encore (VMID 2070-2079). Les nœuds sont à 6 Go pour un OSD à 1 Gio de cible : ne lance pas d'autre charge lourde en même temps.
+7. **Mémoire.** Le module demande socle v2 (≈ 27 Go) + 3 × 6 Go + `cephcli01` (2 Go) ≈ 47 Go, puis jusqu'à 55 Go avec `ceph04` (de E18 au mini-projet, qui le retire). Avant de commencer, arrête la maquette réseau du module 07 si elle tourne encore (VMID 2070-2079). Les nœuds sont à 6 Go pour un OSD à 1 Gio de cible : ne lance pas d'autre charge lourde en même temps.
 
 ---
 

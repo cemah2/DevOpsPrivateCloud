@@ -156,7 +156,7 @@ main() {
     "30 min (#astreinte), puis rédige le post-mortem avec le modèle de l'équipe" \
     "(modules/00-lab/ressources/M00-E46/modele-post-mortem.md)." \
     "" \
-    "Accès : root@10.10.10.51-53 depuis adm01 (clé du fichier de réponse) ; console des nœuds par" \
+    "Accès : ssh hv01, hv02, hv03 depuis adm01 (root, clé du fichier de réponse) ; console des nœuds par" \
     "« qm terminal » ou noVNC sur pve01 en dernier recours. Une HA désarmée par l'injection est" \
     "réarmée par --annuler." \
     "Temps cible : 2 h (rétablissement) + 45 min (post-mortem). Contrôle : lab/bin/check 09 43"

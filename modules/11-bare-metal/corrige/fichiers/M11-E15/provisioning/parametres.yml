@@ -1,0 +1,30 @@
+# parametres.yml — valeurs communes aux gabarits de plateforme/provisioning (M11-E06, version M11-E15).
+# Données PUBLIQUES seulement (empreintes, clés et certificats publics, URL) : ce fichier est versionné.
+# M11-E13 : plus aucun mot de passe (ni empreinte) ; chaîne en HTTPS ; racine de la PKI écrite ici
+# pour le kickstart (le preseed la reçoit de pxe01, par iPXE).
+serveur_http: https://pxe01.par1.medisphere.internal
+domaine: par1.medisphere.internal
+ntp: 10.10.60.1
+disque: sda
+# Rocky Linux : même version mineure que l'initrd servi par pxe01 (host_vars/pxe01/pxe.yml).
+rocky_version: "10.2"
+rocky_miroir: https://dl.rockylinux.org/pub/rocky
+# Racine « MédiSphère Root CA » : empreinte SHA-256 (sans « : », en minuscules) et certificat PEM.
+empreinte_racine: "<EMPREINTE-SHA256-RACINE>"
+racine_pem: |
+  -----BEGIN CERTIFICATE-----
+  <CERTIFICAT-PEM-DE-LA-RACINE-MEDISPHERE>
+  -----END CERTIFICATE-----
+cle_ssh_admin: "<CLE-PUBLIQUE-SSH-ADM01>"
+# Qui s'installe (M11-E15) : statut « staged » ET pxe_action = « installer », écrits par
+# l'orchestrateur outils/provisionner.py. Un équipement « planned » ou « active » démarre sur son disque.
+regle_installation: pxe_action
+# Ce que la chaîne accepte de NetBox.
+reseau: 10.10.60.0/24
+plage_debut: 10.10.60.100
+plage_fin: 10.10.60.199
+# Installateur Proxmox VE par le réseau (M11-E14), plate-forme NetBox « proxmox-ve-9 ».
+# pve_noyau_arguments : recopie EXACTE des arguments de la ligne « kernel » du script iPXE produit par
+# « prepare-iso --pxe-loader ipxe » (outils/preparer-pve-pxe.sh) ; ils changent selon l'ISO.
+pve_version: "9.2"
+pve_noyau_arguments: "<ARGUMENTS-DU-NOYAU-PRODUITS-PAR-PREPARE-ISO>"

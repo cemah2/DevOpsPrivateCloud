@@ -13,9 +13,9 @@ title "M11-E10 — MAAS : inventorier et déployer des machines"
 require_cmd jq curl
 
 # --- Préparation : fiche, flux --------------------------------------------------------------------------------
-check_cmd "documentation : fiche CHG-1215 dans docs/socle/changements/" \
-  bash -c 'ls "$1"/docs/socle/changements/CHG-1215* >/dev/null 2>&1' _ "${WB_DEPOT:-$HOME/medisphere}"
-_m11o_pf="$(_m11o_contenu_main "$_M11O_PROJET_ANSIBLE" inventories/lab/host_vars/gw01/pare_feu.yml)"
+check_cmd "documentation : fiche CHG-1215 dans docs/provisioning/changements/" \
+  bash -c 'ls "$1"/docs/provisioning/changements/CHG-1215* >/dev/null 2>&1' _ "${WB_DEPOT:-$HOME/medisphere}"
+_m11o_pf="$(_m11o_contenu_main "$_M11O_PROJET_ANSIBLE" inventories/lab/group_vars/role_routeur/pare_feu.yml)"
 check_output "matrice de la bordure (main) : maas01 → pve01 en TCP 8006" \
   '(MAAS|maas|10\.10\.60\.11).*ports: 8006|ports: 8006.*(MAAS|maas)' echo "$_m11o_pf"
 _m11o_ipset="$(remote "$_M11O_PVE" 'pvesh get /cluster/firewall/ipset/maas --output-format json' 2>/dev/null || true)"

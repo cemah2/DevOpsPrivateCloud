@@ -4,7 +4,7 @@ Le palier 1 a livré un OpenStack qui démarre : Keystone et ses projets, des im
 
 > **Rappels du module** (introduction) : la configuration d'OpenStack vit dans le projet `plateforme/openstack` et ne change que par MR ; aucune modification à la main dans `/etc/kolla` sur les nœuds ; tout nouveau flux passe par la matrice des flux de la bordure ; tout secret est en Vault (identité `critique`) et au registre des secrets. Les vérifications se lancent depuis `adm01`. Les ressources d'essai de ce palier portent le préfixe de leur exercice (`e10-…`, `e11-…`) : supprime-les après la vérification, les quotas et la mémoire des calculs sont comptés.
 
-**Ordre conseillé** : E10 → E11 → E12 → E13 → E14 → E15 → E16 → E17 → E18 → E19 → E20 → E21 → E22 → E23. E10 conditionne tout le reste (stockage) ; E12 conditionne les accès par IP flottante de E14, E16 et E18 ; E13 précède E15 (quotas repris en code) et E22. E21 peut se faire à tout moment.
+**Ordre conseillé** : E10 → E11 → E12 → E13 → E14 → E15 → E16 → E17 → E18 → E19 → E20 → E21 → E23 → E22. E10 conditionne tout le reste (stockage) ; E12 conditionne les accès par IP flottante de E14, E16 et E18 ; E13 précède E15 (quotas repris en code) ; E22 (le runbook) vient en dernier, quand les rôles de lecture et de support de E23 existent. E21 peut se faire à tout moment.
 **Durée indicative du palier** : 32 à 38 heures.
 
 **Faits communs du palier**
@@ -324,15 +324,16 @@ Pour `OS::Nova::Server`, `flavor_update_policy` vaut `RESIZE` par défaut. Une p
 **Contexte technique**
 - Provider `terraform-provider-openstack/openstack` `~> 3.4` (PLAN §6). Supprimés en 3.0 : `openstack_compute_floatingip_v2`, `openstack_compute_floatingip_associate_v2`, `openstack_compute_secgroup_v2`. Ressources utiles : `openstack_compute_quotaset_v2`, `openstack_blockstorage_quotaset_v3`, `openstack_networking_quota_v2`, `openstack_networking_network_v2`, `openstack_networking_subnet_v2`, `openstack_networking_router_v2`, `openstack_networking_router_interface_v2`, `openstack_networking_secgroup_v2`, `openstack_networking_secgroup_rule_v2` ; sources de données `openstack_identity_project_v3`, `openstack_networking_network_v2`. Identifiants d'import des quotas : `<id du projet>/<région>` (région Kolla : `RegionOne`).
 - Configuration racine : `envs/openstack-projets/` dans `plateforme/infra`, clé d'état `envs/openstack-projets/terraform.tfstate`, même backend et même chiffrement que les autres états (M05-E27).
-- Périmètre : `mediagenda-dev` et `mediagenda-prod`. Les **projets eux-mêmes** et les attributions de rôles restent créés par RB-100 (E22) ; l'état reçoit les projets par leur nom.
+- Périmètre : `mediagenda-dev` et `mediagenda-prod`. Les **projets eux-mêmes**, les groupes et les attributions de rôles restent dans le code d'identité de E05 (`donnees/identite.yml`) ; l'état reçoit les projets par leur nom.
 - Identité : compte de service `svc-tofu` (domaine `Default`, comme les autres comptes de service), rôle `admin` sur le projet `admin` (poser des quotas et créer des ressources pour d'autres projets sont des opérations d'administrateur) ; *application credential* `tofu-openstack-projets`, expiration à 90 jours. Sur `adm01` : `~/.config/workbook/openstack-tofu.env` (600) ; en CI : variables protégées et masquées.
+- Flux : `runner01` (pipeline de `plateforme/infra`) doit joindre les API publiques sur la VIP externe 10.10.50.201 (Keystone 5000, Nova 8774, Cinder 8776, Neutron 9696, et Octavia 9876 pour E16) : nouvelle ligne de la matrice des flux (INFRA → VLAN 50).
 - Réseau de chaque projet : `<projet>-net`, `<projet>-sousreseau` (`mediagenda-dev` 192.168.110.0/24, `mediagenda-prod` 192.168.120.0/24, DNS 10.10.20.10 et 10.10.20.16), routeur `<projet>-routeur` relié à `ext-net` ; groupe de sécurité `<projet>-admin` (SSH depuis 10.10.10.0/24). Étiquette `tofu` sur ce qui est géré.
 
 **Travail demandé**
 1. Crée `svc-tofu` dans `Default` et son rôle (le code d'identité de E05 ne gère que le domaine `medisphere` : script relu en MR, mot de passe tapé, jamais en argument, puis oublié). Connecté comme lui, crée l'application credential. Réponds : que se passe-t-il pour l'application credential si `svc-tofu` perd son rôle ? Si on désactive le compte ? Que signifie `--unrestricted`, et pourquoi ne le mets-tu pas ?
 2. Écris la configuration racine : versions, backend, chiffrement, provider (authentification par variables d'environnement, CA MédiSphère vérifiée, région), une variable `projets` (carte : nom → réseau, quotas), et les ressources avec `for_each`. Aucun secret dans le dépôt.
 3. Les quotas posés en E13 existent déjà : importe-les (blocs `import` relus en MR) plutôt que de les écraser. `tofu plan` doit montrer des imports et des créations (réseaux), aucun changement de quota imprévu.
-4. Branche l'état dans le pipeline (plan en MR, apply manuel protégé sur `main`, même gabarit que les autres états) ; applique par le pipeline.
+4. Ouvre le flux de `runner01` vers les API (MR sur la matrice des flux de `plateforme/ansible`). Branche l'état dans le pipeline (plan en MR, apply manuel protégé sur `main`, même gabarit que les autres états) ; applique par le pipeline.
 5. Vérifie : `openstack network list --project mediagenda-dev`, une instance de test dans `mediagenda-dev-net` qui sort par son routeur. Modifie à la main un quota de `mediagenda-prod` : que montre le plan suivant ? Remets en ordre par le code.
 6. Réponds : pourquoi le réseau d'un projet appartient-il à ce projet (`tenant_id`) et pas à `plateforme` ? Que fait un `tofu destroy` des quotas (lis la documentation des ressources de quota) ?
 
@@ -450,7 +451,7 @@ Le contrôle de santé OVN s'appuie sur un port de service créé dans le sous-r
 **Critères de réussite**
 - [ ] `https://openstack.par1.medisphere.internal/` présente un certificat de la PKI MédiSphère et une page de connexion qui demande le domaine.
 - [ ] Le dépôt contient le réglage multi-domaines et une durée de session de 1800 secondes, et la configuration générée de `horizon` aussi.
-- [ ] La matrice des flux autorise le VPN d'administration vers 10.10.50.201 sur 443 et 6080, et seulement ces ports.
+- [ ] La matrice des flux autorise le VPN d'administration vers 10.10.50.201 sur 443 et 6080, et seulement ces ports (les API restent fermées au VPN jusqu'à la revue de sécurité de M10-E27).
 - [ ] Le port 6080 de la VIP externe répond.
 
 **Vérification** : `lab/bin/check 10 17`
@@ -697,7 +698,7 @@ Cherche tout ce qui ressemble à un secret, à une version, à un registre, et t
 - Rendre chaque étape vérifiable, réversible, et sûre (moindre privilège, secrets).
 - Écrire aussi le chemin inverse : retirer une équipe sans laisser d'orphelins.
 
-**Prérequis** : M10-E13, M10-E15, M10-E16, M10-E17, M10-E23 (rôles de lecture et de support, si tu l'as fait).
+**Prérequis** : M10-E13, M10-E15, M10-E16, M10-E17, M10-E23 (rôles de lecture et de support).
 **Durée indicative** : 2 h.
 
 **Contexte technique**

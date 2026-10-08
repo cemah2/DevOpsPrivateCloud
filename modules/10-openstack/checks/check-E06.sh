@@ -20,7 +20,7 @@ _m10d_e06_image() {
   local j
   j="$(_m10d_os image show "$1")"
   _m10d_jq "$j" "$_m10d_e06_prop
-    .status == \"active\" and .visibility == \"$2\" and .disk_format == \"qcow2\"
+    .status == \"active\" and .visibility == \"$2\" and (.disk_format == \"qcow2\" or .disk_format == \"raw\")
     and p(\"hw_disk_bus\") == \"scsi\" and p(\"hw_scsi_model\") == \"virtio-scsi\"
     and (p(\"hw_qemu_guest_agent\") | tostring | test(\"^(yes|true|True)$\"))
     and p(\"os_distro\") == \"$3\" and (p(\"os_version\") | tostring) == \"$4\"
@@ -32,8 +32,8 @@ _m10d_e06_somme() {
     p(\"os_hash_algo\") == \"sha512\" and (p(\"os_hash_value\") | tostring | test(\"^[0-9a-f]{128}$\"))"
 }
 
-check_cmd "debian-13 : active, publique, qcow2, propriétés du ticket" _m10d_e06_image debian-13 public debian 13
-check_cmd "rocky-10 : active, partagée (shared), qcow2, propriétés du ticket" _m10d_e06_image rocky-10 shared rocky 10
+check_cmd "debian-13 : active, publique, qcow2 (raw après M10-E10), propriétés du ticket" _m10d_e06_image debian-13 public debian 13
+check_cmd "rocky-10 : active, partagée (shared), qcow2 (raw après M10-E10), propriétés du ticket" _m10d_e06_image rocky-10 shared rocky 10
 check_cmd "debian-13 : somme SHA-512 calculée par Glance" _m10d_e06_somme debian-13
 check_cmd "rocky-10 : somme SHA-512 calculée par Glance" _m10d_e06_somme rocky-10
 check_cmd "Une seule image nommée debian-13 et une seule rocky-10 (pas de doublon ambigu)" \

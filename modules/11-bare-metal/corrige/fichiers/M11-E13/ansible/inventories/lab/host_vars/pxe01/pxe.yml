@@ -1,9 +1,15 @@
 ---
-# host_vars/pxe01/pxe.yml — chargeurs iPXE servis par pxe01 (M11-E13).
-# Valeurs produites par ipxe/construire-ipxe.sh (fichier SHA256SUMS) et publiées dans le registre
-# de paquets génériques de plateforme/provisioning sous ipxe/<version>/. Une nouvelle construction
-# = une nouvelle version et une MR sur ce fichier (revue par Sophie : c'est le code qui s'exécute
-# en premier sur chaque serveur).
+# host_vars/pxe01/pxe.yml — M11-E04 (Debian 13), M11-E05 (Rocky Linux 10), M11-E13 (chargeurs iPXE
+# construits). Remplace la version de M11-E05.
+pxe_nom_serveur: pxe01.par1.medisphere.internal
+pxe_installateurs:
+  - {nom: debian13, type: debian, version: trixie, miroir: https://deb.debian.org/debian}
+  - {nom: rocky10, type: rocky, version: "10.2", miroir: https://dl.rockylinux.org/pub/rocky}
+
+# Chargeurs iPXE (M11-E13) : valeurs produites par ipxe/construire-ipxe.sh (empreintes affichées en
+# fin de construction) et publiées dans le registre de paquets génériques de plateforme/provisioning
+# sous ipxe/<version>/. Une nouvelle construction = une nouvelle version et une MR sur ce fichier
+# (revue par Sophie : c'est le premier code qui s'exécute sur chaque serveur).
 pxe_chargeurs_version: v2.0.0-ms1
 pxe_chargeurs:
   - {nom: undionly.kpxe, sha256: "<EMPREINTE-SHA256-UNDIONLY>"}

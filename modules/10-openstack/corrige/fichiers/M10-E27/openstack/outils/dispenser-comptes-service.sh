@@ -8,9 +8,10 @@ set -euo pipefail
 CLOUD="${CLOUD:-medisphere-admin}"
 os() { openstack --os-cloud "$CLOUD" "$@"; }
 
-# Comptes du domaine Default créés par Kolla pour les services activés au M10, plus la sonde (E26).
+# Comptes du domaine Default créés par Kolla pour les services activés au M10, plus les comptes de
+# service de MédiSphère : OpenTofu (E15) et la sonde (E26).
 # Liste à revoir à chaque service activé : « openstack user list --domain Default ».
-COMPTES=(nova neutron glance cinder placement heat octavia svc-supervision)
+COMPTES=(nova neutron glance cinder placement heat octavia svc-tofu svc-supervision)
 
 for c in "${COMPTES[@]}"; do
   if os user show "$c" --domain Default >/dev/null 2>&1; then

@@ -35,6 +35,8 @@ check_cmd "NetBox : gw02 a ses neuf adresses .3 (VLAN 10 à 99)" jq -e \
   '[.results[].address | select(test("^10\\.10\\.(10|20|30|40|50|52|60|70|99)\\.3/24$"))] | length == 9' <<<"${_m07_nb:-null}"
 
 title "Adresses et noyau de gw02"
+check_ssh "gw02 : cartes nommées ens18 (WAN) et ens19 (trunk), comme gw01" gw02 \
+  'test -e /sys/class/net/ens18 && test -e /sys/class/net/ens19'
 for _m07_v in "${_M07P_VLANS[@]}"; do
   check_cmd "gw02 porte 10.10.$_m07_v.3" _m07p_porte gw02 "10.10.$_m07_v.3"
 done

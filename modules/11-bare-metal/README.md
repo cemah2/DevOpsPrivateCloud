@@ -4,9 +4,9 @@
 |---|---|
 | **Bloc** | B — Infrastructure cloud privé |
 | **Niveau** | Secondaire |
-| **Profil de lab** | Socle + VLAN 60 PROV : `pxe01` (2111), `bm01-04` (2112-2115), `maas01` (2116) ; iLO de `hp01` en lecture |
+| **Profil de lab** | Socle + VLAN 60 PROV : `pxe01` (2111), `bm01-04` (2112-2115), `maas01` (2116), VM jetable `m11-build` (2117) ; iLO de `hp01` en lecture |
 | **Prérequis** | Module 06 (Kea, NetBox, step-ca) ; module 07 (passerelles, relais) ; module 09 (installateur automatique de Proxmox VE) |
-| **Durée indicative** | 20 à 25 heures |
+| **Durée indicative** | 60 à 75 heures |
 
 ## Contexte MédiSphère
 
@@ -62,10 +62,11 @@ Dans le lab, les « serveurs » sont des VMs vides qui démarrent en PXE, et le 
 |---|---|---|---|---|
 | `pxe01` | 2111 | 10.10.60.10 | TFTP, HTTP (nginx), iPXE, preseed, kickstart | E02 |
 | `bm01-04` | 2112-2115 | DHCP 10.10.60.100-199 | Serveurs « nus » (SeaBIOS et OVMF) | E03 |
-| `maas01` | 2116 | 10.10.60.11 | MAAS 3.7 (Ubuntu 24.04) | E09 |
+| `maas01` | 2116 | 10.10.60.11 | MAAS 3.7 (Ubuntu 24.04), détruite au mini-projet | E09 |
+| `m11-build` | 2117 | DHCP (`vsandbox`) | VM jetable de construction d'iPXE, détruite aussitôt | E13 |
 | `tpl-ubuntu2404` | 9050 | — | Template Ubuntu 24.04 | E09 |
 
-DHCP du VLAN 60, compte `wb-maas@pve!maas`, iLO de `hp01` : voir [`PLAN.md`](../../PLAN.md) §4.9.
+DHCP du VLAN 60, comptes `wb-maas@pve!maas` et `wb-provision@pve!provision`, iLO de `hp01` : voir [`PLAN.md`](../../PLAN.md) §4.9 et l'[introduction](enonce/00-introduction.md).
 
 ## Fichiers
 

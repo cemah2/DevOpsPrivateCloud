@@ -1,8 +1,6 @@
 ---
 # group_vars/env_m08/ceph.yml (M08-E02/E03) — EXTRAIT : montée de version de M08-E26 (CHG-952).
-# Changé APRÈS la mise à jour du cluster par l'orchestrateur, dans la même MR que RB-082 :
-#   - ceph_image : image de référence (amorçage d'un nouveau cluster, contrôles de dérive) ;
-#   - ceph_noeud_version : paquets cephadm et ceph-common des nœuds, dépôt download.ceph.com/rpm-20.2.4
-#     (rôle ceph_noeud ; il vérifie ensuite « cephadm version »).
+# Changé APRÈS la mise à jour du cluster par l'orchestrateur, dans la même MR que RB-082 et que
+# group_vars/role_ceph/ceph_noeud.yml (ceph_noeud_version) :
+#   - ceph_image : image de référence (amorçage d'un nouveau cluster, contrôles de dérive).
 ceph_image: quay.io/ceph/ceph:v20.2.4
-ceph_noeud_version: "20.2.4"

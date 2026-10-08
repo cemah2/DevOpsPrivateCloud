@@ -28,14 +28,23 @@ check_output "osctl01 (généré) : session de 1800 s" '^SESSION_TIMEOUT[[:space
 check_output "osctl01 (généré) : multi-domaines actif" 'OPENSTACK_KEYSTONE_MULTIDOMAIN_SUPPORT = True' \
   _m10o_conf_noeud "$_M10O_CTL" /etc/kolla/horizon/_9998-kolla-settings.py
 
-# Matrice : toutes les règles du VPN vers la VIP externe ne portent que 443 et 6080, et les deux.
+# Matrice : une règle du VPN vers la VIP externe porte 443 et 6080 ; tant que la matrice du cloud
+# n'a pas été revue (M10-E27), ces règles ne portent rien d'autre.
 _m10o_vpn_vip() {
-  local m lignes ports
+  local m lignes l ports ok=1
   m="$(_m10o_matrice)"
   lignes="$(grep -E 'WG_ADM' <<<"$m" | grep -E '10\.10\.50\.201|OS_VIP_EXT|VIP_EXT' || true)"
   [[ -n "$lignes" ]] || return 1
-  ports="$(grep -oE 'ports:[[:space:]]*(\[[^]]*\]|[0-9]+)' <<<"$lignes" | grep -oE '[0-9]+' | sort -u | paste -sd, -)"
-  [[ "$ports" == "443,6080" ]]
+  while IFS= read -r l; do
+    ports="$(grep -oE 'ports:[[:space:]]*(\[[^]]*\]|[0-9]+)' <<<"$l" | grep -oE '[0-9]+' | sort -u | paste -sd, - || true)"
+    if grep -q 'M10-E27' <<<"$m"; then
+      grep -qE '(^|,)443(,|$)' <<<"$ports" && grep -qE '(^|,)6080(,|$)' <<<"$ports" && ok=0
+    else
+      [[ "$ports" == "443,6080" ]] || return 1
+      ok=0
+    fi
+  done <<<"$lignes"
+  return "$ok"
 }
-check_cmd "matrice des flux (main) : VPN d'administration vers 10.10.50.201 sur 443 et 6080 seulement" _m10o_vpn_vip
+check_cmd "matrice des flux (main) : VPN d'administration vers 10.10.50.201 : 443 et 6080 (rien d'autre avant la revue de M10-E27)" _m10o_vpn_vip
 check_port "VIP externe : console noVNC (6080) joignable" 10.10.50.201 6080

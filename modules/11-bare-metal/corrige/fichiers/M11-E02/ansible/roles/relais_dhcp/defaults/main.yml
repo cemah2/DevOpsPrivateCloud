@@ -1,8 +1,13 @@
 ---
 # Rôle relais_dhcp — relais DHCP des passerelles (dnsmasq en mode relais seul).
-# M06-E25 : un VLAN (99) ; M11-E02 : plusieurs VLANs (99 et 60), sur gw01 ET gw02 (M07).
-# Ce fichier REMPLACE celui de M06-E25. Compatibilité : si relais_dhcp_vlans est vide, le rôle
-# reprend les deux variables historiques (relais_dhcp_interface, relais_dhcp_adresse_locale).
+# M06-E25 : un VLAN (99) ; M07-E24/E25 : gw01 et gw02, giaddr propre (.2/.3), relais_dhcp_actif ;
+# M11-E02 : plusieurs VLANs (99 et 60). Ce fichier REMPLACE celui de M06-E25.
+# Compatibilité : si relais_dhcp_vlans est vide, le rôle reprend les variables de M06/M07
+# (relais_dhcp_interface, relais_dhcp_adresse_locale) : les host_vars de M07-E25 restent valides.
+
+# M07-E24 : false sur une passerelle qui ne doit pas (encore) relayer. playbooks/routeurs.yml
+# n'applique alors pas le rôle (« when ») ; s'il est appliqué quand même, il ne touche à rien.
+relais_dhcp_actif: true
 
 relais_dhcp_fichier: /etc/dnsmasq.d/relais-dhcp.conf
 

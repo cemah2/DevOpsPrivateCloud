@@ -34,7 +34,7 @@ check_output "la chaîne d'alerte a été testée (alerte ms-alerte sur ce servi
 
 title "Identité de la sonde"
 check_output "secure.yaml (~/.config/openstack) en 600" '^[4-7]00$' stat -c '%a' "$HOME/.config/openstack/secure.yaml"
-check_cmd "clouds.yaml : nuage medisphere-supervision par identifiant d'application" bash -c \
+check_cmd "clouds.yaml : cloud medisphere-supervision par application credential" bash -c \
   'grep -A3 "medisphere-supervision:" "$HOME/.config/openstack/clouds.yaml" | grep -q "v3applicationcredential"'
 _m10_regles_get() {
   local r
@@ -42,7 +42,7 @@ _m10_regles_get() {
   jq -e 'type == "array" and length > 0 and all(.[]; (.Method // .method) == "GET")' >/dev/null <<<"$r"
 }
 check_cmd "règles d'accès de svc-supervision : présentes, et GET seulement" _m10_regles_get
-check_cmd "le nuage medisphere-supervision obtient un jeton" \
+check_cmd "le cloud medisphere-supervision obtient un jeton" \
   timeout 60 openstack --os-cloud medisphere-supervision token issue -f value -c expires
 
 title "La sonde, maintenant"

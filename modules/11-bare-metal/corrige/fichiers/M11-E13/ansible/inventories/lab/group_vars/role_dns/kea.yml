@@ -1,0 +1,84 @@
+---
+# group_vars/role_dns/kea.yml — DHCP du lab servi par Kea (M06-E16, E17), en PAIRE haute
+# disponibilité depuis M06-E25 : dns01 (primary) et dns02 (standby), même configuration générée
+# par le même gabarit ; seuls this-server-name et l'adresse de service diffèrent (faits de l'hôte).
+# (M11-E02) VLAN 60 PROV : sous-réseau 60, classes de démarrage réseau (PXE BIOS, PXE UEFI, iPXE).
+# (M11-E06) réservations du VLAN 60 générées depuis NetBox (kea_reservations_prov.yml, même dossier).
+# (M11-E13) classe iPXE réservée à l'iPXE construit par nos soins, URL en HTTPS.
+# Secrets (Vault « critique », group_vars/role_dns/vault-critique.yml) : vault_kea_api_mot_de_passe,
+# vault_kea_api_supervision (E25), vault_kea_tsig_ddns.
+
+kea_dhcp4_sous_reseaux:
+  - id: 99            # = numéro du VLAN : stable, lisible dans les baux ; IDENTIQUE sur les deux pairs
+    reseau: 10.10.99.0/24
+    plages: ["10.10.99.100 - 10.10.99.199"]
+    routeur: 10.10.99.1
+    ntp: 10.10.99.1
+    ddns: true
+    commentaire: "VLAN 99 SANDBOX, relayé par gw01 et gw02 (giaddr 10.10.99.2 et .3, M07-E25), M00-E14"
+  # (M11-E02) VLAN 60 PROV : serveurs nus démarrés sur le réseau. Pas de DDNS : les noms des
+  # serveurs viennent de NetBox (medictl dns sync, M06-E15) ; deux écrivains pour un même nom,
+  # c'est un conflit assuré. Bail : la durée globale du rôle (12 h) ; les serveurs connus ont une réservation.
+  - id: 60
+    reseau: 10.10.60.0/24
+    plages: ["10.10.60.100 - 10.10.60.199"]
+    routeur: 10.10.60.1
+    ntp: 10.10.60.1
+    ddns: false
+    serveur_suivant: 10.10.60.10   # pxe01 : TFTP
+    reservations: "{{ kea_reservations_prov | default([]) }}"
+    commentaire: "VLAN 60 PROV, relayé par les passerelles, M11-E02 ; réservations depuis NetBox (M11-E06)"
+
+# (M11-E03) Démarrage réseau en deux temps : le micrologiciel (PXE) charge iPXE en TFTP, puis
+# iPXE redemande une adresse et reçoit l'URL de son script. Tests EXCLUSIFS (voir defaults).
+#   option 93 (client-system, RFC 4578) : 0x0000 BIOS x86, 0x0007 et 0x0009 UEFI x86-64
+#   option 77 (user-class) : chaîne brute (sans l'en-tête de longueur de la RFC 3004)
+# (M11-E13) Seul NOTRE iPXE (construit avec la racine MédiSphère, il s'annonce « iPXE-MediSphere »
+# par son script intégré) reçoit l'URL HTTPS. Un iPXE quelconque (« iPXE » : la ROM réseau de QEMU
+# des VMs SeaBIOS, la ROM d'une carte récente) ne connaît pas notre racine : il est traité comme
+# un client PXE ordinaire et télécharge notre chargeur en TFTP.
+kea_dhcp4_classes:
+  - nom: ipxe
+    test: "substring(option[77].hex,0,15) == 'iPXE-MediSphere'"
+    fichier: https://pxe01.par1.medisphere.internal/boot.ipxe
+  - nom: pxe-bios
+    test: "option[93].hex == 0x0000 and not (substring(option[77].hex,0,15) == 'iPXE-MediSphere')"
+    fichier: undionly.kpxe
+  - nom: pxe-uefi-x64
+    test: "(option[93].hex == 0x0007 or option[93].hex == 0x0009) and not (substring(option[77].hex,0,15) == 'iPXE-MediSphere')"
+    fichier: ipxe.efi
+
+# (E24) les deux résolveurs, dans l'ordre de préférence.
+kea_dhcp4_dns: [10.10.20.10, 10.10.20.16]
+kea_dhcp4_domaine: par1.medisphere.internal
+
+# --- API de contrôle (E17) : (E25) HTTPS sur l'adresse de service, joignable depuis adm01 ------------
+kea_dhcp4_api: true
+kea_dhcp4_api_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+kea_dhcp4_api_port: 8004
+kea_dhcp4_api_mot_de_passe: "{{ vault_kea_api_mot_de_passe }}"
+kea_dhcp4_api_comptes_supplementaires:
+  - {utilisateur: supervision, mot_de_passe: "{{ vault_kea_api_supervision }}"}
+kea_dhcp4_hooks:
+  - libdhcp_lease_cmds.so
+
+# --- (E25) TLS et haute disponibilité -------------------------------------------------------------
+kea_dhcp4_tls: true
+kea_dhcp4_ha: true
+kea_dhcp4_ha_mode: hot-standby
+kea_dhcp4_ha_pairs:
+  - {nom: dns01, ip: 10.10.20.10, role: primary}
+  - {nom: dns02, ip: 10.10.20.16, role: standby}
+
+# --- DDNS (E17) : sur les DEUX hôtes ; mises à jour toujours vers le PRIMAIRE PowerDNS ------------
+kea_dhcp4_ddns: true
+kea_ddns_tsig_nom: ddns-kea
+kea_ddns_tsig_secret: "{{ vault_kea_tsig_ddns }}"
+kea_ddns_zone_directe: par1.medisphere.internal.
+kea_ddns_zone_inverse: 10.10.in-addr.arpa.
+kea_ddns_serveur: 10.10.20.10
+kea_ddns_port: 5300
+# Adresses autorisées à mettre à jour les zones (métadonnée ALLOW-DNSUPDATE-FROM, posée sur dns01).
+kea_ddns_autorises:
+  - 127.0.0.1/32
+  - 10.10.20.16/32

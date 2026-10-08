@@ -34,4 +34,4 @@ Procédure retenue : l'initrd est **préparé au moment de l'installation** (`ou
 
 ## Nettoyage
 
-`bm04` recréée vide par OpenTofu (`tofu apply -replace=…`, mémoire 2 Go, disque d'origine, même MAC) ; NetBox : `bm04` à `planned` ; noyau et initrd de `/pve/9.2/` supprimés de `pxe01` (ils contiennent le jeton) ; jeton renouvelé dans le Vault.
+`bm04` recréée vide par OpenTofu (`tofu apply -replace=…`, mémoire 4 Go, disque d'origine, même MAC) ; NetBox : `bm04` à `planned` ; noyau et initrd de `/pve/9.2/` supprimés de `pxe01` (ils contiennent le jeton) ; jeton renouvelé dans le Vault.

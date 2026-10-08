@@ -46,3 +46,8 @@ check_ssh "ceph04 : trames de 9000 octets vers ceph01 sur le réseau de réplica
 check_output "cluster en HEALTH_OK" '^HEALTH_OK' _m08o_ceph health
 check_cmd "fiche CHG-928 dans plateforme/medisphere (main)" \
   _m08o_fichier_main "$_M08O_PROJET_DOC" docs/stockage/changements/CHG-928-ceph04.md
+_m08o_rb081() {
+  gitlab_api "$_M08O_PROJET_DOC/repository/tree?ref=main&path=docs%2Fstockage%2Frunbooks&per_page=100" 2>/dev/null \
+    | jq -e 'any(.[]?; .type == "blob" and (.name | startswith("RB-081")))' >/dev/null
+}
+check_cmd "runbook RB-081 (ajouter un nœud) dans docs/stockage/runbooks (main)" _m08o_rb081

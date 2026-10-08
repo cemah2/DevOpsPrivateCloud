@@ -10,7 +10,7 @@ OpenStack tourne : Keystone, Glance, Nova, Neutron/OVN, Cinder, Heat, Horizon et
 >
 > Revenir à un instantané fait revenir **les trois nœuds** dans le passé, mais **pas** Ceph : un volume ou une image créés entre-temps deviennent orphelins. C'est un filet, pas une méthode.
 
-**Chemin imposé** (introduction du module) : la configuration de Kolla vit dans le projet GitLab `plateforme/openstack` (clone `~/src/openstack` sur `adm01`) et change par MR ; ce palier range ses réglages dans des fichiers séparés `etc/kolla/globals.d/<NN>-<sujet>.yml` (Kolla-Ansible les lit après `globals.yml`, par ordre alphabétique) et ses surcharges de services dans `etc/kolla/config/`. Toute configuration d'un hôte **hors Kolla** (sauvegarde, sonde, unités systemd) passe par un rôle Ansible de `plateforme/ansible` ; tout flux traversant la bordure est une ligne de `host_vars/gw01/pare_feu.yml` (même matrice sur `gw02`) ; tout secret est en Vault (identité `critique`) et inscrit au registre des secrets ; la documentation va dans `plateforme/medisphere`, sous `docs/cloud/` (`adr/`, `runbooks/`, `tests/`, `changements/`, `capacite/`).
+**Chemin imposé** (introduction du module) : la configuration de Kolla vit dans le projet GitLab `plateforme/openstack` (clone `~/src/openstack` sur `adm01`) et change par MR ; ce palier range ses réglages dans des fichiers séparés `etc/kolla/globals.d/<NN>-<sujet>.yml` (Kolla-Ansible les lit après `globals.yml`, par ordre alphabétique) et ses surcharges de services dans `etc/kolla/config/`. Toute configuration d'un hôte **hors Kolla** (sauvegarde, sonde, unités systemd) passe par un rôle Ansible de `plateforme/ansible` ; tout flux traversant la bordure est une ligne de la matrice `group_vars/role_routeur/pare_feu.yml` de `plateforme/ansible` (commune à `gw01` et `gw02` depuis M07-E24) ; tout secret est en Vault (identité `critique`) et inscrit au registre des secrets ; la documentation va dans `plateforme/medisphere`, sous `docs/cloud/` (`adr/`, `runbooks/`, `tests/`, `changements/`, `capacite/`).
 
 **Commandes** : comme en M10-E04, Kolla-Ansible est lancé depuis `~/src/openstack` par `uv run kolla-ansible <action> -i inventaire/multinode --configdir etc/kolla`, l'identité Vault `critique` étant fournie par l'`ansible.cfg` du projet (script client `outils/vault-pass-client.sh`, M10-E03). La CLI `openstack` (10.x, `uv tool`) utilise les clouds de `~/.config/openstack/clouds.yaml` (`medisphere-admin`, `medisphere-plateforme`, `medisphere-mediagenda-dev`).
 
@@ -161,7 +161,7 @@ Le nom d'une image RBD de volume Cinder est `volume-<identifiant du volume>`. Po
 
 **Objectifs pédagogiques**
 - Surveiller OpenStack par ce qu'il **rend** (services enregistrés, agents vivants, répartiteurs, certificats) autant que par ses processus (conteneurs, vérifications de santé de Docker).
-- Donner à une sonde une identité OpenStack qui ne peut **que lire**, avec les mécanismes de Keystone (identifiants d'application, règles d'accès).
+- Donner à une sonde une identité OpenStack qui ne peut **que lire**, avec les mécanismes de Keystone (application credentials, règles d'accès).
 - Savoir où sont les journaux d'un déploiement Kolla et préparer l'observabilité des modules 21 et 22.
 
 **Prérequis** : M06-E29 (`ms-verif-services`, son fichier de configuration, ses tests), M02-E26 (`ms-alerte@`), M10-E23 (rôles et politiques), M10-E24.
@@ -170,7 +170,7 @@ Le nom d'une image RBD de volume Cinder est `volume-<identifiant du volume>`. Po
 **Contexte technique**
 - Script `bin/ms-verif-openstack` dans `plateforme/outils`, tests bats, installé sous `/usr/local/bin` par `task install:systeme` ; configuration versionnée `etc/ms-verif-openstack.conf` (installée en `/usr/local/etc/ms-verif-openstack.conf`). Options : `-s|--seuil-certificats JOURS` (défaut 10), `-q|--quiet`. Codes : 0 tout va bien, 1 au moins une anomalie **ou** un contrôle impossible, 2 usage.
 - Unités sur `adm01` : `ms-verif-openstack.service` (oneshot, `User=admin`, `OnFailure=ms-alerte@%n.service`) et `.timer` (toutes les 15 minutes, rattrapage).
-- Identité OpenStack de la sonde : utilisateur `svc-supervision` (domaine `Default`), et un **identifiant d'application** `supervision-adm01` de cet utilisateur, muni de **règles d'accès** qui n'autorisent que la méthode `GET`. Cloud `medisphere-supervision` dans `~/.config/openstack/clouds.yaml`, secret dans `~/.config/openstack/secure.yaml` (600).
+- Identité OpenStack de la sonde : utilisateur `svc-supervision` (domaine `Default`), et une **application credential** `supervision-adm01` de cet utilisateur, munie de **règles d'accès** qui n'autorisent que la méthode `GET`. Cloud `medisphere-supervision` dans `~/.config/openstack/clouds.yaml`, secret dans `~/.config/openstack/secure.yaml` (600).
 - Contrôles des nœuds en SSH depuis `adm01` (compte `admin`, `sudo -n`) : état des conteneurs, espace disque.
 - Contrôles attendus (au minimum) :
 
@@ -186,7 +186,7 @@ Le nom d'une image RBD de volume Cinder est `volume-<identifiant du volume>`. Po
 
 **Travail demandé**
 1. **Lecture.** Dans la documentation de Keystone, lis *Application credentials* (portée, rôles, `unrestricted`, règles d'accès : `service`, `method`, `path`, jokers). Quelles appels l'API de `openstack compute service list` fait-elle réellement (`--debug`) ? Qu'en déduis-tu pour écrire des règles d'accès qui ne cassent pas la découverte des versions des API ?
-2. **L'identité.** Crée `svc-supervision` et donne-lui le rôle strictement nécessaire pour lister les services de calcul, de réseau et de volume (lis les politiques par défaut de Nova en 2026.1 : un lecteur suffit-il ?). Crée l'identifiant d'application avec des règles d'accès limitées à `GET` sur les services nécessaires. Prouve qu'il **lit** et qu'il ne peut **pas** créer (une création refusée, sans effet). Inscris-le au registre des secrets avec ce que tu acceptes comme risque.
+2. **L'identité.** Crée `svc-supervision` et donne-lui le rôle strictement nécessaire pour lister les services de calcul, de réseau et de volume (lis les politiques par défaut de Nova en 2026.1 : un lecteur suffit-il ?). Crée l'application credential avec des règles d'accès limitées à `GET` sur les services nécessaires. Prouve qu'il **lit** et qu'il ne peut **pas** créer (une création refusée, sans effet). Inscris-le au registre des secrets avec ce que tu acceptes comme risque.
 3. **Les journaux.** Sur `osctl01`, retrouve les journaux de `nova-api`, `neutron-server`, `keystone` et `octavia-api`. Qui les écrit (fichier, `fluentd`) ? Combien de place prennent-ils, qui les fait tourner ? Écris dans ton journal ce que M22 (Loki) devra collecter et par quel chemin.
 4. **Le script.** Écris `ms-verif-openstack` et ses tests bats (commandes `openstack`, `ssh`, `openssl` simulées par des fonctions). Même contrat que `ms-verif-services` : une ligne `OK`/`KO` par contrôle, un bilan, un contrôle impossible est un `KO`. Les nœuds, les points TLS et le cloud à utiliser viennent du fichier de configuration.
 5. **Les unités.** Service, timer, alerte, durcissement comme en M06-E29 (le service doit lire `~/.config/openstack/` et utiliser SSH). Valide, active, vérifie la prochaine échéance.
@@ -198,7 +198,7 @@ Le nom d'une image RBD de volume Cinder est `volume-<identifiant du volume>`. Po
 - [ ] Le timer est actif (15 minutes, rattrapage) ; le service est oneshot, tourne en `admin`, déclenche `ms-alerte@` en cas d'échec et a déjà tourné sous systemd.
 - [ ] Lancé maintenant, il répond 0 ; avec un seuil de 400 jours, 1 ; avec une option inconnue, 2.
 - [ ] Le journal de `adm01` contient une alerte `ms-alerte` issue de ce service (moins de 30 jours).
-- [ ] Les règles d'accès de l'identifiant d'application de `svc-supervision` n'autorisent que `GET` ; `secure.yaml` est en 600.
+- [ ] Les règles d'accès de l'application credential de `svc-supervision` n'autorisent que `GET` ; `secure.yaml` est en 600.
 
 **Vérification** : `lab/bin/check 10 26`
 
@@ -227,7 +227,7 @@ Les services systemd durcis avec `ProtectHome=` ne voient plus `/home` : pour un
 > Revue de sécurité du cloud avant l'ouverture à MédiAgenda. Mes constats :
 > 1. tout le trafic interne aux API (VIP interne, ProxySQL, services entre eux) circule en clair sur le VLAN 50 ;
 > 2. le certificat de la VIP externe a été posé à la main : le jour où il expire, le cloud s'arrête ;
-> 3. aucune politique de verrouillage des comptes ; les sessions Horizon durent toute la journée ;
+> 3. aucune politique de verrouillage des comptes ; les sessions Horizon de 30 minutes posées en E17 se prolongent à chaque clic : une session active dure toute la journée ;
 > 4. les instances des projets peuvent-elles joindre les API et les bases du plan de contrôle ? Personne ne sait ;
 > 5. les mots de passe générés à l'installation n'ont jamais tourné, et certains ont été vus par InfoGér.
 > Je veux un plan de remédiation appliqué, et ce qu'on laisse en clair, écrit et justifié.
@@ -246,7 +246,7 @@ Les services systemd durcis avec `ProtectHome=` ne voient plus `/home` : pour un
 - PKI : racine `/usr/local/share/ca-certificates/medisphere-root-ca.crt`. Point ACME de `ca01` : `https://ca01.par1.medisphere.internal/acme/acme/directory`. Kolla sait obtenir et renouveler les certificats des VIP par ACME (rôle `letsencrypt`, qui accepte un autre serveur ACME que Let's Encrypt) ; le défi HTTP-01 arrive sur le port 80 des VIP.
 - Noms : VIP interne `openstack-int.par1.medisphere.internal` (10.10.50.200), VIP externe `openstack.par1.medisphere.internal` (10.10.50.201).
 - Réglages de ce palier dans `etc/kolla/globals.d/27-securite.yml` ; surcharges de Keystone dans `etc/kolla/config/keystone.conf`, d'Horizon dans `etc/kolla/config/horizon/_9999-custom-settings.py`.
-- Politique imposée : 5 échecs d'authentification consécutifs verrouillent un compte humain 15 minutes ; sessions Horizon de 30 minutes ; certificats des VIP de 30 jours au plus, renouvelés à 15 jours de l'expiration.
+- Politique imposée : 5 échecs d'authentification consécutifs verrouillent un compte humain 15 minutes ; sessions Horizon de 30 minutes **au plus**, même en activité ; certificats des VIP de 30 jours au plus, renouvelés à 15 jours de l'expiration.
 - Matrice des flux visée pour les VIP : VIP externe joignable depuis MGMT (10.10.10.0/24), le VPN d'administration (10.255.1.0/24) et `runner01` ; VIP interne seulement depuis le VLAN 50 et `adm01` ; **aucun** flux des IP des instances (VLAN 52) vers le VLAN 50 ; `ca01` vers les deux VIP sur le port 80 (défis ACME).
 
 > ⚠️ **Attention** : (1) le passage de la VIP interne en TLS change **toutes** les URL internes du catalogue et la configuration de tous les services : fais-le dans une fenêtre, après instantané des trois nœuds, et garde la commande de retour (retrait du fichier `27-securite.yml` puis `reconfigure`). (2) Un verrouillage de compte qui s'applique aux comptes de **service** (`nova`, `neutron`, `glance`…) transforme une erreur de mot de passe en panne générale : traite-les **avant** d'activer la politique. (3) La rotation d'un mot de passe de base de données ou de RabbitMQ coupe les services concernés : lis la page *Password Rotation* de Kolla et choisis les secrets à faire tourner **parmi ceux qui se reconfigurent sans étape manuelle**.
@@ -255,7 +255,7 @@ Les services systemd durcis avec `ProtectHome=` ne voient plus `/home` : pour un
 1. **État des lieux.** Pour chaque constat de Sophie, relève l'état actuel avec une preuve (catalogue `openstack endpoint list`, `openssl s_client` sur les deux VIP, `keystone.conf` généré, réglages d'Horizon, test de connexion depuis une instance vers 10.10.50.200:5000 et 10.10.50.51:3306, date de génération de `passwords.yml` dans l'historique Git).
 2. **TLS interne et confiance.** Active le TLS de la VIP interne avec un certificat de la PKI interne ; fais en sorte que les conteneurs fassent confiance à la racine MédiSphère et que les services utilisent le magasin de confiance du système ; adapte le fichier `admin-openrc` généré par Kolla et tes `clouds.yaml`. Explique dans ton journal l'effet de bord sur la base de données (ProxySQL) et ce qui reste en clair (RabbitMQ, migration à chaud libvirt, bases OVN, Ceph).
 3. **Renouvellement automatique.** Confie l'obtention et le renouvellement des certificats des **deux** VIP au mécanisme ACME intégré de Kolla, pointé vers `ca01`, avec un seuil de renouvellement conforme à la politique. Ouvre le flux du défi. Prouve un premier renouvellement (date et empreinte du certificat servi avant/après), et lis où le conteneur journalise ses tentatives. Si le mécanisme ne fonctionne pas avec step-ca sur ton lab, documente l'échec (message exact) et mets en place une alternative tenue par le code, sans entorse à la politique de durées.
-4. **Keystone et Horizon.** Applique la politique de verrouillage par la surcharge de `keystone.conf` et dispense explicitement les comptes de service (et le compte de la sonde E26) du verrouillage. Prouve le verrouillage sur un compte d'essai `essai-verrou` (domaine `medisphere`), puis supprime-le. Règle la durée des sessions d'Horizon.
+4. **Keystone et Horizon.** Applique la politique de verrouillage par la surcharge de `keystone.conf` et dispense explicitement les comptes de service (ceux de Kolla, et `svc-tofu` (E15) et `svc-supervision` (E26)) du verrouillage. Prouve le verrouillage sur un compte d'essai `essai-verrou` (domaine `medisphere`), puis supprime-le. Fais de la durée de session d'Horizon une limite absolue (lis la documentation des réglages de Horizon : quel réglage transforme `SESSION_TIMEOUT` en limite ferme ?).
 5. **Cloisonnement.** Dans `pare_feu.yml`, traduis la matrice visée ; prouve depuis une instance d'essai `secu-essai01` (projet `plateforme`, IP flottante) qu'elle ne joint **plus** ni la VIP interne, ni les nœuds du VLAN 50, mais qu'elle joint toujours Internet ; prouve depuis `adm01` et `runner01` que l'API externe répond. Détruis l'instance d'essai.
 6. **Rotation.** Fais tourner `keystone_admin_password` et un mot de passe de base de données d'un service de ton choix (parmi ceux que la documentation dit applicables par `reconfigure`), par MR (le fichier reste chiffré) ; prouve que l'ancien mot de passe administrateur est refusé et que le service est sain. Liste les secrets qui demanderaient une procédure manuelle, avec leur impact.
 7. **Documenter.** `docs/cloud/securite.md` : constats, remédiations, ce qui reste en clair et pourquoi, secrets et leur rotation, risques acceptés (signés par Sophie). Registre des secrets et matrice des flux à jour.
@@ -263,8 +263,8 @@ Les services systemd durcis avec `ProtectHome=` ne voient plus `/home` : pour un
 **Critères de réussite**
 - [ ] Les points de terminaison `internal` du catalogue sont en `https://openstack-int.par1.medisphere.internal…` ; les deux VIP présentent un certificat émis par la PKI MédiSphère, valide pour leur nom, de 30 jours au plus, qui expire dans plus de 10 jours.
 - [ ] Le renouvellement automatique des certificats des VIP est en place (conteneurs ACME de Kolla en service, ou alternative documentée dans `securite.md`).
-- [ ] `keystone.conf` généré sur `osctl01` porte la politique de verrouillage (5 échecs, 15 minutes) ; les comptes de service de Nova, Neutron, Glance, Cinder et Placement, et `svc-supervision`, en sont dispensés ; le compte `essai-verrou` n'existe plus.
-- [ ] Horizon ferme les sessions au bout de 30 minutes.
+- [ ] `keystone.conf` généré sur `osctl01` porte la politique de verrouillage (5 échecs, 15 minutes) ; les comptes de service de Nova, Neutron, Glance, Cinder et Placement, `svc-tofu` et `svc-supervision` en sont dispensés ; le compte `essai-verrou` n'existe plus.
+- [ ] Horizon ferme les sessions au bout de 30 minutes, même en activité.
 - [ ] `docs/cloud/securite.md` est sur `main` ; plus aucune instance `secu-essai*`.
 
 **Vérification** : `lab/bin/check 10 27`
@@ -446,12 +446,12 @@ Supprimer le service de calcul d'un hôte supprime aussi son fournisseur de ress
 - Assembler réseau, routeur, groupes de sécurité, instances, volume, répartiteur Octavia OVN et IP flottante en un environnement reproductible.
 - Tenir compte des propriétés du fournisseur OVN dans la conception (adresse source préservée, algorithme, contrôles de santé).
 
-**Prérequis** : M10-E13 (projets et quotas), M10-E15 (provider OpenStack, identifiants d'application), M10-E16 (Octavia OVN), M10-E18 (cloud-init), M05 (modules, état distant, pipeline plan/apply), M10-E30 recommandé.
+**Prérequis** : M10-E13 (projets et quotas), M10-E15 (provider OpenStack, application credentials), M10-E16 (Octavia OVN), M10-E18 (cloud-init), M05 (modules, état distant, pipeline plan/apply), M10-E30 recommandé.
 **Durée indicative** : 5 h.
 
 **Contraintes**
 - Dépôt de l'équipe : projet GitLab **`mediagenda/recette-infra`** (groupe `mediagenda`, Julien *Maintainer*, toi *Developer*), qui appelle un module **`openstack-env-app`** publié dans `plateforme/tofu-modules` et référencé par une **étiquette** de version. Le module est générique (une autre équipe doit pouvoir s'en servir) ; le dépôt de l'équipe ne contient que des valeurs.
-- OpenStack : tout dans le projet `mediagenda-dev`. Authentification par un **identifiant d'application** du projet, au rôle `member` (jamais `admin`), stocké en variables **protégées et masquées** du projet GitLab. Les quotas du projet ne sont pas modifiés.
+- OpenStack : tout dans le projet `mediagenda-dev`. Authentification par une **application credential** du projet, au rôle `member` (jamais `admin`), stocké en variables **protégées et masquées** du projet GitLab. Les quotas du projet ne sont pas modifiés.
 - État OpenTofu sur `s3-01`, chiffré comme en M05-E27, inaccessible aux identifiants de l'équipe pour tout autre état que le sien (et inversement : les identifiants de la plateforme n'ont pas à être donnés à l'équipe).
 - Pipeline : validation et plan sur chaque MR (plan visible dans la MR), application **manuelle** sur `main`, destruction manuelle protégée, et un plan nocturne qui signale la dérive.
 - Ressources, avec ces noms (vérifiés) : réseau `agenda-recette-net`, sous-réseau `agenda-recette-sn` (plage privée de ton choix, sans chevauchement avec le lab), routeur `agenda-recette-rt` (passerelle `ext-net`), groupes de sécurité `agenda-recette-app` et `agenda-recette-admin`, instances `agenda-recette-app01` et `agenda-recette-app02` (Debian 13, `m1.petit`, une sur chaque calcul autant que possible), volume `agenda-recette-donnees` (5 Go, attaché à `app01`, formaté et monté par cloud-init), répartiteur `agenda-recette-lb` (fournisseur **OVN**, écoute TCP 80) avec un contrôle de santé, IP flottante associée à la VIP du répartiteur.
@@ -464,7 +464,7 @@ Supprimer le service de calcul d'un hôte supprime aussi son fournisseur de ress
 - [ ] Les ressources nommées existent dans `mediagenda-dev`, actives ; le répartiteur est du fournisseur `ovn`, `ACTIVE` et `ONLINE`, avec deux membres `ONLINE`.
 - [ ] Depuis `adm01`, l'IP flottante du répartiteur répond en HTTP 200 sur le port 80, et des requêtes successives atteignent **les deux** instances ; le port 22 des instances n'est pas joignable par cette adresse.
 - [ ] Le volume `agenda-recette-donnees` est attaché à `agenda-recette-app01`.
-- [ ] `mediagenda/recette-infra` existe, son dernier pipeline de `main` a réussi, et il référence le module par une étiquette ; l'identifiant d'application utilisé n'a pas le rôle `admin`.
+- [ ] `mediagenda/recette-infra` existe, son dernier pipeline de `main` a réussi, et il référence le module par une étiquette ; l'application credential utilisée n'a pas le rôle `admin`.
 - [ ] `docs/cloud/libre-service.md` est sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 10 31`
@@ -525,7 +525,7 @@ Pour le cloisonnement des états, regarde ce que permettent les identités de Se
    c) la rotation des clés invalide immédiatement tous les jetons en cours ;
    d) une horloge très décalée sur un nœud peut faire refuser des jetons valides.
    Justifie, en t'appuyant sur `fernet_token_expiry`, `fernet_token_allow_expired_window` et `fernet_key_rotation_interval` de Kolla.
-9. Un identifiant d'application de la CI de MédiAgenda fuit dans un journal de pipeline. Quelles actions, dans quel ordre ? Qu'est-ce qui limite les dégâts dans ta conception de E31 ? Qu'est-ce qui les aurait aggravés ?
+9. Une application credential de la CI de MédiAgenda fuit dans un journal de pipeline. Quelles actions, dans quel ordre ? Qu'est-ce qui limite les dégâts dans ta conception de E31 ? Qu'est-ce qui les aurait aggravés ?
 10. Les instances voient-elles les VLAN d'infrastructure ? Explique le chemin d'un paquet d'une instance vers 10.10.20.10 (DNS du socle) : réseau de projet, routeur OVN, SNAT sur `ext-net`, bordure. Quelle est la seule barrière, et pourquoi la règle « VLAN 52 → VLAN 50 interdit » de E27 ne suffit-elle pas à protéger le socle ?
 11. Pourquoi les images doivent-elles être au format **raw** avec Ceph, et que se passe-t-il (temps, espace, Ceph) quand une équipe envoie un qcow2 de 2 Go dans Glance ? Comment l'empêcher (*image import*, conversion, `disk_formats`) ?
 12. Kolla n'utilise pas les paquets Debian d'OpenStack mais des images. Avantages et inconvénients pour les correctifs de sécurité (qui les publie, quand, comment tu le sais), et pour l'audit HDS (« quelle version tourne en production ? »).
@@ -575,7 +575,7 @@ Les réponses argumentées sont dans le corrigé.
 **Règles de l'exercice**
 - Conditions d'examen : pas de corrigé, pas d'autres notes que **tes** runbooks (RB-100 en particulier), ton code et la documentation officielle.
 - Durée cible : **2 h** entre l'ouverture du dossier (T0) et l'environnement vérifié (T4).
-- Tout ce qui est durable (projet, groupe, quotas) passe par le code de la plateforme (état OpenTofu des projets, M10-E15) ; les ressources **dans** le projet peuvent être créées par le moyen de ton choix (CLI, Heat, OpenTofu), mais doivent pouvoir être recréées par quelqu'un d'autre à partir de ce que tu laisses.
+- Tout ce qui est durable passe par le code de la plateforme, comme dans RB-100 : projet, groupe, comptes et rôles par le code d'identité (`donnees/identite.yml`, M10-E05/E23), quotas par l'état OpenTofu des projets (`envs/openstack-projets`, M10-E15) ; les ressources **dans** le projet peuvent être créées par le moyen de ton choix (CLI, Heat, OpenTofu), mais doivent pouvoir être recréées par quelqu'un d'autre à partir de ce que tu laisses.
 - L'environnement est **temporaire** : après la vérification, tu le retires proprement, par le même chemin (il est vérifié absent par le mini-projet).
 
 **Prérequis** : RB-100 (M10-E22), M10-E13, E15, E16, E27.

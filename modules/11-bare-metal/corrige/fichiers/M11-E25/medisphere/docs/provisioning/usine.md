@@ -17,7 +17,7 @@ Diagramme d'états de `orchestration.md` ; reprise ; retrait (statut `decommissi
 ## 5. Dépendances : que se passe-t-il quand… ?
 | Composant indisponible | Effet | Tenue | Procédure |
 |---|---|---|---|
-| `pxe01` | plus aucun démarrage réseau ; serveurs en service non touchés | — | reconstruction par le code (OpenTofu, `pxe01.yml`, pipeline `deployer`), RB-111 |
+| `pxe01` | plus aucun démarrage réseau ; serveurs en service non touchés | — | reconstruction par le code (OpenTofu, `playbooks/pxe.yml`, job `deployer` du pipeline), RB-111 |
 | Kea (les deux) | plus d'adresse sur le VLAN 60 | baux en cours | M06 |
 | NetBox | plus de rendu ni d'orchestration ; fichiers servis restent en place | — | M06 |
 | `ca01` | plus d'émission ; certificat de `pxe01` valide jusqu'à 30 jours | 10 jours avant alerte | M06 |

@@ -49,9 +49,9 @@ while read -r _m11o_nom _m11o_vmid _m11o_mac; do
   done
   # Script iPXE par MAC, cohérent avec le statut NetBox.
   _m11o_statut="$(jq -r '.status.value' <<<"$_m11o_d")"
-  _m11o_script="$(curl -sf --max-time "$WB_TIMEOUT" "$_M11O_PXE_URL/ipxe/mac-${_m11o_mac//:/-}.ipxe" 2>/dev/null || true)"
+  _m11o_script="$(_m11o_http "ipxe/mac-${_m11o_mac//:/-}.ipxe")"
   if [[ "$_m11o_statut" == planned ]]; then
-    check_output "$_m11o_nom (planned) : script iPXE servi, qui installe sous le bon nom" "(hostname=$_m11o_nom|kickstart/$_m11o_nom\\.ks)" echo "$_m11o_script"
+    check_output "$_m11o_nom (planned) : script iPXE servi, qui installe sous le bon nom" "(hostname=$_m11o_nom|kickstart/$_m11o_nom\\.ks|preseed/$_m11o_nom\\.cfg)" echo "$_m11o_script"
   else
     check_cmd "$_m11o_nom ($_m11o_statut) : script iPXE servi, qui démarre sur le disque (aucun noyau)" \
       bash -c 'head -n 1 <<<"$1" | grep -qx "#!ipxe" && ! grep -q "^kernel" <<<"$1" && grep -q "^exit" <<<"$1"' _ "$_m11o_script"

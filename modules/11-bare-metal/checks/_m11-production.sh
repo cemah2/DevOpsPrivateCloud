@@ -11,6 +11,7 @@ _m11p_pxe_ip=10.10.60.10
 _m11p_src="${WB_SRC:-$HOME/src}"
 _m11p_cfg="$HOME/.config/workbook"
 _m11p_ilo_env="${WB_ILO_ENV_FILE:-$_m11p_cfg/ilo-hp01.env}"
+_m11p_ilo_pem="$_m11p_cfg/ilo-hp01.pem"
 # shellcheck disable=SC2034  # utilisées par les checks qui sourcent ce fichier
 declare -A _m11p_vmid=([pxe01]=2111 [bm01]=2112 [bm02]=2113 [bm03]=2114 [bm04]=2115 [maas01]=2116)
 
@@ -105,20 +106,24 @@ _m11p_bm_actifs() {
     | jq -r '.results[] | "\(.name) \((.primary_ip4.address // "") | split("/")[0])"' 2>/dev/null
 }
 
-# _m11p_ilo CHEMIN — GET Redfish sur l'iLO de hp01 (identifiants lus dans ilo-hp01.env et passés
-# à curl par son entrée standard, jamais en argument ; certificat épinglé si ILO_CACERT est défini).
+# _m11p_ilo_lire CLÉ — valeur de CLÉ=… dans ilo-hp01.env (guillemets facultatifs), sans l'exécuter.
+_m11p_ilo_lire() {
+  sed -nE "s/^[[:space:]]*(export[[:space:]]+)?$1=\"?([^\"]*)\"?[[:space:]]*(#.*)?\$/\\2/p" "$_m11p_ilo_env" 2>/dev/null | tail -n 1 || true
+}
+
+# _m11p_ilo CHEMIN — GET Redfish sur l'iLO de hp01 avec wb-redfish, comme outils/redfish.sh (M11-E07) :
+# identifiants lus dans ilo-hp01.env SANS l'exécuter et passés à curl par son entrée standard ;
+# certificat épinglé ilo-hp01.pem, nom ILO_NOM_TLS résolu vers ILO_HOST (--resolve) : jamais -k.
 _m11p_ilo() {
-  [[ -r "$_m11p_ilo_env" ]] || return 1
-  (
-    set -a
-    # shellcheck source=/dev/null
-    source "$_m11p_ilo_env"
-    set +a
-    local -a ca=()
-    if [[ -n "${ILO_CACERT:-}" ]]; then ca=(--cacert "$ILO_CACERT"); fi
-    printf 'user = "%s:%s"\n' "$ILO_USER" "$ILO_PASSWORD" \
-      | curl -sS --fail --max-time 20 -K- "${ca[@]}" "https://$ILO_HOST$1"
-  ) 2>/dev/null
+  local hote nom u p
+  [[ -r "$_m11p_ilo_env" && -r "$_m11p_ilo_pem" ]] || return 1
+  hote="$(_m11p_ilo_lire ILO_HOST)"; nom="$(_m11p_ilo_lire ILO_NOM_TLS)"
+  u="$(_m11p_ilo_lire ILO_USER)"; p="$(_m11p_ilo_lire ILO_PASSWORD)"
+  [[ -n "$hote" && -n "$nom" && -n "$u" && -n "$p" ]] || return 1
+  p="${p//\\/\\\\}"; p="${p//\"/\\\"}"
+  printf 'user = "%s:%s"\n' "$u" "$p" \
+    | curl -sS --fail --max-time 20 --proto '=https' --cacert "$_m11p_ilo_pem" \
+        --resolve "$nom:443:$hote" -H 'Accept: application/json' -K - "https://$nom$1" 2>/dev/null
 }
 
 # _m11p_ansible COMMANDE [args…] — comme l'apprenant : racine du projet ansible, environnement du

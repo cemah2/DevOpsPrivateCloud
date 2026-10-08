@@ -3,7 +3,7 @@
 # shellcheck disable=SC2016  # filtres jq et commandes bash -c entre apostrophes
 #
 # check-E31.sh — M10-E31 « Le libre-service pour MédiAgenda »
-# Lecture seule : ressources du projet mediagenda-dev (nuage des checks, admin), requêtes HTTP vers
+# Lecture seule : ressources du projet mediagenda-dev (cloud des checks, admin), requêtes HTTP vers
 # l'IP flottante du répartiteur depuis adm01, GitLab (projets mediagenda/recette-infra et
 # plateforme/medisphere).
 
@@ -98,7 +98,7 @@ _m10_pas_detat() {
 }
 check_cmd "mediagenda/recette-infra : aucun fichier d'état ni d'identifiants dans le dépôt" _m10_pas_detat
 _m10_pas_admin() {
-  # Rôles attribués dans mediagenda-dev : aucun identifiant d'application ne peut porter plus
+  # Rôles attribués dans mediagenda-dev : aucune application credential ne peut porter plus
   # que les rôles de son utilisateur ; on vérifie qu'aucun compte de service de l'équipe n'est admin.
   local r
   r="$(_m10p_os role assignment list --project "$_m10_pj" --names)" || return 1

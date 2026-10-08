@@ -1,16 +1,38 @@
 ---
-- name: Paquets
-  ansible.builtin.apt:
-    name: [tftpd-hpa, nginx, python3]
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
+# Rôle pxe (M11-E02 ; installateurs vérifiés en M11-E04/E05 ; chaîne authentifiée en M11-E13).
 
-- name: TFTP
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - pxe_adresse is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+      - pxe_http_autorises | length > 0
+      - pxe_reponses_autorises | length > 0
+      - pxe_installateurs | rejectattr('type', 'in', ['debian', 'rocky']) | list | length == 0
+      - pxe_chargeurs | rejectattr('sha256', 'match', '^[0-9a-f]{64}$') | list | length == 0
+      - pxe_chargeurs | length == 0 or pxe_chargeurs_version | length > 0
+    fail_msg: >-
+      pxe_adresse doit être une adresse IPv4, pxe_http_autorises et pxe_reponses_autorises non vides,
+      type d'installateur debian ou rocky, chaque chargeur avec une empreinte SHA-256 (64 caractères
+      hexadécimaux en minuscules) et pxe_chargeurs_version renseignée.
+    quiet: true
+
+- name: Paquets (TFTP, HTTP, binaires iPXE, vérification des signatures Debian)
+  ansible.builtin.apt:
+    name:
+      - tftpd-hpa
+      - nginx
+      - ipxe
+      - gpgv
+      - debian-archive-keyring
+      - curl
+      - rsync
+    state: present
+
+- name: TFTP et chargeurs iPXE
   ansible.builtin.import_tasks: tftp.yml
 
-- name: Contenu HTTP
+- name: Contenu HTTP géré par le rôle (racine de la PKI, installateurs vérifiés)
   ansible.builtin.import_tasks: contenu.yml
 
-- name: Nginx
+- name: Site nginx (HTTPS si le certificat existe)
   ansible.builtin.import_tasks: nginx.yml

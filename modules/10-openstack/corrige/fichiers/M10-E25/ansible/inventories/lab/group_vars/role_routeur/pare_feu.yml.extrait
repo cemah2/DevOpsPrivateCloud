@@ -1,0 +1,8 @@
+---
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajout de M10-E25 (section « Sauvegardes vers PAR2 »).
+# Matrice commune à gw01 et gw02 (M07-E24).
+# Déjà définis : $V_OSAPI, $WG_S2S, $PBS01 (M07-E30), $OSCTL01 (M10-E04).
+pare_feu_transit:
+  # … règles existantes (pve01, git01, dns01, ca01, nbx01 → PBS) …
+  - {entree: $V_OSAPI, source: $OSCTL01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "osctl01 vers PBS : base OpenStack (Mariabackup)", ref: M10-E25}

@@ -47,8 +47,8 @@ for _m11_e25_f in docs/provisioning/usine.md docs/provisioning/orchestration.md 
   check_cmd "$_m11_e25_f sur main de plateforme/medisphere" _m11p_gitlab_fichier plateforme/medisphere "$_m11_e25_f"
 done
 _m11_e25_liste() { _m11p_gitlab_ls plateforme/medisphere "$1" | sort | tr '\n' ' '; }
-check_output "ADR-0110 et ADR-0111 sur main" 'ADR-0110.*ADR-0111' _m11_e25_liste docs/socle/adr
-check_output "RB-110 et RB-111 sur main" 'RB-110.*RB-111' _m11_e25_liste docs/socle/runbooks
+check_output "ADR-0110 et ADR-0111 sur main" 'ADR-0110.*ADR-0111' _m11_e25_liste docs/provisioning/adr
+check_output "RB-110 et RB-111 sur main" 'RB-110.*RB-111' _m11_e25_liste docs/provisioning/runbooks
 check_output "matrice des flux documentée : VLAN 60 (10.10.60.0/24)" '10\.10\.60\.' \
   _m11p_gitlab_brut plateforme/medisphere docs/socle/matrice-flux.md
 check_cmd "étiquette provisioning-v1 sur plateforme/medisphere" \
@@ -69,7 +69,7 @@ else
   check_ssh "pve01 : compte wb-maas@pve supprimé ou désactivé, sans jeton" "$WB_PVE_HOST" \
     'u="$(pveum user list --output-format json | python3 -c "import json,sys; u=[x for x in json.load(sys.stdin) if x.get(\"userid\")==\"wb-maas@pve\"]; print(\"absent\" if not u else (\"actif\" if u[0].get(\"enable\",1) else \"inactif\"))")"; [ "$u" = absent ] || { [ "$u" = inactif ] && [ "$(pveum user token list wb-maas@pve --output-format json | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")" = 0 ]; }'
   check_cmd "matrice des flux : plus de référence à maas01 (10.10.60.11)" \
-    bash -c '[ -s "$1" ] && ! grep -Eqi "10\.10\.60\.11|maas" "$1"' _ "$_m11p_src/ansible/inventories/lab/host_vars/gw01/pare_feu.yml"
+    bash -c '[ -s "$1" ] && ! grep -Eqi "10\.10\.60\.11|maas" "$1"' _ "$_m11p_src/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml"
   check_ssh "pare-feu de Proxmox : plus de référence à maas01 (10.10.60.11)" "$WB_PVE_HOST" \
     '! grep -rqs "10\.10\.60\.11" /etc/pve/firewall/'
 fi

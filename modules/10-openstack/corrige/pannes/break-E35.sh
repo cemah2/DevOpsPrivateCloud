@@ -46,7 +46,7 @@ _e35_precondition() {
     return 1
   fi
   if ! m10_image_sonde >/dev/null; then
-    wb_avert "image Debian 13 publique introuvable (M10-E06) ; WB_M10_IMAGE permet de la désigner"
+    wb_avert "image debian-13 introuvable (M10-E06)"
     return 1
   fi
   if ! m10_os flavor show "$_M10_GABARIT" >/dev/null 2>&1; then
@@ -69,9 +69,15 @@ _mE35_une() {
         m10_exec "$h" >/dev/null <<'EOF' || rc=$?
 f=/etc/kolla/nova-compute/nova.conf
 [ -f "$f" ] || exit 10
-subst "$f" '^\[DEFAULT\][ \t]*\n' '[DEFAULT]\nreserved_host_memory_mb = 7680\n' || exit $?
+# La réserve de M10-E20 (2048) est déjà dans [DEFAULT] : la remplacer (oslo.config retient la
+# dernière valeur d'une option répétée) ; sinon, l'ajouter en tête de [DEFAULT].
+if grep -q '^reserved_host_memory_mb[ \t]*=' "$f"; then
+  subst "$f" '^reserved_host_memory_mb[ \t]*=.*$' 'reserved_host_memory_mb = 7680' || exit $?
+else
+  subst "$f" '^\[DEFAULT\][ \t]*\n' '[DEFAULT]\nreserved_host_memory_mb = 7680\n' || exit $?
+fi
 ctr_redemarrer nova_compute || exit 1
-journal "$f : reserved_host_memory_mb = 7680 ajouté, nova_compute redémarré"
+journal "$f : reserved_host_memory_mb = 7680 posé, nova_compute redémarré"
 EOF
         ((rc == 0)) || break
       done

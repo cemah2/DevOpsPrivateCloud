@@ -5,9 +5,12 @@
 # Rappel : les checks tournent sous « set -euo pipefail » (lab/bin/check) : toute commande qui
 # peut échouer hors des fonctions check_* est protégée (|| true, ou dans une fonction).
 # OpenStack est interrogé par la CLI de adm01 avec des commandes de LECTURE (list, show, token
-# issue) ; le cloud vient de WB_OS_CLOUD (lab/lab.env), medisphere-admin par défaut.
+# issue) ; le cloud vient de WB_OS_CLOUD (lab/lab.env), medisphere-admin par défaut ; les objets du
+# projet plateforme se lisent avec WB_OS_CLOUD_PLATEFORME (medisphere-plateforme par défaut).
 
 _M10D_CLOUD="${WB_OS_CLOUD:-medisphere-admin}"
+# shellcheck disable=SC2034  # utilisée par check-E07 et check-E08
+_M10D_CLOUD_PLAT="${WB_OS_CLOUD_PLATEFORME:-medisphere-plateforme}"
 _M10D_SRC="${WB_SRC:-$HOME/src}"
 _M10D_OS="$_M10D_SRC/openstack"
 _M10D_INFRA="$_M10D_SRC/infra"

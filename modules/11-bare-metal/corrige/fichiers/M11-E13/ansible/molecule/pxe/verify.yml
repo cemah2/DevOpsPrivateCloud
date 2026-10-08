@@ -1,0 +1,65 @@
+---
+# molecule/pxe/verify.yml — le service rendu (version M11-E13) : TFTP, redirection du port 80,
+# HTTPS vérifié avec le certificat de test comme ancre, aucune liste, aucune écriture.
+- name: Vérifier le rôle pxe
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+    nom: pxe-molecule.par1.medisphere.internal
+    # Le certificat autosigné de test est sa propre ancre (nom résolu par /etc/hosts, converge.yml).
+    ancre: /etc/ssl/pxe/pxe-molecule.par1.medisphere.internal.crt
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Services tftpd-hpa et nginx actifs
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['tftpd-hpa.service']['state'] == 'running'
+          - ansible_facts['services']['nginx.service']['state'] == 'running'
+
+    - name: TFTP sert les deux chargeurs iPXE
+      ansible.builtin.command:
+        argv: [curl, --silent, --fail, --max-time, "10", --output, /dev/null, "tftp://{{ adresse }}/{{ item }}"]
+      loop: [undionly.kpxe, ipxe.efi]
+      changed_when: false
+
+    - name: TFTP refuse de sortir de sa racine (--secure)
+      ansible.builtin.command:
+        argv: [curl, --silent, --fail, --max-time, "10", --output, /dev/null, "tftp://{{ adresse }}/../etc/passwd"]
+      register: pxe_verif_evasion
+      changed_when: false
+      failed_when: pxe_verif_evasion.rc == 0
+
+    - name: Le port 80 ne fait que rediriger vers HTTPS
+      ansible.builtin.uri:
+        url: "http://{{ adresse }}/pki/medisphere-root-ca.crt"
+        follow_redirects: none
+        status_code: 301
+
+    - name: HTTPS sert la racine de la PKI, certificat vérifié
+      ansible.builtin.uri:
+        url: "https://{{ nom }}/pki/medisphere-root-ca.crt"
+        ca_path: "{{ ancre }}"
+        validate_certs: true
+
+    - name: HTTPS ne liste pas les répertoires et refuse les écritures
+      ansible.builtin.uri:
+        url: "https://{{ nom }}/{{ item.chemin }}"
+        method: "{{ item.methode }}"
+        ca_path: "{{ ancre }}"
+        validate_certs: true
+        status_code: "{{ item.codes }}"
+      loop:
+        - {chemin: "preseed/", methode: GET, codes: [403, 404]}
+        - {chemin: "pki/essai", methode: PUT, codes: [403, 405]}
+
+    - name: Le site nginx n'écoute que sur l'adresse de service (80 et 443)
+      ansible.builtin.command: ss -Hltn '( sport = :80 or sport = :443 )'
+      register: pxe_verif_ecoute
+      changed_when: false
+      failed_when: >-
+        (adresse ~ ':443') not in pxe_verif_ecoute.stdout
+        or '0.0.0.0:' in pxe_verif_ecoute.stdout or '*:' in pxe_verif_ecoute.stdout

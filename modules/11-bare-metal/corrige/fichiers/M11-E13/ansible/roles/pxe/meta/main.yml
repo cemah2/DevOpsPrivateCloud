@@ -1,12 +1,11 @@
 ---
 galaxy_info:
-  role_name: pxe
-  namespace: medisphere
   author: Équipe Plateforme MédiSphère
-  description: Serveur de provisioning (TFTP, iPXE, nginx HTTPS) — M11-E02, sécurisé en M11-E13
+  description: Serveur de démarrage réseau du VLAN 60 (TFTP, iPXE, nginx HTTPS) — M11-E02, sécurisé en M11-E13
   license: proprietary
   min_ansible_version: "2.19"
   platforms:
     - name: Debian
-      versions: [trixie]
+      versions:
+        - trixie
 dependencies: []

@@ -8,7 +8,8 @@
 # Accès utilisés (tous en lecture) :
 #   - API OpenStack : client « openstack » de adm01, cloud $WB_OS_CLOUD (défaut medisphere-admin)
 #     de ~/.config/openstack/clouds.yaml ; certains contrôles utilisent le cloud d'un projet ;
-#   - SSH vers osctl01, oscmp01, oscmp02 (admin + sudo -n) et ceph01 (cephadm shell) ;
+#   - SSH vers osctl01, oscmp01, oscmp02 (admin + sudo -n) et le nœud « _admin » de Ceph
+#     (WB_CEPH_ADMIN, défaut ceph01, M08 : cephadm shell) ;
 #   - API GitLab (jeton des checks) pour lire la branche main des projets ;
 #   - SSH vers les instances d'essai (utilisateur debian, clé de adm01), known_hosts temporaire.
 
@@ -22,7 +23,7 @@ _M10O_PROJET_INFRA="projects/plateforme%2Finfra"
 _M10O_PROJET_DOC="projects/plateforme%2Fmedisphere"
 _M10O_CTL=osctl01
 _M10O_CALCULS="oscmp01 oscmp02"
-_M10O_CEPH="${WB_CEPH_HOST:-ceph01}"
+_M10O_CEPH="${WB_CEPH_ADMIN:-ceph01}"
 _M10O_DELAI=90
 
 _M10O_TMP="$(mktemp -d)"
@@ -82,7 +83,7 @@ _m10o_ssh_instance() {
     -o UserKnownHostsFile="$_M10O_TMP/known_hosts" -o LogLevel=ERROR "debian@$ip" -- "$@"
 }
 
-# _m10o_ceph COMMANDE… — commande Ceph (lecture) dans « cephadm shell » sur ceph01.
+# _m10o_ceph COMMANDE… — commande Ceph (lecture) dans « cephadm shell » sur WB_CEPH_ADMIN.
 _m10o_ceph() {
   remote "$_M10O_CEPH" "sudo -n cephadm shell -- $*" 2>/dev/null || true
 }
@@ -132,13 +133,12 @@ _m10o_globals_vaut() {
     | sed -E 's/[[:space:]]+$//' | tail -n 1 | grep -Eqx -- "$3"
 }
 
-# _m10o_matrice — matrice des flux de la bordure (plateforme/ansible, main) : premier
-# emplacement trouvé (host_vars de gw01, ou fichier commun aux passerelles depuis M07).
+# _m10o_matrice — matrice des flux de la bordure (plateforme/ansible, main) :
+# group_vars/role_routeur/pare_feu.yml depuis M07-E24 (repli : host_vars/gw01, avant M07-E24).
 _m10o_matrice() {
   local c contenu
-  for c in inventories/lab/host_vars/gw01/pare_feu.yml \
-           inventories/lab/group_vars/passerelles/pare_feu.yml \
-           inventories/lab/group_vars/role_routeur/pare_feu.yml; do
+  for c in inventories/lab/group_vars/role_routeur/pare_feu.yml \
+           inventories/lab/host_vars/gw01/pare_feu.yml; do
     contenu="$(_m10o_contenu_main "$_M10O_PROJET_ANSIBLE" "$c")"
     if [[ -n "$contenu" ]]; then
       printf '%s\n' "$contenu"

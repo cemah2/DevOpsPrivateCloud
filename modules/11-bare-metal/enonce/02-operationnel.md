@@ -271,12 +271,12 @@ Une initialisation idempotente se reconnaît à un fichier qu'elle crée : la co
 - Machines confiées à MAAS : `bm01` (BIOS) et `bm03` (UEFI). `bm02` et `bm04` restent éteintes pendant l'essai.
 - ⚠️ Pendant l'essai, le VLAN 60 n'a **pas** de Kea : une machine qui démarre sur le réseau parle à MAAS. Retire d'abord le sous-réseau 60 de Kea et le VLAN 60 du relais des deux passerelles (MR, pipeline), vérifie qu'aucune offre n'arrive plus (`nmap` depuis `pxe01`, comme en E02), **puis** active le DHCP de MAAS. Retour arrière : désactiver le DHCP de MAAS, puis MR inverse. Le DHCP du VLAN 99 ne doit pas être affecté.
 - Sous-réseau dans MAAS : passerelle 10.10.60.1, DNS 10.10.20.10 et .16 ; plages réservées 10.10.60.1-99 et 10.10.60.200-254 ; plage dynamique 10.10.60.150-199 ; les adresses des machines déployées sont prises dans 10.10.60.100-149.
-- Pilote `proxmox` (paramètres CLI : `power_address`, `power_user`, `power_token_name`, `power_token_secret`, `power_vm_name`, `power_verify_ssl`) : adresse `<IP-PVE01>`, utilisateur `wb-maas@pve`, jeton `maas`, VM désignée par son VMID, vérification TLS **activée** (avec les certificats du système de `maas01`, d'où l'ancre de `pve01` installée en E09). Le secret du jeton se saisit dans l'interface web (champ masqué), pas en argument de la CLI.
+- Pilote `proxmox` (paramètres CLI : `power_address`, `power_user`, `power_token_name`, `power_token_secret`, `power_vm_name`, `power_verify_ssl`) : adresse `<IP-PVE01>`, utilisateur `wb-maas@pve`, jeton `maas`, VM désignée par son VMID pour `bm01` et par son **nom** pour `bm03` (le pilote accepte les deux formes : garde-les, tu les compareras en M11-E22), vérification TLS **activée** (avec les certificats du système de `maas01`, d'où l'ancre de `pve01` installée en E09). Le secret du jeton se saisit dans l'interface web (champ masqué), pas en argument de la CLI.
 - Flux `maas01` → `pve01` TCP 8006 : bordure **et** pare-feu Proxmox. Nouvel IPSet `maas` (contenant 10.10.60.11) plutôt que `automation` : justifie.
 - Fin d'essai : machines **libérées** (*Release* : éteintes), DHCP de MAAS désactivé, Kea et relais rétablis, services MAAS arrêtés et `maas01` éteinte (elle resservira en M11-E16 et E22). Lance la vérification **avant** d'éteindre `maas01`, puis après.
 
 **Travail demandé**
-1. **Préparer.** Rédige CHG-1215 dans `docs/socle/changements/` (but, étapes, contrôles, retour arrière, critère d'abandon). Ouvre le flux et l'IPSet ; vérifie depuis `maas01`, avec `curl` sans option de contournement, que l'API de `pve01` répond avec un certificat reconnu.
+1. **Préparer.** Rédige CHG-1215 dans `docs/provisioning/changements/` (but, étapes, contrôles, retour arrière, critère d'abandon). Ouvre le flux et l'IPSet ; vérifie depuis `maas01`, avec `curl` sans option de contournement, que l'API de `pve01` répond avec un certificat reconnu.
 2. **Basculer.** Exécute la première moitié de la fiche ; montre qu'il n'y a jamais eu deux serveurs DHCP en même temps sur le VLAN 60, et que le VLAN 99 est intact.
 3. **Machines.** Crée `bm01` et `bm03` dans MAAS (MAC, architecture `amd64/generic`, pilote `proxmox`) ; vérifie que MAAS lit leur état d'alimentation. Lance la mise en service (*commissioning*) avec les tests matériels par défaut ; observe MAAS allumer et éteindre les VMs. Compare l'inventaire relevé par MAAS (CPU, mémoire, disques, interfaces) avec la configuration Proxmox.
 4. **Déployer.** Déploie Ubuntu 24.04 sur les deux ; connecte-toi en SSH (quel compte ? quelle clé ?). Note la durée de chaque étape et chaque geste manuel.
@@ -331,7 +331,7 @@ Le pilote `proxmox` ne sait pas changer l'ordre de démarrage : la VM doit déma
 3. Liste les **contrôles à faire sur les serveurs déjà installés** par InfoGér avec ces fichiers (ce que les défauts y ont laissé), sous forme de commandes à lancer.
 4. Conclus : archiver, corriger ou détruire ces fichiers ? Où les ranger s'ils sont gardés ?
 
-**Livrable** : `docs/socle/provisioning/revue-infoger.md` (tableau des défauts, contrôles, conclusion), par MR.
+**Livrable** : `docs/provisioning/revue-infoger.md` (tableau des défauts, contrôles, conclusion), par MR.
 
 **Critères de réussite**
 - [ ] Au moins sept défauts relevés, chacun avec son risque, sa gravité et sa correction.
@@ -369,7 +369,7 @@ Un mot de passe qui a été dans un fichier servi en clair est **compromis**, m�
 - Ce que la chaîne fait aujourd'hui (fin du palier 2) : génération depuis NetBox, réservations par MR, publication, installation, extinction ; le passage à `active` est encore manuel (automatisé en E15, qui mettra le runbook à jour).
 
 **Travail demandé**
-1. Écris `docs/socle/runbooks/RB-110-provisionner-un-serveur.md` : réception (saisie NetBox, données obligatoires, où lire la MAC et le numéro de série sur un vrai serveur), génération et application, démarrage par le contrôleur de gestion, suivi de l'installation, contrôles d'acceptation, passage en service, et le cas « réinstaller un serveur existant ».
+1. Écris `docs/provisioning/runbooks/RB-110-provisionner-un-serveur.md` : réception (saisie NetBox, données obligatoires, où lire la MAC et le numéro de série sur un vrai serveur), génération et application, démarrage par le contrôleur de gestion, suivi de l'installation, contrôles d'acceptation, passage en service, et le cas « réinstaller un serveur existant ».
 2. Ajoute un tableau de dépannage d'au moins six symptômes (« le serveur n'obtient pas d'adresse », « iPXE affiche une erreur de téléchargement », « l'installateur pose une question »…) avec la première vérification à faire.
 3. Fais relire le runbook par une personne qui ne connaît pas la chaîne (ou relis-le toi-même après une nuit) et exécute-le sur `bm03` en suivant **seulement** le runbook ; corrige ce qui manquait.
 

@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: Équipe Plateforme MédiSphère
-  description: Relais DHCP de gw01 (dnsmasq en mode relais) vers les serveurs Kea du socle
+  description: Relais DHCP des passerelles gw01 et gw02 (dnsmasq en mode relais) vers les serveurs Kea du socle
   license: proprietary
   min_ansible_version: "2.19"
   platforms:

@@ -12,7 +12,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m09-production.sh"
 title "M09-E34 — Remplacer un nœud en temps limité (hv02)"
 require_cmd jq ssh openssl
 _m09p_charger
-_m09_e34_h="root@hv02.$_M09P_ZONE"
+_m09_e34_h="hv02"
 
 title "Nouveau matériel (exigence 3)"
 check_cmd "VM 2092 recréée depuis moins de 48 h (tâche de création sur pve01)" _m09p_creations_min 2092 1 172800
@@ -25,7 +25,7 @@ check_ssh "hv02 : deux liens Corosync connectés" "$_m09_e34_h" \
 check_cmd "Ceph : hv02 porte un MON en quorum" _m09p_ceph_jq status '.quorum_names | index("hv02") != null'
 check_cmd "Ceph : hv02 porte un MGR (actif ou en attente)" _m09p_ceph_jq "mgr dump" \
   '.active_name == "hv02" or any(.standbys[]?; .name == "hv02")'
-check_ssh "Ceph : hv02 porte deux OSD" "root@hv01.$_M09P_ZONE" '[ "$(ceph osd ls-tree hv02 | wc -l)" -eq 2 ]'
+check_ssh "Ceph : hv02 porte deux OSD" "hv01" '[ "$(ceph osd ls-tree hv02 | wc -l)" -eq 2 ]'
 check_ssh "hv02 : chien de garde i6300esb chargé, softdog absent" "$_m09_e34_h" \
   'lsmod | grep -q "^i6300esb " && ! lsmod | grep -q "^softdog "'
 check_ssh "hv02 : pare-feu du nœud actif" "$_m09_e34_h" \
@@ -49,7 +49,7 @@ check_cmd "réplication vers hv02 rétablie (synchronisée depuis moins d'une he
 title "Retour au nominal (exigence 5)"
 check_cmd "Ceph en HEALTH_OK, 6 OSD existants, up et in" _m09p_ceph_jq status \
   '.health.status == "HEALTH_OK" and .osdmap.num_osds == 6 and .osdmap.num_up_osds == 6 and .osdmap.num_in_osds == 6'
-check_ssh "aucun nœud fantôme (/etc/pve/nodes = hv01, hv02, hv03)" "root@hv01.$_M09P_ZONE" \
+check_ssh "aucun nœud fantôme (/etc/pve/nodes = hv01, hv02, hv03)" "hv01" \
   '[ "$(ls /etc/pve/nodes | sort | tr "\n" " ")" = "hv01 hv02 hv03 " ]'
 check_cmd "aucune ressource HA en error, fence ou recovery" _m09p_ha_sans_erreur
 check_cmd "vm:120 (fence01) revenue sur hv02" _m09p_pvesh_jq /cluster/ha/status/current \

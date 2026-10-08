@@ -39,7 +39,7 @@ check_ssh "pxe01 : plus aucun initrd de l'installateur PVE servi (il contient le
   "r='${_m11_e14_racine:-/srv/http}'; [ -d \"\$r\" ] && [ -z \"\$(sudo -n find \"\$r\" -path '*pve*' -name 'initrd*' 2>/dev/null)\" ]"
 check_cmd "docs/provisioning/pve-pxe.md sur main de plateforme/medisphere" \
   _m11p_gitlab_fichier plateforme/medisphere docs/provisioning/pve-pxe.md
-check_ssh "bm04 (2115) : VM vide de nouveau, mémoire 2 Go" "$WB_PVE_HOST" \
-  'qm config 2115 | grep -Eq "^memory: 2048$" && qm config 2115 | grep -Eq "^name: bm04$"'
+check_ssh "bm04 (2115) : revenue à sa mémoire d'origine (4 Go, M11-E03)" "$WB_PVE_HOST" \
+  'qm config 2115 | grep -Eq "^memory: 4096$" && qm config 2115 | grep -Eq "^name: bm04$"'
 _m11_e14_statut() { [[ "$(_m11p_equipement bm04 | jq -r '.status.value')" == planned ]]; }
 check_cmd "NetBox : bm04 à l'état planned" _m11_e14_statut

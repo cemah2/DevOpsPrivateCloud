@@ -15,7 +15,13 @@ require_cmd curl jq ssh dig
 mapfile -t _m11_e15_actifs < <(_m11p_bm_actifs)
 check_cmd "NetBox : au moins deux équipements serveur-bm à l'état active" test "${#_m11_e15_actifs[@]}" -ge 2
 
-_m11_e15_inv="$(_m11p_ansible ansible-inventory --list 2>/dev/null)" || true
+# Inventaire Ansible : celui par défaut du projet, plus les fichiers d'inventaire NetBox
+# supplémentaires (inventories/lab/*netbox*.yml : netbox-bm.yml dans le corrigé).
+_m11_e15_sources=()
+for _m11_e15_f in "$_m11p_src"/ansible/inventories/lab/*netbox*.yml; do
+  if [[ -f "$_m11_e15_f" ]]; then _m11_e15_sources+=(-i "inventories/lab/${_m11_e15_f##*/}"); fi
+done
+_m11_e15_inv="$(_m11p_ansible ansible-inventory "${_m11_e15_sources[@]}" --list 2>/dev/null)" || true
 _m11_e15_bios_debian=0
 _m11_e15_uefi_rocky=0
 for _m11_e15_l in "${_m11_e15_actifs[@]}"; do
@@ -49,7 +55,7 @@ check_cmd "au moins un serveur UEFI (OVMF) en Rocky mis en service" test "$_m11_
 
 check_cmd "docs/provisioning/orchestration.md sur main de plateforme/medisphere" \
   _m11p_gitlab_fichier plateforme/medisphere docs/provisioning/orchestration.md
-check_output "RB-110 sur main (docs/socle/runbooks/)" '^RB-110' _m11p_gitlab_ls plateforme/medisphere docs/socle/runbooks
+check_output "RB-110 sur main (docs/provisioning/runbooks/)" '^RB-110' _m11p_gitlab_ls plateforme/medisphere docs/provisioning/runbooks
 check_output "pipeline de plateforme/provisioning : un job manuel (when: manual)" 'when:[[:space:]]*manual' \
   _m11p_gitlab_brut plateforme/provisioning .gitlab-ci.yml
 skip "relance sans effet et redémarrage sans réinstallation" "auto-évaluation : démontre-les (sortie et code de retour, console) dans ton compte rendu"

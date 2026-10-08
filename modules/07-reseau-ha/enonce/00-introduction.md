@@ -98,7 +98,7 @@ Le **palier 1** (ce fichier et `01-decouverte.md`) n'y touche pas encore : tu ca
 
 Points structurants :
 
-- **On apprend sur la maquette, on applique sur le socle.** Tout ce qui peut casser (sessions BGP, bascules VRRP, bonds) est d'abord pratiqué sur des VMs jetables, reconstruites par le code en quelques minutes. La bordure du socle n'est modifiée qu'au palier 2 (FRR, E16) et au palier 3 (VRRP, E25), avec fiche de changement et retour arrière.
+- **On apprend sur la maquette, on applique sur le socle.** Tout ce qui peut casser (sessions BGP, bascules VRRP, bonds) est d'abord pratiqué sur des VMs jetables, reconstruites par le code en quelques minutes. La bordure du socle n'est modifiée qu'à partir du palier 2 (flux de la matrice, redirection WAN E13, MTU E15, FRR E16, `wg2` E18), puis au palier 3 (`gw02`, VRRP, VIP WAN, `conntrackd`), toujours par le code, avec précautions et retour arrière (fiche de changement pour E15, E25, E26).
 - **Le pont Linux de `pve01` ne relaie pas LACP.** Les trames 802.3ad (adresse 01:80:c2:00:00:02) sont réservées : un bond LACP entre deux VMs à travers `vmbr1` ne se forme jamais. Le LACP se pratique donc **à l'intérieur de `net01`**, entre espaces de noms reliés par des paires veth (E04, E17). Entre VMs, seuls les modes sans négociation (`active-backup`, `balance-xor`) ont un sens.
 - **Les liens de fabric sont des VNets dédiés** (`vfab1` à `vfab8`, VLAN 901 à 908 de la zone SDN `lab`, sans passerelle) : chaque lien point à point est un domaine de diffusion isolé, comme un câble entre deux commutateurs.
 - **L'interface d'administration de chaque VM de la maquette est `eth0`, sur `vsandbox`** : c'est par elle qu'`adm01` et Ansible y accèdent, et elle reste en dehors du routage de la fabric.
@@ -128,9 +128,9 @@ VMs de la maquette (pool `lab`, étiquette `env-m07`, état OpenTofu `m07-maquet
 | 2078 | `lyo-pc01` | 1 / 512 | DHCP (administration seulement) | `eth1` vfab8 : 10.30.10.10/24 | `env-m07`, `m07-lyo` | E18, E19, E36 |
 | 2079 | `hap01` | 1 / 1024 | DHCP | — | `env-m07`, `m07-hap` | E10 (créée au palier 2) |
 
-Les adresses (sur `eth1`…, et celles de `eth0` en gras) sont posées par cloud-init à la création (`ipconfig1`…). Les VMs en DHCP reçoivent leur nom par la mise à jour dynamique du DNS de Kea (M06-E17) ; les quatre adresses fixes du VLAN 99 (plage `.250-.254` « équipements / tests ») ont leurs enregistrements A et PTR créés par OpenTofu et sont **réservées dans NetBox**, comme la VIP de démonstration 10.10.99.240 (`web-demo.par1.medisphere.internal`). Toutes les VMs allumées : ≈ 10 Go ; `lyo-*` et `hap01` peuvent rester arrêtées tant que leur palier n'est pas commencé.
+Les adresses (sur `eth1`…, et celles de `eth0` en gras) sont posées par cloud-init à la création (`ipconfig1`…). Les VMs en DHCP reçoivent leur nom par la mise à jour dynamique du DNS de Kea (M06-E17) ; les quatre adresses fixes du VLAN 99 (plage `.250-.254` « équipements / tests ») ont leurs enregistrements A et PTR créés par OpenTofu et sont **réservées dans NetBox**, comme la VIP de démonstration 10.10.99.240 (`web-demo.par1.medisphere.internal`). Toutes les VMs allumées : ≈ 10,5 Go ; `lyo-*` et `hap01` peuvent rester arrêtées tant que leur palier n'est pas commencé.
 
-`lyo-pc01` garde au palier 1 la route par défaut de son DHCP d'administration ; le raccordement de LYO1 (E18) la remplace pour que le trafic du site passe par `lyo-gw01`.
+`lyo-pc01` garde **toujours** la route par défaut de son DHCP d'administration (`eth0`) : c'est par elle qu'`adm01` l'administre. Le raccordement de LYO1 (E18) lui ajoute seulement des routes **ciblées** vers les réseaux de PAR1 ouverts à l'agence, par `lyo-gw01` (10.30.10.1).
 
 ### Plan d'adressage et numéros de la fabric
 
@@ -161,7 +161,7 @@ Les adresses (sur `eth1`…, et celles de `eth0` en gras) sont posées par cloud
 | maquette → `dns01`/`dns02` (DNS), Kea (DHCP relayé) | 53, 67 | E03 | existant (M06-E24, E25) |
 | BGP, OSPF, VRRP **à l'intérieur** de la maquette | 179, IP 89, IP 112 | E06-E08 | ne traversent pas `gw01` (même VNet) |
 
-Aucun flux nouveau au palier 1. Les suivants (BGP bordure ↔ `leaf01`, `wg2`, publication par les répartiteurs) passent par `host_vars/gw01/pare_feu.yml` (et `gw02` à partir de E24, même matrice).
+Aucun flux nouveau au palier 1. Les suivants (BGP bordure ↔ `leaf01`, `wg2`, publication par les répartiteurs) passent par `host_vars/gw01/pare_feu.yml` jusqu'à E23 ; en E24, la matrice déménage dans `group_vars/role_routeur/pare_feu.yml`, commune à `gw01` et `gw02`.
 
 ---
 
@@ -172,9 +172,9 @@ Le chemin du module 06 s'applique, avec deux nuances pour la maquette :
 1. **OpenTofu** : les hôtes permanents (`gw02`, `lb01`, `lb02`) vont dans l'état `socle` de `plateforme/infra` (module `vm-debian`, image dorée `current`, pipeline). La maquette a **son propre état**, `m07-maquette` (répertoire `envs/m07-maquette/`), appliqué depuis `adm01` : elle n'a rien à faire dans le pipeline du socle, mais elle se reconstruit entièrement par `tofu apply`.
 2. **Nom et adresse** : NetBox (réservation ou allocation) et PowerDNS (module `enregistrement-dns`, ou mise à jour dynamique de Kea pour les VMs en DHCP).
 3. **Ansible** : un rôle testé (`ansible-lint` profil `production`, scénario Molecule pour les rôles qui iront sur le socle : `frr`, `keepalived`, `haproxy`, `conntrackd`). La maquette se configure depuis `adm01` avec l'inventaire Proxmox (`-i inventories/lab/proxmox.yml`, groupes `env_m07`, `m07_fabric`, `m07_web`…) : l'inventaire NetBox par défaut ne contient que le socle.
-4. **Flux** : une ligne dans `host_vars/gw01/pare_feu.yml` (puis la même matrice pour `gw02`).
+4. **Flux** : une ligne dans `host_vars/gw01/pare_feu.yml` (paliers 1 et 2), puis dans `group_vars/role_routeur/pare_feu.yml` à partir de E24 : une seule matrice pour les deux passerelles.
 5. **Secrets** : Vault `critique` pour ce qui permet d'usurper un équipement ou un service (clés privées WireGuard, clés TLS des répartiteurs) ; Vault `lab` pour le reste (mots de passe BGP de la maquette, page de statistiques HAProxy). Chacun au registre des secrets.
-6. **Documentation** : `docs/socle/reseau/` (cartographie, plan d'adressage, matrice des flux v2), runbooks, ADR, fiches de changement, dans `plateforme/medisphere`.
+6. **Documentation** : `docs/socle/reseau/` (cartographie E02, architecture E46), `docs/socle/matrice-flux.md` (matrice des flux v2, générée en E30), runbooks, ADR, fiches de changement, dans `plateforme/medisphere`.
 
 Une configuration à la main n'est permise que sur la maquette, pour **explorer** (annoncé comme tel dans l'énoncé), et toujours remplacée par le code avant la fin de l'exercice.
 
@@ -221,10 +221,10 @@ Une synthèse pour se repérer ; les exercices et les liens « Pour aller plus l
 | État OpenTofu | `envs/m07-maquette/` de `plateforme/infra`, clé `envs/m07-maquette/terraform.tfstate` du compartiment `tofu-state` (chiffré, même phrase que les autres états, `outils/charger-acces.sh`) |
 | Groupes d'inventaire | maquette (inventaire Proxmox, une étiquette = un groupe) : `env_m07`, `m07_labo`, `m07_fabric` (`m07_spine`, `m07_leaf`), `m07_web`, `m07_lyo`, `m07_hap` ; socle (NetBox) : `role_routeur` (`gw01`, puis `gw02`), `role_lb` (`lb01`, `lb02`) |
 | Rôles Ansible du module | `frr`, `keepalived`, `nginx_web` (serveurs de démonstration), `bonding` et `ovs_labo` (laboratoires de `net01`) au palier 1 ; `haproxy`, `wireguard`, `conntrackd` ensuite |
-| Molecule | `frr` : instance 2047 ; `keepalived` : instances 2048 et 2049 (deux VMs, VIP d'essai 10.10.99.239, VRID 198) ; plage commune 2045-2049 de `plateforme/ansible` |
+| Molecule | `frr` et `frr_bordure` (E16) : instance 2047 ; `haproxy` (E10) : 2046 ; `keepalived` et `conntrackd` (E27) : instances 2048 et 2049 (deux VMs ; VIP d'essai de `keepalived` 10.10.99.239, VRID 198) ; plage commune 2045-2049 de `plateforme/ansible`, une instance détruite à la fin de chaque scénario |
 | Secrets du palier 1 | Vault `lab`, `group_vars/m07_fabric/vault.yml` : `vault_m07_bgp_mdp_fabric` (mot de passe TCP-MD5 des sessions BGP de la maquette) |
 | SSH vers la maquette | bloc `Host` dédié dans `~/.ssh/config` d'`adm01` (nom complet, compte `admin`, fichier `~/.ssh/known_hosts.m07` propre à la maquette), mêmes options pour Ansible (`group_vars/env_m07/`) |
-| Documentation | `docs/socle/reseau/` (cartographie E02, plan d'adressage, matrice des flux v2), `docs/socle/changements/` (fiches CHG-8xx), runbooks RB-070 et suivants, ADR-0070 et suivants |
+| Documentation | `docs/socle/reseau/` (`cartographie.md` E02, `architecture.md` E46), `docs/socle/matrice-flux.md` (matrice v2 générée, E30), `docs/socle/changements/` (fiches CHG-8xx), `docs/socle/runbooks/` (RB-070 et suivants), `docs/socle/adr/` (ADR-0070 et suivants) |
 | Brouillons | `~/m07/eXX/` sur `adm01` (non versionnés, sans secret) |
 
 ### Valeurs à adapter
@@ -234,9 +234,10 @@ Une synthèse pour se repérer ; les exercices et les liens « Pour aller plus l
 | `<NOEUD>` | Nom du nœud Proxmox de `pve01` |
 | `<IP-PVE01>` | Adresse de `pve01` sur le LAN maison |
 | `<LAN-MAISON>` | Ton réseau domestique (ex. 192.168.1.0/24) |
-| `<IP-GW01-WAN>` | Adresse WAN actuelle de `gw01` sur le LAN maison (M00) |
-| `<IP-GW02-WAN>` | Adresse WAN de `gw02` : une adresse **libre** du LAN maison, hors de la plage DHCP de ta box (palier 3, E24) |
-| `<IP-GW-WAN-VIP>` | Adresse WAN virtuelle de la bordure : une autre adresse libre du LAN maison, hors DHCP ; elle deviendra la seule adresse WAN connue de l'extérieur (route de `pve01`, extrémité des tunnels) (palier 3, E26) |
+| `<IP-BOX>`, `<MASQUE>` | Adresse de ta box (passerelle du LAN maison, M00-E10) et longueur de préfixe du LAN maison (souvent 24) |
+| `<IP-GW01-WAN>` | Adresse WAN actuelle de `gw01` sur le LAN maison (M00 ; ex. 192.168.1.40, valeur des fichiers du corrigé) |
+| `<IP-GW02-WAN>` | Adresse WAN de `gw02` : une adresse **libre** du LAN maison, hors de la plage DHCP de ta box (palier 3, E24 ; ex. 192.168.1.41) |
+| `<IP-GW-WAN-VIP>` | Adresse WAN virtuelle de la bordure : une autre adresse libre du LAN maison, hors DHCP ; elle deviendra la seule adresse WAN connue de l'extérieur (route de `pve01`, extrémité des tunnels) (palier 3, E26 ; ex. 192.168.1.50) |
 | `<MOI>` | Ton compte GitLab et NetBox personnel |
 
 Réserve dès maintenant les deux adresses libres du LAN maison (bail statique ou exclusion dans ta box) et note-les dans `lab/inventaire-local.md`.
@@ -308,4 +309,4 @@ Durée indicative du palier 1 : 16 à 20 heures. Le module complet : voir le [RE
 - Open vSwitch : <https://docs.openvswitch.org/en/latest/> (tutoriels « VLANs », « Port mirroring », « Link aggregation »).
 - Bonding Linux : <https://www.kernel.org/doc/html/latest/networking/bonding.html>.
 - SDN de Proxmox VE : <https://pve.proxmox.com/pve-docs/chapter-pvesdn.html>.
-- RFC 4271 (BGP-4), RFC 7938 (BGP dans les grands datacenters), RFC 8212 (politiques eBGP par défaut), RFC 2328 (OSPFv2), RFC 3021 (préfixes /31), RFC 9568 (VRRP v3), IEEE 802.1AX (agrégation de liens), RFC 1191 et RFC 8899 (découverte du MTU).
+- RFC 4271 (BGP-4), RFC 7938 (BGP dans les grands datacenters), RFC 8212 (politiques eBGP par défaut), RFC 2328 (OSPFv2), RFC 3021 (préfixes /31), RFC 9568 (VRRP v3 ; elle remplace la RFC 5798, que certains exercices citent encore pour ses numéros de section), IEEE 802.1AX (agrégation de liens), RFC 1191 et RFC 8899 (découverte du MTU).

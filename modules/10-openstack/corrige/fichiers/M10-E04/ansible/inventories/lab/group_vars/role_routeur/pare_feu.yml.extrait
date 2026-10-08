@@ -1,0 +1,17 @@
+# Extrait de group_vars/role_routeur/pare_feu.yml (matrice commune à gw01 et gw02 depuis M07-E24).
+# M10-E04 (PLAT-1104) : certificat de la VIP externe d'OpenStack par ACME (step-ca).
+# Déjà définis par la matrice v2 (M07-E30) : $V_OSAPI (ens19.50), $V_INFRA, $CA01, $WG_ADM, $NET_VPN.
+#
+# 1) pare_feu_definitions : AJOUTER (bloc « OpenStack », complété par les exercices suivants)
+  - {nom: OSCTL01, valeur: 10.10.50.51, commentaire: "osctl01 (contrôle et réseau OpenStack)"}
+  - {nom: OS_VIP_EXT, valeur: 10.10.50.201, commentaire: "VIP externe d'OpenStack (keepalived de Kolla, VRID 150)"}
+#
+# 2) pare_feu_transit : AJOUTER (bloc « OpenStack »)
+  - {entree: $V_OSAPI, source: $OSCTL01, sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "osctl01 vers ca01 : ACME (émission du certificat externe)", ref: M10-E04}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_OSAPI, destination: $OS_VIP_EXT, proto: tcp, ports: 80,
+     motif: "ca01 vers la VIP externe d'OpenStack : défi ACME HTTP-01", ref: M10-E04}
+# Inchangé et suffisant : « bastion (MGMT) vers tout le lab » (adm01 vers les nœuds et les VIP) ;
+# DNS du lab ; NTP sur LAB_IFS ; « lab vers Internet » (images de quay.io, dépôts Debian et Docker
+# pour bootstrap-servers). Pas de règle pour les réponses : la chaîne forward accepte
+# « established,related ».

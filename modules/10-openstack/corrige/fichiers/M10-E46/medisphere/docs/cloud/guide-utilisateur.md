@@ -46,7 +46,7 @@ clouds:
 
 Le mot de passe va dans `secure.yaml` (mode 600) ou t'est demandé ; **jamais** sur une ligne de commande. Cinq échecs d'authentification consécutifs verrouillent ton compte 15 minutes ; les sessions Horizon durent 30 minutes.
 
-**Automatisation** (CI, OpenTofu) : pas ton mot de passe, un **identifiant d'application** du projet, rôle `member`, avec une date d'expiration, stocké en variable protégée et masquée de ton projet GitLab.
+**Automatisation** (CI, OpenTofu) : pas ton mot de passe, une **application credential** du projet, rôle `member`, avec une date d'expiration, stocké en variable protégée et masquée de ton projet GitLab.
 
 ## 4. Catalogue
 

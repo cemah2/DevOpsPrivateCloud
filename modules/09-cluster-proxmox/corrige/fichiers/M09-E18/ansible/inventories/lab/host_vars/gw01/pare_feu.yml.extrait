@@ -1,13 +1,14 @@
-# host_vars/gw01/pare_feu.yml — lignes AJOUTÉES par le module 09 (matrice commune à gw01 et gw02).
+# host_vars/gw01/pare_feu.yml — lignes AJOUTÉES en M09-E15 et M09-E18
+# (matrice commune à gw01 et gw02).
 
 # --- dans pare_feu_definitions ---------------------------------------------------------------------
-  - {nom: HV_NOEUDS, valeur: '{ 10.10.10.51, 10.10.10.52, 10.10.10.53 }', commentaire: "nœuds hv01-03 (MGMT)"}
+  # HV_NOEUDS existe depuis M09-E05 ({ 10.10.10.51, 10.10.10.52, 10.10.10.53 }).
   - {nom: HV_VIP, valeur: 10.10.10.200, commentaire: "VIP de l'API du cluster hv-par1 (hv.par1.medisphere.internal)"}
 
 # --- dans pare_feu_transit ---------------------------------------------------------------------------
-  # Sauvegardes du cluster vers PAR2 (M09-E15). Déjà couvert par « bastion (MGMT) vers tout le lab et
-  # PAR2 » (M00-E10) : ligne explicite pour que la matrice dise POURQUOI ce flux existe, et pour qu'il
-  # survive au jour où la règle large de MGMT sera resserrée.
+  # Sauvegardes du cluster vers PAR2 (M09-E15). Déjà couvert par « bastion (MGMT) vers tout le
+  # lab, PAR2 et LYO1 » (M00-E10, M07-E30) : ligne explicite pour que la matrice dise POURQUOI ce
+  # flux existe, et pour qu'il survive au resserrement de la règle large de MGMT (M09-E26).
   - {entree: $V_MGMT, source: $HV_NOEUDS, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
      motif: "hv01-03 vers PBS : sauvegardes du cluster hv-par1", ref: M09-E15}
   # Pipeline de plateforme/infra (envs/hv-invites) vers l'API du cluster (M09-E18).

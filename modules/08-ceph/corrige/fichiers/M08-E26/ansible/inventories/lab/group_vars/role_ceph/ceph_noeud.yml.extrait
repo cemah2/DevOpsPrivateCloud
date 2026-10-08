@@ -1,0 +1,6 @@
+---
+# group_vars/role_ceph/ceph_noeud.yml (M08-E02/E03) — EXTRAIT : montée de version de M08-E26 (CHG-952).
+# Même MR que ceph_image (group_vars/env_m08/ceph.yml), fusionnée APRÈS « ceph orch upgrade » :
+#   - ceph_noeud_version : paquets cephadm et ceph-common des nœuds, dépôt RPM signé
+#     download.ceph.com/rpm-20.2.4/el10 (rôle ceph_noeud ; il vérifie ensuite « cephadm version »).
+ceph_noeud_version: "20.2.4"

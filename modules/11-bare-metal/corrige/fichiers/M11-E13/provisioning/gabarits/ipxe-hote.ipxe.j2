@@ -1,0 +1,31 @@
+#!ipxe
+# ipxe/mac-{{ m.mac_tirets }}.ipxe — GÉNÉRÉ par outils/netbox-provision.py depuis NetBox : ne pas modifier.
+# {{ m.nom }} — statut NetBox « {{ m.statut }} »{{ (', pxe_action « ' ~ m.pxe_action ~ ' »') if m.pxe_action else '' }}, plate-forme {{ m.plateforme }}, {{ m.ip }}
+# M11-E13 : tout en HTTPS (certificat de pxe01 vérifié par iPXE, racine MédiSphère intégrée au
+# binaire) ; le fichier de réponse et la racine de la PKI sont REMIS par iPXE dans l'initrd (iPXE
+# construit une archive cpio autour de chaque fichier dont on donne le nom de destination).
+# UEFI : iPXE présente tous les initrd au noyau (protocole LoadFile2, noyaux ≥ 5.8) : pas de
+# paramètre initrd= (⚠️ à vérifier sur ton lab).
+set base {{ p.serveur_http }}
+{% if installer and m.plateforme == "debian-13" %}
+echo {{ m.nom }} : installation de Debian 13, le disque va être effacé.
+kernel ${base}/debian13/linux auto=true priority=critical hostname={{ m.nom }} domain={{ p.domaine }} || goto echec
+initrd ${base}/debian13/initrd.gz || goto echec
+initrd ${base}/preseed/{{ m.nom }}.cfg /preseed.cfg || goto echec
+initrd ${base}/pki/medisphere-root-ca.crt /medisphere-root-ca.crt || goto echec
+boot || goto echec
+{% elif installer and m.plateforme == "rocky-10" %}
+echo {{ m.nom }} : installation de Rocky Linux {{ p.rocky_version }}, le disque va être effacé.
+kernel ${base}/rocky10/vmlinuz inst.repo={{ p.rocky_miroir }}/{{ p.rocky_version }}/BaseOS/x86_64/os/ inst.ks=file:/ks.cfg inst.text ip=dhcp || goto echec
+initrd ${base}/rocky10/initrd.img || goto echec
+initrd ${base}/kickstart/{{ m.nom }}.ks /ks.cfg || goto echec
+boot || goto echec
+{% else %}
+echo {{ m.nom }} : statut NetBox « {{ m.statut }} » : démarrage sur le disque local.
+exit
+{% endif %}
+
+:echec
+echo {{ m.nom }} : échec du chargement de l'installateur. Démarrage sur le disque local dans 30 s.
+sleep 30
+exit

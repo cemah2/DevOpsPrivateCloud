@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # construire-ipxe.sh — construit les chargeurs iPXE de la chaîne de provisioning MédiSphère
 # (M11-E13) : undionly.kpxe (BIOS, pilote UNDI de la carte) et ipxe.efi (UEFI x86-64), avec
-# HTTPS et la racine MédiSphère comme SEULE racine de confiance.
+# HTTPS, la racine MédiSphère comme SEULE racine de confiance, et un script intégré (EMBED=) qui
+# annonce la classe d'utilisateur « iPXE-MediSphere » en DHCP : Kea ne donne l'URL HTTPS de
+# boot.ipxe qu'à NOTRE iPXE. Tout autre iPXE (la ROM réseau de QEMU des VMs SeaBIOS, la ROM d'une
+# carte récente) s'annonce « iPXE », ne connaît pas la racine MédiSphère, et reçoit donc le
+# chargeur à télécharger en TFTP comme un client PXE ordinaire.
 #
 # À lancer dans la VM jetable 2117 « m11-build » (jamais sur adm01 ni sur pxe01) :
 #   admin@m11-build:~$ ./construire-ipxe.sh /chemin/medisphere-root-ca.crt
@@ -75,10 +79,19 @@ cat >"$src/config/local/general.h" <<'EOF'
 #define TIME_CMD               /* afficher l'heure : la validité TLS en dépend */
 EOF
 
-# 5. Construction. TRUST= : racines de confiance (remplace la racine du projet iPXE).
-#    -j : parallélisme ; NO_WERROR non utilisé (on veut voir les erreurs de compilation).
-make -C "$src" -j"$(nproc)" bin/undionly.kpxe TRUST="$racine"
-make -C "$src" -j"$(nproc)" bin-x86_64-efi/ipxe.efi TRUST="$racine"
+# 5. Script intégré : classe d'utilisateur propre (réglage user-class = option DHCP 77, voir
+#    ipxe.org/cfg/user-class ; ⚠️ à vérifier sur ton lab par une capture : l'option 77 du second
+#    DISCOVER doit valoir « iPXE-MediSphere »), puis démarrage habituel (DHCP, fichier désigné).
+cat >"$travail/medisphere.ipxe" <<'EOF'
+#!ipxe
+set user-class iPXE-MediSphere
+autoboot || exit
+EOF
+
+# 6. Construction. TRUST= : racines de confiance (remplace la racine du projet iPXE) ;
+#    EMBED= : script exécuté au démarrage. NO_WERROR non utilisé (on veut voir les erreurs).
+make -C "$src" -j"$(nproc)" bin/undionly.kpxe TRUST="$racine" EMBED="$travail/medisphere.ipxe"
+make -C "$src" -j"$(nproc)" bin-x86_64-efi/ipxe.efi TRUST="$racine" EMBED="$travail/medisphere.ipxe"
 
 mkdir -p "$sortie"
 install -m 0644 "$src/bin/undionly.kpxe" "$sortie/undionly.kpxe"

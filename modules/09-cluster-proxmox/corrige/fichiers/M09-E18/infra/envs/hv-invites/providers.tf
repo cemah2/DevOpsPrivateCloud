@@ -7,7 +7,7 @@
 #  HV_PROXMOX_VE_ENDPOINT / HV_PROXMOX_VE_API_TOKEN, recopiées par le job de l'environnement.)
 #
 # TLS vérifié : le certificat présenté par la VIP est signé par l'autorité du cluster hv-par1,
-# installée dans le magasin système d'adm01 et de runner01 (hv-par1-root-ca.crt, rôle pve_cluster).
+# installée dans le magasin système d'adm01 et de runner01 (pki/hv-par1-root-ca.crt, rôle ca_lab, M09-E18).
 # Il contient le nom hv.par1.medisphere.internal quel que soit le nœud qui porte la VIP.
 provider "proxmox" {
   insecure = false

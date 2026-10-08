@@ -1,0 +1,37 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (matrice de la bordure, commune à gw01 et gw02)
+# — état des entrées du VLAN 60 après M11-E13 (et M11-E15, E18). Copie chaque bloc dans la section
+# correspondante de la matrice ; les noms $… sont ceux de la matrice v2 (M07-E30).
+# Après la MR : documentation régénérée (ms-matrice-flux), contrôles depuis pxe01 (corrigé, étape 6).
+
+# 1. pare_feu_definitions : ajouts (V_PROV existe déjà ; ILO_HP01 depuis M11-E07)
+  - {nom: PXE01, valeur: 10.10.60.10}
+  # LAB_IFS sans ens19.60 : le VLAN 60 a sa propre règle de sortie, limitée à HTTP et HTTPS.
+  - nom: LAB_IFS_INTERNET
+    valeur: '{ "ens19.10", "ens19.20", "ens19.30", "ens19.40", "ens19.50", "ens19.52", "ens19.70", "ens19.99" }'
+
+# 2. pare_feu_transit : REMPLACER la règle « lab vers Internet » (M07-E26) par
+  - {entree: $LAB_IFS_INTERNET, sortie: $WAN, destination: "!= $LAN_MAISON",
+     motif: "lab (hors PROV) vers Internet (traduit vers la VIP WAN)", ref: M11-E13}
+#    et, dans la règle « services publiés depuis le lab et LYO1 » (M07-E13), remplacer $LAB_IFS par
+#    $LAB_IFS_INTERNET : un serveur en cours d'installation n'a rien à demander à GitLab ni à NetBox.
+  - {entree: [$LAB_IFS_INTERNET, $WG_LYO], source: [$NETS_LAB, $NET_LYO1], destination: $VIP_LB, proto: tcp, ports: [80, 443],
+     motif: "services publiés depuis le lab (hors PROV) et LYO1", ref: M11-E13}
+
+# 3. pare_feu_transit : ajouts (VLAN 60). Rien d'autre ne sort du VLAN 60 : ni MGMT, ni les services
+#    du socle (hors DNS, règle « DNS du lab » inchangée, et DHCP relayé, M11-E02).
+  - {entree: $V_PROV, sortie: $WAN, destination: "!= $LAN_MAISON", proto: tcp, ports: [80, 443],
+     motif: "installateurs du VLAN 60 vers les miroirs Debian et Rocky (HTTP et HTTPS seulement)", ref: M11-E13}
+  - {entree: $V_PROV, source: $PXE01, sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "pxe01 vers ca01 : ACME (émission et renouvellement de son certificat)", ref: M11-E13}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_PROV, destination: $PXE01, proto: tcp, ports: 80,
+     motif: "ca01 vers pxe01 : défi ACME HTTP-01", ref: M11-E13}
+  # Chaîne pilotée par la CI (M11-E15) : publication sur pxe01 et accueil Ansible des serveurs.
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_PROV, proto: tcp, ports: 22,
+     motif: "runner01 vers pxe01 et les serveurs bm* : SSH (publication, accueil Ansible)", ref: M11-E15}
+  # iLO de hp01 : Redfish seulement (IPMI sur IP coupé, ligne UDP 623 de M11-E07 RETIRÉE, CHG-1230)
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $WAN, destination: $ILO_HP01, proto: tcp, ports: 443,
+     motif: "runner01 vers l'iLO de hp01 (inventaire Redfish hebdomadaire)", ref: M11-E18}
+  # Administration : couverte par « bastion (MGMT) vers tout le lab » ($LAB_IFS contient ens19.60).
+
+# 4. pare_feu_verifications : ajout
+  - {hote: 10.10.60.10, port: 443, motif: "contrôleur → pxe01 (HTTPS)"}

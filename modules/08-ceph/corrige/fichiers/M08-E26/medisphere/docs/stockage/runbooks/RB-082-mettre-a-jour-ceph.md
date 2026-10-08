@@ -61,7 +61,7 @@ Ordre imposé par l'orchestrateur : mgr, mon, crash, osd, mds, rgw, rbd-mirror, 
 [admin@ceph01 ~]$ sudo ceph osd pool unset noautoscale
 [admin@ceph01 ~]$ sudo ceph health detail
 ```
-- [ ] Code à jour : MR sur `group_vars/env_m08/ceph.yml` (`ceph_image`, `ceph_noeud_version`), fusionnée **maintenant** ; pipeline de `plateforme/ansible`, rôle `ceph_noeud` sur les nœuds (paquets `cephadm` et `ceph-common`) ; `sudo cephadm version` sur chaque hôte.
+- [ ] Code à jour : MR sur `group_vars/env_m08/ceph.yml` (`ceph_image`) et `group_vars/role_ceph/ceph_noeud.yml` (`ceph_noeud_version`), fusionnée **maintenant** ; pipeline de `plateforme/ansible`, rôle `ceph_noeud` sur les nœuds (paquets `cephadm` et `ceph-common`) ; `sudo cephadm version` sur chaque hôte.
 - [ ] Client de `cephcli01` : version notée ; mise à jour si une étape de sécurité l'exige.
 - [ ] Contrôles de santé nouveaux **attendus** (ex. `AUTH_INSECURE_*` en 20.2.4) : ticket SEC, jamais de sourdine sans durée.
 - [ ] Boucles témoins : `boucles-temoins.sh stop`, puis `bilan` ; consigner échecs (attendu : 0) et latences max dans le CHG.

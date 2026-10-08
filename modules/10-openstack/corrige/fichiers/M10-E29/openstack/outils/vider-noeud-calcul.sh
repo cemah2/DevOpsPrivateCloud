@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # vider-noeud-calcul.sh — M10-E29 (RB-102) : vide un nœud de calcul par migrations à chaud.
-# À lancer depuis adm01 avec le nuage d'administration. Ne retire RIEN d'OpenStack : il désactive
+# À lancer depuis adm01 avec le cloud d'administration. Ne retire RIEN d'OpenStack : il désactive
 # le service (avec raison), migre, attend, vérifie. Le retrait (Kolla, inventaire, services,
 # agents) est la suite de RB-102.
 #

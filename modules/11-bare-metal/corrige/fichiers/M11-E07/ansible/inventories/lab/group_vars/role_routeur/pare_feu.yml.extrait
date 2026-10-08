@@ -1,0 +1,15 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (matrice de la bordure, gw01 et gw02) — M11-E07.
+# L'iLO de hp01 est sur le LAN maison ; la règle « lab vers Internet » exclut LAN_MAISON :
+# il faut un flux explicite, limité à adm01. La sortie est traduite (règle NAT « lab vers Internet
+# et LAN maison », M07-E26) : l'iLO voit la VIP WAN de la bordure, pas 10.10.10.10.
+# Valeur d'exemple : 192.168.1.31 = <IP-ILO-HP01> (lab/inventaire-local.md ; à côté de
+# 192.168.1.30 = <IP-HP01-LAN> dans les exemples de la matrice).
+
+# --- pare_feu_definitions : ajout ---
+  - {nom: ILO_HP01, valeur: 192.168.1.31, commentaire: "<IP-ILO-HP01> : iLO 4 de hp01 (M11-E07)"}
+
+# --- pare_feu_transit : ajouts ---
+  - {entree: $V_MGMT, source: $ADM01, sortie: $WAN, destination: $ILO_HP01, proto: tcp, ports: 443,
+     motif: "adm01 vers l'iLO de hp01 : Redfish (HTTPS)", ref: M11-E07}
+  - {entree: $V_MGMT, source: $ADM01, sortie: $WAN, destination: $ILO_HP01, proto: udp, ports: 623,
+     motif: "adm01 vers l'iLO de hp01 : IPMI over LAN (RMCP+), à retirer avec IPMI (M11-E13)", ref: M11-E07}

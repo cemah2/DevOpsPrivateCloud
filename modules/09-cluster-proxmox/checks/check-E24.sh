@@ -51,9 +51,9 @@ check_cmd "code OpenTofu de l'état hv : bloc watchdog i6300esb" \
 
 title "watchdog-mux sur les nœuds"
 for _m09_e24_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e24_n : WATCHDOG_MODULE=i6300esb, module chargé, softdog absent, watchdog-mux actif" "root@$_m09_e24_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e24_n : WATCHDOG_MODULE=i6300esb, module chargé, softdog absent, watchdog-mux actif" "$_m09_e24_n" \
     'grep -Eq "^WATCHDOG_MODULE=i6300esb" /etc/default/pve-ha-manager && lsmod | grep -q "^i6300esb " && ! lsmod | grep -q "^softdog " && systemctl is-active --quiet watchdog-mux'
-  check_ssh "$_m09_e24_n : aucune règle nftables qui bloque Corosync" "root@$_m09_e24_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e24_n : aucune règle nftables qui bloque Corosync" "$_m09_e24_n" \
     '! nft list ruleset 2>/dev/null | grep -Eq "dport 5405-5412 drop|dport \{? ?5405"'
 done
 check_cmd "rôle pve_noeud : réglage WATCHDOG_MODULE dans le code Ansible" \

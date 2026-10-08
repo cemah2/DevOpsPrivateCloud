@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | 1 | API internes en clair sur le VLAN 50 | `openstack endpoint list --interface internal` : `http://openstack-int…` | TLS de la VIP interne (`kolla_enable_tls_internal`), racine MédiSphère copiée dans les conteneurs, `openstack_cacert` | points `internal` en `https://` ; `openssl s_client` sur 10.10.50.200:5000 vérifié par la racine |
 | 2 | Certificat externe posé à la main | `certificates/haproxy.pem` (certificat et clé, chiffré par Vault) obtenu à la main par `step ca certificate --standalone` (M10-E04), 30 jours : renouvellement manuel | Rôle ACME de Kolla (`letsencrypt_lego`) pointé vers `ca01`, renouvellement à 15 jours | `verifier-tls-vip.sh` avant/après : nouvelle date de début, nouvelle empreinte ; `haproxy.pem` retiré du dépôt |
-| 3 | Pas de verrouillage, sessions Horizon longues | `keystone.conf` sans `[security_compliance]` ; Horizon : `SESSION_TIMEOUT` par défaut (3 600 s) | Verrouillage 5 échecs / 15 min, comptes de service dispensés ; sessions de 30 min | compte `essai-verrou` verrouillé au 6ᵉ essai (HTTP 401 avec le bon mot de passe pendant 15 min), puis supprimé |
+| 3 | Pas de verrouillage, sessions Horizon longues | `keystone.conf` sans `[security_compliance]` ; Horizon : `SESSION_TIMEOUT = 1800` depuis M10-E17, mais en délai d'**inactivité** (`SESSION_REFRESH` vaut `True` par défaut) : une session active dure jusqu'à l'expiration du jeton | Verrouillage 5 échecs / 15 min, comptes de service dispensés ; sessions de 30 min en limite absolue (`SESSION_REFRESH = False`), cookie supprimé à la fermeture du navigateur | compte `essai-verrou` verrouillé au 6ᵉ essai (HTTP 401 avec le bon mot de passe pendant 15 min), puis supprimé |
 | 4 | Instances → plan de contrôle ? | depuis `secu-essai01` : `nc -vz 10.10.50.200 5000` **ouvert**, `nc -vz 10.10.50.51 3306` **ouvert** (règle de test large posée en M10-E12) | Matrice `pare_feu.yml` : rien du VLAN 52 vers le VLAN 50 ; API externe pour MGMT, VPN d'admin, `runner01` ; ACME | depuis l'instance : délai dépassé vers .200, .51 ; `deb.debian.org` joint ; compteur `nft-fwd-drop` incrémenté sur `gw01` |
 | 5 | Mots de passe d'installation jamais tournés | `git log --format=%ad -- etc/kolla/passwords.yml` : création seule | Rotation de `keystone_admin_password` et `glance_database_password` (`kolla-genpwd` sur les clés vidées, `reconfigure`) | ancien mot de passe d'`admin` refusé ; `glance image list` fonctionne ; MR chiffrée |
 
@@ -37,10 +37,10 @@ Risque accepté par Sophie Laurent le JJ/MM/AAAA, sous condition : aucun hôte a
 | Élément | Règle |
 |---|---|
 | Comptes humains (domaine `medisphere`) | verrouillage 5 échecs / 15 min ; fédération Keycloak au module 24 |
-| Comptes de service (domaine `Default`) | dispensés du verrouillage (`ignore_lockout_failure_attempts`) : `nova`, `neutron`, `glance`, `cinder`, `placement`, `heat`, `octavia`, `svc-supervision` — liste revue à chaque service activé (`outils/dispenser-comptes-service.sh` affiche les oublis) |
+| Comptes de service (domaine `Default`) | dispensés du verrouillage (`ignore_lockout_failure_attempts`) : `nova`, `neutron`, `glance`, `cinder`, `placement`, `heat`, `octavia`, `svc-supervision`, `svc-tofu` — liste revue à chaque service activé (`outils/dispenser-comptes-service.sh` affiche les oublis) |
 | `passwords.yml` | chiffré (Vault `critique`) ; rotation annuelle des secrets « simples » (liste de la page *Password Rotation* de Kolla : `*_keystone_password`, `*_database_password` sauf `nova_database_password`, `keystone_admin_password`, `keepalived_password`, `metadata_secret`…) par `kolla-genpwd` + `reconfigure` |
 | Secrets à procédure manuelle | `database_password` (racine MariaDB), `nova_database_password` (cellules), `rabbitmq_password` et `rabbitmq_cluster_cookie` (arrêt de tous les services, destruction des volumes RabbitMQ, `deploy`), `heat_domain_admin_password`, `kolla_ssh_key` : planifiés en fenêtre, une procédure chacun |
-| Identifiants d'application | rôle minimal, règles d'accès quand c'est possible (sonde : GET seulement), expiration pour ceux des équipes (E31), inventoriés au registre des secrets |
+| Application credentials | rôle minimal, règles d'accès quand c'est possible (sonde : GET seulement), expiration pour ceux des équipes (E31), inventoriés au registre des secrets |
 
 ## 5. Rotation réalisée (SEC-1153)
 
@@ -53,4 +53,4 @@ admin@adm01:~/src/openstack$ shred -u /dev/shm/pw.yml
 admin@adm01:~/src/openstack$ uv run kolla-ansible reconfigure -i inventaire/multinode --configdir etc/kolla -t keystone,glance
 ```
 
-Puis : `clouds.yaml`/`secure.yaml` du nuage `medisphere-admin` mis à jour, ancien mot de passe refusé (`openstack --os-password …` interdit : test par `openstack token issue` avec une copie temporaire de `secure.yaml` contenant l'ancien), MR « chore(secrets): rotation SEC-1153 », registre des secrets (date de rotation).
+Puis : `clouds.yaml`/`secure.yaml` du cloud `medisphere-admin` mis à jour, ancien mot de passe refusé (`openstack --os-password …` interdit : test par `openstack token issue` avec une copie temporaire de `secure.yaml` contenant l'ancien), MR « chore(secrets): rotation SEC-1153 », registre des secrets (date de rotation).

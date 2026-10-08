@@ -18,8 +18,9 @@ au dépôt chaque nuit.
 
 **Hors du dépôt, volontairement** : certificat et clé du point d'entrée S3 (`~/.config/workbook/ceph-ingress/`
 sur `adm01`, injectés à l'application), clés cephx (créées par commande, sauvegardées chiffrées,
-inscrites au registre des secrets), comptes et utilisateurs RGW (données d'administration du
-service, E12), carte CRUSH binaire, création et suppression de pools (gestes humains, fiche de
+inscrites au registre des secrets), clés d'accès S3 des utilisateurs RGW (Vault, registre des
+secrets), comptes RGW et leurs quotas **jusqu'à M08-E31** (créés à la main en E12 ; ils entrent
+ensuite dans `allocations.yaml`, tenu par `outils/ceph-allocations.sh`), carte CRUSH binaire, création et suppression de pools (gestes humains, fiche de
 changement). **Services par défaut**, sans spécification ici : `crash`, `ceph-exporter`.
 
 ## Structure

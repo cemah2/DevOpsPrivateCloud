@@ -15,8 +15,9 @@ _m09x_table=infoger_durcissement
 # shellcheck disable=SC2034
 _m09x_depot="${WB_DEPOT:-$HOME/medisphere}"
 
-# _m09x_cible NŒUD — root@IP MGMT (ne dépend pas du DNS).
-_m09x_cible() { printf 'root@%s\n' "${_m09x_ip[$1]}"; }
+# _m09x_cible NŒUD — alias SSH du nœud sur adm01 (hv01…hv03, M09-E03 : HostName = IP MGMT, User root,
+# donc indépendant du DNS).
+_m09x_cible() { printf '%s\n' "$1"; }
 
 # _m09x_hv NŒUD "commande" — exécute une commande de lecture en root sur le nœud.
 _m09x_hv() {

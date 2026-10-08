@@ -33,7 +33,7 @@ Déploiement : Kolla-Ansible 22.x (OpenStack 2026.1), images `2026.1-debian-trix
 | Déploiement depuis le dépôt | CI = validation (`controles-kolla`, invariants) ; déploiement par `outils/deployer.sh` depuis `adm01`, seulement sur le commit de `origin/main` au pipeline vert, tracé par une étiquette `deploye-*`. Pas de déploiement par le runner partagé : il porterait l'accès root à tous les nœuds et l'identité Vault `critique` pour tous les projets | ce document |
 | Stockage | Ceph `ceph-par1` (images raw, volumes, disques éphémères, sauvegardes Cinder) | M10-E10 |
 | TLS | VIP externe et interne, certificats ACME de `ca01` renouvelés par Kolla (15 jours) | `securite.md` |
-| Libre-service | module OpenTofu `openstack-env-app`, dépôts des équipes, identifiants d'application `member` | `libre-service.md` |
+| Libre-service | module OpenTofu `openstack-env-app`, dépôts des équipes, application credentials `member` | `libre-service.md` |
 
 ## 3. Exploitation
 

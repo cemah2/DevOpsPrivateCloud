@@ -587,14 +587,14 @@ Deux liens Corosync sur deux commutateurs différents, l'un sur un réseau **dé
 
 **Solution**
 
-1. **La fiche.** Exemple complet : [`CHG-1005-qdevice-pbs01.md`](fichiers/M09-E05/medisphere/docs/socle/changements/CHG-1005-qdevice-pbs01.md).
+1. **La fiche.** Exemple complet : [`CHG-1005-qdevice-pbs01.md`](fichiers/M09-E05/medisphere/docs/virtualisation/changements/CHG-1005-qdevice-pbs01.md).
 
 2. **La matrice.** Extrait : [`pare_feu.yml`](fichiers/M09-E05/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait).
 ```yaml
-  - {entree: $V_MGMT, source: $HV_PAR1, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 5403,
+  - {entree: $V_MGMT, source: $HV_NOEUDS, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 5403,
      motif: "QDevice : corosync-qdevice des nœuds hv-par1 vers corosync-qnetd sur pbs01", ref: M09-E05}
 ```
-Constat : la règle de M00-E10 `{entree: $V_MGMT, sortie: [$LAB_IFS, $WG_S2S], motif: "bastion (MGMT) vers tout le lab et PAR2"}` n'a **pas de source**. Elle a été écrite quand `adm01` était seul dans MGMT ; depuis E03, les nœuds `hvNN` y sont aussi, et joignent donc tout le lab et tout PAR2, `pbs01` compris : le QDevice aurait fonctionné sans ta règle (seul le pare-feu de `pbs01` l'aurait bloqué). Écart au registre : « règle du bastion sans source : tout hôte de MGMT est traité comme le bastion ; proposition : `source: [$ADM01]` après inventaire des flux légitimes des nœuds (PBS, ACME, dépôts), à traiter avec la sécurisation du cluster (M09-E26) ». On ne la restreint pas dans ce changement : cela couperait des flux que les exercices suivants n'ont pas encore déclarés, et un changement ne doit faire qu'une chose.
+Constat : la règle `{entree: $V_MGMT, sortie: [$LAB_IFS, $WG_S2S, $WG_LYO], motif: "bastion (MGMT) vers tout le lab, PAR2 et LYO1", ref: M07-E30}` (celle de M00-E10, élargie à LYO1 en M07-E30) n'a **pas de source**. Elle a été écrite quand `adm01` était seul dans MGMT ; depuis E03, les nœuds `hvNN` y sont aussi, et joignent donc tout le lab et tout PAR2, `pbs01` compris : le QDevice aurait fonctionné sans ta règle (seul le pare-feu de `pbs01` l'aurait bloqué). Écart au registre : « règle du bastion sans source : tout hôte de MGMT est traité comme le bastion ; proposition : `source: [$ADM01]` après inventaire des flux légitimes des nœuds (PBS, ACME, dépôts), à traiter avec la sécurisation du cluster (M09-E26) ». On ne la restreint pas dans ce changement : cela couperait des flux que les exercices suivants n'ont pas encore déclarés, et un changement ne doit faire qu'une chose.
 
 3. **`pbs01`.**
 ```
@@ -1049,7 +1049,7 @@ root@pbs01:~# nft -c -f /etc/nftables.conf && nft -f /etc/nftables.conf
 root@pbs01:~# nft list ruleset | grep -c 5403
 0
 ```
-Matrice : la règle 5403 (et la définition `HV_PAR1` si plus rien ne l'utilise) quitte `pare_feu.yml` par une MR, appliquée aux deux passerelles. Sauvegarde de contrôle (`vzdump 1003 --storage pbs-par2`), CHG-1005 complétée : « QDevice retiré le `<date>` (M09-E08) ; paquet `corosync-qnetd` conservé, service désactivé, à désinstaller en fin de module (M09-E46) ».
+Matrice : la règle 5403 quitte `pare_feu.yml` (la définition `HV_NOEUDS` reste : les flux des nœuds de M09-E15, E18 et E26 la réutilisent) par une MR, appliquée aux deux passerelles. Sauvegarde de contrôle (`vzdump 1003 --storage pbs-par2`), CHG-1005 complétée : « QDevice retiré le `<date>` (M09-E08) ; paquet `corosync-qnetd` conservé, service désactivé, à désinstaller en fin de module (M09-E46) ».
 
 8. **L'épreuve.**
 ```
@@ -1105,7 +1105,7 @@ L'ajout d'un nœud est un runbook (RB-091 couvre aussi la réintégration) : nœ
 
 **8. pmxcfs.** Dans une base SQLite, `/var/lib/pve-cluster/config.db`, sur **chaque** nœud ; `/etc/pve` en est une vue FUSE, et la base est tenue en mémoire. Chaque écriture est diffusée à tous les nœuds par Corosync : de gros fichiers satureraient Corosync et la mémoire, et pmxcfs limite la taille des fichiers et de la base (de l'ordre du mégaoctet par fichier, quelques dizaines à centaines de mégaoctets au total selon la version). Les disques des VMs sont sur les **stockages** (LVM-thin, ZFS, Ceph), les ISO sur des stockages de contenu `iso` (`local`, `hdd-bulk`…) : `/etc/pve` ne porte que la configuration.
 
-**9. Réponse C.** Proxmox VE croit la déclaration : un stockage `shared` n'est pas copié à la migration, et la HA considère que le disque est accessible depuis n'importe quel nœud. La VM « migrée » démarrerait sur un nœud où son volume n'existe pas (échec), ou pire, sur un volume homonyme d'une autre VM (dans le cas d'un même pool ZFS sur chaque nœud, après une réplication par exemple) : données d'une autre machine, ou perte des écritures récentes. A est faux : rien n'est vérifié. B est anodin à côté. D : ZFS ne réplique rien de lui-même.
+**9. Réponse B.** La définition d'un stockage est commune (pmxcfs), mais son **activation** est locale : chaque nœud vérifie de son côté que le pool existe (`pvesm status` sur `hv03` le montre inactif). Rien n'est vérifié à l'adhésion (A faux) ; Proxmox VE ne crée jamais de pool de lui-même à partir d'une simple déclaration (C faux : c'est le rôle `pve_noeud` ou `pveceph`/`zpool create` qui le fait) ; les autres nœuds ont leur pool et ne sont pas affectés (D faux). C'est pour cela que le nom du pool doit être **le même partout** (réplication d'E14) et qu'E06 déclare `zfs-local` avec `--nodes` : limiter un stockage aux nœuds qui le portent réellement, au lieu de laisser un stockage « fantôme » sur les autres (E08 l'étend ensuite à `hv03`). Le cas voisin, et bien plus grave, d'un stockage local déclaré `shared` est l'un des défauts de la revue M09-E21.
 
 **10. Durée et interruption.** La durée totale est celle de la copie (disque entier par miroir NBD, puis mémoire en plusieurs passes) : elle dépend du **volume** et du débit. L'interruption est la dernière passe de mémoire, VM en pause, puis la reprise sur la cible : elle dépend de la mémoire modifiée pendant la passe précédente et de la latence. On peut allonger l'une sans toucher à l'autre : un disque deux fois plus gros double la durée sans changer l'interruption.
 

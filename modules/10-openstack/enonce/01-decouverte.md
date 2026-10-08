@@ -123,7 +123,7 @@ Pour l'identité, sépare **qui tu es** (utilisateur, groupe, domaine), **où tu
 - Comprendre les prérequis d'un nœud OpenStack : interfaces stables, carte externe sans adresse, MTU de bout en bout, virtualisation imbriquée, temps.
 - Prendre possession du réseau d'un hôte par Ansible, avec un accès de secours.
 
-**Prérequis** : M05-E46 et M06-E13/E14 (module `vm-debian` v2 avec NetBox, module `enregistrement-dns`) ; M07-E15 (MTU 9000 sur `vmbr1` et les VLAN 30/51) ; M04 (rôles communs, inventaire dynamique) ; M02-E11 (`ms-snapshot`).
+**Prérequis** : M05-E46, M06-E13/E14 (NetBox, module `enregistrement-dns`) et M08-E02 (module `vm-noeud`) ; M07-E15 (MTU 9000 sur `vmbr1` et les VLAN 30/51) ; M04 (rôles communs, inventaire dynamique) ; M02-E11 (`ms-snapshot`).
 **Durée indicative** : 3 h 30.
 
 **Contexte technique**
@@ -132,7 +132,7 @@ Pour l'identité, sépare **qui tu es** (utilisateur, groupe, domaine), **où tu
 |---|---|
 | VMs | voir l'introduction, « Hôtes du module » et « Plan réseau des nœuds » : `osctl01` (2101, 4 vCPU, 16 Go, 80 Go), `oscmp01`/`oscmp02` (2102/2103, 4 vCPU, 8 Go, 40 Go, CPU `host`) ; disque système sur `local-nvme` ; pool `lab` ; étiquettes `env-m10` et `role-openstack` (à créer dans NetBox si elles n'existent pas) |
 | Cartes | `net0` `vosapi`, `net1` `vostun` (`mtu=9000`), `net2` `vstopub` (`mtu=9000`), `net3` `vosext` (`osctl01` seulement) ; MAC `bc:24:11:<VLAN>:00:<suffixe>` (suffixe = 51, 52, 53) ; pare-feu Proxmox désactivé sur les cartes |
-| Code | état `envs/openstack` de `plateforme/infra` (clé `envs/openstack/terraform.tfstate`, même backend que les autres états) ; module `vm-debian` à la version qui sait porter plusieurs cartes (sinon : étape 2) ; module `enregistrement-dns` pour A et PTR |
+| Code | état `envs/openstack` de `plateforme/infra` (clé `envs/openstack/terraform.tfstate`, même backend que les autres états) ; module `vm-noeud` de M08-E02 (plusieurs cartes, famille `debian13`, type de CPU), à compléter à l'étape 2 ; module `enregistrement-dns` pour A et PTR |
 | Noms | `osctl01`, `oscmp01`, `oscmp02` dans `par1.medisphere.internal` (adresse OS-API) ; `openstack.par1.medisphere.internal` → 10.10.50.201 et `openstack-int.par1.medisphere.internal` → 10.10.50.200 (sans PTR : ce sont des services) |
 | Ansible | `plateforme/ansible` : groupe d'inventaire `role_openstack` (étiquette `role-openstack`) ; rôles communs puis rôle `noeud_openstack` ; playbook `playbooks/openstack-noeuds.yml` |
 | Réseau dans l'invité | `netplan` (cloud-init de l'image dorée le rend) ; le rôle prend la main : fichier `/etc/netplan/60-openstack.yaml`, configuration réseau de cloud-init désactivée |
@@ -148,7 +148,7 @@ Pour l'identité, sépare **qui tu es** (utilisateur, groupe, domaine), **où tu
 
 *B. Le code des VMs*
 
-2. Lis l'interface du module `vm-debian` à sa dernière version publiée. S'il ne sait pas encore porter des **cartes supplémentaires** (VNet, adresse facultative, MTU, MAC), un **type de CPU** et une MAC pour la carte principale, étends-le (MR sur `plateforme/tofu-modules`) : ajout rétrocompatible, donc version **mineure**. Les cartes supplémentaires sont enregistrées dans NetBox (interface, adresse) comme la première. Une carte sans adresse doit venir **après** toutes les cartes adressées : explique pourquoi dans le `README` du module (indice : comment Proxmox numérote `ipconfigN`).
+2. Lis l'interface du module `vm-noeud` (M08-E02 : nœuds de cluster à plusieurs cartes, type de CPU, adresses imposées) à sa dernière version publiée. Il lui manque deux choses pour nos nœuds : une **MAC imposée** par carte et une carte **sans adresse**. Étends-le (MR sur `plateforme/tofu-modules`) : ajout rétrocompatible, donc version **mineure**. Les cartes restent enregistrées dans NetBox (interface pour toutes, adresse pour les cartes adressées). Une carte sans adresse doit venir **après** toutes les cartes adressées : explique pourquoi dans le `README` du module (indice : comment Proxmox numérote `ipconfigN`).
 3. Écris l'état `envs/openstack` : les trois VMs selon le plan, MAC selon la règle, puis les noms DNS des nœuds et des deux VIP. Plan relu en MR, `apply` par le pipeline. Pose l'ordre de démarrage en root (`osctl01` avant les calculs).
 4. Vérifie dans Proxmox (`qm config`), dans NetBox (interfaces et adresses des VMs) et dans le DNS (A et PTR des nœuds, A des VIP).
 
@@ -341,7 +341,7 @@ Pour la santé : `docker ps --filter health=unhealthy` et `docker ps --format '{
 - Manipuler le modèle d'identité de Keystone : domaines, projets, utilisateurs, groupes, rôles et attributions, portée d'un jeton.
 - Décrire ces objets par du code (collection `openstack.cloud`), secrets en Vault.
 - Configurer des clients (`clouds.yaml`, `secure.yaml`) pour plusieurs identités.
-- Découvrir les *application credentials* pour l'automatisation.
+- Découvrir les *application credentials* (« identifiants d'application » : un secret délégué par un utilisateur, limité à un projet, à des rôles et à une durée, révocable ; le module garde le terme anglais, celui de la CLI et de la documentation) pour l'automatisation.
 
 **Prérequis** : M10-E04.
 **Durée indicative** : 3 h.
@@ -435,7 +435,7 @@ Collection `openstack.cloud` : `identity_domain`, `project`, `identity_group`, `
 6. Supprime les fichiers téléchargés de `~/m10/e06/` une fois les images publiées et vérifiées.
 
 **Critères de réussite**
-- [ ] `debian-13` est active, publique, au format `qcow2`, avec les propriétés demandées.
+- [ ] `debian-13` est active, publique, au format `qcow2` (elle passera en `raw` en E10), avec les propriétés demandées.
 - [ ] `rocky-10` est active, en visibilité `shared`, avec les propriétés demandées ; le projet `plateforme` en est membre et a accepté le partage ; `julien.petit` ne la voit pas.
 - [ ] Les deux images ont une somme SHA-512 calculée par Glance.
 
@@ -532,14 +532,14 @@ Partage : `openstack image add project <image> <projet>` (avec `--project-domain
 4. Crée le groupe de sécurité, attache-le à `essai01`. Pourquoi le groupe `default` ne suffit-il pas, et pourquoi ne pas l'ouvrir à `0.0.0.0/0` ?
 5. Crée une IP flottante, associe-la à `essai01`. Depuis `adm01` : `ping`, puis `ssh debian@<IP-FLOTTANTE>`. Dans l'instance : l'adresse privée, la route par défaut, la MTU de l'interface, le résolveur.
 6. Lis la traduction OVN : le commutateur logique et le routeur logique de ton projet (`ovn-nbctl show`), les règles NAT du routeur (`lr-nat-list`), la passerelle choisie (`ovn-sbctl show`, *chassis* et ports de passerelle). Décris dans ton journal le trajet aller et retour d'un `ping` de `adm01` vers l'IP flottante : interfaces, VLAN, traductions, nœud.
-7. Garde `essai01`, son IP flottante, le routeur et le groupe de sécurité : ils servent de référence au palier 2. Rédige `docs/cloud/reseau-projets.md` : le modèle (réseau externe, routeur par projet, groupes), les noms, les MTU, ce qu'un projet peut et ne peut pas faire.
+7. Garde le réseau, le routeur et le groupe de sécurité : ils servent au palier 2. Garde aussi `essai01` et son IP flottante jusqu'au palier 2 : E10 la supprimera avant de changer le stockage de Nova (libère alors l'IP flottante). Rédige `docs/cloud/reseau-projets.md` : le modèle (réseau externe, routeur par projet, groupes), les noms, les MTU, ce qu'un projet peut et ne peut pas faire.
 
 **Critères de réussite**
 - [ ] `ext-net` est externe, de type `flat` sur `physnet1`, MTU 1500 ; son sous-réseau 10.10.52.0/24 a la passerelle 10.10.52.1, pas de DHCP, la plage d'allocation 10.10.52.200-249 ; `playbooks/reseau-externe.yml` est sur `main`.
 - [ ] `routeur-plateforme` (projet `plateforme`) a sa passerelle sur `ext-net` et une interface sur `sous-reseau-plateforme`.
 - [ ] Le groupe `ssh-icmp-admin` n'autorise en entrée que TCP 22 et ICMP, depuis 10.10.10.0/24.
 - [ ] `essai01` a une IP flottante de 10.10.52.200-249 ; elle répond au `ping` et en SSH (port 22) depuis `adm01`.
-- [ ] `reseau-plateforme` a une MTU de 1442 (réseau Geneve).
+- [ ] `reseau-plateforme` a une MTU de 1442 (réseau Geneve ; E12 la portera à 1500).
 - [ ] `docs/cloud/reseau-projets.md` est sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 10 08`

@@ -25,7 +25,7 @@ check_http "API publique : https://$_M10D_NOM_EXT:5000/v3 répond (TLS vérifié
   "https://$_M10D_NOM_EXT:5000/v3" 200 --cacert "$_m10d_e04_racine" --noproxy '*'
 check_cmd "VIP externe : chaîne de la PKI MédiSphère, valable pour $_M10D_NOM_EXT" \
   _m10d_chaine_ok "$_M10D_NOM_EXT" 5000
-check_output "VIP externe : certificat émis par « MédiSphère Intermediate CA »" 'Interm[ée]diate CA' \
+check_output "VIP externe : certificat émis par « MédiSphère Intermediate CA »" 'Interm(é|e)diate CA' \
   bash -c 'timeout 5 openssl s_client -connect "$1:5000" -servername "$1" </dev/null 2>/dev/null | openssl x509 -noout -issuer -nameopt utf8' _ "$_M10D_NOM_EXT"
 
 # --- 2. L'API, vue de adm01 ---------------------------------------------------------------------

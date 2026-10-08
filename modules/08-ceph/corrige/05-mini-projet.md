@@ -12,7 +12,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 
 1. **État des lieux** (1 h) : `lab/bin/check 08 46`, puis les contrôles détaillés rouges (`08 24` à `08 34`) et `lab/bin/check 07 46` (MTU, bordure). Liste des restes : `ceph osd pool ls` (pools d'essai : `bench`, pools de démonstration des codes d'effacement de E15, restaurations), `rbd ls rbd-test`, `ceph auth ls` (identités d'essai de E13/E19/E39), `ceph orch host ls` (`ceph04`), `ceph health detail` (sourdines).
 2. **Sauvegarde d'abord** (30 min) : un passage réussi de `wb-backup-ceph` et une restauration de test **avant** les opérations lourdes (étapes 3 et 4) ; c'est le filet si un redéploiement tourne mal.
-3. **Retirer `ceph04`** (1 à 2 h, surtout de l'attente) : par RB-081 en sens inverse (ou le runbook de retrait écrit en E18-E19) :
+3. **Retirer `ceph04`** (1 à 2 h, surtout de l'attente) : par la section « Retirer un nœud » de RB-081 (E18) :
    ```
    [admin@ceph01 ~]$ sudo ceph orch host drain ceph04            # vide les OSD (et les démons) de l'hôte
    [admin@ceph01 ~]$ sudo ceph orch osd rm status                # attendre la fin ; HEALTH_OK
@@ -23,7 +23,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 4. **Chiffrer les OSD de `ceph01` et `ceph02`** (2 à 3 h d'attente) : procédure de E27, un OSD à la fois, `ok-to-stop`, HEALTH_OK entre deux ; vérifier `lsblk` après chaque. Ordre conseillé : les HDD en dernier (récupération plus lente).
 5. **Consommateurs et équipes** (1 à 2 h) : les cinq pools dans `config/cluster.yaml` ([extrait](fichiers/M08-E46/ceph/config-cluster-pools-extrait.yaml)), créés un par un par `outils/pool-repliquee.sh <pool> rbd` sur `ceph01` (E05, fiche de changement) et réglés par `outils/config-cluster.sh --appliquer` ; [`allocations.yaml`](fichiers/M08-E46/ceph/allocations.yaml) de livraison (quatre identités de consommateurs, `client.sauvegarde`, trois équipes), `outils/ceph-allocations.sh appliquer --simuler` relu dans la MR, `appliquer`, `verifier`. Trousseaux des consommateurs en Vault (`ceph auth get client.glance | ansible-vault encrypt_string --stdin-name …`), **non distribués**. Registre des allocations à jour, avec la somme des quotas et l'écart à la capacité sûre (surallocation assumée dans le lab, écrite).
 6. **Sécurité, finitions** (1 h) : sourdines restantes = seulement les contrôles « clients » de cephx, avec durée et ticket ; clé SSH de l'orchestrateur renouvelée (E27) ; tableau de bord TLS (certificats renouvelés) ; aucune identité `allow *` hors administration ; `mon_allow_pool_delete` à `false`.
-7. **Réseau** (30 min) : `qm config 2081` à `2083` (`net0` et `net1` avec `mtu=9000`), `qm config 2085`, `ip link` dans les invités, `ping -M do -s 8972` dans les deux VLAN ; matrice des flux (`cephcli01` → `pbs01`, ACME, ingress) dans `pare_feu.yml` et `matrice-flux.md`.
+7. **Réseau** (30 min) : `qm config 2081` à `2083` (`net0` et `net1` avec `mtu=9000`), `qm config 2085`, `ip link` dans les invités, `ping -M do -s 8972` dans les deux VLAN ; matrice des flux (`runner01` → VIP RGW et → nœuds pour la dérive, `cephcli01` → `pbs01`) dans `group_vars/role_routeur/pare_feu.yml` et `matrice-flux.md`.
 8. **Documentation et livraison** (3 à 4 h) : `architecture.md`, politique, ADR-0080, registre des allocations, performances, runbooks RB-080 à RB-08x, inventaire NetBox exporté, registre des secrets ; MR, pipelines verts, étiquette `stockage-v1`.
 
 *Démonstration de Nadia — arrêt d'un nœud entier* (à répéter **avant** la revue)

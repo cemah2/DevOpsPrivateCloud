@@ -29,8 +29,8 @@ for _m09_e36_n in "${_m09x_noeuds[@]}"; do
     "timeout 25 pvesh get /nodes/$_m09_e36_n/version --output-format json >/dev/null"
 done
 check_output "authkey de Corosync identique sur les trois nœuds" '^1$' bash -c '
-  for ip in 10.10.10.51 10.10.10.52 10.10.10.53; do
-    ssh -o BatchMode=yes -o ConnectTimeout=8 ${WB_SSH_OPTS:-} "root@$ip" "sha256sum < /etc/corosync/authkey" 2>/dev/null || echo erreur-$ip
+  for n in hv01 hv02 hv03; do
+    ssh -o BatchMode=yes -o ConnectTimeout=8 ${WB_SSH_OPTS:-} "$n" "sha256sum < /etc/corosync/authkey" 2>/dev/null || echo erreur-$n
   done | sort -u | wc -l'
 check_cmd "pile HA armée (pas de disarm-ha en cours)" _m09x_pas_desarmee
 check_cmd "panne M09-E36 close (lab/bin/break 09 36 --annuler après réparation)" _m09x_aucune_panne_active E36

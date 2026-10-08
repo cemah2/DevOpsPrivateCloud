@@ -6,12 +6,15 @@
 # Préfixe _m10x_ : évite les collisions quand check-E43 charge plusieurs checks.
 # Les secrets (mots de passe, clés) ne sont jamais affichés : seules leurs empreintes sont comparées.
 
-_m10x_cloud_admin="${WB_M10_CLOUD_ADMIN:-medisphere-admin}"
-_m10x_cloud_projet="${WB_M10_CLOUD_PROJET:-medisphere-plateforme}"
-_m10x_ctl="${WB_M10_CTL:-osctl01}"
+# Variables de lab/lab.env : WB_OS_CLOUD (cloud d'administration, défaut medisphere-admin),
+# WB_OS_CLOUD_PLATEFORME (projet plateforme, défaut medisphere-plateforme), WB_CEPH_ADMIN (nœud
+# « _admin » de ceph-par1, défaut ceph01, M08), WB_DEPOT.
+_m10x_cloud_admin="${WB_OS_CLOUD:-medisphere-admin}"
+_m10x_cloud_projet="${WB_OS_CLOUD_PLATEFORME:-medisphere-plateforme}"
+_m10x_ctl=osctl01
 # shellcheck disable=SC2034  # utilisées par les checks qui sourcent ce fichier
-_m10x_cmps=("${WB_M10_CMP1:-oscmp01}" "${WB_M10_CMP2:-oscmp02}")
-_m10x_ceph="${WB_M10_CEPH:-ceph01}"
+_m10x_cmps=(oscmp01 oscmp02)
+_m10x_ceph="${WB_CEPH_ADMIN:-ceph01}"
 # shellcheck disable=SC2034
 _m10x_fqdn="openstack.par1.medisphere.internal"
 # shellcheck disable=SC2034

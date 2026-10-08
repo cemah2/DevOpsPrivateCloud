@@ -1,16 +1,16 @@
 ---
 # Le serveur HTTPS n'est rendu que si le certificat existe : au tout premier passage, nginx ne sert
-# que le port 80 ; le rôle certificats_acme émet alors le certificat (nginx arrêté le temps du défi
-# HTTP-01), puis le playbook rappelle ce fichier de tâches (playbooks/pxe01.yml).
+# que la redirection du port 80 ; le rôle certificats_acme émet alors le certificat (nginx arrêté le
+# temps du défi HTTP-01), puis playbooks/pxe.yml rappelle ce fichier de tâches.
 - name: Présence du certificat de pxe01
   ansible.builtin.stat:
     path: "{{ pxe_tls_certificat }}"
   register: pxe_tls_stat
 
-- name: Site nginx de la chaîne de provisioning
+- name: Site nginx du serveur de démarrage
   ansible.builtin.template:
     src: nginx-pxe.conf.j2
-    dest: /etc/nginx/sites-available/pxe.conf
+    dest: /etc/nginx/sites-available/pxe
     owner: root
     group: root
     mode: "0644"
@@ -18,7 +18,7 @@
     pxe_https: "{{ pxe_tls_stat.stat.exists }}"
   notify: Recharger nginx
 
-- name: Inclusions du site (service de réponse PVE, M11-E14)
+- name: Dossier des inclusions du site HTTPS (service de réponse PVE, M11-E14)
   ansible.builtin.file:
     path: /etc/nginx/pxe.d
     state: directory
@@ -28,19 +28,54 @@
 
 - name: Site activé
   ansible.builtin.file:
-    path: /etc/nginx/sites-enabled/pxe.conf
-    src: /etc/nginx/sites-available/pxe.conf
+    src: /etc/nginx/sites-available/pxe
+    dest: /etc/nginx/sites-enabled/pxe
     state: link
   notify: Recharger nginx
 
+# Le site par défaut écoute sur toutes les adresses et sert /var/www/html : on le retire.
 - name: Site par défaut retiré
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
   notify: Recharger nginx
 
-- name: Service nginx actif
+- name: Configuration de nginx valide (avant tout rechargement)
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  check_mode: false
+
+- name: Services actifs et lancés au démarrage
   ansible.builtin.systemd_service:
-    name: nginx
-    state: started
+    name: "{{ item }}"
     enabled: true
+    state: started
+  loop:
+    - tftpd-hpa.service
+    - nginx.service
+
+- name: Appliquer maintenant les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# --- Contrôle du service RENDU, depuis l'hôte lui-même ------------------------------------------------
+- name: TFTP sert le chargeur BIOS
+  ansible.builtin.command:
+    argv: [curl, --silent, --fail, --max-time, "10", --output, /dev/null, "tftp://{{ pxe_adresse }}/undionly.kpxe"]
+  changed_when: false
+  check_mode: false
+
+- name: Le port 80 ne sert plus rien d'autre qu'une redirection vers HTTPS
+  ansible.builtin.uri:
+    url: "http://{{ pxe_adresse }}/pki/medisphere-root-ca.crt"
+    follow_redirects: none
+    status_code: 301
+  when: pxe_tls_stat.stat.exists
+
+# Vérification TLS complète (racine MédiSphère du magasin de pxe01, nom du certificat) : l'adresse
+# du nom est celle de pxe01 elle-même, comprise dans pxe_http_autorises.
+- name: HTTPS sert la racine de la PKI avec un certificat reconnu
+  ansible.builtin.uri:
+    url: "https://{{ pxe_nom_serveur }}/pki/medisphere-root-ca.crt"
+    validate_certs: true
+    ca_path: /etc/ssl/certs/ca-certificates.crt
+  when: pxe_tls_stat.stat.exists and pxe_controle_https | bool

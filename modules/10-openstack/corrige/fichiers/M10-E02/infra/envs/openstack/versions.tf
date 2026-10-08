@@ -1,6 +1,6 @@
 # envs/openstack — nœuds OpenStack du module 10 (VMs 2101-2103), état distant sur s3-01.
 # Un état PAR ENVIRONNEMENT (PLAN §4.9) : détruire le cloud ne peut pas toucher au socle.
-# Fournisseurs : ceux de vm-debian v2.2 (proxmox, netbox) et d'enregistrement-dns (powerdns).
+# Fournisseurs : ceux de vm-noeud v2.3 (proxmox, netbox) et d'enregistrement-dns (powerdns).
 
 terraform {
   required_version = ">= 1.13.0"

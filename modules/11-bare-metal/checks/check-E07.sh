@@ -67,9 +67,13 @@ else
 fi
 
 # --- Flux, outil, registre ---------------------------------------------------------------------------------------
-_m11o_pf="$(_m11o_contenu_main "$_M11O_PROJET_ANSIBLE" inventories/lab/host_vars/gw01/pare_feu.yml)"
+_m11o_pf="$(_m11o_contenu_main "$_M11O_PROJET_ANSIBLE" inventories/lab/group_vars/role_routeur/pare_feu.yml)"
 check_output "matrice de la bordure (main) : adm01 → iLO en TCP 443" '(ILO|ilo|iLO).*ports: 443|ports: 443.*(ILO|ilo|iLO)' echo "$_m11o_pf"
-check_output "matrice de la bordure (main) : adm01 → iLO en UDP 623 (IPMI)" '(ILO|ilo|iLO).*ports: 623|ports: 623.*(ILO|ilo|iLO)' echo "$_m11o_pf"
+if grep -Eq '(ILO|ilo|iLO).*ports: 623|ports: 623.*(ILO|ilo|iLO)' <<<"$_m11o_pf"; then
+  check_cmd "matrice de la bordure (main) : adm01 → iLO en UDP 623 (IPMI)" true
+else
+  skip "matrice de la bordure (main) : adm01 → iLO en UDP 623 (IPMI)" "absent : attendu seulement avant M11-E13, qui coupe IPMI sur IP"
+fi
 _m11o_rf="$(_m11o_contenu_main "$_M11O_PROJET_PROV" outils/redfish.sh)"
 check_output "plateforme/provisioning : outils/redfish.sh sur main" 'redfish' echo "$_m11o_rf"
 check_cmd "outils/redfish.sh : jamais de vérification TLS désactivée (-k, --insecure)" \

@@ -7,6 +7,11 @@ network:
   renderer: networkd
   ethernets:
     {{ routeur_reseau_wan_interface }}:
+{% if routeur_reseau_wan_interface in routeur_reseau_renommage %}
+      match:
+        macaddress: "{{ routeur_reseau_renommage[routeur_reseau_wan_interface] }}"
+      set-name: {{ routeur_reseau_wan_interface }}
+{% endif %}
       dhcp4: false
       addresses: [{{ routeur_reseau_wan_adresse }}]
       routes:
@@ -18,6 +23,11 @@ network:
           metric: {{ routeur_reseau_metrique_garde }}
 {% endfor %}
     {{ routeur_reseau_trunk }}:
+{% if routeur_reseau_trunk in routeur_reseau_renommage %}
+      match:
+        macaddress: "{{ routeur_reseau_renommage[routeur_reseau_trunk] }}"
+      set-name: {{ routeur_reseau_trunk }}
+{% endif %}
       dhcp4: false
       dhcp6: false
       accept-ra: false

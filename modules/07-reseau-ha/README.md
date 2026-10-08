@@ -4,7 +4,7 @@
 |---|---|
 | **Bloc** | B — Infrastructure cloud privé |
 | **Niveau** | Cœur |
-| **Profil de lab** | Socle + maquette réseau (VMs 2070-2079, ≈ 8 Go) ; `gw02`, `lb01`, `lb02` permanents, créés dans ce module |
+| **Profil de lab** | Socle + maquette réseau (VMs 2070-2079, ≈ 10 Go toutes allumées) ; `gw02`, `lb01`, `lb02` permanents, créés dans ce module |
 | **Prérequis** | Module 06 (socle v1 : NetBox, PowerDNS, Kea, step-ca) ; module 05 (OpenTofu) ; module 04 (rôles Ansible) |
 | **Durée indicative** | 40 à 50 heures |
 

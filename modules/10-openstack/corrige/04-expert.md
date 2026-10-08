@@ -36,7 +36,7 @@ Pour lancer Kolla-Ansible depuis `adm01`, les exemples ci-dessous abrègent ta c
 admin@adm01:~/src/openstack$ uv run kolla-ansible reconfigure -i inventaire/multinode --configdir etc/kolla -t <tag>
 ```
 
-(ajoute tes options Vault de M10-E03 pour déchiffrer `passwords.yml`, identité `critique`). Les étiquettes (*tags*) utiles : `nova`, `neutron`, `openvswitch`, `ovn-controller`, `keystone`, `glance`, `cinder`, `horizon`, `loadbalancer`, `memcached`. Avant de lancer, regarde ce qui changerait : `git diff` du dépôt, et au besoin `kolla-ansible genconfig` vers une copie de la configuration pour comparer avec `/etc/kolla/` des nœuds.
+(l'identité Vault `critique`, qui déchiffre `passwords.yml`, vient de l'`ansible.cfg` du projet, M10-E03). Les étiquettes (*tags*) utiles : `nova`, `neutron`, `openvswitch`, `ovn-controller`, `keystone`, `glance`, `cinder`, `horizon`, `loadbalancer`, `memcached`. Avant de lancer, regarde ce qui changerait : `git diff` du dépôt, et au besoin `kolla-ansible genconfig` vers une copie de la configuration pour comparer avec `/etc/kolla/` des nœuds.
 
 ---
 
@@ -52,7 +52,7 @@ admin@adm01:~/src/openstack$ uv run kolla-ansible reconfigure -i inventaire/mult
 
 ```
 admin@adm01:~$ export OS_CLOUD=medisphere-plateforme
-admin@adm01:~$ openstack server create --flavor m1.petit --image <IMAGE-DEBIAN13> --no-network --wait essai-e35
+admin@adm01:~$ openstack server create --flavor m1.petit --image debian-13 --no-network --wait essai-e35
 Error creating server: essai-e35
 admin@adm01:~$ openstack server show essai-e35 -c status -c fault -f yaml
 fault:
@@ -64,8 +64,6 @@ admin@adm01:~$ openstack server event list essai-e35
 | Request ID                               | Server ID | Action | Start Time |
 | req-7c1e9a4b-2f0d-4f7e-9d5a-0c8e3b1f2a66 | 5b0e…     | create | …          |
 ```
-
-`<IMAGE-DEBIAN13>` est le nom ou l'identifiant de ton image Debian 13 (M10-E06).
 
 **Étape 2 — Le plan de contrôle : avant ou dans les filtres ?**
 
@@ -82,15 +80,14 @@ Le conducteur, lui, écrit `NoValidHost` et met l'instance en `ERROR` (`Failed t
 **Étape 3 — Interroger l'étage désigné.**
 
 ```
-admin@adm01:~$ uv tool install --force --with osc-placement python-openstackclient
-admin@adm01:~$ export OS_CLOUD=medisphere-admin
+admin@adm01:~$ export OS_CLOUD=medisphere-admin           # greffon osc-placement installé en M10-E13
 admin@adm01:~$ openstack compute service list --service nova-compute --long
 admin@adm01:~$ openstack resource provider list
 admin@adm01:~$ openstack resource provider inventory list <UUID-OSCMP01>
 admin@adm01:~$ openstack resource provider usage show <UUID-OSCMP01>
 admin@adm01:~$ openstack --os-placement-api-version 1.6 resource provider trait list <UUID-OSCMP01>
 admin@adm01:~$ openstack flavor show m1.petit -c properties
-admin@adm01:~$ openstack image show <IMAGE-DEBIAN13> -c properties
+admin@adm01:~$ openstack image show debian-13 -c properties
 admin@adm01:~$ openstack --os-placement-api-version 1.17 allocation candidate list --resource VCPU=1 --resource MEMORY_MB=1024 --resource DISK_GB=10
 ```
 
@@ -119,7 +116,7 @@ Prévention : la procédure de maintenance (RB-102, M10-E19/E29) se termine par 
 ```
 admin@adm01:~$ openstack resource provider inventory list <UUID-OSCMP01>
 | resource_class | allocation_ratio | min_unit | max_unit | reserved | step_size | total |
-| VCPU           |             16.0 |        1 |        4 |        0 |         1 |     4 |
+| VCPU           |              4.0 |        1 |        4 |        0 |         1 |     4 |
 | MEMORY_MB      |              1.0 |        1 |     7940 |     7680 |         1 |  7940 |
 | DISK_GB        |              1.0 |        1 |      … |        0 |         1 |    … |
 ```
@@ -130,10 +127,11 @@ Capacité mémoire = (`total` − `reserved`) × `allocation_ratio` = 260 Mio : 
 root@oscmp01:~# grep -n reserved_host_memory_mb /etc/kolla/nova-compute/nova.conf
 3:reserved_host_memory_mb = 7680
 root@oscmp01:~# ls -l --time-style=full-iso /etc/kolla/nova-compute/nova.conf
-root@oscmp01:~# grep -rn reserved_host_memory ~/src/openstack/etc/kolla/ 2>/dev/null   # (sur adm01) : rien
+admin@adm01:~/src/openstack$ grep -rn reserved_host_memory etc/kolla/config/
+etc/kolla/config/nova/nova-compute.conf:…:reserved_host_memory_mb = 2048
 ```
 
-La ligne n'est pas dans ton dépôt : modification à la main sur les deux calculs, suivie d'un redémarrage de `nova_compute` (qui a renvoyé le nouvel inventaire à Placement). Correctif durable : `kolla-ansible reconfigure -t nova` régénère le fichier depuis le dépôt et relance `nova_compute` (vérifie ensuite `inventory list`). Si la valeur **venait** de ton dépôt (`etc/kolla/config/nova.conf` ou `nova/nova-compute.conf`), le `reconfigure` l'aurait reposée : c'est là qu'il faut corriger. Remarque : Kolla ne pose pas `reserved_host_memory_mb` pour libvirt (valeur par défaut de Nova : 512 Mio) ; avec 8 Go par calcul, une réservation réaliste pour l'hôte et les conteneurs se situe entre 1 et 2 Gio, à décider et écrire dans le dépôt.
+Ton dépôt dit 2048 (M10-E20), le fichier généré dit 7680 : modification à la main sur les deux calculs, suivie d'un redémarrage de `nova_compute` (qui a renvoyé le nouvel inventaire à Placement). Correctif durable : `kolla-ansible reconfigure -t nova` régénère le fichier depuis le dépôt et relance `nova_compute` (vérifie ensuite `inventory list`). Si la valeur **venait** de ton dépôt (`etc/kolla/config/nova.conf` ou `nova/nova-compute.conf`), le `reconfigure` l'aurait reposée : c'est là qu'il faut corriger. Remarque : Kolla ne pose pas `reserved_host_memory_mb` (valeur par défaut de Nova : 512 Mio) ; la valeur de 2 048 Mio décidée en M10-E13 et posée en M10-E20 est celle du dépôt, donc celle que le `reconfigure` rétablit.
 
 **Variante 3 — image avec une architecture impossible.**
 
@@ -141,14 +139,14 @@ Journal du scheduler : `Filter results: […, 'ImagePropertiesFilter: (start: 2,
 
 ```
 root@osctl01:~# grep -h 'PATCH /v2/images' /var/log/kolla/glance/glance-api.log | tail -n 3
-admin@adm01:~$ openstack image unset --property hw_architecture <IMAGE-DEBIAN13>
+admin@adm01:~$ openstack image unset --property hw_architecture debian-13
 ```
 
 (ou `image set --property hw_architecture=x86_64` si ta convention de M10-E06 la pose explicitement). Prévention : les propriétés des images publiques sont fixées par le code qui les publie (M10-E06) et vérifiées par une sonde ; les **protections de propriétés** de Glance (`glance_enable_property_protection` dans Kolla, fichier de règles) réservent la modification des propriétés `hw_*` aux administrateurs. Note : si `[scheduler] image_metadata_prefilter` est activé (ce n'est pas le défaut), l'architecture devient un trait exigé et le symptôme passe à « Got no allocation candidates ».
 
 **Variante 4 — trait exigé par le gabarit.**
 
-`openstack flavor show m1.petit -c properties` montre `trait:HW_GPU_API_VULKAN='required'`. `allocation candidate list --resource … --required HW_GPU_API_VULKAN` est vide : aucun calcul n'expose ce trait (Nova le publie seulement si l'hyperviseur a un GPU virtuel adapté). Correctif : `openstack flavor unset --property trait:HW_GPU_API_VULKAN m1.petit`. Qui ? Journal de `nova-api` (`PUT …/os-extra_specs` ou `POST …/os-extra_specs`). Prévention : les gabarits sont gérés par le code (OpenTofu, `openstack_compute_flavor_v2` et ses `extra_specs`, état `openstack-projets` de M10-E15) et leur dérive est visible au `tofu plan` nocturne ; un gabarit « GPU » s'appelle autrement et se réserve par un agrégat.
+`openstack flavor show m1.petit -c properties` montre `trait:HW_GPU_API_VULKAN='required'`. `allocation candidate list --resource … --required HW_GPU_API_VULKAN` est vide : aucun calcul n'expose ce trait (Nova le publie seulement si l'hyperviseur a un GPU virtuel adapté). Correctif : `openstack flavor unset --property trait:HW_GPU_API_VULKAN m1.petit`. Qui ? Journal de `nova-api` (`PUT …/os-extra_specs` ou `POST …/os-extra_specs`). Prévention : les gabarits sont gérés par le code (`playbooks/catalogue.yml` de M10-E07, rejoué régulièrement en mode `--check --diff` pour voir la dérive ; avec OpenTofu, `openstack_compute_flavor_v2` et ses `extra_specs` rendraient la dérive visible au plan nocturne) ; un gabarit « GPU » s'appelle autrement et se réserve par un agrégat.
 
 **Vérification** : instance `m1.petit` Debian 13 `ACTIVE` dans `mediagenda-dev`, supprimée ensuite ; `lab/bin/check 10 35` ; puis `lab/bin/break 10 35 --annuler` pour clore.
 
@@ -245,9 +243,9 @@ admin@osctl01:~$ ip -br link show ens21
 ens21            DOWN           bc:24:11:…
 ```
 
-`tcpdump` sur l'interface ne capture rien (une interface administrativement DOWN ne reçoit plus de trames) ; `ovs-vsctl list-ports br-ex` la montre toujours. Correctif : `sudo ip link set ens21 up`. Prévention : la configuration réseau persistante de l'hôte (systemd-networkd, posée par ton rôle Ansible ou par cloud-init en M10-E02) déclare l'interface active sans adresse : un redémarrage du nœud l'aurait relevée, mais personne ne redémarre une passerelle pour « voir ». Une sonde sur l'état des liens des nœuds (`node_exporter` au M21) l'aurait vue tout de suite.
+`tcpdump` sur l'interface ne capture rien (une interface administrativement DOWN ne reçoit plus de trames) ; `ovs-vsctl list-ports br-ex` la montre toujours. Correctif : `sudo ip link set ens21 up`. Prévention : la configuration réseau persistante de l'hôte (netplan rendu pour systemd-networkd par le rôle `noeud_openstack`, M10-E02) déclare l'interface active sans adresse : un redémarrage du nœud l'aurait relevée, mais personne ne redémarre une passerelle pour « voir ». Une sonde sur l'état des liens des nœuds (`node_exporter` au M21) l'aurait vue tout de suite.
 
-Note sur les noms : `ens21` et `br-ex` sont ceux de ce corrigé (carte OS-EXT de M10-E02, pont par défaut de Kolla) ; lis les tiens dans `globals.yml` (`neutron_external_interface`, `neutron_bridge_name`).
+Note sur les noms : `ens21` est la carte OS-EXT de M10-E02 (`neutron_external_interface`, dans `inventaire/host_vars/osctl01.yml`, M10-E03) ; `br-ex` est le pont par défaut de Kolla (`neutron_bridge_name`).
 
 **Vérification** : ping et SSH vers l'IP de test, `lab/bin/check 10 36` (avant `--annuler`), puis `lab/bin/break 10 36 --annuler`.
 
@@ -768,7 +766,7 @@ Trois contrôleurs (VIP qui bascule réellement), sonde HTTPS sur chaque VIP ave
 2. **Priorisation par dépendances** : accès et VIP (E42) → authentification (E39) → messagerie et calculs (E40) → réseau nord-sud (E36) et métadonnées (E37) → stockage (E38, E41) → planification (E35). Exemples : avec E39 et E40, aucune commande `openstack` ne fonctionne tant que Keystone est en panne, et l'état des calculs ne se lit que sur les nœuds (`docker ps`, journaux) ; avec E42 v4 (VIP absentes), **tout** semble cassé, y compris des services sains ; avec E36 et E37, les deux concernent des instances de test, mais E36 coupe tout le nord-sud alors que E37 ne touche que les nouvelles instances : E36 d'abord.
 3. **Communication** (modèle) : « 07 h 05 — INC-3750 — Statut : en cours. Impact : connexion au cloud impossible (Horizon et API), créations d'instances impossibles. Cause : deux anomalies distinctes identifiées sur le contrôleur et les calculs ; rétablissement de l'authentification en cours. Recette MédiAgenda de 9 h : maintenue à ce stade. Prochaine communication : 07 h 35. »
 4. **Post-mortem** : chronologie horodatée (détection, premières hypothèses, fausses pistes, corrections), deux causes racines et leurs causes contributives (modifications hors du code, absence de sonde sur les conteneurs `unhealthy`, accès d'InfoGér sans changement), détection (ce qui aurait dû alerter avant Nadia), actions avec responsable et échéance (sondes, contrôle de dérive des fichiers générés, politique d'accès).
-5. **RB-103** : runbook de référence dans [`fichiers/M10-E43/RB-103-instance-en-erreur.md`](fichiers/M10-E43/RB-103-instance-en-erreur.md). Ce qu'on attend : un arbre de tri qui part du **symptôme** (pas de la cause), des commandes de niveau 1 en lecture seule avec ce qu'il faut y lire, des gestes de niveau 2 encadrés, des critères d'escalade clairs, et une liste de ce qu'il ne faut jamais faire (évacuer un calcul non isolé, régénérer une clé Ceph, forcer l'état d'un volume, désactiver la vérification TLS).
+5. **RB-103** : runbook de référence dans [`docs/cloud/runbooks/RB-103-instance-en-erreur.md`](fichiers/M10-E43/medisphere/docs/cloud/runbooks/RB-103-instance-en-erreur.md). Ce qu'on attend : un arbre de tri qui part du **symptôme** (pas de la cause), des commandes de niveau 1 en lecture seule avec ce qu'il faut y lire, des gestes de niveau 2 encadrés, des critères d'escalade clairs, et une liste de ce qu'il ne faut jamais faire (évacuer un calcul non isolé, régénérer une clé Ceph, forcer l'état d'un volume, désactiver la vérification TLS).
 
 **Grille d'auto-évaluation**
 - [ ] Les instruments ont été vérifiés avant le diagnostic (aucune conclusion tirée d'un test qui dépendait d'un service en panne).
@@ -784,7 +782,7 @@ Trois contrôleurs (VIP qui bascule réellement), sonde HTTPS sur chaque VIP ave
 
 **Solution**
 
-Compte rendu de référence : [`fichiers/M10-E44/vie-d-un-server-create.md`](fichiers/M10-E44/vie-d-un-server-create.md).
+Compte rendu de référence : [`docs/cloud/analyses/vie-d-un-server-create.md`](fichiers/M10-E44/medisphere/docs/cloud/analyses/vie-d-un-server-create.md).
 
 *Préparation : journalisation de débogage par Kolla.* Dans `etc/kolla/globals.yml` de ta branche de travail : `nova_logging_debug: "True"` (variable du rôle Nova, utilisée dans le modèle de `nova.conf`), puis `kolla-ansible reconfigure -t nova`. À la fin, retire la ligne et relance le même `reconfigure`. (Alternative plus ciblée : une surcharge `etc/kolla/config/nova/nova-scheduler.conf` avec `[DEFAULT] debug = True`.)
 
@@ -792,7 +790,7 @@ Compte rendu de référence : [`fichiers/M10-E44/vie-d-un-server-create.md`](fic
 
 ```
 admin@adm01:~$ export OS_CLOUD=medisphere-plateforme
-admin@adm01:~$ openstack --debug server create --flavor m1.petit --image <IMAGE-DEBIAN13> --network <RÉSEAU> --key-name <CLÉ> --wait m10-e44-trace 2>&1 | sed -E 's/(X-Auth-Token: )[^ ]+/\1***/I' > /tmp/e44-debug.txt
+admin@adm01:~$ openstack --debug server create --flavor m1.petit --image debian-13 --network reseau-plateforme --key-name cle-adm01 --wait m10-e44-trace 2>&1 | sed -E 's/(X-Auth-Token: )[^ ]+/\1***/I' > /tmp/e44-debug.txt
 admin@adm01:~$ grep -E 'POST .*/v3/auth/tokens|POST .*/servers|RESP: \[20[12]\]|x-openstack-request-id|x-compute-request-id' /tmp/e44-debug.txt | head
 REQ: curl -g -i -X POST https://openstack.par1.medisphere.internal:5000/v3/auth/tokens …
 RESP: [201] … X-Subject-Token: {SHA256}…
@@ -890,6 +888,6 @@ Le disque éphémère est une image RBD du pool `vms`, **clone** de l'instantan�
 17. Le fournisseur OVN implémente un répartiteur **L4** (TCP, UDP, SCTP) directement dans OVN (NAT distribué vers les membres) : pas de machine virtuelle, démarrage instantané, très peu de ressources ; mais ni L7 (règles HTTP), ni terminaison TLS, ni répartition autre que par source/port (`SOURCE_IP_PORT`), et des contrôles de santé limités. Amphora déploie une VM HAProxy par répartiteur : L7, TLS (avec Barbican), algorithmes variés, mais coût mémoire et complexité (réseau de gestion, certificats, images). Pour MédiAgenda : OVN pour du L4 interne ou un service TCP, amphora (ou un HAProxy dans Kubernetes plus tard) si l'équipe a besoin de TLS ou de routage HTTP (ADR-0100).
 18. *Secure RBAC* définit des personas : `reader` (lecture), `member` (gestion des ressources du projet), `manager` (gestion déléguée dans le projet ou le domaine, depuis 2024.x) et `admin` ; la **portée** (projet, domaine, système) dit sur quoi porte le rôle. `enforce_new_defaults` active les nouvelles règles par défaut (et désactive les anciennes, plus permissives) ; `enforce_scope` fait rejeter un jeton dont la portée ne convient pas à l'API. La transition a pris des années parce que chaque service devait réécrire ses règles, garder la compatibilité avec les déploiements existants (anciennes règles, `admin` global historique) et faire migrer les outils et les comptes de service. Vérifie l'état des défauts dans la documentation 2026.1 de chaque service.
 19. Un nœud : tout est point unique (MariaDB, RabbitMQ, HAProxy/keepalived, memcached, OVN). Trois nœuds : Galera (écriture synchrone, quorum à 2 sur 3), RabbitMQ en grappe avec files *quorum*, VIP qui bascule (VRRP), plusieurs memcached (caches indépendants), bases OVN NB/SB en grappe RAFT. Galera, RabbitMQ *quorum* et RAFT exigent une **majorité** : avec deux nœuds, la perte d'un seul (ou une coupure entre eux) empêche toute majorité ou crée un risque de cerveau divisé ; trois est le minimum utile, et un nombre impair évite de payer un nœud de plus sans gain de tolérance.
-20. Lire les notes de version et la matrice de support de Kolla (systèmes hôtes, version d'Ansible, versions d'OpenStack sautées ou non) ; préparer la nouvelle version de Kolla-Ansible dans un environnement `uv` séparé ; sauvegarder (base `kolla-ansible mariadb_backup`, configuration, clés fernet, M10-E25) ; vérifier Ceph et la compatibilité des clients ; `kolla-ansible pull` (images), `prechecks`, puis `upgrade` (service par service, migrations de schéma, *online data migrations* de Nova et Cinder à terminer) ; vérifier les politiques (nouveaux défauts) et les fonctionnalités dépréciées ; tester (instance, volume, IP flottante, Octavia, Horizon) ; le retour arrière se fait par restauration de la base **et** des images précédentes, d'où la sauvegarde testée. On attend la série Kolla publiée parce que les images et les rôles de la version RC ne sont ni figés ni supportés : une RC peut changer, et une mise à jour depuis une RC n'est pas un chemin garanti.
+20. Lire les notes de version et la matrice de support de Kolla (systèmes hôtes, version d'Ansible, versions d'OpenStack sautées ou non) ; préparer la nouvelle version de Kolla-Ansible dans un environnement `uv` séparé ; sauvegarder (base `kolla-ansible mariadb-backup`, configuration, clés fernet, M10-E25) ; vérifier Ceph et la compatibilité des clients ; `kolla-ansible pull` (images), `prechecks`, puis `upgrade` (service par service, migrations de schéma, *online data migrations* de Nova et Cinder à terminer) ; vérifier les politiques (nouveaux défauts) et les fonctionnalités dépréciées ; tester (instance, volume, IP flottante, Octavia, Horizon) ; le retour arrière se fait par restauration de la base **et** des images précédentes, d'où la sauvegarde testée. On attend la série Kolla publiée parce que les images et les rôles de la version RC ne sont ni figés ni supportés : une RC peut changer, et une mise à jour depuis une RC n'est pas un chemin garanti.
 
 **Grille d'auto-évaluation** : 16/20 au moins avec des réponses argumentées ; reprends les exercices liés à chaque erreur (E35 et E44 pour la planification, E36 et E37 pour le réseau, E38 et E41 pour Ceph, E39 et E40 pour l'identité et la messagerie, E24 et E28 pour la HA et la mise à jour).

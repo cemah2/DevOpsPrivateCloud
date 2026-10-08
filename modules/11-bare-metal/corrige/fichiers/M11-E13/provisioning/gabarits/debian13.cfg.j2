@@ -1,0 +1,85 @@
+{# gabarits/debian13.cfg.j2 — preseed Debian 13 propre à une machine (M11-E04/E06, sécurisé en M11-E13).
+   Rendu par outils/netbox-provision.py dans preseed/<nom>.cfg, remis par iPXE à la racine de
+   l'initrd (/preseed.cfg) : lu avant le réseau, il peut donc tout préremplir, y compris le nom.
+   Variables : m (machine NetBox : m.nom…), p (parametres.yml : domaine, ntp, disque, miroir,
+   cle_ssh_admin, empreinte_racine).
+   AUCUN mot de passe : root verrouillé, admin sans mot de passe (connexion par clé, sudo par la
+   règle posée ci-dessous) ; l'accès console de secours arrive avec le rôle base (compte secours).
+   Validation dans le pipeline : debconf-set-selections -c sur le rendu. -#}
+#_preseed_V1
+# preseed/{{ m.nom }}.cfg — GÉNÉRÉ par outils/netbox-provision.py depuis NetBox : ne pas modifier.
+# {{ m.fqdn }}, {{ m.ip }}
+
+### Langue, clavier
+d-i debian-installer/locale string fr_FR.UTF-8
+d-i keyboard-configuration/xkb-keymap select fr
+
+### Réseau (bail réservé par Kea)
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string {{ m.nom }}
+d-i netcfg/get_domain string {{ p.domaine }}
+d-i netcfg/hostname string {{ m.nom }}
+d-i hw-detect/load_firmware boolean true
+
+### Miroir (HTTP : les paquets sont authentifiés par la signature du fichier Release)
+d-i mirror/country string manual
+d-i mirror/http/hostname string {{ p.miroir | default('deb.debian.org') }}
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+
+### Comptes : root verrouillé, admin sans mot de passe (« ! » = compte verrouillé)
+d-i passwd/root-login boolean false
+d-i passwd/make-user boolean true
+d-i passwd/user-fullname string Administrateur MediSphere
+d-i passwd/username string admin
+d-i passwd/user-password-crypted password !
+
+### Heure
+d-i clock-setup/utc boolean true
+d-i time/zone string Europe/Paris
+d-i clock-setup/ntp boolean true
+d-i clock-setup/ntp-server string {{ p.ntp | default('10.10.60.1') }}
+
+### Partitionnement : LVM sur tout le disque, sans aucune question
+d-i partman-auto/disk string /dev/{{ p.disque | default('sda') }}
+d-i partman-auto/method string lvm
+d-i partman-auto-lvm/guided_size string max
+d-i partman-auto/choose_recipe select atomic
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-md/device_remove_md boolean true
+d-i partman-lvm/confirm boolean true
+d-i partman-lvm/confirm_nooverwrite boolean true
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman-efi/non_efi_system boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+### Paquets
+d-i apt-setup/non-free-firmware boolean true
+d-i apt-setup/services-select multiselect security, updates
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string sudo ca-certificates curl qemu-guest-agent
+d-i pkgsel/upgrade select full-upgrade
+popularity-contest popularity-contest/participate boolean false
+
+### Chargeur d'amorçage
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string default
+
+### Fin : racine de la PKI (remise par iPXE, empreinte vérifiée : la commande échoue et
+### l'installation s'arrête si elle diffère), clé SSH PUBLIQUE d'adm01, sudo sans mot de passe pour
+### admin (comme les images dorées), puis ARRÊT (et non redémarrage) : l'orchestrateur (M11-E15) le
+### voit et bascule la machine sur le démarrage local avant de la rallumer.
+d-i preseed/late_command string \
+  test "$(sha256sum /medisphere-root-ca.crt | cut -d ' ' -f 1)" = "{{ p.empreinte_racine }}" || exit 1; \
+  cp /medisphere-root-ca.crt /target/usr/local/share/ca-certificates/medisphere-root-ca.crt; \
+  in-target update-ca-certificates; \
+  mkdir -p /target/home/admin/.ssh; \
+  echo '{{ p.cle_ssh_admin }}' > /target/home/admin/.ssh/authorized_keys; \
+  in-target chown -R admin:admin /home/admin/.ssh; \
+  chmod 700 /target/home/admin/.ssh; chmod 600 /target/home/admin/.ssh/authorized_keys; \
+  echo 'admin ALL=(ALL) NOPASSWD: ALL' > /target/etc/sudoers.d/90-admin; \
+  chmod 440 /target/etc/sudoers.d/90-admin
+d-i finish-install/reboot_in_progress note
+d-i debian-installer/exit/poweroff boolean true

@@ -416,14 +416,14 @@ Pour le retour automatique du réseau, une minuterie transitoire (`systemd-run -
 - `corosync-qnetd` sur `pbs01` (paquet Debian, écoute TCP **5403**) ; `corosync-qdevice` sur `hv01` et `hv02` ; raccordement par `pvecm qdevice setup 10.20.10.10` lancé sur **un** nœud, tous les nœuds en ligne.
 - Cette commande se connecte en SSH, en `root`, de ce nœud vers `pbs01`, pour y installer les certificats du QDevice. Accès **temporaire** : la clé publique de root de `hv01` est ajoutée à `/root/.ssh/authorized_keys` de `pbs01` pour l'opération, puis retirée.
 - Trafic : `hv01`/`hv02` (10.10.10.51-52, MGMT) → `gw01`/`gw02` → `wg0` → `pbs01` (10.20.10.10). `pbs01` filtre ses entrées en politique `drop` (nftables, M00).
-- Fiche de changement : `docs/socle/changements/CHG-1005-qdevice-pbs01.md` (modèle des fiches de M06).
+- Fiche de changement : `docs/virtualisation/changements/CHG-1005-qdevice-pbs01.md` (modèle des fiches de M06).
 
 > ⚠️ **Attention** : `pbs01` est le serveur de sauvegarde de tout le lab. Avant d'y toucher : vérifie qu'aucune sauvegarde n'est en cours (`proxmox-backup-manager task list`), garde une session SSH ouverte pendant tout changement de pare-feu, et copie `/etc/nftables.conf` et `/root/.ssh/authorized_keys`. Retour arrière complet : `pvecm qdevice remove` sur un nœud, puis sur `pbs01` arrêt et purge de `corosync-qnetd`, recopie des deux fichiers, `nft -f /etc/nftables.conf`.
 
 **Travail demandé**
 
 1. **La fiche.** Rédige CHG-1005 avant toute action : objet, systèmes touchés, risques et parades, étapes, retour arrière, vérifications après changement. Fais-la relire (par toi-même le lendemain, à défaut).
-2. **La matrice.** Ajoute le flux à `host_vars/gw01/pare_feu.yml` (une définition pour les nœuds, une règle avec motif et référence), MR, pipeline sur les deux passerelles. En relisant la matrice, regarde la règle « bastion (MGMT) vers tout le lab et PAR2 » : que permet-elle aux nœuds `hvNN` ? Le QDevice aurait-il fonctionné sans ta règle ? Inscris ce que tu constates au registre des écarts, avec une proposition (ne la mets pas en œuvre ici).
+2. **La matrice.** Ajoute le flux à `host_vars/gw01/pare_feu.yml` (une définition pour les nœuds, une règle avec motif et référence), MR, pipeline sur les deux passerelles. En relisant la matrice, regarde la règle « bastion (MGMT) vers tout le lab, PAR2 et LYO1 » (M00-E10, élargie en M07-E30) : que permet-elle aux nœuds `hvNN` ? Le QDevice aurait-il fonctionné sans ta règle ? Inscris ce que tu constates au registre des écarts, avec une proposition (ne la mets pas en œuvre ici : M09-E26 la traite).
 3. **`pbs01`.** Simule puis installe `corosync-qnetd` ; lis ce que le paquet a créé (service, base de certificats NSS). Ajoute à l'entrée de son pare-feu une règle qui n'ouvre le port 5403 qu'aux adresses des nœuds (`nft -c -f` avant chargement).
 4. **Les nœuds.** Installe `corosync-qdevice` sur `hv01` et `hv02`. Ajoute temporairement la clé publique de root de `hv01` sur `pbs01`, et vérifie la connexion `root@hv01 → root@pbs01`.
 5. **Le raccordement.** Sur `hv01`, `pvecm qdevice setup 10.20.10.10`. Puis observe : `pvecm status` (section *Membership*, drapeaux, votes), `corosync-qdevice-tool -s` sur un nœud, `corosync-qnetd-tool -l` sur `pbs01`, la section `quorum` de `/etc/pve/corosync.conf`. Quel algorithme a été choisi, et combien de votes porte le QDevice ?
@@ -666,11 +666,11 @@ Réponds aux 12 questions, en t'appuyant sur ce que tu as relevé dans les exerc
 
 8. pmxcfs : où sont réellement stockées les données de `/etc/pve` sur un nœud ? Pourquoi `/etc/pve` n'est-il pas fait pour y ranger de gros fichiers ? Où sont les disques des VMs, et les ISO ?
 
-9. *(QCM)* On déclare par erreur `shared 1` sur `zfs-local`. Quelle conséquence est la plus grave ?
-   - A. Aucune : Proxmox VE vérifie que le stockage est vraiment partagé
-   - B. L'interface affiche mal la place libre
-   - C. Une migration ne copie plus les disques : la VM démarre sur le nœud cible sans son disque (ou sur un volume vide de même nom) ; la HA pourrait la « redémarrer » ailleurs de même
-   - D. ZFS se met à répliquer le pool tout seul
+9. *(QCM)* Suppose qu'en E06 tu aies déclaré `zfs-local` **sans** liste de nœuds, puis qu'en E08 `hv03` ait rejoint le cluster avant que son pool `tank` existe. Que se passe-t-il entre l'adhésion et la création du pool ?
+   - A. L'adhésion de `hv03` est refusée tant qu'un stockage déclaré lui manque
+   - B. `zfs-local` est inactif sur `hv03` seulement : toute création, restauration ou migration de disque vers ce stockage **sur `hv03`** échoue ; `hv01` et `hv02` ne voient aucune différence
+   - C. Proxmox VE crée le pool `tank` sur le premier disque libre de `hv03`
+   - D. `zfs-local` passe inactif sur tous les nœuds, puisque sa définition est commune
 
 10. En E07, la migration à chaud avec disques locaux a duré bien plus longtemps que l'interruption mesurée par le `ping`. Explique pourquoi la durée totale et l'interruption sont deux grandeurs indépendantes.
 

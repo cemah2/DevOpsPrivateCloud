@@ -6,10 +6,10 @@
 #   1. preseed de bm01 (preseed/bm01.cfg, à défaut le premier preseed) : la ligne
 #      « d-i partman/confirm boolean true » est commentée → d-i (priority=critical) pose la
 #      question « Écrire les modifications sur les disques ? » et attend ;
-#   2. kickstart de bm03 (kickstart/bm03.ks, à défaut le premier) : la source « url --url=… » pointe
+#   2. kickstart de bm04 (kickstart/bm04.ks, à défaut le premier) : la source « url --url=… » pointe
 #      vers …/BaseOs/… (casse) → Anaconda : erreur de configuration de la source d'installation ;
 #      si le kickstart n'a pas de « url », c'est inst.repo du script iPXE de la machine qui est touché ;
-#   3. kickstart de bm03 : « ignoredisk --only-use=sda » devient « …=sdb » (disque absent) →
+#   3. kickstart de bm04 : « ignoredisk --only-use=sda » devient « …=sdb » (disque absent) →
 #      Anaconda s'arrête sur une erreur de stockage.
 # Seuls les fichiers servis sont touchés (pas les gabarits du dépôt) : la comparaison avec le rendu du
 # code est le bon réflexe de diagnostic. Sauvegardes : /var/lib/workbook/M11-E21.* sur pxe01.
@@ -39,7 +39,7 @@ EOF
 _e21_precondition() {
   local p k
   p="$(_e21_fichier preseed bm01.cfg)"
-  k="$(_e21_fichier kickstart bm03.ks)"
+  k="$(_e21_fichier kickstart bm04.ks)"
   if [[ -z "$p" && -z "$k" ]]; then
     wb_avert "pxe01 ne sert ni preseed ni kickstart sous sa racine : lab/bin/check 11 21"
     return 1
@@ -138,7 +138,7 @@ annuler_E21() {
 resume_E21() {
   case "${WB_VAR:-0}" in
     1) echo "L'installation Debian de bm01 s'arrête en cours de route et attend." ;;
-    *) echo "L'installation Rocky de bm03 s'arrête en cours de route et attend." ;;
+    *) echo "L'installation Rocky de bm04 s'arrête en cours de route et attend." ;;
   esac
 }
 
@@ -148,7 +148,7 @@ symptome_E21() {
     1) l=("L'installation de bm01 (Debian 13) ne se termine plus. Le démarrage réseau se passe"
       "bien, l'installateur démarre, configure le réseau, puis reste sur un écran bleu au milieu"
       "de l'installation. Ça fait une heure, et rien ne bouge.") ;;
-    *) l=("L'installation de bm03 (Rocky 10) ne se termine plus. Le démarrage réseau se passe"
+    *) l=("L'installation de bm04 (Rocky 10) ne se termine plus. Le démarrage réseau se passe"
       "bien, Anaconda démarre en mode texte, puis plus rien ne bouge : l'écran affiche un"
       "résumé de l'installation et semble attendre. Ça fait une heure.") ;;
   esac

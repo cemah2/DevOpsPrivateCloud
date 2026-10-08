@@ -10,8 +10,8 @@
 # Jamais sur pve01 (ni son réseau, ni son pare-feu), jamais sur pbs01 (QDevice compris), jamais sur
 # l'iLO de hp01. Aucune variante ne coupe l'accès SSH de adm01 (10.10.10.10) aux nœuds.
 #
-# 1. Accès : root@<IP MGMT> du nœud, avec la clé de adm01 installée par le fichier de réponse de
-#    l'installateur automatique (M09-E03) ; pas de sudo sur un nœud Proxmox VE. m09_exec envoie le
+# 1. Accès : alias SSH hv01…hv03 de ~/.ssh/config sur adm01 (HostName = IP MGMT, User root, M09-E03),
+#    avec la clé de adm01 installée par le fichier de réponse de l'installateur automatique ; pas de sudo sur un nœud Proxmox VE. m09_exec envoie le
 #    prélude de pannes-lib.sh (journal, sauver…) puis _M09_AIDE_DISTANTE, puis le script.
 # 2. Aide distante : sauvegarde de fichiers entiers (y compris dans /etc/pve, où « cp -a » échoue :
 #    pmxcfs impose propriétaire et droits), empreinte de l'état posé, restauration seulement si le
@@ -81,9 +81,9 @@ m09_effacer() {
 # Accès aux nœuds
 # ---------------------------------------------------------------------------
 
-# m09_cible NŒUD — destination SSH (root@IP MGMT : ne dépend pas du DNS).
+# m09_cible NŒUD — destination SSH : l'alias du nœud (HostName = IP MGMT : ne dépend pas du DNS).
 m09_cible() {
-  printf 'root@%s\n' "${_M09_IP[$1]}"
+  printf '%s\n' "$1"
 }
 
 # m09_ssh NŒUD "commande" — commande distante (sortie conservée), code de retour de la commande.

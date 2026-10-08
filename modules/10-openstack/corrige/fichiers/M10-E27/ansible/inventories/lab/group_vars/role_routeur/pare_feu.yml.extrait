@@ -1,0 +1,37 @@
+---
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : section « Cloud OpenStack » (M10-E27, SEC-1153).
+# Matrice commune à gw01 et gw02. Principe : TOUT ce qui n'est pas listé est refusé (politique drop
+# de la chaîne de transit). Les VIP et les nœuds sont dans le VLAN 50 ; les instances sortent par le
+# VLAN 52 (SNAT des routeurs OVN et IP flottantes, 10.10.52.0/24).
+# Déjà définis : $V_MGMT, $V_INFRA, $V_OSAPI, $V_OSEXT, $WG_ADM, $NET_VPN, $CA01, $RUNNER01 (M07-E30) ;
+# $OSCTL01, $OS_VIP_EXT (M10-E04) ; $NET_OSEXT (M10-E12).
+pare_feu_definitions:
+  # … définitions existantes …
+  - {nom: OS_VIP_INT, valeur: 10.10.50.200, commentaire: "VIP interne d'OpenStack (openstack-int)"}
+  - {nom: NET_OSAPI, valeur: 10.10.50.0/24, commentaire: "VLAN 50 OS-API (nœuds OpenStack, VIP)"}
+
+pare_feu_transit:
+  # … règles existantes …
+  # API publique (Keystone 5000, Nova 8774, Neutron 9696, Glance 9292, Cinder 8776, Placement 8780,
+  # Heat 8004/8000, Octavia 9876, Horizon 443) : postes d'admin (MGMT : règle « bastion vers tout
+  # le lab », inchangée), VPN d'admin, runner de la CI.
+  # REMPLACE la règle VPN de M10-E17 (443, 6080) : la CLI est désormais ouverte au VPN.
+  - {entree: $WG_ADM, source: $NET_VPN, sortie: $V_OSAPI, destination: $OS_VIP_EXT, proto: tcp,
+     ports: [443, 5000, 6080, 8000, 8004, 8774, 8776, 8780, 9292, 9696, 9876], motif: "VPN d'admin vers l'API, Horizon et la console", ref: M10-E27}
+  # REMPLACE la règle runner01 de M10-E15 (même destination, liste de ports complète).
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_OSAPI, destination: $OS_VIP_EXT, proto: tcp,
+     ports: [443, 5000, 8000, 8004, 8774, 8776, 8780, 9292, 9696, 9876], motif: "runner01 : OpenTofu et CI vers l'API", ref: M10-E27}
+  # Défis ACME HTTP-01 : ca01 vient chercher le jeton sur le port 80 des deux VIP.
+  # REMPLACE la règle ca01 → VIP externe de M10-E04.
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_OSAPI, destination: [$OS_VIP_INT, $OS_VIP_EXT], proto: tcp, ports: 80,
+     motif: "ca01 vers les VIP OpenStack : défis ACME (renouvellement des certificats)", ref: M10-E27}
+  # Les conteneurs letsencrypt_lego de osctl01 parlent ACME à ca01 (443).
+  # REMPLACE la règle osctl01 → ca01 de M10-E04 (même sens, source élargie au VLAN 50 pour trois contrôleurs).
+  - {entree: $V_OSAPI, source: $NET_OSAPI, sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "nœuds OpenStack vers step-ca (ACME)", ref: M10-E27}
+  # Instances (VLAN 52) : DNS du socle (règle « DNS du lab… vers les deux récurseurs », inchangée) et
+  # Internet en HTTP/HTTPS (M10-E12, inchangée). AUCUN flux vers le VLAN 50 : la politique « drop »
+  # de la chaîne de transit les refuse. Vérifier qu'aucune règle plus large (ex. « VLAN 52 vers
+  # 10.10.0.0/16 » posée pour un essai) ne les autorise, et le prouver depuis une instance
+  # (M10-E27, étape 5). Le refus est journalisé (préfixe « nft-fwd-drop: ») si
+  # pare_feu_journaliser_rejets est actif (rôle pare_feu, M04).

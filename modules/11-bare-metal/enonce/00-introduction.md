@@ -36,9 +36,9 @@ Jeudi, 8 h 40. OpenStack tourne, le cluster Proxmox imbriqué a été reconstrui
 - des **preseed** (Debian) et **kickstart** (Rocky) validés en CI, générés pour chaque serveur depuis **NetBox** (équipements `bm01` à `bm04`, rôle `serveur-bm`) ;
 - un outil de **pilotage d'alimentation** (API Proxmox pour les VMs `bm*`, Redfish pour l'iLO de `hp01`) ;
 - **MAAS 3.7** sur `maas01`, essayé de bout en bout sur les mêmes machines, puis évalué dans l'ADR-0110 ;
-- au palier 3 et au mini-projet : la chaîne en HTTPS, l'installation d'un nœud Proxmox VE, la boucle complète NetBox → serveur en service.
+- au palier 3 et au mini-projet : la chaîne authentifiée (iPXE construit par nos soins, HTTPS de bout en bout), l'installation d'un nœud Proxmox VE, la boucle complète NetBox → serveur en service, l'inventaire matériel de `hp01` lu sur son iLO.
 
-Le **palier 1** pose le réseau de démarrage et les deux installations automatiques ; le **palier 2** branche NetBox, le contrôleur de gestion et MAAS.
+Le **palier 1** pose le réseau de démarrage et les deux installations automatiques ; le **palier 2** branche NetBox, le contrôleur de gestion et MAAS ; le **palier 3** sécurise la chaîne, l'étend à Proxmox VE, la rend autonome et tranche entre MAAS et la chaîne maison ; le **palier 4** la casse et la lit sur le fil ; le **mini-projet** la livre comme un service.
 
 ## Architecture du module
 
@@ -56,8 +56,8 @@ Le **palier 1** pose le réseau de démarrage et les deux installations automati
      │   VLAN 60 PROV 10.10.60.0/24 (vprov)
   ┌──┴──────────────────────────────────────────────────────────────────────────────────────────┐
   │ pxe01 (2111) .10  tftpd-hpa :69 (/srv/tftp : undionly.kpxe, ipxe.efi)                          │
-  │                   nginx :80   (/srv/http : boot.ipxe, ipxe/, preseed/, kickstart/,             │
-  │                                debian13/, rocky10/, pki/)                                       │
+  │                   nginx :80, puis :443 en E13 (/srv/http : boot.ipxe, ipxe/, preseed/,         │
+  │                                kickstart/, debian13/, rocky10/, pki/, pve/ en E14)              │
   │ maas01 (2116) .11 MAAS 3.7 (snap) + PostgreSQL 16, Ubuntu 24.04 — palier 2, DHCP du VLAN 60    │
   │                   pendant la seule partie MAAS                                                  │
   │ bm01 (2112) SeaBIOS · bm02 (2113) SeaBIOS · bm03 (2114) OVMF · bm04 (2115) OVMF                │
@@ -91,7 +91,8 @@ Points structurants :
 
 - **Deux temps de démarrage.** Le micrologiciel ne sait faire que DHCP et TFTP ; on lui donne le plus petit programme possible (iPXE), qui sait ensuite parler HTTP, exécuter des scripts et télécharger vite. Le serveur DHCP doit donc reconnaître **qui** demande (micrologiciel BIOS, UEFI, ou iPXE) : c'est le rôle des classes de Kea.
 - **Une seule source de vérité.** Nom, adresse, système et statut d'un serveur viennent de NetBox (palier 2). OpenTofu « fabrique » seulement les VMs qui jouent le rôle du matériel livré, avec des adresses MAC fixes.
-- **Un serveur installé ne se réinstalle pas tout seul.** Les VMs démarrent sur le réseau d'abord ; c'est le script iPXE qui décide « installer » (statut `planned`) ou « démarrer sur le disque » (tout autre statut). Une installation se termine par une **extinction**, pas un redémarrage.
+- **Un serveur installé ne se réinstalle pas tout seul.** Les VMs démarrent sur le réseau d'abord ; c'est le script iPXE qui décide « installer » (statut `planned` au palier 2 ; tu rendras cette règle plus sûre au palier 3) ou « démarrer sur le disque » (tout autre cas). Une installation se termine par une **extinction**, pas un redémarrage.
+- **À partir du palier 3, tout passe en HTTPS** après le chargeur iPXE, et ce chargeur est construit par nous (racine MédiSphère intégrée) : le schéma ci-dessus montre la chaîne des paliers 1 et 2.
 - **Un seul serveur DHCP par VLAN.** Kea sert le VLAN 60, sauf pendant la partie MAAS (E10), où le DHCP de MAAS le remplace après une fiche de changement : deux serveurs DHCP sur un même segment, c'est une panne garantie.
 
 ### Hôtes du module
@@ -102,11 +103,12 @@ Points structurants :
 | `bm01` | 2112 | 10.10.60.101 (réservée en E06) | 2 vCPU, 2 Go, 20 Go | `env-m11`, `role-bm` | SeaBIOS — Debian 13 | E03 |
 | `bm02` | 2113 | 10.10.60.102 | 2 vCPU, 3 Go, 20 Go | `env-m11`, `role-bm` | SeaBIOS — Rocky Linux 10 | E03 |
 | `bm03` | 2114 | 10.10.60.103 | 2 vCPU, 2 Go, 20 Go | `env-m11`, `role-bm` | OVMF (UEFI) — Debian 13 | E03 |
-| `bm04` | 2115 | 10.10.60.104 | 2 vCPU, 4 Go, 32 Go (8 Go en E14) | `env-m11`, `role-bm` | OVMF (UEFI) — Rocky Linux 10, puis Proxmox VE (E14) | E03 |
-| `maas01` | 2116 | 10.10.60.11 (fixe) | 2 vCPU, 4 Go, 40 Go | `env-m11`, `role-maas` | Ubuntu 24.04 (template 9050) | E09 |
+| `bm04` | 2115 | 10.10.60.104 | 2 vCPU, 4 Go, 32 Go (8 Go le temps de E14) | `env-m11`, `role-bm` | OVMF (UEFI) — Rocky Linux 10, Proxmox VE le temps de E14 | E03 |
+| `maas01` | 2116 | 10.10.60.11 (fixe) | 2 vCPU, 4 Go, 40 Go | `env-m11`, `role-maas` | Ubuntu 24.04 (template 9050) | E09 (détruite en E25) |
+| `m11-build` | 2117 | DHCP du VLAN 99 (`vsandbox`) | 2 vCPU, 2 Go | `env-m11` | Debian 13 (clone lié de l'image dorée `current`), VM jetable de construction d'iPXE | E13 (détruite aussitôt) |
 | `tpl-ubuntu2404` | 9050 | — | — | `ubuntu2404`, `template` | Image cloud Ubuntu 24.04 | E09 |
 
-Toutes dans le pool `lab`, déclarées dans `plateforme/infra`, environnement **`envs/provisioning/`** (état `envs/provisioning/terraform.tfstate` sur `s3-01`). Adresses MAC fixées : `02:4d:53:60:00:01` à `02:4d:53:60:00:04` pour `bm01` à `bm04` (localement administrées : `02`, puis « MS » `4d:53`, le VLAN `60`, le numéro). Les VMs `bm*` ont 2 Go au moins, et 3 Go pour Rocky : l'installateur réseau de RHEL 10 demande 3 Gio quand il charge son image en HTTP.
+Toutes dans le pool `lab`, déclarées dans `plateforme/infra`, environnement **`envs/provisioning/`** (2117 : ressource conditionnelle, activée le temps de la construction) (état `envs/provisioning/terraform.tfstate` sur `s3-01`). Adresses MAC fixées : `02:4d:53:60:00:01` à `02:4d:53:60:00:04` pour `bm01` à `bm04` (localement administrées : `02`, puis « MS » `4d:53`, le VLAN `60`, le numéro). Les VMs `bm*` ont 2 Go au moins, et 3 Go pour Rocky : l'installateur réseau de RHEL 10 demande 3 Gio quand il charge son image en HTTP.
 
 ### Ports et flux du module
 
@@ -119,10 +121,15 @@ Toutes dans le pool `lab`, déclarées dans `plateforme/infra`, environnement **
 | VLAN 60 → DNS du lab, NTP de la passerelle | 53, 123 | E02 | existant (règles « DNS du lab », NTP) |
 | VLAN 60 → Internet (miroirs des installateurs) | 80, 443 | E04 | existant (« lab vers Internet ») |
 | `adm01` → VLAN 60 | tous | E02 | existant (MGMT joint tout le lab) |
-| `adm01` → iLO de `hp01` | TCP 443, UDP 623 | E07 | transit `gw01`/`gw02` (LAN maison exclu de « lab vers Internet ») |
-| `maas01` → `pve01` (API) | TCP 8006 | E10 | transit `gw01`/`gw02` **et** pare-feu Proxmox (IPSet `maas`) |
+| `adm01` → iLO de `hp01` | TCP 443, UDP 623 (623 retiré en E13) | E07 | transit `gw01`/`gw02` (LAN maison exclu de « lab vers Internet ») |
+| `maas01` → `pve01` (API) | TCP 8006 | E10 (retiré en E25) | transit `gw01`/`gw02` **et** pare-feu Proxmox (IPSet `maas`) |
+| VLAN 60 → `pxe01` (HTTPS) | TCP 443 | E13 | même VLAN : rien |
+| `pxe01` → `ca01` (ACME) ; `ca01` → `pxe01` (défi HTTP-01) | TCP 443 ; TCP 80 | E13 | transit `gw01`/`gw02` |
+| VLAN 60 → Internet | TCP 80 et 443 seulement | E13 | transit `gw01`/`gw02` (le VLAN 60 sort de « lab vers Internet ») |
+| `runner01` → VLAN 60 (publication, accueil Ansible) | TCP 22 | E15 | transit `gw01`/`gw02` |
+| `runner01` → iLO de `hp01` (inventaire) | TCP 443 | E18 | transit `gw01`/`gw02` |
 
-Tout nouveau flux passe par la matrice des flux de la bordure (`host_vars/gw01/pare_feu.yml`, appliquée à `gw01` et `gw02` depuis M07-E24) et par `docs/socle/matrice-flux.md`.
+Tout nouveau flux passe par la matrice des flux de la bordure (`group_vars/role_routeur/pare_feu.yml`, commune à `gw01` et `gw02` depuis M07-E24) ; `docs/socle/matrice-flux.md` en est régénérée par `ms-matrice-flux` (M07-E30).
 
 ---
 
@@ -152,7 +159,9 @@ Une installation à la main n'est permise que pour **explorer**, sur une VM `bm*
 
 **Contrôleur de gestion (BMC).** Un petit ordinateur dans le serveur (iLO chez HPE, iDRAC chez Dell), alimenté même quand le serveur est éteint : alimentation, console, capteurs, journaux, inventaire. Deux protocoles : **IPMI** over LAN (UDP 623, ancien, faibles garanties de sécurité) et **Redfish** (API REST en HTTPS, normalisée par la DMTF). C'est ce qui permet de piloter un parc sans entrer dans la salle — et ce qui fait d'un BMC une cible de choix.
 
-**Cycle de vie d'un serveur.** NetBox porte le statut : `planned` (livré, à installer), `active` (en service), `decommissioning`, `offline`… La chaîne de provisioning est un automate : selon le statut, le serveur s'installe, démarre sur son disque ou est effacé. MAAS (*Metal as a Service*) fait la même chose avec son propre vocabulaire (*New*, *Commissioning*, *Ready*, *Deploying*, *Deployed*) et sa propre base.
+**Cycle de vie d'un serveur.** NetBox porte le statut : `planned` (livré, à installer), `staged` (en cours de mise en service), `active` (en service), `failed`, `decommissioning`, `offline`… La chaîne de provisioning est un automate : selon le statut, le serveur s'installe, démarre sur son disque ou est effacé. MAAS (*Metal as a Service*) fait la même chose avec son propre vocabulaire (*New*, *Commissioning*, *Ready*, *Deploying*, *Deployed*) et sa propre base.
+
+**Fiche : Tinkerbell.** Projet de la CNCF (à l'origine chez Equinix Metal) qui provisionne des serveurs physiques depuis Kubernetes : chaque machine est une ressource (`Hardware`), chaque installation un `Workflow` fait d'actions en conteneurs (écrire une image disque, configurer le réseau…) exécutées par un petit système en mémoire (`HookOS`). Il apporte son DHCP et son serveur iPXE (Smee), son service de métadonnées (Hegel) et son moteur (Tink) ; il pilote les BMC par Rufio (Redfish, IPMI). Déploiement recommandé : un chart Helm sur un cluster Kubernetes. Points à retenir pour l'ADR de M11-E16 : la source de vérité devient Kubernetes, le provisioning repose sur une image disque plutôt qu'un installateur, et il faut un cluster en état de marche **avant** d'installer le premier serveur (Kubernetes n'arrive qu'au module 14). Documentation : <https://tinkerbell.org/>.
 
 ---
 
@@ -160,18 +169,18 @@ Une installation à la main n'est permise que pour **explorer**, sur une VM `bm*
 
 | Élément | Valeur |
 |---|---|
-| Versions (PLAN §6) | Kea 3.0 ; iPXE du paquet Debian 13 (`ipxe`, 1.21.1+git2025) ; tftpd-hpa et nginx 1.26 de Debian 13 ; debian-installer de trixie ; Rocky Linux 10 (10.2 au 8 octobre 2026) ; MAAS 3.7 (snap `3.7/stable`), PostgreSQL 16 d'Ubuntu 24.04 ; ipmitool 1.8.19 ; iLO 4 (Redfish 1.0, firmware 2.82 conseillé) |
+| Versions (PLAN §6) | Kea 3.0 ; iPXE du paquet Debian 13 (`ipxe`, 1.21.1+git2025) aux paliers 1 et 2, puis iPXE amont **construit** (étiquette `v2.0.0`, racine MédiSphère intégrée) à partir de E13 ; tftpd-hpa et nginx 1.26 de Debian 13 ; debian-installer de trixie ; Rocky Linux 10 (10.2 au 8 octobre 2026) ; MAAS 3.7 (snap `3.7/stable`), PostgreSQL 16 d'Ubuntu 24.04 ; ipmitool 1.8.19 ; iLO 4 (Redfish 1.0, firmware 2.82 conseillé) |
 | Changements de version | [`annexes/versions-bloc-B.md`](../../../annexes/versions-bloc-B.md), section « Provisioning bare-metal » |
 | Projet GitLab | **`plateforme/provisioning`** (copie de travail `~/src/provisioning`) : `ipxe/` (`boot.ipxe`, `menu.ipxe`), `preseed/`, `kickstart/`, `pve-answer/` (E14), `gabarits/` (Jinja2), `outils/` (`publier.sh`, `netbox-provision.py`, `alim.sh`), `.gitlab-ci.yml` (validation) |
-| `pxe01` | `/srv/tftp` (chroot de `tftpd-hpa`, `undionly.kpxe` et `ipxe.efi` copiés de `/usr/lib/ipxe`) ; `/srv/http` servi par nginx sur 10.10.60.10:80 (`pxe01.par1.medisphere.internal`) : `debian13/`, `rocky10/`, `pki/` gérés par le rôle `pxe`, `boot.ipxe`, `ipxe/`, `preseed/`, `kickstart/` publiés par `plateforme/provisioning` |
+| `pxe01` | `/srv/tftp` (chroot de `tftpd-hpa`, `undionly.kpxe` et `ipxe.efi` copiés de `/usr/lib/ipxe`, remplacés en E13 par les binaires construits) ; `/srv/http` servi par nginx sur 10.10.60.10:80, puis en HTTPS sur 443 à partir de E13 (`pxe01.par1.medisphere.internal`, certificat ACME de `ca01`) : `debian13/`, `rocky10/`, `pki/` gérés par le rôle `pxe` (playbook `playbooks/pxe.yml`, groupe `role_pxe`), `boot.ipxe`, `ipxe/`, `preseed/`, `kickstart/` publiés par `plateforme/provisioning` (`outils/publier.sh`), `pve/` (E14, temporaire) ; journaux nginx `/var/log/nginx/pxe-acces.log` et `pxe-erreurs.log` |
 | DHCP du VLAN 60 | Kea, sous-réseau `id: 60`, 10.10.60.0/24, plage 10.10.60.100-199, routeur et NTP 10.10.60.1, DNS 10.10.20.10 et .16, `next-server` 10.10.60.10, pas de DDNS ; classes `pxe-bios`, `pxe-uefi-x64`, `ipxe` ; relayé par `gw01`/`gw02` (giaddr 10.10.60.2 / .3) |
-| NetBox (E06) | équipements `bm01`-`bm04` : site `par1`, rôle `serveur-bm`, type `serveur-nu-vm` (fabricant `generique`), plateformes `debian-13` / `rocky-10`, étiquette `env-m11`, interface `eno1` (adresse MAC primaire), IP primaire 10.10.60.101-104 avec son `dns_name` ; statut `planned` → `active` |
+| NetBox (E06) | équipements `bm01`-`bm04` : site `par1`, rôle `serveur-bm`, type `serveur-nu-vm` (fabricant `generique`), plateformes `debian-13` / `rocky-10` (et `proxmox-ve-9` le temps de E14), étiquette `env-m11`, interface `eno1` (adresse MAC primaire), IP primaire 10.10.60.101-104 avec son `dns_name` ; statut `planned` → `active` ; répartition : `bm01` Debian (BIOS), `bm02` Rocky (BIOS), `bm03` Debian (UEFI), `bm04` Rocky (UEFI). Jetons de M06 : `netbox-ansible.env` (lecture), `netbox-auto.token` (écriture de `svc-automatisation`, droits étendus en E15 et E18). Champs personnalisés de `hp01` (E18) : `firmware_bios`, `firmware_ilo`, `inventaire_maj` |
 | Installations | compte `admin` (sudo, clé SSH de `adm01`, mot de passe **haché** SHA-512), `root` sans mot de passe utilisable, racine de la PKI installée (empreinte vérifiée), agent QEMU, fin par **extinction** |
-| Proxmox (E08) | compte `wb-maas@pve`, jeton `wb-maas@pve!maas`, rôle `WBMaas` sur `/vms/2112` à `/vms/2115` ; fichier `~/.config/workbook/pve-maas.env` (même format que `pve-api.env`, M00-E17) |
+| Proxmox (E08, E15) | compte `wb-maas@pve`, jeton `wb-maas@pve!maas`, rôle `WBMaas` sur `/vms/2112` à `/vms/2115` ; fichier `~/.config/workbook/pve-maas.env` (même format que `pve-api.env`, M00-E17) ; supprimé ou désactivé au mini-projet avec MAAS. Orchestrateur de E15 : compte distinct `wb-provision@pve`, jeton `wb-provision@pve!provision`, rôle `WBProvision` sur les mêmes VMs, fichier `~/.config/workbook/pve-provision.env` (il survit à MAAS) |
 | iLO de `hp01` (E07) | `<IP-ILO-HP01>` ; compte `wb-redfish` (droits minimaux) ; `~/.config/workbook/ilo-hp01.env` (600 : `ILO_HOST`, `ILO_NOM_TLS`, `ILO_USER`, `ILO_PASSWORD`) ; certificat épinglé `~/.config/workbook/ilo-hp01.pem` |
 | MAAS (E09-E10) | `http://10.10.60.11:5240/MAAS/`, administrateur `<MOI>`, clé d'API dans `~/.config/workbook/maas-api.key` (600), profil CLI `maas01` ; plage dynamique 10.10.60.150-199 pendant la partie MAAS |
-| Documentation | `docs/socle/provisioning/` (fiches et journaux), runbook **RB-110** (E12), ADR-0110 (E16), fiches de changement `CHG-12xx` |
-| Numérotation | tickets `PLAT-1200`-`1209` (palier 1), `1210`-`1229` (palier 2), `1230`-`1249` (palier 3), `1290` (mini-projet) ; `SEC-12xx`, `CHG-12xx` ; incidents `INC-38xx` |
+| Documentation | dans `plateforme/medisphere`, dossier **`docs/provisioning/`** (comme `docs/stockage/`, `docs/virtualisation/`, `docs/cloud/` des modules 08 à 10) : fiches et comptes rendus, `analyses/` (E23), `journal/` (palier 4) ; `runbooks/` : **RB-110** « provisionner un serveur » (E12), **RB-111** « diagnostiquer un démarrage réseau » (palier 4) ; `adr/` : ADR-0110 « outil de provisioning » (E16), ADR-0111 « confiance du démarrage réseau » (E13) ; `changements/` : fiches `CHG-12xx` (CHG-1215 en E10, CHG-1230 en E13). La matrice des flux et le registre des secrets restent dans `docs/socle/` |
+| Numérotation | tickets `PLAT-1200`-`1209` (palier 1), `1210`-`1229` (palier 2), `1230`-`1249` (paliers 3 et 4), `1290` (mini-projet) ; `SEC-12xx`, `CHG-12xx` ; incidents `INC-3841`-`3844` (palier 4) |
 | Brouillons | `~/m11/eXX/` sur `adm01` (non versionnés, sans secret) |
 
 ### Valeurs à adapter
@@ -190,7 +199,8 @@ Une installation à la main n'est permise que pour **explorer**, sur une VM `bm*
 |---|---|---|
 | `WB_ILO_ENV_FILE` | `$HOME/.config/workbook/ilo-hp01.env` | Accès Redfish en lecture des checks E07, E08, E18 |
 | `WB_MAAS_URL` | `http://10.10.60.11:5240/MAAS` | API de MAAS (E09, E10, E22) |
-| `WB_MAAS_KEY_FILE` | `$HOME/.config/workbook/maas-api.key` | Clé d'API MAAS lue par les checks |
+| `WB_MAAS_KEY_FILE` | `$HOME/.config/workbook/maas-api.key` | Clé d'API MAAS lue par les checks et les pannes (E09, E10, E22) |
+| `WB_M11_MAAS_CONSERVE` | `0` | `1` seulement si ton ADR-0110 conserve MAAS : le contrôle du mini-projet saute alors les contrôles de retrait de MAAS (E25) |
 
 Ajoute-les à ton `lab/lab.env` (elles figurent dans `lab/lab.env.example`). Les vérifications utilisent aussi `WB_SRC` (`~/src/provisioning`, `~/src/ansible`, `~/src/infra`), `WB_PVE_HOST`, `WB_NETBOX_URL`, `WB_NETBOX_TOKEN_FILE` et le jeton GitLab des checks.
 
@@ -204,7 +214,7 @@ Ajoute-les à ton `lab/lab.env` (elles figurent dans `lab/lab.env.example`). Les
 4. **Un seul serveur DHCP par segment.** Avant d'activer le DHCP de MAAS, le sous-réseau 60 de Kea et le relais du VLAN 60 sont retirés par une fiche de changement avec retour arrière ; ils reviennent à la fin de la partie MAAS.
 5. **Instantané avant toute intervention sur un hôte du socle** (`ms-snapshot --prefix avant-m11 <VMID>`, M02-E11) : `dns01`, `dns02` (Kea), `gw01`, `gw02` (relais, pare-feu). ⚠️ Une erreur dans le relais ou dans Kea coupe aussi le DHCP du VLAN 99 : vérifie l'accès de secours (`qm terminal <VMID>`, agent QEMU) avant, et un client du VLAN 99 après.
 6. **Les VMs `bm*` sont jetables.** Les effacer et les réinstaller est le cœur du module ; `pxe01` et `maas01` aussi, mais par OpenTofu.
-7. **Nettoie derrière toi** : à la fin du module (mini-projet), VMs `bm*` et `maas01` détruites, template 9050 conservé ou supprimé selon ta décision consignée, VLAN 60 rendu à Kea, compte `wb-maas` désactivé, compte `wb-redfish` conservé ou supprimé selon E13.
+7. **Nettoie derrière toi** : à la fin du module (mini-projet), `maas01` et la VM jetable 2117 détruites, VMs `bm*` remises à zéro ou détruites selon ta documentation, template 9050 conservé ou supprimé selon ta décision consignée, VLAN 60 servi par Kea seul, compte `wb-maas` supprimé ou désactivé, compte `wb-redfish` réduit au strict nécessaire (E13).
 
 ---
 
@@ -230,6 +240,7 @@ Le premier contrôle (mini-projet du module 06) doit être vert, et la bordure r
 - Les vérifications se lancent depuis `adm01` : `lab/bin/check 11 <XX>`. Elles sont en lecture seule : configuration Proxmox lue en root sur `pve01`, état des hôtes en SSH (`sudo -n`), configuration chargée par Kea (socket de contrôle), fichiers servis par `pxe01`, NetBox avec le jeton des checks, API GitLab en lecture, Redfish en lecture avec le compte `wb-redfish`, API de MAAS avec ta clé.
 - Les indices sont progressifs : ouvre-les un par un.
 - Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Fichiers complets dans `corrige/fichiers/M11-EXX/` : `ansible/` = `plateforme/ansible`, `infra/` = `plateforme/infra`, `provisioning/` = `plateforme/provisioning`, `medisphere/` = la documentation ; on superpose les dossiers dans l'ordre des exercices.
+- Les vérifications d'un exercice décrivent l'état **à la fin de cet exercice** : certaines ne sont plus à relancer après un exercice qui fait évoluer la même brique (par exemple la chaîne en HTTP des paliers 1 et 2 après E13) ; le mini-projet a son contrôle global.
 - Les scripts de panne (`corrige/pannes/`, palier 4) révèlent les causes : ne les lis pas avant d'avoir résolu.
 
 ## Ordre conseillé
@@ -238,6 +249,9 @@ Le premier contrôle (mini-projet du module 06) doit être vert, et la bordure r
 E01 ─ E02 ─ E03 ─┬─ E04 ─┐
                  └─ E05 ─┴─ E06 ─────────────────┐
      E07 ─ E08 (indépendants de E02-E06) ─ E09 ─ E10 ─┴─ E11 ─ E12
+E13 ─ E14 ─ E15 ─ E18 ─ E16 ─ E17              (palier 3)
+E19 ─ E20 ─ E21 ─ E22 ─ E23 ─ E24              (palier 4, pannes dans n'importe quel ordre)
+E25                                            (mini-projet)
 ```
 
 1. **E01** — positionnement, à froid.
@@ -247,8 +261,11 @@ E01 ─ E02 ─ E03 ─┬─ E04 ─┐
 5. **E07 → E08** — le contrôleur de gestion : à faire quand tu veux, même avant E02 (ils ne touchent pas au VLAN 60, sauf l'outil d'alimentation des `bm*` en E08).
 6. **E09 → E10** — MAAS, après E08 (le compte `wb-maas` sert au pilote d'alimentation) et après E04 (pour comparer). Réserve un créneau : E10 change le DHCP du VLAN 60.
 7. **E11**, **E12** — en fin de palier 2.
+8. **Palier 3** — E13 d'abord (tout le reste s'appuie sur la chaîne en HTTPS), puis E14, E15, E18 ; E16 et E17 à la fin, quand tu as les mesures.
+9. **Palier 4** — les quatre pannes après E15 (elles supposent la chaîne du palier 3), E22 avec MAAS redémarré pour l'occasion ; E23, puis E24.
+10. **E25** — le mini-projet, qui finit par le nettoyage.
 
-Durée indicative : palier 1, 8 à 10 heures ; palier 2, 10 à 13 heures.
+Durée indicative : palier 1, 10 à 12 heures ; palier 2, 15 à 18 heures ; palier 3, 16 à 20 heures ; palier 4, 8 à 10 heures ; mini-projet, 10 à 14 heures.
 
 ## Pour aller plus loin
 

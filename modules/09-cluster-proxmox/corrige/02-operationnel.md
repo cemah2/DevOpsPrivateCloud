@@ -106,7 +106,7 @@ Réseau Ceph physiquement séparé et redondant (bond LACP 2 × 25 Gb/s), disque
 
 **Solution**
 
-Fichier : [`mesurer-coupure.sh`](fichiers/M09-E11/mesurer-coupure.sh) (mesure des pertes de `ping` et de la plus longue coupure, depuis `adm01`).
+Mesure : un simple `ping` à 0,2 s depuis `adm01` suffit ici (la coupure d'une migration à chaud se compte en dizaines de millisecondes). L'outil de mesure de coupure **vue d'un client TCP**, `mesure-coupure.sh`, est fourni plus tard (M09-E24), quand on mesure des interruptions de plusieurs minutes.
 
 1. **Le template.** `lvs` et `qm config` des invités montrent si des clones **liés** de 199 existent (un disque `local-lvm:base-199-disk-0/vm-1NN-disk-0` désigne un clone lié ; `app01` et `app02` sont des clones **complets** sur `zfs-local`, M09-E07). Deux voies : déplacer le disque du template (`qm disk move 199 scsi0 ceph-vm`), que Proxmox refuse tant que des clones liés en dépendent (⚠️ à vérifier sur ta version : le déplacement d'un disque de template sans clone lié est accepté sur les versions récentes) ; ou **reconstruire** le template sur `ceph-vm` avec le script de M09-E06 (`ssh hv01 'bash -s' -- --stockage ceph-vm --remplacer < outils/hv/creer-tpl-nested.sh`). Le corrigé reconstruit : la procédure est rejouée (elle sert en E46) et le résultat est propre. Avant de détruire l'ancien template : plus aucun clone lié (`qm destroy` refuserait).
 2. **Disques des VMs, à chaud** (`app01` sur `hv01`, puis `app02`) :
@@ -137,15 +137,15 @@ Fichier : [`mesurer-coupure.sh`](fichiers/M09-E11/mesurer-coupure.sh) (mesure de
    (Valeurs indicatives.) Le clone lié est un *clone* RBD de l'instantané **protégé** du template : il ne consomme que ce qui diverge. Supprimer le template est **refusé** tant que l'instantané a des enfants ; si on forçait (`rbd flatten` des enfants d'abord), chaque clone récupérerait une copie complète. C'est la même dépendance qu'en M03 avec LVM-thin, mais visible et gérée par Ceph. `qm destroy 104` puis `qm destroy 105` ensuite.
 4. **Migration à chaud, disque sur Ceph** :
    ```
-   admin@adm01:~$ ./mesurer-coupure.sh <IP-APP01>
+   admin@adm01:~$ ping -D -O -i 0.2 <IP-APP01>       # -O : signale chaque réponse manquante
    root@hv01:~# qm migrate 101 hv02 --online
    …
    migration active, transferred 312.0 MiB of 1.0 GiB VM-state, 512.0 MiB/s
    average migration speed: 410.2 MiB/s - downtime 41 ms
    migration finished successfully (duration 00:00:06)
-   ^C
-   Paquets sans réponse : 0
-   Plus longue coupure  : 0 paquets ≈ 0.0 s
+   ^C                                                 # côté adm01, après la migration
+   --- <IP-APP01> ping statistics ---
+   61 packets transmitted, 61 received, 0% packet loss, time 12003ms
    ```
    `<IP-APP01>` : adresse DHCP de `app01` (lue par l'agent : `qm agent 101 network-get-interfaces`). Ordre de grandeur attendu : quelques secondes de migration pour 1 Gio de mémoire, *downtime* de quelques dizaines de millisecondes, 0 ou 1 paquet perdu à 0,2 s d'intervalle (⚠️ libellés du journal à vérifier sur ta version).
 5. **Disque local** (VM 106 sur `local-lvm`) : `qm migrate 106 hv02 --online` refuse (« can't migrate local disk … use --with-local-disks ») ; avec `--with-local-disks`, Proxmox crée un disque vide sur la cible, recopie le disque par NBD (*drive-mirror* vers la cible) **puis** la mémoire : la durée est dominée par la taille du disque (une minute ou plus pour 8 Gio sur MGMT à 1 Gb/s), la coupure finale reste courte. Le prix est la durée et la charge réseau, pas l'interruption. `qm destroy 106`.
@@ -353,7 +353,7 @@ Fichiers : [`pbs01-hv.sh`](fichiers/M09-E15/pbs01-hv.sh) (sur `pbs01` : relevé 
    -rw------- 1 root www-data … pbs-par2.pw
    ```
    Secret et clé sont dans `/etc/pve/priv/storage/` (pmxcfs) : **lisibles par root sur les trois nœuds**, ce qui est nécessaire (n'importe quel nœud sauvegarde ses VMs) et suffisant pour comprendre le risque : `root` sur un nœud = lecture de toutes les sauvegardes du cluster.
-   **Flux** : MGMT → `pbs01` TCP 8007 est déjà autorisé par la règle large « bastion (MGMT) vers tout le lab et PAR2 » (M00-E10) ; `pbs01` répond par `wg0` (route 10.10.0.0/16, M00-E21). Le corrigé ajoute quand même une ligne **explicite** (`HV_NOEUDS` → `PBS01`, 8007, `M09-E15`) : la matrice doit dire pourquoi ce flux existe, et il doit survivre au resserrement de la règle MGMT (M26).
+   **Flux** : MGMT → `pbs01` TCP 8007 est déjà autorisé par la règle large « bastion (MGMT) vers tout le lab, PAR2 et LYO1 » (M00-E10, M07-E30) ; `pbs01` répond par `wg0` (route 10.10.0.0/16, M00-E21). Le corrigé ajoute quand même une ligne **explicite** (`HV_NOEUDS` → `PBS01`, 8007, `M09-E15`) : la matrice doit dire pourquoi ce flux existe, et il doit survivre au resserrement de la règle MGMT (M09-E26).
 4. **Clé à l'abri**, sans l'écrire en clair sur `adm01` :
    ```
    admin@adm01:~/src/ansible$ ssh root@hv01 'cat /etc/pve/priv/storage/pbs-par2.enc' \
@@ -574,7 +574,7 @@ Fichiers :
 | DNS multi-A (trois A pour un nom) | rien à installer | pas de détection de panne (un client sur trois tombe sur le nœud mort), et le certificat reste à résoudre | non |
 
 Le rôle : lit le certificat en place (`/etc/pve/local/pveproxy-ssl.pem`), le réémet s'il manque, s'il n'est pas signé par l'autorité du cluster, s'il expire dans moins de 30 jours ou s'il lui manque un nom ; sinon ne fait rien (idempotent). Émission dans un dossier temporaire (clé RSA 2048, extensions `serverAuth`, numéro de série aléatoire pour ne pas toucher au fichier de série de l'autorité, partagé par pmxcfs), puis `pvenode cert set … --force 1 --restart 1`, puis effacement du dossier. `serial: 1` : un seul pveproxy redémarre à la fois.
-⚠️ **Et en M09-E26** : le certificat de l'interface 8006 passera à l'ACME de step-ca (autorité MédiSphère, noms du nœud **et** de la VIP). Le rôle prévoit ce passage : `pve_cluster_cert_gere: false` (sinon il remplacerait ce certificat, signé par une « autre » autorité que celle du cluster) et `pve_cluster_sante_ca` sur la racine MédiSphère (sinon le script de santé rejetterait le nouveau certificat et la VIP tomberait sur **tous** les nœuds). L'autorité du cluster pourra alors sortir du magasin de confiance d'`adm01` et `runner01` (`ca_lab_retirer`).
+⚠️ **Et en M09-E26** : le certificat de l'interface 8006 passera à l'ACME de step-ca (autorité MédiSphère, noms du nœud **et** de la VIP), émis par le rôle `certificats_acme` de M06-E18 et installé par `pvenode cert set` (pas le client `pvenode acme`, dont le renouvellement refait un défi chaque fois : voir le corrigé d'E26). Le rôle prévoit ce passage : `pve_cluster_cert_gere: false` (sinon il remplacerait ce certificat, signé par une « autre » autorité que celle du cluster) et `pve_cluster_sante_ca` sur la racine MédiSphère (sinon le script de santé rejetterait le nouveau certificat et la VIP tomberait sur **tous** les nœuds). L'autorité du cluster pourra alors sortir du magasin de confiance d'`adm01` et `runner01` (`ca_lab_retirer`).
 
 **Confiance.** `pki/hv-par1-root-ca.crt` (copie **publique** de `/etc/pve/pve-root-ca.pem`, empreinte vérifiée sur la console d'un nœud) est versionné dans `plateforme/ansible` ; le rôle `ca_lab` l'installe sur `adm01` et `runner01` seulement (`host_vars`, pas `group_vars/all`). Le playbook `hv-cluster.yml` refuse de tourner si le fichier versionné diffère de l'autorité réelle (cluster reconstruit en E29 ou E46 : nouvelle autorité, nouvelle MR). Le provider `bpg/proxmox` (Go) et `curl` utilisent alors le magasin système : ni `insecure`, ni `-k`.
 
@@ -637,7 +637,7 @@ Fichier : [`playbooks/hv-mise-a-jour.yml`](fichiers/M09-E19/ansible/playbooks/hv
    ```
    Fenêtre typique dans le lab : 8 à 15 minutes par nœud, dont l'essentiel en évacuation et redémarrage. `set-group noout hv03` (et non `set noout`) : seuls les OSD de `hv03` sont protégés contre le passage `out` ; une vraie panne ailleurs pendant la fenêtre déclencherait toujours la récupération.
 3. **Playbook** : contrôles d'entrée (quorum, aucun **autre** nœud en maintenance, Ceph sain ou seulement le drapeau de **ce** nœud — reprise après interruption), puis pour un nœud qui a des paquets à installer ou un état à reprendre : maintenance, attente de l'évacuation, drapeau, `apt` en `dist`, redémarrage si `/run/reboot-required` existe ou si le noyau en cours n'est pas le plus récent, contrôles de retour (quorum, services, OSD `up`), retrait du drapeau, sortie de maintenance ; enfin `HEALTH_OK` avant le nœud suivant. Le drapeau n'est **pas** retiré dans un bloc `always` : si le nœud ne revient pas, le retirer déclencherait la reconstruction au mauvais moment ; le playbook s'arrête (`any_errors_fatal`) et laisse l'état visible pour l'humain.
-4. `uv run ansible-lint playbooks/hv-mise-a-jour.yml` puis `uv run ansible-playbook playbooks/hv-mise-a-jour.yml`. `ping` vers `app01` et `app02` (`mesurer-coupure.sh`) : 0 à 2 paquets perdus par migration, soit une poignée sur toute l'opération ; aucune VM arrêtée.
+4. `uv run ansible-lint playbooks/hv-mise-a-jour.yml` puis `uv run ansible-playbook playbooks/hv-mise-a-jour.yml`. `ping -O -i 0.2` vers `app01` et `app02` depuis `adm01` : 0 à 2 paquets perdus par migration, soit une poignée sur toute l'opération ; aucune VM arrêtée.
 5. **Majeure** : relire les notes de version et la page *Upgrade from 9 to 10* (le jour venu), lancer l'outil de contrôle fourni pour chaque majeure (`pve8to9` pour 8 → 9 : dépôts, paquets, version de Ceph, configuration de Corosync, invités, stockage — il existera un équivalent pour 10), mettre Ceph à la version requise **avant**, changer les dépôts (suite Debian), mettre à jour un nœud à la fois en suivant la page, et ne pas laisser durer un cluster en versions mixtes. La montée de **Ceph** (E28) suit sa propre procédure (MON, puis MGR, puis OSD, puis `require-osd-release`), indépendante de la boucle par nœud de ce playbook : la mélanger avec un `full-upgrade` reviendrait à redémarrer des démons Ceph dans un ordre non maîtrisé.
 
 **Explications**

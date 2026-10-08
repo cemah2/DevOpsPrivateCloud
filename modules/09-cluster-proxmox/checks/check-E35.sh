@@ -22,8 +22,8 @@ done
 check_ssh "corosync.conf : pas de expected_votes forcé dans la section quorum" "$(_m09x_cible hv01)" \
   '! grep -Eq "^[[:space:]]*expected_votes:" /etc/pve/corosync.conf'
 check_output "authkey de Corosync identique sur les trois nœuds" '^1$' bash -c '
-  for ip in 10.10.10.51 10.10.10.52 10.10.10.53; do
-    ssh -o BatchMode=yes -o ConnectTimeout=8 ${WB_SSH_OPTS:-} "root@$ip" "sha256sum < /etc/corosync/authkey" 2>/dev/null || echo erreur-$ip
+  for n in hv01 hv02 hv03; do
+    ssh -o BatchMode=yes -o ConnectTimeout=8 ${WB_SSH_OPTS:-} "$n" "sha256sum < /etc/corosync/authkey" 2>/dev/null || echo erreur-$n
   done | sort -u | wc -l'
 check_cmd "pile HA armée (pas de disarm-ha en cours)" _m09x_pas_desarmee
 check_cmd "runbook RB-093 (perte de quorum) présent et commité dans le dépôt de documentation" \

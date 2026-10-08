@@ -37,7 +37,7 @@ for _m09_e31_n in "${_M09P_NOEUDS[@]}"; do
     check_output "$_m09_e31_n : cache ZFS non limité — décision justifiée dans le document de capacité" \
       'zfs_arc_max' printf '%s\n' "$_m09_e31_doc"
   fi
-  check_ssh "$_m09_e31_n : ksmtuned actif" "root@$_m09_e31_n.$_M09P_ZONE" 'systemctl is-active --quiet ksmtuned'
+  check_ssh "$_m09_e31_n : ksmtuned actif" "$_m09_e31_n" 'systemctl is-active --quiet ksmtuned'
 done
 
 title "Document et ménage"

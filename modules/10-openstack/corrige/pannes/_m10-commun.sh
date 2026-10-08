@@ -29,11 +29,13 @@
 #    sécurité, port, IP flottante, instance) pour E36 et E37, instance et volume pour E38.
 # 4. m10_essayer : variantes sans effet sur un lab donné (on passe à la suivante).
 
-_M10_CLOUD_ADMIN="${WB_M10_CLOUD_ADMIN:-medisphere-admin}"
-_M10_CLOUD_PROJET="${WB_M10_CLOUD_PROJET:-medisphere-plateforme}"
-_M10_CTL="${WB_M10_CTL:-osctl01}"
-_M10_CMP=("${WB_M10_CMP1:-oscmp01}" "${WB_M10_CMP2:-oscmp02}")
-_M10_CEPH="${WB_M10_CEPH:-ceph01}"
+# Variables de lab/lab.env : WB_OS_CLOUD (défaut medisphere-admin), WB_OS_CLOUD_PLATEFORME
+# (défaut medisphere-plateforme), WB_CEPH_ADMIN (défaut ceph01, M08).
+_M10_CLOUD_ADMIN="${WB_OS_CLOUD:-medisphere-admin}"
+_M10_CLOUD_PROJET="${WB_OS_CLOUD_PLATEFORME:-medisphere-plateforme}"
+_M10_CTL=osctl01
+_M10_CMP=(oscmp01 oscmp02)
+_M10_CEPH="${WB_CEPH_ADMIN:-ceph01}"
 _M10_FQDN="openstack.par1.medisphere.internal"
 _M10_VIP_EXT=10.10.50.201
 _M10_GABARIT="m1.petit"
@@ -112,12 +114,14 @@ m10_calculs_sains() {
   done
 }
 
-# m10_image_sonde — identifiant de l'image Debian 13 des sondes (M10-E06) ; WB_M10_IMAGE l'impose.
+# m10_image_sonde — identifiant de l'image Debian 13 des sondes : debian-13 (M10-E06), à défaut
+# la première image publique active dont le nom évoque Debian 13.
 m10_image_sonde() {
   local j id
-  if [[ -n "${WB_M10_IMAGE:-}" ]]; then
-    m10_os image show "$WB_M10_IMAGE" -f value -c id 2>/dev/null
-    return
+  id="$(m10_os image show debian-13 -f value -c id 2>/dev/null)" || id=""
+  if [[ -n "$id" ]]; then
+    printf '%s\n' "$id"
+    return 0
   fi
   j="$(m10_os image list --public --status active --long -f json 2>/dev/null)" || return 1
   id="$(jq -r '[.[] | select((.Name | test("debian"; "i")) and (.Name | test("13|trixie"; "i")))][0].ID // empty' <<<"$j")"

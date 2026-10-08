@@ -185,7 +185,7 @@ osdmap e412 pg 3.0 (3.0) -> up [2,6,3] acting [2,6,3]
 [root@ceph01 ~]# crushtool -i /tmp/crush.bin --test --rule <id> --num-rep <size> --show-bad-mappings | head
 ```
 
-**Variante 1 — `size 4`, `min_size 4`.** Le pool veut 4 copies et en exige 4 pour servir ; la règle (domaine `host`) ne peut en placer que 3 sur 3 hôtes : ensemble de 3 OSD, `undersized` (moins que `size`) et `peered` (moins que `min_size`). `crushtool --num-rep 4 --show-bad-mappings` affiche une mauvaise correspondance pour **chaque** entrée (`bad mapping rule 0 x 0 num_rep 4 result [4,1,8]`). Le journal d'audit montre `osd pool set … size 4` puis `min_size 4`. Correctif immédiat, sans déplacement de données (les trois copies sont déjà en place) :
+**Variante 1 — `size 4`, `min_size 4`.** Le pool veut 4 copies et en exige 4 pour servir ; la règle du pool (`ssd-baie`, domaine `rack`, M08-E14) ne peut en placer que 3, une par baie, et il n'y a que trois baies (`ceph04` partage la baie A avec `ceph01`) : ensemble de 3 OSD, `undersized` (moins que `size`) et `peered` (moins que `min_size`). `crushtool --num-rep 4 --show-bad-mappings` affiche une mauvaise correspondance pour **chaque** entrée (`bad mapping rule <ID> x 0 num_rep 4 result [4,1,8]`, `<ID>` étant l'identifiant de `ssd-baie`). Le journal d'audit montre `osd pool set … size 4` puis `min_size 4`. Comparé à M08-E05 (`size 4` seul : PG `active+undersized`, le service continue), c'est `min_size 4` qui rend les PG inactifs. Correctif immédiat, sans déplacement de données (les trois copies sont déjà en place) :
 
 ```
 [root@ceph01 ~]# ceph osd pool set rbd-test min_size 2
@@ -233,7 +233,7 @@ La règle part d'une racine `par2` créée « pour préparer PAR2 », sans aucun
 
 **Étape finale** : `sudo wb-sonde-stockage` vert (les E/S en attente reprennent seules dès que les PG sont actifs), `lab/bin/check 08 36`, `--annuler`.
 
-**Réponse à Julien (modèle)** : « La politique voulue (4 copies, ou des données sur NVMe, ou une copie à PAR2) n'est pas applicable telle quelle à `ceph-par1` : 3 hôtes ne portent pas 4 copies avec un domaine `host`, nous n'avons pas de NVMe, et PAR2 n'a pas d'OSD. Toute modification de règle ou de réplication passe désormais par une MR sur `plateforme/ceph`, avec la sortie de `crushtool --test --show-bad-mappings` pour la `size` du pool et une estimation du volume déplacé (`--compare` ou `osdmaptool --test-map-pgs` avant/après), appliquée dans une fenêtre. Pour les données de santé, l'exigence de Sophie est mieux servie par la sauvegarde hors cluster (M08-E25) et par la réplication vers PAR2 au module de PRA que par une 4ᵉ copie locale. »
+**Réponse à Julien (modèle)** : « La politique voulue (4 copies, ou des données sur NVMe, ou une copie à PAR2) n'est pas applicable telle quelle à `ceph-par1` : 3 baies ne portent pas 4 copies avec un domaine `rack` (ni 3 hôtes avec un domaine `host`), nous n'avons pas de NVMe, et PAR2 n'a pas d'OSD. Toute modification de règle ou de réplication passe désormais par une MR sur `plateforme/ceph`, avec la sortie de `crushtool --test --show-bad-mappings` pour la `size` du pool et une estimation du volume déplacé (`--compare` ou `osdmaptool --test-map-pgs` avant/après), appliquée dans une fenêtre. Pour les données de santé, l'exigence de Sophie est mieux servie par la sauvegarde hors cluster (M08-E25) et par la réplication vers PAR2 au module de PRA que par une 4ᵉ copie locale. »
 
 **Explications**
 
@@ -283,15 +283,15 @@ nearfull_ratio 0.0053
 [root@ceph01 ~]# ceph osd df | awk '{print $1, $(NF-3)}'      # %USE autour de 1-2 %
 ```
 
-L'espace ne manque pas : les OSD sont à 1 ou 2 %, mais le seuil « plein » a été posé sous ce niveau. Tous les pools sont marqués pleins, toutes les écritures attendent (lectures et suppressions passent). L'audit montre `osd set-full-ratio`, `set-backfillfull-ratio`, `set-nearfull-ratio`. Correctif, avec les valeurs justes (celles du cluster, sinon les valeurs par défaut) et dans l'ordre qui garde les seuils ordonnés :
+L'espace ne manque pas : les OSD sont à 1 ou 2 %, mais le seuil « plein » a été posé sous ce niveau. Tous les pools sont marqués pleins, toutes les écritures attendent (lectures et suppressions passent). L'audit montre `osd set-full-ratio`, `set-backfillfull-ratio`, `set-nearfull-ratio`. Correctif, avec les valeurs de référence du cluster (M08-E20, `config/cluster.yaml` de `plateforme/ceph` : 0,75 / 0,85 / 0,95) et dans l'ordre qui garde les seuils ordonnés :
 
 ```
 [root@ceph01 ~]# ceph osd set-full-ratio 0.95
-[root@ceph01 ~]# ceph osd set-backfillfull-ratio 0.90
-[root@ceph01 ~]# ceph osd set-nearfull-ratio 0.85
+[root@ceph01 ~]# ceph osd set-backfillfull-ratio 0.85
+[root@ceph01 ~]# ceph osd set-nearfull-ratio 0.75
 ```
 
-Justification : à 0,95, il reste 5 % pour que BlueStore et RocksDB travaillent (compactage, journaux) ; `backfillfull` à 0,90 empêche une récupération de remplir un OSD jusqu'au blocage ; `nearfull` à 0,85 laisse le temps d'agir. Sur un petit cluster (9 OSD de 64 Go), la perte d'un hôte fait monter tous les autres d'un tiers : la vraie limite d'exploitation est plus basse (M08-E20, politique de stockage M08-E33).
+(ou `outils/config-cluster.sh --appliquer` depuis `adm01`, qui relit le dépôt). Justification : à 0,95, il reste 5 % pour que BlueStore et RocksDB travaillent (compactage, journaux) ; `backfillfull` à 0,85 empêche une récupération de remplir un OSD jusqu'au blocage ; `nearfull` à 0,75 laisse le temps d'agir. Sur un petit cluster (9 à 12 OSD de 64 Go), la perte d'un hôte fait monter tous les autres d'un tiers : la vraie limite d'exploitation est plus basse (M08-E20, politique de stockage M08-E33).
 
 **Variante 2 — quota de pool.**
 
@@ -890,18 +890,18 @@ Le même calcul, sans interroger le cluster : un client n'a besoin que de la car
 
 ```
 [ceph: root@ceph01 analyse]# ceph osd getcrushmap -o crush.bin && crushtool -d crush.bin -o crush.txt
-[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule 0 --num-rep 3 --min-x 0 --max-x 9 --show-mappings
-CRUSH rule 0 x 0 [5,1,7]
+[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule <ID> --num-rep 3 --min-x 0 --max-x 9 --show-mappings
+CRUSH rule <ID> x 0 [5,1,7]
 …
-[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule 0 --num-rep 3 --min-x 0 --max-x 1023 --show-utilization
-[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule 0 --num-rep 4 --show-bad-mappings | head -3
-bad mapping rule 0 x 0 num_rep 4 result [5,1,7]
-[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule 0 --num-rep 3 --min-x 0 --max-x 1023 --show-mappings --weight 3 0 --weight 4 0 --weight 5 0 > sans-ceph02.txt
-[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule 0 --num-rep 3 --min-x 0 --max-x 1023 --show-mappings > normal.txt
+[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule <ID> --num-rep 3 --min-x 0 --max-x 1023 --show-utilization
+[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule <ID> --num-rep 4 --show-bad-mappings | head -3
+bad mapping rule <ID> x 0 num_rep 4 result [5,1,7]
+[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule <ID> --num-rep 3 --min-x 0 --max-x 1023 --show-mappings --weight 3 0 --weight 4 0 --weight 5 0 > sans-ceph02.txt
+[ceph: root@ceph01 analyse]# crushtool -i crush.bin --test --rule <ID> --num-rep 3 --min-x 0 --max-x 1023 --show-mappings > normal.txt
 [ceph: root@ceph01 analyse]# diff normal.txt sans-ceph02.txt | grep -c '^>'
 ```
 
-Avec 4 copies et 3 hôtes, chaque entrée est une mauvaise correspondance (c'est la variante 1 de M08-E36). En donnant un poids nul aux OSD de `ceph02` : avec trois hôtes et trois copies, **chaque** PG a une copie sur `ceph02`, donc tous changent d'ensemble, et aucun ne peut retrouver trois copies (deux hôtes restants, domaine `host`) : les PG restent `undersized` jusqu'au retour de l'hôte. Sur un cluster plus large, la même simulation chiffre la part de PG déplacés avant une maintenance ou une modification de carte. Les numéros d'OSD de `--weight` sont à adapter à ton arbre (`ceph osd tree`).
+`<ID>` est l'identifiant de la règle du pool (`ssd-baie`, `ceph osd crush rule dump ssd-baie`) . Avec 4 copies et 3 baies (domaine `rack`), chaque entrée est une mauvaise correspondance (c'est la variante 1 de M08-E36). En donnant un poids nul aux OSD de `ceph02` (seul hôte de la baie B) : avec trois baies et trois copies, **chaque** PG a une copie dans la baie B, donc tous changent d'ensemble, et aucun ne peut retrouver trois copies (deux baies restantes) : les PG restent `undersized` jusqu'au retour de l'hôte. Sur un cluster plus large, la même simulation chiffre la part de PG déplacés avant une maintenance ou une modification de carte. Les numéros d'OSD de `--weight` sont à adapter à ton arbre (`ceph osd tree`).
 
 **4. Une image RBD en objets.**
 

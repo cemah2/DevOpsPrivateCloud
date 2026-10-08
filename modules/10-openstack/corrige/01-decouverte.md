@@ -5,7 +5,7 @@
 Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argumentés et les QCM expliquent pourquoi les autres options sont fausses. Les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice ; chaque dossier reproduit l'arborescence du projet concerné (`openstack/` pour `plateforme/openstack`, `ansible/` pour `plateforme/ansible`, `infra/` pour `plateforme/infra`, `tofu-modules/` pour `plateforme/tofu-modules`, `medisphere/` pour `plateforme/medisphere`, `adm01/` pour des fichiers personnels de `adm01`). Ne copie que ce que l'exercice ajoute ou modifie.
 
 **Ce qui a été vérifié à la rédaction** :
-- le module `vm-debian` v2.2.0 et l'état `envs/openstack` passent `tofu validate` et `tofu fmt -check` avec `bpg/proxmox` 0.116.0, `e-breuninger/netbox` 5.8.0 et `mmianl/powerdns` 2.5 (modules référencés en chemins locaux pour le test) ;
+- le module `vm-noeud` v2.3.0 (celui de M08-E02, complété) et l'état `envs/openstack` passent `tofu validate` et `tofu fmt -check` (OpenTofu 1.13) avec `bpg/proxmox` 0.116.0, `e-breuninger/netbox` 5.8.0 et `mmianl/powerdns` 2.5 (modules référencés en chemins locaux pour le test) ;
 - le rôle `noeud_openstack` et les playbooks `identite.yml`, `catalogue.yml`, `reseau-externe.yml` passent `ansible-lint` (profil `production`) ; les paramètres des modules `openstack.cloud` ont été relus dans la collection 2.6.0 (documentation embarquée et code : `identity_group` exige un **identifiant** de domaine, `role_assignment` a `group_domain` et `project_domain`) ; le modèle netplan a été rendu et relu pour `osctl01` et un calcul ;
 - les scripts (`inventaire.sh`, `verifier-chiffrement.sh`, `certificat-externe.sh`, `publier-image.sh`) et les vérifications passent `shellcheck -x` et `bash -n` ; la logique `jq` des vérifications E04 à E08 a été rejouée contre des réponses JSON de la CLI ;
 - les variables et procédures de Kolla-Ansible relues dans la documentation 2026.1 (Quick Start, Multinode, Operating Kolla, Neutron/OVN, TLS, External Ceph) et les notes de version 22.x (ansible-core 2.19 à 2.20, groupes `kolla_toolbox` et `kolla_logs`).
@@ -98,8 +98,7 @@ mtu 9000
 
 *B. Le code des VMs.*
 
-1. **Le module.** Le module `vm-debian` v2.1 ne porte qu'une carte, un type de CPU figé (`x86-64-v2-AES`) et aucune MAC. L'extension v2.2.0 (fichiers complets : [`tofu-modules/vm-debian/`](fichiers/M10-E02/tofu-modules/vm-debian/)) ajoute `type_cpu`, `mac_adresse`, `mtu`, `interface_principale` et `cartes_supplementaires`. Ajout **rétrocompatible** (toutes les nouvelles variables ont un défaut qui reproduit v2.1) : version mineure, commit `feat(vm-debian): cartes réseau supplémentaires, MAC, MTU et type de CPU`, étiquette `v2.2.0` posée par semantic-release. Deux validations protègent le `plan` : une carte adressée a une adresse **et** un préfixe ; les cartes sans adresse viennent **après** les cartes adressées.
-   > Si ton M07 ou ton M08 a déjà étendu le module (gw02, nœuds Ceph à deux cartes), réutilise cette version et ajoute seulement ce qui manque ; garde le principe d'un ajout rétrocompatible.
+1. **Le module.** `vm-debian` (M06) reste le module des hôtes du socle à une carte ; le module des nœuds de cluster est `vm-noeud` (M08-E02) : plusieurs cartes avec leur MTU, famille et type de CPU, adresses imposées. Il lui manque une **MAC** par carte et la carte **sans adresse**. L'extension (fichiers complets : [`tofu-modules/vm-noeud/`](fichiers/M10-E02/tofu-modules/vm-noeud/)) ajoute à chaque élément de `cartes` les champs facultatifs `mac` et, rendus facultatifs, `ipv4`/`prefixe` ; elle écrit `firewall = false` sur chaque carte et ajoute la sortie `macs`. Ajout **rétrocompatible** (un appelant de M08 obtient le même plan) : version mineure, commit `feat(vm-noeud): MAC imposée et carte sans adresse`, étiquette posée par semantic-release (`v2.3.0` dans ce corrigé si M08 a publié `v2.2.0` : les étiquettes de `plateforme/tofu-modules` sont communes à tous ses modules, prends celle que ta MR a produite). Quatre validations protègent le `plan` : adresse **et** préfixe ensemble (ou aucun des deux) ; première carte adressée et cartes sans adresse **après** les cartes adressées ; MAC au bon format ; pas de passerelle sur une carte sans adresse.
 2. **L'état `envs/openstack`** ([`infra/envs/openstack/`](fichiers/M10-E02/infra/envs/openstack/)) : `noeuds.tf` décrit les trois nœuds dans une `locals` et appelle le module avec `for_each` ; la règle des MAC et des adresses y est écrite une fois. `dns.tf` publie A et PTR des nœuds (module `enregistrement-dns`), les A des deux VIP sans PTR, et **réserve** les VIP dans NetBox (rôle `vip`) pour qu'aucune allocation automatique ne les donne un jour à une VM.
    ```
    admin@adm01:~/src/infra$ git switch -c feat/openstack-noeuds
@@ -122,7 +121,7 @@ mtu 9000
    net0: virtio=BC:24:11:50:00:51,bridge=vosapi,firewall=0
    net1: virtio=BC:24:11:51:00:51,bridge=vostun,firewall=0,mtu=9000
    net2: virtio=BC:24:11:30:00:51,bridge=vstopub,firewall=0,mtu=9000
-   net3: virtio=BC:24:11:52:00:51,bridge=vosext,firewall=0,mtu=1500
+   net3: virtio=BC:24:11:52:00:51,bridge=vosext,firewall=0
    tags: env-m10;role-openstack
    root@pve01:~# qm config 2102 | grep ^cpu
    cpu: host
@@ -226,14 +225,14 @@ mtu 9000
 - **Fichiers `.link` de systemd** écrits directement (ou `udev` rules) pour nommer les cartes, sans netplan : même résultat, plus bas niveau. netplan est ce que l'image dorée utilise déjà.
 - **Configuration réseau par cloud-init** : un *snippet* `network-config` (v2) passé par `cicustom` (M05-E19) avec `match`/`set-name` ; le réseau est alors fixé dès le premier démarrage, sans redémarrage. Inconvénient : le changer recrée la VM (le module le documente) ; ici, Ansible peut le corriger sur place.
 - **Garder les noms `eth0`-`eth3`** de cloud-init et l'interface sans adresse sous son nom prévisible : fonctionne tant que personne ne change l'ordre des cartes ni l'image ; c'est le pari qu'on refuse.
-- **Un module OpenTofu dédié** (`vm-openstack`) plutôt qu'une extension de `vm-debian` : plus simple à lire, mais deux modules à maintenir pour 90 % de code commun.
+- **Un module OpenTofu dédié** (`vm-openstack`) plutôt qu'une extension de `vm-noeud` : plus simple à lire, mais un troisième module de VM à maintenir pour 90 % de code commun. Étendre `vm-debian` serait pire : son interface à une carte sert tout le socle.
 
 **Pièges classiques**
 
 - MTU 9000 sur la carte Proxmox alors que le VNet ou `vmbr1` est resté à 1500 : la VM démarre, `ip link` affiche 9000, mais le `ping -M do -s 8972` échoue (*Message too long* côté émetteur, ou rien). Vérifie M07-E15 d'abord.
 - Un octet de MAC « décimal » qui n'est pas de l'hexadécimal valide : ici tout tombe juste (30, 50-53), mais un suffixe 9A, 100… casserait la règle. Elle est documentée : une évolution du plan d'adressage doit la revoir.
 - Appliquer le rôle **sans** `serial: 1` : les trois nœuds redémarrent ensemble ; sans conséquence avant Kolla, désastreux après (tout le plan de contrôle et les deux calculs).
-- Oublier les étiquettes NetBox `env-m10` et `role-openstack` : le module `vm-debian` échoue au moment d'enregistrer la VM dans NetBox.
+- Oublier les étiquettes NetBox `env-m10` et `role-openstack` : le module `vm-noeud` échoue au moment d'enregistrer la VM dans NetBox.
 - Fichier netplan en 644 : netplan avertit (fichier lisible par tous) ; en 600, il est muet. Le rôle écrit en 600.
 - Croire qu'un `netplan apply` à distance est sans danger : renommer la carte qui porte la session SSH coupe Ansible au milieu d'une tâche. Le redémarrage contrôlé est plus sûr, et l'accès de secours (console série) est vérifié avant.
 - Laisser DHCP actif sur `ens21` : rien ne répond sur le VLAN 52, mais le client DHCP retarde le démarrage et peut récupérer un jour une adresse d'un équipement de test.
@@ -342,7 +341,7 @@ Le dépôt `plateforme/openstack` est protégé comme `plateforme/ansible` (deux
 
 *A. Le certificat externe.*
 
-1. **Flux** : extrait [`pare_feu.yml.extrait`](fichiers/M10-E04/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait) (deux règles de transit, `ref: M10-E04`), MR sur `plateforme/ansible`, pipeline. Client `step` sur `osctl01` : [`playbooks/outils-pki.yml`](fichiers/M10-E04/ansible/playbooks/outils-pki.yml) étendu au groupe `role_openstack`.
+1. **Flux** : extrait [`pare_feu.yml.extrait`](fichiers/M10-E04/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) (deux règles de transit, `ref: M10-E04`), MR sur `plateforme/ansible`, pipeline. Client `step` sur `osctl01` : [`playbooks/outils-pki.yml`](fichiers/M10-E04/ansible/playbooks/outils-pki.yml) étendu au groupe `role_openstack`.
    ```
    admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/outils-pki.yml --limit osctl01
    admin@adm01:~$ ssh osctl01 step version

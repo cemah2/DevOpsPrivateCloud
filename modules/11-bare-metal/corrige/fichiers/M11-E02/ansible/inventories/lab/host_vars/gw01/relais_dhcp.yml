@@ -2,7 +2,9 @@
 # host_vars/gw01/relais_dhcp.yml — relais DHCP vers la paire Kea (M06-E25), VLAN 60 ajouté (M11-E02).
 # Depuis M07-E25, gw01 porte .2 dans chaque VLAN (la VIP .1 appartient au maître VRRP) : le giaddr
 # est l'adresse PROPRE de la passerelle, présente même quand elle est en secours.
-# ⚠️ Si ton relais du module 07 utilise d'autres noms de variables, garde-les et ajoute seulement le VLAN 60.
+# Remplace relais_dhcp_interface et relais_dhcp_adresse_locale de M07-E25 (le rôle les ignore dès
+# que relais_dhcp_vlans est rempli) ; relais_dhcp_actif garde son sens (M07-E24).
+relais_dhcp_actif: true
 relais_dhcp_vlans:
   - {interface: ens19.99, adresse_locale: 10.10.99.2, commentaire: "SANDBOX (M00-E14)"}
   - {interface: ens19.60, adresse_locale: 10.10.60.2, commentaire: "PROV, serveurs nus (M11-E02)"}

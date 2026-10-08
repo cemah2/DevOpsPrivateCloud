@@ -4,7 +4,7 @@ La chaîne fonctionne : un serveur déclaré dans NetBox démarre sur le réseau
 
 Ordre conseillé : E13 (tout le reste s'appuie sur la chaîne en HTTPS) → E14 → E15 → E18 → E16 → E17. Durée du palier : 16 à 20 h.
 
-> **Rappels** : tout se lance depuis `adm01`. Clones de travail : `~/src/provisioning` (projet `plateforme/provisioning` : `ipxe/`, `preseed/`, `kickstart/`, `pve-answer/`, `gabarits/`, `outils/`), `~/src/ansible` (rôle `pxe`, `kea_dhcp4`, `relais_dhcp`, matrice des flux `inventories/lab/host_vars/gw01/pare_feu.yml`), `~/src/infra` (état OpenTofu `provisioning` : `pxe01`, `bm01-04`), documentation `~/medisphere` (variable `WB_DEPOT`). Les serveurs cibles `bm01-04` (2112-2115) sont décrits dans NetBox comme des **équipements** (rôle `serveur-bm`, interface `eno1` avec son adresse MAC) ; leur adresse est réservée dans Kea depuis NetBox (M11-E06). Accès à l'iLO de `hp01` : `~/.config/workbook/ilo-hp01.env` (compte `wb-redfish`, M11-E07), jamais `curl -k`.
+> **Rappels** : tout se lance depuis `adm01`. Clones de travail : `~/src/provisioning` (projet `plateforme/provisioning` : `ipxe/`, `preseed/`, `kickstart/`, `pve-answer/`, `gabarits/`, `outils/`), `~/src/ansible` (rôle `pxe`, `kea_dhcp4`, `relais_dhcp`, matrice des flux `inventories/lab/group_vars/role_routeur/pare_feu.yml`), `~/src/infra` (état OpenTofu `provisioning` : `pxe01`, `bm01-04`), documentation `~/medisphere` (variable `WB_DEPOT`). Les serveurs cibles `bm01-04` (2112-2115) sont décrits dans NetBox comme des **équipements** (rôle `serveur-bm`, interface `eno1` avec son adresse MAC) ; leur adresse est réservée dans Kea depuis NetBox (M11-E06). Accès à l'iLO de `hp01` : `~/.config/workbook/ilo-hp01.env` (compte `wb-redfish`, M11-E07), jamais `curl -k`.
 
 **Chemin imposé** (introduction du module) : configuration des hôtes par un **rôle Ansible** (ansible-lint profil `production`) appliqué par le pipeline de `plateforme/ansible` ; VMs par **OpenTofu** (état `provisioning`) ; tout fichier servi par `pxe01` (scripts iPXE, preseed, kickstart, fichiers de réponse) est **rendu depuis `plateforme/provisioning`** (gabarits, `outils/netbox-provision.py`), jamais écrit à la main sur `pxe01` ; tout flux nouveau est une ligne de `pare_feu.yml` (identique sur `gw01` et `gw02`) reportée dans `docs/socle/matrice-flux.md` ; tout secret est en Ansible Vault (identité `critique`) et inscrit au registre des secrets.
 
@@ -36,6 +36,7 @@ Ordre conseillé : E13 (tout le reste s'appuie sur la chaîne en HTTPS) → E14 
 - La construction se fait **dans une VM jetable** (VMID 2117 `m11-build`, clone lié de l'image dorée Debian `current`, VNet `vsandbox`, étiquette `env-m11`), jamais sur `adm01` ni sur `pxe01`. Ce qui est versionné, c'est la **procédure** (script de construction, version de l'amont, options), pas le binaire ; le binaire produit est déposé sur `pxe01` par le rôle `pxe`, avec son empreinte SHA-256 consignée.
 - Certificat de `pxe01` : rôle `certificats_acme` (défi HTTP-01, puis renouvellement par le certificat lui-même). `pxe01` doit joindre l'API de `ca01` (443), et `ca01` le port 80 de `pxe01` pour le défi : c'est le seul flux INFRA → PROV à ouvrir.
 - Le port 80 de `pxe01` reste ouvert pour le défi ACME ; il ne doit plus servir ni script iPXE, ni preseed, ni kickstart.
+- Souviens-toi de M11-E03 : la ROM réseau des VMs SeaBIOS est **déjà** un iPXE (celui de QEMU), qui s'annonce « iPXE » en DHCP et ne connaît pas la racine MédiSphère. Ta chaîne doit faire en sorte que l'URL HTTPS ne soit donnée qu'à **ton** iPXE, et que tout autre client (ROM PXE, iPXE quelconque) commence par télécharger le tien.
 - Les installateurs Debian et Rocky ne connaissent pas la racine MédiSphère : ils ne pourraient pas télécharger leur fichier de réponse en HTTPS depuis `pxe01`. Cherche comment iPXE peut **leur remettre** ce fichier sans que l'installateur ait à le télécharger lui-même.
 - iLO 4 : le réglage d'IPMI sur IP est dans l'interface d'administration de l'iLO (section sécurité ou accès) ; l'état des protocoles se lit aussi en Redfish (`/redfish/v1/Managers/1/NetworkService/`).
 
@@ -47,7 +48,7 @@ Ordre conseillé : E13 (tout le reste s'appuie sur la chaîne en HTTPS) → E14 
 5. **Secrets.** Plus aucun mot de passe en clair dans `plateforme/provisioning` ni sur `pxe01` : compte `admin` par clé SSH, empreinte de mot de passe (algorithme moderne) seulement si un mot de passe console est nécessaire, en Vault ; root verrouillé (preseed et kickstart). Vérifie l'historique Git du projet : si un mot de passe y a été commité, considère-le comme compromis.
 6. **VLAN 60.** Revois `pare_feu.yml` : depuis 10.10.60.0/24, seuls le DNS (10.10.20.10/.16), les miroirs Internet nécessaires aux installateurs et le DHCP relayé sont permis vers l'extérieur du VLAN, plus, pour **`pxe01` seul**, l'ACME de `ca01` (émission et renouvellement de son certificat) ; rien vers MGMT ni vers les autres services du socle. `adm01` garde l'accès au VLAN 60.
 7. **iLO.** Désactive IPMI sur IP (et retire le flux UDP 623 de la matrice) ; vérifie que `wb-redfish` n'a que les privilèges dont ont besoin les exercices restants (lecture ; justifie le cas échéant le contrôle de l'alimentation) ; consigne le changement (CHG-1230).
-8. **ADR-0111** « Confiance du démarrage réseau » (`docs/socle/adr/`, gabarit MADR, une page) : racine intégrée au binaire, signature des scripts (`imgtrust`/`imgverify`), Secure Boot UEFI, ou rien ; décision et conséquences (renouvellement de la racine, reconstruction du binaire).
+8. **ADR-0111** « Confiance du démarrage réseau » (`docs/provisioning/adr/`, gabarit MADR, une page) : racine intégrée au binaire, signature des scripts (`imgtrust`/`imgverify`), Secure Boot UEFI, ou rien ; décision et conséquences (renouvellement de la racine, reconstruction du binaire).
 9. Réinstalle `bm01` (BIOS) et `bm03` (UEFI) de bout en bout par la nouvelle chaîne. Garde la trace de la console qui montre les téléchargements en `https://`.
 
 **Critères de réussite**
@@ -63,7 +64,7 @@ Ordre conseillé : E13 (tout le reste s'appuie sur la chaîne en HTTPS) → E14 
 
 <details><summary>Indice 1</summary>
 
-La documentation de construction d'iPXE décrit deux paramètres de `make` qui intègrent des certificats au binaire : l'un les **rend disponibles**, l'autre en fait des **racines de confiance**. Si tu ne donnes que le premier, ton binaire continue de faire confiance à la racine du projet iPXE. Les fonctions optionnelles (HTTPS, commandes) s'activent dans `src/config/local/general.h`, qui n'est jamais écrasé par une mise à jour de l'amont.
+La documentation de construction d'iPXE décrit deux paramètres de `make` qui intègrent des certificats au binaire : l'un les **rend disponibles**, l'autre en fait des **racines de confiance**. Si tu ne donnes que le premier, ton binaire continue de faire confiance à la racine du projet iPXE. Les fonctions optionnelles (HTTPS, commandes) s'activent dans `src/config/local/general.h`, qui n'est jamais écrasé par une mise à jour de l'amont. Un troisième paramètre intègre un **script** exécuté au démarrage du binaire ; et ce qu'iPXE annonce dans l'option DHCP 77 est un réglage comme un autre (<https://ipxe.org/cfg>).
 </details>
 
 <details><summary>Indice 2</summary>
@@ -94,7 +95,7 @@ iPXE vérifie aussi les **dates** des certificats : l'horloge de la machine comp
 **Durée indicative** : 3 à 4 h.
 
 **Contexte technique**
-- Machine cible : `bm04` (2115, OVMF/UEFI, CPU `host`). L'initrd produit contient tout l'installateur ; il est chargé en mémoire avant le démarrage : porte la mémoire de `bm04` à **8 Go** et son disque à **32 Go** dans le code OpenTofu le temps de l'exercice (le nœud imbriqué n'a pas besoin de plus).
+- Machine cible : `bm04` (2115, OVMF/UEFI, CPU `host`, 4 Go et 32 Go depuis M11-E03). L'initrd produit contient tout l'installateur ; il est chargé en mémoire avant le démarrage : porte la mémoire de `bm04` à **8 Go** dans le code OpenTofu le temps de l'exercice (le disque de 32 Go suffit ; le nœud imbriqué n'a pas besoin de plus). Dans NetBox, la plate-forme de `bm04` peut passer à `proxmox-ve-9` le temps de l'exercice : c'est ainsi que ton outil de rendu saura quel gabarit servir.
 - Fichier de réponse : clés en *kebab-case* (PVE 9.1+). Avec `--fetch-from http`, l'installateur envoie un **POST** contenant une description de la machine (dont les adresses MAC de ses interfaces) et attend le fichier de réponse en retour, au format TOML ou JSON ; un jeton facultatif est envoyé dans l'en-tête `Authorization`. Une URL HTTPS vers un certificat d'une PKI privée exige d'épingler l'empreinte du certificat du serveur (`--cert-fingerprint`). Lis la page officielle [Automated Installation](https://pve.proxmox.com/wiki/Automated_Installation) avant de commencer, en entier.
 - nginx sert des fichiers statiques et refuse un POST sur un fichier : il faut un **petit service** derrière nginx qui choisit la réponse d'après la MAC et vérifie le jeton.
 - Outil : `proxmox-auto-install-assistant` (paquet du dépôt Proxmox), là où tu l'as installé au module 09.
@@ -106,8 +107,8 @@ iPXE vérifie aussi les **dates** des certificats : l'horloge de la machine comp
 3. Prépare l'ISO de PVE 9.2 (déposée et vérifiée comme au M09) pour le PXE, avec la récupération du fichier de réponse en HTTP(S) vers ton service, le jeton, l'empreinte du certificat de `pxe01` et le chargeur iPXE. Lis ce que l'outil a produit (fichiers, script iPXE) et dépose noyau et initrd sur `pxe01` sous `/pve/9.2/` par ta chaîne habituelle (empreintes vérifiées). Note où se retrouve le jeton.
 4. Écris le script iPXE de `bm04` pour ce démarrage (gabarit dans `gabarits/`), puis installe `bm04`. Mesure le temps de bout en bout, la taille de l'initrd et le pic de mémoire de la VM pendant le chargement.
 5. Vérifie le nœud : version, nom, adresse, clé SSH de root acceptée depuis `adm01`, interface web sur 8006 depuis `adm01`.
-6. Réfléchis au renouvellement : le certificat de `pxe01` est renouvelé tous les 30 jours. Qu'arrive-t-il à un initrd préparé avec l'ancienne empreinte ? Propose une procédure (et écris-la dans `docs/provisioning/pve-pxe.md`).
-7. Détruis le nœud : `bm04` est recréée **vide** par OpenTofu (même MAC, mémoire et disque d'origine), le statut NetBox de `bm04` revient à `planned`, le fichier de réponse reste dans le code pour la prochaine fois ; ce que tu as déposé sous `/pve/` sur `pxe01` est retiré s'il contient un secret, et le jeton est renouvelé.
+6. Réfléchis au renouvellement : le certificat de `pxe01` vit 30 jours et se renouvelle 15 jours avant son échéance (M06-E27). Qu'arrive-t-il à un initrd préparé avec l'ancienne empreinte ? Propose une procédure (et écris-la dans `docs/provisioning/pve-pxe.md`).
+7. Détruis le nœud : `bm04` est recréée **vide** par OpenTofu (même MAC, mémoire et disque d'origine), le statut NetBox de `bm04` revient à `planned` (et sa plate-forme à `rocky-10`), le fichier de réponse reste dans le code pour la prochaine fois ; ce que tu as déposé sous `/pve/` sur `pxe01` est retiré s'il contient un secret, et le jeton est renouvelé.
 
 **Critères de réussite**
 - [ ] `pve-answer/bm04.toml` est sur `main`, en *kebab-case*, sans `root-password` en clair, et passe la validation de l'outil.
@@ -115,7 +116,7 @@ iPXE vérifie aussi les **dates** des certificats : l'horloge de la machine comp
 - [ ] Le gabarit iPXE de l'installation PVE est dans `gabarits/` ; après l'exercice, plus aucun initrd PVE (il contient le jeton) ne reste sur `pxe01`, et le jeton a été renouvelé dans le Vault.
 - [ ] Le jeton n'apparaît dans aucun dépôt (il est en Vault) ; ton compte rendu dit où il se trouve en clair et ce que cela implique.
 - [ ] `docs/provisioning/pve-pxe.md` contient la mesure (temps, taille, mémoire) et la procédure de renouvellement.
-- [ ] `bm04` est de nouveau une VM vide, à 2 Go, dans l'état de départ.
+- [ ] `bm04` est de nouveau une VM vide, à 4 Go, dans l'état de départ.
 
 **Vérification** : `lab/bin/check 11 14` (à lancer **après** l'étape 7).
 
@@ -156,14 +157,14 @@ L'empreinte attendue par l'installateur est celle du **certificat** présenté p
 - Le cycle de vie se lit dans NetBox : `planned` (déclaré) → `staged` (installation en cours) → `active` (en service) ; un échec laisse l'équipement dans un état qui le dit (statut, journal de l'objet NetBox), jamais `active`.
 - Pas de réinstallation en boucle : une machine dont l'installation est terminée redémarre sur son disque, même si son ordre de démarrage met le réseau en premier ; une machine `active` ne se réinstalle **jamais** par erreur (un redémarrage de `bm01` en service ne doit rien effacer).
 - Pas de secret sur la machine installée qui donnerait un droit d'écriture sur NetBox, Proxmox ou la forge : la machine en cours d'installation ne « rappelle » personne avec un jeton.
-- Droits minimaux : l'alimentation des seules VMs `bm*` ; l'écriture NetBox limitée au statut et au journal des équipements du rôle `serveur-bm` (compte `svc-automatisation`, autorisation à étendre et à justifier dans le registre des secrets) ; DNS par le chemin du M06.
+- Droits minimaux : l'alimentation des seules VMs `bm*`, par un compte Proxmox **distinct** de celui de MAAS (`wb-maas` disparaît avec MAAS au mini-projet ; nom retenu : `wb-provision@pve`, jeton `provision`, fichier `~/.config/workbook/pve-provision.env`) ; l'écriture NetBox limitée au statut, aux champs et au journal des équipements du rôle `serveur-bm` (compte `svc-automatisation`, jeton `netbox-auto.token`, autorisation à étendre et à justifier dans le registre des secrets) ; DNS par le chemin du M06.
 - Relancer l'outil sur un équipement déjà `active` ne change rien ; le relancer après un échec reprend là où c'était utile.
 - Le serveur installé entre dans l'inventaire Ansible NetBox (groupe à créer pour les équipements `serveur-bm` actifs), reçoit la racine de la PKI, sa clé d'hôte signée, le rôle `base`, et se joint depuis `adm01` sans question sur l'empreinte.
 - Délai maximal par étape, et un message clair à l'échec (étape, cause probable, où regarder).
 - Documentation : `docs/provisioning/orchestration.md` (diagramme d'états, ce qui se passe à chaque transition, reprise), mise à jour de RB-110.
 
 **Critères de réussite**
-- [ ] Un équipement `bm0x` passé à `planned` dans NetBox puis traité par le job manuel finit `active`, résolu dans le DNS, joignable en SSH depuis `adm01` avec un certificat d'hôte reconnu, présent dans l'inventaire Ansible, avec la racine MédiSphère installée — démontré pour une machine **BIOS** Debian et une machine **UEFI** Rocky.
+- [ ] Un équipement `bm0x` passé à `planned` dans NetBox puis traité par le job manuel finit `active`, résolu dans le DNS, joignable en SSH depuis `adm01` avec un certificat d'hôte reconnu, présent dans l'inventaire Ansible, avec la racine MédiSphère installée — démontré pour une machine **BIOS** Debian (`bm01`) et une machine **UEFI** Rocky (`bm04`).
 - [ ] Un redémarrage d'une machine `active` la ramène sur son système installé, sans réinstallation.
 - [ ] Le journal NetBox de l'équipement retrace les transitions (qui, quand, quelle étape).
 - [ ] Une relance sur une machine `active` ne change rien (sortie et code de retour le montrent).
@@ -204,7 +205,7 @@ Le script iPXE propre à une MAC peut dire « installe » ou « démarre sur le 
 **Durée indicative** : 2 h.
 
 **Travail demandé**
-Rédige `docs/socle/adr/ADR-0110-outil-de-provisioning.md` (gabarit MADR, deux pages au plus), par MR sur `plateforme/medisphere`. L'ADR doit au minimum :
+Rédige `docs/provisioning/adr/ADR-0110-outil-de-provisioning.md` (gabarit MADR, deux pages au plus), par MR sur `plateforme/medisphere`. L'ADR doit au minimum :
 1. Poser le contexte chiffré (volumes, sites, constructeurs, cadence, équipe de quatre personnes) et les exigences (HDS, isolation, source de vérité NetBox, DHCP Kea du socle, PKI step-ca).
 2. Comparer les trois options sur au moins : qui fait foi (NetBox ou la base de l'outil), DHCP (qui le sert, coexistence avec Kea), systèmes installables (Debian, Rocky, Proxmox VE, images personnalisées), pilotage des contrôleurs (Redfish, IPMI), dépendances d'exécution (Ubuntu + snap + PostgreSQL ; Kubernetes ; rien de plus que le socle), sécurité (comptes, TLS, secrets), effort d'exploitation et de montée de version, compétences requises, pérennité (éditeur, communauté, licence).
 3. Utiliser les **mesures** de tes exercices (temps d'installation, nombre de gestes, ce qui a coincé) plutôt que des impressions.

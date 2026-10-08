@@ -1,22 +1,77 @@
 ---
 argument_specs:
   main:
-    short_description: Serveur de provisioning pxe01 (TFTP, iPXE, nginx HTTPS)
+    short_description: Serveur de démarrage réseau du VLAN 60 (TFTP, iPXE, nginx HTTPS)
     options:
-      pxe_fqdn:
-        type: str
-        description: Nom servi en HTTPS (certificat ACME).
       pxe_adresse:
         type: str
-        description: Adresse d'écoute TFTP et HTTP(S), dans le VLAN 60.
+        description: Adresse d'écoute de TFTP et HTTP(S), dans le VLAN 60.
+      pxe_nom_serveur:
+        type: str
+        description: Nom servi par nginx (server_name, nom du certificat ACME).
+      pxe_racine_tftp:
+        type: path
+        description: Racine TFTP (chroot de tftpd-hpa).
+      pxe_racine_http:
+        type: path
+        description: Racine HTTP.
+      pxe_tftp_options:
+        type: str
+        description: Options de tftpd-hpa (jamais --create).
+      pxe_binaires_ipxe:
+        type: list
+        elements: str
+        description: Binaires de /usr/lib/ipxe copiés à la racine TFTP tant que pxe_chargeurs est vide (M11-E02).
       pxe_chargeurs:
         type: list
         elements: dict
-        description: Chargeurs iPXE ({nom, sha256}) construits par ipxe/construire-ipxe.sh.
+        description: Chargeurs iPXE construits ({nom, sha256}) par ipxe/construire-ipxe.sh (M11-E13).
       pxe_chargeurs_version:
         type: str
         description: Version publiée dans le registre de paquets génériques (ex. v2.0.0-ms1).
-      pxe_reponses_clients:
+      pxe_chargeurs_url:
+        type: str
+        description: URL du paquet générique qui contient les chargeurs de cette version.
+      pxe_chargeurs_cache:
+        type: path
+        description: Cache des chargeurs sur le contrôleur Ansible.
+      pxe_chargeurs_jeton_lecture:
+        type: path
+        description: Fichier du jeton GitLab en lecture (hors CI).
+      pxe_chargeurs_entetes:
+        type: dict
+        description: En-têtes d'authentification au registre (jeton du job en CI).
+      pxe_http_autorises:
         type: list
         elements: str
-        description: Réseaux autorisés à lire les fichiers de réponse.
+        description: Réseaux autorisés à lire le site.
+      pxe_reponses_autorises:
+        type: list
+        elements: str
+        description: Réseaux autorisés à lire les fichiers de réponse et l'installateur PVE.
+      pxe_dossiers_publies:
+        type: list
+        elements: str
+        description: Dossiers de la racine HTTP alimentés par plateforme/provisioning.
+      pxe_racine_pki:
+        type: path
+        description: Certificat racine de la PKI publié sous pki/.
+      pxe_tls_certificat:
+        type: path
+        description: Certificat (chaîne complète) de pxe01, émis par certificats_acme.
+      pxe_tls_cle:
+        type: path
+        description: Clé privée du certificat de pxe01.
+      pxe_tls_protocoles:
+        type: str
+        description: Protocoles TLS acceptés par nginx.
+      pxe_controle_https:
+        type: bool
+        description: Contrôle final en HTTPS par le nom de pxe01 (désactivé en Molecule).
+      pxe_installateurs:
+        type: list
+        elements: dict
+        description: Installateurs à télécharger et vérifier ({nom, type debian|rocky, version, miroir}).
+      pxe_entete:
+        type: str
+        description: En-tête des fichiers générés.

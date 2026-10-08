@@ -101,7 +101,7 @@ Saisie de la réception par import du bon de livraison (CSV du constructeur), co
 
 **Solution**
 
-Fichiers : [`ilo-hp01.env.exemple`](fichiers/M11-E07/ilo-hp01.env.exemple), [`outils/redfish.sh`](fichiers/M11-E07/provisioning/outils/redfish.sh), [`pare_feu.yml.extrait`](fichiers/M11-E07/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait).
+Fichiers : [`ilo-hp01.env.exemple`](fichiers/M11-E07/ilo-hp01.env.exemple), [`outils/redfish.sh`](fichiers/M11-E07/provisioning/outils/redfish.sh), [`pare_feu.yml.extrait`](fichiers/M11-E07/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait).
 
 1. **Repérage** (*Information → Overview* et *Administration → Licensing*, *Access Settings*) : firmware 2.xx (2.82 conseillé, PLAN §6 ; Redfish existe à partir de 2.30), licence *iLO Standard* le plus souvent sur ces machines. La licence Standard ne donne ni la console graphique à distance une fois le système démarré, ni le média virtuel par script : ce sont des fonctions *iLO Advanced*. Redfish, IPMI, capteurs, journaux et alimentation sont disponibles en Standard. *IPMI/DCMI over LAN* : activé par défaut sur iLO 4.
 2. **Compte.** *Administration → User Administration → New* : `wb-redfish`, privilège **Login** seulement (en iLO 4, « Login » est implicite pour tout compte ; les cases sont *Administer User Accounts*, *Remote Console Access*, *Virtual Power and Reset*, *Virtual Media*, *Configure iLO Settings* : toutes décochées). Justification : la lecture Redfish (inventaire, capteurs, journaux) et IPMI au niveau `USER` ne demandent rien d'autre ; *Virtual Power and Reset* donnerait le droit d'éteindre `hp01` (PBS, QDevice) à un compte dont le mot de passe vit dans un fichier sur `adm01` : non, et pas « au cas où ». Mot de passe :
@@ -316,7 +316,7 @@ Région en haute disponibilité (deux ou trois régions, PostgreSQL répliqué),
 
 **Solution**
 
-Fichiers : [`CHG-1215-dhcp-vlan60-maas.md`](fichiers/M11-E10/medisphere/docs/socle/changements/CHG-1215-dhcp-vlan60-maas.md), [`pare_feu.yml.extrait`](fichiers/M11-E10/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait), [`cluster.fw.extrait`](fichiers/M11-E10/pve/cluster.fw.extrait).
+Fichiers : [`CHG-1215-dhcp-vlan60-maas.md`](fichiers/M11-E10/medisphere/docs/provisioning/changements/CHG-1215-dhcp-vlan60-maas.md), [`pare_feu.yml.extrait`](fichiers/M11-E10/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), [`cluster.fw.extrait`](fichiers/M11-E10/pve/cluster.fw.extrait).
 
 1. **Préparer.** La fiche : lis-la, elle sert de modèle (prérequis, aller, retour, critère d'abandon, retour arrière par instantanés). Flux : une ligne dans la matrice, puis sur `pve01` (même méthode qu'en M03-E15) :
    ```
@@ -343,7 +343,7 @@ Fichiers : [`CHG-1215-dhcp-vlan60-maas.md`](fichiers/M11-E10/medisphere/docs/soc
        power_type=proxmox power_parameters_power_address=<IP-PVE01> power_parameters_power_user=wb-maas@pve \
        power_parameters_power_token_name=maas power_parameters_power_vm_name=2112 power_parameters_power_verify_ssl=y
    ```
-   puis *Machines → bm01 → Configuration → Power* : coller le secret du jeton dans le champ masqué `power_token_secret` (pas en argument). Idem `bm03` (2114). `maas maas01 machine query-power-state <id>` → `off`. Mise en service : à la création, MAAS lance d'office le *commissioning* (sinon `machine commission <id>`) : il allume la VM par l'API Proxmox, elle démarre sur le réseau, reçoit un système éphémère, inventorie le matériel (`lshw`, `lsblk`, LLDP…), exécute les tests par défaut (`smartctl-validate` est sauté sur un disque virtuel, `memtester` court), remonte les résultats et l'éteint. L'inventaire de MAAS (2 CPU, 2 Gio, un disque de 20 Gio `QEMU HARDDISK`, une interface virtio avec la MAC fixée) correspond à `qm config` ; ce qu'il ajoute : modèle de CPU, numéro de série SMBIOS, firmware (BIOS/UEFI), vitesse de lien.
+   puis *Machines → bm01 → Configuration → Power* : coller le secret du jeton dans le champ masqué `power_token_secret` (pas en argument). Idem `bm03`, désignée cette fois par son **nom** (`power_parameters_power_vm_name=bm03`) : le pilote cherche la VM dans `cluster/resources` par VMID ou par nom ; un VMID ne change jamais, un nom peut changer (M11-E22 s'en souviendra). `maas maas01 machine query-power-state <id>` → `off`. Mise en service : à la création, MAAS lance d'office le *commissioning* (sinon `machine commission <id>`) : il allume la VM par l'API Proxmox, elle démarre sur le réseau, reçoit un système éphémère, inventorie le matériel (`lshw`, `lsblk`, LLDP…), exécute les tests par défaut (`smartctl-validate` est sauté sur un disque virtuel, `memtester` court), remonte les résultats et l'éteint. L'inventaire de MAAS (2 CPU, 2 Gio, un disque de 20 Gio `QEMU HARDDISK`, une interface virtio avec la MAC fixée) correspond à `qm config` ; ce qu'il ajoute : modèle de CPU, numéro de série SMBIOS, firmware (BIOS/UEFI), vitesse de lien.
 4. **Déployer** : `maas maas01 machine deploy <id> distro_series=noble` (ou l'interface). MAAS allume, la machine démarre sur le réseau, écrit l'image Ubuntu sur le disque (*curtin*), configure le réseau (adresse « auto » prise dans 10.10.60.100-149), la clé SSH de l'utilisateur MAAS, puis redémarre — encore sur le réseau d'abord : c'est MAAS qui répond « démarre sur ton disque ». Connexion : `ssh ubuntu@10.10.60.1xx` avec la clé enregistrée en E09 (compte `ubuntu`, pas `admin` : nos standards ne sont pas appliqués, il faudrait du cloud-init personnalisé dans `user_data`). Durées typiques sur le lab : 3-5 min de mise en service, 4-6 min de déploiement (image écrite, pas d'installateur).
 5. **Rendre la main** : `machine release <id>` (sans effacement ; `erase=true quick_erase=true` pour un effacement rapide des disques), étapes « retour » de la fiche, `bm01` arrive au menu de **notre** chaîne (ou à son script par MAC). Vérification **avant** l'arrêt (`lab/bin/check 11 10`, partie MAAS), puis `sudo snap stop maas` et `qm shutdown 2116`, puis nouvelle vérification (retour à Kea).
 6. **Bilan** (modèle) :
@@ -382,7 +382,7 @@ Si MAAS était retenu (ADR-0110) : VLAN de provisioning qui lui est propre, sync
 
 ### M11-E11 — Revue : les fichiers d'installation du prestataire
 
-**Réponse attendue** (un modèle de [`revue-infoger.md`](fichiers/M11-E11/medisphere/docs/socle/provisioning/revue-infoger.md) est fourni). Les deux fichiers passent `debconf-set-selections -c` et `ksvalidator` : **aucun validateur ne voit ces défauts**, ils sont sémantiques.
+**Réponse attendue** (un modèle de [`revue-infoger.md`](fichiers/M11-E11/medisphere/docs/provisioning/revue-infoger.md) est fourni). Les deux fichiers passent `debconf-set-selections -c` et `ksvalidator` : **aucun validateur ne voit ces défauts**, ils sont sémantiques.
 
 | # | Fichier, lignes | Défaut | Risque | Gravité | Correction |
 |---|---|---|---|---|---|
@@ -418,7 +418,7 @@ Et, parce que `postinstall.sh` a exécuté un contenu inconnu : inventaire des c
 
 ### M11-E12 — Runbook : provisionner un serveur
 
-**Réponse attendue** : [`RB-110-provisionner-un-serveur.md`](fichiers/M11-E12/medisphere/docs/socle/runbooks/RB-110-provisionner-un-serveur.md) — un modèle complet, à comparer avec le tien.
+**Réponse attendue** : [`RB-110-provisionner-un-serveur.md`](fichiers/M11-E12/medisphere/docs/provisioning/runbooks/RB-110-provisionner-un-serveur.md) — un modèle complet, à comparer avec le tien.
 
 **Ce qui fait un bon RB-110**
 - Un **contrôle d'état de la chaîne** avant de commencer : si `pxe01` ou Kea est en panne, mieux vaut le savoir avant d'avoir allumé le serveur.

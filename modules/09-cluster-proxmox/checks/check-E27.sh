@@ -15,20 +15,20 @@ _m09p_charger
 _m09_e27_ref="$(_m09p_noeud 2>/dev/null || echo hv01)"
 
 title "Réglages du datacenter"
-check_ssh_output "migration secure sur 10.10.30.0/24" "root@$_m09_e27_ref.$_M09P_ZONE" \
+check_ssh_output "migration secure sur 10.10.30.0/24" "$_m09_e27_ref" \
   '^migration: (.*,)?network=10\.10\.30\.0/24' 'cat /etc/pve/datacenter.cfg'
-check_ssh "migration : pas de type insecure" "root@$_m09_e27_ref.$_M09P_ZONE" \
+check_ssh "migration : pas de type insecure" "$_m09_e27_ref" \
   '! grep -Eq "^migration:.*insecure" /etc/pve/datacenter.cfg'
-check_ssh "limite de débit de migration fixée (entre 10 Mio/s et 10 Gio/s)" "root@$_m09_e27_ref.$_M09P_ZONE" \
+check_ssh "limite de débit de migration fixée (entre 10 Mio/s et 10 Gio/s)" "$_m09_e27_ref" \
   'v=$(sed -nE "s/^bwlimit:.*migration=([0-9]+).*/\1/p" /etc/pve/datacenter.cfg); [ -n "$v" ] && [ "$v" -ge 10240 ] && [ "$v" -le 10485760 ]'
 check_cmd "rôle pve_cluster : migration et bwlimit dans le code" \
   bash -c 'grep -rqs "10\.10\.30\.0/24" "$1"/roles/pve_cluster/ && grep -rqs "bwlimit" "$1"/roles/pve_cluster/' _ "$_M09P_SRC/ansible"
 
 title "Corosync à l'écart"
-check_ssh "corosync.conf : aucun lien sur 10.10.30.0/24" "root@$_m09_e27_ref.$_M09P_ZONE" \
+check_ssh "corosync.conf : aucun lien sur 10.10.30.0/24" "$_m09_e27_ref" \
   '! grep -Eq "ring[0-9]_addr: *10\.10\.30\." /etc/pve/corosync.conf && grep -Eq "ring1_addr" /etc/pve/corosync.conf'
 for _m09_e27_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e27_n : deux liens Corosync, aucun pair déconnecté" "root@$_m09_e27_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e27_n : deux liens Corosync, aucun pair déconnecté" "$_m09_e27_n" \
     's=$(corosync-cfgtool -s); [ "$(printf "%s\n" "$s" | grep -c "^LINK ID")" -ge 2 ] && ! printf "%s\n" "$s" | grep -qi "disconnected"'
 done
 

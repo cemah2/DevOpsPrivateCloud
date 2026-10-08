@@ -8,7 +8,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 - **Kolla génère, tu ne bricoles pas.** Les fichiers de `/etc/kolla/<service>/` sur les nœuds sont **produits** par Kolla-Ansible depuis ton dépôt `plateforme/openstack`, puis copiés dans le conteneur à son démarrage. Une modification faite à la main dans un de ces fichiers est une **dérive** : elle disparaît au prochain `kolla-ansible reconfigure`… ou y survit si elle vient de ton dépôt. Avant de corriger, demande-toi d'où vient la valeur fausse.
 - **Le cloud repose sur le socle.** Ceph, DNS, PKI, temps, réseau de la bordure : un symptôme OpenStack peut avoir sa cause en dessous. Vérifie l'étage inférieur dès qu'un indice le désigne (et seulement alors).
 
-> **Rappels** : tout se lance depuis `adm01`. Clients : `openstack` (installé par `uv tool`, M10-00), `~/.config/openstack/clouds.yaml` avec les clouds `medisphere-admin` (administration) et `medisphere-plateforme` (projet `plateforme`) ; exporte `OS_CLOUD=medisphere-admin` ou passe `--os-cloud`. Projet de déploiement : `~/src/openstack` (clone de `plateforme/openstack`, environnement `uv` avec Kolla-Ansible 22 et ansible-core 2.20), `etc/kolla/globals.yml`, `inventaire/multinode`, surcharges dans `etc/kolla/config/`, `passwords.yml` chiffré (identité Vault `critique`). Nœuds : `osctl01` (contrôle et réseau), `oscmp01` et `oscmp02` (calcul), joints par les alias SSH de M10-E02, en `admin` avec `sudo`. Journaux : `/var/log/kolla/<service>/` sur chaque nœud (lien vers le volume `kolla_logs`). Ceph : `ceph01` (M08), `sudo cephadm shell -- ceph …`. Documentation : `~/medisphere`, dossier `docs/cloud/`.
+> **Rappels** : tout se lance depuis `adm01`. Clients : `openstack` (installé par `uv tool`, introduction du module, avec les greffons du palier 2), `~/.config/openstack/clouds.yaml` avec les clouds `medisphere-admin` (administration) et `medisphere-plateforme` (projet `plateforme`) ; exporte `OS_CLOUD=medisphere-admin` ou passe `--os-cloud`. Les vérifications utilisent les mêmes clouds (variables `WB_OS_CLOUD` et `WB_OS_CLOUD_PLATEFORME` de `lab/lab.env`). Projet de déploiement : `~/src/openstack` (clone de `plateforme/openstack`, environnement `uv` avec Kolla-Ansible 22 et ansible-core 2.20), `etc/kolla/globals.yml`, `inventaire/multinode`, surcharges dans `etc/kolla/config/`, `passwords.yml` chiffré (identité Vault `critique`). Nœuds : `osctl01` (contrôle et réseau), `oscmp01` et `oscmp02` (calcul), joints par les alias SSH de M10-E02, en `admin` avec `sudo`. Journaux : `/var/log/kolla/<service>/` sur chaque nœud (lien vers le volume `kolla_logs`). Ceph : `ceph01` (M08), `sudo cephadm shell -- ceph …`. Documentation : `~/medisphere`, dossier `docs/cloud/`.
 
 ## Règles du jeu des pannes (M10-E35 à M10-E43)
 
@@ -44,7 +44,7 @@ La méthode est celle des modules précédents : observer avant d'agir, formuler
 **Prérequis** : M10-E07, M10-E13, M10-E19, M10-E20 ; `lab/bin/check 10 35` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : la planification se fait sur `osctl01` (conteneurs `nova_scheduler`, `nova_conductor`, `placement_api`) ; les inventaires (VCPU, MEMORY_MB, DISK_GB) sont envoyés à Placement par chaque `nova_compute` au démarrage puis périodiquement. La CLI `openstack` de base ne connaît pas les commandes de Placement (`resource provider …`, `allocation candidate list`, `trait list`) : elles viennent du greffon `osc-placement`, à ajouter à ton installation (`uv tool install --with osc-placement python-openstackclient`). Le paramètre `--os-placement-api-version` choisit la version de l'API Placement.
+**Contexte technique** : la planification se fait sur `osctl01` (conteneurs `nova_scheduler`, `nova_conductor`, `placement_api`) ; les inventaires (VCPU, MEMORY_MB, DISK_GB) sont envoyés à Placement par chaque `nova_compute` au démarrage puis périodiquement. La CLI `openstack` de base ne connaît pas les commandes de Placement (`resource provider …`, `allocation candidate list`, `trait list`) : elles viennent du greffon `osc-placement`, ajouté en M10-E13. Le paramètre `--os-placement-api-version` choisit la version de l'API Placement.
 
 **Injection** : `lab/bin/break 10 35` (4 variantes ; l'injection crée puis supprime une instance de test, 1 à 2 minutes).
 
@@ -95,7 +95,7 @@ Une valeur d'inventaire anormale vient de la configuration de `nova_compute` : c
 **Prérequis** : M10-E08, M10-E12, M10-E24 ; `lab/bin/check 10 36` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : `osctl01` est l'unique passerelle OVN (*gateway chassis*) du cloud : le trafic des IP flottantes y entre et en sort, par l'interface du VLAN 52 (sans adresse) rattachée au pont externe de Kolla. Les bases d'OVN tournent dans les conteneurs `ovn_nb_db` et `ovn_sb_db` ; la doc de Kolla conseille de lancer `ovn-nbctl` et `ovn-sbctl` depuis le conteneur `ovn_northd`. `ovs-vsctl` et `ovs-ofctl` se lancent dans `openvswitch_vswitchd`. L'instance de test `m10-e36-sonde` (projet `plateforme`) répondait au ping et en SSH avant l'injection.
+**Contexte technique** : `osctl01` est l'unique passerelle OVN (*gateway chassis*) du cloud : le trafic des IP flottantes y entre et en sort, par l'interface du VLAN 52 (`ens21`, sans adresse, M10-E02) rattachée au pont externe de Kolla (`br-ex`). Les bases d'OVN tournent dans les conteneurs `ovn_nb_db` et `ovn_sb_db` ; la doc de Kolla conseille de lancer `ovn-nbctl` et `ovn-sbctl` depuis le conteneur `ovn_northd`. `ovs-vsctl` et `ovs-ofctl` se lancent dans `openvswitch_vswitchd`. L'instance de test `m10-e36-sonde` (projet `plateforme`) répondait au ping et en SSH avant l'injection.
 
 **Injection** : `lab/bin/break 10 36` (4 variantes ; l'injection crée la pile de test, 3 à 5 minutes).
 
@@ -313,7 +313,7 @@ Des droits Ceph modifiés se voient par différence avec la référence versionn
 Sur `osctl01` : `sudo docker exec rabbitmq rabbitmqctl list_connections user peer_host state` et `/var/log/kolla/rabbitmq/`. Sur un calcul : `timeout 3 bash -c '</dev/tcp/10.10.50.51/5672' && echo ouvert`, `sudo nft list ruleset`.
 </details>
 
-**Pour aller plus loin** : la sonde `ms-verif-openstack` a vu la panne ; fais-lui aussi signaler un conteneur `unhealthy` (elle l'aurait vue avant Nova, sans attendre `service_down_time`). [Nova : groupes de service](https://docs.openstack.org/nova/latest/admin/service-groups.html), [RabbitMQ : connexions](https://www.rabbitmq.com/docs/connections).
+**Pour aller plus loin** : la sonde `ms-verif-openstack` a vu la panne deux fois : par le contrôle des conteneurs `unhealthy` (M10-E26), avant Nova et sans attendre `service_down_time`, puis par l'état des services. Compare les heures des deux alertes dans le journal de `adm01`, et ajoute-lui un contrôle des connexions AMQP vues par RabbitMQ (`rabbitmqctl list_connections`) : un calcul sans connexion est un calcul qui sera bientôt « down ». [Nova : groupes de service](https://docs.openstack.org/nova/latest/admin/service-groups.html), [RabbitMQ : connexions](https://www.rabbitmq.com/docs/connections).
 
 ---
 

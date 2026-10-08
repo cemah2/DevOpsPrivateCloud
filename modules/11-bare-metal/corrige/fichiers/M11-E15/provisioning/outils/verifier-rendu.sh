@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# verifier-rendu.sh — valide les fichiers rendus avant tout dépôt sur pxe01 (M11-E15, pipeline).
-# Usage : outils/verifier-rendu.sh <dossier de rendu>
+# verifier-rendu.sh — contrôles SÉMANTIQUES du rendu avant tout dépôt sur pxe01 (M11-E15, pipeline),
+# en complément de outils/verifier.sh (syntaxe, mots de passe, ShellCheck, M11-E03 à E06).
+# Usage : outils/verifier-rendu.sh <dossier de rendu>     (dans le pipeline : rendu/http)
 #   ipxe/*.ipxe   : en-tête « #!ipxe », aucune URL http:// (HTTPS vers pxe01 seulement)
 #   preseed/*.cfg : debconf-set-selections -c, confirmation du partitionnement, aucun mot de passe en clair
 #   kickstart/*.ks: ksvalidator (version RHEL10), rootpw verrouillé, aucun --plaintext
@@ -16,8 +17,10 @@ shopt -s nullglob
 for f in "$d"/ipxe/*.ipxe "$d"/boot.ipx[e]; do
   [[ "$(head -n 1 "$f")" == "#!ipxe" ]] || defaut "$f" "première ligne différente de #!ipxe"
   if grep -Eq 'http://' "$f"; then defaut "$f" "URL http:// (la chaîne est en HTTPS)"; fi
-  if grep -Eo 'https://[^/ ]+' "$f" | grep -vqx 'https://pxe01\.par1\.medisphere\.internal'; then
-    defaut "$f" "URL vers un autre serveur que pxe01"
+  # Seuls pxe01 et le dépôt officiel de Rocky (inst.repo, authentifié par une autorité publique)
+  # peuvent apparaître : un script iPXE qui vise un autre serveur est une redirection de la chaîne.
+  if grep -Eo 'https://[^/ ]+' "$f" | grep -Evqx 'https://(pxe01\.par1\.medisphere\.internal|dl\.rockylinux\.org)'; then
+    defaut "$f" "URL vers un autre serveur que pxe01 ou le dépôt de Rocky"
   fi
 done
 for f in "$d"/preseed/*.cfg; do

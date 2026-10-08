@@ -57,7 +57,7 @@ Ce mini-projet vérifie l'**intégration** et l'**exploitabilité par d'autres**
 **Pièges classiques**
 - Un déploiement « depuis le dépôt » lancé depuis une copie de travail modifiée : c'est exactement ce que `deployer.sh` refuse.
 - Des surcharges posées directement sous `/etc/kolla/` d'un nœud : elles disparaissent au prochain `reconfigure`, et personne ne sait pourquoi le comportement a changé.
-- Des quotas par défaut sur les projets des équipes : la somme des quotas promet des centaines de Go de mémoire sur un cloud qui en a 14.
+- Des quotas par défaut sur les projets des équipes : la somme des quotas promet des centaines de Go de mémoire sur un cloud qui en a moins de 12 d'allouables.
 - Une démonstration de Julien répétée avec ton compte administrateur : elle marche, puis échoue le jour J (droits, liste d'accès par jeton de job, variables protégées).
 - Laisser les instances d'essai du module (`ha-essai`, `maj-essai`…) : elles consomment la capacité et faussent le rapport.
 
@@ -73,7 +73,7 @@ La recette ajoute un exercice de reprise : `osctl01` arrêté 30 minutes en heur
 | Karim | Code | dépôt suffisant (reconstruction d'un détail réussie), CI avec invariants, déploiement tracé (`deploye-*`), aucune surcharge hors dépôt, module `openstack-env-app` étiqueté et relu |
 | Karim | Choix | décision « déployer depuis le dépôt » argumentée ; ADR-0100 et ADR-0101 à jour |
 | Sophie | Sécurité | TLS interne et externe renouvelés automatiquement, verrouillage des comptes (comptes de service dispensés), matrice des flux (VLAN 52 → VLAN 50 interdit), ce qui reste en clair signé |
-| Sophie | Secrets | registre complet (emplacements, portée, propriétaire, échéance), identifiants d'application à droits minimaux et expirants, aucun secret dans les dépôts ni les journaux |
+| Sophie | Secrets | registre complet (emplacements, portée, propriétaire, échéance), application credentials à droits minimaux et expirantes, aucun secret dans les dépôts ni les journaux |
 | Nadia | Restauration | test de la livraison chronométré, réconcilié (orphelins traités), RTO et RPO |
 | Nadia | Exploitation | sonde planifiée et alertes testées, RB-102 joué en démonstration, runbooks du palier 4 relus |
 | Julien | Libre-service | recette recréée de zéro avec le seul guide et son pipeline, sans aide |

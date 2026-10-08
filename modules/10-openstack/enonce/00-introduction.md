@@ -125,13 +125,13 @@ Les noms d'interface `ens18` à `ens21` sont **imposés par le rôle Ansible** d
 | `ca01` → VIP externe 10.10.50.201 (défi ACME HTTP-01) | 80 | E04 | **nouveau** : INFRA → VLAN 50 |
 | IP flottantes ↔ `adm01` | tout | E08 | existant (MGMT joint tout ; retours autorisés) |
 
-Les deux flux nouveaux sont des lignes de la matrice `pare_feu.yml` (commune à `gw01` et `gw02`), ajoutées par MR en E04.
+Les deux flux nouveaux sont des lignes de la matrice des flux `group_vars/role_routeur/pare_feu.yml` de `plateforme/ansible` (commune à `gw01` et `gw02` depuis M07-E24), ajoutées par MR en E04. Les paliers suivants y ajoutent les leurs (E12, E15, E17, E25, E27).
 
 ---
 
 ## Le chemin imposé
 
-1. **OpenTofu** : les nœuds sont déclarés dans l'état `envs/openstack` de `plateforme/infra`, par le module `vm-debian` de `plateforme/tofu-modules` (clone complet de l'image dorée Debian `current`, adresse enregistrée dans NetBox, nom publié dans PowerDNS par le module `enregistrement-dns`).
+1. **OpenTofu** : les nœuds sont déclarés dans l'état `envs/openstack` de `plateforme/infra`, par le module `vm-noeud` de `plateforme/tofu-modules` (M08-E02, complété en E02 ; clone complet de l'image dorée Debian `current`, adresse enregistrée dans NetBox, nom publié dans PowerDNS par le module `enregistrement-dns`).
 2. **Ansible** (`plateforme/ansible`) : les rôles communs (`base`, `ssh_durci`, racine de confiance), puis un rôle `noeud_openstack` qui prépare ce que Kolla attend (interfaces, MTU, KVM, temps). Docker et le reste de la pile sont posés par **Kolla-Ansible** (`bootstrap-servers`), pas par nos rôles : un seul maître par composant.
 3. **Kolla-Ansible** (`plateforme/openstack`) : `globals.yml`, inventaire, surcharges de configuration (`etc/kolla/config/`), `passwords.yml` **chiffré** sous l'identité Vault `critique`. Exécution depuis `adm01`, dans un environnement `uv` dédié (E03 explique pourquoi un second environnement).
 4. **Les objets du cloud** (domaine, projets, gabarits, réseau externe) sont décrits par du code dans `plateforme/openstack` ; les ressources des projets (instances, réseaux, routeurs) sont créées par leurs utilisateurs, par la CLI d'abord, par Heat et OpenTofu ensuite (palier 2).
@@ -201,9 +201,11 @@ Les instances consomment la mémoire **des calculs** (8 Go chacun, moins ce que 
 
 | Variable | Défaut | Rôle |
 |---|---|---|
-| `WB_OS_CLOUD` | `medisphere-admin` | Cloud de `clouds.yaml` utilisé par les vérifications (commandes de lecture seulement : `list`, `show`) |
+| `WB_OS_CLOUD` | `medisphere-admin` | Cloud d'administration de `clouds.yaml` utilisé par les vérifications et les scripts de panne (vérifications : commandes de lecture seulement, `list`, `show`) |
+| `WB_OS_CLOUD_PLATEFORME` | `medisphere-plateforme` | Cloud du projet `plateforme` (ton compte, E05) : vérifications des objets de ce projet, ressources de test des pannes (palier 4) |
+| `WB_OS_CLOUD_DEV` | `medisphere-mediagenda-dev` | Cloud de `julien.petit` sur `mediagenda-dev` (E05) : vérifications « vues d'un membre » (palier 2) |
 
-Les vérifications utilisent aussi `WB_SRC` (`~/src/openstack`, `~/src/infra`, `~/src/ansible`), `WB_DEPOT`, `WB_PVE_HOST` et le jeton GitLab des checks.
+Les vérifications utilisent aussi `WB_MOI` (ton compte, E05), `WB_CEPH_ADMIN` (nœud `_admin` de `ceph-par1`, `ceph01` par défaut, M08), `WB_SRC` (`~/src/openstack`, `~/src/infra`, `~/src/ansible`), `WB_DEPOT`, `WB_PVE_HOST`, `WB_PBS_HOST` (E25) et le jeton GitLab des checks.
 
 ---
 

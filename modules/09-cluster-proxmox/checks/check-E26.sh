@@ -5,7 +5,7 @@
 # check-E26.sh — M09-E26 « Sécuriser le cluster »
 # Lecture seule : fichiers du pare-feu (/etc/pve/firewall), état de pve-firewall, essais de
 # connexion TCP depuis gw01, runner01 et adm01 (ouverts puis refermés), certificats servis,
-# double authentification (GET /access/tfa), sshd -T, documentation sur GitLab.
+# double authentification (GET /access/tfa), sshd -T, matrice des flux et documentation sur GitLab.
 
 # shellcheck source=_m09-production.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m09-production.sh"
@@ -16,14 +16,14 @@ _m09p_charger
 _m09_e26_ref="$(_m09p_noeud 2>/dev/null || echo hv01)"
 
 title "Pare-feu de cluster"
-check_ssh_output "cluster.fw : pare-feu activé au niveau du datacenter" "root@$_m09_e26_ref.$_M09P_ZONE" \
+check_ssh_output "cluster.fw : pare-feu activé au niveau du datacenter" "$_m09_e26_ref" \
   '^enable: 1$' 'cat /etc/pve/firewall/cluster.fw'
-check_ssh_output "cluster.fw : géré par le rôle pve_pare_feu" "root@$_m09_e26_ref.$_M09P_ZONE" \
+check_ssh_output "cluster.fw : géré par le rôle pve_pare_feu" "$_m09_e26_ref" \
   'pve_pare_feu' 'head -3 /etc/pve/firewall/cluster.fw'
-check_ssh "cluster.fw : IPSet management avec adm01, le VPN et runner01" "root@$_m09_e26_ref.$_M09P_ZONE" \
+check_ssh "cluster.fw : IPSet management avec adm01, le VPN et runner01" "$_m09_e26_ref" \
   's=$(awk "/^\[IPSET management\]/{f=1;next} /^\[/{f=0} f" /etc/pve/firewall/cluster.fw); for a in "10\.10\.10\.10" "10\.255\.1\.0/24" "10\.10\.20\.15"; do printf "%s\n" "$s" | grep -Eq "^$a( |$)" || exit 1; done'
 for _m09_e26_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e26_n : pare-feu du nœud non désactivé, pve-firewall actif" "root@$_m09_e26_n.$_M09P_ZONE" \
+  check_ssh "$_m09_e26_n : pare-feu du nœud non désactivé, pve-firewall actif" "$_m09_e26_n" \
     '! grep -qs "^enable: 0" /etc/pve/nodes/$(hostname)/host.fw && pve-firewall status | grep -q "enabled/running"'
 done
 
@@ -44,8 +44,8 @@ for _m09_e26_n in hv01 hv02 hv03 hv; do
     _m09p_cert_ok "$_m09_e26_n.$_M09P_ZONE" 8006 10
 done
 for _m09_e26_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh "$_m09_e26_n : renouvellement automatique (cert-renewer@pveproxy ou ACME de Proxmox VE)" "root@$_m09_e26_n.$_M09P_ZONE" \
-    'systemctl is-active --quiet cert-renewer@pveproxy.timer || pvenode config get 2>/dev/null | grep -Eq "^acme(domain[0-9])?:"'
+  check_ssh "$_m09_e26_n : renouvellement automatique (cert-renewer@pveproxy.timer actif)" "$_m09_e26_n" \
+    'systemctl is-active --quiet cert-renewer@pveproxy.timer'
 done
 
 title "Double authentification et SSH"
@@ -60,9 +60,24 @@ _m09_e26_tfa() {
 }
 check_cmd "TOTP pour root@pam et chaque membre de hv-admins (groupe non vide)" _m09_e26_tfa
 for _m09_e26_n in "${_M09P_NOEUDS[@]}"; do
-  check_ssh_output "$_m09_e26_n : sshd refuse les mots de passe" "root@$_m09_e26_n.$_M09P_ZONE" \
+  check_ssh_output "$_m09_e26_n : sshd refuse les mots de passe" "$_m09_e26_n" \
     '^passwordauthentication no$' 'sshd -T 2>/dev/null'
 done
+
+title "Bordure (écart de M09-E05)"
+# La règle du bastion (motif « bastion (MGMT) … ») doit porter une source ; sa définition tient sur
+# une ou deux lignes (accolades YAML) : on regarde la ligne du motif et la précédente.
+_m09_e26_bastion() {
+  local c
+  # Emplacement de la matrice : host_vars/gw01 (M00-E10) ou group_vars/role_routeur (M07-E30).
+  c="$(_m09p_fichier_main plateforme/ansible inventories/lab/group_vars/role_routeur/pare_feu.yml 2>/dev/null)" \
+    || c="$(_m09p_fichier_main plateforme/ansible inventories/lab/host_vars/gw01/pare_feu.yml 2>/dev/null)" || return 1
+  awk '/motif: *"bastion \(MGMT\)/ { n++; if ($0 ~ /source:/ || prec ~ /source:/) ok++ } { prec = $0 }
+       END { exit !(n > 0 && n == ok) }' <<<"$c"
+}
+check_cmd "pare_feu.yml (main) : la règle « bastion (MGMT) … » a une source" _m09_e26_bastion
+check_cmd "hv01 → pbs01:8007 toujours accepté (ligne explicite des sauvegardes)" _m09p_port_ouvert hv01 10.20.10.10 8007
+check_cmd "hv01 → ca01:443 accepté (ACME, renouvellement)" _m09p_port_ouvert hv01 10.10.20.11 443
 
 title "Documentation"
 check_cmd "docs/virtualisation/matrice-flux-hv-par1.md sur main" _m09p_doc "" matrice-flux-hv-par1

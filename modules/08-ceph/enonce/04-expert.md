@@ -1,6 +1,6 @@
 # Module 08 — Palier 4 : Expert
 
-`ceph-par1` est en service : trois nœuds, neuf OSD, des pools répliqués et à codes d'effacement, des images RBD, un CephFS, une passerelle S3 derrière sa VIP, une supervision et des sauvegardes. Nadia Roussel pose la question qu'elle avait posée au début du module : « Et à 3 h du matin, quand un disque, un moniteur ou un client tombe, qui sait quoi faire ? » Karim Benali a préparé huit pannes, toutes de celles que les forums et les post-mortems publics racontent : un OSD qui disparaît, des PG qui restent inactifs, un cluster qui refuse d'écrire, des moniteurs sans quorum, un client RBD refusé, un S3 en erreur, un CephFS figé, un cluster lent. Une astreinte les combine. Puis tu descends sous le capot, jusqu'à l'endroit précis où un objet est rangé, et tu passes les questions qu'on pose en entretien.
+`ceph-par1` est en service : trois nœuds permanents et `ceph04` (retiré au mini-projet), douze OSD, des pools répliqués et à codes d'effacement, des images RBD, un CephFS, une passerelle S3 derrière sa VIP, une supervision et des sauvegardes. Nadia Roussel pose la question qu'elle avait posée au début du module : « Et à 3 h du matin, quand un disque, un moniteur ou un client tombe, qui sait quoi faire ? » Karim Benali a préparé huit pannes, toutes de celles que les forums et les post-mortems publics racontent : un OSD qui disparaît, des PG qui restent inactifs, un cluster qui refuse d'écrire, des moniteurs sans quorum, un client RBD refusé, un S3 en erreur, un CephFS figé, un cluster lent. Une astreinte les combine. Puis tu descends sous le capot, jusqu'à l'endroit précis où un objet est rangé, et tu passes les questions qu'on pose en entretien.
 
 La méthode reste celle des modules précédents : observer avant d'agir, formuler une hypothèse, la tester par la mesure la moins invasive, corriger à la racine, prévenir la récidive. Avec trois règles propres au stockage distribué :
 - **Ceph dit presque toujours ce qui ne va pas.** `ceph health detail` donne un code (`OSD_DOWN`, `PG_AVAILABILITY`, `POOL_FULL`, `MON_CLOCK_SKEW`…) et la liste des objets concernés. Lis-le en entier avant de lancer quoi que ce soit, et cherche le code dans la [liste des contrôles de santé](https://docs.ceph.com/en/tentacle/rados/operations/health-checks/).
@@ -102,7 +102,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 **Prérequis** : M08-E05, M08-E14, M08-E21 ; `lab/bin/check 08 36` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : un PG est `active` quand il a au moins `min_size` copies disponibles dans son ensemble actif (*acting set*) ; en dessous, il est seulement `peered` et refuse les E/S. Les clients RBD n'échouent pas : ils **attendent**. Le cluster a trois hôtes, chacun avec des OSD de classe `ssd` et `hdd`.
+**Contexte technique** : un PG est `active` quand il a au moins `min_size` copies disponibles dans son ensemble actif (*acting set*) ; en dessous, il est seulement `peered` et refuse les E/S. Les clients RBD n'échouent pas : ils **attendent**. Le cluster a trois baies CRUSH (`par1-baie-a` à `-c`, M08-E14 ; `ceph04` partage la baie A tant qu'il existe), chaque hôte avec des OSD de classe `ssd` et `hdd` ; `rbd-test` suit la règle `ssd-baie`.
 
 **Injection** : `lab/bin/break 08 36` (3 variantes).
 
@@ -111,7 +111,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 2. Pour ce PG, explique pourquoi il n'est pas actif : combien de copies Ceph veut-il, combien en exige-t-il pour servir, combien la règle CRUSH peut-elle en placer ? Montre les trois nombres.
 3. Lis la règle CRUSH du pool (et sa source : classe, racine, domaine de panne). Prouve hors ligne, avec la carte CRUSH extraite et `crushtool`, ce que cette règle sait placer.
 4. Remets le pool en service par la correction la plus sûre, sans supprimer de donnée, de règle utilisée ou de classe dont un autre pool dépend. Vérifie que les écritures reprennent sur `/mnt/sonde`.
-5. Réponds à Julien : comment aurait-il fallu appliquer la « politique » de Lucas (simulation préalable, mesure du déplacement, fenêtre, MR sur `plateforme/ceph`) ? Si elle était irréalisable sur trois hôtes, dis-le et propose une alternative.
+5. Réponds à Julien : comment aurait-il fallu appliquer la « politique » de Lucas (simulation préalable, mesure du déplacement, fenêtre, MR sur `plateforme/ceph`) ? Si elle était irréalisable sur ce cluster, dis-le et propose une alternative.
 
 **Critères de réussite**
 - [ ] Aucun PG inactif, tous les PG `active+clean` ; `rbd-test` en `size 3` / `min_size 2` sur une règle qui part de la racine `default`.
@@ -152,7 +152,7 @@ Change d'abord ce qui rend les PG actifs le plus vite et le plus sûrement (la r
 **Prérequis** : M08-E20, M08-E24, M08-E26 ; `lab/bin/check 08 37` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : quand un OSD dépasse `full_ratio`, Ceph marque pleins les pools qui l'utilisent et refuse les écritures des clients (ils attendent) ; la suppression de données reste possible. Les valeurs par défaut sont 0,85 (`nearfull`), 0,90 (`backfillfull`) et 0,95 (`full`) ; elles sont stockées dans la carte des OSD (`ceph osd dump | grep ratio`), pas dans la base de configuration.
+**Contexte technique** : quand un OSD dépasse `full_ratio`, Ceph marque pleins les pools qui l'utilisent et refuse les écritures des clients (ils attendent) ; la suppression de données reste possible. Les valeurs par défaut sont 0,85 (`nearfull`), 0,90 (`backfillfull`) et 0,95 (`full`) ; `ceph-par1` a les siennes depuis M08-E20 (`config/cluster.yaml` de `plateforme/ceph`). Elles sont stockées dans la carte des OSD (`ceph osd dump | grep ratio`), pas dans la base de configuration.
 
 **Injection** : `lab/bin/break 08 37` (3 variantes).
 

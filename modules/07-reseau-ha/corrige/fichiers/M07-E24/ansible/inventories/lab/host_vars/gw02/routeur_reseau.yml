@@ -4,3 +4,9 @@ routeur_reseau_pile: netplan
 routeur_reseau_wan_adresse: 192.168.1.41/24   # <IP-GW02-WAN>/<MASQUE>
 routeur_reseau_suffixe: 3
 routeur_reseau_vip_statique: []
+# Renommage des cartes de l'image dorée (eth0, eth1) en ens18/ens19, comme gw01 : par adresse MAC,
+# fixée dans infra/socle/gw02.tf. Appliqué au premier passage (redémarrage de gw02, pas encore en
+# service), puis inerte.
+routeur_reseau_renommage:
+  ens18: "bc:24:11:10:09:00"   # net0, WAN (vmbr0)
+  ens19: "bc:24:11:10:09:01"   # net1, trunk (vmbr1)

@@ -1,0 +1,11 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (matrice de la bordure, gw01 et gw02) — M11-E10.
+# Le pilote d'alimentation « proxmox » de MAAS appelle l'API de pve01 depuis maas01. Le trafic
+# vers pve01 n'est PAS traduit (règle NAT « ip daddr != $PVE01 ») : pve01 voit 10.10.60.11, d'où
+# l'IPSet « maas » du pare-feu Proxmox. Flux retiré avec maas01 (mini-projet M11-E25).
+
+# --- pare_feu_definitions : ajout ---
+  - {nom: MAAS01, valeur: 10.10.60.11, commentaire: "MAAS (M11-E09), retirée avec la VM"}
+
+# --- pare_feu_transit : ajout ---
+  - {entree: $V_PROV, source: $MAAS01, sortie: $WAN, destination: $PVE01, proto: tcp, ports: 8006,
+     motif: "maas01 vers l'API de pve01 (pilote d'alimentation proxmox de MAAS)", ref: M11-E10}

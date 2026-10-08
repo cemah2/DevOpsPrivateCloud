@@ -84,7 +84,25 @@ Points structurants :
 
 Chaque nœud : 4 vCPU (type `host`), 12 Go sans ballon, disque système 32 Go sur `local-nvme`, deux disques de 48 Go (futurs OSD) et un de 32 Go (pool ZFS `tank`) sur `ssd-lab`, cinq cartes virtio aux adresses MAC fixes `02:4d:53:09:NN:0K` (nœud `NN`, carte `K`). Étiquettes Proxmox `env-m09` et `hv-par1`, pool `lab`.
 
-**Invités imbriqués** (à l'intérieur du cluster, VMID indépendants de ceux de `pve01`) : template `tpl-nested-debian13` en **199** ; invités de test en 100-198 (`app01` = 101, `app02` = 102 au palier 1). Ils vivent sur le VLAN 99 (DHCP de Kea, 10.10.99.100-199) : `adm01` les joint comme n'importe quelle VM du bac à sable.
+**Invités imbriqués** (à l'intérieur du cluster, VMID indépendants de ceux de `pve01`). Ils vivent sur le VLAN 99 (DHCP de Kea, 10.10.99.100-199) : `adm01` les joint comme n'importe quelle VM du bac à sable. Plan de numérotation de tout le module :
+
+| VMID | Invité | Exercice |
+|---|---|---|
+| 101, 102 | `app01`, `app02` | E07 (mis sous HA en E13) |
+| 103 | `app03` | E11 |
+| 104-106 | essais de migration (détruits) | E11 |
+| 110 | `rep01` (réplication ZFS) | E14 |
+| 120, 121 | `fence01`, `fence02` (témoins du fencing) | E24 |
+| 122 | `migr01` | E27 |
+| 123-126 | `charge01` à `charge04` | E31 |
+| 127 | `restau01` (restaurations de test, détruite après chaque essai) | E15, E29 |
+| 128 | restauration de contrôle de la recette | E46 |
+| 130-139 | `rec01`… (invités décrits dans l'état OpenTofu `hv-invites`) | E18 |
+| 140, 141 | `evpn01`, `evpn02` | E16 |
+| 150 | `legacy-rdv01` (VM importée) | E23 |
+| 191-197 | invités créés **par les scripts de panne** (étiquette `pannes-m09`), détruits par `--annuler` | E35-E43 |
+| 198 | VM de test sans disque | E44 |
+| 199 | template `tpl-nested-debian13` | E06 |
 
 **VM jetable de `pve01`** : 2099 `m09-essai` (test de la virtualisation imbriquée, E02), détruite dans la foulée.
 
@@ -165,7 +183,7 @@ Une synthèse pour se repérer ; les exercices et les liens « Pour aller plus l
 | QDevice (E05 → E08) | `corosync-qnetd` sur `pbs01` (paquet Debian), TCP 5403 ; `corosync-qdevice` sur les nœuds ; algorithme `ffsplit` |
 | Stockages du palier 1 | `local` (contenus ajoutés : `import`, `snippets`), `local-lvm` (installation), `zfs-local` (pool `tank` sur le disque `hvNN-zfs`, même nom sur chaque nœud) |
 | Secrets du palier 1 | Vault `critique` : `vault_hv_root_mot_de_passe` (`group_vars/hv_par1/vault-critique.yml`) ; sur `adm01` : `~/.config/workbook/hv-root.pass` (600), ancre TLS du cluster `~/.config/workbook/hv-par1-root-ca.pem` (publique) |
-| Documentation | `docs/socle/` de `plateforme/medisphere` : inventaire, matrice des flux, `changements/CHG-1005-qdevice-pbs01.md` ; runbooks RB-090 et suivants, ADR-0090 aux paliers suivants |
+| Documentation | `plateforme/medisphere` : documents communs du socle mis à jour (`docs/socle/inventaire.md`, `docs/socle/matrice-flux.md`, `docs/socle/registre-secrets.md`) ; tout ce qui est propre au cluster dans **`docs/virtualisation/`** : `changements/CHG-10xx-*.md` (dès CHG-1005 en E05), `runbooks/` (RB-090 à RB-092, puis RB-093 et suivants au palier 4), `adr/` (ADR-0090), `tests/`, `post-mortems/` |
 | Brouillons | `~/m09/eXX/` sur `adm01` (non versionnés) |
 
 ### Valeurs à adapter
@@ -178,13 +196,13 @@ Une synthèse pour se repérer ; les exercices et les liens « Pour aller plus l
 
 ### Variables de `lab/lab.env`
 
-Rien de nouveau. Les vérifications utilisent `WB_PVE_HOST` (configuration des VMs 2091-2093 lue en root sur `pve01`), `WB_PBS_HOST` (état du QDevice sur `pbs01`, en lecture), `WB_SRC` (copies de travail `~/src/infra`, `~/src/ansible`, `~/src/images`), `WB_DEPOT`, le jeton GitLab et le jeton NetBox des checks. Elles joignent les nœuds en root par leurs alias SSH `hv01`, `hv02`, `hv03` (voir plus bas).
+Rien de nouveau. Les vérifications utilisent `WB_PVE_HOST` (configuration des VMs 2091-2093 lue en root sur `pve01`), `WB_PBS_HOST` (état du QDevice sur `pbs01`, en lecture), `WB_SRC` (copies de travail `~/src/infra`, `~/src/ansible`, `~/src/images`, `~/src/outils`), `WB_DEPOT`, `WB_CEPH_ADMIN` (nœud d'administration de `ceph-par1`, module 08, pour M09-E12 seulement), le jeton GitLab et le jeton NetBox des checks. Elles joignent les nœuds en root par leurs alias SSH `hv01`, `hv02`, `hv03` (voir plus bas).
 
 ---
 
 ## Règles du module
 
-1. ⚠️ **`pve01` ne se modifie pas sans avertissement.** Le module touche à `pve01` en quatre endroits seulement, chacun annoncé dans l'énoncé avec son retour arrière : le paquet de préparation des ISO (E02), un droit de `wb-tofu@pve` (E02), l'ISO sur `hdd-bulk` (E02, E03), et les VMs 2091-2093 (par OpenTofu). Jamais son réseau (`vmbr0`, `vmbr1`, routes), jamais son pare-feu de centre de données, jamais son noyau sans fenêtre de maintenance.
+1. ⚠️ **`pve01` ne se modifie pas sans avertissement.** Le module touche à `pve01` en quatre endroits seulement, chacun annoncé dans l'énoncé avec son retour arrière : le paquet de préparation des ISO (E02), un droit de `wb-tofu@pve` (E02), l'ISO sur `hdd-bulk` (E02, E03), et les VMs 2091-2093 (par OpenTofu ; plus deux gestes manuels annoncés sur ces seules VMs : le pare-feu de la carte `net4` de 2092 en E07, ramené ensuite par OpenTofu, et l'arrêt brutal `qm stop` d'un nœud pour éprouver la HA en E24 et dans la recette). Jamais son réseau (`vmbr0`, `vmbr1`, routes), jamais son pare-feu de centre de données, jamais son noyau sans fenêtre de maintenance.
 2. **Un seul profil lourd à la fois.** Les VMs `ceph01-03` du module 08 restent **arrêtées** pendant tout le module, sauf pendant M09-E12. Pas de profil `openstack` ou `k8s` en parallèle.
 3. ⚠️ **`pbs01` est le serveur de sauvegarde du site.** Il n'accueille le QDevice que le temps de la phase à deux nœuds (E05 → E08), par une fiche de changement. Aucun script de panne ne le touche, jamais. Toute intervention sur `pbs01` se fait hors de la fenêtre des sauvegardes nocturnes.
 4. **Les nœuds se configurent par le code.** Réseau, dépôts, temps, SSH : rôle `pve_noeud`. Le réseau d'un nœud ne se modifie pas dans l'interface web (le prochain passage d'Ansible l'écraserait, et un `vmbr0` mal saisi coupe le nœud).
@@ -222,7 +240,7 @@ Le dernier contrôle (mini-projet du module 08) doit être vert : M09-E12 consom
 - Les vérifications se lancent depuis `adm01` : `lab/bin/check 09 <XX>`. Elles sont en lecture seule : configuration des VMs 2091-2093 lue en root sur `pve01`, état des nœuds en root par SSH (`pvecm`, `corosync-cfgtool`, `pvesh get`, `zpool`), état du QDevice sur `pbs01`, DNS, NetBox, fichiers de tes copies de travail, API GitLab en lecture.
 - Les indices sont progressifs : ouvre-les un par un, seulement quand tu bloques.
 - Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Les fichiers complets sont dans `corrige/fichiers/M09-EXX/` : `infra/` reproduit l'arborescence de `plateforme/infra`, `ansible/` celle de `plateforme/ansible`, `images/` celle de `plateforme/images`, `outils/` celle de `plateforme/outils`, `medisphere/` celle de la documentation.
-- Les scripts de panne (`corrige/pannes/`, palier 4) révèlent les causes : ne les lis pas avant d'avoir résolu. Ils n'agissent qu'**à l'intérieur** du cluster imbriqué et sur les VMs 2091-2093 ; jamais sur `pbs01`, jamais sur le réseau de `pve01`.
+- Les scripts de panne (`corrige/pannes/`, palier 4) révèlent les causes : ne les lis pas avant d'avoir résolu. Ils agissent **à l'intérieur** des nœuds imbriqués (en root par les alias `hv01`-`hv03`, comme les vérifications) et y créent au besoin leurs propres invités de test (VMID 191-197, étiquette `pannes-m09`, détruits par `--annuler`) ; jamais sur `pbs01`, jamais sur le réseau ni le pare-feu de `pve01`.
 
 ## Ordre conseillé (palier 1)
 

@@ -1,48 +1,83 @@
 ---
-# Rôle pxe — serveur de provisioning pxe01 : TFTP (tftpd-hpa) pour les chargeurs iPXE, nginx pour
-# tout le reste (scripts iPXE, noyaux, initrd, fichiers de réponse).
-# Version de M11-E13 : REMPLACE celle de M11-E02/E03 (même nom de rôle). Ajouts : HTTPS seul pour
-# la chaîne (certificat ACME du rôle certificats_acme), port 80 réduit à une redirection,
-# chargeurs iPXE construits par ipxe/construire-ipxe.sh (racine MédiSphère intégrée) et vérifiés
-# par leur empreinte, fichiers de réponse réservés au VLAN 60.
-# ⚠️ Aligne les noms de variables sur ta version de M11-E02 si tu en avais d'autres.
+# Rôle pxe — serveur de démarrage réseau du VLAN 60, version M11-E13 (remplace celle de M11-E02 :
+# mêmes variables, plus celles de la chaîne authentifiée). Ajouts de M11-E13 :
+#   - chargeurs iPXE CONSTRUITS (ipxe/construire-ipxe.sh, racine MédiSphère seule racine de
+#     confiance) au lieu des binaires du paquet Debian, vérifiés par leur empreinte ;
+#   - nginx en HTTPS (certificat ACME du rôle certificats_acme) ; le port 80 ne sert plus qu'une
+#     redirection (le défi HTTP-01 est servi par le client step, nginx arrêté) ;
+#   - fichiers de réponse (preseed, kickstart, pve) réservés au VLAN 60 et à adm01.
+#
+# PROPRIÉTÉ DES FICHIERS (inchangée depuis M11-E02) :
+#   - ce rôle : /srv/tftp, /srv/http/{debian13,rocky10,pki}, la configuration de nginx et tftpd-hpa ;
+#   - plateforme/provisioning (outils/publier.sh) : /srv/http/boot.ipxe et /srv/http/{ipxe,preseed,kickstart} ;
+#   - playbooks/pve-installateur.yml (M11-E14) : /srv/http/pve/<version>/, temporaire.
 
 pxe_entete: >-
   {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle pxe).') }}
 
-pxe_fqdn: pxe01.par1.medisphere.internal
-pxe_adresse: 10.10.60.10
+# Adresse d'écoute (TFTP et HTTP/HTTPS) : l'adresse de service, jamais toutes les adresses.
+pxe_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+pxe_nom_serveur: "{{ inventory_hostname }}.par1.medisphere.internal"
 
-# --- TFTP --------------------------------------------------------------------------------------
-pxe_tftp_racine: /srv/tftp
-# Écoute sur la seule adresse du VLAN 60 ; --secure : chemins relatifs à la racine (chroot).
-pxe_tftp_options: "--secure"
+pxe_racine_tftp: /srv/tftp
+pxe_racine_http: /srv/http
+# --verbose : chaque lecture (RRQ) est journalisée (suivi d'un démarrage, pannes du palier 4).
+pxe_tftp_options: "--secure --verbose"
 
-# Chargeurs iPXE servis en TFTP. Construits hors de pxe01 (VM jetable 2117) et publiés dans le
-# registre de paquets génériques de plateforme/provisioning ; le contrôleur Ansible les télécharge
-# (pxe01 ne joint pas la forge : VLAN 60 isolé) puis les copie. L'empreinte fait foi.
+# --- Chargeurs iPXE -------------------------------------------------------------------------------
+# M11-E02 : binaires du paquet Debian « ipxe » (/usr/lib/ipxe), utilisés tant que pxe_chargeurs
+# est vide.
+pxe_binaires_ipxe:
+  - undionly.kpxe
+  - ipxe.efi
+# M11-E13 : chargeurs construits hors de pxe01 (VM jetable 2117 m11-build) par
+# ipxe/construire-ipxe.sh, publiés dans le registre de paquets génériques de plateforme/provisioning.
+# Le CONTRÔLEUR (adm01 ou runner01) les télécharge (pxe01 ne joint pas la forge : VLAN 60 isolé),
+# vérifie l'empreinte, les copie ; l'empreinte du fichier en place est revérifiée. L'empreinte fait foi.
 #   - {nom: undionly.kpxe, sha256: "…"}
 pxe_chargeurs: []
 pxe_chargeurs_version: ""
-# URL du paquet générique : <projet>/packages/generic/ipxe/<version>/<fichier>
 pxe_chargeurs_url: >-
   https://git01.par1.medisphere.internal/api/v4/projects/plateforme%2Fprovisioning/packages/generic/ipxe/{{ pxe_chargeurs_version }}
-# Cache local sur le contrôleur (adm01 ou runner01)
 pxe_chargeurs_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/pxe/ipxe-{{ pxe_chargeurs_version }}"
-# En-tête d'authentification pour le registre : jeton du job en CI, jeton en lecture sinon.
+# Authentification au registre : jeton du job en CI (runner01), jeton GitLab en lecture sur adm01.
 pxe_chargeurs_jeton_lecture: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/workbook/gitlab-checks.token"
 pxe_chargeurs_entetes: >-
   {{ {'JOB-TOKEN': lookup('ansible.builtin.env', 'CI_JOB_TOKEN')}
      if lookup('ansible.builtin.env', 'CI_JOB_TOKEN') | length > 0
-     else {'PRIVATE-TOKEN': lookup('ansible.builtin.file', pxe_chargeurs_jeton_lecture, errors='ignore') | default('', true)} }}
+     else {'PRIVATE-TOKEN': lookup('ansible.builtin.file', pxe_chargeurs_jeton_lecture, errors='ignore') | default('', true) | trim} }}
 
-# --- HTTP(S) ------------------------------------------------------------------------------------
-pxe_http_racine: /srv/http
-pxe_http_dossiers: [ipxe, debian, rocky, preseed, kickstart, pki, cles, pve, pve-answer]
-# Certificat ACME (host_vars/pxe01/certificats.yml, id « pxe »)
-pxe_tls_certificat: /etc/ssl/pxe/{{ pxe_fqdn }}.crt
-pxe_tls_cle: /etc/ssl/pxe/{{ pxe_fqdn }}.key
-# Protocoles : iPXE parle TLS 1.2 ; TLS 1.3 pour les autres clients.
+# --- HTTP(S) -----------------------------------------------------------------------------------------
+# Réseaux autorisés à lire le site (scripts iPXE, noyaux, racine de la PKI).
+pxe_http_autorises:
+  - 10.10.60.0/24   # VLAN 60 PROV : les serveurs à installer
+  - 10.10.10.0/24   # VLAN 10 MGMT : adm01 (vérifications, publication)
+# Fichiers de réponse (preseed, kickstart) et installateur PVE (son initrd contient un jeton) :
+# les serveurs à installer et adm01 seulement.
+pxe_reponses_autorises:
+  - 10.10.60.0/24
+  - 10.10.10.10/32
+
+# Dossiers alimentés par plateforme/provisioning (publier.sh) : créés ici, jamais remplis ici.
+pxe_dossiers_publies:
+  - ipxe
+  - preseed
+  - kickstart
+
+# Racine de la PKI publiée pour les installateurs (iPXE la remet à l'installateur, M11-E13).
+pxe_racine_pki: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# Certificat ACME de pxe01 (host_vars/pxe01/certificats.yml, entrée « pxe »). Le site HTTPS n'est
+# rendu que si le certificat existe (premier passage : port 80 seul, puis certificats_acme).
+pxe_tls_certificat: "/etc/ssl/pxe/{{ pxe_nom_serveur }}.crt"
+pxe_tls_cle: "/etc/ssl/pxe/{{ pxe_nom_serveur }}.key"
+# iPXE parle TLS 1.2 ; TLS 1.3 pour les autres clients (curl d'adm01, installateur PVE).
 pxe_tls_protocoles: "TLSv1.2 TLSv1.3"
-# Qui peut lire les fichiers de réponse (preseed, kickstart, pve-answer) : le VLAN 60 et adm01.
-pxe_reponses_clients: [10.10.60.0/24, 10.10.10.10]
+# Contrôle final en HTTPS par le nom de pxe01 (DNS du lab, racine MédiSphère du magasin système).
+# false seulement là où ni l'un ni l'autre n'existe (scénario Molecule, certificat de test).
+pxe_controle_https: true
+
+# Installateurs téléchargés et VÉRIFIÉS (M11-E04, E05). Vide = aucun.
+#   - {nom: debian13, type: debian, version: trixie, miroir: https://deb.debian.org/debian}
+#   - {nom: rocky10, type: rocky, version: "10.2", miroir: https://dl.rockylinux.org/pub/rocky}
+pxe_installateurs: []
