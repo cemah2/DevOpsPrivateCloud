@@ -17,7 +17,7 @@
 
 | Outil | Ce qui change pour toi |
 |---|---|
-| Ceph Tentacle 20.2 | Debian 13 n'est **pas** un hôte supporté (ni paquets download.ceph.com pour trixie, ni hôte de conteneurs testé) ; Rocky Linux 10 l'est depuis 20.2.2 : les nœuds Ceph du workbook sont en Rocky 10. Le paquet `cephadm` de Debian est en 18.2 (Reef) : ne pas l'utiliser. Installer le binaire de la release : `https://download.ceph.com/rpm-20.2.x/el9/noarch/cephadm`. |
+| Ceph Tentacle 20.2 | Debian 13 n'est **pas** un hôte supporté (ni paquets download.ceph.com pour trixie, ni hôte de conteneurs testé) ; Rocky Linux 10 l'est depuis 20.2.2 : les nœuds Ceph du workbook sont en Rocky 10. Le paquet `cephadm` de Debian est en 18.2 (Reef) : ne pas l'utiliser. Le workbook installe les RPM signés `cephadm` et `ceph-common` du dépôt `https://download.ceph.com/rpm-20.2.x/el10/` (aucune somme n'est publiée pour le binaire seul récupéré par `curl`). |
 | Tentacle 20.2.0 | Plugin EC par défaut : **ISA-L** (au lieu de Jerasure) pour les nouveaux pools ; FastEC activable par pool (`allow_ec_optimizations`) ; modules mgr `restful` et `zabbix` supprimés ; `rbd device map` en msgr2 par défaut ; RGW : IAM au niveau *tenant* déprécié au profit des **accounts** ; `osd_repair_during_recovery` supprimé ; seuils d'IOPS mClock bas ; nouveaux services cephadm `mgmt-gateway`, `oauth2-proxy`, `certmgr`, module SMB. |
 | Tentacle 20.2.1-20.2.4 | Tableau de bord : « Dashboard » devient « Overview » ; onglet global des rôles RGW déplacé sous Accounts ; 20.2.4 corrige CVE-2025-30156 (CephX) et CVE-2026-54330 (RGW SigV4) avec des étapes de mise à jour particulières (M08-E26). |
 | iSCSI | La passerelle iSCSI de Ceph (`ceph-iscsi`) n'est plus maintenue ; l'export bloc moderne est NVMe-oF. Le workbook montre l'iSCSI avec LIO (`targetcli`) sur un client RBD. |
@@ -27,7 +27,7 @@
 | Outil | Ce qui change pour toi |
 |---|---|
 | Proxmox VE 9.0 | **HA groups dépréciés au profit des HA rules** (affinité nœud et ressource) ; migration automatique quand tous les nœuds sont en 9, `nofailback` devient `failback`. Fabrics SDN OpenFabric et OSPF. GlusterFS et `maxfiles` supprimés. Privilège `VM.Monitor` supprimé, `VM.Replicate` ajouté. |
-| Proxmox VE 9.1 | Fichier de réponse de l'installateur automatique : clés en *kebab-case* (le *snake_case* produit un avertissement). |
+| Proxmox VE 9.0-9.1 | Fichier de réponse de l'installateur automatique : clés en *kebab-case* (acceptées depuis 8.4, le *snake_case* est déprécié depuis 9.0). |
 | Proxmox VE 9.2 | Ceph **Tentacle** par défaut pour les nouvelles installations (Squid toujours proposé) ; équilibrage dynamique par le CRS ; commandes `disarm-ha`/`arm-ha` ; SDN : fabrics WireGuard et BGP, route-maps ; installateur : `prepare-iso --pxe`, `--answer-auth-token`, `inspect-iso`, fichiers de réponse JSON préférés en HTTP ; **`VM.PowerMgmt` requis pour démarrer une VM après création ou restauration** (à vérifier pour les jetons d'automatisation). |
 | PBS 4.2 | Pas de changement bloquant pour les exercices. |
 
@@ -46,6 +46,6 @@
 |---|---|
 | MAAS 3.7 | Snap (`3.7/stable`) + PostgreSQL 16 ; Ubuntu 24.04 comme système hôte. Pilote d'alimentation **Proxmox** (adresse, `user@realm`, jeton `user!jeton`, identifiant de VM) corrigé en 3.7.0 (bogue 2109681). |
 | Tinkerbell | Déploiement recommandé par chart Helm sur Kubernetes : traité en fiche (Kubernetes arrive au module 14). |
-| iPXE | Amont 2.0 (Secure Boot par shim, TLS 1.0 retiré) ; Debian 13 livre un instantané de 2025 sans ces changements. |
+| iPXE | Amont 2.0 (Secure Boot par shim, TLS 1.0 retiré) ; Debian 13 livre un instantané de 2025 sans ces changements. Le workbook construit iPXE 2.0 avec la racine MédiSphère embarquée pour démarrer en HTTPS (M11-E13). |
 | Kea 3.0 | Classes PXE : test sur l'option 93 (architecture du client : `0x0000` BIOS, `0x0007`/`0x0009` UEFI x64), puis classe iPXE (option 77 *user-class*). |
 | iLO 4 | Redfish 1.0 à partir du firmware 2.30 ; firmware 2.82 conseillé. Virtual Media et console graphique exigent la licence iLO Advanced. Les émulateurs Redfish (`sushy-tools`) ne pilotent que libvirt ou Nova, pas Proxmox. |
