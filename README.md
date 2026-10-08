@@ -24,7 +24,7 @@ Types d'exercices : labs guidés et libres, break & fix (pannes injectées par `
 
 ## État
 
-Voir [`AVANCEMENT.md`](AVANCEMENT.md). Le **bloc A** (fondations automatisées) est disponible : modules 00 à 06.
+Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées, modules 00 à 06) et **B** (infrastructure cloud privé, modules 07 à 11) sont disponibles.
 
 | # | Module | Exercices |
 |---|---|---|
@@ -35,13 +35,18 @@ Voir [`AVANCEMENT.md`](AVANCEMENT.md). Le **bloc A** (fondations automatisées) 
 | 04 | [Gestion de configuration (Ansible)](modules/04-ansible/README.md) | 45 + mini-projet |
 | 05 | [Infrastructure as Code (OpenTofu)](modules/05-iac/README.md) | 45 + mini-projet |
 | 06 | [Services socle](modules/06-services-socle/README.md) | 45 + mini-projet |
+| 07 | [Réseau datacenter et haute disponibilité](modules/07-reseau-ha/README.md) | 45 + mini-projet |
+| 08 | [Stockage distribué (Ceph)](modules/08-ceph/README.md) | 45 + mini-projet |
+| 09 | [Cluster de virtualisation](modules/09-cluster-proxmox/README.md) | 45 + mini-projet |
+| 10 | [OpenStack](modules/10-openstack/README.md) | 45 + mini-projet |
+| 11 | [Provisioning bare-metal](modules/11-bare-metal/README.md) | 24 + mini-projet |
 
-Les blocs suivants (B à G, puis les finaux) sont produits bloc par bloc.
+Les blocs suivants (C à G, puis les finaux) sont produits bloc par bloc.
 
 Annexes :
 - [`annexes/prerequis.md`](annexes/prerequis.md) — graphe des dépendances entre modules, ce que chaque module suppose et laisse en place ;
 - [`annexes/certifications.md`](annexes/certifications.md) — exercices utiles pour préparer LFCS/RHCSA, RHCE, Terraform Associate, GitLab, CKA… ;
 - [`annexes/glossaire.md`](annexes/glossaire.md) — termes du workbook, avec l'exercice qui les introduit ;
-- [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) — versions de référence du bloc A et changements de comportement à connaître.
+- [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) et [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md) — versions de référence des blocs A et B et changements de comportement à connaître.
 
 Tu rencontres une erreur dans un exercice ? Note l'exercice, ce que tu as fait et le message d'erreur, et utilise le message « Corriger après tes tests » de [`REPRISE.md`](REPRISE.md).

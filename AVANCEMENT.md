@@ -9,7 +9,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | PLAN.md | rédigé | Versions des outils hors bloc A à figer au démarrage de chaque bloc |
 | CONVENTIONS.md | rédigé | À ajuster après les retours sur le module 00 |
 | lab/ (check, break, check-lib, lab.env.example) | rédigé | Bloc A : `lab/lib/pannes-lib.sh` (pannes des modules 01+), fonctions `gitlab_api`/`netbox_api`, variables du bloc A dans `lab.env.example` |
-| annexes/ | rédigé (bloc A) | `versions-bloc-A.md`, `prerequis.md` (graphe Mermaid 00-29/F1-F7, état laissé par chaque module du bloc A), `certifications.md` (LFCS, RHCSA, RHCE, Terraform Associate, GitLab ; CKA et suivants à compléter), `glossaire.md` (200 termes du bloc A) : à compléter à la fin de chaque bloc |
+| annexes/ | rédigé (blocs A et B) | `versions-bloc-A.md`, `versions-bloc-B.md`, `prerequis.md` (graphe 00-29/F1-F7, état laissé par chaque module des blocs A et B), `certifications.md` (LFCS, RHCSA, RHCE, Terraform Associate, GitLab, COA, CCNA, grilles Ceph et Proxmox ; CKA et suivants à compléter), `glossaire.md` (380 termes) : à compléter à la fin de chaque bloc |
 
 ## Modules
 
@@ -22,17 +22,22 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 04 | Gestion de configuration (Ansible) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~80 vérifications ; ansible-core 2.21.5/2.19, ansible-lint 26.9 profil production, Molecule 26.9 et Semaphore 2.19 exécutés, pytest de la collection et du module maison verts, filet anti-coupure du pare-feu testé). À confirmer sur le lab : ACL Proxmox de `wb-ansible`, enregistrement réel du runner, `qm terminal` sur `gw01`, délai `logger --tcp` (E41 v4), API `/project/users` de Semaphore |
 | 05 | Infrastructure as Code (OpenTofu) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~65 vérifications ; OpenTofu 1.13.1, Terragrunt 1.1.6, SeaweedFS 4.45/4.48 et AWS CLI exécutés : `validate`, `tofu test` 8/8, verrou `use_lockfile` et 412 `If-None-Match` constatés, chiffrement de l'état éprouvé ; règle sudo de `wb-tofu` corrigée et éprouvée). À confirmer sur le lab : `ciupgrade` avec un jeton non-root, attente de l'agent sur un clone, message de PVE 9 pour un VMID existant, affichage du rapport `terraform` en MR |
 | 06 | Services socle | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~50 vérifications ; Kea 3.0.4, PowerDNS 5.0.7/Recursor 5.4.7, step-ca 0.30.2 et NetBox 4.6 exécutés, 138 pytest, ansible-lint production sur tous les rôles). À confirmer sur le lab : formats de sortie de `pdnsutil` 5.0, coexistence ancre `par1` / NTA `medisphere.internal`, authentification de l'écouteur HA de Kea, écrans NetBox de création des jetons, relecture à chaud des certificats NTS par chrony |
-| 07 | Réseau datacenter et haute disponibilité | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
-| 08 | Stockage distribué (Ceph) | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
-| 09 | Cluster de virtualisation | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
-| 10 | OpenStack | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
-| 11 | Provisioning bare-metal | en cours | 24 + mini-projet | Carte des exercices écrite (README) |
+| 07 | Réseau datacenter et haute disponibilité | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~87 vérifications ; FRR 10.7.1 en espaces de noms, HAProxy 3.2.25 `-c`, keepalived 2.2.8/2.3.4 `-t`, `vtysh --dryrun`, `nft -c`, conntrackd 1.4.8 ; migration VRRP de la bordure refaite pour ne jamais faire tomber les VIP déjà migrées). À confirmer sur le lab : nommage `eth*` de la maquette et renommage de `gw02`, option `mtu` d'une zone SDN VLAN, FDB de `vmbr1`, TCP-MD5 sur voisins *unnumbered*, `retry-on`+`redispatch` du défi ACME, `SDN.Use` sur `localnetwork`, script `STOP` de keepalived sous systemd |
+| 08 | Stockage distribué (Ceph) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~91 vérifications sur le code et la doc de Ceph 20.2 ; RPM el10 et clé de signature vérifiés, specs validées par `python-common`, `crushtool`, notes de 20.2.4 et CVE). À confirmer sur le lab : valeurs du réglage mémoire automatique, formats JSON (`mutes`, comptes RGW), `aes256k` pendant la mise à jour, messages de refus cephx, timing de E36 v2 |
+| 09 | Cluster de virtualisation | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~90 vérifications ; wiki Automated Installation, signatures de l'ISO 9.2-1, code de pve-ha-manager, guide Squid→Tentacle, `tofu validate`, `ansible-lint`). À confirmer sur le lab : épinglage `nic0..4` par `ID_NET_NAME_MAC`, libellés de `ha-manager status` et de `disarm-ha`, configuration FRR du SDN EVPN, démarrage de l'OVA, `watchdog-mux` sans périphérique |
+| 10 | OpenStack | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~104 vérifications dans le code de kolla-ansible 22.2.0 `stable/2026.1`, kolla, horizon, keystone, OSC 10 ; `tofu validate`, 15 bats). Rôle `sauvegarde_pbs` fusionné avec la version M09. À confirmer sur le lab : déploiement complet, images Debian « untested » de la matrice Kolla (repli `rocky` documenté), ACME de Kolla vers step-ca, formats JSON de la CLI, droits cephx minimaux |
+| 11 | Provisioning bare-metal | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~45 vérifications ; `kea-dhcp4 -t` 3.0.4, `ksvalidator` RHEL10, `debconf-set-selections -c`, pilote Proxmox de MAAS 3.7 lu dans le code ; construction iPXE corrigée `TRUST=`+`CERT=`). À confirmer sur le lab : user-class iPXE au second DISCOVER, ROM iPXE de QEMU/OVMF, `IPMI.ProtocolEnabled`/`FirmwareInventory` sur iLO 4, magasin TLS du snap MAAS |
 | 12-18 | Bloc C | à faire | | |
 | 19-20 | Bloc D | à faire | | |
 | 21-23 | Bloc E | à faire | | |
 | 24-26 | Bloc F | à faire | | |
 | 27-29 | Bloc G | à faire | | |
 | F1-F7 | Finaux | à faire | | |
+
+## Effets du bloc B sur les modules précédents (à surveiller)
+
+- Après M07-E25, `gw01` répond en `.2` et la VIP `.1` peut être portée par `gw02` : les vérifications des modules 00 à 06 qui joignent `gw01` par `10.10.x.1` atteignent le maître VRRP (le plus souvent `gw01`, `nopreempt`). À revoir si un retour de l'apprenant montre un faux rouge.
+- Après M07-E24, la matrice des flux est dans `group_vars/role_routeur/pare_feu.yml` ; le check M06-E46 lit encore `host_vars/gw01/pare_feu.yml` (il reste vert grâce aux autres fichiers de `host_vars/gw01`).
 
 ## Retours de l'apprenant en attente
 
@@ -50,6 +55,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 2026-10-07 | 2 (bloc A, fin) | **Bloc A terminé** : modules 01 à 06 relus et poussés, annexes et topologie, contrôle global de cohérence (474 scripts ShellCheck propres). Tâche planifiée créée pour lancer le bloc B |
 
 | 2026-10-08 | 3 (bloc B) | Lancée par la tâche planifiée. Versions du bloc B figées (recherche web, `annexes/versions-bloc-B.md`), décisions structurantes en PLAN §4.9 et journal, cartes des exercices des modules 07 à 11 |
+| 2026-10-08 | 3 (bloc B) | Modules 07 à 11 rédigés (18 rédacteurs en parallèle sur des briefs communs), harmonisés (1 agent par module), relus indépendamment (9 relecteurs, ~420 vérifications sur la documentation et le code officiels, défauts bloquants corrigés : migration VRRP de la bordure, `--dry-run` de cephadm, construction d'iPXE, playbooks E24/E28/E46 de M09…). 323 scripts : `bash -n` et `shellcheck -x` propres. Annexes, topologie, README, REPRISE mis à jour. Correction transverse : M00-E22 (secret PBS hors des arguments de `pvesm`). **Bloc B terminé**, tâche planifiée créée pour lancer le bloc C |
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
 - **Stockage S3 du socle** : MinIO prévu au plan est abandonné par son éditeur (édition communautaire sans binaires depuis octobre 2025, dépôt archivé). Remplacé par SeaweedFS (Apache 2.0, écritures conditionnelles nécessaires au verrou d'état OpenTofu). Garage écarté pour cette raison. Le module 05 en fait un ADR.
