@@ -418,7 +418,7 @@ L'API Proxmox applique une zone SDN modifiée seulement après `pvesh set /clust
 - [ ] La session avec 10.10.99.251 est établie ; `gw01` n'a appris que des préfixes de 10.10.255.0/24 ou 10.10.41.0/24, installés dans son noyau.
 - [ ] Le groupe `K8S` existe (AS 65040, écoute sur 10.10.40.0/24), fermé.
 - [ ] `adm01` joint 10.10.255.1 (boucle de `spine01`).
-- [ ] Le port 179 n'est ouvert en entrée de `gw01` qu'à 10.10.99.251 ; le scénario Molecule `frr` est sur `main`.
+- [ ] Le port 179 n'est ouvert en entrée de `gw01` qu'à 10.10.99.251 ; le scénario Molecule `frr_bordure` est sur `main`.
 
 **Vérification** : `lab/bin/check 07 16`
 
@@ -524,6 +524,8 @@ La base d'OVS persiste (pont, ports, miroir) ; les paires veth et les espaces de
 4. Matrice des flux : l'entrée du tunnel sur `gw01`, les flux de Lyon vers PAR1 (pense à la règle DNS existante). Applique.
 5. Vérifie depuis `lyo-pc01` : résolution de `gitlab.par1.medisphere.internal` par 10.10.20.10, `curl --cacert` vers `https://gitlab.par1.medisphere.internal`, ping de 10.10.20.10. Et l'interdit : rien vers 10.10.10.10 par le tunnel.
 6. Expériences : (a) retire 10.10.70.0/24 des `AllowedIPs` du pair PAR1 côté `lyo-gw01` seulement (la route posée au montage reste) : que voit `lyo-pc01`, que voit `lyo-gw01` lui-même, et pourquoi ? (b) sur `lyo-pc01`, remplace les routes ciblées par une route vers tout 10.10.0.0/16 : que devient ta session SSH depuis `adm01` ? Explique, puis remets en état.
+
+   > ⚠️ **Attention** : l'expérience (b) peut te couper de `lyo-pc01`, et sa console série ne t'aidera pas (le compte `admin` n'a pas de mot de passe). Pose la route à la main (`ip route`, non persistante) et prévois ton retour : un retrait automatique programmé dans la même commande, ou `qm reboot 2078` sur `pve01`. `lyo-pc01` est une VM de maquette : rien d'autre n'est touché.
 
 **Critères de réussite**
 - [ ] `wg2` est monté sur `gw01` (UDP 51822) et sur `lyo-gw01` ; la dernière poignée de main a moins de trois minutes.

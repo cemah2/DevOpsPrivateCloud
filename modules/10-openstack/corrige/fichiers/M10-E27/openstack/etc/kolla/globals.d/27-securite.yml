@@ -25,11 +25,17 @@ kolla_admin_openrc_cacert: "/etc/ssl/certs/ca-certificates.crt"
 # --- Certificats des VIP par ACME (step-ca) -----------------------------------------------------
 # Rôle « letsencrypt » de Kolla : conteneurs letsencrypt_lego (client lego, cron toutes les 4 h)
 # et letsencrypt_webserver (sert les défis HTTP-01 derrière HAProxy, port 80 des VIP).
-# ATTENTION : chaîne « yes » obligatoire (des gabarits comparent enable_letsencrypt == 'yes').
+# (Booléen : les rôles de Kolla 2026.1 le lisent avec le filtre « bool ».)
 enable_letsencrypt: "yes"
 letsencrypt_email: "plateforme@medisphere.internal"
 letsencrypt_external_cert_server: "https://ca01.par1.medisphere.internal/acme/acme/directory"
 letsencrypt_internal_cert_server: "https://ca01.par1.medisphere.internal/acme/acme/directory"
-# Renouveler quand il reste moins de 15 jours (politique M06-E27). La valeur par défaut (30)
-# avec des certificats de 30 jours provoquerait un renouvellement à CHAQUE passage (4 h).
-letsencrypt_cert_valid_days: "15"
+# Fréquence de renouvellement. PIÈGE de Kolla 2026.1 : malgré son nom, letsencrypt_cert_valid_days
+# n'est PAS le seuil de renouvellement ; le script du conteneur le transmet à lego en
+# « --cert.timeout » (délai d'obtention, en secondes). lego renouvelle donc avec son seuil par
+# défaut (renew --days 30) : avec des certificats de 30 jours, CHAQUE passage renouvelle.
+# On règle donc la fréquence : un passage par jour (au lieu de toutes les 4 h) → certificat
+# toujours à plus de 28 jours de l'échéance, une seule émission par jour et par VIP, nouvel essai
+# le lendemain en cas d'échec (la sonde ms-verif-openstack alerte à 10 jours). Écart à la
+# politique M06-E27 (« renouvelés à 15 jours ») consigné dans docs/cloud/securite.md.
+letsencrypt_cron_renew_schedule: "17 3 * * *"

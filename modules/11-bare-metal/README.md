@@ -6,7 +6,7 @@
 | **Niveau** | Secondaire |
 | **Profil de lab** | Socle + VLAN 60 PROV : `pxe01` (2111), `bm01-04` (2112-2115), `maas01` (2116), VM jetable `m11-build` (2117) ; iLO de `hp01` en lecture |
 | **Prérequis** | Module 06 (Kea, NetBox, step-ca) ; module 07 (passerelles, relais) ; module 09 (installateur automatique de Proxmox VE) |
-| **Durée indicative** | 60 à 75 heures |
+| **Durée indicative** | 35 à 45 heures (dont des attentes d'installation et de synchronisation d'images) |
 
 ## Contexte MédiSphère
 

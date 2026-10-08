@@ -44,6 +44,6 @@ check_ssh "zfs-local déclaré pour hv03 et actif sur hv03" hv03 \
 check_ssh "pbs01 : corosync-qnetd arrêté et désactivé" "$_M09D_PBS" \
   '! systemctl is-active --quiet corosync-qnetd && ! systemctl is-enabled --quiet corosync-qnetd 2>/dev/null'
 check_ssh "pbs01 : plus de port 5403 ouvert" "$_M09D_PBS" '! nft list ruleset | grep -q "dport 5403"'
-check_cmd "Matrice des flux (pare_feu.yml de gw01) : règle du QDevice retirée" \
-  bash -c 'f="$1/inventories/lab/host_vars/gw01/pare_feu.yml"; [ -s "$f" ] && ! grep -Eq "ports: *5403" "$f"' _ "$_M09D_ANSIBLE"
+check_cmd "Matrice des flux (group_vars/role_routeur/pare_feu.yml) : règle du QDevice retirée" \
+  bash -c '[ -s "$1" ] && ! grep -Eq "ports: *\[?5403" "$1"' _ "$_M09D_MATRICE"
 check_ssh "gw01 : plus de règle TCP 5403 chargée" gw01 '! sudo -n nft list ruleset | grep -q "dport 5403"'

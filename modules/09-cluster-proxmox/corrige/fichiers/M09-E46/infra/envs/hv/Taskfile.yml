@@ -1,4 +1,4 @@
-# infra/hv/Taskfile.yml — reconstruction chronométrée du cluster hv-par1 depuis le code (M09-E46).
+# infra/envs/hv/Taskfile.yml — reconstruction chronométrée du cluster hv-par1 depuis le code (M09-E46).
 # Projet plateforme/infra, dossier de l'état « hv ». Task 3.x (M02).
 #
 #   task reconstruire        # tout, dans l'ordre, avec un horodatage par étape dans reconstruction.log
@@ -62,17 +62,48 @@ tasks:
         vars: { TEXTE: "T1 VMs créées" }
 
   etape:installation:
-    desc: Attend la fin de l'installation automatique (SSH root par la clé de adm01)
+    desc: Attend la fin de l'installation automatique (port SSH ouvert), puis la confiance initiale
     cmds:
+      # Un nœud réinstallé a une NOUVELLE clé d'hôte, pas encore certifiée (ssh_ca_hote ne passe
+      # qu'avec hv.yml) : une connexion SSH « BatchMode » échouerait sur la vérification de clé.
+      # On attend donc le port 22, sans s'authentifier.
       - for: { var: NOEUDS }
         cmd: |
           for i in $(seq 1 90); do
-            ssh -o BatchMode=yes -o ConnectTimeout=5 root@{{.ITEM}}.par1.medisphere.internal pveversion >/dev/null 2>&1 && exit 0
+            timeout 5 bash -c 'exec 3<>/dev/tcp/{{.ITEM}}.par1.medisphere.internal/22' 2>/dev/null && exit 0
             sleep 20
           done
           echo "{{.ITEM}} : installation non terminée après 30 min" >&2; exit 1
+      - task: confiance
       - task: jalon
-        vars: { TEXTE: "T2 Proxmox VE installé sur les trois nœuds" }
+        vars: { TEXTE: "T2 Proxmox VE installé sur les trois nœuds, clés d'hôte vérifiées" }
+
+  confiance:
+    desc: Geste manuel assumé — confiance initiale dans les clés d'hôte des nœuds réinstallés
+    # Seul geste manuel de la reconstruction (consigné dans le journal). Sans webhook de fin
+    # d'installation (M11), l'empreinte se compare à celle lue sur la console de chaque nœud
+    # (qm terminal 209N sur pve01 : ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub).
+    # Une seule lecture des clés (fichiers .cles-*), affichée PUIS acceptée : pas de seconde lecture.
+    cmds:
+      - for: { var: NOEUDS }
+        cmd: |
+          ip="$(ssh -G {{.ITEM}} | awk '$1 == "hostname" { print $2 }')"
+          ssh-keyscan -t ed25519 "$ip" 2>/dev/null > "{{.ROOT_DIR}}/.cles-{{.ITEM}}"
+          printf '%s (%s) : ' "{{.ITEM}}" "$ip"; ssh-keygen -lf "{{.ROOT_DIR}}/.cles-{{.ITEM}}"
+      - task: confiance:accepter
+
+  confiance:accepter:
+    internal: true
+    prompt: "Les empreintes ci-dessus sont-elles celles lues sur la console de chaque nœud ?"
+    cmds:
+      - for: { var: NOEUDS }
+        cmd: |
+          ip="$(ssh -G {{.ITEM}} | awk '$1 == "hostname" { print $2 }')"
+          ssh-keygen -R "$ip" >/dev/null 2>&1 || true
+          cat "{{.ROOT_DIR}}/.cles-{{.ITEM}}" >> ~/.ssh/known_hosts
+          rm -f "{{.ROOT_DIR}}/.cles-{{.ITEM}}"
+      - task: jalon
+        vars: { TEXTE: "GESTE MANUEL empreintes SSH des nœuds comparées sur la console et acceptées" }
 
   ansible:
     internal: true
@@ -99,7 +130,7 @@ tasks:
         vars: { PB: "{{.PB_CEPH}}" }
       - |
         for i in $(seq 1 60); do
-          ssh root@hv01.par1.medisphere.internal ceph health | grep -qx HEALTH_OK && exit 0
+          ssh hv01 ceph health | grep -qx HEALTH_OK && exit 0
           sleep 20
         done
         echo "Ceph pas en HEALTH_OK après 20 min" >&2; exit 1

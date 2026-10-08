@@ -13,9 +13,10 @@ conntrackd_adresse_pair: ""
 conntrackd_port: 3780
 
 # Adresses dont le trafic PROPRE ne se synchronise pas (trafic de la passerelle elle-même) :
-# boucle locale et adresses propres des DEUX passerelles. Les VIP n'y sont PAS : la traduction
-# sortante vers la VIP WAN et les flux redirigés vers 10.10.70.200 sont exactement ce qu'on veut
-# synchroniser (voir le corrigé, point « à confirmer »).
+# boucle locale et adresses propres des DEUX passerelles. Le filtre ne compare que les extrémités
+# RÉELLES d'une entrée (source d'origine, source de la réponse) : une VIP qui n'est qu'une adresse
+# traduite (SNAT/DNAT sur la VIP WAN) n'écarte aucun flux transité. Les VIP n'y sont pas ici (choix,
+# sans enjeu) ; l'exemple officiel les y met pour ignorer le trafic local qui les vise.
 conntrackd_adresses_ignorees: []
 
 # Protocoles synchronisés.

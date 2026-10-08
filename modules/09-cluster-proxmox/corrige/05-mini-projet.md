@@ -4,7 +4,7 @@
 
 ### M09-E46 — Mini-projet : virtualisation MédiSphère v1
 
-Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, une procédure de reconstruction de référence, les mesures attendues, la **grille de revue** et la grille du nettoyage d'après-recette. Les fichiers de référence sont ceux des exercices du module (`corrige/fichiers/M09-EXX/`) ; nouveaux ici : [`infra/hv/Taskfile.yml`](fichiers/M09-E46/infra/hv/Taskfile.yml) (reconstruction chronométrée) et le modèle [`docs/virtualisation/hv-par1.md`](fichiers/M09-E46/medisphere/docs/virtualisation/hv-par1.md).
+Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, une procédure de reconstruction de référence, les mesures attendues, la **grille de revue** et la grille du nettoyage d'après-recette. Les fichiers de référence sont ceux des exercices du module (`corrige/fichiers/M09-EXX/`) ; nouveaux ici : [`infra/envs/hv/Taskfile.yml`](fichiers/M09-E46/infra/envs/hv/Taskfile.yml) (reconstruction chronométrée) et le modèle [`docs/virtualisation/hv-par1.md`](fichiers/M09-E46/medisphere/docs/virtualisation/hv-par1.md).
 
 **Points non testés en conditions réelles** : durée totale d'une reconstruction (estimée, voir ci-dessous). Le Taskfile appelle les playbooks des exercices (`hv.yml`, `hv-cluster.yml`, `hv-certificats.yml`) et quatre playbooks **à écrire pendant le mini-projet** pour ce que les exercices ont fait à la main (`hv-formation.yml`, `hv-ceph.yml`, `hv-securite.yml`, `hv-services.yml`) : c'est le cœur de l'étape 1.
 
@@ -18,13 +18,13 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
    root@hv01:~# pvesh get /cluster/options --output-format json
    root@hv01:~# pveum acl list ; pveum user list --full 1 ; ha-manager rules config ; pvesh get /cluster/sdn/zones
    admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/hv.yml --check --diff            # changed=0 attendu
-admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/hv-cluster.yml --check --diff
-   admin@adm01:~/src/infra/hv$ tofu plan                                                        # No changes attendu
+   admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/hv-cluster.yml --check --diff
+   admin@adm01:~/src/infra/envs/hv$ tofu plan                                                        # No changes attendu
    ```
    Écarts typiques à ce stade : une règle HA ou une ressource ajoutée à la main en E13/E24 ; l'identité de supervision créée avant le rôle ; un réglage SDN fait dans l'interface ; Ceph installé à la main en Squid en E10 (à décrire dans un playbook, directement en `tentacle`), cluster formé à la main en E04/E08 ; le jeton PBS ; la mise à jour de `/etc/hosts` ; une règle de pare-feu ajoutée pendant un diagnostic. Chacun devient une MR, ou une ligne « manuel assumé » dans `hv-par1.md` avec son runbook (la création des **jetons** — secret affiché une fois — est le cas typique d'un geste manuel assumé et documenté).
-2. **Outillage de la reconstruction** (2-4 h) : le [Taskfile](fichiers/M09-E46/infra/hv/Taskfile.yml) enchaîne les étapes dans l'ordre et horodate chacune dans `reconstruction.log`. Ordre et raisons :
+2. **Outillage de la reconstruction** (2-4 h) : le [Taskfile](fichiers/M09-E46/infra/envs/hv/Taskfile.yml) enchaîne les étapes dans l'ordre et horodate chacune dans `reconstruction.log`. Ordre et raisons :
    1. VMs (OpenTofu `hv`) : le plan **se relit** en MR ; dans le lab, `APPLY_LOCAL=1` est permis et noté.
-   2. Installation automatique (ISO préparée, fichier de réponse servi par `adm01`, M09-E03) : attente SSH par la clé de `adm01`.
+   2. Installation automatique (ISO préparée par nœud avec son fichier de réponse intégré, `--fetch-from iso`, M09-E03) : attente du port 22, puis **confiance initiale** dans les nouvelles clés d'hôte (empreintes lues une fois, comparées à la console de chaque nœud, puis ajoutées à `known_hosts`). C'est le seul geste manuel assumé de la reconstruction, consigné dans le journal : un nœud réinstallé présente une clé neuve, pas encore certifiée par `ssh_ca_hote`, et une connexion non interactive échouerait sur sa vérification. Il disparaîtra avec un *webhook* de fin d'installation (M11).
    3. Nœuds et cluster : `hv.yml` (rôle `pve_noeud` : dépôts, NTP, chien de garde, SSH, mémoire), `hv-formation.yml` (`pvecm create` sur `hv01`, `pvecm add` sur les autres, seulement si le nœud n'est pas déjà membre), `hv-cluster.yml` (rôle `pve_cluster` : VIP, options du datacenter, supervision). Les nœuds doivent être à la **même** version de paquets avant `pvecm add`.
    4. Ceph Tentacle (MON, MGR, OSD, pool `ceph-vm`, `osd_memory_target`) et attente de `HEALTH_OK`.
    5. Sécurité : `pve_pare_feu` **après** Ceph et la VIP (il les contrôle), puis certificats (`hv-certificats.yml`, la VIP doit exister).

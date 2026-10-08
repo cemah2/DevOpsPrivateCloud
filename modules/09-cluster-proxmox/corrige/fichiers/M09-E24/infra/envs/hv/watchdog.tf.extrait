@@ -1,4 +1,4 @@
-# infra/hv/ — EXTRAIT (M09-E24) : bloc ajouté à la ressource des nœuds (proxmox_virtual_environment_vm
+# infra/envs/hv/ — EXTRAIT (M09-E24) : bloc ajouté à la ressource des nœuds (proxmox_virtual_environment_vm
 # de l'état « hv », écrite en M09-E03/E08). Seul ce bloc change ; le reste de la ressource est
 # inchangé. Provider bpg/proxmox ~> 0.116.0 (argument « watchdog » : enabled, model, action).
 #

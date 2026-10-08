@@ -1,6 +1,6 @@
 ---
-# host_vars/gw01/pare_feu.yml — EXTRAIT : ajouts de M09-E05 (QDevice du cluster hv-par1).
-# Même matrice pour gw02 (M07-E24) : une seule MR, les deux passerelles appliquées.
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M09-E05 (QDevice du cluster hv-par1).
+# Matrice commune à gw01 et gw02 depuis M07-E24 : une seule MR, les deux passerelles appliquées.
 #
 # Constat de E05 : la règle « bastion (MGMT) vers tout le lab, PAR2 et LYO1 » (M00-E10, M07-E30) n'a PAS de
 # source. Depuis que des hyperviseurs vivent dans MGMT (10.10.10.51-53), ils joignent déjà tout

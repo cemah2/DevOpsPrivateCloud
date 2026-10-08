@@ -30,7 +30,9 @@ vrrp_script {{ s.nom }} {
 {% set noms_actifs = instances_actives | map(attribute='nom') | list %}
 {% for g in keepalived_groupes_synchro %}
 {% set membres = noms_actifs if (g.toutes_les_instances | default(false)) else (g.instances | default([]) | select('in', noms_actifs) | list) %}
-{% if membres | length > 0 %}
+{# Un groupe n'est rendu que s'il est actif ET a au moins deux membres : « keepalived -t » refuse
+   (code 5) un groupe d'une seule instance (« Sync group … has only 1 virtual router(s) »). #}
+{% if (g.actif | default(true) | bool) and membres | length > 1 %}
 
 vrrp_sync_group {{ g.nom }} {
     group {

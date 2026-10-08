@@ -49,6 +49,15 @@ keepalived_instances: []
 #     interfaces_suivies: [ens18, ens19]   # track_interface du groupe (M07-E25)
 #     notification: /usr/local/sbin/bordure-transition   # script « notify » du groupe (M07-E25)
 #     utilisateur: root                    # compte du script du groupe (défaut : script_user)
+#     actif: true                          # (M07-E25) false = groupe non rendu (voir ci-dessous)
+# ⚠️ Au rechargement, keepalived ne remet un groupe en MASTER que si TOUS ses membres l'étaient
+# avant (vrrp_complete_init, keepalived 2.2/2.3). Une instance NOUVELLE (état initial BACKUP)
+# ajoutée à un groupe MASTER fait donc repasser TOUT le groupe en BACKUP : toutes les VIP de l'hôte
+# tombent, et la passerelle de secours peut les prendre. On n'ajoute jamais une instance à un groupe
+# déjà maître : on désactive le groupe (actif: false, les instances gardent leur état), on ajoute
+# l'instance, puis on réactive le groupe quand toutes ses instances sont dans le même état
+# (playbooks/groupe-bordure.yml). Un groupe d'une seule instance n'est jamais rendu (keepalived -t
+# le refuse).
 keepalived_groupes_synchro: []
 
 # (M07-E25) false : le rendu est posé mais le rechargement est laissé à l'appelant

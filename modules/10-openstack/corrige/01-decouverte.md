@@ -13,10 +13,10 @@ Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argum
 **Points non testés en conditions réelles**, à vérifier sur ta version et à signaler s'ils diffèrent :
 - un déploiement complet de Kolla-Ansible 22.2.0 sur Debian 13 (pas de lab OpenStack dans l'environnement de rédaction) : durées, messages d'erreur et sorties de commandes sont donnés à titre d'**exemple** ;
 - la prise en compte de l'`ansible.cfg` du projet (identité Vault) par `kolla-ansible` lancé depuis `~/src/openstack` ; à défaut, ajoute `--vault-id critique@outils/vault-pass-client.sh` (ou exporte `ANSIBLE_VAULT_IDENTITY_LIST`) ;
-- le déchiffrement par Kolla d'un `haproxy.pem` chiffré par Vault (il repose sur le module `copy`, qui déchiffre les sources Vault) : si ta version copie le certificat autrement, garde le fichier chiffré dans le dépôt et déchiffre-le dans un dossier temporaire au moment du `deploy` ;
+- le déchiffrement par Kolla d'un `haproxy.pem` chiffré par Vault : relu dans le code de 22.2.0 (rôle `loadbalancer`, tâche `copy-certs.yml` : `ansible.builtin.copy`, qui déchiffre les sources Vault ; le `precheck` ne fait qu'un `stat`), mais pas rejoué ; si ta version copie le certificat autrement, garde le fichier chiffré dans le dépôt et déchiffre-le dans un dossier temporaire au moment du `deploy` ;
 - le nom initial de la carte sans adresse avant le rôle (`ens21` attendu sur une machine i440fx ; le rôle la renomme de toute façon par sa MAC) ;
 - la sortie exacte de `openstack network agent list` et `security group show` en JSON selon la version de la CLI 10.x ;
-- l'étiquette `--tags loadbalancer` pour ne reconfigurer qu'HAProxy après un renouvellement de certificat.
+- l'étiquette `--tags loadbalancer` pour ne reconfigurer qu'HAProxy après un renouvellement de certificat (la copie du certificat est bien dans le rôle `loadbalancer` en 22.2.0 ; le redémarrage effectif d'HAProxy reste à constater).
 
 ---
 
@@ -277,7 +277,7 @@ Des serveurs physiques, pas des VMs : deux cartes de 25 Gbit/s agrégées en LAC
    globals.yml  passwords.yml
    all-in-one  multinode
    ```
-   L'inventaire est le fichier le plus dépendant de la version : en 2026.1, le groupe `common` devient `kolla_toolbox`, `kolla_logs` apparaît, Cinder reçoit des groupes LVM. Un inventaire recopié d'un tutoriel de 2024 déploie sans erreur… et oublie des services. D'où [`outils/inventaire.sh`](fichiers/M10-E03/openstack/outils/inventaire.sh) : il assemble **nos** groupes principaux ([`inventaire/groupes-principaux.ini`](fichiers/M10-E03/openstack/inventaire/groupes-principaux.ini)) et les groupes de services de l'exemple **de la version installée** ; la CI vérifie que `inventaire/multinode` est à jour (`--verifier`).
+   L'inventaire est le fichier le plus dépendant de la version : en 2026.1, le groupe `kolla-toolbox` devient `kolla_toolbox`, un groupe `kolla_logs` apparaît (tous deux enfants de `common`), et `cinder-volume`/`cinder-backup` ne suivent plus `storage` mais un nouveau groupe `cinder` (enfant de `control`), `storage` ne servant plus qu'aux variantes LVM. Un inventaire recopié d'un tutoriel de 2024 déploie sans erreur… et oublie des services. D'où [`outils/inventaire.sh`](fichiers/M10-E03/openstack/outils/inventaire.sh) : il assemble **nos** groupes principaux ([`inventaire/groupes-principaux.ini`](fichiers/M10-E03/openstack/inventaire/groupes-principaux.ini)) et les groupes de services de l'exemple **de la version installée** ; la CI vérifie que `inventaire/multinode` est à jour (`--verifier`).
 5. **Inventaire et `globals.yml`.** [`globals.yml`](fichiers/M10-E03/openstack/etc/kolla/globals.yml) ne garde que les écarts au défaut, chacun commenté ; [`inventaire/host_vars/osctl01.yml`](fichiers/M10-E03/openstack/inventaire/host_vars/osctl01.yml) porte `neutron_external_interface: "ens21"` ; [`inventaire/group_vars/noeuds_openstack.yml`](fichiers/M10-E03/openstack/inventaire/group_vars/noeuds_openstack.yml) les paramètres de connexion (`ansible_user: admin`, `ansible_become: true`). La règle de précédence : Kolla passe `globals.yml` en `-e @globals.yml`, c'est-à-dire en **variables supplémentaires**, la priorité la plus haute d'Ansible ; une valeur qui y figure s'impose à **tous** les hôtes, aucune variable d'hôte ne peut la corriger. Une valeur propre à un hôte va donc dans l'inventaire, et elle **ne doit pas** figurer aussi dans `globals.yml`.
 6. **Mots de passe.**
    ```
@@ -325,7 +325,7 @@ Des serveurs physiques, pas des VMs : deux cartes de 25 Gbit/s agrégées en LAC
 - `uv add kolla-ansible` sans version : la dernière publiée sur PyPI, qui sera un jour une autre série (2026.2), avec un autre ansible-core.
 - Lancer `kolla-ansible` depuis un autre dossier que la racine du dépôt : l'`ansible.cfg` du projet n'est pas lu (identité Vault, collections) — erreurs de déchiffrement ou de collections introuvables.
 - Recopier un inventaire d'une autre version (groupes renommés : services absents sans erreur visible au déploiement).
-- Mettre `neutron_external_interface` dans `globals.yml` « parce que c'est plus simple » : les `prechecks` échouent sur les calculs (l'interface `ens21` n'y existe pas) ou, pire, Kolla l'ajoute à `br-ex` partout où elle existe.
+- Mettre `neutron_external_interface` dans `globals.yml` « parce que c'est plus simple » : aujourd'hui, ça passe (Kolla ne crée `br-ex` que sur le groupe `network`, et sur les calculs seulement si `computes_need_external_bridge` : IP flottantes distribuées, réseaux fournisseurs, DVR) ; mais la valeur s'impose à **tous** les hôtes avec la priorité la plus haute : le jour où un calcul a besoin du pont avec une autre carte, aucune variable d'hôte ne pourra la corriger, et Kolla brancherait `ens21`… ou ce qui porte ce nom.
 - `ansible-vault encrypt` sans `--encrypt-vault-id critique` : le fichier est chiffré sous l'identité par défaut, et `vault_id_match = True` refuse ensuite de le déchiffrer avec la bonne clé.
 - Supprimer `etc/kolla/passwords.yml` ou le régénérer par erreur sur un cloud qui tourne : voir E09, question 9.
 
@@ -374,7 +374,7 @@ Le dépôt `plateforme/openstack` est protégé comme `plateforme/ansible` (deux
 
 *B. Le déploiement.* La commande type, depuis `~/src/openstack` : `uv run kolla-ansible <action> -i inventaire/multinode --configdir etc/kolla`.
 
-4. **`bootstrap-servers`** (rôle `baremetal` : `.venv/share/kolla-ansible/ansible/roles/baremetal/`) : installe Docker CE depuis le dépôt de Docker et le SDK Python pour Ansible, crée le compte `kolla`, complète `/etc/hosts` avec les adresses `api_interface` des nœuds (`customize_etc_hosts`), règle quelques paramètres système et désactive le profil AppArmor de libvirt de l'hôte.
+4. **`bootstrap-servers`** (rôle `openstack.kolla.baremetal` de la collection installée par `install-deps` : `collections/ansible_collections/openstack/kolla/roles/baremetal/`, appelé par `.venv/share/kolla-ansible/ansible/kolla-host.yml`) : installe Docker CE depuis le dépôt de Docker et le SDK Python pour Ansible, crée le compte `kolla`, complète `/etc/hosts` avec les adresses `api_interface` des nœuds (`customize_etc_hosts`), règle quelques paramètres système et désactive le profil AppArmor de libvirt de l'hôte.
    ```
    admin@adm01:~$ ssh oscmp01 'sudo docker version --format "{{.Server.Version}}"; grep -E "osctl01|oscmp0" /etc/hosts'
    28.x
@@ -384,9 +384,9 @@ Le dépôt `plateforme/openstack` est protégé comme `plateforme/ansible` (deux
    ```
 5. **`prechecks`**, **`pull`**, **`deploy`** : à titre d'ordre de grandeur sur `pve01` (à mesurer chez toi) : `prechecks` 2-4 min, `pull` 10-25 min selon le débit (plusieurs Go par nœud : `ssh osctl01 sudo docker system df`), `deploy` 25-45 min. Échecs typiques rencontrés à ce stade et leur correction **dans le dépôt** :
    - `prechecks` : « Hostname has to resolve uniquely to the IP address of api_interface » → `/etc/hosts` contenait encore `127.0.1.1 osctl01` (cloud-init) : corriger la gestion de `/etc/hosts` (option `manage_etc_hosts: false` de cloud-init dans l'image, ou tâche du rôle `noeud_openstack`), relancer `bootstrap-servers` puis `prechecks` ;
-   - `prechecks` : interface externe introuvable sur un calcul → `neutron_external_interface` placée dans `globals.yml` ;
+   - `prechecks` : « Checking if kolla_internal_vip_address and kolla_external_vip_address are not pingable from any node » en échec → la VIP posée à la main pour le défi ACME n'a pas été retirée (`ip addr del` sur `osctl01`) ;
    - `deploy` : expiration au téléchargement d'une image → relancer `pull`, puis `deploy` (Kolla est idempotent).
-6. **`post-deploy`** écrit dans le **dossier de configuration** (`etc/kolla/`, donc dans le dépôt) `admin-openrc.sh` et `clouds.yaml`, avec le mot de passe administrateur **en clair** et l'URL **interne** (`http://openstack-int.par1.medisphere.internal:5000`, sans TLS au palier 1). Le `.gitignore` les exclut ; on ne s'en sert pas sur `adm01`, qui passe par la VIP externe en HTTPS.
+6. **`post-deploy`** écrit dans le **dossier de configuration** (`etc/kolla/`, donc dans le dépôt) `admin-openrc.sh` (URL **interne**, `http://openstack-int.par1.medisphere.internal:5000`, sans TLS au palier 1), `public-openrc.sh` et `clouds.yaml` (clouds `kolla-admin`, sur l'URL publique mais **sans** `cacert`, et `kolla-admin-internal`), tous avec le mot de passe administrateur **en clair**. Le `.gitignore` les exclut ; on ne s'en sert pas sur `adm01`, qui passe par la VIP externe en HTTPS.
 7. **Clients** : [`clouds.yaml`](fichiers/M10-E04/adm01/clouds.yaml) (cloud `medisphere-admin`) et `secure.yaml`, produit sans fichier intermédiaire ni affichage :
    ```
    admin@adm01:~/src/openstack$ (umask 077; uv run ansible-vault view etc/kolla/passwords.yml \
@@ -411,6 +411,7 @@ Le dépôt `plateforme/openstack` est protégé comme `plateforme/ansible` (deux
    | …  | nova-compute   | oscmp02 | nova     | enabled | up    |
    admin@adm01:~$ openstack network agent list -c "Agent Type" -c Host -c Alive
    | OVN Controller Gateway agent | osctl01 | :-) |
+   | OVN Metadata agent           | osctl01 | :-) |
    | OVN Controller agent         | oscmp01 | :-) |
    | OVN Metadata agent           | oscmp01 | :-) |
    | OVN Controller agent         | oscmp02 | :-) |
@@ -419,7 +420,7 @@ Le dépôt `plateforme/openstack` est protégé comme `plateforme/ansible` (deux
    admin@adm01:~$ ssh osctl01 'ip -br addr show ens18; sudo grep -E "virtual_router_id|virtual_ipaddress" -A3 /etc/kolla/keepalived/keepalived.conf'
    ens18  UP  10.10.50.51/24 10.10.50.200/32 10.10.50.201/32 …
    ```
-   Points d'accès : `public` en `https://openstack.par1.medisphere.internal:<port>`, `internal` en `http://openstack-int.par1.medisphere.internal:<port>`. Avec OVN, il n'y a ni agent L3 ni agent DHCP : le routage, la traduction d'adresses et le DHCP sont des **flux logiques** compilés par `ovn-northd` et appliqués par `ovn-controller` sur chaque nœud ; `osctl01` est l'unique **passerelle** (« Gateway agent »), les calculs ont un contrôleur et un agent de métadonnées.
+   Points d'accès : `public` en `https://openstack.par1.medisphere.internal:<port>`, `internal` en `http://openstack-int.par1.medisphere.internal:<port>`. Avec OVN, il n'y a ni agent L3 ni agent DHCP : le routage, la traduction d'adresses et le DHCP sont des **flux logiques** compilés par `ovn-northd` et appliqués par `ovn-controller` sur chaque nœud ; `osctl01` est l'unique **passerelle** (« Gateway agent »), les calculs ont un contrôleur et un agent de métadonnées (Kolla place aussi un agent de métadonnées sur le nœud `network` : groupe `neutron-ovn-metadata-agent` = `compute` + `network`).
 9. Compte rendu : modèle [`CHG-1104-deploiement-initial.md`](fichiers/M10-E04/medisphere/docs/cloud/changements/CHG-1104-deploiement-initial.md).
 
 *Renouveler avant l'échéance (jusqu'à M10-E27).* Le cloud tourne, la VIP est portée par keepalived : pas de défi ACME, on renouvelle avec le certificat en cours.
@@ -449,7 +450,7 @@ Le dossier temporaire est en mémoire (`/dev/shm`, 700) et effacé à la sortie 
 
 - Oublier `--configdir etc/kolla` : Kolla cherche `/etc/kolla/globals.yml` sur `adm01`, ne le trouve pas, ou pire en trouve un vieux.
 - `haproxy.pem` dans le mauvais ordre (clé avant le certificat) ou sans l'intermédiaire : HAProxy démarre, mais les clients qui ne connaissent que la racine refusent la chaîne (« unable to get local issuer certificate »).
-- La VIP posée à la main oubliée sur `ens18` : keepalived la croit déjà présente, `prechecks` signale l'adresse comme utilisée (« VIP already in use »), ou deux machines la portent. Le script la retire même en cas d'erreur (`trap`).
+- La VIP posée à la main oubliée sur `ens18` : keepalived la croit déjà présente, `prechecks` échoue (« … kolla_internal_vip_address and kolla_external_vip_address are not pingable from any node »), ou deux machines la portent. Le script la retire même en cas d'erreur (`trap`).
 - Lancer `deploy` avant que le DNS de `openstack-int` ne résolve depuis les nœuds : les services reçoivent dans leur configuration une URL interne qu'ils ne savent pas joindre.
 - Utiliser le `clouds.yaml` de `post-deploy` tel quel depuis `adm01` : URL interne, sans TLS, mot de passe en clair.
 - Interpréter `:-)`/`XXX` de `network agent list` sans attendre : un agent met jusqu'à une minute à se déclarer après un redémarrage.
@@ -478,10 +479,11 @@ Trois contrôleurs (E24), une VIP externe publiée derrière les répartiteurs `
    admin  member  reader  service  …
    admin@adm01:~$ openstack implied role list
    | Prior Role | Implied Role |
-   | admin      | member       |
+   | admin      | manager      |
+   | manager    | member       |
    | member     | reader       |
    ```
-   Le domaine `Default` contient l'administrateur et les **comptes de service** (un par service : Nova s'authentifie auprès de Neutron avec le compte `nova`, etc.) ; Heat a aussi son propre domaine (`heat_user_domain`) pour les utilisateurs qu'il crée dans les piles. Keystone a créé à l'amorçage `admin`, `member`, `reader` (et, selon la version, `service` et `manager`) ; `admin` implique `member`, qui implique `reader` : un `admin` a donc tous les droits d'un `member`.
+   Le domaine `Default` contient l'administrateur et les **comptes de service** (un par service : Nova s'authentifie auprès de Neutron avec le compte `nova`, etc.) ; Heat a aussi son propre domaine (`heat_user_domain`) pour les utilisateurs qu'il crée dans les piles. Keystone a créé à l'amorçage `admin`, `manager`, `member`, `reader` et `service` ; `admin` implique `manager`, qui implique `member`, qui implique `reader` (`service` est hors de cette chaîne) : un `admin` a donc tous les droits d'un `member`.
 2. Domaine jetable :
    ```
    admin@adm01:~$ openstack domain create essai-e05
@@ -611,7 +613,7 @@ Comptes humains fédérés (Keycloak, MFA) ; comptes locaux limités aux comptes
    admin@adm01:~/m10/e06$ sha256sum --check --ignore-missing Rocky-10-GenericCloud-Base.latest.x86_64.qcow2.CHECKSUM
    Rocky-10-GenericCloud-Base.latest.x86_64.qcow2: OK
    ```
-   La somme prouve que le fichier n'a pas été **altéré en route** par rapport au fichier de sommes… téléchargé du même serveur. Pour prouver qu'il vient bien de Debian, il faut que le fichier de sommes soit **signé** et vérifier la signature avec la clé publique de l'équipe qui publie les images (récupérée par un autre canal, par exemple le trousseau du paquet `debian-keyring`). Regarde dans le dossier s'il existe un fichier de signature à côté de `SHA512SUMS` (à confirmer pour la série trixie) ; Rocky publie une signature GPG de ses fichiers `CHECKSUM` (`.CHECKSUM.sig` ou équivalent, à confirmer) avec la clé de signature de Rocky.
+   La somme prouve que le fichier n'a pas été **altéré en route** par rapport au fichier de sommes… téléchargé du même serveur. Pour prouver qu'il vient bien de Debian, il faut que le fichier de sommes soit **signé** et vérifier la signature avec la clé publique de l'équipe qui publie les images (récupérée par un autre canal, par exemple le trousseau du paquet `debian-keyring`). Dans `trixie/latest/`, il n'y a **pas** de fichier de signature à côté de `SHA512SUMS` (constaté en octobre 2026) : la confiance repose sur HTTPS et sur `cloud.debian.org`, c'est un maillon à noter. Rocky publie une signature GPG de chaque fichier de sommes (`….qcow2.CHECKSUM.asc`), à vérifier avec la clé de signature de Rocky Linux 10 (`gpg --verify`) : c'est elle qui prouve l'origine. Le fichier `CHECKSUM` de Rocky est au format BSD (`SHA256 (fichier) = …`), que `sha256sum --check` lit aussi.
 2. Inspection :
    ```
    admin@adm01:~/m10/e06$ qemu-img info debian-13-genericcloud-amd64.qcow2
@@ -729,7 +731,7 @@ Un catalogue d'images **maison** reconstruit chaque mois (correctifs), signé (C
    admin@adm01:~$ openstack console log show essai01 | grep -E 'ci-info: \| +ens|Cloud-init v\. .* finished|ssh-ed25519'
    ```
    Le disque est un fichier qcow2 dont le **fichier de base** est l'image (cache `_base` du calcul) : copie-sur-écriture locale. Le journal de console montre l'adresse reçue par DHCP (172.16.10.x), les empreintes des clés d'hôte, la clé `cle-adm01` installée pour `debian` (preuve que le service de métadonnées a répondu), et « Cloud-init v. 25.1.x finished ».
-6. Cycle de vie : `openstack server stop essai01` → Nova `SHUTOFF`, libvirt `shut off` ; `start` → `ACTIVE`/`running` ; `reboot` (doux, par ACPI) puis `reboot --hard` (coupure). `openstack server console url show essai01` donne une URL `https://openstack.par1.medisphere.internal:6080/vnc_lite.html?…` (ou `vnc_auto`) : c'est `nova-novncproxy`, publié par HAProxy sur la VIP **externe** ; le jeton de l'URL est à usage court.
+6. Cycle de vie : `openstack server stop essai01` → Nova `SHUTOFF`, libvirt `shut off` ; `start` → `ACTIVE`/`running` ; `reboot` (doux, par ACPI) puis `reboot --hard` (coupure). `openstack console url show essai01` donne une URL `https://openstack.par1.medisphere.internal:6080/vnc_lite.html?…` (ou `vnc_auto`) : c'est `nova-novncproxy`, publié par HAProxy sur la VIP **externe** ; le jeton de l'URL est à usage court.
 
 **Explications**
 

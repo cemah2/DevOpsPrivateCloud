@@ -49,6 +49,13 @@ admin@gw02:~$ wg show all latest-handshakes             # wg0 et wg2 : poignée 
 admin@gw02:~$ sudo journalctl -t bordure --since -5min  # transition MASTER, aucune ligne « ERREUR »
 ```
 
+Sur l'**ancien** maître, les tunnels doivent avoir disparu (le script de transition les démonte quand keepalived s'arrête, état `STOP`) ; s'il en reste un, l'arrêter tout de suite, sinon deux passerelles portent la même identité WireGuard et le tunnel bat :
+
+```
+admin@gw01:~$ cat /run/bordure/etat ; ip -br link | grep wg          # STOP ; aucune ligne
+admin@gw01:~$ sudo systemctl stop wg-quick@wg0 wg-quick@wg1 wg-quick@wg2   # seulement s'il en reste
+```
+
 Puis `ms-verif-reseau` depuis `adm01` : seul le contrôle de redondance doit être `KO` (keepalived arrêté sur `gw01`).
 
 Faire la maintenance prévue sur `gw01` (mise à jour, redémarrage). Au redémarrage, keepalived démarre en `BACKUP` et **ne reprend pas** la main (`nopreempt`) : c'est voulu.
@@ -72,6 +79,7 @@ Contrôle final : étape 1 complète, `ms-verif-reseau` entièrement `OK`.
 | VIP sur **les deux** passerelles (`ip -br address`), `etat` MASTER des deux côtés | cerveau divisé : les annonces VRRP ne passent plus (filtrage, lien, VRID différent) | 1) sur la passerelle qui ne doit **pas** être maître : `systemctl stop keepalived` (les VIP y disparaissent, les clients suivent les ARP gratuits de l'autre) ; 2) diagnostiquer avec `tcpdump -ni ens19.99 ip proto 112` des deux côtés, `nft list ruleset | grep 'l4proto 112'` ; 3) ne relancer keepalived qu'une fois les annonces vues dans les deux sens |
 | VIP sur **aucune** passerelle | les deux en `FAULT` (lien suivi tombé) ou keepalived arrêté des deux côtés | `journalctl -u keepalived` des deux côtés ; si un lien est en cause (`ip link`), rétablir le lien ; en dernier recours, démarrer keepalived sur la passerelle saine |
 | Bascule faite mais tunnels absents | script de transition en échec | `journalctl -t bordure` ; `systemctl start wg-quick@wg0` à la main sur le maître ; ouvrir un incident |
+| Tunnels `wg*` présents sur les **deux** passerelles | script de transition non exécuté sur l'ancien maître (keepalived tué brutalement, `kill -9`) | `systemctl stop wg-quick@wg0 wg-quick@wg1 wg-quick@wg2` sur la passerelle qui ne porte pas les VIP ; si elle porte encore des VIP sans keepalived actif, `systemctl start keepalived` (au démarrage, keepalived retire les VIP qu'il gère et repart en `BACKUP`) |
 | Connexions coupées malgré la bascule planifiée | `conntrackd` ne synchronisait pas | `conntrackd -s` des deux côtés ; règle UDP 3780 de la matrice ; noter l'incident |
 | `adm01` ne joint plus `pve01` | `pve01` route encore par une adresse propre | `ip route get 10.10.10.10` sur `pve01` : doit passer par `<IP-GW-WAN-VIP>` |
 

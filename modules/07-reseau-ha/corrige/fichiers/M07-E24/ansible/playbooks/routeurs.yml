@@ -10,9 +10,12 @@
   order: reverse_sorted   # gw02 puis gw01
   any_errors_fatal: true
   roles:
+    # routeur_reseau EN PREMIER : au premier passage, gw02 n'a que son adresse WAN et ne joint ni les
+    # résolveurs (10.10.20.10/16) ni le dépôt du lab ; ce rôle n'a besoin ni de l'un ni de l'autre
+    # (paquets de l'image dorée) et pose les sous-interfaces dont base a besoin.
+    - role: routeur_reseau
     - role: base
     - role: ssh_durci
-    - role: routeur_reseau
     - role: pare_feu
     - role: certificats_acme
     - role: chrony_serveur

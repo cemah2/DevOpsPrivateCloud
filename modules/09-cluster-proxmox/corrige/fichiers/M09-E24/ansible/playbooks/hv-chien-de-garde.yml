@@ -2,10 +2,11 @@
 # playbooks/hv-chien-de-garde.yml — passage des nœuds de hv-par1 au chien de garde émulé (M09-E24).
 #
 # Préalable : le bloc « watchdog » est déjà appliqué aux VMs 2091-2093 par OpenTofu (état hv).
-# Pour chaque nœud, un à la fois : contrôles → mode maintenance (les ressources HA partent) →
-# réglage de watchdog-mux (rôle pve_noeud) → ARRÊT COMPLET de la VM (pour que QEMU recrée ses
-# périphériques) → démarrage par l'API de pve01 → retour dans le cluster → contrôle du module
-# chargé → fin de maintenance (les ressources reviennent selon leurs règles).
+# Pour chaque nœud, un à la fois : contrôles (dont le bloc watchdog dans la configuration de la VM
+# sur pve01) → mode maintenance (les ressources HA partent) → réglage de watchdog-mux (rôle
+# pve_noeud) → noout → ARRÊT COMPLET de la VM (pour que QEMU recrée ses périphériques) → démarrage
+# par l'API de pve01 → retour dans le cluster → contrôle du module chargé → PG active+clean, retrait
+# de noout, HEALTH_OK → fin de maintenance (les ressources reviennent selon leurs règles).
 #
 #   set -a; . ~/.config/workbook/pve-ansible.env; set +a     # accès à l'API de pve01 (M04)
 #   uv run ansible-playbook playbooks/hv-chien-de-garde.yml --limit hv02     # un nœud pour commencer
@@ -71,6 +72,17 @@
              | map(attribute='vmid') | map('string') | map('regex_replace', '^', 'vm:')
              | reject('in', hv_sids) | list }}
 
+    - name: Contrôle | la VM du nœud a déjà le chien de garde i6300esb dans sa configuration (OpenTofu)
+      community.proxmox.proxmox_vm_info:
+        node: "{{ pve01_noeud }}"
+        vmid: "{{ hv_vmid[inventory_hostname] }}"
+        config: current
+      delegate_to: localhost
+      register: hv_vm_conf
+      failed_when: >-
+        hv_vm_conf.proxmox_vms | length != 1
+        or 'i6300esb' not in (hv_vm_conf.proxmox_vms[0].config.watchdog | default(''))
+
     - name: Maintenance | activer pour {{ inventory_hostname }}
       ansible.builtin.command: ha-manager crm-command node-maintenance enable {{ inventory_hostname }}
       changed_when: true
@@ -90,6 +102,14 @@
       ansible.builtin.include_role:
         name: pve_noeud
         tasks_from: chien_de_garde
+      vars:
+        # La carte n'apparaîtra dans le nœud qu'après l'arrêt complet ci-dessous : sa présence dans la
+        # configuration de la VM a été vérifiée sur pve01 (tâche « Contrôle » plus haut).
+        pve_noeud_chien_de_garde_verifier_pci: false
+
+    - name: Ceph | drapeau noout pendant l'arrêt du nœud (ses OSD ne doivent pas sortir)
+      ansible.builtin.command: ceph osd set noout
+      changed_when: true
 
     - name: "Arrêt | éteindre le nœud (la VM s'arrête : QEMU recréera ses périphériques)"
       community.general.shutdown:
@@ -138,12 +158,27 @@
         executable: /bin/bash
       changed_when: false
 
-    - name: Retour | Ceph revenu à HEALTH_OK (OSD du nœud remontés)
+    - name: Retour | OSD du nœud remontés, tous les PG active+clean (seul noout toléré)
+      ansible.builtin.command: ceph status --format json
+      register: hv_ceph_pg
+      changed_when: false
+      until: >-
+        (hv_ceph_pg.stdout | from_json).osdmap.num_up_osds == (hv_ceph_pg.stdout | from_json).osdmap.num_osds
+        and ((hv_ceph_pg.stdout | from_json).pgmap.pgs_by_state | default([])
+             | rejectattr('state_name', 'equalto', 'active+clean') | list | length) == 0
+      retries: 60
+      delay: 10
+
+    - name: Ceph | retirer noout
+      ansible.builtin.command: ceph osd unset noout
+      changed_when: true
+
+    - name: Retour | Ceph revenu à HEALTH_OK
       ansible.builtin.command: ceph health --format json
       register: hv_ceph_apres
       changed_when: false
       until: (hv_ceph_apres.stdout | from_json).status == 'HEALTH_OK'
-      retries: 60
+      retries: 30
       delay: 10
 
     - name: Maintenance | désactiver pour {{ inventory_hostname }}

@@ -66,6 +66,9 @@ popularity-contest popularity-contest/participate boolean false
 ### Chargeur d'amorçage
 d-i grub-installer/only_debian boolean true
 d-i grub-installer/bootdev string default
+# UEFI : copie de secours \EFI\BOOT\BOOTX64.EFI (E04), trouvée par le micrologiciel quand iPXE
+# rend la main (« exit ») même si l'entrée NVRAM « debian » manque ou n'est pas dans l'ordre.
+d-i grub-installer/force-efi-extra-removable boolean true
 
 ### Fin : racine de la PKI (remise par iPXE, empreinte vérifiée : la commande échoue et
 ### l'installation s'arrête si elle diffère), clé SSH PUBLIQUE d'adm01, sudo sans mot de passe pour

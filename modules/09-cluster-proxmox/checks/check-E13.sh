@@ -17,9 +17,10 @@ _m09o_g="$(_m09o_pvesh /cluster/ha/rules)"
 _m09o_res="$(_m09o_ressources)"
 
 for _m09o_id in 101 102 103; do
-  # max_restart / max_relocate : 1 explicite, ou absents (= valeur par défaut 1, ha-manager(1)).
+  # state, max_restart, max_relocate : explicites, ou absents (= valeurs par défaut started, 1, 1,
+  # ha-manager(1)).
   check_cmd "vm:$_m09o_id : ressource HA, état demandé started, max_restart 1, max_relocate 1" _m09o_json "$_m09o_r" \
-    'map(select(.sid == $s))[0] | . != null and .state == "started"
+    'map(select(.sid == $s))[0] | . != null and ((.state // "started") == "started")
        and ((.max_restart // 1) == 1) and ((.max_relocate // 1) == 1)' --arg s "vm:$_m09o_id"
   check_cmd "vm:$_m09o_id : started selon le gestionnaire HA" _m09o_json "$_m09o_e" \
     'map(select(.type == "service" and .sid == $s and .state == "started")) | length == 1' --arg s "vm:$_m09o_id"
@@ -32,7 +33,7 @@ check_cmd "aucune ressource HA en état error" _m09o_json "$_m09o_e" 'map(select
 check_cmd "règle app01-preferences : affinité de nœud sur vm:101, non stricte, active" _m09o_json "$_m09o_g" \
   'map(select(.rule == "app01-preferences"))[0]
    | . != null and .type == "node-affinity" and (.resources | test("(^|,)vm:101(,|$)"))
-     and ((.strict // 0) | tostring | test("^(0|false)$")) and ((.disable // 0) | tostring | test("^(0|false)$"))'
+     and ((.strict // 0) | tostring | test("^(0|false)$")) and ((.disable // 0) | tostring | test("^(0|false)$")) and (.errors == null)'
 check_cmd "règle app01-preferences : priorités hv01 > hv02 > hv03" _m09o_json "$_m09o_g" \
   'map(select(.rule == "app01-preferences"))[0].nodes | split(",")
    | map(split(":") | {(.[0]): ((.[1] // "0") | tonumber)}) | add
@@ -41,7 +42,7 @@ check_cmd "règle frontaux-separes : affinité de ressources négative sur vm:10
   'map(select(.rule == "frontaux-separes"))[0]
    | . != null and .type == "resource-affinity" and .affinity == "negative"
      and (.resources | test("(^|,)vm:102(,|$)")) and (.resources | test("(^|,)vm:103(,|$)"))
-     and ((.disable // 0) | tostring | test("^(0|false)$"))'
+     and ((.disable // 0) | tostring | test("^(0|false)$")) and (.errors == null)'
 
 check_cmd "app01 (101) tourne sur hv01" _m09o_json "$_m09o_res" \
   'map(select(.vmid == 101))[0] | .node == "hv01" and .status == "running"'

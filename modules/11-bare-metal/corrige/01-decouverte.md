@@ -100,7 +100,7 @@ Fichiers : [`envs/provisioning/`](fichiers/M11-E02/infra/envs/provisioning/) (`v
    … ens19.20 In  IP 10.10.20.10.67 > 10.10.60.2.67: BOOTP/DHCP, Reply … Your-IP 10.10.60.1xx Server-IP 10.10.60.10 …
    root@dns01:~# journalctl -u isc-kea-dhcp4-server --since -5min | grep -E 'DHCP4_(PACKET_RECEIVED|LEASE_ADVERT|SUBNET_SELECTED)' | tail
    ```
-   (Libellés exacts des messages selon la version.) Aucun bail : `DISCOVER`/`OFFER` ne réserve rien ; un bail n'existe qu'après `REQUEST`/`ACK`. Kea garde seulement l'adresse « proposée » quelques secondes. `nmap` utilise une MAC aléatoire : rien ne pollue la base de baux.
+   (Libellés exacts des messages selon la version.) Aucun bail : `DISCOVER`/`OFFER` ne réserve rien ; un bail n'existe qu'après `REQUEST`/`ACK`. Kea garde seulement l'adresse « proposée » quelques secondes. `nmap` utilise par défaut une MAC fixe (`DE:AD:C0:DE:CA:FE`, argument `broadcast-dhcp-discover.mac`) justement pour ne pas épuiser la plage : même répété, le test ne touche qu'une entrée.
 6. **Non-régression** : redémarre le réseau d'une VM du VLAN 99 (`sudo networkctl renew ens18`, ou `dhclient -r && dhclient`) et lis le bail dans Kea (`lease4-get-all` ou `/var/lib/kea/kea-leases4.csv`).
 
 **Explications**

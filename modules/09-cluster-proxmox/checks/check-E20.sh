@@ -34,5 +34,7 @@ check_cmd "les VMs HA démarrées ne sont pas toutes sur le même nœud" bash -c
      <<<"$1" >/dev/null' _ "$_m09o_res" "$_m09o_e"
 check_cmd "règle frontaux-separes respectée : app02 (102) et app03 (103) sur deux nœuds" _m09o_json "$_m09o_res" \
   '(map(select(.vmid == 102))[0].node) != (map(select(.vmid == 103))[0].node)'
-check_cmd "aucune règle HA désactivée" _m09o_json "$(_m09o_pvesh /cluster/ha/rules)" \
-  'map(select(((.disable // 0) | tostring) | test("^(1|true)$"))) | length == 0'
+# Une règle est inopérante si elle est désactivée (disable) ou écartée par les contrôles de
+# faisabilité (champ errors : « ignored (conflicts) » dans « ha-manager rules config »).
+check_cmd "aucune règle HA désactivée ni écartée pour conflit" _m09o_json "$(_m09o_pvesh /cluster/ha/rules)" \
+  'length > 0 and (map(select((((.disable // 0) | tostring) | test("^(1|true)$")) or (.errors != null))) | length == 0)'

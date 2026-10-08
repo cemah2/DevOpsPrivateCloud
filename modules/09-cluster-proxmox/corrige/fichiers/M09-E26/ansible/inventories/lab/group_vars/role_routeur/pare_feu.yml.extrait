@@ -1,5 +1,5 @@
 ---
-# host_vars/gw01/pare_feu.yml — EXTRAIT : lignes ajoutées ou modifiées en M09-E26 (matrice commune
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : lignes ajoutées ou modifiées en M09-E26 (matrice commune
 # gw01/gw02). Les nœuds hv01-03 sont dans MGMT ; ca01 et runner01 dans INFRA : ces flux traversent
 # la bordure. Définitions déjà présentes : HV_NOEUDS (M09-E05), HV_VIP (M09-E18), ADM01, CA01,
 # RUNNER01, PBS01 (socle).

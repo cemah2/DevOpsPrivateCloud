@@ -17,7 +17,7 @@ _m07_cr="$_M07P_DEPOT/docs/socle/tests/bascules.md"
 title "Compte rendu"
 check_cmd "bascules.md : au moins sept scénarios avec des valeurs mesurées" bash -c \
   '[ "$(grep -Ec "^\| *[0-9]+ *\|.*[0-9]+([,.][0-9]+)? ?(s|ms) *\|" "$1")" -ge 7 ]' _ "$_m07_cr"
-check_cmd "bascules.md : cerveau divisé observé et expliqué" bash -c 'grep -qiE "cerveau divisé|split.?brain" "$1"' _ "$_m07_cr"
+check_cmd "bascules.md : perte des annonces sur un VLAN (cerveau divisé) observée et expliquée" bash -c 'grep -qiE "cerveau divisé|split.?brain" "$1"' _ "$_m07_cr"
 check_cmd "bascules.md : scénarios non testés listés" bash -c 'grep -qiE "non test" "$1"' _ "$_m07_cr"
 
 title "Retour à l'état nominal"

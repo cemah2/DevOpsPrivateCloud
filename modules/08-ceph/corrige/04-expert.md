@@ -273,7 +273,7 @@ Test de pipeline de `plateforme/ceph` : `crushtool --test --show-bad-mappings` p
 **Variante 1 — seuils abaissés.**
 
 ```
-HEALTH_ERR 9 full osd(s); 6 pool(s) full
+HEALTH_ERR 12 full osd(s); 6 pool(s) full
 [ERR] OSD_FULL: 9 full osd(s)
     osd.0 is full
 …
@@ -324,7 +324,7 @@ Ceph préfère suspendre que corrompre : un OSD plein ne peut plus garantir l'é
 
 **Alternatives**
 - En cas de vrai remplissage : supprimer des instantanés RBD, des objets de test (`rados bench` oubliés), ajouter des OSD ; remonter `full_ratio` à 0,97 **le temps** de supprimer, puis le redescendre.
-- Quotas par client : quotas RBD par espace de noms (*namespace*) ou quotas CephFS par répertoire (`ceph.quota.max_bytes`) plutôt qu'un quota de pool partagé.
+- Quotas plus fins qu'un pool partagé : quotas CephFS par répertoire (`ceph.quota.max_bytes`), quotas de compte ou de compartiment RGW ; pour RBD, un pool par équipe (un espace de noms RBD n'a **pas** de quota, M08-E31).
 
 **Pièges classiques**
 - Remonter `full_ratio` à 0,99 « pour débloquer » : l'OSD finit réellement plein, et un OSD BlueStore à 100 % peut refuser de démarrer.
@@ -507,11 +507,11 @@ admin@cephcli01:~$ sudo awk '/key/ {print $3}' /etc/ceph/ceph.client.sonde.keyri
 Les deux empreintes diffèrent : le client présente une clé que le cluster ne connaît pas (la date du fichier, antérieure à la création du compte, trahit une restauration). `rbd --id sonde ls` échoue de la même façon : le noyau n'y est pour rien. Correctif côté client, sans afficher la clé :
 
 ```
-[root@ceph01 ~]# ceph auth get client.sonde -o /tmp/sonde.keyring     # 600, puis copie par scp vers cephcli01
-admin@cephcli01:~$ sudo install -m 600 -o root -g root /tmp/sonde.keyring /etc/ceph/ceph.client.sonde.keyring && rm -f /tmp/sonde.keyring
+admin@adm01:~$ ssh ceph01 'sudo ceph auth get client.sonde' \
+    | ssh cephcli01 'sudo install -m 600 -o root -g root /dev/stdin /etc/ceph/ceph.client.sonde.keyring'
 ```
 
-(Supprime aussi la copie de `ceph01`.) La bonne pratique est de ne pas garder de trousseaux dans des sauvegardes non chiffrées ; le registre des secrets dit où vit la source (Vault `lab`, M08-E27).
+(Le trousseau ne passe que par des tubes, comme en M08-E31 : aucune copie sur un disque intermédiaire.) La bonne pratique est de ne pas garder de trousseaux dans des sauvegardes non chiffrées ; le registre des secrets dit où vit la source (Vault `lab`, M08-E27).
 
 **Variante 3 — fonctionnalité refusée par krbd.**
 
@@ -919,20 +919,20 @@ bad mapping rule <ID> x 0 num_rep 4 result [5,1,7]
 
 `rbd_id.sonde` contient l'identifiant de l'image ; `rbd_header.<id>` ses métadonnées (taille, fonctionnalités, instantanés) en omap ; `rbd_directory` relie noms et identifiants pour tout le pool ; les données sont découpées en objets de 4 Mio (`order 22`) nommés `rbd_data.<id>.<numéro en hexadécimal sur 16 chiffres>`. Seuls les objets écrits existent (ici quelques dizaines : métadonnées d'ext4 et fichiers témoins), pas 256 : allocation à la demande.
 
-**5. Dans l'OSD.** Pour `analyse-placement` (acting `[5,1,7]`, primaire 5), on prend `osd.7` (sur `ceph03`) :
+**5. Dans l'OSD.** Pour `analyse-placement` (acting `[5,1,7]`, primaire 5), on prend `osd.1` (sur `ceph01`) : un OSD **non chiffré**. Ceux de `ceph03` le sont depuis M08-E27 ; leur volume LUKS est ouvert par l'unité au démarrage de l'OSD et refermé à son arrêt (le fichier `unit.poststop` écrit par cephadm lance `ceph-volume lvm deactivate`), si bien que `cephadm shell --name osd.N` ne trouverait plus le périphérique `block` :
 
 ```
-[root@ceph01 ~]# ceph osd ok-to-stop 7
+[root@ceph01 ~]# ceph osd ok-to-stop 1
 [root@ceph01 ~]# ceph osd set noout
-[root@ceph01 ~]# ceph orch daemon stop osd.7
-[admin@ceph03 ~]$ sudo cephadm shell --name osd.7
-[ceph: root@ceph03 /]# ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-7 --op list-pgs | grep '^2\.1e$'
+[root@ceph01 ~]# ceph orch daemon stop osd.1
+[admin@ceph01 ~]$ sudo cephadm shell --name osd.1
+[ceph: root@ceph01 /]# ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-1 --op list-pgs | grep '^2\.1e$'
 2.1e
-[ceph: root@ceph03 /]# ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-7 --pgid 2.1e --op list analyse-placement
+[ceph: root@ceph01 /]# ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-1 --pgid 2.1e --op list analyse-placement
 ["2.1e",{"oid":"analyse-placement","key":"","snapid":-2,"hash":2098207294,"max":0,"pool":2,"namespace":"","max":0}]
-[ceph: root@ceph03 /]# ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-7 --pgid 2.1e '<JSON ci-dessus>' get-bytes | sha256sum
-[ceph: root@ceph03 /]# exit
-[root@ceph01 ~]# ceph orch daemon start osd.7
+[ceph: root@ceph01 /]# ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-1 --pgid 2.1e '<JSON ci-dessus>' get-bytes | sha256sum
+[ceph: root@ceph01 /]# exit
+[root@ceph01 ~]# ceph orch daemon start osd.1
 [root@ceph01 ~]# ceph -s            # attendre active+clean
 [root@ceph01 ~]# ceph osd unset noout
 ```
@@ -968,8 +968,8 @@ Le `hash` du JSON (2098207294 = 0x7d1c5a3e) est celui de l'étape 1 : la boucle 
 6. **QCM — réponse b.** `osd_memory_target` est une cible : BlueStore ajuste ses caches pour rester autour, mais la mémoire réelle peut dépasser (récupération, *peering* de nombreux PG). a est faux (pas de plafond dur, pas de tueur interne ; c'est le noyau qui tue si la VM manque de mémoire) ; c est faux (cephadm peut ajuster la cible automatiquement avec `osd_memory_target_autotune`, il ne réserve rien au conteneur) ; d est faux (concerne l'ensemble des caches de BlueStore, pas seulement RocksDB).
 7. **BlueStore** : données directement sur le périphérique bloc (sans système de fichiers), métadonnées dans RocksDB (périphérique `block.db`), journal d'écriture anticipée de RocksDB (`block.wal`). Les placer sur SSD accélère les métadonnées et les petites écritures (différées dans le WAL) de disques durs lents. Si `block.db` est trop petit, RocksDB déborde sur le disque lent (`BLUEFS_SPILLOVER`) : performances dégradées, pas de perte.
 8. **Nombre impair** : le quorum est une majorité stricte ; 4 moniteurs tolèrent 1 perte comme 3, et avec 2 pertes sur 4 il n'y a plus de majorité (2 n'est pas > 4/2). 7 moniteurs tolèrent 3 pertes mais chaque décision Paxos doit être acceptée par 4 : plus de latence, de trafic, de mémoire et de disque. 5 suffisent pour les gros clusters.
-9. **cephx** : authentification mutuelle par secret partagé et tickets à durée limitée, et autorisation par droits (*caps*) ; ne chiffre pas les données (c'est le rôle de msgr2 `secure`) et ne protège pas contre qui a le trousseau. `profile rbd` = les droits exacts nécessaires à un client RBD (y compris la liste de blocage d'un ancien détenteur de verrou exclusif) ; `allow rwx pool=…` = lecture, écriture, exécution de classes d'objets sur le pool, sans les droits moniteurs adaptés ; `allow *` = tout, à réserver à l'administration. CVE-2025-30156 est une faiblesse de cephx corrigée en 20.2.4 ; la mise à jour comporte des étapes particulières décrites dans les notes de version (voir M08-E26 et son corrigé : c'est la référence pour le détail, à relire sur [docs.ceph.com](https://docs.ceph.com/en/latest/releases/tentacle/)).
-10. **msgr2** : port 3300 (msgr2), 6789 (msgr1, ancien protocole) ; `crc` = intégrité par somme de contrôle, sans chiffrement ; `secure` = chiffrement AES-GCM. Avant d'imposer `secure` (`ms_cluster_mode`, `ms_service_mode`, `ms_client_mode`) : les clients noyau doivent le supporter (noyau ≥ 5.11, option `ms_mode=secure` ou `prefer-secure` au montage et au map) et joindre le port 3300 ; les vieux clients en msgr1 seront refusés. Mesurer aussi le coût CPU.
+9. **cephx** : authentification mutuelle par secret partagé et tickets à durée limitée, et autorisation par droits (*caps*) ; ne chiffre pas les données (c'est le rôle de msgr2 `secure`) et ne protège pas contre qui a le trousseau. `profile rbd` = les droits exacts nécessaires à un client RBD (y compris la liste de blocage d'un ancien détenteur de verrou exclusif) ; `allow rwx pool=…` = lecture, écriture, exécution de classes d'objets sur le pool, sans les droits moniteurs adaptés ; `allow *` = tout, à réserver à l'administration. CVE-2025-30156 : cephx chiffrait ses titres en AES-128-CBC sans authentification (pas de HMAC, vecteur d'initialisation fixe) ; avec une clé de bas privilège ou en écoutant le réseau, on pouvait modifier un titre par bascule de bits (jusqu'aux droits d'administration). Le correctif de 20.2.4 ajoute un **nouveau type de clé**, `aes256k` : la mise à jour seule ne protège pas les clés existantes, il faut les renouveler (cephadm le fait pour les démons, pas pour les clients) en suivant *Upgrading and Rotating CephX Keys*, ce qui fait apparaître les contrôles `AUTH_INSECURE_*` (M08-E26, M08-E27).
+10. **msgr2** : port 3300 (msgr2), 6789 (msgr1, ancien protocole) ; `crc` = intégrité par somme de contrôle, sans chiffrement ; `secure` = chiffrement AES-GCM. Avant d'imposer `secure` (`ms_cluster_mode`, `ms_service_mode`, `ms_client_mode`) : les clients noyau doivent le supporter (noyau ≥ 5.11, option `ms_mode=secure` ou `prefer-secure` au montage et au map) et joindre le port 3300 ; un client qui demande `crc` seul en msgr2 sera refusé. En revanche, les modes ne s'appliquent **pas** à msgr1 : un client monté en `ms_mode=legacy` (défaut des anciens outils) passe toujours, **en clair**, tant que les moniteurs annoncent des adresses v1 ; il faut donc recenser les connexions sur 6789 et, à terme, couper msgr1 (`ms_bind_msgr1 false`, monmap sans v1). Mesurer aussi le coût CPU.
 11. **QCM — réponse b.** Un PG `active` sert les écritures ; le primaire les envoie à tous les membres de l'ensemble *acting* et n'acquitte que quand tous ont écrit. `undersized` veut dire que l'ensemble est plus court que `size`, pas qu'on attend. a et c sont faux (le PG est actif) ; d est faux (Ceph n'acquitte jamais une écriture portée par le seul primaire quand d'autres membres sont dans l'ensemble).
 12. **Écriture répliquée** : le client calcule le PG et envoie au primaire (réseau public) ; le primaire écrit localement (BlueStore : données, puis métadonnées dans RocksDB via le WAL) et envoie en parallèle aux répliques (réseau cluster) ; chaque réplique écrit et répond ; le primaire acquitte au client. Latence = réseau public + max(écriture locale, aller-retour cluster + écriture de la réplique la plus lente). Le réseau cluster est donc sur le chemin critique de chaque écriture (M08-E42), et il porte aussi la récupération.
 13. **Drapeaux** : `noout` empêche le passage automatique à `out` ; `norebalance` empêche le rééquilibrage des PG non dégradés ; `nobackfill` les remplissages ; `norecover` les récupérations ; `pause` toutes les E/S clientes. Pour redémarrer un nœud 10 minutes : `noout` (éventuellement par hôte avec `ceph osd set-group noout <hôte>`, ou `ceph orch host maintenance enter`). Celui qu'il ne faut jamais oublier : `noout` (silencieux, il désactive la réparation automatique) — et `pause`, qui arrête tout.

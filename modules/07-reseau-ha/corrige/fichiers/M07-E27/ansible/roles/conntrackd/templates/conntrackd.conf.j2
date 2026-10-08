@@ -5,8 +5,8 @@
 
 Sync {
 	Mode FTFW {
-		# Entrées du cache externe injectées au plus tard après ce délai sur le nouveau maître :
-		# laissé au calcul automatique (pas de CommitTimeout).
+		# Après « conntrackd -t » (passage en BACKUP), les entrées du noyau devenues fausses
+		# expirent au bout de ce délai (secondes).
 		PurgeTimeout {{ conntrackd_purge_timeout }}
 		# Demande l'état complet au pair au démarrage (passerelle redémarrée).
 		StartupResync on

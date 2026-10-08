@@ -1,5 +1,5 @@
-# host_vars/gw01/pare_feu.yml — lignes AJOUTÉES en M09-E15 et M09-E18
-# (matrice commune à gw01 et gw02).
+# group_vars/role_routeur/pare_feu.yml — lignes AJOUTÉES en M09-E15 et M09-E18
+# (matrice commune à gw01 et gw02 depuis M07-E24).
 
 # --- dans pare_feu_definitions ---------------------------------------------------------------------
   # HV_NOEUDS existe depuis M09-E05 ({ 10.10.10.51, 10.10.10.52, 10.10.10.53 }).

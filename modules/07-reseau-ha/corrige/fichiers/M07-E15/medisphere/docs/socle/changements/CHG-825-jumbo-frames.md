@@ -35,7 +35,7 @@ L'**infrastructure** (pont `vmbr1`, ponts des VNets, carte trunk de `gw01`) devi
 | 1 | `pve01` : `mtu 9000` dans le bloc `vmbr1`, `ifreload -a` | `ip -d link show vmbr1` : mtu 9000 ; `vmbr0` inchangé (1500) | remettre la copie, `ifreload -a` |
 | 2 | Zone SDN `lab` : `mtu 9000`, appliquer (`pvesh set /cluster/sdn`) | `/sys/class/net/vstopub/mtu` = 9000 ; VMs du socle toujours joignables | `pvesh set /cluster/sdn/zones/lab --delete mtu`, appliquer |
 | 3 | `gw01` : `mtu 1500` écrit sur chaque sous-interface sauf `ens19.30` (9000) ; `mtu 9000` sur `ens19` | relu, pas encore appliqué | copie de `/etc/network/interfaces` |
-| 4 | Carte `net1` de `gw01` : `mtu=9000` (même MAC) ; redémarrage de `gw01` si la modification est en attente | `ip link` sur `gw01` : `ens19` 9000, `ens19.30` 9000, autres 1500 | `mtu=1500` sur `net1`, fichier d'origine, redémarrage |
+| 4 | Carte `net1` de `gw01` : `mtu=9000` (même MAC), par arrêt propre, changement et démarrage de `gw01` (`nic-mtu.sh --avec-redemarrage`) : jamais à chaud (hotplug `network` = carte débranchée puis rebranchée) | `ip link` sur `gw01` : `ens19` 9000, `ens19.30` 9000, autres 1500 | `mtu=1500` sur `net1`, fichier d'origine, redémarrage |
 | 5 | Cartes des VMs de test des VLAN 30/31 : `mtu = 9000` (OpenTofu) | dans l'invité : 9000 | `mtu` retiré, `apply` |
 
 ## Vérification

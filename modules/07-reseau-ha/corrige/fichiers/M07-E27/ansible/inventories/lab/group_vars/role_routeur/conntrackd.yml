@@ -12,7 +12,9 @@ conntrackd_adresse_locale: "10.10.10.{{ routeur_reseau_suffixe }}"
 conntrackd_adresse_pair: "10.10.10.{{ bordure_suffixe_pair }}"
 conntrackd_port: 3780
 # Trafic propre des passerelles : boucle locale, toutes leurs adresses propres (les deux, pour que
-# les deux configurations soient identiques au lien près), adresses WAN propres. PAS les VIP.
+# les deux configurations soient identiques au lien près), adresses WAN propres. Les VIP n'y sont
+# pas (le filtre ne regarde que les extrémités réelles : les flux traduits seraient synchronisés
+# de toute façon ; seul le trafic local qui vise une VIP serait écarté).
 conntrackd_adresses_ignorees: >-
   {{ ['127.0.0.1']
      + (routeur_reseau_vlans | map(attribute='id') | map('string') | map('regex_replace', '^', '10.10.') | map('regex_replace', '$', '.2') | list)

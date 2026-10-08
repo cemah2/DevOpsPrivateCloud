@@ -7,7 +7,7 @@ Le socle v1 savait tout faire, mais sur une seule passerelle et sans point d'ent
 ### M07-E46 — Mini-projet : socle MédiSphère v2  `LIBRE` `★★★`
 
 > **Ticket PLAT-890** — *De : Claire Morel* — *Copie : Karim Benali, Sophie Laurent, Nadia Roussel, Julien Petit*
-> Recette du socle v2 dans deux semaines, devant le comité d'architecture. Je veux une bordure **sans point unique de défaillance** dans le lab (hors `pve01` lui-même, on le sait), qui passe le contrôle global sans un seul rouge, et une démonstration en direct : pendant que Julien clone un dépôt GitLab depuis le LAN maison et que Lyon consulte NetBox, Nadia éteint brutalement la passerelle active. Je veux voir les chiffres de perte s'afficher, et rien d'autre se passer.
+> Recette du socle v2 dans deux semaines, devant le comité d'architecture. Je veux une bordure **sans point unique de défaillance** dans le lab (hors `pve01` lui-même, on le sait), qui passe le contrôle global sans un seul rouge, et une démonstration en direct : pendant que Julien clone un dépôt GitLab depuis le LAN maison et qu'on consulte NetBox par le VPN d'administration, Nadia éteint brutalement la passerelle active. Je veux voir les chiffres de perte s'afficher, et rien d'autre se passer.
 > Sophie relira la matrice des flux v2 et le registre des secrets ; Karim l'ADR-0070 et le code ; Nadia RB-070 et RB-071, qu'elle jouera elle-même. La maquette doit avoir disparu, et on doit pouvoir la reconstruire depuis le code.
 
 **Objectifs pédagogiques**

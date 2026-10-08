@@ -47,14 +47,14 @@ for _m09_e24_n in "${_M09P_NOEUDS[@]}"; do
     '^watchdog: .*(model=)?i6300esb.*action=reset|^watchdog: .*action=reset.*i6300esb' "qm config $_m09_e24_id"
 done
 check_cmd "code OpenTofu de l'état hv : bloc watchdog i6300esb" \
-  bash -c 'grep -rqsE "model[[:space:]]*=[[:space:]]*\"i6300esb\"" "$1"/*.tf' _ "$_M09P_SRC/infra/hv"
+  bash -c 'grep -rqsE "model[[:space:]]*=[[:space:]]*\"i6300esb\"" "$1"/*.tf' _ "$_M09P_SRC/infra/envs/hv"
 
 title "watchdog-mux sur les nœuds"
 for _m09_e24_n in "${_M09P_NOEUDS[@]}"; do
   check_ssh "$_m09_e24_n : WATCHDOG_MODULE=i6300esb, module chargé, softdog absent, watchdog-mux actif" "$_m09_e24_n" \
     'grep -Eq "^WATCHDOG_MODULE=i6300esb" /etc/default/pve-ha-manager && lsmod | grep -q "^i6300esb " && ! lsmod | grep -q "^softdog " && systemctl is-active --quiet watchdog-mux'
   check_ssh "$_m09_e24_n : aucune règle nftables qui bloque Corosync" "$_m09_e24_n" \
-    '! nft list ruleset 2>/dev/null | grep -Eq "dport 5405-5412 drop|dport \{? ?5405"'
+    '! nft list ruleset 2>/dev/null | grep -Eq "dport [{ ]*540[45][^#]*[[:space:]](drop|reject)"'
 done
 check_cmd "rôle pve_noeud : réglage WATCHDOG_MODULE dans le code Ansible" \
   bash -c 'grep -rqs "WATCHDOG_MODULE" "$1"/roles/pve_noeud/' _ "$_M09P_SRC/ansible"

@@ -373,7 +373,7 @@ Sur `ceph01` : `sudo cephadm shell -- ceph health detail`, `… ceph osd pool ge
 **Prérequis** : M10-E17, M10-E24, M10-E27 ; M06-E37 (diagnostic TLS) ; `lab/bin/check 10 42` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : le certificat externe (émis par step-ca, M10-E04/E27) est fourni par ton dépôt et déposé par Kolla dans `/etc/kolla/haproxy/` sur `osctl01`, puis copié dans le conteneur `haproxy` au démarrage. L'adresse d'administration de HAProxy (statistiques) dépend de ta configuration (M10-E24).
+**Contexte technique** : le certificat externe est émis par step-ca : obtenu par le client ACME de Kolla depuis M10-E27 (conteneur `letsencrypt_lego`, qui le pousse dans HAProxy), ou, si tu as retenu l'alternative de E27, fourni par ton dépôt et déposé par Kolla dans `/etc/kolla/haproxy/` sur `osctl01`, puis copié dans le conteneur `haproxy` au démarrage. L'adresse d'administration de HAProxy (statistiques) dépend de ta configuration (M10-E24).
 
 **Injection** : `lab/bin/break 10 42` (4 variantes).
 

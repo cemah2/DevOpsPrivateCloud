@@ -83,7 +83,7 @@ Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argum
 
 *A. Avant d'écrire.*
 
-1. cephadm attend : Python 3, systemd, Podman ou Docker, une synchronisation du temps (chrony), LVM2 (les OSD sont des volumes logiques), SSH. Tentacle documente Rocky Linux 10 comme plateforme prise en charge depuis 20.2.2 (paquets et hôte de conteneurs) ; aucun paquet pour Debian 13 sur `download.ceph.com` (seulement bookworm, jammy, noble), et le paquet `cephadm` de Debian 13 est en 18.2 (Reef) : il amorcerait un cluster Reef ou refuserait l'image Tentacle (`--allow-mismatched-release`).
+1. cephadm attend : Python 3, systemd, Podman ou Docker, une synchronisation du temps (chrony), LVM2 (les OSD sont des volumes logiques), SSH. Tentacle documente Rocky Linux 10 comme plateforme prise en charge depuis 20.2.2 (paquets et hôte de conteneurs) ; aucun paquet pour Debian 13 sur `download.ceph.com` (seulement `bookworm` et `jammy` pour 20.2.3), et le paquet `cephadm` de Debian 13 est en 18.2 (Reef) : il amorcerait un cluster Reef ou refuserait l'image Tentacle (`--allow-mismatched-release`).
 2. Image Rocky :
    ```
    admin@adm01:~$ ssh root@pve01 'qm list | grep rocky10-gold'
@@ -293,16 +293,17 @@ Des serveurs dédiés : CPU et mémoire dimensionnés selon les recommandations 
 7. Inventaire : [`group_vars/env_m08/ceph.yml`](fichiers/M08-E03/ansible/inventories/lab/group_vars/env_m08/ceph.yml) (`ceph_fsid`, `ceph_image`), [`group_vars/role_ceph/ceph_noeud.yml`](fichiers/M08-E03/ansible/inventories/lab/group_vars/role_ceph/ceph_noeud.yml) (`ceph_noeud_cle_orchestrateur` = contenu de `ceph cephadm get-pub-key`). Puis `uv run ansible-playbook playbooks/ceph-noeuds.yml --tags ceph_noeud_orchestrateur`. Sur `ceph02` : la clé est dans `/var/lib/cephadm/.ssh/authorized_keys`, pas dans `/root/.ssh/authorized_keys` (qui n'existe peut-être pas).
 8. Spécifications : [`specs/mon.yaml`](fichiers/M08-E03/ceph/specs/mon.yaml), [`specs/mgr.yaml`](fichiers/M08-E03/ceph/specs/mgr.yaml), [`specs/hosts.yaml`](fichiers/M08-E03/ceph/specs/hosts.yaml).
    ```
-   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mon.yaml --dry-run
-   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mon.yaml
-   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mgr.yaml
    [root@ceph01 ~]# ceph orch apply -i ceph/specs/hosts.yaml
    Added host 'ceph01' with addr '10.10.30.51'
    Added host 'ceph02' with addr '10.10.30.52'
    Added host 'ceph03' with addr '10.10.30.53'
+   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mon.yaml --dry-run
+   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mon.yaml
+   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mgr.yaml --dry-run
+   [root@ceph01 ~]# ceph orch apply -i ceph/specs/mgr.yaml
    [root@ceph01 ~]# ceph -W cephadm
    ```
-   Ordre : `mon` et `mgr` **d'abord**. À l'amorçage, le service `mon` a un placement par défaut (jusqu'à 5 moniteurs sur les hôtes du réseau public) : si les hôtes arrivent avant la spécification, cephadm commence à placer des moniteurs selon ce défaut, puis les déplace. Avec les placements par étiquette en place, l'ajout des hôtes étiquetés déclenche directement le bon déploiement. La spécification de `ceph01` (déjà présent) met à jour son adresse et ses étiquettes sans rien recréer.
+   Ordre : les **hôtes d'abord**. Un placement par étiquette est validé à l'application contre les hôtes connus : appliquer `mon.yaml` tant qu'aucun hôte ne porte l'étiquette `mon` (après l'amorçage, `ceph01` n'a que `_admin`) est refusé (« Cannot place … : No matching hosts for label mon », code de l'orchestrateur 20.2.3). Entre l'ajout des hôtes et l'application des spécifications, les placements par défaut de l'amorçage (`mon` : 5 au plus, `mgr` : 2) commencent à déployer des démons sur `ceph02` et `ceph03` : c'est sans risque ici (trois hôtes, le même résultat que nos spécifications), et l'application des spécifications ne fait que confirmer le placement. La spécification de `ceph01` (déjà présent) met à jour son adresse et ses étiquettes sans rien recréer. ⚠️ `--dry-run` ne simule que les **services** : une spécification d'**hôte** est appliquée même avec `--dry-run` (même code). Relis donc `hosts.yaml` deux fois avant de l'envoyer.
 9. Vérifications :
    ```
    [root@ceph01 ~]# ceph mon dump
@@ -424,20 +425,27 @@ L'amorçage se fait une fois par cluster, à partir d'un dépôt relu, avec une 
    [root@ceph01 ~]# ceph orch ps --daemon-type osd
    NAME   HOST    … MEM USE  MEM LIM  VERSION
    osd.0  ceph01  …  310M     1024M   20.2.3
-   [root@ceph01 ~]# ceph config set osd.0 osd_memory_target_autotune true
-   … (quelques minutes)
+   [root@ceph01 ~]# ceph config set osd.0 osd_memory_target_autotune true      # osd.0 : ceph01
+   [root@ceph01 ~]# ceph config set osd.2 osd_memory_target_autotune true      # osd.2 : ceph03 (ceph osd find 2)
+   … (une quinzaine de minutes : mgr/cephadm/autotune_interval = 10 min)
    [root@ceph01 ~]# ceph config dump | grep osd_memory_target
    osd                 basic     osd_memory_target            1073741824
    osd                 advanced  osd_memory_target_autotune   false
-   osd      host:ceph01 basic    osd_memory_target            <valeur calculée>
+   osd      host:ceph03 basic    osd_memory_target            <valeur calculée, de l'ordre de 0,7 à 0,9 Gio>
    osd.0               advanced  osd_memory_target_autotune   true
+   osd.2               advanced  osd_memory_target_autotune   true
    ```
-   cephadm a calculé une cible pour l'hôte de `osd.0` (70 % de la mémoire de l'hôte, moins ce que consomment les démons non réglés, divisé par le nombre d'OSD réglés) et l'a écrite avec le masque `host:ceph01` : plus précis que `osd`, il l'emporte pour **tous** les OSD de `ceph01`, y compris ceux dont le réglage automatique est désactivé. La valeur exacte dépend de la mémoire vue par cephadm (à confirmer sur ton lab). Retour :
+   Le calcul de cephadm (`mgr/cephadm/autotune.py`, 20.2.3), hôte par hôte : 70 % de la mémoire vue (`autotune_memory_target_ratio`), moins, pour chaque démon non réglé, le plus grand de sa consommation et d'un minimum forfaitaire (moniteur 1 Gio, **gestionnaire 4 Gio**, MDS sa `mds_cache_memory_limit`, `crash` 128 Mio…), moins la cible des OSD non réglés (1 Gio chacun), le reste divisé entre les OSD réglés.
+   - Sur `ceph01` (et `ceph02`), qui portent un gestionnaire : 70 % de ≈ 5,7 Gio ≈ 4 Gio, moins 4 Gio pour le mgr, moins le reste : résultat **négatif**, cephadm n'écrit **rien**. Rien ne se passe : c'est la première surprise.
+   - Sur `ceph03`, sans gestionnaire : ≈ 4 Gio − 1 Gio (mon) − 0,125 (crash) − 2 × 1 Gio (les deux OSD non réglés) ≈ 0,9 Gio, écrit avec le masque `host:ceph03`. Plus précis que la section `osd`, il l'emporte pour **tous** les OSD de `ceph03`, y compris ceux dont le réglage automatique est désactivé : notre 1 Gio est écrasé, ici vers le bas (sur un nœud plus gros, ce serait vers le haut, au risque de l'OOM le jour où un MDS ou un RGW s'y ajoute).
+   La valeur exacte dépend de la mémoire vue par cephadm et de la consommation des démons (⚠️ à confirmer sur ton lab ; les journaux du mgr disent « Adjusting osd_memory_target on ceph03 to … »). Retour :
    ```
    [root@ceph01 ~]# ceph config rm osd.0 osd_memory_target_autotune
-   [root@ceph01 ~]# ceph config rm osd/host:ceph01 osd_memory_target
+   [root@ceph01 ~]# ceph config rm osd.2 osd_memory_target_autotune
+   [root@ceph01 ~]# ceph config rm osd/host:ceph03 osd_memory_target
    [root@ceph01 ~]# ceph config dump | grep osd_memory_target
    ```
+   Retire les deux réglages **avant** la valeur par hôte : tant qu'un OSD est réglé, cephadm la réécrit au calcul suivant.
 7. Capacité :
    ```
    [root@ceph01 ~]# ceph df
@@ -459,7 +467,7 @@ Le check vérifie le nombre et l'état des OSD, leur répartition par hôte et p
 
 - **Spécification par filtres.** Les noms `/dev/sdX` dépendent de l'ordre de découverte au démarrage ; un filtre « rotatif, entre 50 et 100 Go » désigne les mêmes disques quel que soit leur nom, et en désigne de nouveaux identiques si on en ajoute (c'est le comportement voulu pour une extension, M08-E18). Le filtre de taille protège contre l'imprévu : un disque de 8 Gio ajouté pour ZFS ou un essai ne deviendra jamais un OSD.
 - **Deux services.** On pourra modifier l'un sans l'autre (chiffrer les OSD `ssd`, mettre `osd.hdd` en `unmanaged` pendant une intervention), et les compter séparément dans `ceph orch ls`.
-- **Masques de configuration.** Ordre de précédence : `global` < type de démon (`osd`) < masque (`osd/host:ceph01`, `osd/class:ssd`) < démon (`osd.0`). Le réglage automatique travaille au niveau de l'hôte : il ne voit pas qu'on a décidé une valeur pour la classe `osd`.
+- **Masques de configuration.** Ordre de précédence : `global` < type de démon (`osd`) < masque (`osd/host:ceph01`, `osd/class:ssd`) < démon (`osd.0`). Le réglage automatique travaille au niveau de l'hôte : il ne voit pas qu'on a décidé une valeur pour la section `osd`, et son résultat dépend de ce qui tourne sur l'hôte (un gestionnaire « coûte » 4 Gio dans son calcul).
 
 **Alternatives**
 
@@ -889,7 +897,7 @@ ZFS sur les serveurs qui gardent du stockage local de valeur (sauvegardes locale
 
 **7. Réponse B.** Le magasin `config-key` n'est pas chiffré pour ses lecteurs : toute entité dont les capacités permettent de le lire (`client.admin`, ou un client à qui l'on aurait donné `mon 'allow r'` trop large selon les versions) peut récupérer la clé privée, et cette clé ouvre une session `cephadm` (sudo) sur **tous** les nœuds. La version 20.2.4 corrige justement une faille où le magasin était lisible par n'importe quelle clé cephx (CVE-2026-50152, M08-E26). A est faux (le stockage est en clair pour qui a le droit de lire) ; C et D décrivent qui **utilise** la clé, pas qui peut la lire.
 
-**8. Réglage automatique de la mémoire.** Il calcule une cible par hôte à partir de 70 % de la mémoire totale ; sur un nœud de 6 Go partagé avec un moniteur et un gestionnaire, la valeur obtenue peut dépasser ce que l'on veut réserver, et elle change avec ce que cephadm mesure. Nous voulons une valeur **décidée**, la même partout, inscrite dans le code (1 Gio). Il est un bon choix sur des nœuds dédiés et homogènes où les OSD peuvent prendre toute la mémoire disponible, avec un rapport ajusté (`autotune_memory_target_ratio`) sur des nœuds hyperconvergés.
+**8. Réglage automatique de la mémoire.** Il calcule une cible par hôte à partir de 70 % de la mémoire totale, moins ce que réservent les autres démons de l'hôte ; sur nos nœuds de 6 Go, le résultat varie d'un hôte à l'autre (rien sur les nœuds qui portent un gestionnaire, compté 4 Gio ; moins de 1 Gio ailleurs, E04), et il change à chaque démon ajouté ou retiré (MDS, RGW du palier 2). Nous voulons une valeur **décidée**, la même partout, inscrite dans le code (1 Gio). Il est un bon choix sur des nœuds dédiés et homogènes où les OSD peuvent prendre toute la mémoire disponible, avec un rapport ajusté (`autotune_memory_target_ratio`) sur des nœuds hyperconvergés.
 
 **9. Client 18.2, cluster 20.2.** Pas de problème : Ceph garantit la compatibilité des clients de versions antérieures (protocole et fonctionnalités négociés à la connexion) ; le cluster peut exiger un minimum (`require_min_compat_client`), ici bien en dessous. Dans le client, la bibliothèque et la commande (`rbd`, `ceph`) dépendent du paquet ; le **chemin des données** de `/dev/rbd0` dépend du **noyau** (`krbd`, ici celui de Debian 13) : c'est lui qui doit gérer les fonctionnalités de l'image (`object-map`, `fast-diff`, `deep-flatten`, msgr2). Une fonctionnalité trop récente pour le noyau fait échouer le mappage (« image uses unsupported features »), M08-E39.
 

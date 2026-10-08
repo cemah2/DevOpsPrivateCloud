@@ -181,6 +181,10 @@ resume_E35() {
 }
 
 symptome_E35() {
+  local note="Note : aucune ressource HA configurée, la pile HA n'a pas été désarmée."
+  if [[ -n "$(m09_lire E35 ha-desarmee)" ]]; then
+    note="Note : l'injection a désarmé la pile HA (mode freeze) pour éviter la clôture des nœuds."
+  fi
   wb_symptome "Ticket INC-3641 — De : Nadia Roussel" \
     "Depuis 7 h 05, plus aucune action n'aboutit sur le cluster hv-par1 : démarrer, arrêter ou" \
     "modifier une VM échoue avec « cluster not ready - no quorum? (500) », quel que soit le nœud" \
@@ -188,7 +192,7 @@ symptome_E35() {
     "d'interrogation. Les VMs qui tournaient tournent toujours. Rien dans le calendrier des" \
     "changements ; Lucas « n'a rien touché, juste appliqué des consignes d'InfoGér hier soir »." \
     "" \
-    "Note : l'injection a désarmé la pile HA (mode freeze) pour éviter la clôture des nœuds." \
+    "$note" \
     "Temps cible : 45 min. Contrôle : lab/bin/check 09 35"
 }
 

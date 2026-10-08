@@ -5,6 +5,11 @@
 #
 # Le rôle écrit le réglage et DIT s'il faut redémarrer ; il ne redémarre jamais un nœud : un
 # redémarrage de nœud se fait en mode maintenance, un nœud à la fois (playbook hv-chien-de-garde.yml).
+#
+# Garde-fou : par défaut, le rôle refuse i6300esb si la carte n'est pas visible dans le nœud (lspci).
+# Lors du PASSAGE au chien de garde émulé, la carte n'apparaîtra qu'après l'arrêt complet de la VM :
+# le playbook hv-chien-de-garde.yml vérifie alors la configuration de la VM sur pve01 (bloc watchdog
+# appliqué par OpenTofu) et appelle ce fichier avec pve_noeud_chien_de_garde_verifier_pci: false.
 
 - name: Chien de garde | le périphérique émulé est présent (sinon watchdog-mux ne démarrerait pas)
   ansible.builtin.shell: |
@@ -15,7 +20,9 @@
   register: pve_noeud_i6300esb
   changed_when: false
   failed_when: false
-  when: pve_noeud_chien_de_garde_module == 'i6300esb'
+  when:
+    - pve_noeud_chien_de_garde_module == 'i6300esb'
+    - pve_noeud_chien_de_garde_verifier_pci | default(true) | bool
 
 - name: Chien de garde | refuser i6300esb sans le périphérique (VM non arrêtée/démarrée ?)
   ansible.builtin.assert:
@@ -24,7 +31,9 @@
       Aucune carte 6300ESB vue par {{ inventory_hostname }} (lspci). Ajoute le bloc watchdog à la VM
       (OpenTofu, état hv), puis ARRÊTE et DÉMARRE la VM depuis pve01, avant d'appliquer ce réglage.
     quiet: true
-  when: pve_noeud_chien_de_garde_module == 'i6300esb'
+  when:
+    - pve_noeud_chien_de_garde_module == 'i6300esb'
+    - pve_noeud_chien_de_garde_verifier_pci | default(true) | bool
 
 - name: Chien de garde | module choisi dans /etc/default/pve-ha-manager
   ansible.builtin.lineinfile:

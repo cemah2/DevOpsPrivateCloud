@@ -12,7 +12,7 @@ Un serveur qui démarre sur le VLAN 60 exécute ce que le réseau lui donne : ch
 ## Options envisagées
 
 1. **Rien** (HTTP en clair, VLAN isolé) : simple ; tout poste du VLAN peut usurper `pxe01`.
-2. **Racine MédiSphère intégrée au binaire iPXE (`TRUST=`) et HTTPS** : iPXE vérifie le certificat de `pxe01` (chaîne, nom, dates) ; tout ce qu'il télécharge est authentifié. Reconstruction du binaire si la racine change (tous les 10 ans) ; il faut une version d'iPXE qui vérifie l'ECDSA.
+2. **Racine MédiSphère intégrée au binaire iPXE (`TRUST=` et `CERT=`) et HTTPS** : iPXE vérifie le certificat de `pxe01` (chaîne, nom, dates) ; tout ce qu'il télécharge est authentifié. Reconstruction du binaire si la racine change (tous les 10 ans) ; il faut une version d'iPXE qui vérifie l'ECDSA.
 3. **Signature des images (`imgtrust`, `imgverify`)** avec une clé de signature de code : protège même en HTTP et même si `pxe01` est compromis en lecture seule ; impose de signer chaque script et chaque noyau à chaque rendu (clé de signature dans la CI), et de gérer une seconde PKI.
 4. **Secure Boot UEFI (shim signé, iPXE 2.0)** : protège le chargeur lui-même ; nécessite un shim signé par Microsoft ou l'enrôlement de nos clés dans chaque micrologiciel ; ne couvre pas les machines BIOS.
 

@@ -1,5 +1,6 @@
 # pve-answer/bm04.toml — fichier de réponse de l'installateur automatique de Proxmox VE 9.2 pour
-# bm04 (M11-E14), dérivé de celui de hv01 (M09). Clés en kebab-case (PVE 9.1+).
+# bm04 (M11-E14), dérivé de celui de hv01 (M09). Clés en kebab-case (acceptées depuis PVE 8.4,
+# snake_case déprécié depuis 9.0).
 # Servi par le service pve-reponses de pxe01 (POST authentifié), jamais publié en HTTP statique.
 # Adresse et MAC : celles de NetBox (réservation Kea, M11-E06). Valeurs <…> : Vault (empreinte du mot de passe root, générée
 # depuis un mot de passe aléatoire de 32 caractères : « mkpasswd -m yescrypt », paquet whois).
@@ -16,6 +17,10 @@ root-ssh-keys = [
   "<CLE-PUBLIQUE-SSH-ADM01>",
 ]
 reboot-on-error = false
+# EXTINCTION en fin d'installation (pas de redémarrage) : bm04 démarre sur le réseau d'abord et
+# son script iPXE dit encore « installer » tant que NetBox la donne à installer ; un redémarrage
+# relancerait l'installation en boucle. Même règle que pour Debian et Rocky (introduction).
+reboot-mode = "power-off"
 
 [network]
 source = "from-answer"

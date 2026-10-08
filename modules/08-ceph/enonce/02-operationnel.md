@@ -394,7 +394,7 @@ Un code d'effacement écrit un objet en k+m morceaux ; une écriture partielle d
 **Durée indicative** : 1 h 30.
 
 **Contexte technique**
-- Cluster NFS : identifiant `par1`, un démon sur l'hôte étiqueté `nfs` (`ceph01`), port 2049, NFSv4 seulement (NFSv3 désactivé par défaut depuis Squid).
+- Cluster NFS : identifiant `par1`, un démon sur l'hôte étiqueté `nfs` (`ceph01`), port 2049, NFSv4 seulement (NFSv3 désactivé par défaut ; activable depuis Squid, option `--enable-nfsv3`, non voulu ici).
 - Sous-volume : `legacy-rdv` (5 Gio) dans le groupe `applications` du volume `cephfs`.
 - Export : pseudo-chemin `/legacy-rdv`, lecture-écriture pour 10.10.30.20 seulement, `root_squash`.
 - Client : `cephcli01`, paquet `nfs-common`, point de montage `/mnt/legacy-rdv` (montage manuel : ce n'est qu'un essai).
@@ -510,7 +510,7 @@ Dans `targetcli`, les objets s'empilent : `/backstores/block create …`, `/iscs
 2. Crée la VM par le pipeline de `plateforme/infra`, enregistre-la dans NetBox (deux interfaces, deux adresses), vérifie le DNS, puis applique le rôle de préparation des nœuds. Vérifie : Podman, chrony, MTU 9000 sur les deux interfaces (`ping -M do -s 8972` vers `ceph01` sur les deux réseaux), disques vides.
 3. Vérifie que la clé publique de l'orchestrateur (`ceph cephadm get-pub-key`) est autorisée pour le compte `cephadm` de `ceph04` : c'est le rôle `ceph_noeud` qui la pose depuis E03, pas un `ssh-copy-id` à la main. `cephadm check-host` sur `ceph04` doit être vert.
 4. Vérifie que la spécification OSD du palier 1 couvrira `ceph04` (placement), puis prévois l'impact : décide si tu fais entrer les OSD avec leur poids complet ou progressivement (`osd_crush_initial_weight`), et règle la récupération (profil mClock) en conséquence. Justifie dans la fiche.
-5. Ajoute l'hôte par une spécification (`hosts.yaml` : adresse, étiquettes, `location`), avec `--dry-run` d'abord.
+5. Ajoute l'hôte par une spécification (`hosts.yaml` : adresse, étiquettes, `location`). Avant de l'envoyer, cherche (documentation ou code de l'orchestrateur) ce que fait `--dry-run` sur une spécification d'**hôte** : est-ce vraiment une simulation ? Déduis-en comment tu relis ce changement.
 6. Suis l'arrivée : `ceph orch host ls`, `ceph orch ps ceph04`, `ceph osd tree`, `ceph -s` (objets *misplaced*, débit de *backfill*), `ceph osd df tree`. Mesure la durée du rééquilibrage et compare à ton estimation.
 7. Si tu as fait entrer les OSD à poids nul, augmente leur poids par paliers jusqu'à leur taille. Remets les réglages de récupération par défaut. Ferme la fiche (résultat, écarts).
 8. Tire de la fiche un runbook générique `RB-081 — ajouter un nœud` dans `docs/stockage/runbooks/` (n'importe quel nœud, n'importe quelle baie : prérequis, estimation du mouvement, ajout, suivi, retour arrière, critères de fin). Il servira aussi, en sens inverse, à retirer `ceph04` au mini-projet.
@@ -748,7 +748,7 @@ Complète, par MR sur `plateforme/ceph`, le projet et sa mise en service. Contra
 - **aucun secret** dans le dépôt (certificat et clé du point d'entrée S3, mots de passe éventuels) ; un contrôle automatique le garantit ;
 - un pipeline de MR qui valide au moins : la syntaxe YAML, des **règles maison** issues de la revue d'E21 (au moins cinq : nombre de moniteurs, ports, VIP avec masque, pas de bloc de clé, `osd_memory_target` compatible avec la mémoire des nœuds…), la recherche de secrets ;
 - une **procédure d'application** unique (script), qui montre le résultat de `--dry-run` et demande confirmation avant d'appliquer ; la décision écrite sur **qui** l'exécute (CI ou `adm01`), avec l'étude des flux et des droits cephx nécessaires dans chaque cas ;
-- une **détection de dérive** planifiée qui compare `ceph orch ls --export` au dépôt et alerte en cas d'écart, avec des droits cephx en lecture seule ;
+- une **détection de dérive** planifiée qui compare les spécifications que le cluster applique réellement au dépôt et alerte en cas d'écart, avec des droits cephx en lecture seule (et une analyse de ce que ces droits permettent de lire) ;
 - le README : périmètre, structure, procédure, décision, ce qui n'est pas (encore) dans le dépôt et pourquoi.
 
 **Critères de réussite**

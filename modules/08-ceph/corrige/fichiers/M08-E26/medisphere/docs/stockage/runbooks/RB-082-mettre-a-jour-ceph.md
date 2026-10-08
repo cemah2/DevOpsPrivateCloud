@@ -26,7 +26,11 @@ Toute montée de version de `ceph-par1` dans une même série (20.2.x → 20.2.y
 - [ ] Charges témoins lancées 10 min avant (`boucles-temoins.sh start` sur `cephcli01`) : ligne de base relevée.
 - [ ] Prévenir : canal d'exploitation, Julien (MédiDoc, MédiAgenda).
 
-`upgrade check` vérifie que l'image est récupérable et indique les démons concernés, **sans rien démarrer**.
+`upgrade check` fait tirer (ou inspecter) l'image par **un seul** hôte, vérifie que la montée est permise et indique les démons concernés, **sans rien démarrer**. Pour s'assurer que **chaque** hôte peut tirer l'image (et raccourcir les redémarrages), la tirer d'avance sur tous les nœuds :
+
+```
+admin@adm01:~/src/ansible$ uv run ansible role_ceph -b -m ansible.builtin.command -a 'podman pull quay.io/ceph/ceph:v<VERSION>'
+```
 
 ## 3. Mise à jour
 
@@ -37,7 +41,7 @@ Toute montée de version de `ceph-par1` dans une même série (20.2.x → 20.2.y
 [admin@ceph01 ~]$ sudo ceph orch upgrade start --image quay.io/ceph/ceph:v<VERSION>
 [admin@ceph01 ~]$ sudo ceph -W cephadm                               # suivre (Ctrl-C n'interrompt pas la mise à jour)
 ```
-Ordre imposé par l'orchestrateur : mgr, mon, crash, osd, mds, rgw, rbd-mirror, cephfs-mirror, iscsi, nfs. Les démons qui n'utilisent pas l'image Ceph (haproxy et keepalived de l'ingress) gardent leur propre image : elle se change à part, dans la spécification du service, et se vérifie dans `ceph orch ps` (colonne VERSION). Pour chaque OSD, cephadm attend que l'arrêt soit sans danger (`ok-to-stop`). Pendant les OSD, `HEALTH_WARN` passager (`OSD_DOWN`, PG `degraded`) : normal tant qu'il se résorbe à chaque étape.
+Ordre imposé par l'orchestrateur : mgr, mon, crash, osd, mds, rgw, rbd-mirror, cephfs-mirror, ceph-exporter, iscsi, nfs, nvmeof (seuls les types déployés apparaissent ; une mise à jour échelonnée ne peut pas sauter un type). Les démons qui n'utilisent pas l'image Ceph (haproxy et keepalived de l'ingress) gardent leur propre image : elle se change à part, dans la spécification du service, et se vérifie dans `ceph orch ps` (colonne VERSION). Pour chaque OSD, cephadm attend que l'arrêt soit sans danger (`ok-to-stop`). Pendant les OSD, `HEALTH_WARN` passager (`OSD_DOWN`, PG `degraded`) : normal tant qu'il se résorbe à chaque étape.
 
 **Pause / reprise** : `ceph orch upgrade pause` puis `ceph orch upgrade resume`. **Arrêt** : `ceph orch upgrade stop` (les démons déjà mis à jour le restent).
 

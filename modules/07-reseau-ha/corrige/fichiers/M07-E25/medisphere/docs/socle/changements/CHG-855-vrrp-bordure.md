@@ -29,7 +29,7 @@ La passerelle de chaque VLAN routé devient une adresse virtuelle VRRP (`.1`), p
 
 Ordre : d'abord la sandbox (aucun service), puis les VLAN vides ou presque (DMZ : `lb01`/`lb02` survivent à 4 s ; PROV, OS-*, K8S, STOR-PUB n'hébergent rien de permanent à ce stade), puis INFRA (DNS, forge, PKI : un pipeline interrompu se relance), et MGMT en dernier (`adm01`, depuis la session WAN).
 
-Paramètres : VRRP v3, unicast (`unicast_src_ip` propre, pair = l'autre passerelle), `advert_int 1`, groupe de synchronisation `BORDURE` (suit ens18 et ens19), état initial `BACKUP` sur les deux, **`nopreempt`**.
+Paramètres : VRRP v3, unicast (`unicast_src_ip` propre, pair = l'autre passerelle), `advert_int 1`, état initial `BACKUP` sur les deux, **`nopreempt`** ; groupe de synchronisation `BORDURE` (suit ens18 et ens19) **constitué à la fin**, une fois les neuf instances en place des deux côtés. Pendant la migration, le groupe est désactivé (`bordure_groupe_actif: false`) : au rechargement, keepalived ne laisse un groupe `MASTER` que si **tous** ses membres l'étaient, et une instance nouvelle ajoutée à un groupe maître ferait retomber toutes les VIP déjà migrées (essai fait avec keepalived 2.2 : ≈ 3 s sans aucune VIP).
 
 **Choix de préemption.** Avec préemption, une panne de `gw01` coûte **deux** bascules (départ, puis retour dès que `gw01` revient, peut-être en plein redémarrage de ses services ou en boucle si elle est instable) ; avec `nopreempt`, une seule, et le retour sur `gw01` se fait par RB-071, de jour, quand on l'a décidé. Prix : après un incident, `gw02` (identique) reste active jusqu'au retour planifié, et la supervision (M07-E29) le signale. `preempt_delay` (retour retardé) a été écarté : il garde la seconde bascule, seulement plus tard.
 
@@ -39,7 +39,7 @@ Paramètres : VRRP v3, unicast (`unicast_src_ip` propre, pair = l'autre passerel
 - [ ] Accès de secours : console noVNC de 1000 et 1009 ouvertes ; SSH `admin@<IP-GW01-WAN>` et `admin@<IP-GW02-WAN>` ouverts depuis `pve01`.
 - [ ] `sysctl net.ipv4.conf.all.promote_secondaries` = 1 sur `gw01`.
 - [ ] Préparation (étape 3 de l'exercice) appliquée et vérifiée : `.2` présente partout sur `gw01`, DNS et NetBox à jour, BGP de `leaf01` sur `.2`/`.3`, relais et NTP sur adresses propres, VRRP autorisé dans la matrice des deux passerelles.
-- [ ] keepalived installé et actif sur les deux passerelles, sans instance (`keepalived_vlans_vrrp: []`).
+- [ ] keepalived installé et actif sur les deux passerelles, sans instance (`keepalived_vlans_vrrp: []`), groupe désactivé (`bordure_groupe_actif: false`).
 - [ ] Mesures prêtes : `sudo ping -D -i 0.1 <cible>` depuis une VM du VLAN migré vers 10.10.20.10, et depuis `adm01` vers cette VM.
 
 ## Étapes (une par VLAN, dans l'ordre du plan)
@@ -48,7 +48,9 @@ Paramètres : VRRP v3, unicast (`unicast_src_ip` propre, pair = l'autre passerel
 |---|---|---|---|
 | 1 | MR : V retiré de `routeur_reseau_vip_statique` (gw01), ajouté à `keepalived_vlans_vrrp` (gw01, gw02) | pipeline vert (lint, `--check`) | fermer la MR |
 | 2 | Job manuel `migration-vrrp` (`-e vlan=V`) | VIP sur `gw01`, instance V `BACKUP` sur `gw02`, perte mesurée ≤ 5 s | automatique dans le playbook (`.1` reposée) ; sinon : `ip address replace 10.10.V.1/24 dev ens19.V` sur `gw01`, puis MR inverse et `routeurs.yml --limit gw01,gw02` |
-| 3 | Tests : `ping`, `dig`, SSH, `apt update` sur une VM du VLAN ; ARP de la VM | même MAC qu'avant pour `.1` | idem étape 2 |
+| 3 | Tests : `ping`, `dig`, SSH, `apt update` sur une VM du VLAN ; ARP de la VM | même MAC qu'avant pour `.1` ; VIP des VLAN déjà migrés inchangées | idem étape 2 |
+
+**Après le VLAN 10** : MR `bordure_groupe_actif: true`, puis `playbooks/groupe-bordure.yml` (passerelle de secours d'abord) : il refuse de continuer si une passerelle porte une partie seulement des VIP, recharge, vérifie que rien n'a bougé et initialise `/run/bordure/etat`. Retour arrière : `bordure_groupe_actif: false` et `routeurs.yml` (la disparition du groupe ne change l'état d'aucune instance).
 
 **Critères d'arrêt** : perte > 10 s sur un VLAN ; VIP présente sur les deux passerelles ; perte de la session WAN de secours ; tout comportement non expliqué. On s'arrête, on revient sur le VLAN en cours, on garde les VLAN déjà migrés (ils sont indépendants), on analyse.
 

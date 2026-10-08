@@ -1,6 +1,6 @@
 # Matrice des flux du cluster `hv-par1` (SEC-1052)
 
-> Source de vérité : `inventories/lab/group_vars/hv_par1/pve_pare_feu.yml` (rôle `pve_pare_feu`) pour le filtrage **sur les nœuds**, `host_vars/gw01/pare_feu.yml` pour ce qui traverse la bordure. Ce document les explique et dit comment tester chaque ligne. Toute modification commence par le code.
+> Source de vérité : `inventories/lab/group_vars/hv_par1/pve_pare_feu.yml` (rôle `pve_pare_feu`) pour le filtrage **sur les nœuds**, `inventories/lab/group_vars/role_routeur/pare_feu.yml` pour ce qui traverse la bordure. Ce document les explique et dit comment tester chaque ligne. Toute modification commence par le code.
 
 ## Enquête : « qui a fait quoi ? » (moins de 5 minutes)
 

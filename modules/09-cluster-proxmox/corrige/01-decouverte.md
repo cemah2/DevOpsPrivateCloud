@@ -209,7 +209,7 @@ Les serveurs physiques du futur cluster ne posent pas la question de l'imbricati
 - **`partition`** : l'installateur cherche le fichier sur une partition étiquetée `proxmox-ais` (clé USB, disque) ; une ISO générique, un petit support par nœud ; en VM, un disque supplémentaire à fabriquer et à brancher.
 - **`http`** : l'installateur obtient le réseau par **DHCP**, trouve l'URL du serveur de réponses (dans l'ISO, en option DHCP 250, ou dans un enregistrement TXT `proxmox-auto-installer.<domaine>`), envoie l'identité de la machine (MAC, numéros de série) et reçoit **son** fichier ; une seule ISO pour tout le parc.
 
-Le mode `http` est le plus élégant, mais il exige du DHCP sur le réseau d'installation : notre MGMT (VLAN 10) n'en a pas, et en ajouter (sous-réseau Kea, relais, réservations) toucherait au socle pour un besoin ponctuel. Le mode `iso` ne demande rien au réseau : l'adresse statique est dans la réponse. Une ISO préparée contient le fichier de réponse **en clair** : l'empreinte du mot de passe root, la clé publique de `adm01`. Sur `pve01`, elle est lisible par root et par qui a le droit `Datastore.Audit`/`AllocateSpace` sur `hdd-bulk` (téléchargement par l'API) : c'est pourquoi on n'y met jamais le mot de passe lui-même, et que l'empreinte est en SHA-512 avec sel.
+Le mode `http` est le plus élégant, mais il exige du DHCP sur le réseau d'installation : notre MGMT (VLAN 10) n'en a pas, et en ajouter (sous-réseau Kea, relais, réservations) toucherait au socle pour un besoin ponctuel. Le mode `iso` ne demande rien au réseau : l'adresse statique est dans la réponse. Une ISO préparée contient le fichier de réponse **en clair** : l'empreinte du mot de passe root, la clé publique de `adm01`. Sur `pve01`, elle est lisible par root, et par quiconque peut monter une ISO de `hdd-bulk` dans une VM qu'il contrôle (`Datastore.AllocateSpace` sur `hdd-bulk` et `VM.Config.CDROM` sur une VM : le contenu de l'ISO devient lisible dans cette VM) : c'est pourquoi on n'y met jamais le mot de passe lui-même, que l'empreinte est en SHA-512 avec sel, et que les ISO préparées (`pve92-auto-hvNN.iso`) se suppriment quand le cluster est détruit (nettoyage de fin de module).
 
 *B. Les secrets.*
 ```
@@ -589,7 +589,7 @@ Deux liens Corosync sur deux commutateurs différents, l'un sur un réseau **dé
 
 1. **La fiche.** Exemple complet : [`CHG-1005-qdevice-pbs01.md`](fichiers/M09-E05/medisphere/docs/virtualisation/changements/CHG-1005-qdevice-pbs01.md).
 
-2. **La matrice.** Extrait : [`pare_feu.yml`](fichiers/M09-E05/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait).
+2. **La matrice.** Extrait : [`group_vars/role_routeur/pare_feu.yml`](fichiers/M09-E05/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) (la matrice commune aux deux passerelles depuis M07-E24).
 ```yaml
   - {entree: $V_MGMT, source: $HV_NOEUDS, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 5403,
      motif: "QDevice : corosync-qdevice des nœuds hv-par1 vers corosync-qnetd sur pbs01", ref: M09-E05}
@@ -610,7 +610,7 @@ root@pbs01:~# ls /etc/corosync/qnetd/nssdb/
 ```
 Le paquet crée une base de certificats NSS (`/etc/corosync/qnetd/nssdb`) et son autorité : c'est elle qui signera le certificat client du cluster pendant `pvecm qdevice setup`. Règle d'entrée ([extrait](fichiers/M09-E05/pbs01/nftables-extrait.conf)) :
 ```
-		ip saddr { 10.10.10.51, 10.10.10.52, 10.10.10.53 } tcp dport 5403 ct state new accept comment "M09-E05 qnetd"
+		iifname "wg0" ip saddr { 10.10.10.51, 10.10.10.52, 10.10.10.53 } tcp dport 5403 ct state new accept comment "M09-E05 qnetd"
 ```
 ```
 root@pbs01:~# nft -c -f /etc/nftables.conf && nft -f /etc/nftables.conf

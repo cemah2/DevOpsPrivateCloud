@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
 # /usr/local/sbin/wb-backup-socle.sh — sauvegarde APPLICATIVE d'un service socle vers PBS
-# M06-E28 (ticket PLAT-754), étendu en M10-E25 (PLAT-1151) : élément « openstack ».
-# Généralise wb-backup-gitlab.sh (M01-E28) aux services du socle et au plan de contrôle OpenStack.
+# M06-E28 (ticket PLAT-754), étendu en M09-E29 (PLAT-1055) : élément « pve », et en M10-E25
+# (PLAT-1151) : élément « openstack ».
+# Généralise wb-backup-gitlab.sh (M01-E28) aux services du socle, aux nœuds Proxmox VE et au plan
+# de contrôle OpenStack.
 # Déployé par le rôle Ansible sauvegarde_pbs ; lancé chaque nuit par wb-backup-socle.timer.
 #
 # Éléments (WB_ELEMENTS, dans /etc/wb-backup/socle.conf) :
@@ -14,6 +16,10 @@
 #   stepca    /etc/step-ca copié en arborescence (configuration, base Badger, certificats, clé CHIFFRÉE de
 #             l'intermédiaire), step-ca ARRÊTÉ le temps de la copie (base non partageable) ; SANS la clé racine
 #             (refus si elle est présente) ni le fichier de mot de passe de l'intermédiaire (Vault)
+#   pve       nœud Proxmox VE : base de pmxcfs (/var/lib/pve-cluster/config.db) copiée EN LIGNE par
+#             l'API de sauvegarde de SQLite et vérifiée, arborescence /etc/pve (fichiers d'invités,
+#             stockage, HA, pare-feu, secrets de priv/ : l'archive est chiffrée), fichiers propres
+#             au nœud (WB_PVE_FICHIERS : Corosync, réseau, FRR…), versions des paquets
 #   openstack dernière sauvegarde COMPLÈTE Mariabackup de Kolla (volume Docker mariadb_backup, prise
 #             depuis adm01 par « kolla-ansible mariadb-backup »), refusée si elle a plus de
 #             WB_OS_AGE_MAX secondes ou si l'archive est corrompue ; image MariaDB et empreintes
@@ -136,12 +142,36 @@ sauver_stepca() {
   log "stepca : service suspendu $(( $(date +%s) - t0 )) s"
 }
 
+sauver_pve() {
+  local d="$WB_TRAVAIL/pve" base=/var/lib/pve-cluster/config.db f
+  command -v sqlite3 >/dev/null || die "sqlite3 absent"
+  [[ -r "$base" ]] || die "base de pmxcfs introuvable : $base (est-ce un nœud Proxmox VE ?)"
+  install -d -m 0700 "$d"
+  # .backup : copie cohérente pendant que pmxcfs écrit (même mécanisme que pour PowerDNS).
+  sqlite3 "$base" ".backup '$d/config.db'" || die "copie de config.db impossible"
+  [[ "$(sqlite3 "$d/config.db" 'PRAGMA integrity_check;')" == ok ]] || die "copie de config.db incohérente"
+  # Témoin lisible sans restaurer : nombre d'entrées et fichiers de VM présents dans la base.
+  sqlite3 "$d/config.db" "SELECT name FROM tree WHERE name LIKE '%.conf' ORDER BY name;" > "$d/config-db-fichiers.txt" \
+    || die "lecture de la table tree de config.db impossible"
+  # Arborescence /etc/pve (vue FUSE de la même base) : restauration d'un fichier isolé sans
+  # toucher à la base (cas « fichier de VM supprimé par erreur »).
+  install -d -m 0700 "$d/etc-pve"
+  cp -a /etc/pve/. "$d/etc-pve/" || die "copie de /etc/pve impossible (pmxcfs arrêté ?)"
+  [[ -s "$d/etc-pve/corosync.conf" ]] || die "/etc/pve/corosync.conf absent de la copie : nœud hors cluster ?"
+  for f in ${WB_PVE_FICHIERS:-}; do
+    [[ -e "$f" ]] || { log "pve : $f absent, ignoré"; continue; }
+    tar -C / -rf "$d/fichiers-noeud.tar" "${f#/}"
+  done
+  pveversion -v > "$d/pveversion.txt" 2>&1 || true
+  log "pve : config.db ($(wc -l < "$d/config-db-fichiers.txt") fichier(s) .conf), /etc/pve, fichiers du nœud"
+}
+
 sauver_openstack() {
   local vol="${WB_OS_VOLUME:-mariadb_backup}" d="$WB_TRAVAIL/openstack" racine dernier fichier age fernet
   command -v docker >/dev/null || die "docker absent"
   racine="$(docker volume inspect -f '{{.Mountpoint}}' "$vol" 2>/dev/null)" || die "volume Docker $vol introuvable"
-  # Kolla (kolla_mariadb_backup.sh) écrit le chemin de la dernière complète, VU DU CONTENEUR
-  # (/backup/full-<date>/mysqlbackup-<date>.qp.xbc.xbs.gz), dans /backup/last_full_file.
+  # Le script backup.sh de l'image Kolla mariadb-server écrit le chemin de la dernière complète,
+  # VU DU CONTENEUR (/backup//full-<date>/mysqlbackup-<date>.qp.xbc.xbs.gz), dans last_full_file.
   [[ -r "$racine/last_full_file" ]] || die "aucune sauvegarde complète Mariabackup (last_full_file absent)"
   dernier="$(<"$racine/last_full_file")"
   fichier="$racine/${dernier#/backup/}"
@@ -181,7 +211,7 @@ apres_openstack() {
 
 for e in $WB_ELEMENTS; do
   case "$e" in
-    powerdns | kea | netbox | stepca | openstack) log "élément $e" && "sauver_$e" ;;
+    powerdns | kea | netbox | stepca | pve | openstack) log "élément $e" && "sauver_$e" ;;
     *) die "élément inconnu : $e" ;;
   esac
 done

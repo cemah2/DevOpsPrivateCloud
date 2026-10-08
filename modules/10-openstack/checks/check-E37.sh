@@ -32,4 +32,10 @@ if [[ -n "$_m10_e37_fip" ]] && _m10x_osp server show m10-e37-sonde -f value -c i
 else
   skip "sonde m10-e37-sonde" "absente (panne non injectée ou déjà close)"
 fi
-check_cmd "panne M10-E37 close (lab/bin/break 10 37 --annuler après réparation)" _m10x_aucune_panne_active E37
+# Les ressources de test n'existent que tant que la panne est ouverte : ce contrôle se lance
+# AVANT --annuler (énoncé). Dans ce cas, la clôture de la panne n'est pas encore attendue.
+if [[ -n "$_m10_e37_fip" ]]; then
+  skip "panne M10-E37 close" "ressources de test présentes : lance lab/bin/break 10 37 --annuler après ce contrôle vert"
+else
+  check_cmd "panne M10-E37 close (lab/bin/break 10 37 --annuler après réparation)" _m10x_aucune_panne_active E37
+fi

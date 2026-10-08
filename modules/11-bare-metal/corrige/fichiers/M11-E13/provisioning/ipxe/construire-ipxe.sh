@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # construire-ipxe.sh — construit les chargeurs iPXE de la chaîne de provisioning MédiSphère
 # (M11-E13) : undionly.kpxe (BIOS, pilote UNDI de la carte) et ipxe.efi (UEFI x86-64), avec
-# HTTPS, la racine MédiSphère comme SEULE racine de confiance, et un script intégré (EMBED=) qui
+# HTTPS, la racine MédiSphère comme SEULE racine de confiance (et intégrée en entier), et un script intégré (EMBED=) qui
 # annonce la classe d'utilisateur « iPXE-MediSphere » en DHCP : Kea ne donne l'URL HTTPS de
 # boot.ipxe qu'à NOTRE iPXE. Tout autre iPXE (la ROM réseau de QEMU des VMs SeaBIOS, la ROM d'une
 # carte récente) s'annonce « iPXE », ne connaît pas la racine MédiSphère, et reçoit donc le
@@ -88,10 +88,16 @@ set user-class iPXE-MediSphere
 autoboot || exit
 EOF
 
-# 6. Construction. TRUST= : racines de confiance (remplace la racine du projet iPXE) ;
-#    EMBED= : script exécuté au démarrage. NO_WERROR non utilisé (on veut voir les erreurs).
-make -C "$src" -j"$(nproc)" bin/undionly.kpxe TRUST="$racine" EMBED="$travail/medisphere.ipxe"
-make -C "$src" -j"$(nproc)" bin-x86_64-efi/ipxe.efi TRUST="$racine" EMBED="$travail/medisphere.ipxe"
+# 6. Construction (ipxe.org/crypto). TRUST= : racines de confiance (remplace la racine du projet
+#    iPXE) ; seule l'EMPREINTE de la racine est alors intégrée. CERT= : intègre le certificat
+#    COMPLET de la racine, sans lequel iPXE ne peut pas vérifier la signature de l'intermédiaire
+#    (pxe01 présente feuille + intermédiaire, pas la racine) et chercherait un certificat croisé
+#    sur ca.ipxe.org (échec : « Permission denied »). EMBED= : script exécuté au démarrage.
+#    NO_WERROR non utilisé (on veut voir les erreurs).
+make -C "$src" -j"$(nproc)" bin/undionly.kpxe \
+  TRUST="$racine" CERT="$racine" EMBED="$travail/medisphere.ipxe"
+make -C "$src" -j"$(nproc)" bin-x86_64-efi/ipxe.efi \
+  TRUST="$racine" CERT="$racine" EMBED="$travail/medisphere.ipxe"
 
 mkdir -p "$sortie"
 install -m 0644 "$src/bin/undionly.kpxe" "$sortie/undionly.kpxe"

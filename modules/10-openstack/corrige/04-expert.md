@@ -730,6 +730,8 @@ Verify return code: 18 (self-signed certificate)
 
 Un seul certificat, émetteur = sujet : ce n'est plus celui de step-ca. `/etc/kolla/haproxy/haproxy.pem` a été remplacé (date, empreinte différente de celle de ton dépôt). Correctif durable : `kolla-ansible reconfigure -t loadbalancer` recopie le certificat externe (`kolla_external_fqdn_cert`) depuis ton dépôt et relance HAProxy. Vérifie **avant** que le certificat de ton dépôt est valide (30 jours au plus avec ACME, M10-E27) : s'il a expiré, le `reconfigure` repose un certificat expiré, et c'est le renouvellement automatique qu'il faut réparer. Ne jamais contourner avec `-k`, `--insecure` ou `verify: false` dans `clouds.yaml`.
 
+Avec le renouvellement ACME de M10-E27 en place, cette variante ne se produit pas : HAProxy ne lit plus `/etc/kolla/haproxy/haproxy.pem` mais le volume `letsencrypt_certificates`, alimenté par `letsencrypt_lego` ; le script de panne le constate et passe à une autre variante. Si ton lab a retenu l'alternative de E27 (certificat obtenu hors de Kolla et déposé dans `certificates/`), elle s'applique telle quelle. Avec ACME, l'équivalent serait un certificat remplacé dans ce volume : `sudo docker restart letsencrypt_lego` provoque un nouveau passage, qui réémet et pousse un certificat de `ca01`.
+
 **Variante 4 — keepalived arrêté, plus de VIP.**
 
 ```

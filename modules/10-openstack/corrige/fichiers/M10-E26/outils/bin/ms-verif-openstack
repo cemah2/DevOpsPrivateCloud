@@ -63,7 +63,7 @@ os() {
 noeud() {
   local h="$1"
   shift
-  ssh -o BatchMode=yes -o ConnectTimeout=5 "$h" "$@" 2>/dev/null
+  ssh -o BatchMode=yes -o ConnectTimeout=5 -o ControlPath=none "$h" "$@" 2>/dev/null
 }
 
 # --- Points d'entrée -----------------------------------------------------------------------------

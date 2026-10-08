@@ -369,7 +369,7 @@ MAAS est un automate de cycle de vie : *New* (connue, pas inventoriée) → *Com
 
 **Pièges classiques**
 - Activer le DHCP de MAAS avant d'avoir retiré Kea : offres concurrentes, machines qui démarrent tantôt chez l'un, tantôt chez l'autre.
-- `power_verify_ssl=n` « pour que ça marche » : c'est le `curl -k` de MAAS.
+- `power_verify_ssl=n` « pour que ça marche » : c'est le `curl -k` de MAAS. Attention, c'est aussi la valeur **par défaut** du pilote (`default=SSL_INSECURE_NO` dans `proxmox.py`) : sans `power_verify_ssl=y` explicite, MAAS ne vérifie pas le certificat de `pve01`.
 - Vérification TLS en échec alors que `curl` réussit depuis `maas01` : le snap lit les certificats de son propre environnement ; ⚠️ à vérifier sur ton lab (après `update-ca-certificates` côté système, redémarre MAAS ; si le pilote échoue encore, regarde les journaux `/var/snap/maas/common/log/rackd.log`).
 - Oublier les plages réservées : MAAS attribue 10.10.60.10 ou .11 (pxe01, lui-même) à une machine déployée.
 - Machines laissées *Deployed* avant le retour à Kea : elles gardent une adresse statique de MAAS dans la plage dynamique de Kea (conflits plus tard). Les libérer d'abord.

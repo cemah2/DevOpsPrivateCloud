@@ -73,6 +73,9 @@ appliquer() {
   awk '{print "  " $0}' <<<"$attente"
   noms="$(printf '%s\n' "${VNETS[@]}" | cut -d: -f1)"
   autres="$(awk '{print $1}' <<<"$attente" | grep -vxF -f <(echo "$noms") || true)"
+  # Les zones aussi : « pvesh set /cluster/sdn » appliquerait une zone modifiée et non appliquée.
+  autres+="$(pvesh get /cluster/sdn/zones --pending 1 --output-format json \
+    | jq -r '.[] | select(.state != null) | " zone \(.zone)"')"
   [[ -z "$autres" ]] || die "changements en attente qui ne viennent pas de ce script ($autres) : applique-les ou annule-les d'abord, à la main"
   confirmer "Appliquer le SDN (recharge le réseau de pve01) ?" || die "abandon : rien n'a été appliqué (les changements restent en attente)"
   sauvegarder

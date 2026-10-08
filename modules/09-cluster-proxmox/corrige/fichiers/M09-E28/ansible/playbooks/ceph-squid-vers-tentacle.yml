@@ -17,6 +17,8 @@
 # à la main, étape 7 du guide).
 # Sur un cluster déjà en Tentacle : aucun changement (chaque redémarrage est conditionné par la
 # version du démon).
+# Mode vérification (--check) : les lectures (pveversion, ceph … --format json) s'exécutent quand
+# même (check_mode: false) pour que les conditions soient évaluées ; aucune écriture n'a lieu.
 
 - name: 1. Contrôles préalables
   hosts: "{{ hv_groupe | default('hv_par1') }}"
@@ -27,6 +29,7 @@
       ansible.builtin.command: pveversion -v
       register: ct_pveversion
       changed_when: false
+      check_mode: false
 
     - name: Proxmox VE ≥ 9.1 (pve-manager ≥ 9.1.4) et Ceph Squid ≥ 19.2.3-pve3 (ou déjà Tentacle)
       ansible.builtin.assert:
@@ -43,6 +46,7 @@
       ansible.builtin.command: ceph health --format json
       register: ct_sante
       changed_when: false
+      check_mode: false
       run_once: true
       failed_when: >-
         (ct_sante.stdout | from_json).status != 'HEALTH_OK'
@@ -53,6 +57,7 @@
       ansible.builtin.command: ceph fs ls --format json
       register: ct_fs
       changed_when: false
+      check_mode: false
       run_once: true
       failed_when: ct_fs.stdout | from_json | length > 0
 
@@ -63,6 +68,7 @@
       args:
         executable: /bin/bash
       changed_when: false
+      check_mode: false
 
 - name: 2. Dépôt Tentacle et paquets (les démons gardent les binaires Squid jusqu'au redémarrage)
   hosts: "{{ hv_groupe | default('hv_par1') }}"
@@ -100,6 +106,7 @@
       ansible.builtin.command: dpkg-query -W -f=${Version} ceph-common
       register: ct_ceph_paquet
       changed_when: false
+      check_mode: false
       failed_when: not ct_ceph_paquet.stdout.startswith('20.2')
       when: not ansible_check_mode
 
@@ -118,6 +125,7 @@
         executable: /bin/bash
       register: ct_etat
       changed_when: false
+      check_mode: false
       run_once: true
 
     - name: Drapeau noout (seulement s'il reste un démon Squid et que noout n'est pas posé)
@@ -132,6 +140,7 @@
       ansible.builtin.command: ceph tell mon.{{ inventory_hostname }} version --format json
       register: ct_mon_version
       changed_when: false
+      check_mode: false
       failed_when: false
 
     - name: Redémarrer le moniteur s'il n'est pas en 20.2
@@ -146,6 +155,7 @@
       ansible.builtin.command: ceph status --format json
       register: ct_st
       changed_when: false
+      check_mode: false
       until: >-
         (ct_st.stdout | from_json).quorum_names | length == groups[hv_groupe | default('hv_par1')] | length
         and ((ct_st.stdout | from_json).health.checks | default({}) | dict2items | map(attribute='key') | list
@@ -162,6 +172,7 @@
       ansible.builtin.command: ceph mon dump --format json
       register: ct_mondump
       changed_when: false
+      check_mode: false
       failed_when: (ct_mondump.stdout | from_json).min_mon_release | int != 20
       when: not ansible_check_mode
 
@@ -175,6 +186,7 @@
       ansible.builtin.command: ceph versions --format json
       register: ct_versions
       changed_when: false
+      check_mode: false
 
     - name: Redémarrer le MGR de ce nœud tant qu'un MGR Squid subsiste
       ansible.builtin.systemd_service:
@@ -186,6 +198,7 @@
       ansible.builtin.command: ceph mgr stat --format json
       register: ct_mgr
       changed_when: false
+      check_mode: false
       until: (ct_mgr.stdout | from_json).available | bool
       retries: 12
       delay: 5
@@ -200,12 +213,14 @@
       ansible.builtin.command: ceph osd ls-tree {{ inventory_hostname }}
       register: ct_osds
       changed_when: false
+      check_mode: false
 
     - name: Versions des OSD de ce nœud
       ansible.builtin.command: ceph tell osd.{{ item }} version --format json
       loop: "{{ ct_osds.stdout_lines }}"
       register: ct_osd_versions
       changed_when: false
+      check_mode: false
       failed_when: false
 
     - name: Redémarrer les OSD du nœud si l'un d'eux n'est pas en 20.2
@@ -221,6 +236,7 @@
       ansible.builtin.command: ceph status --format json
       register: ct_pg
       changed_when: false
+      check_mode: false
       until: >-
         (ct_pg.stdout | from_json).pgmap.pgs_by_state | default([])
         | rejectattr('state_name', 'equalto', 'active+clean') | list | length == 0
@@ -238,12 +254,18 @@
       ansible.builtin.command: ceph versions --format json
       register: ct_final
       changed_when: false
-      failed_when: (ct_final.stdout | from_json).overall | dict2items | map(attribute='key') | reject('search', ' 20\.2\.') | list | length > 0
+      check_mode: false
+      # En mode vérification, les démons n'ont pas été redémarrés : rien à exiger.
+      failed_when: >-
+        not ansible_check_mode
+        and ((ct_final.stdout | from_json).overall | dict2items | map(attribute='key')
+             | reject('search', ' 20\.2\.') | list | length) > 0
 
     - name: Valeur actuelle de require_osd_release
       ansible.builtin.command: ceph osd dump --format json
       register: ct_osddump
       changed_when: false
+      check_mode: false
 
     - name: Exiger Tentacle pour les OSD, require-osd-release (irréversible)
       ansible.builtin.command: ceph osd require-osd-release tentacle
@@ -259,6 +281,8 @@
       ansible.builtin.command: ceph health --format json
       register: ct_ok
       changed_when: false
+      check_mode: false
+      when: not ansible_check_mode
       until: (ct_ok.stdout | from_json).status == 'HEALTH_OK'
       retries: 30
       delay: 10

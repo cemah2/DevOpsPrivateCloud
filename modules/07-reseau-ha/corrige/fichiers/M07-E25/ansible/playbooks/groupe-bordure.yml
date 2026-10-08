@@ -1,0 +1,94 @@
+---
+# playbooks/groupe-bordure.yml — constitution (ou reconstitution) du groupe de synchronisation
+# BORDURE SANS bascule (M07-E25 fin de migration ; M07-E26 après l'ajout de l'instance WAN).
+# Lancé APRÈS fusion de la MR qui passe bordure_groupe_actif à true :
+#
+#   ansible-playbook playbooks/groupe-bordure.yml
+#
+# Pourquoi ce playbook : au rechargement, keepalived ne met un groupe en MASTER que si TOUTES ses
+# instances l'étaient déjà (sinon tout le groupe repasse en BACKUP et les VIP tombent). On vérifie
+# donc, passerelle par passerelle (secours d'abord), que les instances sont dans un état homogène
+# (toutes les VIP, ou aucune), on recharge, et on vérifie que rien n'a bougé. keepalived n'envoie
+# pas de notification pour un groupe qui naît déjà MASTER : l'état de /run/bordure/etat est alors
+# initialisé en appelant le script de transition une fois.
+
+- name: Constituer le groupe BORDURE sans bascule
+  hosts: role_routeur
+  become: true
+  gather_facts: false
+  serial: 1
+  order: reverse_sorted   # gw02 (secours) puis gw01
+  any_errors_fatal: true
+  vars:
+    _instances_actives: >-
+      {{ keepalived_instances | rejectattr('actif', 'defined') | list
+         + (keepalived_instances | selectattr('actif', 'defined') | selectattr('actif', 'equalto', true) | list) }}
+    _vips: "{{ _instances_actives | map(attribute='vips') | flatten | map('regex_replace', '/.*$', '') | list }}"
+  tasks:
+    - name: Groupe activé dans l'inventaire (MR fusionnée) et au moins deux instances
+      ansible.builtin.assert:
+        that:
+          - bordure_groupe_actif | bool
+          - _vips | length > 1
+        fail_msg: "bordure_groupe_actif doit valoir true (MR fusionnée), avec au moins deux instances actives."
+        quiet: true
+
+    - name: Adresses portées avant
+      ansible.builtin.command: ip -j -4 address show
+      register: _avant
+      changed_when: false
+
+    - name: État homogène (toutes les VIP ou aucune), sinon le groupe forcerait une bascule
+      ansible.builtin.assert:
+        that: _portees_avant | length in [0, _vips | length]
+        fail_msg: >-
+          {{ inventory_hostname }} porte {{ _portees_avant | length }} VIP sur {{ _vips | length }}
+          ({{ _portees_avant | join(', ') }}) : instances dans des états différents. Ne constitue pas
+          le groupe ; ramène d'abord toutes les instances sur la même passerelle (RB-071).
+        quiet: true
+      vars:
+        _portees_avant: "{{ _avant.stdout | from_json | map(attribute='addr_info') | flatten | map(attribute='local') | select('in', _vips) | list }}"
+
+    - name: Rendu et rechargement de keepalived (groupe BORDURE)
+      ansible.builtin.include_role:
+        name: keepalived
+
+    - name: Laisser passer quelques annonces
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Adresses portées après
+      ansible.builtin.command: ip -j -4 address show
+      register: _apres
+      changed_when: false
+
+    - name: Rien n'a bougé
+      ansible.builtin.assert:
+        that: (_avant_l | sort) == (_apres_l | sort)
+        fail_msg: >-
+          Les VIP portées par {{ inventory_hostname }} ont changé pendant le rechargement : RB-071 §4,
+          puis bordure_groupe_actif: false et analyse (journalctl -u keepalived).
+        quiet: true
+      vars:
+        _avant_l: "{{ _avant.stdout | from_json | map(attribute='addr_info') | flatten | map(attribute='local') | select('in', _vips) | list }}"
+        _apres_l: "{{ _apres.stdout | from_json | map(attribute='addr_info') | flatten | map(attribute='local') | select('in', _vips) | list }}"
+
+    - name: État publié par le script de transition
+      ansible.builtin.slurp:
+        src: /run/bordure/etat
+      register: _etat
+      failed_when: false
+
+    - name: Initialiser l'état du groupe (pas de notification pour un groupe né MASTER)
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/bordure-transition
+          - GROUP
+          - BORDURE
+          - "{{ _attendu }}"
+          - "0"
+      when: (_etat.content | default('') | b64decode | trim) != _attendu
+      changed_when: true
+      vars:
+        _attendu: "{{ 'MASTER' if (_apres_l2 | length) > 0 else 'BACKUP' }}"
+        _apres_l2: "{{ _apres.stdout | from_json | map(attribute='addr_info') | flatten | map(attribute='local') | select('in', _vips) | list }}"

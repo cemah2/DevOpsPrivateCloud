@@ -24,6 +24,10 @@ ProtectSystem=strict
 ProtectHome=read-only
 PrivateTmp=yes
 Environment=XDG_CACHE_HOME=/tmp/cache
+# La CLI openstack est installée par « uv tool install » dans ~/.local/bin de admin (introduction
+# du module), absent du PATH par défaut de systemd : sans cette ligne, « openstack » est introuvable
+# et la sonde échoue sous systemd alors qu'elle passe à la main.
+Environment=PATH=/home/admin/.local/bin:/usr/local/bin:/usr/bin:/bin
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

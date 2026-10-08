@@ -39,8 +39,12 @@ _m10_alternative() {
 }
 if _m10_acme; then
   check_cmd "conteneurs ACME de Kolla (letsencrypt_lego, letsencrypt_webserver) en service" _m10_acme
-  check_ssh "seuil de renouvellement : 15 jours (--days 15)" osctl01 \
-    'sudo -n grep -rqs -- "--days 15" /etc/kolla/letsencrypt-lego/'
+  # Chaque passage de lego renouvelle (seuil par défaut de lego, 30 jours) : le planning de la
+  # crontab générée ne doit pas lancer plus d'un passage par jour (heure fixe, pas « */4 »).
+  check_ssh "client ACME : au plus un passage par jour (pas de renouvellement toutes les 4 h)" osctl01 \
+    'h=$(sudo -n awk '"'"'/letsencrypt-certificates/ && !/^#/ {print $2}'"'"' /etc/kolla/letsencrypt-lego/crontab) || exit 1
+     [ -n "$h" ] || exit 1
+     ! printf "%s\n" $h | grep -Evq "^[0-9]+$"'
 else
   skip "conteneurs ACME de Kolla" "absents : alternative documentée attendue"
   check_cmd "securite.md documente l'alternative de renouvellement" _m10_alternative

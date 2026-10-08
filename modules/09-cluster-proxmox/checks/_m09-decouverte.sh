@@ -15,6 +15,8 @@
 
 _M09D_INFRA="${WB_SRC:-$HOME/src}/infra"
 _M09D_ANSIBLE="${WB_SRC:-$HOME/src}/ansible"
+# Matrice des flux commune à gw01 et gw02 depuis M07-E24 (PLAN §4.9).
+_M09D_MATRICE="$_M09D_ANSIBLE/inventories/lab/group_vars/role_routeur/pare_feu.yml"
 _M09D_DNS="10.10.20.10"
 _M09D_PVE="${WB_PVE_HOST:-pve01}"
 _M09D_PBS="${WB_PBS_HOST:-pbs01}"
@@ -24,9 +26,10 @@ _m09d_qm() {
   remote "$_M09D_PVE" "qm config $1" 2>/dev/null || true
 }
 
-# _m09d_qm_a CONFIG CLE REGEX — la ligne « CLE: valeur » de la configuration correspond à la regex.
+# _m09d_qm_a CONFIG CLE REGEX — la ligne « CLE: valeur » de la configuration correspond à la regex
+# (sans tenir compte de la casse : Proxmox garde les MAC telles qu'elles ont été données).
 _m09d_qm_a() {
-  grep -Eq -- "^$2: $3" <<<"$1"
+  grep -Eiq -- "^$2: $3" <<<"$1"
 }
 
 # _m09d_etiquettes CONFIG ETIQ… — la VM porte toutes les étiquettes données.

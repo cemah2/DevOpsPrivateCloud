@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: Équipe Plateforme MédiSphère
-  description: Sauvegarde applicative (PowerDNS, Kea, NetBox, step-ca, base OpenStack) vers PBS
+  description: Sauvegarde applicative (PowerDNS, Kea, NetBox, step-ca, configuration Proxmox VE, base OpenStack) vers PBS
   license: proprietary
   min_ansible_version: "2.19"
   platforms:

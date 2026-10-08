@@ -16,7 +16,8 @@ require_cmd jq curl
 _m08d_e05_regle_hote() {
   [[ -n "$1" ]] || return 1
   _m08d_ceph "osd crush rule dump -f json" \
-    | jq -e --argjson id "$1" '.[] | select(.rule_id == $id) | [.steps[] | select(.op | test("choose")) | .type] | index("host") != null' >/dev/null 2>&1
+    | jq -e --argjson id "$1" '.[] | select(.rule_id == $id) | [.steps[] | select(.op | test("choose")) | .type]
+        | (index("host") != null) or (index("rack") != null)' >/dev/null 2>&1
 }
 _m08d_e05_sans_objet_essai() {
   local liste
@@ -44,7 +45,8 @@ check_cmd "rbd-test : application « rbd » déclarée" _m08d_json "$_m08d_e05_p
 check_cmd "rbd-test : nombre de PG en puissance de 2" _m08d_json "$_m08d_e05_pools" \
   '.[] | select(.pool_name == "rbd-test") | .pg_num as $p | ($p > 0) and ([range(0; 13)] | map(pow(2; .)) | index($p) != null)'
 _m08d_e05_regle="$(jq -r '.[] | select(.pool_name == "rbd-test") | .crush_rule' <<<"$_m08d_e05_pools" 2>/dev/null || true)"
-check_cmd "rbd-test : règle CRUSH dont le domaine de panne est l'hôte" _m08d_e05_regle_hote "$_m08d_e05_regle"
+# Après M08-E14, rbd-test passe sur ssd-baie (domaine de panne : la baie, qui contient les hôtes).
+check_cmd "rbd-test : règle CRUSH dont le domaine de panne est l'hôte (ou la baie, après E14)" _m08d_e05_regle_hote "$_m08d_e05_regle"
 
 # --- 2. Les essais ont été nettoyés ------------------------------------------------------------------
 check_cmd "Pool d'essai « essai-pg » supprimé" _m08d_json "$_m08d_e05_pools" '[.[] | select(.pool_name == "essai-pg")] | length == 0'

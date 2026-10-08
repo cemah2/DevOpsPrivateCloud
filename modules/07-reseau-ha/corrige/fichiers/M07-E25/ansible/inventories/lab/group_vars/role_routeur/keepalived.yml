@@ -10,8 +10,20 @@
 # Variables d'hôte (host_vars/gw0X/bordure.yml) : bordure_priorite (150 | 100), bordure_suffixe_pair
 # (3 | 2), keepalived_vlans_vrrp (VLAN migrés) ; routeur_reseau_suffixe (2 | 3) vient de routeur_reseau.
 
+#
+# Groupe BORDURE et migration : au rechargement, keepalived ne laisse un groupe MASTER que si TOUS
+# ses membres l'étaient déjà ; une instance nouvelle (BACKUP) ajoutée à un groupe maître fait
+# repasser tout le groupe en BACKUP (toutes les VIP de gw01 retirées ≈ 3,5 s, et gw02 peut les
+# prendre). Pendant la migration (et pendant l'ajout de l'instance WAN en M07-E26), le groupe est
+# donc DÉSACTIVÉ (bordure_groupe_actif: false : les instances gardent leur état au rechargement) ;
+# il est constitué une fois toutes les instances migrées des deux côtés, par
+# playbooks/groupe-bordure.yml (aucune transition : groupe MASTER sur gw01, BACKUP sur gw02).
+# Valeur pendant la migration : false. État final :
+bordure_groupe_actif: true
+
 keepalived_groupes_synchro:
   - nom: BORDURE
+    actif: "{{ bordure_groupe_actif }}"
     toutes_les_instances: true
     # Un lien coupé (WAN ou trunk) fait passer TOUT le groupe en FAULT : on bascule tout ensemble.
     interfaces_suivies: [ens18, ens19]

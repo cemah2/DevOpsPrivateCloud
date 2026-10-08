@@ -8,6 +8,8 @@
 #      hv03 se clôturerait) ; hv01 et hv02 gardent le quorum ;
 #   2. horloge de hv03 avancée de 3 h, chrony arrêté et désactivé → Corosync ne voit rien, mais les
 #      tickets d'API signés par les autres nœuds sont refusés par hv03 (et Ceph signale l'écart) ;
+#      HA désarmée avant : pmxcfs date l'âge des verrous (agents, maître du CRM) avec l'horloge
+#      locale, un saut de 3 h les ferait paraître expirés vus de hv03 ;
 #   3. certificat présenté par pveproxy sur hv03 (pveproxy-ssl.pem s'il existe, sinon pve-ssl.pem,
 #      dans /etc/pve/nodes/hv03/) remplacé par un certificat autosigné d'une autre clé, pveproxy
 #      redémarré → la clé ne correspond plus, l'API de hv03 ne répond plus ;
@@ -79,6 +81,7 @@ journal "authkey de corosync remplacée, corosync redémarré"
 EOF
       ;;
     2)
+      m09_ha_geler E36 || return 1
       m09_exec "$_E36_CIBLE" >/dev/null <<'EOF' || rc=$?
 systemctl cat chrony >/dev/null 2>&1 || exit 10
 : >"$WB_DIR/$WB_EX.horloge"
@@ -158,6 +161,7 @@ sleep 3
 chronyc makestep >/dev/null 2>&1 || true
 rm -f "$WB_DIR/$WB_EX.horloge"
 EOF
+      m09_ha_rearmer E36
       ;;
     3)
       m09_exec "$_E36_CIBLE" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur hv03 (certificat de pveproxy)"
@@ -202,6 +206,10 @@ resume_E36() {
 }
 
 symptome_E36() {
+  local note="Temps cible : 45 min. Contrôle : lab/bin/check 09 36"
+  if [[ -n "$(m09_lire E36 ha-desarmee)" ]]; then
+    note="Note : l'injection a désarmé la pile HA (mode freeze) ; ce n'est pas la cause. $note"
+  fi
   wb_symptome "Ticket INC-3642 — De : Karim Benali" \
     "Après une intervention de nuit sur hv03, ce nœud n'est plus « dans » le cluster comme avant :" \
     "depuis l'interface de hv01, hv03 est marqué en rouge ou avec un point d'interrogation, et ses" \
@@ -209,7 +217,7 @@ symptome_E36() {
     "détail de ce qui a été fait cette nuit, le prestataire est injoignable avant 10 h." \
     "Interdiction de retirer hv03 du cluster (pvecm delnode) pour « repartir propre »." \
     "" \
-    "Temps cible : 45 min. Contrôle : lab/bin/check 09 36"
+    "$note"
 }
 
 if [[ -z "${WB_PANNES_LIB:-}" ]]; then

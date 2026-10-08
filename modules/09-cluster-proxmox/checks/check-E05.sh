@@ -21,8 +21,8 @@ check_cmd "Fiche de changement CHG-1005 dans la documentation" \
 # --- Le QDevice en service (sauf après M09-E08) ---------------------------------------------------
 _m09d_e05_qdevice() {
   # Le flux, écrit dans la matrice et chargé sur la bordure.
-  check_cmd "Matrice des flux (pare_feu.yml de gw01) : règle TCP 5403 vers pbs01, référence M09-E05" \
-    bash -c 'f="$1/inventories/lab/host_vars/gw01/pare_feu.yml"; grep -E "5403" "$f" | grep -q "M09-E05"' _ "$_M09D_ANSIBLE"
+  check_cmd "Matrice des flux (group_vars/role_routeur/pare_feu.yml) : règle TCP 5403 vers pbs01, référence M09-E05" \
+    bash -c 'grep -E "5403" "$1" | grep -q "M09-E05"' _ "$_M09D_MATRICE"
   check_ssh "gw01 : la règle TCP 5403 est chargée" gw01 'sudo -n nft list ruleset | grep -q "dport 5403"'
   check_cmd "pvecm status : drapeaux « Quorate Qdevice »" grep -Eq '^Flags:[[:space:]]+Quorate Qdevice' <<<"$_m09d_e05_statut"
   check_cmd "3 votes au total (deux nœuds + QDevice)" grep -Eq '^Total votes:[[:space:]]+3$' <<<"$_m09d_e05_statut"

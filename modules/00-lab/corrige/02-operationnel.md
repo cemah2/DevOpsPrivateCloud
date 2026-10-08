@@ -984,14 +984,13 @@ ERREUR : GET /cluster/nextid → HTTP/1.1 401 authentication failure
    ```
    **Rôle** : `DatastoreBackup` (sauvegarder et restaurer **ses propres** groupes), pas `DatastorePowerUser` (qui ajoute la purge de ses sauvegardes). **Chemin** : le namespace, au plus près du besoin. **Qui** : l'utilisateur **et** le jeton, car les droits d'un jeton PBS sont l'intersection des siens et de ceux de son utilisateur. Si `pvesm status` affichait ensuite le stockage inactif faute de pouvoir lire l'état du datastore, pose les ACL sur `/datastore/ds-lab` (le comportement avec des droits limités à un namespace est à vérifier selon les versions).
 
-4. Raccordement de `pve01`, secret saisi sans écho et hors historique :
+4. Raccordement de `pve01`, secret saisi sans écho et hors historique (`--password` **sans valeur** : `pvesm` le demande ; une variable développée dans la commande, elle, serait visible dans `ps` le temps de l'appel) :
    ```
    root@pbs01:~# proxmox-backup-manager cert info | grep -i fingerprint
-   root@pve01:~# read -rs PBS_SECRET        # coller le secret puis Entrée
    root@pve01:~# pvesm add pbs pbs-par2 --server 10.20.10.10 --datastore ds-lab --namespace par1 \
-                   --username 'wb-backup@pbs!pve01' --password "$PBS_SECRET" \
+                   --username 'wb-backup@pbs!pve01' --password \
                    --fingerprint '<EMPREINTE-SHA256>' --content backup
-   root@pve01:~# unset PBS_SECRET
+   Enter Password: ********                 # coller le secret : saisi sans écho, jamais en argument
    root@pve01:~# pvesm status --storage pbs-par2
    Name            Type     Status           Total            Used       Available        %
    pbs-par2         pbs     active      1771000000        52000000      1718948000    0.00%

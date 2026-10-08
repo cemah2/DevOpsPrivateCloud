@@ -3,7 +3,8 @@
 # M07-E25 ; tunnels M07-E26 ; connexions M07-E27). Fichier géré par Ansible.
 #
 # Appelé par keepalived (« notify » du groupe de synchronisation BORDURE) avec 4 arguments :
-#   $1 GROUP|INSTANCE   $2 nom   $3 MASTER|BACKUP|FAULT|STOP|DELETED   $4 priorité
+#   $1 GROUP|INSTANCE   $2 nom   $3 MASTER|BACKUP|FAULT|STOP|DELETED   $4 priorité (0 pour un groupe)
+# Un groupe reçoit aussi STOP quand keepalived s'arrête (vérifié avec keepalived 2.2/2.3).
 # Il exécute ce qui doit SUIVRE le maître et n'est pas une adresse :
 #   - écrit l'état dans /run/bordure/etat (lu par la supervision, M07-E29) ;
 #   - monte les tunnels WireGuard sur le maître, les démonte ailleurs (M07-E26) ;
@@ -82,6 +83,14 @@ case "$etat" in
   FAULT)
     tunnels stop
     ctd -t "raccourcir les minuteries des entrées du noyau"
+    ;;
+  STOP)
+    # keepalived s'arrête (bascule planifiée de RB-071, maintenance) : cette passerelle rend les
+    # VIP, elle ne doit pas garder des tunnels montés avec les MÊMES clés que le nouveau maître
+    # (les deux initieraient des poignées de main avec la même identité : le tunnel battrait).
+    # Notification envoyée par keepalived à son arrêt (« GROUP BORDURE STOP 0 ») ; RB-071 vérifie
+    # quand même l'absence des interfaces wg après l'arrêt.
+    tunnels stop
     ;;
   *)
     journal "état $etat sans action"

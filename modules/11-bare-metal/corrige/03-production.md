@@ -7,12 +7,12 @@ Les fichiers de référence sont dans [`fichiers/`](fichiers/) : `M11-E13/` (rô
 Commandes représentatives de iPXE (amont 2.0), Kea 3.0, nginx 1.26, Proxmox VE 9.2, NetBox 4.6, iLO 4 2.x. Les sorties exactes varient.
 
 **Points non testés en conditions réelles** (signale-les si ton comportement diffère) :
-- prise en charge des signatures **ECDSA** (racine et intermédiaire step-ca en P-256) par la version d'iPXE construite : le script de construction refuse une source sans code ECDSA, mais seul l'essai `imgfetch https://…` dans le shell iPXE le prouve ; si ta version échoue, essaie la dernière étiquette de l'amont et signale-le ;
-- construction automatique d'une archive cpio par iPXE autour d'un fichier dont la ligne de commande est un chemin (`initrd <url> /preseed.cfg`), en BIOS **et** en UEFI (passage de plusieurs initrd au noyau par le micrologiciel UEFI) ;
+- prise en charge des signatures **ECDSA** (racine et intermédiaire step-ca en P-256) par la version d'iPXE construite : ECDSA et la courbe P-256 figurent dans la liste de [ipxe.org/crypto](https://ipxe.org/crypto) et le script de construction refuse une source sans code ECDSA, mais seul l'essai `imgfetch https://…` dans le shell iPXE le prouve ; si ta version échoue, essaie la dernière étiquette de l'amont et signale-le ;
+- comportement réel de l'« initrd magique » d'iPXE (`initrd <url> /preseed.cfg` : le fichier apparaît sous ce chemin dans l'initramfs, syntaxe documentée sur [ipxe.org/cmd/imgfetch](https://ipxe.org/cmd/imgfetch)) avec d-i et dracut, en BIOS **et** en UEFI ;
 - valeur `!` de `passwd/user-password-crypted` dans le preseed (compte `admin` verrouillé) ;
 - classe d'utilisateur annoncée par le script intégré au binaire (`set user-class iPXE-MediSphere`, réglage décrit sur ipxe.org/cfg/user-class) : à confirmer par une capture du second DISCOVER ;
-- remise de plusieurs initrd au noyau en UEFI sans paramètre `initrd=` (protocole LoadFile2, noyaux ≥ 5.8) ;
-- vérification par Python (`requests`/urllib3) d'un certificat d'iLO épinglé qui n'est pas autosigné (chaîne partielle), dans `inventaire-redfish.py` ;
+- remise de plusieurs initrd au noyau en UEFI sans paramètre `initrd=` (la documentation d'iPXE ne l'exige qu'avant Linux 5.7 ; Debian 13 et Rocky 10 sont bien au-delà) ;
+- vérification par Python (`requests`/urllib3) d'un certificat d'iLO épinglé qui n'est pas autosigné (chaîne partielle), dans `inventaire-redfish.py` ; avec Python 3.13 (Debian 13), le contexte TLS peut aussi activer `VERIFY_X509_STRICT`, qui refuse certains certificats d'iLO 4 (sans SAN, sans identifiant de clé d'autorité) : si c'est ton cas, remplace le certificat de l'iLO par un certificat de la PKI plutôt que d'assouplir la vérification ;
 - nom exact du fichier et arguments du script iPXE produits par `prepare-iso --pxe-loader ipxe` (PVE 9.2), et format du corps JSON envoyé par l'installateur (le service ne dépend que de la présence des MAC) ;
 - privilège `VM.GuestAgent.FileRead` (PVE 9) et point d'API `agent/file-read` utilisés par l'orchestrateur ;
 - emplacement exact du réglage « IPMI/DCMI over LAN » dans l'interface de l'iLO 4 selon la version du firmware, et présence de `IPMI.ProtocolEnabled` dans `Managers/1/NetworkService` ;
@@ -121,7 +121,7 @@ Error: Unable to establish IPMI v2 / RMCP+ session
 
 **Explications**
 
-iPXE n'a pas de magasin de certificats : ses racines de confiance sont compilées. `TRUST=` remplace la racine par défaut (celle du projet iPXE, qui signe les certificats « croisés » distribués par `ca.ipxe.org`) ; `CERT=` ajoute des certificats disponibles **sans** leur faire confiance (utile pour un intermédiaire que le serveur n'enverrait pas). Avec notre seule racine, un binaire iPXE refuse tout serveur HTTPS hors de la PKI MédiSphère, y compris Internet : c'est voulu, la chaîne n'a rien à y faire. La vérification TLS d'iPXE est complète (chaîne, nom, dates) ; elle dépend donc de l'**horloge** de la machine (RTC), et d'un éventuel répondeur OCSP désigné par le certificat (step-ca n'en met pas par défaut).
+iPXE n'a pas de magasin de certificats : ses racines de confiance sont compilées. `TRUST=` remplace la racine par défaut (celle du projet iPXE, qui signe les certificats « croisés » distribués par `ca.ipxe.org`), mais n'intègre que son **empreinte** ; `CERT=` intègre des certificats **complets**, disponibles **sans** leur faire confiance. Il faut donc les deux pour une PKI privée (`TRUST=racine CERT=racine`, [ipxe.org/crypto](https://ipxe.org/crypto)) : `pxe01` présente la feuille et l'intermédiaire, pas la racine, et sans le certificat complet de la racine iPXE ne peut pas vérifier la signature de l'intermédiaire ; il irait chercher un certificat croisé sur `ca.ipxe.org` et échouerait (« Permission denied »). L'autre solution documentée, ajouter la racine à la chaîne servie par nginx, lie le binaire à une configuration de `pxe01` : moins robuste. Avec notre seule racine, un binaire iPXE refuse tout serveur HTTPS hors de la PKI MédiSphère, y compris Internet : c'est voulu, la chaîne n'a rien à y faire. La vérification TLS d'iPXE est complète (chaîne, nom, dates) ; elle dépend donc de l'**horloge** de la machine (RTC), et d'un éventuel répondeur OCSP désigné par le certificat (step-ca n'en met pas par défaut).
 
 **Alternatives**
 - `EMBED=` un script dans le binaire (`dhcp` puis `chain https://…/boot.ipxe`) : la classe iPXE de Kea devient inutile et la boucle de chargement disparaît ; mais le moindre changement d'URL impose une reconstruction.
@@ -130,6 +130,7 @@ iPXE n'a pas de magasin de certificats : ses racines de confiance sont compilée
 
 **Pièges classiques**
 - Donner la racine avec `CERT=` au lieu de `TRUST=` : le binaire fonctionne… et fait toujours confiance à la racine d'iPXE.
+- Donner `TRUST=` **sans** `CERT=` : seule l'empreinte de la racine est intégrée ; si `pxe01` ne présente pas la racine dans sa chaîne, tout téléchargement HTTPS échoue (« Permission denied »).
 - Construire avec une version d'iPXE sans ECDSA : « Permission denied » sur tous les téléchargements HTTPS, alors que `curl` depuis `adm01` réussit.
 - Oublier que `pxe01` doit **renouveler** son certificat (flux `pxe01` → `ca01:443`) : tout casse au bout de 30 jours.
 - Mettre le preseed en HTTPS dans `url=` : d-i ne connaît pas la racine MédiSphère et échoue ; `debian-installer/allow_unauthenticated_ssl` désactive la vérification : interdit.
@@ -145,7 +146,7 @@ Secure Boot sur les serveurs physiques (shim signé, iPXE 2.0), surveillance DHC
 
 **Solution**
 
-*1. Fichier de réponse* — [`pve-answer/bm04.toml`](fichiers/M11-E14/provisioning/pve-answer/bm04.toml), dérivé de celui de `hv01` : `fqdn`, réseau `from-answer` avec l'adresse réservée dans NetBox, interface choisie par sa MAC (`filter.ID_NET_NAME_MAC`), `root-password-hashed` (empreinte yescrypt d'un mot de passe aléatoire conservé dans le Vault), `root-ssh-keys` (clé d'`adm01`).
+*1. Fichier de réponse* — [`pve-answer/bm04.toml`](fichiers/M11-E14/provisioning/pve-answer/bm04.toml), dérivé de celui de `hv01` : `fqdn`, réseau `from-answer` avec l'adresse réservée dans NetBox, interface choisie par sa MAC (`filter.ID_NET_NAME_MAC`), `root-password-hashed` (empreinte yescrypt d'un mot de passe aléatoire conservé dans le Vault), `root-ssh-keys` (clé d'`adm01`), `reboot-mode = "power-off"` : par défaut l'installateur **redémarre**, et `bm04`, qui démarre sur le réseau d'abord, recevrait de nouveau le script « installer » (statut `planned`) : réinstallation en boucle.
 
 ```
 admin@adm01:~$ mkpasswd -m yescrypt          # demande le mot de passe sans écho ; l'empreinte seule va dans le fichier
@@ -175,7 +176,7 @@ proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso --fetch-from htt
 
 `--pxe-loader ipxe` implique `--pxe` : la sortie est un **dossier** contenant `vmlinuz`, `initrd.img` et un script pour iPXE. L'outil n'accepte le jeton qu'en argument : exception documentée dans le script et au registre des secrets (outil lancé sur `adm01`, jeton à usage unique renouvelé après l'installation). Dépôt sur `pxe01` : [`playbooks/pve-installateur.yml`](fichiers/M11-E14/ansible/playbooks/pve-installateur.yml) (`/srv/http/pve/9.2/`, réservé au VLAN 60 et à `adm01` par le rôle `pxe`).
 
-*4. Script iPXE* — [`gabarits/ipxe-pve.ipxe.j2`](fichiers/M11-E14/provisioning/gabarits/ipxe-pve.ipxe.j2) : recopie les arguments de la ligne `kernel` du script produit par l'outil (ils dépendent de la version de l'ISO). Les valeurs `pve_version` et `pve_noyau_arguments` vont dans [`parametres.yml`](fichiers/M11-E14/provisioning/parametres.yml) ; la plate-forme NetBox de `bm04` passe à `proxmox-ve-9` le temps de l'exercice : l'outil de rendu (version E13) lui sert alors ce gabarit au lieu de celui de Rocky. Mémoire de `bm04` portée à 8 Go dans `~/src/infra` (son disque fait déjà 32 Go ; `tofu plan` montre une modification en place, pas un remplacement), puis rendu, publication et démarrage par la chaîne (`bm04` à `planned` : la règle de rendu de E06 et E13).
+*4. Script iPXE* — [`gabarits/ipxe-pve.ipxe.j2`](fichiers/M11-E14/provisioning/gabarits/ipxe-pve.ipxe.j2) : recopie les arguments de la ligne `kernel` du script produit par l'outil (ils dépendent de la version de l'ISO). Les valeurs `pve_version` et `pve_noyau_arguments` vont dans [`parametres.yml`](fichiers/M11-E14/provisioning/parametres.yml) ; la plate-forme NetBox de `bm04` passe à `proxmox-ve-9` le temps de l'exercice : l'outil de rendu (version E13) lui sert alors ce gabarit au lieu de celui de Rocky. Mémoire de `bm04` portée à 8 Go dans `~/src/infra` (son disque fait déjà 32 Go ; `tofu plan` montre une modification en place, pas un remplacement), puis rendu, publication et démarrage par la chaîne (`bm04` à `planned` : la règle de rendu de E06 et E13). La machine **s'éteint** en fin d'installation : passe alors `bm04` à `active` dans NetBox, rends et publie (son script devient « disque local »), puis rallume-la (`outils/alim.sh bm04 allumer`) pour l'étape 5.
 
 *5. Vérification du nœud* :
 
@@ -208,7 +209,8 @@ L'installateur PXE de Proxmox n'est pas un installateur réseau au sens de d-i :
 - Laisser `bm04` à 4 Go : chargement interrompu ou panique du noyau, sans message explicite côté iPXE.
 - Épingler l'empreinte de la **clé** (ou d'un ancien certificat) : refus après le renouvellement suivant.
 - Servir `/pve/` à tout le lab : l'initrd contient le jeton.
-- Oublier le *kebab-case* (avertissements en 9.1+, refus à terme).
+- Oublier le *kebab-case* (déprécié depuis 9.0, refus à terme).
+- Garder le `reboot-mode` par défaut (`reboot`) : la machine redémarre sur le réseau et se réinstalle tant que NetBox la donne à installer.
 - Garder la VM : un nœud Proxmox imbriqué inutilisé consomme 8 Go de `pve01`.
 
 **En production chez MédiSphère**

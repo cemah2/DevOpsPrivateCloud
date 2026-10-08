@@ -64,7 +64,8 @@ locals {
       cartes = [{ vnet = "vfab8", ipv4 = "10.30.10.1/24" }]
     }
     lyo-pc01 = {
-      # eth0 : administration seulement (sa route par défaut est remplacée en M07-E18).
+      # eth0 : administration ; garde TOUJOURS sa route par défaut (DHCP). M07-E18 n'ajoute que
+      # des routes ciblées vers PAR1, par lyo-gw01 (10.30.10.1).
       vmid   = 2078, coeurs = 1, memoire = 512, admin = "dhcp", fonction = ["m07-lyo"]
       cartes = [{ vnet = "vfab8", ipv4 = "10.30.10.10/24" }]
     }

@@ -1,6 +1,17 @@
 # group_vars/role_routeur/keepalived.yml — EXTRAIT M07-E26 : instance WAN ajoutée à la liste
 # keepalived_instances (même groupe BORDURE : la VIP WAN bascule AVEC les VIP des VLAN, sinon la
 # traduction vers la VIP WAN ne servirait à rien et les retours partiraient par l'autre passerelle).
+#
+# ⚠️ Ajouter l'instance WAN à un groupe BORDURE déjà MASTER ferait repasser tout le groupe en BACKUP
+# au rechargement de gw01 (toutes les VIP retirées, gw02 susceptible de les prendre, voir M07-E25).
+# Ordre des MR (même méthode qu'en M07-E25) :
+#   1. bordure_groupe_actif: false (group_vars/role_routeur/keepalived.yml), routeurs.yml gw02 puis
+#      gw01 : le groupe disparaît, les instances gardent leur état, rien ne bouge ;
+#   2. keepalived_wan_actif: true sur gw01 (host_vars) : VIP WAN NOUVELLE, prise en ≈ 3,4 s, aucune
+#      coupure (personne ne l'utilise encore) ;
+#   3. keepalived_wan_actif: true sur gw02 : instance WAN en BACKUP ;
+#   4. bordure_groupe_actif: true, puis playbooks/groupe-bordure.yml : groupe de dix instances,
+#      reconstitué sans bascule (MASTER sur gw01, BACKUP sur gw02).
 bordure_wan_vip: 192.168.1.50/24   # <IP-GW-WAN-VIP>/<MASQUE>
 
 keepalived_instances:

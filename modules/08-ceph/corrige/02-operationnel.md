@@ -326,7 +326,7 @@ Fichiers : [`cles-clientes.sh`](fichiers/M08-E13/cles-clientes.sh) (capacités e
 
    | Groupe | Entités | Usage |
    |---|---|---|
-   | Démons | `mon.`, `mgr.ceph0X.*`, `osd.N`, `mds.cephfs.*`, `client.rgw.par1.*`, `client.nfs.par1.*`, `client.crash.ceph0X`, `client.ceph-exporter.ceph0X` | une clé par démon, créée par cephadm et rangée dans le dossier du démon (`/var/lib/ceph/<FSID>/<démon>/keyring`) ; certaines ont des droits larges (un RGW a `mon 'allow *'`) : elles ne quittent pas l'hôte du démon |
+   | Démons | `mon.`, `mgr.ceph0X.*`, `osd.N`, `mds.cephfs.*`, `client.rgw.par1.*`, `client.nfs.par1.*`, `client.crash.ceph0X` (et `client.ceph-exporter.*` si ce service est déployé un jour) | une clé par démon, créée par cephadm et rangée dans le dossier du démon (`/var/lib/ceph/<FSID>/<démon>/keyring`) ; certaines ont des droits larges (un RGW a `mon 'allow *'`) : elles ne quittent pas l'hôte du démon |
    | Amorçage | `client.bootstrap-osd`, `-mds`, `-mgr`, `-rgw`, `-rbd`, `-rbd-mirror` | créer de nouvelles clés de démons d'un type donné |
    | Clients | `client.admin`, `client.rbd-test` (E06), `client.outillage` (E10), `client.nfs.par1.<n>…` d'un export (E16, utilisé par Ganesha) | humains et applications |
 
@@ -664,7 +664,7 @@ Fichiers : [`ceph04.tf.extrait`](fichiers/M08-E18/infra/envs/ceph/ceph04.tf.extr
    admin@ceph04:~$ lsblk -o NAME,SIZE,ROTA,TYPE,MOUNTPOINT      # sdb/sdc ROTA 0, sdd ROTA 1, vides
    ```
 3. **Clé de l'orchestrateur.** `ceph cephadm get-pub-key` donne la clé publique ; depuis E03, le rôle `ceph_noeud` la pose pour le compte `cephadm` (`ceph_noeud_cle_orchestrateur`, valeur publique versionnée) : rien à faire de plus que de jouer le rôle sur `ceph04`. Contrôle : `sudo cephadm check-host` sur `ceph04`, puis `ceph cephadm check-host ceph04 10.10.30.54` depuis `ceph01`. (La documentation montre `ssh-copy-id -f -i /etc/ceph/ceph.pub root@<hôte>` : c'est le cas d'un amorçage avec l'utilisateur `root`, pas le nôtre.)
-4. **Prévision.** La spécification OSD d'E04 (placement par étiquette `osd`) couvre `ceph04` dès qu'il porte l'étiquette. Choix du corrigé : entrée **progressive** (`ceph config set osd osd_crush_initial_weight 0` avant l'ajout) puis montée du poids en deux paliers, et profil mClock `balanced` pendant l'opération (le défaut, `high_client_ops`, ralentit volontairement la récupération ; `high_recovery_ops` la favorise au détriment des clients). Sur un cluster de lab presque vide, l'entrée directe est tout aussi défendable : l'important est d'avoir **choisi**.
+4. **Prévision.** La spécification OSD d'E04 (placement par étiquette `osd`) couvre `ceph04` dès qu'il porte l'étiquette. Choix du corrigé : entrée **progressive** (`ceph config set osd osd_crush_initial_weight 0` avant l'ajout) puis montée du poids en deux paliers, et profil mClock laissé à `balanced` (le défaut de Tentacle ; `high_client_ops` ralentirait volontairement le rééquilibrage au profit des clients, `high_recovery_ops` l'accélérerait à leurs dépens : choix à écrire dans la fiche, E29 le mesure). Sur un cluster de lab presque vide, l'entrée directe est tout aussi défendable : l'important est d'avoir **choisi**.
 5. **Ajout.** Document ajouté à [`hosts.yaml`](fichiers/M08-E18/ceph/specs/hosts.yaml) :
    ```yaml
    service_type: host
@@ -675,17 +675,17 @@ Fichiers : [`ceph04.tf.extrait`](fichiers/M08-E18/infra/envs/ceph/ceph04.tf.extr
    location:
      rack: par1-baie-a
    ```
-   `ssh ceph01 sudo ceph orch apply -i - --dry-run < hosts.yaml`, puis sans `--dry-run`. Si le nom de `ceph04` dans le cluster ne correspond pas à son nom d'hôte (`hostname` court), cephadm refuse : c'est voulu.
+   ⚠️ Pas de simulation pour un hôte : `ceph orch apply --dry-run` ne marque « aperçu » que les spécifications de **services** ; une spécification `host` est appliquée même avec `--dry-run` (code de l'orchestrateur 20.2.3). On relit donc le fichier (adresse, étiquettes, `location`), on vérifie `ceph cephadm check-host ceph04 10.10.30.54`, puis `ssh ceph01 sudo ceph orch apply -i - < hosts.yaml` (ou `outils/appliquer.sh specs/hosts.yaml` après E23, qui affiche l'état du cluster et le fichier avant de demander confirmation). Si le nom de `ceph04` dans le cluster ne correspond pas à son nom d'hôte (`hostname` court), cephadm refuse : c'est voulu.
 6. **Suivi.**
    ```
    [root@ceph01 ~]# ceph orch host ls
-   [root@ceph01 ~]# ceph orch ps ceph04          # crash, ceph-exporter, osd.9, osd.10, osd.11
+   [root@ceph01 ~]# ceph orch ps ceph04          # crash, osd.9, osd.10, osd.11 (pas de ceph-exporter : --skip-monitoring-stack)
    [root@ceph01 ~]# ceph osd tree                # ceph04 sous par1-baie-a, OSD de poids 0
    [root@ceph01 ~]# ceph osd crush reweight osd.9 0.03125    # puis 0.0625 ; idem 10 et 11
    [root@ceph01 ~]# ceph -s                      # "x/y objects misplaced", "recovery: N MiB/s"
    ```
    Durée mesurée à noter dans la fiche, avec l'écart à l'estimation (au lab, l'écart vient surtout du profil mClock et de la latence des disques virtuels).
-7. **Clôture.** `ceph config rm osd osd_crush_initial_weight`, `ceph config rm osd osd_mclock_profile` (retour au défaut), poids égaux aux tailles (`ceph osd df tree`, colonne `WEIGHT` ≈ 0,0625), `HEALTH_OK`, fiche fermée par MR.
+7. **Clôture.** `ceph config rm osd osd_crush_initial_weight`, `ceph config rm osd osd_mclock_profile` si tu avais changé de profil (retour au défaut `balanced`), poids égaux aux tailles (`ceph osd df tree`, colonne `WEIGHT` ≈ 0,0625), `HEALTH_OK`, fiche fermée par MR.
 
 **Explications**
 
@@ -742,7 +742,7 @@ Fichier : [`correspondance-osd-disque.sh`](fichiers/M08-E19/correspondance-osd-d
    [root@ceph01 ~]# ceph osd tree | grep osd.9
     9    ssd  0.06250          osd.9   destroyed         0  1.00000
    ```
-   L'OSD est marqué `out`, ses PG migrent vers l'autre SSD de la baie A (`osd.0` ou `osd.1` de `ceph01`, ou l'autre SSD de `ceph04`), puis il est détruit (état `destroyed`, identifiant et place CRUSH conservés) et son disque effacé.
+   L'OSD est marqué `out`, ses PG migrent vers les autres SSD de la baie A (`osd.0` et `osd.3` de `ceph01`, l'autre SSD de `ceph04`), puis il est détruit (état `destroyed`, identifiant et place CRUSH conservés) et son disque effacé.
    ⚠️ Avec `--zap` et une spécification gérée, le disque effacé **redevient disponible** et cephadm peut recréer un OSD dessus aussitôt, avant le remplacement « physique ». Au lab, c'est sans conséquence (le disque est sain) ; en production, on met la spécification en `unmanaged: true` le temps du remplacement, ou on retire sans `--zap` quand le disque est réellement mort (il n'y a rien à effacer). Si l'OSD est déjà revenu, le remplacement du disque (étape 4) refait le geste proprement : retrait `--replace` de nouveau, sans `--zap`, puis disque neuf.
 4. **Disque.** Sur `pve01` (⚠️ VM 2084 seulement, disque `scsi1` seulement, vérifié deux fois) :
    ```
@@ -767,7 +767,7 @@ Retirer un OSD proprement, c'est faire migrer ses données **avant** de le détr
 **Pièges classiques**
 - Supprimer le disque virtuel **avant** la fin de la vidange : l'OSD tombe pendant que des PG n'ont pas fini de migrer, le cluster se retrouve dégradé.
 - Se tromper de disque dans Proxmox (`scsi2` au lieu de `scsi1`) : un second OSD tombe ; si c'était l'autre SSD de la baie A, des PG perdent la copie de la baie.
-- Oublier `ssd=1` sur le disque neuf : sans `crush_device_class` dans la spécification, l'OSD reviendrait en classe `hdd` ; avec la classe écrite dans `osd.ssd` (E04), c'est le filtre `rotational: 0` qui ne le reconnaît plus, et aucun OSD n'est recréé.
+- Oublier `ssd=1` sur le disque neuf : le disque est vu rotatif ; `osd.ssd` (filtre `rotational: 0`) ne le prend plus, mais `osd.hdd` (rotatif, même taille) le prend : l'OSD revient avec l'identifiant 9… en classe **`hdd`**, dans la baie A. Les règles `ssd-baie`/`hdd-baie` déplacent alors des données qu'on n'attendait pas. Contrôle : `ceph osd tree` (classe) avant de clore.
 - Retirer avec `--force` parce que « c'est long » : `--force` ignore le contrôle de sûreté.
 
 **En production chez MédiSphère**
@@ -824,7 +824,8 @@ Fichiers : [`seuils-quotas.sh`](fichiers/M08-E20/seuils-quotas.sh), [`outils/rap
    ⚠️ Le nom du pool est saisi **deux fois** : relis-le avant d'appuyer sur Entrée.
 6. **Rapport.** [`rapport-capacite.sh`](fichiers/M08-E20/ceph/outils/rapport-capacite.sh) lit `ceph df detail`, `ceph osd df tree`, `ceph osd dump` et `ceph osd pool ls detail` (quotas), en JSON, et calcule capacité brute et utile par classe, remplissage et marge par pool, OSD le plus rempli, et l'alerte de planification (40 % des SSD des baies à deux SSD). Le **surengagement RBD** (`rbd du`, `rbd ls -l`) demande de lire les en-têtes d'images, donc des droits OSD sur les pools : il est facultatif (`--rbd`, avec une clé `profile rbd-read-only` comme `client.rbd-lecture`). Pour le reste, `client.rapport` avec `mon 'allow r' mgr 'allow r'` suffit : ce sont des lectures de cartes et de statistiques détenues par les moniteurs et le gestionnaire ; aucune donnée d'utilisateur n'est lisible.
    ```
-   [root@ceph01 ~]# ceph auth get-or-create client.rapport mon 'allow r' mgr 'allow r'
+   [root@ceph01 ~]# ceph auth get-or-create client.rapport mon 'allow r' mgr 'allow r' -o /etc/ceph/ceph.client.rapport.keyring
+   [root@ceph01 ~]# chmod 600 /etc/ceph/ceph.client.rapport.keyring
    admin@ceph01:~/src/ceph$ sudo CEPH_ID=rapport CEPH_KEYRING=/etc/ceph/ceph.client.rapport.keyring outils/rapport-capacite.sh
    == Capacité ceph-par1 (2026-10-21 10:12) ==
    Classe  Brut     Utilisé  Utile (×3 / baie)  Seuil planif.
@@ -878,7 +879,7 @@ Rapport hebdomadaire envoyé à Claire, prévision de croissance (pente sur 30 j
 | 14 | `ingress.yaml` : 11-12 | `monitor_user`/`monitor_password` à `admin`/`admin` | Sécu. | Moyenne | Statistiques haproxy (et page `/stats` qui permet de voir les serveurs) accessibles avec un mot de passe connu | Laisser cephadm générer le mot de passe (ou le poser à l'application depuis le Vault) |
 | 15 | `mds.yaml` : 5 | Un seul MDS | Dispo. | Moyenne | Pas de MDS en attente : la perte du nœud `ceph23` arrête CephFS jusqu'au redéploiement | `count: 2` (un actif, un en attente) sur deux nœuds différents |
 | 16 | `pools.sh` : 16-18 | Autoscaler désactivé globalement, `nearfull` à 0,95 et `full` à 0,97 | Expl. | Moyenne | 32 PG fixes quel que soit le volume ; alerte de remplissage **au** mur (0,95), aucune marge pour récupérer après une panne | Autoscaler actif (taille cible par pool), seuils d'E20 (0,75 / 0,85 / 0,95) |
-| 17 | `crush-ajouts.txt` : 6 ; MR | Carte injectée à la main (`setcrushmap`) sans test | Expl. | Faible | Une faute de frappe déplace toutes les données ou rend des PG inactifs ; aucune trace de revue | Commandes `ceph osd crush rule create-replicated`, ou carte testée par `crushtool --test` dans la CI |
+| 17 | `crush-ajouts.txt` : 2 ; MR | Carte injectée à la main (`setcrushmap`) sans test | Expl. | Faible | Une faute de frappe déplace toutes les données ou rend des PG inactifs ; aucune trace de revue | Commandes `ceph osd crush rule create-replicated`, ou carte testée par `crushtool --test` dans la CI |
 | 18 | MR ; `ingress.yaml` : 4-5 | Deux RGW et deux haproxy pour une passerelle « de secours » | Dispo. | Faible | La perte d'un nœud laisse un seul RGW ; acceptable au début, à documenter | Trois si la mémoire le permet, sinon la limite écrite dans le README |
 
 Défauts mineurs acceptés : `count_per_host: 1` (redondant), l'absence de `networks:` pour le moniteur (le `public_network` du bootstrap suffit).
@@ -1005,7 +1006,7 @@ Fichiers : le projet complet [`fichiers/M08-E23/ceph/`](fichiers/M08-E23/ceph/) 
 - `outils/tester-crush.sh` : `crushtool --test` de `config/crush-attendu.txt` (aucun *bad mapping*, aucune baie en double pour `ssd-baie`, `hdd-baie`, `ec-21-hdd`) ; testé à la rédaction avec `crushtool` 19.2 sur cette carte ; `crushtool` vient du paquet `ceph-base` de Debian 13 sur `runner01` (Reef, compatible pour un test de carte) ;
 - `gitleaks` (gabarit `qualite.yml`).
 
-**Application : décision.** L'application reste sur **`adm01`**, par `outils/appliquer.sh` : il affiche le `ceph orch apply --dry-run` de chaque spécification modifiée (ou de toutes), demande une confirmation, applique, puis lance `derive.sh`. Arguments (README) :
+**Application : décision.** L'application reste sur **`adm01`**, par `outils/appliquer.sh` : il affiche le `ceph orch apply --dry-run` de chaque spécification modifiée (ou de toutes ; pour `hosts.yaml`, qui n'a pas de vraie simulation, l'état des hôtes du cluster et le contenu du fichier), demande une confirmation, applique, puis lance `derive.sh`. Arguments (README) :
 - *Flux* : appliquer depuis la CI demanderait à `runner01` de joindre les moniteurs (3300) **et** le gestionnaire actif (6800-7568, port dynamique, qui change à chaque bascule) sur les trois nœuds, ou un accès SSH à `ceph01` ; c'est ouvrir le plan de contrôle du stockage à une machine qui exécute le code de tous les projets du groupe (exécuteur `shell` partagé).
 - *Droits* : `orch apply` exige une clé avec écriture sur le gestionnaire (`mgr 'allow rw'` ou au moins `allow command "orch apply"`) ; la restriction aux seules simulations (`with dry_run=true`) n'est pas garantie pour un argument booléen (⚠️ non vérifié) : une clé de CI capable de simuler serait capable d'appliquer, c'est-à-dire de supprimer des services.
 - *Rythme* : quelques changements par mois, chacun relu et suivi en direct (mouvements de données) ; l'automatisation n'apporte pas de vitesse utile, elle retire l'humain qui regarde `ceph -s`.
@@ -1014,9 +1015,11 @@ La décision sera revue quand un exécuteur dédié au stockage (étiquette `cep
 
 **Dérive.** `outils/derive.sh` exporte `ceph orch ls --export`, normalise les deux côtés (`yq -P 'sort_keys(..)'`, suppression des champs ajoutés par cephadm : `status`, `events`, `unmanaged: false`, et des blocs `ssl_cert`/`ssl_key` du côté du cluster), compare service par service, signale aussi les services présents d'un seul côté, et vérifie l'état déclaratif (`config-cluster.sh --verifier`). Il tourne dans un **pipeline planifié** (`derive`, chaque nuit) sur `runner01`, avec la clé `client.ci-lecture` (`mon 'allow r' mgr 'allow r'`, restreinte à 10.10.20.15) en variable protégée et masquée (fichier) ; ce sont les **seuls** flux ouverts : `runner01` → 10.10.30.51-53 TCP 3300 et 6800-7568 ([extrait](fichiers/M08-E23/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait)). Un écart fait échouer le pipeline (notification GitLab à l'équipe) ; le même script sert à la main sur `adm01`.
 
+⚠️ **« Lecture seule » ne veut pas dire « sans secret ».** `ceph orch ls --export` est une commande de **lecture** (`mgr 'allow r'` suffit) et elle renvoie la spécification complète, **`ssl_key` de l'*ingress* comprise** (cephadm la garde dans la spécification, code 20.2.3). `client.ci-lecture` permet donc de lire la clé privée TLS du point d'entrée S3 : son trousseau a la sensibilité de cette clé. Conséquences retenues : la variable est protégée, de type fichier, limitée à l'environnement `ceph/derive` et à la branche protégée ; la clé cephx est restreinte à l'adresse de `runner01` ; `derive.sh` supprime `ssl_cert`/`ssl_key` avant toute comparaison et n'affiche jamais l'export ; le certificat ne vit que 30 jours ; et l'entrée est inscrite au registre des secrets avec cette sensibilité. Si l'exécuteur `shell` partagé paraît trop exposé, l'alternative est de lancer `derive.sh` par une minuterie sur `adm01` (même script, `CEPH_ADMIN=ceph01`), la CI ne gardant que les contrôles hors ligne : c'est un choix à écrire dans le README. (Même remarque pour toute clé `mgr 'allow r'` : `client.rapport` d'E20 reste sur `ceph01`, déjà nœud `_admin`.)
+
 **Démonstration.** MR qui passe `mon.yaml` à `count: 2` : le job `verifier-specs` échoue (« règle 1 : nombre de moniteurs pair ou < 3 ») ; MR refermée sans fusion, gardée comme preuve.
 
-**Services par défaut** (hors `specs/`, listés dans le README) : `crash`, `ceph-exporter` (et la pile de supervision si elle est déployée un jour) ; ils n'ont pas de paramètres propres au lab.
+**Services par défaut** (hors `specs/`, listés dans le README) : `crash` (et `ceph-exporter` avec la pile de supervision, si elle est déployée un jour : l'amorçage `--skip-monitoring-stack` ne le crée pas) ; ils n'ont pas de paramètres propres au lab.
 
 **Explications**
 
@@ -1034,6 +1037,8 @@ cephadm est déjà déclaratif : une spécification appliquée devient l'intenti
 - Oublier les services créés par d'autres commandes (`mds.cephfs` par `fs volume create`, `nfs.par1` par `nfs cluster create`) : ils existent sans fichier jusqu'à ce qu'on les exporte.
 - Règles maison sans cas fautif : elles ne prouvent pas qu'elles détectent quoi que ce soit.
 - Donner à la CI la clé `client.admin` « pour la dérive ».
+- Croire qu'une clé `mgr 'allow r'` ne lit rien de sensible : `orch ls --export` rend la clé privée de l'*ingress*.
+- Compter sur `--dry-run` pour `hosts.yaml` : les spécifications d'hôtes sont appliquées même en simulation ; `appliquer.sh` les traite à part.
 
 **En production chez MédiSphère**
 Le dépôt `plateforme/ceph` devient la source de reconstruction du cluster (avec la sauvegarde de configuration d'E25), étiqueté à chaque changement, lié aux fiches de changement ; la dérive alimente un tableau de bord (M21) ; les règles maison s'enrichissent à chaque incident (E35-E43).

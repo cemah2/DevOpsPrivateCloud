@@ -4,6 +4,7 @@
 # dns01 (HA), configuration = code. La sauvegarde de VM (lab-nuit) suffit (décision RB-061).
 # osctl01 (M10-E25) : envoi de la dernière sauvegarde Mariabackup de Kolla (prise depuis adm01).
 # oscmp01-02 : rien d'applicatif à sauvegarder (état = Ceph + base du plan de contrôle).
+# Les nœuds hv01-03 (élément « pve », M09-E29) reçoivent le même rôle par playbooks/hv-services.yml.
 - name: Sauvegardes applicatives vers PBS
   hosts: dns01:ca01:nbx01:osctl01
   become: true

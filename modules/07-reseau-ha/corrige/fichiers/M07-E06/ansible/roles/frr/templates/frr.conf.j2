@@ -141,7 +141,9 @@ router bgp {{ frr_bgp.asn }}
 {% for g in frr_bgp.groupes | default([]) %}
 {{ voisin_af(g.nom, g, false) }}
 {%- endfor %}
-{# Membres d'un groupe : seule la politique d'ENTRÉE peut être propre au voisin. #}
+{# Membres d'un groupe : seule la politique d'ENTRÉE est rendue par voisin. FRR accepterait une
+   sortie propre à un membre (surcharge du groupe) : le rôle ne la rend pas, par choix (une seule
+   politique de sortie par groupe, un seul groupe de mise à jour). #}
 {% for v in frr_bgp.voisins | default([]) %}
 {{ voisin_af(v.adresse | default(v.interface), v, v.groupe is defined) }}
 {%- endfor %}

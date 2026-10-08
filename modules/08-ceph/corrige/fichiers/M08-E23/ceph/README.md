@@ -55,6 +55,8 @@ Issues de la revue M08-E21 ; chacune a un cas fautif que la CI vérifie **rejet�
 2. Après fusion, sur `adm01` : `git switch main && git pull`, puis
    `outils/appliquer.sh specs/<fichier>.yaml` (ou `--tout`). Le script refuse une copie qui n'est pas
    `origin/main`, refait les règles, montre le `--dry-run`, demande « oui », applique, puis lance la dérive.
+   `hosts.yaml` n'a pas de vraie simulation (cephadm applique une spécification d'hôte même avec
+   `--dry-run`) : le script affiche alors les hôtes du cluster et ceux du fichier avant de demander « oui ».
 3. État hors spécifications : `outils/config-cluster.sh --verifier`, puis `--appliquer` (confirmation
    à chaque geste ; un changement de règle de pool attend `HEALTH_OK` avant le suivant).
 4. Certificat du point d'entrée S3 : automatique (`ceph-cert-ingress.timer` sur `adm01`) ; à la main :
@@ -75,7 +77,10 @@ Issues de la revue M08-E21 ; chacune a un cas fautif que la CI vérifie **rejet�
   regarde.
 - *Ce que la CI fait* : toutes les validations hors ligne, et la **dérive** chaque nuit avec
   `client.ci-lecture` (`mon 'allow r' mgr 'allow r'`, restreinte à 10.10.20.15). Seuls flux ouverts :
-  `runner01` → 10.10.30.51-53, TCP 3300 et 6800-7568.
+  `runner01` → 10.10.30.51-53, TCP 3300 et 6800-7568. Attention : « lecture » n'est pas « sans secret » :
+  `orch ls --export` (lecture `mgr`) rend aussi `ssl_key` de l'ingress. Le trousseau de `client.ci-lecture`
+  a donc la sensibilité de la clé TLS du point d'entrée S3 (variable protégée de type fichier, environnement
+  `ceph/derive`, registre des secrets) ; repli prévu : dérive par minuterie sur `adm01`.
 
 Révision prévue quand un exécuteur dédié au stockage (étiquette `ceph`, sur le VLAN 30, non partagé)
 existera : un job manuel protégé `appliquer` avec une clé `mgr` d'écriture deviendrait acceptable.

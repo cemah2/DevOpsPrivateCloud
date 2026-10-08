@@ -62,7 +62,7 @@
 ## 5. Exploitation
 
 - Maintenance d'un nœud : RB-090 ; reconstruction : RB-091 ; mises à jour : RB-092 (CHG-1059, changement standard) ; montée majeure de Ceph : CHG-1054 et playbook.
-- Reconstruction complète depuis le code : `infra/hv/Taskfile.yml` (`task reconstruire`), mesures dans `tests/reconstruction-hv-par1.md`.
+- Reconstruction complète depuis le code : `plateforme/infra`, `envs/hv/Taskfile.yml` (`task reconstruire`), mesures dans `tests/reconstruction-hv-par1.md`.
 - Choix de plateforme pour une nouvelle charge : ADR-0090 ; capacité : `capacite-hv-par1.md`, règle d'acceptation par `ms-capacite-cluster`.
 
 ## 6. Ce que les modules suivants traiteront

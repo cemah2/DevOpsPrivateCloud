@@ -76,8 +76,9 @@ resource "netbox_interface" "gw02_vlan" {
   virtual_machine_id = netbox_virtual_machine.gw02.id
   mtu                = local.gw02_mtu[tonumber(each.key)]
   description        = "VLAN ${each.key}, sous-interface de ens19"
-  # Le modèle NetBox a un champ « parent » (ens19) ; s'il n'est pas exposé par ta version du
-  # fournisseur, le rattachement se fait par l'API (point « à confirmer » du corrigé).
+  # Le modèle NetBox a un champ « parent » (ens19), que le fournisseur e-breuninger/netbox n'expose
+  # pas pour netbox_interface : rattachement par l'API (PATCH virtualization/interfaces/<id>/) ou à
+  # la main, noté dans la MR.
 }
 
 # Adresses imposées par le plan (.3) : jamais allouées « à la première libre ».
@@ -115,6 +116,11 @@ resource "proxmox_virtual_environment_vm" "gw02" {
   tags        = ["role-routeur", "socle"]
   on_boot     = true
   started     = true
+
+  # Démarre avec gw01 (ordre 1) : les passerelles avant les services du socle.
+  startup {
+    order = 1
+  }
 
   clone {
     vm_id        = data.proxmox_virtual_environment_vms.image_courante.vms[0].vm_id
@@ -193,7 +199,7 @@ resource "proxmox_virtual_environment_vm" "gw02" {
 
   lifecycle {
     prevent_destroy = true
-    ignore_changes  = [clone, startup]
+    ignore_changes  = [clone]
   }
 
   # L'intention existe avant la VM (et lui survit à la destruction).

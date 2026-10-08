@@ -40,4 +40,10 @@ if _m10x_osp volume show m10-e38-vol -f value -c id >/dev/null 2>&1; then
 else
   skip "volume de test m10-e38-vol" "absent (panne non injectée ou déjà close)"
 fi
-check_cmd "panne M10-E38 close (lab/bin/break 10 38 --annuler après réparation)" _m10x_aucune_panne_active E38
+# Les ressources de test n'existent que tant que la panne est ouverte : ce contrôle se lance
+# AVANT --annuler (énoncé). Dans ce cas, la clôture de la panne n'est pas encore attendue.
+if _m10x_osp volume show m10-e38-vol -f value -c id >/dev/null 2>&1; then
+  skip "panne M10-E38 close" "ressources de test présentes : lance lab/bin/break 10 38 --annuler après ce contrôle vert"
+else
+  check_cmd "panne M10-E38 close (lab/bin/break 10 38 --annuler après réparation)" _m10x_aucune_panne_active E38
+fi

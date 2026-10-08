@@ -15,7 +15,7 @@ Fin du module. La chaîne a été construite morceau par morceau : réseau de pr
 - Clore proprement une évaluation (MAAS) et un environnement de module, et livrer l'état attendu par les modules suivants.
 
 **Prérequis** : M11-E01 à M11-E24 (au minimum tous les `LAB`, `LIBRE` et `BF`) ; mini-projet du module 06 (socle v1) et du module 07 (socle v2).
-**Durée indicative** : 10 à 14 h, plus 30 min de revue.
+**Durée indicative** : 8 à 12 h (l'essentiel est déjà construit), plus 30 min de revue.
 
 **Contexte technique**
 - Hôtes : `pxe01` (2111, 10.10.60.10), `bm01-04` (2112-2115), `maas01` (2116, à détruire), template 9050 `tpl-ubuntu2404` (son sort est à décider et à justifier : il ne sert plus qu'à MAAS) ; Kea sur `dns01`/`dns02` (sous-réseau `id: 60`), relais du VLAN 60 sur `gw01`/`gw02`.

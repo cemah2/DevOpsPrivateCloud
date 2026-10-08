@@ -32,8 +32,7 @@ check_cmd "l'autoscaler est de nouveau actif sur tous les pools" \
   _m08p_jq _M08P_POOLS 'length > 0 and all(.[]; .pg_autoscale_mode == "on")'
 check_cmd "aucun contrôle de santé actif hors de la famille AUTH_INSECURE_* (traités en E27)" \
   _m08p_seuls_controles '^AUTH_INSECURE_'
-check_cmd "le nouveau type de clé cephx est accepté par les moniteurs (aes256k)" bash -c \
-  'grep -q aes256k <<<"$1"' _ "$(_m08p_json 'mon dump' | jq -c '.auth_allowed_ciphers // empty' 2>/dev/null)"
+# (L'acceptation du type aes256k par les moniteurs est vérifiée en M08-E27, où elle est traitée.)
 check_cmd "aucune mise en sourdine permanente ou sans durée" _m08p_sourdines_temporaires
 
 title "Code et documentation"

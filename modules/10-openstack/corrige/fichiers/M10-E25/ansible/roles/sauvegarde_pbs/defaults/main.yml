@@ -1,9 +1,10 @@
 ---
-# Rôle sauvegarde_pbs — sauvegarde applicative des services socle (M06-E28) et du plan de contrôle
-# OpenStack (M10-E25, élément « openstack ») vers PBS.
+# Rôle sauvegarde_pbs — sauvegarde applicative des services socle vers PBS (M06-E28), étendu en
+# M09-E29 (PLAT-1055) : élément « pve », configuration de cluster d'un nœud Proxmox VE ; puis en
+# M10-E25 (PLAT-1151) : élément « openstack », base du plan de contrôle OpenStack.
 # Variables par hôte : host_vars/<hôte>/sauvegarde_pbs.yml. Secrets : Vault « critique ».
 
-# Éléments sauvegardés sur cet hôte : powerdns, kea, netbox, stepca, openstack (voir le script).
+# Éléments sauvegardés sur cet hôte : powerdns, kea, netbox, stepca, pve, openstack (voir le script).
 sauvegarde_pbs_elements: []
 # Heure de passage (OnCalendar) : après git01 (01:15), avant lab-nuit (02:30).
 sauvegarde_pbs_heure: "01:55"
@@ -42,3 +43,16 @@ sauvegarde_pbs_os_fernet: "oui"
 # la documentation PBS, « SecureApt », relevée le 2026-10-07 ; la revérifier à chaque changement).
 sauvegarde_pbs_cle_depot_url: https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg
 sauvegarde_pbs_cle_depot_sha256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45
+
+# Dépôt pbs-client : inutile (et à éviter) sur un nœud Proxmox VE, qui a déjà proxmox-backup-client
+# dans ses propres dépôts, à la version testée avec sa version de Proxmox VE (M09-E29).
+sauvegarde_pbs_depot_client: true
+
+# Élément pve (M09-E29) : fichiers propres au nœud copiés à côté de /etc/pve et de config.db.
+sauvegarde_pbs_pve_fichiers:
+  - /etc/corosync
+  - /etc/network/interfaces
+  - /etc/hosts
+  - /etc/hostname
+  - /etc/default/pve-ha-manager
+  - /etc/frr

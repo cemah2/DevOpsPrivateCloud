@@ -7,7 +7,8 @@
 # de keepalived (quorum + réponse de l'API) ne voit pas ces pannes, la VIP reste sur un nœud où l'on
 # ne peut plus écrire. Variante 1 : un nœud qui NE porte PAS la VIP (hv03, ou hv02 si la VIP est sur
 # hv03), utilisé en direct par Julien — sur le nœud de la VIP, le script de santé déplacerait la VIP.
-# La HA est désarmée (freeze) avant les variantes 1 et 3, sinon le nœud se clôturerait.
+# La HA est désarmée (freeze) avant chaque variante : sans quorum (1), sans base pmxcfs inscriptible
+# (2 : le LRM et le CRM ne renouvellent plus leurs verrous) ou sans pmxcfs (3), le nœud se clôturerait.
 # Variantes :
 #   1. perte de quorum d'un nœud : table nftables « inet infoger_durcissement » sur la cible, qui jette
 #      l'UDP 5404-5412 (Corosync) → la cible est seule et sans quorum, /etc/pve y est en lecture
@@ -93,6 +94,7 @@ NFT
 EOF
       ;;
     2)
+      m09_ha_geler E42 || return 1
       m09_exec "$c" F="$_E42_GROS" >/dev/null <<'EOF' || rc=$?
 [ -e "$F" ] && exit 10
 : >"$WB_DIR/$WB_EX.gros"
@@ -160,6 +162,7 @@ if systemctl cat "$u" >/dev/null 2>&1 && ! systemctl is-active -q "$u"; then
   systemctl start "$u" && journal "annulation : $u relancé"
 fi
 EOF
+      m09_ha_rearmer E42
       ;;
     3)
       m09_exec "$c" P="$_E42_PARASITE" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur $c (pve-cluster) : systemctl start pve-cluster"
@@ -226,6 +229,10 @@ resume_E42() {
 symptome_E42() {
   local acces="https://hv.par1.medisphere.internal:8006 (l'adresse officielle)"
   _e42_par_vip || acces="https://$(_e42_cible).par1.medisphere.internal:8006 (en direct)"
+  local note="Temps cible : 45 min. Contrôle : lab/bin/check 09 42"
+  if [[ -n "$(m09_lire E42 ha-desarmee)" ]]; then
+    note="Note : l'injection a désarmé la pile HA (mode freeze) ; ce n'est pas la cause. $note"
+  fi
   wb_symptome "Ticket INC-3648 — De : Julien Petit" \
     "Impossible de modifier une VM depuis $acces :" \
     "ajouter un disque, changer la mémoire ou même une description échoue, avec une erreur qui" \
@@ -233,7 +240,7 @@ symptome_E42() {
     "directement à $(_e42_autre), modifie ses VMs sans problème. Le tableau de bord n'affiche rien" \
     "d'alarmant au premier coup d'œil." \
     "" \
-    "Temps cible : 45 min. Contrôle : lab/bin/check 09 42"
+    "$note"
 }
 
 if [[ -z "${WB_PANNES_LIB:-}" ]]; then

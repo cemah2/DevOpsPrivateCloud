@@ -4,7 +4,7 @@
 
 **Points non testés en conditions réelles** (signale tes retours, ils corrigent le workbook) :
 - format JSON exact de certaines sorties de Tentacle sur lesquelles s'appuient les checks et les scripts : `ceph health detail` (champs `mutes[].sticky` et `ttl`), `ceph fs subvolumegroup info` (`bytes_quota`), `radosgw-admin account get` (`quota.enabled`, `quota.max_size`), `ceph mon dump` (`auth_allowed_ciphers`), `ceph orch upgrade status` (`is_paused`) ;
-- procédure cephx de 20.2.4 (`aes256k`) : ce que cephadm fait **seul** pendant la mise à jour (clés des démons) ; capacité des clients de Debian 13 (bibliothèques Ceph 18.2 du paquet `ceph-common` de Debian, noyau 6.12 pour krbd et CephFS) à utiliser une clé `aes256k` — le corrigé suppose que **non** (hypothèse prudente) ; syntaxe d'une capacité moniteur combinant `profile rbd` et `allow r fsname=…` (E31) ;
+- procédure cephx de 20.2.4 (`aes256k`) : ce que cephadm fait **seul** pendant la mise à jour (clés des démons ; ajout éventuel de `aes256k` à `auth_allowed_ciphers`) ; clients de Debian 13 : l'avis CVE-2025-30156 indique que le client noyau ne connaît `aes256k` qu'à partir de Linux 7.0 (Debian 13 : 6.12, sauf rétroportage), et seuls 20.2.4 et 19.2.6 sont corrigés (rien pour Reef 18.2) : le corrigé retient donc que ces clients **ne peuvent pas** suivre — vérifie-le sur ton lab ; syntaxe d'une capacité moniteur combinant `profile rbd` et `allow r fsname=…` (E31) ;
 - comportement d'un mgr en attente du module `prometheus` avec `standby_behaviour = default` (le corrigé ne s'appuie que sur le mode `error`, documenté) ; présence des métriques `ceph_pool_stored` / `ceph_pool_max_avail` / `ceph_pg_clean` sous ces noms en 20.2 ;
 - application du certificat du tableau de bord par l'entrée standard (`ceph dashboard set-ssl-certificate -i -` à travers ssh) et relecture après `mgr module disable/enable` ; politique `x509.allow.dns` du provisioner `ceph-dashboard` avec trois noms ;
 - `cephadm version` qui affiche la version du paquet `cephadm` installé sans lancer de conteneur ; disponibilité du dépôt RPM signé `download.ceph.com/rpm-20.2.4/el10/` (même méthode qu'en E02 : seule la variable `ceph_noeud_version` change) ;
@@ -212,7 +212,7 @@ Le passage à 20.2.3 → 20.2.4 ne change pas de série : pas de `require_osd_re
 [admin@ceph01 ~]$ sudo ceph osd pool set noautoscale
 ```
 
-`upgrade check` tire l'image sur les hôtes et liste les démons qui seraient mis à jour, sans rien redémarrer. `noautoscale` évite qu'une fusion ou division de PG ne commence au milieu des redémarrages (recommandation de la page *Upgrading Ceph*). CephFS : par défaut l'orchestrateur ramène `max_mds` à 1 le temps de la mise à jour des MDS (sans effet ici, `max_mds` vaut déjà 1) ; RGW : les démons sont redémarrés un par un, haproxy retire et réintègre chacun.
+`upgrade check` fait tirer (ou inspecter) l'image par **un** hôte de l'inventaire (le premier), en lit la version, vérifie que la montée est permise et liste les démons qui seraient mis à jour, sans rien redémarrer. Il ne prouve donc pas que **chaque** hôte peut la tirer : pour cela, tire-la d'avance sur tous les nœuds, sans rien démarrer (`uv run ansible role_ceph -b -m ansible.builtin.command -a 'podman pull quay.io/ceph/ceph:v20.2.4'` depuis `~/src/ansible`) ; c'est aussi ce qui raccourcit chaque redémarrage pendant la mise à jour. `noautoscale` évite qu'une fusion ou division de PG ne commence au milieu des redémarrages (recommandation de la page *Upgrading Ceph*). CephFS : par défaut l'orchestrateur ramène `max_mds` à 1 le temps de la mise à jour des MDS (sans effet ici, `max_mds` vaut déjà 1) ; RGW : les démons sont redémarrés un par un, haproxy retire et réintègre chacun.
 
 *3-4. Mise à jour échelonnée* :
 
@@ -224,7 +224,7 @@ Le passage à 20.2.3 → 20.2.4 ne change pas de série : pas de `require_osd_re
 [admin@ceph01 ~]$ sudo ceph orch upgrade pause ; sleep 120 ; sudo ceph -s ; sudo ceph orch upgrade resume
 ```
 
-Ordre observé : mgr (bascule vers le mgr à jour), mon (un par un, quorum vérifié), crash, osd (un par un, `ok-to-stop` avant chacun, `OSD_DOWN` et PG `degraded` passagers), mds (actif puis attente : bascule de quelques secondes), rgw. Haproxy et keepalived de l'ingress gardent **leur** image (ce ne sont pas des démons Ceph). Durée typique dans le lab : 40 à 70 minutes, dont l'essentiel pour les 9 OSD.
+Ordre observé (ordre fixe de cephadm : mgr, mon, crash, osd, mds, rgw, rbd-mirror, cephfs-mirror, ceph-exporter, iscsi, nfs, nvmeof…, seuls les types déployés apparaissent) : mgr (bascule vers le mgr à jour), mon (un par un, quorum vérifié), crash, osd (un par un, `ok-to-stop` avant chacun, `OSD_DOWN` et PG `degraded` passagers), mds (actif puis attente : bascule de quelques secondes), rgw, puis nfs (E16). Haproxy et keepalived de l'ingress gardent **leur** image (ce ne sont pas des démons Ceph). Durée typique dans le lab : 40 à 70 minutes, dont l'essentiel pour les 12 OSD.
 
 *5. Après* :
 
@@ -294,14 +294,15 @@ Tableau à produire : identité → utilisateur → client et version. Dans le l
 [admin@ceph01 ~]$ for i in $(sudo ceph osd ls); do
                     until sudo ceph osd ok-to-stop "$i" >/dev/null 2>&1; do sleep 10; done
                     sudo ceph orch daemon restart "osd.$i"
-                    sleep 20; until sudo ceph health | grep -q HEALTH_OK; do sleep 10; done; done
-[admin@ceph01 ~]$ sudo ceph orch restart mds.cephfs ; sudo ceph mgr fail ; sudo ceph orch restart rgw.<SERVICE>
+                    sleep 20; until sudo ceph pg stat | grep -Eq '^[0-9]+ pgs: [0-9]+ active\+clean;'; do sleep 10; done; done
+[admin@ceph01 ~]$ sudo ceph orch restart mds.cephfs ; sudo ceph orch restart rgw.<SERVICE> ; sudo ceph orch restart nfs.<SERVICE-NFS>
+[admin@ceph01 ~]$ sudo ceph mgr fail ; sleep 60 ; sudo ceph mgr fail      # deux bascules : chaque mgr redémarre une fois
 [admin@ceph01 ~]$ sudo ceph config show osd.0 ms_cluster_mode                                               # secure
 admin@cephcli01:~$ sudo rbd device map rbd-test/disque01 --id <ID-E13> -o ms_mode=secure
 admin@cephcli01:~$ sudo mount -t ceph <ID-E13>@.cephfs=/ /mnt/cephfs -o ms_mode=secure
 ```
 
-`<SERVICE>` : nom de ton service RGW (`ceph orch ls rgw`). Réglé au niveau `global`, `ms_client_mode` s'applique aussi aux clients librados qui lisent la configuration centrale ; les clients noyau, eux, choisissent par `ms_mode`. Ce que ces réglages **ne** protègent **pas** : les connexions msgr1 (port 6789), qui n'ont pas de mode sécurisé. Décision du corrigé : pas de désactivation de msgr1 en v1 (risque de couper un client ancien), mais aucune connexion v1 tolérée en exploitation : vérification par `ss` intégrée à la recette, et désactivation (`ms_bind_msgr1 false` + monmap sans adresses v1) inscrite au ticket.
+`<SERVICE>` et `<SERVICE-NFS>` : noms de tes services RGW et NFS (`ceph orch ls`). La boucle des OSD attend que **tous** les PG soient `active+clean` (ligne `ceph pg stat` sans autre état), et non `HEALTH_OK` : les contrôles `AUTH_INSECURE_*` laissés par E26 maintiennent `HEALTH_WARN` jusqu'à l'étape 4, et la boucle ne finirait jamais. `ceph mgr fail` ne fait redémarrer que le mgr actif : la seconde bascule redémarre l'autre. Réglé au niveau `global`, `ms_client_mode` s'applique aussi aux clients librados qui lisent la configuration centrale ; les clients noyau, eux, choisissent par `ms_mode`. Ce que ces réglages **ne** protègent **pas** : les connexions msgr1 (port 6789), qui n'ont pas de mode sécurisé. Décision du corrigé : pas de désactivation de msgr1 en v1 (risque de couper un client ancien), mais aucune connexion v1 tolérée en exploitation : vérification par `ss` intégrée à la recette, et désactivation (`ms_bind_msgr1 false` + monmap sans adresses v1) inscrite au ticket.
 
 *3. Repos* : MR sur `plateforme/ceph` (`encrypted: true` dans les deux services d'OSD), pipeline, puis `outils/appliquer.sh specs/osd.yaml` depuis `adm01` (E23). Puis, pour chaque OSD de `ceph03`, **un par un** :
 
@@ -314,12 +315,13 @@ admin@cephcli01:~$ sudo mount -t ceph <ID-E13>@.cephfs=/ /mnt/cephfs -o ms_mode=
 [admin@ceph01 ~]$ sudo ceph config-key ls | grep -c dm-crypt          # noms des entrées, jamais « get »
 ```
 
-`--replace` garde l'identifiant (l'OSD passe à `destroyed` dans la carte, sa place CRUSH est conservée) ; `--zap` efface le disque ; cephadm recrée l'OSD sur le disque libéré selon la spécification **actuelle**, donc chiffré. Avec 3 hôtes, le vidage de l'OSD reporte ses PG sur l'autre OSD de même classe de `ceph03` : vérifie qu'il a la place (`ceph osd df`). La clé LUKS de chaque OSD est dans le magasin clé-valeur des moniteurs (`dm-crypt/osd/<fsid de l'OSD>/luks`) : un disque ou un fichier `qcow2` copié ne se lit plus, mais une identité capable de lire ce magasin (toute identité `mon 'allow r'` avant 20.2.4) a les clés **et**, si elle peut joindre les OSD, les données ; d'où l'importance de E26.
+`--replace` garde l'identifiant (l'OSD passe à `destroyed` dans la carte, sa place CRUSH est conservée) ; `--zap` efface le disque ; cephadm recrée l'OSD sur le disque libéré selon la spécification **actuelle**, donc chiffré. `ceph03` étant seul dans sa baie (domaine de panne `rack`, E14), le vidage de l'OSD reporte ses PG sur l'autre OSD de même classe de `ceph03` (et, pour l'OSD `hdd`, il n'y en a pas d'autre : ses PG restent `undersized` jusqu'à la recréation) : vérifie la place (`ceph osd df`). La clé LUKS de chaque OSD est dans le magasin clé-valeur des moniteurs (`dm-crypt/osd/<fsid de l'OSD>/luks`) : un disque ou un fichier `qcow2` copié ne se lit plus, mais une identité capable de lire ce magasin (toute identité `mon 'allow r'` avant 20.2.4) a les clés **et**, si elle peut joindre les OSD, les données ; d'où l'importance de E26.
 
 *4. Clés cephx* : la question préalable décide de tout. Hypothèse du corrigé (à vérifier sur ton lab) : les bibliothèques Ceph de Debian 13 (18.2) et le client noyau 6.12 **ne savent pas** utiliser une clé `aes256k`. Conséquences : le type préféré **reste** `aes` (sinon toute identité créée ensuite, celles des équipes en E31 par exemple, serait inutilisable par `cephcli01`), la création de clés de l'ancien type reste permise, l'ancien type reste accepté.
 
 ```
 [admin@ceph01 ~]$ sudo ceph --format=json mon dump | jq '.auth_allowed_ciphers, .auth_preferred_cipher, .auth_service_cipher'
+[admin@ceph01 ~]$ sudo ceph mon set auth_allowed_ciphers aes,aes256k                                   # seulement si aes256k manque (étape 1 de la doc)
 [admin@ceph01 ~]$ sudo ceph health detail | grep -E 'AUTH_INSECURE_(SERVICE_KEY_TYPE|SERVICE_TICKETS)'   # cephadm a renouvelé les démons ?
 [admin@ceph01 ~]$ sudo ceph mon set auth_service_cipher aes256k                                         # tickets de service (étape 5 de la doc)
 ```
@@ -358,7 +360,7 @@ admin@adm01:~/src/ansible$ # MR 1 : ceph_noeud_cle_orchestrateur = ancienne + no
 admin@adm01:~$ scp /tmp/orch-nouvelle /tmp/orch-nouvelle.pub ceph01:/tmp/ && shred -u /tmp/orch-nouvelle
 [root@ceph01 ~]# ceph cephadm set-priv-key -i /tmp/orch-nouvelle
 [root@ceph01 ~]# ceph cephadm set-pub-key -i /tmp/orch-nouvelle.pub
-[root@ceph01 ~]# for h in ceph01 ceph02 ceph03; do ceph cephadm check-host "$h"; done
+[root@ceph01 ~]# for h in $(ceph orch host ls --format json | jq -r '.[].hostname'); do ceph cephadm check-host "$h"; done
 [root@ceph01 ~]# shred -u /tmp/orch-nouvelle /tmp/orch-nouvelle.pub
 admin@adm01:~/src/ansible$ # MR 2 : ceph_noeud_cle_orchestrateur = nouvelle seule (liste exclusive), pipeline
 [admin@ceph02 ~]$ sudo cat /var/lib/cephadm/.ssh/authorized_keys          # une seule ligne : la nouvelle clé
@@ -400,7 +402,9 @@ Chiffrement côté client pour les volumes de données de santé les plus sensib
 Fichiers : profils [`bench/`](fichiers/M08-E28/ceph/bench/) (`plateforme/ceph`) et modèle de [`performances.md`](fichiers/M08-E28/medisphere/docs/stockage/performances.md) (sans aucun chiffre : ce sont **tes** mesures qui comptent).
 
 ```
-[admin@ceph02 ~]$ iperf3 -s                                                   # serveur, à arrêter ensuite
+[admin@ceph02 ~]$ sudo firewall-cmd --add-port=5201/tcp                     # ouverture temporaire (pas --permanent)
+[admin@ceph02 ~]$ iperf3 -s                                                   # serveur, à arrêter ensuite (Ctrl-C)
+[admin@ceph02 ~]$ sudo firewall-cmd --remove-port=5201/tcp                  # après les mesures
 [admin@ceph01 ~]$ iperf3 -c 10.10.31.52 -t 30 ; iperf3 -c 10.10.31.52 -t 30 -P 4 ; iperf3 -c 10.10.30.52 -t 30 -P 4
 [admin@ceph01 ~]$ ping -c 3 -M do -s 8972 10.10.31.52
 [admin@ceph01 ~]$ sudo ceph tell osd.0 bench ; sudo ceph tell osd.2 bench         # un ssd, un hdd (ceph osd tree)
@@ -417,12 +421,12 @@ Fichiers : profils [`bench/`](fichiers/M08-E28/ceph/bench/) (`plateforme/ceph`) 
 admin@cephcli01:~$ sudo FIO_DEV=/dev/rbd0 fio --output-format=json --output=bdd.json ~/src/ceph/bench/base-de-donnees.fio
 ```
 
-Identité de mesure jetable `client.bench` (`profile rbd pool=bench`) pour `cephcli01`, supprimée au nettoyage. Jumbo/1500, sur les **trois** nœuds en même temps (commande Ansible ad hoc, non persistante) :
+Identité de mesure jetable `client.bench` (`profile rbd pool=bench`) pour `cephcli01`, supprimée au nettoyage. Jumbo/1500, sur **tous** les nœuds en même temps, `ceph04` compris (groupe `role_ceph`, commande Ansible ad hoc, non persistante) : un nœud oublié à 9000 enverrait des trames que les autres jettent, c'est la panne de M08-E42.
 
 ```
-admin@adm01:~/src/ansible$ uv run ansible 'ceph0[1-3]' -b -m ansible.builtin.command -a 'ip link set ens19 mtu 1500'
+admin@adm01:~/src/ansible$ uv run ansible role_ceph -b -m ansible.builtin.command -a 'ip link set ens19 mtu 1500'    # ceph01 à ceph04
 … iperf3 cluster, rados bench write 4M …
-admin@adm01:~/src/ansible$ uv run ansible 'ceph0[1-3]' -b -m ansible.builtin.command -a 'ip link set ens19 mtu 9000'
+admin@adm01:~/src/ansible$ uv run ansible role_ceph -b -m ansible.builtin.command -a 'ip link set ens19 mtu 9000'
 [admin@ceph01 ~]$ ping -c 3 -M do -s 8972 10.10.31.53
 ```
 
@@ -440,7 +444,7 @@ Nettoyage :
 
 **Explications**
 
-Mesurer couche par couche localise la limite : si `iperf3` donne 10 Gbit/s et `rados bench` 300 Mio/s en écriture, ce n'est pas le réseau ; si `ceph tell osd.N bench` est déjà bas, c'est le disque (ici, le SSD unique de `pve01` partagé par 6 OSD et toutes les autres VMs). En écriture répliquée, chaque octet écrit par un client est écrit 3 fois et traverse 2 fois le réseau de cluster : le débit d'écriture d'un client est au mieux le tiers de ce que les disques encaissent ensemble. La latence d'une écriture synchrone en profondeur 1 est la borne basse de ce que verra une base de données : réseau client → OSD primaire, réplication vers deux secondaires, écriture des trois, acquittements. Les jumbo frames réduisent le nombre de paquets (donc le CPU par octet) ; sur un pont Linux en mémoire, l'effet sur le débit est faible, sur le CPU mesurable.
+Mesurer couche par couche localise la limite : si `iperf3` donne 10 Gbit/s et `rados bench` 300 Mio/s en écriture, ce n'est pas le réseau ; si `ceph tell osd.N bench` est déjà bas, c'est le disque (ici, le SSD unique de `pve01` partagé par les 8 OSD SSD et toutes les autres VMs). En écriture répliquée, chaque octet écrit par un client est écrit 3 fois et traverse 2 fois le réseau de cluster : le débit d'écriture d'un client est au mieux le tiers de ce que les disques encaissent ensemble. La latence d'une écriture synchrone en profondeur 1 est la borne basse de ce que verra une base de données : réseau client → OSD primaire, réplication vers deux secondaires, écriture des trois, acquittements. Les jumbo frames réduisent le nombre de paquets (donc le CPU par octet) ; sur un pont Linux en mémoire, l'effet sur le débit est faible, sur le CPU mesurable.
 
 **Alternatives**
 - `fio` avec le moteur `rbd` (librbd, sans krbd) : mesure le chemin d'un client QEMU/OpenStack ; krbd mesure celui d'un client noyau (Kubernetes, `cephcli01`).
@@ -483,12 +487,12 @@ Budget (détail dans le modèle) : système 0,5 + MON 0,7 + MGR 0,5 + MDS 0,6 (a
 
 ```
 [admin@ceph01 ~]$ sudo ceph config set osd osd_memory_target_autotune false
-[admin@ceph01 ~]$ for h in ceph01 ceph02 ceph03; do sudo ceph config rm osd/host:$h osd_memory_target; done
+[admin@ceph01 ~]$ for h in $(sudo ceph orch host ls --format json | jq -r '.[].hostname'); do sudo ceph config rm osd/host:$h osd_memory_target; done
 [admin@ceph01 ~]$ sudo ceph config set osd osd_memory_target 1073741824
 [admin@ceph01 ~]$ for i in $(sudo ceph osd ls); do echo "osd.$i $(sudo ceph config show osd.$i osd_memory_target)"; done
 ```
 
-L'option se relit à chaud (le cache de BlueStore se redimensionne). Le minimum de l'option (`osd_memory_target_min`) est inférieur à 1 Gio : la valeur est acceptée, mais elle est **basse** pour BlueStore ; c'est un compromis de lab, écrit comme tel.
+L'option se relit à chaud (le cache de BlueStore se redimensionne). Le minimum de l'option (`min: 896Mi` dans `ceph config help osd_memory_target`, soit `osd_memory_base` + `osd_memory_cache_min`) est inférieur à 1 Gio : la valeur est acceptée, mais elle est **basse** pour BlueStore (défaut : 4 Gio) ; c'est un compromis de lab, écrit comme tel.
 
 *3. mClock* :
 
@@ -661,7 +665,7 @@ Libre-service par un catalogue (M28) qui écrit dans `allocations.yaml` par MR ;
 
 ### M08-E32 — Questions de production : stockage distribué
 
-1. **Un nœud tombe** : chaque PG a perdu une copie sur trois ; lectures et écritures continuent (2 copies ≥ `min_size` 2), PG `active+undersized+degraded`. **Pas de reconstruction** : la règle exige 3 hôtes distincts et il n'en reste que 2 ; le cluster attend le retour du nœud (après 10 minutes, les OSD sont marqués `out`, sans effet sur le placement faute d'hôte). **Un second nœud** une heure plus tard : 1 copie par PG, sous `min_size` → PG inactifs, **toutes les E/S bloquées** (pas de perte : la copie restante est intacte) ; et le quorum des MON est perdu (1 sur 3) : le cluster se fige complètement. `min_size=1` aurait laissé écrire sur une seule copie : la moindre panne de cet OSD aurait alors perdu des écritures acquittées. C'est le compromis disponibilité/durabilité, et la raison du défaut 2.
+1. **Un nœud tombe** : chaque PG a perdu une copie sur trois ; lectures et écritures continuent (2 copies ≥ `min_size` 2), PG `active+undersized+degraded`. **Pas de reconstruction** : la règle exige 3 baies distinctes et il n'en reste que 2 ; le cluster attend le retour du nœud. Les OSD ne sont même pas marqués `out` au bout de 10 minutes : un sous-arbre entier de type `rack` (ou plus large) qui tombe n'est pas sorti automatiquement (`mon_osd_down_out_subtree_limit`, défaut `rack`), pour éviter une reconstruction massive après une panne d'alimentation ou de commutateur. **Un second nœud** une heure plus tard : 1 copie par PG, sous `min_size` → PG inactifs, **toutes les E/S bloquées** (pas de perte : la copie restante est intacte) ; et le quorum des MON est perdu (1 sur 3) : le cluster se fige complètement. `min_size=1` aurait laissé écrire sur une seule copie : la moindre panne de cet OSD aurait alors perdu des écritures acquittées. C'est le compromis disponibilité/durabilité, et la raison du défaut 2.
 2. **c)** au bout de `mon_osd_down_out_interval` (600 s par défaut), le MON marque l'OSD `out` et ses PG sont réaffectés : la reconstruction a commencé il y a 5 minutes **si** un emplacement existe. a) est faux (c'est automatique, sauf `noout`) ; b) faux (10 minutes, pas immédiatement) ; d) faux : Ceph le marque `out` quand même. Avec 3 baies d'un nœud chacune et une règle de taille 3 (domaine `rack`), la reconstruction se fait **dans le même nœud** (sur l'autre OSD de même classe), ce qui charge cet OSD.
 3. `MAX AVAIL` = espace que le pool peut encore recevoir **avant que le premier OSD concerné atteigne `full_ratio`**, compte tenu de la répartition CRUSH et de la réplication : 384/3 = 128 Gio est un plafond théorique (OSD vides, répartition parfaite) ; on retranche l'occupation des autres pools de la même classe, la marge jusqu'au ratio, et le déséquilibre. Il suffit d'un OSD plus rempli pour que tout le pool soit limité par lui (les données sont réparties uniformément ; quand **un** OSD est plein, les écritures qui y vont échouent). Seuils (valeurs par défaut de Ceph, ramenées à 0,75 / 0,85 / 0,95 en E20) : `nearfull` (alerte), `backfillfull` (la récupération ne remplit plus cet OSD), `full` ( **toutes** les écritures du cluster vers les PG concernés sont refusées ; en pratique le cluster passe en lecture seule). D'où le rééquilibreur (`balancer`, actif par défaut en `upmap`).
 4. Avec **plus** d'hôtes que la taille de réplication, perdre un nœud reconstruit ses données sur les survivants : il faut que la capacité restante absorbe la part du nœud perdu (avec 4 nœuds égaux, ~75 % × ratio ; avec 3 nœuds et une taille 2, 66 %). Avec 3 hôtes et `size=3`, il n'y a nulle part où mettre la troisième copie : aucune reconstruction, la capacité n'est pas le problème de la perte d'un **nœud**, mais celle d'un **OSD** (report sur l'autre OSD de même classe du même nœud : d'où 40 % dans la politique, avec `backfillfull` à 0,85).
@@ -675,7 +679,7 @@ Libre-service par un catalogue (M28) qui écrit dans `allocations.yaml` par MR ;
 12. Le script détecte que la base manque (pas d'instantané `sauv-*` antérieur) et fait un **complet** : RPO intact (24 h), mais un export plus lourd cette nuit-là. Pendant la journée où l'instantané manque, rien ne change pour le RPO : la dernière sauvegarde envoyée est dans PBS. Si le script avait été silencieux (complet raté, incrémental impossible) : on le détecterait par l'âge de la dernière sauvegarde dans PBS (alerte « plus de 26 h », `ms-verif-sauvegardes`) et, mieux, par la restauration de test régulière.
 13. **b)** un cluster vide configuré comme l'ancien ; en réimportant les identités (`ceph auth import`), les clients s'authentifient avec leurs clés d'origine. a) faux : aucune donnée (elles sont dans les OSD) ; c) faux : une clé cephx n'est pas liée au `fsid`, elle s'importe ; d) faux : de nouveaux OSD sont créés vides (reprendre d'anciens OSD est une procédure de reconstruction des MON très différente). Pour retrouver le **service** : recréer pools et règles (depuis l'archive ou `plateforme/ceph`), restaurer les volumes depuis PBS (`import-diff`), les données CephFS et S3 (non sauvegardées hors site en v1 : c'est la limite), et repointer les clients (adresses des MON, `fsid` nouveau dans leur configuration).
 14. 3 gros nœuds : moins cher par To (moins de châssis, de ports), mais perte d'un nœud = un tiers de la capacité et aucune reconstruction possible en `size=3` (redondance réduite jusqu'au retour) ; la tolérance d'un nœud impose de garder la capacité sous ~45-66 % selon les disques. 6 petits nœuds : coût unitaire plus élevé, mais la perte d'un nœud (1/6) se reconstruit sur les 5 autres, plus vite (parallélisme) ; capacité utile à garder sous ~80 % × 5/6 ; codes d'effacement possibles (`k=4, m=2` tolère 2 pannes pour 1,5× de surcoût au lieu de 3×). Pour MédiSphère : au moins 5-6 nœuds en production.
-15. Disques entiers : Ceph suppose que chaque OSD est un domaine de panne et de performance **indépendant** ; un RAID matériel masque les pannes et double la redondance, des partitions ou des disques virtuels sur un même disque physique font croire à de l'indépendance qui n'existe pas (une panne du disque physique emporte plusieurs OSD, et ils se disputent les mêmes E/S). Le lab enfreint tout : 6 OSD SSD sur un seul SSD, 3 HDD sur un seul HDD, tous sur un seul hôte. E28 ne vaut que pour des comparaisons ; aucune conclusion de capacité de production, ni de comportement en panne matérielle (la panne de `ssd-lab` arrêterait tous les OSD SSD à la fois).
+15. Disques entiers : Ceph suppose que chaque OSD est un domaine de panne et de performance **indépendant** ; un RAID matériel masque les pannes et double la redondance, des partitions ou des disques virtuels sur un même disque physique font croire à de l'indépendance qui n'existe pas (une panne du disque physique emporte plusieurs OSD, et ils se disputent les mêmes E/S). Le lab enfreint tout : 6 OSD SSD (8 avec `ceph04`) sur un seul SSD, 3 HDD (4) sur un seul HDD, tous sur un seul hôte. E28 ne vaut que pour des comparaisons ; aucune conclusion de capacité de production, ni de comportement en panne matérielle (la panne de `ssd-lab` arrêterait tous les OSD SSD à la fois).
 16. RGW peut fournir le journal des opérations (`rgw_enable_ops_log` : qui — l'identité S3 —, quoi, quand, d'où) et les journaux d'accès HTTP de l'ingress ; il ne sait pas **quel patient** concerne un objet (il ne voit qu'un nom d'objet opaque), ni quel utilisateur final derrière l'identité de l'application. La traçabilité « qui a consulté le dossier de tel patient » se fait **dans l'application** (MédiDoc journalise l'utilisateur, le patient, le document), dans un journal protégé et conservé (M22) ; Ceph fournit la traçabilité technique en complément.
 
 ---

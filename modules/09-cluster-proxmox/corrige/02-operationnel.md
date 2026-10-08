@@ -60,11 +60,11 @@ Fichier : [`ceph-hyperconverge.sh`](fichiers/M09-E10/ceph-hyperconverge.sh) (ét
    ID  CLASS  WEIGHT   TYPE NAME      STATUS
    -1         0.28117  root default
    -3         0.09372      host hv01
-    0    hdd  0.04686          osd.0   up
-    1    hdd  0.04686          osd.1   up
+    0    ssd  0.04686          osd.0   up
+    1    ssd  0.04686          osd.1   up
    …
    ```
-   La classe est souvent `hdd` : un disque virtuel QEMU sans l'option `ssd=1` se déclare rotatif (`/sys/block/sdX/queue/rotational` = 1). Sans conséquence ici (une seule classe) ; à corriger (`ceph osd crush rm-device-class` puis `set-device-class ssd`) si une règle CRUSH filtrait par classe. Chaque hôte est une branche de l'arbre : la règle par défaut place les copies sur des **hôtes** différents.
+   La classe est `ssd` : les disques des nœuds sont déclarés avec l'option `ssd=1` (M09-E03, `ssd = true` dans OpenTofu), que QEMU présente comme non rotatifs (`/sys/block/sdX/queue/rotational` = 0). Sans cette option, un disque virtuel se déclare rotatif et l'OSD est classé `hdd` (⚠️ classe exacte à relever sur ton lab). Sans conséquence ici (une seule classe) ; à corriger (`ceph osd crush rm-device-class` puis `set-device-class`) si une règle CRUSH filtrait par classe. Chaque hôte est une branche de l'arbre : la règle par défaut place les copies sur des **hôtes** différents.
 7. **Pool et stockage** :
    ```
    root@hv01:~# pveceph pool create ceph-vm --size 3 --min_size 2 --pg_autoscale_mode on --application rbd --add_storages 1
@@ -326,7 +326,7 @@ Réservée aux VMs explicitement classées « RPO 15 minutes » dans le catalogu
 
 **Solution**
 
-Fichiers : [`pbs01-hv.sh`](fichiers/M09-E15/pbs01-hv.sh) (sur `pbs01` : relevé d'état, création, retour arrière), [`pbs-stockage.sh`](fichiers/M09-E15/pbs-stockage.sh) (sur `hv01` : stockage chiffré et tâche), [`registre-secrets-extrait.md`](fichiers/M09-E15/medisphere/docs/socle/registre-secrets-extrait.md), ligne de la matrice des flux : [`pare_feu.yml.extrait`](fichiers/M09-E18/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait) (commune avec E18).
+Fichiers : [`pbs01-hv.sh`](fichiers/M09-E15/pbs01-hv.sh) (sur `pbs01` : relevé d'état, création, retour arrière), [`pbs-stockage.sh`](fichiers/M09-E15/pbs-stockage.sh) (sur `hv01` : stockage chiffré et tâche), [`registre-secrets-extrait.md`](fichiers/M09-E15/medisphere/docs/socle/registre-secrets-extrait.md), ligne de la matrice des flux : [`pare_feu.yml.extrait`](fichiers/M09-E18/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) (commune avec E18).
 
 1. Sur `pbs01`, après `./pbs01-hv.sh --etat > …` (conservé dans `~/m09/e15/`) :
    ```
@@ -343,15 +343,17 @@ Fichiers : [`pbs01-hv.sh`](fichiers/M09-E15/pbs01-hv.sh) (sur `pbs01` : relevé 
    ```
    (Aucun privilège sur `par1` : le jeton ne voit ni ne touche les sauvegardes de `pve01`.) `DatastoreBackup` : créer des sauvegardes, lire et restaurer **les siennes** ; pas de purge, pas de suppression. Les droits d'un jeton PBS sont l'intersection des siens et de ceux de son utilisateur : ACL sur les deux.
 2. **Élagage** : la tâche `prune-par1` (M00-E22) a été créée avec `--ns par1` **sans** `--max-depth` ; la référence de PBS dit qu'une profondeur vide signifie « récursion complète » : elle s'applique donc aussi à `par1/hv`, avec la même politique (7 quotidiennes, 4 hebdomadaires, 6 mensuelles). Même chose pour `verify-par1`. Le corrigé ne crée **pas** de tâche propre : une seule politique pour `par1` et ses sous-espaces, lisible ; on en créerait une (avec `--max-depth 0` sur la tâche parente, pour ne pas appliquer deux politiques au même groupe) le jour où le cluster aurait une rétention différente. Vérifie-le : `proxmox-backup-manager prune-job list` et, après une nuit, le journal de la tâche qui doit citer des groupes de `par1/hv`.
-3. **Stockage** (`EMPREINTE=$(…) ./pbs-stockage.sh` sur `hv01`, secret saisi sans écho) :
+3. **Stockage** (`EMPREINTE=$(…) ./pbs-stockage.sh` sur `hv01`) :
    ```
    root@hv01:~# pvesm add pbs pbs-par2 --server 10.20.10.10 --datastore ds-lab --namespace par1/hv \
-                  --username 'wb-hv@pbs!hv-par1' --password "$secret" --fingerprint '<EMPREINTE>' \
-                  --encryption-key autogen --content backup --prune-backups keep-all=1
+                  --username 'wb-hv@pbs!hv-par1' --fingerprint '<EMPREINTE>' \
+                  --encryption-key autogen --content backup --prune-backups keep-all=1 --password
+   Enter Password: ********
    root@hv01:~# ls -l /etc/pve/priv/storage/
    -rw------- 1 root www-data … pbs-par2.enc
    -rw------- 1 root www-data … pbs-par2.pw
    ```
+   `--password` **sans valeur**, en dernière position : `pvesm` demande le secret lui-même, sans écho (exemple de `pvesm(1)`) ; donné en argument (`--password "$secret"`), il serait visible dans `ps` pendant l'appel. ⚠️ Libellé de l'invite (et éventuelle confirmation) à vérifier sur ton lab.
    Secret et clé sont dans `/etc/pve/priv/storage/` (pmxcfs) : **lisibles par root sur les trois nœuds**, ce qui est nécessaire (n'importe quel nœud sauvegarde ses VMs) et suffisant pour comprendre le risque : `root` sur un nœud = lecture de toutes les sauvegardes du cluster.
    **Flux** : MGMT → `pbs01` TCP 8007 est déjà autorisé par la règle large « bastion (MGMT) vers tout le lab, PAR2 et LYO1 » (M00-E10, M07-E30) ; `pbs01` répond par `wg0` (route 10.10.0.0/16, M00-E21). Le corrigé ajoute quand même une ligne **explicite** (`HV_NOEUDS` → `PBS01`, 8007, `M09-E15`) : la matrice doit dire pourquoi ce flux existe, et il doit survivre au resserrement de la règle MGMT (M09-E26).
 4. **Clé à l'abri**, sans l'écrire en clair sur `adm01` :
@@ -545,7 +547,7 @@ Comptes nominatifs uniquement par le fournisseur d'identité (M24), `root@pam` r
 **Solution** (une solution possible, celle du corrigé)
 
 Fichiers :
-- `plateforme/ansible` : rôle [`pve_cluster`](fichiers/M09-E18/ansible/roles/pve_cluster/) (`defaults`, `tasks/{main,certificat,keepalived}.yml`, `handlers`, `templates/keepalived.conf.j2`, `templates/pve-cluster-sante.sh.j2`, `meta`), playbook [`hv-cluster.yml`](fichiers/M09-E18/ansible/playbooks/hv-cluster.yml), confiance d'`adm01` et `runner01` : [`host_vars/adm01/pki-hv.yml`](fichiers/M09-E18/ansible/inventories/lab/host_vars/adm01/pki-hv.yml), [`host_vars/runner01/pki-hv.yml`](fichiers/M09-E18/ansible/inventories/lab/host_vars/runner01/pki-hv.yml), [`pki/LISEZMOI-hv-par1-root-ca.md`](fichiers/M09-E18/ansible/pki/LISEZMOI-hv-par1-root-ca.md), flux : [`pare_feu.yml.extrait`](fichiers/M09-E18/ansible/inventories/lab/host_vars/gw01/pare_feu.yml.extrait).
+- `plateforme/ansible` : rôle [`pve_cluster`](fichiers/M09-E18/ansible/roles/pve_cluster/) (`defaults`, `tasks/{main,certificat,keepalived}.yml`, `handlers`, `templates/keepalived.conf.j2`, `templates/pve-cluster-sante.sh.j2`, `meta`), playbook [`hv-cluster.yml`](fichiers/M09-E18/ansible/playbooks/hv-cluster.yml), confiance d'`adm01` et `runner01` : [`host_vars/adm01/pki-hv.yml`](fichiers/M09-E18/ansible/inventories/lab/host_vars/adm01/pki-hv.yml), [`host_vars/runner01/pki-hv.yml`](fichiers/M09-E18/ansible/inventories/lab/host_vars/runner01/pki-hv.yml), [`pki/LISEZMOI-hv-par1-root-ca.md`](fichiers/M09-E18/ansible/pki/LISEZMOI-hv-par1-root-ca.md), flux : [`pare_feu.yml.extrait`](fichiers/M09-E18/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait).
 - `plateforme/infra` : [`envs/hv-invites/`](fichiers/M09-E18/infra/envs/hv-invites/) (`versions.tf`, `backend.tf`, `chiffrement.tf`, `providers.tf`, `variables.tf`, `main.tf`, `outputs.tf`, `terraform.tfvars`, `README.md`), jobs de CI : [`gitlab-ci.yml.extrait`](fichiers/M09-E18/infra/gitlab-ci.yml.extrait).
 
 **Architecture.**
@@ -813,7 +815,7 @@ Fichiers : [`importer-legacy.sh`](fichiers/M09-E23/importer-legacy.sh) (contrôl
    root@hv01:~# sha256sum /var/lib/vz/import/legacy-rdv01.ova       # à comparer avec la somme notée à la génération
    ```
    Après extraction : `sha256sum -c` sur le manifeste converti (le script le fait). Le descripteur déclare 2 vCPU, 2048 Mo, un contrôleur SCSI `lsilogic`, un disque de 10 Gio en VMDK *streamOptimized*, une carte `E1000` sur « VM Network », un micrologiciel BIOS, un système « Debian 64 bits » (identifiant OVF 96). L'ordre (descripteur en premier) est exigé par la norme OVF pour une archive OVA.
-2. **Contenu « import »** : `pvesm set local --content iso,vztmpl,backup,import` (en **conservant** les contenus existants : l'option remplace la liste). L'OVA apparaît dans *local → Virtual Guests* ; l'assistant propose nom, CPU, mémoire, disques et carte réseau extraits du descripteur, avec un stockage de travail pour l'extraction ; il signale qu'un contrôleur SCSI n'est presque jamais décrit dans un OVF et propose VirtIO SCSI.
+2. **Contenu « import »** : déjà ajouté en M09-E06 (`pvesm status --storage local` et `grep -A3 '^dir: local' /etc/pve/storage.cfg` le confirment). Sinon : `pvesm set local --content iso,vztmpl,backup,import,snippets`, en **conservant** tous les contenus existants (l'option remplace la liste ; oublier `snippets` casserait le fragment cloud-init `medisphere-agent.yaml` de tous les invités clonés du template 199). L'OVA apparaît dans *local → Virtual Guests* ; l'assistant propose nom, CPU, mémoire, disques et carte réseau extraits du descripteur, avec un stockage de travail pour l'extraction ; il signale qu'un contrôleur SCSI n'est presque jamais décrit dans un OVF et propose VirtIO SCSI.
 3. **Import en CLI** : `qm importovf 150 legacy-rdv01.ovf ceph-vm --dryrun 1` affiche la représentation extraite (nom, `cores`, `memory`, disque `scsi0` et son fichier, `ostype`) ; puis sans `--dryrun`. D'après le code de l'analyseur (`PVE::GuestImport::OVF`), il récupère le nom, les cœurs, la mémoire, le type de système, le micrologiciel (`bios = ovmf` si le descripteur VMware dit `efi`), les disques et leur emplacement sur leur contrôleur, et le **modèle** des cartes réseau (`e1000`, `e1000e`, `vmxnet3`) ; il ne sait rien du réseau de destination, du type de contrôleur SCSI (Proxmox garde son défaut), ni des options propres à VMware (outils, synchronisation de l'heure). ⚠️ À vérifier sur ton lab : selon la version, `qm importovf` crée ou non la carte réseau ; le script en pose une de toute façon.
 4. **Premier démarrage tel quel** : avec le contrôleur par défaut (LSI 53C895A émulé), le noyau « cloud » de Debian peut ne pas trouver son disque (il n'embarque pas tous les pilotes de contrôleurs anciens) : arrêt dans l'*initramfs* (« Gave up waiting for root file system device »). ⚠️ Le résultat exact dépend de l'image et du noyau : note ce que tu observes. Mise aux standards (`importer-legacy.sh`) : `--scsihw virtio-scsi-single`, `--cpu x86-64-v2-AES` (identique sur tous les nœuds : migration possible ; `host` seulement si un besoin de performance le justifie), `--serial0 socket --vga serial0` (console série), `--agent enabled=1`, carte `virtio` sur `vinv99`. La VM démarre.
 5. **Reprise de main** : lecteur cloud-init (`--ide2 ceph-vm:cloudinit --ciuser admin --sshkeys <fichier .pub> --ipconfig0 ip=dhcp`). L'identifiant d'instance du lecteur Proxmox diffère de tout ce que l'image a vu : cloud-init rejoue la configuration (utilisateur `admin`, clé, réseau). Puis :
@@ -847,7 +849,7 @@ Un OVF décrit une VM de façon **minimale et portable** ; chaque hyperviseur y 
 
 **Pièges classiques**
 - Archive OVA non vérifiée : on importe ce qu'on a reçu, éventuellement tronqué ou modifié.
-- `pvesm set local --content import` : remplace toute la liste des contenus (les ISO disparaissent de l'interface).
+- `pvesm set local --content import` : remplace toute la liste des contenus (les ISO disparaissent de l'interface, et sans `snippets` les invités qui référencent `local:snippets/…` ne démarrent plus).
 - Basculer le contrôleur en VirtIO sur un invité qui n'a pas le pilote dans son *initramfs* : il ne démarre plus (ici, l'inverse) — l'ordre des gestes dépend de l'invité.
 - Laisser la carte `e1000` : fonctionne, mais lente et gourmande en CPU ; laisser `kvm64`/type par défaut de l'import : pas d'instructions modernes.
 - Garder l'adresse statique d'InfoGér : conflit ou VM injoignable.

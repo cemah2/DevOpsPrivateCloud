@@ -14,10 +14,17 @@ require_cmd jq dig curl
 
 _m08d_e06_cli="$_M08D_CLIENT"
 
-# _m08d_e06_caps — droits cephx de client.rbd-test, sous la forme « mon=… osd=… » (autres : refus).
+# _m08d_e06_caps — droits cephx de client.rbd-test : profil rbd au moniteur, profil rbd limité au
+# pool rbd-test sur les OSD, rien d'autre. Les ajouts des exercices suivants restent acceptés :
+# restriction réseau (E13), profil rbd du mgr (E13), pool de données EC rbd-ec-donnees (E15).
 _m08d_e06_caps() {
-  _m08d_ceph "auth get client.rbd-test -f json" \
-    | jq -r '.[0].caps | to_entries | sort_by(.key) | map("\(.key)=\(.value)") | join(" ")' 2>/dev/null
+  _m08d_ceph "auth get client.rbd-test -f json" | jq -e '
+    .[0].caps as $c
+    | ($c | keys - ["mgr", "mon", "osd"] | length == 0)
+      and ($c.mon | test("^profile rbd( network [0-9./]+)?$"))
+      and ($c.osd | split(", *"; null) | all(test("^profile rbd pool=(rbd-test|rbd-ec-donnees)( network [0-9./]+)?$")))
+      and ($c.osd | test("pool=rbd-test"))
+      and (($c.mgr // "profile rbd") | split(", *"; null) | all(test("^profile rbd( pool=[a-z0-9-]+)?$")))' >/dev/null 2>&1
 }
 
 # --- 1. La VM cliente -------------------------------------------------------------------------------
@@ -31,8 +38,7 @@ check_dns "DNS : cephcli01.par1.medisphere.internal → 10.10.30.20" cephcli01.p
 check_ssh_output "cephcli01 : Debian 13" "$_m08d_e06_cli" '^debian 13$' '. /etc/os-release; echo "$ID $VERSION_ID"'
 
 # --- 2. Le client cephx ------------------------------------------------------------------------------
-check_output "client.rbd-test : droits limités au profil rbd sur le seul pool rbd-test" \
-  '^mon=profile rbd osd=profile rbd pool=rbd-test$' _m08d_e06_caps
+check_cmd "client.rbd-test : droits limités au profil rbd sur le pool rbd-test (mon, osd)" _m08d_e06_caps
 check_ssh "cephcli01 : trousseau client.rbd-test en 600, root" "$_m08d_e06_cli" \
   '[ "$(sudo -n stat -c %a:%U /etc/ceph/ceph.client.rbd-test.keyring)" = 600:root ]'
 check_ssh "cephcli01 : AUCUN trousseau client.admin" "$_m08d_e06_cli" \

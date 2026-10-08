@@ -137,11 +137,12 @@ Pour les questions de MTU, raisonne paquet par paquet : qui émet, avec quelle t
    root@pve01:~# bridge vlan show
    ```
    Relie chaque VNet du SDN à son VLAN (`pvesh get /cluster/sdn/vnets`, `/etc/network/interfaces.d/sdn`). Que sont les interfaces `vinfra`, `vsandbox`… du point de vue du noyau ? Comment `ens19` de `gw01` (sans étiquette côté VM) reçoit-il tous les VLAN ?
-2. Trouve le port *tap* de `adm01` (`tap1001i0`) et celui de `gw01` (`tap1000i1`). Relève leur MTU et les VLAN qu'ils portent. Observe la table FDB de `vmbr1` pour l'adresse MAC de `adm01` (relevée dans `qm config 1001`) :
+2. Trouve le port *tap* de `adm01` (`tap1001i0`) et celui de `gw01` (`tap1000i1`). Dans quel pont chacun se trouve-t-il ? Relève leur MTU et les VLAN qu'ils portent. Observe la table FDB du pont de `adm01` pour son adresse MAC (relevée dans `qm config 1001`), puis celle de `vmbr1` pour la MAC de `ens19` de `gw01` (`qm config 1000`, carte `net1`) :
    ```
-   root@pve01:~# bridge fdb show br vmbr1 | grep -i <MAC-ADM01>
+   root@pve01:~# bridge fdb show br vmgmt | grep -i <MAC-ADM01>
+   root@pve01:~# bridge fdb show br vmbr1 | grep -i <MAC-GW01-ENS19>
    ```
-   Que signifient les champs `vlan` et `master` ? Laisse passer cinq minutes sans trafic depuis `adm01` : l'entrée est-elle toujours là ?
+   Que signifient les champs `vlan` et `master` ? Pourquoi l'une des deux tables a-t-elle un champ `vlan` et pas l'autre ? Cherche aussi la MAC de `adm01` dans la FDB de `vmbr1` et explique ce que tu trouves. Laisse passer cinq minutes sans trafic depuis `adm01` : l'entrée de `vmgmt` est-elle toujours là ?
 3. Observe une trame étiquetée sur le pont, en limitant la capture :
    ```
    root@pve01:~# tcpdump -e -n -c 6 -i tap1000i1 'vlan and icmp'

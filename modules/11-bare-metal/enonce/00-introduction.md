@@ -265,7 +265,7 @@ E25                                            (mini-projet)
 9. **Palier 4** — les quatre pannes après E15 (elles supposent la chaîne du palier 3), E22 avec MAAS redémarré pour l'occasion ; E23, puis E24.
 10. **E25** — le mini-projet, qui finit par le nettoyage.
 
-Durée indicative : palier 1, 10 à 12 heures ; palier 2, 15 à 18 heures ; palier 3, 16 à 20 heures ; palier 4, 8 à 10 heures ; mini-projet, 10 à 14 heures.
+Durée indicative du module : 35 à 45 heures, dont près de la moitié pour le palier 3 et le mini-projet. Les durées par exercice sont des majorants pour une première fois : elles se recouvrent (attente d'une installation ou de la synchronisation des images de MAAS pendant que tu rédiges) et se raccourcissent quand les briques précédentes sont propres.
 
 ## Pour aller plus loin
 

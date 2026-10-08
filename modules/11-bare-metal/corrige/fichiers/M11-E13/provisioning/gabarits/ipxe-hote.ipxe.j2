@@ -4,7 +4,7 @@
 # M11-E13 : tout en HTTPS (certificat de pxe01 vérifié par iPXE, racine MédiSphère intégrée au
 # binaire) ; le fichier de réponse et la racine de la PKI sont REMIS par iPXE dans l'initrd (iPXE
 # construit une archive cpio autour de chaque fichier dont on donne le nom de destination).
-# UEFI : iPXE présente tous les initrd au noyau (protocole LoadFile2, noyaux ≥ 5.8) : pas de
+# UEFI : iPXE présente tous les initrd au noyau (protocole LoadFile2, noyaux ≥ 5.7) : pas de
 # paramètre initrd= (⚠️ à vérifier sur ton lab).
 set base {{ p.serveur_http }}
 {% if installer and m.plateforme == "debian-13" %}

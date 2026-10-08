@@ -11,7 +11,7 @@
    │ (port physique)
  vmbr0  ── tap1000i0 (gw01 ens18, WAN)        ── autres VMs personnelles éventuelles
  vmbr1  (VLAN-aware, SANS port physique, MTU 1500)
-   ├── tap1000i1 (gw01 ens19) : trunk, VLAN 10 20 30 31 32 40 41 50 51 52 60 70 99, non étiqueté côté VM
+   ├── tap1000i1 (gw01 ens19) : trunk (VLAN de bridge-vids, dont 10 20 30 31 32 40 41 50 51 52 60 70 99), étiquettes vues par la VM
    ├── vmbr1.<VLAN> ─┐ un par VNet (interface VLAN de vmbr1)
    │                 └─ VNet = petit pont : vmgmt, vinfra, … vsandbox
    │                       ├── tap1001i0 (adm01)  dans vmgmt
@@ -21,7 +21,7 @@
 
 - Un VNet de la zone SDN `lab` (type VLAN) est un pont Linux (`vinfra`…) dont l'unique « montée » est l'interface VLAN `vmbr1.<VLAN>` : une trame qui sort d'une VM de `vinfra` est étiquetée 20 en entrant dans `vmbr1`, désétiquetée en sortant vers une autre VM de `vinfra`. Les VMs ne voient jamais d'étiquette.
 - `gw01` est branché **directement** sur `vmbr1` (carte `net1` sans `tag`) : son port est un *trunk* qui porte tous les VLAN ; `ens19` reçoit des trames étiquetées et les sous-interfaces `ens19.<VLAN>` les séparent.
-- La table FDB de `vmbr1` associe chaque MAC à (port, VLAN) ; une entrée dynamique vieillit après 300 s sans trafic (`ageing_time`).
+- La table FDB de `vmbr1` associe chaque MAC apprise sur l'un de ses ports à (port, VLAN) : `ens19` de `gw01` y apparaît une fois par VLAN, sur `tap1000i1`. Les MAC des VMs des VNets sont apprises dans le pont de leur VNet (`vmgmt`, `vinfra`…, sans champ `vlan`), pas dans `vmbr1` qu'elles atteignent par `vmbr1.<VLAN>`. Une entrée dynamique vieillit après 300 s sans trafic (`ageing_time`).
 
 | VLAN | Nom | VNet | Réseau | Passerelle | MTU (VM, sous-interface de `gw01`) |
 |---|---|---|---|---|---|
@@ -47,7 +47,8 @@ root@pve01:~# bridge link show | grep -E 'master (vmbr1|v[a-z]+)'
 root@pve01:~# bridge vlan show dev tap1000i1
 root@pve01:~# pvesh get /cluster/sdn/vnets --output-format json | jq -r '.[] | "\(.vnet) \(.tag)"'
 root@pve01:~# grep -A4 '^auto vinfra' /etc/network/interfaces.d/sdn
-root@pve01:~# bridge fdb show br vmbr1 | grep -i <MAC-ADM01>
+root@pve01:~# bridge fdb show br vmgmt | grep -i <MAC-ADM01>
+root@pve01:~# bridge fdb show br vmbr1 | grep -i <MAC-GW01-ENS19>
 root@pve01:~# tcpdump -e -n -c 6 -i tap1000i1 'vlan and icmp'
 ```
 

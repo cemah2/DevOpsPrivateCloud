@@ -4,7 +4,9 @@
 #   outils/appliquer.sh specs/rgw.yaml [specs/…]     les fichiers donnés
 #   outils/appliquer.sh --tout                        toutes les spécifications, dans l'ordre
 # Pour chaque fichier : règles maison, « ceph orch apply --dry-run », confirmation (« oui » en
-# toutes lettres), application ; ingress.yaml passe par cert-ingress.sh (certificat injecté).
+# toutes lettres), application ; ingress.yaml passe par cert-ingress.sh (certificat injecté) ;
+# hosts.yaml n'a pas de simulation (cephadm applique les hôtes même avec --dry-run) : on affiche
+# l'état du cluster et le fichier avant de demander confirmation.
 # Puis contrôle de dérive. Accès : CEPH_ADMIN (défaut ceph01), clé client.admin du nœud _admin.
 # L'état hors spécifications (config/cluster.yaml) s'applique par outils/config-cluster.sh.
 set -euo pipefail
@@ -38,6 +40,19 @@ for f in "${fichiers[@]}"; do
     "$MS_RACINE/outils/cert-ingress.sh" --verifier
     ms_confirmer "Appliquer ingress.yaml (certificat en cours injecté) ?" || { echo "ignoré"; continue; }
     "$MS_RACINE/outils/cert-ingress.sh" --appliquer
+    continue
+  fi
+  if [[ "$(basename "$f")" == hosts.yaml ]]; then
+    # PIÈGE : « ceph orch apply --dry-run » ne simule que les SERVICES. Une spécification d'HÔTE
+    # est appliquée même avec --dry-run (code de l'orchestrateur, 20.2.3) : ajout d'hôte, étiquettes
+    # et emplacement CRUSH changeraient AVANT la confirmation. On montre donc l'état du cluster et
+    # celui du fichier, sans rien envoyer à « orch apply ».
+    echo "--- hôtes du cluster :"
+    ms_ceph orch host ls
+    echo "--- hôtes du fichier (ce qui sera appliqué) :"
+    ms_yq eval 'select(.service_type == "host") | [.hostname, .addr, ((.labels // []) | join(",")), (.location.rack // "")] | join("  ")' "$f"
+    ms_confirmer "Appliquer hosts.yaml (pas de simulation possible pour les hôtes) ?" || { echo "ignoré"; continue; }
+    ms_ceph orch apply -i - < "$f"
     continue
   fi
   ms_ceph orch apply -i - --dry-run < "$f"

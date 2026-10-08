@@ -3,12 +3,12 @@
   ansible.builtin.assert:
     that:
       - sauvegarde_pbs_elements | length > 0
-      - sauvegarde_pbs_elements | difference(['powerdns', 'kea', 'netbox', 'stepca', 'openstack']) | length == 0
+      - sauvegarde_pbs_elements | difference(['powerdns', 'kea', 'netbox', 'stepca', 'pve', 'openstack']) | length == 0
       - sauvegarde_pbs_jeton_secret | length > 0
       - sauvegarde_pbs_empreinte | length > 0
       - sauvegarde_pbs_cle | length > 0
     fail_msg: >-
-      sauvegarde_pbs_elements (powerdns, kea, netbox, stepca, openstack) et les secrets PBS (jeton, empreinte,
+      sauvegarde_pbs_elements (powerdns, kea, netbox, stepca, pve, openstack) et les secrets PBS (jeton, empreinte,
       clé de chiffrement, en Vault « critique ») sont requis pour {{ inventory_hostname }}.
     quiet: true
 
@@ -22,6 +22,7 @@
     group: root
     mode: "0644"
     force: false
+  when: sauvegarde_pbs_depot_client | bool
 
 - name: Dépôt pbs-client (Debian 13)
   ansible.builtin.copy:
@@ -37,11 +38,12 @@
       Components: main
       Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
   register: sauvegarde_pbs_depot
+  when: sauvegarde_pbs_depot_client | bool
 
 - name: Paquets (client PBS et outils des éléments)
   ansible.builtin.apt:
     name: "{{ ['proxmox-backup-client', 'jq']
-              + (['sqlite3'] if 'powerdns' in sauvegarde_pbs_elements else [])
+              + (['sqlite3'] if ('powerdns' in sauvegarde_pbs_elements or 'pve' in sauvegarde_pbs_elements) else [])
               + (['socat'] if 'kea' in sauvegarde_pbs_elements else []) }}"
     state: present
     update_cache: "{{ sauvegarde_pbs_depot is changed }}"

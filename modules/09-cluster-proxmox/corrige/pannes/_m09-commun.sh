@@ -294,19 +294,26 @@ m09_ha_desarmee() {
   m09_ha_status | grep -qi 'disarm'
 }
 
+# m09_ha_desarmee_complet — désarmement terminé : état « disarmed » (tous les watchdogs relâchés) ;
+#   l'état intermédiaire « disarming » garde le watchdog du CRM actif (documentation HA, 9.2).
+m09_ha_desarmee_complet() {
+  m09_ha_status | grep -qiw 'disarmed'
+}
+
 # m09_ha_geler EXX — désarme la HA (mode freeze) si des ressources existent et qu'elle est armée.
 #   Mémorise que c'est la panne qui l'a fait (clé ha-desarmee). Code ≠ 0 si impossible.
 m09_ha_geler() {
   local ex="$1" n
   if ! m09_ha_a_des_ressources; then return 0; fi
-  if m09_ha_desarmee; then return 0; fi
+  if m09_ha_desarmee_complet; then return 0; fi
   n="$(m09_un_quorate)" || { wb_avert "aucun nœud quorate : impossible de geler la HA"; return 1; }
   m09_ssh "$n" "ha-manager crm-command disarm-ha freeze" >/dev/null 2>&1 \
     || { wb_avert "ha-manager crm-command disarm-ha freeze refusé (Proxmox VE 9.2 requis)"; return 1; }
   m09_ecrire "$ex" ha-desarmee "$n"
   m09_journal "$ex" "pile HA désarmée (freeze) depuis $n"
-  # Les LRM libèrent leur watchdog après avoir fini leurs tâches : on laisse le temps au CRM.
-  m09_attendre 90 m09_ha_desarmee || { wb_avert "désarmement de la HA non constaté"; return 1; }
+  # Les LRM libèrent leur watchdog après avoir fini leurs tâches, puis le CRM le sien : on attend
+  # l'état « disarmed » (pas seulement « disarming »).
+  m09_attendre 120 m09_ha_desarmee_complet || { wb_avert "désarmement de la HA non constaté (état disarmed attendu)"; return 1; }
   sleep 20
 }
 
