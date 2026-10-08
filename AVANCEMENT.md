@@ -22,7 +22,11 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 04 | Gestion de configuration (Ansible) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~80 vérifications ; ansible-core 2.21.5/2.19, ansible-lint 26.9 profil production, Molecule 26.9 et Semaphore 2.19 exécutés, pytest de la collection et du module maison verts, filet anti-coupure du pare-feu testé). À confirmer sur le lab : ACL Proxmox de `wb-ansible`, enregistrement réel du runner, `qm terminal` sur `gw01`, délai `logger --tcp` (E41 v4), API `/project/users` de Semaphore |
 | 05 | Infrastructure as Code (OpenTofu) | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~65 vérifications ; OpenTofu 1.13.1, Terragrunt 1.1.6, SeaweedFS 4.45/4.48 et AWS CLI exécutés : `validate`, `tofu test` 8/8, verrou `use_lockfile` et 412 `If-None-Match` constatés, chiffrement de l'état éprouvé ; règle sudo de `wb-tofu` corrigée et éprouvée). À confirmer sur le lab : `ciupgrade` avec un jeton non-root, attente de l'agent sur un clone, message de PVE 9 pour un VMID existant, affichage du rapport `terraform` en MR |
 | 06 | Services socle | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~50 vérifications ; Kea 3.0.4, PowerDNS 5.0.7/Recursor 5.4.7, step-ca 0.30.2 et NetBox 4.6 exécutés, 138 pytest, ansible-lint production sur tous les rôles). À confirmer sur le lab : formats de sortie de `pdnsutil` 5.0, coexistence ancre `par1` / NTA `medisphere.internal`, authentification de l'écouteur HA de Kea, écrans NetBox de création des jetons, relecture à chaud des certificats NTS par chrony |
-| 07-11 | Bloc B | à faire | | Prochain bloc (lancé automatiquement par une tâche planifiée à la fin du bloc A). État d'entrée : `socle-v1` (M06-E46), voir `lab/topologie.md` |
+| 07 | Réseau datacenter et haute disponibilité | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
+| 08 | Stockage distribué (Ceph) | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
+| 09 | Cluster de virtualisation | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
+| 10 | OpenStack | en cours | 45 + mini-projet | Carte des exercices écrite (README) |
+| 11 | Provisioning bare-metal | en cours | 24 + mini-projet | Carte des exercices écrite (README) |
 | 12-18 | Bloc C | à faire | | |
 | 19-20 | Bloc D | à faire | | |
 | 21-23 | Bloc E | à faire | | |
@@ -45,6 +49,7 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 2026-10-07 | 2 (bloc A, clôture) | Annexes du bloc A ; contrôle global de cohérence : hôtes/VMID/IP conformes à PLAN §4.5, PLAN précisé (rôle DHCP de `dns01`, zone parente `medisphere.internal`, emplacement de l'ancre TLS de `pve01`), `lab.env.example` complet, `shellcheck -x` et `bash -n` propres sur tous les scripts, aucun secret ni cache versionné (`dump.rdb` retiré, `.gitignore` complété), README racine et REPRISE mis à jour |
 | 2026-10-07 | 2 (bloc A, fin) | **Bloc A terminé** : modules 01 à 06 relus et poussés, annexes et topologie, contrôle global de cohérence (474 scripts ShellCheck propres). Tâche planifiée créée pour lancer le bloc B |
 
+| 2026-10-08 | 3 (bloc B) | Lancée par la tâche planifiée. Versions du bloc B figées (recherche web, `annexes/versions-bloc-B.md`), décisions structurantes en PLAN §4.9 et journal, cartes des exercices des modules 07 à 11 |
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
 - **Stockage S3 du socle** : MinIO prévu au plan est abandonné par son éditeur (édition communautaire sans binaires depuis octobre 2025, dépôt archivé). Remplacé par SeaweedFS (Apache 2.0, écritures conditionnelles nécessaires au verrou d'état OpenTofu). Garage écarté pour cette raison. Le module 05 en fait un ADR.
@@ -60,3 +65,13 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 - **Module 04** : Semaphore UI pratiqué mais **non retenu** (ADR-0040 : application par la CI seule) — `sem01` est détruite en fin de module ; deux identités Vault (`lab`, `critique`) ; l'inventaire par défaut devient dynamique (Proxmox) dès M04-E13.
 - **Module 05** : `gw01` reste hors IaC (ADR-0051) ; l'ordre de démarrage des VMs (exige `Sys.Modify` sur `/`) est posé en root et ignoré par OpenTofu ; environnements protégés de GitLab absents en CE → protection par branche protégée + job manuel + variables protégées + `resource_group` ; montée délibérée de `bpg/proxmox` en 0.116 en M05-E31.
 - **Module 06** : CA provisoire retirée dès M06-E03 ; zones générées par le code (OpenTofu, Kea DDNS) gérées en mode API par le rôle PowerDNS pour ne jamais être écrasées ; NetBox devient l'inventaire Ansible par défaut (M06-E12).
+
+## Choix faits en l'absence de l'apprenant (bloc B)
+
+- **Bordure redondante** : `gw02` ajoutée au socle, VRRP sur toutes les passerelles (VIP `.1`, `gw01` en `.2`, `gw02` en `.3`), tunnels WireGuard qui suivent le maître. C'est le changement le plus risqué du bloc : il est placé au palier 3 de M07, avec répétition sur la maquette et retour arrière écrit.
+- **Répartiteurs permanents** `lb01`/`lb02` dans la DMZ (VLAN 70), conformément au rôle prévu de ce VLAN.
+- **LACP** : impossible entre VMs à travers un pont Linux (trames 802.3ad non relayées) ; pratiqué dans une VM entre espaces de noms.
+- **Ceph sur Rocky Linux 10** : Debian 13 n'est pas un hôte supporté par Ceph Tentacle ; Rocky 10 l'est et l'image dorée existe depuis M03.
+- **Cluster Proxmox imbriqué** : deux nœuds + QDevice sur `pbs01`, puis trois nœuds (le QDevice est retiré : déconseillé avec un nombre impair de nœuds). Ceph hyperconvergé installé en Squid pour pratiquer la montée en Tentacle.
+- **OpenStack 2026.1** plutôt que 2026.2 (Kolla-Ansible encore en RC pour 2026.2) ; OVN choisi explicitement (le défaut de Kolla reste OVS) ; Octavia avec le fournisseur OVN (amphora trop lourd pour le lab).
+- **MAAS sur Ubuntu 24.04** : seul cas d'Ubuntu du bloc (outil qui l'impose). `hp01` n'est jamais réinstallé : il porte PBS ; l'iLO est exploré en lecture.
