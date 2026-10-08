@@ -156,6 +156,26 @@ netbox_api() {
     "${WB_NETBOX_URL:-https://nbx01.par1.medisphere.internal}/api/$1"
 }
 
+# kube ARGS... — kubectl en LECTURE avec le compte de service des checks (bloc C, M14-E06).
+#   Exemple : kube get nodes -o json | jq '.items | length'
+kube() {
+  local f="${WB_K8S_KUBECONFIG:-$HOME/.config/workbook/k8s-checks.kubeconfig}"
+  [[ -r "$f" ]] || { echo "kubeconfig des checks illisible : $f" >&2; return 1; }
+  kubectl --kubeconfig "$f" --request-timeout="${WB_TIMEOUT}s" "$@"
+}
+
+# harbor_api "chemin" — GET sur l'API Harbor v2.0 avec le robot en lecture des checks (M13-E03).
+#   Le fichier WB_HARBOR_CHECKS_FILE contient HARBOR_USER=... et HARBOR_PASSWORD=...
+#   Exemple : harbor_api "projects?name=medisphere" | jq -r '.[0].name'
+harbor_api() {
+  local f="${WB_HARBOR_CHECKS_FILE:-$HOME/.config/workbook/harbor-checks.env}" HARBOR_USER="" HARBOR_PASSWORD=""
+  [[ -r "$f" ]] || { echo "identifiants Harbor des checks illisibles : $f" >&2; return 1; }
+  # shellcheck disable=SC1090
+  source "$f"
+  curl -sf --max-time "$WB_TIMEOUT" -u "$HARBOR_USER:$HARBOR_PASSWORD" -H "Accept: application/json" \
+    "${WB_HARBOR_URL:-https://registry.par1.medisphere.internal}/api/v2.0/$1"
+}
+
 # summary — affiche le bilan et renvoie 0 si aucun KO
 summary() {
   echo

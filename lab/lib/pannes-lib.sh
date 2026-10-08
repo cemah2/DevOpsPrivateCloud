@@ -34,6 +34,8 @@ WB_ETAT_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/pannes-actives"
   WB_VMID_TPL=9000
   WB_VMID_GIT01=1004
   WB_VMID_RUNNER01=1007
+  WB_VMID_RUNNER02=1012
+  WB_VMID_REG01=1013
 }
 
 # ---------------------------------------------------------------------------
@@ -231,4 +233,46 @@ wb_main() {
   # La fonction de panne peut avoir basculé sur une autre variante (WB_VAR modifié).
   wb_marqueur_ecrire "$cle" "$WB_VAR"
   "symptome_$ex"
+}
+
+# ---------------------------------------------------------------------------
+# Bloc C : objets Kubernetes (sur adm01, avec le kubeconfig d'administration)
+# ---------------------------------------------------------------------------
+# wb_kubectl ARGS... — kubectl avec WB_K8S_ADMIN_KUBECONFIG (défaut ~/.kube/config)
+wb_kubectl() {
+  kubectl --kubeconfig "${WB_K8S_ADMIN_KUBECONFIG:-$HOME/.kube/config}" --request-timeout=20s "$@"
+}
+
+# wb_k8s_sauver TYPE NOM [ESPACE] — sauvegarde l'objet avant modification (une seule fois par panne)
+#   dans ~/.local/state/workbook/k8s/<WB_EX>/<espace>_<type>_<nom>.yaml ; « ABSENT » si l'objet n'existe pas.
+wb_k8s_sauver() {
+  local type="$1" nom="$2" ns="${3:-}" d f
+  d="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/k8s/$WB_EX"
+  f="$d/${ns:-_cluster}_${type//\//-}_${nom}.yaml"
+  mkdir -p "$d"
+  [[ -e "$f" ]] && return 0
+  if wb_kubectl get "$type" "$nom" ${ns:+-n "$ns"} -o yaml > "$f.tmp" 2>/dev/null; then
+    mv "$f.tmp" "$f"
+  else
+    rm -f "$f.tmp"; printf 'ABSENT %s %s %s\n' "$type" "$nom" "$ns" > "$f"
+  fi
+}
+
+# wb_k8s_restaurer — remet les objets sauvegardés par wb_k8s_sauver pour WB_EX (supprime ceux qui
+#   n'existaient pas), puis efface les sauvegardes. Les champs d'état sont ignorés par « replace ».
+wb_k8s_restaurer() {
+  local d f l type nom ns
+  d="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/k8s/$WB_EX"
+  [[ -d "$d" ]] || return 0
+  for f in "$d"/*.yaml; do
+    [[ -e "$f" ]] || continue
+    l="$(head -n1 "$f")"
+    if [[ "$l" == ABSENT* ]]; then
+      read -r _ type nom ns <<<"$l"
+      wb_kubectl delete "$type" "$nom" ${ns:+-n "$ns"} --ignore-not-found >/dev/null
+    else
+      wb_kubectl replace --force -f "$f" >/dev/null 2>&1 || wb_kubectl apply -f "$f" >/dev/null
+    fi
+  done
+  rm -rf "$d"
 }

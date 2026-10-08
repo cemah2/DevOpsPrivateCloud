@@ -61,7 +61,8 @@
 | `rke2-01..03` | 2182-2184 | `vsandbox` (DHCP) | RKE2, profil CIS | E04 |
 | `talos-01..03` | 2185-2187 | `vsandbox` (DHCP) | Talos Linux 1.14 | E05 |
 | `m18-dev01` | 2188 | `vsandbox` (DHCP) | Docker, kind, k3d, clusterctl, image-builder | E02 |
-| Clusters CAPMOX | 5180-5189 | `vsandbox` | VMs créées par Cluster API | E10 |
+| `k3s-ha01..03` | 5191-5193 | `vsandbox` (DHCP) | k3s haute disponibilité (jetables) | E07 |
+| Clusters CAPMOX | 5180-5189 | VLAN 40 K8S (10.10.40.150-169, VIP 10.10.40.210) | VMs créées par Cluster API | E10 |
 | Template de nœud | 9060-9069 | — | Image de nœud Kubernetes 1.36 (image-builder) | E09 |
 
 Toutes ces VMs sont détruites en fin de module (sauf choix contraire écrit dans l'ADR-0180). Détails figés : [`PLAN.md`](../../PLAN.md) §4.10.
