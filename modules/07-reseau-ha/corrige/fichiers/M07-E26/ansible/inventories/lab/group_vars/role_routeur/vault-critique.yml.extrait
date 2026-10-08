@@ -1,0 +1,9 @@
+# group_vars/role_routeur/vault-critique.yml — EXTRAIT (M07-E26). Fichier chiffré par
+#   ansible-vault encrypt --vault-id critique@outils/vault-pass-client.sh
+# Les clés privées de M00 (wg0, wg1) et de M07-E18 (wg2) sont REPRISES de gw01 (même identité vue
+# des pairs : aucun pair à reconfigurer côté clés). Elles sont lues sur gw01 par root, collées dans
+# ansible-vault edit, jamais copiées dans un fichier en clair ni dans un ticket. Registre des secrets :
+# une ligne par clé (emplacement, portée « bordure PAR1 », propriétaire, échéance de rotation).
+vault_wireguard_wg0_cle_privee: "<CLE-PRIVEE-WG0-DE-GW01>"
+vault_wireguard_wg1_cle_privee: "<CLE-PRIVEE-WG1-DE-GW01>"
+vault_wireguard_wg2_cle_privee: "<CLE-PRIVEE-WG2-DE-GW01>"

@@ -1,0 +1,7 @@
+---
+# group_vars/m07_fabric/vault.yml — À CHIFFRER (identité « lab ») :
+#   uv run ansible-vault encrypt --encrypt-vault-id lab inventories/lab/group_vars/m07_fabric/vault.yml
+# Mot de passe généré, jamais tapé ni réutilisé : openssl rand -base64 18
+# TCP-MD5 limite la clé à 80 octets (RFC 2385 ne fixe pas de longueur, le noyau Linux si) ;
+# rester sous 40 caractères ASCII sans espace.
+vault_m07_bgp_mdp_fabric: "<MOT-DE-PASSE-BGP-FABRIC>"

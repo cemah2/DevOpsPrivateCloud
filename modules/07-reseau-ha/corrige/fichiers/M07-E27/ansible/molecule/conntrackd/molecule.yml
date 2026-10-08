@@ -1,0 +1,6 @@
+---
+# molecule/conntrackd/molecule.yml — deux instances qui se synchronisent (M07-E27)
+#   uv run molecule test -s conntrackd
+# Pilote, création et destruction des VMs : communs du projet (M04-E24), comme molecule/keepalived.
+scenario:
+  name: conntrackd

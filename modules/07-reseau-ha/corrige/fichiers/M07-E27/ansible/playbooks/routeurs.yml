@@ -1,0 +1,39 @@
+---
+# playbooks/routeurs.yml — passerelles de la bordure, version de M07-E27 (M07-E24 → E27).
+# Une passerelle à la fois, la passerelle de SECOURS d'abord : la variable bordure_ordre (calculée
+# par le premier jeu) range les passerelles de façon que le maître passe en dernier.
+- name: Repérer la passerelle active
+  hosts: role_routeur
+  become: true
+  gather_facts: false
+  tasks:
+    - name: État VRRP local
+      ansible.builtin.slurp:
+        src: /run/bordure/etat
+      register: _etat
+      failed_when: false
+
+    - name: Groupe des passerelles dans l'ordre (secours, puis maître)
+      ansible.builtin.group_by:
+        key: "bordure_{{ 'maitre' if (_etat.content | default('') | b64decode | trim) == 'MASTER' else 'secours' }}"
+      changed_when: false
+
+- name: Passerelles de la bordure PAR1
+  hosts: bordure_secours:bordure_maitre
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: base
+    - role: ssh_durci
+    - role: routeur_reseau
+    - role: pare_feu
+    - role: certificats_acme
+    - role: chrony_serveur
+    - role: frr
+    - role: relais_dhcp
+      when: relais_dhcp_actif | default(true) | bool
+    - role: wireguard
+    - role: conntrackd
+    - role: bordure
+    - role: keepalived

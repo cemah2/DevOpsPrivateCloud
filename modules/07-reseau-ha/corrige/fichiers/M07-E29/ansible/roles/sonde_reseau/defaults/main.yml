@@ -1,0 +1,8 @@
+---
+# Rôle sonde_reseau — accès en LECTURE de la supervision réseau (M07-E29) sur gw01, gw02, lb01, lb02.
+# Compte « supervision », une clé dédiée, une seule commande possible : /usr/local/sbin/etat-reseau.
+sonde_reseau_compte: supervision
+# Clé publique de ~/.config/workbook/ssh-supervision-reseau (adm01). Publique : en clair ici.
+sonde_reseau_cle_publique: ""
+# Adresses d'où la clé est acceptée (option from= d'authorized_keys) : adm01.
+sonde_reseau_depuis: [10.10.10.10]

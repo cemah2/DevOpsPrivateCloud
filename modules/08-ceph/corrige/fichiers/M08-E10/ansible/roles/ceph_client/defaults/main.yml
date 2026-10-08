@@ -1,0 +1,36 @@
+---
+# Rôle ceph_client — un client Ceph Debian 13 (M08-E06) : paquets, ceph.conf minimal,
+# trousseaux cephx des seuls clients voulus, images RBD mappées au démarrage.
+# Réutilisé par la suite du module (CephFS, M08-E10 ; cephx minimaux, M08-E13 ; iSCSI, M08-E17).
+# ÉTAT M08-E10 : ajout des montages CephFS (ceph_client_cephfs) ; remplace le rôle de M08-E06.
+
+# Debian 13 livre ceph-common 18.2 (Reef) : un client Reef parle à un cluster Tentacle (les
+# clients ont plusieurs versions de tolérance). Le module noyau rbd (krbd) est celui du noyau.
+ceph_client_paquets:
+  - ceph-common
+  - xfsprogs
+
+# ceph.conf MINIMAL (= « ceph config generate-minimal-conf ») : fsid et moniteurs. Tout le reste
+# de la configuration vient des moniteurs.
+ceph_client_fsid: "{{ ceph_fsid }}"
+ceph_client_moniteurs: "{{ ceph_moniteurs }}"
+
+# Trousseaux : liste de { nom: client.xxx, cle: <clé cephx> }. Un fichier par client,
+# /etc/ceph/ceph.<nom>.keyring, root:root 0600. Jamais client.admin sur un client.
+ceph_client_cles: []
+
+# Images mappées par rbdmap au démarrage : { image: pool/image, id: <client sans « client. »> }.
+ceph_client_rbdmap: []
+# Montages des images mappées (fstab, « noauto » : c'est rbdmap qui monte après le mappage).
+ceph_client_montages: []
+# Démarrer (et recharger) rbdmap. false seulement dans le scénario Molecule, sans cluster.
+ceph_client_demarrer_rbdmap: true
+
+# (M08-E10) Montages CephFS par le pilote noyau, permanents (fstab, montés au démarrage après le
+# réseau) : liste de { point, utilisateur (sans « client. »), chemin, fs (défaut cephfs),
+# options (défaut ceph_client_cephfs_options) }. La clé de l'utilisateur doit figurer dans
+# ceph_client_cles : le rôle en tire /etc/ceph/<utilisateur>.secret (0600, la clé seule), lu par
+# mount.ceph (secretfile=) ; aucune clé dans /etc/fstab (lisible par tous).
+ceph_client_cephfs: []
+# msgr2 (port 3300) : « prefer-crc » ; « secure » au palier 3 (chiffrement, M08-E27).
+ceph_client_cephfs_options: ms_mode=prefer-crc,noatime

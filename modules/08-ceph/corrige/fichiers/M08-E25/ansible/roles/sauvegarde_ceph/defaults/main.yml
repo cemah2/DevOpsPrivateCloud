@@ -1,0 +1,37 @@
+---
+# Rôle sauvegarde_ceph — sauvegarde hors cluster de ceph-par1 vers PBS (M08-E25).
+# Appliqué à cephcli01. Variables d'hôte : host_vars/cephcli01/sauvegarde_ceph.yml. Secrets : Vault « critique ».
+
+# Heure de passage : après git01 (01:15), avant les services socle (01:55) et lab-nuit (02:30).
+sauvegarde_ceph_heure: "01:30"
+
+# PBS (M00-E22) : datastore ds-lab, espace de noms par1/ceph, jeton dédié à cet hôte.
+sauvegarde_ceph_serveur: 10.20.10.10
+sauvegarde_ceph_datastore: ds-lab
+sauvegarde_ceph_espace: par1/ceph
+sauvegarde_ceph_jeton_id: "wb-backup@pbs!{{ inventory_hostname }}"
+sauvegarde_ceph_jeton_secret: ""
+sauvegarde_ceph_empreinte: ""
+# Clé de chiffrement côté client (contenu JSON de « proxmox-backup-client key create --kdf none »).
+sauvegarde_ceph_cle: ""
+
+# Images : liste explicite « pool[/espace]/image » + pools où l'équipe désigne ses images par la
+# métadonnée RBD « medisphere.sauvegarde = oui » (M08-E31).
+sauvegarde_ceph_images: []
+sauvegarde_ceph_pools_decouverte: []
+sauvegarde_ceph_meta_cle: medisphere.sauvegarde
+# Export complet le dimanche (date +%u = 7), incrémental les autres jours.
+sauvegarde_ceph_jour_complet: 7
+
+# Identité cephx (trousseau en Vault « critique », droits : profile rbd sur les pools concernés).
+sauvegarde_ceph_id: sauvegarde
+sauvegarde_ceph_cle_cephx: ""
+
+# Export de la configuration : hôte, clé privée SSH (Vault), clé d'hôte attendue (épinglée).
+sauvegarde_ceph_export_hote: ceph01.par1.medisphere.internal
+sauvegarde_ceph_cle_ssh: ""
+sauvegarde_ceph_cle_hote_export: ""
+
+# Dépôt « pbs-client » et trousseau officiel : mêmes valeurs que le rôle sauvegarde_pbs (M06-E28).
+sauvegarde_ceph_cle_depot_url: https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg
+sauvegarde_ceph_cle_depot_sha256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45

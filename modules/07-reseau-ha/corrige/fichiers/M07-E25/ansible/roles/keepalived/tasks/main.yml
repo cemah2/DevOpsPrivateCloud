@@ -1,0 +1,56 @@
+---
+# Rôle keepalived — point d'entrée (M07-E08 ; instances « actif » et groupes étendus en M07-E25).
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - keepalived_vrrp_version | int in [2, 3]
+      - keepalived_instances | map(attribute='vrid') | list | unique | length == keepalived_instances | length
+      - keepalived_instances | map(attribute='nom') | list | unique | length == keepalived_instances | length
+      - keepalived_instances | rejectattr('vrid', 'ge', 1) | list | length == 0
+      - keepalived_instances | rejectattr('vrid', 'le', 255) | list | length == 0
+      - >-
+        keepalived_instances | selectattr('source', 'defined')
+        | rejectattr('pairs', 'defined') | list | length == 0
+    fail_msg: >-
+      VRRP v2 ou v3 ; VRID entre 1 et 255, uniques sur l'hôte ; une instance unicast (source)
+      doit déclarer ses pairs.
+    quiet: true
+
+- name: Installer keepalived
+  ansible.builtin.apt:
+    name: "{{ keepalived_paquets }}"
+    state: present
+
+- name: Compte des scripts (sans connexion, sans dossier personnel)
+  ansible.builtin.user:
+    name: "{{ keepalived_utilisateur_scripts }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Script de transition
+  ansible.builtin.copy:
+    src: keepalived-transition
+    dest: "{{ keepalived_notification }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+# keepalived -t vérifie la syntaxe ET les scripts (existence, droits pour script_user).
+- name: Configuration
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: "0640"
+    validate: keepalived -t -f %s
+    backup: true
+  notify: Recharger keepalived
+
+- name: Service keepalived actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: keepalived.service
+    state: started
+    enabled: true

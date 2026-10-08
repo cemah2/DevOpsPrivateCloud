@@ -1,0 +1,10 @@
+# /etc/wb-backup/ceph.conf — paramètres NON secrets de wb-backup-ceph.sh (M08-E25).
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sauvegarde_ceph).') }}
+WB_HOTE={{ inventory_hostname }}
+WB_NS={{ sauvegarde_ceph_espace }}
+WB_ID_CEPH={{ sauvegarde_ceph_id }}
+WB_EXPORT_HOTE={{ sauvegarde_ceph_export_hote }}
+WB_META_CLE={{ sauvegarde_ceph_meta_cle }}
+WB_JOUR_COMPLET={{ sauvegarde_ceph_jour_complet }}
+WB_IMAGES=({% for i in sauvegarde_ceph_images %}{{ i }}{{ ' ' if not loop.last else '' }}{% endfor %})
+WB_POOLS_DECOUVERTE=({% for p in sauvegarde_ceph_pools_decouverte %}{{ p }}{{ ' ' if not loop.last else '' }}{% endfor %})

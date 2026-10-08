@@ -1,0 +1,16 @@
+---
+# group_vars/m07_fabric/frr.yml — commun aux routeurs de la fabric de la maquette (M07-E07).
+
+# Mot de passe TCP-MD5 des sessions de la fabric : Vault « lab » (vault.yml, même dossier).
+m07_bgp_mdp_fabric: "{{ vault_m07_bgp_mdp_fabric }}"
+
+# Ce que la fabric a le droit de transporter : des boucles (/32) et des liens (/31) de la
+# maquette, rien d'autre (PLAN §4.9 : 10.10.255.0/24 et 10.10.250.0/24).
+m07_pl_fabric:
+  nom: PL-FABRIC
+  regles:
+    - {seq: 10, action: permit, prefixe: 10.10.255.0/24, ge: 32}
+    - {seq: 20, action: permit, prefixe: 10.10.250.0/24, ge: 31, le: 31}
+
+# OSPF retiré (E07) : frr_ospf vide → ospfd désactivé par le rôle.
+frr_ospf: {}

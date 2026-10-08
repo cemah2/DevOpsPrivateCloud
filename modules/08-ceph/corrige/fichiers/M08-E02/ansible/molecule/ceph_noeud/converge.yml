@@ -1,0 +1,18 @@
+---
+# molecule/ceph_noeud/converge.yml (M08-E02)
+# L'instance n'a qu'une carte (vsandbox, DHCP, MTU 1500) et un nom « m08-mol-ceph » : on adapte
+# les attentes réseau, le reste est le rôle tel quel.
+- name: Converge — rôle ceph_noeud
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    ceph_noeud_version: "20.2.3"
+    ceph_noeud_interfaces:
+      - nom: ens18
+        mtu: 1500
+    ceph_noeud_verifier_reseau: false
+    # Clé de test : montre que le dépôt de clé fonctionne (aucun cluster derrière).
+    ceph_noeud_cle_orchestrateur: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPBJqKrcD+KCHoVg/OKg/vPBw6eMhYiMtRwIMQEcz8uR molecule@test"
+  roles:
+    - role: ceph_noeud

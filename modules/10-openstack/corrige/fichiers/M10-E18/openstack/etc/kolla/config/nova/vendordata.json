@@ -1,0 +1,3 @@
+{
+  "cloud-init": "#cloud-config\n# Données fournisseur MédiSphère (M10-E18) : confiance dans la PKI interne et heure du lab.\nca_certs:\n  trusted:\n    - |\n      -----BEGIN CERTIFICATE-----\n      <CONTENU DE /usr/local/share/ca-certificates/medisphere-root-ca.crt>\n      -----END CERTIFICATE-----\nntp:\n  enabled: true\n  ntp_client: chrony\n  servers:\n    - 10.10.52.1\n"
+}

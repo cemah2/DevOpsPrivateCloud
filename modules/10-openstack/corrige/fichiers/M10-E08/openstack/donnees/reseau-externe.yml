@@ -1,0 +1,17 @@
+---
+# donnees/reseau-externe.yml — réseau externe des IP flottantes (M10-E08, PLAT-1108). PLAN §4.9.
+# VLAN 52 (OS-EXT), branché sur ens21 de osctl01, pont br-ex, réseau physique « physnet1 ».
+reseau_externe:
+  nom: ext-net
+  type: flat
+  physnet: physnet1
+  sous_reseau:
+    nom: ext-sous-reseau
+    cidr: 10.10.52.0/24
+    # VIP de la bordure (gw01/gw02, VRRP, M07-E25) : la passerelle des routeurs OpenStack.
+    passerelle: 10.10.52.1
+    # .200-.249 : « VIP et pools d'IP flottantes » (PLAN §4.2). Les passerelles des routeurs
+    # des projets y prennent aussi leur adresse.
+    debut: 10.10.52.200
+    fin: 10.10.52.249
+    resolveurs: [10.10.20.10, 10.10.20.16]

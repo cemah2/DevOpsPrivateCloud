@@ -1,0 +1,32 @@
+---
+# roles/pve_noeud/tasks/memoire.yml — mémoire des nœuds (M09-E31). Inclus par tasks/main.yml
+# (tag « memoire »), APRÈS systeme.yml (M09-E03) qui pose et applique zfs_arc_max.
+# Valeurs justifiées dans docs/virtualisation/capacite-hv-par1.md.
+
+# Le plafond de l'ARC est posé par systeme.yml (M09-E03) ; ici, on CONTRÔLE qu'il est effectif :
+# c'est une hypothèse du calcul de capacité (réserve ZFS de ms-capacite-cluster).
+- name: Mémoire | valeur effective du plafond du cache ZFS
+  ansible.builtin.slurp:
+    src: /sys/module/zfs/parameters/zfs_arc_max
+  register: pve_noeud_arc_effectif
+
+- name: Mémoire | le plafond effectif est celui du calcul de capacité
+  ansible.builtin.assert:
+    that: (pve_noeud_arc_effectif.content | b64decode | trim | int) == (pve_noeud_zfs_arc_max | int)
+    fail_msg: >-
+      zfs_arc_max effectif ({{ pve_noeud_arc_effectif.content | b64decode | trim }}) différent de
+      pve_noeud_zfs_arc_max : la réserve ZFS du calcul de capacité est fausse sur {{ inventory_hostname }}.
+    quiet: true
+  when: pve_noeud_zfs_arc_max | int > 0
+
+- name: Mémoire | ksmtuned installé
+  ansible.builtin.apt:
+    name: ksm-control-daemon
+    state: present
+  when: pve_noeud_ksmtuned | bool
+
+- name: Mémoire | ksmtuned actif
+  ansible.builtin.systemd_service:
+    name: ksmtuned
+    enabled: "{{ pve_noeud_ksmtuned | bool }}"
+    state: "{{ 'started' if pve_noeud_ksmtuned | bool else 'stopped' }}"

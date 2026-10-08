@@ -1,0 +1,7 @@
+# specs/mds.yaml — MDS du volume cephfs (créé par « ceph fs volume create », M08-E10) :
+# un actif, un en attente, sur deux hôtes différents (règle 8).
+service_type: mds
+service_id: cephfs
+placement:
+  count: 2
+  label: mds

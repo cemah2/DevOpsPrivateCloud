@@ -1,0 +1,8 @@
+# rgw.yaml — passerelle S3 de PAR2 (Lucas)
+service_type: rgw
+service_id: par2
+placement:
+  label: rgw
+  count_per_host: 1
+spec:
+  rgw_frontend_port: 443

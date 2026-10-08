@@ -1,0 +1,15 @@
+---
+# molecule/pxe/converge.yml — le rôle pxe sur une instance jetable de vsandbox.
+# Aucun DHCP ici : l'instance sert TFTP et HTTP, sans rien annoncer sur le VLAN 99.
+# Pas d'installateur (téléchargement de 260 Mo) : l'outil pxe-installateurs est éprouvé à part
+# (bats ou exécution manuelle, corrigé M11-E04).
+- name: Converge — rôle pxe
+  hosts: molecule
+  become: true
+  vars:
+    pxe_http_autorises: [10.10.99.0/24, 10.10.10.0/24]
+    # Le magasin du système tient lieu de racine de la PKI sur l'instance de test.
+    pxe_racine_pki: /etc/ssl/certs/ca-certificates.crt
+    pxe_installateurs: []
+  roles:
+    - role: pxe

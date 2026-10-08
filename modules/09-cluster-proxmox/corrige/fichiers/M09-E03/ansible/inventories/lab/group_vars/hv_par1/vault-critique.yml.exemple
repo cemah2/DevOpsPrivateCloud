@@ -1,0 +1,6 @@
+---
+# group_vars/hv_par1/vault-critique.yml — À CHIFFRER : ansible-vault encrypt --encrypt-vault-id critique
+# Mot de passe root des nœuds (console, interface web en root@pam, « pvecm add »). Son empreinte
+# est mise dans le fichier de réponse par installation/preparer-iso.sh, qui le lit dans
+# ~/.config/workbook/hv-root.pass (600) : même valeur ici, pour l'équipe et la reconstruction.
+vault_hv_root_mot_de_passe: "<MOT-DE-PASSE-ROOT-DES-NOEUDS>"

@@ -1,0 +1,8 @@
+# group_vars/role_lb/vault-critique.yml — EXTRAIT M07-E28 (chiffré, identité critique).
+# EMPREINTES crypt(3), pas les mots de passe : produites sur adm01 sans écho ni historique,
+#   admin@adm01:~$ mkpasswd -m sha-512        # demande le mot de passe, affiche l'empreinte
+# Les mots de passe eux-mêmes : gestionnaire de mots de passe de l'équipe ; celui du compte
+# « supervision » aussi dans ~/.config/workbook/haproxy-stats.env (600, HAPROXY_STATS_USER,
+# HAPROXY_STATS_PASSWORD) pour le module 21. Registre des secrets : deux lignes.
+vault_haproxy_stats_supervision_empreinte: "$6$<SEL>$<EMPREINTE>"
+vault_haproxy_stats_admin_empreinte: "$6$<SEL>$<EMPREINTE>"

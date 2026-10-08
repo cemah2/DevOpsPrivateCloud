@@ -1,0 +1,5 @@
+# mon.yaml corrigé (revue M08-E21) — trois moniteurs, un par nœud : quorum = 2 sur 3.
+service_type: mon
+placement:
+  count: 3
+  label: mon

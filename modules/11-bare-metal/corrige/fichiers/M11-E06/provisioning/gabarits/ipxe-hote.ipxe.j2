@@ -1,0 +1,22 @@
+#!ipxe
+# ipxe/mac-{{ m.mac_tirets }}.ipxe — GÉNÉRÉ par outils/netbox-provision.py depuis NetBox : ne pas modifier.
+# {{ m.nom }} — statut NetBox « {{ m.statut }} », plate-forme {{ m.plateforme }}, {{ m.ip }}
+{% if m.statut == "planned" and m.plateforme == "debian-13" %}
+echo {{ m.nom }} : installation de Debian 13 (statut NetBox « planned »), le disque va être effacé.
+kernel {{ p.serveur_http }}/debian13/linux initrd=initrd.gz auto=true priority=critical url={{ p.serveur_http }}/preseed/debian13.cfg hostname={{ m.nom }} domain={{ p.domaine }} || goto echec
+initrd {{ p.serveur_http }}/debian13/initrd.gz || goto echec
+boot || goto echec
+{% elif m.statut == "planned" and m.plateforme == "rocky-10" %}
+echo {{ m.nom }} : installation de Rocky Linux {{ p.rocky_version }} (statut NetBox « planned »), le disque va être effacé.
+kernel {{ p.serveur_http }}/rocky10/vmlinuz initrd=initrd.img inst.repo={{ p.rocky_miroir }}/{{ p.rocky_version }}/BaseOS/x86_64/os/ inst.ks={{ p.serveur_http }}/kickstart/{{ m.nom }}.ks ip=dhcp || goto echec
+initrd {{ p.serveur_http }}/rocky10/initrd.img || goto echec
+boot || goto echec
+{% else %}
+echo {{ m.nom }} : statut NetBox « {{ m.statut }} » : démarrage sur le disque local.
+exit
+{% endif %}
+
+:echec
+echo {{ m.nom }} : échec du chargement de l'installateur. Démarrage sur le disque local dans 30 s.
+sleep 30
+exit

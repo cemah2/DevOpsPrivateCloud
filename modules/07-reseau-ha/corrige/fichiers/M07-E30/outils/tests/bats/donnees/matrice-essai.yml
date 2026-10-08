@@ -1,0 +1,8 @@
+pare_feu_definitions:
+  - {nom: WAN, valeur: '"ens18"'}
+pare_feu_entree:
+  - {entree: $WAN, proto: udp, ports: 51820, motif: "wg0", ref: M00-E21}
+pare_feu_transit:
+  - {entree: $WAN, destination: 10.10.70.200, proto: tcp, ports: [80, 443], motif: "publié", ref: M07-E13}
+pare_feu_nat:
+  - {regle: "oifname $WAN snat to 192.0.2.1", motif: "sortie"}

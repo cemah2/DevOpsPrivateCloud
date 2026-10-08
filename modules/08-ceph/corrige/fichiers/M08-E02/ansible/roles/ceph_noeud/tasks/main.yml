@@ -1,0 +1,28 @@
+---
+# Rôle ceph_noeud — point d'entrée (M08-E02).
+# Ordre : préconditions → dépôt de la version → paquets → compte de l'orchestrateur → réseau
+# → contrôles. Chaque fichier se rejoue sans effet (second passage : changed=0).
+
+- name: Préconditions
+  ansible.builtin.import_tasks: preconditions.yml
+  tags: [ceph_noeud, ceph_noeud_preconditions]
+
+- name: Dépôt Ceph de la version
+  ansible.builtin.import_tasks: depot.yml
+  tags: [ceph_noeud, ceph_noeud_depot]
+
+- name: Paquets
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [ceph_noeud, ceph_noeud_paquets]
+
+- name: Compte de l'orchestrateur
+  ansible.builtin.import_tasks: orchestrateur.yml
+  tags: [ceph_noeud, ceph_noeud_orchestrateur]
+
+- name: Réseau (MTU)
+  ansible.builtin.import_tasks: reseau.yml
+  tags: [ceph_noeud, ceph_noeud_reseau]
+
+- name: Contrôles
+  ansible.builtin.import_tasks: controles.yml
+  tags: [ceph_noeud, ceph_noeud_controles]

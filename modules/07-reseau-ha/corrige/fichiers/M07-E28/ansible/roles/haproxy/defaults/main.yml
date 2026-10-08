@@ -1,0 +1,70 @@
+---
+# Rôle haproxy — HAProxy 3.2 LTS du dépôt haproxy.debian.net (M07-E10 ; TLS en E11 ; répartiteurs
+# lb01/lb02 en E12-E13). Version de référence : PLAN.md §6 (Debian 13 livre la 3.0).
+#
+# Le rôle POSSÈDE /etc/haproxy/haproxy.cfg : global et defaults sont fixés ici (communs à tous les
+# hôtes), les sections propres à l'hôte (frontend, backend, listen) viennent de haproxy_sections.
+# Chaque rendu est validé par « haproxy -c » AVANT d'être posé, puis HAProxy est RECHARGÉ (le
+# maître relance des processus neufs, les anciens finissent leurs connexions : pas de coupure).
+
+# --- Dépôt -----------------------------------------------------------------------------------------
+haproxy_depot_url: https://haproxy.debian.net
+# Suite du dépôt : <version de Debian>-backports-<branche> (ex. trixie-backports-3.2).
+haproxy_depot_branche: "3.2"
+haproxy_depot_cle_url: https://haproxy.debian.net/haproxy-archive-keyring.gpg
+# Empreinte (40 caractères hexadécimaux, sans espace) de la clé du dépôt : relevée et vérifiée
+# en M07-E10 (étape 1), inscrite dans group_vars/all/depots.yml. Le rôle REFUSE de continuer sans.
+haproxy_depot_cle_empreinte: ""
+# Motif de version du paquet (apt) : la branche LTS, jamais « la dernière ».
+haproxy_paquet_version: "3.2.*"
+
+# --- Configuration ------------------------------------------------------------------------------
+haproxy_fichier: /etc/haproxy/haproxy.cfg
+haproxy_dossier_certificats: /etc/haproxy/certs
+haproxy_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# Délais par défaut (section defaults).
+haproxy_delai_connexion: 5s
+haproxy_delai_client: 30s
+haproxy_delai_serveur: 30s
+haproxy_delai_requete_http: 10s
+
+# TLS : versions et suites minimales côté clients (bind) et côté serveurs (re-chiffrement).
+haproxy_tls_version_min: TLSv1.2
+# Racine de confiance pour vérifier les serveurs en re-chiffrement (E13).
+haproxy_racine_ca: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# Sections de l'hôte, rendues dans l'ordre :
+#   - type: resolvers | frontend | backend | listen
+#     nom: fe_web
+#     tls: false          # vrai : section rendue SEULEMENT si un certificat existe déjà dans
+#                         # haproxy_dossier_certificats (amorçage ACME, voir README du rôle)
+#     lignes:             # directives HAProxy, une par ligne, telles quelles
+#       - bind :80
+#       - default_backend be_web
+haproxy_sections: []
+
+# Écouter une adresse que l'hôte ne porte pas (encore) : la VIP keepalived d'un répartiteur
+# BACKUP (E12). Pose net.ipv4.ip_nonlocal_bind=1.
+haproxy_bind_non_local: false
+
+# Contrôles après application : [{url, code, tls}] interrogés DEPUIS l'hôte (TLS vérifié) ;
+# « tls: true » : seulement quand le frontend TLS est rendu (certificat présent).
+haproxy_verifications: []
+
+# --- Production (M07-E28) ------------------------------------------------------------------------
+# Suites TLS « intermediate » du guide Mozilla (TLS 1.2 ; TLS 1.3 a ses propres suites).
+haproxy_tls_suites: >-
+  ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305
+haproxy_tls13_suites: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+# Connexions simultanées au plus, par processus.
+haproxy_maxconn: 4000
+# Un ancien processus qui sert encore de longues connexions après un rechargement est arrêté au
+# plus tard après ce délai (un clone GitLab de 10 minutes ne doit pas être coupé).
+haproxy_arret_force_apres: 15m
+# Page servie quand aucun serveur n'est disponible.
+haproxy_page_503: /etc/haproxy/errors/503-medisphere.http
+# Listes d'utilisateurs (sections « userlist ») : [{nom, groupes: [...], utilisateurs: [{nom,
+# empreinte (crypt(3), Vault), groupes: [...]}]}]. Jamais de mot de passe en clair.
+haproxy_listes_utilisateurs: []

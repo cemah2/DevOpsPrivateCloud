@@ -1,0 +1,19 @@
+---
+# playbooks/pxe01.yml — serveur de provisioning (M11-E02, E13 ; service de réponse PVE en M11-E14).
+- name: Serveur de provisioning pxe01
+  hosts: pxe01
+  become: true
+  roles:
+    - role: pxe
+    - role: certificats_acme
+  tasks:
+    - name: Site HTTPS (le certificat existe désormais)
+      ansible.builtin.include_role:
+        name: pxe
+        tasks_from: nginx.yml
+
+- name: Service de réponse de l'installateur Proxmox VE
+  hosts: pxe01
+  become: true
+  roles:
+    - role: pve_reponses

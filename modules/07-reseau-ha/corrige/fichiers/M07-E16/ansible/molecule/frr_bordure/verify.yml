@@ -1,0 +1,28 @@
+---
+# molecule/frr_bordure/verify.yml — ce que la bordure a CHARGÉ : AS, politiques, groupe fermé.
+- name: Vérifier la configuration de bordure
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire la configuration en cours
+      ansible.builtin.command: vtysh -c "show running-config"
+      register: verif_conf
+      changed_when: false
+
+    - name: AS 65000, politique eBGP obligatoire, groupe K8S fermé et en écoute sur 10.10.40.0/24
+      ansible.builtin.assert:
+        that:
+          - verif_conf.stdout is search('^router bgp 65000$', multiline=True)
+          - verif_conf.stdout is not search('no bgp ebgp-requires-policy')
+          - verif_conf.stdout is search('neighbor K8S shutdown')
+          - verif_conf.stdout is search('bgp listen range 10.10.40.0/24 peer-group K8S')
+          - verif_conf.stdout is search('neighbor 10.10.99.251 route-map RM-FABRIC-IN in')
+          - verif_conf.stdout is search('neighbor 10.10.99.251 route-map RM-FABRIC-OUT out')
+        fail_msg: "{{ verif_conf.stdout }}"
+
+    - name: La route-map de sortie vers Kubernetes refuse tout
+      ansible.builtin.command: vtysh -c "show route-map RM-K8S-OUT"
+      register: verif_rm
+      changed_when: false
+      failed_when: verif_rm.stdout is not search('deny, sequence 10')

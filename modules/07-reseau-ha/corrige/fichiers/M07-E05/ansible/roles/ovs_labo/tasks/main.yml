@@ -1,0 +1,62 @@
+---
+- name: Open vSwitch (paquet Debian 13)
+  ansible.builtin.apt:
+    name: openvswitch-switch
+    state: present
+
+- name: Open vSwitch actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: openvswitch-switch.service
+    state: started
+    enabled: true
+
+- name: Script du labo
+  ansible.builtin.template:
+    src: m07-ovs.sh.j2
+    dest: /usr/local/sbin/m07-ovs
+    mode: "0755"
+    validate: bash -n %s
+  notify: Reconstruire le labo OVS
+
+# Après OVS : la base (ponts, ports) est déjà là, le script recrée ce qui ne survit pas à un
+# redémarrage (espaces de noms, veth, adresses) et remet la table OpenFlow par défaut.
+- name: Unité systemd du labo
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/m07-ovs.service
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle ovs_labo, M07-E05)
+      [Unit]
+      Description=Labo M07 : pont Open vSwitch {{ ovs_labo_pont }} et ses espaces de noms
+      Requires=openvswitch-switch.service
+      After=openvswitch-switch.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/m07-ovs demarrer
+      ExecStop=/usr/local/sbin/m07-ovs arreter
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Reconstruire le labo OVS
+
+- name: Labo actif et reconstruit au démarrage
+  ansible.builtin.systemd_service:
+    name: m07-ovs.service
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Appliquer une reconstruction en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Routage entre VLAN à travers le trunk
+  ansible.builtin.command: >-
+    ip netns exec {{ ovs_labo_hotes[0].ns }} ping -c 2 -W 2
+    {{ (ovs_labo_hotes | rejectattr('vlan', 'equalto', ovs_labo_hotes[0].vlan) | first).adresse.split('/') | first }}
+  changed_when: false
+  retries: 5
+  delay: 3
+  register: ovs_labo_ping
+  until: ovs_labo_ping.rc == 0

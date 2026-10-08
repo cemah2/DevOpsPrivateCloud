@@ -1,0 +1,16 @@
+---
+- name: Redémarrer chrony
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: restarted
+
+# sshd -t valide la configuration COMPLÈTE (fichier principal + sshd_config.d) : si elle
+# échoue, le rechargement n'a pas lieu et la session en cours reste ouverte.
+- name: Valider sshd
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+- name: Recharger ssh
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: reloaded

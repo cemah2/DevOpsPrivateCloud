@@ -1,0 +1,6 @@
+---
+# host_vars/pxe01/pxe.yml — M11-E04 : installateur réseau de Debian 13, vérifié (Release signé,
+# SHA256SUMS, empreintes) par /usr/local/sbin/pxe-installateurs (rôle pxe).
+pxe_nom_serveur: pxe01.par1.medisphere.internal
+pxe_installateurs:
+  - {nom: debian13, type: debian, version: trixie, miroir: https://deb.debian.org/debian}

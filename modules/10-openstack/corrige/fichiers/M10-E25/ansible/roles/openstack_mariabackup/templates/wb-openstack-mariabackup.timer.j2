@@ -1,0 +1,12 @@
+# /etc/systemd/system/wb-openstack-mariabackup.timer — {{ inventory_hostname }} (M10-E25)
+# Avant l'envoi vers PBS de osctl01 (02:10) et la tâche lab-nuit (02:30).
+[Unit]
+Description=Sauvegarde Mariabackup quotidienne de la base OpenStack (M10-E25)
+
+[Timer]
+OnCalendar=*-*-* {{ openstack_mariabackup_heure }}:00
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

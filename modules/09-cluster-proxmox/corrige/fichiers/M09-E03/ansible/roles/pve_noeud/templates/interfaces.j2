@@ -1,0 +1,48 @@
+# {{ pve_noeud_entete }}
+# Réseau du nœud {{ inventory_hostname }} (cluster hv-par1, PLAN §4.9). Cartes épinglées par MAC :
+#   nic0 MGMT (vmbr0) · nic1 COROSYNC · nic2 Ceph public · nic3 Ceph cluster · nic4 trunk invités (vmbr1)
+
+auto lo
+iface lo inet loopback
+
+iface nic0 inet manual
+
+# MGMT (VLAN 10) : administration, API 8006, Corosync lien 1
+auto vmbr0
+iface vmbr0 inet static
+	address {{ pve_noeud_ip_mgmt }}/24
+	gateway {{ pve_noeud_passerelle }}
+	bridge-ports nic0
+	bridge-stp off
+	bridge-fd 0
+
+# COROSYNC (VLAN 32, non routé) : Corosync lien 0
+auto nic1
+iface nic1 inet static
+	address {{ pve_noeud_ip_coro }}/24
+	mtu 1500
+
+# STOR-PUB (VLAN 30) : réseau public de Ceph
+auto nic2
+iface nic2 inet static
+	address {{ pve_noeud_ip_stopub }}/24
+	mtu {{ pve_noeud_mtu_stockage }}
+
+# STOR-CLU (VLAN 31, non routé) : réplication de Ceph
+auto nic3
+iface nic3 inet static
+	address {{ pve_noeud_ip_stoclu }}/24
+	mtu {{ pve_noeud_mtu_stockage }}
+
+iface nic4 inet manual
+
+# Trunk des invités imbriqués : pont VLAN-aware, sans adresse sur le nœud
+auto vmbr1
+iface vmbr1 inet manual
+	bridge-ports nic4
+	bridge-stp off
+	bridge-fd 0
+	bridge-vlan-aware yes
+	bridge-vids {{ pve_noeud_vlans_invites }}
+
+source /etc/network/interfaces.d/*

@@ -1,0 +1,13 @@
+---
+- name: Mettre à jour le magasin de certificats
+  ansible.builtin.command: update-ca-certificates
+  changed_when: true
+
+- name: Recharger PostgreSQL
+  ansible.builtin.systemd_service:
+    name: postgresql.service
+    state: reloaded
+
+- name: Redémarrer MAAS
+  ansible.builtin.command: snap restart maas
+  changed_when: true

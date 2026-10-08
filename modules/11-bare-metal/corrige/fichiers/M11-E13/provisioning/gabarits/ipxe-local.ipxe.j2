@@ -1,0 +1,7 @@
+#!ipxe
+{# gabarits/ipxe-local.ipxe.j2 — machine en service (statut NetBox « active ») : on ne
+    réinstalle JAMAIS ; iPXE rend la main au micrologiciel, qui passe au périphérique suivant de
+    l'ordre de démarrage (le disque). M11-E15. Variables : fqdn, mac. -#}
+# {{ fqdn }} ({{ mac }}) : en service — démarrage sur le disque local
+echo {{ fqdn }} : en service, demarrage sur le disque local.
+exit

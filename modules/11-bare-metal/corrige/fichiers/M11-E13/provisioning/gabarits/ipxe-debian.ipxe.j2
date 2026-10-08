@@ -1,0 +1,16 @@
+#!ipxe
+{# gabarits/ipxe-debian.ipxe.j2 — script iPXE propre à une machine, installation Debian 13
+    (M11-E13 : tout en HTTPS, preseed remis par iPXE dans l'initrd).
+    Variables (outils/netbox-provision.py, M11-E06) : hote, fqdn, mac, url_base.
+    Rendu dans /srv/http/ipxe/mac-<mac en minuscules, tirets>.ipxe. -#}
+# {{ fqdn }} ({{ mac }}) : installation Debian 13 — rendu depuis NetBox, ne pas modifier sur pxe01
+set base {{ url_base }}
+echo {{ fqdn }} : installation Debian 13 (preseed {{ hote }}.cfg)
+kernel ${base}/debian/trixie/linux auto=true priority=critical --- quiet
+initrd ${base}/debian/trixie/initrd.gz
+# Fichiers ajoutés à la racine de l'initrd (iPXE construit l'archive cpio autour de chacun) :
+# d-i lit /preseed.cfg tout seul ; late_command copie la racine et la clé SSH sur le système.
+initrd ${base}/preseed/{{ hote }}.cfg /preseed.cfg
+initrd ${base}/pki/medisphere-root-ca.crt /medisphere-root-ca.crt
+initrd ${base}/cles/admin.pub /authorized_keys
+boot

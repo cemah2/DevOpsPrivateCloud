@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Synchronisation des connexions de la bordure par conntrackd (FTFW, UDP unicast).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

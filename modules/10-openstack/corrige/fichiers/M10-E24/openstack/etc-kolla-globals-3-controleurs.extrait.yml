@@ -1,0 +1,11 @@
+---
+# Ce qui changerait dans etc/kolla/globals.yml (ou globals.d/) avec trois contrôleurs (M10-E24).
+# Rien d'autre : Kolla déduit de l'inventaire les membres de Galera, RabbitMQ, OVN et keepalived.
+
+# Annonces VRRP en unicast entre contrôleurs (cohérent avec la bordure, M07) : évite de dépendre
+# du multicast sur le VLAN 50.
+keepalived_traffic_mode: "unicast"
+
+# Cinder actif/actif sur Ceph : exige un gestionnaire de coordination (etcd ou Valkey) ; sans lui,
+# garder cinder-volume sur un seul nœud du groupe storage. Décision à prendre à ce moment-là.
+# enable_etcd: "yes"

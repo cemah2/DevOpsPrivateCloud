@@ -1,0 +1,35 @@
+---
+# donnees/identite.yml — domaine, projets, groupes, comptes et rôles de MédiSphère (M10-E05, SEC-1105).
+# Lu par playbooks/identite.yml. Les mots de passe sont dans donnees/vault-identite.yml (critique).
+# Règle (Sophie Laurent) : les rôles vont à des GROUPES, jamais à une personne sur un projet.
+
+identite_domaine:
+  nom: medisphere
+  description: "Équipes de MédiSphère"
+
+identite_projets:
+  - {nom: plateforme, description: "Équipe Plateforme : outillage, essais, services communs"}
+  - {nom: mediagenda-dev, description: "MédiAgenda : développement et recette"}
+  - {nom: mediagenda-prod, description: "MédiAgenda : production"}
+
+identite_groupes:
+  - nom: equipe-plateforme
+    description: "Équipe Plateforme (Claire Morel)"
+    membres: ["<MOI>", karim.benali]
+    roles:
+      - {projet: plateforme, role: member}
+      - {projet: mediagenda-dev, role: reader}
+      - {projet: mediagenda-prod, role: reader}
+  - nom: equipe-mediagenda
+    description: "Développeurs de MédiAgenda (Julien Petit)"
+    membres: [julien.petit]
+    roles:
+      - {projet: mediagenda-dev, role: member}
+      - {projet: mediagenda-prod, role: reader}
+
+# Comptes humains. Le mot de passe initial (Vault) n'est posé qu'à la CRÉATION ; chacun le
+# change ensuite (« openstack user password set »). <MOI> : ton compte nominatif.
+identite_utilisateurs:
+  - {nom: "<MOI>", description: "Équipe Plateforme", courriel: "<MOI>@medisphere.internal"}
+  - {nom: karim.benali, description: "Équipe Plateforme", courriel: karim.benali@medisphere.internal}
+  - {nom: julien.petit, description: "MédiAgenda", courriel: julien.petit@medisphere.internal}

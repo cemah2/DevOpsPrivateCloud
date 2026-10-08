@@ -1,0 +1,119 @@
+---
+# Rôle haproxy (M07-E10 ; E11 TLS ; E12-E13 répartiteurs ; E28 production).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - haproxy_depot_cle_empreinte is match('^[0-9A-F]{40}$')
+      - haproxy_sections | map(attribute='type') | difference(['resolvers', 'frontend', 'backend', 'listen']) | length == 0
+      - haproxy_sections | map(attribute='nom') | unique | list | length == haproxy_sections | length
+    fail_msg: >-
+      Empreinte de la clé du dépôt absente ou mal formée (40 caractères hexadécimaux en
+      MAJUSCULES), ou section de type inconnu (resolvers, frontend, backend, listen), ou deux sections du même nom.
+    quiet: true
+
+- name: Dépôt haproxy.debian.net
+  ansible.builtin.import_tasks: depot.yml
+
+- name: Paquet HAProxy de la branche LTS
+  ansible.builtin.apt:
+    name: "haproxy={{ haproxy_paquet_version }}"
+    state: present
+
+# Mêmes droits que ceux que pose le rôle certificats_acme sur ses dossiers (0755 root:root) : deux
+# rôles qui imposent des modes différents au même dossier se contrediraient à chaque passage. La
+# protection est sur les clés (0640, groupe haproxy).
+- name: Mots de passe des listes d'utilisateurs donnés par leur empreinte, jamais en clair
+  ansible.builtin.assert:
+    that:
+      - >-
+        haproxy_listes_utilisateurs | map(attribute='utilisateurs') | flatten | map(attribute='empreinte')
+        | reject('match', '^\$(6|y)\$') | list | length == 0
+    fail_msg: "haproxy_listes_utilisateurs : empreinte crypt(3) attendue ($6$… ou $y$…), Vault critique."
+    quiet: true
+
+- name: Page d'erreur 503
+  ansible.builtin.copy:
+    src: 503-medisphere.http
+    dest: "{{ haproxy_page_503 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dossier des certificats
+  ansible.builtin.file:
+    path: "{{ haproxy_dossier_certificats }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Écoute sur une adresse non portée (VIP d'un répartiteur en attente)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-haproxy.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ haproxy_entete }}
+      # HAProxy écoute la VIP keepalived même quand cet hôte ne la porte pas (état BACKUP) :
+      # à la bascule, il n'y a rien à redémarrer.
+      net.ipv4.ip_nonlocal_bind = {{ 1 if haproxy_bind_non_local | bool else 0 }}
+  notify: Appliquer les paramètres noyau d'haproxy
+
+- name: Appliquer maintenant les paramètres noyau (avant de valider une configuration qui en dépend)
+  ansible.builtin.meta: flush_handlers
+
+# Amorçage : une section « tls: true » n'est rendue que si au moins un certificat existe. Au premier
+# passage, HAProxy démarre sans TLS, sert le défi ACME sur le port 80, le rôle certificats_acme
+# obtient les certificats, et le passage suivant du rôle (même playbook) ajoute les sections TLS.
+- name: Chercher les certificats déjà présents
+  ansible.builtin.find:
+    paths: "{{ haproxy_dossier_certificats }}"
+    patterns: "*.crt"
+  register: _haproxy_certificats
+
+- name: Configuration d'HAProxy (validée par « haproxy -c » avant d'être posée)
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: "{{ haproxy_fichier }}"
+    owner: root
+    group: haproxy
+    mode: "0640"
+    backup: true
+    validate: haproxy -c -f %s
+  vars:
+    _haproxy_tls_possible: "{{ _haproxy_certificats.matched | int > 0 }}"
+  notify: Recharger haproxy
+
+- name: Service actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: haproxy
+    enabled: true
+    state: started
+
+- name: Appliquer maintenant les rechargements en attente
+  ansible.builtin.meta: flush_handlers
+
+# Contrôles sur le service RENDU : la socket d'administration répond et donne la version chargée.
+- name: HAProxy répond sur sa socket d'administration
+  ansible.builtin.shell: |
+    set -o pipefail
+    echo "show info" | socat stdio unix-connect:/run/haproxy/admin.sock | grep -E '^Version: {{ haproxy_depot_branche | regex_escape }}\.'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Points de contrôle de l'hôte
+  ansible.builtin.uri:
+    url: "{{ item.url }}"
+    status_code: "{{ item.code | default(200) }}"
+    ca_path: "{{ haproxy_racine_ca }}"
+    timeout: 5
+  loop: "{{ haproxy_verifications }}"
+  loop_control:
+    label: "{{ item.url }}"
+  # Un point « tls: true » attend que le frontend TLS existe (second passage de l'amorçage).
+  when: not ansible_check_mode and (not (item.tls | default(false) | bool) or _haproxy_certificats.matched | int > 0)

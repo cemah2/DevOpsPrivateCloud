@@ -1,0 +1,9 @@
+# host_vars/leaf01/frr.yml (maquette, M07-E16) — EXTRAIT modifié en M07-E24 puis M07-E25.
+# leaf01 parle BGP à la bordure par le VLAN 99 (10.10.99.251). Il connaît maintenant DEUX voisins,
+# par leurs adresses PROPRES : jamais la VIP 10.10.99.1 (une session vers une VIP change de
+# passerelle à chaque bascule et se réinitialise).
+#   M07-E24 : ajout de 10.10.99.3 (gw02).
+#   M07-E25 : 10.10.99.1 remplacée par 10.10.99.2 (gw01), AVANT la migration du VLAN 99.
+frr_voisins_bordure:
+  - {adresse: 10.10.99.2, as: 65000, description: gw01}
+  - {adresse: 10.10.99.3, as: 65000, description: gw02}

@@ -1,0 +1,9 @@
+---
+# host_vars/pxe01/pxe.yml — M11-E04 (Debian 13) et M11-E05 (Rocky Linux 10).
+# Rocky : version MINEURE fixée. Elle doit être la même que dans inst.repo (scripts iPXE) et
+# dans « url » du kickstart : un initrd d'une autre version que le dépôt fait échouer Anaconda.
+# Monter de version = une MR qui change les trois ensemble (et l'outil de rendu, M11-E06).
+pxe_nom_serveur: pxe01.par1.medisphere.internal
+pxe_installateurs:
+  - {nom: debian13, type: debian, version: trixie, miroir: https://deb.debian.org/debian}
+  - {nom: rocky10, type: rocky, version: "10.2", miroir: https://dl.rockylinux.org/pub/rocky}

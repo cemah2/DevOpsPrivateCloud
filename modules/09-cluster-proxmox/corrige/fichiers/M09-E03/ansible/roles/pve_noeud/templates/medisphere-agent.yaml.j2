@@ -1,0 +1,9 @@
+#cloud-config
+# {{ pve_noeud_entete }}
+# Fragment « vendor » des invités imbriqués : l'image Debian genericcloud n'embarque pas
+# l'agent QEMU ; il sert à lire l'adresse de l'invité et à l'arrêter proprement.
+package_update: true
+packages:
+  - qemu-guest-agent
+runcmd:
+  - [systemctl, start, qemu-guest-agent]

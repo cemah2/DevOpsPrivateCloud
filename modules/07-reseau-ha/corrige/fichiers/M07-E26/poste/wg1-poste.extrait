@@ -1,0 +1,9 @@
+# Poste de <MOI> — configuration WireGuard du VPN d'administration (M00-E16), EXTRAIT M07-E26.
+[Peer]
+# Bordure PAR1 (gw01 ou gw02, même clé)
+PublicKey = <CLE-PUBLIQUE-WG1-DE-GW01>
+Endpoint = 192.168.1.50:51821        # <IP-GW-WAN-VIP>:51821 (était <IP-GW01-WAN>)
+AllowedIPs = 10.10.0.0/16, 10.20.0.0/16, 10.255.1.0/24
+# Après une bascule, le poste continue d'émettre vers la même adresse ; la nouvelle passerelle a la
+# même clé privée : la prochaine poignée de main (≤ 2 min, ou au premier paquet) rétablit le tunnel.
+PersistentKeepalive = 25

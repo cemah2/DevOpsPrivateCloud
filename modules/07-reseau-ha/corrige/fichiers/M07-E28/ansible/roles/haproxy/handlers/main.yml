@@ -1,0 +1,12 @@
+---
+# Rechargement et non redémarrage : en mode maître-processus (systemd lance « haproxy -Ws »), un
+# rechargement démarre de nouveaux processus avec la nouvelle configuration et laisse les anciens
+# terminer leurs connexions. La configuration a déjà été validée par « haproxy -c ».
+- name: Recharger haproxy
+  ansible.builtin.systemd_service:
+    name: haproxy
+    state: reloaded
+
+- name: Appliquer les paramètres noyau d'haproxy
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/60-haproxy.conf
+  changed_when: true

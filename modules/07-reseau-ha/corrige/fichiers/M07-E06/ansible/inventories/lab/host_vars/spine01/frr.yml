@@ -1,0 +1,15 @@
+---
+# host_vars/spine01/frr.yml — état de fin de M07-E06 : OSPF zone 0 (routes statiques retirées).
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.1/32]
+    ospf: {zone: 0.0.0.0}
+  - nom: eth1
+    description: vers leaf01 (vfab1)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+  - nom: eth2
+    description: vers leaf02 (vfab2)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+
+frr_ospf:
+  router_id: 10.10.255.1

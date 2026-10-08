@@ -1,0 +1,30 @@
+# /etc/systemd/system/ms-verif-ceph.service — M08-E24 (PLAT-950)
+# Sonde du cluster Ceph. Déclenchée par ms-verif-ceph.timer (toutes les 5 minutes).
+# Test manuel : sudo systemctl start ms-verif-ceph.service ; journalctl -u ms-verif-ceph -n 40
+
+[Unit]
+Description=MédiSphère : sonde du cluster Ceph ceph-par1 (santé, OSD, PG, capacité, S3, certificats)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+# Version installée par « task install:systeme », jamais le clone de travail.
+ExecStart=/usr/local/bin/ms-verif-ceph --quiet
+TimeoutStartSec=2min
+SyslogIdentifier=ms-verif-ceph
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

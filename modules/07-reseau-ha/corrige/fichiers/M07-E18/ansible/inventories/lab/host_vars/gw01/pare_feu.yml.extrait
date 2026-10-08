@@ -1,0 +1,20 @@
+# host_vars/gw01/pare_feu.yml — EXTRAIT à intégrer (M07-E18, PLAT-828) : le site LYO1.
+
+# pare_feu_definitions :
+  - {nom: WG_LYO, valeur: '"wg2"', commentaire: "tunnel vers le site LYO1 (M07-E18)"}
+  - {nom: NET_LYO1, valeur: 10.30.0.0/16}
+  - {nom: LYO_GW, valeur: 10.10.99.250, commentaire: "extrémité WireGuard de LYO1 (son « Internet » = VLAN 99)"}
+
+# pare_feu_entree :
+  - {entree: $V_SANDBOX, source: $LYO_GW, proto: udp, ports: 51822,
+     motif: "wg2 : tunnel du site LYO1 (maquette)", ref: M07-E18}
+
+# pare_feu_transit — règle DNS existante (M06-E24) : ajouter $NET_LYO1 aux sources :
+  - {source: [$NETS_LAB, $NETS_PAR2, $NET_VPN, $NET_LYO1], destination: [$DNS01, $DNS02], proto: tcp_udp, ports: 53,
+     motif: "DNS du lab (UDP et TCP) vers les deux récurseurs", ref: M06-E24}
+
+# pare_feu_transit, nouvelle section « Site LYO1 (maquette) » :
+  - {entree: $WG_LYO, source: $NET_LYO1, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "LYO1 vers les services publiés (GitLab, NetBox)", ref: M07-E18}
+  - {entree: $WG_LYO, source: $NET_LYO1, sortie: [$V_INFRA, $V_DMZ], proto: icmp, icmp: echo-request,
+     motif: "LYO1 : ping de diagnostic vers INFRA et DMZ", ref: M07-E18}

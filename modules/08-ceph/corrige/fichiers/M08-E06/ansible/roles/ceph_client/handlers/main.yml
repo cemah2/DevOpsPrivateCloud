@@ -1,0 +1,7 @@
+---
+# Recharger rbdmap : « rbdmap map » ne remappe que ce qui manque (ExecReload du service).
+- name: Recharger rbdmap
+  ansible.builtin.systemd_service:
+    name: rbdmap
+    state: reloaded
+  when: ceph_client_demarrer_rbdmap | bool

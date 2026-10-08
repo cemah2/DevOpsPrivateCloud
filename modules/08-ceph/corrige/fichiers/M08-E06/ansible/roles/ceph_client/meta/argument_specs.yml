@@ -1,0 +1,68 @@
+---
+argument_specs:
+  main:
+    short_description: Client Ceph Debian 13 (ceph.conf minimal, trousseaux, rbdmap)
+    options:
+      ceph_client_paquets:
+        type: list
+        elements: str
+        description: Paquets du client.
+      ceph_client_fsid:
+        type: str
+        required: true
+        description: fsid du cluster (ceph fsid).
+      ceph_client_moniteurs:
+        type: list
+        elements: str
+        required: true
+        description: Adresses publiques des moniteurs.
+      ceph_client_cles:
+        type: list
+        elements: dict
+        default: []
+        description: Trousseaux à déposer.
+        options:
+          nom:
+            type: str
+            required: true
+            description: Nom cephx complet (client.xxx).
+          cle:
+            type: str
+            required: true
+            description: Clé cephx (secret, depuis le Vault).
+      ceph_client_rbdmap:
+        type: list
+        elements: dict
+        default: []
+        description: Images mappées au démarrage.
+        options:
+          image:
+            type: str
+            required: true
+            description: pool/image.
+          id:
+            type: str
+            required: true
+            description: Identifiant cephx sans le préfixe client.
+      ceph_client_montages:
+        type: list
+        elements: dict
+        default: []
+        description: Montages des images mappées.
+        options:
+          source:
+            type: str
+            required: true
+            description: Périphérique (/dev/rbd/pool/image).
+          point:
+            type: path
+            required: true
+            description: Point de montage.
+          fs:
+            type: str
+            required: true
+            description: Système de fichiers.
+      ceph_client_demarrer_rbdmap:
+        type: bool
+        default: true
+        description: Démarrer et recharger rbdmap (false dans Molecule, sans cluster).

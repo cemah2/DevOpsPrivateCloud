@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AucuneSuppressionDefinitiveSaufRacine",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": [
+          "arn:aws:iam::<ID-COMPTE>:user/medidoc-app",
+          "arn:aws:iam::<ID-COMPTE>:user/medidoc-audit"
+        ]
+      },
+      "Action": ["s3:DeleteObjectVersion", "s3:PutBucketVersioning", "s3:PutBucketPolicy", "s3:DeleteBucketPolicy"],
+      "Resource": ["arn:aws:s3:::medidoc-documents", "arn:aws:s3:::medidoc-documents/*"]
+    }
+  ]
+}

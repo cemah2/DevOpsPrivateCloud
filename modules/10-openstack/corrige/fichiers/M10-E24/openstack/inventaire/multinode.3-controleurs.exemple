@@ -1,0 +1,48 @@
+# inventaire/multinode.3-controleurs.exemple — plan de contrôle à TROIS nœuds (M10-E24, PLAT-1150)
+# NON UTILISÉ par les déploiements : référence chiffrée pour le jour où le budget mémoire le permet
+# (3 × 16 Go pour le contrôle). Seules les sections du haut changent par rapport à
+# inventaire/multinode ; toutes les sections de groupes dérivés (« [xxx:children] ») qui suivent
+# dans le fichier réel restent identiques et ne sont pas recopiées ici.
+#
+# Adresses (PLAN §4.2, plage des nœuds de clusters .50-.99) :
+#   osctl01  OS-API 10.10.50.51  OS-TUN 10.10.51.51  STOR-PUB 10.10.30.61  (existant, VMID 2101)
+#   osctl02  OS-API 10.10.50.54  OS-TUN 10.10.51.54  STOR-PUB 10.10.30.64  (VMID à réserver)
+#   osctl03  OS-API 10.10.50.55  OS-TUN 10.10.51.55  STOR-PUB 10.10.30.65  (VMID à réserver)
+# Interfaces identiques sur les trois contrôleurs (ens18 API, ens19 tunnel, ens20 stockage,
+# ens21 externe sans adresse) : pas de variable d'hôte nécessaire.
+#
+# Ajout (procédure « Adding new controllers ») : bootstrap-servers --limit control ;
+# pull --limit osctl02,osctl03 ; deploy --limit control ; vérifications (Galera 3, RabbitMQ 3,
+# OVN Raft 3 membres), puis répartition des routeurs (priorités des gateway chassis).
+
+[control]
+osctl01
+osctl02
+osctl03
+
+# La passerelle OVN (gateway chassis) suit le groupe network : trois châssis, bascule par BFD.
+[network]
+osctl01
+osctl02
+osctl03
+
+[compute]
+oscmp01
+oscmp02
+
+[monitoring]
+osctl01
+osctl02
+osctl03
+
+# cinder-volume et cinder-backup (backend Ceph, sans état local) : un par contrôleur, en
+# actif/actif possible seulement avec un gestionnaire de verrous (coordination) ; sinon, un seul.
+[storage]
+osctl01
+osctl02
+osctl03
+
+[deployment]
+localhost ansible_connection=local
+
+# … sections [xxx:children] inchangées (voir inventaire/multinode) …

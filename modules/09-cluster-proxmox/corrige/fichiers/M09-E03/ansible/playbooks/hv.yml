@@ -1,0 +1,15 @@
+---
+# playbooks/hv.yml — configuration des nœuds du cluster Proxmox imbriqué hv-par1 (M09-E03).
+#   uv run ansible-playbook -i inventories/lab/netbox.yml -i inventories/lab/hv.yml playbooks/hv.yml
+# serial: 1 : un nœud à la fois. Une erreur de réseau ne coupe jamais deux nœuds du cluster.
+- name: Nœuds Proxmox VE du cluster hv-par1
+  hosts: hv_par1
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: medisphere.socle.ca_lab
+      tags: [ca_lab]
+    - role: pve_noeud
+      tags: [pve_noeud]
+    - role: ssh_ca_hote
+      tags: [ssh_ca, ssh_ca_hote]

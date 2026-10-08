@@ -1,0 +1,23 @@
+# host_vars/gw01/pare_feu.yml — EXTRAIT à intégrer (M07-E13, PLAT-823) : publication de GitLab et
+# de NetBox par les répartiteurs. Valeurs d'exemple : 192.168.1.10 = <IP-GW01-WAN>.
+
+# pare_feu_definitions :
+  - {nom: GW01_WAN, valeur: 192.168.1.10, commentaire: "<IP-GW01-WAN> (VIP WAN <IP-GW-WAN-VIP> à partir de M07-E26)"}
+
+# pare_feu_transit, nouvelle section « Publication (répartiteurs) » :
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: [$GIT01, $NBX01], proto: tcp, ports: 443,
+     motif: "répartiteurs vers les serveurs publiés (GitLab, NetBox), re-chiffré", ref: M07-E13}
+  - {entree: $V_INFRA, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "socle (runner01, outils) vers les noms publiés", ref: M07-E13}
+  - {entree: $WG_ADM, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "VPN d'admin vers les noms publiés", ref: M07-E13}
+  - {entree: $WAN, source: $LAN_MAISON, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "LAN maison vers la VIP (après la redirection du port 443 de gw01)", ref: M07-E13}
+
+# Nouvelle liste (rôle pare_feu, modèle M07-E13) :
+pare_feu_dnat:
+  - regle: iifname $WAN ip saddr $LAN_MAISON ip daddr $GW01_WAN tcp dport 443 dnat to $VIP_LB:443
+    motif: "HTTPS du LAN maison vers les répartiteurs (M07-E13)"
+
+# pare_feu_verifications (contrôle depuis le contrôleur après application) :
+  - {hote: 10.10.70.200, port: 443, motif: "contrôleur → VIP des répartiteurs (HTTPS)"}

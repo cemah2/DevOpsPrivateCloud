@@ -1,0 +1,13 @@
+#!ipxe
+{# gabarits/ipxe-pve.ipxe.j2 — installation de Proxmox VE 9.2 par le réseau (M11-E14).
+   Noyau et initrd produits par « proxmox-auto-install-assistant prepare-iso --pxe-loader ipxe »
+   (l'initrd contient tout l'installateur, le jeton et l'empreinte du certificat de pxe01).
+   pve_noyau_arguments : recopie EXACTE des arguments de la ligne « kernel » du script iPXE produit
+   par l'outil (dossier de sortie de prepare-iso) ; ils changent selon la version de l'ISO.
+   Variables : fqdn, mac, url_base, pve_version, pve_noyau_arguments. -#}
+# {{ fqdn }} ({{ mac }}) : installation Proxmox VE {{ pve_version }} — rendu depuis NetBox
+set base {{ url_base }}
+echo {{ fqdn }} : installation Proxmox VE {{ pve_version }} (initrd volumineux : patience)
+kernel ${base}/pve/{{ pve_version }}/vmlinuz {{ pve_noyau_arguments }}
+initrd ${base}/pve/{{ pve_version }}/initrd.img
+boot

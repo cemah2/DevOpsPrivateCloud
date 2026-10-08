@@ -1,0 +1,62 @@
+# haproxy.cfg — lb01/lb02, version corrigée de la MR !47 (M07-E21). En production, ce fichier est
+# GÉNÉRÉ par le rôle haproxy (group_vars/role_lb/haproxy.yml) : ce rendu sert à la comparaison.
+global
+    log stdout format short local0 info
+    chroot /var/lib/haproxy
+    user haproxy
+    group haproxy
+    # (défaut 1) maxconn dimensionné : laissé au calcul d'HAProxy (mémoire, ulimit), ou posé
+    # explicitement après mesure (E32), jamais 50.
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+    ssl-default-server-options ssl-min-ver TLSv1.2
+    ssl-load-extra-del-ext
+    crt-base /etc/haproxy/certs
+
+defaults
+    log global
+    mode http
+    option httplog
+    option dontlognull
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+    timeout http-request 10s
+
+frontend fe_http
+    bind :80
+    acl defi_acme path_beg /.well-known/acme-challenge/
+    http-request redirect scheme https code 301 unless defi_acme
+    use_backend be_acme if defi_acme
+
+frontend fe_publication
+    bind :443 ssl crt /etc/haproxy/certs/ strict-sni alpn h2,http/1.1
+    option forwardfor
+    http-request set-header X-Forwarded-Proto https
+    http-request return status 200 content-type text/plain string "ok" if { path /sante }
+    http-request set-var(txn.hote) req.hdr(host),field(1,:),lower
+    use_backend be_agenda if { var(txn.hote) -m str agenda.par1.medisphere.internal }
+    use_backend be_gitlab if { var(txn.hote) -m str gitlab.par1.medisphere.internal }
+    use_backend be_netbox if { var(txn.hote) -m str netbox.par1.medisphere.internal }
+    default_backend be_aucun
+
+backend be_agenda
+    balance roundrobin
+    # Export PDF long : délai allongé ICI seulement, pas pour tout le monde.
+    timeout server 300s
+    option httpchk
+    http-check send meth GET uri /sante ver HTTP/1.1 hdr Host agenda.par1.medisphere.internal
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 check ssl verify required ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+    server app01 10.10.40.21:8443 sni str(app01.par1.medisphere.internal) verifyhost app01.par1.medisphere.internal check-sni app01.par1.medisphere.internal
+    server app02 10.10.40.22:8443 sni str(app02.par1.medisphere.internal) verifyhost app02.par1.medisphere.internal check-sni app02.par1.medisphere.internal
+
+# be_gitlab, be_netbox, be_aucun, be_acme : inchangés (version E13).
+
+# Statistiques : boucle locale seulement (tunnel SSH), sans action d'administration.
+listen stats
+    bind 127.0.0.1:8404
+    stats enable
+    stats uri /stats
+    stats refresh 10s

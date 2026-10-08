@@ -1,0 +1,5 @@
+---
+# molecule/keepalived/molecule.yml — deux instances, une VIP d'essai (M07-E08)
+#   uv run molecule test -s keepalived
+scenario:
+  name: keepalived

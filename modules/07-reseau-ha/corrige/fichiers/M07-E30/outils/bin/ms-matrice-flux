@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""ms-matrice-flux — génère docs/socle/matrice-flux.md depuis la matrice des flux en code (M07-E30).
+
+Lit group_vars/role_routeur/pare_feu.yml (projet plateforme/ansible) et écrit un document Markdown
+trié par chaîne (entrée, transit, traductions), une ligne par flux, avec motif et référence. Le
+document publié dans plateforme/medisphere est TOUJOURS ce que produit ce script : le job
+« matrice-a-jour » de la CI de plateforme/ansible échoue s'il diffère.
+
+Usage : ms-matrice-flux [-o FICHIER] [--verifier FICHIER] MATRICE.yml
+  -o FICHIER          écrire dans FICHIER (défaut : sortie standard)
+  --verifier FICHIER  ne rien écrire : code 1 si FICHIER diffère de ce qui serait généré
+Codes retour : 0 succès (ou document à jour), 1 document en retard ou matrice invalide, 2 usage.
+Dépendance : PyYAML (paquet Debian python3-yaml).
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+import yaml
+
+CHAMPS_OBLIGATOIRES = ("motif",)
+
+
+def cellule(valeur) -> str:
+    """Valeur d'un champ de la matrice → texte de cellule Markdown (listes jointes, | échappé)."""
+    if valeur is None:
+        return ""
+    if isinstance(valeur, list):
+        texte = ", ".join(str(v) for v in valeur)
+    else:
+        texte = str(valeur)
+    return texte.replace("|", "\\|").replace('"', "")
+
+
+def ports(flux: dict) -> str:
+    parties = []
+    if "proto" in flux:
+        parties.append(cellule(flux["proto"]).replace("tcp_udp", "tcp+udp"))
+    if "ports_source" in flux:
+        parties.append("src " + cellule(flux["ports_source"]))
+    if "ports" in flux:
+        parties.append(cellule(flux["ports"]))
+    if "icmp" in flux:
+        parties.append(cellule(flux["icmp"]))
+    return " ".join(parties) or "tout"
+
+
+def tableau(titre: str, flux: list[dict], avec_interfaces: bool) -> list[str]:
+    lignes = [f"## {titre}", ""]
+    if not flux:
+        return lignes + ["Aucun flux.", ""]
+    entete = "| # | Entrée | Sortie | Source | Destination | Protocole et ports | Motif | Réf. |"
+    if not avec_interfaces:
+        entete = "| # | Entrée | Source | Protocole et ports | Motif | Réf. |"
+    lignes += [entete, "|" + "---|" * (entete.count("|") - 1)]
+    for i, f in enumerate(flux, 1):
+        manque = [c for c in CHAMPS_OBLIGATOIRES if not f.get(c)]
+        if manque:
+            raise ValueError(f"{titre}, flux n° {i} : champ(s) manquant(s) {manque}")
+        if avec_interfaces:
+            lignes.append(
+                f"| {i} | {cellule(f.get('entree'))} | {cellule(f.get('sortie'))} | {cellule(f.get('source'))} "
+                f"| {cellule(f.get('destination'))} | {ports(f)} | {cellule(f['motif'])} | {cellule(f.get('ref'))} |"
+            )
+        else:
+            lignes.append(
+                f"| {i} | {cellule(f.get('entree'))} | {cellule(f.get('source'))} | {ports(f)} "
+                f"| {cellule(f['motif'])} | {cellule(f.get('ref'))} |"
+            )
+    return lignes + [""]
+
+
+def generer(matrice: dict) -> str:
+    lignes = [
+        "# Matrice des flux du site PAR1",
+        "",
+        "> Document **généré** par `ms-matrice-flux` (plateforme/outils) depuis "
+        "`inventories/lab/group_vars/role_routeur/pare_feu.yml` (plateforme/ansible). "
+        "Ne pas le modifier à la main : modifier la matrice par MR, le pipeline republie ce document.",
+        "",
+        "Les flux internes à un VLAN ne traversent pas la bordure : ils sont décrits par les variables "
+        "`pare_feu_local_*` des hôtes concernés (rôle `pare_feu_local`).",
+        "",
+        "## Objets nommés",
+        "",
+        "| Nom | Valeur | Commentaire |",
+        "|---|---|---|",
+    ]
+    for d in matrice.get("pare_feu_definitions", []):
+        lignes.append(f"| `{d['nom']}` | {cellule(d['valeur'])} | {cellule(d.get('commentaire'))} |")
+    lignes.append("")
+    lignes += tableau("Vers les passerelles (chaîne input)", matrice.get("pare_feu_entree", []), False)
+    lignes += tableau("À travers la bordure (chaîne forward)", matrice.get("pare_feu_transit", []), True)
+    lignes += ["## Traductions d'adresses", "", "| Chaîne | Règle | Motif |", "|---|---|---|"]
+    for n in matrice.get("pare_feu_dnat", []):
+        lignes.append(f"| prerouting | `{cellule(n['regle'])}` | {cellule(n['motif'])} |")
+    for n in matrice.get("pare_feu_nat", []):
+        lignes.append(f"| postrouting | `{cellule(n['regle'])}` | {cellule(n['motif'])} |")
+    lignes.append("")
+    return "\n".join(lignes)
+
+
+def main(argv: list[str]) -> int:
+    p = argparse.ArgumentParser(prog="ms-matrice-flux", description=__doc__.splitlines()[0])
+    p.add_argument("matrice")
+    groupe = p.add_mutually_exclusive_group()
+    groupe.add_argument("-o", dest="sortie")
+    groupe.add_argument("--verifier", dest="publie")
+    args = p.parse_args(argv)
+    try:
+        with open(args.matrice, encoding="utf-8") as f:
+            texte = generer(yaml.safe_load(f) or {})
+    except (OSError, yaml.YAMLError, ValueError, KeyError, TypeError) as e:
+        print(f"ms-matrice-flux : matrice illisible ou invalide : {e}", file=sys.stderr)
+        return 1
+    if args.publie:
+        try:
+            with open(args.publie, encoding="utf-8") as f:
+                publie = f.read()
+        except OSError as e:
+            print(f"ms-matrice-flux : document publié illisible : {e}", file=sys.stderr)
+            return 1
+        if publie != texte:
+            print("ms-matrice-flux : le document publié n'est pas à jour (régénère-le)", file=sys.stderr)
+            return 1
+        return 0
+    if args.sortie:
+        with open(args.sortie, "w", encoding="utf-8") as f:
+            f.write(texte)
+    else:
+        sys.stdout.write(texte)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,23 @@
+---
+# Rôle wireguard — tunnels WireGuard par wg-quick (M07-E18 : wg2 vers le site LYO1 ; étendu en
+# M07-E26 à wg0 et wg1 et aux deux passerelles). Le rôle ne touche QUE les interfaces listées :
+# wg0 et wg1 de gw01, construits à la main en M00, restent tels quels jusqu'à E26.
+#
+# Clés privées : jamais en clair dans le dépôt. Elles viennent d'Ansible Vault (identité
+# « critique » pour la bordure, « lab » pour la maquette), sont écrites dans
+# /etc/wireguard/<interface>.conf (0600 root) et n'apparaissent dans aucun journal (no_log).
+
+wireguard_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+
+# Interfaces : [{
+#   nom: wg2, adresse: 10.255.2.1/24, port: 51822,
+#   cle_privee: "{{ vault_… }}"            (Vault, jamais en clair),
+#   table: auto | off                       (off : wg-quick ne pose aucune route),
+#   mtu: (facultatif),
+#   post_up: [commandes] (facultatif)       (ex. route statique, M07-E18 ; %i = nom de l'interface),
+#   pilotage: role | transition             (role : enable + start ici ; transition : ni l'un ni
+#                                            l'autre, l'interface est montée par keepalived, E26),
+#   pairs: [{nom, cle_publique, endpoint (facultatif), allowed_ips: [...], keepalive (facultatif)}]
+# }]
+wireguard_interfaces: []

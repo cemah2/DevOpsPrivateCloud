@@ -1,0 +1,51 @@
+---
+# molecule/pxe/verify.yml — le service rendu : TFTP et HTTP répondent, rien de plus.
+- name: Vérifier le rôle pxe
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Services tftpd-hpa et nginx actifs
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['tftpd-hpa.service']['state'] == 'running'
+          - ansible_facts['services']['nginx.service']['state'] == 'running'
+
+    - name: TFTP sert les deux chargeurs iPXE
+      ansible.builtin.command:
+        argv: [curl, --silent, --fail, --max-time, "10", --output, /dev/null, "tftp://{{ adresse }}/{{ item }}"]
+      loop: [undionly.kpxe, ipxe.efi]
+      changed_when: false
+
+    - name: TFTP refuse de sortir de sa racine (--secure)
+      ansible.builtin.command:
+        argv: [curl, --silent, --fail, --max-time, "10", --output, /dev/null, "tftp://{{ adresse }}/../etc/passwd"]
+      register: pxe_verif_evasion
+      changed_when: false
+      failed_when: pxe_verif_evasion.rc == 0
+
+    - name: HTTP sert la racine de la PKI
+      ansible.builtin.uri:
+        url: "http://{{ adresse }}/pki/medisphere-root-ca.crt"
+
+    - name: HTTP ne liste pas les répertoires et refuse les écritures
+      ansible.builtin.uri:
+        url: "http://{{ adresse }}/{{ item.chemin }}"
+        method: "{{ item.methode }}"
+        status_code: "{{ item.code }}"
+      loop:
+        - {chemin: "preseed/", methode: GET, code: [403, 404]}
+        - {chemin: "pki/essai", methode: PUT, code: [403, 405]}
+
+    - name: Le site nginx n'écoute que sur l'adresse de service
+      ansible.builtin.command: ss -Hltn 'sport = :80'
+      register: pxe_verif_ecoute
+      changed_when: false
+      failed_when: >-
+        (adresse ~ ':80') not in pxe_verif_ecoute.stdout
+        or '0.0.0.0:80' in pxe_verif_ecoute.stdout or '*:80' in pxe_verif_ecoute.stdout

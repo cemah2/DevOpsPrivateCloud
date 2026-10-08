@@ -1,0 +1,22 @@
+---
+# Rôle relais_dhcp — relais DHCP des passerelles (dnsmasq en mode relais seul).
+# M06-E25 : un VLAN (99) ; M11-E02 : plusieurs VLANs (99 et 60), sur gw01 ET gw02 (M07).
+# Ce fichier REMPLACE celui de M06-E25. Compatibilité : si relais_dhcp_vlans est vide, le rôle
+# reprend les deux variables historiques (relais_dhcp_interface, relais_dhcp_adresse_locale).
+
+relais_dhcp_fichier: /etc/dnsmasq.d/relais-dhcp.conf
+
+# VLANs relayés : [{interface, adresse_locale, commentaire}]. « adresse_locale » est l'adresse
+# PROPRE de la passerelle dans le VLAN (pas la VIP VRRP : elle n'est portée que par le maître),
+# inscrite comme giaddr : Kea choisit le sous-réseau d'après elle et y renvoie sa réponse.
+relais_dhcp_vlans: []
+
+# Historique (M06-E25), utilisé seulement si relais_dhcp_vlans est vide.
+relais_dhcp_interface: ens19.99
+relais_dhcp_adresse_locale: 10.10.99.1
+
+# Serveurs DHCP : chaque requête est relayée à CHACUN d'eux (une directive dhcp-relay par serveur).
+relais_dhcp_serveurs: []
+# Facultatif : n'accepter les réponses des serveurs que sur cette interface (3e champ de
+# dhcp-relay ; vérifie « man dnsmasq » de ta version). Vide = non utilisé.
+relais_dhcp_interface_serveurs: ""

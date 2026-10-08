@@ -1,0 +1,10 @@
+---
+# host_vars/lyo-pc01/routes.yml — poste de l'agence LYO1 (M07-E18).
+# eth0 = vsandbox (administration depuis adm01, route par défaut DHCP), eth1 = LAN de l'agence
+# (10.30.10.10/24, vfab8). Les réseaux de PAR1 OUVERTS à l'agence passent par le routeur de
+# l'agence ; tout le reste (dont MGMT, d'où vient l'administration) garde la route par défaut :
+# avec une route par défaut vers lyo-gw01, les réponses SSH à adm01 sortiraient par eth1 et ne
+# suivraient plus le chemin de la question (routage asymétrique, voir le corrigé).
+routes_statiques_liste:
+  - {prefixe: 10.10.20.0/24, via: 10.30.10.1}
+  - {prefixe: 10.10.70.0/24, via: 10.30.10.1}

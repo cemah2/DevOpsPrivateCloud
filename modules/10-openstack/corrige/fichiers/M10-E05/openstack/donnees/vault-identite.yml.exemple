@@ -1,0 +1,8 @@
+# donnees/vault-identite.yml — EN CLAIR ICI POUR L'EXEMPLE SEULEMENT.
+# Dans le dépôt, ce fichier est chiffré : ansible-vault encrypt --encrypt-vault-id critique donnees/vault-identite.yml
+# Générer chaque mot de passe sans le taper : openssl rand -base64 24
+---
+vault_identite_mots_de_passe:
+  "<MOI>": "<MOT-DE-PASSE-INITIAL>"
+  karim.benali: "<MOT-DE-PASSE-INITIAL>"
+  julien.petit: "<MOT-DE-PASSE-INITIAL>"

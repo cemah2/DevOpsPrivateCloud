@@ -1,0 +1,47 @@
+# {{ pve_cluster_entete }}
+# keepalived du nœud {{ inventory_hostname }} — VIP de l'API du cluster hv-par1 (M09-E18, rôle pve_cluster).
+# VRRP v3, annonces UNICAST vers les deux autres nœuds (pas de multicast sur MGMT), VRID {{ pve_cluster_vrid }}.
+
+global_defs {
+  router_id {{ inventory_hostname }}
+  vrrp_version 3
+  # Le script de santé lit l'état de Corosync : il tourne en root, et keepalived refuse de lancer
+  # un script modifiable par un autre compte.
+  enable_script_security
+  script_user root
+}
+
+vrrp_script pve_cluster_sante {
+  script "{{ pve_cluster_sante_script }}"
+  interval {{ pve_cluster_sante_intervalle }}
+  timeout {{ pve_cluster_sante_intervalle + 1 }}
+  fall {{ pve_cluster_sante_echecs }}
+  rise {{ pve_cluster_sante_succes }}
+}
+
+vrrp_instance HV_API {
+  # Tous en BACKUP + nopreempt : le premier nœud sain prend la VIP et la GARDE ; un nœud de plus
+  # forte priorité qui revient ne la reprend pas (pas de double bascule après une maintenance).
+  state BACKUP
+  nopreempt
+  interface {{ pve_cluster_interface }}
+  virtual_router_id {{ pve_cluster_vrid }}
+  priority {{ pve_cluster_priorites[inventory_hostname] }}
+  advert_int 1
+
+  unicast_src_ip {{ pve_cluster_adresses[inventory_hostname] }}
+  unicast_peer {
+{% for noeud, adresse in pve_cluster_adresses | dictsort if noeud != inventory_hostname %}
+    {{ adresse }}
+{% endfor %}
+  }
+
+  virtual_ipaddress {
+    {{ pve_cluster_vip }}/{{ pve_cluster_vip_prefixe }} dev {{ pve_cluster_interface }} label {{ pve_cluster_interface }}:api
+  }
+
+  # Sans « weight » : un script en échec met l'instance en FAULT, elle rend la VIP.
+  track_script {
+    pve_cluster_sante
+  }
+}

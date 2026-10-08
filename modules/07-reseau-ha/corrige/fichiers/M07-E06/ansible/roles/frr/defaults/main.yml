@@ -1,0 +1,79 @@
+---
+# Rôle frr — valeurs par défaut (M07-E06 ; BGP complété en M07-E07).
+# Le rôle installe FRR depuis le dépôt officiel et produit /etc/frr/frr.conf à partir de
+# données STRUCTURÉES : on décrit des interfaces, des voisins, des politiques ; le modèle écrit
+# la syntaxe FRR. Une configuration invalide n'est jamais installée (vtysh --dryrun).
+
+# --- Dépôt ------------------------------------------------------------------------------
+frr_depot_url: https://deb.frrouting.org/frr
+frr_depot_suite: "{{ ansible_facts['distribution_release'] }}"   # trixie
+frr_depot_composant: frr-10
+frr_depot_cle_url: https://deb.frrouting.org/frr/keys.gpg
+# Trousseau de plusieurs clés : celle qui signe le dépôt (InRelease) doit y figurer.
+# Relevée le 8 octobre 2026 (gpg --verify InRelease) ; à revérifier si le dépôt change de clé.
+frr_depot_cle_empreinte: A90FC36D9429409798E9C2D874DEED43AB194DBF
+frr_trousseau: /usr/share/keyrings/frrouting.gpg
+# Version épinglée (préférences APT) : une 10.8 n'arrive que par une MR qui change cette ligne.
+frr_version: "10.7.*"
+frr_paquets: [frr, frr-pythontools]
+
+# --- Système ----------------------------------------------------------------------------
+# Routage IPv4 (net.ipv4.ip_forward) : vrai pour un routeur, faux pour un hôte qui ne fait
+# qu'annoncer ses propres adresses.
+frr_routage_ipv4: true
+# systemd-networkd supprime par défaut les routes, règles et nexthops qu'il n'a pas créés :
+# ceux de FRR. auto = le rôle le lui interdit si networkd est actif sur l'hôte (images
+# dorées : netplan + networkd) ; rien à faire sur un hôte en ifupdown (gw01).
+frr_networkd_compatible: auto   # auto | true | false
+
+# --- Démons -----------------------------------------------------------------------------
+# zebra, mgmtd, staticd et watchfrr tournent toujours. Par défaut, un démon de protocole n'est
+# activé que si sa configuration est fournie. Surcharger pour forcer (ex. bfdd: true).
+frr_demons:
+  bgpd: "{{ frr_bgp | length > 0 }}"
+  ospfd: "{{ frr_ospf | length > 0 }}"
+  bfdd: false
+
+# --- Configuration (frr.conf) -----------------------------------------------------------
+frr_nom_hote: "{{ inventory_hostname }}"
+frr_journal: syslog informational
+
+# Interfaces : adresses posées PAR FRR (boucles sur lo ; les cartes physiques reçoivent les
+# leurs du système, cloud-init ou ifupdown) et paramètres OSPF.
+#   - nom: lo
+#     adresses: [10.10.255.11/32]
+#     ospf: {zone: 0.0.0.0}                       # annoncée ; passive (lo) d'office
+#   - nom: eth1
+#     description: vers spine01 (vfab1)
+#     ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+frr_interfaces: []
+
+# Routes statiques : {prefixe, via} (via = adresse, interface ou Null0) ; distance facultative.
+frr_routes_statiques: []
+
+# OSPFv2 (vide = pas d'OSPF) :
+#   router_id: 10.10.255.11
+#   passive_par_defaut: true      # toute interface passive sauf celles où ospf.passive == false
+#   redistribuer: []              # ex. [connected]
+frr_ospf: {}
+
+# BGP (vide = pas de BGP) :
+#   asn: 65101
+#   router_id: 10.10.255.11
+#   groupes:   [{nom, as_distant, description, mot_de_passe, route_map_entree,
+#                route_map_sortie, soft_reconfiguration, bfd}]
+#   voisins:   [{adresse | interface, groupe | as_distant, description, mot_de_passe,
+#                route_map_entree, route_map_sortie, soft_reconfiguration, bfd}]
+#   reseaux:   [10.10.255.11/32]
+#   maximum_paths: 4              # facultatif (défaut de FRR : le maximum compilé)
+#   options: []                   # lignes brutes dans « router bgp » (ex. bgp bestpath …)
+frr_bgp: {}
+
+# Listes de préfixes : [{nom, regles: [{seq, action, prefixe, ge, le}]}]
+frr_prefix_lists: []
+
+# Route-maps : [{nom, entrees: [{seq, action, match: [lignes], set: [lignes]}]}]
+frr_route_maps: []
+
+# Lignes brutes ajoutées à la fin (dernier recours : tout ce qui est structuré est relu).
+frr_config_supplementaire: ""

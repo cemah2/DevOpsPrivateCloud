@@ -1,0 +1,47 @@
+---
+# Rôle ceph_export_config (M08-E25).
+
+- name: Paramètres fournis
+  ansible.builtin.assert:
+    that:
+      - ceph_export_config_cle_publique is match('^ssh-ed25519 ')
+    fail_msg: "ceph_export_config_cle_publique (clé publique ed25519 de cephcli01) est requise."
+    quiet: true
+
+- name: Compte de service sans mot de passe ni shell interactif utile
+  ansible.builtin.user:
+    name: "{{ ceph_export_config_compte }}"
+    system: true
+    shell: /bin/bash
+    password: "!"
+    create_home: true
+    comment: "Export de configuration Ceph (M08-E25)"
+
+- name: Script d'export (root, lecture seule)
+  ansible.builtin.copy:
+    src: wb-ceph-export-config
+    dest: "{{ ceph_export_config_script }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Une seule commande permise par sudo, sans mot de passe
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/90-wb-sauvegarde
+    owner: root
+    group: root
+    mode: "0440"
+    content: |
+      # Géré par Ansible (rôle ceph_export_config, M08-E25)
+      {{ ceph_export_config_compte }} ALL=(root) NOPASSWD: {{ ceph_export_config_script }}
+    validate: visudo -cf %s
+
+# restrict : ni pty, ni redirection de ports, ni agent, ni X11 ; from= : depuis cephcli01 seulement ;
+# command= : la commande demandée par le client est ignorée.
+- name: Clé autorisée à commande forcée
+  ansible.posix.authorized_key:
+    user: "{{ ceph_export_config_compte }}"
+    key: "{{ ceph_export_config_cle_publique }}"
+    key_options: 'restrict,from="{{ ceph_export_config_depuis }}",command="sudo -n {{ ceph_export_config_script }}"'
+    exclusive: true
+    state: present

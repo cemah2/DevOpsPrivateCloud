@@ -1,0 +1,31 @@
+# /etc/network/interfaces de gw01 — EXTRAIT (M07-E15, CHG-825). gw01 reste hors d'OpenTofu
+# (ADR-0051) et son réseau hors d'Ansible : changement à la main, sous fiche de changement.
+#
+# Règle : une sous-interface VLAN HÉRITE du MTU de son parent à sa création. Passer ens19 à 9000
+# sans rien dire aux sous-interfaces mettrait TOUS les VLAN à 9000 côté gw01, alors que leurs VMs
+# restent à 1500 : la passerelle enverrait des trames trop grandes pour elles (aucun ICMP ne
+# préviendrait : c'est le même lien). Chaque sous-interface a donc son MTU ÉCRIT.
+# VLAN 31 et 51 ne sont pas routés (PLAN §4.2) : gw01 n'y a pas de sous-interface ; s'il en avait
+# une (ens19.51 sans adresse), elle prendrait 9000 comme ens19.30.
+
+auto ens19
+iface ens19 inet manual
+	mtu 9000
+
+auto ens19.10
+iface ens19.10 inet static
+	address 10.10.10.1/24
+	mtu 1500
+
+auto ens19.20
+iface ens19.20 inet static
+	address 10.10.20.1/24
+	mtu 1500
+
+# VLAN 30 STOR-PUB : jumbo frames de bout en bout.
+auto ens19.30
+iface ens19.30 inet static
+	address 10.10.30.1/24
+	mtu 9000
+
+# Idem pour ens19.40, ens19.50, ens19.52, ens19.60, ens19.70, ens19.99 : « mtu 1500 » écrit.

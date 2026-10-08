@@ -1,0 +1,63 @@
+# {{ haproxy_entete }}
+# /etc/haproxy/haproxy.cfg — {{ inventory_hostname }} (rôle haproxy, M07 ; global et defaults de production M07-E28).
+# Sections propres à l'hôte : variable haproxy_sections (host_vars/{{ inventory_hostname }}/haproxy.yml).
+
+global
+    # Journal vers la sortie standard : systemd le range dans le journal (journalctl -u haproxy),
+    # sans dépendre d'un rsyslog ni de /dev/log dans le chroot.
+    log stdout format short local0 info
+    chroot /var/lib/haproxy
+    user haproxy
+    group haproxy
+    maxconn {{ haproxy_maxconn }}
+    # Socket d'administration (API d'exécution) : lecture de l'état, drain, maintenance.
+    # expose-fd listeners : au rechargement, le nouveau processus reprend les sockets d'écoute
+    # par ce socket (aucune connexion refusée pendant le rechargement, M07-E28).
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    stats timeout 30s
+    hard-stop-after {{ haproxy_arret_force_apres }}
+    # TLS (politique de certification, M07-E28) : versions minimales et suites, côté clients (bind)
+    # et côté serveurs (re-chiffrement).
+    ssl-default-bind-ciphers {{ haproxy_tls_suites }}
+    ssl-default-bind-ciphersuites {{ haproxy_tls13_suites }}
+    ssl-default-bind-options prefer-client-ciphers ssl-min-ver {{ haproxy_tls_version_min }} no-tls-tickets
+    ssl-default-server-ciphers {{ haproxy_tls_suites }}
+    ssl-default-server-ciphersuites {{ haproxy_tls13_suites }}
+    ssl-default-server-options ssl-min-ver {{ haproxy_tls_version_min }}
+    # « gitlab.crt » + « gitlab.key » : la clé est cherchée sans l'extension du certificat.
+    ssl-load-extra-del-ext
+    crt-base {{ haproxy_dossier_certificats }}
+
+defaults
+    log global
+    mode http
+    # Format HTTP de la documentation, suivi de l'identifiant unique de requête (M07-E28).
+    log-format "%ci:%cp [%tr] %ft %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B %CC %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs %{+Q}r id=%ID"
+    option dontlognull
+    option redispatch
+    retries 3
+    timeout connect {{ haproxy_delai_connexion }}
+    timeout client {{ haproxy_delai_client }}
+    timeout server {{ haproxy_delai_serveur }}
+    timeout http-request {{ haproxy_delai_requete_http }}
+    timeout http-keep-alive 10s
+    timeout queue 30s
+    timeout check 5s
+    errorfile 503 {{ haproxy_page_503 }}
+{% for u in haproxy_listes_utilisateurs %}
+
+userlist {{ u.nom }}
+{% for g in u.groupes | default([]) %}
+    group {{ g }}
+{% endfor %}
+{% for p in u.utilisateurs %}
+    user {{ p.nom }} password {{ p.empreinte }}{{ (' groups ' ~ (p.groupes | join(','))) if p.groupes | default([]) | length > 0 else '' }}
+{% endfor %}
+{% endfor %}
+{% for s in haproxy_sections if (not (s.tls | default(false) | bool)) or (_haproxy_tls_possible | bool) %}
+
+{{ s.type }} {{ s.nom }}
+{% for l in s.lignes %}
+    {{ l }}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,8 @@
+---
+# etc/kolla/globals.d/25-sauvegarde.yml — M10-E25 (PLAT-1151)
+# Sauvegardes à chaud de MariaDB par Mariabackup. Après activation :
+#   uv run kolla-ansible reconfigure -i inventaire/multinode --configdir etc/kolla -t mariadb
+# (crée l'utilisateur de sauvegarde et la base d'historique). Déclenchement : sous-commande
+# « mariadb-backup » depuis adm01 (unité wb-openstack-mariabackup, rôle openstack_mariabackup).
+# Kolla ne planifie ni ne purge : la purge locale est faite par wb-backup-socle sur osctl01.
+enable_mariabackup: "yes"

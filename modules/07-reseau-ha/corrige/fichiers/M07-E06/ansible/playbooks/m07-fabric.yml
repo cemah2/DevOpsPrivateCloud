@@ -1,0 +1,9 @@
+---
+# playbooks/m07-fabric.yml — routage de la fabric de la maquette (M07-E06, E07).
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-fabric.yml
+# Données : host_vars/<routeur>/frr.yml ; secrets : group_vars/m07_fabric/vault.yml (Vault lab).
+- name: Fabric de la maquette — FRR
+  hosts: m07_fabric
+  become: true
+  roles:
+    - role: frr

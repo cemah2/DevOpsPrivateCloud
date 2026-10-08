@@ -1,0 +1,11 @@
+---
+# inventories/lab/group_vars/role_dns/kea_reservations_prov.yml — GÉNÉRÉ par
+# plateforme/provisioning (outils/netbox-provision.py) depuis NetBox : ne pas modifier à la main.
+# Une réservation par serveur valide du rôle « serveur-bm » (site par1), quel que soit son statut :
+# l'adresse d'un serveur ne change pas quand il passe de « planned » à « active ».
+# Lu par group_vars/role_dns/kea.yml (sous-réseau 60) ; appliqué par MR et pipeline.
+kea_reservations_prov:
+  - {mac: "02:4d:53:60:00:01", ip: 10.10.60.101, nom: bm01}
+  - {mac: "02:4d:53:60:00:02", ip: 10.10.60.102, nom: bm02}
+  - {mac: "02:4d:53:60:00:03", ip: 10.10.60.103, nom: bm03}
+  - {mac: "02:4d:53:60:00:04", ip: 10.10.60.104, nom: bm04}

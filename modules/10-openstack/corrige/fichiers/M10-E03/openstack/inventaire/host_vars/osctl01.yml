@@ -1,0 +1,5 @@
+---
+# osctl01 est le seul nœud du groupe « network » : seul à porter la carte externe (VLAN 52).
+# Valeur PROPRE À UN HÔTE : dans l'inventaire, jamais dans globals.yml, qui est chargé avec la
+# priorité la plus haute (« extra vars ») et l'imposerait à tous les nœuds (M10-E03).
+neutron_external_interface: "ens21"

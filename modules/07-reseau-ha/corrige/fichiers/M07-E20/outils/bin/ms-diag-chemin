@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# ms-diag-chemin — relevé de diagnostic d'un chemin réseau, couche par couche (M07-E20, PLAT-830).
+#
+# Depuis une machine (adm01 par défaut, ou un hôte joint en SSH), vers une destination (nom ou
+# adresse) et, facultativement, un port TCP : ce que la machine CROIT (résolution, route choisie,
+# voisin de niveau 2), puis ce qui SE PASSE (ICMP, MTU, chemin, connexion TCP). Lecture seule :
+# aucune configuration n'est modifiée. C'est l'étape 1 du runbook RB-072 (diagnostic réseau).
+#
+# Usage : ms-diag-chemin [-d|--depuis HÔTE] [-m|--mtu OCTETS] DESTINATION [PORT]
+#   -d, --depuis HÔTE   lancer les mesures sur HÔTE (SSH, BatchMode) au lieu de la machine locale
+#   -m, --mtu OCTETS    MTU attendu sur le chemin (défaut 1500 ; 9000 pour les VLAN 30/31/51)
+#
+# Codes retour : 0 destination jointe (port ouvert si un port est donné, sinon réponse ICMP) ;
+#                1 destination non jointe ; 2 usage.
+set -euo pipefail
+
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+usage() {
+  cat <<'FIN'
+Usage : ms-diag-chemin [-d|--depuis HÔTE] [-m|--mtu OCTETS] DESTINATION [PORT]
+
+Relevé de diagnostic d'un chemin réseau, du plus proche au plus lointain : résolution, route
+choisie par le noyau, voisin de niveau 2, ICMP, MTU sans fragmentation, chemin (tracepath),
+connexion TCP. Lecture seule. Étape 1 du runbook RB-072.
+
+  -d, --depuis HÔTE   mesurer depuis HÔTE (SSH) au lieu de la machine locale
+  -m, --mtu OCTETS    MTU attendu (défaut 1500)
+
+Codes retour : 0 destination jointe, 1 non jointe, 2 usage.
+FIN
+}
+
+depuis=""
+mtu=1500
+while (($#)); do
+  case "$1" in
+    -d | --depuis) depuis="${2:?--depuis exige un hôte}"; shift 2 ;;
+    -m | --mtu) mtu="${2:?--mtu exige une valeur}"; shift 2 ;;
+    -h | --help) usage; exit 0 ;;
+    -*) usage >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+(($# >= 1 && $# <= 2)) || { usage >&2; exit 2; }
+destination="$1"
+port="${2:-}"
+if ! [[ "$mtu" =~ ^[0-9]+$ ]] || ((mtu < 576 || mtu > 9216)); then
+  echo "MTU invalide : $mtu" >&2
+  exit 2
+fi
+[[ -z "$port" || "$port" =~ ^[0-9]+$ ]] || { echo "Port invalide : $port" >&2; exit 2; }
+[[ "$destination" =~ ^[A-Za-z0-9.:-]+$ ]] || { echo "Destination invalide : $destination" >&2; exit 2; }
+[[ -z "$depuis" || "$depuis" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Hôte invalide : $depuis" >&2; exit 2; }
+
+# executer CMD — sur la machine locale, ou sur l'hôte --depuis (sans interaction).
+executer() {
+  if [[ -z "$depuis" ]]; then
+    bash -c "$1"
+  else
+    ssh -o BatchMode=yes -o ConnectTimeout=5 "$depuis" -- "$1"
+  fi
+}
+
+section() { printf '\n== %s\n' "$1"; }
+
+require_cmd ssh
+origine="${depuis:-$(hostname -s)}"
+printf 'Chemin %s → %s%s (MTU attendu %s), %s\n' "$origine" "$destination" "${port:+:$port}" "$mtu" "$(date -Is)"
+
+section "1. Résolution (ce que la machine croit)"
+adresse="$(executer "getent ahostsv4 '$destination' | awk 'NR==1 {print \$1}'" || true)"
+if [[ -z "$adresse" ]]; then
+  echo "KO  le nom ne se résout pas depuis $origine (resolv.conf, DNS joignable ?)"
+  exit 1
+fi
+echo "OK  $destination → $adresse"
+
+section "2. Route choisie par le noyau (interface, passerelle, adresse source)"
+route="$(executer "ip route get '$adresse'" 2>&1 || true)"
+echo "$route"
+passerelle="$(sed -nE 's/.* via ([0-9.]+) .*/\1/p' <<<"$route" | head -n 1)"
+interface="$(sed -nE 's/.* dev ([^ ]+).*/\1/p' <<<"$route" | head -n 1)"
+
+section "3. Voisin de niveau 2 (ARP) vers le prochain saut"
+voisin="${passerelle:-$adresse}"
+cmd_voisin="ip neigh show '$voisin'"
+[[ -n "$interface" ]] && cmd_voisin+=" dev '$interface'"
+executer "$cmd_voisin" || true
+echo "(REACHABLE/STALE : la MAC est connue ; FAILED/INCOMPLETE : rien ne répond à l'ARP sur le lien)"
+[[ -n "$interface" ]] && { executer "ip -br link show '$interface'" || true; }
+
+section "4. Réponse ICMP"
+joint_icmp=0
+if executer "ping -c 3 -W 2 -q '$adresse'"; then joint_icmp=1; fi
+
+section "5. MTU sans fragmentation (DF) : $mtu octets"
+charge=$((mtu - 28))
+if executer "ping -c 2 -W 2 -M do -s $charge -q '$adresse'" >/dev/null 2>&1; then
+  echo "OK  des paquets de $mtu octets passent sans fragmentation"
+else
+  echo "KO  des paquets de $mtu octets ne passent pas (ou l'ICMP est filtré) : voir le chemin ci-dessous"
+  executer "ping -c 1 -W 2 -M do -s $charge '$adresse'" 2>&1 | tail -n 3 || true
+fi
+
+section "6. Chemin et MTU de chemin (tracepath)"
+executer "command -v tracepath >/dev/null && timeout 20 tracepath -n -m 12 '$adresse' || echo 'tracepath absent (paquet iputils-tracepath)'" || true
+
+joint=$joint_icmp
+if [[ -n "$port" ]]; then
+  section "7. Connexion TCP au port $port"
+  if executer "timeout 5 bash -c 'exec 3<>/dev/tcp/$adresse/$port'" 2>/dev/null; then
+    echo "OK  le port $port accepte la connexion"
+    joint=1
+  else
+    echo "KO  pas de connexion au port $port : refus (RST, service arrêté ou « reject ») ou silence (filtrage « drop », route de retour)"
+    joint=0
+  fi
+fi
+
+section "Bilan"
+if ((joint)); then
+  echo "Destination jointe depuis $origine."
+  exit 0
+fi
+echo "Destination NON jointe depuis $origine. Suite : RB-072, étape 2 (capturer aux bornes du segment fautif)."
+exit 1

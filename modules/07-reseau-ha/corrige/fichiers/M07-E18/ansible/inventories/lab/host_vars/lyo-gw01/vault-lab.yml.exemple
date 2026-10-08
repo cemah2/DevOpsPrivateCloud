@@ -1,0 +1,4 @@
+# host_vars/lyo-gw01/vault-lab.yml — EXEMPLE (le vrai fichier est CHIFFRÉ, identité « lab »).
+# Même méthode que pour la bordure (group_vars/role_routeur/vault-critique.yml.exemple), avec
+# --vault-id lab@outils/vault-pass-client.sh.
+vault_wireguard_wg2_cle_privee: "<44 caractères base64, chiffrés par ansible-vault>"

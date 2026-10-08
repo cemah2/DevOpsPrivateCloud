@@ -1,0 +1,14 @@
+---
+# group_vars/role_routeur/connexion.yml — comment Ansible joint les passerelles (M07-E24).
+#
+# Règle de la bordure : on parle à une passerelle sur son adresse PROPRE dans le VLAN OÙ L'ON SE
+# TROUVE. Une passerelle a une patte dans chaque VLAN : si adm01 (VLAN 10) visait 10.10.20.2, le
+# paquet passerait par la passerelle ACTIVE (VIP .1) et la réponse reviendrait directement par le
+# VLAN 10 : quand l'active est l'autre passerelle, elle ne voit que la moitié de la conversation
+# TCP et son suivi d'état la jette (M07-E25, étape 7).
+#   - depuis adm01 (VLAN 10) : 10.10.10.<suffixe> (c'est aussi l'adresse du nom DNS) ;
+#   - depuis le pipeline sur runner01 (VLAN 20, variable CI de GitLab) : 10.10.20.<suffixe>.
+# Le certificat d'hôte SSH porte le NOM de la passerelle : HostKeyAlias fait vérifier le nom quelle
+# que soit l'adresse utilisée.
+ansible_host: "10.10.{{ '20' if lookup('ansible.builtin.env', 'CI', default='') | length > 0 else '10' }}.{{ routeur_reseau_suffixe }}"
+ansible_ssh_common_args: "-o HostKeyAlias={{ inventory_hostname }}.par1.medisphere.internal"

@@ -1,0 +1,31 @@
+# /etc/nginx/sites-available/pxe — {{ inventory_hostname }}
+# {{ pxe_entete }}
+# HTTP en clair : le micrologiciel et iPXE du paquet Debian ne vérifient pas de certificat de
+# notre PKI. Le passage en HTTPS est l'objet de M11-E13. En attendant : lecture seule,
+# réseaux restreints, aucune liste de répertoire.
+server {
+    listen {{ pxe_adresse }}:80;
+    server_name {{ pxe_nom_serveur }};
+
+    root {{ pxe_racine_http }};
+    autoindex off;
+    access_log /var/log/nginx/pxe-acces.log;
+    error_log /var/log/nginx/pxe-erreurs.log;
+
+{% for reseau in pxe_http_autorises %}
+    allow {{ reseau }};
+{% endfor %}
+    deny all;
+
+    # Scripts iPXE, preseed, kickstart : du texte (type inconnu de mime.types).
+    location ~ \.(ipxe|cfg|ks)$ {
+        default_type text/plain;
+        limit_except GET { deny all; }   # lecture seule (GET implique HEAD)
+        try_files $uri =404;
+    }
+
+    location / {
+        limit_except GET { deny all; }
+        try_files $uri =404;
+    }
+}

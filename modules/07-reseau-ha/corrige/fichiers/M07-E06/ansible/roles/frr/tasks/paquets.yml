@@ -1,0 +1,90 @@
+---
+# Dépôt officiel deb.frrouting.org (Debian 13 livre FRR 10.3 ; le workbook utilise 10.7).
+
+- name: Outil de vérification de clé
+  ansible.builtin.apt:
+    name: gpg
+    state: present
+
+- name: Télécharger le trousseau du dépôt FRR (fichier temporaire)
+  ansible.builtin.get_url:
+    url: "{{ frr_depot_cle_url }}"
+    dest: /root/frrouting-keys.gpg.nouveau
+    mode: "0600"
+  changed_when: false
+
+- name: Lire les empreintes du trousseau téléchargé
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /root/frrouting-keys.gpg.nouveau
+  register: frr_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser un trousseau sans la clé de signature attendue
+  ansible.builtin.assert:
+    that: frr_cle_colonnes.stdout is search('^fpr:+' ~ frr_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: >-
+      Le trousseau {{ frr_depot_cle_url }} ne contient pas la clé {{ frr_depot_cle_empreinte }} :
+      ne pas installer. Vérifier la clé qui signe aujourd'hui le dépôt (gpg --verify InRelease).
+    quiet: true
+
+- name: Installer le trousseau vérifié
+  ansible.builtin.copy:
+    src: /root/frrouting-keys.gpg.nouveau
+    dest: "{{ frr_trousseau }}"
+    remote_src: true
+    mode: "0644"
+  register: frr_cle
+
+- name: Supprimer le fichier temporaire
+  ansible.builtin.file:
+    path: /root/frrouting-keys.gpg.nouveau
+    state: absent
+  changed_when: false
+
+- name: Source APT FRR
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/frr.list
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle frr)
+      deb [signed-by={{ frr_trousseau }}] {{ frr_depot_url }} {{ frr_depot_suite }} {{ frr_depot_composant }}
+  register: frr_source
+
+# Priorité > 1000 : la version épinglée l'emporte même sur une version plus récente (et sur
+# la 10.3 de Debian) ; un changement de version passe par cette variable, donc par une MR.
+- name: Épingler la version de FRR
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/frr
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle frr)
+      Package: frr frr-pythontools frr-doc frr-snmp frr-rpki-rtrlib
+      Pin: version {{ frr_version }}
+      Pin-Priority: 1001
+  register: frr_pin
+
+- name: Relire les index APT
+  ansible.builtin.apt:
+    update_cache: true
+  when: frr_source is changed or frr_cle is changed or frr_pin is changed
+
+# Le paquet démarre frr avec une configuration vide (zebra, mgmtd, staticd) : sans risque,
+# aucun protocole n'est actif tant que le fichier daemons ne le demande pas.
+- name: Installer FRR
+  ansible.builtin.apt:
+    name: "{{ frr_paquets }}"
+    state: present
+    install_recommends: false
+
+- name: Lire la version installée
+  ansible.builtin.command: dpkg-query -W -f='${Version}' frr
+  register: frr_version_installee
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une version non épinglée
+  ansible.builtin.assert:
+    that: frr_version_installee.stdout is match(frr_version | regex_replace('\\.', '\\.') | regex_replace('\\*', '.*'))
+    fail_msg: "FRR {{ frr_version_installee.stdout }} installé, {{ frr_version }} attendu (préférences APT ?)."
+    quiet: true
+  when: not ansible_check_mode

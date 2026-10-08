@@ -1,0 +1,22 @@
+---
+# host_vars/gw01/pare_feu.yml — EXTRAIT : ajouts de M09-E05 (QDevice du cluster hv-par1).
+# Même matrice pour gw02 (M07-E24) : une seule MR, les deux passerelles appliquées.
+#
+# Constat de E05 : la règle « bastion (MGMT) vers tout le lab et PAR2 » (M00-E10) n'a PAS de
+# source. Depuis que des hyperviseurs vivent dans MGMT (10.10.10.51-53), ils joignent déjà tout
+# PAR2, pbs01 compris : le QDevice fonctionnerait sans rien ouvrir. On écrit quand même la règle
+# (un flux = une ligne, avec son motif et sa référence) et on inscrit l'écart au registre :
+# restreindre la règle du bastion à adm01 est traité avec la sécurisation du cluster (M09-E26),
+# après avoir inventorié les autres flux des nœuds (PBS, ACME…).
+# La règle 5403 est RETIRÉE en M09-E08 (QDevice supprimé) : aucun flux sans usage.
+
+pare_feu_definitions:
+  # … définitions existantes …
+  - nom: HV_PAR1
+    valeur: "{ 10.10.10.51, 10.10.10.52, 10.10.10.53 }"
+    commentaire: "nœuds du cluster Proxmox imbriqué hv-par1 (M09)"
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_MGMT, source: $HV_PAR1, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 5403,
+     motif: "QDevice : corosync-qdevice des nœuds hv-par1 vers corosync-qnetd sur pbs01", ref: M09-E05}

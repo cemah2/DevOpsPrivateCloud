@@ -1,0 +1,121 @@
+---
+- name: Paramètres de sauvegarde fournis
+  ansible.builtin.assert:
+    that:
+      - sauvegarde_pbs_elements | length > 0
+      - sauvegarde_pbs_elements | difference(['powerdns', 'kea', 'netbox', 'stepca', 'openstack']) | length == 0
+      - sauvegarde_pbs_jeton_secret | length > 0
+      - sauvegarde_pbs_empreinte | length > 0
+      - sauvegarde_pbs_cle | length > 0
+    fail_msg: >-
+      sauvegarde_pbs_elements (powerdns, kea, netbox, stepca, openstack) et les secrets PBS (jeton, empreinte,
+      clé de chiffrement, en Vault « critique ») sont requis pour {{ inventory_hostname }}.
+    quiet: true
+
+# --- Client PBS -------------------------------------------------------------------------------
+- name: Trousseau de l'archive Proxmox (empreinte vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ sauvegarde_pbs_cle_depot_url }}"
+    dest: /usr/share/keyrings/proxmox-archive-keyring.gpg
+    checksum: "sha256:{{ sauvegarde_pbs_cle_depot_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Dépôt pbs-client (Debian 13)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pbs-client.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle sauvegarde_pbs, M06-E28)
+      Types: deb
+      URIs: http://download.proxmox.com/debian/pbs-client
+      Suites: trixie
+      Components: main
+      Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  register: sauvegarde_pbs_depot
+
+- name: Paquets (client PBS et outils des éléments)
+  ansible.builtin.apt:
+    name: "{{ ['proxmox-backup-client', 'jq']
+              + (['sqlite3'] if 'powerdns' in sauvegarde_pbs_elements else [])
+              + (['socat'] if 'kea' in sauvegarde_pbs_elements else []) }}"
+    state: present
+    update_cache: "{{ sauvegarde_pbs_depot is changed }}"
+
+# --- Secrets -----------------------------------------------------------------------------------
+- name: Dossier des secrets
+  ansible.builtin.file:
+    path: /etc/wb-backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Accès à PBS (jeton, empreinte)
+  ansible.builtin.template:
+    src: pbs.env.j2
+    dest: /etc/wb-backup/pbs-{{ inventory_hostname }}.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Clé de chiffrement côté client
+  ansible.builtin.copy:
+    content: "{{ sauvegarde_pbs_cle }}"
+    dest: /etc/wb-backup/pbs-{{ inventory_hostname }}.key
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# --- Script et unités ---------------------------------------------------------------------------
+- name: Paramètres non secrets
+  ansible.builtin.template:
+    src: socle.conf.j2
+    dest: /etc/wb-backup/socle.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Script de sauvegarde
+  ansible.builtin.copy:
+    src: wb-backup-socle.sh
+    dest: /usr/local/sbin/wb-backup-socle.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Script de vérification et de préparation de la base OpenStack (M10-E25)
+  ansible.builtin.copy:
+    src: preparer-sauvegarde.sh
+    dest: /usr/local/sbin/preparer-sauvegarde.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: "'openstack' in sauvegarde_pbs_elements"
+
+- name: Unités systemd
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - wb-backup-socle.service
+    - wb-backup-socle.timer
+  notify: Recharger systemd
+
+- name: Prendre en compte les unités
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: wb-backup-socle.timer
+    enabled: true
+    state: started

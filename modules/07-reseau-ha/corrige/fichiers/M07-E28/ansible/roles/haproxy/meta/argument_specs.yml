@@ -1,0 +1,42 @@
+---
+argument_specs:
+  main:
+    short_description: HAProxy 3.2 LTS (dépôt haproxy.debian.net)
+    options:
+      haproxy_depot_cle_empreinte:
+        type: str
+        required: true
+        description: Empreinte de la clé OpenPGP du dépôt haproxy.debian.net (40 caractères hexadécimaux).
+      haproxy_paquet_version:
+        type: str
+        description: Motif de version apt du paquet (ex. « 3.2.* »).
+      haproxy_sections:
+        type: list
+        elements: dict
+        description: Sections resolvers/frontend/backend/listen de l'hôte ({type, nom, tls, lignes}).
+      haproxy_bind_non_local:
+        type: bool
+        description: Autoriser l'écoute sur une adresse non portée (VIP keepalived).
+      haproxy_verifications:
+        type: list
+        elements: dict
+        description: URL à interroger depuis l'hôte après application ({url, code}).
+      haproxy_tls_suites:
+        type: str
+        description: Suites TLS 1.2 (ssl-default-bind-ciphers et -server-ciphers), M07-E28.
+      haproxy_tls13_suites:
+        type: str
+        description: Suites TLS 1.3 (ssl-default-bind-ciphersuites et -server-ciphersuites), M07-E28.
+      haproxy_maxconn:
+        type: int
+        description: Connexions simultanées au plus (maxconn de global), M07-E28.
+      haproxy_arret_force_apres:
+        type: str
+        description: hard-stop-after (délai laissé aux anciens processus après un rechargement), M07-E28.
+      haproxy_page_503:
+        type: path
+        description: Page servie quand aucun serveur n'est disponible (errorfile 503), M07-E28.
+      haproxy_listes_utilisateurs:
+        type: list
+        elements: dict
+        description: Sections userlist ({nom, groupes, utilisateurs [{nom, empreinte, groupes}]}), empreintes crypt(3) seulement, M07-E28.

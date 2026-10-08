@@ -1,0 +1,8 @@
+---
+# molecule/frr_bordure/molecule.yml — la configuration de BORDURE du rôle frr (M07-E16).
+# Le scénario « frr » de M07-E06 teste le rôle ; celui-ci teste les DONNÉES de la bordure
+# (group_vars/role_routeur/frr.yml) avant qu'elles n'approchent gw01.
+# Le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml (M04-E24).
+#   uv run molecule test -s frr_bordure
+scenario:
+  name: frr_bordure

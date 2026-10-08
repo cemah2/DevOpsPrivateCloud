@@ -1,0 +1,7 @@
+# specs/mgr.yaml — gestionnaires (M08-E03).
+# Deux mgr : un actif, un en attente (bascule automatique). Placés parmi les nœuds étiquetés
+# « mgr » (les trois) : si un nœud tombe, cephadm en replace un sur le troisième.
+service_type: mgr
+placement:
+  label: mgr
+  count: 2

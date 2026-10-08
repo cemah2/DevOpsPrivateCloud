@@ -1,0 +1,48 @@
+---
+# Rôle pxe — serveur de provisioning pxe01 : TFTP (tftpd-hpa) pour les chargeurs iPXE, nginx pour
+# tout le reste (scripts iPXE, noyaux, initrd, fichiers de réponse).
+# Version de M11-E13 : REMPLACE celle de M11-E02/E03 (même nom de rôle). Ajouts : HTTPS seul pour
+# la chaîne (certificat ACME du rôle certificats_acme), port 80 réduit à une redirection,
+# chargeurs iPXE construits par ipxe/construire-ipxe.sh (racine MédiSphère intégrée) et vérifiés
+# par leur empreinte, fichiers de réponse réservés au VLAN 60.
+# ⚠️ Aligne les noms de variables sur ta version de M11-E02 si tu en avais d'autres.
+
+pxe_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle pxe).') }}
+
+pxe_fqdn: pxe01.par1.medisphere.internal
+pxe_adresse: 10.10.60.10
+
+# --- TFTP --------------------------------------------------------------------------------------
+pxe_tftp_racine: /srv/tftp
+# Écoute sur la seule adresse du VLAN 60 ; --secure : chemins relatifs à la racine (chroot).
+pxe_tftp_options: "--secure"
+
+# Chargeurs iPXE servis en TFTP. Construits hors de pxe01 (VM jetable 2117) et publiés dans le
+# registre de paquets génériques de plateforme/provisioning ; le contrôleur Ansible les télécharge
+# (pxe01 ne joint pas la forge : VLAN 60 isolé) puis les copie. L'empreinte fait foi.
+#   - {nom: undionly.kpxe, sha256: "…"}
+pxe_chargeurs: []
+pxe_chargeurs_version: ""
+# URL du paquet générique : <projet>/packages/generic/ipxe/<version>/<fichier>
+pxe_chargeurs_url: >-
+  https://git01.par1.medisphere.internal/api/v4/projects/plateforme%2Fprovisioning/packages/generic/ipxe/{{ pxe_chargeurs_version }}
+# Cache local sur le contrôleur (adm01 ou runner01)
+pxe_chargeurs_cache: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/pxe/ipxe-{{ pxe_chargeurs_version }}"
+# En-tête d'authentification pour le registre : jeton du job en CI, jeton en lecture sinon.
+pxe_chargeurs_jeton_lecture: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/workbook/gitlab-checks.token"
+pxe_chargeurs_entetes: >-
+  {{ {'JOB-TOKEN': lookup('ansible.builtin.env', 'CI_JOB_TOKEN')}
+     if lookup('ansible.builtin.env', 'CI_JOB_TOKEN') | length > 0
+     else {'PRIVATE-TOKEN': lookup('ansible.builtin.file', pxe_chargeurs_jeton_lecture, errors='ignore') | default('', true)} }}
+
+# --- HTTP(S) ------------------------------------------------------------------------------------
+pxe_http_racine: /srv/http
+pxe_http_dossiers: [ipxe, debian, rocky, preseed, kickstart, pki, cles, pve, pve-answer]
+# Certificat ACME (host_vars/pxe01/certificats.yml, id « pxe »)
+pxe_tls_certificat: /etc/ssl/pxe/{{ pxe_fqdn }}.crt
+pxe_tls_cle: /etc/ssl/pxe/{{ pxe_fqdn }}.key
+# Protocoles : iPXE parle TLS 1.2 ; TLS 1.3 pour les autres clients.
+pxe_tls_protocoles: "TLSv1.2 TLSv1.3"
+# Qui peut lire les fichiers de réponse (preseed, kickstart, pve-answer) : le VLAN 60 et adm01.
+pxe_reponses_clients: [10.10.60.0/24, 10.10.10.10]

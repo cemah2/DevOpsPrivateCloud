@@ -1,0 +1,5 @@
+---
+# host_vars/gw01/frr.yml — M07-E25. Identifiant de routeur et source de session STABLES : jamais une
+# VIP (elle change de passerelle) ni une adresse qui va disparaître (.1 statique).
+frr_router_id: 10.10.10.2
+frr_update_source_leaf01: 10.10.99.2

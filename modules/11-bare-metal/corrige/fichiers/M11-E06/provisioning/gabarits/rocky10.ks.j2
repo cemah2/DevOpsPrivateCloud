@@ -1,0 +1,45 @@
+# kickstart/{{ m.nom }}.ks — GÉNÉRÉ par outils/netbox-provision.py depuis NetBox : ne pas modifier.
+# {{ m.nom }} ({{ m.fqdn }}), {{ m.ip }}. Modèle : gabarits/rocky10.ks.j2 (même contenu que
+# kickstart/rocky10.ks, M11-E05, plus le nom d'hôte décidé par NetBox).
+text
+eula --agreed
+
+url --url={{ p.rocky_miroir }}/{{ p.rocky_version }}/BaseOS/x86_64/os/
+repo --name=AppStream --baseurl={{ p.rocky_miroir }}/{{ p.rocky_version }}/AppStream/x86_64/os/
+
+lang fr_FR.UTF-8
+keyboard --vckeymap=fr --xlayouts=fr
+timezone Europe/Paris --utc
+timesource --ntp-server=10.10.60.1
+
+network --bootproto=dhcp --device=link --activate --onboot=yes --hostname={{ m.fqdn }}
+
+rootpw --lock
+user --name=admin --groups=wheel --iscrypted --password={{ p.empreinte_admin }}
+sshkey --username=admin "{{ p.cle_ssh_admin }}"
+
+ignoredisk --only-use=sda
+zerombr
+clearpart --all --initlabel --drives=sda
+autopart --type=lvm
+bootloader --boot-drive=sda
+
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=sshd,qemu-guest-agent,chronyd
+
+%packages
+@^minimal-environment
+qemu-guest-agent
+curl
+%end
+
+%post --erroronfail --log=/root/ks-post.log
+set -eu
+curl --fail --silent --show-error -o /tmp/racine.crt {{ p.serveur_http }}/pki/medisphere-root-ca.crt
+test "$(sha256sum /tmp/racine.crt | cut -d ' ' -f 1)" = "{{ p.empreinte_racine }}"
+install -m 644 /tmp/racine.crt /etc/pki/ca-trust/source/anchors/medisphere-root-ca.crt
+update-ca-trust
+%end
+
+poweroff

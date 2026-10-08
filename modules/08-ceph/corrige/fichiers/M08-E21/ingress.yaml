@@ -1,0 +1,12 @@
+# ingress.yaml corrigé (revue M08-E21) — sans certificat, sans clé, sans mot de passe : ils sont
+# ajoutés au moment d'appliquer (modèle : outils/cert-ingress.sh de plateforme/ceph). VIP avec
+# le masque du réseau public de PAR2 ; RGW sur 8080 (rgw.yaml corrigé : rgw_frontend_port: 8080).
+service_type: ingress
+service_id: rgw.par2
+placement:
+  label: rgw
+spec:
+  backend_service: rgw.par2
+  virtual_ip: 10.20.30.200/24
+  frontend_port: 443
+  monitor_port: 1967

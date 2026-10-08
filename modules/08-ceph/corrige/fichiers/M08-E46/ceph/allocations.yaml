@@ -1,0 +1,63 @@
+# allocations.yaml — allocations de ceph-par1 (plateforme/ceph), état de livraison stockage-v1 (M08-E46).
+# Lu par outils/ceph-allocations.sh (M08-E31). Registre humain : docs/stockage/allocations.md.
+# Les pools (rbd-equipes et ceux des consommateurs) sont dans config/cluster.yaml : voir
+# config-cluster-pools-extrait.yaml (capacité, quotas et surallocation y sont expliqués).
+
+identites:
+  - entite: client.sauvegarde
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=rbd-test, profile rbd pool=rbd-equipes"
+  # Droits de la documentation Ceph « Block Devices and OpenStack ». Nova utilise client.cinder.
+  # Clés préparées, NON distribuées : leur type (aes ou aes256k) sera choisi à la distribution selon la
+  # version des clients de Kolla (M10) et de Ceph-CSI (M16), par « ceph auth rotate --key-type ».
+  - entite: client.glance
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=images"
+      mgr: "profile rbd pool=images"
+  - entite: client.cinder
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=volumes, profile rbd pool=vms, profile rbd-read-only pool=images"
+      mgr: "profile rbd pool=volumes, profile rbd pool=vms"
+  - entite: client.cinder-backup
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=backups"
+      mgr: "profile rbd pool=backups"
+  # Ceph-CSI RBD (documentation Ceph « Block Devices and Kubernetes »).
+  - entite: client.k8s
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=k8s-rbd"
+      mgr: "profile rbd pool=k8s-rbd"
+
+equipes:
+  - nom: mediagenda
+    identite: client.mediagenda
+    bloc: {pool: rbd-equipes, plafond_gio: 40}
+    fichier:
+      volume: cephfs
+      plafond_gio: 10
+      sous_volumes:
+        - {nom: exports, taille_gio: 10}
+  - nom: medidoc
+    identite: client.medidoc
+    bloc: {pool: rbd-equipes, plafond_gio: 20}
+    fichier:
+      volume: cephfs
+      plafond_gio: 20
+      sous_volumes:
+        - {nom: archives, taille_gio: 20}
+    objet: {compte: medidoc, quota_gio: 100}   # quota fixé en M08-E12 : reprends le tien
+  # M08-E34 (CHG-960).
+  - nom: medinotif
+    identite: client.medinotif
+    bloc: {pool: rbd-equipes, plafond_gio: 30}
+    fichier:
+      volume: cephfs
+      plafond_gio: 5
+      sous_volumes:
+        - {nom: modeles, taille_gio: 2}
+    objet: {compte: medinotif, quota_gio: 10}

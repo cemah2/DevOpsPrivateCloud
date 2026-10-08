@@ -1,0 +1,30 @@
+---
+# molecule/frr/vars/essai.yml — données de test, partagées par converge.yml et verify.yml.
+frr_interfaces:
+  - nom: lo
+    adresses: [192.0.2.1/32]
+    ospf: {zone: 0.0.0.0}
+  - nom: eth0
+    description: administration (jamais OSPF actif)
+    ospf: {zone: 0.0.0.0}
+frr_ospf:
+  router_id: 192.0.2.1
+frr_prefix_lists:
+  - nom: PL-ESSAI
+    regles:
+      - {seq: 10, action: permit, prefixe: 192.0.2.0/24, ge: 32}
+frr_route_maps:
+  - nom: RM-ESSAI
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-ESSAI]}]
+frr_bgp:
+  asn: 65199
+  router_id: 192.0.2.1
+  groupes:
+    - nom: ESSAI
+      as_distant: 65198
+      mot_de_passe: mot-de-passe-de-test
+      route_map_entree: RM-ESSAI
+      route_map_sortie: RM-ESSAI
+  voisins:
+    - {adresse: 198.51.100.2, groupe: ESSAI, description: voisin injoignable}
+  reseaux: [192.0.2.1/32]

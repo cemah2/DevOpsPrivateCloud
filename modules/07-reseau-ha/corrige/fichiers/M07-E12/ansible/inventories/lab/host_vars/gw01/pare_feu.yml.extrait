@@ -1,0 +1,20 @@
+# host_vars/gw01/pare_feu.yml — EXTRAIT à intégrer (M07-E12, PLAT-822) : la DMZ entre en service.
+# Ce qui ne change pas : la DMZ (ens19.70) est déjà dans LAB_IFS (DNS, NTP, sortie Internet,
+# accès depuis MGMT). Les flux internes à la DMZ (VRRP entre lb01 et lb02, relais du défi ACME
+# vers le port 8402 de l'autre répartiteur) ne traversent pas gw01.
+
+# pare_feu_definitions :
+  - {nom: V_DMZ, valeur: '"ens19.70"'}
+  - {nom: LB01, valeur: 10.10.70.10}
+  - {nom: LB02, valeur: 10.10.70.11}
+  - {nom: VIP_LB, valeur: 10.10.70.200, commentaire: "lb.par1.medisphere.internal (VRRP, VRID 170)"}
+
+# pare_feu_transit, section « Administration » :
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_DMZ, destination: [$LB01, $LB02], proto: tcp, ports: 22,
+     motif: "runner01 vers les répartiteurs : SSH (pipeline Ansible)", ref: M07-E12}
+
+# pare_feu_transit, section « Services socle » :
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "répartiteurs vers ca01 : ACME, renouvellements TLS et SSH", ref: M07-E12}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_DMZ, destination: [$LB01, $LB02, $VIP_LB], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers les répartiteurs et leur VIP", ref: M07-E12}

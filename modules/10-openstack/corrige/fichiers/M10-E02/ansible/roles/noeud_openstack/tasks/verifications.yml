@@ -1,0 +1,81 @@
+---
+# Vérifications en lecture seule, après redémarrage. Un échec ici arrête le playbook AVANT
+# Kolla : un nœud mal câblé se diagnostique bien mieux maintenant qu'au milieu d'un deploy.
+
+- name: Vérifier noms, MAC, MTU et adresses des cartes adressées
+  ansible.builtin.assert:
+    that:
+      - item.nom in ansible_facts['interfaces']
+      - ansible_facts[item.nom]['macaddress'] == mac
+      - ansible_facts[item.nom]['mtu'] | int == item.mtu
+      - ansible_facts[item.nom]['active'] | bool
+      - (ansible_facts[item.nom]['ipv4']['address'] | default('')) == adresse
+    fail_msg: >-
+      {{ inventory_hostname }}/{{ item.nom }} : attendu MAC {{ mac }}, MTU {{ item.mtu }},
+      adresse {{ adresse }} ; vu {{ ansible_facts[item.nom] | default({}) | dict2items
+      | selectattr('key', 'in', ['macaddress', 'mtu', 'active', 'ipv4']) | items2dict }}.
+    quiet: true
+  vars:
+    mac: "bc:24:11:{{ item.vlan }}:00:{{ noeud_openstack_suffixe }}"
+    adresse: "{{ item.prefixe }}.{{ noeud_openstack_suffixe | int + item.decalage }}"
+  loop: "{{ noeud_openstack_interfaces }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Vérifier la carte externe (montée, sans aucune adresse)
+  ansible.builtin.assert:
+    that:
+      - e.nom in ansible_facts['interfaces']
+      - ansible_facts[e.nom]['active'] | bool
+      - ansible_facts[e.nom]['mtu'] | int == e.mtu
+      - ansible_facts[e.nom]['ipv4'] is not defined
+      - (ansible_facts[e.nom]['ipv6'] | default([])) | length == 0
+    fail_msg: >-
+      {{ inventory_hostname }}/{{ e.nom }} doit être montée sans adresse IPv4 ni IPv6
+      (Kolla la branche sur br-ex). Vu : {{ ansible_facts[e.nom] | default('interface absente') }}.
+    quiet: true
+  vars:
+    e: "{{ noeud_openstack_interface_externe }}"
+  when: inventory_hostname in noeud_openstack_noeuds_reseau
+
+- name: Vérifier les trames de 9000 octets sans fragmentation
+  ansible.builtin.command:
+    cmd: ping -c 2 -W 2 -M do -s 8972 -I {{ item.0.interface }} {{ item.1 }}
+  loop: "{{ noeud_openstack_cibles_jumbo | subelements('adresses') }}"
+  loop_control:
+    label: "{{ item.0.interface }} → {{ item.1 }}"
+  changed_when: false
+
+- name: Vérifier KVM sur les calculs
+  when: inventory_hostname in noeud_openstack_noeuds_calcul
+  block:
+    - name: Lire /dev/kvm et les modules KVM
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/dev/kvm, /sys/module/kvm_intel, /sys/module/kvm_amd]
+      register: noeud_openstack_kvm
+
+    - name: Exiger /dev/kvm et un module kvm_intel ou kvm_amd chargé
+      ansible.builtin.assert:
+        that:
+          - noeud_openstack_kvm.results[0].stat.exists
+          - noeud_openstack_kvm.results[1].stat.exists or noeud_openstack_kvm.results[2].stat.exists
+        fail_msg: >-
+          {{ inventory_hostname }} n'a pas d'accélération KVM : vérifie le type de CPU de la VM
+          (host) et, en lecture seule, /sys/module/kvm_intel/parameters/nested sur pve01.
+        quiet: true
+
+- name: Lire l'état de synchronisation de l'horloge
+  ansible.builtin.command:
+    cmd: timedatectl show --property=NTPSynchronized --value
+  register: noeud_openstack_ntp
+  changed_when: false
+
+- name: Exiger une horloge synchronisée
+  ansible.builtin.assert:
+    that:
+      - noeud_openstack_ntp.stdout | trim == 'yes'
+    fail_msg: >-
+      L'horloge de {{ inventory_hostname }} n'est pas synchronisée (chronyc tracking,
+      chronyc sources). RabbitMQ, Keystone (jetons) et Galera n'aiment pas les horloges qui dérivent.
+    quiet: true

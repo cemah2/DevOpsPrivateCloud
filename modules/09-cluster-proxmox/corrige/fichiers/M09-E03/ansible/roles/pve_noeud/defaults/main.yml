@@ -1,0 +1,86 @@
+---
+# Rôle pve_noeud — configuration de base d'un nœud Proxmox VE du cluster imbriqué hv-par1
+# (M09-E03 ; étendu en M09-E18 et M09-E26).
+#
+# Ce que l'installateur automatique a déjà fait (fichier de réponse) : système, vmbr0 sur nic0
+# en 10.10.10.5N, noms nic0..nic4 épinglés sur les MAC, clé SSH de adm01 pour root.
+# Ce que fait ce rôle : contrôles d'entrée, dépôts (sans abonnement), DNS du nœud, temps,
+# réseau complet (/etc/network/interfaces), mémoire de ZFS, console série, SSH par clé seule,
+# fragment cloud-init commun des invités imbriqués.
+# Il ne crée PAS le cluster (pvecm, M09-E04) : une opération unique, faite et vérifiée à la main.
+
+pve_noeud_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle pve_noeud).
+  Toute modification manuelle sera écrasée au prochain passage.') | replace('\n', ' ') }}
+
+# --- Identité (PLAN §4.9) ------------------------------------------------------------------
+# Numéro du nœud (hvNN → NN) : OBLIGATOIRE, dans l'inventaire (inventories/lab/hv.yml).
+# pve_noeud_numero: 1
+pve_noeud_domaine: par1.medisphere.internal
+pve_noeud_ip_mgmt: "10.10.10.{{ 50 + pve_noeud_numero | int }}"
+pve_noeud_ip_coro: "10.10.32.{{ 50 + pve_noeud_numero | int }}"
+pve_noeud_ip_stopub: "10.10.30.{{ 70 + pve_noeud_numero | int }}"
+pve_noeud_ip_stoclu: "10.10.31.{{ 70 + pve_noeud_numero | int }}"
+pve_noeud_passerelle: 10.10.10.1
+
+# Mêmes MAC qu'OpenTofu (envs/hv/locals.tf) : 02:4d:53:09:<numéro>:<carte>. Contrôlées à
+# l'entrée : un nœud dont les cartes ne sont pas celles attendues n'est pas touché.
+pve_noeud_macs: >-
+  {{ ['00', '01', '02', '03', '04']
+     | map('regex_replace', '^', '02:4d:53:09:' ~ ('%02x' | format(pve_noeud_numero | int)) ~ ':')
+     | list }}
+
+# Version attendue de Proxmox VE (préfixe de pve-manager).
+pve_noeud_version: "9.2"
+
+# --- Dépôts --------------------------------------------------------------------------------
+# Sans abonnement : on retire tout fichier de sources qui pointe vers enterprise.proxmox.com
+# (il ferait échouer « apt update » avec une erreur 401) et on déclare pve-no-subscription.
+pve_noeud_sources_a_examiner:
+  - /etc/apt/sources.list.d/pve-enterprise.sources
+  - /etc/apt/sources.list.d/ceph.sources
+pve_noeud_depot_url: http://download.proxmox.com/debian/pve
+pve_noeud_depot_suite: trixie
+pve_noeud_depot_composant: pve-no-subscription
+pve_noeud_trousseau: /usr/share/keyrings/proxmox-archive-keyring.gpg
+
+pve_noeud_paquets:
+  - jq
+  - tcpdump
+  - bind9-dnsutils
+  - mtr-tiny
+  - lsof
+  - nftables
+
+# --- DNS du nœud (réglé par l'API locale de Proxmox : pvesh /nodes/<nœud>/dns) -------------
+pve_noeud_dns_serveurs: [10.10.20.10, 10.10.20.16]
+
+# --- Temps -------------------------------------------------------------------------------------
+# La passerelle de MGMT (VIP .1 depuis M07-E25) sert le temps au lab (PLAN §4.3 bis).
+pve_noeud_ntp_serveurs: ["{{ pve_noeud_passerelle }}"]
+pve_noeud_ntp_essais_sync: 20
+
+# --- Réseau ------------------------------------------------------------------------------------
+# MTU 9000 sur les seuls réseaux Ceph (VLAN 30 et 31, M07-E15) ; tout le reste à 1500.
+pve_noeud_mtu_stockage: 9000
+# VLAN acceptés sur vmbr1 (pont VLAN-aware des invités). pve01 ne laisse passer que ceux du
+# champ trunks de la carte net4 (VLAN 99) : le reste est filtré en amont.
+pve_noeud_vlans_invites: "2-4094"
+# Retour automatique à l'ancienne configuration si le contrôle après ifreload n'aboutit pas.
+pve_noeud_delai_retour_reseau: 120
+
+# --- Mémoire -----------------------------------------------------------------------------------
+# ARC de ZFS plafonné à 1 Gio : sur une installation ext4, OpenZFS prend par défaut jusqu'à la
+# MOITIÉ de la mémoire pour son cache, au détriment des invités et de Ceph (12 Go par nœud).
+pve_noeud_zfs_arc_max: 1073741824
+
+# --- Accès -------------------------------------------------------------------------------------
+# Console série (qm terminal <VMID> depuis pve01) : accès de secours sans réseau.
+pve_noeud_console_serie: true
+pve_noeud_sshd_fichier: /etc/ssh/sshd_config.d/03-pve-noeud.conf
+
+# --- Invités imbriqués -----------------------------------------------------------------------
+# Fragment cloud-init « vendor » commun (agent QEMU des invités), présent sur CHAQUE nœud :
+# un invité qui démarre ou migre sur un autre nœud y retrouve le fichier.
+pve_noeud_snippets_dossier: /var/lib/vz/snippets
+pve_noeud_snippet_agent: medisphere-agent.yaml

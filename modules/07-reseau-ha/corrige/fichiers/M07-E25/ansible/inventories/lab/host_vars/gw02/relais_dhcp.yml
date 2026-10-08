@@ -1,0 +1,11 @@
+---
+# host_vars/gw02/relais_dhcp.yml — M07-E25 : relais actif sur gw02 aussi (PLAN §4.9), giaddr .3.
+# Les deux passerelles relaient chaque DISCOVER : Kea reçoit deux copies (giaddr .2 et .3) et
+# répond aux deux ; le client garde la première offre. Voir le corrigé (alternative : relais sur
+# le maître seulement, par le script de transition).
+relais_dhcp_actif: true
+relais_dhcp_interface: ens19.99
+relais_dhcp_adresse_locale: 10.10.99.3
+relais_dhcp_serveurs:
+  - 10.10.20.10
+  - 10.10.20.16

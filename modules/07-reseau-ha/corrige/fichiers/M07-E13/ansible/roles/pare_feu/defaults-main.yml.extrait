@@ -1,0 +1,6 @@
+# roles/pare_feu/defaults/main.yml — EXTRAIT à intégrer (M07-E13), après pare_feu_nat :
+
+# Redirections entrantes (chaîne prerouting de « table ip nat ») : [{regle, motif}].
+# Chaque redirection a AUSSI besoin de sa règle de transit (pare_feu_transit) vers la nouvelle
+# destination : la traduction ne vaut pas autorisation.
+pare_feu_dnat: []

@@ -1,0 +1,27 @@
+# /etc/gitlab/gitlab.rb — EXTRAIT à intégrer sur git01 (M07-E13), puis « gitlab-ctl reconfigure ».
+# gitlab.rb reste géré à la main (M01 ; rôle gitlab_hote en lecture, M04-E46). Instantané avant :
+#   admin@adm01:~$ ms-snapshot --prefix avant-m07e13 1004
+#
+# 1. L'URL publiée devient celle des répartiteurs. Tout ce que GitLab GÉNÈRE (liens, URL de clone
+#    HTTPS, CI_SERVER_URL des jobs, redirections OAuth) utilise désormais ce nom.
+external_url 'https://gitlab.par1.medisphere.internal'
+
+# 2. Le nginx d'omnibus garde SON certificat (nom git01, ACME, M06-E18) : c'est celui que les
+#    répartiteurs vérifient (verifyhost git01…). Sans ces deux lignes, omnibus chercherait
+#    /etc/gitlab/ssl/gitlab.par1.medisphere.internal.crt (nom tiré de external_url).
+nginx['ssl_certificate'] = "/etc/gitlab/ssl/git01.par1.medisphere.internal.crt"
+nginx['ssl_certificate_key'] = "/etc/gitlab/ssl/git01.par1.medisphere.internal.key"
+# Le port 80 d'omnibus reste une redirection vers HTTPS (défi ACME : M06-E18, arrêt de nginx).
+nginx['redirect_http_to_https'] = true
+
+# 3. Adresse réelle des clients : les répartiteurs sont des mandataires de confiance.
+nginx['real_ip_trusted_addresses'] = ['10.10.70.10', '10.10.70.11']
+nginx['real_ip_header'] = 'X-Forwarded-For'
+nginx['real_ip_recursive'] = 'on'
+gitlab_rails['trusted_proxies'] = ['10.10.70.10', '10.10.70.11']
+
+# 4. Contrôle de santé des répartiteurs (/-/readiness) : autorisé depuis leurs adresses.
+gitlab_rails['monitoring_whitelist'] = ['127.0.0.0/8', '::1/128', '10.10.70.10/32', '10.10.70.11/32']
+
+# 5. Le SSH n'est PAS publié par les répartiteurs : les URL de clone SSH gardent le nom de git01.
+gitlab_rails['gitlab_ssh_host'] = 'git01.par1.medisphere.internal'

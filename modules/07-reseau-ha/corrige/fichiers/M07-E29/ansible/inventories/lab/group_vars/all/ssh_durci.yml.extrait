@@ -1,0 +1,4 @@
+# group_vars/all/ssh_durci.yml — EXTRAIT M07-E29 : si ssh_durci limite les comptes autorisés
+# (AllowGroups/AllowUsers, M04-E11), y ajouter le compte de supervision sur les hôtes concernés.
+# Nom de la variable : celui de TON rôle ssh_durci (ici ssh_durci_comptes_autorises).
+ssh_durci_comptes_autorises_supplementaires: "{{ ['supervision'] if ('role_routeur' in group_names or 'role_lb' in group_names) else [] }}"

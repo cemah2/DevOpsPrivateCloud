@@ -1,0 +1,12 @@
+#!ipxe
+{# gabarits/ipxe-rocky.ipxe.j2 — script iPXE propre à une machine, installation Rocky Linux 10
+    (M11-E13 : noyau et initrd en HTTPS depuis pxe01, kickstart remis par iPXE dans l'initrd,
+    dépôt officiel en HTTPS : autorité publique connue d'Anaconda).
+    Variables : hote, fqdn, mac, url_base, rocky_depot. -#}
+# {{ fqdn }} ({{ mac }}) : installation Rocky Linux 10 — rendu depuis NetBox, ne pas modifier sur pxe01
+set base {{ url_base }}
+echo {{ fqdn }} : installation Rocky Linux 10 (kickstart {{ hote }}.ks)
+kernel ${base}/rocky/10/vmlinuz inst.ks=file:/ks.cfg inst.repo={{ rocky_depot }}/BaseOS/x86_64/os/ inst.text ip=dhcp
+initrd ${base}/rocky/10/initrd.img
+initrd ${base}/kickstart/{{ hote }}.ks /ks.cfg
+boot

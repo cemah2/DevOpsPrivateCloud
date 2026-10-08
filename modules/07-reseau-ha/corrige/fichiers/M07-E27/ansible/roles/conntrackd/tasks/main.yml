@@ -1,0 +1,46 @@
+---
+- name: Vérifier le lien de synchronisation
+  ansible.builtin.assert:
+    that:
+      - conntrackd_adresse_locale | length > 0
+      - conntrackd_adresse_pair | length > 0
+      - conntrackd_adresse_locale != conntrackd_adresse_pair
+      - "'127.0.0.1' in conntrackd_adresses_ignorees"
+    fail_msg: >-
+      conntrackd : adresses locale et du pair obligatoires et différentes ; la boucle locale doit
+      être dans conntrackd_adresses_ignorees (les adresses propres des passerelles aussi, en
+      production : group_vars/role_routeur/conntrackd.yml).
+    quiet: true
+
+- name: Installer conntrackd et l'outil conntrack
+  ansible.builtin.apt:
+    name: [conntrackd, conntrack]
+    state: present
+
+# Pas d'option de vérification de la configuration dans conntrackd : le fichier est relu au
+# redémarrage, et le service est contrôlé juste après (conntrackd -s).
+- name: Configuration de conntrackd
+  ansible.builtin.template:
+    src: conntrackd.conf.j2
+    dest: "{{ conntrackd_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer conntrackd
+
+- name: Service conntrackd activé et démarré
+  ansible.builtin.systemd_service:
+    name: conntrackd
+    enabled: true
+    state: started
+
+- name: Appliquer un éventuel redémarrage maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Le service conntrackd répond sur son socket de contrôle
+  ansible.builtin.command: conntrackd -C {{ conntrackd_fichier }} -s
+  register: _conntrackd_stats
+  changed_when: false
+  retries: 5
+  delay: 2
+  until: _conntrackd_stats.rc == 0

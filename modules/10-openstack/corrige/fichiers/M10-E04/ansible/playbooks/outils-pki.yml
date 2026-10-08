@@ -1,0 +1,13 @@
+---
+# M06-E02 — Client step (commande « step ») sur les hôtes qui DEMANDENT des certificats.
+# M10-E04 : étendu aux nœuds OpenStack (osctl01 obtient le certificat de la VIP externe par
+# ACME, outils/certificat-externe.sh de plateforme/openstack). Aucune CA en ligne ici.
+#   uv run ansible-playbook playbooks/outils-pki.yml --check --diff
+- name: Outils de la PKI (client step)
+  hosts: role_bastion:role_openstack
+  become: true
+  tasks:
+    - name: Client step (dépôt Smallstep, version figée)
+      ansible.builtin.include_role:
+        name: step_ca
+        tasks_from: client.yml

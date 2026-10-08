@@ -1,0 +1,33 @@
+# m08-initiateur.tf.extrait — M08-E17 : VM JETABLE de l'état « ceph » (plateforme/infra,
+# envs/ceph/), sur le modèle de cephcli01.tf (M08-E06). Fichier envs/ceph/m08-initiateur.tf ajouté
+# le temps de l'exercice, puis SUPPRIMÉ par une seconde MR : OpenTofu détruit la VM et son nom.
+# Adresse imposée 10.10.30.21 (plage « statique » du VLAN 30, réservée dans NetBox avant, libérée après).
+
+module "m08_initiateur" {
+  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-noeud?ref=v2.2.0"
+
+  nom         = "m08-initiateur"
+  vmid        = 2086
+  noeud       = var.noeud
+  famille     = "debian13"
+  coeurs      = 1
+  memoire_mo  = 1024
+  disque_go   = 10
+  stockage    = "local-nvme"
+  etiquettes  = ["env-m08"]
+  description = "Initiateur iSCSI jetable (M08-E17, PLAT-927) — à détruire en fin d'exercice."
+
+  cartes = [
+    { vnet = "vstopub", prefixe = "10.10.30.0/24", ipv4 = "10.10.30.21", mtu = 9000, passerelle = true },
+  ]
+
+  cle_ssh_admin  = var.cle_ssh_admin
+  demarrage_auto = false
+}
+
+module "dns_m08_initiateur" {
+  source = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//enregistrement-dns?ref=v2.2.0"
+
+  nom  = module.m08_initiateur.fqdn
+  ipv4 = module.m08_initiateur.ipv4
+}

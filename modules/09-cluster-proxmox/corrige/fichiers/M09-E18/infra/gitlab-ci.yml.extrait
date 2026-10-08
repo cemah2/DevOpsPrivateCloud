@@ -1,0 +1,26 @@
+# .gitlab-ci.yml de plateforme/infra — jobs AJOUTÉS pour envs/hv-invites (M09-E18).
+# Mêmes gabarits .plan/.apply/.derive que les autres états (M05-E26 à E29). Seule différence :
+# l'API visée n'est pas pve01 mais le cluster hv-par1, avec SON jeton. Les variables du projet
+# HV_PROXMOX_VE_ENDPOINT et HV_PROXMOX_VE_API_TOKEN (protégées, masquées) remplacent, dans CES
+# jobs seulement, celles de pve01. Les règles .regles-avec-secrets testent PROXMOX_VE_API_TOKEN :
+# elle est bien définie (par la ligne ci-dessous) quand le secret existe.
+.hv-invites:
+  variables:
+    DOSSIER: envs/hv-invites
+    PROXMOX_VE_ENDPOINT: $HV_PROXMOX_VE_ENDPOINT
+    PROXMOX_VE_API_TOKEN: $HV_PROXMOX_VE_API_TOKEN
+
+plan:hv-invites:
+  extends: [.plan, .hv-invites]
+
+apply:hv-invites:
+  extends: [.apply, .hv-invites]
+  needs: ["plan:hv-invites"]
+  resource_group: tofu-hv-invites
+  environment:
+    name: lab/hv-invites
+    deployment_tier: staging
+
+derive:hv-invites:
+  extends: [.derive, .hv-invites]
+  resource_group: tofu-hv-invites

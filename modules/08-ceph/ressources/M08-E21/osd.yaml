@@ -1,0 +1,10 @@
+# osd.yaml — tous les disques disponibles deviennent des OSD (Lucas)
+service_type: osd
+service_id: tout
+placement:
+  host_pattern: '*'
+spec:
+  data_devices:
+    all: true
+config:
+  osd_memory_target: 4294967296

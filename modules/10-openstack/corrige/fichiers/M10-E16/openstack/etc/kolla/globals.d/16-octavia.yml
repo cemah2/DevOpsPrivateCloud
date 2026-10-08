@@ -1,0 +1,13 @@
+---
+# etc/kolla/globals.d/16-octavia.yml (M10-E16, DEV-1126) — Octavia avec le SEUL fournisseur OVN.
+# Remplace enable_octavia: "no" de globals.yml (palier 1).
+enable_octavia: "yes"
+# Valeurs par défaut de Kolla avec neutron_plugin_agent: ovn :
+#   "amphora:Amphora provider, ovn:OVN provider" / "amphora_agent, ovn"
+# En ne listant que « ovn » :
+#   - octavia_auto_configure devient false (pas de gabarit, de réseau de gestion, de clé ni de
+#     groupe de sécurité pour des amphores) ;
+#   - enable_octavia_jobboard devient false (pas de Valkey pour le jobboard) ;
+#   - pas de certificats d'amphores à générer (kolla-ansible octavia-certificates inutile).
+octavia_provider_drivers: "ovn:OVN provider"
+octavia_provider_agents: "ovn"

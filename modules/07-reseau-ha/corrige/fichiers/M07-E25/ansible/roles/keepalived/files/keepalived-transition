@@ -1,0 +1,5 @@
+#!/bin/sh
+# Géré par Ansible (rôle keepalived) — appelé par keepalived à chaque transition :
+#   $1 = GROUP | INSTANCE, $2 = nom, $3 = MASTER | BACKUP | FAULT | STOP, $4 = priorité
+# Une ligne par transition dans le journal : journalctl -t keepalived-transition
+logger -t keepalived-transition "type=$1 instance=$2 etat=$3 priorite=${4:-?}"

@@ -1,0 +1,12 @@
+# /etc/systemd/system/ceph-cert-dashboard.timer — M08-E24. Chaque jour : renouvellement à 15 jours
+# de l'échéance, donc quinze tentatives avant l'expiration d'un certificat de 30 jours.
+[Unit]
+Description=MédiSphère : certificat du tableau de bord de ceph-par1 (quotidien)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

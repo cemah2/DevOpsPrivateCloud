@@ -1,0 +1,61 @@
+---
+# Rôle routeur_reseau — interfaces des passerelles de la bordure (M07-E24, étendu en M07-E25/E27).
+#
+# Deux piles : gw01 a été installée depuis l'ISO (M00-E10, ifupdown, /etc/network/interfaces) ;
+# gw02 vient de l'image dorée (netplan + systemd-networkd, M03). Le rôle écrit le FICHIER qui fait
+# foi au prochain démarrage, et pose à chaud les adresses qui MANQUENT (ip address add, idempotent).
+# Il ne redémarre JAMAIS le réseau d'une passerelle en service et ne RETIRE jamais une adresse :
+# le retrait de « .1 » statique se fait par playbooks/migration-vrrp.yml (M07-E25), une adresse et
+# un VLAN à la fois, avec retour arrière.
+
+routeur_reseau_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible). Toute modification manuelle sera écrasée.') }}
+
+# ifupdown (gw01) ou netplan (gw02) : variable d'hôte obligatoire.
+routeur_reseau_pile: ""
+
+# WAN : adresse PROPRE de la passerelle (jamais la VIP WAN, posée par keepalived en M07-E26).
+routeur_reseau_wan_interface: ens18
+routeur_reseau_wan_adresse: ""        # ex. 192.168.1.40/24 (<IP-GW01-WAN>/<MASQUE>)
+routeur_reseau_wan_passerelle: ""     # <IP-BOX>
+
+# Trunk et VLAN routés (PLAN §4.2, §4.9). Le MTU de chaque VLAN ne peut pas dépasser celui du trunk.
+routeur_reseau_trunk: ens19
+routeur_reseau_trunk_mtu: 9000
+routeur_reseau_vlans: []              # [{id: 10, mtu: 1500}, …] (group_vars/role_routeur)
+
+# Dernier octet de l'adresse PROPRE de la passerelle sur chaque VLAN : 1 pour gw01 avant M07-E25,
+# 2 pour gw01 ensuite, 3 pour gw02.
+routeur_reseau_suffixe: 0
+# VLAN où « .1 » est ENCORE posée en statique sur cette passerelle (gw01 pendant la migration
+# VRRP de M07-E25). Elle est rendue AVANT l'adresse propre : elle reste l'adresse principale du
+# sous-réseau tant qu'elle existe.
+routeur_reseau_vip_statique: []
+
+# Routes de garde : un réseau joint par un tunnel ne doit jamais partir vers Internet quand le
+# tunnel est démonté (passerelle de secours, wg-quick arrêté). « unreachable » à métrique haute :
+# la route du tunnel (métrique 0, plus prioritaire) la masque quand le tunnel existe.
+routeur_reseau_routes_garde:
+  - 10.20.0.0/16     # PAR2 (wg0)
+  - 10.30.0.0/16     # LYO1 (wg2)
+  - 10.255.0.0/16    # réseaux de tunnels (wg0, wg1, wg2)
+routeur_reseau_metrique_garde: 4000
+
+# Noyau (fichier /etc/sysctl.d/60-routeur.conf).
+routeur_reseau_sysctl:
+  net.ipv4.ip_forward: 1
+  # Indispensable à la migration VRRP : retirer la première adresse d'un sous-réseau doit PROMOUVOIR
+  # la suivante au lieu de les retirer toutes (M07-E25).
+  net.ipv4.conf.all.promote_secondaries: 1
+  net.ipv4.conf.default.promote_secondaries: 1
+  # Filtrage par chemin de retour « lâche » : strict (1) jetterait le trafic asymétrique d'une
+  # bascule partielle et les paquets des tunnels quand les routes changent (M07-E41).
+  net.ipv4.conf.all.rp_filter: 2
+  net.ipv4.conf.default.rp_filter: 2
+  # Reprise des connexions TCP vues en cours de route : 1 (défaut du noyau) jusqu'à M07-E27,
+  # où la décision est prise avec conntrackd (voir group_vars/role_routeur/routeur_reseau.yml).
+  net.netfilter.nf_conntrack_tcp_loose: 1
+
+# Fichiers.
+routeur_reseau_fichier_ifupdown: /etc/network/interfaces
+routeur_reseau_fichier_netplan: /etc/netplan/60-routeur.yaml

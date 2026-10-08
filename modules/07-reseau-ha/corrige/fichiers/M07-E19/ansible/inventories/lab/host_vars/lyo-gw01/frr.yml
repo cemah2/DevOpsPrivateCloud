@@ -1,0 +1,36 @@
+---
+# host_vars/lyo-gw01/frr.yml — routeur de l'agence LYO1, AS 65030 (M07-E19, PLAT-829), rôle frr
+# de M07-E06. Une session eBGP avec la bordure (AS 65000) dans wg2. L'agence annonce SON agrégat
+# 10.30.0.0/16 et n'accepte de PAR1 que les réseaux qui lui sont ouverts
+# (group_vars/all/sites.yml).
+frr_ospf: {}
+
+# L'agrégat n'existe sur aucune interface : une route « blackhole » le fait exister dans la table
+# (condition de « network »). Un /24 réellement présent (10.30.10.0/24, connecté) gagne toujours ;
+# un /24 inexistant est jeté ici au lieu de repartir vers PAR1 (boucle).
+frr_routes_statiques:
+  - {prefixe: 10.30.0.0/16, via: blackhole}
+
+frr_prefix_lists:
+  - nom: PL-DEPUIS-PAR1
+    regles: "{{ sites_lyo1_reseaux_par1 | map('combine', {'action': 'permit'}) | list }}"
+  - nom: PL-VERS-PAR1
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.30.0.0/16}
+
+frr_route_maps:
+  - nom: RM-PAR1-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-PAR1]}]
+  - nom: RM-PAR1-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-VERS-PAR1]}]
+
+frr_bgp:
+  asn: 65030
+  router_id: 10.30.10.1
+  voisins:
+    - adresse: 10.255.2.1
+      as_distant: 65000
+      description: bordure PAR1 (tunnel wg2)
+      route_map_entree: RM-PAR1-IN
+      route_map_sortie: RM-PAR1-OUT
+  reseaux: [10.30.0.0/16]

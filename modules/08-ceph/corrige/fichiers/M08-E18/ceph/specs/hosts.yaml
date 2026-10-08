@@ -1,0 +1,50 @@
+# specs/hosts.yaml — hôtes du cluster ceph-par1 (plateforme/ceph, M08-E23).
+# Adresse : réseau PUBLIC (VLAN 30). Étiquettes : rôle des démons (placements des autres
+# spécifications). location : emplacement CRUSH INITIAL, lu seulement quand l'hôte est ajouté
+# (M08-E14 a déplacé ceph01-03 par commandes ; ceph04 est entré directement dans sa baie, E18).
+# _admin : client.admin et ceph.conf distribués par cephadm — deux hôtes au plus (règle 3).
+service_type: host
+hostname: ceph01
+addr: 10.10.30.51
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+  - mds
+  - nfs
+location:
+  rack: par1-baie-a
+---
+service_type: host
+hostname: ceph02
+addr: 10.10.30.52
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+  - mds
+  - rgw
+location:
+  rack: par1-baie-b
+---
+service_type: host
+hostname: ceph03
+addr: 10.10.30.53
+labels:
+  - mon
+  - osd
+  - rgw
+location:
+  rack: par1-baie-c
+---
+# Extension (CHG-928, M08-E18). Retiré au mini-projet (M08-E46) : document supprimé par la MR
+# du retrait, APRÈS « ceph orch host drain ceph04 » et « ceph orch host rm ceph04 ».
+service_type: host
+hostname: ceph04
+addr: 10.10.30.54
+labels:
+  - osd
+location:
+  rack: par1-baie-a

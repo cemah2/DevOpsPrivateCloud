@@ -1,0 +1,3 @@
+# inventories/lab/group_vars/all/depots.yml — EXTRAIT à intégrer (M07-E12) : la même empreinte
+# que dans l'inventaire de la maquette (M07-E10, étape 1).
+haproxy_depot_cle_empreinte: "<EMPREINTE-CLE-HAPROXY>"

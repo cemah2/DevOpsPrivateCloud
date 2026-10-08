@@ -1,0 +1,4 @@
+# vault-critique.yml.extrait — M08-E11 : variable à AJOUTER au fichier chiffré
+# group_vars/role_pki/vault-critique.yml (ansible-vault edit --vault-id critique@…).
+# Valeur : sortie de « step crypto jose format < ceph-ingress.key.json » (une ligne eyJ…).
+vault_step_ca_ceph_ingress_cle_chiffree: "<FORME-COMPACTE-CHIFFREE>"

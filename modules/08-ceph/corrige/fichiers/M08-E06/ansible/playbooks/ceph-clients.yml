@@ -1,0 +1,19 @@
+---
+# playbooks/ceph-clients.yml — clients du cluster ceph-par1 (M08-E06).
+#   uv run ansible-playbook playbooks/ceph-clients.yml
+- name: Clients Ceph
+  hosts: role_ceph_client
+  become: true
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+    - role: ceph_client
+      tags: [ceph_client]

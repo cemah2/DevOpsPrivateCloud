@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Interfaces, adresses, MTU et réglages noyau des passerelles de la bordure (M07-E24).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

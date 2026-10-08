@@ -1,0 +1,18 @@
+---
+# group_vars/role_pki/step_ca.yml — EXTRAIT : provisioner ajouté en M08-E24 (même modèle que
+# ceph-ingress, M08-E11). Clé du provisioner chiffrée en Vault « critique » ; mot de passe dans
+# ~/.config/workbook/step-ceph-dashboard.pass (600) sur adm01 et en Vault « critique ».
+step_ca_provisioners:
+  # … admin, acme, sshpop, ceph-ingress …
+  - type: JWK
+    name: ceph-dashboard
+    key: {use: sig, kty: EC, kid: "<KID>", crv: P-256, alg: ES256, x: "<X>", y: "<Y>"}
+    encryptedKey: "{{ vault_step_ca_ceph_dashboard_cle_chiffree }}"
+    claims: {minTLSCertDuration: 1h, maxTLSCertDuration: 720h, defaultTLSCertDuration: 720h}
+    policy:
+      x509:
+        allow:
+          dns:
+            - ceph01.par1.medisphere.internal
+            - ceph02.par1.medisphere.internal
+            - ceph03.par1.medisphere.internal

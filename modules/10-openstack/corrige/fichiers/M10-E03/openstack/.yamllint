@@ -1,0 +1,16 @@
+---
+extends: default
+rules:
+  line-length: {max: 140}
+  document-start: disable
+  truthy:
+    # globals.yml de Kolla utilise "yes"/"no" entre guillemets ; on interdit yes/no nus.
+    allowed-values: ["true", "false"]
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+ignore: |
+  .venv/
+  collections/
+  etc/kolla/passwords.yml
+  donnees/vault-*.yml

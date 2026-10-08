@@ -1,0 +1,12 @@
+# Cas fautif de la règle 6 : RGW sur le port du frontal haproxy.
+# est porté par le service ingress (règle 6 : jamais le port du frontal).
+service_type: rgw
+service_id: par1
+placement:
+  label: rgw
+  count_per_host: 1
+networks:
+  - 10.10.30.0/24
+spec:
+  rgw_frontend_port: 443
+  only_bind_port_on_networks: true

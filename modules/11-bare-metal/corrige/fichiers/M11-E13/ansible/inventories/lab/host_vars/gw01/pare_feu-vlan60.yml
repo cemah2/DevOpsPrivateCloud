@@ -1,0 +1,41 @@
+---
+# Entrées du VLAN 60 (PROV) à FUSIONNER dans host_vars/gw01/pare_feu.yml (matrice unique, appliquée
+# aussi à gw02 depuis M07-E24) — état après M11-E13. Ce fichier n'est pas chargé tel quel : copie
+# chaque bloc dans la section correspondante de ta matrice (les noms $… sont ceux de M06-E30).
+#
+# 1. pare_feu_definitions : ajouter
+#   - {nom: V_PROV, valeur: '"ens19.60"'}
+#   - {nom: PXE01, valeur: 10.10.60.10}
+#   - {nom: NET_PROV, valeur: 10.10.60.0/24}
+#   - {nom: ILO_HP01, valeur: 192.168.1.40, commentaire: "<IP-ILO-HP01>"}
+#   - nom: LAB_IFS_INTERNET        # LAB_IFS sans ens19.60 : le VLAN 60 a sa propre règle de sortie
+#     valeur: '{ "ens19.10", "ens19.20", "ens19.30", "ens19.40", "ens19.50", "ens19.52", "ens19.70", "ens19.99" }'
+#
+# 2. pare_feu_transit : REMPLACER la règle « lab vers Internet (NAT) » par
+#   - {entree: $LAB_IFS_INTERNET, sortie: $WAN, destination: "!= $LAN_MAISON",
+#      motif: "lab (hors PROV) vers Internet (NAT)", ref: M11-E13}
+#
+# 3. pare_feu_transit : ajouter (les lignes marquées E02 existent depuis M11-E02)
+pare_feu_transit_vlan60:
+  - {entree: $V_PROV, destination: [$DNS01, $DNS02], proto: udp, ports_source: 68, ports: 67,
+     motif: "renouvellements DHCP (T1) du VLAN 60 en unicast vers Kea", ref: M11-E02}
+  - {entree: $V_PROV, sortie: $WAN, destination: "!= $LAN_MAISON", proto: tcp, ports: [80, 443],
+     motif: "installateurs du VLAN 60 vers les miroirs Debian et Rocky (seulement HTTP/HTTPS)", ref: M11-E13}
+  - {entree: $V_PROV, source: $PXE01, sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "pxe01 vers ca01 : ACME (émission et renouvellement de son certificat)", ref: M11-E13}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_PROV, destination: $PXE01, proto: tcp, ports: 80,
+     motif: "ca01 vers pxe01 : défi ACME HTTP-01", ref: M11-E13}
+  # Administration : couverte par « bastion (MGMT) vers tout le lab » ($LAB_IFS contient ens19.60).
+  # iLO de hp01 : Redfish seulement (IPMI sur IP coupé, UDP 623 retiré, CHG-1230)
+  - {entree: $V_MGMT, source: $ADM01, sortie: $WAN, destination: $ILO_HP01, proto: tcp, ports: 443,
+     motif: "adm01 vers l'iLO de hp01 (Redfish, interface web)", ref: M11-E07}
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $WAN, destination: $ILO_HP01, proto: tcp, ports: 443,
+     motif: "runner01 vers l'iLO de hp01 (inventaire Redfish hebdomadaire)", ref: M11-E18}
+#
+# 4. pare_feu_entree : ajouter (relais DHCP et NTP de la passerelle pour le VLAN 60)
+#   - {entree: $V_PROV, proto: udp, ports_source: 68, ports: 67,
+#      motif: "clients DHCP du VLAN 60 vers le relais", ref: M11-E02}
+#   (NTP et NTS : déjà couverts par $LAB_IFS)
+#
+# 5. pare_feu_verifications : ajouter
+#   - {hote: 10.10.60.10, port: 443, motif: "contrôleur → pxe01 (HTTPS)"}

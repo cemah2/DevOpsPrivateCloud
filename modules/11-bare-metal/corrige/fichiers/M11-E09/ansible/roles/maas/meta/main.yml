@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: MAAS 3.7 (snap) en région + rack sur PostgreSQL 16 du système (évaluation, module 11)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

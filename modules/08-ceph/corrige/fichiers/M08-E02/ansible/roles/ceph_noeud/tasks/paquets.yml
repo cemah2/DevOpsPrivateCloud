@@ -1,0 +1,36 @@
+---
+- name: Prérequis de cephadm
+  ansible.builtin.dnf:
+    name: "{{ ceph_noeud_paquets }}"
+    state: present
+
+# Nom-version : dnf refuse une autre version que celle du dépôt épinglé.
+- name: Paquets cephadm et ceph-common de la version épinglée
+  ansible.builtin.dnf:
+    name: >-
+      {{ ['cephadm-' ~ ceph_noeud_version]
+         + (['ceph-common-' ~ ceph_noeud_version] if ceph_noeud_ceph_common | bool else []) }}
+    state: present
+
+- name: Services nécessaires actifs (temps, pare-feu, SSH)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - chronyd
+    - firewalld
+    - sshd
+
+- name: Lire la version de cephadm installée
+  ansible.builtin.command:
+    cmd: cephadm version
+  register: _ceph_noeud_version_cephadm
+  changed_when: false
+
+- name: La commande cephadm est de la version attendue
+  ansible.builtin.assert:
+    that:
+      - ("version " ~ ceph_noeud_version ~ " ") in _ceph_noeud_version_cephadm.stdout
+    fail_msg: "cephadm installé : {{ _ceph_noeud_version_cephadm.stdout }} ; attendu : {{ ceph_noeud_version }}."
+    quiet: true

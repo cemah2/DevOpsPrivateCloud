@@ -1,0 +1,49 @@
+---
+# host_vars/leaf01/frr.yml — fabric en BGP unnumbered (M07-E14). REMPLACE la version de E07.
+# eth4 (vfab7, lien direct entre leaves) reste hors BGP : dans une fabric de Clos, le trafic entre
+# leaves passe par les spines.
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.11/32]
+  - {nom: eth1, description: vers spine01 (vfab1)}
+  - {nom: eth2, description: vers spine02 (vfab3)}
+  - {nom: eth3, description: vers srv01 (vfab5)}
+  - {nom: eth4, description: vers leaf02 (vfab7) hors BGP}
+
+# srv01 ne parle pas BGP : sa boucle est jointe par une route statique, annoncée par leaf01.
+frr_routes_statiques:
+  - {prefixe: 10.10.255.21/32, via: 10.10.250.9}
+
+frr_prefix_lists:
+  - "{{ m07_pl_fabric }}"
+  # Ce que leaf01 annonce : sa boucle, le lien et la boucle de son serveur (et rien qu'il aurait appris).
+  - nom: PL-LOCAL
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.11/32}
+      - {seq: 20, action: permit, prefixe: 10.10.250.8/31}
+      - {seq: 30, action: permit, prefixe: 10.10.255.21/32}
+
+frr_route_maps:
+  - nom: RM-SPINES-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-FABRIC]}]
+  - nom: RM-SPINES-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-LOCAL]}]
+
+frr_bgp:
+  asn: 65101
+  router_id: 10.10.255.11
+  options: "{{ m07_bgp_options_fabric }}"
+  groupes:
+    - nom: SPINES
+      as_distant: 65100
+      mot_de_passe: "{{ m07_bgp_mdp_fabric }}"
+      route_map_entree: RM-SPINES-IN
+      route_map_sortie: RM-SPINES-OUT
+      soft_reconfiguration: true
+  voisins:
+    - {interface: eth1, groupe: SPINES, description: spine01}
+    - {interface: eth2, groupe: SPINES, description: spine02}
+  # « network » : la boucle (connectée) et celle du serveur (route statique ci-dessus).
+  reseaux: [10.10.255.11/32, 10.10.250.8/31, 10.10.255.21/32]
+  # Jusqu'à 8 chemins égaux installés dans le noyau (deux spines aujourd'hui).
+  maximum_paths: 8

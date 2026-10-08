@@ -1,0 +1,55 @@
+---
+# molecule/haproxy/verify.yml — le service rendu : version, serveur contrôlé, amorçage TLS.
+- name: Vérifier le rôle haproxy
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire l'état des services
+      ansible.builtin.service_facts:
+
+    - name: Service actif et activé
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['services']['haproxy.service']['state'] == 'running'
+          - ansible_facts['services']['haproxy.service']['status'] == 'enabled'
+
+    - name: Version de la branche LTS 3.2 (dépôt haproxy.debian.net)
+      ansible.builtin.command: haproxy -v
+      register: verif_version
+      changed_when: false
+      failed_when: verif_version.stdout is not search('^HAProxy version 3\.2\.', multiline=True)
+
+    - name: Le serveur du backend est vu UP par le contrôle de santé
+      ansible.builtin.shell: |
+        set -o pipefail
+        echo "show stat" | socat stdio unix-connect:/run/haproxy/admin.sock \
+          | awk -F, '$1 == "be_test" && $2 == "local" {print $18}'
+      args:
+        executable: /bin/bash
+      register: verif_etat
+      changed_when: false
+      retries: 5
+      delay: 2
+      until: verif_etat.stdout == 'UP'
+
+    - name: Sans certificat, le frontend TLS n'est pas rendu (amorçage)
+      ansible.builtin.command: grep -c '^frontend fe_tls_test' /etc/haproxy/haproxy.cfg
+      register: verif_tls
+      changed_when: false
+      failed_when: verif_tls.stdout != '0'
+
+    - name: Configuration lisible par root et haproxy seulement
+      ansible.builtin.stat:
+        path: /etc/haproxy/haproxy.cfg
+      register: verif_fichier
+      failed_when: verif_fichier.stat.mode != '0640' or verif_fichier.stat.gr_name != 'haproxy'
+
+    - name: « haproxy -c » (le garde-fou du rôle) refuse une directive inconnue
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf 'global\nfrontend fe_casse\n    bind :8081\n    directive_inconnue oui\n' > /tmp/casse.cfg
+        ! haproxy -c -f /tmp/casse.cfg
+      args:
+        executable: /bin/bash
+      changed_when: false

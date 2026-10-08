@@ -1,0 +1,25 @@
+---
+- name: L'hôte est un Rocky Linux 10 (PLAN.md §4.9)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'RedHat'
+      - ansible_facts['distribution_major_version'] == '10'
+    fail_msg: >-
+      {{ inventory_hostname }} est en {{ ansible_facts['distribution'] }}
+      {{ ansible_facts['distribution_version'] }} : les nœuds Ceph sont en Rocky Linux 10 (PLAN.md §4.9).
+    quiet: true
+
+- name: Le nom d'hôte est le nom court de l'inventaire (cephadm s'en sert comme identité)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['hostname'] == inventory_hostname
+    fail_msg: "hostname = {{ ansible_facts['hostname'] }}, inventaire = {{ inventory_hostname }}."
+    quiet: true
+
+- name: SELinux reste en mode enforcing (image dorée M03-E25)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['selinux']['status'] == 'enabled'
+      - ansible_facts['selinux']['mode'] == 'enforcing'
+    fail_msg: "SELinux : {{ ansible_facts['selinux'] }}. L'image dorée Rocky est en enforcing."
+    quiet: true

@@ -1,0 +1,4 @@
+# group_vars/role_ceph_client/vault-lab.yml — CHIFFRÉ (identité lab). Contenu une fois déchiffré
+# (M08-E06 + M08-E10). Ne jamais l'éditer en recopiant une clé à l'écran : outils/ajouter-cle-ceph.sh.
+vault_ceph_cle_rbd_test: "<CLE-CEPHX-AQ…==>"
+vault_ceph_cle_outillage: "<CLE-CEPHX-AQ…==>"

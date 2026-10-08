@@ -1,0 +1,6 @@
+---
+# molecule/ceph_noeud/molecule.yml — scénario du rôle « ceph_noeud » (M08-E02)
+#   uv run molecule test -s ceph_noeud
+# Instance Rocky Linux 10 (mol_famille: rocky10) : clone lié de l'image dorée rocky10 current.
+scenario:
+  name: ceph_noeud

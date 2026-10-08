@@ -1,0 +1,18 @@
+; sequentiel.fio — gros blocs séquentiels (M08-E28). Écriture puis lecture.
+[global]
+filename=${FIO_DEV}
+ioengine=libaio
+direct=1
+time_based=1
+runtime=90
+ramp_time=10
+group_reporting=1
+bs=1M
+iodepth=4
+
+[ecriture]
+rw=write
+
+[lecture]
+stonewall
+rw=read

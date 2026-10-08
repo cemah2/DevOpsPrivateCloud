@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# ms-capacite-openstack — collecte des chiffres du rapport mensuel de capacité (M10-E33, PLAT-1159).
+# Lecture seule. Sortie : Markdown sur stdout (tableaux du rapport), données brutes JSON dans un
+# dossier daté (-d), pour comparer d'un mois sur l'autre.
+#
+# Usage : ms-capacite-openstack [-c NUAGE] [-d DOSSIER] [-m HÔTE_CEPH]
+#   NUAGE : nuage clouds.yaml avec droits de lecture globale (défaut medisphere-admin)
+#   HÔTE_CEPH : nœud cephadm pour « ceph df » (défaut ceph01, SSH + sudo)
+# Sources : Placement (inventaires, usages, ratios), Nova (usage par projet), quotas, Cinder,
+# Ceph (ceph df, rbd du). « openstack hypervisor stats show » n'existe plus (API compute 2.88+).
+set -euo pipefail
+
+cloud=medisphere-admin dossier="" ceph=ceph01
+while getopts ':c:d:m:' o; do
+  case "$o" in
+    c) cloud="$OPTARG" ;;
+    d) dossier="$OPTARG" ;;
+    m) ceph="$OPTARG" ;;
+    *) echo "Usage : $0 [-c NUAGE] [-d DOSSIER] [-m HÔTE_CEPH]" >&2; exit 2 ;;
+  esac
+done
+for c in openstack jq ssh; do command -v "$c" >/dev/null || { echo "outil manquant : $c" >&2; exit 1; }; done
+os() { openstack --os-cloud "$cloud" "$@" -f json; }
+dossier="${dossier:-$HOME/capacite/$(date +%Y-%m)}"
+mkdir -p "$dossier"
+debut_mois="$(date +%Y-%m-01)"
+aujourdhui="$(date +%Y-%m-%d)"
+
+echo "# Données de capacité — $(date -Is)"
+echo
+
+# --- Calcul (Placement) -------------------------------------------------------------------------
+echo "## Calcul (Placement)"
+echo
+echo "| Hôte | VCPU alloués / allouables (ratio) | Mémoire allouée / allouable Mo (ratio, réservée) | Disque Go alloué / allouable |"
+echo "|---|---|---|---|"
+os resource provider list >"$dossier/fournisseurs.json"
+jq -r '.[] | [.uuid, .name] | @tsv' "$dossier/fournisseurs.json" | while IFS=$'\t' read -r rp nom; do
+  os resource provider inventory list "$rp" >"$dossier/inventaire-$nom.json"
+  os resource provider usage show "$rp" >"$dossier/usage-$nom.json"
+  jq -rn --arg n "$nom" --slurpfile i "$dossier/inventaire-$nom.json" --slurpfile u "$dossier/usage-$nom.json" '
+    def inv(c): ($i[0][] | select(.resource_class == c));
+    def cap(c): (inv(c) | ((.total - .reserved) * .allocation_ratio | floor));
+    def use(c): (($u[0][] | select(.resource_class == c) | .usage) // 0);
+    "| \($n) | \(use("VCPU")) / \(cap("VCPU")) (\(inv("VCPU").allocation_ratio)) | \(use("MEMORY_MB")) / \(cap("MEMORY_MB")) (\(inv("MEMORY_MB").allocation_ratio), \(inv("MEMORY_MB").reserved)) | \(use("DISK_GB")) / \(cap("DISK_GB")) |"'
+done
+echo
+
+# --- Consommation réelle des hyperviseurs -----------------------------------------------------------
+echo "## Consommation réelle des calculs"
+echo
+echo "| Hôte | Mémoire utilisée / totale (Mo) | Charge (1/5/15 min) | vCPU de la VM |"
+echo "|---|---|---|---|"
+for h in $(os compute service list --service nova-compute | jq -r '.[].Host' | sort -u); do
+  ssh -o BatchMode=yes -o ConnectTimeout=5 "$h" \
+    'printf "| %s | %s | %s | %s |\n" "$(hostname -s)" "$(free -m | awk "/^Mem:/ {print \$3\" / \"\$2}")" "$(cut -d" " -f1-3 /proc/loadavg)" "$(nproc)"' \
+    || echo "| $h | injoignable | | |"
+done
+echo
+
+# --- Projets : quotas et usage -------------------------------------------------------------------------
+echo "## Projets du domaine medisphere"
+echo
+echo "| Projet | Instances | vCPU utilisés / quota | Mémoire Mo utilisée / quota | Volumes Go utilisés / quota | Heures vCPU du mois |"
+echo "|---|---|---|---|---|---|"
+os usage list --start "$debut_mois" --end "$aujourdhui" >"$dossier/usage-nova.json"
+os project list --domain medisphere | jq -r '.[] | [.ID, .Name] | @tsv' | while IFS=$'\t' read -r pid pnom; do
+  os limits show --absolute --project "$pid" >"$dossier/limites-$pnom.json"
+  os volume list --project "$pid" >"$dossier/volumes-$pnom.json" 2>/dev/null || echo '[]' >"$dossier/volumes-$pnom.json"
+  q="$(os quota show "$pid")"
+  printf '%s\n' "$q" >"$dossier/quota-$pnom.json"
+  jq -rn --arg p "$pnom" --arg id "$pid" --slurpfile l "$dossier/limites-$pnom.json" --slurpfile v "$dossier/volumes-$pnom.json" \
+         --slurpfile q "$dossier/quota-$pnom.json" --slurpfile n "$dossier/usage-nova.json" '
+    def lim(k): (($l[0][] | select(.Name == k) | .Value) // "?");
+    # « quota show » : objet {cle: valeur} (anciennes CLI) ou liste {Resource, Limit} (récentes).
+    def quota(k): ($q[0] | if type == "array" then (map({(.Resource): .Limit}) | add) else . end | .[k] // "?");
+    def heures: ((($n[0][] | select(.Project == $id or .Project == $p) | .["CPU Hours"]) // 0) | tostring);
+    "| \($p) | \(lim("totalInstancesUsed")) | \(lim("totalCoresUsed")) / \(lim("maxTotalCores")) | \(lim("totalRAMUsed")) / \(lim("maxTotalRAMSize")) | \([$v[0][].Size] | add // 0) / \(quota("gigabytes")) | \(heures) |"'
+done
+echo
+
+# --- Stockage (Ceph) -----------------------------------------------------------------------------------
+echo "## Stockage (ceph-par1)"
+echo
+if ssh -o BatchMode=yes -o ConnectTimeout=5 "$ceph" 'sudo -n cephadm shell -- ceph df -f json' 2>/dev/null >"$dossier/ceph-df.json" \
+   && jq -e .stats >/dev/null "$dossier/ceph-df.json"; then
+  jq -r '"Brut : \(.stats.total_used_raw_bytes / 1073741824 | floor) Gio utilisés sur \(.stats.total_bytes / 1073741824 | floor) Gio (\(.stats.total_used_raw_ratio * 100 | floor) %)\n",
+         "| Pool | Stocké (Gio) | Brut utilisé (Gio) | Disponible (Gio) |", "|---|---|---|---|",
+         (.pools[] | select(.name | IN("images", "volumes", "vms", "backups"))
+          | "| \(.name) | \(.stats.stored / 1073741824 * 10 | floor / 10) | \(.stats.bytes_used / 1073741824 * 10 | floor / 10) | \(.stats.max_avail / 1073741824 | floor) |")' \
+     "$dossier/ceph-df.json"
+  echo
+  echo "Volumes : provisionné (Cinder) contre écrit (RBD) :"
+  prov="$(jq -s '[.[][] | .Size] | add // 0' "$dossier"/volumes-*.json)"
+  ecrit="$(ssh -o BatchMode=yes "$ceph" 'sudo -n cephadm shell -- rbd du -p volumes --format json' 2>/dev/null \
+           | jq '(.total_used_size // 0) / 1073741824 | . * 10 | floor / 10' || echo '?')"
+  echo "- provisionné : $prov Go ; écrit : $ecrit Gio"
+else
+  echo "ceph df illisible depuis $ceph : section à compléter à la main"
+fi
+echo
+echo "Données brutes : $dossier"

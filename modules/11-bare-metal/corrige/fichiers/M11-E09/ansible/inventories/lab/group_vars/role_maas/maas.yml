@@ -1,0 +1,9 @@
+---
+# group_vars/role_maas/maas.yml — M11-E09.
+maas_url: http://10.10.60.11:5240/MAAS
+maas_db_mot_de_passe: "{{ vault_maas_db_mot_de_passe }}"   # Vault « critique »
+# Certificats PUBLICS versionnés dans pki/ du projet (M06-E03) ; l'ancre conforme de pve01 (M02-E08)
+# y est ajoutée sous le nom pve01-root-ca.crt. Adapte les chemins à ton projet.
+maas_ancres:
+  - {nom: medisphere-root-ca, source: "{{ playbook_dir }}/../pki/medisphere-root-ca.crt"}
+  - {nom: pve01-root-ca, source: "{{ playbook_dir }}/../pki/pve01-root-ca.crt"}

@@ -1,0 +1,7 @@
+---
+# host_vars/gw01/bordure.yml — M07-E25.
+bordure_priorite: 150
+bordure_suffixe_pair: 3
+# VLAN migrés, dans l'ordre de CHG-855. On en ajoute UN par MR, sur gw01 d'abord (migration-vrrp.yml),
+# puis le même sur gw02. État final :
+keepalived_vlans_vrrp: [99, 70, 60, 52, 50, 40, 30, 20, 10]

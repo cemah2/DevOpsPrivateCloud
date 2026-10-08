@@ -1,0 +1,7 @@
+# specs/mon.yaml — moniteurs du cluster ceph-par1 (M08-E03).
+# Trois moniteurs, un par nœud portant l'étiquette « mon » : un quorum survit à la perte d'un
+# nœud (2 sur 3), pas de deux. Nombre IMPAIR : 4 moniteurs ne tolèrent pas plus de pannes que 3.
+# Appliquer : ceph orch apply -i specs/mon.yaml [--dry-run]
+service_type: mon
+placement:
+  label: mon

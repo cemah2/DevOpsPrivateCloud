@@ -1,0 +1,12 @@
+---
+# molecule/frr/converge.yml — une instance seule : OSPF et BGP configurés sans voisin joignable.
+# On vérifie l'installation, la configuration produite et chargée, pas la convergence (une seule
+# machine) : la convergence se vérifie sur la maquette (lab/bin/check 07 06 et 07 07).
+# Adresses de documentation (RFC 5737) sur lo : rien ne fuit sur vsandbox.
+- name: Converge — rôle frr
+  hosts: molecule
+  become: true
+  vars_files:
+    - vars/essai.yml
+  roles:
+    - role: frr

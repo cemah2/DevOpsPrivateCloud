@@ -1,0 +1,4 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT M07-E29 : aucune règle nouvelle.
+# adm01 → gw01/gw02 (SSH) : règle d'entrée « SSH depuis MGMT » existante (adresses .2/.3 du VLAN 10).
+# adm01 → lb01/lb02 (SSH) : couvert par « bastion (MGMT) vers tout le lab » ; sur les répartiteurs,
+# le filtrage local (M07-E30) n'accepte le 22 que depuis adm01 et runner01.

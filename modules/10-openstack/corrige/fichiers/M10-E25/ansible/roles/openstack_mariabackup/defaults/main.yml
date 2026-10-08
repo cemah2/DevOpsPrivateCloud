@@ -1,0 +1,24 @@
+---
+# Rôle openstack_mariabackup — déclenche chaque nuit « kolla-ansible mariadb-backup » depuis
+# l'hôte de déploiement (adm01), sous le compte qui porte le projet uv ~/src/openstack (M10-E25).
+
+# Compte et projet Kolla (M10-E03)
+openstack_mariabackup_utilisateur: admin
+openstack_mariabackup_projet: /home/admin/src/openstack
+openstack_mariabackup_inventaire: inventaire/multinode
+openstack_mariabackup_configdir: etc/kolla
+# Binaire uv (M02 : uv installé pour tous sous /usr/local/bin ; adapte si tu l'as ailleurs)
+openstack_mariabackup_uv: /usr/local/bin/uv
+
+# Identité Vault « critique » : SCRIPT CLIENT du projet plateforme/openstack (M10-E03, même
+# valeur que son ansible.cfg), qui lit le mot de passe dans ~/.config/workbook/
+# ansible-vault-critique.pass (600). Jamais un mot de passe dans l'unité.
+openstack_mariabackup_vault_identite: "critique@/home/admin/src/openstack/outils/vault-pass-client.sh"
+
+# Clé SSH sans phrase dédiée aux tâches planifiées de Kolla (les certificats d'utilisateur de
+# 16 h de M06-E20 auront expiré à 01:30). Vide : la configuration SSH du compte s'applique.
+openstack_mariabackup_cle_ssh: /home/admin/.ssh/kolla-auto
+
+# Planification : complète quotidienne (full) ; « incremental » possible pour un second timer.
+openstack_mariabackup_heure: "01:30"
+openstack_mariabackup_type: full

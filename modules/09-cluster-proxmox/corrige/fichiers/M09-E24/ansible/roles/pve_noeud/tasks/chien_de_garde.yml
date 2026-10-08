@@ -1,0 +1,67 @@
+---
+# roles/pve_noeud/tasks/chien_de_garde.yml — module du chien de garde de watchdog-mux (M09-E24).
+# Inclus par tasks/main.yml (« - ansible.builtin.import_tasks: chien_de_garde.yml », tag
+# « chien_de_garde »).
+#
+# Le rôle écrit le réglage et DIT s'il faut redémarrer ; il ne redémarre jamais un nœud : un
+# redémarrage de nœud se fait en mode maintenance, un nœud à la fois (playbook hv-chien-de-garde.yml).
+
+- name: Chien de garde | le périphérique émulé est présent (sinon watchdog-mux ne démarrerait pas)
+  ansible.builtin.shell: |
+    set -o pipefail
+    lspci -n | grep -q ' 8086:25ab'
+  args:
+    executable: /bin/bash
+  register: pve_noeud_i6300esb
+  changed_when: false
+  failed_when: false
+  when: pve_noeud_chien_de_garde_module == 'i6300esb'
+
+- name: Chien de garde | refuser i6300esb sans le périphérique (VM non arrêtée/démarrée ?)
+  ansible.builtin.assert:
+    that: pve_noeud_i6300esb.rc == 0
+    fail_msg: >-
+      Aucune carte 6300ESB vue par {{ inventory_hostname }} (lspci). Ajoute le bloc watchdog à la VM
+      (OpenTofu, état hv), puis ARRÊTE et DÉMARRE la VM depuis pve01, avant d'appliquer ce réglage.
+    quiet: true
+  when: pve_noeud_chien_de_garde_module == 'i6300esb'
+
+- name: Chien de garde | module choisi dans /etc/default/pve-ha-manager
+  ansible.builtin.lineinfile:
+    path: /etc/default/pve-ha-manager
+    regexp: '^#?\s*WATCHDOG_MODULE='
+    line: >-
+      {{ ('WATCHDOG_MODULE=' ~ pve_noeud_chien_de_garde_module)
+         if pve_noeud_chien_de_garde_module | length > 0 else '# WATCHDOG_MODULE=ipmi_watchdog' }}
+    create: false
+    owner: root
+    group: root
+    mode: "0644"
+  register: pve_noeud_wd_conf
+
+- name: Chien de garde | module actuellement chargé
+  ansible.builtin.shell: |
+    set -o pipefail
+    lsmod | awk '{print $1}' | grep -Ex 'softdog|i6300esb' || true
+  args:
+    executable: /bin/bash
+  register: pve_noeud_wd_charge
+  changed_when: false
+
+# Un module de chien de garde ne se décharge pas à chaud (/dev/watchdog est tenu par watchdog-mux) :
+# le nouveau réglage ne prend effet qu'au prochain démarrage du nœud.
+- name: Chien de garde | signaler le redémarrage nécessaire
+  ansible.builtin.set_fact:
+    pve_noeud_redemarrage_requis: true
+  when: >-
+    pve_noeud_wd_conf is changed
+    or (pve_noeud_chien_de_garde_module | length > 0
+        and pve_noeud_chien_de_garde_module not in pve_noeud_wd_charge.stdout_lines)
+    or (pve_noeud_chien_de_garde_module | length > 0 and 'softdog' in pve_noeud_wd_charge.stdout_lines)
+
+- name: Chien de garde | rappel
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} : redémarrage nécessaire pour charger {{ pve_noeud_chien_de_garde_module }}
+      (mode maintenance, arrêt complet de la VM, démarrage : playbooks/hv-chien-de-garde.yml).
+  when: pve_noeud_redemarrage_requis | default(false)

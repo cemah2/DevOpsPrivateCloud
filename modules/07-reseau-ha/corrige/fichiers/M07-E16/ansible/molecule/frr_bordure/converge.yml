@@ -1,0 +1,17 @@
+---
+# molecule/frr_bordure/converge.yml — la configuration de la bordure, sur une instance jetable.
+# Le voisin leaf01 (10.10.99.251) n'est pas joignable depuis l'instance : la session reste en
+# « Active », ce qui suffit à prouver que la configuration est CHARGÉE ; aucune route n'est
+# échangée. L'adresse de documentation 192.0.2.254 (RFC 5737) est posée sur lo pour que
+# « update-source » désigne une adresse locale.
+- name: Converge — rôle frr avec les données de la bordure
+  hosts: molecule
+  become: true
+  vars_files:
+    - ../../inventories/lab/group_vars/role_routeur/frr.yml
+  pre_tasks:
+    - name: Adresse de documentation sur lo (source de session)
+      ansible.builtin.command: ip address replace 192.0.2.254/32 dev lo
+      changed_when: false
+  roles:
+    - role: frr

@@ -1,0 +1,12 @@
+---
+# host_vars/osctl01/vault-sauvegarde.yml — MODÈLE EN CLAIR, à chiffrer (identité « critique ») :
+#   uv run ansible-vault encrypt --encrypt-vault-id critique host_vars/osctl01/vault-sauvegarde.yml
+# vault_pbs_empreinte est déjà défini pour le groupe socle (M06-E28) : osctl01 n'est pas dans ce
+# groupe, d'où la redéfinition ici (même valeur : empreinte du certificat de pbs01).
+# Clé de chiffrement : contenu du fichier produit sur adm01 par
+#   proxmox-backup-client key create /tmp/pbs-osctl01.key --kdf none
+# (paperkey et copie hors ligne AVANT de l'ajouter ici ; puis shred -u du fichier temporaire).
+vault_pbs_empreinte: "<EMPREINTE-SHA256-DU-CERTIFICAT-DE-PBS>"
+vault_pbs_jeton_osctl01: "<SECRET-DU-JETON-wb-backup@pbs!osctl01>"
+vault_pbs_cle_osctl01: |
+  <CONTENU-JSON-DE-pbs-osctl01.key>

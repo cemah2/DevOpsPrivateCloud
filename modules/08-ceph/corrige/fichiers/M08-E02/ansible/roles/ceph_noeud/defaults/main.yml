@@ -1,0 +1,57 @@
+---
+# Rôle ceph_noeud — prépare un hôte Rocky Linux 10 à recevoir des démons Ceph déployés par
+# cephadm (M08-E02, complété en M08-E03 par la clé de l'orchestrateur).
+# Il n'installe AUCUN démon Ceph : c'est le travail de cephadm (conteneurs Podman).
+
+# --- Version de Ceph ---------------------------------------------------------------------------
+# Version EXACTE des paquets cephadm et ceph-common. Le dépôt est celui de CETTE version
+# (download.ceph.com/rpm-<version>/), pas « rpm-tentacle » : une mise à jour automatique
+# (dnf-automatic) ne peut donc rien y trouver de plus récent. Changer de version = changer
+# cette variable, dans le cadre d'une montée de version du cluster (M08-E26, RB-082).
+ceph_noeud_version: "20.2.3"
+ceph_noeud_depot_base: "https://download.ceph.com/rpm-{{ ceph_noeud_version }}/el{{ ansible_facts['distribution_major_version'] }}"
+
+# Clé de signature des paquets de ceph.com (« Ceph.com (release key) »), vérifiée par son empreinte.
+ceph_noeud_cle_url: https://download.ceph.com/keys/release.asc
+ceph_noeud_cle_empreinte: "08B7 3419 AC32 B4E9 66C1 A330 E84A C2C0 460F 3994"
+
+# ceph-common (commande ceph, rbd…) dépend de bibliothèques d'EPEL et de CRB sur EL.
+ceph_noeud_ceph_common: true
+ceph_noeud_epel: true
+
+# --- Prérequis de cephadm (documentation « Requirements ») ------------------------------------
+ceph_noeud_paquets:
+  - podman
+  - lvm2
+  - python3
+  - chrony
+  - openssh-server
+  - firewalld
+  - policycoreutils-python-utils   # semanage, pour le contexte SELinux de ~cephadm/.ssh
+
+# --- Compte de l'orchestrateur -----------------------------------------------------------------
+# Compte créé par le paquet cephadm (home /var/lib/cephadm). Bootstrap avec --ssh-user cephadm :
+# le module cephadm du mgr se connecte en SSH avec ce compte, sudo sans mot de passe.
+# root reste interdit en SSH (ssh_durci, M04-E11).
+ceph_noeud_utilisateur_orchestrateur: cephadm
+ceph_noeud_home_orchestrateur: /var/lib/cephadm
+# Clé publique du cluster (contenu de /etc/ceph/ceph.pub sur ceph01 après le bootstrap, M08-E03).
+# Vide : rien n'est déposé (avant le bootstrap).
+ceph_noeud_cle_orchestrateur: ""
+
+# --- Réseau --------------------------------------------------------------------------------------
+# Cartes et MTU attendus (PLAN.md §4.9 : public VLAN 30 et cluster VLAN 31 en 9000).
+ceph_noeud_interfaces:
+  - nom: ens18
+    mtu: 9000
+  - nom: ens19
+    mtu: 9000
+# Pairs à joindre en trames jumbo SANS fragmentation (ping -M do -s 8972) : adresses publiques et
+# cluster des AUTRES nœuds (table ceph_noeuds de group_vars/env_m08). À false dans Molecule
+# (instance seule, une carte en 1500 sur vsandbox).
+ceph_noeud_verifier_reseau: true
+ceph_noeud_taille_ping: 8972
+
+# --- Contrôles finaux ----------------------------------------------------------------------------
+# cephadm check-host : moteur de conteneurs, systemd, LVM, synchronisation du temps, nom d'hôte.
+ceph_noeud_check_host: true

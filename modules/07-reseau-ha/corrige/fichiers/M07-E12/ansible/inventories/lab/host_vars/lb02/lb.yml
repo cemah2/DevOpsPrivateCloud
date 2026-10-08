@@ -1,0 +1,4 @@
+---
+# host_vars/lb02/lb.yml — valeurs propres à lb02 (M07-E12).
+lb_adresse: 10.10.70.11
+lb_priorite: 100

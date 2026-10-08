@@ -1,0 +1,13 @@
+#!/bin/sh
+# {{ pve_cluster_entete }}
+# Santé du nœud pour keepalived (rôle pve_cluster, M09-E18) : 0 = sain, autre = la VIP doit partir.
+#   1. le nœud est membre d'une partition qui a le QUORUM (sinon /etc/pve est en lecture seule et
+#      l'API refuserait toute écriture) ;
+#   2. l'API répond sur 8006 avec un certificat qui se vérifie contre {{ pve_cluster_sante_ca }} et
+#      porte le nom de la VIP (sinon les clients échoueraient en TLS). 401 attendu sans jeton.
+corosync-quorumtool -s 2>/dev/null | grep -Eq '^Quorate:[[:space:]]+Yes' || exit 1
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
+  --cacert {{ pve_cluster_sante_ca }} \
+  --resolve {{ pve_cluster_vip_nom }}:8006:127.0.0.1 \
+  https://{{ pve_cluster_vip_nom }}:8006/api2/json/version)" || exit 2
+[ "$code" = 401 ] || exit 3

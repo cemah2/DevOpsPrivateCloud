@@ -1,0 +1,47 @@
+---
+argument_specs:
+  main:
+    short_description: Préparer un nœud OpenStack pour Kolla-Ansible
+    description:
+      - Désactive le réseau de cloud-init, écrit un netplan complet (cartes renommées par MAC),
+        redémarre si besoin, puis vérifie cartes, MTU 9000, KVM et horloge.
+    options:
+      noeud_openstack_interfaces:
+        type: list
+        elements: dict
+        description: Cartes adressées (nom, vlan, prefixe, longueur, decalage, mtu, principale).
+      noeud_openstack_interface_externe:
+        type: dict
+        description: Carte externe sans adresse (nom, vlan, mtu).
+      noeud_openstack_noeuds_reseau:
+        type: list
+        elements: str
+        description: Nœuds qui portent la carte externe.
+      noeud_openstack_noeuds_calcul:
+        type: list
+        elements: str
+        description: Nœuds sur lesquels KVM est exigé.
+      noeud_openstack_passerelle:
+        type: str
+        description: Passerelle par défaut (VIP de la bordure sur le VLAN 50).
+      noeud_openstack_resolveurs:
+        type: list
+        elements: str
+        description: Résolveurs DNS.
+      noeud_openstack_domaine:
+        type: str
+        description: Domaine de recherche.
+      noeud_openstack_cibles_jumbo:
+        type: list
+        elements: dict
+        description: Cibles des pings de 9000 octets (interface, adresses).
+      noeud_openstack_redemarrage_autorise:
+        type: bool
+        description: Autoriser le redémarrage après un changement du réseau.
+      noeud_openstack_repetition:
+        type: path
+        description: Dossier où le netplan est validé avant mise en place.
+      noeud_openstack_paquets:
+        type: list
+        elements: str
+        description: Paquets de diagnostic installés sur les nœuds.

@@ -1,0 +1,12 @@
+---
+# group_vars/all/sites.yml — ce que chaque site distant a le droit de joindre à PAR1 (M07-E19,
+# PLAT-829). UNE seule liste, lue par la politique BGP de la bordure (ce qu'on annonce à LYO1 :
+# liste de préfixes PL-VERS-LYO1, « network ») ET par la configuration WireGuard de l'agence
+# (AllowedIPs) : les deux ne peuvent plus diverger. La matrice des flux (pare_feu.yml) reste, elle,
+# écrite à part et relue en MR : elle autorise des SERVICES (ports), pas des réseaux.
+# Exclus volontairement : MGMT (10.10.10.0/24, administration), stockage, OpenStack, sandbox.
+# « seq » : numéro de l'entrée dans la liste de préfixes (garder des trous pour insérer).
+sites_lyo1_reseaux_par1:
+  - {seq: 10, prefixe: 10.10.20.0/24}   # INFRA : DNS (dns01, dns02)
+  - {seq: 20, prefixe: 10.10.70.0/24}   # DMZ : services publiés par les répartiteurs
+sites_lyo1_reseau: 10.30.0.0/16

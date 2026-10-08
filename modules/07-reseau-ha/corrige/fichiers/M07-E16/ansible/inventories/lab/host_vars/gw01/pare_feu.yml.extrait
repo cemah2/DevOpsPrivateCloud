@@ -1,0 +1,9 @@
+# host_vars/gw01/pare_feu.yml — EXTRAIT à intégrer (M07-E16, PLAT-826) : BGP vers gw01.
+
+# pare_feu_definitions :
+  - {nom: LEAF01, valeur: 10.10.99.251, commentaire: "maquette M07 : session BGP de test"}
+
+# pare_feu_entree :
+  - {entree: $V_SANDBOX, source: $LEAF01, proto: tcp, ports: 179,
+     motif: "BGP de leaf01 (maquette) vers la bordure", ref: M07-E16}
+# (M15 ajoutera : {entree: '"ens19.40"', source: 10.10.40.0/24, proto: tcp, ports: 179, …})

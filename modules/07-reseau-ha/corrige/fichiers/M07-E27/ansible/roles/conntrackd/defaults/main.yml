@@ -1,0 +1,25 @@
+---
+# Rôle conntrackd — synchronisation des connexions entre les passerelles de la bordure (M07-E27).
+# Mode FTFW (fiable, acquittements), transport UDP unicast, sur le VLAN 10 (MGMT).
+
+conntrackd_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+conntrackd_fichier: /etc/conntrackd/conntrackd.conf
+
+# Lien de synchronisation : adresse locale, adresse du pair, interface, port.
+conntrackd_interface: ens19.10
+conntrackd_adresse_locale: ""
+conntrackd_adresse_pair: ""
+conntrackd_port: 3780
+
+# Adresses dont le trafic PROPRE ne se synchronise pas (trafic de la passerelle elle-même) :
+# boucle locale et adresses propres des DEUX passerelles. Les VIP n'y sont PAS : la traduction
+# sortante vers la VIP WAN et les flux redirigés vers 10.10.70.200 sont exactement ce qu'on veut
+# synchroniser (voir le corrigé, point « à confirmer »).
+conntrackd_adresses_ignorees: []
+
+# Protocoles synchronisés.
+conntrackd_protocoles: [TCP, UDP, ICMP]
+
+# Après une bascule vers BACKUP, purge des entrées zombies du noyau au bout de N secondes (-t).
+conntrackd_purge_timeout: 60

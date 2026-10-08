@@ -1,0 +1,32 @@
+---
+# M10-E02 — Nœuds OpenStack (groupe role_openstack, étiquette Proxmox/NetBox role-openstack).
+# Rôles communs, puis préparation pour Kolla, UN nœud à la fois (le rôle peut redémarrer).
+#   uv run ansible-playbook playbooks/openstack-noeuds.yml --check --diff
+#   uv run ansible-playbook playbooks/openstack-noeuds.yml
+- name: Configuration commune des nœuds OpenStack
+  hosts: role_openstack
+  become: true
+  pre_tasks:
+    - name: Vérifier le système de l'hôte
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+        fail_msg: "{{ inventory_hostname }} : Debian 13 attendu (image dorée current)."
+        quiet: true
+      tags: [always]
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+
+- name: Préparer les nœuds pour Kolla-Ansible
+  hosts: role_openstack
+  become: true
+  serial: 1
+  roles:
+    - role: noeud_openstack
+      tags: [noeud_openstack]

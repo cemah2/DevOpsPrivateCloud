@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# ms-verif-cluster — sonde du cluster de virtualisation hv-par1 (M09-E25, PLAT-1051).
+#
+# Vérifie, par l'API de Proxmox VE et avec une identité en LECTURE SEULE, que le cluster rend le
+# service attendu : quorum et nœuds en ligne, gestionnaire HA, santé Ceph, stockages, tâches de
+# réplication, sauvegardes, et certificats de l'interface 8006 (nœuds et VIP).
+#
+# Usage : ms-verif-cluster [-q|--quiet] [-n|--noeuds-attendus N] [-h|--help]
+#
+# Configuration :
+#   /usr/local/etc/ms-verif-cluster.conf          ce qui est surveillé (MS_CONF pour un autre chemin)
+#   ~/.config/workbook/pve-hv-supervision.env     accès à l'API (format M00-E17, 600) — MS_PVE_ENV_FILE
+#     jeton wb-supervision@pve!hv, rôle PVEAuditor ; PVE_API_URL n'y sert que de premier essai :
+#     la sonde interroge chaque nœud de MS_HV_NOEUDS, dans l'ordre, jusqu'à une réponse.
+#
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien ».
+
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+: "${MS_PVE_ENV_FILE:=$HOME/.config/workbook/pve-hv-supervision.env}"
+export MS_PVE_ENV_FILE
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+_NOEUD_API=""     # nœud qui a répondu en dernier (nom DNS de MS_HV_NOEUDS)
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-cluster [-q|--quiet] [-n|--noeuds-attendus N] [-h|--help]
+
+Sonde du cluster Proxmox VE hv-par1 : quorum, HA, Ceph, stockages, réplication, sauvegardes,
+certificats de l'interface 8006 (nœuds et VIP).
+
+  -q, --quiet                 n'afficher que les anomalies et le bilan
+  -n, --noeuds-attendus N     nombre de nœuds en ligne attendu (remplace la configuration)
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+
+# api CHEMIN [clé=valeur...] — GET sur le premier nœud qui répond (nœud courant d'abord).
+# Résultat dans la variable globale _REP (et non sur stdout) : un appel dans $(…) tournerait dans
+# un sous-shell et perdrait _NOEUD_API, le nœud qui a répondu.
+_REP=""
+api() {
+  local n out
+  local -a ordre=()
+  [[ -n "$_NOEUD_API" ]] && ordre+=("$_NOEUD_API")
+  for n in "${MS_HV_NOEUDS[@]}"; do
+    [[ "$n" != "$_NOEUD_API" ]] && ordre+=("$n")
+  done
+  for n in "${ordre[@]}"; do
+    PVE_API_URL="https://$n:8006/api2/json"
+    if out="$(pve_api GET "$@" 2>/dev/null)" && [[ -n "$out" && "$out" != null ]]; then
+      _NOEUD_API="$n"
+      _REP="$out"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# api_noeud NŒUD_DNS CHEMIN — GET sur un nœud précis (réplication : chaque nœud ne connaît que
+# les tâches dont il est la source).
+api_noeud() {
+  local n="$1"
+  shift
+  PVE_API_URL="https://$n:8006/api2/json"
+  pve_api GET "$@" 2>/dev/null
+}
+
+# --- Quorum et nœuds ---------------------------------------------------------------------------
+
+verifier_quorum() {
+  local attendus="$1" st quorate en_ligne hors
+  if ! { api /cluster/status && st="$_REP"; }; then
+    ko quorum "aucun nœud de ${MS_HV_NOEUDS[*]} ne répond sur l'API : contrôle impossible"
+    return 1
+  fi
+  quorate="$(jq -r '.[] | select(.type == "cluster") | .quorate // 0' <<<"$st")"
+  en_ligne="$(jq '[.[] | select(.type == "node" and .online == 1)] | length' <<<"$st")"
+  hors="$(jq -r '[.[] | select(.type == "node" and .online != 1) | .name] | join(" ")' <<<"$st")"
+  if [[ "$quorate" == 1 ]]; then
+    ok quorum "cluster quorate (réponse de $_NOEUD_API)"
+  else
+    ko quorum "cluster SANS quorum vu de $_NOEUD_API : écritures dans /etc/pve impossibles, HA figée"
+  fi
+  if ((en_ligne == attendus)); then
+    ok noeuds "$en_ligne nœud(s) en ligne sur $attendus attendu(s)"
+  else
+    ko noeuds "$en_ligne nœud(s) en ligne sur $attendus attendu(s)${hors:+ ; hors ligne : $hors}"
+  fi
+}
+
+# --- HA -----------------------------------------------------------------------------------------
+
+verifier_ha() {
+  local st nb_services maitre mauvais lrm_hs
+  if ! { api /cluster/ha/status/current && st="$_REP"; }; then
+    ko ha "état du gestionnaire HA illisible : contrôle impossible"
+    return
+  fi
+  nb_services="$(jq '[.[] | select(.type == "service")] | length' <<<"$st")"
+  maitre="$(jq -r '[.[] | select(.type == "master") | .status] | first // ""' <<<"$st")"
+  if ((nb_services == 0)); then
+    ok ha "aucune ressource HA déclarée"
+  elif [[ "$maitre" == *active* ]]; then
+    ok ha "maître HA : $maitre"
+  else
+    ko ha "pas de maître HA actif (${maitre:-aucun}) alors que $nb_services ressource(s) sont déclarées"
+  fi
+  # Une ressource dans l'un de ces états demande un humain (error) ou signale un nœud perdu.
+  mauvais="$(jq -r '[.[] | select(.type == "service" and ((.state // "") | test("^(error|fence|recovery)$")))
+    | "\(.sid) (\(.state) sur \(.node // "?"))"] | join(", ")' <<<"$st")"
+  if [[ -z "$mauvais" ]]; then
+    ok ha "$nb_services ressource(s) HA, aucune en error, fence ou recovery"
+  else
+    ko ha "ressource(s) HA à traiter : $mauvais"
+  fi
+  # Un LRM « dead » ou « old timestamp » = nœud qui ne participe plus à la HA.
+  lrm_hs="$(jq -r '[.[] | select(.type == "lrm" and ((.status // "") | test("dead|old timestamp|unknown")))
+    | .status] | join(" ; ")' <<<"$st")"
+  if [[ -z "$lrm_hs" ]]; then
+    ok ha "LRM des nœuds vivants"
+  else
+    ko ha "LRM en défaut : $lrm_hs"
+  fi
+}
+
+# --- Ceph ---------------------------------------------------------------------------------------
+
+verifier_ceph() {
+  local st sante details
+  ((MS_HV_CEPH)) || return 0
+  if ! { api /cluster/ceph/status && st="$_REP"; }; then
+    ko ceph "état de Ceph illisible par l'API : contrôle impossible"
+    return
+  fi
+  sante="$(jq -r '.health.status // "?"' <<<"$st")"
+  if [[ "$sante" == HEALTH_OK ]]; then
+    ok ceph "HEALTH_OK"
+  else
+    details="$(jq -r '[.health.checks // {} | to_entries[] | "\(.key): \(.value.summary.message // "")"] | join(" ; ")' <<<"$st")"
+    ko ceph "$sante${details:+ — $details}"
+  fi
+}
+
+# --- Stockages ----------------------------------------------------------------------------------
+
+verifier_stockages() {
+  local res inactifs pleins nb
+  if ! { api /cluster/resources type=storage && res="$_REP"; }; then
+    ko stockage "liste des stockages illisible : contrôle impossible"
+    return
+  fi
+  nb="$(jq 'length' <<<"$res")"
+  ((nb > 0)) || {
+    ko stockage "aucun stockage visible : contrôle impossible"
+    return
+  }
+  inactifs="$(jq -r '[.[] | select(.status != "available") | "\(.storage)@\(.node) (\(.status))"] | join(", ")' <<<"$res")"
+  pleins="$(jq -r --argjson s "$MS_HV_STOCKAGE_SEUIL" '[.[] | select(.status == "available" and (.maxdisk // 0) > 0
+    and ((.disk // 0) * 100 / .maxdisk) >= $s) | "\(.storage)@\(.node) \((.disk * 100 / .maxdisk) | floor) %"] | join(", ")' <<<"$res")"
+  if [[ -z "$inactifs" ]]; then ok stockage "$nb stockage(s) disponibles"; else ko stockage "indisponible(s) : $inactifs"; fi
+  if [[ -z "$pleins" ]]; then
+    ok stockage "aucun stockage au-delà de ${MS_HV_STOCKAGE_SEUIL} %"
+  else
+    ko stockage "occupation ≥ ${MS_HV_STOCKAGE_SEUIL} % : $pleins"
+  fi
+}
+
+# --- Réplication --------------------------------------------------------------------------------
+
+verifier_replication() {
+  local n jobs maintenant mauvais nb=0 lus=0
+  maintenant="$(date +%s)"
+  for n in "${MS_HV_NOEUDS[@]}"; do
+    # Nom court du nœud pour l'API (/nodes/<nom>) : partie avant le premier point.
+    if ! jobs="$(api_noeud "$n" "/nodes/${n%%.*}/replication")"; then
+      continue
+    fi
+    lus=$((lus + 1))
+    nb=$((nb + $(jq 'length' <<<"$jobs")))
+    mauvais="$(jq -r --argjson t "$maintenant" --argjson age "$MS_HV_REPLI_AGE_MAX" '[.[]
+      | select(((.fail_count // 0) > 0) or (($t - (.last_sync // 0)) > $age))
+      | "\(.id) → \(.target) (échecs \(.fail_count // 0), dernière synchro il y a \((($t - (.last_sync // 0)) / 60) | floor) min)"]
+      | join(", ")' <<<"$jobs")"
+    if [[ -n "$mauvais" ]]; then
+      ko replication "${n%%.*} : $mauvais"
+    fi
+  done
+  if ((lus == 0)); then
+    ko replication "aucun nœud n'a répondu sur ses tâches de réplication : contrôle impossible"
+  elif ((nb == 0)); then
+    ko replication "aucune tâche de réplication trouvée (la réplication ZFS a-t-elle disparu ?)"
+  else
+    ok replication "$nb tâche(s) de réplication lue(s) sur $lus nœud(s)"
+  fi
+}
+
+# --- Sauvegardes --------------------------------------------------------------------------------
+
+verifier_sauvegardes() {
+  local taches res non_couverts pools_json maintenant derniere
+  maintenant="$(date +%s)"
+  if ! { api /cluster/tasks && taches="$_REP"; }; then
+    ko sauvegarde "tâches du cluster illisibles : contrôle impossible"
+    return
+  fi
+  # Dernière tâche vzdump terminée (endtime) : réussie et récente.
+  derniere="$(jq -c '[.[] | select(.type == "vzdump" and (.endtime // 0) > 0)] | sort_by(.endtime) | last // empty' <<<"$taches")"
+  if [[ -z "$derniere" ]]; then
+    ko sauvegarde "aucune tâche de sauvegarde (vzdump) terminée dans l'historique récent"
+  elif [[ "$(jq -r '.status' <<<"$derniere")" != OK ]]; then
+    ko sauvegarde "dernière sauvegarde en échec sur $(jq -r '.node' <<<"$derniere") : $(jq -r '.status' <<<"$derniere")"
+  elif ((maintenant - $(jq -r '.endtime' <<<"$derniere") > MS_HV_SAUVEGARDE_AGE_MAX)); then
+    ko sauvegarde "dernière sauvegarde réussie il y a plus de $((MS_HV_SAUVEGARDE_AGE_MAX / 3600)) h"
+  else
+    ok sauvegarde "dernière sauvegarde réussie ($(jq -r '.node' <<<"$derniere"))"
+  fi
+  # Invités des pools qui DOIVENT être sauvegardés mais qu'aucun job ne couvre.
+  if ! { api /cluster/backup-info/not-backed-up && non_couverts="$_REP"; } || ! { api /cluster/resources type=vm && res="$_REP"; }; then
+    ko sauvegarde "couverture des jobs illisible : contrôle impossible"
+    return
+  fi
+  pools_json="$(printf '%s\n' "${MS_HV_POOLS_SAUVEGARDES[@]}" | jq -R . | jq -sc .)"
+  non_couverts="$(jq -r --argjson pools "$pools_json" --argjson res "$res" '[.[] | .vmid as $id
+    | ($res[] | select(.vmid == $id) | .pool // "") as $p | select($pools | index($p)) | "\($id) (\($p))"]
+    | join(", ")' <<<"$non_couverts")"
+  if [[ -z "$non_couverts" ]]; then
+    ok sauvegarde "tous les invités des pools ${MS_HV_POOLS_SAUVEGARDES[*]} sont couverts par un job"
+  else
+    ko sauvegarde "invité(s) non couvert(s) par un job : $non_couverts"
+  fi
+}
+
+# --- VIP de l'API ---------------------------------------------------------------------------------
+
+# joindre_tcp HÔTE PORT — connexion TCP possible (fonction séparée : remplaçable dans les tests).
+# shellcheck disable=SC2016  # $1 et $2 sont ceux de bash -c
+joindre_tcp() {
+  timeout 5 bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$1" "$2" 2>/dev/null
+}
+
+# La VIP est contrôlée en TCP en plus de son certificat (MS_HV_POINTS_TLS) : une VIP absente et un
+# certificat refusé ne se diagnostiquent pas de la même façon.
+verifier_vip() {
+  [[ -n "${MS_HV_VIP:-}" ]] || return 0
+  if joindre_tcp "${MS_HV_VIP%:*}" "${MS_HV_VIP##*:}"; then
+    ok vip "$MS_HV_VIP répond"
+  else
+    ko vip "$MS_HV_VIP ne répond pas (keepalived ? VRRP filtré ? aucun nœud ne porte la VIP)"
+  fi
+}
+
+# --- Certificats --------------------------------------------------------------------------------
+
+verifier_certificats() {
+  local seuil_j="$1" point nom port pem fin
+  for point in "${MS_HV_POINTS_TLS[@]}"; do
+    nom="${point%:*}"
+    port="${point##*:}"
+    if ! pem="$(openssl s_client -connect "$nom:$port" -servername "$nom" -CAfile "$MS_RACINE" \
+        -verify_hostname "$nom" -verify_return_error </dev/null 2>/dev/null | openssl x509 2>/dev/null)" \
+        || [[ -z "$pem" ]]; then
+      ko certificat "$nom:$port : injoignable, chaîne non reconnue par $MS_RACINE, ou nom incorrect"
+      continue
+    fi
+    fin="$(openssl x509 -noout -enddate <<<"$pem" | cut -d= -f2)"
+    if openssl x509 -noout -checkend $((seuil_j * 86400)) <<<"$pem" >/dev/null; then
+      ok certificat "$nom:$port valide jusqu'au $fin"
+    else
+      ko certificat "$nom:$port expire dans moins de $seuil_j jours ($fin)"
+    fi
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  local attendus=""
+  while (($#)); do
+    case "$1" in
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -n | --noeuds-attendus)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        attendus="$2"
+        shift 2
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  [[ -z "$attendus" || "$attendus" =~ ^[1-9][0-9]?$ ]] || die "--noeuds-attendus attend un nombre entre 1 et 99" 2
+  require_cmd curl jq openssl
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-cluster.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-cluster.conf
+  source "$conf"
+  : "${MS_HV_CEPH:=1}" "${MS_HV_STOCKAGE_SEUIL:=85}" "${MS_HV_REPLI_AGE_MAX:=3600}"
+  : "${MS_HV_SAUVEGARDE_AGE_MAX:=93600}" "${MS_VERIF_SEUIL_CERTS:=10}"
+  ((${#MS_HV_NOEUDS[@]} > 0 && ${#MS_HV_POINTS_TLS[@]} > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+  attendus="${attendus:-${MS_HV_NOEUDS_ATTENDUS:-${#MS_HV_NOEUDS[@]}}}"
+
+  if verifier_quorum "$attendus"; then
+    verifier_ha
+    verifier_ceph
+    verifier_stockages
+    verifier_replication
+    verifier_sauvegardes
+  fi
+  verifier_vip
+  verifier_certificats "$MS_VERIF_SEUIL_CERTS"
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur le cluster hv-par1"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

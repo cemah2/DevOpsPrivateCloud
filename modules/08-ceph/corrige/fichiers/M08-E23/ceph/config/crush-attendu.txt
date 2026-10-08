@@ -1,0 +1,141 @@
+# config/crush-attendu.txt — carte CRUSH ATTENDUE de ceph-par1, décompilée (crushtool -d),
+# allégée pour les tests hors ligne de la CI (outils/tester-crush.sh) : mêmes OSD, classes,
+# hiérarchie et règles que le cluster. Mise à jour : ceph osd getcrushmap | crushtool -d, puis
+# relecture en MR. Poids : 0.0625 = 64 Gio. Identifiants d'OSD : ceux du palier 1 et de ceph04.
+# begin crush map
+tunable choose_local_tries 0
+tunable choose_local_fallback_tries 0
+tunable choose_total_tries 50
+tunable chooseleaf_descend_once 1
+tunable chooseleaf_vary_r 1
+tunable chooseleaf_stable 1
+tunable straw_calc_version 1
+tunable allowed_bucket_algs 54
+
+# devices
+device 0 osd.0 class ssd
+device 1 osd.1 class ssd
+device 2 osd.2 class hdd
+device 3 osd.3 class ssd
+device 4 osd.4 class ssd
+device 5 osd.5 class hdd
+device 6 osd.6 class ssd
+device 7 osd.7 class ssd
+device 8 osd.8 class hdd
+device 9 osd.9 class ssd
+device 10 osd.10 class ssd
+device 11 osd.11 class hdd
+
+# types
+type 0 osd
+type 1 host
+type 2 chassis
+type 3 rack
+type 4 row
+type 5 pdu
+type 6 pod
+type 7 room
+type 8 datacenter
+type 9 zone
+type 10 region
+type 11 root
+
+# buckets
+host ceph01 {
+	id -3
+	alg straw2
+	hash 0	# rjenkins1
+	item osd.0 weight 0.06250
+	item osd.1 weight 0.06250
+	item osd.2 weight 0.06250
+}
+host ceph04 {
+	id -9
+	alg straw2
+	hash 0	# rjenkins1
+	item osd.9 weight 0.06250
+	item osd.10 weight 0.06250
+	item osd.11 weight 0.06250
+}
+host ceph02 {
+	id -5
+	alg straw2
+	hash 0	# rjenkins1
+	item osd.3 weight 0.06250
+	item osd.4 weight 0.06250
+	item osd.5 weight 0.06250
+}
+host ceph03 {
+	id -7
+	alg straw2
+	hash 0	# rjenkins1
+	item osd.6 weight 0.06250
+	item osd.7 weight 0.06250
+	item osd.8 weight 0.06250
+}
+rack par1-baie-a {
+	id -11
+	alg straw2
+	hash 0	# rjenkins1
+	item ceph01 weight 0.18750
+	item ceph04 weight 0.18750
+}
+rack par1-baie-b {
+	id -12
+	alg straw2
+	hash 0	# rjenkins1
+	item ceph02 weight 0.18750
+}
+rack par1-baie-c {
+	id -13
+	alg straw2
+	hash 0	# rjenkins1
+	item ceph03 weight 0.18750
+}
+datacenter par1 {
+	id -10
+	alg straw2
+	hash 0	# rjenkins1
+	item par1-baie-a weight 0.37500
+	item par1-baie-b weight 0.18750
+	item par1-baie-c weight 0.18750
+}
+root default {
+	id -1
+	alg straw2
+	hash 0	# rjenkins1
+	item par1 weight 0.75000
+}
+
+# rules
+rule replicated_rule {
+	id 0
+	type replicated
+	step take default
+	step chooseleaf firstn 0 type host
+	step emit
+}
+rule ssd-baie {
+	id 1
+	type replicated
+	step take default class ssd
+	step chooseleaf firstn 0 type rack
+	step emit
+}
+rule hdd-baie {
+	id 2
+	type replicated
+	step take default class hdd
+	step chooseleaf firstn 0 type rack
+	step emit
+}
+rule ec-21-hdd {
+	id 3
+	type erasure
+	step set_chooseleaf_tries 5
+	step set_choose_tries 100
+	step take default class hdd
+	step chooseleaf indep 0 type rack
+	step emit
+}
+# end crush map

@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# /usr/local/sbin/bordure-transition — script de transition de la bordure PAR1 (rôle bordure,
+# M07-E25 ; tunnels M07-E26 ; connexions M07-E27). Fichier géré par Ansible.
+#
+# Appelé par keepalived (« notify » du groupe de synchronisation BORDURE) avec 4 arguments :
+#   $1 GROUP|INSTANCE   $2 nom   $3 MASTER|BACKUP|FAULT|STOP|DELETED   $4 priorité
+# Il exécute ce qui doit SUIVRE le maître et n'est pas une adresse :
+#   - écrit l'état dans /run/bordure/etat (lu par la supervision, M07-E29) ;
+#   - monte les tunnels WireGuard sur le maître, les démonte ailleurs (M07-E26) ;
+#   - pilote conntrackd dans l'ordre de primary-backup.sh de conntrack-tools (M07-E27).
+# Configuration : /etc/bordure/transition.conf (variables BORDURE_TUNNELS, BORDURE_CONNTRACKD).
+# Il ne doit jamais échouer bruyamment : keepalived ne lit pas son code retour, on journalise.
+set -uo pipefail
+
+CONF=/etc/bordure/transition.conf
+ETAT_DIR=/run/bordure
+BORDURE_TUNNELS=""
+BORDURE_CONNTRACKD=0
+CONNTRACKD_CONF=/etc/conntrackd/conntrackd.conf
+# shellcheck source=/dev/null
+[[ -r "$CONF" ]] && source "$CONF"
+
+journal() { logger -t bordure -- "$*"; }
+
+type_obj="${1:-?}"
+nom="${2:-?}"
+etat="${3:-?}"
+prio="${4:-?}"
+
+# Seules les transitions du GROUPE comptent (les instances d'un groupe changent ensemble).
+if [[ "$type_obj" != "GROUP" ]]; then
+  journal "transition ignorée ($type_obj $nom → $etat)"
+  exit 0
+fi
+
+mkdir -p "$ETAT_DIR"
+chmod 755 "$ETAT_DIR"
+printf '%s\n' "$etat" >"$ETAT_DIR/etat.tmp" && mv -f "$ETAT_DIR/etat.tmp" "$ETAT_DIR/etat"
+chmod 644 "$ETAT_DIR/etat"
+printf '%s %s %s %s\n' "$(date --iso-8601=seconds)" "$nom" "$etat" "$prio" >>"$ETAT_DIR/historique"
+journal "groupe $nom → $etat (priorité $prio)"
+
+ctd() {
+  # ctd OPTION LIBELLÉ — une commande de conntrackd, journalisée si elle échoue.
+  ((BORDURE_CONNTRACKD)) || return 0
+  if ! conntrackd -C "$CONNTRACKD_CONF" "$1" >/dev/null 2>&1; then
+    journal "ERREUR conntrackd $1 ($2)"
+  fi
+}
+
+tunnels() {
+  # tunnels start|stop — wg-quick@ de chaque tunnel listé.
+  local t
+  for t in $BORDURE_TUNNELS; do
+    if ! systemctl "$1" "wg-quick@$t.service"; then
+      journal "ERREUR systemctl $1 wg-quick@$t"
+    fi
+  done
+}
+
+case "$etat" in
+  MASTER)
+    # 1. Les connexions d'abord : quand le trafic arrive, le noyau doit déjà les connaître.
+    ctd -c "valider le cache externe dans le noyau"
+    ctd -f "vider les caches"
+    ctd -R "resynchroniser le cache interne sur le noyau"
+    ctd -B "envoyer l'état complet au pair"
+    # 2. Puis les tunnels (les VIP sont déjà posées par keepalived).
+    tunnels start
+    ;;
+  BACKUP)
+    tunnels stop
+    if ((BORDURE_CONNTRACKD)); then
+      if ! conntrackd -C "$CONNTRACKD_CONF" -s >/dev/null 2>&1; then
+        journal "conntrackd ne répond pas : redémarrage"
+        systemctl restart conntrackd.service || journal "ERREUR redémarrage de conntrackd"
+      fi
+    fi
+    ctd -t "raccourcir les minuteries des entrées du noyau"
+    ctd -n "demander une resynchronisation au maître"
+    ;;
+  FAULT)
+    tunnels stop
+    ctd -t "raccourcir les minuteries des entrées du noyau"
+    ;;
+  *)
+    journal "état $etat sans action"
+    ;;
+esac
+exit 0

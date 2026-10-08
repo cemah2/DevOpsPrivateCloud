@@ -1,0 +1,6 @@
+# {{ ansible_managed | default('Géré par Ansible') }} — rôle ceph_client (M08-E06)
+# Configuration MINIMALE : le reste vient des moniteurs (« ceph config »).
+[global]
+	fsid = {{ ceph_client_fsid }}
+	mon_host = {% for m in ceph_client_moniteurs %}[v2:{{ m }}:3300/0,v1:{{ m }}:6789/0]{{ ' ' if not loop.last else '' }}{% endfor %}
+

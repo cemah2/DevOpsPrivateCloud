@@ -1,0 +1,3 @@
+# Copie en terraform.tfvars (ignoré par git) et adapte. Aucun secret ici.
+noeud         = "<NOEUD>"
+cle_ssh_admin = "ssh-ed25519 AAAA… admin@adm01"

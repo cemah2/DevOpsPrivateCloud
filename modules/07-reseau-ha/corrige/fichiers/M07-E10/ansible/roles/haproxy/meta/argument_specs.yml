@@ -1,0 +1,23 @@
+---
+argument_specs:
+  main:
+    short_description: HAProxy 3.2 LTS (dépôt haproxy.debian.net)
+    options:
+      haproxy_depot_cle_empreinte:
+        type: str
+        required: true
+        description: Empreinte de la clé OpenPGP du dépôt haproxy.debian.net (40 caractères hexadécimaux).
+      haproxy_paquet_version:
+        type: str
+        description: Motif de version apt du paquet (ex. « 3.2.* »).
+      haproxy_sections:
+        type: list
+        elements: dict
+        description: Sections resolvers/frontend/backend/listen de l'hôte ({type, nom, tls, lignes}).
+      haproxy_bind_non_local:
+        type: bool
+        description: Autoriser l'écoute sur une adresse non portée (VIP keepalived).
+      haproxy_verifications:
+        type: list
+        elements: dict
+        description: URL à interroger depuis l'hôte après application ({url, code}).

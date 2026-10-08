@@ -1,0 +1,54 @@
+# /etc/nginx/sites-available/pxe.conf — {{ pxe_entete }}
+# Chaîne de provisioning MédiSphère (M11-E13) : HTTPS seulement pour tout ce qui s'exécute ou
+# s'installe ; le port 80 ne sert plus qu'une redirection (et le défi ACME, servi par le client
+# step pendant l'émission, nginx arrêté).
+
+server {
+    listen {{ pxe_adresse }}:80;
+    server_name {{ pxe_fqdn }};
+    location / {
+        return 301 https://{{ pxe_fqdn }}$request_uri;
+    }
+}
+{% if pxe_https | bool %}
+
+server {
+    listen {{ pxe_adresse }}:443 ssl;
+    http2 off;
+    server_name {{ pxe_fqdn }};
+
+    # Chaîne complète (feuille + intermédiaire) : iPXE ne connaît que la racine.
+    ssl_certificate     {{ pxe_tls_certificat }};
+    ssl_certificate_key {{ pxe_tls_cle }};
+    ssl_protocols       {{ pxe_tls_protocoles }};
+    ssl_session_cache   shared:pxe:1m;
+
+    root {{ pxe_http_racine }};
+    autoindex off;
+    default_type application/octet-stream;
+    access_log /var/log/nginx/pxe-access.log;
+    error_log  /var/log/nginx/pxe-error.log;
+
+    # Scripts iPXE : texte, jamais mis en cache
+    location /ipxe/ {
+        default_type text/plain;
+        add_header Cache-Control "no-store";
+    }
+    location = /boot.ipxe {
+        default_type text/plain;
+        add_header Cache-Control "no-store";
+    }
+
+    # Fichiers de réponse et installateur PVE (son initrd contient un jeton) : VLAN 60 et adm01 seulement
+    location ~ ^/(preseed|kickstart|pve-answer|pve)/ {
+{% for c in pxe_reponses_clients %}
+        allow {{ c }};
+{% endfor %}
+        deny all;
+        default_type text/plain;
+        add_header Cache-Control "no-store";
+    }
+
+    include /etc/nginx/pxe.d/*.conf;
+}
+{% endif %}

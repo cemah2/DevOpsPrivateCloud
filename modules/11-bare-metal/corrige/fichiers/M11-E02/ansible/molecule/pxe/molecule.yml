@@ -1,0 +1,6 @@
+---
+# molecule/pxe/molecule.yml — scénario du rôle « pxe » (M11-E02).
+# Le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml (M04-E24).
+#   uv run molecule test -s pxe
+scenario:
+  name: pxe

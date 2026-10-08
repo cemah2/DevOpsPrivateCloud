@@ -1,0 +1,65 @@
+---
+# group_vars/role_routeur/frr.yml — FRR sur la bordure PAR1 (gw01 ; gw02 en héritera en E24),
+# AS 65000 (M07-E16, PLAT-826 ; PLAN §4.9). Rôle frr de M07-E06, mêmes noms de variables.
+# Valeurs propres à chaque passerelle (host_vars) : frr_router_id, frr_update_source_leaf01.
+#
+# Ce que fait la bordure en BGP :
+#   - fabric (session de test avec leaf01 sur le VLAN 99) : accepte 10.10.255.0/24 (des /32) et
+#     10.10.41.0/24, RIEN d'autre ; lui annonce 10.10.20.0/24 (INFRA : DNS, PKI, forge) ;
+#   - Kubernetes (M15, nœuds en 10.10.40.0/24) : écoute passive, n'accepte que 10.10.41.0/24,
+#     n'annonce rien ; groupe FERMÉ (shutdown) tant que le module 15 n'existe pas.
+# Profil « traditional » (le rôle n'écrit pas de « frr defaults ») : bgp ebgp-requires-policy
+# actif par défaut, temporisateurs 60/180 s.
+frr_ospf: {}
+
+frr_prefix_lists:
+  - nom: PL-DEPUIS-FABRIC
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.0/24, ge: 32}
+      - {seq: 20, action: permit, prefixe: 10.10.41.0/24, le: 32}
+  - nom: PL-DEPUIS-K8S
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.41.0/24, le: 32}
+  - nom: PL-VERS-FABRIC
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.20.0/24}
+
+frr_route_maps:
+  - nom: RM-FABRIC-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-FABRIC]}]
+  - nom: RM-FABRIC-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-VERS-FABRIC]}]
+  - nom: RM-K8S-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-K8S]}]
+  # Rien vers Kubernetes : un refus EXPLICITE (une route-map vide refuserait aussi, sans le dire).
+  - nom: RM-K8S-OUT
+    entrees: [{seq: 10, action: deny}]
+
+frr_bgp:
+  asn: 65000
+  router_id: "{{ frr_router_id }}"
+  groupes:
+    - nom: K8S
+      as_distant: 65040
+      description: noeuds Kubernetes (M15)
+      route_map_entree: RM-K8S-IN
+      route_map_sortie: RM-K8S-OUT
+  voisins:
+    - adresse: 10.10.99.251
+      as_distant: 65101
+      description: leaf01 maquette M07 (session de test)
+      route_map_entree: RM-FABRIC-IN
+      route_map_sortie: RM-FABRIC-OUT
+  # « network » : annoncé seulement s'il existe exactement dans la table (réseau connecté).
+  reseaux: [10.10.20.0/24]
+
+# Ce que le schéma du rôle ne décrit pas : écoute passive du groupe K8S (après sa création), groupe
+# fermé, adresse source de la session avec leaf01 (l'adresse PROPRE de la passerelle sur le VLAN 99 :
+# jamais une VIP, voir E25).
+frr_config_supplementaire: |
+  router bgp 65000
+   bgp listen range 10.10.40.0/24 peer-group K8S
+   bgp listen limit 16
+   neighbor K8S shutdown
+   neighbor 10.10.99.251 update-source {{ frr_update_source_leaf01 }}
+  exit

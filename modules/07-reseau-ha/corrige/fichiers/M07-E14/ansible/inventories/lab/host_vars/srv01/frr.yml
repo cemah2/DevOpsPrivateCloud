@@ -1,0 +1,13 @@
+---
+# host_vars/srv01/frr.yml — serveur rattaché à la fabric (M07-E14) : FRR sans protocole de routage
+# (zebra et staticd), pour poser la boucle et la route vers la fabric. Le lien eth1 (vfab5) garde
+# l'adresse posée par cloud-init (E03) ; eth0 reste l'administration (route par défaut).
+frr_routage_ipv4: false
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.21/32]
+  - {nom: eth1, description: vers leaf01 (vfab5)}
+frr_routes_statiques:
+  - {prefixe: 10.10.255.0/24, via: 10.10.250.8}
+frr_ospf: {}
+frr_bgp: {}

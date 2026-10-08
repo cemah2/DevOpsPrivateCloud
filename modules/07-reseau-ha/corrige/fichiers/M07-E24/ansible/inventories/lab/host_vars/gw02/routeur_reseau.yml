@@ -1,0 +1,6 @@
+---
+# host_vars/gw02/routeur_reseau.yml — M07-E24. gw02 ne porte que .3 ; jamais .1 hors keepalived.
+routeur_reseau_pile: netplan
+routeur_reseau_wan_adresse: 192.168.1.41/24   # <IP-GW02-WAN>/<MASQUE>
+routeur_reseau_suffixe: 3
+routeur_reseau_vip_statique: []

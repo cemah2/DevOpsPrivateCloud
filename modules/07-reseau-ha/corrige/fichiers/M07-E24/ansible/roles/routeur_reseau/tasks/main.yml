@@ -1,0 +1,121 @@
+---
+# Rôle routeur_reseau (M07-E24) : fichier qui fait foi au démarrage + état courant posé à chaud.
+
+- name: Vérifier les variables de la passerelle
+  ansible.builtin.assert:
+    that:
+      - routeur_reseau_pile in ['ifupdown', 'netplan']
+      - routeur_reseau_suffixe | int in [1, 2, 3]
+      - routeur_reseau_wan_adresse | length > 0
+      - routeur_reseau_wan_passerelle | length > 0
+      - routeur_reseau_vlans | length > 0
+      - routeur_reseau_vlans | map(attribute='mtu') | max <= routeur_reseau_trunk_mtu | int
+      # .1 est soit l'adresse propre (gw01 avant E25), soit statique en plus, jamais les deux.
+      - routeur_reseau_suffixe | int != 1 or routeur_reseau_vip_statique | length == 0
+      - routeur_reseau_vip_statique | difference(routeur_reseau_vlans | map(attribute='id')) | length == 0
+    fail_msg: >-
+      Variables de routeur_reseau incohérentes pour {{ inventory_hostname }} : pile, suffixe (1, 2 ou 3),
+      WAN, liste des VLAN, MTU (≤ trunk) ou VLAN à .1 statique inconnu.
+    quiet: true
+
+- name: Paquets réseau
+  ansible.builtin.apt:
+    name: "{{ ['iproute2'] + (['ifupdown'] if routeur_reseau_pile == 'ifupdown' else ['netplan.io']) }}"
+    state: present
+
+- name: Réglages noyau du routeur
+  ansible.builtin.template:
+    src: 60-routeur.conf.j2
+    dest: /etc/sysctl.d/60-routeur.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger les réglages noyau du routeur
+
+# nf_conntrack_tcp_loose n'existe qu'une fois le module chargé : nftables (rôle pare_feu) le charge.
+- name: Module de suivi des connexions chargé au démarrage
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/routeur.conf
+    content: "nf_conntrack\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- Fichier qui fait foi au prochain démarrage --------------------------------------------------
+
+- name: Configuration ifupdown (gw01)
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: "{{ routeur_reseau_fichier_ifupdown }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    validate: /usr/sbin/ifquery --interfaces=%s --list
+  when: routeur_reseau_pile == 'ifupdown'
+
+- name: Laisser cloud-init hors de la configuration réseau (netplan)
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-routeur-reseau.cfg
+    content: |
+      # Rôle routeur_reseau : la configuration réseau de la passerelle est gérée par Ansible.
+      network: {config: disabled}
+    owner: root
+    group: root
+    mode: "0644"
+  when: routeur_reseau_pile == 'netplan'
+
+- name: Configuration netplan (gw02)
+  ansible.builtin.template:
+    src: 60-routeur.yaml.j2
+    dest: "{{ routeur_reseau_fichier_netplan }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Générer la configuration netplan
+  when: routeur_reseau_pile == 'netplan'
+
+# --- État courant, à chaud, sans rien retirer ---------------------------------------------------
+
+- name: Script d'application à chaud
+  ansible.builtin.template:
+    src: routeur-reseau-a-chaud.j2
+    dest: /usr/local/sbin/routeur-reseau-a-chaud
+    owner: root
+    group: root
+    mode: "0755"
+
+# En --check, le script tourne en simulation : il dit ce qu'il ferait, sans rien faire.
+- name: Poser ce qui manque (adresses, sous-interfaces, MTU, routes de garde)
+  ansible.builtin.command:
+    argv: "{{ ['/usr/local/sbin/routeur-reseau-a-chaud'] + (['--simuler'] if ansible_check_mode else []) }}"
+  register: _routeur_reseau_a_chaud
+  changed_when: "'AJOUT' in _routeur_reseau_a_chaud.stdout"
+  check_mode: false
+
+- name: Ce qui a été posé à chaud
+  ansible.builtin.debug:
+    var: _routeur_reseau_a_chaud.stdout_lines
+  when: _routeur_reseau_a_chaud.stdout_lines | length > 0
+
+# Garde-fou : une passerelle ne doit jamais porter .1 hors keepalived et hors migration. Sur gw02
+# (suffixe 3), une .1 présente ET non annoncée par keepalived serait un conflit d'adresse.
+- name: Lire les adresses portées
+  ansible.builtin.command: ip -j -4 address show
+  register: _routeur_reseau_adresses
+  changed_when: false
+  check_mode: false
+
+- name: Aucune adresse .1 inattendue sur la passerelle de secours avant VRRP
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_routeur_reseau_adresses.stdout | from_json | map(attribute='addr_info') | flatten
+         | selectattr('local', 'match', '^10\.10\.[0-9]+\.1$') | list | length) == 0
+    fail_msg: >-
+      {{ inventory_hostname }} porte une adresse 10.10.x.1 alors que keepalived n'est pas encore
+      configuré ici : conflit d'adresse avec la passerelle de ce VLAN. Retire-la immédiatement.
+    quiet: true
+  when:
+    - routeur_reseau_suffixe | int == 3
+    - keepalived_instances | default([]) | length == 0

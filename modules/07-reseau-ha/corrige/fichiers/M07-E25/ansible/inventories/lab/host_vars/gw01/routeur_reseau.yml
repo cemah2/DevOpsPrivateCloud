@@ -1,0 +1,11 @@
+---
+# host_vars/gw01/routeur_reseau.yml — M07-E25.
+routeur_reseau_pile: ifupdown
+routeur_reseau_wan_adresse: 192.168.1.40/24   # <IP-GW01-WAN>/<MASQUE>
+routeur_reseau_suffixe: 2
+# Préparation (étape 3) : tous les VLAN ici, .1 reste statique et .2 s'ajoute. Puis chaque MR de
+# migration retire UN VLAN de cette liste et l'ajoute à keepalived_vlans_vrrp (bordure.yml).
+# Premier passage de la préparation : gw01 n'a pas encore 10.10.10.2, lancer avec
+#   -e ansible_host=10.10.10.1
+# État final :
+routeur_reseau_vip_statique: []

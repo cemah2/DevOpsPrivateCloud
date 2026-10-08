@@ -1,0 +1,9 @@
+# group_vars/role_routeur/vault-critique.yml — EXEMPLE (le vrai fichier est CHIFFRÉ, identité
+# « critique » ; M07-E26 y ajoute les clés de wg0 et wg1). Génération sans que la clé ne touche le
+# disque en clair ni l'écran (M07-E18) :
+#   admin@adm01:~/src/ansible$ wg genkey | tee >(wg pubkey > /tmp/wg2-gw01.pub) \
+#       | uv run ansible-vault encrypt_string --vault-id critique@outils/vault-pass-client.sh \
+#         --stdin-name vault_wireguard_wg2_cle_privee >> inventories/lab/group_vars/role_routeur/vault-critique.yml
+# La clé PUBLIQUE (/tmp/wg2-gw01.pub) n'est pas secrète : elle va en clair chez le pair, puis le
+# fichier temporaire est effacé. Inscrire la clé privée au registre des secrets.
+vault_wireguard_wg2_cle_privee: "<44 caractères base64, chiffrés par ansible-vault>"

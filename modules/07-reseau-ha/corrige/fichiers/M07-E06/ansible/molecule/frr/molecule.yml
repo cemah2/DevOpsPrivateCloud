@@ -1,0 +1,6 @@
+---
+# molecule/frr/molecule.yml — scénario du rôle « frr » (M07-E06)
+# Tout le commun vient de .config/molecule/config.yml (M04-E24).
+#   uv run molecule test -s frr
+scenario:
+  name: frr

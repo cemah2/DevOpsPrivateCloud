@@ -1,0 +1,29 @@
+# specs/osd.yaml — OSD du cluster ceph-par1 par classe de disque (M08-E04).
+#
+# Chaque nœud a 2 disques de 64 Gio sur ssd-lab (présentés non rotatifs : ssd=1 côté Proxmox)
+# et 1 disque de 64 Gio sur hdd-bulk (rotatif). Deux services, un par classe : on pourra plus tard
+# les faire évoluer séparément (chiffrement, nombre d'OSD par disque, mise en pause).
+# Filtres : « rotational » (ce que dit le noyau) ET « size » (bornes larges : le disque système de
+# 20 Gio, déjà partitionné, n'est de toute façon pas « disponible », mais un disque de 8 Gio
+# ajouté pour autre chose — ZFS, essais — ne doit jamais devenir un OSD par surprise).
+# La classe CRUSH est écrite explicitement plutôt que devinée.
+# Appliquer : ceph orch apply -i specs/osd.yaml --dry-run   (lire !)   puis sans --dry-run.
+service_type: osd
+service_id: ssd
+placement:
+  label: osd
+spec:
+  data_devices:
+    rotational: 0
+    size: '50G:100G'
+  crush_device_class: ssd
+---
+service_type: osd
+service_id: hdd
+placement:
+  label: osd
+spec:
+  data_devices:
+    rotational: 1
+    size: '50G:100G'
+  crush_device_class: hdd

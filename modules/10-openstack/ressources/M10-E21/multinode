@@ -1,0 +1,26 @@
+# Inventaire InfoGér adapté à MédiSphère (secrets fictifs)
+
+[all:vars]
+ansible_user=root
+ansible_password=Infoger-root-2024
+
+[control]
+osctl01 ansible_host=10.10.50.51
+
+[network]
+osctl01
+oscmp01
+oscmp02
+
+[compute]
+osctl01
+oscmp01 ansible_host=10.10.50.52
+oscmp02 ansible_host=10.10.50.53
+
+[monitoring]
+osctl01
+
+[storage]
+
+[deployment]
+localhost ansible_connection=local

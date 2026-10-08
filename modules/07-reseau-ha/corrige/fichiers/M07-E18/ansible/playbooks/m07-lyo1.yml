@@ -1,0 +1,46 @@
+---
+# playbooks/m07-lyo1.yml — raccordement du site LYO1 (M07-E18). gw01 est dans l'inventoire NetBox,
+# la maquette dans l'inventaire Proxmox : les deux à la fois.
+#   uv run ansible-playbook -i inventories/lab/netbox.yml -i inventories/lab/proxmox.yml playbooks/m07-lyo1.yml
+# Ordre : PAR1 d'abord, puis l'agence, puis le poste. Le pare-feu de gw01 (flux de wg2,
+# pare_feu.yml) est appliqué AVANT, par le playbook du pare-feu.
+
+- name: Bordure PAR1 — tunnel wg2
+  hosts: gw01
+  become: true
+  roles:
+    - role: wireguard
+      tags: [wireguard]
+
+- name: Routeur de l'agence LYO1
+  hosts: lyo-gw01
+  become: true
+  pre_tasks:
+    - name: Routage IPv4 sur lyo-gw01 (entre le LAN de l'agence et le tunnel)
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        sysctl_file: /etc/sysctl.d/60-routeur.conf
+        reload: true
+  roles:
+    - role: wireguard
+      tags: [wireguard]
+
+- name: Poste de l'agence
+  hosts: lyo-pc01
+  become: true
+  roles:
+    - role: routes_statiques
+      tags: [routes]
+
+- name: Contrôle — le poste joint le DNS de PAR1 par le tunnel
+  hosts: lyo-pc01
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Résolution par dns01 depuis l'adresse du LAN de l'agence
+      ansible.builtin.command: dig +short +time=2 +tries=2 -b 10.30.10.10 @10.10.20.10 gitlab.par1.medisphere.internal A
+      register: _lyo_dig
+      changed_when: false
+      failed_when: _lyo_dig.stdout | trim | length == 0
+      check_mode: false

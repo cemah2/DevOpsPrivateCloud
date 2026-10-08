@@ -1,0 +1,21 @@
+---
+# group_vars/role_lb/certificats.yml — certificat de la VIP par ACME, sur CHAQUE répartiteur
+# (M07-E12). Chaque répartiteur a sa propre clé et son propre certificat, pour les mêmes noms :
+# le nom de la VIP d'abord (c'est lui que les clients demandent), puis son nom propre (pour le
+# tester en direct, et pour que les deux certificats ne soient pas identiques à l'octet près).
+#
+# Défi HTTP-01 : ca01 interroge http://lb.par1.medisphere.internal/ — donc la VIP, donc le
+# répartiteur MAÎTRE, qui n'est pas forcément celui qui demande. HAProxy relaie le défi vers le
+# backend be_acme, qui contient les DEUX répartiteurs (port 8402) : seul celui qui demande y
+# écoute (« --http-listen :8402 ») ; l'autre refuse la connexion et HAProxy réessaie ailleurs
+# (retry-on conn-failure + redispatch). Voir host_vars/group_vars haproxy.yml.
+certificats_acme_certificats:
+  - id: lb
+    noms:
+      - lb.par1.medisphere.internal
+      - "{{ inventory_hostname }}.par1.medisphere.internal"
+    certificat: /etc/haproxy/certs/lb.crt
+    cle: /etc/haproxy/certs/lb.key
+    groupe: haproxy
+    ecoute_http: ":8402"
+    recharger: /usr/bin/systemctl try-reload-or-restart haproxy.service

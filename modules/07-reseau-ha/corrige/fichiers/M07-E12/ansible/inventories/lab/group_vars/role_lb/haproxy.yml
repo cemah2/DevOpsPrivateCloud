@@ -1,0 +1,58 @@
+---
+# group_vars/role_lb/haproxy.yml — répartiteurs lb01/lb02 (M07-E12, PLAT-822). Version E12 :
+# point d'entrée TLS prêt, aucun service publié (E13 remplace ce fichier).
+#
+# Écoute sur TOUTES les adresses (« bind :443 ») plutôt que sur la seule VIP : chaque répartiteur
+# se teste en direct (curl --resolve vers son adresse propre), y compris celui qui attend, et une
+# bascule n'a rien à démarrer. Pas besoin de net.ipv4.ip_nonlocal_bind (ADR-0071).
+haproxy_bind_non_local: false
+
+haproxy_sections:
+  - type: frontend
+    nom: fe_http
+    lignes:
+      - bind :80
+      - acl defi_acme path_beg /.well-known/acme-challenge/
+      # Tout passe en HTTPS, sauf le défi ACME (les règles http-request sont évaluées avant
+      # use_backend, quel que soit l'ordre d'écriture : on les écrit donc dans cet ordre).
+      - http-request redirect scheme https code 301 unless defi_acme
+      - use_backend be_acme if defi_acme
+
+  - type: frontend
+    nom: fe_publication
+    tls: true
+    lignes:
+      - bind :443 ssl crt /etc/haproxy/certs/ alpn h2,http/1.1
+      - option forwardfor
+      - http-request set-header X-Forwarded-Proto https
+      # Santé du répartiteur lui-même (supervision, tests de bascule) : répondu par HAProxy.
+      - http-request return status 200 content-type text/plain string "ok" if { path /sante }
+      # Aucun service publié pour l'instant (E13) : réponse 503 du backend vide.
+      - default_backend be_aucun
+
+  - type: backend
+    nom: be_aucun
+    lignes:
+      - http-request deny deny_status 503
+
+  # Défi ACME : les deux répartiteurs ; seul celui qui demande un certificat écoute sur 8402.
+  - type: backend
+    nom: be_acme
+    lignes:
+      - retries 2
+      - retry-on conn-failure
+      - option redispatch 1
+      - server lb01 10.10.70.10:8402
+      - server lb02 10.10.70.11:8402
+
+  - type: listen
+    nom: stats
+    lignes:
+      - bind 127.0.0.1:8404
+      - stats enable
+      - stats uri /stats
+      - stats refresh 10s
+
+haproxy_verifications:
+  - url: "https://{{ inventory_hostname }}.par1.medisphere.internal/sante"
+    tls: true

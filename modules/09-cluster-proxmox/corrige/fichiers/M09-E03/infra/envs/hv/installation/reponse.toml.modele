@@ -1,0 +1,51 @@
+# Fichier de réponse de l'installateur automatique de Proxmox VE 9.2 (M09-E03).
+# MODÈLE : les marqueurs (entre doubles arobases) sont remplacés par preparer-iso.sh, nœud par nœud.
+# Clés en kebab-case (le snake_case est déprécié dans les ISO 9.x : avertissement).
+# Référence : https://pve.proxmox.com/wiki/Automated_Installation
+# Validation : proxmox-auto-install-assistant validate-answer <fichier>
+
+[global]
+keyboard = "fr"
+country = "fr"
+fqdn = "@@FQDN@@"
+mailto = "plateforme@medisphere.internal"
+timezone = "Europe/Paris"
+# Empreinte SHA-512 crypt du mot de passe root (jamais le mot de passe en clair) :
+# calculée par preparer-iso.sh à partir de ~/.config/workbook/hv-root.pass.
+root-password-hashed = "@@HASH_ROOT@@"
+# Accès d'administration : la clé publique de adm01 pour root (SSH par clé seulement).
+root-ssh-keys = [
+  "@@CLE_SSH_ADM01@@",
+]
+reboot-on-error = false
+
+[network]
+# Adresse statique, donnée par le fichier de réponse : pas de DHCP sur MGMT (VLAN 10).
+source = "from-answer"
+cidr = "@@IP_MGMT@@/24"
+gateway = "10.10.10.1"
+dns = "10.10.20.10"
+# Carte d'administration : nic0, reconnue à son adresse MAC (fixée par OpenTofu).
+# ID_NET_NAME_MAC = « enx » + MAC sans séparateurs (vérifiable : device-info -t network).
+filter.ID_NET_NAME_MAC = "*@@MAC0_COMPACTE@@"
+
+# Noms d'interfaces épinglés sur les adresses MAC (PVE 9.1+) : nic0..nic4 quel que soit
+# l'ordre de détection, ce dont dépendent /etc/network/interfaces et Corosync.
+[network.interface-name-pinning]
+enabled = true
+
+[network.interface-name-pinning.mapping]
+"@@MAC0@@" = "nic0"
+"@@MAC1@@" = "nic1"
+"@@MAC2@@" = "nic2"
+"@@MAC3@@" = "nic3"
+"@@MAC4@@" = "nic4"
+
+[disk-setup]
+# ext4 + LVM-thin sur le SEUL disque système (série @@NOEUD@@-systeme) : les disques OSD et ZFS
+# restent vierges pour Ceph (E10) et le pool « tank » (E06).
+filesystem = "ext4"
+filter.ID_SERIAL = "*@@NOEUD@@-systeme"
+lvm.swapsize = 2
+lvm.maxroot = 12
+lvm.minfree = 2

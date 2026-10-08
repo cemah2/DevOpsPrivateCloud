@@ -1,0 +1,61 @@
+---
+# playbooks/m07-lyo1.yml — site LYO1 en routage dynamique (M07-E19). REMPLACE la version de E18.
+#   uv run ansible-playbook -i inventories/lab/netbox.yml -i inventories/lab/proxmox.yml playbooks/m07-lyo1.yml
+#
+# Bascule (plan détaillé dans le corrigé) :
+#   1. FRR sur la bordure puis sur l'agence : la session monte DANS le tunnel existant et installe
+#      ses routes, identiques aux routes statiques encore en place (aucune coupure) ;
+#   2. WireGuard sans post_up, puis REDÉMARRAGE de wg2 des deux côtés (un post_up retiré n'est pas
+#      défait par « wg syncconf ») : les routes statiques disparaissent avec l'interface ; la
+#      session BGP se rétablit et réinstalle ses routes en quelques secondes.
+# Le pare-feu de gw01 (BGP dans wg2, pare_feu.yml) est appliqué AVANT.
+
+- name: Bordure PAR1 — FRR (session LYO1)
+  ansible.builtin.import_playbook: bordure-frr.yml
+
+- name: Routeur de l'agence LYO1 — FRR
+  hosts: lyo-gw01
+  become: true
+  roles:
+    - role: frr
+      tags: [frr]
+
+- name: Tunnel wg2 sans route statique, des deux côtés
+  hosts: gw01:lyo-gw01
+  become: true
+  roles:
+    - role: wireguard
+      tags: [wireguard]
+  post_tasks:
+    # wg-quick n'expose pas ses PostUp à l'exécution : on regarde la table. Une route « dev wg2 »
+    # sans « proto bgp » est une route statique héritée de E18.
+    - name: Routes statiques encore posées sur wg2 ?
+      ansible.builtin.shell: |
+        set -o pipefail
+        ip route show dev wg2 | grep -v 'proto bgp' | grep -v 'proto kernel' || true
+      args:
+        executable: /bin/bash
+      register: _wg2_statiques
+      changed_when: false
+      check_mode: false
+
+    - name: Redémarrer wg2 pour retirer les routes statiques (coupure de quelques secondes)
+      ansible.builtin.systemd_service:
+        name: wg-quick@wg2.service
+        state: restarted
+      when: _wg2_statiques.stdout | trim | length > 0
+
+- name: Contrôle — routes apprises par BGP, des deux côtés
+  hosts: gw01:lyo-gw01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Préfixe attendu installé par BGP
+      ansible.builtin.command: "ip route show proto bgp {{ '10.30.0.0/16' if inventory_hostname == 'gw01' else '10.10.20.0/24' }}"
+      register: _lyo_bgp
+      changed_when: false
+      check_mode: false
+      retries: 10
+      delay: 3
+      until: _lyo_bgp.stdout | length > 0
+      when: not ansible_check_mode

@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Export en lecture seule de la configuration de Ceph, par clé SSH à commande forcée
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: EL
+      versions: ["10"]
+dependencies: []

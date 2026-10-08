@@ -1,0 +1,12 @@
+# /etc/nginx/pxe.d/pve-reponses.conf — {{ ms_gere_par | default('Fichier géré par Ansible (rôle pve_reponses).') }}
+# Inclus dans le serveur HTTPS de pxe01 (rôle pxe). POST seulement, VLAN 60 et adm01 seulement.
+location = {{ pve_reponses_chemin }} {
+{% for c in pve_reponses_clients %}
+    allow {{ c }};
+{% endfor %}
+    deny all;
+    limit_except POST { deny all; }
+    client_max_body_size 64k;
+    proxy_pass http://{{ pve_reponses_adresse }}:{{ pve_reponses_port }};
+    proxy_set_header Host $host;
+}

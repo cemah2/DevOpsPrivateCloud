@@ -1,0 +1,76 @@
+---
+- name: Configuration de tftpd-hpa
+  ansible.builtin.template:
+    src: tftpd-hpa.j2
+    dest: /etc/default/tftpd-hpa
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer tftpd-hpa
+
+- name: Racine TFTP
+  ansible.builtin.file:
+    path: "{{ pxe_tftp_racine }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Cache local des chargeurs iPXE (contrôleur)
+  ansible.builtin.file:
+    path: "{{ pxe_chargeurs_cache }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  when: pxe_chargeurs | length > 0
+
+- name: Chargeurs iPXE téléchargés sur le contrôleur, empreinte vérifiée
+  ansible.builtin.get_url:
+    url: "{{ pxe_chargeurs_url }}/{{ item.nom }}"
+    dest: "{{ pxe_chargeurs_cache }}/{{ item.nom }}"
+    checksum: "sha256:{{ item.sha256 }}"
+    headers: "{{ pxe_chargeurs_entetes }}"
+    mode: "0644"
+  loop: "{{ pxe_chargeurs }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Chargeurs iPXE déposés (lisibles par le compte tftp)
+  ansible.builtin.copy:
+    src: "{{ pxe_chargeurs_cache }}/{{ item.nom }}"
+    dest: "{{ pxe_tftp_racine }}/{{ item.nom }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ pxe_chargeurs }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Empreinte des chargeurs déposés
+  ansible.builtin.stat:
+    path: "{{ pxe_tftp_racine }}/{{ item.nom }}"
+    checksum_algorithm: sha256
+  loop: "{{ pxe_chargeurs }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: pxe_chargeurs_deposes
+
+- name: Les chargeurs servis sont exactement ceux de la procédure versionnée
+  ansible.builtin.assert:
+    that: item.stat.checksum == item.item.sha256
+    fail_msg: "{{ item.item.nom }} : empreinte {{ item.stat.checksum | default('absente') }} au lieu de {{ item.item.sha256 }}"
+    quiet: true
+  loop: "{{ pxe_chargeurs_deposes.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+
+- name: Service tftpd-hpa actif
+  ansible.builtin.systemd_service:
+    name: tftpd-hpa
+    state: started
+    enabled: true

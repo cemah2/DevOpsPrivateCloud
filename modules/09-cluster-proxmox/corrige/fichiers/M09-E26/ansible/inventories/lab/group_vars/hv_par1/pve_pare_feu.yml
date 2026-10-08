@@ -1,0 +1,60 @@
+---
+# group_vars/hv_par1/pve_pare_feu.yml — matrice des flux du cluster hv-par1 (M09-E26, SEC-1052).
+# Reportée, avec les tests de chaque ligne, dans docs/virtualisation/matrice-flux-hv-par1.md.
+#
+# Règles automatiques de Proxmox VE (rappel, lues dans la documentation et dans les règles
+# générées) : depuis local_network, interface 8006, SSH, consoles (VNC, SPICE) et Corosync. On
+# restreint local_network aux nœuds (10.10.10.48/28 : seules .51-.53 y sont affectées, plage
+# « nœuds de clusters » du PLAN), et l'on ouvre explicitement le reste.
+# Mise en service progressive : host_vars/hv02 et hv03 avec pve_pare_feu_noeud_actif: false au
+# premier passage, puis suppression de ces surcharges.
+
+pve_pare_feu_local_network: 10.10.10.48/28
+
+# Attention : l'appartenance à l'IPSet management ouvre, par les règles AUTOMATIQUES, 8006, SSH,
+# les consoles (5900-5999, 3128) et les ports de migration 60000-60050. Les règles explicites
+# ci-dessous pour ces hôtes documentent l'intention (et survivent si l'on retire un hôte de
+# l'IPSet) ; la preuve négative se fait depuis un hôte HORS de l'IPSet (gw01).
+pve_pare_feu_management:
+  - {cidr: 10.10.10.10, commentaire: "adm01, poste d'administration"}
+  - {cidr: 10.255.1.0/24, commentaire: "VPN d'administration (wg1)"}
+  - {cidr: 10.10.20.15, commentaire: "runner01 : OpenTofu hv-invites (8006) et pipeline Ansible (22)"}
+
+pve_pare_feu_ipsets:
+  hv_noeuds:
+    - {cidr: 10.10.10.51, commentaire: "hv01 MGMT"}
+    - {cidr: 10.10.10.52, commentaire: "hv02 MGMT"}
+    - {cidr: 10.10.10.53, commentaire: "hv03 MGMT"}
+    - {cidr: 10.10.32.51, commentaire: "hv01 COROSYNC"}
+    - {cidr: 10.10.32.52, commentaire: "hv02 COROSYNC"}
+    - {cidr: 10.10.32.53, commentaire: "hv03 COROSYNC"}
+    - {cidr: 10.10.30.71, commentaire: "hv01 STOR-PUB"}
+    - {cidr: 10.10.30.72, commentaire: "hv02 STOR-PUB"}
+    - {cidr: 10.10.30.73, commentaire: "hv03 STOR-PUB"}
+    - {cidr: 10.10.31.71, commentaire: "hv01 STOR-CLU"}
+    - {cidr: 10.10.31.72, commentaire: "hv02 STOR-CLU"}
+    - {cidr: 10.10.31.73, commentaire: "hv03 STOR-CLU"}
+  supervision:
+    - {cidr: 10.10.10.10, commentaire: "adm01 : ms-verif-cluster"}
+  acme:
+    - {cidr: 10.10.20.11, commentaire: "ca01 : défis HTTP-01 de l'émission initiale des certificats"}
+
+pve_pare_feu_regles:
+  # --- Entre nœuds -----------------------------------------------------------------------------
+  - {regle: "IN ACCEPT -source +hv_noeuds -dest +hv_noeuds -p udp -dport 5405:5412",
+     motif: "Corosync (knet), deux liens ; doublon volontaire des règles automatiques", ref: M09-E04}
+  - {regle: "IN SSH(ACCEPT) -source +hv_noeuds", motif: "SSH entre nœuds : migration secure, réplication ZFS, pvecm", ref: M09-E27}
+  - {regle: "IN Ceph(ACCEPT) -source +hv_noeuds -dest +hv_noeuds", motif: "Ceph : MON 3300/6789, OSD et MGR 6800-7300", ref: M09-E10}
+  - {regle: "IN ACCEPT -source +hv_noeuds -dest +hv_noeuds -p vrrp", motif: "VRRP de la VIP 10.10.10.200 (VRID 110)", ref: M09-E18}
+  - {regle: "IN BGP(ACCEPT) -source +hv_noeuds -dest +hv_noeuds", motif: "EVPN du SDN : sessions BGP (AS 65090)", ref: M09-E16}
+  - {regle: "IN ACCEPT -source +hv_noeuds -dest +hv_noeuds -p udp -dport 4789", motif: "EVPN du SDN : VXLAN", ref: M09-E16}
+  - {regle: "IN ACCEPT -source +hv_noeuds -p tcp -dport 8006", motif: "API entre nœuds (proxy de pveproxy vers le nœud cible)", ref: M09-E26}
+  # --- Administration --------------------------------------------------------------------------
+  - {regle: "IN ACCEPT -source +management -p tcp -dport 8006", motif: "interface et API (adm01, VPN, OpenTofu sur runner01)", ref: M09-E26}
+  - {regle: "IN SSH(ACCEPT) -source 10.10.10.10", motif: "SSH depuis adm01 seulement (Ansible, checks, secours)", ref: M09-E26}
+  - {regle: "IN SSH(ACCEPT) -source 10.255.1.0/24", motif: "SSH depuis le VPN d'administration", ref: M09-E26}
+  - {regle: "IN ACCEPT -source 10.10.10.10 -p tcp -dport 5900:5999", motif: "consoles noVNC/VNC depuis adm01", ref: M09-E26}
+  - {regle: "IN ACCEPT -source 10.10.20.15 -p tcp -dport 22", motif: "pipeline Ansible (clé ansible-ci) depuis runner01", ref: M04-E24}
+  - {regle: "IN HTTP(ACCEPT) -source +acme", motif: "défis ACME HTTP-01 de ca01 (émission initiale des certificats 8006)", ref: M09-E26}
+  - {regle: "IN Ping(ACCEPT) -source +management", motif: "diagnostic", ref: M09-E26}
+  - {regle: "IN Ping(ACCEPT) -source +hv_noeuds", motif: "diagnostic, PMTUD", ref: M09-E26}

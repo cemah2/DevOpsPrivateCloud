@@ -1,0 +1,19 @@
+---
+# Les deux gestionnaires écoutent le même événement : le premier refuse si le redémarrage
+# n'est pas autorisé, le second redémarre. Ordre d'exécution = ordre de ce fichier.
+
+- name: Refuser le redémarrage non autorisé
+  ansible.builtin.fail:
+    msg: >-
+      Le réseau de {{ inventory_hostname }} a changé, mais noeud_openstack_redemarrage_autorise
+      vaut false : redémarre le nœud dans une fenêtre annoncée, puis relance le rôle.
+  when: not noeud_openstack_redemarrage_autorise | bool
+  listen: Réseau du nœud modifié
+
+- name: Redémarrer le nœud
+  ansible.builtin.reboot:
+    msg: "Ansible (noeud_openstack) : nouvelle configuration réseau"
+    reboot_timeout: 600
+    post_reboot_delay: 10
+  when: noeud_openstack_redemarrage_autorise | bool
+  listen: Réseau du nœud modifié

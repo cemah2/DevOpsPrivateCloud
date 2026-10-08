@@ -1,0 +1,3 @@
+---
+# host_vars/gw02/relais_dhcp.yml
+relais_dhcp_actif: false   # M07-E24 : pas de relais sur gw02 avant VRRP (M07-E25)

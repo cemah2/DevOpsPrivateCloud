@@ -1,0 +1,51 @@
+{# gabarits/kickstart.ks.j2 — kickstart Rocky Linux 10 propre à une machine (M11-E05/E06, sécurisé
+   en M11-E13). Remis par iPXE dans l'initrd (inst.ks=file:/ks.cfg).
+   Variables : hote, domaine, disque (défaut sda), cle_ssh_admin (clé PUBLIQUE d'adm01),
+   racine_pem (certificat PUBLIC « MédiSphère Root CA »), rocky_depot, ntp.
+   AUCUN mot de passe : root verrouillé, admin verrouillé (clé SSH seulement).
+   Validation dans le pipeline : ksvalidator -v RHEL10 sur le rendu. -#}
+# {{ hote }}.{{ domaine }} — rendu depuis NetBox (plateforme/provisioning), ne pas modifier sur pxe01
+text
+lang fr_FR.UTF-8
+keyboard fr
+timezone Europe/Paris --utc
+timesource --ntp-server={{ ntp | default('10.10.60.1') }}
+
+network --bootproto=dhcp --device=link --hostname={{ hote }}.{{ domaine }} --activate
+url --url={{ rocky_depot }}/BaseOS/x86_64/os/
+repo --name=AppStream --baseurl={{ rocky_depot }}/AppStream/x86_64/os/
+
+# Comptes : rien en clair, rien à deviner
+rootpw --lock
+user --name=admin --groups=wheel --lock
+sshkey --username=admin "{{ cle_ssh_admin }}"
+
+# Disque : uniquement celui prévu, effacé sans question
+ignoredisk --only-use={{ disque | default('sda') }}
+zerombr
+clearpart --all --initlabel --drives={{ disque | default('sda') }}
+autopart --type=lvm
+bootloader --boot-drive={{ disque | default('sda') }}
+
+selinux --enforcing
+firewall --enabled --service=ssh
+services --enabled=sshd,chronyd,qemu-guest-agent
+
+# Arrêt en fin d'installation (orchestrateur, M11-E15)
+poweroff
+
+%packages
+@^minimal-environment
+qemu-guest-agent
+chrony
+sudo
+%end
+
+%post --log=/root/ks-post.log
+cat > /etc/pki/ca-trust/source/anchors/medisphere-root-ca.crt <<'PEM'
+{{ racine_pem | trim }}
+PEM
+update-ca-trust
+echo 'admin ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-admin
+chmod 440 /etc/sudoers.d/90-admin
+%end

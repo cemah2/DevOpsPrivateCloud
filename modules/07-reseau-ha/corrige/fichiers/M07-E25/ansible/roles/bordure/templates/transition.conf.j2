@@ -1,0 +1,5 @@
+# /etc/bordure/transition.conf — {{ inventory_hostname }}
+# {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+# Lu par /usr/local/sbin/bordure-transition (rôle bordure).
+BORDURE_TUNNELS="{{ bordure_tunnels | join(' ') }}"
+BORDURE_CONNTRACKD={{ 1 if bordure_conntrackd | bool else 0 }}

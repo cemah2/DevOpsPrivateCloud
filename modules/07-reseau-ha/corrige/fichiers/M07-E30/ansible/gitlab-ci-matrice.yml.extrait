@@ -1,0 +1,22 @@
+# .gitlab-ci.yml de plateforme/ansible — EXTRAIT M07-E30 : la matrice publiée suit le code.
+# Le job régénère le document depuis la matrice de la MR et le compare à celui publié sur main de
+# plateforme/medisphere (lecture par l'API, jeton de projet en LECTURE, variable masquée
+# MEDISPHERE_LECTURE_TOKEN). Échec = la MR modifie la matrice sans mettre à jour la documentation.
+matrice-a-jour:
+  stage: test
+  tags: [shell, socle]
+  rules:
+    - changes: [inventories/lab/group_vars/role_routeur/pare_feu.yml]
+  script:
+    # Jeton passé à curl par l'entrée standard (-K -), jamais en argument (visible dans ps).
+    - >
+      printf 'header = "PRIVATE-TOKEN: %s"\n' "${MEDISPHERE_LECTURE_TOKEN}"
+      | curl -sSf -K - -o matrice-publiee.md
+      "${CI_API_V4_URL}/projects/plateforme%2Fmedisphere/repository/files/docs%2Fsocle%2Fmatrice-flux.md/raw?ref=main"
+    - ms-matrice-flux inventories/lab/group_vars/role_routeur/pare_feu.yml -o matrice-flux.md
+    - ms-matrice-flux --verifier matrice-publiee.md inventories/lab/group_vars/role_routeur/pare_feu.yml
+      || { echo "Publie matrice-flux.md (artefact) dans plateforme/medisphere par MR."; exit 1; }
+  artifacts:
+    when: always
+    paths: [matrice-flux.md]
+    expire_in: 1 week

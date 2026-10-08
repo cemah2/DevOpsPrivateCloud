@@ -1,0 +1,21 @@
+# envs/m07-maquette/maquette.tf — EXTRAIT à intégrer (M07-E15, CHG-825) : deux cartes de stockage
+# de plus pour srv01 et srv02, AJOUTÉES À LA FIN de leur liste « cartes » (net2 → eth2, net3 →
+# eth3 : l'ordre des cartes existantes ne change pas). Adresses de la plage « tests » (.250-.254).
+# « mtu » : nouvelle clé facultative d'une carte (voir main.tf.extrait).
+
+    srv01 = {
+      vmid   = 2075, coeurs = 1, memoire = 1024, admin = "10.10.99.252/24", fonction = ["m07-web"]
+      cartes = [
+        { vnet = "vfab5", ipv4 = "10.10.250.9/31" },
+        { vnet = "vstopub", ipv4 = "10.10.30.250/24", mtu = 9000 }, # eth2 : VLAN 30 STOR-PUB
+        { vnet = "vstoclu", ipv4 = "10.10.31.250/24", mtu = 9000 }, # eth3 : VLAN 31 STOR-CLU
+      ]
+    }
+    srv02 = {
+      vmid   = 2076, coeurs = 1, memoire = 1024, admin = "10.10.99.253/24", fonction = ["m07-web"]
+      cartes = [
+        { vnet = "vfab6", ipv4 = "10.10.250.11/31" },
+        { vnet = "vstopub", ipv4 = "10.10.30.251/24", mtu = 9000 },
+        { vnet = "vstoclu", ipv4 = "10.10.31.251/24", mtu = 9000 },
+      ]
+    }

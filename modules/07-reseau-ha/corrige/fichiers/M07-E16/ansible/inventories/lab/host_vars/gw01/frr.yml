@@ -1,0 +1,9 @@
+---
+# host_vars/gw01/frr.yml — valeurs propres à gw01 (M07-E16).
+# router-id : un identifiant STABLE, qui ne changera pas quand gw01 passera de .1 à .2 (E25). On
+# prend dès maintenant son adresse MGMT future (10.10.10.2 ; gw02 aura 10.10.10.3) : un router-id
+# n'a pas besoin d'être porté par une interface, il doit seulement être unique.
+frr_router_id: 10.10.10.2
+# Adresse source de la session avec leaf01 : aujourd'hui la seule adresse de gw01 sur le VLAN 99
+# (.1) ; .2 à partir de E25.
+frr_update_source_leaf01: 10.10.99.1

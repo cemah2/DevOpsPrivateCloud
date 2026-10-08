@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Prépare un nœud Rocky Linux 10 pour cephadm (dépôt Ceph épinglé, Podman, compte de l'orchestrateur, MTU)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

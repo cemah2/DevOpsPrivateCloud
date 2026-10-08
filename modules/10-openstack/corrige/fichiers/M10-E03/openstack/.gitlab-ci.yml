@@ -1,0 +1,53 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/openstack (M10-E03, PLAT-1103)
+#
+# Étapes :
+#   lint      gabarits communs (pre-commit, commitlint, gitleaks) + yamllint
+#   verifier  aucun secret en clair (outils/verifier-chiffrement.sh) ; inventaire à jour
+#             par rapport à la version de Kolla figée (outils/inventaire.sh --verifier)
+#
+# PAS de job de déploiement au palier 1 : kolla-ansible est lancé depuis adm01 (le runner
+# n'a ni accès SSH aux nœuds, ni l'identité Vault « critique »). La question d'un déploiement
+# par le pipeline est traitée au mini-projet (M10-E46).
+# Runner : runner01 (exécuteur shell, étiquette « shell »), uv présent (rôle gitlab_runner).
+# Aucun secret n'est confié à la CI pour ces jobs : ils lisent les fichiers chiffrés sans les
+# déchiffrer.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+
+stages:
+  - lint
+  - verifier
+
+.shell:
+  tags: [shell]
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+yamllint:
+  extends: .shell
+  stage: lint
+  script:
+    - uvx --from 'yamllint==1.37.*' yamllint --strict .
+
+secrets-chiffres:
+  extends: .shell
+  stage: verifier
+  script:
+    - outils/verifier-chiffrement.sh
+
+inventaire-a-jour:
+  extends: .shell
+  stage: verifier
+  script:
+    # uv sync installe Kolla-Ansible (version figée) dans .venv du job : l'exemple
+    # « multinode » de CETTE version sert de référence.
+    - uv sync --frozen
+    - outils/inventaire.sh --verifier

@@ -1,0 +1,18 @@
+# {{ routes_statiques_entete }}
+[Unit]
+Description=Routes statiques (rôle routes_statiques, M07)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+{% for r in routes_statiques_liste %}
+ExecStart=/usr/sbin/ip route replace {{ r.prefixe }} via {{ r.via }}{{ (' src ' ~ r.source) if r.source is defined else '' }}
+{% endfor %}
+{% for r in routes_statiques_liste %}
+ExecStop=-/usr/sbin/ip route del {{ r.prefixe }} via {{ r.via }}
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target

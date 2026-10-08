@@ -1,0 +1,15 @@
+---
+# host_vars/gw01/pare_feu.yml — EXTRAIT : lignes ajoutées en M09-E26 (matrice commune gw01/gw02).
+# Les nœuds hv01-03 sont dans MGMT ; ca01 et runner01 dans INFRA : ces flux traversent la bordure.
+
+pare_feu_definitions:
+  # … définitions existantes …
+  - {nom: HV_NOEUDS, valeur: [10.10.10.51, 10.10.10.52, 10.10.10.53]}
+
+pare_feu_transit:
+  - {entree: $V_INFRA, source: $CA01, destination: $HV_NOEUDS, proto: tcp, ports: 80,
+     motif: "ca01 → nœuds : défis ACME HTTP-01 (émission initiale des certificats 8006)", ref: M09-E26}
+  - {entree: $V_MGMT, source: $HV_NOEUDS, destination: $CA01, proto: tcp, ports: 443,
+     motif: "nœuds → ca01 : ACME et renouvellement des certificats (step ca renew)", ref: M09-E26}
+  - {entree: $V_INFRA, source: $RUNNER01, destination: [$HV_NOEUDS, 10.10.10.200], proto: tcp, ports: [8006, 22],
+     motif: "runner01 → nœuds et VIP : OpenTofu hv-invites (8006), pipeline Ansible (22)", ref: M09-E18}

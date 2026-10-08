@@ -1,0 +1,7 @@
+---
+# Les paramètres d'un bond (mode, lacp_rate…) ne se changent pas tous à chaud : on reconstruit.
+- name: Reconstruire le labo de bonding
+  ansible.builtin.systemd_service:
+    name: m07-bond.service
+    state: restarted
+    daemon_reload: true

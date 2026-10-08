@@ -1,0 +1,92 @@
+---
+# Rôle medisphere.socle.ca_lab (1.2.0) — Debian et Red Hat.
+# 1.0.0 (M04-E18) : installe des autorités ; 1.1.0 (M06-E03) : sait les retirer ;
+# 1.2.0 (M08-E02) : famille Red Hat (ancres ca-trust, update-ca-trust), nécessaire aux nœuds
+# Ceph en Rocky Linux 10. Le comportement sur Debian est INCHANGÉ (version mineure).
+
+- name: Famille prise en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] in ['Debian', 'RedHat']
+    fail_msg: "ca_lab ne connaît que les familles Debian et RedHat (ici : {{ ansible_facts['os_family'] }})."
+    quiet: true
+
+- name: Variables de la famille
+  ansible.builtin.include_vars:
+    file: "{{ ansible_facts['os_family'] }}.yml"
+
+- name: Liste cohérente (rien n'est à la fois à installer et à retirer)
+  ansible.builtin.assert:
+    that:
+      - ca_lab_certificats | map(attribute='nom') | intersect(ca_lab_retirer) | length == 0
+    fail_msg: >-
+      Autorité(s) à la fois à installer et à retirer :
+      {{ ca_lab_certificats | map(attribute='nom') | intersect(ca_lab_retirer) | join(', ') }}.
+    quiet: true
+
+- name: Paquet ca-certificates
+  ansible.builtin.package:
+    name: ca-certificates
+    state: present
+
+- name: Installer les autorités de certification du lab
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "{{ _ca_lab_dossier }}/{{ item.nom }}.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ca_lab_certificats }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _ca_lab_copie
+
+- name: Retirer les autorités qui ne sont plus de confiance
+  ansible.builtin.file:
+    path: "{{ _ca_lab_dossier }}/{{ item }}.crt"
+    state: absent
+  loop: "{{ ca_lab_retirer }}"
+  register: _ca_lab_retrait
+
+# Immédiatement (pas en handler) : la suite du play peut avoir besoin de la nouvelle autorité.
+- name: Reconstruire le magasin système  # noqa: no-handler
+  ansible.builtin.command: >-
+    {{ _ca_lab_reconstruire_complet if _ca_lab_retrait is changed else _ca_lab_reconstruire }}
+  when: _ca_lab_copie is changed or _ca_lab_retrait is changed
+  changed_when: true
+
+- name: Vérifier le contenu du magasin système
+  when:
+    - ca_lab_verifier | bool
+    - not ansible_check_mode
+  block:
+    - name: Lire le magasin consolidé
+      ansible.builtin.slurp:
+        src: "{{ _ca_lab_bundle }}"
+      register: _ca_lab_bundle_lu
+
+    - name: Chaque autorité installée est dans le magasin
+      ansible.builtin.assert:
+        that:
+          # 2e ligne du PEM (début du corps base64) : assez distinctive pour reconnaître le certificat.
+          - (lookup('ansible.builtin.file', item.source).splitlines()[1]) in (_ca_lab_bundle_lu.content | b64decode)
+        fail_msg: "{{ item.nom }} n'apparaît pas dans {{ _ca_lab_bundle }} après reconstruction."
+        quiet: true
+      loop: "{{ ca_lab_certificats }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Chercher les ancres des autorités retirées
+      ansible.builtin.stat:
+        path: "{{ _ca_lab_dossier }}/{{ item }}.crt"
+      loop: "{{ ca_lab_retirer }}"
+      register: _ca_lab_ancres
+
+    - name: Refuser une ancre retirée encore présente
+      ansible.builtin.assert:
+        that: not item.stat.exists
+        fail_msg: "{{ _ca_lab_dossier }}/{{ item.item }}.crt existe encore."
+        quiet: true
+      loop: "{{ _ca_lab_ancres.results }}"
+      loop_control:
+        label: "{{ item.item }}"

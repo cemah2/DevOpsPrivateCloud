@@ -1,0 +1,3 @@
+# host_vars/gw01/bordure.yml — EXTRAIT M07-E26 (même chose sur gw02 avec 192.168.1.40).
+bordure_wan_pair: 192.168.1.41   # <IP-GW02-WAN>
+keepalived_wan_actif: true       # gw01 d'abord, puis gw02 (même principe qu'un VLAN en M07-E25)

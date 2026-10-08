@@ -1,0 +1,64 @@
+---
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - bonding_mode in ['active-backup', 'balance-xor', '802.3ad']
+      - bonding_mode_commutateur in ['active-backup', 'balance-xor', '802.3ad']
+      - bonding_liens | int >= 2
+      - bonding_lacp_rate in ['slow', 'fast']
+      - bonding_hachage in ['layer2', 'layer2+3', 'layer3+4']
+    fail_msg: Mode, nombre de liens (≥ 2), lacp_rate ou hachage non reconnus.
+    quiet: true
+
+- name: Outils (iproute2, mesure de débit)
+  ansible.builtin.apt:
+    name: [iproute2, iperf3]
+    state: present
+
+- name: Script du labo
+  ansible.builtin.template:
+    src: m07-bond.sh.j2
+    dest: /usr/local/sbin/m07-bond
+    mode: "0755"
+    validate: bash -n %s
+  notify: Reconstruire le labo de bonding
+
+- name: Unité systemd du labo
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/m07-bond.service
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle bonding, M07-E04)
+      [Unit]
+      Description=Labo M07 : bonding entre les espaces de noms {{ bonding_espace_serveur }} et {{ bonding_espace_commutateur }}
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/m07-bond demarrer
+      ExecStop=/usr/local/sbin/m07-bond arreter
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Reconstruire le labo de bonding
+
+- name: Labo actif et reconstruit au démarrage
+  ansible.builtin.systemd_service:
+    name: m07-bond.service
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Appliquer une reconstruction en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Le serveur joint le commutateur à travers l'agrégat
+  ansible.builtin.command: >-
+    ip netns exec {{ bonding_espace_serveur }}
+    ping -c 3 -W 2 {{ bonding_adresse_commutateur.split('/') | first }}
+  changed_when: false
+  retries: 5
+  delay: 3
+  register: bonding_ping
+  until: bonding_ping.rc == 0

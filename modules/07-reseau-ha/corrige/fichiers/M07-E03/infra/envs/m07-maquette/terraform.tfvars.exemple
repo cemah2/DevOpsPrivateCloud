@@ -1,0 +1,3 @@
+# Copier en terraform.tfvars et adapter. Rien de secret ici (même règle que le socle, M05-E10).
+noeud         = "<NOEUD>"
+cle_ssh_admin = "ssh-ed25519 AAAA… admin@adm01"

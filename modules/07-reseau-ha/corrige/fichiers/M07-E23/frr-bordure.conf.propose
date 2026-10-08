@@ -1,0 +1,42 @@
+! frr.conf — proposition de reprise pour gw01/gw02 (M07-E23), à comparer à frr-infogere.conf.
+! En production, rendu par le rôle frr (group_vars/role_routeur/frr.yml, version E19) ; ce qui
+! est gardé de la configuration d'InfoGér est signalé « (gardé) ».
+frr defaults traditional
+hostname gw01
+log syslog informational
+service integrated-vtysh-config
+!
+! (gardé) ancre de l'agrégat de l'agence côté LYO1 : principe repris sur lyo-gw01, pas ici.
+!
+ip prefix-list DEPUIS_LYO1 seq 10 permit 10.30.0.0/16 le 24
+ip prefix-list VERS_LYO1 seq 10 permit 10.10.20.0/24
+ip prefix-list VERS_LYO1 seq 20 permit 10.10.70.0/24
+!
+route-map LYO1-IN permit 10
+ match ip address prefix-list DEPUIS_LYO1
+exit
+!
+route-map LYO1-OUT permit 10
+ match ip address prefix-list VERS_LYO1
+exit
+!
+router bgp 65000
+ bgp router-id 10.10.10.2
+ bgp ebgp-requires-policy
+ bgp log-neighbor-changes
+ ! Temporisateurs par défaut (60/180) dans le tunnel ; BFD si on veut détecter plus vite.
+ neighbor 10.255.2.2 remote-as 65030
+ neighbor 10.255.2.2 description agence Lyon (wg2)
+ ! Pas de mot de passe MD5 : la session passe dans WireGuard (authentifié, chiffré). Si un jour une
+ ! session sort d'un tunnel : secret distinct par voisin, en Vault.
+ neighbor 10.255.2.2 maximum-prefix 50
+ !
+ address-family ipv4 unicast
+  network 10.10.20.0/24
+  network 10.10.70.0/24
+  neighbor 10.255.2.2 route-map LYO1-IN in
+  neighbor 10.255.2.2 route-map LYO1-OUT out
+ exit-address-family
+exit
+!
+end

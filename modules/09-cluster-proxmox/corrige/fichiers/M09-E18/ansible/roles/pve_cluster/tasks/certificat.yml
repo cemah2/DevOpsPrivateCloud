@@ -1,0 +1,83 @@
+---
+# Certificat de pveproxy (port 8006) : noms du nœud + nom de la VIP, signé par l'autorité du cluster.
+# Pourquoi pas ACME ici : un défi HTTP-01 pour hv.par1.medisphere.internal arriverait au nœud qui
+# porte la VIP, pas forcément à celui qui commande (voir le corrigé de M09-E18). La clé privée naît
+# sur le nœud et n'en sort pas (pmxcfs la range dans /etc/pve/nodes/<nœud>/, lisible par root).
+
+- name: Noms et adresses attendus dans le certificat
+  ansible.builtin.set_fact:
+    _pve_cluster_san: >-
+      {{ ['DNS:' ~ inventory_hostname,
+          'DNS:' ~ inventory_hostname ~ '.par1.medisphere.internal',
+          'DNS:' ~ pve_cluster_vip_nom,
+          'IP:' ~ pve_cluster_adresses[inventory_hostname],
+          'IP:' ~ pve_cluster_vip] }}
+
+- name: Lire le certificat en place (s'il existe)
+  ansible.builtin.shell: |
+    set -o pipefail
+    f=/etc/pve/local/pveproxy-ssl.pem
+    [ -s "$f" ] || { echo ABSENT; exit 0; }
+    openssl verify -CAfile {{ pve_cluster_ca_cert }} "$f" >/dev/null 2>&1 || { echo AUTRE_CA; exit 0; }
+    openssl x509 -in "$f" -noout -checkend {{ pve_cluster_cert_marge_jours * 86400 }} >/dev/null || { echo ECHEANCE; exit 0; }
+    openssl x509 -in "$f" -noout -ext subjectAltName | tail -n +2 | tr -d ' ' | tr ',' '\n'
+  args:
+    executable: /bin/bash
+  register: _pve_cluster_cert
+  changed_when: false
+
+- name: Le certificat doit être (ré)émis
+  ansible.builtin.set_fact:
+    _pve_cluster_emettre: >-
+      {{ _pve_cluster_cert.stdout_lines | length == 0
+         or _pve_cluster_cert.stdout_lines[0] in ['ABSENT', 'AUTRE_CA', 'ECHEANCE']
+         or (_pve_cluster_san | map('replace', 'IP:', 'IPAddress:') | difference(_pve_cluster_cert.stdout_lines) | length > 0) }}
+
+- name: Émettre et installer le certificat
+  when: _pve_cluster_emettre | bool
+  block:
+    - name: Dossier de travail temporaire
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .pve-cert
+      register: _pve_cluster_tmp
+
+    - name: Extensions du certificat
+      ansible.builtin.copy:
+        dest: "{{ _pve_cluster_tmp.path }}/ext.cnf"
+        mode: "0600"
+        content: |
+          basicConstraints = CA:FALSE
+          keyUsage = critical, digitalSignature, keyEncipherment
+          extendedKeyUsage = serverAuth
+          subjectAltName = {{ _pve_cluster_san | join(',') }}
+
+    - name: Clé, demande et signature par l'autorité du cluster
+      ansible.builtin.shell: |
+        set -o pipefail
+        umask 077
+        cd {{ _pve_cluster_tmp.path }}
+        openssl genrsa -out cle.pem 2048 2>/dev/null
+        openssl req -new -key cle.pem -out demande.csr \
+          -subj "/OU=PVE Cluster Node/O=Proxmox Virtual Environment/CN={{ inventory_hostname }}.par1.medisphere.internal"
+        # Numéro de série aléatoire : on ne touche pas au fichier de série partagé (pmxcfs).
+        openssl x509 -req -in demande.csr -CA {{ pve_cluster_ca_cert }} -CAkey {{ pve_cluster_ca_cle }} \
+          -set_serial "0x$(openssl rand -hex 16)" -days {{ pve_cluster_cert_jours }} -sha256 \
+          -extfile ext.cnf -out cert.pem 2>/dev/null
+        openssl verify -CAfile {{ pve_cluster_ca_cert }} cert.pem
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Installer le certificat dans pveproxy
+      ansible.builtin.command: >-
+        pvenode cert set {{ _pve_cluster_tmp.path }}/cert.pem {{ _pve_cluster_tmp.path }}/cle.pem
+        --force 1 --restart 1
+      changed_when: true
+
+  always:
+    - name: Effacer le dossier de travail (la clé n'y reste pas)
+      ansible.builtin.file:
+        path: "{{ _pve_cluster_tmp.path }}"
+        state: absent
+      when: _pve_cluster_tmp.path is defined

@@ -1,0 +1,8 @@
+---
+# Magasin système de la famille Red Hat (Rocky Linux 10, M08-E02) : ancres dans
+# /etc/pki/ca-trust/source/anchors/, magasins consolidés produits par « update-ca-trust extract »
+# (qui régénère TOUT à chaque fois : pas d'option de reconstruction particulière).
+_ca_lab_dossier: /etc/pki/ca-trust/source/anchors
+_ca_lab_reconstruire: update-ca-trust extract
+_ca_lab_reconstruire_complet: update-ca-trust extract
+_ca_lab_bundle: /etc/pki/tls/certs/ca-bundle.crt

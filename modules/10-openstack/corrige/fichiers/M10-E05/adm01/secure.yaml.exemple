@@ -1,0 +1,14 @@
+# ~/.config/openstack/secure.yaml sur adm01 — MODE 600, jamais dans un dépôt.
+# Même structure que clouds.yaml : la CLI fusionne les deux fichiers.
+# Valeurs : keystone_admin_password (etc/kolla/passwords.yml) ; mots de passe de donnees/vault-identite.yml
+# (Julien changera le sien : ce compte de test ne sert qu'aux vérifications du lab).
+clouds:
+  medisphere-admin:
+    auth:
+      password: "<KEYSTONE-ADMIN-PASSWORD>"
+  medisphere-plateforme:
+    auth:
+      password: "<MOT-DE-PASSE-DE-MOI>"
+  medisphere-mediagenda-dev:
+    auth:
+      password: "<MOT-DE-PASSE-DE-JULIEN>"

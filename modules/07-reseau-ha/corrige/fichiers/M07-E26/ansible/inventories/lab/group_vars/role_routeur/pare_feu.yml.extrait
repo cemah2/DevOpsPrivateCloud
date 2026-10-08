@@ -1,0 +1,33 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT M07-E26.
+pare_feu_definitions:
+  # … existant …
+  - {nom: GW_WAN_VIP, valeur: 192.168.1.50, commentaire: "<IP-GW-WAN-VIP> : la bordure vue du LAN maison"}
+  - {nom: GW_WAN_PROPRES, valeur: "{ 192.168.1.40, 192.168.1.41 }", commentaire: "<IP-GW01-WAN>, <IP-GW02-WAN>"}
+  - {nom: LYO_GW, valeur: 10.10.99.250, commentaire: "lyo-gw01 : « Internet » de LYO1 (M07-E18)"}
+
+pare_feu_entree:
+  # … existant, dont wg0 (51820 depuis $HP01_LAN), wg1 (51821 depuis $LAN_MAISON), wg2 (51822 depuis
+  # $LYO_GW sur $V_SANDBOX) : valables tels quels sur les deux passerelles …
+  - {entree: $WAN, source: $GW_WAN_PROPRES, proto: vrrp,
+     motif: "VRRP entre passerelles, WAN (VRID 250)", ref: M07-E26}
+
+# Traduction sortante : vers la VIP WAN, plus de masquerade. Une adresse qui ne bouge pas quand le
+# maître change : les entrées de traduction synchronisées par conntrackd (M07-E27) restent valables
+# sur l'autre passerelle, et le pare-feu de la box ou d'un service distant voit toujours la même source.
+pare_feu_nat:
+  - regle: oifname $WAN ip saddr $NETS_LAB ip daddr != $PVE01 snat to $GW_WAN_VIP
+    motif: "lab vers Internet et LAN maison, derrière la VIP WAN (M07-E26)"
+  # Trafic WireGuard ÉMIS par la passerelle (poignée de main, keepalive) : sans cette règle il part
+  # de l'adresse propre (route vers le pair) et le pair (pbs01, poste) ne le reconnaît pas.
+  - regle: oifname $WAN udp sport { 51820, 51821 } snat to $GW_WAN_VIP
+    motif: "tunnels wg0 et wg1 émis depuis la VIP WAN (M07-E26)"
+  - regle: oifname $V_SANDBOX ip daddr $LYO_GW udp sport 51822 snat to 10.10.99.1
+    motif: "tunnel wg2 émis depuis la VIP du VLAN 99, extrémité vue par LYO1 (M07-E26)"
+  - regle: oifname $WG_S2S ip saddr $LAN_MAISON masquerade
+    motif: "LAN maison vers PAR2 : retour symétrique par le tunnel (M00-E21)"
+
+# Redirection HTTPS vers les répartiteurs (M07-E13) : sur la VIP WAN, plus sur l'adresse de gw01.
+# (Variable du rôle pare_feu ajoutée en M07-E13 pour la chaîne prerouting.)
+pare_feu_dnat:
+  - regle: iifname $WAN ip saddr $LAN_MAISON ip daddr $GW_WAN_VIP tcp dport 443 dnat to $VIP_LB:443
+    motif: "HTTPS publié : VIP WAN vers la VIP des répartiteurs (M07-E13, M07-E26)"

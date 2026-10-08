@@ -1,0 +1,4 @@
+---
+# host_vars/srv01/web.yml — M07-E08 : adresse fixe de eth0 (maquette.tf) et priorité VRRP.
+m07_web_adresse: 10.10.99.252
+m07_web_priorite: 150

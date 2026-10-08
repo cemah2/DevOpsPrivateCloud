@@ -1,0 +1,29 @@
+# Extrait de donnees/identite.yml (M10-E23, SEC-1133) — à fusionner dans les listes existantes.
+
+# Rôles personnalisés (nouvelle liste, lue par la tâche « Rôles personnalisés » du playbook).
+identite_roles:
+  - {nom: support, description: "Support : redémarrer, arrêter, démarrer une instance, lire sa console (SEC-1133)"}
+
+identite_groupes:
+  # … equipe-plateforme, equipe-mediagenda (E05) inchangés …
+  - nom: equipe-securite
+    description: "Sécurité (Sophie Laurent) : lecture de tous les projets du domaine"
+    membres: [sophie.laurent]
+    # Aucun rôle sur un projet : « reader » HÉRITÉ sur le domaine medisphere, posé par
+    # outils/attribution-audit-heritee.sh (le module openstack.cloud.role_assignment ne sait pas
+    # exprimer une attribution héritée — OS-INHERIT — dans la version de la collection du dépôt).
+    roles: []
+  - nom: equipe-support
+    description: "Support et astreinte (Nadia Roussel)"
+    membres: [nadia.roussel]
+    roles:
+      - {projet: mediagenda-dev, role: reader}
+      - {projet: mediagenda-dev, role: support}
+      - {projet: mediagenda-prod, role: reader}
+      - {projet: mediagenda-prod, role: support}
+
+identite_utilisateurs:
+  # … comptes de E05 inchangés …
+  - {nom: sophie.laurent, description: "RSSI", courriel: sophie.laurent@medisphere.internal}
+  - {nom: nadia.roussel, description: "Support et astreinte", courriel: nadia.roussel@medisphere.internal}
+# Et dans donnees/vault-identite.yml (chiffré, critique) : un mot de passe initial pour chacun.

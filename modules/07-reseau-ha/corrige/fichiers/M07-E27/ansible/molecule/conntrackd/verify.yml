@@ -1,0 +1,28 @@
+---
+# molecule/conntrackd/verify.yml — le service répond, l'état complet envoyé par A arrive dans le
+# cache EXTERNE de B (les connexions SSH d'Ansible vers A suffisent comme matière).
+- name: Vérifier le rôle conntrackd
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    emetteur: m07-mol-ct-a
+    recepteur: m07-mol-ct-b
+  tasks:
+    - name: conntrackd répond
+      ansible.builtin.command: conntrackd -C /etc/conntrackd/conntrackd.conf -s
+      changed_when: false
+
+    - name: A envoie son état complet (comme à une prise de fonction)
+      ansible.builtin.command: conntrackd -C /etc/conntrackd/conntrackd.conf -B
+      changed_when: false
+      when: inventory_hostname == emetteur
+
+    - name: Le cache externe de B contient les connexions de A
+      ansible.builtin.command: conntrackd -C /etc/conntrackd/conntrackd.conf -e
+      register: externe
+      changed_when: false
+      until: externe.stdout_lines | length > 0
+      retries: 10
+      delay: 1
+      when: inventory_hostname == recepteur

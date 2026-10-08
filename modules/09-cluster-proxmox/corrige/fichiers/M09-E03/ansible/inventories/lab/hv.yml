@@ -1,0 +1,17 @@
+---
+# inventories/lab/hv.yml — nœuds du cluster Proxmox imbriqué hv-par1 (M09-E03, hv03 en M09-E08).
+#
+# Inventaire STATIQUE, à côté de netbox.yml : l'inventaire NetBox ne prend que l'étiquette
+# « socle » (M06-E12), et ces nœuds sont un environnement de module, détruit en fin de M09.
+# Les deux sources se combinent ; les group_vars de ce dossier valent pour les deux :
+#   uv run ansible-playbook -i inventories/lab/netbox.yml -i inventories/lab/hv.yml playbooks/hv.yml
+# Connexion en root (aucun compte « admin » sur un nœud Proxmox VE) avec la clé de adm01,
+# posée par le fichier de réponse de l'installateur.
+hv_par1:
+  hosts:
+    hv01:
+      ansible_host: 10.10.10.51
+      pve_noeud_numero: 1
+    hv02:
+      ansible_host: 10.10.10.52
+      pve_noeud_numero: 2

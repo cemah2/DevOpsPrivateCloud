@@ -1,0 +1,12 @@
+---
+# host_vars/osctl01/sauvegarde_pbs.yml — envoi de la base OpenStack vers PBS (M10-E25).
+# La sauvegarde Mariabackup elle-même est prise à 01:30 depuis adm01 (rôle openstack_mariabackup) ;
+# osctl01 l'envoie à 02:10 dans par1/openstack (PLAN §4.9 : espace de noms du cloud, pas par1/<hôte>).
+sauvegarde_pbs_elements: [openstack]
+sauvegarde_pbs_heure: "02:10"
+sauvegarde_pbs_espace: par1/openstack
+sauvegarde_pbs_jeton_secret: "{{ vault_pbs_jeton_osctl01 }}"
+sauvegarde_pbs_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_pbs_cle: "{{ vault_pbs_cle_osctl01 }}"
+sauvegarde_pbs_os_retention_jours: 7
+sauvegarde_pbs_os_fernet: "oui"

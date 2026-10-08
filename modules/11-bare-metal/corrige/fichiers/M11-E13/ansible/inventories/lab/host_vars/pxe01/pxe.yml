@@ -1,0 +1,10 @@
+---
+# host_vars/pxe01/pxe.yml — chargeurs iPXE servis par pxe01 (M11-E13).
+# Valeurs produites par ipxe/construire-ipxe.sh (fichier SHA256SUMS) et publiées dans le registre
+# de paquets génériques de plateforme/provisioning sous ipxe/<version>/. Une nouvelle construction
+# = une nouvelle version et une MR sur ce fichier (revue par Sophie : c'est le code qui s'exécute
+# en premier sur chaque serveur).
+pxe_chargeurs_version: v2.0.0-ms1
+pxe_chargeurs:
+  - {nom: undionly.kpxe, sha256: "<EMPREINTE-SHA256-UNDIONLY>"}
+  - {nom: ipxe.efi, sha256: "<EMPREINTE-SHA256-IPXE-EFI>"}

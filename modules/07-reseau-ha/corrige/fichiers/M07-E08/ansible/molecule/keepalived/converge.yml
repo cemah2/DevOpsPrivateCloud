@@ -1,0 +1,35 @@
+---
+# molecule/keepalived/converge.yml — une VIP portée par l'instance la plus prioritaire, un script
+# de suivi qui dépend d'un fichier (verify.yml le retire pour provoquer la bascule).
+- name: Converge — rôle keepalived
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    essai_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    keepalived_scripts:
+      - nom: chk_essai
+        commande: /usr/bin/test -e /run/keepalived-essai-sain
+        intervalle: 1
+        echecs: 2
+        succes: 2
+    keepalived_instances:
+      - nom: ESSAI
+        interface: "{{ essai_interface }}"
+        vrid: 198
+        priorite: "{{ essai_priorite }}"
+        intervalle: 1
+        source: "{{ ansible_facts['default_ipv4']['address'] }}"
+        pairs: >-
+          {{ groups['molecule'] | difference([inventory_hostname])
+             | map('extract', hostvars, ['ansible_facts', 'default_ipv4', 'address']) | list }}
+        vips: [10.10.99.239/24]
+        scripts: [chk_essai]
+  pre_tasks:
+    - name: Instance déclarée saine (fichier lu par le script de suivi)
+      ansible.builtin.copy:
+        dest: /run/keepalived-essai-sain
+        content: ""
+        mode: "0644"
+  roles:
+    - role: keepalived

@@ -1,0 +1,12 @@
+# /etc/systemd/system/ceph-cert-ingress.timer — M08-E11. Chaque jour : le renouvellement a lieu
+# à 15 jours de l'échéance, soit quinze tentatives avant l'expiration d'un certificat de 30 jours.
+[Unit]
+Description=MédiSphère : certificat du point d'entrée S3 de ceph-par1 (quotidien)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

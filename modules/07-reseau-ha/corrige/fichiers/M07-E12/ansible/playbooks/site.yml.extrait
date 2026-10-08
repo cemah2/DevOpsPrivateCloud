@@ -1,0 +1,5 @@
+# playbooks/site.yml — EXTRAIT à intégrer (M07-E12) : les répartiteurs après le socle de base
+# (base, ssh_durci, certificats SSH d'hôte : RB-060) et après la PKI (le défi ACME a besoin de
+# ca01 et du DNS).
+- name: Répartiteurs
+  ansible.builtin.import_playbook: repartiteurs.yml

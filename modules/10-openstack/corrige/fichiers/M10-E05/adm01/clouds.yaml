@@ -1,0 +1,42 @@
+# ~/.config/openstack/clouds.yaml sur adm01 (M10-E04 et M10-E05).
+# AUCUN mot de passe ici : secure.yaml (600), fusionné par la CLI et par openstacksdk.
+# Point d'accès public (VIP externe, HTTPS, certificat de ca01).
+clouds:
+  # Administrateur du cloud (domaine Default, projet admin) : opérations de la plateforme.
+  medisphere-admin:
+    auth:
+      auth_url: https://openstack.par1.medisphere.internal:5000/v3
+      username: admin
+      user_domain_name: Default
+      project_name: admin
+      project_domain_name: Default
+    region_name: RegionOne
+    interface: public
+    identity_api_version: 3
+    cacert: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+  # Ton compte nominatif, dans le projet de l'équipe Plateforme.
+  medisphere-plateforme:
+    auth:
+      auth_url: https://openstack.par1.medisphere.internal:5000/v3
+      username: "<MOI>"
+      user_domain_name: medisphere
+      project_name: plateforme
+      project_domain_name: medisphere
+    region_name: RegionOne
+    interface: public
+    identity_api_version: 3
+    cacert: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+  # Julien Petit dans la recette de MédiAgenda : pour vérifier ce que voit une équipe.
+  medisphere-mediagenda-dev:
+    auth:
+      auth_url: https://openstack.par1.medisphere.internal:5000/v3
+      username: julien.petit
+      user_domain_name: medisphere
+      project_name: mediagenda-dev
+      project_domain_name: medisphere
+    region_name: RegionOne
+    interface: public
+    identity_api_version: 3
+    cacert: /usr/local/share/ca-certificates/medisphere-root-ca.crt

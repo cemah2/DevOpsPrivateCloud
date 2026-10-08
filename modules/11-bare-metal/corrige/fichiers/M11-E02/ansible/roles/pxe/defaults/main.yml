@@ -1,0 +1,46 @@
+---
+# Rôle pxe — serveur de démarrage réseau du VLAN 60 (M11-E02) : TFTP (tftpd-hpa) pour les
+# chargeurs iPXE, HTTP (nginx) pour les scripts iPXE, les noyaux et les fichiers d'installation.
+# Installateurs vérifiés (M11-E04, E05) : variable pxe_installateurs (host_vars/pxe01).
+#
+# PROPRIÉTÉ DES FICHIERS (deux écrivains, deux territoires) :
+#   - ce rôle : /srv/tftp, /srv/http/{debian13,rocky10,pki}, la configuration de nginx et tftpd-hpa ;
+#   - le projet plateforme/provisioning (outils/publier.sh) : /srv/http/boot.ipxe et
+#     /srv/http/{ipxe,preseed,kickstart}. Le rôle crée ces dossiers mais n'y écrit jamais.
+
+pxe_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle pxe).') }}
+
+# Adresse d'écoute (TFTP et HTTP) : l'adresse de service, jamais toutes les adresses.
+pxe_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+pxe_nom_serveur: "{{ inventory_hostname }}.par1.medisphere.internal"
+
+pxe_racine_tftp: /srv/tftp
+pxe_racine_http: /srv/http
+# Binaires iPXE du paquet Debian « ipxe » (/usr/lib/ipxe) copiés à la racine TFTP :
+# undionly.kpxe (BIOS : s'appuie sur la pile UNDI de la carte) et ipxe.efi (UEFI x86-64).
+pxe_binaires_ipxe:
+  - undionly.kpxe
+  - ipxe.efi
+
+# Réseaux autorisés à lire le serveur HTTP (les preseed et kickstart contiennent des empreintes
+# de mots de passe et des clés publiques : pas d'accès depuis le reste du lab).
+pxe_http_autorises:
+  - 10.10.60.0/24   # VLAN 60 PROV : les serveurs à installer
+  - 10.10.10.0/24   # VLAN 10 MGMT : adm01 (vérifications, publication)
+
+# Dossiers alimentés par plateforme/provisioning (publier.sh) : créés ici, jamais remplis ici.
+pxe_dossiers_publies:
+  - ipxe
+  - preseed
+  - kickstart
+
+# Racine de la PKI publiée pour les installateurs (late_command / %post), M11-E04.
+pxe_racine_pki: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# Installateurs téléchargés et VÉRIFIÉS (M11-E04, E05). Vide = aucun.
+# Exemple (host_vars/pxe01/pxe.yml) :
+#   pxe_installateurs:
+#     - {nom: debian13, type: debian, version: trixie, miroir: https://deb.debian.org/debian}
+#     - {nom: rocky10, type: rocky, version: "10.2", miroir: https://dl.rockylinux.org/pub/rocky}
+pxe_installateurs: []

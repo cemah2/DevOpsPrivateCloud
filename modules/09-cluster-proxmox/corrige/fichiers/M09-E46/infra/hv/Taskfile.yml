@@ -1,0 +1,142 @@
+# infra/hv/Taskfile.yml — reconstruction chronométrée du cluster hv-par1 depuis le code (M09-E46).
+# Projet plateforme/infra, dossier de l'état « hv ». Task 3.x (M02).
+#
+#   task reconstruire        # tout, dans l'ordre, avec un horodatage par étape dans reconstruction.log
+#   task etape:noeuds         # une étape seule (reprise après correction)
+#
+# Ce Taskfile n'invente rien : il enchaîne, dans l'ordre et sans geste manuel, ce que les
+# exercices du module ont mis dans le code. Les noms de playbooks sont ceux du corrigé ; adapte
+# PB_* aux tiens. L'application OpenTofu passe normalement par le pipeline (plan relu en MR, job
+# manuel protégé) : la variable APPLY_LOCAL=1 n'est permise que dans le lab, et elle est notée
+# dans le journal.
+# Prérequis sur adm01 : ~/.config/workbook/pve-tofu.env, s3-tofu.env, pve-ansible.env chargés ;
+# clone de plateforme/ansible dans ~/src/ansible ; Vault « critique » accessible.
+
+version: "3"
+
+vars:
+  JOURNAL: "{{.ROOT_DIR}}/reconstruction.log"
+  ANSIBLE_DIR: "{{.HOME}}/src/ansible"
+  NOEUDS: hv01 hv02 hv03
+  # Playbooks des exercices : hv.yml (M09-E03, rôle pve_noeud), hv-cluster.yml (M09-E18, rôle
+  # pve_cluster), hv-certificats.yml (M09-E26). Les autres sont à ÉCRIRE pendant le mini-projet :
+  # ce que les exercices ont fait à la main (formation du cluster E04/E08, Ceph E10, PBS E15, SDN
+  # E16, droits E17, HA E13, réplication E14) devient du code idempotent.
+  PB_NOEUDS: playbooks/hv.yml
+  PB_FORMATION: playbooks/hv-formation.yml      # pvecm create/add, idempotent (à écrire)
+  PB_CLUSTER: playbooks/hv-cluster.yml
+  PB_CEPH: playbooks/hv-ceph.yml                # pveceph en Tentacle, MON/MGR/OSD, pool ceph-vm (à écrire)
+  PB_SECURITE: playbooks/hv-securite.yml        # pve_pare_feu, SSH de pve_noeud (à écrire : assemble E26)
+  PB_CERTIFICATS: playbooks/hv-certificats.yml
+  PB_SERVICES: playbooks/hv-services.yml        # pbs-par2, sauvegarde_pbs (pve), SDN, droits, HA, réplication (à écrire)
+
+tasks:
+  jalon:
+    internal: true
+    cmds:
+      - printf '%s %s\n' "$(date -Is)" "{{.TEXTE}}" | tee -a "{{.JOURNAL}}"
+
+  reconstruire:
+    desc: Reconstruit hv-par1 de bout en bout et chronomètre chaque étape
+    cmds:
+      - task: jalon
+        vars: { TEXTE: "T0 début de la reconstruction (APPLY_LOCAL={{.APPLY_LOCAL | default \"0\"}})" }
+      - task: etape:vms
+      - task: etape:installation
+      - task: etape:noeuds
+      - task: etape:ceph
+      - task: etape:securite
+      - task: etape:services
+      - task: etape:invites
+      - task: etape:verification
+      - task: jalon
+        vars: { TEXTE: "FIN reconstruction terminée" }
+
+  etape:vms:
+    desc: VMs 2091-2093 (état OpenTofu hv)
+    cmds:
+      - tofu init -input=false
+      - tofu plan -input=false -out=hv.plan
+      - '{{if eq (.APPLY_LOCAL | default "0") "1"}}tofu apply -input=false hv.plan{{else}}echo "Applique hv.plan par le pipeline (job manuel), puis relance : task etape:installation"; exit 1{{end}}'
+      - task: jalon
+        vars: { TEXTE: "T1 VMs créées" }
+
+  etape:installation:
+    desc: Attend la fin de l'installation automatique (SSH root par la clé de adm01)
+    cmds:
+      - for: { var: NOEUDS }
+        cmd: |
+          for i in $(seq 1 90); do
+            ssh -o BatchMode=yes -o ConnectTimeout=5 root@{{.ITEM}}.par1.medisphere.internal pveversion >/dev/null 2>&1 && exit 0
+            sleep 20
+          done
+          echo "{{.ITEM}} : installation non terminée après 30 min" >&2; exit 1
+      - task: jalon
+        vars: { TEXTE: "T2 Proxmox VE installé sur les trois nœuds" }
+
+  ansible:
+    internal: true
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - uv run ansible-playbook {{.PB}}
+
+  etape:noeuds:
+    desc: Configuration des nœuds et formation du cluster
+    cmds:
+      - task: ansible
+        vars: { PB: "{{.PB_NOEUDS}}" }
+      - task: ansible
+        vars: { PB: "{{.PB_FORMATION}}" }
+      - task: ansible
+        vars: { PB: "{{.PB_CLUSTER}}" }
+      - task: jalon
+        vars: { TEXTE: "T3 cluster formé (pve_noeud, pvecm, pve_cluster)" }
+
+  etape:ceph:
+    desc: Ceph hyperconvergé Tentacle et attente de HEALTH_OK
+    cmds:
+      - task: ansible
+        vars: { PB: "{{.PB_CEPH}}" }
+      - |
+        for i in $(seq 1 60); do
+          ssh root@hv01.par1.medisphere.internal ceph health | grep -qx HEALTH_OK && exit 0
+          sleep 20
+        done
+        echo "Ceph pas en HEALTH_OK après 20 min" >&2; exit 1
+      - task: jalon
+        vars: { TEXTE: "T4 Ceph HEALTH_OK" }
+
+  etape:securite:
+    desc: Pare-feu, SSH, certificats de la PKI
+    cmds:
+      - task: ansible
+        vars: { PB: "{{.PB_SECURITE}}" }
+      - task: ansible
+        vars: { PB: "{{.PB_CERTIFICATS}}" }
+      - task: jalon
+        vars: { TEXTE: "T5 sécurité appliquée" }
+
+  etape:services:
+    desc: Sauvegardes, SDN, HA (règles), réplication, supervision
+    cmds:
+      - task: ansible
+        vars: { PB: "{{.PB_SERVICES}}" }
+      - task: jalon
+        vars: { TEXTE: "T6 services du cluster configurés" }
+
+  etape:invites:
+    desc: Invités durables (état hv-invites) et restaurations depuis PBS
+    dir: "{{.ROOT_DIR}}/../hv-invites"
+    cmds:
+      - tofu init -input=false
+      - tofu plan -input=false -out=invites.plan
+      - '{{if eq (.APPLY_LOCAL | default "0") "1"}}tofu apply -input=false invites.plan{{else}}echo "Applique invites.plan par le pipeline, puis relance : task etape:verification"; exit 1{{end}}'
+      - task: jalon
+        vars: { TEXTE: "T7 invités recréés" }
+
+  etape:verification:
+    desc: Sonde et contrôle global
+    cmds:
+      - /usr/local/bin/ms-verif-cluster
+      - task: jalon
+        vars: { TEXTE: "T8 ms-verif-cluster au vert ; lancer lab/bin/check 09 46" }

@@ -1,0 +1,115 @@
+---
+# group_vars/role_lb/haproxy.yml — répartiteurs lb01/lb02, version M07-E28 (SEC-857) : production.
+# REMPLACE la version de M07-E13. Ce qui change :
+#   - en-têtes de sécurité (HSTS, retrait de Server/X-Powered-By), identifiant unique de requête ;
+#   - limitation de débit des pages de connexion (429) ;
+#   - contrôles de santé : les erreurs des VRAIES requêtes comptent aussi (observe layer7) ;
+#   - statistiques et métriques sur l'adresse PROPRE (on veut voir le secours), en HTTPS, MGMT
+#     seulement, authentifiées (empreintes en Vault) ; /metrics pour le module 21.
+# global et defaults (TLS, expose-fd, hard-stop-after, journal avec %ID, page 503) : rôle haproxy.
+haproxy_bind_non_local: false
+
+haproxy_listes_utilisateurs:
+  - nom: utilisateurs_stats
+    groupes: [admins]
+    utilisateurs:
+      - {nom: supervision, empreinte: "{{ vault_haproxy_stats_supervision_empreinte }}"}
+      - {nom: admin, empreinte: "{{ vault_haproxy_stats_admin_empreinte }}", groupes: [admins]}
+
+haproxy_sections:
+  - type: frontend
+    nom: fe_http
+    lignes:
+      - bind :80
+      - acl defi_acme path_beg /.well-known/acme-challenge/
+      - http-request redirect scheme https code 301 unless defi_acme
+      - use_backend be_acme if defi_acme
+
+  - type: frontend
+    nom: fe_publication
+    tls: true
+    lignes:
+      - bind :443 ssl crt /etc/haproxy/certs/ strict-sni alpn h2,http/1.1
+      - option forwardfor
+      - http-request set-header X-Forwarded-Proto https
+      # Identifiant unique : transmis aux serveurs (X-Request-ID) et écrit dans le journal (%ID).
+      - unique-id-format %{+X}o\ %ci:%cp_%fi:%fp_%Ts_%rt:%pid
+      - unique-id-header X-Request-ID
+      - http-request return status 200 content-type text/plain string "ok" if { path /sante }
+      - http-request set-var(txn.hote) req.hdr(host),field(1,:),lower
+      # Pages de connexion : au plus 20 requêtes par 10 s et par adresse source.
+      - stick-table type ip size 100k expire 30s store http_req_rate(10s)
+      - acl page_connexion path_beg /users/sign_in /login/
+      - http-request track-sc0 src if page_connexion
+      - http-request deny deny_status 429 if page_connexion { sc_http_req_rate(0) gt 20 }
+      # Sécurité des réponses : un an de HSTS (sans preload : nom interne), pas de version de serveur.
+      - http-response set-header Strict-Transport-Security "max-age=31536000"
+      - http-response del-header Server
+      - http-response del-header X-Powered-By
+      - use_backend be_gitlab if { var(txn.hote) -m str gitlab.par1.medisphere.internal }
+      - use_backend be_netbox if { var(txn.hote) -m str netbox.par1.medisphere.internal }
+      - default_backend be_aucun
+
+  - type: backend
+    nom: be_gitlab
+    lignes:
+      - timeout server 300s
+      - timeout tunnel 1h
+      - option httpchk
+      - http-check send meth GET uri /-/readiness ver HTTP/1.1 hdr Host gitlab.par1.medisphere.internal
+      - http-check expect status 200
+      # Les 5xx des vraies requêtes comptent comme des échecs : retrait en quelques requêtes,
+      # sans attendre trois contrôles.
+      - >-
+        server git01 10.10.20.12:443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(git01.par1.medisphere.internal) verifyhost git01.par1.medisphere.internal
+        check check-sni git01.par1.medisphere.internal inter 5s fall 3 rise 2
+        observe layer7 error-limit 10 on-error mark-down
+
+  - type: backend
+    nom: be_netbox
+    lignes:
+      - option httpchk
+      - http-check send meth GET uri /login/ ver HTTP/1.1 hdr Host netbox.par1.medisphere.internal
+      - http-check expect status 200
+      - >-
+        server nbx01 10.10.20.13:443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(nbx01.par1.medisphere.internal) verifyhost nbx01.par1.medisphere.internal
+        check check-sni nbx01.par1.medisphere.internal inter 5s fall 3 rise 2
+        observe layer7 error-limit 10 on-error mark-down
+
+  - type: backend
+    nom: be_aucun
+    lignes:
+      - http-request deny deny_status 503
+
+  - type: backend
+    nom: be_acme
+    lignes:
+      - retries 2
+      - retry-on conn-failure
+      - option redispatch 1
+      - server lb01 10.10.70.10:8402
+      - server lb02 10.10.70.11:8402
+
+  # Statistiques et métriques : adresse propre, port 8404, HTTPS (certificat « lb » : il porte le
+  # nom du répartiteur, M07-E12), MGMT seulement, authentification ; administration (drain,
+  # maintenance depuis la page) réservée au groupe admins.
+  - type: frontend
+    nom: fe_stats
+    tls: true
+    lignes:
+      - "bind {{ lb_adresse }}:8404 ssl crt lb.crt"
+      - http-request deny deny_status 403 unless { src 10.10.10.0/24 }
+      - http-request auth realm statistiques unless { http_auth(utilisateurs_stats) }
+      - http-request use-service prometheus-exporter if { path /metrics }
+      - stats enable
+      - stats uri /stats
+      - stats refresh 10s
+      - stats admin if { http_auth_group(utilisateurs_stats) admins }
+
+haproxy_verifications:
+  - url: "https://{{ inventory_hostname }}.par1.medisphere.internal/sante"
+    tls: true

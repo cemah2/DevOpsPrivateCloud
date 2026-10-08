@@ -1,0 +1,17 @@
+---
+# group_vars/role_lb/pare_feu_local.yml — filtrage d'entrée de lb01 et lb02 (M07-E30, rôle
+# pare_feu_local de M06-E30). S'ajoute aux règles communes (SSH depuis adm01 et runner01,
+# group_vars/socle/pare_feu_local.yml). La passerelle filtre déjà le transit ; ce filtrage-ci
+# protège la DMZ d'elle-même (un répartiteur compromis ne joint pas l'autre hors VRRP et HTTP).
+pare_feu_local_regles:
+  # Les clients des services publiés arrivent avec leur adresse d'origine (redirection sans
+  # traduction de source) : lab, VPN, LYO1, LAN maison.
+  - {source: [10.10.0.0/16, 10.255.1.0/24, 10.30.0.0/16, 192.168.1.0/24], proto: tcp, ports: [80, 443],
+     motif: "services publiés (HTTP redirigé, HTTPS) ; LAN maison = <LAN-MAISON>", ref: M07-E13}
+  - {source: 10.10.10.0/24, proto: tcp, ports: 8404,
+     motif: "statistiques et métriques HAProxy depuis MGMT", ref: M07-E28}
+  - {source: [10.10.70.10, 10.10.70.11], proto: vrrp,
+     motif: "VRRP entre répartiteurs (VRID 170)", ref: M07-E12}
+pare_feu_local_verifications:
+  - {port: 443, motif: "HTTPS des services publiés (adresse propre)"}
+  - {port: 8404, motif: "statistiques depuis adm01"}

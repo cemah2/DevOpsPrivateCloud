@@ -1,0 +1,4 @@
+---
+# host_vars/ceph01/ceph_export_config.yml — export de configuration par commande forcée (M08-E25).
+# Clé PUBLIQUE de la paire dont la clé privée est en Vault (vault_ceph_export_cle_ssh) : non secrète.
+ceph_export_config_cle_publique: "ssh-ed25519 <CLE-PUBLIQUE-EXPORT> wb-sauvegarde@cephcli01"

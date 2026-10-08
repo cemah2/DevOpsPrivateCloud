@@ -1,0 +1,8 @@
+# group_vars/role_ceph_client/vault-lab.yml — CHIFFRÉ (identité lab), état M08-E17.
+vault_ceph_cle_rbd_test: "<CLE-CEPHX-AQ…==>"
+vault_ceph_cle_outillage: "<CLE-CEPHX-AQ…==>"
+vault_ceph_cle_rbd_lecture: "<CLE-CEPHX-AQ…==>"
+vault_ceph_cle_iscsi_cephcli01: "<CLE-CEPHX-AQ…==>"
+# Secret CHAP de la cible iSCSI (cible-iscsi.sh le lit dans /root/chap-scan-legacy, déposé à la main
+# depuis cette valeur le temps de l'exécution) :
+vault_iscsi_chap_scan_legacy: "<16-CARACTERES-AU-MOINS>"

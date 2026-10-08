@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# pxe-installateurs — télécharge et VÉRIFIE le noyau et l'initrd d'un installateur réseau,
+# puis les publie atomiquement sous /srv/http/<nom>/ (M11-E04, E05).
+# Déposé par le rôle Ansible « pxe » (plateforme/ansible) dans /usr/local/sbin.
+#
+#   pxe-installateurs debian <nom> <suite> <miroir> <racine-http>
+#     ex. pxe-installateurs debian debian13 trixie https://deb.debian.org/debian /srv/http
+#   pxe-installateurs rocky  <nom> <version> <miroir> <racine-http>
+#     ex. pxe-installateurs rocky rocky10 10.2 https://dl.rockylinux.org/pub/rocky /srv/http
+#
+# Chaîne de confiance :
+#   Debian : Release signé (clés de debian-archive-keyring, vérifiées par gpgv) → empreinte de
+#            images/SHA256SUMS → empreintes de linux et initrd.gz.
+#   Rocky  : pas de signature détachée pour images/pxeboot : HTTPS vers le miroir officiel
+#            (certificat vérifié) + empreintes de .treeinfo. Limite documentée (corrigé M11-E05).
+# Sortie : « inchangé » ou « mis à jour » (lue par Ansible pour changed_when). Code ≠ 0 si une
+# vérification échoue : rien n'est publié.
+set -euo pipefail
+
+TROUSSEAU=/usr/share/keyrings/debian-archive-keyring.gpg
+
+erreur() { printf 'pxe-installateurs : %s\n' "$*" >&2; exit 1; }
+
+telecharger() { # URL FICHIER — HTTPS uniquement, certificat vérifié, échec si code HTTP ≥ 400
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    --retry 3 --max-time 600 -o "$2" "$1"
+}
+
+empreinte() { sha256sum "$1" | cut -d ' ' -f 1; }
+
+# publier NOM RACINE NOYAU INITRD DOSSIER_TEMP — remplace /srv/http/NOM par un lien vers une
+# version horodatée : un client qui télécharge pendant la mise à jour lit l'ancienne ou la
+# nouvelle version, jamais un mélange des deux.
+publier() {
+  local nom="$1" racine="$2" noyau="$3" initrd="$4" tmp="$5" version cible
+  if [[ -L "$racine/$nom" ]] \
+     && cmp -s "$racine/$nom/$noyau" "$tmp/$noyau" \
+     && cmp -s "$racine/$nom/$initrd" "$tmp/$initrd"; then
+    echo "inchangé"
+    return 0
+  fi
+  version="$nom.$(date +%Y%m%d%H%M%S)"
+  cible="$racine/.versions/$version"
+  install -d -m 755 "$racine/.versions" "$cible"
+  install -m 644 "$tmp/$noyau" "$tmp/$initrd" "$cible/"
+  [[ -f "$tmp/EMPREINTES" ]] && install -m 644 "$tmp/EMPREINTES" "$cible/"
+  ln -sfn ".versions/$version" "$racine/$nom.nouveau"
+  mv -Tf "$racine/$nom.nouveau" "$racine/$nom"
+  # On garde les deux dernières versions (retour arrière rapide), on efface les autres.
+  find "$racine/.versions" -mindepth 1 -maxdepth 1 -name "$nom.*" -printf '%f\n' | sort | head -n -2 \
+    | while read -r ancienne; do rm -rf -- "$racine/.versions/$ancienne"; done
+  echo "mis à jour"
+}
+
+debian() {
+  local nom="$1" suite="$2" miroir="${3%/}" racine="$4" tmp base images ref attendue f
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+  base="$miroir/dists/$suite"
+  images="$base/main/installer-amd64/current/images"
+  ref="main/installer-amd64/current/images/SHA256SUMS"
+
+  telecharger "$base/Release" "$tmp/Release"
+  telecharger "$base/Release.gpg" "$tmp/Release.gpg"
+  # Le Release porte PLUSIEURS signatures (clés des versions successives) : gpgv sort en erreur
+  # dès qu'il manque UNE clé publique, même si une autre signature est bonne. On fait comme apt :
+  # au moins une signature valide (VALIDSIG) d'une clé du trousseau, et aucune signature fausse.
+  gpgv --status-fd 3 --keyring "$TROUSSEAU" "$tmp/Release.gpg" "$tmp/Release" \
+    3>"$tmp/gpgv.etat" 2>"$tmp/gpgv.log" || true
+  if ! grep -q '^\[GNUPG:\] VALIDSIG ' "$tmp/gpgv.etat" \
+     || grep -Eq '^\[GNUPG:\] (BADSIG|EXPKEYSIG|REVKEYSIG) ' "$tmp/gpgv.etat"; then
+    cat "$tmp/gpgv.log" >&2
+    erreur "signature du fichier Release invalide ($suite)"
+  fi
+
+  # Empreinte attendue de SHA256SUMS : dans la section « SHA256: » du Release signé.
+  attendue="$(awk -v ref="$ref" '/^SHA256:/ {s=1; next} /^[^ ]/ {s=0} s && $3 == ref {print $1}' "$tmp/Release")"
+  [[ -n "$attendue" ]] || erreur "$ref absent du fichier Release"
+  telecharger "$images/SHA256SUMS" "$tmp/SHA256SUMS"
+  [[ "$(empreinte "$tmp/SHA256SUMS")" == "$attendue" ]] || erreur "SHA256SUMS ne correspond pas au Release signé"
+
+  for f in linux initrd.gz; do
+    attendue="$(awk -v ref="./netboot/debian-installer/amd64/$f" '$2 == ref {print $1}' "$tmp/SHA256SUMS")"
+    [[ -n "$attendue" ]] || erreur "netboot/debian-installer/amd64/$f absent de SHA256SUMS"
+    telecharger "$images/netboot/debian-installer/amd64/$f" "$tmp/$f"
+    [[ "$(empreinte "$tmp/$f")" == "$attendue" ]] || erreur "empreinte de $f incorrecte"
+    printf '%s  %s\n' "$attendue" "$f" >>"$tmp/EMPREINTES"
+  done
+  publier "$nom" "$racine" linux initrd.gz "$tmp"
+}
+
+rocky() {
+  local nom="$1" version="$2" miroir="${3%/}" racine="$4" tmp base attendue f
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+  base="$miroir/$version/BaseOS/x86_64/os"
+
+  telecharger "$base/.treeinfo" "$tmp/treeinfo"
+  grep -Eq "^version = ${version//./\\.}" "$tmp/treeinfo" || erreur ".treeinfo ne décrit pas la version $version"
+  for f in vmlinuz initrd.img; do
+    attendue="$(sed -nE "s#^images/pxeboot/$f = sha256:([0-9a-f]{64})\$#\\1#p" "$tmp/treeinfo")"
+    [[ -n "$attendue" ]] || erreur "empreinte de images/pxeboot/$f absente de .treeinfo"
+    telecharger "$base/images/pxeboot/$f" "$tmp/$f"
+    [[ "$(empreinte "$tmp/$f")" == "$attendue" ]] || erreur "empreinte de $f incorrecte"
+    printf '%s  %s\n' "$attendue" "$f" >>"$tmp/EMPREINTES"
+  done
+  publier "$nom" "$racine" vmlinuz initrd.img "$tmp"
+}
+
+[[ $# -eq 5 ]] || erreur "usage : pxe-installateurs debian|rocky <nom> <suite|version> <miroir> <racine-http>"
+case "$1" in
+  debian) debian "$2" "$3" "$4" "$5" ;;
+  rocky)  rocky "$2" "$3" "$4" "$5" ;;
+  *) erreur "type inconnu : $1 (debian ou rocky)" ;;
+esac

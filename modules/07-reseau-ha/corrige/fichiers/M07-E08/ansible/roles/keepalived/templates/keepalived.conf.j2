@@ -1,0 +1,80 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# Géré par Ansible (rôle keepalived, plateforme/ansible) : ne pas modifier à la main.
+# Validation : keepalived -t -f /etc/keepalived/keepalived.conf
+# État courant : journalctl -t keepalived-transition ; ip -br addr ; kill -USR1 (→ /tmp/keepalived.data)
+
+global_defs {
+    router_id {{ keepalived_routeur_id }}
+    vrrp_version {{ keepalived_vrrp_version }}
+    script_user {{ keepalived_utilisateur_scripts }}
+    enable_script_security
+{% if keepalived_garp_rafraichissement | int > 0 %}
+    vrrp_garp_master_refresh {{ keepalived_garp_rafraichissement }}
+{% endif %}
+}
+{% for s in keepalived_scripts %}
+
+vrrp_script {{ s.nom }} {
+    script "{{ s.commande }}"
+    interval {{ s.intervalle | default(2) }}
+    timeout {{ s.delai | default(3) }}
+    fall {{ s.echecs | default(2) }}
+    rise {{ s.succes | default(2) }}
+{% if s.poids is defined %}
+    weight {{ s.poids }}
+{% endif %}
+}
+{% endfor %}
+{% for g in keepalived_groupes_synchro %}
+
+vrrp_sync_group {{ g.nom }} {
+    group {
+{% for i in g.instances %}
+        {{ i }}
+{% endfor %}
+    }
+}
+{% endfor %}
+{% for i in keepalived_instances %}
+
+vrrp_instance {{ i.nom }} {
+    state {{ i.etat_initial | default('BACKUP') }}
+    interface {{ i.interface }}
+    virtual_router_id {{ i.vrid }}
+    priority {{ i.priorite }}
+    advert_int {{ i.intervalle | default(1) }}
+{% if not (i.preemption | default(true)) %}
+    nopreempt
+{% elif i.delai_preemption | default(0) | int > 0 %}
+    preempt_delay {{ i.delai_preemption }}
+{% endif %}
+{% if i.source is defined %}
+    unicast_src_ip {{ i.source }}
+    unicast_peer {
+{% for p in i.pairs %}
+        {{ p }}
+{% endfor %}
+    }
+{% endif %}
+    virtual_ipaddress {
+{% for v in i.vips %}
+        {{ v }} dev {{ i.interface }}
+{% endfor %}
+    }
+{% if i.scripts | default([]) | length > 0 %}
+    track_script {
+{% for s in i.scripts %}
+        {{ s }}
+{% endfor %}
+    }
+{% endif %}
+{% if i.interfaces_suivies | default([]) | length > 0 %}
+    track_interface {
+{% for t in i.interfaces_suivies %}
+        {{ t }}
+{% endfor %}
+    }
+{% endif %}
+    notify "{{ keepalived_notification }}"
+}
+{% endfor %}

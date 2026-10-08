@@ -1,0 +1,26 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT M07-E25 : VRRP entre les passerelles.
+# Une règle par interface (une source par VLAN : les deux adresses propres ; un paquet de la
+# passerelle elle-même ne traverse pas sa chaîne input, la sienne ne gêne pas). Protocole IP 112,
+# sans port (filtre regle_nft étendu en M07-E25). Le VLAN WAN (VRID 250) s'ajoute en M07-E26.
+pare_feu_entree:
+  # … règles existantes …
+  - {entree: $V_MGMT, source: [10.10.10.2, 10.10.10.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 10 (VRID 10)", ref: M07-E25}
+  - {entree: $V_INFRA, source: [10.10.20.2, 10.10.20.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 20 (VRID 20)", ref: M07-E25}
+  - {entree: '"ens19.30"', source: [10.10.30.2, 10.10.30.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 30 (VRID 30)", ref: M07-E25}
+  - {entree: '"ens19.40"', source: [10.10.40.2, 10.10.40.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 40 (VRID 40)", ref: M07-E25}
+  - {entree: '"ens19.50"', source: [10.10.50.2, 10.10.50.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 50 (VRID 50)", ref: M07-E25}
+  - {entree: '"ens19.52"', source: [10.10.52.2, 10.10.52.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 52 (VRID 52)", ref: M07-E25}
+  - {entree: '"ens19.60"', source: [10.10.60.2, 10.10.60.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 60 (VRID 60)", ref: M07-E25}
+  - {entree: '"ens19.70"', source: [10.10.70.2, 10.10.70.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 70 (VRID 70)", ref: M07-E25}
+  - {entree: $V_SANDBOX, source: [10.10.99.2, 10.10.99.3], proto: vrrp,
+     motif: "VRRP entre passerelles, VLAN 99 (VRID 99)", ref: M07-E25}
+  # BGP de leaf01 (M07-E16) : la session vise désormais les adresses propres ; la règle d'entrée
+  # (source 10.10.99.251, TCP 179, interface $V_SANDBOX) ne change pas.

@@ -1,0 +1,24 @@
+---
+# host_vars/leaf01/frr.yml — état de fin de M07-E06 : OSPF zone 0.
+# vfab7 (lien direct entre leaves) coûte 30 : le chemin direct (30) est plus cher que les deux
+# chemins par les spines (10 + 10 = 20), qui deviennent égaux → ECMP.
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.11/32]
+    ospf: {zone: 0.0.0.0}
+  - nom: eth1
+    description: vers spine01 (vfab1)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+  - nom: eth2
+    description: vers spine02 (vfab3)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+  # Lien serveur : annoncé, mais aucune adjacence (passive) : srv01 ne parle pas OSPF.
+  - nom: eth3
+    description: vers srv01 (vfab5)
+    ospf: {zone: 0.0.0.0}
+  - nom: eth4
+    description: vers leaf02 (vfab7)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 30, passive: false}
+
+frr_ospf:
+  router_id: 10.10.255.11

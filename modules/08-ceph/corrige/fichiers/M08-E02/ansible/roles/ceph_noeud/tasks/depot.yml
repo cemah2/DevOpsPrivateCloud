@@ -1,0 +1,35 @@
+---
+# Clé de ceph.com importée SEULEMENT si son empreinte est celle attendue (rpm_key la vérifie
+# après téléchargement et échoue sinon).
+- name: Clé de signature des paquets de ceph.com
+  ansible.builtin.rpm_key:
+    key: "{{ ceph_noeud_cle_url }}"
+    fingerprint: "{{ ceph_noeud_cle_empreinte | replace(' ', '') }}"
+    state: present
+
+- name: Dépôt CRB (dépendances de ceph-common)
+  community.general.dnf_config_manager:
+    name: crb
+    state: enabled
+  when: ceph_noeud_ceph_common | bool and ceph_noeud_epel | bool
+
+- name: EPEL (paquet epel-release du dépôt extras de Rocky)
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+  when: ceph_noeud_ceph_common | bool and ceph_noeud_epel | bool
+
+# Deux dépôts : noarch (cephadm, ceph-volume…) et x86_64 (ceph-common, bibliothèques).
+# gpgcheck : chaque paquet est vérifié avec la clé importée ci-dessus.
+- name: Dépôts Ceph de la version épinglée
+  ansible.builtin.yum_repository:
+    name: "ceph-{{ item }}"
+    description: "Ceph {{ ceph_noeud_version }} ({{ item }}) — download.ceph.com"
+    baseurl: "{{ ceph_noeud_depot_base }}/{{ item }}"
+    gpgcheck: true
+    gpgkey: "{{ ceph_noeud_cle_url }}"
+    enabled: true
+    file: ceph
+  loop:
+    - noarch
+    - x86_64

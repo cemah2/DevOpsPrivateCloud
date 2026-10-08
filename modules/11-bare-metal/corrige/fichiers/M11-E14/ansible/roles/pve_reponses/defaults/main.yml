@@ -1,0 +1,14 @@
+---
+# Rôle pve_reponses — service de réponse de l'installateur automatique de Proxmox VE sur pxe01
+# (M11-E14). Derrière nginx (rôle pxe : inclusion /etc/nginx/pxe.d/), écoute locale seulement.
+pve_reponses_adresse: 127.0.0.1
+pve_reponses_port: 8090
+pve_reponses_chemin: /pve/reponse
+# Jeton « <nom>:<secret> » (Vault, identité critique ; registre des secrets). Le même jeton est
+# donné à prepare-iso --answer-auth-token et se retrouve EN CLAIR dans l'initrd produit.
+pve_reponses_jeton: ""
+# Machines servies : [{mac, fichier}] ; fichiers lus sur le contrôleur dans pve_reponses_depot.
+pve_reponses_machines: []
+pve_reponses_depot: "{{ lookup('ansible.builtin.env', 'WB_SRC') | default(lookup('ansible.builtin.env', 'HOME') ~ '/src', true) }}/provisioning/pve-answer"
+# Clients autorisés (le VLAN 60, adm01 pour les essais)
+pve_reponses_clients: [10.10.60.0/24, 10.10.10.10]

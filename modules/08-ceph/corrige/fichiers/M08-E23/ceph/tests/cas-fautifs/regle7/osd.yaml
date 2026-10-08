@@ -1,0 +1,10 @@
+# Cas fautif de la règle 7 : tous les disques, 4 Gio par OSD.
+service_type: osd
+service_id: tout
+placement:
+  label: osd
+spec:
+  data_devices:
+    all: true
+config:
+  osd_memory_target: 4294967296

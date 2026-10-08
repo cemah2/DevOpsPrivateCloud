@@ -1,0 +1,19 @@
+---
+# Rôle bonding — laboratoire d'agrégation de liens dans net01 (M07-E04).
+# Deux espaces de noms reliés par N paires veth, un bond de chaque côté. Le pont Linux de pve01
+# ne relaie pas LACP (01:80:c2:00:00:02) : c'est ici, entre espaces de noms, qu'on le pratique.
+# Rôle de LABORATOIRE (maquette) : il n'a rien à faire sur un hôte du socle.
+
+bonding_espace_serveur: ns-srv
+bonding_espace_commutateur: ns-sw
+bonding_liens: 2                 # paires veth vsrvN <-> vswN, N = 0 .. liens-1
+bonding_mode: 802.3ad            # active-backup | balance-xor | 802.3ad
+bonding_miimon: 100              # ms ; 0 = aucune surveillance de la porteuse
+bonding_lacp_rate: fast          # 802.3ad seulement : slow (30 s) | fast (1 s)
+bonding_hachage: layer3+4        # balance-xor et 802.3ad : layer2 | layer2+3 | layer3+4
+bonding_primaire: ""             # active-backup : esclave préféré (ex. vsrv0), vide = aucun
+# Mode du côté « commutateur » : identique par défaut. Le changer sert à reproduire un
+# désaccord (E04, étape 7 ; panne M07-E40).
+bonding_mode_commutateur: "{{ bonding_mode }}"
+bonding_adresse_serveur: 172.31.70.1/24
+bonding_adresse_commutateur: 172.31.70.2/24

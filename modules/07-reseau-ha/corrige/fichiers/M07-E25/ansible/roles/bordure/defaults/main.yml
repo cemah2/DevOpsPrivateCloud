@@ -1,0 +1,8 @@
+---
+# Rôle bordure — ce qui suit le maître VRRP de la bordure et n'est pas une adresse (M07-E25).
+# Le script /usr/local/sbin/bordure-transition est appelé par keepalived (notify du groupe BORDURE).
+
+# Tunnels WireGuard montés sur le maître seulement (M07-E26) : ["wg0", "wg1", "wg2"].
+bordure_tunnels: []
+# Synchronisation des connexions par conntrackd (M07-E27).
+bordure_conntrackd: false

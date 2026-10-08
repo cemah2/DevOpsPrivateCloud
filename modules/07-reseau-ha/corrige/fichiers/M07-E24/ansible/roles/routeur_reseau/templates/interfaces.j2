@@ -1,0 +1,46 @@
+# /etc/network/interfaces — {{ inventory_hostname }}, passerelle de la bordure PAR1
+# {{ routeur_reseau_entete }}
+# Source : rôle routeur_reseau (M07-E24) ; adresses : group_vars/role_routeur, host_vars/{{ inventory_hostname }}.
+# Les VIP (.1 de chaque VLAN, VIP WAN) ne sont PAS ici : keepalived les pose sur la passerelle active.
+# Appliquer un changement d'ADRESSE à la main est une coupure : passe par le rôle (ip address add à
+# chaud) ou par playbooks/migration-vrrp.yml, jamais par « systemctl restart networking ».
+
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+{% for r in routeur_reseau_routes_garde %}
+    up ip route replace unreachable {{ r }} metric {{ routeur_reseau_metrique_garde }}
+{% endfor %}
+
+# --- WAN : LAN maison (net0 -> vmbr0), adresse PROPRE (accès de secours) --------------------
+auto {{ routeur_reseau_wan_interface }}
+iface {{ routeur_reseau_wan_interface }} inet static
+    address {{ routeur_reseau_wan_adresse }}
+    gateway {{ routeur_reseau_wan_passerelle }}
+
+# --- Trunk vers vmbr1 (net1, sans étiquette) --------------------------------------------------
+auto {{ routeur_reseau_trunk }}
+iface {{ routeur_reseau_trunk }} inet manual
+    mtu {{ routeur_reseau_trunk_mtu }}
+    up ip link set dev $IFACE up
+    down ip link set dev $IFACE down
+
+# --- Sous-interfaces des VLAN routés ------------------------------------------------------------
+{% for v in routeur_reseau_vlans %}
+{%   set ifc = routeur_reseau_trunk ~ '.' ~ v.id %}
+auto {{ ifc }}
+{%   if v.id in routeur_reseau_vip_statique %}
+# VLAN {{ v.id }} : « .1 » encore statique (migration VRRP en cours, M07-E25), adresse propre en second.
+iface {{ ifc }} inet static
+    address 10.10.{{ v.id }}.1/24
+    mtu {{ v.mtu }}
+iface {{ ifc }} inet static
+    address 10.10.{{ v.id }}.{{ routeur_reseau_suffixe }}/24
+{%   else %}
+iface {{ ifc }} inet static
+    address 10.10.{{ v.id }}.{{ routeur_reseau_suffixe }}/24
+    mtu {{ v.mtu }}
+{%   endif %}
+
+{% endfor %}

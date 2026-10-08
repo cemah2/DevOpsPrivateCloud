@@ -1,0 +1,25 @@
+---
+# Rôle pve_cluster (M09-E18). Hôtes : groupe hv_par1 (hv01-03).
+
+- name: Le nœud est un nœud Proxmox VE d'un cluster qui a le quorum
+  ansible.builtin.command: corosync-quorumtool -s
+  register: _pve_cluster_quorum
+  changed_when: false
+  failed_when: >-
+    _pve_cluster_quorum.rc != 0
+    or (_pve_cluster_quorum.stdout is not search('Quorate:\s+Yes'))
+
+- name: Le nœud a une adresse et une priorité déclarées
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname in pve_cluster_adresses
+      - inventory_hostname in pve_cluster_priorites
+    fail_msg: "{{ inventory_hostname }} absent de pve_cluster_adresses ou pve_cluster_priorites."
+    quiet: true
+
+- name: Certificat de l'API valable pour le nom de la VIP
+  ansible.builtin.include_tasks: certificat.yml
+  when: pve_cluster_cert_gere | bool
+
+- name: VIP de l'API
+  ansible.builtin.include_tasks: keepalived.yml

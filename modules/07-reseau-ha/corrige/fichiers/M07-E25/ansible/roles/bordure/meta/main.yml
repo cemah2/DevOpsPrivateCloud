@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Script de transition VRRP de la bordure (état, tunnels, conntrackd) (M07-E25).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

@@ -1,0 +1,8 @@
+---
+# group_vars/hv_par1/pve_noeud.yml — nœuds du cluster imbriqué hv-par1 (M09-E03).
+ansible_user: root
+# Python de Debian 13, présent sur Proxmox VE.
+ansible_python_interpreter: /usr/bin/python3
+
+# Pas de compte « admin » ni de sudo sur un nœud : le rôle base (comptes, sudo, durcissement
+# SSH du socle) ne s'y applique pas. ssh_ca_hote, lui, s'applique (certificat d'hôte).

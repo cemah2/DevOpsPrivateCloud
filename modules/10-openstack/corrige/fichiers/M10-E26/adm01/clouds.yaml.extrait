@@ -1,0 +1,12 @@
+# ~/.config/openstack/clouds.yaml — EXTRAIT : nuage de la sonde (M10-E26). Aucun secret ici :
+# le secret de l'identifiant d'application est dans secure.yaml (600), fusionné par la CLI.
+clouds:
+  medisphere-supervision:
+    auth_type: v3applicationcredential
+    auth:
+      auth_url: https://openstack.par1.medisphere.internal:5000/v3
+      application_credential_id: "<ID-DE-supervision-adm01>"
+    region_name: RegionOne
+    interface: public
+    identity_api_version: 3
+    cacert: /usr/local/share/ca-certificates/medisphere-root-ca.crt

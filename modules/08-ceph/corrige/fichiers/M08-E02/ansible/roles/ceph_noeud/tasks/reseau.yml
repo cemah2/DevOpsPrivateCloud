@@ -1,0 +1,72 @@
+---
+# MTU : la carte Proxmox (mtu=9000, module vm-noeud) l'annonce à virtio ; NetworkManager doit
+# le garder. On le fixe dans le profil de la carte pour qu'il survive à un redémarrage.
+- name: Profil NetworkManager de chaque carte
+  ansible.builtin.command:
+    cmd: "nmcli -g GENERAL.CONNECTION device show {{ item.nom }}"
+  loop: "{{ ceph_noeud_interfaces }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _ceph_noeud_profils
+  changed_when: false
+
+- name: Chaque carte a un profil actif
+  ansible.builtin.assert:
+    that: item.stdout | trim | length > 0
+    fail_msg: "{{ item.item.nom }} n'a pas de profil NetworkManager actif (carte absente ?)."
+    quiet: true
+  loop: "{{ _ceph_noeud_profils.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+
+- name: MTU enregistré dans chaque profil
+  ansible.builtin.command:
+    argv: [nmcli, -g, 802-3-ethernet.mtu, connection, show, "{{ item.stdout | trim }}"]
+  loop: "{{ _ceph_noeud_profils.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+  register: _ceph_noeud_mtu_profils
+  changed_when: false
+
+- name: Fixer le MTU dans le profil et l'appliquer à chaud
+  ansible.builtin.shell:
+    cmd: >-
+      set -e;
+      nmcli connection modify "{{ item.item.stdout | trim }}" 802-3-ethernet.mtu {{ item.item.item.mtu }};
+      nmcli device reapply {{ item.item.item.nom }}
+  loop: "{{ _ceph_noeud_mtu_profils.results }}"
+  loop_control:
+    label: "{{ item.item.item.nom }}"
+  when: (item.stdout | trim) != (item.item.item.mtu | string)
+  changed_when: true
+
+- name: Lire le MTU effectif des cartes
+  ansible.builtin.slurp:
+    src: "/sys/class/net/{{ item.nom }}/mtu"
+  loop: "{{ ceph_noeud_interfaces }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _ceph_noeud_mtu_effectif
+
+- name: MTU effectif conforme
+  ansible.builtin.assert:
+    that: (item.content | b64decode | trim) == (item.item.mtu | string)
+    fail_msg: "{{ item.item.nom }} : MTU {{ item.content | b64decode | trim }}, attendu {{ item.item.mtu }}."
+    quiet: true
+  loop: "{{ _ceph_noeud_mtu_effectif.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+
+# -M do : interdit la fragmentation ; 8972 + 28 (en-têtes IP et ICMP) = 9000. Un seul maillon
+# à 1500 (carte, pont, VNet) et le ping échoue : c'est exactement ce qu'on veut savoir AVANT
+# de déployer des OSD dont la réplication passera par là.
+- name: Trames jumbo vers les autres nœuds, réseaux public et cluster
+  ansible.builtin.command:
+    argv: [ping, -c, "2", -W, "2", -M, do, -s, "{{ ceph_noeud_taille_ping }}", "{{ item }}"]
+  loop: >-
+    {{ (ceph_noeuds | default({})) | dict2items
+       | rejectattr('key', 'equalto', inventory_hostname)
+       | map(attribute='value') | map('dict2items') | flatten
+       | selectattr('key', 'in', ['public', 'cluster']) | map(attribute='value') | list }}
+  when: ceph_noeud_verifier_reseau | bool
+  changed_when: false

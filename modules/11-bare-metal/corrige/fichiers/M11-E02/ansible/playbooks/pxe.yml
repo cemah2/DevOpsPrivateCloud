@@ -1,0 +1,13 @@
+---
+# playbooks/pxe.yml — serveur de démarrage réseau pxe01 (M11-E02), groupe role_pxe (étiquette
+# role-pxe dans NetBox et Proxmox), sur le modèle de playbooks/statut.yml (M06-E34).
+# Le filtrage local (pare_feu_local) n'est PAS appliqué à pxe01 : TFTP ouvre ses transferts sur
+# des ports éphémères (assistant de suivi de connexion nf_conntrack_tftp) ; écart traité en M11-E13.
+- name: Serveur de démarrage réseau du VLAN 60
+  hosts: role_pxe
+  become: true
+  roles:
+    - role: base
+    - role: ssh_durci
+    - role: ssh_ca_hote
+    - role: pxe

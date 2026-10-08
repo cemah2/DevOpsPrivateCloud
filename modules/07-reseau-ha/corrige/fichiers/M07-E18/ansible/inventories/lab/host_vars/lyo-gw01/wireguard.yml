@@ -1,0 +1,25 @@
+---
+# host_vars/lyo-gw01/wireguard.yml — routeur de l'agence LYO1 (M07-E18). Version statique.
+# Son « Internet » est le VLAN 99 (eth0, 10.10.99.250) ; l'extrémité de PAR1 est la passerelle de
+# ce VLAN, 10.10.99.1 (la VIP à partir de M07-E25 : rien à changer ici).
+# Clé privée : host_vars/lyo-gw01/vault-lab.yml (chiffré, identité « lab » : maquette jetable).
+wireguard_interfaces:
+  - nom: wg2
+    adresse: 10.255.2.2/24
+    port: 51822
+    cle_privee: "{{ vault_wireguard_wg2_cle_privee }}"
+    table: "off"
+    # Seuls les réseaux de PAR1 OUVERTS à l'agence (INFRA : DNS ; DMZ : services publiés).
+    # Pas de MGMT : l'administration de LYO1 ne passe pas par le tunnel.
+    post_up:
+      - ip route replace 10.10.20.0/24 dev %i
+      - ip route replace 10.10.70.0/24 dev %i
+    pilotage: role
+    pairs:
+      - nom: bordure PAR1
+        cle_publique: "<CLE-PUBLIQUE-WG2-DE-GW01>"
+        endpoint: "10.10.99.1:51822"
+        allowed_ips: [10.255.2.1/32, 10.10.20.0/24, 10.10.70.0/24]
+        # Toutes les 25 s : entretient l'état des pare-feu intermédiaires (une agence derrière une
+        # box) et permet à PAR1 de joindre l'agence même si elle n'a rien envoyé depuis longtemps.
+        keepalive: 25

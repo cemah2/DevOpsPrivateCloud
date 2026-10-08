@@ -1,0 +1,17 @@
+# ~/.config/openstack/clouds.yaml sur adm01 (M10-E04 : cloud d'administration).
+# AUCUN mot de passe ici : ils sont dans secure.yaml (600), que la CLI fusionne avec ce fichier.
+# Point d'accès PUBLIC (VIP externe, HTTPS, certificat de ca01) : jamais l'URL interne en HTTP
+# que contient le clouds.yaml produit par « kolla-ansible post-deploy ».
+clouds:
+  medisphere-admin:
+    auth:
+      auth_url: https://openstack.par1.medisphere.internal:5000/v3
+      username: admin
+      user_domain_name: Default
+      project_name: admin
+      project_domain_name: Default
+    region_name: RegionOne
+    interface: public
+    identity_api_version: 3
+    # Sans cacert, le client Python ne connaît que les autorités du paquet certifi.
+    cacert: /usr/local/share/ca-certificates/medisphere-root-ca.crt

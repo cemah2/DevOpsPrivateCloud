@@ -1,0 +1,18 @@
+# group_vars/role_routeur/keepalived.yml — EXTRAIT M07-E26 : instance WAN ajoutée à la liste
+# keepalived_instances (même groupe BORDURE : la VIP WAN bascule AVEC les VIP des VLAN, sinon la
+# traduction vers la VIP WAN ne servirait à rien et les retours partiraient par l'autre passerelle).
+bordure_wan_vip: 192.168.1.50/24   # <IP-GW-WAN-VIP>/<MASQUE>
+
+keepalived_instances:
+  # … neuf instances VLANxx de M07-E25 …
+  - nom: WAN
+    actif: "{{ keepalived_wan_actif | default(false) }}"
+    interface: ens18
+    vrid: 250
+    priorite: "{{ bordure_priorite }}"
+    etat_initial: BACKUP
+    intervalle: 1
+    preemption: false
+    source: "{{ routeur_reseau_wan_adresse | split('/') | first }}"
+    pairs: ["{{ bordure_wan_pair }}"]
+    vips: ["{{ bordure_wan_vip }}"]

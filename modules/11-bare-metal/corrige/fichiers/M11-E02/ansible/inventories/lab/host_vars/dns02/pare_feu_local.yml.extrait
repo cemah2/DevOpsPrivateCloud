@@ -1,0 +1,7 @@
+# À INTÉGRER dans host_vars/dns01/pare_feu_local.yml ET host_vars/dns02/pare_feu_local.yml (M11-E02).
+# Les requêtes relayées arrivent de l'adresse INFRA des passerelles (10.10.20.2 et .3 depuis
+# M07-E25) : la règle « DHCP relayé » de M06-E25 doit les contenir toutes les deux.
+  - {source: [10.10.20.2, 10.10.20.3], proto: udp, ports_source: 67, ports: 67,
+     motif: "DHCP relayé par gw01 et gw02 (source = leur adresse INFRA)", ref: M11-E02}
+  - {source: 10.10.60.0/24, proto: udp, ports_source: 68, ports: 67,
+     motif: "renouvellements DHCP en unicast (VLAN 60)", ref: M11-E02}

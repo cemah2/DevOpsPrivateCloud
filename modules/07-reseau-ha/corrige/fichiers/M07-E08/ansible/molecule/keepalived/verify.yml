@@ -1,0 +1,66 @@
+---
+# molecule/keepalived/verify.yml — élection, bascule sur échec du script de suivi, retour
+# (préemption), journal des transitions.
+- name: Vérifier le rôle keepalived
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    vip: 10.10.99.239
+    prioritaire: m07-mol-ka-a
+    secours: m07-mol-ka-b
+  tasks:
+    - name: Configuration valide et service actif
+      ansible.builtin.command: keepalived -t -f /etc/keepalived/keepalived.conf
+      changed_when: false
+
+    - name: Laisser l'élection se faire
+      ansible.builtin.pause:
+        seconds: 5
+      run_once: true
+
+    - name: Qui porte la VIP ?
+      ansible.builtin.command: ip -4 -br addr show
+      register: adresses
+      changed_when: false
+
+    - name: Seule l'instance prioritaire porte la VIP
+      ansible.builtin.assert:
+        that: >-
+          (adresses.stdout is search(vip ~ '/24')) == (inventory_hostname == prioritaire)
+        fail_msg: "{{ inventory_hostname }} : VIP mal placée ({{ adresses.stdout_lines }})."
+
+    - name: Rendre l'instance prioritaire « malade »
+      ansible.builtin.file:
+        path: /run/keepalived-essai-sain
+        state: absent
+      when: inventory_hostname == prioritaire
+
+    - name: La VIP passe sur le secours
+      ansible.builtin.command: ip -4 -br addr show
+      register: bascule
+      changed_when: false
+      until: (bascule.stdout is search(vip ~ '/24')) == (inventory_hostname == secours)
+      retries: 10
+      delay: 1
+
+    - name: Guérir l'instance prioritaire
+      ansible.builtin.copy:
+        dest: /run/keepalived-essai-sain
+        content: ""
+        mode: "0644"
+      when: inventory_hostname == prioritaire
+
+    - name: La VIP revient (préemption)
+      ansible.builtin.command: ip -4 -br addr show
+      register: retour
+      changed_when: false
+      until: (retour.stdout is search(vip ~ '/24')) == (inventory_hostname == prioritaire)
+      retries: 15
+      delay: 1
+
+    - name: Les transitions sont journalisées
+      ansible.builtin.command: journalctl -t keepalived-transition --since -10min --no-pager -o cat
+      register: journal
+      changed_when: false
+      failed_when: journal.stdout is not search('instance=ESSAI etat=MASTER')

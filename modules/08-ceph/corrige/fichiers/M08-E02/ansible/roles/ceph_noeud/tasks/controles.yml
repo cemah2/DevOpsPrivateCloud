@@ -1,0 +1,16 @@
+---
+- name: Le temps est synchronisé (chrony, passerelle du VLAN 30)
+  ansible.builtin.command:
+    cmd: chronyc -n tracking
+  register: _ceph_noeud_chrony
+  changed_when: false
+  failed_when: "'Leap status     : Normal' not in _ceph_noeud_chrony.stdout"
+
+# check-host vérifie ce que cephadm attend d'un hôte avant de l'ajouter au cluster :
+# moteur de conteneurs, systemctl, lvcreate, synchronisation du temps, nom d'hôte.
+- name: Contrôle « cephadm check-host »
+  ansible.builtin.command:
+    argv: [cephadm, check-host, --expect-hostname, "{{ inventory_hostname }}"]
+  register: _ceph_noeud_check_host
+  changed_when: false
+  when: ceph_noeud_check_host | bool

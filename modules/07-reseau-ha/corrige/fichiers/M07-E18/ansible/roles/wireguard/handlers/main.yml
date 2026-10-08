@@ -1,0 +1,19 @@
+---
+# Une interface ACTIVE reçoit la nouvelle configuration de ses PAIRS sans être démontée
+# (« wg syncconf » ne touche ni aux adresses ni aux routes) : pas de coupure du tunnel. Un
+# changement d'adresse, de table, de MTU ou de PostUp n'est pris qu'au redémarrage de l'interface
+# (systemctl restart wg-quick@wgN) : geste explicite, dans un playbook ou une fenêtre (M07-E19).
+- name: Resynchroniser les interfaces WireGuard actives
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for f in /etc/wireguard/*.conf; do
+      i="$(basename "$f" .conf)"
+      if ip link show dev "$i" >/dev/null 2>&1; then
+        wg syncconf "$i" <(wg-quick strip "$i")
+        echo "resynchronisé : $i"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: _wireguard_sync
+  changed_when: "'resynchronisé' in _wireguard_sync.stdout"

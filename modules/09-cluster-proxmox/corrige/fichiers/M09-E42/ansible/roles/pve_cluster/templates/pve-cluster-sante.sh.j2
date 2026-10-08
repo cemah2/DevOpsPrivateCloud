@@ -1,0 +1,24 @@
+#!/bin/sh
+# {{ pve_cluster_entete }}
+# Santé du nœud pour keepalived (rôle pve_cluster, M09-E18 ; contrôles 3 à 5 ajoutés après INC-3648,
+# M09-E42) : 0 = sain, autre = la VIP doit partir.
+#   1. le nœud est membre d'une partition qui a le QUORUM (sinon /etc/pve est en lecture seule) ;
+#   2. l'API répond sur 8006 avec un certificat qui se vérifie contre {{ pve_cluster_sante_ca }} et
+#      porte le nom de la VIP (sinon les clients échoueraient en TLS). 401 attendu sans jeton ;
+#   3. pve-cluster (pmxcfs) est actif ;
+#   4. /etc/pve est monté (pmxcfs a bien son système de fichiers) ;
+#   5. la base de pmxcfs peut grossir : au moins 5 % et 256 Mio libres sous /var/lib/pve-cluster.
+# Aucun contrôle n'écrit dans /etc/pve : une écriture toutes les {{ pve_cluster_sante_intervalle }} s
+# ferait tourner .version et la réplication Corosync en permanence.
+corosync-quorumtool -s 2>/dev/null | grep -Eq '^Quorate:[[:space:]]+Yes' || exit 1
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
+  --cacert {{ pve_cluster_sante_ca }} \
+  --resolve {{ pve_cluster_vip_nom }}:8006:127.0.0.1 \
+  https://{{ pve_cluster_vip_nom }}:8006/api2/json/version)" || exit 2
+[ "$code" = 401 ] || exit 3
+systemctl is-active -q pve-cluster || exit 4
+mountpoint -q /etc/pve || exit 5
+libre_mio="$(df -P -B1M /var/lib/pve-cluster | awk 'NR == 2 { print $4 }')"
+occupe_pct="$(df -P /var/lib/pve-cluster | awk 'NR == 2 { sub(/%/, "", $5); print $5 }')"
+[ "${libre_mio:-0}" -ge 256 ] && [ "${occupe_pct:-100}" -le 95 ] || exit 6
+exit 0

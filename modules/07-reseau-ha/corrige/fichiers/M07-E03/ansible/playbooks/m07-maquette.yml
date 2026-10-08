@@ -1,0 +1,50 @@
+---
+# playbooks/m07-maquette.yml — socle commun des VMs de la maquette du module 07 (M07-E03).
+# Lancement, depuis adm01 (jamais par le pipeline du socle) :
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-maquette.yml
+# Inventaire Proxmox : les VMs env-m07 n'ont pas l'étiquette « socle », l'inventaire NetBox
+# par défaut ne les contient pas.
+
+- name: Maquette M07 — attendre que les VMs répondent
+  hosts: env_m07
+  gather_facts: false
+  tasks:
+    - name: Attendre SSH et Python (premier démarrage, cloud-init)
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Attendre la fin de cloud-init
+      ansible.builtin.command: cloud-init status --wait
+      register: ci
+      changed_when: false
+      # 0 = terminé ; 2 = terminé avec avertissements récupérables (cloud-init ≥ 23.4)
+      failed_when: ci.rc not in [0, 2]
+
+- name: Maquette M07 — rôle commun
+  hosts: env_m07
+  become: true
+  roles:
+    - role: base
+
+- name: Maquette M07 — contrôles
+  hosts: env_m07
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Lire les adresses des cartes de fabric attendues (local.vms d'OpenTofu, via Proxmox)
+      ansible.builtin.set_fact:
+        m07_ipconfigs: >-
+          {{ hostvars[inventory_hostname] | dict2items
+             | selectattr('key', 'match', '^proxmox_ipconfig[1-9]$')
+             | map(attribute='value') | list }}
+
+    - name: Chaque carte de fabric a son adresse
+      ansible.builtin.assert:
+        that: >-
+          (item.ip | default('')).split('/') | first
+          in (ansible_facts['all_ipv4_addresses'] | default([]))
+        fail_msg: "Adresse {{ item.ip | default('?') }} absente de la VM : cloud-init n'a pas configuré la carte."
+        quiet: true
+      loop: "{{ m07_ipconfigs }}"
+      loop_control:
+        label: "{{ item.ip | default('?') }}"

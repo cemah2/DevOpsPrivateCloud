@@ -1,0 +1,65 @@
+---
+# playbooks/repartiteurs.yml — répartiteurs lb01/lb02 (groupe role_lb), M07-E12.
+# Appliqué par le pipeline de plateforme/ansible (jamais deux répartiteurs à la fois).
+#
+# serial: 1 + order: sorted : lb01 puis lb02 ; pendant qu'un répartiteur est reconfiguré,
+# l'autre porte (ou peut porter) la VIP. any_errors_fatal : si lb01 échoue, lb02 reste intact.
+# Ordre par hôte : keepalived d'abord (la VIP existe tôt), puis l'amorçage TLS d'HAProxy (voir
+# rôle haproxy) : HAProxy sans TLS → certificat ACME → HAProxy avec TLS.
+
+- name: Répartiteurs HAProxy + keepalived
+  hosts: role_lb
+  become: true
+  serial: 1
+  order: sorted
+  any_errors_fatal: true
+  tasks:
+    - name: "HAProxy (premier passage : HTTP et relais du défi ACME)"
+      ansible.builtin.include_role:
+        name: haproxy
+        apply:
+          tags: [haproxy]
+      tags: [haproxy]
+
+    - name: Keepalived (VIP 10.10.70.200, VRID 170)
+      ansible.builtin.include_role:
+        name: keepalived
+        apply:
+          tags: [keepalived]
+      tags: [keepalived]
+
+    - name: Certificat de la VIP par ACME
+      ansible.builtin.include_role:
+        name: certificats_acme
+        apply:
+          tags: [certificats]
+      tags: [certificats]
+
+    - name: "HAProxy (second passage : frontend TLS)"
+      ansible.builtin.include_role:
+        name: haproxy
+        apply:
+          tags: [haproxy]
+      tags: [haproxy]
+
+- name: Contrôle d'ensemble — une et une seule VIP portée
+  hosts: role_lb
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Lire les adresses de l'interface DMZ
+      ansible.builtin.command: ip -o -4 addr show dev eth0
+      register: _lb_adresses
+      changed_when: false
+      check_mode: false
+
+    - name: Exactement un répartiteur porte 10.10.70.200
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_play_hosts | map('extract', hostvars, ['_lb_adresses', 'stdout'])
+            | select('search', ' 10\.10\.70\.200/') | list | length == 1
+        fail_msg: "La VIP est portée par zéro ou deux répartiteurs : lire « journalctl -u keepalived » sur les deux."
+        quiet: true
+      run_once: true
+      when: not ansible_check_mode

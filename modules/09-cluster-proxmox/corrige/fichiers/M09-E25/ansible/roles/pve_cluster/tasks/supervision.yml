@@ -1,0 +1,80 @@
+---
+# roles/pve_cluster/tasks/supervision.yml — identité de supervision en lecture seule (M09-E25).
+# Inclus par tasks/main.yml du rôle (« - ansible.builtin.import_tasks: supervision.yml », tag
+# « supervision »). Exécuté sur UN nœud (run_once) : /etc/pve est commun au cluster.
+#
+# Ce que le code gère : l'utilisateur, l'existence du jeton, les ACL (utilisateur ET jeton).
+# Ce qu'il ne gère pas : le SECRET du jeton. Proxmox le génère et ne l'affiche qu'une fois, à la
+# création. La création initiale du jeton est donc un geste documenté (RB et registre des
+# secrets) : « pveum user token add wb-supervision@pve hv --privsep 1 », secret copié aussitôt
+# dans Vault critique (vault_pve_hv_supervision_secret) et dans ~/.config/workbook/
+# pve-hv-supervision.env de adm01. Le rôle échoue tant que le jeton n'existe pas : il ne le crée
+# pas lui-même, pour ne jamais faire passer un secret par un journal de CI.
+
+- name: Supervision | lire les utilisateurs et leurs jetons
+  ansible.builtin.command: pveum user list --full 1 --output-format json
+  register: pve_cluster_utilisateurs
+  changed_when: false
+  run_once: true
+
+- name: "Supervision | créer l'utilisateur de supervision (sans mot de passe : jeton seulement)"
+  ansible.builtin.command: >-
+    pveum user add {{ pve_cluster_supervision_utilisateur }}
+    --comment "Supervision en lecture seule (ms-verif-cluster, M09-E25)"
+  when: >-
+    pve_cluster_utilisateurs.stdout | from_json
+    | selectattr('userid', 'equalto', pve_cluster_supervision_utilisateur) | list | length == 0
+  changed_when: true
+  run_once: true
+
+- name: "Supervision | vérifier que le jeton existe (création initiale : voir l'en-tête)"
+  ansible.builtin.assert:
+    that:
+      - >-
+        (pve_cluster_utilisateurs.stdout | from_json
+         | selectattr('userid', 'equalto', pve_cluster_supervision_utilisateur)
+         | map(attribute='tokens') | flatten | select('defined')
+         | selectattr('tokenid', 'equalto', pve_cluster_supervision_jeton) | list | length) == 1
+    fail_msg: >-
+      Le jeton {{ pve_cluster_supervision_utilisateur }}!{{ pve_cluster_supervision_jeton }} n'existe pas.
+      Crée-le une fois à la main (secret affiché une seule fois → Vault critique), puis relance.
+    quiet: true
+  run_once: true
+  when: not ansible_check_mode
+
+- name: Supervision | lire les ACL
+  ansible.builtin.command: pveum acl list --output-format json
+  register: pve_cluster_acl
+  changed_when: false
+  run_once: true
+
+# Un jeton à privilèges séparés a besoin de SA propre ACL : ses droits sont l'intersection de
+# ceux de l'utilisateur et des siens. D'où deux ACL identiques.
+- name: Supervision | ACL sur / pour l'utilisateur et le jeton, rôle {{ pve_cluster_supervision_role }}
+  ansible.builtin.command: >-
+    pveum acl modify / --roles {{ pve_cluster_supervision_role }}
+    {{ '--users' if item.type == 'user' else '--tokens' }} {{ item.ugid }}
+  loop:
+    - { type: user, ugid: "{{ pve_cluster_supervision_utilisateur }}" }
+    - { type: token, ugid: "{{ pve_cluster_supervision_utilisateur }}!{{ pve_cluster_supervision_jeton }}" }
+  loop_control:
+    label: "{{ item.ugid }}"
+  when: >-
+    pve_cluster_acl.stdout | from_json
+    | selectattr('path', 'equalto', '/')
+    | selectattr('ugid', 'equalto', item.ugid)
+    | selectattr('roleid', 'equalto', pve_cluster_supervision_role) | list | length == 0
+  changed_when: true
+  run_once: true
+
+# Aucune autre ACL ne doit donner de droits à cette identité (un ajout « temporaire » oublié).
+- name: Supervision | refuser toute autre ACL sur l'identité de supervision
+  ansible.builtin.assert:
+    that:
+      - >-
+        pve_cluster_acl.stdout | from_json
+        | selectattr('ugid', 'match', '^' ~ (pve_cluster_supervision_utilisateur | regex_escape))
+        | rejectattr('roleid', 'equalto', pve_cluster_supervision_role) | list | length == 0
+    fail_msg: "{{ pve_cluster_supervision_utilisateur }} a une ACL autre que {{ pve_cluster_supervision_role }} : à retirer."
+    quiet: true
+  run_once: true

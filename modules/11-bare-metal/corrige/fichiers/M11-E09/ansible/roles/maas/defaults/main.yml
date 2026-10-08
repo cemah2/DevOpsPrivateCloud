@@ -1,0 +1,20 @@
+---
+# Rôle maas — MAAS 3.7 en mode « région + rack » sur Ubuntu 24.04, base PostgreSQL 16 du système
+# (méthode « production » de la documentation « Install MAAS » 3.7), M11-E09.
+# Ce rôle n'installe que le service : l'administrateur, la clé d'API, les images et le DHCP se
+# règlent ensuite (M11-E09, E10), à la main ou par la CLI, et sont décrits dans le corrigé.
+
+maas_canal: 3.7/stable
+maas_url: "http://{{ ansible_facts['default_ipv4']['address'] }}:5240/MAAS"
+
+maas_db_nom: maasdb
+maas_db_utilisateur: maas
+# Vault « critique » (group_vars/role_maas/vault-critique.yml) : vault_maas_db_mot_de_passe.
+maas_db_mot_de_passe: ""
+
+# Ancres de confiance ajoutées au magasin du système (le pilote « proxmox » vérifie le certificat de
+# pve01 avec « les certificats CA du système »). [{nom, source}] : source = fichier sur le CONTRÔLEUR.
+maas_ancres: []
+
+# Fichier témoin : l'initialisation (maas init) n'est faite qu'une fois.
+maas_temoin_init: /var/lib/medisphere/maas-init.fait

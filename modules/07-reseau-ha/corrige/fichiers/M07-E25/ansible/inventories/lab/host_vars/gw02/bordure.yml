@@ -1,0 +1,7 @@
+---
+# host_vars/gw02/bordure.yml — M07-E25.
+bordure_priorite: 100
+bordure_suffixe_pair: 2
+# Toujours un pas DERRIÈRE gw01 pendant la migration (jamais une instance sur gw02 dont la VIP n'est
+# pas déjà portée par keepalived sur gw01). État final :
+keepalived_vlans_vrrp: [99, 70, 60, 52, 50, 40, 30, 20, 10]

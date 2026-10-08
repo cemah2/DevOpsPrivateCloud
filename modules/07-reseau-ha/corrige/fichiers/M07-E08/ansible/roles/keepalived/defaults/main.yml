@@ -1,0 +1,46 @@
+---
+# Rôle keepalived — adresses virtuelles VRRP (M07-E08 sur la maquette ; répartiteurs E12,
+# passerelles E25-E26 ensuite). Les instances et les scripts sont des DONNÉES de l'inventaire.
+
+keepalived_paquets: [keepalived]
+keepalived_routeur_id: "{{ inventory_hostname }}"
+# VRRP v3 (RFC 9568) : pas d'authentification dans le protocole (elle est restée en v2).
+keepalived_vrrp_version: 3
+# Les scripts de suivi et de transition tournent sous ce compte (jamais root) ;
+# enable_script_security refuse un script modifiable par un autre que root.
+keepalived_utilisateur_scripts: keepalived_script
+# Répétition de l'ARP gratuit par le maître (s) : rattrape un voisin qui aurait manqué la
+# bascule (cache ARP vieux, paquet perdu). 0 = jamais.
+keepalived_garp_rafraichissement: 60
+# Script lancé à chaque transition (journal : journalctl -t keepalived-transition).
+keepalived_notification: /usr/local/sbin/keepalived-transition
+
+# Scripts de suivi :
+#   - nom: chk_web
+#     commande: /usr/bin/curl -fsS -o /dev/null --max-time 2 http://127.0.0.1/sante
+#     intervalle: 2          # s
+#     delai: 3               # s avant de considérer le script en échec (timeout)
+#     echecs: 2              # échecs consécutifs avant FAULT (fall)
+#     succes: 2              # succès consécutifs avant retour (rise)
+#     poids: -60             # facultatif : retire des points au lieu de passer en FAULT
+keepalived_scripts: []
+
+# Instances VRRP :
+#   - nom: DEMO_WEB
+#     interface: eth0
+#     vrid: 199
+#     priorite: 150
+#     etat_initial: BACKUP   # BACKUP partout : l'élection décide (exigé par nopreempt)
+#     intervalle: 1          # advert_int (s)
+#     preemption: true       # false = nopreempt
+#     delai_preemption: 0    # preempt_delay (s), si préemption
+#     source: 10.10.99.252   # unicast_src_ip ; absent = annonces multicast (224.0.0.18)
+#     pairs: [10.10.99.253]  # unicast_peer
+#     vips: [10.10.99.240/24]
+#     scripts: [chk_web]     # track_script
+#     interfaces_suivies: [] # track_interface
+keepalived_instances: []
+
+# Groupes de synchronisation : les instances d'un groupe changent d'état ensemble (E25).
+#   - {nom: G_BORDURE, instances: [VI_10, VI_20]}
+keepalived_groupes_synchro: []

@@ -1,0 +1,85 @@
+---
+# molecule/frr/verify.yml — l'instance, puis le REFUS d'une configuration invalide.
+- name: Vérifier le rôle frr
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars_files:
+    - vars/essai.yml
+  tasks:
+    - name: Version installée
+      ansible.builtin.command: dpkg-query -W -f='${Version}' frr
+      register: version
+      changed_when: false
+      failed_when: version.stdout is not match('10\.7\.')
+
+    - name: Démons en fonctionnement
+      ansible.builtin.command: pgrep -x -l 'zebra|bgpd|ospfd|bfdd'
+      register: demons
+      changed_when: false
+      failed_when: >-
+        demons.stdout is not search('\bbgpd\b') or demons.stdout is not search('\bospfd\b')
+        or demons.stdout is search('\bbfdd\b')
+
+    - name: Configuration chargée
+      ansible.builtin.command: vtysh -c 'show running-config'
+      register: config
+      changed_when: false
+      failed_when: >-
+        config.stdout is not search('router bgp 65199')
+        or config.stdout is not search('ip address 192.0.2.1/32')
+        or config.stdout is not search('neighbor ESSAI route-map RM-ESSAI out')
+
+    - name: Boucle installée dans le noyau par zebra
+      ansible.builtin.command: ip -4 -br addr show dev lo
+      register: lo
+      changed_when: false
+      failed_when: lo.stdout is not search('192\.0\.2\.1/32')
+
+    - name: L'interface eth0 n'est pas une interface OSPF active (passive)
+      ansible.builtin.command: vtysh -c 'show ip ospf interface eth0'
+      register: ospf_eth0
+      changed_when: false
+      failed_when: ospf_eth0.stdout is not search('No Hellos \(Passive interface\)')
+
+    - name: Le fichier frr.conf est réservé à frr (mots de passe)
+      ansible.builtin.stat:
+        path: /etc/frr/frr.conf
+      register: fichier
+      failed_when: >-
+        fichier.stat.pw_name != 'frr' or fichier.stat.gr_name != 'frr' or fichier.stat.mode != '0640'
+
+    - name: Routage IPv4 activé
+      ansible.builtin.command: sysctl -n net.ipv4.ip_forward
+      register: fwd
+      changed_when: false
+      failed_when: fwd.stdout != '1'
+
+    - name: Une configuration invalide est refusée…
+      block:
+        - name: Appliquer le rôle avec une ligne invalide
+          ansible.builtin.include_role:
+            name: frr
+          vars:
+            frr_config_supplementaire: "cette ligne n'est pas une commande FRR"
+
+        - name: Noter que le rôle l'a acceptée (anomalie)
+          ansible.builtin.set_fact:
+            frr_invalide_acceptee: true
+      rescue:
+        - name: Noter le refus (attendu)
+          ansible.builtin.set_fact:
+            frr_invalide_acceptee: false
+
+    - name: Le rôle doit avoir refusé la configuration invalide
+      ansible.builtin.assert:
+        that: not frr_invalide_acceptee
+        fail_msg: Le rôle a installé une configuration invalide.
+
+    - name: … et la configuration en place n'a pas bougé
+      ansible.builtin.command: vtysh -c 'show running-config'
+      register: config_apres
+      changed_when: false
+      failed_when: >-
+        config_apres.stdout is not search('neighbor ESSAI route-map RM-ESSAI out')
+        or config_apres.stdout is search("cette ligne")

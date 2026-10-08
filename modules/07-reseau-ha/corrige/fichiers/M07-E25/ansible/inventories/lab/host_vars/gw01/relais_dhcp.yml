@@ -1,0 +1,10 @@
+---
+# host_vars/gw01/relais_dhcp.yml — M07-E25 : le relais inscrit l'adresse PROPRE de gw01 comme
+# giaddr (10.10.99.2), plus la VIP : sur la passerelle de secours, la VIP n'existe pas et dnsmasq
+# ne pourrait pas relayer. Kea choisit le sous-réseau 99 d'après le giaddr (.2 et .3 y sont) et
+# annonce toujours 10.10.99.1 comme routeur (option du sous-réseau, inchangée).
+relais_dhcp_interface: ens19.99
+relais_dhcp_adresse_locale: 10.10.99.2
+relais_dhcp_serveurs:
+  - 10.10.20.10   # dns01, primary
+  - 10.10.20.16   # dns02, standby

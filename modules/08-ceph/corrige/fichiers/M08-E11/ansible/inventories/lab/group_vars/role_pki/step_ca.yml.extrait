@@ -1,0 +1,37 @@
+# step_ca.yml.extrait — M08-E11 (PLAT-921) : entrée à AJOUTER à la liste step_ca_provisioners de
+# group_vars/role_pki/step_ca.yml (plateforme/ansible), après « sshpop ». Le rôle step_ca écrit la
+# liste telle quelle dans ca.json (to_nice_json) et revient à l'ancien ca.json si step-ca refuse
+# de démarrer (M06-E02).
+#
+# Provisioner JWK DÉDIÉ au point d'entrée S3 de ceph-par1 : cephadm déploie haproxy et rien ne peut
+# répondre à un défi ACME sur la VIP. Garde-fous : 30 jours au plus (comme l'ACME), un seul nom
+# autorisé (politique de provisioner), clé privée chiffrée par un mot de passe qui n'est jamais
+# sur ca01. Le renouvellement se fait par le certificat lui-même (step ca renew, TLS mutuel).
+# Politique de certification (M06-E33) : ligne « TLS hors ACME (services gérés par un
+# orchestrateur) » à ajouter, avec ce provisioner, sa durée et son propriétaire.
+  - type: JWK
+    name: ceph-ingress
+    # Partie publique de la clé créée sur adm01 :
+    #   step crypto jwk create ceph-ingress.pub.json ceph-ingress.key.json --kty EC --crv P-256 \
+    #     --use sig --password-file ~/.config/workbook/step-ceph-ingress.pass
+    key:
+      use: sig
+      kty: EC
+      kid: "<KID-DE-LA-CLE-CEPH-INGRESS>"
+      crv: P-256
+      alg: ES256
+      x: "<X>"
+      y: "<Y>"
+    # Forme compacte de ceph-ingress.key.json (step crypto jose format), Vault « critique ».
+    encryptedKey: "{{ vault_step_ca_ceph_ingress_cle_chiffree }}"
+    claims:
+      minTLSCertDuration: 1h
+      maxTLSCertDuration: 720h
+      defaultTLSCertDuration: 720h
+    # Politique d'émission du provisioner : seul ce nom est accepté (⚠️ à vérifier sur ton lab :
+    # refus d'un autre nom avec « step ca certificate essai.par1.medisphere.internal … »).
+    policy:
+      x509:
+        allow:
+          dns:
+            - rgw.par1.medisphere.internal

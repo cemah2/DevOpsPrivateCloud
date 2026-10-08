@@ -1,0 +1,54 @@
+---
+- name: Paquet keepalived
+  ansible.builtin.apt:
+    name: keepalived
+    state: present
+
+- name: Script de santé du nœud (quorum et API)
+  ansible.builtin.template:
+    src: pve-cluster-sante.sh.j2
+    dest: "{{ pve_cluster_sante_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configuration de keepalived
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: "0640"
+    validate: keepalived --config-test --use-file=%s
+  notify: Recharger keepalived
+
+- name: Service keepalived actif et activé
+  ansible.builtin.systemd_service:
+    name: keepalived
+    state: started
+    enabled: true
+
+- name: Appliquer un rechargement en attente avant le contrôle
+  ansible.builtin.meta: flush_handlers
+
+- name: Laisser VRRP converger (annonces toutes les secondes, santé toutes les 2 s)
+  ansible.builtin.wait_for:
+    timeout: 8
+  run_once: true
+
+- name: Lire les adresses de l'interface MGMT
+  ansible.builtin.command: ip -br -4 addr show dev {{ pve_cluster_interface }}
+  register: _pve_cluster_ip
+  changed_when: false
+
+- name: Exactement un nœud porte la VIP
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_play_hosts
+        | map('extract', hostvars, ['_pve_cluster_ip', 'stdout'])
+        | select('search', (pve_cluster_vip | regex_escape) ~ '/')
+        | list | length == 1
+    fail_msg: "La VIP {{ pve_cluster_vip }} n'est pas portée par exactement un nœud (voir journalctl -u keepalived)."
+    quiet: true
+  run_once: true

@@ -1,0 +1,11 @@
+---
+# group_vars/all/temps.yml — temps authentifié (M06-E21), sources modifiées en M07-E25.
+# Les clients interrogent les DEUX passerelles par leurs adresses PROPRES dans leur VLAN (.2 et .3),
+# pas la VIP : NTP a sa propre redondance (chrony choisit parmi ses sources), et un certificat NTS
+# ne peut porter que les adresses que sa passerelle prouve au défi ACME (une VIP n'est sur la
+# passerelle de secours que pendant une bascule). Les hôtes hors VLAN routé (aucun aujourd'hui)
+# fixeraient base_ntp_serveurs eux-mêmes.
+base_ntp_nts: true
+base_ntp_serveurs: >-
+  {{ [ansible_default_ipv4.network | regex_replace('\.0$', '.2'),
+      ansible_default_ipv4.network | regex_replace('\.0$', '.3')] }}

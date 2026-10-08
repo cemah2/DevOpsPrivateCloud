@@ -1,0 +1,136 @@
+---
+# Rôle ceph_client (M08-E06 ; montages CephFS en M08-E10).
+- name: Le client est une Debian 13
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    quiet: true
+
+- name: Aucune clé client.admin sur un client
+  ansible.builtin.assert:
+    that:
+      - ceph_client_cles | map(attribute='nom') | select('equalto', 'client.admin') | list | length == 0
+    fail_msg: "client.admin n'a rien à faire sur un client : crée un client cephx dédié (M08-E06)."
+    quiet: true
+
+- name: Paquets du client Ceph
+  ansible.builtin.apt:
+    name: "{{ ceph_client_paquets }}"
+    state: present
+
+- name: Dossier /etc/ceph
+  ansible.builtin.file:
+    path: /etc/ceph
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Fichier ceph.conf minimal
+  ansible.builtin.template:
+    src: ceph.conf.j2
+    dest: /etc/ceph/ceph.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# no_log : la clé cephx est un secret (une clé suffit pour agir avec les droits du client).
+- name: Trousseaux des clients cephx
+  ansible.builtin.template:
+    src: keyring.j2
+    dest: "/etc/ceph/ceph.{{ item.nom }}.keyring"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ ceph_client_cles }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  no_log: true
+
+- name: Points de montage
+  ansible.builtin.file:
+    path: "{{ item.point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ ceph_client_montages }}"
+  loop_control:
+    label: "{{ item.point }}"
+
+# noauto : systemd ne doit pas tenter le montage avant que rbdmap ait mappé l'image ; c'est
+# rbdmap qui monte (« mount » des entrées fstab du périphérique qu'il vient de mapper).
+- name: Montages dans fstab (noauto, montés par rbdmap)
+  ansible.posix.mount:
+    src: "{{ item.source }}"
+    path: "{{ item.point }}"
+    fstype: "{{ item.fs }}"
+    opts: noauto
+    state: present
+  loop: "{{ ceph_client_montages }}"
+  loop_control:
+    label: "{{ item.point }}"
+
+- name: Images RBD mappées au démarrage (rbdmap)
+  ansible.builtin.template:
+    src: rbdmap.j2
+    dest: /etc/ceph/rbdmap
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger rbdmap
+
+- name: Service rbdmap activé (si des images sont déclarées)
+  ansible.builtin.systemd_service:
+    name: rbdmap
+    enabled: "{{ ceph_client_rbdmap | length > 0 }}"
+    state: "{{ 'started' if (ceph_client_rbdmap | length > 0 and ceph_client_demarrer_rbdmap | bool) else omit }}"
+
+# --- (M08-E10) CephFS ------------------------------------------------------------------------
+- name: Chaque montage CephFS a la clé de son utilisateur
+  ansible.builtin.assert:
+    that:
+      - ("client." ~ item.utilisateur) in (ceph_client_cles | map(attribute='nom') | list)
+    fail_msg: "Montage {{ item.point }} : ajoute la clé de client.{{ item.utilisateur }} à ceph_client_cles."
+    quiet: true
+  loop: "{{ ceph_client_cephfs }}"
+  loop_control:
+    label: "{{ item.point }}"
+
+# no_log : le contenu est la clé cephx.
+- name: Fichiers de clé seule pour mount.ceph (secretfile)
+  ansible.builtin.copy:
+    content: "{{ (ceph_client_cles | selectattr('nom', 'equalto', 'client.' ~ item.utilisateur) | first).cle }}\n"
+    dest: "/etc/ceph/{{ item.utilisateur }}.secret"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ ceph_client_cephfs }}"
+  loop_control:
+    label: "{{ item.utilisateur }}"
+  no_log: true
+
+- name: Points de montage CephFS
+  ansible.builtin.file:
+    path: "{{ item.point }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ ceph_client_cephfs }}"
+  loop_control:
+    label: "{{ item.point }}"
+
+# Syntaxe de périphérique « v2 » : <utilisateur>@<fsid>.<fs>=<chemin> ; le fsid est écrit (pas de
+# dépendance à la lecture de ceph.conf par mount.ceph). _netdev : attendre le réseau au démarrage.
+- name: Montages CephFS (fstab, montés)
+  ansible.posix.mount:
+    src: "{{ item.utilisateur }}@{{ ceph_client_fsid }}.{{ item.fs | default('cephfs') }}={{ item.chemin }}"
+    path: "{{ item.point }}"
+    fstype: ceph
+    opts: "secretfile=/etc/ceph/{{ item.utilisateur }}.secret,{{ item.options | default(ceph_client_cephfs_options) }},_netdev"
+    state: "{{ 'mounted' if ceph_client_demarrer_rbdmap | bool else 'present' }}"
+  loop: "{{ ceph_client_cephfs }}"
+  loop_control:
+    label: "{{ item.point }}"

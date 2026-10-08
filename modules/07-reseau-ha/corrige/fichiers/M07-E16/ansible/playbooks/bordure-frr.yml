@@ -1,0 +1,33 @@
+---
+# playbooks/bordure-frr.yml — FRR sur la bordure (groupe role_routeur), M07-E16.
+# Appliqué par le pipeline de plateforme/ansible. serial: 1 : une passerelle à la fois (gw02 en E24).
+# Données : group_vars/role_routeur/frr.yml, host_vars/<passerelle>/frr.yml (rôle frr de M07-E06).
+# Le rôle ne touche ni au pare-feu ni aux interfaces : il ajoute bgpd et une configuration validée.
+
+- name: FRR sur la bordure PAR1 (AS 65000)
+  hosts: role_routeur
+  become: true
+  serial: 1
+  order: sorted
+  any_errors_fatal: true
+  roles:
+    - role: frr
+      tags: [frr]
+  post_tasks:
+    # Préfixes admis dans la table BGP : fabric et K8s (appris), INFRA et DMZ (annoncés par la
+    # bordure elle-même), LYO1 (appris à partir de M07-E19).
+    - name: Aucune route hors des préfixes autorisés dans la table BGP (contrôle en lecture)
+      ansible.builtin.shell: |
+        set -o pipefail
+        vtysh -c 'show bgp ipv4 unicast json' \
+          | python3 -c 'import ipaddress,json,sys
+        ok=[ipaddress.ip_network(n) for n in ("10.10.255.0/24", "10.10.41.0/24", "10.10.20.0/24", "10.10.70.0/24", "10.30.0.0/16")]
+        routes=json.load(sys.stdin).get("routes", {})
+        hors=[p for p in routes if not any(ipaddress.ip_network(p).subnet_of(n) for n in ok)]
+        print(" ".join(hors)); sys.exit(1 if hors else 0)'
+      args:
+        executable: /bin/bash
+      register: _bordure_hors
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode

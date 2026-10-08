@@ -1,0 +1,15 @@
+# ~/.ssh/config de adm01 — lignes AJOUTÉES en M09-E03 (hv03 en M09-E08).
+# Même choix qu'en M00-E15 : HostName en adresse IP (les checks et les accès de secours ne
+# dépendent pas du DNS). Connexion en root : un nœud Proxmox VE n'a pas de compte « admin ».
+# La clé d'hôte est vérifiée par la ligne @cert-authority de ~/.ssh/known_hosts (M06-E19),
+# dont le motif 10.10.* couvre les nœuds dès qu'ils présentent un certificat (rôle ssh_ca_hote).
+Host hv01
+    HostName 10.10.10.51
+Host hv02
+    HostName 10.10.10.52
+Host hv03
+    HostName 10.10.10.53
+Host hv01 hv02 hv03
+    User root
+    IdentitiesOnly yes
+    IdentityFile ~/.ssh/id_ed25519

@@ -1,0 +1,18 @@
+---
+# host_vars/hap01/certificats.yml — certificat TLS de hap01 par ACME (M07-E11, DEV-821).
+# Défi HTTP-01 : ca01 vient chercher le jeton sur http://hap01.par1.medisphere.internal/ ; le port
+# 80 est tenu par HAProxy, qui relaie /.well-known/acme-challenge/ vers le serveur de défi
+# temporaire de step sur 127.0.0.1:8402 (backend be_acme). Flux ca01 → VLAN 99 port 80 : ouvert
+# sur gw01 (pare_feu.yml, M07-E11).
+# Un seul certificat pour les deux mandataires (HAProxy sur 443, Nginx sur 8443, posé à la main
+# pour la comparaison) : la clé est lisible par le groupe haproxy, Nginx la lit en root au démarrage.
+# Renouvellement : par TLS mutuel (cert-renewer@hap01), sans port 80, puis rechargement des deux
+# services (« try-reload-or-restart » : ne fait rien à un service absent ou arrêté).
+certificats_acme_certificats:
+  - id: hap01
+    noms: [hap01.par1.medisphere.internal]
+    certificat: /etc/haproxy/certs/hap01.crt
+    cle: /etc/haproxy/certs/hap01.key
+    groupe: haproxy
+    ecoute_http: 127.0.0.1:8402
+    recharger: /usr/bin/systemctl try-reload-or-restart haproxy.service nginx.service

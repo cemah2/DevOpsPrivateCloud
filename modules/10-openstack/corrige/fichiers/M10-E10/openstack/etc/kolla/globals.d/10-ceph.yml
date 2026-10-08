@@ -1,0 +1,23 @@
+---
+# etc/kolla/globals.d/10-ceph.yml (M10-E10, PLAT-1120) — lu APRÈS globals.yml : remplace ses valeurs
+# (enable_cinder: "no" du palier 1). Stockage de Glance, Nova et Cinder sur « ceph-par1 » (M08).
+# Pools et utilisateurs : les valeurs par défaut de Kolla conviennent (images/glance,
+# volumes/cinder, backups/cinder-backup, vms) ; seul l'utilisateur de Nova change.
+
+enable_cinder: "yes"
+enable_cinder_backup: "yes"
+
+glance_backend_ceph: "yes"
+cinder_backend_ceph: "yes"
+nova_backend_ceph: "yes"
+
+# Par défaut, ceph_nova_user = ceph_cinder_user : Nova écrirait ses disques avec la clé de
+# Cinder. Nova a sa propre clé (client.nova, M08-E46) : moindre privilège et traçabilité.
+ceph_nova_user: "nova"
+
+# Rappels (valeurs par défaut, laissées en place, écrites ici pour la relecture) :
+#   ceph_cluster: "ceph"              -> fichiers ceph.conf et ceph.client.<user>.keyring
+#   ceph_glance_pool_name: "images"   ceph_cinder_pool_name: "volumes"
+#   ceph_nova_pool_name: "vms"        ceph_cinder_backup_pool_name: "backups"
+#   cinder_backup_driver: "ceph"
+# Le groupe [storage] de inventaire/multinode contient osctl01 (cinder-volume, cinder-backup).

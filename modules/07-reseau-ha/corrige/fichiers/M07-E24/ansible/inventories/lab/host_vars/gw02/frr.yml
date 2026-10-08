@@ -1,0 +1,7 @@
+---
+# host_vars/gw02/frr.yml — FRR sur gw02 (M07-E24). Tout le reste (AS 65000, plage K8S,
+# prefix-lists, route-maps, voisin de Lyon) vient de group_vars/role_routeur/frr.yml (M07-E16),
+# commun aux deux passerelles. Noms des variables : ceux du rôle frr de M07-E06/E16.
+frr_router_id: 10.10.10.3
+# Session avec leaf01 (maquette) depuis l'adresse PROPRE du VLAN 99 : jamais depuis une VIP.
+frr_update_source_leaf01: 10.10.99.3

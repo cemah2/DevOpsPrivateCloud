@@ -1,0 +1,7 @@
+---
+# group_vars/role_openstack — nœuds OpenStack (M10-E02).
+# Les valeurs par défaut du rôle noeud_openstack décrivent déjà le plan du module 10 ;
+# on rappelle ici celles qui dépendent de l'inventaire, pour qu'elles se lisent au même endroit
+# que les groupes.
+noeud_openstack_noeuds_reseau: [osctl01]
+noeud_openstack_noeuds_calcul: [oscmp01, oscmp02]

@@ -1,0 +1,7 @@
+# ~/.config/openstack/secure.yaml sur adm01 — MODE 600. Jamais dans un dépôt.
+# Valeur : keystone_admin_password de etc/kolla/passwords.yml, lue sans fichier en clair :
+#   cd ~/src/openstack && uv run ansible-vault view etc/kolla/passwords.yml | grep '^keystone_admin_password:'
+clouds:
+  medisphere-admin:
+    auth:
+      password: "<KEYSTONE-ADMIN-PASSWORD>"

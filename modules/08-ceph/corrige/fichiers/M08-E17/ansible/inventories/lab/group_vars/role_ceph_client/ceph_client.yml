@@ -1,0 +1,27 @@
+---
+# group_vars/role_ceph_client/ceph_client.yml — cephcli01, état M08-E17 (E06, E10, E13, E17).
+# Clés cephx : valeurs dans vault-lab.yml (identité lab, outils/ajouter-cle-ceph.sh), jamais ici.
+ceph_client_cles:
+  - nom: client.rbd-test
+    cle: "{{ vault_ceph_cle_rbd_test }}"
+  - nom: client.outillage                      # (E10) CephFS, sous-volume plateforme/outillage
+    cle: "{{ vault_ceph_cle_outillage }}"
+  - nom: client.rbd-lecture                    # (E13) lecture seule de rbd-test
+    cle: "{{ vault_ceph_cle_rbd_lecture }}"
+  - nom: client.iscsi-cephcli01                # (E17) image exportée en iSCSI
+    cle: "{{ vault_ceph_cle_iscsi_cephcli01 }}"
+
+ceph_client_rbdmap:
+  - image: rbd-test/disque01
+    id: rbd-test
+  - image: rbd-test/iscsi-scan                 # (E17) mappée AVANT la restauration de LIO
+    id: iscsi-cephcli01
+ceph_client_montages:
+  - source: /dev/rbd/rbd-test/disque01
+    point: /mnt/disque01
+    fs: xfs
+
+ceph_client_cephfs:
+  - point: /mnt/outillage
+    utilisateur: outillage
+    chemin: /volumes/plateforme/outillage/<UUID>

@@ -1,0 +1,34 @@
+# allocations.yaml — allocations de ceph-par1 (plateforme/ceph), état après M08-E31 (DEV-957).
+# Lu par outils/ceph-allocations.sh, sur adm01 (accès au cluster par outils/lib.sh) :
+#   outils/ceph-allocations.sh appliquer --simuler   (relu dans la MR), puis appliquer après fusion
+#   outils/ceph-allocations.sh verifier              (CI la nuit avec client.ci-lecture, ou adm01)
+# Les POOLS sont dans config/cluster.yaml (M08-E23) : rbd-equipes y est ajouté par la même MR
+# (règle ssd-baie, application rbd, quota = somme des plafonds bloc des équipes : 40 + 20 = 60 Gio).
+# Registre humain correspondant : docs/stockage/allocations.md de plateforme/medisphere.
+
+identites:
+  # Sauvegarde hors cluster (M08-E25) : instantanés et exports sur les pools sauvegardés.
+  - entite: client.sauvegarde
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=rbd-test, profile rbd pool=rbd-equipes"
+
+equipes:
+  - nom: mediagenda
+    identite: client.mediagenda
+    bloc: {pool: rbd-equipes, plafond_gio: 40}
+    fichier:
+      volume: cephfs
+      plafond_gio: 10
+      sous_volumes:
+        - {nom: exports, taille_gio: 10}
+  - nom: medidoc
+    identite: client.medidoc
+    bloc: {pool: rbd-equipes, plafond_gio: 20}
+    fichier:
+      volume: cephfs
+      plafond_gio: 20
+      sous_volumes:
+        - {nom: archives, taille_gio: 20}
+    # Le compte S3 de MédiDoc existe depuis M08-E12 : décrit ici pour que « verifier » le surveille.
+    objet: {compte: medidoc, quota_gio: 100}   # quota fixé en M08-E12 : reprends le tien

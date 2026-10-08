@@ -1,0 +1,36 @@
+# Extrait de host_vars/gw01/pare_feu.yml (matrice commune à gw01 et gw02 depuis M07-E24).
+# M10-E12 (SEC-1122) : politique de flux du VLAN 52 (OS-EXT, IP flottantes et SNAT des routeurs
+# OpenStack). Politique écrite et validée dans docs/cloud/reseau-externe.md (plateforme/medisphere).
+#
+# 1) pare_feu_definitions : AJOUTER
+  - {nom: V_OSEXT, valeur: '"ens19.52"'}
+  - {nom: NET_OSEXT, valeur: 10.10.52.0/24}
+  - {nom: OS_FIP, valeur: 10.10.52.200-10.10.52.249, commentaire: "IP flottantes et passerelles des routeurs OpenStack"}
+  # LAB_IFS reste inchangé (règles d'entrée NTP/NTS : le VLAN 52 en a besoin).
+  # Nouvel ensemble pour la SORTIE générique vers Internet : tout le lab SAUF ens19.52.
+  - nom: LAB_IFS_INTERNET
+    valeur: '{ "ens19.10", "ens19.20", "ens19.30", "ens19.40", "ens19.50", "ens19.60", "ens19.70", "ens19.99" }'
+#
+# 2) pare_feu_transit : REMPLACER la règle « lab vers Internet (NAT) »
+  - {entree: $LAB_IFS_INTERNET, sortie: $WAN, destination: "!= $LAN_MAISON",
+     motif: "lab vers Internet (NAT), sauf le VLAN 52 (instances OpenStack : règles dédiées)", ref: M10-E12}
+#
+# 3) pare_feu_transit : AJOUTER (bloc « Instances OpenStack (VLAN 52) »)
+  - {entree: $V_OSEXT, source: $NET_OSEXT, sortie: $WAN, destination: "!= $LAN_MAISON", proto: tcp, ports: [80, 443],
+     motif: "instances OpenStack vers Internet : dépôts de paquets (HTTP/HTTPS) seulement", ref: M10-E12}
+  - {entree: $WG_ADM, sortie: $V_OSEXT, destination: $OS_FIP, proto: tcp, ports: [22, 80, 443],
+     motif: "VPN d'administration (développeurs) vers les IP flottantes : SSH, HTTP, HTTPS", ref: M10-E12}
+  - {entree: $WG_ADM, sortie: $V_OSEXT, destination: $OS_FIP, proto: icmp, icmp: echo-request,
+     motif: "VPN d'administration vers les IP flottantes : ping", ref: M10-E12}
+# Inchangées et suffisantes (à ne PAS dupliquer) :
+#   - DNS : « DNS du lab vers les deux récurseurs » (source NETS_LAB, contient 10.10.52.0/24) ;
+#   - NTP/NTS : règles d'entrée sur LAB_IFS (contient ens19.52) ;
+#   - MGMT vers tout le lab : « bastion (MGMT) vers tout le lab » (sortie LAB_IFS).
+# Tout le reste depuis le VLAN 52 (INFRA, MGMT, autres VLAN, SMTP, etc.) tombe dans la
+# politique par défaut « drop » de la chaîne forward.
+#
+# 4) pare_feu_nat : la règle « masquerade » de NETS_LAB vers WAN couvre déjà 10.10.52.0/24
+#    (l'adresse source vue sur Internet est celle de la VIP WAN, après le SNAT du routeur OVN).
+#
+# 5) pare_feu_verifications : AJOUTER
+  - {hote: 10.10.52.1, port: 4460, motif: "contrôleur → NTS-KE de la passerelle du VLAN 52"}

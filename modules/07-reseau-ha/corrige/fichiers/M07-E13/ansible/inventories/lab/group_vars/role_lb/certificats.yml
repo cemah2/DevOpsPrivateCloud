@@ -1,0 +1,30 @@
+---
+# group_vars/role_lb/certificats.yml — version M07-E13 : un certificat par nom publié, en plus de
+# celui de la VIP (E12). REMPLACE la version de E12.
+# Un fichier par nom plutôt qu'un certificat à plusieurs noms : publier un service de plus, c'est
+# AJOUTER un certificat (le rôle certificats_acme ne réémet un certificat existant que si son
+# PREMIER nom ne se vérifie plus : il ne verrait pas un nom ajouté à la liste d'un certificat déjà
+# valide). HAProxy charge tout le dossier et choisit par SNI.
+_certificats_lb_commun: &commun
+  groupe: haproxy
+  ecoute_http: ":8402"
+  recharger: /usr/bin/systemctl try-reload-or-restart haproxy.service
+
+certificats_acme_certificats:
+  - id: lb
+    noms:
+      - lb.par1.medisphere.internal
+      - "{{ inventory_hostname }}.par1.medisphere.internal"
+    certificat: /etc/haproxy/certs/lb.crt
+    cle: /etc/haproxy/certs/lb.key
+    <<: *commun
+  - id: gitlab
+    noms: [gitlab.par1.medisphere.internal]
+    certificat: /etc/haproxy/certs/gitlab.crt
+    cle: /etc/haproxy/certs/gitlab.key
+    <<: *commun
+  - id: netbox
+    noms: [netbox.par1.medisphere.internal]
+    certificat: /etc/haproxy/certs/netbox.crt
+    cle: /etc/haproxy/certs/netbox.key
+    <<: *commun

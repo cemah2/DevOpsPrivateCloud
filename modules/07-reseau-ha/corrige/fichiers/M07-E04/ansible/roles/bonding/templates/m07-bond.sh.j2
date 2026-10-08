@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Géré par Ansible (rôle bonding, M07-E04) — laboratoire d'agrégation de liens de net01.
+#   m07-bond demarrer | arreter | etat
+# Paramètres : mode {{ bonding_mode }} ({{ bonding_espace_serveur }}) / {{ bonding_mode_commutateur }} ({{ bonding_espace_commutateur }}),
+# miimon {{ bonding_miimon }}, lacp_rate {{ bonding_lacp_rate }}, hachage {{ bonding_hachage }}, {{ bonding_liens }} liens.
+set -euo pipefail
+
+SRV="{{ bonding_espace_serveur }}"
+SW="{{ bonding_espace_commutateur }}"
+LIENS={{ bonding_liens }}
+
+# options_bond MODE — options « ip link add … type bond » adaptées au mode.
+options_bond() {
+  local mode="$1"
+  local opts=(mode "$mode" miimon {{ bonding_miimon }})
+  case "$mode" in
+    802.3ad) opts+=(lacp_rate {{ bonding_lacp_rate }} xmit_hash_policy {{ bonding_hachage }}) ;;
+    balance-xor) opts+=(xmit_hash_policy {{ bonding_hachage }}) ;;
+  esac
+  printf '%s\n' "${opts[@]}"
+}
+
+# monter_bond ESPACE MODE PREFIXE_ESCLAVES ADRESSE [PRIMAIRE]
+monter_bond() {
+  local ns="$1" mode="$2" prefixe="$3" adresse="$4" primaire="${5:-}" i
+  local opts
+  mapfile -t opts < <(options_bond "$mode")
+  ip -n "$ns" link add bond0 type bond "${opts[@]}"
+  for ((i = 0; i < LIENS; i++)); do
+    # Un esclave doit être baissé avant d'être asservi.
+    ip -n "$ns" link set "$prefixe$i" down
+    ip -n "$ns" link set "$prefixe$i" master bond0
+  done
+  if [[ -n "$primaire" && "$mode" == active-backup ]]; then
+    ip -n "$ns" link set bond0 type bond primary "$primaire"
+  fi
+  ip -n "$ns" link set lo up
+  ip -n "$ns" link set bond0 up
+  ip -n "$ns" addr add "$adresse" dev bond0
+}
+
+demarrer() {
+  local i
+  arreter
+  ip netns add "$SRV"
+  ip netns add "$SW"
+  for ((i = 0; i < LIENS; i++)); do
+    ip link add "vsrv$i" netns "$SRV" type veth peer name "vsw$i" netns "$SW"
+  done
+  monter_bond "$SRV" "{{ bonding_mode }}" vsrv "{{ bonding_adresse_serveur }}" "{{ bonding_primaire }}"
+  monter_bond "$SW" "{{ bonding_mode_commutateur }}" vsw "{{ bonding_adresse_commutateur }}"
+  # Les esclaves se lèvent avec le bond ; on les lève explicitement de chaque côté.
+  for ((i = 0; i < LIENS; i++)); do
+    ip -n "$SRV" link set "vsrv$i" up
+    ip -n "$SW" link set "vsw$i" up
+  done
+}
+
+# Supprimer un espace de noms détruit ses interfaces (veth, bond) : rien d'autre à défaire.
+arreter() {
+  local ns
+  for ns in "$SRV" "$SW"; do
+    if ip netns list | grep -qw -- "$ns"; then
+      ip netns del "$ns"
+    fi
+  done
+}
+
+etat() {
+  local ns
+  for ns in "$SRV" "$SW"; do
+    echo "===== $ns ====="
+    ip -n "$ns" -br addr show bond0 || true
+    ip netns exec "$ns" cat /proc/net/bonding/bond0 || true
+  done
+}
+
+case "${1:-}" in
+  demarrer) demarrer ;;
+  arreter) arreter ;;
+  etat) etat ;;
+  *) echo "Usage : $0 demarrer|arreter|etat" >&2; exit 2 ;;
+esac

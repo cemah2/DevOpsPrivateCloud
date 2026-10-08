@@ -1,0 +1,41 @@
+---
+# playbooks/m07-hap01.yml — HAProxy de démonstration, version TLS (M07-E11). REMPLACE celle de E10.
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-hap01.yml
+#
+# Amorçage TLS sur hap01 :
+#   1. haproxy           — sans certificat, seul le port 80 est servi (avec le relais du défi ACME) ;
+#   2. certificats_acme  — émission par ACME derrière HAProxy (--http-listen 127.0.0.1:8402) ;
+#   3. haproxy           — le certificat existe : le frontend TLS est rendu, HAProxy rechargé.
+# Nginx en mandataire (comparaison) est posé à la main : hap01/nginx-mandataire.conf.
+
+- name: HAProxy de démonstration (TLS)
+  hosts: m07_hap
+  become: true
+  tasks:
+    - name: HAProxy (amorçage)
+      ansible.builtin.include_role:
+        name: haproxy
+        apply:
+          tags: [haproxy]
+      tags: [haproxy]
+
+    - name: Certificat de hap01 par ACME
+      ansible.builtin.include_role:
+        name: certificats_acme
+        apply:
+          tags: [certificats]
+      tags: [certificats]
+
+    - name: HAProxy, second passage (frontend TLS)
+      ansible.builtin.include_role:
+        name: haproxy
+        apply:
+          tags: [haproxy]
+      tags: [haproxy]
+
+  post_tasks:
+    - name: HAProxy répond en TLS, avec un certificat que la racine MédiSphère valide
+      ansible.builtin.uri:
+        url: https://hap01.par1.medisphere.internal/
+        ca_path: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+      when: not ansible_check_mode

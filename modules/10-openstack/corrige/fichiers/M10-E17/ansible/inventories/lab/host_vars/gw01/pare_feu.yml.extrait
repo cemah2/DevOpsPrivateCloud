@@ -1,0 +1,10 @@
+# Extrait de host_vars/gw01/pare_feu.yml (matrice commune gw01/gw02) — M10-E17 (DEV-1127).
+# pare_feu_definitions : AJOUTER
+  - {nom: V_OSAPI, valeur: '"ens19.50"', commentaire: "VLAN 50 OS-API (si M07 ne l'a pas déjà défini)"}
+  - {nom: OS_VIP_EXT, valeur: 10.10.50.201, commentaire: "VIP externe d'OpenStack (openstack.par1.medisphere.internal)"}
+# pare_feu_transit : AJOUTER (bloc « OpenStack »)
+  - {entree: $WG_ADM, sortie: $V_OSAPI, destination: $OS_VIP_EXT, proto: tcp, ports: [443, 6080],
+     motif: "VPN d'administration vers Horizon (443) et la console noVNC (6080)", ref: M10-E17}
+# MGMT (adm01) joint déjà tout le lab. Les API (5000, 8774, 9292, 9696, 8776, 9876…) ne sont PAS
+# ouvertes au VPN : les équipes utilisent Horizon ; l'ouverture de la CLI depuis les postes est
+# une décision de sécurité reportée au palier 3 (liste des ports, ou frontal unique sur 443).

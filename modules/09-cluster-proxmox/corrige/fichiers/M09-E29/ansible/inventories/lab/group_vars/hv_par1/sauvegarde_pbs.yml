@@ -1,0 +1,19 @@
+---
+# group_vars/hv_par1/sauvegarde_pbs.yml — sauvegarde de la configuration de cluster des nœuds
+# (M09-E29, PLAT-1055), par le rôle sauvegarde_pbs de M06-E28 étendu de l'élément « pve ».
+sauvegarde_pbs_elements: [pve]
+# Avant le job de sauvegarde des VMs (E15) et loin des réplications : une configuration de la veille
+# au soir suffit (RPO 24 h pour /etc/pve, qui change peu ; chaque changement passe par le code).
+sauvegarde_pbs_heure: "00:40"
+# PBS : même datastore, espace de noms du cluster, groupe host/<nœud>.
+sauvegarde_pbs_espace: par1/hv
+# Jeton PBS du cluster créé en M09-E15 (DatastoreBackup sur /datastore/ds-lab/par1/hv) : le même
+# que celui du stockage pbs-par2 ; adapte le nom si tu en as choisi un autre.
+sauvegarde_pbs_jeton_id: "wb-hv@pbs!hv-par1"
+sauvegarde_pbs_jeton_secret: "{{ vault_pbs_hv_par1_jeton_secret }}"
+sauvegarde_pbs_empreinte: "{{ vault_pbs_empreinte }}"
+# Clé de chiffrement du cluster (M09-E15) : la même que celle du stockage pbs-par2, conservée dans
+# Vault critique et sur papier (paperkey). Sans elle, ni les VMs ni la configuration ne se restaurent.
+sauvegarde_pbs_cle: "{{ vault_pbs_hv_par1_cle }}"
+# Les nœuds ont proxmox-backup-client par les dépôts de Proxmox VE.
+sauvegarde_pbs_depot_client: false

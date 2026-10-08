@@ -1,0 +1,56 @@
+---
+# Le paquet cephadm crée le compte (home /var/lib/cephadm, .ssh/authorized_keys) : on vérifie
+# qu'il existe plutôt que de le recréer sous une autre forme.
+- name: Lire le compte de l'orchestrateur
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ ceph_noeud_utilisateur_orchestrateur }}"
+
+- name: Le compte a le dossier attendu
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['getent_passwd'][ceph_noeud_utilisateur_orchestrateur][4] == ceph_noeud_home_orchestrateur
+    fail_msg: >-
+      {{ ceph_noeud_utilisateur_orchestrateur }} : dossier
+      {{ ansible_facts['getent_passwd'][ceph_noeud_utilisateur_orchestrateur][4] }}.
+    quiet: true
+
+# cephadm exige sudo sans mot de passe pour un compte autre que root (--ssh-user).
+# Validé par visudo AVANT d'être mis en place : un sudoers invalide casse sudo pour tout le monde.
+- name: Droits sudo sans mot de passe pour l'orchestrateur
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ ceph_noeud_utilisateur_orchestrateur }}"
+    content: |
+      # Géré par Ansible (rôle ceph_noeud, M08-E02).
+      # Compte du module cephadm du mgr (bootstrap --ssh-user). Clé privée : dans le cluster
+      # (config-key du MON) ; quiconque la lit est root sur tous les nœuds.
+      {{ ceph_noeud_utilisateur_orchestrateur }} ALL=(ALL) NOPASSWD: ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+# sshd sous SELinux ne lit authorized_keys que s'il porte le type ssh_home_t ; un dossier
+# personnel hors de /home n'a pas ce contexte par défaut.
+- name: Contexte SELinux du .ssh de l'orchestrateur
+  community.general.sefcontext:
+    target: "{{ ceph_noeud_home_orchestrateur }}/.ssh(/.*)?"
+    setype: ssh_home_t
+    state: present
+  register: _ceph_noeud_sefcontext
+
+- name: Appliquer le contexte  # noqa: no-handler
+  ansible.builtin.command:
+    cmd: "restorecon -R {{ ceph_noeud_home_orchestrateur }}/.ssh"
+  when: _ceph_noeud_sefcontext is changed
+  changed_when: true
+
+- name: Clé publique du cluster autorisée (après le bootstrap, M08-E03)
+  ansible.posix.authorized_key:
+    user: "{{ ceph_noeud_utilisateur_orchestrateur }}"
+    key: "{{ ceph_noeud_cle_orchestrateur }}"
+    path: "{{ ceph_noeud_home_orchestrateur }}/.ssh/authorized_keys"
+    manage_dir: true
+    exclusive: true
+    state: present
+  when: ceph_noeud_cle_orchestrateur | length > 0

@@ -1,0 +1,130 @@
+---
+# playbooks/netbox-bordure.yml — modèle VRRP de la bordure dans NetBox (M07-E25).
+# Pour chaque VLAN routé V : un groupe FHRP (protocole vrrp3, identifiant V), la VIP 10.10.V.1/24
+# (rôle « vrrp ») rattachée au groupe, et le groupe rattaché aux interfaces ens19.V de gw01
+# (priorité 150) et de gw02 (priorité 100). Idempotent : lit avant d'écrire, n'écrit que ce qui manque.
+#
+# API REST de NetBox 4.6 (ipam/fhrp-groups, ipam/fhrp-group-assignments, ipam/ip-addresses), par le
+# compte de service svc-automatisation : ses permissions d'objet (M06-E04) doivent inclure, en plus
+# des VMs/interfaces/adresses, « ipam | FHRP group » et « ipam | FHRP group assignment »
+# (ajout/consultation/modification). Jeton : NETBOX_TOKEN_ECRITURE (fichier netbox-auto.token).
+#
+#   NETBOX_TOKEN_ECRITURE="$(<~/.config/workbook/netbox-auto.token)" \
+#     ansible-playbook playbooks/netbox-bordure.yml
+#
+# Pourquoi pas les modules netbox.netbox : ceux des groupes FHRP existent, mais vérifie leurs
+# arguments avec ansible-doc avant de les préférer ; l'API REST, elle, est stable et documentée.
+
+- name: VRRP de la bordure dans NetBox
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    nb_url: "{{ lookup('ansible.builtin.env', 'NETBOX_API', default='https://nbx01.par1.medisphere.internal') }}"
+    nb_jeton: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN_ECRITURE') }}"
+    nb_entetes:
+      Authorization: "Bearer {{ nb_jeton }}"
+      Accept: application/json
+    vlans: [10, 20, 30, 40, 50, 52, 60, 70, 99]
+    passerelles:
+      - {nom: gw01, priorite: 150}
+      - {nom: gw02, priorite: 100}
+  module_defaults:
+    ansible.builtin.uri:
+      headers: "{{ nb_entetes }}"
+      body_format: json
+      return_content: true
+      validate_certs: true
+  tasks:
+    - name: Jeton fourni
+      ansible.builtin.assert:
+        that: nb_jeton | length > 0
+        fail_msg: "NETBOX_TOKEN_ECRITURE est vide (jeton de svc-automatisation, jamais en argument)."
+        quiet: true
+
+    - name: Groupes FHRP existants
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/fhrp-groups/?protocol=vrrp3&limit=100"
+      register: _groupes
+      no_log: true
+
+    - name: Créer les groupes manquants
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/fhrp-groups/"
+        method: POST
+        status_code: 201
+        body:
+          protocol: vrrp3
+          group_id: "{{ item }}"
+          name: "bordure-vlan{{ item }}"
+          description: "VIP .1 du VLAN {{ item }}, gw01/gw02 (M07-E25)"
+      loop: "{{ vlans | difference(_groupes.json.results | map(attribute='group_id') | list) }}"
+      no_log: true
+
+    - name: Relire les groupes
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/fhrp-groups/?protocol=vrrp3&limit=100"
+      register: _groupes
+      no_log: true
+
+    - name: Table VRID → identifiant NetBox
+      ansible.builtin.set_fact:
+        _id_groupe: "{{ dict(_groupes.json.results | map(attribute='group_id') | zip(_groupes.json.results | map(attribute='id'))) }}"
+
+    - name: VIP existantes
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/ip-addresses/?address=10.10.{{ item }}.1/24"
+      loop: "{{ vlans }}"
+      register: _vip
+      no_log: true
+
+    - name: Créer les VIP manquantes (rôle vrrp, rattachées au groupe)
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/ip-addresses/"
+        method: POST
+        status_code: 201
+        body:
+          address: "10.10.{{ item.item }}.1/24"
+          role: vrrp
+          status: active
+          assigned_object_type: ipam.fhrpgroup
+          assigned_object_id: "{{ _id_groupe[item.item] }}"
+          description: "VIP de la bordure, VLAN {{ item.item }} (M07-E25)"
+      loop: "{{ _vip.results | selectattr('json.count', 'eq', 0) | list }}"
+      loop_control:
+        label: "10.10.{{ item.item }}.1"
+      no_log: true
+
+    - name: Interfaces ens19.V des passerelles
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/virtualization/interfaces/?virtual_machine={{ item.0.nom }}&name=ens19.{{ item.1 }}"
+      loop: "{{ passerelles | product(vlans) | list }}"
+      register: _interfaces
+      no_log: true
+
+    - name: Rattachements existants
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/fhrp-group-assignments/?limit=500"
+      register: _rattachements
+      no_log: true
+
+    - name: Rattacher chaque groupe aux interfaces des deux passerelles
+      ansible.builtin.uri:
+        url: "{{ nb_url }}/api/ipam/fhrp-group-assignments/"
+        method: POST
+        status_code: 201
+        body:
+          group: "{{ _id_groupe[item.item.1] }}"
+          interface_type: virtualization.vminterface
+          interface_id: "{{ item.json.results[0].id }}"
+          priority: "{{ item.item.0.priorite }}"
+      loop: "{{ _interfaces.results }}"
+      loop_control:
+        label: "{{ item.item.0.nom }} ens19.{{ item.item.1 }}"
+      when:
+        - item.json.count == 1
+        - >-
+          (_rattachements.json.results
+           | selectattr('interface_id', 'eq', item.json.results[0].id)
+           | selectattr('group.id', 'eq', _id_groupe[item.item.1]) | list | length) == 0
+      no_log: true

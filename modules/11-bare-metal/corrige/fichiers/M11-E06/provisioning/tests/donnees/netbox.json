@@ -1,0 +1,6 @@
+[
+  {"nom": "bm01", "statut": "planned", "plateforme": "debian-13", "mac": "02:4d:53:60:00:01", "ip": "10.10.60.101/24", "dns_name": "bm01.par1.medisphere.internal"},
+  {"nom": "bm02", "statut": "planned", "plateforme": "rocky-10", "mac": "02:4D:53:60:00:02", "ip": "10.10.60.102/24", "dns_name": "bm02.par1.medisphere.internal"},
+  {"nom": "bm03", "statut": "active", "plateforme": "debian-13", "mac": "02:4d:53:60:00:03", "ip": "10.10.60.103/24", "dns_name": "bm03.par1.medisphere.internal"},
+  {"nom": "bm04", "statut": "active", "plateforme": "rocky-10", "mac": "02:4d:53:60:00:04", "ip": "10.10.60.104/24", "dns_name": "bm04.par1.medisphere.internal"}
+]

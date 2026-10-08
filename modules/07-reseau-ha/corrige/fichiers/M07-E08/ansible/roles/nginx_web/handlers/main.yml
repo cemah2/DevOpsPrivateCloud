@@ -1,0 +1,13 @@
+---
+# Un fichier de site ne se valide pas seul : on valide TOUTE la configuration (nginx -t) avant
+# de recharger. Si la validation échoue, le rechargement n'a pas lieu et le passage échoue.
+- name: Valider la configuration de nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  listen: Recharger nginx
+
+- name: Recharger le service nginx
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    state: reloaded
+  listen: Recharger nginx

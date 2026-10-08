@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# /usr/local/sbin/etat-reseau — état réseau LOCAL d'une passerelle ou d'un répartiteur, en JSON
+# (rôle sonde_reseau, M07-E29). Lecture seule. Seule commande permise au compte « supervision »
+# (commande forcée SSH + sudo restreint). Lu par ms-verif-reseau sur adm01.
+#
+# Sortie : {"hote", "date", "keepalived", "etat_bordure", "adresses": [...],
+#           "bgp": {...}|null, "wireguard": [{"interface","pair","poignee"}], "haproxy": [...],
+#           "conntrackd"}
+set -euo pipefail
+export LC_ALL=C
+
+actif() { systemctl is-active --quiet "$1" && echo true || echo false; }
+
+adresses="$(ip -j -4 address show | jq -c '[.[] | .ifname as $i | .addr_info[] | {interface: $i, adresse: .local, longueur: .prefixlen}]')"
+
+etat_bordure="null"
+if [[ -r /run/bordure/etat ]]; then
+  etat_bordure="$(jq -Rc . </run/bordure/etat)"
+fi
+
+bgp="null"
+if command -v vtysh >/dev/null 2>&1 && systemctl is-active --quiet frr; then
+  # Pour chaque voisin : état et durée dans cet état (« peerUptimeMsec »), toutes familles.
+  bgp="$(vtysh -c 'show bgp summary json' 2>/dev/null \
+    | jq -c '[.. | objects | select(has("peers")) | .peers | to_entries[]
+               | {voisin: .key, etat: .value.state, depuis_ms: (.value.peerUptimeMsec // 0)}]
+             | unique_by(.voisin)' 2>/dev/null || echo null)"
+fi
+
+wireguard="[]"
+if command -v wg >/dev/null 2>&1; then
+  # « wg show all latest-handshakes » : interface, clé publique du pair, horodatage (0 = jamais).
+  wireguard="$(wg show all latest-handshakes 2>/dev/null \
+    | jq -Rc --argjson maintenant "$(date +%s)" '[inputs, . | select(length > 0) | split("\t")
+          | {interface: .[0], pair: .[1], age_s: (if (.[2] | tonumber) == 0 then null else ($maintenant - (.[2] | tonumber)) end)}]
+        | unique' 2>/dev/null || echo '[]')"
+fi
+
+haproxy="[]"
+if [[ -S /run/haproxy/admin.sock ]]; then
+  # « show stat » : CSV ; on garde les lignes de serveurs (ni FRONTEND ni BACKEND).
+  haproxy="$(echo "show stat" | socat stdio UNIX-CONNECT:/run/haproxy/admin.sock 2>/dev/null \
+    | awk -F, 'NR > 1 && $1 !~ /^#/ && $2 != "FRONTEND" && $2 != "BACKEND" && NF > 17 {print $1 "\t" $2 "\t" $18}' \
+    | jq -Rc '[inputs, . | select(length > 0) | split("\t") | {section: .[0], serveur: .[1], etat: .[2]}] | unique' \
+    2>/dev/null || echo '[]')"
+fi
+
+conntrackd="null"
+if systemctl cat conntrackd.service >/dev/null 2>&1; then
+  conntrackd="$(actif conntrackd)"
+fi
+
+jq -n \
+  --arg hote "$(hostname -s)" \
+  --arg date "$(date --iso-8601=seconds)" \
+  --argjson keepalived "$(actif keepalived)" \
+  --argjson etat_bordure "$etat_bordure" \
+  --argjson adresses "$adresses" \
+  --argjson bgp "$bgp" \
+  --argjson wireguard "$wireguard" \
+  --argjson haproxy "$haproxy" \
+  --argjson conntrackd "$conntrackd" \
+  '{hote: $hote, date: $date, keepalived: $keepalived, etat_bordure: $etat_bordure,
+    adresses: $adresses, bgp: $bgp, wireguard: $wireguard, haproxy: $haproxy, conntrackd: $conntrackd}'

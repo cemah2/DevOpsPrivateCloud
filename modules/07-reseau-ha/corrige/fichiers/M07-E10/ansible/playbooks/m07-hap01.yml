@@ -1,0 +1,27 @@
+---
+# playbooks/m07-hap01.yml — HAProxy de démonstration de la maquette (M07-E10).
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-hap01.yml
+# Les serveurs srv01/srv02 (rôle nginx_web, point de santé /sante) sont configurés depuis M07-E08
+# (playbooks/m07-web.yml) : rien à leur appliquer ici.
+
+- name: HAProxy de démonstration
+  hosts: m07_hap
+  become: true
+  roles:
+    - role: haproxy
+      tags: [haproxy]
+  post_tasks:
+    - name: Six requêtes par le répartiteur
+      ansible.builtin.uri:
+        url: http://127.0.0.1/
+      register: _hap01_reponses
+      loop: "{{ range(6) | list }}"
+      when: not ansible_check_mode
+
+    - name: Les deux serveurs ont répondu (en-tête X-Serveur de nginx_web)
+      ansible.builtin.assert:
+        that:
+          - _hap01_reponses.results | map(attribute='x_serveur') | unique | list | length == 2
+        fail_msg: "Un seul serveur répond : {{ _hap01_reponses.results | map(attribute='x_serveur') | list }}"
+        quiet: true
+      when: not ansible_check_mode

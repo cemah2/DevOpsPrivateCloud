@@ -1,0 +1,5 @@
+---
+# host_vars/gw02/amorcage.yml — PREMIER passage seulement (M07-E24), puis fichier supprimé.
+# Avant le rôle routeur_reseau, gw02 n'a que son adresse WAN : adm01 la joint à travers gw01
+# (règle temporaire « amorçage gw02 » de la matrice, retirée dans la même MR que ce fichier).
+ansible_host: 192.168.1.41   # <IP-GW02-WAN>

@@ -1,0 +1,15 @@
+---
+# host_vars/cephcli01/sauvegarde_ceph.yml — sauvegarde hors cluster de ceph-par1 (M08-E25).
+# Images explicites (essais de E06) ; les volumes des équipes sont désignés par l'équipe elle-même
+# (métadonnée medisphere.sauvegarde = oui) dans rbd-equipes (M08-E31).
+sauvegarde_ceph_images:
+  - rbd-test/disque01
+sauvegarde_ceph_pools_decouverte:
+  - rbd-equipes
+sauvegarde_ceph_jeton_secret: "{{ vault_pbs_jeton_cephcli01 }}"
+sauvegarde_ceph_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_ceph_cle: "{{ vault_pbs_cle_cephcli01 }}"
+sauvegarde_ceph_cle_cephx: "{{ vault_ceph_cle_client_sauvegarde }}"
+sauvegarde_ceph_cle_ssh: "{{ vault_ceph_export_cle_ssh }}"
+# Clé d'hôte ed25519 de ceph01 (publique, relevée sur la console : /etc/ssh/ssh_host_ed25519_key.pub).
+sauvegarde_ceph_cle_hote_export: "ssh-ed25519 <CLE-HOTE-CEPH01>"

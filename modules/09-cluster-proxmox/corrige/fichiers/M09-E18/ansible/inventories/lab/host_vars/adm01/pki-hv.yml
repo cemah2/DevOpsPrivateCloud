@@ -1,0 +1,8 @@
+---
+# host_vars/adm01/pki-hv.yml — autorités dont adm01 a besoin EN PLUS de celle du socle (M09-E18).
+# L'autorité du cluster hv-par1 (créée par pvecm à la formation du cluster) signe les certificats
+# de l'API des nœuds, valables aussi pour hv.par1.medisphere.internal (rôle pve_cluster).
+# Seuls adm01 et runner01 (OpenTofu, checks) lui font confiance : pas de group_vars/all.
+ca_lab_certificats:
+  - {nom: medisphere-root-ca, source: "{{ ms_pki_racine }}"}
+  - {nom: hv-par1-root-ca, source: "{{ playbook_dir }}/../pki/hv-par1-root-ca.crt"}

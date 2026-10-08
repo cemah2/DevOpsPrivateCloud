@@ -1,0 +1,29 @@
+# /etc/network/interfaces de pve01 — EXTRAIT M07-E26 (stanza de vmbr0 ; le reste ne change pas).
+# ⚠️ Hôte HORS pool lab : n'y change QUE ces lignes. Valeurs d'exemple : 192.168.1.50 = <IP-GW-WAN-VIP>.
+#
+# Ordre (CHG-856) :
+#   1. à chaud, une route à la fois, avec la VIP déjà portée par gw01 :
+#        root@pve01:~# ip route replace 10.10.0.0/16 via 192.168.1.50
+#        root@pve01:~# ip route replace 10.20.0.0/16 via 192.168.1.50
+#        root@pve01:~# ip route replace 10.255.1.0/24 via 192.168.1.50
+#      vérifier depuis adm01 : ssh root@pve01 true ; pvesh get /version (API) ;
+#   2. puis seulement, rendre persistant (ci-dessous) — PAS de « ifreload -a » nécessaire ici, la
+#      table de routage est déjà dans l'état voulu ; ifreload le relirait sans rien changer ;
+#   3. retour arrière : les mêmes « ip route replace » vers <IP-GW01-WAN>, et ces lignes remises.
+# Le pare-feu de Proxmox (datacenter) ne voit aucune différence : le lab joint pve01 sans traduction
+# (règle « daddr != $PVE01 » de la matrice), avec ses adresses 10.10.x.y comme avant.
+
+auto vmbr0
+iface vmbr0 inet static
+        address <IP-PVE01>/<MASQUE>
+        gateway <IP-BOX>
+        bridge-ports <NIC-PVE01>
+        bridge-stp off
+        bridge-fd 0
+        # Lab MédiSphère : la bordure PAR1 vue du LAN maison = VIP WAN (VRRP gw01/gw02, M07-E26).
+        post-up ip route replace 10.10.0.0/16 via 192.168.1.50
+        post-up ip route replace 10.20.0.0/16 via 192.168.1.50
+        post-up ip route replace 10.255.1.0/24 via 192.168.1.50
+        pre-down ip route del 10.10.0.0/16 via 192.168.1.50 || true
+        pre-down ip route del 10.20.0.0/16 via 192.168.1.50 || true
+        pre-down ip route del 10.255.1.0/24 via 192.168.1.50 || true

@@ -1,0 +1,63 @@
+---
+# Dépôt haproxy.debian.net (branche LTS 3.2), clé vérifiée par son empreinte : même méthode que
+# les dépôts Smallstep (step_ca, M06-E02) et ISC (kea_dhcp4, M06-E16).
+
+- name: Outils de vérification de la clé et socat (socket d'administration)
+  ansible.builtin.apt:
+    name:
+      - gpg
+      - ca-certificates
+      - socat
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clé de signature du dépôt haproxy.debian.net
+  ansible.builtin.get_url:
+    url: "{{ haproxy_depot_cle_url }}"
+    dest: /etc/apt/keyrings/haproxy-archive-keyring.gpg
+    owner: root
+    group: root
+    mode: "0644"
+  register: _haproxy_cle_depot
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/haproxy-archive-keyring.gpg
+  register: _haproxy_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that:
+      - _haproxy_cle_colonnes.stdout is search('^fpr:+' ~ haproxy_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: >-
+      La clé /etc/apt/keyrings/haproxy-archive-keyring.gpg n'a pas l'empreinte attendue
+      ({{ haproxy_depot_cle_empreinte }}) : ne rien installer, vérifier la source.
+    quiet: true
+
+- name: Source APT haproxy.debian.net (format deb822)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/haproxy.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle haproxy) — HAProxy {{ haproxy_depot_branche }} LTS, haproxy.debian.net
+      Types: deb
+      URIs: {{ haproxy_depot_url }}
+      Suites: {{ ansible_facts['distribution_release'] }}-backports-{{ haproxy_depot_branche }}
+      Components: main
+      Signed-By: /etc/apt/keyrings/haproxy-archive-keyring.gpg
+  register: _haproxy_source
+
+- name: Relire les index APT si le dépôt vient d'être déclaré
+  ansible.builtin.apt:
+    update_cache: true
+  when: _haproxy_source is changed or _haproxy_cle_depot is changed

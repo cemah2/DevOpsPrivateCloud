@@ -1,0 +1,37 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/openstack (M10-E46, PLAT-1190)
+#
+# La CI VALIDE ; elle ne déploie pas (décision du mini-projet, voir docs/cloud/README.md) :
+# un déploiement Kolla exige un accès root à tous les nœuds (SSH + sudo) et l'identité Vault
+# « critique » ; le runner partagé runner01 (exécuteur shell, tous projets) ne doit porter ni l'un
+# ni l'autre. Le déploiement se fait depuis adm01 par outils/deployer.sh, qui refuse tout autre
+# état que le commit de origin/main et l'étiquette (deploye-AAAAMMJJ-HHMM).
+#
+# Jobs : gabarits communs (pre-commit, gitleaks, commitlint) + controles-kolla.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+
+stages:
+  - lint
+  - test
+
+controles-kolla:
+  stage: test
+  tags: [shell]
+  script:
+    # 1. passwords.yml est chiffré, avec l'identité « critique » (jamais en clair sur une branche).
+    - head -n 1 etc/kolla/passwords.yml | grep -Eq '^\$ANSIBLE_VAULT;1\.2;AES256;critique$'
+    # 2. Aucune clé privée versionnée (certificats ACME : obtenus par Kolla, pas dans Git).
+    - "! grep -rlE 'BEGIN ([A-Z]+ )?PRIVATE KEY' etc/ inventaire/"
+    # 3. YAML valide (globals.yml, globals.d/, surcharges YAML).
+    - for f in etc/kolla/globals.yml etc/kolla/globals.d/*.yml; do python3 -c 'import sys, yaml; yaml.safe_load(open(sys.argv[1]))' "$f"; done
+    # 4. Invariants de MédiSphère (PLAN §4.9) : un écart est une MR à relire, pas un oubli.
+    - outils/invariants-globals.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH

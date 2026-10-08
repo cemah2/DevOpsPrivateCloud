@@ -1,0 +1,3 @@
+# group_vars/env_m08/vault-lab.yml — À CHIFFRER : ansible-vault encrypt --encrypt-vault-id lab
+# (M08-E03). Inscrit au registre des secrets (docs/socle/registre-secrets.md).
+vault_ceph_dashboard_admin_mdp: "<MOT-DE-PASSE-GENERE>"

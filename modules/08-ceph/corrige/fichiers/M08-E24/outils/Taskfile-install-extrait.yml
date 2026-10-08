@@ -1,0 +1,16 @@
+# Taskfile.yml de plateforme/outils — EXTRAIT : la tâche install:systeme (M02-E20, M06-E29),
+# complétée pour installer ms-verif-ceph et sa configuration (M08-E24).
+  install:systeme:
+    desc: Installe les scripts dans /usr/local (root:root), pour les services systemd
+    cmds:
+      - sudo install -D -o root -g root -m 0644 lib/ms-commun.sh /usr/local/lib/ms-commun.sh
+      - for: { var: SCRIPTS }
+        cmd: sudo install -o root -g root -m 0755 bin/{{.ITEM}} /usr/local/bin/{{.ITEM}}
+      # Configurations des sondes : versionnées ici, relues en MR, installées telles quelles.
+      - sudo install -D -o root -g root -m 0644 etc/ms-verif-services.conf /usr/local/etc/ms-verif-services.conf
+      - sudo install -D -o root -g root -m 0644 etc/ms-verif-ceph.conf /usr/local/etc/ms-verif-ceph.conf
+      - for: [ms-verif-ceph.service, ms-verif-ceph.timer]
+        cmd: sudo install -o root -g root -m 0644 systemd/{{.ITEM}} /etc/systemd/system/{{.ITEM}}
+      - sudo systemctl daemon-reload
+    vars:
+      SCRIPTS: ms-snapshot ms-verif-sauvegardes ms-alerte ms-verif-services ms-verif-ceph

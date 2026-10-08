@@ -1,0 +1,44 @@
+---
+# Rôle sauvegarde_pbs — sauvegarde applicative des services socle (M06-E28) et du plan de contrôle
+# OpenStack (M10-E25, élément « openstack ») vers PBS.
+# Variables par hôte : host_vars/<hôte>/sauvegarde_pbs.yml. Secrets : Vault « critique ».
+
+# Éléments sauvegardés sur cet hôte : powerdns, kea, netbox, stepca, openstack (voir le script).
+sauvegarde_pbs_elements: []
+# Heure de passage (OnCalendar) : après git01 (01:15), avant lab-nuit (02:30).
+sauvegarde_pbs_heure: "01:55"
+
+# PBS (M00-E22) : datastore ds-lab, espace de noms par1/<hôte>, groupe host/<hôte>.
+sauvegarde_pbs_serveur: 10.20.10.10
+sauvegarde_pbs_datastore: ds-lab
+sauvegarde_pbs_espace: "par1/{{ inventory_hostname }}"
+sauvegarde_pbs_jeton_id: "wb-backup@pbs!{{ inventory_hostname }}"
+# Secrets (Vault) : secret du jeton, empreinte du certificat de PBS, clé de chiffrement
+# (contenu JSON du fichier créé par « proxmox-backup-client key create --kdf none »).
+sauvegarde_pbs_jeton_secret: ""
+sauvegarde_pbs_empreinte: ""
+sauvegarde_pbs_cle: ""
+
+# Options propres aux éléments (valeurs de M06-E02, E04, E06, E16 ; à adapter si différentes)
+sauvegarde_pbs_pdns_base: /var/lib/powerdns/pdns.sqlite3
+sauvegarde_pbs_kea_socket: /run/kea/kea4-ctrl-socket
+sauvegarde_pbs_netbox_dossier: /opt/netbox
+sauvegarde_pbs_netbox_base: netbox
+sauvegarde_pbs_stepca_dossier: /etc/step-ca
+# Fichiers exclus de l'archive de step-ca (relatifs au dossier) : le mot de passe de la clé
+# de l'intermédiaire est en Vault, il ne voyage pas à côté de la clé chiffrée.
+sauvegarde_pbs_stepca_exclure: [password.txt]
+
+# Élément openstack (M10-E25) : sauvegardes Mariabackup de Kolla dans le volume Docker de MariaDB.
+sauvegarde_pbs_os_volume: mariadb_backup
+# Âge maximal de la dernière complète (s) : 26 h (complète quotidienne à 01:30 sur adm01).
+sauvegarde_pbs_os_age_max: 93600
+# Rétention LOCALE dans le volume (jours) ; la rétention longue est celle de PBS (prune-job).
+sauvegarde_pbs_os_retention_jours: 7
+# Joindre les clés Fernet de Keystone à l'archive (« oui » ou « non »), décision de M10-E25.
+sauvegarde_pbs_os_fernet: "oui"
+
+# Dépôt « pbs-client » de Proxmox pour Debian 13 et trousseau officiel (empreinte publiée dans
+# la documentation PBS, « SecureApt », relevée le 2026-10-07 ; la revérifier à chaque changement).
+sauvegarde_pbs_cle_depot_url: https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg
+sauvegarde_pbs_cle_depot_sha256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45

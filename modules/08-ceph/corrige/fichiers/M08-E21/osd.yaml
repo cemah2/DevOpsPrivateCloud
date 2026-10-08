@@ -1,0 +1,20 @@
+# osd.yaml corrigé (revue M08-E21) — un service par classe, filtres explicites, placement par
+# étiquette. osd_memory_target = 1 Gio par « ceph config set osd osd_memory_target 1073741824 ».
+# Pendant un remplacement de disque : « unmanaged: true », appliquer, puis le retirer.
+service_type: osd
+service_id: ssd
+placement:
+  label: osd
+spec:
+  data_devices:
+    rotational: 0
+    size: '60G:70G'
+---
+service_type: osd
+service_id: hdd
+placement:
+  label: osd
+spec:
+  data_devices:
+    rotational: 1
+    size: '60G:70G'

@@ -1,0 +1,4 @@
+---
+# host_vars/pxe01/pxe.yml — M11-E02 (pas encore d'installateur : E04 et E05 complètent la liste).
+pxe_nom_serveur: pxe01.par1.medisphere.internal
+pxe_installateurs: []

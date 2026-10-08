@@ -1,0 +1,21 @@
+---
+# Ordre d'exécution = ordre de ce fichier : redémarrage (fichier daemons) avant rechargement.
+
+- name: Redémarrer systemd-networkd
+  ansible.builtin.systemd_service:
+    name: systemd-networkd.service
+    state: restarted
+
+# Le fichier daemons n'est lu qu'au démarrage : ajouter ou retirer un démon = redémarrer FRR
+# (les sessions BGP et voisinages OSPF tombent : à faire dans un créneau sur la bordure).
+- name: Redémarrer frr
+  ansible.builtin.systemd_service:
+    name: frr.service
+    state: restarted
+
+# frrinit.sh reload → frr-reload.py : calcule la différence entre la configuration en cours
+# et frr.conf, et n'applique que les lignes qui changent. Les sessions non concernées restent.
+- name: Recharger frr
+  ansible.builtin.systemd_service:
+    name: frr.service
+    state: reloaded

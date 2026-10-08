@@ -1,0 +1,10 @@
+# specs/nfs.yaml — NFS-Ganesha (M08-E16), cluster NFS « par1 ». Un démon, sans VIP :
+# limite documentée dans le README (HA = ingress keepalive-only + deux démons).
+# Les exports ne sont pas des spécifications : config/nfs/*.json (ceph nfs export apply).
+service_type: nfs
+service_id: par1
+placement:
+  count: 1
+  label: nfs
+spec:
+  port: 2049

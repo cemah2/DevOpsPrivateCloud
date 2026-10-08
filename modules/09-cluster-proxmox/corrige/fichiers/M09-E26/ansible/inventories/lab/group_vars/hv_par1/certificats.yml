@@ -1,0 +1,25 @@
+---
+# group_vars/hv_par1/certificats.yml — certificat de l'interface 8006 des nœuds (M09-E26).
+# Rôle certificats_acme de M06-E18 (émission ACME HTTP-01 par step, renouvellement par mTLS
+# « step ca renew » via cert-renewer@pveproxy.timer, à 15 jours de l'expiration depuis M06-E27).
+# Le certificat couvre le nom du nœud ET celui de la VIP : l'émission initiale exige que le nœud
+# porte la VIP (défi HTTP-01 sur 10.10.10.200) — c'est le playbook hv-certificats.yml qui l'y
+# amène ; les renouvellements, eux, ne refont pas de défi.
+certificats_acme_certificats:
+  - id: pveproxy
+    noms:
+      - "{{ inventory_hostname }}.par1.medisphere.internal"
+      - hv.par1.medisphere.internal
+    certificat: /etc/wb-certs/pveproxy.crt
+    cle: /etc/wb-certs/pveproxy.key
+    groupe: root
+    # Proxmox VE n'écoute pas sur le port 80 : rien à libérer pour le serveur autonome de step.
+    # Après émission et après chaque renouvellement : installation pour pveproxy
+    # (fichiers /etc/pve/local/pveproxy-ssl.{pem,key}) et redémarrage de pveproxy.
+    recharger: "pvenode cert set /etc/wb-certs/pveproxy.crt /etc/wb-certs/pveproxy.key --force 1 --restart 1"
+
+# Passation avec le rôle pve_cluster (M09-E18) : il n'émet plus le certificat de pveproxy, et son
+# script de santé keepalived accepte les deux racines (fichier construit par hv-certificats.yml).
+# hv-certificats.yml construit ce fichier et réapplique pve_cluster AVANT la première émission.
+pve_cluster_cert_gere: false
+pve_cluster_sante_ca: /etc/wb-certs/ca-api.pem

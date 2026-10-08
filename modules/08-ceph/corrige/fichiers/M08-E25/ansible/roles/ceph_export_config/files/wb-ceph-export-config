@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# =============================================================================
+# /usr/local/sbin/wb-ceph-export-config — export de la CONFIGURATION du cluster ceph-par1 (M08-E25)
+# Lancé sur ceph01 (hôte « _admin ») par la commande forcée de la clé SSH du compte wb-sauvegarde,
+# via sudo (une seule entrée sudoers). Lecture seule. Écrit une archive tar sur la sortie standard.
+#
+# Contenu : de quoi RECONSTRUIRE un cluster équivalent (configuration centrale, spécifications des
+# services, hôtes, carte et règles CRUSH, pools, systèmes de fichiers, moniteurs, configuration RGW,
+# identités cephx et leurs droits) + versions et état au moment de l'export.
+# Volontairement EXCLU : le magasin clé-valeur des moniteurs (clés LUKS des OSD, clé SSH de cephadm,
+# secrets des modules mgr). Il ne sert à rien sans les disques eux-mêmes, et c'est le contenu le plus
+# sensible du cluster (CVE-2026-50152) : il ne quitte pas les moniteurs.
+# Les identités cephx (avec leurs clés) sont dans l'archive : elle est chiffrée côté client par PBS.
+# =============================================================================
+set -Eeuo pipefail
+umask 077
+
+[[ $EUID -eq 0 ]] || { echo "wb-ceph-export-config : à lancer en root (sudo)" >&2; exit 1; }
+# La commande demandée par le client est ignorée (commande forcée) : on le trace.
+if [[ -n "${SSH_ORIGINAL_COMMAND:-}" ]]; then
+  logger -t wb-ceph-export-config "commande demandée ignorée : ${SSH_ORIGINAL_COMMAND}"
+fi
+
+d="$(mktemp -d /var/tmp/wb-ceph-export.XXXXXX)"
+trap 'rm -rf "$d"' EXIT
+
+# rgw_admin ARGS… — radosgw-admin de l'hôte, sinon celui du conteneur (cephadm shell).
+rgw_admin() {
+  if command -v radosgw-admin >/dev/null 2>&1; then
+    radosgw-admin "$@"
+  else
+    cephadm shell -- radosgw-admin "$@" 2>/dev/null
+  fi
+}
+
+# exporter FICHIER COMMANDE… — une commande, un fichier ; échec = échec de l'export (pas d'archive
+# partielle présentée comme complète).
+exporter() {
+  local f="$1"
+  shift
+  if ! "$@" >"$d/$f" 2>"$d/$f.err"; then
+    echo "wb-ceph-export-config : échec de « $* »" >&2
+    cat "$d/$f.err" >&2
+    exit 1
+  fi
+  rm -f "$d/$f.err"
+  [[ -s "$d/$f" ]] || { echo "wb-ceph-export-config : sortie vide pour « $* »" >&2; exit 1; }
+}
+
+exporter versions.json        ceph versions --format json-pretty
+exporter status.json          ceph status --format json-pretty
+exporter config-dump.json     ceph config dump --format json-pretty
+exporter orch-ls-export.yaml  ceph orch ls --export
+exporter orch-host-ls.json    ceph orch host ls --format json-pretty
+exporter mon-dump.json        ceph mon dump --format json-pretty
+exporter osd-dump.json        ceph osd dump --format json-pretty
+exporter osd-tree.json        ceph osd tree --format json-pretty
+exporter crush-dump.json      ceph osd crush dump --format json-pretty
+exporter crushmap.bin         ceph osd getcrushmap
+exporter pools.json           ceph osd pool ls detail --format json-pretty
+exporter fs-dump.json         ceph fs dump --format json-pretty
+exporter auth.json            ceph auth ls --format json-pretty
+exporter rgw-zonegroup.json   rgw_admin zonegroup get
+exporter rgw-zone.json        rgw_admin zone get
+exporter rgw-users.json       rgw_admin user list
+exporter rgw-buckets.json     rgw_admin bucket list
+
+(cd "$d" && sha256sum -- * > SHA256SUMS)
+tar -C "$d" -cf - .

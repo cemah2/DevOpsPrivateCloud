@@ -1,0 +1,5 @@
+# mon.yaml — moniteurs (Lucas)
+service_type: mon
+placement:
+  count: 2
+  label: mon

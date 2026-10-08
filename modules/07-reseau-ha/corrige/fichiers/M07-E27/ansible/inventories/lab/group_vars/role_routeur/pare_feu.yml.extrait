@@ -1,0 +1,5 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT M07-E27 : synchronisation des connexions.
+pare_feu_entree:
+  # … existant …
+  - {entree: $V_MGMT, source: [10.10.10.2, 10.10.10.3], proto: udp, ports: 3780,
+     motif: "conntrackd : synchronisation des connexions entre passerelles", ref: M07-E27}

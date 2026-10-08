@@ -1,0 +1,12 @@
+# /etc/systemd/system/wb-backup-ceph.timer — {{ inventory_hostname }} (M08-E25)
+# Après la sauvegarde de git01 (01:15), avant les services socle (01:55) et lab-nuit (02:30).
+[Unit]
+Description=Sauvegarde quotidienne de ceph-par1 vers PBS (M08-E25)
+
+[Timer]
+OnCalendar=*-*-* {{ sauvegarde_ceph_heure }}:00
+RandomizedDelaySec=2min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

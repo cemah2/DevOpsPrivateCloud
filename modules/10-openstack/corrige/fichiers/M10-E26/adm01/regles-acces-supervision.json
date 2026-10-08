@@ -1,0 +1,7 @@
+[
+  {"service": "compute",       "method": "GET", "path": "/**"},
+  {"service": "network",       "method": "GET", "path": "/**"},
+  {"service": "volumev3",      "method": "GET", "path": "/**"},
+  {"service": "block-storage", "method": "GET", "path": "/**"},
+  {"service": "load-balancer", "method": "GET", "path": "/**"}
+]

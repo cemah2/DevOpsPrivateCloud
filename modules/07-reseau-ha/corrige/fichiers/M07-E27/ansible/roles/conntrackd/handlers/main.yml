@@ -1,0 +1,8 @@
+---
+# Redémarrer conntrackd vide ses caches : sur la passerelle de SECOURS, il les réclame aussitôt au
+# maître (StartupResync) ; sur le maître, le cache interne est reconstruit depuis le noyau. Les
+# connexions en cours ne sont pas touchées (elles vivent dans le noyau, pas dans conntrackd).
+- name: Redémarrer conntrackd
+  ansible.builtin.systemd_service:
+    name: conntrackd
+    state: restarted

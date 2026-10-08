@@ -1,0 +1,4 @@
+# group_vars/role_ceph_client/vault-lab.yml — CHIFFRÉ (identité lab), état M08-E13.
+vault_ceph_cle_rbd_test: "<CLE-CEPHX-AQ…==>"
+vault_ceph_cle_outillage: "<CLE-CEPHX-AQ…==>"
+vault_ceph_cle_rbd_lecture: "<CLE-CEPHX-AQ…==>"

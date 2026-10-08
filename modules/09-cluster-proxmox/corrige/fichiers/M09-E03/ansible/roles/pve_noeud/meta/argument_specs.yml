@@ -1,0 +1,43 @@
+---
+argument_specs:
+  main:
+    short_description: Configuration de base d'un nœud Proxmox VE du cluster hv-par1
+    description:
+      - Contrôles d'entrée, dépôts sans abonnement, DNS, temps, réseau (avec retour automatique),
+        plafond de l'ARC de ZFS, console série, SSH par clé, fragment cloud-init des invités.
+      - Ne crée pas le cluster (pvecm) et ne touche ni à Corosync ni à Ceph.
+    options:
+      pve_noeud_numero:
+        type: int
+        required: true
+        choices: [1, 2, 3]
+        description: Numéro du nœud (hvNN → NN), qui donne ses adresses et ses MAC.
+      pve_noeud_version:
+        type: str
+        default: "9.2"
+        description: Version attendue de pve-manager (préfixe).
+      pve_noeud_dns_serveurs:
+        type: list
+        elements: str
+        default: [10.10.20.10, 10.10.20.16]
+        description: Résolveurs du nœud (trois au plus).
+      pve_noeud_ntp_serveurs:
+        type: list
+        elements: str
+        description: Sources de temps (défaut, la passerelle de MGMT).
+      pve_noeud_mtu_stockage:
+        type: int
+        default: 9000
+        description: MTU des cartes Ceph (nic2, nic3).
+      pve_noeud_delai_retour_reseau:
+        type: int
+        default: 120
+        description: Délai (s) avant retour automatique à l'ancienne configuration réseau.
+      pve_noeud_zfs_arc_max:
+        type: int
+        default: 1073741824
+        description: Plafond de l'ARC de ZFS, en octets.
+      pve_noeud_console_serie:
+        type: bool
+        default: true
+        description: Activer un getty sur ttyS0 (qm terminal depuis pve01).

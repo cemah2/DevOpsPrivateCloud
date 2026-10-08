@@ -1,0 +1,26 @@
+---
+# group_vars/role_routeur/wireguard.yml — version M07-E18 (PLAT-828) : le tunnel wg2 vers le site
+# LYO1 (PLAN §4.9). wg0 et wg1, construits à la main en M00, ne sont PAS encore dans ce fichier :
+# ils y entreront en M07-E26 (qui remplace ce fichier pour les deux passerelles).
+# Routage STATIQUE pour l'instant : la route vers 10.30.0.0/16 est posée au montage (post_up) ;
+# BGP la remplacera en E19.
+# Clé privée : group_vars/role_routeur/vault-critique.yml (chiffré, identité « critique »).
+wireguard_interfaces:
+  - nom: wg2
+    adresse: 10.255.2.1/24
+    port: 51822
+    cle_privee: "{{ vault_wireguard_wg2_cle_privee }}"
+    # off : wg-quick n'installe aucune route ; on écrit celles qu'on veut.
+    table: "off"
+    post_up:
+      - ip route replace 10.30.0.0/16 dev %i
+    pilotage: role
+    pairs:
+      - nom: lyo-gw01 (LYO1)
+        cle_publique: "<CLE-PUBLIQUE-WG2-DE-LYO-GW01>"
+        # Les deux extrémités ont une adresse fixe : chacune peut initier.
+        endpoint: "10.10.99.250:51822"
+        # AllowedIPs = filtre d'ENTRÉE (sources acceptées de ce pair) ET table du tunnel
+        # (destinations envoyées à ce pair).
+        allowed_ips: [10.255.2.2/32, 10.30.0.0/16]
+        keepalive: 25

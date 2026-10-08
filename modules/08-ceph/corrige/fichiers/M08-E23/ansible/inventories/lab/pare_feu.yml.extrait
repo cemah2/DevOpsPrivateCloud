@@ -1,0 +1,10 @@
+# pare_feu.yml.extrait — M08-E23 (PLAT-933) : à ajouter à la matrice des flux (pare_feu.yml de gw01
+# ET gw02, même matrice depuis M07-E24 ; rôle pare_feu). Section « À travers les passerelles ».
+# Définitions à ajouter si elles n'existent pas encore :
+#   - {nom: V_STOPUB, valeur: '"ens19.30"'}
+#   - {nom: CEPH_NOEUDS, valeur: '{ 10.10.30.51, 10.10.30.52, 10.10.30.53 }', commentaire: "ceph01-03, réseau public"}
+pare_feu_transit:
+  - {entree: $V_INFRA, sortie: $V_STOPUB, source: $RUNNER01, destination: $CEPH_NOEUDS, proto: tcp, ports: 3300,
+     motif: "runner01 → moniteurs de ceph-par1 (msgr2), job de dérive de plateforme/ceph", ref: M08-E23}
+  - {entree: $V_INFRA, sortie: $V_STOPUB, source: $RUNNER01, destination: $CEPH_NOEUDS, proto: tcp, ports: 6800-7568,
+     motif: "runner01 → gestionnaire actif de ceph-par1 (orch ls), job de dérive", ref: M08-E23}

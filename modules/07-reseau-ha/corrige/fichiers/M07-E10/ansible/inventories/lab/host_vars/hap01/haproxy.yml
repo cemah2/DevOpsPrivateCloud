@@ -1,0 +1,50 @@
+---
+# host_vars/hap01/haproxy.yml — HAProxy de démonstration de la maquette (M07-E10, PLAT-820).
+# Un frontend HTTP, un backend de deux serveurs Nginx (srv01, srv02) contrôlés sur /sante, une
+# page de statistiques locale. La version TLS (E11) remplace ce fichier.
+
+haproxy_sections:
+  # Les serveurs sont désignés par leur NOM (A créés par OpenTofu en M07-E03). Sans section
+  # « resolvers », un nom n'est résolu qu'au démarrage d'HAProxy : une maquette reconstruite avec
+  # d'autres adresses ne serait vue qu'au prochain redémarrage. Avec elle, HAProxy suit le DNS en
+  # continu. init-addr : dernière adresse connue, puis libc, sinon démarrer quand même.
+  - type: resolvers
+    nom: lab
+    lignes:
+      - nameserver dns01 10.10.20.10:53
+      - nameserver dns02 10.10.20.16:53
+      - accepted_payload_size 1232
+      - hold valid 10s
+
+  - type: frontend
+    nom: fe_web
+    lignes:
+      - bind :80
+      # Le serveur voit l'adresse du client dans X-Forwarded-For (sinon : celle de hap01).
+      - option forwardfor
+      - default_backend be_web
+
+  - type: backend
+    nom: be_web
+    lignes:
+      - balance roundrobin
+      # Contrôle de santé de niveau 7 : une requête HTTP, pas une simple connexion TCP.
+      - option httpchk
+      - http-check send meth GET uri /sante ver HTTP/1.1 hdr Host hap01.par1.medisphere.internal
+      - http-check expect status 200
+      # Toutes les 2 s ; hors service après 3 échecs, de retour après 2 succès.
+      - default-server inter 2s fall 3 rise 2 resolvers lab init-addr last,libc,none
+      - server srv01 srv01.par1.medisphere.internal:80 check
+      - server srv02 srv02.par1.medisphere.internal:80 check
+
+  # Page de statistiques : sur la boucle locale seulement (tunnel SSH pour la voir).
+  - type: listen
+    nom: stats
+    lignes:
+      - bind 127.0.0.1:8404
+      - stats enable
+      - stats uri /stats
+      - stats refresh 10s
+
+haproxy_verifications:
+  - url: http://127.0.0.1/sante

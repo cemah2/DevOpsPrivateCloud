@@ -1,0 +1,6 @@
+---
+# Pas de redémarrage : pve-firewall recompile seul. Le handler ne fait que constater l'état.
+- name: État du pare-feu
+  ansible.builtin.command: pve-firewall status
+  changed_when: false
+  listen: pve_pare_feu_change

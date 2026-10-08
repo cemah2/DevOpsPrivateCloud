@@ -1,0 +1,6 @@
+# /etc/sysctl.d/60-routeur.conf — {{ inventory_hostname }}
+# {{ routeur_reseau_entete }}
+# Source : rôle routeur_reseau (M07-E24), variable routeur_reseau_sysctl.
+{% for cle, valeur in routeur_reseau_sysctl | dictsort %}
+{{ cle }} = {{ valeur }}
+{% endfor %}

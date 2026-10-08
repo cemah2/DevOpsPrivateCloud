@@ -1,0 +1,7 @@
+# roles/pve_cluster/defaults/main.yml — EXTRAIT : variables ajoutées par M09-E25 (supervision).
+# Le reste du fichier (VIP keepalived, options du cluster…) vient de M09-E18 et M09-E27.
+pve_cluster_supervision_utilisateur: wb-supervision@pve
+pve_cluster_supervision_jeton: hv
+# Rôle intégré : Sys.Audit, VM.Audit, Datastore.Audit, Pool.Audit, SDN.Audit, Mapping.Audit…
+# Aucun privilège de modification.
+pve_cluster_supervision_role: PVEAuditor

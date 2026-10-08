@@ -1,0 +1,27 @@
+# /etc/systemd/system/wb-openstack-mariabackup.service — {{ inventory_hostname }} (M10-E25)
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle openstack_mariabackup).') }}
+# Sauvegarde Mariabackup ({{ openstack_mariabackup_type }}) de la base OpenStack, déclenchée par
+# Kolla-Ansible ; le fichier reste dans le volume mariadb_backup de osctl01, envoyé à PBS à 02:10.
+[Unit]
+Description=Sauvegarde Mariabackup ({{ openstack_mariabackup_type }}) de la base OpenStack
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/cloud/sauvegarde-restauration.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User={{ openstack_mariabackup_utilisateur }}
+WorkingDirectory={{ openstack_mariabackup_projet }}
+# Identité Vault : un script client, pas un secret (passwords.yml est chiffré et toujours chargé).
+Environment=ANSIBLE_VAULT_IDENTITY_LIST={{ openstack_mariabackup_vault_identite }}
+{% if openstack_mariabackup_cle_ssh | length > 0 %}
+Environment=ANSIBLE_PRIVATE_KEY_FILE={{ openstack_mariabackup_cle_ssh }}
+{% endif %}
+Environment=ANSIBLE_FORCE_COLOR=0
+ExecStart={{ openstack_mariabackup_uv }} run --frozen kolla-ansible mariadb-backup --{{ openstack_mariabackup_type }} -i {{ openstack_mariabackup_inventaire }} --configdir {{ openstack_mariabackup_configdir }}
+SyslogIdentifier=wb-openstack-mariabackup
+TimeoutStartSec=45min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full

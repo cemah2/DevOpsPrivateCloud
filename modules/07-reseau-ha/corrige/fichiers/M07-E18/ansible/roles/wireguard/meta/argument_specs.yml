@@ -1,0 +1,10 @@
+---
+argument_specs:
+  main:
+    short_description: Tunnels WireGuard gérés par wg-quick
+    options:
+      wireguard_interfaces:
+        type: list
+        elements: dict
+        required: true
+        description: Interfaces (nom, adresse, port, cle_privee, table, mtu, post_up, pilotage, pairs).

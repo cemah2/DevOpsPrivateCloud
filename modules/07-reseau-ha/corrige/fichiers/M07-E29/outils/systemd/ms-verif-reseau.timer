@@ -1,0 +1,11 @@
+# /etc/systemd/system/ms-verif-reseau.timer — toutes les 5 minutes, avec rattrapage (M07-E29).
+[Unit]
+Description=Sonde de la bordure et des répartiteurs toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+RandomizedDelaySec=20
+
+[Install]
+WantedBy=timers.target

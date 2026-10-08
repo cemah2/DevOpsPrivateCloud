@@ -1,0 +1,11 @@
+# .yamllint.yml — plateforme/ceph (M08-E23). Les spécifications cephadm sont des fichiers à
+# plusieurs documents (---) ; pas de « document-start » obligatoire au début.
+extends: default
+rules:
+  document-start: disable
+  line-length:
+    max: 120
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    allowed-values: ["true", "false"]

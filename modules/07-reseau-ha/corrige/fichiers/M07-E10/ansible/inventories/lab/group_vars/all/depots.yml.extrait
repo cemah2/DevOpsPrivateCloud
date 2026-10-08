@@ -1,0 +1,7 @@
+# inventories/lab/group_vars/all/depots.yml — EXTRAIT à intégrer (M07-E10, étape 1) : empreinte
+# de la clé du dépôt haproxy.debian.net, relevée et vérifiée par toi (gpg --show-keys
+# --with-fingerprint sur la clé téléchargée, comparée à une seconde source : page d'accueil du
+# dépôt, annonce de la liste haproxy@formilux.org ou serveur de clés). 40 caractères hexadécimaux
+# en MAJUSCULES, sans espace. Tant que la valeur ci-dessous n'est pas remplacée, le rôle haproxy
+# s'arrête avant d'installer quoi que ce soit.
+haproxy_depot_cle_empreinte: "<EMPREINTE-CLE-HAPROXY>"

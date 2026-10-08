@@ -1,0 +1,6 @@
+---
+# molecule/ceph_client/molecule.yml — scénario du rôle « ceph_client » (M08-E06)
+#   uv run molecule test -s ceph_client
+# Sans cluster : on teste les fichiers produits, les droits et l'outillage, pas la connexion.
+scenario:
+  name: ceph_client

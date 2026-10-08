@@ -1,0 +1,19 @@
+; rbd.fio — même charge « base de données » par librbd (moteur rbd de fio), sans krbd (M08-E28).
+; Vérifier d'abord que ton fio dispose du moteur : « fio --enghelp | grep -w rbd ».
+; Identité et image : variables FIO_ID (ex. bench, sans « client. ») et FIO_IMAGE (ex. fio01).
+[global]
+ioengine=rbd
+clientname=${FIO_ID}
+pool=bench
+rbdname=${FIO_IMAGE}
+time_based=1
+runtime=120
+ramp_time=15
+group_reporting=1
+percentile_list=50:95:99:99.9
+
+[base-de-donnees-librbd]
+rw=randrw
+rwmixread=70
+bs=4k
+iodepth=16

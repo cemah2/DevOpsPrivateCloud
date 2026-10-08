@@ -1,0 +1,14 @@
+# Politique de Nova — surcharges MédiSphère (M10-E23, SEC-1133).
+# COPIE POUR HORIZON de etc/kolla/config/nova/policy.yaml (M10-E23) : Horizon évalue ces règles pour
+# décider quels boutons afficher. Toute modification se fait dans les DEUX fichiers.
+# Chaque règle REPREND la règle par défaut (rule:project_member_or_admin, lue dans le fichier
+# d'exemple généré par oslopolicy-sample-generator --namespace nova de NOTRE version) et y
+# AJOUTE le rôle « support » limité au projet de l'instance.
+# Lecture des instances : le support a aussi « reader » (attribution), pas de règle ici.
+# Copie identique pour Horizon : etc/kolla/config/horizon/nova_policy.yaml.
+
+"os_compute_api:servers:reboot": "rule:project_member_or_admin or (role:support and project_id:%(project_id)s)"
+"os_compute_api:servers:start": "rule:project_member_or_admin or (role:support and project_id:%(project_id)s)"
+"os_compute_api:servers:stop": "rule:project_member_or_admin or (role:support and project_id:%(project_id)s)"
+"os_compute_api:os-console-output": "rule:project_member_or_admin or (role:support and project_id:%(project_id)s)"
+"os_compute_api:os-remote-consoles": "rule:project_member_or_admin or (role:support and project_id:%(project_id)s)"

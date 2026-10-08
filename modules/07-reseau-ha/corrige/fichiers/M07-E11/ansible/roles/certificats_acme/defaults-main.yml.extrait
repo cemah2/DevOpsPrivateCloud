@@ -1,0 +1,5 @@
+# roles/certificats_acme/defaults/main.yml — EXTRAIT à intégrer (M07-E11) : documentation du
+# nouveau champ, à ajouter dans le commentaire qui décrit certificats_acme_certificats.
+#     ecoute_http: 127.0.0.1:8402      # (facultatif, M07-E11) le serveur de défi de step écoute
+#                                      # ici, derrière un mandataire qui tient le port 80 et lui
+#                                      # relaie /.well-known/acme-challenge/ (« --http-listen »)

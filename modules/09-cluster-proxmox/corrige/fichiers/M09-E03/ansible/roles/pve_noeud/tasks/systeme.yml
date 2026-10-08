@@ -1,0 +1,62 @@
+---
+# --- Mémoire de ZFS -----------------------------------------------------------------------------
+- name: Plafond de l'ARC de ZFS (persistant)
+  ansible.builtin.template:
+    src: zfs.conf.j2
+    dest: /etc/modprobe.d/zfs.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Plafond actuel de l'ARC (si le module est chargé)
+  ansible.builtin.slurp:
+    src: /sys/module/zfs/parameters/zfs_arc_max
+  register: _pve_noeud_arc
+  failed_when: false
+
+- name: Appliquer le plafond sans redémarrer
+  ansible.builtin.shell: echo {{ pve_noeud_zfs_arc_max | int }} > /sys/module/zfs/parameters/zfs_arc_max
+  when:
+    - _pve_noeud_arc.content is defined
+    - (_pve_noeud_arc.content | b64decode | trim | int) != (pve_noeud_zfs_arc_max | int)
+  changed_when: true
+
+# --- Console série (accès de secours) ------------------------------------------------------------
+- name: Getty sur la console série ttyS0
+  ansible.builtin.systemd_service:
+    name: serial-getty@ttyS0.service
+    state: started
+    enabled: true
+  when: pve_noeud_console_serie | bool
+
+# --- SSH : clé seulement --------------------------------------------------------------------------
+# root se connecte par clé (adm01, et les nœuds entre eux : Proxmox s'en sert pour la
+# migration et la réplication). Jamais par mot de passe.
+- name: Fragment sshd du nœud
+  ansible.builtin.template:
+    src: sshd-pve-noeud.conf.j2
+    dest: "{{ pve_noeud_sshd_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+  # Handlers exécutés dans l'ordre du fichier : validation complète (sshd -t), PUIS rechargement.
+  notify:
+    - Valider sshd
+    - Recharger ssh
+
+# --- Fragment cloud-init commun des invités ------------------------------------------------------
+- name: Dossier des fragments (contenu « snippets » du stockage local)
+  ansible.builtin.file:
+    path: "{{ pve_noeud_snippets_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Fragment « vendor » (agent QEMU des invités imbriqués)
+  ansible.builtin.template:
+    src: medisphere-agent.yaml.j2
+    dest: "{{ pve_noeud_snippets_dossier }}/{{ pve_noeud_snippet_agent }}"
+    owner: root
+    group: root
+    mode: "0644"

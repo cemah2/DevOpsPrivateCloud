@@ -1,0 +1,10 @@
+---
+- name: Redémarrer tftpd-hpa
+  ansible.builtin.systemd_service:
+    name: tftpd-hpa.service
+    state: restarted
+
+- name: Recharger nginx
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    state: reloaded

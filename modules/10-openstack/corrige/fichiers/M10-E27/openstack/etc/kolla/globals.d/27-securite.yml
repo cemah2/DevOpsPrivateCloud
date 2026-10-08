@@ -1,0 +1,35 @@
+---
+# etc/kolla/globals.d/27-securite.yml — M10-E27 (SEC-1153)
+# Application (fenêtre, instantané des trois nœuds) :
+#   uv run kolla-ansible reconfigure -i inventaire/multinode --configdir etc/kolla
+# Retour arrière : retirer ce fichier (MR), puis reconfigure.
+
+# --- TLS des deux VIP -----------------------------------------------------------------------
+# Externe : déjà actif depuis M10-E04. Interne : nouveau. Les VIP sont distinctes (.200/.201),
+# condition posée par la documentation pour activer l'un sans l'autre.
+kolla_enable_tls_external: "yes"
+kolla_enable_tls_internal: "yes"
+# Effet de bord : avec ProxySQL (actif par défaut) et le TLS interne, Kolla passe aussi
+# database_enable_tls_internal à « yes » (connexions des services vers ProxySQL en TLS).
+
+# --- Confiance dans la PKI MédiSphère ------------------------------------------------------
+# etc/kolla/certificates/ca/medisphere-root-ca.crt (certificat PUBLIC de la racine) est copié
+# dans chaque conteneur (préfixe kolla-customca-) et ajouté au magasin du système.
+kolla_copy_ca_into_containers: "yes"
+# Magasin de confiance des services (images Debian) : sans lui, certains clients Python
+# (requests) utilisent leur propre paquet de certificats et refusent la PKI interne.
+openstack_cacert: "/etc/ssl/certs/ca-certificates.crt"
+# admin-openrc.sh généré par « post-deploy » : chemin valide sur adm01 (racine dans le magasin).
+kolla_admin_openrc_cacert: "/etc/ssl/certs/ca-certificates.crt"
+
+# --- Certificats des VIP par ACME (step-ca) -----------------------------------------------------
+# Rôle « letsencrypt » de Kolla : conteneurs letsencrypt_lego (client lego, cron toutes les 4 h)
+# et letsencrypt_webserver (sert les défis HTTP-01 derrière HAProxy, port 80 des VIP).
+# ATTENTION : chaîne « yes » obligatoire (des gabarits comparent enable_letsencrypt == 'yes').
+enable_letsencrypt: "yes"
+letsencrypt_email: "plateforme@medisphere.internal"
+letsencrypt_external_cert_server: "https://ca01.par1.medisphere.internal/acme/acme/directory"
+letsencrypt_internal_cert_server: "https://ca01.par1.medisphere.internal/acme/acme/directory"
+# Renouveler quand il reste moins de 15 jours (politique M06-E27). La valeur par défaut (30)
+# avec des certificats de 30 jours provoquerait un renouvellement à CHAQUE passage (4 h).
+letsencrypt_cert_valid_days: "15"

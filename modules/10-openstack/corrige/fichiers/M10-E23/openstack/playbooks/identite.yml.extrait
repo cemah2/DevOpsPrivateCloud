@@ -1,0 +1,11 @@
+# Extrait de playbooks/identite.yml (M10-E23) : tâche à insérer AVANT « Rôles des groupes sur
+# les projets » (un rôle doit exister avant d'être attribué).
+
+    - name: Rôles personnalisés
+      openstack.cloud.identity_role:
+        name: "{{ item.nom }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ identite_roles | default([]) }}"
+      loop_control:
+        label: "{{ item.nom }}"

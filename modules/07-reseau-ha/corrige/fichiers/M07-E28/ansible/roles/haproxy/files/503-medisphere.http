@@ -1,0 +1,10 @@
+HTTP/1.1 503 Service Unavailable
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html; charset=utf-8
+
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Service indisponible — MédiSphère</title></head>
+<body><h1>Service momentanément indisponible</h1>
+<p>Le service demandé ne répond pas. L'équipe Plateforme est prévenue par la supervision.</p>
+<p>Astreinte : voir la page d'information du socle.</p></body></html>

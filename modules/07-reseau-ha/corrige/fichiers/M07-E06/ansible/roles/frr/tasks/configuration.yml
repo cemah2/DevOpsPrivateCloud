@@ -1,0 +1,32 @@
+---
+# /etc/frr/daemons : on ne réécrit QUE les lignes des démons gérés ; le reste du fichier (options
+# de lancement, profil) reste celui du paquet de la version installée.
+- name: Activer ou désactiver les démons de protocole
+  ansible.builtin.lineinfile:
+    path: /etc/frr/daemons
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ 'yes' if item.value | bool else 'no' }}"
+  loop: "{{ frr_demons | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value | bool }}"
+  notify: Redémarrer frr
+
+# Validation par vtysh --dryrun (-C) --inputfile (-f) : la syntaxe complète est vérifiée par le
+# même analyseur que les démons, sans les toucher. Un fichier refusé n'est pas installé.
+# 640 frr:frr : il contient les mots de passe des sessions BGP.
+- name: Écrire frr.conf
+  ansible.builtin.template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: "0640"
+    validate: vtysh --dryrun --inputfile %s
+    backup: true
+  notify: Recharger frr
+
+- name: FRR actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: frr.service
+    state: started
+    enabled: true

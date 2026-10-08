@@ -1,0 +1,49 @@
+#!ipxe
+# menu.ipxe — plateforme/provisioning (M11-E03 ; entrée Debian en M11-E04).
+# Défaut au bout de 30 s : le disque local. Une machine installée qui démarre sur le réseau
+# (ordre réseau puis disque) ne doit JAMAIS se réinstaller sans qu'on l'ait choisi.
+
+set base http://pxe01.par1.medisphere.internal
+
+:menu
+menu MédiSphère — provisioning (${netX/mac}, ${netX/ip}, ${platform}, iPXE ${version})
+item --gap -- Démarrage
+item local     Démarrer sur le disque local (défaut)
+item --gap -- Installation automatique (efface le disque)
+item debian13  Debian 13 (preseed)
+item --gap -- Diagnostic
+item infos     Afficher les informations de la machine
+item shell     Console iPXE
+choose --timeout 30000 --default local cible || goto local
+goto ${cible}
+
+:debian13
+# Nom provisoire dérivé de la MAC tant que NetBox ne décide pas (M11-E06).
+# initrd=initrd.gz : nom de l'image chargée par « initrd », indispensable au noyau en UEFI.
+kernel ${base}/debian13/linux initrd=initrd.gz auto=true priority=critical url=${base}/preseed/debian13.cfg hostname=bm-${netX/mac:hexhyp} domain=par1.medisphere.internal || goto erreur
+initrd ${base}/debian13/initrd.gz || goto erreur
+boot || goto erreur
+
+:erreur
+echo Échec (voir le message ci-dessus) : retour au menu dans 10 s.
+sleep 10
+goto menu
+
+:infos
+echo MAC        : ${netX/mac}
+echo Adresse    : ${netX/ip} / ${netX/netmask} via ${netX/gateway}
+echo DNS        : ${netX/dns}
+echo Serveur    : ${netX/next-server} fichier ${netX/filename}
+echo Fabricant  : ${manufacturer} ${product} (série ${serial}, UUID ${uuid})
+echo Plateforme : ${platform} (${buildarch}), iPXE ${version}
+prompt Appuie sur une touche pour revenir au menu...
+goto menu
+
+:shell
+echo Tape « exit » pour revenir au menu.
+shell
+goto menu
+
+:local
+echo Démarrage sur le disque local.
+exit

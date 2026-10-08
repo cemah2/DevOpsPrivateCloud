@@ -1,0 +1,257 @@
+#!/usr/bin/env bash
+# ms-verif-openstack — sonde de service du cloud OpenStack (M10-E26, PLAT-1152).
+#
+# Vérifie que le cloud REND ce qu'on attend : Keystone délivre un jeton, chaque service de calcul
+# activé est « up » (et un service désactivé l'est avec une raison), chaque agent OVN est vivant
+# et la passerelle est présente, les services Cinder sont « up », aucun répartiteur Octavia n'est
+# en erreur ; sur chaque nœud, aucun conteneur malade ou arrêté et de la place dans /var/lib/docker ;
+# certificats des points d'entrée (chaîne, nom, expiration).
+#
+# Usage : ms-verif-openstack [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+# Variable : MS_VERIF_SEUIL_CERTS (défaut 10), équivalent de --seuil-certificats (pour un drop-in).
+#
+# Configuration :
+#   /usr/local/etc/ms-verif-openstack.conf   ce qui est surveillé (MS_CONF pour un autre chemin)
+#   ~/.config/openstack/clouds.yaml + secure.yaml (600) : nuage MS_OS_CLOUD, identifiant
+#   d'application de svc-supervision restreint aux GET (règles d'accès de Keystone)
+#   SSH vers les nœuds : compte courant, BatchMode, « sudo -n docker » en lecture
+#
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien ».
+
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20). Référence dans le
+# workbook : modules/02-scripting/corrige/fichiers/M02-E20/outils/lib/ms-commun.sh (le second
+# source-path ne sert qu'à ShellCheck dans le dépôt du workbook).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-openstack [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+
+Sonde du cloud OpenStack : Keystone, services de calcul, agents OVN, services Cinder,
+répartiteurs Octavia, conteneurs et disque des nœuds, certificats des points d'entrée.
+Un certificat qui expire dans moins de JOURS jours (défaut 10) est une anomalie.
+
+  -s, --seuil-certificats JOURS   seuil d'expiration des certificats (1 à 999)
+  -q, --quiet                     n'afficher que les anomalies et le bilan
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+
+# os ARGS… — CLI openstack avec le nuage de supervision, sortie JSON, délai borné.
+os() {
+  timeout 60 openstack --os-cloud "$MS_OS_CLOUD" "$@" -f json 2>/dev/null
+}
+
+# noeud HÔTE COMMANDE — commande de lecture sur un nœud (SSH non interactif).
+noeud() {
+  local h="$1"
+  shift
+  ssh -o BatchMode=yes -o ConnectTimeout=5 "$h" "$@" 2>/dev/null
+}
+
+# --- Points d'entrée -----------------------------------------------------------------------------
+
+verifier_keystone() {
+  if timeout 30 openstack --os-cloud "$MS_OS_CLOUD" token issue -f value -c expires >/dev/null 2>&1; then
+    ok keystone "jeton délivré pour le nuage $MS_OS_CLOUD"
+  else
+    ko keystone "aucun jeton pour le nuage $MS_OS_CLOUD (Keystone, HAProxy, identifiant d'application ?)"
+  fi
+}
+
+# --- Calcul, réseau, volumes, répartiteurs ------------------------------------------------------
+
+verifier_calcul() {
+  local rep n bin hote h
+  if ! rep="$(os compute service list --long)" || ! jq -e 'type == "array" and length > 0' >/dev/null <<<"$rep"; then
+    ko calcul "liste des services de calcul illisible : contrôle impossible"
+    return
+  fi
+  while IFS=$'\t' read -r bin hote; do
+    ko calcul "$bin sur $hote : activé mais « down »"
+  done < <(jq -r '.[] | select(.Status == "enabled" and .State != "up") | [.Binary, .Host] | @tsv' <<<"$rep")
+  while IFS=$'\t' read -r bin hote; do
+    ko calcul "$bin sur $hote : désactivé SANS raison"
+  done < <(jq -r '.[] | select(.Status == "disabled" and ((.["Disabled Reason"] // "") == "")) | [.Binary, .Host] | @tsv' <<<"$rep")
+  n="$(jq '[.[] | select((.Status == "enabled" and .State == "up") or (.Status == "disabled" and (.["Disabled Reason"] // "") != ""))] | length' <<<"$rep")"
+  if [[ "$n" == "$(jq length <<<"$rep")" ]]; then
+    ok calcul "$n service(s) Nova conformes"
+  fi
+  for h in "${MS_OS_CALCULS[@]}"; do
+    jq -e --arg h "$h" 'any(.[]; .Binary == "nova-compute" and .Host == $h)' >/dev/null <<<"$rep" \
+      || ko calcul "aucun nova-compute enregistré pour $h"
+  done
+}
+
+verifier_reseau() {
+  local rep type hote
+  if ! rep="$(os network agent list)" || ! jq -e 'type == "array" and length > 0' >/dev/null <<<"$rep"; then
+    ko reseau "liste des agents réseau illisible : contrôle impossible"
+    return
+  fi
+  while IFS=$'\t' read -r type hote; do
+    ko reseau "$type sur $hote : mort"
+  done < <(jq -r '.[] | select(.Alive != true) | [.["Agent Type"], .Host] | @tsv' <<<"$rep")
+  if jq -e 'all(.[]; .Alive == true)' >/dev/null <<<"$rep"; then
+    ok reseau "$(jq length <<<"$rep") agent(s) OVN vivant(s)"
+  fi
+  if jq -e 'any(.[]; .["Agent Type"] | test("Gateway"))' >/dev/null <<<"$rep"; then
+    ok reseau "passerelle OVN présente"
+  else
+    ko reseau "aucun châssis passerelle OVN : plus d'IP flottantes ni de SNAT"
+  fi
+}
+
+verifier_volumes() {
+  local rep b
+  if ! rep="$(os volume service list)" || ! jq -e 'type == "array" and length > 0' >/dev/null <<<"$rep"; then
+    ko volumes "liste des services Cinder illisible : contrôle impossible"
+    return
+  fi
+  for b in "${MS_OS_CINDER_BINAIRES[@]}"; do
+    if jq -e --arg b "$b" 'any(.[]; .Binary == $b) and all(.[] | select(.Binary == $b); .Status == "enabled" and .State == "up")' >/dev/null <<<"$rep"; then
+      ok volumes "$b : up"
+    else
+      ko volumes "$b : absent, désactivé ou « down »"
+    fi
+  done
+}
+
+verifier_repartiteurs() {
+  local rep n nom prov oper
+  if ! rep="$(os loadbalancer list)" || ! jq -e 'type == "array"' >/dev/null <<<"$rep"; then
+    ko octavia "liste des répartiteurs illisible : contrôle impossible"
+    return
+  fi
+  while IFS=$'\t' read -r nom prov oper; do
+    ko octavia "répartiteur $nom : $prov / $oper"
+  done < <(jq -r '.[] | select(.provisioning_status == "ERROR" or .operating_status == "ERROR" or .operating_status == "OFFLINE") | [.name, .provisioning_status, .operating_status] | @tsv' <<<"$rep")
+  n="$(jq '[.[] | select(.provisioning_status != "ERROR" and .operating_status != "ERROR" and .operating_status != "OFFLINE")] | length' <<<"$rep")"
+  if [[ "$n" == "$(jq length <<<"$rep")" ]]; then
+    ok octavia "$n répartiteur(s) sans erreur"
+  fi
+}
+
+# --- Nœuds ----------------------------------------------------------------------------------------
+
+verifier_noeuds() {
+  local h malades arretes pc
+  for h in "${MS_OS_NOEUDS[@]}"; do
+    if ! noeud "$h" true; then
+      ko noeud "$h injoignable en SSH : contrôle impossible"
+      continue
+    fi
+    if ! malades="$(noeud "$h" sudo -n docker ps --filter health=unhealthy --format '{{.Names}}')"; then
+      ko noeud "$h : docker ps impossible (sudo, démon Docker ?)"
+      continue
+    fi
+    if [[ -z "$malades" ]]; then ok noeud "$h : aucun conteneur unhealthy"; else ko noeud "$h : unhealthy : $(tr '\n' ' ' <<<"$malades")"; fi
+    arretes="$(noeud "$h" sudo -n docker ps -a --filter status=exited --filter status=dead --format '{{.Names}}' || echo '?')"
+    if [[ -z "$arretes" ]]; then ok noeud "$h : aucun conteneur arrêté"; else ko noeud "$h : arrêté(s) : $(tr '\n' ' ' <<<"$arretes")"; fi
+    pc="$(noeud "$h" df --output=pcent /var/lib/docker | tail -n 1 | tr -dc '0-9')"
+    if [[ -z "$pc" ]]; then
+      ko noeud "$h : occupation de /var/lib/docker illisible"
+    elif ((pc < MS_OS_SEUIL_DISQUE)); then
+      ok noeud "$h : /var/lib/docker occupé à $pc %"
+    else
+      ko noeud "$h : /var/lib/docker occupé à $pc % (seuil $MS_OS_SEUIL_DISQUE %)"
+    fi
+  done
+}
+
+# --- Certificats (même contrat que ms-verif-services) ----------------------------------------------
+
+verifier_certificats() {
+  local seuil_j="$1" point nom port pem fin
+  for point in "${MS_POINTS_TLS[@]}"; do
+    nom="${point%:*}"
+    port="${point##*:}"
+    if ! pem="$(openssl s_client -connect "$nom:$port" -servername "$nom" -CAfile "$MS_RACINE" \
+        -verify_hostname "$nom" -verify_return_error </dev/null 2>/dev/null | openssl x509 2>/dev/null)" \
+        || [[ -z "$pem" ]]; then
+      ko certificat "$nom:$port : injoignable, chaîne non reconnue par la racine MédiSphère, ou nom incorrect"
+      continue
+    fi
+    fin="$(openssl x509 -noout -enddate <<<"$pem" | cut -d= -f2)"
+    if openssl x509 -noout -checkend $((seuil_j * 86400)) <<<"$pem" >/dev/null; then
+      ok certificat "$nom:$port valide jusqu'au $fin"
+    else
+      ko certificat "$nom:$port expire dans moins de $seuil_j jours ($fin)"
+    fi
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  local seuil_j="${MS_VERIF_SEUIL_CERTS:-10}"
+  while (($#)); do
+    case "$1" in
+      -s | --seuil-certificats)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        seuil_j="$2"
+        shift 2
+        ;;
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  [[ "$seuil_j" =~ ^[1-9][0-9]{0,2}$ ]] || die "--seuil-certificats attend un nombre de jours entre 1 et 999" 2
+  require_cmd openstack jq openssl ssh timeout
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-openstack.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-openstack.conf
+  source "$conf"
+  ((${#MS_OS_NOEUDS[@]} > 0 && ${#MS_OS_CALCULS[@]} > 0 && ${#MS_POINTS_TLS[@]} > 0 && ${#MS_OS_CINDER_BINAIRES[@]} > 0)) \
+    && [[ -n "${MS_OS_CLOUD:-}" ]] \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+
+  verifier_keystone
+  verifier_calcul
+  verifier_reseau
+  verifier_volumes
+  verifier_repartiteurs
+  verifier_noeuds
+  verifier_certificats "$seuil_j"
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur le cloud OpenStack"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

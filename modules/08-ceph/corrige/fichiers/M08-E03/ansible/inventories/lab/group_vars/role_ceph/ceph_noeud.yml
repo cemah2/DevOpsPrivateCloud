@@ -1,0 +1,6 @@
+---
+# group_vars/role_ceph/ceph_noeud.yml — nœuds ceph01-03 (M08-E02, clé ajoutée en M08-E03).
+ceph_noeud_version: "20.2.3"
+# Contenu de /etc/ceph/ceph.pub sur ceph01 après le bootstrap (= « ceph cephadm get-pub-key »).
+# Clé PUBLIQUE : elle se versionne. La clé privée reste dans le cluster (config-key du MON).
+ceph_noeud_cle_orchestrateur: "<CONTENU-DE-ETC-CEPH-CEPH.PUB>"

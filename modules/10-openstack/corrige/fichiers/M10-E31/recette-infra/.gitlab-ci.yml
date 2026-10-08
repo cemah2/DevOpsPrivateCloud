@@ -1,0 +1,116 @@
+# =============================================================================
+# .gitlab-ci.yml — mediagenda/recette-infra (équipe MédiAgenda), M10-E31 (DEV-1157)
+#
+# valider   fmt, validate (sans accès : MR de n'importe quelle branche)
+# plan      plan ENREGISTRÉ (chiffré), résumé dans le widget de la MR ; sur main aussi
+# appliquer apply MANUEL du plan du même pipeline, main seulement (Maintainers : Julien)
+# detruire  destroy MANUEL, main seulement, pipeline lancé à la main avec DETRUIRE=agenda-recette
+# derive    plan nocturne planifié : échoue s'il y a un écart entre le code et le cloud
+#
+# Variables du projet (Settings > CI/CD > Variables), toutes PROTÉGÉES ; masquées et cachées pour
+# les secrets. Aucune n'est un secret de la plateforme :
+#   OS_AUTH_TYPE=v3applicationcredential  OS_AUTH_URL=https://openstack.par1.medisphere.internal:5000/v3
+#   OS_REGION_NAME=RegionOne  OS_CACERT=/usr/local/share/ca-certificates/medisphere-root-ca.crt
+#   OS_APPLICATION_CREDENTIAL_ID           identifiant d'application du projet mediagenda-dev (rôle member)
+#   OS_APPLICATION_CREDENTIAL_SECRET       (masquée, cachée)
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  identité S3 « tofu-mediagenda » (compartiment tofu-state-mediagenda seul)
+#   TF_ENCRYPTION                          key_provider "pbkdf2" "etat" { passphrase = "…" } (masquée, cachée)
+#   TF_VAR_cle_publique_ssh                clé publique de l'équipe (non secrète)
+# Accès au module : le projet plateforme/tofu-modules autorise ce projet dans sa liste
+# « CI/CD job token allowlist » ; le jeton de job sert à cloner le module (aucun jeton personnel).
+# Runner : runner01 (exécuteur shell partagé, étiquette « shell ») — cloisonnement imparfait entre
+# projets (même machine, même compte) : accepté pour la recette, à revoir au module 19.
+# =============================================================================
+
+stages:
+  - valider
+  - plan
+  - appliquer
+  - detruire
+
+default:
+  tags: [shell]
+  interruptible: true
+
+variables:
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+# Jeton de job pour cloner le module, par variables d'environnement de Git (aucun fichier de
+# configuration modifié sur le runner partagé).
+.acces-module:
+  before_script:
+    - export GIT_CONFIG_COUNT=1
+    - export GIT_CONFIG_KEY_0="url.https://gitlab-ci-token:${CI_JOB_TOKEN}@git01.par1.medisphere.internal/.insteadOf"
+    - export GIT_CONFIG_VALUE_0="https://git01.par1.medisphere.internal/"
+    - tofu version
+
+valider:
+  extends: .acces-module
+  stage: valider
+  script:
+    - tofu fmt -check -recursive
+    - tofu init -backend=false -input=false
+    - tofu validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+plan:
+  extends: .acces-module
+  stage: plan
+  resource_group: recette
+  script:
+    - tofu init -input=false -lockfile=readonly
+    - |
+      rc=0
+      tofu plan -input=false -lock-timeout=10m -detailed-exitcode -out=plan.tfplan || rc=$?
+      [ "$rc" -ne 1 ] || exit 1
+      tofu show -json plan.tfplan | jq '{create: ([.resource_changes[]? | select(.change.actions | index("create"))] | length),
+                                         update: ([.resource_changes[]? | select(.change.actions | index("update"))] | length),
+                                         delete: ([.resource_changes[]? | select(.change.actions | index("delete"))] | length)}' > rapport-terraform.json
+  artifacts:
+    expire_in: 7 days
+    paths: [plan.tfplan]
+    reports:
+      terraform: rapport-terraform.json
+  rules:
+    # Les variables protégées n'existent que sur main et les branches protégées.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $OS_APPLICATION_CREDENTIAL_ID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+appliquer:
+  extends: .acces-module
+  stage: appliquer
+  resource_group: recette
+  needs: [plan]
+  script:
+    - tofu init -input=false -lockfile=readonly
+    - tofu apply -input=false -lock-timeout=10m plan.tfplan
+    # Preuve d'idempotence : le plan suivant doit être vide.
+    - tofu plan -input=false -lock-timeout=10m -detailed-exitcode
+    - tofu output url
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: manual
+
+detruire:
+  extends: .acces-module
+  stage: detruire
+  resource_group: recette
+  script:
+    - tofu init -input=false -lockfile=readonly
+    - tofu destroy -input=false -lock-timeout=10m -auto-approve
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web" && $DETRUIRE == "agenda-recette"
+      when: manual
+
+derive:
+  extends: .acces-module
+  stage: plan
+  interruptible: false
+  script:
+    - tofu init -input=false -lockfile=readonly
+    - tofu plan -input=false -lock-timeout=10m -detailed-exitcode -refresh=true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PLANIF == "derive"

@@ -1,0 +1,39 @@
+---
+# playbooks/reseau-externe.yml — réseau externe ext-net (M10-E08). Cloud « medisphere-admin ».
+#   uv run ansible-playbook playbooks/reseau-externe.yml --check
+#   uv run ansible-playbook playbooks/reseau-externe.yml
+- name: Réseau externe des IP flottantes
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../donnees/reseau-externe.yml
+  module_defaults:
+    group/openstack.cloud.openstack:
+      cloud: "{{ reseau_cloud | default('medisphere-admin') }}"
+
+  tasks:
+    - name: Réseau externe (fournisseur, flat sur physnet1)
+      openstack.cloud.network:
+        name: "{{ reseau_externe.nom }}"
+        # « external » : les projets peuvent y brancher la passerelle de leurs routeurs et y
+        # prendre des IP flottantes. PAS « shared » : personne n'y branche une instance.
+        external: true
+        shared: false
+        provider_network_type: "{{ reseau_externe.type }}"
+        provider_physical_network: "{{ reseau_externe.physnet }}"
+        state: present
+
+    - name: Sous-réseau externe (sans DHCP)
+      openstack.cloud.subnet:
+        name: "{{ reseau_externe.sous_reseau.nom }}"
+        network: "{{ reseau_externe.nom }}"
+        cidr: "{{ reseau_externe.sous_reseau.cidr }}"
+        gateway_ip: "{{ reseau_externe.sous_reseau.passerelle }}"
+        # Aucune instance n'est branchée directement sur ce réseau : pas de DHCP. Les adresses
+        # sont attribuées par Neutron (IP flottantes, passerelles de routeurs).
+        is_dhcp_enabled: false
+        allocation_pool_start: "{{ reseau_externe.sous_reseau.debut }}"
+        allocation_pool_end: "{{ reseau_externe.sous_reseau.fin }}"
+        dns_nameservers: "{{ reseau_externe.sous_reseau.resolveurs }}"
+        state: present

@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+# ms-verif-ceph — sonde de service du cluster Ceph ceph-par1 (M08-E24, PLAT-950).
+#
+# Lit les métriques du module « prometheus » du mgr ACTIF (aucune identité cephx nécessaire, aucune
+# écriture) et vérifie que le cluster REND le service : état global et contrôles nommés, quorum,
+# OSD up/in, PG active+clean, remplissage des pools et du cluster, point d'entrée S3, certificats.
+#
+# Usage : ms-verif-ceph [-p|--seuil-pool POURCENT] [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+# Variables : MS_VERIF_SEUIL_POOL (défaut 80), MS_VERIF_SEUIL_CERTS (défaut 10), pour un drop-in.
+#
+# Configuration : /usr/local/etc/ms-verif-ceph.conf (MS_CONF pour un autre chemin).
+#
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien » — aucun mgr actif, une page de
+# métriques vide, un outil absent sont des KO.
+
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20). Référence dans le
+# workbook : modules/02-scripting/corrige/fichiers/M02-E20/outils/lib/ms-commun.sh (le second
+# source-path ne sert qu'à ShellCheck dans le dépôt du workbook).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+_METRIQUES=""
+_MGR_ACTIF=""
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-ceph [-p|--seuil-pool POURCENT] [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+
+Sonde du cluster Ceph (métriques du mgr actif) : santé, quorum, OSD, PG, remplissage, S3, certificats.
+
+  -p, --seuil-pool POURCENT       remplissage maximal admis d'un pool (0 à 100, défaut 80)
+  -s, --seuil-certificats JOURS   un certificat qui expire dans moins de JOURS jours est une anomalie (défaut 10)
+  -q, --quiet                     n'afficher que les anomalies et le bilan
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils (section Ceph).
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+
+# metrique NOM [FILTRE_ÉTIQUETTES] — lignes « valeur » des échantillons d'une métrique (texte Prometheus).
+# Le filtre est une expression régulière appliquée à la partie {…} (ex. 'name="OSD_DOWN"').
+metrique() {
+  local nom="$1" filtre="${2:-}"
+  awk -v n="$nom" -v f="$filtre" '
+    $0 ~ "^" n "[{ ]" {
+      etiq = ""; if (match($0, /\{[^}]*\}/)) etiq = substr($0, RSTART, RLENGTH)
+      if (f == "" || etiq ~ f) print $NF
+    }' <<<"$_METRIQUES"
+}
+
+# metrique_etiquettes NOM — lignes « {étiquettes} valeur » d'une métrique.
+metrique_etiquettes() {
+  awk -v n="$1" '$0 ~ "^" n "\\{" { if (match($0, /\{[^}]*\}/)) print substr($0, RSTART, RLENGTH), $NF }' <<<"$_METRIQUES"
+}
+
+# etiquette "{a=\"x\",b=\"y\"}" NOM — valeur d'une étiquette.
+etiquette() { sed -nE "s/.*[{,]$2=\"([^\"]*)\".*/\1/p" <<<"$1"; }
+
+# somme NOM [FILTRE] — somme des échantillons (0 si aucun).
+somme() { metrique "$1" "${2:-}" | awk '{ s += $1 } END { printf "%d\n", s }'; }
+
+# --- Mgr actif -----------------------------------------------------------------------------------
+
+# trouver_mgr — charge les métriques du SEUL mgr actif. Un mgr en attente répond par une erreur
+# HTTP (standby_behaviour = error, E24) ; un hôte sans mgr ne répond pas.
+trouver_mgr() {
+  local h corps actifs=()
+  for h in "${MS_CEPH_MGR_HOTES[@]}"; do
+    if corps="$(curl -sS --fail --max-time 10 "http://$h:$MS_CEPH_PORT_METRIQUES/metrics" 2>/dev/null)" \
+        && grep -q '^ceph_health_status' <<<"$corps"; then
+      actifs+=("$h")
+      _METRIQUES="$corps"
+    fi
+  done
+  case "${#actifs[@]}" in
+    1)
+      _MGR_ACTIF="${actifs[0]}"
+      ok mgr "mgr actif : $_MGR_ACTIF"
+      ;;
+    0)
+      ko mgr "aucun mgr actif ne sert de métriques (${MS_CEPH_MGR_HOTES[*]}, port $MS_CEPH_PORT_METRIQUES) : contrôles du cluster impossibles"
+      return 1
+      ;;
+    *)
+      ko mgr "plusieurs hôtes servent des métriques (${actifs[*]}) : standby_behaviour mal réglé, résultat non fiable"
+      return 1
+      ;;
+  esac
+}
+
+# --- Contrôles du cluster -----------------------------------------------------------------------------
+
+verifier_sante() {
+  local etat actifs
+  etat="$(metrique ceph_health_status | head -n 1)"
+  # Contrôles actifs : ceph_health_detail{name="…",severity="…"} 1.0
+  actifs="$(metrique_etiquettes ceph_health_detail | awk '$NF + 0 == 1 { print $1 }' \
+    | sed -nE 's/.*name="([^"]+)".*/\1/p' | sort -u | paste -sd ' ' -)"
+  case "${etat%%.*}" in
+    0) ok sante "HEALTH_OK" ;;
+    1) ko sante "HEALTH_WARN : ${actifs:-contrôles non détaillés}" ;;
+    2) ko sante "HEALTH_ERR : ${actifs:-contrôles non détaillés}" ;;
+    *) ko sante "état global illisible dans les métriques" ;;
+  esac
+}
+
+verifier_quorum() {
+  local presents
+  presents="$(metrique ceph_mon_quorum_status | awk '$1 + 0 == 1' | wc -l)"
+  if ((presents == MS_CEPH_MONS)); then
+    ok quorum "$presents moniteur(s) sur $MS_CEPH_MONS dans le quorum"
+  else
+    ko quorum "$presents moniteur(s) sur $MS_CEPH_MONS dans le quorum"
+  fi
+}
+
+verifier_osd() {
+  local ligne demon hors=()
+  while read -r ligne; do
+    [[ -n "$ligne" ]] || continue
+    demon="$(etiquette "$ligne" ceph_daemon)"
+    [[ "${ligne##* }" == 1* ]] || hors+=("$demon:down")
+  done < <(metrique_etiquettes ceph_osd_up)
+  while read -r ligne; do
+    [[ -n "$ligne" ]] || continue
+    demon="$(etiquette "$ligne" ceph_daemon)"
+    [[ "${ligne##* }" == 1* ]] || hors+=("$demon:out")
+  done < <(metrique_etiquettes ceph_osd_in)
+  local total
+  total="$(metrique_etiquettes ceph_osd_up | grep -c . || true)"
+  if ((total != MS_CEPH_OSDS)); then
+    ko osd "$total OSD connus, $MS_CEPH_OSDS attendus"
+  elif ((${#hors[@]} > 0)); then
+    ko osd "${hors[*]}"
+  else
+    ok osd "$total OSD up et in"
+  fi
+}
+
+verifier_pg() {
+  local total actifs propres
+  total="$(somme ceph_pg_total)"
+  actifs="$(somme ceph_pg_active)"
+  propres="$(somme ceph_pg_clean)"
+  if ((total == 0)); then
+    ko pg "aucun PG dans les métriques"
+  elif ((actifs == total && propres == total)); then
+    ok pg "$total PG actifs et propres"
+  else
+    ko pg "$total PG : $((total - actifs)) inactif(s), $((total - propres)) non propre(s)"
+  fi
+}
+
+# Remplissage d'un pool = stocké / (stocké + disponible), comme %USED de « ceph df ».
+verifier_pools() {
+  local seuil="$1" ligne id nom stocke dispo pct n=0 pleins=0
+  while read -r ligne; do
+    [[ -n "$ligne" ]] || continue
+    id="$(etiquette "$ligne" pool_id)"
+    nom="$(etiquette "$ligne" name)"
+    stocke="$(metrique ceph_pool_stored "pool_id=\"$id\"" | head -n 1)"
+    dispo="$(metrique ceph_pool_max_avail "pool_id=\"$id\"" | head -n 1)"
+    [[ -n "$stocke" && -n "$dispo" ]] || { ko pool "$nom : occupation illisible"; continue; }
+    pct="$(awk -v s="$stocke" -v d="$dispo" 'BEGIN { if (s + d > 0) printf "%d", 100 * s / (s + d); else print 0 }')"
+    n=$((n + 1))
+    if ((pct >= seuil)); then
+      ko pool "$nom plein à $pct % (seuil $seuil %)"
+      pleins=$((pleins + 1))
+    fi
+  done < <(metrique_etiquettes ceph_pool_metadata)
+  if ((n == 0)); then
+    ko pool "aucun pool dans les métriques"
+  elif ((pleins == 0)); then
+    ok pool "$n pool(s) sous le seuil de $seuil %"
+  fi
+
+  local brut utilise
+  brut="$(metrique ceph_cluster_total_bytes | head -n 1)"
+  utilise="$(metrique ceph_cluster_total_used_bytes | head -n 1)"
+  pct="$(awk -v u="${utilise:-0}" -v b="${brut:-0}" 'BEGIN { if (b > 0) printf "%d", 100 * u / b; else print -1 }')"
+  if ((pct < 0)); then
+    ko capacite "capacité brute illisible"
+  elif ((pct >= MS_CEPH_SEUIL_BRUT)); then
+    ko capacite "cluster occupé à $pct % (réserve pour la perte d'un nœud : $MS_CEPH_SEUIL_BRUT %)"
+  else
+    ok capacite "cluster occupé à $pct %"
+  fi
+}
+
+# --- Points d'entrée et certificats --------------------------------------------------------------------
+
+verifier_s3() {
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --cacert "$MS_RACINE" "$MS_CEPH_S3_URL/" 2>/dev/null || true)"
+  if [[ "$code" == 200 ]]; then ok s3 "$MS_CEPH_S3_URL répond (HTTP 200)"; else ko s3 "$MS_CEPH_S3_URL : HTTP ${code:-aucune réponse}"; fi
+}
+
+verifier_certificats() {
+  local seuil_j="$1" point nom port pem fin points=("${MS_CEPH_POINTS_TLS[@]}")
+  # Tableau de bord : celui du mgr ACTIF (les autres hôtes n'ont pas forcément de mgr).
+  [[ -z "$_MGR_ACTIF" ]] || points+=("$_MGR_ACTIF:${MS_CEPH_PORT_TABLEAU:-8443}")
+  for point in "${points[@]}"; do
+    nom="${point%:*}"
+    port="${point##*:}"
+    if ! pem="$(openssl s_client -connect "$nom:$port" -servername "$nom" -CAfile "$MS_RACINE" \
+        -verify_hostname "$nom" -verify_return_error </dev/null 2>/dev/null | openssl x509 2>/dev/null)" \
+        || [[ -z "$pem" ]]; then
+      ko certificat "$nom:$port : injoignable, chaîne non reconnue par la racine MédiSphère, ou nom incorrect"
+      continue
+    fi
+    fin="$(openssl x509 -noout -enddate <<<"$pem" | cut -d= -f2)"
+    if openssl x509 -noout -checkend $((seuil_j * 86400)) <<<"$pem" >/dev/null; then
+      ok certificat "$nom:$port valide jusqu'au $fin"
+    else
+      ko certificat "$nom:$port expire dans moins de $seuil_j jours ($fin)"
+    fi
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  local seuil_j="${MS_VERIF_SEUIL_CERTS:-10}" seuil_p="${MS_VERIF_SEUIL_POOL:-80}"
+  while (($#)); do
+    case "$1" in
+      -p | --seuil-pool | -s | --seuil-certificats)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        if [[ "$1" == -p || "$1" == --seuil-pool ]]; then seuil_p="$2"; else seuil_j="$2"; fi
+        shift 2
+        ;;
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  [[ "$seuil_j" =~ ^[1-9][0-9]{0,2}$ ]] || die "--seuil-certificats attend un nombre de jours entre 1 et 999" 2
+  [[ "$seuil_p" =~ ^([0-9]|[1-9][0-9]|100)$ ]] || die "--seuil-pool attend un pourcentage entre 0 et 100" 2
+  require_cmd curl openssl awk
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-ceph.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-ceph.conf
+  source "$conf"
+  ((${#MS_CEPH_MGR_HOTES[@]} > 0 && MS_CEPH_MONS > 0 && MS_CEPH_OSDS > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+
+  if trouver_mgr; then
+    verifier_sante
+    verifier_quorum
+    verifier_osd
+    verifier_pg
+    verifier_pools "$seuil_p"
+  fi
+  verifier_s3
+  verifier_certificats "$seuil_j"
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur le cluster Ceph"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

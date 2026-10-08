@@ -1,0 +1,18 @@
+; base-de-donnees.fio — charge de type base de données (M08-E28).
+; Périphérique : variable d'environnement FIO_DEV (ex. /dev/rbd0). Écrit sur le périphérique : mesure seulement.
+[global]
+filename=${FIO_DEV}
+ioengine=libaio
+direct=1
+time_based=1
+runtime=120
+ramp_time=15
+group_reporting=1
+percentile_list=50:95:99:99.9
+
+[base-de-donnees]
+rw=randrw
+rwmixread=70
+bs=4k
+iodepth=16
+numjobs=1

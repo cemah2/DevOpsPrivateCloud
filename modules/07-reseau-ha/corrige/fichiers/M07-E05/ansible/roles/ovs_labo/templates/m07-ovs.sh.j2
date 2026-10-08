@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Géré par Ansible (rôle ovs_labo, M07-E05) — laboratoire Open vSwitch de net01.
+#   m07-ovs demarrer | arreter | etat
+# demarrer est idempotent : --may-exist pour la base d'OVS, réglages des ports réappliqués,
+# espaces de noms et veth recréés s'ils manquent. Il remet la table OpenFlow par défaut
+# (une seule règle : priority=0, actions=NORMAL) : un flux ajouté à la main ne survit pas.
+set -euo pipefail
+
+PONT="{{ ovs_labo_pont }}"
+
+espace() { ip netns list | grep -qw -- "$1" || ip netns add "$1"; ip -n "$1" link set lo up; }
+
+# relier ESPACE PORT : paire veth PORT (racine, dans OVS) <-> eth0 (dans l'espace).
+relier() {
+  local ns="$1" port="$2"
+  espace "$ns"
+  if ! ip link show "$port" >/dev/null 2>&1; then
+    ip link add "$port" type veth peer name eth0 netns "$ns"
+  fi
+  ovs-vsctl --may-exist add-port "$PONT" "$port"
+  ip link set "$port" up
+  ip -n "$ns" link set eth0 up
+}
+
+adresse() { ip -n "$1" addr replace "$3" dev "$2"; }
+
+demarrer() {
+  ovs-vsctl --may-exist add-br "$PONT"
+  ip link set "$PONT" up
+{% for h in ovs_labo_hotes %}
+
+  # {{ h.ns }} : accès VLAN {{ h.vlan }}
+  relier {{ h.ns }} {{ h.port }}
+  ovs-vsctl set port {{ h.port }} vlan_mode=access tag={{ h.vlan }}
+  adresse {{ h.ns }} eth0 {{ h.adresse }}
+  ip -n {{ h.ns }} route replace default via {{ h.passerelle }}
+{% endfor %}
+
+  # {{ ovs_labo_routeur.ns }} : trunk {{ ovs_labo_routeur.vlans | map(attribute='id') | join(',') }}
+  relier {{ ovs_labo_routeur.ns }} {{ ovs_labo_routeur.port }}
+  ovs-vsctl set port {{ ovs_labo_routeur.port }} vlan_mode=trunk trunks={{ ovs_labo_routeur.vlans | map(attribute='id') | join(',') }}
+  ovs-vsctl clear port {{ ovs_labo_routeur.port }} tag
+{% for v in ovs_labo_routeur.vlans %}
+  ip -n {{ ovs_labo_routeur.ns }} link show eth0.{{ v.id }} >/dev/null 2>&1 \
+    || ip -n {{ ovs_labo_routeur.ns }} link add link eth0 name eth0.{{ v.id }} type vlan id {{ v.id }}
+  ip -n {{ ovs_labo_routeur.ns }} link set eth0.{{ v.id }} up
+  adresse {{ ovs_labo_routeur.ns }} eth0.{{ v.id }} {{ v.adresse }}
+{% endfor %}
+  ip netns exec {{ ovs_labo_routeur.ns }} sysctl -qw net.ipv4.ip_forward=1
+
+  # Table OpenFlow par défaut : commutateur classique (apprentissage, VLAN).
+  ovs-ofctl del-flows "$PONT"
+  ovs-ofctl add-flow "$PONT" "priority=0,actions=NORMAL"
+}
+
+# Retire les ports et les espaces de ce labo ; le pont reste (d'autres labos peuvent l'utiliser,
+# M07-E17). Supprimer un espace de noms détruit aussi le bout racine de chaque paire veth.
+arreter() {
+  local p ns
+  for p in {{ (ovs_labo_hotes | map(attribute='port') | list + [ovs_labo_routeur.port]) | join(' ') }}; do
+    ovs-vsctl --if-exists del-port "$PONT" "$p"
+  done
+  for ns in {{ (ovs_labo_hotes | map(attribute='ns') | list + [ovs_labo_routeur.ns]) | join(' ') }}; do
+    if ip netns list | grep -qw -- "$ns"; then
+      ip netns del "$ns"
+    fi
+  done
+}
+
+etat() {
+  ovs-vsctl show
+  echo "--- flux OpenFlow"
+  ovs-ofctl dump-flows "$PONT"
+  echo "--- table d'apprentissage"
+  ovs-appctl fdb/show "$PONT"
+}
+
+case "${1:-}" in
+  demarrer) demarrer ;;
+  arreter) arreter ;;
+  etat) etat ;;
+  *) echo "Usage : $0 demarrer|arreter|etat" >&2; exit 2 ;;
+esac

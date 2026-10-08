@@ -1,0 +1,169 @@
+heat_template_version: 2021-04-16
+
+description: >
+  Environnement de recette de MédiAgenda (M10-E14, DEV-1124) : réseau et sous-réseau, routeur
+  relié au réseau externe, groupe de sécurité, une instance web (nginx) avec un volume de données
+  et une IP flottante. Projet cible : mediagenda-dev.
+
+parameter_groups:
+  - label: Instance
+    parameters: [image, gabarit, cle, taille_volume]
+  - label: Réseau
+    parameters: [reseau_externe, cidr, sources_admin]
+
+parameters:
+  image:
+    type: string
+    label: Image
+    description: Image de l'instance (format raw, M10-E10).
+    default: debian-13
+    constraints:
+      - custom_constraint: glance.image
+  gabarit:
+    type: string
+    label: Gabarit
+    default: m1.petit
+    constraints:
+      - custom_constraint: nova.flavor
+      - allowed_values: [m1.petit, m1.moyen]
+        description: La recette se limite à m1.petit et m1.moyen (quota de mediagenda-dev).
+  cle:
+    type: string
+    label: Paire de clés SSH
+    constraints:
+      - custom_constraint: nova.keypair
+  taille_volume:
+    type: number
+    label: Taille du volume de données (Go)
+    default: 5
+    constraints:
+      - range: {min: 1, max: 50}
+        description: Entre 1 et 50 Go.
+  reseau_externe:
+    type: string
+    label: Réseau externe
+    default: ext-net
+    constraints:
+      - custom_constraint: neutron.network
+  cidr:
+    type: string
+    label: Sous-réseau de la recette
+    default: 192.168.140.0/24
+    constraints:
+      - custom_constraint: net_cidr
+  sources_admin:
+    type: comma_delimited_list
+    label: Réseaux autorisés en SSH et HTTP
+    description: MGMT et le VPN d'administration (PLAN §4.2, §4.3).
+    default: "10.10.10.0/24,10.255.1.0/24"
+
+resources:
+  reseau:
+    type: OS::Neutron::Net
+    properties:
+      name: {list_join: ['-', [{get_param: OS::stack_name}, 'net']]}
+
+  sous_reseau:
+    type: OS::Neutron::Subnet
+    properties:
+      name: {list_join: ['-', [{get_param: OS::stack_name}, 'sousreseau']]}
+      network: {get_resource: reseau}
+      cidr: {get_param: cidr}
+      ip_version: 4
+      dns_nameservers: [10.10.20.10, 10.10.20.16]
+
+  routeur:
+    type: OS::Neutron::Router
+    properties:
+      name: {list_join: ['-', [{get_param: OS::stack_name}, 'routeur']]}
+      external_gateway_info:
+        network: {get_param: reseau_externe}
+
+  interface_routeur:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router: {get_resource: routeur}
+      subnet: {get_resource: sous_reseau}
+
+  groupe_securite:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: {list_join: ['-', [{get_param: OS::stack_name}, 'web']]}
+      description: SSH et HTTP depuis MGMT et le VPN d'administration (géré par Heat)
+      rules:
+        repeat:
+          for_each:
+            <%source%>: {get_param: sources_admin}
+            <%port%>: [22, 80]
+          template:
+            direction: ingress
+            protocol: tcp
+            remote_ip_prefix: <%source%>
+            port_range_min: <%port%>
+            port_range_max: <%port%>
+
+  port:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_resource: reseau}
+      fixed_ips:
+        - subnet: {get_resource: sous_reseau}
+      security_groups:
+        - {get_resource: groupe_securite}
+
+  serveur:
+    type: OS::Nova::Server
+    properties:
+      name: {list_join: ['-', [{get_param: OS::stack_name}, 'web']]}
+      image: {get_param: image}
+      flavor: {get_param: gabarit}
+      key_name: {get_param: cle}
+      networks:
+        - port: {get_resource: port}
+      metadata:
+        role: web
+        pile: {get_param: OS::stack_name}
+      user_data_format: RAW
+      user_data: |
+        #cloud-config
+        package_update: true
+        packages: [nginx]
+        runcmd:
+          - [sh, -c, 'printf "MédiAgenda recette — %s\n" "$(hostname)" > /var/www/html/index.html']
+
+  volume:
+    type: OS::Cinder::Volume
+    properties:
+      name: {list_join: ['-', [{get_param: OS::stack_name}, 'donnees']]}
+      size: {get_param: taille_volume}
+      description: Données de la recette (géré par Heat)
+
+  attachement:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: {get_resource: serveur}
+      volume_id: {get_resource: volume}
+
+  ip_flottante:
+    type: OS::Neutron::FloatingIP
+    # Sans l'interface du routeur, Neutron refuse l'association (« External network …
+    # is not reachable from subnet … ») : la dépendance n'est pas visible dans les références.
+    depends_on: interface_routeur
+    properties:
+      floating_network: {get_param: reseau_externe}
+      port_id: {get_resource: port}
+
+outputs:
+  ip_flottante:
+    description: IP flottante de l'instance web.
+    value: {get_attr: [ip_flottante, floating_ip_address]}
+  url:
+    description: Page servie par l'instance.
+    value:
+      str_replace:
+        template: http://ADRESSE/
+        params:
+          ADRESSE: {get_attr: [ip_flottante, floating_ip_address]}
+  volume:
+    description: Identifiant du volume de données.
+    value: {get_resource: volume}

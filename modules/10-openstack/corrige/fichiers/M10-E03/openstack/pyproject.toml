@@ -1,0 +1,22 @@
+# plateforme/openstack — déploiement d'OpenStack 2026.1 par Kolla-Ansible (M10-E03, PLAT-1103).
+# Environnement SÉPARÉ de plateforme/ansible : Kolla-Ansible 22 exige ansible-core < 2.21
+# (notes de version 2026.1 : Ansible 12 au moins, 13 au plus, soit ansible-core 2.19 ou 2.20),
+# alors que plateforme/ansible suit ansible-core 2.21 (PLAN §6).
+[project]
+name = "plateforme-openstack"
+version = "0.1.0"
+description = "Déploiement d'OpenStack 2026.1 « Gazpacho » par Kolla-Ansible — MédiSphère PAR1"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    # Version exacte : un changement de Kolla est une mise à jour planifiée (M10-E28), pas un
+    # effet de bord d'un « uv sync ».
+    "kolla-ansible==22.2.0",
+    # Borne haute imposée par Kolla 22 ; on vise la 2.20 (la plus récente admise).
+    "ansible-core>=2.20,<2.21",
+    # Pour la collection openstack.cloud (objets du cloud : identité, gabarits, réseau externe).
+    "openstacksdk>=4.0",
+]
+
+[tool.uv]
+# Pas de paquet Python à construire : un projet d'outillage.
+package = false

@@ -1,0 +1,15 @@
+## template: jinja
+#cloud-config
+# Données utilisateur de e18-vm (M10-E18). Gabarit Jinja de cloud-init : les métadonnées de
+# l'instance (--property role=web) sont lues dans ds.meta_data.meta (vérifier le chemin avec
+# « cloud-init query --all » dans l'instance).
+package_update: true
+packages:
+  - nginx
+write_files:
+  - path: /etc/medisphere/role
+    permissions: "0644"
+    content: |
+      {{ ds.meta_data.meta.role }}
+runcmd:
+  - [systemctl, enable, --now, nginx]

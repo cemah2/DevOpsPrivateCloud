@@ -1,0 +1,40 @@
+---
+# noeud_openstack — préparer un nœud pour Kolla-Ansible (M10-E02, PLAT-1102).
+# Plan réseau : modules/10-openstack/enonce/00-introduction.md. UNE règle, la même que
+# l'état OpenTofu envs/openstack (noeuds.tf) :
+#   suffixe = dernier octet de ansible_host (adresse OS-API, 51 à 53)
+#   adresse = <prefixe>.<suffixe + decalage>/<longueur>
+#   MAC     = bc:24:11:<vlan>:00:<suffixe>
+
+# Cartes de tous les nœuds, dans l'ordre net0, net1, net2.
+noeud_openstack_interfaces:
+  - {nom: ens18, vlan: 50, prefixe: "10.10.50", longueur: 24, decalage: 0, mtu: 1500, principale: true}
+  - {nom: ens19, vlan: 51, prefixe: "10.10.51", longueur: 24, decalage: 0, mtu: 9000, principale: false}
+  - {nom: ens20, vlan: 30, prefixe: "10.10.30", longueur: 24, decalage: 10, mtu: 9000, principale: false}
+
+# Carte externe (net3), SANS adresse, seulement sur les nœuds de ce groupe d'hôtes.
+noeud_openstack_interface_externe: {nom: ens21, vlan: 52, mtu: 1500}
+noeud_openstack_noeuds_reseau: [osctl01]
+
+# Calculs : KVM obligatoire.
+noeud_openstack_noeuds_calcul: [oscmp01, oscmp02]
+
+# Petits outils de diagnostic absents de l'image dorée.
+noeud_openstack_paquets: [iputils-arping, tcpdump]
+
+noeud_openstack_passerelle: "10.10.50.1"
+noeud_openstack_resolveurs: ["10.10.20.10", "10.10.20.16"]
+noeud_openstack_domaine: "par1.medisphere.internal"
+
+# Contrôles après redémarrage : ping sans fragmentation, 9000 octets (8972 de charge ICMP).
+noeud_openstack_cibles_jumbo:
+  - {interface: ens19, adresses: ["10.10.51.51", "10.10.51.52", "10.10.51.53"]}
+  - {interface: ens20, adresses: ["10.10.30.51"]}   # ceph01 (M08)
+
+# Un changement du réseau redémarre le nœud. false : le rôle s'arrête en erreur au lieu de
+# redémarrer (utile pour préparer un changement sur un nœud qui porte déjà des instances).
+noeud_openstack_redemarrage_autorise: true
+
+# Dossier de répétition : le fichier netplan y est validé (netplan generate --root-dir) avant
+# d'être mis en place.
+noeud_openstack_repetition: /var/lib/noeud_openstack/repetition

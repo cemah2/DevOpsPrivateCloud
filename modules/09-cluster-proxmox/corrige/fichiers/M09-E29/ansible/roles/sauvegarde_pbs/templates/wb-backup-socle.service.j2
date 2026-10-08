@@ -1,0 +1,17 @@
+# /etc/systemd/system/wb-backup-socle.service — {{ inventory_hostname }} (M06-E28)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sauvegarde_pbs).') }}
+[Unit]
+Description=Sauvegarde applicative ({{ sauvegarde_pbs_elements | join(', ') }}) vers PBS
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/socle/runbooks/RB-061-restaurer-un-service-socle.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wb-backup-socle.sh
+SyslogIdentifier=wb-backup-socle
+# Priorité basse : le service sauvegardé reste réactif.
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

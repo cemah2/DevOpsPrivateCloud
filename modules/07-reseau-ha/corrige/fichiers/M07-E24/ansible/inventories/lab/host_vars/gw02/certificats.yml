@@ -1,0 +1,24 @@
+---
+# host_vars/gw02/certificats.yml — certificat NTS de gw02 par ACME (M07-E24, modèle M06-E21).
+# Noms : le nom de gw02 et SES adresses (.3). Défi HTTP-01 : ca01 joint chacune de ces adresses sur
+# le port 80 de gw02 (règle « défi ACME » de la matrice, commune aux deux passerelles).
+# En M07-E25, gw01 fait de même avec ses .2 : plus aucun certificat ne porte les .1 (VIP).
+certificats_acme_certificats:
+  - id: chrony
+    noms:
+      - gw02.par1.medisphere.internal
+      - 10.10.10.3
+      - 10.10.20.3
+      - 10.10.30.3
+      - 10.10.40.3
+      - 10.10.50.3
+      - 10.10.52.3
+      - 10.10.60.3
+      - 10.10.70.3
+      - 10.10.99.3
+    certificat: /etc/chrony/nts/gw02.crt
+    cle: /etc/chrony/nts/gw02.key
+    groupe: _chrony
+    recharger: /usr/bin/systemctl try-restart chrony.service
+chrony_serveur_nts_certificat: /etc/chrony/nts/gw02.crt
+chrony_serveur_nts_cle: /etc/chrony/nts/gw02.key

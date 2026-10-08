@@ -1,0 +1,8 @@
+#cloud-config
+# Instance web de démonstration (M10-E16) : nginx et une page qui donne le nom de l'instance.
+package_update: true
+packages:
+  - nginx
+runcmd:
+  - [sh, -c, 'printf "%s\n" "$(hostname)" > /var/www/html/index.html']
+  - [systemctl, enable, --now, nginx]

@@ -1,0 +1,32 @@
+---
+# noeud_openstack — préparer un nœud pour Kolla-Ansible (M10-E02).
+# Ne pose PAS Docker ni les paquets d'OpenStack : c'est le travail de
+# « kolla-ansible bootstrap-servers » (un seul maître par composant).
+
+- name: Calculer le suffixe du nœud (dernier octet de l'adresse OS-API)
+  ansible.builtin.set_fact:
+    noeud_openstack_suffixe: "{{ ansible_host.split('.')[-1] | int }}"
+
+- name: Vérifier l'adresse de connexion et le suffixe
+  ansible.builtin.assert:
+    that:
+      - ansible_host is ansible.builtin.match('^10\.10\.50\.[0-9]{1,3}$')
+      - noeud_openstack_suffixe | int >= 51
+      - noeud_openstack_suffixe | int <= 99
+    fail_msg: >-
+      {{ inventory_hostname }} : ansible_host vaut « {{ ansible_host }} ». Un nœud OpenStack
+      est joint par son adresse OS-API 10.10.50.51-99 (plage « nœuds de clusters », PLAN §4.2).
+    quiet: true
+
+- name: "Outils de diagnostic réseau (arping pour la détection d'adresse en double, M10-E04)"
+  ansible.builtin.apt:
+    name: "{{ noeud_openstack_paquets }}"
+    state: present
+
+- name: Réseau du nœud
+  ansible.builtin.import_tasks: reseau.yml
+  tags: [reseau]
+
+- name: Vérifications (réseau, KVM, temps)
+  ansible.builtin.import_tasks: verifications.yml
+  tags: [verifications]

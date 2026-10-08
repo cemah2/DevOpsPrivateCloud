@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: pve_reponses
+  namespace: medisphere
+  author: Équipe Plateforme MédiSphère
+  description: Service de réponse de l'installateur automatique de Proxmox VE (M11-E14)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

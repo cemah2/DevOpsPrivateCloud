@@ -1,0 +1,29 @@
+---
+# group_vars/m07_fabric/frr.yml — commun aux routeurs de la fabric, version M07-E14 (PLAT-824).
+# REMPLACE celle de M07-E07. Passage en BGP « unnumbered » : les voisins sont désignés par leur
+# INTERFACE ; les /31 des liens (posés par cloud-init) restent, mais plus rien n'en dépend.
+
+# Mot de passe TCP-MD5 des sessions de la fabric : Vault « lab » (vault.yml, même dossier, E07).
+m07_bgp_mdp_fabric: "{{ vault_m07_bgp_mdp_fabric }}"
+
+# Ce que la fabric transporte : les boucles (/32 seulement), les liens /31 de la maquette, les
+# adresses de services Kubernetes (M15, toute longueur dans 10.10.41.0/24) et ce que la bordure
+# annonce à la fabric (10.10.20.0/24, à partir de M07-E16).
+m07_pl_fabric:
+  nom: PL-FABRIC
+  regles:
+    - {seq: 10, action: permit, prefixe: 10.10.255.0/24, ge: 32}
+    - {seq: 20, action: permit, prefixe: 10.10.250.0/24, ge: 31, le: 31}
+    - {seq: 30, action: permit, prefixe: 10.10.41.0/24, le: 32}
+    - {seq: 40, action: permit, prefixe: 10.10.20.0/24}
+
+# Options communes de l'instance BGP :
+#   - multipath-relax : deux chemins sont « égaux » même si leurs AS_PATH diffèrent par l'AS
+#     (utile si un jour les spines avaient des AS distincts ; sans effet ici, voir le corrigé) ;
+#   - temporisateurs 3/9 s (ceux du profil « datacenter », écrits explicitement : le rôle reste
+#     en profil « traditional », qui garde bgp ebgp-requires-policy actif).
+m07_bgp_options_fabric:
+  - bgp bestpath as-path multipath-relax
+  - timers bgp 3 9
+
+frr_ospf: {}

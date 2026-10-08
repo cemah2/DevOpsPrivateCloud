@@ -1,0 +1,7 @@
+# host_vars/nbx01/netbox.yml — EXTRAIT à intégrer (M07-E13) : NetBox accepte le nom publié.
+# Django refuse (400 Bad Request) une requête dont l'en-tête Host n'est pas dans ALLOWED_HOSTS.
+# Le premier nom reste celui de nbx01 : il sert de server_name à nginx (netbox_nginx_nom) et
+# c'est lui que le répartiteur vérifie dans le certificat de nbx01 (verifyhost).
+netbox_allowed_hosts:
+  - nbx01.par1.medisphere.internal
+  - netbox.par1.medisphere.internal

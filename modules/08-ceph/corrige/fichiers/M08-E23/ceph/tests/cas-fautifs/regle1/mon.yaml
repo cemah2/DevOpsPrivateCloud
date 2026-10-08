@@ -1,0 +1,5 @@
+# Cas fautif de la règle 1 : deux moniteurs (quorum perdu à la première panne).
+service_type: mon
+placement:
+  count: 2
+  label: mon

@@ -1,0 +1,9 @@
+---
+# playbooks/m07-web.yml — serveurs web de démonstration et VIP VRRP (M07-E08).
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-web.yml
+- name: Serveurs web de la maquette
+  hosts: m07_web
+  become: true
+  roles:
+    - role: nginx_web
+    - role: keepalived

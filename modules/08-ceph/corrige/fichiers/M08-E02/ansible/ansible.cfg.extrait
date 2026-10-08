@@ -1,0 +1,4 @@
+# ansible.cfg — section [defaults] : M08-E02 ajoute la source de l'environnement Ceph.
+# Liste séparée par des virgules (type « pathlist ») ; l'ordre n'a pas d'importance ici.
+[defaults]
+inventory = inventories/lab/netbox.yml,inventories/lab/netbox-ceph.yml

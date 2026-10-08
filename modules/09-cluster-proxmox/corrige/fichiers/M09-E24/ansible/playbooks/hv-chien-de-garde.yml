@@ -1,0 +1,151 @@
+---
+# playbooks/hv-chien-de-garde.yml — passage des nœuds de hv-par1 au chien de garde émulé (M09-E24).
+#
+# Préalable : le bloc « watchdog » est déjà appliqué aux VMs 2091-2093 par OpenTofu (état hv).
+# Pour chaque nœud, un à la fois : contrôles → mode maintenance (les ressources HA partent) →
+# réglage de watchdog-mux (rôle pve_noeud) → ARRÊT COMPLET de la VM (pour que QEMU recrée ses
+# périphériques) → démarrage par l'API de pve01 → retour dans le cluster → contrôle du module
+# chargé → fin de maintenance (les ressources reviennent selon leurs règles).
+#
+#   set -a; . ~/.config/workbook/pve-ansible.env; set +a     # accès à l'API de pve01 (M04)
+#   uv run ansible-playbook playbooks/hv-chien-de-garde.yml --limit hv02     # un nœud pour commencer
+#   uv run ansible-playbook playbooks/hv-chien-de-garde.yml                  # les autres
+#
+# Le jeton d'Ansible doit avoir VM.PowerMgmt et VM.Audit sur les VMs 2091-2093 (rôle WBAnsible, M04 ;
+# sinon, ajoute le privilège par une MR sur la définition du rôle, jamais un jeton plus large).
+# Un nœud qui porte une VM NON HA en marche n'est pas arrêté : le playbook s'interrompt (déplace-la
+# d'abord, la maintenance HA ne déplace que les ressources HA).
+
+- name: Chien de garde émulé, un nœud à la fois
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  serial: 1
+  any_errors_fatal: true
+  gather_facts: false
+  vars:
+    hv_vmid: { hv01: 2091, hv02: 2092, hv03: 2093 }
+    # Nom du nœud Proxmox de pve01 dans l'API (hostname de pve01, M00).
+    pve01_noeud: "{{ lookup('ansible.builtin.env', 'PROXMOX_NODE') | default('pve01', true) }}"
+    pve01_hote: >-
+      {{ lookup('ansible.builtin.env', 'PROXMOX_HOST')
+         or (lookup('ansible.builtin.env', 'PROXMOX_URL') | urlsplit('hostname')) or '' }}
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ pve01_hote }}"
+      validate_certs: true
+      ca_path: /etc/ssl/certs/ca-certificates.crt
+      api_timeout: 30
+
+  tasks:
+    - name: Contrôle | cluster quorate et tous les nœuds en ligne
+      ansible.builtin.command: pvesh get /cluster/status --output-format json
+      register: hv_statut
+      changed_when: false
+      failed_when: >-
+        (hv_statut.stdout | from_json | selectattr('type', 'equalto', 'cluster') | first).quorate != 1
+        or (hv_statut.stdout | from_json | selectattr('type', 'equalto', 'node')
+            | rejectattr('online', 'equalto', 1) | list | length) > 0
+
+    - name: Contrôle | Ceph en bonne santé (HEALTH_OK)
+      ansible.builtin.command: ceph health --format json
+      register: hv_ceph
+      changed_when: false
+      failed_when: (hv_ceph.stdout | from_json).status != 'HEALTH_OK'
+
+    - name: Contrôle | lire les ressources HA et les VMs du nœud
+      ansible.builtin.command: "pvesh get {{ item }} --output-format json"
+      loop:
+        - /cluster/ha/resources
+        - /nodes/{{ inventory_hostname }}/qemu
+      register: hv_lectures
+      changed_when: false
+
+    - name: Contrôle | aucune VM non HA en marche sur le nœud
+      ansible.builtin.assert:
+        that: hv_vm_non_ha | length == 0
+        fail_msg: "VM(s) non HA en marche sur {{ inventory_hostname }} : {{ hv_vm_non_ha | join(', ') }} — à déplacer d'abord."
+        quiet: true
+      vars:
+        hv_sids: "{{ hv_lectures.results[0].stdout | from_json | map(attribute='sid') | list }}"
+        hv_vm_non_ha: >-
+          {{ hv_lectures.results[1].stdout | from_json | selectattr('status', 'equalto', 'running')
+             | map(attribute='vmid') | map('string') | map('regex_replace', '^', 'vm:')
+             | reject('in', hv_sids) | list }}
+
+    - name: Maintenance | activer pour {{ inventory_hostname }}
+      ansible.builtin.command: ha-manager crm-command node-maintenance enable {{ inventory_hostname }}
+      changed_when: true
+
+    - name: Maintenance | attendre que plus aucune ressource HA ne tourne ici
+      ansible.builtin.command: pvesh get /cluster/ha/status/current --output-format json
+      register: hv_ha
+      changed_when: false
+      until: >-
+        hv_ha.stdout | from_json | selectattr('type', 'equalto', 'service')
+        | selectattr('node', 'equalto', inventory_hostname)
+        | selectattr('state', 'in', ['started', 'migrate', 'starting']) | list | length == 0
+      retries: 60
+      delay: 10
+
+    - name: Réglage | module du chien de garde (rôle pve_noeud)
+      ansible.builtin.include_role:
+        name: pve_noeud
+        tasks_from: chien_de_garde
+
+    - name: "Arrêt | éteindre le nœud (la VM s'arrête : QEMU recréera ses périphériques)"
+      community.general.shutdown:
+        delay: 0
+
+    - name: Arrêt | attendre l'arrêt de la VM sur pve01, VMID {{ hv_vmid[inventory_hostname] }}
+      community.proxmox.proxmox_vm_info:
+        node: "{{ pve01_noeud }}"
+        vmid: "{{ hv_vmid[inventory_hostname] }}"
+      delegate_to: localhost
+      register: hv_vm
+      until: hv_vm.proxmox_vms | length == 1 and hv_vm.proxmox_vms[0].status == 'stopped'
+      retries: 36
+      delay: 5
+
+    - name: Démarrage | démarrer la VM depuis pve01
+      community.proxmox.proxmox_kvm:
+        node: "{{ pve01_noeud }}"
+        vmid: "{{ hv_vmid[inventory_hostname] }}"
+        state: started
+      delegate_to: localhost
+
+    - name: Démarrage | attendre SSH
+      ansible.builtin.wait_for_connection:
+        delay: 30
+        timeout: 600
+
+    - name: Retour | le nœud est de nouveau en ligne dans un cluster quorate
+      ansible.builtin.command: pvesh get /cluster/status --output-format json
+      register: hv_retour
+      changed_when: false
+      until: >-
+        (hv_retour.stdout | from_json | selectattr('type', 'equalto', 'cluster') | first).quorate == 1
+        and (hv_retour.stdout | from_json | selectattr('type', 'equalto', 'node')
+             | selectattr('name', 'equalto', inventory_hostname) | first).online == 1
+      retries: 30
+      delay: 10
+
+    - name: Retour | watchdog-mux utilise le bon module (et plus softdog)
+      ansible.builtin.shell: |
+        set -o pipefail
+        lsmod | awk '{print $1}' | grep -qx i6300esb
+        ! lsmod | awk '{print $1}' | grep -qx softdog
+        systemctl is-active --quiet watchdog-mux
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Retour | Ceph revenu à HEALTH_OK (OSD du nœud remontés)
+      ansible.builtin.command: ceph health --format json
+      register: hv_ceph_apres
+      changed_when: false
+      until: (hv_ceph_apres.stdout | from_json).status == 'HEALTH_OK'
+      retries: 60
+      delay: 10
+
+    - name: Maintenance | désactiver pour {{ inventory_hostname }}
+      ansible.builtin.command: ha-manager crm-command node-maintenance disable {{ inventory_hostname }}
+      changed_when: true

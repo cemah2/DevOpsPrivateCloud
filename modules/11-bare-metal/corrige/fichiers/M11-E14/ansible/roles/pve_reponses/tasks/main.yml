@@ -1,0 +1,88 @@
+---
+- name: Le jeton est fourni (Vault)
+  ansible.builtin.assert:
+    that: pve_reponses_jeton is match('^[A-Za-z0-9_-]+:.{16,}$')
+    fail_msg: "pve_reponses_jeton absent ou trop court (format <nom>:<secret>, secret de 16 caractères au moins)"
+    quiet: true
+
+- name: Compte de service
+  ansible.builtin.user:
+    name: pve-reponses
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+
+- name: Dossiers
+  ansible.builtin.file:
+    path: "{{ item.chemin }}"
+    state: directory
+    owner: root
+    group: "{{ item.groupe }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {chemin: /etc/pve-reponses, groupe: pve-reponses, mode: "0750"}
+    - {chemin: /srv/pve-answer, groupe: pve-reponses, mode: "0750"}
+    - {chemin: /usr/local/lib/pve-reponses, groupe: root, mode: "0755"}
+
+- name: Programme du service
+  ansible.builtin.copy:
+    src: serveur.py
+    dest: /usr/local/lib/pve-reponses/serveur.py
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Redémarrer pve-reponses
+
+- name: Jeton (lisible par le seul compte de service)
+  ansible.builtin.copy:
+    content: "{{ pve_reponses_jeton }}\n"
+    dest: /etc/pve-reponses/jeton
+    owner: root
+    group: pve-reponses
+    mode: "0640"
+  no_log: true
+
+- name: Table MAC → fichier de réponse
+  ansible.builtin.copy:
+    content: "{{ dict(pve_reponses_machines | map(attribute='mac') | map('lower') | zip(pve_reponses_machines | map(attribute='fichier'))) | to_nice_json }}\n"
+    dest: /etc/pve-reponses/machines.json
+    owner: root
+    group: pve-reponses
+    mode: "0640"
+
+- name: "Fichiers de réponse (contiennent une empreinte de mot de passe : non publics)"
+  ansible.builtin.copy:
+    src: "{{ pve_reponses_depot }}/{{ item.fichier }}"
+    dest: "/srv/pve-answer/{{ item.fichier }}"
+    owner: root
+    group: pve-reponses
+    mode: "0640"
+  loop: "{{ pve_reponses_machines }}"
+  loop_control:
+    label: "{{ item.fichier }}"
+
+- name: Unité systemd
+  ansible.builtin.template:
+    src: pve-reponses.service.j2
+    dest: /etc/systemd/system/pve-reponses.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer pve-reponses
+
+- name: Emplacement nginx
+  ansible.builtin.template:
+    src: nginx-pve-reponses.conf.j2
+    dest: /etc/nginx/pxe.d/pve-reponses.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger nginx
+
+- name: Service actif
+  ansible.builtin.systemd_service:
+    name: pve-reponses
+    state: started
+    enabled: true
+    daemon_reload: true

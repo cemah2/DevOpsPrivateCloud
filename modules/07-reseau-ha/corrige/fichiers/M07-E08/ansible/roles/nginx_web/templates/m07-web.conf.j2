@@ -1,0 +1,24 @@
+# Géré par Ansible (rôle nginx_web) — site de démonstration de {{ nginx_web_nom }}.
+server {
+    listen {{ nginx_web_port }} default_server;
+    listen [::]:{{ nginx_web_port }} default_server;
+    server_name _;
+
+    root {{ nginx_web_racine }};
+    index index.html;
+
+    # Qui a répondu ? Visible dans les en-têtes, même derrière un répartiteur.
+    add_header X-Serveur "{{ nginx_web_nom }}" always;
+
+    # Point de santé : keepalived (E08), HAProxy (E10). Pas de journal : un appel toutes les
+    # deux secondes noierait les vraies requêtes.
+    location = /sante {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}

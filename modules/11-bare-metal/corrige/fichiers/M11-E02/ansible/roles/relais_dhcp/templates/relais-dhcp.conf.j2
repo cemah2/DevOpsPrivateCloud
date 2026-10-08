@@ -1,0 +1,19 @@
+# {{ relais_dhcp_fichier }} — {{ inventory_hostname }} : dnsmasq en RELAIS DHCP uniquement
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle relais_dhcp).') }}
+# M00-E14 (un serveur), M06-E25 (paire Kea), M11-E02 (plusieurs VLANs).
+{% set vlans = relais_dhcp_vlans if relais_dhcp_vlans | length > 0 else [{'interface': relais_dhcp_interface, 'adresse_locale': relais_dhcp_adresse_locale, 'commentaire': ''}] %}
+
+# Pas de service DNS sur le routeur.
+port=0
+
+{% for v in vlans %}
+# --- {{ v.interface }}{{ (' : ' ~ v.commentaire) if v.commentaire | default('') | length > 0 else '' }}
+# N'écouter (DHCP) que sur les VLANs des clients.
+interface={{ v.interface }}
+# Requêtes reçues sur l'interface qui porte {{ v.adresse_locale }} : relayées à chaque serveur
+# ({{ v.adresse_locale }} inscrit comme giaddr).
+{%   for s in relais_dhcp_serveurs %}
+dhcp-relay={{ v.adresse_locale }},{{ s }}{{ (',' ~ relais_dhcp_interface_serveurs) if relais_dhcp_interface_serveurs | length > 0 else '' }}
+{%   endfor %}
+
+{% endfor %}

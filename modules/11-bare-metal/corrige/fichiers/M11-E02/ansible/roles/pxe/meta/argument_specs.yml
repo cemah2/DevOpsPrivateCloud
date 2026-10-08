@@ -1,0 +1,39 @@
+---
+argument_specs:
+  main:
+    short_description: Serveur de démarrage réseau du VLAN 60 (TFTP, HTTP, iPXE)
+    options:
+      pxe_adresse:
+        type: str
+        description: Adresse d'écoute de TFTP et HTTP.
+      pxe_nom_serveur:
+        type: str
+        description: Nom servi par nginx (server_name).
+      pxe_racine_tftp:
+        type: path
+        description: Racine TFTP (chroot de tftpd-hpa).
+      pxe_racine_http:
+        type: path
+        description: Racine HTTP.
+      pxe_binaires_ipxe:
+        type: list
+        elements: str
+        description: Binaires de /usr/lib/ipxe copiés à la racine TFTP.
+      pxe_http_autorises:
+        type: list
+        elements: str
+        description: Réseaux autorisés à lire le serveur HTTP.
+      pxe_dossiers_publies:
+        type: list
+        elements: str
+        description: Dossiers de la racine HTTP alimentés par plateforme/provisioning.
+      pxe_racine_pki:
+        type: path
+        description: Certificat racine de la PKI publié sous pki/ pour les installateurs.
+      pxe_installateurs:
+        type: list
+        elements: dict
+        description: Installateurs à télécharger et vérifier ({nom, type debian|rocky, version, miroir}).
+      pxe_entete:
+        type: str
+        description: En-tête des fichiers générés.

@@ -1,0 +1,57 @@
+{
+  "client-classes": [
+    {
+      "boot-file-name": "http://pxe01.par1.medisphere.internal/boot.ipxe",
+      "name": "ipxe",
+      "test": "substring(option[77].hex,0,4) == 'iPXE'"
+    },
+    {
+      "boot-file-name": "undionly.kpxe",
+      "name": "pxe-bios",
+      "test": "option[93].hex == 0x0000 and not (substring(option[77].hex,0,4) == 'iPXE')"
+    },
+    {
+      "boot-file-name": "ipxe.efi",
+      "name": "pxe-uefi-x64",
+      "test": "(option[93].hex == 0x0007 or option[93].hex == 0x0009) and not (substring(option[77].hex,0,4) == 'iPXE')"
+    }
+  ],
+  "subnet4 (id 60)": [
+    {
+      "ddns-send-updates": false,
+      "id": 60,
+      "next-server": "10.10.60.10",
+      "option-data": [
+        {
+          "data": "10.10.60.1",
+          "name": "routers"
+        },
+        {
+          "data": "10.10.60.1",
+          "name": "ntp-servers"
+        }
+      ],
+      "pools": [
+        {
+          "pool": "10.10.60.100 - 10.10.60.199"
+        }
+      ],
+      "reservations": [
+        {
+          "hostname": "bm01",
+          "hw-address": "02:4d:53:60:00:01",
+          "ip-address": "10.10.60.101"
+        },
+        {
+          "hostname": "bm04",
+          "hw-address": "02:4d:53:60:00:04",
+          "ip-address": "10.10.60.104"
+        }
+      ],
+      "subnet": "10.10.60.0/24",
+      "user-context": {
+        "commentaire": "VLAN 60 PROV, relayé par les passerelles, M11-E02 ; réservations depuis NetBox (M11-E06)"
+      }
+    }
+  ]
+}

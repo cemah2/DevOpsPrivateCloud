@@ -1,0 +1,21 @@
+---
+# host_vars/leaf02/frr.yml — état de fin de M07-E06 : OSPF zone 0.
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.12/32]
+    ospf: {zone: 0.0.0.0}
+  - nom: eth1
+    description: vers spine01 (vfab2)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+  - nom: eth2
+    description: vers spine02 (vfab4)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 10, passive: false}
+  - nom: eth3
+    description: vers srv02 (vfab6)
+    ospf: {zone: 0.0.0.0}
+  - nom: eth4
+    description: vers leaf01 (vfab7)
+    ospf: {zone: 0.0.0.0, reseau: point-to-point, cout: 30, passive: false}
+
+frr_ospf:
+  router_id: 10.10.255.12

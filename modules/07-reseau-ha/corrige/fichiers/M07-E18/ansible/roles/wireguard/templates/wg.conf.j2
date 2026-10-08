@@ -1,0 +1,32 @@
+# /etc/wireguard/{{ item.nom }}.conf — {{ inventory_hostname }}
+# {{ wireguard_entete }}
+# Source : rôle wireguard (M07-E18). Clé privée depuis Ansible Vault.
+{% if item.pilotage | default('role') == 'transition' %}
+# Interface montée par la transition VRRP sur le maître UNIQUEMENT.
+{% endif %}
+[Interface]
+Address = {{ item.adresse }}
+ListenPort = {{ item.port }}
+PrivateKey = {{ item.cle_privee }}
+{% if item.table | default('auto') != 'auto' %}
+Table = {{ item.table }}
+{% endif %}
+{% if item.mtu is defined %}
+MTU = {{ item.mtu }}
+{% endif %}
+{% for c in item.post_up | default([]) %}
+PostUp = {{ c }}
+{% endfor %}
+{% for p in item.pairs %}
+
+[Peer]
+# {{ p.nom }}
+PublicKey = {{ p.cle_publique }}
+{%   if p.endpoint is defined %}
+Endpoint = {{ p.endpoint }}
+{%   endif %}
+AllowedIPs = {{ p.allowed_ips | join(', ') }}
+{%   if p.keepalive is defined %}
+PersistentKeepalive = {{ p.keepalive }}
+{%   endif %}
+{% endfor %}

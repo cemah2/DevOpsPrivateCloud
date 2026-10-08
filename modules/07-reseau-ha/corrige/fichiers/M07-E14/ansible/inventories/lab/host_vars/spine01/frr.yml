@@ -1,0 +1,47 @@
+---
+# host_vars/spine01/frr.yml — fabric en BGP unnumbered (M07-E14). REMPLACE la version de E07.
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.1/32]
+  - {nom: eth1, description: vers leaf01 (vfab1)}
+  - {nom: eth2, description: vers leaf02 (vfab2)}
+
+frr_prefix_lists:
+  - "{{ m07_pl_fabric }}"
+  # Ce que chaque leaf a le droit d'annoncer : sa boucle, le lien et la boucle de son serveur.
+  - nom: PL-LEAF01
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.11/32}
+      - {seq: 20, action: permit, prefixe: 10.10.250.8/31}
+      - {seq: 30, action: permit, prefixe: 10.10.255.21/32}
+      - {seq: 40, action: permit, prefixe: 10.10.41.0/24, le: 32}
+      - {seq: 50, action: permit, prefixe: 10.10.20.0/24}
+  - nom: PL-LEAF02
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.12/32}
+      - {seq: 20, action: permit, prefixe: 10.10.250.10/31}
+      - {seq: 30, action: permit, prefixe: 10.10.255.22/32}
+      - {seq: 40, action: permit, prefixe: 10.10.41.0/24, le: 32}
+
+frr_route_maps:
+  - nom: RM-LEAF01-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-LEAF01]}]
+  - nom: RM-LEAF02-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-LEAF02]}]
+  - nom: RM-LEAVES-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-FABRIC]}]
+
+frr_bgp:
+  asn: 65100
+  router_id: 10.10.255.1
+  options: "{{ m07_bgp_options_fabric }}"
+  groupes:
+    - nom: LEAVES
+      mot_de_passe: "{{ m07_bgp_mdp_fabric }}"
+      route_map_sortie: RM-LEAVES-OUT
+  # Voisins désignés par l'INTERFACE : session sur l'adresse IPv6 lien-local du voisin (découverte
+  # par ses annonces de routeur), routes IPv4 avec un next-hop IPv6 (RFC 8950).
+  voisins:
+    - {interface: eth1, as_distant: 65101, groupe: LEAVES, description: leaf01, route_map_entree: RM-LEAF01-IN}
+    - {interface: eth2, as_distant: 65102, groupe: LEAVES, description: leaf02, route_map_entree: RM-LEAF02-IN}
+  reseaux: [10.10.255.1/32]

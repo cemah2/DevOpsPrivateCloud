@@ -1,0 +1,34 @@
+---
+# molecule/haproxy/converge.yml — HAProxy sur une instance jetable : un nginx local sert de
+# « serveur » (rôle nginx_web, port 8080) ; un frontend sur le port 80 le répartit.
+# La section TLS n'est PAS rendue (aucun certificat dans /etc/haproxy/certs) : c'est le cas
+# d'amorçage du rôle, vérifié par verify.yml.
+- name: Converge — rôles nginx_web et haproxy
+  hosts: molecule
+  become: true
+  vars:
+    nginx_web_port: 8080
+    haproxy_sections:
+      - type: frontend
+        nom: fe_test
+        lignes:
+          - bind :80
+          - default_backend be_test
+      - type: frontend
+        nom: fe_tls_test
+        tls: true
+        lignes:
+          - bind :443 ssl crt /etc/haproxy/certs/
+          - default_backend be_test
+      - type: backend
+        nom: be_test
+        lignes:
+          - option httpchk
+          - http-check send meth GET uri /sante
+          - http-check expect status 200
+          - server local 127.0.0.1:8080 check inter 1s
+    haproxy_verifications:
+      - url: http://127.0.0.1/sante
+  roles:
+    - role: nginx_web
+    - role: haproxy

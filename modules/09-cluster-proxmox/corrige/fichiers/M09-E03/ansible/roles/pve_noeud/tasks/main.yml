@@ -1,0 +1,23 @@
+---
+# Rôle pve_noeud (M09-E03). Ordre : rien n'est modifié tant que les contrôles d'entrée
+# n'ont pas confirmé qu'on parle au bon nœud, avec les bonnes cartes.
+
+- name: Contrôles d'entrée
+  ansible.builtin.import_tasks: controles.yml
+  tags: [pve_noeud, pve_noeud_controles]
+
+- name: Dépôts et paquets
+  ansible.builtin.import_tasks: depots.yml
+  tags: [pve_noeud, pve_noeud_depots]
+
+- name: DNS du nœud et temps
+  ansible.builtin.import_tasks: temps.yml
+  tags: [pve_noeud, pve_noeud_temps]
+
+- name: Réseau (avec retour automatique)
+  ansible.builtin.import_tasks: reseau.yml
+  tags: [pve_noeud, pve_noeud_reseau]
+
+- name: Système (mémoire de ZFS, console série, SSH, fragments cloud-init)
+  ansible.builtin.import_tasks: systeme.yml
+  tags: [pve_noeud, pve_noeud_systeme]

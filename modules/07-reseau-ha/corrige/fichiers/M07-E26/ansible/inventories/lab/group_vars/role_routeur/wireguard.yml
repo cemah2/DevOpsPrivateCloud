@@ -1,0 +1,41 @@
+---
+# group_vars/role_routeur/wireguard.yml — les trois tunnels de la bordure, IDENTIQUES sur gw01 et
+# gw02 (M07-E26, PLAN §4.9) : mêmes adresses, mêmes ports, mêmes clés. Montés sur le maître VRRP
+# seulement (pilotage: transition). Clés privées : group_vars/role_routeur/vault-critique.yml.
+# Clés publiques : non secrètes, en clair ici.
+wireguard_interfaces:
+  - nom: wg0
+    adresse: 10.255.0.1/30
+    port: 51820
+    cle_privee: "{{ vault_wireguard_wg0_cle_privee }}"
+    pilotage: transition
+    pairs:
+      - nom: pbs01 (PAR2)
+        cle_publique: "<CLE-PUBLIQUE-WG0-DE-PBS01>"
+        endpoint: "192.168.1.30:51820"   # <IP-HP01-LAN>
+        allowed_ips: [10.255.0.2/32, 10.20.0.0/16]
+        keepalive: 25
+  - nom: wg1
+    adresse: 10.255.1.1/24
+    port: 51821
+    cle_privee: "{{ vault_wireguard_wg1_cle_privee }}"
+    pilotage: transition
+    pairs:
+      - nom: poste de <MOI>
+        cle_publique: "<CLE-PUBLIQUE-DU-POSTE>"
+        allowed_ips: [10.255.1.2/32]
+  - nom: wg2
+    adresse: 10.255.2.1/24
+    port: 51822
+    cle_privee: "{{ vault_wireguard_wg2_cle_privee }}"
+    pilotage: transition
+    # Les routes de Lyon (10.30.0.0/16) viennent de BGP (M07-E19) : wg-quick n'en pose aucune.
+    table: "off"
+    pairs:
+      - nom: lyo-gw01 (LYO1)
+        cle_publique: "<CLE-PUBLIQUE-WG2-DE-LYO-GW01>"
+        endpoint: "10.10.99.250:51822"
+        allowed_ips: [10.255.2.2/32, 10.30.0.0/16]
+        keepalive: 25
+
+bordure_tunnels: [wg0, wg1, wg2]

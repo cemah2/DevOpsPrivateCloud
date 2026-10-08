@@ -1,0 +1,85 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/ceph (M08-E23, PLAT-933)
+#
+# Étapes :
+#   lint      gabarits communs (pre-commit, commitlint, gitleaks) + yamllint
+#   verifier  règles maison sur specs/ ; tests des règles (chaque cas fautif rejeté) ;
+#             carte CRUSH attendue testée hors ligne (crushtool)
+#   release   versions du projet (semantic-release, gabarit commun)
+# Planifié (variable de planification PLANIF=derive) : comparaison du cluster au dépôt,
+# EN LECTURE SEULE (outils/derive.sh), avec la clé client.ci-lecture.
+#
+# PAS de job d'application : l'application se fait depuis adm01 par outils/appliquer.sh (décision
+# et arguments dans le README : flux vers le gestionnaire, droits cephx, rythme des changements).
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell »). Outils : yq (mikefarah), jq, uv,
+# ceph-common et ceph-base de Debian 13 (client Reef 18.2 : ceph, crushtool), posés par le rôle
+# gitlab_runner de plateforme/ansible.
+# Flux (matrice v2, M08-E23) : runner01 → 10.10.30.51-53 TCP 3300 (moniteurs, msgr2) et
+# TCP 6800-7568 (gestionnaire actif), pour le seul job de dérive.
+#
+# Secret — variable du projet PROTÉGÉE, de type fichier, portée d'environnement « ceph/derive » :
+#   CEPH_CI_KEYRING   trousseau de client.ci-lecture (mon 'allow r' mgr 'allow r',
+#                     restreint à 10.10.20.15) ; aucune autre clé Ceph n'est confiée à la CI.
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+
+stages:
+  - lint
+  - verifier
+  - release
+  - derive
+
+.shell:
+  tags: [shell]
+  interruptible: true
+  rules:
+    - if: $PLANIF
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+yamllint:
+  extends: .shell
+  stage: lint
+  script:
+    - uvx --from 'yamllint==1.37.*' yamllint --strict specs/ config/ .gitlab-ci.yml
+
+regles-maison:
+  extends: .shell
+  stage: verifier
+  script:
+    - outils/verifier-specs.sh
+
+tests-regles:
+  extends: .shell
+  stage: verifier
+  script:
+    - tests/tester-regles.sh
+
+crush-hors-ligne:
+  extends: .shell
+  stage: verifier
+  script:
+    - outils/tester-crush.sh config/crush-attendu.txt
+
+derive:
+  stage: derive
+  tags: [shell]
+  environment:
+    name: ceph/derive
+    action: verify
+  rules:
+    - if: $PLANIF == "derive"
+  variables:
+    CEPH_ID: ci-lecture
+    CEPH_CONF: config/ceph-client.conf
+  script:
+    - test -n "$CEPH_CI_KEYRING" || { echo "CEPH_CI_KEYRING absente (variable protégée)"; exit 1; }
+    - CEPH_KEYRING="$CEPH_CI_KEYRING" outils/derive.sh

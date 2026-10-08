@@ -1,0 +1,5 @@
+# group_vars/role_ceph_client/vault-lab.yml — À CHIFFRER (identité lab) :
+#   uv run ansible-vault encrypt --encrypt-vault-id lab inventories/lab/group_vars/role_ceph_client/vault-lab.yml
+# Valeur : la ligne « key = … » de « ceph auth get client.rbd-test » (M08-E06).
+# Inscrit au registre des secrets (emplacement, détenteur, rotation : ceph auth get-or-create… ).
+vault_ceph_cle_rbd_test: "<CLE-CEPHX-AQ…==>"

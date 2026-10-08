@@ -1,0 +1,113 @@
+---
+# Rôle pve_pare_feu — voir defaults/main.yml. Le jeu doit cibler TOUS les nœuds du cluster en
+# même temps (pas de --limit) : cluster.fw est commun, le filet doit être armé partout.
+
+- name: Contrôles | variables minimales
+  ansible.builtin.assert:
+    that:
+      - pve_pare_feu_management | length > 0
+      - pve_pare_feu_politique_entree in ['ACCEPT', 'DROP', 'REJECT']
+      - pve_pare_feu_regles | selectattr('motif', 'undefined') | list | length == 0
+    fail_msg: IPSet management vide, politique invalide ou règle sans motif.
+    quiet: true
+
+- name: Contrôles | le jeu couvre tous les nœuds du cluster
+  ansible.builtin.assert:
+    that: ansible_play_hosts_all | length == groups[hv_groupe | default('hv_par1')] | length
+    fail_msg: "pve_pare_feu modifie un fichier commun au cluster : lance-le sur tous les nœuds (pas de --limit)."
+    quiet: true
+  run_once: true
+
+- name: Contrôles | cluster quorate (sinon /etc/pve est en lecture seule)
+  ansible.builtin.command: pvecm status
+  register: pve_pare_feu_pvecm
+  changed_when: false
+  failed_when: pve_pare_feu_pvecm.stdout is not search('Quorate:\s+Yes')
+
+- name: Filet | armer la désactivation automatique sur chaque nœud
+  ansible.builtin.command: >-
+    systemd-run --unit={{ pve_pare_feu_filet_unite }} --on-active={{ pve_pare_feu_filet_minutes }}min
+    --description="Filet anti-coupure du pare-feu (M09-E26)" /usr/sbin/pve-firewall stop
+  register: pve_pare_feu_filet
+  changed_when: pve_pare_feu_filet.rc == 0
+  failed_when: pve_pare_feu_filet.rc != 0 and 'already' not in (pve_pare_feu_filet.stderr | lower)
+  when: not ansible_check_mode
+
+- name: Application, contrôles, puis désarmement du filet
+  block:
+    - name: Datacenter | cluster.fw
+      ansible.builtin.template:
+        src: cluster.fw.j2
+        dest: /etc/pve/firewall/cluster.fw
+        mode: "0640"
+      run_once: true
+      notify: pve_pare_feu_change
+
+    - name: Nœud | host.fw
+      ansible.builtin.template:
+        src: host.fw.j2
+        dest: "/etc/pve/nodes/{{ inventory_hostname }}/host.fw"
+        mode: "0640"
+      notify: pve_pare_feu_change
+
+    - name: Contrôles | laisser pve-firewall recompiler (cycle d'environ 10 s)
+      ansible.builtin.pause:
+        seconds: 25
+      run_once: true
+      when: not ansible_check_mode
+
+    - name: Contrôles | SSH depuis le contrôleur toujours possible
+      ansible.builtin.wait_for_connection:
+        timeout: 30
+
+    - name: Contrôles | quorum conservé
+      ansible.builtin.command: pvecm status
+      register: pve_pare_feu_pvecm_apres
+      changed_when: false
+      failed_when: pve_pare_feu_pvecm_apres.stdout is not search('Quorate:\s+Yes')
+
+    - name: Contrôles | Ceph sans OSD ni MON en panne
+      ansible.builtin.command: ceph health --format json
+      register: pve_pare_feu_ceph
+      changed_when: false
+      run_once: true
+      failed_when: >-
+        (pve_pare_feu_ceph.stdout | from_json).status == 'HEALTH_ERR'
+        or ((pve_pare_feu_ceph.stdout | from_json).checks | default({}) | dict2items
+            | selectattr('key', 'in', ['OSD_DOWN', 'MON_DOWN', 'MGR_DOWN']) | list | length) > 0
+
+    - name: Contrôles | qui porte la VIP
+      ansible.builtin.shell: |
+        set -o pipefail
+        ip -o -4 addr show | grep -c ' {{ pve_pare_feu_vip }}/' || true
+      args:
+        executable: /bin/bash
+      register: pve_pare_feu_vip_ici
+      changed_when: false
+
+    - name: Contrôles | la VIP est portée par un et un seul nœud (VRRP non filtré)
+      ansible.builtin.assert:
+        that: >-
+          ansible_play_hosts | map('extract', hostvars, ['pve_pare_feu_vip_ici', 'stdout'])
+          | map('int') | sum == 1
+        fail_msg: La VIP {{ pve_pare_feu_vip }} n'est pas portée par exactement un nœud (VRRP filtré ?).
+        quiet: true
+      run_once: true
+
+    - name: Filet | désarmer (contrôles passés)
+      ansible.builtin.systemd_service:
+        name: "{{ pve_pare_feu_filet_unite }}.timer"
+        state: stopped
+      when: not ansible_check_mode
+
+  rescue:
+    - name: Échec | arrêter le pare-feu tout de suite sur ce nœud
+      ansible.builtin.command: /usr/sbin/pve-firewall stop
+      changed_when: true
+
+    - name: Échec | arrêter le jeu
+      ansible.builtin.fail:
+        msg: >-
+          Contrôle en échec après application du pare-feu : pve-firewall arrêté sur
+          {{ inventory_hostname }}. Corrige les règles (matrice des flux) avant de relancer ; pour
+          réactiver ensuite : « pve-firewall start » sur chaque nœud.

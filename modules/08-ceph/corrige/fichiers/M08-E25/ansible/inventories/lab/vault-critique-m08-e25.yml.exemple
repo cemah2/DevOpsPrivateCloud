@@ -1,0 +1,11 @@
+---
+# Modèle des variables Vault « critique » ajoutées en M08-E25 (à placer dans le fichier chiffré du
+# groupe concerné, jamais en clair). Chaque secret est inscrit au registre des secrets.
+vault_pbs_jeton_cephcli01: "<SECRET-DU-JETON-wb-backup@pbs!cephcli01>"
+vault_pbs_cle_cephcli01: |
+  <CONTENU-JSON-DE-LA-CLE-PBS-DE-CEPHCLI01>
+vault_ceph_cle_client_sauvegarde: "<CLE-CEPHX-client.sauvegarde>"
+vault_ceph_export_cle_ssh: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  <CLE-PRIVEE-ED25519-DE-L-EXPORT>
+  -----END OPENSSH PRIVATE KEY-----

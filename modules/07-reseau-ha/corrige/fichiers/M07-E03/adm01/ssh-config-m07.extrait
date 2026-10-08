@@ -1,0 +1,9 @@
+# ~/.ssh/config d'adm01 — bloc de la maquette du module 07 (M07-E03). À placer AVANT un
+# éventuel « Host * » (ssh prend la première valeur trouvée pour chaque option).
+# Connexion par le nom complet (DNS dynamique de Kea ou enregistrement d'OpenTofu), fichier
+# known_hosts dédié vidé à chaque reconstruction, nouvelles clés acceptées, clés modifiées refusées.
+Host net01 spine01 spine02 leaf01 leaf02 srv01 srv02 lyo-gw01 lyo-pc01 hap01
+    HostName %h.par1.medisphere.internal
+    User admin
+    UserKnownHostsFile ~/.ssh/known_hosts.m07
+    StrictHostKeyChecking accept-new

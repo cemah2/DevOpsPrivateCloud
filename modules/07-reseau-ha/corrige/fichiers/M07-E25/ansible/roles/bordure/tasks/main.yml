@@ -1,0 +1,51 @@
+---
+- name: Dossier de configuration de la bordure
+  ansible.builtin.file:
+    path: /etc/bordure
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configuration du script de transition
+  ansible.builtin.template:
+    src: transition.conf.j2
+    dest: /etc/bordure/transition.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# enable_script_security (keepalived) refuse un script modifiable par un autre que root.
+- name: Script de transition
+  ansible.builtin.copy:
+    src: bordure-transition
+    dest: /usr/local/sbin/bordure-transition
+    owner: root
+    group: root
+    mode: "0755"
+
+# /run est vidé au démarrage : tmpfiles recrée le dossier ; l'état y sera écrit à la première
+# transition (keepalived démarre toujours en BACKUP dans la bordure : nopreempt).
+- name: Dossier d'état recréé au démarrage
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/bordure.conf
+    content: "d /run/bordure 0755 root root -\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dossier d'état présent maintenant
+  ansible.builtin.file:
+    path: /run/bordure
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Les tunnels de la bordure ne démarrent JAMAIS seuls : c'est la transition MASTER qui les monte.
+# Une passerelle de secours qui démarrerait wg0 au boot volerait le tunnel au maître.
+- name: Tunnels non démarrés au démarrage de la VM
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ item }}.service"
+    enabled: false
+  loop: "{{ bordure_tunnels }}"

@@ -1,0 +1,35 @@
+---
+# playbooks/pve-installateur.yml — dépose (ou retire) sur pxe01 le noyau et l'initrd de
+# l'installateur Proxmox VE préparés par outils/preparer-pve-pxe.sh (M11-E14).
+# L'initrd contient le jeton du service de réponse : on le retire après l'installation.
+#   ansible-playbook playbooks/pve-installateur.yml -e pve_sortie=$HOME/pve-pxe/9.2 -e pve_version=9.2
+#   ansible-playbook playbooks/pve-installateur.yml -e pve_version=9.2 -e pve_etat=absent
+- name: Installateur Proxmox VE servi par pxe01
+  hosts: pxe01
+  become: true
+  vars:
+    pve_etat: present
+    pve_dossier: "/srv/http/pve/{{ pve_version }}"
+  tasks:
+    - name: Version fournie
+      ansible.builtin.assert:
+        that: pve_version is defined and pve_version is match('^[0-9]+\.[0-9]+$')
+        quiet: true
+
+    - name: Dossier de la version
+      ansible.builtin.file:
+        path: "{{ pve_dossier }}"
+        state: "{{ 'directory' if pve_etat == 'present' else 'absent' }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Noyau et initrd
+      ansible.builtin.copy:
+        src: "{{ pve_sortie }}/{{ item }}"
+        dest: "{{ pve_dossier }}/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [vmlinuz, initrd.img]
+      when: pve_etat == 'present'

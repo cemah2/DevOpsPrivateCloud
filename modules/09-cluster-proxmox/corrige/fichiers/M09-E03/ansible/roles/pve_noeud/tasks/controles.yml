@@ -1,0 +1,48 @@
+---
+- name: Le numéro du nœud est fourni par l'inventaire
+  ansible.builtin.assert:
+    that:
+      - pve_noeud_numero is defined
+      - pve_noeud_numero | int in [1, 2, 3]
+      - inventory_hostname == ('hv%02d' | format(pve_noeud_numero | int))
+    fail_msg: "pve_noeud_numero absent ou incohérent avec le nom {{ inventory_hostname }} (hvNN ↔ NN)"
+    quiet: true
+
+- name: Version de Proxmox VE
+  ansible.builtin.command: pveversion
+  register: _pve_noeud_version
+  changed_when: false
+  check_mode: false
+
+- name: C'est bien Proxmox VE {{ pve_noeud_version }}
+  ansible.builtin.assert:
+    that: _pve_noeud_version.stdout is search('^pve-manager/' ~ pve_noeud_version | regex_escape ~ '(\.|/)')
+    fail_msg: "Version inattendue : {{ _pve_noeud_version.stdout }} (attendu pve-manager/{{ pve_noeud_version }}.x)"
+    quiet: true
+
+- name: Nom d'hôte et résolution locale (Proxmox exige que le nom pointe vers l'adresse de gestion)
+  ansible.builtin.command: getent hosts {{ inventory_hostname }}
+  register: _pve_noeud_hosts
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _pve_noeud_hosts.rc != 0
+    or (_pve_noeud_hosts.stdout.split() | first) != pve_noeud_ip_mgmt
+    or ansible_facts['hostname'] != inventory_hostname
+
+- name: Les cinq cartes portent les noms et adresses MAC attendus (épinglage de l'installateur)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['nic' ~ item] is defined
+      - ansible_facts['nic' ~ item]['macaddress'] | lower == pve_noeud_macs[item]
+    fail_msg: >-
+      nic{{ item }} absente ou de MAC inattendue (attendu {{ pve_noeud_macs[item] }}) : vérifier
+      l'ordre des cartes dans OpenTofu et la section interface-name-pinning du fichier de réponse.
+    quiet: true
+  loop: [0, 1, 2, 3, 4]
+
+- name: Virtualisation imbriquée disponible (/dev/kvm, CPU « host » côté pve01)
+  ansible.builtin.stat:
+    path: /dev/kvm
+  register: _pve_noeud_kvm
+  failed_when: not _pve_noeud_kvm.stat.exists

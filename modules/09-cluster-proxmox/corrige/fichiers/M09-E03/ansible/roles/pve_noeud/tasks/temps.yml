@@ -1,0 +1,51 @@
+---
+# --- DNS : réglé par l'API locale, comme le ferait l'interface (Système > DNS) --------------
+- name: Réglages DNS actuels du nœud
+  ansible.builtin.command: pvesh get /nodes/{{ inventory_hostname }}/dns --output-format json
+  register: _pve_noeud_dns
+  changed_when: false
+  check_mode: false
+
+- name: Résolveurs et domaine de recherche du nœud
+  ansible.builtin.command:
+    argv: >-
+      {{ ['pvesh', 'set', '/nodes/' ~ inventory_hostname ~ '/dns', '--search', pve_noeud_domaine]
+         + (pve_noeud_dns_serveurs | zip(['--dns1', '--dns2', '--dns3']) | map('reverse') | flatten) }}
+  vars:
+    _actuel: "{{ _pve_noeud_dns.stdout | from_json }}"
+  when: >-
+    _actuel.search | default('') != pve_noeud_domaine
+    or [_actuel.dns1 | default(''), _actuel.dns2 | default(''), _actuel.dns3 | default('')]
+       | select | list != pve_noeud_dns_serveurs
+  changed_when: true
+
+# --- Temps : chrony (installé par Proxmox VE) ---------------------------------------------------
+- name: Au moins une source de temps
+  ansible.builtin.assert:
+    that: pve_noeud_ntp_serveurs | length > 0
+    quiet: true
+
+- name: Configuration de chrony (validée avant d'être mise en place)
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: chronyd -p -f %s
+  notify: Redémarrer chrony
+
+- name: Chrony démarré et activé
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Appliquer maintenant les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# Corosync et Ceph supportent mal les horloges qui divergent : on attend la synchronisation.
+- name: Attendre la synchronisation de l'horloge
+  ansible.builtin.command: chronyc -n waitsync {{ pve_noeud_ntp_essais_sync }} 0.1 0 3
+  changed_when: false
+  check_mode: false

@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+# ms-verif-reseau — sonde de la REDONDANCE de la bordure et des répartiteurs (M07-E29, PLAT-858).
+#
+# Pour chaque hôte surveillé, lit l'état local publié par /usr/local/sbin/etat-reseau (compte
+# « supervision », clé dédiée, commande forcée) et vérifie que la redondance EXISTE : une seule
+# passerelle porte chaque VIP, toutes les VIP de la bordure sont sur la même, rien n'est en FAULT,
+# BGP et WireGuard vivent sur le maître, conntrackd tourne des deux côtés, les serveurs derrière les
+# répartiteurs sont UP, et les services publiés répondent de bout en bout.
+#
+# Usage : ms-verif-reseau [-q|--quiet] [--prometheus FICHIER] [-h|--help]
+# Configuration : /usr/local/etc/ms-verif-reseau.conf (MS_CONF pour un autre chemin).
+# Tests : MS_ETAT_DIR=<dossier> lit <dossier>/<hôte>.json au lieu de se connecter (tests bats).
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+_METRIQUES=()
+declare -A _ETAT=()
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-reseau [-q|--quiet] [--prometheus FICHIER] [-h|--help]
+
+Sonde de la bordure (gw01, gw02) et des répartiteurs (lb01, lb02) : VRRP, BGP, WireGuard,
+conntrackd, serveurs HAProxy, services publiés.
+
+  -q, --quiet              n'afficher que les anomalies et le bilan
+  --prometheus FICHIER     écrire aussi les mesures au format texte de node_exporter
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils.
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+# metrique NOM{ÉTIQUETTES} VALEUR — accumulée pour --prometheus.
+metrique() { _METRIQUES+=("$1 $2"); }
+
+# etat HOTE — JSON publié par l'hôte (en cache). Échoue si illisible.
+etat() {
+  local h="$1" j
+  if [[ -z "${_ETAT[$h]+x}" ]]; then
+    if [[ -n "${MS_ETAT_DIR:-}" ]]; then
+      j="$(cat "$MS_ETAT_DIR/${h%%.*}.json" 2>/dev/null)" || j=""
+    else
+      j="$(ssh -o BatchMode=yes -o ConnectTimeout=5 -o ControlPath=none -i "$MS_SSH_CLE" \
+        "$MS_SSH_COMPTE@$h" etat-reseau 2>/dev/null)" || j=""
+    fi
+    jq -e 'type == "object" and has("adresses")' >/dev/null 2>&1 <<<"$j" || j=""
+    _ETAT[$h]="$j"
+  fi
+  [[ -n "${_ETAT[$h]}" ]] || return 1
+  printf '%s\n' "${_ETAT[$h]}"
+}
+
+# porteurs VIP HOTE... — noms courts des hôtes qui portent l'adresse VIP.
+porteurs() {
+  local vip="$1" h
+  shift
+  for h in "$@"; do
+    etat "$h" 2>/dev/null | jq -e --arg v "$vip" 'any(.adresses[]; .adresse == $v)' >/dev/null 2>&1 \
+      && printf '%s\n' "${h%%.*}"
+  done
+}
+
+verifier_joignables() {
+  local h
+  for h in "${MS_PASSERELLES[@]}" "${MS_REPARTITEURS[@]}"; do
+    if etat "$h" >/dev/null; then
+      ok acces "$h publie son état"
+      metrique "ms_reseau_hote_joignable{hote=\"${h%%.*}\"}" 1
+    else
+      ko acces "$h : état illisible (SSH supervision, etat-reseau)"
+      metrique "ms_reseau_hote_joignable{hote=\"${h%%.*}\"}" 0
+    fi
+  done
+}
+
+# verifier_vip DOMAINE GROUPE_DE_VIP... -- HOTES... : une seule porteuse par VIP ; et, pour la
+# bordure, la même porteuse pour toutes.
+verifier_vip() {
+  local domaine="$1" meme="$2" v n p ref=""
+  shift 2
+  local -a vips=() hotes=()
+  while (($#)) && [[ "$1" != "--" ]]; do vips+=("$1"); shift; done
+  shift
+  hotes=("$@")
+  local coherent=1
+  for v in "${vips[@]}"; do
+    mapfile -t p < <(porteurs "$v" "${hotes[@]}")
+    n="${#p[@]}"
+    metrique "ms_reseau_vip_porteurs{vip=\"$v\"}" "$n"
+    if ((n == 1)); then
+      ok "$domaine" "$v portée par ${p[0]}"
+      if [[ -z "$ref" ]]; then ref="${p[0]}"; elif [[ "$ref" != "${p[0]}" ]]; then coherent=0; fi
+    elif ((n == 0)); then
+      ko "$domaine" "$v portée par AUCUN hôte (plus de passerelle pour ce réseau)"
+    else
+      ko "$domaine" "$v portée par ${n} hôtes (${p[*]}) : cerveau divisé"
+    fi
+  done
+  if [[ "$meme" == oui ]]; then
+    if ((coherent)) && [[ -n "$ref" ]]; then
+      ok "$domaine" "toutes les VIP sur la même passerelle ($ref)"
+    else
+      ko "$domaine" "VIP réparties sur plusieurs passerelles (groupe de synchronisation rompu)"
+    fi
+  fi
+}
+
+verifier_etats_bordure() {
+  local h e k nb_maitre=0
+  for h in "${MS_PASSERELLES[@]}"; do
+    e="$(etat "$h" 2>/dev/null | jq -r '.etat_bordure // "inconnu"')" || e="inconnu"
+    k="$(etat "$h" 2>/dev/null | jq -r '.keepalived')" || k="false"
+    [[ "$e" == MASTER ]] && nb_maitre=$((nb_maitre + 1))
+    if [[ "$k" == true && ("$e" == MASTER || "$e" == BACKUP) ]]; then
+      ok vrrp "${h%%.*} : keepalived actif, état $e"
+    else
+      ko vrrp "${h%%.*} : keepalived actif=$k, état $e (plus de redondance)"
+    fi
+    metrique "ms_reseau_bordure_maitre{hote=\"${h%%.*}\"}" "$([[ "$e" == MASTER ]] && echo 1 || echo 0)"
+  done
+  if ((nb_maitre == 1)); then ok vrrp "un seul maître dans la bordure"; else ko vrrp "$nb_maitre maître(s) dans la bordure"; fi
+}
+
+# maitre_bordure — nom complet de la passerelle qui porte la première VIP de la bordure.
+maitre_bordure() {
+  local h
+  for h in "${MS_PASSERELLES[@]}"; do
+    if [[ "$(porteurs "${MS_VIP_BORDURE[0]}" "$h")" != "" ]]; then
+      printf '%s\n' "$h"
+      return 0
+    fi
+  done
+  return 1
+}
+
+verifier_bgp() {
+  local h m v s
+  m="$(maitre_bordure)" || m=""
+  for h in "${MS_PASSERELLES[@]}"; do
+    local -a attendus=("${MS_BGP_TOUS[@]}")
+    [[ "$h" == "$m" ]] && attendus+=("${MS_BGP_MAITRE[@]}")
+    for v in "${attendus[@]}"; do
+      s="$(etat "$h" 2>/dev/null | jq -r --arg v "$v" '(.bgp // [])[] | select(.voisin == $v) | .etat')" || s=""
+      if [[ "$s" == Established ]]; then
+        ok bgp "${h%%.*} : session $v établie"
+      else
+        ko bgp "${h%%.*} : session $v ${s:-absente}"
+      fi
+      metrique "ms_reseau_bgp_etabli{hote=\"${h%%.*}\",voisin=\"$v\"}" "$([[ "$s" == Established ]] && echo 1 || echo 0)"
+    done
+    # Voisins configurés, non désactivés (« Admin »), tombés depuis trop longtemps. Sur la
+    # passerelle de secours, les voisins « du maître » (Lyon, dans wg2) sont normalement tombés.
+    local excl="[]"
+    [[ "$h" == "$m" ]] || excl="$(printf '%s\n' "${MS_BGP_MAITRE[@]}" | jq -Rnc '[inputs | select(length > 0)]')"
+    while IFS=$'\t' read -r v s; do
+      [[ -n "$v" ]] || continue
+      ko bgp "${h%%.*} : voisin $v en état $s depuis plus de $MS_BGP_TOLERANCE_MIN min"
+    done < <(etat "$h" 2>/dev/null | jq -r --argjson lim "$((MS_BGP_TOLERANCE_MIN * 60000))" --argjson excl "$excl" \
+      '(.bgp // [])[] | select(.etat != "Established" and (.etat | test("Admin") | not) and .depuis_ms > $lim
+         and (.voisin as $v | $excl | index($v) | not))
+       | [.voisin, .etat] | @tsv' 2>/dev/null)
+  done
+}
+
+verifier_wireguard() {
+  local m i a
+  m="$(maitre_bordure)" || { ko wireguard "aucun maître : tunnels non vérifiables"; return; }
+  for i in "${MS_WG_SURVEILLES[@]}"; do
+    a="$(etat "$m" | jq -r --arg i "$i" '[.wireguard[] | select(.interface == $i) | .age_s] | first // "absente"')"
+    if [[ "$a" =~ ^[0-9]+$ ]] && ((a <= MS_WG_AGE_MAX)); then
+      ok wireguard "${m%%.*} : $i, dernière poignée de main il y a ${a} s"
+    else
+      ko wireguard "${m%%.*} : $i, poignée de main ${a/null/jamais} (seuil ${MS_WG_AGE_MAX} s)"
+    fi
+    [[ "$a" =~ ^[0-9]+$ ]] && metrique "ms_reseau_wireguard_age_secondes{interface=\"$i\"}" "$a"
+  done
+}
+
+verifier_conntrackd() {
+  local h c
+  for h in "${MS_PASSERELLES[@]}"; do
+    c="$(etat "$h" 2>/dev/null | jq -r '.conntrackd')" || c=""
+    if [[ "$c" == true ]]; then ok conntrackd "${h%%.*} : actif"; else ko conntrackd "${h%%.*} : conntrackd $c"; fi
+  done
+}
+
+verifier_haproxy() {
+  local h l
+  for h in "${MS_REPARTITEURS[@]}"; do
+    l="$(etat "$h" 2>/dev/null | jq -r '.haproxy | length')" || l=0
+    if [[ ! "$l" =~ ^[1-9] ]]; then
+      ko haproxy "${h%%.*} : aucun serveur lu (API d'exécution ?)"
+      continue
+    fi
+    while IFS=$'\t' read -r sec srv st; do
+      if [[ "$st" == UP* ]]; then
+        ok haproxy "${h%%.*} : $sec/$srv $st"
+      else
+        ko haproxy "${h%%.*} : $sec/$srv $st"
+      fi
+      metrique "ms_reseau_haproxy_serveur_up{hote=\"${h%%.*}\",section=\"$sec\",serveur=\"$srv\"}" "$([[ "$st" == UP* ]] && echo 1 || echo 0)"
+    done < <(etat "$h" | jq -r '.haproxy[] | [.section, .serveur, .etat] | @tsv')
+  done
+}
+
+verifier_urls() {
+  local ligne url attendu code
+  for ligne in "${MS_URLS[@]}"; do
+    read -r url attendu <<<"$ligne"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --cacert "$MS_RACINE" "$url" 2>/dev/null)" || code="000"
+    if [[ "$code" == "$attendu" ]]; then ok publie "$url répond $code"; else ko publie "$url répond ${code} (attendu $attendu)"; fi
+  done
+}
+
+ecrire_prometheus() {
+  local f="$1" tmp
+  tmp="$(mktemp "${f}.XXXXXX")" || die "écriture impossible : $f" 1
+  {
+    echo "# HELP ms_reseau_anomalies Nombre d'anomalies de la dernière exécution de ms-verif-reseau."
+    echo "# TYPE ms_reseau_anomalies gauge"
+    echo "ms_reseau_anomalies $_NB_KO"
+    echo "# TYPE ms_reseau_derniere_execution_timestamp_seconds gauge"
+    echo "ms_reseau_derniere_execution_timestamp_seconds $(date +%s)"
+    printf '%s\n' "${_METRIQUES[@]}"
+  } >"$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$f"   # renommage atomique : node_exporter ne lit jamais un fichier à moitié écrit
+}
+
+main() {
+  set -Eeuo pipefail
+  local prom=""
+  while (($#)); do
+    case "$1" in
+      -q | --quiet) _QUIET=1; shift ;;
+      --prometheus)
+        [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+        prom="$2"
+        shift 2
+        ;;
+      -h | --help) usage; exit 0 ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  require_cmd jq curl
+  [[ -n "${MS_ETAT_DIR:-}" ]] || require_cmd ssh
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-reseau.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-reseau.conf
+  source "$conf"
+  ((${#MS_PASSERELLES[@]} == 2 && ${#MS_VIP_BORDURE[@]} > 0 && ${#MS_REPARTITEURS[@]} > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+  if [[ -z "${MS_ETAT_DIR:-}" && ! -r "$MS_SSH_CLE" ]]; then
+    die "clé de supervision illisible : $MS_SSH_CLE" 1
+  fi
+
+  verifier_joignables
+  verifier_etats_bordure
+  verifier_vip vrrp oui "${MS_VIP_BORDURE[@]}" -- "${MS_PASSERELLES[@]}"
+  verifier_vip vrrp-dmz non "${MS_VIP_REPARTITEURS[@]}" -- "${MS_REPARTITEURS[@]}"
+  verifier_bgp
+  verifier_wireguard
+  verifier_conntrackd
+  verifier_haproxy
+  ((${#MS_URLS[@]} == 0)) || verifier_urls
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  [[ -z "$prom" ]] || ecrire_prometheus "$prom"
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur la bordure ou les répartiteurs"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -1,0 +1,22 @@
+{
+  "export_id": 1,
+  "path": "/volumes/applications/legacy-rdv/<UUID>",
+  "cluster_id": "par1",
+  "pseudo": "/legacy-rdv",
+  "access_type": "none",
+  "squash": "none",
+  "security_label": true,
+  "protocols": [4],
+  "transports": ["TCP"],
+  "fsal": {
+    "name": "CEPH",
+    "fs_name": "cephfs"
+  },
+  "clients": [
+    {
+      "addresses": ["10.10.30.20"],
+      "access_type": "rw",
+      "squash": "root_squash"
+    }
+  ]
+}

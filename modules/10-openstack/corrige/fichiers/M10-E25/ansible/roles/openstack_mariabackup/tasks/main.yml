@@ -1,0 +1,41 @@
+---
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - openstack_mariabackup_type in ['full', 'incremental']
+      - openstack_mariabackup_heure is match('^[0-2][0-9]:[0-5][0-9]$')
+      - openstack_mariabackup_vault_identite is match('^critique@/')
+    fail_msg: "Type (full|incremental), heure HH:MM et identité Vault « critique@<script> » attendus."
+    quiet: true
+
+- name: Le projet Kolla existe sur l'hôte de déploiement
+  ansible.builtin.stat:
+    path: "{{ openstack_mariabackup_projet }}/{{ openstack_mariabackup_inventaire }}"
+  register: openstack_mariabackup_inv
+
+- name: Inventaire Kolla présent
+  ansible.builtin.assert:
+    that: openstack_mariabackup_inv.stat.exists
+    fail_msg: "Inventaire Kolla introuvable : {{ openstack_mariabackup_projet }}/{{ openstack_mariabackup_inventaire }}"
+    quiet: true
+
+- name: Unités systemd
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - wb-openstack-mariabackup.service
+    - wb-openstack-mariabackup.timer
+  notify: Recharger systemd
+
+- name: Prendre en compte les unités
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: wb-openstack-mariabackup.timer
+    enabled: true
+    state: started

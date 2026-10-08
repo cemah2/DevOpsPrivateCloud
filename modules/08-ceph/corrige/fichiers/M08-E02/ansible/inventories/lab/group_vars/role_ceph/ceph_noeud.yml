@@ -1,0 +1,5 @@
+---
+# group_vars/role_ceph/ceph_noeud.yml — nœuds ceph01-03 (M08-E02, clé ajoutée en M08-E03).
+ceph_noeud_version: "20.2.3"
+# Contenu de /etc/ceph/ceph.pub sur ceph01 après le bootstrap (clé PUBLIQUE : versionnable).
+ceph_noeud_cle_orchestrateur: ""

@@ -1,0 +1,91 @@
+---
+# playbooks/identite.yml — identité de MédiSphère dans Keystone (M10-E05, SEC-1105).
+# Collection openstack.cloud (requirements.yml), openstacksdk de l'environnement uv du dépôt,
+# cloud « medisphere-admin » de ~/.config/openstack/clouds.yaml (+ secure.yaml).
+#   uv run ansible-playbook playbooks/identite.yml --check
+#   uv run ansible-playbook playbooks/identite.yml
+# Paramètres des modules : vérifiés avec « uv run ansible-doc openstack.cloud.<module> » dans CET
+# environnement (ils ont changé entre les versions 1.x et 2.x de la collection).
+- name: Identité de MédiSphère (Keystone)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../donnees/identite.yml
+    - ../donnees/vault-identite.yml
+  module_defaults:
+    group/openstack.cloud.openstack:
+      cloud: "{{ identite_cloud | default('medisphere-admin') }}"
+
+  tasks:
+    - name: Domaine
+      openstack.cloud.identity_domain:
+        name: "{{ identite_domaine.nom }}"
+        description: "{{ identite_domaine.description }}"
+        is_enabled: true
+        state: present
+      register: identite_domaine_cree
+
+    - name: Projets
+      openstack.cloud.project:
+        name: "{{ item.nom }}"
+        domain: "{{ identite_domaine.nom }}"
+        description: "{{ item.description }}"
+        is_enabled: true
+        state: present
+      loop: "{{ identite_projets }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Groupes
+      openstack.cloud.identity_group:
+        name: "{{ item.nom }}"
+        # IDENTIFIANT exigé (le module ne résout pas un nom de domaine, contrairement à
+        # openstack.cloud.project) : on prend celui que la première tâche a renvoyé.
+        domain_id: "{{ identite_domaine_cree.domain.id }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ identite_groupes }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      register: identite_groupes_crees
+
+    - name: Comptes (mot de passe posé à la création seulement)
+      openstack.cloud.identity_user:
+        name: "{{ item.nom }}"
+        domain: "{{ identite_domaine.nom }}"
+        description: "{{ item.description }}"
+        email: "{{ item.courriel }}"
+        password: "{{ vault_identite_mots_de_passe[item.nom] }}"
+        update_password: on_create
+        is_enabled: true
+        state: present
+      loop: "{{ identite_utilisateurs }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      register: identite_comptes_crees
+      # Le résultat contient le mot de passe passé en paramètre : jamais affiché, même en -vvv.
+      no_log: true
+
+    - name: Appartenance aux groupes (par identifiants, un nom d'utilisateur n'étant unique que dans son domaine)
+      openstack.cloud.group_assignment:
+        group: "{{ (identite_groupes_crees.results | selectattr('item.nom', '==', item.0.nom) | first).group.id }}"
+        user: "{{ (identite_comptes_crees.results | selectattr('item.nom', '==', item.1) | first).user.id }}"
+        state: present
+      loop: "{{ identite_groupes | subelements('membres') }}"
+      loop_control:
+        label: "{{ item.0.nom }} ← {{ item.1 }}"
+
+    - name: Rôles des groupes sur les projets
+      openstack.cloud.role_assignment:
+        role: "{{ item.1.role }}"
+        group: "{{ item.0.nom }}"
+        project: "{{ item.1.projet }}"
+        # Domaines où CHERCHER le groupe et le projet (même nom possible dans un autre domaine).
+        # Pas de « domain » : il porterait le rôle sur le domaine lui-même.
+        group_domain: "{{ identite_domaine.nom }}"
+        project_domain: "{{ identite_domaine.nom }}"
+        state: present
+      loop: "{{ identite_groupes | subelements('roles') }}"
+      loop_control:
+        label: "{{ item.0.nom }} : {{ item.1.role }} sur {{ item.1.projet }}"

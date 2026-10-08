@@ -1,0 +1,41 @@
+# keepalived.conf — version corrigée de la MR !47 (M07-E21), rendu du rôle keepalived pour lb01.
+# lb02 : identique, sauf router_id lb02, priority 100, unicast_src_ip 10.10.70.11,
+# unicast_peer 10.10.70.10.
+global_defs {
+    router_id lb01
+    vrrp_version 3
+    script_user keepalived_script
+    enable_script_security
+}
+
+vrrp_script chk_haproxy {
+    # systemctl, toujours présent ; killall (paquet psmisc) peut manquer, et le script échoue alors
+    # en permanence sur les deux hôtes.
+    script "/usr/bin/systemctl is-active --quiet haproxy.service"
+    interval 2
+    fall 2
+    rise 2
+    # Pas de poids : un échec fait passer l'instance en FAULT, la VIP part quelle que soit la
+    # priorité de l'autre.
+}
+
+vrrp_instance VI_DMZ {
+    state BACKUP
+    interface eth0
+    # 170 : le VRID 70 sera celui de la passerelle du VLAN 70 (VRRP de la bordure, E25).
+    virtual_router_id 170
+    priority 150
+    advert_int 1
+    nopreempt
+    # VRRP v3 n'a pas d'authentification : bloc « authentication » retiré.
+    unicast_src_ip 10.10.70.10
+    unicast_peer {
+        10.10.70.11
+    }
+    virtual_ipaddress {
+        10.10.70.200/24 dev eth0
+    }
+    track_script {
+        chk_haproxy
+    }
+}

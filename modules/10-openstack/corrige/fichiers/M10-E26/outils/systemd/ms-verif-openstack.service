@@ -1,0 +1,33 @@
+# /etc/systemd/system/ms-verif-openstack.service — M10-E26 (PLAT-1152)
+# Sonde du cloud OpenStack. Déclenchée par ms-verif-openstack.timer (toutes les 15 minutes).
+# Test manuel : sudo systemctl start ms-verif-openstack.service ; journalctl -u ms-verif-openstack -n 40
+
+[Unit]
+Description=MédiSphère : sonde du cloud OpenStack (API, calcul, réseau, volumes, Octavia, nœuds, certificats)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+ExecStart=/usr/local/bin/ms-verif-openstack --quiet
+# La CLI openstack est lente au démarrage (≈ 2 s par appel) : une sonde complète prend 20 à 40 s.
+TimeoutStartSec=5min
+SyslogIdentifier=ms-verif-openstack
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Lecture seule de /home : la sonde lit ~/.config/openstack (clouds.yaml, secure.yaml) et ~/.ssh.
+# La CLI openstack écrit un cache sous ~/.cache : on le redirige dans un tmpfs privé.
+ProtectHome=read-only
+PrivateTmp=yes
+Environment=XDG_CACHE_HOME=/tmp/cache
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

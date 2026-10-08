@@ -1,0 +1,11 @@
+---
+# donnees/catalogue.yml — gabarits publics du cloud MédiSphère (M10-E07, DEV-1107).
+# Capacité (palier 1) : deux calculs de 4 vCPU et 8 Go ; Nova surréserve les vCPU (défaut 4.0
+# pour cpu_allocation_ratio, sauf réglage), PAS la mémoire (ram_allocation_ratio 1.0) : c'est
+# la mémoire qui limite. Un m1.grand (4 Go) occupe la moitié d'un calcul.
+# Un gabarit est quasi immuable : on n'en modifie pas les ressources (Nova les recopie dans
+# chaque instance) ; on en crée un nouveau et on retire l'ancien.
+catalogue_gabarits:
+  - {nom: m1.petit, vcpus: 1, ram: 1024, disk: 10, description: "1 vCPU, 1 Go, 10 Go"}
+  - {nom: m1.moyen, vcpus: 2, ram: 2048, disk: 20, description: "2 vCPU, 2 Go, 20 Go"}
+  - {nom: m1.grand, vcpus: 2, ram: 4096, disk: 40, description: "2 vCPU, 4 Go, 40 Go"}

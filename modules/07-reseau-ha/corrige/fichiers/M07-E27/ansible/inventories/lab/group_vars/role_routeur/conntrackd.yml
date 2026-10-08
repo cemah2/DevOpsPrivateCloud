@@ -1,0 +1,35 @@
+---
+# group_vars/role_routeur/conntrackd.yml — synchronisation des connexions (M07-E27).
+# Lien : VLAN 10 (MGMT), adresses propres .2 ↔ .3, UDP 3780.
+# Pourquoi le VLAN 10 : il existe sur les deux passerelles sans nouvelle carte, n'héberge que des
+# machines d'administration de confiance (adm01, futurs hyperviseurs), et son trafic est faible. Ce
+# qui circule (adresses et ports de toutes les connexions du lab) est une information sensible :
+# pas sur le VLAN 99 (sandbox, VMs jetables). Limite : si le VLAN 10 tombe, la synchronisation
+# s'arrête SANS que VRRP ne bascule (les autres VLAN annoncent toujours) → supervision (M07-E29).
+# Un VLAN dédié (lien « heartbeat ») serait mieux en production ; il demanderait une VNet de plus.
+conntrackd_interface: ens19.10
+conntrackd_adresse_locale: "10.10.10.{{ routeur_reseau_suffixe }}"
+conntrackd_adresse_pair: "10.10.10.{{ bordure_suffixe_pair }}"
+conntrackd_port: 3780
+# Trafic propre des passerelles : boucle locale, toutes leurs adresses propres (les deux, pour que
+# les deux configurations soient identiques au lien près), adresses WAN propres. PAS les VIP.
+conntrackd_adresses_ignorees: >-
+  {{ ['127.0.0.1']
+     + (routeur_reseau_vlans | map(attribute='id') | map('string') | map('regex_replace', '^', '10.10.') | map('regex_replace', '$', '.2') | list)
+     + (routeur_reseau_vlans | map(attribute='id') | map('string') | map('regex_replace', '^', '10.10.') | map('regex_replace', '$', '.3') | list)
+     + ['192.168.1.40', '192.168.1.41'] }}
+#      ^ <IP-GW01-WAN>, <IP-GW02-WAN>
+
+bordure_conntrackd: true
+
+# Décision M07-E27 : plus de « reprise » des connexions TCP vues en cours de route. Avec conntrackd,
+# le nouveau maître CONNAÎT les connexions : la reprise n'apporte plus rien et permettait à un
+# paquet forgé au milieu d'un flux de créer un état. Prix accepté : si conntrackd ne synchronisait
+# pas, les connexions TCP traversant la bordure tomberaient à la bascule (supervisé, M07-E29).
+routeur_reseau_sysctl:
+  net.ipv4.ip_forward: 1
+  net.ipv4.conf.all.promote_secondaries: 1
+  net.ipv4.conf.default.promote_secondaries: 1
+  net.ipv4.conf.all.rp_filter: 2
+  net.ipv4.conf.default.rp_filter: 2
+  net.netfilter.nf_conntrack_tcp_loose: 0

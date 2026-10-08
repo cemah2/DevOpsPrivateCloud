@@ -1,0 +1,14 @@
+---
+# playbooks/sauvegarde-ceph.yml — sauvegarde hors cluster de ceph-par1 (M08-E25).
+# ceph01 d'abord (compte d'export), puis cephcli01 (client de sauvegarde).
+- name: Export de configuration par commande forcée
+  hosts: ceph01
+  become: true
+  roles:
+    - ceph_export_config
+
+- name: Sauvegarde des volumes et de la configuration vers PBS
+  hosts: cephcli01
+  become: true
+  roles:
+    - sauvegarde_ceph

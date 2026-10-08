@@ -1,0 +1,9 @@
+---
+# playbooks/m07-net01.yml — laboratoires de net01 (M07-E04 bonding, M07-E05 Open vSwitch).
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-net01.yml
+- name: Laboratoires réseau de net01
+  hosts: m07_labo
+  become: true
+  roles:
+    - role: bonding
+      tags: [bonding]

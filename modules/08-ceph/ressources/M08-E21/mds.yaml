@@ -1,0 +1,6 @@
+# mds.yaml — serveur de métadonnées CephFS (Lucas)
+service_type: mds
+service_id: cephfs
+placement:
+  count: 1
+  label: mds

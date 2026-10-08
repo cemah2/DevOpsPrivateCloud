@@ -1,0 +1,20 @@
+# /etc/systemd/system/ceph-cert-ingress.service — M08-E11 (PLAT-921), adm01.
+# Renouvelle le certificat de rgw.par1.medisphere.internal et l'applique au service ingress.
+# Clé SSH dédiée sans phrase de passe (une unité n'a pas d'agent) : ~/.ssh/id_ed25519_ceph_auto,
+# autorisée sur ceph01 pour admin avec « from="10.10.10.10" » ; inscrite au registre des secrets.
+[Unit]
+Description=MédiSphère : certificat du point d'entrée S3 de ceph-par1
+After=network-online.target
+Wants=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Environment=CEPH_ADMIN=ceph01
+Environment="CEPH_SSH_OPTS=-i /home/admin/.ssh/id_ed25519_ceph_auto"
+ExecStart=/home/admin/src/ceph/outils/cert-ingress.sh
+TimeoutStartSec=10min
+SyslogIdentifier=ceph-cert-ingress
+NoNewPrivileges=yes
+PrivateTmp=yes

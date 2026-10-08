@@ -1,0 +1,15 @@
+# Cas fautif de la règle 4 : VIP en /32.
+# VIP rgw.par1.medisphere.internal. VRID 80 (les passerelles utilisent 30 sur ce VLAN).
+# NE JAMAIS ajouter ssl_cert / ssl_key ici (règles 4 et 5) : outils/cert-ingress.sh les
+# injecte au moment d'appliquer, depuis ~/.config/workbook/ceph-ingress/ sur adm01.
+service_type: ingress
+service_id: rgw.par1
+placement:
+  label: rgw
+spec:
+  backend_service: rgw.par1
+  virtual_ip: 10.10.30.200/32
+  frontend_port: 443
+  monitor_port: 1967
+  first_virtual_router_id: 80
+  health_check_interval: 2s

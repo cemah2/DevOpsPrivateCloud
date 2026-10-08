@@ -1,0 +1,14 @@
+# ceph04.tf.extrait — M08-E18 (CHG-928) : quatrième nœud, état « ceph » de plateforme/infra.
+# envs/ceph/ceph.tf (M08-E02) déclare les nœuds par « for_each = var.noeuds_ceph » (nom => numéro) :
+# adresses 10.10.30.5N / 10.10.31.5N, VMID 208N, disques d'OSD (2 × ssd-lab avec ssd = true,
+# 1 × hdd-bulk), séries « cephNN-ssd1/ssd2/hdd1 », MTU 9000, et l'enregistrement DNS. Ajouter ceph04,
+# c'est ajouter UNE entrée à la variable — dans envs/ceph/terraform.tfvars (ou le défaut de
+# variables.tf, selon ton choix d'E02) :
+noeuds_ceph = {
+  ceph01 = 1
+  ceph02 = 2
+  ceph03 = 3
+  ceph04 = 4 # CHG-928 (M08-E18) — retiré au mini-projet (M08-E46)
+}
+# Plan relu en MR : module.ceph["ceph04"] et module.dns_ceph["ceph04"] à créer, RIEN à modifier ni à
+# détruire pour ceph01-03. Mémoire : 6 Go de plus sur pve01 — vérifie la marge avant l'apply.

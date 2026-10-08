@@ -1,0 +1,43 @@
+---
+# playbooks/m07-fabric.yml — fabric de la maquette en BGP unnumbered (M07-E14). REMPLACE la
+# version de M07-E06/E07.
+#   uv run ansible-playbook -i inventories/lab/proxmox.yml playbooks/m07-fabric.yml
+# Données : group_vars/m07_fabric/frr.yml, host_vars/<hôte>/frr.yml (rôle frr de M07-E06).
+
+- name: Spines et leaves — FRR (BGP unnumbered, ECMP)
+  hosts: m07_fabric
+  become: true
+  pre_tasks:
+    # ECMP : le noyau choisit le chemin d'un flux par un hachage. Politique 1 = adresses ET ports
+    # (L4) : deux connexions entre les mêmes boucles peuvent prendre deux spines différents.
+    - name: Hachage ECMP de niveau 4
+      ansible.posix.sysctl:
+        name: net.ipv4.fib_multipath_hash_policy
+        value: "1"
+        sysctl_file: /etc/sysctl.d/60-ecmp.conf
+        reload: true
+  roles:
+    - role: frr
+      tags: [frr]
+
+- name: Serveurs rattachés (boucle, route vers la fabric)
+  hosts: m07_web
+  become: true
+  roles:
+    - role: frr
+      tags: [frr]
+
+- name: Contrôle — deux chemins égaux d'une leaf vers l'autre
+  hosts: m07_leaf
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Route vers la boucle de l'autre leaf dans le noyau
+      ansible.builtin.command: "ip -j route show {{ '10.10.255.12' if inventory_hostname == 'leaf01' else '10.10.255.11' }}/32"
+      register: _fabric_route
+      changed_when: false
+      check_mode: false
+      retries: 10
+      delay: 3
+      until: (_fabric_route.stdout | from_json | first | default({})).get('nexthops', []) | length == 2
+      when: not ansible_check_mode

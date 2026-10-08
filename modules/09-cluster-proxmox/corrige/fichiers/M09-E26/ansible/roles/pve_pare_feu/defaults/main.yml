@@ -1,0 +1,45 @@
+---
+# Rôle pve_pare_feu — pare-feu de cluster Proxmox VE de hv-par1 (M09-E26, SEC-1052).
+#
+# Écrit /etc/pve/firewall/cluster.fw (commun au cluster : une seule fois, run_once) et
+# /etc/pve/nodes/<nœud>/host.fw (un par nœud). pve-firewall relit ces fichiers et recompile ses
+# règles seul (cycle d'une dizaine de secondes) : il n'y a pas de service à redémarrer.
+#
+# Prudence : avant toute modification, un « filet » est armé sur chaque nœud (unité systemd
+# transitoire qui lance « pve-firewall stop » au bout de pve_pare_feu_filet_minutes) ; il n'est
+# désarmé qu'après les contrôles (SSH depuis le contrôleur, quorum, Ceph, VIP unique).
+
+# Pare-feu actif au niveau du datacenter (cluster.fw, option enable).
+pve_pare_feu_cluster_actif: true
+# Pare-feu actif sur CE nœud (host.fw, option enable) : à poser à false en host_vars pour activer
+# nœud par nœud (hv01 d'abord).
+pve_pare_feu_noeud_actif: true
+# Moteur nftables (proxmox-firewall) : aperçu technologique, laissé à false (iptables).
+pve_pare_feu_nftables: false
+
+# Politiques du datacenter (s'appliquent aux nœuds ; les VMs ont les leurs).
+pve_pare_feu_politique_entree: DROP
+pve_pare_feu_politique_sortie: ACCEPT
+
+# Redéfinition de l'alias local_network (sinon : tout le réseau de l'adresse principale du nœud,
+# c'est-à-dire tout MGMT, passerelles comprises). Une seule adresse ou un seul réseau par alias.
+pve_pare_feu_local_network: ""
+
+# IPSet « management » : qui administre les nœuds (interface 8006, SSH, consoles).
+pve_pare_feu_management: []
+# Autres IPSet du datacenter : {nom: [{cidr, commentaire}]}
+pve_pare_feu_ipsets: {}
+# Règles du datacenter, dans l'ordre (une chaîne par règle, syntaxe de cluster.fw), chacune avec
+# son motif : [{regle: "IN SSH(ACCEPT) -source +management", motif: "…", ref: "M09-E26"}]
+pve_pare_feu_regles: []
+# Règles propres à un nœud (host.fw), même format.
+pve_pare_feu_regles_noeud: []
+
+# Filet anti-coupure.
+pve_pare_feu_filet_minutes: 10
+pve_pare_feu_filet_unite: wb-pare-feu-filet
+# Adresse de la VIP du cluster (contrôle : portée par un seul nœud).
+pve_pare_feu_vip: 10.10.10.200
+
+pve_pare_feu_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible), rôle pve_pare_feu.') }}

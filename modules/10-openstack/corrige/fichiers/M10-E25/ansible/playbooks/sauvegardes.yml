@@ -1,0 +1,20 @@
+---
+# playbooks/sauvegardes.yml — sauvegardes applicatives vers PBS (M06-E28, étendu en M10-E25).
+# dns02 n'a pas de sauvegarde applicative : zones = copie de dns01 (AXFR), baux = copie de
+# dns01 (HA), configuration = code. La sauvegarde de VM (lab-nuit) suffit (décision RB-061).
+# osctl01 (M10-E25) : envoi de la dernière sauvegarde Mariabackup de Kolla (prise depuis adm01).
+# oscmp01-02 : rien d'applicatif à sauvegarder (état = Ceph + base du plan de contrôle).
+- name: Sauvegardes applicatives vers PBS
+  hosts: dns01:ca01:nbx01:osctl01
+  become: true
+  roles:
+    - role: sauvegarde_pbs
+      tags: [sauvegarde_pbs]
+
+# Déclenchement des sauvegardes Mariabackup par Kolla-Ansible, depuis l'hôte de déploiement.
+- name: Planification de Mariabackup (hôte de déploiement Kolla)
+  hosts: adm01
+  become: true
+  roles:
+    - role: openstack_mariabackup
+      tags: [openstack_mariabackup]

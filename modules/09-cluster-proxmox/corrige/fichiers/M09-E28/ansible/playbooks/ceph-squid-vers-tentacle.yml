@@ -1,0 +1,264 @@
+---
+# playbooks/ceph-squid-vers-tentacle.yml — montée de Ceph Squid 19.2 → Tentacle 20.2 sur un cluster
+# Proxmox VE hyperconvergé (M09-E28, CHG-1054). Suit la procédure officielle :
+# https://pve.proxmox.com/wiki/Ceph_Squid_to_Tentacle
+#
+#   uv run ansible-playbook playbooks/ceph-squid-vers-tentacle.yml --check --diff   # ce qui changerait
+#   uv run ansible-playbook playbooks/ceph-squid-vers-tentacle.yml --step           # 1re fois, pas à pas
+#   uv run ansible-playbook playbooks/ceph-squid-vers-tentacle.yml                  # rejouable
+#
+# Étapes (une par jeu, chacune sûre à rejouer) :
+#   1. contrôles préalables (versions minimales, HEALTH_OK) ;
+#   2. dépôt ceph-tentacle et paquets à jour sur chaque nœud (aucun démon redémarré) ;
+#   3. noout, puis MON un nœud à la fois, contrôle de min_mon_release ;
+#   4. MGR ; 5. OSD un nœud à la fois, attente de la récupération ;
+#   6. require-osd-release tentacle (POINT DE NON-RETOUR), retrait de noout, contrôle final.
+# Pas de MDS sur hv-par1 : si « ceph fs ls » n'est pas vide, le jeu s'arrête (procédure MDS à suivre
+# à la main, étape 7 du guide).
+# Sur un cluster déjà en Tentacle : aucun changement (chaque redémarrage est conditionné par la
+# version du démon).
+
+- name: 1. Contrôles préalables
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Versions des paquets (pveversion -v)
+      ansible.builtin.command: pveversion -v
+      register: ct_pveversion
+      changed_when: false
+
+    - name: Proxmox VE ≥ 9.1 (pve-manager ≥ 9.1.4) et Ceph Squid ≥ 19.2.3-pve3 (ou déjà Tentacle)
+      ansible.builtin.assert:
+        that:
+          - ct_pve_manager is version('9.1.4', '>=')
+          - ct_ceph is version('19.2.3-pve3', '>=', version_type='loose')
+        fail_msg: "{{ inventory_hostname }} : pve-manager {{ ct_pve_manager }}, ceph {{ ct_ceph }} — mets d'abord le nœud à jour (RB-092)."
+        quiet: true
+      vars:
+        ct_pve_manager: "{{ ct_pveversion.stdout | regex_search('(?m)^pve-manager: ([0-9.]+)', '\\1') | first }}"
+        ct_ceph: "{{ ct_pveversion.stdout | regex_search('(?m)^ceph: ([0-9][^ ]*)', '\\1') | first }}"
+
+    - name: Ceph en HEALTH_OK avant de commencer (ou seulement noout si on reprend en cours de route)
+      ansible.builtin.command: ceph health --format json
+      register: ct_sante
+      changed_when: false
+      run_once: true
+      failed_when: >-
+        (ct_sante.stdout | from_json).status != 'HEALTH_OK'
+        and ((ct_sante.stdout | from_json).checks | default({}) | dict2items | map(attribute='key') | list
+             | difference(['OSDMAP_FLAGS', 'OSD_UPGRADE_FINISHED']) | length) > 0
+
+    - name: Pas de CephFS (sinon procédure MDS manuelle)
+      ansible.builtin.command: ceph fs ls --format json
+      register: ct_fs
+      changed_when: false
+      run_once: true
+      failed_when: ct_fs.stdout | from_json | length > 0
+
+    - name: Aucune sauvegarde ni réplication en cours sur le nœud
+      ansible.builtin.shell: |
+        set -o pipefail
+        ! pgrep -x vzdump >/dev/null && ! pvesr status 2>/dev/null | awk 'NR > 1' | grep -qi syncing
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+- name: 2. Dépôt Tentacle et paquets (les démons gardent les binaires Squid jusqu'au redémarrage)
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Dépôt ceph-tentacle no-subscription (deb822)
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/ceph.sources
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible).') }} M09-E28.
+          Types: deb
+          URIs: http://download.proxmox.com/debian/ceph-tentacle
+          Suites: trixie
+          Components: no-subscription
+          Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+
+    - name: Ancien fichier au format .list absent (sinon deux dépôts Ceph)
+      ansible.builtin.file:
+        path: /etc/apt/sources.list.d/ceph.list
+        state: absent
+
+    - name: Mise à jour complète des paquets (apt full-upgrade)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        upgrade: full
+      register: ct_apt
+
+    - name: Le paquet ceph installé est en 20.2
+      ansible.builtin.command: dpkg-query -W -f=${Version} ceph-common
+      register: ct_ceph_paquet
+      changed_when: false
+      failed_when: not ct_ceph_paquet.stdout.startswith('20.2')
+      when: not ansible_check_mode
+
+- name: 3. Moniteurs, un nœud à la fois
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Démons encore en Squid et drapeaux posés
+      ansible.builtin.shell: |
+        set -o pipefail
+        ceph versions --format json
+        ceph osd dump --format json
+      args:
+        executable: /bin/bash
+      register: ct_etat
+      changed_when: false
+      run_once: true
+
+    - name: Drapeau noout (seulement s'il reste un démon Squid et que noout n'est pas posé)
+      ansible.builtin.command: ceph osd set noout
+      changed_when: true
+      run_once: true
+      when:
+        - (ct_etat.stdout_lines[0] | from_json).overall | dict2items | map(attribute='key') | select('search', ' 19\\.2\\.') | list | length > 0
+        - "'noout' not in ((ct_etat.stdout_lines[1] | from_json).flags | default('')).split(',')"
+
+    - name: Version du moniteur de ce nœud
+      ansible.builtin.command: ceph tell mon.{{ inventory_hostname }} version --format json
+      register: ct_mon_version
+      changed_when: false
+      failed_when: false
+
+    - name: Redémarrer le moniteur s'il n'est pas en 20.2
+      ansible.builtin.systemd_service:
+        name: ceph-mon.target
+        state: restarted
+      when: >-
+        ct_mon_version.rc != 0
+        or not ((ct_mon_version.stdout | from_json).version | default('') is search(' 20\.2\.'))
+
+    - name: Attendre le retour au quorum des trois moniteurs et une santé acceptable
+      ansible.builtin.command: ceph status --format json
+      register: ct_st
+      changed_when: false
+      until: >-
+        (ct_st.stdout | from_json).quorum_names | length == groups[hv_groupe | default('hv_par1')] | length
+        and ((ct_st.stdout | from_json).health.checks | default({}) | dict2items | map(attribute='key') | list
+             | difference(['OSDMAP_FLAGS']) | length) == 0
+      retries: 30
+      delay: 10
+
+- name: 3 bis. Contrôle de min_mon_release
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  run_once: true
+  tasks:
+    - name: Tous les MON en Tentacle (min_mon_release 20)
+      ansible.builtin.command: ceph mon dump --format json
+      register: ct_mondump
+      changed_when: false
+      failed_when: (ct_mondump.stdout | from_json).min_mon_release | int != 20
+      when: not ansible_check_mode
+
+- name: 4. Gestionnaires (MGR)
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Versions des MGR
+      ansible.builtin.command: ceph versions --format json
+      register: ct_versions
+      changed_when: false
+
+    - name: Redémarrer le MGR de ce nœud tant qu'un MGR Squid subsiste
+      ansible.builtin.systemd_service:
+        name: ceph-mgr.target
+        state: restarted
+      when: (ct_versions.stdout | from_json).mgr | default({}) | dict2items | map(attribute='key') | select('search', ' 19\.2\.') | list | length > 0
+
+    - name: Un MGR actif
+      ansible.builtin.command: ceph mgr stat --format json
+      register: ct_mgr
+      changed_when: false
+      until: (ct_mgr.stdout | from_json).available | bool
+      retries: 12
+      delay: 5
+
+- name: 5. OSD, un nœud à la fois
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Identifiants des OSD de ce nœud
+      ansible.builtin.command: ceph osd ls-tree {{ inventory_hostname }}
+      register: ct_osds
+      changed_when: false
+
+    - name: Versions des OSD de ce nœud
+      ansible.builtin.command: ceph tell osd.{{ item }} version --format json
+      loop: "{{ ct_osds.stdout_lines }}"
+      register: ct_osd_versions
+      changed_when: false
+      failed_when: false
+
+    - name: Redémarrer les OSD du nœud si l'un d'eux n'est pas en 20.2
+      ansible.builtin.systemd_service:
+        name: ceph-osd.target
+        state: restarted
+      when: >-
+        ct_osd_versions.results | rejectattr('rc', 'equalto', 0) | list | length > 0
+        or ct_osd_versions.results | map(attribute='stdout') | map('from_json') | map(attribute='version')
+           | reject('search', ' 20\.2\.') | list | length > 0
+
+    - name: Attendre que tous les PG soient active+clean (seul noout toléré)
+      ansible.builtin.command: ceph status --format json
+      register: ct_pg
+      changed_when: false
+      until: >-
+        (ct_pg.stdout | from_json).pgmap.pgs_by_state | default([])
+        | rejectattr('state_name', 'equalto', 'active+clean') | list | length == 0
+        and (ct_pg.stdout | from_json).osdmap.num_up_osds == (ct_pg.stdout | from_json).osdmap.num_osds
+      retries: 60
+      delay: 10
+
+- name: 6. Finalisation (point de non-retour)
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  gather_facts: false
+  run_once: true
+  any_errors_fatal: true
+  tasks:
+    - name: Plus aucun démon en Squid
+      ansible.builtin.command: ceph versions --format json
+      register: ct_final
+      changed_when: false
+      failed_when: (ct_final.stdout | from_json).overall | dict2items | map(attribute='key') | reject('search', ' 20\.2\.') | list | length > 0
+
+    - name: Valeur actuelle de require_osd_release
+      ansible.builtin.command: ceph osd dump --format json
+      register: ct_osddump
+      changed_when: false
+
+    - name: Exiger Tentacle pour les OSD, require-osd-release (irréversible)
+      ansible.builtin.command: ceph osd require-osd-release tentacle
+      when: (ct_osddump.stdout | from_json).require_osd_release != 'tentacle'
+      changed_when: true
+
+    - name: Retirer noout s'il est posé
+      ansible.builtin.command: ceph osd unset noout
+      changed_when: true
+      when: "'noout' in ((ct_osddump.stdout | from_json).flags | default('')).split(',')"
+
+    - name: HEALTH_OK final
+      ansible.builtin.command: ceph health --format json
+      register: ct_ok
+      changed_when: false
+      until: (ct_ok.stdout | from_json).status == 'HEALTH_OK'
+      retries: 30
+      delay: 10

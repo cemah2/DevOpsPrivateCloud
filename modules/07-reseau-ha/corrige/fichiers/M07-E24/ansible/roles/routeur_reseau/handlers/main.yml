@@ -1,0 +1,12 @@
+---
+- name: Recharger les réglages noyau du routeur
+  ansible.builtin.command: sysctl --load /etc/sysctl.d/60-routeur.conf
+  changed_when: true
+
+# netplan : on GÉNÈRE (fichiers de systemd-networkd), on n'APPLIQUE pas. « netplan apply » sur une
+# passerelle en service reconfigure les liens et peut retirer les VIP posées par keepalived.
+# L'état courant est posé par les tâches « à chaud » du rôle ; la configuration générée fait foi
+# au prochain démarrage.
+- name: Générer la configuration netplan
+  ansible.builtin.command: netplan generate
+  changed_when: true

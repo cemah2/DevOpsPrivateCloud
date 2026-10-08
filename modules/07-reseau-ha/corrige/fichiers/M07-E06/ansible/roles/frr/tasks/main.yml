@@ -1,0 +1,32 @@
+---
+# Rôle frr — point d'entrée (M07-E06).
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - frr_bgp | length == 0 or (frr_bgp.asn is defined and frr_bgp.router_id is defined)
+      - frr_ospf | length == 0 or frr_ospf.router_id is defined
+      - frr_interfaces | selectattr('ospf', 'defined') | list | length == 0 or frr_ospf | length > 0
+    fail_msg: >-
+      frr_bgp exige asn et router_id ; frr_ospf exige router_id ; une interface avec des
+      paramètres OSPF exige frr_ospf.
+    quiet: true
+
+- name: Dépôt FRR et paquets
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [frr_paquets]
+
+- name: Système (routage, cohabitation avec systemd-networkd)
+  ansible.builtin.import_tasks: systeme.yml
+  tags: [frr_systeme]
+
+- name: Démons et configuration
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [frr_config]
+
+- name: Appliquer maintenant les redémarrages et rechargements en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Vérifications
+  ansible.builtin.import_tasks: verifications.yml
+  tags: [frr_verifications]

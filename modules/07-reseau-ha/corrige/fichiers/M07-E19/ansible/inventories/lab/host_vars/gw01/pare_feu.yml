@@ -1,0 +1,178 @@
+---
+# host_vars/gw01/pare_feu.yml — LA MATRICE DES FLUX DU SITE PAR1 (transit par gw01), en code.
+# État de référence en fin de PALIER 2 du module 07 : fin du module 06 (M00-E26 base, M00-E31 NTP,
+# M01-E28 git01 → PBS, M03-E05/E15 Packer, M06 : VPN restreint E20, NTS E21, dns02 E24, paire Kea
+# E25, sauvegardes applicatives E28) + M07 : ACME vers la maquette (E11), DMZ et répartiteurs
+# (E12), publication de GitLab et NetBox (E13), BGP de la bordure (E16), site LYO1 (E18, E19).
+# Les flux marqués « maquette » disparaissent avec elle (M07-E46).
+# Toute ouverture de flux passe par une MR sur ce fichier. Les flux INTERNES au VLAN INFRA ne
+# passent pas par gw01 : ils sont filtrés sur chaque hôte (rôle pare_feu_local, M06-E30).
+#
+# Valeurs d'exemple à adapter (lab/inventaire-local.md) :
+#   192.168.1.0/24 = <LAN-MAISON>   192.168.1.20 = <IP-PVE01>   192.168.1.30 = <IP-HP01-LAN>
+#   192.168.1.10 = <IP-GW01-WAN>
+
+pare_feu_definitions:
+  # Interfaces
+  - {nom: WAN, valeur: '"ens18"'}
+  - {nom: V_MGMT, valeur: '"ens19.10"'}
+  - {nom: V_INFRA, valeur: '"ens19.20"'}
+  - {nom: V_SANDBOX, valeur: '"ens19.99"'}
+  - {nom: V_DMZ, valeur: '"ens19.70"'}
+  - nom: LAB_IFS
+    valeur: '{ "ens19.10", "ens19.20", "ens19.30", "ens19.40", "ens19.50", "ens19.52", "ens19.60", "ens19.70", "ens19.99" }'
+  - {nom: WG_S2S, valeur: '"wg0"', commentaire: "tunnel site à site vers PAR2 (M00-E21)"}
+  - {nom: WG_ADM, valeur: '"wg1"', commentaire: "VPN d'administration (M00-E16)"}
+  - {nom: WG_LYO, valeur: '"wg2"', commentaire: "tunnel vers le site LYO1 (M07-E18)"}
+  # Adresses
+  - {nom: LAN_MAISON, valeur: 192.168.1.0/24, commentaire: "<LAN-MAISON>"}
+  - {nom: PVE01, valeur: 192.168.1.20, commentaire: "<IP-PVE01>"}
+  - {nom: GW01_WAN, valeur: 192.168.1.10, commentaire: "<IP-GW01-WAN> (VIP WAN <IP-GW-WAN-VIP> à partir de M07-E26)"}
+  - {nom: HP01_LAN, valeur: 192.168.1.30, commentaire: "<IP-HP01-LAN> (extrémité WireGuard de PAR2)"}
+  - {nom: ADM01, valeur: 10.10.10.10}
+  - {nom: DNS01, valeur: 10.10.20.10}
+  - {nom: CA01, valeur: 10.10.20.11}
+  - {nom: GIT01, valeur: 10.10.20.12}
+  - {nom: NBX01, valeur: 10.10.20.13}
+  - {nom: RUNNER01, valeur: 10.10.20.15}
+  - {nom: DNS02, valeur: 10.10.20.16}
+  - {nom: LB01, valeur: 10.10.70.10}
+  - {nom: LB02, valeur: 10.10.70.11}
+  - {nom: VIP_LB, valeur: 10.10.70.200, commentaire: "lb.par1.medisphere.internal (VRRP, VRID 170)"}
+  - {nom: LEAF01, valeur: 10.10.99.251, commentaire: "maquette M07 : session BGP de test"}
+  - {nom: LYO_GW, valeur: 10.10.99.250, commentaire: "extrémité WireGuard de LYO1 (son « Internet » = VLAN 99)"}
+  - {nom: NET_LYO1, valeur: 10.30.0.0/16}
+  - {nom: PBS01, valeur: 10.20.10.10}
+  - {nom: NETS_LAB, valeur: 10.10.0.0/16}
+  - {nom: NETS_PAR2, valeur: 10.20.0.0/16, commentaire: "pbs01 émet vers PAR1 depuis 10.20.10.10 (M00-E21)"}
+  - {nom: NET_VPN, valeur: 10.255.1.0/24}
+  - {nom: PAR2_MGMT, valeur: 10.20.10.0/24}
+
+# --- Vers gw01 (chaîne input) ---------------------------------------------------------------
+pare_feu_entree:
+  - {entree: $WAN, source: $LAN_MAISON, proto: tcp, ports: 22,
+     motif: "SSH depuis le LAN maison (accès de secours)", ref: M00-E10}
+  - {entree: [$V_MGMT, $WG_ADM], proto: tcp, ports: 22,
+     motif: "SSH depuis MGMT (adm01) et le VPN d'admin", ref: M00-E16}
+  - {entree: $V_INFRA, source: $RUNNER01, proto: tcp, ports: 22,
+     motif: "SSH depuis runner01 (pipeline Ansible, clé ansible-ci ; sem01 retiré)", ref: M04-E27}
+  - {entree: $LAB_IFS, proto: udp, ports: 123,
+     motif: "NTP (chrony) pour les VLANs du lab", ref: M00-E31}
+  - {entree: $WG_S2S, source: $NETS_PAR2, proto: udp, ports: 123,
+     motif: "NTP pour PAR2 (via wg0)", ref: M00-E31}
+  # NTS (M06-E21) : établissement des clés en TLS sur 4460.
+  - {entree: $LAB_IFS, proto: tcp, ports: 4460,
+     motif: "NTS-KE (chrony) pour les VLANs du lab", ref: M06-E21}
+  - {entree: $WG_S2S, source: $NETS_PAR2, proto: tcp, ports: 4460,
+     motif: "NTS-KE pour PAR2 (via wg0)", ref: M06-E21}
+  - {entree: $V_INFRA, source: $CA01, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers gw01 (certificat NTS, toutes ses adresses)", ref: M06-E21}
+  - {entree: $V_SANDBOX, proto: udp, ports_source: 68, ports: 67,
+     motif: "clients DHCP du VLAN 99 vers le relais", ref: M00-E14}
+  - {entree: $V_INFRA, source: [$DNS01, $DNS02], destination: 10.10.99.1, proto: udp, ports_source: 67, ports: 67,
+     motif: "réponses des serveurs Kea adressées au giaddr", ref: M06-E25}
+  - {entree: $WAN, source: $LAN_MAISON, proto: udp, ports: 51821,
+     motif: "wg1 : VPN d'administration", ref: M00-E16}
+  - {entree: $WAN, source: $HP01_LAN, proto: udp, ports: 51820,
+     motif: "wg0 : tunnel vers PAR2", ref: M00-E21}
+  # Routage dynamique (M07)
+  - {entree: $V_SANDBOX, source: $LEAF01, proto: tcp, ports: 179,
+     motif: "BGP de leaf01 (maquette) vers la bordure", ref: M07-E16}
+  - {entree: $V_SANDBOX, source: $LYO_GW, proto: udp, ports: 51822,
+     motif: "wg2 : tunnel du site LYO1 (maquette)", ref: M07-E18}
+  - {entree: $WG_LYO, source: 10.255.2.2, proto: tcp, ports: 179,
+     motif: "BGP de lyo-gw01 (LYO1, AS 65030) dans le tunnel wg2", ref: M07-E19}
+
+# --- À travers gw01 (chaîne forward) -----------------------------------------------------------
+pare_feu_transit:
+  # Diagnostic
+  - {source: [10.10.10.0/24, $NET_VPN, $PVE01], proto: icmp, icmp: echo-request,
+     motif: "ping traversant depuis les postes d'administration", ref: M00-E10}
+  # Administration
+  - {entree: $V_MGMT, sortie: [$LAB_IFS, $WG_S2S],
+     motif: "bastion (MGMT) vers tout le lab et PAR2", ref: M00-E10}
+  - {entree: $WG_ADM, sortie: $V_MGMT, destination: $ADM01, proto: tcp, ports: 22,
+     motif: "VPN d'admin vers le bastion adm01 (SSH, ProxyJump)", ref: M06-E20}
+  - {entree: $WG_ADM, sortie: $V_INFRA, proto: tcp, ports: 443,
+     motif: "VPN d'admin vers les interfaces web du socle (GitLab, NetBox, ca01)", ref: M06-E20}
+  - {entree: $WG_ADM, sortie: $WG_S2S, destination: $PAR2_MGMT,
+     motif: "VPN d'admin vers PAR2 MGMT", ref: M00-E21}
+  - {entree: $V_MGMT, sortie: $WAN, destination: $PVE01, proto: tcp, ports: [22, 8006],
+     motif: "adm01 vers pve01 (SSH, API)", ref: M00-E15}
+  - {entree: $WG_ADM, sortie: $WAN, destination: $PVE01, proto: tcp, ports: [22, 8006],
+     motif: "VPN d'admin vers pve01 (SSH, API)", ref: M00-E16}
+  - {entree: $V_MGMT, sortie: $WAN, destination: $HP01_LAN, proto: tcp, ports: [22, 8007],
+     motif: "adm01 vers hp01 par le LAN (transition avant tunnel)", ref: M00-E20}
+  - {entree: $WAN, source: $PVE01, sortie: $LAB_IFS, proto: tcp, ports: 22,
+     motif: "pve01 vers les VMs (vérifications avant M00-E15)", ref: M00-E10}
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_MGMT, destination: $ADM01, proto: tcp, ports: 22,
+     motif: "runner01 vers adm01 : SSH (pipeline Ansible)", ref: M04-E27}
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_DMZ, destination: [$LB01, $LB02], proto: tcp, ports: 22,
+     motif: "runner01 vers les répartiteurs : SSH (pipeline Ansible)", ref: M07-E12}
+  # Services socle : DNS (deux récurseurs) et DHCP (paire Kea)
+  - {source: [$NETS_LAB, $NETS_PAR2, $NET_VPN, $NET_LYO1], destination: [$DNS01, $DNS02], proto: tcp_udp, ports: 53,
+     motif: "DNS du lab (UDP et TCP) vers les deux récurseurs", ref: M06-E24}
+  - {entree: $V_INFRA, source: [$DNS01, $DNS02], sortie: $WAN, proto: tcp_udp, ports: 53,
+     motif: "récurseurs vers Internet (récursion depuis la racine)", ref: M06-E24}
+  - {entree: $V_SANDBOX, destination: [$DNS01, $DNS02], proto: udp, ports_source: 68, ports: 67,
+     motif: "renouvellements DHCP (T1) en unicast vers le serveur Kea du bail", ref: M06-E25}
+  # PKI : ACME et renouvellements depuis la DMZ ; défis HTTP-01 de ca01
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "répartiteurs vers ca01 : ACME, renouvellements TLS et SSH", ref: M07-E12}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_DMZ, destination: [$LB01, $LB02, $VIP_LB], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers les répartiteurs et leur VIP", ref: M07-E12}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_SANDBOX, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers la maquette (hap01)", ref: M07-E11}
+  # Publication (répartiteurs)
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: [$GIT01, $NBX01], proto: tcp, ports: 443,
+     motif: "répartiteurs vers les serveurs publiés (GitLab, NetBox), re-chiffré", ref: M07-E13}
+  - {entree: $V_INFRA, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "socle (runner01, outils) vers les noms publiés", ref: M07-E13}
+  - {entree: $WG_ADM, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "VPN d'admin vers les noms publiés", ref: M07-E13}
+  - {entree: $WAN, source: $LAN_MAISON, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "LAN maison vers la VIP (après la redirection du port 443 de gw01)", ref: M07-E13}
+  # Site LYO1 (maquette)
+  - {entree: $WG_LYO, source: $NET_LYO1, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "LYO1 vers les services publiés (GitLab, NetBox)", ref: M07-E18}
+  - {entree: $WG_LYO, source: $NET_LYO1, sortie: [$V_INFRA, $V_DMZ], proto: icmp, icmp: echo-request,
+     motif: "LYO1 : ping de diagnostic vers INFRA et DMZ", ref: M07-E18}
+  # Images (Packer)
+  - {entree: $V_SANDBOX, destination: $ADM01, proto: tcp, ports: "8100-8199",
+     motif: "VMs de build vers le serveur HTTP de Packer sur adm01", ref: M03-E05}
+  - {entree: $V_SANDBOX, destination: $RUNNER01, proto: tcp, ports: "8100-8199",
+     motif: "VMs de build vers le serveur HTTP de Packer sur runner01", ref: M03-E15}
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $V_SANDBOX, proto: tcp, ports: 22,
+     motif: "runner01 vers les VMs de build et de test (SSH)", ref: M03-E15}
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $WAN, destination: $PVE01, proto: tcp, ports: 8006,
+     motif: "runner01 vers l'API de pve01", ref: M03-E15}
+  # Sauvegardes vers PAR2
+  - {entree: $WAN, source: $PVE01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "pve01 vers PBS", ref: M00-E21}
+  - {entree: $V_INFRA, source: $GIT01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "git01 vers PBS : sauvegarde applicative GitLab", ref: M01-E28}
+  - {entree: $V_INFRA, source: [$DNS01, $CA01, $NBX01], sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "dns01, ca01, nbx01 vers PBS : sauvegardes applicatives", ref: M06-E28}
+  # Sortie Internet (le LAN maison n'est pas « Internet »)
+  - {entree: $LAB_IFS, sortie: $WAN, destination: "!= $LAN_MAISON",
+     motif: "lab vers Internet (NAT)", ref: M00-E10}
+
+# --- Traduction d'adresses ------------------------------------------------------------------------
+pare_feu_nat:
+  - regle: oifname $WAN ip saddr $NETS_LAB ip daddr != $PVE01 masquerade
+    motif: "lab vers Internet et LAN maison"
+  - regle: oifname $WG_S2S ip saddr $LAN_MAISON masquerade
+    motif: "LAN maison vers PAR2 : retour symétrique par le tunnel (M00-E21)"
+
+# --- Redirections entrantes (chaîne prerouting, rôle pare_feu version M07-E13) ------------------
+pare_feu_dnat:
+  - regle: iifname $WAN ip saddr $LAN_MAISON ip daddr $GW01_WAN tcp dport 443 dnat to $VIP_LB:443
+    motif: "HTTPS du LAN maison vers les répartiteurs (M07-E13)"
+
+# --- Contrôles après application, depuis le contrôleur (chaîne forward) --------------------------
+pare_feu_verifications:
+  - {hote: 10.10.20.10, port: 53, motif: "contrôleur → dns01 (DNS en TCP)"}
+  - {hote: 10.10.20.16, port: 53, motif: "contrôleur → dns02 (DNS en TCP)"}
+  - {hote: 10.10.20.12, port: 443, motif: "contrôleur → git01 (HTTPS)"}
+  - {hote: 10.10.70.200, port: 443, motif: "contrôleur → VIP des répartiteurs (HTTPS)"}
+  - {hote: 192.168.1.20, port: 8006, motif: "contrôleur → pve01 (API) — <IP-PVE01>"}

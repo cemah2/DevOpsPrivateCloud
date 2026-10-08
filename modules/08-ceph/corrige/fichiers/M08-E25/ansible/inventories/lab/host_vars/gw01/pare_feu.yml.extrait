@@ -1,0 +1,10 @@
+---
+# host_vars/gw01/pare_feu.yml — EXTRAIT : ajout de M08-E25 (même matrice pour gw02).
+pare_feu_definitions:
+  # … définitions existantes (PBS01, WG_S2S, V_STOPUB…) …
+  - {nom: CEPHCLI01, valeur: 10.10.30.20}
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_STOPUB, source: $CEPHCLI01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "cephcli01 vers PBS : sauvegarde hors cluster de ceph-par1", ref: M08-E25}

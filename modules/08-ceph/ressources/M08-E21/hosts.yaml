@@ -1,0 +1,32 @@
+# hosts.yaml — hôtes du cluster ceph-par2 (Lucas)
+service_type: host
+hostname: ceph21
+addr: 10.20.30.51
+labels:
+  - _admin
+  - mon
+  - osd
+  - rgw
+---
+service_type: host
+hostname: ceph22
+addr: 10.20.31.52
+labels:
+  - _admin
+  - mon
+  - osd
+  - rgw
+---
+service_type: host
+hostname: ceph23
+addr: 10.20.30.53
+labels:
+  - _admin
+  - osd
+  - mds
+---
+service_type: host
+hostname: pbs01
+addr: 10.20.10.10
+labels:
+  - _admin

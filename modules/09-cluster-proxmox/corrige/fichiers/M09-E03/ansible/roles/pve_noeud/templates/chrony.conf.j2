@@ -1,0 +1,10 @@
+# {{ pve_noeud_entete }}
+{% for s in pve_noeud_ntp_serveurs %}
+server {{ s }} iburst
+{% endfor %}
+driftfile /var/lib/chrony/chrony.drift
+# Au démarrage, rattraper un écart d'un coup (3 premières mesures), ensuite seulement en douceur.
+makestep 1 3
+rtcsync
+leapsectz right/UTC
+logdir /var/log/chrony

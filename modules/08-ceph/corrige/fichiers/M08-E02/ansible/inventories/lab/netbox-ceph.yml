@@ -1,0 +1,42 @@
+---
+# inventories/lab/netbox-ceph.yml — environnement Ceph tiré de NetBox (M08-E02).
+#
+# Pourquoi un second fichier et pas une ligne de plus dans netbox.yml ? Les filtres d'étiquettes
+# de l'API NetBox se cumulent en ET (?tag=socle&tag=env-m08 : objets portant LES DEUX) : on ne
+# peut pas demander « socle OU env-m08 » dans une seule source. Deux sources, même dossier :
+# les group_vars de inventories/lab/ s'appliquent aux deux.
+# ansible.cfg : inventory = inventories/lab/netbox.yml,inventories/lab/netbox-ceph.yml
+# Le garde-fou de site.yml (neuf hôtes dans « socle ») n'est pas touché : les nœuds Ceph ne
+# portent pas l'étiquette socle.
+# Contrôle : uv run ansible-inventory --graph env_m08
+plugin: netbox.netbox.nb_inventory
+api_endpoint: https://nbx01.par1.medisphere.internal
+validate_certs: true
+token:
+  type: Bearer
+  value: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+
+plurals: false
+racks: false
+services: false
+interfaces: false
+config_context: false
+
+query_filters:
+  - tag: env-m08
+vm_query_filters:
+  - status: active
+
+rename_variables:
+  - pattern: "^tags$"
+    repl: netbox_etiquettes
+
+# Mêmes groupes que netbox.yml : un par étiquette (env_m08, role_ceph, role_ceph_client).
+keyed_groups:
+  - key: netbox_etiquettes | map('replace', '-', '_') | list
+    prefix: ""
+    separator: ""
+
+compose:
+  vmid: custom_fields.vmid
+strict: false

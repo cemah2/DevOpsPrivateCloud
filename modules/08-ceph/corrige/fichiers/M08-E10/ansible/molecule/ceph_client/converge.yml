@@ -1,0 +1,28 @@
+---
+- name: Converge — rôle ceph_client
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    ceph_client_fsid: 00000000-0000-4000-8000-000000000000
+    ceph_client_moniteurs: [192.0.2.51, 192.0.2.52, 192.0.2.53]
+    # Clé de TEST (format cephx valide, aucune valeur réelle).
+    ceph_client_cles:
+      - nom: client.essai
+        cle: AQBmb2xlY3VsZS1jZXBoeC1lc3NhaQ==
+    ceph_client_rbdmap:
+      - image: essai/disque
+        id: essai
+    ceph_client_montages:
+      - source: /dev/rbd/essai/disque
+        point: /mnt/essai
+        fs: xfs
+    # (M08-E10) Montage CephFS : fstab et fichier de clé vérifiés, pas de montage (pas de cluster).
+    ceph_client_cephfs:
+      - point: /mnt/outillage
+        utilisateur: essai
+        chemin: /volumes/plateforme/outillage/00000000-0000-4000-8000-000000000001
+    # Sans cluster, rbdmap ne peut rien mapper : fichiers vérifiés, service non démarré.
+    ceph_client_demarrer_rbdmap: false
+  roles:
+    - role: ceph_client

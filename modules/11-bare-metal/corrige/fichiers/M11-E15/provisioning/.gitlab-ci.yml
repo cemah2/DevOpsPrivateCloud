@@ -1,0 +1,55 @@
+# .gitlab-ci.yml — plateforme/provisioning (M11-E06, complété en M11-E15).
+# valider   : à chaque MR — ShellCheck, rendu de TOUS les équipements dans un dossier temporaire,
+#             validation du rendu (ksvalidator, debconf-set-selections -c, scripts iPXE).
+# deployer  : sur main — rendu et dépôt sur pxe01 (outils/netbox-provision.py deployer, M11-E06).
+# provisionner : job MANUEL sur main, variable EQUIPEMENT (nom NetBox) — outils/provisionner.py.
+# Secrets : variables protégées et masquées du projet (NETBOX_TOKEN : svc-automatisation ;
+# PVE_ENV_FICHIER : variable de type « fichier » au format pve-provision.env ; clé SSH de déploiement
+# vers pxe01). Exécuteur : runner01 (shell), uv et Ansible installés (M04).
+stages: [valider, deployer, provisionner]
+
+variables:
+  NETBOX_URL: https://nbx01.par1.medisphere.internal
+  ANSIBLE_PROJET: $CI_BUILDS_DIR/ansible
+
+default:
+  tags: [shell]
+
+shellcheck:
+  stage: valider
+  script:
+    - shellcheck -x outils/*.sh ipxe/*.sh
+
+rendu:
+  stage: valider
+  script:
+    - uv sync --frozen
+    - uv run outils/netbox-provision.py rendre --sortie rendu/
+    - uv run --with pykickstart outils/verifier-rendu.sh rendu/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deployer:
+  stage: deployer
+  resource_group: pxe01
+  script:
+    - uv sync --frozen
+    - uv run outils/netbox-provision.py rendre --sortie rendu/
+    - uv run --with pykickstart outils/verifier-rendu.sh rendu/
+    - uv run outils/netbox-provision.py deployer --depuis rendu/
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "web"
+
+provisionner:
+  stage: provisionner
+  resource_group: provisioning   # une seule installation à la fois (lab : mémoire de pve01)
+  timeout: 2h
+  script:
+    - test -n "$EQUIPEMENT" || { echo "Variable EQUIPEMENT (nom NetBox) obligatoire"; exit 2; }
+    - git clone --depth 1 "https://gitlab-ci-token:${CI_JOB_TOKEN}@git01.par1.medisphere.internal/plateforme/ansible.git" "$ANSIBLE_PROJET"
+    - uv sync --frozen
+    - PVE_ENV="$PVE_ENV_FICHIER" uv run outils/provisionner.py "$EQUIPEMENT"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual

@@ -1,0 +1,32 @@
+---
+# playbooks/hv-cluster.yml — services de cluster de hv-par1 (M09-E18) : certificat de l'API et VIP.
+# serial: 1 : le renouvellement d'un certificat redémarre pveproxy ; un nœud à la fois, la VIP
+# reste servie par un autre nœud sain pendant ce temps.
+
+- name: Autorité du cluster versionnée = autorité réelle du cluster
+  hosts: hv_par1
+  gather_facts: false
+  run_once: true
+  tasks:
+    - name: Lire l'autorité du cluster (publique)
+      ansible.builtin.slurp:
+        src: /etc/pve/pve-root-ca.pem
+      register: _ca_cluster
+
+    - name: Comparer avec pki/hv-par1-root-ca.crt du dépôt
+      ansible.builtin.assert:
+        that:
+          - (_ca_cluster.content | b64decode | trim) == (lookup('ansible.builtin.file', playbook_dir ~ '/../pki/hv-par1-root-ca.crt') | trim)
+        fail_msg: >-
+          pki/hv-par1-root-ca.crt ne correspond pas à /etc/pve/pve-root-ca.pem (cluster reconstruit ?).
+          Mets le fichier à jour par MR : adm01 et runner01 font confiance à ce fichier (rôle ca_lab).
+        quiet: true
+
+- name: Services de cluster (VIP de l'API, certificat)
+  hosts: hv_par1
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: pve_cluster
+      tags: [pve_cluster]

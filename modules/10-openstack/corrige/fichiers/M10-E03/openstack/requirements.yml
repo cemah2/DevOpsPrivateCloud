@@ -1,0 +1,7 @@
+---
+# Collections propres à ce dépôt, EN PLUS de celles de Kolla (kolla-ansible install-deps).
+# Installées dans ./collections (ansible.cfg) :
+#   uv run ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: openstack.cloud
+    version: ">=2.4.0,<3.0.0"

@@ -1,0 +1,9 @@
+# fstab.extrait — M08-E10 : ligne produite par le rôle ceph_client (variable ceph_client_cephfs)
+# dans /etc/fstab de cephcli01. Ne pas l'écrire à la main : c'est le rôle qui la tient.
+# <FSID> : « ceph fsid » (ceph_fsid de group_vars/env_m08/ceph.yml) ; <UUID> : « ceph fs subvolume
+# getpath cephfs outillage --group_name plateforme ». « outillage@<FSID>.cephfs » : utilisateur
+# cephx outillage, cluster, système de fichiers cephfs (syntaxe de périphérique « v2 »).
+# Clé dans un fichier 600 (jamais « secret= » ici : fstab est en 644).
+# ms_mode=prefer-crc : protocole msgr2 (port 3300) ; « secure » au palier 3 (M08-E27).
+# _netdev : attendre le réseau au démarrage.
+outillage@<FSID>.cephfs=/volumes/plateforme/outillage/<UUID>  /mnt/outillage  ceph  secretfile=/etc/ceph/outillage.secret,ms_mode=prefer-crc,noatime,_netdev  0  0

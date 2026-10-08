@@ -1,0 +1,53 @@
+# config/cluster.yaml — état déclaratif de ceph-par1 HORS spécifications cephadm (M08-E23).
+# Lu par outils/config-cluster.sh : --verifier (lecture seule, code 1 si écart) ou --appliquer.
+# --appliquer crée les règles et profils manquants, règle seuils, options et paramètres des
+# pools EXISTANTS. Il ne crée ni ne supprime jamais de pool, et ne déplace jamais d'hôte dans
+# la hiérarchie CRUSH (mouvements de données : geste humain, fiche de changement).
+
+seuils:
+  nearfull: 0.75      # M08-E20 : alerte de planification à 40 % des SSD des baies B et C (E24)
+  backfillfull: 0.85
+  full: 0.95
+
+# Options de la configuration centralisée (ceph config set <qui> <option> <valeur>).
+# « regle:<nom> » est remplacé par l'identifiant numérique de la règle.
+options:
+  - {qui: global, option: osd_pool_default_crush_rule, valeur: "regle:ssd-baie"}
+  - {qui: osd, option: osd_memory_target, valeur: "1073741824"}
+  - {qui: mds, option: mds_cache_memory_limit, valeur: "536870912"}
+  - {qui: mon, option: mon_allow_pool_delete, valeur: "false"}
+
+crush:
+  # Vérifiée seulement (jamais appliquée) : <bucket> <type> <parent attendu>.
+  hierarchie:
+    - {nom: par1, type: datacenter, parent: default}
+    - {nom: par1-baie-a, type: rack, parent: par1}
+    - {nom: par1-baie-b, type: rack, parent: par1}
+    - {nom: par1-baie-c, type: rack, parent: par1}
+    - {nom: ceph01, type: host, parent: par1-baie-a}
+    - {nom: ceph02, type: host, parent: par1-baie-b}
+    - {nom: ceph03, type: host, parent: par1-baie-c}
+    - {nom: ceph04, type: host, parent: par1-baie-a}
+  regles:
+    - {nom: ssd-baie, racine: default, domaine: rack, classe: ssd}
+    - {nom: hdd-baie, racine: default, domaine: rack, classe: hdd}
+
+profils_ec:
+  - nom: ec-21-hdd
+    parametres: "k=2 m=1 crush-device-class=hdd crush-failure-domain=rack"
+
+# Pools : règle (répliqués), application, quota en octets (0 = aucun), taille cible.
+pools:
+  - {nom: .mgr, regle: ssd-baie, application: mgr}
+  - {nom: rbd-test, regle: ssd-baie, application: rbd, quota_octets: 107374182400, target_size_ratio: 0.5}
+  - {nom: rbd-ec-donnees, profil_ec: ec-21-hdd, application: rbd, quota_octets: 64424509440, ec_overwrites: true}
+  - {nom: cephfs.cephfs.meta, regle: ssd-baie, application: cephfs}
+  - {nom: cephfs.cephfs.data, regle: ssd-baie, application: cephfs}
+  - {nom: .nfs, regle: ssd-baie, application: nfs}
+  - {nom: .rgw.root, regle: ssd-baie, application: rgw}
+  - {nom: default.rgw.log, regle: ssd-baie, application: rgw}
+  - {nom: default.rgw.control, regle: ssd-baie, application: rgw}
+  - {nom: default.rgw.meta, regle: ssd-baie, application: rgw}
+  - {nom: default.rgw.buckets.index, regle: ssd-baie, application: rgw}
+  - {nom: default.rgw.buckets.data, regle: ssd-baie, application: rgw}
+  - {nom: default.rgw.buckets.non-ec, regle: ssd-baie, application: rgw}

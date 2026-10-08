@@ -1,0 +1,22 @@
+---
+argument_specs:
+  main:
+    short_description: Serveur de provisioning pxe01 (TFTP, iPXE, nginx HTTPS)
+    options:
+      pxe_fqdn:
+        type: str
+        description: Nom servi en HTTPS (certificat ACME).
+      pxe_adresse:
+        type: str
+        description: Adresse d'écoute TFTP et HTTP(S), dans le VLAN 60.
+      pxe_chargeurs:
+        type: list
+        elements: dict
+        description: Chargeurs iPXE ({nom, sha256}) construits par ipxe/construire-ipxe.sh.
+      pxe_chargeurs_version:
+        type: str
+        description: Version publiée dans le registre de paquets génériques (ex. v2.0.0-ms1).
+      pxe_reponses_clients:
+        type: list
+        elements: str
+        description: Réseaux autorisés à lire les fichiers de réponse.

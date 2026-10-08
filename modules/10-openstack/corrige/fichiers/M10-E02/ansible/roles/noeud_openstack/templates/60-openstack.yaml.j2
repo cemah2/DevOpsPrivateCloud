@@ -1,0 +1,40 @@
+# {{ ansible_managed }} — rôle noeud_openstack (M10-E02)
+# Interfaces reconnues par leur MAC (bc:24:11:<VLAN>:00:<suffixe>) et renommées : les noms
+# ne dépendent ni de cloud-init, ni de l'ordre des cartes PCI.
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+{% for i in noeud_openstack_interfaces %}
+    {{ i.nom }}:
+      match:
+        macaddress: "bc:24:11:{{ i.vlan }}:00:{{ noeud_openstack_suffixe }}"
+      set-name: {{ i.nom }}
+      mtu: {{ i.mtu }}
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      addresses:
+        - "{{ i.prefixe }}.{{ noeud_openstack_suffixe | int + i.decalage }}/{{ i.longueur }}"
+{% if i.principale %}
+      routes:
+        - to: default
+          via: {{ noeud_openstack_passerelle }}
+      nameservers:
+        addresses: {{ noeud_openstack_resolveurs | to_json }}
+        search: [{{ noeud_openstack_domaine }}]
+{% endif %}
+{% endfor %}
+{% if inventory_hostname in noeud_openstack_noeuds_reseau %}
+{% set e = noeud_openstack_interface_externe %}
+    # Carte externe : AUCUNE adresse. Kolla-Ansible la branche sur le pont br-ex (physnet1).
+    {{ e.nom }}:
+      match:
+        macaddress: "bc:24:11:{{ e.vlan }}:00:{{ noeud_openstack_suffixe }}"
+      set-name: {{ e.nom }}
+      mtu: {{ e.mtu }}
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+{% endif %}

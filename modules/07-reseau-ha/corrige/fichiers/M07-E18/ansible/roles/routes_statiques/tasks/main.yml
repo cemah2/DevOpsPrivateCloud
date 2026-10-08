@@ -1,0 +1,32 @@
+---
+# Rôle routes_statiques (M07-E18).
+
+- name: Unité des routes statiques
+  ansible.builtin.template:
+    src: routes-statiques.service.j2
+    dest: /etc/systemd/system/routes-statiques.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Relancer les routes statiques
+
+- name: Unité activée et lancée
+  ansible.builtin.systemd_service:
+    name: routes-statiques.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Appliquer maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Chaque route est dans la table principale
+  ansible.builtin.command: "ip route show {{ item.prefixe }}"
+  register: _routes_statiques_verif
+  changed_when: false
+  check_mode: false
+  failed_when: _routes_statiques_verif.stdout is not search('via ' ~ item.via | regex_escape)
+  loop: "{{ routes_statiques_liste }}"
+  loop_control:
+    label: "{{ item.prefixe }}"
+  when: not ansible_check_mode

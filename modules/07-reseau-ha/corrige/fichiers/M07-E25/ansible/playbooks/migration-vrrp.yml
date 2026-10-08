@@ -1,0 +1,124 @@
+---
+# playbooks/migration-vrrp.yml — migration d'UN VLAN de « .1 statique sur gw01 » à « VIP .1 VRRP »
+# (M07-E25, fiche CHG-855). Lancé par le job manuel « migration-vrrp » du pipeline (ou depuis adm01,
+# session WAN ouverte sur gw01), APRÈS fusion de la MR qui, pour le VLAN V :
+#   - retire V de routeur_reseau_vip_statique (host_vars/gw01/routeur_reseau.yml) ;
+#   - ajoute V à keepalived_vlans_vrrp de gw01 ET de gw02 (host_vars/gw0X/bordure.yml).
+#
+#   ansible-playbook playbooks/migration-vrrp.yml -e vlan=99
+#
+# Déroulé (coupure attendue sur le VLAN V : Master_Down_Interval de gw01, ≈ 3,4 s) :
+#   1. contrôles : gw01 porte .1 et .2, gw02 ne porte pas .1, keepalived actif des deux côtés ;
+#   2. gw01 : fichier ifupdown rendu SANS .1, keepalived rendu AVEC l'instance V (pas encore rechargé) ;
+#   3. gw01 : retrait de .1 à chaud puis rechargement de keepalived → l'instance démarre en BACKUP,
+#      n'entend aucun pair, devient MASTER et repose .1 (même adresse MAC : caches ARP intacts) ;
+#   4. attente de la VIP sur gw01 ; sinon RETOUR ARRIÈRE immédiat (.1 reposée en statique) ;
+#   5. gw02 : instance V ajoutée (rechargement), elle doit rester BACKUP ;
+#   6. preuves : VIP sur gw01 seulement, état BACKUP de l'instance sur gw02.
+# Le pare-feu n'est PAS touché ici (VRRP déjà autorisé à l'étape 3 de l'exercice).
+
+- name: Contrôles avant la migration d'un VLAN
+  hosts: gw01,gw02
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Paramètre vlan fourni et connu
+      ansible.builtin.assert:
+        that:
+          - vlan is defined
+          - vlan | int in (routeur_reseau_vlans | map(attribute='id') | list)
+          - vlan | int in keepalived_vlans_vrrp
+          - inventory_hostname != 'gw01' or vlan | int not in routeur_reseau_vip_statique
+        fail_msg: >-
+          VLAN {{ vlan | default('?') }} : il doit être routé, présent dans keepalived_vlans_vrrp des
+          deux passerelles et absent de routeur_reseau_vip_statique de gw01 (MR fusionnée ?).
+        quiet: true
+
+    - name: Adresses portées sur ens19.{{ vlan }}
+      ansible.builtin.command: ip -j -4 address show dev ens19.{{ vlan }}
+      register: _adresses
+      changed_when: false
+
+    - name: Situation de départ attendue
+      ansible.builtin.assert:
+        that: >-
+          ('10.10.' ~ vlan ~ '.1' in (_adresses.stdout | from_json | map(attribute='addr_info') | flatten | map(attribute='local') | list))
+          == (inventory_hostname == 'gw01')
+        fail_msg: "Départ inattendu : .1 doit être sur gw01 et seulement sur gw01 (VLAN {{ vlan }})."
+        quiet: true
+
+    - name: Les secondaires sont promues quand la principale disparaît
+      ansible.builtin.command: sysctl -n net.ipv4.conf.all.promote_secondaries
+      register: _promote
+      changed_when: false
+      failed_when: _promote.stdout | trim != '1'
+
+- name: Migration du VLAN sur gw01
+  hosts: gw01
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    _vip: "10.10.{{ vlan }}.1"
+  tasks:
+    - name: Fichier ifupdown sans .1 statique pour ce VLAN
+      ansible.builtin.include_role:
+        name: routeur_reseau
+
+    - name: Rendu de keepalived avec la nouvelle instance, rechargement retardé, VLAN {{ vlan }}
+      ansible.builtin.include_role:
+        name: keepalived
+      vars:
+        keepalived_recharger: false
+
+    - name: Bascule de .1 statique vers VRRP
+      block:
+        # Une seule commande : retrait de .1 puis rechargement, sans attente entre les deux.
+        - name: Retirer .1 statique et recharger keepalived
+          ansible.builtin.shell: |
+            set -e
+            ip address del {{ _vip }}/24 dev ens19.{{ vlan }}
+            systemctl reload keepalived
+          changed_when: true
+
+        - name: Attendre que keepalived repose la VIP (15 s au plus)
+          ansible.builtin.command: ip -4 -o address show dev ens19.{{ vlan }}
+          register: _apres
+          until: _vip ~ '/24' in _apres.stdout
+          retries: 15
+          delay: 1
+          changed_when: false
+
+      rescue:
+        - name: RETOUR ARRIÈRE — reposer .1 en statique
+          ansible.builtin.command: ip address replace {{ _vip }}/24 dev ens19.{{ vlan }}
+          changed_when: true
+
+        - name: Échouer en expliquant
+          ansible.builtin.fail:
+            msg: >-
+              keepalived n'a pas repris {{ _vip }} sur gw01 en 15 s : .1 a été reposée à la main (état
+              courant). Remets le VLAN {{ vlan }} dans routeur_reseau_vip_statique et retire-le de
+              keepalived_vlans_vrrp (MR), relance routeurs.yml --limit gw01, puis cherche la cause
+              (journalctl -u keepalived, règle VRRP de la matrice, keepalived -t).
+
+- name: Instance de secours du VLAN sur gw02
+  hosts: gw02
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Rendu et rechargement de keepalived, nouvelle instance en BACKUP, VLAN {{ vlan }}
+      ansible.builtin.include_role:
+        name: keepalived
+
+    - name: Laisser passer trois annonces
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: La VIP n'est pas sur gw02 (sinon cerveau divisé)
+      ansible.builtin.command: ip -4 -o address show dev ens19.{{ vlan }}
+      register: _gw02
+      changed_when: false
+      failed_when: ('10.10.' ~ vlan ~ '.1/24') in _gw02.stdout

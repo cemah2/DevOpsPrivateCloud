@@ -1,0 +1,10 @@
+---
+# Rôle ceph_export_config — export de la configuration de Ceph par commande forcée (M08-E25).
+# Appliqué à l'hôte « _admin » qui sert les exports (ceph01).
+
+ceph_export_config_compte: wb-sauvegarde
+ceph_export_config_script: /usr/local/sbin/wb-ceph-export-config
+# Clé publique de cephcli01 autorisée à lancer l'export (la clé privée est en Vault « critique »,
+# déposée sur cephcli01 par le rôle sauvegarde_ceph). Seule l'adresse de cephcli01 est admise.
+ceph_export_config_cle_publique: ""
+ceph_export_config_depuis: 10.10.30.20

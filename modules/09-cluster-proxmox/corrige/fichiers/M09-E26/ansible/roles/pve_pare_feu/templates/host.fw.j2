@@ -1,0 +1,11 @@
+# {{ pve_pare_feu_entete }}
+# Pare-feu du nœud {{ inventory_hostname }} (M09-E26).
+
+[OPTIONS]
+enable: {{ 1 if pve_pare_feu_noeud_actif else 0 }}
+nftables: {{ 1 if pve_pare_feu_nftables else 0 }}
+
+[RULES]
+{% for r in pve_pare_feu_regles_noeud %}
+{{ r.regle }} # {{ r.motif }} ({{ r.ref }})
+{% endfor %}

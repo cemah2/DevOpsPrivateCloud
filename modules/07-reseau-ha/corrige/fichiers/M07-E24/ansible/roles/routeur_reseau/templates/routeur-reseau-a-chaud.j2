@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# /usr/local/sbin/routeur-reseau-a-chaud — {{ inventory_hostname }}
+# {{ routeur_reseau_entete }}
+# Pose À CHAUD ce qui MANQUE par rapport au rôle routeur_reseau : MTU du trunk, sous-interfaces
+# VLAN, MTU des VLAN, adresses propres (et .1 statique pendant la migration), routes de garde.
+# Ne RETIRE jamais rien (une VIP posée par keepalived n'est pas dans cette liste : la retirer
+# couperait un VLAN). Affiche une ligne « AJOUT … » par changement.
+# Usage : routeur-reseau-a-chaud [--simuler]
+set -euo pipefail
+
+simuler=0
+[[ "${1:-}" == "--simuler" ]] && simuler=1
+
+faire() {
+  echo "AJOUT $*"
+  ((simuler)) || "$@"
+}
+
+trunk={{ routeur_reseau_trunk | quote }}
+mtu_trunk={{ routeur_reseau_trunk_mtu }}
+
+if [[ "$(cat "/sys/class/net/$trunk/mtu")" != "$mtu_trunk" ]]; then
+  faire ip link set dev "$trunk" mtu "$mtu_trunk"
+fi
+
+# vlan:mtu:adresses (adresses dans l'ordre : .1 statique éventuelle, puis l'adresse propre)
+while IFS=: read -r vlan mtu adresses; do
+  ifc="$trunk.$vlan"
+  if [[ ! -e "/sys/class/net/$ifc" ]]; then
+    faire ip link add link "$trunk" name "$ifc" type vlan id "$vlan"
+  fi
+  if [[ ! -e "/sys/class/net/$ifc" ]] || [[ "$(cat "/sys/class/net/$ifc/mtu")" != "$mtu" ]]; then
+    faire ip link set dev "$ifc" mtu "$mtu"
+  fi
+  if [[ ! -e "/sys/class/net/$ifc" ]] || ! grep -qw up "/sys/class/net/$ifc/operstate"; then
+    faire ip link set dev "$ifc" up
+  fi
+  for a in $adresses; do
+    if ! ip -o -4 address show dev "$ifc" 2>/dev/null | grep -qw "$a"; then
+      faire ip address add "$a" dev "$ifc"
+    fi
+  done
+done <<'LISTE'
+{% for v in routeur_reseau_vlans %}
+{{ v.id }}:{{ v.mtu }}:{{ ('10.10.' ~ v.id ~ '.1/24 ') if v.id in routeur_reseau_vip_statique else '' }}10.10.{{ v.id }}.{{ routeur_reseau_suffixe }}/24
+{% endfor %}
+LISTE
+
+{% for r in routeur_reseau_routes_garde %}
+if ! ip -4 route show type unreachable {{ r }} | grep -q "metric {{ routeur_reseau_metrique_garde }}"; then
+  faire ip route replace unreachable {{ r }} metric {{ routeur_reseau_metrique_garde }}
+fi
+{% endfor %}
+exit 0

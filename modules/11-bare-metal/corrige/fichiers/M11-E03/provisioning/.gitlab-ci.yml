@@ -1,0 +1,23 @@
+# plateforme/provisioning — pipeline de validation (M11-E03 ; preseed E04, kickstart E05, générateur E06).
+# Exécuteur shell de runner01 (M01) : shellcheck et debconf y sont installés par le rôle
+# gitlab_runner ; pykickstart est lancé par uvx (version épinglée).
+include:
+  - project: plateforme/ci-templates
+    file: qualite.yml        # pre-commit, Gitleaks (M01)
+
+stages: [qualite, verifier]
+
+verifier:
+  stage: verifier
+  tags: [shell, socle]
+  variables:
+    PYKICKSTART_VERSION: "3.78"   # version validée par le corrigé (octobre 2026)
+  script:
+    - |
+      # ksvalidator dans un environnement jetable, sans rien installer sur le runner.
+      ksvalidator() { uvx --from "pykickstart==${PYKICKSTART_VERSION}" ksvalidator "$@"; }
+      export -f ksvalidator
+      outils/verifier.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

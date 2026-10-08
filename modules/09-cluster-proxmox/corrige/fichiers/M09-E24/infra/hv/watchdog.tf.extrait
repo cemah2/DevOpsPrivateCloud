@@ -1,0 +1,18 @@
+# infra/hv/ — EXTRAIT (M09-E24) : bloc ajouté à la ressource des nœuds (proxmox_virtual_environment_vm
+# de l'état « hv », écrite en M09-E03/E08). Seul ce bloc change ; le reste de la ressource est
+# inchangé. Provider bpg/proxmox ~> 0.116.0 (argument « watchdog » : enabled, model, action).
+#
+# Effet : QEMU (sur pve01) émule une carte Intel 6300ESB dans la VM du nœud. Une fois armé par
+# watchdog-mux, si le nœud cesse de le nourrir, c'est QEMU — hors du noyau du nœud — qui
+# réinitialise la VM. Contrairement à softdog, cela marche même si le noyau du nœud est figé.
+#
+# Un périphérique ajouté n'apparaît qu'au prochain démarrage de QEMU : arrêt complet de la VM puis
+# démarrage (le playbook hv-chien-de-garde.yml le fait nœud par nœud). Le provider applique la
+# modification à chaud dans la configuration ; il ne redémarre pas la VM (vérifie le plan : aucune
+# recréation ne doit être annoncée).
+
+  watchdog {
+    enabled = true
+    model   = "i6300esb"
+    action  = "reset"
+  }

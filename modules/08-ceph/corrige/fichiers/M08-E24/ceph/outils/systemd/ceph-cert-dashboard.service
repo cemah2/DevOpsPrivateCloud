@@ -1,0 +1,19 @@
+# /etc/systemd/system/ceph-cert-dashboard.service — M08-E24 (PLAT-950), adm01.
+# Renouvelle le certificat du tableau de bord de ceph-par1 et l'applique. Même clé SSH dédiée que
+# ceph-cert-ingress.service (M08-E11).
+[Unit]
+Description=MédiSphère : certificat du tableau de bord de ceph-par1
+After=network-online.target
+Wants=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Environment=CEPH_ADMIN=ceph01
+Environment="CEPH_SSH_OPTS=-i /home/admin/.ssh/id_ed25519_ceph_auto"
+ExecStart=/home/admin/src/ceph/outils/cert-dashboard.sh
+TimeoutStartSec=10min
+SyslogIdentifier=ceph-cert-dashboard
+NoNewPrivileges=yes
+PrivateTmp=yes

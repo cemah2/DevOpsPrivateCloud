@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# ms-capacite-cluster — capacité mémoire « N+1 » du cluster hv-par1 et décision sur une demande
+# (M09-E31, DEV-1057).
+#
+# Capacité d'un nœud = mémoire du nœud − réserves (hôte, Ceph, cache ZFS) − marge.
+# Capacité N+1      = somme des capacités − capacité du plus gros nœud (on doit survivre à sa perte).
+# Mémoire engagée   = somme de la mémoire des VMs (hors templates) ; pour les pools de
+#                     MS_CAP_POOLS_BALLON, plancher de ballon (« balloon ») s'il est défini.
+#
+# Usage : ms-capacite-cluster [-d|--demande <N>x<Mio>] [-q|--quiet] [-h|--help]
+#   sans --demande : rapport ; code 1 si la mémoire engagée dépasse déjà la capacité N+1.
+#   avec --demande : code 0 si la demande entre dans la capacité N+1, 1 sinon.
+# Codes retour : 0 oui / sain ; 1 non / dépassement / contrôle impossible ; 2 usage.
+# Configuration : /usr/local/etc/ms-capacite-cluster.conf (MS_CONF) ; accès API : identité de
+# supervision de M09-E25 (~/.config/workbook/pve-hv-supervision.env, MS_PVE_ENV_FILE).
+
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+: "${MS_PVE_ENV_FILE:=$HOME/.config/workbook/pve-hv-supervision.env}"
+export MS_PVE_ENV_FILE
+
+_QUIET=0
+_REP=""
+
+usage() {
+  cat <<'FIN'
+Usage : ms-capacite-cluster [-d|--demande <N>x<Mio>] [-q|--quiet] [-h|--help]
+
+Capacité mémoire N+1 du cluster hv-par1 (perte du plus gros nœud comprise).
+  -d, --demande NxMio   ex. 20x2048 : 20 VMs de 2048 Mio ; code 0 si elles entrent, 1 sinon
+  -q, --quiet           n'afficher que la conclusion
+Codes retour : 0 oui/sain, 1 non/dépassement/contrôle impossible, 2 usage.
+FIN
+}
+
+dire() { ((_QUIET)) || printf '%s\n' "$*"; }
+
+# api CHEMIN [clé=valeur…] — premier nœud qui répond ; résultat dans _REP.
+api() {
+  local n out
+  for n in "${MS_HV_NOEUDS[@]}"; do
+    PVE_API_URL="https://$n:8006/api2/json"
+    if out="$(pve_api GET "$@" 2>/dev/null)" && [[ -n "$out" && "$out" != null ]]; then
+      _REP="$out"
+      return 0
+    fi
+  done
+  return 1
+}
+
+main() {
+  set -Eeuo pipefail
+  local demande="" n_dem=0 mio_dem=0
+  while (($#)); do
+    case "$1" in
+      -d | --demande)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        demande="$2"
+        shift 2
+        ;;
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  if [[ -n "$demande" ]]; then
+    [[ "$demande" =~ ^([1-9][0-9]{0,3})x([1-9][0-9]{1,6})$ ]] || die "--demande attend <N>x<Mio>, ex. 20x2048" 2
+    n_dem="${BASH_REMATCH[1]}"
+    mio_dem="${BASH_REMATCH[2]}"
+  fi
+  require_cmd curl jq
+  local conf="${MS_CONF:-/usr/local/etc/ms-capacite-cluster.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-capacite-cluster.conf
+  source "$conf"
+  ((${#MS_HV_NOEUDS[@]} > 0)) || die "aucun nœud dans $conf" 1
+
+  local noeuds vms reserve marge capacites cap_n1 engage vm id noeud pool mem ballon
+  api /cluster/resources type=node || die "API injoignable sur ${MS_HV_NOEUDS[*]} : contrôle impossible" 1
+  noeuds="$_REP"
+  api /cluster/resources type=vm || die "liste des VMs illisible : contrôle impossible" 1
+  vms="$_REP"
+
+  reserve=$((MS_CAP_RESERVE_HOTE_MIO + MS_CAP_RESERVE_CEPH_MIO + MS_CAP_RESERVE_ZFS_MIO))
+  marge="${MS_CAP_MARGE_PCT:-10}"
+  # Capacité de chaque nœud (Mio) — les nœuds hors ligne comptent aussi : la capacité se calcule
+  # sur le cluster COMPLET ; un nœud absent est justement le cas que la réserve N+1 couvre.
+  capacites="$(jq -r --argjson r "$reserve" --argjson m "$marge" '.[] | select(.maxmem != null)
+    | (((.maxmem / 1048576) - $r) * (100 - $m) / 100 | floor) as $c | "\(.node) \(if $c < 0 then 0 else $c end)"' <<<"$noeuds")"
+  [[ -n "$capacites" ]] || die "aucun nœud avec une mémoire connue : contrôle impossible" 1
+  cap_n1="$(awk '{s += $2; if ($2 > m) m = $2} END {print s - m}' <<<"$capacites")"
+
+  engage=0
+  while read -r vm; do
+    [[ -n "$vm" ]] || continue
+    read -r id noeud pool mem <<<"$vm"
+    if [[ " ${MS_CAP_POOLS_BALLON[*]:-} " == *" $pool "* ]] \
+        && api "/nodes/$noeud/qemu/$id/config"; then
+      ballon="$(jq -r '.balloon // 0' <<<"$_REP")"
+      if ((ballon > 0)); then
+        mem="$ballon"
+      fi
+    fi
+    engage=$((engage + mem))
+  done < <(jq -r '.[] | select(.template != 1 and .type == "qemu")
+    | "\(.vmid) \(.node) \(.pool // "-") \((.maxmem // 0) / 1048576 | floor)"' <<<"$vms")
+
+  dire "Capacité par nœud (Mio, après réserves de ${reserve} Mio et marge de ${marge} %) :"
+  dire "  ${capacites//$'\n'/$'\n'  }"
+  dire "Capacité N+1 : ${cap_n1} Mio ; mémoire engagée : ${engage} Mio ; disponible : $((cap_n1 - engage)) Mio"
+
+  if [[ -n "$demande" ]]; then
+    local besoin=$((n_dem * mio_dem))
+    if ((engage + besoin <= cap_n1)); then
+      echo "OUI : ${n_dem} × ${mio_dem} Mio (${besoin} Mio) entrent dans la capacité N+1 (reste $((cap_n1 - engage - besoin)) Mio)."
+      exit 0
+    fi
+    echo "NON : ${n_dem} × ${mio_dem} Mio (${besoin} Mio) dépassent la capacité N+1 de $((engage + besoin - cap_n1)) Mio."
+    exit 1
+  fi
+  if ((engage > cap_n1)); then
+    echo "DÉPASSEMENT : la mémoire engagée dépasse la capacité N+1 de $((engage - cap_n1)) Mio : la perte d'un nœud ne serait pas absorbée."
+    exit 1
+  fi
+  echo "SAIN : la perte du plus gros nœud serait absorbée (reste $((cap_n1 - engage)) Mio)."
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

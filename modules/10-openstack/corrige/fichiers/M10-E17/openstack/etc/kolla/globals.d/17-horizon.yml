@@ -1,0 +1,8 @@
+---
+# etc/kolla/globals.d/17-horizon.yml (M10-E17, DEV-1127) — Horizon multi-domaines.
+horizon_keystone_multidomain: "yes"
+# Plus d'une entrée : liste déroulante. Clé = nom du domaine Keystone, valeur = libellé affiché.
+# L'ordre d'un dictionnaire YAML est conservé : medisphere apparaît en premier.
+horizon_keystone_domain_choices:
+  medisphere: "MédiSphère (équipes)"
+  Default: "Default (administration)"

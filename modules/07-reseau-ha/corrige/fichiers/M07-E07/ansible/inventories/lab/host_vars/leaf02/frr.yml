@@ -1,0 +1,42 @@
+---
+# host_vars/leaf02/frr.yml — état de fin de M07-E07 : eBGP (AS 65102) avec les deux spines.
+# vfab7 (lien direct vers leaf01) reste adressé mais hors BGP : dans une fabric leaf-spine, le
+# trafic entre leaves passe par les spines.
+frr_interfaces:
+  - nom: lo
+    adresses: [10.10.255.12/32]
+  - {nom: eth1, description: vers spine01 (vfab2)}
+  - {nom: eth2, description: vers spine02 (vfab4)}
+  - {nom: eth3, description: vers srv02 (vfab6)}
+  - {nom: eth4, description: vers leaf01 (vfab7) hors BGP}
+
+frr_prefix_lists:
+  - "{{ m07_pl_fabric }}"
+  - nom: PL-LOCAL
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.12/32}
+      - {seq: 20, action: permit, prefixe: 10.10.250.10/31}
+
+frr_route_maps:
+  - nom: RM-SPINES-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-FABRIC]}]
+  # Un leaf n'annonce QUE ses préfixes : jamais de transit entre spines à travers lui.
+  - nom: RM-SPINES-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-LOCAL]}]
+
+frr_bgp:
+  asn: 65102
+  router_id: 10.10.255.12
+  groupes:
+    - nom: SPINES
+      as_distant: 65100
+      mot_de_passe: "{{ m07_bgp_mdp_fabric }}"
+      route_map_entree: RM-SPINES-IN
+      route_map_sortie: RM-SPINES-OUT
+      # Garde une copie de ce que les spines envoient AVANT filtrage (diagnostic :
+      # show bgp ipv4 unicast neighbors … received-routes).
+      soft_reconfiguration: true
+  voisins:
+    - {adresse: 10.10.250.2, groupe: SPINES, description: spine01}
+    - {adresse: 10.10.250.6, groupe: SPINES, description: spine02}
+  reseaux: [10.10.255.12/32, 10.10.250.10/31]

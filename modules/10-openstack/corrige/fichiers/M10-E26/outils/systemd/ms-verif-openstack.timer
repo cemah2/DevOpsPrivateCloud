@@ -1,0 +1,12 @@
+# /etc/systemd/system/ms-verif-openstack.timer — M10-E26 (PLAT-1152)
+[Unit]
+Description=MédiSphère : sonde du cloud OpenStack toutes les 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+AccuracySec=30s
+RandomizedDelaySec=60s
+
+[Install]
+WantedBy=timers.target

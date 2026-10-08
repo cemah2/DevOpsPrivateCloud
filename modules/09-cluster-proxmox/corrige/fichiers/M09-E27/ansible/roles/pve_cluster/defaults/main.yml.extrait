@@ -1,0 +1,10 @@
+# roles/pve_cluster/defaults/main.yml — EXTRAIT : options du datacenter ajoutées par M09-E27.
+# Migration à chaud : canal SSH chiffré (secure), sur le VLAN 30 (STOR-PUB, MTU 9000), loin des
+# deux liens Corosync (VLAN 32 et MGMT).
+pve_cluster_migration: "type=secure,network=10.10.30.0/24"
+# Limites de débit en Kio/s. Le VLAN 30 porte aussi le réseau public de Ceph : on laisse à Ceph
+# au moins la moitié du lien. Dans le lab (pont virtuel de pve01, pas de vrai lien), la valeur
+# compte surtout pour la démonstration ; sur un lien 10 Gbit/s réel : ~ 600 000 Kio/s.
+pve_cluster_bwlimit:
+  migration: 307200   # 300 Mio/s ≈ 2,5 Gbit/s
+  restore: 204800

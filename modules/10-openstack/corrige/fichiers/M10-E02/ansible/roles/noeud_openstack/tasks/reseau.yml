@@ -1,0 +1,74 @@
+---
+# Prendre possession du réseau : configuration validée À CÔTÉ, puis mise en place, puis
+# redémarrage contrôlé (un « netplan apply » qui renomme la carte de la session SSH en cours
+# couperait la connexion d'Ansible au milieu d'une tâche).
+
+- name: Vérifier que chaque MAC attendue existe sur le nœud
+  ansible.builtin.assert:
+    that:
+      - mac in (ansible_facts['interfaces'] | map('extract', ansible_facts, ['macaddress']) | select('defined') | list)
+    fail_msg: >-
+      Aucune carte de {{ inventory_hostname }} n'a la MAC {{ mac }}. Compare avec
+      « qm config {{ hostvars[inventory_hostname]['vmid'] | default('<VMID>') }} » sur pve01 et
+      la règle de noeuds.tf : rien n'est modifié tant que ce n'est pas réglé.
+    quiet: true
+  vars:
+    mac: "bc:24:11:{{ item.vlan }}:00:{{ noeud_openstack_suffixe }}"
+  loop: >-
+    {{ noeud_openstack_interfaces
+       + ([noeud_openstack_interface_externe] if inventory_hostname in noeud_openstack_noeuds_reseau else []) }}
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Dossier de répétition
+  ansible.builtin.file:
+    path: "{{ noeud_openstack_repetition }}/etc/netplan"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Écrire la configuration dans le dossier de répétition
+  ansible.builtin.template:
+    src: 60-openstack.yaml.j2
+    dest: "{{ noeud_openstack_repetition }}/etc/netplan/60-openstack.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Valider la configuration avec netplan (sans rien appliquer)
+  ansible.builtin.command:
+    cmd: netplan generate --root-dir {{ noeud_openstack_repetition }}
+  changed_when: false
+
+- name: Retirer la configuration réseau à cloud-init
+  ansible.builtin.copy:
+    src: 99-openstack-reseau.cfg
+    dest: /etc/cloud/cloud.cfg.d/99-openstack-reseau.cfg
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Réseau du nœud modifié
+
+- name: Mettre en place la configuration netplan
+  ansible.builtin.copy:
+    src: "{{ noeud_openstack_repetition }}/etc/netplan/60-openstack.yaml"
+    dest: /etc/netplan/60-openstack.yaml
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Réseau du nœud modifié
+
+- name: Supprimer la configuration générée par cloud-init (elle nommait la carte eth0)
+  ansible.builtin.file:
+    path: /etc/netplan/50-cloud-init.yaml
+    state: absent
+  notify: Réseau du nœud modifié
+
+- name: Redémarrer maintenant si le réseau a changé
+  ansible.builtin.meta: flush_handlers
+
+- name: Relire les faits réseau après un éventuel redémarrage
+  ansible.builtin.setup:
+    gather_subset: ["!all", "!min", "network"]

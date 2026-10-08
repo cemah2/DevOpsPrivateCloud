@@ -1,0 +1,8 @@
+# .gitleaks.toml — plateforme/ceph (M08-E23). Règles par défaut de Gitleaks, plus une exception :
+# le cas fautif de la règle maison 5 contient VOLONTAIREMENT un faux bloc de clé privée.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Cas fautifs des tests des règles maison (clés FICTIVES)"
+paths = ['''^tests/cas-fautifs/''']

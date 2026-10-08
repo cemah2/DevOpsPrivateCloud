@@ -1,0 +1,58 @@
+# Cas fautif de la règle 3 : un hôte étranger au cluster (serveur de sauvegarde) avec _admin.
+# Adresse EXPLICITE (réseau public, PLAN.md §4.9) : sans elle, cephadm résout le nom par le DNS.
+# Étiquettes : _admin (ceph.conf et trousseau client.admin dans /etc/ceph), mon, mgr, osd (E03) ;
+# mds (E10), rgw (E11), nfs (E16). location : emplacement CRUSH INITIAL, lu seulement à l'ajout
+# d'un hôte (ceph01-03 ont été rangés par commandes en E14 ; ceph04 est entré dans sa baie, E18).
+service_type: host
+hostname: ceph01
+addr: 10.10.30.51
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+  - mds
+  - nfs
+location:
+  rack: par1-baie-a
+---
+service_type: host
+hostname: ceph02
+addr: 10.10.30.52
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+  - mds
+  - rgw
+location:
+  rack: par1-baie-b
+---
+service_type: host
+hostname: ceph03
+addr: 10.10.30.53
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+  - rgw
+location:
+  rack: par1-baie-c
+---
+# Extension (CHG-928, M08-E18) : OSD seulement. Retiré au mini-projet (M08-E46) : document
+# supprimé par la MR du retrait, APRÈS « ceph orch host drain ceph04 » et « ceph orch host rm ».
+service_type: host
+hostname: ceph04
+addr: 10.10.30.54
+labels:
+  - osd
+location:
+  rack: par1-baie-a
+---
+service_type: host
+hostname: pbs01
+addr: 10.10.30.99
+labels:
+  - _admin

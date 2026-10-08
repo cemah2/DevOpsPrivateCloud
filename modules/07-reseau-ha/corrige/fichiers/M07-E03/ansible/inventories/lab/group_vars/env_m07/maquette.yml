@@ -1,0 +1,16 @@
+---
+# group_vars/env_m07/maquette.yml — variables communes de la maquette réseau (M07-E03).
+
+ms_environnement: maquette-m07
+
+# Outils de diagnostic réseau, en plus de la trousse du rôle base (tcpdump, mtr, dig…).
+base_paquets_role:
+  - iperf3
+  - traceroute
+  - ethtool
+  - nftables
+  - conntrack
+
+# Pas de compte de secours sur des VMs jetables : la console Proxmox et le compte admin
+# (clé injectée par cloud-init) suffisent ; une VM cassée se reconstruit.
+base_secours_mdp_hash: ""

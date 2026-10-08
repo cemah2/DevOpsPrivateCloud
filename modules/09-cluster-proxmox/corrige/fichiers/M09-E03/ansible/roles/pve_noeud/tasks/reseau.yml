@@ -1,0 +1,90 @@
+---
+# /etc/network/interfaces appartient à ce rôle. On ne modifie PAS le réseau des nœuds par
+# l'interface web (elle écrirait le même fichier, et le prochain passage l'écraserait).
+# Le SDN de Proxmox (M09-E16) écrit dans /etc/network/interfaces.d/sdn : la ligne « source »
+# du modèle le prend en compte.
+
+- name: Préparer la nouvelle configuration réseau (syntaxe vérifiée par ifupdown2)
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces.ansible
+    owner: root
+    group: root
+    mode: "0644"
+    validate: ifup -a -s -i %s
+
+- name: Comparer avec la configuration en service
+  ansible.builtin.command: cmp -s /etc/network/interfaces.ansible /etc/network/interfaces
+  register: _pve_noeud_reseau_cmp
+  changed_when: false
+  failed_when: _pve_noeud_reseau_cmp.rc > 1
+  check_mode: false
+
+- name: Appliquer la nouvelle configuration, avec filet
+  when: _pve_noeud_reseau_cmp.rc == 1
+  block:
+    - name: Garder la configuration en service (référence du retour arrière)
+      ansible.builtin.copy:
+        src: /etc/network/interfaces
+        dest: /etc/network/interfaces.avant-ansible
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    # Minuterie systemd transitoire : sans confirmation (arrêt de la minuterie ci-dessous),
+    # l'ancienne configuration revient d'elle-même. C'est ce qui sauve un nœud injoignable.
+    - name: Armer le retour automatique (délai pve_noeud_delai_retour_reseau)
+      ansible.builtin.command: >-
+        systemd-run --unit=pve-noeud-retour-reseau --on-active={{ pve_noeud_delai_retour_reseau }}
+        /bin/sh -c 'cp -f /etc/network/interfaces.avant-ansible /etc/network/interfaces && ifreload -a'
+      changed_when: true
+
+    - name: Mettre en place la nouvelle configuration
+      ansible.builtin.copy:
+        src: /etc/network/interfaces.ansible
+        dest: /etc/network/interfaces
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Recharger le réseau (ifupdown2)
+      ansible.builtin.command: ifreload -a
+      changed_when: true
+
+    - name: Le nœud répond encore
+      ansible.builtin.wait_for_connection:
+        timeout: 30
+
+    - name: La passerelle de MGMT répond
+      ansible.builtin.command: ping -c 2 -W 2 {{ pve_noeud_passerelle }}
+      changed_when: false
+
+    - name: Les adresses Corosync et Ceph sont en place
+      ansible.builtin.command: ip -4 -br address show dev {{ item.carte }}
+      loop:
+        - {carte: nic1, ip: "{{ pve_noeud_ip_coro }}"}
+        - {carte: nic2, ip: "{{ pve_noeud_ip_stopub }}"}
+        - {carte: nic3, ip: "{{ pve_noeud_ip_stoclu }}"}
+      register: _pve_noeud_adresses
+      changed_when: false
+      failed_when: (item.ip ~ '/24') not in _pve_noeud_adresses.stdout
+
+    - name: Confirmer (désarmer le retour automatique)
+      ansible.builtin.systemd_service:
+        name: pve-noeud-retour-reseau.timer
+        state: stopped
+  rescue:
+    - name: Échec après le changement de réseau
+      ansible.builtin.fail:
+        msg: >-
+          Le contrôle après « ifreload -a » a échoué. La configuration précédente revient
+          d'elle-même au plus tard {{ pve_noeud_delai_retour_reseau }} s après l'application
+          (/etc/network/interfaces.avant-ansible). Console de secours : qm terminal
+          {{ 2090 + pve_noeud_numero | int }} sur pve01.
+
+- name: Contrôle des trames géantes vers la passerelle du VLAN 30 (MTU 9000 de bout en bout)
+  ansible.builtin.command: ping -c 1 -W 2 -M do -s 8972 10.10.30.1
+  changed_when: false
+  check_mode: false

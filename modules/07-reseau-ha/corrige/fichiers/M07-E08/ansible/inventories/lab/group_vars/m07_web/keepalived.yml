@@ -1,0 +1,30 @@
+---
+# group_vars/m07_web/keepalived.yml — VIP de démonstration de la maquette (M07-E08).
+# VRID 199 : le 99 servira à la passerelle du VLAN 99 (E25) ; deux instances VRRP d'un même
+# VLAN doivent avoir des VRID différents (même MAC virtuelle 00:00:5e:00:01:<VRID> sinon).
+
+keepalived_scripts:
+  # Le serveur qui ne SERT plus doit perdre la VIP, même si la machine va bien. Pas de
+  # « poids » : un échec met l'instance en FAULT, quelle que soit sa priorité.
+  - nom: chk_web
+    commande: /usr/bin/curl -fsS -o /dev/null --max-time 2 http://127.0.0.1/sante
+    intervalle: 2
+    delai: 3
+    echecs: 2
+    succes: 2
+
+keepalived_instances:
+  - nom: DEMO_WEB
+    interface: eth0
+    vrid: 199
+    priorite: "{{ m07_web_priorite }}"
+    etat_initial: BACKUP
+    intervalle: 1
+    preemption: true
+    # Unicast : adresses fixes (maquette.tf) ; les pairs = les autres membres du groupe.
+    source: "{{ m07_web_adresse }}"
+    pairs: >-
+      {{ groups['m07_web'] | difference([inventory_hostname])
+         | map('extract', hostvars, 'm07_web_adresse') | list }}
+    vips: [10.10.99.240/24]
+    scripts: [chk_web]

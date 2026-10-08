@@ -1,0 +1,7 @@
+---
+# host_vars/gw01/routeur_reseau.yml — M07-E24 : le rôle reprend EXACTEMENT la configuration de
+# M00-E10/M07-E15 (gw01 porte .1 partout). Il évolue en M07-E25 (.2 + .1 statique, puis .2 seul).
+routeur_reseau_pile: ifupdown
+routeur_reseau_wan_adresse: 192.168.1.40/24   # <IP-GW01-WAN>/<MASQUE>
+routeur_reseau_suffixe: 1
+routeur_reseau_vip_statique: []

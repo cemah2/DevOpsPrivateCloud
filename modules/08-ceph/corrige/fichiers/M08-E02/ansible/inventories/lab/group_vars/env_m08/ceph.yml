@@ -1,0 +1,13 @@
+---
+# group_vars/env_m08/ceph.yml — faits du cluster ceph-par1 partagés par les nœuds et les
+# clients (M08-E02 ; ceph_fsid complété en M08-E03).
+ceph_cluster: ceph-par1
+# Adresses du plan (PLAN.md §4.9). ceph04 n'est ajouté qu'en M08-E18.
+ceph_noeuds:
+  ceph01: {public: 10.10.30.51, cluster: 10.10.31.51}
+  ceph02: {public: 10.10.30.52, cluster: 10.10.31.52}
+  ceph03: {public: 10.10.30.53, cluster: 10.10.31.53}
+ceph_reseau_public: 10.10.30.0/24
+ceph_reseau_cluster: 10.10.31.0/24
+# Identifiant du cluster, affiché par le bootstrap (M08-E03) : « ceph fsid ».
+ceph_fsid: "<FSID>"

@@ -1,0 +1,10 @@
+# host_vars/gw01/pare_feu.yml — EXTRAIT à intégrer (M07-E11, DEV-821).
+# Le défi ACME HTTP-01 de ca01 vers une VM de la maquette (VLAN 99) traverse gw01.
+# Ciblé : ca01 seul, port 80 seul, vers la sandbox seule. À RETIRER avec la maquette (E46).
+
+# pare_feu_definitions (si absente) :
+  - {nom: V_SANDBOX, valeur: '"ens19.99"'}
+
+# pare_feu_transit, section « Services socle » :
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_SANDBOX, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers la maquette (hap01)", ref: M07-E11}

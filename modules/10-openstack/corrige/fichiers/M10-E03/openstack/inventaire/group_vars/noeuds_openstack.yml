@@ -1,0 +1,5 @@
+---
+# Connexion aux nœuds : compte « admin » de l'image dorée (sudo sans mot de passe), clé SSH de
+# adm01 ; les noms (osctl01…) sont résolus par le DNS du lab et vérifiés par known_hosts.
+ansible_user: admin
+ansible_become: true

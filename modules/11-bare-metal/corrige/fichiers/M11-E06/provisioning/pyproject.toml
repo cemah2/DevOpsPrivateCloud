@@ -1,0 +1,28 @@
+[project]
+name = "provisioning"
+version = "0.1.0"
+description = "Chaîne de provisioning bare-metal de MédiSphère : rendu depuis NetBox (M11-E06)"
+requires-python = ">=3.13"
+dependencies = [
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    "requests>=2.32",
+]
+
+[dependency-groups]
+dev = [
+    "pykickstart==3.78",
+    "pytest>=9.0",
+    "ruff>=0.16",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101"]  # assert dans les tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,14 @@
+---
+# group_vars/env_m07/connexion.yml — connexion aux VMs de la maquette du module 07 (M07-E03).
+#
+# Les VMs de la maquette sont recréées souvent (tofu destroy / apply) : nouvelles clés d'hôte à
+# chaque fois, et pas de certificat d'hôte (M06-E19) tant qu'Ansible ne les a jamais touchées.
+# Compromis, limité à ces VMs jetables du VLAN 99 :
+#   - fichier known_hosts DÉDIÉ (jamais celui du projet ni ~/.ssh/known_hosts), vidé à chaque
+#     reconstruction ;
+#   - accept-new : une clé INCONNUE est acceptée, une clé qui CHANGE est refusée.
+# Même réglage que le bloc « Host » de ~/.ssh/config d'adm01 (adm01/ssh-config-m07.extrait).
+ansible_user: admin
+ansible_ssh_common_args: >-
+  -o StrictHostKeyChecking=accept-new
+  -o UserKnownHostsFile=~/.ssh/known_hosts.m07

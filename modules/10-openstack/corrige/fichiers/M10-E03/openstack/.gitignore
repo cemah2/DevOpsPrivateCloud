@@ -1,0 +1,17 @@
+# Environnement et dépendances (reconstruits par « uv sync » et « install-deps »)
+.venv/
+collections/
+__pycache__/
+*.retry
+
+# Produits par « kolla-ansible post-deploy » DANS le dossier de configuration (--configdir) :
+# ils contiennent le mot de passe administrateur EN CLAIR.
+etc/kolla/admin-openrc.sh
+etc/kolla/admin-openrc-system.sh
+etc/kolla/public-openrc.sh
+etc/kolla/public-openrc-system.sh
+etc/kolla/clouds.yaml
+
+# Copies de travail déchiffrées (ne devraient jamais exister ; filet de sécurité)
+*.clair
+*.dechiffre

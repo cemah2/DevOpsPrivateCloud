@@ -1,0 +1,14 @@
+---
+# host_vars/pxe01/certificats.yml — certificat TLS de pxe01 par ACME (M11-E13), rôle certificats_acme.
+# Émission : défi HTTP-01 (ca01 → pxe01:80, nginx arrêté le temps du défi : le client step écoute
+# lui-même sur 80). Renouvellement : par le certificat (pxe01 → ca01:443), sans le port 80.
+# Ordre imposé par playbooks/pxe01.yml : rôle pxe (nginx installé, port 80 seul), puis ce
+# certificat (arrêt/démarrage de nginx), puis le site HTTPS.
+certificats_acme_certificats:
+  - id: pxe
+    noms: [pxe01.par1.medisphere.internal]
+    certificat: /etc/ssl/pxe/pxe01.par1.medisphere.internal.crt
+    cle: /etc/ssl/pxe/pxe01.par1.medisphere.internal.key
+    avant_emission: /usr/bin/systemctl stop nginx
+    apres_emission: /usr/bin/systemctl start nginx
+    recharger: /usr/bin/systemctl reload nginx

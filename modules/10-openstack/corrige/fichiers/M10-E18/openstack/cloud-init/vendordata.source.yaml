@@ -1,0 +1,17 @@
+# Source LISIBLE des données fournisseur (M10-E18). vendordata.json en est la sérialisation :
+#   yq -o=json '.' cloud-init/vendordata.source.yaml > etc/kolla/config/nova/vendordata.json   (yq mikefarah, PLAN §6)
+# cloud-init lit la clé « cloud-init » et l'applique comme des données utilisateur.
+cloud-init: |
+  #cloud-config
+  # Données fournisseur MédiSphère (M10-E18) : confiance dans la PKI interne et heure du lab.
+  ca_certs:
+    trusted:
+      - |
+        -----BEGIN CERTIFICATE-----
+        <CONTENU DE /usr/local/share/ca-certificates/medisphere-root-ca.crt>
+        -----END CERTIFICATE-----
+  ntp:
+    enabled: true
+    ntp_client: chrony
+    servers:
+      - 10.10.52.1

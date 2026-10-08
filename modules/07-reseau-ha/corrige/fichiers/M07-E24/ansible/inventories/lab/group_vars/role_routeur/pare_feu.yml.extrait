@@ -1,0 +1,28 @@
+# group_vars/role_routeur/pare_feu.yml — M07-E24 : la matrice des flux devient COMMUNE aux deux
+# passerelles. EXTRAIT : ce fichier est host_vars/gw01/pare_feu.yml déplacé tel quel (git mv), à ces
+# différences près. La version complète relue est celle de M07-E30 (matrice v2).
+#
+#   git mv inventories/lab/host_vars/gw01/pare_feu.yml inventories/lab/group_vars/role_routeur/pare_feu.yml
+#
+# Règle : rien dans ce fichier ne dépend de la passerelle qui l'applique. Ce qui vaut « pour gw01
+# seulement » n'existe pas : soit c'est vrai pour les deux, soit c'est une variable d'hôte.
+
+# 1) En-tête : « LA MATRICE DES FLUX DU SITE PAR1 (transit par les passerelles gw01 et gw02) ».
+
+# 2) Réponses DHCP de Kea : elles visaient le giaddr de gw01 (10.10.99.1). Elles arrivent sur la
+#    passerelle elle-même (chaîne input) : la destination est implicite, on la retire. Chaque
+#    passerelle relaie avec SA propre adresse à partir de M07-E25 (rôle relais_dhcp).
+pare_feu_entree:
+  # AVANT (M06-E25) :
+  # - {entree: $V_INFRA, source: [$DNS01, $DNS02], destination: 10.10.99.1, proto: udp, ports_source: 67, ports: 67,
+  #    motif: "réponses des serveurs Kea adressées au giaddr", ref: M06-E25}
+  - {entree: $V_INFRA, source: [$DNS01, $DNS02], proto: udp, ports_source: 67, ports: 67,
+     motif: "réponses des serveurs Kea au relais de la passerelle (giaddr propre)", ref: M07-E24}
+
+# 3) Défi ACME HTTP-01 de ca01 vers les passerelles (certificats NTS, M06-E21) : la règle de M06-E21
+#    acceptait déjà ca01 → port 80 de « la » passerelle par l'interface INFRA ; elle vaut telle quelle
+#    pour gw02. Rien à changer, mais relis-la : elle doit rester limitée à la source $CA01.
+
+# 4) Contrôles après application (pare_feu_verifications) : inchangés, ils sont lancés depuis le
+#    contrôleur À TRAVERS la passerelle active ; pour gw02 (qui ne route encore pour personne), ils
+#    passent par gw01 et ne prouvent rien sur gw02 : la preuve de gw02 est l'étape 6 de l'exercice.

@@ -1,0 +1,6 @@
+---
+# molecule/haproxy/molecule.yml — scénario du rôle « haproxy » (M07-E10).
+# Le commun (create/destroy, séquence, ansible.cfg) vient de .config/molecule/config.yml (M04-E24).
+#   uv run molecule test -s haproxy
+scenario:
+  name: haproxy

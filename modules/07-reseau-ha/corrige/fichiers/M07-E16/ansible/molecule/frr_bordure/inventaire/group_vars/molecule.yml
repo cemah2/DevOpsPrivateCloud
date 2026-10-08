@@ -1,0 +1,4 @@
+---
+# Valeurs propres à l'instance (à la place de host_vars/gw01/frr.yml).
+frr_router_id: 192.0.2.254
+frr_update_source_leaf01: 192.0.2.254

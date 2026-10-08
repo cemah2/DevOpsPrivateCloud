@@ -1,0 +1,5 @@
+# {{ ansible_managed | default('Géré par Ansible') }} — rôle ceph_client (M08-E06)
+# RbdDevice		Parameters
+{% for m in ceph_client_rbdmap %}
+{{ m.image }}	id={{ m.id }},keyring=/etc/ceph/ceph.client.{{ m.id }}.keyring
+{% endfor %}

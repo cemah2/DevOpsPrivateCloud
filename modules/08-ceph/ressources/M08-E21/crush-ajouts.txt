@@ -1,0 +1,20 @@
+# crush-ajouts.txt — ajouts de Lucas à la carte CRUSH décompilée de ceph-par2
+# (crushtool -d, édition, crushtool -c, ceph osd setcrushmap)
+
+# règle pour les pools sur SSD
+rule par2-ssd {
+	id 1
+	type replicated
+	step take default class ssd
+	step chooseleaf firstn 0 type osd
+	step emit
+}
+
+# règle pour les métadonnées CephFS (« le HDD suffit, il n'y a presque rien dedans »)
+rule par2-meta {
+	id 2
+	type replicated
+	step take default class hdd
+	step chooseleaf firstn 0 type host
+	step emit
+}

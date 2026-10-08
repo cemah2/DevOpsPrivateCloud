@@ -1,0 +1,28 @@
+{
+ "hote": "lb02",
+ "date": "x",
+ "keepalived": true,
+ "etat_bordure": null,
+ "adresses": [
+  {
+   "interface": "eth0",
+   "adresse": "10.10.70.11",
+   "longueur": 24
+  }
+ ],
+ "bgp": null,
+ "wireguard": [],
+ "haproxy": [
+  {
+   "section": "be_gitlab",
+   "serveur": "git01",
+   "etat": "UP"
+  },
+  {
+   "section": "be_netbox",
+   "serveur": "nbx01",
+   "etat": "UP"
+  }
+ ],
+ "conntrackd": null
+}

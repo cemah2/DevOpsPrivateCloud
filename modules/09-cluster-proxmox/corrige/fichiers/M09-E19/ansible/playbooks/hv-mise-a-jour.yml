@@ -1,0 +1,186 @@
+---
+# playbooks/hv-mise-a-jour.yml — mise à jour progressive des nœuds hv01-03 (M09-E19, CHG-1029).
+#
+# Un nœud à la fois (serial: 1), arrêt au premier contrôle en échec (any_errors_fatal). Pour chaque nœud :
+#   contrôles d'entrée → mode maintenance HA (évacuation) → drapeau Ceph « noout » limité au nœud →
+#   apt full-upgrade → redémarrage s'il le faut → contrôles de retour → retrait du drapeau →
+#   sortie de maintenance → Ceph HEALTH_OK avant de passer au suivant.
+# Relançable après interruption : un nœud resté en maintenance ou avec son drapeau est REPRIS là où
+# il en était (les contrôles d'entrée tolèrent l'état laissé par une exécution précédente sur CE nœud,
+# jamais sur un autre).
+#
+#   uv run ansible-playbook playbooks/hv-mise-a-jour.yml            # tous les nœuds
+#   uv run ansible-playbook playbooks/hv-mise-a-jour.yml -l hv02    # un seul
+# Montée de version MAJEURE (PVE 9 → 10) ou de Ceph : HORS de ce playbook (procédures dédiées).
+
+- name: Mise à jour progressive des nœuds Proxmox VE de hv-par1
+  hosts: hv_par1
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    hv_maj_evacuation_essais: 60 # × 10 s
+    hv_maj_retour_essais: 90 # × 10 s
+    hv_maj_ceph_essais: 90 # × 10 s
+    hv_maj_noeud: "{{ inventory_hostname }}"
+
+  pre_tasks:
+    - name: Le cluster a le quorum
+      ansible.builtin.command: corosync-quorumtool -s
+      register: _quorum
+      changed_when: false
+      failed_when: _quorum.stdout is not search('Quorate:\s+Yes')
+
+    - name: Lire l'état HA
+      ansible.builtin.command: ha-manager status
+      register: _ha
+      changed_when: false
+
+    - name: Aucun AUTRE nœud en maintenance
+      ansible.builtin.assert:
+        that:
+          - >-
+            _ha.stdout_lines | select('search', '^lrm ') | select('search', 'maintenance')
+            | reject('search', '^lrm ' ~ hv_maj_noeud ~ ' ') | list | length == 0
+        fail_msg: "Un autre nœud est en maintenance : jamais deux à la fois (Ceph min_size, place pour la HA)."
+        quiet: true
+
+    - name: Lire la santé de Ceph
+      ansible.builtin.command: ceph health detail --format json
+      register: _sante
+      changed_when: false
+
+    - name: Ceph sain (seul un drapeau posé sur CE nœud par une exécution interrompue est toléré)
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_sante.stdout | from_json).status == 'HEALTH_OK'
+            or ((_sante.stdout | from_json).checks.keys() | list == ['OSD_FLAGS']
+                and _sante.stdout is search(hv_maj_noeud))
+        fail_msg: "Ceph n'est pas sain : {{ (_sante.stdout | from_json).checks.keys() | list }}. Pas de mise à jour."
+        quiet: true
+
+  tasks:
+    - name: Mettre à jour la liste des paquets
+      ansible.builtin.apt:
+        update_cache: true
+      changed_when: false
+
+    - name: Paquets à mettre à jour (simulation)
+      ansible.builtin.command: apt-get -s dist-upgrade # noqa: command-instead-of-module (le module apt ne sait pas simuler sans --check global)
+      register: _simulation
+      changed_when: false
+
+    - name: Le nœud a quelque chose à faire (mise à jour, ou reprise d'une exécution interrompue)
+      ansible.builtin.set_fact:
+        _a_faire: >-
+          {{ (_simulation.stdout_lines | select('match', '^Inst ') | list | length > 0)
+             or (_ha.stdout is search('lrm ' ~ hv_maj_noeud ~ ' \(maintenance'))
+             or (_sante.stdout is search(hv_maj_noeud)) }}
+
+    - name: Mise à jour du nœud
+      when: _a_faire | bool
+      block:
+        - name: Mode maintenance HA
+          ansible.builtin.command: ha-manager crm-command node-maintenance enable {{ hv_maj_noeud }}
+          changed_when: true
+
+        - name: Attendre que plus aucune ressource HA ne tourne sur le nœud
+          ansible.builtin.command: ha-manager status
+          register: _ha_evac
+          changed_when: false
+          retries: "{{ hv_maj_evacuation_essais }}"
+          delay: 10
+          until: >-
+            _ha_evac.stdout_lines | select('search', '^service ')
+            | select('search', '\(' ~ hv_maj_noeud ~ ', (started|migrate|relocate)')
+            | list | length == 0
+
+        - name: Ceph ne marque pas les OSD du nœud « out » pendant l'intervention
+          ansible.builtin.command: ceph osd set-group noout {{ hv_maj_noeud }}
+          changed_when: true
+
+        - name: Mise à jour (full-upgrade, jamais « apt upgrade » sur Proxmox VE)
+          ansible.builtin.apt:
+            upgrade: dist
+          environment:
+            DEBIAN_FRONTEND: noninteractive
+
+        - name: Noyau en cours et noyau le plus récent installé
+          ansible.builtin.shell: |
+            set -o pipefail
+            echo "$(uname -r)"
+            ls /boot/vmlinuz-* | sed 's#^/boot/vmlinuz-##' | sort -V | tail -n 1
+          args:
+            executable: /bin/bash
+          register: _noyaux
+          changed_when: false
+
+        - name: Redémarrage requis ?
+          ansible.builtin.stat:
+            path: /run/reboot-required
+          register: _reboot_requis
+
+        - name: Redémarrer le nœud
+          ansible.builtin.reboot:
+            reboot_timeout: 900
+            post_reboot_delay: 20
+            test_command: systemctl is-active pve-cluster
+            msg: "Redémarrage pour mise à jour (CHG-1029)"
+          when: >-
+            _reboot_requis.stat.exists
+            or (_noyaux.stdout_lines[0] != _noyaux.stdout_lines[1])
+
+        - name: Contrôle de retour — quorum
+          ansible.builtin.command: corosync-quorumtool -s
+          register: _retour_quorum
+          changed_when: false
+          retries: "{{ hv_maj_retour_essais }}"
+          delay: 10
+          until: _retour_quorum.stdout is search('Quorate:\s+Yes')
+
+        - name: Contrôle de retour — services Proxmox VE
+          ansible.builtin.service_facts:
+          register: _services
+          retries: 30
+          delay: 10
+          until: >-
+            ['pve-cluster.service', 'pvedaemon.service', 'pveproxy.service', 'pve-ha-lrm.service', 'pve-ha-crm.service']
+            | map('extract', _services.ansible_facts.services) | map(attribute='state') | unique | list == ['running']
+
+        - name: Contrôle de retour — tous les OSD du nœud sont « up »
+          ansible.builtin.command: ceph osd tree --format json
+          register: _arbre
+          changed_when: false
+          retries: "{{ hv_maj_retour_essais }}"
+          delay: 10
+          until: >-
+            (_arbre.stdout | from_json).nodes
+            | selectattr('id', 'in', ((_arbre.stdout | from_json).nodes | selectattr('type', 'equalto', 'host')
+                                     | selectattr('name', 'equalto', hv_maj_noeud) | first).children)
+            | selectattr('status', 'equalto', 'up') | list | length >= 2
+
+        - name: Retirer le drapeau noout du nœud
+          ansible.builtin.command: ceph osd unset-group noout {{ hv_maj_noeud }}
+          changed_when: true
+
+        - name: Sortir le nœud de maintenance (les ressources HA y reviennent)
+          ansible.builtin.command: ha-manager crm-command node-maintenance disable {{ hv_maj_noeud }}
+          changed_when: true
+
+    - name: Ceph HEALTH_OK avant le nœud suivant
+      ansible.builtin.command: ceph health
+      register: _fin
+      changed_when: false
+      retries: "{{ hv_maj_ceph_essais }}"
+      delay: 10
+      until: _fin.stdout is search('^HEALTH_OK')
+
+    - name: Versions du nœud
+      ansible.builtin.command: pveversion
+      register: _version
+      changed_when: false
+
+    - name: Afficher la version
+      ansible.builtin.debug:
+        msg: "{{ hv_maj_noeud }} : {{ _version.stdout }}"

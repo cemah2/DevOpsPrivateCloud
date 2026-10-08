@@ -1,0 +1,15 @@
+---
+# group_vars/role_ceph_client/ceph_client.yml — cephcli01 (M08-E06).
+# Clés cephx : valeurs dans vault-lab.yml (identité lab), jamais en clair ici.
+ceph_client_cles:
+  - nom: client.rbd-test
+    cle: "{{ vault_ceph_cle_rbd_test }}"
+
+# Image mappée au démarrage (rbdmap) et son montage.
+ceph_client_rbdmap:
+  - image: rbd-test/disque01
+    id: rbd-test
+ceph_client_montages:
+  - source: /dev/rbd/rbd-test/disque01
+    point: /mnt/disque01
+    fs: xfs

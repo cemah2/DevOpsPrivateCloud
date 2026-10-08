@@ -1,0 +1,35 @@
+#cloud-config
+# cloud-init des instances du module openstack-env-app (M10-E31). Gabarit OpenTofu (templatefile).
+package_update: true
+packages:
+  - nginx
+  - xfsprogs
+
+write_files:
+  - path: /usr/local/sbin/monter-donnees.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Formate (une seule fois) et monte le volume de données, retrouvé par son NUMÉRO DE SÉRIE
+      # (= identifiant du volume Cinder ; virtio-blk le tronque à 20 caractères, virtio-scsi le
+      # garde entier : on compare le début) : indépendant du nom du périphérique (vdb, sdb…).
+      set -euo pipefail
+      serie="$(printf '%s' "${volume_id}" | cut -c1-20)"
+      for i in $(seq 1 60); do
+        dev="$(lsblk -dno NAME,SERIAL | awk -v s="$serie" 'index($2, s) == 1 {print "/dev/"$1}')"
+        [ -n "$dev" ] && break
+        sleep 2
+      done
+      [ -n "$dev" ] || { echo "volume $serie introuvable" >&2; exit 1; }
+      blkid "$dev" >/dev/null 2>&1 || mkfs.xfs -L donnees "$dev"
+      mkdir -p "${montage}"
+      uuid="$(blkid -s UUID -o value "$dev")"
+      grep -q "$uuid" /etc/fstab || echo "UUID=$uuid ${montage} xfs defaults,nofail 0 2" >> /etc/fstab
+      mountpoint -q "${montage}" || mount "${montage}"
+
+runcmd:
+  - [sh, -c, 'printf "<!doctype html><title>%s</title><h1>%s</h1><p>Servi par <b>%s</b></p>\n" "${titre}" "${titre}" "$(hostname)" > /var/www/html/index.html']
+  - [systemctl, enable, --now, nginx]
+%{ if volume_id != "" ~}
+  - [/usr/local/sbin/monter-donnees.sh]
+%{ endif ~}

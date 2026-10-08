@@ -1,0 +1,9 @@
+# envs/m07-maquette/maquette.tf — EXTRAIT à intégrer (M07-E10, PLAT-820) : une entrée de plus dans
+# local.vms (« Ajouter une VM = ajouter une entrée », M07-E03). hap01 : une seule carte, eth0 sur
+# vsandbox en DHCP (nom publié par la mise à jour dynamique du DNS de Kea) ; étiquette de fonction
+# m07-hap → groupe d'inventaire m07_hap.
+
+    hap01 = {
+      vmid   = 2079, coeurs = 1, memoire = 1024, admin = "dhcp", fonction = ["m07-hap"]
+      cartes = []
+    }

@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Autorités de certification du lab dans le magasin système (Debian, Red Hat) — installation et retrait
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

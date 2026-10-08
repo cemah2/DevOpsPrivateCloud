@@ -1,0 +1,31 @@
+# specs/osd.yaml — OSD du cluster ceph-par1 par classe de disque (M08-E04), état après M08-E27.
+#
+# Spécification de M08-E04/E23 inchangée, plus « encrypted: true » sur les deux services : chaque OSD
+# CRÉÉ à partir de maintenant l'est sur un volume LUKS (dm-crypt, par ceph-volume) ; sa clé est dans le
+# magasin clé-valeur des moniteurs. Les OSD existants ne changent pas : ils se redéploient un par un
+# (« ceph orch osd rm <id> --replace --zap », HEALTH_OK entre deux ; ceph03 en E27, ceph01-02 en E46).
+# Filtres : « rotational » (ce que dit le noyau) ET « size » (aucun disque de 8 Gio ajouté pour autre
+# chose ne devient un OSD par surprise). La classe CRUSH est écrite explicitement.
+# Appliquer : outils/appliquer.sh specs/osd.yaml (M08-E23). Pendant un remplacement de disque
+# (RB-080) : « unmanaged: true » sur le service concerné, le temps du remplacement.
+service_type: osd
+service_id: ssd
+placement:
+  label: osd
+spec:
+  data_devices:
+    rotational: 0
+    size: '50G:100G'
+  crush_device_class: ssd
+  encrypted: true
+---
+service_type: osd
+service_id: hdd
+placement:
+  label: osd
+spec:
+  data_devices:
+    rotational: 1
+    size: '50G:100G'
+  crush_device_class: hdd
+  encrypted: true

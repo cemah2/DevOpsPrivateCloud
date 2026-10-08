@@ -1,0 +1,4 @@
+# roles/pve_noeud/defaults/main.yml — EXTRAIT : variable ajoutée par M09-E31.
+# (pve_noeud_zfs_arc_max existe depuis M09-E03 : 1 Gio, valeur confirmée par les mesures d'E31.)
+# KSM (fusion des pages identiques) piloté par ksmtuned : actif sur tous les nœuds.
+pve_noeud_ksmtuned: true

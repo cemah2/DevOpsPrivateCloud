@@ -1,0 +1,17 @@
+---
+# molecule/conntrackd/converge.yml — chaque instance synchronise vers l'autre, en UDP, sur son
+# interface par défaut. Différence voulue avec la production : seules la boucle locale est ignorée,
+# pour que les connexions des instances elles-mêmes (SSH d'Ansible) servent de matière à synchroniser.
+- name: Converge — rôle conntrackd
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    conntrackd_interface: "{{ ansible_facts['default_ipv4']['interface'] }}"
+    conntrackd_adresse_locale: "{{ ansible_facts['default_ipv4']['address'] }}"
+    conntrackd_adresse_pair: >-
+      {{ groups['molecule'] | difference([inventory_hostname])
+         | map('extract', hostvars, ['ansible_facts', 'default_ipv4', 'address']) | first }}
+    conntrackd_adresses_ignorees: [127.0.0.1]
+  roles:
+    - role: conntrackd

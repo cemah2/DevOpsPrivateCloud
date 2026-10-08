@@ -1,0 +1,125 @@
+---
+# playbooks/hv-certificats.yml — certificats de la PKI MédiSphère pour l'interface 8006 (M09-E26).
+#
+# Pour chaque nœud, un à la fois : si le certificat servi n'est pas déjà un certificat MédiSphère
+# valide pour le nom du nœud ET celui de la VIP, on amène la VIP sur ce nœud (keepalived arrêté
+# quelques secondes sur les autres : coupure brève de l'accès par la VIP, annoncée), on émet par
+# ACME (rôle certificats_acme), puis on rend la VIP. Ensuite, plus aucun défi : le renouvellement
+# se fait par mTLS (cert-renewer@pveproxy.timer).
+#   uv run ansible-playbook playbooks/hv-certificats.yml
+
+- name: Certificats 8006 de hv-par1
+  hosts: "{{ hv_groupe | default('hv_par1') }}"
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    hv_vip: 10.10.10.200
+    hv_vip_nom: hv.par1.medisphere.internal
+    hv_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+  pre_tasks:
+    - name: Racine MédiSphère installée sur le nœud
+      ansible.builtin.include_role:
+        name: ca_lab
+
+    - name: Dossier des certificats de l'API
+      ansible.builtin.file:
+        path: /etc/wb-certs
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Racines acceptées par le script de santé de keepalived (pve_cluster_sante_ca) : celle du
+    # cluster (certificats d'avant M09-E26) et celle de MédiSphère (certificats de step-ca).
+    - name: Racines du script de santé (transition sans perte de la VIP)
+      ansible.builtin.shell: |
+        set -o pipefail
+        cat /etc/pve/pve-root-ca.pem {{ hv_racine }} > /etc/wb-certs/ca-api.pem.nouveau
+        if cmp -s /etc/wb-certs/ca-api.pem.nouveau /etc/wb-certs/ca-api.pem; then
+          rm -f /etc/wb-certs/ca-api.pem.nouveau; echo inchangé
+        else
+          chmod 0644 /etc/wb-certs/ca-api.pem.nouveau
+          mv /etc/wb-certs/ca-api.pem.nouveau /etc/wb-certs/ca-api.pem; echo modifié
+        fi
+      args:
+        executable: /bin/bash
+      register: hv_ca_api
+      changed_when: "'modifié' in hv_ca_api.stdout"
+
+    - name: Le rôle pve_cluster ne gère plus le certificat (passation faite)
+      ansible.builtin.assert:
+        that:
+          - not (pve_cluster_cert_gere | default(true) | bool)
+          - pve_cluster_sante_ca | default('') == '/etc/wb-certs/ca-api.pem'
+        fail_msg: >-
+          Pose pve_cluster_cert_gere: false et pve_cluster_sante_ca: /etc/wb-certs/ca-api.pem (MR sur
+          group_vars/hv_par1), puis relance : sinon la VIP tomberait au premier certificat MédiSphère.
+        quiet: true
+
+    # Le script de santé de keepalived doit connaître les deux racines AVANT le premier certificat
+    # MédiSphère : on (ré)applique pve_cluster ici, sur ce nœud (cert_gere false : il ne touche
+    # plus au certificat).
+    - name: Rôle pve_cluster avec le nouveau réglage du script de santé
+      ansible.builtin.include_role:
+        name: pve_cluster
+
+    - name: Le certificat en place est-il déjà bon pour les deux noms ?
+      ansible.builtin.shell: |
+        set -o pipefail
+        f=/etc/wb-certs/pveproxy.crt
+        test -s "$f" || exit 1
+        for n in {{ inventory_hostname }}.par1.medisphere.internal {{ hv_vip_nom }}; do
+          openssl verify -CAfile {{ hv_racine }} -untrusted "$f" -verify_hostname "$n" "$f" >/dev/null || exit 1
+        done
+        openssl x509 -in "$f" -noout -checkend 864000 >/dev/null
+      args:
+        executable: /bin/bash
+      register: hv_cert_ok
+      changed_when: false
+      failed_when: false
+
+  tasks:
+    - name: Émission initiale avec la VIP sur ce nœud
+      when: hv_cert_ok.rc != 0
+      block:
+        - name: VIP | arrêter keepalived sur les autres nœuds
+          ansible.builtin.systemd_service:
+            name: keepalived
+            state: stopped
+          delegate_to: "{{ item }}"
+          loop: "{{ groups[hv_groupe | default('hv_par1')] | difference([inventory_hostname]) }}"
+
+        - name: VIP | attendre qu'elle soit portée ici
+          ansible.builtin.command: ip -o -4 addr show
+          register: hv_adresses
+          changed_when: false
+          until: hv_adresses.stdout is search(' ' ~ hv_vip ~ '/')
+          retries: 15
+          delay: 2
+
+        - name: Émission | rôle certificats_acme (défi HTTP-01 pour les deux noms)
+          ansible.builtin.include_role:
+            name: certificats_acme
+
+      always:
+        - name: VIP | redémarrer keepalived sur les autres nœuds
+          ansible.builtin.systemd_service:
+            name: keepalived
+            state: started
+          delegate_to: "{{ item }}"
+          loop: "{{ groups[hv_groupe | default('hv_par1')] | difference([inventory_hostname]) }}"
+
+    - name: Renouvellement seul (certificat déjà bon) | rôle certificats_acme
+      ansible.builtin.include_role:
+        name: certificats_acme
+      when: hv_cert_ok.rc == 0
+
+    - name: Vérifier ce que sert pveproxy (chaîne MédiSphère, nom du nœud)
+      ansible.builtin.shell: |
+        set -o pipefail
+        openssl s_client -connect 127.0.0.1:8006 -servername {{ inventory_hostname }}.par1.medisphere.internal \
+          -CAfile {{ hv_racine }} -verify_hostname {{ inventory_hostname }}.par1.medisphere.internal \
+          -verify_return_error </dev/null >/dev/null 2>&1
+      args:
+        executable: /bin/bash
+      changed_when: false

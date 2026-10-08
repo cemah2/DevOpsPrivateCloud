@@ -1,0 +1,24 @@
+# pbs01 (hp01, PAR2) — EXTRAITS M07-E26. ⚠️ Hôte HORS pool lab, porte les sauvegardes : changer hors
+# des fenêtres de sauvegarde, iLO ou écran à portée, une modification à la fois.
+# Valeurs d'exemple : 192.168.1.50 = <IP-GW-WAN-VIP>, 192.168.1.40/41 = <IP-GW01-WAN>/<IP-GW02-WAN>.
+
+# --- 1. /etc/nftables.conf : accepter AUSSI la VIP (avant de changer l'extrémité) --------------
+# AVANT : define GW01_WAN = 192.168.1.40
+define BORDURE_WAN = { 192.168.1.40, 192.168.1.50 }   # transition : propre de gw01 ET VIP
+#   …et dans la chaîne input, « ip saddr $GW01_WAN udp dport 51820 » devient « ip saddr $BORDURE_WAN … ».
+#   root@pbs01:~# nft -c -f /etc/nftables.conf && systemctl reload nftables
+# Une fois la traduction des tunnels vers la VIP en place sur les deux passerelles (et vérifiée par
+# « conntrack -L -p udp --dport 51820 » sur la passerelle active), on restreint à la VIP SEULE :
+#   define BORDURE_WAN = { 192.168.1.50 }
+# (Ne JAMAIS y mettre <IP-GW02-WAN> « pour être tranquille » : un pair qui accepte toutes les
+# adresses de la bordure masque une traduction cassée jusqu'au jour où elle compte.)
+
+# --- 2. /etc/wireguard/wg0.conf : extrémité de PAR1 = VIP WAN ---------------------------------
+# [Peer]
+# PublicKey = <CLE-PUBLIQUE-WG0-DE-GW01>      (inchangée : gw02 a la même clé)
+# Endpoint = 192.168.1.50:51820
+# AllowedIPs = 10.255.0.1/32, 10.10.0.0/16, 10.255.1.0/24
+# PersistentKeepalive = 25
+#   Appliquer sans couper : root@pbs01:~# wg set wg0 peer <CLE-PUBLIQUE-WG0-DE-GW01> endpoint 192.168.1.50:51820
+#   puis reporter dans le fichier (wg-quick relit le fichier au prochain démarrage).
+#   Vérifier : wg show wg0 latest-handshakes (moins de 2 minutes) ; une sauvegarde de test vers ds-lab.

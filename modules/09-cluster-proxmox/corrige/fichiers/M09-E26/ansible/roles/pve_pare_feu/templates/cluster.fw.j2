@@ -1,0 +1,29 @@
+# {{ pve_pare_feu_entete }}
+# Pare-feu du datacenter hv-par1 (M09-E26). Toute modification passe par le rôle pve_pare_feu.
+
+[OPTIONS]
+enable: {{ 1 if pve_pare_feu_cluster_actif else 0 }}
+policy_in: {{ pve_pare_feu_politique_entree }}
+policy_out: {{ pve_pare_feu_politique_sortie }}
+
+{% if pve_pare_feu_local_network | length > 0 %}
+[ALIASES]
+local_network {{ pve_pare_feu_local_network }} # restreint aux nœuds (défaut : tout MGMT)
+
+{% endif %}
+[IPSET management] # administration des nœuds : interface 8006, SSH, consoles
+{% for e in pve_pare_feu_management %}
+{{ e.cidr }} # {{ e.commentaire }}
+{% endfor %}
+
+{% for nom, entrees in pve_pare_feu_ipsets | dictsort %}
+[IPSET {{ nom }}]
+{% for e in entrees %}
+{{ e.cidr }} # {{ e.commentaire }}
+{% endfor %}
+
+{% endfor %}
+[RULES]
+{% for r in pve_pare_feu_regles %}
+{{ r.regle }} # {{ r.motif }} ({{ r.ref }})
+{% endfor %}

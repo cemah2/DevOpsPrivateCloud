@@ -1,0 +1,8 @@
+# .yamllint — règles du projet plateforme/ceph (M08-E03 ; pipeline en M08-E23).
+extends: default
+rules:
+  document-start: disable
+  line-length:
+    max: 120
+  truthy:
+    allowed-values: ["true", "false"]

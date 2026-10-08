@@ -1,0 +1,16 @@
+---
+# group_vars/role_routeur/routeur_reseau.yml — ce qui est COMMUN aux deux passerelles (M07-E24).
+# PLAN §4.2 (VLAN routés) et §4.9 (MTU 9000 sur 30 ; 31 et 51 ne sont pas routés).
+routeur_reseau_trunk: ens19
+routeur_reseau_trunk_mtu: 9000
+routeur_reseau_vlans:
+  - {id: 10, mtu: 1500}   # MGMT
+  - {id: 20, mtu: 1500}   # INFRA
+  - {id: 30, mtu: 9000}   # STOR-PUB (jumbo, M07-E15)
+  - {id: 40, mtu: 1500}   # K8S
+  - {id: 50, mtu: 1500}   # OS-API
+  - {id: 52, mtu: 1500}   # OS-EXT
+  - {id: 60, mtu: 1500}   # PROV
+  - {id: 70, mtu: 1500}   # DMZ
+  - {id: 99, mtu: 1500}   # SANDBOX
+routeur_reseau_wan_passerelle: 192.168.1.1   # <IP-BOX>

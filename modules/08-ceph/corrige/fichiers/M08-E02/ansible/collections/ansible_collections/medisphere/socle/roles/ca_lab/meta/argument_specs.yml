@@ -1,0 +1,27 @@
+---
+argument_specs:
+  main:
+    short_description: Installe et retire des autorités de certification dans le magasin système
+    options:
+      ca_lab_certificats:
+        type: list
+        elements: dict
+        description: Autorités à installer.
+        options:
+          nom:
+            type: str
+            required: true
+            description: Nom du fichier .crt dans le dossier d'ancres de la famille.
+          source:
+            type: path
+            required: true
+            description: Certificat PEM sur le contrôleur.
+      ca_lab_retirer:
+        type: list
+        elements: str
+        default: []
+        description: Noms d'autorités à retirer (fichier <nom>.crt du dossier d'ancres).
+      ca_lab_verifier:
+        type: bool
+        default: true
+        description: Contrôler le magasin consolidé après reconstruction.

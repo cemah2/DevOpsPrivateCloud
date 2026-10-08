@@ -1,0 +1,4 @@
+---
+# host_vars/lb01/lb.yml — valeurs propres à lb01 (M07-E12).
+lb_adresse: 10.10.70.10
+lb_priorite: 150

@@ -1,0 +1,15 @@
+# À INTÉGRER dans /etc/pve/firewall/cluster.fw (pare-feu Proxmox, niveau datacenter) — M11-E10.
+# Ou par l'API / la CLI (voir le corrigé). Retiré avec maas01 (mini-projet M11-E25).
+#
+# Un IPSet DÉDIÉ plutôt qu'une entrée de plus dans « automation » (M03-E15) :
+#  - le jour où maas01 disparaît, on retire l'IPSet et sa règle sans relire qui d'autre est dans
+#    « automation » ;
+#  - la règle peut être limitée à 8006 pour ce seul client, et sa raison d'être reste lisible ;
+#  - les droits applicatifs de wb-maas (quatre VMs) ne changent rien au fait qu'une adresse de plus
+#    joint l'API : la surface réseau se décide séparément, et se documente séparément.
+
+[IPSET maas] # maas01 : pilote d'alimentation « proxmox » de MAAS (M11-E10)
+10.10.60.11
+
+[RULES]
+IN ACCEPT -source +maas -p tcp -dport 8006 -log nolog # M11-E10 : maas01 → API de pve01

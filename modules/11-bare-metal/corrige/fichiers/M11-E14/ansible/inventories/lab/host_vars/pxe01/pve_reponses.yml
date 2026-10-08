@@ -1,0 +1,7 @@
+---
+# host_vars/pxe01/pve_reponses.yml — machines servies par le service de réponse PVE (M11-E14).
+# Jeton : vault_pve_reponses_jeton (host_vars/pxe01/vault.yml, identité critique ; registre des
+# secrets : « jeton du service de réponse PVE »).
+pve_reponses_jeton: "{{ vault_pve_reponses_jeton }}"
+pve_reponses_machines:
+  - {mac: "<MAC-BM04>", fichier: bm04.toml}

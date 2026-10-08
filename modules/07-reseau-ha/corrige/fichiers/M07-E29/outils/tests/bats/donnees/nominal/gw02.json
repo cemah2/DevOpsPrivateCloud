@@ -1,0 +1,73 @@
+{
+ "hote": "gw02",
+ "date": "2026-10-08T10:00:00+02:00",
+ "keepalived": true,
+ "etat_bordure": "BACKUP",
+ "adresses": [
+  {
+   "interface": "ens18",
+   "adresse": "192.168.1.41",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.10",
+   "adresse": "10.10.10.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.20",
+   "adresse": "10.10.20.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.30",
+   "adresse": "10.10.30.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.40",
+   "adresse": "10.10.40.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.50",
+   "adresse": "10.10.50.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.52",
+   "adresse": "10.10.52.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.60",
+   "adresse": "10.10.60.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.70",
+   "adresse": "10.10.70.3",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.99",
+   "adresse": "10.10.99.3",
+   "longueur": 24
+  }
+ ],
+ "bgp": [
+  {
+   "voisin": "10.10.99.251",
+   "etat": "Established",
+   "depuis_ms": 3600000
+  },
+  {
+   "voisin": "10.255.2.2",
+   "etat": "Active",
+   "depuis_ms": 3600000
+  }
+ ],
+ "wireguard": [],
+ "haproxy": [],
+ "conntrackd": true
+}

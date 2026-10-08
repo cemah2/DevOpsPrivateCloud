@@ -1,0 +1,72 @@
+---
+# Rôle wireguard (M07-E18).
+
+- name: Vérifier les interfaces
+  ansible.builtin.assert:
+    that:
+      - wireguard_interfaces | map(attribute='nom') | list | unique | length == wireguard_interfaces | length
+      - wireguard_interfaces | rejectattr('cle_privee', 'defined') | list | length == 0
+      - wireguard_interfaces | map(attribute='pilotage', default='role') | difference(['role', 'transition']) | length == 0
+    fail_msg: "wireguard_interfaces : noms uniques, clé privée (Vault) et pilotage role|transition."
+    quiet: true
+
+- name: Installer wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+
+- name: Dossier /etc/wireguard réservé à root
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# no_log : la clé privée est dans le rendu ; un échec ou un « diff » l'afficherait.
+- name: Configuration des interfaces
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "/etc/wireguard/{{ item.nom }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ wireguard_interfaces }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  no_log: true
+  notify: Resynchroniser les interfaces WireGuard actives
+
+- name: Interfaces pilotées par le rôle (activées et démarrées)
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ item.nom }}.service"
+    enabled: true
+    state: started
+  loop: "{{ wireguard_interfaces | selectattr('pilotage', 'undefined') | list
+            + wireguard_interfaces | selectattr('pilotage', 'defined') | selectattr('pilotage', 'eq', 'role') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Interfaces pilotées ailleurs (non activées au démarrage)
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ item.nom }}.service"
+    enabled: false
+  loop: "{{ wireguard_interfaces | selectattr('pilotage', 'defined') | selectattr('pilotage', 'eq', 'transition') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Appliquer maintenant les resynchronisations en attente
+  ansible.builtin.meta: flush_handlers
+
+# Contrôle sur le service RENDU : chaque interface pilotée par le rôle est montée sur son port.
+- name: Chaque interface pilotée par le rôle écoute sur son port
+  ansible.builtin.command: "wg show {{ item.nom }} listen-port"
+  register: _wireguard_port
+  changed_when: false
+  check_mode: false
+  failed_when: _wireguard_port.rc != 0 or _wireguard_port.stdout | trim != item.port | string
+  loop: "{{ wireguard_interfaces | rejectattr('pilotage', 'defined') | list
+            + wireguard_interfaces | selectattr('pilotage', 'defined') | selectattr('pilotage', 'eq', 'role') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  when: not ansible_check_mode

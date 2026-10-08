@@ -1,0 +1,21 @@
+---
+# host_vars/gw01/certificats.yml — certificat NTS de gw01 (M06-E21), modifié en M07-E25 :
+# le nom de gw01 et SES adresses (.2). Les .1 (VIP) disparaissent : la passerelle de secours ne
+# pourrait pas prouver une VIP au défi HTTP-01, et les clients NTP visent .2 et .3.
+certificats_acme_certificats:
+  - id: chrony
+    noms:
+      - gw01.par1.medisphere.internal
+      - 10.10.10.2
+      - 10.10.20.2
+      - 10.10.30.2
+      - 10.10.40.2
+      - 10.10.50.2
+      - 10.10.52.2
+      - 10.10.60.2
+      - 10.10.70.2
+      - 10.10.99.2
+    certificat: /etc/chrony/nts/gw01.crt
+    cle: /etc/chrony/nts/gw01.key
+    groupe: _chrony
+    recharger: /usr/bin/systemctl try-restart chrony.service

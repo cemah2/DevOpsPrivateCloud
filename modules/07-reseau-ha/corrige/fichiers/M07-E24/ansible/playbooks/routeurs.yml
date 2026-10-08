@@ -1,0 +1,24 @@
+---
+# playbooks/routeurs.yml — passerelles de la bordure (M07-E24).
+# UNE passerelle à la fois, gw02 d'abord (la passerelle de secours) : si le rendu casse quelque
+# chose, gw01 continue de servir le lab. any_errors_fatal : on n'enchaîne pas sur gw01 après un
+# échec sur gw02.
+- name: Passerelles de la bordure PAR1
+  hosts: role_routeur
+  become: true
+  serial: 1
+  order: reverse_sorted   # gw02 puis gw01
+  any_errors_fatal: true
+  roles:
+    - role: base
+    - role: ssh_durci
+    - role: routeur_reseau
+    - role: pare_feu
+    - role: certificats_acme
+    - role: chrony_serveur
+    - role: frr
+    # relais_dhcp : gw01 seulement jusqu'à M07-E25 (variable relais_dhcp_actif de host_vars).
+    - role: relais_dhcp
+      when: relais_dhcp_actif | default(true) | bool
+    # M07-E25 et suivants : keepalived, bordure ; M07-E26 : wireguard ; M07-E27 : conntrackd ;
+    # M07-E29 : sonde_reseau (voir la version de M07-E27 et M07-E29 de ce playbook).

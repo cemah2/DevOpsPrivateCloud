@@ -1,0 +1,6 @@
+# outils/netbox/modele-medisphere.yml — EXTRAIT : ajout de M09-E03.
+# L'étiquette doit exister dans NetBox AVANT le premier « tofu apply » de envs/hv : le compte
+# svc-automatisation (OpenTofu) n'a pas le droit de créer des étiquettes (M06-E10).
+etiquettes:
+  # … étiquettes existantes …
+  - {name: env-m09, slug: env-m09, color: "ff9800"}

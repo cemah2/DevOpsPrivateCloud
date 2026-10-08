@@ -1,0 +1,53 @@
+---
+- name: Installer nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Retirer le site par défaut du paquet
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Recharger nginx
+
+- name: Racine du site
+  ansible.builtin.file:
+    path: "{{ nginx_web_racine }}"
+    state: directory
+    mode: "0755"
+
+- name: Page d'accueil (nom du serveur)
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: "{{ nginx_web_racine }}/index.html"
+    mode: "0644"
+
+- name: Site de démonstration
+  ansible.builtin.template:
+    src: m07-web.conf.j2
+    dest: /etc/nginx/sites-available/m07-web
+    mode: "0644"
+  notify: Recharger nginx
+
+- name: Activer le site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/m07-web
+    dest: /etc/nginx/sites-enabled/m07-web
+    state: link
+  notify: Recharger nginx
+
+- name: Service nginx actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: nginx.service
+    state: started
+    enabled: true
+
+- name: Appliquer un rechargement en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Le point de santé répond
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ nginx_web_port }}/sante"
+    return_content: true
+  register: nginx_web_sante
+  failed_when: nginx_web_sante.status != 200 or nginx_web_sante.content != "ok\n"

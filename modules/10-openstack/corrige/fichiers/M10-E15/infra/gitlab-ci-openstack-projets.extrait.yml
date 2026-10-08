@@ -1,0 +1,29 @@
+# Extrait de .gitlab-ci.yml de plateforme/infra (M10-E15) : jobs de l'état openstack-projets,
+# sur le modèle de plan:/apply: des autres états (M05-E26). Les modèles .plan et .apply, la
+# préparation des accès (outils/ci-preparer.sh) et le resource_group sont ceux du projet.
+# Variables CI protégées et masquées : OS_APPLICATION_CREDENTIAL_ID,
+# OS_APPLICATION_CREDENTIAL_SECRET (+ TF_ENCRYPTION et accès S3 existants). Les autres
+# variables OS_* ne sont pas secrètes et vont ci-dessous.
+
+.openstack-projets:
+  variables:
+    RACINE: envs/openstack-projets
+    OS_AUTH_URL: https://openstack.par1.medisphere.internal:5000/v3
+    OS_AUTH_TYPE: v3applicationcredential
+    OS_REGION_NAME: RegionOne
+    OS_INTERFACE: public
+    OS_CACERT: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+plan:openstack-projets:
+  extends: [.plan, .openstack-projets]
+  rules:
+    - changes: [envs/openstack-projets/**/*]
+
+apply:openstack-projets:
+  extends: [.apply, .openstack-projets]
+  needs: [plan:openstack-projets]
+  resource_group: tofu-openstack-projets
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: [envs/openstack-projets/**/*]
+      when: manual

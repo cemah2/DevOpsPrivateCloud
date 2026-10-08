@@ -1,0 +1,6 @@
+---
+# group_vars/all/sonde_reseau.yml — clé publique de la supervision réseau (M07-E29), utilisée par le
+# rôle sonde_reseau sur role_routeur et role_lb. Générée sur adm01 :
+#   admin@adm01:~$ ssh-keygen -t ed25519 -N '' -C 'supervision-reseau@adm01' -f ~/.config/workbook/ssh-supervision-reseau
+# (sans phrase de passe : la sonde tourne sans humain ; la clé ne permet QUE etat-reseau, depuis adm01.)
+sonde_reseau_cle_publique: "ssh-ed25519 AAAA<…> supervision-reseau@adm01"

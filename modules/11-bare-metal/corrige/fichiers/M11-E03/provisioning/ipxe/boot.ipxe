@@ -1,0 +1,22 @@
+#!ipxe
+# boot.ipxe — plateforme/provisioning, publié à la racine HTTP de pxe01 (M11-E03).
+# Kea (classe « ipxe ») donne cette URL à tout iPXE qui démarre sur le VLAN 60.
+# 1. Un script propre à CETTE machine (généré depuis NetBox à partir de M11-E06) ;
+# 2. à défaut, le menu.
+# ${netX/…} = la dernière interface ouverte, celle qui vient d'obtenir son adresse.
+
+set base http://pxe01.par1.medisphere.internal
+echo MédiSphère — démarrage réseau : ${netX/mac} ${netX/ip} (${platform}, iPXE ${version})
+
+# --autofree : libère le script chargé s'il rend la main. 404 → menu (pas une erreur).
+chain --autofree ${base}/ipxe/mac-${netX/mac:hexhyp}.ipxe || goto menu
+exit
+
+:menu
+chain --autofree ${base}/ipxe/menu.ipxe || goto echec
+exit
+
+:echec
+echo Échec du chargement du menu depuis ${base} : démarrage sur le disque local dans 10 s.
+sleep 10
+exit

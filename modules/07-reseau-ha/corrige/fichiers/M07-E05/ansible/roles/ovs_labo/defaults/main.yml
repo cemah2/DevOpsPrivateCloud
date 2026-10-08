@@ -1,0 +1,21 @@
+---
+# Rôle ovs_labo — laboratoire Open vSwitch de net01 (M07-E05).
+# Un pont OVS, des « machines » (espaces de noms) sur des ports d'accès, un routeur au bout d'un
+# trunk (router on a stick). Les VLAN 110 et 120 n'existent QUE dans net01.
+# Rôle de LABORATOIRE (maquette) : rien à faire sur un hôte du socle.
+
+ovs_labo_pont: br-lab
+
+# Machines sur des ports d'accès : le bout « eth0 » est dans l'espace, le bout « port » dans OVS.
+ovs_labo_hotes:
+  - {ns: ns-a, port: ovs-a, vlan: 110, adresse: 172.31.110.10/24, passerelle: 172.31.110.1}
+  - {ns: ns-c, port: ovs-c, vlan: 110, adresse: 172.31.110.11/24, passerelle: 172.31.110.1}
+  - {ns: ns-b, port: ovs-b, vlan: 120, adresse: 172.31.120.10/24, passerelle: 172.31.120.1}
+
+# Routeur sur un trunk : une sous-interface eth0.<VLAN> par VLAN transporté.
+ovs_labo_routeur:
+  ns: ns-r
+  port: ovs-r
+  vlans:
+    - {id: 110, adresse: 172.31.110.1/24}
+    - {id: 120, adresse: 172.31.120.1/24}

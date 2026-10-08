@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# ms-mesure-bascule — mesure la perte d'un flux ICMP pendant un essai de bascule (M07-E32).
+#
+# Lance un ping horodaté à 10 paquets par seconde vers une cible, jusqu'à Ctrl-C ou la durée
+# donnée, puis affiche : paquets envoyés, perdus, et la plus longue coupure (en secondes), calculée
+# depuis les numéros de séquence manquants (100 ms par paquet).
+#
+# Usage : ms-mesure-bascule [-d SECONDES] CIBLE
+# Un intervalle de 0,1 s demande les droits root avec certaines versions d'iputils : lancer avec
+# sudo si ping refuse l'intervalle. Rien n'est modifié sur le système.
+set -euo pipefail
+
+duree=0
+while getopts ':d:h' o; do
+  case "$o" in
+    d) duree="$OPTARG" ;;
+    h) sed -n '2,11p' "$0"; exit 0 ;;
+    *) echo "usage : $0 [-d SECONDES] CIBLE" >&2; exit 2 ;;
+  esac
+done
+shift $((OPTIND - 1))
+[[ $# -eq 1 ]] || { echo "usage : $0 [-d SECONDES] CIBLE" >&2; exit 2; }
+[[ "$duree" =~ ^[0-9]+$ ]] || { echo "durée invalide : $duree" >&2; exit 2; }
+cible="$1"
+
+journal="$(mktemp)"
+trap 'rm -f "$journal"' EXIT
+
+opts=(-D -n -i 0.1 -W 1)
+((duree > 0)) && opts+=(-w "$duree")
+echo "Mesure vers $cible (Ctrl-C pour arrêter)…" >&2
+# Ctrl-C interrompt ping, pas le script : le bilan est calculé ensuite.
+trap ':' INT
+ping "${opts[@]}" "$cible" >"$journal" 2>&1 || true
+trap - INT
+
+# Séquences reçues → trous.
+awk -F'icmp_seq=' '/icmp_seq=/ { split($2, a, " "); print a[1] }' "$journal" | sort -n | awk '
+  NR == 1 { premier = $1; prec = $1; next }
+  { trou = $1 - prec - 1; if (trou > max) max = trou; perdus += trou; prec = $1 }
+  END {
+    if (NR == 0) { print "aucune réponse reçue"; exit 1 }
+    envoyes = prec - premier + 1
+    printf "envoyés (entre la première et la dernière réponse) : %d\n", envoyes
+    printf "perdus : %d (%.1f %%)\n", perdus, (envoyes ? 100 * perdus / envoyes : 0)
+    printf "plus longue coupure : %.1f s\n", max / 10
+  }'

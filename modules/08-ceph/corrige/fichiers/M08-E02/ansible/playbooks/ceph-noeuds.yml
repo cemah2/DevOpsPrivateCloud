@@ -1,0 +1,37 @@
+---
+# playbooks/ceph-noeuds.yml — prépare les nœuds Ceph (M08-E02).
+#   uv run ansible-playbook playbooks/ceph-noeuds.yml --check --diff
+#   uv run ansible-playbook playbooks/ceph-noeuds.yml
+# Hors de site.yml (qui ne converge que le socle) : l'environnement Ceph a son propre cycle.
+- name: Nœuds du cluster ceph-par1
+  hosts: role_ceph
+  become: true
+  # Un nœud à la fois une fois le cluster en service : un changement de MTU ou de sshd raté
+  # ne touche jamais deux nœuds (et donc jamais le quorum des moniteurs).
+  serial: 1
+  max_fail_percentage: 0
+
+  pre_tasks:
+    - name: Le garde-fou d'inventaire (trois nœuds au moins, chacun dans la table du plan)
+      ansible.builtin.assert:
+        that:
+          - groups['role_ceph'] | default([]) | length >= 3
+          - inventory_hostname in ceph_noeuds
+          - ansible_host == ceph_noeuds[inventory_hostname].public
+        fail_msg: >-
+          {{ inventory_hostname }} : absent de ceph_noeuds (group_vars/env_m08) ou adresse de
+          connexion ({{ ansible_host | default('?') }}) différente de l'adresse publique du plan.
+        quiet: true
+      tags: [always]
+
+  roles:
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+    - role: ceph_noeud
+      tags: [ceph_noeud]

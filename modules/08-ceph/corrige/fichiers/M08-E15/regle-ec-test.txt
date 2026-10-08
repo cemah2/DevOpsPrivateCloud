@@ -1,0 +1,16 @@
+# regle-ec-test.txt — M08-E15 : règle EC de TEST à ajouter à la carte décompilée de M08-E14
+# (section « rules »), pour vérifier hors ligne qu'un profil k=4, m=2 par baie est impossible :
+#   ./tester-regles.sh …  ne sert pas ici (3 répliques) ; lancer directement :
+#   crushtool -c carte.txt -o carte.bin
+#   crushtool -i carte.bin --test --rule 3 --num-rep 6 --show-bad-mappings | head
+# Résultat attendu : toutes les entrées incomplètes, ex. « result [8,2,5,2147483647,…] »
+# (2147483647 = 0x7fffffff = aucun OSD trouvé). Avec --num-rep 3 : aucune entrée incomplète.
+rule ec-test-baie {
+	id 3
+	type erasure
+	step set_chooseleaf_tries 5
+	step set_choose_tries 100
+	step take default class hdd
+	step chooseleaf indep 0 type rack
+	step emit
+}

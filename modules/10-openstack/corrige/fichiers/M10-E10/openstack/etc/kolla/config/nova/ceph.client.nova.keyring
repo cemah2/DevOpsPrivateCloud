@@ -1,0 +1,4 @@
+# Trousseau-GABARIT (M10-E10) : Kolla copie ce fichier avec le module « template » d'Ansible ;
+# la clé vient de passwords.yml (chiffré). Aucun secret dans Git.
+[client.nova]
+    key = {{ ceph_cle_nova }}

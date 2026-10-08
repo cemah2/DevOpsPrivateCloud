@@ -1,0 +1,31 @@
+# pve-answer/bm04.toml — fichier de réponse de l'installateur automatique de Proxmox VE 9.2 pour
+# bm04 (M11-E14), dérivé de celui de hv01 (M09). Clés en kebab-case (PVE 9.1+).
+# Servi par le service pve-reponses de pxe01 (POST authentifié), jamais publié en HTTP statique.
+# Valeurs <…> : NetBox (adresse réservée, MAC) et Vault (empreinte du mot de passe root, générée
+# depuis un mot de passe aléatoire de 32 caractères : « mkpasswd -m yescrypt », paquet whois).
+# Validation : proxmox-auto-install-assistant validate-answer pve-answer/bm04.toml
+
+[global]
+keyboard = "fr"
+country = "fr"
+fqdn = "bm04.par1.medisphere.internal"
+mailto = "plateforme@medisphere.internal"
+timezone = "Europe/Paris"
+root-password-hashed = "<EMPREINTE-YESCRYPT-ROOT-BM04>"
+root-ssh-keys = [
+  "<CLE-PUBLIQUE-SSH-ADM01>",
+]
+reboot-on-error = false
+
+[network]
+source = "from-answer"
+cidr = "<IP-BM04>/24"
+dns = "10.10.20.10"
+gateway = "10.10.60.1"
+# Interface choisie par sa MAC (propriété udev de la forme enx<mac sans séparateur>)
+filter.ID_NET_NAME_MAC = "*<MAC-BM04-SANS-SEPARATEUR>"
+
+[disk-setup]
+filesystem = "ext4"
+disk-list = ["sda"]
+lvm.swapsize = 2

@@ -1,0 +1,7 @@
+# Modèle du ceph.conf client (M10-E10) — généré par outils/ceph-conf-clients.sh, puis posé
+# à l'identique dans glance/, cinder/ et nova/ (Kolla lit un ceph.conf par service).
+# Pas de tabulation en début de ligne : l'analyseur INI de Kolla les refuse.
+# Ce fichier n'est pas secret (fsid et adresses des MON).
+[global]
+fsid = <FSID-CEPH-PAR1>
+mon_host = [v2:10.10.30.51:3300/0,v1:10.10.30.51:6789/0] [v2:10.10.30.52:3300/0,v1:10.10.30.52:6789/0] [v2:10.10.30.53:3300/0,v1:10.10.30.53:6789/0]

@@ -1,0 +1,5 @@
+# roles/pve_noeud/defaults/main.yml — EXTRAIT : variable ajoutée par M09-E24.
+# Module de chien de garde chargé par watchdog-mux (/etc/default/pve-ha-manager).
+# Vide = softdog (défaut de Proxmox VE). « i6300esb » exige le périphérique émulé sur la VM du nœud
+# (OpenTofu, état hv) : le rôle vérifie sa présence avant d'écrire le réglage.
+pve_noeud_chien_de_garde_module: i6300esb

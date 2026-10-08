@@ -1,0 +1,58 @@
+# carte-ajouts.txt — M08-E14 : ajouts à la carte CRUSH DÉCOMPILÉE (crushtool -d), pour le test
+# HORS LIGNE avant toute commande en ligne. Les identifiants négatifs des nouveaux buckets doivent
+# être libres dans ta carte (regarde les « id -N » existants) ; ceux des hôtes et des OSD sont les
+# tiens. Ici : palier 1 (ceph01-03, osd.0 à osd.8), poids 0.0625 = 64 Gio.
+#
+# 1. Dans la section « buckets », APRÈS les hôtes et AVANT « root default » :
+rack par1-baie-a {
+	id -11
+	alg straw2
+	hash 0	# rjenkins1
+	item ceph01 weight 0.18750
+}
+rack par1-baie-b {
+	id -12
+	alg straw2
+	hash 0	# rjenkins1
+	item ceph02 weight 0.18750
+}
+rack par1-baie-c {
+	id -13
+	alg straw2
+	hash 0	# rjenkins1
+	item ceph03 weight 0.18750
+}
+datacenter par1 {
+	id -10
+	alg straw2
+	hash 0	# rjenkins1
+	item par1-baie-a weight 0.18750
+	item par1-baie-b weight 0.18750
+	item par1-baie-c weight 0.18750
+}
+# 2. Dans « root default » : remplacer les trois « item ceph0N » par :
+#	item par1 weight 0.56250
+#
+# 3. Dans la section « rules », après replicated_rule :
+rule ssd-baie {
+	id 1
+	type replicated
+	step take default class ssd
+	step chooseleaf firstn 0 type rack
+	step emit
+}
+rule hdd-baie {
+	id 2
+	type replicated
+	step take default class hdd
+	step chooseleaf firstn 0 type rack
+	step emit
+}
+# 4. Règle volontairement impossible, pour voir ce que montre le test (à retirer ensuite) :
+# rule impossible {
+#	id 9
+#	type replicated
+#	step take default class nvme
+#	step chooseleaf firstn 0 type rack
+#	step emit
+# }

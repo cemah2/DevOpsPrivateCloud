@@ -1,0 +1,9 @@
+---
+# playbooks/maas.yml — maas01 (M11-E09), groupe role_maas (étiquette role-maas).
+# Les rôles communs du socle (base, ssh_durci…) visent Debian 13 : ils ne sont appliqués ici que
+# s'ils savent traiter Ubuntu (à vérifier dans ton projet ; maas01 est une VM d'évaluation).
+- name: MAAS 3.7 (évaluation)
+  hosts: role_maas
+  become: true
+  roles:
+    - role: maas

@@ -1,0 +1,54 @@
+---
+- name: Clé publique de supervision fournie
+  ansible.builtin.assert:
+    that: sonde_reseau_cle_publique is match('^ssh-ed25519 ')
+    fail_msg: "sonde_reseau_cle_publique : clé ed25519 de ~/.config/workbook/ssh-supervision-reseau.pub attendue."
+    quiet: true
+
+- name: Outils de la sonde
+  ansible.builtin.apt:
+    name: [jq, socat]
+    state: present
+
+- name: Compte de supervision (sans mot de passe)
+  ansible.builtin.user:
+    name: "{{ sonde_reseau_compte }}"
+    system: true
+    shell: /bin/sh                # la commande forcée passe par le shell du compte
+    home: "/var/lib/{{ sonde_reseau_compte }}"
+    create_home: true
+    password: "!"
+    password_lock: true
+
+- name: Script d'état
+  ansible.builtin.copy:
+    src: etat-reseau
+    dest: /usr/local/sbin/etat-reseau
+    owner: root
+    group: root
+    mode: "0755"
+
+# « restrict » : ni terminal, ni redirection, ni agent, ni X11 ; « command » : quelle que soit la
+# commande demandée par le client, seule celle-ci s'exécute ; « from » : depuis adm01 seulement.
+- name: Clé autorisée, commande forcée
+  ansible.posix.authorized_key:
+    user: "{{ sonde_reseau_compte }}"
+    key: "{{ sonde_reseau_cle_publique }}"
+    key_options: 'restrict,from="{{ sonde_reseau_depuis | join(",") }}",command="sudo -n /usr/local/sbin/etat-reseau"'
+    exclusive: true
+    state: present
+
+# Chemin exact, aucun argument permis ("" final). Validé par visudo avant d'être posé.
+- name: Règle sudo limitée à etat-reseau
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/60-supervision-reseau
+    content: |
+      # Rôle sonde_reseau (M07-E29) : la supervision lit l'état réseau, rien d'autre.
+      {{ sonde_reseau_compte }} ALL=(root) NOPASSWD: /usr/local/sbin/etat-reseau ""
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+# Si ssh_durci (M04, M06-E20) restreint les comptes autorisés (AllowUsers/AllowGroups), le compte
+# doit y figurer : variable de ssh_durci, voir le corrigé.

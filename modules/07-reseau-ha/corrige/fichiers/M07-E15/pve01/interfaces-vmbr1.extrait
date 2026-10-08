@@ -1,0 +1,16 @@
+# /etc/network/interfaces de pve01 — EXTRAIT (M07-E15, CHG-825) : seule la ligne « mtu 9000 »
+# s'ajoute au bloc de vmbr1 tel que tu l'as écrit au module 00. Le reste du bloc ne change pas.
+# vmbr1 n'a pas de port physique : aucun effet sur le LAN maison (vmbr0 reste à 1500).
+#
+# Sauvegarde avant :   root@pve01:~# cp -a /etc/network/interfaces /root/interfaces.avant-chg825
+# Application :        root@pve01:~# ifreload -a
+# Retour arrière :     root@pve01:~# cp -a /root/interfaces.avant-chg825 /etc/network/interfaces && ifreload -a
+
+auto vmbr1
+iface vmbr1 inet manual
+	bridge-ports none
+	bridge-stp off
+	bridge-fd 0
+	bridge-vlan-aware yes
+	bridge-vids 2-4094
+	mtu 9000

@@ -1,0 +1,29 @@
+---
+# playbooks/catalogue.yml — gabarits publics (M10-E07). Cloud « medisphere-admin ».
+#   uv run ansible-playbook playbooks/catalogue.yml --check
+#   uv run ansible-playbook playbooks/catalogue.yml
+- name: Catalogue de gabarits
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../donnees/catalogue.yml
+  module_defaults:
+    group/openstack.cloud.openstack:
+      cloud: "{{ catalogue_cloud | default('medisphere-admin') }}"
+
+  tasks:
+    - name: Gabarits
+      openstack.cloud.compute_flavor:
+        name: "{{ item.nom }}"
+        vcpus: "{{ item.vcpus }}"
+        ram: "{{ item.ram }}"
+        disk: "{{ item.disk }}"
+        ephemeral: 0
+        swap: 0
+        is_public: true
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ catalogue_gabarits }}"
+      loop_control:
+        label: "{{ item.nom }}"

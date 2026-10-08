@@ -1,0 +1,142 @@
+---
+# Rôle maas (M11-E09).
+
+- name: Paramètres indispensables fournis
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] is version('24.04', '>=')
+      - maas_db_mot_de_passe | length >= 20
+    fail_msg: "Ubuntu 24.04 requis ; maas_db_mot_de_passe (vault_maas_db_mot_de_passe) d'au moins 20 caractères."
+    quiet: true
+
+# --- Ancres de confiance -------------------------------------------------------------------------------
+- name: Ancres de confiance (racine MédiSphère, ancre de pve01)
+  ansible.builtin.copy:
+    src: "{{ item.source }}"
+    dest: "/usr/local/share/ca-certificates/{{ item.nom }}.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ maas_ancres }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  notify:
+    - Mettre à jour le magasin de certificats
+    - Redémarrer MAAS
+
+# --- PostgreSQL 16 (paquet Ubuntu 24.04) ------------------------------------------------------------------
+- name: PostgreSQL
+  ansible.builtin.apt:
+    name: postgresql
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: PostgreSQL actif
+  ansible.builtin.systemd_service:
+    name: postgresql.service
+    enabled: true
+    state: started
+
+# Le mot de passe passe par l'ENTRÉE STANDARD de psql (jamais en argument, jamais dans un fichier).
+- name: Rôle PostgreSQL de MAAS (créé ou mot de passe aligné sur Vault)
+  ansible.builtin.command:
+    argv: [psql, --quiet, --no-psqlrc, --set, ON_ERROR_STOP=1, --dbname, postgres]
+    stdin: |
+      SELECT format('CREATE ROLE %I LOGIN', '{{ maas_db_utilisateur }}')
+        WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ maas_db_utilisateur }}') \gexec
+      ALTER ROLE "{{ maas_db_utilisateur }}" WITH LOGIN PASSWORD '{{ maas_db_mot_de_passe | replace("'", "''") }}';
+  become: true
+  become_user: postgres
+  changed_when: false
+  no_log: true
+
+- name: Base de MAAS
+  ansible.builtin.command:
+    argv: [psql, --quiet, --no-psqlrc, --tuples-only, --set, ON_ERROR_STOP=1, --dbname, postgres]
+    stdin: |
+      SELECT 'existe' FROM pg_database WHERE datname = '{{ maas_db_nom }}';
+      SELECT format('CREATE DATABASE %I OWNER %I', '{{ maas_db_nom }}', '{{ maas_db_utilisateur }}')
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ maas_db_nom }}') \gexec
+  become: true
+  become_user: postgres
+  register: maas_resultat_base
+  changed_when: "'existe' not in maas_resultat_base.stdout"
+
+- name: Version de PostgreSQL
+  ansible.builtin.command:
+    argv: [psql, --no-psqlrc, --tuples-only, --no-align, --command, "SHOW server_version_num", --dbname, postgres]
+  become: true
+  become_user: postgres
+  register: maas_resultat_version
+  changed_when: false
+  check_mode: false
+
+# Accès LOCAL seulement, par mot de passe (scram-sha-256), pour le seul couple base/utilisateur de MAAS.
+# Ligne insérée AVANT les règles générales (la première règle qui correspond s'applique).
+- name: Accès PostgreSQL de MAAS depuis la boucle locale seulement (pg_hba.conf)
+  ansible.builtin.lineinfile:
+    path: "/etc/postgresql/{{ (maas_resultat_version.stdout | int) // 10000 }}/main/pg_hba.conf"
+    line: "host    {{ maas_db_nom }}    {{ maas_db_utilisateur }}    127.0.0.1/32    scram-sha-256"
+    insertbefore: '^(local|host)\s+all\s+'
+    firstmatch: true
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  notify: Recharger PostgreSQL
+
+- name: Appliquer maintenant le rechargement de PostgreSQL
+  ansible.builtin.meta: flush_handlers
+
+# --- MAAS (snap) ----------------------------------------------------------------------------------------------
+- name: Snap MAAS au canal figé (PLAN §6)
+  community.general.snap:
+    name: maas
+    channel: "{{ maas_canal }}"
+    state: present
+
+- name: Dossier du fichier témoin
+  ansible.builtin.file:
+    path: "{{ maas_temoin_init | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ⚠️ EXCEPTION documentée (registre des secrets) : « maas init » n'accepte le mot de passe de la base
+# que DANS l'URI, en argument. Il est visible dans la liste des processus pendant l'initialisation
+# (quelques secondes, une seule fois, sur une VM où personne d'autre n'est connecté) ; no_log
+# l'écarte des journaux d'Ansible. MAAS le recopie ensuite dans sa propre configuration (root).
+- name: Initialiser MAAS (région + rack), une seule fois
+  ansible.builtin.command:
+    argv:
+      - maas
+      - init
+      - region+rack
+      - --database-uri
+      - "postgres://{{ maas_db_utilisateur }}:{{ maas_db_mot_de_passe | urlencode }}@localhost/{{ maas_db_nom }}"
+      - --maas-url
+      - "{{ maas_url }}"
+    creates: "{{ maas_temoin_init }}"
+  no_log: true
+
+# Atteint seulement si l'initialisation a réussi (ou était déjà faite) : un échec arrête le jeu avant.
+- name: Fichier témoin de l'initialisation
+  ansible.builtin.copy:
+    dest: "{{ maas_temoin_init }}"
+    content: "maas init region+rack fait par Ansible (rôle maas), {{ maas_url }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+# Contrôle du service RENDU : l'API répond (version, sans authentification).
+- name: L'API de MAAS répond
+  ansible.builtin.uri:
+    url: "{{ maas_url }}/api/2.0/version/"
+    return_content: true
+  register: maas_resultat_api
+  retries: 30
+  delay: 10
+  until: maas_resultat_api.status == 200
+  when: not ansible_check_mode

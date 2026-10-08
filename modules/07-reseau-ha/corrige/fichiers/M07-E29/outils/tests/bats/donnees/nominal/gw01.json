@@ -1,0 +1,134 @@
+{
+ "hote": "gw01",
+ "date": "2026-10-08T10:00:00+02:00",
+ "keepalived": true,
+ "etat_bordure": "MASTER",
+ "adresses": [
+  {
+   "interface": "ens18",
+   "adresse": "192.168.1.40",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.10",
+   "adresse": "10.10.10.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.20",
+   "adresse": "10.10.20.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.30",
+   "adresse": "10.10.30.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.40",
+   "adresse": "10.10.40.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.50",
+   "adresse": "10.10.50.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.52",
+   "adresse": "10.10.52.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.60",
+   "adresse": "10.10.60.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.70",
+   "adresse": "10.10.70.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.99",
+   "adresse": "10.10.99.2",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.10",
+   "adresse": "10.10.10.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.20",
+   "adresse": "10.10.20.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.30",
+   "adresse": "10.10.30.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.40",
+   "adresse": "10.10.40.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.50",
+   "adresse": "10.10.50.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.52",
+   "adresse": "10.10.52.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.60",
+   "adresse": "10.10.60.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.70",
+   "adresse": "10.10.70.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens19.99",
+   "adresse": "10.10.99.1",
+   "longueur": 24
+  },
+  {
+   "interface": "ens18",
+   "adresse": "192.168.1.50",
+   "longueur": 24
+  }
+ ],
+ "bgp": [
+  {
+   "voisin": "10.10.99.251",
+   "etat": "Established",
+   "depuis_ms": 3600000
+  },
+  {
+   "voisin": "10.255.2.2",
+   "etat": "Established",
+   "depuis_ms": 3600000
+  }
+ ],
+ "wireguard": [
+  {
+   "interface": "wg0",
+   "pair": "A",
+   "age_s": 40
+  },
+  {
+   "interface": "wg2",
+   "pair": "B",
+   "age_s": 20
+  }
+ ],
+ "haproxy": [],
+ "conntrackd": true
+}

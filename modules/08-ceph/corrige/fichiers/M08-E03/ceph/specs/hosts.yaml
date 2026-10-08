@@ -1,0 +1,31 @@
+# specs/hosts.yaml — hôtes du cluster ceph-par1 (M08-E03).
+# Adresse EXPLICITE (réseau public, PLAN.md §4.9) : sans elle, cephadm résout le nom par le DNS.
+# Étiquettes : _admin (ceph.conf et trousseau client.admin dans /etc/ceph), mon, mgr, osd.
+# ceph04 s'ajoute en M08-E18.
+# Appliquer : ceph orch apply -i specs/hosts.yaml
+service_type: host
+hostname: ceph01
+addr: 10.10.30.51
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+---
+service_type: host
+hostname: ceph02
+addr: 10.10.30.52
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd
+---
+service_type: host
+hostname: ceph03
+addr: 10.10.30.53
+labels:
+  - _admin
+  - mon
+  - mgr
+  - osd

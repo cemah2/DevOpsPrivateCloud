@@ -1,0 +1,23 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle pve_reponses).') }}
+[Unit]
+Description=Service de réponse de l'installateur Proxmox VE (M11-E14)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pve-reponses
+Group=pve-reponses
+ExecStart=/usr/local/lib/pve-reponses/serveur.py {{ pve_reponses_adresse }} {{ pve_reponses_port }}
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadOnlyPaths=/etc/pve-reponses /srv/pve-answer
+RestrictAddressFamilies=AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target

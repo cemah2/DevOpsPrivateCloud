@@ -1,0 +1,16 @@
+# /etc/systemd/system/wb-backup-ceph.service — {{ inventory_hostname }} (M08-E25)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sauvegarde_ceph).') }}
+[Unit]
+Description=Sauvegarde hors cluster de ceph-par1 (volumes RBD et configuration) vers PBS
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/stockage/sauvegarde.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wb-backup-ceph.sh
+SyslogIdentifier=wb-backup-ceph
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=3h

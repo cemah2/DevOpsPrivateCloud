@@ -1,0 +1,17 @@
+; latence.fio — écriture synchrone 4 Kio, profondeur 1 (M08-E28) : la latence d'un aller-retour
+; complet client → OSD primaire → réplicas → acquittement. C'est la borne basse du cluster.
+[global]
+filename=${FIO_DEV}
+ioengine=libaio
+direct=1
+time_based=1
+runtime=60
+ramp_time=5
+group_reporting=1
+percentile_list=50:95:99:99.9
+
+[latence]
+rw=randwrite
+bs=4k
+iodepth=1
+fsync=1

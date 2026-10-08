@@ -1,0 +1,32 @@
+---
+# playbooks/accueil-bm.yml — accueil d'un serveur fraîchement installé par la chaîne de provisioning
+# (M11-E15). Lancé par outils/provisionner.py :
+#   ansible-playbook playbooks/accueil-bm.yml --limit <hôte> -e accueil_known_hosts=<fichier>
+# Le serveur est encore « staged » dans NetBox : il est dans l'inventaire netbox-bm.yml (statuts
+# staged et active, groupe role_serveur_bm).
+#
+# Premier contact SANS confiance aveugle : accueil_known_hosts contient la clé d'hôte lue DANS la
+# machine par l'agent QEMU (canal hors réseau, provisionner.py). sshd doit présenter exactement
+# cette clé (StrictHostKeyChecking=yes), sinon arrêt. Une fois la clé d'hôte signée par la CA SSH
+# (rôle ssh_ca_hote, M06-E19), adm01 et runner01 reconnaissent le serveur par @cert-authority.
+- name: Accueil d'un serveur bare-metal
+  hosts: role_serveur_bm
+  gather_facts: true
+  become: true
+  serial: 1
+  vars:
+    ansible_user: admin
+    ansible_ssh_common_args: >-
+      -o UserKnownHostsFile={{ accueil_known_hosts }} -o StrictHostKeyChecking=yes -o ControlPath=none
+  pre_tasks:
+    - name: Le fichier de clé confirmée est fourni
+      ansible.builtin.assert:
+        that: accueil_known_hosts is defined and accueil_known_hosts is file
+        fail_msg: "accueil_known_hosts absent : lance l'accueil par outils/provisionner.py"
+        quiet: true
+      delegate_to: localhost
+      become: false
+  roles:
+    - role: ca_lab          # racine MédiSphère (déjà posée par l'installateur : vérifiée, convergée)
+    - role: ssh_ca_hote     # clé d'hôte signée par step-ca (M06-E19)
+    - role: base            # comptes (dont secours), durcissement commun, chrony

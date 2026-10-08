@@ -1,0 +1,19 @@
+# envs/m07-maquette/main.tf — EXTRAIT à intégrer (M07-E15) : le MTU d'une carte devient
+# paramétrable. Dans le bloc « dynamic "network_device" » de la ressource « maquette » :
+
+  dynamic "network_device" {
+    for_each = each.value.cartes
+    content {
+      bridge   = network_device.value.vnet
+      model    = "virtio"
+      firewall = false
+      # Option « mtu » de la carte virtio Proxmox : annoncée à l'invité (VIRTIO_NET_F_MTU), qui
+      # monte l'interface à cette valeur. Absente : 1500 dans l'invité. Ne peut pas dépasser le
+      # MTU du pont (vmbr1 et la zone SDN « lab » à 9000 d'abord : CHG-825, étapes 1 et 2).
+      mtu = try(network_device.value.mtu, null)
+    }
+  }
+
+# Dans local.vms, les cartes d'une même VM peuvent avoir des attributs différents (une liste
+# littérale d'objets est un tuple : chaque élément garde son type) ; try() lit « mtu » s'il existe.
+# Si les cartes passent un jour par une variable typée, déclarer mtu = optional(number).

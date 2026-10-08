@@ -1,0 +1,16 @@
+# /etc/systemd/system/m07-e17-ovs.service — reconstruit la maquette OVS de M07-E17 au démarrage.
+# La base d'Open vSwitch conserve le pont et ses ports, mais les paires veth et les espaces de
+# noms disparaissent à l'arrêt : sans cette unité, OVS retrouverait des ports sans interface.
+[Unit]
+Description=Maquette M07-E17 : LACP, VLAN et miroir dans Open vSwitch
+After=openvswitch-switch.service
+Requires=openvswitch-switch.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/m07-e17-ovs.sh monter
+ExecStop=/usr/local/sbin/m07-e17-ovs.sh demonter
+
+[Install]
+WantedBy=multi-user.target

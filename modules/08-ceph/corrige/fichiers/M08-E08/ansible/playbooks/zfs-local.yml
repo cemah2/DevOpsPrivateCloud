@@ -1,0 +1,55 @@
+---
+# playbooks/zfs-local.yml — outils ZFS sur cephcli01 (M08-E08, rappel du stockage local).
+#   uv run ansible-playbook playbooks/zfs-local.yml
+# Installe seulement les OUTILS (module noyau compilé par DKMS). Le pool, les datasets et les
+# instantanés se font à la main pendant l'exercice : c'est le geste qu'on révise.
+# Jamais sur pve01 : son ZFS (s'il en a un) porte les VMs de l'apprenant.
+- name: ZFS sur le client de test
+  hosts: cephcli01
+  become: true
+  vars:
+    zfs_paquets:
+      - linux-headers-amd64
+      - zfs-dkms
+      - zfsutils-linux
+  tasks:
+    - name: Uniquement sur cephcli01
+      ansible.builtin.assert:
+        that: inventory_hostname == 'cephcli01'
+        quiet: true
+
+    # ZFS est dans la section « contrib » de Debian (licence CDDL, incompatible avec la GPL du
+    # noyau : le module ne peut pas être livré compilé dans « main »).
+    - name: Section contrib dans les sources Debian (format deb822)
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list.d/debian.sources
+        regexp: '^Components: main$'
+        replace: 'Components: main contrib'
+      register: sources
+
+    - name: Mettre à jour l'index des paquets  # noqa: no-handler
+      ansible.builtin.apt:
+        update_cache: true
+      when: sources is changed
+
+    # La compilation DKMS prend plusieurs minutes ; elle refait le module à chaque nouveau noyau
+    # (en-têtes du noyau EN COURS nécessaires : linux-headers-amd64 suit le méta-paquet du noyau).
+    - name: Paquets ZFS (module compilé par DKMS)
+      ansible.builtin.apt:
+        name: "{{ zfs_paquets }}"
+        state: present
+
+    - name: Charger le module zfs
+      community.general.modprobe:
+        name: zfs
+        state: present
+
+    - name: Lire la version de ZFS
+      ansible.builtin.command:
+        cmd: zfs version
+      register: version_zfs
+      changed_when: false
+
+    - name: Afficher la version (outils et module)
+      ansible.builtin.debug:
+        var: version_zfs.stdout_lines

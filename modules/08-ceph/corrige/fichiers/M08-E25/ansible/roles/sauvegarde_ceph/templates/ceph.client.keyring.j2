@@ -1,0 +1,3 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sauvegarde_ceph), clé en Vault « critique ».') }}
+[client.{{ sauvegarde_ceph_id }}]
+	key = {{ sauvegarde_ceph_cle_cephx }}

@@ -1,0 +1,14 @@
+# /etc/systemd/system/ms-verif-ceph.timer — M08-E24 (PLAT-950)
+# 5 minutes : un OSD arrêté est marqué « out » au bout de 10 minutes (mon_osd_down_out_interval) ;
+# l'astreinte doit le savoir avant que la reconstruction ne commence.
+[Unit]
+Description=MédiSphère : sonde du cluster Ceph toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=15s
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

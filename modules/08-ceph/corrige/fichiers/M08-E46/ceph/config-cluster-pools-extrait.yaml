@@ -1,0 +1,22 @@
+# config/cluster.yaml (plateforme/ceph, M08-E23) — EXTRAIT : pools ajoutés en M08-E31, E34 et E46.
+# Création : outils/pool-repliquee.sh <pool> rbd sur ceph01 (geste humain, fiche de changement), puis
+# outils/config-cluster.sh --verifier / --appliquer pour la règle, l'application et le quota.
+#
+# Capacité (3 nœuds, réplication 3, domaine « rack », une baie par nœud) : classe ssd 6 × 64 Gio
+# = 384 Gio bruts → 128 Gio utiles ; classe hdd 3 × 64 Gio = 192 Gio bruts → 64 Gio utiles.
+# Réserve (politique de stockage) : la perte d'un OSD SSD se reporte sur l'autre OSD SSD du même
+# nœud, qui doit rester sous backfillfull (0,85) : occupation brute ≤ 40 %, soit ~51 Gio de données
+# en ssd. Les quotas portent sur les octets STOCKÉS : leur somme en ssd (rbd-test 100 + équipes 90 +
+# consommateurs 70) dépasse la capacité sûre. Surallocation ASSUMÉE dans le lab, écrite dans la
+# politique et surveillée (ms-verif-ceph) ; en production, somme des quotas ≤ capacité sûre.
+pools:
+  # … pools existants (M08-E05 à E16) …
+  # Équipes (E31, E34) : somme des plafonds bloc = 40 + 20 + 30 = 90 Gio.
+  - {nom: rbd-equipes, regle: ssd-baie, application: rbd, quota_octets: 96636764160}
+  # OpenStack (M10) : Glance, Cinder, Nova éphémère, Cinder Backup.
+  - {nom: images, regle: ssd-baie, application: rbd, quota_octets: 16106127360}
+  - {nom: volumes, regle: ssd-baie, application: rbd, quota_octets: 26843545600}
+  - {nom: vms, regle: ssd-baie, application: rbd, quota_octets: 10737418240}
+  - {nom: backups, regle: hdd-baie, application: rbd, quota_octets: 32212254720}
+  # Kubernetes, Ceph-CSI RBD (M16).
+  - {nom: k8s-rbd, regle: ssd-baie, application: rbd, quota_octets: 21474836480}

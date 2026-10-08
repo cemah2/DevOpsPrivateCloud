@@ -1,0 +1,7 @@
+---
+# Magasin système de la famille Debian (M04-E18).
+_ca_lab_dossier: /usr/local/share/ca-certificates
+_ca_lab_reconstruire: update-ca-certificates
+# Option de reconstruction complète après un retrait (liens orphelins).
+_ca_lab_reconstruire_complet: update-ca-certificates --fresh
+_ca_lab_bundle: /etc/ssl/certs/ca-certificates.crt

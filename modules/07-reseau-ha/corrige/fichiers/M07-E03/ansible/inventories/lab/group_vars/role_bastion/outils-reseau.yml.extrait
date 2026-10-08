@@ -1,0 +1,9 @@
+---
+# group_vars/role_bastion/ — ajout de M07 (introduction, « Préparer adm01 ») : outils de
+# diagnostic réseau du bastion. Si base_paquets_role est déjà défini pour role_bastion,
+# ajoute ces paquets à la liste existante (une variable n'a qu'une valeur par groupe).
+base_paquets_role:
+  - iperf3
+  - traceroute
+  - ethtool
+  - nmap

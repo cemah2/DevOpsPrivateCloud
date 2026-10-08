@@ -1,0 +1,46 @@
+---
+# Rôle pve_cluster — services de CLUSTER des nœuds hv01-03 (M09-E18) :
+#   1. point d'accès stable à l'API : VIP keepalived portée par un nœud SAIN (quorum + API) ;
+#   2. certificat de l'API (port 8006) valable pour le nom de la VIP, signé par l'autorité du
+#      cluster (/etc/pve/pve-root-ca.pem), renouvelé par le rôle avant échéance.
+# La configuration propre à chaque nœud (dépôts, NTP, paquets) relève du rôle pve_noeud.
+
+# --- VIP ---------------------------------------------------------------------------------------------
+pve_cluster_vip: 10.10.10.200
+pve_cluster_vip_prefixe: 24
+pve_cluster_vip_nom: hv.par1.medisphere.internal
+pve_cluster_vrid: 110 # PLAN §4.9 (les VRID 1-99 = numéros de VLAN des passerelles, 150 Kolla, 170 lb)
+pve_cluster_interface: vmbr0
+# Adresse MGMT de chaque nœud : source et pairs des annonces VRRP unicast.
+pve_cluster_adresses:
+  hv01: 10.10.10.51
+  hv02: 10.10.10.52
+  hv03: 10.10.10.53
+# Priorités : départage au démarrage seulement (nopreempt : une VIP saine ne bouge plus).
+pve_cluster_priorites:
+  hv01: 150
+  hv02: 140
+  hv03: 130
+# Santé : quorum ET API qui répond. Délais : 2 échecs × 2 s + annonces (3 × 1 s + décalage) < 10 s.
+pve_cluster_sante_intervalle: 2
+pve_cluster_sante_echecs: 2
+pve_cluster_sante_succes: 3
+pve_cluster_sante_script: /usr/local/libexec/pve-cluster-sante
+# Autorité avec laquelle le script de santé vérifie le certificat présenté sur 8006.
+pve_cluster_sante_ca: "{{ pve_cluster_ca_cert }}"
+
+# --- Certificat de l'API -------------------------------------------------------------------------------
+# M09-E18 : le rôle émet lui-même le certificat (autorité du cluster). À partir de M09-E26, le
+# certificat vient de step-ca (ACME, rôle certificats_acme) : mettre pve_cluster_cert_gere à false
+# (sinon le rôle remplacerait ce certificat, signé par une « autre » autorité) et pve_cluster_sante_ca
+# sur la racine MédiSphère (sinon le script de santé rejetterait le nouveau certificat et la VIP
+# tomberait sur tous les nœuds).
+pve_cluster_cert_gere: true
+pve_cluster_ca_cert: /etc/pve/pve-root-ca.pem
+pve_cluster_ca_cle: /etc/pve/priv/pve-root-ca.key
+pve_cluster_cert_jours: 365
+# Renouvellement quand il reste moins de N jours (le rôle tourne au moins chaque semaine : CI planifiée).
+pve_cluster_cert_marge_jours: 30
+
+pve_cluster_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}

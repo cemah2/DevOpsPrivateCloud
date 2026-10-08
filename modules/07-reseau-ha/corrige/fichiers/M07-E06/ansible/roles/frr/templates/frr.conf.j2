@@ -1,0 +1,159 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+! Géré par Ansible (rôle frr, plateforme/ansible) : toute modification par vtysh
+! (« write memory ») sera écrasée au prochain passage. Modifier host_vars/{{ inventory_hostname }}/frr.yml.
+!
+hostname {{ frr_nom_hote }}
+log {{ frr_journal }}
+!
+{# ---------------------------------------------------------------- listes de préfixes #}
+{% for pl in frr_prefix_lists %}
+{% for r in pl.regles %}
+ip prefix-list {{ pl.nom }} seq {{ r.seq }} {{ r.action }} {{ r.prefixe }}{% if r.ge is defined %} ge {{ r.ge }}{% endif %}{% if r.le is defined %} le {{ r.le }}{% endif %}
+
+{% endfor %}
+!
+{% endfor %}
+{# ---------------------------------------------------------------- route-maps #}
+{% for rm in frr_route_maps %}
+{% for e in rm.entrees %}
+route-map {{ rm.nom }} {{ e.action }} {{ e.seq }}
+{% for m in e.match | default([]) %}
+ match {{ m }}
+{% endfor %}
+{% for s in e.set | default([]) %}
+ set {{ s }}
+{% endfor %}
+exit
+!
+{% endfor %}
+{% endfor %}
+{# ---------------------------------------------------------------- interfaces #}
+{% for itf in frr_interfaces %}
+interface {{ itf.nom }}
+{% if itf.description is defined %}
+ description {{ itf.description }}
+{% endif %}
+{% for a in itf.adresses | default([]) %}
+ ip address {{ a }}
+{% endfor %}
+{% if itf.ospf is defined %}
+ ip ospf area {{ itf.ospf.zone }}
+{% if itf.ospf.reseau is defined %}
+ ip ospf network {{ itf.ospf.reseau }}
+{% endif %}
+{% if itf.ospf.cout is defined %}
+ ip ospf cost {{ itf.ospf.cout }}
+{% endif %}
+{% endif %}
+exit
+!
+{% endfor %}
+{# ---------------------------------------------------------------- routes statiques #}
+{% for r in frr_routes_statiques %}
+ip route {{ r.prefixe }} {{ r.via }}{% if r.distance is defined %} {{ r.distance }}{% endif %}
+
+{% endfor %}
+{% if frr_routes_statiques | length > 0 %}
+!
+{% endif %}
+{# ---------------------------------------------------------------- OSPF #}
+{% if frr_ospf | length > 0 %}
+router ospf
+ ospf router-id {{ frr_ospf.router_id }}
+{% if frr_ospf.passive_par_defaut | default(true) %}
+ passive-interface default
+{% endif %}
+{% for r in frr_ospf.redistribuer | default([]) %}
+ redistribute {{ r }}
+{% endfor %}
+exit
+!
+{% if frr_ospf.passive_par_defaut | default(true) %}
+{# « no ip ospf passive » au niveau de l'interface : FRR place la passivité sur l'interface. #}
+{% for itf in frr_interfaces if itf.ospf is defined and itf.ospf.passive is defined and not itf.ospf.passive %}
+interface {{ itf.nom }}
+ no ip ospf passive
+exit
+!
+{% endfor %}
+{% endif %}
+{% endif %}
+{# ---------------------------------------------------------------- BGP #}
+{% macro voisin_options(cle, v) %}
+{% if v.description is defined %}
+ neighbor {{ cle }} description {{ v.description }}
+{% endif %}
+{% if v.mot_de_passe is defined %}
+ neighbor {{ cle }} password {{ v.mot_de_passe }}
+{% endif %}
+{% if v.bfd | default(false) %}
+ neighbor {{ cle }} bfd
+{% endif %}
+{% endmacro %}
+{% macro voisin_af(cle, v, membre) %}
+{% if not membre %}
+  neighbor {{ cle }} activate
+{% endif %}
+{% if v.soft_reconfiguration | default(false) %}
+  neighbor {{ cle }} soft-reconfiguration inbound
+{% endif %}
+{% if v.route_map_entree is defined %}
+  neighbor {{ cle }} route-map {{ v.route_map_entree }} in
+{% endif %}
+{% if v.route_map_sortie is defined and not membre %}
+  neighbor {{ cle }} route-map {{ v.route_map_sortie }} out
+{% endif %}
+{% endmacro %}
+{% if frr_bgp | length > 0 %}
+router bgp {{ frr_bgp.asn }}
+ bgp router-id {{ frr_bgp.router_id }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+{% for o in frr_bgp.options | default([]) %}
+ {{ o }}
+{% endfor %}
+{% for g in frr_bgp.groupes | default([]) %}
+ neighbor {{ g.nom }} peer-group
+{% if g.as_distant is defined %}
+ neighbor {{ g.nom }} remote-as {{ g.as_distant }}
+{% endif %}
+{{ voisin_options(g.nom, g) }}
+{%- endfor %}
+{% for v in frr_bgp.voisins | default([]) %}
+{% set cle = v.adresse | default(v.interface) %}
+{# Un membre sans AS hérite de celui du groupe ; sinon l'AS est déclaré AVANT l'adhésion. #}
+{% if v.interface is defined %}
+ neighbor {{ cle }} interface{% if v.as_distant is defined %} remote-as {{ v.as_distant }}{% endif %}
+
+{% elif v.as_distant is defined %}
+ neighbor {{ cle }} remote-as {{ v.as_distant }}
+{% endif %}
+{% if v.groupe is defined %}
+ neighbor {{ cle }} peer-group {{ v.groupe }}
+{% endif %}
+{{ voisin_options(cle, v) }}
+{%- endfor %}
+ !
+ address-family ipv4 unicast
+{% for n in frr_bgp.reseaux | default([]) %}
+  network {{ n }}
+{% endfor %}
+{% for g in frr_bgp.groupes | default([]) %}
+{{ voisin_af(g.nom, g, false) }}
+{%- endfor %}
+{# Membres d'un groupe : seule la politique d'ENTRÉE peut être propre au voisin. #}
+{% for v in frr_bgp.voisins | default([]) %}
+{{ voisin_af(v.adresse | default(v.interface), v, v.groupe is defined) }}
+{%- endfor %}
+{% if frr_bgp.maximum_paths is defined %}
+  maximum-paths {{ frr_bgp.maximum_paths }}
+{% endif %}
+ exit-address-family
+exit
+!
+{% endif %}
+{% if frr_config_supplementaire | length > 0 %}
+{{ frr_config_supplementaire }}
+!
+{% endif %}
+end

@@ -1,0 +1,67 @@
+---
+argument_specs:
+  main:
+    short_description: Prépare un nœud Rocky Linux 10 à recevoir des démons Ceph (cephadm)
+    options:
+      ceph_noeud_version:
+        type: str
+        required: true
+        description: Version exacte de Ceph (paquets cephadm et ceph-common, dépôt rpm-<version>).
+      ceph_noeud_depot_base:
+        type: str
+        description: URL du dépôt de la version (sans le sous-dossier d'architecture).
+      ceph_noeud_cle_url:
+        type: str
+        description: URL de la clé de signature des paquets.
+      ceph_noeud_cle_empreinte:
+        type: str
+        description: Empreinte attendue de la clé (espaces tolérés).
+      ceph_noeud_ceph_common:
+        type: bool
+        default: true
+        description: Installer ceph-common (commandes ceph, rbd) en plus de cephadm.
+      ceph_noeud_epel:
+        type: bool
+        default: true
+        description: Activer EPEL et CRB (dépendances de ceph-common).
+      ceph_noeud_paquets:
+        type: list
+        elements: str
+        description: Prérequis système de cephadm.
+      ceph_noeud_utilisateur_orchestrateur:
+        type: str
+        default: cephadm
+        description: Compte SSH de l'orchestrateur (créé par le paquet cephadm).
+      ceph_noeud_home_orchestrateur:
+        type: path
+        default: /var/lib/cephadm
+        description: Dossier personnel de ce compte.
+      ceph_noeud_cle_orchestrateur:
+        type: str
+        default: ""
+        description: Clé publique SSH du cluster (/etc/ceph/ceph.pub) ; vide avant le bootstrap.
+      ceph_noeud_interfaces:
+        type: list
+        elements: dict
+        description: Cartes et MTU attendus.
+        options:
+          nom:
+            type: str
+            required: true
+            description: Nom de l'interface (ens18, ens19).
+          mtu:
+            type: int
+            required: true
+            description: MTU attendu.
+      ceph_noeud_verifier_reseau:
+        type: bool
+        default: true
+        description: Vérifier les trames jumbo vers les autres nœuds (table ceph_noeuds).
+      ceph_noeud_taille_ping:
+        type: int
+        default: 8972
+        description: Charge ICMP du test (MTU - 28).
+      ceph_noeud_check_host:
+        type: bool
+        default: true
+        description: Lancer « cephadm check-host » en fin de rôle.

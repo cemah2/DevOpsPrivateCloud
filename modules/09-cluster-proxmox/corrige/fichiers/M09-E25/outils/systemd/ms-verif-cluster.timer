@@ -1,0 +1,14 @@
+# /etc/systemd/system/ms-verif-cluster.timer — M09-E25 (PLAT-1051)
+# Toutes les 5 minutes : un nœud perdu se voit en moins de 6 minutes (contre 15 pour le socle :
+# le cluster porte des charges de production, et la sonde est légère).
+[Unit]
+Description=MédiSphère : sonde du cluster hv-par1 toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=15s
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,6 @@
+---
+# Rôle nginx_web — serveur web de DÉMONSTRATION (maquette M07 : srv01, srv02 ; backends de
+# HAProxy en E10). Une page qui dit qui répond, et un point de santé.
+nginx_web_racine: /var/www/m07
+nginx_web_nom: "{{ inventory_hostname }}"
+nginx_web_port: 80

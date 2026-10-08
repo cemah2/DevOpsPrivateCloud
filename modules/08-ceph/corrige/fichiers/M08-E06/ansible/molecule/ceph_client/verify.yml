@@ -1,0 +1,43 @@
+---
+- name: Vérifier le rôle ceph_client
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire ceph.conf
+      ansible.builtin.slurp:
+        src: /etc/ceph/ceph.conf
+      register: conf
+
+    - name: Le ceph.conf est minimal (fsid, trois moniteurs en v2 et v1)
+      ansible.builtin.assert:
+        that:
+          - (conf.content | b64decode) is search('fsid = 00000000-0000-4000-8000-000000000000')
+          - (conf.content | b64decode) is search('\[v2:192\.0\.2\.53:3300/0,v1:192\.0\.2\.53:6789/0\]')
+
+    - name: Lire les droits du trousseau
+      ansible.builtin.stat:
+        path: /etc/ceph/ceph.client.essai.keyring
+      register: trousseau
+
+    - name: Le trousseau n'est lisible que par root
+      ansible.builtin.assert:
+        that:
+          - trousseau.stat.exists
+          - trousseau.stat.mode == '0600'
+          - trousseau.stat.pw_name == 'root'
+
+    - name: Lire fstab
+      ansible.builtin.command:
+        cmd: findmnt --fstab --noheadings --output OPTIONS /mnt/essai
+      register: fstab
+      changed_when: false
+
+    - name: Le montage est en noauto
+      ansible.builtin.assert:
+        that: fstab.stdout is search('noauto')
+
+    - name: La commande rbd est disponible
+      ansible.builtin.command:
+        cmd: rbd --version
+      changed_when: false

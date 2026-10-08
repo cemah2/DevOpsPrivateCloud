@@ -1,0 +1,97 @@
+---
+argument_specs:
+  main:
+    short_description: Client Ceph Debian 13 (ceph.conf minimal, trousseaux, rbdmap)
+    options:
+      ceph_client_paquets:
+        type: list
+        elements: str
+        description: Paquets du client.
+      ceph_client_fsid:
+        type: str
+        required: true
+        description: fsid du cluster (ceph fsid).
+      ceph_client_moniteurs:
+        type: list
+        elements: str
+        required: true
+        description: Adresses publiques des moniteurs.
+      ceph_client_cles:
+        type: list
+        elements: dict
+        default: []
+        description: Trousseaux à déposer.
+        options:
+          nom:
+            type: str
+            required: true
+            description: Nom cephx complet (client.xxx).
+          cle:
+            type: str
+            required: true
+            description: Clé cephx (secret, depuis le Vault).
+      ceph_client_rbdmap:
+        type: list
+        elements: dict
+        default: []
+        description: Images mappées au démarrage.
+        options:
+          image:
+            type: str
+            required: true
+            description: pool/image.
+          id:
+            type: str
+            required: true
+            description: Identifiant cephx sans le préfixe client.
+      ceph_client_montages:
+        type: list
+        elements: dict
+        default: []
+        description: Montages des images mappées.
+        options:
+          source:
+            type: str
+            required: true
+            description: Périphérique (/dev/rbd/pool/image).
+          point:
+            type: path
+            required: true
+            description: Point de montage.
+          fs:
+            type: str
+            required: true
+            description: Système de fichiers.
+      ceph_client_demarrer_rbdmap:
+        type: bool
+        default: true
+        description: Démarrer et recharger rbdmap, monter CephFS (false dans Molecule, sans cluster).
+      ceph_client_cephfs:
+        type: list
+        elements: dict
+        default: []
+        description: Montages CephFS permanents (M08-E10).
+        options:
+          point:
+            type: str
+            required: true
+            description: Point de montage.
+          utilisateur:
+            type: str
+            required: true
+            description: Utilisateur cephx sans le préfixe client. (sa clé est dans ceph_client_cles).
+          chemin:
+            type: str
+            required: true
+            description: Chemin dans le système de fichiers (ceph fs subvolume getpath).
+          fs:
+            type: str
+            default: cephfs
+            description: Nom du système de fichiers (volume).
+          options:
+            type: str
+            description: Options de montage (défaut ceph_client_cephfs_options), sans secretfile ni _netdev.
+      ceph_client_cephfs_options:
+        type: str
+        default: ms_mode=prefer-crc,noatime
+        description: Options par défaut des montages CephFS.

@@ -1,0 +1,4 @@
+---
+# host_vars/adm01/openstack_mariabackup.yml — sauvegarde Mariabackup quotidienne (M10-E25).
+openstack_mariabackup_heure: "01:30"
+openstack_mariabackup_type: full

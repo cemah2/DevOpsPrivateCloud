@@ -1,0 +1,16 @@
+---
+- name: Paquets
+  ansible.builtin.apt:
+    name: [tftpd-hpa, nginx, python3]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: TFTP
+  ansible.builtin.import_tasks: tftp.yml
+
+- name: Contenu HTTP
+  ansible.builtin.import_tasks: contenu.yml
+
+- name: Nginx
+  ansible.builtin.import_tasks: nginx.yml

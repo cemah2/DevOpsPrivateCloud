@@ -1,0 +1,55 @@
+---
+# roles/pve_cluster/tasks/options_datacenter.yml — options du datacenter (/etc/pve/datacenter.cfg)
+# gérées par l'API (pvesh set /cluster/options), jamais en éditant le fichier (M09-E27).
+# Inclus par tasks/main.yml (tag « options »). Une seule fois pour le cluster (run_once).
+
+- name: Options | lire les options actuelles
+  ansible.builtin.command: pvesh get /cluster/options --output-format json
+  register: pve_cluster_options_json
+  changed_when: false
+  run_once: true
+
+- name: Options | valeurs voulues et valeurs actuelles
+  ansible.builtin.set_fact:
+    pve_cluster_options_actuelles: "{{ pve_cluster_options_json.stdout | from_json }}"
+    # L'API rend « migration » et « bwlimit » comme des objets ; on compare des chaînes normalisées.
+    pve_cluster_bwlimit_voulu: >-
+      {{ pve_cluster_bwlimit | dictsort | map('join', '=') | join(',') }}
+  run_once: true
+
+- name: Options | chaînes actuelles normalisées
+  ansible.builtin.set_fact:
+    pve_cluster_migration_actuelle: "{{ pve_cluster_migration_norm }}"
+    pve_cluster_bwlimit_actuel: "{{ pve_cluster_bwlimit_norm }}"
+  vars:
+    pve_cluster_mig: "{{ pve_cluster_options_actuelles.migration | default('') }}"
+    pve_cluster_bw: "{{ pve_cluster_options_actuelles.bwlimit | default('') }}"
+    pve_cluster_migration_norm: >-
+      {% if pve_cluster_mig is mapping %}type={{ pve_cluster_mig.type | default('secure') }}{%
+      if pve_cluster_mig.network is defined %},network={{ pve_cluster_mig.network }}{% endif %}{%
+      else %}{{ pve_cluster_mig }}{% endif %}
+    pve_cluster_bwlimit_norm: >-
+      {% if pve_cluster_bw is mapping %}{{ pve_cluster_bw | dictsort | map('join', '=') | join(',') }}{%
+      else %}{{ pve_cluster_bw }}{% endif %}
+  run_once: true
+
+- name: Options | migration et limites de débit
+  ansible.builtin.command: >-
+    pvesh set /cluster/options
+    --migration {{ pve_cluster_migration | quote }}
+    --bwlimit {{ pve_cluster_bwlimit_voulu | quote }}
+  when: >-
+    pve_cluster_migration_actuelle | trim != pve_cluster_migration
+    or pve_cluster_bwlimit_actuel | trim != pve_cluster_bwlimit_voulu | trim
+  changed_when: true
+  run_once: true
+
+- name: Options | contrôle dans datacenter.cfg
+  ansible.builtin.command: cat /etc/pve/datacenter.cfg
+  register: pve_cluster_dc_cfg
+  changed_when: false
+  run_once: true
+  vars:
+    pve_cluster_reseau_migration: "{{ pve_cluster_migration | regex_search('network=([0-9./]+)', '\\1') | first }}"
+  failed_when: >-
+    pve_cluster_dc_cfg.stdout is not search('(?m)^migration:.*network=' ~ (pve_cluster_reseau_migration | regex_escape))

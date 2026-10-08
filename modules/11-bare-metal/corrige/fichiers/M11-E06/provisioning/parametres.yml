@@ -1,0 +1,15 @@
+# parametres.yml — valeurs communes aux gabarits de plateforme/provisioning (M11-E06).
+# Données PUBLIQUES seulement (empreintes, clés publiques, URL) : ce fichier est versionné.
+serveur_http: http://pxe01.par1.medisphere.internal
+domaine: par1.medisphere.internal
+# Rocky Linux : même version mineure que l'initrd servi par pxe01 (host_vars/pxe01/pxe.yml).
+rocky_version: "10.2"
+rocky_miroir: https://dl.rockylinux.org/pub/rocky
+# Mêmes valeurs que preseed/debian13.cfg et kickstart/rocky10.ks (M11-E04, E05).
+empreinte_admin: "<EMPREINTE-SHA512-ADMIN>"
+empreinte_racine: "<EMPREINTE-SHA256-RACINE>"
+cle_ssh_admin: "<CLE-PUBLIQUE-SSH-ADM01>"
+# Ce que la chaîne accepte de NetBox.
+reseau: 10.10.60.0/24
+plage_debut: 10.10.60.100
+plage_fin: 10.10.60.199

@@ -1,0 +1,6 @@
+# group_vars/hv_par1/vault-critique.yml — EXTRAIT EN CLAIR pour lecture : le vrai fichier est
+# chiffré (ansible-vault, identité « critique »). Valeurs : jamais ici.
+vault_pbs_hv_par1_jeton_secret: "<SECRET-DU-JETON-wb-hv@pbs!hv-par1>"
+vault_pbs_empreinte: "<EMPREINTE-SHA256-DU-CERTIFICAT-DE-PBS01>"
+vault_pbs_hv_par1_cle: |
+  <CONTENU-JSON-DE-LA-CLÉ-DE-CHIFFREMENT-DU-CLUSTER>

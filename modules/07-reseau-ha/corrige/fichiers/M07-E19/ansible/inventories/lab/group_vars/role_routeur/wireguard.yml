@@ -1,0 +1,18 @@
+---
+# group_vars/role_routeur/wireguard.yml — version M07-E19 (REMPLACE celle de E18) : plus de route
+# posée au montage (post_up retiré), la route vers 10.30.0.0/16 vient de BGP. AllowedIPs couvre
+# TOUT ce que la politique RM-LYO1-IN peut accepter (10.30.0.0/16 jusqu'aux /24) : une route apprise
+# hors d'AllowedIPs serait installée… et ses paquets jetés par WireGuard (trou noir silencieux).
+wireguard_interfaces:
+  - nom: wg2
+    adresse: 10.255.2.1/24
+    port: 51822
+    cle_privee: "{{ vault_wireguard_wg2_cle_privee }}"
+    table: "off"
+    pilotage: role
+    pairs:
+      - nom: lyo-gw01 (LYO1)
+        cle_publique: "<CLE-PUBLIQUE-WG2-DE-LYO-GW01>"
+        endpoint: "10.10.99.250:51822"
+        allowed_ips: "{{ ['10.255.2.2/32', sites_lyo1_reseau] }}"
+        keepalive: 25

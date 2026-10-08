@@ -1,0 +1,72 @@
+---
+# molecule/ceph_noeud/verify.yml (M08-E02) : ce que cephadm attend d'un hôte.
+- name: Vérifier le rôle ceph_noeud
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire les versions de cephadm, de ceph et de podman
+      ansible.builtin.command:
+        cmd: "{{ item }}"
+      loop:
+        - cephadm version
+        - ceph --version
+        - podman --version
+      register: versions
+      changed_when: false
+
+    - name: Les commandes cephadm et ceph sont en 20.2.3
+      ansible.builtin.assert:
+        that:
+          - versions.results[0].stdout is search('version 20\.2\.3 ')
+          - versions.results[1].stdout is search('version 20\.2\.3 ')
+        fail_msg: "{{ versions.results | map(attribute='stdout') | list }}"
+
+    - name: Le dépôt est épinglé sur la version (aucune mise à jour disponible au-delà)
+      ansible.builtin.command:
+        cmd: dnf -q --disablerepo='*' --enablerepo='ceph-*' list --available cephadm
+      register: dispo
+      changed_when: false
+      failed_when: false
+
+    - name: Aucune version plus récente de cephadm n'est proposée
+      ansible.builtin.assert:
+        that: dispo.stdout is not search('cephadm\.noarch\s+2:20\.2\.([4-9]|[1-9][0-9])')
+        fail_msg: "{{ dispo.stdout }}"
+
+    - name: Lire les droits sudo de cephadm
+      ansible.builtin.command:
+        cmd: sudo -n -l -U cephadm
+      register: sudo_cephadm
+      changed_when: false
+
+    - name: La règle sudo est présente
+      ansible.builtin.assert:
+        that: sudo_cephadm.stdout is search('NOPASSWD:\s*ALL')
+        fail_msg: "{{ sudo_cephadm.stdout }}"
+
+    - name: Lire le contexte SELinux de authorized_keys
+      ansible.builtin.command:
+        cmd: stat -c %C /var/lib/cephadm/.ssh/authorized_keys
+      register: contexte
+      changed_when: false
+
+    - name: Le fichier authorized_keys est lisible par sshd (ssh_home_t)
+      ansible.builtin.assert:
+        that: contexte.stdout is search(':ssh_home_t:')
+        fail_msg: "{{ contexte.stdout }}"
+
+    - name: Root ne se connecte toujours pas en SSH
+      ansible.builtin.command:
+        cmd: sshd -T
+      register: sshd_t
+      changed_when: false
+
+    - name: PermitRootLogin no
+      ansible.builtin.assert:
+        that: sshd_t.stdout_lines is contains('permitrootlogin no')
+
+    - name: La commande « cephadm check-host » passe
+      ansible.builtin.command:
+        argv: [cephadm, check-host, --expect-hostname, "{{ inventory_hostname }}"]
+      changed_when: false

@@ -1,0 +1,40 @@
+---
+- name: Lire les démons en fonctionnement
+  ansible.builtin.command: pgrep -x -l '{{ (frr_demons | dict2items | map(attribute="key") | list + ["zebra"]) | join("|") }}'
+  register: frr_processus
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Chaque démon demandé tourne, aucun autre
+  ansible.builtin.assert:
+    that:
+      - frr_processus.stdout is search('\\bzebra\\b')
+      - >-
+        (frr_processus.stdout is search('\\b' ~ item.key ~ '\\b')) == (item.value | bool)
+    fail_msg: "{{ item.key }} : attendu {{ 'actif' if item.value | bool else 'arrêté' }}. Voir journalctl -u frr."
+    quiet: true
+  loop: "{{ frr_demons | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: not ansible_check_mode
+
+# La configuration CHARGÉE doit être celle du fichier : frr-reload.py --test liste ce qu'il
+# faudrait ajouter ou retirer. Après un rechargement réussi, les deux listes sont vides.
+- name: Comparer la configuration chargée au fichier
+  ansible.builtin.command: /usr/lib/frr/frr-reload.py --test /etc/frr/frr.conf
+  register: frr_ecart
+  changed_when: false
+  check_mode: false
+
+- name: Aucune différence entre la configuration chargée et frr.conf
+  ansible.builtin.assert:
+    that: >-
+      frr_ecart.stdout_lines
+      | reject('match', '^\\s*$') | reject('match', '^(Lines To (Delete|Add)|=+)$')
+      | list | length == 0
+    fail_msg: |
+      FRR n'a pas chargé tout frr.conf (rechargement refusé en partie ?) :
+      {{ frr_ecart.stdout }}
+    quiet: true
+  when: not ansible_check_mode

@@ -1,0 +1,37 @@
+---
+# inventories/lab/netbox-bm.yml — serveurs bare-metal tirés de NetBox (M11-E15).
+# Second fichier d'inventaire NetBox, à côté de netbox.yml (M06-E12, VMs « socle ») : les
+# serveurs bm* sont des ÉQUIPEMENTS (devices), du rôle « serveur-bm », aux statuts staged
+# (accueil en cours) et active (en service). Même jeton en lecture (NETBOX_TOKEN).
+# Contrôle : uv run ansible-inventory -i inventories/lab/netbox-bm.yml --graph
+plugin: netbox.netbox.nb_inventory
+api_endpoint: https://nbx01.par1.medisphere.internal
+validate_certs: true
+token:
+  type: Bearer
+  value: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+plurals: false
+racks: false
+services: false
+interfaces: false
+config_context: false
+
+# Équipements du rôle serveur-bm seulement ; aucune VM n'a ce rôle (le filtre vide la liste des VMs).
+query_filters:
+  - role: serveur-bm
+device_query_filters:
+  - status: staged
+  - status: active
+
+rename_variables:
+  - pattern: "^tags$"
+    repl: netbox_etiquettes
+
+# Tous les hôtes de cette source sont des serveurs bare-metal ; les « active » forment le groupe
+# d'exploitation (les « staged » n'y entrent qu'après l'accueil).
+groups:
+  role_serveur_bm: true
+keyed_groups:
+  - key: status.value | default(status)
+    prefix: statut
+strict: false

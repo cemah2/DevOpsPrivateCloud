@@ -1,0 +1,11 @@
+# crush-regle.txt corrigé (revue M08-E21) — domaine de panne : l'HÔTE (chaque copie sur un nœud
+# différent). Mieux que d'éditer la carte : « ceph osd crush rule create-replicated par2-ssd default
+# host ssd », puis test hors ligne (crushtool --test --show-bad-mappings). Métadonnées CephFS : même
+# règle SSD (par2-meta supprimée).
+rule par2-ssd {
+	id 1
+	type replicated
+	step take default class ssd
+	step chooseleaf firstn 0 type host
+	step emit
+}

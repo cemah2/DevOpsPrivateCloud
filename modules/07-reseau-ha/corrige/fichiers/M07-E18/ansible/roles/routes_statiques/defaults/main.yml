@@ -1,0 +1,10 @@
+---
+# Rôle routes_statiques — quelques routes statiques persistantes, posées par une unité systemd
+# (M07-E18, poste lyo-pc01 de la maquette). Indépendant de l'outil réseau de l'image (ifupdown,
+# netplan, networkd) : l'unité passe après « network-online.target » et fait « ip route replace ».
+# Pour un routeur, préférer FRR (staticd) : routes visibles dans vtysh, suivies, redistribuables.
+
+# [{prefixe, via, source}] — source facultative (adresse d'émission choisie, « src »).
+routes_statiques_liste: []
+routes_statiques_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}

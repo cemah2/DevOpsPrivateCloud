@@ -1,0 +1,39 @@
+# {{ routeur_reseau_fichier_netplan }} — {{ inventory_hostname }}, passerelle de la bordure PAR1
+# {{ routeur_reseau_entete }}
+# Source : rôle routeur_reseau (M07-E24). Les VIP ne sont PAS ici (keepalived).
+# Ne pas lancer « netplan apply » sur une passerelle en service : voir le rôle.
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ routeur_reseau_wan_interface }}:
+      dhcp4: false
+      addresses: [{{ routeur_reseau_wan_adresse }}]
+      routes:
+        - to: default
+          via: {{ routeur_reseau_wan_passerelle }}
+{% for r in routeur_reseau_routes_garde %}
+        - to: {{ r }}
+          type: unreachable
+          metric: {{ routeur_reseau_metrique_garde }}
+{% endfor %}
+    {{ routeur_reseau_trunk }}:
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+      mtu: {{ routeur_reseau_trunk_mtu }}
+  vlans:
+{% for v in routeur_reseau_vlans %}
+    {{ routeur_reseau_trunk }}.{{ v.id }}:
+      id: {{ v.id }}
+      link: {{ routeur_reseau_trunk }}
+      mtu: {{ v.mtu }}
+      dhcp4: false
+      accept-ra: false
+      addresses:
+{%   if v.id in routeur_reseau_vip_statique %}
+        - 10.10.{{ v.id }}.1/24
+{%   endif %}
+        - 10.10.{{ v.id }}.{{ routeur_reseau_suffixe }}/24
+{% endfor %}

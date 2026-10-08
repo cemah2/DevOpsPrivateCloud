@@ -1,0 +1,34 @@
+---
+# group_vars/role_lb/keepalived.yml — VIP des répartiteurs (M07-E12, PLAN §4.9), rôle keepalived
+# de M07-E08. Une instance VRRP v3 unicast, VRID 170 (le 70 sera celui de la passerelle du VLAN 70
+# en E25 : deux instances d'un même VLAN ne partagent jamais un VRID), VIP 10.10.70.200/24 sur
+# l'interface de la DMZ (eth0 : nommage cloud-init des VMs du module vm-debian).
+# Valeurs propres à chaque hôte (adresse, priorité) : host_vars/lbNN/lb.yml.
+#
+# Choix (ADR-0071) : PAS de préemption. Les deux démarrent BACKUP ; lb01 (150) gagne l'élection
+# initiale, mais s'il revient après une panne, il ne reprend pas la VIP à lb02 : une bascule de
+# moins, donc des connexions coupées en moins. Le retour sur lb01 se fait à la main (RB-070).
+keepalived_scripts:
+  # HAProxy arrêté : l'instance passe en FAULT (pas de poids) et rend la VIP à l'autre.
+  - nom: chk_haproxy
+    commande: /usr/bin/systemctl is-active --quiet haproxy.service
+    intervalle: 2
+    delai: 3
+    echecs: 2
+    succes: 2
+
+keepalived_instances:
+  - nom: VI_DMZ
+    interface: eth0
+    vrid: 170
+    priorite: "{{ lb_priorite }}"
+    etat_initial: BACKUP
+    intervalle: 1
+    preemption: false
+    source: "{{ lb_adresse }}"
+    # Les pairs = les autres membres du groupe (calculés : pas de copier-coller à oublier).
+    pairs: >-
+      {{ groups['role_lb'] | difference([inventory_hostname])
+         | map('extract', hostvars, 'lb_adresse') | list }}
+    vips: [10.10.70.200/24]
+    scripts: [chk_haproxy]

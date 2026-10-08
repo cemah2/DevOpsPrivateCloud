@@ -1,0 +1,30 @@
+---
+- name: Routage IPv4
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "{{ '1' if frr_routage_ipv4 | bool else '0' }}"
+    sysctl_file: /etc/sysctl.d/90-frr.conf
+    reload: true
+
+- name: Lire l'état des services (systemd-networkd actif ?)
+  ansible.builtin.service_facts:
+  when: frr_networkd_compatible == 'auto'
+
+# Sans cela, à la prochaine reconfiguration d'une interface par networkd (renouvellement DHCP
+# qui change quelque chose, netplan apply, redémarrage de networkd), les routes BGP/OSPF et
+# leurs objets nexthop disparaissent du noyau alors que FRR les croit installées.
+- name: Interdire à systemd-networkd de supprimer les routes de FRR
+  ansible.builtin.copy:
+    dest: /etc/systemd/networkd.conf.d/50-frr.conf
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle frr) — voir networkd.conf(5)
+      [Network]
+      ManageForeignRoutes=no
+      ManageForeignRoutingPolicyRules=no
+      ManageForeignNextHops=no
+  notify: Redémarrer systemd-networkd
+  when: >-
+    (frr_networkd_compatible is boolean and frr_networkd_compatible)
+    or (frr_networkd_compatible == 'auto'
+        and (ansible_facts['services']['systemd-networkd.service']['state'] | default('')) == 'running')
