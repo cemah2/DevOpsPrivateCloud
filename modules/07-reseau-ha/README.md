@@ -83,7 +83,7 @@ Le socle v1 tient, mais il repose sur **une seule passerelle** : quand `gw01` re
 | `lb01`, `lb02` | 1010, 1011 | 10.10.70.10, .11 (VIP 10.10.70.200) | HAProxy + keepalived, points d'entrée publiés | E12 |
 | `gw01` | 1000 | `.1` → `.2` + VIP `.1` | FRR (AS 65000), keepalived, conntrackd, `wg2` | E16, E25-E27 |
 | `gw02` | 1009 | `.3` sur chaque VLAN routé | Seconde passerelle | E24-E26 |
-| Maquette | 2070-2079 | `vsandbox` + VNets `vfab1-8` | `net01`, `spine01-02`, `leaf01-02`, `srv01-02`, `lyo-gw01`, `lyo-pc01` | E03 |
+| Maquette | 2070-2079 | `vsandbox` + VNets `vfab1-8` | `net01`, `spine01-02`, `leaf01-02`, `srv01-02`, `lyo-gw01`, `lyo-pc01`, `hap01` | E03 |
 
 Toutes les valeurs (VRID, AS, adresses de fabric, site LYO1, MTU) sont dans [`PLAN.md`](../../PLAN.md) §4.9.
 
