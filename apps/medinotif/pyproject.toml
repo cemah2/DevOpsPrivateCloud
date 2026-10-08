@@ -1,0 +1,44 @@
+[project]
+name = "medinotif"
+version = "1.0.0"
+description = "MédiNotif : worker d'envoi des notifications SMS et mail de MédiSphère (application de formation)"
+readme = "README.md"
+authors = [{ name = "Équipe MédiNotif (MédiSphère)" }]
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "pika>=1.4.4,<2",
+    "prometheus-client>=0.26.0,<1",
+]
+
+[project.scripts]
+medinotif = "medinotif.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10",
+    "ruff>=0.16.10,<0.17",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: test qui demande un vrai RabbitMQ (MEDINOTIF_TEST_AMQP_URL)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+# RUF001-003 : caractères français dans chaînes et commentaires.
+# E501 : la longueur des lignes de code est gérée par « ruff format ».
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]

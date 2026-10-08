@@ -1,0 +1,2 @@
+# Les pièces jointes téléversées sont écrites ici (sur le disque du serveur web).
+# Ce fichier sert seulement à versionner le répertoire.

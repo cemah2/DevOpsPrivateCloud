@@ -1,0 +1,5 @@
+# Tâche planifiée de Legacy-RDV sur la VM : /etc/cron.d/legacy-rdv
+# Purge nocturne des pièces jointes de plus d'un an (disque local uniquement).
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+30 3 * * * www-data /usr/bin/php /var/www/legacy-rdv/cron/purge-uploads.php

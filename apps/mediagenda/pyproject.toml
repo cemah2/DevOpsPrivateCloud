@@ -1,0 +1,63 @@
+[project]
+name = "mediagenda"
+version = "1.0.0"
+description = "MédiAgenda : API de prise de rendez-vous de MédiSphère (application de formation)"
+readme = "README.md"
+authors = [{ name = "Équipe MédiAgenda (MédiSphère)" }]
+requires-python = ">=3.13,<3.14"
+# Bornes : on accepte les mineures, pas les majeures (le fichier uv.lock fige
+# les versions exactes ; « uv sync --locked » refuse un verrou désynchronisé).
+dependencies = [
+    "fastapi>=0.142.4,<1",
+    "prometheus-client>=0.26.0,<1",
+    "psycopg-pool>=3.3.3,<4",
+    "psycopg[binary]>=3.3.6,<4",
+    "redis>=8.1.0,<9",
+    "tzdata>=2026.5",
+    "uvicorn>=0.54.0,<1",
+]
+
+[project.scripts]
+mediagenda = "mediagenda.__main__:main"
+mediagenda-migrate = "mediagenda.migrate:main"
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1,<1",
+    "pytest>=9.1.1,<10",
+    "ruff>=0.16.10,<0.17",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Les tests marqués « integration » demandent un vrai PostgreSQL et un vrai
+# Valkey : ils sont sautés par défaut. Pour les lancer :
+#   uv run pytest -m integration
+addopts = "-m 'not integration'"
+# Starlette 1.x annonce le passage du client de test à « httpx2 » ; on garde
+# httpx (stable, largement diffusé) tant que ce n'est qu'un avertissement.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+markers = [
+    "integration: test qui demande PostgreSQL et Valkey réels (MEDIAGENDA_TEST_DB_URL, MEDIAGENDA_TEST_VALKEY_URL)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+# RUF001-003 : caractères français (é, ’, …) dans chaînes et commentaires.
+# E501 : la longueur des lignes de code est gérée par « ruff format ».
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Query(...) en valeur par défaut est l'usage normal de FastAPI.
+extend-immutable-calls = ["fastapi.Query"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
