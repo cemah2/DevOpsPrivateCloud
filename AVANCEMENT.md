@@ -27,7 +27,13 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 09 | Cluster de virtualisation | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~90 vérifications ; wiki Automated Installation, signatures de l'ISO 9.2-1, code de pve-ha-manager, guide Squid→Tentacle, `tofu validate`, `ansible-lint`). À confirmer sur le lab : épinglage `nic0..4` par `ID_NET_NAME_MAC`, libellés de `ha-manager status` et de `disarm-ha`, configuration FRR du SDN EVPN, démarrage de l'OVA, `watchdog-mux` sans périphérique |
 | 10 | OpenStack | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~104 vérifications dans le code de kolla-ansible 22.2.0 `stable/2026.1`, kolla, horizon, keystone, OSC 10 ; `tofu validate`, 15 bats). Rôle `sauvegarde_pbs` fusionné avec la version M09. À confirmer sur le lab : déploiement complet, images Debian « untested » de la matrice Kolla (repli `rocky` documenté), ACME de Kolla vers step-ca, formats JSON de la CLI, droits cephx minimaux |
 | 11 | Provisioning bare-metal | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~45 vérifications ; `kea-dhcp4 -t` 3.0.4, `ksvalidator` RHEL10, `debconf-set-selections -c`, pilote Proxmox de MAAS 3.7 lu dans le code ; construction iPXE corrigée `TRUST=`+`CERT=`). À confirmer sur le lab : user-class iPXE au second DISCOVER, ROM iPXE de QEMU/OVMF, `IPMI.ProtocolEnabled`/`FirmwareInventory` sur iLO 4, magasin TLS du snap MAAS |
-| 12-18 | Bloc C | à faire | | |
+| 12 | Conteneurs | à faire | 45 + mini-projet | Carte des exercices écrite |
+| 13 | Registre et supply chain | à faire | 24 + mini-projet | Carte des exercices écrite |
+| 14 | Administration Kubernetes | à faire | 45 + mini-projet | Carte des exercices écrite |
+| 15 | Réseau Kubernetes | à faire | 45 + mini-projet | Carte des exercices écrite |
+| 16 | Stockage et données Kubernetes | à faire | 45 + mini-projet | Carte des exercices écrite |
+| 17 | Packaging | à faire | 24 + mini-projet | Carte des exercices écrite |
+| 18 | Distributions et cycle de vie | à faire | 24 + mini-projet | Carte des exercices écrite |
 | 19-20 | Bloc D | à faire | | |
 | 21-23 | Bloc E | à faire | | |
 | 24-26 | Bloc F | à faire | | |
@@ -56,6 +62,8 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 
 | 2026-10-08 | 3 (bloc B) | Lancée par la tâche planifiée. Versions du bloc B figées (recherche web, `annexes/versions-bloc-B.md`), décisions structurantes en PLAN §4.9 et journal, cartes des exercices des modules 07 à 11 |
 | 2026-10-08 | 3 (bloc B) | Modules 07 à 11 rédigés (18 rédacteurs en parallèle sur des briefs communs), harmonisés (1 agent par module), relus indépendamment (9 relecteurs, ~420 vérifications sur la documentation et le code officiels, défauts bloquants corrigés : migration VRRP de la bordure, `--dry-run` de cephadm, construction d'iPXE, playbooks E24/E28/E46 de M09…). 323 scripts : `bash -n` et `shellcheck -x` propres. Annexes, topologie, README, REPRISE mis à jour. Correction transverse : M00-E22 (secret PBS hors des arguments de `pvesm`). **Bloc B terminé**, tâche planifiée créée pour lancer le bloc C |
+| 2026-10-08 | 4 (bloc C) | Lancée par la tâche planifiée. Versions du bloc C figées (recherche web), décisions structurantes en PLAN §4.10 et journal, applications métier `apps/` (testées), cartes des exercices des modules 12 à 18 |
+
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
 - **Stockage S3 du socle** : MinIO prévu au plan est abandonné par son éditeur (édition communautaire sans binaires depuis octobre 2025, dépôt archivé). Remplacé par SeaweedFS (Apache 2.0, écritures conditionnelles nécessaires au verrou d'état OpenTofu). Garage écarté pour cette raison. Le module 05 en fait un ADR.
@@ -81,3 +89,16 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 - **Cluster Proxmox imbriqué** : deux nœuds + QDevice sur `pbs01`, puis trois nœuds (le QDevice est retiré : déconseillé avec un nombre impair de nœuds). Ceph hyperconvergé installé en Squid pour pratiquer la montée en Tentacle.
 - **OpenStack 2026.1** plutôt que 2026.2 (Kolla-Ansible encore en RC pour 2026.2) ; OVN choisi explicitement (le défaut de Kolla reste OVS) ; Octavia avec le fournisseur OVN (amphora trop lourd pour le lab).
 - **MAAS sur Ubuntu 24.04** : seul cas d'Ubuntu du bloc (outil qui l'impose). `hp01` n'est jamais réinstallé : il porte PBS ; l'iLO est exploré en lecture.
+
+## Choix faits en l'absence de l'apprenant (bloc C)
+
+- **Kubernetes 1.36 plutôt que 1.37** pour le cluster de référence (installé en 1.35, monté en 1.36 au M14) : Cilium 1.20, cert-manager 1.21, ceph-csi 3.18, CloudNativePG 1.30 et CAPMOX 0.9 ne déclarent pas encore 1.37.
+- **containerd.io 2.3 LTS du dépôt Docker** sur les nœuds : le containerd 1.7 de Debian 13 n'est pas compatible avec Kubernetes 1.36.
+- **VIP d'API par keepalived + HAProxy** sur les nœuds de contrôle (méthode de la documentation kubeadm, réutilise les rôles du M07), HAProxy en 8443.
+- **Pas d'ingress-nginx** (projet retiré en mars 2026) : Gateway API servie par Cilium ; ingress-nginx étudié uniquement en migration.
+- **RFC 2136 (TSIG) plutôt que l'API PowerDNS** pour ExternalDNS et les défis DNS-01 : les clés TSIG se limitent à une zone, une clé d'API PowerDNS donne tout le serveur.
+- **ceph-csi externe vers `ceph-par1`** comme stockage de production ; Rook et Longhorn pratiqués puis retirés.
+- **Harbor et un runner Docker permanents** (`reg01`, `runner02`) : consommés par la CI (M19) et GitOps (M20).
+- **Cosign sans Rekor public** (clé MédiSphère, pas de journal de transparence) : lab souverain, choix discuté dans l'ADR-0130.
+- **Helm 4** enseigné (Helm 3 en fin de vie en février 2027) ; utilisé comme simple installateur aux M14-M16, approfondi au M17.
+- **Cluster API 1.12** imposé par CAPMOX 0.9 ; compatibilité de CAPMOX avec Proxmox VE 9 non documentée, à confirmer sur le lab (repli décrit dans le module).
