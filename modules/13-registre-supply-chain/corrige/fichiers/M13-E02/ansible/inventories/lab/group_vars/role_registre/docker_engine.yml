@@ -1,0 +1,13 @@
+---
+# group_vars/role_registre/docker_engine.yml — réglages du démon Docker de reg01 (M13-E02).
+# ⚠️ Les noms de variables sont ceux du rôle docker_engine écrit au M12 (M12-E02/E20) : adapte-les
+# si ton rôle les nomme autrement. Contenu voulu de /etc/docker/daemon.json :
+docker_engine_daemon_json:
+  # Harbor envoie les journaux de ses conteneurs à harbor-log (pilote syslog dans son compose) ;
+  # pour les autres (aucun ici), rotation par le pilote « local ».
+  log-driver: local
+  log-opts:
+    max-size: 20m
+    max-file: "5"
+  # live-restore : un redémarrage du démon (mise à jour de docker-ce) n'arrête pas Harbor.
+  live-restore: true

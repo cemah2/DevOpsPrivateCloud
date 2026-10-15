@@ -1,0 +1,7 @@
+---
+# host_vars/reg01/sauvegarde_harbor.yml — sauvegarde applicative de Harbor (M13-E15).
+sauvegarde_harbor_mode: sauvegarde
+sauvegarde_harbor_heure: "01:40"
+sauvegarde_harbor_jeton_secret: "{{ vault_pbs_jeton_reg01 }}"
+sauvegarde_harbor_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_harbor_cle: "{{ vault_pbs_cle_reg01 }}"

@@ -1,0 +1,425 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://git01.par1.medisphere.internal/mediagenda/chart/values.schema.json",
+  "title": "Valeurs du chart mediagenda",
+  "type": "object",
+  "required": [
+    "medisphere",
+    "image",
+    "replicaCount",
+    "database",
+    "migrations"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "global": {
+      "type": "object"
+    },
+    "medisphere-commun": {
+      "type": "object",
+      "description": "Valeurs du chart de bibliothèque (aucune)."
+    },
+    "medisphere": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "equipe",
+        "environnement"
+      ],
+      "properties": {
+        "equipe": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,30}$"
+        },
+        "environnement": {
+          "description": "Environnement cible : aucune valeur par défaut, à fixer par l'overlay ou -f.",
+          "enum": [
+            "dev",
+            "recette",
+            "prod"
+          ]
+        },
+        "donneesSante": {
+          "type": "boolean"
+        }
+      }
+    },
+    "nameOverride": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "maxLength": 40
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry",
+        "repository"
+      ],
+      "properties": {
+        "registry": {
+          "description": "Seul le registre MédiSphère est admis (ValidatingAdmissionPolicy du M14-E18).",
+          "const": "registry.par1.medisphere.internal"
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^[a-z0-9._/-]+$"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Vide (v<appVersion>) ou vX.Y.Z[-pré-version] ; jamais latest.",
+          "pattern": "^$|^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^$|^sha256:[a-f0-9]{64}$"
+        },
+        "pullPolicy": {
+          "enum": [
+            "IfNotPresent",
+            "Always",
+            "Never"
+          ]
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "automountToken": {
+          "type": "boolean"
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logLevel": {
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "CRITICAL"
+          ]
+        },
+        "logFormat": {
+          "enum": [
+            "json",
+            "texte"
+          ]
+        },
+        "fuseau": {
+          "type": "string",
+          "minLength": 3
+        },
+        "cacheTtl": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "delaiArret": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120
+        },
+        "extraEnv": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^MEDIAGENDA_[A-Z0-9_]+$"
+          },
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "secretKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "not": {},
+          "description": "Interdit : l'URL contient le mot de passe, elle vient d'un Secret."
+        },
+        "password": {
+          "not": {},
+          "description": "Interdit : pas de secret dans les valeurs."
+        }
+      }
+    },
+    "postgresql": {
+      "type": "object",
+      "properties": {
+        "cnpg": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "instances": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "imageName": {
+              "type": "string"
+            },
+            "database": {
+              "type": "string",
+              "pattern": "^[a-z_][a-z0-9_]*$"
+            },
+            "owner": {
+              "type": "string",
+              "pattern": "^[a-z_][a-z0-9_]*$"
+            },
+            "storage": {
+              "type": "object",
+              "required": [
+                "size",
+                "storageClass"
+              ],
+              "properties": {
+                "size": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(Mi|Gi|Ti)$"
+                },
+                "storageClass": {
+                  "enum": [
+                    "ceph-rbd",
+                    "ceph-rbd-retain"
+                  ]
+                }
+              }
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "valkey": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "externalValkey": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^rediss?://"
+        }
+      }
+    },
+    "valkeyImporte": {
+      "type": "object"
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "ClusterIP"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    },
+    "httpRoute": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "parentRefs": {
+          "type": "array",
+          "minItems": 1
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": [
+        "requests",
+        "limits"
+      ],
+      "properties": {
+        "requests": {
+          "type": "object",
+          "required": [
+            "cpu",
+            "memory"
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "required": [
+            "memory"
+          ]
+        }
+      }
+    },
+    "probes": {
+      "type": "object"
+    },
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minAvailable": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      }
+    },
+    "topologySpread": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "maxSkew": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "topologyKey": {
+          "type": "string"
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "podAnnotations": {
+      "type": "object"
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cilium": {
+          "type": "boolean"
+        },
+        "clusterPostgresqlExterne": {
+          "type": "string"
+        },
+        "valkeyExterneLabels": {
+          "type": "object"
+        },
+        "cnpgOperatorNamespace": {
+          "type": "string"
+        }
+      }
+    },
+    "migrations": {
+      "type": "object",
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "hook",
+            "initContainer",
+            "none"
+          ]
+        },
+        "repertoire": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "backoffLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 60
+        },
+        "ttlSecondsAfterFinished": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

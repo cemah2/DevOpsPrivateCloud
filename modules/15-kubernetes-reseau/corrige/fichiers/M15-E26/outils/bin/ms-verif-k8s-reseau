@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+# ms-verif-k8s-reseau — sonde de service du réseau de k8s-par1 (M15-E26, PLAT-1626).
+#
+# Vérifie que le réseau du cluster REND le service : API joignable, agents Cilium / Envoy / opérateur
+# et composants d'entrée prêts, métriques des agents joignables et sans nœud injoignable, clés
+# WireGuard publiées, sessions BGP établies (vue des nœuds ET vue de la passerelle maître), adresses de
+# service installées à la bordure, certificats prêts et loin de l'expiration, noms publiés qui
+# répondent en HTTPS avec un certificat valide.
+#
+# Usage : ms-verif-k8s-reseau [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+# Configuration : /usr/local/etc/ms-verif-k8s-reseau.conf (MS_CONF pour un autre chemin).
+# Identité : kubeconfig du compte de service « ms-supervision » (lecture, sans Secrets) ; état de la
+# bordure par le compte SSH « supervision » des passerelles (commande forcée etat-reseau, M07-E29).
+#
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien ».
+
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-k8s-reseau [-s|--seuil-certificats JOURS] [-q|--quiet] [-h|--help]
+
+Sonde du réseau de k8s-par1 : composants, métriques, WireGuard, BGP, bordure, certificats, noms publiés.
+
+  -s, --seuil-certificats JOURS   un certificat qui expire dans moins de JOURS jours est une anomalie (défaut 10)
+  -q, --quiet                     n'afficher que les anomalies et le bilan
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils (section « Réseau du cluster »).
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+
+kc() { kubectl --kubeconfig "$MS_K8S_KUBECONFIG" --request-timeout=10s "$@"; }
+
+# kc_json ARGS... — sortie JSON valide de « kubectl get … -o json », sinon échec.
+kc_json() {
+  local s
+  s="$(kc get "$@" -o json 2>/dev/null)" || return 1
+  jq -e . >/dev/null 2>&1 <<<"$s" || return 1
+  printf '%s\n' "$s"
+}
+
+# --- API et composants -----------------------------------------------------------------------------
+
+verifier_api() {
+  if [[ "$(kc get --raw /readyz 2>/dev/null)" == ok ]]; then
+    ok api "API du cluster prête"
+  else
+    ko api "API du cluster injoignable ou non prête : aucun contrôle Kubernetes possible"
+    return 1
+  fi
+}
+
+verifier_daemonsets() {
+  local d ns nom j etat prevus prets ajour
+  for d in "${MS_K8S_DAEMONSETS[@]}"; do
+    ns="${d%%/*}" nom="${d#*/}"
+    if ! j="$(kc_json -n "$ns" daemonset "$nom")"; then
+      ko composant "DaemonSet $d introuvable"
+      continue
+    fi
+    etat="$(jq -r '.status | "\(.desiredNumberScheduled // 0) \(.numberReady // 0) \(.updatedNumberScheduled // 0)"' <<<"$j")"
+    read -r prevus prets ajour <<<"$etat"
+    if ((prevus > 0 && prets == prevus && ajour == prevus)); then
+      ok composant "$d : $prets/$prevus prêts"
+    else
+      ko composant "$d : $prets/$prevus prêts, $ajour à jour"
+    fi
+  done
+}
+
+verifier_deploiements() {
+  local d ns nom j voulus prets
+  for d in "${MS_K8S_DEPLOIEMENTS[@]}"; do
+    ns="${d%%/*}" nom="${d#*/}"
+    if ! j="$(kc_json -n "$ns" deployment "$nom")"; then
+      ko composant "Deployment $d introuvable"
+      continue
+    fi
+    voulus="$(jq -r '.spec.replicas // 1' <<<"$j")"
+    prets="$(jq -r '.status.readyReplicas // 0' <<<"$j")"
+    if ((voulus > 0 && prets == voulus)); then
+      ok composant "$d : $prets/$voulus prêts"
+    else
+      ko composant "$d : $prets/$voulus prêts"
+    fi
+  done
+}
+
+# --- Métriques des agents (HTTP 9962, adresse des nœuds) --------------------------------------------
+
+verifier_metriques() {
+  local ip corps inj
+  for ip in "${MS_K8S_NOEUDS[@]}"; do
+    if ! corps="$(curl -sS --fail --max-time 5 "http://$ip:$MS_K8S_PORT_AGENT/metrics" 2>/dev/null)" \
+        || ! grep -q '^cilium_' <<<"$corps"; then
+      ko metriques "$ip:$MS_K8S_PORT_AGENT : métriques de l'agent injoignables ou vides"
+      continue
+    fi
+    inj="$(awk '$1 == "cilium_unreachable_nodes" { print int($2) }' <<<"$corps" | head -n 1)"
+    if [[ -z "$inj" ]]; then
+      ko metriques "$ip : métrique cilium_unreachable_nodes absente (version ou réglage des métriques ?)"
+    elif ((inj > 0)); then
+      ko metriques "$ip : l'agent ne joint pas $inj nœud(s)"
+    else
+      ok metriques "$ip : agent joignable, aucun nœud injoignable"
+    fi
+  done
+}
+
+# --- WireGuard : une clé publique par CiliumNode --------------------------------------------------------
+
+verifier_wireguard() {
+  local j n sans
+  j="$(kc_json ciliumnodes)" || { ko wireguard "CiliumNodes illisibles"; return; }
+  n="$(jq '.items | length' <<<"$j")"
+  sans="$(jq -r '[.items[] | select((.metadata.annotations["network.cilium.io/wg-pub-key"] // "") == "") | .metadata.name] | join(" ")' <<<"$j")"
+  if ((n != MS_K8S_NB_NOEUDS)); then
+    ko wireguard "$n CiliumNode(s), $MS_K8S_NB_NOEUDS attendus"
+  elif [[ -n "$sans" ]]; then
+    ko wireguard "sans clé WireGuard publiée : $sans"
+  else
+    ok wireguard "$n nœuds ont publié leur clé WireGuard"
+  fi
+}
+
+# --- BGP vu des nœuds (statut des CiliumBGPNodeConfig) ---------------------------------------------
+
+verifier_bgp_noeuds() {
+  local j etablies mauvaises
+  j="$(kc_json ciliumbgpnodeconfigs)" || { ko bgp "CiliumBGPNodeConfigs illisibles"; return; }
+  etablies="$(jq '[.items[].status.bgpInstances[]?.peers[]? | select((.peeringState // "" | ascii_downcase) == "established")] | length' <<<"$j")"
+  mauvaises="$(jq -r '[.items[] | .metadata.name as $n | .status.bgpInstances[]?.peers[]?
+      | select((.peeringState // "" | ascii_downcase) != "established") | "\($n)→\(.peerAddress // .name):\(.peeringState // "inconnu")"] | join(" ")' <<<"$j")"
+  if [[ -n "$mauvaises" ]]; then
+    ko bgp "sessions non établies : $mauvaises"
+  elif ((etablies < MS_K8S_BGP_SESSIONS_MIN)); then
+    ko bgp "$etablies session(s) établie(s), $MS_K8S_BGP_SESSIONS_MIN attendues"
+  else
+    ok bgp "$etablies sessions BGP établies"
+  fi
+}
+
+# --- Bordure : vue de la passerelle MAÎTRE (etat-reseau, M07-E29, champ routes_service de M15-E26) ---
+
+# etat_passerelle HÔTE — JSON d'etat-reseau (commande forcée : la commande demandée est ignorée).
+etat_passerelle() {
+  ssh -o BatchMode=yes -o ConnectTimeout=5 -o ControlPath=none -i "$MS_SSH_CLE" "$MS_SSH_COMPTE@$1" etat-reseau 2>/dev/null
+}
+
+verifier_bordure() {
+  local h j maitre="" adr n voisins
+  for h in "${MS_PASSERELLES[@]}"; do
+    j="$(etat_passerelle "$h")" || continue
+    jq -e . >/dev/null 2>&1 <<<"$j" || continue
+    if [[ "$(jq -r '.etat_bordure // ""' <<<"$j")" == MASTER ]]; then
+      maitre="$h"
+      break
+    fi
+  done
+  if [[ -z "$maitre" ]]; then
+    ko bordure "aucune passerelle maître trouvée (${MS_PASSERELLES[*]}) : état de la bordure inconnu"
+    return
+  fi
+  voisins="$(jq --arg r "$MS_K8S_RESEAU_NOEUDS" '[(.bgp // [])[] | select((.voisin | startswith($r)) and .etat == "Established")] | length' <<<"$j")"
+  if ((voisins < MS_K8S_BGP_SESSIONS_MAITRE_MIN)); then
+    ko bordure "$maitre (maître) : $voisins session(s) établie(s) avec les nœuds, $MS_K8S_BGP_SESSIONS_MAITRE_MIN attendues"
+  else
+    ok bordure "$maitre (maître) : $voisins sessions établies avec les nœuds"
+  fi
+  for adr in "${MS_K8S_ADRESSES_SERVICE[@]}"; do
+    n="$(jq --arg a "$adr" '[(.routes_service // [])[] | select(.dst == $a) | .sauts[]?] | length' <<<"$j")"
+    if ((n >= MS_K8S_SAUTS_MIN)); then
+      ok bordure "$maitre : $adr installée vers $n nœud(s)"
+    else
+      ko bordure "$maitre : $adr installée vers $n nœud(s), $MS_K8S_SAUTS_MIN attendus"
+    fi
+  done
+}
+
+# --- Certificats cert-manager ----------------------------------------------------------------------------
+
+verifier_certificats() {
+  local seuil_j="$1" j limite lignes
+  j="$(kc_json certificates -A)" || { ko certificat "Certificates illisibles"; return; }
+  if (($(jq '.items | length' <<<"$j") == 0)); then
+    ko certificat "aucun Certificate dans le cluster : rien vu n'est pas tout va bien"
+    return
+  fi
+  limite="$(($(date +%s) + seuil_j * 86400))"
+  lignes="$(jq -r --argjson l "$limite" '.items[] | "\(.metadata.namespace)/\(.metadata.name) "
+      + (if any(.status.conditions[]?; .type == "Ready" and .status == "True") then "pret" else "nonpret" end) + " "
+      + ((.status.notAfter // "") as $f | if $f == "" then "inconnue" elif ($f | fromdateiso8601) < $l then "proche:" + $f else "loin:" + $f end)' <<<"$j")"
+  while read -r nom pret fin; do
+    [[ -n "$nom" ]] || continue
+    if [[ "$pret" != pret ]]; then
+      ko certificat "$nom non prêt (kubectl describe certificate)"
+    elif [[ "$fin" == proche:* ]]; then
+      ko certificat "$nom expire dans moins de $seuil_j jours (${fin#proche:}) : renouvellement en échec ?"
+    elif [[ "$fin" == inconnue ]]; then
+      ko certificat "$nom : date d'expiration inconnue"
+    else
+      ok certificat "$nom prêt, valable jusqu'au ${fin#loin:}"
+    fi
+  done <<<"$lignes"
+}
+
+# --- Noms publiés -------------------------------------------------------------------------------------------
+
+verifier_noms() {
+  local e nom attendu ip code
+  for e in "${MS_K8S_NOMS[@]}"; do
+    nom="${e%%=*}" attendu="${e#*=}"
+    ip="$(dig +short +time=3 +tries=1 "@$MS_DNS" "$nom" A 2>/dev/null | tail -n 1)"
+    if [[ "$ip" != "$attendu" ]]; then
+      ko nom "$nom résout vers « ${ip:-rien} » sur $MS_DNS, $attendu attendu"
+      continue
+    fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --cacert "$MS_RACINE" "https://$nom/" 2>/dev/null || true)"
+    if [[ "$code" =~ ^[234][0-9][0-9]$ && "$code" != 404 ]]; then
+      ok nom "$nom → $ip, HTTPS $code, certificat valide"
+    else
+      ko nom "$nom → $ip : HTTPS ${code:-aucune réponse} (TLS refusé, certificat invalide ou route absente)"
+    fi
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  local seuil_j="${MS_VERIF_SEUIL_CERTS:-10}"
+  while (($#)); do
+    case "$1" in
+      -s | --seuil-certificats)
+        [[ $# -ge 2 ]] || {
+          usage >&2
+          exit 2
+        }
+        seuil_j="$2"
+        shift 2
+        ;;
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  [[ "$seuil_j" =~ ^[1-9][0-9]{0,2}$ ]] || die "--seuil-certificats attend un nombre de jours entre 1 et 999" 2
+  require_cmd kubectl jq curl dig ssh awk
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-k8s-reseau.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-k8s-reseau.conf
+  source "$conf"
+  [[ -r "$MS_K8S_KUBECONFIG" ]] || die "kubeconfig de supervision illisible : $MS_K8S_KUBECONFIG" 1
+  ((${#MS_K8S_NOEUDS[@]} > 0 && ${#MS_K8S_DAEMONSETS[@]} > 0 && MS_K8S_NB_NOEUDS > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+
+  if verifier_api; then
+    verifier_daemonsets
+    verifier_deploiements
+    verifier_wireguard
+    verifier_bgp_noeuds
+    verifier_certificats "$seuil_j"
+  fi
+  verifier_metriques
+  verifier_bordure
+  verifier_noms
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur le réseau de k8s-par1"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

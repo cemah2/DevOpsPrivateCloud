@@ -1,0 +1,39 @@
+---
+- name: Dossier de configuration du démon
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Validé par dockerd lui-même avant d'être mis en place : une clé inconnue ou un JSON faux
+# n'empêchera jamais le démon de redémarrer.
+- name: Fichier daemon.json (défauts du rôle + inventaire)
+  ansible.builtin.copy:
+    content: "{{ docker_engine_daemon_defaut | combine(docker_engine_daemon_extra, recursive=true) | to_nice_json(indent=2) }}\n"
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    validate: dockerd --validate --config-file=%s
+  notify: Redémarrer docker
+
+- name: Services containerd et docker actifs au démarrage
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - containerd
+    - docker
+
+- name: Comptes du groupe docker (équivalent root, comptes déjà sudo seulement)
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_engine_groupe_docker }}"
+
+- name: Appliquer un changement de daemon.json maintenant
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,48 @@
+# composants/passerelles/gw-par1.yaml — Gateway principale de k8s-par1 (M15-E12, DEV-1612).
+# Adresse 10.10.41.10 (pool lb-par1, réservée par convention, NetBox : gw-par1.par1.medisphere.internal),
+# annoncée en BGP (E11). Deux écouteurs :
+#   http  : port 80, TOUS les noms (redirection vers HTTPS pour *.apps, défis ACME HTTP-01 pour les
+#           noms hors apps, E13) ;
+#   https : port 443, *.apps.par1.medisphere.internal, terminaison TLS avec le joker apps-joker
+#           (émis à la main en E12, par cert-manager à partir d'E14).
+# Délégation : routes admises depuis les seuls espaces étiquetés medisphere.fr/exposition=oui.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-par1
+  namespace: passerelles
+spec:
+  gatewayClassName: cilium
+  addresses:
+    - type: IPAddress
+      value: 10.10.41.10
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              medisphere.fr/exposition: oui
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.apps.par1.medisphere.internal"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: apps-joker
+      allowedRoutes:
+        kinds:
+          - kind: HTTPRoute
+          - kind: GRPCRoute
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              medisphere.fr/exposition: oui

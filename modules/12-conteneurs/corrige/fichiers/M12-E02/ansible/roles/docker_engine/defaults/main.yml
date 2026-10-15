@@ -1,0 +1,57 @@
+---
+# Rôle docker_engine — valeurs par défaut (M12-E02).
+# Docker Engine du dépôt officiel download.docker.com (suite trixie), JAMAIS le paquet docker.io
+# de Debian 13 (26.1, trop ancien, sans le stockage d'images containerd par défaut).
+# Les versions exactes sont fixées dans l'inventaire (group_vars/role_docker/docker_engine.yml) :
+# une montée de version est une MR qui change ces lignes.
+
+docker_engine_depot_url: https://download.docker.com/linux/debian
+docker_engine_suite: trixie
+docker_engine_cle_url: https://download.docker.com/linux/debian/gpg
+# Empreinte publiée par Docker (« Install Docker Engine on Debian ») : la clé téléchargée n'est
+# installée que si elle correspond.
+docker_engine_cle_empreinte: "9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88"
+docker_engine_cle_fichier: /etc/apt/keyrings/docker.asc
+
+# Paquet => version exacte (format Debian, avec l'époque « 5: » pour docker-ce).
+docker_engine_versions:
+  docker-ce: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-cli: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-rootless-extras: "5:29.8.2-1~debian.13~trixie"
+  containerd.io: "2.3.6-1~debian.13~trixie"
+  docker-buildx-plugin: "0.37.1-1~debian.13~trixie"
+  docker-compose-plugin: "5.6.0-1~debian.13~trixie"
+
+# Paquets Debian en conflit (documentation Docker) : retirés s'ils sont présents.
+docker_engine_paquets_conflictuels:
+  - docker.io
+  - docker-doc
+  - docker-compose
+  - podman-docker
+  - containerd
+  - runc
+
+# Outils de travail des exercices (synchronisation des sources, lecture de JSON).
+docker_engine_outils:
+  - git
+  - rsync
+  - jq
+
+# /etc/docker/daemon.json = défauts du rôle, complétés (fusion récursive) par l'inventaire.
+# - journaux : json-file avec rotation (sans elle, un conteneur bavard remplit le disque) ;
+# - default-address-pools : réseaux des conteneurs dans 172.20.0.0/14, en /24. Par défaut,
+#   Docker finit par piocher dans 192.168.0.0/16, qui peut chevaucher le LAN maison.
+docker_engine_daemon_defaut:
+  log-driver: json-file
+  log-opts:
+    max-size: 10m
+    max-file: "3"
+  default-address-pools:
+    - base: 172.20.0.0/14
+      size: 24
+docker_engine_daemon_extra: {}
+
+# Comptes ajoutés au groupe docker. ⚠️ Appartenir à ce groupe, c'est être root sur l'hôte
+# (M12-E26) : on n'y met que des comptes qui ont DÉJÀ sudo sans mot de passe (admin).
+docker_engine_groupe_docker:
+  - admin

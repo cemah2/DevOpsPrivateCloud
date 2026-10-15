@@ -1,0 +1,98 @@
+---
+# Paquet et configuration. Ordre : refuser le containerd de Debian, installer containerd.io,
+# poser config.toml (validé), les hosts.toml, crictl, puis démarrer.
+
+- name: Refuser les paquets containerd et runc de Debian (incompatibles avec Kubernetes 1.36)
+  ansible.builtin.apt:
+    name:
+      - containerd
+      - runc
+    state: absent
+
+- name: Paquet containerd.io de la branche {{ containerd_branche }}
+  ansible.builtin.apt:
+    name: "containerd.io={{ containerd_branche }}.*"
+    state: present
+  notify: Redémarrer containerd
+
+- name: Dossiers de configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/containerd
+    - "{{ containerd_dossier_hotes }}"
+
+# « containerd config dump » charge le fichier, le fusionne avec les défauts et l'affiche : il
+# échoue (code 1) sur un fichier invalide. Sans démon ni socket : utilisable comme validation.
+- name: Configuration de containerd (validée avant d'être posée)
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: /etc/containerd/config.toml
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+    validate: containerd --config %s config dump
+  notify: Redémarrer containerd
+
+- name: Dossier de chaque registre en miroir
+  ansible.builtin.file:
+    path: "{{ containerd_dossier_hotes }}/{{ item.registre }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ containerd_miroirs }}"
+  loop_control:
+    label: "{{ item.registre }}"
+
+# Les hosts.toml sont relus à chaque tirage : pas de redémarrage de containerd.
+- name: Miroirs de registres (hosts.toml)
+  ansible.builtin.template:
+    src: hosts.toml.j2
+    dest: "{{ containerd_dossier_hotes }}/{{ item.registre }}/hosts.toml"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ containerd_miroirs }}"
+  loop_control:
+    label: "{{ item.registre }} → {{ item.miroir }}"
+
+- name: Lister les dossiers de registres existants
+  ansible.builtin.find:
+    paths: "{{ containerd_dossier_hotes }}"
+    file_type: directory
+  register: _containerd_dossiers
+
+# Un miroir retiré de l'inventaire disparaît du nœud (l'inventaire est la vérité).
+- name: Retirer les miroirs qui ne sont plus déclarés
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ _containerd_dossiers.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: item.path | basename not in (containerd_miroirs | map(attribute='registre') | list)
+
+- name: Configuration de crictl
+  ansible.builtin.template:
+    src: crictl.yaml.j2
+    dest: /etc/crictl.yaml
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Service containerd actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: containerd.service
+    state: started
+    enabled: true
+
+# Redémarrer containerd ne tue pas les conteneurs (chacun a son « shim ») ; le kubelet
+# se reconnecte au socket. On le fait tout de même maintenant, nœud par nœud (serial: 1).
+- name: Appliquer maintenant un éventuel redémarrage
+  ansible.builtin.meta: flush_handlers

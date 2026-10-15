@@ -1,0 +1,81 @@
+# composants/cilium/values.yaml — fichier COMPLET de référence à la fin du palier 3 du module 15
+# (M15-E27, CHG-1627). Compare-le au tien : les sections des paliers 1 et 2 (kube-proxy, BGP, Gateway)
+# peuvent différer dans le détail ; les sections du palier 3 sont commentées avec leur exercice.
+# Seul endroit où vivent les réglages de Cilium (introduction du module) : jamais de --set.
+#
+# Application (Taskfile de plateforme/k8s, CILIUM_VERSION) :
+#   cilium upgrade --version "$CILIUM_VERSION" --values composants/cilium/values.yaml
+# Aperçu avant application : cilium upgrade … --dry-run-helm-values (option à confirmer par --help).
+
+# --- Accès à l'API sans kube-proxy (M14, M15-E08) ---------------------------------------------------
+k8sServiceHost: k8s-api.par1.medisphere.internal
+k8sServicePort: 8443
+kubeProxyReplacement: true
+
+# --- Adresses des pods (M14) ---------------------------------------------------------------------------
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList: ["10.240.0.0/16"]
+    clusterPoolIPv4MaskSize: 24
+
+# --- Mode de routage : tunnel VXLAN (décision ADR-0150 après la comparaison de M15-E29) ----------------
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+# --- Chiffrement entre nœuds (M15-E24) ---------------------------------------------------------------
+encryption:
+  enabled: true
+  type: wireguard
+  nodeEncryption: false
+
+# --- Entrée : Gateway API (M15-E07, E12), LB IPAM (E10, actif par défaut), BGP (E11) ----------------
+l7Proxy: true
+gatewayAPI:
+  enabled: true
+bgpControlPlane:
+  enabled: true
+
+# --- Mise à jour sans coupure (M15-E27) ---------------------------------------------------------------
+# Un agent à la fois : chaque travailleur porte une part de l'entrée (Envoy, annonces BGP) ; avec le
+# défaut (2), deux des trois travailleurs redémarrent ensemble et la bordure perd deux chemins sur trois.
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+envoy:
+  enabled: true
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  prometheus:
+    enabled: true                       # 9964 (M15-E26)
+operator:
+  replicas: 2
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  prometheus:
+    enabled: true                       # 9963 (M15-E26)
+# Le chart ne redémarre pas les agents quand seule la ConfigMap change (défaut false) : on le fait
+# volontairement, en suivant la stratégie ci-dessus (kubectl -n kube-system rollout restart ds/cilium).
+rollOutCiliumPods: false
+
+# --- Supervision (M15-E26) -------------------------------------------------------------------------------
+prometheus:
+  enabled: true                         # 9962
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  ui:
+    enabled: true
+  metrics:
+    enabled:
+      - dns:query;ignoreAAAA
+      - drop
+      - tcp
+      - flow
+      - icmp
+    port: 9965

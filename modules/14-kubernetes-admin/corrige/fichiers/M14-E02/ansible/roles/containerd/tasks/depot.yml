@@ -1,0 +1,78 @@
+---
+# Dépôt download.docker.com (suite trixie, composant stable), clé vérifiée par son empreinte :
+# même méthode que haproxy (M07-E10) et docker_engine (M12).
+
+- name: Outils de vérification de la clé
+  ansible.builtin.apt:
+    name:
+      - gpg
+      - ca-certificates
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# La clé est publiée « en armure » (texte) ; apt accepte un trousseau .asc dans Signed-By.
+- name: Clé de signature du dépôt Docker
+  ansible.builtin.get_url:
+    url: "{{ containerd_depot_cle_url }}"
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+  register: _containerd_cle
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/docker.asc
+  register: _containerd_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that:
+      - _containerd_cle_colonnes.stdout is search('^fpr:+' ~ containerd_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: >-
+      /etc/apt/keyrings/docker.asc n'a pas l'empreinte attendue ({{ containerd_depot_cle_empreinte }}) :
+      ne rien installer, vérifier la source.
+    quiet: true
+
+- name: Source APT download.docker.com (format deb822)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/docker.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ containerd_entete }}
+      # Rôle containerd (M14-E02) : seul containerd.io est installé depuis ce dépôt.
+      Types: deb
+      URIs: {{ containerd_depot_url }}
+      Suites: {{ ansible_facts['distribution_release'] }}
+      Components: stable
+      Signed-By: /etc/apt/keyrings/docker.asc
+  register: _containerd_source
+
+# Préférence : containerd.io reste dans la branche LTS (2.3.x) même si le dépôt publie une 2.4.
+# Priorité 1001 : la version épinglée l'emporte, y compris pour revenir en arrière.
+- name: Épingler containerd.io sur la branche {{ containerd_branche }}
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/containerd.pref
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ containerd_entete }}
+      Package: containerd.io
+      Pin: version {{ containerd_branche }}.*
+      Pin-Priority: 1001
+
+- name: Relire les index APT si le dépôt vient d'être déclaré
+  ansible.builtin.apt:
+    update_cache: true
+  when: _containerd_source is changed or _containerd_cle is changed

@@ -1,0 +1,47 @@
+# composants/cert-manager/values.yaml — cert-manager 1.21 (M15-E13, version E13).
+# Installation (Helm 4, simple installateur jusqu'au M17) :
+#   helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+#     --version v1.21.<PATCH> --namespace cert-manager --create-namespace \
+#     --values composants/cert-manager/values.yaml --wait
+# Images tirées par le cache Harbor des nœuds (hosts.toml de containerd : quay.io → cache « quay »).
+
+# CRD installées ET conservées par le chart : un « helm uninstall » ne supprime pas les CRD (donc
+# pas tous les Certificate du cluster).
+crds:
+  enabled: true
+  keep: true
+
+# Configuration du contrôleur (fichier ControllerConfiguration).
+# 1.21 : « enableGatewayAPI » est déprécié au profit de gatewayAPI.enabled (notes de version).
+config:
+  apiVersion: controller.config.cert-manager.io/v1alpha1
+  kind: ControllerConfiguration
+  gatewayAPI:
+    enabled: true
+
+# Haute disponibilité : deux contrôleurs (élection de chef) et deux webhooks, répartis.
+replicaCount: 2
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: controller
+
+webhook:
+  replicaCount: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+cainjector:
+  replicaCount: 1
+
+# Ressources modestes (lab) ; à revoir avec les métriques au M21.
+resources:
+  requests: {cpu: 20m, memory: 64Mi}
+  limits: {memory: 256Mi}

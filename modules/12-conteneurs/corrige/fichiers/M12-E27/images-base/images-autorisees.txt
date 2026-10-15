@@ -1,0 +1,14 @@
+# images-autorisees.txt — images qu'un FROM peut référencer à MédiSphère (M12-E27, PLAT-1353).
+# Lu par outils/verifier-from.sh (job « images-autorisees » de plateforme/ci-templates).
+# Format : un motif par ligne (glob du shell, appliqué à la référence COMPLÈTE après résolution des
+# ARG), puis « | » et la consigne affichée quand une image n'est PAS autorisée. Lignes « # » ignorées.
+# Ajouter une ligne = MR relue par Sophie Laurent (exception : date de fin dans le commentaire).
+#
+# 1. Le catalogue MédiSphère : toute étape, toute image.
+ctr01.par1.medisphere.internal:5000/bibliotheque/*@sha256:* | utilise une image bibliotheque/ (docs/conteneurs/images-de-base.md)
+# 2. Images finales sans gestionnaire de paquets (rien à corriger chaque semaine) : par empreinte.
+gcr.io/distroless/static-debian13*@sha256:* | binaire statique : distroless static-debian13 par empreinte
+# 3. Étapes de CONSTRUCTION seulement (jamais en production) : chaînes de compilation, par empreinte.
+docker.io/library/golang:1.26-trixie@sha256:* | construction Go : golang:1.26-trixie par empreinte
+# 4. Images d'outils copiées par COPY --from (binaire statique) : version exacte.
+ghcr.io/astral-sh/uv:0.12.* | uv : ghcr.io/astral-sh/uv:0.12.x (même version que adm01)

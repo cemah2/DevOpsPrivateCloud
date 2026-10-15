@@ -1,0 +1,38 @@
+# À INTÉGRER au scénario Molecule du rôle powerdns_auth (M06-E06) — M15-E14.
+# 1) converge.yml, variables du jeu (zone d'essai, clé d'essai ; secret FICTIF, propre à Molecule) :
+powerdns_auth_dnsupdate: true
+powerdns_auth_dnsupdate_autorises: [127.0.0.1]
+powerdns_auth_cles_dnsupdate:
+  - {nom: essai-maj, algorithme: hmac-sha256, secret: "c2VjcmV0LWZpY3RpZi1wb3VyLW1vbGVjdWxlLTMyb2N0ZXRz"}
+powerdns_auth_zones_dnsupdate:
+  - {zone: apps.molecule.internal, cles: [essai-maj], depuis: [192.0.2.0/24], notifier: true, axfr: [essai-maj]}
+# (et apps.molecule.internal ajoutée à powerdns_auth_zones avec contenu: api)
+#
+# 2) verify.yml, tâches à ajouter (le paquet bind9-dnsutils fournit nsupdate dans l'instance) :
+- name: Mise à jour SIGNÉE depuis la boucle locale acceptée (allow-dnsupdate-from global)
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf 'server 127.0.0.1 5300\nzone apps.molecule.internal\nupdate add essai.apps.molecule.internal 60 TXT "ok"\nsend\n' \
+      | nsupdate -y "hmac-sha256:essai-maj:c2VjcmV0LWZpY3RpZi1wb3VyLW1vbGVjdWxlLTMyb2N0ZXRz"
+  args: {executable: /bin/bash}
+  changed_when: false
+
+- name: Mise à jour NON signée refusée (la zone exige une clé)
+  ansible.builtin.shell: |
+    set -o pipefail
+    printf 'server 127.0.0.1 5300\nzone apps.molecule.internal\nupdate add refus.apps.molecule.internal 60 TXT "ko"\nsend\n' | nsupdate
+  args: {executable: /bin/bash}
+  register: maj_non_signee
+  changed_when: false
+  failed_when: maj_non_signee.rc == 0
+
+- name: Métadonnées attendues (deux passages : aucune modification au second, voir idempotence)
+  ansible.builtin.command: pdnsutil metadata get apps.molecule.internal TSIG-ALLOW-DNSUPDATE NOTIFY-DNSUPDATE TSIG-ALLOW-AXFR
+  become: true
+  become_user: pdns
+  register: meta
+  changed_when: false
+  failed_when: >-
+    meta.stdout is not search('TSIG-ALLOW-DNSUPDATE = essai-maj')
+    or meta.stdout is not search('NOTIFY-DNSUPDATE = 1')
+    or meta.stdout is not search('TSIG-ALLOW-AXFR = .*essai-maj')

@@ -1,0 +1,42 @@
+# plateforme/ansible — inventories/lab/host_vars/s3-01/seaweedfs.yml (EXTRAIT, M16-E15/E16/E19)
+# Ajouts aux listes seaweedfs_identites et seaweedfs_compartiments du M05-E10 (ne rien retirer
+# de l'existant : tofu-etat, admin-s3, etcd-k8s du M14…).
+
+seaweedfs_identites:
+  # … identités existantes …
+  # M16-E16 : Velero (k8s-par1). Un seul compartiment. Write couvre aussi la suppression
+  # (expiration des sauvegardes par Velero, maintenance des dépôts Kopia).
+  - nom: velero
+    cle_acces: "{{ vault_seaweedfs_velero_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_velero_cle_secrete }}"
+    actions:
+      - Read:velero-k8s-par1
+      - Write:velero-k8s-par1
+      - List:velero-k8s-par1
+  # M16-E19 : CloudNativePG, plugin Barman Cloud (WAL et sauvegardes de base).
+  - nom: cnpg
+    cle_acces: "{{ vault_seaweedfs_cnpg_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_cnpg_cle_secrete }}"
+    actions:
+      - Read:cnpg-k8s-par1
+      - Write:cnpg-k8s-par1
+      - List:cnpg-k8s-par1
+  # M16-E15 : essai de sauvegarde Longhorn, RETIRÉE en fin d'exercice (avec son compartiment).
+  # - nom: longhorn-essai
+  #   cle_acces: "{{ vault_seaweedfs_longhorn_essai_cle_acces }}"
+  #   cle_secrete: "{{ vault_seaweedfs_longhorn_essai_cle_secrete }}"
+  #   actions: [Read:longhorn-essai, Write:longhorn-essai, List:longhorn-essai]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  # Versionnage désactivé : Velero (expiration, maintenance Kopia) et Barman (rétention)
+  # suppriment eux-mêmes ce qui est périmé ; avec le versionnage et sans règle de cycle de vie,
+  # chaque suppression laisserait une version cachée et le disque de s3-01 se remplirait sans
+  # que personne ne le voie. La protection contre l'effacement malveillant (verrou d'objet,
+  # copie vers PAR2) est traitée par la politique de sauvegarde (M16-E32) et F5.
+  - nom: velero-k8s-par1
+    versionnage: false
+  - nom: cnpg-k8s-par1
+    versionnage: false
+  # - nom: longhorn-essai        # M16-E15, retiré en fin d'exercice
+  #   versionnage: false

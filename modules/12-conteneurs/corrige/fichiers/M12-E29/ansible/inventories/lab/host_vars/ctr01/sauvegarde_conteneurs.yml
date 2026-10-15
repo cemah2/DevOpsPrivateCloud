@@ -1,0 +1,11 @@
+---
+# host_vars/ctr01/sauvegarde_conteneurs.yml — M12-E29 (PLAT-1355)
+# Base de la pile Compose de MédiAgenda (E08/E24) : export logique, cohérent à chaud.
+sauvegarde_conteneurs_bases:
+  - "mediagenda-db-1|mediagenda|mediagenda"
+# Aucun volume en copie à froid : Valkey n'a pas de persistance (E08), le registre de travail se
+# reconstruit depuis la CI (E15), le reste est dans Git. (Exemple : "mediagenda_donnees-db|mediagenda-db-1".)
+sauvegarde_conteneurs_volumes: []
+sauvegarde_conteneurs_jeton_secret: "{{ vault_pbs_jeton_ctr01 }}"
+sauvegarde_conteneurs_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_conteneurs_cle: "{{ vault_pbs_cle_ctr01 }}"

@@ -1,0 +1,26 @@
+# ~/m15/e10/erreurs.yaml — étape 7 : deux erreurs volontaires, à SUPPRIMER après lecture.
+# (a) adresse hors pool : le Service reste <pending>, condition io.cilium/lb-ipam-request-satisfied=False.
+apiVersion: v1
+kind: Service
+metadata:
+  name: essai-hors-pool
+  namespace: wb-essais
+  annotations:
+    lbipam.cilium.io/ips: 10.10.41.250
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: agnhost
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+# (b) pool qui chevauche lb-par1 : le DERNIER créé est marqué Conflicting et n'attribue plus rien.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: essai-conflit
+spec:
+  blocks:
+    - start: 10.10.41.150
+      stop: 10.10.41.160

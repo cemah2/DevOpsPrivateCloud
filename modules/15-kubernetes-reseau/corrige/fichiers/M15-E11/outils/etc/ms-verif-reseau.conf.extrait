@@ -1,0 +1,5 @@
+# Extrait de etc/ms-verif-reseau.conf (plateforme/outils, M07-E29) — M15-E11.
+# Voisins BGP attendus en « Established » sur CHAQUE passerelle (gw01 et gw02) : les trois
+# travailleurs de k8s-par1 parlent aux deux passerelles (pas seulement au maître VRRP).
+MS_BGP_TOUS=(10.10.40.61 10.10.40.62 10.10.40.63)   # k8s-w01..03 (AS 65040, M15-E11)
+MS_BGP_MAITRE=()                                    # lyo-gw01 : maquette détruite (M07-E46)

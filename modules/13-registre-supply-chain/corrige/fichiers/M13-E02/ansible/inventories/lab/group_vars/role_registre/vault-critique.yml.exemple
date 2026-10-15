@@ -1,0 +1,8 @@
+---
+# group_vars/role_registre/vault-critique.yml — À CHIFFRER (identité critique) :
+#   admin@adm01:~/src/ansible$ uv run ansible-vault encrypt --vault-id critique@outils/vault-pass-client.sh \
+#       inventories/lab/group_vars/role_registre/vault-critique.yml
+# Mots de passe générés (pas tapés) : python3 -c 'import secrets; print(secrets.token_urlsafe(24) + "Aa1")'
+# Politique de Harbor pour admin : 8 à 128 caractères, au moins une majuscule, une minuscule, un chiffre.
+vault_harbor_admin_mdp: "<MOT-DE-PASSE-ADMIN-HARBOR>"
+vault_harbor_db_mdp: "<MOT-DE-PASSE-BASE-HARBOR>"

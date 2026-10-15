@@ -1,0 +1,26 @@
+# Extrait à ajouter au .gitlab-ci.yml de mediagenda/chart (M17-E15, ticket SEC-1833).
+# Le chart ne doit JAMAIS rendre un Secret, quels que soient les valeurs et les sous-charts activés :
+# les secrets viennent d'objets créés hors du paquet (CloudNativePG, scripts depuis Vault Ansible).
+sans-secret:
+  extends: .helm-lecture
+  stage: test
+  script:
+    # yq (mikefarah) n'est pas dans l'image Helm : binaire épinglé par version et empreinte.
+    - wget -q -O /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+    - echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum -c -
+    - chmod +x /usr/local/bin/yq
+    - |
+      echec=0
+      verifier() {   # verifier <description> <arguments de helm template…>
+        desc="$1"; shift
+        helm template mediagenda "$CHART_DIR" -n mediagenda-test "$@" > rendu.yaml || { echo "rendu impossible ($desc)" >&2; echec=1; return; }
+        secrets="$(yq -N 'select(.kind == "Secret") | .metadata.name' rendu.yaml)"
+        if [ -n "$secrets" ]; then echo "Le rendu ($desc) contient un Secret : $secrets" >&2; echec=1; fi
+      }
+      verifier recette --set medisphere.environnement=recette
+      verifier "dev autonome" --set medisphere.environnement=dev --set valkey.enabled=true --set postgresql.cnpg.enabled=true
+      for f in "$CHART_DIR"/ci/*-values.yaml; do verifier "$f" -f "$f"; done
+      exit "$echec"
+  variables:
+    YQ_VERSION: v4.54.1
+    YQ_SHA256: "<EMPREINTE-SHA256-DU-BINAIRE>"

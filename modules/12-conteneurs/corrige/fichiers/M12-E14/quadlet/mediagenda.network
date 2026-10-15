@@ -1,0 +1,9 @@
+# ~/.config/containers/systemd/mediagenda.network (compte app, ctr02) — M12-E14, PLAT-1324.
+# Réseau Netavark dédié : DNS interne (aardvark-dns), les conteneurs se joignent par leur nom.
+# Service généré : mediagenda-network.service
+[Unit]
+Description=Réseau de la pile MédiAgenda (recette ctr02)
+
+[Network]
+NetworkName=mediagenda
+Label=app=mediagenda

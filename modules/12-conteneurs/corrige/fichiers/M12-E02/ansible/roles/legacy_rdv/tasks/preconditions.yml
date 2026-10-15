@@ -1,0 +1,21 @@
+---
+- name: Debian 13 seulement (PHP 8.4 et MariaDB 11.8 de la distribution)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "legacy_rdv : Debian 13 attendu sur {{ inventory_hostname }}."
+    quiet: true
+
+- name: Le code de Legacy-RDV est présent sur le contrôleur
+  ansible.builtin.stat:
+    path: "{{ legacy_rdv_source }}/config.php"
+  delegate_to: localhost
+  become: false
+  register: legacy_rdv_source_stat
+
+- name: Source trouvée (lance ce playbook depuis adm01, où le workbook est cloné)
+  ansible.builtin.assert:
+    that: legacy_rdv_source_stat.stat.exists
+    fail_msg: "Code introuvable : {{ legacy_rdv_source }} (variable legacy_rdv_source)."
+    quiet: true

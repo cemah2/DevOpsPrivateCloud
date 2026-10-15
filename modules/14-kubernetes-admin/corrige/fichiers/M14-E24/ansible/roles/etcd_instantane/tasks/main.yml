@@ -1,0 +1,139 @@
+---
+# Rôle etcd_instantane (M14-E24).
+
+- name: Paramètres fournis
+  ansible.builtin.assert:
+    that:
+      - etcd_instantane_s3_cle_acces | length > 0
+      - etcd_instantane_s3_cle_secrete | length > 0
+      - etcd_instantane_age_destinataire is match('^age1[0-9a-z]+$')
+      - etcd_instantane_outils_sha256 is match('^[0-9a-f]{64}$')
+      - etcd_instantane_minute is match('^[0-5][0-9]$')
+    fail_msg: >-
+      Identité S3 (Vault critique), clé publique age, empreinte de l'archive etcd et minute de passage
+      sont requises pour {{ inventory_hostname }}.
+    quiet: true
+
+- name: Le nœud est bien un membre etcd de kubeadm (certificat client local présent)
+  ansible.builtin.stat:
+    path: /etc/kubernetes/pki/etcd/healthcheck-client.crt
+  register: etcd_instantane_cert
+  failed_when: not etcd_instantane_cert.stat.exists
+
+- name: Paquets (age, rclone, jq)
+  ansible.builtin.apt:
+    name: [age, rclone, jq]
+    state: present
+
+# --- etcdctl / etcdutl de la version du cluster ----------------------------------------------------
+- name: Version installée des outils etcd
+  ansible.builtin.command: /usr/local/bin/etcdutl version
+  register: etcd_instantane_version_vue
+  changed_when: false
+  failed_when: false
+
+- name: Installer etcdctl et etcdutl {{ etcd_instantane_outils_version }}
+  when: >-
+    etcd_instantane_version_vue.rc != 0
+    or ('etcdutl version: ' ~ etcd_instantane_outils_version) not in etcd_instantane_version_vue.stdout
+  block:
+    - name: Archive officielle (empreinte vérifiée)
+      ansible.builtin.get_url:
+        url: "{{ etcd_instantane_outils_url }}"
+        dest: "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}.tar.gz"
+        checksum: "sha256:{{ etcd_instantane_outils_sha256 }}"
+        mode: "0600"
+
+    - name: Dossier d'extraction
+      ansible.builtin.file:
+        path: "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}"
+        state: directory
+        mode: "0700"
+
+    - name: Extraction
+      ansible.builtin.unarchive:
+        src: "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}.tar.gz"
+        dest: "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}"
+        remote_src: true
+        extra_opts: [--strip-components=1]
+
+    # Seuls les outils clients sont installés : le serveur etcd reste celui du pod statique de kubeadm.
+    - name: Copie de etcdctl et etcdutl
+      ansible.builtin.copy:
+        src: "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      loop: [etcdctl, etcdutl]
+
+  always:
+    - name: Nettoyage
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}.tar.gz"
+        - "/var/tmp/etcd-v{{ etcd_instantane_outils_version }}"
+
+# --- Configuration et secrets ---------------------------------------------------------------------------
+- name: Dossiers (configuration, état, copies locales)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop: [/etc/etcd-instantane, /var/lib/etcd-instantane, /var/backups/etcd]
+
+- name: Paramètres non secrets
+  ansible.builtin.template:
+    src: etcd-instantane.conf.j2
+    dest: /etc/etcd-instantane/etcd-instantane.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Identité S3 etcd-k8s
+  ansible.builtin.template:
+    src: s3.env.j2
+    dest: /etc/etcd-instantane/s3.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+
+# --- Script et unités -----------------------------------------------------------------------------------
+- name: Scripts d'instantané et de restauration d'un membre (RB-141)
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "/usr/local/sbin/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - {src: etcd-instantane.sh, dest: etcd-instantane}
+    - {src: etcd-restaurer-membre.sh, dest: etcd-restaurer-membre}
+
+- name: Unités systemd
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - etcd-instantane.service
+    - etcd-instantane.timer
+  notify: Recharger systemd
+
+- name: Prendre en compte les unités
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: etcd-instantane.timer
+    enabled: true
+    state: started

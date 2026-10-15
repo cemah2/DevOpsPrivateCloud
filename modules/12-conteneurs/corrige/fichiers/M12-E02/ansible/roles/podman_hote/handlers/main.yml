@@ -1,0 +1,12 @@
+---
+# Après un changement de /etc/subuid ou /etc/subgid, le stockage existant du compte doit être
+# « migré » (podman system migrate arrête ses conteneurs et relit les plages).
+- name: Migrer le stockage Podman du compte
+  ansible.builtin.command:
+    cmd: podman system migrate
+  become: true
+  become_user: "{{ podman_hote_compte }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ podman_hote_compte_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ podman_hote_compte_uid }}/bus"
+  changed_when: true

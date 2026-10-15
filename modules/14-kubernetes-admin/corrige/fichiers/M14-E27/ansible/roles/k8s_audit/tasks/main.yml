@@ -1,0 +1,23 @@
+---
+# Rôle k8s_audit (M14-E27).
+- name: Dossiers de la politique et des journaux
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ k8s_audit_dossier_politique }}"
+    - "{{ k8s_audit_dossier_journaux }}"
+
+# Le serveur d'API lit la politique AU DÉMARRAGE seulement : une modification n'est prise en compte
+# qu'au prochain redémarrage du pod statique (outils/reconfigurer-apiserver.sh, un nœud à la fois).
+- name: Politique d'audit
+  ansible.builtin.copy:
+    src: politique.yaml
+    dest: "{{ k8s_audit_dossier_politique }}/politique.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Rappel redémarrage du serveur d'API

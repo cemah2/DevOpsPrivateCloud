@@ -1,0 +1,31 @@
+---
+- name: Lire la version du démon et le stockage d'images
+  ansible.builtin.command:
+    cmd: docker info --format '{{ "{{" }}.ServerVersion{{ "}}" }} {{ "{{" }}json .DriverStatus{{ "}}" }}'
+  register: docker_engine_info
+  changed_when: false
+
+- name: Le démon est celui de la version épinglée, avec le stockage d'images containerd
+  ansible.builtin.assert:
+    that:
+      - docker_engine_info.stdout.split(' ')[0] == (docker_engine_versions['docker-ce'] | regex_replace('^[0-9]+:', '') | regex_replace('-.*$', ''))
+      - "'io.containerd.snapshotter.v1' in docker_engine_info.stdout"
+    fail_msg: "Démon inattendu : {{ docker_engine_info.stdout }}"
+    quiet: true
+
+- name: Lire les versions des extensions
+  ansible.builtin.command:
+    cmd: "docker {{ item }} version"
+  loop:
+    - compose
+    - buildx
+  register: docker_engine_extensions
+  changed_when: false
+
+- name: Compose v5 et Buildx présents
+  ansible.builtin.assert:
+    that:
+      - docker_engine_extensions.results[0].stdout is search('v5\.')
+      - docker_engine_extensions.results[1].stdout is search('v0\.')
+    fail_msg: "{{ docker_engine_extensions.results | map(attribute='stdout') | list }}"
+    quiet: true

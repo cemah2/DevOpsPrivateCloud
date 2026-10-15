@@ -1,0 +1,13 @@
+<!-- docs/kubernetes/stockage/ceph-csi.md — EXTRAIT, section ajoutée en M16-E07 (DEV-1707), après « 3. Classes ». -->
+
+## 3 bis. CephFS : quand et comment
+
+**Quand choisir `cephfs`.** Seulement quand plusieurs pods, sur **plusieurs nœuds**, doivent lire et écrire les **mêmes fichiers** : pièces jointes de Legacy-RDV derrière deux instances (F4), modèles partagés, dépôt de fichiers échangés entre deux applications. Pour tout le reste (bases, Valkey, file d'un seul pod), `ceph-rbd` : un système de fichiers local au nœud sur un bloc répliqué est plus rapide (pas de MDS sur le chemin des métadonnées), et sa cohérence est simple (un seul noyau écrit).
+
+**Ce que vaut la taille d'un PVC `cephfs`.** Chaque PVC est un sous-volume `csi-vol-<uuid>` du groupe `csi`, avec un quota CephFS (`ceph.quota.max_bytes`) égal à la taille demandée : une écriture au-delà échoue en `Disk quota exceeded` (EDQUOT), constaté en E07 à `<taille observée>`. Le client noyau applique le quota avec un léger retard (il connaît l'occupation par les *capabilities* du MDS) : un dépassement de quelques Mio est possible. Le groupe `csi` est lui-même plafonné à 20 Gio (`allocations.yaml`) : la somme des PVC `cephfs` ne peut pas le dépasser, quoi que demandent les équipes.
+
+**Applications.** Le pod écrit avec son utilisateur ; `fsGroup` donne le groupe au répertoire du sous-volume (`fsGroupPolicy: File`). Deux écrivains sur le même fichier : CephFS est cohérent (verrous et *capabilities* du MDS), mais l'application doit gérer elle-même la concurrence (ajouts concurrents, verrous `flock` si elle en a besoin).
+
+**Pourquoi pas RBD en RWX.** ceph-csi refuse RWX pour un volume RBD en mode `Filesystem` : deux noyaux qui écrivent le même ext4 le corrompent. Il l'accepte en mode `Block`, pour les applications qui savent partager un disque (systèmes de fichiers en grappe, migration à chaud de VMs dans KubeVirt) : pas pour MédiSphère aujourd'hui.
+
+**Legacy-RDV (préparation de F4).** PVC `uploads` en `cephfs`, monté sur `/var/www/legacy-rdv/uploads` des deux instances ; l'utilisateur `www-data` (33) lit et écrit grâce à `fsGroup: 33`. La purge nocturne (`cron/purge-uploads.php`) devient un CronJob qui monte le même PVC. Le README de Legacy-RDV rappelle que le stockage objet serait meilleur (MédiDoc) : `cephfs` est la solution de migration, pas la cible.

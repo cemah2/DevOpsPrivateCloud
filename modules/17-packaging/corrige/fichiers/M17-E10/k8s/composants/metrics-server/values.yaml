@@ -1,0 +1,9 @@
+# metrics-server (M14-E20), repris par Helmfile en M17-E10. Exemple : remplace par la sortie de
+#   helm get values metrics-server -n kube-system -o yaml
+# (valeurs FOURNIES à l'installation du M14, à l'identique, pour un diff vide).
+args:
+  - --kubelet-preferred-address-types=InternalIP
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi

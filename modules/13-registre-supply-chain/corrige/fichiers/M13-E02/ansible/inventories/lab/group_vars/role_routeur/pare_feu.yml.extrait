@@ -1,0 +1,15 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT (M13-E02, ticket PLAT-1402).
+# 1. Dans pare_feu_definitions, section « Socle » :
+  - {nom: REG01, valeur: 10.10.20.18, commentaire: "registry.par1.medisphere.internal (Harbor, M13-E02)"}
+
+# 2. Dans pare_feu_transit, après « Points d'entrée (répartiteurs) » :
+  # Registre (Harbor). MGMT (adm01) et le VPN d'admin passent déjà par leurs règles générales ;
+  # runner01, runner02, git01, ca01 sont dans le même VLAN (pas de transit).
+  - {entree: [$V_K8S, $V_SANDBOX], destination: $REG01, proto: tcp, ports: 443,
+     motif: "nœuds Kubernetes (M14) et VMs d'essai / reg02 (VLAN 99) vers Harbor", ref: M13-E02}
+
+# 3. Dans pare_feu_verifications :
+  - {hote: 10.10.20.18, port: 443, motif: "contrôleur → reg01 (Harbor, HTTPS)"}
+
+# Rien à ajouter pour « reg01 → Internet » : la règle « lab vers Internet » (M07-E26) le couvre.
+# Sauvegarde de reg01 vers PBS (M13-E15) : règle ajoutée au palier 3.

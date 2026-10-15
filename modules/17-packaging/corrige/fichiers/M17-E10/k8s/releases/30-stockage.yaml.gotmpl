@@ -1,0 +1,45 @@
+# Stockage et données (M16). external-snapshotter et le plugin Barman Cloud sont installés par
+# manifestes (composants/…/) : ils ne sont pas des releases Helm et restent hors de ce fichier.
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: ceph-csi-rbd
+    namespace: ceph-csi
+    chart: ceph-csi/ceph-csi-rbd
+    version: 3.18.1
+    labels:
+      groupe: stockage
+      composant: ceph-csi-rbd
+    values:
+      - ../composants/ceph-csi-rbd/values.yaml
+
+  - name: ceph-csi-cephfs
+    namespace: ceph-csi
+    chart: ceph-csi/ceph-csi-cephfs
+    version: 3.18.1
+    labels:
+      groupe: stockage
+      composant: ceph-csi-cephfs
+    values:
+      - ../composants/ceph-csi-cephfs/values.yaml
+
+  - name: cnpg
+    namespace: cnpg-system
+    chart: cnpg/cloudnative-pg
+    version: 0.29.1
+    labels:
+      groupe: stockage
+      composant: cnpg
+    values:
+      - ../composants/cnpg/values.yaml
+
+  - name: velero
+    namespace: velero
+    chart: vmware-tanzu/velero
+    version: 12.2.1
+    labels:
+      groupe: stockage
+      composant: velero
+    values:
+      - ../composants/velero/values.yaml

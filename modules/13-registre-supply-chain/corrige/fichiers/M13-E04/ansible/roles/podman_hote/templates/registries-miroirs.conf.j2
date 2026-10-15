@@ -1,0 +1,16 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle podman_hote).') }}
+# /etc/containers/registries.conf.d/50-miroirs-medisphere.conf — M13-E04.
+# Podman, Buildah et Skopeo tirent d'abord par le MIROIR (cache Harbor) ; si le miroir ne répond
+# pas, ils essaient l'amont (« location »). Le nom de l'image ne change pas pour l'utilisateur
+# (« docker.io/library/debian ») ; l'empreinte est celle de l'amont, la signature aussi.
+# Pour interdire tout repli vers Internet : la bordure, pas ce fichier (un repli silencieux
+# vers l'amont cache une panne du registre ; à surveiller au M21).
+{% for m in podman_hote_miroirs %}
+
+[[registry]]
+prefix = "{{ m.prefixe }}"
+location = "{{ m.prefixe }}"
+
+[[registry.mirror]]
+location = "{{ m.miroir }}"
+{% endfor %}

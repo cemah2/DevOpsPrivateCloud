@@ -1,0 +1,21 @@
+# Politique réseau de MédiAgenda (dépôt et chemin des politiques du M15-E17) — ajout M16-E27.
+# Le proxy de l'API (kube-apiserver, sur les nœuds de contrôle) lit le port 9187 des instances
+# PostgreSQL. Une NetworkPolicy standard ne sait pas désigner kube-apiserver comme source ; Cilium
+# a une identité réservée pour lui (entité « kube-apiserver », à vérifier sur Cilium 1.20 : selon
+# la configuration, le trafic peut aussi porter l'identité « remote-node » ou « host »).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: metriques-cnpg-depuis-api
+  namespace: mediagenda-recette
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  ingress:
+  - fromEntities:
+    - kube-apiserver
+    toPorts:
+    - ports:
+      - port: "9187"
+        protocol: TCP

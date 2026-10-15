@@ -1,0 +1,27 @@
+# Magasin d'objets de MédiDoc — corrigé (M16-E21)
+# Compartiment et identité DÉDIÉS à MédiDoc (cnpg-medidoc-dev, identité cnpg-medidoc : MR sur le
+# rôle seaweedfs) : l'équipe MédiDoc ne doit ni lire ni effacer les archives de MédiAgenda.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: medidoc-s3
+  namespace: medidoc-dev
+spec:
+  retentionPolicy: "7d"
+  configuration:
+    destinationPath: s3://cnpg-medidoc-dev/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+    data:
+      compression: gzip

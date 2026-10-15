@@ -1,0 +1,5 @@
+# group_vars/k8s_plan_controle/etcd_instantane.yml — EXTRAIT (M14-E25) : kubeadm 1.36.5 déploie
+# etcd 3.6.8-0 ; les outils des nœuds suivent (restaurer avec un etcdutl plus ancien que le membre
+# qui a pris l'instantané n'est pas supporté).
+etcd_instantane_outils_version: "3.6.8"
+etcd_instantane_outils_sha256: "<SHA256-DE-etcd-v3.6.8-linux-amd64.tar.gz>"

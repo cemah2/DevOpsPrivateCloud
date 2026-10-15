@@ -1,0 +1,40 @@
+# Dev (mediagenda-dev) : rendu seulement (« kustomize build ») tant que dev sert de banc d'essai au chart
+# installé par Helm (M17-E03 à E12). Il ne faut PAS appliquer cet overlay par-dessus la release Helm.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-dev
+resources:
+  - ../../base
+labels:
+  - pairs:
+      medisphere.fr/environnement: dev
+    includeSelectors: false
+    includeTemplates: true
+images:
+  - name: registry.par1.medisphere.internal/medisphere/mediagenda-api
+    newTag: v1.0.0
+replicas:
+  - name: mediagenda
+    count: 1
+configMapGenerator:
+  - name: mediagenda-parametres
+    literals:
+      - MEDIAGENDA_LOG_LEVEL=DEBUG
+      - MEDIAGENDA_CACHE_TTL=10
+patches:
+  - target:
+      kind: HTTPRoute
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: mediagenda-dev.apps.par1.medisphere.internal
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          configMapRef:
+            name: mediagenda-parametres

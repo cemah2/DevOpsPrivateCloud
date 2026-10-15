@@ -1,0 +1,46 @@
+{{- if .Values.tests.enabled }}
+# « helm test <release> » : l'API répond prête (PostgreSQL ET Valkey joignables) à travers son Service.
+# Pas d'image d'outillage externe : l'image de l'application contient déjà Python.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "mediagenda.fullname" . }}-test-pret
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  securityContext:
+    {{- include "medisphere-commun.securite.pod" . | nindent 4 }}
+  containers:
+    - name: pret
+      image: {{ include "mediagenda.image" . }}
+      command:
+        - python
+        - -c
+        - |
+          import json, sys, urllib.request
+          url = "http://{{ include "mediagenda.fullname" . }}:{{ .Values.service.port }}"
+          with urllib.request.urlopen(url + "/pret", timeout=10) as r:
+              print("/pret :", r.status, r.read().decode())
+          with urllib.request.urlopen(url + "/sante", timeout=10) as r:
+              version = json.load(r).get("version")
+          print("/sante : version", version)
+          sys.exit(0 if version == "{{ include "mediagenda.imageTag" . }}" else 1)
+      securityContext:
+        {{- include "medisphere-commun.securite.conteneur" . | nindent 8 }}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
+{{- end }}

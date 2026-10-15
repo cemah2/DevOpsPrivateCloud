@@ -1,0 +1,56 @@
+suite: Migrations de schéma (hooks)
+templates:
+  - migrations-job.yaml
+release:
+  name: mediagenda
+  namespace: mediagenda-recette
+set:
+  medisphere.environnement: recette
+tests:
+  - it: lance le Job avant l'installation et avant chaque montée (base externe)
+    documentSelector:
+      path: kind
+      value: Job
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-install,pre-upgrade
+      - equal:
+          path: metadata.annotations["helm.sh/hook-delete-policy"]
+          value: before-hook-creation
+
+  - it: passe en post-install quand le chart crée aussi la base
+    documentSelector:
+      path: kind
+      value: Job
+    set:
+      postgresql.cnpg.enabled: true
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: post-install,pre-upgrade
+
+  - it: crée la politique réseau du Job avant le Job (poids inférieur)
+    documentSelector:
+      path: kind
+      value: NetworkPolicy
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/hook-weight"]
+          value: "-10"
+
+  - it: n'utilise pas le compte de service du chart (absent pendant un pre-install)
+    documentSelector:
+      path: kind
+      value: Job
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: default
+
+  - it: ne rend aucun hook en mode initContainer
+    set:
+      migrations.mode: initContainer
+    asserts:
+      - hasDocuments:
+          count: 0

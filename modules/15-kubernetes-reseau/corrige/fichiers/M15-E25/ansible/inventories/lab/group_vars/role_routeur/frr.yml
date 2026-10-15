@@ -1,0 +1,90 @@
+---
+# group_vars/role_routeur/frr.yml — FRR sur la bordure PAR1, AS 65000. Version M15-E25 (PLAT-1625) :
+# REMPLACE celle de M15-E11 (groupe K8S ouvert). Base : M07-E19 (rôle frr de M07-E06, mêmes variables).
+# Valeurs propres à chaque passerelle (host_vars) : frr_router_id, frr_update_source_leaf01.
+#
+# Ajouts de M15-E25 :
+#   - multichemin explicite (maximum_paths) : la bordure répartit vers TOUS les nœuds qui annoncent une
+#     adresse de service (même AS 65040, même longueur de chemin : chemins égaux). Le défaut de FRR est
+#     le maximum compilé (rôle M07-E06) : on l'écrit quand même, c'est une exigence de l'architecture ;
+#   - route de rejet pour 10.10.41.0/24 (distance 250, plus mauvaise que celle d'eBGP, 20) : quand plus
+#     aucune annonce n'arrive (FRR arrêté, cluster éteint), les paquets vers les adresses de service sont
+#     JETÉS ici au lieu de suivre la route par défaut vers le WAN (fuite vers le LAN maison et Internet,
+#     traduits par le NAT de sortie). Elle ne gêne jamais les /32 appris en BGP (préfixe plus long).
+#
+# Si tu as ajouté un mot de passe TCP-MD5 au groupe K8S en E11, garde ta ligne « mot_de_passe ».
+frr_ospf: {}
+
+frr_prefix_lists:
+  - nom: PL-DEPUIS-FABRIC
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.0/24, ge: 32}
+      - {seq: 20, action: permit, prefixe: 10.10.41.0/24, le: 32}
+  - nom: PL-DEPUIS-K8S
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.41.0/24, le: 32}
+  - nom: PL-VERS-FABRIC
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.20.0/24}
+  - nom: PL-DEPUIS-LYO1
+    regles:
+      - {seq: 10, action: permit, prefixe: "{{ sites_lyo1_reseau }}", le: 24}
+  - nom: PL-VERS-LYO1
+    regles: "{{ sites_lyo1_reseaux_par1 | map('combine', {'action': 'permit'}) | list }}"
+
+frr_route_maps:
+  - nom: RM-FABRIC-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-FABRIC]}]
+  - nom: RM-FABRIC-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-VERS-FABRIC]}]
+  - nom: RM-K8S-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-K8S]}]
+  - nom: RM-K8S-OUT
+    entrees: [{seq: 10, action: deny}]
+  - nom: RM-LYO1-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-LYO1]}]
+  - nom: RM-LYO1-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-VERS-LYO1]}]
+
+# Route de rejet (M15-E25) : « ip route 10.10.41.0/24 blackhole 250 ».
+frr_routes_statiques:
+  - {prefixe: 10.10.41.0/24, via: blackhole, distance: 250}
+
+frr_bgp:
+  asn: 65000
+  router_id: "{{ frr_router_id }}"
+  maximum_paths: 8
+  groupes:
+    - nom: K8S
+      as_distant: 65040
+      description: noeuds Kubernetes k8s-par1 (M15)
+      route_map_entree: RM-K8S-IN
+      route_map_sortie: RM-K8S-OUT
+  voisins:
+    - adresse: 10.10.99.251
+      as_distant: 65101
+      description: leaf01 maquette M07 (session de test)
+      route_map_entree: RM-FABRIC-IN
+      route_map_sortie: RM-FABRIC-OUT
+    - adresse: 10.255.2.2
+      as_distant: 65030
+      description: lyo-gw01 site LYO1 (tunnel wg2)
+      route_map_entree: RM-LYO1-IN
+      route_map_sortie: RM-LYO1-OUT
+  reseaux: "{{ (['10.10.20.0/24'] + sites_lyo1_reseaux_par1 | map(attribute='prefixe') | list) | unique }}"
+
+# Groupe K8S OUVERT depuis M15-E11 (la ligne « neighbor K8S shutdown » a disparu). Plafond de préfixes
+# acceptés du groupe : 3 travailleurs × 190 adresses possibles du pool lb-par1 ; un nœud qui annoncerait
+# davantage fait tomber SA session au lieu d'envahir la bordure. Aide au redémarrage en douceur (GR) :
+# active par défaut dans FRR (mode « helper ») : rien à écrire pour que la bordure garde les routes d'un
+# agent Cilium qui redémarre, si l'agent a annoncé la capacité GR (CiliumBGPPeerConfig, M15-E25).
+frr_config_supplementaire: |
+  router bgp 65000
+   bgp listen range 10.10.40.0/24 peer-group K8S
+   bgp listen limit 16
+   neighbor 10.10.99.251 update-source {{ frr_update_source_leaf01 }}
+   address-family ipv4 unicast
+    neighbor 10.255.2.2 maximum-prefix 50
+    neighbor K8S maximum-prefix 600
+   exit-address-family
+  exit

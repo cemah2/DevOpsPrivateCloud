@@ -1,0 +1,5 @@
+apiVersion: v2
+name: emetteurs
+description: Émetteurs cert-manager de k8s-par1 (ClusterIssuer ACME de step-ca), M17-E16.
+type: application
+version: 0.1.0

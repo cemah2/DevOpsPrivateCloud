@@ -1,0 +1,33 @@
+---
+argument_specs:
+  main:
+    short_description: Outils Kubernetes du poste d'administration
+    options:
+      outils_k8s_kubectl_mineure:
+        type: str
+        description: Mineure du dépôt pkgs.k8s.io de kubectl.
+      outils_k8s_kubectl_version:
+        type: str
+        description: Version exacte du paquet kubectl (ex. 1.36.5-1.1).
+      outils_k8s_kubernetes_cle_empreinte:
+        type: str
+        description: Empreinte de la clé de pkgs.k8s.io.
+      outils_k8s_helm_depot_url:
+        type: str
+        description: Dépôt APT de Helm.
+      outils_k8s_helm_cle_url:
+        type: str
+        description: Clé du dépôt de Helm.
+      outils_k8s_helm_cle_empreinte:
+        type: str
+        description: Empreinte de la clé du dépôt de Helm.
+      outils_k8s_helm_version:
+        type: str
+        description: Motif de version du paquet helm (ex. 4.3.*).
+      outils_k8s_dossier:
+        type: path
+        description: Dossier des binaires amont versionnés.
+      outils_k8s_binaires:
+        type: list
+        elements: dict
+        description: Binaires amont ({nom, version, url, somme, fichiers}).

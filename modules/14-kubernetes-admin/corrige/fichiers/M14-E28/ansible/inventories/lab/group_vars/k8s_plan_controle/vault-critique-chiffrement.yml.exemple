@@ -1,0 +1,8 @@
+---
+# group_vars/k8s_plan_controle/vault-critique.yml — EXTRAIT EN CLAIR (M14-E28) ; le vrai fichier est
+# chiffré sous l'identité « critique ». Génération : head -c 32 /dev/urandom | base64
+# Registre des secrets : « clé de chiffrement des Secrets k8s-par1 <nom> » (portée : etcd de k8s-par1 ;
+# emplacements : ce fichier, /etc/kubernetes/chiffrement/ des nœuds de contrôle ; mise en service,
+# retrait, destruction prévue = retrait + 35 jours).
+vault_k8s_chiffrement_cle_2026_10: "<32-OCTETS-EN-BASE64>"   # aescbc, retirée le <DATE>, à détruire après le <DATE+35 j>
+vault_k8s_chiffrement_cle_2026_11: "<32-OCTETS-EN-BASE64>"   # secretbox, en service

@@ -1,0 +1,71 @@
+# ~/m14/e15/sonde-noeud.yaml — DaemonSet : un pod sur CHAQUE nœud, plan de contrôle compris.
+# Chaque pod sert, en HTTP sur 8080, le nom et l'adresse de son nœud (API descendante).
+# Les tolérances « operator: Exists » sans clé acceptent toutes les taints (control-plane, dedie=bdd,
+# et les taints posées par Kubernetes : not-ready, unreachable, unschedulable…).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sonde-noeud
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: sonde-noeud
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sonde-noeud
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sonde-noeud
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-essai
+      tolerations:
+        - operator: Exists
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sonde
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /tmp/www
+              printf 'noeud=%s\nip=%s\n' "$NOEUD" "$IP_NOEUD" > /tmp/www/index.html
+              exec httpd -f -p 8080 -h /tmp/www
+          env:
+            - name: NOEUD
+              valueFrom:
+                fieldRef: {fieldPath: spec.nodeName}
+            - name: IP_NOEUD
+              valueFrom:
+                fieldRef: {fieldPath: status.hostIP}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 5m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Mi

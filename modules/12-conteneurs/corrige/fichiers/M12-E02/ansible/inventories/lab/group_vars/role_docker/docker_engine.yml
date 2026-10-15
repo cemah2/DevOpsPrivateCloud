@@ -1,0 +1,11 @@
+---
+# group_vars/role_docker/docker_engine.yml — versions de Docker de l'environnement (M12-E02).
+# PLAN.md §6 (bloc C) : Engine 29.8.x, containerd.io 2.3.x LTS, Buildx 0.37.x, Compose 5.6.x.
+# Monter de version = une MR qui change ces lignes (et rien d'autre).
+docker_engine_versions:
+  docker-ce: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-cli: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-rootless-extras: "5:29.8.2-1~debian.13~trixie"
+  containerd.io: "2.3.6-1~debian.13~trixie"
+  docker-buildx-plugin: "0.37.1-1~debian.13~trixie"
+  docker-compose-plugin: "5.6.0-1~debian.13~trixie"

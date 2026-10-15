@@ -1,0 +1,31 @@
+# ~/.config/containers/systemd/mediagenda-pg.container — PostgreSQL 18 de la pile (M12-E14).
+# HORS du pod : la base a son propre cycle de vie (on redémarre l'API sans toucher à la base).
+# Service généré : mediagenda-pg.service
+[Unit]
+Description=PostgreSQL 18 de MédiAgenda (recette ctr02)
+
+[Container]
+ContainerName=mediagenda-pg
+# Nom complet (registre compris) : pas de résolution de nom court ambiguë en service.
+Image=docker.io/library/postgres:18-trixie
+Network=mediagenda.network
+# PostgreSQL 18 (image officielle) : le volume se monte sur /var/lib/postgresql (PGDATA en
+# /var/lib/postgresql/18/docker), plus sur /var/lib/postgresql/data comme jusqu'à la 17.
+Volume=mediagenda-pg.volume:/var/lib/postgresql
+Environment=POSTGRES_DB=mediagenda POSTGRES_USER=mediagenda
+# Secret Podman (podman secret create), remis comme variable d'environnement au seul conteneur.
+Secret=mediagenda-pg-mdp,type=env,target=POSTGRES_PASSWORD
+HealthCmd=pg_isready -U mediagenda -d mediagenda
+HealthInterval=10s
+HealthRetries=5
+HealthStartPeriod=30s
+# Le service n'est « démarré » pour systemd qu'une fois le conteneur en bonne santé : les unités
+# qui en dépendent (After=) attendent une base qui répond, pas un processus lancé.
+Notify=healthy
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+# espaces/wb-diagnostic.yaml — pods de diagnostic de nœud (M14-E20)
+# Espace des pods de diagnostic de NŒUD (« kubectl debug node/… ») : ils partagent le réseau, les
+# processus et le système de fichiers de l'hôte, ce que « baseline » et « restricted » interdisent.
+# Seul le groupe medisphere:plateforme-admins y a des droits (cluster-admin). On n'y laisse rien
+# tourner : un pod de diagnostic se supprime dès le diagnostic fini.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-diagnostic
+  labels:
+    app.kubernetes.io/part-of: workbook
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/audit: baseline

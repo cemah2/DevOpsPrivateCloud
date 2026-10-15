@@ -1,0 +1,27 @@
+# sonde-ndots.yaml — sonde dont le résolveur est réglé à la main (M15-E04).
+# Même image que les sondes de E02 ; dnsPolicy ClusterFirst (CoreDNS) mais ndots ramené à 2 :
+# un nom qui contient au moins deux points est d'abord essayé tel quel, sans les suffixes de recherche.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sonde-ndots
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: sonde
+    app.kubernetes.io/part-of: m15
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-w01
+  terminationGracePeriodSeconds: 0
+  dnsPolicy: ClusterFirst
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "2"
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 500m, memory: 128Mi}

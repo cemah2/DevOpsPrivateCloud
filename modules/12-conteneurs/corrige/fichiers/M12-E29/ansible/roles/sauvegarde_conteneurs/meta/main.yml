@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Sauvegarde des données des conteneurs (exports PostgreSQL, volumes à froid) vers PBS
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

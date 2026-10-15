@@ -1,0 +1,131 @@
+# ~/m14/e20/diagnostic-corrige.yaml — M14-E20 : les pods de ressources/E20-diagnostic.yaml réparés.
+# Un pod ne se modifie presque pas en place (env, sondes, ressources sont immuables) :
+#   kubectl delete -f ressources/E20-diagnostic.yaml && kubectl apply -f diagnostic-corrige.yaml
+# Les lignes changées portent « # CORRIGÉ ».
+# Images : uniquement par Harbor (caches dockerhub et k8s).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: diag-config
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20}
+data:
+  SEUIL_ALERTE: "80"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: diag-config
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: surveillant
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sh", "-c", "echo seuil=$SEUIL; exec sleep infinity"]
+      env:
+        - name: SEUIL
+          valueFrom:
+            configMapKeyRef: {name: diag-config, key: SEUIL_ALERTE}   # CORRIGÉ : clé exacte (sensible à la casse)
+      resources: {requests: {cpu: 5m, memory: 8Mi}, limits: {cpu: 50m, memory: 32Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: diag-crash
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: relais
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          echo '{"niveau":"INFO","message":"démarrage du relais"}'
+          if [ -z "${RELAIS_DESTINATION:-}" ]; then
+            echo '{"niveau":"CRITICAL","message":"RELAIS_DESTINATION absente : arrêt"}' >&2
+            exit 3
+          fi
+          echo "{\"niveau\":\"INFO\",\"message\":\"relais vers $RELAIS_DESTINATION\"}"
+          exec sleep infinity
+      env:                                    # CORRIGÉ : variable obligatoire fournie
+        - {name: RELAIS_DESTINATION, value: "file.par1.medisphere.internal:5672"}
+      resources: {requests: {cpu: 5m, memory: 8Mi}, limits: {cpu: 50m, memory: 32Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: diag-memoire
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: chargeur
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      # Charge un « référentiel » de 96 Mio en mémoire au démarrage, puis attend.
+      command: ["sh", "-c", "echo chargement; head -c 96m /dev/zero | tail > /dev/null || exit $?; echo chargé; exec sleep infinity"]
+      resources: {requests: {cpu: 10m, memory: 192Mi}, limits: {cpu: 200m, memory: 192Mi}}   # CORRIGÉ : 96 Mio de données + marge (mesurée avec kubectl top)
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: diag-pret
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20, app.kubernetes.io/name: diag-pret}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: web
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sh", "-c", "mkdir -p /tmp/www && echo ok > /tmp/www/index.html && exec httpd -f -p 8080 -h /tmp/www"]
+      ports:
+        - {name: http, containerPort: 8080}
+      readinessProbe:
+        httpGet: {path: /, port: http}   # CORRIGÉ : le port réellement écouté (nommé)
+        periodSeconds: 5
+      resources: {requests: {cpu: 5m, memory: 8Mi}, limits: {cpu: 50m, memory: 32Mi}}
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+      volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+  volumes:
+    - name: tmp
+      emptyDir: {sizeLimit: 1Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diag-pret
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20}
+spec:
+  selector: {app.kubernetes.io/name: diag-pret}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: diag-sans-shell
+  namespace: wb-essais
+  labels: {medisphere.internal/exercice: e20}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: minimal
+      image: registry.par1.medisphere.internal/k8s/pause:3.10.1
+      resources: {requests: {cpu: 5m, memory: 8Mi}, limits: {cpu: 50m, memory: 16Mi}}
+      securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}

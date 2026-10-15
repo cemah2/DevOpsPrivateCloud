@@ -1,0 +1,33 @@
+suite: Base CloudNativePG rendue par le chart
+templates:
+  - cnpg-cluster.yaml
+release:
+  name: mediagenda
+  namespace: mediagenda-prod
+set:
+  medisphere.environnement: prod
+  replicaCount: 3
+tests:
+  - it: "ne rend rien par défaut (recette : base du M16 hors chart)"
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: rend le cluster mediagenda-db, conservé à la désinstallation
+    set:
+      postgresql.cnpg.enabled: true
+      postgresql.cnpg.instances: 3
+    asserts:
+      - isKind:
+          of: Cluster
+      - isAPIVersion:
+          of: postgresql.cnpg.io/v1
+      - equal:
+          path: metadata.name
+          value: mediagenda-db
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+      - equal:
+          path: spec.affinity.enablePodAntiAffinity
+          value: true

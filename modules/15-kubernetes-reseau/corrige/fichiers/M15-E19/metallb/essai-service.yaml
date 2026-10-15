@@ -1,0 +1,39 @@
+# ~/m15/e19/essai-service.yaml — charge et Services d'essai sur m15-essai (M15-E19).
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: agnhost, namespace: default}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app.kubernetes.io/name: agnhost}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: agnhost}
+    spec:
+      containers:
+        - name: agnhost
+          image: registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.61
+          args: ["netexec", "--http-port=8080", "--udp-port=-1"]
+          ports: [{name: http, containerPort: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: essai-l2, namespace: default}
+spec:
+  type: LoadBalancer
+  selector: {app.kubernetes.io/name: agnhost}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+# Étape 5 : adresse demandée (annotation de MetalLB, préfixe metallb.io/ ; l'ancien
+# metallb.universe.tf/ est déprécié).
+apiVersion: v1
+kind: Service
+metadata:
+  name: essai-l2-fixe
+  namespace: default
+  annotations:
+    metallb.io/loadBalancerIPs: 10.10.99.235
+spec:
+  type: LoadBalancer
+  selector: {app.kubernetes.io/name: agnhost}
+  ports: [{name: http, port: 80, targetPort: http}]

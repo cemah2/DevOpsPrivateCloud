@@ -1,0 +1,13 @@
+# /etc/systemd/system/etcd-instantane.timer — {{ inventory_hostname }} (M14-E24)
+# Minute décalée par nœud (k8s-cp01 :05, k8s-cp02 :25, k8s-cp03 :45) : un instantané toutes les
+# 20 minutes environ pour le cluster, une charge et un envoi à la fois.
+[Unit]
+Description=Instantané etcd horaire (M14-E24)
+
+[Timer]
+OnCalendar=*-*-* *:{{ etcd_instantane_minute }}:00
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

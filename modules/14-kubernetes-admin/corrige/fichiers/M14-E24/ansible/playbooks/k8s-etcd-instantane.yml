@@ -1,0 +1,9 @@
+---
+# playbooks/k8s-etcd-instantane.yml — instantanés etcd horaires (M14-E24).
+# Un nœud de contrôle à la fois : le rôle ne redémarre rien du cluster, mais on reste prudent.
+- name: Instantanés etcd chiffrés vers s3-01
+  hosts: k8s_plan_controle
+  become: true
+  serial: 1
+  roles:
+    - etcd_instantane

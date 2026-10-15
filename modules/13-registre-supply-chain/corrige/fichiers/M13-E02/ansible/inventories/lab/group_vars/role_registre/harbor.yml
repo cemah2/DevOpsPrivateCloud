@@ -1,0 +1,7 @@
+---
+# group_vars/role_registre/harbor.yml — M13-E02. Valeurs communes à reg01 (et reg02, M13-E13).
+harbor_version: "2.15.3"
+harbor_installateur_sha256: "9609b32edaa0075ce2bfa336b5e72447f8782ded9f576b5df7cd92bdd8359336"
+harbor_nom: registry.par1.medisphere.internal
+harbor_jobservice_workers: 5
+harbor_metriques: false   # M13-E16

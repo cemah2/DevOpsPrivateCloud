@@ -1,0 +1,9 @@
+---
+- name: Harbor démarre avec la machine
+  ansible.builtin.systemd_service:
+    name: harbor.service
+    enabled: true
+    state: started
+
+- name: Appliquer un redémarrage demandé (prepare) avant le contrôle de santé
+  ansible.builtin.meta: flush_handlers

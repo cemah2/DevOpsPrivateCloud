@@ -1,0 +1,27 @@
+# composants/reseau/politiques/sortie-mediagenda.yaml — M15-E28 (SEC-1628), règle 3 de Sophie.
+# Les pods des espaces de MédiAgenda ne sortent vers Internet que vers calendrier.api.gouv.fr en HTTPS.
+# Pourquoi une AUTORISATION et pas un refus : les refus ne savent pas exprimer « tout Internet sauf un
+# nom » (toFQDNs n'existe pas en egressDeny, documentation « Deny Policies »), et un egressDeny vers
+# « world » l'emporterait aussi sur ce nom. Le reste d'Internet est refusé parce que les pods de
+# MédiAgenda sont en refus par défaut en sortie (default-deny de M15-E17) : la règle 2 est tenue par
+# le RBAC (les équipes ne créent pas de politiques Cilium, vérifié par auth can-i) et par la revue de
+# plateforme/k8s.
+# toFQDNs exige que la résolution passe par le proxy DNS : base-dns.yaml.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: sortie-mediagenda
+spec:
+  description: "MédiAgenda : sortie Internet limitée à calendrier.api.gouv.fr:443 (SEC-1628)"
+  endpointSelector:
+    matchLabels:
+      io.cilium.k8s.namespace.labels.medisphere.fr/equipe: mediagenda
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  egress:
+    - toFQDNs:
+        - matchName: calendrier.api.gouv.fr
+      toPorts:
+        - ports:
+            - {port: "443", protocol: TCP}

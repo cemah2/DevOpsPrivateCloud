@@ -1,0 +1,27 @@
+# plateforme/k8s — espaces/mediagenda-recette/20-limites.yaml (M14-E10)
+# Valeurs par défaut et bornes par conteneur et par pod. Sans elles, le quota (qui suit
+# requests ET limits) refuserait tout pod qui ne déclare pas ses ressources.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-defaut
+  namespace: mediagenda-recette
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 512Mi
+      min:
+        cpu: 10m
+        memory: 16Mi
+      max:
+        cpu: "2"
+        memory: 2Gi
+    - type: Pod
+      max:
+        cpu: "4"
+        memory: 4Gi

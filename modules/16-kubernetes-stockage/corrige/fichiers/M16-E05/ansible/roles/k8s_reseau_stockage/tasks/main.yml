@@ -1,0 +1,38 @@
+---
+# k8s_reseau_stockage — carte STOR-PUB des travailleurs (M16-E05).
+# Idempotent et sans interruption pour un nœud déjà conforme : il n'est drainé et redémarré que
+# si sa carte de stockage vient d'apparaître (OpenTofu) et n'est pas encore configurée.
+
+- name: Calculer l'adresse et la MAC de la carte de stockage (règle de envs/k8s/noeuds.tf)
+  ansible.builtin.set_fact:
+    k8s_reseau_stockage_suffixe: "{{ ansible_facts['default_ipv4']['address'].split('.')[-1] | int }}"
+
+- name: Vérifier que le nœud est bien un travailleur du VLAN 40
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['default_ipv4']['address'] is match('^10\.10\.40\.')
+      - k8s_reseau_stockage_suffixe | int >= 61
+      - k8s_reseau_stockage_suffixe | int <= 69
+    fail_msg: >-
+      {{ inventory_hostname }} n'a pas une adresse de travailleur (10.10.40.61-69) en route par défaut :
+      rôle réservé au groupe k8s_travailleurs.
+    quiet: true
+
+- name: Fixer l'adresse et la MAC attendues
+  ansible.builtin.set_fact:
+    k8s_reseau_stockage_adresse: >-
+      {{ k8s_reseau_stockage_prefixe }}.{{ k8s_reseau_stockage_suffixe | int + k8s_reseau_stockage_decalage | int }}
+    k8s_reseau_stockage_mac: "bc:24:11:{{ k8s_reseau_stockage_vlan }}:00:{{ k8s_reseau_stockage_suffixe }}"
+
+- name: Protéger le nœud contre une « nouvelle instance » cloud-init
+  ansible.builtin.import_tasks: cloud_init.yml
+
+- name: Modules noyau des clients Ceph
+  ansible.builtin.import_tasks: modules.yml
+
+- name: Configuration réseau de la carte de stockage
+  ansible.builtin.import_tasks: reseau.yml
+
+- name: Vérifications et étiquette du nœud
+  ansible.builtin.include_tasks: verifications.yml
+  when: k8s_reseau_stockage_carte_presente | bool

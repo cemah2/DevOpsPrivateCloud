@@ -1,0 +1,107 @@
+# Taskfile.reseau.yml — le réseau de k8s-par1 décrit par le code (M15-E23, PLAT-1623).
+# Inclus par Taskfile.yml :   includes: { reseau: ./Taskfile.reseau.yml }
+# Usage : task reseau:installer   (tout, dans l'ordre, arrêt au premier échec)
+#         task reseau:derive      (lecture seule, code 1 si le cluster a dérivé du dépôt)
+# Prérequis HORS cluster (cités, pas dupliqués) : bordure FRR + flux (plateforme/ansible,
+# group_vars/role_routeur/{frr,pare_feu}.yml), zone apps et clés TSIG (rôle powerdns_auth,
+# group_vars/role_dns/), délégation DNS (plateforme/infra envs/k8s/dns-apps.tf), répartiteurs
+# (group_vars/role_lb/haproxy.yml). Voir docs/kubernetes/reseau/reconstruction.md.
+version: "3"
+
+dotenv: [composants/versions.env]
+
+vars:
+  ESPACES_MEDIAGENDA: mediagenda-dev mediagenda-recette
+
+tasks:
+  installer:
+    desc: Installe ou remet à niveau TOUT le réseau du cluster, dans l'ordre
+    cmds:
+      - task: crd-gateway-api
+      - task: cilium
+      - task: espaces
+      - task: noeuds
+      - task: lb-bgp
+      - task: coredns
+      - task: secrets-tsig
+      - task: cert-manager
+      - task: external-dns
+      - task: passerelles
+      - task: politiques
+
+  crd-gateway-api:
+    desc: CRD de la Gateway API (canal standard, version épinglée, fichier vendu avec son empreinte)
+    dir: composants/gateway-api
+    cmds:
+      - sha256sum -c SHA256SUMS
+      - kubectl apply --server-side -f standard-install-{{.GATEWAY_API_VERSION}}.yaml
+
+  cilium:
+    desc: Cilium (CLI cilium = helm upgrade de la release « cilium »), puis attente
+    cmds:
+      - cilium upgrade --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium status --wait --wait-duration 10m
+
+  espaces:
+    desc: Espaces de noms du réseau et étiquettes d'exposition
+    cmds:
+      - kubectl apply --server-side -f espaces/passerelles.yaml -f espaces/cert-manager.yaml -f espaces/external-dns.yaml
+
+  noeuds:
+    desc: Étiquettes de nœuds (bgp=par1, zones)
+    cmds:
+      - outils/etiqueter-noeuds.sh
+
+  lb-bgp:
+    desc: Pool LB IPAM et plan de contrôle BGP
+    cmds:
+      - kubectl apply --server-side -f composants/cilium/lb-ipam/
+      - kubectl apply --server-side -f composants/cilium/bgp/
+
+  coredns:
+    desc: Corefile géré (M15-E04)
+    cmds:
+      - kubectl apply --server-side -f composants/coredns/
+      - kubectl -n kube-system rollout status deploy/coredns --timeout=120s
+
+  secrets-tsig:
+    desc: Secrets TSIG recréés depuis le Vault (aucun secret dans ce dépôt)
+    cmds:
+      - outils/secret-tsig.sh certmanager-k8s cert-manager tsig-certmanager-k8s
+      - outils/secret-tsig.sh externaldns-k8s external-dns tsig-externaldns-k8s
+
+  cert-manager:
+    desc: cert-manager (chart OCI épinglé) puis l'émetteur ACME
+    cmds:
+      - >-
+        helm upgrade --install cert-manager {{.CERT_MANAGER_CHART}} --version {{.CERT_MANAGER_VERSION}}
+        --namespace cert-manager --values composants/cert-manager/values.yaml --wait --timeout 10m
+      - kubectl apply --server-side -f composants/cert-manager/clusterissuer-step-ca-acme.yaml
+      - kubectl wait --for=condition=Ready clusterissuer/step-ca-acme --timeout=180s
+
+  external-dns:
+    desc: ExternalDNS (chart épinglé)
+    cmds:
+      - helm repo add external-dns {{.EXTERNAL_DNS_REPO}} --force-update
+      - >-
+        helm upgrade --install external-dns external-dns/external-dns --version {{.EXTERNAL_DNS_CHART_VERSION}}
+        --namespace external-dns --values composants/external-dns/values.yaml --wait --timeout 5m
+
+  passerelles:
+    desc: gw-par1, redirection HTTPS, certificat joker
+    cmds:
+      - kubectl apply --server-side -f composants/passerelles/
+      - kubectl -n passerelles wait --for=condition=Programmed gateway/gw-par1 --timeout=180s
+      - kubectl -n passerelles wait --for=condition=Ready certificate/apps-joker --timeout=600s
+
+  politiques:
+    desc: Politiques de MédiAgenda et routes des espaces applicatifs
+    cmds:
+      - for: {var: ESPACES_MEDIAGENDA}
+        cmd: kubectl apply --server-side -n {{.ITEM}} -f espaces/politiques-mediagenda/
+      - kubectl apply --server-side -f espaces/mediagenda-recette/httproute-mediagenda.yaml
+
+  derive:
+    desc: Écarts entre le dépôt et le cluster (lecture seule ; code 1 si dérive)
+    cmds:
+      - outils/derive-reseau.sh

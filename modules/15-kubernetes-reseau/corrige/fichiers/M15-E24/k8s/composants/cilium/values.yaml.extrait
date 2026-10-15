@@ -1,0 +1,17 @@
+# composants/cilium/values.yaml — EXTRAIT à intégrer (M15-E24, SEC-1624) : chiffrement WireGuard.
+# Le fichier complet de fin de palier 3 est dans corrige/fichiers/M15-E27/k8s/composants/cilium/values.yaml.
+#
+# Décision (docs/kubernetes/reseau/chiffrement.md) :
+#   - chiffrement des flux ENTRE PODS de nœuds différents (mode par défaut) ;
+#   - pas de nodeEncryption (beta en 1.20, nœuds de contrôle exclus de toute façon, et les flux entre
+#     nœuds qui comptent — API, etcd, kubelet — sont déjà en TLS mutuel par Kubernetes) ;
+#   - pas de mode strict en entrée pour l'instant : il refuse tout trafic entre pods non chiffré, ce qui
+#     transformerait la moindre perte de clé (nœud reconstruit) en panne ; réévalué après six mois de
+#     fonctionnement sans incident (action ADR-0150).
+encryption:
+  enabled: true
+  type: wireguard
+  nodeEncryption: false
+  # strictMode:
+  #   ingress:
+  #     enabled: true     # option du chart 1.20 (WireGuard seulement) : refuse le trafic non chiffré

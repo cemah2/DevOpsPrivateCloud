@@ -1,0 +1,9 @@
+# .dockerignore de MédiAgenda (M12-E11) — liste blanche.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!migrations/
+**/__pycache__
+**/*.pyc

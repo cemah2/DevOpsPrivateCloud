@@ -1,0 +1,29 @@
+# Base CNPG de MédiDoc (dev)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: medidoc-db
+  namespace: medidoc-dev
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
+  storage:
+    storageClass: rapide
+    size: 1Gi
+  affinity:
+    enablePodAntiAffinity: false
+  bootstrap:
+    initdb:
+      database: medidoc
+      owner: medidoc
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://cnpg-k8s-par1/
+      endpointURL: https://s3-01.par1.medisphere.internal:8333
+      s3Credentials:
+        accessKeyId:
+          name: cnpg-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: cnpg-s3
+          key: ACCESS_SECRET_KEY

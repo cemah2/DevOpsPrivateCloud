@@ -1,0 +1,429 @@
+# _m14-temoins.yaml — témoins des pannes du palier 4 du module 14 (espace wb-pannes).
+#
+# Appliqué par m14_temoins (_m14-commun.sh) à la première injection, après remplacement de
+#   __IMAGE_AGENDA__  image MédiAgenda tirée de Harbor (projet medisphere, M13) ;
+#   __REGISTRE__      registre Harbor (registry.par1.medisphere.internal), caches publics compris.
+# Les Secrets « harbor-pull » (copié d'un espace existant, M14-E19) et « agenda-db » (mot de passe
+# tiré au hasard) sont créés à part par le script : jamais de secret dans ce fichier.
+#
+# Ces objets jouent le rôle d'une petite application d'équipe ; ils ne sont jamais supprimés par
+# les pannes. Stockage JETABLE (emptyDir) assumé : le stockage persistant arrive au module 16.
+# Tous les pods respectent le profil Pod Security « restricted » et tirent leurs images par Harbor.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-pannes
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+    medisphere.internal/usage: temoins-pannes-m14
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: wb-pannes
+  namespace: wb-pannes
+spec:
+  hard:
+    pods: "20"
+    requests.cpu: "4"
+    requests.memory: 16Gi
+    limits.cpu: "8"
+    limits.memory: 24Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: wb-pannes
+  namespace: wb-pannes
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        cpu: 200m
+        memory: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: wb-pannes
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: temoins
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/part-of: temoins
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: __REGISTRE__/dockerhub/library/postgres:18-trixie
+          imagePullPolicy: Always
+          env:
+            - name: POSTGRES_USER
+              value: mediagenda
+            - name: POSTGRES_DB
+              value: mediagenda
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agenda-db
+                  key: motdepasse
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: donnees
+              mountPath: /var/lib/postgresql
+      volumes:
+        - name: donnees
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: wb-pannes
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey
+  namespace: wb-pannes
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: temoins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/part-of: temoins
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: __REGISTRE__/dockerhub/valkey/valkey:8.1
+          imagePullPolicy: Always
+          args: ["valkey-server", "--save", "", "--appendonly", "no"]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: valkey
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+      volumes:
+        - name: donnees
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: wb-pannes
+spec:
+  selector:
+    app.kubernetes.io/name: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agenda
+  namespace: wb-pannes
+  labels:
+    app.kubernetes.io/name: agenda
+    app.kubernetes.io/part-of: temoins
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agenda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agenda
+        app.kubernetes.io/part-of: temoins
+    spec:
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agenda
+          image: __IMAGE_AGENDA__
+          imagePullPolicy: Always
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agenda-db
+                  key: url
+            - name: MEDIAGENDA_VALKEY_URL
+              value: redis://valkey:6379/0
+            - name: MEDIAGENDA_VERSION
+              value: temoin-m14
+          ports:
+            - name: http
+              containerPort: 8000
+          startupProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /pret
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agenda
+  namespace: wb-pannes
+spec:
+  selector:
+    app.kubernetes.io/name: agenda
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sonde-api
+  namespace: wb-pannes
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sonde-api
+  namespace: wb-pannes
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sonde-api
+  namespace: wb-pannes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sonde-api
+subjects:
+  - kind: ServiceAccount
+    name: sonde-api
+    namespace: wb-pannes
+---
+# Sonde « application qui lit l'API » : toutes les 10 s, liste les pods de l'espace avec le jeton lié
+# monté dans le pod (relu à chaque fois : il est renouvelé par le kubelet). Prête tant que le dernier
+# appel a réussi il y a moins d'une minute.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonde-api
+  namespace: wb-pannes
+  labels:
+    app.kubernetes.io/name: sonde-api
+    app.kubernetes.io/part-of: temoins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sonde-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sonde-api
+        app.kubernetes.io/part-of: temoins
+    spec:
+      serviceAccountName: sonde-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sonde
+          image: __REGISTRE__/dockerhub/curlimages/curl:8.16.0
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - |
+              d=/var/run/secrets/kubernetes.io/serviceaccount
+              while true; do
+                if curl -sf --max-time 5 --cacert "$d/ca.crt" -H "Authorization: Bearer $(cat "$d/token")" \
+                    "https://kubernetes.default.svc/api/v1/namespaces/wb-pannes/pods?limit=1" -o /dev/null; then
+                  date +%s > /tmp/dernier-succes; echo "$(date -Iseconds) lecture de l'API : ok"
+                else
+                  echo "$(date -Iseconds) lecture de l'API : ECHEC"
+                fi
+                sleep 10
+              done
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "test $(( $(date +%s) - $(cat /tmp/dernier-succes 2>/dev/null || echo 0) )) -lt 60"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+# Sonde DNS : prête tant qu'un nom interne (Service) ET un nom MédiSphère hors cluster se résolvent.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonde-dns
+  namespace: wb-pannes
+  labels:
+    app.kubernetes.io/name: sonde-dns
+    app.kubernetes.io/part-of: temoins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sonde-dns
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sonde-dns
+        app.kubernetes.io/part-of: temoins
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: sonde
+          image: __REGISTRE__/dockerhub/library/busybox:1.37
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c", "trap 'exit 0' TERM; while true; do sleep 5 & wait $!; done"]
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - nslookup kubernetes.default.svc.cluster.local >/dev/null && nslookup registry.par1.medisphere.internal >/dev/null
+            periodSeconds: 10
+            timeoutSeconds: 8
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

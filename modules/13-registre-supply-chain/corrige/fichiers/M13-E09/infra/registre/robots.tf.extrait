@@ -1,0 +1,9 @@
+# registre/robots.tf — EXTRAIT (M13-E09) : un robot de CI pour le projet « plateforme » (image
+# outillée de la chaîne de livraison, publiée par le pipeline de plateforme/ci-templates).
+# 1. Ajouter « plateforme-ci » à l'ensemble de random_password.robot :
+#      for_each = toset(["medisphere-ci", "bibliotheque-ci", "plateforme-ci", "k8s-pull", "wb-checks"])
+# 2. Ajouter « plateforme » à l'ensemble de harbor_robot_account.ci :
+#      for_each = toset(["medisphere", "bibliotheque", "plateforme"])
+# Résultat : robot$plateforme+ci (poussée et tirage dans « plateforme » seulement), 180 jours.
+# Ses identifiants vont dans les variables HARBOR_ROBOT_USER / HARBOR_ROBOT_TOKEN du PROJET
+# plateforme/ci-templates (pas du groupe plateforme : aucun autre projet n'en a besoin).

@@ -1,0 +1,28 @@
+# Certificats et noms publiés (M15-E13 à E15). Les clés TSIG restent des Secrets créés par script
+# (jamais dans ces valeurs).
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    version: v1.21.1
+    labels:
+      groupe: certificats
+      composant: cert-manager
+    values:
+      - ../composants/cert-manager/values.yaml
+
+  - name: external-dns
+    namespace: external-dns
+    chart: external-dns/external-dns
+    version: 1.23.0
+    labels:
+      groupe: certificats
+      composant: external-dns
+    values:
+      - ../composants/external-dns/values.yaml
+      - txtOwnerId: {{ .Values.cluster }}
+        domainFilters:
+          - {{ .Values.domaineApps }}

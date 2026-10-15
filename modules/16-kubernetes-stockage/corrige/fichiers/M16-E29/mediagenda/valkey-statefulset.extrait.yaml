@@ -1,0 +1,19 @@
+# EXTRAIT du StatefulSet valkey (dépôt et chemin de E08) — M16-E29 : seule la classe change.
+# volumeClaimTemplates est IMMUABLE : l'objet est supprimé avec --cascade=orphan (ni pods, ni PVC)
+# puis recréé par la MR ; il adopte le PVC donnees-valkey-0 existant, quelle que soit sa classe.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  namespace: mediagenda-recette
+spec:
+  replicas: 1
+  volumeClaimTemplates:
+  - metadata:
+      name: donnees
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: ceph-rbd-chiffre        # était : ceph-rbd
+      resources:
+        requests:
+          storage: 2Gi                          # inchangé (E08)

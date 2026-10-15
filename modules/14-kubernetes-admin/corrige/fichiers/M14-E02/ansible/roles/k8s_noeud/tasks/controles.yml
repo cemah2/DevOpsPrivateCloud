@@ -1,0 +1,57 @@
+---
+# Contrôles : cohérence avec containerd, puis tous les contrôles préalables de kubeadm.
+
+- name: Image pause attendue par kubeadm {{ k8s_noeud_version }}
+  ansible.builtin.command: kubeadm config images list --kubernetes-version v{{ k8s_noeud_version }}
+  register: _k8s_noeud_images
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+# kubeadm signale l'écart par un simple avertissement (« sandbox image … inconsistent ») : le
+# kubelet tirerait alors deux images pause différentes. Ici c'est une erreur.
+- name: Exiger la même image pause dans containerd et kubeadm
+  ansible.builtin.assert:
+    that:
+      - k8s_noeud_image_pause in _k8s_noeud_images.stdout_lines
+    fail_msg: >-
+      containerd utilise {{ k8s_noeud_image_pause }} ; kubeadm {{ k8s_noeud_version }} attend
+      {{ _k8s_noeud_images.stdout_lines | select('search', '/pause:') | first | default('?') }}.
+      Corrige k8s_image_pause dans group_vars/k8s_par1/kubernetes.yml.
+    quiet: true
+  when: not ansible_check_mode and k8s_noeud_image_pause | length > 0
+
+- name: Dossier de travail du rôle
+  ansible.builtin.file:
+    path: /var/lib/k8s_noeud
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: k8s_noeud_preflight | bool and not _k8s_noeud_membre.stat.exists
+
+# Configuration minimale : sans version explicite, kubeadm demanderait « stable-1 » à dl.k8s.io.
+- name: Configuration du contrôle préalable
+  ansible.builtin.template:
+    src: preflight.yaml.j2
+    dest: /var/lib/k8s_noeud/preflight.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when: k8s_noeud_preflight | bool and not _k8s_noeud_membre.stat.exists
+
+# --dry-run : aucune image tirée, rien d'écrit. Seulement sur un nœud pas encore membre (sur un
+# nœud membre, les ports 6443/10250… sont pris et /etc/kubernetes/manifests n'est pas vide).
+- name: Contrôles préalables de kubeadm (sans rien modifier)
+  ansible.builtin.command: >-
+    kubeadm init phase preflight --dry-run --config /var/lib/k8s_noeud/preflight.yaml
+    {{ ('--ignore-preflight-errors=' ~ (k8s_noeud_preflight_ignorer | join(','))) if k8s_noeud_preflight_ignorer | length > 0 else '' }}
+  register: _k8s_noeud_preflight
+  changed_when: false
+  check_mode: false
+  when: k8s_noeud_preflight | bool and not _k8s_noeud_membre.stat.exists and not ansible_check_mode
+
+- name: Avertissements du contrôle préalable
+  ansible.builtin.debug:
+    msg: "{{ _k8s_noeud_preflight.stderr_lines | select('search', 'WARNING') | list }}"
+  when: _k8s_noeud_preflight.stderr_lines is defined and (_k8s_noeud_preflight.stderr_lines | select('search', 'WARNING') | list | length > 0)

@@ -1,0 +1,4 @@
+---
+# host_vars/ctr02/supervision_conteneurs.yml — M12-E28 (PLAT-1354)
+supervision_conteneurs_comptes_podman: [app]
+supervision_conteneurs_cle_publique: "ssh-ed25519 <CLÉ-PUBLIQUE> supervision-conteneurs@adm01"

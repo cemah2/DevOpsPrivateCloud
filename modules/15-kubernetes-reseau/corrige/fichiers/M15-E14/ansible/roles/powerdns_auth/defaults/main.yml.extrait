@@ -1,0 +1,15 @@
+# À AJOUTER à la fin de roles/powerdns_auth/defaults/main.yml (état M06-E26) — M15-E14.
+
+# --- (M15-E14) Mises à jour dynamiques PAR ZONE (RFC 2136, primaire seulement) ------------------
+# Clés TSIG de mise à jour : [{nom, algorithme, secret}] ; secret en Vault (32 caractères au moins).
+# Distinctes de powerdns_auth_tsig (transferts axfr-par1) et de la clé ddns-kea (rôle kea_ddns).
+powerdns_auth_cles_dnsupdate: []
+# Autorisations par zone (la zone doit figurer dans powerdns_auth_zones) :
+#   - zone: apps.par1.medisphere.internal
+#     cles: [certmanager-k8s, externaldns-k8s]   # TSIG-ALLOW-DNSUPDATE (une valeur par clé)
+#     depuis: [10.10.40.0/24]                      # ALLOW-DNSUPDATE-FROM
+#     notifier: true                               # NOTIFY-DNSUPDATE = 1 (secondaires à jour tout de suite)
+#     axfr: [externaldns-k8s]                      # clés AUSSI autorisées à transférer la zone (TSIG-ALLOW-AXFR)
+# Le rôle n'écrit QUE les zones listées : les métadonnées posées par kea_ddns sur par1 et les zones
+# inverses ne sont jamais touchées.
+powerdns_auth_zones_dnsupdate: []

@@ -1,0 +1,54 @@
+# manifestes/sondes-segmentation.yaml — M15-E28 : pods de sonde pour la matrice de tests.
+# Profil PSA « restricted » (espaces d'équipe) : utilisateur non root, aucune capacité. netshoot sait
+# faire curl, nc et dig sans privilège. Supprimer en fin d'exercice :
+#   kubectl delete -f manifestes/sondes-segmentation.yaml
+# Les sondes portent le label app=sonde : les politiques de M15-E17 ne les autorisent à rien de plus que
+# le DNS (refus par défaut) ; la matrice teste donc la cloison ET l'absence d'autorisation. Pour tester
+# la cloison SEULE (règle 2), la politique temporaire « tout-autoriser-test » ouvre l'entrée de recette.
+apiVersion: v1
+kind: Pod
+metadata: {name: sonde, namespace: mediagenda-dev, labels: {app: sonde}}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {cpu: 200m, memory: 64Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: sonde, namespace: medidoc-dev, labels: {app: sonde}}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {cpu: 200m, memory: 64Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: sonde, namespace: mediagenda-recette, labels: {app: sonde}}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {cpu: 200m, memory: 64Mi}}
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+# Politique TEMPORAIRE (étape 5, preuve de la règle 2) : à supprimer aussitôt le test fait.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: tout-autoriser-test, namespace: mediagenda-recette}
+spec:
+  endpointSelector: {}
+  ingress:
+    - fromEntities: [all]

@@ -1,0 +1,48 @@
+# compose.ha.yaml — recette « deux instances derrière un répartiteur » (M12-E30, CHG-1356).
+# Fichier de SURCHARGE, toujours utilisé avec compose.yaml :
+#
+#   admin@ctr01:~/src/mediagenda-api$ export COMPOSE_FILE=compose.yaml:compose.ha.yaml
+#   admin@ctr01:~/src/mediagenda-api$ docker compose up -d --wait
+#   admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=<NOUVELLE> outils/maj-progressive.sh
+#
+# Compose ne sait pas faire de mise à jour progressive (deploy.update_config est une notion
+# Swarm, ignorée ici) : on déclare donc DEUX services d'API, mis à jour l'un après l'autre par
+# outils/maj-progressive.sh, et HAProxy devient le seul point d'entrée (port 8000 de l'hôte).
+services:
+  api:
+    # Plus de publication directe : tout passe par HAProxy (sinon un client resterait collé à
+    # l'instance qu'on redémarre). « !reset » vide la liste héritée de compose.yaml.
+    ports: !reset []
+
+  api-b:
+    # Copie conforme du service « api » de compose.yaml (image, durcissement, sondes, secrets…).
+    extends:
+      file: compose.yaml
+      service: api
+    ports: !reset []
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+
+  entree:
+    image: docker.io/library/haproxy:3.2-trixie
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # L'image tourne déjà sous l'utilisateur haproxy (non root) ; HAProxy écoute en 8080 (> 1024).
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    tmpfs:
+      - /tmp:size=1m,mode=1777,noexec,nosuid,nodev
+    ports:
+      # Les clients de la recette gardent l'adresse habituelle : http://ctr01…:8000
+      - "8000:8080"
+      # Page d'état (CSV) lue par outils/maj-progressive.sh : boucle locale seulement.
+      - "127.0.0.1:8404:8404"
+    # Pas de HEALTHCHECK : l'image n'a ni curl ni wget, et « haproxy -c » ne testerait que la
+    # syntaxe. La page d'état (8404) et la sonde ms-verif-conteneurs (M12-E28) en tiennent lieu.
+    restart: unless-stopped
+    networks: [avant]

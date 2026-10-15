@@ -1,0 +1,14 @@
+# Volume partagé entre l'API MédiDoc et le traitement des miniatures (corrigé, M16-E21)
+# RWX en mode fichier : CephFS, seule classe qui le permet ; taille dans les bornes de l'espace.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: documents-partages
+  namespace: medidoc-dev
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: cephfs
+  resources:
+    requests:
+      storage: 5Gi

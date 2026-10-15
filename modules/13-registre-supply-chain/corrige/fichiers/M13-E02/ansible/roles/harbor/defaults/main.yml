@@ -1,0 +1,66 @@
+---
+# Rôle harbor — Harbor (installateur hors ligne) sur un hôte Debian 13 avec Docker Engine 29 et
+# Compose v5 (rôle docker_engine du M12). M13-E02, ticket PLAT-1402. RB-130.
+#
+# Ce que fait le rôle, dans l'ordre (tasks/main.yml) :
+#   1. prerequis.yml : disque de données → /data (XFS, par son identifiant stable), docker.service
+#      attend /data (RequiresMountsFor), dossier des certificats, scripts, unité harbor.service.
+#      Ces tâches sont aussi appelées SEULES avant le rôle certificats_acme (playbooks/registre.yml).
+#   2. installer.yml : archive téléchargée SUR l'hôte, vérifiée par son empreinte SHA-256 épinglée
+#      (signature Sigstore vérifiée à la main au moment de l'épinglage, RB-130), décompressée dans
+#      un dossier par version, lien /opt/harbor → version active.
+#   3. configurer.yml : harbor.yml (600) ; install.sh --with-trivy à la PREMIÈRE installation
+#      seulement ; ensuite tout changement de harbor.yml → prepare puis redémarrage.
+#   4. service.yml : harbor.service actif et activé.
+#   5. verifier.yml : /api/v2.0/health « healthy », par le nom de service, TLS vérifié.
+# Le rôle ne crée AUCUN objet dans Harbor (projets, robots…) : c'est l'état OpenTofu « registre ».
+
+# --- Version et installateur -------------------------------------------------------------------
+harbor_version: "2.15.3"
+# Empreinte SHA-256 de harbor-offline-installer-v<version>.tgz, relevée APRÈS vérification du
+# bundle Sigstore de la release (RB-130, étape 1) :
+#   cosign verify-blob harbor-offline-installer-v2.15.3.tgz \
+#     --bundle harbor-offline-installer-v2.15.3.tgz.sigstore.json \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+#     --certificate-identity https://github.com/goharbor/harbor/.github/workflows/publish_release.yml@refs/tags/v2.15.3
+harbor_installateur_sha256: "9609b32edaa0075ce2bfa336b5e72447f8782ded9f576b5df7cd92bdd8359336"
+harbor_installateur_url: "https://github.com/goharbor/harbor/releases/download/v{{ harbor_version }}/harbor-offline-installer-v{{ harbor_version }}.tgz"
+harbor_dist: /opt/harbor-dist
+harbor_dossier: /opt/harbor
+# Changer de version est une PROCÉDURE (sauvegarde, prepare, migration du schéma : M13-E16).
+# Le rôle refuse de basculer le lien /opt/harbor vers une autre version tant que cette variable
+# n'est pas mise à true, explicitement, pour l'opération (ligne de commande -e, jamais en dur).
+harbor_autoriser_changement_version: false
+
+# --- Disque de données -------------------------------------------------------------------------
+# Identifiant stable du disque scsi1 (numéro de série posé par OpenTofu, socle/reg01.tf).
+harbor_disque_donnees: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_reg01-donnees
+harbor_donnees: /data
+harbor_donnees_fstype: xfs
+
+# --- harbor.yml (clés du harbor.yml.tmpl de la version, rien d'autre) ------------------------
+harbor_nom: registry.par1.medisphere.internal
+harbor_port_http: 80
+harbor_port_https: 443
+harbor_tls_dossier: /etc/harbor/tls
+harbor_tls_certificat: "{{ harbor_tls_dossier }}/registry.crt"   # chaîne complète (step-ca)
+harbor_tls_cle: "{{ harbor_tls_dossier }}/registry.key"
+harbor_admin_mdp: "{{ vault_harbor_admin_mdp }}"   # n'agit qu'à la PREMIÈRE installation (doc)
+harbor_db_mdp: "{{ vault_harbor_db_mdp }}"
+harbor_trivy_ignore_unfixed: false
+harbor_trivy_skip_update: false
+harbor_trivy_timeout: 5m0s
+harbor_jobservice_workers: 5          # 2 vCPU : 10 (défaut) est trop pour reg01
+harbor_journal_niveau: info
+harbor_journal_rotation_nombre: 50
+harbor_journal_rotation_taille: 200M
+harbor_metriques: false               # palier 3 (M13-E16) : true, port 9090
+harbor_metriques_port: 9090
+harbor_purge_uploads_age: 168h
+
+# --- Contrôles ----------------------------------------------------------------------------------
+harbor_sante_tentatives: 30
+harbor_sante_delai: 10
+
+harbor_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle harbor).') | replace('\n', ' ') }}

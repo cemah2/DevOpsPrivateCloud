@@ -1,0 +1,43 @@
+# e03-volume-local.yaml — M16-E03 (PLAT-1703) : la classe et le PV, objets DE CLUSTER posés par l'admin.
+# Préalable, sur le nœud (exploration, à la main) :
+#   admin@k8s-w01:~$ sudo mkdir -p /srv/wb-local/e03 && sudo chmod 0777 /srv/wb-local/e03
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-manuel
+  labels:
+    medisphere.fr/exercice: m16-e03
+  # Surtout PAS d'annotation storageclass.kubernetes.io/is-default-class : la classe par défaut
+  # du cluster sera ceph-rbd (E06).
+provisioner: kubernetes.io/no-provisioner
+# Liaison au premier consommateur : le planificateur choisit le nœud en tenant compte de
+# l'affinité du PV, puis le contrôleur lie. En Immediate, un PVC pourrait se lier à un PV d'un
+# nœud où le pod ne peut pas aller (ressources, taints).
+volumeBindingMode: WaitForFirstConsumer
+# Sans effet sur un PV statique (c'est le champ du PV qui compte) ; écrit pour être explicite.
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: e03-local-w01
+  labels:
+    medisphere.fr/exercice: m16-e03
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: ["ReadWriteOnce"]
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-manuel
+  local:
+    path: /srv/wb-local/e03
+  # Obligatoire pour un volume local : la donnée n'existe que sur ce nœud.
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["k8s-w01"]

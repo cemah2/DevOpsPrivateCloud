@@ -1,0 +1,19 @@
+# M16-E29 — PVC définitif : même NOM que celui du StatefulSet (donnees-valkey-0), lié
+# explicitement au PV du volume chiffré (volumeName). Appliqué après :
+#   1. PV cible passé en Retain ; 2. PVC temporaire migration-valkey-cible supprimé ;
+#   3. claimRef du PV cible retiré (le PV passe de Released à Available) ;
+#   4. ancien PVC donnees-valkey-0 supprimé (son PV, en Retain, est conservé : retour arrière).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: donnees-valkey-0
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: valkey          # mêmes labels que ceux posés par le StatefulSet (E08)
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ceph-rbd-chiffre
+  volumeName: <PV-CIBLE>
+  resources:
+    requests:
+      storage: <TAILLE>

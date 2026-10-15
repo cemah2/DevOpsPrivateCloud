@@ -1,0 +1,6 @@
+---
+# molecule/docker_engine/molecule.yml — scénario du rôle « docker_engine » (M12-E02)
+#   uv run molecule test -s docker_engine
+# Instance Debian 13 (mol_famille: debian13) : clone lié de l'image dorée debian13 current.
+scenario:
+  name: docker_engine

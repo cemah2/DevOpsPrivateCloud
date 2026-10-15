@@ -1,0 +1,15 @@
+# Une sauvegarde par nuit — corrigé (M16-E21). Cron CNPG à SIX champs (secondes en tête) :
+# 02:00:00 UTC chaque jour.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: medidoc-db-nuit
+  namespace: medidoc-dev
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: medidoc-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

@@ -1,0 +1,11 @@
+---
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajout de M12-E29 (matrice commune à gw01 et gw02, M07-E24).
+# docs/socle/matrice-flux.md est régénéré par ms-matrice-flux (job « matrice-a-jour »).
+pare_feu_definitions:
+  # … définitions existantes (PBS01, WG_S2S, V_SANDBOX…) …
+  - {nom: CTR01, valeur: 10.10.99.121, commentaire: "ctr01 (M12), réservation Kea du sous-réseau 99"}
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_SANDBOX, source: $CTR01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "ctr01 vers PBS : sauvegarde des données des conteneurs (par1/conteneurs)", ref: M12-E29}

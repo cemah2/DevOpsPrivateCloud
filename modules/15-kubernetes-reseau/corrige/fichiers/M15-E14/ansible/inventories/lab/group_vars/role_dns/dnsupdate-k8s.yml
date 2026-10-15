@@ -1,0 +1,21 @@
+---
+# group_vars/role_dns/dnsupdate-k8s.yml — mises à jour RFC 2136 de la zone apps par k8s-par1
+# (M15-E14, PLAT-1614). Appliqué sur le PRIMAIRE (dns01) par roles/powerdns_auth/tasks/dnsupdate.yml.
+# Secrets : group_vars/role_dns/vault-lab.yml (identité lab), écrits par outils/ajouter-tsig.sh ;
+# registre des secrets : deux lignes (certmanager-k8s, externaldns-k8s).
+#
+# Ce que ces clés permettent (à dire honnêtement) : TOUT enregistrement de la SEULE zone apps
+# (PowerDNS n'a pas de politique par type sans script Lua), depuis le seul VLAN 40. Elles ne
+# peuvent rien dans par1, par2 ni les inverses (aucune métadonnée de ces zones ne les cite).
+powerdns_auth_cles_dnsupdate:
+  - {nom: certmanager-k8s, algorithme: hmac-sha256, secret: "{{ vault_powerdns_tsig_certmanager_k8s }}"}
+  - {nom: externaldns-k8s, algorithme: hmac-sha256, secret: "{{ vault_powerdns_tsig_externaldns_k8s }}"}
+
+powerdns_auth_zones_dnsupdate:
+  - zone: apps.par1.medisphere.internal
+    cles: [certmanager-k8s, externaldns-k8s]
+    # Les pods sortent du cluster avec l'adresse de leur nœud (masquage de Cilium) : 10.10.40.0/24.
+    depuis: [10.10.40.0/24]
+    notifier: true
+    # ExternalDNS (politique sync) lit la zone par AXFR signé pour savoir ce qu'il possède.
+    axfr: [externaldns-k8s]

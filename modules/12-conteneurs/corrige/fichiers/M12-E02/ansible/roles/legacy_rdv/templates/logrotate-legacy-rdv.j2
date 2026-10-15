@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Journal applicatif de Legacy-RDV (fichier local, comme sur la VM d'InfoGér).
+{{ legacy_rdv_journaux }}/app.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 {{ legacy_rdv_utilisateur_web }} {{ legacy_rdv_utilisateur_web }}
+}

@@ -1,0 +1,26 @@
+# vm-debian/variables.tf — EXTRAIT à AJOUTER en fin de fichier (M13-E02, version mineure).
+# Même contrat que vm-noeud (M08-E02) : les deux modules partagent les noms quand le sens est le même.
+
+variable "disques_donnees" {
+  description = <<-EOT
+    Disques de données facultatifs, branchés sur scsi1, scsi2… dans l'ordre de la liste (M13-E02).
+    sauvegarde = false par défaut : un disque de données dont l'application se sauvegarde
+    elle-même (Harbor, M13-E15) n'a pas à alourdir la sauvegarde PBS de la VM.
+    serie : numéro de série vu par l'invité (/dev/disk/by-id/…), 20 caractères au plus.
+    Liste vide par défaut : aucun changement pour les consommateurs existants.
+  EOT
+  type = list(object({
+    taille_go  = number
+    datastore  = string
+    ssd        = optional(bool, false)
+    sauvegarde = optional(bool, false)
+    serie      = optional(string)
+  }))
+  default = []
+  validation {
+    condition = length(var.disques_donnees) <= 4 && alltrue([
+      for d in var.disques_donnees : d.taille_go >= 1 && (d.serie == null || length(coalesce(d.serie, "")) <= 20)
+    ])
+    error_message = "disques_donnees : 4 disques au plus, taille >= 1 Gio, série de 20 caractères au plus."
+  }
+}

@@ -1,0 +1,25 @@
+# wb-essais/pg-essai.yaml (M16-E25) — cluster d'essai pour les mises à jour mineure et majeure.
+# Jetable : supprimé en fin d'exercice. Image « minimal-trixie » : la montée majeure en place
+# n'est possible qu'entre images de la même distribution de base (documentation CNPG 1.30).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-essai
+  namespace: wb-essais
+spec:
+  instances: 2
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:17.10-minimal-trixie
+  # Accès super-utilisateur : crée le Secret pg-essai-superuser, utilisé comme source de l'import.
+  enableSuperuserAccess: true
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  storage:
+    storageClass: ceph-rbd
+    size: 1Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  bootstrap:
+    initdb:
+      database: essai
+      owner: essai

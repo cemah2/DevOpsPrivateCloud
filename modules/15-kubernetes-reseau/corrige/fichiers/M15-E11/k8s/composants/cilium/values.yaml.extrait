@@ -1,0 +1,8 @@
+# Extrait de composants/cilium/values.yaml (plateforme/k8s) — M15-E11. Les autres clés sont celles
+# du M14 et de M15-E07/E08 (gatewayAPI.enabled, kubeProxyReplacement, k8sServiceHost…).
+# Appliqué par : cilium upgrade --version 1.20.<PATCH> --values composants/cilium/values.yaml
+# (même CLI que l'installation du M14 ; la CLI fait un « helm upgrade » de la release « cilium »).
+bgpControlPlane:
+  enabled: true
+  # Secrets BGP (mots de passe TCP-MD5, authSecretRef) : espace par défaut du chart, kube-system.
+  # Aucun pour l'instant (choix discuté dans le corrigé de M15-E11).

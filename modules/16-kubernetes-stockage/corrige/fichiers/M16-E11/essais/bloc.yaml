@@ -1,0 +1,48 @@
+# ~/m16/e11/bloc.yaml — volume RBD en mode bloc (M16-E11).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bloc
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteOnce"]
+  volumeMode: Block
+  storageClassName: ceph-rbd
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bloc-essai
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: m16-e11
+spec:
+  # Écrire sur un périphérique bloc ne demande pas de privilège : le kubelet autorise ce seul
+  # périphérique dans le cgroup du conteneur. L'utilisateur doit pouvoir l'ouvrir : on reste
+  # en root DANS le conteneur, sans capacité ni élévation (acceptable en baseline, pas en
+  # restricted : pour restricted, il faudrait fsGroup… qui ne s'applique pas aux périphériques
+  # bloc avec tous les pilotes : à vérifier sur ta version).
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: essai
+      image: debian:trixie-slim
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeDevices:
+        - name: b
+          devicePath: /dev/xvda
+  volumes:
+    - name: b
+      persistentVolumeClaim:
+        claimName: bloc

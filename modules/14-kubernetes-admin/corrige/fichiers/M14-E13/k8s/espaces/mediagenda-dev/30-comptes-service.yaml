@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/mediagenda-dev/30-comptes-service.yaml (M14-E13)
+# - « default » : aucun jeton monté automatiquement (un pod qui oublie serviceAccountName ne reçoit
+#   pas d'identité utilisable contre l'API).
+# - « mediagenda-api » : l'identité de l'application. Elle n'a AUCUN droit RBAC (l'API ne parle pas
+#   à Kubernetes) et ne monte pas de jeton non plus. Elle existe pour être nommée (audit, futures
+#   politiques réseau du M15, identité de charge de travail du M25).
+# « kubectl apply » sur « default » ne recrée rien : il fusionne le champ dans le compte existant.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: mediagenda-dev
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+automountServiceAccountToken: false

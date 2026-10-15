@@ -1,0 +1,18 @@
+# plateforme/k8s — espaces/medidoc-dev/10-quota.yaml (M14-E33) : enveloppe accordée par Claire Morel.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: enveloppe
+  namespace: medidoc-dev
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "20"
+    # Publication au M15 seulement : ni LoadBalancer ni NodePort.
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    # Le stockage arrive au M16 : aucune demande de volume persistant d'ici là.
+    persistentvolumeclaims: "0"

@@ -1,0 +1,25 @@
+# plateforme/renovate — .gitlab-ci.yml (M13-E11, PLAT-1411).
+# Gabarit de renovate-runner IMPORTÉ dans plateforme/renovate-runner à l'étiquette v26.1.0 : on ne
+# dépend pas de gitlab.com à chaque exécution, et une nouvelle version du gabarit passe par une MR.
+# Le job « renovate » du gabarit ne tourne QUE sur un pipeline planifié (CI_PIPELINE_SOURCE ==
+# "schedule") : planification « chaque nuit » sur main (CI/CD > Schedules), 0 4 * * *, Europe/Paris.
+include:
+  - project: plateforme/renovate-runner
+    ref: v26.1.0
+    file: templates/renovate.gitlab-ci.yml
+
+variables:
+  # Image de Renovate par le cache GHCR de Harbor, majeure 44 épinglée par empreinte.
+  CI_RENOVATE_IMAGE: registry.par1.medisphere.internal/ghcr/renovatebot/renovate:44@sha256:<EMPREINTE>
+  # Renovate est une application Node.js : elle n'utilise pas le magasin du système.
+  # MEDISPHERE_ROOT_CA : variable d'instance de type FICHIER (racine MédiSphère), donc un chemin.
+  NODE_EXTRA_CA_CERTS: $MEDISPHERE_ROOT_CA
+  # Git (clones des projets traités sur git01) : même racine. Remplace le magasin de Git, ce qui
+  # suffit : Renovate ne clone que sur git01.
+  GIT_SSL_CAINFO: $MEDISPHERE_ROOT_CA
+  # Découverte limitée par config.js (autodiscoverFilter) ; RENOVATE_TOKEN : variable du projet.
+  RENOVATE_AUTODISCOVER: "true"
+  LOG_LEVEL: info
+
+renovate:
+  tags: [docker]

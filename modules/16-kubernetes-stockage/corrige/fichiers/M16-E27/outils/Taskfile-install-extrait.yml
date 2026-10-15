@@ -1,0 +1,15 @@
+# Taskfile.yml de plateforme/outils — EXTRAIT : install:systeme complétée pour la sonde M16-E27.
+  install:systeme:
+    desc: Installe les scripts dans /usr/local (root:root), pour les services systemd
+    cmds:
+      - sudo install -D -o root -g root -m 0644 lib/ms-commun.sh /usr/local/lib/ms-commun.sh
+      - for: { var: SCRIPTS }
+        cmd: sudo install -o root -g root -m 0755 bin/{{.ITEM}} /usr/local/bin/{{.ITEM}}
+      - sudo install -D -o root -g root -m 0644 etc/ms-verif-services.conf /usr/local/etc/ms-verif-services.conf
+      - sudo install -D -o root -g root -m 0644 etc/ms-verif-ceph.conf /usr/local/etc/ms-verif-ceph.conf
+      - sudo install -D -o root -g root -m 0644 etc/ms-verif-k8s-stockage.conf /usr/local/etc/ms-verif-k8s-stockage.conf
+      - for: [ms-verif-ceph.service, ms-verif-ceph.timer, ms-verif-k8s-stockage.service, ms-verif-k8s-stockage.timer]
+        cmd: sudo install -o root -g root -m 0644 systemd/{{.ITEM}} /etc/systemd/system/{{.ITEM}}
+      - sudo systemctl daemon-reload
+    vars:
+      SCRIPTS: ms-snapshot ms-verif-sauvegardes ms-alerte ms-verif-services ms-verif-ceph ms-verif-k8s-stockage

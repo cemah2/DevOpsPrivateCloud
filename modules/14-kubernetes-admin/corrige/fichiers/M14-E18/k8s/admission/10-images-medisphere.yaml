@@ -1,0 +1,98 @@
+# plateforme/k8s — admission/10-images-medisphere.yaml (M14-E18)
+# ValidatingAdmissionPolicy (CEL, dans l'API server : pas de webhook à faire tourner) :
+#   1. toute image vient d'un registre autorisé (Harbor de PAR1 : projets ET caches) ;
+#   2. toute image porte une étiquette explicite autre que « latest », ou un condensé (@sha256:…).
+# Appliquée aux pods ET à leurs contrôleurs, pour que l'erreur arrive à « kubectl apply » du
+# Deployment, et pas plus tard, en silence, dans les événements du ReplicaSet.
+# Paramètres (registres autorisés) dans une ConfigMap : changer la liste ne demande pas de modifier
+# la politique. Kyverno (M26) prendra le relais pour les règles plus riches (signatures…).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-images
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+data:
+  # Préfixes autorisés, séparés par des virgules (chaque préfixe se termine par « / »).
+  registres: "registry.par1.medisphere.internal/"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: medisphere-images
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs", "cronjobs"]
+  variables:
+    # La spécification de pod, où qu'elle soit selon le type d'objet.
+    - name: specPod
+      expression: >-
+        object.kind == 'Pod' ? object.spec :
+        (object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec : object.spec.template.spec)
+    - name: images
+      expression: >-
+        variables.specPod.containers.map(c, c.image) +
+        (has(variables.specPod.initContainers) ? variables.specPod.initContainers.map(c, c.image) : []) +
+        (has(variables.specPod.ephemeralContainers) ? variables.specPod.ephemeralContainers.map(c, c.image) : [])
+    - name: registres
+      expression: "params.data.registres.split(',').map(r, r.trim()).filter(r, r != '')"
+    # Partie après le dernier « / » : nom[:étiquette][@condensé]
+    - name: hors_registre
+      expression: >-
+        variables.images.filter(i, !variables.registres.exists(r, i.startsWith(r)))
+    - name: sans_version
+      expression: >-
+        variables.images.filter(i, !i.contains('@sha256:') &&
+          (!i.split('/')[i.split('/').size() - 1].contains(':') || i.endsWith(':latest')))
+  validations:
+    - expression: "size(variables.hors_registre) == 0"
+      messageExpression: >-
+        'image(s) hors du registre MédiSphère : ' + variables.hors_registre.join(', ') +
+        ' (autorisé : ' + variables.registres.join(', ') + ' ; les images publiques passent par les caches de Harbor)'
+      reason: Forbidden
+    - expression: "size(variables.sans_version) == 0"
+      messageExpression: >-
+        'image(s) sans version explicite ou en « latest » : ' + variables.sans_version.join(', ') +
+        ' (indique une étiquette de version ou un condensé @sha256)'
+      reason: Forbidden
+---
+# Liaison : sur les espaces des équipes (étiquette medisphere.internal/equipe), en mode bloquant.
+# Mise en service en deux temps (voir le corrigé) : d'abord validationActions [Warn, Audit], puis [Deny].
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: medisphere-images
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+spec:
+  policyName: medisphere-images
+  validationActions: ["Deny"]
+  paramRef:
+    name: medisphere-images
+    namespace: kube-system
+    parameterNotFoundAction: Deny
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists

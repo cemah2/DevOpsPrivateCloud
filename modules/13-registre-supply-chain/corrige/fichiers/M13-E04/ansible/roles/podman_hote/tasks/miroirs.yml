@@ -1,0 +1,18 @@
+---
+# roles/podman_hote/tasks/miroirs.yml — M13-E04. Inclus depuis tasks/main.yml :
+#   - name: Miroirs de registres (caches Harbor)
+#     ansible.builtin.include_tasks: miroirs.yml
+#     when: podman_hote_miroirs | length > 0
+# Fichier à part dans registries.conf.d : le registries.conf de la distribution n'est pas réécrit,
+# un hôte sans la variable ne change pas (liste vide par défaut, defaults/main.yml).
+- name: Dossier des fragments de registries.conf
+  ansible.builtin.file:
+    path: /etc/containers/registries.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Miroirs vers les caches Harbor
+  ansible.builtin.template:
+    src: registries-miroirs.conf.j2
+    dest: /etc/containers/registries.conf.d/50-miroirs-medisphere.conf
+    mode: "0644"

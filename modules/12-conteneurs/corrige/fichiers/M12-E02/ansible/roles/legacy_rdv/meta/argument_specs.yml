@@ -1,0 +1,32 @@
+---
+argument_specs:
+  main:
+    short_description: Installe Legacy-RDV à l'ancienne (Apache + mod_php + MariaDB locale) sur Debian 13
+    options:
+      legacy_rdv_source:
+        type: path
+        description: Dossier du code sur le contrôleur (contenu copié, barre oblique finale).
+      legacy_rdv_racine:
+        type: path
+        description: Racine du site (chemin attendu par l'hôte virtuel Apache).
+      legacy_rdv_journaux:
+        type: path
+        description: Dossier du journal applicatif (LOG_FILE de config.php).
+      legacy_rdv_utilisateur_web:
+        type: str
+        description: Compte d'Apache (propriétaire des pièces jointes et du journal).
+      legacy_rdv_db_nom:
+        type: str
+        description: Base MariaDB.
+      legacy_rdv_db_utilisateur:
+        type: str
+        description: Compte MariaDB de l'application.
+      legacy_rdv_db_mdp:
+        type: str
+        required: true
+        no_log: true
+        description: Mot de passe du compte (doit être celui de config.php).
+      legacy_rdv_paquets:
+        type: list
+        elements: str
+        description: Paquets de la pile LAMP.

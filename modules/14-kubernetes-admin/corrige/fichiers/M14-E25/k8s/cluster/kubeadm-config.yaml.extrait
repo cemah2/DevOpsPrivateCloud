@@ -1,0 +1,9 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M14-E25) : seule la version change.
+# Le reste du fichier (M14-E04, E23) est inchangé ; vérifié par :
+#   kubeadm config validate --config cluster/kubeadm-config.yaml   (avec kubeadm 1.36)
+# v1beta4 est déjà l'API du fichier : « kubeadm config migrate » n'est pas nécessaire (il le serait
+# pour un fichier v1beta3, qui ne sera plus lu par kubeadm 1.37).
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v1.36.5
+# … controlPlaneEndpoint, networking, apiServer, etcd… inchangés …

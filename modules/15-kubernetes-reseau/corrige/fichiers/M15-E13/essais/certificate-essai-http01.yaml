@@ -1,0 +1,22 @@
+# ~/m15/e13/certificate-essai-http01.yaml — émission d'essai par HTTP-01 (M15-E13, étape 5).
+# Le nom est HORS de la zone apps (inexistante à ce stade) : gw-par1.par1.medisphere.internal,
+# publié depuis NetBox en E12 et résolu par ca01 avec ses récurseurs.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: essai-http01
+  namespace: wb-essais
+spec:
+  secretName: essai-http01-tls
+  dnsNames:
+    - gw-par1.par1.medisphere.internal
+  # Pas de « duration » : le provisioner acme impose 30 jours (720 h) au plus (M06-E27) ;
+  # cert-manager renouvelle aux 2/3 de la durée par défaut (renewBefore non fixé).
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: step-ca-acme

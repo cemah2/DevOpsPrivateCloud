@@ -1,0 +1,46 @@
+# Entrée : la Gateway (identité ingress) sur l'API seulement ; le kubelet (host) sur les sondes.
+# Sortie : S3 de s3-01 seulement, par nom (toFQDNs), avec la règle DNS qui permet au proxy DNS de
+# Cilium d'apprendre l'adresse du nom (sans elle, toFQDNs ne sait rien et tout est refusé).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: medidoc
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports:
+            - {port: "8080", protocol: TCP}
+          rules:
+            http:
+              - {method: POST, path: "/documents"}
+              - {method: GET, path: "/documents(\\?.*)?"}
+              - {method: GET, path: "/documents/[^/?]+"}
+    - fromEntities: [host]
+      toPorts:
+        - ports:
+            - {port: "8080", protocol: TCP}
+          rules:
+            http:
+              - {method: GET, path: "/healthz"}
+              - {method: GET, path: "/readyz"}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: ANY}
+          rules:
+            dns:
+              - matchName: s3-01.par1.medisphere.internal
+    - toFQDNs:
+        - matchName: s3-01.par1.medisphere.internal
+      toPorts:
+        - ports:
+            - {port: "8333", protocol: TCP}

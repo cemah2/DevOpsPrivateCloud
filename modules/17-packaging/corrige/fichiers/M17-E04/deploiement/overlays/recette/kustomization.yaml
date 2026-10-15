@@ -1,0 +1,44 @@
+# Recette (mediagenda-recette) : base du M16 (CNPG mediagenda-db, StatefulSet valkey) hors de ce dépôt.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-recette
+resources:
+  - ../../base
+labels:
+  - pairs:
+      medisphere.fr/environnement: recette
+    # Jamais dans les sélecteurs : le sélecteur d'un Deployment est immuable.
+    includeSelectors: false
+    includeTemplates: true
+images:
+  - name: registry.par1.medisphere.internal/medisphere/mediagenda-api
+    newTag: v1.0.0
+replicas:
+  - name: mediagenda
+    count: 2
+configMapGenerator:
+  # Paramètres propres à l'environnement : nom suffixé d'une empreinte du contenu, donc tout
+  # changement crée une NOUVELLE ConfigMap et redéploie les pods qui la référencent.
+  - name: mediagenda-parametres
+    envs:
+      - parametres.env
+patches:
+  # Correctif stratégique (strategic merge) : ressources de la recette.
+  - path: ressources.yaml
+  # Correctifs JSON 6902 : nom publié, et ajout de la ConfigMap générée (en dernier : elle l'emporte).
+  - target:
+      kind: HTTPRoute
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: mediagenda-recette.apps.par1.medisphere.internal
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          configMapRef:
+            name: mediagenda-parametres

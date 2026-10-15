@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/rook-ceph/00-namespace.yaml (M16-E13, SUPPRIMÉ en M16-E14)
+# EXCEPTION PSA : les démons Ceph de Rook (OSD : accès direct aux disques, hostPath
+# /var/lib/rook et /dev ; pilotes CSI : montages et privilèges) ne tiennent pas en baseline.
+# Espace temporaire de comparaison (ADR-0160), aucune charge applicative.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rook-ceph
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+    medisphere.internal/environnement: essai
+  annotations:
+    medisphere.internal/ticket: "PLAT-1713"
+    medisphere.internal/exception-psa: "Rook (OSD et CSI) : privilèges hôte nécessaires, espace temporaire"

@@ -1,0 +1,106 @@
+# mediagenda/api — k8s/recette/30-valkey.yaml (M14-E21 : version corrigée de la MR de Lucas)
+# StatefulSet de 3 instances : valkey-0 est PRIMAIRE, -1 et -2 sont des RÉPLIQUES de -0.
+# C'est l'identité STABLE de chaque pod (nom, ordinal, nom DNS) qui rend ce schéma possible.
+# Pas de bascule automatique (Sentinel, ou un opérateur, au M27) : si -0 tombe, les répliques restent
+# en lecture seule jusqu'à son retour. Données en emptyDir (cache jetable) : pas de volumeClaimTemplates
+# avant le M16.
+#
+# ⚠️ Le Service passe de ClusterIP à « headless » (clusterIP: None) : ce champ est IMMUABLE.
+#    Supprime l'ancien Service avant d'appliquer ce fichier (voir le corrigé).
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true    # les répliques doivent résoudre -0 avant d'être prêtes
+  selector:
+    app.kubernetes.io/name: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  serviceName: valkey
+  replicas: 3
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/component: cache
+        app.kubernetes.io/part-of: mediagenda
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-standard
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1
+          # « args » remplace le CMD de l'image et garde son ENTRYPOINT (tini + docker-entrypoint.sh).
+          # L'ordinal se lit dans le nom d'hôte du pod (valkey-<N>).
+          args:
+            - sh
+            - -c
+            - |
+              ordinal="${HOSTNAME##*-}"
+              set -- --save "" --appendonly no --maxmemory 96mb --maxmemory-policy allkeys-lru
+              if [ "$ordinal" = "0" ]; then
+                exec valkey-server "$@"
+              else
+                exec valkey-server "$@" --replicaof valkey-0.valkey.mediagenda-recette.svc.cluster.local 6379
+              fi
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: valkey
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+      volumes:
+        - name: donnees
+          emptyDir: {}

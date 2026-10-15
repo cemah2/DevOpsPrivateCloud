@@ -1,0 +1,9 @@
+# plateforme/ansible — inventories/lab/host_vars/s3-01/vault.yml (EXTRAIT EN CLAIR, M16)
+# Le fichier réel est chiffré (identité lab) : on l'édite avec
+#   uv run ansible-vault edit inventories/lab/host_vars/s3-01/vault.yml
+# Clés générées comme au M05-E10 (openssl rand -hex 10 | tr a-f A-F ; openssl rand -base64 30),
+# copiées en même temps dans ~/.config/workbook/s3-<identité>.env (600) et au registre des secrets.
+vault_seaweedfs_velero_cle_acces: "<CLE-ACCES-VELERO>"
+vault_seaweedfs_velero_cle_secrete: "<CLE-SECRETE-VELERO>"
+vault_seaweedfs_cnpg_cle_acces: "<CLE-ACCES-CNPG>"
+vault_seaweedfs_cnpg_cle_secrete: "<CLE-SECRETE-CNPG>"

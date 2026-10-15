@@ -1,0 +1,18 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M13-E13 (reg02, TEMPORAIRES).
+# Tous retirés en M13-E25 (avec la définition REG02) : aucun flux sans usage.
+# reg02 → Internet (installateur, base de Trivy) : couvert par « lab vers Internet » (M07-E26).
+# reg02 → reg01:443 : déjà couvert par la règle [$V_K8S, $V_SANDBOX] → $REG01 de M13-E02.
+# adm01 → reg02 (SSH, HTTPS, checks) : règle générale du bastion (MGMT vers tout le lab).
+
+# 1. Dans pare_feu_definitions, section « Environnements de module » :
+  - {nom: REG02, valeur: 10.10.99.31, commentaire: "reg02.par1.medisphere.internal (Harbor de test, M13-E13, TEMPORAIRE)"}
+
+# 2. Dans pare_feu_transit :
+  - {entree: $V_INFRA, source: $REG01, sortie: $V_SANDBOX, destination: $REG02, proto: tcp, ports: 443,
+     motif: "réplication en poussée de reg01 vers reg02 (Harbor de test) — TEMPORAIRE, retirée en M13-E25", ref: M13-E13}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_SANDBOX, destination: $REG02, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers reg02 — TEMPORAIRE, retirée en M13-E25", ref: M13-E13}
+  - {entree: $V_SANDBOX, source: $REG02, destination: $CA01, proto: tcp, ports: 443,
+     motif: "ACME (commande et renouvellement) de reg02 vers step-ca — TEMPORAIRE, retirée en M13-E25", ref: M13-E13}
+  # Sauvegarde de test de reg02 vers pbs01 : AUCUNE. La restauration de M13-E15 lit les archives de reg01
+  # depuis reg02 : règle temporaire de M13-E15 (voir son extrait), retirée avec celles-ci.

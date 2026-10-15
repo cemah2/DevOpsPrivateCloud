@@ -1,0 +1,39 @@
+# Component « haute-disponibilite » (prod) : trois réplicas répartis sur les baies et les nœuds,
+# budget de perturbation à 2, base PostgreSQL à trois instances. À inclure APRÈS « dependances »
+# (les correctifs visent le Cluster mediagenda-db que ce component-là apporte).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+replicas:
+  - name: mediagenda
+    count: 3
+patches:
+  - path: repartition.yaml
+  - target:
+      kind: PodDisruptionBudget
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      - op: replace
+        path: /spec/instances
+        value: 3
+      - op: add
+        path: /spec/affinity
+        value:
+          enablePodAntiAffinity: true
+          podAntiAffinityType: required
+          topologyKey: kubernetes.io/hostname
+      # Réplication synchrone : une réplique doit confirmer chaque validation (RPO nul sur une panne
+      # d'instance). Syntaxe « synchronous » de CNPG ≥ 1.24 (minSyncReplicas/maxSyncReplicas dépréciés).
+      - op: add
+        path: /spec/postgresql
+        value:
+          synchronous:
+            method: any
+            number: 1

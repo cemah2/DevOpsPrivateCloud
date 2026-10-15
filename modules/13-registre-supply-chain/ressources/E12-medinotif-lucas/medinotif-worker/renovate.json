@@ -1,0 +1,14 @@
+{
+  "extends": ["config:recommended"],
+  "automerge": true,
+  "automergeType": "branch",
+  "ignoreTests": true,
+  "pinDigests": false,
+  "packageRules": [
+    {
+      "matchPackageNames": ["*"],
+      "automerge": true,
+      "minimumReleaseAge": null
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+# Tout pod de l'espace : rien n'entre, rien ne sort, sauf ce que les autres politiques autorisent
+# (les politiques Kubernetes et Cilium s'ADDITIONNENT : une connexion passe si au moins une
+# politique qui sélectionne le pod l'autorise).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

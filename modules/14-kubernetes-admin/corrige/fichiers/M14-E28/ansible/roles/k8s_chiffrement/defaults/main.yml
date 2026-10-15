@@ -1,0 +1,12 @@
+---
+# Rôle k8s_chiffrement (M14-E28) — EncryptionConfiguration du serveur d'API sur les nœuds de contrôle.
+# Le serveur d'API la relit seul quand elle change (--encryption-provider-config-automatic-reload) ;
+# les options et le volume monté sont dans la ClusterConfiguration (plateforme/k8s).
+k8s_chiffrement_dossier: /etc/kubernetes/chiffrement
+k8s_chiffrement_ressources: [secrets]
+
+# Fournisseurs, DANS L'ORDRE : le premier chiffre les écritures, tous servent à lire.
+# Chaque élément : {type: identity} ou {type: aescbc|aesgcm|secretbox, cles: [{nom, secret}]}
+# (secret = 32 octets aléatoires en base64, depuis le Vault « critique »). Valeur par défaut : aucun
+# chiffrement (le rôle refuse de poser une configuration vide ; voir group_vars).
+k8s_chiffrement_fournisseurs: []

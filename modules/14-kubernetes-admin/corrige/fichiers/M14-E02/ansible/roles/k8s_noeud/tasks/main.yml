@@ -1,0 +1,17 @@
+---
+# Rôle k8s_noeud — point d'entrée (M14-E02).
+
+- name: Préconditions (système, version, nom)
+  ansible.builtin.import_tasks: preconditions.yml
+
+- name: Système (swap, modules, sysctl)
+  ansible.builtin.import_tasks: systeme.yml
+
+- name: Dépôt pkgs.k8s.io de la mineure
+  ansible.builtin.import_tasks: depot.yml
+
+- name: Paquets épinglés et retenus
+  ansible.builtin.import_tasks: paquets.yml
+
+- name: Contrôles (cohérence avec containerd, préalables de kubeadm)
+  ansible.builtin.import_tasks: controles.yml

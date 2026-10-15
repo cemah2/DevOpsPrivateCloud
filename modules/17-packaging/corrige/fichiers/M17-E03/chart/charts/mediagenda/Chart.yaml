@@ -1,0 +1,10 @@
+apiVersion: v2
+name: mediagenda
+description: MédiAgenda, l'API de prise de rendez-vous de MédiSphère.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.35.0-0"
+maintainers:
+  - name: Julien Petit
+    email: julien.petit@medisphere.internal

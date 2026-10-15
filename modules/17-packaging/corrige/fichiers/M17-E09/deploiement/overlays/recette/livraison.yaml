@@ -1,0 +1,10 @@
+# Ce qui est livré en recette : changer la version ICI (une MR) = promouvoir une version.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livraison
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  version: v1.0.0
+  nom-publie: mediagenda-recette.apps.par1.medisphere.internal

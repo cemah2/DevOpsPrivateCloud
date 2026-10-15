@@ -1,0 +1,8 @@
+apiVersion: v2
+name: medisphere-commun
+description: Fonctions de gabarit communes aux charts de MédiSphère (étiquettes, contexte de sécurité, image).
+type: library
+version: 0.1.0
+maintainers:
+  - name: Équipe Plateforme MédiSphère
+    email: plateforme@medisphere.internal

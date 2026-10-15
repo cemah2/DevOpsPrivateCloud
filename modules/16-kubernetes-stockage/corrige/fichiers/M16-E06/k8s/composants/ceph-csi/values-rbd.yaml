@@ -1,0 +1,49 @@
+# composants/ceph-csi/values-rbd.yaml (plateforme/k8s) — chart ceph-csi-rbd 3.18.1, M16-E06 (PLAT-1706)
+# Installé par composants/ceph-csi/installer.sh (release ceph-csi-rbd, espace ceph-csi).
+# Seules les valeurs qui diffèrent du chart sont écrites : le reste (images v3.18.1 et sidecars,
+# kubeletDir /var/lib/kubelet, nom du pilote rbd.csi.ceph.com…) est celui de la version épinglée.
+#
+# Ce que le chart NE crée PAS ici, exprès :
+#  - le Secret de l'identité (secret.create: false par défaut) : il viendrait des values, donc de Git ;
+#    il est créé depuis Ansible Vault par outils/ceph-csi-secrets.sh ;
+#  - les StorageClasses (storageClass.create: false par défaut) : elles sont dans classes/, hors du
+#    cycle de vie de la release (un « helm uninstall » ne doit pas supprimer la classe par défaut
+#    du cluster), et une seule release en porterait une seule.
+
+# Le cluster Ceph : clusterID = fsid de ceph-par1 (« ceph fsid » sur ceph01), le même dans les classes.
+# Moniteurs en msgr2 (3300) seulement : le mode secure du messager n'existe pas en msgr1 (6789).
+csiConfig:
+  - clusterID: "<FSID>"
+    monitors:
+      - "10.10.30.51:3300"
+      - "10.10.30.52:3300"
+      - "10.10.30.53:3300"
+
+# ceph.conf des conteneurs (outils rbd, bibliothèques librados/librbd du provisioner).
+# Les modes « secure » côté client : même si le cluster les assouplissait un jour, le pilote
+# refuserait de parler en clair. Le noyau (krbd) suit, lui, l'option ms_mode de la StorageClass.
+cephconf: |
+  [global]
+    auth_cluster_required = cephx
+    auth_service_required = cephx
+    auth_client_required = cephx
+    ms_client_mode = secure
+    ms_mon_client_mode = secure
+
+nodeplugin:
+  # Seulement sur les nœuds raccordés et vérifiés (étiquette posée par k8s_reseau_stockage, E05).
+  nodeSelector:
+    medisphere.fr/stockage-ceph: "oui"
+  # Un travailleur réservé (taint dedie=…:NoSchedule, M14-E14) doit pouvoir monter des volumes :
+  # sans cette tolérance, les pods qui y sont autorisés resteraient en ContainerCreating.
+  tolerations:
+    - key: dedie
+      operator: Exists
+      effect: NoSchedule
+
+provisioner:
+  # 2 réplicas (un leader par sidecar, un en attente) : le chart impose une anti-affinité stricte
+  # par nœud ; avec 3, un drain laisserait un réplica Pending à chaque maintenance.
+  replicaCount: 2
+  nodeSelector:
+    medisphere.fr/stockage-ceph: "oui"

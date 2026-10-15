@@ -1,0 +1,31 @@
+# /etc/systemd/system/ms-verif-k8s-stockage.service — M16-E27 (PLAT-1727)
+# Sonde du stockage de k8s-par1. Déclenchée par ms-verif-k8s-stockage.timer (toutes les 10 minutes).
+# Test manuel : sudo systemctl start ms-verif-k8s-stockage.service ; journalctl -u ms-verif-k8s-stockage -n 40
+
+[Unit]
+Description=MédiSphère : sonde du stockage de k8s-par1 (volumes, pilotes, snapshots, Velero, PostgreSQL)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+ExecStart=/usr/local/bin/ms-verif-k8s-stockage --quiet
+TimeoutStartSec=4min
+SyslogIdentifier=ms-verif-k8s-stockage
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Lecture du kubeconfig de la sonde ; ~/.kube/cache de kubectl est éphémère (pas d'écriture du HOME).
+ProtectHome=read-only
+Environment=KUBECACHEDIR=/tmp/kube-cache
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

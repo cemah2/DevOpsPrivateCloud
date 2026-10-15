@@ -1,0 +1,28 @@
+# composants/cilium/bgp/bgp-par1.yaml — instance BGP des travailleurs de k8s-par1 (M15-E11).
+# Sélection des nœuds : étiquette bgp=par1 (posée par outils/etiqueter-noeuds.sh depuis
+# cluster/noeuds.yaml). Les nœuds de contrôle ne la portent pas : ils n'annoncent rien.
+# Deux voisins par nœud : les adresses PROPRES des passerelles (jamais la VIP 10.10.40.1, qui
+# change de passerelle) ; côté bordure, plage d'écoute passive du groupe K8S (M07-E16).
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: bgp-par1
+spec:
+  nodeSelector:
+    matchLabels:
+      bgp: par1
+  bgpInstances:
+    - name: k8s-par1-65040
+      localASN: 65040
+      # Pas de localPort : l'agent n'écoute pas, il initie les sessions (la bordure est passive).
+      peers:
+        - name: gw01
+          peerASN: 65000
+          peerAddress: 10.10.40.2
+          peerConfigRef:
+            name: bordure
+        - name: gw02
+          peerASN: 65000
+          peerAddress: 10.10.40.3
+          peerConfigRef:
+            name: bordure

@@ -1,0 +1,51 @@
+---
+# Rôle containerd — runtime de conteneurs des nœuds Kubernetes (M14-E02, PLAN §4.10).
+# containerd.io 2.3.x LTS du dépôt Docker : le paquet « containerd » de Debian 13 (1.7.24) est
+# incompatible avec Kubernetes 1.36 (containerd 2.2 ou plus récent exigé). runc est inclus dans
+# containerd.io : on n'installe PAS le paquet runc de Debian.
+#
+# Le rôle POSSÈDE /etc/containerd/config.toml (le paquet de Docker livre un fichier qui
+# DÉSACTIVE le greffon CRI : disabled_plugins = ["cri"], inutilisable par le kubelet).
+# Le fichier rendu ne contient que ce qui diffère des valeurs par défaut de containerd ;
+# « containerd config dump » montre la configuration complète, défauts compris.
+
+containerd_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# --- Dépôt ------------------------------------------------------------------------------------
+containerd_depot_url: https://download.docker.com/linux/debian
+containerd_depot_cle_url: https://download.docker.com/linux/debian/gpg
+# Empreinte de la clé « Docker Release (CE deb) », relevée en M12 (rôle docker_engine) et
+# revérifiée en M14-E02 : le rôle REFUSE une clé dont l'empreinte diffère.
+containerd_depot_cle_empreinte: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+# Branche LTS épinglée par une préférence APT : les correctifs 2.3.x passent par
+# « apt upgrade » (fenêtre de maintenance), jamais une 2.4.
+containerd_branche: "2.3"
+
+# --- Configuration (config.toml, schéma version 4 de containerd 2.3) ----------------------------
+# Version du schéma écrite en tête du fichier. containerd 2.3 lit encore un fichier « version = 3 »
+# mais le migre à chaque démarrage avec un avertissement (« Configuration migrated from version 3 »).
+containerd_config_version: 4
+# Pilote de cgroups systemd (cgroup v2 de Debian 13) : le même que le kubelet. Faux par défaut
+# dans containerd : un nœud dont la valeur est restée à false voit ses pods redémarrer en boucle.
+containerd_cgroup_systemd: true
+# Image « pause » du bac à sable : DOIT être celle qu'attend kubeadm de la version installée
+# (kubeadm config images list). containerd 2.3.6 a 3.10.2 par défaut, kubeadm 1.35 attend 3.10.1.
+# Le rôle k8s_noeud compare les deux et s'arrête s'ils diffèrent.
+containerd_image_sandbox: "{{ k8s_image_pause | default('registry.k8s.io/pause:3.10.1') }}"
+# Dossier des hosts.toml (un sous-dossier par registre) : miroirs, CA, capacités.
+containerd_dossier_hotes: /etc/containerd/certs.d
+
+# Miroirs de registres (hosts.toml). Vide jusqu'en M14-E19 (cache Harbor) :
+#   - registre: docker.io                         # espace de noms vu par les pods
+#     amont: https://registry-1.docker.io         # « server » : repli si les miroirs échouent
+#     miroir: https://registry.par1.medisphere.internal/v2/dockerhub
+#     override_path: true                         # le chemin du miroir contient déjà /v2/<projet>
+#     ca: /usr/local/share/ca-certificates/medisphere-root-ca.crt   # facultatif
+containerd_miroirs: []
+
+# Socket CRI (kubelet, crictl, kubeadm).
+containerd_socket: /run/containerd/containerd.sock
+# /etc/crictl.yaml : crictl interroge containerd sans avoir à le préciser à chaque appel.
+containerd_crictl_delai: 10

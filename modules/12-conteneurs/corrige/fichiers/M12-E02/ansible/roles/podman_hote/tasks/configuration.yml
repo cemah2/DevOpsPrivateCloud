@@ -1,0 +1,32 @@
+---
+# Fichiers « drop-in » : on ne réécrit pas les fichiers des paquets (registries.conf,
+# containers.conf), on les complète. Un « podman info » montre le résultat de la fusion.
+- name: Dossiers des fichiers complémentaires
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/containers/registries.conf.d
+    - /etc/containers/containers.conf.d
+
+- name: Registres (noms courts, mode enforcing)
+  ansible.builtin.template:
+    src: registries-medisphere.conf.j2
+    dest: /etc/containers/registries.conf.d/50-medisphere.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Moteur (réseau sans privilège, journaux, cgroups)
+  ansible.builtin.template:
+    src: containers-medisphere.conf.j2
+    dest: /etc/containers/containers.conf.d/50-medisphere.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Appliquer une nouvelle plage subordonnée maintenant
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,34 @@
+# registre/projets.tf — EXTRAIT : politiques de confiance (M13-E14, SEC-1432).
+# Seul le bloc harbor_project.projet change ; le reste du fichier (membres…) est celui de M13-E06/E10.
+#
+# Politiques par projet :
+#   medisphere : signature Cosign EXIGÉE, images Critical refusées (et images non analysées, voir le
+#                corrigé), analyse à la poussée ;
+#   plateforme, bibliotheque : analyse à la poussée seulement au palier 3 (leurs images sont signées par
+#                leurs pipelines ; la signature y sera exigée quand toutes le seront, ADR-0130) ;
+#   charts : rien de plus (M17).
+# Liste blanche de CVE : vide au niveau du système ; une exception se pose ICI, par projet, par MR, avec
+# un ticket et une date de fin écrits dans le commentaire (cve_allowlist), jamais dans l'interface.
+locals {
+  politiques = {
+    medisphere   = { cosign = true, seuil = "critical" }
+    plateforme   = { cosign = false, seuil = null }
+    bibliotheque = { cosign = false, seuil = null }
+    charts       = { cosign = false, seuil = null }
+  }
+}
+
+resource "harbor_project" "projet" {
+  for_each               = local.projets
+  name                   = each.key
+  public                 = false
+  vulnerability_scanning = true
+  auto_sbom_generation   = contains(["medisphere", "plateforme", "bibliotheque"], each.key)
+
+  # M13-E14 : la signature exigée vérifie la PRÉSENCE d'une signature Cosign (accessoire), pas sa clé.
+  enable_content_trust_cosign = local.politiques[each.key].cosign
+  # « Prevent vulnerable images from running » : Critical ou plus refusé au tirage.
+  deployment_security = local.politiques[each.key].seuil
+  # Exceptions (aucune aujourd'hui). Exemple de forme, à n'utiliser qu'avec un ticket SEC- et une date :
+  # cve_allowlist = ["CVE-AAAA-NNNNN"] # SEC-14xx, jusqu'au AAAA-MM-JJ, motif : …
+}

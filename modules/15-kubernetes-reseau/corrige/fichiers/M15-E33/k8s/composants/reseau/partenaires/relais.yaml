@@ -1,0 +1,88 @@
+# composants/reseau/partenaires/relais.yaml — M15-E33. Relais mTLS dans mediagenda-recette (PSA
+# « restricted »). Composant de la PLATEFORME (et non du code de MédiAgenda) : il porte un contrôle de
+# sécurité (authentification des partenaires) que l'équipe ne doit pas pouvoir affaiblir seule.
+# ConfigMaps relais-mtls-conf (nginx.conf) et ca-partenaires (certificat PUBLIC de l'autorité des
+# partenaires) : générées par « task appliquer » depuis les fichiers du dossier.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relais-mtls
+  namespace: mediagenda-recette
+  labels: {app.kubernetes.io/name: relais-mtls, app.kubernetes.io/part-of: plateforme-reseau}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app.kubernetes.io/name: relais-mtls}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: relais-mtls, app.kubernetes.io/part-of: plateforme-reseau}
+      annotations:
+        # Changer ce numéro (ou la somme du fichier) redéploie après une rotation de l'autorité.
+        medisphere.fr/version-conf: "1"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app.kubernetes.io/name: relais-mtls}
+      containers:
+        - name: nginx
+          image: registry.par1.medisphere.internal/dockerhub/nginxinc/nginx-unprivileged:1.30-alpine
+          ports:
+            - {name: tls, containerPort: 8443, protocol: TCP}
+          readinessProbe:
+            tcpSocket: {port: tls}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: tls}
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {cpu: 300m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf, readOnly: true}
+            - {name: tls, mountPath: /etc/nginx/tls, readOnly: true}
+            - {name: ca, mountPath: /etc/nginx/ca, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: conf
+          configMap: {name: relais-mtls-conf}
+        - name: tls
+          secret: {secretName: mediagenda-partenaires-tls}
+        - name: ca
+          configMap: {name: ca-partenaires}
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: relais-mtls
+  namespace: mediagenda-recette
+  labels: {app.kubernetes.io/name: relais-mtls}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: relais-mtls}
+  ports:
+    - {name: tls, port: 443, targetPort: tls, protocol: TCP}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: relais-mtls
+  namespace: mediagenda-recette
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: relais-mtls}

@@ -1,0 +1,20 @@
+# rbac/plateforme-admins.yaml — administrateurs du cluster (M14-E06, SEC-1506).
+# Les identités personnelles de l'équipe Plateforme (certificats clients, O=medisphere:plateforme-admins,
+# 7 jours, outils/kubeconfig-personnel.sh) reçoivent cluster-admin par leur GROUPE : arriver ou
+# partir de l'équipe ne change pas ce fichier, seulement les certificats émis.
+# Pas system:masters : ce groupe court-circuite l'autorisation et ne se retire pas (seule la CA
+# peut l'invalider). Ici, supprimer cette liaison retire les droits immédiatement.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: medisphere:plateforme-admins
+  labels:
+    medisphere.internal/proprietaire: plateforme
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: medisphere:plateforme-admins

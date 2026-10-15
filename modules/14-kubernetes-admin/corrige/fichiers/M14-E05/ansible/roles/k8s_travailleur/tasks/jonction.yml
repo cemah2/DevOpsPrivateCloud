@@ -1,0 +1,63 @@
+---
+# Jonction d'un travailleur (M14-E05) : jeton de 15 min créé sur un nœud de contrôle, fichier de
+# jonction en 600 détruit après usage, jeton révoqué. Pas de clé de certificats : un travailleur
+# ne reçoit aucun secret du plan de contrôle, seulement son propre certificat de kubelet (TLS
+# bootstrap, CSR approuvée automatiquement pour le groupe system:bootstrappers).
+
+- name: Créer un jeton d'amorçage à durée courte
+  ansible.builtin.command: >-
+    kubeadm token create --ttl {{ k8s_travailleur_jeton_duree }}
+    --description "jonction de {{ inventory_hostname }} (Ansible, k8s_travailleur)"
+  delegate_to: "{{ _k8s_travailleur_reference }}"
+  register: _k8s_travailleur_jeton
+  changed_when: true
+  no_log: true
+
+- name: Empreinte de la clé publique de la CA
+  ansible.builtin.shell: |
+    set -o pipefail
+    openssl x509 -pubkey -noout -in /etc/kubernetes/pki/ca.crt \
+      | openssl pkey -pubin -outform der \
+      | openssl dgst -sha256 -hex | sed 's/^.* //'
+  args:
+    executable: /bin/bash
+  delegate_to: "{{ _k8s_travailleur_reference }}"
+  register: _k8s_travailleur_empreinte_ca
+  changed_when: false
+
+- name: Dossier du fichier de jonction
+  ansible.builtin.file:
+    path: "{{ k8s_travailleur_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Fichier de jonction (600, détruit après usage)
+  ansible.builtin.template:
+    src: kubeadm-join.yaml.j2
+    dest: "{{ k8s_travailleur_dossier }}/kubeadm-join.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: kubeadm config validate --config %s
+  no_log: true
+
+- name: Joindre le nœud (kubeadm join --config)
+  block:
+    - name: Lancer kubeadm join avec le fichier de jonction
+      ansible.builtin.command:
+        cmd: kubeadm join --config {{ k8s_travailleur_dossier }}/kubeadm-join.yaml
+        creates: /etc/kubernetes/kubelet.conf
+      no_log: true
+  always:
+    - name: Détruire le fichier de jonction
+      ansible.builtin.file:
+        path: "{{ k8s_travailleur_dossier }}/kubeadm-join.yaml"
+        state: absent
+
+    - name: Révoquer le jeton d'amorçage
+      ansible.builtin.command: kubeadm token delete {{ (_k8s_travailleur_jeton.stdout | trim).split('.')[0] }}
+      delegate_to: "{{ _k8s_travailleur_reference }}"
+      changed_when: true
+      no_log: true

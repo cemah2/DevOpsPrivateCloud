@@ -1,0 +1,42 @@
+# .gitlab-ci.yml (plateforme/k8s) — EXTRAIT, contrôles du stockage (M16-E23).
+# Exécuteur docker de runner02 (M12), images par Harbor. Les jobs ne parlent jamais au cluster.
+stockage:yaml:
+  stage: test
+  image: registry.par1.medisphere.internal/plateforme/outils-k8s:2026.10   # image d'outils de la CI de plateforme/k8s (M14-E23 ; à construire si absente)
+  rules:
+    - changes: [composants/**/*, espaces/**/*, admission/**/*, outils/**/*]
+  script:
+    - yamllint -s composants espaces admission
+    # Aucun motif de clé dans le dépôt (en plus de Gitleaks du gabarit qualite.yml) :
+    - "! grep -rEn '(aws_secret_access_key|ACCESS_SECRET_KEY|userKey|repository-password)\\s*[:=]\\s*[A-Za-z0-9/+=]{16,}' composants espaces admission"
+    - "! grep -rEn 'AQ[A-Za-z0-9+/]{38}==' composants espaces admission"     # clé cephx
+
+stockage:charts:
+  stage: test
+  image: registry.par1.medisphere.internal/plateforme/outils-k8s:2026.10
+  script:
+    - helm repo add ceph-csi https://ceph.github.io/csi-charts
+    - helm repo add vmware-tanzu https://vmware-tanzu.github.io/helm-charts
+    - helm repo add cnpg https://cloudnative-pg.github.io/charts
+    - mkdir -p rendu
+    - helm template ceph-csi-rbd ceph-csi/ceph-csi-rbd --version 3.18.1 -n ceph-csi -f composants/ceph-csi/values-rbd.yaml > rendu/ceph-csi-rbd.yaml
+    - helm template ceph-csi-cephfs ceph-csi/ceph-csi-cephfs --version 3.18.1 -n ceph-csi -f composants/ceph-csi/values-cephfs.yaml > rendu/ceph-csi-cephfs.yaml
+    - helm template velero vmware-tanzu/velero --version 12.2.1 -n velero -f composants/velero/values.yaml > rendu/velero.yaml
+    - helm template cnpg cnpg/cloudnative-pg --version 0.29.1 -n cnpg-system -f composants/cloudnative-pg/values.yaml > rendu/cnpg.yaml
+    - helm template plugin-barman-cloud cnpg/plugin-barman-cloud --version 0.8.1 -n cnpg-system -f composants/plugin-barman-cloud/values.yaml > rendu/barman.yaml
+    - outils/schemas-crd.sh schemas
+    - >-
+      kubeconform -strict -summary -kubernetes-version 1.36.0
+      -schema-location default
+      -schema-location 'schemas/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+      rendu/ composants/ceph-csi/classes/ composants/velero/planifications.yaml admission/
+      espaces/mediagenda-dev/ espaces/mediagenda-recette/
+  artifacts:
+    when: on_failure
+    paths: [rendu/]
+
+stockage:scripts:
+  stage: test
+  image: registry.par1.medisphere.internal/plateforme/outils-k8s:2026.10
+  script:
+    - shellcheck -x outils/*.sh composants/ceph-csi/installer.sh

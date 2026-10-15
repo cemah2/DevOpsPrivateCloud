@@ -1,0 +1,12 @@
+---
+# playbooks/legacy-rdv.yml — Legacy-RDV « à l'ancienne » sur legacy01 (M12-E02).
+# À lancer DEPUIS adm01 : le code vient de la copie du workbook (~/DevOpsPrivateCloud), pas
+# encore d'un projet GitLab (il naît en M12-E19). Après playbooks/conteneurs.yml.
+#   uv run ansible-playbook playbooks/legacy-rdv.yml --check --diff
+#   uv run ansible-playbook playbooks/legacy-rdv.yml
+- name: Legacy-RDV
+  hosts: role_legacy
+  become: true
+  roles:
+    - role: legacy_rdv
+      tags: [legacy_rdv]

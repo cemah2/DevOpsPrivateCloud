@@ -1,0 +1,15 @@
+---
+# molecule/docker_engine/converge.yml (M12-E02) : le rôle tel quel, versions de l'inventaire.
+- name: Converge — rôle docker_engine
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../inventories/lab/group_vars/role_docker/docker_engine.yml
+  vars:
+    # Une clé de daemon.json en plus : prouve la fusion avec les défauts du rôle.
+    docker_engine_daemon_extra:
+      log-opts:
+        max-file: "5"
+  roles:
+    - role: docker_engine

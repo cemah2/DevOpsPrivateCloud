@@ -1,0 +1,8 @@
+# .dockerignore de Legacy-RDV (M12-E19) — liste blanche : jamais uploads/ (données de santé), ni
+# .git, ni les fichiers de la VM.
+*
+!*.php
+!inc/
+!cron/
+!conteneur/
+!uploads/LISEZMOI.txt

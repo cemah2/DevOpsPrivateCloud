@@ -1,0 +1,24 @@
+# Témoin du palier 4 (M12-E36, M12-E40) : cache Valkey de recette du compte app.
+# Remis à sa version de référence par lab/bin/break 12 XX avant chaque panne.
+[Unit]
+Description=Cache Valkey de recette (témoin du palier 4)
+
+[Container]
+ContainerName=recette-cache
+Image=docker.io/valkey/valkey:8-trixie
+User=999:999
+Exec=valkey-server --appendonly yes --dir /data
+Volume=%h/recette/cache:/data
+Network=recette.network
+PublishPort=127.0.0.1:6379:6379
+HealthCmd=valkey-cli ping
+HealthInterval=30s
+NoNewPrivileges=true
+DropCapability=ALL
+
+[Service]
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

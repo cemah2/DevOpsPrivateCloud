@@ -1,0 +1,24 @@
+# EXTRAIT du manifeste du Cluster mediagenda-db (dépôt et chemin choisis en E18) — M16-E25.
+# Seuls les champs modifiés par l'exercice sont montrés. Deux MR successives :
+#   MR 1 : primaryUpdateStrategy: supervised (sans autre changement) ;
+#   MR 2 : le paramètre qui exige un redémarrage (max_connections).
+# Avec primaryUpdateMethod: switchover, changer l'image ET un paramètre dans la même MR est refusé
+# par le webhook de l'opérateur (documentation « Rolling updates ») : une chose à la fois.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: mediagenda-recette
+spec:
+  instances: 3
+  # Décision consignée dans le compte rendu : la RECETTE reste en supervised (les démonstrations
+  # ont lieu en journée ; une bascule se décide). La PRODUCTION (plus tard) sera en unsupervised
+  # avec une fenêtre de maintenance et une sonde, faute d'astreinte 24 h/24 pour « promouvoir ».
+  primaryUpdateStrategy: supervised
+  primaryUpdateMethod: switchover
+  # Délais (valeurs par défaut de la documentation 1.30 rappelées pour mémoire) :
+  # failoverDelay: 0        # bascule dès que le primaire est déclaré en échec
+  # switchoverDelay: 3600   # délai de l'arrêt « fast » de l'ancien primaire (à vérifier sur ta version)
+  postgresql:
+    parameters:
+      max_connections: "150"

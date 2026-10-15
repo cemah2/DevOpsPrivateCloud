@@ -1,0 +1,27 @@
+# ~/m14/e14/preemption.yaml — remplir les travailleurs de pods « essai », puis faire arriver un pod
+# « critique » qui n'a plus de place : l'ordonnanceur évince (préempte) des pods « essai ».
+# 1) kubectl apply -f preemption.yaml ; 2) kubectl -n wb-essais scale deploy remplissage --replicas=N
+#    jusqu'à voir des Pending ; 3) kubectl apply -f preemption-critique.yaml (fichier suivant).
+# ⚠️ À faire dans wb-essais seulement ; « kubectl delete -f » des deux fichiers à la fin.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remplissage
+  namespace: wb-essais
+spec:
+  replicas: 4
+  selector:
+    matchLabels: {app.kubernetes.io/name: remplissage}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: remplissage}
+    spec:
+      priorityClassName: medisphere-essai
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: attente
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+          command: ["sleep", "infinity"]
+          resources:
+            requests: {cpu: "1", memory: 64Mi}
+            limits: {cpu: "1", memory: 64Mi}

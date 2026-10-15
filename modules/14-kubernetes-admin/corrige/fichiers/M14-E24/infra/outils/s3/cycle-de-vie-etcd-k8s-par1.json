@@ -1,0 +1,18 @@
+{
+  "Rules": [
+    {
+      "ID": "horaire-3-jours",
+      "Filter": { "Prefix": "horaire/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 3 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    },
+    {
+      "ID": "quotidien-35-jours",
+      "Filter": { "Prefix": "quotidien/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 35 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    }
+  ]
+}

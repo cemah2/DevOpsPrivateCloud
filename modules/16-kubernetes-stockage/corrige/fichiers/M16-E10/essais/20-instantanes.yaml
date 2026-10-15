@@ -1,0 +1,21 @@
+# ~/m16/e10/20-instantanes.yaml — instantanés (classe par défaut du pilote si omise ;
+# on l'écrit pour la lisibilité).
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: donnees-s1
+  namespace: wb-essais
+spec:
+  volumeSnapshotClassName: ceph-rbd-snap
+  source:
+    persistentVolumeClaimName: donnees
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: partage-s1
+  namespace: wb-essais
+spec:
+  volumeSnapshotClassName: cephfs-snap
+  source:
+    persistentVolumeClaimName: partage

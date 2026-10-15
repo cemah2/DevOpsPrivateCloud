@@ -1,0 +1,13 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M14-E26) : document KubeletConfiguration.
+# Il sert à kubeadm init (reconstruction du cluster, E23) ; sur le cluster EXISTANT, la référence est
+# le ConfigMap kube-system/kubelet-config (modifié à la main ou par « kubectl apply » de ce même
+# contenu), puis recopié sur chaque nœud par « kubeadm upgrade node phase kubelet-config ».
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+# Certificat client : renouvelé par le kubelet lui-même (déjà le défaut de kubeadm, écrit pour être lu).
+rotateCertificates: true
+# Certificat de SERVICE (port 10250) demandé à l'API (signataire kubernetes.io/kubelet-serving) au lieu
+# d'être auto-signé. Les demandes ne sont PAS approuvées automatiquement : RB-143 §5.
+serverTLSBootstrap: true

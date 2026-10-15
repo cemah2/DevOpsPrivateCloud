@@ -1,0 +1,7 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M15-E20, PLAT-1620.
+# Définitions NET_K8S_LB et GW_PAR1 : ajoutées en M15-E13.
+# Transit (bloc « Points d'entrée ») :
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_K8S, destination: $GW_PAR1, proto: tcp, ports: 443,
+     motif: "répartiteurs vers gw-par1 : TLS relayé (SNI) des noms de k8s-par1 publiés dehors", ref: M15-E20}
+# Rien d'autre : le LAN maison arrive déjà sur la VIP des répartiteurs (dnat 443, M07-E13) ; le
+# retour de 10.10.41.10 vers lb01/lb02 est une réponse (état établi).

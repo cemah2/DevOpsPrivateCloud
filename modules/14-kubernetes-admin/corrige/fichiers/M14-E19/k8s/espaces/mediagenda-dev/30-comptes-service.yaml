@@ -1,0 +1,26 @@
+# plateforme/k8s — espaces/mediagenda-dev/30-comptes-service.yaml (M14-E13, complété en M14-E19)
+# - « default » : aucun jeton monté automatiquement ; peut tirer les images privées (harbor-pull).
+# - « mediagenda-api » : identité de l'application, sans droit RBAC ni jeton monté ; tire ses
+#   images depuis Harbor avec le Secret harbor-pull (créé par outils/secret-tirage.sh, non versionné).
+# Le Secret est référencé par le COMPTE DE SERVICE : les manifestes de l'équipe n'ont pas à le nommer,
+# et l'admission ServiceAccount le recopie dans chaque pod créé avec ce compte.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: mediagenda-dev
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: harbor-pull
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: harbor-pull

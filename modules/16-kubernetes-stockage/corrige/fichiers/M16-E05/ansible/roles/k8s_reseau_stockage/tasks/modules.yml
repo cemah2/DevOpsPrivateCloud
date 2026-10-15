@@ -1,0 +1,18 @@
+---
+- name: Charger les modules noyau au démarrage
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/ceph-csi.conf
+    content: |
+      # Géré par Ansible (rôle k8s_reseau_stockage, M16-E05) : clients noyau de ceph-csi.
+      {% for m in k8s_reseau_stockage_modules %}
+      {{ m }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Charger les modules noyau maintenant
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ k8s_reseau_stockage_modules }}"

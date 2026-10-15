@@ -1,0 +1,15 @@
+# Fichiers exclus de l'archive du chart (helm package).
+.DS_Store
+.git/
+.gitignore
+*.swp
+*.bak
+*.tmp
+*.orig
+.vscode/
+.idea/
+# Tests unitaires et valeurs de chart-testing : utiles au dépôt, pas à l'archive publiée.
+# Le « / » initial ancre le motif à la racine du chart : « tests/ » tout court exclurait AUSSI
+# templates/tests/ (les tests « helm test ») — piège classique.
+/tests/
+/ci/

@@ -1,0 +1,42 @@
+---
+# k8s_reseau_stockage — carte STOR-PUB (VLAN 30) des travailleurs de k8s-par1 (M16-E05, PLAT-1705).
+# UNE règle, la même que l'état OpenTofu envs/k8s (noeuds.tf) :
+#   suffixe = dernier octet de ansible_host (adresse VLAN 40 : 61 à 63)
+#   adresse = <prefixe>.<suffixe + decalage>/<longueur>   → 10.10.30.81 à .83
+#   MAC     = bc:24:11:<vlan>:00:<suffixe>
+
+k8s_reseau_stockage_interface: ens19
+k8s_reseau_stockage_vlan: 30
+k8s_reseau_stockage_prefixe: "10.10.30"
+k8s_reseau_stockage_longueur: 24
+k8s_reseau_stockage_decalage: 20
+k8s_reseau_stockage_mtu: 9000
+
+# Moniteurs de ceph-par1 (M08) : cibles du test sans fragmentation après redémarrage.
+k8s_reseau_stockage_moniteurs:
+  - 10.10.30.51
+  - 10.10.30.52
+  - 10.10.30.53
+
+# Modules noyau des clients Ceph : krbd (volumes RBD) et client CephFS. ceph-csi sait les charger,
+# mais un nœud qui les charge au démarrage n'a pas de premier montage plus lent ni de surprise.
+k8s_reseau_stockage_modules:
+  - rbd
+  - ceph
+
+# Étiquette posée sur le nœud Kubernetes APRÈS vérification de la carte : c'est elle qui place les
+# pods de ceph-csi (nodeSelector des values, M16-E06).
+k8s_reseau_stockage_etiquette_cle: medisphere.fr/stockage-ceph
+k8s_reseau_stockage_etiquette_valeur: "oui"
+
+# Un nœud dont la carte vient d'apparaître est drainé puis redémarré. false : le rôle s'arrête en
+# erreur au lieu de le faire (pour préparer un changement dans une fenêtre annoncée).
+k8s_reseau_stockage_redemarrage_autorise: true
+k8s_reseau_stockage_drain_delai: 600s
+
+# kubectl sur adm01 (delegate_to: localhost), avec l'identité de la personne qui joue le playbook.
+k8s_reseau_stockage_kubectl: kubectl
+
+# Dossier de répétition : le fichier netplan y est validé (netplan generate --root-dir) avant
+# d'être mis en place.
+k8s_reseau_stockage_repetition: /var/lib/k8s_reseau_stockage/repetition

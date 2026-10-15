@@ -1,0 +1,45 @@
+---
+# inventories/lab/netbox-k8s.yml — nœuds du cluster k8s-par1 tirés de NetBox (M14-E02).
+#
+# Même méthode que netbox-ceph.yml (M08-E02) : une source par environnement, parce que les
+# filtres d'étiquettes de l'API NetBox se combinent en ET. Les group_vars de inventories/lab/
+# s'appliquent à toutes les sources du dossier.
+# ansible.cfg : inventory = inventories/lab/netbox.yml,inventories/lab/netbox-ceph.yml,inventories/lab/netbox-k8s.yml
+# Contrôle : uv run ansible-inventory --graph k8s_par1
+plugin: netbox.netbox.nb_inventory
+api_endpoint: https://nbx01.par1.medisphere.internal
+validate_certs: true
+token:
+  type: Bearer
+  value: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+
+plurals: false
+racks: false
+services: false
+interfaces: false
+config_context: false
+
+query_filters:
+  - tag: env-k8s
+vm_query_filters:
+  - status: active
+
+rename_variables:
+  - pattern: "^tags$"
+    repl: netbox_etiquettes
+
+# Un groupe par étiquette (env_k8s, role_k8s_cp, role_k8s_worker), comme les autres sources…
+keyed_groups:
+  - key: netbox_etiquettes | map('replace', '-', '_') | list
+    prefix: ""
+    separator: ""
+
+# … et les noms de groupes utilisés par les rôles et les playbooks Kubernetes (PLAN §4.10).
+groups:
+  k8s_par1: "'env-k8s' in (netbox_etiquettes | default([]))"
+  k8s_plan_controle: "'role-k8s-cp' in (netbox_etiquettes | default([]))"
+  k8s_travailleurs: "'role-k8s-worker' in (netbox_etiquettes | default([]))"
+
+compose:
+  vmid: custom_fields.vmid
+strict: false

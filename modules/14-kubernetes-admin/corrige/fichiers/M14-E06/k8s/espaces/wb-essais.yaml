@@ -1,0 +1,9 @@
+# espaces/wb-essais.yaml — essais des exercices (M14-E06) : MédiAgenda de M14-E07/E08, objets
+# jetables des exercices suivants. Rien d'important n'y vit : on peut le vider à tout moment.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-essais
+  labels:
+    app.kubernetes.io/part-of: workbook
+    medisphere.internal/proprietaire: plateforme

@@ -1,0 +1,86 @@
+# /etc/kubernetes/audit/politique.yaml — politique d'audit du serveur d'API de k8s-par1
+# (M14-E27, SEC-1527). Déposée par le rôle Ansible k8s_audit sur les trois nœuds de contrôle.
+# Règle d'or : la PREMIÈRE règle qui correspond s'applique. Exceptions d'abord, cas général ensuite.
+apiVersion: audit.k8s.io/v1
+kind: Policy
+# L'étape RequestReceived double le volume sans rien apprendre de plus (l'événement ResponseComplete
+# contient tout) ; les watch longs produisent ResponseStarted puis ResponseComplete.
+omitStages:
+  - RequestReceived
+rules:
+  # --- 1. Bruit : sondes et découverte ---------------------------------------------------------------
+  # Sondes de santé (kubelet, HAProxy, supervision) et découverte de l'API par les clients.
+  - level: None
+    nonResourceURLs:
+      - /healthz*
+      - /livez*
+      - /readyz*
+      - /version
+      - /openapi/*
+      - /api
+      - /api/*
+      - /apis
+      - /apis/*
+  # Baux d'élection et de présence des nœuds : renouvelés toutes les quelques secondes par les composants.
+  - level: None
+    verbs: [get, update, watch]
+    resources:
+      - group: coordination.k8s.io
+        resources: [leases]
+  # kube-proxy et les kubelets surveillent Services, EndpointSlices, nœuds, pods : des milliers de lectures.
+  # Conséquence assumée : les lectures de Secrets par les kubelets (limitées par le Node authorizer
+  # aux pods du nœud) ne sont pas auditées.
+  - level: None
+    users: [system:kube-proxy]
+    verbs: [watch, list, get]
+  - level: None
+    userGroups: [system:nodes]
+    verbs: [get, list, watch]
+  # Les événements sont déjà un journal ; les auditer double tout.
+  - level: None
+    resources:
+      - group: ""
+        resources: [events]
+      - group: events.k8s.io
+        resources: [events]
+
+  # --- 2. Données sensibles : qui, quoi, quand, JAMAIS le contenu ------------------------------------------
+  # Secrets, ConfigMaps (souvent des secrets mal rangés), jetons et revues de jetons, CSR (clés publiques
+  # seulement, mais inutile de les stocker) : niveau Metadata pour TOUS les verbes, y compris les écritures.
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: [secrets, configmaps, serviceaccounts/token]
+      - group: authentication.k8s.io
+        resources: [tokenreviews]
+      - group: authorization.k8s.io
+        resources: [subjectaccessreviews, selfsubjectaccessreviews]
+      - group: certificates.k8s.io
+        resources: [certificatesigningrequests]
+
+  # --- 3. Lectures sensibles par des humains : tracées ----------------------------------------------------
+  # Qui a lu les journaux d'un pod, ouvert un shell, relayé un port (accès possible à des données).
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: [pods/log, pods/exec, pods/attach, pods/portforward, nodes/proxy, services/proxy]
+
+  # --- 4. Écritures : le corps de la requête (ce qui a été demandé) --------------------------------------
+  # RBAC, admission, espaces de noms, objets d'application : Request suffit (la réponse renverrait
+  # l'objet complet, le double du volume ; l'état final se relit dans le cluster ou dans Git).
+  - level: Request
+    verbs: [create, update, patch, delete, deletecollection]
+    resources:
+      - group: rbac.authorization.k8s.io
+      - group: admissionregistration.k8s.io
+      - group: ""
+        resources: [namespaces, resourcequotas, limitranges, serviceaccounts, services, pods, nodes, persistentvolumes, persistentvolumeclaims]
+      - group: apps
+      - group: batch
+      - group: policy
+      - group: scheduling.k8s.io
+      - group: networking.k8s.io
+      - group: apiextensions.k8s.io
+
+  # --- 5. Tout le reste : métadonnées -----------------------------------------------------------------------
+  - level: Metadata

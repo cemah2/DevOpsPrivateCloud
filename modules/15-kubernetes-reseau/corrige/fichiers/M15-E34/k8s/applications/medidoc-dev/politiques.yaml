@@ -1,0 +1,55 @@
+# applications/medidoc-dev/politiques.yaml — M15-E34 (exigence 6 du dossier).
+# 1. Refus par défaut en entrée ET en sortie de tout l'espace (NetworkPolicy standard, comme E17).
+# 2. Autorisations : Gateway → 8080 ; DNS du cluster ; s3-01 en TCP 8333.
+# La cloison isolement-medidoc-dev (E28) refuse en plus tout échange avec les autres espaces d'équipe.
+# s3-01 est hors du cluster : autorisation par nom (toFQDNs, résolution via le proxy DNS de base-dns),
+# plus robuste qu'une adresse en dur si s3-01 change d'adresse ; l'adresse (10.10.20.14) reste
+# documentée dans la matrice des flux.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: medidoc-dev
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-entree-gateway
+  namespace: medidoc-dev
+spec:
+  description: "MédiDoc : entrée depuis la Gateway (Envoy) seulement"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-sortie
+  namespace: medidoc-dev
+spec:
+  description: "MédiDoc : DNS du cluster et s3-01:8333, rien d'autre"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: s3-01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "8333", protocol: TCP}]

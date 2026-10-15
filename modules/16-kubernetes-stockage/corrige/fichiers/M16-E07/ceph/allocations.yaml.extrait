@@ -1,0 +1,34 @@
+# allocations.yaml (plateforme/ceph) — EXTRAIT, ajouts de M16-E07 (DEV-1707) à l'état stockage-v1 (M08-E46).
+# outils/ceph-allocations.sh appliquer --simuler (relu dans la MR), puis appliquer, puis verifier.
+
+identites:
+  # … client.sauvegarde, client.glance, client.cinder, client.cinder-backup (M08) …
+  # Ceph-CSI RBD (documentation Ceph « Block Devices and Kubernetes ») — inchangé depuis M08-E46.
+  - entite: client.k8s
+    caps:
+      mon: "profile rbd"
+      osd: "profile rbd pool=k8s-rbd"
+      mgr: "profile rbd pool=k8s-rbd"
+  # Ceph-CSI CephFS (M16-E07) : droits de docs/capabilities.md de ceph-csi 3.18.1, pour le volume
+  # « cephfs » et le groupe de sous-volumes « csi ». Identité SÉPARÉE de client.k8s : le droit
+  # « mgr allow rw » (module volumes du mgr, qui crée et supprime les sous-volumes) est large ; il
+  # ne doit pas s'ajouter à l'identité qui écrit les images RBD.
+  # Type de clé : celui que le cluster préfère (aes, M08-E27) — clients noyau 6.12.
+  - entite: client.k8s-cephfs
+    caps:
+      mon: "allow r fsname=cephfs"
+      mgr: "allow rw"
+      osd: "allow rwx tag cephfs metadata=cephfs, allow rw tag cephfs data=cephfs"
+      mds: "allow r fsname=cephfs path=/volumes, allow rws fsname=cephfs path=/volumes/csi"
+
+# Groupes de sous-volumes des CONSOMMATEURS (M16-E07) : ni équipe ni identité calculée ; le
+# consommateur (ceph-csi) crée lui-même ses sous-volumes dans le groupe. Le plafond borne tout ce
+# que Kubernetes peut mettre dans CephFS (quota CephFS du répertoire du groupe).
+groupes:
+  - volume: cephfs
+    nom: csi
+    plafond_gio: 20
+    usage: "Kubernetes k8s-par1, ceph-csi CephFS (StorageClass cephfs)"
+
+equipes:
+  # … mediagenda, medidoc, medinotif (M08-E31, E34) : inchangées …

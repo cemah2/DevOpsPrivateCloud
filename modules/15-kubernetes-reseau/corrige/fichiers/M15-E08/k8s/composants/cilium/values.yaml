@@ -1,0 +1,64 @@
+# composants/cilium/values.yaml — réglages de Cilium 1.20 sur k8s-par1.
+# Version M15-E08 (CHG-1608) : REMPLACE celle de M15-E05 ; Cilium remplace kube-proxy.
+# Seul endroit où vivent les réglages de Cilium : jamais de --set sans l'écrire ici.
+#
+# Application (depuis ~/src/k8s, sur adm01), même version de Cilium que celle qui tourne :
+#   cilium upgrade --version <VERSION-CILIUM> --reset-values --values composants/cilium/values.yaml
+#   kubectl -n kube-system rollout restart deployment/cilium-operator daemonset/cilium
+#   kubectl -n kube-system rollout status daemonset/cilium --timeout=10m
+#   cilium status --wait
+# (rollOutCiliumPods vaut false : une modification de la ConfigMap cilium-config n'est prise en
+#  compte qu'au redémarrage des agents.)
+
+# --- Accès à l'API : la VIP du plan de contrôle, pas le Service « kubernetes » ---------------------
+# Indispensable dès que kube-proxy disparaît (E08) : l'agent doit joindre l'API AVANT de savoir
+# traduire l'adresse 10.96.0.1. Le nom est résolu par le DNS du socle (pods hostNetwork).
+k8sServiceHost: k8s-api.par1.medisphere.internal
+k8sServicePort: 8443
+
+# --- Adresses des pods (M14) ------------------------------------------------------------------------
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - 10.240.0.0/16
+    clusterPoolIPv4MaskSize: 24
+
+# --- Mode réseau : tunnel VXLAN (défaut), écrit explicitement ---------------------------------------
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+# --- Services : Cilium remplace kube-proxy (CHG-1608) ------------------------------------------------
+# ClusterIP, NodePort, LoadBalancer, externalIPs et hostPort traduits en eBPF ; l'agent refuse de
+# démarrer si le noyau ne sait pas le faire (pas de repli silencieux).
+kubeProxyReplacement: true
+# Serveur de santé compatible kube-proxy (/healthz sur 10256) : les répartiteurs externes et les
+# Services externalTrafficPolicy: Local s'en servent pour savoir si un nœud porte un pod.
+kubeProxyReplacementHealthzBindAddr: "0.0.0.0:10256"
+
+# --- Opérateur : deux réplicas (défaut du chart, écrit explicitement) -------------------------------
+operator:
+  replicas: 2
+
+# --- Hubble -----------------------------------------------------------------------------------------
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  # Interface web : publiée et protégée en M15-E26, pas avant.
+  ui:
+    enabled: false
+  # Rédaction (SEC-1605) : aucune donnée de patient ni secret dans les flux observés. Ne joue que
+  # sur les flux L7 (HTTP), visibles seulement là où une politique L7 s'applique.
+  redact:
+    enabled: true
+    http:
+      urlQuery: true
+      userInfo: true
+      headers:
+        deny:
+          - Authorization
+          - Proxy-Authorization
+          - Cookie
+          - Set-Cookie
+          - X-Api-Key

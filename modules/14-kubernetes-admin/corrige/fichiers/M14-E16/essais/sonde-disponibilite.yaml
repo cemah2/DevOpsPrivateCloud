@@ -1,0 +1,41 @@
+# ~/m14/e16/sonde-disponibilite.yaml — interroge le SERVICE de l'API toutes les 0,5 s depuis le
+# cluster et journalise chaque échec. À lancer avant une mise à jour, à lire après :
+#   kubectl -n wb-essais logs -f sonde-disponibilite | grep -c ECHEC
+# (port-forward ne convient pas : il s'attache à UN pod, qui disparaît pendant la mise à jour.)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sonde-disponibilite
+  namespace: wb-essais
+spec:
+  automountServiceAccountToken: false
+  priorityClassName: medisphere-essai
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          url="http://mediagenda-api.mediagenda-dev.svc.cluster.local:8000/sante"
+          while true; do
+            if r="$(wget -q -T 2 -O - "$url" 2>&1)"; then
+              echo "$(date +%T) OK $r"
+            else
+              echo "$(date +%T) ECHEC $r"
+            fi
+            sleep 0.5
+          done
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 100m, memory: 32Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

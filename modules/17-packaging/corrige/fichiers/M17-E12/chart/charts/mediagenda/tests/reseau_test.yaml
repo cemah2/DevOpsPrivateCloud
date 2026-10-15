@@ -1,0 +1,46 @@
+suite: Politiques réseau
+release:
+  name: mediagenda
+  namespace: mediagenda-dev
+set:
+  medisphere.environnement: dev
+tests:
+  - it: autorise la sortie vers le cluster CNPG de recette par défaut
+    template: networkpolicy.yaml
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            to:
+              - podSelector:
+                  matchLabels:
+                    cnpg.io/cluster: mediagenda-db
+            ports:
+              - port: 5432
+                protocol: TCP
+
+  - it: protège aussi la base et Valkey quand le chart les déploie
+    template: networkpolicy.yaml
+    set:
+      postgresql.cnpg.enabled: true
+      valkey.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3
+
+  - it: laisse entrer le trafic de la Gateway Cilium sur le port 8000
+    template: ciliumnetworkpolicy.yaml
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: spec.ingress[0].fromEntities[0]
+          value: ingress
+
+  - it: ne rend aucune politique si networkPolicy.enabled est faux
+    template: networkpolicy.yaml
+    set:
+      networkPolicy.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

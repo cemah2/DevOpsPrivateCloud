@@ -1,0 +1,50 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Préréglage MédiSphère (plateforme/renovate-config, M13-E11). Étendu par : { \"extends\": [\"local>plateforme/renovate-config\"] }",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Paris",
+  "labels": ["renovate"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 0,
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "registryAliases": {
+    "registry.par1.medisphere.internal/dockerhub": "docker.io",
+    "registry.par1.medisphere.internal/quay": "quay.io",
+    "registry.par1.medisphere.internal/ghcr": "ghcr.io",
+    "registry.par1.medisphere.internal/k8s": "registry.k8s.io"
+  },
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Images : toujours épinglées par empreinte (étiquette lisible + @sha256).",
+      "matchDatasources": ["docker"],
+      "pinDigests": true
+    },
+    {
+      "description": "Fusion automatique des SEULS correctifs (patch), quand le pipeline de la MR réussit.",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
+    },
+    {
+      "description": "Mineures, empreintes, épinglages : MR relue, pas de fusion automatique.",
+      "matchUpdateTypes": ["minor", "digest", "pin", "pinDigest"],
+      "automerge": false
+    },
+    {
+      "description": "Majeures : jamais automatiques, étiquette dédiée.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["majeure"]
+    },
+    {
+      "description": "Outils de sécurité (images et gabarits) : relecture de la RSSI, jamais automatique.",
+      "matchPackageNames": ["/trivy/", "/cosign/", "/syft/", "/grype/", "/outils-supply-chain/"],
+      "automerge": false,
+      "addLabels": ["securite"],
+      "reviewers": ["sophie.laurent"]
+    }
+  ]
+}

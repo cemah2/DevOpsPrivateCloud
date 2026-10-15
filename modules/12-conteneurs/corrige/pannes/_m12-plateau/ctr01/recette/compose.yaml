@@ -1,0 +1,133 @@
+# Pile de recette MédiAgenda (témoin des pannes du palier 4, M12-E35 à M12-E43)
+#
+# Installée et remise à sa version de référence par lab/bin/break 12 XX, avant chaque panne.
+# Ne la modifie que pour réparer : avant chaque injection, tes modifications sont archivées
+# dans /srv/recette-archives/<date>/ puis la version de référence est remise en place.
+#
+#   sudo docker compose ps          (depuis /srv/recette)
+#   curl http://ctr01.par1.medisphere.internal:8000/pret
+#   curl http://ctr01.par1.medisphere.internal:8080/healthz
+#
+# Le mot de passe de la base est dans .env (600) et secrets/db_password.txt (400, UID 999).
+name: recette
+
+services:
+  db:
+    image: postgres:18-trixie
+    restart: unless-stopped
+    user: "999:999"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      POSTGRES_USER: mediagenda
+      POSTGRES_DB: mediagenda
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - pgdata:/var/lib/postgresql
+    networks:
+      donnees:
+        aliases:
+          - base-recette
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  valkey:
+    image: valkey/valkey:8-trixie
+    restart: unless-stopped
+    user: "999:999"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - donnees
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  migrations:
+    image: recette/mediagenda-api:plateau
+    restart: "no"
+    entrypoint: ["python", "-m", "mediagenda.migrate"]
+    environment:
+      MEDIAGENDA_DB_URL: "postgresql://mediagenda:${DB_MOT_DE_PASSE:?}@base-recette:5432/mediagenda"
+      MEDIAGENDA_VALKEY_URL: "redis://valkey:6379/0"
+    networks:
+      - donnees
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./api
+    image: recette/mediagenda-api:plateau
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 128
+    environment:
+      MEDIAGENDA_DB_URL: "postgresql://mediagenda:${DB_MOT_DE_PASSE:?}@base-recette:5432/mediagenda"
+      MEDIAGENDA_VALKEY_URL: "redis://valkey:6379/0"
+      MEDIAGENDA_VERSION: "recette"
+      MEDIAGENDA_LOG_FORMAT: "json"
+    ports:
+      - "8000:8000"
+    networks:
+      - front
+      - donnees
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  doc:
+    build:
+      context: ./doc
+    image: recette/medidoc:plateau
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    mem_limit: 128m
+    environment:
+      # Pas de S3 en recette : seule la vivacité (/healthz) sert ; /readyz répond 503, c'est attendu.
+      MEDIDOC_S3_ENDPOINT: "http://s3-recette.invalid:8333"
+      MEDIDOC_S3_BUCKET: "medidoc-recette"
+      AWS_ACCESS_KEY_ID: "recette"
+      AWS_SECRET_ACCESS_KEY: "recette-sans-valeur"
+      MEDIDOC_VERSION: "recette"
+    ports:
+      - "8080:8080"
+    networks:
+      - front
+
+networks:
+  front: {}
+  donnees:
+    internal: true
+
+volumes:
+  pgdata: {}
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt

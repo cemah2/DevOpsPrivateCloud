@@ -1,0 +1,19 @@
+# Valeurs du chart communes aux trois environnements gérés par Kustomize (lues par outils/rendre-base.sh).
+# Le rendu se fait dans le profil « recette » (base et Valkey externes à l'application) ; chaque overlay
+# corrige ce qui dépend de l'environnement (étiquettes, nom publié, version, dépendances, taille).
+medisphere:
+  environnement: recette
+replicaCount: 2
+migrations:
+  mode: initContainer
+tests:
+  enabled: false
+postgresql:
+  cnpg:
+    enabled: false
+valkey:
+  enabled: false
+externalValkey:
+  url: redis://valkey:6379/0
+networkPolicy:
+  clusterPostgresqlExterne: mediagenda-db

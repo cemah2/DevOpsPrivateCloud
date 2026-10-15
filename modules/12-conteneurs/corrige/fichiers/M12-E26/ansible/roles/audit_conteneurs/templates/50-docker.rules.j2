@@ -1,0 +1,11 @@
+## {{ audit_conteneurs_fichier_regles }} — {{ ms_gere_par | default('Fichier géré par Ansible (rôle audit_conteneurs, M12-E26).') }}
+## Recherche : ausearch -k docker -i ; ausearch -k docker-cli -i
+## Une règle sur /run/docker.sock ne tracerait PAS les appels à l'API (connect() n'ouvre pas le
+## fichier) : les appels se lisent dans « docker events » et le journal du démon.
+{% for chemin in audit_conteneurs_surveilles_presents %}
+-w {{ chemin }} -p wa -k docker
+{% endfor %}
+{% for binaire in audit_conteneurs_binaires_presents %}
+-w {{ binaire }} -p wax -k docker
+{% endfor %}
+-w {{ audit_conteneurs_client }} -p x -k docker-cli

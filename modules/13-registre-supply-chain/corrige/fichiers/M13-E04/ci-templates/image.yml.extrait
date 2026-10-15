@@ -1,0 +1,12 @@
+# plateforme/ci-templates — image.yml : EXTRAIT (M13-E04, PLAT-1404).
+# Toutes les images des jobs passent par les caches de Harbor. Les EMPREINTES ne changent pas : un
+# cache sert le même manifeste que l'amont (même contenu, même sha256). Relève-les avec
+#   skopeo inspect --format '{{.Digest}}' docker://registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.0-rootless
+variables:
+  # Avant (M12-E21) : moby/buildkit:v0.34.0-rootless@sha256:<EMPREINTE>
+  BUILDKIT_IMAGE: registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.0-rootless@sha256:<EMPREINTE>
+  # Avant : hadolint/hadolint:v2.15.1@sha256:<EMPREINTE>
+  HADOLINT_IMAGE: registry.par1.medisphere.internal/dockerhub/hadolint/hadolint:v2.15.1@sha256:<EMPREINTE>
+  # Avant : quay.io/skopeo/stable:v1.18.0@sha256:<EMPREINTE>
+  SKOPEO_IMAGE: registry.par1.medisphere.internal/quay/skopeo/stable:v1.18.0@sha256:<EMPREINTE>
+# Les jobs utilisent « image: $BUILDKIT_IMAGE » etc. : aucune autre ligne ne change.

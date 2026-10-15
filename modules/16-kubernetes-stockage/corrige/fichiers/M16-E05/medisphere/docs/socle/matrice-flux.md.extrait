@@ -1,0 +1,13 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — EXTRAIT, lignes ajoutées en M16-E05/E06 (PLAT-1705).
+     À ranger dans la section « Stockage » de la matrice, à côté des clients Ceph du M08 et du M10. -->
+
+| Source | Destination | Protocole / ports | VLAN | Traverse la bordure | Usage | Module |
+|---|---|---|---|---|---|---|
+| `k8s-w01-03` (10.10.30.81-83, `ens19`) | MON `ceph01-03` (10.10.30.51-53) | TCP 3300 (msgr2, mode `secure`) | 30 | **non** (intra-VLAN, aucune règle sur `gw01`/`gw02`) | ceph-csi : authentification cephx, cartes du cluster | M16-E05/E06 |
+| `k8s-w01-03` (10.10.30.81-83) | OSD et MDS `ceph01-03` (10.10.30.51-53) | TCP 6800-7568 (msgr2) | 30 | non | ceph-csi : E/S RBD (krbd) et CephFS (client noyau) | M16-E06/E07 |
+| `k8s-w01-03` (10.10.30.81-83) | MON `ceph01-03` | TCP 6789 (msgr1) | 30 | — | **non utilisé** : configuration de ceph-csi en 3300 seulement (E06) | M16-E06 |
+
+Notes :
+- Les pods du *provisioner* de ceph-csi (hors `hostNetwork`) sortent masqués par l'adresse du nœud sur `ens19` : la source vue par Ceph reste 10.10.30.81-83.
+- Les nœuds de contrôle (`k8s-cp01-03`) n'ont pas de carte sur le VLAN 30 et ne joignent pas `ceph-par1`.
+- `group_vars/role_routeur/pare_feu.yml` ne change pas : le flux ne passe pas par la passerelle (même VLAN, pas de route).

@@ -1,0 +1,14 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M14-E28) : ajouts au bloc apiServer de E27.
+apiServer:
+  extraArgs:
+    # … options d'audit de M14-E27 …
+    - {name: encryption-provider-config, value: /etc/kubernetes/chiffrement/configuration.yaml}
+    # Relit le fichier quand il change : rotation sans redémarrer les serveurs d'API.
+    - {name: encryption-provider-config-automatic-reload, value: "true"}
+  extraVolumes:
+    # … volumes d'audit de M14-E27 …
+    - name: chiffrement
+      hostPath: /etc/kubernetes/chiffrement
+      mountPath: /etc/kubernetes/chiffrement
+      readOnly: true
+      pathType: Directory

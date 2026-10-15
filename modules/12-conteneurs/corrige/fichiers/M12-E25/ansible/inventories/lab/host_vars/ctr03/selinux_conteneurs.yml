@@ -1,0 +1,15 @@
+---
+# host_vars/ctr03/selinux_conteneurs.yml — M12-E25 (SEC-1351).
+selinux_conteneurs_dossiers:
+  # Pièces jointes de Legacy-RDV migrées de legacy01 : écrites par www-data (UID 33) du conteneur,
+  # qui est « app » sur l'hôte (UserNS=keep-id:uid=33,gid=33 dans l'unité Quadlet).
+  - chemin: /srv/legacy-rdv/uploads
+    proprietaire: app
+    groupe: app
+    mode: "0750"
+    type: container_file_t
+# /home/app/depot-infoger n'est PAS ici : il garde son étiquette user_home_t (sshd/SFTP) ;
+# l'accès en lecture vient du module legacy_rdv.
+selinux_conteneurs_modules:
+  - nom: legacy_rdv
+    modeles: [base_container, net_container]

@@ -1,0 +1,3 @@
+---
+# Aucun gestionnaire : le chargement d'un module est immédiat. Les conteneurs qui utilisent un type
+# modifié doivent être redémarrés par leur propriétaire (systemctl --user restart …).

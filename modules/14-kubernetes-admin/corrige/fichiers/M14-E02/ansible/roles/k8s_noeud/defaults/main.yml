@@ -1,0 +1,56 @@
+---
+# Rôle k8s_noeud — préparer un nœud Debian 13 pour kubeadm (M14-E02, PLAN §4.10).
+# Commun aux nœuds de contrôle et aux travailleurs. Ne crée ni ne joint aucun cluster :
+# c'est le travail de k8s_plan_controle et k8s_travailleur.
+#
+# Les valeurs du cluster (version, réseau) viennent des faits partagés de l'inventaire
+# (group_vars/k8s_par1/kubernetes.yml, variables k8s_*) ; les défauts ci-dessous permettent au
+# rôle de tourner seul (scénario Molecule).
+
+k8s_noeud_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# --- Version ------------------------------------------------------------------------------------
+# Version complète (patch) : paquets kubelet/kubeadm/kubectl ET kubernetesVersion de kubeadm.
+k8s_noeud_version: "{{ k8s_version | default('1.35.9') }}"
+# Mineure : elle choisit le dépôt pkgs.k8s.io (un dépôt par mineure).
+k8s_noeud_version_mineure: "{{ k8s_noeud_version.split('.')[0:2] | join('.') }}"
+# Révision de paquet de pkgs.k8s.io (1.35.9-1.1).
+k8s_noeud_paquet_revision: "{{ k8s_paquet_revision | default('1.1') }}"
+
+# --- Dépôt pkgs.k8s.io --------------------------------------------------------------------------
+k8s_noeud_depot_url: "https://pkgs.k8s.io/core:/stable:/v{{ k8s_noeud_version_mineure }}/deb/"
+k8s_noeud_depot_cle_url: "{{ k8s_noeud_depot_url }}Release.key"
+# Clé « isv:kubernetes OBS Project », la même pour toutes les mineures (relevée en M14-E02).
+# Elle porte une date d'expiration : si apt la refuse un jour (EXPKEYSIG), le rôle la retélécharge
+# (force) et revérifie son empreinte.
+k8s_noeud_depot_cle_empreinte: DE15B14486CD377B9E876E1A234654DA9A296436
+
+# Paquets épinglés à la version exacte puis retenus (apt-mark hold) : une mise à jour de Kubernetes
+# est une procédure (M14-E25), jamais un effet de bord d'« apt upgrade ».
+k8s_noeud_paquets: [kubelet, kubeadm, kubectl]
+# Autoriser un changement de version sur un nœud déjà membre (playbook de montée de version,
+# M14-E25 seulement) : sinon le rôle refuse.
+k8s_noeud_changement_version: false
+# Outils attendus par les contrôles préalables de kubeadm et le diagnostic.
+k8s_noeud_paquets_outils: [conntrack, ethtool, socat, iptables, iproute2, ipset]
+
+# --- Système -----------------------------------------------------------------------------------
+k8s_noeud_modules: [overlay, br_netfilter]
+k8s_noeud_sysctl:
+  net.ipv4.ip_forward: 1
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+
+# --- Cohérence avec containerd -------------------------------------------------------------------
+# Image pause attendue par containerd (rôle containerd) : comparée à celle de kubeadm.
+k8s_noeud_image_pause: "{{ containerd_image_sandbox | default(k8s_image_pause | default('')) }}"
+k8s_noeud_socket_cri: "{{ k8s_socket_cri | default('unix:///run/containerd/containerd.sock') }}"
+
+# --- Contrôle final -------------------------------------------------------------------------------
+# « kubeadm init phase preflight --dry-run » sur un nœud qui n'a pas encore rejoint de cluster :
+# toutes les vérifications système de kubeadm, sans rien tirer ni écrire. Désactivable pour une
+# instance de test trop petite (le contrôle exige 2 vCPU et 1700 Mo).
+k8s_noeud_preflight: true
+# Erreurs du contrôle tolérées (liste kubeadm : Swap, NumCPU, Mem…). Vide en production.
+k8s_noeud_preflight_ignorer: []

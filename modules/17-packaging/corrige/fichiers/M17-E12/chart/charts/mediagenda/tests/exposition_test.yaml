@@ -1,0 +1,44 @@
+suite: Exposition et disponibilité (HTTPRoute, PDB)
+release:
+  name: mediagenda
+  namespace: mediagenda-recette
+set:
+  medisphere.environnement: recette
+tests:
+  - it: publie mediagenda-<environnement>.apps.par1.medisphere.internal sur gw-par1
+    template: httproute.yaml
+    asserts:
+      - equal:
+          path: spec.hostnames[0]
+          value: mediagenda-recette.apps.par1.medisphere.internal
+      - equal:
+          path: spec.parentRefs[0]
+          value:
+            name: gw-par1
+            namespace: passerelles
+            sectionName: https
+
+  - it: accepte un nom publié imposé (prod)
+    template: httproute.yaml
+    set:
+      medisphere.environnement: prod
+      httpRoute.hostname: mediagenda.apps.par1.medisphere.internal
+    asserts:
+      - equal:
+          path: spec.hostnames[0]
+          value: mediagenda.apps.par1.medisphere.internal
+
+  - it: ne rend pas de PDB pour un seul réplica (il bloquerait les drains)
+    template: pdb.yaml
+    set:
+      replicaCount: 1
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: rend un PDB minAvailable 1 pour deux réplicas
+    template: pdb.yaml
+    asserts:
+      - equal:
+          path: spec.minAvailable
+          value: 1

@@ -1,0 +1,18 @@
+# e07-rbd-rwx.yaml — M16-E07, étape 8 : demander du RWX en mode fichier à ceph-csi RBD.
+# Attendu : PVC Pending, événement ProvisioningFailed du provisioner, du type
+#   rpc error: code = InvalidArgument desc = multi node access modes are only supported on rbd `block` type volumes
+# (message à comparer avec le tien). kubectl delete -f e07-rbd-rwx.yaml ensuite.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e07-rbd-rwx
+  namespace: wb-essais
+  labels:
+    medisphere.fr/exercice: m16-e07
+spec:
+  storageClassName: ceph-rbd
+  accessModes: ["ReadWriteMany"]
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi

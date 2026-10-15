@@ -1,0 +1,25 @@
+# plateforme/k8s — composants/velero/planifications.yaml (M16-E16 ; volumes déplacés en E17)
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: mediagenda-dev-quotidienne
+  namespace: velero
+  labels:
+    medisphere.internal/sauvegarde: quotidienne
+spec:
+  # 02 h 30, heure de Paris (sans CRON_TZ, Velero calcule en UTC).
+  schedule: "CRON_TZ=Europe/Paris 30 2 * * *"
+  useOwnerReferencesInBackup: false
+  template:
+    includedNamespaces:
+      - mediagenda-dev
+    ttl: 168h0m0s
+    storageLocation: s3-01
+    # E17 : instantané CSI cohérent au niveau bloc, puis copie Kopia vers s3-01 ; l'instantané
+    # est supprimé de Ceph une fois la copie faite. Les données quittent donc ceph-par1.
+    snapshotVolumes: true
+    snapshotMoveData: true
+    defaultVolumesToFsBackup: false
+    metadata:
+      labels:
+        medisphere.internal/sauvegarde: quotidienne

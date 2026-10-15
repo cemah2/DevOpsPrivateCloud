@@ -1,0 +1,17 @@
+# gw-attente.yaml — Gateway de la classe « cilium » par défaut, pour observer ce qui manque (M15-E07, étape 5).
+# Sans fournisseur d'adresses (LB IPAM en M15-E10), son Service LoadBalancer reste en <pending>.
+# À SUPPRIMER après observation : kubectl -n wb-essais delete gateway gw-attente
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-attente
+  namespace: wb-essais
+spec:
+  gatewayClassName: cilium
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same

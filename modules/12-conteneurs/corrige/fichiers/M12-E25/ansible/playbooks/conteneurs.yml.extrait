@@ -1,0 +1,9 @@
+# Extrait de playbooks/conteneurs.yml — ajouté en M12-E25 (après « Podman sans privilège »).
+
+- name: SELinux pour les conteneurs (Rocky Linux)
+  hosts: role_podman
+  become: true
+  roles:
+    - role: selinux_conteneurs
+      when: ansible_facts['os_family'] == 'RedHat'
+      tags: [selinux]

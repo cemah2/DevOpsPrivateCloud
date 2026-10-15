@@ -1,0 +1,11 @@
+# Extrait de playbooks/conteneurs.yml — modifié en M12-E26 : audit du moteur Docker sur ctr01.
+# (runner02, hôte du socle, reçoit le même rôle dans site.yml au mini-projet M12-E46.)
+
+- name: Docker Engine
+  hosts: role_docker
+  become: true
+  roles:
+    - role: docker_engine
+      tags: [docker_engine]
+    - role: audit_conteneurs
+      tags: [audit]

@@ -1,0 +1,23 @@
+# composants/snapshot-controller/kustomization.yaml (plateforme/k8s) — M16-E06 (PLAT-1706)
+# CRD snapshot.storage.k8s.io (VolumeSnapshotClass, VolumeSnapshotContent, VolumeSnapshot) et les
+# CRD de groupes de snapshots, puis le contrôleur commun (espace kube-system, 2 réplicas, élection
+# d'un leader). À installer AVANT le pilote CSI : le sidecar csi-snapshotter de ceph-csi observe
+# ces CRD dès son démarrage.
+#
+#   admin@adm01:~/src/k8s$ kubectl kustomize composants/snapshot-controller | less      # relire
+#   admin@adm01:~/src/k8s$ kubectl apply --server-side -k composants/snapshot-controller
+#
+# Sources amont épinglées à l'étiquette v8.6.0 (kustomize les clone avec git). Le manifeste du
+# contrôleur, à cette étiquette, cite encore l'image v8.5.0 : on la fixe ici.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/kubernetes-csi/external-snapshotter//client/config/crd?ref=v8.6.0
+  - https://github.com/kubernetes-csi/external-snapshotter//deploy/kubernetes/snapshot-controller?ref=v8.6.0
+images:
+  - name: registry.k8s.io/sig-storage/snapshot-controller
+    newTag: v8.6.0
+labels:
+  - pairs:
+      medisphere.fr/composant: stockage
+    includeSelectors: false

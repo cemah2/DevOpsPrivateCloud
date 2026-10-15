@@ -1,0 +1,33 @@
+# composants/reseau/politiques/base-dns.yaml — M15-E28 (SEC-1628). Fait passer les requêtes DNS de
+# tous les pods (hors kube-system) par le proxy DNS de Cilium : visibilité des noms dans Hubble et
+# prérequis de toute règle toFQDNs. enableDefaultDeny à false dans les deux sens : cette politique
+# n'ouvre rien et ne ferme rien, elle ne fait passer AUCUN pod en refus par défaut (exemple
+# « intercept-all-dns » de la documentation 1.20, Endpoint default policy).
+# Attention : EnableDefaultDeny ne s'applique pas au L7 ; la règle DNS ci-dessous AUTORISE tous les
+# noms (matchPattern "*"), elle ne peut donc pas provoquer de refus de requêtes DNS.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: base-dns
+spec:
+  description: "Proxy DNS pour tous les pods hors kube-system, sans refus par défaut (M15-E28)"
+  endpointSelector:
+    matchExpressions:
+      - key: io.kubernetes.pod.namespace
+        operator: NotIn
+        values: [kube-system]
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"

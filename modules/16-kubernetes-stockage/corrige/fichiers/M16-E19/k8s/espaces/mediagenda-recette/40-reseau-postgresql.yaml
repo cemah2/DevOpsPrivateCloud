@@ -1,0 +1,76 @@
+# plateforme/k8s — espaces/mediagenda-recette/40-reseau-postgresql.yaml (M16-E18 ; sortie vers s3-01 en E19)
+# mediagenda-recette est en refus par défaut (M15). Le DNS vers kube-system/kube-dns est déjà
+# autorisé pour tout l'espace par la politique du M15.
+# Sélecteur : tous les pods de CNPG (instances ET jobs initdb/join/recovery) portent
+# cnpg.io/cluster.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-entree
+  namespace: mediagenda-recette
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  policyTypes: ["Ingress"]
+  ingress:
+    # Opérateur : état des instances (8000, HTTPS) et contrôles PostgreSQL (5432).
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: cnpg-system}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: cloudnative-pg}
+      ports:
+        - {protocol: TCP, port: 8000}
+        - {protocol: TCP, port: 5432}
+    # Réplication et pg_rewind entre instances ; état entre instances (8000).
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: cnpg.io/cluster, operator: Exists}
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    # API MédiAgenda (étiquette des pods de l'API posée au M14-E07 : adapte si différente)
+    # et Job de migration du schéma.
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["mediagenda-api", "mediagenda-migration"]
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+# Sortie : l'API Kubernetes (le gestionnaire d'instance la lit et met à jour l'état), les autres
+# instances. Avec Cilium, l'API Kubernetes est l'entité kube-apiserver : une NetworkPolicy
+# standard avec ipBlock sur les adresses des nœuds ne la couvre pas.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: postgresql-sortie
+  namespace: mediagenda-recette
+spec:
+  endpointSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  egress:
+    - toEntities: ["kube-apiserver"]
+      toPorts:
+        - ports:
+            - {port: "6443", protocol: TCP}
+    - toEndpoints:
+        - matchExpressions:
+            - {key: cnpg.io/cluster, operator: Exists}
+      toPorts:
+        - ports:
+            - {port: "5432", protocol: TCP}
+            - {port: "8000", protocol: TCP}
+    # M16-E19 : archivage des WAL, sauvegardes et restaurations (sidecar du plugin, jobs de
+    # récupération) vers s3-01, et lui seul. La bordure laisse passer le VLAN 40 vers 8333
+    # depuis le M14.
+    - toCIDR: ["10.10.20.14/32"]
+      toPorts:
+        - ports:
+            - {port: "8333", protocol: TCP}

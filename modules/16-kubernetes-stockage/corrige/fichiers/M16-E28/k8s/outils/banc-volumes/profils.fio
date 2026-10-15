@@ -1,0 +1,40 @@
+; plateforme/k8s — outils/banc-volumes/profils.fio (M16-E28, PLAT-1728)
+; Un profil = une section. Le script lance UNE section à la fois (--section=<profil>).
+; Tous : E/S directes (pas de cache de pages), libaio, 10 s de chauffe puis 60 s de mesure,
+; fichier de 2 Gio pré-rempli (pas de mesure sur des objets RADOS jamais écrits).
+[global]
+ioengine=libaio
+direct=1
+filename=/donnees/fio.dat
+size=2g
+time_based=1
+ramp_time=10
+runtime=60
+group_reporting=1
+percentile_list=50:99:99.9
+
+; Journal de PostgreSQL : écritures séquentielles de 8 Kio, chacune rendue durable (fdatasync).
+[wal]
+rw=write
+bs=8k
+iodepth=1
+fdatasync=1
+
+; Pages de la base : 70 % lectures / 30 % écritures aléatoires de 8 Kio.
+[oltp]
+rw=randrw
+rwmixread=70
+bs=8k
+iodepth=16
+
+; Plafond d'opérations : écritures aléatoires de 4 Kio, file profonde.
+[iops]
+rw=randwrite
+bs=4k
+iodepth=32
+
+; Débit : lectures séquentielles de 1 Mio (sauvegarde, export).
+[debit]
+rw=read
+bs=1m
+iodepth=8

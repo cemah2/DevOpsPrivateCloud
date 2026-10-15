@@ -1,0 +1,7 @@
+---
+# containerd relit config.toml au démarrage seulement. Les conteneurs en cours survivent au
+# redémarrage (un processus « shim » par conteneur) ; le kubelet se reconnecte.
+- name: Redémarrer containerd
+  ansible.builtin.systemd_service:
+    name: containerd.service
+    state: restarted

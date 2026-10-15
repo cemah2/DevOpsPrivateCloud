@@ -1,0 +1,16 @@
+# Valeurs de chart-testing (ct lint / ct install, M17-E07) : une installation AUTONOME dans un espace
+# jetable (wb-ct) — base CNPG et Valkey rendues par le chart, pas d'exposition par la Gateway.
+medisphere:
+  environnement: dev
+replicaCount: 1
+postgresql:
+  cnpg:
+    enabled: true
+    instances: 1
+    storage:
+      size: 1Gi
+      storageClass: ceph-rbd
+valkey:
+  enabled: true
+httpRoute:
+  enabled: false

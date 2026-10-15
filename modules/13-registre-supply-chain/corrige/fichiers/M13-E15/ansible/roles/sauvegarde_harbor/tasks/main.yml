@@ -1,0 +1,121 @@
+---
+- name: Paramètres fournis
+  ansible.builtin.assert:
+    that:
+      - sauvegarde_harbor_mode in ['sauvegarde', 'restauration']
+      - sauvegarde_harbor_jeton_secret | length > 0
+      - sauvegarde_harbor_empreinte | length > 0
+      - sauvegarde_harbor_cle | length > 0
+    fail_msg: >-
+      sauvegarde_harbor_mode (sauvegarde | restauration) et les secrets PBS (jeton, empreinte, clé de
+      chiffrement, en Vault « critique ») sont requis pour {{ inventory_hostname }}.
+    quiet: true
+
+# --- Client PBS -------------------------------------------------------------------------------
+- name: Trousseau de l'archive Proxmox (empreinte vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ sauvegarde_harbor_cle_depot_url }}"
+    dest: /usr/share/keyrings/proxmox-archive-keyring.gpg
+    checksum: "sha256:{{ sauvegarde_harbor_cle_depot_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Dépôt pbs-client (Debian 13)
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/pbs-client.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle sauvegarde_harbor, M13-E15)
+      Types: deb
+      URIs: http://download.proxmox.com/debian/pbs-client
+      Suites: trixie
+      Components: main
+      Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  register: sauvegarde_harbor_depot
+
+- name: Client PBS et jq
+  ansible.builtin.apt:
+    name: [proxmox-backup-client, jq]
+    state: present
+    update_cache: "{{ sauvegarde_harbor_depot is changed }}"
+
+# --- Secrets -----------------------------------------------------------------------------------
+- name: Dossier des secrets
+  ansible.builtin.file:
+    path: /etc/wb-backup
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Accès à PBS (jeton, empreinte)
+  ansible.builtin.template:
+    src: pbs.env.j2
+    dest: /etc/wb-backup/pbs-{{ inventory_hostname }}.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Clé de chiffrement côté client
+  ansible.builtin.copy:
+    content: "{{ sauvegarde_harbor_cle }}"
+    dest: /etc/wb-backup/pbs-{{ inventory_hostname }}.key
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Paramètres non secrets
+  ansible.builtin.template:
+    src: harbor-sauvegarde.conf.j2
+    dest: /etc/wb-backup/harbor.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+# --- Scripts -------------------------------------------------------------------------------------
+- name: Script de sauvegarde
+  ansible.builtin.copy:
+    src: wb-backup-harbor.sh
+    dest: /usr/local/sbin/wb-backup-harbor.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: sauvegarde_harbor_mode == 'sauvegarde'
+
+- name: Script de restauration (jamais lancé par Ansible)
+  ansible.builtin.copy:
+    src: wb-restaurer-harbor.sh
+    dest: /usr/local/sbin/wb-restaurer-harbor.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+# --- Minuterie (sauvegarde seulement) -----------------------------------------------------------
+- name: Unités systemd
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: /etc/systemd/system/{{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - wb-backup-harbor.service
+    - wb-backup-harbor.timer
+  notify: Recharger systemd
+  when: sauvegarde_harbor_mode == 'sauvegarde'
+
+- name: Prendre en compte les unités
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: wb-backup-harbor.timer
+    enabled: true
+    state: started
+  when: sauvegarde_harbor_mode == 'sauvegarde'

@@ -1,0 +1,33 @@
+---
+# Rôle legacy_rdv — valeurs par défaut (M12-E02).
+#
+# Reproduit À L'IDENTIQUE l'installation « à l'ancienne » d'InfoGér (README de Legacy-RDV) sur
+# legacy01 : Apache + mod_php 8.4 + MariaDB sur la même VM, code copié dans /var/www, journal
+# dans un fichier, cron sur la VM. Ce n'est PAS une installation à recommander : c'est le point
+# de départ de la conteneurisation (M12-E19). On automatise l'existant pour pouvoir le
+# reconstruire et l'étudier, pas pour l'améliorer : aucune « correction » ici.
+
+# Copie du code sur le contrôleur (adm01) : le dépôt du workbook, tant que le projet GitLab
+# legacy/legacy-rdv n'existe pas (il naît en M12-E19). Barre oblique finale : on copie le CONTENU.
+legacy_rdv_source: "{{ lookup('ansible.builtin.env', 'HOME') }}/DevOpsPrivateCloud/apps/legacy-rdv/"
+
+legacy_rdv_racine: /var/www/legacy-rdv
+legacy_rdv_journaux: /var/log/legacy-rdv
+legacy_rdv_utilisateur_web: www-data
+
+legacy_rdv_db_nom: legacy_rdv
+legacy_rdv_db_utilisateur: legacy_rdv
+# Mot de passe de la base : celui que config.php contient EN DUR (défaut « 12 facteurs » n° 1).
+# Il vit quand même en Vault (lab) : on ne le recopie pas une fois de plus en clair.
+legacy_rdv_db_mdp: "{{ vault_legacy_rdv_db_mdp }}"
+
+# Paquets de la procédure InfoGér (+ php8.4-mbstring : extension utilisée par le code, absente
+# de la procédure ; php8.4-cli : la tâche cron lance « php »).
+legacy_rdv_paquets:
+  - apache2
+  - libapache2-mod-php8.4
+  - php8.4-cli
+  - php8.4-mysql
+  - php8.4-mbstring
+  - mariadb-server
+  - rsync              # copie du code par ansible.posix.synchronize

@@ -1,0 +1,19 @@
+# composants/cilium/bgp/services-lb.yaml — ce que les nœuds annoncent (M15-E11) : les adresses
+# LoadBalancer (LB IPAM, pool lb-par1) de TOUS les Services, en /32. Ni ClusterIP, ni ExternalIP,
+# ni PodCIDR : la bordure n'accepterait de toute façon que 10.10.41.0/24 (RM-K8S-IN).
+# « Tous » = expression NotIn sur une clé factice (méthode de la documentation Cilium).
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: services-lb
+  labels:
+    bgp.medisphere.fr/annonce: services
+spec:
+  advertisements:
+    - advertisementType: Service
+      service:
+        addresses:
+          - LoadBalancerIP
+      selector:
+        matchExpressions:
+          - {key: medisphere.fr/jamais-utilisee, operator: NotIn, values: ["jamais"]}

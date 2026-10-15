@@ -1,0 +1,6 @@
+---
+# Le serveur d'API relit le fichier seul (--encryption-provider-config-automatic-reload) : on lui en
+# laisse le temps, puis on vérifie à la main le préfixe d'un Secret écrit par CE serveur d'API.
+- name: Attendre le rechargement automatique
+  ansible.builtin.pause:
+    seconds: 90

@@ -1,0 +1,53 @@
+---
+argument_specs:
+  main:
+    short_description: Préparer un nœud Debian 13 pour kubeadm
+    description:
+      - Dépôt pkgs.k8s.io de la mineure (clé vérifiée par son empreinte), kubelet/kubeadm/kubectl à
+        la version exacte et retenus, swap désactivé, modules overlay et br_netfilter, sysctl,
+        cohérence de l'image pause avec containerd, contrôles préalables de kubeadm.
+    options:
+      k8s_noeud_version:
+        type: str
+        description: Version complète de Kubernetes (ex. 1.35.9).
+      k8s_noeud_version_mineure:
+        type: str
+        description: Mineure (ex. 1.35), déduite de la version ; choisit le dépôt.
+      k8s_noeud_paquet_revision:
+        type: str
+        description: Révision des paquets pkgs.k8s.io (ex. 1.1).
+      k8s_noeud_depot_cle_empreinte:
+        type: str
+        required: true
+        description: Empreinte (40 caractères hexadécimaux, majuscules) de la clé de pkgs.k8s.io.
+      k8s_noeud_changement_version:
+        type: bool
+        description: Autoriser un changement de version sur un nœud membre (montée de version, M14-E25).
+      k8s_noeud_paquets:
+        type: list
+        elements: str
+        description: Paquets Kubernetes épinglés puis retenus.
+      k8s_noeud_paquets_outils:
+        type: list
+        elements: str
+        description: Outils attendus par kubeadm et le diagnostic.
+      k8s_noeud_modules:
+        type: list
+        elements: str
+        description: Modules du noyau chargés au démarrage.
+      k8s_noeud_sysctl:
+        type: dict
+        description: Paramètres noyau (nom => valeur).
+      k8s_noeud_image_pause:
+        type: str
+        description: Image pause configurée dans containerd, comparée à celle de kubeadm.
+      k8s_noeud_socket_cri:
+        type: str
+        description: Socket CRI (URL unix://).
+      k8s_noeud_preflight:
+        type: bool
+        description: Lancer les contrôles préalables de kubeadm sur un nœud pas encore joint.
+      k8s_noeud_preflight_ignorer:
+        type: list
+        elements: str
+        description: Contrôles préalables tolérés (instance de test seulement).

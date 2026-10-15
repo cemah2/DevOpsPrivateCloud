@@ -1,0 +1,139 @@
+# k8s/essais/mediagenda-api.yaml — l'API MédiAgenda, espace wb-essais (M14-E07 ; configuration,
+# sondes, ressources et contexte de sécurité en M14-E08, DEV-1508).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda-api
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda-api
+      app.kubernetes.io/part-of: mediagenda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mediagenda-api
+        app.kubernetes.io/part-of: mediagenda
+        app.kubernetes.io/component: api
+    spec:
+      imagePullSecrets:
+        - name: harbor-pull
+      # Plus long que MEDIAGENDA_DELAI_ARRET (20 s) : uvicorn finit ses requêtes avant le SIGKILL.
+      terminationGracePeriodSeconds: 30
+      # L'image tourne sous l'UID 10001 (USER numérique, M12) : le kubelet peut le vérifier.
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: migrations
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_MDP
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-db
+                  key: mot-de-passe
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://mediagenda:$(MEDIAGENDA_DB_MDP)@postgresql:5432/mediagenda
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          ports:
+            - name: http
+              containerPort: 8000
+          # Configuration non secrète : toutes les clés du ConfigMap deviennent des variables.
+          envFrom:
+            - configMapRef:
+                name: mediagenda-api-config
+          env:
+            - name: MEDIAGENDA_DB_MDP
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-db
+                  key: mot-de-passe
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://mediagenda:$(MEDIAGENDA_DB_MDP)@postgresql:5432/mediagenda
+          # Démarrage : rien d'autre ne s'exécute avant que /sante réponde (60 s au plus).
+          startupProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          # Vivacité : le processus répond-il ? /sante NE contacte NI la base NI le cache (README) :
+          # une base en panne ne doit pas faire redémarrer l'API en boucle.
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # Disponibilité : le pod reçoit-il du trafic ? /pret vérifie PostgreSQL ET Valkey ; en
+          # échec, le pod sort des points de terminaison du Service sans être redémarré.
+          readinessProbe:
+            httpGet:
+              path: /pret
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          # Burstable : demandes (ce que l'ordonnanceur réserve) et limite de mémoire (au-delà :
+          # OOMKilled). Pas de limite de CPU : pas d'étranglement (throttling) aux pics.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Système de fichiers en lecture seule : un tmpfs pour les fichiers temporaires de Python.
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-api
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

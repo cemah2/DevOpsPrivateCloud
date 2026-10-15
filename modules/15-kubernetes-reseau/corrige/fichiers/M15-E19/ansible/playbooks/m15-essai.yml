@@ -1,0 +1,11 @@
+---
+# playbooks/m15-essai.yml — prépare m15-essai pour kubeadm (M15-E19) avec les rôles du M14.
+# Groupe d'inventaire NetBox construit sur l'étiquette role-k8s-essai (comme role-k8s-worker au M14).
+# Les variables des rôles sont celles du M14 (group_vars/k8s_par1 non appliquées ici : pas de VIP,
+# pas de jonction) ; seules la mineure de Kubernetes et le cache Harbor sont repris.
+- name: Nœud d'essai kubeadm (containerd + paquets Kubernetes)
+  hosts: role_k8s_essai
+  become: true
+  roles:
+    - role: containerd
+    - role: k8s_noeud

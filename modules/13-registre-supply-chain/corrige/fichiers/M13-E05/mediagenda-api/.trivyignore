@@ -1,0 +1,10 @@
+# .trivyignore — mediagenda/api (M13-E05, SEC-1405). Exceptions ACCEPTÉES par l'équipe.
+# Règle (docs/registre/analyse.md) : une ligne = un identifiant, précédé d'un commentaire
+#   « # <date de revue AAAA-MM-JJ> | <auteur> | <justification> | <ticket> »
+# Une exception sans date ou dont la date est dépassée est retirée à la revue mensuelle.
+# Format « .trivyignore » simple (identifiants) ; le format YAML (.trivyignore.yaml) accepte aussi
+# des dates d'expiration (expired_at) et des chemins : à préférer quand l'exception est fine.
+
+# 2027-01-08 | julien.petit | Exemple : CVE du noyau Linux remontée par le paquet linux-libc-dev
+# présent dans l'image de base ; aucun code du noyau n'est exécuté dans le conteneur. | SEC-1405
+<CVE-ACCEPTEE>

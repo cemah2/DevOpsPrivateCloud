@@ -1,0 +1,19 @@
+# plateforme/k8s — composants/cloudnative-pg/values.yaml (M16-E18)
+# Chart cnpg/cloudnative-pg 0.29.1 = opérateur 1.30.1.
+#   helm upgrade --install cnpg cnpg/cloudnative-pg --version 0.29.1 \
+#     -n cnpg-system -f composants/cloudnative-pg/values.yaml --wait
+image:
+  # Par le cache « ghcr » de Harbor : cette image sert AUSSI de conteneur d'initialisation
+  # (bootstrap-controller) dans les pods PostgreSQL de mediagenda-* (variable
+  # OPERATOR_IMAGE_NAME), où la politique d'admission exige registry.par1.medisphere.internal/.
+  repository: registry.par1.medisphere.internal/ghcr/cloudnative-pg/cloudnative-pg
+  tag: "1.30.1"
+crds:
+  create: true
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: "1", memory: 512Mi}
+monitoring:
+  podMonitorEnabled: false          # pas de Prometheus avant le M21
+  grafanaDashboard:
+    create: false

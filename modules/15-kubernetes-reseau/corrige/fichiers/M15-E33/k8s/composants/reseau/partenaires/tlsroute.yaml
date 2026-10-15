@@ -1,0 +1,18 @@
+# composants/reseau/partenaires/tlsroute.yaml — M15-E33. TLSRoute v1 (canal standard de Gateway API
+# v1.6) : le routage se fait sur le SNI, le flux TLS est relayé tel quel au relais.
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: mediagenda-partenaires
+  namespace: mediagenda-recette
+spec:
+  parentRefs:
+    - name: gw-partenaires
+      namespace: passerelles
+      sectionName: tls-passthrough
+  hostnames:
+    - mediagenda-partenaires.apps.par1.medisphere.internal
+  rules:
+    - backendRefs:
+        - name: relais-mtls
+          port: 443

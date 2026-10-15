@@ -1,0 +1,75 @@
+# k8s/essais/valkey.yaml — cache de MédiAgenda pour les ESSAIS (M14-E07, sondes et ressources M14-E08).
+# Jetable : pas de persistance (emptyDir, ni RDB ni AOF). Le stockage persistant arrive au M16.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+    app.kubernetes.io/component: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+      app.kubernetes.io/part-of: mediagenda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/part-of: mediagenda
+        app.kubernetes.io/component: cache
+    spec:
+      containers:
+        - name: valkey
+          image: docker.io/valkey/valkey:8.1
+          # Un cache : sa mémoire est bornée par Valkey lui-même, AVANT la limite du conteneur
+          # (sinon le noyau le tue, OOMKilled, au lieu qu'il évince des clés).
+          args: ["--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: valkey
+            periodSeconds: 10
+            failureThreshold: 3
+          # Burstable : des demandes, une limite de mémoire, pas de limite de CPU.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+      volumes:
+        - name: donnees
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey

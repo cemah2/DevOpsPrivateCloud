@@ -1,0 +1,71 @@
+# rbac/supervision/supervision.yaml — M15-E26 (PLAT-1626). Identité de lecture de la sonde
+# ms-verif-k8s-reseau (adm01). Lecture des STATUTS dont la sonde a besoin, jamais des Secrets.
+# Jeton long par Secret de type service-account-token : même exception documentée que wb-checks
+# (M14-E06) ; rotation = supprimer le Secret, le recréer, relancer outils/kubeconfig-supervision.sh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: supervision
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    medisphere.fr/role: plateforme
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-supervision
+  namespace: supervision
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ms-supervision-jeton
+  namespace: supervision
+  annotations:
+    kubernetes.io/service-account.name: ms-supervision
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ms-supervision-lecture
+rules:
+  - apiGroups: [""]
+    resources: [nodes, namespaces, pods, services]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [daemonsets, deployments]
+    verbs: [get, list]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list]
+  - apiGroups: [cilium.io]
+    resources:
+      - ciliumnodes
+      - ciliumbgpnodeconfigs
+      - ciliumbgpclusterconfigs
+      - ciliumbgppeerconfigs
+      - ciliumbgpadvertisements
+      - ciliumloadbalancerippools
+    verbs: [get, list]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways, httproutes, tlsroutes, gatewayclasses]
+    verbs: [get, list]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates, clusterissuers]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ms-supervision-lecture
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ms-supervision-lecture
+subjects:
+  - kind: ServiceAccount
+    name: ms-supervision
+    namespace: supervision

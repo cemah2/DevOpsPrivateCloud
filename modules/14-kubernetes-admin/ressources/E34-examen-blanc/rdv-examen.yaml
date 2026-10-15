@@ -1,0 +1,60 @@
+# rdv-examen.yaml — manifeste fourni pour la tâche 9 de l'examen blanc M14-E34.
+# Remplace <IMAGE-MEDIAGENDA> par l'image de MédiAgenda de M14-E07, puis :
+#   kubectl apply -n wb-examen -f rdv-examen.yaml
+# Ce manifeste ne fonctionne pas tel quel : c'est l'objet de la tâche.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rdv-examen
+  labels:
+    app: rdv-examen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rdv-examen
+  template:
+    metadata:
+      labels:
+        app: rdv-examen
+    spec:
+      containers:
+        - name: api
+          image: <IMAGE-MEDIAGENDA>
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://examen@base.wb-examen.svc:5432/examen
+            - name: MEDIAGENDA_LOG_LEVEL
+              value: INFO
+          readinessProbe:
+            httpGet:
+              path: /sante
+              port: 8080
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: 8000
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Gi
+            limits:
+              memory: 64Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rdv-examen
+spec:
+  type: ClusterIP
+  selector:
+    app: rdv
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

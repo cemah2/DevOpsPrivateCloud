@@ -1,0 +1,13 @@
+<!-- vm-debian/README.md — EXTRAIT à ajouter après « Ce qui change en v2 » (M13-E02). -->
+
+## Ce qui change en v2.<MINEURE> (M13-E02, ajout rétrocompatible)
+
+Variable facultative `disques_donnees` (liste vide par défaut, même schéma que `vm-noeud`) :
+`taille_go`, `datastore`, `ssd` (`false`), `sauvegarde` (`false`), `serie`. Les disques sont
+branchés sur `scsi1`, `scsi2`… Un appelant qui ne renseigne rien obtient exactement le même plan.
+
+Premier consommateur : `reg01` (Harbor, 200 Gio sur `hdd-bulk`, série `reg01-donnees`).
+
+Pourquoi pas `vm-noeud` pour `reg01` : `vm-noeud` refuse les VMID du socle (1000-1099) par
+validation, ne connaît que des adresses imposées multi-cartes et n'est pas fait pour un hôte
+permanent ; `vm-debian` est le module des hôtes du socle (une carte, adresse imposée ou allouée).

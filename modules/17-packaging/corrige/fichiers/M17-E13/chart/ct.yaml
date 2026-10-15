@@ -1,0 +1,13 @@
+# Configuration de chart-testing 3.15 (M17-E07, modifiée en M17-E13).
+chart-dirs:
+  - charts
+target-branch: main
+remote: origin
+validate-maintainers: false
+# M17-E13 : la version du chart est calculée par semantic-release à la publication (étiquette
+# vX.Y.Z → « helm package --version X.Y.Z »). Une MR ne modifie donc jamais « version » dans
+# Chart.yaml : le contrôle d'incrément de ct échouerait sur chaque MR.
+check-version-increment: false
+excluded-charts:
+  - medisphere-commun
+helm-extra-args: --timeout 600s

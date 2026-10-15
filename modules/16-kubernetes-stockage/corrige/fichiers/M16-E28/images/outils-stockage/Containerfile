@@ -1,0 +1,22 @@
+# Image plateforme/outils-stockage (M16-E28, réutilisée en M16-E29) : fio et rsync, non root.
+# Construite, analysée (Trivy), signée (Cosign) et poussée par la chaîne des images de plateforme
+# du module 13 ; référencée par son empreinte (digest) dans les manifestes.
+# Image de base par le cache Harbor (docker.io → projet dockerhub).
+FROM registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+# hadolint ignore=DL3008
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends fio rsync ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin outils
+
+LABEL org.opencontainers.image.title="outils-stockage" \
+      org.opencontainers.image.description="fio et rsync pour les mesures et migrations de volumes (MédiSphère)" \
+      org.opencontainers.image.vendor="MédiSphère" \
+      org.opencontainers.image.source="https://git01.par1.medisphere.internal/plateforme/images-conteneurs"
+
+USER 10001:10001
+WORKDIR /donnees
+ENTRYPOINT ["fio"]
+CMD ["--version"]

@@ -1,0 +1,24 @@
+# {{ k8s_chiffrement_dossier }}/configuration.yaml — {{ inventory_hostname }} (M14-E28, SEC-1528)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle k8s_chiffrement).') }}
+# Le PREMIER fournisseur chiffre les écritures ; tous sont essayés à la lecture (le préfixe
+# k8s:enc:<type>:v1:<nom-de-clé>: stocké dans etcd dit lequel).
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+resources:
+  - resources:
+{% for r in k8s_chiffrement_ressources %}
+      - {{ r }}
+{% endfor %}
+    providers:
+{% for f in k8s_chiffrement_fournisseurs %}
+{% if f.type == 'identity' %}
+      - identity: {}
+{% else %}
+      - {{ f.type }}:
+          keys:
+{% for c in f.cles %}
+            - name: {{ c.nom }}
+              secret: {{ c.secret }}
+{% endfor %}
+{% endif %}
+{% endfor %}

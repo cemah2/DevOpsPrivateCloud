@@ -1,0 +1,37 @@
+# composants/reseau/partenaires/gateway.yaml — M15-E33 (SEC-1633). Gateway DISTINCTE pour l'API des
+# centres partenaires : le TLS n'y est PAS terminé (passthrough), la négociation du client arrive
+# intacte au relais nginx qui exige et vérifie le certificat client (Cilium 1.20 n'implémente pas la
+# validation client à la Gateway : spec.tls.frontend ignoré, voir durcissement-entree.md).
+# Adresse propre (10.10.41.11, pool lb-par1) : aucun mélange avec les écouteurs HTTPS de gw-par1.
+# Nom publié par ExternalDNS (source « service ») : Cilium recopie spec.infrastructure.annotations sur
+# le Service LoadBalancer qu'il crée pour la Gateway. Annonce BGP : services-lb (E11) sélectionne
+# tous les Services LoadBalancer, donc aussi celui-ci.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-partenaires
+  namespace: passerelles
+spec:
+  gatewayClassName: cilium
+  addresses:
+    - type: IPAddress
+      value: 10.10.41.11
+  infrastructure:
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: mediagenda-partenaires.apps.par1.medisphere.internal
+  listeners:
+    - name: tls-passthrough
+      protocol: TLS
+      port: 443
+      hostname: mediagenda-partenaires.apps.par1.medisphere.internal
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        kinds:
+          - group: gateway.networking.k8s.io
+            kind: TLSRoute
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              medisphere.fr/exposition: oui

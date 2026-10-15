@@ -1,0 +1,13 @@
+# /etc/systemd/system/wb-backup-harbor.timer — {{ inventory_hostname }} (M13-E15)
+# 01:40 : avant lab-nuit (02:30, sauvegarde des VM par PBS) et la réplication (03:15). Le ramasse-miettes
+# de Harbor (M13-E10) ne doit jamais tomber dans cette fenêtre : le script refuse de tourner pendant un GC.
+[Unit]
+Description=Sauvegarde applicative quotidienne de Harbor vers PBS (M13-E15)
+
+[Timer]
+OnCalendar=*-*-* {{ sauvegarde_harbor_heure }}:00
+RandomizedDelaySec=3min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

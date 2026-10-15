@@ -1,0 +1,63 @@
+---
+# kubelet, kubeadm, kubectl : version EXACTE, puis apt-mark hold.
+
+- name: Version de paquet visée
+  ansible.builtin.set_fact:
+    _k8s_noeud_version_paquet: "{{ k8s_noeud_version }}-{{ k8s_noeud_paquet_revision }}"
+
+- name: Outils attendus par kubeadm et le diagnostic
+  ansible.builtin.apt:
+    name: "{{ k8s_noeud_paquets_outils }}"
+    state: present
+
+- name: Lire la version installée de kubeadm
+  ansible.builtin.command: dpkg-query --showformat='${Version}' --show kubeadm
+  register: _k8s_noeud_installe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Garde-fou : sur un nœud déjà membre, changer la version des paquets n'est PAS une montée de
+# version (il faut kubeadm upgrade, le drain, l'ordre des nœuds : RB-142, M14-E25). Le rôle refuse
+# sauf si l'appelant l'autorise explicitement (playbook de montée de version).
+- name: Refuser un changement de version non annoncé sur un nœud membre
+  ansible.builtin.assert:
+    that:
+      - >-
+        not _k8s_noeud_membre.stat.exists
+        or _k8s_noeud_installe.rc != 0
+        or _k8s_noeud_installe.stdout == _k8s_noeud_version_paquet
+        or k8s_noeud_changement_version | bool
+    fail_msg: >-
+      {{ inventory_hostname }} est membre du cluster avec kubeadm {{ _k8s_noeud_installe.stdout }} ;
+      l'inventaire demande {{ _k8s_noeud_version_paquet }}. Une montée de version suit RB-142
+      (M14-E25) et son playbook (k8s_noeud_changement_version: true), nœud par nœud, après drain.
+    quiet: true
+
+- name: Libérer les paquets avant un changement de version autorisé
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: install
+  loop: "{{ k8s_noeud_paquets }}"
+  when:
+    - _k8s_noeud_installe.rc == 0
+    - _k8s_noeud_installe.stdout != _k8s_noeud_version_paquet
+
+- name: Paquets Kubernetes en {{ _k8s_noeud_version_paquet }}
+  ansible.builtin.apt:
+    name: "{{ k8s_noeud_paquets | map('regex_replace', '$', '=' ~ _k8s_noeud_version_paquet) | list }}"
+    state: present
+  notify: Relancer kubelet
+
+- name: Retenir les paquets (apt-mark hold)
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ k8s_noeud_paquets }}"
+
+# Le paquet active kubelet.service, qui redémarre en boucle tant que kubeadm n'a pas écrit sa
+# configuration (/var/lib/kubelet/config.yaml) : c'est normal avant init/join.
+- name: Service kubelet activé au démarrage
+  ansible.builtin.systemd_service:
+    name: kubelet.service
+    enabled: true

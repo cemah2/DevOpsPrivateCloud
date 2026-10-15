@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/@EQUIPE@-@ENV@/00-namespace.yaml (gabarit M14-E33)
+# Espace de développement de l'équipe @EQUIPE@. Mêmes conventions que mediagenda-dev (M14-E10, E18) :
+# l'étiquette medisphere.internal/equipe fait sélectionner l'espace par la liaison de la
+# ValidatingAdmissionPolicy medisphere-images (namespaceSelector « equipe Exists », M14-E18) ;
+# les étiquettes pod-security.kubernetes.io/* appliquent « restricted ». L'équipe n'a aucun droit
+# d'écriture sur les espaces : elle ne peut pas desserrer ces règles.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: @EQUIPE@-@ENV@
+  labels:
+    medisphere.internal/equipe: @EQUIPE@
+    medisphere.internal/environnement: @ENV@
+    pod-security.kubernetes.io/enforce: restricted
+    # Version figée comme en E18 ; l'espace naît après la montée en 1.36 (M14-E25).
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "<prenom.nom>"
+    medisphere.internal/ticket: "<TICKET>"

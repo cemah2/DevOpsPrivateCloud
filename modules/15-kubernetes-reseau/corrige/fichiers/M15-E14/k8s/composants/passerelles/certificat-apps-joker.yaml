@@ -1,0 +1,26 @@
+# composants/passerelles/certificat-apps-joker.yaml — le joker de gw-par1 (M15-E14).
+# Remplace le Secret apps-joker créé à la main en E12 : cert-manager le réécrit (même nom), la
+# Gateway Cilium relit le Secret et sert le nouveau certificat sans redémarrage.
+# Durée : 30 jours imposés par le provisioner acme de ca01 (M06-E27) ; renouvellement à 10 jours
+# de l'échéance (2/3 de la vie par défaut, rendu explicite).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: apps-joker
+  namespace: passerelles
+spec:
+  secretName: apps-joker
+  secretTemplate:
+    labels:
+      app.kubernetes.io/part-of: reseau-k8s-par1
+  dnsNames:
+    - "*.apps.par1.medisphere.internal"
+  renewBefore: 240h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: step-ca-acme

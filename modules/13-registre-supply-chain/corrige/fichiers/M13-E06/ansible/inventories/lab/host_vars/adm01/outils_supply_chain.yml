@@ -1,0 +1,7 @@
+---
+# host_vars/adm01/outils_supply_chain.yml — M13-E05 (cosign, trivy) puis M13-E06 (syft, grype).
+outils_supply_chain_outils:
+  - cosign
+  - trivy
+  - syft
+  - grype

@@ -1,0 +1,100 @@
+# politiques-wb-essais.yaml — politiques réseau standard de wb-essais (M15-E06, SEC-1606).
+# Modèle « tout refuser, puis ouvrir ce qui est écrit », repris en M15-E17 pour MédiAgenda.
+#
+# Préalable : les sondes « clientes » portent le label role=client :
+#   kubectl -n wb-essais label pod sonde-w01a sonde-w02 role=client
+# (sonde-w01b et sonde-ndots restent sans ce label : elles servent de témoin refusé.)
+#
+# Rappels de sémantique (API networking.k8s.io/v1) :
+#   - une politique qui SÉLECTIONNE un pod pour une direction (policyTypes) le fait passer en
+#     « refus par défaut » dans cette direction ; les autorisations de toutes les politiques
+#     s'additionnent ; il n'existe pas de règle « deny » ;
+#   - les ports d'une règle sont ceux du POD (targetPort, ici 8080), pas ceux du Service (80) :
+#     la traduction du Service a lieu avant l'application de la politique ;
+#   - un même élément de « from »/« to » qui combine namespaceSelector ET podSelector exige les
+#     deux ; deux éléments séparés sont un OU.
+---
+# 1. Refus par défaut, entrée et sortie, pour tous les pods de l'espace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: wb-essais
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# 2. Tous les pods peuvent interroger le DNS du cluster (et seulement lui), en UDP et en TCP.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: autoriser-dns
+  namespace: wb-essais
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# 3. Les clients (role=client) peuvent sortir vers echo, sur le port du pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clients-vers-echo
+  namespace: wb-essais
+spec:
+  podSelector:
+    matchLabels:
+      role: client
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: echo
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# 4. echo accepte les clients de l'espace, et le VLAN d'administration par le NodePort echo-np
+#    (externalTrafficPolicy: Local : l'adresse source 10.10.10.10 de adm01 est conservée jusqu'au pod).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: echo-entree
+  namespace: wb-essais
+spec:
+  podSelector:
+    matchLabels:
+      app: echo
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: client
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - ipBlock:
+            cidr: 10.10.10.0/24
+      ports:
+        - protocol: TCP
+          port: 8080

@@ -1,0 +1,73 @@
+# plateforme/images-base — .gitlab-ci.yml (M12-E27, PLAT-1353)
+# Construit les images bibliotheque/* sur runner02 (BuildKit sans privilège, gabarit image.yml de
+# M12-E21) et les publie dans le registre de travail avec deux étiquettes :
+#   - <version>-AAAAMMJJ : datée, IMMUABLE (jamais repoussée : le job échoue si elle existe) ;
+#   - <version>          : MOBILE, déplacée à chaque construction réussie (suivie par les recettes).
+# Déclencheurs : pipeline planifié hebdomadaire (« hebdomadaire », lundi 04:00 Europe/Paris), MR
+# (construction sans publication), lancement manuel sur main (correctif urgent : « Run pipeline »).
+include:
+  - project: plateforme/ci-templates
+    ref: v1.4.0          # version du gabarit qui contient image.yml (E21) ; à adapter à la tienne
+    file: [qualite.yml, image.yml]
+
+stages: [test, construction]
+
+variables:
+  REGISTRE_BIBLIOTHEQUE: ctr01.par1.medisphere.internal:5000/bibliotheque
+  PLATEFORMES: linux/amd64,linux/arm64
+
+hadolint:
+  stage: test
+  # Variante Debian de l'image : la boucle ci-dessous demande un shell (l'image par défaut n'en a pas).
+  image: docker.io/hadolint/hadolint:v2.15.1-debian
+  tags: [docker]
+  script:
+    - for f in */Dockerfile; do echo "== $f"; hadolint "$f"; done
+
+# Date commune à toutes les images d'un même pipeline (un pipeline qui passe minuit reste cohérent).
+date:
+  stage: test
+  # Image amont (et non bibliotheque/debian) : ce projet doit pouvoir construire le catalogue à vide.
+  image: docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+  tags: [docker]
+  script:
+    - echo "DATE_CONSTRUCTION=$(date -u +%Y%m%d)" > date.env
+  artifacts:
+    reports:
+      dotenv: date.env
+
+.bibliotheque:
+  extends: .image-construction          # job caché de image.yml (E21)
+  stage: construction
+  needs: [hadolint, date]
+  variables:
+    CONTEXTE: .
+    ARGS_CONSTRUCTION: "REVISION=$CI_COMMIT_SHA DATE_CONSTRUCTION=$DATE_CONSTRUCTION"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      variables: { PUBLIER: "oui" }
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables: { PUBLIER: "oui" }
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables: { PUBLIER: "non" }
+
+debian:
+  extends: .bibliotheque
+  variables:
+    FICHIER: debian/Dockerfile
+    IMAGE: $REGISTRE_BIBLIOTHEQUE/debian
+    ETIQUETTES: "trixie-$DATE_CONSTRUCTION trixie"
+
+python:
+  extends: .bibliotheque
+  variables:
+    FICHIER: python/Dockerfile
+    IMAGE: $REGISTRE_BIBLIOTHEQUE/python
+    ETIQUETTES: "3.13-trixie-$DATE_CONSTRUCTION 3.13-trixie"
+
+php-apache:
+  extends: .bibliotheque
+  variables:
+    FICHIER: php-apache/Dockerfile
+    IMAGE: $REGISTRE_BIBLIOTHEQUE/php-apache
+    ETIQUETTES: "8.4-apache-trixie-$DATE_CONSTRUCTION 8.4-apache-trixie"

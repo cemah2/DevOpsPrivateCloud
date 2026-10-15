@@ -1,0 +1,57 @@
+# k8s/essais/valkey.yaml — cache de MédiAgenda pour les ESSAIS (M14-E07, DEV-1507), espace wb-essais.
+# Jetable : pas de persistance (emptyDir, ni RDB ni AOF). Le stockage persistant arrive au M16.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+    app.kubernetes.io/component: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+      app.kubernetes.io/part-of: mediagenda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/part-of: mediagenda
+        app.kubernetes.io/component: cache
+    spec:
+      containers:
+        - name: valkey
+          # Image publique tirée de Docker Hub directement au palier 1 ; par le cache Harbor en E19.
+          # En production : épinglée par empreinte (@sha256:…).
+          image: docker.io/valkey/valkey:8.1
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+      volumes:
+        - name: donnees
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey

@@ -1,0 +1,37 @@
+# .hadolint.yaml — règles Hadolint de MédiSphère (M12-E16, ticket SEC-1326). Hadolint 2.15.
+# Copié à la racine de chaque projet applicatif ; le gabarit CI image.yml (E21) l'utilise.
+# Toute dérogation se fait DANS le Dockerfile, ligne par ligne, avec sa raison :
+#   # hadolint ignore=DL3008  (raison : …)
+# jamais en ajoutant la règle à « ignored » ici.
+
+# Avertissement = échec : on ne livre pas une image avec un avertissement non traité.
+failure-threshold: warning
+
+# Registres d'où une image de base peut venir (DL3026). Au module 13, ce sera Harbor seul.
+trustedRegistries:
+  - docker.io
+  - gcr.io
+  - ghcr.io
+  - ctr01.par1.medisphere.internal:5000
+
+# Étiquettes OCI obligatoires (DL3049 si absente, DL3048 si invalide).
+label-schema:
+  org.opencontainers.image.title: text
+  org.opencontainers.image.version: text
+  org.opencontainers.image.source: url
+  org.opencontainers.image.vendor: text
+
+# Règles durcies : ce qui est un « avertissement » ailleurs est une erreur chez nous.
+override:
+  error:
+    - DL3002   # le dernier USER ne doit pas être root
+    - DL3004   # pas de sudo
+    - DL3007   # pas d'étiquette « latest »
+    - DL3006   # toujours une étiquette explicite
+    - DL3020   # COPY plutôt qu'ADD
+    - DL4006   # pipefail avant un tube dans RUN
+    - DL3025   # forme JSON (exec) pour CMD et ENTRYPOINT
+    - SC2086   # variables non protégées dans RUN
+  warning:
+    - DL3066   # USER non numérique (Hadolint 2.15) : runAsNonRoot ne peut pas le vérifier
+    - DL3049   # étiquette OCI obligatoire absente (image finale)

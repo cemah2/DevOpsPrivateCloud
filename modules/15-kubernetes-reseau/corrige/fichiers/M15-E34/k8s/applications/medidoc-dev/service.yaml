@@ -1,0 +1,12 @@
+# applications/medidoc-dev/service.yaml — M15-E34 (DEV-1634).
+apiVersion: v1
+kind: Service
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+  labels: {app.kubernetes.io/name: medidoc}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: medidoc}
+  ports:
+    - {name: http, port: 80, targetPort: http, protocol: TCP}

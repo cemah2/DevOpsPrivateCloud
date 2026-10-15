@@ -1,0 +1,48 @@
+---
+- name: Hôte virtuel d'InfoGér (fichier du dépôt, tel quel)
+  ansible.builtin.copy:
+    src: "{{ legacy_rdv_racine }}/vm/apache-legacy-rdv.conf"
+    dest: /etc/apache2/sites-available/legacy-rdv.conf
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger apache2
+
+- name: Site par défaut désactivé
+  ansible.builtin.command:
+    cmd: a2dissite 000-default
+    removes: /etc/apache2/sites-enabled/000-default.conf
+  notify: Recharger apache2
+
+- name: Site legacy-rdv activé
+  ansible.builtin.command:
+    cmd: a2ensite legacy-rdv
+    creates: /etc/apache2/sites-enabled/legacy-rdv.conf
+  notify: Recharger apache2
+
+- name: Apache démarré
+  ansible.builtin.systemd_service:
+    name: apache2
+    enabled: true
+    state: started
+
+- name: Tâche planifiée de purge (fichier du dépôt, tel quel)
+  ansible.builtin.copy:
+    src: "{{ legacy_rdv_racine }}/vm/cron.d-legacy-rdv"
+    dest: /etc/cron.d/legacy-rdv
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Rotation du journal applicatif (logrotate, comme sur la VM d'InfoGér)
+  ansible.builtin.template:
+    src: logrotate-legacy-rdv.j2
+    dest: /etc/logrotate.d/legacy-rdv
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Appliquer la configuration d'Apache maintenant
+  ansible.builtin.meta: flush_handlers

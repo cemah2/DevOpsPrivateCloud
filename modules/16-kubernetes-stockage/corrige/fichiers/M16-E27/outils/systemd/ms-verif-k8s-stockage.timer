@@ -1,0 +1,14 @@
+# /etc/systemd/system/ms-verif-k8s-stockage.timer — M16-E27 (PLAT-1727)
+# 10 minutes : les pannes de stockage de Kubernetes se révèlent lentement (PVC Pending à 15 min,
+# sauvegardes à 26 h) ; un passage plus fréquent chargerait l'API pour rien.
+[Unit]
+Description=MédiSphère : sonde du stockage de k8s-par1 toutes les 10 minutes
+
+[Timer]
+OnCalendar=*:0/10
+Persistent=true
+AccuracySec=30s
+RandomizedDelaySec=60s
+
+[Install]
+WantedBy=timers.target

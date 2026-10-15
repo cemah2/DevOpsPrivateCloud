@@ -1,0 +1,31 @@
+# M16-E34 — cluster TEMPORAIRE d'enquête : la base de la recette telle qu'elle était juste avant
+# l'erreur. Une instance, aucune archive écrite (pas de .spec.plugins), supprimé à T3.
+# targetTime : l'heure affichée par l'injection (heure de Paris, avec son décalage), qui précède le
+# début de la transaction fautive : la récupération s'arrête avant sa validation.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db-enquete
+  namespace: mediagenda-recette
+  labels: {medisphere.fr/enquete: inc-4334}
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-system-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+  bootstrap:
+    recovery:
+      source: recette
+      recoveryTarget:
+        targetTime: "<AAAA-MM-JJ HH:MM:SS+HH:MM>"
+  externalClusters:
+  - name: recette
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: mediagenda-db

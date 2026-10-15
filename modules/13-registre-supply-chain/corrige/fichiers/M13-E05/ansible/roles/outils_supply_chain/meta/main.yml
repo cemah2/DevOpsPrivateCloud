@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Outils de la chaîne d'approvisionnement (Cosign, Trivy, Syft, Grype) vérifiés et épinglés
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

@@ -1,0 +1,40 @@
+# composants/ceph-csi/classes/ceph-rbd.yaml (plateforme/k8s) — M16-E06 (PLAT-1706)
+# Classe PAR DÉFAUT du cluster : bloc RBD dans le pool k8s-rbd de ceph-par1, ext4, RWO.
+# Les paramètres d'une StorageClass sont immuables : changer un réglage = nouvelle classe
+# (ou suppression puis recréation, sans effet sur les PV déjà créés).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ceph-rbd
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+  labels:
+    medisphere.fr/composant: stockage
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  # Gérées par krbd (Linux 6.12 des travailleurs) ; journaling ne l'est pas (miroir RBD par journal,
+  # réservé à librbd/rbd-nbd). object-map et fast-diff : rbd du, export-diff et snapshots rapides ;
+  # deep-flatten : aplatir un clone dont l'image source a des instantanés.
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  # Option du noyau au mappage : msgr2 en mode chiffré (port 3300), sans repli possible.
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+# Liaison immédiate : un volume RBD est joignable depuis tous les travailleurs, il n'y a pas de
+# topologie à attendre. (Comparaison avec WaitForFirstConsumer : M16-E12.)
+volumeBindingMode: Immediate
+# discard : les blocs libérés par ext4 sont rendus au pool (images allouées à la demande, pool
+# sous quota de 20 Gio). Alternative moins coûteuse en E/S : fstrim périodique (palier 3).
+mountOptions:
+  - discard

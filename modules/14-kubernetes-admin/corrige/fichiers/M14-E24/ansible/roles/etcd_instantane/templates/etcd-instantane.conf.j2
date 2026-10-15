@@ -1,0 +1,9 @@
+# /etc/etcd-instantane/etcd-instantane.conf — {{ inventory_hostname }} (M14-E24)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle etcd_instantane).') }}
+ETCD_NOEUD={{ inventory_hostname }}
+ETCD_S3_POINT={{ etcd_instantane_s3_point }}
+ETCD_S3_COMPARTIMENT={{ etcd_instantane_s3_compartiment }}
+ETCD_AGE_DESTINATAIRE={{ etcd_instantane_age_destinataire }}
+ETCD_LOCAL=/var/backups/etcd
+ETCD_GARDER={{ etcd_instantane_garder }}
+ETCD_HEURE_QUOTIDIEN={{ etcd_instantane_heure_quotidien }}

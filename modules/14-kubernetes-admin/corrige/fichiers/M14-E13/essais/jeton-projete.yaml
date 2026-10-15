@@ -1,0 +1,49 @@
+# ~/m14/e13/jeton-projete.yaml — un jeton lié, à audience dédiée, projeté dans un fichier et
+# renouvelé par le kubelet. Rien n'est monté automatiquement : le seul jeton du pod est celui-ci.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jeton-essai
+  namespace: wb-essais
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jeton-projete
+  namespace: wb-essais
+  labels:
+    medisphere.internal/exercice: e13
+spec:
+  serviceAccountName: jeton-essai
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: lecteur
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      # Affiche toutes les 60 s l'empreinte du jeton : elle change quand le kubelet le renouvelle
+      # (vers 80 % de sa durée de vie, soit environ 8 min pour 600 s).
+      command: ["sh", "-c", "while true; do date; sha256sum /var/run/secrets/medisphere/jeton; sleep 60; done"]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: jeton
+          mountPath: /var/run/secrets/medisphere
+          readOnly: true
+  volumes:
+    - name: jeton
+      projected:
+        sources:
+          - serviceAccountToken:
+              path: jeton
+              audience: medisphere-essai
+              expirationSeconds: 600

@@ -1,0 +1,22 @@
+---
+- name: Attendre que Harbor soit sain (par le nom de service, TLS vérifié)
+  ansible.builtin.uri:
+    url: "https://{{ harbor_nom }}/api/v2.0/health"
+    return_content: true
+    validate_certs: true
+  register: harbor_sante
+  until: harbor_sante.status == 200 and (harbor_sante.json.status | default('')) == 'healthy'
+  retries: "{{ harbor_sante_tentatives }}"
+  delay: "{{ harbor_sante_delai }}"
+  changed_when: false
+
+- name: Lire la version des conteneurs
+  ansible.builtin.command: docker inspect -f '{{ '{{' }}.Config.Image{{ '}}' }}' harbor-core
+  register: harbor_image_core
+  changed_when: false
+
+- name: Vérifier que la version qui tourne est celle demandée
+  ansible.builtin.assert:
+    that: harbor_image_core.stdout is search(':v' ~ harbor_version ~ '$')
+    fail_msg: "harbor-core tourne en {{ harbor_image_core.stdout }}, attendu v{{ harbor_version }}."
+    quiet: true

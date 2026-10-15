@@ -1,0 +1,47 @@
+# .gitlab-ci.yml — mediagenda/api (M13-E09, DEV-1409).
+# Gabarits partagés ÉPINGLÉS (étiquettes de plateforme/ci-templates ; Renovate propose les montées).
+# Une version vX.Y.Z = une étiquette Git posée par semantic-release sur main = une image publiée,
+# signée, attestée dans Harbor : registry.par1.medisphere.internal/medisphere/mediagenda-api:vX.Y.Z
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never                     # pas de doublon branche + MR
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+include:
+  - project: plateforme/ci-templates
+    ref: v<X.Y.Z>                     # étiquette du dépôt de gabarits qui contient supply-chain.yml
+    file:
+      - qualite.yml                   # pre-commit, Gitleaks (M01)
+      - release.yml                   # semantic-release (M01)
+      - supply-chain.yml              # M13-E09
+
+variables:
+  SC_IMAGE_NOM: medisphere/mediagenda-api
+
+stages:
+  - qualite
+  - test
+  - construction
+  - analyse
+  - publication
+  - signature
+  - verification
+  - release
+
+tests:
+  stage: test
+  image: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:<EMPREINTE>
+  tags: [docker]
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: on_success
+  script:
+    - uv sync --locked
+    - uv run ruff check .
+    - uv run ruff format --check .
+    - uv run pytest

@@ -1,0 +1,4 @@
+# /etc/sudoers.d/60-supervision-conteneurs — {{ ms_gere_par | default('Fichier géré par Ansible (rôle supervision_conteneurs).') }}
+# Une seule commande, sans argument (« "" » interdit tout argument), sans mot de passe, sans terminal.
+Defaults:{{ supervision_conteneurs_compte }} !requiretty, env_reset
+{{ supervision_conteneurs_compte }} ALL=(root) NOPASSWD: /usr/local/sbin/ms-etat-conteneurs ""

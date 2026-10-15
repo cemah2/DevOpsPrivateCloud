@@ -1,0 +1,56 @@
+# ~/m15/e16/grpc.yaml — serveur gRPC de santé et GRPCRoute (M15-E16, étape 4).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agnhost-grpc
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: agnhost-grpc}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app.kubernetes.io/name: agnhost-grpc}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: agnhost-grpc}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: agnhost
+          image: registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.61
+          args: ["grpc-health-checking", "--port=5000", "--http-port=8080"]
+          ports:
+            - {name: app, containerPort: 5000}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: agnhost-grpc, namespace: wb-essais}
+spec:
+  selector: {app.kubernetes.io/name: agnhost-grpc}
+  ports:
+    # HTTP/2 en clair vers le backend (GEP-1911) : la Gateway termine le TLS.
+    - {name: grpc, port: 5000, targetPort: app, appProtocol: kubernetes.io/h2c}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: essai-grpc
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: https}
+  hostnames:
+    - grpc-essai.apps.par1.medisphere.internal
+  rules:
+    - matches:
+        - method: {type: Exact, service: grpc.health.v1.Health, method: Check}
+      backendRefs:
+        - {name: agnhost-grpc, port: 5000}

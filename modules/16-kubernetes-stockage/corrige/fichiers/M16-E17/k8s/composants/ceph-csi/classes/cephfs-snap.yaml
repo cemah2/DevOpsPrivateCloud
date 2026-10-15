@@ -1,0 +1,22 @@
+# composants/ceph-csi/classes/cephfs-snap.yaml (plateforme/k8s) — M16-E10, étiquette Velero en M16-E17
+# Classe d'instantanés du pilote cephfs.csi.ceph.com, PAR DÉFAUT pour ce pilote. Appliquée par
+# composants/ceph-csi/installer.sh avec les StorageClasses (CRD des snapshots requises : E06).
+# <FSID> : fsid de ceph-par1, le même que dans les StorageClasses. Secret : celui du
+# provisionneur (outils/ceph-csi-secrets.sh, E06-E07).
+# deletionPolicy: Delete : supprimer le VolumeSnapshot supprime l'instantané dans Ceph.
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: cephfs-snap
+  labels:
+    medisphere.fr/composant: stockage
+    # M16-E17 : classe que Velero utilise pour les instantanés CSI de ce pilote (une seule par pilote).
+    velero.io/csi-volumesnapshot-class: "true"
+  annotations:
+    snapshot.storage.kubernetes.io/is-default-class: "true"
+driver: cephfs.csi.ceph.com
+deletionPolicy: Delete
+parameters:
+  clusterID: "<FSID>"
+  csi.storage.k8s.io/snapshotter-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/snapshotter-secret-namespace: ceph-csi

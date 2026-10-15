@@ -1,0 +1,12 @@
+# Taskfile.yml de plateforme/k8s — EXTRAIT M14-E14 : à intégrer au fichier (E05, E06, E10).
+
+vars:
+  # « ordonnancement » (PriorityClasses) s'ajoute aux dossiers appliqués. PAS « cluster » :
+  # cluster/ contient la configuration kubeadm et cluster/noeuds.yaml, qui ne sont pas des objets.
+  DOSSIERS: espaces rbac admission ordonnancement
+
+tasks:
+  etiquettes:
+    desc: Poser les étiquettes et taints MédiSphère des nœuds (cluster/noeuds.yaml), idempotent
+    cmds:
+      - outils/etiqueter-noeuds.sh {{.CLI_ARGS}}

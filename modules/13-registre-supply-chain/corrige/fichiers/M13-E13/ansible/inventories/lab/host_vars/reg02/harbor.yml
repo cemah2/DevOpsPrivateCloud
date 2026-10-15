@@ -1,0 +1,12 @@
+---
+# host_vars/reg02/harbor.yml — Harbor de test (M13-E13). Tout le reste vient de group_vars/role_registre
+# (même version que reg01 : la restauration de M13-E15 l'exige ; en M13-E16, version N-1 le temps de la
+# répétition, avec -e harbor_autoriser_changement_version=true pour remonter).
+harbor_nom: reg02.par1.medisphere.internal
+harbor_disque_donnees: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_reg02-donnees
+# Secrets PROPRES à reg02 (Vault critique, host_vars/reg02/vault-critique.yml) : jamais ceux de reg01.
+# Après une restauration de reg01 sur reg02 (M13-E15), la base contient les comptes de reg01 :
+# harbor_admin_mdp n'agit de toute façon qu'à la première installation.
+harbor_admin_mdp: "{{ vault_reg02_harbor_admin_mdp }}"
+harbor_db_mdp: "{{ vault_reg02_harbor_db_mdp }}"
+harbor_jobservice_workers: 3

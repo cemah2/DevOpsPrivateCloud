@@ -1,0 +1,90 @@
+# gw-essai.yaml — première Gateway d'essai, sans adresse de LoadBalancer (M15-E07, DEV-1607).
+# Le LB IPAM n'arrive qu'en M15-E10 : cette Gateway passe par une GatewayClass paramétrée dont le
+# Service est de type NodePort (exemple officiel de Cilium « GatewayClass Parameters Support »).
+# ⚠️ CiliumGatewayClassConfig est une API alpha (cilium.io/v2alpha1) : relire les notes de version
+#    de Cilium à chaque montée de version.
+#
+# Ordre d'application : CiliumGatewayClassConfig, GatewayClass, politique, Gateway, HTTPRoute.
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumGatewayClassConfig
+metadata:
+  name: nodeport
+  namespace: wb-essais
+spec:
+  service:
+    type: NodePort
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: cilium-nodeport
+spec:
+  controllerName: io.cilium/gateway-controller
+  description: Cilium, Service NodePort (essais M15, sans LB IPAM)
+  parametersRef:
+    group: cilium.io
+    kind: CiliumGatewayClassConfig
+    name: nodeport
+    namespace: wb-essais
+---
+# Le trafic qui sort d'Envoy vers les pods porte l'identité réservée « ingress » : aucune
+# NetworkPolicy standard ne sait la désigner (ce n'est ni un pod, ni un espace, ni une adresse
+# stable). Sans cette autorisation, refus-par-defaut (E06) fait répondre la Gateway en 503.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: echo-depuis-gateway
+  namespace: wb-essais
+spec:
+  endpointSelector:
+    matchLabels:
+      app: echo
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-essai
+  namespace: wb-essais
+spec:
+  gatewayClassName: cilium-nodeport
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: "*.wb-essais.internal"
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+# Seuls /hostname et /clientip sont routés : tout le reste (dont /shell et /exit de netexec)
+# reçoit un 404 d'Envoy, sans jamais atteindre le pod.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: echo
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - name: gw-essai
+      sectionName: http
+  hostnames:
+    - echo.wb-essais.internal
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /hostname
+        - path:
+            type: Exact
+            value: /clientip
+      backendRefs:
+        - name: echo
+          port: 80

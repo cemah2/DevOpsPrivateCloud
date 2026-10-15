@@ -1,0 +1,133 @@
+# plateforme/k8s — composants/rook/cluster-values.yaml (M16-E13, SUPPRIMÉ en M16-E14)
+# Chart rook-release/rook-ceph-cluster 1.21.0 : un CephCluster minimal de comparaison.
+#   helm template rook-ceph-cluster rook-release/rook-ceph-cluster --version 1.21.0 \
+#     -n rook-ceph -f composants/rook/cluster-values.yaml > ~/m16/e13/cluster-rendu.yaml
+#   helm upgrade --install rook-ceph-cluster rook-release/rook-ceph-cluster --version 1.21.0 \
+#     -n rook-ceph -f composants/rook/cluster-values.yaml
+operatorNamespace: rook-ceph
+
+toolbox:
+  enabled: true
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+    limits: {memory: 256Mi}
+
+monitoring:
+  enabled: false
+
+cephImage:
+  repository: quay.io/ceph/ceph      # tiré par le cache Harbor « quay » (hosts.toml, M14-E19)
+  tag: v20.2.4
+  allowUnsupported: false
+
+cephClusterSpec:
+  dataDirHostPath: /var/lib/rook
+  security:
+    cephx:
+      csi:
+        keyType: aes                 # noyau 6.12 des nœuds : pas d'aes256k (PLAN §4.9)
+  mon:
+    count: 3
+    allowMultiplePerNode: false
+  mgr:
+    count: 1                         # comparaison : un seul MGR (mémoire) ; 2 en production
+    allowMultiplePerNode: false
+    modules:
+      - name: rook
+        enabled: false
+  dashboard:
+    enabled: true
+    ssl: true                        # certificat auto-signé de Rook : port-forward seulement
+  network:
+    connections:
+      requireMsgr2: true             # défaut 1.21, écrit pour la lisibilité (noyau >= 5.11)
+      encryption:
+        enabled: false
+      compression:
+        enabled: false
+  crashCollector:
+    disable: false
+  resources:
+    mgr:
+      requests: {cpu: 100m, memory: 384Mi}
+      limits: {memory: 768Mi}
+    mon:
+      requests: {cpu: 100m, memory: 256Mi}
+      limits: {memory: 768Mi}
+    osd:
+      # Rook dérive osd_memory_target de la limite mémoire de l'OSD (documentation CRD).
+      requests: {cpu: 200m, memory: 1Gi}
+      limits: {memory: 1536Mi}
+    prepareosd:
+      requests: {cpu: 100m, memory: 50Mi}
+    mgr-sidecar:
+      requests: {cpu: 10m, memory: 40Mi}
+      limits: {memory: 100Mi}
+    crashcollector:
+      requests: {cpu: 10m, memory: 60Mi}
+      limits: {memory: 60Mi}
+    logcollector:
+      requests: {cpu: 10m, memory: 50Mi}
+      limits: {memory: 256Mi}
+    cleanup:
+      requests: {cpu: 100m, memory: 100Mi}
+      limits: {memory: 1Gi}
+    exporter:
+      requests: {cpu: 10m, memory: 50Mi}
+      limits: {memory: 128Mi}
+  storage:
+    # JAMAIS « tous les nœuds, tous les disques » sur des nœuds qui ont d'autres disques.
+    useAllNodes: false
+    useAllDevices: false
+    nodes:
+      - name: k8s-w01
+        devices:
+          - name: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_k8s-w01-rook
+      - name: k8s-w02
+        devices:
+          - name: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_k8s-w02-rook
+      - name: k8s-w03
+        devices:
+          - name: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_k8s-w03-rook
+  placement:
+    all:
+      # Si le taint dedie=bdd:NoSchedule du M14-E14 est toujours sur k8s-w03, les MON et OSD
+      # doivent le tolérer, sinon le troisième MON et l'OSD de k8s-w03 ne démarrent pas.
+      tolerations:
+        - key: dedie
+          operator: Equal
+          value: bdd
+          effect: NoSchedule
+  disruptionManagement:
+    managePodBudgets: true
+
+cephBlockPools:
+  - name: rook-essai
+    spec:
+      failureDomain: host
+      replicated:
+        size: 3
+    storageClass:
+      enabled: true
+      name: rook-ceph-block
+      isDefault: false               # ceph-rbd reste la seule classe par défaut
+      reclaimPolicy: Delete
+      allowVolumeExpansion: true
+      volumeBindingMode: Immediate
+      parameters:
+        imageFormat: "2"
+        imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+        csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/provisioner-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+        csi.storage.k8s.io/controller-expand-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+        csi.storage.k8s.io/node-stage-secret-namespace: "{{ .Release.Namespace }}"
+        csi.storage.k8s.io/fstype: ext4
+
+cephFileSystems: []
+cephObjectStores: []
+cephFileSystemVolumeSnapshotClass:
+  enabled: false
+cephBlockPoolsVolumeSnapshotClass:
+  enabled: false

@@ -1,0 +1,25 @@
+# composants/reseau/hubble-ui/cnp-hubble-ui.yaml — M15-E26. Les pods hubble-ui n'acceptent en entrée
+# que le trafic sortant d'Envoy pour une Gateway (identité réservée « ingress »), sur le port de
+# l'interface (8081, cible du Service hubble-ui). Un pod du cluster ne peut donc pas contourner la
+# Gateway ; la Gateway elle-même n'est joignable que depuis MGMT, le VPN d'administration et la DMZ
+# (matrice des flux), et lb01/lb02 ne relaient pas ce nom (liste explicite de M15-E20).
+# Les sondes du kubelet (réseau de l'hôte du nœud) restent permises : Cilium autorise par défaut
+# l'hôte local vers ses pods (option allow-localhost, à vérifier si tu l'as changée).
+# Rien en sortie : la politique ne sélectionne pas la direction egress (hubble-ui → relay, → API).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-ui-entree
+  namespace: kube-system
+spec:
+  description: "hubble-ui : entrée par la Gateway seulement (M15-E26)"
+  endpointSelector:
+    matchLabels:
+      k8s-app: hubble-ui
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP

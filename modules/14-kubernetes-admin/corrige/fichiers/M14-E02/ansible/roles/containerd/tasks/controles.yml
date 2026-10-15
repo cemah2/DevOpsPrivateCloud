@@ -1,0 +1,39 @@
+---
+# Contrôles en lecture : ce que lit le kubelet doit être ce que l'inventaire décrit.
+
+- name: Lire la configuration effective de containerd
+  ansible.builtin.command: containerd config dump
+  register: _containerd_dump
+  changed_when: false
+  check_mode: false
+
+- name: Vérifier CRI actif, cgroups systemd, image pause et dossier des hosts.toml
+  ansible.builtin.assert:
+    that:
+      - _containerd_dump.stdout is not search("disabled_plugins = \[[^\]]*cri")
+      - _containerd_dump.stdout is search("SystemdCgroup = " ~ (containerd_cgroup_systemd | string | lower))
+      - _containerd_dump.stdout is search("sandbox = '" ~ (containerd_image_sandbox | regex_escape) ~ "'")
+      - _containerd_dump.stdout is search("config_path = '" ~ (containerd_dossier_hotes | regex_escape) ~ "'")
+    fail_msg: >-
+      La configuration effective de containerd (containerd config dump) ne correspond pas à
+      l'inventaire : greffon CRI désactivé, SystemdCgroup, image pause ou config_path.
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Le socket CRI répond (crictl info)
+  ansible.builtin.command: crictl --runtime-endpoint unix://{{ containerd_socket }} info
+  register: _containerd_crictl
+  changed_when: false
+  check_mode: false
+  # crictl vient de cri-tools (pkgs.k8s.io, rôle k8s_noeud) : absent au tout premier passage.
+  failed_when: _containerd_crictl.rc not in [0, 2]
+  when: not ansible_check_mode
+
+- name: Le runtime se déclare prêt (RuntimeReady ; NetworkReady attend le CNI, E05)
+  ansible.builtin.assert:
+    that:
+      - (_containerd_crictl.stdout | from_json).status.conditions
+        | selectattr('type', 'equalto', 'RuntimeReady') | map(attribute='status') | first | default(false)
+    fail_msg: "containerd ne se déclare pas prêt (crictl info, condition RuntimeReady)."
+    quiet: true
+  when: not ansible_check_mode and _containerd_crictl.rc | default(1) == 0

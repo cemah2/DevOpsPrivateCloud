@@ -1,0 +1,17 @@
+# ~/m15/e15/route-essai-dns.yaml — étape 4 : cycle de vie d'un nom (créer, publier, supprimer).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: essai-dns
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - essai-dns.apps.par1.medisphere.internal
+  rules:
+    - backendRefs:
+        - name: essai-lb
+          port: 80

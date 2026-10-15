@@ -1,0 +1,53 @@
+---
+# Rôle podman_hote — valeurs par défaut (M12-E02).
+# Podman SANS privilège pour un compte applicatif dédié, sur Debian 13 (Podman 5.4 de la
+# distribution) et Rocky Linux 10 (Podman 5.8, SELinux enforcing). Pas de dépôt tiers : Podman 6
+# n'est dans aucune des deux distributions (PLAN §6).
+
+# Compte applicatif : il fait tourner les conteneurs, il n'a PAS sudo.
+podman_hote_compte: app
+podman_hote_compte_uid: 1001
+podman_hote_compte_commentaire: "Conteneurs sans privilège (Podman), sans sudo"
+
+# Plage d'identifiants subordonnés du compte (/etc/subuid et /etc/subgid) : 65 536 UID et GID
+# de l'hôte que le compte peut « prêter » à ses conteneurs. Fixée ici plutôt que laissée au
+# hasard de useradd : on la retrouve dans les droits des volumes et dans « ps » (M12-E06).
+podman_hote_subid_debut: 524288
+podman_hote_subid_nombre: 65536
+
+# Linger : le gestionnaire systemd du compte tourne sans session ouverte (conteneurs et unités
+# Quadlet démarrés au boot, M12-E14).
+podman_hote_linger: true
+
+# Versions attendues (major.minor) par famille : contrôle, pas installation.
+podman_hote_version_attendue:
+  Debian: "5.4"
+  RedHat: "5.8"
+
+podman_hote_paquets_communs:
+  - podman
+  - buildah
+  - skopeo
+  - crun
+  - passt                # réseau sans privilège par défaut de Podman 5 (pasta)
+  - systemd-container    # machinectl shell app@ : une vraie session systemd pour le compte
+  - acl                  # become_user vers un compte sans privilège (fichiers temporaires d'Ansible)
+  - git
+  - rsync
+  - jq
+podman_hote_paquets_famille:
+  # Debian : passt, uidmap (newuidmap/newgidmap) et dbus-user-session ne sont que des
+  # « Recommends » de podman : une installation --no-install-recommends casserait le sans-privilège.
+  Debian:
+    - uidmap
+    - dbus-user-session
+    - slirp4netns
+  RedHat:
+    - shadow-utils
+    - container-selinux
+
+# Registres où chercher un nom court (« nginx » → docker.io/library/nginx). Un seul registre :
+# pas d'ambiguïté, donc pas de question interactive en mode « enforcing ». Les normes
+# MédiSphère demandent quand même des noms complets dans le code (M12-E33).
+podman_hote_registres_recherche:
+  - docker.io

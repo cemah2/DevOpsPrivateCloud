@@ -1,0 +1,6 @@
+---
+# molecule/podman_hote/molecule.yml — scénario du rôle « podman_hote » (M12-E02)
+#   uv run molecule test -s podman_hote
+# Instance Debian 13 ; la famille Rocky est couverte par ctr03 (même rôle, variables de famille).
+scenario:
+  name: podman_hote

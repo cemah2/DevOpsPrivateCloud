@@ -1,0 +1,167 @@
+# M17-E03 — Dépendances PROVISOIRES de MédiAgenda dans mediagenda-dev (fournies, à appliquer telles quelles).
+# Une base CloudNativePG d'une instance et un Valkey sans persistance, le temps que le chart sache les
+# déployer lui-même (M17-E06). Tout ce qui porte « provisoire » dans son nom sera supprimé en E06.
+#   admin@adm01:~$ kubectl apply --server-side -f ~/DevOpsPrivateCloud/modules/17-packaging/ressources/E03-dependances-dev.yaml
+# Les données de dev sont jetables : aucune sauvegarde.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: mediagenda-dev
+  labels:
+    medisphere.fr/environnement: dev
+spec:
+  instances: 1
+  # Même image que la base de recette (M16-E18) : registre MédiSphère, cache « ghcr ».
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+  storage:
+    size: 2Gi
+    storageClass: ceph-rbd
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/name: valkey
+spec:
+  selector:
+    app.kubernetes.io/name: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/name: valkey
+spec:
+  serviceName: valkey
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+      volumes:
+        - name: donnees
+          emptyDir: {}
+---
+# Politiques réseau provisoires (l'espace est en refus par défaut depuis le M15).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-base-provisoire
+  namespace: mediagenda-dev
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+      ports:
+        - { port: 5432, protocol: TCP }
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - { port: 8000, protocol: TCP }
+        - { port: 5432, protocol: TCP }
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: dev-base-provisoire-api-kubernetes
+  namespace: mediagenda-dev
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  egress:
+    - toEntities: [kube-apiserver]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-valkey-provisoire
+  namespace: mediagenda-dev
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+      ports:
+        - { port: 6379, protocol: TCP }
+  egress: []

@@ -1,0 +1,40 @@
+# plateforme/k8s — espaces/mediagenda-recette/55-mediagenda-migration.yaml (M16-E18)
+# Migration du schéma MédiAgenda vers mediagenda-db (python -m mediagenda.migrate, idempotent :
+# n'applique que les migrations absentes de mediagenda_historique_schema). À relancer à chaque
+# nouvelle version : supprimer le Job terminé puis le réappliquer (le M20 en fera un hook).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mediagenda-migration
+  namespace: mediagenda-recette
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mediagenda-migration
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migration
+          # Même image que l'API (version de recette du M14) : <VERSION> à reprendre du Deployment.
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:<VERSION>
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef: {name: mediagenda-db-app, key: uri}
+            # La commande de migration ne lit que MEDIAGENDA_DB_URL (et MEDIAGENDA_MIGRATIONS_DIR,
+            # « migrations » relatif au répertoire de travail de l'image du M12 : à fixer ici si
+            # ton image range les migrations ailleurs).
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # la migration n'écrit rien sur disque
+            capabilities: {drop: ["ALL"]}

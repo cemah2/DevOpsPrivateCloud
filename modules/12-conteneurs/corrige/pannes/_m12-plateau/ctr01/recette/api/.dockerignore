@@ -1,0 +1,10 @@
+# Contexte de construction de l'image de recette : seulement ce qui sert à l'image.
+.git
+.venv
+**/__pycache__
+.pytest_cache
+.ruff_cache
+tests
+*.sql
+*.dump
+*.tar*

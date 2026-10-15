@@ -1,0 +1,71 @@
+# plateforme/k8s — espaces/mediagenda-recette/50-mediagenda-db.yaml (M16-E18 ; archivage par le plugin Barman Cloud en E19)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  description: "Base de recette de MédiAgenda (DEV-1718)"
+  instances: 3
+  # PostgreSQL 18.6, variante minimale (sans barman-cloud intégré, inutile avec le plugin),
+  # par le cache ghcr de Harbor (politique d'images de mediagenda-*). Étiquette exacte, jamais
+  # « 18 » flottant : une montée de version est une MR.
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+      encoding: UTF8
+
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+
+  postgresql:
+    parameters:
+      shared_buffers: 128MB
+      max_connections: "100"
+      timezone: Europe/Paris
+    # Au moins une réplique confirme chaque validation : aucune transaction validée n'est
+    # perdue si le primaire tombe. Si les deux répliques sont indisponibles, les écritures
+    # attendent (dataDurability: required) : choix assumé (données de santé).
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required        # une instance par nœud, jamais deux
+    topologyKey: kubernetes.io/hostname
+    # Taint dedie=bdd:NoSchedule du M14-E14 sur k8s-w03 (s'il y est toujours) : trois instances,
+    # trois travailleurs, il faut donc pouvoir aller sur k8s-w03.
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  enableSuperuserAccess: false
+
+  # M16-E19 : archivage continu des WAL et sauvegardes de base par le plugin Barman Cloud
+  # (CNPG-I). Pas de spec.backup.barmanObjectStore : l'archivage intégré est déprécié en 1.30
+  # et disparaît en 1.31. Ajouter ce bloc redémarre les instances une à une (sidecar injecté).
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3

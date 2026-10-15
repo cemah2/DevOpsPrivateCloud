@@ -1,0 +1,65 @@
+# ~/m16/e16/velero-essai.yaml — application d'essai de Velero (wb-essais). Le Secret est un
+# faux secret DE TEST : il sert à constater qu'il finit en clair dans l'archive de sauvegarde.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-essai
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: velero-essai}
+data:
+  message: "version 1"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: velero-essai
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: velero-essai}
+stringData:
+  jeton: "ceci-est-un-faux-secret-de-test"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: velero-essai
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: velero-essai}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: velero-essai}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: velero-essai}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: essai
+          image: debian:trixie-slim
+          command: ["bash", "-c", "while true; do cat /config/message; sleep 30; done"]
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+      volumes:
+        - name: config
+          configMap: {name: velero-essai}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: velero-essai
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: velero-essai}
+spec:
+  selector: {app.kubernetes.io/name: velero-essai}
+  ports:
+    - port: 80
+      targetPort: 8080

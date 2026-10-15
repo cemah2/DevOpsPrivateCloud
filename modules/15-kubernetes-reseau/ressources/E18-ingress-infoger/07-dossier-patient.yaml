@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dossier-patient
+  namespace: dossier
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/affinity: cookie
+    nginx.ingress.kubernetes.io/session-cookie-name: INFOGER_SESSION
+    nginx.ingress.kubernetes.io/auth-url: https://sso.medisphere-infoger.example/oauth2/auth
+    nginx.ingress.kubernetes.io/auth-signin: https://sso.medisphere-infoger.example/oauth2/start?rd=$escaped_request_uri
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location /status { deny all; }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dossier.medisphere-infoger.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dossier
+                port:
+                  number: 8443

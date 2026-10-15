@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Nœud de contrôle kubeadm de k8s-par1 (VIP d'API keepalived + HAProxy, init, jonction)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+# keepalived et haproxy sont inclus par include_role (variables calculées ici), pas en dépendances.
+dependencies: []

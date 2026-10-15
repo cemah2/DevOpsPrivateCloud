@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Legacy-RDV installé comme InfoGér l'avait fait (Apache, mod_php 8.4, MariaDB sur la même VM)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

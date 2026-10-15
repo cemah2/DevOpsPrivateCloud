@@ -1,0 +1,26 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-l7
+  namespace: medidoc-dev
+spec:
+  endpointSelector:
+    matchLabels:
+      app: medidoc
+  ingress:
+    - fromEntities: [world, cluster]
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+          rules:
+            http:
+              - method: ".*"
+                path: "/.*"
+  egress:
+    - toFQDNs:
+        - matchPattern: "*"
+      toPorts:
+        - ports:
+            - port: "8333"
+              protocol: TCP

@@ -1,0 +1,28 @@
+# composants/ceph-csi/classes/cephfs.yaml (plateforme/k8s) — M16-E07 (DEV-1707)
+# Fichier partagé (RWX) : un sous-volume CephFS par PVC, dans le groupe « csi » du volume « cephfs »
+# de ceph-par1, avec un quota CephFS égal à la taille demandée. Pas classe par défaut.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: cephfs
+  labels:
+    medisphere.fr/composant: stockage
+provisioner: cephfs.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  fsName: cephfs
+  # Client noyau (et non ceph-fuse) : performances, et c'est lui que règle ms_mode.
+  mounter: kernel
+  # msgr2 en mode chiffré (port 3300), sans repli.
+  kernelMountOptions: ms_mode=secure
+  csi.storage.k8s.io/provisioner-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-cephfs-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate

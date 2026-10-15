@@ -1,0 +1,132 @@
+# mediagenda/api — k8s/recette/40-api.yaml (M14-E21 : version corrigée de la MR de Lucas)
+# L'image vient du projet privé « medisphere » de Harbor : le compte de service mediagenda-api porte
+# le Secret de tirage harbor-pull (plateforme/k8s, M14-E19). Étiquette immuable v* (M13).
+# La migration du schéma est un Job à part (50-migration.yaml), lancé AVANT chaque montée de version.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  replicas: 3
+  # Mise à jour progressive SANS perte de capacité : un pod de plus pendant la mise à jour (surge),
+  # jamais un de moins (maxUnavailable: 0). Un nouveau pod doit rester prêt 10 s avant de compter
+  # (minReadySeconds) ; si la mise à jour n'avance plus pendant 2 min, le Deployment le signale
+  # (condition Progressing=False, ProgressDeadlineExceeded) — il ne revient PAS en arrière tout seul.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  minReadySeconds: 10
+  progressDeadlineSeconds: 120
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mediagenda-api
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: mediagenda
+    spec:
+      serviceAccountName: mediagenda-api
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-standard
+      # Une baie perdue ne doit pas emporter toutes les instances : écart d'au plus 1 entre zones.
+      # nodeTaintsPolicy: Honor — sans lui, la zone par1-baie-c (où seuls k8s-w03 et k8s-cp03,
+      # tous deux « taintés », existent) compte comme une zone vide que l'API ne peut jamais remplir :
+      # le 3e réplica resterait Pending.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda-api
+          matchLabelKeys:
+            - pod-template-hash
+      # Dans une zone, préférer des nœuds différents (souhait, pas exigence).
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: mediagenda-api
+      terminationGracePeriodSeconds: 30     # > MEDIAGENDA_DELAI_ARRET (20 s)
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: mediagenda-api-config
+          env:
+            - name: MEDIAGENDA_VERSION
+              value: "1.0.0"
+            - name: MEDIAGENDA_DB_MDP
+              valueFrom:
+                secretKeyRef: {name: mediagenda-db, key: mot-de-passe}
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://mediagenda:$(MEDIAGENDA_DB_MDP)@postgresql:5432/mediagenda
+          startupProbe:
+            httpGet: {path: /sante, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: {path: /sante, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: {path: /pret, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {cpu: 500m, memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  selector:
+    app.kubernetes.io/name: mediagenda-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

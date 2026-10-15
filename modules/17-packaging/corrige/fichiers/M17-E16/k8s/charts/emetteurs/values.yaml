@@ -1,0 +1,11 @@
+# Valeurs fournies par releases/20-certificats-dns.yaml.gotmpl. Aucun secret : les Secrets TSIG et la
+# racine de la PKI sont créés hors de Helm (M15) et seulement référencés ici.
+acme:
+  serveur: ""
+  zone: ""
+  # Secret de la clé TSIG « certmanager-k8s » (script du M15, depuis Vault Ansible lab).
+  tsigSecret: certmanager-tsig
+  tsigCle: certmanager-k8s
+  serveurDns: 10.10.20.10:53
+  # ConfigMap ou Secret qui porte la racine « MédiSphère Root CA », comme au M15 (caBundle en base64).
+  caBundle: ""

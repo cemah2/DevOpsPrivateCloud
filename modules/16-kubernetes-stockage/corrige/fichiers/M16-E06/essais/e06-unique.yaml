@@ -1,0 +1,83 @@
+# e06-unique.yaml — M16-E06, étape 11 : ReadWriteOncePod (pilotes CSI seulement).
+# Les deux pods sont forcés sur le même nœud (<NOEUD> : un travailleur, ex. k8s-w02).
+# Attendu : le premier démarre ; le second reste Pending, refusé par le planificateur (le PVC est
+# déjà utilisé par un pod en ReadWriteOncePod). En RWO, il aurait démarré (E03, étape 5).
+# kubectl delete -f e06-unique.yaml ensuite.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e06-unique
+  namespace: wb-essais
+  labels:
+    medisphere.fr/exercice: m16-e06
+spec:
+  storageClassName: ceph-rbd
+  accessModes: ["ReadWriteOncePod"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e06-unique-a
+  namespace: wb-essais
+  labels:
+    medisphere.fr/exercice: m16-e06
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: <NOEUD>
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sh", "-c", "while true; do sleep 3600; done"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: donnees
+          mountPath: /donnees
+  volumes:
+    - name: donnees
+      persistentVolumeClaim:
+        claimName: e06-unique
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e06-unique-b
+  namespace: wb-essais
+  labels:
+    medisphere.fr/exercice: m16-e06
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: <NOEUD>
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sh", "-c", "while true; do sleep 3600; done"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: donnees
+          mountPath: /donnees
+  volumes:
+    - name: donnees
+      persistentVolumeClaim:
+        claimName: e06-unique

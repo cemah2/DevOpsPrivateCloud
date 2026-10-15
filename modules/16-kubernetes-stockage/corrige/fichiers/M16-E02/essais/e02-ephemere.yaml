@@ -1,0 +1,106 @@
+# e02-ephemere.yaml — M16-E02 (DEV-1702) : où un conteneur écrit, et ce qui survit à quoi.
+# kubectl apply -f e02-ephemere.yaml   (espace wb-essais, PSA baseline ; le pod respecte restricted)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: e02-config
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: e02-ephemere
+    medisphere.fr/exercice: m16-e02
+data:
+  niveau: "INFO"
+  message: "configuration initiale"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e02-ephemere
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: e02-ephemere
+    medisphere.fr/exercice: m16-e02
+spec:
+  # Le jeton projeté ci-dessous suffit : pas de jeton par défaut monté en plus.
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sh", "-c"]
+      # Une ligne par démarrage du CONTENEUR, dans la couche inscriptible (/tmp) et dans l'emptyDir.
+      # Le conteneur se termine en erreur dès que /tmp/arret existe : le kubelet le redémarre
+      # (restartPolicy Always), avec une couche neuve où /tmp/arret n'existe plus.
+      args:
+        - |
+          echo "demarrage $(date +%s) $(hostname)" >> /tmp/couche
+          echo "demarrage $(date +%s) $(hostname)" >> /travail/journal
+          while sleep 2; do
+            [ -e /tmp/arret ] && { echo "arret demande"; exit 1; }
+          done
+      env:
+        - name: NIVEAU
+          valueFrom:
+            configMapKeyRef:
+              name: e02-config
+              key: niveau
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: travail
+          mountPath: /travail
+        - name: cache
+          mountPath: /cache
+        - name: config
+          mountPath: /config
+          readOnly: true
+  volumes:
+    # Disque du nœud (/var/lib/kubelet/pods/<UID>/volumes/kubernetes.io~empty-dir/travail),
+    # plafonné : au-delà, le kubelet évince le pod.
+    - name: travail
+      emptyDir:
+        sizeLimit: 200Mi
+    # tmpfs : compté dans la mémoire du conteneur (et du pod) ; taille du tmpfs = sizeLimit.
+    - name: cache
+      emptyDir:
+        medium: Memory
+        sizeLimit: 32Mi
+    - name: config
+      projected:
+        defaultMode: 0440
+        sources:
+          - configMap:
+              name: e02-config
+              items:
+                - key: niveau
+                  path: niveau
+                - key: message
+                  path: message
+          - downwardAPI:
+              items:
+                - path: etiquettes
+                  fieldRef:
+                    fieldPath: metadata.labels
+                - path: limite-memoire
+                  resourceFieldRef:
+                    containerName: app
+                    resource: limits.memory
+                    divisor: 1Mi
+          - serviceAccountToken:
+              path: jeton
+              audience: wb-essais
+              expirationSeconds: 600

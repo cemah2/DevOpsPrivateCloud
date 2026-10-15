@@ -1,0 +1,4 @@
+---
+# group_vars/role_legacy/legacy_rdv.yml — Legacy-RDV « à l'ancienne » sur legacy01 (M12-E02).
+# Le code vient de la copie du workbook sur adm01 (WB_WORKBOOK si tu l'as cloné ailleurs).
+legacy_rdv_source: "{{ lookup('ansible.builtin.env', 'WB_WORKBOOK', default=lookup('ansible.builtin.env', 'HOME') ~ '/DevOpsPrivateCloud') }}/apps/legacy-rdv/"

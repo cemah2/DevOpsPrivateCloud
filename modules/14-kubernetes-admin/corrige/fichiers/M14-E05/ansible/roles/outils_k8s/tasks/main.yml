@@ -1,0 +1,103 @@
+---
+# Rôle outils_k8s — point d'entrée (M14-E05).
+
+- name: Outils de vérification des clés
+  ansible.builtin.apt:
+    name: [gpg, ca-certificates]
+    state: present
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clés des dépôts kubectl et Helm
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "/etc/apt/keyrings/{{ item.fichier }}"
+    force: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - {url: "https://pkgs.k8s.io/core:/stable:/v{{ outils_k8s_kubectl_mineure }}/deb/Release.key", fichier: kubernetes.asc}
+    - {url: "{{ outils_k8s_helm_cle_url }}", fichier: helm.asc}
+  loop_control:
+    label: "{{ item.fichier }}"
+  register: _outils_k8s_cles
+
+- name: Lire les empreintes des clés
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/{{ item }}
+  loop: [kubernetes.asc, helm.asc]
+  register: _outils_k8s_empreintes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that:
+      - _outils_k8s_empreintes.results[0].stdout is search('^fpr:+' ~ outils_k8s_kubernetes_cle_empreinte ~ ':', multiline=True)
+      - _outils_k8s_empreintes.results[1].stdout is search('^fpr:+' ~ outils_k8s_helm_cle_empreinte ~ ':', multiline=True)
+    fail_msg: "Une clé de dépôt (pkgs.k8s.io ou Helm) n'a pas l'empreinte attendue : ne rien installer."
+    quiet: true
+
+- name: Sources APT kubectl et Helm (format deb822)
+  ansible.builtin.copy:
+    dest: "/etc/apt/sources.list.d/{{ item.nom }}.sources"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ outils_k8s_entete }}
+      Types: deb
+      URIs: {{ item.url }}
+      Suites: {{ item.suite }}
+      {% if item.composants %}
+      Components: {{ item.composants }}
+      {% endif %}
+      Signed-By: /etc/apt/keyrings/{{ item.cle }}
+  loop:
+    - {nom: kubernetes, url: "https://pkgs.k8s.io/core:/stable:/v{{ outils_k8s_kubectl_mineure }}/deb/", suite: /, composants: "", cle: kubernetes.asc}
+    - {nom: helm, url: "{{ outils_k8s_helm_depot_url }}", suite: any, composants: main, cle: helm.asc}
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _outils_k8s_sources
+
+- name: Relire les index APT si un dépôt a changé
+  ansible.builtin.apt:
+    update_cache: true
+  when: _outils_k8s_sources is changed or _outils_k8s_cles is changed
+
+- name: Paquets kubectl et helm épinglés
+  ansible.builtin.apt:
+    name:
+      - "kubectl={{ outils_k8s_kubectl_version }}"
+      - "helm={{ outils_k8s_helm_version }}"
+    state: present
+    # kubectl est retenu (hold) : un changement de version de l'inventaire doit pouvoir passer.
+    allow_change_held_packages: true
+
+- name: Retenir kubectl (apt-mark hold)
+  ansible.builtin.dpkg_selections:
+    name: kubectl
+    selection: hold
+
+- name: Binaires amont vérifiés
+  ansible.builtin.include_tasks: binaire.yml
+  loop: "{{ outils_k8s_binaires }}"
+  loop_control:
+    loop_var: outils_k8s_binaire
+    label: "{{ outils_k8s_binaire.nom }} {{ outils_k8s_binaire.version }}"
+
+- name: Complétion bash de kubectl, helm, cilium
+  ansible.builtin.shell: |
+    set -o pipefail
+    {{ item }} completion bash > /etc/bash_completion.d/{{ item | basename }}.tmp
+    mv /etc/bash_completion.d/{{ item | basename }}.tmp /etc/bash_completion.d/{{ item | basename }}
+  args:
+    executable: /bin/bash
+    creates: /etc/bash_completion.d/{{ item | basename }}
+  loop: [/usr/bin/kubectl, /usr/bin/helm, /usr/local/bin/cilium]

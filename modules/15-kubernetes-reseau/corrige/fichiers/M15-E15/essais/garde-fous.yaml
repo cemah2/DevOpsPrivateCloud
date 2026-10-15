@@ -1,0 +1,28 @@
+# ~/m15/e15/garde-fous.yaml — étape 6 (à supprimer ensuite).
+# (a) nom hors zone : la route ne s'attache même pas (hors du nom de l'écouteur https) ; et fût-elle
+#     attachée, --domain-filter l'écarterait.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: garde-fou-hors-zone
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: http}
+  hostnames: [essai.par1.medisphere.internal]
+  rules:
+    - backendRefs: [{name: essai-lb, port: 80}]
+---
+# (b) route attachée à gw-essai (M15-E07) : acceptée par sa Gateway, ignorée par ExternalDNS
+#     (--gateway-name=gw-par1).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: garde-fou-autre-gateway
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-essai}
+  hostnames: [garde-fou.apps.par1.medisphere.internal]
+  rules:
+    - backendRefs: [{name: essai-lb, port: 80}]

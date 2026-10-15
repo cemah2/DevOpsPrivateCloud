@@ -1,0 +1,16 @@
+# EXTRAIT du Deployment de l'API (dépôt de M14-E08/M15) — M16-E29, TEMPORAIRE.
+# Constat de la répétition : la sonde de disponibilité (readinessProbe) de l'API est /pret, qui
+# répond 503 dès que Valkey ne répond pas ; après failureThreshold × periodSeconds (ici 3 × 10 s),
+# tous les pods de l'API sortent du Service : l'API tombe alors que son code sait fonctionner sans
+# cache. Pendant la fenêtre de migration (MR « avant », puis MR « après » qui rétablit la valeur) :
+# la sonde tolère 5 minutes d'échec. Ticket DEV-1729 ouvert à l'équipe de Julien : /pret ne devrait
+# pas dépendre d'une dépendance facultative (cache), ou l'API devrait exposer deux états.
+spec:
+  template:
+    spec:
+      containers:
+      - name: api
+        readinessProbe:
+          httpGet: {path: /pret, port: 8000}
+          periodSeconds: 10
+          failureThreshold: 30          # fenêtre de migration ; valeur normale : 3

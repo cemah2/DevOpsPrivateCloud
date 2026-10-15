@@ -1,0 +1,43 @@
+# ~/m15/e14/nsupdate-essai.yaml — étape 6 : mise à jour RFC 2136 À LA MAIN depuis le cluster.
+# Avant : outils/secret-tsig.sh certmanager-k8s wb-essais tsig-essai   (Secret d'essai, à supprimer après)
+# Lancer : kubectl apply -f nsupdate-essai.yaml && kubectl -n wb-essais logs -f nsupdate-essai
+# Le fichier de clé est écrit dans un emptyDir en MÉMOIRE ; le secret n'apparaît ni dans la
+# commande du conteneur ni dans ps (variable d'environnement).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nsupdate-essai
+  namespace: wb-essais
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: nsupdate
+      image: registry.par1.medisphere.internal/dockerhub/internetsystemsconsortium/bind9:9.20
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          printf 'key "certmanager-k8s" { algorithm hmac-sha256; secret "%s"; };\n' "$TSIG" > /cle/cle.conf
+          printf 'server 10.10.20.10 5300\nzone apps.par1.medisphere.internal\nupdate add essai.apps.par1.medisphere.internal 60 TXT "essai M15-E14"\nsend\n' \
+            | nsupdate -k /cle/cle.conf -v
+          echo "mise à jour envoyée"
+          dig +short +norecurse -p 5300 @10.10.20.10 essai.apps.par1.medisphere.internal TXT
+          dig +short +norecurse -p 5300 @10.10.20.16 essai.apps.par1.medisphere.internal TXT
+          printf 'server 10.10.20.10 5300\nzone apps.par1.medisphere.internal\nupdate delete essai.apps.par1.medisphere.internal TXT\nsend\n' \
+            | nsupdate -k /cle/cle.conf -v
+          echo "enregistrement supprimé"
+      env:
+        - name: TSIG
+          valueFrom:
+            secretKeyRef: {name: tsig-essai, key: secret}
+      volumeMounts:
+        - {name: cle, mountPath: /cle}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
+  volumes:
+    - name: cle
+      emptyDir: {medium: Memory, sizeLimit: 1Mi}

@@ -1,0 +1,11 @@
+# M17-E18 — overlays/recette/livraison.yaml : la version livrée en recette (component « livraison »).
+# Rien d'autre ne change dans l'overlay : surtout pas de « images: », qui l'emporterait (M17-E21).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livraison
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  version: v1.1.0
+  nom-publie: mediagenda-recette.apps.par1.medisphere.internal

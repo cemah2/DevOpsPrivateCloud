@@ -1,0 +1,7 @@
+# group_vars/k8s_par1/kubernetes.yml — EXTRAIT (M14-E25, CHG-1525) : les deux valeurs qui changent,
+# dans la MR de montée, fusionnée APRÈS la montée (le rôle k8s_noeud refuse un changement de version
+# sur un nœud membre hors du playbook de montée : k8s_noeud_changement_version).
+k8s_version: "1.36.5"
+# Image pause de kubeadm 1.36.5 (kubeadm config images list) ; containerd_image_sandbox en dérive
+# (group_vars/k8s_par1/containerd.yml). 1.35.9 : 3.10.1.
+k8s_image_pause: registry.k8s.io/pause:3.10.2

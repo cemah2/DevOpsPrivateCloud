@@ -1,0 +1,21 @@
+# {{ k8s_plan_controle_entete }}
+# Fichier de jonction TEMPORAIRE de {{ inventory_hostname }} (rôle k8s_plan_controle) : détruit après usage.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: {{ k8s_plan_controle_api_nom }}:{{ k8s_plan_controle_api_port }}
+    token: {{ _k8s_plan_controle_jeton_valeur }}
+    caCertHashes:
+      - sha256:{{ _k8s_plan_controle_empreinte_ca.stdout | trim }}
+nodeRegistration:
+  name: {{ inventory_hostname }}
+  criSocket: {{ k8s_plan_controle_socket_cri }}
+  kubeletExtraArgs:
+    - name: node-ip
+      value: {{ k8s_plan_controle_adresse }}
+controlPlane:
+  localAPIEndpoint:
+    advertiseAddress: {{ k8s_plan_controle_adresse }}
+    bindPort: {{ k8s_plan_controle_apiserver_port }}
+  certificateKey: {{ _k8s_plan_controle_cle_valeur }}

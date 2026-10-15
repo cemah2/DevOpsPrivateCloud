@@ -1,0 +1,6 @@
+# Étape 5 : annotation à ajouter au Service essai-lb (wb-essais, M15-E10). Préfixe de 0.23 :
+# external-dns.kubernetes.io/ (l'ancien external-dns.alpha.kubernetes.io/ n'est plus lu par défaut,
+# drapeau --enable-legacy-annotation-prefix). Adresse publiée : celle du Service (10.10.41.20).
+metadata:
+  annotations:
+    external-dns.kubernetes.io/hostname: essai-lb.apps.par1.medisphere.internal

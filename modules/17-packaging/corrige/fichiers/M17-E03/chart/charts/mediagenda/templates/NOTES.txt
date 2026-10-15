@@ -1,0 +1,5 @@
+MédiAgenda {{ include "mediagenda.tag" . }} installé : release « {{ .Release.Name }} », révision {{ .Release.Revision }}, espace {{ .Release.Namespace }}.
+{{- if .Values.httpRoute.enabled }}
+Adresse : https://{{ .Values.httpRoute.hostname }}/sante
+{{- end }}
+Suivi : kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "mediagenda.fullname" . }}

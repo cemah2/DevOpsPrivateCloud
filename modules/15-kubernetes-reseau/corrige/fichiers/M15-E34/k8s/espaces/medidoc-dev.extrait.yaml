@@ -1,0 +1,10 @@
+# espaces/medidoc-dev.yaml — EXTRAIT (M15-E34) : labels de l'espace après le chrono.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medidoc-dev
+  labels:
+    medisphere.fr/equipe: medidoc          # M15-E28 (cloisons)
+    medisphere.fr/exposition: oui          # allowedRoutes de gw-par1 (M15-E12)
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

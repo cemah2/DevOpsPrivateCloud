@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# {{ harbor_entete }}
+# /usr/local/sbin/harbor-recharger-certificat — appelé par cert-renewer@harbor (rôle
+# certificats_acme) après chaque émission ou renouvellement du certificat (M13-E02).
+#
+# « prepare » COPIE le certificat et la clé de harbor.yml dans {{ harbor_donnees }}/secret/cert/
+# (propriétaire 10000:10000, lu par le conteneur nginx sous /etc/cert/). Un renouvellement ne
+# touche que les fichiers sources : il faut recopier, puis recharger nginx dans son conteneur.
+# On réécrit le CONTENU (cat >) : propriétaire et droits des fichiers de destination sont gardés.
+set -euo pipefail
+
+src_crt={{ harbor_tls_certificat | quote }}
+src_cle={{ harbor_tls_cle | quote }}
+dst={{ (harbor_donnees ~ '/secret/cert') | quote }}
+
+# Premier passage (Harbor pas encore installé) : rien à recharger.
+if [[ ! -f "$dst/server.crt" || ! -f "$dst/server.key" ]]; then
+  echo "Harbor pas encore installé ($dst absent) : rien à recharger."
+  exit 0
+fi
+
+# Refuse une paire incohérente (clé qui ne correspond pas au certificat).
+if [[ "$(openssl x509 -noout -pubkey -in "$src_crt" | sha256sum)" != "$(openssl pkey -pubout -in "$src_cle" | sha256sum)" ]]; then
+  echo "ERREUR : la clé $src_cle ne correspond pas au certificat $src_crt" >&2
+  exit 1
+fi
+
+cat "$src_crt" > "$dst/server.crt"
+cat "$src_cle" > "$dst/server.key"
+
+if docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' nginx 2>/dev/null | grep -qx true; then
+  docker exec nginx nginx -t -q
+  docker exec nginx nginx -s reload
+  echo "Certificat recopié et nginx rechargé."
+else
+  echo "Certificat recopié ; le conteneur nginx ne tourne pas (il lira le nouveau au démarrage)."
+fi

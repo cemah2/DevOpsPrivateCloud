@@ -1,0 +1,13 @@
+# espaces/ — EXTRAIT à intégrer dans les manifestes des espaces d'équipe (M15-E28, SEC-1628).
+# Le label medisphere.fr/equipe est la SEULE source de l'appartenance à une équipe pour les politiques
+# de cluster : il est posé par le code de la plateforme, jamais par l'équipe (RBAC : les équipes ne
+# modifient pas les Namespace).
+# mediagenda-dev.yaml, mediagenda-recette.yaml :
+metadata:
+  labels:
+    medisphere.fr/equipe: mediagenda
+---
+# medidoc-dev.yaml :
+metadata:
+  labels:
+    medisphere.fr/equipe: medidoc

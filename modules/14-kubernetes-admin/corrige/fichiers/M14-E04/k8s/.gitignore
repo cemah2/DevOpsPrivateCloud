@@ -1,0 +1,8 @@
+# Jamais de kubeconfig, de clé ni de jeton en clair dans ce dépôt (secrets/ ne contient que des
+# fichiers chiffrés par Ansible Vault, identité critique).
+*.kubeconfig
+*.conf
+*.key
+*.pem
+*.csr
+.task/

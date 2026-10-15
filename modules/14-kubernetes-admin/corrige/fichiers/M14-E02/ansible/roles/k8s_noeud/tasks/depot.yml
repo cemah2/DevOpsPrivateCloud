@@ -1,0 +1,58 @@
+---
+# pkgs.k8s.io : UN dépôt par mineure. Changer de mineure = changer l'URL (M14-E25).
+
+- name: Dossier des trousseaux APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clé de signature de pkgs.k8s.io
+  ansible.builtin.get_url:
+    url: "{{ k8s_noeud_depot_cle_url }}"
+    dest: /etc/apt/keyrings/kubernetes.asc
+    # Retéléchargée à chaque passage (remplacée seulement si elle a changé) : la clé du projet OBS
+    # a une date d'expiration et est prolongée par l'amont ; son empreinte est revérifiée.
+    force: true
+    owner: root
+    group: root
+    mode: "0644"
+  register: _k8s_noeud_cle
+
+- name: Lire l'empreinte de la clé téléchargée
+  ansible.builtin.command: gpg --show-keys --with-colons --with-fingerprint /etc/apt/keyrings/kubernetes.asc
+  register: _k8s_noeud_cle_colonnes
+  changed_when: false
+  check_mode: false
+
+- name: Refuser une clé de dépôt inattendue
+  ansible.builtin.assert:
+    that:
+      - _k8s_noeud_cle_colonnes.stdout is search('^fpr:+' ~ k8s_noeud_depot_cle_empreinte ~ ':', multiline=True)
+    fail_msg: >-
+      /etc/apt/keyrings/kubernetes.asc n'a pas l'empreinte attendue ({{ k8s_noeud_depot_cle_empreinte }}) :
+      ne rien installer, vérifier la source.
+    quiet: true
+
+# Dépôt « plat » : « Suites: / » et pas de « Components » (format deb822, sources.list(5)).
+- name: Source APT pkgs.k8s.io v{{ k8s_noeud_version_mineure }}
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/kubernetes.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ k8s_noeud_entete }}
+      # Rôle k8s_noeud (M14-E02) : Kubernetes v{{ k8s_noeud_version_mineure }} (une mineure par dépôt).
+      Types: deb
+      URIs: {{ k8s_noeud_depot_url }}
+      Suites: /
+      Signed-By: /etc/apt/keyrings/kubernetes.asc
+  register: _k8s_noeud_source
+
+- name: Relire les index APT si le dépôt vient de changer
+  ansible.builtin.apt:
+    update_cache: true
+  when: _k8s_noeud_source is changed or _k8s_noeud_cle is changed

@@ -1,0 +1,3 @@
+# À ajouter au .gitignore du projet mediagenda/api (M12-E08) : les secrets locaux de Compose.
+secrets/
+.env

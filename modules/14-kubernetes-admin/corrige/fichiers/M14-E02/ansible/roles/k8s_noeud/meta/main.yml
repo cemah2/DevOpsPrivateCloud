@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Préparer un nœud Debian 13 pour kubeadm (pkgs.k8s.io, swap, modules, sysctl)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+dependencies: []

@@ -1,0 +1,13 @@
+# plateforme/k8s — espaces/mediagenda-recette/00-namespace.yaml (M14-E10)
+# Espace de recette de l'équipe MédiAgenda (Julien Petit).
+# Les étiquettes medisphere.internal/* servent de sélecteurs (RBAC, admission en E18, supervision au M21).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-recette
+  labels:
+    medisphere.internal/equipe: mediagenda
+    medisphere.internal/environnement: recette
+  annotations:
+    medisphere.internal/responsable: "julien.petit"
+    medisphere.internal/ticket: "PLAT-1510"

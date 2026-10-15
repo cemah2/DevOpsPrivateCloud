@@ -1,0 +1,53 @@
+# M17-E18 (ticket DEV-1836) : MédiAgenda 1.1.0 exige MEDIAGENDA_ENVIRONNEMENT, pour l'API comme
+# pour les migrations (gabarit commun mediagenda.envConnexion).
+suite: Variable MEDIAGENDA_ENVIRONNEMENT
+templates:
+  - deployment.yaml
+  - configmap.yaml
+  - migrations-job.yaml
+release:
+  name: mediagenda
+  namespace: mediagenda-recette
+tests:
+  - it: transmet l'environnement à l'API
+    template: deployment.yaml
+    set:
+      medisphere.environnement: recette
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MEDIAGENDA_ENVIRONNEMENT
+            value: recette
+
+  - it: transmet l'environnement au Job de migration
+    template: migrations-job.yaml
+    documentSelector:
+      path: kind
+      value: Job
+    set:
+      medisphere.environnement: dev
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MEDIAGENDA_ENVIRONNEMENT
+            value: dev
+
+  - it: transmet l'environnement au conteneur d'initialisation (livraison par Kustomize)
+    template: deployment.yaml
+    set:
+      medisphere.environnement: prod
+      replicaCount: 2
+      migrations.mode: initContainer
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content:
+            name: MEDIAGENDA_ENVIRONNEMENT
+            value: prod
+
+  - it: refuse un rendu sans environnement
+    template: deployment.yaml
+    asserts:
+      - failedTemplate: {}

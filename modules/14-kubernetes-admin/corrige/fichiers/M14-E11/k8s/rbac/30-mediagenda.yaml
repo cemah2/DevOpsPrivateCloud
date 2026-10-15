@@ -1,0 +1,52 @@
+# plateforme/k8s — rbac/30-mediagenda.yaml (M14-E11)
+# Droits de l'équipe MédiAgenda : un RoleBinding PAR ESPACE vers des ClusterRoles réutilisables.
+#   mediagenda-dev     : développeur (écriture des charges) + édition des Secrets
+#   mediagenda-recette : lecture seule (le déploiement en recette est fait par la plateforme, puis la CI au M20)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mediagenda-devs-developpeur
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-developpeur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "medisphere:mediagenda-devs"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mediagenda-devs-secrets
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-secrets-edition
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "medisphere:mediagenda-devs"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mediagenda-devs-lecture
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-lecture-charges
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "medisphere:mediagenda-devs"

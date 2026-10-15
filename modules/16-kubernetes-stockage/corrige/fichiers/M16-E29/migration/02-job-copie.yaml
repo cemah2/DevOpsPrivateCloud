@@ -1,0 +1,51 @@
+# M16-E29 — copie par rsync de donnees-valkey-0 vers migration-valkey-cible.
+# Lancé deux fois : à chaud (Valkey tourne : copie rapide mais incohérente) puis à froid (Valkey
+# arrêté : seule la différence est copiée, la copie est cohérente). Nom du Job suffixé (chaud/froid).
+# - Sur le nœud du pod valkey-0 : un PVC RWO déjà monté ne peut être monté par un second pod que
+#   sur le MÊME nœud (à froid, n'importe quel nœud convient, mais on garde le même).
+# - Même utilisateur que Valkey (lu dans le StatefulSet) : rsync non root ne peut pas changer de
+#   propriétaire ; les fichiers créés appartiennent à cet utilisateur, comme les originaux.
+# - Conforme à la PSA restricted de mediagenda-recette ; image du registre (politique d'admission).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migration-valkey-copie-<PASSE>       # chaud, puis froid
+  namespace: mediagenda-recette
+  labels: {medisphere.fr/migration: sec-1729}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: {medisphere.fr/migration: sec-1729}
+    spec:
+      restartPolicy: Never
+      nodeName: <NŒUD-DE-VALKEY-0>
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: <UID-VALKEY>
+        runAsGroup: <GID-VALKEY>
+        fsGroup: <GID-VALKEY>
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: rsync
+        image: registry.par1.medisphere.internal/plateforme/outils-stockage:1.0.0
+        command: ["rsync"]
+        # -rlptD : récursif, liens, permissions, dates, spéciaux (pas -o/-g : non root) ;
+        # --delete : la cible devient l'exact reflet de la source (passe à froid).
+        args: ["-rlptD", "--delete", "--stats", "/source/", "/cible/"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: [ALL]}
+        resources:
+          requests: {cpu: 100m, memory: 64Mi}
+          limits: {memory: 256Mi}
+        volumeMounts:
+        - {name: source, mountPath: /source, readOnly: true}
+        - {name: cible, mountPath: /cible}
+      volumes:
+      - name: source
+        persistentVolumeClaim: {claimName: donnees-valkey-0, readOnly: true}
+      - name: cible
+        persistentVolumeClaim: {claimName: migration-valkey-cible}

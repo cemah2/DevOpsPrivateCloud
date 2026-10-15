@@ -1,0 +1,24 @@
+---
+- name: Refuser un outil inconnu du catalogue
+  ansible.builtin.assert:
+    that: item in outils_supply_chain_catalogue
+    fail_msg: "Outil « {{ item }} » absent de outils_supply_chain_catalogue."
+    quiet: true
+  loop: "{{ outils_supply_chain_outils }}"
+
+- name: Dossier de téléchargement
+  ansible.builtin.file:
+    path: "{{ outils_supply_chain_cache }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+# Cosign d'abord : il sert à vérifier les autres. Lui-même n'est vérifié par signature que si un
+# Cosign est déjà présent (première installation : à la main, M13-E02 ; ensuite, la version en
+# place vérifie la suivante).
+- name: Installer chaque outil vérifié
+  ansible.builtin.include_tasks: outil.yml
+  loop: "{{ (['cosign'] if 'cosign' in outils_supply_chain_outils else []) + (outils_supply_chain_outils | difference(['cosign'])) }}"
+  loop_control:
+    loop_var: outils_supply_chain_nom

@@ -1,0 +1,15 @@
+---
+- name: Docker Engine, containerd et les extensions, en versions exactes
+  vars:
+    # « paquet=version » pour chaque entrée de docker_engine_versions
+    paquets_versions: "{{ docker_engine_versions | dict2items | map(attribute='key') | zip(docker_engine_versions.values()) | map('join', '=') | list }}"
+  ansible.builtin.apt:
+    name: "{{ paquets_versions }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Outils de travail
+  ansible.builtin.apt:
+    name: "{{ docker_engine_outils }}"
+    state: present

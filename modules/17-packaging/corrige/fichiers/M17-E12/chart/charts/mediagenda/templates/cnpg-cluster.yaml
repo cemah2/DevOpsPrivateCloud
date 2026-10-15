@@ -1,0 +1,40 @@
+{{- if .Values.postgresql.cnpg.enabled }}
+# Base PostgreSQL de MédiAgenda, gérée par l'opérateur CloudNativePG 1.30 (M16).
+# CNPG crée le Secret <nom>-app (clés username, password, host, port, dbname, uri…).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "mediagenda.cnpgName" . }}
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+  annotations:
+    # Une base ne se supprime pas avec un « helm uninstall » : on la garde, on la détruit à la main.
+    helm.sh/resource-policy: keep
+spec:
+  instances: {{ .Values.postgresql.cnpg.instances }}
+  {{- with .Values.postgresql.cnpg.imageName }}
+  imageName: {{ . }}
+  {{- end }}
+  {{- with $.Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  inheritedMetadata:
+    labels:
+      {{- include "medisphere-commun.etiquettes" . | nindent 6 }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgresql.cnpg.database }}
+      owner: {{ .Values.postgresql.cnpg.owner }}
+  storage:
+    size: {{ .Values.postgresql.cnpg.storage.size }}
+    storageClass: {{ .Values.postgresql.cnpg.storage.storageClass }}
+  resources:
+    {{- toYaml .Values.postgresql.cnpg.resources | nindent 4 }}
+  {{- if gt (int .Values.postgresql.cnpg.instances) 1 }}
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: preferred
+  {{- end }}
+{{- end }}

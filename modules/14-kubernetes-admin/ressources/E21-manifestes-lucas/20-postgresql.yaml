@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda-pg
+  namespace: mediagenda-recette
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mediagenda-pg
+  template:
+    metadata:
+      labels:
+        app: mediagenda-pg
+    spec:
+      containers:
+        - name: postgresql
+          image: postgres:18
+          env:
+            - name: POSTGRES_USER
+              value: mediagenda
+            - name: POSTGRES_DB
+              value: mediagenda
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-pg
+                  key: mot-de-passe
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: donnees
+              mountPath: /var/lib/postgresql
+      volumes:
+        - name: donnees
+          hostPath:
+            path: /srv/mediagenda-pg
+            type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-pg
+  namespace: mediagenda-recette
+spec:
+  selector:
+    app: mediagenda-pg
+  ports:
+    - port: 5432

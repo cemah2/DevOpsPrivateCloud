@@ -1,0 +1,41 @@
+# plateforme/k8s — composants/velero/restaurations/e24-recette-vers-restauration.yaml (M16-E24)
+# Restauration de l'espace mediagenda-recette dans wb-restauration (copie inactive, non publiée).
+# À appliquer à la main (kubectl apply -f) au moment de restaurer : un Restore est une OPÉRATION,
+# pas un état ; il ne fait pas partie de « task appliquer ». Relire namespaceMapping avant.
+apiVersion: velero.io/v1
+kind: Restore
+metadata:
+  name: e24-recette-vers-restauration
+  namespace: velero
+spec:
+  backupName: e24-recette
+  includedNamespaces:
+  - mediagenda-recette
+  # Sans cette ligne, Velero recrée les objets DANS mediagenda-recette (ignorés s'ils existent,
+  # créés s'ils manquent : jamais ce qu'on veut pendant un essai).
+  namespaceMapping:
+    mediagenda-recette: wb-restauration
+  # Ce que CloudNativePG reconstruira lui-même ou qui rendrait la copie active :
+  # - le Cluster (recréé par un manifeste de récupération, sans archivage) ;
+  # - les sauvegardes et planifications (une copie ne sauvegarde pas dans les archives de l'original) ;
+  # - les événements (bruit).
+  excludedResources:
+  - clusters.postgresql.cnpg.io
+  - backups.postgresql.cnpg.io
+  - scheduledbackups.postgresql.cnpg.io
+  - poolers.postgresql.cnpg.io
+  - events
+  - events.events.k8s.io
+  # Tout ce que l'opérateur crée pour un Cluster porte le label cnpg.io/cluster (pods, PVC,
+  # Secrets générés, Services, PDB) : on n'en restaure rien, il le recrée pour la copie.
+  # L'ObjectStore cnpg-s3 et son Secret d'identifiants n'ont pas ce label : ils sont restaurés
+  # (la copie en a besoin pour LIRE les archives).
+  labelSelector:
+    matchExpressions:
+    - key: cnpg.io/cluster
+      operator: DoesNotExist
+  resourceModifier:
+    kind: ConfigMap
+    name: modificateurs-restauration
+  restorePVs: true
+  existingResourcePolicy: none

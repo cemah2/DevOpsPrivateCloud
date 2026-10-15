@@ -1,0 +1,17 @@
+## Pour containerd (module 14) — à ajouter à `docs/registre/caches.md`
+
+> EXTRAIT (M13-E25). Le module 14 l'applique par le rôle `containerd` (`config_path` vers `/etc/containerd/certs.d`).
+
+Un fichier `hosts.toml` par registre amont, sous `/etc/containerd/certs.d/<registre amont>/` : les tirages de `docker.io/…` partent vers le cache sans changer le nom des images dans les manifestes.
+
+```toml
+# /etc/containerd/certs.d/docker.io/hosts.toml
+server = "https://registry-1.docker.io"
+
+[host."https://registry.par1.medisphere.internal/v2/dockerhub"]
+  capabilities = ["pull", "resolve"]
+  ca = "/usr/local/share/ca-certificates/medisphere-root-ca.crt"
+  override_path = true
+```
+
+Même forme pour `quay.io` (→ `/v2/quay`), `ghcr.io` (→ `/v2/ghcr`) et `registry.k8s.io` (→ `/v2/k8s`). `override_path = true` est nécessaire parce que le chemin du cache (`/v2/dockerhub`) n'est pas la racine `/v2/` attendue par défaut. Les caches sont publics (E04) : pas d'identifiant. Les images de `medisphere` (privé) se tirent par leur vrai nom avec le robot `k8s-pull` (Secret de tirage, M14-E19). À vérifier sur containerd 2.3 : `server` en repli si le cache ne répond pas (ce repli contourne la politique : à désactiver si on veut l'imposer).

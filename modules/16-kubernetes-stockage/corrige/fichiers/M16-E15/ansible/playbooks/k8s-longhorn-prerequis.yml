@@ -1,0 +1,10 @@
+---
+# plateforme/ansible — playbooks/k8s-longhorn-prerequis.yml (M16-E15)
+#   uv run ansible-playbook playbooks/k8s-longhorn-prerequis.yml                       # present
+#   uv run ansible-playbook playbooks/k8s-longhorn-prerequis.yml -e longhorn_prerequis_etat=absent
+- name: Prérequis Longhorn sur les travailleurs
+  hosts: k8s_travailleurs
+  become: true
+  gather_facts: false
+  roles:
+    - role: longhorn_prerequis

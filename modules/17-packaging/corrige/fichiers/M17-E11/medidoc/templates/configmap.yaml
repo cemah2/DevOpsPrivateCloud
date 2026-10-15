@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "medidoc.fullname" . }}
+  labels:
+    {{- include "medidoc.labels" . | nindent 4 }}
+data:
+  MEDIDOC_S3_ENDPOINT: {{ .Values.s3.endpoint | quote }}
+  MEDIDOC_S3_BUCKET: {{ required "s3.bucket est obligatoire" .Values.s3.bucket | quote }}
+  MEDIDOC_S3_REGION: {{ .Values.s3.region | quote }}
+  MEDIDOC_MAX_MB: {{ .Values.config.maxMb | quote }}
+  MEDIDOC_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  MEDIDOC_PORT: "8080"
+  {{- if .Values.s3.caConfigMap }}
+  MEDIDOC_CA_FILE: /etc/medidoc/ca/ca.crt
+  {{- end }}

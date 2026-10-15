@@ -1,0 +1,3 @@
+# registre/terraform.tfvars — copie ce fichier sans « .exemple » (rien de secret ici).
+moi     = "<MOI>"
+moi_nom = "<TON-NOM-COMPLET>"

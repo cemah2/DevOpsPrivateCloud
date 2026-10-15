@@ -1,0 +1,33 @@
+# plateforme/k8s — cluster/noeuds.yaml (M14-E14)
+# Source de vérité des étiquettes et des taints posées PAR MÉDISPHÈRE sur les nœuds
+# (celles de kubeadm et du kubelet ne sont pas listées ici et ne sont jamais touchées).
+# Appliqué par outils/etiqueter-noeuds.sh (task etiquettes), idempotent, rejoué après chaque jonction.
+# Zones : mêmes baies que la carte CRUSH de ceph-par1 (M08-E14) : par1-baie-a, -b, -c.
+noeuds:
+  k8s-cp01:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-a
+  k8s-cp02:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-b
+  k8s-cp03:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-c
+  k8s-w01:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-a
+  k8s-w02:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-b
+  k8s-w03:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-c
+      medisphere.internal/dedie: bdd
+    taints:
+      - cle: dedie
+        valeur: bdd
+        effet: NoSchedule
+# k8s-w04 (E17, ponctuel) : ajouter le temps de l'exercice, sous « noeuds » :
+#   k8s-w04:
+#     etiquettes:
+#       topology.kubernetes.io/zone: par1-baie-a

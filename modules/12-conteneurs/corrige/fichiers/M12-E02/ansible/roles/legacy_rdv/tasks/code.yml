@@ -1,0 +1,52 @@
+---
+- name: Racine du site
+  ansible.builtin.file:
+    path: "{{ legacy_rdv_racine }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Comme « cp -r ~/legacy-rdv/. /var/www/legacy-rdv/ » de la procédure : TOUT le dossier, vm/ et
+# schema.sql compris (l'hôte virtuel en interdit l'accès). Le code appartient à root : Apache
+# le lit, il ne peut pas le modifier. rsync (synchronize) plutôt que copy : on EXCLUT uploads/,
+# qui appartient à Apache et contient des données (copy lui remettrait root à chaque passage).
+- name: Code de l'application (sans les pièces jointes)
+  ansible.posix.synchronize:
+    src: "{{ legacy_rdv_source }}"
+    dest: "{{ legacy_rdv_racine }}/"
+    archive: false
+    recursive: true
+    checksum: true
+    rsync_opts:
+      - "--exclude=uploads/"
+      - "--exclude=.git/"
+      - "--chown=root:root"
+      - "--chmod=D755,F644"
+  notify: Recharger apache2
+
+- name: Pièces jointes et journal appartenant à Apache (seuls endroits où il écrit)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ legacy_rdv_utilisateur_web }}"
+    group: "{{ legacy_rdv_utilisateur_web }}"
+    mode: "0750"
+  loop:
+    - "{{ legacy_rdv_racine }}/uploads"
+    - "{{ legacy_rdv_journaux }}"
+
+- name: Lire config.php tel qu'installé
+  ansible.builtin.slurp:
+    src: "{{ legacy_rdv_racine }}/config.php"
+  register: legacy_rdv_config
+
+# Le mot de passe du Vault doit être celui écrit en dur dans le code : sinon l'application ne se
+# connecte pas. C'est exactement le couplage que M12-E19 supprime.
+- name: Le mot de passe du Vault est celui de config.php
+  ansible.builtin.assert:
+    that:
+      - (legacy_rdv_config.content | b64decode) is search("define\('DB_PASS', '" ~ (legacy_rdv_db_mdp | regex_escape) ~ "'\)")
+    fail_msg: "vault_legacy_rdv_db_mdp ne correspond pas à DB_PASS de config.php."
+    quiet: true
+  no_log: true

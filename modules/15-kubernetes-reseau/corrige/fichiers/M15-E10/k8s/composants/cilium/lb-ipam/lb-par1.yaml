@@ -1,0 +1,19 @@
+# composants/cilium/lb-ipam/lb-par1.yaml — pool unique d'adresses de service de k8s-par1 (M15-E10,
+# PLAT-1610). PLAN §4.10 : 10.10.41.10-10.10.41.199 ; 10.10.41.200-254 hors pool (VIP futures, tests).
+# Convention (pas de réservation possible dans LB IPAM) :
+#   10.10.41.10        gw-par1 (spec.addresses, E12) — personne d'autre ne la demande ;
+#   10.10.41.11-19     Gateways de plateforme et d'essai, adresses DEMANDÉES explicitement ;
+#   10.10.41.20-49     essais du workbook, adresses DEMANDÉES (annotation lbipam.cilium.io/ips) ;
+#   10.10.41.50-199    attribution automatique.
+# ⚠️ Modifier un pool existant peut réattribuer des adresses (documentation Cilium, issue 40358) :
+# tout changement de ce fichier passe par une MR qui dit quels Services sont touchés.
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lb-par1
+  labels:
+    app.kubernetes.io/part-of: reseau-k8s-par1
+spec:
+  blocks:
+    - start: 10.10.41.10
+      stop: 10.10.41.199

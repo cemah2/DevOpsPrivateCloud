@@ -1,0 +1,13 @@
+---
+- name: Debian 13 seulement (le dépôt et les versions sont ceux de trixie)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "docker_engine : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} non pris en charge (Debian 13 attendu)."
+    quiet: true
+
+- name: Paquets Debian en conflit avec ceux de Docker retirés
+  ansible.builtin.apt:
+    name: "{{ docker_engine_paquets_conflictuels }}"
+    state: absent

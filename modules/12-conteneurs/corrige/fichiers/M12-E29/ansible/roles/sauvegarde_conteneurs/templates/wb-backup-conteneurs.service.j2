@@ -1,0 +1,17 @@
+# /etc/systemd/system/wb-backup-conteneurs.service — {{ inventory_hostname }} (M12-E29)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sauvegarde_conteneurs).') }}
+[Unit]
+Description=Sauvegarde des données des conteneurs vers PBS ({{ sauvegarde_conteneurs_espace }})
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/conteneurs/runbooks/RB-121-restaurer-la-base-d-une-pile-compose.md
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wb-backup-conteneurs.sh
+SyslogIdentifier=wb-backup-conteneurs
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

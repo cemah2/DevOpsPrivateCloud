@@ -1,0 +1,60 @@
+# composants/coredns/configmap-coredns.yaml — Corefile de CoreDNS sur k8s-par1 (M15-E04, PLAT-1604).
+# Part du Corefile écrit par kubeadm 1.36 et ne change que la résolution hors du cluster.
+#
+# Application (depuis ~/src/k8s, sur adm01) : la ConfigMap a été créée par kubeadm, qui en garde la
+# propriété des champs ; l'application déclarative en reprend la propriété :
+#   kubectl apply --server-side --force-conflicts --field-manager=plateforme-k8s \
+#     -f composants/coredns/configmap-coredns.yaml
+# Le greffon « reload » relit le Corefile sans redémarrage (délai : propagation de la ConfigMap dans
+# le volume, jusqu'à une minute environ, puis vérification toutes les 30 s).
+#
+# Montées de version : kubeadm CONSERVE un Corefile modifié (ou le migre s'il le faut) mais réécrit
+# le Deployment coredns. Après chaque « kubeadm upgrade apply », comparer la ConfigMap à ce fichier
+# (lab/bin/check 15 04 le fait).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    # Noms internes de MédiSphère : transmis aux récurseurs du socle, qui valident DNSSEC
+    # (ancre de par1.medisphere.internal). Bloc à part : cache et journal d'erreurs propres,
+    # et ces noms ne partent jamais ailleurs, même si le bloc général change.
+    medisphere.internal:53 {
+        errors
+        prometheus :9153
+        cache 30
+        forward . 10.10.20.10 10.10.20.16 {
+           policy sequential
+        }
+    }
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        # Récurseurs du socle par leur adresse, et non /etc/resolv.conf du nœud : CoreDNS ne dépend
+        # plus de la configuration DNS des nœuds (ni d'un éventuel résolveur local 127.0.0.53 qui
+        # ferait boucler les requêtes), et la matrice des flux est explicite.
+        # policy sequential : dns01 d'abord, dns02 seulement si dns01 est marqué en panne (contrôle de
+        # santé par défaut toutes les 0,5 s) ; le cache des récurseurs est ainsi mieux utilisé.
+        forward . 10.10.20.10 10.10.20.16 {
+           max_concurrent 1000
+           policy sequential
+        }
+        cache 30 {
+           disable success cluster.local
+           disable denial cluster.local
+        }
+        loop
+        reload
+        loadbalance
+    }

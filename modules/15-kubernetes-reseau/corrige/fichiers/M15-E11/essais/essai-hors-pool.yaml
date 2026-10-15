@@ -1,0 +1,17 @@
+# ~/m15/e11/essai-hors-pool.yaml — étape 7 (À SUPPRIMER ensuite, avec l'ajout temporaire
+# d'« ExternalIP » dans services-lb). Une ExternalIP n'est pas attribuée par LB IPAM : n'importe
+# quel utilisateur qui peut créer un Service peut en écrire une. Si elle était annoncée et acceptée,
+# il détournerait l'adresse de son choix : c'est le rôle de RM-K8S-IN de l'empêcher.
+apiVersion: v1
+kind: Service
+metadata:
+  name: essai-hors-pool
+  namespace: wb-essais
+spec:
+  type: ClusterIP
+  externalIPs: [10.10.42.10]
+  selector:
+    app.kubernetes.io/name: agnhost
+  ports:
+    - port: 80
+      targetPort: 8080

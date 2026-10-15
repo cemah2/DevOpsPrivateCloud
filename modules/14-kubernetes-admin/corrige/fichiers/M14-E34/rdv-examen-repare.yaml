@@ -1,0 +1,60 @@
+# rdv-examen-repare.yaml — M14-E34, tâche 9 : le manifeste fourni, réparé (4 défauts).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rdv-examen
+  labels:
+    app: rdv-examen
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rdv-examen
+  template:
+    metadata:
+      labels:
+        app: rdv-examen
+    spec:
+      containers:
+        - name: api
+          image: <IMAGE-MEDIAGENDA>
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://examen@base.wb-examen.svc:5432/examen
+            # Défaut 1 : variable obligatoire absente → le processus s'arrête au démarrage (CrashLoopBackOff).
+            - name: MEDIAGENDA_VALKEY_URL
+              value: redis://cache.wb-examen.svc:6379/0
+            - name: MEDIAGENDA_LOG_LEVEL
+              value: INFO
+          readinessProbe:
+            httpGet:
+              path: /sante
+              port: 8000          # Défaut 2 : 8080, l'application écoute sur 8000 → jamais prête.
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: 8000
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi       # Défaut 3 : 64Gi → refusé par le quota (et irréalisable sur un nœud).
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rdv-examen
+spec:
+  type: ClusterIP
+  selector:
+    app: rdv-examen               # Défaut 4 : « app: rdv » ne sélectionne aucun pod → aucun point d'accès.
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

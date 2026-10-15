@@ -1,0 +1,14 @@
+# ~/.config/containers/systemd/mediagenda.pod — le pod de l'API et de son cache (M12-E14).
+# Les conteneurs d'un pod partagent l'espace de noms réseau (localhost commun) : l'API joint
+# Valkey sur 127.0.0.1:6379 ; seul le pod publie un port. Service généré : mediagenda-pod.service
+[Unit]
+Description=Pod MédiAgenda (API + Valkey), recette ctr02
+
+[Pod]
+PodName=mediagenda
+Network=mediagenda.network
+# Sans privilège : port > 1024 publié par pasta (réseau sans privilège de Podman 5).
+PublishPort=8000:8000
+
+[Install]
+WantedBy=default.target

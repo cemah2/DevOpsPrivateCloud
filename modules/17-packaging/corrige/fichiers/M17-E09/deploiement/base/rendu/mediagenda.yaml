@@ -1,0 +1,386 @@
+# Rendu de registry.par1.medisphere.internal/charts/mediagenda:0.5.0 (sha256:<DIGEST-DU-CHART-0.5.0>), signature vérifiée.
+# Produit par outils/rendre-base.sh — ne pas modifier à la main.
+---
+# Source: mediagenda/templates/networkpolicy.yaml
+# Pods de la release (API, migrations par initContainer, test) : sorties strictement nécessaires.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Entre pods de la release (pod de « helm test » → API).
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+              app.kubernetes.io/instance: mediagenda
+      ports:
+        - port: http
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: mediagenda-db
+      ports:
+        - port: 5432
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      ports:
+        - port: 6379
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+              app.kubernetes.io/instance: mediagenda
+      ports:
+        - port: http
+          protocol: TCP
+
+---
+# Source: mediagenda/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+spec:
+  minAvailable: 1
+  # Un pod qui n'est pas prêt peut être évincé même si le budget est atteint (évite les drains bloqués).
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+      app.kubernetes.io/component: api
+
+---
+# Source: mediagenda/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+automountServiceAccountToken: false
+
+---
+# Source: mediagenda/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+data:
+  MEDIAGENDA_FUSEAU: "Europe/Paris"
+  MEDIAGENDA_CACHE_TTL: "60"
+  MEDIAGENDA_DELAI_ARRET: "20"
+  MEDIAGENDA_PORT: "8000"
+
+---
+# Source: mediagenda/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+
+---
+# Source: mediagenda/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: mediagenda-0.5.0
+        app.kubernetes.io/name: mediagenda
+        app.kubernetes.io/instance: mediagenda
+        app.kubernetes.io/version: "v1.0.0"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: mediagenda
+        medisphere.fr/equipe: "mediagenda"
+        medisphere.fr/environnement: "recette"
+        medisphere.fr/donnees-sante: "oui"
+        app.kubernetes.io/component: api
+      annotations:
+        # Une modification de la ConfigMap change l'empreinte, donc le gabarit de pod : redéploiement.
+        checksum/config: 5fc6978892ebbc25fe97f435ab6603df910d0630aedf0feba904f63f02e6b9a1
+    spec:
+      serviceAccountName: mediagenda
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      # Supérieur à MEDIAGENDA_DELAI_ARRET : uvicorn finit ses requêtes avant le SIGKILL.
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: migrations
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-db-app
+                  key: uri
+            - name: MEDIAGENDA_VALKEY_URL
+              value: "redis://valkey:6379/0"
+            - name: MEDIAGENDA_LOG_LEVEL
+              value: "INFO"
+            - name: MEDIAGENDA_LOG_FORMAT
+              value: "json"
+            - name: MEDIAGENDA_MIGRATIONS_DIR
+              value: "/app/migrations"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            limits:
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-db-app
+                  key: uri
+            - name: MEDIAGENDA_VALKEY_URL
+              value: "redis://valkey:6379/0"
+            - name: MEDIAGENDA_LOG_LEVEL
+              value: "INFO"
+            - name: MEDIAGENDA_LOG_FORMAT
+              value: "json"
+            - name: MEDIAGENDA_VERSION
+              value: "v1.0.0"
+          envFrom:
+            - configMapRef:
+                name: mediagenda
+          startupProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /pret
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            limits:
+              memory: 384Mi
+            requests:
+              cpu: 100m
+              memory: 192Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+
+---
+# Source: mediagenda/templates/ciliumnetworkpolicy.yaml
+# Le trafic de la Gateway Cilium arrive avec l'identité réservée « ingress » (Envoy de Cilium) :
+# une NetworkPolicy standard ne sait pas la désigner.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-depuis-gateway
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+      app.kubernetes.io/component: api
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+
+---
+# Source: mediagenda/templates/httproute.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.5.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.fr/equipe: "mediagenda"
+    medisphere.fr/environnement: "recette"
+    medisphere.fr/donnees-sante: "oui"
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - "mediagenda-recette.apps.par1.medisphere.internal"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mediagenda
+          port: 8000

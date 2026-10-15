@@ -1,0 +1,9 @@
+# M17-E05 — valeurs de la release de dev (mediagenda-dev), passées par -f à chaque montée.
+medisphere:
+  environnement: dev
+replicaCount: 1
+config:
+  logLevel: DEBUG
+# Nom publié calculé : mediagenda-dev.apps.par1.medisphere.internal
+httpRoute:
+  hostname: ""

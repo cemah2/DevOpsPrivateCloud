@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "medidoc.fullname" . }}
+  namespace: medidoc-dev
+  labels:
+    {{- include "medidoc.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+data:
+  MEDIDOC_S3_ENDPOINT: {{ .Values.s3.endpoint }}
+  MEDIDOC_S3_BUCKET: {{ .Values.s3.bucket }}
+  MEDIDOC_S3_REGION: {{ .Values.s3.region }}
+  MEDIDOC_LOG_LEVEL: {{ .Values.logLevel }}

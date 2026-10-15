@@ -1,0 +1,31 @@
+---
+# Les contrôles tournent EN TANT QUE le compte applicatif : c'est son Podman qui compte.
+# XDG_RUNTIME_DIR et le bus D-Bus de son systemd (linger) donnent à Podman une vraie session
+# (cgroups délégués par systemd), comme « machinectl shell app@ ».
+- name: Lire l'état de Podman pour le compte applicatif
+  ansible.builtin.command:
+    cmd: podman info --format json
+  become: true
+  become_user: "{{ podman_hote_compte }}"
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ podman_hote_compte_uid }}"
+    DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ podman_hote_compte_uid }}/bus"
+  register: podman_hote_info
+  changed_when: false
+
+- name: Podman du compte sans privilège, cgroup v2, version attendue
+  vars:
+    info: "{{ podman_hote_info.stdout | from_json }}"
+  ansible.builtin.assert:
+    that:
+      - info.host.security.rootless | bool
+      - info.host.cgroupVersion == 'v2'
+      - info.host.rootlessNetworkCmd == 'pasta'
+      - info.version.Version is version(podman_hote_version_attendue[ansible_facts['os_family']], '>=')
+      - info.version.Version is version(podman_hote_version_attendue[ansible_facts['os_family']] ~ '.999', '<=')
+    fail_msg: >-
+      Podman de {{ podman_hote_compte }} : rootless={{ info.host.security.rootless }},
+      cgroup={{ info.host.cgroupVersion }}, réseau={{ info.host.rootlessNetworkCmd | default('?') }},
+      version={{ info.version.Version }}
+      (attendu {{ podman_hote_version_attendue[ansible_facts['os_family']] }}.x).
+    quiet: true

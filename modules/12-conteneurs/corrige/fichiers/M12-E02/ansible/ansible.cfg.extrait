@@ -1,0 +1,5 @@
+# ansible.cfg — section [defaults] : M12-E02 ajoute la source de l'environnement du module 12.
+# Liste séparée par des virgules (type « pathlist ») ; l'ordre n'a pas d'importance ici.
+# Si l'environnement Ceph est détruit, sa source renvoie simplement zéro hôte.
+[defaults]
+inventory = inventories/lab/netbox.yml,inventories/lab/netbox-ceph.yml,inventories/lab/netbox-m12.yml

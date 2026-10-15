@@ -1,0 +1,40 @@
+# Component « livraison » (M17-E09) : la ConfigMap locale « livraison » de chaque overlay est la
+# SEULE source de la version livrée et du nom publié (elle n'est pas déployée : annotation
+# config.kubernetes.io/local-config). Les remplacements passent après les autres transformations
+# de l'overlay (images, labels, correctifs) : ils l'emportent sur un « images: » qui traînerait.
+# Toujours en DERNIER dans la liste « components » de l'overlay.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+replacements:
+  - source:
+      kind: ConfigMap
+      name: livraison
+      fieldPath: data.version
+    targets:
+      - select:
+          kind: Deployment
+          name: mediagenda
+        fieldPaths:
+          - spec.template.spec.containers.[name=api].image
+          - spec.template.spec.initContainers.[name=migrations].image
+        options:
+          # registre/dépôt:étiquette → on remplace ce qui suit le « : » (registre SANS numéro de port).
+          delimiter: ':'
+          index: 1
+      - select:
+          kind: Deployment
+          name: mediagenda
+        fieldPaths:
+          - spec.template.spec.containers.[name=api].env.[name=MEDIAGENDA_VERSION].value
+          - metadata.labels.[app.kubernetes.io/version]
+          - spec.template.metadata.labels.[app.kubernetes.io/version]
+  - source:
+      kind: ConfigMap
+      name: livraison
+      fieldPath: data.nom-publie
+    targets:
+      - select:
+          kind: HTTPRoute
+          name: mediagenda
+        fieldPaths:
+          - spec.hostnames.0

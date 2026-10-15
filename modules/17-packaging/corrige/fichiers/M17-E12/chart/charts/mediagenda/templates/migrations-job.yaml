@@ -1,0 +1,85 @@
+{{- if eq .Values.migrations.mode "hook" }}
+# Migrations de schéma par hook Helm (M17-E12).
+# Ordre d'une montée : hooks pre-upgrade (cette politique réseau, poids -10, puis ce Job, poids 0)
+# → objets ordinaires (nouveau Deployment) → hooks post-upgrade. Si le Job échoue, Helm s'arrête
+# AVANT de toucher au Deployment : l'ancienne version continue de servir sur l'ancien schéma.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "mediagenda.fullname" . }}-migrations
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    helm.sh/hook: {{ include "mediagenda.migrations.hook" . }}
+    helm.sh/hook-weight: "0"
+    # On supprime l'ancien Job juste avant d'en créer un nouveau, mais on GARDE un Job terminé
+    # (réussi ou en échec) pour pouvoir lire ses journaux ; ttlSecondsAfterFinished fait le ménage.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.migrations.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "mediagenda.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      # Le compte de service du chart n'existe pas encore au moment d'un hook pre-install :
+      # le Job utilise « default », sans jeton.
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "medisphere-commun.securite.pod" . | nindent 8 }}
+      containers:
+        {{- include "mediagenda.conteneurMigration" . | nindent 8 }}
+{{- if .Values.networkPolicy.enabled }}
+---
+# Politique réseau du Job, créée AVANT lui (poids -10) : à la première installation, la politique
+# ordinaire de la release n'existe pas encore pendant les hooks pre-install. Supprimée quand tous
+# les hooks de la phase ont réussi.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "mediagenda.fullname" . }}-migrations
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    helm.sh/hook: {{ include "mediagenda.migrations.hook" . }}
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "mediagenda.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: migrations
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ ternary (include "mediagenda.cnpgName" .) .Values.networkPolicy.clusterPostgresqlExterne .Values.postgresql.cnpg.enabled }}
+      ports:
+        - port: 5432
+          protocol: TCP
+{{- end }}
+{{- end }}

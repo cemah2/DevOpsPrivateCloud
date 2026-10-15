@@ -1,0 +1,42 @@
+---
+# Rôle k8s_chiffrement (M14-E28).
+- name: Fournisseurs valides
+  ansible.builtin.assert:
+    that:
+      - k8s_chiffrement_fournisseurs | length > 0
+      - k8s_chiffrement_fournisseurs | map(attribute='type')
+        | difference(['identity', 'aescbc', 'aesgcm', 'secretbox']) | length == 0
+      - k8s_chiffrement_fournisseurs | selectattr('type', 'ne', 'identity')
+        | map(attribute='cles') | flatten | map(attribute='secret')
+        | map('b64decode', encoding='latin-1') | map('length') | reject('equalto', 32) | list | length == 0
+    fail_msg: >-
+      k8s_chiffrement_fournisseurs doit lister des fournisseurs connus, et chaque clé faire 32 octets
+      (base64). Rien n'est modifié sur {{ inventory_hostname }}.
+    quiet: true
+  no_log: true
+
+- name: Dossier de la configuration
+  ansible.builtin.file:
+    path: "{{ k8s_chiffrement_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Écrit par renommage (copie atomique d'Ansible) : le serveur d'API voit un fichier complet, jamais
+# un fichier à moitié écrit. Le DOSSIER est monté dans le pod, pas le fichier : un fichier remplacé
+# par renommage ne serait pas visible à travers un montage de fichier.
+- name: EncryptionConfiguration
+  ansible.builtin.template:
+    src: configuration.yaml.j2
+    dest: "{{ k8s_chiffrement_dossier }}/configuration.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Attendre le rechargement automatique
+
+# Le rechargement doit avoir eu lieu sur CE nœud avant de passer au suivant (serial: 1).
+- name: Appliquer les gestionnaires avant le nœud suivant
+  ansible.builtin.meta: flush_handlers

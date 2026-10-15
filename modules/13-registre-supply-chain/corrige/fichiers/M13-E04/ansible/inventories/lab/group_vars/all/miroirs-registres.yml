@@ -1,0 +1,9 @@
+---
+# group_vars/all/miroirs-registres.yml — caches Harbor (M13-E04). Lu par podman_hote (et, au M14,
+# par le rôle containerd pour ses hosts.toml : mêmes couples amont → cache).
+miroirs_registres: &miroirs
+  - {prefixe: docker.io, miroir: registry.par1.medisphere.internal/dockerhub}
+  - {prefixe: quay.io, miroir: registry.par1.medisphere.internal/quay}
+  - {prefixe: ghcr.io, miroir: registry.par1.medisphere.internal/ghcr}
+  - {prefixe: registry.k8s.io, miroir: registry.par1.medisphere.internal/k8s}
+podman_hote_miroirs: *miroirs

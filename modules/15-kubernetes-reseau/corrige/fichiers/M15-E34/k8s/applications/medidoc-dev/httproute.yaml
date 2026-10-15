@@ -1,0 +1,29 @@
+# applications/medidoc-dev/httproute.yaml — M15-E34. Écouteur HTTPS de gw-par1 (certificat joker
+# apps-joker : aucun Certificate à créer) ; nom publié par ExternalDNS (source gateway-httproute) ;
+# l'espace porte medisphere.fr/exposition: oui (allowedRoutes de gw-par1). En-têtes de sécurité de E33.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - medidoc-dev.apps.par1.medisphere.internal
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains"}
+              - {name: X-Content-Type-Options, value: nosniff}
+              - {name: Referrer-Policy, value: no-referrer}
+              - {name: X-Frame-Options, value: DENY}
+      backendRefs:
+        - name: medidoc
+          port: 80

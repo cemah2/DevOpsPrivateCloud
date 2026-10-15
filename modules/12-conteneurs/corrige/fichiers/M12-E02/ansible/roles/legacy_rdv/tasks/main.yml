@@ -1,0 +1,31 @@
+---
+# Rôle legacy_rdv — point d'entrée (M12-E02).
+# Ordre : préconditions → paquets → code → base → Apache et cron → contrôles.
+
+- name: Préconditions
+  ansible.builtin.import_tasks: preconditions.yml
+  tags: [legacy_rdv]
+
+- name: Paquets de la pile LAMP
+  ansible.builtin.apt:
+    name: "{{ legacy_rdv_paquets }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [legacy_rdv]
+
+- name: Code et dossiers
+  ansible.builtin.import_tasks: code.yml
+  tags: [legacy_rdv]
+
+- name: Base MariaDB locale
+  ansible.builtin.import_tasks: base.yml
+  tags: [legacy_rdv]
+
+- name: Apache, cron et rotation du journal
+  ansible.builtin.import_tasks: web.yml
+  tags: [legacy_rdv]
+
+- name: Contrôles
+  ansible.builtin.import_tasks: controles.yml
+  tags: [legacy_rdv]

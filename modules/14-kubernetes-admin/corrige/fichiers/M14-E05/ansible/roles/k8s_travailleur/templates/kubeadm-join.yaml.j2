@@ -1,0 +1,16 @@
+# {{ k8s_travailleur_entete }}
+# Fichier de jonction TEMPORAIRE de {{ inventory_hostname }} (rôle k8s_travailleur) : détruit après usage.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: {{ k8s_travailleur_api_nom }}:{{ k8s_travailleur_api_port }}
+    token: {{ _k8s_travailleur_jeton.stdout | trim }}
+    caCertHashes:
+      - sha256:{{ _k8s_travailleur_empreinte_ca.stdout | trim }}
+nodeRegistration:
+  name: {{ inventory_hostname }}
+  criSocket: {{ k8s_travailleur_socket_cri }}
+  kubeletExtraArgs:
+    - name: node-ip
+      value: {{ k8s_travailleur_adresse }}

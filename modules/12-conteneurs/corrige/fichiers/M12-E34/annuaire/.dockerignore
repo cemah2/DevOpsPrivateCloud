@@ -1,0 +1,7 @@
+# .dockerignore — le contexte ne contient que ce que le Dockerfile copie (CNT-IMG-09).
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+src/**/__pycache__

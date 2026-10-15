@@ -1,0 +1,67 @@
+---
+argument_specs:
+  main:
+    short_description: Nœud de contrôle kubeadm de k8s-par1
+    description:
+      - Point d'accès de l'API (keepalived VRRP v3 unicast + HAProxy en TCP), fichier kubeadm du nœud
+        validé, amorçage facultatif du premier nœud, jonction automatique des suivants.
+    options:
+      k8s_plan_controle_groupe:
+        type: str
+        description: Groupe d'inventaire des nœuds de contrôle.
+      k8s_plan_controle_adresse:
+        type: str
+        description: Adresse du nœud sur le VLAN 40 (advertiseAddress, node-ip, source VRRP).
+      k8s_plan_controle_interface:
+        type: str
+        description: Interface du VLAN 40 dans l'invité (porte la VIP).
+      k8s_plan_controle_premier:
+        type: str
+        description: Nœud qui amorce un cluster neuf.
+      k8s_plan_controle_api_nom:
+        type: str
+        description: Nom DNS du point d'accès (controlPlaneEndpoint).
+      k8s_plan_controle_api_vip:
+        type: str
+        description: VIP de l'API.
+      k8s_plan_controle_api_port:
+        type: int
+        description: Port d'écoute d'HAProxy sur la VIP (8443).
+      k8s_plan_controle_apiserver_port:
+        type: int
+        description: Port des kube-apiserver (6443).
+      k8s_plan_controle_vrid:
+        type: int
+        description: VRID de l'instance VRRP (140).
+      k8s_plan_controle_priorite:
+        type: int
+        description: Priorité VRRP du nœud.
+      k8s_plan_controle_pairs:
+        type: list
+        elements: str
+        description: Adresses des autres nœuds de contrôle (annonces unicast).
+      k8s_plan_controle_haproxy_delai_tunnel:
+        type: str
+        description: timeout client/server des sections TCP d'HAProxy.
+      k8s_plan_controle_haproxy_ca:
+        type: path
+        description: CA du cluster utilisée pour vérifier les backends en TLS.
+      k8s_plan_controle_fichier_cluster:
+        type: path
+        required: true
+        description: Chemin, sur le contrôleur Ansible, de cluster/kubeadm-config.yaml (plateforme/k8s).
+      k8s_plan_controle_dossier:
+        type: path
+        description: Dossier des fichiers kubeadm sur le nœud.
+      k8s_plan_controle_socket_cri:
+        type: str
+        description: Socket CRI.
+      k8s_plan_controle_amorcage_auto:
+        type: bool
+        description: Amorcer un cluster neuf sur le premier nœud si aucun n'existe.
+      k8s_plan_controle_jonction_auto:
+        type: bool
+        description: Joindre les nœuds de contrôle pas encore membres.
+      k8s_plan_controle_jeton_duree:
+        type: str
+        description: Durée de vie du jeton d'amorçage d'une jonction.

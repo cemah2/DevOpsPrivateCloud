@@ -1,0 +1,33 @@
+---
+# playbooks/registre.yml — registre Harbor (M13-E02, ticket PLAT-1402). RB-130.
+# Appliqué par le pipeline protégé de plateforme/ansible (job « registre »), un hôte à la fois.
+# Les rôles communs du socle (ssh_durci, ca_lab, ssh_ca_hote, ssh_ca_utilisateur, base…) sont
+# appliqués par site.yml comme à tous les hôtes du groupe socle ; ce playbook ne fait que le registre.
+
+- name: Registre Harbor
+  hosts: role_registre
+  become: true
+  serial: 1
+  pre_tasks:
+    - name: Garde-fou — le groupe role_registre ne contient que des hôtes attendus
+      ansible.builtin.assert:
+        that: inventory_hostname in ['reg01', 'reg02']
+        fail_msg: "{{ inventory_hostname }} n'est pas un registre connu (reg01, reg02)."
+        quiet: true
+  tasks:
+    - name: Docker Engine et Compose (rôle du M12)
+      ansible.builtin.include_role:
+        name: docker_engine
+
+    - name: Prérequis de Harbor (disque, scripts, unité) avant le certificat
+      ansible.builtin.include_role:
+        name: harbor
+        tasks_from: prerequis
+
+    - name: Certificat ACME de step-ca (id harbor)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: Harbor
+      ansible.builtin.include_role:
+        name: harbor

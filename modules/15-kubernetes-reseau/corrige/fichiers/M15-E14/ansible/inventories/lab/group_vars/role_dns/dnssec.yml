@@ -1,0 +1,23 @@
+---
+# group_vars/role_dns/dnssec.yml — DNSSEC des zones internes (M06-E26, complété en M15-E14).
+# Données PUBLIQUES (le DS d'une zone n'est pas un secret) : en clair dans l'inventaire.
+# Ce fichier REMPLACE celui de M06-E26 : apps.par1.medisphere.internal rejoint les zones signées.
+# Ancres des récurseurs : INCHANGÉES. apps est sous par1 (ancre positive) : la chaîne de confiance
+# passe par le DS de apps publié DANS par1 (délégation OpenTofu, envs/k8s/dns-apps.tf).
+
+powerdns_auth_zones_signees:
+  - par1.medisphere.internal
+  - apps.par1.medisphere.internal
+powerdns_auth_nsec3: false
+powerdns_auth_soa_edit_signees: INCEPTION-INCREMENT
+
+# Récurseurs (dns01, dns02) : ancre positive de par1 seulement (valeur de M06-E26, à garder).
+powerdns_recursor_ancres:
+  - nom: par1.medisphere.internal
+    ds:
+      - "<KEYTAG> 13 2 <EMPREINTE-SHA256-EN-HEXADÉCIMAL>"
+
+powerdns_recursor_nta:
+  - {nom: medisphere.internal, raison: "Zone parente interne non signée (M06-E06), par2 comprise"}
+  - {nom: 10.10.in-addr.arpa, raison: "Inverse interne PAR1 (RFC 1918)"}
+  - {nom: 20.10.in-addr.arpa, raison: "Inverse interne PAR2 (RFC 1918)"}

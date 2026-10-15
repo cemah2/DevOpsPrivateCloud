@@ -1,0 +1,70 @@
+---
+- name: Clé publique de supervision fournie
+  ansible.builtin.assert:
+    that:
+      - supervision_conteneurs_cle_publique is match('^ssh-ed25519 ')
+      - supervision_conteneurs_docker or supervision_conteneurs_comptes_podman | length > 0
+    fail_msg: >-
+      supervision_conteneurs_cle_publique (clé ed25519 de adm01) et au moins un moteur à lire sont
+      requis pour {{ inventory_hostname }}.
+    quiet: true
+
+- name: Compte de supervision (système, sans mot de passe, hors groupe docker)
+  ansible.builtin.user:
+    name: "{{ supervision_conteneurs_compte }}"
+    system: true
+    shell: /bin/sh            # nécessaire à sshd pour lancer la commande forcée ; aucun mot de passe
+    password: "!"
+    create_home: true
+    home: /var/lib/{{ supervision_conteneurs_compte }}
+    groups: []
+    append: false
+
+- name: Script de lecture de l'état
+  ansible.builtin.copy:
+    src: ms-etat-conteneurs
+    dest: /usr/local/sbin/ms-etat-conteneurs
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Moteurs à lire
+  ansible.builtin.template:
+    src: ms-etat-conteneurs.conf.j2
+    dest: /etc/ms-etat-conteneurs.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Règle sudo (une seule commande, sans argument)
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/60-supervision-conteneurs
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+
+# restrict : ni pty, ni redirection de ports, ni agent, ni X11 ; command= : ce que le client
+# demande (SSH_ORIGINAL_COMMAND) n'est jamais exécuté ; from= : depuis adm01 seulement.
+- name: Clé autorisée à commande forcée
+  ansible.posix.authorized_key:
+    user: "{{ supervision_conteneurs_compte }}"
+    key: "{{ supervision_conteneurs_cle_publique }}"
+    key_options: >-
+      restrict,from="{{ supervision_conteneurs_depuis }}",command="sudo -n /usr/local/sbin/ms-etat-conteneurs"
+    exclusive: true
+
+- name: Contrôle — le compte n'est pas dans le groupe docker
+  ansible.builtin.command:
+    argv: [id, -nG, "{{ supervision_conteneurs_compte }}"]
+  register: supervision_conteneurs_groupes
+  changed_when: false
+  failed_when: "'docker' in supervision_conteneurs_groupes.stdout.split()"
+
+- name: Contrôle — le script répond (lecture seule)
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/ms-etat-conteneurs]
+  register: supervision_conteneurs_essai
+  changed_when: false
+  failed_when: supervision_conteneurs_essai.rc != 0 or supervision_conteneurs_essai.stdout_lines[-1] is not match('^fin [0-9]+$')

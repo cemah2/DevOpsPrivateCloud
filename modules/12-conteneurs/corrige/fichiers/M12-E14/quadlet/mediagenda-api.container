@@ -1,0 +1,32 @@
+# ~/.config/containers/systemd/mediagenda-api.container — l'API MédiAgenda, dans le pod (M12-E14).
+# Service généré : mediagenda-api.service
+[Unit]
+Description=API MédiAgenda (recette ctr02)
+Requires=mediagenda-migrations.service mediagenda-valkey.service
+After=mediagenda-migrations.service mediagenda-valkey.service
+
+[Container]
+ContainerName=mediagenda-api
+Image=mediagenda-api.build
+Pod=mediagenda.pod
+# URL complète de la base (avec son mot de passe) : secret Podman, jamais dans ce fichier.
+Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
+Environment=MEDIAGENDA_VALKEY_URL=redis://127.0.0.1:6379/0
+Environment=MEDIAGENDA_LOG_LEVEL=INFO
+# La sonde de vivacité de l'application (pas /pret : une panne de la base ne doit pas faire
+# redémarrer l'API). E18 y ajoute HealthOnFailure=.
+# Forme tableau JSON : Quadlet 5.4 tronque le guillemet final d'une commande « python -c "…" »
+# écrite en une chaîne (vérifié avec quadlet -dryrun) ; le tableau est transmis intact.
+HealthCmd=["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
+HealthInterval=30s
+HealthRetries=3
+HealthStartPeriod=15s
+Notify=healthy
+# Arrêt propre : uvicorn a 20 s pour finir les requêtes ; on lui en laisse 30 avant SIGKILL.
+StopTimeout=30
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

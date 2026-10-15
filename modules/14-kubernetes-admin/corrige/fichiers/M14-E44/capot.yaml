@@ -1,0 +1,37 @@
+# capot.yaml — pod d'étude de M14-E44 (espace wb-essais).
+# schedulerName désigne un ordonnanceur qui n'existe pas : l'ordonnanceur par défaut ignore ce pod,
+# qui reste Pending jusqu'à la liaison manuelle (binding.json).
+# Demandes inférieures aux limites : classe QoS Burstable. Profil Pod Security « restricted » respecté.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: capot
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: capot
+    medisphere.internal/ticket: PLAT-1544
+spec:
+  schedulerName: ordonnanceur-manuel
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: capot
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "1000000"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          cpu: 200m
+          memory: 64Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

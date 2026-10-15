@@ -1,0 +1,42 @@
+# Valeurs par défaut du chart mediagenda 0.1.0 (M17-E03). Aucune valeur secrète.
+environnement: dev
+
+image:
+  registry: registry.par1.medisphere.internal
+  repository: medisphere/mediagenda-api
+  # Vide : v<appVersion> du Chart.yaml.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: harbor-pull
+
+replicaCount: 1
+
+config:
+  logLevel: INFO
+  logFormat: json
+  fuseau: Europe/Paris
+  cacheTtl: 60
+  delaiArret: 20
+
+# Secret CNPG qui porte l'URL complète de PostgreSQL (clé « uri »).
+database:
+  existingSecret: mediagenda-db-app
+  secretKey: uri
+
+valkeyUrl: redis://valkey:6379/0
+
+service:
+  port: 8000
+
+httpRoute:
+  enabled: true
+  hostname: mediagenda-dev.apps.par1.medisphere.internal
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    memory: 384Mi

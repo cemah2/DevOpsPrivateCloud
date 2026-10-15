@@ -1,0 +1,20 @@
+# manifestes/echo-lb.yaml — Service d'essai de M15-E25 (wb-essais). Supprimé en fin d'exercice.
+# L'application « echo » (agnhost netexec, port 8080, label app=echo) est celle de M15-E03.
+# Étape 6 : appliquer tel quel (Cluster), observer, puis passer externalTrafficPolicy à Local avec
+# « kubectl -n wb-essais scale deploy/echo --replicas=1 ».
+# Aucun label à poser : l'annonce services-lb (E11) sélectionne tous les Services LoadBalancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-lb
+  namespace: wb-essais
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
+  selector:
+    app: echo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP

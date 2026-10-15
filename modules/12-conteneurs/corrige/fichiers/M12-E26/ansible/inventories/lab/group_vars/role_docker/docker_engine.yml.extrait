@@ -1,0 +1,22 @@
+# Extrait de group_vars/role_docker/docker_engine.yml — options ajoutées en M12-E26 (SEC-1352) et
+# M12-E28 (PLAT-1354). Fusionnées récursivement avec docker_engine_daemon_defaut (journaux de E18,
+# default-address-pools de E02) par le rôle docker_engine ; validées par « dockerd --validate ».
+docker_engine_daemon_extra:
+  # Les conteneurs survivent à un redémarrage ou une mise à jour de dockerd (pas de containerd).
+  live-restore: true
+  # Pas de communication entre conteneurs sur le réseau « bridge » PAR DÉFAUT (docker0) seulement :
+  # les réseaux de Compose ont leur propre option (com.docker.network.bridge.enable_icc).
+  icc: false
+  # no-new-privileges pour TOUT conteneur, même lancé à la main sans l'option.
+  no-new-privileges: true
+  # M12-E28 : métriques du moteur (format Prometheus) sur toutes les adresses, port 9323. Lecture
+  # seule ; le VLAN 99 n'est joint que depuis MGMT (adm01) : pas de règle de bordure nécessaire.
+  metrics-addr: "0.0.0.0:9323"
+  # Décisions écrites dans docs/conteneurs/durcissement-execution.md (section « Moteur ») :
+  #  - PAS de "userns-remap" (désactive le stockage d'images containerd de Docker 29, sépare
+  #    images/volumes, incompatible avec --network host) ;
+  #  - PAS de "hosts" en TCP, jamais (administration distante par SSH : DOCKER_HOST=ssh://…).
+
+# Groupe docker : uniquement des comptes qui ont DÉJÀ sudo sans mot de passe (M12-E02, inchangé).
+docker_engine_groupe_docker:
+  - admin

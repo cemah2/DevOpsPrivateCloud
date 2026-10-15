@@ -1,0 +1,134 @@
+# valkey.yaml — Valkey de MédiAgenda en recette, persistant (M16-E08, DEV-1708).
+# À ranger avec les manifestes de recette de MédiAgenda (là où M14-E46 les a mis ; ils passeront
+# dans mediagenda/deploiement, overlay « recette », au M17).
+#
+# ⚠️ Étiquettes : app.kubernetes.io/name: valkey et app.kubernetes.io/part-of: mediagenda sont
+# celles du corrigé du M14. Reprends EXACTEMENT celles de ton ancien Valkey : le Service « valkey »
+# (visé par MEDIAGENDA_VALKEY_URL) et les politiques réseau du M15 (API → Valkey) les sélectionnent.
+#
+# Contraintes de l'espace : Pod Security « restricted » ; ValidatingAdmissionPolicy du M14 (image
+# de registry.par1.medisphere.internal, pas de :latest). Contrôle avant application :
+#   kubectl apply --dry-run=server -f valkey.yaml
+---
+# Second Service, SANS TÊTE, pour les noms stables des instances (serviceName du StatefulSet).
+# Le Service « valkey » existant (ClusterIP) ne change pas : l'API continue de l'utiliser.
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-interne
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: valkey
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: valkey
+    app.kubernetes.io/part-of: mediagenda
+    app.kubernetes.io/component: cache
+spec:
+  serviceName: valkey-interne
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+      app.kubernetes.io/part-of: mediagenda
+  # Recette : ni la réduction ni la suppression du StatefulSet n'emportent le volume.
+  persistentVolumeClaimRetentionPolicy:
+    whenScaled: Retain
+    whenDeleted: Retain
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: valkey
+        app.kubernetes.io/part-of: mediagenda
+        app.kubernetes.io/component: cache
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 30
+      # Secret de tirage du robot robot$k8s-pull (M14-E19), si ton espace ne le donne pas au compte
+      # de service par défaut :
+      # imagePullSecrets:
+      #   - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        # Le kubelet donne le groupe 999 à la racine du volume ext4 (fsGroupPolicy: File du
+        # CSIDriver) ; OnRootMismatch : il ne reparcourt pas tout le volume à chaque montage.
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: valkey
+          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:9.1.2-trixie
+          # Cache : AOF chaque seconde (au plus une seconde de clés perdue sur un arrêt brutal),
+          # mémoire plafonnée et éviction LRU (un cache plein évince, il ne refuse pas d'écrire).
+          args:
+            - "--appendonly"
+            - "yes"
+            - "--appendfsync"
+            - "everysec"
+            - "--maxmemory"
+            - "192mb"
+            - "--maxmemory-policy"
+            - "allkeys-lru"
+            - "--dir"
+            - "/data"
+          ports:
+            - name: valkey
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: donnees
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: donnees
+        labels:
+          app.kubernetes.io/name: valkey
+          app.kubernetes.io/part-of: mediagenda
+      spec:
+        storageClassName: ceph-rbd
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

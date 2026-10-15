@@ -1,0 +1,31 @@
+---
+# Rôle sauvegarde_harbor — sauvegarde APPLICATIVE de Harbor vers PBS (M13-E15, PLAT-1433). RB-131.
+#
+# Mode « sauvegarde » (reg01) : script /usr/local/sbin/wb-backup-harbor.sh, minuterie quotidienne.
+# Mode « restauration » (reg02, essai) : client PBS, accès EN LECTURE aux sauvegardes de reg01 et
+# script /usr/local/sbin/wb-restaurer-harbor.sh ; aucune minuterie.
+# Secrets : Vault « critique » (host_vars/<hôte>/vault-critique.yml).
+sauvegarde_harbor_mode: sauvegarde          # sauvegarde | restauration
+sauvegarde_harbor_heure: "01:40"            # avant lab-nuit (02:30) et la réplication (03:15)
+
+# Harbor (valeurs du rôle harbor, M13-E02)
+sauvegarde_harbor_installation: "{{ harbor_dossier | default('/opt/harbor') }}"
+sauvegarde_harbor_donnees: "{{ harbor_donnees | default('/data') }}"
+sauvegarde_harbor_conteneur_base: harbor-db
+sauvegarde_harbor_base: registry
+
+# PBS (M00-E22, M06-E28) : datastore ds-lab, espace de noms par1/registre, identifiant reg01.
+sauvegarde_harbor_serveur: 10.20.10.10
+sauvegarde_harbor_datastore: ds-lab
+sauvegarde_harbor_espace: par1/registre
+sauvegarde_harbor_id: reg01                 # identifiant de la sauvegarde (aussi lu en restauration)
+sauvegarde_harbor_jeton_id: "wb-backup@pbs!{{ inventory_hostname }}"
+sauvegarde_harbor_jeton_secret: ""
+sauvegarde_harbor_empreinte: ""
+# Clé de chiffrement côté client de reg01 (JSON de « proxmox-backup-client key create --kdf none »).
+# En restauration, c'est la MÊME clé (celle de reg01), posée le temps de l'essai puis retirée.
+sauvegarde_harbor_cle: ""
+
+# Dépôt « pbs-client » (même trousseau et même empreinte que le rôle sauvegarde_pbs, M06-E28).
+sauvegarde_harbor_cle_depot_url: https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg
+sauvegarde_harbor_cle_depot_sha256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45

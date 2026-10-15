@@ -1,0 +1,10 @@
+# plateforme/k8s — composants/metrics-server/values.yaml — EXTRAIT (M14-E26, SEC-1526)
+# Fin de la dette de M14-E20 : les kubelets présentent désormais des certificats de service signés par
+# la CA du cluster (serverTLSBootstrap), que metrics-server vérifie avec la CA de son compte de service.
+# Les « args » du chart s'AJOUTENT aux arguments par défaut : la liste vide retire --kubelet-insecure-tls.
+#   helm upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 \
+#     --namespace kube-system -f composants/metrics-server/values.yaml
+# À appliquer seulement APRÈS l'approbation des six demandes kubelet-serving (sinon metrics-server
+# ne joint plus les kubelets non encore servis par un certificat signé).
+args: []
+# … replicas, podDisruptionBudget, affinity, resources de M14-E20 inchangés …

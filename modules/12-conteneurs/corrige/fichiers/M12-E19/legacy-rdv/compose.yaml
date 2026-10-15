@@ -1,0 +1,90 @@
+# compose.yaml de Legacy-RDV (projet legacy/legacy-rdv) — M12-E19, ticket DEV-1329.
+# Pile de recette sur ctr01 : l'application, sa base MariaDB 11.8, la purge en tâche ponctuelle.
+#
+#   admin@ctr01:~/src/legacy-rdv$ docker compose up -d --build --wait
+#   admin@ctr01:~/src/legacy-rdv$ docker compose --profile admin run --rm purge   # minuterie systemd
+#
+# Secrets : fichiers HORS du dépôt, dans ~/.config/legacy-rdv/ (dossier 700, fichiers 644 : voir
+# le corrigé, ils sont lus par www-data et mysql dans les conteneurs).
+name: legacy-rdv
+
+x-config-base: &config-base
+  LEGACY_RDV_DB_HOST: mariadb
+  LEGACY_RDV_DB_NAME: legacy_rdv
+  LEGACY_RDV_DB_USER: legacy_rdv
+  LEGACY_RDV_DB_PASS_FILE: /run/secrets/legacy_rdv_db_mdp
+  LEGACY_RDV_FUSEAU: Europe/Paris
+  TZ: Europe/Paris
+
+services:
+  web:
+    build: .
+    image: legacy-rdv:2.3.1
+    environment: *config-base
+    secrets: [legacy_rdv_db_mdp]
+    ports:
+      - "8081:8080"
+    volumes:
+      - pieces-jointes:/var/www/legacy-rdv/uploads
+      - sessions:/var/lib/php/sessions
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    restart: unless-stopped
+    # La sonde de l'image (sante.php) suffit ; on la rappelle pour qu'elle soit lisible ici.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/sante.php"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 20s
+
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: legacy_rdv
+      MARIADB_USER: legacy_rdv
+      MARIADB_PASSWORD_FILE: /run/secrets/legacy_rdv_db_mdp
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/legacy_rdv_db_root
+      # Le fuseau de la base reste celui de la VM : les DATETIME sont « heure de Paris » (point 10).
+      TZ: Europe/Paris
+    secrets: [legacy_rdv_db_mdp, legacy_rdv_db_root]
+    volumes:
+      - base:/var/lib/mysql
+      # Premier démarrage seulement (volume vide) : le schéma et le jeu d'essai. En recette, on
+      # importe à la place le vidage de legacy01 (voir le corrigé).
+      - ./schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    # Pas de « ports: » : la base n'est joignable que depuis le réseau de la pile.
+
+  # Purge des pièces jointes (ancien /etc/cron.d/legacy-rdv) : tâche ponctuelle, lancée par une
+  # minuterie systemd de l'hôte. Même image, mêmes volumes, autre commande.
+  purge:
+    image: legacy-rdv:2.3.1
+    profiles: [admin]
+    environment: *config-base
+    secrets: [legacy_rdv_db_mdp]
+    volumes:
+      - pieces-jointes:/var/www/legacy-rdv/uploads
+    command: ["php", "/var/www/legacy-rdv/cron/purge-uploads.php"]
+    healthcheck:
+      disable: true
+    restart: "no"
+
+secrets:
+  legacy_rdv_db_mdp:
+    file: ${HOME}/.config/legacy-rdv/db-mdp
+  legacy_rdv_db_root:
+    file: ${HOME}/.config/legacy-rdv/db-root
+
+volumes:
+  pieces-jointes:
+  sessions:
+  base:

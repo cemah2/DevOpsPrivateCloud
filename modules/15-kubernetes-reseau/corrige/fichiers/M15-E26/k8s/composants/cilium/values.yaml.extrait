@@ -1,0 +1,25 @@
+# composants/cilium/values.yaml — EXTRAIT à intégrer (M15-E26, PLAT-1626) : métriques et Hubble UI.
+# Fusionner avec la section « hubble » existante (relay activé au M14).
+prometheus:
+  enabled: true            # agent : http://<nœud>:9962/metrics
+operator:
+  prometheus:
+    enabled: true          # opérateur : 9963 (déjà le défaut du chart, écrit pour être explicite)
+envoy:
+  prometheus:
+    enabled: true          # Envoy : 9964 (défaut du chart)
+hubble:
+  relay:
+    enabled: true
+  ui:
+    enabled: true          # Service hubble-ui (port 80) dans kube-system, publié par composants/reseau/hubble-ui/
+  metrics:
+    # Familles retenues : aucune famille L7 (http, httpV2, kafka) — règle 5 de l'introduction du module.
+    # « dns:query;ignoreAAAA » : noms demandés, sans doubler chaque requête par son AAAA.
+    enabled:
+      - dns:query;ignoreAAAA
+      - drop
+      - tcp
+      - flow
+      - icmp
+    port: 9965

@@ -1,0 +1,20 @@
+# .dockerignore — ce qui n'entre PAS dans le contexte de construction (M12-E05).
+# Sans lui, « COPY src » resterait correct, mais tout le dossier serait envoyé au moteur,
+# et un « COPY . . » futur embarquerait l'environnement virtuel local et l'historique Git.
+.git
+.gitignore
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+*.egg-info
+dist
+tests
+# Fichiers de l'environnement de travail, jamais dans une image
+.env
+*.env
+secrets
+compose*.yaml
+Dockerfile
+.dockerignore

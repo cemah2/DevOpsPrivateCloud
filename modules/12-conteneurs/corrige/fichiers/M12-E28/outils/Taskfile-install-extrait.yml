@@ -1,0 +1,8 @@
+# Extrait du Taskfile.yml de plateforme/outils — M12-E28 : la sonde s'installe comme les autres.
+  install:systeme:
+    cmds:
+      # … (lignes existantes de ms-verif-services, ms-verif-ceph)
+      - sudo install -m 0755 bin/ms-verif-conteneurs /usr/local/bin/ms-verif-conteneurs
+      - sudo install -m 0644 etc/ms-verif-conteneurs.conf /usr/local/etc/ms-verif-conteneurs.conf
+      - sudo install -m 0644 systemd/ms-verif-conteneurs.service systemd/ms-verif-conteneurs.timer /etc/systemd/system/
+      - sudo systemctl daemon-reload

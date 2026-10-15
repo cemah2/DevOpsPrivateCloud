@@ -1,0 +1,11 @@
+---
+# playbooks/k8s-api-fichiers.yml — fichiers dont le serveur d'API a besoin sur chaque nœud de contrôle :
+# politique d'audit (M14-E27) et configuration du chiffrement (M14-E28). À jouer AVANT toute
+# reconfiguration du serveur d'API et avant toute jonction d'un nœud de contrôle (E29).
+- name: Fichiers du serveur d'API
+  hosts: k8s_plan_controle
+  become: true
+  serial: 1
+  roles:
+    - k8s_audit
+    - k8s_chiffrement

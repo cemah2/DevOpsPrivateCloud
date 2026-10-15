@@ -1,0 +1,57 @@
+suite: Schéma des valeurs (values.schema.json)
+# deployment.yaml inclut configmap.yaml (empreinte checksum/config) : les deux doivent être chargés,
+# sinon CHAQUE test échoue au rendu… et un « failedTemplate: {} » passerait pour une mauvaise raison.
+# D'où le motif d'erreur précis dans chaque assertion, et le premier test qui prouve que le rendu marche.
+templates:
+  - deployment.yaml
+  - configmap.yaml
+set:
+  medisphere.environnement: recette
+tests:
+  - it: rend sans erreur avec des valeurs valides (témoin)
+    template: deployment.yaml
+    set:
+      image.tag: v1.2.3
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: refuse un environnement inconnu
+    template: deployment.yaml
+    set:
+      medisphere.environnement: preprod
+    asserts:
+      - failedTemplate:
+          errorPattern: "/medisphere/environnement"
+
+  - it: refuse l'étiquette latest
+    template: deployment.yaml
+    set:
+      image.tag: latest
+    asserts:
+      - failedTemplate:
+          errorPattern: "/image/tag"
+
+  - it: refuse un mot de passe dans les valeurs
+    template: deployment.yaml
+    set:
+      database.password: secret
+    asserts:
+      - failedTemplate:
+          errorPattern: "/database/password"
+
+  - it: refuse un nombre de réplicas en texte
+    template: deployment.yaml
+    set:
+      replicaCount: "deux"
+    asserts:
+      - failedTemplate:
+          errorPattern: "/replicaCount"
+
+  - it: refuse un registre autre que celui de MédiSphère
+    template: deployment.yaml
+    set:
+      image.registry: docker.io
+    asserts:
+      - failedTemplate:
+          errorPattern: "/image/registry"

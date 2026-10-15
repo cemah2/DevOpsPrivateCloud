@@ -1,0 +1,107 @@
+---
+# plateforme/ansible — playbooks/k8s-rook-nettoyage.yml (M16-E14)
+# Nettoyage des nœuds APRÈS le démontage de Rook (page « Cleanup » de Rook 1.21, section
+# « Delete the data on hosts »). Complète ce que les jobs rook-ceph-cleanup ont (ou n'ont pas)
+# fait. Destructif pour le SEUL disque <nœud>-rook ; refuse si :
+#   - l'espace rook-ceph existe encore (le cluster n'est pas démonté) ;
+#   - le disque ne fait pas 32 Gio, ou est monté, ou porte un système de fichiers « classique ».
+#   uv run ansible-playbook playbooks/k8s-rook-nettoyage.yml --check --diff
+#   uv run ansible-playbook playbooks/k8s-rook-nettoyage.yml -e confirmer_effacement=oui
+- name: Garde-fou côté cluster
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Lire l'espace rook-ceph (adm01, kubeconfig personnel)
+      ansible.builtin.command:
+        cmd: kubectl get namespace rook-ceph --ignore-not-found -o name
+      register: rook_ns
+      changed_when: false
+      check_mode: false
+
+    - name: Refuser si Rook est encore là
+      ansible.builtin.assert:
+        that: rook_ns.stdout | length == 0
+        fail_msg: "L'espace rook-ceph existe encore : termine le démontage (E14 étapes 5-6) avant de nettoyer les nœuds."
+
+- name: Nettoyer les travailleurs
+  hosts: k8s_travailleurs
+  become: true
+  gather_facts: false
+  serial: 1
+  vars:
+    rook_disque: "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_{{ inventory_hostname_short }}-rook"
+    rook_taille_octets: 34359738368
+    confirmer_effacement: non
+  tasks:
+    - name: Exiger une confirmation explicite
+      ansible.builtin.assert:
+        that: confirmer_effacement == "oui" or ansible_check_mode
+        fail_msg: "Relance avec -e confirmer_effacement=oui après avoir relu les cibles."
+
+    - name: Lire le disque (taille, montages, type)
+      ansible.builtin.command:
+        cmd: "lsblk --bytes --noheadings --output SIZE,MOUNTPOINTS,FSTYPE {{ rook_disque }}"
+      register: rook_lsblk
+      changed_when: false
+      check_mode: false
+
+    - name: Refuser un disque inattendu
+      ansible.builtin.assert:
+        that:
+          - (rook_lsblk.stdout_lines | first).split() | first | int == rook_taille_octets
+          - rook_lsblk.stdout is not search('/')
+          - rook_lsblk.stdout is not search('ext4|xfs|vfat|btrfs')
+        fail_msg: "{{ rook_disque }} : taille, montage ou système de fichiers inattendus ({{ rook_lsblk.stdout }})."
+
+    - name: Supprimer /var/lib/rook (dataDirHostPath)
+      ansible.builtin.file:
+        path: /var/lib/rook
+        state: absent
+
+    - name: Lister les cartes device-mapper de Ceph
+      ansible.builtin.shell:
+        cmd: "set -o pipefail; dmsetup ls 2>/dev/null | awk '/^ceph--/ {print $1}'"
+        executable: /bin/bash
+      register: rook_dm
+      changed_when: false
+      check_mode: false
+
+    - name: Retirer les cartes device-mapper de Ceph (aucun autre usage de Ceph en LVM sur ces nœuds)
+      ansible.builtin.command:
+        cmd: "dmsetup remove {{ item }}"
+      loop: "{{ rook_dm.stdout_lines }}"
+      changed_when: true
+
+    - name: Effacer les tables de partitions et en-têtes LVM (sgdisk --zap-all)
+      ansible.builtin.command:
+        cmd: "sgdisk --zap-all {{ rook_disque }}"
+      changed_when: true
+
+    - name: Effacer le début du disque (métadonnées LVM et BlueStore résiduelles)
+      ansible.builtin.command:
+        cmd: "dd if=/dev/zero of={{ rook_disque }} bs=1M count=100 oflag=direct,dsync"
+      changed_when: true
+
+    - name: Effacer les signatures restantes
+      ansible.builtin.command:
+        cmd: "wipefs --all {{ rook_disque }}"
+      changed_when: true
+
+    - name: Retirer les répertoires résiduels de ceph-volume
+      ansible.builtin.shell:
+        cmd: "rm -rf /dev/ceph-* /dev/mapper/ceph--*"
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Relire la table des partitions
+      ansible.builtin.command:
+        cmd: "partprobe {{ rook_disque }}"
+      changed_when: false
+
+    - name: Contrôler qu'il ne reste aucune signature
+      ansible.builtin.command:
+        cmd: "wipefs --no-act {{ rook_disque }}"
+      register: rook_wipefs
+      changed_when: false
+      check_mode: false
+      failed_when: rook_wipefs.stdout | length > 0

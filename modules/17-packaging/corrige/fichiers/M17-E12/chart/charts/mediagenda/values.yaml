@@ -1,0 +1,182 @@
+# Valeurs par défaut du chart mediagenda (état de fin du palier 2, M17-E12).
+# Règles : aucune valeur secrète ici (les mots de passe viennent de Secrets existants) ;
+# chaque clé est décrite et validée par values.schema.json ; les défauts conviennent à la recette.
+
+# Organisation MédiSphère (chart de bibliothèque medisphere-commun) : étiquettes posées sur tous les objets.
+medisphere:
+  equipe: mediagenda
+  # dev, recette ou prod : obligatoire, pas de défaut (on ne déploie pas « par hasard » en prod).
+  environnement: ""
+  donneesSante: true
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: registry.par1.medisphere.internal
+  repository: medisphere/mediagenda-api
+  # Vide : v<appVersion> du Chart.yaml. Jamais « latest » (refusé par le schéma et par la VAP du M14).
+  tag: ""
+  # sha256:… : prioritaire sur l'étiquette (déploiement immuable).
+  digest: ""
+  pullPolicy: IfNotPresent
+
+# Secret de tirage du robot robot$k8s-pull (M14-E19), présent dans chaque espace mediagenda-*.
+imagePullSecrets:
+  - name: harbor-pull
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  name: ""
+  # L'API ne parle pas à l'API Kubernetes : pas de jeton monté.
+  automountToken: false
+
+# Configuration non secrète de l'API (variables MEDIAGENDA_*, voir apps/mediagenda/README.md).
+config:
+  logLevel: INFO
+  logFormat: json
+  fuseau: Europe/Paris
+  cacheTtl: 60
+  delaiArret: 20
+  # Variables supplémentaires (nom → valeur), rendues par tpl : {{ .Release.Namespace }} est permis.
+  extraEnv: {}
+
+# PostgreSQL : l'URL complète (avec mot de passe) est lue dans un Secret, jamais dans les valeurs.
+database:
+  # Secret existant. Vide : <nom du cluster CNPG>-app (créé par CloudNativePG) si postgresql.cnpg.enabled,
+  # sinon mediagenda-db-app (cluster CNPG de recette du M16).
+  existingSecret: ""
+  # Clé du Secret qui contient l'URL postgresql://… (CNPG : « uri »).
+  secretKey: uri
+
+# Cluster CloudNativePG rendu PAR LE CHART (dev, prod). En recette, la base du M16 reste hors chart.
+postgresql:
+  cnpg:
+    enabled: false
+    # Nom du cluster ; vide : <fullname>-db (mediagenda-db pour la release « mediagenda »).
+    name: ""
+    instances: 1
+    # Image PostgreSQL 18 par le cache Harbor « ghcr » (la VAP du M14-E18 exige le registre MédiSphère).
+    # Aligne l'étiquette sur celle du cluster de recette (M16-E18).
+    imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18
+    database: mediagenda
+    owner: mediagenda
+    storage:
+      size: 2Gi
+      storageClass: ceph-rbd
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+# Valkey : sous-chart officiel (dev, prod) ou instance existante (recette : StatefulSet du M16).
+valkey:
+  enabled: false
+  # Valeurs transmises au sous-chart valkey (voir « helm show values » du chart valkey 0.12.0).
+  image:
+    registry: registry.par1.medisphere.internal/dockerhub
+  # Attention : le chart valkey attend une liste de NOMS (pas d'objets { name: … } comme ce chart).
+  imagePullSecrets:
+    - harbor-pull
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+# URL de Valkey quand valkey.enabled est faux (non secrète : Valkey sans mot de passe dans le lab).
+externalValkey:
+  url: redis://valkey:6379/0
+# Rempli par import-values depuis le sous-chart (service.port) ; défaut si le sous-chart est absent.
+valkeyImporte:
+  port: 6379
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# Exposition par la Gateway API (Gateway gw-par1 du M15).
+httpRoute:
+  enabled: true
+  # Nom publié ; tpl autorisé. Vide : mediagenda-<environnement>.apps.par1.medisphere.internal
+  hostname: ""
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    memory: 384Mi
+
+probes:
+  startup:
+    periodSeconds: 5
+    failureThreshold: 24
+  liveness:
+    periodSeconds: 10
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 5
+    failureThreshold: 3
+
+podDisruptionBudget:
+  enabled: true
+  # Rendu seulement si replicaCount > 1 (un PDB à minAvailable 1 sur un seul pod bloque les drains).
+  minAvailable: 1
+
+# Répartition et anti-affinité (le component « haute-disponibilite » de mediagenda/deploiement les active).
+topologySpread:
+  enabled: false
+  maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+
+# Politiques réseau de l'API (et de la base si le chart la gère). Les espaces mediagenda-* sont en
+# refus par défaut (M15) : sans elles, rien ne passe.
+networkPolicy:
+  enabled: true
+  # CiliumNetworkPolicy en complément des NetworkPolicy standard : trafic venant de la Gateway Cilium
+  # (identité réservée « ingress ») et, pour la base rendue par le chart, accès à l'API Kubernetes.
+  cilium: true
+  # Cluster CNPG externe (recette, M16) quand postgresql.cnpg.enabled est faux.
+  clusterPostgresqlExterne: mediagenda-db
+  # Étiquettes des pods Valkey externes (StatefulSet du M16) quand valkey.enabled est faux.
+  valkeyExterneLabels:
+    app.kubernetes.io/name: valkey
+  # Espace de l'opérateur CloudNativePG (politiques de la base rendue par le chart).
+  cnpgOperatorNamespace: cnpg-system
+
+# Migrations de schéma (python -m mediagenda.migrate, verrou consultatif PostgreSQL).
+migrations:
+  # hook : Job Helm pre-install/pre-upgrade (post-install si le chart crée aussi la base) ;
+  # initContainer : conteneur d'initialisation de chaque pod (rendu par Kustomize ou kubectl apply,
+  #                 qui ne connaissent pas les hooks) ; none : migrations faites ailleurs.
+  mode: hook
+  # Chemin des fichiers V<n>__*.sql dans l'image (M12-E05).
+  repertoire: /app/migrations
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  # Durée de conservation du Job terminé (s) : laisse le temps de lire les journaux d'un échec.
+  ttlSecondsAfterFinished: 86400
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+# Test « helm test » : appelle /pret depuis l'image de l'application.
+tests:
+  enabled: true

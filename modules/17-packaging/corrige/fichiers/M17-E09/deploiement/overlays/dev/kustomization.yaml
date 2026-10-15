@@ -1,0 +1,28 @@
+# Dev (mediagenda-dev) — M17-E09. ⚠️ Pas encore appliqué : jusqu'au mini-projet (M17-E25), dev reste le
+# banc d'essai du chart installé PAR HELM (release « mediagenda »). « kustomize build » seulement.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-dev
+resources:
+  - ../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.fr/environnement: dev
+    includeSelectors: false
+    includeTemplates: true
+replicas:
+  - name: mediagenda
+    count: 1
+patches:
+  # Un budget « minAvailable: 1 » sur un seul pod interdit toute éviction : il bloquerait les drains.
+  - patch: |-
+      $patch: delete
+      apiVersion: policy/v1
+      kind: PodDisruptionBudget
+      metadata:
+        name: mediagenda
+components:
+  - ../../components/dependances
+  - ../../components/debogage
+  - ../../components/livraison

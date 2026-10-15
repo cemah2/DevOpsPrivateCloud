@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mediagenda.fullname" . }}
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+data:
+  MEDIAGENDA_FUSEAU: {{ .Values.config.fuseau | quote }}
+  MEDIAGENDA_CACHE_TTL: {{ .Values.config.cacheTtl | quote }}
+  MEDIAGENDA_DELAI_ARRET: {{ .Values.config.delaiArret | quote }}
+  MEDIAGENDA_PORT: "8000"
+  {{- range $nom, $valeur := .Values.config.extraEnv }}
+  {{ $nom }}: {{ tpl (toString $valeur) $ | quote }}
+  {{- end }}

@@ -1,0 +1,24 @@
+# L'API (et son éventuel conteneur d'initialisation de migration, même pod) parle à PostgreSQL et
+# à Valkey de SON espace, sur leurs seuls ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-vers-donnees
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      ports:
+        - {protocol: TCP, port: 6379}

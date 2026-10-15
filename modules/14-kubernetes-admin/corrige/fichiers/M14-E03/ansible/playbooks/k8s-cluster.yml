@@ -1,0 +1,40 @@
+---
+# playbooks/k8s-cluster.yml — version M14-E03 : point d'accès de l'API sur les nœuds de contrôle.
+# (Version complète, avec kubeadm et les travailleurs : fichiers/M14-E05/ansible/playbooks/.)
+#   uv run ansible-playbook playbooks/k8s-cluster.yml --tags point_acces --check --diff
+#   uv run ansible-playbook playbooks/k8s-cluster.yml --tags point_acces
+# Prérequis : playbooks/k8s-noeuds.yml (E02).
+
+- name: Plan de contrôle de k8s-par1
+  hosts: k8s_plan_controle
+  become: true
+  # Un nœud à la fois, dans l'ordre : pendant qu'un nœud est reconfiguré, les deux autres portent
+  # (ou peuvent porter) la VIP. Un échec arrête tout avant le nœud suivant.
+  serial: 1
+  order: sorted
+  any_errors_fatal: true
+  roles:
+    - role: k8s_plan_controle
+
+- name: Contrôle d'ensemble — une et une seule VIP d'API portée
+  hosts: k8s_plan_controle
+  become: false
+  gather_facts: false
+  tags: [point_acces, kubeadm]
+  tasks:
+    - name: Lire les adresses de l'interface du VLAN 40
+      ansible.builtin.command: ip -o -4 addr show dev {{ k8s_interface }}
+      register: _k8s_adresses
+      changed_when: false
+      check_mode: false
+
+    - name: Exactement un nœud de contrôle porte {{ k8s_api_vip }}
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_play_hosts | map('extract', hostvars, ['_k8s_adresses', 'stdout'])
+            | select('search', ' ' ~ (k8s_api_vip | regex_escape) ~ '/') | list | length == 1
+        fail_msg: "La VIP est portée par zéro ou plusieurs nœuds : lire « journalctl -u keepalived » sur les trois."
+        quiet: true
+      run_once: true
+      when: not ansible_check_mode

@@ -1,0 +1,12 @@
+# plateforme/k8s — composants/cloudnative-pg/values.yaml — EXTRAIT M16-E33 (CHG-1733).
+# Mise à jour EN PLACE du gestionnaire d'instance : à la prochaine version de l'opérateur, le
+# binaire « instance manager » de chaque pod PostgreSQL est remplacé sans redémarrer le postmaster
+# (pas de bascule). Contrepartie : la définition des pods (conteneur d'initialisation) ne reflète
+# plus la version réellement en service. Décision : activé pour les correctives (1.30.x) ; désactivé
+# (redémarrage progressif + bascule) pour une mineure (1.31), qui se répète d'abord sur pg-essai.
+config:
+  data:
+    ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES: "true"
+    # Étale les redémarrages quand plusieurs Cluster sont concernés (secondes).
+    CLUSTERS_ROLLOUT_DELAY: "60"
+    INSTANCES_ROLLOUT_DELAY: "30"

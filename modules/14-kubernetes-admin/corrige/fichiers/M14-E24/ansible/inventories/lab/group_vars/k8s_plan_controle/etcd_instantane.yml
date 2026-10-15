@@ -1,0 +1,11 @@
+---
+# group_vars/k8s_plan_controle/etcd_instantane.yml — instantanés etcd (M14-E24, PLAT-1524).
+# Version des outils = version de l'etcd de kubeadm (à changer AVEC la mineure, M14-E25 : 3.6.8).
+etcd_instantane_outils_version: "3.6.6"
+etcd_instantane_outils_sha256: "<SHA256-DE-etcd-v3.6.6-linux-amd64.tar.gz>"
+
+# Clé publique age des sauvegardes etcd (la privée : plateforme/k8s secrets/etcd-instantane-age.cle).
+etcd_instantane_age_destinataire: "<age1…CLE-PUBLIQUE>"
+
+etcd_instantane_s3_cle_acces: "{{ vault_s3_etcd_k8s_cle_acces }}"
+etcd_instantane_s3_cle_secrete: "{{ vault_s3_etcd_k8s_cle_secrete }}"

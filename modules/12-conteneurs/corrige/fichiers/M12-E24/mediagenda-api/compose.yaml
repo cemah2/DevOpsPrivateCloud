@@ -1,0 +1,168 @@
+# compose.yaml — MédiAgenda, PostgreSQL 18 et Valkey 8, DURCIS à l'exécution (M12-E24, SEC-1350).
+# Reprend le compose.yaml de M12-E08 ; seuls les blocs « Durcissement » sont nouveaux.
+#
+#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 600
+#   admin@ctr01:~/src/mediagenda-api$ docker compose up -d --wait
+#   admin@ctr01:~/src/mediagenda-api$ docker exec -i mediagenda-api-1 python - < ~/E24-tests-evasion.py
+#
+# Règles appliquées à TOUS les services (normes MédiSphère, M12-E33) :
+#   - jamais root : UID numérique fixe (image ou « user: ») ;
+#   - cap_drop: [ALL], puis seulement les capacités justifiées ici même (aucune pour l'instant) ;
+#   - no-new-privileges : un binaire setuid (su, passwd, mount… présents dans les images Debian)
+#     ne donne plus aucun droit ;
+#   - système de fichiers racine en lecture seule, écritures sur tmpfs (noexec) ou volume nommé ;
+#   - seccomp : profil par défaut de Docker, et pour l'API un profil plus strict (sans ptrace).
+name: mediagenda
+
+# Durcissement commun (ancre YAML) : fusionnée dans chaque service par « <<: *durci ».
+x-durci: &durci
+  read_only: true
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  # Borne le nombre de processus (une bombe fork ne sature pas l'hôte) : PostgreSQL en lance une
+  # dizaine, uvicorn un seul ; 256 laisse de la marge sans être illimité.
+  pids_limit: 256
+
+services:
+  # --- Base de données ------------------------------------------------------------------------
+  db:
+    <<: *durci
+    image: docker.io/library/postgres:18-trixie
+    # Durcissement : l'entrypoint de l'image démarre en root pour faire chown, puis redescend vers
+    # « postgres » par gosu (il lui faut alors CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID).
+    # En démarrant DIRECTEMENT sous postgres (UID 999 de l'image), il saute ces étapes : aucune
+    # capacité n'est nécessaire. Condition : le volume appartient déjà à 999 (c'est le cas d'un
+    # volume nommé créé par Docker, qui recopie les droits du dossier de l'image).
+    user: "999:999"
+    tmpfs:
+      # Socket Unix et fichier de verrou de PostgreSQL ; /tmp pour les tris temporaires éventuels.
+      - /var/run/postgresql:size=1m,mode=2777,uid=999,gid=999,noexec,nosuid,nodev
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    environment:
+      POSTGRES_DB: mediagenda
+      POSTGRES_USER: mediagenda
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_mdp
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    secrets:
+      - db_mdp
+    volumes:
+      - donnees-db:/var/lib/postgresql
+    # PostgreSQL utilise la mémoire partagée POSIX (/dev/shm, 64 Mio par défaut) : suffisant ici.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks: [arriere]
+
+  # --- Cache ------------------------------------------------------------------------------------
+  valkey:
+    <<: *durci
+    image: docker.io/valkey/valkey:8-trixie
+    # Même raisonnement que pour PostgreSQL : l'entrypoint ne fait chown/setpriv que s'il est root.
+    user: "999:999"
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [arriere]
+
+  # --- Migrations : un service PONCTUEL ---------------------------------------------------------
+  migrations:
+    <<: *durci
+    image: mediagenda-api:${MEDIAGENDA_TAG:-0.1.0}
+    build:
+      context: .
+      args:
+        VERSION: ${MEDIAGENDA_TAG:-0.1.0}
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./securite/seccomp-mediagenda.json
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'MEDIAGENDA_DB_URL="postgresql://mediagenda:$$(cat /run/secrets/db_mdp)@db:5432/mediagenda" exec mediagenda-migrate'
+    environment:
+      MEDIAGENDA_MIGRATIONS_DIR: /app/migrations
+    secrets:
+      - db_mdp
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks: [arriere]
+
+  # --- L'API ------------------------------------------------------------------------------------
+  api:
+    <<: *durci
+    image: mediagenda-api:${MEDIAGENDA_TAG:-0.1.0}
+    # L'image fixe déjà USER 10001:10001 (M12-E05) ; le répéter ici protège contre une image
+    # reconstruite par erreur sans USER (le conteneur refuserait alors de tourner en root).
+    user: "10001:10001"
+    # « security_opt » remplace la liste de l'ancre : on y redit no-new-privileges.
+    # Le chemin du profil est relatif à ce fichier ; Compose lit le JSON et l'envoie au démon.
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./securite/seccomp-mediagenda.json
+    tmpfs:
+      # Seul endroit inscriptible : petit, sans exécution possible, sans setuid ni périphérique.
+      - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'MEDIAGENDA_DB_URL="postgresql://mediagenda:$$(cat /run/secrets/db_mdp)@db:5432/mediagenda" exec mediagenda'
+    environment:
+      MEDIAGENDA_VALKEY_URL: redis://valkey:6379/0
+      MEDIAGENDA_LOG_LEVEL: INFO
+    secrets:
+      - db_mdp
+    ports:
+      # Port 8000 > 1024 : aucune capacité NET_BIND_SERVICE nécessaire.
+      - "8000:8000"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks: [avant, arriere]
+
+  # --- Outils (profil « outils ») ------------------------------------------------------------------
+  psql:
+    <<: *durci
+    profiles: [outils]
+    image: docker.io/library/postgres:18-trixie
+    user: "999:999"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'PGPASSWORD="$$(cat /run/secrets/db_mdp)" exec psql -h db -U mediagenda -d mediagenda'
+    secrets:
+      - db_mdp
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [arriere]
+
+networks:
+  avant: {}
+  arriere:
+    internal: true
+
+volumes:
+  donnees-db: {}
+
+secrets:
+  db_mdp:
+    file: ./secrets/db_mdp

@@ -1,0 +1,33 @@
+# /etc/systemd/system/ms-verif-conteneurs.service — M12-E28 (PLAT-1354)
+# Sonde des conteneurs. Déclenchée par ms-verif-conteneurs.timer (toutes les 5 minutes).
+# Test manuel : sudo systemctl start ms-verif-conteneurs.service ; journalctl -u ms-verif-conteneurs -n 40
+
+[Unit]
+Description=MédiSphère : sonde des conteneurs (présence, état, santé, redémarrages, métriques)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+ExecStart=/usr/local/bin/ms-verif-conteneurs --quiet
+# Dossier d'état (compteurs de redémarrages du passage précédent) : /var/lib/ms-verif-conteneurs,
+# créé par systemd pour admin, passé au script dans STATE_DIRECTORY.
+StateDirectory=ms-verif-conteneurs
+StateDirectoryMode=0700
+TimeoutStartSec=2min
+SyslogIdentifier=ms-verif-conteneurs
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

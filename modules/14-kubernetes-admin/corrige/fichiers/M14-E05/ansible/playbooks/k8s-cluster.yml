@@ -1,0 +1,51 @@
+---
+# playbooks/k8s-cluster.yml — cluster k8s-par1 (M14-E03 à E05, version complète).
+#   uv run ansible-playbook playbooks/k8s-cluster.yml --check --diff \
+#     -e k8s_plan_controle_fichier_cluster=$HOME/src/k8s/cluster/kubeadm-config.yaml
+#   uv run ansible-playbook playbooks/k8s-cluster.yml -e …
+# Lancé depuis adm01 (« task noeuds » de plateforme/k8s le fait avec le bon chemin). Prérequis :
+# playbooks/k8s-noeuds.yml. Idempotent : sur un cluster complet, second passage changed=0.
+# Reconstruction depuis le code (E23, E46) : -e k8s_plan_controle_amorcage_auto=true.
+
+- name: Plan de contrôle de k8s-par1
+  hosts: k8s_plan_controle
+  become: true
+  # Un nœud à la fois, dans l'ordre : le premier amorce (si demandé), les suivants rejoignent ;
+  # jamais deux membres etcd en cours de changement en même temps.
+  serial: 1
+  order: sorted
+  any_errors_fatal: true
+  roles:
+    - role: k8s_plan_controle
+
+- name: Contrôle d'ensemble — une et une seule VIP d'API portée
+  hosts: k8s_plan_controle
+  become: false
+  gather_facts: false
+  tags: [point_acces, kubeadm]
+  tasks:
+    - name: Lire les adresses de l'interface du VLAN 40
+      ansible.builtin.command: ip -o -4 addr show dev {{ k8s_interface }}
+      register: _k8s_adresses
+      changed_when: false
+      check_mode: false
+
+    - name: Exactement un nœud de contrôle porte {{ k8s_api_vip }}
+      ansible.builtin.assert:
+        that:
+          - >-
+            ansible_play_hosts | map('extract', hostvars, ['_k8s_adresses', 'stdout'])
+            | select('search', ' ' ~ (k8s_api_vip | regex_escape) ~ '/') | list | length == 1
+        fail_msg: "La VIP est portée par zéro ou plusieurs nœuds : lire « journalctl -u keepalived » sur les trois."
+        quiet: true
+      run_once: true
+      when: not ansible_check_mode
+
+- name: Travailleurs de k8s-par1
+  hosts: k8s_travailleurs
+  become: true
+  serial: 1
+  order: sorted
+  max_fail_percentage: 0
+  roles:
+    - role: k8s_travailleur

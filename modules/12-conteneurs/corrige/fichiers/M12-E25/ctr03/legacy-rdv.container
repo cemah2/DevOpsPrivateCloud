@@ -1,0 +1,34 @@
+# ~app/.config/containers/systemd/legacy-rdv.container — ctr03 (M12-E25, SEC-1351)
+# Legacy-RDV sans privilège, sous un type SELinux dédié produit par udica (module legacy_rdv,
+# rôle selinux_conteneurs). Aucun « :z »/« :Z », aucun SecurityLabelDisable : règles de Sophie.
+#   [app@ctr03 ~]$ systemctl --user daemon-reload && systemctl --user restart legacy-rdv.service
+[Unit]
+Description=Legacy-RDV (recette SELinux, ctr03)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=legacy-rdv
+Image=ctr01.par1.medisphere.internal:5000/legacy/legacy-rdv:2.3.1
+PublishPort=8080:8080
+# www-data (33) du conteneur = app sur l'hôte : les pièces jointes écrites appartiennent à app.
+UserNS=keep-id:uid=33,gid=33
+# Pièces jointes : dossier étiqueté container_file_t par la politique (semanage fcontext).
+Volume=/srv/legacy-rdv/uploads:/var/www/legacy-rdv/uploads
+# Dépôt SFTP d'InfoGér : lecture seule, étiquette user_home_t conservée (accès par legacy_rdv.process).
+Volume=/home/app/depot-infoger:/import:ro
+SecurityLabelType=legacy_rdv.process
+DropCapability=ALL
+NoNewPrivileges=true
+ReadOnly=true
+ReadOnlyTmpfs=true
+# Configuration de E19 (base, mot de passe en secret Podman) : reprends celle de ta recette ; la base
+# n'est pas nécessaire pour cet exercice (seuls l'accès aux fichiers et le démarrage sont étudiés).
+Environment=LEGACY_RDV_AFFICHER_ERREURS=0
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

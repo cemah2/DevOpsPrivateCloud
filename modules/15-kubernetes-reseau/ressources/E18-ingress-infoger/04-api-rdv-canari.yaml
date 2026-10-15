@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-rdv-canari
+  namespace: rdv
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "20"
+    nginx.ingress.kubernetes.io/canary-by-header: X-Version-Rdv
+    nginx.ingress.kubernetes.io/canary-by-header-value: v2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.medisphere-infoger.example
+      http:
+        paths:
+          - path: /rdv(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-rdv-v2
+                port:
+                  number: 8000

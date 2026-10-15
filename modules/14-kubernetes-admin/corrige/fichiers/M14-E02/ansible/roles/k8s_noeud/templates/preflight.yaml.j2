@@ -1,0 +1,12 @@
+# {{ k8s_noeud_entete }}
+# /var/lib/k8s_noeud/preflight.yaml — contrôle préalable seulement (rôle k8s_noeud, M14-E02).
+# Ce n'est PAS la configuration du cluster (celle-ci vient de plateforme/k8s, rôle k8s_plan_controle).
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+nodeRegistration:
+  name: {{ inventory_hostname }}
+  criSocket: {{ k8s_noeud_socket_cri }}
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v{{ k8s_noeud_version }}

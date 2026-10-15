@@ -1,0 +1,8 @@
+# .dockerignore de MédiNotif (M12-E17) — liste blanche.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+**/__pycache__
+**/*.pyc

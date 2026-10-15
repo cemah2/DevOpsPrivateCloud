@@ -1,0 +1,62 @@
+---
+- name: Compte applicatif (pas de groupe sudo, wheel ni docker)
+  ansible.builtin.user:
+    name: "{{ podman_hote_compte }}"
+    uid: "{{ podman_hote_compte_uid }}"
+    comment: "{{ podman_hote_compte_commentaire }}"
+    shell: /bin/bash
+    create_home: true
+    groups: []
+    append: false
+
+# Plage subordonnée : on refuse un chevauchement avec celle d'un autre compte (admin a reçu la
+# sienne de useradd au premier démarrage, en général 100000:65536).
+- name: Lire /etc/subuid et /etc/subgid
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop:
+    - /etc/subuid
+    - /etc/subgid
+  register: podman_hote_subids
+
+- name: Entrées des autres comptes (format nom:début:nombre)
+  ansible.builtin.set_fact:
+    podman_hote_autres_plages: >-
+      {{ podman_hote_subids.results
+         | map(attribute='content') | map('b64decode') | map('split', '\n') | flatten
+         | select('match', '^[^:#]+:[0-9]+:[0-9]+$')
+         | reject('match', '^' ~ podman_hote_compte ~ ':') | list }}
+
+- name: La plage du compte ne chevauche celle d'aucun autre compte
+  ansible.builtin.assert:
+    that:
+      - (item.split(':')[1] | int) >= (podman_hote_subid_debut + podman_hote_subid_nombre)
+        or ((item.split(':')[1] | int) + (item.split(':')[2] | int)) <= podman_hote_subid_debut
+    fail_msg: "La plage de « {{ item }} » chevauche {{ podman_hote_subid_debut }}:{{ podman_hote_subid_nombre }} : choisis une autre plage."
+    quiet: true
+  loop: "{{ podman_hote_autres_plages }}"
+
+- name: Plage subordonnée du compte (UID et GID)
+  ansible.builtin.lineinfile:
+    path: "{{ item }}"
+    regexp: "^{{ podman_hote_compte }}:"
+    line: "{{ podman_hote_compte }}:{{ podman_hote_subid_debut }}:{{ podman_hote_subid_nombre }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/subuid
+    - /etc/subgid
+  notify: Migrer le stockage Podman du compte
+
+- name: Linger du compte (son systemd tourne sans session ouverte)
+  ansible.builtin.command:
+    cmd: "loginctl enable-linger {{ podman_hote_compte }}"
+    creates: "/var/lib/systemd/linger/{{ podman_hote_compte }}"
+  when: podman_hote_linger | bool
+
+- name: Attendre le gestionnaire systemd du compte (/run/user/UID)
+  ansible.builtin.wait_for:
+    path: "/run/user/{{ podman_hote_compte_uid }}/bus"
+    timeout: 30
+  when: podman_hote_linger | bool

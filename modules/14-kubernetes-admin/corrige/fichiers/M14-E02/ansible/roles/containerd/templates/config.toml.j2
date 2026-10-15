@@ -1,0 +1,23 @@
+# {{ containerd_entete }}
+# /etc/containerd/config.toml — {{ inventory_hostname }} (rôle containerd, M14-E02).
+# Seules les valeurs qui diffèrent des défauts de containerd {{ containerd_branche }} sont écrites ;
+# la configuration complète : « containerd config dump ».
+version = {{ containerd_config_version }}
+
+# Le paquet containerd.io de Docker désactive le greffon CRI (disabled_plugins = ["cri"]) :
+# on le réactive explicitement en vidant la liste.
+disabled_plugins = []
+
+[plugins.'io.containerd.cri.v1.images']
+  [plugins.'io.containerd.cri.v1.images'.pinned_images]
+    # Image du bac à sable des pods : celle de « kubeadm config images list » (vérifiée par k8s_noeud).
+    sandbox = '{{ containerd_image_sandbox }}'
+  [plugins.'io.containerd.cri.v1.images'.registry]
+    # Un sous-dossier par registre, avec son hosts.toml (miroirs, CA) : relus à chaque tirage.
+    config_path = '{{ containerd_dossier_hotes }}'
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
+  runtime_type = 'io.containerd.runc.v2'
+  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+    # Même pilote de cgroups que le kubelet (cgroupDriver: systemd).
+    SystemdCgroup = {{ containerd_cgroup_systemd | string | lower }}

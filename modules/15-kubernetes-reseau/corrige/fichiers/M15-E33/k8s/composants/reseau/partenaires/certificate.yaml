@@ -1,0 +1,24 @@
+# composants/reseau/partenaires/certificate.yaml — M15-E33. Certificat SERVEUR du relais (présenté aux
+# partenaires), ACME de ca01. Le nom résout vers 10.10.41.11, que l'écouteur HTTP de gw-par1 ne sert
+# pas : le défi doit être DNS-01 (solveur rfc2136 du ClusterIssuer, zone apps). Vérifie que le sélecteur
+# du solveur DNS-01 de TON ClusterIssuer couvre ce nom (sinon cert-manager tentera HTTP-01 et échouera).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mediagenda-partenaires
+  namespace: mediagenda-recette
+spec:
+  secretName: mediagenda-partenaires-tls
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: step-ca-acme
+  dnsNames:
+    - mediagenda-partenaires.apps.par1.medisphere.internal
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - digital signature
+    - server auth

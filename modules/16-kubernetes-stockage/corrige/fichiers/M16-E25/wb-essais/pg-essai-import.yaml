@@ -1,0 +1,38 @@
+# wb-essais/pg-essai-import.yaml (M16-E25) — montée majeure 17 → 18 par IMPORT logique
+# (bootstrap.initdb.import, type microservice) : nouveau cluster en PostgreSQL 18, données copiées
+# par pg_dump/pg_restore (binaires de la DESTINATION, ≥ source). L'original reste intact : c'est le
+# retour arrière. À créer AVANT la montée en place de pg-essai (données identiques).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-essai-import
+  namespace: wb-essais
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 1Gi
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  bootstrap:
+    initdb:
+      database: essai
+      owner: essai
+      import:
+        type: microservice
+        databases:
+        - essai
+        source:
+          externalCluster: pg-essai
+  externalClusters:
+  - name: pg-essai
+    connectionParameters:
+      host: pg-essai-rw.wb-essais.svc
+      user: postgres
+      dbname: postgres
+      sslmode: require
+    password:
+      name: pg-essai-superuser
+      key: password

@@ -1,0 +1,61 @@
+---
+# plateforme/ansible — playbooks/k8s-rook-prerequis.yml (M16-E13)
+# Prépare les travailleurs de k8s-par1 pour les OSD de Rook : lvm2, module rbd au démarrage,
+# et refus explicite si le disque désigné n'est pas un disque vide de 32 Go (protection contre
+# une erreur d'ordre des disques ou de série).
+#   uv run ansible-playbook playbooks/k8s-rook-prerequis.yml --check --diff
+#   uv run ansible-playbook playbooks/k8s-rook-prerequis.yml
+- name: Prérequis Rook sur les travailleurs
+  hosts: k8s_travailleurs
+  become: true
+  gather_facts: true
+  vars:
+    rook_disque: "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_{{ inventory_hostname_short }}-rook"
+    rook_taille_octets: 34359738368   # 32 Gio
+  tasks:
+    - name: Installer lvm2 (ceph-volume en a besoin dans l'OSD, et l'hôte doit le connaître)
+      ansible.builtin.apt:
+        name: lvm2
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Charger le module rbd au démarrage
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/rbd.conf
+        content: "# M16-E13 : pilotes CSI (ceph-csi, Rook)\nrbd\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Charger le module rbd maintenant
+      community.general.modprobe:
+        name: rbd
+        state: present
+
+    - name: Résoudre le disque désigné
+      ansible.builtin.stat:
+        path: "{{ rook_disque }}"
+        follow: true
+      register: rook_stat
+
+    - name: Exiger que le disque existe
+      ansible.builtin.assert:
+        that: rook_stat.stat.exists and rook_stat.stat.isblk
+        fail_msg: "{{ rook_disque }} absent : le disque OpenTofu n'est pas vu par l'invité."
+
+    - name: Lire taille et signatures du disque
+      ansible.builtin.command:
+        cmd: "lsblk --bytes --nodeps --noheadings --output SIZE,FSTYPE,PTTYPE {{ rook_disque }}"
+      register: rook_lsblk
+      changed_when: false
+      check_mode: false
+
+    - name: Exiger un disque de 32 Gio sans aucune signature
+      ansible.builtin.assert:
+        that:
+          - (rook_lsblk.stdout.split() | first | int) == rook_taille_octets
+          - (rook_lsblk.stdout.split() | length) == 1
+        fail_msg: >-
+          {{ rook_disque }} ne fait pas 32 Gio ou porte une signature ({{ rook_lsblk.stdout }}) :
+          ce n'est pas le disque attendu, ou il n'est pas vide. Rook l'ignorerait (ou pire).

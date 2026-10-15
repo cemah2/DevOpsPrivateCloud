@@ -1,0 +1,29 @@
+# /etc/systemd/system/etcd-instantane.service — {{ inventory_hostname }} (M14-E24)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle etcd_instantane).') }}
+[Unit]
+Description=Instantané etcd du membre local, chiffré, vers s3-01 (etcd-k8s-par1)
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/kubernetes/runbooks/RB-141-restaurer-etcd.md
+Wants=network-online.target
+After=network-online.target kubelet.service
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/etcd-instantane
+# rclone cherche sa configuration et son cache sous HOME : ProtectHome masque /root.
+Environment=HOME=/var/lib/etcd-instantane
+SyslogIdentifier=etcd-instantane
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=15min
+# Durcissement : lecture seule partout sauf l'état, les copies locales et /tmp privé.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/etcd-instantane /var/backups/etcd
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

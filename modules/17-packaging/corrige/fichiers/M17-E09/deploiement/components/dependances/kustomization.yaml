@@ -1,0 +1,10 @@
+# Component « dependances » : base PostgreSQL (CNPG) et Valkey de l'environnement, à côté de
+# l'application mais PAS dans le chart : les données vivent plus longtemps que l'application, et un
+# « kubectl delete -k » de l'application ne doit pas emporter la base (voir ADR-0170).
+# Utilisé par dev et prod ; la recette garde la base du M16, gérée hors de ce dépôt.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - postgresql.yaml
+  - valkey.yaml
+  - politiques.yaml

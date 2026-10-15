@@ -1,0 +1,14 @@
+---
+# Rôle supervision_conteneurs — accès en LECTURE SEULE à l'état des conteneurs (M12-E28, PLAT-1354).
+# Compte « supervision » : sans mot de passe, clé autorisée à commande forcée et restreinte, une
+# seule règle sudo vers /usr/local/sbin/ms-etat-conteneurs. Il n'est PAS dans le groupe docker
+# (ce serait root sur l'hôte, M12-E26).
+
+supervision_conteneurs_compte: supervision
+# Clé PUBLIQUE de ~/.config/workbook/ssh-supervision-conteneurs (adm01) — pas un secret.
+supervision_conteneurs_cle_publique: ""
+# Seule adresse d'où la clé est acceptée : adm01.
+supervision_conteneurs_depuis: 10.10.10.10
+# Moteurs lus sur l'hôte : Docker (root) et/ou les comptes Podman sans privilège.
+supervision_conteneurs_docker: false
+supervision_conteneurs_comptes_podman: []

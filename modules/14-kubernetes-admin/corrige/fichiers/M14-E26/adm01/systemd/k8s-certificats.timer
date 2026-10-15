@@ -1,0 +1,10 @@
+# /etc/systemd/system/k8s-certificats.timer — adm01 (M14-E26)
+[Unit]
+Description=Échéances des certificats de k8s-par1, chaque lundi
+
+[Timer]
+OnCalendar=Mon *-*-* 07:40:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

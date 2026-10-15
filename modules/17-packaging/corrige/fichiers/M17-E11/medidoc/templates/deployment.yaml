@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "medidoc.fullname" . }}
+  labels:
+    {{- include "medidoc.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "medidoc.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "medidoc.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: medidoc
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "medidoc.tag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "medidoc.fullname" . }}
+            - secretRef:
+                name: {{ required "s3.existingSecret est obligatoire (clés S3 hors chart)" .Values.s3.existingSecret }}
+          env:
+            - name: MEDIDOC_VERSION
+              value: {{ include "medidoc.tag" . | quote }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.s3.caConfigMap }}
+          volumeMounts:
+            - name: ca
+              mountPath: /etc/medidoc/ca
+              readOnly: true
+          {{- end }}
+      {{- if .Values.s3.caConfigMap }}
+      volumes:
+        - name: ca
+          configMap:
+            name: {{ .Values.s3.caConfigMap }}
+      {{- end }}

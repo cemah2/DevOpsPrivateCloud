@@ -1,0 +1,48 @@
+---
+# Swap, modules, paramètres noyau : la page « Installing kubeadm » et « Container Runtimes ».
+
+# Le kubelet sait fonctionner avec du swap (NodeSwap, GA en 1.34), mais kubeadm le refuse tant
+# que failSwapOn n'est pas désactivé : on n'en veut pas sur ces nœuds (comportement prévisible
+# sous pression mémoire). L'image dorée n'a pas de swap ; le rôle le garantit.
+- name: Désactiver le swap actif
+  ansible.builtin.command: swapoff --all
+  when: ansible_facts['swaptotal_mb'] | int > 0
+  changed_when: true
+
+- name: Neutraliser les entrées de swap de /etc/fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#\s]\S*\s+\S+\s+swap\s.*)$'
+    replace: '# \1  # désactivé par Ansible (k8s_noeud)'
+  notify: Relire les unités systemd
+
+- name: Modules du noyau chargés au démarrage
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/kubernetes.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # {{ k8s_noeud_entete }}
+      # Rôle k8s_noeud (M14-E02) : overlay (instantanés de containerd), br_netfilter (le trafic
+      # ponté traverse netfilter : règles de kube-proxy en mode iptables).
+      {% for m in k8s_noeud_modules %}
+      {{ m }}
+      {% endfor %}
+
+- name: Charger les modules maintenant
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ k8s_noeud_modules }}"
+
+- name: Paramètres noyau
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-kubernetes.conf
+    state: present
+    reload: true
+  loop: "{{ k8s_noeud_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} = {{ item.value }}"

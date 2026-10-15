@@ -1,0 +1,22 @@
+# plateforme/ci-templates — .gitlab-ci.yml : EXTRAIT (M13-E09). Construit et publie l'image outillée
+# avec SA PROPRE chaîne (supply-chain.yml du même dépôt, inclus en local). La toute première version
+# (1.0.0) n'a pas d'image outillée pour se construire : construis-la avec image.yml (M12-E21), pousse-la
+# dans le projet « plateforme » avec ton compte, signe-la à la main (outils/signer-image.sh), reporte
+# son empreinte dans SC_OUTILS_IMAGE, puis laisse ce job publier 1.0.1 par la chaîne.
+include:
+  - local: supply-chain.yml
+
+variables:
+  SC_IMAGE_NOM: plateforme/outils-supply-chain
+  SC_CONTEXTE: images/outils-supply-chain
+
+# Le contexte a besoin de la clé publique, de la configuration de signature et de la racine.
+sc:construction:
+  before_script:
+    - cp "$MEDISPHERE_ROOT_CA" images/outils-supply-chain/medisphere-root-ca.crt
+    - cp docs-registre/cosign.pub docs-registre/signing-config.json images/outils-supply-chain/
+# docs-registre/ : copie de docs/registre/ de plateforme/medisphere, tenue à jour par MR (sous-module
+# ou copie relue) ; c'est la seule source de la clé publique qui entre dans l'image.
+
+# Robot de publication du projet « plateforme » : variables HARBOR_ROBOT_USER / HARBOR_ROBOT_TOKEN
+# du projet plateforme/ci-templates = robot$plateforme+ci (ajouté à registre/robots.tf comme les autres).

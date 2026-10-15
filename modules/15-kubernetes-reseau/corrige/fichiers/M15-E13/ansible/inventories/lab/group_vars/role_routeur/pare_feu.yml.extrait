@@ -1,0 +1,9 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M15-E13, SEC-1613.
+# 1) Définitions (section pare_feu_definitions, après NET_K8S) — servent aussi à E14 et E20 :
+  - {nom: NET_K8S_LB, valeur: 10.10.41.0/24, commentaire: "adresses de service de k8s-par1 (LB IPAM, annoncées en BGP, M15)"}
+  - {nom: GW_PAR1, valeur: 10.10.41.10, commentaire: "Gateway principale gw-par1 de k8s-par1 (M15-E12)"}
+# 2) Transit (section pare_feu_transit, bloc « Points d'entrée ») :
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_K8S, destination: $GW_PAR1, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers la Gateway gw-par1 (cert-manager)", ref: M15-E13}
+# La sortie est l'interface du VLAN 40 : les /32 de 10.10.41.0/24 sont joignables par les nœuds
+# (prochains sauts BGP en 10.10.40.6x, M15-E11). MGMT joint déjà tout le lab (règle « bastion »).

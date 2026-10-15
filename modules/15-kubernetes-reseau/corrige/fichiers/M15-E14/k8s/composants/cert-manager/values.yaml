@@ -1,0 +1,49 @@
+# composants/cert-manager/values.yaml — cert-manager 1.21 (M15-E13, complété en M15-E14).
+# Installation (Helm 4, simple installateur jusqu'au M17) :
+#   helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager \
+#     --version v1.21.<PATCH> --namespace cert-manager --create-namespace \
+#     --values composants/cert-manager/values.yaml --wait
+# Images tirées par le cache Harbor des nœuds (hosts.toml de containerd : quay.io → cache « quay »).
+
+crds:
+  enabled: true
+  keep: true
+
+config:
+  apiVersion: controller.config.cert-manager.io/v1alpha1
+  kind: ControllerConfiguration
+  gatewayAPI:
+    enabled: true
+
+# (M15-E14) Autocontrôle DNS-01 : cert-manager vérifie lui-même la présence du TXT avant de
+# prévenir ca01. On l'envoie DIRECTEMENT à l'autoritaire primaire (10.10.20.10:5300), et
+# seulement à lui : par défaut il interrogerait les serveurs NS de la zone… sur leur port 53, qui
+# est celui des RÉCURSEURS (cache négatif de 300 s). Prix payé : on ne vérifie pas que dns02 a
+# reçu la mise à jour (NOTIFY-DNSUPDATE la lui pousse ; ca01 interroge les récurseurs).
+dns01RecursiveNameservers: "10.10.20.10:5300"
+dns01RecursiveNameserversOnly: true
+
+replicaCount: 2
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/component: controller
+
+webhook:
+  replicaCount: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+cainjector:
+  replicaCount: 1
+
+resources:
+  requests: {cpu: 20m, memory: 64Mi}
+  limits: {memory: 256Mi}

@@ -1,0 +1,36 @@
+# {{ registre_travail_entete }}
+# Configuration de CNCF Distribution 3 (registry:3), montée sur /etc/distribution/config.yml.
+# Référence : https://distribution.github.io/distribution/about/configuration/
+version: 0.1
+log:
+  level: {{ registre_travail_niveau_journal }}
+  formatter: json
+  fields:
+    service: registre-travail
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+  # Suppression des manifestes par l'API (DELETE /v2/<nom>/manifests/<empreinte>) : sans elle,
+  # le ramasse-miettes n'a rien à récupérer.
+  delete:
+    enabled: true
+  cache:
+    blobdescriptor: inmemory
+http:
+  addr: :5000
+  host: https://{{ registre_travail_nom }}:{{ registre_travail_port }}
+  tls:
+    certificate: /etc/distribution/tls/registre.crt
+    key: /etc/distribution/tls/registre.key
+    minimumtls: tls1.2
+  headers:
+    X-Content-Type-Options: [nosniff]
+auth:
+  htpasswd:
+    realm: "Registre de travail MediSphere"
+    path: /etc/distribution/auth/htpasswd
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3

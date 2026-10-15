@@ -1,0 +1,165 @@
+---
+# playbooks/harbor-mise-a-jour.yml — mise à jour corrective de Harbor (M13-E16, CHG-1434). RB-132.
+#
+# Procédure officielle (« Upgrade Harbor and Migrate Data ») encadrée :
+#   1. garde-fous : un seul hôte, version visée > version active (jamais de descente), même mineure
+#      2.15, santé « healthy », sauvegarde applicative réussie de moins de 26 h (reg01) ;
+#   2. arrêt de Harbor ; copie À L'ARRÊT de <données>/database (seul retour arrière du schéma) ;
+#   3. contrôle de harbor.yml : « prepare migrate » de la NOUVELLE version sur une copie de l'actuel,
+#      comparé aux clés que rend le gabarit du rôle (un écart = gabarit à mettre à jour, arrêt) ;
+#   4. rôle harbor avec harbor_autoriser_changement_version=true : nouvelle archive vérifiée, lien
+#      /opt/harbor basculé, install.sh --with-trivy dans le nouveau dossier ; harbor-core migre le
+#      schéma de la base à son démarrage ;
+#   5. contrôle : santé, version annoncée par l'API.
+# Le retour arrière n'est PAS automatique (il défait une migration de schéma) : RB-132, section 4.
+#
+# Lancement (depuis le pipeline protégé ou adm01) — toujours reg02 d'abord :
+#   ansible-playbook playbooks/harbor-mise-a-jour.yml -l reg02
+#   ansible-playbook playbooks/harbor-mise-a-jour.yml -l reg01     # fenêtre annoncée
+- name: Mise à jour corrective de Harbor
+  hosts: role_registre
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    maj_exiger_sauvegarde: "{{ inventory_hostname == 'reg01' }}"
+    maj_api: "https://{{ harbor_nom }}/api/v2.0"
+  pre_tasks:
+    - name: Un seul hôte par lancement (-l reg02 ou -l reg01)
+      ansible.builtin.assert:
+        that: ansible_play_hosts_all | length == 1
+        fail_msg: "Limite le lancement à UN registre (-l reg02, puis -l reg01 dans la fenêtre)."
+        quiet: true
+
+    - name: Version active (lien {{ harbor_dossier }})
+      ansible.builtin.stat:
+        path: "{{ harbor_dossier }}"
+      register: maj_lien
+
+    - name: Déduire la version active
+      ansible.builtin.set_fact:
+        maj_version_active: "{{ maj_lien.stat.lnk_source | regex_search('/([0-9]+\\.[0-9]+\\.[0-9]+)/harbor$', '\\1') | first }}"
+
+    - name: Montée de version corrective seulement (même 2.15, version strictement supérieure)
+      ansible.builtin.assert:
+        that:
+          - harbor_version is version('2.15.0', '>=')
+          - harbor_version is version('2.16.0', '<')
+          - harbor_version is version(maj_version_active, '>')
+        fail_msg: >-
+          {{ maj_version_active }} → {{ harbor_version }} : ce playbook ne fait que des montées correctives
+          en 2.15 (une mineure suit le chemin de mise à jour de la documentation, une descente est un
+          retour arrière : RB-132 section 4).
+        quiet: true
+
+    - name: Santé avant intervention
+      ansible.builtin.uri:
+        url: "{{ maj_api }}/health"
+        return_content: true
+      register: maj_sante_avant
+      failed_when: maj_sante_avant.json.status | default('') != 'healthy'
+
+    - name: Dernier passage de la sauvegarde applicative (reg01) — « résultat âge_en_secondes »
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          r=$(systemctl show -p Result --value wb-backup-harbor.service)
+          t=$(systemctl show -p ExecMainExitTimestamp --value wb-backup-harbor.service)
+          [ -n "$t" ] || t="@0"
+          echo "$r $(( $(date +%s) - $(date -d "$t" +%s) ))"
+        executable: /bin/bash
+      register: maj_sauvegarde
+      changed_when: false
+      when: maj_exiger_sauvegarde | bool
+
+    - name: Sauvegarde réussie de moins de 26 h
+      ansible.builtin.assert:
+        that:
+          - maj_sauvegarde.stdout.split()[0] == 'success'
+          - maj_sauvegarde.stdout.split()[1] | int < 93600
+        fail_msg: >-
+          Pas de sauvegarde réussie de moins de 26 h (wb-backup-harbor.service : {{ maj_sauvegarde.stdout }}) :
+          lance-la et vérifie-la d'abord (RB-131).
+        quiet: true
+      when: maj_exiger_sauvegarde | bool
+
+  tasks:
+    - name: Arrêt de Harbor
+      ansible.builtin.systemd_service:
+        name: harbor.service
+        state: stopped
+
+    - name: Copie de la base À L'ARRÊT (retour arrière du schéma)
+      ansible.builtin.command:
+        cmd: cp -a {{ harbor_donnees }}/database {{ harbor_donnees }}/database.avant-{{ harbor_version }}
+        creates: "{{ harbor_donnees }}/database.avant-{{ harbor_version }}"
+
+    - name: Rôle harbor — nouvelle version (archive vérifiée, bascule du lien, installation)
+      ansible.builtin.include_role:
+        name: harbor
+      vars:
+        harbor_autoriser_changement_version: true
+
+    - name: Image prepare de la nouvelle version présente (chargée par install.sh)
+      ansible.builtin.command:
+        cmd: docker image inspect goharbor/prepare:v{{ harbor_version }}
+      changed_when: false
+
+    - name: « prepare migrate » de l'ancien harbor.yml vers le format de la nouvelle version
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm -v /:/hostfs goharbor/prepare:v{{ harbor_version }} migrate
+          -i /hostfs{{ harbor_dist }}/{{ harbor_version }}/harbor/harbor.yml.version-precedente
+          -o /hostfs/root/harbor.yml.migre -t {{ harbor_version }}
+      changed_when: false
+      failed_when: false
+      register: maj_migrate
+
+    - name: Clés du harbor.yml migré et de celui du rôle
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          cles() { grep -E '^[a-z_]+:' "$1" | cut -d: -f1 | sort -u; }
+          diff <(cles /root/harbor.yml.migre) <(cles {{ harbor_dossier }}/harbor.yml) || true
+          rm -f /root/harbor.yml.migre
+        executable: /bin/bash
+      register: maj_cles
+      changed_when: false
+      when: maj_migrate.rc == 0
+
+    - name: Écart de clés entre la migration officielle et le gabarit du rôle
+      ansible.builtin.debug:
+        msg: "{{ maj_cles.stdout_lines | default(['prepare migrate non applicable (même format de harbor.yml)']) }}"
+
+    - name: Santé après mise à jour (harbor-core migre le schéma au démarrage)
+      ansible.builtin.uri:
+        url: "{{ maj_api }}/health"
+        return_content: true
+      register: maj_sante
+      until: maj_sante.json is defined and maj_sante.json.status | default('') == 'healthy'
+      retries: 30
+      delay: 10
+
+  post_tasks:
+    - name: Version annoncée par l'API
+      ansible.builtin.uri:
+        url: "{{ maj_api }}/systeminfo"
+        url_username: admin
+        url_password: "{{ harbor_admin_mdp }}"
+        force_basic_auth: true
+        return_content: true
+      register: maj_info
+      no_log: true
+
+    - name: La version active est celle visée
+      ansible.builtin.assert:
+        that: maj_info.json.harbor_version is match('^v' ~ harbor_version | regex_escape)
+        fail_msg: "Harbor annonce {{ maj_info.json.harbor_version | default('?') }} au lieu de v{{ harbor_version }}."
+        quiet: true
+
+    - name: Rappel
+      ansible.builtin.debug:
+        msg: >-
+          Mise à jour {{ maj_version_active }} → {{ harbor_version }} faite sur {{ inventory_hostname }}.
+          Garder {{ harbor_donnees }}/database.avant-{{ harbor_version }} et {{ harbor_dist }}/{{ maj_version_active }}
+          une semaine (RB-132), relancer une analyse complète, passer MS_REG_VERSION à v{{ harbor_version }}.

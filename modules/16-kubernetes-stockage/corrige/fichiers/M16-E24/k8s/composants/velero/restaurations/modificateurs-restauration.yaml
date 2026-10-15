@@ -1,0 +1,51 @@
+# plateforme/k8s — composants/velero/restaurations/modificateurs-restauration.yaml (M16-E24)
+# Modificateurs de ressources appliqués par Velero AVANT de créer chaque objet restauré
+# (Velero 1.18, « Restore Resource Modifiers »). Référencés par spec.resourceModifier des Restore.
+# Les conditions « namespaces » désignent l'espace D'ORIGINE (celui de la sauvegarde), pas la cible.
+# La ConfigMap doit être dans l'espace de Velero et ne contenir qu'une clé (le document YAML).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: modificateurs-restauration
+  namespace: velero
+data:
+  modificateurs.yaml: |
+    version: v1
+    resourceModifierRules:
+    # 1. Une copie ne revendique jamais le nom public de l'original : un nom distinct, et de toute
+    #    façon refusé par gw-par1 (wb-restauration n'a pas le label d'exposition).
+    - conditions:
+        groupResource: httproutes.gateway.networking.k8s.io
+        namespaces:
+        - mediagenda-recette
+      patches:
+      - operation: replace
+        path: "/spec/hostnames"
+        value: "[\"mediagenda-restauration.apps.par1.medisphere.internal\"]"
+    # 2. Aucune tâche planifiée restaurée ne s'exécute (purges, exports, envois : en double sinon).
+    - conditions:
+        groupResource: cronjobs.batch
+        namespaces:
+        - mediagenda-recette
+      mergePatches:
+      - patchData: |
+          {"spec": {"suspend": true}}
+    # 3. Tout objet de charge restauré est marqué comme copie (tri, nettoyage, supervision).
+    - conditions:
+        groupResource: deployments.apps
+        namespaces:
+        - mediagenda-recette
+      mergePatches:
+      - patchData: |
+          {"metadata": {"labels": {"medisphere.fr/copie-de": "mediagenda-recette"}}}
+    - conditions:
+        groupResource: statefulsets.apps
+        namespaces:
+        - mediagenda-recette
+      mergePatches:
+      - patchData: |
+          {"metadata": {"labels": {"medisphere.fr/copie-de": "mediagenda-recette"}}}
+    # 4. (Si tes politiques réseau désignent l'espace d'origine PAR SON NOM, par exemple un
+    #    namespaceSelector sur kubernetes.io/metadata.name: mediagenda-recette, ajoute ici une
+    #    règle « test » + « replace » sur le chemin concerné : sinon la copie accepterait du trafic
+    #    de la recette. Les politiques du corrigé du M15 n'utilisent que podSelector dans l'espace.)

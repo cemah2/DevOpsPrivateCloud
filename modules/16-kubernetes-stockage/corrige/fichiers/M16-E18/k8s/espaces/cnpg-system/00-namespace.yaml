@@ -1,0 +1,13 @@
+# plateforme/k8s — espaces/cnpg-system/00-namespace.yaml (M16-E18)
+# Opérateur CloudNativePG et plugin Barman Cloud (le plugin DOIT être dans l'espace de
+# l'opérateur). Aucun privilège : niveau restricted.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnpg-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/ticket: "DEV-1718"

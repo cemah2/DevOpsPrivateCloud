@@ -1,0 +1,119 @@
+{{- include "mediagenda.verifications" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mediagenda.fullname" . }}
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "mediagenda.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "mediagenda.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        # Une modification de la ConfigMap change l'empreinte, donc le gabarit de pod : redéploiement.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "mediagenda.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "medisphere-commun.securite.pod" . | nindent 8 }}
+      # Supérieur à MEDIAGENDA_DELAI_ARRET : uvicorn finit ses requêtes avant le SIGKILL.
+      terminationGracePeriodSeconds: {{ add .Values.config.delaiArret 10 }}
+      {{- if eq .Values.migrations.mode "initContainer" }}
+      initContainers:
+        {{- include "mediagenda.conteneurMigration" . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: api
+          image: {{ include "mediagenda.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            {{- include "mediagenda.envConnexion" . | nindent 12 }}
+            - name: MEDIAGENDA_VERSION
+              value: {{ include "mediagenda.imageTag" . | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "mediagenda.fullname" . }}
+          startupProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /pret
+              port: http
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          securityContext:
+            {{- include "medisphere-commun.securite.conteneur" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
+          topologyKey: {{ .Values.topologySpread.topologyKey }}
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "mediagenda.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              {{- include "mediagenda.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

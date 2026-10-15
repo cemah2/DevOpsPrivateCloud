@@ -1,0 +1,52 @@
+---
+# molecule/podman_hote/verify.yml (M12-E02) : le compte « app » fait tourner un conteneur sans
+# privilège, sur sa plage subordonnée, avec pasta.
+- name: Vérifier le rôle podman_hote
+  hosts: molecule
+  become: true
+  gather_facts: false
+  vars:
+    env_app:
+      XDG_RUNTIME_DIR: /run/user/1001
+      DBUS_SESSION_BUS_ADDRESS: unix:path=/run/user/1001/bus
+  tasks:
+    - name: Le compte app n'a aucun droit sudo
+      ansible.builtin.command:
+        cmd: sudo -n -l -U app
+      environment:
+        LC_ALL: C
+      register: sudo_app
+      changed_when: false
+      failed_when: false
+
+    - name: Aucune règle sudo pour app
+      ansible.builtin.assert:
+        that: sudo_app.stdout is search('not allowed to run sudo')
+        fail_msg: "{{ sudo_app.stdout }}"
+
+    - name: Linger actif
+      ansible.builtin.stat:
+        path: /var/lib/systemd/linger/app
+      register: linger
+      failed_when: not linger.stat.exists
+
+    - name: Plage subordonnée attendue
+      ansible.builtin.command:
+        cmd: grep -x 'app:524288:65536' /etc/subuid /etc/subgid
+      changed_when: false
+
+    - name: Un conteneur du compte app, vu de l'intérieur (root) et de l'hôte
+      ansible.builtin.command:
+        cmd: podman run --rm docker.io/library/debian:trixie-slim cat /proc/self/uid_map
+      become: true
+      become_user: app
+      environment: "{{ env_app }}"
+      register: uidmap
+      changed_when: false
+
+    - name: La table de correspondance commence par l'UID du compte, puis sa plage
+      ansible.builtin.assert:
+        that:
+          - uidmap.stdout_lines[0].split() == ['0', '1001', '1']
+          - uidmap.stdout_lines[1].split() == ['1', '524288', '65536']
+        fail_msg: "{{ uidmap.stdout }}"

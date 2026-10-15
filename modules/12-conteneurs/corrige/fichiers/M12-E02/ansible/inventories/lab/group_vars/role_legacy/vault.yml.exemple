@@ -1,0 +1,7 @@
+---
+# group_vars/role_legacy/vault.yml — À CHIFFRER avec l'identité « lab » (M04) avant tout commit :
+#   uv run ansible-vault encrypt --encrypt-vault-id lab inventories/lab/group_vars/role_legacy/vault.yml
+# La valeur est celle que config.php contient en dur (« InfoGer2014! », fictive) : l'application
+# ne fonctionne qu'avec elle tant que M12-E19 ne l'a pas sortie du code. On ne la recopie pas en
+# clair pour autant : un secret connu reste un secret qu'on ne propage pas.
+vault_legacy_rdv_db_mdp: "<MOT-DE-PASSE-DE-CONFIG.PHP>"

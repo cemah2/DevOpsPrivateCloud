@@ -1,0 +1,13 @@
+# Configuration de chart-testing 3.15 (M17-E07), lue par « ct lint » et « ct install ».
+chart-dirs:
+  - charts
+target-branch: main
+remote: origin
+# Les mainteneurs ne sont pas des comptes GitHub : pas de validation de leurs noms.
+validate-maintainers: false
+# Toute modification d'un chart exige une nouvelle version (comparée à target-branch).
+check-version-increment: true
+# Le chart de bibliothèque ne se rend pas seul : il est testé à travers mediagenda (helm-unittest).
+excluded-charts:
+  - medisphere-commun
+helm-extra-args: --timeout 600s

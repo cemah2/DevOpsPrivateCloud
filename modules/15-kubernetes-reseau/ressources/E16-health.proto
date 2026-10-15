@@ -1,0 +1,29 @@
+// E16-health.proto — définition standard du service de santé gRPC (grpc.health.v1),
+// reproduite pour grpcurl (le serveur d'essai agnhost n'expose pas la réflexion gRPC).
+// Source : dépôt grpc/grpc-proto, fichier grpc/health/v1/health.proto (licence Apache 2.0).
+// Usage (M15-E16) : grpcurl -import-path <dossier> -proto E16-health.proto …
+
+syntax = "proto3";
+
+package grpc.health.v1;
+
+option go_package = "google.golang.org/grpc/health/grpc_health_v1";
+
+message HealthCheckRequest {
+  string service = 1;
+}
+
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;  // utilisé seulement par Watch
+  }
+  ServingStatus status = 1;
+}
+
+service Health {
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}

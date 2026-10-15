@@ -1,0 +1,6 @@
+# Valeurs de l'environnement par1 (cluster k8s-par1), lues dans les gabarits de releases/.
+cluster: k8s-par1
+domaineApps: apps.par1.medisphere.internal
+apiServeur:
+  hote: k8s-api.par1.medisphere.internal
+  port: 8443

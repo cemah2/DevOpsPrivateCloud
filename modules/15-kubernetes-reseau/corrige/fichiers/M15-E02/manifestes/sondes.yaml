@@ -1,0 +1,65 @@
+# sondes.yaml — trois pods de sonde réseau dans wb-essais (M15-E02, réutilisés jusqu'à E09).
+#   sonde-w01a et sonde-w01b sur k8s-w01 (même nœud), sonde-w02 sur k8s-w02 (autre nœud).
+# Image netshoot (outils réseau : ip, ping, curl, dig, tcpdump, iperf3) par le cache Harbor.
+# Les sondes ne servent rien : elles dorment et on y entre par « kubectl exec ».
+# wb-essais est en PSA baseline : root et les capacités par défaut (dont NET_RAW pour ping) sont
+# permis ; aucune capacité ajoutée, aucun hostNetwork.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sonde-w01a
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: sonde
+    app.kubernetes.io/part-of: m15
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-w01
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 500m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sonde-w01b
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: sonde
+    app.kubernetes.io/part-of: m15
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-w01
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 500m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sonde-w02
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: sonde
+    app.kubernetes.io/part-of: m15
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-w02
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: sonde
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 500m, memory: 128Mi}

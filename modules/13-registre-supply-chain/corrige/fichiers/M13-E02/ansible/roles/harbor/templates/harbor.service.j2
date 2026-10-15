@@ -1,0 +1,26 @@
+# {{ harbor_entete }}
+# /etc/systemd/system/harbor.service — pile Compose de Harbor (M13-E02).
+# Les conteneurs de Harbor sont en « restart: always » : Docker les relancerait seul. L'unité
+# donne en plus un ORDRE (après /data et Docker), un état lisible (systemctl status harbor) et un
+# arrêt propre à l'extinction (compose down avant l'arrêt de Docker).
+[Unit]
+Description=Harbor {{ harbor_version }} (registre MédiSphère, {{ harbor_nom }})
+Documentation=https://goharbor.io/docs/ file://{{ harbor_dossier }}/harbor.yml
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor={{ harbor_donnees }}
+ConditionPathExists={{ harbor_dossier }}/docker-compose.yml
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ harbor_dossier }}
+# --wait : l'unité n'est « active » que lorsque les conteneurs sont sains (healthcheck).
+ExecStart=/usr/bin/docker compose -f {{ harbor_dossier }}/docker-compose.yml up -d --wait --wait-timeout 300
+ExecStop=/usr/bin/docker compose -f {{ harbor_dossier }}/docker-compose.yml down
+TimeoutStartSec=420
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

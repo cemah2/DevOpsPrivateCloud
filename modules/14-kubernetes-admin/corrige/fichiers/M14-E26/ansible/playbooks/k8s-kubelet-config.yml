@@ -1,0 +1,37 @@
+---
+# playbooks/k8s-kubelet-config.yml — recopier sur chaque nœud la configuration du kubelet du ConfigMap
+# kube-system/kubelet-config, puis redémarrer le kubelet, un nœud à la fois (M14-E26, page
+# « Reconfiguring a kubeadm cluster »). Préalable : ConfigMap mis à jour.
+- name: Configuration du kubelet depuis le ConfigMap kubelet-config
+  hosts: k8s_par1
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Télécharger la configuration (écrit /var/lib/kubelet/config.yaml)
+      ansible.builtin.command: kubeadm upgrade node phase kubelet-config
+      changed_when: true
+
+    - name: Redémarrer le kubelet
+      ansible.builtin.systemd_service:
+        name: kubelet
+        state: restarted
+
+    - name: Nœud Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=3m
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Demandes de certificat de service en attente pour ce nœud (à lire puis approuver, RB-143 §5)
+      ansible.builtin.command: >-
+        kubectl get csr --field-selector spec.signerName=kubernetes.io/kubelet-serving
+        -o jsonpath='{range .items[?(@.spec.username=="system:node:{{ inventory_hostname }}")]}{.metadata.name}{" "}{.status.conditions[*].type}{"\n"}{end}'
+      delegate_to: localhost
+      become: false
+      register: k8s_csr
+      changed_when: false
+
+    - name: Afficher les demandes
+      ansible.builtin.debug:
+        var: k8s_csr.stdout_lines

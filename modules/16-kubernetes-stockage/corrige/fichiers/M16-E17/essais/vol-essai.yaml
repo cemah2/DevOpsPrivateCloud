@@ -1,0 +1,67 @@
+# ~/m16/e17/vol-essai.yaml — StatefulSet d'essai à deux volumes (RBD et CephFS), wb-essais.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vol-essai
+  namespace: wb-essais
+spec:
+  clusterIP: None
+  selector: {app.kubernetes.io/name: vol-essai}
+  ports:
+    - port: 80
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vol-essai
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: vol-essai}
+spec:
+  serviceName: vol-essai
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: vol-essai}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: vol-essai}
+      # Variante fs-backup (étape 5) : décommenter pour désigner les volumes à sauvegarder
+      # par fichiers, au lieu de --default-volumes-to-fs-backup.
+      # annotations:
+      #   backup.velero.io/backup-volumes: donnees-rbd,donnees-fs
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: essai
+          image: debian:trixie-slim
+          command: ["sleep", "infinity"]
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 500m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: donnees-rbd, mountPath: /rbd}
+            - {name: donnees-fs, mountPath: /fs}
+  volumeClaimTemplates:
+    - metadata:
+        name: donnees-rbd
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: ceph-rbd
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: donnees-fs
+      spec:
+        accessModes: ["ReadWriteMany"]
+        storageClassName: cephfs
+        resources:
+          requests:
+            storage: 1Gi

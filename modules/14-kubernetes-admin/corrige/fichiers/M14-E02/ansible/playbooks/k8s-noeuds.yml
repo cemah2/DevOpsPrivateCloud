@@ -1,0 +1,53 @@
+---
+# playbooks/k8s-noeuds.yml — préparer les nœuds de k8s-par1 (M14-E02, PLAT-1502).
+#   uv run ansible-playbook playbooks/k8s-noeuds.yml --check --diff
+#   uv run ansible-playbook playbooks/k8s-noeuds.yml                    # un nœud à la fois
+#   uv run ansible-playbook playbooks/k8s-noeuds.yml -e k8s_noeuds_serie=6   # premier passage seulement
+# Hors de site.yml (qui ne converge que le socle) : le cluster a son propre cycle de vie.
+# La suite (point d'accès, kubeadm, jonctions) est dans playbooks/k8s-cluster.yml (E03-E05).
+
+- name: Garde-fou d'inventaire
+  hosts: k8s_par1
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Chaque nœud est dans la table du plan, avec la bonne adresse et le bon groupe
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in k8s_noeuds
+          - ansible_host == k8s_noeuds[inventory_hostname].ip
+          - >-
+            (k8s_noeuds[inventory_hostname].role == 'plan-controle')
+            == (inventory_hostname in groups['k8s_plan_controle'] | default([]))
+          - >-
+            (k8s_noeuds[inventory_hostname].role == 'travailleur')
+            == (inventory_hostname in groups['k8s_travailleurs'] | default([]))
+        fail_msg: >-
+          {{ inventory_hostname }} : absent de k8s_noeuds (group_vars/k8s_par1/kubernetes.yml),
+          adresse de connexion ({{ ansible_host | default('?') }}) différente du plan, ou étiquette
+          NetBox (role-k8s-cp / role-k8s-worker) incohérente avec son rôle.
+        quiet: true
+      tags: [always]
+
+- name: Nœuds de k8s-par1 — système, runtime, paquets Kubernetes
+  hosts: k8s_par1
+  become: true
+  # Un nœud à la fois dès que le cluster existe : un redémarrage de containerd ou un sshd raté
+  # ne touche jamais deux nœuds de contrôle (quorum etcd) ni deux travailleurs.
+  serial: "{{ k8s_noeuds_serie | default(1) }}"
+  max_fail_percentage: 0
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+    - role: containerd
+      tags: [containerd]
+    - role: k8s_noeud
+      tags: [k8s_noeud]

@@ -1,0 +1,8 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M13-E15 (sauvegarde de Harbor).
+
+# Dans pare_feu_transit, section « Sauvegardes » (même forme que les sauvegardes applicatives de M06-E28) :
+  - {entree: $V_INFRA, source: $REG01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "sauvegarde applicative de Harbor (reg01) vers pbs01, par1/registre", ref: M13-E15}
+  # Essai de restauration sur reg02 : lecture des sauvegardes de reg01 — TEMPORAIRE, retirée en M13-E25.
+  - {entree: $V_SANDBOX, source: $REG02, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 8007,
+     motif: "essai de restauration de Harbor sur reg02 (lecture par1/registre) — TEMPORAIRE", ref: M13-E15}

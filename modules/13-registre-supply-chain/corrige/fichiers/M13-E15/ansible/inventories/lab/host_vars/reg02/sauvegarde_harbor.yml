@@ -1,0 +1,10 @@
+---
+# host_vars/reg02/sauvegarde_harbor.yml — ESSAI DE RESTAURATION de reg01 sur reg02 (M13-E15).
+# Jeton propre à reg02, en LECTURE sur par1/registre (DatastoreReader) ; clé de chiffrement de reg01
+# (sans elle, rien ne se déchiffre). Ce fichier et les secrets de reg02 sont retirés après l'essai.
+sauvegarde_harbor_mode: restauration
+sauvegarde_harbor_id: reg01
+sauvegarde_harbor_jeton_id: "wb-restore@pbs!reg02"
+sauvegarde_harbor_jeton_secret: "{{ vault_pbs_jeton_restauration_reg02 }}"
+sauvegarde_harbor_empreinte: "{{ vault_pbs_empreinte }}"
+sauvegarde_harbor_cle: "{{ vault_pbs_cle_reg01 }}"

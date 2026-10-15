@@ -1,0 +1,250 @@
+# Rendu du chart mediagenda 0.1.0 (M17-E03), NE PAS MODIFIER À LA MAIN : régénérer par
+#   helm template mediagenda <clone de mediagenda/chart>/charts/mediagenda > base/mediagenda.yaml
+# Les étiquettes « managed-by: Helm » et « helm.sh/chart » viennent du rendu : ici, c'est kubectl qui applique.
+---
+# Source: mediagenda/templates/networkpolicy.yaml
+# Les espaces mediagenda-* sont en refus par défaut (M15) : l'API doit pouvoir sortir vers le DNS,
+# PostgreSQL et Valkey, et recevoir le trafic de la Gateway Cilium.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: mediagenda-db
+      ports:
+        - { port: 5432, protocol: TCP }
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      ports:
+        - { port: 6379, protocol: TCP }
+
+---
+# Source: mediagenda/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+automountServiceAccountToken: false
+
+---
+# Source: mediagenda/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+data:
+  MEDIAGENDA_LOG_LEVEL: "INFO"
+  MEDIAGENDA_LOG_FORMAT: "json"
+  MEDIAGENDA_FUSEAU: "Europe/Paris"
+  MEDIAGENDA_CACHE_TTL: "60"
+  MEDIAGENDA_DELAI_ARRET: "20"
+  MEDIAGENDA_VALKEY_URL: "redis://valkey:6379/0"
+
+---
+# Source: mediagenda/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+
+---
+# Source: mediagenda/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+      # Sélecteur immuable : on y met tout de suite le composant (d'autres pods viendront : migrations, tests).
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: mediagenda-0.1.0
+        app.kubernetes.io/name: mediagenda
+        app.kubernetes.io/instance: mediagenda
+        app.kubernetes.io/version: "v1.0.0"
+        app.kubernetes.io/managed-by: Helm
+        medisphere.fr/environnement: dev
+        app.kubernetes.io/component: api
+      annotations:
+        checksum/config: 80ad697895de9909bf318bab4d8be611de344584aeacd8e67275e7bb3ca4d4f8
+    spec:
+      serviceAccountName: mediagenda
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: "registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-db-app
+                  key: uri
+            - name: MEDIAGENDA_VERSION
+              value: "v1.0.0"
+          envFrom:
+            - configMapRef:
+                name: mediagenda
+          startupProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /pret
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              memory: 384Mi
+            requests:
+              cpu: 100m
+              memory: 192Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+# Source: mediagenda/templates/networkpolicy.yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-depuis-gateway
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports:
+            - { port: "8000", protocol: TCP }
+
+---
+# Source: mediagenda/templates/httproute.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mediagenda
+  labels:
+    helm.sh/chart: mediagenda-0.1.0
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/version: "v1.0.0"
+    app.kubernetes.io/managed-by: Helm
+    medisphere.fr/environnement: dev
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - "mediagenda-dev.apps.par1.medisphere.internal"
+  rules:
+    - backendRefs:
+        - name: mediagenda
+          port: 8000

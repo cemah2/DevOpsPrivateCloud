@@ -1,0 +1,19 @@
+# ~/m15/e13/clusterissuer-sans-cabundle.yaml — étape 7 : copie SANS caBundle (à supprimer ensuite).
+# Attendu : l'émetteur ne devient jamais Ready ; le message parle d'un certificat signé par une
+# autorité inconnue (« x509: certificate signed by unknown authority »).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: step-ca-acme-essai
+spec:
+  acme:
+    server: https://ca01.par1.medisphere.internal/acme/acme/directory
+    privateKeySecretRef:
+      name: step-ca-acme-essai-compte
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: gw-par1
+                namespace: passerelles
+                sectionName: http

@@ -1,0 +1,31 @@
+# Base commune des fichiers de releases/ (incluse par « bases: »). Ne contient aucune release.
+environments:
+  par1:
+    # Contexte kubectl du cluster dans ~/.kube/config (identité personnelle, M14-E06), à adapter :
+    # jamais le contexte « courant » de kubectl par accident.
+    kubeContext: k8s-par1
+    values:
+      - ../environnements/par1.yaml
+    missingFileHandler: Error
+repositories:
+  - name: cilium
+    url: https://helm.cilium.io
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns/
+  - name: ceph-csi
+    url: https://ceph.github.io/csi-charts
+  - name: cnpg
+    url: https://cloudnative-pg.github.io/charts
+  - name: vmware-tanzu
+    url: https://vmware-tanzu.github.io/helm-charts
+  - name: metrics-server
+    url: https://kubernetes-sigs.github.io/metrics-server/
+helmDefaults:
+  # Attendre que les objets soient prêts (Helm 4 : stratégie « watcher », fondée sur kstatus).
+  wait: true
+  timeout: 600
+  historyMax: 10
+  # Pas de création implicite d'espace : les espaces sont décrits dans espaces/ (M14).
+  createNamespace: false

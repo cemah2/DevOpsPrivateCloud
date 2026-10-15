@@ -1,0 +1,28 @@
+# composants/cert-manager/clusterissuer-step-ca-acme.yaml — émetteur ACME de la PKI MédiSphère
+# (M15-E13, version E13 : HTTP-01 seulement ; E14 ajoute le solveur DNS-01 de la zone apps).
+# caBundle : « MédiSphère Root CA » en PEM, ENCODÉE EN BASE64 (une ligne), produite par
+#   base64 -w0 /usr/local/share/ca-certificates/medisphere-root-ca.crt
+# Ce n'est pas un secret (racine publique) : elle peut être versionnée. Remplace <CA_BUNDLE_BASE64>.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: step-ca-acme
+spec:
+  acme:
+    server: https://ca01.par1.medisphere.internal/acme/acme/directory
+    caBundle: <CA_BUNDLE_BASE64>
+    # Pas d'e-mail : step-ca n'en exige pas et n'envoie rien.
+    privateKeySecretRef:
+      name: step-ca-acme-compte
+    solvers:
+      # Solveur par défaut (aucun sélecteur) : HTTP-01, route temporaire sur l'écouteur http de gw-par1.
+      # La route est créée dans l'espace du Certificate : cet espace doit être étiqueté
+      # medisphere.fr/exposition=oui (allowedRoutes de l'écouteur).
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - group: gateway.networking.k8s.io
+                kind: Gateway
+                name: gw-par1
+                namespace: passerelles
+                sectionName: http

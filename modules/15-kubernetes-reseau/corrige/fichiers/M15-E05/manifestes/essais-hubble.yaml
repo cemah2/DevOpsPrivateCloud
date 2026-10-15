@@ -1,0 +1,43 @@
+# essais-hubble.yaml — objets temporaires de M15-E05 (SEC-1605). À SUPPRIMER en fin d'exercice :
+#   kubectl -n wb-essais delete -f essais-hubble.yaml
+---
+# Un Service dont le sélecteur ne désigne aucun pod : Cilium rejette les connexions (serviceNoBackendResponse:
+# reject par défaut) et Hubble montre la raison du refus.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vide
+  namespace: wb-essais
+spec:
+  selector:
+    app: personne
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+# Visibilité L7 sur echo : une politique HTTP qui autorise TOUT (toute source, toute requête) mais
+# fait passer le trafic du port 8080 par le proxy Envoy de Cilium, qui produit des flux HTTP
+# (méthode, URL, code de réponse) dans Hubble. C'est sur ces flux que la rédaction s'applique.
+# ⚠️ Une politique qui sélectionne echo en entrée le fait passer en refus par défaut pour tout ce
+#    qu'elle n'autorise pas : ici fromEntities « all » sur 8080 garde le comportement d'avant
+#    (sondes, NodePort echo-np depuis adm01), mais pas les autres ports (echo n'en a pas).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: visibilite-l7-echo
+  namespace: wb-essais
+spec:
+  endpointSelector:
+    matchLabels:
+      app: echo
+  ingress:
+    - fromEntities:
+        - all
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+          rules:
+            http:
+              - {}

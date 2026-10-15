@@ -1,0 +1,58 @@
+# plateforme/k8s — admission/classes-stockage.yaml (M16-E20)
+# Classes de stockage autorisées par espace d'équipe. La liste est dans l'ANNOTATION de l'espace
+# medisphere.internal/classes-stockage (« ceph-rbd,cephfs ») : seule la plateforme peut modifier
+# un objet Namespace ; une ConfigMap de l'espace serait modifiable par l'équipe elle-même.
+# Le contrôleur mutant DefaultStorageClass passe AVANT : un PVC sans classe arrive ici avec
+# storageClassName = ceph-rbd.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: classes-stockage
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["persistentvolumeclaims"]
+  variables:
+    - name: annotation
+      expression: >-
+        has(namespaceObject.metadata.annotations) &&
+        'medisphere.internal/classes-stockage' in namespaceObject.metadata.annotations
+        ? namespaceObject.metadata.annotations['medisphere.internal/classes-stockage'] : ''
+    - name: autorisees
+      expression: >-
+        variables.annotation.split(',').map(c, c.trim()).filter(c, c != '')
+    - name: classe
+      expression: >-
+        has(object.spec.storageClassName) ? object.spec.storageClassName : ''
+  validations:
+    # Chaînes CEL entre guillemets doubles (les apostrophes françaises y sont permises).
+    - expression: "size(variables.autorisees) > 0"
+      messageExpression: >-
+        "l'espace " + namespaceObject.metadata.name + " n'a pas d'annotation
+        medisphere.internal/classes-stockage : aucune classe de stockage autorisée
+        (demande à l'équipe Plateforme)"
+      reason: Forbidden
+    - expression: "variables.classe in variables.autorisees"
+      messageExpression: >-
+        "classe de stockage « " + (variables.classe == '' ? '(vide)' : variables.classe) +
+        " » refusée dans " + namespaceObject.metadata.name + " ; classes autorisées : " +
+        variables.autorisees.join(', ')
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: classes-stockage
+spec:
+  policyName: classes-stockage
+  # Mise en service : [Warn, Audit] d'abord (journal d'audit du M14-E27), puis Deny.
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists

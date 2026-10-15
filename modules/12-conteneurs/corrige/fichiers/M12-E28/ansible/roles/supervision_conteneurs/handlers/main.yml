@@ -1,0 +1,2 @@
+---
+# Aucun gestionnaire : rien à recharger (sshd lit authorized_keys à chaque connexion).

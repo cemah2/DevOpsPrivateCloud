@@ -1,0 +1,19 @@
+# Extrait à intégrer aux manifestes d'espaces existants (espaces/ de plateforme/k8s, M14-E10) :
+# l'étiquette qui autorise un espace à attacher des routes à gw-par1 (M15-E12).
+# Seule l'équipe Plateforme écrit les objets Namespace (RBAC du M14) : poser l'étiquette est donc
+# une décision de la plateforme, pas de l'équipe applicative.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-recette
+  labels:
+    medisphere.fr/exposition: oui
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-essais
+  labels:
+    medisphere.fr/exposition: oui
+# mediagenda-dev : PAS d'étiquette pour l'instant (essai de refus de l'étape 7) ; ajoutée par MR le
+# jour où l'équipe en a besoin.

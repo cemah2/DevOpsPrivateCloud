@@ -1,0 +1,25 @@
+# Base de MédiAgenda (M17-E09) : le rendu du chart mediagenda signé, à la version et au digest fixés
+# dans chart.env. Le rendu est produit par outils/rendre-base.sh (vérification Cosign du digest, puis
+# « helm template ») et COMMITÉ : la MR montre exactement ce qui changera dans le cluster.
+# Ne modifie jamais base/rendu/ à la main ; modifie chart.env ou values-communes.yaml et relance le script.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rendu/mediagenda.yaml
+# Paramètres d'environnement : ConfigMap générée (nom suffixé de l'empreinte de son contenu), que les
+# overlays complètent par « behavior: merge ». Ajoutée APRÈS la ConfigMap du chart dans envFrom : en
+# cas de clé en double, la dernière source l'emporte.
+configMapGenerator:
+  - name: mediagenda-parametres
+    literals:
+      - MEDIAGENDA_CACHE_TTL=60
+patches:
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          configMapRef:
+            name: mediagenda-parametres

@@ -1,0 +1,20 @@
+# ~/m15/e19/essai-l2.yaml — MetalLB 0.16 en mode L2 sur m15-essai (M15-E19).
+# Prérequis : chart installé dans metallb-system (étiquettes PSA « privileged » : le speaker utilise
+# le réseau de l'hôte et NET_RAW pour répondre à l'ARP).
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: essai-l2
+  namespace: metallb-system
+spec:
+  addresses:
+    - 10.10.99.230-10.10.99.238
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: essai-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools: [essai-l2]
+# AUCUN BGPPeer : la bordure n'a pas de voisin prévu pour la sandbox (ses politiques le refuseraient).

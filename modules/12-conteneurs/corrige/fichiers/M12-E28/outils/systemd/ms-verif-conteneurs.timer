@@ -1,0 +1,12 @@
+# /etc/systemd/system/ms-verif-conteneurs.timer — M12-E28 (PLAT-1354)
+[Unit]
+Description=MédiSphère : sonde des conteneurs toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=15s
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

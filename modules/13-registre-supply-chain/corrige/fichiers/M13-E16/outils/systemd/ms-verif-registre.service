@@ -1,0 +1,29 @@
+# /etc/systemd/system/ms-verif-registre.service — M13-E16 (CHG-1434)
+# Sonde du registre Harbor. Déclenchée par ms-verif-registre.timer (toutes les 5 minutes).
+# Test manuel : sudo systemctl start ms-verif-registre.service ; journalctl -u ms-verif-registre -n 40
+
+[Unit]
+Description=MédiSphère : sonde du registre Harbor (santé, version, disque, réplications, GC, certificat)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+ExecStart=/usr/local/bin/ms-verif-registre --quiet
+TimeoutStartSec=2min
+SyslogIdentifier=ms-verif-registre
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

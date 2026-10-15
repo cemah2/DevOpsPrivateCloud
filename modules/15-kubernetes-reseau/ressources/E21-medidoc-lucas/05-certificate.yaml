@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: medidoc-dev-tls
+  namespace: medidoc-dev
+spec:
+  secretName: medidoc-dev-tls
+  duration: 8760h
+  renewBefore: 720h
+  dnsNames:
+    - medidoc-dev.apps.par1.medisphere.internal
+  privateKey:
+    rotationPolicy: Never
+  issuerRef:
+    kind: Issuer
+    name: step-ca-acme

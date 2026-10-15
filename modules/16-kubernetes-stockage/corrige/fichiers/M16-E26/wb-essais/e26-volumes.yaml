@@ -1,0 +1,66 @@
+# wb-essais/e26-volumes.yaml (M16-E26) — volume témoin chiffré et volume de contrôle en clair.
+# Chaque pod écrit une chaîne reconnaissable, la synchronise sur disque, puis dort.
+# e26-temoin est conservé pour E28 ; e26-clair est supprimé à la fin de E26.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: e26-temoin, namespace: wb-essais}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ceph-rbd-chiffre
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: e26-clair, namespace: wb-essais}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ceph-rbd
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: e26-temoin, namespace: wb-essais}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    fsGroup: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+  - name: ecrivain
+    image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+    command: ["sh", "-c", "for i in $(seq 1 2000); do echo MEDISPHERE-E26-TEMOIN-7f3c9a; done > /donnees/temoin.txt && sync && sleep infinity"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {memory: 64Mi}
+    volumeMounts: [{name: donnees, mountPath: /donnees}]
+  volumes:
+  - name: donnees
+    persistentVolumeClaim: {claimName: e26-temoin}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: e26-clair, namespace: wb-essais}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    fsGroup: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+  - name: ecrivain
+    image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+    command: ["sh", "-c", "for i in $(seq 1 2000); do echo MEDISPHERE-E26-TEMOIN-7f3c9a; done > /donnees/temoin.txt && sync && sleep infinity"]
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+    resources:
+      requests: {cpu: 10m, memory: 16Mi}
+      limits: {memory: 64Mi}
+    volumeMounts: [{name: donnees, mountPath: /donnees}]
+  volumes:
+  - name: donnees
+    persistentVolumeClaim: {claimName: e26-clair}

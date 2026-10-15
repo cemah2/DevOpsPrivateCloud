@@ -1,0 +1,124 @@
+---
+# kubeadm sur un nœud de contrôle : fichier du nœud, puis amorçage OU jonction, jamais les deux.
+# Idempotent : un nœud membre (kubelet.conf présent) n'est plus touché.
+
+- name: Lire le fichier du cluster (plateforme/k8s) sur le contrôleur
+  ansible.builtin.set_fact:
+    _k8s_plan_controle_cluster: "{{ lookup('ansible.builtin.file', k8s_plan_controle_fichier_cluster) }}"
+
+# Le fichier du cluster ne décrit que ce qui est commun à tous les nœuds ; ce qui est propre au
+# nœud (adresse, nom) est ajouté ici. Il ne commence pas par « --- » (le rôle place le séparateur)
+# et ne contient ni InitConfiguration ni JoinConfiguration.
+- name: Le fichier du cluster a la forme attendue
+  ansible.builtin.assert:
+    that:
+      - _k8s_plan_controle_cluster is search('(?m)^kind:\s*ClusterConfiguration\s*$')
+      - _k8s_plan_controle_cluster is not search('(?m)^kind:\s*(InitConfiguration|JoinConfiguration)\s*$')
+      - _k8s_plan_controle_cluster is not match('^(\s*(#[^\n]*)?\n)*\s*---')
+      - >-
+        _k8s_plan_controle_cluster is search('(?m)^controlPlaneEndpoint:\s*"?'
+        ~ (k8s_plan_controle_api_nom | regex_escape) ~ ':' ~ k8s_plan_controle_api_port ~ '"?\s*$')
+    fail_msg: >-
+      {{ k8s_plan_controle_fichier_cluster }} : il doit contenir une ClusterConfiguration dont
+      controlPlaneEndpoint vaut {{ k8s_plan_controle_api_nom }}:{{ k8s_plan_controle_api_port }},
+      aucune InitConfiguration ni JoinConfiguration, et ne pas commencer par « --- ».
+    quiet: true
+
+- name: Dossier des fichiers kubeadm
+  ansible.builtin.file:
+    path: "{{ k8s_plan_controle_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# « kubeadm config validate » refuse un champ inconnu ou une API dépréciée : une faute de frappe
+# s'arrête ici, pas au milieu d'un « kubeadm init ».
+- name: Fichier kubeadm du nœud (InitConfiguration du nœud + fichier du cluster), validé
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: "{{ k8s_plan_controle_dossier }}/kubeadm-config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: kubeadm config validate --config %s
+
+- name: Ce nœud est-il déjà membre ?
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: _k8s_plan_controle_membre
+
+# Référence = un nœud de contrôle qui porte déjà le cluster (admin.conf présent). Lu sur TOUS
+# les nœuds de contrôle (le playbook passe un nœud à la fois : serial 1).
+- name: Chercher les nœuds de contrôle qui portent déjà le cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  delegate_to: "{{ item }}"
+  loop: "{{ groups[k8s_plan_controle_groupe] | sort }}"
+  register: _k8s_plan_controle_admin
+
+- name: Nœud de référence
+  ansible.builtin.set_fact:
+    _k8s_plan_controle_reference: >-
+      {{ _k8s_plan_controle_admin.results | selectattr('stat.exists') | map(attribute='item')
+         | reject('equalto', inventory_hostname) | first
+         | default(inventory_hostname if _k8s_plan_controle_membre.stat.exists else '') }}
+
+- name: Aucun cluster et amorçage non demandé
+  ansible.builtin.debug:
+    msg: >-
+      Aucun nœud de contrôle ne porte de cluster. Le fichier
+      {{ k8s_plan_controle_dossier }}/kubeadm-config.yaml est prêt ; l'amorçage est un geste
+      explicite (M14-E04) : « kubeadm init » sur {{ k8s_plan_controle_premier }}, ou
+      k8s_plan_controle_amorcage_auto=true pour une reconstruction depuis le code.
+  when: _k8s_plan_controle_reference == '' and not (k8s_plan_controle_amorcage_auto | bool and inventory_hostname == k8s_plan_controle_premier)
+
+- name: Amorcer le cluster (premier nœud, reconstruction depuis le code)
+  when:
+    - _k8s_plan_controle_reference == ''
+    - k8s_plan_controle_amorcage_auto | bool
+    - inventory_hostname == k8s_plan_controle_premier
+  block:
+    # La sortie contient un jeton d'amorçage et la clé de chiffrement des certificats : rien
+    # dans le journal d'Ansible.
+    - name: Lancer kubeadm init --upload-certs avec le fichier du nœud
+      ansible.builtin.command:
+        cmd: kubeadm init --config {{ k8s_plan_controle_dossier }}/kubeadm-config.yaml --upload-certs
+        creates: /etc/kubernetes/admin.conf
+      no_log: true
+      register: _k8s_plan_controle_init
+
+    - name: Ce nœud devient la référence
+      ansible.builtin.set_fact:
+        _k8s_plan_controle_reference: "{{ inventory_hostname }}"
+
+- name: Joindre ce nœud au plan de contrôle
+  ansible.builtin.include_tasks:
+    file: jonction.yml
+    apply:
+      tags: [kubeadm]
+  when:
+    - not _k8s_plan_controle_membre.stat.exists
+    - _k8s_plan_controle_reference not in ['', inventory_hostname]
+    - k8s_plan_controle_jonction_auto | bool
+
+- name: Attendre que le kube-apiserver local soit prêt (/readyz)
+  ansible.builtin.uri:
+    url: "https://{{ k8s_plan_controle_adresse }}:{{ k8s_plan_controle_apiserver_port }}/readyz"
+    ca_path: "{{ k8s_plan_controle_haproxy_ca }}"
+    return_content: true
+    status_code: 200
+    timeout: 5
+  register: _k8s_plan_controle_pret
+  until: _k8s_plan_controle_pret.status == 200
+  retries: 40
+  delay: 6
+  when: (_k8s_plan_controle_init is changed) or (_k8s_plan_controle_jonction is defined and _k8s_plan_controle_jonction is changed)
+
+# La CA vient d'apparaître sur le nœud : HAProxy passe ses contrôles de santé en HTTPS vérifié.
+- name: Rejouer le point d'accès (contrôles de santé TLS)
+  ansible.builtin.include_tasks:
+    file: point_acces.yml
+    apply:
+      tags: [kubeadm, point_acces]
+  when: (_k8s_plan_controle_init is changed) or (_k8s_plan_controle_jonction is defined and _k8s_plan_controle_jonction is changed)

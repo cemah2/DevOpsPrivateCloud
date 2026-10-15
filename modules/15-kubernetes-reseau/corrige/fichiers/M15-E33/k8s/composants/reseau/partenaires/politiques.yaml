@@ -1,0 +1,44 @@
+# composants/reseau/partenaires/politiques.yaml — M15-E33. Flux du relais, dans le refus par défaut de
+# mediagenda-recette (M15-E17) et sous la cloison de M15-E28 (même espace : non concerné).
+# Le « label de l'API » est celui de TON Deployment MédiAgenda (ici app.kubernetes.io/name: mediagenda-api).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: relais-mtls
+  namespace: mediagenda-recette
+spec:
+  description: "Relais mTLS : entrée depuis Envoy (Gateway en passthrough), sortie vers l'API et le DNS"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: relais-mtls}
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8443", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: mediagenda-api}
+      toPorts:
+        - ports: [{port: "8000", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: relais-mtls-vers-api
+  namespace: mediagenda-recette
+spec:
+  description: "API MédiAgenda : entrée depuis le relais mTLS"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: mediagenda-api}
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {app.kubernetes.io/name: relais-mtls}
+      toPorts:
+        - ports: [{port: "8000", protocol: TCP}]

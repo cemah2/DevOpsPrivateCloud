@@ -1,0 +1,23 @@
+---
+# M16-E05 — Carte du réseau de stockage des travailleurs de k8s-par1 (groupe k8s_travailleurs).
+# UN nœud à la fois : le rôle peut drainer et redémarrer un travailleur dont la carte vient
+# d'apparaître. À lancer depuis adm01 (kubectl local, identité <MOI>) :
+#   uv run ansible-playbook playbooks/k8s-reseau-stockage.yml --check --diff
+#   uv run ansible-playbook playbooks/k8s-reseau-stockage.yml -l k8s-w01
+- name: Raccorder les travailleurs au réseau de stockage
+  hosts: k8s_travailleurs
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Vérifier le système de l'hôte
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+        fail_msg: "{{ inventory_hostname }} : Debian 13 attendu (image dorée current)."
+        quiet: true
+      tags: [always]
+  roles:
+    - role: k8s_reseau_stockage
+      tags: [k8s_reseau_stockage]

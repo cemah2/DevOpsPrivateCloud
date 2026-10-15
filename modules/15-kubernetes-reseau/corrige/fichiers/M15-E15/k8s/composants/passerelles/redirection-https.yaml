@@ -1,0 +1,21 @@
+# composants/passerelles/redirection-https.yaml — HTTP → HTTPS pour tous les noms *.apps (M15-E12).
+# (M15-E15) étiquette medisphere.fr/dns=non : ExternalDNS ne publie PAS ce nom joker.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: redirection-https
+  namespace: passerelles
+  labels:
+    medisphere.fr/dns: non
+spec:
+  parentRefs:
+    - name: gw-par1
+      sectionName: http
+  hostnames:
+    - "*.apps.par1.medisphere.internal"
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

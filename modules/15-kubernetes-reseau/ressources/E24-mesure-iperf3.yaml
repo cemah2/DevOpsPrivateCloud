@@ -1,0 +1,80 @@
+# ressources/E24-mesure-iperf3.yaml — pods de mesure de M15-E24 et M15-E29 (SEC-1624, PLAT-1629).
+# Fourni : ce n'est pas la solution de l'exercice, c'est l'instrument de mesure.
+#
+#   admin@adm01:~$ kubectl apply -f ressources/E24-mesure-iperf3.yaml
+#   admin@adm01:~$ kubectl -n wb-perf get pod -o wide        # mesure-a sur k8s-w01, mesure-b sur k8s-w02
+#
+# mesure-b sert :
+#   - iperf3 en écoute sur TCP/UDP 5201 (conteneur « iperf3 ») ;
+#   - un serveur HTTP de test sur TCP 8080 (conteneur « echo », agnhost netexec : /hostname, /clientip,
+#     /echo?msg=…) pour la capture « en clair » de l'étape 2.
+# mesure-a est le client (iperf3, ping, curl, tcpdump de netshoot).
+#
+# Pour une série « même nœud » (E29), change le nodeSelector de mesure-a en k8s-w02 et recrée le pod.
+# Images par le cache Harbor (introduction du module). Si les projets de cache de ton Harbor sont
+# privés, copie d'abord le Secret harbor-pull dans wb-perf (méthode de M14-E19) ; sinon la référence
+# ci-dessous est ignorée par le kubelet (simple avertissement).
+# À supprimer en fin de M15-E29 : kubectl delete namespace wb-perf
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-perf
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: baseline
+    medisphere.fr/usage: mesure
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mesure-a
+  namespace: wb-perf
+  labels:
+    app: mesure
+    role: client
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-w01
+  imagePullSecrets:
+    - name: harbor-pull
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: outils
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {cpu: "2", memory: 256Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mesure-b
+  namespace: wb-perf
+  labels:
+    app: mesure
+    role: serveur
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: k8s-w02
+  imagePullSecrets:
+    - name: harbor-pull
+  terminationGracePeriodSeconds: 1
+  containers:
+    - name: iperf3
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["iperf3", "-s"]
+      ports:
+        - {containerPort: 5201, protocol: TCP}
+        - {containerPort: 5201, protocol: UDP}
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+        limits: {cpu: "2", memory: 256Mi}
+    - name: echo
+      image: registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.66.1
+      args: ["netexec", "--http-port=8080"]
+      ports:
+        - {containerPort: 8080, protocol: TCP}
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 200m, memory: 64Mi}

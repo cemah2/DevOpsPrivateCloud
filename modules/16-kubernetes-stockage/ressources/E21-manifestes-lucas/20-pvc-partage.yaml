@@ -1,0 +1,12 @@
+# Volume partagé entre l'API et le traitement des miniatures
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: documents-partages
+  namespace: medidoc-dev
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi

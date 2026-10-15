@@ -1,0 +1,45 @@
+# cluster/kubeadm-config.yaml — configuration du CLUSTER k8s-par1 (M14-E04, PLAT-1504).
+# API kubeadm v1beta4 (seule API en 1.37 ; v1beta3 supprimée). Validation :
+#   kubeadm config validate --config <fichier complet>     (sur un nœud, version de kubeadm du cluster)
+#
+# Ce fichier ne contient que ce qui est COMMUN à tous les nœuds. Le rôle Ansible k8s_plan_controle
+# le recopie sur chaque nœud de contrôle (/etc/kubernetes/kubeadm/kubeadm-config.yaml) précédé de
+# l'InitConfiguration du nœud (adresse, nom, node-ip). Il ne commence donc pas par « --- ».
+# Après l'amorçage, la ClusterConfiguration vit aussi dans le ConfigMap kube-system/kubeadm-config :
+# toute modification ultérieure passe par une procédure (kubeadm upgrade, M14-E25), pas par une
+# simple MR sur ce fichier.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+clusterName: k8s-par1
+# Version exacte (pas « stable ») : la même que les paquets (group_vars/k8s_par1/kubernetes.yml).
+kubernetesVersion: v1.35.9
+# Point d'accès de TOUS les clients (kubelets, contrôleurs, humains) : la VIP keepalived + HAProxy.
+# Sans lui, un cluster amorcé sur un seul nœud ne peut plus devenir hautement disponible.
+controlPlaneEndpoint: k8s-api.par1.medisphere.internal:8443
+networking:
+  dnsDomain: cluster.local
+  # Réseau des pods : alloué par l'IPAM de Cilium (cluster-pool, /24 par nœud), PLAN §4.10.
+  podSubnet: 10.240.0.0/16
+  serviceSubnet: 10.96.0.0/16
+apiServer:
+  # Noms et adresses ajoutés au certificat du kube-apiserver (en plus du nom et de l'adresse du
+  # nœud, de kubernetes.default… et de 10.96.0.1) : la VIP et son nom.
+  certSANs:
+    - k8s-api.par1.medisphere.internal
+    - 10.10.40.200
+# Durées de vie (défauts de kubeadm, écrits pour être lus) : 1 an pour les certificats feuilles
+# (renouvelés à chaque « kubeadm upgrade »), 10 ans pour les CA. M14-E26.
+certificateValidityPeriod: 8760h0m0s
+caCertificateValidityPeriod: 87600h0m0s
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+# Même pilote que containerd (SystemdCgroup = true). Depuis 1.34 le kubelet peut le lire dans le
+# CRI ; on l'écrit quand même : une incohérence se voit dans le fichier.
+cgroupDriver: systemd
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+# kube-proxy conservé au M14 (Cilium sans remplacement de kube-proxy) ; mode explicite : ipvs est
+# déprécié depuis 1.35 et le défaut passera à nftables dans une version future. M15 retire kube-proxy.
+mode: iptables

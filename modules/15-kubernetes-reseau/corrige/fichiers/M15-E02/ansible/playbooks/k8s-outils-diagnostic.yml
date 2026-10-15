@@ -1,0 +1,50 @@
+---
+# playbooks/k8s-outils-diagnostic.yml — outils de diagnostic réseau sur les nœuds de k8s-par1 (M15-E02, PLAT-1602).
+# Lancement (pipeline protégé de plateforme/ansible, ou depuis adm01 pour un essai) :
+#   uv run ansible-playbook playbooks/k8s-outils-diagnostic.yml
+# Idempotent : un second passage donne changed=0.
+#
+# Pourquoi un playbook à part plutôt que le rôle k8s_noeud : ces paquets ne servent pas à faire
+# tourner Kubernetes, seulement à l'observer. On peut les retirer d'un nœud sans toucher au rôle
+# qui le construit, et le profil des nœuds de production pourra s'en passer (ADR-0150).
+#
+#   tcpdump        : capture sur les interfaces des nœuds (ens18, cilium_vxlan, lxc*) — E02, E05, E42
+#   conntrack      : table de suivi des connexions du noyau (comparaison avec la table CT de Cilium) — E03, E44
+#   iptables       : lecture et nettoyage des règles laissées par kube-proxy (backend nft de Debian 13) — E03, E08
+#   bpftool        : programmes et tables eBPF chargés par Cilium — E44
+#   bind9-dnsutils : dig depuis le nœud lui-même (comparaison avec les pods) — E04, E36
+#   iperf3         : mesures de débit (le serveur n'est jamais lancé en service) — E29
+- name: Outils de diagnostic réseau des nœuds Kubernetes
+  hosts: k8s_par1
+  become: true
+  serial: 1
+  tasks:
+    - name: Paquets de diagnostic
+      ansible.builtin.apt:
+        name:
+          - tcpdump
+          - conntrack
+          - iptables
+          - bpftool
+          - bind9-dnsutils
+          - iperf3
+        state: present
+        install_recommends: false
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Le service iperf3 éventuellement installé par le paquet reste arrêté et désactivé
+      ansible.builtin.systemd_service:
+        name: iperf3
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Les outils répondent
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - tcpdump --version
+        - conntrack --version
+        - iptables --version
+        - bpftool version
+      changed_when: false

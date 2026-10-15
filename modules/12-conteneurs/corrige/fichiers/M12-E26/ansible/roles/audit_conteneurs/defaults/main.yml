@@ -1,0 +1,24 @@
+---
+# Rôle audit_conteneurs — journal d'audit des modifications du moteur de conteneurs (M12-E26).
+# Recommandations « Docker daemon audit » du CIS Docker Benchmark (section 1), adaptées au lab.
+
+audit_conteneurs_paquets: [auditd, audispd-plugins]
+
+# Fichiers et dossiers dont toute écriture ou changement d'attribut est journalisé (clé « docker »).
+audit_conteneurs_surveilles:
+  - /etc/docker
+  - /etc/containerd
+  - /etc/default/docker
+  - /usr/lib/systemd/system/docker.service
+  - /usr/lib/systemd/system/docker.socket
+  - /usr/lib/systemd/system/containerd.service
+  - /etc/systemd/system/docker.service.d
+# Binaires du moteur : modification ou exécution (clé « docker »).
+audit_conteneurs_binaires:
+  - /usr/bin/dockerd
+  - /usr/bin/containerd
+  - /usr/bin/containerd-shim-runc-v2
+  - /usr/bin/runc
+# Client : chaque exécution est journalisée avec l'auid de l'humain (clé « docker-cli »).
+audit_conteneurs_client: /usr/bin/docker
+audit_conteneurs_fichier_regles: /etc/audit/rules.d/50-docker.rules

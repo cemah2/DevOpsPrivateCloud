@@ -1,0 +1,12 @@
+# .yamllint.yaml — plateforme/k8s (M14-E04). « task valider » et la CI l'utilisent.
+extends: default
+rules:
+  line-length:
+    max: 160
+  # cluster/kubeadm-config.yaml ne commence pas par « --- » (le rôle k8s_plan_controle le précède
+  # de l'InitConfiguration du nœud) : le début de document n'est pas exigé.
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    check-keys: false

@@ -1,0 +1,36 @@
+# plateforme/k8s — composants/cnpg/wb-restauration/mediagenda-db-recuperation.yaml (M16-E24)
+# Base de la copie : récupérée depuis les archives de la recette (ObjectStore cnpg-s3 restauré par
+# Velero dans wb-restauration), une seule instance, AUCUN archivage (.spec.plugins absent).
+# Même nom que l'original : le Deployment de l'API restauré cherche mediagenda-db-rw et le Secret
+# mediagenda-db-app, que l'opérateur crée ici pour la copie.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: wb-restauration
+  labels:
+    medisphere.fr/copie-de: mediagenda-recette
+spec:
+  instances: 1
+  # Même image (même majeure) que la recette : une récupération ne change pas de version.
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-system-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi                     # au moins la taille de la recette (E18)
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+  bootstrap:
+    recovery:
+      source: recette
+      # Sans recoveryTarget : rejeu jusqu'au dernier WAL archivé (état « le plus récent »).
+  externalClusters:
+  - name: recette
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: mediagenda-db
+  # PAS de .spec.plugins : la copie n'archive rien. Si un jour la copie doit archiver, ce sera vers
+  # un autre ObjectStore ou un autre serverName (la vérification « Expected empty archive » est un
+  # filet, pas une procédure).

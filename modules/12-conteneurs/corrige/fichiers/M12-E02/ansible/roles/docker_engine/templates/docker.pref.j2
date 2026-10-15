@@ -1,0 +1,10 @@
+{# Préférences APT : pas de commentaire « # » (champ Explanation à la place, accepté par APT). #}
+{% for paquet, version in docker_engine_versions.items() %}
+Explanation: géré par Ansible (rôle docker_engine, M12-E02) ; priorité 1001 : la version épinglée gagne, même pour descendre
+Package: {{ paquet }}
+Pin: version {{ version }}
+Pin-Priority: 1001
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}

@@ -1,0 +1,10 @@
+# M17-E02 — valeurs de la release d'essai podinfo (wb-essais).
+replicaCount: 2
+ui:
+  message: "Essai Helm 4 — équipe Plateforme"
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi

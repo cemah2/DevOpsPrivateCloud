@@ -1,0 +1,53 @@
+---
+# molecule/docker_engine/verify.yml (M12-E02) : ce qu'un hôte Docker de MédiSphère garantit.
+- name: Vérifier le rôle docker_engine
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire la version du démon, le stockage d'images et la rotation des journaux
+      ansible.builtin.command:
+        cmd: docker info --format '{{ "{{" }}.ServerVersion{{ "}}" }}|{{ "{{" }}json .DriverStatus{{ "}}" }}|{{ "{{" }}.LoggingDriver{{ "}}" }}'
+      register: info
+      changed_when: false
+
+    - name: Docker 29.8, stockage containerd, json-file
+      ansible.builtin.assert:
+        that:
+          - info.stdout.split('|')[0] is match('29\.8\.')
+          - "'io.containerd.snapshotter.v1' in info.stdout.split('|')[1]"
+          - info.stdout.split('|')[2] == 'json-file'
+        fail_msg: "{{ info.stdout }}"
+
+    - name: Lire daemon.json
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: daemon
+
+    - name: Défauts du rôle et clé de l'inventaire fusionnés
+      vars:
+        conf: "{{ daemon.content | b64decode | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - conf['log-opts']['max-size'] == '10m'
+          - conf['log-opts']['max-file'] == '5'
+          - conf['default-address-pools'][0]['base'] == '172.20.0.0/14'
+
+    - name: Le paquet docker.io de Debian est absent
+      ansible.builtin.command:
+        cmd: dpkg-query -W -f '${Status}' docker.io
+      register: dockerio
+      changed_when: false
+      failed_when: "'install ok installed' in dockerio.stdout"
+
+    - name: Un conteneur de test démarre et voit le réseau du pool MédiSphère
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm --network bridge docker.io/library/debian:trixie-slim
+          sh -c 'echo ok'
+      register: essai
+      changed_when: false
+
+    - name: Le conteneur a répondu
+      ansible.builtin.assert:
+        that: essai.stdout == 'ok'

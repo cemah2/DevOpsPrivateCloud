@@ -1,0 +1,30 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-medidoc
+  namespace: medidoc-dev
+spec:
+  gatewayClassName: cilium
+  addresses:
+    - type: IPAddress
+      value: 10.10.41.10
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: "*.apps.par1.medisphere.internal"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: apps-joker
+            namespace: passerelles
+      allowedRoutes:
+        namespaces:
+          from: All

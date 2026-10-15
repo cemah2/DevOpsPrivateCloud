@@ -1,0 +1,43 @@
+---
+- name: Savoir si Harbor est déjà installé (docker-compose.yml produit par prepare)
+  ansible.builtin.stat:
+    path: "{{ harbor_dossier }}/docker-compose.yml"
+  register: harbor_compose_fichier
+
+- name: Vérifier que le certificat est en place (rôle certificats_acme, avant ce rôle)
+  ansible.builtin.stat:
+    path: "{{ harbor_tls_certificat }}"
+  register: harbor_crt
+
+- name: Refuser d'installer sans certificat
+  ansible.builtin.assert:
+    that: harbor_crt.stat.exists
+    fail_msg: "{{ harbor_tls_certificat }} absent : le rôle certificats_acme (id harbor) doit passer avant (playbooks/registre.yml)."
+    quiet: true
+
+- name: harbor.yml (deux secrets : 600, root)
+  ansible.builtin.template:
+    src: harbor.yml.j2
+    dest: "{{ harbor_dossier }}/harbor.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  register: harbor_conf
+  diff: false   # jamais de --diff sur ce fichier : il afficherait les mots de passe dans le journal
+
+- name: Première installation (charge les images, prepare, up -d) — une seule fois
+  ansible.builtin.command:
+    cmd: ./install.sh --with-trivy
+    chdir: "{{ harbor_dossier }}"
+    creates: "{{ harbor_dossier }}/docker-compose.yml"
+  register: harbor_installation
+
+- name: harbor.yml a changé sur une instance installée → prepare (régénère la configuration)
+  ansible.builtin.command:
+    cmd: ./prepare --with-trivy
+    chdir: "{{ harbor_dossier }}"
+  when:
+    - harbor_compose_fichier.stat.exists
+    - harbor_conf is changed
+  changed_when: true
+  notify: Redémarrer Harbor

@@ -1,0 +1,114 @@
+# plateforme/k8s — rbac/ms-supervision-stockage.yaml (M16-E27, PLAT-1727)
+# Identité de la sonde ms-verif-k8s-stockage (adm01). Lecture seule, liste FERMÉE de ressources :
+# - pas de Secrets ;
+# - pas de nodes/proxy (ouvre tout le kubelet : exec, journaux, ports…) : nodes/metrics suffit pour
+#   /metrics du kubelet (autorisation du kubelet par l'API, sous-ressource « metrics ») ;
+# - pods/proxy uniquement dans les espaces qui portent une base (Role), pour lire le port 9187.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ms-supervision-stockage
+  namespace: wb-system
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ms-supervision-stockage
+rules:
+- apiGroups: [""]
+  resources: [persistentvolumeclaims, persistentvolumes, nodes]
+  verbs: [get, list]
+- apiGroups: [""]
+  resources: [nodes/metrics]
+  verbs: [get]
+- apiGroups: [storage.k8s.io]
+  resources: [volumeattachments, storageclasses, csidrivers, csinodes]
+  verbs: [get, list]
+- apiGroups: [snapshot.storage.k8s.io]
+  resources: [volumesnapshots, volumesnapshotcontents, volumesnapshotclasses]
+  verbs: [get, list]
+- apiGroups: [postgresql.cnpg.io]
+  resources: [clusters, backups, scheduledbackups]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ms-supervision-stockage
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: ms-supervision-stockage}
+subjects:
+- {kind: ServiceAccount, name: ms-supervision-stockage, namespace: wb-system}
+---
+# Pilotes ceph-csi : DaemonSets et Deployments de l'espace ceph-csi seulement.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ms-supervision-stockage, namespace: ceph-csi}
+rules:
+- apiGroups: [apps]
+  resources: [daemonsets, deployments]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: ms-supervision-stockage, namespace: ceph-csi}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ms-supervision-stockage}
+subjects:
+- {kind: ServiceAccount, name: ms-supervision-stockage, namespace: wb-system}
+---
+# Contrôleur de snapshots : son seul Deployment.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ms-supervision-stockage, namespace: kube-system}
+rules:
+- apiGroups: [apps]
+  resources: [deployments]
+  resourceNames: [snapshot-controller]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: ms-supervision-stockage, namespace: kube-system}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ms-supervision-stockage}
+subjects:
+- {kind: ServiceAccount, name: ms-supervision-stockage, namespace: wb-system}
+---
+# Velero : emplacements, planifications, sauvegardes (pas les identifiants S3, qui sont des Secrets).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ms-supervision-stockage, namespace: velero}
+rules:
+- apiGroups: [velero.io]
+  resources: [backupstoragelocations, schedules, backups]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: ms-supervision-stockage, namespace: velero}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ms-supervision-stockage}
+subjects:
+- {kind: ServiceAccount, name: ms-supervision-stockage, namespace: wb-system}
+---
+# Métriques des instances PostgreSQL (port 9187) par le proxy de l'API : espaces avec une base.
+# pods/proxy donne l'accès HTTP à TOUS les ports des pods de l'espace : la politique réseau
+# (CiliumNetworkPolicy metriques-cnpg-depuis-api) le restreint au seul 9187 des instances.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: ms-supervision-stockage, namespace: mediagenda-recette}
+rules:
+- apiGroups: [""]
+  resources: [pods/proxy]
+  verbs: [get]
+- apiGroups: [""]
+  resources: [pods]
+  verbs: [get, list]
+- apiGroups: [postgresql.cnpg.io]
+  resources: [scheduledbackups]
+  verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: ms-supervision-stockage, namespace: mediagenda-recette}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: ms-supervision-stockage}
+subjects:
+- {kind: ServiceAccount, name: ms-supervision-stockage, namespace: wb-system}

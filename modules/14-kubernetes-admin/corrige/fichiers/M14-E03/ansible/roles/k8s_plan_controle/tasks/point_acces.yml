@@ -1,0 +1,99 @@
+---
+# Point d'accès de l'API : méthode « keepalived et haproxy » de la documentation kubeadm
+# (« Options for Software Load Balancing »), avec les rôles du M07 et leurs conventions
+# (VRRP v3 unicast, pas de préemption, HAProxy validé par « haproxy -c » puis rechargé).
+#
+# Pourquoi 8443 et pas 6443 : HAProxy tourne SUR les nœuds de contrôle, où kube-apiserver écoute
+# déjà 6443 sur toutes les adresses. La VIP prend donc un autre port.
+
+- name: Repartir d'une liste de serveurs vide (le fichier peut être inclus deux fois)
+  ansible.builtin.set_fact:
+    _k8s_plan_controle_serveurs: []
+
+- name: La CA du cluster existe-t-elle déjà sur ce nœud ?
+  ansible.builtin.stat:
+    path: "{{ k8s_plan_controle_haproxy_ca }}"
+  register: _k8s_plan_controle_ca
+
+# Contrôle de santé des backends :
+#  - avant l'amorçage (pas de CA) : connexion TCP au port 6443 (rien n'écoute : backend DOWN) ;
+#  - ensuite : GET /readyz en HTTPS, certificat du kube-apiserver vérifié par la CA du cluster.
+#    /readyz est lisible sans authentification (ClusterRole system:public-info-viewer).
+- name: Lignes « server » des backends (un par nœud de contrôle, ordre alphabétique)
+  ansible.builtin.set_fact:
+    _k8s_plan_controle_serveurs: >-
+      {{ _k8s_plan_controle_serveurs | default([])
+         + ['server ' ~ item ~ ' ' ~ k8s_noeuds[item].ip ~ ':' ~ k8s_plan_controle_apiserver_port ~ ' check'] }}
+  loop: "{{ groups[k8s_plan_controle_groupe] | sort }}"
+
+- name: Construire les sections HAProxy de l'API
+  ansible.builtin.set_fact:
+    _k8s_plan_controle_haproxy_sections:
+      - type: frontend
+        nom: fe_k8s_api
+        lignes:
+          - "bind {{ k8s_plan_controle_api_vip }}:{{ k8s_plan_controle_api_port }}"
+          - mode tcp
+          - option tcplog
+          - "timeout client {{ k8s_plan_controle_haproxy_delai_tunnel }}"
+          - default_backend be_k8s_api
+      - type: backend
+        nom: be_k8s_api
+        lignes: >-
+          {{ _k8s_plan_controle_lignes_base
+             + (_k8s_plan_controle_lignes_tls if _k8s_plan_controle_ca.stat.exists else _k8s_plan_controle_lignes_tcp)
+             + _k8s_plan_controle_serveurs }}
+  vars:
+    _k8s_plan_controle_lignes_base:
+      - mode tcp
+      - balance roundrobin
+      - "timeout server {{ k8s_plan_controle_haproxy_delai_tunnel }}"
+    _k8s_plan_controle_lignes_tcp:
+      - default-server inter 3s fall 3 rise 2
+    _k8s_plan_controle_lignes_tls:
+      - option httpchk
+      - http-check connect ssl
+      - http-check send meth GET uri /readyz
+      - http-check expect status 200
+      - "default-server inter 3s fall 3 rise 2 verify required ca-file {{ k8s_plan_controle_haproxy_ca }}"
+
+- name: HAProxy sur la VIP, vers les kube-apiserver — port {{ k8s_plan_controle_api_port }}
+  ansible.builtin.include_role:
+    name: haproxy
+    apply:
+      tags: [point_acces]
+  vars:
+    haproxy_sections: "{{ _k8s_plan_controle_haproxy_sections }}"
+    # La VIP n'est portée que par un nœud : les autres écoutent une adresse qu'ils n'ont pas.
+    haproxy_bind_non_local: true
+    haproxy_verifications: []
+
+- name: Keepalived, VIP de l'API — VRID {{ k8s_plan_controle_vrid }}
+  ansible.builtin.include_role:
+    name: keepalived
+    apply:
+      tags: [point_acces]
+  vars:
+    keepalived_scripts:
+      # HAProxy arrêté : l'instance passe en FAULT et rend la VIP (même script qu'en M07-E12).
+      - nom: chk_haproxy
+        commande: /usr/bin/systemctl is-active --quiet haproxy.service
+        intervalle: 2
+        delai: 3
+        echecs: 2
+        succes: 2
+    keepalived_instances:
+      - nom: VI_K8S_API
+        interface: "{{ k8s_plan_controle_interface }}"
+        vrid: "{{ k8s_plan_controle_vrid | int }}"
+        priorite: "{{ k8s_plan_controle_priorite | int }}"
+        etat_initial: BACKUP
+        intervalle: 1
+        # Pas de préemption (ADR-0071, comme les répartiteurs) : un nœud qui revient ne reprend pas
+        # la VIP, une bascule de moins.
+        preemption: false
+        source: "{{ k8s_plan_controle_adresse }}"
+        pairs: "{{ k8s_plan_controle_pairs }}"
+        vips: ["{{ k8s_plan_controle_api_vip }}/24"]
+        scripts: [chk_haproxy]
+    keepalived_groupes_synchro: []

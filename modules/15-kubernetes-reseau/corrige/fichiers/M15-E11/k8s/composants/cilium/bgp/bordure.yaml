@@ -1,0 +1,18 @@
+# composants/cilium/bgp/bordure.yaml — paramètres communs des sessions vers gw01/gw02 (M15-E11).
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: bordure
+spec:
+  # Détection d'une panne en 9 s au plus (au lieu de 90 s), reconnexion rapide.
+  timers:
+    connectRetryTimeSeconds: 5
+    holdTimeSeconds: 9
+    keepAliveTimeSeconds: 3
+  # Pas de gracefulRestart ici : il est étudié et mesuré au palier 3 (M15-E25).
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          bgp.medisphere.fr/annonce: services

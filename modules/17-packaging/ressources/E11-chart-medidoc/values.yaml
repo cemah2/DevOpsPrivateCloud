@@ -1,0 +1,25 @@
+# Valeurs de MédiDoc (Lucas) — les clés S3 ci-dessous sont FICTIVES (exercice M17-E11).
+image:
+  repository: docker.io/lucasmartin/medidoc
+  tag: latest
+  pullPolicy: Always
+
+replicaCount: 2
+
+s3:
+  endpoint: http://minio:9000
+  bucket: medidoc-documents
+  region: us-east-1
+  accessKey: AKIAEXEMPLE0LUCAS000
+  secretKey: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXEMPLEKEY
+
+maxMb: 10
+logLevel: debug
+
+ingress:
+  host: medidoc.medisphere.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi

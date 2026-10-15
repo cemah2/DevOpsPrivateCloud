@@ -1,0 +1,356 @@
+#!/usr/bin/env bash
+# ms-verif-k8s-stockage — sonde du stockage du cluster k8s-par1 (M16-E27, PLAT-1727).
+#
+# Lit, avec le compte de service ms-supervision-stockage (lecture seule, sans Secrets ni
+# nodes/proxy), l'état des objets de stockage, les métriques des kubelets (nodes/metrics) et celles
+# des instances CloudNativePG (proxy de l'API vers le port 9187), et vérifie que le stockage REND le
+# service : volumes, pilotes CSI, snapshots, sauvegardes Velero, bases PostgreSQL.
+#
+# Usage : ms-verif-k8s-stockage [-q|--quiet] [-h|--help]
+# Configuration : /usr/local/etc/ms-verif-k8s-stockage.conf (MS_CONF pour un autre chemin).
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien ».
+
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+_MAINTENANT=0
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-k8s-stockage [-q|--quiet] [-h|--help]
+
+Sonde du stockage de k8s-par1 : PVC, PV, attachements, pilotes ceph-csi, snapshots, volumes pleins
+(kubelet), Velero, CloudNativePG.
+
+  -q, --quiet   n'afficher que les anomalies et le bilan
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils (section « Stockage Kubernetes »).
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-12s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-12s %s\n' "$1" "$2"
+}
+
+# k ARGS... — kubectl avec l'identité de la sonde.
+k() { kubectl --kubeconfig "$MS_K8S_KUBECONFIG" --request-timeout=20s "$@"; }
+
+# kjson RESSOURCE [ARGS...] — liste JSON (toutes les espaces si rien n'est précisé), ou échec.
+kjson() {
+  local r="$1"
+  shift
+  if (($# == 0)); then set -- -A; fi
+  k get "$r" "$@" -o json 2>/dev/null
+}
+
+# age_s HORODATAGE_ISO — âge en secondes (0 si illisible).
+age_s() {
+  local t
+  t="$(date -d "$1" +%s 2>/dev/null)" || { echo 0; return; }
+  echo $((_MAINTENANT - t))
+}
+
+# --- Objets de stockage --------------------------------------------------------------------------
+
+verifier_pvc() {
+  local j lignes
+  j="$(kjson persistentvolumeclaims)" || { ko pvc "lecture des PVC impossible"; return; }
+  lignes="$(jq -r --argjson s "$((MS_K8S_PVC_PENDING_MIN * 60))" --argjson t "$_MAINTENANT" '
+    .items[] | select(.status.phase == "Pending")
+    | select(($t - (.metadata.creationTimestamp | fromdateiso8601)) > $s)
+    | "\(.metadata.namespace)/\(.metadata.name) (\(.spec.storageClassName // "sans classe"))"' <<<"$j")"
+  if [[ -n "$lignes" ]]; then
+    ko pvc "Pending depuis plus de $MS_K8S_PVC_PENDING_MIN min : $(paste -sd ' ' - <<<"$lignes")"
+  else
+    ok pvc "$(jq '.items | length' <<<"$j") PVC, aucun Pending au-delà de $MS_K8S_PVC_PENDING_MIN min"
+  fi
+}
+
+verifier_pv() {
+  local j lignes
+  j="$(kjson persistentvolumes)" || { ko pv "lecture des PV impossible"; return; }
+  # Failed : suppression ou récupération en échec. Released + Delete : l'image n'a pas été supprimée.
+  lignes="$(jq -r '.items[]
+    | select(.status.phase == "Failed" or (.status.phase == "Released" and .spec.persistentVolumeReclaimPolicy == "Delete"))
+    | "\(.metadata.name):\(.status.phase)"' <<<"$j")"
+  if [[ -n "$lignes" ]]; then
+    ko pv "$(paste -sd ' ' - <<<"$lignes")"
+  else
+    ok pv "$(jq '.items | length' <<<"$j") PV, aucun en échec"
+  fi
+}
+
+verifier_attachements() {
+  local j lignes
+  j="$(kjson volumeattachments)" || { ko attachement "lecture des VolumeAttachment impossible"; return; }
+  lignes="$(jq -r '.items[] | select(.status.attachError or .status.detachError)
+    | "\(.spec.source.persistentVolumeName // "?")@\(.spec.nodeName): \((.status.attachError // .status.detachError).message // "erreur" | .[0:80])"' <<<"$j")"
+  if [[ -n "$lignes" ]]; then
+    ko attachement "$(paste -sd ';' - <<<"$lignes")"
+  else
+    ok attachement "$(jq '.items | length' <<<"$j") attachement(s), aucun en erreur"
+  fi
+}
+
+verifier_pilotes() {
+  local ds dep lignes n
+  ds="$(kjson daemonsets -n "$MS_K8S_ESPACE_CSI")" || { ko pilotes "lecture des DaemonSets de $MS_K8S_ESPACE_CSI impossible"; return; }
+  dep="$(kjson deployments -n "$MS_K8S_ESPACE_CSI")" || { ko pilotes "lecture des Deployments de $MS_K8S_ESPACE_CSI impossible"; return; }
+  n="$(jq '.items | length' <<<"$ds")"
+  if ((n < MS_K8S_NB_PILOTES)); then
+    ko pilotes "$n DaemonSet(s) de nodeplugins dans $MS_K8S_ESPACE_CSI, $MS_K8S_NB_PILOTES attendus"
+    return
+  fi
+  lignes="$(jq -r --argjson w "$MS_K8S_NB_TRAVAILLEURS" '.items[]
+    | select((.status.numberReady // 0) < (.status.desiredNumberScheduled // 0)
+             or (.status.desiredNumberScheduled // 0) < $w
+             or (.status.updatedNumberScheduled // 0) < (.status.desiredNumberScheduled // 0))
+    | "\(.metadata.name): \(.status.numberReady // 0)/\(.status.desiredNumberScheduled // 0) prêts"' <<<"$ds")"
+  lignes+="$(jq -r '.items[] | select((.status.readyReplicas // 0) < (.spec.replicas // 1))
+    | "\n\(.metadata.name): \(.status.readyReplicas // 0)/\(.spec.replicas) prêts"' <<<"$dep")"
+  if [[ -n "${lignes//$'\n'/}" ]]; then
+    ko pilotes "$(grep -v '^$' <<<"$lignes" | paste -sd ' ' -)"
+  else
+    ok pilotes "pilotes ceph-csi prêts sur $MS_K8S_NB_TRAVAILLEURS travailleur(s)"
+  fi
+  if k get deployment "$MS_K8S_SNAPSHOT_CONTROLLER" -n kube-system -o json 2>/dev/null \
+      | jq -e '(.status.readyReplicas // 0) >= 1' >/dev/null; then
+    ok snapshots "contrôleur de snapshots prêt"
+  else
+    ko snapshots "contrôleur de snapshots ($MS_K8S_SNAPSHOT_CONTROLLER) absent ou non prêt"
+  fi
+}
+
+verifier_instantanes() {
+  local j lignes
+  j="$(kjson volumesnapshots.snapshot.storage.k8s.io)" || { ko snapshots "lecture des VolumeSnapshots impossible"; return; }
+  lignes="$(jq -r --argjson s "$((MS_K8S_SNAPSHOT_MIN * 60))" --argjson t "$_MAINTENANT" '
+    .items[] | select((.status.readyToUse // false) | not)
+    | select(($t - (.metadata.creationTimestamp | fromdateiso8601)) > $s)
+    | "\(.metadata.namespace)/\(.metadata.name)"' <<<"$j")"
+  if [[ -n "$lignes" ]]; then
+    ko snapshots "non prêts depuis plus de $MS_K8S_SNAPSHOT_MIN min : $(paste -sd ' ' - <<<"$lignes")"
+  else
+    ok snapshots "$(jq '.items | length' <<<"$j") VolumeSnapshot(s), tous prêts ou récents"
+  fi
+}
+
+# --- Volumes pleins : métriques des kubelets -------------------------------------------------------
+
+# metriques_kubelet NŒUD — /metrics du kubelet, avec le jeton et la CA du kubeconfig de la sonde.
+metriques_kubelet() {
+  curl -sS --fail --max-time 15 --cacert "$_CA" -H "Authorization: Bearer $_JETON" \
+    "https://$1:$MS_K8S_PORT_KUBELET/metrics" 2>/dev/null
+}
+
+verifier_volumes() {
+  local n m nb=0 pleins=() vus=0
+  for n in "${MS_K8S_NOEUDS[@]}"; do
+    if ! m="$(metriques_kubelet "$n")" || [[ -z "$m" ]]; then
+      ko volumes "$n : métriques du kubelet illisibles"
+      continue
+    fi
+    nb=$((nb + 1))
+    # Échantillons : kubelet_volume_stats_used_bytes{namespace="…",persistentvolumeclaim="…"} V
+    while IFS=' ' read -r pvc pct; do
+      [[ -n "$pvc" ]] || continue
+      vus=$((vus + 1))
+      ((pct >= MS_K8S_SEUIL_VOLUME)) && pleins+=("$pvc:$pct%")
+    done < <(awk -v seuil="$MS_K8S_SEUIL_VOLUME" '
+      function cle(l,  ns, p) {
+        match(l, /namespace="[^"]*"/); ns = substr(l, RSTART + 11, RLENGTH - 12)
+        match(l, /persistentvolumeclaim="[^"]*"/); p = substr(l, RSTART + 23, RLENGTH - 24)
+        return ns "/" p
+      }
+      /^kubelet_volume_stats_used_bytes\{/       { u[cle($0)] = $NF }
+      /^kubelet_volume_stats_capacity_bytes\{/   { c[cle($0)] = $NF }
+      /^kubelet_volume_stats_inodes_used\{/      { iu[cle($0)] = $NF }
+      /^kubelet_volume_stats_inodes\{/           { ic[cle($0)] = $NF }
+      END {
+        for (x in c) {
+          p = (c[x] > 0) ? int(100 * u[x] / c[x]) : 0
+          q = (ic[x] > 0) ? int(100 * iu[x] / ic[x]) : 0
+          print x, (p > q ? p : q)
+        }
+      }' <<<"$m")
+  done
+  ((nb > 0)) || return 0
+  if ((${#pleins[@]} > 0)); then
+    ko volumes "remplis au-delà de $MS_K8S_SEUIL_VOLUME % (octets ou inodes) : ${pleins[*]}"
+  else
+    ok volumes "$vus volume(s) monté(s) sur $nb nœud(s), tous sous $MS_K8S_SEUIL_VOLUME %"
+  fi
+}
+
+# --- Velero ------------------------------------------------------------------------------------------
+
+verifier_velero() {
+  local bsl sch bk s dernier age
+  bsl="$(kjson backupstoragelocations.velero.io -n "$MS_K8S_ESPACE_VELERO")" || { ko velero "lecture des BSL impossible"; return; }
+  if jq -e '.items | length > 0 and all(.[]; .status.phase == "Available")' >/dev/null <<<"$bsl"; then
+    ok velero "emplacement(s) de sauvegarde disponible(s) : $(jq -r '[.items[].metadata.name] | join(" ")' <<<"$bsl")"
+  else
+    ko velero "emplacement(s) non disponible(s) : $(jq -r '[.items[] | select(.status.phase != "Available") | "\(.metadata.name):\(.status.phase // "inconnu")"] | join(" ") | if . == "" then "aucun BSL" else . end' <<<"$bsl")"
+  fi
+  sch="$(kjson schedules.velero.io -n "$MS_K8S_ESPACE_VELERO")" || { ko velero "lecture des planifications impossible"; return; }
+  bk="$(kjson backups.velero.io -n "$MS_K8S_ESPACE_VELERO")" || { ko velero "lecture des sauvegardes impossible"; return; }
+  if jq -e '.items | length == 0' >/dev/null <<<"$sch"; then
+    ko velero "aucune planification Velero : rien n'est sauvegardé régulièrement"
+    return
+  fi
+  for s in $(jq -r '.items[] | select((.spec.paused // false) | not) | .metadata.name' <<<"$sch"); do
+    dernier="$(jq -r --arg s "$s" '[.items[] | select(.metadata.labels["velero.io/schedule-name"] == $s
+      and .status.phase == "Completed") | .status.completionTimestamp] | sort | last // ""' <<<"$bk")"
+    if [[ -z "$dernier" ]]; then
+      ko velero "$s : aucune sauvegarde réussie"
+      continue
+    fi
+    age=$(($(age_s "$dernier") / 3600))
+    if ((age >= MS_K8S_SAUVEGARDE_H)); then
+      ko velero "$s : dernière sauvegarde réussie il y a $age h (seuil $MS_K8S_SAUVEGARDE_H h)"
+    else
+      ok velero "$s : dernière sauvegarde réussie il y a $age h"
+    fi
+  done
+}
+
+# --- CloudNativePG -----------------------------------------------------------------------------------
+
+# metriques_instance ESPACE POD — /metrics de l'instance (port 9187) par le proxy de l'API.
+metriques_instance() {
+  k get --raw "/api/v1/namespaces/$1/pods/$2:9187/proxy/metrics" 2>/dev/null
+}
+
+verifier_cnpg() {
+  local cl bk c ns nom prim m retard dernier age archiveur planifie
+  cl="$(kjson clusters.postgresql.cnpg.io)" || { ko cnpg "lecture des Cluster impossible"; return; }
+  bk="$(kjson backups.postgresql.cnpg.io)" || bk='{"items":[]}'
+  if jq -e '.items | length == 0' >/dev/null <<<"$cl"; then
+    ko cnpg "aucun Cluster PostgreSQL trouvé (au moins mediagenda-db attendu)"
+    return
+  fi
+  while read -r c; do
+    ns="${c%%/*}"
+    nom="${c#*/}"
+    local j
+    j="$(jq -c --arg n "$nom" --arg ns "$ns" '.items[] | select(.metadata.name == $n and .metadata.namespace == $ns)' <<<"$cl")"
+    if jq -e '.status.phase == "Cluster in healthy state" and ((.status.readyInstances // 0) == .spec.instances)' >/dev/null <<<"$j"; then
+      ok cnpg "$c : sain, $(jq -r '.status.readyInstances' <<<"$j")/$(jq -r '.spec.instances' <<<"$j") instances prêtes"
+    else
+      ko cnpg "$c : $(jq -r '.status.phase // "phase inconnue"' <<<"$j"), $(jq -r '.status.readyInstances // 0' <<<"$j")/$(jq -r '.spec.instances' <<<"$j") instances prêtes"
+    fi
+    archiveur="$(jq -r 'any(.spec.plugins[]?; .isWALArchiver == true)' <<<"$j")"
+    if [[ "$archiveur" == true ]]; then
+      if jq -e 'any(.status.conditions[]?; .type == "ContinuousArchiving" and .status == "True")' >/dev/null <<<"$j"; then
+        ok archivage "$c : archivage continu des WAL actif"
+      else
+        ko archivage "$c : archivage continu des WAL en échec ou inconnu"
+      fi
+      planifie="$(k get scheduledbackups.postgresql.cnpg.io -n "$ns" -o json 2>/dev/null \
+        | jq -r --arg n "$nom" 'any(.items[]; .spec.cluster.name == $n)')" || planifie=false
+      if [[ "$planifie" == true ]]; then
+        dernier="$(jq -r --arg n "$nom" --arg ns "$ns" '[.items[] | select(.metadata.namespace == $ns
+          and .spec.cluster.name == $n and .status.phase == "completed") | .status.stoppedAt // empty] | sort | last // ""' <<<"$bk")"
+        if [[ -z "$dernier" ]]; then
+          ko sauvegarde "$c : aucune sauvegarde de base réussie"
+        else
+          age=$(($(age_s "$dernier") / 3600))
+          if ((age >= MS_K8S_SAUVEGARDE_H)); then
+            ko sauvegarde "$c : dernière sauvegarde de base il y a $age h (seuil $MS_K8S_SAUVEGARDE_H h)"
+          else
+            ok sauvegarde "$c : dernière sauvegarde de base il y a $age h"
+          fi
+        fi
+      fi
+    fi
+    # Retard de réplication, lu sur chaque réplica (cnpg_pg_replication_lag, en secondes).
+    prim="$(jq -r '.status.currentPrimary // ""' <<<"$j")"
+    for m in $(jq -r '.status.instanceNames[]? // empty' <<<"$j"); do
+      [[ "$m" != "$prim" ]] || continue
+      if ! retard="$(metriques_instance "$ns" "$m" | awk '/^cnpg_pg_replication_lag[ {]/ { print int($NF); exit }')" \
+          || [[ -z "$retard" ]]; then
+        ko replication "$ns/$m : métriques illisibles (proxy 9187, politique réseau ?)"
+      elif ((retard > MS_K8S_RETARD_S)); then
+        ko replication "$ns/$m : retard de $retard s (seuil $MS_K8S_RETARD_S s)"
+      else
+        ok replication "$ns/$m : retard de $retard s"
+      fi
+    done
+  done < <(jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)"' <<<"$cl")
+}
+
+# --- Programme principal -------------------------------------------------------------------------------
+
+main() {
+  set -Eeuo pipefail
+  while (($#)); do
+    case "$1" in
+      -q | --quiet)
+        _QUIET=1
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log_err "option inconnue : $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+  require_cmd kubectl curl jq awk base64
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-k8s-stockage.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  # shellcheck source=../etc/ms-verif-k8s-stockage.conf
+  source "$conf"
+  ((${#MS_K8S_NOEUDS[@]} > 0 && MS_K8S_NB_TRAVAILLEURS > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+  [[ -r "$MS_K8S_KUBECONFIG" ]] || die "kubeconfig de la sonde illisible : $MS_K8S_KUBECONFIG" 1
+  _MAINTENANT="$(date +%s)"
+
+  # Jeton et CA du kubeconfig, pour interroger les kubelets directement. La CA va dans un fichier
+  # temporaire privé (PrivateTmp dans l'unité systemd).
+  _JETON="$(kubectl --kubeconfig "$MS_K8S_KUBECONFIG" config view --raw --minify -o jsonpath='{.users[0].user.token}')"
+  _CA="$(mktemp)"
+  trap 'rm -f "$_CA"' EXIT
+  kubectl --kubeconfig "$MS_K8S_KUBECONFIG" config view --raw --minify \
+    -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d >"$_CA"
+  [[ -n "$_JETON" && -s "$_CA" ]] || die "jeton ou CA absents du kubeconfig $MS_K8S_KUBECONFIG" 1
+
+  if ! k auth can-i list persistentvolumeclaims -A >/dev/null 2>&1; then
+    ko api "l'API du cluster ne répond pas ou l'identité de la sonde est refusée (jeton expiré ?)"
+  else
+    verifier_pvc
+    verifier_pv
+    verifier_attachements
+    verifier_pilotes
+    verifier_instantanes
+    verifier_velero
+    verifier_cnpg
+  fi
+  verifier_volumes
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur le stockage de k8s-par1"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

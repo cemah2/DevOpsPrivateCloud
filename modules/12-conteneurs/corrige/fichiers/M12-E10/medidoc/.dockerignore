@@ -1,0 +1,10 @@
+# .dockerignore de MédiDoc (M12-E10) : n'envoie au constructeur que ce qui sert à compiler.
+# Tout est exclu, puis on réautorise le nécessaire (liste blanche : un nouveau fichier secret
+# ajouté au dépôt n'entre pas dans le contexte par accident).
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+# Les tests ne servent pas à construire l'image (ils tournent en CI, à part).
+**/*_test.go

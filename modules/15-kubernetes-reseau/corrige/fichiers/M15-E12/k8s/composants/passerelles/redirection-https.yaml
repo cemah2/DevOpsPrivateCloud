@@ -1,0 +1,20 @@
+# composants/passerelles/redirection-https.yaml — HTTP → HTTPS pour tous les noms *.apps (M15-E12).
+# Attachée au SEUL écouteur http ; une règle sans backendRefs, un filtre RequestRedirect (301).
+# Les défis ACME HTTP-01 (E13) visent des noms HORS apps : ils ne passent pas par cette route.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: redirection-https
+  namespace: passerelles
+spec:
+  parentRefs:
+    - name: gw-par1
+      sectionName: http
+  hostnames:
+    - "*.apps.par1.medisphere.internal"
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

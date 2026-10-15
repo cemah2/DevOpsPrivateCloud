@@ -1,0 +1,74 @@
+# Taskfile.yml — plateforme/k8s (M14-E05 ; complété par les exercices suivants).
+# Lancé depuis adm01, à la racine de la copie de travail (~/src/k8s) :
+#   task --list
+#   task noeuds              # Ansible : nœuds puis cluster (idempotent)
+#   task cilium              # première installation de Cilium (E05)
+#   task diff / appliquer    # manifestes (espaces/, rbac/, admission/…) par « server-side apply »
+# Le contexte kubectl est TOUJOURS explicite : une commande ne part jamais vers « le contexte
+# courant » par accident.
+version: "3"
+
+vars:
+  CONTEXTE: k8s-par1
+  # Gestionnaire des champs posés par ce dépôt (server-side apply) : « kubectl get … --show-managed-fields ».
+  GESTIONNAIRE: plateforme-k8s
+  CILIUM_VERSION: 1.20.2
+  # Dossiers de manifestes appliqués, dans l'ordre (les espaces de noms d'abord).
+  DOSSIERS: espaces rbac admission
+  # Copie de travail de plateforme/ansible (WB_SRC de lab/lab.env, sinon ~/src).
+  ANSIBLE_DIR:
+    sh: echo "${WB_SRC:-$HOME/src}/ansible"
+
+tasks:
+  noeuds:
+    desc: Converger les nœuds de k8s-par1 (playbooks k8s-noeuds puis k8s-cluster de plateforme/ansible)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - uv run ansible-playbook playbooks/k8s-noeuds.yml {{.CLI_ARGS}}
+      - >-
+        uv run ansible-playbook playbooks/k8s-cluster.yml
+        -e k8s_plan_controle_fichier_cluster={{.ROOT_DIR}}/cluster/kubeadm-config.yaml {{.CLI_ARGS}}
+
+  cilium:
+    desc: Installer Cilium (première fois) avec composants/cilium/values.yaml
+    cmds:
+      - cilium install --context {{.CONTEXTE}} --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium status --context {{.CONTEXTE}} --wait
+
+  cilium-maj:
+    desc: Appliquer un changement de composants/cilium/values.yaml (ou de version) à Cilium installé
+    cmds:
+      - cilium upgrade --context {{.CONTEXTE}} --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium status --context {{.CONTEXTE}} --wait
+
+  valider:
+    desc: Valider les manifestes (yamllint, puis le serveur sans rien écrire)
+    cmds:
+      - yamllint --strict .
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}}
+          --dry-run=server -R -f {{.ITEM}} ; fi
+
+  diff:
+    desc: Montrer ce qu'« appliquer » changerait (code 1 = des différences, ce n'est pas une erreur)
+    cmds:
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} diff --server-side --field-manager={{.GESTIONNAIRE}}
+          -R -f {{.ITEM}} || [ $? -eq 1 ] ; fi
+
+  appliquer:
+    desc: Appliquer les manifestes du dépôt (après MR fusionnée, depuis main à jour)
+    preconditions:
+      - sh: '[ "$(git rev-parse --abbrev-ref HEAD)" = main ] && git diff --quiet && git diff --cached --quiet'
+        msg: "Applique depuis main, sans modification locale (la MR fait foi)."
+    cmds:
+      - task: valider
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}}
+          -R -f {{.ITEM}} ; fi

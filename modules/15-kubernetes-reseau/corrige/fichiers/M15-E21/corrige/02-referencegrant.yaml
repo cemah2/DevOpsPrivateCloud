@@ -1,0 +1,3 @@
+# SUPPRIMÉ : aucun ReferenceGrant vers les Secrets de passerelles. Le joker ne sert qu'à gw-par1 ;
+# le prêter à une Gateway d'équipe permettrait à cette équipe de se faire passer pour n'importe
+# quel nom *.apps.

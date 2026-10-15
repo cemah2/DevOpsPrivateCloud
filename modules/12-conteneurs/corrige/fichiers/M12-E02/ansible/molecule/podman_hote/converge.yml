@@ -1,0 +1,10 @@
+---
+# molecule/podman_hote/converge.yml (M12-E02) : le rôle tel quel, valeurs de l'inventaire.
+- name: Converge — rôle podman_hote
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../inventories/lab/group_vars/role_podman/podman_hote.yml
+  roles:
+    - role: podman_hote

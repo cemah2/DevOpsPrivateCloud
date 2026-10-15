@@ -1,0 +1,40 @@
+# plateforme/k8s — espaces/mediagenda-recette/60-cnpg-s3.yaml (M16-E19)
+# Magasin d'objets du plugin Barman Cloud 0.15 pour les clusters CNPG de mediagenda-recette.
+# Secrets cnpg-s3 et medisphere-ca : outils/secrets-sauvegarde.sh cnpg mediagenda-recette.
+# Les données de chaque cluster vont sous s3://cnpg-k8s-par1/<serverName>/ (wals/, base/) ;
+# serverName vaut le nom du cluster par défaut, et se règle côté Cluster, JAMAIS ici.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3
+  namespace: mediagenda-recette
+spec:
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: s3://cnpg-k8s-par1/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+      maxParallel: 4
+    data:
+      compression: gzip
+      jobs: 2
+  instanceSidecarConfiguration:
+    retentionPolicyIntervalSeconds: 1800
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi

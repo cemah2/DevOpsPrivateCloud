@@ -1,0 +1,6 @@
+<!-- plateforme/medisphere — docs/socle/matrice-flux.md (EXTRAIT, lignes ajoutées en M16) -->
+| Source | Destination | Port | Usage | Règle de bordure | Module |
+|---|---|---|---|---|---|
+| VLAN 40 (`k8s-w01-03`, pods masqués derrière l'adresse du nœud) | `s3-01` 10.10.20.14 | TCP 8333 | Velero (BSL `s3-01`, Kopia, *data mover*) | **existante** (ouverte au M14-E24 pour l'instantané etcd, source 10.10.40.0/24) : rien à ajouter | M16-E16 |
+| VLAN 40 (idem) | `s3-01` 10.10.20.14 | TCP 8333 | CloudNativePG, plugin Barman Cloud (WAL, sauvegardes de base) | existante (même règle) | M16-E19 |
+| VLAN 40 (idem) | `s3-01` 10.10.20.14 | TCP 8333 | Longhorn, cible de sauvegarde d'essai (retirée) | existante | M16-E15 |

@@ -1,0 +1,7 @@
+---
+# Rôle k8s_audit (M14-E27) — fichiers de l'audit du serveur d'API sur les nœuds de contrôle.
+# Les options du serveur d'API (fichier de politique, journal, rotation) et les volumes montés sont
+# dans la ClusterConfiguration (plateforme/k8s cluster/kubeadm-config.yaml) : ce rôle ne pose que
+# les fichiers, AVANT que le serveur d'API en ait besoin (y compris sur un nœud qui rejoint, E29).
+k8s_audit_dossier_politique: /etc/kubernetes/audit
+k8s_audit_dossier_journaux: /var/log/kubernetes/audit

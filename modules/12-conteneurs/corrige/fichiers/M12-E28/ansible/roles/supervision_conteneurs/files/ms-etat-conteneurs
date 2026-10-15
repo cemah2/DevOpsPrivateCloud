@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# /usr/local/sbin/ms-etat-conteneurs — état des conteneurs de l'hôte, en LECTURE SEULE (M12-E28).
+# Lancé par le compte « supervision » (clé à commande forcée, une seule règle sudo) pour la sonde
+# ms-verif-conteneurs d'adm01. N'accepte AUCUN argument : ce que le client demande par ssh
+# (SSH_ORIGINAL_COMMAND) est ignoré.
+#
+# Sortie : une ligne par conteneur, champs séparés par une tabulation :
+#   moteur  compte  nom  état  santé  redémarrages  image
+#   - moteur : docker, ou podman (conteneurs sans privilège du compte indiqué) ;
+#   - santé : healthy, unhealthy, starting, ou « aucune » (pas de sonde de santé) ;
+#   - redémarrages : RestartCount du moteur ; pour un conteneur géré par une unité systemd
+#     (Quadlet), NRestarts de l'unité (Quadlet recrée le conteneur à chaque redémarrage : son
+#     propre compteur reste à 0).
+# Dernière ligne : « fin <nombre de conteneurs> » (une sortie tronquée se voit).
+# Code retour : 0 si tous les moteurs configurés ont répondu, 1 sinon (ligne « erreur … »).
+set -uo pipefail
+umask 077
+CONF=/etc/ms-etat-conteneurs.conf
+MOTEUR_DOCKER=non
+COMPTES_PODMAN=()
+# shellcheck source=/dev/null
+[[ -r "$CONF" ]] && source "$CONF"
+
+n=0 rc=0
+champ_sante() { [[ -n "$1" && "$1" != "<no value>" ]] && printf '%s' "$1" || printf 'aucune'; }
+
+if [[ "$MOTEUR_DOCKER" == oui ]]; then
+  if ids="$(timeout 20 docker ps -aq 2>/dev/null)"; then
+    if [[ -n "$ids" ]]; then
+      # shellcheck disable=SC2086  # liste d'identifiants, découpage voulu
+      while IFS='|' read -r nom etat sante redem image; do
+        printf 'docker\troot\t%s\t%s\t%s\t%s\t%s\n' "${nom#/}" "$etat" "$(champ_sante "$sante")" "$redem" "$image"
+        n=$((n + 1))
+      done < <(timeout 20 docker inspect --format \
+        '{{.Name}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.RestartCount}}|{{.Config.Image}}' $ids)
+    fi
+  else
+    echo "erreur docker : le démon ne répond pas"
+    rc=1
+  fi
+fi
+
+for compte in "${COMPTES_PODMAN[@]}"; do
+  if ! uid="$(id -u "$compte" 2>/dev/null)"; then
+    echo "erreur podman $compte : compte inconnu"; rc=1; continue
+  fi
+  en_compte() { timeout 20 runuser -u "$compte" -- env XDG_RUNTIME_DIR="/run/user/$uid" HOME="$(getent passwd "$compte" | cut -d: -f6)" "$@"; }
+  if ! ids="$(cd / && en_compte podman ps -aq 2>/dev/null)"; then
+    echo "erreur podman $compte : podman ne répond pas (linger ? XDG_RUNTIME_DIR ?)"; rc=1; continue
+  fi
+  [[ -n "$ids" ]] || continue
+  # shellcheck disable=SC2086
+  while IFS='|' read -r nom etat sante redem image unite; do
+    if [[ -n "$unite" && "$unite" != "<no value>" ]]; then
+      redem="$(cd / && en_compte systemctl --user show -p NRestarts --value "$unite" 2>/dev/null || echo "$redem")"
+    fi
+    printf 'podman\t%s\t%s\t%s\t%s\t%s\t%s\n' "$compte" "$nom" "$etat" "$(champ_sante "$sante")" "${redem:-0}" "$image"
+    n=$((n + 1))
+  done < <(cd / && en_compte podman inspect --format \
+    '{{.Name}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.RestartCount}}|{{.ImageName}}|{{index .Config.Labels "PODMAN_SYSTEMD_UNIT"}}' $ids 2>/dev/null)
+done
+
+echo "fin $n"
+exit "$rc"

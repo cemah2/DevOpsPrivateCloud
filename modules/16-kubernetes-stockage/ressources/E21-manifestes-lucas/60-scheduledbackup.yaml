@@ -1,0 +1,10 @@
+# Une sauvegarde par nuit, à 2 h
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: medidoc-db-nuit
+  namespace: medidoc-dev
+spec:
+  schedule: "0 2 * * *"
+  cluster:
+    name: medidoc-db

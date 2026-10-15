@@ -1,0 +1,7 @@
+renovate:
+  image: renovate/renovate:latest
+  tags: [docker]
+  variables:
+    NODE_TLS_REJECT_UNAUTHORIZED: "0"
+  script:
+    - renovate

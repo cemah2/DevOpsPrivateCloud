@@ -1,0 +1,10 @@
+---
+# playbooks/outils-k8s.yml — outils Kubernetes du poste d'administration (M14-E05).
+#   uv run ansible-playbook playbooks/outils-k8s.yml --check --diff
+#   uv run ansible-playbook playbooks/outils-k8s.yml
+- name: Outils Kubernetes sur adm01
+  hosts: adm01
+  become: true
+  roles:
+    - role: outils_k8s
+      tags: [outils_k8s]

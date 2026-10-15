@@ -1,0 +1,43 @@
+# ~/m16/e19/mediagenda-db-pitr.yaml — restauration à un instant donné de mediagenda-db dans un
+# cluster À PART (M16-E19). <T> : l'heure notée à l'étape 5, AVEC son fuseau
+# (ex. 2026-11-04T14:32:10+01:00) ; sans fuseau, CNPG la lit en UTC.
+# Pas de .spec.plugins : ce cluster n'archive PAS ses WAL (sinon il écrirait sous
+# s3://cnpg-k8s-par1/mediagenda-db-pitr/, ou pire sous mediagenda-db/ si l'on se trompait de
+# serverName). À supprimer après vérification et après le passage du check.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db-pitr
+  namespace: mediagenda-recette
+spec:
+  description: "Restauration à T de mediagenda-db (SEC-1719), temporaire"
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+  bootstrap:
+    recovery:
+      source: origine
+      recoveryTarget:
+        targetTime: "<T>"
+  externalClusters:
+    - name: origine
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          serverName: mediagenda-db
+  affinity:
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi

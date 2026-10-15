@@ -1,0 +1,15 @@
+---
+# molecule/k8s_noeud/converge.yml (M14-E02)
+# Les deux rôles tels quels, avec les faits du cluster passés en variables (l'instance n'est pas
+# dans le groupe k8s_par1). Le contrôle préalable de kubeadm tourne en vrai (--dry-run).
+- name: Converge — rôles containerd et k8s_noeud
+  hosts: molecule
+  become: true
+  gather_facts: true
+  vars:
+    k8s_version: "1.35.9"
+    k8s_image_pause: registry.k8s.io/pause:3.10.1
+    containerd_image_sandbox: registry.k8s.io/pause:3.10.1
+  roles:
+    - role: containerd
+    - role: k8s_noeud

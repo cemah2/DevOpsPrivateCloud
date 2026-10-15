@@ -1,0 +1,66 @@
+# ~/m15/e16/httproute-essai-avance.yaml — routage avancé (M15-E16, DEV-1616).
+# Ordre de choix d'une règle (spécification HTTPRoute, « Matching precedence ») quand plusieurs
+# correspondent : 1) chemin Exact, puis PathPrefix le plus long ; 2) méthode ; 3) le plus grand
+# nombre d'en-têtes ; 4) le plus grand nombre de paramètres de requête ; 5) route la plus ancienne,
+# puis ordre alphabétique « espace/nom » ; 6) première règle de la route. L'ordre d'écriture des
+# règles ne compte qu'en dernier recours.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: essai-avance
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: https}
+  hostnames:
+    - essai.apps.par1.medisphere.internal
+  rules:
+    # Testeurs : en-tête X-Canari: oui → toujours la v2 (plus d'en-têtes = plus prioritaire que la
+    # règle par défaut au même chemin « / »).
+    - name: canari-force
+      matches:
+        - path: {type: PathPrefix, value: /}
+          headers:
+            - {type: Exact, name: X-Canari, value: oui}
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - {name: X-Medisphere-Env, value: essai}
+      backendRefs:
+        - {name: agnhost-v2, port: 80}
+    # Nouveau préfixe : /v2/x → /x vers la v2 (préfixe plus long que « / » : prioritaire).
+    - name: prefixe-v2
+      matches:
+        - path: {type: PathPrefix, value: /v2}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: {type: ReplacePrefixMatch, replacePrefixMatch: /}
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - {name: X-Medisphere-Env, value: essai}
+      backendRefs:
+        - {name: agnhost-v2, port: 80}
+    # Anciennes adresses : /ancien/x → 301 vers /x (aucun backend : la Gateway répond elle-même).
+    - name: anciennes-adresses
+      matches:
+        - path: {type: PathPrefix, value: /ancien}
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path: {type: ReplacePrefixMatch, replacePrefixMatch: /}
+            statusCode: 301
+    # Par défaut : 90 % v1, 10 % v2 (poids relatifs, par connexion/requête selon l'implémentation).
+    - name: defaut-canari-10
+      matches:
+        - path: {type: PathPrefix, value: /}
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - {name: X-Medisphere-Env, value: essai}
+      backendRefs:
+        - {name: agnhost-v1, port: 80, weight: 90}
+        - {name: agnhost-v2, port: 80, weight: 10}

@@ -1,0 +1,41 @@
+# composants/cert-manager/clusterissuer-step-ca-acme.yaml — émetteur ACME de la PKI MédiSphère
+# (M15-E13 ; version E14 : solveur DNS-01 RFC 2136 pour la zone apps).
+# caBundle : « MédiSphère Root CA » en PEM encodée en base64 (base64 -w0 …/medisphere-root-ca.crt).
+#
+# Choix du solveur (règle de cert-manager) : le solveur dont le sélecteur est le plus précis
+# l'emporte ; dnsZones vaut pour la zone ET ses sous-domaines. Donc :
+#   *.apps.par1.medisphere.internal, x.apps.par1… → DNS-01 (seul possible pour un joker) ;
+#   tout autre nom (gw-par1.par1…, noms hors apps)  → HTTP-01 par gw-par1 (solveur sans sélecteur).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: step-ca-acme
+spec:
+  acme:
+    server: https://ca01.par1.medisphere.internal/acme/acme/directory
+    caBundle: <CA_BUNDLE_BASE64>
+    privateKeySecretRef:
+      name: step-ca-acme-compte
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - group: gateway.networking.k8s.io
+                kind: Gateway
+                name: gw-par1
+                namespace: passerelles
+                sectionName: http
+      - selector:
+          dnsZones:
+            - apps.par1.medisphere.internal
+        dns01:
+          rfc2136:
+            # L'autoritaire primaire, port 5300 : le port 53 est celui des récurseurs (M06-E07).
+            nameserver: 10.10.20.10:5300
+            tsigKeyName: certmanager-k8s
+            tsigAlgorithm: HMACSHA256
+            # Secret de l'espace de cert-manager (« clusterResourceNamespace » d'un ClusterIssuer),
+            # créé par outils/secret-tsig.sh depuis le Vault lab.
+            tsigSecretSecretRef:
+              name: tsig-certmanager-k8s
+              key: secret

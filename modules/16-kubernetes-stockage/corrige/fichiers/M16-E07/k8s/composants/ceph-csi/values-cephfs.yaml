@@ -1,0 +1,43 @@
+# composants/ceph-csi/values-cephfs.yaml (plateforme/k8s) — chart ceph-csi-cephfs 3.18.1, M16-E07 (DEV-1707)
+# Installé par composants/ceph-csi/installer.sh (release ceph-csi-cephfs, espace ceph-csi), à côté
+# de la release ceph-csi-rbd. Mêmes principes que values-rbd.yaml : ni Secret ni StorageClass par
+# le chart.
+
+# Les deux charts nomment par défaut leurs ConfigMaps de la même façon (ceph-csi-config,
+# ceph-config, ceph-csi-encryption-kms-config) : dans un même espace, la seconde release
+# échouerait (objet déjà possédé par l'autre). Les Deployments, DaemonSets, comptes de service et
+# rôles dérivent du nom de la release : pas de collision.
+configMapName: ceph-csi-config-cephfs
+cephConfConfigMapName: ceph-config-cephfs
+kmsConfigMapName: ceph-csi-encryption-kms-config-cephfs
+
+csiConfig:
+  - clusterID: "<FSID>"
+    monitors:
+      - "10.10.30.51:3300"
+      - "10.10.30.52:3300"
+      - "10.10.30.53:3300"
+    cephFS:
+      # Le groupe doit exister (allocations.yaml, plateforme/ceph) : le pilote ne le crée pas.
+      subvolumeGroup: "csi"
+
+cephconf: |
+  [global]
+    auth_cluster_required = cephx
+    auth_service_required = cephx
+    auth_client_required = cephx
+    ms_client_mode = secure
+    ms_mon_client_mode = secure
+
+nodeplugin:
+  nodeSelector:
+    medisphere.fr/stockage-ceph: "oui"
+  tolerations:
+    - key: dedie
+      operator: Exists
+      effect: NoSchedule
+
+provisioner:
+  replicaCount: 2
+  nodeSelector:
+    medisphere.fr/stockage-ceph: "oui"

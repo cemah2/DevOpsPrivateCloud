@@ -1,0 +1,98 @@
+# plateforme/k8s — espaces/medidoc-dev/30-medidoc.yaml (M16-E46, PLAT-1799)
+# MédiDoc range ses documents dans le compartiment medidoc-documents du RGW de ceph-par1
+# (https://rgw.par1.medisphere.internal, VIP 10.10.30.200, compte medidoc-app du M08-E12).
+# Prérequis : Secret medidoc-s3 créé par outils/secret-medidoc-s3.sh (jamais dans ce dépôt),
+# ConfigMap medisphere-ca (racine publique de la PKI, versionnable).
+# L'image vient du projet Harbor medisphere (M13) ; <VERSION> = étiquette signée.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-ca
+  namespace: medidoc-dev
+  labels: {app.kubernetes.io/part-of: medidoc}
+data:
+  # Contenu de /usr/local/share/ca-certificates/medisphere-root-ca.crt (certificat public).
+  ca.crt: |
+    <PEM-DE-MEDISPHERE-ROOT-CA>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+  labels: {app.kubernetes.io/name: medidoc, app.kubernetes.io/part-of: medidoc}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: medidoc}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: medidoc, app.kubernetes.io/part-of: medidoc}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: medidoc
+          image: registry.par1.medisphere.internal/medisphere/medidoc:<VERSION>
+          ports: [{name: http, containerPort: 8080}]
+          env:
+            - {name: MEDIDOC_S3_ENDPOINT, value: "https://rgw.par1.medisphere.internal"}
+            - {name: MEDIDOC_S3_BUCKET, value: medidoc-documents}
+            - {name: MEDIDOC_CA_FILE, value: /etc/medidoc/ca/ca.crt}
+            - {name: MEDIDOC_MAX_MB, value: "10"}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: medidoc-s3, key: AWS_ACCESS_KEY_ID}}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: medidoc-s3, key: AWS_SECRET_ACCESS_KEY}}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+          resources:
+            # Chaque document est lu en mémoire (MEDIDOC_MAX_MB) : 10 Mio × requêtes simultanées.
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: ca, mountPath: /etc/medidoc/ca, readOnly: true}
+      volumes:
+        - name: ca
+          configMap: {name: medisphere-ca}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+  labels: {app.kubernetes.io/name: medidoc}
+spec:
+  selector: {app.kubernetes.io/name: medidoc}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+# Sortie de MédiDoc vers le RGW uniquement (l'espace est en refus par défaut si M15 l'y a mis ;
+# sinon cette politique l'y met pour les pods de MédiDoc). Chemin choisi : carte VLAN 30 des
+# travailleurs (le trafic quitte le nœud traduit sur 10.10.30.8x, sans traverser la bordure) ;
+# à vérifier avec Hubble et dans le journal d'accès du RGW (adresse source).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: medidoc-sortie
+  namespace: medidoc-dev
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: medidoc}}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ipBlock: {cidr: 10.10.30.200/32}}]
+      ports: [{protocol: TCP, port: 443}]
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]

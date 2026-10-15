@@ -1,0 +1,12 @@
+# espaces/passerelles.yaml — espace des Gateways de plateforme (M15-E12). Appartient à l'équipe
+# Plateforme : seules les routes de redirection et les certificats de l'entrée y vivent.
+# PSA restricted : aucun pod n'y tourne (l'Envoy de Cilium est dans kube-system), autant fermer.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: passerelles
+  labels:
+    medisphere.fr/exposition: oui
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

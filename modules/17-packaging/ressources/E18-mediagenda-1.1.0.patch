@@ -1,0 +1,162 @@
+From 60e88d4f2a1604a82ab04949319a24ee8eee8ae8 Mon Sep 17 00:00:00 2001
+From: Julien Petit <julien.petit@medisphere.internal>
+Date: Thu, 8 Oct 2026 11:47:19 +0000
+Subject: [PATCH] feat: canal de prise (V3) et variable
+ MEDIAGENDA_ENVIRONNEMENT obligatoire
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+MEDIAGENDA_ENVIRONNEMENT (dev, recette ou prod) est désormais obligatoire : l'API s'arrête avec le code 2 sans elle, et l'affiche dans /sante. La migration V3 ajoute la colonne canal (additive, valeur par défaut 'web').
+---
+ migrations/V3__canal.sql | 11 +++++++++++
+ src/mediagenda/app.py    | 11 +++++++++--
+ src/mediagenda/config.py | 13 ++++++++++++-
+ tests/test_api.py        |  2 +-
+ tests/test_config.py     | 12 ++++++++++++
+ 5 files changed, 45 insertions(+), 4 deletions(-)
+ create mode 100644 migrations/V3__canal.sql
+
+diff --git a/migrations/V3__canal.sql b/migrations/V3__canal.sql
+new file mode 100644
+index 0000000..a0d450f
+--- /dev/null
++++ b/migrations/V3__canal.sql
+@@ -0,0 +1,11 @@
++-- V3 : canal de prise du rendez-vous (MédiAgenda 1.1.0).
++-- Migration ADDITIVE : la colonne a une valeur par défaut, une version 1.0.x de l'API qui
++-- n'en connaît pas l'existence continue d'insérer des lignes valides. On peut donc migrer
++-- AVANT de déployer la nouvelle image, et revenir à l'image 1.0.x sans toucher au schéma.
++-- Sur une grosse table, PostgreSQL 11+ ajoute une colonne à défaut constant sans réécrire la table
++-- (la contrainte CHECK impose seulement une lecture des lignes existantes, sous verrou).
++ALTER TABLE rendez_vous
++    ADD COLUMN canal text NOT NULL DEFAULT 'web'
++    CHECK (canal IN ('web', 'telephone', 'guichet'));
++
++COMMENT ON COLUMN rendez_vous.canal IS 'Canal de prise du rendez-vous (web, telephone, guichet)';
+diff --git a/src/mediagenda/app.py b/src/mediagenda/app.py
+index abf6c4c..0fe7870 100644
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -58,7 +58,10 @@ def create_app(
+     async def cycle_de_vie(app: FastAPI) -> AsyncIterator[None]:
+         app.state.depot = depot if depot is not None else DepotPostgres(settings.db_url)
+         app.state.cache = cache if cache is not None else CacheValkey(settings.valkey_url)
+-        journal.info("démarrage", extra={"version": settings.version})
++        journal.info(
++            "démarrage",
++            extra={"version": settings.version, "environnement": settings.environnement},
++        )
+         yield
+         # Exécuté à l'arrêt : uvicorn a reçu SIGTERM, a cessé d'accepter des
+         # connexions et a laissé finir les requêtes en cours.
+@@ -100,7 +103,11 @@ def create_app(
+     @app.get("/sante")
+     def sante() -> dict[str, str]:
+         """Vivacité : le processus répond. Ne touche à aucune dépendance."""
+-        return {"statut": "ok", "version": settings.version}
++        return {
++            "statut": "ok",
++            "version": settings.version,
++            "environnement": settings.environnement,
++        }
+ 
+     @app.get("/pret")
+     def pret(request: Request) -> JSONResponse:
+diff --git a/src/mediagenda/config.py b/src/mediagenda/config.py
+index ae94c26..fec8943 100644
+--- a/src/mediagenda/config.py
++++ b/src/mediagenda/config.py
+@@ -13,6 +13,7 @@ from dataclasses import dataclass
+ 
+ NIVEAUX_JOURNAL = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+ FORMATS_JOURNAL = ("json", "texte")
++ENVIRONNEMENTS = ("dev", "recette", "prod")
+ 
+ 
+ class ErreurConfiguration(Exception):
+@@ -30,13 +31,16 @@ class Settings:
+     fuseau: str = "Europe/Paris"
+     cache_ttl: int = 60
+     delai_arret: int = 20
++    environnement: str = "dev"
+ 
+     @classmethod
+     def depuis_env(cls, env: Mapping[str, str] | None = None) -> Settings:
+         """Construit la configuration depuis ``env`` (par défaut ``os.environ``)."""
+         env = os.environ if env is None else env
+         manquantes = [
+-            nom for nom in ("MEDIAGENDA_DB_URL", "MEDIAGENDA_VALKEY_URL") if not env.get(nom)
++            nom
++            for nom in ("MEDIAGENDA_DB_URL", "MEDIAGENDA_VALKEY_URL", "MEDIAGENDA_ENVIRONNEMENT")
++            if not env.get(nom)
+         ]
+         if manquantes:
+             raise ErreurConfiguration(
+@@ -50,6 +54,12 @@ class Settings:
+         if fmt not in FORMATS_JOURNAL:
+             raise ErreurConfiguration(f"MEDIAGENDA_LOG_FORMAT invalide : {fmt!r} (json ou texte)")
+ 
++        environnement = env["MEDIAGENDA_ENVIRONNEMENT"].lower()
++        if environnement not in ENVIRONNEMENTS:
++            raise ErreurConfiguration(
++                f"MEDIAGENDA_ENVIRONNEMENT invalide : {environnement!r} (dev, recette ou prod)"
++            )
++
+         return cls(
+             db_url=env["MEDIAGENDA_DB_URL"],
+             valkey_url=env["MEDIAGENDA_VALKEY_URL"],
+@@ -60,6 +70,7 @@ class Settings:
+             fuseau=env.get("MEDIAGENDA_FUSEAU", "Europe/Paris"),
+             cache_ttl=_entier(env, "MEDIAGENDA_CACHE_TTL", 60),
+             delai_arret=_entier(env, "MEDIAGENDA_DELAI_ARRET", 20),
++            environnement=environnement,
+         )
+ 
+ 
+diff --git a/tests/test_api.py b/tests/test_api.py
+index bebb168..ba8043d 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -17,7 +17,7 @@ def test_sante_ne_touche_pas_aux_dependances(client, depot, cache):
+     depot.en_panne = cache.en_panne = True
+     r = client.get("/sante")
+     assert r.status_code == 200
+-    assert r.json() == {"statut": "ok", "version": "1.2.3"}
++    assert r.json() == {"statut": "ok", "version": "1.2.3", "environnement": "dev"}
+ 
+ 
+ def test_pret_ok(client):
+diff --git a/tests/test_config.py b/tests/test_config.py
+index a486cbc..a6a2670 100644
+--- a/tests/test_config.py
++++ b/tests/test_config.py
+@@ -7,6 +7,7 @@ from mediagenda.config import ErreurConfiguration, Settings
+ BASE = {
+     "MEDIAGENDA_DB_URL": "postgresql://mediagenda@localhost/mediagenda",
+     "MEDIAGENDA_VALKEY_URL": "redis://localhost:6379/0",
++    "MEDIAGENDA_ENVIRONNEMENT": "recette",
+ }
+ 
+ 
+@@ -19,6 +20,17 @@ def test_valeurs_par_defaut():
+     assert s.version == "dev"
+ 
+ 
++def test_environnement_obligatoire():
++    env = {k: v for k, v in BASE.items() if k != "MEDIAGENDA_ENVIRONNEMENT"}
++    with pytest.raises(ErreurConfiguration, match="MEDIAGENDA_ENVIRONNEMENT"):
++        Settings.depuis_env(env)
++
++
++def test_environnement_invalide():
++    with pytest.raises(ErreurConfiguration, match="MEDIAGENDA_ENVIRONNEMENT"):
++        Settings.depuis_env({**BASE, "MEDIAGENDA_ENVIRONNEMENT": "preprod"})
++
++
+ def test_variables_obligatoires():
+     with pytest.raises(ErreurConfiguration, match="MEDIAGENDA_DB_URL"):
+         Settings.depuis_env({"MEDIAGENDA_VALKEY_URL": "redis://x"})
+-- 
+2.43.0
+

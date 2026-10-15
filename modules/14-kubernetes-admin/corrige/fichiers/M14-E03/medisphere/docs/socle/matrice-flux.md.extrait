@@ -1,0 +1,23 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — EXTRAIT, lignes ajoutées en M14-E02/E03 (PLAT-1502, PLAT-1503).
+     Nouvelle section « Kubernetes (k8s-par1) ». -->
+
+| Source | Destination | Protocole / ports | VLAN | Traverse la bordure | Usage | Module |
+|---|---|---|---|---|---|---|
+| `adm01` (10.10.10.10) | VIP de l'API `k8s-api.par1.medisphere.internal` (10.10.40.200) | TCP 8443 | 10 → 40 | oui, **déjà permis** (MGMT → tout) | kubectl, helm, cilium, checks | M14-E03 |
+| `adm01` | `k8s-cp01-03`, `k8s-w01-03` | TCP 22 | 10 → 40 | oui, déjà permis | Ansible, diagnostic | M14-E02 |
+| `k8s-cp01-03` ↔ `k8s-cp01-03` | — | VRRP v3 unicast (protocole IP 112), VRID 140 | 40 | non (intra-VLAN) | VIP de l'API (keepalived) | M14-E03 |
+| tous les nœuds, HAProxy | `k8s-cp01-03` | TCP 6443 | 40 | non | kube-apiserver (derrière la VIP ; contrôles de santé d'HAProxy) | M14-E03/E04 |
+| `k8s-cp01-03` ↔ `k8s-cp01-03` | — | TCP 2379-2380 | 40 | non | etcd (clients, pairs) | M14-E04/E05 |
+| `k8s-cp01-03` | tous les nœuds | TCP 10250 | 40 | non | API du kubelet (logs, exec, métriques) | M14-E04 |
+| tous les nœuds ↔ tous les nœuds | — | UDP 8472 (VXLAN), TCP 4240 (santé), TCP 4244-4245 (Hubble) | 40 | non | Cilium : tunnel entre nœuds, santé, Hubble | M14-E05 |
+| tous les nœuds | Internet (`registry.k8s.io`, `quay.io`, `docker.io`, `pkgs.k8s.io`, `download.docker.com`, dépôts Debian) | TCP 443 | 40 → WAN | oui, **déjà permis** (lab → Internet) | paquets, images publiques (palier 1 ; cache Harbor en M14-E19) | M14-E02 |
+| tous les nœuds | `reg01` (`registry.par1.medisphere.internal`) | TCP 443 | 40 → 20 | oui, déjà permis (M13-E02) | images de MédiAgenda (projet `medisphere`) | M14-E07 |
+
+Notes :
+- Aucune règle nouvelle sur `gw01`/`gw02` au palier 1 : `group_vars/role_routeur/pare_feu.yml` ne change pas.
+  Les flux internes au cluster restent dans le VLAN 40 ; ceux qui en sortent étaient déjà ouverts.
+- Pas de pare-feu local sur les nœuds Kubernetes (le rôle `pare_feu_local` n'y est pas appliqué) : kube-proxy et
+  Cilium écrivent leurs propres règles netfilter, qu'un `flush ruleset` effacerait. Le filtrage dans le cluster
+  passe par les NetworkPolicy (M15), celui des nœuds par les politiques d'hôte de Cilium (M26).
+- La VIP 10.10.40.200 est une adresse de rôle « vip » dans NetBox, sans interface ; HAProxy l'écoute sur les
+  trois nœuds de contrôle (`net.ipv4.ip_nonlocal_bind = 1`).

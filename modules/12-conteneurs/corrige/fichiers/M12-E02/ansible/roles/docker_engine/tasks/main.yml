@@ -1,0 +1,24 @@
+---
+# Rôle docker_engine — point d'entrée (M12-E02).
+# Ordre : préconditions → dépôt (clé vérifiée) → paquets épinglés → daemon.json → service
+# → contrôles. Second passage : changed=0.
+
+- name: Préconditions
+  ansible.builtin.import_tasks: preconditions.yml
+  tags: [docker_engine, docker_engine_preconditions]
+
+- name: Dépôt Docker et clé vérifiée
+  ansible.builtin.import_tasks: depot.yml
+  tags: [docker_engine, docker_engine_depot]
+
+- name: Paquets épinglés
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [docker_engine, docker_engine_paquets]
+
+- name: Configuration du démon
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [docker_engine, docker_engine_configuration]
+
+- name: Contrôles
+  ansible.builtin.import_tasks: controles.yml
+  tags: [docker_engine, docker_engine_controles]

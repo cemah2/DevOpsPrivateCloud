@@ -1,0 +1,14 @@
+---
+# host_vars/reg02/certificats.yml — rôle certificats_acme (M06-E18), M13-E13. Même schéma que reg01.
+# Défi HTTP-01 : ca01 (VLAN 20) vient chercher le jeton sur http://reg02.par1.medisphere.internal/
+# (VLAN 99) : règle de bordure dédiée (pare_feu.yml, M13-E13). Port 80 libre pendant l'émission.
+certificats_acme_certificats:
+  - id: harbor
+    noms:
+      - reg02.par1.medisphere.internal
+    certificat: /etc/harbor/tls/registry.crt
+    cle: /etc/harbor/tls/registry.key
+    groupe: root
+    avant_emission: "systemctl stop harbor.service"
+    apres_emission: "systemctl start harbor.service"
+    recharger: "/usr/local/sbin/harbor-recharger-certificat"

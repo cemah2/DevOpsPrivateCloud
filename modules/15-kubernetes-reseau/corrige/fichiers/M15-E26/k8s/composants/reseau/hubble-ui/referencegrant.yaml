@@ -1,0 +1,16 @@
+# composants/reseau/hubble-ui/referencegrant.yaml — M15-E26. kube-system autorise UNE route de
+# « passerelles » à viser UN Service (hubble-ui), et rien d'autre de kube-system.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: hubble-ui-depuis-passerelles
+  namespace: kube-system
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: passerelles
+  to:
+    - group: ""
+      kind: Service
+      name: hubble-ui

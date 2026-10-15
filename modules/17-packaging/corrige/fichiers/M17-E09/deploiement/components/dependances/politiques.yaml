@@ -1,0 +1,79 @@
+# Politiques réseau de la base et de Valkey (espaces en refus par défaut depuis le M15).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-db
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+      ports:
+        - { port: 5432, protocol: TCP }
+    # Réplication et sondes entre instances (prod : 3 instances).
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: mediagenda-db
+      ports:
+        - { port: 5432, protocol: TCP }
+        - { port: 8000, protocol: TCP }
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - { port: 8000, protocol: TCP }
+        - { port: 5432, protocol: TCP }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: mediagenda-db
+      ports:
+        - { port: 5432, protocol: TCP }
+        - { port: 8000, protocol: TCP }
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-db-api-kubernetes
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  egress:
+    - toEntities: [kube-apiserver]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: valkey
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+      ports:
+        - { port: 6379, protocol: TCP }
+  egress: []

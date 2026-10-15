@@ -1,0 +1,8 @@
+# host_vars/ctr01/vault-critique.yml — MODÈLE en clair : le vrai fichier est chiffré
+# (uv run ansible-vault create --vault-id critique@outils/vault-pass-client.sh …).
+vault_pbs_jeton_ctr01: "<SECRET-DU-JETON wb-backup@pbs!ctr01>"
+# Empreinte du certificat de pbs01 : même valeur que pour le socle (M06-E28), mais ctr01 n'est pas
+# dans le groupe socle : on la répète ici (proxmox-backup-manager cert info, sur pbs01).
+vault_pbs_empreinte: "<EMPREINTE-SHA256-DU-CERTIFICAT-DE-PBS01>"
+vault_pbs_cle_ctr01: |
+  <CONTENU JSON DE pbs-ctr01.key (proxmox-backup-client key create --kdf none)>

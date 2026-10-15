@@ -1,0 +1,27 @@
+---
+# Rôle sauvegarde_conteneurs — données des conteneurs vers PBS (M12-E29, PLAT-1355).
+# Modèle : rôle sauvegarde_pbs (M06-E28). Variables par hôte : host_vars/<hôte>/sauvegarde_conteneurs.yml.
+# Secrets : Vault « critique ».
+
+# Exports logiques PostgreSQL : « conteneur|base|compte » (pg_dump -Fc dans le conteneur).
+sauvegarde_conteneurs_bases: []
+# Copies à froid de volumes nommés : « volume|conteneur à arrêter pendant la copie » (ou « volume| »).
+sauvegarde_conteneurs_volumes: []
+# Image jetable de la copie de volume (tar), par empreinte (relevée le 2026-10-08).
+sauvegarde_conteneurs_image_outil: "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
+# Après Ceph (01:30), avant les services socle (01:55) et lab-nuit (02:30).
+sauvegarde_conteneurs_heure: "01:40"
+
+sauvegarde_conteneurs_serveur: 10.20.10.10
+sauvegarde_conteneurs_datastore: ds-lab
+sauvegarde_conteneurs_espace: par1/conteneurs
+sauvegarde_conteneurs_jeton_id: "wb-backup@pbs!{{ inventory_hostname }}"
+# Secrets (Vault « critique ») : secret du jeton, empreinte du certificat de PBS, clé de chiffrement
+# (contenu JSON du fichier créé par « proxmox-backup-client key create --kdf none »).
+sauvegarde_conteneurs_jeton_secret: ""
+sauvegarde_conteneurs_empreinte: ""
+sauvegarde_conteneurs_cle: ""
+
+# Dépôt pbs-client et trousseau officiel : mêmes valeurs que le rôle sauvegarde_pbs (M06-E28).
+sauvegarde_conteneurs_cle_depot_url: https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg
+sauvegarde_conteneurs_cle_depot_sha256: 136673be77aba35dcce385b28737689ad64fd785a797e57897589aed08db6e45

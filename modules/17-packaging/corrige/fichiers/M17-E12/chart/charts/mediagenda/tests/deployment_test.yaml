@@ -1,0 +1,149 @@
+suite: Deployment de l'API
+templates:
+  - deployment.yaml
+  - configmap.yaml
+release:
+  name: mediagenda
+  namespace: mediagenda-recette
+set:
+  medisphere.environnement: recette
+tests:
+  - it: nomme les objets comme aux modules 14 à 16 (release « mediagenda »)
+    template: deployment.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: mediagenda
+
+  - it: déploie par défaut l'image v<appVersion> du registre MédiSphère
+    template: deployment.yaml
+    chart:
+      appVersion: 1.0.0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MEDIAGENDA_VERSION
+            value: v1.0.0
+
+  - it: préfère le digest à l'étiquette
+    template: deployment.yaml
+    set:
+      image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: "@sha256:[a-f0-9]{64}$"
+
+  - it: lit l'URL PostgreSQL dans le Secret de CNPG, jamais en clair
+    template: deployment.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MEDIAGENDA_DB_URL
+            valueFrom:
+              secretKeyRef:
+                name: mediagenda-db-app
+                key: uri
+
+  - it: utilise le Secret du cluster rendu par le chart quand postgresql.cnpg.enabled
+    template: deployment.yaml
+    set:
+      postgresql.cnpg.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: mediagenda-db-app
+
+  - it: pointe vers le Valkey du sous-chart quand valkey.enabled
+    template: deployment.yaml
+    set:
+      valkey.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MEDIAGENDA_VALKEY_URL
+            value: redis://mediagenda-valkey:6379/0
+
+  - it: respecte le profil Pod Security « restricted »
+    template: deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation
+          value: false
+      - contains:
+          path: spec.template.spec.containers[0].securityContext.capabilities.drop
+          content: ALL
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.seccompProfile.type
+          value: RuntimeDefault
+
+  - it: sonde /sante pour la vivacité et /pret pour la disponibilité
+    template: deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /sante
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /pret
+
+  - it: redéploie quand la configuration change (empreinte de la ConfigMap)
+    template: deployment.yaml
+    asserts:
+      - exists:
+          path: spec.template.metadata.annotations["checksum/config"]
+
+  - it: n'a pas de conteneur d'initialisation en mode hook
+    template: deployment.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.initContainers
+
+  - it: migre par conteneur d'initialisation en mode initContainer
+    template: deployment.yaml
+    set:
+      migrations.mode: initContainer
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].command
+          value: ["python", "-m", "mediagenda.migrate"]
+
+  - it: refuse la prod avec un seul réplica
+    template: deployment.yaml
+    set:
+      medisphere.environnement: prod
+      replicaCount: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: "prod : replicaCount doit valoir au moins 2"
+
+  - it: pose les étiquettes d'organisation MédiSphère
+    template: deployment.yaml
+    asserts:
+      - equal:
+          path: metadata.labels["medisphere.fr/environnement"]
+          value: recette
+      - equal:
+          path: metadata.labels["medisphere.fr/donnees-sante"]
+          value: "oui"
+
+  - it: ajoute les variables supplémentaires à la ConfigMap, rendues par tpl
+    template: configmap.yaml
+    set:
+      config.extraEnv:
+        MEDIAGENDA_ESPACE: "{{ .Release.Namespace }}"
+    asserts:
+      - equal:
+          path: data.MEDIAGENDA_ESPACE
+          value: mediagenda-recette

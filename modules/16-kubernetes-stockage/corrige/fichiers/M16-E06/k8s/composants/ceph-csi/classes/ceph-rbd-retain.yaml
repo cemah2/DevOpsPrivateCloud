@@ -1,0 +1,31 @@
+# composants/ceph-csi/classes/ceph-rbd-retain.yaml (plateforme/k8s) — M16-E06 (PLAT-1706)
+# Comme ceph-rbd, mais le volume SURVIT à la suppression de son PVC (PV « Released », image RBD
+# conservée) : pour les données qu'on ne veut pas perdre sur une erreur de manipulation.
+# Pas classe par défaut. Le ménage d'un PV Released est un geste d'administrateur (fiche
+# docs/kubernetes/stockage/ceph-csi.md) : Kubernetes ne supprime jamais l'image d'un PV Retain.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ceph-rbd-retain
+  labels:
+    medisphere.fr/composant: stockage
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Retain
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+mountOptions:
+  - discard

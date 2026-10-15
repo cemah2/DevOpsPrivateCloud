@@ -1,0 +1,5 @@
+apiVersion: v2
+name: medidoc
+description: Chart de MédiDoc
+version: 1.0
+appVersion: latest

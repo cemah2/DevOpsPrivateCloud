@@ -1,0 +1,6 @@
+# {{ harbor_entete }}
+# /etc/systemd/system/docker.service.d/10-attendre-donnees.conf (M13-E02)
+# Sans cela, au démarrage, Docker relance les conteneurs « restart: always » de Harbor AVANT le
+# montage de /data : la base et le registre démarreraient sur un dossier vide du disque système.
+[Unit]
+RequiresMountsFor={{ harbor_donnees }}

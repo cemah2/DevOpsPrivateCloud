@@ -1,0 +1,31 @@
+# plateforme/k8s — ordonnancement/priorites.yaml (M14-E14)
+# Dossier « ordonnancement » ajouté à la variable DOSSIERS du Taskfile : appliqué par « task appliquer ».
+# Classes de priorité MédiSphère. Les valeurs restent très en dessous des classes système
+# (system-cluster-critical = 2000000000, system-node-critical = 2000001000).
+# Aucune n'est globalDefault : un pod sans classe a la priorité 0 (en dessous de « standard »),
+# ce qui pousse les équipes à la déclarer.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-critique
+value: 100000
+globalDefault: false
+description: "Données et services dont la perte interrompt un parcours patient (bases, files). Peut préempter."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-standard
+value: 10000
+globalDefault: false
+description: "Charges applicatives sans état (API, frontaux)."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-essai
+value: 100
+globalDefault: false
+preemptionPolicy: Never
+description: "Essais et tâches de fond : ne préempte jamais personne, premier préempté."

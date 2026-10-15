@@ -1,0 +1,101 @@
+---
+- name: Hôte de la famille RHEL avec SELinux en mode enforcing
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'RedHat'
+      - ansible_facts['selinux']['status'] == 'enabled'
+      - ansible_facts['selinux']['mode'] == 'enforcing'
+    fail_msg: >-
+      {{ inventory_hostname }} : SELinux doit être actif et en mode enforcing (getenforce). Ce rôle ne
+      le change jamais lui-même : un passage en permissive est une décision tracée, pas une tâche.
+    quiet: true
+
+- name: Paquets SELinux pour les conteneurs
+  ansible.builtin.dnf:
+    name: "{{ selinux_conteneurs_paquets }}"
+    state: present
+
+# --- Répertoires de données ------------------------------------------------------------------
+- name: Règles d'étiquetage locales (semanage fcontext)
+  community.general.sefcontext:
+    target: "{{ item.chemin }}(/.*)?"
+    setype: "{{ item.type | default('container_file_t') }}"
+    state: present
+  loop: "{{ selinux_conteneurs_dossiers }}"
+  loop_control:
+    label: "{{ item.chemin }} → {{ item.type | default('container_file_t') }}"
+  register: selinux_conteneurs_fcontext
+
+- name: Répertoires de données
+  ansible.builtin.file:
+    path: "{{ item.chemin }}"
+    state: directory
+    owner: "{{ item.proprietaire }}"
+    group: "{{ item.groupe }}"
+    mode: "{{ item.mode | default('0750') }}"
+  loop: "{{ selinux_conteneurs_dossiers }}"
+  loop_control:
+    label: "{{ item.chemin }}"
+
+# restorecon seulement pour les règles qui viennent de changer (un dossier de pièces jointes peut
+# être gros : pas de parcours complet à chaque passage).
+- name: Appliquer les étiquettes de la politique (restorecon)
+  ansible.builtin.command:
+    argv: [restorecon, -R, -v, "{{ item.item.chemin }}"]
+  loop: "{{ selinux_conteneurs_fcontext.results }}"
+  loop_control:
+    label: "{{ item.item.chemin }}"
+  when: item is changed
+  changed_when: true
+
+# --- Politiques dédiées (udica) -----------------------------------------------------------------
+- name: Dossier des modules de politique MédiSphère
+  ansible.builtin.file:
+    path: "{{ selinux_conteneurs_dossier_modules }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Modules CIL (copie)
+  ansible.builtin.copy:
+    src: "{{ item.nom }}.cil"
+    dest: "{{ selinux_conteneurs_dossier_modules }}/{{ item.nom }}.cil"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: "{{ selinux_conteneurs_modules }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: selinux_conteneurs_cil
+
+- name: Modules déjà chargés
+  ansible.builtin.command:
+    argv: [semodule, --list-modules=standard]
+  register: selinux_conteneurs_charges
+  changed_when: false
+
+# Chargé si le fichier a changé OU si le module est absent (premier passage, retrait manuel).
+# semodule -i remplace un module de même nom : c'est aussi la mise à jour.
+- name: Charger les modules (avec les modèles d'udica)
+  ansible.builtin.command:
+    argv: >-
+      {{ ['semodule', '-i', selinux_conteneurs_dossier_modules ~ '/' ~ item.item.nom ~ '.cil']
+         + (item.item.modeles | map('regex_replace', '^(.*)$', selinux_conteneurs_modeles_udica ~ '/\1.cil') | list) }}
+  loop: "{{ selinux_conteneurs_cil.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"
+  when: >-
+    item is changed
+    or (selinux_conteneurs_charges.stdout_lines | map('split') | map('first') | select('equalto', item.item.nom) | list | length == 0)
+  changed_when: true
+
+- name: Contrôle — les types de processus dédiés existent dans la politique chargée
+  ansible.builtin.command:
+    argv: [seinfo, -t, "{{ item.nom }}.process"]
+  loop: "{{ selinux_conteneurs_modules }}"
+  loop_control:
+    label: "{{ item.nom }}.process"
+  register: selinux_conteneurs_types
+  changed_when: false
+  failed_when: (item.nom ~ '.process') not in selinux_conteneurs_types.stdout

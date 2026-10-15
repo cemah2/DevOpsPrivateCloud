@@ -1,0 +1,7 @@
+# Extrait de playbooks/conteneurs.yml — ajouté en M12-E28 (PLAT-1354).
+- name: Supervision des conteneurs (lecture seule)
+  hosts: ctr01:ctr02
+  become: true
+  roles:
+    - role: supervision_conteneurs
+      tags: [supervision]

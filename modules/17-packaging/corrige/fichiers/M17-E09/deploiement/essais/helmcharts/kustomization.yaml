@@ -1,0 +1,30 @@
+# Essai (M17-E09, étape 7) : le même overlay de recette, mais en gonflant le chart par Kustomize
+# (helmCharts) au lieu du rendu commité. Construire avec :
+#   kustomize build --enable-helm essais/helmcharts
+# et comparer avec « kustomize build overlays/recette » (voir le corrigé : ce qui diffère, et pourquoi
+# ce n'est pas l'option retenue).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-recette
+helmCharts:
+  - name: mediagenda
+    repo: oci://registry.par1.medisphere.internal/charts
+    version: 0.5.0
+    releaseName: mediagenda
+    skipHooks: true
+    skipTests: true
+    valuesFile: values.yaml
+configMapGenerator:
+  - name: mediagenda-parametres
+    literals:
+      - MEDIAGENDA_CACHE_TTL=120
+patches:
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          configMapRef:
+            name: mediagenda-parametres

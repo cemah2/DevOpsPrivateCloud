@@ -1,0 +1,42 @@
+---
+- name: Paquets auditd
+  ansible.builtin.apt:
+    name: "{{ audit_conteneurs_paquets }}"
+    state: present
+
+# auditctl refuse une règle -w sur un chemin absent : on ne garde que ceux qui existent sur l'hôte
+# (un hôte sans /etc/default/docker n'a pas à échouer).
+- name: Chemins présents sur l'hôte
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ audit_conteneurs_surveilles + audit_conteneurs_binaires + [audit_conteneurs_client] }}"
+  register: audit_conteneurs_stat
+
+- name: Règles d'audit du moteur
+  vars:
+    audit_conteneurs_presents: "{{ audit_conteneurs_stat.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+    audit_conteneurs_surveilles_presents: "{{ audit_conteneurs_surveilles | intersect(audit_conteneurs_presents) }}"
+    audit_conteneurs_binaires_presents: "{{ audit_conteneurs_binaires | intersect(audit_conteneurs_presents) }}"
+  ansible.builtin.template:
+    src: 50-docker.rules.j2
+    dest: "{{ audit_conteneurs_fichier_regles }}"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Charger les règles d'audit
+
+- name: auditd actif au démarrage
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Charger les règles maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Contrôle — les règles « docker » sont chargées dans le noyau
+  ansible.builtin.command:
+    argv: [auditctl, -l]
+  register: audit_conteneurs_charge
+  changed_when: false
+  failed_when: "'-k docker' not in audit_conteneurs_charge.stdout"

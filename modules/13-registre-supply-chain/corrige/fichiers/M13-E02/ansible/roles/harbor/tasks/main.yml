@@ -1,0 +1,16 @@
+---
+# Rôle harbor — point d'entrée (M13-E02). Voir defaults/main.yml pour l'ordre et le pourquoi.
+- name: Prérequis (disque, Docker après /data, scripts, unité)
+  ansible.builtin.import_tasks: prerequis.yml
+
+- name: Installateur vérifié et version active
+  ansible.builtin.import_tasks: installer.yml
+
+- name: harbor.yml, première installation ou prepare
+  ansible.builtin.import_tasks: configurer.yml
+
+- name: Service
+  ansible.builtin.import_tasks: service.yml
+
+- name: Contrôle de santé
+  ansible.builtin.import_tasks: verifier.yml

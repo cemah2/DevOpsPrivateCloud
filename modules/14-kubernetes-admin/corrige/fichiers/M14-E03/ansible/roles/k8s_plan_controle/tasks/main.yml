@@ -1,0 +1,28 @@
+---
+# Rôle k8s_plan_controle — point d'entrée (M14-E03 à E05).
+#   --tags point_acces : keepalived + HAProxy seulement (E03)
+#   --tags kubeadm     : fichier kubeadm du nœud, amorçage éventuel, jonction (E04, E05)
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname in groups[k8s_plan_controle_groupe]
+      - groups[k8s_plan_controle_groupe] | length in [1, 3, 5]
+      - k8s_plan_controle_adresse is match('^10\\.10\\.40\\.[0-9]{1,3}$')
+      - k8s_plan_controle_api_vip is match('^10\\.10\\.40\\.2[0-4][0-9]$')
+      - k8s_plan_controle_vrid | int >= 1 and k8s_plan_controle_vrid | int <= 255
+      - k8s_plan_controle_api_port | int != k8s_plan_controle_apiserver_port | int
+    fail_msg: >-
+      {{ inventory_hostname }} : membre de {{ k8s_plan_controle_groupe }} attendu ; 1, 3 ou 5 nœuds de
+      contrôle (quorum etcd impair) ; adresses du VLAN 40 (VIP dans la plage .200-.249) ; VRID 1-255 ; le port d'HAProxy (VIP) différent
+      de celui de kube-apiserver (les deux écoutent sur le même hôte).
+    quiet: true
+  tags: [always]
+
+- name: Point d'accès de l'API (keepalived + HAProxy)
+  ansible.builtin.import_tasks: point_acces.yml
+  tags: [point_acces]
+
+- name: Fichier kubeadm du nœud, amorçage, jonction
+  ansible.builtin.import_tasks: kubeadm.yml
+  tags: [kubeadm]

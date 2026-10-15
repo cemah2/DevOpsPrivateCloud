@@ -1,0 +1,17 @@
+# ~/.config/containers/systemd/mediagenda-migrations.container — migrations SQL (M12-E14).
+# Tâche ponctuelle : même image que l'API, autre commande ; l'API attend qu'elle ait réussi.
+[Unit]
+Description=Migrations du schéma de MédiAgenda
+Requires=mediagenda-pg.service
+After=mediagenda-pg.service
+
+[Container]
+ContainerName=mediagenda-migrations
+Image=mediagenda-api.build
+Network=mediagenda.network
+Exec=mediagenda-migrate
+Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes

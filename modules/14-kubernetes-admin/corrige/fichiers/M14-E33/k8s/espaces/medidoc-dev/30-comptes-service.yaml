@@ -1,0 +1,12 @@
+# plateforme/k8s — espaces/medidoc-dev/30-comptes-service.yaml (M14-E33)
+# « default » tire les images par le robot Harbor (Secret harbor-pull créé par outils/secret-tirage.sh
+# de M14-E19, jamais versionné), sans jeton monté par défaut. Les manifestes de l'équipe n'ont rien à
+# savoir de Harbor.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: medidoc-dev
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: harbor-pull

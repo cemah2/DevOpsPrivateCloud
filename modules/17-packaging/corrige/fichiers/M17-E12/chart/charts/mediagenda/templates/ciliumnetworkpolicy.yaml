@@ -1,0 +1,39 @@
+{{- if and .Values.networkPolicy.enabled .Values.networkPolicy.cilium }}
+# Le trafic de la Gateway Cilium arrive avec l'identité réservée « ingress » (Envoy de Cilium) :
+# une NetworkPolicy standard ne sait pas la désigner.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "mediagenda.fullname" . }}-depuis-gateway
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "mediagenda.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "8000"
+              protocol: TCP
+{{- if .Values.postgresql.cnpg.enabled }}
+---
+# Le gestionnaire d'instance CNPG (dans chaque pod PostgreSQL) parle à l'API Kubernetes.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ include "mediagenda.cnpgName" . }}-api-kubernetes
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ include "mediagenda.cnpgName" . }}
+  egress:
+    - toEntities:
+        - kube-apiserver
+{{- end }}
+{{- end }}

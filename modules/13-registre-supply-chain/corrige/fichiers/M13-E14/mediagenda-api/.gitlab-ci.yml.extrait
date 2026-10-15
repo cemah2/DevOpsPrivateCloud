@@ -1,0 +1,20 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M13-E14). Le reste est celui de M13-E09.
+include:
+  - project: plateforme/ci-templates
+    ref: <vX.Y.Z>            # étiquette du dépôt de gabarits, jamais une branche
+    file: [supply-chain.yml, verification.yml]
+
+stages: [construction, analyse, sbom, publication, signature, verification]
+
+# Le job de publication de supply-chain.yml (E09) exporte le digest produit dans un rapport dotenv
+# (nom des variables : celui de TON gabarit ; ici IMAGE et IMAGE_DIGEST).
+verifier-signature:
+  extends: .verifier-signature
+  needs:
+    - job: signature        # nom du job de signature/attestation de supply-chain.yml
+      artifacts: true
+  variables:
+    IMAGE_REF: "${IMAGE}@${IMAGE_DIGEST}"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

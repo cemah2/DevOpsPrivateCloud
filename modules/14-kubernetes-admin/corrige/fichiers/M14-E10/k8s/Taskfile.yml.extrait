@@ -1,0 +1,28 @@
+# Taskfile.yml de plateforme/k8s — EXTRAIT M14-E10 : à intégrer dans « tasks: » du fichier d'E05-E06.
+# Problème : « valider » fait un --dry-run=server de tout le dépôt ; un objet d'un espace qui n'existe
+# pas encore est refusé (NotFound), parce que le dry-run de l'objet Namespace n'écrit rien.
+# Correction : créer (ou mettre à jour) d'abord les seuls espaces de noms, pour de bon, puis valider
+# et appliquer le reste. Version complète du Taskfile : M14-E23.
+
+  espaces:
+    desc: Créer ou mettre à jour les espaces de noms (avant toute validation par le serveur)
+    cmds:
+      - >-
+        for f in espaces/*.yaml espaces/*/00-namespace.yaml; do
+        [ -e "$f" ] || continue;
+        kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}} -f "$f";
+        done
+
+  appliquer:
+    desc: Appliquer les manifestes du dépôt (après MR fusionnée, depuis main à jour)
+    preconditions:
+      - sh: '[ "$(git rev-parse --abbrev-ref HEAD)" = main ] && git diff --quiet && git diff --cached --quiet'
+        msg: "Applique depuis main, sans modification locale (la MR fait foi)."
+    cmds:
+      - task: espaces        # NOUVEAU (E10) : avant « valider »
+      - task: valider
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}}
+          -R -f {{.ITEM}} ; fi

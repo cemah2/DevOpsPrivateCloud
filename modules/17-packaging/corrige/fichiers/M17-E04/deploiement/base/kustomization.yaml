@@ -1,0 +1,5 @@
+# Base commune de MédiAgenda (M17-E04) : les manifestes rendus du chart, sans espace de noms.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - mediagenda.yaml

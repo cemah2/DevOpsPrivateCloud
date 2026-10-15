@@ -1,0 +1,49 @@
+---
+# Rôle k8s_plan_controle — nœuds de contrôle de k8s-par1 (M14-E03 à E05, PLAN §4.10).
+#   point_acces : VIP de l'API (keepalived, VRID 140) + HAProxy 8443 → kube-apiserver 6443,
+#                 par les rôles keepalived et haproxy du M07 (méthode de la doc kubeadm « HA »).
+#   kubeadm     : fichier de configuration du nœud (InitConfiguration + fichier du cluster tiré de
+#                 plateforme/k8s), amorçage (désactivé par défaut) et jonction des nœuds suivants.
+# Prérequis : rôles containerd et k8s_noeud (playbooks/k8s-noeuds.yml).
+
+k8s_plan_controle_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# --- Le nœud -----------------------------------------------------------------------------------
+k8s_plan_controle_groupe: k8s_plan_controle
+k8s_plan_controle_adresse: "{{ k8s_noeuds[inventory_hostname].ip }}"
+k8s_plan_controle_interface: "{{ k8s_interface | default('eth0') }}"
+# Premier nœud (ordre alphabétique) : le seul qui peut amorcer un cluster neuf.
+k8s_plan_controle_premier: "{{ groups[k8s_plan_controle_groupe] | sort | first }}"
+
+# --- Point d'accès de l'API -----------------------------------------------------------------------
+k8s_plan_controle_api_nom: "{{ k8s_api_nom }}"
+k8s_plan_controle_api_vip: "{{ k8s_api_vip }}"
+k8s_plan_controle_api_port: "{{ k8s_api_port | default(8443) }}"
+k8s_plan_controle_apiserver_port: "{{ k8s_apiserver_port | default(6443) }}"
+k8s_plan_controle_vrid: "{{ k8s_api_vrid | default(140) }}"
+k8s_plan_controle_priorite: "{{ k8s_noeuds[inventory_hostname].vrrp_priorite }}"
+# Pairs VRRP (annonces unicast) : les adresses des AUTRES nœuds de contrôle (calculées).
+k8s_plan_controle_pairs: >-
+  {{ groups[k8s_plan_controle_groupe] | difference([inventory_hostname]) | sort
+     | map('extract', k8s_noeuds) | map(attribute='ip') | list }}
+# Une connexion TCP sans trafic est coupée après ce délai : les « watch » du kubelet et des
+# contrôleurs, « kubectl logs -f », « exec » restent ouverts longtemps.
+k8s_plan_controle_haproxy_delai_tunnel: 1h
+# Contrôle de santé des backends quand la CA du cluster existe sur le nœud : GET /readyz en TLS
+# vérifié par la CA du cluster. Avant (E03, cluster pas encore amorcé) : simple connexion TCP.
+k8s_plan_controle_haproxy_ca: /etc/kubernetes/pki/ca.crt
+
+# --- kubeadm -------------------------------------------------------------------------------------
+# Fichier du CLUSTER (ClusterConfiguration, KubeletConfiguration, KubeProxyConfiguration), lu sur
+# le poste qui lance Ansible : la copie de travail de plateforme/k8s (cluster/kubeadm-config.yaml).
+k8s_plan_controle_fichier_cluster: "{{ lookup('ansible.builtin.env', 'HOME') }}/src/k8s/cluster/kubeadm-config.yaml"
+k8s_plan_controle_dossier: /etc/kubernetes/kubeadm
+k8s_plan_controle_socket_cri: "{{ k8s_socket_cri | default('unix:///run/containerd/containerd.sock') }}"
+# Amorcer un cluster NEUF si aucun nœud de contrôle n'en porte un. false par défaut : l'amorçage
+# est un geste explicite (M14-E04) ; true pour une reconstruction depuis le code (E23, E46).
+k8s_plan_controle_amorcage_auto: false
+# Joindre les nœuds de contrôle qui ne sont pas encore membres (M14-E05).
+k8s_plan_controle_jonction_auto: true
+# Durée de vie du jeton d'amorçage créé pour une jonction (supprimé juste après).
+k8s_plan_controle_jeton_duree: 15m

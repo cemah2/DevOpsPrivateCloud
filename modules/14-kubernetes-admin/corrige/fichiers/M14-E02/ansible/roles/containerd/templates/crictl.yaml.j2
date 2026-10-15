@@ -1,0 +1,5 @@
+# {{ containerd_entete }}
+# /etc/crictl.yaml — rôle containerd (M14-E02).
+runtime-endpoint: unix://{{ containerd_socket }}
+image-endpoint: unix://{{ containerd_socket }}
+timeout: {{ containerd_crictl_delai }}

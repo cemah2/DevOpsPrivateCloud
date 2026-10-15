@@ -1,0 +1,180 @@
+---
+# taches/montee-noeud.yml — montée de version d'UN nœud (inclus par k8s-montee-version.yml).
+# Ordre de la documentation « Upgrading kubeadm clusters » / « Upgrading Linux nodes » :
+# dépôt → kubeadm → kubeadm upgrade (apply ou node) → drain → kubelet et kubectl → redémarrage
+# du kubelet → Ready → uncordon → santé.
+- name: Variables de la montée
+  ansible.builtin.set_fact:
+    montee_mineure: "{{ k8s_cible.split('.')[0:2] | join('.') }}"
+    montee_paquet: "{{ k8s_cible }}-{{ k8s_paquet_revision | default('1.1') }}"
+    montee_noeud: "{{ inventory_hostname }}"
+
+- name: Version du kubelet vue par l'API
+  ansible.builtin.command: kubectl get node {{ montee_noeud }} -o jsonpath={.status.nodeInfo.kubeletVersion}
+  delegate_to: localhost
+  become: false
+  register: montee_kubelet
+  changed_when: false
+
+- name: Version de kubeadm sur le nœud
+  ansible.builtin.command: kubeadm version -o short
+  register: montee_kubeadm
+  changed_when: false
+
+- name: Nœud déjà à la cible ?
+  ansible.builtin.set_fact:
+    montee_a_faire: >-
+      {{ montee_kubelet.stdout != 'v' ~ k8s_cible or montee_kubeadm.stdout != 'v' ~ k8s_cible }}
+
+- name: Rien à faire sur {{ montee_noeud }}
+  ansible.builtin.debug:
+    msg: "{{ montee_noeud }} est déjà en v{{ k8s_cible }} (kubelet et kubeadm) : sauté."
+  when: not montee_a_faire | bool
+
+- name: Montée de version du nœud {{ montee_noeud }}
+  when: montee_a_faire | bool
+  block:
+    # --- Dépôt de la mineure cible ---------------------------------------------------------------------
+    # Par le rôle k8s_noeud lui-même (M14-E02) : même fichier (kubernetes.sources), même clé, même
+    # contrôle d'empreinte. Seule la version change. Ses tâches « paquets » ne servent PAS ici : elles
+    # installent les trois paquets d'un coup, alors que l'ordre documenté est kubeadm → upgrade →
+    # drain → kubelet.
+    - name: Dépôt pkgs.k8s.io de la mineure cible (rôle k8s_noeud)
+      ansible.builtin.include_role:
+        name: k8s_noeud
+        tasks_from: depot.yml
+      vars:
+        k8s_noeud_version: "{{ k8s_cible }}"
+
+    # --- kubeadm --------------------------------------------------------------------------------------------
+    - name: Lever l'épingle de kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: install
+
+    - name: Installer kubeadm {{ montee_paquet }}
+      ansible.builtin.apt:
+        name: "kubeadm={{ montee_paquet }}"
+        update_cache: true
+
+    - name: Épingler kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: hold
+
+    - name: Version de la ClusterConfiguration en vigueur
+      ansible.builtin.command: >-
+        kubectl -n kube-system get configmap kubeadm-config -o jsonpath={.data.ClusterConfiguration}
+      delegate_to: localhost
+      become: false
+      register: montee_cc
+      changed_when: false
+      when: montee_controle | bool
+
+    - name: Premier nœud de contrôle — plan
+      ansible.builtin.command: kubeadm upgrade plan v{{ k8s_cible }}
+      register: montee_plan
+      changed_when: false
+      when:
+        - montee_controle | bool
+        - "('kubernetesVersion: v' ~ k8s_cible) not in montee_cc.stdout"
+
+    - name: Premier nœud de contrôle — plan lu dans le journal
+      ansible.builtin.debug:
+        var: montee_plan.stdout_lines
+      when: montee_plan is not skipped
+
+    - name: Premier nœud de contrôle — kubeadm upgrade apply
+      ansible.builtin.command: kubeadm upgrade apply v{{ k8s_cible }} --yes
+      when: montee_plan is not skipped
+      changed_when: true
+
+    - name: Autres nœuds — kubeadm upgrade node
+      ansible.builtin.command: kubeadm upgrade node
+      when: montee_plan is skipped
+      changed_when: true
+
+    # --- Drainage (depuis adm01) -----------------------------------------------------------------------------
+    - name: Drainer {{ montee_noeud }}
+      ansible.builtin.command: >-
+        kubectl drain {{ montee_noeud }} --ignore-daemonsets --delete-emptydir-data --timeout=10m
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+    # --- kubelet et kubectl -----------------------------------------------------------------------------------
+    - name: Lever l'épingle de kubelet et kubectl
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: install
+      loop: [kubelet, kubectl]
+
+    - name: Installer kubelet et kubectl {{ montee_paquet }}
+      ansible.builtin.apt:
+        name: ["kubelet={{ montee_paquet }}", "kubectl={{ montee_paquet }}"]
+
+    - name: Épingler kubelet et kubectl
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop: [kubelet, kubectl]
+
+    - name: Redémarrer le kubelet
+      ansible.builtin.systemd_service:
+        name: kubelet
+        state: restarted
+        daemon_reload: true
+
+    - name: Attendre la nouvelle version du kubelet vue par l'API v{{ k8s_cible }}
+      ansible.builtin.command: kubectl get node {{ montee_noeud }} -o jsonpath={.status.nodeInfo.kubeletVersion}
+      delegate_to: localhost
+      become: false
+      register: montee_apres
+      until: montee_apres.stdout == 'v' ~ k8s_cible
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Condition Ready
+      ansible.builtin.command: kubectl wait --for=condition=Ready node/{{ montee_noeud }} --timeout=5m
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+  rescue:
+    - name: Échec — le nœud reste cordonné, on s'arrête là
+      ansible.builtin.fail:
+        msg: >-
+          La montée de {{ montee_noeud }} a échoué. Le nœud peut être cordonné : NE relance PAS sur le
+          nœud suivant. Diagnostic et reprise : RB-142 §6 (la commande kubeadm est idempotente).
+
+# --- Remise en service et santé (même pour un nœud sauté : rattrape un uncordon oublié) ----------------------
+- name: Remettre en service {{ montee_noeud }}
+  ansible.builtin.command: kubectl uncordon {{ montee_noeud }}
+  delegate_to: localhost
+  become: false
+  register: montee_uncordon
+  changed_when: "'uncordoned' in montee_uncordon.stdout"
+
+- name: Pods statiques du plan de contrôle prêts sur {{ montee_noeud }}
+  ansible.builtin.command: >-
+    kubectl -n kube-system wait --for=condition=Ready pod -l tier=control-plane
+    --field-selector spec.nodeName={{ montee_noeud }} --timeout=5m
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  when: montee_controle | bool
+
+- name: API prête à travers la VIP
+  ansible.builtin.command: kubectl get --raw /readyz
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Charges témoins revenues (Deployments disponibles)
+  ansible.builtin.command: >-
+    kubectl -n {{ item }} wait --for=condition=Available deployment --all --timeout=5m
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  loop: "{{ montee_espaces_temoins | default(['mediagenda-recette']) }}"

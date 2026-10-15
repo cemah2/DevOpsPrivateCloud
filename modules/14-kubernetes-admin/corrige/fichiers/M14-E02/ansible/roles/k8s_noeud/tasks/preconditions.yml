@@ -1,0 +1,37 @@
+---
+# Refuser tôt ce qui ferait échouer kubeadm plus tard, avec un message qui dit quoi regarder.
+
+- name: Système, version et nom
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+      - k8s_noeud_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
+      - k8s_noeud_depot_cle_empreinte is match('^[0-9A-F]{40}$')
+      - ansible_facts['hostname'] == inventory_hostname
+    fail_msg: >-
+      {{ inventory_hostname }} : Debian 13 attendu (image dorée current), version au format 1.35.9,
+      empreinte de clé en 40 caractères hexadécimaux MAJUSCULES, nom d'hôte
+      ({{ ansible_facts['hostname'] }}) égal au nom d'inventaire (kubeadm nomme le nœud d'après lui).
+    quiet: true
+
+# Kubernetes 1.35 refuse cgroup v1 (failCgroupV1: true par défaut) : le kubelet ne démarrerait pas.
+- name: Lire la hiérarchie des cgroups
+  ansible.builtin.stat:
+    path: /sys/fs/cgroup/cgroup.controllers
+  register: _k8s_noeud_cgroup2
+
+- name: Exiger cgroup v2 (hiérarchie unifiée)
+  ansible.builtin.assert:
+    that:
+      - _k8s_noeud_cgroup2.stat.exists
+    fail_msg: >-
+      {{ inventory_hostname }} n'est pas en cgroup v2 (/sys/fs/cgroup/cgroup.controllers absent) :
+      le kubelet 1.35+ refuse de démarrer. Cherche un paramètre systemd.unified_cgroup_hierarchy=0
+      sur la ligne de démarrage du noyau.
+    quiet: true
+
+- name: Le nœud est-il déjà membre d'un cluster ?
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: _k8s_noeud_membre

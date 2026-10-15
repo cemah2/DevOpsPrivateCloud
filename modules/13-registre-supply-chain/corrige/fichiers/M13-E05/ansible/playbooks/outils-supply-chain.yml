@@ -1,0 +1,8 @@
+---
+# playbooks/outils-supply-chain.yml — M13-E05. Postes qui analysent et signent à la main (adm01).
+# En CI, les outils viennent de l'image outillée plateforme/outils-supply-chain (M13-E09).
+- name: Outils de la chaîne d'approvisionnement
+  hosts: adm01
+  become: true
+  roles:
+    - outils_supply_chain

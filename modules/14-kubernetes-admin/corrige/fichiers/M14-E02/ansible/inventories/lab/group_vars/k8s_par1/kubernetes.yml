@@ -1,0 +1,41 @@
+---
+# group_vars/k8s_par1/kubernetes.yml — faits partagés du cluster k8s-par1 (M14, PLAN §4.10).
+# Lus par les rôles containerd, k8s_noeud, k8s_plan_controle, k8s_travailleur et par les
+# playbooks. UNE seule table des nœuds : celle de envs/k8s (OpenTofu) dit la même chose.
+
+k8s_cluster_nom: k8s-par1
+
+# Version complète : paquets (1.35.9-1.1) et kubernetesVersion de kubeadm. La mineure (dépôt
+# pkgs.k8s.io) s'en déduit. Montée en 1.36 : M14-E25 (RB-142), jamais par simple changement ici.
+k8s_version: "1.35.9"
+k8s_paquet_revision: "1.1"
+# Image pause attendue par kubeadm de CETTE version (kubeadm config images list) : containerd
+# l'épingle, k8s_noeud vérifie la cohérence. 1.35 : 3.10.1 ; 1.36 : 3.10.2.
+k8s_image_pause: registry.k8s.io/pause:3.10.1
+k8s_socket_cri: unix:///run/containerd/containerd.sock
+
+# Point d'accès de l'API : VIP keepalived (VRID 140) + HAProxy 8443 → kube-apiserver 6443.
+k8s_api_nom: k8s-api.par1.medisphere.internal
+k8s_api_vip: 10.10.40.200
+k8s_api_port: 8443
+k8s_apiserver_port: 6443
+k8s_api_vrid: 140
+
+# Réseaux du cluster (ClusterConfiguration et IPAM de Cilium).
+k8s_reseau_pods: 10.240.0.0/16
+k8s_reseau_services: 10.96.0.0/16
+k8s_domaine_cluster: cluster.local
+
+# Carte du VLAN 40 dans l'invité (nommage de cloud-init sur l'image dorée Debian, comme vm-debian).
+k8s_interface: eth0
+
+# Nœuds : adresse (VLAN 40) et, pour le plan de contrôle, priorité VRRP. Tout nœud de
+# l'inventaire doit figurer ici (garde-fou des playbooks).
+k8s_noeuds:
+  k8s-cp01: {ip: 10.10.40.51, role: plan-controle, vrrp_priorite: 150}
+  k8s-cp02: {ip: 10.10.40.52, role: plan-controle, vrrp_priorite: 120}
+  k8s-cp03: {ip: 10.10.40.53, role: plan-controle, vrrp_priorite: 100}
+  k8s-w01: {ip: 10.10.40.61, role: travailleur}
+  k8s-w02: {ip: 10.10.40.62, role: travailleur}
+  k8s-w03: {ip: 10.10.40.63, role: travailleur}
+  k8s-w04: {ip: 10.10.40.64, role: travailleur}   # M14-E17 seulement

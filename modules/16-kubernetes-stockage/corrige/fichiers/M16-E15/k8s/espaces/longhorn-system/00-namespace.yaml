@@ -1,0 +1,15 @@
+# plateforme/k8s — espaces/longhorn-system/00-namespace.yaml (M16-E15, SUPPRIMÉ en fin d'exercice)
+# EXCEPTION PSA : le gestionnaire et les instance-managers de Longhorn tournent en privilégié
+# (iSCSI par nsenter dans l'hôte, /dev, /var/lib/longhorn, propagation des montages).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: longhorn-system
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+    medisphere.internal/environnement: essai
+  annotations:
+    medisphere.internal/ticket: "PLAT-1715"
+    medisphere.internal/exception-psa: "Longhorn : privilèges hôte nécessaires, espace temporaire"

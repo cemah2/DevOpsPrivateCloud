@@ -1,0 +1,34 @@
+---
+# group_vars/k8s_par1/containerd.yml — runtime des nœuds de k8s-par1 (M14-E02, miroirs en M14-E19).
+# Les valeurs par défaut du rôle containerd décrivent déjà le cluster ; on rappelle ici celles
+# qui changent au fil du module.
+
+# Image pause : celle de kubeadm (faits partagés, kubernetes.yml).
+containerd_image_sandbox: "{{ k8s_image_pause }}"
+
+# Miroirs (M14-E19, PLAT-1519) : toutes les images publiques passent par les caches de Harbor.
+# - « miroir » : l'API du projet de cache (…/v2/<projet>) ; override_path car le chemin contient
+#   déjà /v2/<projet> : containerd demande alors <miroir>/<dépôt>/manifests/<réf>.
+# - « amont » (server) : repli si Harbor ne répond pas. Choix assumé (ADR-0141 à venir) : une panne
+#   de Harbor ne doit pas empêcher un nœud de redémarrer ses pods ; la bordure pourra couper Internet
+#   au VLAN 40 plus tard (M26), et ce repli échouera alors proprement.
+# - pas de « ca » : la CA racine MédiSphère est dans le magasin système des nœuds (rôle ca_lab du
+#   playbook k8s-noeuds.yml), que containerd utilise.
+k8s_harbor_api_v2: https://registry.par1.medisphere.internal/v2
+containerd_miroirs:
+  - registre: docker.io
+    amont: https://registry-1.docker.io
+    miroir: "{{ k8s_harbor_api_v2 }}/dockerhub"
+    override_path: true
+  - registre: quay.io
+    amont: https://quay.io
+    miroir: "{{ k8s_harbor_api_v2 }}/quay"
+    override_path: true
+  - registre: ghcr.io
+    amont: https://ghcr.io
+    miroir: "{{ k8s_harbor_api_v2 }}/ghcr"
+    override_path: true
+  - registre: registry.k8s.io
+    amont: https://registry.k8s.io
+    miroir: "{{ k8s_harbor_api_v2 }}/k8s"
+    override_path: true

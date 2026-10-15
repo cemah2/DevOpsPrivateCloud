@@ -1,0 +1,18 @@
+# ~/m15/e12/route-refusee.yaml — étape 7 : route d'un espace NON étiqueté (à supprimer ensuite).
+# Attendu : status.parents[].conditions Accepted=False, reason NotAllowedByListeners.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: essai-refus
+  namespace: mediagenda-dev
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - mediagenda-dev.apps.par1.medisphere.internal
+  rules:
+    - backendRefs:
+        - name: mediagenda-api
+          port: 8000

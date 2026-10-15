@@ -1,0 +1,17 @@
+# /etc/systemd/system/wb-backup-harbor.service — {{ inventory_hostname }} (M13-E15)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle sauvegarde_harbor).') }}
+[Unit]
+Description=Sauvegarde applicative de Harbor (base, blobs, clés, configuration) vers PBS
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/registre/runbooks/RB-131-restaurer-harbor.md
+Requires=docker.service
+After=docker.service harbor.service network-online.target
+Wants=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wb-backup-harbor.sh
+SyslogIdentifier=wb-backup-harbor
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=3h

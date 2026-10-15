@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# Rôle podman_hote (M12-E02) — complète /etc/containers/registries.conf.
+# Un seul registre de recherche : un nom court ne peut pas être résolu vers un registre
+# inattendu (typosquatting d'un nom court sur un registre de la liste).
+unqualified-search-registries = [{% for r in podman_hote_registres_recherche %}"{{ r }}"{{ "," if not loop.last }}{% endfor %}]
+short-name-mode = "enforcing"
+# Le cache Harbor (M13) ajoutera ici des sections [[registry]] avec leurs miroirs.

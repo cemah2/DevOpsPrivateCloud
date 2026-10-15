@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+spec:
+  parentRefs:
+    - name: gw-par1
+      namespace: passerelles
+      sectionName: https
+  hostnames:
+    - medidoc-dev.apps.par1.medisphere.internal
+  rules:
+    # Seule l'API (/documents) est publiée ; /metrics, /healthz et /readyz restent internes (politique L7 aussi).
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /documents
+      backendRefs:
+        - name: medidoc
+          port: 8080

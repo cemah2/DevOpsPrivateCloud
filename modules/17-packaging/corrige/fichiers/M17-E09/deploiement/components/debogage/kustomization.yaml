@@ -1,0 +1,27 @@
+# Component « debogage » (dev, et ponctuellement ailleurs le temps d'un diagnostic) : journaux en
+# DEBUG et lisibles, cache des créneaux réduit. Jamais en prod (le check M17-E09 y veille).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  # Les variables MEDIAGENDA_LOG_* sont dans « env » (prioritaire sur envFrom) : correctif
+  # stratégique, qui fusionne la liste env par le champ « name ».
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mediagenda
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: MEDIAGENDA_LOG_LEVEL
+                    value: DEBUG
+                  - name: MEDIAGENDA_LOG_FORMAT
+                    value: texte
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    literals:
+      - MEDIAGENDA_CACHE_TTL=5

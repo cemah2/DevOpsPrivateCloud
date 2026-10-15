@@ -1,0 +1,14 @@
+# plateforme/k8s — composants/plugin-barman-cloud/values.yaml (M16-E18)
+# Chart cnpg/plugin-barman-cloud 0.8.1 = plugin 0.15.1, dans cnpg-system (même espace que
+# l'opérateur). Certificats TLS plugin <-> opérateur émis par cert-manager (M15).
+#   helm upgrade --install plugin-barman-cloud cnpg/plugin-barman-cloud --version 0.8.1 \
+#     -n cnpg-system -f composants/plugin-barman-cloud/values.yaml --wait
+image:
+  registry: registry.par1.medisphere.internal
+  repository: ghcr/cloudnative-pg/plugin-barman-cloud
+  tag: v0.15.1
+# Le sidecar est injecté dans les pods PostgreSQL (mediagenda-*) : même contrainte d'images.
+sidecarImage:
+  registry: registry.par1.medisphere.internal
+  repository: ghcr/cloudnative-pg/plugin-barman-cloud-sidecar
+  tag: v0.15.1

@@ -1,0 +1,30 @@
+# Base CNPG de MédiDoc (dev) — corrigé (M16-E21)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: medidoc-db
+  namespace: medidoc-dev
+spec:
+  # Dev : deux instances suffisent (une réplique pour essayer les bascules) ; pas de
+  # réplication synchrone exigée.
+  instances: 2
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+  bootstrap:
+    initdb:
+      database: medidoc
+      owner: medidoc
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  # Plugin Barman Cloud (l'archivage intégré barmanObjectStore est déprécié en 1.30, retiré en 1.31).
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: medidoc-s3

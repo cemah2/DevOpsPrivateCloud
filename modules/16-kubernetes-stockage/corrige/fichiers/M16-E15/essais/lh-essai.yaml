@@ -1,0 +1,94 @@
+# ~/m16/e15/lh-essai.yaml — volume Longhorn, écrivain continu, classes d'instantanés.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lh-essai
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lh-essai
+  namespace: wb-essais
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: ecrivain
+      image: debian:trixie-slim
+      command: ["bash", "-c", "while true; do date -Is >> /d/horodatage.log; sync; sleep 1; done"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
+      volumeMounts:
+        - {name: d, mountPath: /d}
+  volumes:
+    - name: d
+      persistentVolumeClaim: {claimName: lh-essai}
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: longhorn-snap
+driver: driver.longhorn.io
+deletionPolicy: Delete
+parameters:
+  type: snap          # instantané Longhorn DANS le cluster (sur les réplicas)
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: longhorn-bak
+driver: driver.longhorn.io
+deletionPolicy: Delete
+parameters:
+  type: bak           # sauvegarde Longhorn vers la cible S3 (BackupTarget « default »)
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: lh-essai-snap
+  namespace: wb-essais
+spec:
+  volumeSnapshotClassName: longhorn-snap
+  source:
+    persistentVolumeClaimName: lh-essai
+---
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: lh-essai-bak
+  namespace: wb-essais
+spec:
+  volumeSnapshotClassName: longhorn-bak
+  source:
+    persistentVolumeClaimName: lh-essai
+---
+# Restauration de la sauvegarde dans un nouveau volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lh-restauree
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+  dataSource:
+    apiGroup: snapshot.storage.k8s.io
+    kind: VolumeSnapshot
+    name: lh-essai-bak

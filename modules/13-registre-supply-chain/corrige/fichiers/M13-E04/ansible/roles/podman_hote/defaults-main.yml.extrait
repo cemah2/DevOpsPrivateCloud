@@ -1,0 +1,3 @@
+# roles/podman_hote/defaults/main.yml — EXTRAIT à ajouter (M13-E04).
+# Miroirs des registres publics : [{prefixe, miroir}]. Vide = aucun fichier écrit (comportement M12).
+podman_hote_miroirs: []

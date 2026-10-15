@@ -1,0 +1,17 @@
+# mediagenda/api — k8s/recette/10-config.yaml (M14-E21 : version corrigée de la MR de Lucas)
+# Configuration non secrète de MédiAgenda en recette. Le Secret mediagenda-db (mot de passe de la base) est créé
+# par la plateforme (plateforme/k8s : outils/secret-mediagenda.sh) et n'est jamais versionné.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mediagenda-api-config
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+data:
+  MEDIAGENDA_VALKEY_URL: "redis://valkey-0.valkey:6379/0"   # le PRIMAIRE (écritures)
+  MEDIAGENDA_LOG_LEVEL: "INFO"
+  MEDIAGENDA_LOG_FORMAT: "json"
+  MEDIAGENDA_FUSEAU: "Europe/Paris"
+  MEDIAGENDA_CACHE_TTL: "60"
+  MEDIAGENDA_DELAI_ARRET: "20"          # < terminationGracePeriodSeconds (30 s) de l'API

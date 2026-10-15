@@ -1,0 +1,16 @@
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "mediagenda.fullname" . }}
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  # Un pod qui n'est pas prêt peut être évincé même si le budget est atteint (évite les drains bloqués).
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      {{- include "mediagenda.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+{{- end }}

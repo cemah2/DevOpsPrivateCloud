@@ -1,0 +1,60 @@
+# composants/external-dns/values.yaml — ExternalDNS 0.23 (M15-E15, DEV-1615).
+# Installation (Helm 4, simple installateur jusqu'au M17) :
+#   helm repo add external-dns https://kubernetes-sigs.github.io/external-dns
+#   helm upgrade --install external-dns external-dns/external-dns --version 1.23.0 \
+#     --namespace external-dns --values composants/external-dns/values.yaml --wait
+# Prérequis : espace external-dns (espaces/external-dns.yaml) et Secret tsig-externaldns-k8s
+# (outils/secret-tsig.sh externaldns-k8s external-dns tsig-externaldns-k8s).
+
+provider:
+  name: rfc2136
+
+# Routes HTTP de la Gateway API + Services LoadBalancer annotés (nom demandé explicitement).
+# (Pas de gateway-tlsroute : ExternalDNS 0.23 lit encore TLSRoute en v1alpha2, absente du canal
+# standard v1.6 ; pas de gateway-grpcroute pour l'instant : on l'ajoutera avec le premier besoin.)
+sources:
+  - gateway-httproute
+  - service
+
+# sync : crée ET supprime. Exige de lire la zone (AXFR signé, autorisé en M15-E14).
+policy: sync
+registry: txt
+# Propriétaire : un autre cluster (ou un autre ExternalDNS) devra avoir un identifiant DIFFÉRENT.
+txtOwnerId: k8s-par1
+domainFilters:
+  - apps.par1.medisphere.internal
+# Exclusion par étiquette des objets sources (routes, Services) : redirection-https porte
+# medisphere.fr/dns=non (sinon elle publierait le joker « *.apps », qui résoudrait tout nom).
+# « clé!=valeur » retient aussi les objets SANS cette étiquette.
+labelFilter: "medisphere.fr/dns!=non"
+
+interval: 1m
+triggerLoopOnEvent: true
+logFormat: json
+logLevel: info
+
+extraArgs:
+  - --rfc2136-host=10.10.20.10
+  - --rfc2136-port=5300
+  - --rfc2136-zone=apps.par1.medisphere.internal
+  - --rfc2136-tsig-keyname=externaldns-k8s
+  - --rfc2136-tsig-secret-alg=hmac-sha256
+  # 0.23 : --rfc2136-axfr remplace --rfc2136-tsig-axfr (déprécié).
+  - --rfc2136-axfr
+  - --rfc2136-min-ttl=60s
+  # Seules les routes attachées à gw-par1 sont publiées (pas celles d'une Gateway d'essai).
+  - --gateway-name=gw-par1
+  - --gateway-namespace=passerelles
+
+# Le secret TSIG n'est JAMAIS un argument (visible dans le manifeste du pod et dans ps) :
+# variable d'environnement lue par ExternalDNS (EXTERNAL_DNS_<DRAPEAU>), tutoriel RFC2136.
+env:
+  - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: tsig-externaldns-k8s
+        key: secret
+
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 128Mi}

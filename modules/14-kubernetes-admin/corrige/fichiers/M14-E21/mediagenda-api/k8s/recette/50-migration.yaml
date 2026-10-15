@@ -1,0 +1,53 @@
+# mediagenda/api — k8s/recette/50-migration.yaml (M14-E21 : version corrigée de la MR de Lucas)
+# Migration du schéma, UNE fois par version, avant de déployer l'API de cette version.
+# Le gabarit d'un Job est immuable : on ne « réapplique » pas un Job terminé, on en crée un nouveau.
+# Le nom porte donc la version (v1.0.0 → -v1-0-0) ; l'étiquette app.kubernetes.io/name est fixe.
+# Procédure : kubectl apply -f 50-migration.yaml
+#             kubectl wait --for=condition=Complete job/mediagenda-migration-v1-0-0 --timeout=5m
+#             puis kubectl apply -f 40-api.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mediagenda-migration-v1-0-0
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: mediagenda-migration
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: mediagenda
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  backoffLimit: 3                 # 4 essais au plus (base pas encore prête…), avec délai croissant
+  activeDeadlineSeconds: 600      # au-delà, le Job échoue : une migration ne tourne pas une heure
+  ttlSecondsAfterFinished: 604800 # garder la trace (et les journaux) 7 jours, puis ménage automatique
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mediagenda-migration
+        app.kubernetes.io/part-of: mediagenda
+    spec:
+      restartPolicy: Never        # un nouveau pod par essai : les journaux de chaque échec restent lisibles
+      serviceAccountName: mediagenda-api
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-standard
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migration
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_MDP
+              valueFrom:
+                secretKeyRef: {name: mediagenda-db, key: mot-de-passe}
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://mediagenda:$(MEDIAGENDA_DB_MDP)@postgresql:5432/mediagenda
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

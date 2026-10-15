@@ -1,0 +1,22 @@
+# plateforme/k8s — espaces/mediagenda-dev/10-quota.yaml (M14-E10)
+# Budget de l'équipe en développement. Calcul : voir le corrigé de M14-E10.
+# Le stockage persistant (PVC, StorageClass) arrive au M16 : son quota sera ajouté là.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-equipe
+  namespace: mediagenda-dev
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "6"
+    limits.memory: 8Gi
+    pods: "20"
+    services: "10"
+    services.nodeports: "0"
+    services.loadbalancers: "0"
+    configmaps: "30"
+    secrets: "30"
+    count/jobs.batch: "20"
+    count/cronjobs.batch: "5"

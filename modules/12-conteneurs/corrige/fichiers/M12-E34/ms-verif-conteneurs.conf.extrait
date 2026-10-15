@@ -1,0 +1,5 @@
+# Extrait de etc/ms-verif-conteneurs.conf (plateforme/outils) — MR de M12-E34 (exigence 8).
+MS_CONTENEURS_ATTENDUS=(
+  # … conteneurs existants (E28, E30) …
+  ctr01:annuaire-annuaire-1
+)

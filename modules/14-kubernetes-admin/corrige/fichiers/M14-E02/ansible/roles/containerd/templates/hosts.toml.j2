@@ -1,0 +1,16 @@
+# {{ containerd_entete }}
+# {{ containerd_dossier_hotes }}/{{ item.registre }}/hosts.toml — rôle containerd (M14-E02, miroirs en M14-E19).
+# Les hôtes [host.…] sont essayés dans l'ordre ; « server » est le repli si tous échouent.
+{% if item.amont is defined %}
+server = "{{ item.amont }}"
+{% endif %}
+
+[host."{{ item.miroir }}"]
+  capabilities = ["pull", "resolve"]
+{% if item.override_path | default(false) %}
+  # Le chemin du miroir contient déjà /v2/<projet de cache Harbor> : containerd ne rajoute pas /v2.
+  override_path = true
+{% endif %}
+{% if item.ca is defined %}
+  ca = "{{ item.ca }}"
+{% endif %}

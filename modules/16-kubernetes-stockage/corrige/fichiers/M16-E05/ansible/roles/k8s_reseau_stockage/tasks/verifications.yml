@@ -1,0 +1,81 @@
+---
+# La carte existe : elle doit être conforme AVANT que le nœud reçoive l'étiquette qui y attire
+# les pods de ceph-csi.
+
+- name: La carte porte l'adresse et le MTU attendus
+  ansible.builtin.assert:
+    that:
+      - ansible_facts[k8s_reseau_stockage_interface] is defined
+      - ansible_facts[k8s_reseau_stockage_interface]['ipv4']['address'] | default('') == k8s_reseau_stockage_adresse
+      - ansible_facts[k8s_reseau_stockage_interface]['mtu'] | int == k8s_reseau_stockage_mtu | int
+    fail_msg: >-
+      {{ k8s_reseau_stockage_interface }} de {{ inventory_hostname }} n'a pas
+      {{ k8s_reseau_stockage_adresse }} en MTU {{ k8s_reseau_stockage_mtu }} : lire « ip -d addr show
+      {{ k8s_reseau_stockage_interface }} », « networkctl status {{ k8s_reseau_stockage_interface }} »
+      et « qm config <VMID> » (mtu= de la carte). Le nœud n'est PAS étiqueté.
+    quiet: true
+
+- name: Lire les routes par défaut
+  ansible.builtin.command:
+    cmd: ip -4 route show default
+  register: k8s_reseau_stockage_routes
+  changed_when: false
+
+- name: Aucune route par défaut par la carte de stockage
+  ansible.builtin.assert:
+    that:
+      - k8s_reseau_stockage_interface not in k8s_reseau_stockage_routes.stdout
+      - k8s_reseau_stockage_routes.stdout_lines | length == 1
+    fail_msg: "Routes par défaut inattendues : {{ k8s_reseau_stockage_routes.stdout_lines }}"
+    quiet: true
+
+- name: Joindre chaque moniteur en 9000 octets sans fragmentation (8972 + 28 d'en-têtes)
+  ansible.builtin.command:
+    argv: [ping, -M, do, -s, "8972", -c, "2", -W, "2", -I, "{{ k8s_reseau_stockage_interface }}", "{{ item }}"]
+  loop: "{{ k8s_reseau_stockage_moniteurs }}"
+  changed_when: false
+
+- name: Lire l'adresse interne du nœud Kubernetes
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_reseau_stockage_kubectl }}"
+      - get
+      - node
+      - "{{ inventory_hostname }}"
+      - -o
+      - jsonpath={.status.addresses[?(@.type=="InternalIP")].address}
+  delegate_to: localhost
+  become: false
+  register: k8s_reseau_stockage_ip_interne
+  changed_when: false
+
+- name: L'adresse interne du nœud est restée celle du VLAN 40
+  ansible.builtin.assert:
+    that:
+      - k8s_reseau_stockage_ip_interne.stdout == ansible_facts['default_ipv4']['address']
+    fail_msg: >-
+      Le kubelet annonce {{ k8s_reseau_stockage_ip_interne.stdout }} au lieu de
+      {{ ansible_facts['default_ipv4']['address'] }} : fixer node-ip (configuration du kubelet, M14).
+    quiet: true
+
+- name: Étiqueter le nœud raccordé au réseau de stockage
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_reseau_stockage_kubectl }}"
+      - label
+      - --overwrite
+      - node
+      - "{{ inventory_hostname }}"
+      - "{{ k8s_reseau_stockage_etiquette_cle }}={{ k8s_reseau_stockage_etiquette_valeur }}"
+  delegate_to: localhost
+  become: false
+  register: k8s_reseau_stockage_label
+  changed_when: "'not labeled' not in k8s_reseau_stockage_label.stdout"
+
+- name: Remettre en service le nœud que ce rôle a drainé
+  ansible.builtin.command:
+    argv: ["{{ k8s_reseau_stockage_kubectl }}", uncordon, "{{ inventory_hostname }}"]
+  delegate_to: localhost
+  become: false
+  when: k8s_reseau_stockage_redemarre | bool
+  changed_when: true

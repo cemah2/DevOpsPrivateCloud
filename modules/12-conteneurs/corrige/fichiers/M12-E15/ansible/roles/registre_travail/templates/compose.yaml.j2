@@ -1,0 +1,44 @@
+# {{ registre_travail_entete }}
+# Registre de travail (M12-E15) : {{ registre_travail_dossier }}/compose.yaml sur {{ inventory_hostname }}.
+name: registre
+
+services:
+  registre:
+    image: {{ registre_travail_image }}
+    restart: unless-stopped
+    ports:
+      - "{{ registre_travail_port }}:5000"
+    volumes:
+      - donnees:/var/lib/registry
+      - ./config.yml:/etc/distribution/config.yml:ro
+      - ./htpasswd:/etc/distribution/auth/htpasswd:ro
+      - {{ registre_travail_certificat | dirname }}:/etc/distribution/tls:ro
+    # Le registre n'a besoin d'aucun privilège : système de fichiers en lecture seule (sauf le
+    # volume de données), aucune capacité, pas d'escalade.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      # L'image (Alpine) a wget ; /v2/ répond 401 sans identifiants, ce qui prouve que le service vit.
+      test: ["CMD-SHELL", "wget -q --spider --no-check-certificate https://127.0.0.1:5000/v2/ 2>&1 | grep -q 401"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Ramasse-miettes : lancé par la minuterie registre-gc.timer, registre arrêté (voir RB-121).
+  ramasse-miettes:
+    image: {{ registre_travail_image }}
+    profiles: [maintenance]
+    entrypoint: ["registry", "garbage-collect", "--delete-untagged", "/etc/distribution/config.yml"]
+    volumes:
+      - donnees:/var/lib/registry
+      - ./config.yml:/etc/distribution/config.yml:ro
+      - ./htpasswd:/etc/distribution/auth/htpasswd:ro
+      - {{ registre_travail_certificat | dirname }}:/etc/distribution/tls:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+
+volumes:
+  donnees:

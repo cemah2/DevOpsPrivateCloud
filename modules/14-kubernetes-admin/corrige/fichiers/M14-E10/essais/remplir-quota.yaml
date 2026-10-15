@@ -1,0 +1,33 @@
+# ~/m14/e10/remplir-quota.yaml — 10 réplicas de 300m : le quota (requests.cpu: 2) en laisse passer 6.
+# Le refus n'apparaît pas sur le Deployment mais dans les événements du ReplicaSet.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: essai-quota
+  namespace: mediagenda-dev
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: essai-quota
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: essai-quota
+    spec:
+      securityContext:   # conforme à « restricted » (E18) : ces essais resteront valables
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: attente
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+          command: ["sleep", "3600"]
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+          resources:
+            requests:
+              cpu: 300m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 64Mi

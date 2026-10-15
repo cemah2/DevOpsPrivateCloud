@@ -1,0 +1,3 @@
+# M17-E18 — seule ligne modifiée de Chart.yaml. Commit : « feat: variable MEDIAGENDA_ENVIRONNEMENT,
+# application 1.1.0 » → semantic-release publie la mineure suivante du chart (0.6.0 → 0.7.0, par ex.).
+appVersion: "1.1.0"

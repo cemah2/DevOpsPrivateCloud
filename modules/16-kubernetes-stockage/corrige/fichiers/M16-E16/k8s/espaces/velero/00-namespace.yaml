@@ -1,0 +1,15 @@
+# plateforme/k8s — espaces/velero/00-namespace.yaml (M16-E16)
+# EXCEPTION PSA : le node-agent de Velero monte /var/lib/kubelet/pods et /var/lib/kubelet/plugins
+# du nœud (hostPath, propagation HostToContainer) pour lire les volumes des pods (fs-backup) et
+# servir le data mover. Aucune charge applicative dans cet espace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: velero
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+  annotations:
+    medisphere.internal/ticket: "PLAT-1716"
+    medisphere.internal/exception-psa: "Velero node-agent : hostPath des volumes du kubelet"

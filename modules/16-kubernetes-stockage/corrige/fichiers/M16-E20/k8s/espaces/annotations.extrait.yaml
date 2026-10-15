@@ -1,0 +1,5 @@
+# plateforme/k8s — espaces/mediagenda-dev/00-namespace.yaml et espaces/mediagenda-recette/
+# 00-namespace.yaml (EXTRAIT, M16-E20) : annotation ajoutée aux espaces du M14-E10.
+metadata:
+  annotations:
+    medisphere.internal/classes-stockage: "ceph-rbd,cephfs"

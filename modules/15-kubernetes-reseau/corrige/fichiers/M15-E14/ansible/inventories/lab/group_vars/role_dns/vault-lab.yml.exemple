@@ -1,0 +1,8 @@
+# group_vars/role_dns/vault-lab.yml — CHIFFRÉ par Ansible Vault (identité « lab »), écrit par
+# outils/ajouter-tsig.sh (M15-E14). Contenu une fois déchiffré (valeurs FICTIVES ci-dessous) :
+---
+vault_powerdns_tsig_certmanager_k8s: "<BASE64-32-OCTETS>"
+vault_powerdns_tsig_externaldns_k8s: "<BASE64-32-OCTETS>"
+# Pourquoi « lab » et pas « critique » (où sont la clé d'API et axfr-par1) : ces clés ne donnent
+# accès qu'à la seule zone apps, depuis le seul VLAN 40, et doivent aussi exister en Secret dans le
+# cluster ; leur compromission ne touche pas le DNS du socle. Décision consignée dans l'ADR-0150.

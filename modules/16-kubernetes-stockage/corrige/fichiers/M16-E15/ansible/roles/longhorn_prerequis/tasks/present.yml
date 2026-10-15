@@ -1,0 +1,49 @@
+---
+- name: Installer les paquets
+  ansible.builtin.apt:
+    name: "{{ longhorn_prerequis_paquets }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Refuser open-iscsi 2.1.12 (avertissement de la documentation Longhorn 1.13)
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f=${Version} open-iscsi
+  register: longhorn_prerequis_iscsi_version
+  changed_when: false
+  check_mode: false
+  failed_when: longhorn_prerequis_iscsi_version.stdout is match('2\.1\.12')
+
+- name: Charger les modules au démarrage
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/longhorn.conf
+    content: "# M16-E15 : Longhorn\n{{ longhorn_prerequis_modules | join('\n') }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Charger les modules maintenant
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ longhorn_prerequis_modules }}"
+
+- name: Activer iscsid
+  ansible.builtin.systemd_service:
+    name: iscsid
+    enabled: true
+    state: started
+
+- name: Créer le système de fichiers (jamais sur un disque qui en porte déjà un)
+  community.general.filesystem:
+    dev: "{{ longhorn_prerequis_disque }}"
+    fstype: ext4
+    opts: "-L {{ longhorn_prerequis_etiquette }}"
+
+- name: Monter /var/lib/longhorn (et l'inscrire dans fstab)
+  ansible.posix.mount:
+    path: "{{ longhorn_prerequis_point_montage }}"
+    src: "LABEL={{ longhorn_prerequis_etiquette }}"
+    fstype: ext4
+    opts: defaults,noatime,nofail
+    state: mounted

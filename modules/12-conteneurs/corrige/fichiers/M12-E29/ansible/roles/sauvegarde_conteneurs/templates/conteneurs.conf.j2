@@ -1,0 +1,10 @@
+# /etc/wb-backup/conteneurs.conf — {{ inventory_hostname }} : paramètres NON secrets (M12-E29)
+# {{ ms_gere_par | default('Fichier géré par Ansible (plateforme/ansible, rôle sauvegarde_conteneurs).') }}
+WB_HOTE={{ inventory_hostname }}
+WB_NS={{ sauvegarde_conteneurs_espace }}
+WB_BASES=({% for b in sauvegarde_conteneurs_bases %}"{{ b }}" {% endfor %})
+WB_VOLUMES=({% for v in sauvegarde_conteneurs_volumes %}"{{ v }}" {% endfor %})
+WB_IMAGE_OUTIL={{ sauvegarde_conteneurs_image_outil }}
+WB_ENV=/etc/wb-backup/pbs-{{ inventory_hostname }}.env
+WB_CLE=/etc/wb-backup/pbs-{{ inventory_hostname }}.key
+WB_TRAVAIL=/var/lib/wb-backup/travail-conteneurs

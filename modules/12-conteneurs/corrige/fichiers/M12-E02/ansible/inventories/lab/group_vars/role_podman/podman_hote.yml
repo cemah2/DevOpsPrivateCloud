@@ -1,0 +1,7 @@
+---
+# group_vars/role_podman/podman_hote.yml — hôtes Podman sans privilège (M12-E02).
+# Compte « app » (UID 1001, sans sudo) ; plage subordonnée 524288-589823 (65 536 identifiants).
+podman_hote_compte: app
+podman_hote_compte_uid: 1001
+podman_hote_subid_debut: 524288
+podman_hote_subid_nombre: 65536

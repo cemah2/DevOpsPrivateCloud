@@ -1,0 +1,93 @@
+---
+# group_vars/role_routeur/frr.yml — FRR sur la bordure PAR1, AS 65000. Version M15-E11 (PLAT-1611) :
+# REMPLACE celle de M07 (E16, E19, état de fin de module E46). Rôle frr de M07-E06, mêmes variables.
+# Valeurs propres à chaque passerelle (host_vars) : frr_router_id, frr_update_source_leaf01.
+#
+# Changements de M15-E11 (les autres lignes sont celles de M07, inchangées) :
+#   - groupe K8S OUVERT : « neighbor K8S shutdown » retiré de frr_config_supplementaire ;
+#   - au plus 200 préfixes par nœud Kubernetes (le pool lb-par1 en compte 190) : au-delà, FRR
+#     coupe la session de CE nœud au lieu de laisser une erreur de configuration envahir la table ;
+#   - ECMP explicite : jusqu'à 8 chemins égaux installés (3 travailleurs aujourd'hui), au lieu de
+#     dépendre de la valeur compilée par défaut.
+# Si ton état de fin de M07 diffère (voisins de la maquette retirés plutôt que fermés, par exemple),
+# garde le tien et n'applique que ces trois changements.
+#
+# Ce que fait la bordure en BGP :
+#   - Kubernetes (nœuds en 10.10.40.0/24, AS 65040) : écoute passive, n'accepte que 10.10.41.0/24
+#     (des /32 d'adresses de service), n'annonce RIEN vers le cluster (refus explicite) ;
+#   - fabric (leaf01, maquette M07) et LYO1 (lyo-gw01) : sessions fermées depuis la destruction de
+#     la maquette (M07-E46), politiques conservées.
+# Profil « traditional » : bgp ebgp-requires-policy actif par défaut, temporisateurs 60/180 s (la
+# durée de maintien négociée avec Cilium est le minimum des deux propositions : 9 s).
+frr_ospf: {}
+
+frr_prefix_lists:
+  - nom: PL-DEPUIS-FABRIC
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.255.0/24, ge: 32}
+      - {seq: 20, action: permit, prefixe: 10.10.41.0/24, le: 32}
+  - nom: PL-DEPUIS-K8S
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.41.0/24, le: 32}
+  - nom: PL-VERS-FABRIC
+    regles:
+      - {seq: 10, action: permit, prefixe: 10.10.20.0/24}
+  - nom: PL-DEPUIS-LYO1
+    regles:
+      - {seq: 10, action: permit, prefixe: "{{ sites_lyo1_reseau }}", le: 24}
+  - nom: PL-VERS-LYO1
+    regles: "{{ sites_lyo1_reseaux_par1 | map('combine', {'action': 'permit'}) | list }}"
+
+frr_route_maps:
+  - nom: RM-FABRIC-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-FABRIC]}]
+  - nom: RM-FABRIC-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-VERS-FABRIC]}]
+  - nom: RM-K8S-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-K8S]}]
+  # Rien vers Kubernetes : un refus EXPLICITE (une route-map vide refuserait aussi, sans le dire).
+  - nom: RM-K8S-OUT
+    entrees: [{seq: 10, action: deny}]
+  - nom: RM-LYO1-IN
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-DEPUIS-LYO1]}]
+  - nom: RM-LYO1-OUT
+    entrees: [{seq: 10, action: permit, match: [ip address prefix-list PL-VERS-LYO1]}]
+
+frr_bgp:
+  asn: 65000
+  router_id: "{{ frr_router_id }}"
+  # (M15-E11) ECMP explicite vers les nœuds Kubernetes (rendu par le rôle dans l'AF ipv4 unicast).
+  maximum_paths: 8
+  groupes:
+    - nom: K8S
+      as_distant: 65040
+      description: noeuds Kubernetes k8s-par1 (M15)
+      route_map_entree: RM-K8S-IN
+      route_map_sortie: RM-K8S-OUT
+  voisins:
+    - adresse: 10.10.99.251
+      as_distant: 65101
+      description: leaf01 maquette M07 (session de test)
+      route_map_entree: RM-FABRIC-IN
+      route_map_sortie: RM-FABRIC-OUT
+    - adresse: 10.255.2.2
+      as_distant: 65030
+      description: lyo-gw01 site LYO1 (tunnel wg2)
+      route_map_entree: RM-LYO1-IN
+      route_map_sortie: RM-LYO1-OUT
+  reseaux: "{{ (['10.10.20.0/24'] + sites_lyo1_reseaux_par1 | map(attribute='prefixe') | list) | unique }}"
+
+# Lignes que le schéma du rôle ne décrit pas : écoute passive du groupe K8S, plafond de préfixes,
+# sessions de la maquette fermées (M07-E46). « neighbor K8S shutdown » a disparu (M15-E11).
+frr_config_supplementaire: |
+  router bgp 65000
+   bgp listen range 10.10.40.0/24 peer-group K8S
+   bgp listen limit 16
+   neighbor 10.10.99.251 update-source {{ frr_update_source_leaf01 }}
+   neighbor 10.10.99.251 shutdown
+   neighbor 10.255.2.2 shutdown
+   address-family ipv4 unicast
+    neighbor 10.255.2.2 maximum-prefix 50
+    neighbor K8S maximum-prefix 200
+   exit-address-family
+  exit

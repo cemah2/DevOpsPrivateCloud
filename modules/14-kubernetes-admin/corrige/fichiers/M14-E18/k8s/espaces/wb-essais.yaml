@@ -1,0 +1,17 @@
+# espaces/wb-essais.yaml — essais des exercices (M14-E06) : MédiAgenda de M14-E07/E08, objets
+# jetables des exercices suivants. Rien d'important n'y vit : on peut le vider à tout moment.
+# M14-E18 : Pod Security « baseline » appliqué (pas de privilège, pas d'accès à l'hôte),
+# « restricted » signalé et journalisé pour apprendre à l'atteindre.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-essais
+  labels:
+    app.kubernetes.io/part-of: workbook
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.35
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

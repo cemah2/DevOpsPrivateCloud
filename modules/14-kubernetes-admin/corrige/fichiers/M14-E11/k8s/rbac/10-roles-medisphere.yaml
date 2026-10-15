@@ -1,0 +1,139 @@
+# plateforme/k8s — rbac/10-roles-medisphere.yaml (M14-E11)
+# Rôles de cluster MédiSphère, construits par AGRÉGATION : les rôles « publics »
+# (medisphere-lecture, medisphere-developpeur) n'ont pas de règles écrites à la main ;
+# le contrôleur d'agrégation y recopie les règles des petits rôles étiquetés.
+# Ajouter un droit à toutes les équipes = ajouter un petit rôle étiqueté, sans toucher aux liaisons.
+# Aucun de ces rôles ne donne accès aux Secrets, sauf medisphere-secrets-edition (lié en dev seulement).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-lecture
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        rbac.medisphere.internal/agreger-vers-lecture: "true"
+rules: []   # rempli par le contrôleur d'agrégation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-developpeur
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        rbac.medisphere.internal/agreger-vers-developpeur: "true"
+rules: []   # rempli par le contrôleur d'agrégation
+---
+# Lecture des objets d'un espace (sans Secrets). Agrégé dans les deux rôles publics.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-lecture-charges
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    rbac.medisphere.internal/agreger-vers-lecture: "true"
+    rbac.medisphere.internal/agreger-vers-developpeur: "true"
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - services
+      - endpoints
+      - configmaps
+      - serviceaccounts
+      - events
+      - persistentvolumeclaims
+      - resourcequotas
+      - limitranges
+      - replicationcontrollers
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "controllerrevisions"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["events.k8s.io"]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+# Lecture d'objets de cluster utiles au diagnostic. Agrégé dans medisphere-lecture seulement :
+# un développeur n'a pas à lister les nœuds (il le voit dans l'état de ses pods).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-lecture-cluster
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    rbac.medisphere.internal/agreger-vers-lecture: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["scheduling.k8s.io"]
+    resources: ["priorityclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+# Écriture des charges de travail d'un espace (sans Secrets, sans RBAC, sans quotas).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-developpeur-ecriture
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    rbac.medisphere.internal/agreger-vers-developpeur: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/portforward", "pods/attach"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale", "statefulsets/scale", "replicasets/scale"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["create", "update", "patch", "delete"]
+---
+# Gestion des Secrets d'un espace : PAS agrégé. Lié explicitement là où c'est voulu (dev).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-secrets-edition
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]

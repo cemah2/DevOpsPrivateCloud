@@ -1,0 +1,18 @@
+# {{ ansible_managed }} — rôle k8s_reseau_stockage (M16-E05)
+# Carte STOR-PUB (VLAN {{ k8s_reseau_stockage_vlan }}) : reconnue par sa MAC, renommée, sans passerelle
+# ni DNS. La carte principale reste décrite par 50-cloud-init.yaml (premier démarrage).
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ k8s_reseau_stockage_interface }}:
+      match:
+        macaddress: "{{ k8s_reseau_stockage_mac }}"
+      set-name: {{ k8s_reseau_stockage_interface }}
+      mtu: {{ k8s_reseau_stockage_mtu }}
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+      addresses:
+        - "{{ k8s_reseau_stockage_adresse }}/{{ k8s_reseau_stockage_longueur }}"

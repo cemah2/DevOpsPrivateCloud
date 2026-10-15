@@ -1,0 +1,97 @@
+# {{ harbor_entete }}
+# harbor.yml de {{ inventory_hostname }} — Harbor {{ harbor_version }} (M13-E02).
+# Écrit à partir du harbor.yml.tmpl de la version : mêmes clés, mêmes valeurs par défaut sauf
+# mention. À chaque montée de version, COMPARE ce gabarit avec le nouveau harbor.yml.tmpl
+# (diff des clés) avant de changer harbor_version (M13-E16).
+# Ne modifie jamais les fichiers générés par « prepare » (common/config/, docker-compose.yml).
+# Ce fichier contient deux secrets : mode 600, propriétaire root.
+
+hostname: {{ harbor_nom }}
+
+http:
+  # Redirige vers HTTPS. Le port 80 sert aussi au défi ACME HTTP-01 à l'émission initiale du
+  # certificat (Harbor est alors arrêté, rôle certificats_acme).
+  port: {{ harbor_port_http }}
+
+https:
+  port: {{ harbor_port_https }}
+  # Copiés par prepare dans {{ harbor_donnees }}/secret/cert/server.crt et server.key.
+  certificate: {{ harbor_tls_certificat }}
+  private_key: {{ harbor_tls_cle }}
+  strong_ssl_ciphers: true
+
+# Mot de passe initial de « admin » : lu à la PREMIÈRE installation seulement. Le changer ensuite
+# se fait par l'API (PUT /api/v2.0/users/{id}/password), puis dans le Vault.
+harbor_admin_password: {{ harbor_admin_mdp }}
+
+database:
+  password: {{ harbor_db_mdp }}
+  max_idle_conns: 100
+  max_open_conns: 900
+  conn_max_lifetime: 5m
+  conn_max_idle_time: 0
+
+data_volume: {{ harbor_donnees }}
+
+trivy:
+  ignore_unfixed: {{ harbor_trivy_ignore_unfixed | lower }}
+  skip_update: {{ harbor_trivy_skip_update | lower }}
+  skip_java_db_update: false
+  db_repository: ghcr.io/aquasecurity/trivy-db
+  java_db_repository: ghcr.io/aquasecurity/trivy-java-db
+  offline_scan: false
+  security_check: vuln
+  insecure: false
+  timeout: {{ harbor_trivy_timeout }}
+
+jobservice:
+  max_job_workers: {{ harbor_jobservice_workers }}
+  max_job_duration_hours: 24
+  job_loggers:
+    - STD_OUTPUT
+    - FILE
+  logger_sweeper_duration: 1
+
+notification:
+  webhook_job_max_retry: 3
+  webhook_job_http_client_timeout: 3
+
+log:
+  level: {{ harbor_journal_niveau }}
+  local:
+    rotate_count: {{ harbor_journal_rotation_nombre }}
+    rotate_size: {{ harbor_journal_rotation_taille }}
+    location: /var/log/harbor
+
+# Version du SCHÉMA de ce fichier (pas de Harbor) : celle du harbor.yml.tmpl de la 2.15.x.
+_version: 2.15.0
+
+proxy:
+  http_proxy:
+  https_proxy:
+  no_proxy:
+  components:
+    - core
+    - jobservice
+    - trivy
+
+network:
+  # Webhooks vers des adresses privées refusés (protection SSRF, défaut de la 2.15).
+  allow_private_network_access: false
+
+{% if harbor_metriques %}
+metric:
+  enabled: true
+  port: {{ harbor_metriques_port }}
+  path: /metrics
+{% endif %}
+
+upload_purging:
+  enabled: true
+  age: {{ harbor_purge_uploads_age }}
+  interval: 24h
+  dryrun: false
+
+cache:
+  enabled: false
+  expire_hours: 24

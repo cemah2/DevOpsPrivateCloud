@@ -1,0 +1,8 @@
+{
+  "apiVersion": "policy/v1",
+  "kind": "Eviction",
+  "metadata": {
+    "name": "<NOM-DU-POD>",
+    "namespace": "mediagenda-dev"
+  }
+}

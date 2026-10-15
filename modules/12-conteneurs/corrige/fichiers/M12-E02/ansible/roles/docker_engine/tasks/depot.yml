@@ -1,0 +1,78 @@
+---
+- name: Prérequis du dépôt (certificats, gpg pour lire l'empreinte de la clé)
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Dossier des clés APT
+  ansible.builtin.file:
+    path: "{{ docker_engine_cle_fichier | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# La clé est d'abord téléchargée À CÔTÉ, contrôlée, puis seulement installée : une clé
+# inattendue n'est jamais utilisée pour valider des paquets, même une seconde.
+- name: Clé du dépôt téléchargée pour contrôle
+  ansible.builtin.get_url:
+    url: "{{ docker_engine_cle_url }}"
+    dest: "{{ docker_engine_cle_fichier }}.a-verifier"
+    owner: root
+    group: root
+    mode: "0644"
+    force: true
+  changed_when: false
+
+- name: Empreintes de la clé téléchargée
+  ansible.builtin.command:
+    cmd: gpg --show-keys --with-colons --with-fingerprint "{{ docker_engine_cle_fichier }}.a-verifier"
+  register: docker_engine_cle_lue
+  changed_when: false
+
+- name: L'empreinte est celle publiée par Docker
+  vars:
+    empreintes_lues: "{{ docker_engine_cle_lue.stdout_lines | select('match', '^fpr:') | map('split', ':') | map(attribute='9') | list }}"
+  ansible.builtin.assert:
+    that:
+      - (docker_engine_cle_empreinte | replace(' ', '') | upper) in empreintes_lues
+    fail_msg: "Clé de {{ docker_engine_cle_url }} inattendue : empreinte attendue {{ docker_engine_cle_empreinte }}."
+    quiet: true
+
+- name: Clé installée (Signed-By du dépôt)
+  ansible.builtin.copy:
+    src: "{{ docker_engine_cle_fichier }}.a-verifier"
+    dest: "{{ docker_engine_cle_fichier }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dépôt Docker au format deb822, limité à cette clé
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: "{{ docker_engine_depot_url }}"
+    suites: "{{ docker_engine_suite }}"
+    components: [stable]
+    architectures: [amd64]
+    signed_by: "{{ docker_engine_cle_fichier }}"
+    state: present
+  notify: Mettre à jour l'index APT
+
+# Épinglage APT : même un « apt upgrade » à la main ne change pas de version. Monter de version =
+# changer docker_engine_versions dans l'inventaire (MR).
+- name: Préférences APT (versions épinglées)
+  ansible.builtin.template:
+    src: docker.pref.j2
+    dest: /etc/apt/preferences.d/docker.pref
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Index APT à jour avant l'installation
+  ansible.builtin.meta: flush_handlers

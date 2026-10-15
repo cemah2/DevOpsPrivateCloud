@@ -1,0 +1,25 @@
+# plateforme/k8s — composants/longhorn/values.yaml (M16-E15, SUPPRIMÉ en fin d'exercice)
+# Chart longhorn/longhorn 1.13.0.
+#   helm upgrade --install longhorn longhorn/longhorn --version 1.13.0 \
+#     -n longhorn-system -f composants/longhorn/values.yaml --wait --timeout 10m
+persistence:
+  defaultClass: false               # le défaut du chart est true : ceph-rbd reste la seule
+  defaultClassReplicaCount: 3
+  defaultFsType: ext4
+  reclaimPolicy: Delete
+defaultSettings:
+  defaultDataPath: /var/lib/longhorn/
+  defaultReplicaCount: 3
+  # Protection contre la désinstallation accidentelle : passée à true par kubectl patch
+  # juste avant le retrait (étape 8), jamais dans ce fichier.
+  deletingConfirmationFlag: false
+  # Pas de disque par défaut sur les nœuds de contrôle (le gestionnaire n'y tourne pas :
+  # pas de tolérance du taint control-plane dans ce fichier).
+  createDefaultDiskLabeledNodes: false
+# La cible de sauvegarde « en aperçu » est posée après l'installation, sur la ressource
+# BackupTarget « default » (étape 6), pour pouvoir la retirer avant la désinstallation.
+defaultBackupStore:
+  backupTarget: ~
+  backupTargetCredentialSecret: ~
+longhornUI:
+  replicas: 1

@@ -1,0 +1,2 @@
+# Extrait de envs/k8s/terraform.tfvars (M15-E14) — valeur PUBLIQUE (un DS n'est pas un secret).
+ds_apps = "<KEYTAG> 13 2 <EMPREINTE-SHA256-EN-HEXADÉCIMAL>"

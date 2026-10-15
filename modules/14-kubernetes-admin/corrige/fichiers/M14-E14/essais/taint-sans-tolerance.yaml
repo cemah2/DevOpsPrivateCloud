@@ -1,0 +1,18 @@
+# ~/m14/e14/taint-sans-tolerance.yaml — exige k8s-w03 sans tolérer sa taint : reste Pending.
+# Lis le message de l'ordonnanceur : « … had untolerated taint {dedie: bdd} … ».
+apiVersion: v1
+kind: Pod
+metadata:
+  name: essai-sans-tolerance
+  namespace: wb-essais
+spec:
+  priorityClassName: medisphere-essai
+  nodeSelector:
+    medisphere.internal/dedie: bdd
+  containers:
+    - name: attente
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}

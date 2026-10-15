@@ -1,0 +1,30 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M14-E27) : audit du serveur d'API.
+# v1beta4 : extraArgs est une LISTE de {name, value} ; extraVolumes une liste de HostPathMount.
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v1.36.5
+# … controlPlaneEndpoint, networking, etcd… inchangés …
+apiServer:
+  certSANs:
+    - k8s-api.par1.medisphere.internal
+    - 10.10.40.200
+  extraArgs:
+    - {name: audit-policy-file, value: /etc/kubernetes/audit/politique.yaml}
+    - {name: audit-log-path, value: /var/log/kubernetes/audit/audit.log}
+    # Rotation par le serveur d'API lui-même : 100 Mo par fichier, 10 fichiers, 30 jours, compressés.
+    # Au pire 1 Go par nœud (compressé : bien moins) ; la conservation longue est au module 22.
+    - {name: audit-log-maxsize, value: "100"}
+    - {name: audit-log-maxbackup, value: "10"}
+    - {name: audit-log-maxage, value: "30"}
+    - {name: audit-log-compress, value: "true"}
+  extraVolumes:
+    - name: audit-politique
+      hostPath: /etc/kubernetes/audit
+      mountPath: /etc/kubernetes/audit
+      readOnly: true
+      pathType: Directory
+    - name: audit-journaux
+      hostPath: /var/log/kubernetes/audit
+      mountPath: /var/log/kubernetes/audit
+      readOnly: false
+      pathType: DirectoryOrCreate

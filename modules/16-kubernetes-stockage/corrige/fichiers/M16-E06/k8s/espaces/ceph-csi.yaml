@@ -1,0 +1,16 @@
+# espaces/ceph-csi.yaml (plateforme/k8s) — M16-E06 (PLAT-1706)
+# Pilotes ceph-csi (RBD, CephFS). Le nodeplugin est privilégié, en hostNetwork et hostPID, monte
+# /dev, /sys, /lib/modules et les répertoires du kubelet avec une propagation Bidirectional :
+# aucun profil de Pod Security autre que « privileged » ne l'admet. L'espace ne contient QUE ces
+# pilotes ; qui peut y créer un pod est root sur les travailleurs (RBAC : équipe Plateforme seule).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ceph-csi
+  labels:
+    medisphere.fr/composant: stockage
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+    # Les avertissements « baseline » rappellent, à chaque application, ce qui est accordé.
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/audit: baseline

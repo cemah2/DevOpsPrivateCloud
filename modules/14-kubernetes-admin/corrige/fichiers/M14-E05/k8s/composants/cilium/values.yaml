@@ -1,0 +1,45 @@
+# composants/cilium/values.yaml — CNI de k8s-par1 (M14-E05, PLAT-1505). Cilium 1.20.x.
+# Installé par la CLI cilium (qui pilote le chart Helm « cilium », release « cilium » dans
+# kube-system) :
+#   cilium install --version 1.20.2 --values composants/cilium/values.yaml   (task cilium)
+# Seules les valeurs qui diffèrent des défauts du chart, ou qu'on veut voir écrites, figurent ici.
+# Référence : helm show values cilium/cilium --version 1.20.2
+
+cluster:
+  # Nom du cluster (utile dès qu'on parlera de Cluster Mesh ; 32 caractères au plus).
+  name: k8s-par1
+
+# Les agents parlent à l'API par la VIP, pas par le Service « kubernetes » (10.96.0.1) : avec
+# kube-proxy conservé ce n'est pas obligatoire, mais c'est indispensable dès que kube-proxy est
+# retiré (M15), et cela évite une dépendance circulaire au démarrage du nœud.
+k8sServiceHost: k8s-api.par1.medisphere.internal
+k8sServicePort: 8443
+
+# kube-proxy reste en place au M14 (mode iptables) : Cilium ne le remplace pas. M15 : true.
+kubeProxyReplacement: "false"
+
+# Encapsulation VXLAN entre nœuds (le réseau du VLAN 40 ne connaît pas les adresses des pods).
+routingMode: tunnel
+tunnelProtocol: vxlan
+
+ipam:
+  # L'opérateur Cilium découpe le réseau des pods en /24 et en attribue un à chaque nœud
+  # (CiliumNode .spec.ipam.podCIDRs). Même réseau que networking.podSubnet de kubeadm.
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - 10.240.0.0/16
+    clusterPoolIPv4MaskSize: 24
+
+hubble:
+  enabled: true
+  # Relais : agrège les flux de tous les nœuds pour la CLI hubble (hubble observe). L'interface web
+  # arrive au M15.
+  relay:
+    enabled: true
+  ui:
+    enabled: false
+
+operator:
+  # Deux réplicas (défaut), répartis sur deux nœuds différents par le chart.
+  replicas: 2

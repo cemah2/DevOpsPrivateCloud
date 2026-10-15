@@ -1,0 +1,19 @@
+# {{ k8s_plan_controle_entete }}
+# {{ k8s_plan_controle_dossier }}/kubeadm-config.yaml — {{ inventory_hostname }} (rôle k8s_plan_controle, M14-E04).
+# Premier document : ce qui est PROPRE au nœud. Suivants : le fichier du cluster, copié tel quel de
+# plateforme/k8s (cluster/kubeadm-config.yaml). Seul {{ k8s_plan_controle_premier }} sert à « kubeadm init » ;
+# sur les autres, le fichier sert aux commandes de phase (upload-certs, kubeconfig user…).
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ k8s_plan_controle_adresse }}
+  bindPort: {{ k8s_plan_controle_apiserver_port }}
+nodeRegistration:
+  name: {{ inventory_hostname }}
+  criSocket: {{ k8s_plan_controle_socket_cri }}
+  kubeletExtraArgs:
+    # Adresse annoncée par le kubelet : explicite, pour le jour où le nœud aura plusieurs cartes.
+    - name: node-ip
+      value: {{ k8s_plan_controle_adresse }}
+---
+{{ _k8s_plan_controle_cluster }}

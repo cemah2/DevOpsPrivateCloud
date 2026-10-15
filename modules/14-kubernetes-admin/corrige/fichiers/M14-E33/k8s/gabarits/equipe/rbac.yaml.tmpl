@@ -1,0 +1,37 @@
+# plateforme/k8s — rbac/40-@EQUIPE@.yaml (gabarit M14-E33)
+# Droits de l'équipe @EQUIPE@ : mêmes ClusterRoles réutilisables que MédiAgenda (rbac/10-roles-medisphere.yaml,
+# M14-E11), liés PAR ESPACE. medisphere-developpeur (agrégé : lecture et écriture des charges, sans
+# Secrets, sans RBAC, sans quotas) et medisphere-secrets-edition (Secrets de l'espace, en dev seulement).
+# Aucune liaison à l'échelle du cluster : le groupe ne voit rien hors de son espace.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: @EQUIPE@-devs-developpeur
+  namespace: @EQUIPE@-@ENV@
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-developpeur
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "medisphere:@EQUIPE@-devs"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: @EQUIPE@-devs-secrets
+  namespace: @EQUIPE@-@ENV@
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-secrets-edition
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "medisphere:@EQUIPE@-devs"

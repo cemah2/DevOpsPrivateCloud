@@ -1,0 +1,149 @@
+---
+# roles/powerdns_auth/tasks/dnsupdate.yml — (M15-E14) autorisations de mise à jour dynamique
+# (RFC 2136) PAR ZONE, sur le primaire. Variables : powerdns_auth_cles_dnsupdate,
+# powerdns_auth_zones_dnsupdate (defaults/main.yml).
+#
+# Règle de PowerDNS 5.0 (page « Dynamic DNS Update ») : une mise à jour doit être autorisée par
+# ADRESSE (réglage global allow-dnsupdate-from OU métadonnée ALLOW-DNSUPDATE-FROM de la zone), PUIS,
+# si la zone a TSIG-ALLOW-DNSUPDATE, signée par l'une de ces clés. Les clés s'ajoutent UNE PAR
+# VALEUR (« metadata add »), jamais en liste séparée par des virgules.
+#
+# Comme replication.yml : pdnsutil SOUS LE COMPTE pdns (propriétaire de la base SQLite), une
+# lecture avant chaque écriture (idempotence), secrets jamais affichés (no_log) ni passés en argument
+# visible plus longtemps que la commande d'import (variable d'environnement).
+
+- name: Autorisations de mise à jour cohérentes
+  ansible.builtin.assert:
+    that:
+      - powerdns_auth_dnsupdate | bool
+      - powerdns_auth_cles_dnsupdate | length > 0
+      - powerdns_auth_cles_dnsupdate | rejectattr('secret', 'defined') | list | length == 0
+      - powerdns_auth_cles_dnsupdate | map(attribute='secret') | map('length') | min >= 32
+      - (powerdns_auth_zones_dnsupdate | map(attribute='zone')
+         | difference(powerdns_auth_zones | map(attribute='nom'))) | length == 0
+      - ((powerdns_auth_zones_dnsupdate | map(attribute='cles') | flatten)
+         + (powerdns_auth_zones_dnsupdate | map(attribute='axfr', default=[]) | flatten))
+        | difference(powerdns_auth_cles_dnsupdate | map(attribute='nom')) | length == 0
+      - powerdns_auth_zones_dnsupdate | rejectattr('depuis', 'defined') | list | length == 0
+    fail_msg: >-
+      Mises à jour dynamiques mal décrites : powerdns_auth_dnsupdate doit être vrai ; chaque zone de
+      powerdns_auth_zones_dnsupdate doit être servie (powerdns_auth_zones) et avoir « depuis » ;
+      chaque clé citée doit être déclarée dans powerdns_auth_cles_dnsupdate avec un secret de
+      32 caractères au moins (Vault).
+    quiet: true
+  no_log: true
+
+# --- Clés TSIG ---------------------------------------------------------------------------------
+- name: Lire les clés TSIG connues
+  ansible.builtin.command: pdnsutil tsigkey list
+  become: true
+  become_user: pdns
+  register: powerdns_auth_maj_cles_connues
+  changed_when: false
+  check_mode: false
+  no_log: true
+
+# Ligne « nom. algorithme. secret » : clé absente ou secret changé (rotation dans Vault) → import.
+- name: Importer ou mettre à jour les clés de mise à jour
+  ansible.builtin.shell: |
+    set -o pipefail
+    pdnsutil tsigkey delete "$NOM" >/dev/null 2>&1 || true
+    pdnsutil tsigkey import "$NOM" "$ALGO" "$SECRET"
+  args:
+    executable: /bin/bash
+  environment:
+    NOM: "{{ item.nom }}"
+    ALGO: "{{ item.algorithme | default('hmac-sha256') }}"
+    SECRET: "{{ item.secret }}"
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_cles_dnsupdate }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  when: >-
+    (powerdns_auth_maj_cles_connues.stdout_lines
+     | select('search', '^' ~ (item.nom | regex_escape) ~ '\.? ')
+     | select('search', ' ' ~ (item.secret | regex_escape) ~ '$') | list | length) == 0
+  changed_when: true
+  no_log: true
+
+# --- Métadonnées des zones ---------------------------------------------------------------------
+- name: Lire les métadonnées de mise à jour et de transfert de chaque zone
+  ansible.builtin.command: >-
+    pdnsutil metadata get {{ item.zone }}
+    TSIG-ALLOW-DNSUPDATE ALLOW-DNSUPDATE-FROM NOTIFY-DNSUPDATE TSIG-ALLOW-AXFR
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_zones_dnsupdate }}"
+  loop_control:
+    label: "{{ item.zone }}"
+  register: powerdns_auth_maj_meta
+  changed_when: false
+  check_mode: false
+
+# Valeur actuelle d'une métadonnée sous forme de liste triée (« KIND = a, b » ; points finaux retirés).
+- name: Clés autorisées à mettre à jour = exactement celles de l'inventaire
+  ansible.builtin.shell: |
+    set -euo pipefail
+    pdnsutil metadata set "$ZONE" TSIG-ALLOW-DNSUPDATE
+    for c in $CLES; do pdnsutil metadata add "$ZONE" TSIG-ALLOW-DNSUPDATE "$c"; done
+  args:
+    executable: /bin/bash
+  environment:
+    ZONE: "{{ item.item.zone }}"
+    CLES: "{{ item.item.cles | join(' ') }}"
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_maj_meta.results }}"
+  loop_control:
+    label: "{{ item.item.zone }}"
+  vars:
+    _actuel: >-
+      {{ ((item.stdout | regex_search('^TSIG-ALLOW-DNSUPDATE = (.*)$', '\1', multiline=True)) or [''])
+         | first | split(',') | map('trim') | map('regex_replace', '\.$', '') | reject('equalto', '')
+         | sort }}
+  when: _actuel != (item.item.cles | sort)
+  changed_when: true
+
+- name: Réseaux autorisés à envoyer des mises à jour (ALLOW-DNSUPDATE-FROM)
+  ansible.builtin.command:
+    argv: "{{ ['pdnsutil', 'metadata', 'set', item.item.zone, 'ALLOW-DNSUPDATE-FROM'] + item.item.depuis }}"
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_maj_meta.results }}"
+  loop_control:
+    label: "{{ item.item.zone }}"
+  vars:
+    _actuel: >-
+      {{ ((item.stdout | regex_search('^ALLOW-DNSUPDATE-FROM = (.*)$', '\1', multiline=True)) or [''])
+         | first | split(',') | map('trim') | reject('equalto', '') | sort }}
+  when: _actuel != (item.item.depuis | sort)
+  changed_when: true
+
+- name: NOTIFY vers les secondaires après chaque mise à jour (NOTIFY-DNSUPDATE)
+  ansible.builtin.command:
+    argv: "{{ ['pdnsutil', 'metadata', 'set', item.item.zone, 'NOTIFY-DNSUPDATE'] + (['1'] if item.item.notifier | default(true) else []) }}"
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_maj_meta.results }}"
+  loop_control:
+    label: "{{ item.item.zone }}"
+  vars:
+    _voulu: "{{ item.item.notifier | default(true) | bool }}"
+    _actuel: "{{ item.stdout is search('^NOTIFY-DNSUPDATE = 1$', multiline=True) }}"
+  when: _actuel | bool != _voulu | bool
+  changed_when: true
+
+# « tsigkey activate … primary » AJOUTE la clé à TSIG-ALLOW-AXFR (axfr-par1, posée par
+# replication.yml, reste en place).
+- name: Clés supplémentaires autorisées à transférer la zone (lecture par AXFR signé)
+  ansible.builtin.command: pdnsutil tsigkey activate {{ item.0.item.zone }} {{ item.1 }} primary
+  become: true
+  become_user: pdns
+  loop: "{{ powerdns_auth_maj_meta.results | subelements('item.axfr', skip_missing=True) }}"
+  loop_control:
+    label: "{{ item.0.item.zone }} : {{ item.1 }}"
+  when: >-
+    item.1 not in (((item.0.stdout | regex_search('^TSIG-ALLOW-AXFR = (.*)$', '\1', multiline=True)) or [''])
+                   | first | split(',') | map('trim') | map('regex_replace', '\.$', '') | list)
+  changed_when: true

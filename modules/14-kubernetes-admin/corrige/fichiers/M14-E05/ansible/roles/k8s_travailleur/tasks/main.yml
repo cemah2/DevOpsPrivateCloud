@@ -1,0 +1,41 @@
+---
+# Rôle k8s_travailleur — point d'entrée (M14-E05). Idempotent : un nœud membre n'est pas touché.
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname not in groups[k8s_travailleur_groupe_controle] | default([])
+      - k8s_travailleur_adresse is match('^10\.10\.40\.[0-9]{1,3}$')
+    fail_msg: "{{ inventory_hostname }} : un travailleur n'est pas un nœud de contrôle ; adresse du VLAN 40 attendue."
+    quiet: true
+
+- name: Ce nœud est-il déjà membre ?
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: _k8s_travailleur_membre
+
+- name: Chercher un nœud de contrôle qui porte le cluster
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  delegate_to: "{{ item }}"
+  loop: "{{ groups[k8s_travailleur_groupe_controle] | sort }}"
+  register: _k8s_travailleur_admin
+  when: not _k8s_travailleur_membre.stat.exists
+
+- name: Nœud de référence
+  ansible.builtin.set_fact:
+    _k8s_travailleur_reference: >-
+      {{ (_k8s_travailleur_admin.results | default([])) | selectattr('stat', 'defined') | selectattr('stat.exists')
+         | map(attribute='item') | first | default('') }}
+  when: not _k8s_travailleur_membre.stat.exists
+
+- name: Pas de cluster à rejoindre
+  ansible.builtin.fail:
+    msg: >-
+      Aucun nœud de {{ k8s_travailleur_groupe_controle }} ne porte de cluster (admin.conf absent) :
+      amorce d'abord le plan de contrôle (M14-E04).
+  when: not _k8s_travailleur_membre.stat.exists and _k8s_travailleur_reference == '' and k8s_travailleur_jonction_auto | bool
+
+- name: Joindre le travailleur
+  ansible.builtin.include_tasks: jonction.yml
+  when: not _k8s_travailleur_membre.stat.exists and k8s_travailleur_jonction_auto | bool

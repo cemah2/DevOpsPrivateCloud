@@ -1,0 +1,17 @@
+# Réseau du cluster (M14-E05, M15). Cilium a été installé par la CLI « cilium » : elle crée une
+# release Helm « cilium » dans kube-system, que l'on reprend telle quelle.
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: cilium
+    namespace: kube-system
+    chart: cilium/cilium
+    version: 1.20.2
+    labels:
+      groupe: reseau
+      composant: cilium
+    values:
+      # Valeurs « fournies » de la release (helm get values cilium -n kube-system), y compris celles
+      # que la CLI avait ajoutées d'elle-même : sans elles, le premier diff n'est pas vide.
+      - ../composants/cilium/values.yaml

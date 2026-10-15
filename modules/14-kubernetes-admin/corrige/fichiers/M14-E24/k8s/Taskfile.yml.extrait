@@ -1,0 +1,9 @@
+# Taskfile.yml de plateforme/k8s — EXTRAIT : tâches ajoutées en M14-E24.
+version: "3"
+
+tasks:
+  # … tâches existantes (appliquer, kubeconfig…) …
+  etcd:instantane:
+    desc: "Instantané etcd à la demande, téléchargé, déchiffré et vérifié (avant toute opération)"
+    cmds:
+      - outils/etcd-instantane.sh --noeud {{.NOEUD | default "k8s-cp01"}} --verifier

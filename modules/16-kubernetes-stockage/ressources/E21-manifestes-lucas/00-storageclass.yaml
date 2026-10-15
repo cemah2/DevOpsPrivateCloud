@@ -1,0 +1,22 @@
+# Classe « rapide » pour les développeurs (Lucas, MR !42)
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rapide
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: 5c2f4c1e-8a7b-11f1-9d3e-bc2411300051
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten,journaling
+  csi.storage.k8s.io/fstype: xfs
+  csi.storage.k8s.io/provisioner-secret-name: ceph-admin
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: ceph-admin
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: ceph-admin
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+volumeBindingMode: Immediate

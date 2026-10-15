@@ -1,0 +1,69 @@
+# plateforme/k8s — composants/velero/values.yaml (M16-E16, complété en E17)
+# Chart vmware-tanzu/velero 12.2.1 (appVersion 1.18.2) : image fixée en 1.18.4.
+#   outils/secrets-sauvegarde.sh velero          # AVANT : le chart ne crée pas le Secret
+#   helm upgrade --install velero vmware-tanzu/velero --version 12.2.1 \
+#     -n velero -f composants/velero/values.yaml --wait
+image:
+  repository: velero/velero          # docker.io, tiré par le cache Harbor (hosts.toml)
+  tag: v1.18.4
+  pullPolicy: IfNotPresent
+
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.14.4
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: "1", memory: 512Mi}
+
+# Pas de VolumeSnapshotLocation : aucun instantané « natif » de fournisseur ; les volumes
+# passent par CSI (EnableCSI) et Kopia (node-agent).
+snapshotsEnabled: false
+
+credentials:
+  useSecret: true
+  existingSecret: velero-s3          # créé par outils/secrets-sauvegarde.sh (clé « cloud »)
+
+deployNodeAgent: true
+nodeAgent:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+  # Le taint dedie=bdd:NoSchedule de k8s-w03 (M14-E14) : le node-agent doit tourner partout
+  # où des pods ont des volumes, donc le tolérer.
+  tolerations:
+    - key: dedie
+      operator: Equal
+      value: bdd
+      effect: NoSchedule
+
+configuration:
+  features: EnableCSI
+  uploaderType: kopia                # seul choix possible pour sauvegarder depuis 1.17
+  defaultSnapshotMoveData: false     # choisi sauvegarde par sauvegarde (E17)
+  backupStorageLocation:
+    - name: s3-01
+      provider: aws
+      bucket: velero-k8s-par1
+      default: true
+      accessMode: ReadWrite
+      # Racine « MédiSphère Root CA » en base 64 (publique : elle peut être versionnée) :
+      #   base64 -w0 /usr/local/share/ca-certificates/medisphere-root-ca.crt
+      # caCert est déprécié en 1.18 au profit de caCertRef (Secret), que le chart 12.2.1 ne
+      # sait pas encore écrire. À migrer quand le chart le permettra.
+      caCert: <BASE64-DE-MEDISPHERE-ROOT-CA>
+      config:
+        region: us-east-1            # SeaweedFS l'ignore, le SDK AWS l'exige
+        s3ForcePathStyle: "true"
+        s3Url: https://s3-01.par1.medisphere.internal:8333
+  volumeSnapshotLocation: []
+
+# CRD mises à jour par un job à chaque upgrade (défaut), image kubectl par le cache « k8s ».
+upgradeCRDs: true
+kubectl:
+  image:
+    repository: registry.k8s.io/kubectl

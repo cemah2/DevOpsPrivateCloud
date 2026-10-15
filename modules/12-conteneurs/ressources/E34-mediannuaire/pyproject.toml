@@ -1,0 +1,16 @@
+[project]
+name = "mediannuaire"
+version = "1.0.0"
+description = "MédiAnnuaire : annuaire des praticiens de MédiSphère (application de formation, M12-E34)"
+readme = "README.md"
+authors = [{ name = "Équipe MédiAgenda (MédiSphère)" }]
+requires-python = ">=3.13,<3.14"
+# Aucune dépendance : bibliothèque standard seulement.
+dependencies = []
+
+[project.scripts]
+mediannuaire = "mediannuaire.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.13.0"]
+build-backend = "uv_build"

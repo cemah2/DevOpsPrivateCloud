@@ -1,0 +1,35 @@
+# Côté données : PostgreSQL et Valkey n'acceptent que l'API de leur espace. (L'autorisation doit
+# exister DES DEUX CÔTÉS : sortie de l'API ET entrée de la base.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-depuis-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda-api
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: valkey-depuis-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda-api
+      ports:
+        - {protocol: TCP, port: 6379}

@@ -1,0 +1,20 @@
+# plateforme/k8s — composants/rook/operator-values.yaml (M16-E13, SUPPRIMÉ en M16-E14)
+# Chart rook-release/rook-ceph 1.21.0. Seules les valeurs qui changent du défaut.
+#   helm upgrade --install rook-ceph rook-release/rook-ceph --version 1.21.0 \
+#     -n rook-ceph -f composants/rook/operator-values.yaml --wait
+crds:
+  # Le chart gère les CRD (défaut). Ne JAMAIS le passer à false après l'installation : la
+  # suppression des CRD détruirait le cluster (avertissement du chart).
+  enabled: true
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+csi:
+  # ceph-csi-operator (sous-chart) installe et pilote les pilotes CSI de Rook (préfixés
+  # « rook-ceph. »). Défaut conservé, écrit pour la lisibilité.
+  installCsiOperator: true
+monitoring:
+  enabled: false        # pas de Prometheus avant le M21

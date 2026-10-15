@@ -1,0 +1,42 @@
+---
+argument_specs:
+  main:
+    short_description: Installe et configure Docker Engine (dépôt download.docker.com) sur Debian 13
+    options:
+      docker_engine_depot_url:
+        type: str
+        description: URL du dépôt APT de Docker (sans la suite).
+      docker_engine_suite:
+        type: str
+        description: Suite Debian du dépôt (trixie).
+      docker_engine_cle_url:
+        type: str
+        description: URL de la clé OpenPGP de signature du dépôt.
+      docker_engine_cle_empreinte:
+        type: str
+        description: Empreinte attendue de la clé (espaces tolérés).
+      docker_engine_cle_fichier:
+        type: path
+        description: Emplacement de la clé (Signed-By du dépôt).
+      docker_engine_versions:
+        type: dict
+        required: true
+        description: Paquet => version Debian exacte (docker-ce, docker-ce-cli, containerd.io, plugins).
+      docker_engine_paquets_conflictuels:
+        type: list
+        elements: str
+        description: Paquets Debian à retirer avant l'installation.
+      docker_engine_outils:
+        type: list
+        elements: str
+        description: Outils de travail installés en plus.
+      docker_engine_daemon_defaut:
+        type: dict
+        description: Contenu de base de /etc/docker/daemon.json.
+      docker_engine_daemon_extra:
+        type: dict
+        description: Clés ajoutées ou remplacées (fusion récursive) dans daemon.json.
+      docker_engine_groupe_docker:
+        type: list
+        elements: str
+        description: Comptes ajoutés au groupe docker (équivalent root).

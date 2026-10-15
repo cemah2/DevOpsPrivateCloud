@@ -1,0 +1,16 @@
+{
+  "branches": ["main"],
+  "tagFormat": "v${version}",
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    [
+      "@semantic-release/gitlab",
+      {
+        "successComment": "Chart publié en ${nextRelease.version} : oci://registry.par1.medisphere.internal/charts/mediagenda (signé Cosign).",
+        "failTitle": "La release automatique du chart échoue",
+        "labels": "release,automatisation"
+      }
+    ]
+  ]
+}

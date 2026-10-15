@@ -1,0 +1,16 @@
+---
+# Rôle longhorn_prerequis (M16-E15) : prérequis des nœuds pour Longhorn 1.13 (moteur V1) et
+# disque dédié monté sur /var/lib/longhorn. « absent » défait tout, disque compris.
+longhorn_prerequis_etat: present          # present | absent
+longhorn_prerequis_disque: "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_{{ inventory_hostname_short }}-lh"
+longhorn_prerequis_taille_octets: 34359738368   # 32 Gio : garde-fou avant mkfs ou effacement
+longhorn_prerequis_etiquette: longhorn
+longhorn_prerequis_point_montage: /var/lib/longhorn
+longhorn_prerequis_paquets:
+  - open-iscsi        # Debian 13 : 2.1.11 (la 2.1.12 casse les attachements, doc Longhorn 1.13)
+  - nfs-common        # client NFSv4 : sauvegardes NFS et volumes RWX
+  - cryptsetup        # volumes chiffrés
+  - dmsetup
+longhorn_prerequis_modules:
+  - iscsi_tcp
+  - dm_crypt

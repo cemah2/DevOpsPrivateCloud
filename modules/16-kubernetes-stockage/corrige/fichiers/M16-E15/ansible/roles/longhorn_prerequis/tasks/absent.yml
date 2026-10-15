@@ -1,0 +1,46 @@
+---
+- name: Refuser tant que Longhorn tourne (instance-manager présent sur le nœud)
+  ansible.builtin.command:
+    cmd: pgrep -f longhorn-instance-manager
+  register: longhorn_prerequis_pgrep
+  changed_when: false
+  check_mode: false
+  failed_when: longhorn_prerequis_pgrep.rc == 0
+
+- name: Démonter et retirer de fstab
+  ansible.posix.mount:
+    path: "{{ longhorn_prerequis_point_montage }}"
+    state: absent
+
+- name: Supprimer le point de montage
+  ansible.builtin.file:
+    path: "{{ longhorn_prerequis_point_montage }}"
+    state: absent
+
+- name: Effacer la signature du seul disque dédié
+  ansible.builtin.command:
+    cmd: "wipefs --all {{ longhorn_prerequis_disque }}"
+  register: longhorn_prerequis_wipefs
+  changed_when: longhorn_prerequis_wipefs.stdout | length > 0
+
+- name: Arrêter et désactiver iscsid et son socket
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - iscsid.socket
+    - iscsid.service
+
+- name: Retirer les modules au démarrage
+  ansible.builtin.file:
+    path: /etc/modules-load.d/longhorn.conf
+    state: absent
+
+# nfs-common et cryptsetup peuvent servir ailleurs : on ne retire que l'initiateur iSCSI,
+# qui ouvre une surface inutile sans Longhorn.
+- name: Retirer open-iscsi
+  ansible.builtin.apt:
+    name: open-iscsi
+    state: absent
+    purge: true

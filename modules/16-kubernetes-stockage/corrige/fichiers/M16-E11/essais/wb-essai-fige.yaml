@@ -1,0 +1,39 @@
+# ~/m16/e11/wb-essai-fige.yaml — classe sans agrandissement (copie de ceph-rbd), à SUPPRIMER
+# après l'essai. <FSID> : fsid de ceph-par1. Reprends exactement les paramètres de ta ceph-rbd
+# (kubectl get sc ceph-rbd -o yaml) : seuls le nom et allowVolumeExpansion changent ici.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wb-essai-fige
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: false
+volumeBindingMode: Immediate
+mountOptions:
+  - discard
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fige
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: wb-essai-fige
+  resources:
+    requests:
+      storage: 1Gi

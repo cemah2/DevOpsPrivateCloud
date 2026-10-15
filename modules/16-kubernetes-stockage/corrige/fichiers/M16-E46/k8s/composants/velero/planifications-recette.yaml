@@ -1,0 +1,37 @@
+# plateforme/k8s — composants/velero/planifications-recette.yaml (M16-E46, à ajouter à planifications.yaml)
+# Sauvegarde quotidienne de la recette de MédiAgenda et de MédiDoc.
+# La base mediagenda-db est EXCLUE : sa sauvegarde de référence est CloudNativePG (base + WAL,
+# politique-sauvegarde.md) ; tout objet étiqueté cnpg.io/cluster (pods, PVC, Services, Secrets
+# générés) est écarté par le sélecteur, et le Cluster lui-même par excludedResources : restauré par
+# Velero sans ses volumes, il ferait démarrer une base VIDE. Après une restauration d'espace, la base
+# se restaure par CloudNativePG (RB-162), puis l'API se reconnecte.
+# Volumes restants (Valkey) : instantané CSI puis déplacement des données vers s3-01 (Kopia).
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: recette-quotidienne
+  namespace: velero
+  labels:
+    medisphere.internal/sauvegarde: quotidienne
+spec:
+  schedule: "CRON_TZ=Europe/Paris 15 3 * * *"
+  useOwnerReferencesInBackup: false
+  template:
+    includedNamespaces:
+      - mediagenda-recette
+      - medidoc-dev
+    excludedResources:
+      - clusters.postgresql.cnpg.io
+      - backups.postgresql.cnpg.io
+      - scheduledbackups.postgresql.cnpg.io
+    labelSelector:
+      matchExpressions:
+        - {key: cnpg.io/cluster, operator: DoesNotExist}
+    snapshotVolumes: true
+    snapshotMoveData: true
+    defaultVolumesToFsBackup: false
+    storageLocation: s3-01
+    ttl: 336h0m0s
+    metadata:
+      labels:
+        medisphere.internal/sauvegarde: quotidienne

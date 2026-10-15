@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "medidoc.fullname" . }}
+  namespace: medidoc-dev
+  labels:
+    {{- include "medidoc.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "medidoc.labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "medidoc.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: medidoc
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "medidoc.fullname" . }}
+            - secretRef:
+                name: {{ include "medidoc.fullname" . }}
+          env:
+            - name: MEDIDOC_MAX_MB
+              value: {{ .Values.maxMb }}
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 1
+          resources: {{ toYaml .Values.resources | indent 10 }}

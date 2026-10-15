@@ -1,0 +1,27 @@
+---
+# Rôle containerd — point d'entrée (M14-E02).
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+      - containerd_depot_cle_empreinte is match('^[0-9A-F]{40}$')
+      - containerd_branche is match('^[0-9]+\.[0-9]+$')
+      - containerd_image_sandbox is match('^[a-z0-9.-]+(:[0-9]+)?/[^:@]+[:@].+$')
+      - containerd_miroirs | rejectattr('registre', 'defined') | list | length == 0
+      - containerd_miroirs | rejectattr('miroir', 'defined') | list | length == 0
+    fail_msg: >-
+      Debian 13 attendu ; empreinte de clé en 40 caractères hexadécimaux MAJUSCULES ; branche au
+      format « 2.3 » ; image pause complète (registre/nom:étiquette) ; chaque miroir a un
+      « registre » et un « miroir ».
+    quiet: true
+
+- name: Dépôt download.docker.com
+  ansible.builtin.import_tasks: depot.yml
+
+- name: Paquet containerd.io et configuration
+  ansible.builtin.import_tasks: configuration.yml
+
+- name: Contrôles
+  ansible.builtin.import_tasks: controles.yml

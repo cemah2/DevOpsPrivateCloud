@@ -1,0 +1,22 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18
+  imagePullSecrets:
+    - name: harbor-pull
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+  storage:
+    size: 2Gi
+    storageClass: ceph-rbd
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

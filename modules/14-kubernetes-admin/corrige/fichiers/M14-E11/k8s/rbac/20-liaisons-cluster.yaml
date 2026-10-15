@@ -1,0 +1,19 @@
+# plateforme/k8s — rbac/20-liaisons-cluster.yaml (M14-E11)
+# Liaisons à l'échelle du cluster, par GROUPE (le groupe vient du certificat client : champ O).
+# La liaison du groupe medisphere:plateforme-admins à cluster-admin est dans rbac/plateforme-admins.yaml
+# (M14-E06) ; celle du compte wb-checks dans rbac/wb-checks.yaml (M14-E06).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: medisphere-lecture
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-lecture
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "medisphere:lecture"

@@ -1,0 +1,9 @@
+---
+# group_vars/all/vault-critique-s3.yml — modèle EN CLAIR des variables Vault « critique » de M14-E24
+# (le vrai fichier est entièrement chiffré sous l'identité critique). Lu par s3-01 (rôle seaweedfs :
+# identité etcd-k8s) et par les nœuds de contrôle (rôle etcd_instantane).
+# Registre des secrets : « S3 etcd-k8s » (portée : compartiment etcd-k8s-par1 ; emplacements : ce
+# fichier, nœuds de contrôle /etc/etcd-instantane/s3.env, adm01 ~/.config/workbook/s3-etcd.env ;
+# rotation : 6 mois).
+vault_s3_etcd_k8s_cle_acces: "<CLE-D-ACCES-etcd-k8s>"
+vault_s3_etcd_k8s_cle_secrete: "<CLE-SECRETE-etcd-k8s>"

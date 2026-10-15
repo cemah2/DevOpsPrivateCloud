@@ -1,0 +1,82 @@
+# ~/m16/e12/classes-essai.yaml — classes d'essai de M16-E12, toutes à SUPPRIMER en fin
+# d'exercice (kubectl delete -f). Copies de ceph-rbd : <FSID> et Secrets comme ta ceph-rbd.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wb-essai-defaut2
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate
+mountOptions:
+  - discard
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wb-essai-differee
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - discard
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wb-essai-baie-a
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+mountOptions:
+  - discard
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: topology.kubernetes.io/zone
+        values: ["par1-baie-a"]

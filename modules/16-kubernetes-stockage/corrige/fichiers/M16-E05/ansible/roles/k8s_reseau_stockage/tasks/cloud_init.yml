@@ -1,0 +1,11 @@
+---
+# Avant toute modification du lecteur cloud-init par OpenTofu : sinon, au démarrage suivant,
+# cloud-init rejoue ses modules « par instance » (clés d'hôte SSH régénérées, réseau réécrit).
+
+- name: Déposer la protection cloud-init (réseau figé, clés d'hôte conservées)
+  ansible.builtin.copy:
+    src: 99-medisphere-k8s.cfg
+    dest: /etc/cloud/cloud.cfg.d/99-medisphere-k8s.cfg
+    owner: root
+    group: root
+    mode: "0644"

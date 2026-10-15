@@ -1,0 +1,19 @@
+# k8s/essais/mediagenda-api-config.yaml — configuration NON secrète de l'API (M14-E08, DEV-1508).
+# Les clés deviennent des variables d'environnement (envFrom) : mêmes noms que dans le README de
+# l'application. Changer une valeur ne redémarre pas les pods : « kubectl rollout restart ».
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mediagenda-api-config
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+data:
+  MEDIAGENDA_LOG_LEVEL: INFO
+  MEDIAGENDA_LOG_FORMAT: json
+  MEDIAGENDA_FUSEAU: Europe/Paris
+  MEDIAGENDA_CACHE_TTL: "60"
+  # Délai laissé aux requêtes en cours après SIGTERM : inférieur à terminationGracePeriodSeconds.
+  MEDIAGENDA_DELAI_ARRET: "20"
+  MEDIAGENDA_VALKEY_URL: redis://valkey:6379/0

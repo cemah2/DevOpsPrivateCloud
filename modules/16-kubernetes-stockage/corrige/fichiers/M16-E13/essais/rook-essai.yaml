@@ -1,0 +1,40 @@
+# ~/m16/e13/rook-essai.yaml — volume sur la classe de Rook et pod qui écrit une ligne horodatée
+# par seconde (sert aussi à la panne d'OSD de M16-E14).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rook-essai
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: rook-ceph-block
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rook-essai
+  namespace: wb-essais
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: ecrivain
+      image: debian:trixie-slim
+      command: ["bash", "-c", "while true; do date -Is >> /d/horodatage.log; sync; sleep 1; done"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 64Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: ["ALL"]}
+      volumeMounts:
+        - {name: d, mountPath: /d}
+  volumes:
+    - name: d
+      persistentVolumeClaim: {claimName: rook-essai}

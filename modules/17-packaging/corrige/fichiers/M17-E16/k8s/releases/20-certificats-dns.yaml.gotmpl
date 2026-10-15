@@ -1,0 +1,48 @@
+# Certificats et noms publiés (M15-E13 à E15), version de M17-E16 (ticket CHG-1834).
+# Changements par rapport à M17-E10 : cert-manager v1.21.1 → v1.21.2 ; retour automatique sur échec ;
+# les émetteurs (ClusterIssuer) deviennent une release, ordonnée APRÈS cert-manager par « needs ».
+# Les clés TSIG restent des Secrets créés par script (jamais dans ces valeurs).
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: cert-manager
+    namespace: cert-manager
+    chart: jetstack/cert-manager
+    version: v1.21.2
+    labels:
+      groupe: certificats
+      composant: cert-manager
+    # Helm 4 : --rollback-on-failure (force aussi --wait=watcher). Exclusif avec « atomic ».
+    rollbackOnFailure: true
+    waitForJobs: true
+    values:
+      - ../composants/cert-manager/values.yaml
+
+  # Chart local : le ClusterIssuer step-ca-acme (M15-E13/E14), jusqu'ici appliqué à part.
+  # Repris sans recréation (takeOwnership, retiré après la première application, voir RB-172).
+  - name: emetteurs
+    namespace: cert-manager
+    chart: ../charts/emetteurs
+    labels:
+      groupe: certificats
+      composant: emetteurs
+    needs:
+      - cert-manager/cert-manager
+    values:
+      - acme:
+          serveur: https://ca01.par1.medisphere.internal/acme/acme/directory
+          zone: {{ .Values.domaineApps }}
+
+  - name: external-dns
+    namespace: external-dns
+    chart: external-dns/external-dns
+    version: 1.23.0
+    labels:
+      groupe: certificats
+      composant: external-dns
+    values:
+      - ../composants/external-dns/values.yaml
+      - txtOwnerId: {{ .Values.cluster }}
+        domainFilters:
+          - {{ .Values.domaineApps }}

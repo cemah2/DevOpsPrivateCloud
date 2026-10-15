@@ -1,0 +1,56 @@
+---
+# molecule/k8s_noeud/verify.yml (M14-E02) — ce qu'attend kubeadm, vérifié de l'extérieur des rôles.
+- name: Vérifier — nœud prêt pour kubeadm
+  hosts: molecule
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Lire les versions et l'état des paquets
+      ansible.builtin.command: dpkg-query --showformat='${Package} ${Version} ${Status}\n' --show kubelet kubeadm kubectl containerd.io
+      register: _verif_paquets
+      changed_when: false
+
+    - name: Paquets Kubernetes en 1.35.9-1.1 et retenus ; containerd.io en 2.3
+      ansible.builtin.assert:
+        that:
+          - _verif_paquets.stdout is search('kubeadm 1\.35\.9-1\.1 hold ok installed')
+          - _verif_paquets.stdout is search('kubelet 1\.35\.9-1\.1 hold ok installed')
+          - _verif_paquets.stdout is search('kubectl 1\.35\.9-1\.1 hold ok installed')
+          - _verif_paquets.stdout is search('containerd\.io 2\.3\.')
+        quiet: true
+
+    - name: Lire la configuration effective de containerd
+      ansible.builtin.command: containerd config dump
+      register: _verif_dump
+      changed_when: false
+
+    - name: CRI actif, cgroups systemd, image pause de kubeadm
+      ansible.builtin.assert:
+        that:
+          - _verif_dump.stdout is search('SystemdCgroup = true')
+          - _verif_dump.stdout is search("sandbox = 'registry.k8s.io/pause:3.10.1'")
+          - _verif_dump.stdout is not search("disabled_plugins = \[[^\]]*cri")
+        quiet: true
+
+    - name: Lire swap, modules et paramètres noyau
+      ansible.builtin.shell: |
+        set -o pipefail
+        echo "swap=$(swapon --show --noheadings | wc -l)"
+        echo "modules=$(lsmod | grep -cE '^(overlay|br_netfilter) ')"
+        echo "forward=$(sysctl -n net.ipv4.ip_forward)"
+      args:
+        executable: /bin/bash
+      register: _verif_systeme
+      changed_when: false
+
+    - name: Pas de swap, deux modules, routage actif
+      ansible.builtin.assert:
+        that:
+          - "'swap=0' in _verif_systeme.stdout_lines"
+          - "'modules=2' in _verif_systeme.stdout_lines"
+          - "'forward=1' in _verif_systeme.stdout_lines"
+        quiet: true
+
+    - name: Contrôles préalables de kubeadm
+      ansible.builtin.command: kubeadm init phase preflight --dry-run --config /var/lib/k8s_noeud/preflight.yaml
+      changed_when: false

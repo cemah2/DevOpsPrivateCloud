@@ -1,0 +1,10 @@
+apiVersion: v2
+name: medidoc
+description: MédiDoc, la gestion des documents patients de MédiSphère (Go, stockage objet S3).
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.35.0-0"
+maintainers:
+  - name: Équipe MédiDoc
+    email: medidoc@medisphere.internal

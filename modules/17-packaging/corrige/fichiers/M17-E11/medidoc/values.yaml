@@ -1,0 +1,40 @@
+# Valeurs de MédiDoc (version corrigée de la MR !3, M17-E11). Aucune valeur secrète.
+environnement: dev
+
+image:
+  registry: registry.par1.medisphere.internal
+  repository: medisphere/medidoc
+  # Vide : v<appVersion>. Jamais latest.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: harbor-pull
+
+replicaCount: 2
+
+s3:
+  # Point d'entrée RGW de ceph-par1 (M08-E11), en HTTPS.
+  endpoint: https://rgw.par1.medisphere.internal
+  bucket: medidoc-documents
+  region: default
+  # Secret EXISTANT (créé hors chart depuis le Vault) avec AWS_ACCESS_KEY_ID et AWS_SECRET_ACCESS_KEY.
+  existingSecret: medidoc-s3
+  # ConfigMap existante contenant la racine MédiSphère (clé ca.crt) : MEDIDOC_CA_FILE.
+  caConfigMap: medisphere-ca
+
+config:
+  maxMb: 10
+  logLevel: info
+
+httpRoute:
+  enabled: true
+  # Vide : medidoc-<environnement>.apps.par1.medisphere.internal
+  hostname: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

@@ -1,0 +1,21 @@
+# cluster/noeuds.yaml — étiquettes de nœuds gérées par le dépôt (M15-E11). Lu par
+# outils/etiqueter-noeuds.sh (task noeuds:etiqueter). Seules les clés listées ici sont gérées :
+# l'outil n'enlève jamais une étiquette qu'il ne connaît pas.
+# topology.kubernetes.io/zone : M14-E14 (baies CRUSH de M08) ; bgp : M15-E11.
+etiquettes_gerees: [bgp, topology.kubernetes.io/zone]
+noeuds:
+  k8s-w01:
+    bgp: par1
+    topology.kubernetes.io/zone: par1-baie-a
+  k8s-w02:
+    bgp: par1
+    topology.kubernetes.io/zone: par1-baie-b
+  k8s-w03:
+    bgp: par1
+    topology.kubernetes.io/zone: par1-baie-c
+  k8s-cp01:
+    topology.kubernetes.io/zone: par1-baie-a
+  k8s-cp02:
+    topology.kubernetes.io/zone: par1-baie-b
+  k8s-cp03:
+    topology.kubernetes.io/zone: par1-baie-c

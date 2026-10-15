@@ -1,0 +1,12 @@
+---
+# group_vars/k8s_par1/containerd.yml — runtime des nœuds de k8s-par1 (M14-E02).
+# Les valeurs par défaut du rôle containerd décrivent déjà le cluster ; on rappelle ici celles
+# qui changeront au fil du module.
+
+# Image pause : celle de kubeadm (faits partagés, kubernetes.yml).
+containerd_image_sandbox: "{{ k8s_image_pause }}"
+
+# Miroirs : aucun au palier 1. Les images publiques viennent directement d'Internet (flux « lab
+# vers Internet »). M14-E19 les fait passer par les caches de Harbor (projets dockerhub, quay,
+# ghcr, k8s) en remplissant cette liste.
+containerd_miroirs: []

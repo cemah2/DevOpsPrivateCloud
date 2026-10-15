@@ -1,0 +1,19 @@
+---
+# group_vars/k8s_plan_controle/chiffrement.yml — chiffrement des Secrets (M14-E28, SEC-1528).
+# Chaque étape est une MR, appliquée aux TROIS nœuds (playbooks/k8s-api-fichiers.yml) et vérifiée
+# avant la suivante. Les secrets des clés sont dans vault-critique.yml (même dossier) ; une clé
+# retirée d'ici RESTE dans le Vault 35 jours (rétention des instantanés etcd, RB-141).
+#
+# Étape 1 — tous savent lire aescbc, écriture encore en clair :
+#   [identity, aescbc(cle-2026-10)]
+# Étape 2 — chiffrement actif, lecture des anciens Secrets en clair encore possible :
+#   [aescbc(cle-2026-10), identity]          → puis réécriture de tous les Secrets
+# Rotation, étape 3 — nouvelle clé (secretbox) connue de tous, pas encore utilisée :
+#   [aescbc(cle-2026-10), secretbox(cle-2026-11), identity]
+# Rotation, étape 4 — nouvelle clé en premier :
+#   [secretbox(cle-2026-11), aescbc(cle-2026-10), identity]   → puis réécriture de tous les Secrets
+# Rotation, étape 5 (état final) — ancienne clé et identity retirées :
+k8s_chiffrement_fournisseurs:
+  - type: secretbox
+    cles:
+      - {nom: cle-2026-11, secret: "{{ vault_k8s_chiffrement_cle_2026_11 }}"}

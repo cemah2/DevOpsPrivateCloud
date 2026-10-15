@@ -1,0 +1,8 @@
+# ~/.config/containers/systemd/mediagenda-pg.volume — données PostgreSQL de la pile (M12-E14).
+# Service généré : mediagenda-pg-volume.service
+[Unit]
+Description=Volume des données PostgreSQL de MédiAgenda
+
+[Volume]
+VolumeName=mediagenda-pg
+Label=app=mediagenda

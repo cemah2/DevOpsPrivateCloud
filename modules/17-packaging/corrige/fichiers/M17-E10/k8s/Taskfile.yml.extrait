@@ -1,0 +1,10 @@
+# Extrait à ajouter au Taskfile.yml de plateforme/k8s (M14-E23), section tasks: (M17-E10).
+  helmfile:diff:
+    desc: Écart entre releases/ et les releases du cluster (code 2 s'il y en a un)
+    cmds:
+      - helmfile -e par1 diff --detailed-exitcode {{.CLI_ARGS}}
+  helmfile:apply:
+    desc: Applique les releases qui diffèrent (après relecture du diff)
+    cmds:
+      - helmfile -e par1 diff
+      - helmfile -e par1 apply {{.CLI_ARGS}}

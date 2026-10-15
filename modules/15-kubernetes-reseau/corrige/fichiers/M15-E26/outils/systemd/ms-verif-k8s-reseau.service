@@ -1,0 +1,30 @@
+# /etc/systemd/system/ms-verif-k8s-reseau.service — M15-E26 (PLAT-1626)
+# Sonde du réseau de k8s-par1. Déclenchée par ms-verif-k8s-reseau.timer (toutes les 5 minutes).
+# Test manuel : sudo systemctl start ms-verif-k8s-reseau.service ; journalctl -u ms-verif-k8s-reseau -n 40
+
+[Unit]
+Description=MédiSphère : sonde du réseau de k8s-par1 (Cilium, BGP, bordure, certificats, noms publiés)
+Documentation=https://git01.par1.medisphere.internal/plateforme/outils/-/blob/main/docs/astreinte.md
+Wants=network-online.target
+After=network-online.target
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+ExecStart=/usr/local/bin/ms-verif-k8s-reseau --quiet
+TimeoutStartSec=3min
+SyslogIdentifier=ms-verif-k8s-reseau
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Lecture du kubeconfig et de la clé SSH de supervision sous ~/.config/workbook (600, admin).
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+LockPersonality=yes
+UMask=0077

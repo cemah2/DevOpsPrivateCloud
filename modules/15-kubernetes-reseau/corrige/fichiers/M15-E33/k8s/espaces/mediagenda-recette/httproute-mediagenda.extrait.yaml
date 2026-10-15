@@ -1,0 +1,18 @@
+# HTTPRoute « mediagenda » (mediagenda-recette) — EXTRAIT (M15-E33, SEC-1633) : en-têtes de sécurité.
+# À ajouter à CHAQUE règle (rules[]) de la route existante (E12/E17). ResponseHeaderModifier est un
+# filtre « Extended » de la Gateway API, implémenté par Cilium (vérifié par curl -sI).
+# HSTS : max-age=300 pendant les essais, puis un an (31536000) une fois tout vérifié ; jamais « preload »
+# (domaine interne). Les réponses HTTP de l'écouteur 80 ne sont que des redirections (E12) : le HSTS
+# n'y est pas posé, et il n'aurait aucun effet (RFC 6797 : ignoré hors HTTPS).
+filters:
+  - type: ResponseHeaderModifier
+    responseHeaderModifier:
+      set:
+        - name: Strict-Transport-Security
+          value: max-age=31536000; includeSubDomains
+        - name: X-Content-Type-Options
+          value: nosniff
+        - name: Referrer-Policy
+          value: no-referrer
+        - name: X-Frame-Options
+          value: DENY

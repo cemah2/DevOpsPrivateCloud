@@ -1,0 +1,68 @@
+---
+# playbooks/k8s-montee-version.yml — montée de version de k8s-par1 (M14-E25, CHG-1525, RB-142).
+#
+# Un nœud à la fois, arrêt au premier échec : nœuds de contrôle d'abord (le premier qui trouve le
+# cluster en ancienne version fait « kubeadm upgrade apply », les autres « kubeadm upgrade node »),
+# puis les travailleurs. Rejouable : un nœud dont kubeadm et le kubelet sont déjà à la cible est sauté.
+#
+# Lancement (depuis adm01, après un instantané etcd vérifié : task etcd:instantane dans plateforme/k8s) :
+#   uv run ansible-playbook playbooks/k8s-montee-version.yml -e k8s_cible=1.36.5
+#   (limiter : --limit k8s-cp02 ; voir ce qui serait fait : --check n'a pas de sens ici, lis RB-142)
+# Prérequis : ~/.kube/config sur adm01 (identité <MOI>, plateforme-admins), kubectl ≥ cible - 1.
+
+- name: Contrôles préalables (adm01)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    k8s_cible: "{{ k8s_cible | mandatory }}"
+  tasks:
+    - name: Version cible au bon format
+      ansible.builtin.assert:
+        that: k8s_cible is match('^1\.[0-9]+\.[0-9]+$')
+        fail_msg: "k8s_cible doit ressembler à 1.36.5"
+        quiet: true
+
+    - name: Tous les nœuds sont Ready et aucun n'est déjà cordonné
+      ansible.builtin.command: >-
+        kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name} {.spec.unschedulable}
+        {range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}'
+      register: montee_noeuds
+      changed_when: false
+      failed_when: >-
+        montee_noeuds.rc != 0
+        or (montee_noeuds.stdout_lines | select('search', 'true|False|Unknown') | list | length > 0)
+
+    - name: Instantané etcd de moins d'une heure sur au moins un nœud de contrôle
+      ansible.builtin.shell: |
+        set -o pipefail
+        maintenant=$(date +%s)
+        for n in {{ groups['k8s_plan_controle'] | join(' ') }}; do
+          t=$(ssh -o BatchMode=yes "$n" 'sudo -n cat /var/lib/etcd-instantane/dernier-succes' | cut -d' ' -f1) || continue
+          [ -n "$t" ] && [ $((maintenant - t)) -lt 3600 ] && exit 0
+        done
+        exit 1
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+- name: Nœuds de contrôle
+  hosts: k8s_plan_controle
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    montee_controle: true
+  tasks:
+    - name: Montée du nœud
+      ansible.builtin.include_tasks: taches/montee-noeud.yml
+
+- name: Travailleurs
+  hosts: k8s_travailleurs
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    montee_controle: false
+  tasks:
+    - name: Montée du nœud
+      ansible.builtin.include_tasks: taches/montee-noeud.yml

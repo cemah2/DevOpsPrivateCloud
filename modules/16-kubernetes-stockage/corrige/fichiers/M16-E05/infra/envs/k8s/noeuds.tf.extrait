@@ -1,0 +1,57 @@
+# envs/k8s/noeuds.tf (plateforme/infra) — EXTRAIT, M16-E05 (PLAT-1705) : carte STOR-PUB des travailleurs.
+#
+# À intégrer dans le fichier de l'état « k8s » écrit au M14 (nœuds k8s-cp01-03 et k8s-w01-03, module
+# vm-noeud). Seuls changent : le local « stockage_actif » et la liste « cartes » des TRAVAILLEURS.
+# Les noms de locals et de champs (noeuds, suffixe, role…) sont ceux du corrigé du M14 : garde les
+# tiens. Règle partagée avec le rôle Ansible k8s_reseau_stockage :
+#   suffixe   = dernier octet de l'adresse VLAN 40 (61, 62, 63)
+#   VLAN 40   = 10.10.40.<suffixe>      (net0 / ens18 dans l'invité, passerelle 10.10.40.1)
+#   VLAN 30   = 10.10.30.<suffixe + 20> (net1 / ens19, MTU 9000, SANS passerelle)
+#   MAC       = bc:24:11:<VLAN>:00:<suffixe>
+#
+# Un travailleur à la fois : passe son entrée à true dans une MR, nœud DRAINÉ (le fournisseur peut
+# redémarrer la VM quand le lecteur cloud-init change), playbook k8s-reseau-stockage.yml limité à
+# ce nœud, remise en service ; puis le suivant. À la fin, les trois valent true.
+
+locals {
+  stockage_actif = {
+    "k8s-w01" = true
+    "k8s-w02" = true
+    "k8s-w03" = true
+  }
+
+  carte_k8s = { for nom, n in local.noeuds : nom => {
+    vnet = "vk8s", prefixe = "10.10.40.0/24", ipv4 = "10.10.40.${n.suffixe}",
+    mac = format("bc:24:11:40:00:%d", n.suffixe), passerelle = true
+  } }
+
+  carte_stockage = { for nom, n in local.noeuds : nom => {
+    vnet = "vstopub", prefixe = "10.10.30.0/24", ipv4 = "10.10.30.${n.suffixe + 20}",
+    mac = format("bc:24:11:30:00:%d", n.suffixe), mtu = 9000
+  } }
+}
+
+module "noeud" {
+  source   = "git::https://git01.par1.medisphere.internal/plateforme/tofu-modules.git//vm-noeud?ref=<VERSION-TOFU-MODULES>"
+  for_each = local.noeuds
+
+  # … nom, vmid, famille, coeurs, memoire_mo, disque_go, etiquettes, etc. : inchangés (M14) …
+
+  # Les nœuds de contrôle n'ont jamais de carte de stockage (aucun volume n'y est monté).
+  # Ordre imposé par vm-noeud : la carte qui porte le nom DNS et la passerelle en premier.
+  cartes = concat(
+    [local.carte_k8s[each.key]],
+    lookup(local.stockage_actif, each.key, false) ? [local.carte_stockage[each.key]] : []
+  )
+
+  # … resolveurs, cle_ssh_admin, demarrage_auto : inchangés …
+}
+
+# Plan attendu pour k8s-w01 (extrait) :
+#   # module.noeud["k8s-w01"].proxmox_virtual_environment_vm.vm will be updated in-place
+#     + network_device { bridge = "vstopub", mac_address = "BC:24:11:30:00:61", mtu = 9000, … }
+#     ~ initialization { + ip_config { + ipv4 { + address = "10.10.30.81/24" } } }
+#   # module.noeud["k8s-w01"].netbox_interface.carte[1] will be created
+#   # module.noeud["k8s-w01"].netbox_ip_address.carte[1] will be created
+#   Plan: 2 to add, 1 to change, 0 to destroy.
+# Un « must be replaced » sur la VM est une erreur : on ne recrée pas un nœud pour lui ajouter une carte.

@@ -1,0 +1,432 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: nginx
+  namespace: admin
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - hostname: admin.medisphere-infoger.example
+    name: admin-medisphere-infoger-example-http
+    port: 80
+    protocol: HTTP
+  - hostname: admin.medisphere-infoger.example
+    name: admin-medisphere-infoger-example-https
+    port: 443
+    protocol: HTTPS
+    tls:
+      certificateRefs:
+      - group: ""
+        kind: Secret
+        name: admin-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: nginx
+  namespace: dossier
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - hostname: dossier.medisphere-infoger.example
+    name: dossier-medisphere-infoger-example-http
+    port: 80
+    protocol: HTTP
+  - hostname: dossier.medisphere-infoger.example
+    name: dossier-medisphere-infoger-example-tls-passthrough
+    port: 443
+    protocol: TLS
+    tls:
+      mode: Passthrough
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: nginx
+  namespace: notif
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - hostname: notif.medisphere-infoger.example
+    name: notif-medisphere-infoger-example-http
+    port: 80
+    protocol: HTTP
+  - hostname: notif.medisphere-infoger.example
+    name: notif-medisphere-infoger-example-https
+    port: 443
+    protocol: HTTPS
+    tls:
+      certificateRefs:
+      - group: ""
+        kind: Secret
+        name: notif-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: nginx
+  namespace: portail
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - hostname: portail.medisphere-infoger.example
+    name: portail-medisphere-infoger-example-http
+    port: 80
+    protocol: HTTP
+  - hostname: portail.medisphere-infoger.example
+    name: portail-medisphere-infoger-example-https
+    port: 443
+    protocol: HTTPS
+    tls:
+      certificateRefs:
+      - group: ""
+        kind: Secret
+        name: portail-tls
+  - hostname: www.portail.medisphere-infoger.example
+    name: www-portail-medisphere-infoger-example-http
+    port: 80
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: nginx
+  namespace: rdv
+spec:
+  gatewayClassName: nginx
+  listeners:
+  - hostname: api.medisphere-infoger.example
+    name: api-medisphere-infoger-example-http
+    port: 80
+    protocol: HTTP
+  - hostname: api.medisphere-infoger.example
+    name: api-medisphere-infoger-example-https
+    port: 443
+    protocol: HTTPS
+    tls:
+      certificateRefs:
+      - group: ""
+        kind: Secret
+        name: api-tls
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: api-rdv-api-medisphere-infoger-example
+  namespace: rdv
+spec:
+  hostnames:
+  - api.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    port: 443
+    sectionName: api-medisphere-infoger-example-https
+  rules:
+  - backendRefs:
+    - name: api-rdv
+      port: 8000
+      weight: 80
+    - name: api-rdv-v2
+      port: 8000
+      weight: 20
+    filters:
+    - cors:
+        allowCredentials: true
+        allowHeaders:
+        - DNT
+        - Keep-Alive
+        - User-Agent
+        - X-Requested-With
+        - If-Modified-Since
+        - Cache-Control
+        - Content-Type
+        - Range
+        - Authorization
+        allowMethods:
+        - GET
+        - PUT
+        - POST
+        - DELETE
+        - PATCH
+        - OPTIONS
+        allowOrigins:
+        - https://portail.medisphere-infoger.example
+        maxAge: 1728000
+      type: CORS
+    matches:
+    - path:
+        type: RegularExpression
+        value: (?i)(?i)/rdv(/|$)(.*).*.*
+    timeouts:
+      request: 20m0s
+  - backendRefs:
+    - name: api-rdv-v2
+      port: 8000
+    filters:
+    - cors:
+        allowCredentials: true
+        allowHeaders:
+        - DNT
+        - Keep-Alive
+        - User-Agent
+        - X-Requested-With
+        - If-Modified-Since
+        - Cache-Control
+        - Content-Type
+        - Range
+        - Authorization
+        allowMethods:
+        - GET
+        - PUT
+        - POST
+        - DELETE
+        - PATCH
+        - OPTIONS
+        allowOrigins:
+        - https://portail.medisphere-infoger.example
+        maxAge: 1728000
+      type: CORS
+    matches:
+    - headers:
+      - name: X-Version-Rdv
+        value: v2
+      path:
+        type: RegularExpression
+        value: (?i)(?i)/rdv(/|$)(.*).*.*
+    timeouts:
+      request: 20m0s
+status:
+  parents: []
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: portail-portail-medisphere-infoger-example-http
+  namespace: portail
+spec:
+  hostnames:
+  - portail.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    port: 80
+  rules:
+  - filters:
+    - requestRedirect:
+        scheme: https
+        statusCode: 308
+      type: RequestRedirect
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+status:
+  parents: null
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: api-rdv-api-medisphere-infoger-example-http
+  namespace: rdv
+spec:
+  hostnames:
+  - api.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    port: 80
+  rules:
+  - filters:
+    - requestRedirect:
+        scheme: https
+        statusCode: 308
+      type: RequestRedirect
+    matches:
+    - path:
+        type: RegularExpression
+        value: (?i)(?i)/rdv(/|$)(.*).*.*
+  - filters:
+    - requestRedirect:
+        scheme: https
+        statusCode: 308
+      type: RequestRedirect
+    matches:
+    - headers:
+      - name: X-Version-Rdv
+        value: v2
+      path:
+        type: RegularExpression
+        value: (?i)(?i)/rdv(/|$)(.*).*.*
+status:
+  parents: null
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: admin-admin-medisphere-infoger-example-http
+  namespace: admin
+spec:
+  hostnames:
+  - admin.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    port: 80
+  rules:
+  - filters:
+    - requestRedirect:
+        scheme: https
+        statusCode: 308
+      type: RequestRedirect
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+status:
+  parents: null
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: admin-admin-medisphere-infoger-example
+  namespace: admin
+spec:
+  hostnames:
+  - admin.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    port: 443
+    sectionName: admin-medisphere-infoger-example-https
+  rules:
+  - backendRefs:
+    - name: console-admin
+      port: 8080
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+status:
+  parents: []
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: portail-portail-medisphere-infoger-example
+  namespace: portail
+spec:
+  hostnames:
+  - portail.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    port: 443
+    sectionName: portail-medisphere-infoger-example-https
+  rules:
+  - backendRefs:
+    - name: portail
+      port: 80
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+    timeouts:
+      request: 10m0s
+  - filters:
+    - requestRedirect:
+        path:
+          replaceFullPath: /accueil
+          type: ReplaceFullPath
+        statusCode: 302
+      type: RequestRedirect
+    matches:
+    - path:
+        type: Exact
+        value: /
+status:
+  parents: []
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: portail-ancien-nom-www-portail-medisphere-infoger-example
+  namespace: portail
+spec:
+  hostnames:
+  - www.portail.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+  rules:
+  - filters:
+    - requestRedirect:
+        hostname: portail.medisphere-infoger.example
+        path:
+          replaceFullPath: /accueil
+          type: ReplaceFullPath
+        scheme: https
+        statusCode: 308
+      type: RequestRedirect
+    matches:
+    - path:
+        type: PathPrefix
+        value: /
+status:
+  parents: []
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: notif-grpc-notif-medisphere-infoger-example
+  namespace: notif
+spec:
+  hostnames:
+  - notif.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+  rules:
+  - backendRefs:
+    - name: notif
+      port: 50051
+status:
+  parents: null
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  annotations:
+    gateway.networking.k8s.io/generator: ingress2gateway-dev
+  name: dossier-patient-dossier-medisphere-infoger-example-tls-passthrough
+  namespace: dossier
+spec:
+  hostnames:
+  - dossier.medisphere-infoger.example
+  parentRefs:
+  - name: nginx
+    sectionName: dossier-medisphere-infoger-example-tls-passthrough
+  rules:
+  - backendRefs:
+    - name: dossier
+      port: 8443
+status:
+  parents: []

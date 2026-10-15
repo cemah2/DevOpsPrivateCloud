@@ -1,0 +1,91 @@
+# Taskfile.yml (plateforme/k8s) — EXTRAIT, tâches du stockage complétées en M16-E23.
+# Reprend stockage:snapshots, stockage:ceph-csi, stockage:secrets, stockage:verifier d'E06-E07
+# et ajoute sauvegardes, données et garde-fous. Versions des charts : ICI, pas sur la ligne de
+# commande de quelqu'un.
+vars:
+  VELERO_CHART_VERSION: "12.2.1"
+  CNPG_CHART_VERSION: "0.29.1"
+  BARMAN_CHART_VERSION: "0.8.1"
+
+tasks:
+  stockage:snapshots:
+    desc: CRD et contrôleur de snapshots (external-snapshotter v8.6.0), avant tout pilote CSI
+    cmds:
+      - kubectl apply --server-side -k composants/snapshot-controller
+      - kubectl -n kube-system rollout status deploy/snapshot-controller --timeout=180s
+
+  stockage:secrets:
+    desc: Tous les Secrets du stockage (ceph-csi depuis le Vault critique, sauvegardes depuis ~/.config/workbook)
+    cmds:
+      - outils/ceph-csi-secrets.sh appliquer
+      - outils/secrets-sauvegarde.sh velero
+      - outils/secrets-sauvegarde.sh cnpg mediagenda-recette
+      # velero-kopia n'est PAS rejoué : le mot de passe des dépôts ne change jamais après coup.
+
+  stockage:ceph-csi:
+    desc: Espace, pilotes ceph-csi (RBD, CephFS), StorageClasses et classes d'instantanés
+    deps: [stockage:snapshots]
+    cmds:
+      - kubectl apply -f espaces/ceph-csi.yaml
+      - composants/ceph-csi/installer.sh
+
+  stockage:velero:
+    desc: Velero (chart {{.VELERO_CHART_VERSION}}) et ses planifications
+    cmds:
+      - kubectl apply -f espaces/velero/00-namespace.yaml
+      - >-
+        helm upgrade --install velero vmware-tanzu/velero --version {{.VELERO_CHART_VERSION}}
+        -n velero -f composants/velero/values.yaml --wait
+      - kubectl apply -f composants/velero/planifications.yaml
+
+  stockage:cnpg:
+    desc: Opérateur CloudNativePG et plugin Barman Cloud (même espace)
+    cmds:
+      - kubectl apply -f espaces/cnpg-system/00-namespace.yaml
+      - >-
+        helm upgrade --install cnpg cnpg/cloudnative-pg --version {{.CNPG_CHART_VERSION}}
+        -n cnpg-system -f composants/cloudnative-pg/values.yaml --wait
+      - >-
+        helm upgrade --install plugin-barman-cloud cnpg/plugin-barman-cloud --version {{.BARMAN_CHART_VERSION}}
+        -n cnpg-system -f composants/plugin-barman-cloud/values.yaml --wait
+
+  stockage:garde-fous:
+    desc: Quotas de stockage et politique des classes par équipe
+    cmds:
+      - kubectl apply -f admission/classes-stockage.yaml
+      - kubectl apply -f espaces/mediagenda-dev/30-quota-stockage.yaml
+      - kubectl apply -f espaces/mediagenda-recette/30-quota-stockage.yaml
+
+  stockage:donnees:
+    desc: Base de MédiAgenda (recette) et ses sauvegardes, après l'opérateur
+    cmds:
+      - kubectl apply -f espaces/mediagenda-recette/40-reseau-postgresql.yaml
+      - kubectl apply -f espaces/mediagenda-recette/60-cnpg-s3.yaml
+      - kubectl apply -f espaces/mediagenda-recette/50-mediagenda-db.yaml
+      - kubectl apply -f espaces/mediagenda-recette/70-mediagenda-db-sauvegarde.yaml
+
+  stockage:appliquer:
+    desc: Tout le stockage, dans l'ordre (idempotent)
+    cmds:
+      - task: stockage:snapshots
+      - task: stockage:secrets
+      - task: stockage:ceph-csi
+      - task: stockage:velero
+      - task: stockage:cnpg
+      - task: stockage:garde-fous
+      - task: stockage:donnees
+
+  stockage:derive:
+    desc: Compare l'état du cluster au dépôt (lecture seule) ; code 1 en cas d'écart
+    cmds:
+      - outils/derive-stockage.sh
+
+  stockage:verifier:
+    desc: Contrôles de lecture (classes, pilotes, sauvegardes, Secrets)
+    cmds:
+      - kubectl get sc,volumesnapshotclass
+      - kubectl -n ceph-csi get ds,deploy -o wide
+      - kubectl get csidrivers
+      - outils/ceph-csi-secrets.sh verifier
+      - velero backup-location get
+      - kubectl -n mediagenda-recette get cluster.postgresql.cnpg.io,objectstores.barmancloud.cnpg.io

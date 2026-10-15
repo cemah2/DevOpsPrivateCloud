@@ -1,0 +1,19 @@
+# plateforme/infra — envs/k8s/<fichier des travailleurs>.tf (EXTRAIT, M16-E13)
+# À intégrer dans l'appel du module vm-noeud des travailleurs k8s-w01-03 (M14-E02, carte VLAN 30
+# ajoutée en M16-E05). Seul l'attribut disques_donnees change. Le module branche les disques sur
+# scsi1, scsi2… dans l'ordre de la liste : NE JAMAIS réordonner ni insérer en tête, sinon
+# OpenTofu verrait un disque changer de taille, de stockage ou de série (destruction du disque).
+#
+# Plan attendu : « ~ update in-place » sur les trois VMs, un bloc disk ajouté, aucun « -/+ ».
+#   tofu -chdir=envs/k8s plan -out=e13.plan && tofu -chdir=envs/k8s show e13.plan | grep -E '^\s+[~+-/]'
+
+  disques_donnees = [
+    # M16-E13 : OSD de Rook (comparaison, ADR-0160) ; retiré au mini-projet (E46).
+    { taille_go = 32, datastore = "ssd-lab", ssd = true, sauvegarde = false, serie = "${each.key}-rook" },
+    # M16-E15 : disque Longhorn, ajouté en E15 SEULEMENT (après le démontage de Rook) :
+    # { taille_go = 32, datastore = "hdd-bulk", ssd = false, sauvegarde = false, serie = "${each.key}-lh" },
+  ]
+
+# each.key vaut le nom du nœud (k8s-w01…) si les travailleurs sont décrits par for_each sur une
+# table indexée par nom, comme les nœuds Ceph du M08 ; adapte si ton M14 a fait autrement.
+# sauvegarde = false : disques d'essai, exclus des sauvegardes PBS (par1/k8s).

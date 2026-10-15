@@ -1,0 +1,3 @@
+# /etc/ms-etat-conteneurs.conf — {{ ms_gere_par | default('Fichier géré par Ansible (rôle supervision_conteneurs, M12-E28).') }}
+MOTEUR_DOCKER={{ 'oui' if supervision_conteneurs_docker else 'non' }}
+COMPTES_PODMAN=({{ supervision_conteneurs_comptes_podman | join(' ') }})

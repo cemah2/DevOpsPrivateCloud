@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# Rôle podman_hote (M12-E02) — complète /etc/containers/containers.conf (valeurs de Podman 5
+# écrites explicitement : on les lit ici au lieu de les deviner).
+
+[containers]
+# Journaux des conteneurs dans journald : « podman logs » et « journalctl » voient la même chose.
+log_driver = "journald"
+
+[engine]
+# Les cgroups des conteneurs sont gérés par systemd (délégation au systemd du compte).
+cgroup_manager = "systemd"
+events_logger = "journald"
+
+[network]
+# Réseau sans privilège : pasta (passt), défaut de Podman 5 ; slirp4netns reste installé
+# sur Debian pour la comparaison, il disparaît de Podman 6.
+default_rootless_network_cmd = "pasta"

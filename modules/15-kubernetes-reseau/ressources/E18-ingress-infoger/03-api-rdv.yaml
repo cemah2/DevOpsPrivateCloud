@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-rdv
+  namespace: rdv
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: https://portail.medisphere-infoger.example
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.medisphere-infoger.example]
+      secretName: api-tls
+  rules:
+    - host: api.medisphere-infoger.example
+      http:
+        paths:
+          - path: /rdv(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-rdv
+                port:
+                  number: 8000

@@ -1,0 +1,28 @@
+# Taskfile.yml (plateforme/k8s) — EXTRAIT, tâches du stockage (M16-E06, E07).
+# À ajouter sous « tasks: » du Taskfile du M14 ; « task appliquer » peut les appeler dans l'ordre.
+  stockage:snapshots:
+    desc: CRD et contrôleur de snapshots (external-snapshotter v8.6.0), avant tout pilote CSI
+    cmds:
+      - kubectl apply --server-side -k composants/snapshot-controller
+      - kubectl -n kube-system rollout status deploy/snapshot-controller --timeout=180s
+
+  stockage:ceph-csi:
+    desc: Espace, pilotes ceph-csi (RBD, CephFS) et StorageClasses
+    deps: [stockage:snapshots]
+    cmds:
+      - kubectl apply -f espaces/ceph-csi.yaml
+      - composants/ceph-csi/installer.sh
+
+  stockage:secrets:
+    desc: Secrets des identités cephx depuis Ansible Vault (identité critique)
+    cmds:
+      - outils/ceph-csi-secrets.sh appliquer
+      - outils/ceph-csi-secrets.sh verifier
+
+  stockage:verifier:
+    desc: Contrôles de lecture (classes, pilotes, Secrets)
+    cmds:
+      - kubectl get sc
+      - kubectl -n ceph-csi get ds,deploy -o wide
+      - kubectl get csidrivers
+      - outils/ceph-csi-secrets.sh verifier

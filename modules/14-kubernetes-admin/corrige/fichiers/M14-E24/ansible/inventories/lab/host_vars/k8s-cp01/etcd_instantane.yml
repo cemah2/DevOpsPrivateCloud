@@ -1,0 +1,3 @@
+---
+# host_vars/k8s-cp01/etcd_instantane.yml — minute de passage de l'instantané (M14-E24).
+etcd_instantane_minute: "05"

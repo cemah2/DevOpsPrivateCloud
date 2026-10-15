@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mediagenda.fullname" . }}
+  labels:
+    {{- include "mediagenda.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "mediagenda.selectorLabels" . | nindent 6 }}
+      # Sélecteur immuable : on y met tout de suite le composant (d'autres pods viendront : migrations, tests).
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "mediagenda.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "mediagenda.fullname" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: {{ add .Values.config.delaiArret 10 }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ include "mediagenda.tag" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.secretKey }}
+            - name: MEDIAGENDA_VERSION
+              value: {{ include "mediagenda.tag" . | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "mediagenda.fullname" . }}
+          startupProbe:
+            httpGet:
+              path: /sante
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /sante
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /pret
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

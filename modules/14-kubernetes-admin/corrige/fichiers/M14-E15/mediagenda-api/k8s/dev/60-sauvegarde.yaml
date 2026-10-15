@@ -1,0 +1,68 @@
+# mediagenda/api — k8s/dev/60-sauvegarde.yaml (M14-E15)
+# Export logique nocturne de la base de dev. ⚠️ EXERCICE : le fichier est écrit dans un emptyDir et
+# disparaît avec le pod ; seuls sa taille et son empreinte restent dans les journaux. La vraie
+# sauvegarde (archivage continu vers S3, restauration) arrive au M16 avec CloudNativePG.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mediagenda-sauvegarde
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/name: mediagenda-sauvegarde
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  schedule: "15 2 * * *"          # 02:15…
+  timeZone: Europe/Paris          # … heure de Paris, été comme hiver (sans ce champ : fuseau du kube-controller-manager)
+  concurrencyPolicy: Forbid       # jamais deux exports en même temps
+  startingDeadlineSeconds: 900    # raté de plus de 15 min (contrôleur arrêté…) : on saute cette exécution
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: mediagenda-sauvegarde
+            app.kubernetes.io/part-of: mediagenda
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          priorityClassName: medisphere-essai
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: pg-dump
+              image: registry.par1.medisphere.internal/dockerhub/library/postgres:18-trixie
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  f="/sauvegarde/mediagenda-$(date +%Y%m%dT%H%M%S).dump"
+                  pg_dump -h postgresql -U mediagenda -d mediagenda -Fc -f "$f"
+                  echo "export terminé : $(wc -c < "$f") octets, sha256 $(sha256sum "$f" | cut -d' ' -f1)"
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: {name: mediagenda-db, key: mot-de-passe}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {cpu: 500m, memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: sauvegarde
+                  mountPath: /sauvegarde
+          volumes:
+            - name: sauvegarde
+              emptyDir:
+                sizeLimit: 512Mi

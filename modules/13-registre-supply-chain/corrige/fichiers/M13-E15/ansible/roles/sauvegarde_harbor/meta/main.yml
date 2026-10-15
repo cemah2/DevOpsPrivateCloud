@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: plateforme
+  description: Sauvegarde applicative de Harbor (pg_dump, blobs, clés, configuration) vers PBS — M13-E15
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

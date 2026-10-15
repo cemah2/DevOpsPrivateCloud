@@ -1,0 +1,7 @@
+# Extrait à intégrer à la Gateway gw-essai de M15-E07 (wb-essais), AVANT de créer lb-par1 :
+# l'adresse est demandée par la Gateway (le Service cilium-gateway-gw-essai appartient à Cilium,
+# toute modification directe serait écrasée).
+spec:
+  addresses:
+    - type: IPAddress
+      value: 10.10.41.11

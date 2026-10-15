@@ -1,0 +1,39 @@
+---
+argument_specs:
+  main:
+    short_description: containerd.io 2.3 LTS (dépôt Docker) configuré pour Kubernetes
+    description:
+      - Dépôt download.docker.com à clé vérifiée par son empreinte, paquet containerd.io épinglé
+        sur la branche LTS, config.toml propre (CRI actif, cgroups systemd, image pause de kubeadm,
+        dossier des hosts.toml), miroirs de registres, crictl.
+    options:
+      containerd_depot_cle_empreinte:
+        type: str
+        required: true
+        description: Empreinte (40 caractères hexadécimaux, majuscules) de la clé du dépôt Docker.
+      containerd_branche:
+        type: str
+        description: Branche de containerd.io épinglée par préférence APT (ex. « 2.3 »).
+      containerd_config_version:
+        type: int
+        choices: [3, 4]
+        description: Version du schéma de config.toml (4 pour containerd 2.3).
+      containerd_cgroup_systemd:
+        type: bool
+        description: SystemdCgroup du runtime runc (doit valoir true avec le kubelet de kubeadm).
+      containerd_image_sandbox:
+        type: str
+        description: Image pause du bac à sable (celle de kubeadm config images list).
+      containerd_dossier_hotes:
+        type: path
+        description: Dossier des hosts.toml (config_path du greffon CRI).
+      containerd_miroirs:
+        type: list
+        elements: dict
+        description: Miroirs ({registre, amont, miroir, override_path, ca}) rendus en hosts.toml.
+      containerd_socket:
+        type: path
+        description: Socket CRI de containerd.
+      containerd_crictl_delai:
+        type: int
+        description: Délai (s) des appels de crictl.

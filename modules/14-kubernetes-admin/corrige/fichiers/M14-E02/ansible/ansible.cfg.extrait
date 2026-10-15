@@ -1,0 +1,5 @@
+# ansible.cfg — section [defaults] : M14-E02 ajoute la source de l'environnement Kubernetes.
+# Liste séparée par des virgules (type « pathlist ») ; garde celles des modules précédents
+# encore utiles (netbox-ceph.yml si ceph-par1 est conservé, ce qui est le cas).
+[defaults]
+inventory = inventories/lab/netbox.yml,inventories/lab/netbox-ceph.yml,inventories/lab/netbox-k8s.yml

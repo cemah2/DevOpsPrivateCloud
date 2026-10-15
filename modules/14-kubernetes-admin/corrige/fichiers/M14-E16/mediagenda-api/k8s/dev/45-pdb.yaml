@@ -1,0 +1,20 @@
+# mediagenda/api — k8s/dev/45-pdb.yaml (M14-E16)
+# Budget de perturbation : lors d'une ÉVICTION VOLONTAIRE (drain d'un nœud, autoscaler), au plus une
+# instance de l'API peut manquer à la fois. Ne protège pas contre une panne (nœud qui tombe), ni contre
+# « kubectl delete pod », ni contre une mise à jour du Deployment (c'est la stratégie qui la règle).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/name: mediagenda-api
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  maxUnavailable: 1
+  # Un pod qui n'est PAS prêt (en échec de sonde) peut être évincé même si le budget est épuisé :
+  # sans cela, une instance malade bloquerait le drain de son nœud.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda-api

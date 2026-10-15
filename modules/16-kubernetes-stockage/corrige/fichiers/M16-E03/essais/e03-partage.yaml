@@ -1,0 +1,48 @@
+# e03-partage.yaml — M16-E03, étape 6 : demander du RWX à une classe qui n'a que du RWO.
+# Attendu : le PVC reste Pending ; le pod reste Pending avec un événement du planificateur du type
+#   0/6 nodes are available: … 3 node(s) didn't find available persistent volumes to bind …
+# À supprimer ensuite (kubectl delete -f e03-partage.yaml).
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: e03-partage
+  namespace: wb-essais
+  labels:
+    medisphere.fr/exercice: m16-e03
+spec:
+  storageClassName: local-manuel
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e03-partage
+  namespace: wb-essais
+  labels:
+    medisphere.fr/exercice: m16-e03
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: app
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "600"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: partage
+          mountPath: /partage
+  volumes:
+    - name: partage
+      persistentVolumeClaim:
+        claimName: e03-partage

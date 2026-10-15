@@ -1,0 +1,28 @@
+---
+# Rôle selinux_conteneurs — SELinux pour les conteneurs des hôtes Rocky Linux (M12-E25, SEC-1351).
+# Règles de Sophie Laurent : SELinux jamais désactivé ; pas de réétiquetage à la volée (:z/:Z)
+# des répertoires de l'hôte ; une politique dédiée (udica), versionnée, pour un accès inhabituel.
+
+selinux_conteneurs_paquets:
+  - udica                          # politiques dédiées à un conteneur (AppStream)
+  - policycoreutils-python-utils   # semanage, audit2why
+  - setools-console                # sesearch, seinfo (lecture de la politique)
+  - container-selinux              # déjà tiré par podman_hote, rappelé ici (modèles de udica)
+
+# Répertoires de données des conteneurs : créés avec leur propriétaire, étiquetés par une règle
+# LOCALE de la politique (semanage fcontext), qui survit à restorecon.
+#   - chemin: /srv/legacy-rdv/uploads
+#     proprietaire: app
+#     groupe: app
+#     mode: "0750"
+#     type: container_file_t
+selinux_conteneurs_dossiers: []
+
+# Modules CIL produits par udica SUR l'hôte puis versionnés dans files/ (le rôle les déploie,
+# il ne les régénère pas). « modeles » : modèles d'udica cités par sa commande « semodule -i ».
+#   - nom: legacy_rdv
+#     modeles: [base_container, net_container]
+selinux_conteneurs_modules: []
+
+selinux_conteneurs_dossier_modules: /etc/selinux/medisphere
+selinux_conteneurs_modeles_udica: /usr/share/udica/templates

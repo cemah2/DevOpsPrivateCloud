@@ -1,0 +1,31 @@
+# plateforme/k8s — espaces/mediagenda-recette/30-quota-stockage.yaml (M16-E20)
+# Plafonds de stockage décidés par Claire Morel (PLAT-1720). Séparé de quota-equipe (M14-E10) :
+# deux ResourceQuota s'appliquent ensemble, chacune sur ses ressources.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-stockage
+  namespace: mediagenda-recette
+spec:
+  hard:
+    requests.storage: 40Gi
+    persistentvolumeclaims: "20"
+    ceph-rbd.storageclass.storage.k8s.io/requests.storage: 30Gi
+    cephfs.storageclass.storage.k8s.io/requests.storage: 10Gi
+    # ceph-rbd-retain : réservée à la plateforme (volumes qui survivent à leur PVC).
+    ceph-rbd-retain.storageclass.storage.k8s.io/requests.storage: "0"
+    ceph-rbd-retain.storageclass.storage.k8s.io/persistentvolumeclaims: "0"
+    count/volumesnapshots.snapshot.storage.k8s.io: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-pvc
+  namespace: mediagenda-recette
+spec:
+  limits:
+    - type: PersistentVolumeClaim
+      min:
+        storage: 1Gi
+      max:
+        storage: 10Gi

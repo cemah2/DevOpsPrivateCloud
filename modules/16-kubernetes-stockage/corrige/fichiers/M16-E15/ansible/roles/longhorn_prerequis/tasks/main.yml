@@ -1,0 +1,30 @@
+---
+- name: Vérifier l'état demandé
+  ansible.builtin.assert:
+    that: longhorn_prerequis_etat in ["present", "absent"]
+    fail_msg: "longhorn_prerequis_etat vaut present ou absent"
+
+- name: Lire le disque dédié
+  ansible.builtin.command:
+    cmd: "lsblk --bytes --nodeps --noheadings --output SIZE,FSTYPE,LABEL {{ longhorn_prerequis_disque }}"
+  register: longhorn_prerequis_lsblk
+  changed_when: false
+  check_mode: false
+
+- name: Refuser un disque inattendu (taille, ou système de fichiers étranger)
+  ansible.builtin.assert:
+    that:
+      - (longhorn_prerequis_lsblk.stdout.split() | first | int) == longhorn_prerequis_taille_octets
+      - (longhorn_prerequis_lsblk.stdout.split() | length) == 1
+        or (longhorn_prerequis_lsblk.stdout.split()[1:] == ["ext4", longhorn_prerequis_etiquette])
+    fail_msg: >-
+      {{ longhorn_prerequis_disque }} : {{ longhorn_prerequis_lsblk.stdout }} ; attendu un disque
+      de 32 Gio vide ou en ext4 étiqueté {{ longhorn_prerequis_etiquette }}.
+
+- name: Mettre en place
+  ansible.builtin.include_tasks: present.yml
+  when: longhorn_prerequis_etat == "present"
+
+- name: Retirer
+  ansible.builtin.include_tasks: absent.yml
+  when: longhorn_prerequis_etat == "absent"

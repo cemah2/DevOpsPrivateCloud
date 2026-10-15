@@ -1,0 +1,79 @@
+# wb-essais/temoins-volumes.yaml (M16-E33) — témoins d'écriture continue pendant une mise à jour.
+# Chaque pod écrit chaque seconde une ligne horodatée (et la synchronise) dans son volume ; un trou
+# dans la suite des horodatages = des écritures bloquées. Lecture : kubectl exec … -- tail, ou
+# outils/temoins-trous.sh. Supprimés après l'exercice.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: temoin-rbd, namespace: wb-essais}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: ceph-rbd
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: temoin-cephfs, namespace: wb-essais}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: cephfs
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: temoin-rbd, namespace: wb-essais}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: temoin-rbd}}
+  template:
+    metadata: {labels: {app: temoin-rbd}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: ecrivain
+        image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+        command: ["sh", "-c", "while true; do date +%s >> /donnees/horodatages.log; sync /donnees/horodatages.log; sleep 1; done"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {memory: 64Mi}
+        volumeMounts: [{name: donnees, mountPath: /donnees}]
+      volumes:
+      - name: donnees
+        persistentVolumeClaim: {claimName: temoin-rbd}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: temoin-cephfs, namespace: wb-essais}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: temoin-cephfs}}
+  template:
+    metadata: {labels: {app: temoin-cephfs}}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: ecrivain
+        image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+        command: ["sh", "-c", "while true; do date +%s >> /donnees/horodatages.log; sync /donnees/horodatages.log; sleep 1; done"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {memory: 64Mi}
+        volumeMounts: [{name: donnees, mountPath: /donnees}]
+      volumes:
+      - name: donnees
+        persistentVolumeClaim: {claimName: temoin-cephfs}

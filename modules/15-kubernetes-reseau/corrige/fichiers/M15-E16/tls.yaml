@@ -1,0 +1,88 @@
+# ~/m15/e16/tls.yaml — TLS de bout en bout : TLSRoute v1 en Passthrough (M15-E16, étape 5).
+# Le backend présente SON certificat (émis par cert-manager, DNS-01) ; la Gateway ne déchiffre rien.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: {name: tls-essai, namespace: wb-essais}
+spec:
+  secretName: tls-essai-tls
+  dnsNames: [tls-essai.apps.par1.medisphere.internal]
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  issuerRef: {group: cert-manager.io, kind: ClusterIssuer, name: step-ca-acme}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agnhost-tls
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: agnhost-tls}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: agnhost-tls}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: agnhost-tls}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: agnhost
+          image: registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.61
+          args: ["netexec", "--http-port=8443", "--udp-port=-1",
+                 "--tls-cert-file=/tls/tls.crt", "--tls-private-key-file=/tls/tls.key"]
+          ports:
+            - {name: https, containerPort: 8443}
+          volumeMounts:
+            - {name: tls, mountPath: /tls, readOnly: true}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+      volumes:
+        - name: tls
+          secret: {secretName: tls-essai-tls}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: agnhost-tls, namespace: wb-essais}
+spec:
+  selector: {app.kubernetes.io/name: agnhost-tls}
+  ports: [{name: https, port: 443, targetPort: https}]
+---
+# Gateway DÉDIÉE (pas un écouteur de plus sur gw-par1) : un écouteur TLS Passthrough et un écouteur
+# HTTPS sur le même port 443 de la même Gateway sont possibles dans la spécification (aiguillage
+# par SNI), mais ce n'est pas un cas documenté par Cilium 1.20 : on ne l'essaie pas sur l'entrée
+# de production. Adresse d'essai demandée explicitement (pool lb-par1, plage d'essai).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: gw-essai-tls, namespace: wb-essais}
+spec:
+  gatewayClassName: cilium
+  addresses:
+    - {type: IPAddress, value: 10.10.41.21}
+  listeners:
+    - name: tls
+      protocol: TLS
+      port: 443
+      hostname: tls-essai.apps.par1.medisphere.internal
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        kinds: [{kind: TLSRoute}]
+        namespaces: {from: Same}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata: {name: essai-tls, namespace: wb-essais}
+spec:
+  parentRefs:
+    - {name: gw-essai-tls, sectionName: tls}
+  hostnames: [tls-essai.apps.par1.medisphere.internal]
+  rules:
+    - backendRefs:
+        - {name: agnhost-tls, port: 443}

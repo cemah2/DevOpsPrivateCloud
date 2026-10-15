@@ -1,0 +1,26 @@
+---
+- name: Debian 13 ou Rocky Linux 10 seulement
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts['distribution'] == 'Debian' and ansible_facts['distribution_major_version'] == '13')
+        or (ansible_facts['distribution'] == 'Rocky' and ansible_facts['distribution_major_version'] == '10')
+    fail_msg: "podman_hote : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} non pris en charge."
+    quiet: true
+
+- name: Lire la hiérarchie cgroup (v2 unifié exigé pour limiter les ressources sans privilège)
+  ansible.builtin.stat:
+    path: /sys/fs/cgroup/cgroup.controllers
+  register: podman_hote_cgroup2
+
+- name: Le système est en cgroup v2
+  ansible.builtin.assert:
+    that: podman_hote_cgroup2.stat.exists
+    fail_msg: "cgroup v1 détecté : Podman sans privilège ne pourra pas appliquer de limites."
+    quiet: true
+
+- name: SELinux reste en enforcing sur la famille Red Hat (on ne le désactive jamais)
+  ansible.builtin.assert:
+    that: ansible_facts['selinux']['status'] == 'enabled' and ansible_facts['selinux']['mode'] == 'enforcing'
+    fail_msg: "SELinux n'est pas en enforcing sur {{ inventory_hostname }} : corrige l'image ou l'hôte, pas le rôle."
+    quiet: true
+  when: ansible_facts['os_family'] == 'RedHat'

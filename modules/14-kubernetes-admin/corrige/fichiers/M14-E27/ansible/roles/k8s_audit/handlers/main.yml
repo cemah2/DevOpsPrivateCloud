@@ -1,0 +1,8 @@
+---
+# Le serveur d'API ne relit pas la politique : on ne le redémarre PAS d'ici (un nœud à la fois, avec
+# retour arrière : outils/reconfigurer-apiserver.sh de plateforme/k8s). On le rappelle seulement.
+- name: Rappel redémarrage du serveur d'API
+  ansible.builtin.debug:
+    msg: >-
+      La politique d'audit a changé sur {{ inventory_hostname }} : relance son serveur d'API
+      (outils/reconfigurer-apiserver.sh {{ inventory_hostname }}), un nœud de contrôle à la fois.

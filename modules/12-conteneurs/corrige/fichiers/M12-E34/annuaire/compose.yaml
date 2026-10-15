@@ -1,0 +1,40 @@
+# compose.yaml — recette de MédiAnnuaire sur ctr01 (M12-E34). Image publiée par le pipeline.
+#
+#   admin@ctr01:~/src/annuaire$ install -d -m 700 secrets && (umask 022; openssl rand -hex 24 > secrets/jeton_admin)
+#   admin@ctr01:~/src/annuaire$ docker compose up -d --wait     # version : ANNUAIRE_TAG, sinon le défaut ci-dessous (MR à chaque livraison)
+name: annuaire
+
+services:
+  annuaire:
+    # CNT-PUB-02 : version immuable, jamais « latest » ; le nom complet du registre (CNT-IMG-03).
+    image: ctr01.par1.medisphere.internal:5000/mediagenda/annuaire:${ANNUAIRE_TAG:-1.0.0}
+    # CNT-RUN-02 à 05 : non root, aucune capacité, pas d'élévation, racine en lecture seule.
+    user: "10002:10002"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      # Le cache de l'index doit être inscriptible (README) : tmpfs borné, appartenant à l'UID du service.
+      - /var/cache/mediannuaire:size=8m,mode=0700,uid=10002,gid=10002,noexec,nosuid,nodev
+    environment:
+      MEDIANNUAIRE_DONNEES: /donnees/praticiens.csv
+      # CNT-RUN-07 : le secret est un FICHIER monté, pas une variable visible dans « docker inspect ».
+      MEDIANNUAIRE_JETON_ADMIN_FICHIER: /run/secrets/jeton_admin
+    secrets:
+      - jeton_admin
+    volumes:
+      - ./donnees:/donnees:ro
+    ports:
+      - "8090:8080"
+    # CNT-RUN-08 : limites (E18).
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    # CNT-RUN-09 : redémarrage par le moteur ; la sonde de santé est celle de l'image.
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+secrets:
+  jeton_admin:
+    file: ./secrets/jeton_admin

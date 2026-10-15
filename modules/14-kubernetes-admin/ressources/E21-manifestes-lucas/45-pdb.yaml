@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-recette
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mediagenda

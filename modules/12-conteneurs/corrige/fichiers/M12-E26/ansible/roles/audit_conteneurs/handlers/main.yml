@@ -1,0 +1,7 @@
+---
+# augenrules assemble /etc/audit/rules.d/*.rules et charge le résultat (sans redémarrer auditd,
+# que systemd refuse d'arrêter « à la main » : RefuseManualStop).
+- name: Charger les règles d'audit
+  ansible.builtin.command:
+    argv: [augenrules, --load]
+  changed_when: true

@@ -1,0 +1,156 @@
+---
+# group_vars/role_lb/haproxy.yml — répartiteurs lb01/lb02, version M15-E20 (PLAT-1620).
+# REMPLACE la version de M07-E28 (en-têtes de sécurité, limitation de débit, contrôles de santé,
+# statistiques : INCHANGÉS). Ce qui change :
+#   - :443 est désormais un frontal TCP (fe_tls_sni) qui lit le SNI du ClientHello SANS déchiffrer :
+#       * noms de k8s_noms_publies → flux TLS relayé tel quel vers gw-par1 (10.10.41.10:443) : le
+#         client voit le certificat joker du cluster, le TLS est de bout en bout ;
+#       * autre nom en .apps.par1.medisphere.internal → connexion refusée (pas publié dehors) ;
+#       * tout le reste (GitLab, NetBox, /sante) → terminaison TLS locale, comme avant ;
+#   - fe_publication (terminaison TLS de M07) écoute sur une adresse ABSTRAITE (abns@publication),
+#     derrière fe_tls_sni, qui lui transmet l'adresse du client par le protocole PROXY v2 : GitLab
+#     et NetBox continuent de voir l'adresse réelle du client (X-Forwarded-For).
+# global et defaults : rôle haproxy (M07-E28).
+haproxy_bind_non_local: false
+
+# Noms de k8s-par1 publiés HORS du lab (décision de la plateforme, une MR par ajout).
+k8s_noms_publies:
+  - mediagenda-recette.apps.par1.medisphere.internal
+k8s_gw_par1: 10.10.41.10:443
+
+haproxy_listes_utilisateurs:
+  - nom: utilisateurs_stats
+    groupes: [admins]
+    utilisateurs:
+      - {nom: supervision, empreinte: "{{ vault_haproxy_stats_supervision_empreinte }}"}
+      - {nom: admin, empreinte: "{{ vault_haproxy_stats_admin_empreinte }}", groupes: [admins]}
+
+haproxy_sections:
+  - type: frontend
+    nom: fe_http
+    lignes:
+      - bind :80
+      - acl defi_acme path_beg /.well-known/acme-challenge/
+      - http-request redirect scheme https code 301 unless defi_acme
+      - use_backend be_acme if defi_acme
+
+  # (M15-E20) Aiguillage par SNI, sans déchiffrement. « tls: true » : rendu seulement quand la
+  # terminaison locale (fe_publication) l'est aussi (certificats présents), jamais l'un sans l'autre.
+  - type: frontend
+    nom: fe_tls_sni
+    tls: true
+    lignes:
+      - bind :443
+      - mode tcp
+      # Format TCP (celui des defaults est un format HTTP, sans objet ici) avec le SNI demandé.
+      - option tcplog
+      - log-format "%ci:%cp [%t] %ft %b/%s %Tw/%Tc/%Tt %B %ts %ac/%fc/%bc/%sc/%rc %sq/%bq sni=%[var(sess.sni)]"
+      # ACL déclarées AVANT les règles qui les utilisent.
+      - "acl k8s_publie var(sess.sni) -m str {{ k8s_noms_publies | join(' ') }}"
+      - acl k8s_apps var(sess.sni) -m end .apps.par1.medisphere.internal
+      # Attendre le ClientHello (au plus 5 s), lire le nom demandé, PUIS décider. Ordre important :
+      # « accept » arrête l'évaluation des règles tcp-request content suivantes.
+      - tcp-request inspect-delay 5s
+      - tcp-request content set-var(sess.sni) req.ssl_sni,lower if { req.ssl_hello_type 1 }
+      # Un nom du cluster NON publié n'est servi qu'à l'intérieur du lab (adresse 10.10.41.10).
+      - tcp-request content reject if k8s_apps !k8s_publie
+      - tcp-request content accept if { req.ssl_hello_type 1 }
+      - use_backend be_k8s_gw_par1 if k8s_publie
+      - default_backend be_terminaison_locale
+
+  - type: backend
+    nom: be_k8s_gw_par1
+    tls: true
+    lignes:
+      - mode tcp
+      # Contrôle TCP simple (le TLS appartient au cluster) ; les deux répartiteurs contrôlent.
+      - "server gw-par1 {{ k8s_gw_par1 }} check inter 5s fall 3 rise 2"
+
+  - type: backend
+    nom: be_terminaison_locale
+    tls: true
+    lignes:
+      - mode tcp
+      - server local abns@publication send-proxy-v2
+
+  - type: frontend
+    nom: fe_publication
+    tls: true
+    lignes:
+      # (M15-E20) Adresse abstraite : joignable seulement par fe_tls_sni, sur le même hôte.
+      - bind abns@publication accept-proxy ssl crt /etc/haproxy/certs/ strict-sni alpn h2,http/1.1
+      - option forwardfor
+      - http-request set-header X-Forwarded-Proto https
+      - unique-id-format %{+X}o\ %ci:%cp_%fi:%fp_%Ts_%rt:%pid
+      - unique-id-header X-Request-ID
+      - http-request return status 200 content-type text/plain string "ok" if { path /sante }
+      - http-request set-var(txn.hote) req.hdr(host),field(1,:),lower
+      - stick-table type ip size 100k expire 30s store http_req_rate(10s)
+      - acl page_connexion path_beg /users/sign_in /login/
+      - http-request track-sc0 src if page_connexion
+      - http-request deny deny_status 429 if page_connexion { sc_http_req_rate(0) gt 20 }
+      - http-response set-header Strict-Transport-Security "max-age=31536000"
+      - http-response del-header Server
+      - http-response del-header X-Powered-By
+      - use_backend be_gitlab if { var(txn.hote) -m str gitlab.par1.medisphere.internal }
+      - use_backend be_netbox if { var(txn.hote) -m str netbox.par1.medisphere.internal }
+      - default_backend be_aucun
+
+  - type: backend
+    nom: be_gitlab
+    lignes:
+      - timeout server 300s
+      - timeout tunnel 1h
+      - option httpchk
+      - http-check send meth GET uri /-/readiness ver HTTP/1.1 hdr Host gitlab.par1.medisphere.internal
+      - http-check expect status 200
+      - >-
+        server git01 10.10.20.12:443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(git01.par1.medisphere.internal) verifyhost git01.par1.medisphere.internal
+        check check-sni git01.par1.medisphere.internal inter 5s fall 3 rise 2
+        observe layer7 error-limit 10 on-error mark-down
+
+  - type: backend
+    nom: be_netbox
+    lignes:
+      - option httpchk
+      - http-check send meth GET uri /login/ ver HTTP/1.1 hdr Host netbox.par1.medisphere.internal
+      - http-check expect status 200
+      - >-
+        server nbx01 10.10.20.13:443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(nbx01.par1.medisphere.internal) verifyhost nbx01.par1.medisphere.internal
+        check check-sni nbx01.par1.medisphere.internal inter 5s fall 3 rise 2
+        observe layer7 error-limit 10 on-error mark-down
+
+  - type: backend
+    nom: be_aucun
+    lignes:
+      - http-request deny deny_status 503
+
+  - type: backend
+    nom: be_acme
+    lignes:
+      - retries 2
+      - retry-on conn-failure
+      - option redispatch 1
+      - server lb01 10.10.70.10:8402
+      - server lb02 10.10.70.11:8402
+
+  - type: frontend
+    nom: fe_stats
+    tls: true
+    lignes:
+      - "bind {{ lb_adresse }}:8404 ssl crt lb.crt"
+      - http-request deny deny_status 403 unless { src 10.10.10.0/24 }
+      - http-request auth realm statistiques unless { http_auth(utilisateurs_stats) }
+      - http-request use-service prometheus-exporter if { path /metrics }
+      - stats enable
+      - stats uri /stats
+      - stats refresh 10s
+      - stats admin if { http_auth_group(utilisateurs_stats) admins }
+
+haproxy_verifications:
+  - url: "https://{{ inventory_hostname }}.par1.medisphere.internal/sante"
+    tls: true

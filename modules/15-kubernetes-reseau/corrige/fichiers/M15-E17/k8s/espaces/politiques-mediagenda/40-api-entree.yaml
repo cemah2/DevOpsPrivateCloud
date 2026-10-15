@@ -1,0 +1,38 @@
+# Entrée de l'API : une CiliumNetworkPolicy, car une NetworkPolicy standard ne sait pas désigner
+# l'identité « ingress » (trafic sortant de l'Envoy de la Gateway Cilium) ni appliquer du L7.
+#   - depuis l'identité ingress (gw-par1) : port 8000, SEULEMENT les appels prévus de l'API ;
+#     tout autre appel sur ce port reçoit un 403 du proxy (« Access denied »), dont /metrics ;
+#   - depuis l'identité host (kubelet du nœud) : port 8000, sondes /sante et /pret.
+# Les chemins sont des expressions régulières comparées au chemin COMPLET, chaîne de requête
+# comprise (« ?date=… ») : d'où « (\?.*)? ». ⚠️ À vérifier sur ta version de Cilium (essai :
+# /api/v1/creneaux?date=2026-10-08 doit passer).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: api-entree
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda-api
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports:
+            - {port: "8000", protocol: TCP}
+          rules:
+            http:
+              - {method: GET, path: "/sante"}
+              - {method: GET, path: "/pret"}
+              - {method: GET, path: "/api/v1/rendez-vous(\\?.*)?"}
+              - {method: POST, path: "/api/v1/rendez-vous"}
+              - {method: GET, path: "/api/v1/rendez-vous/[0-9]+"}
+              - {method: DELETE, path: "/api/v1/rendez-vous/[0-9]+"}
+              - {method: GET, path: "/api/v1/creneaux(\\?.*)?"}
+    - fromEntities: [host]
+      toPorts:
+        - ports:
+            - {port: "8000", protocol: TCP}
+          rules:
+            http:
+              - {method: GET, path: "/sante"}
+              - {method: GET, path: "/pret"}

@@ -1,0 +1,15 @@
+# ~/m14/e14/preemption-critique.yaml — demande 1 CPU avec la classe critique, sur des nœuds pleins.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: essai-critique
+  namespace: wb-essais
+spec:
+  priorityClassName: medisphere-critique
+  containers:
+    - name: attente
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+      resources:
+        requests: {cpu: "1", memory: 64Mi}
+        limits: {cpu: "1", memory: 64Mi}

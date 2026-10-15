@@ -1,0 +1,49 @@
+---
+# playbooks/conteneurs.yml — hôtes de conteneurs du module 12 (M12-E02).
+#   uv run ansible-playbook playbooks/conteneurs.yml --check --diff
+#   uv run ansible-playbook playbooks/conteneurs.yml
+# Hors de site.yml (qui ne converge que le socle) : l'environnement du module a son propre cycle.
+
+- name: Socle commun des hôtes du module 12
+  hosts: env_m12
+  become: true
+  pre_tasks:
+    - name: Le garde-fou d'inventaire (les quatre hôtes du plan, rien d'autre)
+      ansible.builtin.assert:
+        that:
+          - groups['env_m12'] | default([]) | sort == ['ctr01', 'ctr02', 'ctr03', 'legacy01']
+          - groups['role_docker'] | default([]) == ['ctr01']
+          - groups['role_podman'] | default([]) | sort == ['ctr02', 'ctr03']
+          - groups['role_legacy'] | default([]) == ['legacy01']
+        fail_msg: "Inventaire env_m12 inattendu : {{ groups['env_m12'] | default([]) }} (étiquettes NetBox ?)."
+        quiet: true
+      run_once: true
+      tags: [always]
+  roles:
+    # « base » est écrit pour Debian (apt, unattended-upgrades) : l'image dorée Rocky a déjà
+    # l'équivalent (M08-E02).
+    - role: base
+      when: ansible_facts['os_family'] == 'Debian'
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+
+- name: Docker Engine
+  hosts: role_docker
+  become: true
+  roles:
+    - role: docker_engine
+      tags: [docker_engine]
+
+- name: Podman sans privilège
+  hosts: role_podman
+  become: true
+  roles:
+    - role: podman_hote
+      tags: [podman_hote]

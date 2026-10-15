@@ -1,0 +1,35 @@
+---
+# Rôle etcd_instantane (M14-E24) — instantané horaire du membre etcd local, chiffré (age) et envoyé
+# vers s3-01 (rclone). Appliqué au groupe k8s_plan_controle. Valeurs : group_vars/k8s_plan_controle/
+# etcd_instantane.yml et host_vars/k8s-cp0N/etcd_instantane.yml ; secrets : Vault « critique ».
+
+# --- Outils etcd (etcdctl, etcdutl) ---------------------------------------------------------------
+# MÊME version que l'etcd déployé par kubeadm (kubeadm config images list) : 3.6.6 avec kubeadm 1.35.9,
+# 3.6.8 après la montée en 1.36.5 (M14-E25). Version ET empreinte vont ensemble : l'empreinte se
+# relève dans le fichier SHA256SUMS publié avec la version (page de la version sur GitHub), après
+# vérification de sa signature si tu la fais (voir corrigé).
+etcd_instantane_outils_version: "3.6.6"
+etcd_instantane_outils_sha256: "<SHA256-DE-etcd-v3.6.6-linux-amd64.tar.gz>"
+etcd_instantane_outils_url: >-
+  https://github.com/etcd-io/etcd/releases/download/v{{ etcd_instantane_outils_version
+  }}/etcd-v{{ etcd_instantane_outils_version }}-linux-amd64.tar.gz
+
+# --- Planification ------------------------------------------------------------------------------------
+# Minute de passage, décalée par nœud (host_vars) pour étaler la charge et les envois : 05, 25, 45.
+etcd_instantane_minute: "05"
+# Heure (locale du nœud) dont le passage est aussi copié sous quotidien/ (rétention longue).
+etcd_instantane_heure_quotidien: "03"
+# Copies locales claires conservées dans /var/backups/etcd (restauration rapide, sans réseau).
+etcd_instantane_garder: 6
+
+# --- Destination ----------------------------------------------------------------------------------------
+etcd_instantane_s3_point: https://s3-01.par1.medisphere.internal:8333
+etcd_instantane_s3_compartiment: etcd-k8s-par1
+# Identité S3 etcd-k8s (Vault « critique ») : lecture, écriture, listage du seul compartiment.
+etcd_instantane_s3_cle_acces: ""
+etcd_instantane_s3_cle_secrete: ""
+
+# --- Chiffrement ----------------------------------------------------------------------------------------
+# Clé PUBLIQUE age (« age1… »), non secrète. La clé privée est dans plateforme/k8s secrets/ (Vault
+# « critique ») et en copie papier : elle ne vient jamais sur un nœud.
+etcd_instantane_age_destinataire: ""

@@ -1,0 +1,24 @@
+---
+# Rôle podman_hote — point d'entrée (M12-E02).
+# Ordre : préconditions → paquets → compte applicatif et sous-identifiants → configuration
+# des conteneurs → contrôles (en tant que le compte). Second passage : changed=0.
+
+- name: Préconditions
+  ansible.builtin.import_tasks: preconditions.yml
+  tags: [podman_hote, podman_hote_preconditions]
+
+- name: Paquets
+  ansible.builtin.import_tasks: paquets.yml
+  tags: [podman_hote, podman_hote_paquets]
+
+- name: Compte applicatif
+  ansible.builtin.import_tasks: compte.yml
+  tags: [podman_hote, podman_hote_compte]
+
+- name: Configuration des conteneurs
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [podman_hote, podman_hote_configuration]
+
+- name: Contrôles
+  ansible.builtin.import_tasks: controles.yml
+  tags: [podman_hote, podman_hote_controles]

@@ -1,0 +1,7 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M15-E14, PLAT-1614.
+# Transit (section pare_feu_transit, bloc « Services socle ») :
+  - {entree: $V_K8S, source: $NET_K8S, sortie: $V_INFRA, destination: $DNS01, proto: tcp_udp, ports: 5300,
+     motif: "zone apps : RFC 2136, autocontrôle DNS-01 et AXFR depuis k8s-par1 vers l'autoritaire primaire", ref: M15-E14}
+# Rien vers dns02 : un secondaire ne reçoit pas de mises à jour (forward-dnsupdate les relaierait au
+# primaire, mais on ne veut qu'un seul chemin) ; les clients résolvent par les récurseurs (port 53,
+# règle M07-E19 existante).

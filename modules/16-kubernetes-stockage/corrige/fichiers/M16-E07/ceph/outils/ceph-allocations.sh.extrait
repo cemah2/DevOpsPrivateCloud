@@ -1,0 +1,37 @@
+# outils/ceph-allocations.sh (plateforme/ceph) — EXTRAIT, ajout de M16-E07 (DEV-1707) au script de M08-E31.
+#
+# 1) Dans l'en-tête (description des entrées), après la ligne « equipes[] : … » :
+#   groupes[]   : volume, nom, plafond_gio, usage — groupes de sous-volumes de consommateurs
+#                 (ceph-csi : le consommateur crée lui-même ses sous-volumes dans le groupe)
+#
+# 2) Après la fonction equipes() :
+
+# --- Groupes de consommateurs ------------------------------------------------------------------------
+# groupe JSON — le groupe de sous-volumes existe avec exactement ce plafond (quota CephFS du groupe).
+# Même règle que pour les équipes : rien n'est supprimé ni réduit (resize --no_shrink).
+groupe() {
+  local g="$1" vol nom plafond info
+  vol="$(jq -r '.volume' <<<"$g")"
+  nom="$(jq -r '.nom' <<<"$g")"
+  plafond=$(($(jq -r '.plafond_gio' <<<"$g") * GIO))
+  if ! ceph_json fs subvolumegroup ls "$vol" | jq -e --arg n "$nom" 'any(.[]; .name == $n)' >/dev/null; then
+    prevoir "groupe de sous-volumes $vol/$nom absent" ms_ceph fs subvolumegroup create "$vol" "$nom" --size "$plafond"
+    return
+  fi
+  info="$(ceph_json fs subvolumegroup info "$vol" "$nom" || echo '{}')"
+  if [[ "$(jq -r '.bytes_quota // 0' <<<"$info")" != "$plafond" ]]; then
+    prevoir "groupe $vol/$nom : plafond différent de $((plafond / GIO)) Gio" \
+      ms_ceph fs subvolumegroup resize "$vol" "$nom" "$plafond" --no_shrink
+  fi
+}
+
+groupes() {
+  local i n
+  n="$(jq '.groupes // [] | length' <<<"$DESC")"
+  for ((i = 0; i < n; i++)); do groupe "$(jq -c ".groupes[$i]" <<<"$DESC")"; done
+}
+
+# 3) Dans le corps principal, l'appel s'ajoute entre les identités et les équipes :
+identites
+groupes
+equipes

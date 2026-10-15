@@ -1,0 +1,12 @@
+# /etc/systemd/system/ms-verif-registre.timer — M13-E16 (CHG-1434)
+[Unit]
+Description=MédiSphère : sonde du registre Harbor toutes les 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+AccuracySec=15s
+RandomizedDelaySec=30s
+
+[Install]
+WantedBy=timers.target

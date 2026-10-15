@@ -1,0 +1,71 @@
+---
+# Rôle outils_supply_chain — Cosign, Trivy, Syft, Grype installés VÉRIFIÉS et ÉPINGLÉS (M13-E05,
+# ticket SEC-1405 ; Syft et Grype en M13-E06).
+#
+# Pour chaque outil activé sur l'hôte (outils_supply_chain_outils) :
+#   1. refus d'une version interdite (Trivy 0.69.4 à 0.69.6, CVE-2026-33634) ;
+#   2. téléchargement du paquet, GARDÉ SEULEMENT si son SHA-256 est celui épinglé ici ;
+#   3. si Cosign est présent : vérification du bundle Sigstore (du paquet, ou du fichier
+#      d'empreintes signé qui contient l'empreinte du paquet), identité et émetteur imposés ;
+#   4. installation, puis contrôle de la version installée.
+# L'empreinte épinglée a été relevée APRÈS une vérification manuelle de la signature (règle 2 du
+# module). Une montée de version = une MR qui change version + url + sha256 (+ identité si l'étiquette
+# Git y figure), relue, avec la sortie de cosign verify-blob dans la description.
+
+outils_supply_chain_outils: []          # ex. [cosign, trivy, syft, grype] (host_vars)
+outils_supply_chain_verifier_signatures: true
+outils_supply_chain_cache: /var/cache/outils-supply-chain
+
+outils_supply_chain_interdits:
+  trivy: ["0.69.4", "0.69.5", "0.69.6"]
+
+outils_supply_chain_github: https://github.com
+outils_supply_chain_emetteur_actions: https://token.actions.githubusercontent.com
+
+outils_supply_chain_catalogue:
+  cosign:
+    version: "3.1.3"
+    paquet: cosign
+    fichier: cosign_3.1.3_amd64.deb
+    url: "{{ outils_supply_chain_github }}/sigstore/cosign/releases/download/v3.1.3/cosign_3.1.3_amd64.deb"
+    sha256: "75357d96161da4d06d37c4b2831fa6978483cdce661999e5951b586f9ee1d710"
+    signature:
+      mode: paquet                       # le bundle signe le paquet lui-même
+      bundle_url: "{{ outils_supply_chain_github }}/sigstore/cosign/releases/download/v3.1.3/cosign_3.1.3_amd64.deb.sigstore.json"
+      identite: keyless@projectsigstore.iam.gserviceaccount.com
+      emetteur: https://accounts.google.com
+  trivy:
+    version: "0.75.0"
+    paquet: trivy
+    fichier: trivy_0.75.0_Linux-64bit.deb
+    url: "{{ outils_supply_chain_github }}/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.deb"
+    sha256: "b6d7b944b6cbf4e7de5b4bc6c3635900c50fed53b64b77b99a5fbc3136cd1d5d"
+    signature:
+      mode: paquet
+      bundle_url: "{{ outils_supply_chain_github }}/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.deb.sigstore.json"
+      identite: "{{ outils_supply_chain_github }}/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.75.0"
+      emetteur: "{{ outils_supply_chain_emetteur_actions }}"
+  syft:
+    version: "1.54.1"
+    paquet: syft
+    fichier: syft_1.54.1_linux_amd64.deb
+    url: "{{ outils_supply_chain_github }}/anchore/syft/releases/download/v1.54.1/syft_1.54.1_linux_amd64.deb"
+    sha256: "2d1b572980c5f017c55138e62d9493392c77968815025d91de90ba54998e74bb"
+    signature:
+      mode: empreintes                   # le bundle signe le fichier d'empreintes
+      empreintes_url: "{{ outils_supply_chain_github }}/anchore/syft/releases/download/v1.54.1/syft_1.54.1_checksums.txt"
+      bundle_url: "{{ outils_supply_chain_github }}/anchore/syft/releases/download/v1.54.1/syft_1.54.1_checksums.txt.sigstore.json"
+      identite: "{{ outils_supply_chain_github }}/anchore/syft/.github/workflows/release.yaml@refs/heads/main"
+      emetteur: "{{ outils_supply_chain_emetteur_actions }}"
+  grype:
+    version: "0.120.1"
+    paquet: grype
+    fichier: grype_0.120.1_linux_amd64.deb
+    url: "{{ outils_supply_chain_github }}/anchore/grype/releases/download/v0.120.1/grype_0.120.1_linux_amd64.deb"
+    sha256: "111189f61433426af29cc3db33c6847d7e5272150926396b170a985fcda3a11c"
+    signature:
+      mode: empreintes
+      empreintes_url: "{{ outils_supply_chain_github }}/anchore/grype/releases/download/v0.120.1/grype_0.120.1_checksums.txt"
+      bundle_url: "{{ outils_supply_chain_github }}/anchore/grype/releases/download/v0.120.1/grype_0.120.1_checksums.txt.sigstore.json"
+      identite: "{{ outils_supply_chain_github }}/anchore/grype/.github/workflows/release.yaml@refs/heads/main"
+      emetteur: "{{ outils_supply_chain_emetteur_actions }}"

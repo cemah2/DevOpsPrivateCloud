@@ -1,0 +1,15 @@
+---
+- name: La page d'accueil répond et lit la base
+  ansible.builtin.uri:
+    url: http://127.0.0.1/
+    return_content: true
+    status_code: 200
+  register: legacy_rdv_accueil
+
+- name: Le contenu est celui de Legacy-RDV (et pas une page d'erreur)
+  ansible.builtin.assert:
+    that:
+      - "'MédiSphère RDV' in legacy_rdv_accueil.content"
+      - "'indisponible' not in legacy_rdv_accueil.content"
+    fail_msg: "La page d'accueil ne ressemble pas à Legacy-RDV : regarde {{ legacy_rdv_journaux }}/app.log."
+    quiet: true

@@ -1,0 +1,40 @@
+# composants/reseau/politiques/isolement-medidoc-dev.yaml — M15-E28 (SEC-1628), règles 1 et 2 de Sophie.
+# Généré sur le même modèle pour chaque espace d'équipe (une politique par espace : une politique
+# générique ne sait pas dire « un AUTRE espace que le mien »). Ajouter une équipe = ajouter un fichier.
+#
+# Des REFUS : ils l'emportent sur toute autorisation (CNP, CCNP ou NetworkPolicy, documentation
+# « Deny Policies »), donc aucune politique posée dans un espace d'équipe ne peut les lever.
+# Sélection des pairs : pods d'un espace qui porte un label d'équipe (Exists) ET qui n'est pas medidoc-dev.
+# Les espaces de plateforme (kube-system, passerelles, cert-manager, external-dns, supervision) ne
+# portent pas ce label : ils ne sont pas concernés. L'identité « ingress » (Gateway) n'est pas un pod
+# d'espace d'équipe : non concernée non plus.
+# enableDefaultDeny à false : la cloison ne fait passer personne en refus par défaut ; les
+# autorisations restent celles des politiques de l'espace (default-deny + règles de M15-E17).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: isolement-medidoc-dev
+spec:
+  description: "Cloison de medidoc-dev : aucun échange avec les autres espaces d'équipe (SEC-1628)"
+  endpointSelector:
+    matchLabels:
+      io.kubernetes.pod.namespace: medidoc-dev
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingressDeny:
+    - fromEndpoints:
+        - matchExpressions:
+            - key: io.cilium.k8s.namespace.labels.medisphere.fr/equipe
+              operator: Exists
+            - key: io.kubernetes.pod.namespace
+              operator: NotIn
+              values: [medidoc-dev]
+  egressDeny:
+    - toEndpoints:
+        - matchExpressions:
+            - key: io.cilium.k8s.namespace.labels.medisphere.fr/equipe
+              operator: Exists
+            - key: io.kubernetes.pod.namespace
+              operator: NotIn
+              values: [medidoc-dev]

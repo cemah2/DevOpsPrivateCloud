@@ -1,0 +1,12 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajout de M14-E24 (matrice commune à gw01 et gw02).
+# Si M14-E02 a déjà ouvert « VLAN 40 → s3-01:8333 » pour tout le réseau des nœuds, ne duplique pas :
+# resserre plutôt la source aux trois nœuds de contrôle (seuls clients de s3-01 au M14).
+pare_feu_definitions:
+  # … définitions existantes (V_K8S, V_INFRA, NET_K8S…) …
+  - {nom: K8S_CP, valeur: "{ 10.10.40.51, 10.10.40.52, 10.10.40.53 }", commentaire: "nœuds de contrôle de k8s-par1"}
+  - {nom: S3_01, valeur: 10.10.20.14}
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_K8S, source: $K8S_CP, sortie: $V_INFRA, destination: $S3_01, proto: tcp, ports: 8333,
+     motif: "instantanés etcd de k8s-par1 vers s3-01 (compartiment etcd-k8s-par1)", ref: M14-E24}

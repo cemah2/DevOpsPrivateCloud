@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-recette
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mediagenda
+      version: "1.0.0"
+  template:
+    metadata:
+      labels:
+        app: mediagenda
+        version: "1.0.0"
+    spec:
+      nodeName: k8s-w01
+      terminationGracePeriodSeconds: 5
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:latest
+          imagePullPolicy: Always
+          command: ["sh", "-c", "python -m mediagenda.migrate; python -m mediagenda"]
+          envFrom:
+            - configMapRef:
+                name: mediagenda-config
+          ports:
+            - containerPort: 8000
+              hostPort: 8000
+          livenessProbe:
+            httpGet:
+              path: /pret
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 1
+          resources:
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-recette
+spec:
+  selector:
+    app: mediagenda-api
+  ports:
+    - port: 8000
+      targetPort: 8000

@@ -1,0 +1,4 @@
+# Dépendances téléchargées par « helm dependency build/update » : reconstruites depuis Chart.lock.
+charts/*/charts/
+# Archives produites par « helm package ».
+*.tgz

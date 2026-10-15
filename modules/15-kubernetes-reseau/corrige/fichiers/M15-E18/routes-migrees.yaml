@@ -1,0 +1,114 @@
+# ~/m15/e18/routes-migrees.yaml — migration de trois applications d'InfoGér vers gw-par1 (M15-E18).
+# Essais dans wb-essais ; backends d'essai (agnhost-v1/v2/grpc d'E16) à la place des applications.
+# Noms : <application>-infoger.apps.par1.medisphere.internal (joker apps-joker, publiés par ExternalDNS).
+# Ce qui n'est PAS repris d'ingress2gateway : la Gateway « nginx » (une par espace !), les écouteurs
+# par nom, les certificats par application, les routes HTTP→HTTPS par application (gw-par1 le fait
+# pour tout *.apps : redirection-https), les expressions régulières (remplacées par des préfixes).
+#
+# --- portail (01-portail.yaml) -----------------------------------------------------------------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: portail-infoger
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: https}
+  hostnames: [portail-infoger.apps.par1.medisphere.internal]
+  rules:
+    # app-root: /accueil → « / » EXACTEMENT redirige (302) vers /accueil (même comportement que
+    # nginx ; ingress2gateway l'avait bien traduit).
+    - matches:
+        - path: {type: Exact, value: /}
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            path: {type: ReplaceFullPath, replaceFullPath: /accueil}
+            statusCode: 302
+    - matches:
+        - path: {type: PathPrefix, value: /}
+      # proxy-read-timeout: 60 (délai ENTRE deux lectures chez nginx) n'a pas d'équivalent exact :
+      # timeouts.request borne la requête ENTIÈRE. 60 s est plus strict que nginx pour un envoi
+      # lent de pièce jointe : valeur à valider avec l'équipe (ingress2gateway proposait 10 min).
+      timeouts:
+        request: 60s
+      backendRefs:
+        - {name: agnhost-v1, port: 80}
+---
+# --- ancien nom du portail (02-portail-ancien-nom.yaml) ------------------------------------------
+# permanent-redirect + code 308 : nginx renvoie l'URL FIXE (le chemin demandé est perdu) ; on
+# reproduit cela avec ReplaceFullPath. (Un simple « hostname » dans RequestRedirect garderait le
+# chemin : comportement différent, peut-être meilleur, mais ce n'est plus une migration à l'identique.)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: portail-infoger-ancien-nom
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: https}
+  hostnames: [www-portail-infoger.apps.par1.medisphere.internal]
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            hostname: portail-infoger.apps.par1.medisphere.internal
+            path: {type: ReplaceFullPath, replaceFullPath: /accueil}
+            statusCode: 308
+---
+# --- api-rdv + canari (03-api-rdv.yaml, 04-api-rdv-canari.yaml) ----------------------------------
+# rewrite-target /$2 sur « /rdv(/|$)(.*) » = retirer le préfixe /rdv : URLRewrite ReplacePrefixMatch.
+# (ingress2gateway l'a REFUSÉ : groupe de capture ; il a aussi produit une regex fautive
+# « (?i)(?i)/rdv(/|$)(.*).*.* ».) Différence assumée : nginx comparait sans casse (use-regex),
+# un préfixe Gateway API est sensible à la casse (/RDV/… → 404).
+# Canari : 20 % vers v2, ou 100 % avec X-Version-Rdv: v2 (bien traduit par ingress2gateway).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api-rdv-infoger
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: https}
+  hostnames: [api-rdv-infoger.apps.par1.medisphere.internal]
+  rules:
+    - matches:
+        - path: {type: PathPrefix, value: /rdv}
+          headers:
+            - {type: Exact, name: X-Version-Rdv, value: v2}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: {type: ReplacePrefixMatch, replacePrefixMatch: /}
+      timeouts: {request: 120s}
+      backendRefs:
+        - {name: agnhost-v2, port: 80}
+    - matches:
+        - path: {type: PathPrefix, value: /rdv}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: {type: ReplacePrefixMatch, replacePrefixMatch: /}
+      timeouts: {request: 120s}
+      backendRefs:
+        - {name: agnhost-v1, port: 80, weight: 80}
+        - {name: agnhost-v2, port: 80, weight: 20}
+    # limit-rps: 20 et CORS : voir migration.md (pas de limite de débit dans la Gateway API ; filtre
+    # CORS présent dans le canal standard v1.6 mais prise en charge par Cilium 1.20 à vérifier).
+---
+# --- notif (06-notif-grpc.yaml) ---------------------------------------------------------------
+# backend-protocol: GRPC → GRPCRoute (bien traduit). proxy-read-timeout 3600 (flux longs) : pas de
+# champ de délai dans GRPCRoute v1 ; durée des flux = défauts de l'Envoy de Cilium (à mesurer).
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: notif-infoger
+  namespace: wb-essais
+spec:
+  parentRefs:
+    - {name: gw-par1, namespace: passerelles, sectionName: https}
+  hostnames: [notif-infoger.apps.par1.medisphere.internal]
+  rules:
+    - backendRefs:
+        - {name: agnhost-grpc, port: 5000}

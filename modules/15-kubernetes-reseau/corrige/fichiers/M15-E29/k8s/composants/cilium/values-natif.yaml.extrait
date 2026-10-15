@@ -1,0 +1,11 @@
+# composants/cilium/values.yaml — EXTRAIT de la MR BROUILLON de M15-E29 (série B) : routage natif.
+# Jamais fusionné : appliqué dans la fenêtre d'essai depuis la branche de la MR, puis retour au fichier
+# de main (tunnel VXLAN). Remplace la section « Mode de routage » du fichier de référence.
+routingMode: native
+# Plage des pods : les paquets vers ces adresses ne sont PAS masqués ; tout le reste (sortie du cluster)
+# l'est derrière l'adresse du nœud (enableIPv4Masquerade reste actif par défaut).
+ipv4NativeRoutingCIDR: 10.240.0.0/16
+# Les six nœuds partagent le VLAN 40 (un seul domaine L2) : chaque agent pose les routes vers le /24
+# des autres nœuds, via leur adresse du VLAN 40. Sans cela, il faudrait que la bordure connaisse les
+# plages de pods (annonce BGP de type PodCIDR), ce que la politique de la bordure refuse (10.10.41.0/24 seul).
+autoDirectNodeRoutes: true

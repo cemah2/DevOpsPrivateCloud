@@ -1,0 +1,35 @@
+# Extrait de .gitlab-ci.yml de plateforme/k8s (M15-E23) — exécuteur docker de runner02 (M12).
+# Images par le cache Harbor ; versions épinglées.
+stages: [valider]
+
+valider-manifestes:
+  stage: valider
+  tags: [docker]
+  image:
+    name: registry.par1.medisphere.internal/ghcr/yannh/kubeconform:v0.8.0
+    entrypoint: [""]
+  script:
+    # Schémas : Kubernetes 1.36 (catalogue officiel, mis en cache dans le dépôt : ci/schemas/k8s/)
+    # et CRD (Cilium 1.20, Gateway API v1.6, cert-manager 1.21) converties par openapi2jsonschema
+    # dans ci/schemas/crd/ (outils/schemas-crd.sh, régénéré à chaque montée de version).
+    - >-
+      /kubeconform -strict -summary -kubernetes-version 1.36.0
+      -schema-location 'ci/schemas/k8s/{{ .NormalizedKubernetesVersion }}-standalone-strict/{{ .ResourceKind }}{{ .KindSuffix }}.json'
+      -schema-location 'ci/schemas/crd/{{ .Group }}/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json'
+      -ignore-filename-pattern 'values\.yaml$' -ignore-filename-pattern '\.extrait'
+      composants/ espaces/
+
+versions-epinglees:
+  stage: valider
+  tags: [docker]
+  image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+  script:
+    # 1) Aucune version flottante.
+    - "! grep -rnE '(:latest\\b|--version +latest|image: [^:@]+$)' composants/ espaces/ Taskfile*.yml"
+    # 2) Aucune version écrite en dur hors de versions.env dans les commandes d'installation.
+    - "! grep -nE -- '--version +[v0-9]' Taskfile*.yml"
+    # 3) Les variables de version sont toutes définies, avec un correctif (x.y.z).
+    - grep -qE '^CILIUM_VERSION=1\.20\.[0-9]+$' composants/versions.env
+    - grep -qE '^GATEWAY_API_VERSION=v1\.6\.[0-9]+$' composants/versions.env
+    - grep -qE '^CERT_MANAGER_VERSION=v1\.21\.[0-9]+$' composants/versions.env
+    - grep -qE '^EXTERNAL_DNS_CHART_VERSION=1\.23\.[0-9]+$' composants/versions.env

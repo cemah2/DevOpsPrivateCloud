@@ -1,0 +1,91 @@
+# ressources/E34-medidoc/deployment.yaml — livré par l'équipe MédiDoc (DEV-1634). À NE PAS MODIFIER
+# pendant le chrono, sauf la ligne d'image (<VERSION-MEDIDOC>) : tout le reste est attendu de la Plateforme.
+#
+# Ce que ce Deployment suppose (dossier E34-dossier-chrono.md) :
+#   - Secret « harbor-pull » dans medidoc-dev (M14-E33) ;
+#   - Secret « medidoc-s3 » (clés AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY du compte medidoc-dev de s3-01) ;
+#   - ConfigMap « racine-medisphere » (clé medisphere-root-ca.crt : la racine MédiSphère, publique) ;
+#   - un accès réseau à s3-01.par1.medisphere.internal:8333 et au DNS du cluster, rien d'autre.
+# Conforme au profil PSA « restricted ».
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+  labels:
+    app.kubernetes.io/name: medidoc
+    app.kubernetes.io/part-of: medidoc
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medidoc
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: medidoc
+        app.kubernetes.io/part-of: medidoc
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: medidoc
+      containers:
+        - name: medidoc
+          image: registry.par1.medisphere.internal/medisphere/medidoc:<VERSION-MEDIDOC>
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: MEDIDOC_S3_ENDPOINT
+              value: https://s3-01.par1.medisphere.internal:8333
+            - name: MEDIDOC_S3_BUCKET
+              value: medidoc-dev
+            - name: MEDIDOC_CA_FILE
+              value: /etc/medisphere/medisphere-root-ca.crt
+            - name: MEDIDOC_MAX_MB
+              value: "10"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: medidoc-s3, key: AWS_ACCESS_KEY_ID}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: medidoc-s3, key: AWS_SECRET_ACCESS_KEY}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - name: racine
+              mountPath: /etc/medisphere
+              readOnly: true
+      volumes:
+        - name: racine
+          configMap:
+            name: racine-medisphere

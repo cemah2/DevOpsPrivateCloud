@@ -1,0 +1,20 @@
+# plateforme/k8s — espaces/medidoc-dev/20-limites.yaml (M14-E33)
+# Valeurs par défaut : un conteneur sans ressources déclarées reçoit celles-ci (sinon le quota sur
+# requests/limits ferait REFUSER le pod), et aucun conteneur ne dépasse le plafond.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defauts
+  namespace: medidoc-dev
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 256Mi
+      max:
+        cpu: "2"
+        memory: 2Gi

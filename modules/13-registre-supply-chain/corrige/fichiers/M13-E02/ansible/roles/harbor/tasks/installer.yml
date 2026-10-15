@@ -1,0 +1,67 @@
+---
+- name: Refuser une empreinte d'installateur absente ou mal formée
+  ansible.builtin.assert:
+    that: harbor_installateur_sha256 is match('^[0-9a-f]{64}$')
+    fail_msg: "harbor_installateur_sha256 doit être l'empreinte SHA-256 vérifiée de l'installateur (RB-130, étape 1)."
+    quiet: true
+
+- name: Dossiers de distribution
+  ansible.builtin.file:
+    path: "{{ harbor_dist }}/{{ harbor_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Télécharger l'installateur hors ligne (gardé seulement si l'empreinte correspond)
+  ansible.builtin.get_url:
+    url: "{{ harbor_installateur_url }}"
+    dest: "{{ harbor_dist }}/harbor-offline-installer-v{{ harbor_version }}.tgz"
+    checksum: "sha256:{{ harbor_installateur_sha256 }}"
+    owner: root
+    group: root
+    mode: "0640"
+    timeout: 600
+
+- name: Décompresser l'installateur dans le dossier de la version
+  ansible.builtin.unarchive:
+    src: "{{ harbor_dist }}/harbor-offline-installer-v{{ harbor_version }}.tgz"
+    dest: "{{ harbor_dist }}/{{ harbor_version }}"
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ harbor_dist }}/{{ harbor_version }}/harbor/install.sh"
+
+- name: Lire la version actuellement active
+  ansible.builtin.stat:
+    path: "{{ harbor_dossier }}"
+  register: harbor_lien
+
+- name: Refuser un changement de version implicite (procédure M13-E16)
+  ansible.builtin.assert:
+    that: >-
+      not harbor_lien.stat.exists
+      or (harbor_lien.stat.islnk and harbor_lien.stat.lnk_source == harbor_dist ~ '/' ~ harbor_version ~ '/harbor')
+      or harbor_autoriser_changement_version | bool
+    fail_msg: >-
+      {{ harbor_dossier }} désigne {{ harbor_lien.stat.lnk_source | default('un dossier ordinaire') }}, pas
+      la version {{ harbor_version }}. Une montée de version suit RB-132 (sauvegarde, prepare,
+      migration) : relance avec -e harbor_autoriser_changement_version=true pendant la procédure.
+    quiet: true
+
+- name: Reprendre harbor.yml de la version précédente avant de basculer (rien n'est perdu)
+  ansible.builtin.copy:
+    src: "{{ harbor_dossier }}/harbor.yml"
+    dest: "{{ harbor_dist }}/{{ harbor_version }}/harbor/harbor.yml.version-precedente"
+    remote_src: true
+    mode: "0600"
+  when:
+    - harbor_lien.stat.exists
+    - harbor_lien.stat.islnk
+    - harbor_lien.stat.lnk_source != harbor_dist ~ '/' ~ harbor_version ~ '/harbor'
+
+- name: Lien /opt/harbor vers la version active
+  ansible.builtin.file:
+    src: "{{ harbor_dist }}/{{ harbor_version }}/harbor"
+    dest: "{{ harbor_dossier }}"
+    state: link

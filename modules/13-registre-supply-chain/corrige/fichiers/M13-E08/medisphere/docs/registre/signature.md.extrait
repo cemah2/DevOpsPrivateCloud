@@ -1,0 +1,21 @@
+<!-- docs/registre/signature.md — EXTRAIT : section à ajouter après « Vérifier une image » (M13-E08, SEC-1408). -->
+
+## Attestations
+
+Une attestation est un relevé **in-toto** (`subject` = nom et empreinte de l'image, `predicateType`, `predicate`) enveloppé en DSSE et signé avec la même clé que les images, sans journal. Elle est rangée dans Harbor comme référent de l'image (bundle Sigstore), à côté de la signature.
+
+| Attestation | Type Cosign | `predicateType` | Producteur | Exigée en production |
+|---|---|---|---|---|
+| SBOM SPDX 2.3 (Syft) | `spdxjson` | `https://spdx.dev/Document` | chaîne de livraison (M13-E09) | **oui** |
+| SBOM CycloneDX (Syft) | `cyclonedx` | `https://cyclonedx.org/bom` | chaîne de livraison | non (confort) |
+| Provenance de construction | — (BuildKit, dans l'index) | `https://slsa.dev/provenance/v1` | BuildKit `attest:provenance=mode=max` | oui, **couverte par la signature de l'index** |
+
+Vérifier :
+
+```
+admin@adm01:~$ cosign verify-attestation --key ~/medisphere/docs/registre/cosign.pub --insecure-ignore-tlog=true \
+    --type spdxjson $IMG@$D | jq -r .payload | base64 -d | jq '.predicateType, .subject'
+admin@adm01:~$ docker buildx imagetools inspect $IMG@$D --format '{{json .Provenance}}' | jq '.SLSA.runDetails.builder, .SLSA.buildDefinition.resolvedDependencies'
+```
+
+Ce que la provenance **prouve** : ce que le constructeur (BuildKit, dans le job de `runner02`) a déclaré au moment de construire — Dockerfile, contexte Git, images de base par empreinte, arguments. Ce qu'elle **ne prouve pas** : que le constructeur était sain. Elle est produite dans le même job que la construction, et la clé qui signe l'index est accessible à ce job : un attaquant qui contrôle `runner02` ou le pipeline peut écrire une provenance fausse et la faire signer. Niveau atteint : **SLSA Build L1** (la provenance existe, complète, distribuée avec l'image), sur une plateforme hébergée (`runner02`). **L2** exigerait que la provenance soit produite **et signée par la plateforme** elle-même, pas par une étape du job qui a accès à la clé ; **L3**, une plateforme durcie où les constructions sont isolées les unes des autres et où la clé de signature est hors de portée de tout code défini par l'utilisateur.

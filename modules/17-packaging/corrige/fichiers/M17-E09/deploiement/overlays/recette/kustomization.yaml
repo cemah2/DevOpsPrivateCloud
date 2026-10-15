@@ -1,0 +1,24 @@
+# Recette (mediagenda-recette) — M17-E09. Base PostgreSQL (mediagenda-db) et Valkey du M16, gérés
+# hors de ce dépôt ; ce qui est livré ici, c'est l'application.
+#   kubectl diff --server-side -k overlays/recette
+#   kubectl apply --server-side -k overlays/recette
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-recette
+resources:
+  - ../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.fr/environnement: recette
+    # Jamais dans les sélecteurs : le sélecteur d'un Deployment est immuable.
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  # Toujours en dernier : ses remplacements doivent voir le résultat de tout le reste.
+  - ../../components/livraison

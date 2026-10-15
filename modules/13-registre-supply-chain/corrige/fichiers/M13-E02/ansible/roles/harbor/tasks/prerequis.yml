@@ -1,0 +1,96 @@
+---
+# Prérequis de Harbor. Idempotent ; appelé seul AVANT certificats_acme (playbooks/registre.yml)
+# pour que le script de rechargement et l'unité existent quand le certificat est émis.
+- name: Refuser tout autre système que Debian 13
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "Le rôle harbor ne connaît que Debian 13 (trouvé : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})."
+    quiet: true
+
+- name: Exiger Docker Engine et le greffon Compose (rôle docker_engine)
+  ansible.builtin.command: docker compose version --short
+  register: harbor_compose
+  changed_when: false
+
+- name: Refuser un Compose antérieur à v2.3 (prérequis Harbor) — v5 attendu
+  ansible.builtin.assert:
+    that:
+      - harbor_compose.stdout is version('2.3', '>=')
+    fail_msg: "docker compose {{ harbor_compose.stdout }} : Harbor exige 2.3 ou plus (Compose v5 attendu, rôle docker_engine)."
+    quiet: true
+
+- name: Outils de disque (XFS)
+  ansible.builtin.apt:
+    name: xfsprogs
+    state: present
+
+- name: Vérifier que le disque de données est bien là (identifiant stable)
+  ansible.builtin.stat:
+    path: "{{ harbor_disque_donnees }}"
+  register: harbor_disque
+
+- name: Refuser de continuer sans disque de données
+  ansible.builtin.assert:
+    that: harbor_disque.stat.exists
+    fail_msg: "{{ harbor_disque_donnees }} absent : vérifie le disque scsi1 et son numéro de série (socle/reg01.tf)."
+    quiet: true
+
+- name: Système de fichiers du disque de données (jamais reformaté s'il existe)
+  community.general.filesystem:
+    dev: "{{ harbor_disque_donnees }}"
+    fstype: "{{ harbor_donnees_fstype }}"
+    force: false
+
+- name: Lire l'UUID du système de fichiers
+  ansible.builtin.command: blkid -s UUID -o value {{ harbor_disque_donnees }}
+  register: harbor_uuid
+  changed_when: false
+
+- name: Monter /data par UUID (fstab), nofail pour ne pas bloquer le démarrage
+  ansible.posix.mount:
+    path: "{{ harbor_donnees }}"
+    src: "UUID={{ harbor_uuid.stdout }}"
+    fstype: "{{ harbor_donnees_fstype }}"
+    opts: defaults,noatime,nofail
+    state: mounted
+
+- name: Docker n'attend /data que si le montage existe (surcharge de docker.service)
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+
+- name: Surcharge « RequiresMountsFor » de docker.service
+  ansible.builtin.template:
+    src: docker-attend-donnees.conf.j2
+    dest: /etc/systemd/system/docker.service.d/10-attendre-donnees.conf
+    mode: "0644"
+  notify: Relire les unités systemd
+
+- name: Dossier des certificats sources (lus par prepare)
+  ansible.builtin.file:
+    path: "{{ harbor_tls_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Script de rechargement du certificat (appelé par cert-renewer@harbor)
+  ansible.builtin.template:
+    src: harbor-recharger-certificat.j2
+    dest: /usr/local/sbin/harbor-recharger-certificat
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Unité harbor.service
+  ansible.builtin.template:
+    src: harbor.service.j2
+    dest: /etc/systemd/system/harbor.service
+    mode: "0644"
+  notify: Relire les unités systemd
+
+- name: Relire systemd maintenant (l'unité doit exister pour certificats_acme)
+  ansible.builtin.meta: flush_handlers

@@ -1,0 +1,123 @@
+# rbac/wb-checks.yaml — compte de service des vérifications du workbook (M14-E06, PLAN §4.10).
+# Lecture seule, SANS les Secrets. Utilisé par « kube » de lab/lib/check-lib.sh à travers
+# ~/.config/workbook/k8s-checks.kubeconfig (outils/kubeconfig-checks.sh).
+#
+# ClusterRole « wb-checks » AGRÉGÉE : elle réunit toutes les ClusterRoles qui portent l'étiquette
+# workbook.medisphere.internal/checks=true. Un module qui installe un composant (M15 Gateway API,
+# M16 ceph-csi, M21 Prometheus…) ajoute sa ClusterRole de lecture étiquetée, sans toucher à celle-ci.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wb-checks
+  namespace: wb-system
+  labels:
+    app.kubernetes.io/part-of: workbook
+# Le jeton n'est pas monté dans des pods : ce compte ne sert que depuis adm01.
+automountServiceAccountToken: false
+---
+# EXCEPTION DOCUMENTÉE (registre des secrets, docs/kubernetes/acces.md) : jeton de compte de
+# service « à l'ancienne », porté par un Secret, SANS expiration. Les vérifications tournent
+# pendant des mois sur le cluster, à intervalles irréguliers ; un jeton lié (« kubectl create
+# token --duration ») expirerait entre deux exercices. Compensations : droits en lecture sans
+# Secrets, fichier 600 sur adm01 seulement, révocation immédiate en supprimant ce Secret.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wb-checks-jeton
+  namespace: wb-system
+  annotations:
+    kubernetes.io/service-account.name: wb-checks
+  labels:
+    app.kubernetes.io/part-of: workbook
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks
+  labels:
+    app.kubernetes.io/part-of: workbook
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        workbook.medisphere.internal/checks: "true"
+# Pas de « rules » : le contrôleur d'agrégation les écrit (et les réécrirait).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-base
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  # Ressources du cœur : tout sauf les Secrets (énumérées : RBAC n'a pas de « sauf »).
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - endpoints
+      - events
+      - limitranges
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - persistentvolumes
+      - pods
+      - pods/log
+      - podtemplates
+      - replicationcontrollers
+      - resourcequotas
+      - serviceaccounts
+      - services
+    verbs: [get, list, watch]
+  # GET à travers le mandataire de l'API vers un Service (/api/v1/namespaces/<ns>/services/<svc>:<port>/proxy/…) :
+  # les vérifications interrogent /sante, /pret d'une application sans port-forward ni exec.
+  # Seul le verbe « get » : aucune requête qui modifie l'application.
+  - apiGroups: [""]
+    resources: [services/proxy]
+    verbs: [get]
+  - apiGroups:
+      - admissionregistration.k8s.io
+      - apiextensions.k8s.io
+      - apiregistration.k8s.io
+      - apps
+      - autoscaling
+      - batch
+      - certificates.k8s.io
+      - coordination.k8s.io
+      - discovery.k8s.io
+      - events.k8s.io
+      - networking.k8s.io
+      - node.k8s.io
+      - policy
+      - rbac.authorization.k8s.io
+      - scheduling.k8s.io
+      - storage.k8s.io
+      - metrics.k8s.io
+      - cilium.io
+    resources: ["*"]
+    verbs: [get, list, watch]
+  # « Cet utilisateur peut-il… ? » pour un autre que soi (SubjectAccessReview) : rien n'est écrit
+  # dans etcd, mais c'est un « create » au sens de l'API. Permet de vérifier le RBAC des
+  # exercices sans le droit d'emprunter une identité (impersonate), qui serait bien plus large.
+  - apiGroups: [authorization.k8s.io]
+    resources: [subjectaccessreviews]
+    verbs: [create]
+  - nonResourceURLs: [/healthz, /healthz/*, /livez, /livez/*, /readyz, /readyz/*, /version]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wb-checks
+  labels:
+    app.kubernetes.io/part-of: workbook
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wb-checks
+subjects:
+  - kind: ServiceAccount
+    name: wb-checks
+    namespace: wb-system

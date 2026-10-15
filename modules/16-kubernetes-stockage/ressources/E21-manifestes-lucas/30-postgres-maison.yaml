@@ -1,0 +1,54 @@
+# PostgreSQL « en attendant » (deux réplicas pour la HA)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-donnees
+  namespace: medidoc-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: rapide
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: medidoc-dev
+spec:
+  serviceName: postgres
+  replicas: 2
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Delete
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:latest
+          env:
+            - name: POSTGRES_PASSWORD
+              value: medidoc
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: donnees
+              mountPath: /var/lib/postgresql/data
+            - name: secours
+              mountPath: /sauvegardes
+      volumes:
+        - name: donnees
+          persistentVolumeClaim:
+            claimName: pg-donnees
+        - name: secours
+          hostPath:
+            path: /srv/medidoc-sauvegardes
+            type: DirectoryOrCreate

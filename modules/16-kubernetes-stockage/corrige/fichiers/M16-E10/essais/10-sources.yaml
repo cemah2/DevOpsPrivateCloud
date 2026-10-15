@@ -1,0 +1,93 @@
+# ~/m16/e10/10-sources.yaml — volumes sources et leurs pods (wb-essais, M16-E10).
+# Image : Debian par le cache Harbor (docker.io → registry.par1…/dockerhub, M14-E19).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: donnees
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ceph-rbd
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: partage
+  namespace: wb-essais
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: cephfs
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: donnees
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: m16-e10
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: essai
+      image: debian:trixie-slim
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: d
+          mountPath: /donnees
+  volumes:
+    - name: d
+      persistentVolumeClaim:
+        claimName: donnees
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: partage
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: m16-e10
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: essai
+      image: debian:trixie-slim
+      command: ["sleep", "infinity"]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: d
+          mountPath: /partage
+  volumes:
+    - name: d
+      persistentVolumeClaim:
+        claimName: partage

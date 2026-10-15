@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# ms-verif-conteneurs — sonde de service des conteneurs de MédiSphère (M12-E28, PLAT-1354).
+#
+# Pour chaque hôte de la configuration, lit l'état des conteneurs par ssh (compte « supervision »,
+# clé à commande forcée : l'hôte ne renvoie que la sortie de ms-etat-conteneurs, en lecture seule)
+# et vérifie : hôte joignable et réponse complète ; conteneurs attendus présents et « running » ;
+# aucun conteneur « unhealthy » ou « restarting » ; compteur de redémarrages qui n'a pas augmenté
+# depuis le passage précédent ; sonde de santé présente sur chaque conteneur attendu (sauf
+# exception écrite dans la configuration) ; pages de métriques des démons Docker joignables.
+#
+# Usage : ms-verif-conteneurs [-q|--quiet] [-h|--help]
+# Configuration : /usr/local/etc/ms-verif-conteneurs.conf (MS_CONF pour un autre chemin).
+# État entre deux passages : $STATE_DIRECTORY (fourni par systemd), sinon
+# ${XDG_STATE_HOME:-~/.local/state}/ms-verif-conteneurs (MS_ETAT_DOSSIER pour forcer).
+#
+# Codes retour : 0 tout va bien ; 1 au moins une anomalie OU un contrôle impossible ; 2 usage.
+# Principe (M02-E26) : « rien vu » n'est jamais « tout va bien ».
+
+# lib/ms-commun.sh : bibliothèque commune de plateforme/outils (M02-E20).
+# shellcheck source-path=SCRIPTDIR source-path=SCRIPTDIR/../../../../../../02-scripting/corrige/fichiers/M02-E20/outils/bin source=../lib/ms-commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/ms-commun.sh"
+
+_NB_OK=0
+_NB_KO=0
+_QUIET=0
+
+usage() {
+  cat <<'FIN'
+Usage : ms-verif-conteneurs [-q|--quiet] [-h|--help]
+
+Sonde des conteneurs (Docker et Podman) des hôtes de la configuration : présence, état, santé,
+redémarrages, sondes de santé, métriques des démons.
+
+  -q, --quiet   n'afficher que les anomalies et le bilan
+
+Codes retour : 0 tout va bien, 1 anomalie ou contrôle impossible, 2 usage.
+Guide d'astreinte : docs/astreinte.md du projet plateforme/outils (section Conteneurs) ; RB-120.
+FIN
+}
+
+ok() {
+  _NB_OK=$((_NB_OK + 1))
+  ((_QUIET)) || printf 'OK  %-11s %s\n' "$1" "$2"
+}
+ko() {
+  _NB_KO=$((_NB_KO + 1))
+  printf 'KO  %-11s %s\n' "$1" "$2"
+}
+
+# lire_hote HÔTE — sortie de ms-etat-conteneurs (la commande est imposée côté hôte).
+lire_hote() {
+  # shellcheck disable=SC2086  # options ssh à découper
+  ssh -n -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 \
+    -i "$MS_CONTENEURS_CLE" ${MS_CONTENEURS_SSH_OPTS:-} "$MS_CONTENEURS_UTILISATEUR@$1" etat 2>/dev/null
+}
+
+# admis_sans_sonde HÔTE NOM — le conteneur figure dans la liste des exceptions.
+admis_sans_sonde() {
+  local e
+  for e in "${MS_CONTENEURS_SANS_SONDE[@]}"; do [[ "$e" == "$1:$2" ]] && return 0; done
+  return 1
+}
+
+verifier_hote() {
+  local hote="$1" court="${1%%.*}" sortie ligne moteur compte nom etat sante redem image cle
+  local -A vus=()
+  if ! sortie="$(lire_hote "$hote")" && [[ -z "$sortie" ]]; then
+    ko hote "$court injoignable par ssh (compte $MS_CONTENEURS_UTILISATEUR, clé $MS_CONTENEURS_CLE)"
+    return
+  fi
+  if ! grep -qE '^fin [0-9]+$' <<<"$sortie"; then
+    ko hote "$court : réponse incomplète (pas de ligne de fin)"
+    return
+  fi
+  if grep -q '^erreur' <<<"$sortie"; then
+    while read -r ligne; do ko moteur "$court : ${ligne#erreur }"; done < <(grep '^erreur' <<<"$sortie")
+  else
+    ok hote "$court : $(sed -nE 's/^fin ([0-9]+)$/\1/p' <<<"$sortie") conteneur(s) lus"
+  fi
+  while IFS=$'\t' read -r moteur compte nom etat sante redem image; do
+    [[ "$moteur" == docker || "$moteur" == podman ]] || continue
+    cle="$court:$nom"
+    vus["$cle"]="$etat"
+    case "$etat:$sante" in
+      restarting:*) ko etat "$cle redémarre en boucle (état restarting) — RB-120" ;;
+      running:unhealthy) ko sante "$cle est unhealthy ($image)" ;;
+    esac
+    # Redémarrages : comparaison avec le passage précédent (même hôte, moteur, compte, nom).
+    local prec
+    prec="$(awk -v k="$court $moteur $compte $nom" '$1" "$2" "$3" "$4 == k { print $5 }' "$_ETAT_PREC" 2>/dev/null | tail -n 1)"
+    printf '%s %s %s %s %s\n' "$court" "$moteur" "$compte" "$nom" "$redem" >>"$_ETAT_NOUV"
+    if [[ "$prec" =~ ^[0-9]+$ && "$redem" =~ ^[0-9]+$ ]] && ((redem - prec >= MS_CONTENEURS_SEUIL_REDEMARRAGES)); then
+      ko redemarrage "$cle a redémarré $((redem - prec)) fois depuis le dernier passage ($prec → $redem) — RB-120"
+    fi
+    _SANTE["$cle"]="$sante"
+  done <<<"$sortie"
+
+  local attendu
+  for attendu in "${MS_CONTENEURS_ATTENDUS[@]}"; do
+    [[ "${attendu%%:*}" == "$court" ]] || continue
+    nom="${attendu#*:}"
+    if [[ -z "${vus[$attendu]+x}" ]]; then
+      ko absent "$attendu attendu, introuvable"
+    elif [[ "${vus[$attendu]}" != running ]]; then
+      ko etat "$attendu est ${vus[$attendu]}"
+    elif [[ "${_SANTE[$attendu]}" == aucune ]] && ! admis_sans_sonde "$court" "$nom"; then
+      ko sonde "$attendu n'a pas de sonde de santé (norme CNT-IMG-08)"
+    else
+      ok conteneur "$attendu running (${_SANTE[$attendu]})"
+    fi
+  done
+}
+
+verifier_metriques() {
+  local url
+  for url in "${MS_CONTENEURS_METRIQUES[@]}"; do
+    if curl -fsS --max-time 10 "$url" 2>/dev/null | grep -q '^engine_daemon_engine_info'; then
+      ok metriques "$url répond"
+    else
+      ko metriques "$url injoignable ou sans métriques du moteur"
+    fi
+  done
+}
+
+main() {
+  set -Eeuo pipefail
+  while (($#)); do
+    case "$1" in
+      -q | --quiet) _QUIET=1; shift ;;
+      -h | --help) usage; exit 0 ;;
+      *) log_err "option inconnue : $1"; usage >&2; exit 2 ;;
+    esac
+  done
+  require_cmd ssh curl awk
+  local conf="${MS_CONF:-/usr/local/etc/ms-verif-conteneurs.conf}"
+  [[ -r "$conf" ]] || die "configuration illisible : $conf" 1
+  MS_CONTENEURS_SANS_SONDE=()
+  MS_CONTENEURS_METRIQUES=()
+  MS_CONTENEURS_SEUIL_REDEMARRAGES=1
+  # shellcheck source=../etc/ms-verif-conteneurs.conf
+  source "$conf"
+  ((${#MS_CONTENEURS_HOTES[@]} > 0 && ${#MS_CONTENEURS_ATTENDUS[@]} > 0)) \
+    || die "configuration incomplète ($conf) : rien à surveiller ne veut pas dire que tout va bien" 1
+  [[ -r "$MS_CONTENEURS_CLE" ]] || die "clé ssh illisible : $MS_CONTENEURS_CLE" 1
+
+  local dossier="${MS_ETAT_DOSSIER:-${STATE_DIRECTORY:-${XDG_STATE_HOME:-$HOME/.local/state}/ms-verif-conteneurs}}"
+  mkdir -p "$dossier"
+  _ETAT_PREC="$dossier/redemarrages"
+  _ETAT_NOUV="$(mktemp "$dossier/.redemarrages.XXXXXX")"
+  trap 'rm -f "$_ETAT_NOUV"' EXIT
+  declare -gA _SANTE=()
+
+  local hote
+  for hote in "${MS_CONTENEURS_HOTES[@]}"; do verifier_hote "$hote"; done
+  verifier_metriques
+  # Le nouvel état remplace l'ancien seulement après un passage complet.
+  mv "$_ETAT_NOUV" "$_ETAT_PREC"
+  trap - EXIT
+
+  echo "Bilan : $_NB_OK contrôle(s) OK, $_NB_KO anomalie(s)."
+  ((_NB_OK > 0)) || die "aucun contrôle n'a abouti" 1
+  if ((_NB_KO > 0)); then
+    log_err "$_NB_KO anomalie(s) sur les conteneurs"
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

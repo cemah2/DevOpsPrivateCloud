@@ -1,0 +1,3 @@
+# SUPPRIMÉ : le joker apps-joker de gw-par1 couvre medidoc-dev.apps.par1.medisphere.internal.
+# (S'il fallait un certificat dédié : ClusterIssuer step-ca-acme, pas de duration au-delà de 720 h,
+# rotationPolicy Always — voir M15-E13.)

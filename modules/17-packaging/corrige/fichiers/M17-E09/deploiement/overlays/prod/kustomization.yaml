@@ -1,0 +1,25 @@
+# Production (mediagenda-prod) — M17-E09. Espace créé ici (quotas comme au M14-E10, Pod Security
+# « restricted », refus réseau par défaut comme au M15) ; base et Valkey propres à la prod.
+#   kubectl diff --server-side -k overlays/prod
+#   kubectl apply --server-side -k overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-prod
+resources:
+  - espace.yaml
+  - ../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.fr/environnement: prod
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  - ../../components/dependances
+  - ../../components/haute-disponibilite
+  - ../../components/livraison

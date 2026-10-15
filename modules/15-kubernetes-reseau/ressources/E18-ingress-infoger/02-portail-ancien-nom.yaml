@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portail-ancien-nom
+  namespace: portail
+  annotations:
+    nginx.ingress.kubernetes.io/permanent-redirect: https://portail.medisphere-infoger.example/accueil
+    nginx.ingress.kubernetes.io/permanent-redirect-code: "308"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: www.portail.medisphere-infoger.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: portail
+                port:
+                  number: 80

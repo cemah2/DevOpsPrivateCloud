@@ -1,0 +1,38 @@
+---
+- name: MariaDB démarrée
+  ansible.builtin.systemd_service:
+    name: mariadb
+    enabled: true
+    state: started
+
+# Pas de collection community.mysql dans le projet : le client « mariadb » de la VM, en root par
+# le socket Unix (authentification unix_socket de Debian), SQL par l'entrée standard (jamais de
+# mot de passe dans la ligne de commande, visible dans « ps »).
+- name: État de la base (base, compte, table)
+  ansible.builtin.command:
+    cmd: mariadb --batch --skip-column-names
+    stdin: |
+      SELECT
+        (SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = '{{ legacy_rdv_db_nom }}'),
+        (SELECT COUNT(*) FROM mysql.user WHERE User = '{{ legacy_rdv_db_utilisateur }}' AND Host = 'localhost'),
+        (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '{{ legacy_rdv_db_nom }}' AND TABLE_NAME = 'rendez_vous');
+  register: legacy_rdv_etat_base
+  changed_when: false
+
+- name: Base et compte de l'application (droits de la procédure InfoGér)
+  ansible.builtin.command:
+    cmd: mariadb
+    stdin: |
+      CREATE DATABASE IF NOT EXISTS {{ legacy_rdv_db_nom }} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS '{{ legacy_rdv_db_utilisateur }}'@'localhost' IDENTIFIED BY '{{ legacy_rdv_db_mdp }}';
+      GRANT SELECT, INSERT, UPDATE, DELETE ON {{ legacy_rdv_db_nom }}.* TO '{{ legacy_rdv_db_utilisateur }}'@'localhost';
+  when: legacy_rdv_etat_base.stdout.split()[0:2] != ['1', '1']
+  changed_when: true
+  no_log: true
+
+- name: Schéma et données fictives (une seule fois)
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; mariadb {{ legacy_rdv_db_nom }} < {{ legacy_rdv_racine }}/schema.sql"
+    executable: /bin/bash
+  when: legacy_rdv_etat_base.stdout.split()[2] | default('0') != '1'
+  changed_when: true

@@ -1,0 +1,7 @@
+# plateforme/infra — envs/k8s/<fichier des travailleurs>.tf (EXTRAIT, M16-E15)
+# Second disque de comparaison (Longhorn), APRÈS celui de Rook (scsi1) : il devient scsi2.
+  disques_donnees = [
+    { taille_go = 32, datastore = "ssd-lab", ssd = true, sauvegarde = false, serie = "${each.key}-rook" },
+    { taille_go = 32, datastore = "hdd-bulk", ssd = false, sauvegarde = false, serie = "${each.key}-lh" },
+  ]
+# Plan attendu : « ~ update in-place », un disque ajouté par VM, aucun disque modifié.

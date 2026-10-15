@@ -1,0 +1,12 @@
+# medidoc-dev existe déjà (M14-E33, espaces/medidoc-dev.yaml de plateforme/k8s) : on ne le
+# redéfinit pas ici. Seule modification demandée, par MR sur ce fichier de la plateforme :
+# l'étiquette d'exposition. PSA reste « restricted » (M14-E18) : MédiDoc tourne sans privilège.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medidoc-dev
+  labels:
+    medisphere.fr/exposition: oui
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

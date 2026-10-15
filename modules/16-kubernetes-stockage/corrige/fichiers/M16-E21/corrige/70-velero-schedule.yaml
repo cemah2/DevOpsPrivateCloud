@@ -1,0 +1,24 @@
+# Velero toutes les nuits — corrigé (M16-E21). Fichier de la PLATEFORME (espace velero), pas de
+# l'équipe : il va dans plateforme/k8s/composants/velero/planifications.yaml.
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: medidoc-dev-nuit
+  namespace: velero
+spec:
+  schedule: "CRON_TZ=Europe/Paris 0 3 * * *"
+  template:
+    includedNamespaces:
+      - medidoc-dev
+    # La base est sauvegardée par CNPG (WAL + base) : on n'en copie pas les fichiers à chaud.
+    # Les autres volumes : instantané CSI puis copie vers s3-01 (hors de ceph-par1).
+    snapshotVolumes: true
+    snapshotMoveData: true
+    defaultVolumesToFsBackup: false
+    # Ressources de la base (Cluster, ObjectStore…) gardées ; leurs PVC exclus (recréés par
+    # CNPG depuis sa sauvegarde).
+    labelSelector:
+      matchExpressions:
+        - key: cnpg.io/cluster
+          operator: DoesNotExist
+    ttl: 336h0m0s

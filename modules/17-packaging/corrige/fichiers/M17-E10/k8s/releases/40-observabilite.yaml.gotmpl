@@ -1,0 +1,14 @@
+# Métriques de ressources (M14-E20) : kubectl top, HPA. Prometheus arrive au M21.
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: metrics-server
+    namespace: kube-system
+    chart: metrics-server/metrics-server
+    version: 3.14.0
+    labels:
+      groupe: observabilite
+      composant: metrics-server
+    values:
+      - ../composants/metrics-server/values.yaml

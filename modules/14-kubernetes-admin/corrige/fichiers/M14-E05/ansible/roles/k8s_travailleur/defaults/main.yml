@@ -1,0 +1,16 @@
+---
+# Rôle k8s_travailleur — joindre un travailleur à k8s-par1 (M14-E05, PLAN §4.10).
+# Prérequis : rôles containerd et k8s_noeud ; au moins un nœud de contrôle qui porte le cluster.
+
+k8s_travailleur_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+k8s_travailleur_adresse: "{{ k8s_noeuds[inventory_hostname].ip }}"
+# Groupe où chercher un nœud de contrôle qui porte le cluster (création du jeton).
+k8s_travailleur_groupe_controle: k8s_plan_controle
+k8s_travailleur_api_nom: "{{ k8s_api_nom }}"
+k8s_travailleur_api_port: "{{ k8s_api_port | default(8443) }}"
+k8s_travailleur_socket_cri: "{{ k8s_socket_cri | default('unix:///run/containerd/containerd.sock') }}"
+k8s_travailleur_dossier: /etc/kubernetes/kubeadm
+k8s_travailleur_jonction_auto: true
+k8s_travailleur_jeton_duree: 15m

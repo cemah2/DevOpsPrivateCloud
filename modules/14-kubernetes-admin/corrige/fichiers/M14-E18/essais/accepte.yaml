@@ -1,0 +1,24 @@
+# ~/m14/e18/accepte.yaml — le même pod, conforme : accepté (registre Harbor, version, restricted).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: conforme
+  namespace: mediagenda-dev
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: attente
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {cpu: 50m, memory: 32Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]

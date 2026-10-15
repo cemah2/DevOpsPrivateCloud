@@ -1,0 +1,19 @@
+---
+# host_vars/reg01/certificats.yml — rôle certificats_acme (M06-E18), M13-E02.
+# Émission par ACME HTTP-01 : ca01 vient chercher le jeton sur http://registry.par1.medisphere.internal/
+# (CNAME → reg01, même VLAN 20) ; le port 80 doit être LIBRE : Harbor est arrêté le temps de l'émission.
+# Renouvellement : par le certificat lui-même (mTLS), sans port 80, par cert-renewer@harbor.timer ;
+# « recharger » recopie le certificat dans /data/secret/cert/ et recharge nginx dans son conteneur.
+certificats_acme_certificats:
+  - id: harbor
+    noms:
+      - registry.par1.medisphere.internal   # sujet : le nom de SERVICE
+      - reg01.par1.medisphere.internal
+    certificat: /etc/harbor/tls/registry.crt
+    cle: /etc/harbor/tls/registry.key
+    groupe: root
+    # Commandes lancées par le module « command » (pas de shell : ni ||, ni redirection).
+    # Au premier passage, l'unité existe (prerequis.yml) mais n'est pas démarrée : stop réussit.
+    avant_emission: "systemctl stop harbor.service"
+    apres_emission: "systemctl start harbor.service"
+    recharger: "/usr/local/sbin/harbor-recharger-certificat"

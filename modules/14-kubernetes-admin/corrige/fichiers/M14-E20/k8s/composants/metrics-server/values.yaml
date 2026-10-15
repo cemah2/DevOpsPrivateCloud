@@ -1,0 +1,36 @@
+# plateforme/k8s — composants/metrics-server/values.yaml (M14-E20)
+# Chart metrics-server 3.14.0 (application 0.9.0), dépôt https://kubernetes-sigs.github.io/metrics-server/
+# Installation (Helm sert ici de simple installateur ; il est enseigné au M17) :
+#   helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+#   helm upgrade --install metrics-server metrics-server/metrics-server --version 3.14.0 \
+#     --namespace kube-system -f composants/metrics-server/values.yaml
+# L'image registry.k8s.io/metrics-server/metrics-server est tirée par le cache Harbor « k8s »
+# (miroir containerd : le nom reste registry.k8s.io dans le manifeste).
+
+replicas: 2
+
+# ⚠️ DETTE TEMPORAIRE (ticket ouvert pour M14-E26) : les certificats de service des kubelets
+# kubeadm sont auto-signés, metrics-server ne peut pas les vérifier. M14-E26 active
+# serverTLSBootstrap (certificats signés par la CA du cluster) et retire cette option.
+args:
+  - --kubelet-insecure-tls
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+# Deux instances sur deux nœuds différents.
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - topologyKey: kubernetes.io/hostname
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: metrics-server
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

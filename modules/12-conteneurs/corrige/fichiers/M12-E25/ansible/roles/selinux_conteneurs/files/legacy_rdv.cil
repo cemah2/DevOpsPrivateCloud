@@ -1,0 +1,11 @@
+(block legacy_rdv
+    (blockinherit container)
+    (blockinherit restricted_net_container)
+    (allow process http_cache_port_t ( tcp_socket (  name_bind ))) 
+    (allow process container_file_t ( dir ( add_name create getattr ioctl lock open read remove_name rmdir search setattr write ))) 
+    (allow process container_file_t ( file ( append create getattr ioctl lock map open read rename setattr unlink write ))) 
+    (allow process container_file_t ( sock_file ( append getattr open read write ))) 
+    (allow process user_home_t ( dir ( getattr ioctl lock open read search ))) 
+    (allow process user_home_t ( file ( getattr ioctl lock open read ))) 
+    (allow process user_home_t ( sock_file ( getattr open read ))) 
+)

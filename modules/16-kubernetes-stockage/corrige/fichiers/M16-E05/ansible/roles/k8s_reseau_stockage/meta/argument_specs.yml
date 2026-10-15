@@ -1,0 +1,67 @@
+---
+argument_specs:
+  main:
+    short_description: Carte STOR-PUB des travailleurs de k8s-par1 (M16-E05)
+    description:
+      - Protège le nœud contre une « nouvelle instance » cloud-init, charge les modules rbd et ceph,
+        écrit et valide le netplan de la carte de stockage reconnue par sa MAC ; si la carte vient
+        d'apparaître, draine et redémarre le nœud ; vérifie adresse, MTU, routes, MTU de bout en bout
+        vers les moniteurs et adresse interne du nœud ; pose l'étiquette medisphere.fr/stockage-ceph.
+    options:
+      k8s_reseau_stockage_interface:
+        type: str
+        default: ens19
+        description: Nom donné à la carte dans l'invité (net1 → ens19).
+      k8s_reseau_stockage_vlan:
+        type: int
+        default: 30
+        description: VLAN de la carte, aussi 4e octet de sa MAC (bc:24:11:<vlan>:00:<suffixe>).
+      k8s_reseau_stockage_prefixe:
+        type: str
+        default: "10.10.30"
+        description: Trois premiers octets du réseau STOR-PUB.
+      k8s_reseau_stockage_longueur:
+        type: int
+        default: 24
+        description: Longueur du préfixe.
+      k8s_reseau_stockage_decalage:
+        type: int
+        default: 20
+        description: Ajouté au dernier octet de l'adresse VLAN 40 (61 → 81).
+      k8s_reseau_stockage_mtu:
+        type: int
+        default: 9000
+        description: MTU de la carte (PLAN §4.9, VLAN 30 en jumbo frames).
+      k8s_reseau_stockage_moniteurs:
+        type: list
+        elements: str
+        description: Adresses des moniteurs de ceph-par1, cibles du test sans fragmentation.
+      k8s_reseau_stockage_modules:
+        type: list
+        elements: str
+        default: [rbd, ceph]
+        description: Modules noyau chargés au démarrage.
+      k8s_reseau_stockage_etiquette_cle:
+        type: str
+        default: medisphere.fr/stockage-ceph
+        description: Clé de l'étiquette posée sur le nœud vérifié.
+      k8s_reseau_stockage_etiquette_valeur:
+        type: str
+        default: "oui"
+        description: Valeur de l'étiquette.
+      k8s_reseau_stockage_redemarrage_autorise:
+        type: bool
+        default: true
+        description: false = échouer au lieu de drainer et redémarrer.
+      k8s_reseau_stockage_drain_delai:
+        type: str
+        default: 600s
+        description: Délai maximal du drain.
+      k8s_reseau_stockage_kubectl:
+        type: str
+        default: kubectl
+        description: Commande kubectl sur adm01 (delegate_to localhost).
+      k8s_reseau_stockage_repetition:
+        type: path
+        default: /var/lib/k8s_reseau_stockage/repetition
+        description: Dossier où le netplan est validé avant mise en place.

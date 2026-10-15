@@ -1,0 +1,14 @@
+# Velero toutes les nuits, avec les volumes
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: medidoc-dev-nuit
+  namespace: velero
+spec:
+  schedule: "0 2 * * *"
+  template:
+    includedNamespaces:
+      - "*"
+    defaultVolumesToFsBackup: true
+    snapshotMoveData: false
+    ttl: 8760h0m0s

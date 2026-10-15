@@ -1,0 +1,4 @@
+# plateforme/infra — envs/k8s/terraform.tfvars — EXTRAIT M14-E17 (variable prévue en M14-E02, noeuds.tf).
+# MR 1 (ajout) : passer à true. MR 2 (retrait, après drain, delete node et kubeadm reset) : remettre false,
+# ou supprimer la ligne (false est la valeur par défaut). Le pipeline de plateforme/infra fait le reste.
+avec_k8s_w04 = true

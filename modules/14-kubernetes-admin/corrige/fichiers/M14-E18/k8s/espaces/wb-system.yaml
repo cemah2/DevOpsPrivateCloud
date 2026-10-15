@@ -1,0 +1,12 @@
+# espaces/wb-system.yaml — espace des outils du workbook (M14-E06) : compte de service des
+# vérifications (wb-checks). Aucune charge de travail n'y tourne.
+# M14-E18 : le niveau le plus strict, puisque rien ne doit y tourner.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-system
+  labels:
+    app.kubernetes.io/part-of: workbook
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.35

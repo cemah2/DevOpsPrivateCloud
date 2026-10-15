@@ -1,0 +1,5 @@
+MédiDoc {{ include "medidoc.tag" . }} — release « {{ .Release.Name }} » dans {{ .Release.Namespace }}.
+{{- if .Values.httpRoute.enabled }}
+Adresse : https://{{ default (printf "medidoc-%s.apps.par1.medisphere.internal" .Values.environnement) .Values.httpRoute.hostname }}/healthz
+{{- end }}
+Les clés S3 viennent du Secret {{ .Values.s3.existingSecret }} (jamais de ce chart).

@@ -1,0 +1,12 @@
+# plateforme/k8s — composants de plateforme de k8s-par1 installés par Helm (M17-E10, PLAT-1810).
+# Usage (depuis adm01, clone ~/src/k8s) :
+#   helmfile -e par1 diff                  # écart entre ce fichier et le cluster (vide après adoption)
+#   helmfile -e par1 -l composant=<nom> apply
+# Ce fichier n'est pas un gabarit (pas de .gotmpl) : il ne fait que déclarer l'environnement et
+# inclure les fichiers de releases/, rendus, eux, comme des gabarits Go (Helmfile v1).
+# NB : Helmfile refuse un helmfile.yaml ET un dossier helmfile.d/ côte à côte : d'où releases/.
+environments:
+  par1: {}
+---
+helmfiles:
+  - path: releases/*.yaml.gotmpl

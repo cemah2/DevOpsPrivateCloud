@@ -1,0 +1,100 @@
+---
+# Fichier netplan validé À CÔTÉ, mis en place, puis — seulement si la carte existe et n'est pas
+# encore configurée — drain, redémarrage, attente du nœud. Pas de « netplan apply » à chaud :
+# systemd-networkd reconfiguré sous Cilium peut retirer des routes et des règles qu'il ne connaît
+# pas, et un redémarrage d'un nœud drainé prouve en plus que la configuration tient au démarrage.
+
+- name: Repérer la carte de stockage par sa MAC
+  ansible.builtin.set_fact:
+    k8s_reseau_stockage_carte_presente: >-
+      {{ k8s_reseau_stockage_mac in (ansible_facts | dict2items
+                                     | selectattr('value.macaddress', 'defined')
+                                     | map(attribute='value.macaddress') | list) }}
+
+- name: Dossier de répétition
+  ansible.builtin.file:
+    path: "{{ k8s_reseau_stockage_repetition }}/etc/netplan"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Écrire la configuration dans le dossier de répétition
+  ansible.builtin.template:
+    src: 60-stockage.yaml.j2
+    dest: "{{ k8s_reseau_stockage_repetition }}/etc/netplan/60-stockage.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Valider la configuration avec netplan (sans rien appliquer)
+  ansible.builtin.command:
+    cmd: netplan generate --root-dir {{ k8s_reseau_stockage_repetition }}
+  changed_when: false
+
+- name: Mettre en place la configuration netplan (prise en compte au prochain démarrage)
+  ansible.builtin.copy:
+    src: "{{ k8s_reseau_stockage_repetition }}/etc/netplan/60-stockage.yaml"
+    dest: /etc/netplan/60-stockage.yaml
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Constater si la carte porte déjà son adresse
+  ansible.builtin.set_fact:
+    k8s_reseau_stockage_configuree: >-
+      {{ (ansible_facts[k8s_reseau_stockage_interface]['ipv4']['address'] | default('')) == k8s_reseau_stockage_adresse }}
+    k8s_reseau_stockage_redemarre: false
+
+- name: Drainer, redémarrer et attendre le nœud
+  when:
+    - k8s_reseau_stockage_carte_presente | bool
+    - not k8s_reseau_stockage_configuree | bool
+  block:
+    - name: Refuser le redémarrage non autorisé
+      ansible.builtin.fail:
+        msg: >-
+          La carte de stockage de {{ inventory_hostname }} est présente mais pas configurée, et
+          k8s_reseau_stockage_redemarrage_autorise vaut false : drainer et redémarrer le nœud dans
+          une fenêtre annoncée, puis relancer le rôle.
+      when: not k8s_reseau_stockage_redemarrage_autorise | bool
+
+    - name: Drainer le nœud (depuis adm01)
+      ansible.builtin.command:
+        argv:
+          - "{{ k8s_reseau_stockage_kubectl }}"
+          - drain
+          - "{{ inventory_hostname }}"
+          - --ignore-daemonsets
+          - --delete-emptydir-data
+          - --timeout={{ k8s_reseau_stockage_drain_delai }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+    - name: Redémarrer le nœud
+      ansible.builtin.reboot:
+        msg: "Ansible (k8s_reseau_stockage) : carte de stockage {{ k8s_reseau_stockage_interface }}"
+        reboot_timeout: 600
+        post_reboot_delay: 10
+
+    - name: Attendre que le nœud soit Ready
+      ansible.builtin.command:
+        argv:
+          - "{{ k8s_reseau_stockage_kubectl }}"
+          - wait
+          - --for=condition=Ready
+          - node/{{ inventory_hostname }}
+          - --timeout=300s
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Noter le redémarrage (remise en service après les vérifications)
+      ansible.builtin.set_fact:
+        k8s_reseau_stockage_redemarre: true
+
+    - name: Relire les faits réseau
+      ansible.builtin.setup:
+        gather_subset: ["!all", "!min", "network"]

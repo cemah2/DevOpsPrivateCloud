@@ -1,0 +1,32 @@
+# composants/cilium/bgp/bordure.yaml — version M15-E25 (PLAT-1625), REMPLACE celle de M15-E11.
+# Ajout : le redémarrage en douceur (graceful restart). Les temporisateurs sont ceux d'E11.
+#
+# Choix (RB-152) :
+#   - hold 9 s / keepalive 3 s (E11) : un nœud éteint brutalement est déclaré mort en 9 s au plus (défaut
+#     du plan de contrôle : 90 s) ; le hold time négocié est le MINIMUM des deux côtés : FRR propose
+#     180 s (profil « traditional »), c'est donc la valeur de Cilium qui s'applique ;
+#   - redémarrage en douceur, 30 s (E25) : pendant le redémarrage d'un AGENT (mise à jour, E27), la
+#     bordure (aide au redémarrage, active par défaut dans FRR) garde les routes du nœud ; le plan de
+#     données eBPF et Envoy continuent de servir pendant ce temps.
+#     Revers : si la bordure traite aussi la mort d'un nœud comme un redémarrage (RFC 4724/8538 : des
+#     routes « périmées » peuvent être conservées après un hold time expiré, comportement de FRR à
+#     MESURER en E25), ses routes restent jusqu'à 30 s au lieu de 9 : d'où une valeur courte, à peine
+#     plus que le redémarrage mesuré d'un agent (≈ 10-20 s dans le lab).
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: bordure
+spec:
+  timers:
+    connectRetryTimeSeconds: 5
+    holdTimeSeconds: 9
+    keepAliveTimeSeconds: 3
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 30
+  families:
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          bgp.medisphere.fr/annonce: services

@@ -1,0 +1,5 @@
+---
+- name: Podman, Buildah, Skopeo et les outils du sans-privilège
+  ansible.builtin.package:
+    name: "{{ podman_hote_paquets_communs + podman_hote_paquets_famille[ansible_facts['os_family']] | default([]) }}"
+    state: present

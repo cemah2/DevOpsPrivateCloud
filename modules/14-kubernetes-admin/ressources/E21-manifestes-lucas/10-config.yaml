@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mediagenda-config
+  namespace: mediagenda-recette
+data:
+  MEDIAGENDA_DB_URL: "postgresql://mediagenda:Recette2026!@mediagenda-pg:5432/mediagenda"
+  MEDIAGENDA_VALKEY_URL: "redis://mediagenda-valkey:6379/0"
+  MEDIAGENDA_LOG_LEVEL: "DEBUG"

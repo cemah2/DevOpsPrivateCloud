@@ -1,0 +1,60 @@
+# ~/m14/e18/refuses.yaml — quatre objets qui DOIVENT être refusés dans mediagenda-dev.
+# kubectl apply --dry-run=server -f refuses.yaml  → lis chaque message : qui refuse (PSA ou VAP) et pourquoi.
+# 1. Pod sans contexte de sécurité : refusé par Pod Security (restricted).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: refus-psa
+  namespace: mediagenda-dev
+spec:
+  containers:
+    - name: attente
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+---
+# 2. Image tirée directement de Docker Hub : refusée par la politique medisphere-images.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: refus-registre
+  namespace: mediagenda-dev
+spec:
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: attente
+      image: docker.io/library/busybox:1.37
+      command: ["sleep", "3600"]
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+# 3. Étiquette « latest » : refusée par medisphere-images.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: refus-latest
+  namespace: mediagenda-dev
+spec:
+  securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: attente
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:latest
+      command: ["sleep", "3600"]
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+---
+# 4. Deployment dont l'image n'a pas d'étiquette du tout (= latest implicite) : refusé dès le Deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: refus-sans-etiquette
+  namespace: mediagenda-dev
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: refus-sans-etiquette}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: refus-sans-etiquette}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: attente
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox
+          command: ["sleep", "3600"]
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}

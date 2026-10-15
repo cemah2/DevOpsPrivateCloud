@@ -1,0 +1,28 @@
+# Taskfile.yml de plateforme/k8s — EXTRAIT (M15-E34) : objets de MédiDoc qui ne peuvent pas être
+# versionnés tels quels. Le Secret S3 est créé depuis le fichier local 600 (ou Vault lab), jamais
+# depuis le dépôt ; la ConfigMap de la racine depuis le fichier public du magasin de adm01.
+# Les valeurs ne passent jamais en argument de commande (--from-env-file lit le fichier).
+tasks:
+  medidoc:secrets:
+    desc: Secret medidoc-s3 et ConfigMap racine-medisphere dans medidoc-dev
+    cmds:
+      - test -r ~/.config/workbook/s3-medidoc-dev.env
+      - >-
+        kubectl -n medidoc-dev create secret generic medidoc-s3
+        --from-env-file="$HOME/.config/workbook/s3-medidoc-dev.env"
+        --dry-run=client -o yaml | kubectl apply -f -
+      - >-
+        kubectl -n medidoc-dev create configmap racine-medisphere
+        --from-file=medisphere-root-ca.crt=/usr/local/share/ca-certificates/medisphere-root-ca.crt
+        --dry-run=client -o yaml | kubectl apply -f -
+
+  medidoc:appliquer:
+    desc: Publie MédiDoc dans medidoc-dev (politiques d'abord)
+    deps: [medidoc:secrets]
+    cmds:
+      - kubectl apply -f espaces/medidoc-dev.yaml
+      - kubectl apply -f applications/medidoc-dev/politiques.yaml
+      - kubectl apply -f applications/medidoc-dev/deployment.yaml
+      - kubectl apply -f applications/medidoc-dev/service.yaml
+      - kubectl apply -f applications/medidoc-dev/httproute.yaml
+      - kubectl -n medidoc-dev rollout status deploy/medidoc --timeout=3m

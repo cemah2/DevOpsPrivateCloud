@@ -1,0 +1,11 @@
+# M17-E07 — espace jetable de chart-testing : mêmes garde-fous que les espaces applicatifs.
+# admin@adm01:~$ kubectl apply --server-side -f wb-ct.yaml
+# Supprimé en fin d'exercice (kubectl delete namespace wb-ct), après contrôle des volumes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-ct
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    medisphere.fr/jetable: "oui"
