@@ -1,0 +1,21 @@
+---
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M18-E08 (Cluster API sur Proxmox).
+# Matrice commune à gw01 et gw02 (M07-E24) : une MR, les deux passerelles appliquées.
+#
+# Les clusters de gestion (kind sur m18-dev01, puis k3s01 après le pivot) sont sur vsandbox en
+# DHCP : leurs adresses sont stables tant que la MAC l'est (bail Kea), mais ce sont des baux.
+# Une règle par adresse, avec leur nom : si un bail change, la règle se corrige ici et dans
+# l'IPSet « capi » de pve01 (même MR, même fiche).
+# Retrait en fin de module (mini-projet) : les deux définitions et les deux règles.
+
+pare_feu_definitions:
+  # … définitions existantes (V_SANDBOX, V_K8S, WAN, PVE01…) …
+  - {nom: M18_GESTION, valeur: "{ <IP-M18-DEV01>, <IP-K3S01> }", commentaire: "m18-dev01 et k3s01 : clusters de gestion Cluster API (M18-E08, E12)"}
+  - {nom: CAPI_ESSAI_API, valeur: "{ 10.10.40.150-10.10.40.169, 10.10.40.210 }", commentaire: "nœuds et VIP du cluster capi-essai (M18-E10)"}
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_SANDBOX, source: $M18_GESTION, sortie: $WAN, destination: $PVE01, proto: tcp, ports: 8006,
+     motif: "CAPMOX et image-builder (m18-dev01), CAPMOX après pivot (k3s01) vers l'API de pve01", ref: M18-E08}
+  - {entree: $V_SANDBOX, source: $M18_GESTION, sortie: $V_K8S, destination: $CAPI_ESSAI_API, proto: tcp, ports: 6443,
+     motif: "contrôleurs Cluster API (KubeadmControlPlane, MachineHealthCheck) vers l'API de capi-essai", ref: M18-E08}

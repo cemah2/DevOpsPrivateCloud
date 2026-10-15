@@ -1,0 +1,25 @@
+---
+# roles/rke2/handlers/main.yml — version de M18-E22 : le fichier de configuration est VALIDÉ avant tout
+# redémarrage (une erreur de syntaxe ne doit jamais arrêter un serveur), et un serveur à la fois
+# (serial: 1 dans playbooks/m18.yml). Exige python3-pyyaml sur l'hôte : ajoute-le à rke2_paquets_hote
+# (cloud-init l'installe déjà sur l'image Rocky 10, à vérifier).
+
+- name: Recharger NetworkManager
+  ansible.builtin.systemd_service:
+    name: NetworkManager
+    state: reloaded
+
+- name: Valider la configuration de RKE2
+  ansible.builtin.command:
+    cmd: >-
+      /usr/bin/python3 -c
+      "import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]"
+      /etc/rancher/rke2/config.yaml
+  changed_when: false
+  listen: Redémarrer rke2
+
+- name: Redémarrer le service RKE2
+  ansible.builtin.systemd_service:
+    name: "rke2-{{ rke2_role }}"
+    state: restarted
+  listen: Redémarrer rke2

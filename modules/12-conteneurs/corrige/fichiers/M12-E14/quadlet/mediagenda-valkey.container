@@ -1,16 +1,18 @@
-# ~/.config/containers/systemd/mediagenda-valkey.container — cache Valkey, dans le pod (M12-E14).
+# ~app/.config/containers/systemd/mediagenda-valkey.container (ctr02) — M12-E14.
+# Cache Valkey, DANS le pod. Service généré : mediagenda-valkey.service
 [Unit]
 Description=Valkey de MédiAgenda (cache, sans persistance)
 
 [Container]
 ContainerName=mediagenda-valkey
-Image=docker.io/valkey/valkey:8.1
+Image=docker.io/valkey/valkey:8-trixie
 Pod=mediagenda.pod
-# Cache : pas de journal AOF ; écoute sur la boucle locale du pod seulement (l'API est dans le
-# même pod). Pas de « --save "" » ici : Quadlet 5.4 perd l'argument vide et tout ce qui le suit
-# (vérifié avec quadlet -dryrun) ; l'instantané RDB par défaut reste dans le conteneur, jetable.
+# N'écoute que sur la boucle locale du pod (l'API est dans le même pod) ; pas de journal AOF.
+# Pas de « --save "" » : Quadlet 5.4 perd l'argument vide ET tout ce qui le suit (vérifié avec
+# « quadlet -dryrun ») ; l'instantané RDB par défaut reste dans la couche du conteneur, jetée
+# à chaque redémarrage (--rm) : c'est un cache.
 Exec=valkey-server --bind 127.0.0.1 --appendonly no
-HealthCmd=valkey-cli ping
+HealthCmd=["valkey-cli", "ping"]
 HealthInterval=10s
 HealthRetries=3
 Notify=healthy

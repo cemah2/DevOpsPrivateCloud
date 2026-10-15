@@ -1,0 +1,14 @@
+# capi/recette-agenda/crs.yaml
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: cilium
+  namespace: recette-agenda
+spec:
+  strategy: Reconcile
+  clusterSelector:
+    matchLabels:
+      cni: calico
+  resources:
+    - kind: ConfigMap
+      name: cilium

@@ -1,0 +1,19 @@
+---
+# host_vars/runner02/docker_engine.yml — Docker Engine de runner02 (M12-E20) : mêmes versions
+# épinglées que ctr01 (group_vars/role_docker n'est PAS appliqué : runner02 est dans role_runner).
+docker_engine_versions:
+  docker-ce: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-cli: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-rootless-extras: "5:29.8.2-1~debian.13~trixie"
+  containerd.io: "2.3.6-1~debian.13~trixie"
+  docker-buildx-plugin: "0.37.1-1~debian.13~trixie"
+  docker-compose-plugin: "5.6.0-1~debian.13~trixie"
+# PERSONNE dans le groupe docker : le runner tourne en root, les humains passent par sudo.
+docker_engine_groupe_docker: []
+# Images arm64 construites par BuildKit dans les jobs : l'émulation QEMU est enregistrée dans le
+# noyau de l'hôte (drapeau F), donc utilisable depuis les conteneurs de job (M12-E12).
+docker_engine_emulation: true
+# Ménage des images et du cache de build des jobs (M12-E39 l'industrialise).
+docker_engine_daemon_extra:
+  # Les conteneurs de jobs n'ont pas besoin de se joindre entre eux sur le pont par défaut.
+  icc: false

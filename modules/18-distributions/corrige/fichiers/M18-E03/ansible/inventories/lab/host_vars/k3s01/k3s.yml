@@ -1,0 +1,17 @@
+---
+# k3s01 — k3s monoœud de l'agence LYO1 simulée (M18-E03, PLAT-1903). SQLite (kine) : pas de cluster-init.
+k3s_version: v1.36.5+k3s1
+k3s_role: server
+k3s_jeton: "{{ vault_k3s_jeton_k3s01 }}"
+k3s_config:
+  # kubeconfig local root seulement (défaut de k3s : 600 ; écrit pour qu'on ne le change pas).
+  write-kubeconfig-mode: "0600"
+  # Le kubeconfig de adm01 vise ce nom : il doit être dans le certificat du kube-apiserver.
+  tls-san:
+    - k3s01.par1.medisphere.internal
+  # Pas d'Ingress ni de répartiteur de services à l'agence pour l'instant (PLAT-1903).
+  disable:
+    - traefik
+    - servicelb
+  # Nom du nœud explicite (sinon : nom d'hôte, identique ici, mais on ne dépend pas du DHCP).
+  node-name: k3s01

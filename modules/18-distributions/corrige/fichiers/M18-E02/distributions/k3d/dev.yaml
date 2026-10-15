@@ -1,0 +1,53 @@
+# k3d/dev.yaml — cluster de développement k3d (M18-E02, DEV-1902).
+#   admin@m18-dev01:~$ k3d cluster create --config ~/src/distributions/k3d/dev.yaml
+#   admin@m18-dev01:~$ k3d cluster delete dev
+# Contexte kubectl : k3d-dev. Topologie : 1 serveur + 2 agents k3s, plus un conteneur
+# « serverlb » (nginx) que k3d met devant l'API.
+#
+# Image FIXÉE : k3d 5.9.0 démarre sinon son k3s par défaut (v1.35.5-k3s1).
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: dev
+servers: 1
+agents: 2
+image: rancher/k3s:v1.36.5-k3s1
+volumes:
+  # Racine MédiSphère pour la connexion TLS au cache Harbor (déposée sur l'hôte par ca_lab).
+  - volume: /usr/local/share/ca-certificates/medisphere-root-ca.crt:/etc/medisphere/medisphere-root-ca.crt
+    nodeFilters:
+      - server:*
+      - agent:*
+registries:
+  # Contenu du registries.yaml de k3s (format de k3s, pas de containerd).
+  config: |
+    mirrors:
+      docker.io:
+        endpoint:
+          - https://registry.par1.medisphere.internal/v2/dockerhub
+      quay.io:
+        endpoint:
+          - https://registry.par1.medisphere.internal/v2/quay
+      ghcr.io:
+        endpoint:
+          - https://registry.par1.medisphere.internal/v2/ghcr
+      registry.k8s.io:
+        endpoint:
+          - https://registry.par1.medisphere.internal/v2/k8s
+    configs:
+      registry.par1.medisphere.internal:
+        tls:
+          ca_file: /etc/medisphere/medisphere-root-ca.crt
+options:
+  k3d:
+    wait: true
+    timeout: "180s"
+  k3s:
+    extraArgs:
+      # Pas d'Ingress sur un poste : les tests d'Ingress se font sur un vrai cluster.
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: false

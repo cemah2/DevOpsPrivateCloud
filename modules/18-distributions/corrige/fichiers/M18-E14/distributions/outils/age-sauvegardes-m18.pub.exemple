@@ -1,0 +1,4 @@
+# outils/age-sauvegardes-m18.pub — destinataire age des sauvegardes du module 18 (M18-E14).
+# Seule la clé PUBLIQUE est dans le dépôt (renomme ce fichier en .pub). La clé privée est chiffrée par
+# Ansible Vault « critique » (secrets/age-sauvegardes-m18.cle), copie papier au coffre, comme en M14-E24.
+age1<CLE-PUBLIQUE>

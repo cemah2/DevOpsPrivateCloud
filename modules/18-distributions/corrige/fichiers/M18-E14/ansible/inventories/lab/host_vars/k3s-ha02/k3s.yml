@@ -1,0 +1,4 @@
+# host_vars/k3s-ha02/k3s.yml — agent du banc k3s etcd (M18-E14, panne M18-E19).
+k3s_version: v1.36.5+k3s1
+k3s_role: agent
+k3s_url: https://k3s-ha01.par1.medisphere.internal:6443

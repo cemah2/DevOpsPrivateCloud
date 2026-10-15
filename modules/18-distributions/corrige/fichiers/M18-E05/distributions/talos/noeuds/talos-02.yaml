@@ -1,0 +1,8 @@
+# talos/noeuds/talos-02.yaml — patch propre au nœud talos-02 (M18-E05).
+# En 1.14, le nom d'hôte est le document HostnameConfig ; « auto: off » coupe le nom stable
+# généré (talos-xxx-yyy) et laisse le nom donné ici. Le document existe déjà dans la configuration
+# générée (auto: stable) : le patch le FUSIONNE (même kind, même apiVersion).
+apiVersion: v1alpha1
+kind: HostnameConfig
+hostname: talos-02
+auto: "off"   # entre guillemets : pour un analyseur YAML 1.1, off nu est un booléen

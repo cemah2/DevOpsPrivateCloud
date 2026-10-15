@@ -1,0 +1,11 @@
+# {{ registre_travail_entete }}
+[Unit]
+Description=Ramasse-miettes hebdomadaire du registre de travail
+
+[Timer]
+OnCalendar={{ registre_travail_gc_calendrier }}
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

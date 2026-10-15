@@ -1,0 +1,25 @@
+# kind/gestion-capd.yaml — REPLI : cluster de gestion pour le fournisseur Docker (CAPD), si la
+# vérification préalable CAPMOX / Proxmox VE 9 échoue (M18-E08).
+#   admin@m18-dev01:~$ kind create cluster --config ~/src/distributions/kind/gestion-capd.yaml
+# CAPD crée les « machines » comme des conteneurs Docker sur m18-dev01 : son contrôleur doit
+# parler au démon Docker de l'hôte, d'où le montage du socket (documentation de démarrage de CAPI).
+# ⚠️ Ce socket donne root sur m18-dev01 à tout ce qui tourne dans ce cluster : poste jetable
+# seulement, jamais sur un hôte partagé.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: gestion
+networking:
+  apiServerAddress: "0.0.0.0"
+  apiServerPort: 6443
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      certSANs:
+        - m18-dev01.par1.medisphere.internal
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraMounts:
+      - hostPath: /var/run/docker.sock
+        containerPath: /var/run/docker.sock

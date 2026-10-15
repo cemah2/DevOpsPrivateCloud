@@ -1,24 +1,34 @@
 # syntax=docker/dockerfile:1
-# Variante « scratch » de MédiDoc (M12-E10, comparaison) : image finale VIDE, on y apporte
-# soi-même ce que distroless fournissait (certificats racines, utilisateur non root).
-#   docker build -f Dockerfile.scratch --build-arg VERSION=1.0.0 -t medidoc:1.0.0-scratch .
-FROM golang:1.26-trixie AS construction
+# Variante « scratch » de MédiDoc (M12-E10, comparaison seulement — l'image retenue est celle du
+# Dockerfile, sur distroless). L'image finale est VIDE : on y apporte soi-même ce que distroless
+# fournissait (certificats racines, comptes non root). Ce qu'on oublie ici casse à l'exécution,
+# pas à la construction : c'est tout l'intérêt de la comparaison.
+#
+#   admin@ctr01:~/src/medidoc$ docker build -f Dockerfile.scratch --build-arg VERSION=1.0.0 -t medidoc:1.0.0-scratch .
+
+FROM docker.io/library/golang:1.26-trixie@sha256:f06b7122f888680048afb247c4e5f49c0069eb6c4c1ccae0f3f4834527a8d22c AS construction
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 COPY cmd/ cmd/
 COPY internal/ internal/
 ARG VERSION=dev
+# Un /etc/passwd et un /etc/group minimaux : sans eux, « USER 65532 » fonctionne, mais tout ce
+# qui cherche un nom de compte (bibliothèques, outils de diagnostic) n'en trouve aucun.
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
       -o /out/medidoc ./cmd/medidoc \
- # Un /etc/passwd minimal : sans lui, « USER 65532 » marche, mais les outils qui cherchent
- # un nom (journaux, ps de l'hôte) affichent un UID nu ; on le fournit pour la lisibilité.
  && printf 'nonroot:x:65532:65532:nonroot:/nonexistent:/sbin/nologin\n' > /out/passwd \
  && printf 'nonroot:x:65532:\n' > /out/group
 
 FROM scratch
-# Certificats racines de Debian (sans eux : « x509: certificate signed by unknown authority »
-# au premier appel HTTPS vers S3). Pas de tzdata : MédiDoc journalise en UTC.
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="medidoc" \
+      org.opencontainers.image.description="MédiDoc sur scratch (comparaison M12-E10)" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://git01.par1.medisphere.internal/medidoc/medidoc" \
+      org.opencontainers.image.vendor="MédiSphère"
+# Certificats racines de Debian : sans eux, « x509: certificate signed by unknown authority » au
+# premier appel HTTPS vers S3. Pas de tzdata : MédiDoc journalise en UTC (à vérifier si cela change).
 COPY --from=construction /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=construction /out/passwd /etc/passwd
 COPY --from=construction /out/group /etc/group

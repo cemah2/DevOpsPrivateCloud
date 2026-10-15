@@ -1,4 +1,4 @@
-# .hadolint.yaml — règles Hadolint de MédiSphère (M12-E16, ticket SEC-1326). Hadolint 2.15.
+# .hadolint.yaml — règles Hadolint de MédiSphère (M12-E16, ticket SEC-1316). Hadolint 2.15.
 # Copié à la racine de chaque projet applicatif ; le gabarit CI image.yml (E21) l'utilise.
 # Toute dérogation se fait DANS le Dockerfile, ligne par ligne, avec sa raison :
 #   # hadolint ignore=DL3008  (raison : …)

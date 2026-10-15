@@ -1,0 +1,15 @@
+# kind/gestion-capo.yaml — cluster de gestion ÉPHÉMÈRE pour CAPO (M18-E16), sur m18-dev01.
+# Cluster API 1.14.x + CAPO 0.15.x : incompatible avec k3s01 (Cluster API 1.12, imposé par CAPMOX).
+# Détruit à la fin de l'exercice : kind delete cluster --name gestion-capo
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: gestion-capo
+nodes:
+  - role: control-plane
+    # Image 1.36 publiée avec kind 0.33 : prends dans les notes de version de kind le correctif 1.36
+    # listé et son digest (« kindest/node:v1.36.N@sha256:… »), comme en M18-E02.
+    image: kindest/node:v1.36.5
+networking:
+  # API du cluster de gestion joignable depuis adm01 (pour clusterctl et kubectl), pas seulement en local.
+  apiServerAddress: "0.0.0.0"
+  apiServerPort: 6444

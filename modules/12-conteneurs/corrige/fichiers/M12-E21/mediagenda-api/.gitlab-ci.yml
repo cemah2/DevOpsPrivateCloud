@@ -1,0 +1,44 @@
+# .gitlab-ci.yml — mediagenda/api (M12-E21, SEC-1321).
+# lint (pre-commit, commitlint, gitleaks, Hadolint) → test (pytest, ruff) → build (image
+# multi-architectures, BuildKit sans privilège sur runner02) → release (semantic-release, M01).
+#   MR             : tout est construit, rien n'est publié ;
+#   main           : image main-<SHA court> publiée (et le cache de construction) ;
+#   étiquette vX.Y.Z : image X.Y.Z publiée (amd64 + arm64).
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+      - templates/image.yml
+
+# Workflow de templates/qualite.yml (MR, branches) + les étiquettes de version : qualite.yml ne
+# lance aucun pipeline d'étiquette, or c'est l'étiquette vX.Y.Z qui publie l'image X.Y.Z.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+
+tests:
+  stage: test
+  # runner01 (exécuteur shell) a uv 0.12.23 et Python 3.13 (M02, rôle gitlab_runner).
+  tags: [shell]
+  needs: []
+  script:
+    - uv sync --locked
+    - uv run ruff check .
+    - uv run ruff format --check .
+    - uv run pytest
+
+hadolint:
+  extends: .hadolint
+
+image:
+  extends: .image-construction
+  needs: [tests, hadolint]
+  variables:
+    IMAGE: ctr01.par1.medisphere.internal:5000/mediagenda/api
+    PLATEFORMES: linux/amd64,linux/arm64

@@ -1,0 +1,4 @@
+---
+# host_vars/ctr01/docker_engine.yml — état après M12-E16 (remplace celui de M12-E12).
+docker_engine_emulation: true          # M12-E12 : constructions arm64 (QEMU)
+docker_engine_outils_qualite: true     # M12-E16 : Hadolint et Dive pour les revues d'images

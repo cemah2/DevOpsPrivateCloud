@@ -1,0 +1,12 @@
+{
+  "//": "plateforme/images, capi/ubuntu-2404-k136.json — image de nœud Cluster API (M18-E09, PLAT-1909). Fichier de variables Packer passé à image-builder v0.1.55 par PACKER_VAR_FILES : il PRIME sur les valeurs par défaut (packer/config/*.json) et sur le fichier de l'OS (packer/proxmox/ubuntu-2404.json).",
+  "vmid": "9060",
+  "artifact_name": "tpl-capi-ubuntu2404-k136",
+  "kubernetes_series": "v1.36",
+  "kubernetes_semver": "v1.36.4",
+  "kubernetes_deb_version": "1.36.4-1.1",
+  "disk_format": "raw",
+  "disk_size": "20G",
+  "iso_url": "",
+  "iso_file": "hdd-bulk:iso/ubuntu-24.04.4-live-server-amd64.iso"
+}

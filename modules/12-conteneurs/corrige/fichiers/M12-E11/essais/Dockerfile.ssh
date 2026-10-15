@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+# Essai du montage SSH de BuildKit (M12-E11, étape 7) — ~/m12/e11/ssh/Dockerfile sur ctr01.
+# Le RUN voit l'agent SSH du client (« docker build --ssh default »), le temps de l'instruction
+# seulement : ni la clé ni le socket ne restent dans une couche. Clé d'essai jetable, créée pour
+# l'occasion (jamais ta clé personnelle : root sur ctr01 pourrait se servir de ton agent).
+#
+#   admin@ctr01:~/m12/e11/ssh$ eval "$(ssh-agent -s)" && ssh-add ~/m12/e11/ssh/cle-essai
+#   admin@ctr01:~/m12/e11/ssh$ docker build --ssh default --progress plain --no-cache -t m12-e11-ssh .
+FROM docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+# hadolint ignore=DL3008
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssh-client \
+ && rm -rf /var/lib/apt/lists/*
+# Avec l'agent : la clé est listée. Sans « --ssh default » : la construction échoue (required).
+RUN --mount=type=ssh,required=true ssh-add -l
+# Instruction suivante, SANS montage : plus d'agent (ssh-add échoue, d'où le message).
+RUN ssh-add -l || echo "aucun agent SSH hors du RUN qui le monte"

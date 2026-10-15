@@ -1,0 +1,12 @@
+# rke2/essai-cis/pod-refuse.yaml — le même pod SANS securityContext : refusé par l'admission
+# Pod Security (niveau restricted). Ne s'applique qu'en --dry-run=server, pour lire le refus.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: refuse
+  namespace: essai-cis
+spec:
+  containers:
+    - name: attente
+      image: docker.io/library/busybox:1.37
+      command: ["sleep", "infinity"]

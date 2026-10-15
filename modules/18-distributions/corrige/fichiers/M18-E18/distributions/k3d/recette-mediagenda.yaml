@@ -1,0 +1,57 @@
+# k3d/recette-mediagenda.yaml — cluster de recette éphémère de l'équipe MédiAgenda (M18-E18).
+# Lancé SUR m18-dev01 par k3d/outils/recette.sh (k3d 5.9). Les fichiers montés (miroirs, CA) sont copiés
+# par le script dans /opt/recette-mediagenda/ de m18-dev01.
+# ⚠️ k3d remplace les $VARIABLES de ce fichier avant de le lire : aucune expression régulière ici (les
+# réécritures de registries.yaml utilisent « $1 ») ; les miroirs sont donc dans un fichier MONTÉ.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: recette-mediagenda
+servers: 1
+agents: 1
+# k3s par le cache Harbor « dockerhub » : jamais Docker Hub en direct (X2). Version fixée (k3d 5.9 prendrait
+# sinon le k3s du canal stable au moment de sa compilation).
+image: registry.par1.medisphere.internal/dockerhub/rancher/k3s:v1.36.5-k3s1
+kubeAPI:
+  host: m18-dev01.par1.medisphere.internal   # nom écrit dans le kubeconfig
+  hostIP: 0.0.0.0                             # écoute sur l'interface de m18-dev01 (adm01 doit l'atteindre)
+  hostPort: "6445"
+ports:
+  # ServiceLB de k3s publie le Service LoadBalancer sur le port 8000 des nœuds ; le répartiteur de k3d le
+  # republie sur le port 8080 de m18-dev01 (X8). Une équipe = un port (convention à écrire dans l'ADR).
+  - port: 8080:8000
+    nodeFilters:
+      - loadbalancer
+volumes:
+  - volume: /opt/recette-mediagenda/registries.yaml:/etc/rancher/k3s/registries.yaml
+    nodeFilters:
+      - server:*
+      - agent:*
+  - volume: /opt/recette-mediagenda/medisphere-root-ca.crt:/etc/ssl/certs/medisphere-root-ca.crt
+    nodeFilters:
+      - server:*
+      - agent:*
+options:
+  k3d:
+    wait: true
+    timeout: "300s"
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik          # pas d'Ingress : Service LoadBalancer (ServiceLB) suffit
+        nodeFilters:
+          - server:*
+    nodeLabels:
+      - label: medisphere.fr/proprietaire=mediagenda
+        nodeFilters:
+          - server:*
+          - agent:*
+  kubeconfig:
+    updateDefaultKubeconfig: false      # le kubeconfig est récupéré et rangé par le script (X3)
+    switchCurrentContext: false
+  runtime:
+    labels:
+      - label: medisphere.fr/proprietaire=mediagenda
+        nodeFilters:
+          - server:*
+          - agent:*
+          - loadbalancer

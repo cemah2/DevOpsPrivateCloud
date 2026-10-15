@@ -1,0 +1,17 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT : ajouts de M18-E14 (rôle seaweedfs, M05-E10 ; même forme
+# qu'en M14-E24). Les secrets vault_s3_etcd_m18_* sont lus par s3-01 ET par les nœuds k3s/RKE2 :
+# un seul fichier Vault « lab » (group_vars/all/vault-lab-s3-m18.yml), pas de copie.
+seaweedfs_identites:
+  # … identités existantes (tofu-etat, etcd-k8s, velero…) …
+  # Instantanés des clusters d'essai du module 18 : écriture (nœuds), lecture et liste (adm01,
+  # restaurations, contrôles). Suppression refusée par la politique du compartiment
+  # (plateforme/infra outils/s3/politique-etcd-m18.json) ; la purge est faite par le cycle de vie.
+  - nom: etcd-m18
+    cle_acces: "{{ vault_s3_etcd_m18_cle_acces }}"
+    cle_secrete: "{{ vault_s3_etcd_m18_cle_secrete }}"
+    actions: [Read:etcd-m18, Write:etcd-m18, List:etcd-m18]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: etcd-m18
+    versionnage: true

@@ -1,0 +1,21 @@
+---
+# playbooks/registre-travail.yml — registre de travail sur ctr01 (M12-E15, PLAT-1315).
+#   admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/registre-travail.yml --diff
+# Prérequis : playbooks/conteneurs.yml appliqué (Docker sur ctr01), flux de bordure ca01 ↔ ctr01
+# (ACME) ouverts, réservation Kea 10.10.99.121 en place.
+- name: Registre de travail (CNCF Distribution 3)
+  hosts: role_docker
+  become: true
+  pre_tasks:
+    - name: Garde-fou d'inventaire (un seul hôte Docker, celui du module 12)
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'ctr01'
+          - "'env_m12' in group_names"
+        fail_msg: "Ce playbook ne vise que ctr01 (env-m12, role-docker) ; inventaire : {{ inventory_hostname }}."
+        quiet: true
+  roles:
+    - role: certificats_acme
+      tags: [certificats]
+    - role: registre_travail
+      tags: [registre]

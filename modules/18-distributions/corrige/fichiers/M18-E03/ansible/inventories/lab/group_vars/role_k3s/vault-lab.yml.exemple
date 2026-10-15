@@ -1,0 +1,5 @@
+---
+# group_vars/role_k3s/vault-lab.yml — CHIFFRÉ avec l'identité « lab » :
+#   uv run ansible-vault create --vault-id lab@outils/vault-pass-client.sh inventories/lab/group_vars/role_k3s/vault-lab.yml
+# Jeton généré par : openssl rand -hex 32
+vault_k3s_jeton_k3s01: "<JETON-64-CARACTERES-HEX>"

@@ -1,0 +1,8 @@
+---
+# host_vars/ctr01/registre_travail.yml — registre de travail (M12-E15, PLAT-1315).
+# Deux comptes : « plateforme » (l'équipe, les vérifications du workbook, la recette de ctr02) et
+# « ci » (les pipelines de runner02, M12-E21). Mots de passe dans le Vault « lab » (vault.yml) ;
+# emplacements inscrits au registre des secrets (docs/socle/registre-secrets.md).
+registre_travail_comptes:
+  plateforme: "{{ vault_registre_travail_mdp_plateforme }}"
+  ci: "{{ vault_registre_travail_mdp_ci }}"

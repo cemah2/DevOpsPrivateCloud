@@ -1,0 +1,59 @@
+---
+# playbooks/m18.yml — environnement du module 18 (M18-E02 : poste de développement).
+#   uv run ansible-playbook playbooks/m18.yml --check --diff
+#   uv run ansible-playbook playbooks/m18.yml
+# Hors de site.yml : l'environnement du module a son propre cycle. Complété en E03 (k3s),
+# E04 (rke2) et E07 (banc k3s-ha).
+
+- name: Socle commun des hôtes du module 18
+  hosts: env_m18
+  become: true
+  pre_tasks:
+    - name: Le garde-fou d'inventaire (hôtes du plan seulement)
+      ansible.builtin.assert:
+        that:
+          - groups['env_m18'] | default([]) | difference(['m18-dev01', 'k3s01', 'rke2-01', 'rke2-02', 'rke2-03']) | length == 0
+          - groups['role_m18_dev'] | default([]) | difference(['m18-dev01']) | length == 0
+        fail_msg: "Inventaire env_m18 inattendu : {{ groups['env_m18'] | default([]) }} (étiquettes NetBox ?)."
+        quiet: true
+      tags: [always]
+  roles:
+    # « base » est écrit pour Debian ; l'image dorée Rocky a déjà l'équivalent (M08-E02).
+    - role: base
+      when: ansible_facts['os_family'] == 'Debian'
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+
+- name: Poste de développement (Docker, kubectl, kind, k3d, clusterctl, talosctl)
+  hosts: role_m18_dev
+  become: true
+  tasks:
+    - name: Limites inotify pour les clusters dans des conteneurs (dépannage de kind)
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/60-m18-dev.conf
+        state: present
+      loop: "{{ m18_dev_sysctl | dict2items }}"
+      tags: [sysctl]
+  roles:
+    - role: docker_engine
+      tags: [docker_engine]
+    - role: outils_k8s
+      tags: [outils_k8s]
+    - role: outils_distributions
+      tags: [outils_distributions]
+
+- name: Outils de pilotage sur adm01 (talosctl, clusterctl)
+  hosts: adm01
+  become: true
+  roles:
+    - role: outils_distributions
+      tags: [outils_distributions]

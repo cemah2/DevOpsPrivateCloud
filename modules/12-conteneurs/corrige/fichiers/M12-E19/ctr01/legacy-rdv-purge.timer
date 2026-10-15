@@ -1,0 +1,10 @@
+# /etc/systemd/system/legacy-rdv-purge.timer (ctr01) — M12-E19 : même horaire que le cron d'InfoGér.
+[Unit]
+Description=Legacy-RDV : purge nocturne des pièces jointes
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

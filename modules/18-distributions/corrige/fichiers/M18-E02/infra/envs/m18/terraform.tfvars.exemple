@@ -1,0 +1,9 @@
+# terraform.tfvars — valeurs NON secrètes de l'environnement (copie ce fichier sans .exemple).
+noeud         = "<NOEUD>"
+cle_ssh_admin = "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+
+# Familles allumées : E02 ["dev"], E03 + "k3s", E04 + "rke2", E05 + "talos".
+groupes = ["dev"]
+
+# VMs jetables du banc k3s HA (M18-E07, fichier k3s-ha.tf) : vide hors de l'exercice.
+# k3s_ha_noeuds = ["k3s-ha01", "k3s-ha02", "k3s-ha03"]

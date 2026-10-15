@@ -1,0 +1,12 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+# /etc/rancher/rke2/registries.yaml — rôle rke2 (M18-E04). Même format que celui de k3s.
+mirrors:
+{% for registre, miroir in rke2_miroirs | dictsort %}
+  {{ registre }}:
+    endpoint:
+      - {{ miroir }}
+{% endfor %}
+configs:
+  {{ rke2_registre_hote }}:
+    tls:
+      ca_file: {{ rke2_registre_ca }}

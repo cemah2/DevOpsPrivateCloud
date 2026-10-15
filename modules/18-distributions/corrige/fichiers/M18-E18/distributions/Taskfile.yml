@@ -1,0 +1,13 @@
+# Taskfile.yml — plateforme/distributions (EXTRAIT : tâches de M18-E18). Lancé depuis adm01.
+version: "3"
+
+tasks:
+  recette:creer:
+    desc: Crée le cluster de recette éphémère et y installe MédiAgenda (chart signé, M18-E18)
+    cmds:
+      - k3d/outils/recette.sh creer
+
+  recette:detruire:
+    desc: Détruit le cluster de recette éphémère et supprime son kubeconfig
+    cmds:
+      - k3d/outils/recette.sh detruire

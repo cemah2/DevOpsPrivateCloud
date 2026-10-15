@@ -1,0 +1,6 @@
+{
+  "commentaire": "Extrait de la configuration Kea (sous-réseau id 99, VLAN SANDBOX) — M12-E15 : adresse stable de ctr01, cible des règles de bordure du registre de travail (ACME, runner02). Même méthode que les réservations du M11 (variable du rôle Kea, MR sur plateforme/ansible). La MAC est celle que le module vm-noeud impose à ctr01 (M12-E02).",
+  "reservations": [
+    { "hw-address": "bc:24:11:99:12:01", "ip-address": "10.10.99.121", "hostname": "ctr01" }
+  ]
+}

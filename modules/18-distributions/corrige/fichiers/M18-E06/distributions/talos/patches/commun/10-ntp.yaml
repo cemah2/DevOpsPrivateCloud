@@ -1,0 +1,8 @@
+# talos/patches/commun/10-ntp.yaml — heure du lab (M18-E06, CHG-1906).
+# Sans ce document, Talos se synchronise sur time.cloudflare.com : le lab a une source de temps,
+# la passerelle de chaque VLAN (PLAN.md §4.3 bis), et rien ne doit dépendre d'un service public.
+apiVersion: v1alpha1
+kind: TimeSyncConfig
+ntp:
+  servers:
+    - 10.10.99.1

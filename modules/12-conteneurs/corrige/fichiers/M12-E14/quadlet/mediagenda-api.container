@@ -1,5 +1,5 @@
-# ~/.config/containers/systemd/mediagenda-api.container — l'API MédiAgenda, dans le pod (M12-E14).
-# Service généré : mediagenda-api.service
+# ~app/.config/containers/systemd/mediagenda-api.container (ctr02) — M12-E14.
+# L'API MédiAgenda, dans le pod. Service généré : mediagenda-api.service
 [Unit]
 Description=API MédiAgenda (recette ctr02)
 Requires=mediagenda-migrations.service mediagenda-valkey.service
@@ -13,20 +13,20 @@ Pod=mediagenda.pod
 Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
 Environment=MEDIAGENDA_VALKEY_URL=redis://127.0.0.1:6379/0
 Environment=MEDIAGENDA_LOG_LEVEL=INFO
-# La sonde de vivacité de l'application (pas /pret : une panne de la base ne doit pas faire
-# redémarrer l'API). E18 y ajoute HealthOnFailure=.
-# Forme tableau JSON : Quadlet 5.4 tronque le guillemet final d'une commande « python -c "…" »
-# écrite en une chaîne (vérifié avec quadlet -dryrun) ; le tableau est transmis intact.
+# Vivacité sur /sante (ne dépend ni de la base ni du cache). Forme TABLEAU JSON : en chaîne
+# simple, Quadlet 5.4 perd le guillemet final de « python -c "…" » (vérifié avec quadlet -dryrun),
+# et la sonde échoue toujours. M12-E18 y ajoute HealthOnFailure= et des limites.
 HealthCmd=["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
 HealthInterval=30s
 HealthRetries=3
 HealthStartPeriod=15s
 Notify=healthy
-# Arrêt propre : uvicorn a 20 s pour finir les requêtes ; on lui en laisse 30 avant SIGKILL.
+# Arrêt propre : uvicorn laisse 20 s aux requêtes en cours ; on lui en laisse 30 avant SIGKILL.
 StopTimeout=30
 
 [Service]
 Restart=on-failure
+TimeoutStartSec=300
 
 [Install]
 WantedBy=default.target

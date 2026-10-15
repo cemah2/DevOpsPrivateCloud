@@ -1,0 +1,8 @@
+{# /root/.docker/config.json de runner02 — identifiants de TIRAGE des images de jobs (M12-E21). #}
+{
+  "auths": {
+{% for hote, identifiants in gitlab_runner_docker_auth.items() %}
+    "{{ hote }}": {"auth": "{{ identifiants | b64encode }}"}{{ "," if not loop.last else "" }}
+{% endfor %}
+  }
+}

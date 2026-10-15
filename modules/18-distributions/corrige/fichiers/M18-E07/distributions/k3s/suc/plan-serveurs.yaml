@@ -1,0 +1,29 @@
+# k3s/suc/plan-serveurs.yaml — montée de version des serveurs du banc k3s HA (M18-E07).
+# Une version EXPLICITE (pas de canal) : une montée est une MR qui change cette ligne.
+# Un nœud à la fois, isolé (cordon) pendant sa montée, dans une fenêtre horaire.
+# Pas de plan « agents » : le banc n'a que des serveurs (la documentation de k3s en ajoute un
+# second, qui attend celui-ci par son étape « prepare »).
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: serveurs
+  namespace: system-upgrade
+spec:
+  concurrency: 1
+  cordon: true
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: In
+        values: ["true"]
+  serviceAccountName: system-upgrade
+  upgrade:
+    image: rancher/k3s-upgrade
+  version: v1.36.5+k3s1
+  # Fenêtre de maintenance : en semaine, 9 h - 17 h (heure de Paris) pendant l'essai ; à l'agence,
+  # la nuit. Hors fenêtre, aucun travail de montée n'est créé.
+  window:
+    days: [monday, tuesday, wednesday, thursday, friday]
+    startTime: "09:00"
+    endTime: "17:00"
+    timeZone: Europe/Paris

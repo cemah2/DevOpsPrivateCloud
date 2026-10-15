@@ -1,0 +1,7 @@
+---
+# Distribution ne relit ni sa configuration, ni htpasswd, ni son certificat à chaud : on redémarre
+# (quelques secondes ; une poussée en cours échoue et se relance).
+- name: Redémarrer le registre
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ registre_travail_dossier }}", up, -d, --wait, --force-recreate, registre]
+  changed_when: true

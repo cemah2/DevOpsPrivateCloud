@@ -1,0 +1,28 @@
+# k3d/recette-mediagenda-values.yaml — valeurs du chart mediagenda pour la recette éphémère (M18-E18, X7).
+# Aucune valeur secrète : l'URL de la base vient du Secret créé par CloudNativePG, le tirage de l'image du
+# Secret harbor-pull créé par le script.
+medisphere:
+  environnement: recette
+image:
+  tag: v1.1.0
+replicaCount: 1
+service:
+  type: LoadBalancer          # ServiceLB de k3s → répartiteur k3d → m18-dev01:8080
+  port: 8000
+httpRoute:
+  enabled: false              # pas de Gateway sur le cluster éphémère
+networkPolicy:
+  # Politiques écrites pour k8s-par1 (Cilium, Gateway gw-par1) : les CiliumNetworkPolicy n'ont pas de CRD
+  # ici, et les NetworkPolicy standard, appliquées par le contrôleur intégré de k3s, couperaient ServiceLB.
+  enabled: false
+postgresql:
+  cnpg:
+    enabled: true
+    instances: 1
+    storage:
+      size: 1Gi
+      storageClass: local-path
+valkey:
+  enabled: true
+podDisruptionBudget:
+  enabled: false

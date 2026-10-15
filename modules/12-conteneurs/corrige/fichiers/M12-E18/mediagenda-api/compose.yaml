@@ -1,0 +1,161 @@
+# compose.yaml — MédiAgenda, PostgreSQL 18 et Valkey 8 sur un poste ou une VM de recette (M12-E08),
+# avec les LIMITES de ressources, les journaux et les sondes de M12-E18 (PLAT-1318) ; image 0.2.0
+# de M12-E11. Les blocs nouveaux sont marqués « E18 ».
+#
+#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 600
+#   admin@ctr01:~/src/mediagenda-api$ docker compose up -d --wait
+#   admin@ctr01:~/src/mediagenda-api$ docker compose --profile outils run --rm psql
+#
+# Pas d'attribut « version: » : il est obsolète (la spécification Compose n'a plus de version).
+# Nom du projet fixé : réseau, volumes et conteneurs s'appellent mediagenda-…, d'où que l'on lance.
+name: mediagenda
+
+services:
+  # --- Base de données ------------------------------------------------------------------------
+  db:
+    image: docker.io/library/postgres:18-trixie
+    environment:
+      POSTGRES_DB: mediagenda
+      POSTGRES_USER: mediagenda
+      # Variante « _FILE » de l'image officielle : le mot de passe est lu dans le secret monté,
+      # il n'apparaît ni dans ce fichier, ni dans « docker inspect », ni dans l'environnement.
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_mdp
+      # Base en UTF-8 (README de MédiAgenda).
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    secrets:
+      - db_mdp
+    volumes:
+      # PostgreSQL 18 : l'image range les données dans /var/lib/postgresql/18/docker (PGDATA) et
+      # attend le volume sur /var/lib/postgresql (et non plus /var/lib/postgresql/data).
+      - donnees-db:/var/lib/postgresql
+    # E18 — limites : PostgreSQL se règle sur la mémoire qu'il VOIT (shared_buffers par défaut :
+    # 128 Mo) ; 512 Mo laissent la place aux connexions et aux tris. Au-delà, le noyau tue un
+    # processus du conteneur (OOM du cgroup), pas un processus de l'hôte.
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    # E18 — arrêt : l'image arrête PostgreSQL par SIGINT (son STOPSIGNAL : arrêt « fast », les
+    # sessions sont coupées, un point de reprise est écrit) ; on lui laisse 30 s avant SIGKILL
+    # (10 s par défaut), sinon la base redémarre en récupération après crash.
+    stop_grace_period: 30s
+    healthcheck:
+      # pg_isready dit si le serveur accepte les connexions, sans mot de passe.
+      test: ["CMD", "pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks: [arriere]
+
+  # --- Cache ------------------------------------------------------------------------------------
+  valkey:
+    image: docker.io/valkey/valkey:8-trixie
+    # Cache seulement : pas de persistance sur disque (il se reconstruit depuis la base).
+    # E18 — un cache borné : Valkey évince les clés les moins utilisées AVANT d'atteindre la
+    # limite du conteneur (sinon c'est le noyau qui le tue, OOM, et le cache repart vide).
+    command: ["valkey-server", "--save", "", "--appendonly", "no",
+              "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [arriere]
+
+  # --- Migrations : un service PONCTUEL ---------------------------------------------------------
+  # Il applique V1, V2… puis s'arrête avec le code 0 ; l'API ne démarre qu'après ce succès.
+  migrations:
+    image: mediagenda-api:${MEDIAGENDA_TAG:-0.2.0}
+    build:
+      context: .
+      args:
+        VERSION: ${MEDIAGENDA_TAG:-0.2.0}
+    entrypoint: ["/bin/sh", "-c"]
+    # L'application ne lit sa configuration que dans l'environnement : on compose l'URL à partir
+    # du secret au dernier moment, et « exec » remplace le shell (le processus reçoit les signaux).
+    command:
+      - 'MEDIAGENDA_DB_URL="postgresql://mediagenda:$$(cat /run/secrets/db_mdp)@db:5432/mediagenda" exec mediagenda-migrate'
+    environment:
+      MEDIAGENDA_MIGRATIONS_DIR: /app/migrations
+    secrets:
+      - db_mdp
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: 256m
+    pids_limit: 64
+    networks: [arriere]
+
+  # --- L'API ------------------------------------------------------------------------------------
+  api:
+    image: mediagenda-api:${MEDIAGENDA_TAG:-0.2.0}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'MEDIAGENDA_DB_URL="postgresql://mediagenda:$$(cat /run/secrets/db_mdp)@db:5432/mediagenda" exec mediagenda'
+    environment:
+      MEDIAGENDA_VALKEY_URL: redis://valkey:6379/0
+      MEDIAGENDA_LOG_LEVEL: INFO
+    secrets:
+      - db_mdp
+    ports:
+      # Publié sur toutes les adresses de l'hôte, port 8000 (la recette est jointe depuis adm01).
+      - "8000:8000"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      # Pas de curl dans l'image : le Python de l'image fait la requête. /sante seulement :
+      # la vivacité ne doit pas dépendre de la base (README de MédiAgenda).
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # E18 — limites mesurées (docker stats sous charge : ≈ 80 Mo, < 5 % d'un CPU) : 256 Mo et un
+    # CPU laissent une marge d'un facteur 3 ; 128 processus suffisent à un uvicorn sans travailleurs.
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    # E18 — arrêt : MEDIAGENDA_DELAI_ARRET (20 s) + marge, avant SIGKILL.
+    stop_grace_period: 30s
+    # E18 — journaux : le pilote et la rotation viennent du démon (daemon.json, rôle docker_engine :
+    # json-file, 10 Mo × 3, compressés). On ne les redéfinit ici que pour une exception.
+    restart: unless-stopped
+    networks: [avant, arriere]
+
+  # --- Outils (profil « outils ») : jamais lancés par un simple « up » ------------------------------
+  psql:
+    profiles: [outils]
+    image: docker.io/library/postgres:18-trixie
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'PGPASSWORD="$$(cat /run/secrets/db_mdp)" exec psql -h db -U mediagenda -d mediagenda'
+    secrets:
+      - db_mdp
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [arriere]
+
+networks:
+  # « avant » : le seul réseau de l'API vers l'extérieur (publication de port).
+  avant: {}
+  # « arriere » : base et cache ; internal = pas de route vers l'extérieur, aucun port publiable.
+  arriere:
+    internal: true
+
+volumes:
+  donnees-db: {}
+
+secrets:
+  # Fichier local, hors dépôt (.gitignore), en 600 ; créé par outils/secrets-compose.sh.
+  db_mdp:
+    file: ./secrets/db_mdp

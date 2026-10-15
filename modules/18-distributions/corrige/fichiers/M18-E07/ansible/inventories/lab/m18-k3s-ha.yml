@@ -1,0 +1,15 @@
+---
+# inventories/lab/m18-k3s-ha.yml — banc k3s HA jetable (M18-E07), inventaire STATIQUE.
+# Ces VMs (5191-5193, clones liés) ne sont pas dans NetBox : elles vivent quelques heures.
+# ansible.cfg : ajouter ce fichier à la liste « inventory » (un hôte absent ne gêne pas :
+# le playbook échoue seulement sur la connexion, et le garde-fou du jeu k3s_ha le dit).
+all:
+  children:
+    k3s_ha:
+      hosts:
+        k3s-ha01:
+          ansible_host: k3s-ha01.par1.medisphere.internal
+        k3s-ha02:
+          ansible_host: k3s-ha02.par1.medisphere.internal
+        k3s-ha03:
+          ansible_host: k3s-ha03.par1.medisphere.internal

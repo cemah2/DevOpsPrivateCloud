@@ -1,0 +1,8 @@
+---
+# roles/docker_engine/defaults/main.yml — EXTRAIT : variables ajoutées en M12-E12.
+# Émulation QEMU pour construire des images d'autres architectures (désactivée par défaut :
+# seuls les hôtes qui CONSTRUISENT en ont besoin, ctr01 et runner02).
+docker_engine_emulation: false
+# Noms des entrées binfmt_misc contrôlées (/proc/sys/fs/binfmt_misc/qemu-<nom>).
+docker_engine_emulation_architectures:
+  - aarch64

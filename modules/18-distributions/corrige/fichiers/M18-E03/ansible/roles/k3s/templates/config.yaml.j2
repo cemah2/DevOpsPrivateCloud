@@ -1,0 +1,10 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+# /etc/rancher/k3s/config.yaml — rôle k3s (M18-E03). Clés = options de « k3s {{ k3s_role }} » sans « -- ».
+{% set calcule = {'token-file': k3s_jeton_fichier} %}
+{% if k3s_cluster_init %}
+{%   set _ = calcule.update({'cluster-init': true}) %}
+{% endif %}
+{% if k3s_url | length > 0 %}
+{%   set _ = calcule.update({'server': k3s_url}) %}
+{% endif %}
+{{ k3s_config | combine(calcule) | to_nice_yaml(indent=2) }}

@@ -1,0 +1,36 @@
+---
+# playbooks/runner02.yml — runner GitLab à exécuteur docker du socle (M12-E20, PLAT-1320).
+#   admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/runner02.yml --check --diff
+# Puis par le pipeline de plateforme/ansible (ADR-0040), comme les autres hôtes du socle. runner02
+# rejoint aussi playbooks/site.yml (groupe role_runner) : voir le corrigé.
+- name: runner02 — rôles communs du socle
+  hosts: runner02
+  become: true
+  pre_tasks:
+    - name: Garde-fou (hôte du socle, adresse du plan)
+      ansible.builtin.assert:
+        that:
+          - "'socle' in group_names"
+          - ansible_facts['default_ipv4']['address'] == '10.10.20.17'
+        fail_msg: "runner02 inattendu : groupes {{ group_names }}, adresse {{ ansible_facts['default_ipv4']['address'] | default('?') }}."
+        quiet: true
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+
+- name: runner02 — Docker Engine puis GitLab Runner (exécuteur docker)
+  hosts: runner02
+  become: true
+  roles:
+    - role: docker_engine
+      tags: [docker_engine]
+    - role: gitlab_runner
+      tags: [gitlab_runner]

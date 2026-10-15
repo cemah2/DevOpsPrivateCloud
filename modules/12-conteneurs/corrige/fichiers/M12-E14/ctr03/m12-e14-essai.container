@@ -1,0 +1,15 @@
+# m12-e14-essai.container — unité d'essai de « podman quadlet install » sur ctr03 (Podman 5.8),
+# M12-E14 : cette commande n'existe pas dans le Podman 5.4 de Debian 13 (ctr02).
+#   [app@ctr03 ~]$ podman quadlet install ~/m12/e14/m12-e14-essai.container
+#   [app@ctr03 ~]$ podman quadlet list
+#   [app@ctr03 ~]$ systemctl --user start m12-e14-essai.service
+[Unit]
+Description=Essai de podman quadlet install (M12-E14)
+
+[Container]
+ContainerName=m12-e14-essai
+Image=docker.io/library/nginx:1.30-trixie
+PublishPort=8084:80
+
+[Install]
+WantedBy=default.target

@@ -1,5 +1,7 @@
-# ~/.config/containers/systemd/mediagenda-pg.volume — données PostgreSQL de la pile (M12-E14).
-# Service généré : mediagenda-pg-volume.service
+# ~app/.config/containers/systemd/mediagenda-pg.volume (ctr02) — M12-E14.
+# Volume nommé des données PostgreSQL, créé par systemd (service mediagenda-pg-volume.service)
+# avant le conteneur qui le monte. Il survit à l'arrêt, à la suppression du conteneur et au
+# redémarrage de ctr02 ; « podman volume rm mediagenda-pg » le détruit (sans corbeille).
 [Unit]
 Description=Volume des données PostgreSQL de MédiAgenda
 

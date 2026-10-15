@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_PASSWORD: Recette2026
+      POSTGRES_USER: mediagenda
+    ports:
+      - "5432:5432"
+    volumes:
+      - /srv/donnees/pg:/var/lib/postgresql/data
+
+  valkey:
+    image: valkey/valkey
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ./mediagenda-api
+    ports:
+      - "80:80"
+    depends_on:
+      - db
+      - valkey
+    restart: always
+
+  medidoc:
+    build: ./medidoc
+    network_mode: host
+    privileged: true
+
+  sauvegarde:
+    build: ./sauvegarde-pg
+    restart: always
+    depends_on:
+      - db
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always

@@ -1,0 +1,30 @@
+# talos/patches/commun/30-miroirs.yaml — images publiques par le cache Harbor (M18-E06).
+# Mêmes miroirs que k8s-par1 (M14-E19) ; overridePath : le chemin contient déjà /v2/<projet>.
+# Pas de skipFallback : si Harbor est indisponible, le nœud tire directement à l'amont.
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: docker.io
+endpoints:
+  - url: https://registry.par1.medisphere.internal/v2/dockerhub
+    overridePath: true
+---
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: quay.io
+endpoints:
+  - url: https://registry.par1.medisphere.internal/v2/quay
+    overridePath: true
+---
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: ghcr.io
+endpoints:
+  - url: https://registry.par1.medisphere.internal/v2/ghcr
+    overridePath: true
+---
+apiVersion: v1alpha1
+kind: RegistryMirrorConfig
+name: registry.k8s.io
+endpoints:
+  - url: https://registry.par1.medisphere.internal/v2/k8s
+    overridePath: true

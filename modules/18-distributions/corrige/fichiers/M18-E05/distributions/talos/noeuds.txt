@@ -1,0 +1,5 @@
+# talos/noeuds.txt — nœuds de talos-essai : nom, adresse fixe, type (M18-E05). Même table que
+# plateforme/infra envs/m18/talos.tf.
+talos-01 10.10.99.85 controlplane
+talos-02 10.10.99.86 worker
+talos-03 10.10.99.87 worker

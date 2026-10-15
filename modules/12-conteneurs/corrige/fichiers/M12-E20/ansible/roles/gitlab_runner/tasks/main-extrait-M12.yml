@@ -1,0 +1,45 @@
+# EXTRAIT — modifications du rôle gitlab_runner pour l'exécuteur docker (M12-E20, PLAT-1320).
+# Le rôle sert désormais deux profils, choisis par gitlab_runner_executeur :
+#   shell  (runner01, inchangé) : outils installés sur l'hôte, enregistrement par « register » ;
+#   docker (runner02)           : AUCUN outil sur l'hôte, config.toml généré (executeur_docker.yml).
+#
+# 1. tasks/main.yml — conditionner ce qui ne concerne que l'exécuteur shell, ajouter le nouveau
+#    fichier. Les « when » d'un import_tasks s'appliquent à chaque tâche importée.
+- name: Préconditions
+  ansible.builtin.import_tasks: preconditions.yml
+  tags: [runner_preconditions]
+
+- name: Autorités de certification (runner01 : racine + CA de pve01 ; runner02 : rôle ca_lab du playbook)
+  ansible.builtin.import_tasks: ca.yml
+  when: gitlab_runner_executeur == 'shell'
+  tags: [runner_ca]
+
+- name: GitLab Runner (dépôt, paquets ; enregistrement pour l'exécuteur shell)
+  ansible.builtin.import_tasks: runner.yml
+  tags: [runner_service]
+
+- name: Exécuteur docker (config.toml généré, identifiants de tirage)
+  ansible.builtin.import_tasks: executeur_docker.yml
+  when: gitlab_runner_executeur == 'docker'
+  tags: [runner_service, runner_docker]
+
+# Les imports d'outils (outils_apt, outils_iac, outils_binaires, outils_python, outils_node,
+# packer, opentofu, step, verifier) reçoivent tous :
+#   when: gitlab_runner_executeur == 'shell'
+# (packer et opentofu gardent en plus leur condition : « when: [gitlab_runner_executeur == 'shell',
+# gitlab_runner_packer] »).
+#
+# 2. tasks/preconditions.yml — l'assertion sur les empreintes des outils (bats, gitlab_runner_outils)
+#    ne vaut que pour l'exécuteur shell : ajouter « when: gitlab_runner_executeur == 'shell' » à
+#    cette tâche ; ajouter une assertion « gitlab_runner_executeur in ['shell', 'docker'] ».
+#
+# 3. tasks/runner.yml — les cinq tâches d'enregistrement (« Lire la configuration du runner » à
+#    « Nombre de jobs simultanés ») reçoivent « when: gitlab_runner_executeur == 'shell' » : pour
+#    l'exécuteur docker, executeur_docker.yml écrit tout config.toml (concurrent compris). Les
+#    tâches de dépôt, de paquets figés, du compte gitlab-runner sans privilège et du service
+#    restent communes.
+#
+# 4. Molecule : le scénario gitlab_runner (M04-E24) garde l'exécuteur shell ; ajouter un second
+#    scénario « gitlab_runner_docker » (instance 2048, rôle docker_engine puis gitlab_runner avec
+#    gitlab_runner_executeur: docker et un faux jeton) qui vérifie config.toml (privileged = false,
+#    0600) — la tâche « gitlab-runner verify » y est désactivée (molecule-notest).

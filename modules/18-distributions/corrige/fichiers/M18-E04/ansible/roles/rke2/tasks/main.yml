@@ -1,0 +1,163 @@
+---
+# Rôle rke2 — point d'entrée (M18-E04).
+
+- name: Préconditions (Rocky/RHEL 10, variables)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'RedHat'
+      - ansible_facts['distribution_major_version'] == rke2_el
+      - rke2_role in ['server', 'agent']
+      - rke2_jeton | length >= 32
+    fail_msg: "RKE2 (M18) : RHEL/Rocky {{ rke2_el }} attendu, rôle server/agent, jeton (Vault) d'au moins 32 caractères."
+    quiet: true
+
+- name: Clé des dépôts Rancher (empreinte vérifiée)
+  ansible.builtin.rpm_key:
+    key: "{{ rke2_cle_url }}"
+    fingerprint: "{{ rke2_cle_empreinte }}"
+    state: present
+
+- name: Dépôts RKE2 (commun et mineure {{ rke2_mineure }})
+  ansible.builtin.yum_repository:
+    name: "{{ item.nom }}"
+    description: "{{ item.description }}"
+    baseurl: "{{ item.url }}"
+    gpgcheck: true
+    gpgkey: "{{ rke2_cle_url }}"
+    enabled: true
+  loop:
+    - nom: rancher-rke2-common
+      description: Rancher RKE2 Common (latest)
+      url: "{{ rke2_depot_base }}/common/centos/{{ rke2_el }}/noarch"
+    - nom: "rancher-rke2-{{ rke2_mineure | replace('.', '-') }}"
+      description: "Rancher RKE2 {{ rke2_mineure }} (latest)"
+      url: "{{ rke2_depot_base }}/{{ rke2_mineure }}/centos/{{ rke2_el }}/x86_64"
+  loop_control:
+    label: "{{ item.nom }}"
+
+- name: Paquets de l'hôte
+  ansible.builtin.dnf:
+    name: "{{ rke2_paquets_hote }}"
+    state: present
+
+- name: Utilisateur et groupe etcd (exigés par le profil CIS)
+  block:
+    - name: Groupe etcd
+      ansible.builtin.group:
+        name: etcd
+        system: true
+    - name: Utilisateur etcd (sans connexion, sans dossier personnel)
+      ansible.builtin.user:
+        name: etcd
+        group: etcd
+        system: true
+        shell: /sbin/nologin
+        create_home: false
+        comment: etcd user
+
+- name: Pare-feu local et NetworkManager (problèmes connus de RKE2)
+  block:
+    - name: Inventaire des services
+      ansible.builtin.service_facts:
+    - name: Arrêter et désactiver firewalld (conflit avec Canal)
+      ansible.builtin.systemd_service:
+        name: firewalld
+        state: stopped
+        enabled: false
+      when:
+        - rke2_desactiver_firewalld
+        - "'firewalld.service' in ansible_facts.services"
+    - name: NetworkManager ignore les interfaces du CNI
+      ansible.builtin.copy:
+        dest: /etc/NetworkManager/conf.d/rke2-canal.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Rôle rke2 (M18-E04) — page « Known Issues » de RKE2.
+          [keyfile]
+          unmanaged-devices=interface-name:flannel*;interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:vxlan-v6.calico;interface-name:wireguard.cali;interface-name:wg-v6.cali
+      notify: Recharger NetworkManager
+
+- name: Paquet RKE2 épinglé
+  ansible.builtin.dnf:
+    name: "rke2-{{ rke2_role }}-{{ rke2_version_paquet }}"
+    state: present
+  register: _rke2_paquet
+
+- name: Paramètres noyau CIS (copie du fichier livré par le paquet)
+  ansible.builtin.copy:
+    src: "{{ rke2_sysctl_source }}"
+    dest: "{{ rke2_sysctl_dest }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  register: _rke2_sysctl
+
+# Le guide : à faire sur une installation neuve, AVANT le premier démarrage de RKE2 (relancer
+# systemd-sysctl sur un nœud qui tourne peut défaire des réglages posés par le CNI).
+# Pas de handler : il doit s'exécuter ICI, avant le démarrage de RKE2, pas en fin de jeu.
+- name: Charger les paramètres noyau (installation neuve seulement)  # noqa: no-handler
+  ansible.builtin.systemd_service:
+    name: systemd-sysctl
+    state: restarted
+  when: _rke2_sysctl is changed
+
+- name: Dossier de configuration
+  ansible.builtin.file:
+    path: /etc/rancher/rke2
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Jeton du cluster (fichier 600)
+  ansible.builtin.copy:
+    dest: "{{ rke2_jeton_fichier }}"
+    content: "{{ rke2_jeton }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Redémarrer rke2
+
+- name: Configuration de RKE2 (config.yaml)
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Redémarrer rke2
+
+- name: Miroirs de registres (registries.yaml)
+  ansible.builtin.template:
+    src: registries.yaml.j2
+    dest: /etc/rancher/rke2/registries.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when: rke2_miroirs | length > 0
+  notify: Redémarrer rke2
+
+- name: Service RKE2 activé et démarré
+  ansible.builtin.systemd_service:
+    name: "rke2-{{ rke2_role }}"
+    enabled: true
+    state: started
+  # Le premier démarrage tire les images du plan de contrôle : plusieurs minutes.
+  async: 900
+  poll: 15
+
+- name: Appliquer les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre que l'API locale soit prête (serveurs)
+  ansible.builtin.command: /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml get --raw=/readyz
+  register: _rke2_pret
+  until: _rke2_pret.rc == 0
+  retries: 60
+  delay: 10
+  changed_when: false
+  when: rke2_role == 'server' and not ansible_check_mode

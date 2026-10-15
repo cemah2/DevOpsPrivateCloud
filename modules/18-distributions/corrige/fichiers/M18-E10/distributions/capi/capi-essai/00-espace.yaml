@@ -1,0 +1,6 @@
+# capi/capi-essai/00-espace.yaml — espace du cluster capi-essai DANS LE CLUSTER DE GESTION (M18-E10).
+# Tous les objets de capi-essai y vivent : « clusterctl move -n capi-essai » les déplace ensemble (E12).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: capi-essai

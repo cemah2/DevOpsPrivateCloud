@@ -1,0 +1,39 @@
+---
+# Rôle outils_distributions — binaires des essais de distributions (M18-E02, PLAN §4.10).
+# Même méthode que outils_k8s (M14-E05) : binaire amont téléchargé dans un dossier VERSIONNÉ
+# (/opt/outils_distributions/<outil>-<version>/), vérifié par son empreinte SHA-256, lié dans
+# /usr/local/bin. Retour arrière = remettre l'ancienne version dans l'inventaire.
+#
+# Les empreintes sont ÉCRITES ICI (relevées le 2026-10-15) plutôt que lues dans un fichier de
+# sommes à l'exécution : un attaquant qui remplace le binaire d'une version publiée doit aussi
+# remplacer notre dépôt. Sources : kind-linux-amd64.sha256sum, talos sha256sum.txt et k3d
+# checksums.txt publiés avec chaque version ; clusterctl ne publie pas de fichier de sommes pour
+# v1.12.11 : empreinte relevée au téléchargement, recoupée par un second téléchargement.
+
+outils_distributions_dossier: /opt/outils_distributions
+
+# Sélection par hôte : m18-dev01 reçoit tout, adm01 seulement clusterctl et talosctl
+# (group_vars/role_m18_dev et host_vars/adm01).
+outils_distributions_choix: [kind, k3d, clusterctl, talosctl]
+
+outils_distributions_catalogue:
+  kind:
+    version: "0.33.0"
+    url: https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64
+    sha256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+  k3d:
+    version: "5.9.0"
+    url: https://github.com/k3d-io/k3d/releases/download/v5.9.0/k3d-linux-amd64
+    sha256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+  clusterctl:
+    # 1.12.x imposé par CAPMOX 0.9 (CAPI 1.11 et 1.12 seulement) ; 1.36 supporté dès 1.12.8.
+    version: "1.12.11"
+    url: https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.12.11/clusterctl-linux-amd64
+    sha256: 6619c9c040668dbd0356bc6c30e63c2ad3cf776b8c184df5f28e06a4763b91f5
+  talosctl:
+    version: "1.14.2"
+    url: https://github.com/siderolabs/talos/releases/download/v1.14.2/talosctl-linux-amd64
+    sha256: c6c9552b0e5f767352c595fa1c0af4f186f697488646872955057d23990a66c4
+
+# Complétion bash installée pour ces outils (s'ils sont choisis).
+outils_distributions_completion: [kind, k3d, clusterctl, talosctl]

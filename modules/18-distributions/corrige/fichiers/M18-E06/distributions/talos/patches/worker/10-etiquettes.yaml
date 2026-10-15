@@ -1,0 +1,8 @@
+# talos/patches/worker/10-etiquettes.yaml — étiquette commune des travailleurs (M18-E06).
+# KubeNodeConfig existe déjà dans la configuration générée : le patch le fusionne (les clés de
+# « labels » s'ajoutent). Une étiquette PROPRE à un nœud irait dans talos/noeuds/<nœud>.yaml.
+apiVersion: v1alpha1
+kind: KubeNodeConfig
+labels:
+  node-role.kubernetes.io/worker: ""
+  medisphere.internal/distribution: talos

@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: equipe-plateforme
+  description: k3s (serveur ou agent, SQLite ou etcd intégré) par le script officiel figé, M18.
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

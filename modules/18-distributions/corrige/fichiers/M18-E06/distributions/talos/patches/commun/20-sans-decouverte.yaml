@@ -1,0 +1,9 @@
+# talos/patches/commun/20-sans-decouverte.yaml — pas de service de découverte public (M18-E06).
+# La configuration générée contient un DiscoveryServiceConfig vers https://discovery.talos.dev/
+# (Sidero Labs) : les membres y publient des données (chiffrées) pour se trouver, ce qui sert à
+# KubeSpan, que nous n'utilisons pas. Souveraineté et HDS : on retire le document.
+# Conséquence : « talosctl get members » est vide ; les nœuds se connaissent par Kubernetes.
+apiVersion: v1alpha1
+kind: DiscoveryServiceConfig
+name: default
+$patch: delete

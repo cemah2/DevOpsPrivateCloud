@@ -1,0 +1,27 @@
+---
+# roles/rke2/tasks/etcd_s3.yml — AJOUT au rôle rke2 (M18-E14) : instantanés etcd planifiés et envoi S3.
+# Inclus depuis tasks/main.yml (serveurs seulement) :
+#   - name: Instantanés etcd vers S3
+#     ansible.builtin.include_tasks: etcd_s3.yml
+#     when: rke2_etcd_s3_actif | default(false)
+# Le profil CIS met déjà les fichiers de /etc/rancher/rke2 en 600 ; on l'impose quand même.
+
+- name: Dossier des fragments de configuration
+  ansible.builtin.file:
+    path: /etc/rancher/rke2/config.yaml.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Fragment etcd-s3 (planification, rétention, compartiment)
+  ansible.builtin.template:
+    src: 50-etcd-s3.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml.d/50-etcd-s3.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    setype: etc_t
+  no_log: true
+  # Un serveur à la fois (serial: 1 dans le playbook m18.yml) : le quorum etcd reste garanti.
+  notify: Redémarrer rke2

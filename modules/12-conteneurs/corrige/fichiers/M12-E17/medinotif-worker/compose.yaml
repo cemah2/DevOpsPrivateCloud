@@ -1,0 +1,65 @@
+# compose.yaml de MédiNotif (projet medinotif/worker) — M12-E17, ticket DEV-1317.
+# Pile de TEST sur ctr01 : le worker et un RabbitMQ 4.1 jetable (pas de volume : on teste l'arrêt
+# propre, pas la durabilité des files). Secret : ./secrets/amqp_mdp (dossier 700, ignoré par Git),
+# créé par outils/secrets-compose.sh (même principe que MédiAgenda, M12-E08).
+#
+#   admin@ctr01:~/src/medinotif-worker$ ./outils/secrets-compose.sh
+#   admin@ctr01:~/src/medinotif-worker$ docker compose up -d --build --wait
+#   admin@ctr01:~/src/medinotif-worker$ ./outils/essai-arret.sh          # arrêt propre mesuré
+name: medinotif
+
+services:
+  rabbitmq:
+    image: docker.io/library/rabbitmq:4.1
+    # L'image n'accepte plus de fichier de mot de passe (RABBITMQ_DEFAULT_PASS_FILE est refusé
+    # comme obsolète) : la variable est posée AU DÉMARRAGE, depuis le secret, dans le processus
+    # seulement (absente de « docker inspect ») ; « exec » rend la main à l'entrée de l'image.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'RABBITMQ_DEFAULT_PASS="$$(cat /run/secrets/amqp_mdp)" exec docker-entrypoint.sh rabbitmq-server'
+    environment:
+      RABBITMQ_DEFAULT_USER: medinotif
+    secrets: [amqp_mdp]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    networks: [arriere]
+
+  worker:
+    build:
+      context: .
+      args:
+        VERSION: ${MEDINOTIF_TAG:-1.0.0}
+    image: medinotif-worker:${MEDINOTIF_TAG:-1.0.0}
+    # L'URL contient le mot de passe : composée au démarrage depuis le secret, « exec » rend la
+    # main au worker (PID 1, il reçoit SIGTERM).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'MEDINOTIF_AMQP_URL="amqp://medinotif:$$(cat /run/secrets/amqp_mdp)@rabbitmq:5672/%2F" exec medinotif'
+    environment:
+      # File « classic » : un courtier de test à un nœud n'a pas besoin d'une file quorum.
+      MEDINOTIF_TYPE_FILE: classic
+      # Un envoi « dure » 3 s : de quoi arrêter le worker au milieu d'un traitement.
+      MEDINOTIF_DELAI_ENVOI_MS: "3000"
+    secrets: [amqp_mdp]
+    ports:
+      - "9100:9100"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # Délai de grâce : plus long qu'un traitement (3 s), plus court que la patience de l'astreinte.
+    stop_grace_period: 30s
+    restart: unless-stopped
+    networks: [avant, arriere]
+
+networks:
+  avant: {}
+  arriere:
+    internal: true
+
+secrets:
+  amqp_mdp:
+    file: ./secrets/amqp_mdp

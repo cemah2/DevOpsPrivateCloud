@@ -1,0 +1,152 @@
+# plateforme/ci-templates — templates/image.yml (M12-E21, ticket SEC-1321).
+# Construire et publier une image SANS mode privilégié : BuildKit sans privilège (image
+# moby/buildkit:rootless, « buildctl-daemonless.sh » : un démon éphémère, sous l'UID 1000, dans le
+# conteneur du job), sur runner02 (étiquette docker). Analyse Hadolint du Dockerfile.
+#
+# Utilisation (dans le .gitlab-ci.yml d'un projet) :
+#   include:
+#     - project: plateforme/ci-templates
+#       ref: v1
+#       file: [templates/qualite.yml, templates/release.yml, templates/image.yml]
+#   hadolint:
+#     extends: .hadolint
+#   image:
+#     extends: .image-construction
+#     variables:
+#       IMAGE: ctr01.par1.medisphere.internal:5000/mediagenda/api
+#       PLATEFORMES: linux/amd64,linux/arm64
+#
+# Stages : ceux de templates/qualite.yml (lint, test, build, release) ; .hadolint est en « lint »,
+# .image-construction en « build ». Pour publier une version, le projet ajoute les étiquettes
+# vX.Y.Z au workflow de qualite.yml (qui n'en lance pas) : voir le .gitlab-ci.yml de mediagenda/api.
+#
+# Variables du job caché .image-construction (valeurs par défaut entre parenthèses) :
+#   IMAGE              (obligatoire) dépôt de l'image, registre compris, SANS étiquette
+#   ETIQUETTES         étiquettes à publier, séparées par des espaces (vide : calculées, voir
+#                      ci-dessous) ; jamais « latest »
+#   FICHIER            chemin du Dockerfile, relatif au projet (Dockerfile)
+#   CONTEXTE           contexte de construction (.)
+#   ARGS_CONSTRUCTION  arguments de construction « CLE=valeur CLE2=valeur2 » (sans espace dans
+#                      les valeurs) ; VERSION, REVISION et SOURCE_DATE_EPOCH sont ajoutés seuls
+#   PLATEFORMES        plateformes cibles, séparées par des virgules (linux/amd64)
+#   PUBLIER            « oui » : pousser l'image et le cache ; « non » : construire seulement
+#                      (pipelines de MR, posé par les règles ci-dessous)
+# Étiquettes calculées quand ETIQUETTES est vide :
+#   étiquette Git vX.Y.Z (semantic-release, M01)  →  X.Y.Z
+#   branche par défaut                            →  main-<SHA court>
+#   autre (MR)                                    →  mr-<SHA court> (jamais poussée)
+#
+# Identifiants du registre (compte « ci », M12-E15) : variables PROTÉGÉES et MASQUÉES
+# REGISTRE_UTILISATEUR et REGISTRE_MOT_DE_PASSE, déclarées sur les groupes des applications. Elles
+# n'existent que dans les pipelines des branches et étiquettes protégées : un pipeline de MR
+# construit, mais ne peut rien publier.
+
+variables:
+  # Images des outils : nom complet, étiquette ET empreinte d'index (relevées le 2026-10-15).
+  IMAGE_BUILDKIT: docker.io/moby/buildkit:v0.34.0-rootless@sha256:65eca3c01cd1180c8f64565c4e3c5983af5145818b0e6fa863385d099eb73855
+  IMAGE_HADOLINT: docker.io/hadolint/hadolint:v2.15.1-debian@sha256:9a3944b7fddcb947d1ffd90829ac1a6e5c30479223358f249d8b96c7d0019e27
+
+.hadolint:
+  stage: lint
+  image:
+    name: $IMAGE_HADOLINT
+    entrypoint: [""]
+  tags: [docker]
+  needs: []
+  variables:
+    FICHIER: Dockerfile
+  # .hadolint.yaml (M12-E16) à la racine du projet : lu automatiquement (répertoire courant).
+  script:
+    - hadolint --no-fail --format gitlab_codeclimate "$FICHIER" > gl-hadolint.json
+    - hadolint "$FICHIER"
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-hadolint.json
+
+.image-construction:
+  stage: build
+  image:
+    name: $IMAGE_BUILDKIT
+    # L'image démarre par défaut « rootlesskit buildkitd » : on veut un shell (buildctl-daemonless.sh
+    # lance lui-même un démon éphémère).
+    entrypoint: [""]
+  tags: [docker]
+  variables:
+    IMAGE: ""
+    ETIQUETTES: ""
+    FICHIER: Dockerfile
+    CONTEXTE: .
+    ARGS_CONSTRUCTION: ""
+    PLATEFORMES: linux/amd64
+    PUBLIER: "oui"
+    # Un seul hôte de registre à approuver : celui de l'image (ctr01:5000 au M12, Harbor au M13).
+    # CA_RACINE : racine MédiSphère montée dans chaque job par runner02 (config.toml, M12-E20).
+    CA_RACINE: /etc/medisphere/racine-ca.crt
+    # Démon sans « bac à sable » de processus : pas de nouvel espace PID ni de /proc par RUN (que
+    # le profil de Docker masque) ; les RUN voient les processus du démon (documentation BuildKit,
+    # « Rootless mode », limite acceptée : un seul job par conteneur).
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+    # Le démon éphémère met plusieurs secondes à démarrer sur une VM de 2 vCPU (10 essais par
+    # défaut, ≈ 3 s : trop court).
+    BUILDCTL_CONNECT_RETRIES_MAX: "40"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables: {PUBLIER: "non"}
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - |
+      set -eu
+      [ -n "$IMAGE" ] || { echo "IMAGE est obligatoire (registre/groupe/application)" >&2; exit 1; }
+      REGISTRE_HOTE="${IMAGE%%/*}"
+      COURT="$(printf '%s' "$CI_COMMIT_SHA" | cut -c1-8)"
+      if [ -z "$ETIQUETTES" ]; then
+        if [ -n "${CI_COMMIT_TAG:-}" ]; then ETIQUETTES="${CI_COMMIT_TAG#v}"
+        elif [ "${CI_COMMIT_BRANCH:-}" = "$CI_DEFAULT_BRANCH" ]; then ETIQUETTES="main-$COURT"
+        else ETIQUETTES="mr-$COURT"; fi
+      fi
+      for e in $ETIQUETTES; do
+        [ "$e" != latest ] || { echo "étiquette « latest » refusée (normes MédiSphère)" >&2; exit 1; }
+      done
+      VERSION="${ETIQUETTES%% *}"
+      # Date du commit : constructions reproductibles (M12-E11), même empreinte si rien n'a changé.
+      SOURCE_DATE_EPOCH="$(git -c safe.directory="$CI_PROJECT_DIR" log -1 --format=%ct)"
+      echo "image $IMAGE, étiquettes [$ETIQUETTES], plateformes $PLATEFORMES, publication : $PUBLIER"
+
+      # Confiance TLS du démon BuildKit envers le registre (sans jamais « insecure »).
+      mkdir -p "$HOME/.config/buildkit" "$HOME/.docker"
+      printf '[registry."%s"]\n  ca = ["%s"]\n' "$REGISTRE_HOTE" "$CA_RACINE" > "$HOME/.config/buildkit/buildkitd.toml"
+
+      set -- --frontend dockerfile.v0 \
+        --local context="$CONTEXTE" \
+        --local dockerfile="$(dirname "$FICHIER")" \
+        --opt filename="$(basename "$FICHIER")" \
+        --opt platform="$PLATEFORMES" \
+        --opt build-arg:VERSION="$VERSION" \
+        --opt build-arg:REVISION="$CI_COMMIT_SHA" \
+        --opt build-arg:SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH"
+      for a in $ARGS_CONSTRUCTION; do set -- "$@" --opt "build-arg:$a"; done
+
+      if [ "$PUBLIER" = oui ]; then
+        [ -n "${REGISTRE_UTILISATEUR:-}" ] && [ -n "${REGISTRE_MOT_DE_PASSE:-}" ] || {
+          echo "REGISTRE_UTILISATEUR / REGISTRE_MOT_DE_PASSE absents : pipeline non protégé ?" >&2; exit 1; }
+        # Identifiants dans le fichier de configuration du client (0600), jamais en argument.
+        ( umask 077
+          printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$REGISTRE_HOTE" \
+            "$(printf '%s:%s' "$REGISTRE_UTILISATEUR" "$REGISTRE_MOT_DE_PASSE" | base64 | tr -d '\n')" \
+            > "$HOME/.docker/config.json" )
+        NOMS=""
+        for e in $ETIQUETTES; do NOMS="${NOMS:+$NOMS,}$IMAGE:$e"; done
+        set -- "$@" \
+          --output "type=image,\"name=$NOMS\",push=true,rewrite-timestamp=true" \
+          --import-cache "type=registry,ref=$IMAGE:cache" \
+          --export-cache "type=registry,ref=$IMAGE:cache,mode=max"
+      else
+        # MR : on construit tout (le Dockerfile est valide pour chaque plateforme), on ne pousse rien.
+        set -- "$@" --output "type=oci,dest=/tmp/image.oci.tar"
+      fi
+      buildctl-daemonless.sh build "$@"
+      [ "$PUBLIER" != oui ] || echo "publié : $NOMS"
+  after_script:
+    - rm -f "$HOME/.docker/config.json"

@@ -1,0 +1,4 @@
+---
+# host_vars/ctr01/docker_engine.yml — M12-E12 : ctr01 construit des images arm64 (QEMU).
+# (M12-E16 ajoute ici les outils de qualité d'image.)
+docker_engine_emulation: true

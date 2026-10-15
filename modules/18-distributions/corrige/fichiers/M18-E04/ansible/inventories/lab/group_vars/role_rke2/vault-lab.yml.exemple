@@ -1,0 +1,3 @@
+---
+# group_vars/role_rke2/vault-lab.yml — CHIFFRÉ (identité « lab ») ; jeton : openssl rand -hex 32
+vault_rke2_jeton: "<JETON-64-CARACTERES-HEX>"

@@ -1,0 +1,106 @@
+---
+# playbooks/m18.yml — environnement du module 18 (M18-E02 poste de développement, E03 k3s, E04 RKE2,
+# E07 banc k3s HA).
+#   uv run ansible-playbook playbooks/m18.yml --check --diff
+#   uv run ansible-playbook playbooks/m18.yml
+# Hors de site.yml : l'environnement du module a son propre cycle. Complété en E03 (k3s),
+# E04 (rke2) et E07 (banc k3s-ha).
+
+- name: Socle commun des hôtes du module 18
+  hosts: env_m18
+  become: true
+  pre_tasks:
+    - name: Le garde-fou d'inventaire (hôtes du plan seulement)
+      ansible.builtin.assert:
+        that:
+          - groups['env_m18'] | default([]) | difference(['m18-dev01', 'k3s01', 'rke2-01', 'rke2-02', 'rke2-03']) | length == 0
+          - groups['role_m18_dev'] | default([]) | difference(['m18-dev01']) | length == 0
+        fail_msg: "Inventaire env_m18 inattendu : {{ groups['env_m18'] | default([]) }} (étiquettes NetBox ?)."
+        quiet: true
+      tags: [always]
+  roles:
+    # « base » est écrit pour Debian ; l'image dorée Rocky a déjà l'équivalent (M08-E02).
+    - role: base
+      when: ansible_facts['os_family'] == 'Debian'
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+
+- name: Poste de développement (Docker, kubectl, kind, k3d, clusterctl, talosctl)
+  hosts: role_m18_dev
+  become: true
+  tasks:
+    - name: Limites inotify pour les clusters dans des conteneurs (dépannage de kind)
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_file: /etc/sysctl.d/60-m18-dev.conf
+        state: present
+      loop: "{{ m18_dev_sysctl | dict2items }}"
+      tags: [sysctl]
+  roles:
+    - role: docker_engine
+      tags: [docker_engine]
+    - role: outils_k8s
+      tags: [outils_k8s]
+    - role: outils_distributions
+      tags: [outils_distributions]
+
+- name: Outils de pilotage sur adm01 (talosctl, clusterctl)
+  hosts: adm01
+  become: true
+  roles:
+    - role: outils_distributions
+      tags: [outils_distributions]
+
+- name: Distribution k3s (agence LYO1 simulée)
+  hosts: role_k3s
+  become: true
+  # Un nœud à la fois : un serveur k3s qui redémarre ne sert plus l'API pendant quelques secondes.
+  serial: 1
+  roles:
+    - role: k3s
+      tags: [k3s]
+
+- name: RKE2 (profil CIS)
+  hosts: role_rke2
+  become: true
+  # Premier serveur d'abord (il amorce etcd), puis les autres un par un : jamais deux membres
+  # etcd qui démarrent ou redémarrent en même temps.
+  order: sorted
+  serial: 1
+  roles:
+    - role: rke2
+      tags: [rke2]
+
+- name: Banc k3s HA jetable (socle commun)
+  hosts: k3s_ha
+  become: true
+  pre_tasks:
+    - name: Le garde-fou (VMs jetables du banc seulement)
+      ansible.builtin.assert:
+        that: groups['k3s_ha'] | difference(['k3s-ha01', 'k3s-ha02', 'k3s-ha03']) | length == 0
+        quiet: true
+      tags: [always]
+  roles:
+    - role: base
+      tags: [base]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+
+- name: Banc k3s HA (etcd intégré, trois serveurs)
+  hosts: k3s_ha
+  become: true
+  # k3s-ha01 d'abord (cluster-init), puis un serveur à la fois : chaque nouveau membre etcd doit
+  # être sain avant le suivant.
+  order: sorted
+  serial: 1
+  roles:
+    - role: k3s
+      tags: [k3s]

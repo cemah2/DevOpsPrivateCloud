@@ -1,0 +1,41 @@
+---
+# inventories/lab/netbox-m18.yml — environnement du module 18 tiré de NetBox (M18-E02).
+#
+# Même construction que netbox-m12.yml (M12-E02) : une source par environnement (les filtres
+# d'étiquettes de l'API NetBox se cumulent en ET). Les nœuds Talos ne sont pas dans NetBox (pas
+# de SSH ni d'Ansible), les VMs jetables k3s-ha01..03 sont dans m18-k3s-ha.yml (M18-E07).
+# ansible.cfg : ajouter inventories/lab/netbox-m18.yml à la liste « inventory ».
+# Contrôle : uv run ansible-inventory --graph env_m18
+plugin: netbox.netbox.nb_inventory
+api_endpoint: https://nbx01.par1.medisphere.internal
+validate_certs: true
+token:
+  type: Bearer
+  value: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+
+plurals: false
+racks: false
+services: false
+interfaces: false
+config_context: false
+
+query_filters:
+  - tag: env-m18
+vm_query_filters:
+  - status: active
+
+rename_variables:
+  - pattern: "^tags$"
+    repl: netbox_etiquettes
+
+# Groupes par étiquette : env_m18, role_m18_dev, role_k3s, role_rke2.
+keyed_groups:
+  - key: netbox_etiquettes | map('replace', '-', '_') | list
+    prefix: ""
+    separator: ""
+
+# VMs en DHCP : on se connecte par le nom que le DDNS de Kea a publié.
+compose:
+  vmid: custom_fields.vmid
+  ansible_host: inventory_hostname ~ '.par1.medisphere.internal'
+strict: false

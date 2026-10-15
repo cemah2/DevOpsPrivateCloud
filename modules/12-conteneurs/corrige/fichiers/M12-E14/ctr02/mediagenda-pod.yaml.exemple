@@ -1,0 +1,36 @@
+# ~app/m12/e14/mediagenda-pod.yaml (ctr02) — EXEMPLE de sortie de
+#   app@ctr02:~$ podman kube generate mediagenda > ~/m12/e14/mediagenda-pod.yaml
+# (extrait, Podman 5.4.2 ; ta sortie diffère par les dates, le nom d'hôte et les identifiants).
+# À lire : le pod devient un objet Kubernetes « Pod » ; les conteneurs, leurs images, le port
+# publié (hostPort) et les variables sont là ; les SECRETS ne sont pas exportés (ni leur valeur, ni
+# leur référence en variable d'environnement), pas plus que le réseau Podman ni la base, hors du pod.
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    io.kubernetes.cri-o.SandboxID/mediagenda-api: <ID>
+  creationTimestamp: "<DATE>"
+  labels:
+    app: mediagenda
+  name: mediagenda
+spec:
+  containers:
+  - args:
+    - valkey-server
+    - --bind
+    - 127.0.0.1
+    - --appendonly
+    - "no"
+    image: docker.io/valkey/valkey:8-trixie
+    name: mediagenda-valkey
+    ports:
+    - containerPort: 8000
+      hostPort: 8000
+  - env:
+    - name: MEDIAGENDA_VALKEY_URL
+      value: redis://127.0.0.1:6379/0
+    - name: MEDIAGENDA_LOG_LEVEL
+      value: INFO
+    image: localhost/mediagenda-api:0.2.0
+    name: mediagenda-api
+  hostname: mediagenda

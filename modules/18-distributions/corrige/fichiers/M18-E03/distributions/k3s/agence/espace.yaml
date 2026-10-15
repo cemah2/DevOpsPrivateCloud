@@ -1,0 +1,10 @@
+# k3s/agence/espace.yaml — espace des services de l'agence LYO1 (M18-E03).
+#   admin@adm01:~/src/distributions$ kubectl --kubeconfig ~/.config/workbook/m18/k3s01.kubeconfig apply -f k3s/agence/
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agence
+  labels:
+    # k3s n'impose pas de niveau Pod Security : on le pose nous-mêmes (même règle que M14-E18).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

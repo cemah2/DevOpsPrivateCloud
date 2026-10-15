@@ -1,0 +1,8 @@
+# Rien de généré ni de secret dans le dépôt (M18-E05) : les configurations machine contiennent
+# les clés du cluster, le talosconfig la clé du client.
+controlplane.yaml
+worker.yaml
+talosconfig
+*.kubeconfig
+secrets/*.yaml
+!secrets/*.vault

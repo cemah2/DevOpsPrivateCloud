@@ -1,0 +1,16 @@
+# ~app/m12/e13/miroir.yaml (ctr02) — images de base de référence à copier dans le registre de
+# travail, sous ctr01.par1.medisphere.internal:5000/miroir/… (M12-E13, PLAT-1313).
+#   app@ctr02:~/m12/e13$ skopeo sync --all --src yaml --dest docker \
+#       --authfile ~/.config/containers/auth.json miroir.yaml ctr01.par1.medisphere.internal:5000/miroir
+# --all : toutes les plateformes de l'index (amd64 ET arm64, M12-E12), pas seulement celle de l'hôte.
+# Clés : un registre source, puis ses dépôts et les étiquettes voulues (jamais « latest »).
+docker.io:
+  images:
+    library/debian:
+      - trixie-slim
+    library/python:
+      - 3.13-slim-trixie
+    library/postgres:
+      - 18-trixie
+    valkey/valkey:
+      - 8-trixie

@@ -1,0 +1,8 @@
+# group_vars/role_rke2/etcd_s3.yml — instantanés etcd des trois serveurs RKE2 (M18-E14). Rôle rke2 de M18-E04.
+rke2_etcd_s3_actif: true
+rke2_etcd_s3_dossier: rke2
+rke2_etcd_snapshot_cron: "0 */6 * * *"
+rke2_etcd_snapshot_retention: 8     # local, par serveur
+rke2_etcd_s3_retention: 200         # global : 3 serveurs × 4 par jour × 14 jours = 168 < 200
+# Même racine que celle des miroirs du rôle (M18-E04).
+rke2_etcd_s3_ca: "{{ rke2_registre_ca }}"

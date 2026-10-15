@@ -1,0 +1,14 @@
+# {{ ansible_managed }} — instantanés etcd de RKE2 (M18-E14). root:root 0600.
+# Noms des options : page « Backup and Restore » de la documentation RKE2 (mêmes options que k3s).
+etcd-snapshot-schedule-cron: "{{ rke2_etcd_snapshot_cron }}"
+etcd-snapshot-retention: {{ rke2_etcd_snapshot_retention }}
+etcd-s3: true
+etcd-s3-endpoint: "s3-01.par1.medisphere.internal:8333"
+etcd-s3-endpoint-ca: "{{ rke2_etcd_s3_ca }}"
+etcd-s3-bucket-lookup-type: path
+etcd-s3-region: us-east-1
+etcd-s3-bucket: etcd-m18
+etcd-s3-folder: "{{ rke2_etcd_s3_dossier }}"
+etcd-s3-retention: {{ rke2_etcd_s3_retention }}
+etcd-s3-access-key: "{{ vault_s3_etcd_m18_cle_acces }}"
+etcd-s3-secret-key: "{{ vault_s3_etcd_m18_cle_secrete }}"

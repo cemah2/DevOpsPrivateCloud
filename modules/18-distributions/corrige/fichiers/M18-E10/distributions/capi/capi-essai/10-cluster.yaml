@@ -1,0 +1,49 @@
+# capi/capi-essai/10-cluster.yaml — le cluster et son infrastructure Proxmox (M18-E10, DEV-1910).
+# Cluster API 1.12 (contrat v1beta2), CAPMOX 0.9.1 (API v1alpha2).
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: capi-essai
+  namespace: capi-essai
+  labels:
+    # Sélectionné par le ClusterResourceSet « cilium » (30-crs-cilium.yaml).
+    cni: cilium
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks: ["10.244.0.0/16"]
+    services:
+      cidrBlocks: ["10.96.0.0/12"]
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ProxmoxCluster
+    name: capi-essai
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: capi-essai-plan-controle
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: ProxmoxCluster
+metadata:
+  name: capi-essai
+  namespace: capi-essai
+spec:
+  # VIP du plan de contrôle, portée par kube-vip (fichier statique du KubeadmControlPlane). Hors
+  # de la plage des nœuds, dans la zone « VIP » du VLAN 40 (.200-.249, PLAN.md §4.2).
+  controlPlaneEndpoint:
+    host: 10.10.40.210
+    port: 6443
+  # Adresses des nœuds : CAPMOX crée lui-même le réservoir InClusterIPPool « capi-essai-v4-icip »
+  # (IPAM in-cluster) à partir de ce bloc.
+  ipv4Config:
+    addresses: ["10.10.40.150-10.10.40.169"]
+    prefix: 24
+    gateway: 10.10.40.1
+  dnsServers: ["10.10.20.10", "10.10.20.16"]
+  allowedNodes: ["<NOEUD>"]
+  # Identifiants PAR CLUSTER (Secret dans le même espace, créé par capi/identifiants.sh) : pas
+  # d'identifiants globaux dans le contrôleur. CAPMOX pose une ownerRef sur ce Secret : il suit le
+  # cluster lors d'un « clusterctl move ».
+  credentialsRef:
+    name: capi-essai-proxmox

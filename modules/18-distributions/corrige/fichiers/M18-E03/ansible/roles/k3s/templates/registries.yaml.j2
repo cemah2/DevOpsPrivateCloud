@@ -1,0 +1,15 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+# /etc/rancher/k3s/registries.yaml — rôle k3s (M18-E03). k3s en tire les hosts.toml de son
+# containerd (/var/lib/rancher/k3s/agent/etc/containerd/certs.d/) au démarrage.
+# Un point d'accès qui contient un chemin autre que /v2 (…/v2/dockerhub) est utilisé tel quel
+# (override_path), comme les hosts.toml de k8s-par1 (M14-E19).
+mirrors:
+{% for registre, miroir in k3s_miroirs | dictsort %}
+  {{ registre }}:
+    endpoint:
+      - {{ miroir }}
+{% endfor %}
+configs:
+  {{ k3s_registre_hote }}:
+    tls:
+      ca_file: {{ k3s_registre_ca }}

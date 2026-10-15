@@ -1,0 +1,4 @@
+# plateforme/infra envs/m18/banc-k3s.auto.tfvars — EXTRAIT (M18-E14) : banc k3s etcd des paliers 3 et 4.
+# Variable du code de M18-E07 (clones liés de debian13 « current », 2 Go, vsandbox, MAC bc:24:11:99:18:9N).
+# M18-E07 : ["k3s-ha01", "k3s-ha02", "k3s-ha03"] puis [] ; M18-E14 à E19 : deux VMs ; M18-E25 : [].
+k3s_ha_noeuds = ["k3s-ha01", "k3s-ha02"]

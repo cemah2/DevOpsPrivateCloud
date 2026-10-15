@@ -1,0 +1,22 @@
+---
+# roles/rke2/tasks/etcd_utilisateur.yml — version de M18-E22 : UID et GID FIXES pour le compte etcd
+# exigé par le profil CIS (même identité sur les trois serveurs, même après reconstruction ou après
+# une suppression accidentelle). Valeurs dans defaults/main.yml : rke2_etcd_uid, rke2_etcd_gid (ex. 990).
+# Le guide de durcissement donne « useradd -r -c "etcd user" -s /sbin/nologin -M etcd -U » ; on fixe en plus
+# l'UID et le GID. Le compte et le groupe sont dans /etc/passwd et /etc/group (pas de NSS ni de userdb).
+
+- name: Groupe etcd (GID fixe)
+  ansible.builtin.group:
+    name: etcd
+    gid: "{{ rke2_etcd_gid }}"
+    system: true
+
+- name: Utilisateur etcd (UID fixe, sans connexion)
+  ansible.builtin.user:
+    name: etcd
+    uid: "{{ rke2_etcd_uid }}"
+    group: etcd
+    comment: etcd user
+    shell: /sbin/nologin
+    create_home: false
+    system: true

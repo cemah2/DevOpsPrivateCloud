@@ -1,0 +1,26 @@
+# ~app/.config/containers/systemd/mediagenda-api.container (ctr02) — EXTRAIT : clés ajoutées ou
+# modifiées en M12-E18 (PLAT-1318). Le reste de l'unité est celui de M12-E14.
+#   app@ctr02:~$ systemctl --user daemon-reload && systemctl --user restart mediagenda-api.service
+
+[Container]
+# Sonde (forme tableau JSON, M12-E14) : 3 échecs à 30 s d'intervalle = « unhealthy ».
+HealthCmd=["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
+HealthInterval=30s
+HealthTimeout=3s
+HealthRetries=3
+HealthStartPeriod=15s
+# Ce que Docker ne sait pas faire : AGIR sur un conteneur malade. « kill » tue le conteneur ;
+# conmon s'arrête, le service systemd échoue, et Restart=on-failure le relance (avec la limite
+# de systemd : StartLimitBurst redémarrages en StartLimitIntervalSec). Les autres valeurs :
+# none (défaut), restart (Podman le relance lui-même, sans que systemd le sache), stop.
+HealthOnFailure=kill
+# Limites. Pas de clé « Memory= » dans le Quadlet de Podman 5.4 (refusée par le générateur) :
+# options de podman run, par PodmanArgs. PidsLimit, elle, existe.
+PidsLimit=128
+PodmanArgs=--memory=256m --cpus=1
+# Journaux : pilote journald par défaut chez Podman (containers.conf de M12-E02) :
+#   app@ctr02:~$ journalctl --user -u mediagenda-api.service -f
+
+[Service]
+Restart=on-failure
+RestartSec=5s

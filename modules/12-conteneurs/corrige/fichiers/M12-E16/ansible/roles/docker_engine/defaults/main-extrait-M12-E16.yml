@@ -1,0 +1,15 @@
+---
+# roles/docker_engine/defaults/main.yml — EXTRAIT : variables ajoutées en M12-E16.
+docker_engine_outils_qualite: false
+docker_engine_outils_qualite_dossier: /opt/outils-qualite
+# Hadolint 2.15.1 (PLAN §6) : la release ne publie pas de fichier d'empreinte (constaté le
+# 2026-10-15) ; empreinte calculée par l'équipe sur le binaire téléchargé, comme pour bats (M02-E24).
+docker_engine_hadolint:
+  version: 2.15.1
+  url: https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
+  sha256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+# Dive 0.13.1 : empreinte du fichier dive_0.13.1_checksums.txt de la release.
+docker_engine_dive:
+  version: 0.13.1
+  url: https://github.com/wagoodman/dive/releases/download/v0.13.1/dive_0.13.1_linux_amd64.deb
+  sha256: 0c20d18f0cc87e6e982a3289712ac3aa9fc364ba973109d1da3a473232640571

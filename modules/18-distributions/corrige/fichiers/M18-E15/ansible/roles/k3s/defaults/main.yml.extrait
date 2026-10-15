@@ -1,0 +1,13 @@
+# roles/k3s/defaults/main.yml — EXTRAIT : ajout de M18-E15 (chiffrement des Secrets au repos).
+# false par défaut : sur un cluster EXISTANT, l'option seule ne suffit pas, il faut d'abord
+# « k3s secrets-encrypt enable », puis l'option, un redémarrage, « rotate-keys » et un second redémarrage
+# (page secrets-encrypt de la doc k3s). Sur un cluster NEUF, l'option au premier démarrage suffit.
+k3s_secrets_encryption: false
+
+# host_vars/k3s01/k3s.yml (M18-E15) :
+#   k3s_secrets_encryption: true
+#
+# templates/config.yaml.j2 — ligne ajoutée :
+#   {% if k3s_secrets_encryption %}
+#   secrets-encryption: true
+#   {% endif %}

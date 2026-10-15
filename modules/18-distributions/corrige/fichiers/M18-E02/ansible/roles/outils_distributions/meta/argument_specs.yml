@@ -1,0 +1,22 @@
+---
+argument_specs:
+  main:
+    short_description: Installe des binaires amont vérifiés par empreinte (kind, k3d, clusterctl, talosctl).
+    options:
+      outils_distributions_dossier:
+        type: path
+        default: /opt/outils_distributions
+        description: Racine des dossiers versionnés.
+      outils_distributions_choix:
+        type: list
+        elements: str
+        default: [kind, k3d, clusterctl, talosctl]
+        description: Outils à installer sur cet hôte (clés du catalogue).
+      outils_distributions_catalogue:
+        type: dict
+        description: Outil => version, url, sha256.
+      outils_distributions_completion:
+        type: list
+        elements: str
+        default: [kind, k3d, clusterctl, talosctl]
+        description: Outils dont on installe la complétion bash.

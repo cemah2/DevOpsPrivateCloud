@@ -1,0 +1,18 @@
+# capi/capi-essai/30-crs-cilium.yaml — Cilium installé par ClusterResourceSet (M18-E10).
+# Le contrôleur applique le contenu du ConfigMap « cilium » (généré par capi/cilium/generer-crs.sh,
+# ressource suivante de cet espace) dans CHAQUE cluster qui porte l'étiquette cni=cilium, une fois
+# son API joignable. Mode ApplyOnce (défaut) : appliqué une fois, jamais réconcilié ; les montées
+# de version de Cilium se font ensuite par Helm dans le cluster (ou par le module helm de CAPI).
+apiVersion: addons.cluster.x-k8s.io/v1beta2
+kind: ClusterResourceSet
+metadata:
+  name: cilium
+  namespace: capi-essai
+spec:
+  strategy: ApplyOnce
+  clusterSelector:
+    matchLabels:
+      cni: cilium
+  resources:
+    - kind: ConfigMap
+      name: cilium

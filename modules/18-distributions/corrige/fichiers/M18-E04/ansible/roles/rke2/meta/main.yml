@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: equipe-plateforme
+  description: RKE2 en RPM (Rocky/RHEL 10), profil CIS, M18.
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: EL
+      versions: ["10"]
+dependencies: []

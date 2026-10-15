@@ -1,0 +1,32 @@
+{
+  "Rules": [
+    {
+      "ID": "k3s-ha-14-jours",
+      "Filter": { "Prefix": "k3s-ha/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 14 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    },
+    {
+      "ID": "rke2-14-jours",
+      "Filter": { "Prefix": "rke2/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 14 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    },
+    {
+      "ID": "talos-30-jours",
+      "Filter": { "Prefix": "talos/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 30 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    },
+    {
+      "ID": "gestion-30-jours",
+      "Filter": { "Prefix": "gestion/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 30 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    }
+  ]
+}

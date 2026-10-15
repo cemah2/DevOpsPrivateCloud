@@ -1,0 +1,27 @@
+# k3d/registries.yaml — miroirs de containerd pour les nœuds k3d (monté en /etc/rancher/k3s/registries.yaml).
+# Toutes les images passent par les caches de Harbor (M13) : docker.io → projet dockerhub, ghcr.io → ghcr,
+# registry.k8s.io → k8s. Le port 443 est écrit dans l'URL pour que k3s applique les réécritures
+# (doc k3s « Private Registry Configuration », section Rewrites).
+mirrors:
+  docker.io:
+    endpoint:
+      - "https://registry.par1.medisphere.internal:443"
+    rewrite:
+      "^(.*)$": "dockerhub/$1"
+  ghcr.io:
+    endpoint:
+      - "https://registry.par1.medisphere.internal:443"
+    rewrite:
+      "^(.*)$": "ghcr/$1"
+  registry.k8s.io:
+    endpoint:
+      - "https://registry.par1.medisphere.internal:443"
+    rewrite:
+      "^(.*)$": "k8s/$1"
+configs:
+  "registry.par1.medisphere.internal:443":
+    tls:
+      ca_file: /etc/ssl/certs/medisphere-root-ca.crt
+  "registry.par1.medisphere.internal":
+    tls:
+      ca_file: /etc/ssl/certs/medisphere-root-ca.crt

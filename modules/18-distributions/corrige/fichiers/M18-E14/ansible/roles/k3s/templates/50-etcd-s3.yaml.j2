@@ -1,0 +1,16 @@
+# {{ ansible_managed }} — instantanés etcd de k3s (M18-E14). root:root 0600.
+# Noms des options : page « etcd-snapshot » de la documentation k3s.
+etcd-snapshot-schedule-cron: "{{ k3s_etcd_snapshot_cron }}"
+etcd-snapshot-retention: {{ k3s_etcd_snapshot_retention }}
+etcd-s3: true
+# Hôte et port, SANS « https:// » (le client ajoute le schéma ; etcd-s3-insecure le retirerait).
+etcd-s3-endpoint: "s3-01.par1.medisphere.internal:8333"
+etcd-s3-endpoint-ca: "/usr/local/share/ca-certificates/medisphere-root-ca.crt"
+# Compartiment dans le chemin : « etcd-m18.s3-01… » n'existe pas dans le DNS du lab.
+etcd-s3-bucket-lookup-type: path
+etcd-s3-region: us-east-1
+etcd-s3-bucket: etcd-m18
+etcd-s3-folder: "{{ k3s_etcd_s3_dossier }}"
+etcd-s3-retention: {{ k3s_etcd_s3_retention }}
+etcd-s3-access-key: "{{ vault_s3_etcd_m18_cle_acces }}"
+etcd-s3-secret-key: "{{ vault_s3_etcd_m18_cle_secrete }}"

@@ -1,0 +1,33 @@
+# Taskfile.yml — plateforme/distributions (EXTRAIT : tâches des paliers 3 à 5). Lancé depuis adm01.
+version: "3"
+
+tasks:
+  recette:creer:
+    desc: Crée le cluster de recette éphémère et y installe MédiAgenda (chart signé, M18-E18)
+    cmds:
+      - k3d/outils/recette.sh creer
+
+  recette:detruire:
+    desc: Détruit le cluster de recette éphémère et supprime son kubeconfig
+    cmds:
+      - k3d/outils/recette.sh detruire
+
+  demo:construire:
+    desc: Construit depuis zéro le cluster de l'option retenue par l'ADR-0180 (M18-E25), durée affichée
+    cmds:
+      - demo/demo.sh construire
+
+  demo:detruire:
+    desc: Détruit le cluster de démonstration (VMs, kubeconfig)
+    cmds:
+      - demo/demo.sh detruire
+
+  etcd:talos:
+    desc: Instantané etcd de talos-essai vers s3-01 (M18-E14)
+    cmds:
+      - talos/outils/etcd-instantane.sh
+
+  gestion:sauvegarder:
+    desc: Sauvegarde à froid du cluster de gestion k3s01 vers s3-01 (M18-E14)
+    cmds:
+      - k3s/outils/gestion-sauvegarde.sh

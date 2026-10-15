@@ -1,0 +1,29 @@
+---
+# Banc k3s HA (M18-E07) : trois serveurs, etcd intégré. Le premier (k3s-ha01) amorce etcd
+# (cluster-init, host_vars), les deux autres le rejoignent par son API.
+# Installé en v1.36.4+k3s1, puis monté en v1.36.5+k3s1 par le system-upgrade-controller.
+k3s_version: v1.36.4+k3s1
+# Le system-upgrade-controller gère la version : Ansible installe si k3s est absent, mais ne
+# « redescend » jamais un nœud que le contrôleur a monté.
+k3s_gere_version: false
+k3s_role: server
+k3s_url: https://k3s-ha01.par1.medisphere.internal:6443
+k3s_jeton: "{{ vault_k3s_jeton_k3s_ha }}"
+k3s_miroirs:
+  docker.io: https://registry.par1.medisphere.internal/v2/dockerhub
+  quay.io: https://registry.par1.medisphere.internal/v2/quay
+  ghcr.io: https://registry.par1.medisphere.internal/v2/ghcr
+  registry.k8s.io: https://registry.par1.medisphere.internal/v2/k8s
+k3s_config:
+  write-kubeconfig-mode: "0600"
+  node-name: "{{ inventory_hostname }}"
+  tls-san:
+    - k3s-ha01.par1.medisphere.internal
+    - k3s-ha02.par1.medisphere.internal
+    - k3s-ha03.par1.medisphere.internal
+  disable:
+    - traefik
+    - servicelb
+  # Instantanés etcd automatiques (défaut de k3s : toutes les 12 h, 5 gardés) écrits ici pour la lecture.
+  etcd-snapshot-schedule-cron: "0 */12 * * *"
+  etcd-snapshot-retention: 5

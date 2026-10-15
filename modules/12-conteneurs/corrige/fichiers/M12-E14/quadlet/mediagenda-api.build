@@ -1,15 +1,17 @@
-# ~/.config/containers/systemd/mediagenda-api.build — construit l'image de l'API (M12-E14).
-# Le Dockerfile d'E11 (portable : pas d'option env= sur le secret, Buildah 1.39 la refuse).
-# Service généré : mediagenda-api-build.service (oneshot) ; une unité .container qui référence
-# « mediagenda-api.build » dans Image= en dépend automatiquement.
+# ~app/.config/containers/systemd/mediagenda-api.build (ctr02) — M12-E14.
+# Construit l'image de l'API avec le Dockerfile de M12-E11 (Buildah, sans démon) ; Podman 5.2+.
+# Service généré : mediagenda-api-build.service (oneshot). Toute unité .container dont l'Image=
+# vaut « mediagenda-api.build » en dépend automatiquement (Requires= et After=).
+# Le palier 3 (M12-E30) remplace cette construction locale par l'image du registre.
 [Unit]
 Description=Image de l'API MédiAgenda (construction locale, ctr02)
 
 [Build]
 ImageTag=localhost/mediagenda-api:0.2.0
-# Contexte de construction : le clone du projet (fichier Dockerfile à sa racine).
+# Contexte de construction : la copie de travail du projet (Dockerfile à sa racine).
 SetWorkingDirectory=/home/app/src/mediagenda-api
 File=Dockerfile
 Label=app=mediagenda
-# Pas de clé « Arg= » en Podman 5.4 (refusée par Quadlet) : l'argument passe par PodmanArgs.
+# Pas de clé « BuildArg= » en Podman 5.4 (refusée par le générateur : « unsupported key ») :
+# l'argument passe par PodmanArgs.
 PodmanArgs=--build-arg VERSION=0.2.0

@@ -1,0 +1,9 @@
+---
+# m18-dev01 reçoit tous les outils du catalogue (valeur par défaut du rôle, écrite pour la lecture).
+outils_distributions_choix: [kind, k3d, clusterctl, talosctl]
+
+# Paramètres noyau du poste de développement : kind et k3d multi-nœuds ouvrent beaucoup de
+# surveillances inotify (guide de dépannage de kind, « Pod errors due to too many open files »).
+m18_dev_sysctl:
+  fs.inotify.max_user_watches: 524288
+  fs.inotify.max_user_instances: 512

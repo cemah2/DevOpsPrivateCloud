@@ -1,0 +1,19 @@
+---
+argument_specs:
+  main:
+    short_description: Installe et configure k3s (serveur ou agent) à une version fixée.
+    options:
+      k3s_version: {type: str, default: v1.36.5+k3s1, description: "Version de k3s (vX.Y.Z+k3sN)."}
+      k3s_script_url: {type: str, description: "URL du script install.sh au tag de la version."}
+      k3s_script_sha256: {type: str, required: true, description: "Empreinte SHA-256 attendue du script."}
+      k3s_script_dossier: {type: path, default: /usr/local/lib/k3s, description: "Dossier du script conservé."}
+      k3s_role: {type: str, choices: [server, agent], default: server, description: "Rôle du nœud."}
+      k3s_cluster_init: {type: bool, default: false, description: "Premier serveur d'un cluster etcd intégré."}
+      k3s_url: {type: str, default: "", description: "URL du serveur à joindre."}
+      k3s_jeton: {type: str, required: true, no_log: true, description: "Jeton du cluster (Vault)."}
+      k3s_jeton_fichier: {type: path, default: /etc/rancher/k3s/jeton, description: "Fichier du jeton."}
+      k3s_config: {type: dict, default: {}, description: "Options de k3s pour config.yaml."}
+      k3s_miroirs: {type: dict, default: {}, description: "Registre => point d'accès du miroir."}
+      k3s_registre_ca: {type: path, description: "Autorité du cache Harbor."}
+      k3s_registre_hote: {type: str, default: registry.par1.medisphere.internal, description: "Hôte du cache Harbor."}
+      k3s_gere_version: {type: bool, default: true, description: "Le rôle installe ou change la version."}

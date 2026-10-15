@@ -1,0 +1,18 @@
+# host_vars/k3s-ha01..03/k3s.yml — EXTRAIT (M18-E25) : banc de démonstration, trois SERVEURS en etcd intégré.
+# Remplace la paire de M18-E14/E19 (k3s-ha01 serveur, k3s-ha02 agent), qui n'existe plus après le palier 4.
+#
+# host_vars/k3s-ha01/k3s.yml
+k3s_version: v1.36.5+k3s1
+k3s_role: server
+k3s_cluster_init: true
+k3s_etcd_s3_actif: true
+k3s_etcd_s3_dossier: demo
+k3s_etcd_snapshot_cron: "0 */6 * * *"
+k3s_etcd_snapshot_retention: 8
+k3s_etcd_s3_retention: 200      # 3 serveurs × 4 par jour × 14 jours = 168
+#
+# host_vars/k3s-ha02/k3s.yml et host_vars/k3s-ha03/k3s.yml (mêmes variables S3, à mettre en group_vars si
+# l'inventaire a un groupe pour le banc) :
+#   k3s_version: v1.36.5+k3s1
+#   k3s_role: server
+#   k3s_url: https://k3s-ha01.par1.medisphere.internal:6443

@@ -1,0 +1,57 @@
+---
+# roles/docker_engine/tasks/outils_qualite.yml — AJOUTÉ en M12-E16 (SEC-1316). À importer depuis
+# tasks/main.yml, après « Paquets épinglés » :
+#   - name: Outils de qualité d'image (Hadolint, Dive)
+#     ansible.builtin.import_tasks: outils_qualite.yml
+#     when: docker_engine_outils_qualite
+#     tags: [docker_engine, docker_engine_outils_qualite]
+#
+# Binaires des releases GitHub, vérifiés par leur SHA-256 AVANT installation (règle 2 du module).
+# En CI, on n'installe rien : les jobs utilisent les images officielles épinglées par empreinte.
+- name: Dossier versionné des outils
+  ansible.builtin.file:
+    path: "{{ docker_engine_outils_qualite_dossier }}/hadolint-{{ docker_engine_hadolint.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Hadolint {{ docker_engine_hadolint.version }} (binaire statique, empreinte vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ docker_engine_hadolint.url }}"
+    dest: "{{ docker_engine_outils_qualite_dossier }}/hadolint-{{ docker_engine_hadolint.version }}/hadolint"
+    checksum: "sha256:{{ docker_engine_hadolint.sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Lien /usr/local/bin/hadolint vers la version retenue
+  ansible.builtin.file:
+    src: "{{ docker_engine_outils_qualite_dossier }}/hadolint-{{ docker_engine_hadolint.version }}/hadolint"
+    dest: /usr/local/bin/hadolint
+    state: link
+
+- name: Paquet de Dive {{ docker_engine_dive.version }} (empreinte vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ docker_engine_dive.url }}"
+    dest: "/var/cache/apt/archives/dive_{{ docker_engine_dive.version }}_linux_amd64.deb"
+    checksum: "sha256:{{ docker_engine_dive.sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dive installé depuis ce paquet
+  ansible.builtin.apt:
+    deb: "/var/cache/apt/archives/dive_{{ docker_engine_dive.version }}_linux_amd64.deb"
+    state: present
+
+- name: Les deux outils répondent dans la version attendue
+  ansible.builtin.command:
+    cmd: "{{ item.cmd }}"
+  loop:
+    - {cmd: "hadolint --version", attendu: "{{ docker_engine_hadolint.version }}"}
+    - {cmd: "dive --version", attendu: "{{ docker_engine_dive.version }}"}
+  register: _docker_engine_qualite
+  changed_when: false
+  check_mode: false
+  failed_when: item.attendu not in _docker_engine_qualite.stdout

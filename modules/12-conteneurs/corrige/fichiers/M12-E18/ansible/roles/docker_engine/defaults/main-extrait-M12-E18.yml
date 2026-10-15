@@ -1,0 +1,18 @@
+---
+# roles/docker_engine/defaults/main.yml — EXTRAIT : docker_engine_daemon_defaut après M12-E18
+# (PLAT-1318). Seule nouveauté : « compress » (les fichiers tournés sont compressés en gzip).
+# Décision écrite dans docs/conteneurs/journaux.md : json-file reste le pilote par défaut.
+#   - docker logs fonctionne avec json-file, local et journald (Docker ≥ 20.10 : « dual logging ») ;
+#   - json-file est le format que lisent les collecteurs de journaux (M22) sans configuration ;
+#   - local (format interne compressé, rotation par défaut 20 Mo × 5) est plus compact, mais
+#     illisible hors de Docker ;
+#   - journald convient aux conteneurs « système » (registre) : journalctl, rétention de l'hôte.
+docker_engine_daemon_defaut:
+  log-driver: json-file
+  log-opts:
+    max-size: 10m
+    max-file: "3"
+    compress: "true"
+  default-address-pools:
+    - base: 172.20.0.0/14
+      size: 24

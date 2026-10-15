@@ -1,0 +1,114 @@
+# capi/revue-lucas/travailleurs.yaml — travailleurs de recette-agenda (M18-E11, version corrigée de la MR !7).
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: recette-agenda-travailleurs
+  namespace: recette-agenda
+spec:
+  clusterName: recette-agenda
+  replicas: 2
+  selector:
+    matchLabels: {}
+  template:
+    metadata:
+      labels:
+        node-role.kubernetes.io/worker: ""
+    spec:
+      clusterName: recette-agenda
+      version: v1.36.4
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: KubeadmConfigTemplate
+          name: recette-agenda-travailleurs-1364
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ProxmoxMachineTemplate
+        name: recette-agenda-travailleurs-1364
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: ProxmoxMachineTemplate
+metadata:
+  name: recette-agenda-travailleurs-1364
+  namespace: recette-agenda
+spec:
+  template:
+    spec:
+      sourceNode: "<NOEUD>"
+      templateID: 9060
+      full: true
+      storage: local-nvme
+      pool: lab
+      tags: ["env-m18", "recette-agenda"]
+      vmIDRange:
+        start: 5180
+        end: 5189
+      numSockets: 1
+      numCores: 2
+      memoryMiB: 4096
+      disks:
+        bootVolume:
+          disk: scsi0
+          sizeGb: 32
+      network:
+        networkDevices:
+          - name: net0
+            bridge: vk8s
+            model: virtio
+            defaultIPv4: true
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfigTemplate
+metadata:
+  name: recette-agenda-travailleurs-1364
+  namespace: recette-agenda
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            - name: provider-id
+              value: "proxmox://'{{ ds.meta_data.instance_id }}'"
+      ntp:
+        enabled: true
+        servers: ["10.10.40.1"]
+      users:
+        - name: admin
+          sudo: "ALL=(ALL) NOPASSWD:ALL"
+          sshAuthorizedKeys:
+            - "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+      files:
+        - path: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+          owner: root:root
+          permissions: "0644"
+          contentFrom:
+            secret:
+              name: medisphere-root-ca
+              key: ca.crt
+        - path: /etc/containerd/certs.d/docker.io/hosts.toml
+          owner: root:root
+          permissions: "0644"
+          content: |
+            server = "https://registry-1.docker.io"
+            [host."https://registry.par1.medisphere.internal/v2/dockerhub"]
+              capabilities = ["pull", "resolve"]
+              override_path = true
+        - path: /etc/containerd/certs.d/quay.io/hosts.toml
+          owner: root:root
+          permissions: "0644"
+          content: |
+            server = "https://quay.io"
+            [host."https://registry.par1.medisphere.internal/v2/quay"]
+              capabilities = ["pull", "resolve"]
+              override_path = true
+        - path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
+          owner: root:root
+          permissions: "0644"
+          content: |
+            server = "https://registry.k8s.io"
+            [host."https://registry.par1.medisphere.internal/v2/k8s"]
+              capabilities = ["pull", "resolve"]
+              override_path = true
+      preKubeadmCommands:
+        - update-ca-certificates

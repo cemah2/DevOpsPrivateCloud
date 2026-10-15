@@ -1,0 +1,14 @@
+# /etc/systemd/system/legacy-rdv-purge.service (ctr01) — M12-E19, DEV-1319.
+# L'ancien /etc/cron.d/legacy-rdv de la VM, en tâche ponctuelle de la pile Compose : même image,
+# même volume de pièces jointes, autre commande. Une seule exécution quel que soit le nombre
+# d'instances web (facteur XII). Déposé par Ansible en recette (copie ici pour l'exercice).
+[Unit]
+Description=Legacy-RDV : purge des pièces jointes de plus d'un an
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=admin
+WorkingDirectory=/home/admin/src/legacy-rdv
+ExecStart=/usr/bin/docker compose --profile admin run --rm purge

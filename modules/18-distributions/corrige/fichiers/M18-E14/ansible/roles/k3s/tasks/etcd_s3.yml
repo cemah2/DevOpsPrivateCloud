@@ -1,0 +1,25 @@
+---
+# roles/k3s/tasks/etcd_s3.yml — AJOUT au rôle k3s (M18-E14) : instantanés etcd planifiés et envoi S3.
+# Inclus depuis tasks/main.yml, après l'écriture de config.yaml et avant le démarrage du service :
+#   - name: Instantanés etcd vers S3
+#     ansible.builtin.include_tasks: etcd_s3.yml
+#     when: k3s_role == 'server' and k3s_cluster_init | default(false) and k3s_etcd_s3_actif | default(false)
+# Le fragment contient la clé secrète : root:root 0600, jamais journalisé (no_log).
+
+- name: Dossier des fragments de configuration
+  ansible.builtin.file:
+    path: /etc/rancher/k3s/config.yaml.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Fragment etcd-s3 (planification, rétention, compartiment)
+  ansible.builtin.template:
+    src: 50-etcd-s3.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml.d/50-etcd-s3.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Redémarrer k3s

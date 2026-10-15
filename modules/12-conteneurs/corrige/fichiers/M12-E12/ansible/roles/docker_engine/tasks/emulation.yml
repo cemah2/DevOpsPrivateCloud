@@ -1,0 +1,44 @@
+---
+# roles/docker_engine/tasks/emulation.yml — AJOUTÉ en M12-E12 (DEV-1312). À importer depuis
+# tasks/main.yml, APRÈS « Paquets épinglés » :
+#   - name: Émulation d'autres architectures (QEMU)
+#     ansible.builtin.import_tasks: emulation.yml
+#     when: docker_engine_emulation
+#     tags: [docker_engine, docker_engine_emulation]
+#
+# QEMU en mode utilisateur, enregistré dans binfmt_misc par systemd-binfmt (paquet Debian
+# qemu-user-binfmt, qui tire qemu-user, binaires statiques). Drapeau « F » (fix binary) : le noyau
+# ouvre l'interpréteur une fois pour toutes à l'enregistrement, il est donc utilisable DANS les
+# conteneurs (BuildKit de la machine ou d'un conteneur, runner02) sans y être copié.
+# Alternative écartée : « docker run --privileged tonistiigi/binfmt --install … » (conteneur
+# privilégié, enregistrement perdu au redémarrage, rien dans le code de l'hôte).
+- name: QEMU en mode utilisateur et son enregistrement binfmt_misc
+  ansible.builtin.apt:
+    name: qemu-user-binfmt
+    state: present
+  register: _docker_engine_qemu
+
+- name: Réenregistrer les interpréteurs (systemd-binfmt) après installation
+  ansible.builtin.systemd_service:
+    name: systemd-binfmt
+    state: restarted
+  when: _docker_engine_qemu is changed
+
+- name: Lire l'enregistrement des architectures émulées
+  ansible.builtin.command:
+    cmd: "cat /proc/sys/fs/binfmt_misc/qemu-{{ item }}"
+  loop: "{{ docker_engine_emulation_architectures }}"
+  register: _docker_engine_binfmt
+  changed_when: false
+  check_mode: false
+
+- name: Chaque architecture est active, avec le drapeau F
+  ansible.builtin.assert:
+    that:
+      - item.stdout is search('^enabled', multiline=true)
+      - item.stdout is search('^flags: .*F', multiline=true)
+    fail_msg: "binfmt_misc qemu-{{ item.item }} : {{ item.stdout }}"
+    quiet: true
+  loop: "{{ _docker_engine_binfmt.results }}"
+  loop_control:
+    label: "{{ item.item }}"

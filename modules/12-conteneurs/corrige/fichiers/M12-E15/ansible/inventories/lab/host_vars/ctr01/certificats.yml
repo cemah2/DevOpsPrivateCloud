@@ -1,0 +1,12 @@
+---
+# host_vars/ctr01/certificats.yml — certificat du registre de travail (M12-E15).
+# Rôle certificats_acme (M06-E18/E27) : émission ACME (défi HTTP-01 : ca01 vient chercher le jeton
+# sur le port 80 de ctr01, libre sur cet hôte), renouvellement par cert-renewer@registre.timer,
+# puis redémarrage du registre (Distribution ne relit pas son certificat à chaud).
+certificats_acme_certificats:
+  - id: registre
+    noms: [ctr01.par1.medisphere.internal]
+    certificat: /etc/registre/tls/registre.crt
+    cle: /etc/registre/tls/registre.key
+    groupe: root
+    recharger: "docker compose --project-directory /opt/registre restart registre"

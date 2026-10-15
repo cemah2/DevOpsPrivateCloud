@@ -1,0 +1,31 @@
+# rke2/essai-cis/pod-conforme.yaml — un pod qui passe le niveau « restricted » (M18-E04).
+# Les cinq exigences de restricted : pas d'escalade, capacités ALL retirées, non root, seccomp
+# RuntimeDefault (ou Localhost), et aucun volume hostPath / espace de l'hôte / privilège.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: conforme
+  namespace: essai-cis
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: attente
+      image: docker.io/library/busybox:1.37
+      command: ["sleep", "infinity"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 8Mi
+        limits:
+          memory: 16Mi

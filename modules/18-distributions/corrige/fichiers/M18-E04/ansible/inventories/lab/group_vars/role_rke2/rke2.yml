@@ -1,0 +1,20 @@
+---
+# RKE2 du module 18 : trois serveurs (etcd à trois membres), profil CIS (M18-E04, SEC-1904).
+rke2_version_paquet: "1.36.5~rke2r1"
+rke2_jeton: "{{ vault_rke2_jeton }}"
+rke2_config:
+  # Le profil CIS : vérifications de l'hôte + réglages restrictifs (guide de durcissement RKE2).
+  profile: cis
+  # Explicite (le RPM le met déjà par /etc/sysconfig/rke2-server) : containerd en mode SELinux.
+  selinux: true
+  write-kubeconfig-mode: "0600"
+  # Le kubeconfig de adm01 vise rke2-01 ; les deux autres noms servent à un repli manuel.
+  tls-san:
+    - rke2-01.par1.medisphere.internal
+    - rke2-02.par1.medisphere.internal
+    - rke2-03.par1.medisphere.internal
+rke2_miroirs:
+  docker.io: https://registry.par1.medisphere.internal/v2/dockerhub
+  quay.io: https://registry.par1.medisphere.internal/v2/quay
+  ghcr.io: https://registry.par1.medisphere.internal/v2/ghcr
+  registry.k8s.io: https://registry.par1.medisphere.internal/v2/k8s

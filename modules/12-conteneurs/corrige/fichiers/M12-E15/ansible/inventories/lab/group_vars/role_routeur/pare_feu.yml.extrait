@@ -1,0 +1,14 @@
+---
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M12-E15 (matrice commune à gw01 et
+# gw02, M07-E24). M12-E20 y ajoutera runner02 → ctr01:5000. docs/socle/matrice-flux.md suit (job « matrice-a-jour »).
+pare_feu_definitions:
+  # … définitions existantes …
+  - {nom: CTR01, valeur: 10.10.99.121, commentaire: "ctr01 (M12), réservation Kea du sous-réseau 99 (M12-E15)"}
+
+pare_feu_transit:
+  # … règles existantes …
+  # Registre de travail (M12-E15) : certificat ACME de step-ca
+  - {entree: $V_SANDBOX, source: $CTR01, sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "ctr01 vers step-ca (ACME : commande, renouvellement)", ref: M12-E15}
+  - {entree: $V_INFRA, source: $CA01, sortie: $V_SANDBOX, destination: $CTR01, proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 vers ctr01 (émission du certificat du registre)", ref: M12-E15}

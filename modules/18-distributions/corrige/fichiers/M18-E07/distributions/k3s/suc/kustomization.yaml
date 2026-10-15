@@ -1,0 +1,10 @@
+# k3s/suc/kustomization.yaml — system-upgrade-controller v0.20.2 et plan du banc k3s HA (M18-E07).
+#   admin@adm01:~/src/distributions$ kubectl --kubeconfig ~/.config/workbook/m18/k3s-ha.kubeconfig apply -k k3s/suc/
+# Les manifestes amont sont pris À LA VERSION (URL de la version, jamais « latest ») ; kubectl
+# les télécharge à chaque application (kustomize, ressources distantes).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/crd.yaml
+  - https://github.com/rancher/system-upgrade-controller/releases/download/v0.20.2/system-upgrade-controller.yaml
+  - plan-serveurs.yaml

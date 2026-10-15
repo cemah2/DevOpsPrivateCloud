@@ -1,31 +1,38 @@
 ---
-# Rôle registre_travail — registre d'images de travail du module 12 (M12-E15, ticket PLAT-1325).
+# Rôle registre_travail — registre d'images de travail du module 12 (M12-E15, ticket PLAT-1315).
 # CNCF Distribution 3 (image registry:3) sur ctr01, lancé par Docker Compose, TLS par step-ca
-# (ACME, rôle certificats_acme), authentification htpasswd (bcrypt), suppression activée.
-# Il disparaît au module 13 (Harbor) : pas de haute disponibilité, pas de réplication, pas de
-# droits par dépôt (tout compte authentifié peut tirer, pousser ET supprimer).
+# (ACME, rôle certificats_acme, M06-E18), authentification htpasswd (bcrypt), suppression activée,
+# ramasse-miettes planifié. Il disparaît au module 13 (Harbor) : pas de haute disponibilité, pas de
+# réplication, et AUCUN droit par dépôt (tout compte authentifié peut tirer, pousser ET supprimer).
+#
+# Prérequis sur l'hôte : rôle docker_engine (Docker + Compose), rôle certificats_acme avec un
+# certificat d'identifiant « registre » qui écrit registre_travail_certificat et registre_travail_cle.
 
 registre_travail_dossier: /opt/registre
-# Étiquette ET empreinte (relevée le 2026-10-08 : registry:3 = Distribution 3.1.2). Pour changer
-# de version : relever l'empreinte (docker buildx imagetools inspect registry:3), MR, application.
-registre_travail_image: "registry:3@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8"
+# Étiquette ET empreinte d'index (relevées le 2026-10-15 : registry:3 = Distribution 3.1.2). Pour
+# changer de version : relever l'empreinte (docker buildx imagetools inspect …), MR, application.
+registre_travail_image: "docker.io/library/registry:3@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8"
 registre_travail_port: 5000
 registre_travail_nom: "{{ inventory_hostname }}.par1.medisphere.internal"
 
-# Certificat (émis et renouvelé par certificats_acme, monté en lecture seule dans le conteneur).
+# Certificat et clé (émis et renouvelés par certificats_acme), montés en lecture seule.
 registre_travail_certificat: /etc/registre/tls/registre.crt
 registre_travail_cle: /etc/registre/tls/registre.key
 
-# Comptes htpasswd : nom → mot de passe (depuis le Vault « lab » ; jamais en clair ici).
-#   plateforme : l'équipe (et les vérifications du workbook) ; ci : les pipelines (runner02).
+# Comptes htpasswd : nom → mot de passe (Vault « lab » ; jamais en clair dans l'inventaire).
+#   plateforme : l'équipe et les vérifications du workbook ; ci : les pipelines (runner02, E21).
+# Le rôle n'écrit une ligne que si le mot de passe ne correspond plus (htpasswd -v) : idempotent,
+# et un mot de passe changé dans le Vault est appliqué au passage suivant (rotation).
 registre_travail_comptes: {}
 #   plateforme: "{{ vault_registre_travail_mdp_plateforme }}"
 #   ci: "{{ vault_registre_travail_mdp_ci }}"
+# Comptes à retirer du fichier (départ, compte compromis).
+registre_travail_comptes_retires: []
 
-# Journaux du registre : JSON sur la sortie standard (pilote de journaux du démon Docker).
 registre_travail_niveau_journal: info
 
-# Ramasse-miettes planifié (registry garbage-collect --delete-untagged), en mode lecture seule.
+# Ramasse-miettes (registry garbage-collect --delete-untagged) : registre ARRÊTÉ pendant l'opération
+# (la documentation de Distribution interdit de le lancer pendant une poussée). Fenêtre sans CI.
 registre_travail_gc_calendrier: "Sun *-*-* 03:30:00"
 
 registre_travail_entete: >-

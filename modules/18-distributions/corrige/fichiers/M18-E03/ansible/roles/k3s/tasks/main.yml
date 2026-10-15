@@ -1,0 +1,102 @@
+---
+# Rôle k3s — point d'entrée (M18-E03).
+
+- name: Préconditions
+  ansible.builtin.assert:
+    that:
+      - k3s_role in ['server', 'agent']
+      - k3s_version is match('^v1\.[0-9]+\.[0-9]+\+k3s[0-9]+$')
+      - k3s_jeton | length >= 32
+      - k3s_role == 'server' or k3s_url | length > 0
+      - not (k3s_cluster_init and k3s_url | length > 0)
+    fail_msg: >-
+      Variables k3s incohérentes : rôle server/agent, version vX.Y.Z+k3sN, jeton d'au moins 32
+      caractères (Vault), k3s_url obligatoire pour un agent, cluster-init et k3s_url exclusifs.
+    quiet: true
+
+- name: Dossiers de configuration et du script
+  ansible.builtin.file:
+    path: "{{ item.chemin }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {chemin: /etc/rancher/k3s, mode: "0755"}
+    - {chemin: "{{ k3s_script_dossier }}", mode: "0755"}
+
+- name: Script d'installation figé (empreinte vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ k3s_script_url }}"
+    dest: "{{ k3s_script_dossier }}/install-{{ k3s_version }}.sh"
+    checksum: "sha256:{{ k3s_script_sha256 }}"
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Jeton du cluster (fichier 600)
+  ansible.builtin.copy:
+    dest: "{{ k3s_jeton_fichier }}"
+    content: "{{ k3s_jeton }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Redémarrer k3s
+
+- name: Configuration de k3s (config.yaml)
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Redémarrer k3s
+
+- name: Miroirs de registres (registries.yaml)
+  ansible.builtin.template:
+    src: registries.yaml.j2
+    dest: /etc/rancher/k3s/registries.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when: k3s_miroirs | length > 0
+  notify: Redémarrer k3s
+
+- name: Version installée
+  ansible.builtin.command: /usr/local/bin/k3s --version
+  register: _k3s_version_installee
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Installer ou changer la version de k3s (script figé)
+  ansible.builtin.command: "{{ k3s_script_dossier }}/install-{{ k3s_version }}.sh"
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    INSTALL_K3S_EXEC: "{{ k3s_role }}"
+    # Le rôle démarre le service lui-même, après avoir écrit la configuration.
+    INSTALL_K3S_SKIP_START: "true"
+  when: >-
+    _k3s_version_installee.rc != 0
+    or (k3s_gere_version and k3s_version not in _k3s_version_installee.stdout)
+  changed_when: true
+  notify: Redémarrer k3s
+
+- name: Service k3s activé et démarré
+  ansible.builtin.systemd_service:
+    name: "{{ 'k3s' if k3s_role == 'server' else 'k3s-agent' }}"
+    enabled: true
+    state: started
+
+- name: Appliquer les redémarrages en attente avant d'attendre le nœud
+  ansible.builtin.meta: flush_handlers
+
+- name: Attendre que l'API locale réponde (serveurs)
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get --raw=/readyz
+  register: _k3s_pret
+  until: _k3s_pret.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  when: k3s_role == 'server' and not ansible_check_mode

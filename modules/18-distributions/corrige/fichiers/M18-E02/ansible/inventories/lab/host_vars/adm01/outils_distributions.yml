@@ -1,0 +1,3 @@
+---
+# adm01 pilote Talos et Cluster API (M18-E05, E08-E12) ; pas de Docker, donc ni kind ni k3d.
+outils_distributions_choix: [clusterctl, talosctl]

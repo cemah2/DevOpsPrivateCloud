@@ -1,0 +1,60 @@
+# capi/capi-essai/gabarits-k136-2.yaml — gabarits d'infrastructure de la montée en v1.36.5 (M18-E13).
+# NOUVEAUX objets, sous de NOUVEAUX noms : un ProxmoxMachineTemplate est la recette des machines
+# futures ; le modifier en place ne remplacerait aucune machine existante.
+# Copie de tes gabarits de M18-E10 : seuls le nom et templateID changent. <NOEUD> = nom du nœud Proxmox
+# qui porte le template (celui de E10, pas forcément « pve01 »).
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: ProxmoxMachineTemplate
+metadata:
+  name: capi-essai-control-plane-k136-2
+  namespace: capi-essai
+spec:
+  template:
+    spec:
+      sourceNode: <NOEUD>
+      templateID: 9061
+      full: true                 # clone complet (local-nvme est en mode bloc : format raw, pas de « format »)
+      pool: lab
+      vmIDRange:
+        start: 5180
+        end: 5189
+      numSockets: 1
+      numCores: 2
+      memoryMiB: 4096
+      disks:
+        bootVolume:
+          disk: scsi0
+          sizeGb: 32
+      network:
+        networkDevices:
+          - name: net0
+            bridge: vk8s
+            model: virtio
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: ProxmoxMachineTemplate
+metadata:
+  name: capi-essai-worker-k136-2
+  namespace: capi-essai
+spec:
+  template:
+    spec:
+      sourceNode: <NOEUD>
+      templateID: 9061
+      full: true
+      pool: lab
+      vmIDRange:
+        start: 5180
+        end: 5189
+      numSockets: 1
+      numCores: 2
+      memoryMiB: 4096
+      disks:
+        bootVolume:
+          disk: scsi0
+          sizeGb: 32
+      network:
+        networkDevices:
+          - name: net0
+            bridge: vk8s
+            model: virtio

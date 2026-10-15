@@ -1,0 +1,10 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M18-E16 (facultatif, provisoires).
+# Cluster de gestion éphémère kind sur m18-dev01 (vsandbox, DHCP) → API OpenStack et → API du cluster
+# capo-essai. Retirés à la fin de l'exercice (ou au mini-projet M18-E25). Adapte les noms de définitions.
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_SANDBOX, source: $NET_SANDBOX, sortie: $V_OSAPI, destination: 10.10.50.201, proto: tcp, ports: 443,
+     motif: "CAPO (gestion éphémère sur m18-dev01) → API publiques OpenStack (HAProxy de Kolla) — provisoire",
+     ref: M18-E16}
+  - {entree: $V_SANDBOX, source: $NET_SANDBOX, sortie: $V_OSEXT, destination: 10.10.52.200-10.10.52.249, proto: tcp, ports: 6443,
+     motif: "CAPO → API Kubernetes de capo-essai sur IP flottante — provisoire", ref: M18-E16}

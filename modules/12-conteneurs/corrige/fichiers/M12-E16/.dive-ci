@@ -1,4 +1,4 @@
-# .dive-ci — seuils Dive de MédiSphère (M12-E16, ticket SEC-1326). Dive 0.13.
+# .dive-ci — seuils Dive de MédiSphère (M12-E16, ticket SEC-1316). Dive 0.13.
 # Lu par « CI=true dive <image> » (ou « dive --ci --ci-config .dive-ci <image> »).
 rules:
   # Part des octets de l'image réellement utile (non écrasée ou supprimée par une couche suivante).

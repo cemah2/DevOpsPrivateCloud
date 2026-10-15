@@ -1,0 +1,97 @@
+---
+# roles/gitlab_runner/tasks/executeur_docker.yml — AJOUTÉ en M12-E20 (PLAT-1320).
+# Runner à exécuteur docker (runner02). Contrairement à l'exécuteur shell de runner01 (M04-E16),
+# config.toml est GÉNÉRÉ par le rôle : toute la sécurité de l'exécuteur y est (privileged,
+# security_opt, pull_policy, volumes), elle doit être relue en MR et rejouée à l'identique.
+# Le jeton glrt- vient du Vault à la première fois, puis du fichier en place (rotation éventuelle).
+# Prérequis : rôle docker_engine appliqué sur l'hôte (playbooks/runner02.yml).
+
+- name: Le démon Docker répond (rôle docker_engine appliqué avant)
+  ansible.builtin.command: docker info --format '{{ "{{" }}.ServerVersion{{ "}}" }}'
+  register: _gitlab_runner_docker
+  changed_when: false
+  check_mode: false
+
+- name: Jamais de runner privilégié (PLAN §4.10)
+  ansible.builtin.assert:
+    that:
+      - gitlab_runner_docker_security_opt | select('search', 'privileged') | list | length == 0
+      - gitlab_runner_docker_pull_policy | length > 0
+      - gitlab_runner_docker_pull_policy != ['never']
+      - gitlab_runner_docker_image is search('@sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      Configuration refusée : privilège, politique de tirage « never » seule ou image par défaut non
+      épinglée par empreinte.
+    quiet: true
+
+- name: Lire la configuration en place (jeton éventuellement renouvelé par le runner)
+  ansible.builtin.slurp:
+    src: /etc/gitlab-runner/config.toml
+  register: _gitlab_runner_config_actuelle
+  failed_when: false
+  no_log: true
+
+- name: Jeton effectif (celui du fichier s'il existe, sinon celui du Vault)
+  ansible.builtin.set_fact:
+    _gitlab_runner_jeton_effectif: >-
+      {{ ((_gitlab_runner_config_actuelle.content | default('') | b64decode)
+          | regex_search('token = "(glrt-[^"]+)"', '\1') | default([], true) | first)
+         | default(gitlab_runner_jeton, true) }}
+  no_log: true
+
+- name: Refuser de générer une configuration sans jeton
+  ansible.builtin.assert:
+    that:
+      - _gitlab_runner_jeton_effectif is ansible.builtin.match('^glrt-')
+    fail_msg: >-
+      Aucun jeton glrt- : crée le runner {{ gitlab_runner_nom }} dans GitLab (Admin → CI/CD →
+      Runners, étiquettes {{ gitlab_runner_etiquettes | join(', ') }}) et range son jeton dans le Vault.
+    quiet: true
+
+- name: Configuration du runner (0600 : elle contient le jeton)
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: /etc/gitlab-runner/config.toml
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Redémarrer gitlab-runner
+
+# Identifiants du registre pour TIRER les images des jobs (M12-E21) : lus par le runner (root) dans
+# son propre ~/.docker/config.json ; ils ne sont PAS transmis aux jobs (contrairement à une
+# variable « environment » de config.toml, que tout job lirait).
+- name: Dossier ~/.docker de root
+  ansible.builtin.file:
+    path: /root/.docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: gitlab_runner_docker_auth | length > 0
+
+- name: Identifiants de tirage du runner
+  ansible.builtin.template:
+    src: docker-config.json.j2
+    dest: /root/.docker/config.json
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: gitlab_runner_docker_auth | length > 0
+
+- name: Service gitlab-runner démarré et activé
+  ansible.builtin.systemd_service:
+    name: gitlab-runner
+    state: started
+    enabled: true
+
+- name: Appliquer la configuration maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Le runner est reconnu par GitLab
+  ansible.builtin.command: gitlab-runner verify --name {{ gitlab_runner_nom }}
+  register: _gitlab_runner_verify
+  changed_when: false
+  check_mode: false
+  # Code non nul si GitLab refuse le jeton (runner supprimé, jeton révoqué) : à corriger avant tout.

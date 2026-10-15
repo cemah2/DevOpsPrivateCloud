@@ -1,0 +1,41 @@
+---
+# Rôle k3s — installation de k3s par son script officiel FIGÉ (M18-E03, réutilisé en E07 et au palier 3).
+#
+# Principe : le script d'installation est téléchargé AU TAG de la version, son empreinte SHA-256
+# est écrite ici (lue et relue en MR). Le script vérifie lui-même l'empreinte du binaire k3s qu'il
+# télécharge (sha256sum-amd64.txt de la version). Toute la configuration de k3s passe par
+# /etc/rancher/k3s/config.yaml (k3s_config) : aucune option en argument, aucun secret dans le
+# service systemd.
+
+k3s_version: v1.36.5+k3s1
+# Script install.sh du tag (identique pour v1.36.4+k3s1 et v1.36.5+k3s1, relevé le 2026-10-15).
+k3s_script_url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_version | urlencode }}/install.sh"
+k3s_script_sha256: 46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad
+k3s_script_dossier: /usr/local/lib/k3s
+
+# server : nœud de contrôle (API, plan de contrôle, base) ; agent : travailleur.
+k3s_role: server
+# Premier serveur d'un cluster etcd intégré (M18-E07) : --cluster-init. Faux pour un nœud unique
+# en SQLite (k3s01) et pour les serveurs qui rejoignent.
+k3s_cluster_init: false
+# URL du superviseur/API à joindre (serveurs qui rejoignent et agents), ex. https://k3s-ha01.par1.medisphere.internal:6443
+k3s_url: ""
+
+# Jeton partagé du cluster (Ansible Vault « lab ») ; écrit dans un fichier 600, jamais en argument.
+k3s_jeton: ""
+k3s_jeton_fichier: /etc/rancher/k3s/jeton
+
+# Options de k3s (clés = noms des options sans « -- »), fusionnées avec celles que le rôle calcule
+# (token-file, cluster-init, server).
+k3s_config: {}
+
+# Miroirs de registres (registries.yaml de k3s) ; vide = pas de fichier.
+k3s_miroirs: {}
+# Autorité qui signe le cache Harbor (déposée par le rôle ca_lab).
+k3s_registre_ca: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+k3s_registre_hote: registry.par1.medisphere.internal
+
+# Le rôle installe ou change la version quand elle diffère. Mettre à false quand un autre
+# mécanisme (system-upgrade-controller, M18-E07) gère les montées de version : sinon Ansible
+# « redescendrait » le nœud à la version de l'inventaire.
+k3s_gere_version: true

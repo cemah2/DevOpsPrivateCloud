@@ -1,0 +1,5 @@
+<!-- docs/socle/matrice-flux.md — EXTRAIT : lignes ajoutées en M18-E08. -->
+| Source | Destination | Port | Motif | Réf. | Pare-feu |
+|---|---|---|---|---|---|
+| `m18-dev01`, `k3s01` (`vsandbox`, baux DHCP) | `pve01` | TCP 8006 | CAPMOX, image-builder (Packer) vers l'API Proxmox | M18-E08 | bordure + pare-feu Proxmox (IPSet `capi`) |
+| `m18-dev01`, `k3s01` | `capi-essai` 10.10.40.150-169, VIP 10.10.40.210 | TCP 6443 | contrôleurs Cluster API vers l'API du cluster de charge de travail | M18-E08 | bordure |

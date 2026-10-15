@@ -1,0 +1,5 @@
+# group_vars/all/vault-lab-s3-m18.yml — MODÈLE (M18-E14). Le vrai fichier est chiffré :
+#   uv run ansible-vault encrypt --vault-id lab@outils/vault-pass-client.sh group_vars/all/vault-lab-s3-m18.yml
+# Lu par s3-01 (identité), k3s-ha01 et rke2-01..03 (envoi des instantanés).
+vault_s3_etcd_m18_cle_acces: <CLE-D-ACCES>
+vault_s3_etcd_m18_cle_secrete: <CLE-SECRETE>

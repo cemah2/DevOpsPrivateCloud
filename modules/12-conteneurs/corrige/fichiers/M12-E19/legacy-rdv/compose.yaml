@@ -1,4 +1,4 @@
-# compose.yaml de Legacy-RDV (projet legacy/legacy-rdv) — M12-E19, ticket DEV-1329.
+# compose.yaml de Legacy-RDV (projet legacy/legacy-rdv) — M12-E19, ticket DEV-1319.
 # Pile de recette sur ctr01 : l'application, sa base MariaDB 11.8, la purge en tâche ponctuelle.
 #
 #   admin@ctr01:~/src/legacy-rdv$ docker compose up -d --build --wait
@@ -23,7 +23,7 @@ services:
     environment: *config-base
     secrets: [legacy_rdv_db_mdp]
     ports:
-      - "8081:8080"
+      - "8090:8080"
     volumes:
       - pieces-jointes:/var/www/legacy-rdv/uploads
       - sessions:/var/lib/php/sessions
@@ -41,7 +41,7 @@ services:
     stop_grace_period: 20s
 
   mariadb:
-    image: mariadb:11.8
+    image: docker.io/library/mariadb:11.8@sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15
     environment:
       MARIADB_DATABASE: legacy_rdv
       MARIADB_USER: legacy_rdv

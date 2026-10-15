@@ -1,0 +1,45 @@
+---
+# Rôle outils_distributions — point d'entrée (M18-E02).
+
+- name: Refuser un outil inconnu du catalogue
+  ansible.builtin.assert:
+    that: outils_distributions_choix | difference(outils_distributions_catalogue.keys() | list) | length == 0
+    fail_msg: "Outil(s) hors catalogue : {{ outils_distributions_choix | difference(outils_distributions_catalogue.keys() | list) }}"
+    quiet: true
+
+- name: Dossiers versionnés des outils
+  ansible.builtin.file:
+    path: "{{ outils_distributions_dossier }}/{{ item }}-{{ outils_distributions_catalogue[item].version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ outils_distributions_choix }}"
+
+- name: Télécharger les binaires (empreinte SHA-256 vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ outils_distributions_catalogue[item].url }}"
+    dest: "{{ outils_distributions_dossier }}/{{ item }}-{{ outils_distributions_catalogue[item].version }}/{{ item }}"
+    checksum: "sha256:{{ outils_distributions_catalogue[item].sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ outils_distributions_choix }}"
+
+- name: Lier les binaires dans /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ outils_distributions_dossier }}/{{ item }}-{{ outils_distributions_catalogue[item].version }}/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop: "{{ outils_distributions_choix }}"
+
+- name: Complétion bash
+  ansible.builtin.shell: |
+    set -o pipefail
+    /usr/local/bin/{{ item }} completion bash > /etc/bash_completion.d/{{ item }}.tmp
+    mv /etc/bash_completion.d/{{ item }}.tmp /etc/bash_completion.d/{{ item }}-{{ outils_distributions_catalogue[item].version }}
+  args:
+    executable: /bin/bash
+    creates: /etc/bash_completion.d/{{ item }}-{{ outils_distributions_catalogue[item].version }}
+  loop: "{{ outils_distributions_choix | intersect(outils_distributions_completion) }}"

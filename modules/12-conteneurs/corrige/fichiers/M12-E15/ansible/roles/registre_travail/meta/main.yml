@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Registre d'images de travail (CNCF Distribution 3) sur un hôte Docker, TLS step-ca, htpasswd
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

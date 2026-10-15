@@ -1,0 +1,7 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible).') }}
+# /etc/rancher/rke2/config.yaml — rôle rke2 (M18-E04). Clés = options de « rke2 {{ rke2_role }} ».
+{% set calcule = {'token-file': rke2_jeton_fichier, 'node-name': inventory_hostname} %}
+{% if inventory_hostname != rke2_premier or rke2_role == 'agent' %}
+{%   set _ = calcule.update({'server': rke2_adresse_enregistrement}) %}
+{% endif %}
+{{ rke2_config | combine(calcule) | to_nice_yaml(indent=2) }}

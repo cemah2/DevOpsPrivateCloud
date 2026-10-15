@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# ms-variables-registre — pose (ou met à jour) les identifiants de publication du registre de
+# travail sur les groupes GitLab des applications (projet plateforme/outils, M12-E21, SEC-1321).
+#
+#   admin@adm01:~/src/ansible$ uv run ansible-vault view inventories/lab/host_vars/ctr01/vault.yml \
+#       | sed -n 's/^vault_registre_travail_mdp_ci: "\(.*\)"$/\1/p' \
+#       | ms-variables-registre mediagenda medidoc medinotif legacy plateforme
+#
+# Le mot de passe arrive sur l'ENTRÉE STANDARD (jamais en argument, jamais affiché). Variables
+# créées sur chaque groupe, PROTÉGÉES (seuls les pipelines des branches et étiquettes protégées les
+# reçoivent) : REGISTRE_UTILISATEUR (= ci ; trop court pour être masqué, et ce n'est pas un secret)
+# et REGISTRE_MOT_DE_PASSE, MASQUÉE en plus (remplacée par [MASKED] dans les journaux). Jeton : ~/.config/workbook/gitlab-admin.token (portée api, courte
+# durée, M01). Rotation (M12-E42) : relancer le script avec le nouveau mot de passe.
+set -euo pipefail
+
+GITLAB="${WB_GITLAB_URL:-https://git01.par1.medisphere.internal}"
+JETON_FICHIER="${WB_GITLAB_ADMIN_TOKEN_FILE:-$HOME/.config/workbook/gitlab-admin.token}"
+UTILISATEUR="${REGISTRE_UTILISATEUR:-ci}"
+
+[[ $# -ge 1 ]] || { echo "usage : … | $(basename "$0") GROUPE [GROUPE…]" >&2; exit 2; }
+[[ -r "$JETON_FICHIER" ]] || { echo "jeton illisible : $JETON_FICHIER" >&2; exit 1; }
+[[ ! -t 0 ]] || { echo "le mot de passe est attendu sur l'entrée standard (pas au clavier)" >&2; exit 2; }
+IFS= read -r MDP || true
+[[ ${#MDP} -ge 16 && "$MDP" =~ ^[A-Za-z0-9]+$ ]] || {
+  echo "mot de passe refusé : 16 caractères au moins, alphanumérique (variable masquée de GitLab)" >&2; exit 1; }
+
+# api METHODE CHEMIN [options curl…] — appel de l'API ; l'en-tête du jeton est lu dans un fichier
+# (curl -H @fichier) : le jeton n'apparaît pas dans la liste des processus.
+api() {
+  local m="$1" c="$2"
+  shift 2
+  curl -sS --fail-with-body -X "$m" -H @<(printf 'PRIVATE-TOKEN: %s\n' "$(<"$JETON_FICHIER")") \
+    "$GITLAB/api/v4/$c" "$@"
+}
+
+# pose GROUPE CLE MASQUEE(true|false) — valeur sur l'entrée standard ; crée la variable, ou la met
+# à jour si elle existe.
+pose() {
+  local g="$1" cle="$2" masquee="$3" valeur
+  valeur="$(cat)"
+  if api GET "groups/$g/variables/$cle" >/dev/null 2>&1; then
+    printf '%s' "$valeur" | api PUT "groups/$g/variables/$cle" --data-urlencode "value@-" \
+      --data "protected=true" --data "masked=$masquee" >/dev/null
+    echo "  $g : $cle mise à jour"
+  else
+    printf '%s' "$valeur" | api POST "groups/$g/variables" --data "key=$cle" --data-urlencode "value@-" \
+      --data "protected=true" --data "masked=$masquee" >/dev/null
+    echo "  $g : $cle créée"
+  fi
+}
+
+for groupe in "$@"; do
+  printf '%s' "$UTILISATEUR" | pose "$groupe" REGISTRE_UTILISATEUR false
+  printf '%s' "$MDP" | pose "$groupe" REGISTRE_MOT_DE_PASSE true
+done
+echo "Pense au registre des secrets (emplacements : variables de groupe $*)."

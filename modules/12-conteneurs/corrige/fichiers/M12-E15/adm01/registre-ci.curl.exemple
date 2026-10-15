@@ -1,0 +1,6 @@
+# ~/.config/workbook/registre-ci.curl sur adm01 — 600, jamais dans un dépôt (M12-E15, M12-E42).
+# Identifiants du compte « ci » au format d'un fichier de configuration de curl (« curl -K ») : ils
+# n'apparaissent ni dans la ligne de commande, ni dans « ps », ni dans l'historique du shell.
+#   admin@adm01:~$ curl -s -o /dev/null -w '%{http_code}\n' -K ~/.config/workbook/registre-ci.curl \
+#       https://ctr01.par1.medisphere.internal:5000/v2/        # 200 attendu
+user = "ci:<MOT-DE-PASSE-CI>"

@@ -1,5 +1,6 @@
-# ~/.config/containers/systemd/mediagenda-migrations.container — migrations SQL (M12-E14).
-# Tâche ponctuelle : même image que l'API, autre commande ; l'API attend qu'elle ait réussi.
+# ~app/.config/containers/systemd/mediagenda-migrations.container (ctr02) — M12-E14.
+# Tâche PONCTUELLE : même image que l'API, autre commande. L'API attend qu'elle ait réussi.
+# Service généré : mediagenda-migrations.service (Type=oneshot)
 [Unit]
 Description=Migrations du schéma de MédiAgenda
 Requires=mediagenda-pg.service
@@ -10,8 +11,10 @@ ContainerName=mediagenda-migrations
 Image=mediagenda-api.build
 Network=mediagenda.network
 Exec=mediagenda-migrate
+# L'URL complète de la base contient le mot de passe : c'est elle-même un secret.
 Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
 
 [Service]
 Type=oneshot
+# « Actif » une fois terminée avec succès : les unités qui en dépendent la considèrent comme faite.
 RemainAfterExit=yes

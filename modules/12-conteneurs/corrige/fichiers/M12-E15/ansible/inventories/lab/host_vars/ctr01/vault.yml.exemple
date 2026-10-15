@@ -1,0 +1,7 @@
+---
+# host_vars/ctr01/vault.yml — À CHIFFRER (identité « lab ») ; ce fichier .exemple n'est jamais copié tel quel.
+#   admin@adm01:~/src/ansible$ uv run ansible-vault create --encrypt-vault-id lab inventories/lab/host_vars/ctr01/vault.yml
+# Mots de passe générés, jamais choisis : openssl rand -hex 24 (hexadécimal : sans caractère à échapper
+# dans une URL ni dans une variable masquée de GitLab).
+vault_registre_travail_mdp_plateforme: "<MOT-DE-PASSE-PLATEFORME>"
+vault_registre_travail_mdp_ci: "<MOT-DE-PASSE-CI>"

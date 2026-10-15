@@ -1,0 +1,172 @@
+# capi/capi-essai/20-plan-controle.yaml — plan de contrôle de capi-essai (M18-E10).
+# Un nœud de contrôle (essai : 4 Go). Production : 3 (nombre impair, quorum etcd).
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: capi-essai-plan-controle
+  namespace: capi-essai
+spec:
+  replicas: 1
+  # DOIT correspondre au Kubernetes du template (9060 : 1.36.4) : kubeadm ne télécharge rien.
+  version: v1.36.4
+  machineTemplate:
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ProxmoxMachineTemplate
+        name: capi-essai-plan-controle-1364
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        certSANs: ["10.10.40.210"]
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          # CAPMOX : le providerID est l'UUID BIOS de la VM, lu dans les métadonnées cloud-init.
+          - name: provider-id
+            value: "proxmox://'{{ ds.meta_data.instance_id }}'"
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          - name: provider-id
+            value: "proxmox://'{{ ds.meta_data.instance_id }}'"
+    # Heure : la passerelle du VLAN 40 (PLAN.md §4.3 bis).
+    ntp:
+      enabled: true
+      servers: ["10.10.40.1"]
+    # Compte de secours SSH : clé de adm01 seulement, pas de mot de passe.
+    users:
+      - name: admin
+        sudo: "ALL=(ALL) NOPASSWD:ALL"
+        sshAuthorizedKeys:
+          - "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+    files:
+      # Racine MédiSphère (cache Harbor en TLS) : contenu lu dans un Secret de l'espace, étiqueté
+      # pour suivre le cluster lors du pivot (capi/identifiants.sh).
+      - path: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        owner: root:root
+        permissions: "0644"
+        contentFrom:
+          secret:
+            name: medisphere-root-ca
+            key: ca.crt
+      # Miroirs : le containerd de l'image d'image-builder lit /etc/containerd/certs.d (config_path).
+      - path: /etc/containerd/certs.d/docker.io/hosts.toml
+        owner: root:root
+        permissions: "0644"
+        content: |
+          server = "https://registry-1.docker.io"
+          [host."https://registry.par1.medisphere.internal/v2/dockerhub"]
+            capabilities = ["pull", "resolve"]
+            override_path = true
+      - path: /etc/containerd/certs.d/quay.io/hosts.toml
+        owner: root:root
+        permissions: "0644"
+        content: |
+          server = "https://quay.io"
+          [host."https://registry.par1.medisphere.internal/v2/quay"]
+            capabilities = ["pull", "resolve"]
+            override_path = true
+      - path: /etc/containerd/certs.d/registry.k8s.io/hosts.toml
+        owner: root:root
+        permissions: "0644"
+        content: |
+          server = "https://registry.k8s.io"
+          [host."https://registry.par1.medisphere.internal/v2/k8s"]
+            capabilities = ["pull", "resolve"]
+            override_path = true
+      # kube-vip en pod statique : porte la VIP 10.10.40.210 (ARP) devant le kube-apiserver.
+      - path: /etc/kubernetes/manifests/kube-vip.yaml
+        owner: root:root
+        permissions: "0600"
+        content: |
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: kube-vip
+            namespace: kube-system
+          spec:
+            containers:
+              - name: kube-vip
+                image: ghcr.io/kube-vip/kube-vip:v1.2.4
+                imagePullPolicy: IfNotPresent
+                args: ["manager"]
+                env:
+                  - {name: cp_enable, value: "true"}
+                  - {name: vip_arp, value: "true"}
+                  - {name: address, value: "10.10.40.210"}
+                  - {name: port, value: "6443"}
+                  - {name: vip_leaderelection, value: "true"}
+                  - {name: vip_leaseduration, value: "15"}
+                  - {name: vip_renewdeadline, value: "10"}
+                  - {name: vip_retryperiod, value: "2"}
+                securityContext:
+                  capabilities:
+                    add: ["NET_ADMIN", "NET_RAW"]
+                volumeMounts:
+                  - {mountPath: /etc/kubernetes/admin.conf, name: kubeconfig}
+            hostAliases:
+              - {ip: 127.0.0.1, hostnames: ["localhost", "kubernetes"]}
+            hostNetwork: true
+            volumes:
+              - name: kubeconfig
+                hostPath:
+                  path: /etc/kubernetes/admin.conf
+                  type: FileOrCreate
+      # Kubernetes ≥ 1.29 : pendant « kubeadm init », admin.conf n'a pas encore de droits (groupe
+      # kubeadm:cluster-admins lié APRÈS le démarrage de l'API) ; kube-vip doit utiliser
+      # super-admin.conf, sinon il ne prend jamais la VIP et l'init attend une API injoignable.
+      # Même correctif que les gabarits de CAPMOX et la documentation de kube-vip.
+      - path: /etc/kube-vip-prepare.sh
+        owner: root:root
+        permissions: "0700"
+        content: |
+          #!/bin/bash
+          set -e
+          if [[ -f /run/kubeadm/kubeadm.yaml ]]; then
+            sed -i 's#path: /etc/kubernetes/admin.conf#path: /etc/kubernetes/super-admin.conf#' /etc/kubernetes/manifests/kube-vip.yaml
+          fi
+    preKubeadmCommands:
+      - update-ca-certificates
+      - /etc/kube-vip-prepare.sh
+    # Une fois le nœud initialisé, kube-vip revient à admin.conf (droits normaux) : il ne garde pas
+    # une identité system:masters.
+    postKubeadmCommands:
+      - >-
+        if [ -f /run/kubeadm/kubeadm.yaml ]; then
+        sed -i 's#path: /etc/kubernetes/super-admin.conf#path: /etc/kubernetes/admin.conf#' /etc/kubernetes/manifests/kube-vip.yaml;
+        fi
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: ProxmoxMachineTemplate
+metadata:
+  # La version dans le nom : un template de machine est IMMUABLE ; monter de version, c'est créer
+  # un nouvel objet (…-1365) et y pointer le KubeadmControlPlane (palier 3).
+  name: capi-essai-plan-controle-1364
+  namespace: capi-essai
+spec:
+  template:
+    spec:
+      sourceNode: "<NOEUD>"
+      templateID: 9060
+      full: true
+      storage: local-nvme
+      pool: lab
+      tags: ["env-m18", "capi-essai"]
+      # VMID imposés dans la plage du module (PLAN.md §4.6) : 5180-5189.
+      vmIDRange:
+        start: 5180
+        end: 5189
+      numSockets: 1
+      numCores: 2
+      memoryMiB: 4096
+      disks:
+        bootVolume:
+          disk: scsi0
+          sizeGb: 32
+      network:
+        networkDevices:
+          - name: net0
+            bridge: vk8s
+            model: virtio
+            defaultIPv4: true

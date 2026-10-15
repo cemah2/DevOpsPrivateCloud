@@ -20,8 +20,8 @@ http:
   addr: :5000
   host: https://{{ registre_travail_nom }}:{{ registre_travail_port }}
   tls:
-    certificate: /etc/distribution/tls/registre.crt
-    key: /etc/distribution/tls/registre.key
+    certificate: /etc/distribution/tls/{{ registre_travail_certificat | basename }}
+    key: /etc/distribution/tls/{{ registre_travail_cle | basename }}
     minimumtls: tls1.2
   headers:
     X-Content-Type-Options: [nosniff]

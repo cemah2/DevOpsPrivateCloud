@@ -1,0 +1,23 @@
+---
+# host_vars/runner02/gitlab_runner.yml — runner02, exécuteur docker (M12-E20, PLAT-1320 ;
+# M12-E21, SEC-1321). Surcharge les valeurs de group_vars/role_runner (celles de runner01).
+gitlab_runner_executeur: docker
+gitlab_runner_nom: runner02-docker
+gitlab_runner_etiquettes: [docker, socle]
+gitlab_runner_concurrent: 2
+# Première fois seulement (ensuite, le jeton est relu dans config.toml) : Vault « lab ».
+gitlab_runner_jeton: "{{ vault_gitlab_runner02_jeton }}"
+
+# --- M12-E21 : constructions sans privilège -------------------------------------------------------
+# BuildKit sans privilège dans le conteneur du job doit créer des espaces de noms (user, mount) et
+# monter des systèmes de fichiers : le profil seccomp par défaut de Docker interdit unshare/mount
+# sans CAP_SYS_ADMIN, le profil AppArmor docker-default interdit mount. Ces deux exceptions — et
+# elles seules — sont accordées, au lieu de « privileged = true » qui donnerait en plus toutes les
+# capacités, tous les périphériques et l'accès en écriture à /sys et /proc. Documentation BuildKit,
+# « Rootless mode » ; décision tracée dans docs/conteneurs/construction-ci.md et l'ADR-0120.
+gitlab_runner_docker_security_opt:
+  - seccomp=unconfined
+  - apparmor=unconfined
+# Tirage des images de jobs depuis le registre de travail (compte ci, Vault « lab ») : M12-E27.
+gitlab_runner_docker_auth:
+  ctr01.par1.medisphere.internal:5000: "ci:{{ vault_registre_travail_mdp_ci }}"

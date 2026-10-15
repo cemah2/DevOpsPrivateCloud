@@ -1,0 +1,91 @@
+# capi/recette-agenda/plan-controle.yaml
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: recette-agenda-control-plane
+  namespace: recette-agenda
+spec:
+  replicas: 2
+  version: v1.36.5
+  machineTemplate:
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ProxmoxMachineTemplate
+        name: recette-agenda-control-plane
+  kubeadmConfigSpec:
+    users:
+      - name: root
+        sshAuthorizedKeys:
+          - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK7lucasPortablePerso lucas@portable"
+    files:
+      - path: /etc/kubernetes/manifests/kube-vip.yaml
+        owner: root:root
+        content: |
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: kube-vip
+            namespace: kube-system
+          spec:
+            containers:
+              - name: kube-vip
+                image: ghcr.io/kube-vip/kube-vip:latest
+                args: ["manager"]
+                env:
+                  - {name: cp_enable, value: "true"}
+                  - {name: vip_arp, value: "true"}
+                  - {name: address, value: "10.10.40.155"}
+                  - {name: port, value: "6443"}
+                  - {name: vip_leaderelection, value: "true"}
+                securityContext:
+                  capabilities:
+                    add: ["NET_ADMIN", "NET_RAW"]
+                volumeMounts:
+                  - {mountPath: /etc/kubernetes/admin.conf, name: kubeconfig}
+            hostNetwork: true
+            volumes:
+              - name: kubeconfig
+                hostPath:
+                  path: /etc/kubernetes/admin.conf
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          - name: provider-id
+            value: "proxmox://'{{ ds.meta_data.instance_id }}'"
+    joinConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
+          - name: provider-id
+            value: "proxmox://'{{ ds.meta_data.instance_id }}'"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
+kind: ProxmoxMachineTemplate
+metadata:
+  name: recette-agenda-control-plane
+  namespace: recette-agenda
+spec:
+  template:
+    spec:
+      sourceNode: "pve01"
+      templateSelector:
+        matchTags: ["capi"]
+        matchPolicy: subset
+      format: qcow2
+      full: true
+      storage: local-nvme
+      vmIDRange:
+        start: 5180
+        end: 5199
+      numSockets: 1
+      numCores: 1
+      memoryMiB: 1024
+      disks:
+        bootVolume:
+          disk: scsi0
+          sizeGb: 20
+      network:
+        networkDevices:
+          - name: net0
+            bridge: vsandbox
+            model: virtio

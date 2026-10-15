@@ -1,0 +1,8 @@
+# Schéma de l'Image Factory des nœuds Talos du module 18 (M18-E05).
+# Identifiant obtenu par :  curl -sS -X POST --data-binary @talos-schema.yaml https://factory.talos.dev/schematics
+#   → ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515 (empreinte du contenu)
+# Toute modification de ce fichier change l'identifiant : reporte-le dans talos.tf (local.talos_schema_id).
+customization:
+  systemExtensions:
+    officialExtensions:
+      - siderolabs/qemu-guest-agent

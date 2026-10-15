@@ -1,0 +1,119 @@
+---
+# Rôle registre_travail (M12-E15).
+
+- name: Préconditions (Docker, Compose, certificat)
+  ansible.builtin.assert:
+    that:
+      - registre_travail_comptes | length > 0
+      - registre_travail_image is search('@sha256:[0-9a-f]{64}$')
+    fail_msg: >-
+      registre_travail_comptes est vide (le registre n'accepterait personne) ou l'image n'est pas
+      épinglée par empreinte.
+    quiet: true
+
+- name: Outil htpasswd (bcrypt) sur l'hôte
+  ansible.builtin.apt:
+    name: apache2-utils
+    state: present
+
+- name: Dossier du registre
+  ansible.builtin.file:
+    path: "{{ registre_travail_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Fichier htpasswd (créé vide s'il n'existe pas)
+  ansible.builtin.file:
+    path: "{{ registre_travail_dossier }}/htpasswd"
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    modification_time: preserve
+    access_time: preserve
+
+# Vérification de chaque mot de passe SANS l'écrire nulle part : htpasswd -v lit le mot de passe
+# sur l'entrée standard (-i). Code 0 : le compte existe avec ce mot de passe.
+- name: Comptes déjà à jour ?
+  ansible.builtin.command:
+    argv: [htpasswd, -v, -i, "{{ registre_travail_dossier }}/htpasswd", "{{ item.key }}"]
+    stdin: "{{ item.value }}"
+  register: _registre_verif
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ registre_travail_comptes | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+
+# bcrypt (-B), coût 12 (-C) ; mot de passe sur l'entrée standard, jamais en argument (ps).
+- name: Écrire les comptes absents ou dont le mot de passe a changé
+  ansible.builtin.command:
+    argv: [htpasswd, -i, -B, -C, "12", "{{ registre_travail_dossier }}/htpasswd", "{{ item.item.key }}"]
+    stdin: "{{ item.item.value }}"
+  loop: "{{ _registre_verif.results | rejectattr('rc', 'eq', 0) | list }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  changed_when: true
+  no_log: true
+  notify: Redémarrer le registre
+
+- name: Retirer les comptes révoqués
+  ansible.builtin.lineinfile:
+    path: "{{ registre_travail_dossier }}/htpasswd"
+    regexp: "^{{ item }}:"
+    state: absent
+  loop: "{{ registre_travail_comptes_retires }}"
+  notify: Redémarrer le registre
+
+- name: Configuration de Distribution et fichier Compose
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ registre_travail_dossier }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0640"
+  loop: [config.yml, compose.yaml]
+  notify: Redémarrer le registre
+
+# Démarre (ou met à jour) la pile ; --wait attend la sonde de santé.
+- name: Registre démarré
+  ansible.builtin.command:
+    argv: [docker, compose, --project-directory, "{{ registre_travail_dossier }}", up, -d, --wait, registre]
+  register: _registre_up
+  changed_when: "'Started' in _registre_up.stderr or 'Recreated' in _registre_up.stderr or 'Created' in _registre_up.stderr"
+
+- name: Ramasse-miettes planifié (unités systemd)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [registre-gc.service, registre-gc.timer]
+  register: _registre_unites
+
+- name: Minuterie du ramasse-miettes active
+  ansible.builtin.systemd_service:
+    name: registre-gc.timer
+    enabled: true
+    state: started
+    daemon_reload: "{{ _registre_unites is changed }}"
+
+- name: Purger les gestionnaires (le contrôle doit voir le registre redémarré)
+  ansible.builtin.meta: flush_handlers
+
+# Contrôle de bout en bout : TLS vérifié contre la racine MédiSphère, authentification exigée.
+- name: Le registre répond 401 sans identifiants, en TLS vérifié
+  ansible.builtin.uri:
+    url: "https://{{ registre_travail_nom }}:{{ registre_travail_port }}/v2/"
+    ca_path: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+    status_code: 401
+  retries: 5
+  delay: 3
+  register: _registre_401
+  until: _registre_401.status == 401
+  check_mode: false

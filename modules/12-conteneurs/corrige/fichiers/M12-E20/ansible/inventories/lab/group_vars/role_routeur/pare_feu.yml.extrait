@@ -1,0 +1,13 @@
+---
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajouts de M12-E20 (matrice commune à gw01 et
+# gw02). La définition CTR01 et les règles ACME du registre sont de M12-E15.
+pare_feu_definitions:
+  # … définitions existantes (dont CTR01, M12-E15) …
+  - {nom: RUNNER02, valeur: 10.10.20.17, commentaire: "runner02, exécuteur docker (M12-E20)"}
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_INFRA, source: $RUNNER02, sortie: $V_SANDBOX, destination: $CTR01, proto: tcp, ports: 5000,
+     motif: "runner02 vers le registre de travail (registry:3, TLS) : tirage et poussée", ref: M12-E20}
+  # runner02 → Internet (images des jobs, Docker Hub, dépôts) : règle « lab vers Internet » existante.
+  # runner02 → git01 : même VLAN (INFRA), ne traverse pas la bordure.

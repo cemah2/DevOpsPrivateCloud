@@ -1,0 +1,10 @@
+---
+# m18-dev01 : Docker Engine 29 par le rôle docker_engine du M12, mêmes versions que role_docker
+# (une montée de version est une MR qui change les deux fichiers).
+docker_engine_versions:
+  docker-ce: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-cli: "5:29.8.2-1~debian.13~trixie"
+  docker-ce-rootless-extras: "5:29.8.2-1~debian.13~trixie"
+  containerd.io: "2.3.6-1~debian.13~trixie"
+  docker-buildx-plugin: "0.37.1-1~debian.13~trixie"
+  docker-compose-plugin: "5.6.0-1~debian.13~trixie"

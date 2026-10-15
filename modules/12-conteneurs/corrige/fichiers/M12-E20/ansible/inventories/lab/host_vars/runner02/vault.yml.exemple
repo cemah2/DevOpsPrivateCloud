@@ -1,0 +1,10 @@
+---
+# host_vars/runner02/vault.yml — À CHIFFRER (identité « lab »).
+#   admin@adm01:~/src/ansible$ uv run ansible-vault create --encrypt-vault-id lab inventories/lab/host_vars/runner02/vault.yml
+# Jeton d'authentification du runner (Admin → CI/CD → Runners → New instance runner, étiquettes
+# docker et socle, « Run untagged jobs » décoché). Sert à la PREMIÈRE génération de config.toml.
+vault_gitlab_runner02_jeton: "glrt-<JETON>"
+# Mot de passe du compte « ci » du registre de travail : la même valeur que host_vars/ctr01/vault.yml
+# (le Vault « lab » est commun ; une seule source : déplacer la variable dans group_vars/all/ si tu
+# préfères ne pas la dupliquer).
+vault_registre_travail_mdp_ci: "<MOT-DE-PASSE-CI>"

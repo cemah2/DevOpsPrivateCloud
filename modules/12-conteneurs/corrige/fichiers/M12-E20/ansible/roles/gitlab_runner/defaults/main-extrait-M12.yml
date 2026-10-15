@@ -1,0 +1,26 @@
+---
+# roles/gitlab_runner/defaults/main.yml — EXTRAIT : variables ajoutées en M12-E20 (exécuteur
+# docker, runner02) et M12-E21 (constructions sans privilège). Les valeurs de runner01 (exécuteur
+# shell) ne changent pas : gitlab_runner_executeur reste « shell » par défaut.
+
+# « shell » (runner01 : outils installés sur l'hôte) ou « docker » (runner02 : tout est dans les
+# images des jobs, aucun outil de CI sur l'hôte, config.toml généré par le rôle).
+gitlab_runner_executeur: shell
+# Étiquettes posées dans GitLab à la création du runner (rappel pour les messages et la doc ; le
+# runner à jeton glrt- ne les déclare plus lui-même).
+gitlab_runner_etiquettes: [shell, socle]
+
+# --- Exécuteur docker (M12-E20) ------------------------------------------------------------------
+gitlab_runner_docker_image: "docker.io/library/debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f"
+gitlab_runner_docker_pull_policy: [always, if-not-present]
+gitlab_runner_docker_allowed_pull_policies: [always, if-not-present]
+gitlab_runner_docker_volumes:
+  - /cache
+  - "{{ ms_pki_racine_hote | default('/usr/local/share/ca-certificates/medisphere-root-ca.crt') }}:/etc/medisphere/racine-ca.crt:ro"
+gitlab_runner_docker_memoire: 1536m
+gitlab_runner_docker_cpus: "2"
+# Exceptions de sécurité des conteneurs de job : aucune par défaut (M12-E21 en décide).
+gitlab_runner_docker_security_opt: []
+# Identifiants de tirage des images de jobs : hôte du registre → « utilisateur:mot de passe »
+# (Vault). Vide par défaut (M12-E21).
+gitlab_runner_docker_auth: {}

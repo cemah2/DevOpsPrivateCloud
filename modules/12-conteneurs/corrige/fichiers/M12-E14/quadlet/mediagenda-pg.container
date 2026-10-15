@@ -1,26 +1,26 @@
-# ~/.config/containers/systemd/mediagenda-pg.container — PostgreSQL 18 de la pile (M12-E14).
-# HORS du pod : la base a son propre cycle de vie (on redémarre l'API sans toucher à la base).
+# ~app/.config/containers/systemd/mediagenda-pg.container (ctr02) — M12-E14.
+# PostgreSQL 18, HORS du pod : la base a son propre cycle de vie (on redémarre l'API sans
+# toucher à la base) et n'est joignable que sur le réseau mediagenda (aucun port publié).
 # Service généré : mediagenda-pg.service
 [Unit]
 Description=PostgreSQL 18 de MédiAgenda (recette ctr02)
 
 [Container]
 ContainerName=mediagenda-pg
-# Nom complet (registre compris) : pas de résolution de nom court ambiguë en service.
+# Nom complet (registre compris) : short-name-mode = enforcing refuse les noms courts (M12-E02).
 Image=docker.io/library/postgres:18-trixie
 Network=mediagenda.network
-# PostgreSQL 18 (image officielle) : le volume se monte sur /var/lib/postgresql (PGDATA en
-# /var/lib/postgresql/18/docker), plus sur /var/lib/postgresql/data comme jusqu'à la 17.
+# PostgreSQL 18 : le volume se monte sur /var/lib/postgresql (données dans 18/docker), M12-E08.
 Volume=mediagenda-pg.volume:/var/lib/postgresql
 Environment=POSTGRES_DB=mediagenda POSTGRES_USER=mediagenda
-# Secret Podman (podman secret create), remis comme variable d'environnement au seul conteneur.
+# Secret Podman (podman secret create), remis comme variable au SEUL processus du conteneur.
 Secret=mediagenda-pg-mdp,type=env,target=POSTGRES_PASSWORD
-HealthCmd=pg_isready -U mediagenda -d mediagenda
+HealthCmd=["pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
 HealthInterval=10s
 HealthRetries=5
 HealthStartPeriod=30s
-# Le service n'est « démarré » pour systemd qu'une fois le conteneur en bonne santé : les unités
-# qui en dépendent (After=) attendent une base qui répond, pas un processus lancé.
+# Le service n'est « démarré » pour systemd qu'une fois le conteneur sain : les unités qui en
+# dépendent (After=) attendent une base qui répond, pas un processus lancé.
 Notify=healthy
 
 [Service]

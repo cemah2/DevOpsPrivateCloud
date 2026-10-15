@@ -1,0 +1,10 @@
+# kind/certs.d/registry.k8s.io/hosts.toml — registry.k8s.io par le cache Harbor (projet k8s), M18-E02.
+# Même contenu que les nœuds de k8s-par1 (M14-E19, rôle containerd). « server » : repli si le
+# cache ne répond pas (un poste de développement doit continuer à fonctionner).
+server = "https://registry.k8s.io"
+
+[host."https://registry.par1.medisphere.internal/v2/k8s"]
+  capabilities = ["pull", "resolve"]
+  # Le chemin contient déjà /v2/<projet> : containerd ne rajoute pas /v2.
+  override_path = true
+  ca = "/etc/medisphere/medisphere-root-ca.crt"

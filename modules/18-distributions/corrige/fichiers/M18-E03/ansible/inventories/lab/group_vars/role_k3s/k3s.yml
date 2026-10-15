@@ -1,0 +1,7 @@
+---
+# Miroirs communs à tous les k3s du module (cache Harbor, M13 ; mêmes projets que M14-E19).
+k3s_miroirs:
+  docker.io: https://registry.par1.medisphere.internal/v2/dockerhub
+  quay.io: https://registry.par1.medisphere.internal/v2/quay
+  ghcr.io: https://registry.par1.medisphere.internal/v2/ghcr
+  registry.k8s.io: https://registry.par1.medisphere.internal/v2/k8s

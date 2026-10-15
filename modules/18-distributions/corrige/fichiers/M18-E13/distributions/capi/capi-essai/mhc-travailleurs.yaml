@@ -1,0 +1,33 @@
+# capi/capi-essai/mhc-travailleurs.yaml — réparation automatique des travailleurs de capi-essai (M18-E13).
+# À appliquer dans le CLUSTER DE GESTION (k3s01), espace capi-essai. API Cluster API 1.12 (v1beta2).
+# Le sélecteur vise le seul MachineDeployment des travailleurs : jamais le plan de contrôle (un seul
+# nœud de contrôle : le remplacer ferait perdre le quorum etcd, le KCP refuserait de toute façon).
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineHealthCheck
+metadata:
+  name: capi-essai-travailleurs
+  namespace: capi-essai
+  labels:
+    cluster.x-k8s.io/cluster-name: capi-essai
+spec:
+  clusterName: capi-essai
+  selector:
+    matchLabels:
+      # Étiquette posée par le contrôleur de MachineDeployment (adapte au nom de TON MD).
+      cluster.x-k8s.io/deployment-name: capi-essai-workers
+  checks:
+    # Clone complet sur local-nvme + premier démarrage + cloud-init + kubeadm join + tirages d'images :
+    # le défaut de 10 min est trop juste sur le lab et provoquerait une boucle de remplacements.
+    nodeStartupTimeoutSeconds: 900
+    unhealthyNodeConditions:
+      - type: Ready
+        status: Unknown
+        timeoutSeconds: 300
+      - type: Ready
+        status: "False"          # entre guillemets : sans eux, YAML lit un booléen
+        timeoutSeconds: 300
+  remediation:
+    triggerIf:
+      # Un NOMBRE et pas un pourcentage : « 40% » de 2 machines s'arrondit à 0 (aucune réparation).
+      # Au-delà d'une machine malade à la fois, c'est le réseau ou Proxmox : on ne répare pas en aveugle.
+      unhealthyLessThanOrEqualTo: 1

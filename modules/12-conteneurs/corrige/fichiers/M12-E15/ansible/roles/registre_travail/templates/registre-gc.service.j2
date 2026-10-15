@@ -1,0 +1,13 @@
+# {{ registre_travail_entete }}
+# Ramasse-miettes du registre de travail (M12-E15) : arrêt du registre, garbage-collect, redémarrage.
+[Unit]
+Description=Ramasse-miettes du registre de travail
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/docker compose --project-directory {{ registre_travail_dossier }} stop registre
+ExecStart=/usr/bin/docker compose --project-directory {{ registre_travail_dossier }} --profile maintenance run --rm ramasse-miettes
+# Toujours relancer le registre, même si le ramasse-miettes a échoué.
+ExecStopPost=/usr/bin/docker compose --project-directory {{ registre_travail_dossier }} up -d --wait registre

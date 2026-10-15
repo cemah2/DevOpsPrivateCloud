@@ -1,0 +1,36 @@
+# .gitlab-ci.yml — medinotif/worker (M12-E21 ; obligatoire au mini-projet M12-E46).
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+      - templates/image.yml
+
+# Workflow de templates/qualite.yml (MR, branches) + les étiquettes de version : qualite.yml ne
+# lance aucun pipeline d'étiquette, or c'est l'étiquette vX.Y.Z qui publie l'image X.Y.Z.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+
+tests:
+  stage: test
+  tags: [shell]
+  needs: []
+  script:
+    - uv sync --locked
+    - uv run ruff check .
+    - uv run pytest
+
+hadolint:
+  extends: .hadolint
+
+image:
+  extends: .image-construction
+  needs: [tests, hadolint]
+  variables:
+    IMAGE: ctr01.par1.medisphere.internal:5000/medinotif/worker

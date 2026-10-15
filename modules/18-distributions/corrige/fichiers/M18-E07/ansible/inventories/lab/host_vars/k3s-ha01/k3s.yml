@@ -1,0 +1,4 @@
+---
+# k3s-ha01 amorce le cluster etcd intégré : --cluster-init, et pas de « server » à joindre.
+k3s_cluster_init: true
+k3s_url: ""

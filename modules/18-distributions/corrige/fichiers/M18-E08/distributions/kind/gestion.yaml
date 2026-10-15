@@ -1,0 +1,24 @@
+# kind/gestion.yaml — cluster d'AMORÇAGE de Cluster API (M18-E08, PLAT-1908).
+#   admin@m18-dev01:~$ kind create cluster --config ~/src/distributions/kind/gestion.yaml
+# Contexte kubectl sur m18-dev01 : kind-gestion. Un seul nœud : kind retire la taint du plan de
+# contrôle d'un cluster mononœud, les contrôleurs de CAPI peuvent s'y placer.
+#
+# L'API écoute sur toutes les adresses de m18-dev01, port 6443 FIXE, pour que adm01 (et les
+# vérifications) y accèdent par https://m18-dev01.par1.medisphere.internal:6443 ; le nom est
+# ajouté au certificat du kube-apiserver. ⚠️ kind le déconseille hors d'un poste : ce cluster ne
+# vit que de E08 à E12 (pivot), sur vsandbox, et son kubeconfig est administrateur.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: gestion
+networking:
+  apiServerAddress: "0.0.0.0"
+  apiServerPort: 6443
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      certSANs:
+        - m18-dev01.par1.medisphere.internal
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed

@@ -1,0 +1,43 @@
+---
+# Rôle rke2 — RKE2 en RPM sur Rocky Linux 10, profil CIS (M18-E04, SEC-1904).
+#
+# Pas de script d'installation : le rôle déclare les dépôts rpm.rancher.io (clé vérifiée par son
+# empreinte) et installe le paquet épinglé. Le RPM tire rke2-common et rke2-selinux, et livre
+# /etc/sysconfig/rke2-server avec RKE2_SELINUX=true (page SELinux de la documentation RKE2).
+# Le profil CIS VÉRIFIE l'hôte sans le modifier : le rôle fournit l'utilisateur etcd et les
+# paramètres noyau, puis RKE2 applique ses réglages (PSA restricted, NetworkPolicies, droits).
+
+rke2_version_paquet: "1.36.5~rke2r1"
+rke2_mineure: "1.36"
+rke2_el: "10"
+rke2_depot_base: https://rpm.rancher.io/rke2/latest
+rke2_cle_url: https://rpm.rancher.io/public.key
+# Clé « Rancher (CI) <ci@rancher.com> », rsa3072 (2020-03-10), relevée le 2026-10-15.
+rke2_cle_empreinte: C8CFF216455126E9B9C918BE925EA29AE257814A
+
+# RHEL 10 et dérivés : nf_conntrack est dans kernel-modules-extra (exigences de RKE2).
+rke2_paquets_hote: [kernel-modules-extra]
+
+# server (seul cas de cet essai) ; agent pour un travailleur.
+rke2_role: server
+# Premier serveur (celui qui amorce etcd) : les autres le rejoignent par son superviseur (9345).
+rke2_premier: "{{ groups['role_rke2'] | sort | first }}"
+rke2_adresse_enregistrement: "https://{{ rke2_premier }}.par1.medisphere.internal:9345"
+
+rke2_jeton: ""
+rke2_jeton_fichier: /etc/rancher/rke2/jeton
+
+# Options de RKE2 pour /etc/rancher/rke2/config.yaml, fusionnées avec token-file et server.
+rke2_config: {}
+
+rke2_miroirs: {}
+rke2_registre_ca: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+rke2_registre_hote: registry.par1.medisphere.internal
+
+# Fichier de paramètres noyau CIS livré par le RPM (méthode RPM du guide de durcissement).
+rke2_sysctl_source: /usr/share/rke2/rke2-cis-sysctl.conf
+rke2_sysctl_dest: /etc/sysctl.d/60-rke2-cis.conf
+
+# Problèmes connus de RKE2 : firewalld entre en conflit avec Canal ; NetworkManager ne doit pas
+# gérer les interfaces du CNI.
+rke2_desactiver_firewalld: true

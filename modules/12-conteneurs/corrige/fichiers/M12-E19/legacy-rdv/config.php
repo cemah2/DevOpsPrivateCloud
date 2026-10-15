@@ -1,6 +1,6 @@
 <?php
 /*
- * Configuration de Legacy-RDV — version conteneurisable (M12-E19, ticket DEV-1329).
+ * Configuration de Legacy-RDV — version conteneurisable (M12-E19, ticket DEV-1319).
  *
  * Toutes les valeurs viennent de l'environnement (facteur III). Les valeurs par défaut sont
  * celles de l'installation d'InfoGér, pour que l'application se comporte EXACTEMENT comme avant

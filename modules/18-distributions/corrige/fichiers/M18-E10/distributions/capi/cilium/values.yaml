@@ -1,0 +1,24 @@
+# capi/cilium/values.yaml — Cilium 1.20.2 pour capi-essai (M18-E10). Rendu en manifeste par
+# capi/cilium/generer-crs.sh, puis appliqué par le ClusterResourceSet « cilium ».
+cluster:
+  name: capi-essai
+# Les agents joignent l'API par la VIP (kube-vip), pas par le Service « kubernetes ».
+k8sServiceHost: 10.10.40.210
+k8sServicePort: 6443
+# kube-proxy conservé (kubeadm l'installe) : même choix que k8s-par1 au M14.
+kubeProxyReplacement: "false"
+routingMode: tunnel
+tunnelProtocol: vxlan
+ipam:
+  mode: cluster-pool
+  operator:
+    # Même réseau que Cluster.spec.clusterNetwork.pods.
+    clusterPoolIPv4PodCIDRList: ["10.244.0.0/16"]
+    clusterPoolIPv4MaskSize: 24
+hubble:
+  enabled: true
+  relay:
+    enabled: false
+operator:
+  # Un nœud de contrôle et deux travailleurs : un seul opérateur suffit à l'essai.
+  replicas: 1

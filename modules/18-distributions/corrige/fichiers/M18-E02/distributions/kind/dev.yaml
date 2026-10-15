@@ -1,0 +1,35 @@
+# kind/dev.yaml — cluster de développement kind (M18-E02, DEV-1902).
+#   admin@m18-dev01:~$ kind create cluster --config ~/src/distributions/kind/dev.yaml
+#   admin@m18-dev01:~$ kind delete cluster --name dev
+# Contexte kubectl : kind-dev. Topologie : 1 nœud de contrôle + 2 travailleurs (conteneurs Docker).
+#
+# Image : TOUJOURS avec son empreinte (notes de version de kind 0.33.0) ; kind 0.33 n'a pas
+# d'image 1.36.5, la plus récente 1.36 est la 1.36.4.
+# Miroirs : containerd des nœuds lit /etc/containerd/certs.d/<registre>/hosts.toml (montés depuis
+# ce dépôt) et fait confiance à la racine MédiSphère montée depuis l'hôte (rôle ca_lab).
+# Les chemins hôtes sont ABSOLUS : le dépôt est cloné dans ~/src/distributions du compte admin.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: dev
+containerdConfigPatches:
+  # Format de configuration v2 de l'image kindest/node 1.36.4 (lis /etc/containerd/config.toml
+  # dans un nœud) : sans config_path, containerd ignore les hosts.toml.
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraMounts: &montages
+      - hostPath: /home/admin/src/distributions/kind/certs.d
+        containerPath: /etc/containerd/certs.d
+        readOnly: true
+      - hostPath: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        containerPath: /etc/medisphere/medisphere-root-ca.crt
+        readOnly: true
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraMounts: *montages
+  - role: worker
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraMounts: *montages

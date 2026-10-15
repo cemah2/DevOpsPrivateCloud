@@ -1,0 +1,9 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajout de M18-E14 (matrice commune à gw01 et gw02).
+# Les nœuds k3s-ha et RKE2 sont en DHCP sur vsandbox : pas d'adresse fixe à cibler, la source est le
+# réseau vsandbox. Règle provisoire, liée au module : elle est RETIRÉE au mini-projet (M18-E25),
+# en même temps que les VMs. Adapte les noms des définitions ($V_SANDBOX, $NET_SANDBOX…) à ta matrice.
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_SANDBOX, source: $NET_SANDBOX, sortie: $V_INFRA, destination: $S3_01, proto: tcp, ports: 8333,
+     motif: "instantanés etcd des clusters d'essai du M18 vers s3-01 (compartiment etcd-m18) — provisoire",
+     ref: M18-E14}

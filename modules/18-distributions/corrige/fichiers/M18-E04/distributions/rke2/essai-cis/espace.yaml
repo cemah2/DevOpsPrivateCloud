@@ -1,0 +1,7 @@
+# rke2/essai-cis/espace.yaml — espace d'essai du profil CIS (M18-E04). Aucune étiquette Pod
+# Security : c'est la configuration d'admission de RKE2 (rke2-pss.yaml, « restricted » par défaut
+# avec le profil cis) qui s'applique.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: essai-cis

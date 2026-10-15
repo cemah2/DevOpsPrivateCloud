@@ -1,0 +1,46 @@
+# capi/capi-essai/montee-v1.36.5.extrait.yaml — EXTRAIT : ce qui change dans les manifestes de
+# M18-E10 pour la montée en v1.36.5 (M18-E13). Deux MR, appliquées dans cet ordre :
+#   MR 1 — plan de contrôle : version + gabarit du KCP ; attendre KCP « à jour » (UPTODATE = REPLICAS).
+#   MR 2 — travailleurs : version + gabarit du MD.
+# Le reste des objets (kubeadmConfigSpec, kube-vip, etc.) est inchangé.
+---
+# MR 1
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: capi-essai-control-plane
+  namespace: capi-essai
+spec:
+  version: v1.36.5                     # était v1.36.4
+  machineTemplate:
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ProxmoxMachineTemplate
+        name: capi-essai-control-plane-k136-2   # était capi-essai-control-plane (template 9060)
+  rollout:
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1                    # seule valeur possible avec un seul nœud de contrôle
+---
+# MR 2
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: capi-essai-workers
+  namespace: capi-essai
+spec:
+  rollout:
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1                    # une machine neuve Ready avant chaque suppression…
+        maxUnavailable: 0              # … et jamais moins de « replicas » machines disponibles
+  template:
+    spec:
+      version: v1.36.5                 # était v1.36.4
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ProxmoxMachineTemplate
+        name: capi-essai-worker-k136-2 # était capi-essai-worker (template 9060)
