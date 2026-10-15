@@ -8,8 +8,8 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 |---|---|---|
 | PLAN.md | rédigé | Versions des outils hors bloc A à figer au démarrage de chaque bloc |
 | CONVENTIONS.md | rédigé | À ajuster après les retours sur le module 00 |
-| lab/ (check, break, check-lib, lab.env.example) | rédigé | Bloc A : `lab/lib/pannes-lib.sh` (pannes des modules 01+), fonctions `gitlab_api`/`netbox_api`, variables du bloc A dans `lab.env.example` |
-| annexes/ | rédigé (blocs A et B) | `versions-bloc-A.md`, `versions-bloc-B.md`, `prerequis.md` (graphe 00-29/F1-F7, état laissé par chaque module des blocs A et B), `certifications.md` (LFCS, RHCSA, RHCE, Terraform Associate, GitLab, COA, CCNA, grilles Ceph et Proxmox ; CKA et suivants à compléter), `glossaire.md` (380 termes) : à compléter à la fin de chaque bloc |
+| lab/ (check, break, check-lib, lab.env.example) | rédigé (bloc C : `kube`, `harbor_api`, `wb_kubectl`, `wb_k8s_sauver`, `wb_k8s_restaurer`) | Bloc A : `lab/lib/pannes-lib.sh` (pannes des modules 01+), fonctions `gitlab_api`/`netbox_api`, variables du bloc A dans `lab.env.example` |
+| annexes/ | rédigé (blocs A, B et C) | `versions-bloc-A.md`, `versions-bloc-B.md`, `versions-bloc-C.md`, `prerequis.md` (graphe 00-29/F1-F7, état laissé par chaque module des blocs A à C), `certifications.md` (LFCS, RHCSA, RHCE, Terraform Associate, GitLab, COA, CCNA, Ceph, Proxmox, CKA, CKAD, CKS partiel, KCNA/KCSA, DCA), `glossaire.md` (560 termes) : à compléter à la fin de chaque bloc |
 
 ## Modules
 
@@ -27,13 +27,13 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 09 | Cluster de virtualisation | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~90 vérifications ; wiki Automated Installation, signatures de l'ISO 9.2-1, code de pve-ha-manager, guide Squid→Tentacle, `tofu validate`, `ansible-lint`). À confirmer sur le lab : épinglage `nic0..4` par `ID_NET_NAME_MAC`, libellés de `ha-manager status` et de `disarm-ha`, configuration FRR du SDN EVPN, démarrage de l'OVA, `watchdog-mux` sans périphérique |
 | 10 | OpenStack | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~104 vérifications dans le code de kolla-ansible 22.2.0 `stable/2026.1`, kolla, horizon, keystone, OSC 10 ; `tofu validate`, 15 bats). Rôle `sauvegarde_pbs` fusionné avec la version M09. À confirmer sur le lab : déploiement complet, images Debian « untested » de la matrice Kolla (repli `rocky` documenté), ACME de Kolla vers step-ca, formats JSON de la CLI, droits cephx minimaux |
 | 11 | Provisioning bare-metal | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~45 vérifications ; `kea-dhcp4 -t` 3.0.4, `ksvalidator` RHEL10, `debconf-set-selections -c`, pilote Proxmox de MAAS 3.7 lu dans le code ; construction iPXE corrigée `TRUST=`+`CERT=`). À confirmer sur le lab : user-class iPXE au second DISCOVER, ROM iPXE de QEMU/OVMF, `IPMI.ProtocolEnabled`/`FirmwareInventory` sur iLO 4, magasin TLS du snap MAAS |
-| 12 | Conteneurs | à faire | 45 + mini-projet | Carte des exercices écrite |
-| 13 | Registre et supply chain | à faire | 24 + mini-projet | Carte des exercices écrite |
-| 14 | Administration Kubernetes | à faire | 45 + mini-projet | Carte des exercices écrite |
-| 15 | Réseau Kubernetes | à faire | 45 + mini-projet | Carte des exercices écrite |
-| 16 | Stockage et données Kubernetes | à faire | 45 + mini-projet | Carte des exercices écrite |
-| 17 | Packaging | à faire | 24 + mini-projet | Carte des exercices écrite |
-| 18 | Distributions et cycle de vie | à faire | 24 + mini-projet | Carte des exercices écrite |
+| 12 | Conteneurs | relu | 45 + mini-projet | 4 rédacteurs (palier 2 écrit après la reprise), harmonisation, relecture indépendante en 2 parties (~100 vérifications ; Docker 29.8.2, Compose 5, BuildKit rootless, registry:3, Podman 5.4 et `quadlet -dryrun`, hadolint, dive, skopeo, seccomp et code de moby/systemd/udica lus au tag ; pile de recette et pannes injectées puis annulées en réel). À confirmer sur le lab : DDNS au premier bail, Quadlet sous un vrai systemd utilisateur, SELinux/udica sur Rocky 10, émulation arm64, pipelines GitLab réels, remplissage disque E39 |
+| 13 | Registre et supply chain | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~50 vérifications ; code de Harbor 2.15.3 au tag, fournisseur goharbor 3.12.5 `tofu validate`, Cosign 3.1.3, Trivy/Syft/Grype vérifiés par bundle et identité, renovate-config-validator 44). Défaut majeur corrigé : Harbor 2.15.3 n'exempte plus Cosign (GHSA-wrw5-gmvj-gf23). À confirmer sur le lab : installation réelle, `CONTENT_TRUST_LEGACY_SIGNER_PULL_ENABLED`, `scan_overview` d'un index, réplication des signatures, rétention des caches |
+| 14 | Administration Kubernetes | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~100 vérifications ; kubeadm 1.35.9/1.36.5 `config validate`, `init --dry-run`, kube-apiserver 1.36.5 réel avec audit et chiffrement, etcd 3.6.8 snapshot/restore, containerd.io 2.3.6 `config dump`, HAProxy, chart Cilium 1.20.2). À confirmer sur le lab : déploiement sur six VMs, restauration etcd complète, montée 1.35 → 1.36, pannes en conditions réelles, comportement de Cilium après restauration |
+| 15 | Réseau Kubernetes | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~100 vérifications ; code de Cilium 1.20.2 et de kubeadm au tag, Gateway API v1.6.1, charts cert-manager/ExternalDNS rendus, PowerDNS 5.0, ingress2gateway compilé, relais mTLS nginx testé). À confirmer sur le lab : `Programmed` d'une Gateway en NodePort, sorties de `cilium bgp peers`, graceful restart FRR, MTU 1355, HAProxy 3.2, rechargement du Secret de la Gateway |
+| 16 | Stockage et données Kubernetes | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~110 vérifications ; charts ceph-csi 3.18.1, Rook 1.21, Longhorn 1.13, Velero 12.2.1, CNPG 0.29.1 et plugin 0.8.1 rendus ; code de ceph-csi, CNPG, Velero lu au tag ; kube-apiserver 1.36.5 local pour les dry-run et la VAP ; fio et PostgreSQL 18). À confirmer sur le lab : krbd `ms_mode=secure`, masquage Cilium par `eth1`, nettoyage de Rook, Velero/Kopia sur SeaweedFS, PITR CNPG, instantané d'un volume chiffré |
+| 17 | Packaging | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~75 vérifications ; Helm 4.3.0, helm-unittest 37 tests, ct 3.15, Kustomize 5.8.2/5.8.1, Helmfile 1.8.1, Cosign 3.1.3, banc kube-apiserver 1.36 avec CRD Gateway API pour la reprise de la recette et les pannes). À confirmer sur le lab : reprise de la recette sans coupure, relais mTLS repointé, Harbor et charts OCI signés, HPA de E22 v3 |
+| 18 | Distributions et cycle de vie | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~57 vérifications ; talosctl 1.14.2, Image Factory, kind/k3d, dépôts RKE2 el10, code de CAPMOX 0.9.1 et image-builder v0.1.55 au tag, CAPO 0.15 en v1beta2). Durée 57-71 h, élevée pour un module secondaire (allègements proposés ci-dessous). À confirmer sur le lab : **compatibilité CAPMOX/Proxmox VE 9** (contrôle préalable et repli CAPD fournis), construction de l'image, pivot, montées Talos et SUC |
 | 19-20 | Bloc D | à faire | | |
 | 21-23 | Bloc E | à faire | | |
 | 24-26 | Bloc F | à faire | | |
@@ -44,6 +44,16 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 
 - Après M07-E25, `gw01` répond en `.2` et la VIP `.1` peut être portée par `gw02` : les vérifications des modules 00 à 06 qui joignent `gw01` par `10.10.x.1` atteignent le maître VRRP (le plus souvent `gw01`, `nopreempt`). À revoir si un retour de l'apprenant montre un faux rouge.
 - Après M07-E24, la matrice des flux est dans `group_vars/role_routeur/pare_feu.yml` ; le check M06-E46 lit encore `host_vars/gw01/pare_feu.yml` (il reste vert grâce aux autres fichiers de `host_vars/gw01`).
+
+## Effets du bloc C sur les modules précédents (à surveiller)
+
+- La règle de bordure vers `s3-01` 8333 depuis le VLAN 40 est ouverte aux nœuds de contrôle (M14-E24) puis aux travailleurs (M15-E34) : définitions `K8S_CP` et `K8S_TRAV` dans `group_vars/role_routeur/pare_feu.yml`.
+- `vm-noeud` passe en v2.4.0 (M12, cartes en DHCP) ; un bloc `moved` garde inchangés les plans des états de M08 et M10.
+- Harbor devient le cache des registres publics : les rôles du bloc A/B qui tirent des images (Molecule, runner) peuvent passer par lui (non imposé).
+
+## Allègements possibles du module 18 (proposés par la relecture, non appliqués)
+
+E14 → E20 et E15 → E22 sans détruire les bancs entre les deux ; restauration RKE2 de E14 en « pour aller plus loin » ; un seul référentiel kube-bench par distribution en E15 ; partie 4 de E23 facultative ; garder `k3s-ha01/02` de E07 à E14 ; mini-projet sans la revue jouée. Gain estimé : 57-71 h → 50-62 h. À décider après les retours de l'apprenant.
 
 ## Retours de l'apprenant en attente
 
@@ -63,6 +73,8 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 2026-10-08 | 3 (bloc B) | Lancée par la tâche planifiée. Versions du bloc B figées (recherche web, `annexes/versions-bloc-B.md`), décisions structurantes en PLAN §4.9 et journal, cartes des exercices des modules 07 à 11 |
 | 2026-10-08 | 3 (bloc B) | Modules 07 à 11 rédigés (18 rédacteurs en parallèle sur des briefs communs), harmonisés (1 agent par module), relus indépendamment (9 relecteurs, ~420 vérifications sur la documentation et le code officiels, défauts bloquants corrigés : migration VRRP de la bordure, `--dry-run` de cephadm, construction d'iPXE, playbooks E24/E28/E46 de M09…). 323 scripts : `bash -n` et `shellcheck -x` propres. Annexes, topologie, README, REPRISE mis à jour. Correction transverse : M00-E22 (secret PBS hors des arguments de `pvesm`). **Bloc B terminé**, tâche planifiée créée pour lancer le bloc C |
 | 2026-10-08 | 4 (bloc C) | Lancée par la tâche planifiée. Versions du bloc C figées (recherche web), décisions structurantes en PLAN §4.10 et journal, applications métier `apps/` (testées), cartes des exercices des modules 12 à 18 |
+
+| 2026-10-08/15 | 4 (bloc C) | Rédaction des modules 12 à 18 (25 rédacteurs sur des briefs et des fiches de module communs ; interruption par la limite hebdomadaire d'utilisation le 8, reprise le 15 sans perte, les rédacteurs interrompus ayant été relancés sur leur contexte), harmonisation (7 agents, décisions transverses : préfixe `medisphere.internal/`, `wb-checks` agrégée, `eth0`/`eth1`, port 5300, Service MédiAgenda en 80), relecture indépendante (11 relecteurs, ~600 vérifications sur la documentation et le code officiels ; défauts bloquants corrigés : exemption Cosign retirée de Harbor 2.15.3, signature des manifestes de plateforme, instantanés de volumes chiffrés, base visée par les restaurations CNPG, `--reset-values` de Cilium, témoins de pannes M15 qui ne toléraient pas `dedie=bdd`, reprise de la recette par le chart M17…). Corrections transverses : flux `s3-01` des travailleurs, `harbor_api` sans mot de passe en argument, `wb_k8s_restaurer` sans `replace --force`. 412 scripts du bloc : `bash -n` et `shellcheck -x` propres. Annexes, topologie, README, REPRISE mis à jour. **Bloc C terminé**, tâche planifiée créée pour lancer le bloc D+E |
 
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
@@ -101,4 +113,8 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 - **Harbor et un runner Docker permanents** (`reg01`, `runner02`) : consommés par la CI (M19) et GitOps (M20).
 - **Cosign sans Rekor public** (clé MédiSphère, pas de journal de transparence) : lab souverain, choix discuté dans l'ADR-0130.
 - **Helm 4** enseigné (Helm 3 en fin de vie en février 2027) ; utilisé comme simple installateur aux M14-M16, approfondi au M17.
-- **Cluster API 1.12** imposé par CAPMOX 0.9 ; compatibilité de CAPMOX avec Proxmox VE 9 non documentée, à confirmer sur le lab (repli décrit dans le module).
+- **Cluster API 1.12** imposé par CAPMOX 0.9 ; compatibilité de CAPMOX avec Proxmox VE 9 non documentée, à confirmer sur le lab (contrôle préalable et repli CAPD décrits dans le module) ; CAPO 0.15 exige CAPI 1.14 : cluster de gestion kind séparé pour M18-E16.
+- **RKE2 sur Rocky 10** (RKE2 ne supporte pas Debian) ; **Talos** en adresses fixes sur `vsandbox`.
+- **Chart MédiAgenda** : les objets prennent le nom standard `mediagenda` au M17 (reprise de la recette décrite en M17-E04) ; le déploiement par environnement consomme un rendu commité et vérifié du chart.
+- **Valkey de recette à une instance persistante** au M16 (trois instances éphémères au M14).
+- **Rédaction en deux sessions** : la limite hebdomadaire d'utilisation a interrompu la rédaction le 8 octobre ; elle a repris le 15 sur l'invite « Tu peux reprendre » de l'apprenant.

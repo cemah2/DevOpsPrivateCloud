@@ -4,13 +4,13 @@
 >
 > Domaines relevés le 7 octobre 2026 sur les pages officielles des éditeurs (liens en fin de section). Ils changent régulièrement : vérifie la version en vigueur avant de t'inscrire. Les correspondances sont **indicatives** : un exercice « couvre » un domaine quand il y fait pratiquer un geste de l'examen, pas quand il en parle. Les examens pratiques (LFCS, RHCSA, RHCE, CKA) demandent en plus de la **vitesse** : refais les exercices `CHRONO` et les `BF` sans indice.
 
-État : **blocs A et B** (modules 00 à 11) renseignés ; blocs C à G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026.
+État : **blocs A, B et C** (modules 00 à 18) renseignés ; blocs D à G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)).
 
 ## Vue d'ensemble
 
 | Certification | Éditeur | Format | Couverture par le workbook | Où |
 |---|---|---|---|---|
-| LFCS — Linux Foundation Certified System Administrator | Linux Foundation | pratique, en ligne | large pour le réseau et le stockage (blocs A et B), conteneurs au bloc C | §1 |
+| LFCS — Linux Foundation Certified System Administrator | Linux Foundation | pratique, en ligne | large pour le réseau et le stockage (blocs A et B), moteurs de conteneurs (M12) | §1, §14 |
 | RHCSA — Red Hat Certified System Administrator (EX200, RHEL 10) | Red Hat | pratique | partielle : le workbook est surtout sur Debian, Rocky Linux 10 au M03 | §2 |
 | RHCE — Red Hat Certified Engineer (EX294) | Red Hat | pratique (Ansible) | large pour Ansible (M04, M06), appliqué à grande échelle au bloc B | §3 |
 | HashiCorp Terraform Associate (004) | HashiCorp | QCM | large pour les concepts, avec OpenTofu (M05) | §4 |
@@ -19,7 +19,11 @@
 | CCNA (200-301) | Cisco | QCM et simulations | partielle : les concepts L2/L3 et FHRP (M07), sur Linux et non sur IOS | §7 |
 | Ceph : Red Hat Certified Specialist in Ceph Cloud Storage (EX260) | Red Hat | pratique | **examen retiré** ; programme couvert par M08 | §8 |
 | Proxmox VE | Proxmox Server Solutions | formation avec attestation, sans examen | M00, M09 | §8 |
-| CKA, CKAD, CKS | CNCF / Linux Foundation | pratique (Kubernetes) | à venir : blocs C à F | §9 |
+| CKA — Certified Kubernetes Administrator (programme v1.35) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large : installation kubeadm, cycle de vie, réseau, stockage et dépannage (M14 à M17) ; l'autoscaling seulement au M28 | §9 |
+| CKAD — Certified Kubernetes Application Developer (programme v1.37) | CNCF / Linux Foundation | pratique, en ligne (2 h) | large pour la conception, la configuration et le déploiement (M12, M14, M15, M17) | §10 |
+| CKS — Certified Kubernetes Security Specialist (programme v1.34) | CNCF / Linux Foundation | pratique, en ligne (2 h) ; CKA en cours de validité exigée | **partielle** : chaîne d'approvisionnement (M12, M13), RBAC, admission, audit, chiffrement (M14), politiques réseau et chiffrement entre nœuds (M15) ; sécurité à l'exécution au bloc F | §11 |
+| KCNA et KCSA — Kubernetes and Cloud Native (Security) Associate | CNCF / Linux Foundation | QCM en ligne | KCNA : largement couvert par le bloc C ; KCSA : en partie (le reste au bloc F) | §12 |
+| DCA — Docker Certified Associate | Mirantis | QCM | partielle : M12, M13 ; Swarm et produits d'entreprise de Mirantis non couverts | §13 |
 
 ---
 
@@ -29,7 +33,7 @@ Examen pratique de 2 heures sur Ubuntu. Le module 00 **évalue** ces bases (E01,
 
 | Domaine (poids) | Compétences de l'examen | Exercices du bloc A | Exercices du bloc B |
 |---|---|---|---|
-| **Operations Deployment** (25 %) | paramètres du noyau à chaud ; processus ; journaux ; tâches planifiées ; intégrité et disponibilité des ressources ; scripts de maintenance ; démarrage et services ; SELinux ; machines virtuelles ; moteurs de conteneurs | sysctl et routage : M00-E10, M03-E13 · services, journaux : M00-E06, M00-E40, M01-E30, M01-E37 · planification (timers systemd) : M00-E30, M02-E26, M02-E35, M02-E41 · mises à jour maîtrisées : M00-E34, M03-E13 · scripts : M02-E03, M02-E10 à E14, M02-E27 à E30, M02-E39, M02-E44 · démarrage : M00-E44, M03-E22, M03-E23 · SELinux : M03-E06, M03-E25 · VMs : M00-E11, M00-E12, M00-E18, M00-E19 · conteneurs : *module 12* | paramètres du noyau (`sysctl`, conntrack) : M07-E27, M07-E41 · KVM imbriqué (module et paramètre du noyau) : M09-E02 · VMs : M09-E07, M09-E11, M09-E23 · démarrage réseau et installation : M11-E03, M11-E04, M11-E05 · conteneurs vus en exploitation (Podman, Docker) : M08-E03, M10-E20 · journaux et services : M07-E22, M10-E20 · SELinux sur Rocky : M08-E02 |
+| **Operations Deployment** (25 %) | paramètres du noyau à chaud ; processus ; journaux ; tâches planifiées ; intégrité et disponibilité des ressources ; scripts de maintenance ; démarrage et services ; SELinux ; machines virtuelles ; moteurs de conteneurs | sysctl et routage : M00-E10, M03-E13 · services, journaux : M00-E06, M00-E40, M01-E30, M01-E37 · planification (timers systemd) : M00-E30, M02-E26, M02-E35, M02-E41 · mises à jour maîtrisées : M00-E34, M03-E13 · scripts : M02-E03, M02-E10 à E14, M02-E27 à E30, M02-E39, M02-E44 · démarrage : M00-E44, M03-E22, M03-E23 · SELinux : M03-E06, M03-E25 · VMs : M00-E11, M00-E12, M00-E18, M00-E19 · conteneurs : voir §14 (bloc C) | paramètres du noyau (`sysctl`, conntrack) : M07-E27, M07-E41 · KVM imbriqué (module et paramètre du noyau) : M09-E02 · VMs : M09-E07, M09-E11, M09-E23 · démarrage réseau et installation : M11-E03, M11-E04, M11-E05 · conteneurs vus en exploitation (Podman, Docker) : M08-E03, M10-E20 · journaux et services : M07-E22, M10-E20 · SELinux sur Rocky : M08-E02 |
 | **Networking** (25 %) | adressage IPv4/IPv6 et résolution de noms ; temps synchronisé ; diagnostic réseau ; OpenSSH serveur et client ; filtrage, redirection de ports, NAT ; routage statique ; ponts et agrégats ; reverse proxies et répartiteurs de charge | adressage et résolution : M00-E10, M00-E12, M00-E13, M03-E11, M06-E06 à E08 · temps : M00-E31, M00-E45, M06-E21 · diagnostic : M00-E38 à E43, M00-E47, M06-E35 · OpenSSH : M00-E15, M00-E27, M01-E40, M04-E11, M06-E19, M06-E20 · nftables, NAT : M00-E10, M00-E26, M00-E38, M04-E17, M06-E30 · routage statique, tunnels : M00-E16, M00-E21 · ponts : M00-E09, M00-E28 · agrégats, reverse proxies, répartiteurs : voir bloc B | adressage et cartographie : M07-E02 · diagnostic : M07-E20, M07-E38, M07-E41, M07-E44, M11-E23 · OpenSSH (commande forcée) : M07-E29 · filtrage, NAT, redirection de ports : M07-E13, M07-E26, M07-E30 · routage statique puis dynamique : M07-E06, M07-E07, M07-E14, M07-E19 · **ponts et agrégats** : M07-E04, M07-E05, M07-E17, M07-E40 · **reverse proxies et répartiteurs** : M07-E10, M07-E11, M07-E12, M07-E13, M07-E28, M07-E39 · tunnels : M07-E18 |
 | **Storage** (20 %) | LVM ; système de fichiers virtuel ; création, gestion et dépannage des systèmes de fichiers ; systèmes de fichiers distants et périphériques bloc réseau ; swap ; automontage ; performances | LVM, LVM-thin, systèmes de fichiers : M00-E07, M00-E19, M00-E44 · performances : M00-E48 · partitionnement automatisé : M03-E05, M03-E06 · NFS, iSCSI, Ceph : voir bloc B · swap et automontage : non pratiqués (révision personnelle) | **systèmes de fichiers distants et périphériques bloc réseau** : M08-E06 (RBD), M08-E10 (CephFS), M08-E16 (NFS), M08-E17 (iSCSI), M08-E41 · ZFS et chiffrement LUKS : M08-E08, M08-E27 · montages persistants : M08-E06, M08-E10 · performances : M08-E28, M08-E42 · swap et automontage : toujours non pratiqués |
 | **Essential Commands** (20 %) | opérations Git de base ; créer, configurer et dépanner des services ; performances ; contraintes propres aux applications ; espace disque ; certificats SSL | Git : M01-E02, M01-E07, M01-E08, M01-E12, M01-E13, M01-E18, M01-E19, M01-E41, M01-E44 · services en panne : M01-E37, M04-E40, M06-E39 · performances : M00-E48, M02-E40, M04-E26, M04-E41 · espace disque, nettoyage : M02-E37, M01-E45 · certificats : M01-E04, M06-E02, M06-E03, M06-E18, M06-E27, M06-E37 | services en panne : M07-E39, M10-E42, M11-E19 · espace disque (seuils de remplissage) : M08-E20, M08-E37 · certificats : M07-E12, M08-E11, M10-E27, M11-E13 |
@@ -162,12 +166,98 @@ Source : [EX260 (retiré), page Red Hat](https://www.redhat.com/en/services/trai
 
 **Proxmox VE.** Proxmox Server Solutions ne propose pas d'examen : ses formations officielles (*Proxmox VE Deployment and Management*, *Proxmox VE Clustering and Shared Storage*) délivrent un certificat de fin de formation. Le module 00 recouvre en partie la première, le module 09 la seconde (cluster, quorum, HA, Ceph hyperconvergé, réplication, sauvegarde : M09-E04 à M09-E15). Source : [FAQ des formations Proxmox](https://proxmox.com/en/training/faqs).
 
-## 9. À compléter aux blocs suivants
+## 9. CKA — Certified Kubernetes Administrator
+
+Examen pratique de 2 heures, en ligne et surveillé, sur des clusters fournis (ligne de commande seulement, documentation de kubernetes.io autorisée). Programme **v1.35** de la CNCF (le workbook est en 1.36 : les écarts entre les deux versions ne touchent pas les gestes de l'examen). Le module 14 en est le cœur : `k8s-par1` est construit par kubeadm, en haute disponibilité, puis exploité, monté de version et cassé. L'examen demande de la **vitesse** : refais M14-E34 (examen blanc) et les `BF` des modules 14 à 16 sans indice, et entraîne-toi à `kubectl` impératif (`create`, `expose`, `--dry-run=client -o yaml`), que le workbook utilise peu (tout y passe par le code).
+
+| Domaine (poids) | Compétences de l'examen | Exercices du bloc C |
+|---|---|---|
+| **Storage** (10 %) | classes de stockage et provisionnement dynamique ; types de volumes, modes d'accès, politiques de récupération ; PV et PVC | classes et provisionnement dynamique : M16-E03, M16-E06, M16-E07, M16-E12 · types de volumes, modes d'accès, `reclaimPolicy` : M16-E02, M16-E03, M16-E11 · PV et PVC : M16-E03, M16-E08, M16-E10, M16-E29 · dépannage : M16-E22, M16-E35, M16-E36, M16-E37 |
+| **Troubleshooting** (30 %) | clusters et nœuds ; composants du cluster ; consommation de ressources ; sorties des conteneurs ; services et réseau | nœuds : M14-E22, M14-E35, M14-E36 · composants : M14-E39 (API), M14-E40 (etcd), M14-E29 · ressources (`kubectl top`, metrics-server) : M14-E20 · journaux des conteneurs : M14-E20, M14-E38 · services et réseau : M14-E42 (DNS), M15-E35, M15-E36, M15-E37, M15-E42 · astreintes : M14-E43, M15-E43, M16-E43 |
+| **Workloads and Scheduling** (15 %) | déploiements, mises à jour progressives et retours arrière ; ConfigMaps et Secrets ; autoscaling ; primitives d'auto-réparation ; admission et ordonnancement (limites, affinités) | déploiements et retours arrière : M14-E07, M14-E16 · ConfigMaps et Secrets : M14-E08 · auto-réparation (sondes, StatefulSets, DaemonSets, PDB) : M14-E08, M14-E15, M14-E16 · ordonnancement (affinités, taints, répartition, priorités) : M14-E14, M14-E36 · limites et admission : M14-E10, M14-E18 · **autoscaling** (HPA) : non pratiqué au bloc C (module 28) |
+| **Cluster Architecture, Installation and Configuration** (25 %) | RBAC ; préparer l'infrastructure ; créer et gérer un cluster avec kubeadm ; cycle de vie ; plan de contrôle hautement disponible ; Helm et Kustomize pour installer des composants ; interfaces d'extension (CNI, CSI, CRI) ; CRD et opérateurs | RBAC : M14-E11, M14-E12, M14-E13, M14-E41 · préparer les nœuds : M14-E02 · kubeadm : M14-E04, M14-E05, M14-E17 · cycle de vie (montée de version, certificats, etcd) : M14-E24, M14-E25, M14-E26 · plan de contrôle HA : M14-E03, M14-E29 · Helm et Kustomize : M14-E20 (metrics-server par Helm), M17-E02, M17-E04, M17-E10, M17-E16 · CRI : M14-E02 ; CNI : M14-E05, M15-E09 ; CSI : M16-E04, M16-E44 · CRD et opérateurs : M15-E13 (cert-manager), M16-E13 (Rook), M16-E18 (CloudNativePG) |
+| **Services and Networking** (20 %) | connectivité entre pods ; NetworkPolicy ; Services ClusterIP, NodePort, LoadBalancer et leurs points de terminaison ; Gateway API pour le trafic entrant ; contrôleurs et ressources Ingress ; CoreDNS | connectivité : M15-E02, M15-E05 · NetworkPolicy : M15-E06, M15-E17, M15-E28 · Services et EndpointSlices : M15-E03, M15-E10 · **Gateway API** : M15-E07, M15-E12, M15-E16 · Ingress : M15-E18 (migration d'Ingress vers la Gateway API ; ingress-nginx est retiré, l'examen garde les objets `Ingress`) · CoreDNS : M15-E04, M15-E36 |
+| Chronométré, sans corrigé | — | M14-E34 (examen blanc d'administration), M15-E34, M16-E34, M17-E18 |
+
+Source : [programme CKA v1.35 (CNCF)](https://github.com/cncf/curriculum) et [page de l'examen](https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/) (Linux Foundation).
+
+## 10. CKAD — Certified Kubernetes Application Developer
+
+Examen pratique de 2 heures, en ligne. Programme **v1.37**. Le point de vue est celui de l'équipe MédiAgenda : construire l'image, écrire les manifestes, configurer, exposer, déboguer. Le workbook le pratique côté plateforme ; ce qui manque surtout, c'est la vitesse d'écriture des manifestes à la main.
+
+| Domaine (poids) | Compétences de l'examen | Exercices du bloc C |
+|---|---|---|
+| **Application Design and Build** (20 %) | construire et modifier des images ; choisir la bonne ressource (Deployment, DaemonSet, CronJob…) ; pods multi-conteneurs (init, sidecar) ; volumes persistants et éphémères | images : M12-E05, M12-E10, M12-E12 · ressources de charge : M14-E07, M14-E15 · conteneurs d'initialisation : M14-E15 · volumes : M16-E02, M16-E03, M16-E08 |
+| **Application Deployment** (20 %) | stratégies de déploiement (bleu/vert, canari) ; Deployments et mises à jour progressives ; Helm pour déployer des paquets existants ; Kustomize | canari par poids de route : M15-E16 · mises à jour progressives : M14-E16 · Helm : M17-E02, M17-E06 · Kustomize : M17-E04, M17-E09 |
+| **Application Observability and Maintenance** (15 %) | dépréciations d'API ; sondes et contrôles de santé ; outils CLI de surveillance ; journaux des conteneurs ; débogage | dépréciations (montée de version) : M14-E25, M14-E30 · sondes : M14-E08 · `kubectl top`, `events`, `logs`, `debug` : M14-E20 · débogage : M14-E37, M14-E38 |
+| **Application Environment, Configuration and Security** (25 %) | ressources d'extension (CRD, opérateurs) ; authentification, autorisation, admission ; demandes, limites, quotas ; ConfigMaps ; Secrets ; ServiceAccounts ; sécurité applicative (`securityContext`, capacités) | CRD et opérateurs : M15-E13, M16-E18 · authentification, RBAC, admission : M14-E11, M14-E12, M14-E18 · demandes, limites, quotas : M14-E08, M14-E10, M16-E20 · ConfigMaps et Secrets : M14-E08, M17-E15 · ServiceAccounts : M14-E13 · `securityContext` et capacités : M14-E08, M14-E18, M12-E24 |
+| **Services and Networking** (20 %) | NetworkPolicy ; accès aux applications par les Services ; règles Ingress | NetworkPolicy : M15-E06, M15-E17 · Services : M15-E03, M15-E35 · exposition : M15-E07 (Gateway API), M15-E18 (Ingress) |
+
+Source : [programme CKAD v1.37 (CNCF)](https://github.com/cncf/curriculum).
+
+## 11. CKS — Certified Kubernetes Security Specialist (partiel)
+
+Examen pratique de 2 heures, en ligne, qui exige une **CKA en cours de validité**. Programme **v1.34**. Le bloc C en couvre une bonne moitié : la chaîne d'approvisionnement (M12, M13), le contrôle d'accès, l'admission, l'audit et le chiffrement (M14), les politiques réseau et le chiffrement entre nœuds (M15). La sécurité à l'exécution (Falco, Tetragon), Kyverno, kube-bench et kubescape en profondeur, AppArmor dans Kubernetes et les conteneurs isolés (gVisor, Kata) arrivent au **module 26** (bloc F) : la colonne de droite dit ce qui reste.
+
+| Domaine (poids) | Exercices du bloc C | À venir (bloc F) |
+|---|---|---|
+| **Cluster Setup** (15 %) : NetworkPolicy au niveau du cluster ; référentiel CIS des composants ; Ingress en TLS ; métadonnées et points d'accès des nœuds ; vérifier les binaires avant déploiement | NetworkPolicy et politique de base du cluster : M15-E06, M15-E28 · TLS de l'entrée : M15-E12, M15-E33 · référentiel CIS (kube-bench, comparé entre distributions) : M18-E15 · binaires vérifiés (signature et empreinte) : M13-E05, M14-E02 | CIS appliqué à `k8s-par1` (M26) ; métadonnées des nœuds (sans objet dans un lab sans nuage public, à réviser) |
+| **Cluster Hardening** (15 %) : RBAC minimal ; comptes de service (désactiver les jetons par défaut, droits minimaux) ; restreindre l'accès à l'API ; monter de version | RBAC : M14-E11, M14-E41 · comptes de service et jetons liés : M14-E13 · accès à l'API (VIP interne, certificats courts, bris de glace) : M14-E03, M14-E06, M14-E12 · montée de version : M14-E25 | OIDC pour Kubernetes (M24) |
+| **System Hardening** (10 %) : réduire l'empreinte du système hôte ; identités à moindre privilège ; limiter l'accès réseau externe ; AppArmor, seccomp | OS minimal et immuable : M18-E05 (Talos), M18-E04 (profil CIS de RKE2) · moindre privilège : M13-E03 (robots), M14-E11 · sortie limitée : M15-E28 (`toFQDNs`), M15-E32 · seccomp, capacités, SELinux : M12-E24, M12-E25 | profils AppArmor et seccomp dans les pods (M26) |
+| **Minimize Microservice Vulnerabilities** (20 %) : Pod Security Standards ; Secrets ; isolation (multi-locataire, conteneurs isolés) ; chiffrement de pod à pod (Cilium, Istio) | Pod Security Admission : M14-E18 · Secrets chiffrés au repos : M14-E28, M17-E15 · multi-équipes : M14-E33, M15-E28 · chiffrement entre nœuds (WireGuard de Cilium) : M15-E24 · espaces de noms utilisateur : M12-E26 | Vault et External Secrets (M25) ; gVisor ou Kata (M26) |
+| **Supply Chain Security** (20 %) : image de base minimale ; connaître sa chaîne (SBOM, CI/CD, dépôts d'artefacts) ; sécuriser la chaîne (registres autorisés, signer et valider) ; analyse statique des charges et des images | images minimales : M12-E10, M12-E27 · SBOM et provenance : M13-E06, M13-E08 · chaîne de livraison : M13-E09 · registres autorisés : M14-E18 (ValidatingAdmissionPolicy `medisphere-images`), M14-E19 · signature exigée : M13-E07, M13-E14, M17-E08 · analyse statique : M12-E16 (Hadolint), M13-E05 (Trivy), M15-E21 et M16-E23 (kubeconform) | vérification de signature à l'admission (Kyverno, M26) |
+| **Monitoring, Logging and Runtime Security** (20 %) : analyse comportementale ; menaces ; phases d'une attaque ; immuabilité des conteneurs à l'exécution ; journaux d'audit | journaux d'audit : M14-E27 · racine en lecture seule : M12-E24, M14-E08 | Falco, Tetragon, réponse à incident (M26, F6) |
+
+Source : [programme CKS v1.34 (CNCF)](https://github.com/cncf/curriculum).
+
+## 12. KCNA et KCSA
+
+QCM en ligne, sans manipulation. **KCNA** (*Kubernetes and Cloud Native Associate*) vérifie les notions ; le bloc C les pratique toutes, au-delà de ce que demande l'examen. **KCSA** (*Kubernetes and Cloud Native Security Associate*) est le pendant théorique de la CKS : le bloc C en couvre la moitié, le bloc F le reste. Révise surtout le vocabulaire et l'écosystème de la CNCF, que le workbook n'aborde que par ce qu'il utilise.
+
+| Domaine KCNA (poids) | Exercices du bloc C |
+|---|---|
+| **Kubernetes Fundamentals** (44 %) : concepts, administration, ordonnancement, conteneurs | M12-E03, M12-E04, M12-E09 · M14-E04 à M14-E09, M14-E14 |
+| **Container Orchestration** (28 %) : réseau, sécurité, dépannage, stockage | M15-E02, M15-E03, M15-E06 · M14-E11, M14-E18 · M14-E20 · M16-E03, M16-E04 |
+| **Cloud Native Application Delivery** (16 %) : livraison, débogage | M17-E02, M17-E04, M17-E10 · M14-E20 ; GitOps au module 20 |
+| **Cloud Native Architecture** (12 %) : observabilité, écosystème, communauté | M15-E05 (Hubble), M18-E01 (panorama des distributions) ; observabilité au bloc E |
+
+| Domaine KCSA (poids) | Exercices du bloc C | À venir |
+|---|---|---|
+| **Overview of Cloud Native Security** (14 %) : les 4C, isolation, dépôts d'artefacts et images, sécurité du code | M12-E24, M12-E26, M13-E01, M13-E14 | — |
+| **Kubernetes Cluster Component Security** (22 %) : API server, contrôleurs, ordonnanceur, kubelet, runtime, kube-proxy, etcd, réseau, stockage | M14-E26 (certificats, `serverTLSBootstrap`), M14-E27, M14-E28, M14-E24, M15-E24, M16-E26 | — |
+| **Kubernetes Security Fundamentals** (22 %) : Pod Security, authentification, Secrets, isolation, audit, NetworkPolicy | M14-E18, M14-E12, M14-E13, M14-E28, M14-E33, M14-E27, M15-E06 | — |
+| **Kubernetes Threat Model** (16 %) : frontières de confiance, persistance, déni de service, code malveillant, attaquant sur le réseau, données sensibles, élévation de privilèges | M13-E24, M14-E45, M15-E45 (questions expert) | F6 (réponse à incident) |
+| **Platform Security** (16 %) : chaîne d'approvisionnement, dépôt d'images, observabilité, maillage de services, PKI, connectivité, admission | M13-E09, M13-E14, M14-E26, M15-E33, M14-E18 | maillage de services (hors périmètre), M26 |
+| **Compliance and Security Frameworks** (10 %) | M18-E15 (CIS comparé), M13-E17 (ADR de confiance) | M26, F6 (HDS, ISO 27001) |
+
+Sources : [programmes KCNA et KCSA (CNCF)](https://github.com/cncf/curriculum).
+
+## 13. Docker Certified Associate (DCA)
+
+**Statut** : l'examen existe toujours, mais il n'appartient plus à Docker. Docker a cédé son activité d'entreprise à **Mirantis** en 2019, qui administre depuis la certification. QCM. Domaines relevés sur une source secondaire (juin 2026), à vérifier sur la page de Mirantis avant de t'inscrire. L'examen garde une large part de **Swarm** et des produits d'entreprise de Mirantis (MKE, MSR), que le workbook ne pratique pas : il a retenu Kubernetes pour l'orchestration. Avec le seul bloc C, c'est un examen à préparer en partie à côté.
+
+| Domaine (poids) | Exercices du bloc C |
+|---|---|
+| **Orchestration** (25 %) : Swarm, services, piles, mise à l'échelle | non couvert (Swarm hors périmètre) ; Compose : M12-E08 ; orchestration par Kubernetes : M14 |
+| **Image Creation, Management, and Registry** (20 %) | M12-E04, M12-E05, M12-E10, M12-E11, M12-E13, M12-E15, M12-E16 · registre d'entreprise : M13-E02, M13-E03, M13-E10 |
+| **Installation and Configuration** (15 %) | M12-E02, M12-E20, M12-E26 |
+| **Networking** (15 %) | M12-E07, M12-E37 |
+| **Security** (15 %) | M12-E24, M12-E26, M13-E07, M13-E14 |
+| **Storage and Volumes** (10 %) | M12-E07, M12-E29, M12-E36, M12-E39 |
+
+Sources : [Mirantis, certifications](https://certification.mirantis.com/), [présentation de l'examen (KodeKloud, juin 2026, source secondaire)](https://kodekloud.com/blog/docker-certification/).
+
+## 14. LFCS : compléments du bloc C
+
+Le domaine *Operations Deployment* de la LFCS (§1) demande de savoir utiliser un **moteur de conteneurs** : lancer, inspecter, arrêter des conteneurs, gérer images, volumes et réseaux, et faire démarrer un conteneur avec le système. Le module 12 le couvre : M12-E03 (cycle de vie), M12-E04 (images), M12-E06 (Podman sans privilège), M12-E07 (volumes et réseaux), M12-E14 (Quadlet et systemd), M12-E18 (journaux, ressources, santé), M12-E35 à M12-E41 (pannes). Les certificats (*Essential Commands*) reviennent avec cert-manager : M15-E13, M15-E40. Swap, automontage, ACL et LDAP restent non pratiqués (LDAP au module 24).
+
+## 15. À compléter aux blocs suivants
 
 | Certification | Domaines officiels | Bloc concerné |
 |---|---|---|
-| **CKA** (programme v1.35) | Cluster Architecture, Installation & Configuration · Workloads & Scheduling · Services & Networking · Storage · Troubleshooting | C (14-18), à relever au démarrage du bloc C sur [cncf/curriculum](https://github.com/cncf/curriculum) |
-| **CKAD** | à relever | C, D |
-| **CKS** | à relever | F (26) |
-| **LFCS** (compléments) | conteneurs, swap, automontage, ACL, LDAP | C (12), F (24) |
-| **Vault Associate**, **Prometheus Certified Associate**, **Certified Argo Project Associate**… | à relever si pertinents | D, E, F |
+| **CKA** (complément) | autoscaling des charges (HPA) | G (28) |
+| **CKS** (complément) | sécurité à l'exécution, AppArmor et seccomp dans les pods, conteneurs isolés, admission par politiques, CIS appliqué | F (24-26) |
+| **KCSA** (complément) | modèle de menaces, conformité | F, finaux F6 |
+| **LFCS** (compléments) | swap, automontage, ACL, LDAP | F (24) |
+| **GitLab CI/CD Associate** (complément) | `rules`, `needs`, environnements, runners Kubernetes | D (19) |
+| **Certified Argo Project Associate (CAPA)**, **Prometheus Certified Associate (PCA)**, **OpenTelemetry Certified Associate (OTCA)**, **Vault Associate** | à relever si pertinents | D, E, F |

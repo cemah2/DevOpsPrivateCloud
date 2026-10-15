@@ -24,7 +24,7 @@ Types d'exercices : labs guidés et libres, break & fix (pannes injectées par `
 
 ## État
 
-Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées, modules 00 à 06) et **B** (infrastructure cloud privé, modules 07 à 11) sont disponibles.
+Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées, modules 00 à 06), **B** (infrastructure cloud privé, modules 07 à 11) et **C** (conteneurs et Kubernetes, modules 12 à 18) sont disponibles.
 
 | # | Module | Exercices |
 |---|---|---|
@@ -40,13 +40,20 @@ Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées
 | 09 | [Cluster de virtualisation](modules/09-cluster-proxmox/README.md) | 45 + mini-projet |
 | 10 | [OpenStack](modules/10-openstack/README.md) | 45 + mini-projet |
 | 11 | [Provisioning bare-metal](modules/11-bare-metal/README.md) | 24 + mini-projet |
+| 12 | [Conteneurs](modules/12-conteneurs/README.md) | 45 + mini-projet |
+| 13 | [Registre et chaîne d'approvisionnement](modules/13-registre-supply-chain/README.md) | 24 + mini-projet |
+| 14 | [Administration Kubernetes](modules/14-kubernetes-admin/README.md) | 45 + mini-projet |
+| 15 | [Réseau Kubernetes](modules/15-kubernetes-reseau/README.md) | 45 + mini-projet |
+| 16 | [Stockage et données dans Kubernetes](modules/16-kubernetes-stockage/README.md) | 45 + mini-projet |
+| 17 | [Packaging (Helm, Kustomize, Helmfile)](modules/17-packaging/README.md) | 24 + mini-projet |
+| 18 | [Distributions et cycle de vie des clusters](modules/18-distributions/README.md) | 24 + mini-projet |
 
-Les blocs suivants (C à G, puis les finaux) sont produits bloc par bloc.
+Les applications métier de MédiSphère (MédiAgenda, MédiDoc, MédiNotif, Legacy-RDV) sont dans [`apps/`](apps/README.md) à partir du module 12. Les blocs suivants (D à G, puis les finaux) sont produits bloc par bloc.
 
 Annexes :
 - [`annexes/prerequis.md`](annexes/prerequis.md) — graphe des dépendances entre modules, ce que chaque module suppose et laisse en place ;
-- [`annexes/certifications.md`](annexes/certifications.md) — exercices utiles pour préparer LFCS/RHCSA, RHCE, Terraform Associate, GitLab, CKA… ;
+- [`annexes/certifications.md`](annexes/certifications.md) — exercices utiles pour préparer LFCS/RHCSA, RHCE, Terraform Associate, GitLab, CKA, CKAD, CKS… ;
 - [`annexes/glossaire.md`](annexes/glossaire.md) — termes du workbook, avec l'exercice qui les introduit ;
-- [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) et [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md) — versions de référence des blocs A et B et changements de comportement à connaître.
+- [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md) et [`annexes/versions-bloc-C.md`](annexes/versions-bloc-C.md) — versions de référence des blocs A, B et C et changements de comportement à connaître.
 
 Tu rencontres une erreur dans un exercice ? Note l'exercice, ce que tu as fait et le message d'erreur, et utilise le message « Corriger après tes tests » de [`REPRISE.md`](REPRISE.md).
