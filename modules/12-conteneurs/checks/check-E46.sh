@@ -206,7 +206,7 @@ EOF
   _m12_e46_pods="${_m12_e46_pods:-[]}"
   for _m12_e46_p in "${_m12_e46_apps[@]}"; do
     check_cmd "ctr02 : un conteneur du compte app exécute $_m12_e46_p tirée du registre de travail" \
-      bash -c 'jq -e --arg i "$2/$3:" "[.[] | select(.image | startswith(\$i))] | length >= 1" >/dev/null <<<"$1"' \
+      bash -c 'jq -e --arg i "$2/$3" "[.[] | select((.image | startswith(\$i + \":\")) or (.image | startswith(\$i + \"@\")))] | length >= 1" >/dev/null <<<"$1"' \
       _ "$_m12_e46_pods" "$_m12x_nom01:5000" "$_m12_e46_p"
   done
   check_cmd "ctr02 : aucun conteneur privilégié" bash -c 'jq -e "all(.[]; .privilegie == false) and length > 0" >/dev/null <<<"$1"' _ "$_m12_e46_pods"

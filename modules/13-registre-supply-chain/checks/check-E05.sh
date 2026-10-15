@@ -60,10 +60,12 @@ _m13_ignore() {
   [[ -n "$c" ]] || return 1
   while IFS= read -r l; do
     if [[ -z "${l//[[:space:]]/}" ]]; then prec=""; continue; fi
-    if [[ "$l" =~ ^[[:space:]]*# ]]; then prec="$l"; continue; fi
+    # Le commentaire qui précède un identifiant peut tenir sur plusieurs lignes : on garde le bloc.
+    if [[ "$l" =~ ^[[:space:]]*# ]]; then prec="$prec $l"; continue; fi
     n=$((n + 1))
     # Chaque identifiant suit un commentaire qui porte une date de revue AAAA-MM-JJ.
     [[ "$prec" =~ [0-9]{4}-[0-9]{2}-[0-9]{2} ]] || return 1
+    prec=""
   done <<<"$c"
   (( n >= 1 ))
 }

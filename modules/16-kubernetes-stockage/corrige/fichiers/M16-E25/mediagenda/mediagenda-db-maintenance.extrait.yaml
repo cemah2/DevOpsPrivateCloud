@@ -18,7 +18,7 @@ spec:
   primaryUpdateMethod: switchover
   # Délais (valeurs par défaut de la documentation 1.30 rappelées pour mémoire) :
   # failoverDelay: 0        # bascule dès que le primaire est déclaré en échec
-  # switchoverDelay: 3600   # délai de l'arrêt « fast » de l'ancien primaire (à vérifier sur ta version)
+  # switchoverDelay: 3600   # délai de l'arrêt « fast » de l'ancien primaire (défaut lu dans l'API 1.30)
   postgresql:
     parameters:
       max_connections: "150"

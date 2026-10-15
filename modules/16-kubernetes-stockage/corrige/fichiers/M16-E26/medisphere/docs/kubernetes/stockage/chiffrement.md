@@ -13,7 +13,7 @@
 | Transit nœud ↔ Ceph | msgr2 `secure` (AES-GCM) : imposé par `ceph-par1` (M08-E27), demandé par les clients noyau (`mapOptions: krbd:ms_mode=secure`, `kernelMountOptions: ms_mode=secure`) | écoute du VLAN 30 | un nœud compromis (il a les clés) |
 | Repos côté Ceph | OSD chiffrés par cephadm (LUKS, clés dans le magasin des moniteurs) | vol d'un disque, copie d'un fichier disque d'OSD | un administrateur Ceph, une identité cephx qui lit l'image (les données sont en clair au niveau RADOS) |
 | Repos côté client | classe `ceph-rbd-chiffre` : LUKS2 ouvert **sur le nœud** par ceph-csi ; une DEK par volume, enveloppée par la KEK de la classe, rangée dans les métadonnées de l'image | administrateur Ceph, `client.k8s` utilisé hors de Kubernetes, export d'image, sauvegarde PBS d'OSD | un administrateur Kubernetes qui lit les Secrets de `ceph-csi` ; un nœud compromis pendant que le volume y est ouvert |
-| Secrets Kubernetes | `EncryptionConfiguration` `aescbc` dans etcd (M14-E28) | lecture brute d'etcd, instantanés etcd | qui a le droit `get secrets` |
+| Secrets Kubernetes | `EncryptionConfiguration` dans etcd (`aescbc`, puis `secretbox` après la rotation du M14-E28) | lecture brute d'etcd, instantanés etcd | qui a le droit `get secrets` |
 
 ## Modèle de menace (synthèse)
 
@@ -31,7 +31,7 @@
 
 | Clé | Où | Qui y accède |
 |---|---|---|
-| KEK `ceph-rbd-chiffre` | Ansible Vault `critique` (`plateforme/k8s`, `secrets/ceph-csi.yml`, variable `ceph_csi_rbd_kek`) ; copie hors ligne (enveloppe au coffre) ; Secret `ceph-csi/csi-rbd-secret-chiffre` | équipe Plateforme (Vault `critique`) ; pods ceph-csi ; administrateurs Kubernetes |
+| KEK `ceph-rbd-chiffre` | Ansible Vault `critique` (`plateforme/k8s`, `secrets/ceph-csi.yml`, variable `ceph_csi_rbd_kek`) ; copie hors ligne (enveloppe au coffre) ; Secret `ceph-csi/csi-rbd-secret-chiffre`, nommé par le fournisseur `secrets-metadata` (`secretName`) pour que création, montage, instantanés et clones la trouvent | équipe Plateforme (Vault `critique`) ; pods ceph-csi ; administrateurs Kubernetes |
 | DEK de chaque volume | métadonnée `rbd.csi.ceph.com/dek` de l'image, **enveloppée** par la KEK | personne en clair hors des pods ceph-csi |
 | Clé `client.k8s` | Ansible Vault `critique` ; Secrets `csi-rbd-secret`, `csi-rbd-secret-chiffre`, `csi-cephfs-secret` | équipe Plateforme ; pods ceph-csi |
 | Mot de passe du dépôt Kopia de Velero | Secret de Velero (E16) ; Ansible Vault | équipe Plateforme |

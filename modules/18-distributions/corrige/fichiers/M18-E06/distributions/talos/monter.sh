@@ -20,6 +20,11 @@ essai="${2:-}"
 image="factory.talos.dev/nocloud-installer/${TALOS_SCHEMA_ID}:${TALOS_VERSION}"
 cp="$(awk '$3 == "controlplane" {print $2; exit}' "$ICI/noeuds.txt")"
 mapfile -t ordre < <(awk '!/^#/ && NF == 3 {print ($3 == "controlplane" ? 0 : 1), $2}' "$ICI/noeuds.txt" | sort -k1,1n -k2 | cut -d' ' -f2)
+# Sans service de découverte (patch commun 20-sans-decouverte.yaml), « talosctl health » ne connaît
+# plus les membres du cluster : on lui donne les nœuds explicitement, lus dans noeuds.txt.
+plan_controle="$(awk '!/^#/ && $3 == "controlplane" {print $2}' "$ICI/noeuds.txt" | paste -sd,)"
+travailleurs="$(awk '!/^#/ && $3 == "worker" {print $2}' "$ICI/noeuds.txt" | paste -sd,)"
+sante() { talosctl --nodes "$cp" health --wait-timeout 10m --control-plane-nodes "$plan_controle" --worker-nodes "$travailleurs"; }
 
 case "$quoi" in
   talos)
@@ -30,7 +35,7 @@ case "$quoi" in
       [[ "$essai" == "--essai" ]] && continue
       # Draine le nœud (défaut), installe sur la partition inactive (schéma A/B), redémarre.
       talosctl --nodes "$ip" upgrade --image "$image" --wait
-      talosctl --nodes "$cp" health --wait-timeout 10m
+      sante
     done
     ;;
   kubernetes)
@@ -38,7 +43,7 @@ case "$quoi" in
       talosctl --nodes "$cp" upgrade-k8s --to "$KUBERNETES_VERSION" --dry-run
     else
       talosctl --nodes "$cp" upgrade-k8s --to "$KUBERNETES_VERSION"
-      talosctl --nodes "$cp" health --wait-timeout 10m
+      sante
     fi
     ;;
   *)

@@ -105,31 +105,47 @@
         cmd: docker image inspect goharbor/prepare:v{{ harbor_version }}
       changed_when: false
 
+    # -t attend la version du FORMAT de harbor.yml (_version du harbor.yml.tmpl : 2.15.0 pour toute
+    # la 2.15.x), pas la version de Harbor (« target version 2.15.3 not supported »). Avec /:/hostfs
+    # monté, prepare préfixe lui-même /hostfs : on lui donne les chemins de l'HÔTE
+    # (get_realpath, make/photon/prepare/utils/misc.py).
+    - name: Gabarit harbor.yml.tmpl de la nouvelle version
+      ansible.builtin.slurp:
+        src: "{{ harbor_dist }}/{{ harbor_version }}/harbor/harbor.yml.tmpl"
+      register: maj_gabarit
+
+    - name: Format de harbor.yml attendu par la nouvelle version (_version de son gabarit)
+      ansible.builtin.set_fact:
+        maj_format: "{{ maj_gabarit.content | b64decode | regex_search('(?m)^_version:[ \\t]*([0-9]+[.][0-9]+[.][0-9]+)', '\\1') | first }}"
+
     - name: « prepare migrate » de l'ancien harbor.yml vers le format de la nouvelle version
       ansible.builtin.command:
         cmd: >-
           docker run --rm -v /:/hostfs goharbor/prepare:v{{ harbor_version }} migrate
-          -i /hostfs{{ harbor_dist }}/{{ harbor_version }}/harbor/harbor.yml.version-precedente
-          -o /hostfs/root/harbor.yml.migre -t {{ harbor_version }}
+          -i {{ harbor_dist }}/{{ harbor_version }}/harbor/harbor.yml.version-precedente
+          -o /root/harbor.yml.migre -t {{ maj_format }}
       changed_when: false
-      failed_when: false
       register: maj_migrate
 
+    # Même format (_version identique, cas des montées correctives) : prepare migrate n'écrit rien.
     - name: Clés du harbor.yml migré et de celui du rôle
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
+          if [ ! -f /root/harbor.yml.migre ]; then
+            echo "format de harbor.yml inchangé ({{ maj_format }}) : rien à migrer"
+            exit 0
+          fi
           cles() { grep -E '^[a-z_]+:' "$1" | cut -d: -f1 | sort -u; }
           diff <(cles /root/harbor.yml.migre) <(cles {{ harbor_dossier }}/harbor.yml) || true
           rm -f /root/harbor.yml.migre
         executable: /bin/bash
       register: maj_cles
       changed_when: false
-      when: maj_migrate.rc == 0
 
     - name: Écart de clés entre la migration officielle et le gabarit du rôle
       ansible.builtin.debug:
-        msg: "{{ maj_cles.stdout_lines | default(['prepare migrate non applicable (même format de harbor.yml)']) }}"
+        msg: "{{ maj_cles.stdout_lines }}"
 
     - name: Santé après mise à jour (harbor-core migre le schéma au démarrage)
       ansible.builtin.uri:

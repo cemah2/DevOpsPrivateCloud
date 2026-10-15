@@ -139,8 +139,11 @@ panne_E34_v1() {
       'debut', to_char(debut AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), 'duree_minutes', duree_minutes,
       'motif', motif, 'cree_le', to_char(cree_le AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')) ORDER BY id), '[]') FROM d")" \
     || return 1
-  jq -e 'length >= 8' >/dev/null <<<"$suppr" || return 1
+  # Écrit AVANT tout contrôle : en cas d'échec, --annuler (appelé par lab/bin/break) doit pouvoir
+  # remettre les rendez-vous de dr-garnier qui existaient avant l'injection.
   printf '%s\n' "$suppr" >"$_E34_ETAT/supprimes.json"
+  chmod 600 "$_E34_ETAT/supprimes.json"
+  jq -e 'length >= 8' >/dev/null <<<"$suppr" || return 1
 
   # 3. La vie continue : écritures postérieures, dont un conflit sur le créneau de 10:00.
   sleep 90
@@ -195,7 +198,7 @@ annuler_E34() {
     if [[ -s "$_E34_ETAT/supprimes.json" ]]; then
       etrangers="$(jq -c --rawfile c "$_E34_ETAT/crees.ids" \
         '($c | split("\n") | map(select(length > 0) | tonumber)) as $ids | map(select(.id as $i | $ids | index($i) | not))' \
-        "$_E34_ETAT/supprimes.json")"
+        "$_E34_ETAT/supprimes.json" 2>/dev/null)" || etrangers='[]'
       if jq -e 'length > 0' >/dev/null <<<"$etrangers"; then
         _e34_sql "INSERT INTO rendez_vous OVERRIDING SYSTEM VALUE
           SELECT * FROM json_populate_recordset(NULL::rendez_vous, '${etrangers//$q/$q$q}')

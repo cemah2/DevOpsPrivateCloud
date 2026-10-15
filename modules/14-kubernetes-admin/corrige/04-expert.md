@@ -505,20 +505,20 @@ admin@k8s-cp02:~$ sudo ss -ltnp | grep 8443
 admin@k8s-cp02:~$ tail -n 2 /etc/keepalived/keepalived.conf
 # IG-2241 (InfoGér) : suivi retiré, la VIP basculait « sans raison »
 admin@k8s-cp02:~$ grep -n -E 'vrrp_script|track_script' /etc/keepalived/keepalived.conf
-5:vrrp_script chk_apiserver {
+15:vrrp_script chk_haproxy {
 ```
 
 Le nœud porte la VIP, keepalived est content, mais personne n'écoute en 8443. Le `vrrp_script` existe encore mais n'est plus suivi par l'instance (`track_script` retiré) : keepalived ne baisse plus sa priorité quand le contrôle échoue, la VIP ne bascule plus. Preuve de la dérive et correctif par le code :
 
 ```
-admin@adm01:~/src/ansible$ ansible-playbook playbooks/k8s.yml --limit k8s-cp02 --tags keepalived,haproxy --check --diff
+admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/k8s-cluster.yml --limit k8s-cp02 --tags point_acces --check --diff
 … -    track_script {
-… -        chk_apiserver
+… -        chk_haproxy
 … -    }
-admin@adm01:~/src/ansible$ ansible-playbook playbooks/k8s.yml --limit k8s-cp02 --tags keepalived,haproxy
+admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/k8s-cluster.yml --limit k8s-cp02 --tags point_acces
 ```
 
-(Noms de playbook et d'étiquettes : ceux de ton `plateforme/ansible`, M14-E03.) Le rôle remet `track_script` et relance HAProxy (`state: started`).
+(Playbook et étiquette de la solution de M14-E03 : `playbooks/k8s-cluster.yml`, `--tags point_acces` ; adapte-les si les tiens diffèrent. Avec `--limit`, le contrôle d'ensemble « une seule VIP » du playbook ne voit que ce nœud et peut échouer s'il ne porte pas la VIP : ce n'est pas l'écart cherché ; vérifie la VIP sur les trois nœuds à part, ou rejoue sans `--limit` une fois la correction faite.) Le rôle remet `track_script` et relance HAProxy (`state: started`).
 
 **Variante 2 — filtrage du 8443.**
 
@@ -535,7 +535,7 @@ table inet durcissement_infoger {
 		iifname != "lo" tcp dport 8443 drop comment "IG-2242 : API réservée au réseau d'administration"
 ```
 
-Tout va bien **vu du nœud** (y compris le contrôle de keepalived, qui passe par la boucle locale), rien ne passe **vu du réseau**. Correctif : `sudo nft delete table inet durcissement_infoger` ; la table n'est pas persistante (elle disparaîtrait au redémarrage, ce qui rendrait la panne « intermittente » et encore plus trompeuse). Le filtrage voulu par InfoGér (l'API réservée à certains réseaux) se fait par la matrice des flux de la bordure (`group_vars/role_routeur/pare_feu.yml`, rôle `pare_feu`) et, sur les nœuds, par le rôle de pare-feu des nœuds s'il existe, jamais par une table posée à la main.
+Tout va bien **vu du nœud** (y compris le contrôle de keepalived, `systemctl is-active haproxy`, qui ne regarde que l'état de l'unité), rien ne passe **vu du réseau**. Correctif : `sudo nft delete table inet durcissement_infoger` ; la table n'est pas persistante (elle disparaîtrait au redémarrage, ce qui rendrait la panne « intermittente » et encore plus trompeuse). Le filtrage voulu par InfoGér (l'API réservée à certains réseaux) se fait par la matrice des flux de la bordure (`group_vars/role_routeur/pare_feu.yml`, rôle `pare_feu`) et, sur les nœuds, par le rôle de pare-feu des nœuds s'il existe, jamais par une table posée à la main.
 
 **Variante 3 — un kube-apiserver qui ne joint plus etcd.**
 
@@ -575,7 +575,7 @@ Le fichier ne contient qu'une `ClusterConfiguration` : kubeadm détecte l'adress
 
 **Clôture** : les quatre tests du triage au vert, `lab/bin/check 14 39`, `--annuler`. RB-146 : `corrige/fichiers/M14-E39/medisphere/docs/kubernetes/runbooks/RB-146-api-ne-repond-plus.md`.
 
-**Pourquoi la haute disponibilité n'a pas suffi** : elle protège contre la perte d'un **nœud entier** (M14-E29). Ici, un maillon s'est mis en défaut **sans se déclarer défaillant** : HAProxy arrêté sur un nœud qui garde la VIP faute de suivi (v1), un filtre invisible des contrôles locaux (v2), un certificat valide mais faux qu'aucun contrôle de santé ne vérifie (v4). Seule la variante 3 était couverte par la HA (HAProxy a écarté le serveur), et elle a quand même réduit la marge à zéro sans alerte. À changer : contrôle keepalived qui teste le chemin complet par l'adresse du nœud (et pas la boucle locale), suivi obligatoire vérifié par le rôle, contrôle externe du certificat (SAN) de chaque serveur, alerte sur les backends HAProxy `DOWN`.
+**Pourquoi la haute disponibilité n'a pas suffi** : elle protège contre la perte d'un **nœud entier** (M14-E29). Ici, un maillon s'est mis en défaut **sans se déclarer défaillant** : HAProxy arrêté sur un nœud qui garde la VIP faute de suivi (v1), un filtre invisible des contrôles locaux (v2), un certificat valide mais faux qu'aucun contrôle de santé ne vérifie (v4). Seule la variante 3 était couverte par la HA (HAProxy a écarté le serveur), et elle a quand même réduit la marge à zéro sans alerte. À changer : contrôle keepalived qui teste le service rendu (une requête `/readyz` vers l'adresse du nœud en 8443) et pas seulement l'état de l'unité systemd, suivi obligatoire vérifié par le rôle, contrôle externe du certificat (SAN) de chaque serveur, alerte sur les backends HAProxy `DOWN`.
 
 **Explications**
 
@@ -630,9 +630,9 @@ admin@k8s-cp03:~$ sudo crictl logs <id> 2>&1 | tail -n 3
 La base bbolt du membre ne s'ouvre plus. On ne répare pas une base bbolt à la main : on **remplace le membre**, ses données viendront des deux autres (procédure de M14-E29, RB-144 « Remplacer un nœud de contrôle »). Un seul nœud est touché à la fois ; on vérifie avant chaque commande que les deux autres membres sont sains.
 
 ```
+admin@k8s-cp03:~$ sudo mv /etc/kubernetes/manifests/etcd.yaml /root/etcd.yaml && sleep 30 && sudo crictl ps --name etcd   # plus rien ne tourne
 admin@k8s-cp01:~$ sudo -E etcdctl member list -w table | grep k8s-cp03      # relever l'identifiant (ID) de k8s-cp03
 admin@k8s-cp01:~$ sudo -E etcdctl member remove <ID-K8S-CP03>
-admin@k8s-cp03:~$ sudo mv /etc/kubernetes/manifests/etcd.yaml /root/etcd.yaml && sleep 30 && sudo crictl ps -a --name etcd
 admin@k8s-cp03:~$ sudo mv /var/lib/etcd/member /root/etcd-member-corrompu-$(date +%F)
 admin@k8s-cp01:~$ sudo -E etcdctl member add k8s-cp03 --peer-urls=https://10.10.40.53:2380
 ETCD_INITIAL_CLUSTER="k8s-cp01=https://10.10.40.51:2380,k8s-cp02=https://10.10.40.52:2380,k8s-cp03=https://10.10.40.53:2380"
@@ -724,7 +724,7 @@ notBefore=Sep  8 04:05:00 2026 GMT
 notAfter=Sep 15 04:05:00 2026 GMT
 ```
 
-`401` : l'API n'a même pas regardé tes droits. Le certificat est bien signé par la CA du cluster, à ton nom et dans ton groupe, mais expiré. Correctif : `outils/kubeconfig-personnel.sh` (M14-E06). Point à vérifier dans **ton** script : s'il renouvelle en passant par l'API des CSR avec ton identité courante, il ne peut pas fonctionner avec un certificat déjà expiré. Il faut alors une identité de secours légitime : `kubeadm kubeconfig user --client-name <MOI> --org medisphere:plateforme-admins --validity-period 168h` sur un nœud de contrôle (SSH, sudo, CA du cluster), ou `admin.conf` en bris de glace (Vault `critique`, ligne dans le journal, fichier détruit après). Dans les deux cas, corrige le script pour qu'il prévienne **avant** l'expiration (date affichée à chaque usage, minuterie qui avertit à J-1). Pas de révocation possible d'un certificat client dans Kubernetes (M14-E12) : c'est pour cela qu'ils sont courts.
+`401` : l'API n'a même pas regardé tes droits. Le certificat est bien signé par la CA du cluster, à ton nom et dans ton groupe, mais expiré. Correctif : `outils/kubeconfig-personnel.sh` (M14-E06). Point à vérifier dans **ton** script : s'il renouvelle en passant par l'API des CSR avec ton identité courante, il ne peut pas fonctionner avec un certificat déjà expiré. Il faut alors une identité de secours légitime : `kubeadm kubeconfig user --client-name <MOI> --org medisphere:plateforme-admins --validity-period 168h` sur un nœud de contrôle (SSH, sudo, CA du cluster) — avec `--config` pointant vers la `ClusterConfiguration` du ConfigMap `kubeadm-config` (sinon le `server` et le nom du cluster du fichier produit sont ceux par défaut, à corriger comme en M14-E35 v5), ou `admin.conf` en bris de glace (Vault `critique`, ligne dans le journal, fichier détruit après). Dans les deux cas, corrige le script pour qu'il prévienne **avant** l'expiration (date affichée à chaque usage, minuterie qui avertit à J-1). Pas de révocation possible d'un certificat client dans Kubernetes (M14-E12) : c'est pour cela qu'ils sont courts.
 
 **Variante 2 — sujet de RoleBinding mal orthographié.**
 
@@ -980,14 +980,14 @@ admin@k8s-w02:~$ cat /proc/24517/cgroup
 admin@k8s-w02:~$ d=/sys/fs/cgroup/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod5d2e….slice
 admin@k8s-w02:~$ cat $d/cri-containerd-<id>.scope/{cpu.max,cpu.weight,memory.max}
 20000 100000
-4
+17
 67108864
 admin@k8s-w02:~$ sudo ls -l /proc/24517/ns /proc/24431/ns | grep -E 'net|ipc|uts|pid '
 admin@k8s-w02:~$ sudo nsenter -t 24517 -n ip -br addr
 eth0@if37   UP   10.240.2.88/32 …
 ```
 
-`limits.cpu: 200m` → `cpu.max` = `20000 100000` (20 ms de calcul par période de 100 ms) ; `requests.cpu: 100m` → 102 parts (100 × 1024 / 1000), converties en `cpu.weight` cgroup v2 par la formule de runc `1 + ((parts − 2) × 9999) / 262142` = 4 ; `limits.memory: 64Mi` → `memory.max` = 67108864. Demandes inférieures aux limites : classe `Burstable`, d'où `kubepods-burstable.slice`. Le conteneur partage avec `pause` les espaces `net`, `ipc` et `uts` (mêmes numéros d'inode), pas `pid` ni `mnt`.
+`limits.cpu: 200m` → `cpu.max` = `20000 100000` (20 ms de calcul par période de 100 ms) ; `requests.cpu: 100m` → 102 parts (100 × 1024 / 1000), converties en `cpu.weight` cgroup v2 par runc. Depuis runc 1.4 (bibliothèque `opencontainers/cgroups` ≥ 0.0.5, donc le runc 1.5 de `containerd.io` 2.3), la conversion est **quadratique en échelle logarithmique** : `poids = ⌈10^((L² + 125·L)/612 − 7/34)⌉` avec `L = log2(parts)`, qui envoie 2 → 1, 1024 → 100 et 262144 → 10000 ; pour 102 parts, **17**. L'ancienne formule linéaire `1 + ((parts − 2) × 9999) / 262142` (runc ≤ 1.3.1) donnait 4, et 39 pour 1024 parts : un conteneur à 1 CPU demandé pesait moins qu'un processus système ordinaire (poids 100), d'où le changement (à vérifier sur ton nœud : `runc --version`) ; `limits.memory: 64Mi` → `memory.max` = 67108864. Demandes inférieures aux limites : classe `Burstable`, d'où `kubepods-burstable.slice`. Le conteneur partage avec `pause` les espaces `net`, `ipc` et `uts` (mêmes numéros d'inode), pas `pid` ni `mnt`.
 
 **Réponses aux questions d'analyse**
 

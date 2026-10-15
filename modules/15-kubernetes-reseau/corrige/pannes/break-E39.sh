@@ -52,7 +52,7 @@ _m15E39_une() {
       m15_ecrire E39 pose "ns:cert-manager"
       ;;
     3)
-      [[ -n "$(m15_k get ns "$_M15_NS_APP" -o jsonpath='{.metadata.labels.medisphere\.fr/exposition}' 2>/dev/null)" ]] || return 10
+      [[ -n "$(m15_k get ns "$_M15_NS_APP" -o jsonpath='{.metadata.labels.medisphere\.internal/exposition}' 2>/dev/null)" ]] || return 10
       m15_patch_json ns "$_M15_NS_APP" "" 'del(.metadata.labels["medisphere.internal/exposition"])' || return 1
       m15_ecrire E39 pose "etiquette"
       ;;
@@ -86,7 +86,7 @@ annuler_E39() {
       fi
       ;;
     etiquette)
-      if [[ -z "$(m15_k get ns "$_M15_NS_APP" -o jsonpath='{.metadata.labels.medisphere\.fr/exposition}' 2>/dev/null || true)" ]]; then
+      if [[ -z "$(m15_k get ns "$_M15_NS_APP" -o jsonpath='{.metadata.labels.medisphere\.internal/exposition}' 2>/dev/null || true)" ]]; then
         m15_k label ns "$_M15_NS_APP" medisphere.internal/exposition=oui >/dev/null 2>&1 || wb_avert "annulation : étiquette d'exposition non remise"
       fi
       ;;

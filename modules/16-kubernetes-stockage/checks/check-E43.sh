@@ -9,8 +9,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m16-expert.sh"
 
 title "M16-E43 — Astreinte : post-mortem"
 require_cmd kubectl jq ssh curl
-_m16_e43_pm="$(_m16x_arbre plateforme/medisphere docs/socle/post-mortems | grep -- 'INC-4350' | head -n1)"
-check_cmd "post-mortem INC-4350 publié (docs/socle/post-mortems/, branche main)" test -n "$_m16_e43_pm"
+_m16_e43_pm="$(_m16x_arbre plateforme/medisphere docs/kubernetes/post-mortems | grep -- 'INC-4350' | head -n1)"
+check_cmd "post-mortem INC-4350 publié (docs/kubernetes/post-mortems/, branche main)" test -n "$_m16_e43_pm"
 check_cmd "post-mortem : chronologie, causes racines, actions" _m16x_doc_main "${_m16_e43_pm:-absent}" \
   '^#+ .*chronologie' '^#+ .*causes?' '^#+ .*actions'
 check_cmd "astreinte close (lab/bin/break 16 43 --annuler après réparation)" _m16x_aucune_panne_active E43

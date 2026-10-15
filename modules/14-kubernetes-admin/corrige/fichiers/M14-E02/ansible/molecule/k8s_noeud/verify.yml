@@ -52,5 +52,7 @@
         quiet: true
 
     - name: Contrôles préalables de kubeadm
+      environment:
+        KUBEADM_INIT_DRYRUN_DIR: /var/lib/k8s_noeud/dryrun
       ansible.builtin.command: kubeadm init phase preflight --dry-run --config /var/lib/k8s_noeud/preflight.yaml
       changed_when: false

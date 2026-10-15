@@ -30,7 +30,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (MR) : heure, hypothèse, commande, résultat observé, conclusion. Chaque panne se termine par un runbook (RB-133 à RB-135) ou un ajout à un runbook existant.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
-> ⚠️ **Accès de secours pour E22** : si Harbor ne démarre plus, tu travailles directement sur `reg01` (SSH, `docker`, `journalctl`). Vérifie **avant** d'injecter que tu y entres par la console série (`qm terminal 1013` depuis `pve01`) au cas où une saturation de disque gênerait ta session SSH, et que tu sais où est la dernière sauvegarde (E15, RB-131).
+> ⚠️ **Accès de secours** : si Harbor ne démarre plus (E22), tu travailles directement sur `reg01` (SSH, `docker`, `journalctl`). Une variante de E20 peut aussi te fermer la porte SSH de `runner02`. Comme au module 06 (M06-E37), tu as alors l'agent QEMU depuis `pve01` (`qm guest exec <VMID> -- <commande>`) et le compte console `secours` du rôle `base` (M04), avec sa clé de bris de glace. Vérifie **avant** d'injecter que ces chemins marchent pour `reg01` (1013) et `runner02` (1012) : `qm guest cmd 1012 ping` répond, `qm terminal 1013` ouvre la console série. Sache aussi où est la dernière sauvegarde (E15, RB-131). Toute utilisation de la clé de bris de glace est consignée dans ton journal.
 
 ---
 

@@ -40,7 +40,7 @@ app@ctr02:~$ podman auto-update --dry-run      # UPDATED = pending
 app@ctr02:~$ podman auto-update                # sinon : le timer podman-auto-update (quotidien) le fera
 ```
 
-Retour arrière **automatique** : si l'unité ne redevient pas active (sonde jamais *healthy* dans `TimeoutStartSec`, grâce à `Notify=healthy`), `podman auto-update` remet l'image précédente et redémarre l'unité (`UPDATED` = `rolled back`, à vérifier sur ta version ; journal `journalctl --user -u mediagenda-api.service`). Il faut ensuite **remettre une bonne image sous `recette`**, sinon le passage suivant retentera la mauvaise.
+Retour arrière **automatique** : si l'unité ne redevient pas active (sonde jamais *healthy* dans `TimeoutStartSec`, grâce à `Notify=healthy`), `podman auto-update` remet l'image précédente et redémarre l'unité (`UPDATED` = `rolled back` dans la sortie de `podman auto-update` ; journaux `journalctl --user -u podman-auto-update.service` quand la mise à jour vient du timer, et `journalctl --user -u mediagenda-api.service`). Il faut ensuite **remettre une bonne image sous `recette`**, sinon le passage suivant retentera la mauvaise.
 
 Retour arrière **manuel** : republier la version précédente sous `recette`, puis `podman auto-update`.
 

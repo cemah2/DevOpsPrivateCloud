@@ -36,7 +36,7 @@ Lire une ligne : `horodatage`, `source (identité) -> destination (identité)`, 
 
 ## Rédaction des champs sensibles (HDS)
 
-Réglée dans `composants/cilium/values.yaml` de `plateforme/k8s` (`hubble.redact`) : paramètres d'URL (`?patient=…`), informations d'utilisateur (`user:mot-de-passe@`) et en-têtes `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` remplacés par `HIDDEN` dans les flux L7. Vérification : `hubble observe --protocol http -o json | jq '.flow.l7.http'` sur une requête de test portant ces champs.
+Réglée dans `composants/cilium/values.yaml` de `plateforme/k8s` (`hubble.redact`) : paramètres d'URL (`?patient=…` : la chaîne de requête est retirée de l'URL), mot de passe des informations d'utilisateur (`user:mot-de-passe@`) et valeur des en-têtes `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key` remplacés par `HUBBLE_REDACTED` dans les flux L7. Vérification : `hubble observe --protocol http -o json | jq '.flow.l7.http'` sur une requête de test portant ces champs.
 
 Limites : les **chemins** d'URL ne sont pas rédigés (une API qui met un identifiant de patient dans le chemin le laisse voir) ; l'adresse source des clients reste visible. Règle MédiSphère : pas d'identifiant de patient dans les chemins des API (à vérifier en revue d'API) ; les flux ne quittent pas le cluster tant que l'export vers la supervision (M21-M22) n'a pas été validé par la RSSI.
 

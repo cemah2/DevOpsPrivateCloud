@@ -27,8 +27,10 @@ containerd_branche: "2.3"
 # Version du schéma écrite en tête du fichier. containerd 2.3 lit encore un fichier « version = 3 »
 # mais le migre à chaque démarrage avec un avertissement (« Configuration migrated from version 3 »).
 containerd_config_version: 4
-# Pilote de cgroups systemd (cgroup v2 de Debian 13) : le même que le kubelet. Faux par défaut
-# dans containerd : un nœud dont la valeur est restée à false voit ses pods redémarrer en boucle.
+# Pilote de cgroups systemd (cgroup v2 de Debian 13). Faux par défaut dans containerd. Depuis
+# Kubernetes 1.34 (KubeletCgroupDriverFromCRI), le kubelet lit ce pilote dans le CRI et ignore
+# son propre cgroupDriver : une valeur restée à false ne casse rien de visible, mais met kubelet
+# et containerd en cgroupfs, en concurrence avec systemd. D'où la valeur imposée et contrôlée.
 containerd_cgroup_systemd: true
 # Image « pause » du bac à sable : DOIT être celle qu'attend kubeadm de la version installée
 # (kubeadm config images list). containerd 2.3.6 a 3.10.2 par défaut, kubeadm 1.35 attend 3.10.1.

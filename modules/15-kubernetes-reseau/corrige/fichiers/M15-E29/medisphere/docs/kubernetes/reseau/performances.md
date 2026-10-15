@@ -26,12 +26,12 @@
 | Latence sous charge (ms) | 0,4 | 1,9 | 0,3 | 1,6 |
 | HTTP court, médiane / p99 (ms) | — | 1,1 / 2,8 | 0,7 / 1,9 | 1,0 / 2,5 |
 | Processeur (cœurs, deux nœuds, TCP 4 flux) | 1,5 | 3,0 | 1,8 | 2,8 |
-| MTU des pods | — | 1370 | 1370 | 1420 |
+| MTU des routes des pods (`ip route`) | — | 1355 | 1355 | 1405 |
 
 ## MTU de bout en bout
 
-- VLAN 40 : 1500. VXLAN : 50 octets (IP 20 + UDP 8 + VXLAN 8 + Ethernet interne 14) ; WireGuard : 80 octets réservés par Cilium (IP 20 + UDP 8 + en-tête et étiquette WireGuard 32, marge pour IPv6). Pods en tunnel + WireGuard : 1500 − 50 − 80 = **1370** ; en natif + WireGuard : 1500 − 80 = **1420**.
-- Mesure : `ping -M do -s 1342` passe (1342 + 28 = 1370), `-s 1343` échoue (`message too long`) entre `mesure-a` et `mesure-b`.
+- VLAN 40 : 1500. VXLAN : 50 octets (IP 20 + UDP 8 + VXLAN 8 + Ethernet interne 14) ; WireGuard : 95 octets réservés par Cilium 1.20 (constante `WireguardOverhead` : IP extérieure jusqu'à 40, UDP 8, en-tête et étiquette WireGuard 32, bourrage jusqu'à 15). Cilium ne réduit pas l'interface `eth0` des pods (elle reste à 1500, la MTU du nœud) : il pose la MTU utile sur les **routes** du pod (`ip route` dans le pod : `… mtu 1355`). Tunnel + WireGuard : 1500 − 50 − 95 = **1355** ; natif + WireGuard : 1500 − 95 = **1405** ; VXLAN seul (avant E24) : 1450.
+- Mesure : `ping -M do -s 1327` passe (1327 + 28 = 1355), `-s 1328` échoue (`message too long, mtu=1355`) entre `mesure-a` et `mesure-b`.
 - Un nœud avec une MTU différente : Cilium calcule la MTU des pods à partir de **sa** interface ; un pod d'un nœud à 9000 enverrait de gros paquets que l'autre nœud (1500) ne recevrait pas : trous noirs sur les gros transferts (le TCP s'établit, les données ne passent pas). Une seule MTU par VLAN (M07-E15).
 
 ## Lecture

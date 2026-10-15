@@ -53,5 +53,5 @@ check_ssh_output "le superviseur de k3s-ha01 répond depuis l'agent (TCP 6443)" 
 title "Documentation"
 check_cmd "RB-183 publié (vérifications, messages typiques, ce qu'on ne fait jamais)" \
   _m18p_doc_prefixe docs/kubernetes/distributions/runbooks RB-183 'jeton|token' '6443' 'horloge|NTP|chrony' 'journalctl'
-check_cmd "journal de diagnostic INC-4519 publié dans docs/socle/journal/" \
-  _m18p_un_fichier_contient plateforme/medisphere docs/socle/journal 'INC-4519'
+check_cmd "journal de diagnostic INC-4519 publié dans docs/kubernetes/journal/" \
+  _m18p_un_fichier_contient plateforme/medisphere docs/kubernetes/journal 'INC-4519'

@@ -23,6 +23,13 @@ spec:
   bootstrap:
     recovery:
       source: recette
+      # Base applicative et propriétaire de la recette (E18). Sans ces deux champs, l'opérateur prend
+      # « app » par défaut : il crée après la récupération une base app vide et un rôle app, et le
+      # Secret mediagenda-db-app de la copie vise cette base vide (l'API restaurée ne voit aucun
+      # rendez-vous). Le mot de passe du rôle mediagenda de la COPIE est remplacé par celui du Secret
+      # généré pour la copie : celui de la recette n'est pas concerné.
+      database: mediagenda
+      owner: mediagenda
       # Sans recoveryTarget : rejeu jusqu'au dernier WAL archivé (état « le plus récent »).
   externalClusters:
   - name: recette

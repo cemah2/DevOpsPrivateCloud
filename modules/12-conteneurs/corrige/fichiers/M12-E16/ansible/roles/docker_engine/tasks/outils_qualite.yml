@@ -16,7 +16,7 @@
     group: root
     mode: "0755"
 
-- name: Hadolint {{ docker_engine_hadolint.version }} (binaire statique, empreinte vérifiée)
+- name: Hadolint, binaire statique à empreinte vérifiée, version {{ docker_engine_hadolint.version }}
   ansible.builtin.get_url:
     url: "{{ docker_engine_hadolint.url }}"
     dest: "{{ docker_engine_outils_qualite_dossier }}/hadolint-{{ docker_engine_hadolint.version }}/hadolint"
@@ -31,7 +31,7 @@
     dest: /usr/local/bin/hadolint
     state: link
 
-- name: Paquet de Dive {{ docker_engine_dive.version }} (empreinte vérifiée)
+- name: Paquet de Dive à empreinte vérifiée, version {{ docker_engine_dive.version }}
   ansible.builtin.get_url:
     url: "{{ docker_engine_dive.url }}"
     dest: "/var/cache/apt/archives/dive_{{ docker_engine_dive.version }}_linux_amd64.deb"

@@ -12,7 +12,7 @@
 - tous les overlays Kustomize ont été construits et leurs sorties validées par kubeconform ;
 - les sorties d'aide citées (`helm install|upgrade|uninstall|pull --help`) sont celles de Helm 4.3.0.
 
-**Non rejoué sur un cluster** (le banc d'essai de ce corrigé n'avait pas de cluster complet) : installation réelle des charts, ordre exact des événements des hooks, comportement de la Gateway et des politiques Cilium avec ces objets, reprise de la recette, comportement du cache Harbor pour les artefacts Helm. Ces points sont signalés « ⚠️ À vérifier sur ton lab » : tes retours les corrigeront.
+**Non rejoué sur un cluster** (le banc d'essai de ce corrigé n'avait pas de cluster complet) : installation réelle des charts, ordre exact des événements des hooks, comportement de la Gateway et des politiques Cilium avec ces objets, reprise de la recette (dont le relais mTLS des partenaires repointé), comportement du cache Harbor pour les artefacts Helm. La perte silencieuse des en-têtes de la route à sa reprise (E04), elle, a été reproduite sur un serveur d'API 1.36 avec les CRD Gateway API v1.6.1. Ces points sont signalés « ⚠️ À vérifier sur ton lab » : tes retours les corrigeront.
 
 ---
 
@@ -27,7 +27,7 @@
 7. **Version et sélecteur.** `spec.selector` d'un Deployment est **immuable** après création. Avec la version dans le sélecteur, chaque montée de version voudrait changer le sélecteur : l'API refuse (`field is immutable`), et Helm ne peut s'en sortir qu'en remplaçant l'objet (coupure). Sur le pod, l'étiquette est utile (tableaux de bord, `kubectl get pods -L app.kubernetes.io/version`) et sans danger. Règle : sélecteur = `name` + `instance` (+ un composant fixe), jamais une valeur qui change.
 8. **Helmfile.** Au script, il ajoute la **déclaration** (toutes les releases, versions et valeurs dans un fichier relu), le **diff** avant d'agir, l'idempotence (seules les releases qui diffèrent sont touchées), les environnements, les sélecteurs (`-l groupe=stockage`) et l'ordre (`needs`). Par rapport à Argo CD : pas de **boucle de réconciliation** (rien ne détecte ni ne corrige une dérive tant qu'un humain ne relance pas `helmfile diff`), pas d'interface ni d'historique de synchronisation, pas de contrôle d'accès propre (il agit avec les droits de qui le lance).
 9. **Étiquette réécrite.** Une étiquette OCI est un pointeur mobile ; le **digest** (`sha256:…` du manifeste) désigne un contenu unique. Le consommateur s'en aperçoit s'il a noté le digest (Helm 4 l'affiche à chaque `pull`/`install` : `Digest: sha256:…`) et le compare, ou si la signature Cosign qu'il vérifie porte sur l'ancien digest. Protections : règle d'**immuabilité** des étiquettes dans le projet Harbor `charts` (comme `v*` dans `medisphere` au M13), consommation **par digest** (Helm 4 l'accepte), vérification Cosign du digest avant usage (E08, E09).
-10. **Faux.** `--atomic` existe encore en Helm 4.3, mais il est **déprécié** : `helm upgrade --atomic …` affiche `Flag --atomic has been deprecated, use --rollback-on-failure instead`. Il fait la même chose (retour arrière si l'opération échoue, et `--wait` passe en stratégie `watcher`). Il disparaîtra dans une version majeure suivante : les scripts de MédiSphère utilisent `--rollback-on-failure`. Même chose pour `--force` → `--force-replace`.
+10. **Faux.** `--atomic` existe encore en Helm 4.3, mais il est **déprécié** : `helm upgrade --atomic …` affiche `Flag --atomic has been deprecated, use --rollback-on-failure instead`. Il fait la même chose (retour arrière si l'opération échoue, et `--wait` passe en stratégie `watcher`). Il disparaîtra dans une version majeure suivante : les scripts de MédiSphère utilisent `--rollback-on-failure`. Même chose pour `--force` → `--force-replace` (`Flag --force has been deprecated, use --force-replace instead`), avec une différence de taille : sur une release en *server-side apply*, Helm 4.3 refuse le remplacement (`invalid operation: cannot use server-side apply and force replace together`, vérifié sur le code au tag v4.3.0 et constaté). Le remplacement forcé n'existe plus que pour une release en *client-side apply* (`--server-side=false`).
 
 ---
 
@@ -143,7 +143,8 @@ Désinstallation :
 
 ```
 admin@adm01:~/m17/e02$ helm uninstall podinfo -n wb-essais --keep-history --wait
-admin@adm01:~/m17/e02$ helm list -n wb-essais                 # vide
+admin@adm01:~/m17/e02$ helm list -n wb-essais                 # podinfo … uninstalled : Helm 4 liste TOUS les statuts
+admin@adm01:~/m17/e02$ helm list -n wb-essais --deployed      # vide
 admin@adm01:~/m17/e02$ helm list -n wb-essais --uninstalled   # podinfo … uninstalled
 admin@adm01:~/m17/e02$ helm history podinfo -n wb-essais > historique.txt; tail -n 1 historique.txt
 10        …        uninstalled podinfo-6.14.0  6.14.0       Uninstallation complete
@@ -151,7 +152,7 @@ admin@adm01:~/m17/e02$ helm uninstall podinfo -n wb-essais    # sur une release 
 admin@adm01:~/m17/e02$ kubectl -n wb-essais get all,secret -l 'app.kubernetes.io/name=podinfo' ; kubectl -n wb-essais get secret -l owner=helm,name=podinfo
 ```
 
-Avec `--keep-history`, les objets sont supprimés mais les Secrets de révision restent (statut `uninstalled`) : `helm history` fonctionne, `helm rollback podinfo <N>` peut **réinstaller** une ancienne révision. Un second `helm uninstall` sans l'option purge l'historique (⚠️ à vérifier sur ton lab : le message diffère selon les versions). Les pods de test de `podinfo` portent `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded` : ils disparaissent dès qu'ils ont réussi. Un pod de test **en échec** reste, lui : supprime-le à la main s'il en reste un.
+Changement de Helm 4 à connaître : `helm list` sans option montre les releases de **tous** les statuts (Helm 3 ne montrait que `deployed` et `failed`, et `--all` élargissait ; l'option `--all` n'existe plus) ; on filtre par `--deployed`, `--failed`, `--pending`, `--uninstalled`… (aide de `helm list` 4.3, constaté). Avec `--keep-history`, les objets sont supprimés mais les Secrets de révision restent (statut `uninstalled`) : `helm history` fonctionne, `helm rollback podinfo <N>` peut **réinstaller** une ancienne révision. Un second `helm uninstall` sans l'option purge l'historique ; Helm 4.3 répond simplement `release "podinfo" uninstalled`, et `kubectl -n wb-essais get secret -l owner=helm,name=podinfo` ne renvoie plus rien (constaté sur un serveur d'API 1.36). Les pods de test de `podinfo` portent `helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded` : ils disparaissent dès qu'ils ont réussi. Un pod de test **en échec** reste, lui : supprime-le à la main s'il en reste un.
 
 Fiche d'astreinte : [`fiche-helm.md`](fichiers/M17-E02/medisphere/docs/kubernetes/packaging/fiche-helm.md).
 
@@ -267,7 +268,7 @@ Le chart vit dans son propre projet, avec ses propres versions : l'équipe de Ju
 
 **Solution**
 
-Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/) — [`base/kustomization.yaml`](fichiers/M17-E04/deploiement/base/kustomization.yaml), [`base/mediagenda.yaml`](fichiers/M17-E04/deploiement/base/mediagenda.yaml) (rendu du chart 0.1.0), [`overlays/recette/`](fichiers/M17-E04/deploiement/overlays/recette/) (`kustomization.yaml`, `ressources.yaml`, `parametres.env`, [`acces-donnees.yaml`](fichiers/M17-E04/deploiement/overlays/recette/acces-donnees.yaml)), [`overlays/dev/`](fichiers/M17-E04/deploiement/overlays/dev/kustomization.yaml), [`overlays/essai/`](fichiers/M17-E04/deploiement/overlays/essai/kustomization.yaml).
+Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/) — [`base/kustomization.yaml`](fichiers/M17-E04/deploiement/base/kustomization.yaml), [`base/mediagenda.yaml`](fichiers/M17-E04/deploiement/base/mediagenda.yaml) (rendu du chart 0.1.0), [`overlays/recette/`](fichiers/M17-E04/deploiement/overlays/recette/) (`kustomization.yaml`, `ressources.yaml`, `parametres.env`, [`acces-donnees.yaml`](fichiers/M17-E04/deploiement/overlays/recette/acces-donnees.yaml)), [`overlays/dev/`](fichiers/M17-E04/deploiement/overlays/dev/kustomization.yaml), [`overlays/essai/`](fichiers/M17-E04/deploiement/overlays/essai/kustomization.yaml). MR de `plateforme/k8s` (étape 6) : [`fichiers/M17-E04/k8s/`](fichiers/M17-E04/k8s/) — [`espaces/politiques-mediagenda/`](fichiers/M17-E04/k8s/espaces/politiques-mediagenda/) (README et `30-valkey-replication.yaml` ; `00` et `10` inchangés), [`espaces/mediagenda-recette/40-reseau-postgresql.yaml`](fichiers/M17-E04/k8s/espaces/mediagenda-recette/40-reseau-postgresql.yaml), relais [`nginx.conf`](fichiers/M17-E04/k8s/composants/reseau/partenaires/nginx.conf) et [`politiques.yaml`](fichiers/M17-E04/k8s/composants/reseau/partenaires/politiques.yaml).
 
 1. **Inventaire.**
    ```
@@ -275,22 +276,25 @@ Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/
    admin@adm01:~$ kubectl -n mediagenda-recette get httproute mediagenda -o jsonpath='{.spec.rules[0].backendRefs}{"\n"}'
    [{"group":"","kind":"Service","name":"mediagenda-api","port":80,"weight":1}]
    admin@adm01:~$ kubectl -n mediagenda-recette get httproute mediagenda -o yaml --show-managed-fields | grep -E 'manager:|operation:'
-   admin@adm01:~/src/k8s$ git grep -l -e mediagenda-api -e 'name: mediagenda$' -- espaces composants
+   admin@adm01:~/src/k8s$ git grep -n -e mediagenda-api -e 'name: mediagenda$' -- espaces composants outils Taskfile*.yml
    admin@adm01:~/src/mediagenda-api$ git ls-files k8s/recette
    ```
    Ce qu'on trouve (corrigés des modules 14 à 16 ; tes noms peuvent différer, c'est l'intérêt de l'inventaire) :
 
-   | Objet | Créé par | Ce que le chart en fait |
+   | Objet | Créé par | Ce que la reprise en fait |
    |---|---|---|
-   | Deployment, Service (port 80), PDB `mediagenda-api`, ConfigMap `mediagenda-api-config` | `mediagenda/api`, `k8s/recette/40-api.yaml`, `45-pdb.yaml`, `10-config.yaml` (M14) | remplacés par `mediagenda` (autres noms, autres étiquettes) : à retirer après la bascule |
-   | HTTPRoute `mediagenda` → `mediagenda-api:80` | `plateforme/k8s`, `espaces/mediagenda-recette/httproute-mediagenda.yaml` (M15-E12) | **même nom** : reprise par ce dépôt, vise `mediagenda:80` |
-   | `refus-par-defaut`, `sortie-dns` | `plateforme/k8s`, `espaces/politiques-mediagenda/` (M15-E17) | restent (tout l'espace) |
-   | `api-vers-donnees`, `api-entree` (L7), `postgresql-depuis-api`, `valkey-depuis-api` | idem | sélectionnent `app.kubernetes.io/name: mediagenda-api` : **sans effet** sur les pods du chart ; `valkey-depuis-api` n'admet que `mediagenda-api` |
-   | `postgresql-entree`, `postgresql-sortie` | `plateforme/k8s`, `espaces/mediagenda-recette/40-reseau-postgresql.yaml` (M16-E18) | restent (opérateur, réplication) ; n'admettent comme clients que `mediagenda-api` et `mediagenda-migration` |
+   | Deployment, Service (port 80), PDB `mediagenda-api`, ConfigMap `mediagenda-api-config` | `mediagenda/api`, `k8s/recette/40-api.yaml`, `45-pdb.yaml`, `10-config.yaml` (M14) | remplacés par `mediagenda` (autres noms, autres étiquettes) : à retirer en dernier (étape 6) |
+   | HTTPRoute `mediagenda` → `mediagenda-api:80`, avec un filtre `ResponseHeaderModifier` (HSTS, `nosniff`, `Referrer-Policy`, `X-Frame-Options`) | `plateforme/k8s`, `espaces/mediagenda-recette/httproute-mediagenda.yaml` (M15-E12, en-têtes en M15-E33), appliquée par `task reseau:politiques` et comparée par `outils/derive-reseau.sh` (M15-E23) | **même nom** : reprise par ce dépôt, vise `mediagenda:80` ; les en-têtes, que le chart ne rend pas, sont recopiés par l'overlay |
+   | `refus-par-defaut`, `sortie-dns` | `plateforme/k8s`, `espaces/politiques-mediagenda/` (M15-E17), appliquées à **dev et recette** | restent (tout l'espace) |
+   | `api-vers-donnees` (sortie), `api-entree` (entrée L7) | idem | sélectionnent les pods `app.kubernetes.io/name: mediagenda-api` : sans objet pour les pods du chart, qui rendent leurs équivalents (NetworkPolicy `mediagenda`, CiliumNetworkPolicy `mediagenda-depuis-gateway` au même filtrage L7) |
+   | `postgresql-depuis-api`, `valkey-depuis-api` | idem | sélectionnent les **données** (`app.kubernetes.io/name: postgresql`, que CloudNativePG 1.30 pose aussi sur ses instances à côté de `cnpg.io/cluster`, et `valkey`) mais n'admettent que `mediagenda-api` (et les tâches du M14 pour PostgreSQL) |
+   | `taches-vers-postgresql`, `valkey-replication` | idem | Job de migration (M16) ; réplication de Valkey |
+   | `postgresql-entree`, `mediagenda-vers-postgresql`, `postgresql-sortie` | `plateforme/k8s`, `espaces/mediagenda-recette/40-reseau-postgresql.yaml` (M16-E18/E19) | restent (opérateur, réplication, archivage) ; les deux premières citent `mediagenda-api` et `mediagenda-migration` |
+   | Relais mTLS : Deployment, Service et PDB `relais-mtls`, ConfigMap `relais-mtls-conf`, CiliumNetworkPolicy `relais-mtls` et `relais-mtls-vers-api` | `plateforme/k8s`, `composants/reseau/partenaires/` (M15-E33) | relaie vers `mediagenda-api.mediagenda-recette.svc.cluster.local:80`, ses politiques visent `app.kubernetes.io/name: mediagenda-api` : **second client** de l'ancienne API, à repointer avant le retrait (étape 6) |
    | CNPG `mediagenda-db` (`plateforme/k8s`), StatefulSet `valkey` et son Service sans tête `valkey` (`mediagenda/api`, `k8s/recette/30-valkey.yaml`) | M16-E18, M16-E08 | **hors de ce dépôt**, on n'y touche pas ; `redis://valkey:6379/0` du chart résout vers l'unique instance `valkey-0` |
    | Compte `mediagenda-api`, Secret `harbor-pull` | `plateforme/k8s` (M14-E19) | restent (plateforme) ; le chart a son propre compte `mediagenda` |
 
-   Conclusion de l'inventaire : déposés tels quels, les pods du chart seraient refusés par la base et par Valkey (entrée), donc jamais prêts. D'où `acces-donnees.yaml` (étape 3). Note aussi les gestionnaires de champs de la route : `kubectl-client-side-apply` si elle a été appliquée par `kubectl apply` au M15, `kubectl` si c'était `--server-side`.
+   Conclusion de l'inventaire : déposés tels quels, les pods du chart seraient refusés par la base et par Valkey (entrée), donc jamais prêts. D'où `acces-donnees.yaml` (étape 3). La route porte des en-têtes de sécurité que le chart ne connaît pas, et le relais des partenaires appelle encore l'ancienne API. Note aussi le gestionnaire de champs de la route : `kubectl` (la tâche du M15-E23 applique en `--server-side`), ou `kubectl-client-side-apply` si quelqu'un l'a appliquée côté client.
 2. **Base.**
    ```
    admin@adm01:~/src/mediagenda-deploiement$ helm template mediagenda ~/src/mediagenda-chart/charts/mediagenda > base/mediagenda.yaml
@@ -321,20 +325,30 @@ Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/
          - op: replace
            path: /spec/hostnames/0
            value: mediagenda-recette.apps.par1.medisphere.internal
+         - op: add                                 # en-têtes du M15-E33, que le chart ne rend pas
+           path: /spec/rules/0/filters
+           value:
+             - type: ResponseHeaderModifier
+               responseHeaderModifier:
+                 set:
+                   - {name: Strict-Transport-Security, value: "max-age=31536000; includeSubDomains"}
+                   - {name: X-Content-Type-Options, value: nosniff}
+                   - {name: Referrer-Policy, value: no-referrer}
+                   - {name: X-Frame-Options, value: DENY}
      - target: {kind: Deployment, name: mediagenda}
        patch: |-
          - op: add
            path: /spec/template/spec/containers/0/envFrom/-
            value: {configMapRef: {name: mediagenda-parametres}}
    ```
-   Et, dans `resources`, [`acces-donnees.yaml`](fichiers/M17-E04/deploiement/overlays/recette/acces-donnees.yaml) : deux NetworkPolicy d'**entrée** sur les pods de la base (`cnpg.io/cluster: mediagenda-db`) et de Valkey (`app.kubernetes.io/name: valkey`), qui admettent les pods `app.kubernetes.io/name: mediagenda` + `app.kubernetes.io/instance: mediagenda`. Les politiques s'additionnent : on ouvre l'accès à nos pods sans modifier celles de la plateforme (la sortie, elle, est dans le rendu du chart). Résultat vérifié (`kustomize build overlays/recette`) : Deployment à deux réplicas, ressources de la recette, étiquette `recette` sur l'objet et le gabarit de pod mais pas dans `spec.selector`, `envFrom` = `[mediagenda, mediagenda-parametres-<empreinte>]`, route sur le bon nom et vers `mediagenda:80`.
+   Et, dans `resources`, [`acces-donnees.yaml`](fichiers/M17-E04/deploiement/overlays/recette/acces-donnees.yaml) : deux NetworkPolicy d'**entrée** sur les pods de la base (`cnpg.io/cluster: mediagenda-db`) et de Valkey (`app.kubernetes.io/name: valkey`), qui admettent les pods `app.kubernetes.io/name: mediagenda` + `app.kubernetes.io/instance: mediagenda`. Les politiques s'additionnent : on ouvre l'accès à nos pods sans modifier celles de la plateforme (la sortie, elle, est dans le rendu du chart). Résultat vérifié (`kustomize build overlays/recette`) : Deployment à deux réplicas, ressources de la recette, étiquette `recette` sur l'objet et le gabarit de pod mais pas dans `spec.selector`, `envFrom` = `[mediagenda, mediagenda-parametres-<empreinte>]`, route sur le bon nom, vers `mediagenda:80`, avec ses quatre en-têtes.
 4. **Dev.** `kustomize build overlays/dev` et `kubectl kustomize overlays/dev` donnent la même sortie sur ces fonctions ; `kustomize version` → v5.8.2, `kubectl version --client` → `Kustomize Version: v5.8.1`. Un écart de version mineure peut changer un comportement fin : la CI (M19) épingle **une** version.
 5. **Reprise de la recette : à côté, bascule, retrait.** Les noms diffèrent (`mediagenda` contre `mediagenda-api`) : aucun champ immuable n'est en jeu, les nouveaux objets arrivent **à côté** des anciens. Seule la route a le même nom : l'appliquer, c'est basculer.
    ```
    admin@adm01:~/src/mediagenda-deploiement$ kubectl -n mediagenda-recette get deploy,svc,pdb,cm,httproute -o yaml > ~/m17/e04/avant-reprise.yaml
    admin@adm01:~/src/mediagenda-deploiement$ kubectl diff --server-side -k overlays/recette
    ```
-   Le diff montre des objets nouveaux (Deployment, Service, ConfigMap, compte, politiques `mediagenda*`) et, sur la route existante, le changement de `backendRefs` (`mediagenda-api` → `mediagenda`) et des étiquettes. **Premier temps**, tout sauf la route :
+   Le diff montre des objets nouveaux (Deployment, Service, ConfigMap, compte, politiques `mediagenda*`) et, sur la route existante, le changement de `backendRefs` (`mediagenda-api` → `mediagenda`) et des étiquettes. Sans le correctif des en-têtes, il montrerait aussi les lignes `filters:` **retirées** : la route du M15 a été appliquée en *server-side* sous le gestionnaire `kubectl`, celui qu'utilise aussi ce dépôt ; un champ que le même gestionnaire n'applique plus est supprimé, sans conflit ni avertissement (constaté sur un serveur d'API 1.36 avec les CRD Gateway API v1.6.1). Les en-têtes HSTS de la recette auraient disparu à la bascule, et le check M15-E33 serait passé au rouge. **Premier temps**, tout sauf la route :
    ```
    admin@adm01:~/src/mediagenda-deploiement$ kubectl kustomize overlays/recette | yq 'select(.kind != "HTTPRoute")' \
        | kubectl apply --server-side -f -
@@ -345,17 +359,39 @@ Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/
    ```
    admin@adm01:~/src/mediagenda-deploiement$ kubectl apply --server-side -k overlays/recette
    admin@adm01:~$ for i in $(seq 30); do curl -s -o /dev/null -w '%{http_code} ' https://mediagenda-recette.apps.par1.medisphere.internal/sante; sleep 1; done; echo
+   admin@adm01:~$ curl -sI https://mediagenda-recette.apps.par1.medisphere.internal/sante | grep -i -E 'strict|nosniff|referrer|frame'
    ```
-   Si l'`apply` signale un **conflit** sur la route (champ possédé par un autre gestionnaire), lis lequel : quand la route a été appliquée par `kubectl apply` côté client au M15, kubectl migre lui-même la propriété des champs de la dernière configuration appliquée (`kubectl-client-side-apply` → `kubectl`) ; un conflit restant se règle par `--force-conflicts` **après** lecture (M17-E14 y revient). Retour arrière de la bascule : réappliquer la route sauvegardée (`yq 'select(.kind == "HTTPRoute")' ~/m17/e04/avant-reprise.yaml`, sans `uid`, `resourceVersion` ni `status`) ; l'ancien Deployment tourne encore à ce stade.
-   **Retrait de l'ancienne version**, après quelques minutes sans erreur :
+   Si l'`apply` signale un **conflit** sur la route, c'est qu'un **autre** gestionnaire en possède un champ (par exemple `kubectl-client-side-apply` si quelqu'un l'a appliquée côté client) : lis lequel, et règle-le par `--force-conflicts` **après** lecture (M17-E14 y revient). Retour arrière de la bascule : réappliquer la route sauvegardée (`yq 'select(.kind == "HTTPRoute")' ~/m17/e04/avant-reprise.yaml`, sans `uid`, `resourceVersion`, `managedFields` ni `status`) ; l'ancien Deployment tourne encore à ce stade.
+6. **La plateforme d'accord avec la reprise**, une MR de `plateforme/k8s` (relue par Karim), dans cet ordre.
+   - *Relais des partenaires d'abord.* Dans `composants/reseau/partenaires/` : `nginx.conf` relaie vers `http://mediagenda.mediagenda-recette.svc.cluster.local:80` ; dans `politiques.yaml`, la sortie de `relais-mtls` et l'`endpointSelector` de `relais-mtls-vers-api` visent les étiquettes de sélection du chart (`app.kubernetes.io/name: mediagenda`, `instance: mediagenda`, `component: api`) ; dans `relais.yaml`, `medisphere.internal/version-conf` passe à `"2"`. Ce dernier point n'est pas un détail : `nginx.conf` est monté par `subPath`, et un fichier monté ainsi n'est **jamais** mis à jour dans un pod qui tourne ; sans redéploiement, nginx garde l'ancienne cible.
+     ```
+     admin@adm01:~/src/k8s$ task appliquer                        # crée relais-mtls-conf depuis nginx.conf, applique (M15-E33)
+     admin@adm01:~$ kubectl -n mediagenda-recette rollout status deploy/relais-mtls
+     admin@adm01:~$ curl -s -o /dev/null -w '%{http_code}\n' --cert ~/.config/workbook/partenaire-centre-test-01.crt \
+         --key ~/.config/workbook/partenaire-centre-test-01.key https://mediagenda-partenaires.apps.par1.medisphere.internal/sante
+     200
+     admin@adm01:~$ kubectl -n mediagenda-recette logs deploy/relais-mtls --tail=3          # partenaire="centre-test-01" … code=200
+     ```
+   - *Politiques ensuite.* D'après l'inventaire : `espaces/politiques-mediagenda/` ne garde que `00-refus-par-defaut.yaml`, `10-sortie-dns.yaml` et la réplication de Valkey (`30-valkey-replication.yaml`). Partent `40-api-entree.yaml` (le chart rend `mediagenda-depuis-gateway`, même filtrage L7), `20-api-vers-donnees.yaml` (`api-vers-donnees` : le chart rend sa sortie ; `taches-vers-postgresql` : en recette, `mediagenda-vers-postgresql` du M16 couvre le Job de migration, et le dev n'a plus de tâche du M14), `postgresql-depuis-api` et `valkey-depuis-api` (remplacées par `acces-donnees.yaml` en recette et par les politiques du chart en dev). Dans `espaces/mediagenda-recette/40-reseau-postgresql.yaml`, `mediagenda-api` sort des deux listes ; `mediagenda-migration` reste jusqu'en E09. Le README du dossier le dit. Puis, comme `kubectl apply` ne supprime rien :
+     ```
+     admin@adm01:~/src/k8s$ task reseau:politiques && kubectl apply --server-side -f espaces/mediagenda-recette/40-reseau-postgresql.yaml
+     admin@adm01:~$ for e in mediagenda-dev mediagenda-recette; do
+         kubectl -n "$e" delete networkpolicy api-vers-donnees taches-vers-postgresql postgresql-depuis-api valkey-depuis-api --ignore-not-found
+         kubectl -n "$e" delete ciliumnetworkpolicy api-entree --ignore-not-found
+       done
+     admin@adm01:~$ for e in mediagenda-dev mediagenda-recette; do kubectl -n "$e" get netpol,cnp -o json | jq -r --arg e "$e" '.items[] | select(.spec | tojson | contains("\"mediagenda-api\"")) | "\($e) \(.kind) \(.metadata.name)"'; done
+     ```
+     La dernière commande ne doit rien afficher. `curl` sur `/pret` (dev et recette) et l'appel du partenaire restent à 200 : Hubble (`hubble observe -n mediagenda-recette --verdict DROPPED`) ne montre de refus que vers les anciens pods.
+   - *La route du M15* : `git rm espaces/mediagenda-recette/httproute-mediagenda.yaml`, et dans la même MR, la ligne qui l'applique dans la tâche `politiques` de `Taskfile.reseau.yml` et l'entrée de la liste de `outils/derive-reseau.sh` (M15-E23). Oublier l'une ou l'autre : la tâche d'application échoue sur un fichier absent, ou le script de dérive annonce « absent » à chaque passage.
+
+   **Retrait de l'ancienne version**, après quelques minutes sans erreur, et seulement quand plus rien ne l'appelle (`kubectl -n mediagenda-recette get endpointslices -l kubernetes.io/service-name=mediagenda-api`, journaux du relais) :
    ```
    admin@adm01:~$ kubectl -n mediagenda-recette delete deploy/mediagenda-api svc/mediagenda-api pdb/mediagenda-api cm/mediagenda-api-config
    admin@adm01:~/src/mediagenda-api$ git rm k8s/recette/40-api.yaml k8s/recette/45-pdb.yaml k8s/recette/10-config.yaml   # MR relue par Julien
-   admin@adm01:~/src/k8s$ git rm espaces/mediagenda-recette/httproute-mediagenda.yaml                                  # MR relue par Karim
    ```
-   ⚠️ Ne supprime **ni** `mediagenda-db` **ni** Valkey (`k8s/recette/30-valkey.yaml` reste dans `mediagenda/api`), ni le Secret `mediagenda-db-app`. Le Job manuel de migration du M16 (`k8s/recette/50-migration.yaml` de `mediagenda/api`) reste jusqu'en E09, où le chart prend les migrations en charge (conteneur d'initialisation) : on le retire alors. Ce qui reste à la plateforme et devient sans effet sur les pods du chart : `api-vers-donnees`, `api-entree`, `postgresql-depuis-api`, `valkey-depuis-api` (elles sélectionnent `mediagenda-api`). Ne les retire pas ici : elles sont partagées avec `mediagenda-dev` par `espaces/politiques-mediagenda/`, et leur retrait (après lecture de Hubble : aucun flux ne les utilise plus) est une MR de `plateforme/k8s` à part. Note-le dans le journal, comme le relais mTLS des partenaires (M15-E33) s'il est en place : il visait `mediagenda-api` et doit désormais viser `mediagenda` (port 80) et les nouvelles étiquettes.
-6. **`namePrefix`.** Dans `overlays/essai` : objets renommés `essai-mediagenda`, `essai-mediagenda-depuis-gateway` ; références mises à jour : `serviceAccountName`, `envFrom[].configMapRef` (les deux sont des références connues de Kustomize). Non modifiés : le Secret `mediagenda-db-app` (il n'est pas dans les ressources de l'overlay : Kustomize ne renomme que ce qu'il gère), les **sélecteurs** d'étiquettes (`podSelector`, `endpointSelector`, `selector` du Service) — un préfixe change des **noms**, pas des étiquettes. Observé avec Kustomize 5.8.2 : la référence `backendRefs` d'une `HTTPRoute` vers le Service n'est **pas** réécrite (Kustomize ne connaît pas ce champ de la Gateway API) ; il faudrait la déclarer (`configurations:` et `nameReference`). C'est l'une des raisons pour lesquelles l'overlay `essai` retire la route ; pour le constater, construis la base avec un simple `namePrefix` et lis `backendRefs`.
-7. **Empreinte.** `MEDIAGENDA_CACHE_TTL=90` → nouveau nom `mediagenda-parametres-<autre empreinte>`, nouvelle révision du Deployment. L'ancienne ConfigMap reste dans le cluster (orpheline) : `kubectl apply` ne supprime rien. Elle permet d'ailleurs un `kubectl rollout undo` cohérent ; on fait le ménage périodiquement, ou on laisse Argo CD le faire (M20).
+   ⚠️ Ne supprime **ni** `mediagenda-db` **ni** Valkey (`k8s/recette/30-valkey.yaml` reste dans `mediagenda/api`), ni le Secret `mediagenda-db-app`. Le Job manuel de migration du M16 (`k8s/recette/50-migration.yaml` de `mediagenda/api`) reste jusqu'en E09, où le chart prend les migrations en charge (conteneur d'initialisation) : on le retire alors, avec les entrées `mediagenda-migration` des politiques de la plateforme. La matrice des flux du M15 (`docs/kubernetes/reseau/flux-mediagenda.md`) prend les nouveaux noms dans une MR de `plateforme/medisphere`.
+7. **`namePrefix`.** Dans `overlays/essai` : objets renommés `essai-mediagenda`, `essai-mediagenda-depuis-gateway` ; références mises à jour : `serviceAccountName`, `envFrom[].configMapRef` (les deux sont des références connues de Kustomize). Non modifiés : le Secret `mediagenda-db-app` (il n'est pas dans les ressources de l'overlay : Kustomize ne renomme que ce qu'il gère), les **sélecteurs** d'étiquettes (`podSelector`, `endpointSelector`, `selector` du Service) — un préfixe change des **noms**, pas des étiquettes. Observé avec Kustomize 5.8.2 : la référence `backendRefs` d'une `HTTPRoute` vers le Service n'est **pas** réécrite (Kustomize ne connaît pas ce champ de la Gateway API) ; il faudrait la déclarer (`configurations:` et `nameReference`). C'est l'une des raisons pour lesquelles l'overlay `essai` retire la route ; pour le constater, construis la base avec un simple `namePrefix` et lis `backendRefs`.
+8. **Empreinte.** `MEDIAGENDA_CACHE_TTL=90` → nouveau nom `mediagenda-parametres-<autre empreinte>`, nouvelle révision du Deployment. L'ancienne ConfigMap reste dans le cluster (orpheline) : `kubectl apply` ne supprime rien. Elle permet d'ailleurs un `kubectl rollout undo` cohérent ; on fait le ménage périodiquement, ou on laisse Argo CD le faire (M20).
 
 **Explications**
 
@@ -374,6 +410,9 @@ Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/
 - Patch stratégique sur une liste sans clé de fusion (par exemple `hostnames`) : la liste entière est **remplacée**.
 - Oublier que `images` ne touche que les champs `image` des conteneurs connus de Kustomize : une image citée dans une variable d'environnement ou une CRD n'est pas changée.
 - Supprimer le Deployment de la recette alors que l'overlay pointe vers un Secret qui n'existe pas : vérifier `kubectl get secret mediagenda-db-app` avant.
+- Reprendre un objet existant avec un manifeste « plus pauvre » sous le **même** gestionnaire de champs : tout ce que l'ancien manifeste posait et que le nouveau ne pose plus disparaît (ici les en-têtes HSTS de la route). Le `kubectl diff` le montre, à condition de le lire jusqu'au bout.
+- Ne chercher que la route parmi les clients de l'ancienne API : le relais des partenaires l'appelait par le Service, et ne l'aurait plus trouvée après le retrait. Un `git grep` du nom de l'ancien Service dans `plateforme/k8s` les trouve tous.
+- Changer la configuration d'un pod montée par `subPath` sans le redéployer : le fichier du pod ne change pas.
 
 **En production chez MédiSphère**
 

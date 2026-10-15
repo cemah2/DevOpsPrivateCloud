@@ -4,6 +4,7 @@
 # Usage : campagne.sh [CIBLE...]   (défaut : ceph-rbd ceph-rbd-chiffre cephfs emptydir)
 set -euo pipefail
 ici="$(dirname "$(readlink -f "$0")")"
+mkdir -p "$HOME/m16/e28"
 cibles=("$@")
 ((${#cibles[@]} > 0)) || cibles=(ceph-rbd ceph-rbd-chiffre cephfs emptydir)
 for c in "${cibles[@]}"; do

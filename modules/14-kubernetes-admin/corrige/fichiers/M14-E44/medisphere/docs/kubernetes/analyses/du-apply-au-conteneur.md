@@ -43,7 +43,7 @@ Nœud : `k8s-w02`. Classe QoS du pod : `Burstable`.
 | Fichier (cgroup v2) | Valeur | Origine |
 |---|---|---|
 | `…/kubepods-burstable-pod5d2e….slice/cri-containerd-<id>.scope/cpu.max` | `20000 100000` | `limits.cpu: 200m` (20 ms par période de 100 ms) |
-| `…/cpu.weight` | `4` | `requests.cpu: 100m` → 102 parts → poids cgroup v2 |
+| `…/cpu.weight` | `17` | `requests.cpu: 100m` → 102 parts → poids cgroup v2 (conversion quadratique de runc ≥ 1.4 ; l'ancienne formule linéaire donnait 4) |
 | `…/memory.max` | `67108864` | `limits.memory: 64Mi` |
 | `…/memory.current` | quelques centaines de Kio | usage réel de `sleep` |
 

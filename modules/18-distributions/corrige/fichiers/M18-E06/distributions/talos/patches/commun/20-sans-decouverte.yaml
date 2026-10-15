@@ -2,7 +2,10 @@
 # La configuration générée contient un DiscoveryServiceConfig vers https://discovery.talos.dev/
 # (Sidero Labs) : les membres y publient des données (chiffrées) pour se trouver, ce qui sert à
 # KubeSpan, que nous n'utilisons pas. Souveraineté et HDS : on retire le document.
-# Conséquence : « talosctl get members » est vide ; les nœuds se connaissent par Kubernetes.
+# Conséquences (page « Discovery » de Talos 1.14) : « talosctl get members » est vide, et
+# « talosctl health » ne trouve plus les nœuds seul (--control-plane-nodes / --worker-nodes) ;
+# KubePrism perd ses points d'accès découverts et ne garde que celui du cluster (un seul nœud de
+# contrôle ici : sans effet) ; les nœuds se connaissent par Kubernetes.
 apiVersion: v1alpha1
 kind: DiscoveryServiceConfig
 name: default

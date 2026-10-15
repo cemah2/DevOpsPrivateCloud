@@ -27,7 +27,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 
 *Démonstration de Sophie — évasion* : depuis `podman exec -it mediagenda-api python` (pas de shell nécessaire) : `os.getuid()` (10001 dans le conteneur), lecture de `/proc/self/status` (`CapEff: 0000000000000000`), tentative d'écriture dans `/` (lecture seule), de `os.setuid(0)` (refusée) ; vu de l'hôte, `ps -o user,pid,cmd -C python` montre l'UID 534288 (plage de `app`) : même une évasion donnerait un compte sans privilège et sans `sudo`.
 
-*Démonstration de Nadia — arrêt brutal de la base* : `podman kill mediagenda-pg` (SIGKILL) : `systemctl --user status mediagenda-pg` passe `failed` puis `Restart=always` la relance ; `/pret` répond 503 quelques secondes (PostgreSQL rejoue son journal), puis 200 ; `/sante` reste à 200 (pas de redémarrage inutile de l'API) ; `ms-verif-conteneurs` signale le redémarrage au passage suivant (seuil de redémarrages, E28).
+*Démonstration de Nadia — arrêt brutal de la base* : `podman kill mediagenda-pg` (SIGKILL) : `systemctl --user status mediagenda-pg` montre `activating (auto-restart)` puis `Restart=always` la relance ; `/pret` répond 503 quelques secondes (PostgreSQL rejoue son journal), puis 200 ; `/sante` reste à 200 (pas de redémarrage inutile de l'API, parce que l'API et les migrations ont `Wants=` et non `Requires=` sur la base : avec `Requires=`, systemd 257 redémarre aussi les unités qui requièrent une unité relancée par `Restart=`) ; `ms-verif-conteneurs` signale le redémarrage au passage suivant (seuil de redémarrages, E28).
 
 **Grille de revue**
 
@@ -52,6 +52,7 @@ Le mini-projet ne demande presque rien de neuf : il oblige à faire tenir ensemb
 
 **Pièges classiques**
 - Secrets dans `Environment=` (visibles par `podman inspect` et dans le fichier Quadlet) au lieu de `Secret=`.
+- `Requires=` entre une application et sa base : chaque redémarrage automatique de la base redémarre aussi l'application (propagation de `Restart=` avec `RestartMode=normal`, le défaut) ; `Wants=` + `After=` suffisent, la sonde de disponibilité fait le reste.
 - Une URL de connexion contenant un mot de passe avec `/` ou `+` non encodés : générer des mots de passe hexadécimaux.
 - Volumes des pièces jointes de Legacy-RDV créés par l'hôte (propriétaire `app`, donc root du conteneur) : `www-data` (33) ne peut pas écrire ; un volume nommé hérite des droits de l'image.
 - `ctr01` détruite avant d'avoir décidé du sort des images : M13-E03 devra alors tout reconstruire par la CI (possible, mais à prévoir).

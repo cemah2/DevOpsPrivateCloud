@@ -1,0 +1,11 @@
+---
+# group_vars/role_registre/harbor.yml — EXTRAIT : M13-E14 (SEC-1414). À AJOUTER au fichier de M13-E02.
+# Harbor 2.15.3+ (avis GHSA-wrw5-gmvj-gf23) : dans un projet qui EXIGE la signature Cosign, Harbor ne
+# laisse plus Cosign lire une image non encore signée ; la première signature (cosign sign, cosign
+# attest) échoue en 412. Le rôle harbor pose CONTENT_TRUST_LEGACY_SIGNER_PULL_ENABLED=true dans
+# common/config/core/env après chaque prepare, puis redémarre Harbor (fenêtre calme, aucun pipeline).
+# Portée : la SEULE politique de signature, et seulement pour une identité qui a le droit de pousser
+# dans le projet (robot$medisphere+ci, développeurs) ; la politique « images vulnérables » n'a pas
+# d'exemption (la chaîne attend la fin de l'analyse avant de signer, templates/supply-chain.yml).
+# Retour arrière : false, même playbook.
+harbor_cosign_lecture_avant_signature: true

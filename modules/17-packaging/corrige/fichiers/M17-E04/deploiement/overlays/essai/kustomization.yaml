@@ -1,4 +1,4 @@
-# Essai de namePrefix dans wb-essais (M17-E04, étape 6) : construit et comparé, jamais publié.
+# Essai de namePrefix dans wb-essais (M17-E04, étape 7) : construit et comparé, jamais publié.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: wb-essais

@@ -6,10 +6,17 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: gestion-capo
 nodes:
   - role: control-plane
-    # Image 1.36 publiée avec kind 0.33 : prends dans les notes de version de kind le correctif 1.36
-    # listé et son digest (« kindest/node:v1.36.N@sha256:… »), comme en M18-E02.
-    image: kindest/node:v1.36.5
+    # Seule image 1.36 publiée avec kind 0.33 (pas de v1.36.5), à l'empreinte, comme en M18-E02.
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
 networking:
-  # API du cluster de gestion joignable depuis adm01 (pour clusterctl et kubectl), pas seulement en local.
+  # API du cluster de gestion joignable depuis adm01 (pour clusterctl et kubectl), pas seulement en
+  # local ; port 6444 pour ne pas heurter un cluster « gestion » encore présent (6443).
   apiServerAddress: "0.0.0.0"
   apiServerPort: 6444
+kubeadmConfigPatches:
+  # Le nom de m18-dev01 dans le certificat du kube-apiserver (même raison qu'en M18-E08).
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      certSANs:
+        - m18-dev01.par1.medisphere.internal

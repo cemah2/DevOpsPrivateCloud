@@ -41,5 +41,5 @@ done
 title "Documentation"
 check_cmd "RB-185 publié (messages typiques, vérifications de l'hôte du profil CIS, interdits)" \
   _m18p_doc_prefixe docs/kubernetes/distributions/runbooks RB-185 'journalctl' 'etcd' 'sysctl|noyau' 'cis'
-check_cmd "journal de diagnostic INC-4522 publié dans docs/socle/journal/" \
-  _m18p_un_fichier_contient plateforme/medisphere docs/socle/journal 'INC-4522'
+check_cmd "journal de diagnostic INC-4522 publié dans docs/kubernetes/journal/" \
+  _m18p_un_fichier_contient plateforme/medisphere docs/kubernetes/journal 'INC-4522'

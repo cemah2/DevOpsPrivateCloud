@@ -37,7 +37,7 @@ admin@k8s-cp0X:~$ echo 'show stat' | sudo socat stdio /run/haproxy/admin.sock | 
 admin@k8s-cp0X:~$ sudo nft list ruleset | grep -n 8443
 ```
 
-- Dérive par rapport au code : `ansible-playbook <playbook des nœuds> --limit k8s-cp0X --tags keepalived,haproxy --check --diff`, puis sans `--check`.
+- Dérive par rapport au code : `uv run ansible-playbook playbooks/k8s-cluster.yml --limit k8s-cp0X --tags point_acces --check --diff`, puis sans `--check`.
 - Un `vrrp_script` doit être suivi (`track_script`) ; son contrôle doit tester le chemin réel (HAProxy puis un kube-apiserver), pas seulement un processus.
 - Aucune table nftables posée à la main ; le filtrage de l'API se décide dans la matrice des flux.
 

@@ -274,7 +274,13 @@ verifier_cnpg() {
         fi
       fi
     fi
-    # Retard de réplication, lu sur chaque réplica (cnpg_pg_replication_lag, en secondes).
+    # Retard de réplication, lu sur chaque réplica (cnpg_pg_replication_lag, en secondes), dans les
+    # seuls espaces où la sonde a le droit pods/proxy (MS_K8S_ESPACES_BASES ; tous si non défini) :
+    # un cluster d'essai de wb-essais ne doit pas déclencher « métriques illisibles » à chaque passage.
+    if [[ -n "${MS_K8S_ESPACES_BASES[*]:-}" && " ${MS_K8S_ESPACES_BASES[*]} " != *" $ns "* ]]; then
+      ok replication "$c : retard non lu (espace hors de MS_K8S_ESPACES_BASES)"
+      continue
+    fi
     prim="$(jq -r '.status.currentPrimary // ""' <<<"$j")"
     for m in $(jq -r '.status.instanceNames[]? // empty' <<<"$j"); do
       [[ "$m" != "$prim" ]] || continue

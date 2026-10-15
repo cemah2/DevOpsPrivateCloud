@@ -110,8 +110,13 @@ _m13_e25_sans_reg02() {
   [[ -n "$c" ]] && ! grep -q '10\.10\.99\.31' <<<"$c"
 }
 check_cmd "matrice des flux : plus de règle vers reg02 (10.10.99.31)" _m13_e25_sans_reg02
-check_cmd "matrice des flux : VLAN 40 → reg01 443 déclaré pour le module 14" \
-  _m13p_fichier_motifs plateforme/ansible inventories/lab/group_vars/role_routeur/pare_feu.yml '10\.10\.40\.0/24' '10\.10\.20\.18'
+# Une RÈGLE (même ligne) qui vise reg01 depuis le VLAN 40, en 443 — pas seulement les définitions.
+_m13_e25_flux_k8s() {
+  local c
+  c="$(_m13p_fichier_main plateforme/ansible inventories/lab/group_vars/role_routeur/pare_feu.yml 2>/dev/null)" || return 1
+  grep -E '\$REG01|10\.10\.20\.18' <<<"$c" | grep -E 'V_K8S|NET_K8S|10\.10\.40\.0/24' | grep -qE '443'
+}
+check_cmd "matrice des flux : VLAN 40 → reg01 443 déclaré pour le module 14" _m13_e25_flux_k8s
 check_cmd "projets des témoins (wb-sonde*) supprimés" _m13p_jq "$_m13_e25_projets" '[.[] | select(.name | startswith("wb-sonde"))] | length == 0'
 check_ssh "runner02 : fichiers des témoins supprimés" "$_m13x_runner" \
   '! sudo -n test -e /etc/workbook/sonde-registre && ! sudo -n test -e /usr/local/sbin/wb-sonde-registre'

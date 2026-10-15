@@ -10,7 +10,7 @@
 ## Règles
 
 1. **Une seule version** pour l'agent, l'opérateur et Envoy : la CLI met tout à jour d'un coup ; jamais un composant seul.
-2. Les *values* viennent du fichier du projet ; jamais `--reuse-values` entre deux versions du chart.
+2. Les *values* viennent du fichier du projet, seul : `cilium upgrade --reset-values` (la tâche le fait ; sans option, la CLI reprend les values de la release précédente) ; jamais `--reuse-values` entre deux versions du chart.
 3. **Kubernetes ou Cilium d'abord ?** La version de Cilium doit être compatible avec la mineure de Kubernetes **avant et après** : on monte d'abord Cilium vers une version qui supporte les deux mineures, puis Kubernetes (RB-142). Jamais Kubernetes vers une mineure que la version installée de Cilium ne liste pas.
 4. Mineure (1.20 → 1.21) : d'abord le dernier correctif de la 1.20, lire les *Upgrade Notes* de la 1.21 (CRD retirées, options renommées), `upgradeCompatibility` à la version initiale, vérification préalable obligatoire.
 
@@ -31,7 +31,8 @@ admin@adm01:~/src/k8s$ task cilium:preflight                                    
 admin@adm01:~/src/k8s$ task cilium:appliquer
 admin@adm01:~$ kubectl -n kube-system rollout status ds/cilium ; kubectl -n kube-system rollout status ds/cilium-envoy
 admin@adm01:~$ cilium version ; cilium status --wait ; cilium bgp peers
-admin@adm01:~$ cilium connectivity test --test-namespace wb-cilium-test                 # puis : kubectl delete ns wb-cilium-test
+admin@adm01:~$ cilium connectivity test --test-namespace wb-cilium-test                 # crée wb-cilium-test-1 (suffixe toujours ajouté)
+admin@adm01:~$ cilium connectivity test --cleanup --test-namespace wb-cilium-test       # ménage, puis : kubectl get ns | grep cilium-test (vide)
 ```
 
 **Critères d'arrêt** (retour arrière immédiat) : un agent en `CrashLoopBackOff` ; plus d'une interruption de la sonde de plus de 5 s ; des refus `Policy denied` nouveaux dans Hubble sur les espaces d'application ; une session BGP qui ne revient pas en 2 minutes.

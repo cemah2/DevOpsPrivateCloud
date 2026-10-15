@@ -21,7 +21,8 @@ done
 
 title "Cluster"
 check_cmd "talosctl health vert (vu de talos-01)" \
-  timeout 180 talosctl --talosconfig "$_M18P_TALOSCONFIG" -n "$_M18P_TALOS_CP" health --wait-timeout 2m
+  timeout 180 talosctl --talosconfig "$_M18P_TALOSCONFIG" -n "$_M18P_TALOS_CP" health --wait-timeout 2m \
+    --control-plane-nodes "$_M18P_TALOS_CP" --worker-nodes "$(IFS=,; echo "${_M18P_TALOS_TRAV[*]}")"
 check_cmd "trois nœuds Ready dans Kubernetes" _m18p_noeuds_prets "$_M18P_KC_TALOS" 3
 
 title "Correctif de Lucas (si une branche lucas/* existe)"
@@ -50,5 +51,5 @@ fi
 title "Documentation"
 check_cmd "RB-184 publié (client, configuration, nœud ; maintenance ; ce qu'on ne fait jamais)" \
   _m18p_doc_prefixe docs/kubernetes/distributions/runbooks RB-184 'talosconfig' 'maintenance' 'insecure' 'appliquer\.sh|apply-config'
-check_cmd "journal de diagnostic INC-4520 publié dans docs/socle/journal/" \
-  _m18p_un_fichier_contient plateforme/medisphere docs/socle/journal 'INC-4520'
+check_cmd "journal de diagnostic INC-4520 publié dans docs/kubernetes/journal/" \
+  _m18p_un_fichier_contient plateforme/medisphere docs/kubernetes/journal 'INC-4520'

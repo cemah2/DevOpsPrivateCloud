@@ -9,8 +9,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m15-expert.sh"
 
 title "M15-E43 — Astreinte : plus rien n'entre dans le cluster"
 
-_m15_e43_pm="$(cd "$_m15x_depot" 2>/dev/null && find docs/socle/post-mortems -maxdepth 1 -name "*INC-4250*.md" 2>/dev/null | sort | head -n 1)" || true
-check_cmd "post-mortem rédigé (docs/socle/post-mortems/*INC-4250*.md)" test -n "$_m15_e43_pm"
+_m15_e43_pm="$(cd "$_m15x_depot" 2>/dev/null && find docs/kubernetes/post-mortems -maxdepth 1 -name "*INC-4250*.md" 2>/dev/null | sort | head -n 1)" || true
+check_cmd "post-mortem rédigé (docs/kubernetes/post-mortems/*INC-4250*.md)" test -n "$_m15_e43_pm"
 if [[ -n "$_m15_e43_pm" ]]; then
   check_cmd "post-mortem : chronologie" _m15x_doc_contient "$_m15_e43_pm" '^#+ .*chronologie'
   check_cmd "post-mortem : causes racines" _m15x_doc_contient "$_m15_e43_pm" '^#+ .*cause'

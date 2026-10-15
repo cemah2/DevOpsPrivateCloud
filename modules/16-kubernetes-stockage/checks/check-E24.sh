@@ -49,6 +49,9 @@ _m16_e24_cl="$(_m16p_kj clusters.postgresql.cnpg.io mediagenda-db -n wb-restaura
 check_cmd "wb-restauration/mediagenda-db est sain" _m16p_cluster_sain wb-restauration mediagenda-db
 check_cmd "wb-restauration/mediagenda-db démarré par bootstrap.recovery" \
   _m16p_jq "$_m16_e24_cl" '.spec.bootstrap.recovery != null'
+_m16_e24_base="$(_m16p_kj clusters.postgresql.cnpg.io "$_M16P_BASE" -n "$_M16P_RECETTE" | jq -r '.spec.bootstrap.initdb.database // "app"' 2>/dev/null)" || _m16_e24_base=app
+check_cmd "wb-restauration/mediagenda-db : Secret applicatif généré pour la base de la recette ($_m16_e24_base)" \
+  _m16p_jq "$_m16_e24_cl" '(.spec.bootstrap.recovery.database // "app") == $b' --arg b "${_m16_e24_base:-app}"
 check_cmd "wb-restauration/mediagenda-db n'archive rien (aucun plugin isWALArchiver)" \
   _m16p_jq "$_m16_e24_cl" '[.spec.plugins[]? | select(.isWALArchiver == true)] | length == 0'
 check_cmd "tous les PVC de la copie sont liés" _m16p_pvc_tous_lies wb-restauration

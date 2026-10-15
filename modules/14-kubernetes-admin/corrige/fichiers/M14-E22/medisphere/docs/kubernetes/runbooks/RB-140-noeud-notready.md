@@ -45,7 +45,7 @@ admin@adm01:~$ kubectl get events -A --field-selector involvedObject.kind=Node,i
 
 | Délai après la panne | Effet |
 |---|---|
-| ≈ 40 s | le contrôleur de nœuds passe `Ready` à `Unknown` et pose les taints `node.kubernetes.io/unreachable` (ou `not-ready`) en `NoSchedule` et `NoExecute` |
+| ≈ 50 s | le contrôleur de nœuds (`--node-monitor-grace-period`, 50 s par défaut depuis 1.32) passe `Ready` à `Unknown` et pose les taints `node.kubernetes.io/unreachable` (ou `not-ready`) en `NoSchedule` et `NoExecute` |
 | 300 s | les pods sans tolérance plus longue sont **évincés** (tolérance de 300 s ajoutée à chaque pod) et recréés ailleurs par leurs contrôleurs. Les pods de DaemonSet restent. Les pods de StatefulSet restent `Terminating` tant que le nœud n'a pas confirmé (jamais deux fois le même ordinal) |
 | | les données `emptyDir` du nœud (Valkey, PostgreSQL jetable du M14) sont **perdues** pour les pods recréés |
 

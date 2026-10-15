@@ -80,7 +80,9 @@ _mE42_une() {
 [ -n "$REG" ] || exit 10
 if [ "$VAR" = 1 ]; then
   f="$(hote_ REGISTRY_AUTH_HTPASSWD_PATH '*htpasswd*')"
-  [ -n "$f" ] && [ -f "$f" ] && grep -q '^ci:' "$f" || exit 10
+  # Fichier ordinaire seulement : un lien symbolique serait réécrit à travers le lien, et sauver()
+  # ne garderait que le lien (l'original serait perdu).
+  [ -n "$f" ] && [ -f "$f" ] && [ ! -L "$f" ] && grep -q '^ci:' "$f" || exit 10
   sauver "$f"
   python3 - "$f" "$EMPREINTE" <<'PY' || exit 1
 import sys
@@ -93,7 +95,12 @@ PY
 else
   crt="$(hote_ REGISTRY_HTTP_TLS_CERTIFICATE '*.crt')"
   key="$(hote_ REGISTRY_HTTP_TLS_KEY '*.key')"
-  [ -n "$crt" ] && [ -f "$crt" ] && [ -n "$key" ] && [ -f "$key" ] || exit 10
+  [ -n "$crt" ] && [ -f "$crt" ] && [ ! -L "$crt" ] && [ -n "$key" ] && [ -f "$key" ] && [ ! -L "$key" ] || exit 10
+  # Garde-fou : on ne remplace que le certificat RÉELLEMENT servi par le registre (jamais une autre
+  # racine ou chaîne rangée à côté), et sa clé (même clé publique).
+  [ -n "$(empreinte_servie_)" ] || exit 10
+  [ "$(openssl x509 -in "$crt" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)" = "$(empreinte_servie_)" ] || exit 10
+  [ "$(openssl x509 -in "$crt" -noout -pubkey 2>/dev/null)" = "$(openssl pkey -in "$key" -pubout 2>/dev/null)" ] || exit 10
   sauver "$crt"; sauver "$key"
   n="$(hostname -f)"
   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 30 \

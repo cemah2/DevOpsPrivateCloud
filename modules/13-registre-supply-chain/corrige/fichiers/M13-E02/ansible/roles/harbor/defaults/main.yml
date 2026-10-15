@@ -58,6 +58,18 @@ harbor_metriques: false               # palier 3 (M13-E16) : true, port 9090
 harbor_metriques_port: 9090
 harbor_purge_uploads_age: 168h
 
+# --- Signature dans un projet qui l'exige (Harbor 2.15.3+, M13-E14) -----------------------------
+# Depuis 2.15.3 (avis GHSA-wrw5-gmvj-gf23), Harbor ne laisse plus Cosign LIRE une image encore non
+# signée d'un projet « signature Cosign exigée » : la première signature échoue en 412. L'exemption
+# (identité ayant le droit de poussée ET client Cosign/Notation reconnu à son User-Agent) se rétablit
+# par la variable CONTENT_TRUST_LEGACY_SIGNER_PULL_ENABLED=true du conteneur core. harbor.yml n'a pas
+# de clé pour cela : le rôle l'écrit dans common/config/core/env APRÈS chaque prepare (seule
+# exception à la règle « on ne touche pas aux fichiers générés », documentée par les notes de version).
+# false tant qu'aucun projet n'exige la signature ; true à partir de M13-E14 (group_vars).
+# Elle ne concerne PAS la politique « images vulnérables » : une image non encore analysée reste
+# illisible, même pour Cosign (la chaîne attend la fin de l'analyse avant de signer, M13-E14).
+harbor_cosign_lecture_avant_signature: false
+
 # --- Contrôles ----------------------------------------------------------------------------------
 harbor_sante_tentatives: 30
 harbor_sante_delai: 10

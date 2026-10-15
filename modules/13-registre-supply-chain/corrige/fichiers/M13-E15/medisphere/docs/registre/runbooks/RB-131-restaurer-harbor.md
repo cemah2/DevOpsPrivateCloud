@@ -22,7 +22,7 @@
    root@<cible>:~# source /etc/wb-backup/pbs-<cible>.env && export PBS_REPOSITORY PBS_PASSWORD PBS_FINGERPRINT
    root@<cible>:~# proxmox-backup-client snapshot list --ns par1/registre
    ```
-4. **Restaurer** (arrête Harbor, restaure blobs et clés, base seule, `pg_restore`, désactive les réplications, redémarre) :
+4. **Restaurer** (arrête Harbor, restaure blobs et clés, remet le certificat **de la cible** dans `secret/cert/`, base seule, `pg_restore`, désactive les réplications, redémarre) :
    ```
    root@<cible>:~# wb-restaurer-harbor.sh --instantane host/reg01/<date> --je-sais-ce-que-je-fais
    ```
@@ -35,4 +35,5 @@
 - Version de Harbor différente entre source et cible : refus du script (le schéma de base doit correspondre).
 - `secretkey` non restaurée : robots et projets fonctionnent, mais les identifiants des endpoints sont illisibles.
 - Politiques de réplication restaurées actives : la cible pousse vers la production (ou vers elle-même) à l'heure dite.
+- `secret/cert/` restauré tel quel sur une autre machine : le proxy présente le certificat de la source (nom de `reg01` sur `reg02`) ; le script recopie celui de la cible par `harbor-recharger-certificat`.
 - Blobs plus anciens que la base : `blob unknown` au tirage — refaire la restauration avec la même sauvegarde pour les deux.

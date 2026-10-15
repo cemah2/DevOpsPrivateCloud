@@ -61,7 +61,9 @@ tasks:
   coredns:
     desc: Corefile géré (M15-E04)
     cmds:
-      - kubectl apply --server-side -f composants/coredns/
+      # Même gestionnaire de champs qu'en M15-E04 : data.Corefile appartient à « plateforme-k8s »
+      # (repris à kubeadm) ; sans lui, une modification du Corefile serait refusée pour conflit.
+      - kubectl apply --server-side --force-conflicts --field-manager=plateforme-k8s -f composants/coredns/
       - kubectl -n kube-system rollout status deploy/coredns --timeout=120s
 
   secrets-tsig:

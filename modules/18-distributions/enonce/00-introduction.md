@@ -263,7 +263,7 @@ E02 ─ E08 ─ E09 ─ E10 ─ E11 ─ E12
 4. **E08 → E12** dans l'ordre strict : Cluster API se construit pièce par pièce. E11 (revue) se fait idéalement après E10, quand tu as écrit tes propres manifestes.
 5. **Paliers 3 à 5** : l'ordre est donné en tête de chaque fichier (E13 → E14 → E15 → E17 → E18, E16 facultatif ; puis les pannes E19 à E22 une à une, E23, E24 ; enfin le mini-projet E25).
 
-Durée indicative : palier 1, 8 à 11 heures ; palier 2, 11 à 15 heures ; palier 3, 12 à 16 heures (sans E16) ; palier 4, 7 à 9 heures ; mini-projet, 8 à 12 heures.
+Durée indicative (somme des durées des exercices) : palier 1, 12 à 14 heures ; palier 2, 16 à 19 heures ; palier 3, 14 à 17 heures (sans E16) ; palier 4, 7 à 9 heures ; mini-projet, 8 à 12 heures.
 
 ## Pour aller plus loin
 

@@ -518,7 +518,7 @@ Hadolint lit `.hadolint.yaml` dans le répertoire courant, ou le fichier donné 
 
 <details><summary>Indice 2</summary>
 
-Dive compte comme « gaspillé » un fichier présent dans une couche puis modifié ou supprimé par une couche suivante, **y compris dans les couches de l'image de base**. `userWastedPercent` rapporte le gaspillage aux seules couches ajoutées après la base : c'est le seuil qui juge ton travail.
+Dive compte comme « gaspillé » un fichier présent dans une couche puis modifié ou supprimé par une couche suivante, **y compris dans les couches de l'image de base**. Pour `userWastedPercent`, vérifie dans le code de Dive (`dive/image/image.go`) ce qui est au numérateur et ce qui est au dénominateur : pour Dive, la « base » n'est que la **toute première** couche, pas l'image de base du `FROM`.
 </details>
 
 ---

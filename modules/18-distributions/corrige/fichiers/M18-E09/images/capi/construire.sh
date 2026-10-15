@@ -6,9 +6,12 @@
 #   admin@m18-dev01:~/src/images$ VARS=capi/ubuntu-2404-k136-2.json ETIQUETTES="capi;k8s-v1.36.5" capi/construire.sh
 #
 # image-builder v0.1.55, cloné À L'ÉTIQUETTE dans ~/m18/image-builder (hors dépôt). Deux
-# corrections locales de son gabarit Packer Proxmox, appliquées par jq et AFFICHÉES :
-#   1. insecure_skip_tls_verify: true est écrit EN DUR dans packer/proxmox/packer.json : on le
-#      remet à false (règle 4 du module ; l'ancre de pve01 est dans le magasin de m18-dev01) ;
+# corrections locales de son gabarit Packer Proxmox, appliquées par jq et AFFICHÉES. Le fichier
+# versionné est packer/proxmox/packer.json.tmpl : packer.json n'est PAS dans le dépôt (ignoré par
+# git), il est régénéré depuis le .tmpl par « make build-… » (cible set-ssh-password, qui y écrit
+# le mot de passe de build). On corrige donc le .tmpl, sinon make écraserait nos corrections.
+#   1. insecure_skip_tls_verify: true est écrit EN DUR dans le gabarit : on le remet à false
+#      (règle 4 du module ; l'ancre de pve01 est dans le magasin de m18-dev01) ;
 #   2. pas de « pool » : le jeton wb-packer n'a de droits que sur le pool lab (M03-E02) ; sans
 #      pool, la création de la VM de build est refusée. On ajoute pool = lab et des étiquettes.
 # Identifiants : ~/.config/workbook/pve-packer.env (wb-packer@pve!packer, M03), lu ici, jamais
@@ -34,15 +37,17 @@ fi
 [[ "$(git -C "$IB_DIR" describe --tags --exact-match)" == "$IB_VERSION" ]] \
   || { echo "$IB_DIR n'est pas à l'étiquette $IB_VERSION" >&2; exit 1; }
 
-gabarit="$IB_DIR/images/capi/packer/proxmox/packer.json"
-git -C "$IB_DIR" checkout -- images/capi/packer/proxmox/packer.json
+relatif=images/capi/packer/proxmox/packer.json.tmpl
+gabarit="$IB_DIR/$relatif"
+# Repartir du fichier d'origine à chaque construction (les corrections ne s'empilent pas).
+git -C "$IB_DIR" checkout -- "$relatif"
 jq --arg tags "$ETIQUETTES" \
   '.builders[0].insecure_skip_tls_verify = false | .builders[0].pool = "lab" | .builders[0].tags = $tags' \
   "$gabarit" > "$gabarit.nouveau"
 mv "$gabarit.nouveau" "$gabarit"
 echo "Corrections locales du gabarit Packer d'image-builder :"
 git -C "$IB_DIR" --no-pager diff --stat
-git -C "$IB_DIR" --no-pager diff -U0 images/capi/packer/proxmox/packer.json
+git -C "$IB_DIR" --no-pager diff -U0 "$relatif"
 
 export PROXMOX_URL="${PKR_VAR_proxmox_url:?}"          # https://<IP-PVE01>:8006/api2/json
 export PROXMOX_USERNAME="${PKR_VAR_proxmox_username:?}" # wb-packer@pve!packer

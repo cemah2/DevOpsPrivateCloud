@@ -3,7 +3,8 @@
 # shellcheck disable=SC2016  # filtres jq et commandes distantes entre apostrophes
 #
 # check-E16.sh — M16-E16 : Velero : sauvegarder des espaces de noms
-# À lancer depuis adm01. Lecture seule : objets Kubernetes (wb-checks, jamais les Secrets), fichiers locaux, API GitLab en GET.
+# À lancer depuis adm01. Lecture seule : objets Kubernetes (wb-checks, jamais les Secrets), fichiers locaux,
+# ouverture TCP vers s3-01:8333 depuis les travailleurs (SSH), API GitLab en GET.
 
 # shellcheck source=_m16-operationnel.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m16-operationnel.sh"
@@ -31,6 +32,14 @@ check_cmd "BSL s3-01 : HTTPS vers s3-01:8333, CA fournie, aucune vérification T
   (.spec.config.s3Url // "") == "https://s3-01.par1.medisphere.internal:8333"
   and (((.spec.objectStorage.caCert // "") != "") or (.spec.objectStorage.caCertRef != null))
   and ((.spec.config.insecureSkipTLSVerify // "false") != "true")'
+# Flux de la bordure : la règle du M14-E24 ne visait que les nœuds de contrôle ; Velero écrit
+# depuis les travailleurs (serveur, node-agent, data mover). Simple ouverture TCP, rien n'est envoyé.
+for _m16o_n in $_M16O_TRAVAILLEURS; do
+  check_ssh "$_m16o_n : s3-01 joignable en TCP 8333 (règle de la bordure élargie aux travailleurs)" "$_m16o_n" \
+    "timeout 3 bash -c '</dev/tcp/10.10.20.14/8333'"
+done
+check_cmd "plateforme/medisphere (main) : la matrice des flux cite Velero vers s3-01" \
+  bash -c 'grep -i "velero" <<<"$1" | grep -q "8333"' _ "$(_m16o_contenu_main "$_M16O_PROJET_DOC" docs/socle/matrice-flux.md)"
 check_cmd "fichier $HOME/.config/workbook/s3-velero.env en 600" _m16o_local600 "$_M16O_CFG/s3-velero.env"
 _m16o_val="$(_m16o_contenu_main "$_M16O_PROJET_K8S" composants/velero/values.yaml)"
 check_cmd "composants/velero/values.yaml sur main de plateforme/k8s" test -n "$_m16o_val"

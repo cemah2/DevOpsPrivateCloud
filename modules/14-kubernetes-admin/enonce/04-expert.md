@@ -49,7 +49,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 **Prérequis** : M14-E20, M14-E22 (RB-140), M14-E26 (certificats du kubelet) ; `lab/bin/check 14 35` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : la panne touche un **travailleur**. Le contrôleur de nœuds passe un nœud `NotReady` (puis `Unknown`) quand son bail n'est plus renouvelé pendant `node-monitor-grace-period` (40 s par défaut) ; il pose alors les taints `node.kubernetes.io/not-ready` ou `unreachable`, et les pods qui ne les tolèrent pas sont évincés après `tolerationSeconds` (300 s par défaut). Un nœud peut aussi rester `Ready` mais se protéger (conditions `DiskPressure`, `MemoryPressure`, `PIDPressure`) en évinçant des pods.
+**Contexte technique** : la panne touche un **travailleur**. Le contrôleur de nœuds passe la condition `Ready` d'un nœud à `Unknown` (affiché `NotReady`) quand son bail n'est plus renouvelé pendant `node-monitor-grace-period` (50 s par défaut depuis 1.32 ; lis la valeur de ta version) ; il pose alors les taints `node.kubernetes.io/not-ready` ou `unreachable`, et les pods qui ne les tolèrent pas sont évincés après `tolerationSeconds` (300 s par défaut). Un nœud peut aussi rester `Ready` mais se protéger (conditions `DiskPressure`, `MemoryPressure`, `PIDPressure`) en évinçant des pods.
 
 **Injection** : `lab/bin/break 14 35` (6 variantes).
 

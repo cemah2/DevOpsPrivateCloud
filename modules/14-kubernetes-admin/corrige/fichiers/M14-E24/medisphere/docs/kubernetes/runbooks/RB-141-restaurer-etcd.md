@@ -97,7 +97,7 @@ etcdutl snapshot restore /var/tmp/etcd-restau.db --name <NŒUD> \
 ## 7. Vérifier
 
 - `kubectl get nodes` : six nœuds `Ready`.
-- `etcdctl endpoint status --cluster -w table` : révision supérieure à 1 000 000 000, un leader.
+- `etcdctl endpoint status --cluster -w table` : un leader, trois membres ; la révision n'est pas dans le tableau d'etcd 3.6 : `etcdctl endpoint status --cluster -w json | jq '.[].Status.header.revision'` doit dépasser 1 000 000 000.
 - Les objets attendus sont là (ex. l'espace perdu), à l'état de l'heure de l'instantané.
 - `kubectl get pods -A | grep -v Running` : rien d'anormal au bout de 5 minutes ; les pods de l'espace restauré ont été **recréés** — leurs données de volumes `emptyDir` ou `hostPath` jetables sont perdues (etcd ne contient pas les données des volumes).
 - `kubectl get secrets -A` puis la lecture d'un Secret applicatif : lisible (sinon, la clé de chiffrement n'est pas la bonne : §2).

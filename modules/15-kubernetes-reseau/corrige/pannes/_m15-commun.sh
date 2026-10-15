@@ -232,6 +232,11 @@ spec:
       labels: {app.kubernetes.io/name: sonde}
     spec:
       terminationGracePeriodSeconds: 2
+      # k8s-w03 porte le taint dedie=bdd:NoSchedule (M14-E14) : sans cette tolérance, aucun témoin n'y
+      # tournerait et la matrice inter-nœuds (précondition m15_sain) échouerait toujours. Les nœuds de
+      # contrôle restent exclus (taint control-plane non toléré) : un témoin par travailleur.
+      tolerations:
+        - {key: dedie, operator: Equal, value: bdd, effect: NoSchedule}
       containers:
         - name: sonde
           image: $_M15_IMG_SONDE

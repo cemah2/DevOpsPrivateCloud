@@ -40,9 +40,11 @@ _m12_e30_u="$(jq -r '.Config.Labels.PODMAN_SYSTEMD_UNIT // empty' <<<"$_m12_e30_
 check_output "son unité systemd est active" '^active$' _m12p_systemctl_app ctr02 "is-active ${_m12_e30_u:-absente.service}"
 check_output "le timer podman-auto-update du compte est actif" '^active$' \
   _m12p_systemctl_app ctr02 "is-active podman-auto-update.timer"
-# Libellé du retour arrière à vérifier sur ta version (podman auto-update : « rolled back »).
-check_ssh_output "un retour arrière automatique est journalisé (30 jours)" ctr02 'roll(ed)?[ -]?back|rollback' \
-  "sudo -n journalctl -q --no-pager --since -30d _UID=$_M12P_APP_UID -o cat | grep -iE 'auto-update|autoupdate' | grep -iE 'roll' | tail -n 3"
+# Libellé « rolled back » de la colonne UPDATED (code de Podman 5.4) : la sortie du service
+# podman-auto-update.service (lancé par le timer ou par systemctl --user start) est dans le journal
+# de l'utilisateur ; un « podman auto-update » lancé dans un terminal n'y laisse rien.
+check_ssh_output "un retour arrière automatique est journalisé (30 jours)" ctr02 'rolled back' \
+  "sudo -n journalctl -q --no-pager --since -30d _UID=$_M12P_APP_UID _SYSTEMD_USER_UNIT=podman-auto-update.service -o cat | grep -i 'rolled back' | tail -n 3"
 
 title "Dans le code"
 check_cmd "mediagenda/api : compose.ha.yaml (extends, plus de publication directe)" \

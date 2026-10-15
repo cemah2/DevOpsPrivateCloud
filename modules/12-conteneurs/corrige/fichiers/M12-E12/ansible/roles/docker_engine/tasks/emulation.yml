@@ -18,7 +18,9 @@
     state: present
   register: _docker_engine_qemu
 
-- name: Réenregistrer les interpréteurs (systemd-binfmt) après installation
+# Tâche conditionnelle plutôt que gestionnaire : l'enregistrement doit être fait AVANT la
+# vérification qui suit, dans le même passage (un gestionnaire ne tournerait qu'en fin de jeu).
+- name: Réenregistrer les interpréteurs (systemd-binfmt) après installation  # noqa: no-handler
   ansible.builtin.systemd_service:
     name: systemd-binfmt
     state: restarted

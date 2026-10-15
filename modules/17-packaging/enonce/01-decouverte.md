@@ -209,39 +209,47 @@ Si la route reste refusée, relis `status.parents[].conditions` : `NotAllowedByL
 - Générer une ConfigMap à suffixe d'empreinte et constater qu'elle redéploie les pods.
 - Reprendre une application existante (objets créés aux modules 14 à 16) sans couper la recette : déployer à côté, basculer, retirer l'ancien.
 
-**Prérequis** : M17-E03.
-**Durée indicative** : 2 h 30.
+**Prérequis** : M17-E03 ; M15-E17 (politiques de MédiAgenda), M15-E33 (en-têtes de sécurité, relais mTLS des partenaires).
+**Durée indicative** : 3 h.
 
 **Contexte technique**
 - Projet GitLab `mediagenda/deploiement` à créer, clone `~/src/mediagenda-deploiement`. Arborescence : `base/`, `overlays/dev/`, `overlays/recette/`, `overlays/essai/`.
 - Base : les manifestes **rendus** du chart 0.1.0 (`helm template mediagenda <chart> > base/mediagenda.yaml`), sans espace de noms. Tu verras en E09 comment brancher le chart lui-même.
-- Recette : objets actuels des modules 14 à 16 dans `mediagenda-recette` : Deployment, Service et PDB `mediagenda-api`, ConfigMap `mediagenda-api-config` (manifestes `k8s/recette/` de `mediagenda/api`, M14) ; HTTPRoute `mediagenda` vers le Service `mediagenda-api` port 80 (`plateforme/k8s`, M15) ; politiques réseau (`plateforme/k8s`, M15 et M16). La base de données et Valkey **restent** hors de ce dépôt.
+- Recette : objets actuels des modules 14 à 16 dans `mediagenda-recette` : Deployment, Service et PDB `mediagenda-api`, ConfigMap `mediagenda-api-config` (manifestes `k8s/recette/` de `mediagenda/api`, M14) ; HTTPRoute `mediagenda` vers le Service `mediagenda-api` port 80, avec ses en-têtes de sécurité (`plateforme/k8s`, M15-E12 et E33) ; politiques réseau (`plateforme/k8s`, M15 et M16) ; relais mTLS des partenaires (`plateforme/k8s`, M15-E33), s'il est en place. La base de données et Valkey **restent** hors de ce dépôt.
 - Le chart nomme ses objets `mediagenda` et pose ses propres étiquettes (`app.kubernetes.io/name: mediagenda`, `app.kubernetes.io/instance`, `app.kubernetes.io/component`) là où le M14 avait `mediagenda-api`. La reprise n'est donc pas une mise à jour en place : les nouveaux objets arrivent **à côté** des anciens, la route bascule de l'un à l'autre, puis l'ancien est retiré. Seule la route porte le même nom des deux côtés.
-- `overlays/dev` est seulement **construit** : `mediagenda-dev` appartient à la release Helm (règle d'un seul gestionnaire). `overlays/essai` sert à l'étape 6 et n'est jamais appliqué.
+- `overlays/dev` est seulement **construit** : `mediagenda-dev` appartient à la release Helm (règle d'un seul gestionnaire). `overlays/essai` sert à l'étape 7 et n'est jamais appliqué.
 
 **Travail demandé**
-1. Inventorie la recette telle qu'elle est : `kubectl -n mediagenda-recette get deploy,svc,pdb,sa,cm,httproute,netpol,ciliumnetworkpolicy -o wide --show-labels`. Pour chaque objet, note qui l'a créé (quel dépôt, quel fichier : `git grep` dans `~/src/k8s` et dans le clone de `mediagenda/api`), ses étiquettes et, pour la route, le Service et le port visés. Pour chaque politique réseau, note **quels pods elle sélectionne** et lesquels elle admet en entrée : les nouveaux pods (`app.kubernetes.io/name: mediagenda`) seront-ils admis par la base et par Valkey ? Note tout dans `~/m17/e04/inventaire.md`.
+1. Inventorie la recette telle qu'elle est : `kubectl -n mediagenda-recette get deploy,svc,pdb,sa,cm,httproute,netpol,ciliumnetworkpolicy -o wide --show-labels`. Pour chaque objet, note qui l'a créé (quel dépôt, quel fichier : `git grep` dans `~/src/k8s` et dans le clone de `mediagenda/api`), ses étiquettes et, pour la route, le Service et le port visés. Pour chaque politique réseau, note **quels pods elle sélectionne** et lesquels elle admet en entrée : les nouveaux pods (`app.kubernetes.io/name: mediagenda`) seront-ils admis par la base et par Valkey ? Pour la route, note tout ce qu'elle porte en plus du Service visé. Cherche enfin qui d'autre que la route appelle l'API (`git grep mediagenda-api` dans `~/src/k8s`). Note tout dans `~/m17/e04/inventaire.md`.
 2. Crée le projet et `base/` : le rendu du chart, un `kustomization.yaml` qui le liste. `kustomize build base` doit rendre exactement le rendu.
 3. Écris `overlays/recette/` :
    - espace `mediagenda-recette`, étiquette `medisphere.internal/environnement: recette` sur les objets et les pods mais **pas** dans les sélecteurs ;
    - image fixée par le transformateur `images`, deux réplicas par `replicas` ;
    - ressources de la recette par un **patch stratégique** (fichier `ressources.yaml`) ;
-   - nom publié `mediagenda-recette.apps.par1.medisphere.internal` par un **patch JSON 6902** ;
+   - nom publié `mediagenda-recette.apps.par1.medisphere.internal` par un **patch JSON 6902** ; dans le même patch, ce que la route de la recette porte aujourd'hui et que le chart ne rend pas (constat de l'étape 1) ;
    - une ConfigMap générée `mediagenda-parametres` (fichier `parametres.env`, par exemple `MEDIAGENDA_CACHE_TTL=120`) ajoutée **en dernier** aux `envFrom` du conteneur par un patch JSON 6902 ;
    - les autorisations d'entrée qui manquent pour que **tes** pods joignent la base et Valkey de la recette (constat de l'étape 1), dans un fichier de l'overlay, sans modifier les politiques de `plateforme/k8s`.
 4. Fais de même pour `overlays/dev/` (une réplique, journaux en `DEBUG`), sans l'appliquer. Compare `kustomize build overlays/dev` et `kubectl kustomize overlays/dev` : même sortie ? Même version de Kustomize ?
 5. Prépare la reprise de la recette : `kubectl diff --server-side -k overlays/recette`. Quels objets sont nouveaux ? Lequel existe déjà, et que change le diff sur lui ?
    > ⚠️ **Attention** : la route `mediagenda` existe déjà. L'appliquer la fait viser le nouveau Service : c'est la **bascule**, et si les nouveaux pods ne sont pas prêts à ce moment-là, la recette est coupée. Préviens Julien avant. Sauvegarde les objets actuels (`kubectl -n mediagenda-recette get deploy,svc,pdb,cm,httproute -o yaml > ~/m17/e04/avant-reprise.yaml`) pour revenir en arrière. Ne touche **jamais** à la base `mediagenda-db` ni au StatefulSet `valkey`.
-   Procède en deux temps : applique d'abord tout le rendu **sauf** la route, attends que les nouveaux pods soient prêts, puis applique l'overlay complet (`kubectl apply --server-side -k overlays/recette`). Vérifie `/sante` sur le nom publié pendant et après la bascule.
-   Enfin, retire l'ancienne version : les objets `mediagenda-api` que plus rien ne sert (après l'avoir vérifié), et, par MR, les fichiers de `plateforme/k8s` et de `mediagenda/api` qui les recréeraient (dont la route du M15, désormais gérée par ce dépôt). Note dans le journal ce que tu as supprimé et ce que tu laisses à la plateforme.
-6. Dans `overlays/essai` (espace `wb-essais`, `namePrefix: essai-`, sans route), construis et lis le résultat : quels noms ont changé ? Quelles **références** à ces noms ont été mises à jour (compte de service, ConfigMap…) et lesquelles ne l'ont pas été (le Secret `mediagenda-db-app`, les sélecteurs des politiques réseau) ? La route n'est pas dans cet overlay : construis la base seule avec un `namePrefix` pour savoir si sa référence au Service suit. Explique pourquoi dans le journal.
-7. Change `MEDIAGENDA_CACHE_TTL` dans `parametres.env`, reconstruis : que devient le nom de la ConfigMap ? Applique et observe le redéploiement. Que reste-t-il de l'ancienne ConfigMap dans le cluster ?
-8. MR relue par Karim, fusionnée ; la recette est maintenant gérée par `mediagenda/deploiement`.
+   Procède en deux temps : applique d'abord tout le rendu **sauf** la route, attends que les nouveaux pods soient prêts, puis applique l'overlay complet (`kubectl apply --server-side -k overlays/recette`). Vérifie `/sante` et les en-têtes de la réponse (`curl -sI`) sur le nom publié, pendant et après la bascule.
+   Ne retire pas encore l'ancienne version : la route n'est peut-être pas la seule à s'en servir (étape 6).
+6. Remets la plateforme d'accord avec la reprise, par une MR sur `plateforme/k8s` relue par Karim, **avant** de retirer l'ancienne version :
+   - le relais mTLS des partenaires (M15-E33), s'il est en place, vise encore le Service `mediagenda-api`, et ses politiques Cilium les pods `app.kubernetes.io/name: mediagenda-api`. Fais-le relayer vers le Service `mediagenda` (port 80) et vise les pods du chart, redéploie-le, puis vérifie un appel avec le certificat de test du M15-E33 ;
+   - les politiques de `espaces/politiques-mediagenda/` (M15-E17, appliquées à `mediagenda-dev` **et** à `mediagenda-recette`) et de `espaces/mediagenda-recette/` (M16) qui sélectionnent ou admettent `mediagenda-api` : d'après ton inventaire, retire celles dont le chart ou l'overlay porte désormais l'équivalent, et adapte celles qui servent encore à autre chose (tout l'espace, la réplication de Valkey, le Job de migration du M16). Supprime du cluster, dans les deux espaces, les politiques retirées du dépôt : `kubectl apply` ne supprime rien ;
+   - la route du M15 (`espaces/mediagenda-recette/httproute-mediagenda.yaml`), désormais gérée par `mediagenda/deploiement` : retire le fichier, et tout ce qui l'applique ou la compare encore dans `plateforme/k8s` (cherche son nom).
+   > ⚠️ **Attention** : respecte l'ordre. Le relais d'abord, vérifié avec le certificat de test ; les politiques ensuite. Retirer les politiques coupe les anciens pods de la base et de l'entrée : sans gravité si plus rien ne les appelle, mais une coupure pour les partenaires si le relais vise encore `mediagenda-api`. Retour arrière : réappliquer la version précédente des fichiers (`git revert` de la MR, puis la tâche d'application du M15).
+
+   Retire ensuite l'ancienne version : les objets `mediagenda-api` de la recette que plus rien ne sert (vérifie-le d'abord), et, par MR sur `mediagenda/api`, les fichiers de `k8s/recette/` qui les recréeraient. Note dans le journal ce que tu as supprimé, ce que tu as adapté et ce que tu laisses à la plateforme.
+7. Dans `overlays/essai` (espace `wb-essais`, `namePrefix: essai-`, sans route), construis et lis le résultat : quels noms ont changé ? Quelles **références** à ces noms ont été mises à jour (compte de service, ConfigMap…) et lesquelles ne l'ont pas été (le Secret `mediagenda-db-app`, les sélecteurs des politiques réseau) ? La route n'est pas dans cet overlay : construis la base seule avec un `namePrefix` pour savoir si sa référence au Service suit. Explique pourquoi dans le journal.
+8. Change `MEDIAGENDA_CACHE_TTL` dans `parametres.env`, reconstruis : que devient le nom de la ConfigMap ? Applique et observe le redéploiement. Que reste-t-il de l'ancienne ConfigMap dans le cluster ?
+9. MR relue par Karim, fusionnée ; la recette est maintenant gérée par `mediagenda/deploiement`.
 
 **Critères de réussite**
 - [ ] `mediagenda/deploiement` contient `base/` et les overlays `dev`, `recette`, `essai` ; `kustomize build` réussit pour chacun.
 - [ ] Dans `mediagenda-recette`, le Deployment `mediagenda` n'appartient pas à une release Helm, porte `medisphere.internal/environnement: recette`, a deux réplicas prêts et lit une ConfigMap `mediagenda-parametres-<empreinte>` qui existe.
-- [ ] La route `mediagenda` de la recette publie `mediagenda-recette.apps.par1.medisphere.internal` vers le Service `mediagenda` (port 80) et `/sante` y répond 200.
+- [ ] La route `mediagenda` de la recette publie `mediagenda-recette.apps.par1.medisphere.internal` vers le Service `mediagenda` (port 80) et `/sante` y répond 200, avec les en-têtes de sécurité du M15-E33 (`Strict-Transport-Security`…).
+- [ ] Dans `mediagenda-dev` et `mediagenda-recette`, aucune NetworkPolicy ni CiliumNetworkPolicy ne sélectionne ni n'admet encore `mediagenda-api`. Si le relais mTLS des partenaires existe, il relaie vers le Service `mediagenda` (port 80) et un appel avec le certificat de test répond 200.
 - [ ] Le Deployment `mediagenda-api` du M14 n'existe plus (un seul gestionnaire de l'application).
 - [ ] La base `mediagenda-db` de la recette n'a pas été recréée (son âge est antérieur au module).
 
@@ -259,7 +267,7 @@ Pour ajouter un élément **à la fin** d'une liste en JSON 6902, le chemin se t
 
 <details><summary>Indice 3</summary>
 
-Pour appliquer « tout sauf la route », `kubectl kustomize` écrit le rendu sur la sortie standard, et `yq` sait filtrer des documents par `kind`. Si `kubectl apply --server-side` signale un conflit sur un champ de la route, lis le nom du gestionnaire qui le possède : c'est la trace de la façon dont elle a été créée au M15. Comprends le conflit avant d'utiliser `--force-conflicts`. Si les nouveaux pods restent non prêts, relis ton inventaire des politiques d'entrée de la base et de Valkey.
+Pour appliquer « tout sauf la route », `kubectl kustomize` écrit le rendu sur la sortie standard, et `yq` sait filtrer des documents par `kind`. Lis le `kubectl diff` de la route jusqu'au bout : ce qui **disparaît** compte autant que ce qui change. Avec le *server-side apply*, un champ qu'un même gestionnaire n'applique plus est retiré sans un mot ; un conflit, lui, n'apparaît que si un **autre** gestionnaire possède le champ (lis son nom avant d'utiliser `--force-conflicts`). Si les nouveaux pods restent non prêts, relis ton inventaire des politiques d'entrée de la base et de Valkey.
 </details>
 
 **Pour aller plus loin** (facultatif) : `kubectl apply --prune` avec un *ApplySet* (fonction encore en alpha, variable `KUBECTL_APPLYSET=true`) supprime les objets retirés d'un overlay. Essaie-le sur `wb-essais` seulement.

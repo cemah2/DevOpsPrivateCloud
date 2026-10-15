@@ -3,8 +3,8 @@
 # shellcheck disable=SC2016  # commandes distantes entre apostrophes
 #
 # check-E26.sh — M12-E26 « Durcir le moteur : socket, userns-remap, Docker sans privilège »
-# Lecture seule : getent, ss, docker info, docker network inspect, /proc d'un conteneur EXISTANT
-# (le registre de travail), auditctl -l, ausearch ; fichiers sur main (API GitLab).
+# Lecture seule : getent, ss, docker info, docker network inspect, daemon.json, auditctl -l,
+# ausearch ; fichiers sur main (API GitLab).
 
 # shellcheck source=_m12-production.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m12-production.sh"
@@ -34,15 +34,17 @@ check_output "réseau bridge par défaut : communication entre conteneurs désac
   _m12p_docker ctr01 "network inspect bridge --format '{{index .Options \"com.docker.network.bridge.enable_icc\"}}'"
 check_ssh_output "daemon.json : no-new-privileges par défaut" ctr01 '^true$' \
   "jq -r '.\"no-new-privileges\"' /etc/docker/daemon.json"
-_m12_e26_reg="$(_m12p_ctr_service ctr01 registre registre)"
-check_output "un conteneur sans l'option (registre) a NoNewPrivs à 1" '^NoNewPrivs:[[:space:]]+1$' \
-  _m12p_docker ctr01 "exec ${_m12_e26_reg:-registre-absent} cat /proc/1/status"
+# Effet réel (démon en marche, pas seulement le fichier) : docker info liste « name=no-new-privileges »
+# quand le démon l'applique à tout conteneur. (Le registre de E15 pose déjà l'option lui-même : son
+# NoNewPrivs ne prouverait rien.)
+check_cmd "le démon applique no-new-privileges à tout conteneur (docker info)" _m12p_jq "$_m12_e26_info" \
+  '(.SecurityOptions // []) | any(. == "name=no-new-privileges")'
 check_http "le registre de travail répond (401 sans identifiants)" "https://$_M12P_REGISTRE/v2/" 401 --cacert "$_M12P_RACINE"
 
 title "Audit"
 check_ssh_output "règles d'audit chargées (clé docker)" ctr01 '-k docker' "sudo -n auditctl -l"
 check_ssh_output "un événement d'audit « docker » de moins de 7 jours" ctr01 '^EVENEMENT$' \
-  "sudo -n ausearch -k docker -ts \$(date -d '7 days ago' '+%m/%d/%Y') >/dev/null 2>&1 && echo EVENEMENT || echo AUCUN"
+  "sudo -n ausearch -k docker -ts week-ago >/dev/null 2>&1 && echo EVENEMENT || echo AUCUN"
 
 title "Dans le code"
 check_cmd "plateforme/ansible : rôle audit_conteneurs sur main" \

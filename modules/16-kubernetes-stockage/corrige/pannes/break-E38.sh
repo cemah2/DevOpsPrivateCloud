@@ -158,10 +158,16 @@ rm -f "$f" "$fp"
 EOF
       ;;
     3)
-      local h
+      local h a
       h="$(m16_lire E38 cle_posee)"
       [[ -n "$h" ]] || return 0
-      if [[ "$(m16_hachage_cle)" == "$h" ]]; then
+      a="$(m16_hachage_cle)"
+      # Ceph injoignable : on ne sait pas si la clé posée est encore là ; on garde tout pour réessayer.
+      if [[ -z "$a" ]]; then
+        wb_avert "annulation : clé de $_M16_CEPH_ID illisible ; trousseau d'origine conservé sur $_M16_CEPH_ADMIN (/var/lib/workbook/M16-E38.keyring), relance lab/bin/break 16 38 --annuler"
+        return 1
+      fi
+      if [[ "$a" == "$h" ]]; then
         m16_ceph_exec I="$_M16_CEPH_ID" >/dev/null 2>&1 <<'EOF' || wb_avert "annulation : trousseau d'origine de client.k8s non réimporté"
 f="$WB_DIR/$WB_EX.keyring"
 [ -f "$f" ] || exit 1
@@ -173,6 +179,12 @@ else
 fi
 journal "trousseau d'origine de $I réimporté"
 EOF
+        # Le trousseau d'origine n'est effacé qu'une fois la clé posée par la panne disparue de Ceph
+        # (réimport réussi) : sinon il reste la seule copie de la valeur attendue par les volumes montés.
+        if [[ "$(m16_hachage_cle)" == "$h" ]]; then
+          wb_avert "annulation : la clé posée par la panne est toujours celle de $_M16_CEPH_ID ; trousseau d'origine conservé sur $_M16_CEPH_ADMIN (/var/lib/workbook/M16-E38.keyring), relance lab/bin/break 16 38 --annuler"
+          return 1
+        fi
       fi
       m16_ceph_exec >/dev/null 2>&1 <<'EOF' || true
 rm -f "$WB_DIR/$WB_EX.keyring"
@@ -182,6 +194,12 @@ EOF
 }
 
 _e38_injecter() {
+  # Une annulation précédente de la variante 3 a échoué (clé non remise) : on ne repose rien ; le
+  # retour d'échec fait relancer l'annulation par lab/bin/break, qui réessaie de remettre la clé.
+  if [[ -n "$(m16_lire E38 cle_posee)" ]]; then
+    wb_avert "la clé de $_M16_CEPH_ID posée par une injection précédente n'a pas été remise : nouvelle tentative d'annulation"
+    return 1
+  fi
   m16_preparer || return 1
   m16_ceph status -f json 2>/dev/null | jq -e '.health.status != "HEALTH_ERR"' >/dev/null 2>&1 \
     || { wb_avert "ceph-par1 ne répond pas ou est en HEALTH_ERR depuis $_M16_CEPH_ADMIN"; return 1; }
@@ -201,13 +219,20 @@ verifier_E38() {
 }
 
 annuler_E38() {
+  local ok=0
   case "${WB_VAR:-}" in
-    1 | 2 | 3) _e38_defaire "$WB_VAR" ;;
-    *) _e38_defaire 3; _e38_defaire 2; _e38_defaire 1 ;;
+    1 | 2) _e38_defaire "$WB_VAR" ;;
+    3) _e38_defaire 3 || ok=1 ;;
+    *) _e38_defaire 3 || ok=1; _e38_defaire 2; _e38_defaire 1 ;;
   esac
   _e38_supprimer_temoin
-  m16_journal E38 "annulation"
-  m16_effacer_etat E38
+  # État local gardé si la clé n'a pas pu être remise : un nouvel --annuler réessaiera.
+  if ((ok == 0)); then
+    m16_journal E38 "annulation"
+    m16_effacer_etat E38
+  else
+    m16_journal E38 "annulation incomplète (clé de client.k8s), état conservé"
+  fi
 }
 
 resume_E38() {

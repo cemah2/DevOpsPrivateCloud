@@ -30,7 +30,7 @@ modification = patch dans le dépôt, `generer.sh`, `appliquer.sh <nœud> --essa
 
 | Besoin | Commande |
 |---|---|
-| état d'ensemble | `talosctl -n 10.10.99.85 health`, `talosctl dashboard` |
+| état d'ensemble | `talosctl -n 10.10.99.85 health` (après E06, sans découverte : `--control-plane-nodes 10.10.99.85 --worker-nodes 10.10.99.86,10.10.99.87`), `talosctl dashboard` |
 | services | `talosctl -n <ip> service` (`service kubelet status`) |
 | journaux | `talosctl -n <ip> logs kubelet --tail 50`, `logs machined`, `dmesg` |
 | ressources | `talosctl -n <ip> get <type>` (`members`, `hostname`, `addresses`, `routes`, `extensions`, `machineconfig`) |

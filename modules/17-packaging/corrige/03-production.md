@@ -133,17 +133,17 @@ On ajouterait :
 
 ```
 admin@adm01:~/src/mediagenda-chart$ helm diff upgrade mediagenda charts/mediagenda -n mediagenda-dev \
-    --reuse-values -f valeurs-dev.yaml --context 3
+    -f valeurs-dev.yaml --context 3
 mediagenda-dev, mediagenda, Deployment (apps) has changed:
 …
 -             memory: 384Mi
 +             memory: 448Mi
 ```
 
-Reprends les valeurs que la release du dev utilise vraiment : `helm get values mediagenda -n mediagenda-dev` les affiche. `helm get manifest` comparé à `helm template` donne le même diff ici, mais à la main : pas de masquage des Secrets, pas de regroupement par objet, et surtout aucun rendu côté serveur. `helm diff` fait le rendu comme `helm upgrade` : mêmes valeurs, mêmes `lookup` avec `--dry-run=server`, même validation contre l'API.
+`valeurs-dev.yaml` : les valeurs que la release du dev utilise vraiment (`helm get values mediagenda -n mediagenda-dev -o yaml > valeurs-dev.yaml`, ou ton `~/m17/e06/dev.yaml`). Pas de `--reuse-values` : comme pour `helm upgrade` (M17-E02), on repasse un fichier relu. `helm get manifest` comparé à `helm template` donne le même diff ici, mais à la main : pas de masquage des Secrets, pas de regroupement par objet, et surtout aucun rendu côté serveur. `helm diff` fait le rendu comme `helm upgrade` : mêmes valeurs, mêmes `lookup` avec `--dry-run=server`, même validation contre l'API.
 
 *2. Options.*
-- `--server-side auto` (défaut) suit la méthode de la release. `helm get` montre `apply_method: ssa` pour une release installée par Helm 4.
+- `--server-side auto` (défaut) suit la méthode de la release. Pour une release installée par Helm 4, `helm get metadata` affiche `APPLY_METHOD: server-side apply` et `helm status -o json` la clé `"apply_method": "ssa"` (constaté avec Helm 4.3.0).
 - `--three-way-merge` fait entrer l'**état réel** du cluster dans la comparaison.
 - `--context 3` donne un diff lisible en MR.
 - Les Secrets sont masqués par défaut : `--show-secrets` les afficherait, à ne jamais utiliser en CI.
@@ -210,7 +210,7 @@ Helm 3 appliquait un *3-way merge* côté client : ancien manifeste, état réel
 
 **Pièges classiques**
 - Lire `helm diff` sans `--three-way-merge` et conclure « rien ne change ».
-- Confondre `--force-conflicts` (SSA : prendre la propriété) et `--force-replace` (supprimer puis recréer l'objet : interruption).
+- Confondre `--force-conflicts` (SSA : prendre la propriété) et `--force-replace` (supprimer puis recréer l'objet : interruption). Sur une release en SSA, Helm 4.3 refuse d'ailleurs le second (`cannot use server-side apply and force replace together`), et refuse aussi de combiner les deux.
 - Appliquer la recette avec `kubectl apply -k` côté client un jour et `--server-side` le lendemain : deux propriétaires.
 
 **En production chez MédiSphère**

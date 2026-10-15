@@ -9,13 +9,18 @@
 #      roulante « courant » ne peut plus être réécrite ;
 #   3. robot$wb-sonde-ci privé de son droit de poussée (lecture seule) ;
 #   4. chrony arrêté sur runner02 et horloge avancée de 40 jours → le certificat de Harbor (30 jours au
-#      plus) est vu expiré par le client (seulement si aucun job ne tourne sur runner02).
+#      plus) est vu expiré par le client (seulement si aucun job ne tourne sur runner02) ; les
+#      certificats SSH (16 h) aussi : runner02 ne se joint plus qu'en secours (agent QEMU, compte
+#      secours), comme en M06-E37 ; la vérification et l'annulation passent par l'agent QEMU.
 # Valeurs d'origine dans ~/.local/state/workbook/M13-E20/ (adm01) et /var/lib/workbook/ (runner02).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
 # shellcheck source=_m13-commun.sh
 source "$WB_ROOT/modules/13-registre-supply-chain/corrige/pannes/_m13-commun.sh"
+
+# VMID de runner02 (PLAN §4.5) pour l'agent QEMU de la variante 4.
+_E20_VMID_RUNNER="${WB_M13_RUNNER_VMID:-$WB_VMID_RUNNER02}"
 
 _e20_quota() {
   local pid
@@ -99,12 +104,22 @@ _e20_defaire() {
       fi
       ;;
     4)
-      wb_exec "$_M13_RUNNER" <<'EOF' || wb_avert "annulation : horloge de runner02 non rétablie"
-if [ -f "$WB_DIR/$WB_EX.date-avant" ]; then
+      # Par l'agent QEMU : horloge en avance, les certificats SSH (16 h) sont refusés par runner02
+      # (même méthode que M06-E37). L'horloge est d'abord ramenée, puis chrony affine.
+      wb_exec_invite "$_E20_VMID_RUNNER" <<'EOF' || wb_avert "annulation : horloge de runner02 non rétablie (agent QEMU) : vérifie-la par la console"
+f="$WB_DIR/$WB_EX.date-avant"
+if [ -f "$f" ]; then
+  ecart=$(( $(date +%s) - $(cat "$f") ))
+  if [ "$ecart" -gt 864000 ]; then
+    date -s "@$(( $(date +%s) - 40 * 86400 ))" >/dev/null
+    journal "annulation : horloge reculée de 40 jours"
+  else
+    journal "annulation : horloge déjà corrigée (réparation)"
+  fi
   systemctl is-active -q chrony || systemctl start chrony
   sleep 5
   chronyc -a makestep >/dev/null 2>&1 || true
-  rm -f "$WB_DIR/$WB_EX.date-avant"
+  rm -f "$f"
   journal "chrony relancé, horloge resynchronisée"
 fi
 EOF
@@ -118,7 +133,20 @@ panne_E20_v2() { _e20_injecter 2; }
 panne_E20_v3() { _e20_injecter 3; }
 panne_E20_v4() { _e20_injecter 4; }
 
-verifier_E20() { m13_attendre 60 m13_sonde_echoue publication; }
+# Variante 4 : SSH vers runner02 est refusé (horloge en avance) ; la sonde est lancée par l'agent
+# QEMU, et la panne n'est constatée que si la sonde y échoue vraiment (pas un simple échec SSH).
+_e20_sonde_echoue_agent() {
+  wb_exec_invite "$_E20_VMID_RUNNER" <<'EOF'
+if /usr/local/sbin/wb-sonde-registre --etape publication >/dev/null 2>&1; then exit 1; fi
+exit 0
+EOF
+}
+verifier_E20() {
+  case "$WB_VAR" in
+    4) m13_attendre 90 _e20_sonde_echoue_agent ;;
+    *) m13_attendre 60 m13_sonde_echoue publication ;;
+  esac
+}
 
 annuler_E20() {
   case "${WB_VAR:-}" in

@@ -26,7 +26,7 @@
 ## Retour au nominal
 
 - `cilium bgp peers` : toutes les sessions établies ; `nc -zv 10.10.41.10 443` depuis `adm01` ; routes présentes sur `gw01` **et** `gw02`.
-- Clore : ticket, journal de diagnostic dans `docs/socle/journal/`, MR de correction liée.
+- Clore : ticket, journal de diagnostic dans `docs/kubernetes/journal/`, MR de correction liée.
 
 ## Historique
 

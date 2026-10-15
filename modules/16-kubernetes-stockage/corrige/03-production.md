@@ -4,10 +4,10 @@
 
 **Points non testés en conditions réelles** (signale tes retours, ils corrigent le workbook) :
 - Velero 1.18 : sélecteur de restauration par **absence** de label (`labelSelector.matchExpressions` `DoesNotExist`) combiné au remappage ; remappage des sujets des RoleBindings ; comportement exact des modificateurs de ressources sur un champ tableau (`/spec/hostnames` remplacé par une valeur JSON échappée, comme dans l'exemple officiel) ;
-- CloudNativePG 1.30 : présence du label `cnpg.io/cluster` sur **tous** les objets générés (en particulier le Secret `-app`), chaîne `uri` de ce Secret qui contient le nom de l'espace ; nom du pod de récupération (`<cluster>-1-full-recovery-*`) ; valeur par défaut de `switchoverDelay` ; métriques `cnpg_pg_replication_lag` et `cnpg_pg_stat_archiver_*` de la configuration de supervision par défaut ; effet d'une nouvelle version du plugin Barman Cloud sur le *sidecar* des instances (redémarrage ou non) ; syntaxe `kubectl cnpg pgbench … -- --initialize --scale N` ;
-- ceph-csi 3.18 : collision du nom de ConfigMap de KMS entre les charts `ceph-csi-rbd` et `ceph-csi-cephfs` installés dans le même espace (lue dans les gabarits des charts 3.18.1, non essayée) ; création d'un volume chiffré par clone d'un instantané **en clair** (comportement non documenté : le corrigé recommande de ne pas s'y fier) ; métadonnées d'image `rbd.csi.ceph.com/encrypted` et `rbd.csi.ceph.com/dek` (lues dans le code au tag v3.18.1) ;
+- CloudNativePG 1.30 : nom du pod de récupération (`<cluster>-1-full-recovery-*`) ; présence de `cnpg_pg_stat_archiver_*` dans la configuration de supervision par défaut de ta version ; effet d'une nouvelle version du plugin Barman Cloud sur le *sidecar* des instances (redémarrage ou non). (Lus dans le code au tag v1.30.1 : label `cnpg.io/cluster` posé sur tous les objets générés, Secret `-app` compris ; clé `uri` qui contient l'espace, clé `host` qui ne le contient pas ; `switchoverDelay` à 3600 s par défaut ; `kubectl cnpg pgbench` vise la base `app` sauf `--db-name`.)
+- ceph-csi 3.18 : collision du nom de ConfigMap de KMS entre les charts `ceph-csi-rbd` et `ceph-csi-cephfs` installés dans le même espace (lue dans les gabarits des charts 3.18.1, non essayée) ; création d'un volume chiffré par clone d'un instantané **en clair** (comportement non documenté : le corrigé recommande de ne pas s'y fier) ; (lus dans le code au tag v3.18.1 : métadonnées d'image `rbd.csi.ceph.com/encrypted` et `rbd.csi.ceph.com/dek`, KEK cherchée dans les Secrets de la requête sans `secretName`, même DEK ré-enveloppée pour un clone, agrandissement refusé avec `integrityMode`) ;
 - Cilium 1.20 : identité `kube-apiserver` (entité) pour le trafic du proxy de l'API vers un pod ; selon la configuration, il peut porter `remote-node` ou `host` ;
-- kubelet : certificat de service signé par la CA du cluster (`serverTLSBootstrap`, M14-E26) et portant le nom court du nœud ; variable `KUBECACHEDIR` de kubectl ;
+- kubelet : certificat de service signé par la CA du cluster (`serverTLSBootstrap`, M14-E26) et portant le nom court du nœud ;
 - `ansible-vault encrypt` lisant l'entrée standard (`-`) ; `valkey-cli` et la variable `REDISCLI_AUTH` ;
 - durées indicatives (restauration, import, montée en place, migration) : elles dépendent du volume de données de ta recette.
 
@@ -29,7 +29,7 @@ Fichiers : espace [`wb-restauration`](fichiers/M16-E24/k8s/espaces/wb-restaurati
 - **Objet existant** : ignoré par défaut (`existingResourcePolicy: none`), sauf les comptes de service (fusion) ; `update` tente un correctif, sans toucher aux données des PVC.
 - **Modificateurs** : correctifs JSON Patch, *merge patch* ou *strategic merge* appliqués avant la création, filtrés par groupe-ressource, nom, espace **d'origine**, labels ; ils ne savent ni supprimer un objet de la restauration (c'est le rôle des filtres), ni lire un autre objet.
 - **Filtrer** : ressources incluses/exclues, espaces, `labelSelector` (avec expressions) ou `orLabelSelectors`.
-- **CloudNativePG** : un `Cluster` avec `bootstrap.recovery` et un `externalClusters` de type plugin (`barmanObjectName`, `serverName`) redémarre depuis la dernière sauvegarde de base et rejoue les WAL ; base et propriétaire sont repris de la sauvegarde ; les Secrets ne sont **pas** dans la sauvegarde (le `-app` est régénéré) ; un cluster qui archiverait dans une archive non vide reste en `Setting up primary` avec `Expected empty archive`.
+- **CloudNativePG** : un `Cluster` avec `bootstrap.recovery` et un `externalClusters` de type plugin (`barmanObjectName`, `serverName`) redémarre depuis la dernière sauvegarde de base et rejoue les WAL ; les bases et les rôles viennent de la sauvegarde, mais `bootstrap.recovery.database` et `owner` (défaut : `app`) désignent la base applicative pour laquelle l'opérateur génère le Secret `-app` (et crée base et rôle s'ils manquent) : ici `mediagenda`, sinon le Secret vise une base `app` vide ; les Secrets ne sont **pas** dans la sauvegarde (le `-app` est régénéré, et le mot de passe du propriétaire de la copie aligné sur lui) ; un cluster qui archiverait dans une archive non vide reste en `Setting up primary` avec `Expected empty archive`.
 - **Pourquoi pas les PVC et les pods de la base par Velero** : l'opérateur gère l'identité des instances (PVC nommés, rôles primaire/réplica, timelines, état dans `status`) ; des volumes restaurés sans cet état (Velero retire le `status`) donnent un cluster incohérent ; et l'instantané d'un volume de base pris pendant l'activité n'est cohérent qu'en cas de panne, sans garantie sur l'archive des WAL. La base se restaure par son outil, à l'instant voulu.
 
 *2. Inventaire* (classement attendu, à adapter à ton espace) :
@@ -85,7 +85,7 @@ rendez_vous=42 empreinte=3b9c…            # identique
 valkey_cles=118                           # identique
 admin@adm01:~$ kubectl port-forward -n wb-restauration svc/mediagenda-api 18000:80 &
 admin@adm01:~$ curl -s localhost:18000/pret ; curl -s 'localhost:18000/api/v1/rendez-vous?limite=3' | jq length
-admin@adm01:~$ kubectl get secret mediagenda-db-app -n wb-restauration -o jsonpath='{.data.host}' | base64 -d ; echo
+admin@adm01:~$ kubectl get secret mediagenda-db-app -n wb-restauration -o jsonpath='{.data.uri}' | base64 -d | sed -E 's#^[^@]*@##; s#/.*##' ; echo   # mediagenda-db-rw.wb-restauration:5432 (sans le mot de passe)
 admin@adm01:~$ kubectl cnpg psql mediagenda-db -n wb-restauration -- -At -c "SELECT count(*) FROM pg_stat_activity WHERE application_name NOT LIKE 'cnpg%' AND backend_type = 'client backend'"
 admin@adm01:~$ kubectl get httproute -n wb-restauration -o jsonpath='{.items[*].status.parents[*].conditions[?(@.type=="Accepted")].status}'   # False
 admin@adm01:~$ dig +short mediagenda-restauration.apps.par1.medisphere.internal                                              # rien
@@ -94,7 +94,7 @@ admin@adm01:~$ set -a; . ~/.config/workbook/s3-cnpg.env; set +a
 admin@adm01:~$ aws --endpoint-url https://s3-01.par1.medisphere.internal:8333 s3 ls s3://cnpg-k8s-par1/          # un seul préfixe : mediagenda-db/
 ```
 
-Le Service `mediagenda-api` (M14) écoute en 80 et renvoie vers le port `http` (8000) des pods. Le dernier contrôle porte sur le compartiment : il ne doit y avoir que les préfixes des clusters qui archivent réellement (la copie n'a pas de `.spec.plugins`). Si ta CLI S3 n'est pas `aws`, prends celle du M05.
+La clé `host` du Secret ne contient que `mediagenda-db-rw` (nom court, résolu dans l'espace du pod) ; c'est `uri`, la clé que lit l'API, qui porte l'espace (`mediagenda-db-rw.<espace>:5432`) : c'est donc elle qu'on contrôle, en coupant le mot de passe avant tout affichage. Le Service `mediagenda-api` (M14) écoute en 80 et renvoie vers le port `http` (8000) des pods. Le dernier contrôle porte sur le compartiment : il ne doit y avoir que les préfixes des clusters qui archivent réellement (la copie n'a pas de `.spec.plugins`). Si ta CLI S3 n'est pas `aws`, prends celle du M05.
 
 *7. Écrire* : compte rendu et RB-161 (fichiers). RTO typique sur le lab : 10 à 20 minutes (téléchargement des volumes par le *data mover*, téléchargement de la sauvegarde de base, rejeu des WAL depuis la dernière sauvegarde) : **mesure-le**, ne le recopie pas.
 
@@ -113,6 +113,7 @@ Velero est un outil **générique** : il sait recréer des objets Kubernetes et 
 **Pièges classiques**
 - Oublier `namespaceMapping` (les objets manquants sont recréés dans la recette).
 - Restaurer le Secret `-app` : l'API de la copie vise la base de la recette (bloquée ici par les politiques réseau… ou pas, selon les tiennes).
+- Oublier `database`/`owner` dans `bootstrap.recovery` : l'API restaurée se connecte à une base `app` vide créée par l'opérateur.
 - Mettre `.spec.plugins` dans le `Cluster` de récupération « pour être complet » : la copie archive dans le même préfixe, l'opérateur la bloque (`Expected empty archive`) — ou pire, avec un autre `serverName`, elle remplit le compartiment de la recette.
 - Comparer seulement le nombre d'objets restaurés : seule une empreinte des **données** prouve la restauration.
 - Laisser la copie en place « pour plus tard » : une copie de données de santé non suivie.
@@ -164,7 +165,7 @@ admin@adm01:~$ kubectl cnpg status mediagenda-db -n mediagenda-recette
 admin@adm01:~$ kubectl logs -n mediagenda-recette mediagenda-db-2 -c postgres | grep -i rewind
 ```
 
-Indisponibilité typique : une à quelques dizaines de secondes (détection, élection, et attente du bail si l'ancien n'a pas pu le libérer). `pg_rewind` apparaît quand l'ancien primaire avait écrit des WAL que le nouveau n'a pas reçus avant la promotion : sa timeline a divergé, il faut « rembobiner » ses fichiers jusqu'au point de bifurcation avant de suivre la nouvelle timeline. Après une bascule planifiée, il n'y a pas de divergence (arrêt propre, WAL envoyés), donc pas besoin. En réplication asynchrone, des transactions validées par l'ancien primaire et non reçues sont **perdues** : le témoin peut en montrer une ou deux (un 201 reçu, puis le rendez-vous absent) : c'est le RPO non nul de l'asynchrone, à écrire.
+Indisponibilité typique : une à quelques dizaines de secondes (détection, élection, et attente du bail si l'ancien n'a pas pu le libérer). `pg_rewind` apparaît quand l'ancien primaire avait écrit des WAL que le nouveau n'a pas reçus avant la promotion : sa timeline a divergé, il faut « rembobiner » ses fichiers jusqu'au point de bifurcation avant de suivre la nouvelle timeline. Après une bascule planifiée, il n'y a pas de divergence (arrêt propre, WAL envoyés), donc pas besoin. Avec la réplication synchrone d'E18 (`any 1`, `dataDurability: required`), toute transaction acquittée (201) existe sur au moins une réplique, et l'opérateur promeut la plus avancée : **0** rendez-vous perdu attendu, ici aussi. En asynchrone, des transactions validées par l'ancien primaire et non reçues seraient **perdues** (un 201 reçu, puis le rendez-vous absent) : c'est le RPO non nul de l'asynchrone. Si ton témoin en montre, vérifie `synchronous_standby_names` et `pg_stat_replication` avant d'accuser l'opérateur.
 
 *5. Isolement* :
 
@@ -192,7 +193,7 @@ Décision du corrigé : la **recette reste en `supervised`** (les démonstration
 
 ```
 admin@adm01:~$ kubectl apply -f pg-essai.yaml          # puis données d'essai
-admin@adm01:~$ kubectl cnpg pgbench pg-essai -n wb-essais --job-name pgbench-init -- --initialize --scale 5
+admin@adm01:~$ kubectl cnpg pgbench pg-essai -n wb-essais --db-name essai --job-name pgbench-init -- --initialize --scale 5
 admin@adm01:~$ kubectl cnpg psql pg-essai -n wb-essais -- -d essai -At -c 'SELECT count(*) FROM pgbench_accounts'
 admin@adm01:~$ kubectl apply -f pg-essai-import.yaml   # (a) import, source en 17.11
 admin@adm01:~$ kubectl cnpg psql pg-essai-import -n wb-essais -- -d essai -At -c 'SELECT count(*) FROM pgbench_accounts'
@@ -203,7 +204,7 @@ admin@adm01:~$ kubectl cnpg psql pg-essai -n wb-essais -- -d essai -c 'ANALYZE'
 admin@adm01:~$ kubectl cnpg psql pg-essai -n wb-essais -- -At -c 'SELECT version()'
 ```
 
-(La commande `kubectl cnpg pgbench` crée un Job ; vérifie sa syntaxe par `--help`. L'échelle 5 donne 500 000 lignes, environ 75 Mio, compatibles avec un volume de 1 Gio.) Comparaison (voir le modèle de compte rendu) : l'import laisse la source intacte (retour arrière immédiat) mais impose de geler les écritures pendant la copie ou de passer par la réplication logique pour une bascule en ligne ; la voie en place arrête **tout** le cluster, mais sa durée dépend peu du volume (`--link`) ; dans les deux cas, l'archive des WAL repart d'un nouveau système (nouvel identifiant de système) : changer le `serverName` du plugin au même moment et faire une sauvegarde de base aussitôt, car aucune restauration à un instant donné ne traverse une majeure.
+(La commande `kubectl cnpg pgbench` crée un Job qui se connecte avec le Secret `pg-essai-app` à la base `app` par défaut : `--db-name essai` est indispensable ici. L'échelle 5 donne 500 000 lignes, environ 75 Mio, compatibles avec un volume de 1 Gio.) Comparaison (voir le modèle de compte rendu) : l'import laisse la source intacte (retour arrière immédiat) mais impose de geler les écritures pendant la copie ou de passer par la réplication logique pour une bascule en ligne ; la voie en place arrête **tout** le cluster, mais sa durée dépend peu du volume (`--link`) ; dans les deux cas, l'archive des WAL repart d'un nouveau système (nouvel identifiant de système) : changer le `serverName` du plugin au même moment et faire une sauvegarde de base aussitôt, car aucune restauration à un instant donné ne traverse une majeure.
 
 *9.* `outils/temoin-api.sh --nettoyer`. Puis suppression de `pg-essai` et `pg-essai-import` après la vérification.
 
@@ -212,7 +213,7 @@ admin@adm01:~$ kubectl cnpg psql pg-essai -n wb-essais -- -At -c 'SELECT version
 CloudNativePG ne s'appuie ni sur un DCS (etcd, Consul) comme Patroni, ni sur un StatefulSet : l'opérateur gère directement les pods et les PVC de chaque instance, et l'API Kubernetes **est** la source de vérité (statut du `Cluster`, bail). Une bascule est donc une suite d'actions de l'opérateur, observables dans le statut et les événements. Côté application, l'indisponibilité ne se résume jamais à la promotion : le Service doit pointer vers le nouveau primaire, et les connexions établies vers l'ancien doivent être fermées et rouvertes — d'où l'importance d'un pool de connexions qui détecte les erreurs, et d'une sonde `/pret` qui ne fait pas sortir **tous** les pods de l'API du Service pour quelques secondes de base indisponible (point repris en E29). `pg_rewind` existe parce qu'une bascule sur panne peut laisser l'ancien primaire « en avance » sur une branche qui n'existe plus.
 
 **Alternatives**
-- Réplication synchrone `any 1` + `dataDurability: preferred` : RPO nul tant qu'un réplica suit, sans bloquer les écritures en maintenance ; coût : latence de chaque validation (un aller-retour de plus, voir E28 `wal`).
+- Réplication synchrone `any 1` + `dataDurability: preferred` (au lieu du `required` d'E18) : RPO nul tant qu'un réplica suit, sans bloquer les écritures quand les deux réplicas manquent ; la garantie tombe alors en silence : choix de disponibilité, à écrire dans la politique (E32). Coût commun aux deux : la latence de chaque validation (un aller-retour de plus, voir E28 `wal`).
 - PgBouncer (`Pooler` de CloudNativePG) devant la base : les applications gardent leurs connexions au *pooler*, qui suit le primaire ; en mode `transaction`, une bascule devient presque invisible.
 - Montée majeure en ligne par réplication logique (`Publication`/`Subscription`), puis bascule de l'application : quasi sans coupure, plus complexe (séquences, DDL non répliquée).
 
@@ -225,7 +226,7 @@ CloudNativePG ne s'appuie ni sur un DCS (etcd, Consul) comme Patroni, ni sur un 
 - Garder le même `serverName` après une majeure : archive mélangée de deux systèmes.
 
 **En production chez MédiSphère**
-Bascules planifiées en fenêtre, annoncées, avec le témoin ; exercice de bascule sur panne trimestriel ; `Pooler` devant les bases de production ; réplication synchrone `preferred` pour MédiAgenda (RPO quasi nul) ; montée majeure annuelle répétée sur un clone (`pg-essai` à partir d'une sauvegarde de production anonymisée), avec nouveau `serverName` et sauvegarde immédiate.
+Bascules planifiées en fenêtre, annoncées, avec le témoin ; exercice de bascule sur panne trimestriel ; `Pooler` devant les bases de production ; réplication synchrone `required` gardée pour MédiAgenda (RPO nul, au prix des écritures suspendues si les deux réplicas manquent) ; montée majeure annuelle répétée sur un clone (`pg-essai` à partir d'une sauvegarde de production anonymisée), avec nouveau `serverName` et sauvegarde immédiate.
 
 ---
 
@@ -235,7 +236,7 @@ Bascules planifiées en fenêtre, annoncées, avec le témoin ; exercice de basc
 
 Fichiers : [extrait de `values-rbd.yaml`](fichiers/M16-E26/k8s/composants/ceph-csi/values-rbd.chiffrement.extrait.yaml), [classe `ceph-rbd-chiffre`](fichiers/M16-E26/k8s/composants/ceph-csi/classes/ceph-rbd-chiffre.yaml), [`outils/secret-rbd-chiffre.sh`](fichiers/M16-E26/k8s/outils/secret-rbd-chiffre.sh) (voisin de `outils/ceph-csi-secrets.sh`, même fichier Vault), [volumes d'essai](fichiers/M16-E26/wb-essais/e26-volumes.yaml), [`chiffrement.md`](fichiers/M16-E26/medisphere/docs/kubernetes/stockage/chiffrement.md).
 
-*1. Lecture* (ceph-csi 3.18.1, `docs/rbd/deploy.md`) : à la **création**, l'image est créée et, si un KMS est utilisé, une phrase (DEK) est générée et stockée ; l'état `encryptionPrepared` est écrit dans les métadonnées de l'image. Au **premier montage**, le *nodeplugin* récupère la phrase, formate le périphérique en LUKS, passe l'état à `encrypted`. Aux montages suivants, il ouvre le LUKS et monte le périphérique du *device-mapper*. À la **suppression**, la phrase est retirée du KMS (erreurs ignorées). Fournisseurs : phrase **unique** dans les Secrets de la classe (clé `encryptionPassphrase`, une même phrase pour tous les volumes) ; `metadata` (DEK par volume, chiffrée par la KEK, rangée dans la métadonnée de l'image ; KEK lue dans un Secret nommé `secretName` ou, à défaut, dans les Secrets de la classe) ; Vault (`vault`, `vaulttokens`, `vaulttenantsa`) et d'autres KMS. **Interdit** : activer le chiffrement sur une classe qui a déjà des volumes, ou sur un volume existant. Paramètres : `encryptionCipher` (`aes-xts-plain64` par défaut), `encryptionKeySize`, `encryptionSectorSize`, `integrityMode` (dm-integrity : **interdit l'agrandissement**).
+*1. Lecture* (ceph-csi 3.18.1, `docs/rbd/deploy.md`) : à la **création**, l'image est créée et, si un KMS est utilisé, une phrase (DEK) est générée et stockée ; l'état `encryptionPrepared` est écrit dans les métadonnées de l'image. Au **premier montage**, le *nodeplugin* récupère la phrase, formate le périphérique en LUKS, passe l'état à `encrypted`. Aux montages suivants, il ouvre le LUKS et monte le périphérique du *device-mapper*. À la **suppression**, la phrase est retirée du KMS (erreurs ignorées). Fournisseurs : phrase **unique** dans les Secrets de la classe (clé `encryptionPassphrase`, une même phrase pour tous les volumes) ; `metadata` (DEK par volume, chiffrée par la KEK, rangée dans la métadonnée de l'image ; KEK lue dans le Secret nommé par `secretName`/`secretNamespace` de la configuration du KMS ou, à défaut, dans les Secrets **de la requête** : ceux de la StorageClass pour créer et monter, mais ceux de la VolumeSnapshotClass pour un instantané) ; Vault (`vault`, `vaulttokens`, `vaulttenantsa`) et d'autres KMS. **Interdit** : activer le chiffrement sur une classe qui a déjà des volumes, ou sur un volume existant. Paramètres : `encryptionCipher` (`aes-xts-plain64` par défaut), `encryptionKeySize`, `encryptionSectorSize`, `integrityMode` (dm-integrity : **interdit l'agrandissement**).
 
 *2. Modèle de menace* : voir [`chiffrement.md`](fichiers/M16-E26/medisphere/docs/kubernetes/stockage/chiffrement.md). Le point qui surprend : le ClusterRole du *nodeplugin* RBD (chart 3.18) donne `get/list/watch` sur **tous** les Secrets du cluster (pour lire les jetons Vault des espaces locataires) : le *nodeplugin* est de fait un composant de confiance de niveau administrateur, et quiconque peut exécuter du code dans son pod lit tout. Conséquence : la KEK dans un Secret ne protège **pas** contre les administrateurs de Kubernetes ; elle protège contre ceux de Ceph et contre les copies d'images. C'est l'objet de la bascule vers Vault (M25).
 
@@ -258,6 +259,8 @@ La KEK n'apparaît ni à l'écran, ni dans l'historique, ni sur le disque en cla
 admin@adm01:~$ kubectl get cm -n ceph-csi -o json | jq -r '.items[] | select(.data["config.json"] // "" | contains("secrets-metadata")) | .metadata.name'
 admin@adm01:~$ kubectl get sc ceph-rbd -o yaml | grep -E 'encrypt|is-default'      # aucune clé encrypt, défaut true
 ```
+
+Le fournisseur désigne la KEK **par son nom** (`secretName: csi-rbd-secret-chiffre`, `secretNamespace: ceph-csi`). Sans cela, un instantané de `e26-temoin` par `ceph-rbd-snap` (dont le Secret est `csi-rbd-secret`, sans KEK) échoue (`missing "encryptionPassphrase" in storageclass secret` dans le `csi-rbdplugin` du provisioner, contenu d'instantané en erreur) : ceph-csi doit relire la DEK de la source pour l'instantané, avec les Secrets de la classe d'instantané. Les sauvegardes Velero par déplacement des données d'instantanés (Valkey sur la classe chiffrée après E29, planification du mini-projet) échoueraient de même. L'autre solution — une classe d'instantanés dédiée qui nomme `csi-rbd-secret-chiffre`, imposée aux PVC chiffrés par l'annotation `velero.io/csi-volumesnapshot-class` — marche aussi, mais il faut y penser pour chaque volume.
 
 La ConfigMap de KMS du pilote RBD garde son nom par défaut (`ceph-csi-encryption-kms-config`) : celle du chart CephFS a été renommée en E07 (`ceph-csi-encryption-kms-config-cephfs`), justement parce que les deux charts créent par défaut la même ConfigMap dans le même espace. Si l'application du chart échoue avec un conflit de propriété sur cette ConfigMap, c'est que ce renommage manque dans `values-cephfs.yaml`.
 
@@ -305,6 +308,7 @@ Le chiffrement « par le client » déplace la frontière de confiance : Ceph ne
 **Pièges classiques**
 - Ajouter `encrypted: "true"` à `ceph-rbd` (refusé ou incohérent : des volumes en clair et chiffrés dans la même classe).
 - Mettre la KEK dans le Secret de `ceph-rbd` : rotation de la clé cephx et de la KEK liées, et la KEK suit toutes les classes.
+- Laisser le fournisseur `metadata` sans `secretName` : création et montage marchent, les instantanés (et Velero) échouent sur les volumes chiffrés.
 - Prouver le chiffrement par `lsblk` seulement : il montre le LUKS sur le nœud, pas ce que Ceph stocke ; la preuve, c'est l'export.
 - `integrityMode` « pour faire bien » : l'agrandissement devient impossible.
 - Perdre la KEK (Secret supprimé, coffre non relu) : tous les volumes perdus.
@@ -318,7 +322,7 @@ KMS Vault (`vaulttenantsa`, une politique par espace) au module 25, DEK dans Vau
 
 **Solution**
 
-Fichiers : projet `plateforme/outils` : [`bin/ms-verif-k8s-stockage`](fichiers/M16-E27/outils/bin/ms-verif-k8s-stockage), [`etc/ms-verif-k8s-stockage.conf`](fichiers/M16-E27/outils/etc/ms-verif-k8s-stockage.conf), [tests `bats`](fichiers/M16-E27/outils/tests/bats/ms-verif-k8s-stockage.bats) (19 tests, sans cluster), [unités systemd](fichiers/M16-E27/outils/systemd/), [extrait du Taskfile](fichiers/M16-E27/outils/Taskfile-install-extrait.yml), [section d'astreinte](fichiers/M16-E27/outils/docs/astreinte-extrait.md) ; projet `plateforme/k8s` : [RBAC](fichiers/M16-E27/k8s/rbac/ms-supervision-stockage.yaml), [`outils/kubeconfig-supervision-stockage.sh`](fichiers/M16-E27/k8s/outils/kubeconfig-supervision-stockage.sh) ; politiques de MédiAgenda : [CiliumNetworkPolicy du port 9187](fichiers/M16-E27/mediagenda/cnp-metriques-cnpg.yaml).
+Fichiers : projet `plateforme/outils` : [`bin/ms-verif-k8s-stockage`](fichiers/M16-E27/outils/bin/ms-verif-k8s-stockage), [`etc/ms-verif-k8s-stockage.conf`](fichiers/M16-E27/outils/etc/ms-verif-k8s-stockage.conf), [tests `bats`](fichiers/M16-E27/outils/tests/bats/ms-verif-k8s-stockage.bats) (20 tests, sans cluster), [unités systemd](fichiers/M16-E27/outils/systemd/), [extrait du Taskfile](fichiers/M16-E27/outils/Taskfile-install-extrait.yml), [section d'astreinte](fichiers/M16-E27/outils/docs/astreinte-extrait.md) ; projet `plateforme/k8s` : [RBAC](fichiers/M16-E27/k8s/rbac/ms-supervision-stockage.yaml), [`outils/kubeconfig-supervision-stockage.sh`](fichiers/M16-E27/k8s/outils/kubeconfig-supervision-stockage.sh) ; politiques de MédiAgenda : [CiliumNetworkPolicy du port 9187](fichiers/M16-E27/mediagenda/cnp-metriques-cnpg.yaml).
 
 *1. Inventaire* : tableau en tête de la [section d'astreinte](fichiers/M16-E27/outils/docs/astreinte-extrait.md).
 
@@ -362,6 +366,7 @@ Sans la politique, la requête expire (refus par défaut de M15). Si l'entité `
 - **Une identité dédiée**, lue dans un kubeconfig dont le jeton expire : un jeton expiré produit `KO api`, pas un silence.
 - **Les seuils dans la configuration**, et des seuils **temporels** (Pending depuis 15 min, non prêt depuis 30 min) : un PVC Pending pendant 10 secondes est normal (`WaitForFirstConsumer`, provisionnement en cours).
 - **Les absences sont des anomalies** : aucune planification Velero, aucune sauvegarde réussie, aucun `Cluster`, un kubelet illisible.
+- **Des droits et une configuration qui se répondent** : le retard de réplication n'est lu que dans les espaces où la sonde a `pods/proxy` (`MS_K8S_ESPACES_BASES`) ; les clusters d'essai de `wb-essais` (E25) restent surveillés sur leur phase et leur archivage, sans fausse alerte « métriques illisibles ».
 - **Kubelet interrogé en direct**, nœud par nœud, avec le jeton et la CA du kubeconfig (fichier temporaire privé).
 - **Tests** : `kubectl` et `curl` remplacés par des fonctions qui produisent du JSON et des métriques à partir de variables d'état ; un test vert, un test « rouge » par contrôle, un test de non-alerte (Pending récent), configuration vide, option inconnue.
 
@@ -502,7 +507,7 @@ Puis un PVC `e29-essai` avec `volumeName: $PV` et `storageClassName: ceph-rbd` s
 
 Plan : Retain sur le PV source (retour arrière) → répétition → pré-copie → coupure (arrêt, copie finale, rattachement, StatefulSet recréé, redémarrage) → contrôles → suppression de l'ancien volume (point de non-retour, après validation).
 
-*3. Répétition et préparation* : constat attendu de la répétition : la sonde de disponibilité de l'API est `/pret`, qui répond 503 dès que Valkey ne répond pas ; au bout de `failureThreshold` × `periodSeconds` (10 s avec les valeurs du M14 : `periodSeconds: 5`, `failureThreshold: 2`), **tous** les pods de l'API sortent du Service : l'API tombe alors que son code sait fonctionner sans cache (créneaux calculés depuis la base). La coupure de Valkey prévue (une à deux minutes) dépasse cette fenêtre. Mesure retenue : MR « avant » qui porte `failureThreshold` à 60 pendant la fenêtre (300 s), MR « après » qui le rétablit (chaque MR déclenche un déploiement progressif de l'API, sans coupure) ; ticket **DEV-1729** à l'équipe de Julien : la disponibilité ne devrait pas dépendre d'une dépendance facultative. Une autre réponse est d'écourter la coupure sous 10 s (pré-copie, volume petit, image déjà sur le nœud) : à mesurer, sans marge.
+*3. Répétition et préparation* : constat attendu de la répétition : la sonde de disponibilité de l'API est `/pret`, qui répond 503 dès que Valkey ne répond pas ; au bout de `failureThreshold` × `periodSeconds` (10 s avec les valeurs du M14 : `periodSeconds: 5`, `failureThreshold: 2`), **tous** les pods de l'API sortent du Service : l'API tombe alors que son code sait fonctionner sans cache (créneaux calculés depuis la base). La coupure de Valkey prévue (une à deux minutes) dépasse cette fenêtre. Mesure retenue : MR « avant » qui porte `failureThreshold` à 60 pendant la fenêtre (300 s), MR « après » qui le rétablit (chaque MR déclenche un déploiement progressif de l'API, sans coupure) ; ticket **DEV-1729** à l'équipe de Julien : la disponibilité ne devrait pas dépendre d'une dépendance facultative. Une autre réponse est d'écourter la coupure sous 10 s (pré-copie, volume petit, image déjà sur le nœud) : à mesurer, sans marge. Côté création de rendez-vous, l'API efface deux clés de cache par création, avec un délai de 2 s par appel à Valkey : tant que le Service `valkey` sans point de terminaison est **refusé** tout de suite (réponse de Cilium à un Service sans *backend*, `serviceNoBackendResponse: reject` par défaut : à vérifier sur ta version), la création reste rapide ; si les paquets étaient jetés, chaque création attendrait jusqu'à 4 s, au-delà du `--max-time 3` du témoin.
 
 Clés témoins :
 
@@ -759,7 +764,7 @@ Total de référence : 40 minutes avec un RB-162 préparé et le script de récu
 ```
 admin@adm01:~$ sed 's/<AAAA-MM-JJ HH:MM:SS+HH:MM>/<HEURE-AFFICHÉE>/' mediagenda-db-enquete.yaml | kubectl apply -f -
 admin@adm01:~$ kubectl cnpg status mediagenda-db-enquete -n mediagenda-recette
-admin@adm01:~$ kubectl cnpg psql mediagenda-db-enquete -n mediagenda-recette -- -d app -At \
+admin@adm01:~$ kubectl cnpg psql mediagenda-db-enquete -n mediagenda-recette -- -d mediagenda -At \
     -c "SELECT count(*), max(cree_le) FROM rendez_vous WHERE praticien = 'dr-garnier'"
 admin@adm01:~$ ~/src/k8s/outils/recuperer-lignes.sh --praticien dr-garnier             # simulation : REINSERE 7 … CONFLIT <ID> …
 admin@adm01:~$ ~/src/k8s/outils/recuperer-lignes.sh --praticien dr-garnier --appliquer
@@ -767,7 +772,7 @@ admin@adm01:~$ curl -s https://mediagenda-recette.apps.par1.medisphere.internal/
 admin@adm01:~$ kubectl delete cluster mediagenda-db-enquete -n mediagenda-recette
 ```
 
-(`app` : la base de E18 si tu en as choisi une autre.) Le conflit : un rendez-vous supprimé à 10 h a vu son créneau repris après l'incident ; l'index unique `(praticien, debut)` interdirait de toute façon de le réinsérer ; le script le **signale** au lieu d'échouer, et son identifiant va dans le compte rendu.
+(`mediagenda` : la base de E18 ; adapte si tu en as choisi une autre. Sans `database`/`owner` dans `bootstrap.recovery`, l'opérateur ajoute une base `app` vide : les données sont quand même dans `mediagenda`.) Le conflit : un rendez-vous supprimé à 10 h a vu son créneau repris après l'incident ; l'index unique `(praticien, debut)` interdirait de toute façon de le réinsérer ; le script le **signale** au lieu d'échouer, et son identifiant va dans le compte rendu.
 
 **Explications**
 

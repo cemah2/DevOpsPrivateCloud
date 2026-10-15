@@ -12,7 +12,7 @@ case "${1:-}" in
   provisionnement)
     trap 'echo; echo arrêt; exit 0' INT TERM
     while :; do
-      n="temoin-prov-$(date +%H%M%S)"
+      n="e33-prov-$(date +%H%M%S)"
       debut=$(date +%s)
       kubectl apply -f - >/dev/null <<FIN
 apiVersion: v1
@@ -47,7 +47,7 @@ FIN
     done
     ;;
   trous)
-    for t in temoin-rbd temoin-cephfs; do
+    for t in e33-temoin-rbd e33-temoin-cephfs; do
       echo "== $t"
       kubectl exec -n "$ns" "deploy/$t" -- cat /donnees/horodatages.log \
         | awk 'NR > 1 && $1 - p > 2 { print p, $1 - p } { p = $1 }' \

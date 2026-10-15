@@ -1,6 +1,9 @@
 # capi/capo-essai/cluster.yaml — cluster capo-essai sur OpenStack (M18-E16, facultatif).
-# Écrit d'après la doc CAPO (API infrastructure.cluster.x-k8s.io/v1beta1). AVANT de l'appliquer, confronte
-# chaque champ au CRD de TON cluster de gestion : kubectl explain openstackcluster.spec --recursive
+# CAPO 0.15 (contrat Cluster API v1beta2) : OpenStackCluster et OpenStackMachineTemplate en
+# infrastructure.cluster.x-k8s.io/v1beta2, la version stockée de ses CRD (v1beta1 est encore servie,
+# mais ses champs diffèrent : apiServerFloatingIP, apiServerLoadBalancer, flavor en chaîne…).
+# Champs relus dans les CRD de infrastructure-components.yaml v0.15.0 ; confronte-les quand même au
+# cluster de gestion : kubectl explain openstackcluster.spec --recursive --api-version=infrastructure.cluster.x-k8s.io/v1beta2
 # Secret capo-essai-cloud-config : créé hors dépôt (clouds.yaml du compte svc-capi + CA MédiSphère) :
 #   kubectl create secret generic capo-essai-cloud-config -n capo-essai \
 #     --from-file=clouds.yaml=$HOME/.config/workbook/m18/clouds-capi.yaml --from-file=cacert=<CA>
@@ -23,13 +26,14 @@ spec:
     kind: KubeadmControlPlane
     name: capo-essai-control-plane
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackCluster
 metadata:
   name: capo-essai
   namespace: capo-essai
 spec:
   identityRef:
+    type: Secret
     cloudName: medisphere-capi
     name: capo-essai-cloud-config
   externalNetwork:
@@ -40,9 +44,10 @@ spec:
     - cidr: 10.6.0.0/24
       dnsNameservers: [10.10.20.10, 10.10.20.16]
   # Un seul nœud de contrôle : IP flottante fixe plutôt qu'un répartiteur Octavia (voir capo.md).
-  apiServerLoadBalancer:
-    enabled: false
-  apiServerFloatingIP: 10.10.52.210
+  # Sans managedLoadBalancer, CAPO ne crée aucun répartiteur.
+  apiServer:
+    enableFloatingIP: true
+    floatingIP: 10.10.52.210
   managedSecurityGroups:
     allowAllInClusterTraffic: true
 ---
@@ -78,7 +83,7 @@ spec:
           - name: provider-id
             value: "openstack:///{{ instance_id }}"
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: capo-essai-control-plane
@@ -86,7 +91,9 @@ metadata:
 spec:
   template:
     spec:
-      flavor: m1.medium
+      flavor:
+        filter:
+          name: m1.medium
       image:
         filter:
           name: ubuntu-2404-kube-v1.36.5
@@ -116,7 +123,7 @@ spec:
         kind: OpenStackMachineTemplate
         name: capo-essai-worker
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: capo-essai-worker
@@ -124,7 +131,9 @@ metadata:
 spec:
   template:
     spec:
-      flavor: m1.medium
+      flavor:
+        filter:
+          name: m1.medium
       image:
         filter:
           name: ubuntu-2404-kube-v1.36.5

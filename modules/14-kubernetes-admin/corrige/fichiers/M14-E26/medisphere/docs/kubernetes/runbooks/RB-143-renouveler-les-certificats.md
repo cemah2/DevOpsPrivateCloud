@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | `pki/ca.crt` | lui-même | CA du cluster | 10 ans | personne (rotation manuelle, §7) |
 | `pki/apiserver.crt` | `ca` | serveur, SAN : `kubernetes`, `kubernetes.default…`, `10.96.0.1`, IP du nœud, VIP `10.10.40.200`, `k8s-api.par1.medisphere.internal` | 1 an | kubeadm (montée, `certs renew`) |
-| `pki/apiserver-kubelet-client.crt` | `ca` | client du serveur d'API vers les kubelets (O=`kubeadm:cluster-admins`) | 1 an | kubeadm |
+| `pki/apiserver-kubelet-client.crt` | `ca` | client du serveur d'API vers les kubelets (CN=`kube-apiserver-kubelet-client`, sans groupe, lié par la ClusterRoleBinding `kubeadm:apiserver-kubelet-client` au rôle `system:kubelet-api-admin` depuis 1.35.5 et 1.36.1 ; avant : O=`kubeadm:cluster-admins`) | 1 an | kubeadm |
 | `pki/front-proxy-ca.crt` / `front-proxy-client.crt` | lui-même / `front-proxy-ca` | agrégation d'API (metrics-server) | 10 ans / 1 an | personne / kubeadm |
 | `pki/etcd/ca.crt` | lui-même | CA d'etcd | 10 ans | personne |
 | `pki/etcd/server.crt`, `peer.crt` | `etcd-ca` | etcd (clients, pairs), SAN : nom et IP du nœud | 1 an | kubeadm |

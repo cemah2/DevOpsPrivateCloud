@@ -16,6 +16,12 @@ check_output "Cilium est en mode tunnel (cilium-config : routing-mode)" '^tunnel
 check_output "le tunnel est VXLAN (cilium-config : tunnel-protocol)" '^vxlan$' _m15p_cilium_cfg tunnel-protocol
 check_output "le chiffrement WireGuard est toujours actif" '^true$' _m15p_cilium_cfg enable-wireguard
 check_cmd "tous les agents Cilium sont prêts et à jour" _m15p_ds_pret kube-system cilium
+_m15_e29_sans_routes_directes() {
+  local c
+  c="$(kube -n kube-system get configmap cilium-config -o json 2>/dev/null)" || return 1
+  jq -e '(.data["auto-direct-node-routes"] // "false") == "false"' <<<"$c" >/dev/null 2>&1
+}
+check_cmd "aucun réglage du routage natif ne reste appliqué (cilium-config : auto-direct-node-routes)" _m15_e29_sans_routes_directes
 check_cmd "values sur main : pas de routage natif" _m15p_values_jq '(.routingMode // "tunnel") == "tunnel" and (.autoDirectNodeRoutes // false) == false'
 check_cmd "l'espace de mesure wb-perf a été supprimé" _m15p_absent namespace wb-perf
 

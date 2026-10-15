@@ -47,8 +47,11 @@ tasks:
 
   cilium-maj:
     desc: Appliquer un changement de composants/cilium/values.yaml (ou de version) à Cilium installé
+    # --reset-values : la release repart des défauts du chart + values.yaml, et rien d'autre. Sans
+    # elle (défaut de la CLI : --reset-then-reuse-values), une valeur RETIRÉE du fichier resterait
+    # active, héritée de la release précédente : le dépôt ne ferait plus foi.
     cmds:
-      - cilium upgrade --context {{.CONTEXTE}} --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium upgrade --context {{.CONTEXTE}} --version {{.CILIUM_VERSION}} --reset-values --values composants/cilium/values.yaml
       - cilium status --context {{.CONTEXTE}} --wait
 
   metrics-server:

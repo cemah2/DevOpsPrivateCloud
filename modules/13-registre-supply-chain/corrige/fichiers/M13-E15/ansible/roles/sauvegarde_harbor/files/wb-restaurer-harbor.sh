@@ -74,6 +74,15 @@ for a in registre:registry secret:secret; do
   if [[ -e "$d" ]]; then mv "$d" "$d.avant-restauration"; fi
   proxmox-backup-client restore --ns "$WB_NS" "$instantane" "${a%%:*}.pxar" "$d" --keyfile "$CLE"
 done
+# secret/cert/ vient de la SOURCE : c'est la copie du certificat de reg01 que sert le proxy. Sur
+# une autre machine (reg02), le proxy présenterait un certificat qui ne couvre pas son nom. On
+# remet le certificat de CETTE machine (/etc/harbor/tls, rôle certificats_acme) par le script de
+# rechargement du rôle harbor (il recopie en gardant propriétaire et droits ; nginx est arrêté).
+if [[ -x /usr/local/sbin/harbor-recharger-certificat ]]; then
+  /usr/local/sbin/harbor-recharger-certificat || die "certificat local non recopié dans $WB_DATA/secret/cert"
+else
+  log "AVERTISSEMENT : harbor-recharger-certificat absent : $WB_DATA/secret/cert contient le certificat de la source"
+fi
 
 log "base seule (service « postgresql » du docker-compose.yml, conteneur harbor-db)"
 cd "$WB_INSTALL"

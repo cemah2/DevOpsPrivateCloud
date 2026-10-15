@@ -21,7 +21,7 @@
 | CloudNativePG (M16) | 1.30 | 1.34 à 1.36 (1.37 « testée, non supportée ») |
 | Velero (M16) | 1.18 | testé jusqu'à 1.35 |
 | Cluster API + CAPMOX (M18) | 1.12 / 0.9 | clusters ≤ 1.36 |
-| metrics-server | 0.8 | toutes les mineures récentes |
+| metrics-server | 0.9 (chart 3.14.0) | toutes les mineures récentes |
 | containerd.io | 2.3 LTS | 1.36 et 1.37 |
 
 - Expérience de M14-E25 : la montée 1.35 → 1.36 a pris <2 h 30> sans interruption de MédiAgenda, avec un playbook rejouable ; les correctifs (1.36.x → 1.36.y) utilisent le même playbook.

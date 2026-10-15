@@ -30,8 +30,9 @@ check_output "wb-checks lit les objets de la Gateway API (wb-checks-reseau)" '^y
   kube auth can-i list gateways.gateway.networking.k8s.io --all-namespaces
 check_output "wb-checks lit les objets de cert-manager (wb-checks-reseau)" '^yes$' \
   kube auth can-i list certificates.cert-manager.io --all-namespaces
-check_output "wb-checks ne lit toujours pas les Secrets" '^no$' \
-  bash -c 'kube auth can-i get secrets --all-namespaces 2>/dev/null || true'
+# (fonction locale : « kube » est une fonction de check-lib.sh, invisible dans un « bash -c »)
+_m15d_e07_secrets() { kube auth can-i get secrets --all-namespaces 2>/dev/null || true; }
+check_output "wb-checks ne lit toujours pas les Secrets" '^no$' _m15d_e07_secrets
 check_cmd "rbac/wb-checks-reseau.yaml sur main de plateforme/k8s" \
   test -n "$(_m15d_contenu_main "$_M15D_PROJET_K8S" rbac/wb-checks-reseau.yaml)"
 

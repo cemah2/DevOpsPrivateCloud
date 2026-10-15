@@ -38,7 +38,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 15 XX`).
 
 **Travail demandé**
 1. **Lecture.** Dans la documentation de Cilium 1.20 (*WireGuard Transparent Encryption*), relève : comment les clés sont créées et distribuées, ce qui est chiffré dans le mode par défaut et avec `nodeEncryption` (tableau *Which traffic is encrypted*), ce que deviennent les nœuds de contrôle avec `nodeEncryption`, ce qui se passe en mode tunnel (double encapsulation) et l'effet sur la MTU. Compare avec IPsec (gestion des clés, rotation, accélération matérielle) en cinq lignes.
-2. **Mesure avant.** Applique le manifeste de mesure. Mesure le débit TCP entre les deux pods (`iperf3`, 30 s, un flux puis quatre flux en parallèle), la latence (`ping` de 100 paquets) et la MTU de l'interface `eth0` des pods. Pendant le débit, relève la charge processeur des deux nœuds (`kubectl top node`, et `top` sur le nœud). Puis prouve le problème de Sophie : sur `k8s-w02`, capture le trafic VXLAN pendant une requête HTTP du pod de `k8s-w01` vers un serveur HTTP du pod de `k8s-w02` (le pod de mesure en sert un, voir le manifeste), et retrouve la requête **en clair** dans la capture.
+2. **Mesure avant.** Applique le manifeste de mesure. Mesure le débit TCP entre les deux pods (`iperf3`, 30 s, un flux puis quatre flux en parallèle), la latence (`ping` de 100 paquets) et la MTU vue par les pods (celle de leur interface `eth0` **et** celle de leurs routes, `ip route` dans le pod). Pendant le débit, relève la charge processeur des deux nœuds (`kubectl top node`, et `top` sur le nœud). Puis prouve le problème de Sophie : sur `k8s-w02`, capture le trafic VXLAN pendant une requête HTTP du pod de `k8s-w01` vers un serveur HTTP du pod de `k8s-w02` (le pod de mesure en sert un, voir le manifeste), et retrouve la requête **en clair** dans la capture.
    ```
    admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- iperf3 -c <IP-POD-B> -t 30
    admin@k8s-w02:~$ sudo tcpdump -ni <INTERFACE-VLAN40> -A -c 40 'udp port 8472'
@@ -61,7 +61,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 15 XX`).
 
 <details><summary>Indice 1</summary>
 
-Le chiffrement transparent ne change rien pour les pods : leur adresse, leur route et leur `eth0` restent les mêmes (sauf la MTU). Ce qui change se voit sous le pod : une nouvelle interface sur chaque nœud, des routes qui y envoient le trafic destiné aux pods des autres nœuds, et un port UDP qui écoute. Cherche ces trois choses avant et après.
+Le chiffrement transparent ne change rien pour les pods : leur adresse, leur route et leur `eth0` restent les mêmes (sauf la MTU que portent leurs routes). Ce qui change se voit sous le pod : une nouvelle interface sur chaque nœud, des routes qui y envoient le trafic destiné aux pods des autres nœuds, et un port UDP qui écoute. Cherche ces trois choses avant et après.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -71,7 +71,7 @@ Un fichier de *values* modifié change la ConfigMap `cilium-config` ; un agent n
 
 <details><summary>Indice 3</summary>
 
-En mode tunnel, un paquet entre pods est d'abord encapsulé en VXLAN, puis le paquet VXLAN est confié à WireGuard : chaque couche coûte des octets d'en-tête. Compare la MTU des pods avant et après, et calcule ce que coûte chaque couche (IP + UDP + VXLAN + Ethernet interne pour l'une, IP + UDP + en-tête WireGuard pour l'autre).
+En mode tunnel, un paquet entre pods est d'abord encapsulé en VXLAN, puis le paquet VXLAN est confié à WireGuard : chaque couche coûte des octets d'en-tête. Compare la MTU des routes des pods avant et après, et calcule ce que coûte chaque couche (IP + UDP + VXLAN + Ethernet interne pour l'une, IP + UDP + en-tête WireGuard pour l'autre).
 </details>
 
 **Pour aller plus loin** (facultatif) : le chiffrement entre nœuds (`nodeEncryption`) et son interaction avec le BGP de la bordure ; IPsec dans Cilium et la rotation de ses clés ; la conformité « tout chiffré » d'un cluster (mTLS applicatif, *service mesh*) ; [WireGuard Transparent Encryption](https://docs.cilium.io/en/v1.20/security/network/encryption-wireguard/), [WireGuard](https://www.wireguard.com/papers/wireguard.pdf).
@@ -134,7 +134,7 @@ Quand une passerelle n'a plus aucune route BGP vers 10.10.41.0/24, il lui reste 
 Avec `nopreempt`, une baisse de priorité du maître ne fait pas basculer la bordure : seul un passage en état `FAULT` le fait, et dans le groupe `BORDURE` (M07), c'est **tout** le groupe qui bascule. Pèse ce que coûterait un faux positif de la surveillance de FRR contre ce que coûte une panne de FRR sur le maître.
 </details>
 
-**Pour aller plus loin** (facultatif) : BFD (absent du plan de contrôle BGP de Cilium 1.20 : à vérifier) et ce qu'il apporterait ; le réglage `maxUnavailable` du DaemonSet `cilium-envoy` ; la répartition par hachage L4 à la bordure (`fib_multipath_hash_policy`, M07-E14) ; [BGP Control Plane](https://docs.cilium.io/en/v1.20/network/bgp-control-plane/), [FRR BGP Graceful Restart](https://docs.frrouting.org/en/stable-10.7/bgp.html).
+**Pour aller plus loin** (facultatif) : BFD (absent du plan de contrôle BGP de Cilium 1.20 : aucun champ dans `CiliumBGPPeerConfig`) et ce qu'il apporterait ; le réglage `maxUnavailable` du DaemonSet `cilium-envoy` ; la répartition par hachage L4 à la bordure (`fib_multipath_hash_policy`, M07-E14) ; [BGP Control Plane](https://docs.cilium.io/en/v1.20/network/bgp-control-plane/bgp-control-plane/), [FRR BGP Graceful Restart](https://docs.frrouting.org/en/stable-10.7/bgp.html).
 
 ---
 
@@ -320,7 +320,7 @@ Cilium expose les labels de l'espace d'un pod comme des labels du pod, avec un p
 `toFQDNs` ne connaît que les noms **résolus à travers le proxy DNS** de Cilium : sans règle DNS L7 sur le chemin vers CoreDNS, la politique ne voit jamais la réponse et ne peut rien autoriser. Une politique de base qui intercepte le DNS sans rien refuser existe dans la documentation (`enableDefaultDeny`).
 </details>
 
-**Pour aller plus loin** (facultatif) : l'**Egress Gateway** de Cilium (sortie vers Internet par un nœud et une adresse source fixes, que le partenaire peut filtrer) et ses prérequis (`bpf.masquerade`, remplacement de kube-proxy) ; le mode d'application `always` (`policyEnforcementMode`) et ce qu'il casserait ; les politiques de nœud (`nodeSelector`, pare-feu de l'hôte) ; [Deny policies](https://docs.cilium.io/en/v1.20/security/policy/language/#deny-policies), [DNS based](https://docs.cilium.io/en/v1.20/security/policy/language/#dns-based), [Egress Gateway](https://docs.cilium.io/en/v1.20/network/egress-gateway/egress-gateway/).
+**Pour aller plus loin** (facultatif) : l'**Egress Gateway** de Cilium (sortie vers Internet par un nœud et une adresse source fixes, que le partenaire peut filtrer) et ses prérequis (`bpf.masquerade`, remplacement de kube-proxy) ; le mode d'application `always` (`policyEnforcementMode`) et ce qu'il casserait ; les politiques de nœud (`nodeSelector`, pare-feu de l'hôte) ; [Deny policies](https://docs.cilium.io/en/v1.20/security/policy/deny/), [DNS based](https://docs.cilium.io/en/v1.20/security/policy/layer3/#dns-based), [Egress Gateway](https://docs.cilium.io/en/v1.20/network/egress-gateway/egress-gateway/).
 
 ---
 
@@ -343,7 +343,7 @@ Cilium expose les labels de l'espace d'un pod comme des labels du pod, avec un p
 - L'essai en routage natif se fait sur `k8s-par1`, dans une fenêtre annoncée, et **le cluster revient en VXLAN à la fin** : la décision est l'objet de l'ADR (E30).
 - Documentation : `docs/kubernetes/reseau/performances.md`.
 
-> ⚠️ **Attention** : changer le mode de routage redémarre tous les agents ; pendant le déploiement, un nœud passé en natif et un nœud encore en tunnel ne se comprennent plus : **les flux entre pods de ces deux nœuds sont coupés** jusqu'à la fin du déploiement. Annonce une fenêtre de 30 minutes, fais l'aller et le retour dans la même fenêtre, sonde lancée, et garde le fichier de *values* d'origine à portée de main. Sur `pve01`, aucune autre charge lourde pendant les mesures (`ceph-par1` arrêté).
+> ⚠️ **Attention** : changer le mode de routage redémarre tous les agents ; pendant le déploiement, un nœud passé en natif et un nœud encore en tunnel ne se comprennent plus : **les flux entre pods de ces deux nœuds sont coupés** jusqu'à la fin du déploiement. Annonce une fenêtre de 30 minutes, fais l'aller et le retour dans la même fenêtre, sonde lancée, et garde le fichier de *values* d'origine à portée de main. Au retour, vérifie que les valeurs appliquées à la release (`helm -n kube-system get values cilium`) sont **exactement** celles du fichier de `main` : selon ses options, `cilium upgrade` peut reprendre des valeurs de la release précédente, et un réglage du routage natif resté en place empêche les agents de redémarrer en tunnel. Sur `pve01`, aucune autre charge lourde pendant les mesures (`ceph-par1` arrêté).
 
 **Travail demandé**
 1. **Méthode.** Écris d'abord le protocole dans la fiche : grandeurs mesurées (débit TCP 1 et 4 flux, débit UDP à débit imposé et pertes, latence au repos, latence sous charge, requêtes HTTP courtes par seconde), durée et nombre de répétitions, ce qui doit être identique entre deux séries, comment tu présentes la dispersion. Mesure aussi **une référence sans Kubernetes** : `iperf3` entre `k8s-w01` et `k8s-w02` en direct, sur leurs adresses du VLAN 40.

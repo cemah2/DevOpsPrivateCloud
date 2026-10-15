@@ -23,7 +23,8 @@ _M15_E28_CCNP="$(_m15p_get ciliumclusterwidenetworkpolicies)"
 title "Proxy DNS de base"
 check_cmd "une politique de cluster intercepte le DNS (règle DNS L7) sans refus par défaut" \
   _m15p_jq "$_M15_E28_CCNP" 'any(.items[];
-     .spec.enableDefaultDeny.ingress == false and .spec.enableDefaultDeny.egress == false
+     .spec.enableDefaultDeny.egress == false
+     and (.spec.enableDefaultDeny.ingress == false or (((.spec.ingress // []) + (.spec.ingressDeny // [])) | length) == 0)
      and any(.spec.egress[]?; any(.toPorts[]?; (.rules.dns // []) | length > 0)))'
 check_cmd "aucune politique de cluster ne met tout le cluster en refus par défaut (endpointSelector vide sans enableDefaultDeny)" \
   _m15p_jq "$_M15_E28_CCNP" 'all(.items[];

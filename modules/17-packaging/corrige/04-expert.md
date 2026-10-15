@@ -21,7 +21,6 @@ Les objets modifiés sont sauvegardés sur `adm01` dans `~/.local/state/workbook
   - le nom du gestionnaire de champs du contrôleur HPA (`kube-controller-manager`, sous-ressource `scale`) ;
   - la montée à `minReplicas` sans métriques disponibles.
 - E21 : application de l'overlay `prod` complet sur `k8s-par1` (CRD réelles de CNPG, Cilium, Gateway API).
-- E23 : nom exact de la variable de connexion du pilote `sql` (`HELM_DRIVER_SQL_CONNECTION_STRING` dans la documentation de Helm 3 ; à confirmer pour Helm 4).
 
 ---
 
@@ -209,6 +208,8 @@ Il croyait le component `livraison` « toujours en dernier ». C'est vrai **parm
 
 Le `images:` de l'overlay passe donc **après** `livraison` et l'emporte. Comportement vérifié avec Kustomize 5.8.2 et 5.8.1. Seul un overlay *parent*, qui inclurait celui-ci en ressource, passerait encore après.
 
+Ce qu'a fait la mauvaise image, au-delà de l'API : le conteneur d'initialisation `migrations` a tourné avec elle (le `images:` de l'overlay touche **tous** les conteneurs qui portent ce nom d'image) et a appliqué à la base de prod les migrations de la version de recette (V3 si la recette est en 1.1.0, M17-E18). Vérifie-le (`kubectl cnpg psql mediagenda-db -n mediagenda-prod -- -c 'SELECT version FROM mediagenda_historique_schema'`) et écris-le dans le journal : ni la remise sur `main` ni `--annuler` ne défont une migration. Ici, V3 est additive (*expand*), et l'ancienne version de l'API fonctionne dessus ; une migration destructive aurait fait de cette panne un incident de données, à traiter par une restauration à un instant donné (M16-E19).
+
 **Variante 2 — component `debogage` inclus à tort.** `components: [dependances, haute-disponibilite, debogage, livraison]` (commit `chore(prod): journaux détaillés pour le diagnostic…`). L'image est la bonne, mais :
 - `MEDIAGENDA_LOG_LEVEL=DEBUG` et `MEDIAGENDA_LOG_FORMAT=texte` (le correctif stratégique du component) ;
 - `MEDIAGENDA_CACHE_TTL=5`, d'où la lenteur des créneaux.
@@ -225,7 +226,7 @@ admin@adm01:~/src/mediagenda-deploiement$ kubectl apply --server-side -k overlay
 admin@adm01:~$ kubectl rollout status deploy/mediagenda -n mediagenda-prod
 ```
 
-On garde la branche de Lucas (preuve) jusqu'au post-mortem. On ne la pousse pas.
+On garde la branche de Lucas (preuve) jusqu'au post-mortem (`docs/kubernetes/post-mortems/` de `plateforme/medisphere`), puis on la supprime. On ne la pousse pas.
 
 *Prévention* :
 - garde-fou de CI [`outils/verifier-livraison.sh`](fichiers/M17-E21/deploiement/outils/verifier-livraison.sh) ([job](fichiers/M17-E21/deploiement/.gitlab-ci.extrait.yml)) : pour chaque overlay, l'image rendue (API **et** migrations) et `MEDIAGENDA_VERSION` égalent `livraison.yaml` ; en prod, ni `images:`, ni `debogage`, ni réglage de débogage ;
@@ -321,7 +322,7 @@ Ordre réel : écriture de la nouvelle révision en `pending-upgrade` ; hooks `p
 
 *5. Pilote `configmap`.* `HELM_DRIVER=configmap helm install capot-cm …` : des ConfigMaps `sh.helm.release.v1.capot-cm.v*`. `helm list` **sans** la variable ne les voit pas : chaque pilote a son propre stockage, et deux personnes qui n'ont pas le même `HELM_DRIVER` croient à deux états différents. Lecture : quiconque lit les ConfigMaps de l'espace lit les valeurs, y compris `wb-checks` et souvent des équipes applicatives. À Sophie : jamais pour une release qui aurait la moindre valeur sensible. C'est-à-dire jamais chez MédiSphère, où la règle reste de n'avoir aucun secret en valeur.
 
-*6. Pilote `sql`.* Les releases vont dans une base PostgreSQL (chaîne de connexion par variable d'environnement, voir *Helm Storage Backends*). Il est justifié pour des releases trop grosses pour 1 Mio, ou pour un audit centralisé de l'historique. Mais Helm dépend alors d'une base **hors du cluster**, qui doit être disponible, sauvegardée et accessible à tous ceux qui exécutent Helm. Les sauvegardes Velero ou etcd du cluster ne contiennent plus l'état des releases. Non retenu.
+*6. Pilote `sql`.* Les releases vont dans une base PostgreSQL (`HELM_DRIVER=sql`, chaîne de connexion dans `HELM_DRIVER_SQL_CONNECTION_STRING` : nom vérifié dans le code de Helm au tag v4.3.0 et dans `helm --help`). Il est justifié pour des releases trop grosses pour 1 Mio, ou pour un audit centralisé de l'historique. Mais Helm dépend alors d'une base **hors du cluster**, qui doit être disponible, sauvegardée et accessible à tous ceux qui exécutent Helm. Les sauvegardes Velero ou etcd du cluster ne contiennent plus l'état des releases. Non retenu.
 
 *7.* Outil : [`outils/helm-release.sh`](fichiers/M17-E23/k8s/outils/helm-release.sh). Il donne statut, dates, chart, méthode, objets, hooks et **noms** des clés de valeurs. Il fonctionne avec les deux pilotes et a été testé.
 

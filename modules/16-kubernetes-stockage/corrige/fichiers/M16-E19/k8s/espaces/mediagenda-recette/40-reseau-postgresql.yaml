@@ -91,8 +91,8 @@ spec:
             - {port: "5432", protocol: TCP}
             - {port: "8000", protocol: TCP}
     # M16-E19 : archivage des WAL, sauvegardes et restaurations (sidecar du plugin, jobs de
-    # récupération) vers s3-01, et lui seul. La bordure laisse passer le VLAN 40 vers 8333
-    # depuis le M14.
+    # récupération) vers s3-01, et lui seul. La bordure laisse passer les travailleurs vers
+    # s3-01:8333 depuis M16-E16 (règle du M14-E24 élargie à K8S_TRAV).
     - toCIDR: ["10.10.20.14/32"]
       toPorts:
         - ports:

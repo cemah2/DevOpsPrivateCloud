@@ -19,7 +19,7 @@ Le module a raccordé `k8s-par1` à `ceph-par1`, comparé Rook et Longhorn, sauv
 **Durée indicative** : 14 à 20 h, plus 30 min de revue.
 
 **Contexte technique**
-- Cluster `k8s-par1` (PLAN.md §4.10) : travailleurs `k8s-w01-03` (2144-2146) avec leur carte VLAN 30 (10.10.30.81-83, MTU 9000, M16-E05) ; ceph-csi 3.18 (espace `ceph-csi`), classes `ceph-rbd` (par défaut), `ceph-rbd-retain`, `cephfs`, classes d'instantanés `ceph-rbd-snap` et `cephfs-snap`, external-snapshotter 8.6.
+- Cluster `k8s-par1` (PLAN.md §4.10) : travailleurs `k8s-w01-03` (2144-2146) avec leur carte VLAN 30 (10.10.30.81-83, MTU 9000, M16-E05) ; ceph-csi 3.18 (espace `ceph-csi`), classes `ceph-rbd` (par défaut), `ceph-rbd-retain`, `ceph-rbd-chiffre` (M16-E26, qui porte le Valkey de la recette depuis M16-E29), `cephfs`, classes d'instantanés `ceph-rbd-snap` et `cephfs-snap`, external-snapshotter 8.6.
 - `ceph-par1` (M08) : pool `k8s-rbd`, identité `client.k8s` (et l'identité CephFS que tu as retenue au M16-E07), RGW `https://rgw.par1.medisphere.internal` (VIP 10.10.30.200), compte RGW `medidoc-app` du M08 et ses identifiants dans `~/.config/workbook/s3-medidoc-app.env`, compartiment `medidoc-documents`.
 - `s3-01` (M05) : compartiments `velero-k8s-par1` (compte `velero`) et `cnpg-k8s-par1` (compte `cnpg`).
 - Applications : MédiAgenda (`mediagenda-recette`, publiée en `https://mediagenda-recette.apps.par1.medisphere.internal`, M15), base `mediagenda-db` (CloudNativePG 1.30, PostgreSQL 18, plugin Barman Cloud 0.15, `ObjectStore` `cnpg-s3`), Valkey en StatefulSet ; MédiDoc (`medidoc-dev`, M14-E33 et M15-E34), qui écrit encore ses documents dans le compartiment `medidoc-dev` de `s3-01` (Secret `medidoc-s3`, politique de sortie `medidoc-sortie` du M15-E34).

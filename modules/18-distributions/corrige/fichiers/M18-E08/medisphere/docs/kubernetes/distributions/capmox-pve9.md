@@ -37,8 +37,9 @@ Conséquences pour PVE 9 : `VM.Monitor` n'existe plus (remplacé par `VM.GuestAg
 | `pveum role add WBCapi …` | accepté (aucun privilège inconnu) | |
 | `preflight-pve.sh` : version, ressources, nœud | OK, TLS vérifié | |
 | `preflight-pve.sh` : stockages `iso` visibles | **`capi-iso` seul** | |
-| `preflight-pve.sh` : ISO téléversée puis supprimée | OK | |
+| `preflight-pve.sh` : ISO téléversée, montée en `ide0`, démontée, supprimée | OK | |
 | `preflight-pve.sh` : clone 5189, configuration, suppression | OK | |
+| `preflight-pve.sh` : démarrage, `agent/ping`, `agent/exec` de `cloud-init status` | OK (aucun 403) | privilèges `VM.GuestAgent.*` de PVE 9 |
 | `clusterctl init` (E08) | 5 fournisseurs `Ready` | |
 | Première machine de `capi-essai` (E10) | `Running`, agent et `cloud-init status` lus | |
 

@@ -39,7 +39,7 @@ admin@adm01:~$ kubectl -n external-dns logs deploy/external-dns --since=30m | ta
 |---|---|---|
 | L'autoritaire a le nom, pas les récurseurs | cache négatif (TTL négatif 300 s) | attendre 5 min ; ne pas vider le cache sans raison |
 | `SERVFAIL` partout sur `*.apps` | chaîne DNSSEC cassée (DS de `apps` dans `par1`) | P2 Plateforme (RB-064, délégation `envs/k8s/dns-apps.tf`) |
-| Nom absent de l'autoritaire, route `Accepted` | ExternalDNS ne publie pas (journal : `NOTAUTH`, `REFUSED`, filtre) | Plateforme ; vérifier l'étiquette `medisphere.internal/dns`, le domaine, la Gateway visée |
+| Nom absent de l'autoritaire, route `Accepted` | ExternalDNS ne publie pas (journal : `REFUSED` = clé ou adresse refusée, la cause exacte est dans `journalctl -u pdns` sur `dns01` ; `NOTAUTH` = serveur qui ne fait pas autorité pour la zone visée ; ou filtre) | Plateforme ; vérifier l'étiquette `medisphere.internal/dns`, le domaine, la Gateway visée |
 | Route non `Accepted` | voir 4 | — |
 
 ## 2. Adresse et annonce

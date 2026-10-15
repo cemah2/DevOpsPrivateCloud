@@ -1,0 +1,30 @@
+# Réplication de Valkey (StatefulSet valkey du M14-E15/E21, rendu persistant au M16-E08 : valkey-1 et
+# valkey-2 suivent valkey-0 par --replicaof sur 6379). Sans elle, les répliques restent « prêtes » (la
+# sonde ne fait qu'un PING local) mais ne répliquent plus rien : une panne silencieuse.
+# M17-E04 : seule politique gardée de l'ancien 30-donnees-depuis-api.yaml. « postgresql-depuis-api »
+# et « valkey-depuis-api » n'admettaient que les pods mediagenda-api du M14 ; l'accès des pods du chart
+# aux données est déclaré par mediagenda/deploiement (overlays/recette/acces-donnees.yaml) en recette,
+# et par le chart lui-même en dev.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: valkey-replication
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      ports:
+        - {protocol: TCP, port: 6379}
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: valkey
+      ports:
+        - {protocol: TCP, port: 6379}

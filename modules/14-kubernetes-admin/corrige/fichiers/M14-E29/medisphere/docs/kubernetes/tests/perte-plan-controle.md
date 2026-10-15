@@ -20,8 +20,8 @@
 | T0 + <~5 s> | HAProxy marque `k8s-cp02` DOWN (sondes) |
 | T0 + <~1-2 s> | etcd : nouveau leader si `k8s-cp02` l'était (élection) ; quorum 2/3 |
 | T0 + <~15 s> | nouveaux titulaires des baux (durée du bail 15 s par défaut) |
-| T0 + <~40-50 s> | `k8s-cp02` `NotReady` (période de grâce du gestionnaire de contrôleurs) ; taints `node.kubernetes.io/unreachable` |
-| T0 + <~5 min 40 s> | pods évincés de `k8s-cp02` (tolérances de 300 s), recréés ailleurs s'ils appartiennent à un contrôleur ; DaemonSets et pods statiques non concernés |
+| T0 + <~50 s> | `k8s-cp02` `NotReady` (période de grâce du gestionnaire de contrôleurs) ; taints `node.kubernetes.io/unreachable` |
+| T0 + <~5 min 50 s> | pods évincés de `k8s-cp02` (tolérances de 300 s), recréés ailleurs s'ils appartiennent à un contrôleur ; DaemonSets et pods statiques non concernés |
 
 Création d'un Deployment pendant la panne : <réussie>. Réponse d'etcd attendue si un second nœud tombait : plus d'écriture possible (`etcdserver: request timed out`, l'API répond en lecture depuis son cache puis échoue).
 

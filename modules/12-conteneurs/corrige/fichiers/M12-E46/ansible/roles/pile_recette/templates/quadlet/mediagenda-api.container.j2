@@ -1,7 +1,11 @@
 # {{ pile_recette_entete }}
 [Unit]
 Description=API MédiAgenda (recette conteneurs v1)
-Requires=mediagenda-pg.service mediagenda-valkey.service mediagenda-migrations.service
+# Wants= et non Requires= : avec systemd 257, le redémarrage automatique (Restart=) d'une unité
+# REQUISE redémarre aussi les unités qui la requièrent (RestartMode=normal). L'application tolère
+# l'absence passagère de sa dépendance (sa sonde de disponibilité échoue, elle ne s'arrête pas).
+Wants=mediagenda-pg.service mediagenda-valkey.service
+Requires=mediagenda-migrations.service
 After=mediagenda-pg.service mediagenda-valkey.service mediagenda-migrations.service
 
 [Container]

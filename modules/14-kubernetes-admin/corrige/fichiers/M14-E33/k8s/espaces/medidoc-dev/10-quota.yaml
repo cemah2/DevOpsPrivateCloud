@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: ResourceQuota
 metadata:
-  name: enveloppe
+  name: quota-equipe
   namespace: medidoc-dev
 spec:
   hard:

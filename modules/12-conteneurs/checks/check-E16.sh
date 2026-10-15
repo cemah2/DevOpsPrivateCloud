@@ -34,7 +34,7 @@ for _m12o_e16_p in mediagenda/api medidoc/medidoc; do
 done
 
 # _m12o_e16_dive — Dive en mode CI sur mediagenda-api:0.2.0 avec les seuils du .dive-ci de main,
-# passés en options (Dive ne lit pas un fichier de règles sans extension .yaml/.yml).
+# passés en options : le .dive-ci du dépôt n'est pas sur ctr01, et le check n'y écrit rien.
 _m12o_e16_dive() {
   local c opts="" cle val
   c="$(_m12o_fichier mediagenda/api .dive-ci)"

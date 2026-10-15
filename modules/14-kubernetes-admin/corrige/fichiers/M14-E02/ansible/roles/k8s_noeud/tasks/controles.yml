@@ -21,13 +21,16 @@
     quiet: true
   when: not ansible_check_mode and k8s_noeud_image_pause | length > 0
 
-- name: Dossier de travail du rôle
+- name: Dossiers de travail du rôle
   ansible.builtin.file:
-    path: /var/lib/k8s_noeud
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0700"
+  loop:
+    - /var/lib/k8s_noeud
+    - /var/lib/k8s_noeud/dryrun
   when: k8s_noeud_preflight | bool and not _k8s_noeud_membre.stat.exists
 
 # Configuration minimale : sans version explicite, kubeadm demanderait « stable-1 » à dl.k8s.io.
@@ -40,9 +43,14 @@
     mode: "0600"
   when: k8s_noeud_preflight | bool and not _k8s_noeud_membre.stat.exists
 
-# --dry-run : aucune image tirée, rien d'écrit. Seulement sur un nœud pas encore membre (sur un
-# nœud membre, les ports 6443/10250… sont pris et /etc/kubernetes/manifests n'est pas vide).
+# --dry-run : aucune image tirée. kubeadm crée tout de même un dossier vide de « dry-run »
+# (par défaut /etc/kubernetes/tmp/kubeadm-init-dryrun<N>, un de plus à chaque passage) :
+# KUBEADM_INIT_DRYRUN_DIR le place dans le dossier du rôle, hors de /etc/kubernetes.
+# Seulement sur un nœud pas encore membre (sur un nœud membre, les ports 6443/10250… sont pris
+# et /etc/kubernetes/manifests n'est pas vide).
 - name: Contrôles préalables de kubeadm (sans rien modifier)
+  environment:
+    KUBEADM_INIT_DRYRUN_DIR: /var/lib/k8s_noeud/dryrun
   ansible.builtin.command: >-
     kubeadm init phase preflight --dry-run --config /var/lib/k8s_noeud/preflight.yaml
     {{ ('--ignore-preflight-errors=' ~ (k8s_noeud_preflight_ignorer | join(','))) if k8s_noeud_preflight_ignorer | length > 0 else '' }}

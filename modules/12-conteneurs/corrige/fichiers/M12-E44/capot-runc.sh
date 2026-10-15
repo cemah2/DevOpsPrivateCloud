@@ -20,16 +20,18 @@ rm -rf "$B"
 umoci unpack --image /srv/capot/oci:trixie "$B"
 cd "$B"
 mv config.json config.umoci.json
-runc spec                                   # modèle : espaces pid, network, ipc, uts, mount, cgroup
+runc spec                                   # modèle : espaces pid, network, ipc, uts, mount (+ cgroup en cgroup v2)
 diff <(jq -S . config.umoci.json) <(jq -S . config.json) | head -n 40 || true
 
-# Adaptation : processus, racine en lecture seule, nom d'hôte, cgroup et limites
+# Adaptation : processus, racine en lecture seule, nom d'hôte, cgroup et limites (ajoutées à côté
+# de la règle de périphériques du modèle, linux.resources.devices, qu'on garde)
 jq '.process.terminal = false
   | .process.args = ["sleep", "infinity"]
   | .hostname = "capot"
   | .root.readonly = true
   | .linux.cgroupsPath = "/capot"
-  | .linux.resources = {"memory": {"limit": 67108864}, "pids": {"limit": 32}}' config.json > config.json.nouveau
+  | .linux.resources.memory = {"limit": 67108864}
+  | .linux.resources.pids = {"limit": 32}' config.json > config.json.nouveau
 mv config.json.nouveau config.json
 jq '{namespaces: .linux.namespaces, caps: .process.capabilities.bounding, user: .process.user}' config.json
 

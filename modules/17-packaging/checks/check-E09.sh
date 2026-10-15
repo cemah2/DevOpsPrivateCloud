@@ -46,6 +46,17 @@ check_cmd "prod : étiquette d'image (${_e09_tag:-?}) = MEDIAGENDA_VERSION = app
    and .metadata.labels[\"app.kubernetes.io/version\"] == \"$_e09_tag\" and \"$_e09_tag\" != \"\""
 check_cmd "https://mediagenda.$_m17d_domaine/sante répond 200 avec la version ${_e09_tag:-?}" \
   _m17d_sante "https://mediagenda.$_m17d_domaine/sante" "$_e09_tag"
+# En-têtes de sécurité de l'entrée (M15-E33, repris par l'overlay de recette en E04) : exigés si
+# l'entrée a été durcie au M15 (Gateway des partenaires présente).
+_e09_hsts() {
+  curl -sI --max-time "$WB_TIMEOUT" "https://mediagenda.$_m17d_domaine/sante" 2>/dev/null \
+    | grep -qi '^strict-transport-security:'
+}
+if [[ -n "$(_m17d_obj passerelles gateway gw-partenaires)" ]]; then
+  check_cmd "prod : la réponse porte Strict-Transport-Security, comme la recette" _e09_hsts
+else
+  skip "prod : en-têtes de sécurité du M15-E33" "Gateway gw-partenaires absente (M15-E33 non fait)"
+fi
 
 # --- Recette sur le rendu 0.5.0 ---
 _e09_r="$(_m17d_obj mediagenda-recette deploy mediagenda)"

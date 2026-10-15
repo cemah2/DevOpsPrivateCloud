@@ -75,3 +75,4 @@ MédiSphère publie ses applications en images de conteneurs (M12). Elles vivaie
 | Pas d'horodatage ni de journal de transparence | Sophie Laurent | M25 / F6 |
 | Pas de vérification à l'admission avant M26 | Claire Morel | M26 |
 | Registre unique, un seul site | Claire Morel | finaux (PAR2) |
+| Exemption de lecture avant la première signature (Harbor 2.15.3, `CONTENT_TRUST_LEGACY_SIGNER_PULL_ENABLED`) : une identité qui peut pousser dans `medisphere` peut aussi lire une image non signée en se présentant comme Cosign | Sophie Laurent | M26 (admission par clé) ; à chaque version de Harbor |

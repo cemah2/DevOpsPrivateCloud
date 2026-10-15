@@ -6,7 +6,7 @@
 
 Il n'y a pas de solution unique : ce corrigé donne un **plan de travail**, les points de contrôle de chaque étape, la préparation des quatre démonstrations et la **grille de revue**. Les fichiers de référence sont ceux des exercices du module ; nouveaux : [`architecture.md`](fichiers/M13-E25/medisphere/docs/registre/architecture.md) (modèle) et la [section containerd de `caches.md`](fichiers/M13-E25/medisphere/docs/registre/caches-containerd.md.extrait).
 
-**Points non testés en conditions réelles** : la commande de traçabilité (démonstration de Karim) lit la provenance que BuildKit range **dans l'index** (E08, E09) : manifeste annoté `attestation-manifest`, couche annotée `in-toto.io/predicate-type: https://slsa.dev/provenance/v1`, lue par `oras blob fetch` (ORAS, E23) ; les noms exacts des champs, et le fait que Harbor serve ce manifeste enfant d'un index signé malgré la politique « signature exigée », sont à vérifier sur ta sortie (sur une machine avec Docker, `docker buildx imagetools inspect --format '{{json .Provenance}}'` donne la même chose). Le comportement de repli de `hosts.toml` (champ `server`) est à vérifier sur containerd 2.3 au module 14.
+**Points non testés en conditions réelles** : la commande de traçabilité (démonstration de Karim) lit la provenance par l'attestation Cosign `slsaprovenance1` que la chaîne extrait de l'archive (E09) ; lire directement le manifeste d'attestation de BuildKit **dans Harbor** (annoté `attestation-manifest`, couche `in-toto.io/predicate-type: https://slsa.dev/provenance/v1`, `oras blob fetch`, E23) est refusé sous les politiques de `medisphere` : ce manifeste n'est ni signé ni analysé (code de Harbor 2.15.3 : `contentrust.go`, `vulnerable.go`) ; les noms exacts des champs sont à vérifier sur ta sortie (`provenance.json`, artefact du job `sc:signature`). Le comportement de repli de `hosts.toml` (champ `server`) est à vérifier sur containerd 2.3 au module 14.
 
 **Solution**
 
@@ -54,12 +54,8 @@ admin@adm01:~$ D=$(skopeo inspect --format '{{.Digest}}' docker://$I:$T); echo "
 admin@adm01:~$ cosign verify --key $K --insecure-ignore-tlog=true $I@$D >/dev/null && echo "signature : vérifiée (clé MédiSphère)"
 admin@adm01:~$ cosign verify-attestation --key $K --insecure-ignore-tlog=true --type spdxjson $I@$D \
     | jq -r '.payload | @base64d | fromjson | .predicate.packages[] | "\(.name) \(.versionInfo)"' | sort | head -20
-admin@adm01:~$ A=$(skopeo inspect --raw docker://$I@$D \
-    | jq -r '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest") | .digest' | head -n 1)
-admin@adm01:~$ L=$(skopeo inspect --raw docker://$I@$A \
-    | jq -r '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://slsa.dev/provenance/v1") | .digest')
-admin@adm01:~$ oras blob fetch --output - $I@$L \
-    | jq '.predicate | {source: .buildDefinition.externalParameters.configSource, args: .buildDefinition.externalParameters.request.args, run: .runDetails.metadata}'
+admin@adm01:~$ cosign verify-attestation --key $K --insecure-ignore-tlog=true --type slsaprovenance1 $I@$D \
+    | jq '.payload | @base64d | fromjson | .predicate | {source: .buildDefinition.externalParameters.configSource, args: .buildDefinition.externalParameters.request.args, run: .runDetails.metadata}'
 admin@adm01:~$ curl -s -u "$U" "https://registry.par1.medisphere.internal/api/v2.0/projects/medisphere/repositories/medidoc/artifacts/$D?with_scan_overview=true" \
     | jq '.scan_overview | to_entries[0].value | {severity, summary: .summary.summary}'
 ```

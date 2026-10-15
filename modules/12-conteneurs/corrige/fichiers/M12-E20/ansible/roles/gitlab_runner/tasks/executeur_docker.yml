@@ -48,7 +48,7 @@
       Runners, étiquettes {{ gitlab_runner_etiquettes | join(', ') }}) et range son jeton dans le Vault.
     quiet: true
 
-- name: Configuration du runner (0600 : elle contient le jeton)
+- name: "Configuration du runner (0600 : elle contient le jeton)"
   ansible.builtin.template:
     src: config.toml.j2
     dest: /etc/gitlab-runner/config.toml

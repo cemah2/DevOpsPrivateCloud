@@ -522,7 +522,7 @@ Pour savoir quel côté refuse : un refus en sortie apparaît sur le nœud du cl
 | Vérifications | le compte `wb-checks` (M14-E06) ne lit pas encore les objets `gateway.networking.k8s.io` ni, plus tard (E13), ceux de cert-manager : sa ClusterRole est **agrégée** (étiquette `workbook.medisphere.internal/checks: "true"`) ; ClusterRole de lecture `wb-checks-reseau` dans `rbac/wb-checks-reseau.yaml` de `plateforme/k8s`, sans Secrets |
 | Tests | depuis `adm01`, `curl -H "Host: echo.wb-essais.internal" http://10.10.40.61:<NODEPORT>/hostname` (aucun nom DNS : la zone `apps` arrive en E14) |
 
-> ⚠️ **Attention** : n'installe **jamais** les CRD du canal *experimental* sur `k8s-par1` sans décision écrite. Elles remplacent les CRD standard du même nom ; et Cilium 1.20 a changé la version de `TLSRoute` (v1alpha2 → v1) : des objets `TLSRoute` stockés dans une version que la CRD ne sert plus deviennent illisibles. Depuis v1.6.1, `TLSRoute` est servie en `v1` par le canal **standard** : M15-E16 s'en sert sans rien installer de plus.
+> ⚠️ **Attention** : n'installe **jamais** les CRD du canal *experimental* sur `k8s-par1` sans décision écrite. Elles remplacent les CRD standard du même nom, et passer d'un canal à l'autre peut rendre illisibles des objets stockés dans une version que la nouvelle CRD ne sert plus : Gateway API v1.6 a fait passer `TLSRoute` de `v1alpha2` à `v1` (Cilium 1.20 exige la `v1`), et la CRD standard v1.6 ne sert plus `v1alpha2`. Depuis v1.6.1, `TLSRoute` est servie en `v1` par le canal **standard** : M15-E16 s'en sert sans rien installer de plus.
 
 **Travail demandé**
 

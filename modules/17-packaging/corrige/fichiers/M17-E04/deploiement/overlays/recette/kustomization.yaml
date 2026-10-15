@@ -27,7 +27,8 @@ configMapGenerator:
 patches:
   # Correctif stratégique (strategic merge) : ressources de la recette.
   - path: ressources.yaml
-  # Correctifs JSON 6902 : nom publié, et ajout de la ConfigMap générée (en dernier : elle l'emporte).
+  # Correctifs JSON 6902 : nom publié et en-têtes de sécurité de la route, puis ajout de la ConfigMap
+  # générée (en dernier dans envFrom : elle l'emporte).
   - target:
       kind: HTTPRoute
       name: mediagenda
@@ -35,6 +36,23 @@ patches:
       - op: replace
         path: /spec/hostnames/0
         value: mediagenda-recette.apps.par1.medisphere.internal
+      # En-têtes de sécurité posés sur la route de la recette au M15-E33 (SEC-1633). Le chart ne les
+      # rend pas : sans ce correctif, la reprise de la route par ce dépôt les retirerait sans un mot
+      # (même gestionnaire de champs « kubectl » qu'au M15 : pas de conflit, le champ disparaît).
+      - op: add
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - name: Strict-Transport-Security
+                  value: max-age=31536000; includeSubDomains
+                - name: X-Content-Type-Options
+                  value: nosniff
+                - name: Referrer-Policy
+                  value: no-referrer
+                - name: X-Frame-Options
+                  value: DENY
   - target:
       kind: Deployment
       name: mediagenda

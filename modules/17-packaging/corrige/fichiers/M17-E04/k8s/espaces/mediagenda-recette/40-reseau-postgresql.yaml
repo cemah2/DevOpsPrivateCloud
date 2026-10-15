@@ -1,0 +1,101 @@
+# plateforme/k8s — espaces/mediagenda-recette/40-reseau-postgresql.yaml (M16-E18 ; sortie vers s3-01 en E19 ;
+# M17-E04 : les pods de l'API ne sont plus ceux du M14, voir plus bas)
+# mediagenda-recette est en refus par défaut (M15). Le DNS vers kube-system/kube-dns est déjà
+# autorisé pour tout l'espace par la politique du M15.
+# Sélecteur : tous les pods de CNPG (instances ET jobs initdb/join/recovery) portent
+# cnpg.io/cluster.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-entree
+  namespace: mediagenda-recette
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  policyTypes: ["Ingress"]
+  ingress:
+    # Opérateur : état des instances (8000, HTTPS) et contrôles PostgreSQL (5432).
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: cnpg-system}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: cloudnative-pg}
+      ports:
+        - {protocol: TCP, port: 8000}
+        - {protocol: TCP, port: 5432}
+    # Réplication et pg_rewind entre instances ; état entre instances (8000).
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: cnpg.io/cluster, operator: Exists}
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 8000}
+    # Job de migration du schéma (k8s/recette/50-migration.yaml de mediagenda/api, M16), jusqu'à ce
+    # que le chart prenne les migrations en charge (M17-E09). Depuis M17-E04, l'API est celle du
+    # chart (app.kubernetes.io/name: mediagenda) : son accès est déclaré par mediagenda/deploiement
+    # (overlays/recette/acces-donnees.yaml), plus ici.
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: ["mediagenda-migration"]
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+# Sortie du Job de migration du M16 vers les instances (5432). Depuis M17-E04, la sortie de l'API
+# vers la base est rendue par le chart (NetworkPolicy « mediagenda »). La politique s'applique après
+# la traduction du Service (mediagenda-db-rw → pod du primaire).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-vers-postgresql
+  namespace: mediagenda-recette
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["mediagenda-migration"]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {cnpg.io/cluster: mediagenda-db}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+# Sortie : l'API Kubernetes (le gestionnaire d'instance la lit et met à jour l'état), les autres
+# instances. Avec Cilium, l'API Kubernetes est l'entité kube-apiserver : une NetworkPolicy
+# standard avec ipBlock sur les adresses des nœuds ne la couvre pas.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: postgresql-sortie
+  namespace: mediagenda-recette
+spec:
+  endpointSelector:
+    matchExpressions:
+      - {key: cnpg.io/cluster, operator: Exists}
+  egress:
+    - toEntities: ["kube-apiserver"]
+      toPorts:
+        - ports:
+            - {port: "6443", protocol: TCP}
+    - toEndpoints:
+        - matchExpressions:
+            - {key: cnpg.io/cluster, operator: Exists}
+      toPorts:
+        - ports:
+            - {port: "5432", protocol: TCP}
+            - {port: "8000", protocol: TCP}
+    # M16-E19 : archivage des WAL, sauvegardes et restaurations (sidecar du plugin, jobs de
+    # récupération) vers s3-01, et lui seul. La bordure laisse passer les travailleurs vers
+    # s3-01:8333 depuis M16-E16 (règle du M14-E24 élargie à K8S_TRAV).
+    - toCIDR: ["10.10.20.14/32"]
+      toPorts:
+        - ports:
+            - {port: "8333", protocol: TCP}

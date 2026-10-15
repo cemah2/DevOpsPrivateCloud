@@ -36,8 +36,8 @@ Règle du quorum : 3 membres, il en faut **2** pour écrire. Avec un membre en p
 ## 2. Remplacer un membre (données perdues)
 
 1. Vérifier que les **deux autres** sont sains (`endpoint health`).
-2. `etcdctl member remove <ID>` : l'identifiant du membre **malade**, relu deux fois.
-3. Sur le nœud : manifeste hors de `/etc/kubernetes/manifests/` (le conteneur s'arrête), dossier `/var/lib/etcd/member` mis de côté.
+2. Sur le nœud : manifeste hors de `/etc/kubernetes/manifests/` et attendre l'arrêt du conteneur (`crictl ps --name etcd`) **avant** tout retrait : un membre retiré qui tourne encore redémarre en boucle dans un cluster qui ne le connaît plus.
+3. `etcdctl member remove <ID>` depuis un nœud sain : l'identifiant du membre **malade**, relu deux fois ; puis, sur le nœud, dossier `/var/lib/etcd/member` mis de côté.
 4. `etcdctl member add <NOM> --peer-urls=https://<IP>:2380` ; reporter `--initial-cluster` affiché et `--initial-cluster-state=existing` dans le manifeste.
 5. Manifeste remis ; le membre rattrape par instantané du leader ; vérifier `endpoint status` (même révision).
 6. Supprimer le dossier mis de côté.

@@ -55,8 +55,8 @@ check_cmd "aucun Cluster n'utilise l'archivage intégré barmanObjectStore (supp
 
 title "Après la mise à jour"
 check_cmd "la sonde ms-verif-k8s-stockage est verte" timeout 240 /usr/local/bin/ms-verif-k8s-stockage --quiet
-check_cmd "aucun témoin ne subsiste dans wb-essais" \
-  _m16p_jq "$(_m16p_kj deployments,pvc -n wb-essais)" 'all(.items[]?; (.metadata.name | startswith("temoin-")) | not)'
+check_cmd "aucun témoin de la mise à jour (e33-…) ne subsiste dans wb-essais" \
+  _m16p_jq "$(_m16p_kj deployments,pods,pvc -n wb-essais)" 'all(.items[]?; (.metadata.name | startswith("e33-")) | not)'
 
 title "Code et documentation"
 check_cmd "RB-164 sur main de plateforme/medisphere" _m16p_doc_prefixe docs/kubernetes/stockage RB-164 'témoin|temoin' 'rollback|retour arrière'

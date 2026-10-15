@@ -93,10 +93,11 @@ Helm 4 (novembre 2025) change des choses que tu croiseras dans de vieux tutoriel
 |---|---|---|
 | Application des objets | *client-side* (fusion à trois voies, annotation de dernier état) | ***server-side apply* par défaut** pour une **nouvelle** release (`--server-side=true`) ; une release créée par Helm 3 garde sa méthode (`upgrade --server-side=auto`) ; conflits de champs signalés, `--force-conflicts` pour passer outre |
 | Retour arrière automatique | `--atomic` | **`--rollback-on-failure`** (`--atomic` accepté avec un avertissement de dépréciation) |
-| Remplacement forcé | `--force` | **`--force-replace`** |
+| Remplacement forcé | `--force` | **`--force-replace`** (`--force` accepté avec un avertissement) ; refusé avec le *server-side apply* (`cannot use server-side apply and force replace together`) |
 | Attente | `--wait` (booléen) | `--wait=watcher` (par défaut quand `--wait` est donné seul ; fondé sur *kstatus*), `hookOnly` (par défaut sans `--wait`), `legacy` |
 | Post-rendu | `--post-renderer <exécutable>` | `--post-renderer <nom d'un plugin>` : les post-rendus sont des **plugins** |
 | Plugins | installés sans vérification | **vérifiés** à l'installation : `--verify=false` obligatoire pour un plugin non signé installé depuis Git (helm-unittest, helm-diff) |
+| `helm list` | releases `deployed` et `failed` seulement (`--all` pour le reste) | **tous les statuts** par défaut, y compris `uninstalled` ; filtres `--deployed`, `--failed`, `--pending`, `--uninstalled`… (`--all` n'existe plus) |
 | Registres OCI | `helm registry login <URL>` | `helm registry login <nom de domaine>` seulement ; installation **par digest** (`…@sha256:…`) |
 | Charts | `apiVersion: v2` | `v2` inchangé (c'est celui du module) ; charts `v3` expérimentaux (`HELM_EXPERIMENTAL_CHART_V3`) |
 

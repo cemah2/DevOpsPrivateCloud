@@ -13,11 +13,13 @@ derive=0
 note() { printf '  %-14s %s\n' "$1" "$2"; }
 
 # 1) Manifestes : kubectl diff renvoie 0 (identique), 1 (différent), >1 (erreur).
+#    --force-conflicts : sans lui, un champ modifié à la main (kubectl edit, autre gestionnaire)
+#    fait échouer le dry-run pour conflit (code >1) au lieu d'afficher la dérive. Rien n'est écrit.
 for cible in composants/cilium/lb-ipam composants/cilium/bgp composants/passerelles \
              composants/cert-manager/clusterissuer-step-ca-acme.yaml composants/coredns \
              espaces/passerelles.yaml espaces/mediagenda-recette/httproute-mediagenda.yaml; do
   [[ -e "$cible" ]] || { note "absent" "$cible"; derive=1; continue; }
-  kubectl diff --server-side -f "$cible" >/tmp/derive.$$ 2>&1
+  kubectl diff --server-side --force-conflicts -f "$cible" >/tmp/derive.$$ 2>&1
   rc=$?
   case $rc in
     0) note "ok" "$cible" ;;
@@ -26,7 +28,7 @@ for cible in composants/cilium/lb-ipam composants/cilium/bgp composants/passerel
   esac
 done
 for e in mediagenda-dev mediagenda-recette; do
-  kubectl diff --server-side -n "$e" -f espaces/politiques-mediagenda/ >/tmp/derive.$$ 2>&1
+  kubectl diff --server-side --force-conflicts -n "$e" -f espaces/politiques-mediagenda/ >/tmp/derive.$$ 2>&1
   case $? in
     0) note "ok" "politiques ($e)" ;;
     1) note "DÉRIVE" "politiques ($e)"; sed 's/^/      /' /tmp/derive.$$; derive=1 ;;

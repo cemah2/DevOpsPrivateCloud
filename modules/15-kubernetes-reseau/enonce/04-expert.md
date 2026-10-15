@@ -28,7 +28,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 15 35 --annuler` remet l'état sain (filet de sécurité, pas un correctif : compte l'exercice comme non réussi). **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne (sinon elle reste marquée active et bloque l'astreinte M15-E43 et le mini-projet) : l'annulation ne rétablit que ce qui porte encore la marque de la panne et ne revient jamais sur ta réparation.
 - **Où agissent les pannes.** Objets du cluster dans `wb-*`, `mediagenda-*`, `passerelles`, `cert-manager`, `external-dns` et `kube-system` (Corefile, configuration de Cilium), avec le kubeconfig d'administration ; les travailleurs `k8s-w01` à `w03` par SSH (configuration courante uniquement, rien d'écrit sur disque) ; et, pour une seule variante, la **passerelle de secours** de la bordure (celle qui ne porte pas la VIP 10.10.40.1), dans la configuration courante de FRR. Jamais la VIP, jamais keepalived, jamais `pve01` ni son réseau, jamais `pbs01`. Aucune donnée n'est détruite ; chaque objet modifié est sauvegardé avant.
 - **Ta réparation passe par le code.** Une correction à chaud est permise pour rétablir le service ; elle doit ensuite être reportée dans `plateforme/k8s` ou `plateforme/ansible` par une MR (ou la cause doit être retirée du dépôt si c'est là qu'elle se trouve), sinon le prochain `task appliquer` ou le prochain rejeu la défera. Le contrôle vérifie l'état réel ; la revue de Karim vérifiera le dépôt.
-- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Il alimente le post-mortem de M15-E43.
+- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/kubernetes/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Il alimente le post-mortem de M15-E43.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 > ⚠️ **Attention — bordure** : une panne peut concerner une passerelle. Tu ne **bascules jamais** la VIP pour « tester » (pas de `systemctl stop keepalived`, pas d'arrêt de `gw01`/`gw02`) : la bascule coupe les tunnels WireGuard et toutes les sessions de l'atelier. Sur FRR, préfère `vtysh -c 'show …'` ; pour corriger, rejoue le playbook de la bordure (`playbooks/bordure-frr.yml`, qui fait un `reload` sans couper les sessions) plutôt qu'un `systemctl restart frr` qui fait tomber **toutes** les sessions BGP de la passerelle.
@@ -286,7 +286,7 @@ Sur chaque passerelle, `ip -4 route show proto bgp | grep 10.10.41` dit ce qui e
 
 <details><summary>Indice 3</summary>
 
-Les raisons sont définies par la spécification : lis la [référence de l'API Gateway](https://gateway-api.sigs.k8s.io/reference/spec/) aux types `ListenerConditionReason` et `RouteConditionReason`. Une route refusée par un écouteur n'est pas une route cassée : c'est l'écouteur qui la refuse.
+Les raisons sont définies par la spécification : lis la [référence de l'API Gateway](https://gateway-api.sigs.k8s.io/reference/api-spec/) aux types `ListenerConditionReason` et `RouteConditionReason`. Une route refusée par un écouteur n'est pas une route cassée : c'est l'écouteur qui la refuse.
 </details>
 
 **Pour aller plus loin** : ajoute à `ms-verif-k8s-reseau` (M15-E26) un contrôle « toutes les conditions de toutes les Gateway et de toutes les routes sont à `True` », qui liste la raison de chaque écart : c'est la meilleure alerte précoce de la Gateway API.
@@ -440,7 +440,7 @@ Un ExternalDNS ne touche jamais un enregistrement dont le TXT désigne un autre 
 Un `tcpdump` des deux côtés tranche entre « ça ne part pas », « ça part mais n'arrive pas » et « ça arrive mais personne ne le prend ». Le port de destination d'un paquet VXLAN est celui configuré sur le nœud **émetteur** ; le port d'écoute est celui configuré sur le nœud **récepteur**.
 </details>
 
-**Pour aller plus loin** : la MTU est la cause classique suivante de « ça marche pour les petites requêtes, pas pour les grosses ». Calcule la MTU des pods de `k8s-par1` (1500 moins l'en-tête VXLAN, moins celui de WireGuard), vérifie-la (`ip link` dans un pod, `cilium-dbg status --verbose`), et montre avec `ping -M do -s <taille>` entre deux témoins la taille maximale qui passe.
+**Pour aller plus loin** : la MTU est la cause classique suivante de « ça marche pour les petites requêtes, pas pour les grosses ». Calcule la MTU des pods de `k8s-par1` (1500 moins l'en-tête VXLAN, moins celui de WireGuard), vérifie-la (`ip route` dans un pod, `cilium-dbg status --verbose`), et montre avec `ping -M do -s <taille>` entre deux témoins la taille maximale qui passe.
 
 ---
 
@@ -465,7 +465,7 @@ Un `tcpdump` des deux côtés tranche entre « ça ne part pas », « ça part m
 1. **Triage (10 min max)** : liste les symptômes, leur impact (qui ne peut plus faire quoi ?) et tes hypothèses de regroupement. Vérifie d'abord tes instruments : kubeconfig valide, `cilium status`, `hubble` qui répond, accès SSH aux nœuds et aux passerelles, témoins de `wb-pannes`. Envoie la première communication.
 2. **Diagnostic** : traite les pannes dans un ordre que tu justifies par les dépendances du chemin. Tiens ton journal horodaté ; garde la preuve de chaque cause (condition, verdict Hubble, sortie `vtysh`, capture).
 3. **Rétablissement** : corrige chaque cause racine, par le dépôt ; après chaque correction, relance **tous** tes tests de départ (une correction en amont révèle souvent la panne suivante).
-4. **Clôture** : communication de fin d'incident, `--annuler` pour clore, puis post-mortem dans `docs/socle/post-mortems/AAAA-MM-JJ-INC-4250.md` publié par MR.
+4. **Clôture** : communication de fin d'incident, `--annuler` pour clore, puis post-mortem dans `docs/kubernetes/post-mortems/AAAA-MM-JJ-INC-4250.md` publié par MR.
 
 **Critères de réussite**
 - [ ] Toutes les vérifications de M15-E35 à M15-E42 sont vertes (le contrôle les rejoue toutes) et aucune panne n'est encore marquée active.
@@ -502,7 +502,7 @@ Les contrôles `lab/bin/check 15 35` à `15 42` sont des sondes ciblées : lance
 **Durée indicative** : 3 h.
 
 **Contexte technique**
-- Dans l'agent : `cilium-dbg` (sous-commandes `bpf`, `service`, `endpoint`, `identity`, `monitor`, `map`). Sur le nœud : `bpftool` (paquet Debian `bpftool`, à installer par le rôle `k8s_noeud` si tu le gardes, ou dans un conteneur de diagnostic de nœud `kubectl debug node/<nœud> -it --image=<image netshoot du cache Harbor> --profile=sysadmin`, à supprimer après usage).
+- Dans l'agent : `cilium-dbg` (sous-commandes `bpf`, `service`, `endpoint`, `identity`, `monitor`, `map`). Sur le nœud : `bpftool` (paquet Debian `bpftool`, installé par le playbook des outils de diagnostic de M15-E02 ; à défaut, dans un conteneur de diagnostic de nœud `kubectl debug node/<nœud> -it --image=<image netshoot du cache Harbor> --profile=sysadmin`, à supprimer après usage).
 - Objet d'étude : le Service de MédiAgenda en recette (`mediagenda-api`, port 80 vers le port 8000 des pods, adresse ClusterIP en 10.96.0.0/16) et une connexion depuis un pod témoin de `wb-pannes` vers ce Service. Pour que la connexion soit permise, crée **temporairement** (par le dépôt, ou à la main en le notant dans ton journal) deux autorisations étroites : la sortie « témoins de `wb-pannes` → API de MédiAgenda, TCP 8000 » (la politique `sonde-interne` ne permet aux témoins que le trafic interne et le DNS) et l'entrée « témoins → API, TCP 8000 » dans `mediagenda-recette`. Tu les retires à la fin.
 
 > ⚠️ **Attention** : `bpftool` sait aussi **modifier** (`map update`, `map delete`, `prog detach`, `net detach`…) et `cilium-dbg` aussi (`bpf ct flush`, `bpf lb delete`, `service delete`, `endpoint config`). Dans cet exercice, seules les opérations de lecture sont permises : `bpftool prog show`, `net show`, `cgroup tree`, `map show`, `map dump` (sur une petite table) ; `cilium-dbg … list`, `get`, `status`, `monitor`. Un `monitor` sans filtre sur un nœud chargé produit des milliers de lignes : filtre toujours (`--type drop`, `--related-to <id>`, `--from`/`--to`). Supprime le pod de diagnostic de nœud à la fin (`kubectl get pods -A | grep node-debugger`).
@@ -595,7 +595,7 @@ Les noms des programmes et des tables sont dans le code de Cilium (`bpf/bpf_lxc.
 
 <details><summary>Indice 1</summary>
 
-Pour 1 à 10 : le [modèle réseau de Kubernetes](https://kubernetes.io/docs/concepts/services-networking/), les pages Cilium [Kubernetes Without kube-proxy](https://docs.cilium.io/en/v1.20/network/kubernetes/kubeproxy-free/), [Policy](https://docs.cilium.io/en/v1.20/security/policy/), [LB IPAM](https://docs.cilium.io/en/v1.20/network/lb-ipam/), [BGP Control Plane](https://docs.cilium.io/en/v1.20/network/bgp-control-plane/) ; tes journaux de M15-E35 à M15-E38.
+Pour 1 à 10 : le [modèle réseau de Kubernetes](https://kubernetes.io/docs/concepts/services-networking/), les pages Cilium [Kubernetes Without kube-proxy](https://docs.cilium.io/en/v1.20/network/kubernetes/kubeproxy-free/), [Policy](https://docs.cilium.io/en/v1.20/security/policy/), [LB IPAM](https://docs.cilium.io/en/v1.20/network/lb-ipam/), [BGP Control Plane](https://docs.cilium.io/en/v1.20/network/bgp-control-plane/bgp-control-plane/) ; tes journaux de M15-E35 à M15-E38.
 </details>
 
 <details><summary>Indice 2</summary>

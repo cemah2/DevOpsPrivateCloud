@@ -50,7 +50,7 @@ sont ceux de ce corrigé : remplace-les par ceux de **ton** dépôt.
 | Envoy (`ingress`) | API MédiAgenda (8000), `medidoc` (8080), `hubble-ui` (8081), `relais-mtls` (8443) | TCP | WireGuard entre nœuds | routes | `allow-gateway-api` (E17), `medidoc-entree-gateway` (E34), `hubble-ui-entree` (E26), `relais-mtls` (E33) | M15 |
 | `relais-mtls` | API MédiAgenda | TCP 8000 | WireGuard entre nœuds | partenaires | `relais-mtls-vers-api` (E33) | M15-E33 |
 | cert-manager | `ca01` | TCP 443 | TLS | ACME | bordure (VLAN 40 → `ca01` 443) | M15-E13 |
-| cert-manager, ExternalDNS (masqués : nœud) | `dns01` | TCP/UDP 53 (RFC 2136, TSIG) | signé, non chiffré | défis DNS-01, noms | bordure (VLAN 40 → `dns01` 53) | M15-E14, E15 |
+| cert-manager, ExternalDNS (masqués : nœud) | `dns01` (autoritaire) | TCP/UDP 5300 (RFC 2136, TSIG) | signé, non chiffré | défis DNS-01, noms | bordure (VLAN 40 → `dns01` 5300) et pare-feu local de `dns01` | M15-E14, E15 |
 | `ca01` | 10.10.41.10 | TCP 80 | non | défis HTTP-01 | bordure | M15-E13 |
 | tous les pods | CoreDNS (10.96.0.10) | UDP/TCP 53 | WireGuard entre nœuds | DNS | `base-dns` (CCNP) + politiques DNS des espaces | M15-E04, E28 |
 | CoreDNS (masqué : nœud) | `dns01`, `dns02` | UDP/TCP 53 | non | récursion | bordure (DNS depuis tous les VLAN) | M15-E04 |

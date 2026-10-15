@@ -37,7 +37,7 @@ Chaque changement passe par une MR et un pipeline vert. Les fichiers d'accès de
 - RKE2 (`rke2-01..03`, trois serveurs v1.36.5+rke2r1, Rocky Linux 10, profil CIS) et Talos (`talos-01..03`, 10.10.99.85-87, cluster `talos-essai`, Talos v1.14.2, Kubernetes v1.36.5) : **détruits** en fin de M18-E04 et M18-E06, reconstruits par le code quand un exercice en a besoin (voir ci-dessus) ;
 - `lab/bin/check 18 12` est vert.
 
-**Ordre conseillé** : E13 → E14 → E15 → E17 → E18, et E16 quand tu as le temps (facultatif). L'ADR (E17) s'écrit après les mesures de E13 à E15. **Durée totale indicative** : 12 à 16 h (sans E16).
+**Ordre conseillé** : E13 → E14 → E15 → E17 → E18, et E16 quand tu as le temps (facultatif). L'ADR (E17) s'écrit après les mesures de E13 à E15. **Durée totale indicative** : 14 à 17 h (sans E16).
 
 Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 18 XX`). Les clusters d'essai n'ont pas de compte `wb-checks` : les contrôles lisent avec les kubeconfig de `~/.config/workbook/m18/`, **en lecture seule** (aucune commande d'écriture), et lisent les nœuds par SSH (`sudo -n` pour des lectures seulement) ou par `talosctl` (lectures). C'est l'exception documentée du module.
 
@@ -202,7 +202,7 @@ Pour Talos, la restauration n'est permise que si etcd est en état `Preparing` s
 **Durée indicative** : 3 h.
 
 **Contexte technique**
-- kube-bench **0.16.0** (binaire de la publication GitHub d'Aqua Security, empreinte à vérifier sur `checksums.txt` de la publication). Il est utilisé ici en **aperçu**, depuis le nœud, sans rien corriger : le module 26 l'industrialisera.
+- kube-bench **0.16.0** (binaire de la publication GitHub d'Aqua Security, empreinte à vérifier sur `kube-bench_0.16.0_checksums.txt` de la publication). Il est utilisé ici en **aperçu**, depuis le nœud, sans rien corriger : le module 26 l'industrialisera.
 - Les référentiels de kube-bench (dossier `cfg/` de l'archive) ne suivent pas Kubernetes de près : relève, dans `cfg/config.yaml`, la version la plus récente pour un Kubernetes générique, pour RKE2 et pour k3s, et compare-les à 1.36.
 - Talos n'a ni SSH ni shell. Tout s'observe par `talosctl` : `service`, `processes`, `netstat`, `mounts`, `read`, `get` (consulte `talosctl --help`).
 - Procédure de chiffrement de k3s sur un cluster **existant** : page *secrets-encrypt* de la doc k3s (commandes `status`, `enable`, `rotate-keys`).

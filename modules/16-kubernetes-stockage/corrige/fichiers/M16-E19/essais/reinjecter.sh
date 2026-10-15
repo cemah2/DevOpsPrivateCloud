@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # reinjecter.sh — recopie dans mediagenda-db les rendez-vous d'un praticien perdus après T,
 # lus dans mediagenda-db-pitr (M16-E19, étape 8). Ne touche à rien d'autre : les lignes dont
-# l'identifiant existe déjà dans mediagenda-db sont ignorées (ON CONFLICT DO NOTHING).
+# l'identifiant existe déjà dans mediagenda-db, ou dont le créneau (praticien, début : index unique
+# de V2) a été repris depuis T, sont ignorées (ON CONFLICT DO NOTHING, sans cible : toutes les
+# contraintes d'unicité) ; compare les deux comptes affichés pour les repérer.
 #   ./reinjecter.sh <PRATICIEN>
 # Connexion locale (socket) en postgres dans les pods, par kubectl exec, comme le fait
 # « kubectl cnpg psql » : aucun mot de passe ne circule. La colonne id est GENERATED ALWAYS :
@@ -30,7 +32,7 @@ psql_dans "$source_pod" -Atc \
 | psql_dans "$cible_pod" \
     -c "CREATE TEMP TABLE a_reinjecter (LIKE rendez_vous)" \
     -c "COPY a_reinjecter (id, patient, praticien, debut, duree_minutes, motif, cree_le) FROM STDIN WITH (FORMAT csv)" \
-    -c "INSERT INTO rendez_vous OVERRIDING SYSTEM VALUE SELECT * FROM a_reinjecter ON CONFLICT (id) DO NOTHING"
+    -c "INSERT INTO rendez_vous OVERRIDING SYSTEM VALUE SELECT * FROM a_reinjecter ON CONFLICT DO NOTHING"
 
 echo "Dans mediagenda-db ($cible_pod) : $(psql_dans "$cible_pod" -Atc \
   "SELECT count(*) FROM rendez_vous WHERE praticien = '$praticien'") ligne(s) pour $praticien"

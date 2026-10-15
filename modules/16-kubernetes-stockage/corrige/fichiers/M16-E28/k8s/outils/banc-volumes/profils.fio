@@ -1,7 +1,9 @@
 ; plateforme/k8s — outils/banc-volumes/profils.fio (M16-E28, PLAT-1728)
 ; Un profil = une section. Le script lance UNE section à la fois (--section=<profil>).
 ; Tous : E/S directes (pas de cache de pages), libaio, 10 s de chauffe puis 60 s de mesure,
-; fichier de 2 Gio pré-rempli (pas de mesure sur des objets RADOS jamais écrits).
+; fichier de 2 Gio pré-rempli (pas de mesure sur des objets RADOS jamais écrits) : overwrite=1
+; fait écrire le fichier en entier avant la mesure, y compris pour les profils d'écriture (sans
+; lui, fio recrée le fichier par simple réservation : fallocate, rien n'est écrit dans Ceph).
 [global]
 ioengine=libaio
 direct=1
@@ -12,6 +14,7 @@ ramp_time=10
 runtime=60
 group_reporting=1
 percentile_list=50:99:99.9
+overwrite=1
 
 ; Journal de PostgreSQL : écritures séquentielles de 8 Kio, chacune rendue durable (fdatasync).
 [wal]

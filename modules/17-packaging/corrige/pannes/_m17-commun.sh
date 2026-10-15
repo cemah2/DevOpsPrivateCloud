@@ -127,6 +127,25 @@ stringData:
 EOF
 }
 
+# m17_sauver_secret ESPACE NOM — wb_k8s_sauver d'un Secret de release, puis droits restreints : la
+# sauvegarde contient les valeurs de la release (encodées, pas chiffrées). Répertoire 700, fichiers 600.
+# Code 1 si la sauvegarde n'a pas pu être écrite (disque plein…) : on ne casse jamais sans filet.
+m17_sauver_secret() {
+  local d="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/k8s/$WB_EX"
+  wb_k8s_sauver secret "$2" "$1" || true
+  chmod 700 "$d" 2>/dev/null || true
+  chmod 600 "$d"/*.yaml 2>/dev/null || true
+  if [[ ! -s "$d/${1}_secret_${2}.yaml" ]]; then
+    wb_avert "sauvegarde de $1/$2 impossible dans $d : injection abandonnée"
+    return 1
+  fi
+}
+
+# m17_rel_max ESPACE RELEASE — plus haut numéro de révision parmi les Secrets de la release (0 si aucun).
+m17_rel_max() {
+  m17_rel_lister "$1" "$2" | awk '$2 ~ /^[0-9]+$/ && $2 > m { m = $2 } END { print m + 0 }'
+}
+
 m17_rel_statut() {
   m17_helm status "$2" -n "$1" -o json 2>/dev/null | jq -r '.info.status // empty' 2>/dev/null
 }

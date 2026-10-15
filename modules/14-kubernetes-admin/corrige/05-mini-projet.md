@@ -28,7 +28,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 | 2 | `ssh k8s-cp0X 'ip -br -4 addr \| grep 10.10.40.200'` : repérer le porteur ; instantané etcd vérifié | — |
 | 3 | `qm shutdown 214X` (arrêt propre) depuis `pve01` ; en parallèle, `while sleep 1; do date +%T; kubectl get --raw /livez; done` sur `adm01` | quelques secondes d'échec, puis `ok` (VIP basculée) |
 | 4 | `kubectl get nodes` ; `etcdctl endpoint health` depuis un nœud restant | `k8s-cp0X` `NotReady` ; deux membres sains sur trois, quorum conservé |
-| 5 | Boucle de Julien | aucune requête en échec : le trafic de pod à Service ne passe ni par l'API ni par la VIP |
+| 5 | Boucle de Julien | aucune requête en échec : le trafic de pod à Service ne passe ni par l'API ni par la VIP. **Mais** la boucle résout le nom du Service à chaque tour : si un pod CoreDNS (ou de MédiAgenda) tourne sur le nœud arrêté, il reste dans les EndpointSlices tant que le nœud n'est pas `NotReady` (environ 50 s) et une partie des requêtes échoue pendant ce temps. Vérifie avant la répétition (`kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide`) ; c'est un vrai défaut à montrer et à corriger (répartition des réplicas de CoreDNS sur les travailleurs), pas à cacher |
 | 6 | `qm start 214X` ; attendre | nœud `Ready`, membre etcd sain (même révision), VIP qui revient ou non selon la préemption de keepalived (à expliquer) |
 | 7 | Bilan | temps de bascule de l'API, nombre de requêtes perdues (zéro attendu), ce qui a été visible (et ce qui ne l'a pas été) |
 
@@ -55,6 +55,7 @@ Faire la démonstration avec un arrêt brutal (`qm stop`) plutôt qu'un arrêt p
 **Pièges classiques**
 - Nettoyer le plan de contrôle (certificats, manifestes) avant la démonstration de Nadia, puis découvrir qu'un nœud ne revient pas sans instantané frais.
 - Faire tourner la boucle de Julien par `kubectl port-forward` : la session passe par l'API et coupe à la bascule, ce qui fausse la démonstration.
+- Croire qu'un arrêt propre (`qm shutdown`) retire aussitôt les pods du nœud des Services : sans arrêt gracieux du kubelet configuré (`shutdownGracePeriod`), personne ne marque ces pods non prêts avant le passage du nœud en `NotReady`.
 - Oublier que les témoins `wb-pannes` utilisent une image MédiAgenda : supprimer l'étiquette de Harbor pendant le nettoyage casse leurs redémarrages (sans effet sur la livraison, mais sur le palier 4 si tu le rejoues).
 - Poser l'étiquette `k8s-v1` avant que les pipelines de `main` soient verts.
 

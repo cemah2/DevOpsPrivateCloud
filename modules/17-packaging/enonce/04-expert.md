@@ -41,7 +41,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
   - tes copies de travail, sur une **branche locale** créée pour l'occasion : jamais de commit sur `main`, jamais de `git push`.
 
   Elles ne touchent jamais `mediagenda-recette`, cert-manager, Cilium ni le stockage. Tout objet modifié est sauvegardé avant (PLAN §4.10, « Pannes du bloc C »).
-- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion.
+- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/kubernetes/journal/` de `plateforme/medisphere` (clone `~/medisphere`, publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Un incident qui a touché un service (la production en M17-E21) a en plus son post-mortem dans `docs/kubernetes/post-mortems/`.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 > ⚠️ **Accès aux Secrets de release** : tu les lis avec ton kubeconfig personnel. Avant de modifier ou de supprimer un Secret `sh.helm.release.v1.*`, **sauvegarde-le** :

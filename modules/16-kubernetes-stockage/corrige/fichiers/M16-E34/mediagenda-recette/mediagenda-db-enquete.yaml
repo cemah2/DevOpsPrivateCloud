@@ -20,6 +20,10 @@ spec:
   bootstrap:
     recovery:
       source: recette
+      # Base et propriétaire de la recette (E18) : sinon l'opérateur crée une base « app » vide et
+      # son Secret mediagenda-db-enquete-app la vise.
+      database: mediagenda
+      owner: mediagenda
       recoveryTarget:
         targetTime: "<AAAA-MM-JJ HH:MM:SS+HH:MM>"
   externalClusters:

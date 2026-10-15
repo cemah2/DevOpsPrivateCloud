@@ -40,7 +40,7 @@
   ansible.builtin.command:
     argv: [htpasswd, -v, -i, "{{ registre_travail_dossier }}/htpasswd", "{{ item.key }}"]
     stdin: "{{ item.value }}"
-  register: _registre_verif
+  register: _registre_travail_verif
   changed_when: false
   failed_when: false
   check_mode: false
@@ -54,7 +54,7 @@
   ansible.builtin.command:
     argv: [htpasswd, -i, -B, -C, "12", "{{ registre_travail_dossier }}/htpasswd", "{{ item.item.key }}"]
     stdin: "{{ item.item.value }}"
-  loop: "{{ _registre_verif.results | rejectattr('rc', 'eq', 0) | list }}"
+  loop: "{{ _registre_travail_verif.results | rejectattr('rc', 'eq', 0) | list }}"
   loop_control:
     label: "{{ item.item.key }}"
   changed_when: true
@@ -83,8 +83,8 @@
 - name: Registre démarré
   ansible.builtin.command:
     argv: [docker, compose, --project-directory, "{{ registre_travail_dossier }}", up, -d, --wait, registre]
-  register: _registre_up
-  changed_when: "'Started' in _registre_up.stderr or 'Recreated' in _registre_up.stderr or 'Created' in _registre_up.stderr"
+  register: _registre_travail_up
+  changed_when: "'Started' in _registre_travail_up.stderr or 'Recreated' in _registre_travail_up.stderr or 'Created' in _registre_travail_up.stderr"
 
 - name: Ramasse-miettes planifié (unités systemd)
   ansible.builtin.template:
@@ -94,14 +94,14 @@
     group: root
     mode: "0644"
   loop: [registre-gc.service, registre-gc.timer]
-  register: _registre_unites
+  register: _registre_travail_unites
 
 - name: Minuterie du ramasse-miettes active
   ansible.builtin.systemd_service:
     name: registre-gc.timer
     enabled: true
     state: started
-    daemon_reload: "{{ _registre_unites is changed }}"
+    daemon_reload: "{{ _registre_travail_unites is changed }}"
 
 - name: Purger les gestionnaires (le contrôle doit voir le registre redémarré)
   ansible.builtin.meta: flush_handlers
@@ -114,6 +114,6 @@
     status_code: 401
   retries: 5
   delay: 3
-  register: _registre_401
-  until: _registre_401.status == 401
+  register: _registre_travail_401
+  until: _registre_travail_401.status == 401
   check_mode: false

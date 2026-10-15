@@ -706,7 +706,7 @@ Une ConfigMap n'est pas un Secret : qui a le droit de lire les ConfigMaps de la 
 - Comportement par défaut à connaître : taints `node.kubernetes.io/not-ready` et `unreachable` posées par le contrôleur de nœuds, tolérance par défaut de 300 s des pods avant éviction, pods de DaemonSet jamais évincés, pods sur `emptyDir` perdus.
 
 **Travail demandé**
-1. Rédige RB-140 : déclencheur (comment on le constate), impact attendu minute par minute (0, 40 s, 5 min…), vérifications préalables (un seul nœud ? un nœud de contrôle ? la VIP ?), arbre de diagnostic (VM allumée ? réseau ? kubelet ? containerd ? disque ? mémoire ? certificats ? horloge ?) avec, pour chaque branche, la commande et le résultat attendu.
+1. Rédige RB-140 : déclencheur (comment on le constate), impact attendu minute par minute (0, 50 s, 5 min…), vérifications préalables (un seul nœud ? un nœud de contrôle ? la VIP ?), arbre de diagnostic (VM allumée ? réseau ? kubelet ? containerd ? disque ? mémoire ? certificats ? horloge ?) avec, pour chaque branche, la commande et le résultat attendu.
 2. Actions : redémarrer le kubelet, redémarrer containerd, drainer et isoler, redémarrer la VM, et en dernier recours retirer le nœud et le reconstruire (lien vers la procédure d'E17 et d'E23). Pour chacune : risque, prérequis, retour arrière.
 3. Cas particuliers : nœud de contrôle (quorum etcd, VIP), `k8s-w03` (PostgreSQL jetable : la base repart vide ailleurs ? peut-elle seulement aller ailleurs ?), plusieurs nœuds à la fois (escalade immédiate).
 4. Retour à la normale : critères observables (nœud `Ready`, plus de taint, pods replacés, PDB satisfaits, `task etiquettes` rejouée si le nœud a été reconstruit).
@@ -724,7 +724,7 @@ Un nœud `NotReady` est un nœud dont le kubelet ne renouvelle plus son bail (`k
 
 <details><summary>Indice 2</summary>
 
-Les délais par défaut (40 s avant `Unknown`, 300 s avant éviction) se lisent dans la documentation du contrôleur de nœuds et dans les tolérances ajoutées automatiquement aux pods (`kubectl get pod -o yaml`, section `tolerations`).
+Les délais par défaut (50 s avant `Unknown` depuis 1.32, 300 s avant éviction) se lisent dans la documentation du contrôleur de nœuds et dans les tolérances ajoutées automatiquement aux pods (`kubectl get pod -o yaml`, section `tolerations`).
 </details>
 
 ---

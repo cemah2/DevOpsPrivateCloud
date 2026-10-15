@@ -18,7 +18,7 @@ Le palier 1 a monté chaque distribution une fois. Ce palier les **exploite** : 
 | Flux à ouvrir (E08) | `m18-dev01`, `k3s01` → `pve01:8006` (bordure + IPSet `capi` du pare-feu Proxmox) ; → 10.10.40.150-169 et .210, port 6443 |
 | Documentation | `docs/kubernetes/distributions/` : `talos.md`, `k3s.md` (HA), `capmox-pve9.md`, `image-noeud.md`, `cluster-api.md` |
 
-Durée indicative du palier : 11 à 15 heures. Ordre conseillé :
+Durée indicative du palier : 16 à 19 heures. Ordre conseillé :
 
 ```
 E06 (juste après E05)      E07 (après E03)
@@ -43,7 +43,7 @@ E08 ─ E09 ─ E10 ─ E11 ─ E12
 **Contexte technique**
 - Trois *patches* communs, un par sujet, dans `talos/patches/commun/` (appliqués par `generer.sh` à tous les nœuds), plus un *patch* pour les travailleurs dans `talos/patches/worker/` :
   - temps : la passerelle de `vsandbox` (10.10.99.1) comme seul serveur NTP ;
-  - découverte : plus de service de découverte public ;
+  - découverte : plus de service de découverte public (lis la section « What changes when discovery is disabled » de la page *Discovery* : certaines commandes de `talosctl` s'appuient sur la liste des membres) ;
   - miroirs : `docker.io`, `quay.io`, `ghcr.io`, `registry.k8s.io` par le cache Harbor (mêmes chemins qu'au M14-E19), et la racine MédiSphère reconnue par les nœuds ; la racine n'est **pas** recopiée dans le dépôt : elle est lue sur `adm01` (`/usr/local/share/ca-certificates/medisphere-root-ca.crt`) au moment de la génération ;
   - travailleurs : étiquettes `node-role.kubernetes.io/worker=""` et `medisphere.internal/distribution=talos`.
 - Montée de version visée : Talos **v1.14.2**, Kubernetes **v1.36.5**. Talos 1.14 ne publie plus d'installeur sur `ghcr.io` : l'installeur vient de l'Image Factory, **avec le même schéma** que l'image d'origine (sinon l'extension `qemu-guest-agent` disparaît).
@@ -182,14 +182,19 @@ Hors de la fenêtre, le contrôleur ne crée aucun Job : si rien ne se passe, re
 - La liste des privilèges de `WBCapi` se déduit des appels de CAPMOX (clonage, configuration, alimentation, agent QEMU, exécution de `cloud-init status` par l'agent). En Proxmox VE 9, `VM.Monitor` n'existe plus.
 - Identifiants sur `adm01` et `m18-dev01` : `~/.config/workbook/pve-capi.env` (600) : `PROXMOX_URL=https://<IP-PVE01>:8006`, `PROXMOX_TOKEN=wb-capi@pve!capi`, `PROXMOX_SECRET=<SECRET>`. Ancre TLS de `pve01` : `~/.config/workbook/pve-root-ca.pem` (M02-E08), à installer sur `m18-dev01` et `k3s01`.
 - Flux : `m18-dev01` et `k3s01` vers `pve01:8006` (bordure **et** pare-feu Proxmox : IPSet dédié `capi`), et vers 10.10.40.150-169 et 10.10.40.210 en 6443 (E10).
-- **Repli** si la vérification échoue : le fournisseur Docker (CAPD, `--infrastructure docker:v1.12.11`) dans un cluster kind qui monte le socket Docker de `m18-dev01` ; les exercices E10 à E12 se font alors avec des « machines » conteneurs.
+- **Repli** si la vérification échoue : le fournisseur Docker (CAPD, `--infrastructure docker:v1.12.11`) dans un cluster kind qui monte le socket Docker de `m18-dev01` ; les « machines » sont alors des conteneurs sur `m18-dev01`. Ce que le repli change pour la suite :
+  - E10 et E11 se font avec CAPD (E11 reste une revue de manifestes CAPMOX) ;
+  - E12 : le contrôleur de CAPD doit joindre le démon Docker de `m18-dev01`, ce qu'il ne peut pas faire depuis `k3s01` ; le pivot se fait vers un **second** cluster kind de `m18-dev01` (même fichier `kind/gestion-capd.yaml`, autre nom, port 6444), et la durabilité du cluster de gestion reste une conclusion écrite, pas un résultat ;
+  - E13 : les images de nœud sont celles de kind (pas de `v1.36.5` pour kind 0.33) : la montée de version se pratique de `v1.35.8` vers `v1.36.4`, sans image-builder ;
+  - E21 (pannes propres à Proxmox) ne s'applique pas : lis son corrigé et RB-180 à la place ;
+  - les contrôles de E12, E13 et E21 supposent CAPMOX : en repli, auto-évalue-toi avec le corrigé.
 
 **Travail demandé**
 1. **Concepts.** Lis « Concepts » du livre de Cluster API et `clusterctl generate provider --infrastructure proxmox:v0.9.1 --describe`. Dessine dans `docs/kubernetes/distributions/cluster-api.md` les objets d'un cluster (Cluster, ProxmoxCluster, KubeadmControlPlane, MachineDeployment, MachineSet, Machine, ProxmoxMachine, KubeadmConfig) et qui crée qui.
 2. **Le compte Proxmox.** Écris `capi/pve-compte-capi.sh` (dans `plateforme/distributions`, sur le modèle de `pve-packer-compte.sh` du M03), relis-le, lance-le sur `pve01`. Range le secret.
    > ⚠️ **Attention** : le script modifie `pve01` (nouveau stockage dans `/etc/pve/storage.cfg`, rôles, ACL). Relis-le avant ; retour arrière : `pveum user delete wb-capi@pve`, `pveum role delete WBCapi`, `pveum role delete WBCapiAudit`, `pvesm remove capi-iso`.
 3. **Les flux.** Ajoute les deux règles à la matrice de la bordure (`group_vars/role_routeur/pare_feu.yml`), l'IPSet `capi` et la règle 8006 au pare-feu de `pve01` (méthode de M03-E15), les lignes de `matrice-flux.md`. Installe l'ancre de `pve01` sur `m18-dev01` et `k3s01` (jeu du playbook).
-4. **La vérification préalable.** Écris `capi/preflight-pve.sh` : avec le **jeton de CAPMOX**, depuis `m18-dev01`, enchaîne les appels qu'il fera (version, ressources, état du nœud, stockages `iso` visibles, téléversement puis suppression d'une ISO dans `capi-iso`, clonage complet d'un template du pool vers le VMID 5189, configuration de la VM, suppression), TLS vérifié, et s'arrête à la première réponse inattendue.
+4. **La vérification préalable.** Écris `capi/preflight-pve.sh` : avec le **jeton de CAPMOX**, depuis `m18-dev01`, enchaîne les appels qu'il fera (version, ressources, état du nœud, stockages `iso` visibles, téléversement d'une ISO dans `capi-iso`, clonage complet d'une image dorée Debian du pool vers le VMID 5189, configuration de la VM avec l'ISO montée, démarrage, appels à l'agent QEMU dont l'exécution de `cloud-init status`, arrêt, suppressions), TLS vérifié, et s'arrête à la première réponse inattendue. Ce sont les appels à l'agent qui touchent les privilèges changés en Proxmox VE 9.
    > ⚠️ **Attention** : le script crée puis supprime une VM. Il ne doit **jamais** supprimer une VM qu'il n'a pas créée : vérifie avant le clonage que 5189 est libre, et ne nettoie que ce que le script a créé.
 5. **Le cluster de gestion.** Écris `kind/gestion.yaml`, crée le cluster, récupère le kubeconfig sur `adm01` (serveur `https://m18-dev01.par1.medisphere.internal:6443`). Écris `capi/versions.env` et `capi/init.sh` (versions explicites, aucune variable `PROXMOX_*`), installe :
    ```
@@ -249,7 +254,7 @@ Le déploiement de CAPMOX lit ses identifiants globaux dans un Secret rendu par 
 
 **Travail demandé**
 1. Dépose l'ISO sur `hdd-bulk` depuis `pve01` (l'API `download-url` du stockage vérifie l'empreinte).
-2. Clone image-builder à l'étiquette, lis `images/capi/packer/proxmox/packer.json` et `ubuntu-2404.json`, et la page *Building Images for Proxmox VE*. Repère : comment le nom et le VMID du template sont fixés ; d'où viennent les versions de Kubernetes ; ce qui empêche le jeton `wb-packer` de créer la VM de build ; ce qui désactive la vérification TLS.
+2. Clone image-builder à l'étiquette, lis `images/capi/packer/proxmox/packer.json.tmpl` (le gabarit versionné ; `packer.json` n'existe qu'après un `make build-…` ou `make validate-…`, qui le régénère à partir du `.tmpl`) et `ubuntu-2404.json`, et la page *Building Images for Proxmox VE*. Repère : comment le nom et le VMID du template sont fixés ; d'où viennent les versions de Kubernetes ; ce qui empêche le jeton `wb-packer` de créer la VM de build ; ce qui désactive la vérification TLS.
 3. Dans `plateforme/images`, crée `capi/` : un fichier de variables Packer (`ubuntu-2404-k136.json`, passé par `PACKER_VAR_FILES`) et un script `construire.sh` qui clone à l'étiquette, applique **et affiche** les corrections locales du gabarit (TLS vérifié ; pool `lab` ; étiquettes), charge les identifiants depuis le fichier 600 sans les afficher, et lance la construction. MR.
 4. Valide (`construire.sh --valider`), puis construis. Pendant la construction, suis la VM sur `pve01` (`qm list`, console) et les étapes Ansible dans la sortie.
 5. Contrôle le template : Kubernetes, containerd, `cloud-init` et agent QEMU installés, aucune clé SSH ni mot de passe de build laissé, configuration Proxmox (agent, disque brut, pool, étiquettes). Clone-le à la main en 5188 (clone lié, sur `vsandbox`), démarre, connecte-toi, vérifie `kubeadm version`, `kubelet --version`, `crictl --version`, puis supprime la VM.
@@ -318,7 +323,7 @@ Le jeton de Packer a `VM.Allocate` sur `/pool/lab` seulement : Proxmox n'accepte
    admin@adm01:~$ kubectl -n capmox-system logs deploy/capmox-controller-manager -f
    root@pve01:~# qm list | awk '$1 >= 5180 && $1 <= 5189'
    ```
-   Note l'ordre dans lequel les choses se passent (adresse réservée, clone, ISO cloud-init, démarrage, agent, `kubeadm init`, VIP, jonctions).
+   Note dans quel ordre les choses se passent : clone, réservation d'adresse, ISO cloud-init, démarrage, agent, `kubeadm init`, VIP, jonctions (la raison de la condition `VirtualMachineProvisioned` de la `ProxmoxMachine` t'aide à suivre).
 4. Récupère le kubeconfig (`clusterctl get kubeconfig`) dans `~/.config/workbook/m18/capi-essai.kubeconfig` (600). Vérifie les nœuds, Cilium, la VIP, et qu'une image publique passe par Harbor.
 5. Regarde dans Proxmox ce que CAPMOX a créé (nom des VMs, étiquettes, description, ISO dans `capi-iso`, disques) et dans le cluster de gestion le réservoir d'adresses créé par CAPMOX. Que se passerait-il si tu arrêtais une de ces VMs dans l'interface de Proxmox ?
 6. Complète `cluster-api.md` (section `capi-essai`) et `mesures.md` (temps de `kubectl apply` à trois nœuds `Ready`, et de quoi il dépend).

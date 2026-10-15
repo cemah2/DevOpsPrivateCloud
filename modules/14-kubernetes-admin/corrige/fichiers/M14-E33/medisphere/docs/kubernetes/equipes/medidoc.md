@@ -16,7 +16,7 @@
 |---|---|---|
 | `kubectl auth can-i create deployments -n medidoc-dev --as <REFERENT> --as-group medisphere:medidoc-devs` | yes | |
 | `… get secrets -n medidoc-dev …` | yes | |
-| `… update resourcequota/enveloppe -n medidoc-dev …` | no | |
+| `… update resourcequota/quota-equipe -n medidoc-dev …` | no | |
 | `… create rolebindings -n medidoc-dev …` | no | |
 | `… patch namespace/medidoc-dev …` | no | |
 | `… get pods -n mediagenda-dev …` | no | |

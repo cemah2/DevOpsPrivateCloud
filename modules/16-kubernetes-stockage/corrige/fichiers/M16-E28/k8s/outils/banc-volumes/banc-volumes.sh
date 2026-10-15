@@ -104,7 +104,11 @@ kubectl wait --for=condition=complete "job/$nom" -n "$ns" --timeout=15m >/dev/nu
 f="$sortie/${cible}-${profil}-${rep}.json"
 # Les journaux mêlent sortie standard et erreurs de fio : le JSON commence à la première ligne « { ».
 kubectl logs -n "$ns" "job/$nom" | sed -n '/^{/,$p' >"$f"
-# Résumé : IOPS, débit (Mio/s), latence moyenne et p99 (ms) des lectures et des écritures.
+# Résumé : IOPS, débit (Mio/s), latence moyenne et p99 (ms) des lectures et des écritures, et,
+# pour « wal », celle des fdatasync : fio la compte À PART (.sync), hors de la latence des écritures ;
+# la latence d'une validation PostgreSQL, c'est l'écriture PLUS le fdatasync.
 jq -r --arg c "$cible" --arg p "$profil" '.jobs[0] as $j
-  | ["read", "write"][] as $s | $j[$s] | select(.io_bytes > 0)
-  | "\($c)\t\($p)\t\($s)\t\(.iops | floor) IOPS\t\(.bw / 1024 | . * 10 | floor / 10) Mio/s\tmoy \(.clat_ns.mean / 1e6 | . * 100 | floor / 100) ms\tp99 \((.clat_ns.percentile["99.000000"] // 0) / 1e6 | . * 100 | floor / 100) ms"' "$f"
+  | ((["read", "write"][] as $s | $j[$s] | select(.io_bytes > 0)
+      | "\($c)\t\($p)\t\($s)\t\(.iops | floor) IOPS\t\(.bw / 1024 | . * 10 | floor / 10) Mio/s\tmoy \(.clat_ns.mean / 1e6 | . * 100 | floor / 100) ms\tp99 \((.clat_ns.percentile["99.000000"] // 0) / 1e6 | . * 100 | floor / 100) ms"),
+     ($j.sync // {} | select((.lat_ns.N // 0) > 0)
+      | "\($c)\t\($p)\tfdatasync\t\(.lat_ns.N) appels\t-\tmoy \(.lat_ns.mean / 1e6 | . * 100 | floor / 100) ms\tp99 \((.lat_ns.percentile["99.000000"] // 0) / 1e6 | . * 100 | floor / 100) ms"))' "$f"

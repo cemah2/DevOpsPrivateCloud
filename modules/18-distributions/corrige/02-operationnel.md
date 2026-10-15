@@ -9,7 +9,7 @@ Fichiers complets dans [`fichiers/`](fichiers/) : `M18-E06/` (patches et scripts
 - k3s HA : `k3s-ha.tf` passe `tofu validate` (avec le reste d'`envs/m18`) ; manifestes de system-upgrade-controller v0.20.2 présents à l'URL de la version (image `rancher/system-upgrade-controller:v0.20.2`, espace `system-upgrade`, compte `system-upgrade`) ; image `rancher/k3s-upgrade:v1.36.5-k3s1` présente ; champs du plan conformes à la documentation de k3s (*Automated Upgrades*) ;
 - Cluster API : composants de CAPI v1.12.11 (cœur, kubeadm ×2, CAPD), CAPMOX v0.9.1 et IPAM in-cluster v1.1.1 téléchargés ; leurs CRD converties en schémas JSON stricts, et **tous les manifestes** (`capi-essai`, `revue-lucas`, et ceux de Lucas) validés contre eux par `kubeconform -strict` (les défauts de schéma de Lucas, comme `matchPolicy: subset`, sont bien refusés) ; lecture du code de CAPMOX v0.9.1 (`api/v1alpha2`, `pkg/scope/cluster.go` : clés `url`, `token`, `secret`, `insecure`, `root_ca` du Secret et TLS désactivé si `insecure` absente ; `cmd/main.go` : démarrage sans identifiants globaux ; `pkg/kubernetes/ipam` : réservoir `<cluster>-v4-icip` ; `internal/service/vmservice` : `vmIDRange`, `pool`, `tags`, recherche de template par étiquettes, `cloud-init status` par l'agent ; `internal/controller` : ownerRef sur le Secret ; go-proxmox v0.8.1 : ISO téléversée dans le premier stockage `iso`) ; `clusterctl` 1.12.11 : options d'`init`, `move` (`--to-kubeconfig`, `--to-directory`, `--dry-run`, `-n`), `generate cluster --list-variables`, `generate provider --describe`, fournisseurs connus (`proxmox`, `in-cluster`, `docker`) ;
 - matrice de compatibilité de CAPI (branche release-1.13 : Kubernetes 1.36 accepté par CAPI ≥ 1.12.8 ; la page de l'étiquette v1.12.11 s'arrête à 1.35, elle n'est pas à jour) ;
-- image-builder v0.1.55 : `packer/proxmox/packer.json` (`insecure_skip_tls_verify: true` écrit en dur, pas de `pool`), `ubuntu-2404.json` (ISO 24.04.4 et empreinte), `packer/config/kubernetes.json` et `containerd.json` (défauts 1.36.1, containerd 2.3.2), gabarit containerd (`config_path = "/etc/containerd/certs.d"`), Makefile (`PACKER_VAR_FILES`, `deps-proxmox`, `build-proxmox-ubuntu-2404`) ;
+- image-builder v0.1.55 : `packer/proxmox/packer.json.tmpl` (seul fichier versionné : `packer.json` est ignoré par git et régénéré par la cible `set-ssh-password` de chaque `make build-…`/`validate-…` ; `insecure_skip_tls_verify: true` écrit en dur, pas de `pool`), `ubuntu-2404.json` (ISO 24.04.4 et empreinte), `packer/config/kubernetes.json` et `containerd.json` (défauts 1.36.1, containerd 2.3.2), gabarit containerd (`config_path = "/etc/containerd/certs.d"`), Makefile (`PACKER_VAR_FILES`, `deps-proxmox`, `build-proxmox-ubuntu-2404`) ;
 - privilèges de Proxmox VE 9 (*User Management*) : `VM.GuestAgent.Audit`, `…Unrestricted`, absence de `VM.Monitor`, `Datastore.AllocateTemplate` pour téléverser une ISO ;
 - tous les scripts : `shellcheck -x`, `bash -n` ; manifestes : `yamllint`.
 
@@ -60,8 +60,11 @@ NODE          NAMESPACE   TYPE               ID            VERSION   TIMESERVERS
 10.10.99.86   network     TimeServerStatus   timeservers   2         ["10.10.99.1"]
 admin@adm01:~$ talosctl -n 10.10.99.86 list -r /etc/cri/conf.d
 admin@adm01:~$ talosctl -n 10.10.99.86 get members        # vide : plus de découverte
+admin@adm01:~$ talosctl -n 10.10.99.85 health --control-plane-nodes 10.10.99.85 --worker-nodes 10.10.99.86,10.10.99.87
 admin@adm01:~$ kubectl --kubeconfig ~/.config/workbook/m18/talos.kubeconfig get nodes --show-labels | grep distribution=talos
 ```
+Effet de bord de la découverte retirée : `talosctl health` lit la liste des nœuds dans les membres de la découverte ; sans elle, il attend des nœuds qui ne viennent jamais (`etcd member ips […] are not subset of control plane node ips []`). On lui donne désormais les nœuds explicitement (`monter.sh` le fait à partir de `noeuds.txt`). La page *Discovery* de Talos 1.14 cite aussi KubePrism et KubeSpan parmi ce qui dépend de la découverte : sans effet ici (un seul nœud de contrôle, pas de KubeSpan), à réexaminer avec trois nœuds de contrôle (service de découverte auto-hébergé).
+
 Aucun de ces changements ne redémarre le nœud (le résumé du dry-run le dit) : temps, miroirs, racines, étiquettes et découverte sont appliqués à chaud par les contrôleurs de Talos. Ce qui redémarre : un changement d'installation, de disque, de noyau (arguments), certains changements réseau ; le mode `auto` décide et le dry-run l'annonce. Preuve du cache : un pod `docker.io/library/busybox:1.37` dans un espace d'essai, puis le journal du projet `dockerhub` de Harbor (tirage depuis 10.10.99.86 ou .87).
 
 *4. Montée de Talos.* [`talos/monter.sh`](fichiers/M18-E06/distributions/talos/monter.sh) : ordre « nœud de contrôle puis travailleurs » lu dans `noeuds.txt`, version actuelle lue par `talosctl version`, `talosctl upgrade --image factory.talos.dev/nocloud-installer/<schéma>:v1.14.2 --wait` (draine le nœud, écrit la nouvelle image sur la partition inactive, redémarre), puis `talosctl health` avant le nœud suivant ; `--essai` montre le plan. `versions.env` change **avant** ([fichier](fichiers/M18-E06/distributions/talos/versions.env)) : le script y lit la version visée, et toute configuration régénérée ensuite porte l'installeur 1.14.2 ; dans l'autre ordre, une application du dépôt entre deux nœuds remettrait l'installeur 1.14.1 dans la configuration (sans effet immédiat, mais une réinstallation repartirait en 1.14.1).
@@ -110,6 +113,7 @@ Les deux montées sont indépendantes : `talosctl upgrade` change Talos sans tou
 - `versions.env` oublié après `upgrade-k8s` : la prochaine application du dépôt **redescend** les images du kubelet (Talos l'accepte, Kubernetes le supporte mal).
 - Écrire `machine.time.servers` (forme `v1alpha1` dépréciée) **et** un `TimeSyncConfig` : un champ déprécié et son document de remplacement s'excluent, la configuration est refusée.
 - `$patch: delete` sans `name: default` sur un document nommé : le *patch* ne trouve pas le document à supprimer.
+- `talosctl health` sans `--control-plane-nodes`/`--worker-nodes` une fois la découverte retirée : il échoue après le délai, alors que le cluster est sain.
 
 **En production chez MédiSphère**
 
@@ -246,19 +250,26 @@ L'ancre de `pve01` est déposée sur `m18-dev01` et `k3s01` par le dernier jeu d
 
 *4. La vérification préalable.* [`capi/preflight-pve.sh`](fichiers/M18-E08/distributions/capi/preflight-pve.sh) : en-tête d'authentification dans un fichier 600 (`curl -H @fichier`), TLS vérifié par le magasin du système, arrêt à la première erreur, et un nettoyage qui ne supprime **que** ce que le script a créé (drapeaux `CLONE_CREE`, `ISO_CREEE`, refus si 5189 existe).
 ```
-admin@m18-dev01:~/src/distributions$ NOEUD=<NOEUD> capi/preflight-pve.sh
+admin@m18-dev01:~/src/distributions$ NOEUD=<NOEUD> TEMPLATE=<VMID-IMAGE-DOREE-DEBIAN> capi/preflight-pve.sh
 == Version de Proxmox VE (TLS vérifié, jeton accepté)
 Proxmox VE 9.2.x (9.2)
 == Ressources visibles par le jeton (pool lab seulement)
 …
 == Stockages visibles : CAPMOX téléverse dans le PREMIER stockage « iso » qu'il voit
 capi-iso
-== Téléversement puis suppression d'une ISO dans capi-iso (Datastore.AllocateTemplate)
-== Clonage complet du template 9000 vers 5189 dans le pool lab (VM.Clone, VM.Allocate, AllocateSpace)
+== Téléversement d'une ISO dans capi-iso (Datastore.AllocateTemplate)
+== Clonage complet du template <VMID> vers 5189 dans le pool lab (VM.Clone, VM.Allocate, AllocateSpace)
+== Configuration de la VM clonée (CPU, mémoire, carte sur vk8s, étiquettes, ISO en ide0 : VM.Config.CDROM)
+cores=2 memory=2048 net0=virtio=…,bridge=vk8s tags=env-m18;preflight ide0=capi-iso:iso/preflight-capi.iso,media=cdrom
+== Démarrage (VM.PowerMgmt) et agent QEMU (VM.GuestAgent.Audit, puis .Unrestricted pour exec)
+agent : ping OK
+agent : exec de « cloud-init status » accepté
+== Démontage de l'ISO et suppression (VM.Config.CDROM, Datastore.Allocate sur capi-iso)
+== Suppression de la VM d'essai
 …
 Vérification préalable : tous les appels ont réussi avec le jeton wb-capi@pve!capi.
 ```
-Ce que le script ne couvre pas : l'agent QEMU et l'exécution de `cloud-init status` (il faudrait une VM démarrée avec l'agent) ; ils sont vérifiés à la première machine de E10, dernière ligne du tableau de `capmox-pve9.md`.
+L'image dorée Debian sert de template d'essai (elle a cloud-init et l'agent QEMU ; le template d'image-builder n'existe pas encore). Les appels à l'agent sont ceux qui dépendent des privilèges réécrits en Proxmox VE 9 (`VM.Monitor` remplacé par `VM.GuestAgent.*`) : un **403** sur `agent/ping` ou `agent/exec` est le signal de repli le plus probable. Ce que le script ne couvre pas : le redimensionnement du disque, le démarrage depuis l'ISO de CAPMOX et `kubeadm` ; ils sont vérifiés à la première machine de E10 (dernière ligne du tableau de `capmox-pve9.md`). *À vérifier sur ta version* : la forme du paramètre `command` d'`agent/exec` (une valeur par mot).
 
 *5. Le cluster de gestion.* [`kind/gestion.yaml`](fichiers/M18-E08/distributions/kind/gestion.yaml) (`apiServerAddress: "0.0.0.0"`, `apiServerPort: 6443`, `certSANs` par `kubeadmConfigPatches`).
 ```
@@ -325,7 +336,7 @@ Un compte et un jeton par cluster de gestion, expirant, renouvelés par procédu
 
 2. Lecture du gabarit : le nom vient de `artifact_name` (défaut `<build_name>-kube-<kubernetes_semver>`), le VMID de `vmid` (vide par défaut : prochain libre) ; les versions de Kubernetes de `packer/config/kubernetes.json` (1.36.1 par défaut en v0.1.55) ; `builders[0]` contient `"insecure_skip_tls_verify": true` **en dur** et aucune option `pool` : avec le jeton `wb-packer` (`VM.Allocate` sur `/pool/lab` seulement), la création de la VM de build sans pool est refusée (« Permission check failed (/vms/…, VM.Allocate) »).
 
-3. [`capi/ubuntu-2404-k136.json`](fichiers/M18-E09/images/capi/ubuntu-2404-k136.json) (VMID 9060, nom, `kubernetes_series` v1.36, `kubernetes_semver` v1.36.4, `kubernetes_deb_version` 1.36.4-1.1, `disk_format` raw, ISO déposée `iso_file`, `iso_url` vide) et [`capi/construire.sh`](fichiers/M18-E09/images/capi/construire.sh) : clone à l'étiquette (vérifiée par `git describe --exact-match`), remise à zéro du gabarit puis trois corrections par `jq` (TLS vérifié, `pool: lab`, `tags`), `git diff` affiché, identifiants lus dans `pve-packer.env` et passés en variables d'environnement à image-builder (convention inverse de CAPMOX), `PACKER_VAR_FILES`, `make`.
+3. [`capi/ubuntu-2404-k136.json`](fichiers/M18-E09/images/capi/ubuntu-2404-k136.json) (VMID 9060, nom, `kubernetes_series` v1.36, `kubernetes_semver` v1.36.4, `kubernetes_deb_version` 1.36.4-1.1, `disk_format` raw, ISO déposée `iso_file`, `iso_url` vide) et [`capi/construire.sh`](fichiers/M18-E09/images/capi/construire.sh) : clone à l'étiquette (vérifiée par `git describe --exact-match`), remise à zéro du gabarit **`packer.json.tmpl`** puis trois corrections par `jq` (TLS vérifié, `pool: lab`, `tags`), `git diff` affiché, identifiants lus dans `pve-packer.env` et passés en variables d'environnement à image-builder (convention inverse de CAPMOX), `PACKER_VAR_FILES`, `make`.
 
 4. Construction :
    ```
@@ -375,6 +386,7 @@ image-builder est un assemblage Packer (créer la VM, installer l'OS, convertir 
 
 **Pièges classiques**
 
+- Corriger `packer.json` au lieu de `packer.json.tmpl` : `make build-…` le régénère depuis le `.tmpl` (cible `set-ssh-password`) et la construction repart avec `insecure_skip_tls_verify: true` et sans `pool`, sans rien signaler.
 - `PROXMOX_TOKEN` rempli avec l'identifiant du jeton (convention de CAPMOX) : authentification refusée.
 - Disque `qcow2` (défaut) sur un stockage bloc : erreur de création du disque.
 - `kubernetes_semver` changé sans `kubernetes_deb_version` : les paquets installés ne sont pas ceux du nom du template.
@@ -430,7 +442,7 @@ Pipeline dans `plateforme/images` (job manuel par version de Kubernetes, sur `ru
          5181 capi-essai-travailleurs-xxxxx-yyyyy running 4096 32.00 …
          5182 capi-essai-travailleurs-xxxxx-zzzzz running 4096 32.00 …
    ```
-   Ordre observé : `IPAddressClaim` (adresse réservée) → clone du template en 5180 (tâche `qmclone`) → redimensionnement du disque, CPU, mémoire, carte `vk8s`, étiquettes → ISO `user-data-5180.iso` téléversée dans `capi-iso` et montée en `ide0` → démarrage → attente de l'agent QEMU → `cloud-init status` par l'agent → cloud-init joue `preKubeadmCommands`, `kubeadm init` ; kube-vip (avec `super-admin.conf`) prend la VIP 10.10.40.210 → le contrôleur du plan de contrôle joint l'API par la VIP → les travailleurs sont créés (5181, 5182) et joignent → le CRS applique Cilium → nœuds `Ready`. CAPMOX démonte ensuite l'ISO.
+   Ordre observé (celui de `ReconcileVM` dans `internal/service/vmservice/vm.go` de CAPMOX v0.9.1) : clone du template en 5180 (tâche `qmclone`) → CPU, mémoire, carte `vk8s`, étiquettes, redimensionnement du disque → `IPAddressClaim` puis `IPAddress` (raison `WaitingForStaticIPAllocation` tant qu'elle manque) → ISO `user-data-5180.iso` téléversée dans `capi-iso` et montée en `ide0` → démarrage → attente de l'agent QEMU → CAPMOX interroge `cloud-init status` par l'agent jusqu'à la fin de cloud-init, qui joue `preKubeadmCommands` puis `kubeadm init` ; kube-vip (avec `super-admin.conf`) prend la VIP 10.10.40.210 → le contrôleur du plan de contrôle joint l'API par la VIP → les travailleurs sont créés (5181, 5182) et joignent → le CRS applique Cilium → nœuds `Ready`. CAPMOX démonte ensuite l'ISO.
 
 4. Accès :
    ```
@@ -448,7 +460,7 @@ Pipeline dans `plateforme/images` (job manuel par version de Kubernetes, sur `ru
 
 6. [`cluster-api.md`](fichiers/M18-E10/medisphere/docs/kubernetes/distributions/cluster-api.md) ; mesures : ≈ 10 à 15 min de `kubectl apply` à trois nœuds `Ready` (clone complet des disques, démarrage, cloud-init) : surtout le clone (copie de 20 Gio sur `local-nvme`) et le tirage des images de Cilium.
 
-**Repli CAPD** (si E08 a conclu ainsi) : `kind/gestion-capd.yaml`, `capi/init.sh <kubeconfig> docker`, puis `clusterctl generate cluster capi-essai --flavor development --infrastructure docker:v1.12.11 --kubernetes-version v1.36.4 --control-plane-machine-count 1 --worker-machine-count 2 > capi-essai-capd.yaml` (gabarit ClusterClass : `CLUSTER_TOPOLOGY=true`) ; même suivi (`clusterctl describe`), les « machines » sont des conteneurs `capi-essai-*` sur `m18-dev01` ; Cilium par le même ConfigMap avec `k8sServiceHost` adapté (adresse du répartiteur de CAPD). Le check signale les contrôles Proxmox non applicables.
+**Repli CAPD** (si E08 a conclu ainsi) : `kind/gestion-capd.yaml`, `capi/init.sh <kubeconfig> docker`, puis `clusterctl generate cluster capi-essai --flavor development --infrastructure docker:v1.12.11 --kubernetes-version v1.36.4 --control-plane-machine-count 1 --worker-machine-count 2 > capi-essai-capd.yaml` (gabarit ClusterClass : `CLUSTER_TOPOLOGY=true`) ; même suivi (`clusterctl describe`), les « machines » sont des conteneurs `capi-essai-*` sur `m18-dev01` ; Cilium par le même ConfigMap avec `k8sServiceHost` adapté (adresse du répartiteur de CAPD). Le check signale les contrôles Proxmox non applicables. CAPD choisit l'image `kindest/node:<version>` d'après la version de la machine (étiquette sans empreinte : celle que publie kind 0.33 pour v1.36.4 existe). Pour E12, le cluster cible doit lui aussi monter le socket Docker de `m18-dev01` : `kind create cluster --config kind/gestion-capd.yaml --name gestion-cible` (en changeant `apiServerPort` en 6444), `capi/init.sh <kubeconfig> docker`, puis `clusterctl move --to-kubeconfig` comme en CAPMOX ; on n'obtient pas la durabilité, seulement la mécanique du pivot.
 
 **Explications**
 
@@ -491,7 +503,7 @@ ClusterClass `medisphere-recette` (palier 3), trois nœuds de contrôle, `Machin
    ```
    L'API voit ce que `--dry-run=client` ignore : les schémas des CRD (`matchPolicy`), les règles CEL (par exemple `full` obligatoire avec `format`), les webhooks de CAPI et CAPMOX. Elle ne voit pas les incohérences avec le plan (adresses, VMID, VNet, version de l'image), ni la sécurité (secret dans le dépôt, root, TLS).
 
-2. La revue : [`capi/revue-lucas/REVUE.md`](fichiers/M18-E11/distributions/capi/revue-lucas/REVUE.md), 23 défauts classés. Les trois qui empêchent de dormir : **le jeton `root@pam` en clair dans le dépôt** (à révoquer, branche à purger), **sans vérification TLS** (Secret sans `insecure: "false"`), et **la VIP dans la plage des nœuds de `capi-essai`** (collision d'adresses avec un cluster existant). Les autres bloquants : version 1.36.5 contre une image 1.36.4, plan de contrôle à deux nœuds.
+2. La revue : [`capi/revue-lucas/REVUE.md`](fichiers/M18-E11/distributions/capi/revue-lucas/REVUE.md), 22 défauts classés. Les trois qui empêchent de dormir : **le jeton `root@pam` en clair dans le dépôt** (à révoquer, branche à purger), **sans vérification TLS** (Secret sans `insecure: "false"`), et **la VIP dans la plage des nœuds de `capi-essai`** (collision d'adresses avec un cluster existant). Autres bloquants : le jeton `root@pam` lui-même (tous les droits sur `pve01`) et la version 1.36.5 contre une image 1.36.4 ; le plan de contrôle à deux nœuds est majeur.
 
 3. Les manifestes corrigés : [`capi/revue-lucas/`](fichiers/M18-E11/distributions/capi/revue-lucas/) (`cluster.yaml`, `plan-controle.yaml`, `travailleurs.yaml`, `crs.yaml`, et [`identifiants.md`](fichiers/M18-E11/distributions/capi/revue-lucas/identifiants.md) à la place du Secret). Pour coexister avec `capi-essai` : adresses 10.10.40.170-179, VIP 10.10.40.211, même plage de VMID 5180-5189 (CAPMOX prend le premier VMID libre : dix VMs au plus pour les deux clusters), ConfigMap `cilium` dans l'espace `recette-agenda`, rendu avec `k8sServiceHost: 10.10.40.211`. Ils passent `kubectl apply --dry-run=server`.
 
@@ -595,4 +607,4 @@ Les manifestes de clusters ne sont plus écrits à la main : un `Cluster` court 
 
 **En production chez MédiSphère**
 
-Un cluster de gestion dédié et redondant (trois nœuds, ou un k3s HA), sauvegardé (base + export chiffré des objets), supervisé (contrôleurs, conditions des clusters), accessible à l'équipe Plateforme seulement, avec des jetons Proxmox expirants renouvelés par procédure ; un runbook (RB-180, palier 4) pour une machine bloquée, et une procédure de reconstruction du cluster de gestion depuis l'export.
+Un cluster de gestion dédié et redondant (trois nœu

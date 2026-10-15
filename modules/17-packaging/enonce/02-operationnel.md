@@ -230,7 +230,7 @@ Cosign s'authentifie auprès du registre avec la configuration Docker (`~/.docke
 - Mode de livraison retenu par MédiSphère : le **rendu vérifié et commité** (`chart.env` + `outils/rendre-base.sh`), appliqué par `kubectl apply --server-side -k overlays/<env>`. Les exercices suivants (E14, E18, E21, E25) s'appuient sur ce montage ; l'essai `helmCharts` sert à le confronter au gonfleur et à argumenter le choix dans l'ADR-0170.
 - Une ConfigMap locale `livraison` par overlay (`version`, `nom-publie`), annotée `config.kubernetes.io/local-config: "true"`, est la **seule** source de la version et du nom publié.
 - Production : `mediagenda-prod`, étiquettes d'espace d'équipe du M14-E10 (`medisphere.internal/equipe`, `medisphere.internal/environnement` : la politique d'images du M14-E18 et le RBAC s'en servent) et du M15-E28 (`medisphere.internal/equipe`), Pod Security `restricted` (enforce, audit, warn), `medisphere.internal/exposition: oui` (routes admises par `gw-par1`), `ResourceQuota` et `LimitRange` comme au M14-E10, NetworkPolicy de refus par défaut `refus-par-defaut` (même nom qu'au M15) ; Secret de tirage `harbor-pull` créé hors dépôt comme au M14-E19. Nom publié `mediagenda.apps.par1.medisphere.internal`.
-- La recette passe du rendu 0.1.0 (E04) au rendu 0.5.0 : le conteneur d'initialisation `migrations` apparaît.
+- La recette passe du rendu 0.1.0 (E04) au rendu 0.5.0 : le conteneur d'initialisation `migrations` apparaît. Les en-têtes de sécurité que l'overlay de recette ajoute à la route depuis E04 valent aussi pour la production : place-les là où les deux les reçoivent.
 
 **Travail demandé**
 1. Lis les pages *Components*, *replacements* et *helmCharts* de la documentation Kustomize. Note dans `~/m17/e09/journal.md` l'ordre dans lequel une kustomization traite ses `resources`, ses `components` et ses propres transformations, et ce qu'implique `--enable-helm` pour qui construit (outils, accès réseau, identifiants du registre).
@@ -245,7 +245,7 @@ Cosign s'authentifie auprès du registre avec la configuration Docker (`~/.docke
 
 **Critères de réussite**
 - [ ] `mediagenda-prod` existe avec les étiquettes d'équipe, Pod Security `restricted`, l'étiquette d'exposition, un quota, une LimitRange et la politique `refus-par-defaut`.
-- [ ] En prod : 3 pods de l'API prêts sur au moins 2 nœuds, base `mediagenda-db` à 3 instances prêtes, Valkey prêt ; `https://mediagenda.apps.par1.medisphere.internal/sante` répond 200 avec la version de `livraison.yaml`.
+- [ ] En prod : 3 pods de l'API prêts sur au moins 2 nœuds, base `mediagenda-db` à 3 instances prêtes, Valkey prêt ; `https://mediagenda.apps.par1.medisphere.internal/sante` répond 200 avec la version de `livraison.yaml` et les mêmes en-têtes de sécurité que la recette.
 - [ ] En prod, aucun conteneur n'a `MEDIAGENDA_LOG_LEVEL=DEBUG` ; l'étiquette d'image, `MEDIAGENDA_VERSION` et `app.kubernetes.io/version` sont identiques.
 - [ ] La recette tourne le rendu 0.5.0 (conteneur d'initialisation `migrations`), toujours gérée par Kustomize.
 - [ ] `mediagenda/deploiement` contient `chart.env` (digest), `outils/rendre-base.sh` et les quatre components déclarés `kind: Component`.

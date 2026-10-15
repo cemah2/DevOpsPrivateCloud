@@ -59,7 +59,7 @@ Lecture :
 ## Après
 
 - Retour du nœud : `Ready`, sessions `Established` vers les deux passerelles, chemins revenus (`ip route show 10.10.41.10` sur les deux).
-- Note dans le journal (`docs/socle/journal/`) : heure, durée mesurée par la sonde ou estimée, cause.
+- Note dans le journal (`docs/kubernetes/journal/`) : heure, durée mesurée par la sonde ou estimée, cause.
 
 ## Décision : keepalived ne surveille pas FRR
 

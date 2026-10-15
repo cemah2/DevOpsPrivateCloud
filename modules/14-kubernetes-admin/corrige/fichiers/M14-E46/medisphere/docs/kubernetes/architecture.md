@@ -12,7 +12,7 @@
 | Travailleurs | `k8s-w01-03` (VM 2144-2146, 10.10.40.61-63, 4 vCPU, 8 Go) ; `k8s-w03` dédié aux bases (`dedie=bdd:NoSchedule`) ; zones `par1-baie-a/b/c` |
 | Point d'accès de l'API | `https://k8s-api.par1.medisphere.internal:8443`, VIP 10.10.40.200 (keepalived VRID 140), HAProxy 8443 → kube-apiserver 6443 |
 | Runtime | containerd.io 2.3 (dépôt Docker), runc 1.5, cgroup v2, pilote systemd ; images par le cache Harbor (`hosts.toml`) |
-| Réseau | Cilium 1.20 (IPAM `cluster-pool` 10.240.0.0/16), kube-proxy en mode `iptables` (retiré au module 15), Services 10.96.0.0/16, CoreDNS (transfert vers `dns01`/`dns02`) |
+| Réseau | Cilium 1.20 (IPAM `cluster-pool` 10.240.0.0/16), kube-proxy en mode `iptables` (retiré au module 15), Services 10.96.0.0/16, CoreDNS (transfert vers le résolveur des nœuds, c'est-à-dire `dns01`/`dns02` ; explicite au module 15) |
 | Composants | metrics-server, Hubble relay |
 | Code | `plateforme/k8s` (cluster, composants, espaces, rbac, admission, outils, Taskfile), `plateforme/ansible` (rôles `containerd`, `k8s_noeud`, `k8s_plan_controle`, `k8s_travailleur`, `etcd_instantane`), `plateforme/infra` (état OpenTofu `k8s`) |
 
@@ -32,11 +32,11 @@ Détail : `docs/socle/matrice-flux.md` et `group_vars/role_routeur/pare_feu.yml`
 
 ## 3. Identités et cloisonnement
 
-- Humains : certificats clients de 7 jours (`outils/kubeconfig-personnel.sh`), groupes `medisphere:plateforme-admins`, `medisphere:mediagenda-devs`, `medisphere:lecture` ; OIDC au module 24.
+- Humains : certificats clients de 7 jours (`outils/kubeconfig-personnel.sh`), groupes `medisphere:plateforme-admins`, `medisphere:mediagenda-devs`, `medisphere:medidoc-devs`, `medisphere:lecture` ; OIDC au module 24.
 - Bris de glace : `admin.conf`, `super-admin.conf` en Vault `critique` (RB-148).
 - Charges de travail : comptes de service, jetons liés ; exception documentée : jeton longue durée de `wb-checks` (lecture, sans les Secrets).
-- Espaces d'équipe `mediagenda-dev`, `mediagenda-recette` : quotas, LimitRange, Pod Security `restricted`, politiques d'admission (registre Harbor, pas de `latest`).
-- Audit (`/etc/kubernetes/audit/politique.yaml`, Secrets en `Metadata`) ; Secrets chiffrés au repos (`aescbc`, `kms` v2 avec OpenBao au module 25).
+- Espaces d'équipe `mediagenda-dev`, `mediagenda-recette`, `medidoc-dev` : quotas, LimitRange, Pod Security `restricted`, politiques d'admission (registre Harbor, pas de `latest`).
+- Audit (`/etc/kubernetes/audit/politique.yaml`, Secrets en `Metadata`) ; Secrets chiffrés au repos (`secretbox` depuis la rotation de M14-E28 ; `kms` v2 avec OpenBao au module 25).
 
 ## 4. Ce qui se passe quand…
 
@@ -44,7 +44,7 @@ Détail : `docs/socle/matrice-flux.md` et `group_vars/role_routeur/pare_feu.yml`
 |---|---|---|
 | un nœud de contrôle tombe | VIP basculée en quelques secondes (<MESURE>) ; etcd sur 2 membres ; contrôleurs réélus | automatique au retour ; remplacement : RB-144 |
 | deux nœuds de contrôle tombent | plus de quorum etcd : API arrêtée, pods en place continuent | RB-141 (restauration) |
-| un travailleur tombe | `NotReady` après 40 s, pods recréés ailleurs après 5 min (sauf StatefulSets) | RB-140 ; reconstruction par le code en <MESURE> |
+| un travailleur tombe | `NotReady` après 50 s, pods recréés ailleurs après 5 min (sauf StatefulSets) | RB-140 ; reconstruction par le code en <MESURE> |
 | HAProxy ou keepalived défaillant sans se déclarer | API injoignable malgré la HA | RB-146 |
 | un membre etcd perd ses données | redondance nulle jusqu'au remplacement | RB-147 |
 | CoreDNS tombe | plus de résolution dans les pods | RB-149 |
@@ -61,7 +61,7 @@ Détail : `docs/socle/matrice-flux.md` et `group_vars/role_routeur/pare_feu.yml`
 | Élément | Risque | Traité par |
 |---|---|---|
 | un seul hyperviseur physique (`pve01`) | perte de tout le cluster | PRA (F5), site PAR2 |
-| PostgreSQL et Valkey de MédiAgenda en `emptyDir` | données perdues à chaque redémarrage | module 16 (ceph-csi), module 27 (CloudNativePG) |
+| PostgreSQL et Valkey de MédiAgenda en `emptyDir` | données perdues à chaque redémarrage | module 16 (ceph-csi, CloudNativePG) |
 | un seul registre (`reg01`) | plus de nouveaux pods | réplication Harbor (M13), à décider |
 | CA du cluster (10 ans) dans les fichiers des nœuds de contrôle | compromission = reconstruire la confiance | RB-143, M26 |
 | kube-proxy et iptables | performances, pas de politique réseau | module 15 |

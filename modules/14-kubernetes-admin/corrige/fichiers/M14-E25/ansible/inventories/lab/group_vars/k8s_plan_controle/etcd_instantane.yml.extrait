@@ -2,4 +2,5 @@
 # etcd 3.6.8-0 ; les outils des nœuds suivent (restaurer avec un etcdutl plus ancien que le membre
 # qui a pris l'instantané n'est pas supporté).
 etcd_instantane_outils_version: "3.6.8"
-etcd_instantane_outils_sha256: "<SHA256-DE-etcd-v3.6.8-linux-amd64.tar.gz>"
+# SHA256SUMS de v3.6.8 (relevée à la rédaction : compare-la toi-même).
+etcd_instantane_outils_sha256: "cf9cfe91a4856cb90eed9c99e6aee4b708db2c7888b88a6f116281f04b0ea693"

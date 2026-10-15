@@ -10,9 +10,10 @@
 #      rendu illisible (contenu tronqué) ; Helm ne le voit plus, recalcule N comme révision suivante et
 #      se heurte au Secret existant → « release: already exists » (exige N ≥ 2, sinon variante 1) ;
 #   3. release « metrics-server » de kube-system : comme la variante 1 (bloque « helmfile apply »).
-# Aucun objet applicatif n'est modifié : seuls les Secrets de release. Sauvegardes : wb_k8s_sauver et
-# ~/.local/state/workbook/M17-E19/. Annulation : supprime la révision « pending-upgrade » écrite si elle
-# est toujours dans cet état ; remet le Secret d'origine s'il est toujours illisible.
+# Aucun objet applicatif n'est modifié : seuls les Secrets de release. Sauvegardes (700/600, elles
+# contiennent les valeurs de la release) : m17_sauver_secret et ~/.local/state/workbook/M17-E19/.
+# Annulation : supprime la révision « pending-upgrade » écrite si elle est toujours dans cet état ET
+# toujours la dernière ; remet le Secret d'origine s'il est toujours illisible.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -37,7 +38,7 @@ _e19_bloquer() {
   n=$((n + 1))
   # La révision N+1 ne doit pas exister (sinon l'état n'est pas celui attendu).
   wb_kubectl get secret "sh.helm.release.v1.${rel}.v${n}" -n "$ns" >/dev/null 2>&1 && return 10
-  wb_k8s_sauver secret "sh.helm.release.v1.${rel}.v${n}" "$ns"
+  m17_sauver_secret "$ns" "sh.helm.release.v1.${rel}.v${n}" || return 1
   jq --argjson n "$n" --arg t "$(date -u -d '-14 hours' +%Y-%m-%dT%H:%M:%S.000000000Z)" '
       .version = $n
       | .info.status = "pending-upgrade"
@@ -55,9 +56,16 @@ _e19_corrompre() {
   [[ -n "$sec" ]] || return 10
   n="${sec##*.v}"
   [[ "$n" =~ ^[0-9]+$ ]] && ((n >= 2)) || return 10
-  # Révisions contiguës : la révision N-1 doit exister et se lire (sinon Helm écrirait dans le trou).
+  # Révisions contiguës : la révision N-1 doit exister et se lire (sinon Helm écrirait dans le trou),
+  # et ne pas être « pending-* » (reste d'une réparation de la variante 1 par rollback) : Helm la
+  # prendrait pour la dernière et répondrait « another operation … in progress », pas le symptôme
+  # annoncé. Avec N-1 « superseded » ou « failed », Helm repart d'elle et se heurte au Secret N.
   m17_rel_lisible "$ns" "sh.helm.release.v1.${rel}.v$((n - 1))" || return 10
-  wb_k8s_sauver secret "$sec" "$ns"
+  case "$(wb_kubectl get secret "sh.helm.release.v1.${rel}.v$((n - 1))" -n "$ns" -o jsonpath='{.metadata.labels.status}' 2>/dev/null || true)" in
+    superseded | failed) ;;
+    *) return 10 ;;
+  esac
+  m17_sauver_secret "$ns" "$sec" || return 1
   # Début d'un flux gzip valide, puis plus rien : ce que laisse une écriture tronquée.
   wb_kubectl patch secret "$sec" -n "$ns" --type merge \
     -p "{\"data\":{\"release\":\"$(printf 'H4sIAAAAAAAC/+R9a3PbSJLgd/0KhPdu' | base64 -w0)\"}}" >/dev/null || return 1
@@ -106,7 +114,10 @@ annuler_E19() {
     case "$action" in
       bloquer)
         st="$(wb_kubectl get secret "$sec" -n "$ns" -o jsonpath='{.metadata.labels.status}' 2>/dev/null || true)"
-        if [[ "$st" == pending-upgrade ]]; then
+        # Seulement si la révision bloquante est encore la DERNIÈRE : après une réparation par
+        # « helm rollback », elle reste dans l'historique sous une révision deployed, et la supprimer
+        # trouerait l'historique de l'apprenant.
+        if [[ "$st" == pending-upgrade && "$(m17_rel_max "$ns" "$rel")" == "$n" ]]; then
           wb_kubectl delete secret "$sec" -n "$ns" --ignore-not-found >/dev/null 2>&1 || wb_avert "annulation : $sec non supprimé"
           m17_journal E19 "annulation : $sec supprimé"
         fi

@@ -256,3 +256,11 @@ METRIQUES
   [ "$status" -eq 1 ]
   [[ "$output" == *"retard de 300 s"* ]]
 }
+
+@test "espace hors de MS_K8S_ESPACES_BASES : retard non lu, pas d'alerte" {
+  RETARD=300
+  echo 'MS_K8S_ESPACES_BASES=(wb-autre)' >>"$MS_CONF"
+  run main
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"retard non lu"* ]]
+}

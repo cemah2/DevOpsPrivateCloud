@@ -31,6 +31,21 @@ check_cmd "ceph-rbd-chiffre n'est pas classe par défaut" \
 check_cmd "fournisseur secrets-metadata (type metadata) dans la ConfigMap de KMS de ceph-csi" \
   _m16p_jq "$(_m16p_kj configmaps -n ceph-csi)" 'any(.items[]; (.data["config.json"] // "{}") | (try fromjson catch {}) | .["secrets-metadata"].encryptionKMSType == "metadata")'
 
+# La KEK doit être trouvée aussi pour un instantané (Secrets de la VolumeSnapshotClass) : soit le
+# fournisseur nomme son Secret (secretName), soit une classe d'instantanés nomme le Secret de la
+# classe chiffrée. Sans l'un ou l'autre, instantanés et sauvegardes Velero des volumes chiffrés échouent.
+_m16_e26_kek_nommee() {
+  local cm vsc secret
+  cm="$(_m16p_kj configmaps -n ceph-csi)"
+  _m16p_jq "$cm" 'any(.items[]; (.data["config.json"] // "{}") | (try fromjson catch {}) | ((.["secrets-metadata"].secretName // "") | length > 0))' \
+    && return 0
+  secret="$(jq -r '[.items[] | select(.metadata.name == "ceph-rbd-chiffre") | .parameters["csi.storage.k8s.io/node-stage-secret-name"]][0] // empty' <<<"$_m16_e26_sc" 2>/dev/null)"
+  [[ -n "$secret" ]] || return 1
+  vsc="$(_m16p_kj volumesnapshotclasses)"
+  _m16p_jq "$vsc" 'any(.items[]; .driver == "rbd.csi.ceph.com" and .parameters["csi.storage.k8s.io/snapshotter-secret-name"] == $s)' --arg s "$secret"
+}
+check_cmd "la KEK est trouvée pour les instantanés (secretName du KMS, ou classe d'instantanés dédiée)" _m16_e26_kek_nommee
+
 title "Transit (msgr2 secure) pour toutes les classes Ceph"
 for _m16_e26_c in ceph-rbd ceph-rbd-retain ceph-rbd-chiffre; do
   check_cmd "$_m16_e26_c : mapOptions avec ms_mode=secure" \

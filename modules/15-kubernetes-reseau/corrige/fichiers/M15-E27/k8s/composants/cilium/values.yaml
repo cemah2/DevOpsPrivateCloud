@@ -4,8 +4,9 @@
 # Seul endroit où vivent les réglages de Cilium (introduction du module) : jamais de --set.
 #
 # Application (Taskfile de plateforme/k8s, CILIUM_VERSION) :
-#   cilium upgrade --version "$CILIUM_VERSION" --values composants/cilium/values.yaml
-# Aperçu avant application : cilium upgrade … --dry-run-helm-values (option à confirmer par --help).
+#   cilium upgrade --version "$CILIUM_VERSION" --reset-values --values composants/cilium/values.yaml
+# (--reset-values : sans lui, la CLI reprend les values de la release précédente, défaut
+# --reset-then-reuse-values de la CLI 0.20.) Aperçu : cilium upgrade … --dry-run-helm-values.
 
 # --- Accès à l'API sans kube-proxy (M14, M15-E08) ---------------------------------------------------
 k8sServiceHost: k8s-api.par1.medisphere.internal

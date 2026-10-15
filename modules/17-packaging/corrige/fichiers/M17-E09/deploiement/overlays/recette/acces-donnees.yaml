@@ -1,9 +1,9 @@
 # Recette : accès des pods de CE dépôt à la base et à Valkey du M16, qui restent gérés hors de ce
-# dépôt (plateforme/k8s). Leurs politiques d'ENTRÉE (postgresql-entree du M16-E18,
-# valkey-depuis-api du M15-E17) n'admettent que les pods étiquetés app.kubernetes.io/name:
-# mediagenda-api (M14) : sans ces deux politiques, les pods du chart (app.kubernetes.io/name:
-# mediagenda) seraient refusés et ne deviendraient jamais prêts (/pret en 503).
-# Les politiques s'ADDITIONNENT : on ouvre l'accès à nos pods sans toucher à celles de la plateforme.
+# dépôt (plateforme/k8s). Depuis M17-E04, c'est la SEULE autorisation d'entrée de l'API vers les
+# données : les anciennes (valkey-depuis-api, postgresql-depuis-api du M15-E17, entrée « API » de
+# postgresql-entree du M16) n'admettaient que les pods mediagenda-api du M14 et ont été retirées de
+# plateforme/k8s. Sans ces deux politiques, les pods du chart seraient refusés (/pret en 503).
+# Le conteneur d'initialisation « migrations » tourne dans ces mêmes pods : il est couvert aussi.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

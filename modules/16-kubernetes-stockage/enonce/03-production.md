@@ -56,7 +56,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 16 XX`).
 5. **Restaurer.** Applique le manifeste `Restore` et suis-le (`velero restore describe <NOM> --details`, `velero restore logs <NOM>`, objets `datadownloads.velero.io` de l'espace `velero`). Quand il est `Completed`, applique le `Cluster` de récupération et suis-le (`kubectl cnpg status mediagenda-db -n wb-restauration`). Chronomètre chaque étape, de la décision de restaurer jusqu'à l'API restaurée prête.
 6. **Contrôler.** Vérifie, preuves à l'appui : les pods de `wb-restauration` sont prêts (la sonde `/pret` de l'API exige PostgreSQL **et** Valkey) ; l'API restaurée répond par un `kubectl port-forward` et liste les rendez-vous ; nombre de rendez-vous, empreinte de la table et nombre de clés Valkey identiques à l'état de référence ; l'API restaurée parle à la base **restaurée** (lis la chaîne de connexion qu'elle reçoit et les connexions vues côté PostgreSQL) ; la HTTPRoute de la copie n'est pas acceptée par `gw-par1` et aucun enregistrement DNS n'a été créé ; aucune sauvegarde ni aucun WAL n'est parti de la copie (le préfixe de `mediagenda-db` dans `cnpg-k8s-par1` n'a reçu que les WAL de la recette) ; la recette est intacte.
 7. **Écrire.** Le compte rendu (étapes, durées, RTO mesuré, écarts et leurs causes) et le runbook RB-161 : quand l'utiliser, prérequis, décisions à prendre (où restaurer, quelle sauvegarde, à quel instant pour la base), étapes, contrôles, retour arrière, nettoyage.
-8. **Nettoyer** après `lab/bin/check 16 24` : supprime la copie (`Cluster`, puis l'espace de noms) et vérifie que les images RBD de la copie ont disparu de `k8s-rbd`. Garde le manifeste et la sauvegarde `e24-recette` (elle expire selon sa durée de vie).
+8. **Nettoyer** après `lab/bin/check 16 24` : supprime la copie (`Cluster`, puis tout le contenu de l'espace ; l'espace lui-même, décrit par le code, reste, vide) et vérifie que les images RBD de la copie ont disparu de `k8s-rbd`. Garde le manifeste et la sauvegarde `e24-recette` (elle expire selon sa durée de vie).
 
 **Critères de réussite**
 - [ ] `wb-restauration` existe, décrit dans `plateforme/k8s`, en PSA `restricted`, sans label d'exposition.
@@ -110,7 +110,7 @@ L'`ObjectStore` est un objet **de l'espace de noms** : restauré dans `wb-restau
             -d "{\"patient\":\"Témoin E25\",\"praticien\":\"wb-temoin\",\"debut\":\"$d\"}" "$API/api/v1/rendez-vous")
         [ "$c" = 201 ] || echo "$(date +%T) échec $c"; done | tee ~/e25-temoin.log
   ```
-- Cluster d'essai **`pg-essai`** dans `wb-essais` : 2 instances, 1 Gio chacune sur `ceph-rbd`, image `registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:17.10-minimal-trixie` au départ (cache Harbor `ghcr`, comme pour `mediagenda-db`), accès super-utilisateur activé (il servira de source à un import). Données d'essai : `kubectl cnpg pgbench pg-essai -n wb-essais -- --initialize --scale 5` (voir `--help` ; environ 75 Mio). Cluster cible de l'import : **`pg-essai-import`** (PostgreSQL 18.6, même famille d'image `minimal-trixie`, 1 instance).
+- Cluster d'essai **`pg-essai`** dans `wb-essais` : 2 instances, 1 Gio chacune sur `ceph-rbd`, image `registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:17.10-minimal-trixie` au départ (cache Harbor `ghcr`, comme pour `mediagenda-db`), accès super-utilisateur activé (il servira de source à un import). Données d'essai : `kubectl cnpg pgbench pg-essai -n wb-essais … -- --initialize --scale 5` (environ 75 Mio ; lis `--help` : quelle base le Job vise-t-il par défaut ?). Cluster cible de l'import : **`pg-essai-import`** (PostgreSQL 18.6, même famille d'image `minimal-trixie`, 1 instance).
 - Compte rendu : `docs/kubernetes/stockage/tests/bascules-postgresql.md` (une ligne par opération : heure, durée d'indisponibilité vue par le témoin, erreurs, rendez-vous perdus, observations).
 
 > ⚠️ **Attention** : (1) prévenir l'équipe de Julien avant chaque opération sur `mediagenda-db` ; une sauvegarde de base récente et `ContinuousArchiving` à `True` sont exigés avant de commencer ; (2) **jamais** deux opérations en même temps (bascule pendant une mise à jour, *fencing* du primaire) : attends `Cluster in healthy state` entre deux ; (3) isoler le **primaire** n'entraîne **pas** de bascule : la recette s'arrête jusqu'à la levée ; (4) la montée majeure ne se pratique que sur `pg-essai`, jamais sur `mediagenda-db` ; (5) si des politiques réseau s'appliquent dans `wb-essais` (M15-E06), les clusters d'essai ont besoin des mêmes autorisations que `mediagenda-db` (opérateur, réplication, plugin, S3 s'ils archivent).
@@ -201,7 +201,7 @@ Pour l'import, la source doit être joignable avec un compte qui a le droit de t
 
 <details><summary>Indice 1</summary>
 
-Le fournisseur `metadata` sans nom de Secret explicite prend sa KEK dans les Secrets **de la classe** (ceux du *provisioner* et du *node-stage*), sous une clé précise. D'où l'intérêt d'un Secret dédié à la classe chiffrée : la KEK ne voyage pas avec les autres classes, et une rotation de la clé cephx n'a pas à toucher à la KEK.
+Le fournisseur `metadata` lit sa KEK, sous une clé précise, soit dans un Secret qu'il **nomme** dans sa configuration, soit, à défaut, dans les Secrets **de la requête** en cours : ceux de la StorageClass pour créer et monter, mais ceux de la classe d'**instantanés** quand on photographie le volume (et Velero photographie). Un Secret dédié à la classe chiffrée garde la KEK à l'écart des autres classes ; reste à t'assurer que chaque opération (création, montage, instantané, clone) la trouve.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -469,7 +469,7 @@ Rook n'est pas qu'un Ceph dans Kubernetes : en mode externe, c'est aussi une fa�
    Justifie, et dis ce qui permet de restaurer, avec quel RPO.
 6. Le quota du pool `k8s-rbd` est atteint. Que voient : un PVC en cours de création, un pod qui écrit dans un volume existant, PostgreSQL, Valkey ? Quel signal t'aurait prévenu avant, et à quel seuil ?
 7. Pourquoi l'archivage des WAL bloqué est-il une urgence alors que la base répond normalement ? Que se passe-t-il pour l'espace disque du primaire, et pour le RPO ?
-8. QCM — `mediagenda-db` est en réplication **asynchrone**. Le primaire meurt brutalement avec 200 ms de transactions validées non encore reçues par les réplicas. Après la bascule :
+8. QCM — Suppose `mediagenda-db` en réplication **asynchrone** (ce n'est pas le réglage choisi en E18). Le primaire meurt brutalement avec 200 ms de transactions validées non encore reçues par les réplicas. Après la bascule :
    a) ces transactions sont rejouées depuis l'archive S3 ;
    b) elles sont perdues ;
    c) l'ancien primaire les renvoie au nouveau à son retour ;

@@ -9,8 +9,8 @@
 - noms et formats exacts de certaines sorties de Cilium 1.20 utilisées par les checks et la sonde : annotation `network.cilium.io/wg-pub-key` des `CiliumNode`, clé `enable-wireguard` de `cilium-config`, statut `bgpInstances[].peers[].peeringState` (« established ») et `timers.appliedHoldTimeSeconds` des `CiliumBGPNodeConfig`, métrique `cilium_unreachable_nodes` (documentation 1.20) ; ligne `Encryption:` de `cilium-dbg status` ;
 - options de la CLI `cilium` : `cilium upgrade --dry-run-helm-values`, `cilium connectivity test --test-namespace`, `cilium bgp routes advertised ipv4 unicast` (à confirmer par `--help` de ta version) ;
 - ExternalDNS 0.23 : publication d'un Service `LoadBalancer` créé par Cilium pour une Gateway à partir de l'annotation `external-dns.alpha.kubernetes.io/hostname` recopiée depuis `spec.infrastructure.annotations` (E33) ;
-- MTU de 1370 octets des pods en tunnel VXLAN + WireGuard (surcoût WireGuard de 80 octets retenu par Cilium) ;
-- modèle `step` (`--template`) d'un certificat client à usage `clientAuth` seul (E33) et image `nginxinc/nginx-unprivileged:1.30-alpine` avec un `nginx.conf` complet en système de fichiers en lecture seule ;
+- MTU des routes des pods de 1355 octets en tunnel VXLAN + WireGuard (1500 − 50 − 95 : constantes `TunnelOverheadIPv4` et `WireguardOverhead` de `pkg/mtu` au tag `v1.20.2`, vérifiées dans le code mais pas mesurées ; l'interface `eth0` des pods reste à 1500, Cilium pose la MTU sur les routes du pod) ;
+- *vérifié hors lab, dans des conteneurs* : `outils/ca-partenaires.sh` (step 0.28 : autorité, certificat client `clientAuth` seul de 30 jours, fichiers en 600) et le `nginx.conf` du relais dans `nginxinc/nginx-unprivileged:1.30-alpine` (nginx 1.30.2, utilisateur 101, racine en lecture seule) : 400 sans certificat client et avec un certificat d'une autre autorité, 200 avec `centre-test-01`, en-tête `X-Partenaire` envoyé par le client écrasé, TLS 1.1 refusé. Reste à vérifier sur le lab : le passage par `gw-partenaires` (Envoy en *passthrough*) et step 0.31 ;
 - toutes les **mesures** chiffrées des fiches (chiffrement, performances, convergence) sont des ordres de grandeur attendus, **pas** des mesures du workbook : remplace-les par les tiennes.
 
 **Rappel** : aucune nouvelle VM dans ce palier. Fichiers de solution : `corrige/fichiers/M15-E24/` à `M15-E30/`, `M15-E32/` à `M15-E34/`. Le fichier `composants/cilium/values.yaml` complet de fin de palier est dans `M15-E27/` (rendu validé par `helm template` du chart 1.20.2).
@@ -34,7 +34,8 @@ admin@adm01:~$ B=$(kubectl -n wb-perf get pod mesure-b -o jsonpath='{.status.pod
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- iperf3 -c $B -t 30
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- iperf3 -c $B -t 30 -P 4
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- ping -c 100 -i 0.2 -q $B
-admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- ip link show eth0          # mtu 1450 (1500 − 50 de VXLAN)
+admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- ip link show eth0          # mtu 1500 : Cilium ne réduit pas l'interface du pod
+admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- ip route                   # « … mtu 1450 » : la MTU utile est sur les routes (1500 − 50 de VXLAN)
 admin@adm01:~$ kubectl top node k8s-w01 k8s-w02                             # pendant le débit
 admin@k8s-w02:~$ ip -br address                                               # interface du VLAN 40 (eth0 : nommée par cloud-init, M14)
 admin@k8s-w02:~$ sudo tcpdump -ni eth0 -A -c 40 'udp port 8472'
@@ -48,7 +49,7 @@ Dans la capture, la ligne `GET /echo?msg=donnees-de-test HTTP/1.1` apparaît en 
 *4. Activation.* L'extrait dans `composants/cilium/values.yaml`, MR, puis :
 
 ```
-admin@adm01:~/src/k8s$ task cilium:appliquer          # ou : cilium upgrade --version <VERSION-CILIUM> --values composants/cilium/values.yaml
+admin@adm01:~/src/k8s$ task cilium:appliquer          # ou : cilium upgrade --version <VERSION-CILIUM> --reset-values --values composants/cilium/values.yaml
 admin@adm01:~$ kubectl -n kube-system get cm cilium-config -o jsonpath='{.data.enable-wireguard}'   # true
 admin@adm01:~$ kubectl -n kube-system get pod -l k8s-app=cilium -o wide        # âge des pods
 ```
@@ -70,12 +71,12 @@ admin@adm01:~$ kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-d
 admin@adm01:~$ kubectl get ciliumnodes -o custom-columns='NOEUD:.metadata.name,CLE:.metadata.annotations.network\.cilium\.io/wg-pub-key'
 admin@k8s-w02:~$ ip -d link show cilium_wg0
 admin@k8s-w02:~$ sudo tcpdump -ni eth0 -c 20 'udp port 51871 or udp port 8472'
-admin@k8s-w02:~$ sudo tcpdump -ni cilium_wg0 -A -c 20 'tcp port 8080'
+admin@k8s-w02:~$ sudo tcpdump -ni cilium_wg0 -A -c 20 'udp port 8472'      # le paquet VXLAN, avant chiffrement
 ```
 
-Cinq pairs (six nœuds moins soi). Sur `eth0`, plus d'UDP 8472 entre pods : seulement de l'UDP 51871, illisible. Sur `cilium_wg0`, la requête est en clair : c'est l'interface **avant** chiffrement (le noyau chiffre en sortie de cette interface).
+Cinq pairs (six nœuds moins soi). Sur `eth0`, plus d'UDP 8472 entre pods : seulement de l'UDP 51871, illisible. Sur `cilium_wg0`, la requête est en clair, dans son enveloppe VXLAN (UDP 8472 entre les adresses des nœuds : en mode tunnel, c'est le paquet VXLAN que Cilium confie à WireGuard, d'où le filtre `udp port 8472` et non `tcp port 8080`) : c'est l'interface **avant** chiffrement (le noyau chiffre en sortie de cette interface).
 
-*6. Mesure après* : mêmes commandes ; MTU des pods 1370 (1500 − 50 VXLAN − 80 réservés pour WireGuard). Tableau dans la fiche.
+*6. Mesure après* : mêmes commandes ; MTU des routes des pods 1355 (1500 − 50 VXLAN − 95 réservés par Cilium pour WireGuard, en-tête et bourrage compris), `eth0` toujours à 1500 ; `cilium_wg0` est à 1405 (1500 − 95). Tableau dans la fiche.
 
 *7.* Aucune règle de bordure : les nœuds sont tous dans le VLAN 40, aucun paquet 51871 ne traverse `gw01`/`gw02`. Le flux est inscrit dans la matrice du cluster (E32).
 
@@ -283,10 +284,10 @@ admin@adm01:~/src/k8s$ task cilium:appliquer
 admin@adm01:~$ kubectl -n kube-system rollout status ds/cilium ; kubectl -n kube-system rollout status ds/cilium-envoy
 admin@adm01:~$ cilium version ; cilium status --wait ; cilium bgp peers
 admin@adm01:~$ cilium connectivity test --test-namespace wb-cilium-test
-admin@adm01:~$ kubectl delete ns wb-cilium-test
+admin@adm01:~$ cilium connectivity test --cleanup --test-namespace wb-cilium-test    # ou kubectl delete ns wb-cilium-test-1 …
 ```
 
-Le test de connectivité déploie des pods clients et serveurs dans son espace (et parfois des espaces suffixés), en tirant des images de `quay.io` (par le cache Harbor) ; avec les politiques de cluster de E28 (proxy DNS sans refus), il reste vert ; supprime tout ce qu'il laisse (`kubectl get ns | grep cilium-test`).
+Le test de connectivité déploie des pods clients et serveurs dans son espace, **toujours suffixé** d'un numéro (`wb-cilium-test-1` ; aide de `--test-namespace`, CLI 0.20), en tirant des images de `quay.io` (par le cache Harbor) ; avec les politiques de cluster de E28 (proxy DNS sans refus), il reste vert ; supprime tout ce qu'il laisse (`kubectl get ns | grep cilium-test`).
 
 *6. Retour arrière.* `helm -n kube-system history cilium`, `helm -n kube-system rollback cilium <N> --wait`, contrôles, puis MR qui remet `CILIUM_VERSION` en accord, puis remontée par le code. La sonde E25 mesure chaque étape (RB-153).
 
@@ -299,7 +300,7 @@ La CLI `cilium` est une enveloppe de Helm : la release `cilium` porte l'historiq
 `helm upgrade` direct (même chose, sans l'aide de la CLI) ; GitOps (Argo CD, M20) avec vagues de synchronisation ; nœud par nœud avec `cordon`/`drain` avant chaque agent (inutile pour Cilium, dont le plan de données survit au redémarrage).
 
 **Pièges classiques**
-- `--reuse-values` entre deux versions du chart (valeurs nouvelles ignorées).
+- `--reuse-values` entre deux versions du chart (valeurs nouvelles ignorées) ; et son cousin implicite : sans option, la CLI `cilium` 0.20 applique `--reset-then-reuse-values` (values de la release précédente fusionnées sous celles du fichier), d'où `--reset-values` dans la tâche : le fichier du projet est la seule source.
 - Mettre à jour l'agent par `kubectl set image` sans l'opérateur.
 - Oublier la vérification préalable : chaque agent attend son image, et une erreur de tirage bloque le déploiement au milieu.
 - Lancer le test de connectivité sans savoir ce qu'il crée, ou le laisser traîner.
@@ -375,11 +376,11 @@ Fichiers : [fiche `performances.md`](fichiers/M15-E29/medisphere/docs/kubernetes
 *1.* Protocole dans la fiche. Référence sans Kubernetes :
 
 ```
-admin@k8s-w02:~$ sudo apt-get install -y iperf3 && iperf3 -s -1
-admin@k8s-w01:~$ sudo apt-get install -y iperf3 && iperf3 -c 10.10.40.62 -t 30 -P 4
+admin@k8s-w02:~$ iperf3 -s -1
+admin@k8s-w01:~$ iperf3 -c 10.10.40.62 -t 30 -P 4
 ```
 
-(Retire ensuite le paquet sur les deux nœuds, ou ajoute-le au rôle `k8s_noeud` si tu veux le garder : décision à écrire.)
+(`iperf3` est déjà sur les nœuds : playbook des outils de diagnostic de M15-E02, service arrêté. `-s -1` sert une seule mesure puis s'arrête : rien ne reste à l'écoute.)
 
 *2.* Commandes de E24 ; pour « même nœud », change le `nodeSelector` de `mesure-a` en `k8s-w02`. Requêtes courtes :
 
@@ -387,7 +388,7 @@ admin@k8s-w01:~$ sudo apt-get install -y iperf3 && iperf3 -c 10.10.40.62 -t 30 -
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- sh -c 'for i in $(seq 1000); do curl -s -o /dev/null -w "%{time_total}\n" http://'$B':8080/hostname; done' | sort -n | awk '{a[NR]=$1} END {print "médiane", a[int(NR/2)], "p99", a[int(NR*0.99)]}'
 ```
 
-*3. MTU.* `kubectl -n wb-perf exec mesure-a -- ping -c 3 -M do -s 1342 $B` passe, `-s 1343` échoue : 1342 + 8 (ICMP) + 20 (IP) = 1370 = MTU des pods. Empilement : 1500 sur le VLAN − 80 (WireGuard, réservés par Cilium) − 50 (VXLAN).
+*3. MTU.* `kubectl -n wb-perf exec mesure-a -- ping -c 3 -M do -s 1327 $B` passe, `-s 1328` échoue (`message too long, mtu=1355`) : 1327 + 8 (ICMP) + 20 (IP) = 1355 = MTU des routes du pod (`ip route` dans le pod). Empilement : 1500 sur le VLAN − 95 (WireGuard, réservés par Cilium 1.20, bourrage compris) − 50 (VXLAN).
 
 *4. Natif.* La MR brouillon (`routingMode: native`, `ipv4NativeRoutingCIDR: 10.240.0.0/16`, `autoDirectNodeRoutes: true`) est appliquée depuis sa branche dans la fenêtre :
 
@@ -397,7 +398,7 @@ admin@k8s-w01:~$ ip route | grep 10.240                 # 10.240.<N>.0/24 via 10
 admin@adm01:~$ kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg status | grep -E 'Routing|Masquerading'
 ```
 
-Mesures, puis retour : `git switch main && task cilium:appliquer`, redémarrage des agents, `cilium status --wait`, sonde, `cilium bgp peers`, `cilium-dbg status | grep Encryption`. Le masquage reste actif : la sortie hors de 10.240.0.0/16 est traduite en adresse du nœud (la bordure ne connaît pas les adresses des pods).
+Mesures, puis retour : `git switch main && task cilium:appliquer`, redémarrage des agents, `cilium status --wait`, sonde, `cilium bgp peers`, `cilium-dbg status | grep Encryption`, et `helm -n kube-system get values cilium | grep -E 'autoDirectNodeRoutes|ipv4NativeRoutingCIDR'` **vide**. Ce dernier contrôle n'est pas une formalité : sans `--reset-values`, la CLI `cilium` reprend par défaut les values de la release précédente (`--reset-then-reuse-values`, CLI 0.20) ; `autoDirectNodeRoutes: true`, absent du fichier de `main`, survivrait au retour, et l'agent refuse de démarrer en mode tunnel avec cette option (`auto-direct-node-routes cannot be used with tunneling`, `daemon/cmd/daemon_main.go` au tag `v1.20.2`) : le premier agent redémarré resterait en erreur et son nœud perdrait le réseau des pods. Si c'est arrivé : réapplique avec `--reset-values` (la tâche du corrigé de E27 le fait). Le masquage reste actif : la sortie hors de 10.240.0.0/16 est traduite en adresse du nœud (la bordure ne connaît pas les adresses des pods).
 
 *5. BBR* : `bandwidthManager.enabled` et `bbr: true` exigent un noyau récent (≥ 5.18 pour BBR des pods, à vérifier dans la page *Bandwidth Manager*) et ne valent que pour des liens longs ou avec pertes : sans intérêt mesurable dans le lab.
 
@@ -415,7 +416,7 @@ Sur un seul hyperviseur, tout est **processeur** : chaque couche (veth, VXLAN, W
 - Comparer une série « même nœud » à une série « inter-nœuds ».
 - Une seule mesure de 10 s, sans répétition.
 - Oublier que le retour en VXLAN redémarre aussi les agents : la fenêtre doit couvrir l'aller **et** le retour.
-- Laisser `iperf3` installé sur les nœuds sans l'avoir décidé.
+- Laisser un serveur `iperf3` à l'écoute sur un nœud (`-1` l'évite).
 
 **En production chez MédiSphère**
 
@@ -458,12 +459,12 @@ Exemple d'ADR : [`ADR-0150-reseau-entree-cluster.md`](fichiers/M15-E30/medispher
 6. L'agent et l'opérateur partagent des CRD et des formats (identités, IPAM, état BGP, CiliumNodes) ; une version d'opérateur qui écrit un champ ou un format que l'ancien agent ne comprend pas (ou l'inverse) peut, par exemple, casser l'attribution des plages de pods à un nouveau nœud ou la synchronisation des identités. La procédure garantit qu'ils sont testés ensemble.
 7. Tous les pods du cluster (sauf ce que l'agent exempte) passent en **refus par défaut en sortie** : seul le DNS reste permis, tout le reste tombe (API, bases, sorties) — y compris dans `kube-system` si le sélecteur l'inclut. Il fallait `enableDefaultDeny: {egress: false}` (politique `base-dns`), et exclure `kube-system`.
 8. **b.** Un refus l'emporte toujours sur une autorisation, quel que soit le type de politique (documentation *Deny Policies*). a, c, d faux : il n'y a ni spécificité, ni priorité par portée, ni ordre de création. Empêcher une équipe de la supprimer : la CCNP est une ressource de cluster ; une équipe n'a des droits que dans ses espaces (RBAC) ; seuls les administrateurs peuvent la supprimer, et l'audit de l'API (M14-E27) et Git tracent leurs actions.
-9. Le proxy DNS a appris l'adresse pour 60 s (ou le minimum configuré) ; au-delà, si l'adresse n'est plus « vivante » pour ce pod (aucune connexion ouverte), elle sort de la politique : la prochaine connexion de l'application, qui n'a pas re-résolu, est **refusée**. Réglage : le TTL minimum du proxy (`dnsProxy.minTtl`, option `tofqdns-min-ttl`, à vérifier). La bonne correction est côté application : respecter le TTL. Augmenter le minimum élargit la fenêtre d'une adresse réattribuée à autre chose.
+9. Le proxy DNS a appris l'adresse pour 60 s (ou le minimum configuré) ; au-delà, si l'adresse n'est plus « vivante » pour ce pod (aucune connexion ouverte), elle sort de la politique : la prochaine connexion de l'application, qui n'a pas re-résolu, est **refusée**. Réglages : le TTL minimum du proxy (`dnsProxy.minTtl` du chart, option `tofqdns-min-ttl` ; 0 par défaut en 1.20, c'est-à-dire le TTL de l'amont respecté) et le délai de grâce des connexions inactives (`dnsProxy.idleConnectionGracePeriod`, 0 s par défaut). La bonne correction est côté application : respecter le TTL. Augmenter le minimum élargit la fenêtre d'une adresse réattribuée à autre chose.
 10. Refus : `*.amazonaws.com` couvre des milliers de services de tiers et rend la sortie de données incontrôlable (n'importe quel compartiment S3 public). Proposer : les noms précis des points d'accès utilisés (région, service), mieux encore un point d'accès interne (le S3 de MédiSphère n'est d'ailleurs pas chez AWS : MédiDoc utilise `s3-01` ou RGW) ; ou un mandataire de sortie journalisé ; et un ticket de la RSSI pour toute exception.
 11. **b.** Le trafic vers une Gateway Cilium est toujours remis à l'Envoy **local** par TPROXY, sans traduction : Envoy voit 10.10.10.10 et l'écrit dans `X-Forwarded-For` (0 saut de confiance). a) c'est le cas d'un Service `LoadBalancer` ordinaire en `Cluster` ; c) la VIP de la bordure n'apparaît jamais comme source (pas de NAT sur la bordure entre MGMT et le VLAN 41) ; d) faux. En *passthrough* : Envoy relaie un flux TCP, l'application voit l'adresse d'Envoy (du nœud), pas celle du client.
 12. Relais applicatif derrière une `TLSRoute` *passthrough* (E33 : simple, l'application ou un relais termine le TLS, mais la Gateway ne voit plus le HTTP : pas de filtres, pas de journaux L7) ; `CiliumEnvoyConfig` pour configurer Envoy directement (puissant, hors de l'API standard, dette à chaque mise à jour) ; une autre implémentation Gateway API qui supporte `spec.tls.frontend` (un composant de plus) ; attendre une version de Cilium qui l'implémente ; mTLS fait par les répartiteurs `lb01`/`lb02` (HAProxy sait vérifier un certificat client), au prix d'un TLS de plus vers le cluster.
 13. Le gain est faible (15 %), mesuré sur un lab où le processeur limite tout, et il coûte une hypothèse forte : tous les nœuds dans un même domaine L2 (ou l'annonce des plages de pods à la bordure, que sa politique refuse). Le chiffrement, lui, coûte 60 % : c'est lui qui dimensionne. Ce qui changerait : un débit entre pods devenu goulot **mesuré** en production, des nœuds physiques avec déchargement matériel, ou une vraie fabric BGP qui accepterait les PodCIDR.
-14. Bordure : 15 annonceurs × 2 passerelles = 30 sessions ; `bgp listen limit 16` à relever (sinon les nœuds au-delà du 16e sont refusés), plafond `maximum-prefix` à revoir, `maximum-paths 8` limite à 8 chemins égaux (ou ne pas faire annoncer tous les nœuds : un sous-ensemble dédié à l'entrée). WireGuard : 14 pairs par nœud, sans difficulté (WireGuard passe à l'échelle de centaines de pairs), mais une clé de plus à propager à chaque nœud. DNS : CoreDNS à 2 réplicas devient un point de contention et un risque (perte d'un nœud) : plus de réplicas, `NodeLocal DNSCache`, anti-affinité. Prévoir aussi des nœuds dédiés à l'entrée (Envoy) et le dimensionnement de la mémoire d'Envoy.
+14. Bordure : 15 annonceurs × 2 passerelles = 30 sessions ; `bgp listen limit 16` (voisins dynamiques **par passerelle**) : 15 annonceurs passent encore, sans marge (au-delà de 16 voisins, les suivants sont refusés) : à relever, plafond `maximum-prefix` à revoir, `maximum-paths 8` limite à 8 chemins égaux (ou ne pas faire annoncer tous les nœuds : un sous-ensemble dédié à l'entrée). WireGuard : 14 pairs par nœud, sans difficulté (WireGuard passe à l'échelle de centaines de pairs), mais une clé de plus à propager à chaque nœud. DNS : CoreDNS à 2 réplicas devient un point de contention et un risque (perte d'un nœud) : plus de réplicas, `NodeLocal DNSCache`, anti-affinité. Prévoir aussi des nœuds dédiés à l'entrée (Envoy) et le dimensionnement de la mémoire d'Envoy.
 15. Toute personne sur MGMT ou sur le VPN d'administration, et tout pod du cluster qui joint la Gateway. Ils y voient tous les flux : espaces, pods, ports, verdicts, requêtes DNS (noms demandés) — pas d'URL ni d'en-têtes tant qu'aucune visibilité L7 n'est active. Premier changement : authentification OIDC (OAuth2 Proxy, M24) avec un groupe autorisé ; ensuite, filtrage des pods qui peuvent joindre la Gateway pour ce nom.
 16. Par ordre de valeur : les **tests** (matrice de E28 rejouée et datée, idéalement automatisée et rejouée régulièrement) et les **journaux** de refus (Hubble : refus `denylist` entre espaces sur une période), qui prouvent le comportement ; la **configuration** versionnée (politiques de refus, historique Git, revue) qui prouve l'intention ; les captures d'écran, qui ne prouvent presque rien. Un auditeur préfère une preuve rejouable devant lui.
 

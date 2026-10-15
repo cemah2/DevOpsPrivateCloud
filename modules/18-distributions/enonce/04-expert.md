@@ -33,7 +33,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne : sinon elle reste marquée active et bloque le mini-projet. L'annulation ne rétablit que ce qui est encore dans l'état cassé et ne revient jamais sur ta réparation (pour E21, elle remet aussi le nombre de travailleurs d'origine).
 - Les pannes n'agissent que sur les VMs du module (`k3s-ha01/02`, `rke2-01..03`, `talos-01..03`), sur les objets Cluster API de l'espace `capi-essai` de `k3s01`, sur ta copie `~/src/distributions` (branche locale, jamais de `git push`) et sur ton poste (`~/.config/workbook/m18/`, toujours sauvegardé avant). Pour E21, elles touchent aussi **deux réglages Proxmox propres au module** : l'expiration du jeton `wb-capi@pve!capi` et l'appartenance du template de `capi-essai` au pool `lab`. Elles ne touchent jamais `k8s-par1`, la bordure, `pbs01` ni le réseau de `pve01`.
 - Si SSH vers un nœud refuse ta connexion, tu as toujours la console de la VM dans Proxmox et l'agent QEMU (`qm guest exec <VMID> -- <commande>` depuis `pve01`, en lecture d'abord). Le refus lui-même est un indice.
-- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (publié par MR), qui cite le numéro du ticket (`INC-4519`…) : heure, hypothèse, commande, résultat observé, conclusion.
+- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/kubernetes/journal/` de `~/medisphere` (publié par MR), qui cite le numéro du ticket (`INC-4519`…) : heure, hypothèse, commande, résultat observé, conclusion.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 ---

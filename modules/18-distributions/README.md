@@ -6,7 +6,7 @@
 | **Niveau** | Secondaire |
 | **Profil de lab** | Socle + VMs 2181-2188 (≈ 30 Go en tout, jamais toutes allumées) et clusters Cluster API 5180-5189 ; `k8s-par1` **arrêté** pendant les parties lourdes |
 | **Prérequis** | Module 14 (kubeadm, `k8s-v1`) ; module 05 (OpenTofu) ; module 03 (Packer, pour l'image de nœud) ; module 13 (cache Harbor) ; module 17 (`packaging-v1` : chart signé, Helm) ; module 10 pour E16 (facultatif) |
-| **Durée indicative** | 45 à 60 heures (dont mini-projet 8 à 12 h ; E16 facultatif en plus, 6 à 8 h) |
+| **Durée indicative** | 57 à 71 heures (palier 1 : 12-14 h ; palier 2 : 16-19 h ; palier 3 : 14-17 h ; palier 4 : 7-9 h ; mini-projet : 8-12 h ; E16 facultatif en plus, 6 à 8 h) |
 
 ## Contexte MédiSphère
 

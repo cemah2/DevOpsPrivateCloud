@@ -34,6 +34,16 @@ check_cmd "pg-essai-import est sain" _m16p_cluster_sain wb-essais pg-essai-impor
 check_cmd "pg-essai-import : PostgreSQL 18, créé par import (bootstrap.initdb.import)" \
   _m16p_jq "$_m16_e25_import" '((.spec.imageName // "") | test(":18\\.")) and (.spec.bootstrap.initdb.import.type // "") != ""'
 
+title "Nettoyage"
+# L'API liste au plus 1000 rendez-vous, triés par date de début : les témoins (créneaux de 2030 et
+# au-delà) sont en fin de liste ; au-delà de 1000 rendez-vous, le contrôle ne peut pas conclure.
+_m16_e25_temoins() {
+  local l
+  l="$(_m16p_api '/api/v1/rendez-vous?limite=1000')" || return 1
+  jq -e 'length < 1000 and all(.[]; .praticien != "wb-temoin")' >/dev/null 2>&1 <<<"$l"
+}
+check_cmd "aucun rendez-vous de test (praticien wb-temoin) ne reste dans la recette" _m16_e25_temoins
+
 title "Documentation"
 check_cmd "compte rendu tests/bascules-postgresql.md (bascules, pg_rewind, montée majeure)" \
   _m16p_doc_main docs/kubernetes/stockage/tests/bascules-postgresql.md 'pg_rewind' 'switchover|bascule planifiée' 'import' 'pg_upgrade|en place'

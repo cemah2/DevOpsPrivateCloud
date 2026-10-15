@@ -21,7 +21,9 @@
 #     _M14_ASTREINTE=1 dispense chaque panne de ces contrôles, que la précédente ferait échouer) ;
 #   - ordre d'injection (dépendances) : pannes de charge de travail (E36/E37/E38), DNS (E42), nœud
 #     (E35), accès (E41 : peut rendre ton kubeconfig inutilisable), etcd (E40 : peut bloquer toute
-#     écriture), API (E39 : peut couper la VIP) en dernier. Annulation dans l'ordre inverse.
+#     écriture), API (E39 : peut couper la VIP) en dernier. Annulation dans l'ordre inverse, sauf E40
+#     annulée AVANT E39 : sa variante 2 (horloge reculée) peut faire refuser le SSH du nœud que E39
+#     doit réparer (l'annulation d'E40 passe par l'agent QEMU ; celle d'E39 ne touche pas etcd).
 
 _WB_E43_DIR="$(dirname "${BASH_SOURCE[0]}")"
 WB_PANNES_LIB=1
@@ -45,6 +47,7 @@ unset WB_PANNES_LIB
 
 declare -A _E43_NB=([E35]=6 [E36]=4 [E37]=4 [E38]=4 [E39]=4 [E40]=3 [E41]=4 [E42]=4)
 _E43_ORDRE=(E38 E37 E36 E42 E35 E41 E40 E39)
+_E43_ORDRE_ANNULATION=(E40 E39 E41 E35 E42 E36 E37 E38)
 
 # _E43_trios — trios admis (au plus un de E36/E37/E38), un par ligne.
 _E43_trios() {
@@ -62,11 +65,10 @@ _E43_trios() {
 }
 
 _E43_annuler() {
-  local liste e ex var r
+  local liste ex var r
   liste="$(wb_marqueur_lire M14-E43)"
   local -a actives=()
-  for ((e = ${#_E43_ORDRE[@]} - 1; e >= 0; e--)); do
-    ex="${_E43_ORDRE[e]}"
+  for ex in "${_E43_ORDRE_ANNULATION[@]}"; do
     if [[ " $liste " == *" $ex:"* ]] || wb_marqueur_existe "M14-$ex"; then
       actives+=("$ex")
     fi

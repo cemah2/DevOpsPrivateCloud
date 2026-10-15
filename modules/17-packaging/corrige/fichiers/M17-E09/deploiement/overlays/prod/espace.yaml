@@ -7,11 +7,10 @@ metadata:
   labels:
     # Étiquettes des espaces d'équipe du M14-E10 : la ValidatingAdmissionPolicy des images (M14-E18)
     # et le RBAC sélectionnent les espaces par medisphere.internal/equipe. Sans elle, la production
-    # échapperait à la règle « images de Harbor, jamais latest ».
+    # échapperait à la règle « images de Harbor, jamais latest ». La même étiquette sert aussi au
+    # cloisonnement entre équipes et à la sortie Internet (M15-E28).
     medisphere.internal/equipe: mediagenda
     medisphere.internal/environnement: prod
-    # Cloisonnement entre équipes et sortie Internet (M15-E28).
-    medisphere.internal/equipe: mediagenda
     # Routes acceptées par gw-par1 (allowedRoutes, M15).
     medisphere.internal/exposition: oui
     pod-security.kubernetes.io/enforce: restricted

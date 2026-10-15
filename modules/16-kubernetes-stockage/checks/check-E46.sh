@@ -27,6 +27,8 @@ _m16_e46_sc="$(_m16x_j storageclass)"
 check_cmd "classes ceph-rbd, ceph-rbd-retain et cephfs présentes, pilotes ceph-csi" _m16x_q "$_m16_e46_sc" '
   ([.items[] | {(.metadata.name): .provisioner}] | add) as $p
   | $p["ceph-rbd"] == "rbd.csi.ceph.com" and $p["ceph-rbd-retain"] == "rbd.csi.ceph.com" and $p["cephfs"] == "cephfs.csi.ceph.com"'
+check_cmd "classe chiffrée ceph-rbd-chiffre présente (LUKS, KMS secrets-metadata, M16-E26)" _m16x_q "$_m16_e46_sc" \
+  'any(.items[]; .metadata.name == "ceph-rbd-chiffre" and .parameters.encrypted == "true" and .parameters.encryptionKMSID == "secrets-metadata")'
 check_cmd "ceph-rbd seule classe par défaut ; ceph-rbd-retain en Retain ; ceph-rbd extensible" _m16x_q "$_m16_e46_sc" '
   ([.items[] | select(.metadata.annotations["storageclass.kubernetes.io/is-default-class"] == "true") | .metadata.name] == ["ceph-rbd"])
   and any(.items[]; .metadata.name == "ceph-rbd-retain" and .reclaimPolicy == "Retain")
@@ -98,10 +100,12 @@ check_cmd "MédiAgenda : MEDIAGENDA_DB_URL lue dans le Secret mediagenda-db-app 
   any(.items[] | select(.metadata.namespace == "mediagenda-recette") | .spec.template.spec.containers[]
       | select(.image | contains("mediagenda-api")) | .env[]?;
       .name == "MEDIAGENDA_DB_URL" and .valueFrom.secretKeyRef.name == "mediagenda-db-app")'
-check_cmd "Valkey (mediagenda-recette) : StatefulSet prêt, volume sur ceph-rbd" _m16x_q \
+# Valkey est passé sur la classe chiffrée en M16-E29 (SEC-1729) ; ceph-rbd reste accepté si
+# l'ADR-0160 ou la politique en décident autrement (choix à justifier dans la revue).
+check_cmd "Valkey (mediagenda-recette) : StatefulSet prêt, volume persistant sur ceph-rbd-chiffre (ou ceph-rbd)" _m16x_q \
   "$(_m16x_j statefulsets -n "$_m16x_ns_db")" '
   any(.items[]; (.metadata.name | test("valkey")) and (.status.readyReplicas // 0) >= 1
-      and any(.spec.volumeClaimTemplates[]?; (.spec.storageClassName // "ceph-rbd") == "ceph-rbd"))'
+      and any(.spec.volumeClaimTemplates[]?; (.spec.storageClassName // "ceph-rbd") | test("^ceph-rbd(-chiffre)?$")))'
 check_http "MédiAgenda publiée : https://mediagenda-recette.apps.par1.medisphere.internal/pret" \
   "https://mediagenda-recette.apps.par1.medisphere.internal/pret" 200
 check_cmd "MédiDoc : disponible, documents sur RGW (rgw.par1.medisphere.internal), clés S3 lues dans un Secret" \

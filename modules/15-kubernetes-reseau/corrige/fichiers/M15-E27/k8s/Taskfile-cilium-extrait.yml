@@ -9,7 +9,7 @@ tasks:
     desc: Values effectives que produirait la mise à jour (rien n'est appliqué)
     dir: composants/cilium
     cmds:
-      - cilium upgrade --version {{.CILIUM_VERSION}} --values values.yaml --dry-run-helm-values
+      - cilium upgrade --version {{.CILIUM_VERSION}} --reset-values --values values.yaml --dry-run-helm-values
 
   cilium:preflight:
     desc: Vérification préalable de la documentation (tire les images, valide les politiques)
@@ -30,5 +30,9 @@ tasks:
     desc: Installe ou met à jour Cilium avec le fichier de values du projet
     dir: composants/cilium
     cmds:
-      - cilium upgrade --version {{.CILIUM_VERSION}} --values values.yaml
+      # --reset-values (comme au M15-E08) : le fichier est la SEULE source. Sans lui, la CLI reprend par
+      # défaut les values de la release précédente (--reset-then-reuse-values) : une clé retirée du
+      # fichier survivrait (ex. autoDirectNodeRoutes après l'essai natif de M15-E29, que l'agent refuse
+      # en mode tunnel : « auto-direct-node-routes cannot be used with tunneling »).
+      - cilium upgrade --version {{.CILIUM_VERSION}} --reset-values --values values.yaml
       - cilium status --wait --wait-duration 10m

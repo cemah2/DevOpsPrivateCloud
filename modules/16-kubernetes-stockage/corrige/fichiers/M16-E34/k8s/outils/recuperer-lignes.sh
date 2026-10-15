@@ -34,6 +34,7 @@ p_enq="$(kubectl get cluster "$enquete" -n "$ns" -o jsonpath='{.status.currentPr
 [[ -n "$p_prod" && -n "$p_enq" ]] || { echo "primaire introuvable" >&2; exit 1; }
 
 umask 077
+mkdir -p "$HOME/m16/e34"
 f="$(mktemp "$HOME/m16/e34/extraction.XXXXXX.csv")"
 trap 'shred -u "$f" 2>/dev/null || rm -f "$f"' EXIT
 

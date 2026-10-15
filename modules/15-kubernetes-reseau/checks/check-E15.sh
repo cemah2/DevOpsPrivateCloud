@@ -42,7 +42,7 @@ check_output "aucun joker publié : un nom inexistant de apps est NXDOMAIN" 'sta
 check_cmd "redirection-https porte l'étiquette d'exclusion medisphere.internal/dns=non" _m15o_jq \
   "$(_m15o_kjson httproute redirection-https -n passerelles)" '.metadata.labels["medisphere.internal/dns"] == "non"'
 check_cmd "ExternalDNS exclut les objets étiquetés medisphere.internal/dns=non" bash -c \
-  'grep -qxE -- "--label-filter=medisphere\\.fr/dns ?!= ?non" <<<"$1"' _ "$_m15o_args"
+  'grep -qxE -- "--label-filter=medisphere\\.internal/dns ?!= ?non" <<<"$1"' _ "$_m15o_args"
 check_dns "essai-lb.$_M15O_APPS publié vers l'adresse du Service (10.10.41.20)" "essai-lb.$_M15O_APPS" A '^10\.10\.41\.20$'
 
 # --- Code et documentation ----------------------------------------------------------------------------

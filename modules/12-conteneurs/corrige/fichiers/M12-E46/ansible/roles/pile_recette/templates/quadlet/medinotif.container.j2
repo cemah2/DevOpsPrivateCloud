@@ -1,7 +1,10 @@
 # {{ pile_recette_entete }}
 [Unit]
 Description=MédiNotif (recette conteneurs v1)
-Requires=medinotif-rabbitmq.service
+# Wants= et non Requires= : avec systemd 257, le redémarrage automatique (Restart=) d'une unité
+# REQUISE redémarre aussi les unités qui la requièrent (RestartMode=normal). L'application tolère
+# l'absence passagère de sa dépendance (sa sonde de disponibilité échoue, elle ne s'arrête pas).
+Wants=medinotif-rabbitmq.service
 After=medinotif-rabbitmq.service
 
 [Container]

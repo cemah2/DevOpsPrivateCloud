@@ -1,10 +1,12 @@
 # wb-essais/temoins-volumes.yaml (M16-E33) — témoins d'écriture continue pendant une mise à jour.
 # Chaque pod écrit chaque seconde une ligne horodatée (et la synchronise) dans son volume ; un trou
 # dans la suite des horodatages = des écritures bloquées. Lecture : kubectl exec … -- tail, ou
-# outils/temoins-trous.sh. Supprimés après l'exercice.
+# outils/temoins-stockage.sh trous. Supprimés après l'exercice.
+# Noms préfixés « e33- » : les témoins du palier 4 (temoin-rbd, temoin-cephfs, créés par les pannes)
+# portent les noms courts et ne doivent pas être confondus avec ceux-ci.
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: temoin-rbd, namespace: wb-essais}
+metadata: {name: e33-temoin-rbd, namespace: wb-essais}
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: ceph-rbd
@@ -12,7 +14,7 @@ spec:
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: temoin-cephfs, namespace: wb-essais}
+metadata: {name: e33-temoin-cephfs, namespace: wb-essais}
 spec:
   accessModes: [ReadWriteMany]
   storageClassName: cephfs
@@ -20,13 +22,13 @@ spec:
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: temoin-rbd, namespace: wb-essais}
+metadata: {name: e33-temoin-rbd, namespace: wb-essais}
 spec:
   replicas: 1
   strategy: {type: Recreate}
-  selector: {matchLabels: {app: temoin-rbd}}
+  selector: {matchLabels: {app: e33-temoin-rbd}}
   template:
-    metadata: {labels: {app: temoin-rbd}}
+    metadata: {labels: {app: e33-temoin-rbd}}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -46,17 +48,17 @@ spec:
         volumeMounts: [{name: donnees, mountPath: /donnees}]
       volumes:
       - name: donnees
-        persistentVolumeClaim: {claimName: temoin-rbd}
+        persistentVolumeClaim: {claimName: e33-temoin-rbd}
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: temoin-cephfs, namespace: wb-essais}
+metadata: {name: e33-temoin-cephfs, namespace: wb-essais}
 spec:
   replicas: 1
   strategy: {type: Recreate}
-  selector: {matchLabels: {app: temoin-cephfs}}
+  selector: {matchLabels: {app: e33-temoin-cephfs}}
   template:
-    metadata: {labels: {app: temoin-cephfs}}
+    metadata: {labels: {app: e33-temoin-cephfs}}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -76,4 +78,4 @@ spec:
         volumeMounts: [{name: donnees, mountPath: /donnees}]
       volumes:
       - name: donnees
-        persistentVolumeClaim: {claimName: temoin-cephfs}
+        persistentVolumeClaim: {claimName: e33-temoin-cephfs}

@@ -25,9 +25,10 @@ Durée indicative du palier : 32 à 40 heures. Ordre conseillé :
 
 ```
 E10 ─ E11 ─ E12
-E13 ─ E14 ─ E15          (les disques de comparaison ; Rook est démonté avant Longhorn)
+E13 ─ E14 ─ E15          (les disques de comparaison ; Rook est démonté avant Longhorn ;
+                          la sauvegarde Longhorn d'E15 a besoin du flux vers s3-01 d'E16, étape 2)
 E10 ─ E16 ─ E17          (Velero a besoin des classes de snapshots)
-E18 ─ E19 ─ E20
+E18 ─ E19 ─ E20          (l'archivage d'E19 a lui aussi besoin du flux vers s3-01 d'E16, étape 2)
 E21, E22 (quand tu veux, après E19)
 E23 (en dernier : il reprend tout)
 ```
@@ -164,7 +165,7 @@ Dans un pod, un volume en mode bloc se déclare sous `volumeDevices` (avec `devi
 > ⚠️ **Attention** : l'étape 3 retire **pendant quelques minutes** la classe par défaut du cluster. Tout PVC créé sans classe pendant ce temps (par une autre personne, un opérateur, un chart) reste sans classe. Préviens (ticket), fais-le hors des essais d'autres modules, note l'heure, et remets l'annotation dès l'essai terminé ; vérifie à la fin qu'il y a exactement une classe par défaut.
 
 **Travail demandé**
-1. **Lecture des paramètres.** Explique dans `~/m16/e12/journal.md`, ligne par ligne, la StorageClass `ceph-rbd` telle qu'elle est dans le cluster (`kubectl get sc ceph-rbd -o yaml`) : `provisioner`, chaque paramètre (`clusterID`, `pool`, `imageFeatures`, `csi.storage.k8s.io/fstype`, les cinq paramètres de Secret et ce que chacun sert à appeler), `reclaimPolicy`, `allowVolumeExpansion`, `volumeBindingMode`, `mountOptions` éventuelles. Lesquels sont modifiables après création ?
+1. **Lecture des paramètres.** Explique dans `~/m16/e12/journal.md`, ligne par ligne, la StorageClass `ceph-rbd` telle qu'elle est dans le cluster (`kubectl get sc ceph-rbd -o yaml`) : `provisioner`, chaque paramètre (`clusterID`, `pool`, `imageFeatures`, `csi.storage.k8s.io/fstype`, les quatre couples de paramètres de Secret (nom, espace) et ce que chacun sert à appeler), `reclaimPolicy`, `allowVolumeExpansion`, `volumeBindingMode`, `mountOptions` éventuelles. Lesquels sont modifiables après création ?
 2. **Deux classes par défaut.** Crée `wb-essai-defaut2`. Crée un PVC sans classe : laquelle reçoit-il ? Que dit la documentation sur ce cas depuis 1.26 ? Supprime le PVC et `wb-essai-defaut2`.
 3. **Zéro classe par défaut** (voir l'avertissement). Retire l'annotation de `ceph-rbd`, crée un PVC `sans-classe` sans classe : état, événements, `spec.storageClassName`. Remets l'annotation et observe `sans-classe` dans la minute qui suit. Quelle différence entre un PVC **sans** `storageClassName` et un PVC avec `storageClassName: ""` ? Prouve-le.
 4. **Liaison différée.** Crée `wb-essai-differee`, puis un PVC dessus : état et événement. Crée un pod qui le monte avec un `nodeSelector` impossible (étiquette inexistante) : que se passe-t-il côté Ceph (`rbd ls k8s-rbd` avant et après) ? Corrige le pod. Compare avec la même expérience en `Immediate` sur `ceph-rbd`. Écris dans le journal deux situations réelles où `Immediate` coûte (quotas, volumes orphelins, topologie).
@@ -351,7 +352,7 @@ Si l'espace reste en `Terminating`, la documentation explique comment retrouver 
 - Disques : 32 Go par travailleur sur `hdd-bulk`, `scsi2`, série `k8s-w0N-lh`, formaté en ext4 (étiquette `longhorn`) et monté sur `/var/lib/longhorn` (chemin par défaut de Longhorn) par Ansible.
 - Prérequis des nœuds (moteur V1, celui qu'on utilise) : `open-iscsi` avec `iscsid` actif et le module `iscsi_tcp`, client NFSv4 (`nfs-common`), `cryptsetup`, `dmsetup`, propagation des montages. Debian 13 fournit `open-iscsi` 2.1.11 : la documentation 1.13 met en garde contre la **2.1.12**, à ne jamais installer. L'outil `longhornctl` 1.13.0 (binaire publié dans les versions de `longhorn/cli`) sait contrôler ces prérequis.
 - Longhorn 1.13.0 : chart `longhorn/longhorn` (`https://charts.longhorn.io`), espace `longhorn-system` en PSA `privileged` ; Kubernetes 1.34 au minimum. Par défaut, le chart crée une classe `longhorn` **marquée par défaut** : à empêcher.
-- Sauvegarde « en aperçu » : identité `longhorn-essai` et compartiment `longhorn-essai` sur `s3-01` (rôle `seaweedfs`, MR), clés dans `~/.config/workbook/s3-longhorn-essai.env` ; Secret `longhorn-s3` dans `longhorn-system` (clés `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINTS`, `AWS_CERT` = CA MédiSphère) ; cible de sauvegarde de la forme `s3://<compartiment>@<région>/`. Identité et compartiment sont **supprimés** en fin d'exercice.
+- Sauvegarde « en aperçu » : identité `longhorn-essai` et compartiment `longhorn-essai` sur `s3-01` (rôle `seaweedfs`, MR), clés dans `~/.config/workbook/s3-longhorn-essai.env` ; Secret `longhorn-s3` dans `longhorn-system` (clés `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINTS`, `AWS_CERT` = CA MédiSphère) ; cible de sauvegarde de la forme `s3://<compartiment>@<région>/`. Identité et compartiment sont **supprimés** en fin d'exercice. Les pods de Longhorn qui écrivent la sauvegarde tournent sur les travailleurs : ils doivent joindre `s3-01:8333` à travers la bordure (règle de `pare_feu.yml` élargie aux travailleurs en M16-E16, étape 2 ; si tu fais E15 avant E16, fais d'abord cette étape).
 - Interface : `kubectl -n longhorn-system port-forward svc/longhorn-frontend 8080:80` depuis `adm01` ; elle n'est **pas** publiée (pas d'authentification par défaut).
 - Code : `plateforme/infra` (disques), `plateforme/ansible` (rôle `longhorn_prerequis`, variable `longhorn_prerequis_etat: present|absent`, playbook `k8s-longhorn-prerequis.yml`), `plateforme/k8s` (`espaces/longhorn-system/`, `composants/longhorn/values.yaml`).
 
@@ -407,12 +408,12 @@ Le *job* de désinstallation échoue tant que `deleting-confirmation-flag` vaut 
 - Installer Velero 1.18 avec le plugin AWS vers le S3 du socle, en TLS vérifié avec la CA MédiSphère, sans secret dans un dépôt.
 - Sauvegarder, planifier, filtrer, restaurer des ressources ; lire les journaux d'une sauvegarde et d'une restauration.
 
-**Prérequis** : M05-E10 (rôle `seaweedfs`), M14-E24 (sauvegarde etcd, pour comparer), M16-E10 (classes d'instantanés, pour E17).
+**Prérequis** : M05-E10 (rôle `seaweedfs`), M07-E24 (matrice `pare_feu.yml` commune aux passerelles, playbook `routeurs.yml`), M14-E24 (sauvegarde etcd, pour comparer), M16-E10 (classes d'instantanés, pour E17).
 **Durée indicative** : 3 h.
 
 **Contexte technique**
 - S3 : identité `velero` limitée au compartiment `velero-k8s-par1` (`Read`, `Write`, `List`), ajoutés par MR dans `host_vars/s3-01/seaweedfs.yml` et le Vault (`vault.yml` de `s3-01`) ; décide et justifie le versionnage du compartiment. Clés dans `~/.config/workbook/s3-velero.env` (variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, 600) et au registre des secrets.
-- Flux : les pods sortent par l'adresse de leur nœud (VLAN 40). Le flux VLAN 40 → `s3-01` TCP 8333 a été ouvert au M14 pour l'instantané etcd : vérifie qu'il couvre les travailleurs, et ajoute la ligne « Velero » à `docs/socle/matrice-flux.md`.
+- Flux : les pods sortent par l'adresse de leur nœud (VLAN 40), et les pods de Velero (serveur, `node-agent`, pods de déplacement de données) tournent sur les **travailleurs**. Le flux VLAN 40 → `s3-01` TCP 8333 a été ouvert au M14-E24 pour l'instantané etcd : relis sa règle dans `group_vars/role_routeur/pare_feu.yml` (`plateforme/ansible`) et sa source. Si elle ne couvre pas les travailleurs, élargis-la (MR, application sur `gw01` puis `gw02`), puis ajoute la ligne « Velero » à `docs/socle/matrice-flux.md`. Cette règle servira aussi à CloudNativePG (E19) et à la cible de sauvegarde de Longhorn (E15).
 - Velero 1.18.4 par le chart `vmware-tanzu/velero` **12.2.1** (`https://vmware-tanzu.github.io/helm-charts`), dont la version applicative par défaut est 1.18.2 : fixe l'image `velero/velero:v1.18.4`. Plugin `velero/velero-plugin-for-aws:v1.14.4` (conteneur d'initialisation). Espace `velero` en PSA `privileged` (le `node-agent` d'E17 monte `/var/lib/kubelet/pods` du nœud).
 - Emplacement de sauvegarde (BSL) : nom `s3-01`, par défaut, fournisseur `aws`, compartiment `velero-k8s-par1`, configuration `region`, `s3ForcePathStyle`, `s3Url` (`https://s3-01.par1.medisphere.internal:8333`), CA MédiSphère dans `caCert` (en base 64 : le chart 12.2.1 ne gère pas encore `caCertRef`, la voie recommandée par la documentation 1.18). Pas d'emplacement d'instantanés natif (`VolumeSnapshotLocation`) : les volumes passent par CSI et Kopia (E17).
 - Identifiants : Secret `velero-s3` (clé `cloud`, au format d'un fichier d'identifiants AWS) créé par le script `outils/secrets-sauvegarde.sh` de `plateforme/k8s` à partir de `s3-velero.env`, **sans** passer par un fichier en clair ni la ligne de commande ; le chart l'utilise sans le créer (`credentials.existingSecret`).
@@ -422,7 +423,8 @@ Le *job* de désinstallation échoue tant que `deleting-confirmation-flag` vaut 
 
 **Travail demandé**
 1. **Lecture.** Lis *Velero → How Velero works*, *Backup Storage Locations*, *Backup reference*, *Restore reference*. Réponds dans `~/m16/e16/journal.md` : que contient une sauvegarde dans le compartiment (fichiers, format) ? Qu'est-ce qui n'est **pas** sauvegardé par défaut ? Comment Velero restaure-t-il un objet qui existe déjà ? Qu'apporte Velero par rapport à l'instantané etcd, et l'inverse ?
-2. **S3.** Ajoute l'identité et le compartiment par MR (`plateforme/ansible`), clés générées comme au M05, rangées sans passer par l'écran. Vérifie depuis `adm01` avec `s3-velero.env` : liste du compartiment autorisée, liste d'un autre compartiment refusée.
+2. **S3 et flux.** Ajoute l'identité et le compartiment par MR (`plateforme/ansible`), clés générées comme au M05, rangées sans passer par l'écran. Vérifie depuis `adm01` avec `s3-velero.env` : liste du compartiment autorisée, liste d'un autre compartiment refusée. Puis, depuis **chaque** travailleur, teste la connexion TCP vers `s3-01:8333` (`timeout 3 bash -c '</dev/tcp/10.10.20.14/8333' && echo ouvert`) : si elle n'aboutit pas, corrige la règle de la bordure (voir le contexte technique) et refais le test.
+   > ⚠️ **Attention** : `pare_feu.yml` est la matrice **commune** de `gw01` et `gw02`, qui filtrent tout le lab. Avant d'appliquer, lis le `--check --diff` (seule ta règle doit changer dans `/etc/nftables.conf`), applique sur une passerelle à la fois, et vérifie après chaque passerelle qu'`adm01` joint toujours l'API du cluster et que l'instantané etcd horaire du M14 part toujours. Retour arrière : annuler la MR (`git revert`) et rejouer le même playbook sur les deux passerelles.
 3. **CLI.** Installe `velero` 1.18.4 sur `adm01` (empreinte vérifiée). `velero version --client-only`.
 4. **Secret et espace.** `espaces/velero/00-namespace.yaml` (PSA `privileged`, justifié) ; écris `outils/secrets-sauvegarde.sh` (sous-commande `velero` pour l'instant : lit `s3-velero.env`, crée ou met à jour `velero-s3` par `kubectl apply`, n'affiche jamais la clé, refuse si le fichier n'est pas en 600) ; MR, application, exécution.
 5. **Installation.** Écris `composants/velero/values.yaml` (image, plugin, BSL `s3-01`, `caCert`, Secret existant, pas de `VolumeSnapshotLocation`, `node-agent`, `EnableCSI`, ressources) ; rends-le (`helm template … | less`) et vérifie qu'aucun secret n'y figure ; MR, puis :
@@ -441,6 +443,7 @@ Le *job* de désinstallation échoue tant que `deleting-confirmation-flag` vaut 
 **Critères de réussite**
 - [ ] L'espace `velero` est en PSA `privileged` ; Velero tourne en 1.18.4 avec le plugin AWS 1.14.4 ; le `node-agent` tourne sur les trois travailleurs.
 - [ ] La BSL `s3-01` est `Available` et par défaut, vers `velero-k8s-par1`, en HTTPS sans `insecureSkipTLSVerify`.
+- [ ] Chacun des trois travailleurs joint `s3-01` en TCP 8333 ; la règle de la bordure qui le permet est sur `main` de `plateforme/ansible`, et `docs/socle/matrice-flux.md` cite Velero.
 - [ ] Le Secret `velero-s3` existe ; `s3-velero.env` est en 600 ; aucune clé n'est dans `plateforme/k8s` (le check cherche les motifs de clé dans les fichiers de `composants/velero/`).
 - [ ] Une sauvegarde de `wb-essais` est `Completed` et au moins trois restaurations sont `Completed` (ou `PartiallyFailed` expliqué dans le journal).
 - [ ] La planification `mediagenda-dev-quotidienne` existe (TTL 168 h) et a produit au moins une sauvegarde `Completed`.
@@ -609,7 +612,7 @@ Les pods d'instance portent l'étiquette `cnpg.io/cluster: mediagenda-db` (y com
 - Le `Cluster` déclare le plugin `barman-cloud.cloudnative-pg.io` avec `isWALArchiver: true` et le paramètre `barmanObjectName: cnpg-s3`. Le modifier redémarre les instances une à une (le primaire en dernier, par bascule).
 - Sauvegarde planifiée : `ScheduledBackup` `mediagenda-db-quotidienne`, méthode `plugin`, tous les jours à 01 h 15 ; l'expression cron de CNPG a **six** champs (secondes en tête).
 - Restauration : nouveau cluster `mediagenda-db-pitr` dans `mediagenda-recette`, **une** instance, amorcé par `bootstrap.recovery` depuis un `externalClusters` qui lit `cnpg-s3` avec `serverName: mediagenda-db`, cible `recoveryTarget.targetTime` avec un fuseau explicite. Il n'archive **pas** ses propres WAL (sinon il écrirait dans le même compartiment sous un autre nom de serveur : à faire exprès, jamais par accident). Il est supprimé après vérification et après le passage du check.
-- Réseau : la sortie des instances (et des pods de restauration) vers 10.10.20.14:8333 s'ajoute à la politique d'E18.
+- Réseau : la sortie des instances (et des pods de restauration) vers 10.10.20.14:8333 s'ajoute à la politique d'E18. Hors du cluster, la bordure doit laisser passer les travailleurs vers `s3-01:8333` : c'est l'étape 2 de M16-E16 (fais-la d'abord si tu n'as pas encore fait E16).
 - Supervision provisoire : conditions `ContinuousArchiving` et `LastBackupSucceeded` du `Cluster`, statut `serverRecoveryWindow` de l'`ObjectStore`, `kubectl cnpg status`.
 
 **Travail demandé**

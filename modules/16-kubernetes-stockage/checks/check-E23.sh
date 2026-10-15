@@ -38,8 +38,9 @@ check_cmd "task stockage:appliquer définie dans Taskfile.yml" grep -q 'stockage
 # Classes : mêmes paramètres dans le cluster et dans le dépôt.
 _m16o_meme_classe() { # FICHIER RESSOURCE NOM CHAMPS_JQ
   local depot cluster
-  depot="$(_m16o_contenu_main "$_M16O_PROJET_K8S" "$1" | yq -o=json -I=0 'select(.metadata.name == "'"$3"'")' 2>/dev/null | jq -c "$4" 2>/dev/null)"
-  cluster="$(_m16o_kj get "$2" "$3" | jq -c "$4" 2>/dev/null)"
+  # -S : l'API renvoie les clés des tables (parameters) triées ; le fichier, dans son ordre à lui.
+  depot="$(_m16o_contenu_main "$_M16O_PROJET_K8S" "$1" | yq -o=json -I=0 'select(.metadata.name == "'"$3"'")' 2>/dev/null | jq -cS "$4" 2>/dev/null)"
+  cluster="$(_m16o_kj get "$2" "$3" | jq -cS "$4" 2>/dev/null)"
   [[ -n "$depot" && "$depot" == "$cluster" ]]
 }
 for _m16o_c in ceph-rbd ceph-rbd-retain cephfs; do

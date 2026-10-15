@@ -9,8 +9,8 @@
 #      one PodDisruptionBudget ») : le drain ne passe pas ;
 #   2. une réplique est clôturée (annotation cnpg.io/fencedInstances, « diagnostic disque » de
 #      Lucas oublié) → il ne reste qu'une réplique saine : la promotion vers la réplique clôturée est
-#      refusée, et après la bascule et le drain (l'instance évincée de X reste Pending : anti-affinité
-#      requise), plus aucune réplique synchrone : avec dataDurability: required, les écritures attendent ;
+#      refusée ; le drain fait basculer le primaire, puis reste bloqué sur l'ancien primaire devenu
+#      réplique (PDB des répliques : instances − 2 = 1 réplique prête exigée, la clôturée ne l'est pas) ;
 #   3. réplication synchrone mal réglée : .spec.postgresql.synchronous.number passe de 1 à 2 → tant que
 #      les trois instances tournent, tout va bien ; dès que le drain retire une instance, les
 #      validations attendent une seconde réplique synchrone qui n'existe plus : écritures bloquées.

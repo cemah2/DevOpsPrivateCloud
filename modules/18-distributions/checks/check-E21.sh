@@ -54,5 +54,5 @@ check_cmd "aucune réservation d'adresse sans propriétaire Cluster API dans $_e
 title "Documentation"
 check_cmd "RB-180 publié (phases et raisons, jeton, droits, adresses, point d'accès, pause)" \
   _m18p_doc_prefixe docs/kubernetes/distributions/runbooks RB-180 'Provisioning' 'VirtualMachineProvisioned' 'jeton|token' 'IPAddressClaim|adresse' 'paused|pause'
-check_cmd "journal de diagnostic INC-4521 publié dans docs/socle/journal/" \
-  _m18p_un_fichier_contient plateforme/medisphere docs/socle/journal 'INC-4521'
+check_cmd "journal de diagnostic INC-4521 publié dans docs/kubernetes/journal/" \
+  _m18p_un_fichier_contient plateforme/medisphere docs/kubernetes/journal 'INC-4521'

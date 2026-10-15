@@ -14,6 +14,26 @@ configMapGenerator:
     literals:
       - MEDIAGENDA_CACHE_TTL=60
 patches:
+  # En-têtes de sécurité de l'entrée (M15-E33, SEC-1633), repris de l'overlay de recette de M17-E04 :
+  # le chart ne les rend pas. Dans la base, ils valent pour la recette ET la production.
+  - target:
+      kind: HTTPRoute
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - name: Strict-Transport-Security
+                  value: max-age=31536000; includeSubDomains
+                - name: X-Content-Type-Options
+                  value: nosniff
+                - name: Referrer-Policy
+                  value: no-referrer
+                - name: X-Frame-Options
+                  value: DENY
   - target:
       kind: Deployment
       name: mediagenda

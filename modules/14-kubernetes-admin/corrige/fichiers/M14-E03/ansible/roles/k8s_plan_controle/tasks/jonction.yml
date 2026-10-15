@@ -17,8 +17,12 @@
 
 # Ré-envoie les certificats partagés (CA, sa, front-proxy, etcd) chiffrés dans le Secret
 # kubeadm-certs et affiche la clé sur la dernière ligne.
+# --config : le fichier du nœud de référence (posé par kubeadm.yml) fixe la version ; sans lui,
+# kubeadm part de ses défauts et interroge dl.k8s.io pour « stable-1 ».
 - name: Ré-envoyer les certificats partagés et obtenir la clé de déchiffrement
-  ansible.builtin.command: kubeadm init phase upload-certs --upload-certs
+  ansible.builtin.command: >-
+    kubeadm init phase upload-certs --upload-certs
+    --config {{ k8s_plan_controle_dossier }}/kubeadm-config.yaml
   delegate_to: "{{ _k8s_plan_controle_reference }}"
   register: _k8s_plan_controle_cle_certs
   changed_when: true

@@ -4,13 +4,20 @@
 # contrôleurs (suppression d'un volume : nettoyage de la DEK chez les KMS qui la stockent ailleurs).
 #
 # Type « metadata » : une DEK aléatoire PAR VOLUME, chiffrée par une KEK et rangée dans les
-# métadonnées de l'image RBD (rbd.csi.ceph.com/dek). Sans secretName, la KEK est lue dans les
-# Secrets de la StorageClass (provisioner et node-stage), clé encryptionPassphrase : ici le Secret
-# dédié csi-rbd-secret-chiffre (créé par outils/secret-rbd-chiffre.sh depuis Ansible Vault).
+# métadonnées de l'image RBD (rbd.csi.ceph.com/dek). La KEK est la clé encryptionPassphrase du
+# Secret dédié csi-rbd-secret-chiffre (créé par outils/secret-rbd-chiffre.sh depuis Ansible Vault),
+# DÉSIGNÉ ICI PAR SON NOM (secretName, secretNamespace).
+# Pourquoi le nommer : sans secretName, ceph-csi lit la KEK dans les Secrets de la REQUÊTE en cours
+# (docs/rbd/deploy.md, internal/kms/secretskms.go au tag v3.18.1). Pour un instantané, ce sont ceux de
+# la VolumeSnapshotClass ceph-rbd-snap (csi-rbd-secret, sans KEK) : la copie de la configuration de
+# chiffrement échoue (« missing encryptionPassphrase in storageclass secret »), et toutes les
+# sauvegardes Velero par instantané d'un volume chiffré (Valkey après M16-E29) aussi.
 # Valeurs de type chaîne uniquement (map[string]string, documentation ceph-csi).
 encryptionKMSConfig:
   secrets-metadata:
     encryptionKMSType: metadata
+    secretName: csi-rbd-secret-chiffre
+    secretNamespace: ceph-csi
 #
 # Rappel (charts 3.18) : les charts ceph-csi-rbd ET ceph-csi-cephfs créent chacun une ConfigMap
 # nommée par kmsConfigMapName, avec le même nom par défaut. C'est pour cela que values-cephfs.yaml

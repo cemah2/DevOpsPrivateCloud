@@ -14,14 +14,14 @@ Les fichiers modifiés sur un nœud sont sauvegardés dans `/var/lib/workbook/` 
 
 **Vérifié pendant la rédaction** :
 - talosctl **v1.14.2** : génération d'un `talosconfig` d'un autre cluster et remplacement du contexte par `yq` (E20 variante 1, injection et annulation rejouées en local) ;
-- refus du correctif de Lucas par la validation stricte : `talosctl machineconfig patch` répond `error decoding document v1alpha1/KubeNodeConfig/ (line 7): unknown keys found during decoding: nodeLabels: …` (sortie réelle), et accepte le correctif une fois `nodeLabels` remplacé par `labels` ;
+- refus du correctif de Lucas par la validation stricte : `talosctl machineconfig patch` répond `error decoding document v1alpha1/KubeNodeConfig/ (line N): unknown keys found during decoding: nodeLabels: …` (sortie réelle), et accepte le correctif une fois `nodeLabels` remplacé par `labels` ;
 - création et annulation de la branche `lucas/talos-zones` (dépôt de test) ;
 - contrôle de l'empreinte de CA d'un jeton k3s (`check-E19`, sur fichiers de test).
 
 **Points non testés en conditions réelles** (aucun cluster de la bonne version n'a pu être démarré pour la vérification) :
 - les messages exacts de k3s, RKE2 et CAPMOX cités ci-dessous : ils viennent de la documentation et des sources, **à confirmer sur ta version** ;
 - E20 variante 3 : réinitialisation de `STATE` et `EPHEMERAL` puis retour en maintenance sur 10.10.99.87 (le lecteur nocloud ne porte que le réseau ; d'après le code de la plateforme nocloud de Talos 1.14, un `user-data` `#cloud-config` n'est pas pris pour une configuration de machine) ;
-- E21 : refus d'un jeton Proxmox expiré par l'API de Proxmox VE 9 et réaction de CAPMOX ; ordre clone → réservation d'adresse dans CAPMOX 0.9 (d'après les raisons de la condition `VirtualMachineProvisioned`) ; `pvesh get /pools --poolid lab` sur PVE 9 ;
+- E21 : refus d'un jeton Proxmox expiré par l'API de Proxmox VE 9 et réaction de CAPMOX ; (l'ordre clone → réservation d'adresse est, lui, celui du code de CAPMOX v0.9.1, `ReconcileVM`) ; `pvesh get /pools --poolid lab` sur PVE 9 ;
 - E22 variante 4 : comportement exact de RKE2 quand `system-default-registry` change (échec du tirage du *runtime* ou des pods statiques : le nœud reste `NotReady` dans les deux cas).
 
 ---
@@ -133,17 +133,17 @@ admin@adm01:~$ kubectl --kubeconfig ~/.config/workbook/m18/talos.kubeconfig get 
 
 ```
 admin@adm01:~$ yq -r '.contexts[.context].ca' $TALOSCONFIG | base64 -d | openssl x509 -noout -subject -fingerprint -sha256
-admin@adm01:~$ yq -r '.os.ca.crt' ~/.config/workbook/m18/talos-secrets.yaml | base64 -d | openssl x509 -noout -subject -fingerprint -sha256
+admin@adm01:~$ yq -r '.certs.os.crt' ~/.config/workbook/m18/talos-secrets.yaml | base64 -d | openssl x509 -noout -subject -fingerprint -sha256
 ```
 
-(Le chemin de la CA de l'OS dans le paquet de secrets, `os.ca.crt`, est celui de `talosctl gen secrets` 1.14 : relis ton fichier.) Les empreintes diffèrent. Correctif : régénérer **depuis le paquet de secrets**, sans toucher aux nœuds :
+(La CA de l'OS est sous `certs.os.crt` dans le paquet produit par `talosctl gen secrets` 1.14 ; à côté, `certs.etcd`, `certs.k8s`, `certs.k8saggregator`, `certs.k8sserviceaccount`.) Les empreintes diffèrent. Correctif : régénérer **depuis le paquet de secrets**, sans toucher aux nœuds :
 
 ```
 admin@adm01:~/src/distributions$ set -a; . talos/versions.env; set +a
 admin@adm01:~$ talosctl gen config "$TALOS_CLUSTER" "$TALOS_ENDPOINT" --with-secrets ~/.config/workbook/m18/talos-secrets.yaml \
->   --output-types talosconfig -o /tmp/talosconfig.$$ --force
-admin@adm01:~$ talosctl --talosconfig /tmp/talosconfig.$$ config endpoint 10.10.99.85
-admin@adm01:~$ install -m 600 /tmp/talosconfig.$$ ~/.config/workbook/m18/talosconfig && rm -f /tmp/talosconfig.$$
+>   --output-types talosconfig -o ~/.cache/m18/talosconfig.neuf --force
+admin@adm01:~$ talosctl --talosconfig ~/.cache/m18/talosconfig.neuf config endpoint 10.10.99.85
+admin@adm01:~$ install -m 600 ~/.cache/m18/talosconfig.neuf ~/.config/workbook/m18/talosconfig && rm -f ~/.cache/m18/talosconfig.neuf
 ```
 
 Le paquet de secrets suffit à refaire un `talosconfig` valide : c'est pour cela qu'il est en 600 et dans le Vault. À l'inverse, le `talosconfig` ne permet pas de refaire le paquet. Prévention : `generer.sh` produit aussi le `talosconfig`, on ne lance jamais `gen config` sans `--with-secrets` dans le dossier de travail, et `talosctl config merge` plutôt qu'un écrasement.
@@ -153,7 +153,7 @@ Le paquet de secrets suffit à refaire un `talosconfig` valide : c'est pour cela
 ```
 admin@adm01:~/src/distributions$ git log --oneline -3 && git show --stat HEAD
 admin@adm01:~/src/distributions$ talos/appliquer.sh talos-02 --essai
-… error decoding document v1alpha1/KubeNodeConfig/ (line 7): unknown keys found during decoding:
+… error decoding document v1alpha1/KubeNodeConfig/ (line N): unknown keys found during decoding:
 nodeLabels:
     topology.kubernetes.io/zone: par1-baie-b
 ```
@@ -174,7 +174,7 @@ La console affiche le tableau de bord de Talos en mode maintenance, avec l'adres
 ```
 admin@adm01:~/src/distributions$ talos/generer.sh                    # si ~/.cache/m18/talos/ est vide
 admin@adm01:~/src/distributions$ talos/appliquer.sh talos-03 --maintenance
-admin@adm01:~$ talosctl -n 10.10.99.87 health --wait-timeout 10m
+admin@adm01:~$ talosctl -n 10.10.99.85 health --wait-timeout 10m --control-plane-nodes 10.10.99.85 --worker-nodes 10.10.99.86,10.10.99.87
 ```
 
 Le nœud se réinstalle **pas** (il est déjà installé sur le disque) : il reçoit sa configuration, regénère son identité, rejoint le cluster. Le `Node` Kubernetes `talos-03` existant est repris (même nom). La cause (qui a lancé `talosctl reset` ?) se cherche dans l'historique : `talosctl -n 10.10.99.87 dmesg` ne la gardera pas (tout est effacé) ; c'est l'audit de l'API Talos qui manque, et une règle d'équipe (le rôle `os:admin` n'est pas pour tout le monde : `os:operator` suffit à l'astreinte de premier niveau).

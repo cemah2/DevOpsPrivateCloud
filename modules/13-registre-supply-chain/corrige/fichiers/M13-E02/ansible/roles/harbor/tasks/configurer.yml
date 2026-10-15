@@ -41,3 +41,13 @@
     - harbor_conf is changed
   changed_when: true
   notify: Redémarrer Harbor
+
+# Harbor 2.15.3+ : exemption de lecture avant la première signature (voir defaults/main.yml).
+# prepare réécrit common/config/core/env : la ligne est reposée après chaque install.sh ou prepare,
+# et un changement redémarre Harbor (le conteneur core ne lit son env_file qu'à sa création).
+- name: Exemption de lecture avant la première signature Cosign (core, Harbor 2.15.3+)
+  ansible.builtin.lineinfile:
+    path: "{{ harbor_dossier }}/common/config/core/env"
+    regexp: '^CONTENT_TRUST_LEGACY_SIGNER_PULL_ENABLED='
+    line: "CONTENT_TRUST_LEGACY_SIGNER_PULL_ENABLED={{ 'true' if harbor_cosign_lecture_avant_signature | bool else 'false' }}"
+  notify: Redémarrer Harbor

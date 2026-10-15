@@ -14,7 +14,8 @@
 #   sc:sbom          Syft : SBOM SPDX (référence) + CycloneDX, artefacts du pipeline
 #   sc:publication   Skopeo, robot du projet : copie de l'archive vers Harbor, empreintes préservées ;
 #                    refus si l'étiquette existe déjà (et immuabilité des v* côté Harbor, M13-E10)
-#   sc:signature     Cosign : signature de l'empreinte + attestations SPDX et CycloneDX, sans journal
+#   sc:signature     Cosign : signature de l'index ET de chaque manifeste de plateforme, attestations
+#                    SPDX, CycloneDX et provenance SLSA (extraite de l'archive), sans journal
 #   sc:verification  Cosign : vérification avec la clé PUBLIQUE embarquée dans l'image outillée
 # Sorties (rapports dotenv) : SC_EMPREINTE (sc:construction), SC_REF = <registre>/<dépôt>@<empreinte>
 # (sc:publication), utilisée par le job « verifier-signature » de templates/verification.yml (E14).
@@ -22,6 +23,9 @@
 # Compatible avec les politiques de M13-E14 (signature exigée, images vulnérables refusées) : entre la
 # poussée et la signature, Harbor refuse de SERVIR le manifeste ; aucun job ne relit donc l'image par
 # skopeo après la poussée (empreinte publiée lue dans --digestfile, provenance contrôlée sur l'archive).
+# sc:signature attend la fin de l'analyse de Harbor, et la première signature d'une image d'un projet
+# qui exige la signature suppose l'exemption de Harbor 2.15.3+ (rôle harbor, variable
+# harbor_cosign_lecture_avant_signature, M13-E14).
 #
 # Quand :
 #   - étiquette Git vX.Y.Z (semantic-release, étiquettes protégées) → publication sous vX.Y.Z ;
@@ -207,14 +211,60 @@ sc:publication:
 sc:signature:
   stage: signature
   extends: [.sc-outils, .sc-regles-publication]
-  needs: [sc:publication, sc:sbom]
+  # sc:construction : l'archive (image.tar) donne les manifestes de l'index et la provenance.
+  needs: [sc:construction, sc:publication, sc:sbom]
   script:
     - *sc-connexion
+    # Cosign LIT le manifeste avant de signer. Avec la politique « images vulnérables » de M13-E14,
+    # Harbor ne le sert à personne (Cosign compris, sans exemption possible) tant que l'analyse lancée
+    # à la poussée n'est pas terminée : on attend sa fin (10 min au plus). Sans politique, l'attente
+    # est courte et ne change rien. Identifiants par la configuration de curl lue sur l'entrée
+    # standard (jamais en argument). Champ lu : scan_overview (résumé de l'index pour une image
+    # multi-manifeste : à vérifier sur ta version de Harbor).
+    - |
+      projet="${SC_IMAGE_NOM%%/*}"; depot="${SC_IMAGE_NOM#*/}"; depot="${depot//\//%252F}"
+      url="https://$SC_REGISTRE/api/v2.0/projects/$projet/repositories/$depot/artifacts/$SC_EMPREINTE?with_scan_overview=true"
+      etat=absente
+      for _ in $(seq 1 60); do
+        etat="$(printf 'user = "%s:%s"\n' "$HARBOR_ROBOT_USER" "$HARBOR_ROBOT_TOKEN" \
+          | curl -sf --max-time 20 -K - "$url" \
+          | jq -r '[(.scan_overview // {})[] | .scan_status] | first // "absente"')" || etat=illisible
+        echo "analyse de Harbor : $etat"
+        case "$etat" in
+          Success) break ;;
+          Error | Stopped) echo "l'analyse de Harbor a échoué : voir l'artefact dans Harbor"; exit 1 ;;
+        esac
+        sleep 10
+      done
+      test "$etat" = Success || { echo "analyse de Harbor non terminée après 10 min"; exit 1; }
     # COSIGN_PRIVATE_KEY est une variable de type FICHIER (chemin) ; COSIGN_PASSWORD est lue par Cosign.
     # --signing-config : configuration MédiSphère SANS journal public (sinon : Rekor public, sans question).
     - cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$SC_REF"
+    # La politique « signature exigée » de Harbor vérifie CHAQUE manifeste tiré : un moteur (Docker,
+    # containerd) tire l'index PUIS le manifeste de sa plateforme, qui doit donc être signé lui aussi
+    # (src/server/middleware/contenttrust/contentrust.go de Harbor 2.15.3 : pas d'héritage de
+    # l'index). On signe chaque manifeste de plateforme listé dans l'index de l'archive. Le manifeste
+    # d'attestation de BuildKit (plateforme unknown/unknown) n'est jamais tiré par un moteur, et
+    # Harbor ne l'analyse pas : il reste illisible sous les politiques ; sa provenance est attestée
+    # ci-dessous par Cosign (référent signé, lisible).
+    - |
+      tar -xOf image.tar "blobs/sha256/${SC_EMPREINTE#sha256:}" > index-archive.json
+      for m in $(jq -r '.manifests[] | select((.platform.os // "unknown") != "unknown") | .digest' index-archive.json); do
+        cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$SC_REGISTRE/$SC_IMAGE_NOM@$m"
+      done
     - cosign attest --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json --type spdxjson --predicate sbom.spdx.json "$SC_REF"
     - cosign attest --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json --type cyclonedx --predicate sbom.cdx.json "$SC_REF"
+    # Provenance SLSA v1 de BuildKit (couche in-toto du manifeste d'attestation de l'archive),
+    # attestée par Cosign sur l'index : vérifiable par « cosign verify-attestation --type slsaprovenance1 ».
+    - |
+      att="$(jq -r '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")][0].digest' index-archive.json)"
+      couche="$(tar -xOf image.tar "blobs/sha256/${att#sha256:}" \
+        | jq -r '[.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://slsa.dev/provenance/v1")][0].digest')"
+      tar -xOf image.tar "blobs/sha256/${couche#sha256:}" | jq -e '.predicate' > provenance.json
+      cosign attest --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json --type slsaprovenance1 --predicate provenance.json "$SC_REF"
+  artifacts:
+    paths: [provenance.json]
+    expire_in: 1 year
 
 # --- 6. Vérification (comme le fera le consommateur) --------------------------------------------
 sc:verification:
@@ -225,6 +275,7 @@ sc:verification:
     - *sc-connexion
     - cosign verify --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true "$SC_REF" > /dev/null
     - cosign verify-attestation --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true --type spdxjson "$SC_REF" > /dev/null
+    - cosign verify-attestation --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true --type slsaprovenance1 "$SC_REF" > /dev/null
     # La provenance de BuildKit (dans l'index, contrôlée sur l'archive par sc:publication) est couverte
     # par la signature de l'index vérifiée ci-dessus.
     - echo "Publiée, signée, attestée et vérifiée -> $SC_REF"

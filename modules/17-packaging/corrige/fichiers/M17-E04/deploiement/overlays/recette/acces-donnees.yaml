@@ -4,6 +4,8 @@
 # mediagenda-api (M14) : sans ces deux politiques, les pods du chart (app.kubernetes.io/name:
 # mediagenda) seraient refusés et ne deviendraient jamais prêts (/pret en 503).
 # Les politiques s'ADDITIONNENT : on ouvre l'accès à nos pods sans toucher à celles de la plateforme.
+# (La MR de plateforme/k8s de l'étape 6 retire ensuite ces anciennes autorisations, devenues sans objet :
+# celles-ci deviennent les seules.)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

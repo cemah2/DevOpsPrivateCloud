@@ -38,8 +38,9 @@ check_cmd "aucune version flottante dans composants/ et le Taskfile (latest, ima
 # --- CI -------------------------------------------------------------------------------------------------
 _m15o_ci="$(_m15o_contenu_main "$_M15O_K8S" .gitlab-ci.yml)"
 check_cmd "CI : validation des manifestes (kubeconform ou équivalent)" bash -c 'grep -qiE "kubeconform|kubeval|dry-run=server" <<<"$1"' _ "$_m15o_ci"
-check_output "CI : dernier pipeline de main réussi" '^success$' \
-  bash -c 'gitlab_api "$1/pipelines?ref=main&per_page=1" | jq -r ".[0].status"' _ "$_M15O_K8S"
+# (fonction locale : « gitlab_api » est une fonction de check-lib.sh, invisible dans un « bash -c »)
+_m15o_dernier_pipeline() { gitlab_api "$_M15O_K8S/pipelines?ref=main&per_page=1" | jq -r '.[0].status'; }
+check_output "CI : dernier pipeline de main réussi" '^success$' _m15o_dernier_pipeline
 
 # --- Cluster conforme au dépôt (échantillon) -------------------------------------------------------------
 _m15o_pool_git="$(_m15o_contenu_main "$_M15O_K8S" composants/cilium/lb-ipam/lb-par1.yaml | yq -o json '.spec.blocks' 2>/dev/null | jq -c . 2>/dev/null || true)"

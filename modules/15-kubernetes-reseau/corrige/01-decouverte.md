@@ -19,7 +19,7 @@ Ce corrigé suit l'ordre de l'énoncé (E08 se **réalise** avant E07, voir l'in
 - tout ce qui suppose le cluster : l'environnement de rédaction n'avait pas de `k8s-par1` ; les sorties montrées sont **représentatives**, pas copiées ;
 - l'état `Programmed: True` d'une Gateway dont le Service est en `NodePort` (le code renseigne ses adresses à partir des nœuds ; si ta Gateway reste `Programmed: False` avec un message d'adresse, signale-le : le check E07 l'exige) ;
 - la raison exacte affichée par Hubble pour un Service sans pod (`Service backend not found` attendu) et celle de l'HTTPRoute dont le port est faux (`ResolvedRefs: False`, raison `BackendNotFound` ou proche) ;
-- `cilium upgrade --reset-values` et l'option de simulation `--dry-run-helm-values` de la CLI `cilium` : présentes dans les versions récentes de la CLI, à confirmer par `cilium upgrade --help` ;
+- `cilium upgrade --reset-values` et l'option de simulation `--dry-run-helm-values` : présentes dans la CLI `cilium` v0.20.1 (relu dans `cilium upgrade --help` ; sans `--reset-values`, la CLI applique par défaut `--reset-then-reuse-values`, qui garde les valeurs de la release précédente) ; confirme sur la version de ta CLI ;
 - `kubeadm upgrade apply <VERSION-ACTUELLE> --dry-run` : kubeadm peut refuser une « montée » vers la même version ; dans ce cas, la lecture de la ConfigMap et du code suffit (énoncé, étape 10) ;
 - la réponse de Cilium 1.20 à un `ping` vers une ClusterIP (E01, question 15) ;
 - la ligne *Host Routing* (attendue `Legacy` avant **et** après E08, faute de masquage eBPF) ;
@@ -271,12 +271,12 @@ L'adresse, le nœud (`nodeName`), la zone (`zone`, issue du label `topology.kube
 
 ```
 admin@adm01:~$ curl -s http://10.10.40.61:30880/clientip; echo
-10.10.40.61:39612
+10.240.3.31:39612
 admin@adm01:~$ curl -s http://10.10.40.51:30880/hostname; echo
 echo-6c9f7d5b8-r7wq2
 ```
 
-En `externalTrafficPolicy: Cluster` (défaut), le nœud qui reçoit peut choisir un pod d'un **autre** nœud ; il doit alors masquer l'adresse source derrière la sienne, sinon la réponse du pod partirait directement vers `adm01`, qui l'ignorerait (asymétrie). Le pod voit donc l'adresse d'un nœud. Un nœud de contrôle sans pod `echo` sert quand même le NodePort.
+En `externalTrafficPolicy: Cluster` (défaut), le nœud qui reçoit peut choisir un pod d'un **autre** nœud ; il doit alors masquer l'adresse source derrière la sienne, sinon la réponse du pod partirait directement vers `adm01`, qui l'ignorerait (asymétrie). kube-proxy marque donc tout le trafic NodePort pour le masquage (`KUBE-MARK-MASQ`), même quand le pod choisi est local. Le pod voit une adresse **du nœud qui a reçu la requête** : avec `MASQUERADE`, celle de l'interface par laquelle le paquet repart vers le pod, ici `cilium_host` (10.240.3.31 sur `k8s-w01`), et non 10.10.40.61. ⚠️ À vérifier sur ton lab : l'adresse exacte affichée (celle de `cilium_host` du nœud d'entrée attendue). Un nœud de contrôle sans pod `echo` sert quand même le NodePort.
 
 Après passage en `Local` :
 
@@ -557,14 +557,14 @@ Après :
 admin@adm01:~$ hubble observe -n wb-essais --protocol http --last 2 -o json | jq '.flow.l7.http'
 {
   "method": "GET",
-  "url": "http://echo/echo?msg=HIDDEN",
+  "url": "http://echo/echo",
   "headers": [
-    {"key": "Authorization", "value": "HIDDEN"},
-    {"key": "Cookie", "value": "HIDDEN"},
+    {"key": "Authorization", "value": "HUBBLE_REDACTED"},
+    {"key": "Cookie", "value": "HUBBLE_REDACTED"},
     …
 ```
 
-Restent visibles : la méthode, l'hôte, le **chemin** (`/echo`), le code de réponse, les adresses et identités. Limite : une API qui met un identifiant dans le chemin (`/patients/123/dossier`) le laisse voir ; MédiAgenda (`/api/v1/rendez-vous/{rdv_id}`) expose un identifiant de rendez-vous, pas de patient : à noter pour la revue de Sophie. Puis `kubectl -n wb-essais delete -f essais-hubble.yaml`.
+La chaîne de requête est **retirée** de l'URL (`urlQuery` vide `RawQuery` et le fragment) ; les en-têtes de la liste `deny` gardent leur nom, leur valeur devient `HUBBLE_REDACTED` (constante du code de Hubble, `pkg/hubble/defaults`) ; `userInfo` ne remplace que le **mot de passe** d'une URL `utilisateur:mot-de-passe@`, le nom d'utilisateur reste. Restent visibles : la méthode, l'hôte, le **chemin** (`/echo`), le code de réponse, les adresses et identités. Limite : une API qui met un identifiant dans le chemin (`/patients/123/dossier`) le laisse voir ; MédiAgenda (`/api/v1/rendez-vous/{rdv_id}`) expose un identifiant de rendez-vous, pas de patient : à noter pour la revue de Sophie. Puis `kubectl -n wb-essais delete -f essais-hubble.yaml`.
 
 *D. Fiche* : [`medisphere/docs/kubernetes/reseau/hubble.md`](fichiers/M15-E05/medisphere/docs/kubernetes/reseau/hubble.md).
 
@@ -630,7 +630,7 @@ Questions 5 et 6 : `clients-vers-echo` (sortie des `role=client` vers `app=echo`
 | `sonde-w01b` (sans label) | refusée | (jamais atteinte) | refusé | `EGRESS DENIED` sur `k8s-w01` |
 | `adm01` par `echo-np` | (hors cluster) | `echo-entree` (ipBlock) | passe | `INGRESS ALLOWED` depuis `world` |
 
-Question 6 : on peut raisonner sur l'adresse de `adm01` parce que `echo-np` est en `externalTrafficPolicy: Local` (E03) : le pod reçoit le paquet avec l'adresse source **réelle** (10.10.10.10). En `Cluster`, un nœud qui transmet à un pod d'un autre nœud masque l'adresse derrière la sienne : il faudrait autoriser les nœuds (en standard, un `ipBlock` 10.10.40.0/24 ; en Cilium, l'entité `remote-node`/`host`), c'est-à-dire n'importe qui passant par n'importe quel nœud : bien moins précis.
+Question 6 : on peut raisonner sur l'adresse de `adm01` parce que `echo-np` est en `externalTrafficPolicy: Local` (E03) : le pod reçoit le paquet avec l'adresse source **réelle** (10.10.10.10). En `Cluster`, le nœud d'entrée masque l'adresse derrière l'une des siennes (E03) : le pod ne voit plus qu'un **nœud**, que Cilium classe sous l'identité `host` (nœud local, toujours autorisé vers ses pods) ou `remote-node` (autre nœud). Un `ipBlock` 10.10.40.0/24 n'y changerait rien : par défaut, Cilium ne fait correspondre les sélecteurs CIDR à aucune adresse du cluster, nœuds compris (réglage `policyCIDRMatchMode: nodes` pour le permettre, page *Layer 3 Policies*). Il faudrait autoriser l'entité `remote-node` (CiliumNetworkPolicy), c'est-à-dire n'importe qui passant par n'importe quel nœud : bien moins précis.
 
 Question 7 : les sondes du kubelet partent du nœud lui-même (identité `host`) ; Cilium autorise toujours le trafic du nœud local vers ses pods (réglage par défaut, conforme à l'API NetworkPolicy qui prévoit que les sondes de santé ne soient pas bloquées). Les pods restent `Ready`.
 
@@ -824,7 +824,7 @@ La Gateway principale `gw-par1` (E12) vit dans l'espace `passerelles`, géré pa
 
 **Solution**
 
-*A. Préparer* (questions 1 à 6). Procédure de la documentation de Cilium pour une installation existante : (1) Cilium avec `kubeProxyReplacement=true` (et `k8sServiceHost`/`k8sServicePort`) ; (2) suppression du DaemonSet `kube-proxy` et de sa ConfigMap ; (3) sur chaque nœud, `iptables-save | grep -v KUBE | iptables-restore`. L'ordre « Cilium d'abord » évite toute période sans traduction des Services ; la suppression de kube-proxy rompt les connexions établies dont la traduction était tenue par lui.
+*A. Préparer* (questions 1 à 6). La page de Cilium (section *Quick-Start*) donne, pour un cluster où kube-proxy tourne en DaemonSet : suppression du DaemonSet `kube-proxy` et de sa ConfigMap, puis sur chaque nœud `iptables-save | grep -v KUBE | iptables-restore`, **puis** installation de Cilium avec `kubeProxyReplacement=true` (et `k8sServiceHost`/`k8sServicePort`) ; elle prévient que, dans cet ordre, le trafic des Services s'arrête jusqu'à ce que le remplacement soit installé. Sur un cluster qui sert du trafic et dont Cilium est **déjà** le CNI, on inverse sciemment : (1) Cilium avec le remplacement, agents redémarrés ; (2) suppression du DaemonSet et de la ConfigMap ; (3) nettoyage des règles nœud par nœud. L'ordre « Cilium d'abord » évite toute période sans traduction des Services ; le changement de traducteur rompt quand même les connexions établies (second avertissement de la page : les deux tables de traduction s'ignorent).
 
 `k8sServiceHost` et `k8sServicePort` : l'agent doit parler à l'API pour apprendre les Services ; s'il l'appelait par 10.96.0.1 (le Service `kubernetes`), il lui faudrait déjà savoir traduire cette adresse. Avec kube-proxy, c'était kube-proxy qui la traduisait ; sans lui, au premier redémarrage d'un nœud (ou d'un agent qui a perdu ses tables), l'agent ne joindrait jamais l'API : nœud sans réseau de pods. Chez nous, ils valent la VIP du plan de contrôle depuis le M14 (`k8s-api.par1.medisphere.internal:8443`, résolue par le DNS du socle).
 

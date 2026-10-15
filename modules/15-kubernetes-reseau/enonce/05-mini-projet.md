@@ -39,7 +39,7 @@ Le module a construit, exploité, cassé et réparé le réseau de `k8s-par1`. I
 **Contraintes**
 - Aucun secret dans un dépôt, un journal de CI ou la documentation : des **emplacements**, jamais des valeurs (Ansible Vault `lab`, Secrets Kubernetes créés depuis le Vault ; Vault/OpenBao arrive au M25).
 - Tout ce qui est créé l'est par le code (`plateforme/k8s`, rôles Ansible, OpenTofu) ; une intervention manuelle exceptionnelle est consignée et reportée dans le code.
-- Aucune politique n'est élargie pour « faire passer » une démonstration ; aucune bascule de la VIP de la bordure hors de la démonstration prévue de Nadia (et seulement par l'arrêt de la passerelle de **secours**).
+- Aucune politique n'est élargie pour « faire passer » une démonstration ; aucune bascule de la VIP de la bordure : la démonstration de Nadia n'arrête que la passerelle de **secours** (vérifie avant laquelle porte la VIP), ce qui ne déplace pas la VIP.
 - Les choix qui s'écartent d'un exercice du module sont justifiés (ADR ou description de MR).
 
 **Critères de réussite**

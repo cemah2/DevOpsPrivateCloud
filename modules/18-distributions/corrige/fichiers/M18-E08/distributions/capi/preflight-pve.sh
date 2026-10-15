@@ -5,18 +5,23 @@
 #
 # Rejoue, AVEC LE JETON DE CAPMOX (wb-capi@pve!capi) et depuis la machine qui portera le
 # contrôleur, les appels d'API dont CAPMOX v0.9.1 a besoin, sur une VM jetable :
-#   version, lecture des ressources, état du nœud, téléversement et suppression d'une ISO dans
-#   capi-iso, clonage d'un template du pool lab vers le VMID 5189, configuration, suppression.
+#   version, lecture des ressources, état du nœud, téléversement d'une ISO dans capi-iso, clonage
+#   d'un template du pool lab vers le VMID 5189, configuration (CPU, mémoire, carte, étiquettes,
+#   ISO en ide0), démarrage, agent QEMU (ping, puis exec de « cloud-init status » : les privilèges
+#   VM.GuestAgent.* de Proxmox VE 9), arrêt, démontage de l'ISO, suppressions.
 # Toute réponse inattendue arrête le script : c'est le critère de repli vers CAPD.
 # Lecture seule sur Proxmox, SAUF la VM 5189 et l'ISO d'essai, supprimées à la fin (et à l'échec).
 #
 # Entrées : ~/.config/workbook/pve-capi.env (PROXMOX_URL, PROXMOX_TOKEN, PROXMOX_SECRET),
-#           NOEUD (nom du nœud Proxmox), TEMPLATE (VMID d'un template du pool lab, défaut 9000).
+#           NOEUD (nom du nœud Proxmox), TEMPLATE (VMID d'un template du pool lab qui contient
+#           l'agent QEMU et cloud-init : l'image dorée Debian « current », plage 9010-9029),
+#           AGENT=0 pour sauter le démarrage et les appels à l'agent (déconseillé).
 set -euo pipefail
 
 ENV_FILE="${ENV_FILE:-$HOME/.config/workbook/pve-capi.env}"
 NOEUD="${NOEUD:?indique le nœud Proxmox : NOEUD=<NOEUD> $0}"
-TEMPLATE="${TEMPLATE:-9000}"
+TEMPLATE="${TEMPLATE:?indique le VMID du template à cloner : TEMPLATE=<VMID> (image dorée Debian current)}"
+AGENT="${AGENT:-1}"
 VMID_ESSAI="${VMID_ESSAI:-5189}"
 STOCKAGE_ISO="${STOCKAGE_ISO:-capi-iso}"
 STOCKAGE_VM="${STOCKAGE_VM:-local-nvme}"
@@ -35,6 +40,8 @@ ISO_CREEE=0
 # Nettoyage : seulement ce que CE script a créé (jamais une VM 5189 qui existait avant).
 nettoyer() {
   if (( CLONE_CREE )); then
+    pve POST "/nodes/$NOEUD/qemu/$VMID_ESSAI/status/stop" >/dev/null 2>&1 || true
+    sleep 5
     pve DELETE "/nodes/$NOEUD/qemu/$VMID_ESSAI?purge=1&destroy-unreferenced-disks=1" >/dev/null 2>&1 || true
   fi
   if (( ISO_CREEE )); then
@@ -76,13 +83,11 @@ pve GET "/nodes/$NOEUD/status" | jq -r '.data.memory | "mémoire : \(.total) oct
 etape "Stockages visibles : CAPMOX téléverse dans le PREMIER stockage « iso » qu'il voit"
 pve GET "/nodes/$NOEUD/storage?content=iso" | jq -r '.data[].storage'
 
-etape "Téléversement puis suppression d'une ISO dans $STOCKAGE_ISO (Datastore.AllocateTemplate)"
+etape "Téléversement d'une ISO dans $STOCKAGE_ISO (Datastore.AllocateTemplate)"
 genisoimage -quiet -V cidata -o "$iso" /dev/null 2>/dev/null || dd if=/dev/zero of="$iso" bs=1k count=64 status=none
 ISO_CREEE=1
 upid="$(pve POST "/nodes/$NOEUD/storage/$STOCKAGE_ISO/upload" -F content=iso -F "filename=@$iso;filename=preflight-capi.iso" | jq -r .data)"
 attendre_tache "$upid"
-pve DELETE "/nodes/$NOEUD/storage/$STOCKAGE_ISO/content/$STOCKAGE_ISO:iso/preflight-capi.iso" >/dev/null
-ISO_CREEE=0
 
 if pve GET "/cluster/resources?type=vm" | jq -e --argjson id "$VMID_ESSAI" '.data[] | select(.vmid == $id)' >/dev/null; then
   echo "Le VMID $VMID_ESSAI existe déjà : rien n'est cloné ni supprimé. Libère-le ou change VMID_ESSAI." >&2
@@ -94,10 +99,37 @@ upid="$(pve POST "/nodes/$NOEUD/qemu/$TEMPLATE/clone" -d newid="$VMID_ESSAI" -d 
 CLONE_CREE=1
 attendre_tache "$upid"
 
-etape "Configuration de la VM clonée (CPU, mémoire, carte sur vk8s, étiquettes)"
+etape "Configuration de la VM clonée (CPU, mémoire, carte sur vk8s, étiquettes, ISO en ide0 : VM.Config.CDROM)"
 pve PUT "/nodes/$NOEUD/qemu/$VMID_ESSAI/config" -d cores=2 -d memory=2048 \
-  -d "net0=virtio,bridge=vk8s" -d "tags=env-m18;preflight" >/dev/null
-pve GET "/nodes/$NOEUD/qemu/$VMID_ESSAI/config" | jq -r '.data | "cores=\(.cores) memory=\(.memory) net0=\(.net0) tags=\(.tags)"'
+  -d "net0=virtio,bridge=vk8s" -d "tags=env-m18;preflight" \
+  --data-urlencode "ide0=$STOCKAGE_ISO:iso/preflight-capi.iso,media=cdrom" >/dev/null
+pve GET "/nodes/$NOEUD/qemu/$VMID_ESSAI/config" | jq -r '.data | "cores=\(.cores) memory=\(.memory) net0=\(.net0) tags=\(.tags) ide0=\(.ide0)"'
+
+if [[ "$AGENT" != 0 ]]; then
+  etape "Démarrage (VM.PowerMgmt) et agent QEMU (VM.GuestAgent.Audit, puis .Unrestricted pour exec)"
+  pve POST "/nodes/$NOEUD/qemu/$VMID_ESSAI/status/start" | jq -r .data | { read -r u; attendre_tache "$u"; }
+  agent_ok=0
+  for _ in $(seq 1 60); do
+    if pve POST "/nodes/$NOEUD/qemu/$VMID_ESSAI/agent/ping" >/dev/null 2>&1; then agent_ok=1; break; fi
+    sleep 3
+  done
+  (( agent_ok )) || { echo "l'agent QEMU ne répond pas après 3 min (le template l'a-t-il ? « agent: 1 » ?)" >&2; exit 1; }
+  echo "agent : ping OK"
+  # CAPMOX lance « cloud-init status » par l'agent. Un 403 ici = privilège manquant (critère de repli) ;
+  # le code de sortie de cloud-init lui-même importe peu. Paramètre « command » : liste, un élément
+  # par mot (à vérifier sur ta version de l'API si la requête est refusée en 400).
+  reponse="$(curl -sS -o /dev/stderr -w '%{http_code}' -X POST -H "@$entete" \
+    --data-urlencode command=cloud-init --data-urlencode command=status \
+    "$API/nodes/$NOEUD/qemu/$VMID_ESSAI/agent/exec" 2>/dev/null)" || reponse=000
+  [[ "$reponse" == 200 ]] || { echo "agent/exec refusé (HTTP $reponse) : vérifie VM.GuestAgent.Unrestricted" >&2; exit 1; }
+  echo "agent : exec de « cloud-init status » accepté"
+  pve POST "/nodes/$NOEUD/qemu/$VMID_ESSAI/status/stop" | jq -r .data | { read -r u; attendre_tache "$u"; }
+fi
+
+etape "Démontage de l'ISO et suppression (VM.Config.CDROM, Datastore.Allocate sur capi-iso)"
+pve PUT "/nodes/$NOEUD/qemu/$VMID_ESSAI/config" -d delete=ide0 >/dev/null
+pve DELETE "/nodes/$NOEUD/storage/$STOCKAGE_ISO/content/$STOCKAGE_ISO:iso/preflight-capi.iso" >/dev/null
+ISO_CREEE=0
 
 etape "Suppression de la VM d'essai"
 upid="$(pve DELETE "/nodes/$NOEUD/qemu/$VMID_ESSAI?purge=1&destroy-unreferenced-disks=1" | jq -r .data)"

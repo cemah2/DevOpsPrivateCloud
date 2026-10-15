@@ -42,6 +42,55 @@ check_cmd "recette : la route publie mediagenda-recette.$_m17d_domaine" _m17d_jq
 check_cmd "recette : la route vise le Service mediagenda, port 80" _m17d_jq "$_e04_r" \
   '[.spec.rules[]?.backendRefs[]? | select(.name == "mediagenda" and .port == 80)] | length > 0'
 check_cmd "https://mediagenda-recette.$_m17d_domaine/sante répond 200" _m17d_sante "https://mediagenda-recette.$_m17d_domaine/sante"
+# En-têtes de sécurité de l'entrée (M15-E33) : exigés si l'entrée a été durcie au M15, ce que signale
+# la Gateway des partenaires du même exercice.
+_e04_hsts() {
+  curl -sI --max-time "$WB_TIMEOUT" "https://mediagenda-recette.$_m17d_domaine/sante" 2>/dev/null \
+    | grep -qi '^strict-transport-security:'
+}
+if [[ -n "$(_m17d_obj passerelles gateway gw-partenaires)" ]]; then
+  check_cmd "recette : la réponse porte toujours Strict-Transport-Security (en-têtes du M15-E33)" _e04_hsts
+else
+  skip "recette : en-têtes de sécurité du M15-E33" "Gateway gw-partenaires absente (M15-E33 non fait)"
+fi
+
+# Plus aucune politique réseau ne vise ni n'admet les pods mediagenda-api du M14, en dev comme en
+# recette (les politiques du M15-E17 sont communes aux deux espaces). Liste illisible = échec.
+_e04_politiques() {
+  local e t l
+  for e in mediagenda-dev mediagenda-recette; do
+    for t in networkpolicies ciliumnetworkpolicies.cilium.io; do
+      l="$(_m17d_liste "$e" "$t")"
+      [[ -n "$l" ]] || return 1
+      jq -e '[.items[] | select(.spec | tojson | contains("\"mediagenda-api\""))] | length == 0' >/dev/null 2>&1 <<<"$l" || return 1
+    done
+  done
+}
+check_cmd "dev et recette : aucune politique réseau ne vise ni n'admet encore les pods mediagenda-api" _e04_politiques
+
+# Relais mTLS des partenaires (M15-E33), s'il existe : il relaie vers le Service du chart et répond.
+_e04_relais="$(_m17d_obj mediagenda-recette deploy relais-mtls)"
+if [[ -n "$_e04_relais" ]]; then
+  _e04_conf="$(_m17d_obj mediagenda-recette configmap relais-mtls-conf)"
+  check_cmd "relais mTLS : relais-mtls-conf relaie vers le Service mediagenda (port 80), plus vers mediagenda-api" \
+    _m17d_jq "$_e04_conf" '[.data[]?] | join("\n")
+      | test("proxy_pass +https?://mediagenda(\\.mediagenda-recette(\\.svc(\\.cluster\\.local)?)?)?:80;")
+        and (test("proxy_pass[^;]*mediagenda-api") | not)'
+  check_cmd "relais mTLS : pods prêts" _m17d_pret "$_e04_relais"
+  _e04_crt="$HOME/.config/workbook/partenaire-centre-test-01.crt"
+  _e04_cle="$HOME/.config/workbook/partenaire-centre-test-01.key"
+  _e04_partenaire() {
+    curl -fsS -o /dev/null --max-time "$WB_TIMEOUT" --cert "$_e04_crt" --key "$_e04_cle" \
+      "https://mediagenda-partenaires.$_m17d_domaine/sante" 2>/dev/null
+  }
+  if [[ -s "$_e04_crt" && -r "$_e04_cle" ]]; then
+    check_cmd "https://mediagenda-partenaires.$_m17d_domaine/sante répond 200 avec le certificat de test" _e04_partenaire
+  else
+    skip "appel du relais avec le certificat de test" "$_e04_crt absent (M15-E33)"
+  fi
+else
+  skip "relais mTLS des partenaires" "Deployment relais-mtls absent de mediagenda-recette (M15-E33 non fait)"
+fi
 _e04_ancien() {
   # L'ancienne version (M14) est retirée : plus de Deployment mediagenda-api. Une lecture impossible
   # n'est pas une absence : on exige une liste lisible.

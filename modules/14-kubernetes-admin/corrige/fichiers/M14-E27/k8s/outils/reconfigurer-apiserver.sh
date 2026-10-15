@@ -48,13 +48,22 @@ set -Eeuo pipefail
 m=/etc/kubernetes/manifests/kube-apiserver.yaml
 avant=/root/kubeadm-reconf/kube-apiserver.yaml.avant-$(date +%Y%m%dT%H%M%S)
 cp -a "$m" "$avant"
+ancien_id="$(crictl ps --name '^kube-apiserver$' -q 2>/dev/null | head -1)"
 kubeadm init phase control-plane apiserver --config /root/kubeadm-reconf/kubeadm.yaml
+if cmp -s "$avant" "$m"; then
+  echo "manifeste inchangé : le kubelet ne relancera rien (rien à faire sur $(hostname -s))"
+  exit 0
+fi
 diff -u "$avant" "$m" || true
-echo "attente du serveur d'API local (readyz)…"
+# L'ANCIEN serveur d'API répond encore quelques secondes : attendre qu'un NOUVEAU conteneur tourne
+# avant de croire /readyz, sinon on validerait l'ancien processus.
+echo "attente du nouveau conteneur kube-apiserver, puis de readyz…"
 for _ in $(seq 1 60); do
   sleep 5
+  id="$(crictl ps --name '^kube-apiserver$' -q 2>/dev/null | head -1)"
+  [[ -n "$id" && "$id" != "$ancien_id" ]] || continue
   if curl -sk --max-time 3 https://127.0.0.1:6443/readyz | grep -qx ok; then
-    echo "serveur d'API de $(hostname -s) prêt"
+    echo "serveur d'API de $(hostname -s) prêt (nouveau conteneur ${id:0:13})"
     exit 0
   fi
 done

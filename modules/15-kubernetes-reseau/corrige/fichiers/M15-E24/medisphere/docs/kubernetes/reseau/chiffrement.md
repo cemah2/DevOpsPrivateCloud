@@ -32,7 +32,7 @@ Non retenu pour l'instant :
 | Client (`adm01`, `lb01`) → Gateway | TLS de la Gateway | WireGuard ne couvre jamais l'extérieur du cluster |
 | Nœud → nœud (kubelet, API, etcd, BGP vers la bordure) | TLS de Kubernetes / rien pour BGP | BGP vers `gw01`/`gw02` en clair (même VLAN, TCP-MD5 si posé en E11) |
 | Pod → `s3-01`, `ca01`, `reg01` | TLS applicatif | sortent du cluster masqués derrière l'adresse du nœud |
-| Sonde du kubelet → pod d'un autre nœud | rien (sans `nodeEncryption`) | pas de donnée de santé |
+| Nœud (réseau de l'hôte) → pod d'un autre nœud | rien (sans `nodeEncryption`) | les sondes du kubelet, elles, ne visent que les pods de leur propre nœud |
 
 ## Mesures (pods `mesure-a` sur `k8s-w01`, `mesure-b` sur `k8s-w02`, iperf3 30 s, 3 répétitions)
 
@@ -43,7 +43,7 @@ Les chiffres ci-dessous sont **indicatifs** (ordre de grandeur attendu sur des V
 | Débit TCP, 1 flux | 9,8 Gbit/s | 3,1 Gbit/s | −68 % |
 | Débit TCP, 4 flux | 12,4 Gbit/s | 5,6 Gbit/s | −55 % |
 | Latence (ping 100 paquets, moyenne) | 0,21 ms | 0,29 ms | +0,08 ms |
-| MTU de `eth0` des pods | 1450 | 1370 | −80 octets |
+| MTU des routes des pods (`ip route` ; `eth0` reste à 1500) | 1450 | 1355 | −95 octets |
 | Processeur des deux nœuds pendant le débit | ~1,2 cœur | ~2,9 cœurs | ×2,4 |
 
 Réserve : les six nœuds sont des VMs d'un seul hyperviseur, le « réseau » est un pont Linux en mémoire de
@@ -53,7 +53,7 @@ reliés en 10 Gbit/s serait différent. L'ordre de grandeur du coût processeur,
 ## Preuve
 
 - `cilium-dbg status | grep Encryption` sur chaque agent : `Encryption: Wireguard [cilium_wg0 (Pubkey: …, Port: 51871, Peers: 5)]` (format de la documentation 1.20 ; le détail peut varier).
-- Capture sur l'interface VLAN 40 de `k8s-w02` pendant une requête HTTP de `mesure-a` : plus aucun paquet UDP 8472, seulement de l'UDP 51871 illisible. Sur `cilium_wg0`, la même requête apparaît en clair : c'est l'interface **avant** chiffrement.
+- Capture sur l'interface VLAN 40 de `k8s-w02` pendant une requête HTTP de `mesure-a` : plus aucun paquet UDP 8472, seulement de l'UDP 51871 illisible. Sur `cilium_wg0`, la même requête apparaît en clair, encapsulée en VXLAN (UDP 8472) : c'est l'interface **avant** chiffrement.
 
 ## Flux réseau
 

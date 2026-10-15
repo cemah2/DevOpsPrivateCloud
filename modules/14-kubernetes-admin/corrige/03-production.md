@@ -8,7 +8,7 @@
 - restauration d'un etcd empilé de kubeadm avec `--bump-revision`/`--mark-compacted` : comportement de Cilium 1.20 après la restauration (identités et `CiliumEndpoint` recréés par le redémarrage des agents et de l'opérateur, d'après le principe des *informers* ; non mesuré) ;
 - `kubeadm upgrade apply v1.36.5 --yes` et l'ordre exact des composants affiché par kubeadm 1.36 ; promotion des membres etcd apprenants lors d'une jonction (`EtcdLearnerMode`, à relire dans le CHANGELOG de ta version) ;
 - `kubeadm init phase control-plane apiserver --config` avec un fichier fait d'une `ClusterConfiguration` et d'une `InitConfiguration` propre au nœud, et `kubeadm init phase upload-config kubeadm --config` sur un cluster existant (méthode de la page *Reconfiguring a kubeadm cluster*) ; alternative `kubeadm upgrade node phase control-plane` non testée ;
-- sujet du certificat `apiserver-kubelet-client` en 1.36 (groupe `kubeadm:cluster-admins` d'après les notes de 1.29 ; vérifie avec `openssl x509 -noout -subject`) ;
+- sujet du certificat `apiserver-kubelet-client` : d'après le code de kubeadm 1.35.9 et 1.36.5, `CN=kube-apiserver-kubelet-client` **sans** organisation, droits donnés par la ClusterRoleBinding `kubeadm:apiserver-kubelet-client` (rôle `system:kubelet-api-admin`) ; les versions plus anciennes mettaient `O=kubeadm:cluster-admins`, et un certificat émis avant la montée garde son ancien sujet jusqu'à son renouvellement (vérifie avec `openssl x509 -noout -subject`) ;
 - noms de fichiers et de variables posés par les paliers 1 et 2 et repris ici : nom de la VIP et des variables `k8s_version`/`k8s_image_pause` du rôle `k8s_noeud` (repris de la solution de M14-E02), `secrets/admin.conf.vault`, étiquette de sélection des liaisons d'admission de E18, mode d'installation de metrics-server (E20), nom du Service de MédiAgenda (`mediagenda-api`). Si les tiens diffèrent, la logique est la même.
 
 **Rappel** : aucune nouvelle VM dans ce palier. Fichiers de solution : `corrige/fichiers/M14-E24/` à `M14-E31/`, `M14-E33/`, `M14-E34/`.
@@ -95,7 +95,8 @@ Puis RB-141 §3 (téléchargement de **cet** objet, déchiffrement, `snapshot st
 admin@adm01:~$ kubectl get nodes
 admin@adm01:~$ kubectl -n wb-essais get configmap temoin-restauration -o jsonpath='{.data.etat}{"\n"}'
 avant-instantane
-admin@k8s-cp01:~$ sudo etcdctl … endpoint status --cluster -w table      # RAFT INDEX, REVISION > 1000000000
+admin@k8s-cp01:~$ sudo etcdctl … endpoint status --cluster -w table      # IDs nouveaux, un leader
+admin@k8s-cp01:~$ sudo etcdctl … endpoint status --cluster -w json | jq '.[].Status.header.revision'   # > 1000000000 (colonne absente du tableau en 3.6)
 admin@adm01:~$ kubectl -n wb-essais get pods
 ```
 
@@ -380,7 +381,7 @@ admin@adm01:~$ kubectl get pods -A -o wide --field-selector spec.nodeName=k8s-cp
 
 Pour rendre l'essai plus instructif : faire de `k8s-cp02` le leader etcd (`etcdctl move-leader <ID-cp02>`) et le maître VRRP (arrêter puis relancer keepalived sur le maître actuel ; attention au `nopreempt` du M07, qui fige le maître). Ce n'est pas obligatoire.
 
-*2. Panne* : `root@pve01:~# qm stop 2142` ; observations attendues dans le compte rendu (ordres de grandeur) : la VIP bascule en 1 à 3 s (annonces VRRP manquées) ; HAProxy retire `k8s-cp02` après ses sondes ; etcd élit un nouveau leader en moins de 2 s (délai d'élection de l'ordre de 1 s) ; les baux sont repris en 15 s environ (durée du bail) ; le nœud passe `NotReady` au bout d'environ 40 à 50 s (`--node-monitor-grace-period` du gestionnaire de contrôleurs : lis la valeur par défaut de ta version), avec les taints `node.kubernetes.io/unreachable` ; les pods qui y tournaient (CoreDNS par exemple) sont évincés au bout de 300 s (tolérances `tolerationSeconds: 300` ajoutées par l'admission `DefaultTolerationSeconds`) et recréés ailleurs ; pods statiques et DaemonSets ne bougent pas. Créer un Deployment fonctionne : 2 membres sur 3 forment un quorum. Un second nœud perdu : plus de quorum, plus d'écriture (`etcdserver: request timed out`, puis serveurs d'API en erreur) ; les pods existants continuent de tourner.
+*2. Panne* : `root@pve01:~# qm stop 2142` ; observations attendues dans le compte rendu (ordres de grandeur) : la VIP bascule en 1 à 3 s (annonces VRRP manquées) ; HAProxy retire `k8s-cp02` après ses sondes ; etcd élit un nouveau leader en moins de 2 s (délai d'élection de l'ordre de 1 s) ; les baux sont repris en 15 s environ (durée du bail) ; le nœud passe `NotReady` au bout d'environ 50 s (`--node-monitor-grace-period` du gestionnaire de contrôleurs, 50 s par défaut depuis 1.32 ; 40 s avant), avec les taints `node.kubernetes.io/unreachable` ; les pods qui y tournaient (CoreDNS par exemple) sont évincés au bout de 300 s (tolérances `tolerationSeconds: 300` ajoutées par l'admission `DefaultTolerationSeconds`) et recréés ailleurs ; pods statiques et DaemonSets ne bougent pas. Créer un Deployment fonctionne : 2 membres sur 3 forment un quorum. Un second nœud perdu : plus de quorum, plus d'écriture (`etcdserver: request timed out`, puis serveurs d'API en erreur) ; les pods existants continuent de tourner.
 
 *3. Retour* : `qm start 2142` ; le membre etcd rattrape le leader (journal, `endpoint status` : `RAFT INDEX` qui rejoint les autres), le kubelet relance les pods statiques, le nœud redevient `Ready` en une à deux minutes.
 
@@ -508,7 +509,7 @@ L'ADR est revue après le M18 avec les mêmes mesures sur RKE2 et Talos, et à c
 
 **11. Copie de `/var/lib/etcd`.** Avec `secretbox`, les Secrets de cette copie sont chiffrés : **sans** le fichier `/etc/kubernetes/chiffrement/configuration.yaml`, illisibles. La sauvegarde PBS **entière** de la VM contient les deux : lisibles. Un compte avec `get secrets` lit les Secrets de l'espace en clair par l'API : le chiffrement au repos ne fait rien contre lui. Conclusion : le chiffrement au repos local protège les **copies d'etcd séparées des nœuds** (instantanés) ; KMS protège aussi contre la copie d'un nœud entier, en sortant la clé maîtresse ; aucun ne remplace le RBAC.
 
-**12. Réponse b.** Le serveur d'API essaie les fournisseurs restants pour déchiffrer, aucun ne connaît la clé nommée dans le préfixe : erreur à la lecture (`failed to decrypt`… ), les pods qui montent ces Secrets ne démarrent plus, les contrôleurs qui les lisent échouent. a) faux : rien n'est réécrit automatiquement. c) faux : la configuration est valide, le serveur démarre. d) faux : `identity` ne lit que ce qui est en clair. Sortie : remettre l'ancienne clé dans la configuration (d'où sa conservation dans le Vault), attendre le rechargement, réécrire tous les Secrets, puis seulement retirer l'ancienne clé.
+**12. Réponse b.** Le serveur d'API essaie les fournisseurs restants pour déchiffrer, aucun ne connaît la clé nommée dans le préfixe : erreur à la lecture (`Internal error occurred: no matching prefix found` avec kube-apiserver 1.36 quand plus aucun fournisseur ne correspond au préfixe stocké), les pods qui montent ces Secrets ne démarrent plus, les contrôleurs qui les lisent échouent. a) faux : rien n'est réécrit automatiquement. c) faux : la configuration est valide, le serveur démarre. d) faux : `identity` ne lit que ce qui est en clair. Sortie : remettre l'ancienne clé dans la configuration (d'où sa conservation dans le Vault), attendre le rechargement, réécrire tous les Secrets, puis seulement retirer l'ancienne clé.
 
 **13. VIP et HAProxy sur les nœuds de contrôle.** Pas d'autre machine à maintenir et pas de dépendance à une autre équipe (méthode keepalived + HAProxy de la documentation kubeadm). HAProxy écoute sur 8443 parce que le serveur d'API du nœud occupe déjà 6443 sur toutes les adresses du nœud, VIP comprise. Si keepalived met la VIP sur un nœud dont le serveur d'API est arrêté, ce n'est pas grave tant que **HAProxy** tourne : il envoie aux serveurs d'API vivants des autres nœuds. Si HAProxy lui-même est arrêté sur le maître VRRP, la VIP ne répond plus : d'où le script de suivi de keepalived (M14-E03) qui fait perdre la VIP à un nœud dont HAProxy est mort.
 
@@ -529,7 +530,7 @@ admin@adm01:~$ kubectl auth can-i create deployments -n medidoc-dev --as amelie.
 yes
 admin@adm01:~$ kubectl auth can-i get secrets -n medidoc-dev --as amelie.durand --as-group medisphere:medidoc-devs
 yes
-admin@adm01:~$ kubectl auth can-i update resourcequota/enveloppe -n medidoc-dev --as amelie.durand --as-group medisphere:medidoc-devs
+admin@adm01:~$ kubectl auth can-i update resourcequota/quota-equipe -n medidoc-dev --as amelie.durand --as-group medisphere:medidoc-devs
 no
 admin@adm01:~$ kubectl auth can-i create rolebindings -n medidoc-dev --as amelie.durand --as-group medisphere:medidoc-devs
 no

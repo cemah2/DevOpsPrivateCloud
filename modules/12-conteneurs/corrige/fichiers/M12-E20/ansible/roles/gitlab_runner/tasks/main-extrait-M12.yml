@@ -9,7 +9,7 @@
   ansible.builtin.import_tasks: preconditions.yml
   tags: [runner_preconditions]
 
-- name: Autorités de certification (runner01 : racine + CA de pve01 ; runner02 : rôle ca_lab du playbook)
+- name: "Autorités de certification (runner01 : racine + CA de pve01 ; runner02 : rôle ca_lab du playbook)"
   ansible.builtin.import_tasks: ca.yml
   when: gitlab_runner_executeur == 'shell'
   tags: [runner_ca]

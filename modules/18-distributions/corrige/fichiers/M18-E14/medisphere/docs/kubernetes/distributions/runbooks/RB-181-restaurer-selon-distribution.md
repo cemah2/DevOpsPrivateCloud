@@ -75,7 +75,7 @@ admin@adm01:~$ talosctl -n 10.10.99.85 reset --graceful=false --reboot --system-
 admin@adm01:~$ talosctl -n 10.10.99.85 service etcd                        # attendre « Preparing »
 admin@adm01:~$ talosctl -n 10.10.99.85 bootstrap --recover-from=./<INSTANTANÉ>.db
 # instantané copié depuis /var/lib/etcd/member/snap/db (talosctl cp) : ajouter --recover-skip-hash-check
-admin@adm01:~$ talosctl -n 10.10.99.85 health
+admin@adm01:~$ talosctl -n 10.10.99.85 health --control-plane-nodes 10.10.99.85 --worker-nodes 10.10.99.86,10.10.99.87
 ```
 Ne jamais effacer `STATE` sur le nœud de contrôle : il repartirait en maintenance sans configuration. Un nœud perdu se reconstruit depuis sa configuration sauvegardée (`talosctl get mc v1alpha1 -o yaml | yq .spec`) et `talos-secrets.yaml`.
 

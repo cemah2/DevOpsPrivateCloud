@@ -34,8 +34,9 @@ caCertificateValidityPeriod: 87600h0m0s
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
-# Même pilote que containerd (SystemdCgroup = true). Depuis 1.34 le kubelet peut le lire dans le
-# CRI ; on l'écrit quand même : une incohérence se voit dans le fichier.
+# Même pilote que containerd (SystemdCgroup = true). Depuis 1.34 le kubelet le lit dans le CRI
+# et ignore cette valeur quand containerd l'annonce ; on l'écrit quand même : l'intention se lit dans
+# le fichier, et le contrôle de containerd (rôle containerd) garantit qu'elle est tenue.
 cgroupDriver: systemd
 ---
 apiVersion: kubeproxy.config.k8s.io/v1alpha1

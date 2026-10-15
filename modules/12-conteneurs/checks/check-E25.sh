@@ -41,8 +41,9 @@ check_ssh_output "unité Quadlet : SecurityLabelType, ni SecurityLabelDisable ni
 check_ssh_output "aucun refus SELinux pour legacy_rdv.process depuis le démarrage de l'unité" ctr03 '^AUCUN$' "
   t=\$(sudo -n -u app env XDG_RUNTIME_DIR=/run/user/$_M12P_APP_UID systemctl --user show -p ActiveEnterTimestamp --value legacy-rdv.service 2>/dev/null)
   [ -n \"\$t\" ] || exit 0
-  d=\$(date -d \"\$t\" '+%m/%d/%Y %H:%M:%S') || exit 0
-  if sudo -n ausearch -m AVC,USER_AVC -ts \$d --context legacy_rdv.process >/dev/null 2>&1; then echo REFUS; else echo AUCUN; fi"
+  d=\$(LC_ALL=C date -d \"\$t\" '+%m/%d/%Y %H:%M:%S') || exit 0
+  # Format de date de ausearch -ts : celui de LC_TIME (on impose C des deux côtés).
+  if sudo -n env LC_ALL=C ausearch -m AVC,USER_AVC -ts \$d --context legacy_rdv.process >/dev/null 2>&1; then echo REFUS; else echo AUCUN; fi"
 
 title "Dans le code"
 check_cmd "plateforme/ansible : rôle selinux_conteneurs et module legacy_rdv.cil sur main" \

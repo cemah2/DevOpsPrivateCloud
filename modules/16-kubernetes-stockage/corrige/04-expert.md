@@ -452,7 +452,7 @@ admin@adm01:~$ velero backup describe wb-essais-HHMM --details     # Phase: Comp
 admin@adm01:~$ velero restore create --from-backup wb-essais-HHMM --namespace-mappings wb-essais:wb-restauration --wait
 admin@adm01:~$ kubectl get pods,pvc -n wb-restauration              # témoins restaurés, prêts
 admin@adm01:~$ kubectl exec -n wb-restauration deploy/temoin-rbd -- cat /donnees/battement
-admin@adm01:~$ kubectl delete namespace wb-restauration            # nettoyage (volumes restaurés supprimés : classe Delete)
+admin@adm01:~$ kubectl delete deploy,pod,pvc,cm,secret --all -n wb-restauration   # nettoyage (classe Delete : images supprimées) ; l'espace, décrit par le code (E24), reste
 ```
 
 Puis `lab/bin/break 16 39 --annuler`, `lab/bin/check 16 39`, RB-166 ([modèle](fichiers/M16-E39/medisphere/docs/kubernetes/stockage/runbooks/RB-166-sauvegarde-velero-en-echec.md)).
@@ -480,7 +480,7 @@ Contrôle de l'emplacement `Available` et de l'âge de la dernière sauvegarde r
 
 **Démarche de diagnostic**
 
-*Symptômes* (répétition de Lucas) : v1, le drain du nœud du primaire est refusé ; v2 et v3, la bascule et le drain passent, puis les écritures de MédiAgenda restent bloquées.
+*Symptômes* (répétition de Lucas) : v1, le drain du nœud du primaire est refusé ; v2, la promotion vers une réplique est refusée, ou la bascule déclenchée par le drain passe mais le drain reste ensuite bloqué sur l'ancien primaire ; v3, la bascule et le drain passent, puis les écritures de MédiAgenda restent bloquées.
 
 *Hypothèses* : budget de disruption ; instance non candidate (clôturée, en retard, non prête) ; réplication synchrone qui ne peut plus être satisfaite pendant la maintenance ; nœud ou place manquants pour replanifier (anti-affinité requise : normal pendant un drain).
 
@@ -531,14 +531,14 @@ admin@adm01:~$ kubectl get cluster mediagenda-db -n mediagenda-recette -o jsonpa
 ["mediagenda-db-2"]
 ```
 
-Si Lucas promeut `mediagenda-db-2`, la promotion est refusée (instance clôturée). S'il draine : CloudNativePG bascule sur `mediagenda-db-3` (seule candidate), l'ancien primaire est évincé et reste `Pending` (anti-affinité requise), et il ne reste **aucune** réplique saine : `show synchronous_standby_names` attend une réplique synchrone, `pg_stat_replication` est vide, et avec `dataDurability: required` chaque validation attend. C'est « ça bascule mal ». Cause : une clôture posée pour un « diagnostic disque » et jamais levée (audit : `patch` sur le Cluster). Avant de la lever, vérifie que la raison n'existe plus (journal de l'instance, place du volume). Correctif :
+Si Lucas promeut `mediagenda-db-2`, la promotion est refusée (instance clôturée). S'il draine : CloudNativePG bascule sur `mediagenda-db-3` (seule candidate), puis l'éviction de l'ancien primaire, devenu réplique, est **refusée** (`Cannot evict pod as it would violate the pod's disruption budget`) : le PDB des répliques exige `instances − 2` = 1 réplique prête, et la seule autre réplique, clôturée, n'est pas prête. Le drain tourne en boucle, le nœud reste cordonné. C'est « ça bascule mal ». Le PDB fait ici son travail : si l'éviction passait, il ne resterait **aucune** réplique en flux (`pg_stat_replication` vide) et, avec `dataDurability: required`, chaque validation attendrait. Cause : une clôture posée pour un « diagnostic disque » et jamais levée (audit : `patch` sur le Cluster). Avant de la lever, vérifie que la raison n'existe plus (journal de l'instance, place du volume). Correctif :
 
 ```
 admin@adm01:~$ kubectl cnpg fencing off mediagenda-db mediagenda-db-2 -n mediagenda-recette
 admin@adm01:~$ kubectl cnpg status mediagenda-db -n mediagenda-recette      # 3 instances OK, réplication en flux
 ```
 
-Si les écritures sont déjà bloquées (drain fait), `kubectl uncordon` du nœud drainé ramène l'instance évincée, qui redevient réplique synchrone : les validations reprennent.
+Le drain bloqué reprend seul dès que la réplique clôturée est de nouveau prête (le PDB des répliques autorise alors une éviction) ; sinon, interromps-le et `kubectl uncordon` le nœud avant de reprendre la maintenance (étape finale).
 
 **Variante 3 — réplication synchrone mal réglée.**
 
@@ -750,7 +750,7 @@ Ordre type : d'abord ce qui peut **corrompre ou perdre** (E37 avant toute procé
 
 *5. Communication.* Points de 30 min au format : état (ce qui est rétabli, ce qui ne l'est pas), risque restant sur les données, prochaine action, heure du prochain point. Pas de cause annoncée avant d'être prouvée.
 
-**Post-mortem attendu** (`docs/socle/post-mortems/AAAA-MM-JJ-INC-4350.md`, modèle du M00) : chronologie à la minute (injection, détection, chaque hypothèse, chaque correction, retour à la normale), impact (données exposées, durée de non-restaurabilité, écritures bloquées), causes racines (une par panne, puis le facteur commun : **des changements faits à la main hors du code** — Secret, classe, quota, PDB, clôture, étiquette de nœud), ce qui a bien marché (témoins, contrôles, runbooks), actions avec responsable et échéance : une **détection** par panne (contrôle `ms-verif-k8s-stockage`, alerte M21), une **prévention** par panne (GitOps M20 qui annule les dérives, admission, revue), et une action transverse (droits d'écriture de Lucas sur les composants de plateforme, M24).
+**Post-mortem attendu** (`docs/kubernetes/post-mortems/AAAA-MM-JJ-INC-4350.md`, modèle du M00) : chronologie à la minute (injection, détection, chaque hypothèse, chaque correction, retour à la normale), impact (données exposées, durée de non-restaurabilité, écritures bloquées), causes racines (une par panne, puis le facteur commun : **des changements faits à la main hors du code** — Secret, classe, quota, PDB, clôture, étiquette de nœud), ce qui a bien marché (témoins, contrôles, runbooks), actions avec responsable et échéance : une **détection** par panne (contrôle `ms-verif-k8s-stockage`, alerte M21), une **prévention** par panne (GitOps M20 qui annule les dérives, admission, revue), et une action transverse (droits d'écriture de Lucas sur les composants de plateforme, M24).
 
 **Explications**
 

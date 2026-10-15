@@ -35,8 +35,10 @@ check_cmd "Dockerfile : USER non root" \
   bash -c 'grep -Eq "^USER +[^ ]+" <<<"$1" && ! grep -Eq "^USER +(root|0)(:|$| )" <<<"$1"' _ "$_m12d_e05_df"
 check_cmd "Dockerfile : commande en forme exec" _m12d_correspond "$_m12d_e05_df" '^(CMD|ENTRYPOINT) +\['
 _m12d_e05_di="$(_m12d_contenu_main mediagenda/api .dockerignore)"
+# Liste noire (.git et .venv nommés) ou liste blanche (« * » puis des « ! ») : les deux excluent
+# .git et .venv ; la liste blanche (M12-E10, E11) remplace souvent celle de E05 sur main.
 check_cmd ".dockerignore : .git et .venv exclus du contexte" \
-  bash -c 'grep -Eq "^/?\.git/?$" <<<"$1" && grep -Eq "^/?\.venv/?$" <<<"$1"' _ "$_m12d_e05_di"
+  bash -c '{ grep -Eq "^/?\.git/?$" <<<"$1" && grep -Eq "^/?\.venv/?$" <<<"$1"; } || { grep -Eq "^\*\s*$" <<<"$1" && ! grep -Eq "^!\s*/?\.(git|venv)" <<<"$1"; }' _ "$_m12d_e05_di"
 
 # --- 2. L'image sur ctr01 --------------------------------------------------------------------------
 _m12d_e05_img="$(_m12d_docker "image inspect --format '{{.Config.User}}|{{json .Config.Cmd}}|{{json .Config.Entrypoint}}|{{json .Config.ExposedPorts}}|{{json .Config.Env}}' mediagenda-api:0.1.0")"

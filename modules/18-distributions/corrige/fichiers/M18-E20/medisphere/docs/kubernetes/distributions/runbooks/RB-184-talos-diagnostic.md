@@ -31,7 +31,7 @@ kubectl --kubeconfig ~/.config/workbook/m18/talos.kubeconfig get nodes -o wide
 
 1. Vérifier que l'adresse est bien la VM attendue (console Proxmox, MAC, VMID).
 2. `talos/generer.sh` puis `talos/appliquer.sh <nœud> --maintenance`.
-3. `talosctl -n <IP> health`, `kubectl get nodes`.
+3. `talosctl -n 10.10.99.85 health --control-plane-nodes 10.10.99.85 --worker-nodes 10.10.99.86,10.10.99.87` (nœuds explicites : sans service de découverte, `health` ne les trouve pas seul), `kubectl get nodes`.
 4. Chercher qui a réinitialisé le nœud (accès `os:admin`).
 
 ## 4. Configuration refusée
