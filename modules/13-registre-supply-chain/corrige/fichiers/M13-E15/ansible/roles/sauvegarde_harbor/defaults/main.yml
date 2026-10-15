@@ -1,5 +1,5 @@
 ---
-# Rôle sauvegarde_harbor — sauvegarde APPLICATIVE de Harbor vers PBS (M13-E15, PLAT-1433). RB-131.
+# Rôle sauvegarde_harbor — sauvegarde APPLICATIVE de Harbor vers PBS (M13-E15, PLAT-1415). RB-131.
 #
 # Mode « sauvegarde » (reg01) : script /usr/local/sbin/wb-backup-harbor.sh, minuterie quotidienne.
 # Mode « restauration » (reg02, essai) : client PBS, accès EN LECTURE aux sauvegardes de reg01 et

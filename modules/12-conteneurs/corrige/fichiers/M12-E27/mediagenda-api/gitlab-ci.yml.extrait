@@ -1,8 +1,12 @@
 # Extrait de .gitlab-ci.yml de mediagenda/api — ajouté en M12-E27 : contrôle des images de base.
 include:
   - project: plateforme/ci-templates
-    ref: v1.5.0          # version qui ajoute images-autorisees.yml
-    file: [qualite.yml, image.yml, images-autorisees.yml]
+    ref: v1              # la branche v1 avance avec la version qui ajoute images-autorisees.yml
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+      - templates/image.yml
+      - templates/images-autorisees.yml
 
 # Le Dockerfile passe de « FROM docker.io/library/python:3.13-slim-trixie » à :
 #   ARG IMAGE_BASE=ctr01.par1.medisphere.internal:5000/bibliotheque/python:3.13-trixie-<AAAAMMJJ>@sha256:<EMPREINTE>

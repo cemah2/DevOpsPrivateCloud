@@ -15,9 +15,9 @@
 
 **Solution**
 
-Fichiers (projet `mediagenda/api`) : [`compose.yaml`](fichiers/M12-E24/mediagenda-api/compose.yaml) durci, [`securite/generer-seccomp.sh`](fichiers/M12-E24/mediagenda-api/securite/generer-seccomp.sh) et le profil produit [`securite/seccomp-mediagenda.json`](fichiers/M12-E24/mediagenda-api/securite/seccomp-mediagenda.json) (Docker 29.8.2). Documentation : [`docs/conteneurs/durcissement-execution.md`](fichiers/M12-E24/medisphere/docs/conteneurs/durcissement-execution.md) (sections E24, E25 et E26).
+Fichiers (projet `mediagenda/api`) : [`compose.yaml`](fichiers/M12-E24/mediagenda-api/compose.yaml) durci (celui de E18, limites et image 0.2.0 comprises, plus les blocs « Durcissement »), [`securite/generer-seccomp.sh`](fichiers/M12-E24/mediagenda-api/securite/generer-seccomp.sh) et le profil produit [`securite/seccomp-mediagenda.json`](fichiers/M12-E24/mediagenda-api/securite/seccomp-mediagenda.json) (Docker 29.8.2). Documentation : [`docs/conteneurs/durcissement-execution.md`](fichiers/M12-E24/medisphere/docs/conteneurs/durcissement-execution.md) (sections E24, E25 et E26).
 
-*1. État des lieux.* Sur la pile de E08 (image non root de E05) :
+*1. État des lieux.* Sur la pile telle que la laisse E18 (`compose.yaml` de E08 avec les limites de E18, image non root 0.2.0 de E11) :
 
 ```
 admin@ctr01:~$ docker inspect mediagenda-api-1 --format '{{.Config.User}} {{.HostConfig.CapAdd}} {{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}} {{.AppArmorProfile}} {{.HostConfig.ReadonlyRootfs}}'
@@ -279,7 +279,7 @@ root@<id>:/# exit
 admin@ctr01:~$ sudo userdel -r demo-docker
 ```
 
-Le démon tourne en root et exécute ce qu'on lui demande : monter `/` de l'hôte, donner `--privileged`, `--pid host`… Le groupe propriétaire du socket ne protège que **l'accès au socket**, pas ce qu'on en fait. Règle retenue : le groupe `docker` ne contient **que des comptes qui ont déjà `sudo` sans mot de passe** (`admin`, variable `docker_engine_groupe_docker` de M12-E02) et, sur `runner02`, le compte du runner (`gitlab-runner`), qui en a besoin pour l'exécuteur `docker`. Ce qu'`admin` y gagne : rien qu'il n'ait déjà… sauf qu'une action par le socket ne laisse **pas de trace `sudo`** (`journalctl _COMM=sudo`) : d'où l'audit de l'étape 6. Comptes de service, de supervision, de développeurs : jamais (voir E32 Q6).
+Le démon tourne en root et exécute ce qu'on lui demande : monter `/` de l'hôte, donner `--privileged`, `--pid host`… Le groupe propriétaire du socket ne protège que **l'accès au socket**, pas ce qu'on en fait. Règle retenue : le groupe `docker` ne contient **que des comptes qui ont déjà `sudo` sans mot de passe** (`admin`, variable `docker_engine_groupe_docker` de M12-E02) ; sur `runner02`, **personne** (M12-E20 : le service `gitlab-runner` tourne en root et parle seul au démon, le compte `gitlab-runner` reste hors du groupe, les humains passent par `sudo`). Ce qu'`admin` y gagne : rien qu'il n'ait déjà… sauf qu'une action par le socket ne laisse **pas de trace `sudo`** (`journalctl _COMM=sudo`) : d'où l'audit de l'étape 6. Comptes de service, de supervision, de développeurs : jamais (voir E32 Q6).
 
 ```
 admin@ctr01:~$ getent group docker
@@ -390,12 +390,12 @@ Règles d'audit envoyées vers la plateforme de journaux (M22) avec une alerte s
 
 **Solution**
 
-Fichiers : projet `plateforme/images-base` — [`debian/Dockerfile`](fichiers/M12-E27/images-base/debian/Dockerfile), [`python/Dockerfile`](fichiers/M12-E27/images-base/python/Dockerfile), [`php-apache/Dockerfile`](fichiers/M12-E27/images-base/php-apache/Dockerfile), [`images-autorisees.txt`](fichiers/M12-E27/images-base/images-autorisees.txt), [`outils/verifier-from.sh`](fichiers/M12-E27/images-base/outils/verifier-from.sh), [`.gitlab-ci.yml`](fichiers/M12-E27/images-base/.gitlab-ci.yml), [`pki/`](fichiers/M12-E27/images-base/pki/LISEZMOI.md) ; projet `plateforme/ci-templates` — [`images-autorisees.yml`](fichiers/M12-E27/ci-templates/images-autorisees.yml) ; [extrait du `.gitlab-ci.yml` de `mediagenda/api`](fichiers/M12-E27/mediagenda-api/gitlab-ci.yml.extrait) ; documentation [`images-de-base.md`](fichiers/M12-E27/medisphere/docs/conteneurs/images-de-base.md).
+Fichiers : projet `plateforme/images-base` — [`debian/Dockerfile`](fichiers/M12-E27/images-base/debian/Dockerfile), [`python/Dockerfile`](fichiers/M12-E27/images-base/python/Dockerfile), [`php-apache/Dockerfile`](fichiers/M12-E27/images-base/php-apache/Dockerfile), [`images-autorisees.txt`](fichiers/M12-E27/images-base/images-autorisees.txt), [`outils/verifier-from.sh`](fichiers/M12-E27/images-base/outils/verifier-from.sh), [`.gitlab-ci.yml`](fichiers/M12-E27/images-base/.gitlab-ci.yml), [`pki/`](fichiers/M12-E27/images-base/pki/LISEZMOI.md) ; projet `plateforme/ci-templates` — [`templates/images-autorisees.yml`](fichiers/M12-E27/ci-templates/templates/images-autorisees.yml) ; [extrait du `.gitlab-ci.yml` de `mediagenda/api`](fichiers/M12-E27/mediagenda-api/gitlab-ci.yml.extrait) ; documentation [`images-de-base.md`](fichiers/M12-E27/medisphere/docs/conteneurs/images-de-base.md).
 
 Conception retenue (une solution parmi d'autres, défendable) :
 - **Trois images** : `bibliotheque/debian`, `bibliotheque/python` (MédiAgenda, MédiNotif, MédiAnnuaire) et `bibliotheque/php-apache` (Legacy-RDV). Pas de `bibliotheque/golang` : la chaîne de compilation Go ne part pas en production (étape de construction, autorisée par empreinte), et l'image finale de MédiDoc est *distroless* (pas de paquets à corriger chaque semaine : on suit l'amont par MR).
 - **Épinglage + reconstruction** : `ARG AMONT=…@sha256:…` (empreintes de l'index amont relevées le 2026-10-08), `apt-get upgrade` à chaque construction ; l'empreinte amont change par MR (Renovate au M13). Hadolint signale `apt-get upgrade` (DL3005) et l'absence de version des paquets (DL3008) : dérogations écrites **sur la ligne**, avec la raison (c'est l'objet même de l'image). Les trois Dockerfiles passent Hadolint 2.15.1 avec le `.hadolint.yaml` de E16 (vérifié).
-- **Étiquettes** : `trixie-AAAAMMJJ` immuable (le gabarit doit refuser de repousser une étiquette existante), `trixie` mobile ; la date est calculée **une fois par pipeline** (job `date`, artefact *dotenv*) pour que les trois images aient la même.
+- **Étiquettes** : `trixie-AAAAMMJJ` immuable **par convention** (le gabarit de E21 ne refuse que `latest`, et `registry:3` accepte qu'on repousse une étiquette : c'est une limite écrite dans la politique, levée au M13 par l'immuabilité des étiquettes de Harbor ; un job qui interroge le registre avant de pousser est une amélioration possible), `trixie` mobile ; la date est calculée **une fois par pipeline** (job `date`, artefact *dotenv*) pour que les trois images aient la même.
 - **Traçabilité** : `org.opencontainers.image.base.name` contient l'amont **avec** son empreinte, `revision` le commit, `created` la date ; les applications référencent `…/bibliotheque/python:3.13-trixie-AAAAMMJJ@sha256:…` et posent à leur tour `base.name`.
 - **Utilisateur** : les images du catalogue restent en root (`USER 0` explicite, dérogation DL3002 écrite ; Hadolint 2.15 exige un UID numérique, DL3066) : ce sont des bases de construction, les applications installent des paquets avant de fixer leur UID ; l'exigence « non root » porte sur l'image **finale** (`CNT-IMG-05`, contrôlée par Hadolint dans chaque application).
 - **Multi-architectures** : `PLATEFORMES=linux/amd64,linux/arm64` passé au gabarit ; il faut l'émulation (binfmt) sur `runner02`, comme sur `ctr01` en E12 ; sans elle, retire arm64 et écris-le (exception datée).
@@ -492,7 +492,7 @@ Prometheus (M21) moissonne les métriques des démons, de cAdvisor ou de l'expor
 
 **Solution**
 
-Fichiers (projet `plateforme/ansible`) : rôle [`sauvegarde_conteneurs`](fichiers/M12-E29/ansible/roles/sauvegarde_conteneurs/) (script [`wb-backup-conteneurs.sh`](fichiers/M12-E29/ansible/roles/sauvegarde_conteneurs/files/wb-backup-conteneurs.sh), gabarits, unités), variables [`host_vars/ctr01/sauvegarde_conteneurs.yml`](fichiers/M12-E29/ansible/inventories/lab/host_vars/ctr01/sauvegarde_conteneurs.yml), [modèle de Vault](fichiers/M12-E29/ansible/inventories/lab/host_vars/ctr01/vault-critique.yml.exemple), [extrait de `pare_feu.yml`](fichiers/M12-E29/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), [réservation Kea](fichiers/M12-E29/kea/reservation-ctr01.extrait.json), [extrait du playbook](fichiers/M12-E29/ansible/playbooks/conteneurs.yml.extrait) ; PBS : [`pbs-jeton-conteneurs.sh`](fichiers/M12-E29/pbs01/pbs-jeton-conteneurs.sh), [règle d'entrée](fichiers/M12-E29/pbs01/pbs01-nftables-extrait.nft) ; documentation : [RB-121](fichiers/M12-E29/medisphere/docs/conteneurs/runbooks/RB-121-restaurer-la-base-d-une-pile-compose.md), [`tests/restauration-conteneurs.md`](fichiers/M12-E29/medisphere/docs/conteneurs/tests/restauration-conteneurs.md).
+Fichiers (projet `plateforme/ansible`) : rôle [`sauvegarde_conteneurs`](fichiers/M12-E29/ansible/roles/sauvegarde_conteneurs/) (script [`wb-backup-conteneurs.sh`](fichiers/M12-E29/ansible/roles/sauvegarde_conteneurs/files/wb-backup-conteneurs.sh), gabarits, unités), variables [`host_vars/ctr01/sauvegarde_conteneurs.yml`](fichiers/M12-E29/ansible/inventories/lab/host_vars/ctr01/sauvegarde_conteneurs.yml), [modèle de Vault](fichiers/M12-E29/ansible/inventories/lab/host_vars/ctr01/vault-critique.yml.exemple), [extrait de `pare_feu.yml`](fichiers/M12-E29/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) (adresse stable : [réservation Kea de M12-E15](fichiers/M12-E15/kea/reservation-ctr01.extrait.json)), [extrait du playbook](fichiers/M12-E29/ansible/playbooks/conteneurs.yml.extrait) ; PBS : [`pbs-jeton-conteneurs.sh`](fichiers/M12-E29/pbs01/pbs-jeton-conteneurs.sh), [règle d'entrée](fichiers/M12-E29/pbs01/pbs01-nftables-extrait.nft) ; documentation : [RB-121](fichiers/M12-E29/medisphere/docs/conteneurs/runbooks/RB-121-restaurer-la-base-d-une-pile-compose.md), [`tests/restauration-conteneurs.md`](fichiers/M12-E29/medisphere/docs/conteneurs/tests/restauration-conteneurs.md).
 
 *1. Sauvegarde logique.*
 
@@ -535,7 +535,7 @@ app@ctr02:~$ skopeo copy docker://ctr01.par1.medisphere.internal:5000/mediagenda
 
 Avec le stockage containerd de Docker 29, `docker save` produit une archive au format **OCI** (`oci-layout`, `index.json`) **et** compatible avec l'ancien format (`manifest.json`) ; elle peut contenir plusieurs plateformes et les attestations de BuildKit (`--platform` pour n'en garder qu'une). Skopeo est installé sur `ctr02` (pas sur `ctr01`) ; depuis un hôte Docker, la source `docker-daemon:` de Skopeo lit directement le démon. Ce qui se **sauvegarde** : les données (bases, volumes de fichiers), les secrets (Vault) ; ce qui se **reconstruit** : les images (CI, empreintes dans Git), le registre de travail (repoussé par les pipelines), la configuration (Git, Ansible), les conteneurs eux-mêmes.
 
-*4. Vers PBS.* Script [`pbs-jeton-conteneurs.sh`](fichiers/M12-E29/pbs01/pbs-jeton-conteneurs.sh) sur `pbs01` (espace `par1/conteneurs`, jeton `wb-backup@pbs!ctr01`, `DatastoreBackup` sur l'espace seulement) ; clé `proxmox-backup-client key create --kdf none` (Vault `critique`, *paperkey*, `shred -u`) ; réservation Kea 10.10.99.121 (puis renouvellement du bail de `ctr01`) ; règle de bordure et règle d'entrée de `pbs01`. Le rôle reprend la structure de `sauvegarde_pbs` (M06-E28) ; `ctr01` n'étant pas dans le groupe `socle`, l'empreinte du certificat de PBS est répétée dans son Vault. Le script (testé hors lab avec un faux client PBS : export, vérification, copie à froid avec arrêt et relance de l'écrivain, nettoyage) vérifie chaque archive (`pg_restore --list`, présence de `TABLE DATA`), relance **toujours** un conteneur arrêté pour une copie à froid (`trap`), et rend un code non nul au moindre échec.
+*4. Vers PBS.* Script [`pbs-jeton-conteneurs.sh`](fichiers/M12-E29/pbs01/pbs-jeton-conteneurs.sh) sur `pbs01` (espace `par1/conteneurs`, jeton `wb-backup@pbs!ctr01`, `DatastoreBackup` sur l'espace seulement) ; clé `proxmox-backup-client key create --kdf none` (Vault `critique`, *paperkey*, `shred -u`) ; adresse stable : la réservation Kea 10.10.99.121 et la définition `CTR01` de M12-E15 (rien à recréer, vérifier `ip -4 addr` sur `ctr01`) ; règle de bordure et règle d'entrée de `pbs01`. Le rôle reprend la structure de `sauvegarde_pbs` (M06-E28) ; `ctr01` n'étant pas dans le groupe `socle`, l'empreinte du certificat de PBS est répétée dans son Vault. Le script (testé hors lab avec un faux client PBS : export, vérification, copie à froid avec arrêt et relance de l'écrivain, nettoyage) vérifie chaque archive (`pg_restore --list`, présence de `TABLE DATA`), relance **toujours** un conteneur arrêté pour une copie à froid (`trap`), et rend un code non nul au moindre échec.
 
 ```
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/conteneurs.yml --limit ctr01 --tags sauvegarde
@@ -597,24 +597,24 @@ admin@adm01:~$ grep -vc ' 200$' charge.log
 
 ```
 admin@ctr01:~/src/mediagenda-api$ export COMPOSE_FILE=compose.yaml:compose.ha.yaml
-admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.2.0 outils/maj-progressive.sh
-Version en service : 0.1.0 ; cible : 0.2.0
+admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.2.1 outils/maj-progressive.sh
+Version en service : 0.2.0 ; cible : 0.2.1
 == api : recréation
 == api : attente du passage UP dans HAProxy (api-a)
 == api-b : recréation
 == api-b : attente du passage UP dans HAProxy (api-b)
-Mise à jour terminée : les deux instances sont en 0.2.0.          # 16 s ; charge témoin : 915 × 200, 0 erreur
+Mise à jour terminée : les deux instances sont en 0.2.1.          # 16 s ; charge témoin : 915 × 200, 0 erreur
 admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.3.0 outils/maj-progressive.sh     # image cassée
 == api : recréation
 container mediagenda-api-1 is unhealthy
 ÉCHEC : api n'est pas devenu healthy. L'autre instance sert toujours.
-Retour arrière : MEDIAGENDA_TAG=0.2.0 outils/maj-progressive.sh
-admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.2.0 outils/maj-progressive.sh     # 1 475 × 200, 0 erreur sur tout l'essai
+Retour arrière : MEDIAGENDA_TAG=0.2.1 outils/maj-progressive.sh
+admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.2.1 outils/maj-progressive.sh     # 1 475 × 200, 0 erreur sur tout l'essai
 ```
 
-Image cassée utilisée : `printf 'FROM mediagenda-api:0.2.0\nENV MEDIAGENDA_PORT=8001\n' | docker build -t mediagenda-api:0.3.0 -` (le processus écoute ailleurs : la sonde et HAProxy échouent, l'instance n'entre jamais en rotation).
+`<NOUVELLE>` : `docker build --build-arg VERSION=0.2.1 -t mediagenda-api:0.2.1 .` (même code, autre version, visible dans `/sante`). Image cassée utilisée : `printf 'FROM mediagenda-api:0.2.1\nENV MEDIAGENDA_PORT=8001\n' | docker build -t mediagenda-api:0.3.0 -` (le processus écoute ailleurs : la sonde et HAProxy échouent, l'instance n'entre jamais en rotation).
 
-*4. Mise à jour automatique (Podman).* Clés ajoutées à l'unité de E14 : `Image=…/mediagenda/api:recette`, `AutoUpdate=registry`, `HealthCmd=` (Python, l'image n'a pas de `curl`), `Notify=healthy` (l'unité n'est « démarrée » que lorsque le conteneur est *healthy* ; option `--sdnotify=healthy`, à vérifier sur ta version 5.4), et dans `[Service]` `TimeoutStartSec=90`. Identifiants dans `~/.config/containers/auth.json` (persistant) et non dans `$XDG_RUNTIME_DIR` (vidé au redémarrage) ; `systemctl --user enable --now podman-auto-update.timer`. Publication et essai :
+*4. Mise à jour automatique (Podman).* Clés ajoutées ou modifiées dans l'unité de E14 : `Image=…/mediagenda/api:recette` (à la place de l'unité `.build`), `AutoUpdate=registry`, et dans `[Service]` `TimeoutStartSec=90`. La sonde (`HealthCmd=` en tableau JSON, Python : l'image n'a pas de `curl`) et `Notify=healthy` (l'unité n'est « démarrée » que lorsque le conteneur est *healthy*, option `--sdnotify=healthy` de `podman run`) sont déjà là depuis E14 : vérifie-les, car tout le retour arrière en dépend. Identifiants dans `~/.config/containers/auth.json` (persistant) et non dans `$XDG_RUNTIME_DIR` (vidé au redémarrage) ; `systemctl --user enable --now podman-auto-update.timer`. Publication et essai :
 
 ```
 admin@adm01:~$ skopeo copy --src-creds plateforme:<MDP> --dest-creds plateforme:<MDP> \
@@ -751,16 +751,16 @@ Fichiers (projet `mediagenda/annuaire`) : [`Dockerfile`](fichiers/M12-E34/annuai
 
 | Jalon | Actions | Temps de référence |
 |---|---|---|
-| T0 → T1 | Lecture du dossier et du README (variables, sondes, **dossier de cache inscriptible**, codes de sortie) ; projet `mediagenda/annuaire` créé, code poussé ; Dockerfile multi-étapes (uv, `--no-editable`) à partir de `bibliotheque/python` daté et épinglé, UID 10002, `HEALTHCHECK` par `mediannuaire sonde`, étiquettes OCI ; `.dockerignore` en liste blanche ; construction et essai locaux sur `ctr01` | 25 min |
-| T1 → T2 | `.gitlab-ci.yml` : tests (`unittest`), Hadolint, `images-autorisees`, construction par le gabarit E21 ; étiquette `1.0.0` (ou version par semantic-release) ; pipeline vert, image publiée | 25 min |
+| T0 → T1 | Lecture du dossier et du README (variables, sondes, **dossier de cache inscriptible**, codes de sortie) ; projet `mediagenda/annuaire` créé, code poussé ; Dockerfile multi-étapes (uv, `--no-editable`) à partir de `bibliotheque/python` daté et épinglé, UID 10003 (10001 MédiAgenda, 10002 MédiNotif), `HEALTHCHECK` par `mediannuaire sonde`, étiquettes OCI ; `.dockerignore` en liste blanche ; construction et essai locaux sur `ctr01` | 25 min |
+| T1 → T2 | `.gitlab-ci.yml` : tests (`unittest`), Hadolint, `images-autorisees`, construction par le gabarit E21 (stages et workflow de `qualite.yml`, étiquettes déduites de Git) ; pipeline de `main` vert, puis étiquette Git `v1.0.0` (ou version par semantic-release) : image `1.0.0` publiée | 25 min |
 | T2 → T3 | Secret `secrets/jeton_admin` (700/644, hors Git), `compose.yaml` de recette (image publiée, `read_only` + `tmpfs` sur le cache, aucune capacité, limites, données `:ro`, secret en fichier), `docker compose up -d --wait` ; exigences 4 à 7 constatées | 20 min |
 | T3 → T4 | MR sur la configuration de la sonde, registre des secrets, `lab/bin/check 12 34` | 10 min |
 
-Le piège de l'application : avec la racine en lecture seule et sans `tmpfs` sur `/var/cache/mediannuaire`, elle refuse de démarrer (code 3, « cache inutilisable ») ; le `tmpfs` doit appartenir à l'UID du service (`uid=10002,gid=10002`), sinon même erreur. Constats hors lab avec ces fichiers : image construite et lue par Hadolint 2.15.1 sans avertissement ; recette saine (`/sante`, `/pret`, liste des cardiologues, `POST /admin/recharger` 200 avec le jeton, 401 sans) ; `docker compose stop` en 0,7 s, code de sortie 0 (« signal reçu, arrêt en cours » puis « arrêt terminé » dans le journal JSON) ; le script d'essais de E24 trouve un seul geste possible (`ptrace`, profil seccomp par défaut : acceptable au niveau `DEVRAIT` de `CNT-RUN-06`, à documenter).
+Le piège de l'application : avec la racine en lecture seule et sans `tmpfs` sur `/var/cache/mediannuaire`, elle refuse de démarrer (code 3, « cache inutilisable ») ; le `tmpfs` doit appartenir à l'UID du service (`uid=10003,gid=10003`), sinon même erreur. Constats hors lab avec ces fichiers : image construite et lue par Hadolint 2.15.1 sans avertissement ; recette saine (`/sante`, `/pret`, liste des cardiologues, `POST /admin/recharger` 200 avec le jeton, 401 sans) ; `docker compose stop` en 0,7 s, code de sortie 0 (« signal reçu, arrêt en cours » puis « arrêt terminé » dans le journal JSON) ; le script d'essais de E24 trouve un seul geste possible (`ptrace`, profil seccomp par défaut : acceptable au niveau `DEVRAIT` de `CNT-RUN-06`, à documenter).
 
 ```
 admin@ctr01:~/src/annuaire$ docker inspect annuaire-annuaire-1 --format '{{.Config.User}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}} {{json .HostConfig.Tmpfs}}'
-10002:10002 true [ALL] [no-new-privileges:true] {"/var/cache/mediannuaire":"size=8m,mode=0700,uid=10002,gid=10002,noexec,nosuid,nodev"}
+10003:10003 true [ALL] [no-new-privileges:true] {"/var/cache/mediannuaire":"size=8m,mode=0700,uid=10003,gid=10003,noexec,nosuid,nodev"}
 admin@ctr01:~/src/annuaire$ docker inspect annuaire-annuaire-1 --format '{{json .Config.Env}}' | grep -c JETON_ADMIN=
 0
 ```
@@ -771,12 +771,14 @@ L'exercice mesure l'**outillage** autant que l'opérateur : avec le gabarit de C
 
 **Alternatives**
 - Image finale *distroless* Python (`gcr.io/distroless/python3-debian13`) : plus petite et sans setuid, mais elle n'est pas dans la liste autorisée (exception à demander) et la version de Python est imposée par l'image.
-- Lancer la recette sur `ctr02` en Quadlet (ADR-0120 : serveurs en Podman) : plus conforme à la cible, un peu plus long ; les deux sont acceptés par le dossier.
+- Lancer la recette sur `ctr02` en Quadlet (ADR-0120 : serveurs en Podman) : plus conforme à la cible, un peu plus long ; le dossier impose toutefois `ctr01` pour cet exercice (la vérification lit `docker inspect`).
 
 **Pièges classiques**
 - Passer la racine en lecture seule sans lire le README : refus de démarrer (cache).
 - Jeton en variable d'environnement ou dans `compose.yaml`.
 - Recette lancée avec une image **construite à la main** (exigence 4 : l'image vérifiée est celle du pipeline).
+- `ETIQUETTES: "${CI_COMMIT_TAG:-main-…}"` dans le `.gitlab-ci.yml` : GitLab ne développe pas cette syntaxe du shell dans les variables, l'étiquette publiée est littéralement la chaîne écrite. Laisser le gabarit déduire les étiquettes de Git.
+- Redéfinir `stages:` dans le projet sans `lint` : les jobs de `qualite.yml` et `.hadolint` n'ont plus de stage et le pipeline est refusé.
 - `HEALTHCHECK` avec `curl` (absent de l'image) : sonde toujours en échec.
 - Shell entre Docker et le processus (`CMD mediannuaire` en forme shell) : SIGTERM n'arrive pas, `docker stop` attend 10 s puis tue (code 137).
 

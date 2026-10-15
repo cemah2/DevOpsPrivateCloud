@@ -254,7 +254,7 @@ Quand un HPA pilote un Deployment, la documentation Kubernetes (*Horizontal Pod 
 
 ### M17-E23 — Sous le capot : où Helm range-t-il ses releases ?  `LAB` `★★★`
 
-> **Ticket PLAT-1837** — *De : Karim Benali*
+> **Ticket PLAT-1823** — *De : Karim Benali*
 > Après les pannes de la semaine, je veux que toute l'équipe sache lire ce que Helm laisse dans le cluster. Fais-nous une séance : ce qu'il y a dans un Secret de release, ce que Helm en fait à chaque commande, ce qui change avec un autre pilote de stockage, et un outil pour décoder une révision sans en afficher les secrets.
 
 **Objectifs pédagogiques**
@@ -303,7 +303,7 @@ Le serveur d'API encode toujours en base64 le contenu d'un Secret (`data`), alor
 
 ### M17-E24 — Questions expert : packaging  `Q` `★★★`
 
-> **Ticket PLAT-1838** — *De : Claire Morel*
+> **Ticket PLAT-1824** — *De : Claire Morel*
 > Avant de te laisser encadrer les équipes MédiDoc et MédiNotif sur le packaging, je te fais passer les questions que Karim pose en entretien. Réponds par écrit, avec tes arguments : je veux le raisonnement, pas un mot-clé.
 
 **Prérequis** : paliers 1 à 4 du module.

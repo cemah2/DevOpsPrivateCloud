@@ -59,7 +59,7 @@ Les images de MédiSphère existent, mais elles vivent sur un registre de travai
 | Hôte | VMID | Réseau | Rôle | Exercice |
 |---|---|---|---|---|
 | `reg01` | **1013** (socle) | INFRA 10.10.20.18 | Harbor 2.15, `https://registry.par1.medisphere.internal` | E02 |
-| `reg02` | 2131 | `vsandbox` (DHCP) | Registre de réplication (détruit en fin de module) | E13 |
+| `reg02` | 2131 | SANDBOX 10.10.99.31 (VNet `vsandbox`, adresse imposée) | Harbor de test : réplication, restauration, répétition des mises à jour (détruit en fin de module) | E13 |
 
 Projets Harbor, caches, robots, signature Cosign et Renovate : voir [`PLAN.md`](../../PLAN.md) §4.10. À partir de ce module, toutes les images de MédiSphère sont publiées dans Harbor et signées ; les nœuds Kubernetes (M14) tireront les images publiques par ses caches.
 

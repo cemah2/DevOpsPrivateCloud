@@ -6,4 +6,4 @@ le job copie dans le contexte : `docs/registre/cosign.pub` et `docs/registre/sig
 (`/usr/local/share/ca-certificates/medisphere-root-ca.crt`, variable de CI `MEDISPHERE_ROOT_CA`).
 Monter un outil : changer `*_VERSION` et `*_SHA256` (après `cosign verify-blob` manuel), publier une
 nouvelle version de l'image, puis mettre à jour `SC_OUTILS_IMAGE` (étiquette + empreinte) dans
-`supply-chain.yml` — Renovate le propose (M13-E11).
+`templates/supply-chain.yml` (et `MS_IMAGE_OUTILS` dans `templates/verification.yml`) — Renovate le propose (M13-E11).

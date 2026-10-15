@@ -1,0 +1,23 @@
+# plateforme/k8s — rbac/wb-checks-reseau.yaml (M15-E07, DEV-1607)
+# Lecture seule des ressources réseau du module 15 pour le compte des vérifications du workbook
+# (wb-system/wb-checks, M14-E06). La ClusterRole « wb-checks » du M14 est AGRÉGÉE : l'étiquette
+# workbook.medisphere.internal/checks=true suffit, aucune liaison à écrire, rien à modifier au M14.
+# Déjà couverts par wb-checks-base (M14) : cilium.io (pools LB IPAM, BGP, CiliumNetworkPolicy,
+# CiliumGatewayClassConfig…), networking.k8s.io, discovery.k8s.io (EndpointSlices), apps.
+# Ajoutés ici : la Gateway API (E07) et cert-manager (E13). RBAC ne vérifie pas l'existence des
+# groupes : la règle cert-manager peut être posée avant son installation.
+# Aucun verbe d'écriture, aucun Secret (apps-joker, clés TSIG et clés de compte ACME en sont).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-reseau
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["cert-manager.io", "acme.cert-manager.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]

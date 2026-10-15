@@ -1,7 +1,7 @@
 # plateforme/k8s — espaces/wb-restauration.yaml (M16-E24, PLAT-1724)
 # Espace de restauration : reçoit des COPIES d'espaces applicatifs (données de santé comprises).
 # - PSA restricted comme mediagenda-* (les objets restaurés doivent y être admis tels quels) ;
-# - PAS de label medisphere.fr/exposition : gw-par1 refuse toute route de cet espace (allowedRoutes) ;
+# - PAS de label medisphere.internal/exposition : gw-par1 refuse toute route de cet espace (allowedRoutes) ;
 # - quota de stockage serré : une copie ne doit pas pouvoir épuiser le quota du pool k8s-rbd.
 # L'espace est créé par le code et reste vide entre deux essais (la copie est supprimée après contrôle).
 apiVersion: v1
@@ -13,9 +13,9 @@ metadata:
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted
-    medisphere.fr/usage: restauration
+    medisphere.internal/usage: restauration
   annotations:
-    medisphere.fr/contenu: "copies de données de production ou de recette : à vider après chaque essai (RB-161)"
+    medisphere.internal/contenu: "copies de données de production ou de recette : à vider après chaque essai (RB-161)"
 ---
 apiVersion: v1
 kind: ResourceQuota

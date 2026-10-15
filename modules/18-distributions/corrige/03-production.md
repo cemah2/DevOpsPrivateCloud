@@ -21,7 +21,7 @@ Les manifestes YAML ont été contrôlés avec `yamllint` et `kubeconform` (sch�
 
 **Solution**
 
-Fichiers : [`mhc-travailleurs.yaml`](fichiers/M18-E13/distributions/capi/capi-essai/mhc-travailleurs.yaml), [témoin](fichiers/M18-E13/distributions/capi/capi-essai/essais/temoin.yaml), [nouveaux gabarits](fichiers/M18-E13/distributions/capi/capi-essai/gabarits-k136-2.yaml), [extrait KCP et MD](fichiers/M18-E13/distributions/capi/capi-essai/montee-v1.36.5.extrait.yaml), [variables image-builder](fichiers/M18-E13/distributions/capi/image-builder/k136-2.env), [boucle témoin](fichiers/M18-E13/distributions/capi/outils/suivi-temoin.sh), [RB-182](fichiers/M18-E13/medisphere/docs/kubernetes/distributions/runbooks/RB-182-montee-version-capi.md), [compte rendu](fichiers/M18-E13/medisphere/docs/kubernetes/distributions/tests/cycle-de-vie-capi.md).
+Fichiers : [`mhc-travailleurs.yaml`](fichiers/M18-E13/distributions/capi/capi-essai/mhc-travailleurs.yaml), [témoin](fichiers/M18-E13/distributions/capi/capi-essai/essais/temoin.yaml), [nouveaux gabarits](fichiers/M18-E13/distributions/capi/capi-essai/gabarits-k136-2.yaml), [extrait KCP et MD](fichiers/M18-E13/distributions/capi/capi-essai/montee-v1.36.5.extrait.yaml), [variables image-builder](fichiers/M18-E13/images/capi/ubuntu-2404-k136-2.json) (dans `plateforme/images`, avec le `construire.sh` de E09), [boucle témoin](fichiers/M18-E13/distributions/capi/outils/suivi-temoin.sh), [RB-182](fichiers/M18-E13/medisphere/docs/kubernetes/distributions/runbooks/RB-182-montee-version-capi.md), [compte rendu](fichiers/M18-E13/medisphere/docs/kubernetes/distributions/tests/cycle-de-vie-capi.md).
 
 *1. Lecture.*
 
@@ -35,7 +35,7 @@ admin@adm01:~$ kubectl --kubeconfig ~/.config/workbook/m18/capi-essai.kubeconfig
 >   -o custom-columns=NOM:.metadata.name,PROVIDER:.spec.providerID,VERSION:.status.nodeInfo.kubeletVersion
 ```
 
-Chaîne : `Cluster` → `KubeadmControlPlane` (gabarit `ProxmoxMachineTemplate` du plan de contrôle, configuration kubeadm intégrée) et `MachineDeployment` → `MachineSet` (une par version de la spécification) → `Machine` → `ProxmoxMachine` (VMID, nœud Proxmox, adresses) + `KubeadmConfig` (données d'amorçage cloud-init) → VM → `Node` (`providerID: proxmox://<UUID SMBIOS>`, injecté par `kubeletExtraArgs` du gabarit). Étiquettes utiles : `cluster.x-k8s.io/cluster-name=capi-essai` sur toutes les machines, `cluster.x-k8s.io/deployment-name=capi-essai-workers` (nom de ton MD) sur les travailleurs, `cluster.x-k8s.io/control-plane` (et `cluster.x-k8s.io/control-plane-name`) sur le plan de contrôle.
+Chaîne : `Cluster` → `KubeadmControlPlane` (gabarit `ProxmoxMachineTemplate` du plan de contrôle, configuration kubeadm intégrée) et `MachineDeployment` → `MachineSet` (une par version de la spécification) → `Machine` → `ProxmoxMachine` (VMID, nœud Proxmox, adresses) + `KubeadmConfig` (données d'amorçage cloud-init) → VM → `Node` (`providerID: proxmox://<UUID SMBIOS>`, injecté par `kubeletExtraArgs` du gabarit). Étiquettes utiles : `cluster.x-k8s.io/cluster-name=capi-essai` sur toutes les machines, `cluster.x-k8s.io/deployment-name=capi-essai-travailleurs` (nom du MD de E10) sur les travailleurs, `cluster.x-k8s.io/control-plane` (et `cluster.x-k8s.io/control-plane-name`) sur le plan de contrôle.
 
 *2. Témoin* : appliquer [`temoin.yaml`](fichiers/M18-E13/distributions/capi/capi-essai/essais/temoin.yaml) dans le cluster de charge de travail, puis lancer la boucle dans un `tmux` :
 
@@ -46,7 +46,7 @@ admin@adm01:~/src/distributions$ capi/outils/suivi-temoin.sh | tee ~/capi-temoin
 Elle écrit une ligne par seconde (`heure prêts/désirés`) et la valeur minimale à l'arrêt.
 
 *3. MachineHealthCheck.* Points clés du [manifeste](fichiers/M18-E13/distributions/capi/capi-essai/mhc-travailleurs.yaml) :
-- `selector.matchLabels: {cluster.x-k8s.io/deployment-name: capi-essai-workers}` : le MD seul, jamais le plan de contrôle ;
+- `selector.matchLabels: {cluster.x-k8s.io/deployment-name: capi-essai-travailleurs}` : le MD seul, jamais le plan de contrôle ;
 - `checks.unhealthyNodeConditions` : `Ready` `Unknown` et `Ready` `"False"`, `timeoutSeconds: 300` (les guillemets autour de `False` sont obligatoires : sans eux, YAML lit un booléen et le serveur refuse le champ) ;
 - `checks.nodeStartupTimeoutSeconds: 900` : un clone complet sur `local-nvme`, le premier démarrage, cloud-init, `kubeadm join` et le tirage des images prennent plusieurs minutes. Avec le défaut de 10 minutes, une machine lente serait supprimée **pendant** son démarrage, et la suivante aussi : boucle de remplacement ;
 - `remediation.triggerIf.unhealthyLessThanOrEqualTo: 1` : **un nombre**, pas un pourcentage. « 40 % » de 2 machines donne 0,8, arrondi vers le bas à 0 : rien ne serait jamais réparé. « 50 % » donnerait 1 aujourd'hui, mais 1 aussi à 3 machines, et 2 à 4 : le nombre absolu dit exactement ce qu'on veut (une réparation à la fois sur ce petit cluster). Si les deux travailleurs tombent ensemble, c'est probablement le réseau ou Proxmox : réparer ne ferait qu'empirer.
@@ -80,11 +80,11 @@ Chronologie attendue (ordres de grandeur, à remplacer par tes mesures) :
 
 Pourquoi pas de MHC sur le plan de contrôle : avec un seul nœud de contrôle, le remplacer veut dire supprimer **le seul** membre etcd. Le KCP refuse une réparation qui ferait perdre le quorum : une réparation n'est possible qu'à partir de deux machines de contrôle déjà initialisées, et n'a de sens qu'à trois (on perd un membre sur trois, on en recrée un). Pour un plan de contrôle unique, la réponse à la panne est la sauvegarde (E14), pas la réparation automatique.
 
-*4. Mise à l'échelle* : `spec.replicas: 3` dans le manifeste du MD (MR, puis `kubectl apply`), ou `kubectl scale md capi-essai-workers -n capi-essai --replicas 3` pour l'essai **suivi immédiatement** d'un commit qui l'écrit (sinon le prochain `apply` du dépôt reviendrait à 2). Retour à 2 en choisissant la machine :
+*4. Mise à l'échelle* : `spec.replicas: 3` dans le manifeste du MD (MR, puis `kubectl apply`), ou `kubectl scale md capi-essai-travailleurs -n capi-essai --replicas 3` pour l'essai **suivi immédiatement** d'un commit qui l'écrit (sinon le prochain `apply` du dépôt reviendrait à 2). Retour à 2 en choisissant la machine :
 
 ```
 admin@adm01:~$ kubectl annotate machine -n capi-essai <MACHINE> cluster.x-k8s.io/delete-machine=oui
-admin@adm01:~$ kubectl scale md capi-essai-workers -n capi-essai --replicas 2
+admin@adm01:~$ kubectl scale md capi-essai-travailleurs -n capi-essai --replicas 2
 ```
 
 La valeur de l'annotation est libre : sa seule présence donne la priorité à la suppression. Sans elle, le `MachineSet` choisit selon `spec.deletion.order` du MD (`Random` par défaut en v1beta2 ; `Newest` et `Oldest` existent). Pendant le drain, le PDB `minAvailable: 2` du témoin fait attendre l'éviction du troisième pod tant que son remplaçant n'est pas prêt : la boucle ne descend jamais sous 2. C'est le même mécanisme qu'en M14-E17, mais déclenché par le contrôleur de `Machine`.
@@ -94,15 +94,14 @@ La valeur de l'annotation est libre : sa seule présence donne la priorité à l
 Image :
 
 ```
-admin@m18-dev01:~/image-builder/images/capi$ set -a; . ~/.config/workbook/pve-image-builder.env; set +a
-admin@m18-dev01:~/image-builder/images/capi$ export PACKER_FLAGS="$(cat ~/src/distributions/capi/image-builder/k136-2.env)"
-admin@m18-dev01:~/image-builder/images/capi$ make build-proxmox-ubuntu-2404
+admin@m18-dev01:~/src/images$ NOEUD=<NOEUD> VARS=capi/ubuntu-2404-k136-2.json ETIQUETTES='capi;k8s-v1.36.5' capi/construire.sh --valider
+admin@m18-dev01:~/src/images$ NOEUD=<NOEUD> VARS=capi/ubuntu-2404-k136-2.json ETIQUETTES='capi;k8s-v1.36.5' capi/construire.sh
 root@pve01:~# qm set 9061 --tags 'capi;current;k8s-v1.36.5'
 root@pve01:~# qm set 9060 --tags 'capi;k8s-v1.36.4'
 ```
 
-(Le fichier d'environnement de construction est celui de E09 ; adapte son nom au tien.) Ordre et raisons :
-- **nouveaux gabarits sous de nouveaux noms** (`capi-essai-control-plane-k136-2`, `capi-essai-worker-k136-2`) : un `ProxmoxMachineTemplate` est la recette des machines **futures** ; le modifier en place ne remplacerait rien, et les machines créées ensuite (réparation, mise à l'échelle) n'auraient pas la même image que les autres ;
+(Même script que E09 : le fichier de variables `capi/ubuntu-2404-k136-2.json` de `plateforme/images` ne change que le VMID, le nom et les versions ; `construire.sh` accepte désormais `VARS`. Contrôle du template et clone d'essai en 5188 comme en E09, avant de déplacer `current`.) Ordre et raisons :
+- **nouveaux gabarits sous de nouveaux noms** (`capi-essai-plan-controle-1365`, `capi-essai-travailleurs-1365`, copies exactes des gabarits `…-1364` de E10 où seuls le nom et `templateID` changent) : un `ProxmoxMachineTemplate` est la recette des machines **futures** ; le modifier en place ne remplacerait rien, et les machines créées ensuite (réparation, mise à l'échelle) n'auraient pas la même image que les autres ;
 - **plan de contrôle d'abord** : la politique de décalage interdit un kubelet plus récent que le serveur d'API. Le KCP remplace la machine de contrôle (surplus de 1 : une 2e machine de contrôle rejoint etcd, puis l'ancienne est retirée du membre etcd et supprimée). Avec un seul nœud de contrôle, `maxSurge: 0` est impossible ; le KCP crée toujours avant de supprimer ;
 - **travailleurs ensuite** : `rollout.strategy.rollingUpdate.maxSurge: 1`, `maxUnavailable: 0` : une machine neuve `Ready` avant chaque suppression, drain respectant le PDB ;
 - le KCP et le MD peuvent recevoir leur nouvelle version dans la même MR, mais c'est déconseillé : Cluster API ne séquence pas les deux objets entre eux (seul un `ClusterClass` avec topologie le fait). On fait deux MR, ou une MR et deux applications.

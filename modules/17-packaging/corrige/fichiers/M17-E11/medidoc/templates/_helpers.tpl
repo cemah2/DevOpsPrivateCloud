@@ -17,7 +17,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ include "medidoc.tag" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" }}
-medisphere.fr/environnement: {{ .Values.environnement | quote }}
+medisphere.internal/environnement: {{ .Values.environnement | quote }}
 {{- end -}}
 
 {{- define "medidoc.tag" -}}

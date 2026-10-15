@@ -6,14 +6,14 @@
 
 Il n'y a pas de solution unique : ce corrigé donne un **plan de travail**, les points de contrôle de chaque étape, la préparation des quatre démonstrations et la **grille de revue**. Les fichiers de référence sont ceux des exercices du module ; nouveaux : [`architecture.md`](fichiers/M13-E25/medisphere/docs/registre/architecture.md) (modèle) et la [section containerd de `caches.md`](fichiers/M13-E25/medisphere/docs/registre/caches-containerd.md.extrait).
 
-**Points non testés en conditions réelles** : la commande de traçabilité (étape 10) suppose que l'attestation de provenance de E08 est au format SLSA v1 (`predicate.buildDefinition`, `predicate.runDetails`) ; avec la provenance BuildKit attachée à l'index (et non par Cosign), lis-la par `docker buildx imagetools inspect --format '{{json .Provenance}}'`. Le comportement de repli de `hosts.toml` (champ `server`) est à vérifier sur containerd 2.3 au module 14.
+**Points non testés en conditions réelles** : la commande de traçabilité (démonstration de Karim) lit la provenance que BuildKit range **dans l'index** (E08, E09) : manifeste annoté `attestation-manifest`, couche annotée `in-toto.io/predicate-type: https://slsa.dev/provenance/v1`, lue par `oras blob fetch` (ORAS, E23) ; les noms exacts des champs, et le fait que Harbor serve ce manifeste enfant d'un index signé malgré la politique « signature exigée », sont à vérifier sur ta sortie (sur une machine avec Docker, `docker buildx imagetools inspect --format '{{json .Provenance}}'` donne la même chose). Le comportement de repli de `hosts.toml` (champ `server`) est à vérifier sur containerd 2.3 au module 14.
 
 **Solution**
 
 *Plan de travail recommandé* (dans cet ordre : on retire le provisoire **après** avoir prouvé qu'on sait s'en passer)
 
-1. **État des lieux** (30 min) : `lab/bin/check 13 25`, puis les contrôles détaillés rouges (`13 13` à `13 23`) et `lab/bin/check 12 46`. Liste des restes : `reg02` et ses états (`envs/m13-registre`, `registre-reg02`), endpoint et politique sur `reg01`, flux temporaires, témoins (`wb-sonde*`, fichiers de `runner02`), utilisateur `wb-pannes` et `~/.config/workbook/harbor-pannes.env`, dépôts `essai-*`, secrets de `reg02` en Vault, jeton PBS `wb-restore@pbs!reg02`.
-2. **Les quatre images** (3 à 5 h) : appliquer le gabarit `supply-chain.yml` (E09) et `verification.yml` (E14) à `medidoc/medidoc`, `medinotif/worker` et `legacy/legacy-rdv` ; images de base de `bibliotheque` ou des caches, **par digest** (Renovate tient les digests à jour) ; publier une version `vX.Y.Z` de chacune par semantic-release. Contrôle :
+1. **État des lieux** (30 min) : `lab/bin/check 13 25`, puis les contrôles détaillés rouges (`13 13` à `13 23`) et `lab/bin/check 12 46`. Liste des restes : `reg02` et ses états (`m13-registre`, dossier `envs/m13` ; `registre-reg02`), endpoint et politique sur `reg01`, flux temporaires, témoins (`wb-sonde*`, fichiers de `runner02`), utilisateur `wb-pannes` et `~/.config/workbook/harbor-pannes.env`, dépôts `essai-*`, secrets de `reg02` en Vault, jeton PBS `wb-restore@pbs!reg02`.
+2. **Les quatre images** (3 à 5 h) : appliquer les gabarits `templates/supply-chain.yml` (E09) et `templates/verification.yml` (E14) à `medidoc/medidoc`, `medinotif/worker` et `legacy/legacy-rdv` ; images de base de `bibliotheque` ou des caches, **par digest** (Renovate tient les digests à jour) ; publier une version `vX.Y.Z` de chacune par semantic-release. Contrôle :
    ```
    admin@adm01:~$ for a in mediagenda-api medidoc medinotif legacy-rdv; do
        d=$(skopeo inspect --format '{{.Digest}}' docker://registry.par1.medisphere.internal/medisphere/$a:<vX.Y.Z>)
@@ -54,8 +54,12 @@ admin@adm01:~$ D=$(skopeo inspect --format '{{.Digest}}' docker://$I:$T); echo "
 admin@adm01:~$ cosign verify --key $K --insecure-ignore-tlog=true $I@$D >/dev/null && echo "signature : vérifiée (clé MédiSphère)"
 admin@adm01:~$ cosign verify-attestation --key $K --insecure-ignore-tlog=true --type spdxjson $I@$D \
     | jq -r '.payload | @base64d | fromjson | .predicate.packages[] | "\(.name) \(.versionInfo)"' | sort | head -20
-admin@adm01:~$ cosign verify-attestation --key $K --insecure-ignore-tlog=true --type slsaprovenance1 $I@$D \
-    | jq '.payload | @base64d | fromjson | .predicate | {source: .buildDefinition.externalParameters, run: .runDetails.metadata}'
+admin@adm01:~$ A=$(skopeo inspect --raw docker://$I@$D \
+    | jq -r '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest") | .digest' | head -n 1)
+admin@adm01:~$ L=$(skopeo inspect --raw docker://$I@$A \
+    | jq -r '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://slsa.dev/provenance/v1") | .digest')
+admin@adm01:~$ oras blob fetch --output - $I@$L \
+    | jq '.predicate | {source: .buildDefinition.externalParameters.configSource, args: .buildDefinition.externalParameters.request.args, run: .runDetails.metadata}'
 admin@adm01:~$ curl -s -u "$U" "https://registry.par1.medisphere.internal/api/v2.0/projects/medisphere/repositories/medidoc/artifacts/$D?with_scan_overview=true" \
     | jq '.scan_overview | to_entries[0].value | {severity, summary: .summary.summary}'
 ```

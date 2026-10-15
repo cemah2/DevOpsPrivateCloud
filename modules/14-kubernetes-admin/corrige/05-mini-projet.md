@@ -4,7 +4,7 @@
 
 ### M14-E46 — Mini-projet : Kubernetes MédiSphère v1
 
-Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, les points de contrôle de chaque étape, la préparation des démonstrations et la **grille de revue** avec laquelle Claire, Karim, Sophie, Nadia et Julien évaluent la livraison. Les fichiers de référence sont ceux des exercices du module ; les nouveaux sont le modèle de [`docs/kubernetes/architecture.md`](fichiers/M14-E46/medisphere/docs/kubernetes/architecture.md) et le pod de la boucle de Julien, [`boucle-recette.yaml`](fichiers/M14-E46/k8s/espaces/mediagenda-recette/boucle-recette.yaml).
+Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, les points de contrôle de chaque étape, la préparation des démonstrations et la **grille de revue** avec laquelle Claire, Karim, Sophie, Nadia et Julien évaluent la livraison. Les fichiers de référence sont ceux des exercices du module ; les nouveaux sont le modèle de [`docs/kubernetes/architecture.md`](fichiers/M14-E46/medisphere/docs/kubernetes/architecture.md) et le pod de la boucle de Julien, [`boucle-recette.yaml`](fichiers/M14-E46/adm01/boucle-recette.yaml) (objet d'essai appliqué à la main dans `mediagenda-recette` le temps de la revue, rangé dans `~/m14/e46/` et non dans `plateforme/k8s`).
 
 **Solution**
 
@@ -16,7 +16,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 4. **Retirer `k8s-w04`** s'il existe encore (M14-E17) : `kubectl drain k8s-w04 --ignore-daemonsets --delete-emptydir-data`, `kubectl delete node k8s-w04`, `kubeadm reset` sur le nœud, VM 2147 retirée de l'état OpenTofu `k8s` (`tofu plan` puis `apply` dans `plateforme/infra/envs/k8s/`), objets NetBox et enregistrement DNS retirés par le même code, inventaire Ansible propre.
 5. **Converger le code** (2 à 3 h) : `task appliquer` dans `plateforme/k8s` et `kubectl diff` vide sur tout le dépôt ; `ansible-playbook <playbook des nœuds> --check --diff` vide sur les six nœuds (reporte les correctifs du palier 4 : `track_script`, `hosts.toml`, swap, chrony, CoreDNS) ; pipeline de `main` vert.
 6. **Sécurité** (1 à 2 h) : liaisons `cluster-admin` (`kubectl get clusterrolebindings -o wide | grep cluster-admin`) limitées à `kubeadm:cluster-admins`, `system:masters` (implicite) et `medisphere:plateforme-admins` ; `kubeadm certs check-expiration` sur les trois nœuds de contrôle (renouvellement par RB-143 si moins de 30 jours) ; audit et chiffrement présents sur les trois kube-apiserver ; registre des secrets (emplacements de `admin.conf`, `super-admin.conf`, clés de chiffrement, identité `etcd-k8s`, jeton `robot$k8s-pull`, kubeconfig `wb-checks`).
-7. **MédiAgenda en recette** (1 à 2 h) : manifestes de l'équipe appliqués dans `mediagenda-recette` (image signée par étiquette `v*` ou digest, 2 réplicas, PDB `minAvailable: 1`, sondes `/sante` et `/pret`, demandes et limites), PostgreSQL et Valkey jetables, pod de boucle prêt.
+7. **MédiAgenda en recette** (1 à 2 h) : manifestes de l'équipe appliqués dans `mediagenda-recette` (ceux de M14-E21 : image signée par étiquette `v*` ou digest, 3 réplicas, PDB `maxUnavailable: 1` avec `unhealthyPodEvictionPolicy: AlwaysAllow`, sondes `/sante` et `/pret`, demandes et limites, Job de migration), PostgreSQL et Valkey jetables, pod de boucle prêt.
 8. **Restauration et reconstruction** (2 à 3 h) : test de restauration d'etcd selon RB-141 sur un environnement d'essai (ou une restauration réelle annoncée, si tu l'as déjà faite en M14-E24 et que tu la refais pour la livraison), chronométré ; reconstruction d'un travailleur depuis le code (M14-E23), chronométrée.
 9. **Documentation et livraison** (3 h) : `architecture.md` (modèle fourni), ADR-0140, ADR-0141, RB-140 à RB-149, journal des pannes, post-mortem INC-4150, matrice des flux, inventaire NetBox ; MR, pipelines verts, étiquette `k8s-v1`.
 
@@ -24,7 +24,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 
 | Étape | Action | Attendu |
 |---|---|---|
-| 1 | Julien : `kubectl -n mediagenda-recette logs -f boucle-recette` (une ligne par seconde : code HTTP de `/pret` du Service) | `200` en continu |
+| 1 | Julien : `kubectl -n mediagenda-recette logs -f boucle-recette` (une ligne par seconde : `/pret` du Service `mediagenda-api`, port 80) | `OK` en continu |
 | 2 | `ssh k8s-cp0X 'ip -br -4 addr \| grep 10.10.40.200'` : repérer le porteur ; instantané etcd vérifié | — |
 | 3 | `qm shutdown 214X` (arrêt propre) depuis `pve01` ; en parallèle, `while sleep 1; do date +%T; kubectl get --raw /livez; done` sur `adm01` | quelques secondes d'échec, puis `ok` (VIP basculée) |
 | 4 | `kubectl get nodes` ; `etcdctl endpoint health` depuis un nœud restant | `k8s-cp0X` `NotReady` ; deux membres sains sur trois, quorum conservé |

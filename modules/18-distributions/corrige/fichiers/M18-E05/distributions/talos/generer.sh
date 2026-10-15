@@ -18,7 +18,7 @@ SECRETS="${TALOS_SECRETS:-$HOME/.config/workbook/m18/talos-secrets.yaml}"
 SORTIE="${TALOS_SORTIE:-$HOME/.cache/m18/talos}"
 TALOSCONFIG_CIBLE="${TALOSCONFIG_CIBLE:-$HOME/.config/workbook/m18/talosconfig}"
 
-# shellcheck source=versions.env
+# shellcheck source-path=SCRIPTDIR source=versions.env
 source "$ICI/versions.env"
 
 [[ -r "$SECRETS" ]] || { echo "Bundle de secrets illisible : $SECRETS (talosctl gen secrets -o …)" >&2; exit 1; }

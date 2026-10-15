@@ -18,11 +18,11 @@ _m15o_redir="$(_m15o_kjson httproute redirection-https -n passerelles)"
 
 # --- Espaces ------------------------------------------------------------------------------------------
 for _m15o_e in passerelles mediagenda-recette wb-essais; do
-  check_cmd "espace $_m15o_e étiqueté medisphere.fr/exposition=oui" _m15o_jq "$_m15o_nsj" --arg e "$_m15o_e" \
-    'any(.items[]?; .metadata.name == $e and .metadata.labels["medisphere.fr/exposition"] == "oui")'
+  check_cmd "espace $_m15o_e étiqueté medisphere.internal/exposition=oui" _m15o_jq "$_m15o_nsj" --arg e "$_m15o_e" \
+    'any(.items[]?; .metadata.name == $e and .metadata.labels["medisphere.internal/exposition"] == "oui")'
 done
 check_cmd "espace mediagenda-dev NON étiqueté pour l'exposition" _m15o_jq "$_m15o_nsj" \
-  'any(.items[]?; .metadata.name == "mediagenda-dev" and (.metadata.labels["medisphere.fr/exposition"] // "") != "oui")'
+  'any(.items[]?; .metadata.name == "mediagenda-dev" and (.metadata.labels["medisphere.internal/exposition"] // "") != "oui")'
 
 # --- Gateway ------------------------------------------------------------------------------------------
 check_cmd "gw-par1 : classe cilium, adresse demandée 10.10.41.10" _m15o_jq "$_m15o_gwj" \
@@ -32,8 +32,8 @@ check_cmd "gw-par1 : adresse attribuée 10.10.41.10" _m15o_jq "$_m15o_gwj" 'any(
 check_cmd "écouteur http : port 80, HTTP" _m15o_jq "$_m15o_gwj" 'any(.spec.listeners[]?; .name == "http" and .port == 80 and .protocol == "HTTP")'
 check_cmd "écouteur https : 443, *.apps.par1.medisphere.internal, terminaison TLS avec le Secret apps-joker" \
   _m15o_jq "$_m15o_gwj" 'any(.spec.listeners[]?; .name == "https" and .port == 443 and .protocol == "HTTPS" and .hostname == "*.apps.par1.medisphere.internal" and (.tls.mode // "Terminate") == "Terminate" and any(.tls.certificateRefs[]?; .name == "apps-joker" and ((.namespace // "passerelles") == "passerelles")))'
-check_cmd "routes admises par étiquette d'espace medisphere.fr/exposition=oui sur les deux écouteurs" \
-  _m15o_jq "$_m15o_gwj" '[.spec.listeners[]? | select(.name == "http" or .name == "https") | .allowedRoutes.namespaces | select(.from == "Selector" and .selector.matchLabels["medisphere.fr/exposition"] == "oui")] | length == 2'
+check_cmd "routes admises par étiquette d'espace medisphere.internal/exposition=oui sur les deux écouteurs" \
+  _m15o_jq "$_m15o_gwj" '[.spec.listeners[]? | select(.name == "http" or .name == "https") | .allowedRoutes.namespaces | select(.from == "Selector" and .selector.matchLabels["medisphere.internal/exposition"] == "oui")] | length == 2'
 check_cmd "écouteur https : références résolues (certificat lu)" _m15o_jq "$_m15o_gwj" \
   'any(.status.listeners[]?; .name == "https" and any(.conditions[]?; .type == "ResolvedRefs" and .status == "True"))'
 

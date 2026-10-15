@@ -30,8 +30,8 @@ fi
 _e05_d="$(_m17d_obj mediagenda-dev deploy mediagenda)"
 _e05_v="$(_m17d_version_chart "$_e05_d")" || _e05_v=""
 check_cmd "release de dev : chart ${_e05_v:-?} ≥ 0.2.0" _m17d_version_ge "$_e05_v" 0.2.0
-check_cmd "dev : étiquettes medisphere.fr/environnement=dev et medisphere.fr/donnees-sante" _m17d_jq "$_e05_d" \
-  '.metadata.labels["medisphere.fr/environnement"] == "dev" and (.metadata.labels | has("medisphere.fr/donnees-sante"))'
+check_cmd "dev : étiquettes medisphere.internal/environnement=dev et medisphere.internal/donnees-sante" _m17d_jq "$_e05_d" \
+  '.metadata.labels["medisphere.internal/environnement"] == "dev" and (.metadata.labels | has("medisphere.internal/donnees-sante"))'
 _e05_uid="$(jq -r '.metadata.uid // ""' <<<"$_e05_d" 2>/dev/null)" || _e05_uid=""
 check_cmd "journal.md : contient l'uid actuel du Deployment (non recréé)" \
   _m17d_fichier_contient "$_m17d_brouillons/e05/journal.md" "${_e05_uid:-uid-introuvable}"

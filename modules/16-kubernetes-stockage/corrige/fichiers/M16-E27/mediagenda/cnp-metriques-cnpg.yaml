@@ -1,4 +1,4 @@
-# Politique réseau de MédiAgenda (dépôt et chemin des politiques du M15-E17) — ajout M16-E27.
+# plateforme/k8s — espaces/mediagenda-recette/45-metriques-cnpg.yaml (à côté de 40-reseau-postgresql.yaml) — M16-E27.
 # Le proxy de l'API (kube-apiserver, sur les nœuds de contrôle) lit le port 9187 des instances
 # PostgreSQL. Une NetworkPolicy standard ne sait pas désigner kube-apiserver comme source ; Cilium
 # a une identité réservée pour lui (entité « kube-apiserver », à vérifier sur Cilium 1.20 : selon

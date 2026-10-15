@@ -8,7 +8,7 @@
 #      (le nom du Certificate au lieu de celui de son Secret, ou l'inverse) ;
 #   2. mauvais espace : le certificateRefs vise le bon nom dans l'espace cert-manager, sans
 #      ReferenceGrant (et le Secret n'y est pas) ;
-#   3. allowedRoutes : l'étiquette medisphere.fr/exposition est retirée de l'espace
+#   3. allowedRoutes : l'étiquette medisphere.internal/exposition est retirée de l'espace
 #      mediagenda-recette : la route n'est plus acceptée par l'écouteur.
 # Sauvegardes : Gateway, Namespace.
 
@@ -53,7 +53,7 @@ _m15E39_une() {
       ;;
     3)
       [[ -n "$(m15_k get ns "$_M15_NS_APP" -o jsonpath='{.metadata.labels.medisphere\.fr/exposition}' 2>/dev/null)" ]] || return 10
-      m15_patch_json ns "$_M15_NS_APP" "" 'del(.metadata.labels["medisphere.fr/exposition"])' || return 1
+      m15_patch_json ns "$_M15_NS_APP" "" 'del(.metadata.labels["medisphere.internal/exposition"])' || return 1
       m15_ecrire E39 pose "etiquette"
       ;;
   esac
@@ -87,7 +87,7 @@ annuler_E39() {
       ;;
     etiquette)
       if [[ -z "$(m15_k get ns "$_M15_NS_APP" -o jsonpath='{.metadata.labels.medisphere\.fr/exposition}' 2>/dev/null || true)" ]]; then
-        m15_k label ns "$_M15_NS_APP" medisphere.fr/exposition=oui >/dev/null 2>&1 || wb_avert "annulation : étiquette d'exposition non remise"
+        m15_k label ns "$_M15_NS_APP" medisphere.internal/exposition=oui >/dev/null 2>&1 || wb_avert "annulation : étiquette d'exposition non remise"
       fi
       ;;
   esac

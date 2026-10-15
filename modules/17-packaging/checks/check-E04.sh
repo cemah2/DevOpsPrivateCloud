@@ -25,10 +25,10 @@ fi
 
 _e04_d="$(_m17d_obj mediagenda-recette deploy mediagenda)"
 check_cmd "recette : Deployment mediagenda hors de toute release Helm" _m17d_hors_helm "$_e04_d"
-check_cmd "recette : étiquette medisphere.fr/environnement=recette (objet et pods)" _m17d_jq "$_e04_d" \
-  '.metadata.labels["medisphere.fr/environnement"] == "recette" and .spec.template.metadata.labels["medisphere.fr/environnement"] == "recette"'
+check_cmd "recette : étiquette medisphere.internal/environnement=recette (objet et pods)" _m17d_jq "$_e04_d" \
+  '.metadata.labels["medisphere.internal/environnement"] == "recette" and .spec.template.metadata.labels["medisphere.internal/environnement"] == "recette"'
 check_cmd "recette : l'étiquette d'environnement n'est pas dans le sélecteur" _m17d_jq "$_e04_d" \
-  '.spec.selector.matchLabels | has("medisphere.fr/environnement") | not'
+  '.spec.selector.matchLabels | has("medisphere.internal/environnement") | not'
 check_cmd "recette : au moins deux réplicas prêts" _m17d_pret "$_e04_d" 2
 _e04_cm="$(jq -r '[.spec.template.spec.containers[] | select(.name == "api") | .envFrom[]?.configMapRef.name // empty
           | select(test("^mediagenda-parametres-[a-z0-9]{6,}$"))][0] // ""' <<<"$_e04_d" 2>/dev/null)" || _e04_cm=""
@@ -39,7 +39,17 @@ check_cmd "recette : la ConfigMap $_e04_cm existe" test -n "$_e04_cmj"
 _e04_r="$(_m17d_obj mediagenda-recette httproute mediagenda)"
 check_cmd "recette : la route publie mediagenda-recette.$_m17d_domaine" _m17d_jq "$_e04_r" \
   ".spec.hostnames | index(\"mediagenda-recette.$_m17d_domaine\") != null"
+check_cmd "recette : la route vise le Service mediagenda, port 80" _m17d_jq "$_e04_r" \
+  '[.spec.rules[]?.backendRefs[]? | select(.name == "mediagenda" and .port == 80)] | length > 0'
 check_cmd "https://mediagenda-recette.$_m17d_domaine/sante répond 200" _m17d_sante "https://mediagenda-recette.$_m17d_domaine/sante"
+_e04_ancien() {
+  # L'ancienne version (M14) est retirée : plus de Deployment mediagenda-api. Une lecture impossible
+  # n'est pas une absence : on exige une liste lisible.
+  local l
+  l="$(_m17d_liste mediagenda-recette deploy)"
+  [[ -n "$l" ]] && jq -e '[.items[] | select(.metadata.name == "mediagenda-api")] | length == 0' >/dev/null 2>&1 <<<"$l"
+}
+check_cmd "recette : l'ancien Deployment mediagenda-api du M14 est retiré" _e04_ancien
 _e04_db="$(_m17d_obj mediagenda-recette cluster.postgresql.cnpg.io mediagenda-db)"
 _e04_base_ancienne() {
   local tb tc

@@ -1,18 +1,20 @@
 # plateforme/k8s — rbac/wb-checks-stockage.yaml (M16-E10)
 # Lecture seule des ressources de stockage et de données pour le compte des vérifications du
-# workbook (wb-system/wb-checks, M14-E06). Complète le ClusterRole « wb-checks » du M14 sans le
-# modifier. Aucun verbe d'écriture, aucun accès aux Secrets (ceux de ceph-csi, Velero et CNPG
-# contiennent des clés).
+# workbook (wb-system/wb-checks, M14-E06). AGRÉGÉE au ClusterRole « wb-checks » du M14 par
+# l'étiquette workbook.medisphere.internal/checks=true : pas de liaison à écrire, rien à modifier
+# dans rbac/wb-checks.yaml. Aucun verbe d'écriture, aucun accès aux Secrets (ceux de ceph-csi,
+# Velero et CNPG contiennent des clés).
+# Déjà couverts par wb-checks-base (M14) et donc absents d'ici : storage.k8s.io (classes,
+# CSIDriver, CSINode, VolumeAttachment), networking.k8s.io et cilium.io (politiques réseau),
+# admissionregistration.k8s.io (politiques d'admission), PV et PVC.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: wb-checks-stockage
   labels:
     app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
 rules:
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses", "csidrivers", "csinodes", "volumeattachments", "volumeattributesclasses", "csistoragecapacities"]
-    verbs: ["get", "list", "watch"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshotclasses", "volumesnapshots", "volumesnapshotcontents"]
     verbs: ["get", "list", "watch"]
@@ -22,36 +24,17 @@ rules:
   - apiGroups: ["postgresql.cnpg.io", "barmancloud.cnpg.io"]
     resources: ["*"]
     verbs: ["get", "list", "watch"]
+  # Rook (E13-E14) et Longhorn (E15) : le temps de la comparaison ; la règle ne gêne pas après
+  # leur retrait (groupes absents).
   - apiGroups: ["ceph.rook.io", "csi.ceph.io", "longhorn.io"]
     resources: ["*"]
     verbs: ["get", "list", "watch"]
-  # Politiques réseau des bases (E18-E19) : standard et Cilium.
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["cilium.io"]
-    resources: ["ciliumnetworkpolicies"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["admissionregistration.k8s.io"]
-    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
-    verbs: ["get", "list", "watch"]
-  # Résumé de statistiques du kubelet (occupation des volumes, E11, E27) : sous-ressource proxy
-  # des nœuds en lecture. nodes/proxy en GET ne permet pas d'exécuter dans un pod.
+  # Résumé de statistiques du kubelet (occupation des volumes : occupation.sh d'E11, lancé par
+  # le check d'E11 avec ce compte) par le proxy de l'API (/api/v1/nodes/<N>/proxy/stats/summary).
+  # ⚠️ nodes/proxy est un droit SENSIBLE, même en « get » seul : présenté directement au kubelet
+  # (port 10250), il autorise toute son API, y compris /exec par WebSocket (une connexion WebSocket
+  # commence par un GET). Exception assumée pour le seul compte des vérifications (jeton 600 sur
+  # adm01, révocable) ; les comptes de supervision ne l'ont jamais (E27 : nodes/metrics).
   - apiGroups: [""]
     resources: ["nodes/proxy", "nodes/stats"]
     verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: wb-checks-stockage
-  labels:
-    app.kubernetes.io/part-of: workbook
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: wb-checks-stockage
-subjects:
-  - kind: ServiceAccount
-    name: wb-checks
-    namespace: wb-system

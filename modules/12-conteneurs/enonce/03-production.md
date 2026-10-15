@@ -16,7 +16,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 12 XX`).
 
 ### M12-E24 — Durcir l'exécution : utilisateur, capacités, seccomp, lecture seule  `LAB` `★★★`
 
-> **Ticket SEC-1350** — *De : Sophie Laurent*
+> **Ticket SEC-1324** — *De : Sophie Laurent*
 > Une image qui ne tourne pas en root, c'est un bon début. Mais si quelqu'un exploite une faille de MédiAgenda, je veux savoir **exactement** ce qu'il peut faire ensuite dans le conteneur : déposer un outil, monter un système de fichiers, lire la mémoire d'un autre processus, s'élever par un binaire setuid. Je veux que chacun de ces gestes échoue, que ce soit écrit dans le `compose.yaml` et pas dans la tête de quelqu'un, et que tu me montres les essais.
 
 **Objectifs pédagogiques**
@@ -29,7 +29,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 12 XX`).
 **Durée indicative** : 3 h 30.
 
 **Contexte technique**
-- Pile visée : `compose.yaml` du projet `mediagenda/api` (M12-E08), lancée sur `ctr01` depuis `~/src/mediagenda-api` (projet Compose `mediagenda` : services `db`, `valkey`, `migrations`, `api`).
+- Pile visée : `compose.yaml` du projet `mediagenda/api` tel que l'a laissé M12-E18 (pile de M12-E08, image 0.2.0 de M12-E11, limites et délais d'arrêt de M12-E18), lancée sur `ctr01` depuis `~/src/mediagenda-api` (projet Compose `mediagenda` : services `db`, `valkey`, `migrations`, `api`).
 - Essais d'évasion fournis par l'équipe Plateforme : [`ressources/E24-tests-evasion.py`](../ressources/E24-tests-evasion.py). Le script tourne **dans** le conteneur avec le Python de l'image (`docker exec -i <CONTENEUR> python - < E24-tests-evasion.py`), tente onze gestes d'attaquant, affiche « BLOQUÉ » ou « POSSIBLE » pour chacun et rend le nombre de gestes possibles. Il ne modifie rien hors du conteneur. Lis-le avant de le lancer.
 - Profil seccomp par défaut de Docker : publié dans le dépôt `moby/moby`, à l'étiquette `docker-v<VERSION>` (`docker version --format '{{.Server.Version}}'`), fichier `vendor/github.com/moby/profiles/seccomp/default.json`. Le profil MédiAgenda est versionné dans `mediagenda/api` sous `securite/seccomp-mediagenda.json`.
 - Debian 13 active AppArmor : `ctr01` applique le profil `docker-default`, `ctr02` celui de Podman. SELinux est l'affaire de E25.
@@ -83,7 +83,7 @@ Le profil par défaut accorde certains appels système sans condition, d'autres 
 
 ### M12-E25 — SELinux et conteneurs sur Rocky Linux  `LAB` `★★★`
 
-> **Ticket SEC-1351** — *De : Sophie Laurent* — *Copie : Claire Morel*
+> **Ticket SEC-1325** — *De : Sophie Laurent* — *Copie : Claire Morel*
 > L'hébergeur HDS que nous visons pour la production exploite des serveurs de la famille RHEL, avec SELinux en mode *enforcing*, et l'auditeur vérifiera qu'il le reste. Je veux savoir comment nos conteneurs se comportent sous SELinux, et je pose trois règles : SELinux n'est **jamais** désactivé, ni globalement ni pour un conteneur ; on ne réétiquette **pas** à la volée des répertoires de l'hôte depuis un conteneur ; un conteneur qui a besoin d'un accès inhabituel reçoit une politique **dédiée et minimale**.
 > Premier cas réel : Legacy-RDV sur `ctr03`, avec ses pièces jointes et l'export que InfoGér nous dépose par SFTP.
 
@@ -144,7 +144,7 @@ udica lit le JSON de `podman inspect` (montages, ports, capacités) et produit u
 
 ### M12-E26 — Durcir le moteur : socket, *userns-remap*, Docker sans privilège  `LAB` `★★★`
 
-> **Ticket SEC-1352** — *De : Sophie Laurent* — *Copie : Karim Benali*
+> **Ticket SEC-1326** — *De : Sophie Laurent* — *Copie : Karim Benali*
 > J'ai lu la CIS Docker Benchmark en diagonale. Trois phrases m'inquiètent : « *being a member of the docker group is equivalent to root* », « *do not expose the Docker daemon socket* » et « *enable user namespace support* ». Montre-moi ce que la première veut dire sur `ctr01`, prouve-moi que la deuxième est respectée, et dis-moi ce que coûte la troisième avec Docker 29. Au passage : je veux savoir **qui** a touché à la configuration de Docker, et quand.
 
 **Objectifs pédagogiques**
@@ -174,7 +174,7 @@ udica lit le JSON de `podman inspect` (montages, ports, capacités) et produit u
 7. **Documentation.** Dans `docs/conteneurs/durcissement-execution.md`, une section « Moteur » : accès au socket, options du démon et leur effet mesuré, décision sur *userns-remap* et sur le mode sans privilège (par hôte, avec la raison), journaux d'audit.
 
 **Critères de réussite**
-- [ ] Le groupe `docker` de `ctr01` ne contient que `admin`, celui de `runner02` que `admin` et le compte du runner ; les comptes `demo-docker` et `essai-rootless` n'existent plus ; aucun démon Docker n'écoute en TCP.
+- [ ] Le groupe `docker` de `ctr01` ne contient que `admin`, celui de `runner02` ne contient personne (M12-E20) ; les comptes `demo-docker` et `essai-rootless` n'existent plus ; aucun démon Docker n'écoute en TCP.
 - [ ] `live-restore` est actif, le réseau `bridge` par défaut a la communication entre conteneurs désactivée, et un conteneur lancé sans option a `NoNewPrivs` à 1.
 - [ ] *userns-remap* n'est plus actif et le registre de travail répond.
 - [ ] Les règles d'audit sont chargées (clé `docker`) et un événement a été enregistré depuis moins de 7 jours.
@@ -203,7 +203,7 @@ Avec `userns-remap`, Docker 29 range tout sous un sous-dossier de `/var/lib/dock
 
 ### M12-E27 — Politique des images de base de MédiSphère  `LIBRE` `★★★`
 
-> **Ticket PLAT-1353** — *De : Claire Morel* — *Copie : Sophie Laurent, Julien Petit*
+> **Ticket PLAT-1327** — *De : Claire Morel* — *Copie : Sophie Laurent, Julien Petit*
 > J'ai compté sept images de base différentes dans nos Dockerfiles, dont deux que personne ne sait expliquer. Quand la prochaine faille d'OpenSSL sortira, je veux pouvoir répondre en une heure à « quelles images sont touchées, et quand sont-elles corrigées ? ».
 > Je veux un **catalogue** d'images de base MédiSphère (`bibliotheque/…`), reconstruites **chaque semaine** à partir d'images amont **épinglées**, une **liste des images autorisées**, et un pipeline qui refuse le reste. Au module 13, tout cela partira dans Harbor : prépare-le pour que le déménagement soit un changement d'adresse.
 
@@ -255,7 +255,7 @@ Les étiquettes `org.opencontainers.image.*` (spécification OCI *annotations*) 
 
 ### M12-E28 — Superviser les conteneurs  `LAB` `★★`
 
-> **Ticket PLAT-1354** — *De : Nadia Roussel*
+> **Ticket PLAT-1328** — *De : Nadia Roussel*
 > Vendredi, l'API de recette a redémarré en boucle tout l'après-midi (le runbook RB-120 a servi, merci). Personne ne l'a vu avant que Julien appelle. Je veux une sonde comme pour le socle et pour Ceph : qui tourne seule, qui dit en une ligne quel conteneur ne va pas sur quel hôte, et qui m'alerte. Et je veux savoir ce qu'on aura de plus quand Prometheus arrivera.
 
 **Objectifs pédagogiques**
@@ -305,7 +305,7 @@ Avec une commande forcée (`command=` dans `authorized_keys`), ce que le client 
 
 ### M12-E29 — Sauvegarder et restaurer les données des conteneurs  `LAB` `★★`
 
-> **Ticket PLAT-1355** — *De : Claire Morel*
+> **Ticket PLAT-1329** — *De : Claire Morel*
 > Julien a créé des jeux de rendez-vous de recette qu'il met une demi-journée à reconstituer. Ils vivent dans un volume Docker sur `ctr01`. Une VM sauvegardée chaque nuit, c'est bien, mais je veux pouvoir restaurer **la base** sans restaurer la VM, prouver que la sauvegarde est **cohérente**, et savoir combien de temps ça prend.
 
 **Objectifs pédagogiques**
@@ -321,7 +321,7 @@ Avec une commande forcée (`command=` dans `authorized_keys`), ce que le client 
 - Données à protéger : la base `mediagenda` du service `db` de la pile Compose de `ctr01` (volume `mediagenda_donnees-db`). Le cache Valkey n'a pas de persistance (E08) ; le registre de travail se reconstruit depuis la CI ; le code et la configuration sont dans Git.
 - PBS : `pbs01` (10.20.10.10:8007), datastore `ds-lab`, espace de noms **`par1/conteneurs`** (à créer), jeton **`wb-backup@pbs!ctr01`** limité à cet espace (rôle `DatastoreBackup`), clé de chiffrement côté client propre à `ctr01` (Vault `critique`, copie papier). Même méthode qu'en M06-E28 et M08-E25.
 - La VM `ctr01` elle-même est déjà sauvegardée chaque nuit par la tâche `lab-nuit` (pool `lab`, espace `par1`) : vérifie-le, ne la duplique pas.
-- Flux : `ctr01` → `pbs01:8007` à travers la bordure et le tunnel `wg0`, plus la règle d'entrée de `pbs01`. La règle de bordure exige une adresse **stable** : réserve **10.10.99.121** pour la carte de `ctr01` dans Kea (sous-réseau `id: 99`, même méthode que les réservations du M11) avant d'écrire la règle.
+- Flux : `ctr01` → `pbs01:8007` à travers la bordure et le tunnel `wg0`, plus la règle d'entrée de `pbs01`. La règle de bordure exige une adresse **stable** : c'est la réservation Kea **10.10.99.121** de `ctr01` posée en M12-E15, et la définition `CTR01` de la matrice des flux qui l'accompagne ; vérifie qu'elles sont toujours en place, n'en crée pas d'autre.
 - Horaires : `git01` 01:15, Ceph 01:30, services socle 01:55-02:05, `lab-nuit` 02:30 ; la sauvegarde des conteneurs passe à **01:40**.
 - Rôle Ansible : `sauvegarde_conteneurs` (sur le modèle de `sauvegarde_pbs`), script `/usr/local/sbin/wb-backup-conteneurs.sh`, unités `wb-backup-conteneurs.service` et `.timer`, secrets sous `/etc/wb-backup/` (root, 600).
 
@@ -331,7 +331,7 @@ Avec une commande forcée (`command=` dans `authorized_keys`), ce que le client 
 1. **Sauvegarde logique.** Exporte la base avec `pg_dump` au format *custom*, en exécutant l'outil **dans** le conteneur `db` (le flux sort sur la sortie standard, rien n'est écrit dans le conteneur) ; vérifie l'archive (`pg_restore --list`). Pourquoi la sortie de `pg_dump` est-elle cohérente même si l'API écrit pendant l'export ?
 2. **Sauvegarde de volume.** Copie le contenu du volume `mediagenda_donnees-db` dans une archive `tar` au moyen d'un conteneur jetable (`docker run --rm -v mediagenda_donnees-db:/source:ro …`), d'abord **pendant** que PostgreSQL tourne et écrit (lance une boucle de créations de rendez-vous), puis **après** `docker compose stop db`. Restaure chacune dans un volume `restau-…` et démarre un PostgreSQL 18 dessus : que dit le journal ? Lequel des deux essais est une sauvegarde, à quelles conditions ? Quand préférerais-tu une copie de volume à un export logique ?
 3. **Images.** Exporte l'image de l'API (`docker save`), importe-la sur `ctr02` (`podman load`), puis copie-la sans passer par un fichier avec Skopeo (`docker-daemon:` vers `docker://` ou `oci-archive:`). Que contient l'archive avec le stockage containerd de Docker 29 (index, plateformes, attestations) ? Écris ce que MédiSphère **sauvegarde** et ce qu'elle **reconstruit** (images, registre, volumes, configuration).
-4. **Vers PBS.** Crée l'espace de noms et le jeton (script de M06-E28 étendu), la clé de chiffrement, la réservation Kea, la règle de `pare_feu.yml` et celle de `pbs01`, et inscris chaque secret au registre. Écris le rôle `sauvegarde_conteneurs` et son script : export logique de chaque base listée dans la configuration (conteneur, base, utilisateur), vérification de chaque archive, copie à froid des volumes listés (liste vide par défaut), envoi vers PBS (`--ns par1/conteneurs`, identifiant `ctr01`), nettoyage en sortie quoi qu'il arrive, code retour non nul au moindre échec. Applique-le et lance le service une fois.
+4. **Vers PBS.** Crée l'espace de noms et le jeton (script de M06-E28 étendu), la clé de chiffrement, la règle de `pare_feu.yml` (avec la définition `CTR01` de M12-E15) et celle de `pbs01`, et inscris chaque secret au registre. Écris le rôle `sauvegarde_conteneurs` et son script : export logique de chaque base listée dans la configuration (conteneur, base, utilisateur), vérification de chaque archive, copie à froid des volumes listés (liste vide par défaut), envoi vers PBS (`--ns par1/conteneurs`, identifiant `ctr01`), nettoyage en sortie quoi qu'il arrive, code retour non nul au moindre échec. Applique-le et lance le service une fois.
 5. **Restauration.** Restaure la dernière sauvegarde depuis PBS dans un conteneur `restau-db` (PostgreSQL 18, volume `restau-donnees`, réseau isolé), compare le nombre de rendez-vous et une somme de contrôle de la table avec la base d'origine (requête identique des deux côtés), chronomètre chaque étape, puis supprime conteneur et volume. Consigne le tout dans `docs/conteneurs/tests/restauration-conteneurs.md` (RPO, RTO mesuré).
 6. **Runbook.** Rédige `docs/conteneurs/runbooks/RB-121-restaurer-la-base-d-une-pile-compose.md` : quand l'utiliser (et quand restaurer plutôt la VM), préalables, restauration à côté puis bascule, vérifications, retour arrière.
 
@@ -359,7 +359,7 @@ Avec une commande forcée (`command=` dans `authorized_keys`), ce que le client 
 
 ### M12-E30 — Mettre à jour sans interruption et revenir en arrière  `LAB` `★★★`
 
-> **Ticket CHG-1356** — *De : Julien Petit* — *Copie : Claire Morel*
+> **Ticket CHG-1330** — *De : Julien Petit* — *Copie : Claire Morel*
 > À chaque nouvelle version, la recette est coupée une minute et mes testeurs prennent des erreurs 502. Et la semaine dernière, une image cassée est restée en place jusqu'au lundi parce que personne n'a vu que la sonde de santé échouait.
 > Je veux : sur `ctr01`, des mises à jour **sans aucune erreur** côté client ; sur `ctr02`, que la recette se mette à jour **toute seule** quand on publie une nouvelle image… et qu'elle **revienne en arrière toute seule** si la nouvelle image ne passe pas sa sonde.
 
@@ -383,7 +383,7 @@ Avec une commande forcée (`command=` dans `authorized_keys`), ce que le client 
 1. **Mesurer la coupure actuelle.** Depuis `adm01`, lance une boucle de requêtes vers l'API de recette (une toutes les 50 ms, code HTTP journalisé ligne par ligne), puis mets à jour l'API de `ctr01` comme d'habitude (`MEDIAGENDA_TAG=<NOUVELLE> docker compose up -d --wait`). Compte les erreurs et leur durée. Qu'est-ce que Compose fait, dans quel ordre ? Lis ce que la spécification Compose dit de `deploy.update_config` et ce que Docker Compose en fait.
 2. **Deux instances et un répartiteur.** Écris `compose.ha.yaml` : le second service d'API reprend **exactement** la définition du premier (lis la documentation de `extends` et des balises de fusion `!reset`/`!override`), plus aucune publication directe de l'API, et le service HAProxy (durci comme en E24). Configuration HAProxy : sonde de **disponibilité** sur `/pret`, résolution des noms par le DNS embarqué de Docker (une instance recréée change d'adresse IP : que se passe-t-il sans section `resolvers` ?), nouvelle tentative **sur un autre serveur** pour les seules requêtes qui ont échoué à la connexion.
 3. **Mise à jour progressive.** Écris `outils/maj-progressive.sh` : une instance après l'autre, recréation avec attente de la sonde de santé, puis attente que **HAProxy** voie l'instance de retour avant de passer à la suivante ; arrêt sans toucher la seconde instance si la première échoue, avec la commande de retour arrière. Relance la boucle de requêtes et mets à jour vers `<NOUVELLE>` : **zéro** erreur attendue. Puis essaie `<CASSÉE>` : le script doit s'arrêter, le service continuer, et le retour à `<NOUVELLE>` se faire sans erreur.
-4. **Mise à jour automatique (Podman).** Sur `ctr02`, en compte `app` : connecte le compte au registre avec un fichier d'authentification persistant, fais pointer l'unité de l'API vers l'étiquette `recette`, ajoute la politique de mise à jour automatique et fais en sorte que l'unité ne soit considérée comme **démarrée** que lorsque le conteneur est **en bonne santé** (lis `podman-systemd.unit(5)` : clés `AutoUpdate=`, `Notify=`, `HealthCmd=`… et la section `[Service]` pour le délai de démarrage). Active le timer de mise à jour du compte. Publie `<NOUVELLE>` sous `recette` (`skopeo copy`), puis `podman auto-update --dry-run`, puis `podman auto-update` : la version change-t-elle ?
+4. **Mise à jour automatique (Podman).** Sur `ctr02`, en compte `app` : connecte le compte au registre avec un fichier d'authentification persistant, fais pointer l'unité de l'API vers l'étiquette `recette`, ajoute la politique de mise à jour automatique, et vérifie que l'unité n'est toujours considérée comme **démarrée** que lorsque le conteneur est **en bonne santé** (exigence de M12-E14), avec un délai de démarrage adapté (lis `podman-systemd.unit(5)` : clés `AutoUpdate=`, `Notify=`, `HealthCmd=`… et la section `[Service]`). Active le timer de mise à jour du compte. Publie `<NOUVELLE>` sous `recette` (`skopeo copy`), puis `podman auto-update --dry-run`, puis `podman auto-update` : la version change-t-elle ?
 5. **Retour arrière automatique.** Publie `<CASSÉE>` sous `recette` et lance `podman auto-update`. Que se passe-t-il, dans quel ordre (journal de l'unité, `podman auto-update` lui-même) ? Quelle image tourne à la fin ? Remets `<NOUVELLE>` sous `recette`. Que se passerait-il **sans** la clé qui lie le démarrage à la santé ?
 6. **Réflexion et runbook.** Une étiquette mobile en recette, d'accord ; en production ? Comment savoir **quelle version** tourne à un instant donné, et comment la reproduire ? Rédige RB-122 : préparer (version cible, empreinte, migrations de base compatibles avec les deux versions), mettre à jour (Compose : script ; Podman : publication), vérifier, revenir en arrière dans les deux cas.
 
@@ -417,7 +417,7 @@ Pendant l'arrêt d'une instance, uvicorn ferme d'abord son socket d'écoute puis
 
 ### M12-E31 — ADR : Docker ou Podman sur les serveurs  `RED` `★★`
 
-> **Ticket PLAT-1357** — *De : Claire Morel* — *Copie : Karim Benali, Sophie Laurent*
+> **Ticket PLAT-1331** — *De : Claire Morel* — *Copie : Karim Benali, Sophie Laurent*
 > Depuis le début du module, on fait tourner Docker sur `ctr01` et `runner02`, Podman sur `ctr02` et `ctr03`. Avant que chaque équipe choisisse le sien, je veux une décision : quel moteur sur les serveurs qui font tourner des conteneurs **hors Kubernetes** (recette, outillage, Harbor au M13), et quel moteur pour la **CI**. Une décision qu'on puisse défendre devant Sophie, et qui dise ce qu'elle nous coûte.
 
 **Objectifs pédagogiques**
@@ -460,7 +460,7 @@ Certaines contraintes ne se discutent pas : un outil livré avec un `docker-comp
 
 ### M12-E32 — Questions de production : conteneurs  `Q` `★★★`
 
-> **Ticket PLAT-1358** — *De : Karim Benali*
+> **Ticket PLAT-1332** — *De : Karim Benali*
 > Avant que tu prennes l'astreinte sur les conteneurs, je veux t'entendre sur ces questions. Argumente, cite la commande qui le prouve quand c'est possible, et dis de quoi dépend le « ça dépend ».
 
 **Objectifs pédagogiques**
@@ -515,7 +515,7 @@ Les réponses argumentées sont dans le corrigé.
 
 ### M12-E33 — Normes de conteneurisation de MédiSphère  `RED` `★★`
 
-> **Ticket PLAT-1359** — *De : Claire Morel* — *Copie : Sophie Laurent, Julien Petit, Karim Benali*
+> **Ticket PLAT-1333** — *De : Claire Morel* — *Copie : Sophie Laurent, Julien Petit, Karim Benali*
 > Les équipes vont conteneuriser leurs applications par dizaines. Je ne veux pas relire chaque Dockerfile en me demandant ce qui est attendu. Écris les **normes de conteneurisation** de MédiSphère : ce qui est **obligatoire**, ce qui est **recommandé**, ce qui est **interdit**, et comment on le **vérifie**. C'est sur ce texte que reposeront les revues de MR, la CI, et au module 26 les politiques d'admission de Kubernetes.
 
 **Objectifs pédagogiques**
@@ -561,7 +561,7 @@ Une norme trop longue n'est pas lue. Garde dans le document la règle, la raison
 
 ### M12-E34 — Conteneuriser une application en temps limité  `CHRONO` `★★★`
 
-> **Ticket CHG-1360** — *De : Julien Petit* — *Copie : Claire Morel*
+> **Ticket CHG-1334** — *De : Julien Petit* — *Copie : Claire Morel*
 > L'équipe de Julien a écrit un petit service, **MédiAnnuaire** (l'annuaire des praticiens, utilisé par la prise de rendez-vous). Ils veulent le livrer en recette **cette semaine**, conteneurisé selon les normes. La direction veut savoir combien de temps il faut à la Plateforme pour conteneuriser **proprement** une nouvelle application.
 > Le dossier est prêt (ressources de l'exercice). Chrono en main.
 

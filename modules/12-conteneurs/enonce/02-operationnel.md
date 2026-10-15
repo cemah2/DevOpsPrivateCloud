@@ -692,7 +692,7 @@ Livre, dans `legacy/legacy-rdv` (MR relue par Karim et Claire) :
 
 <details><summary>Indice 1</summary>
 
-Lis le script d'entrée de l'image officielle `php:8.4-apache-trixie` (`apache2-foreground`) et ses variables `APACHE_*` : un Apache qui démarre sous un compte non root ne peut pas ouvrir le port 80. Les extensions PHP absentes de l'image s'ajoutent par `docker-php-ext-install`. Les images officielles de MariaDB acceptent les variables `*_FILE`.
+Lis le script d'entrée de l'image officielle `php:8.4-apache-trixie` (`apache2-foreground`) et ses variables `APACHE_*` : il démarre en root pour ouvrir le port 80, puis change de compte ; un Apache entièrement non root doit écouter sur le port imposé par le contexte, qui fonctionne aussi hors de Docker. Les extensions PHP absentes de l'image s'ajoutent par `docker-php-ext-install`. Les images officielles de MariaDB acceptent les variables `*_FILE`.
 </details>
 
 <details><summary>Indice 2</summary>

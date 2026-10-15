@@ -48,7 +48,7 @@ de `gw-par1` (E12) est inchangée (`curl -sI http://…` → 301 vers `https://�
 partenaire ──TLS mutuel──> 10.10.41.11:443 gw-partenaires (Envoy, SNI, passthrough)
                                  └──flux TLS intact──> relais-mtls:443 (nginx, mediagenda-recette)
                                         vérifie le certificat client (autorité « MédiSphère Partenaires » seule)
-                                        └──HTTP + X-Partenaire: <CN>──> API MédiAgenda:8000
+                                        └──HTTP + X-Partenaire: <CN>──> API MédiAgenda (Service :80 → pod :8000)
 ```
 
 - Nom : `mediagenda-partenaires.apps.par1.medisphere.internal` → 10.10.41.11 (ExternalDNS, source `service`, annotation recopiée par Cilium depuis `spec.infrastructure`).

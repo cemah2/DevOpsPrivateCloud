@@ -7,13 +7,13 @@ kind: Namespace
 metadata:
   name: mediagenda-recette
   labels:
-    medisphere.fr/exposition: oui
+    medisphere.internal/exposition: oui
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: wb-essais
   labels:
-    medisphere.fr/exposition: oui
+    medisphere.internal/exposition: oui
 # mediagenda-dev : PAS d'étiquette pour l'instant (essai de refus de l'étape 7) ; ajoutée par MR le
 # jour où l'équipe en a besoin.

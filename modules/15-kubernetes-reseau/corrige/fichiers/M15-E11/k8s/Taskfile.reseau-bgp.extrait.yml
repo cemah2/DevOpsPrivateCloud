@@ -1,13 +1,10 @@
 # Extrait du Taskfile.yml de plateforme/k8s — M15-E11 (version complète du réseau : M15-E23).
+# La tâche « etiquettes » existe depuis M14-E14 : elle lit cluster/noeuds.yaml, complété ici.
 version: "3"
 tasks:
-  noeuds:etiqueter:
-    desc: Étiquettes de nœuds gérées par le dépôt (cluster/noeuds.yaml)
-    cmds:
-      - outils/etiqueter-noeuds.sh
   reseau:bgp:
     desc: Pool LB IPAM et plan de contrôle BGP de Cilium
-    deps: [noeuds:etiqueter]
+    deps: [etiquettes]
     cmds:
       - kubectl apply --server-side -f composants/cilium/lb-ipam/
       - kubectl apply --server-side -f composants/cilium/bgp/

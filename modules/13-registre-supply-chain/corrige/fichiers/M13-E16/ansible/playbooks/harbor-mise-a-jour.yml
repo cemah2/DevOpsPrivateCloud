@@ -1,5 +1,5 @@
 ---
-# playbooks/harbor-mise-a-jour.yml — mise à jour corrective de Harbor (M13-E16, CHG-1434). RB-132.
+# playbooks/harbor-mise-a-jour.yml — mise à jour corrective de Harbor (M13-E16, CHG-1416). RB-132.
 #
 # Procédure officielle (« Upgrade Harbor and Migrate Data ») encadrée :
 #   1. garde-fous : un seul hôte, version visée > version active (jamais de descente), même mineure

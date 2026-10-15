@@ -1,4 +1,4 @@
-# Extrait de playbooks/conteneurs.yml — ajouté en M12-E29 (PLAT-1355).
+# Extrait de playbooks/conteneurs.yml — ajouté en M12-E29 (PLAT-1329).
 - name: Sauvegarde des données des conteneurs vers PBS
   hosts: ctr01
   become: true

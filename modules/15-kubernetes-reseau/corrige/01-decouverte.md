@@ -127,8 +127,8 @@ admin@k8s-w01:~$ ip -o link | grep -E "^15:|cilium"
 admin@k8s-w01:~$ ip -d link show cilium_vxlan | grep vxlan
     vxlan external id 0 srcport 0 0 dstport 8472 nolearning ttl auto ageing 300 …
 admin@k8s-w01:~$ ip route
-default via 10.10.40.1 dev ens18 proto static
-10.10.40.0/24 dev ens18 proto kernel scope link src 10.10.40.61
+default via 10.10.40.1 dev eth0 proto static
+10.10.40.0/24 dev eth0 proto kernel scope link src 10.10.40.61
 10.240.0.0/24 via 10.240.3.31 dev cilium_host proto kernel src 10.240.3.31 mtu 1450
 10.240.1.0/24 via 10.240.3.31 dev cilium_host proto kernel src 10.240.3.31 mtu 1450
 10.240.3.0/24 via 10.240.3.31 dev cilium_host proto kernel src 10.240.3.31
@@ -158,19 +158,19 @@ admin@adm01:~$ kubectl -n kube-system exec $CIL -c cilium-agent -- cilium-dbg id
 
 Les deux sondes ont **la même identité** : l'identité est calculée à partir des labels de **sécurité** du pod (labels du pod, espace de noms, compte de service…), pas de son nom ni de son adresse. Deux pods aux mêmes labels sont interchangeables pour les politiques. `POLICY ENFORCEMENT: Disabled` : aucune politique ne les sélectionne encore (E06 le changera).
 
-*C. Même nœud* (question 6) : capture sur `lxc…` de `sonde-w01b`, `ping` depuis `sonde-w01a`. Rien sur `ens18`. Le programme de sortie de `lxc…` de `sonde-w01a` trouve la destination dans la table des points de terminaison **locaux** et redirige le paquet vers l'interface de `sonde-w01b`. *Host Routing* : `Legacy` (état du module 14) ; dans ce mode, la capture sur `lxc…` de la destination voit le paquet. Avec le routage d'hôte eBPF, le paquet serait remis directement dans l'espace de noms du pod (`bpf_redirect_peer`) et la capture côté nœud ne verrait pas l'entrée.
+*C. Même nœud* (question 6) : capture sur `lxc…` de `sonde-w01b`, `ping` depuis `sonde-w01a`. Rien sur `eth0`. Le programme de sortie de `lxc…` de `sonde-w01a` trouve la destination dans la table des points de terminaison **locaux** et redirige le paquet vers l'interface de `sonde-w01b`. *Host Routing* : `Legacy` (état du module 14) ; dans ce mode, la capture sur `lxc…` de la destination voit le paquet. Avec le routage d'hôte eBPF, le paquet serait remis directement dans l'espace de noms du pod (`bpf_redirect_peer`) et la capture côté nœud ne verrait pas l'entrée.
 
 *D. Deux nœuds* (questions 7 à 9) :
 
 ```
-admin@k8s-w01:~$ sudo tcpdump -ni ens18 -c 6 udp port 8472
+admin@k8s-w01:~$ sudo tcpdump -ni eth0 -c 6 udp port 8472
 IP 10.10.40.61.53812 > 10.10.40.62.8472: OTV, flags [I] (0x08), overlay 0, instance 38712
 IP 10.240.3.112 > 10.240.4.201: ICMP echo request, id 7, seq 1, length 64
 IP 10.10.40.62.41275 > 10.10.40.61.8472: OTV, flags [I] (0x08), overlay 0, instance 38712
 IP 10.240.4.201 > 10.240.3.112: ICMP echo reply, id 7, seq 1, length 64
 ```
 
-`tcpdump` décode le port 8472 comme **OTV** (un autre protocole qui utilise ce port) : la « *instance* » affichée est le VNI. En-tête externe : 10.10.40.61 → 10.10.40.62, UDP vers 8472 (port source variable : il sert à répartir les flux sur des liens agrégés) ; en-tête interne : les adresses des **pods**, sans aucune traduction. Pour un décodage VXLAN explicite : `tcpdump -ni ens18 -T vxlan udp port 8472` (option à vérifier dans ta version de `tcpdump`).
+`tcpdump` décode le port 8472 comme **OTV** (un autre protocole qui utilise ce port) : la « *instance* » affichée est le VNI. En-tête externe : 10.10.40.61 → 10.10.40.62, UDP vers 8472 (port source variable : il sert à répartir les flux sur des liens agrégés) ; en-tête interne : les adresses des **pods**, sans aucune traduction. Pour un décodage VXLAN explicite : `tcpdump -ni eth0 -T vxlan udp port 8472` (option à vérifier dans ta version de `tcpdump`).
 
 Le VNI vaut **38712** : l'identité de `sonde-w01a` (`cilium-dbg identity get 38712`). Cilium transporte l'**identité de sécurité de la source** dans l'en-tête du tunnel : le nœud d'arrivée applique la politique d'entrée de `sonde-w02` sans avoir à déduire l'émetteur de son adresse. Dans le sens retour, le VNI est l'identité de `sonde-w02` (ici la même, puisque les trois sondes ont les mêmes labels : vérifie avec un autre pod).
 
@@ -190,12 +190,12 @@ admin@adm01:~$ kubectl -n wb-essais exec sonde-w01a -- ping -c 1 -M do -s 1423 1
 ping: local error: message too long, mtu=1450
 ```
 
-1422 octets de données + 8 (ICMP) + 20 (IP) = 1450, le MTU de la route du pod ; + 50 octets VXLAN = 1500 sur `ens18`. Le refus est **local** (le noyau du pod connaît le MTU de sa route) : c'est le bon comportement. Si le MTU de la route était faux (1500), le paquet partirait et serait perdu plus loin.
+1422 octets de données + 8 (ICMP) + 20 (IP) = 1450, le MTU de la route du pod ; + 50 octets VXLAN = 1500 sur `eth0`. Le refus est **local** (le noyau du pod connaît le MTU de sa route) : c'est le bon comportement. Si le MTU de la route était faux (1500), le paquet partirait et serait perdu plus loin.
 
 *E. Sortie* (question 11) :
 
 ```
-admin@k8s-w01:~$ sudo tcpdump -ni ens18 -c 2 port 53 and host 10.10.20.10
+admin@k8s-w01:~$ sudo tcpdump -ni eth0 -c 2 port 53 and host 10.10.20.10
 IP 10.10.40.61.47121 > 10.10.20.10.53: 51234+ [1au] A? git01.par1.medisphere.internal. (59)
 IP 10.10.20.10.53 > 10.10.40.61.47121: 51234* 1/0/1 A 10.10.20.12 (75)
 ```
@@ -220,7 +220,7 @@ Le check vérifie les sondes (nœud, adresse, deux /24 différents), les tranche
 
 **Pièges classiques**
 
-- Capturer sur `cilium_vxlan` en s'attendant à voir l'en-tête VXLAN : cette interface voit les trames **avant** encapsulation (ou après décapsulation). L'en-tête externe se voit sur `ens18`.
+- Capturer sur `cilium_vxlan` en s'attendant à voir l'en-tête VXLAN : cette interface voit les trames **avant** encapsulation (ou après décapsulation). L'en-tête externe se voit sur `eth0`.
 - Lire `ip route` du nœud et conclure que le trafic inter-nœuds passe par `cilium_host` « et puis c'est tout » : sans l'ipcache, on ne comprend pas le chemin.
 - Prendre l'« OTV » de `tcpdump` pour un problème : c'est seulement le nom que `tcpdump` donne au port 8472.
 - Oublier que le MTU est porté par la **route** du pod, pas par l'interface : `ip link` dans le pod affiche 1500, `ip route` affiche 1450.
@@ -669,7 +669,7 @@ Le modèle s'applique aux espaces `mediagenda-*` (M15-E17) : refus par défaut, 
 
 ```
 admin@adm01:~$ kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg status | grep -E "KubeProxyReplacement|Proxy Status"
-KubeProxyReplacement:    True   [ens18   10.10.40.61 (Direct Routing)]
+KubeProxyReplacement:    True   [eth0   10.10.40.61 (Direct Routing)]
 Proxy Status:            OK, ip 10.240.3.171, 0 redirects active on ports 10000-20000, Envoy: external
 admin@adm01:~$ cilium config view | grep -E "^enable-l7-proxy|^kube-proxy-replacement "
 ```
@@ -702,6 +702,8 @@ cilium   io.cilium/gateway-controller   True       1m
 ```
 
 La GatewayClass `cilium` est rendue **par le chart** (`gatewayAPI.gatewayClass.create: auto` : seulement si la CRD `GatewayClass` existe au moment de l'application) : d'où « CRD d'abord ». Dans l'autre ordre, l'opérateur journalise « Required GatewayAPI resources are not found » et le contrôleur ne démarre pas ; il faut réappliquer après les CRD et redémarrer l'opérateur.
+
+Droits des vérifications : [`k8s/rbac/wb-checks-reseau.yaml`](fichiers/M15-E07/k8s/rbac/wb-checks-reseau.yaml), une ClusterRole étiquetée `workbook.medisphere.internal/checks: "true"` que le contrôleur d'agrégation fond dans `wb-checks` (M14-E06) : aucune liaison à écrire. Elle couvre `gateway.networking.k8s.io` et, par avance, `cert-manager.io` et `acme.cert-manager.io` (RBAC ne vérifie pas l'existence d'un groupe). `kubectl auth can-i list gateways.gateway.networking.k8s.io -A --as=system:serviceaccount:wb-system:wb-checks` répond `yes`, la même question pour `secrets` répond `no`. Ne mets pas `"*"` dans `apiGroups` « pour ne plus y penser » : le groupe du cœur (`""`) en ferait partie, Secrets compris.
 
 *C. Une Gateway sans adresse* (questions 5 à 7). [`manifestes/gw-attente.yaml`](fichiers/M15-E07/manifestes/gw-attente.yaml) :
 
@@ -814,7 +816,7 @@ Le check vérifie les sept CRD (v1.6.1, canal standard) et l'absence de CRD exp�
 
 **En production chez MédiSphère**
 
-La Gateway principale `gw-par1` (E12) vit dans l'espace `passerelles`, géré par la plateforme ; les équipes n'écrivent que des routes dans leurs espaces, et seuls les espaces étiquetés `medisphere.fr/exposition: oui` peuvent s'y attacher. L'autorisation de l'identité `ingress` fait partie du modèle de politiques de chaque application (E17). Les CRD de la Gateway API sont montées de version comme un composant à part, avant Cilium, avec relecture des notes des deux projets (E27).
+La Gateway principale `gw-par1` (E12) vit dans l'espace `passerelles`, géré par la plateforme ; les équipes n'écrivent que des routes dans leurs espaces, et seuls les espaces étiquetés `medisphere.internal/exposition: oui` peuvent s'y attacher. L'autorisation de l'identité `ingress` fait partie du modèle de politiques de chaque application (E17). Les CRD de la Gateway API sont montées de version comme un composant à part, avant Cilium, avec relecture des notes des deux projets (E27).
 
 ---
 
@@ -884,7 +886,7 @@ admin@adm01:~$ kubectl -n kube-system rollout restart deployment/cilium-operator
 admin@adm01:~$ kubectl -n kube-system rollout status daemonset/cilium --timeout=10m && cilium status --wait
 admin@adm01:~$ for p in $(kubectl -n kube-system get pods -l k8s-app=cilium -o name); do
     kubectl -n kube-system exec $p -c cilium-agent -- cilium-dbg status | grep KubeProxyReplacement; done
-KubeProxyReplacement:    True   [ens18   10.10.40.51 (Direct Routing)]
+KubeProxyReplacement:    True   [eth0   10.10.40.51 (Direct Routing)]
 …
 admin@adm01:~$ kubectl -n kube-system exec $CIL -c cilium-agent -- cilium-dbg service list | awk '{print $3}' | sort | uniq -c
      18 ClusterIP
@@ -992,7 +994,7 @@ Le remplacement de kube-proxy fait partie de la configuration de référence de 
 
 **12. Réponse B.** L'entrée de `echo` accepte maintenant `sonde-w01b` (union des autorisations), mais `sonde-w01b` est elle-même en refus par défaut **en sortie** : la connexion s'arrête sur son nœud. A suppose un ordre qui n'existe pas ; C oublie la sortie ; D : rien ne refuse une politique valide.
 
-**13. Gateway et remplacement de kube-proxy.** L'entrée de la Gateway est un Service (ici NodePort) que Cilium marque comme « répartiteur L7 » : c'est son plan de données des Services (eBPF, au niveau du NodePort) qui détourne les connexions vers l'Envoy local par TPROXY ; sans le remplacement, ces Services seraient traduits par kube-proxy, qui ne sait rien d'Envoy. Chemin : `adm01` → `ens18` de `k8s-w01`, port 30412 → programme eBPF du NodePort (Service L7) → TPROXY vers l'écouteur d'Envoy (`cilium-envoy`) → Envoy lit `Host` et le chemin, choisit la route, puis un pod `echo` dans les adresses que l'agent lui transmet → Envoy ouvre une connexion vers le pod avec l'identité `ingress` → politique d'entrée de `echo` (`echo-depuis-gateway`) → pod. La réponse revient par Envoy.
+**13. Gateway et remplacement de kube-proxy.** L'entrée de la Gateway est un Service (ici NodePort) que Cilium marque comme « répartiteur L7 » : c'est son plan de données des Services (eBPF, au niveau du NodePort) qui détourne les connexions vers l'Envoy local par TPROXY ; sans le remplacement, ces Services seraient traduits par kube-proxy, qui ne sait rien d'Envoy. Chemin : `adm01` → `eth0` de `k8s-w01`, port 30412 → programme eBPF du NodePort (Service L7) → TPROXY vers l'écouteur d'Envoy (`cilium-envoy`) → Envoy lit `Host` et le chemin, choisit la route, puis un pod `echo` dans les adresses que l'agent lui transmet → Envoy ouvre une connexion vers le pod avec l'identité `ingress` → politique d'entrée de `echo` (`echo-depuis-gateway`) → pod. La réponse revient par Envoy.
 
 **14. Visibilité L7.** Seul le proxy lit le HTTP : il faut qu'une politique L7 fasse passer le trafic par Envoy (ou le DNS par le proxy DNS). Coût : un saut de plus par connexion (latence, CPU et mémoire d'Envoy sur chaque nœud), une connexion TCP terminée et rouverte par le proxy (le pod voit Envoy), un composant de plus sur le chemin de toutes les requêtes du pod (un incident d'Envoy devient un incident de l'application), et des données de requête collectées (confidentialité). On l'active là où on en a besoin : politiques L7 réelles (E17), diagnostic ponctuel.
 

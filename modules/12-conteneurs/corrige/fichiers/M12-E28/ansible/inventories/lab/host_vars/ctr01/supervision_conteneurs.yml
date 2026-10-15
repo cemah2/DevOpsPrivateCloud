@@ -1,4 +1,4 @@
 ---
-# host_vars/ctr01/supervision_conteneurs.yml — M12-E28 (PLAT-1354)
+# host_vars/ctr01/supervision_conteneurs.yml — M12-E28 (PLAT-1328)
 supervision_conteneurs_docker: true
 supervision_conteneurs_cle_publique: "ssh-ed25519 <CLÉ-PUBLIQUE> supervision-conteneurs@adm01"

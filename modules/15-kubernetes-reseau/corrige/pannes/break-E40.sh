@@ -37,7 +37,7 @@ metadata:
   name: $_E40_CERT
   namespace: $_E40_NS
   annotations:
-    medisphere.fr/demande: "PLAT-1647 : répétition du renouvellement du joker"
+    medisphere.internal/demande: "PLAT-1647 : répétition du renouvellement du joker"
 spec:
   secretName: $_E40_CERT-tls
   duration: 2160h

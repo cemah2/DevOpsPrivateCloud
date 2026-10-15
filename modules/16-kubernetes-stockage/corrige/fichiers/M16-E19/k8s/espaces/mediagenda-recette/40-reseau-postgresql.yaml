@@ -43,6 +43,29 @@ spec:
       ports:
         - {protocol: TCP, port: 5432}
 ---
+# Sortie de l'API et du Job de migration vers les instances (5432). La politique « api-vers-donnees »
+# du M15 n'autorise que les pods app.kubernetes.io/name=postgresql (le PostgreSQL jetable du M14) :
+# sans celle-ci, l'API ne joint pas mediagenda-db-rw (/pret à 503) et la migration échoue. La
+# politique s'applique après la traduction du Service (mediagenda-db-rw → pod du primaire).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-vers-postgresql
+  namespace: mediagenda-recette
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["mediagenda-api", "mediagenda-migration"]
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {cnpg.io/cluster: mediagenda-db}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
 # Sortie : l'API Kubernetes (le gestionnaire d'instance la lit et met à jour l'état), les autres
 # instances. Avec Cilium, l'API Kubernetes est l'entité kube-apiserver : une NetworkPolicy
 # standard avec ipBlock sur les adresses des nœuds ne la couvre pas.

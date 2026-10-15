@@ -41,7 +41,7 @@ options:
         nodeFilters:
           - server:*
     nodeLabels:
-      - label: medisphere.fr/proprietaire=mediagenda
+      - label: medisphere.internal/proprietaire=mediagenda
         nodeFilters:
           - server:*
           - agent:*
@@ -50,7 +50,7 @@ options:
     switchCurrentContext: false
   runtime:
     labels:
-      - label: medisphere.fr/proprietaire=mediagenda
+      - label: medisphere.internal/proprietaire=mediagenda
         nodeFilters:
           - server:*
           - agent:*

@@ -12,9 +12,11 @@
 #
 # Construite par le pipeline de plateforme/ci-templates (job « outils-supply-chain »), publiée
 # dans le projet Harbor « plateforme », signée. Première version : construite par le gabarit
-# image.yml (M12-E21) puis signée à la main (outils/signer-image.sh), faute de chaîne existante.
+# templates/image.yml (M12-E21) puis signée à la main (outils/signer-image.sh), faute de chaîne existante.
 
-FROM registry.par1.medisphere.internal/bibliotheque/debian:trixie-slim@sha256:<EMPREINTE>
+# Image de base MédiSphère (M12-E27 : étiquette datée trixie-AAAAMMJJ + étiquette mobile trixie) ;
+# Renovate propose la nouvelle étiquette datée et son empreinte (M13-E11).
+FROM registry.par1.medisphere.internal/bibliotheque/debian:trixie-<AAAAMMJJ>@sha256:<EMPREINTE>
 
 ARG COSIGN_VERSION=3.1.3
 ARG COSIGN_SHA256=75357d96161da4d06d37c4b2831fa6978483cdce661999e5951b586f9ee1d710

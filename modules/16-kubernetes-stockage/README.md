@@ -79,11 +79,14 @@ MédiAgenda fonctionne, mais sa base PostgreSQL tourne encore sur une VM gérée
 
 | Élément | Valeur | Exercice |
 |---|---|---|
-| Carte STOR-PUB des travailleurs | 10.10.30.81-83 (VLAN 30, MTU 9000) | E05 |
+| Carte STOR-PUB des travailleurs | `eth1` (netplan, MAC `bc:24:11:30:00:61-63`), 10.10.30.81-83 (VLAN 30, MTU 9000) | E05 |
 | StorageClasses | `ceph-rbd` (par défaut), `ceph-rbd-retain`, `cephfs` | E06-E07, E12 |
+| Valkey de recette | StatefulSet `valkey` d'une instance, PVC `donnees-valkey-0` (`ceph-rbd`, puis `ceph-rbd-chiffre` en E29) | E08, E29 |
+| Classe chiffrée | `ceph-rbd-chiffre` (LUKS par le client, KMS `secrets-metadata`) | E26 |
 | Disques de comparaison | 32 Go `ssd-lab` (Rook) et 32 Go `hdd-bulk` (Longhorn) par travailleur, retirés en fin de module | E13-E15 |
 | Velero | `s3-01`, compartiment `velero-k8s-par1` | E16 |
-| CloudNativePG | `s3-01`, compartiment `cnpg-k8s-par1`, plugin Barman Cloud | E18-E19 |
+| CloudNativePG | cluster `mediagenda-db` (3 instances, `mediagenda-recette`) ; `s3-01`, compartiment `cnpg-k8s-par1`, plugin Barman Cloud | E18-E19 |
+| MédiDoc | documents dans `medidoc-documents` du RGW de `ceph-par1` (au lieu de `s3-01`) | E46 |
 
 Détails figés : [`PLAN.md`](../../PLAN.md) §4.10.
 

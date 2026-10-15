@@ -10,7 +10,7 @@
                                                     │  → test de fumée → poussée (compte ci)
                                                     ▼
                                    registre de travail ctr01:5000 (registry:3, TLS step-ca, htpasswd)
-                                                    │  tirage (compte plateforme, lecture)
+                                                    │  tirage (compte plateforme)
                                                     ▼
              ctr02 (Podman 5.4, compte app UID 1001, Quadlet) : pile de recette apps-recette
                MédiAgenda :8000 ─ PostgreSQL 18, Valkey 8, migrations
@@ -24,7 +24,7 @@
 | Hôte | VMID | Rôle | Cycle de vie |
 |---|---|---|---|
 | `runner02` | 1012 | GitLab Runner, exécuteur `docker`, étiquettes `docker`, `socle` ; constructions sans privilège | **socle** (état OpenTofu `socle`, PBS, supervision) |
-| `ctr01` | 2121 | Docker 29, registre de travail (port 5000) | environnement M12 ; gardée jusqu'à M13-E02 si décidé (voir `recette-v1.md`) |
+| `ctr01` | 2121 | Docker 29, registre de travail (port 5000) | environnement M12 ; gardée jusqu'à la fin de M13-E03 si décidé (voir `recette-v1.md`) |
 | `ctr02` | 2122 | Podman sans privilège, pile de recette | détruite après la recette |
 | `ctr03` | 2123 | Podman 5.8, SELinux | détruite après la recette |
 | `legacy01` | 2124 | Legacy-RDV « à l'ancienne » (référence de comparaison) | détruite après la recette |

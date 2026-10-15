@@ -9,7 +9,7 @@ metadata:
   name: e03-partage
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e03
+    medisphere.internal/exercice: m16-e03
 spec:
   storageClassName: local-manuel
   accessModes: ["ReadWriteMany"]
@@ -23,7 +23,7 @@ metadata:
   name: e03-partage
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e03
+    medisphere.internal/exercice: m16-e03
 spec:
   automountServiceAccountToken: false
   securityContext:

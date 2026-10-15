@@ -1,3 +1,3 @@
-# Extrait de la règle d'entrée de pbs01 (même chemin qu'en M06-E28) — M12-E29 (PLAT-1355).
+# Extrait de la règle d'entrée de pbs01 (même chemin qu'en M06-E28) — M12-E29 (PLAT-1329).
 # ctr01 (réservation Kea 10.10.99.121) → API de sauvegarde, à travers le tunnel wg0.
         ip saddr 10.10.99.121 tcp dport 8007 accept comment "ctr01 -> PBS par1/conteneurs (M12-E29)"

@@ -36,7 +36,7 @@ Lundi, 9 h 05. `k8s-par1` tourne depuis la fin du module 14 : trois nœuds de co
 - **cert-manager 1.21** et le ClusterIssuer `step-ca-acme` (ACME de `ca01`, défis HTTP-01 et DNS-01) ; la zone **`apps.par1.medisphere.internal`** sur PowerDNS, mise à jour en **RFC 2136** signée TSIG ; **ExternalDNS 0.23** qui publie les noms des routes ;
 - des **politiques réseau** : NetworkPolicy standard, CiliumNetworkPolicy L7 et `toFQDNs`, politique de base à l'échelle du cluster ;
 - le chiffrement **WireGuard** entre nœuds, la publication de MédiAgenda hors du lab par `lb01`/`lb02`, une comparaison avec **MetalLB** sur une VM jetable, la migration des Ingress d'InfoGér ;
-- l'ADR-0150, les runbooks RB-150 (service injoignable), RB-151 (certificat non délivré), RB-152 (BGP), la matrice des flux du cluster.
+- l'ADR-0150, les runbooks RB-150 (service injoignable), RB-151 (certificat non délivré), RB-152 (BGP), RB-153 (mise à jour de Cilium), la matrice des flux du cluster.
 
 Le **palier 1** (ce fichier et `01-decouverte.md`) observe le modèle réseau tel que le module 14 l'a laissé (pods, Services, DNS, Hubble), pose les premières politiques, remplace kube-proxy et ouvre une première route HTTP par la Gateway API. Rien n'est encore annoncé à la bordure : tout se teste depuis `adm01` (VLAN 10, qui joint tout le lab) ou depuis des pods de sonde.
 
@@ -106,7 +106,7 @@ Aucun flux nouveau sur la bordure au palier 1. Les flux du module (BGP TCP 179, 
 3. **Ansible** pour ce qui vit hors du cluster : la bordure (rôle `frr`, `group_vars/role_routeur/`), les répartiteurs (rôle `haproxy`), la zone DNS (rôle `powerdns_auth`), et les outils des nœuds.
 4. **Essais** dans l'espace **`wb-essais`** (brouillons dans `~/m15/eXX/` sur `adm01`, non versionnés, sans secret) ; ce qui sert la plateforme ou les applications va dans le code.
 5. **Secrets** : clés TSIG en Ansible Vault `lab` et en Secret Kubernetes, jamais en clair dans un dépôt ; inscrits au registre des secrets. Pas de Vault ni d'External Secrets avant les modules 25.
-6. **Documentation** : dans `plateforme/medisphere`, dossier **`docs/kubernetes/reseau/`** (fiches, ADR-0150, runbooks RB-150 à RB-152, matrice des flux du cluster) ; fiches de changement dans `docs/kubernetes/changements/`.
+6. **Documentation** : dans `plateforme/medisphere`, dossier **`docs/kubernetes/reseau/`** (fiches, ADR-0150, runbooks RB-150 à RB-153 dans `docs/kubernetes/reseau/runbooks/`, matrice des flux du cluster) ; fiches de changement dans `docs/kubernetes/changements/`.
 
 ---
 
@@ -143,13 +143,13 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Élément | Valeur |
 |---|---|
 | Versions (PLAN §6) | Kubernetes **1.36.x** ; Cilium et Hubble **1.20.x** (1.20.2 à la rédaction ; testé de Kubernetes 1.33 à 1.36) ; Gateway API **v1.6.1** (canal standard ; Cilium 1.20 exige au moins v1.6.1) ; cert-manager **1.21.x** ; ExternalDNS **0.23.x** (fournisseur `rfc2136`) ; MetalLB **0.16.x** ; ingress-nginx **1.15.1** (dernière version, projet retiré : étudié en migration seulement) ; CoreDNS de kubeadm 1.36 (1.14.x) |
-| Changements de version | voir [`annexes/versions-bloc-C.md`](../../../annexes/versions-bloc-C.md) : Gateway API ≥ v1.6.1 et `TLSRoute` passée en `v1` ; Gateway API de Cilium **exige** `kubeProxyReplacement: true` ; BGP control plane **v2** seulement (`CiliumBGPPeeringPolicy` absente de la documentation 1.20) ; `cilium-dbg bgp` déprécié au profit de `cilium shell -- bgp/…` ; CiliumNetworkPolicy vides refusées à l'admission ; options `--node-port-mode`/`--node-port-algorithm` supprimées (`loadBalancer.mode`, `loadBalancer.algorithm`) ; *mutual auth* de Cilium déprécié ; `enableGatewayAPI` de cert-manager remplacé par `config.gatewayAPI.enabled` |
+| Changements de version | voir [`annexes/versions-bloc-C.md`](../../../annexes/versions-bloc-C.md) : Gateway API ≥ v1.6.1 et `TLSRoute` passée en `v1` ; Gateway API de Cilium **exige** `kubeProxyReplacement: true` ; BGP control plane **v2** seulement (`CiliumBGPPeeringPolicy` absente de la documentation 1.20) ; `cilium-dbg bgp …` marqué déprécié dans l'agent (lis plutôt l'état par la CLI `cilium bgp …` depuis `adm01` ou par le statut des `CiliumBGPNodeConfig` ; le remplaçant dans l'agent, `cilium-dbg shell -- bgp/…`, est à vérifier sur ta version) ; CiliumNetworkPolicy vides refusées à l'admission ; options `--node-port-mode`/`--node-port-algorithm` supprimées (`loadBalancer.mode`, `loadBalancer.algorithm`) ; *mutual auth* de Cilium déprécié ; `enableGatewayAPI` de cert-manager remplacé par `config.gatewayAPI.enabled` |
 | État d'entrée (M14) | `k8s-par1` en 1.36, Cilium 1.20 installé par `cilium install --version 1.20.x --values plateforme/k8s/composants/cilium/values.yaml` : IPAM `cluster-pool` 10.240.0.0/16 (/24 par nœud), `k8sServiceHost: k8s-api.par1.medisphere.internal`, `k8sServicePort: 8443`, `kubeProxyReplacement: false`, Hubble relay activé ; kube-proxy en mode `iptables` ; metrics-server ; Helm 4.3, cilium et hubble CLI sur `adm01` |
 | Mode réseau de Cilium | tunnel **VXLAN** (défaut : `routingMode: tunnel`, `tunnelProtocol: vxlan`, UDP 8472) ; la comparaison avec le routage natif est l'objet de M15-E29 |
 | Espaces de noms | `wb-essais` (essais, PSA `baseline`), `mediagenda-dev`, `mediagenda-recette` (PSA `restricted`), `medidoc-dev` (M14-E33) ; créés dans ce module : `passerelles` (Gateway principale), `cert-manager`, `external-dns` |
 | Images d'essai | par le cache Harbor : `registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16` (sondes réseau), `registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.66.1` (application `echo`) |
 | Projet `plateforme/k8s` | clone `~/src/k8s` ; `composants/cilium/values.yaml`, `composants/coredns/`, `composants/gateway-api/` (palier 1), puis `composants/cert-manager/`, `composants/external-dns/`, `composants/reseau/` ; `cluster/kubeadm-config.yaml` |
-| Documentation | `plateforme/medisphere` (clone `~/medisphere`) : `docs/kubernetes/reseau/` (fiches du palier 1 : `chemin-paquet.md`, `dns-du-cluster.md`, `hubble.md`), ADR-0150, runbooks RB-150 (service injoignable), RB-151 (certificat non délivré), RB-152 (BGP), `matrice-flux-cluster.md` ; `docs/kubernetes/changements/` (fiches CHG) |
+| Documentation | `plateforme/medisphere` (clone `~/medisphere`) : `docs/kubernetes/reseau/` (fiches du palier 1 : `chemin-paquet.md`, `dns-du-cluster.md`, `hubble.md`), ADR-0150, runbooks `runbooks/RB-150` (service injoignable), `RB-151` (certificat non délivré), `RB-152` (BGP), `RB-153` (mise à jour de Cilium), `matrice-flux-cluster.md` ; `docs/kubernetes/changements/` (fiches CHG) |
 | Tickets | PLAT-16xx, SEC-16xx, DEV-16xx, CHG-16xx, INC-42xx |
 | Brouillons | `~/m15/eXX/` sur `adm01` (non versionnés, sans secret) |
 
@@ -164,7 +164,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-Le palier 1 n'ajoute aucune variable : il utilise celles du module 14 (`WB_K8S_KUBECONFIG`, `WB_K8S_ADMIN_KUBECONFIG`, `WB_K8S_CP`, `WB_K8S_WORKERS`), `WB_SRC` et les jetons en lecture de GitLab. Les vérifications lisent le cluster avec le compte de service `wb-checks` (lecture seule, sans accès aux Secrets) et les nœuds en SSH (`admin`, `sudo -n` pour lire les règles du noyau).
+Le module n'ajoute que des variables facultatives : `WB_M15_ESSAI_KUBECONFIG` (kubeconfig de `m15-essai`, défaut `~/.kube/m15-essai.conf`, E19) et `WB_M15_IMAGE_SONDE` (image des témoins du palier 4, défaut netshoot v0.16 du cache Harbor). Le palier 1 n'en ajoute aucune : il utilise celles du module 14 (`WB_K8S_KUBECONFIG`, `WB_K8S_ADMIN_KUBECONFIG`, `WB_K8S_CP`, `WB_K8S_WORKERS`), `WB_SRC` et les jetons en lecture de GitLab. Les vérifications lisent le cluster avec le compte de service `wb-checks` (lecture seule, sans accès aux Secrets ; M15-E07 lui ajoute la lecture des objets de la Gateway API et de cert-manager par une ClusterRole agrégée, `wb-checks-reseau`) et les nœuds en SSH (`admin`, `sudo -n` pour lire les règles du noyau).
 
 ---
 

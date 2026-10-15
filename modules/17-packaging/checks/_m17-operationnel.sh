@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
 # _m17-operationnel.sh — fonctions des vérifications du palier 2 du module 17 (check-E06 à E12).
 # Reprend celles du palier 1 (_m17-decouverte.sh) et ajoute les lectures propres au palier.
 # LECTURE SEULE. Préfixe _m17o_.

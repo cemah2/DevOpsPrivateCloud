@@ -21,7 +21,7 @@ client ──DNS──▶ récurseurs dns01/dns02 ──▶ zone apps (dns01 pri
 
 ## Publier une application (équipe applicative)
 
-1. **Espace autorisé** : l'espace doit porter l'étiquette `medisphere.fr/exposition: oui`. Elle est posée par la plateforme (MR sur `plateforme/k8s`, `espaces/`), pas par l'équipe.
+1. **Espace autorisé** : l'espace doit porter l'étiquette `medisphere.internal/exposition: oui`. Elle est posée par la plateforme (MR sur `plateforme/k8s`, `espaces/`), pas par l'équipe.
 2. **Route** dans ton espace :
    ```yaml
    apiVersion: gateway.networking.k8s.io/v1

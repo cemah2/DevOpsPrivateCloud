@@ -13,17 +13,17 @@ title "M13-E09 — La chaîne de livraison d'une image"
 require_cmd jq cosign
 
 _m13_api_p="projects/mediagenda%2Fapi"
-_m13_tpl="$(_m13d_contenu_main "$_M13D_CITPL" supply-chain.yml)"
+_m13_tpl="$(_m13d_contenu_main "$_M13D_CITPL" templates/supply-chain.yml)"
 
 # --- Gabarit -----------------------------------------------------------------------------------------
-check_cmd "plateforme/ci-templates (main) : supply-chain.yml présent" test -n "$_m13_tpl"
+check_cmd "plateforme/ci-templates (main) : templates/supply-chain.yml présent" test -n "$_m13_tpl"
 _m13_images_harbor() {
-  # Toute valeur d'image (clé image:, name:, variable *_IMAGE:) littérale désigne Harbor, avec empreinte.
+  # Toute valeur d'image (clé image:, name:, variable IMAGE_* ou *_IMAGE) littérale désigne Harbor, avec empreinte.
   local l n=0
   while IFS= read -r l; do
     n=$((n + 1))
     [[ "$l" == "$_M13D_NOM/"*"@sha256:"* ]] || return 1
-  done < <(grep -Eo '^[[:space:]]*(image|name|[A-Z_]*IMAGE)[[:space:]]*:[[:space:]]*["'"'"']?[^ "'"'"'$#[][^ "'"'"']*' <<<"$_m13_tpl" \
+  done < <(grep -Eo '^[[:space:]]*(image|name|[A-Z_]*IMAGE[A-Z_]*)[[:space:]]*:[[:space:]]*["'"'"']?[^ "'"'"'$#[][^ "'"'"']*' <<<"$_m13_tpl" \
              | sed -E 's/^[^:]*:[[:space:]]*["'"'"']?//')
   (( n >= 1 ))
 }
@@ -41,7 +41,7 @@ check_cmd "plateforme/ci-templates : au moins une étiquette (référence éping
 # --- Client mediagenda/api ------------------------------------------------------------------------------
 _m13_ci="$(_m13d_contenu_main "$_m13_api_p" .gitlab-ci.yml)"
 _m13_inclusion() {
-  grep -q 'plateforme/ci-templates' <<<"$_m13_ci" && grep -q 'supply-chain.yml' <<<"$_m13_ci" \
+  grep -q 'plateforme/ci-templates' <<<"$_m13_ci" && grep -q 'templates/supply-chain.yml' <<<"$_m13_ci" \
     && grep -Eq '^[[:space:]]*ref:[[:space:]]*["'"'"']?v[0-9]+\.[0-9]+' <<<"$_m13_ci"
 }
 check_cmd "mediagenda/api (main) : inclut supply-chain.yml par une étiquette épinglée" _m13_inclusion

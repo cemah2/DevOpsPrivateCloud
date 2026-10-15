@@ -31,7 +31,7 @@
 
 | Clé | Où | Qui y accède |
 |---|---|---|
-| KEK `ceph-rbd-chiffre` | Ansible Vault `critique` (`plateforme/k8s`, `secrets/ceph-csi.vault.yml`, variable `ceph_csi_rbd_kek`) ; copie hors ligne (enveloppe au coffre) ; Secret `ceph-csi/csi-rbd-secret-chiffre` | équipe Plateforme (Vault `critique`) ; pods ceph-csi ; administrateurs Kubernetes |
+| KEK `ceph-rbd-chiffre` | Ansible Vault `critique` (`plateforme/k8s`, `secrets/ceph-csi.yml`, variable `ceph_csi_rbd_kek`) ; copie hors ligne (enveloppe au coffre) ; Secret `ceph-csi/csi-rbd-secret-chiffre` | équipe Plateforme (Vault `critique`) ; pods ceph-csi ; administrateurs Kubernetes |
 | DEK de chaque volume | métadonnée `rbd.csi.ceph.com/dek` de l'image, **enveloppée** par la KEK | personne en clair hors des pods ceph-csi |
 | Clé `client.k8s` | Ansible Vault `critique` ; Secrets `csi-rbd-secret`, `csi-rbd-secret-chiffre`, `csi-cephfs-secret` | équipe Plateforme ; pods ceph-csi |
 | Mot de passe du dépôt Kopia de Velero | Secret de Velero (E16) ; Ansible Vault | équipe Plateforme |

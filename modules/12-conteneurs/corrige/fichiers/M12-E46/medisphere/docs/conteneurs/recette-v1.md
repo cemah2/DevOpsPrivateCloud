@@ -27,4 +27,4 @@
 ## Environnement
 
 - `ctr02`, `ctr03`, `legacy01` détruites par OpenTofu (état `m12-conteneurs`) le <date> ; objets NetBox et DNS retirés.
-- `ctr01` : <détruite le … | **conservée** jusqu'à M13-E02 (migration des images vers Harbor), `WB_M12_CTR01_CONSERVE=1>`.
+- `ctr01` : <détruite le … | **conservée** jusqu'à la fin de M13-E03 (migration des images vers Harbor), `WB_M12_CTR01_CONSERVE=1>`.

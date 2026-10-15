@@ -1,4 +1,4 @@
-# /etc/systemd/system/ms-verif-registre.timer — M13-E16 (CHG-1434)
+# /etc/systemd/system/ms-verif-registre.timer — M13-E16 (CHG-1416)
 [Unit]
 Description=MédiSphère : sonde du registre Harbor toutes les 5 minutes
 

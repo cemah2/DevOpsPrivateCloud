@@ -1,4 +1,4 @@
-# images-autorisees.txt — images qu'un FROM peut référencer à MédiSphère (M12-E27, PLAT-1353).
+# images-autorisees.txt — images qu'un FROM peut référencer à MédiSphère (M12-E27, PLAT-1327).
 # Lu par outils/verifier-from.sh (job « images-autorisees » de plateforme/ci-templates).
 # Format : un motif par ligne (glob du shell, appliqué à la référence COMPLÈTE après résolution des
 # ARG), puis « | » et la consigne affichée quand une image n'est PAS autorisée. Lignes « # » ignorées.

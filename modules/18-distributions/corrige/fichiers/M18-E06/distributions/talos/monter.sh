@@ -12,7 +12,7 @@ set -euo pipefail
 
 ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export TALOSCONFIG="${TALOSCONFIG:-$HOME/.config/workbook/m18/talosconfig}"
-# shellcheck source=versions.env
+# shellcheck source-path=SCRIPTDIR source=versions.env
 source "$ICI/versions.env"
 
 quoi="${1:?usage : $0 talos|kubernetes [--essai]}"

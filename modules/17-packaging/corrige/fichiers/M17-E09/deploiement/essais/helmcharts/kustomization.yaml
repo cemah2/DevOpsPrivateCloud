@@ -1,4 +1,4 @@
-# Essai (M17-E09, étape 7) : le même overlay de recette, mais en gonflant le chart par Kustomize
+# Essai (M17-E09, étape 8) : le même overlay de recette, mais en gonflant le chart par Kustomize
 # (helmCharts) au lieu du rendu commité. Construire avec :
 #   kustomize build --enable-helm essais/helmcharts
 # et comparer avec « kustomize build overlays/recette » (voir le corrigé : ce qui diffère, et pourquoi

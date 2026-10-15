@@ -1,10 +1,10 @@
 # plateforme/ci-templates — .gitlab-ci.yml : EXTRAIT (M13-E09). Construit et publie l'image outillée
-# avec SA PROPRE chaîne (supply-chain.yml du même dépôt, inclus en local). La toute première version
-# (1.0.0) n'a pas d'image outillée pour se construire : construis-la avec image.yml (M12-E21), pousse-la
+# avec SA PROPRE chaîne (templates/supply-chain.yml du même dépôt, inclus en local). La toute première version
+# (1.0.0) n'a pas d'image outillée pour se construire : construis-la avec templates/image.yml (M12-E21), pousse-la
 # dans le projet « plateforme » avec ton compte, signe-la à la main (outils/signer-image.sh), reporte
 # son empreinte dans SC_OUTILS_IMAGE, puis laisse ce job publier 1.0.1 par la chaîne.
 include:
-  - local: supply-chain.yml
+  - local: templates/supply-chain.yml
 
 variables:
   SC_IMAGE_NOM: plateforme/outils-supply-chain

@@ -9,14 +9,14 @@ services:
     # CNT-PUB-02 : version immuable, jamais « latest » ; le nom complet du registre (CNT-IMG-03).
     image: ctr01.par1.medisphere.internal:5000/mediagenda/annuaire:${ANNUAIRE_TAG:-1.0.0}
     # CNT-RUN-02 à 05 : non root, aucune capacité, pas d'élévation, racine en lecture seule.
-    user: "10002:10002"
+    user: "10003:10003"
     read_only: true
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
     tmpfs:
       # Le cache de l'index doit être inscriptible (README) : tmpfs borné, appartenant à l'UID du service.
-      - /var/cache/mediannuaire:size=8m,mode=0700,uid=10002,gid=10002,noexec,nosuid,nodev
+      - /var/cache/mediannuaire:size=8m,mode=0700,uid=10003,gid=10003,noexec,nosuid,nodev
     environment:
       MEDIANNUAIRE_DONNEES: /donnees/praticiens.csv
       # CNT-RUN-07 : le secret est un FICHIER monté, pas une variable visible dans « docker inspect ».
@@ -26,7 +26,7 @@ services:
     volumes:
       - ./donnees:/donnees:ro
     ports:
-      - "8090:8080"
+      - "8095:8080"
     # CNT-RUN-08 : limites (E18).
     mem_limit: 128m
     cpus: 0.5

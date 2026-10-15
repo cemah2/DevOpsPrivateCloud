@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# outils/sbom-recherche.sh — plateforme/outils (M13-E18, SEC-1436). Réponse à une alerte : « qui
+# outils/sbom-recherche.sh — plateforme/outils (M13-E18, SEC-1418). Réponse à une alerte : « qui
 # contient ce paquet, dans quelle version ? », à partir des SBOM ATTESTÉES (signées par la clé de la CI)
 # des images en service, sans relire le code ni réanalyser les images.
 #

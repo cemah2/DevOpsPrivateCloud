@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 — 2026-10 (M12-E28, ticket PLAT-1354) |
+| **Version** | 1.0 — 2026-10 (M12-E28, ticket PLAT-1328) |
 | **Propriétaire** | Équipe Plateforme ; astreinte : Nadia Roussel |
 
 ## Aujourd'hui (avant le module 21)

@@ -10,7 +10,7 @@ HostName=medinotif-rabbitmq
 Volume=medinotif-rabbitmq.volume:/var/lib/rabbitmq
 Environment=RABBITMQ_DEFAULT_USER=medinotif
 Secret=rabbitmq-mdp,type=env,target=RABBITMQ_DEFAULT_PASS
-HealthCmd=rabbitmq-diagnostics -q ping
+HealthCmd=["rabbitmq-diagnostics", "-q", "ping"]
 HealthInterval=20s
 HealthStartPeriod=40s
 Notify=healthy

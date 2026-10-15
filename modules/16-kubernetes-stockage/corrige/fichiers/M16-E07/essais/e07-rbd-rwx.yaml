@@ -8,7 +8,7 @@ metadata:
   name: e07-rbd-rwx
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e07
+    medisphere.internal/exercice: m16-e07
 spec:
   storageClassName: ceph-rbd
   accessModes: ["ReadWriteMany"]

@@ -18,6 +18,15 @@ tests:
             namespace: passerelles
             sectionName: https
 
+  - it: vise le Service sur le port 80, comme les routes du M15
+    template: httproute.yaml
+    asserts:
+      - equal:
+          path: spec.rules[0].backendRefs[0]
+          value:
+            name: mediagenda
+            port: 80
+
   - it: accepte un nom publié imposé (prod)
     template: httproute.yaml
     set:

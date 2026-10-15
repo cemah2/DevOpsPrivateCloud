@@ -22,7 +22,7 @@ metadata:
   labels:
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/warn: baseline
-    medisphere.fr/usage: mesure
+    medisphere.internal/usage: mesure
 ---
 apiVersion: v1
 kind: Pod

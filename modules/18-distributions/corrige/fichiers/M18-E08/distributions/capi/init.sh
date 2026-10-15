@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=versions.env
+# shellcheck source-path=SCRIPTDIR source=versions.env
 source "$ICI/versions.env"
 
 kubeconfig="${1:?usage : $0 <kubeconfig> proxmox|docker}"

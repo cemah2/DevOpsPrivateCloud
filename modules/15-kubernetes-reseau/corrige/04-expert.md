@@ -43,7 +43,7 @@ Les sorties reproduites sont **représentatives** : noms de pods, identités, ad
 5. **Corriger à la racine, puis faire converger le code.** Une correction à chaud qui n'est pas dans `plateforme/k8s` ou `plateforme/ansible` sera défaite ; une cause présente dans le dépôt reviendra au prochain `task appliquer`.
 6. **Prévenir** : quel contrôle de `ms-verif-k8s-reseau`, quelle règle de pipeline (`kubeconform`, test de politiques), quelle métrique (M21) aurait vu la panne avant l'utilisateur ?
 
-Deux scripts automatisent l'étape 4 : `outils/derive-reseau.sh` de M15-E23 ([fichier](fichiers/M15-E23/k8s/outils/derive-reseau.sh)) pour le cluster (manifestes, values Helm, étiquettes) et [`derive-bordure-noeuds.sh`](fichiers/M15-E43/plateforme-k8s/outils/derive-bordure-noeuds.sh), écrit pour ce palier, pour ce que le premier ne voit pas (configuration courante de FRR, pare-feu des nœuds). Planifiés ensemble, ils sont l'outil de prévention commun du palier.
+Deux scripts automatisent l'étape 4 : `outils/derive-reseau.sh` de M15-E23 ([fichier](fichiers/M15-E23/k8s/outils/derive-reseau.sh)) pour le cluster (manifestes, values Helm, étiquettes) et [`derive-bordure-noeuds.sh`](fichiers/M15-E43/k8s/outils/derive-bordure-noeuds.sh), écrit pour ce palier, pour ce que le premier ne voit pas (configuration courante de FRR, pare-feu des nœuds). Planifiés ensemble, ils sont l'outil de prévention commun du palier.
 
 ---
 
@@ -84,7 +84,7 @@ admin@adm01:~$ kubectl -n mediagenda-recette get httproute mediagenda -o jsonpat
 ```
 admin@adm01:~$ kubectl -n mediagenda-recette get svc mediagenda-api -o wide
 NAME             TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE   SELECTOR
-mediagenda-api   ClusterIP   10.96.41.187   <none>        8000/TCP  12d   app.kubernetes.io/name=mediagenda-api-v2   # v1
+mediagenda-api   ClusterIP   10.96.41.187   <none>        80/TCP    12d   app.kubernetes.io/name=mediagenda-api-v2   # v1
 admin@adm01:~$ kubectl -n mediagenda-recette get endpointslices -l kubernetes.io/service-name=mediagenda-api
 NAME                   ADDRESSTYPE   PORTS     ENDPOINTS   AGE
 mediagenda-api-x7kq2   IPv4          <unset>   <unset>     12d        # v1 : vide
@@ -94,7 +94,7 @@ admin@adm01:~$ kubectl -n mediagenda-recette get pod <pod> -o jsonpath='{.spec.c
 [{"containerPort":8000,"name":"http","protocol":"TCP"}]
 ```
 
-(Nom et port de la route du corrigé de M15-E12 : Service `mediagenda-api`, port 8000 ; adapte aux tiens.)
+(Nom et port de la route du corrigé de M15-E12 : Service `mediagenda-api`, port 80, `targetPort: http` → 8000 du conteneur, comme au M14.)
 
 **Étape 4 — Vérifier de l'intérieur, sans la Gateway.**
 
@@ -107,7 +107,7 @@ Ce test est **jeté** par les politiques (la sortie des témoins est limitée à
 ```
 admin@adm01:~$ kubectl -n mediagenda-recette port-forward pod/<pod> 18000:8000 &
 admin@adm01:~$ curl -s localhost:18000/pret        # 200 : l'application est saine
-admin@adm01:~$ kubectl -n mediagenda-recette port-forward svc/mediagenda-api 18001:8000 &
+admin@adm01:~$ kubectl -n mediagenda-recette port-forward svc/mediagenda-api 18001:80 &
 admin@adm01:~$ curl -s localhost:18001/pret        # v1 : kubectl ne trouve aucun pod pour le sélecteur ; v2 : kubectl journalise « connection refused » sur le port 8080 du pod
 ```
 
@@ -115,11 +115,11 @@ Et ce que Cilium a programmé :
 
 ```
 admin@adm01:~$ kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg service list | grep 10.96.41.187
-42   10.96.41.187:8000    ClusterIP                                       # v1 : aucun backend
-42   10.96.41.187:8000    ClusterIP      1 => 10.240.3.17:8080 (active)   # v2
+42   10.96.41.187:80      ClusterIP                                       # v1 : aucun backend
+42   10.96.41.187:80      ClusterIP      1 => 10.240.3.17:8080 (active)   # v2
 ```
 
-**Variante 1 — sélecteur du Service modifié.** Le sélecteur porte `…-v2` : aucun pod ne correspond, l'EndpointSlice est vide, Envoy n'a aucune destination. **Variante 2 — `targetPort` à 8080.** Les points de terminaison existent, mais MédiAgenda écoute sur 8000 : refus de connexion. **Variante 3 — `port` du Service changé.** La route vise le port 8000 d'un Service qui n'expose plus que le port 80 : la référence ne se résout pas, la Gateway renvoie 500 (comportement imposé par la spécification pour un `backendRefs` invalide).
+**Variante 1 — sélecteur du Service modifié.** Le sélecteur porte `…-v2` : aucun pod ne correspond, l'EndpointSlice est vide, Envoy n'a aucune destination. **Variante 2 — `targetPort` à 8080.** Les points de terminaison existent, mais MédiAgenda écoute sur 8000 : refus de connexion. **Variante 3 — `port` du Service changé.** La route vise le port 80 d'un Service qui n'expose plus que le port 8000 : la référence ne se résout pas, la Gateway renvoie 500 (comportement imposé par la spécification pour un `backendRefs` invalide).
 
 **Qui l'a fait ?**
 
@@ -128,12 +128,12 @@ admin@adm01:~$ kubectl -n mediagenda-recette get svc mediagenda-api -o yaml --sh
   - manager: kubectl-replace            # ou kubectl-edit, kubectl-patch
     operation: Update
     time: "2026-…"
-admin@adm01:~/src/mediagenda-deploiement$ git log -p -- base/   # rien : la modification n'est pas dans le dépôt
+admin@adm01:~/src/mediagenda-api$ git log -p -- k8s/recette/   # rien : la modification n'est pas dans le dépôt
 ```
 
-**Correctif** : remettre le Service conforme au dépôt (`kubectl apply -k overlays/recette` ou `task appliquer`, selon ton organisation M14/M15), jamais l'inverse (adapter les pods au sélecteur fautif). Vérifier : EndpointSlice peuplée, `cilium-dbg service list` avec les bons backends, `/pret` en 200.
+**Correctif** : remettre le Service conforme au dépôt (`kubectl apply -f k8s/recette/40-api.yaml` depuis `~/src/mediagenda-api`, comme au M14-E21), jamais l'inverse (adapter les pods au sélecteur fautif). Vérifier : EndpointSlice peuplée, `cilium-dbg service list` avec les bons backends, `/pret` en 200.
 
-**Prévention** : RB-150 complété ([extrait](fichiers/M15-E35/medisphere/docs/kubernetes/reseau/runbooks/RB-150-extrait-5xx.md)) ; contrôle de cohérence dans le pipeline du dépôt de déploiement (sélecteur ⇔ étiquettes de gabarit, `targetPort` ⇔ `containerPort`, `backendRefs.port` ⇔ `ports[].port`) ; détection de dérive (`derive-reseau.sh`, `kubectl diff`) planifiée ; en M20, GitOps corrigera la dérive de lui-même et la signalera.
+**Prévention** : RB-150 complété ([extrait](fichiers/M15-E35/medisphere/docs/kubernetes/reseau/runbooks/RB-150-extrait-5xx.md)) ; contrôle de cohérence dans le pipeline de `mediagenda/api` (sélecteur ⇔ étiquettes de gabarit, `targetPort` ⇔ `containerPort`, `backendRefs.port` ⇔ `ports[].port`) ; détection de dérive (`derive-reseau.sh`, `kubectl diff`) planifiée ; en M20, GitOps corrigera la dérive de lui-même et la signalera.
 
 **Explications**
 
@@ -238,8 +238,8 @@ La passerelle (VIP `.1` du VLAN 20) ne sert pas de DNS : le bloc `medisphere.int
 
 **Correctif**
 - V1 : Corefile du dépôt réappliqué (`task appliquer` ou la cible de `composants/coredns/`), attendre le rechargement (journal `[INFO] Reloading` puis `Reloading complete`), vérifier depuis un témoin.
-- V2 : supprimer `interdire-kube-system` **après avoir prévenu Sophie** (c'est une demande de sécurité légitime mal traduite), puis lui proposer la bonne formulation : un refus vers `kube-system` **sauf** le DNS est impossible à écrire avec un `egressDeny` (un refus ne connaît pas d'exception) ; la bonne réponse est l'absence d'autorisation : le `default-deny` de l'espace interdit déjà tout `kube-system` sauf ce que E17 autorise (DNS). La demande SEC-1612 était donc **déjà satisfaite** ; à documenter dans la matrice des flux du cluster.
-- V3 : `dnsPolicy` retiré du gabarit (ou `ClusterFirst`) dans le dépôt de déploiement, réappliqué ; le déploiement se termine.
+- V2 : supprimer `interdire-kube-system` **après avoir prévenu Sophie** (c'est une demande de sécurité légitime mal traduite), puis lui proposer la bonne formulation : un refus vers `kube-system` **sauf** le DNS est impossible à écrire avec un `egressDeny` (un refus ne connaît pas d'exception) ; la bonne réponse est l'absence d'autorisation : le `refus-par-defaut` de l'espace interdit déjà tout `kube-system` sauf ce que E17 autorise (DNS). La demande SEC-1612 était donc **déjà satisfaite** ; à documenter dans la matrice des flux du cluster.
+- V3 : `dnsPolicy` retiré du gabarit (ou `ClusterFirst`) dans `mediagenda/api` (`k8s/recette/`), réappliqué ; le déploiement se termine.
 
 Dans tous les cas : `kubectl -n mediagenda-recette rollout status deploy/mediagenda-api` se termine, `/pret` répond 200 par la Gateway.
 
@@ -301,25 +301,25 @@ Deny     Ingress     reserved:all                                 ANY          N
 Allow    Egress      k8s:app.kubernetes.io/name=postgresql …      5432/TCP     …                                           # devenue 6432 en v3
 ```
 
-**Variante 1 — `quarantaine`.** Une CNP `ingressDeny: fromEntities: [all]` sur `endpointSelector: {}` : **tout** ce qui entre dans un pod de l'espace est refusé, y compris les sondes du kubelet (entité `host`) ; les pods deviennent non prêts, la Gateway n'a plus de destination. L'annotation dit d'où elle vient (le modèle d'isolement d'incident de Sophie) : elle a été appliquée dans le mauvais espace. **Variante 2 — sélecteur changé.** Une autorisation (celle qui vise l'API) a un `podSelector` (ou `endpointSelector`) suffixé `-v2` : elle ne sélectionne plus rien, elle n'apparaît dans aucun verdict, et le `default-deny` s'applique seul. **Variante 3 — port 6432.** Les règles de port 5432 sont devenues 6432 (« préparation du pooler », qui n'existe pas encore) : l'API ne joint plus PostgreSQL, `/pret` passe en 503, les pods deviennent non prêts.
+**Variante 1 — `quarantaine`.** Une CNP `ingressDeny: fromEntities: [all]` sur `endpointSelector: {}` : **tout** ce qui entre dans un pod de l'espace est refusé, y compris les sondes du kubelet (entité `host`) ; les pods deviennent non prêts, la Gateway n'a plus de destination. L'annotation dit d'où elle vient (le modèle d'isolement d'incident de Sophie) : elle a été appliquée dans le mauvais espace. **Variante 2 — sélecteur changé.** Une autorisation (celle qui vise l'API) a un `podSelector` (ou `endpointSelector`) suffixé `-v2` : elle ne sélectionne plus rien, elle n'apparaît dans aucun verdict, et le `refus-par-defaut` s'applique seul. **Variante 3 — port 6432.** Les règles de port 5432 sont devenues 6432 (« préparation du pooler », qui n'existe pas encore) : l'API ne joint plus PostgreSQL, `/pret` passe en 503, les pods deviennent non prêts.
 
 Les connexions établies tombent elles aussi : Cilium évalue la politique pour chaque paquet qui n'est pas une réponse, pas seulement à l'ouverture (contrairement à ce que beaucoup supposent) ; l'application voit ses connexions à PostgreSQL expirer.
 
 **Correctif**
-- V1 : `kubectl -n mediagenda-recette delete cnp quarantaine` **après** accord de Sophie (c'est un objet de sécurité), puis revue avec elle : le modèle d'isolement doit viser un pod par étiquette (`medisphere.fr/quarantaine: oui`), jamais `{}`, et être posé par une procédure (runbook de réponse à incident, M26).
+- V1 : `kubectl -n mediagenda-recette delete cnp quarantaine` **après** accord de Sophie (c'est un objet de sécurité), puis revue avec elle : le modèle d'isolement doit viser un pod par étiquette (`medisphere.internal/quarantaine: oui`), jamais `{}`, et être posé par une procédure (runbook de réponse à incident, M26).
 - V2 et V3 : réappliquer les politiques du dépôt (`kubectl diff -f` montre l'écart) ; si le dépôt contient l'erreur (MR de Lucas fusionnée), corriger par MR.
 - Vérifier : `hubble observe --namespace mediagenda-recette --verdict DROPPED` ne montre plus que les flux qui doivent être refusés ; `/pret` stable ; le témoin vers l'API toujours refusé.
 
 *Question de l'étape 5* : une NetworkPolicy « tout autoriser » n'aurait rien changé en variante 1 (un refus l'emporte) ; dans tous les cas elle aurait supprimé l'isolement exigé par HDS pour un espace qui porte des données de santé, sans dire quelle règle manquait. On répare la règle, on n'ouvre pas l'espace.
 
-**Prévention** : test de non-régression des politiques dans le pipeline de `plateforme/k8s` (flux attendus et interdits de la matrice, M15-E32) ; alerte sur la hausse brutale des `DROPPED` par espace (métrique Hubble `hubble_drop_total`, M21) ; les politiques de refus et de quarantaine relues par la RSSI ; les étiquettes utilisées par les politiques fixées dans un contrat d'étiquettes (`app.kubernetes.io/name`, `medisphere.fr/role`) que le chart (M17) respecte.
+**Prévention** : test de non-régression des politiques dans le pipeline de `plateforme/k8s` (flux attendus et interdits de la matrice, M15-E32) ; alerte sur la hausse brutale des `DROPPED` par espace (métrique Hubble `hubble_drop_total`, M21) ; les politiques de refus et de quarantaine relues par la RSSI ; les étiquettes utilisées par les politiques fixées dans un contrat d'étiquettes (`app.kubernetes.io/name`, `medisphere.internal/role`) que le chart (M17) respecte.
 
 **Explications**
 
 Le modèle de Kubernetes est **additif** : un pod non sélectionné par aucune politique est ouvert ; dès qu'une politique le sélectionne dans une direction, cette direction devient « tout refuser sauf l'union des autorisations ». Cilium ajoute les refus explicites (`ingressDeny`, `egressDeny`), évalués **avant** les autorisations, et les politiques de cluster. Une politique dont le sélecteur ne correspond à rien est valide et silencieuse : c'est la panne la plus difficile à voir, parce qu'aucun verdict ne la cite ; seule la comparaison « politique → pods sélectionnés » la révèle. Cilium traduit tout en **identités** : les étiquettes du pod (et de son espace) donnent un numéro d'identité, et la table de politique du point de terminaison contient des couples (identité, port, direction).
 
 **Alternatives**
-- Politiques par CNP uniquement (sélecteurs riches, L7, entités) ou par NetworkPolicy standard uniquement (portables, comprises par tous les outils) : MédiSphère garde le `default-deny` en standard (lisible par n'importe quel auditeur et indépendant du CNI) et les règles fines en CNP.
+- Politiques par CNP uniquement (sélecteurs riches, L7, entités) ou par NetworkPolicy standard uniquement (portables, comprises par tous les outils) : MédiSphère garde le `refus-par-defaut` en standard (lisible par n'importe quel auditeur et indépendant du CNI) et les règles fines en CNP.
 - Politiques générées depuis la matrice des flux (un fichier, un générateur) : supprime l'écart entre la documentation et la réalité, au prix d'un outil à maintenir.
 
 **Pièges classiques**
@@ -501,14 +501,14 @@ Error from server (NotFound): secrets "apps-joker-tls" not found
 admin@adm01:~$ kubectl -n mediagenda-recette get httproute mediagenda -o json | jq -c '.status.parents[] | {p: .parentRef.name, c: [.conditions[] | {type,status,reason}]}'
 {"p":"gw-par1","c":[{"type":"Accepted","status":"False","reason":"NotAllowedByListeners"},…]}
 admin@adm01:~$ kubectl -n passerelles get gateway gw-par1 -o jsonpath='{.spec.listeners[?(@.name=="https")].allowedRoutes}'
-{"namespaces":{"from":"Selector","selector":{"matchLabels":{"medisphere.fr/exposition":"oui"}}}}
+{"namespaces":{"from":"Selector","selector":{"matchLabels":{"medisphere.internal/exposition":"oui"}}}}
 admin@adm01:~$ kubectl get ns mediagenda-recette --show-labels
 NAME                 STATUS   AGE   LABELS
 mediagenda-recette   Active   30d   kubernetes.io/metadata.name=mediagenda-recette,pod-security.kubernetes.io/enforce=restricted,…   # plus d'étiquette d'exposition
 admin@adm01:~$ kubectl get ns mediagenda-recette -o yaml --show-managed-fields | grep -B3 -A8 'manager: kubectl-'
 ```
 
-L'espace a perdu `medisphere.fr/exposition: oui` : l'écouteur n'admet plus ses routes, Envoy n'a pas de route pour ce nom et répond 404 (le certificat joker, lui, est servi). Selon ta configuration d'ExternalDNS, le nom peut aussi disparaître de la zone au cycle suivant (une route non acceptée n'est plus une source) : c'est une conséquence, pas une deuxième panne.
+L'espace a perdu `medisphere.internal/exposition: oui` : l'écouteur n'admet plus ses routes, Envoy n'a pas de route pour ce nom et répond 404 (le certificat joker, lui, est servi). Selon ta configuration d'ExternalDNS, le nom peut aussi disparaître de la zone au cycle suivant (une route non acceptée n'est plus une source) : c'est une conséquence, pas une deuxième panne.
 
 **Correctif** : V1 et V2, réappliquer la Gateway du dépôt (référence au Secret `apps-joker` de `passerelles`) ; V3, réappliquer la définition de l'espace (`plateforme/k8s/espaces/`), ce qui remet l'étiquette. Vérifier : conditions toutes `True`, `attachedRoutes` revenu à sa valeur, `openssl s_client … Verification: OK`, `/sante` en 200, `curl -I http://…` en 301/308, et les autres applications publiées.
 
@@ -771,13 +771,13 @@ defaults: {tunnel-port: "8473"}
 **Étape 3 — Capturer des deux côtés.**
 
 ```
-admin@k8s-w01:~$ sudo tcpdump -ni ens18 -c 5 'udp port 51871 and host 10.10.40.62'
+admin@k8s-w01:~$ sudo tcpdump -ni eth0 -c 5 'udp port 51871 and host 10.10.40.62'
 10:52:01.1 IP 10.10.40.61.51871 > 10.10.40.62.51871: UDP, length 128     # part de w01
-admin@k8s-w02:~$ sudo tcpdump -ni ens18 -c 5 'udp port 51871 and host 10.10.40.61'
+admin@k8s-w02:~$ sudo tcpdump -ni eth0 -c 5 'udp port 51871 and host 10.10.40.61'
 10:52:01.1 IP 10.10.40.61.51871 > 10.10.40.62.51871: UDP, length 128     # arrive sur w02… et n'a jamais de réponse (v1 : jeté après la capture)
 ```
 
-`tcpdump` capture **avant** netfilter : un paquet vu par `tcpdump` puis jamais traité est le signe d'un filtrage local (v1, compteur de la règle `drop` qui monte). En v2, on capture avec `udp port 8472 or udp port 8473` **à l'intérieur** du tunnel chiffré… c'est-à-dire sur `cilium_wg0`, pas sur `ens18` : w02 envoie vers le port 8473 d'un nœud qui écoute sur 8472, et inversement. En v3, rien ne sort de w02 vers les autres nœuds en 51871 : l'interface WireGuard est arrêtée, le trafic chiffré n'a plus de chemin (et Cilium, en mode chiffrement, ne retombe pas en clair).
+`tcpdump` capture **avant** netfilter : un paquet vu par `tcpdump` puis jamais traité est le signe d'un filtrage local (v1, compteur de la règle `drop` qui monte). En v2, on capture avec `udp port 8472 or udp port 8473` **à l'intérieur** du tunnel chiffré… c'est-à-dire sur `cilium_wg0`, pas sur `eth0` : w02 envoie vers le port 8473 d'un nœud qui écoute sur 8472, et inversement. En v3, rien ne sort de w02 vers les autres nœuds en 51871 : l'interface WireGuard est arrêtée, le trafic chiffré n'a plus de chemin (et Cilium, en mode chiffrement, ne retombe pas en clair).
 
 **Variante 1 — pare-feu.** Le « durcissement » d'InfoGér jette les ports « non documentés » : VXLAN et surtout WireGuard (le seul qui passe sur le fil quand le chiffrement est actif). **Variante 2 — surcharge par nœud.** Une `CiliumNodeConfig` d'essai, oubliée, change le port du tunnel sur un seul nœud ; elle ne s'est appliquée qu'au redémarrage de l'agent, ce qui explique le décalage entre la pose et la panne. **Variante 3 — interface arrêtée.** Le script de durcissement a arrêté les interfaces qu'il ne connaissait pas.
 
@@ -791,7 +791,7 @@ admin@k8s-w02:~$ sudo tcpdump -ni ens18 -c 5 'udp port 51871 and host 10.10.40.6
 
 **Explications**
 
-Avec Cilium en tunnel VXLAN et WireGuard, un paquet de pod à pod entre deux nœuds suit : `lxc*` du pod (programme `cil_from_container`) → décision de politique et recherche de l'adresse distante dans l'*ipcache* (identité, nœud de tunnel) → encapsulation VXLAN par `cilium_vxlan` (UDP 8472 vers l'adresse du nœud) → routage vers `cilium_wg0` → chiffrement WireGuard (UDP 51871) → `ens18`. À l'arrivée, l'ordre inverse. Chaque étage peut casser seul, et chacun se prouve par un outil : `cilium-dbg monitor`, `ip -d link`, `tcpdump` sur chaque interface, `nft list ruleset`. La santé de Cilium sonde deux choses distinctes : le **nœud** (adresse du nœud) et un **point de terminaison de santé** (adresse de pod) ; seul le second traverse le tunnel.
+Avec Cilium en tunnel VXLAN et WireGuard, un paquet de pod à pod entre deux nœuds suit : `lxc*` du pod (programme `cil_from_container`) → décision de politique et recherche de l'adresse distante dans l'*ipcache* (identité, nœud de tunnel) → encapsulation VXLAN par `cilium_vxlan` (UDP 8472 vers l'adresse du nœud) → routage vers `cilium_wg0` → chiffrement WireGuard (UDP 51871) → `eth0`. À l'arrivée, l'ordre inverse. Chaque étage peut casser seul, et chacun se prouve par un outil : `cilium-dbg monitor`, `ip -d link`, `tcpdump` sur chaque interface, `nft list ruleset`. La santé de Cilium sonde deux choses distinctes : le **nœud** (adresse du nœud) et un **point de terminaison de santé** (adresse de pod) ; seul le second traverse le tunnel.
 
 **Alternatives**
 - Routage natif (sans tunnel, M15-E29) : supprime VXLAN et son port, mais exige que la bordure (ou les nœuds entre eux) route les adresses de pods ; WireGuard reste possible.
@@ -800,7 +800,7 @@ Avec Cilium en tunnel VXLAN et WireGuard, un paquet de pod à pod entre deux nœ
 **Pièges classiques**
 - Redémarrer tous les agents : la variante 2 s'étend alors au moment où l'agent de w02 redémarre… sans rien corriger, et les variantes 1 et 3 restent.
 - `nft flush ruleset` sur le nœud : efface aussi les règles de Cilium et de kubelet.
-- Capturer sur `ens18` en cherchant du VXLAN alors que le chiffrement est actif : on ne voit que de l'UDP 51871.
+- Capturer sur `eth0` en cherchant du VXLAN alors que le chiffrement est actif : on ne voit que de l'UDP 51871.
 - Conclure « problème réseau de Proxmox » parce que le ping entre nœuds marche mal pour les gros paquets : vérifier d'abord la MTU de Cilium (pour aller plus loin de l'énoncé).
 
 **En production chez MédiSphère**
@@ -833,7 +833,7 @@ Il n'y a pas une solution, mais une **méthode** ; les causes sont celles de M15
 
 *Pièges propres à l'astreinte* : « réparer » la deuxième panne en croyant réparer la première (redémarrer tous les agents Cilium, supprimer des politiques) ; corriger à chaud sans reporter dans le dépôt, à 2 h du matin, puis oublier ; ne pas relancer les trois tests après chaque correction ; clore sans `lab/bin/break 15 43 --annuler`.
 
-*Post-mortem* : modèle de l'équipe, exemple rédigé dans [`fichiers/M15-E43/medisphere/docs/socle/post-mortems/2026-10-15-INC-4250.md`](fichiers/M15-E43/medisphere/docs/socle/post-mortems/2026-10-15-INC-4250.md) (une combinaison E38 v4 + E42 v1 + E37 v3). Points attendus : chronologie horodatée (détection, triage, chaque hypothèse, chaque correction, retour au nominal) ; trois causes racines **et** une cause commune (trois changements sans ticket, dont deux à chaud hors dépôt) ; détection (la sonde externe a vu la conséquence, rien n'a vu les causes : ni la dérive de configuration, ni `cilium-health`, ni les `DROPPED`) ; actions avec responsable et échéance, dont la détection de dérive planifiée (`derive-reseau.sh` de M15-E23 et [`derive-bordure-noeuds.sh`](fichiers/M15-E43/plateforme-k8s/outils/derive-bordure-noeuds.sh)), les contrôles manquants de `ms-verif-k8s-reseau`, et la règle « aucun changement sans ticket, même pour InfoGér ».
+*Post-mortem* : modèle de l'équipe, exemple rédigé dans [`fichiers/M15-E43/medisphere/docs/socle/post-mortems/2026-10-15-INC-4250.md`](fichiers/M15-E43/medisphere/docs/socle/post-mortems/2026-10-15-INC-4250.md) (une combinaison E38 v4 + E42 v1 + E37 v3). Points attendus : chronologie horodatée (détection, triage, chaque hypothèse, chaque correction, retour au nominal) ; trois causes racines **et** une cause commune (trois changements sans ticket, dont deux à chaud hors dépôt) ; détection (la sonde externe a vu la conséquence, rien n'a vu les causes : ni la dérive de configuration, ni `cilium-health`, ni les `DROPPED`) ; actions avec responsable et échéance, dont la détection de dérive planifiée (`derive-reseau.sh` de M15-E23 et [`derive-bordure-noeuds.sh`](fichiers/M15-E43/k8s/outils/derive-bordure-noeuds.sh)), les contrôles manquants de `ms-verif-k8s-reseau`, et la règle « aucun changement sans ticket, même pour InfoGér ».
 
 **Explications**
 
@@ -841,7 +841,7 @@ Une astreinte multi-causes se gagne par l'ordre et par les instruments : trois p
 
 **Alternatives** : avec deux personnes d'astreinte, l'une prend l'entrée, l'autre le réseau interne (tests de l'intérieur), la coordination passant par le journal d'incident ; avec GitOps (M20), la dérive aurait été corrigée et signalée automatiquement en quelques minutes, ce qui aurait réduit l'incident à une seule cause.
 
-**Pièges classiques** : supprimer `default-deny`, désactiver le chiffrement, basculer la VIP, poser un certificat à la main (tous interdits par le ticket : ils transforment un incident de disponibilité en incident de sécurité) ; un post-mortem qui désigne Lucas ou InfoGér au lieu du processus.
+**Pièges classiques** : supprimer `refus-par-defaut`, désactiver le chiffrement, basculer la VIP, poser un certificat à la main (tous interdits par le ticket : ils transforment un incident de disponibilité en incident de sécurité) ; un post-mortem qui désigne Lucas ou InfoGér au lieu du processus.
 
 **En production chez MédiSphère** : GitOps avec détection de dérive (M20), alertes sur les causes (M21) et pas seulement sur les symptômes, changements tracés et relus pour tous (y compris le prestataire), et répétition d'astreinte trimestrielle sur un environnement de recette.
 
@@ -882,17 +882,17 @@ spec:
       toPorts: [{ports: [{port: "8000", protocol: TCP}]}]
 ```
 
-(Étiquettes de l'API à adapter aux tiennes.) Un témoin joint alors le **Service** sur son port (8000), traduit vers le port 8000 d'un pod.
+(Étiquettes de l'API posées au M14.) Un témoin joint alors le **Service** sur son port (80), traduit vers le port 8000 d'un pod.
 
 **1. Programmes eBPF.**
 
 ```
-admin@adm01:~$ kubectl debug node/k8s-w01 -it --profile=sysadmin --image=registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.13
+admin@adm01:~$ kubectl debug node/k8s-w01 -it --profile=sysadmin --image=registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
 root@k8s-w01:/# chroot /host bpftool net show            # bpftool du nœud (paquet bpftool) ; sinon celui de l'image s'il existe
 xdp:
 tc:
-ens18(2) tcx/ingress cil_from_netdev prog_id 812 link_id 14
-ens18(2) tcx/egress cil_to_netdev prog_id 815 link_id 15
+eth0(2) tcx/ingress cil_from_netdev prog_id 812 link_id 14
+eth0(2) tcx/egress cil_to_netdev prog_id 815 link_id 15
 cilium_net(3) tcx/ingress cil_to_host prog_id 801 …
 cilium_host(4) tcx/ingress cil_to_host prog_id 798 …
 cilium_host(4) tcx/egress cil_from_host prog_id 799 …
@@ -918,13 +918,13 @@ Noyau 6.12 : Cilium s'attache en **tcx** (successeur de tc/cls_bpf) quand il est
 ```
 admin@adm01:~$ kubectl -n kube-system exec cilium-7qz2m -c cilium-agent -- cilium-dbg service list | grep -A2 10.96.41.187
 ID   Frontend            Service Type   Backend
-42   10.96.41.187:8000/TCP ClusterIP    1 => 10.240.3.17:8000/TCP (active)
+42   10.96.41.187:80/TCP   ClusterIP    1 => 10.240.3.17:8000/TCP (active)
                                         2 => 10.240.5.22:8000/TCP (active)
 admin@adm01:~$ kubectl -n kube-system exec cilium-7qz2m -c cilium-agent -- cilium-dbg bpf lb list | grep -A3 10.96.41.187
 SERVICE ADDRESS          BACKEND ADDRESS (REVNAT_ID) (SLOT)
-10.96.41.187:8000/TCP (0)  0.0.0.0:0 (42) (0) [ClusterIP, non-routable]
-10.96.41.187:8000/TCP (1)  10.240.3.17:8000/TCP (42) (1)
-10.96.41.187:8000/TCP (2)  10.240.5.22:8000/TCP (42) (2)
+10.96.41.187:80/TCP (0)  0.0.0.0:0 (42) (0) [ClusterIP, non-routable]
+10.96.41.187:80/TCP (1)  10.240.3.17:8000/TCP (42) (1)
+10.96.41.187:80/TCP (2)  10.240.5.22:8000/TCP (42) (2)
 admin@adm01:~$ kubectl -n mediagenda-recette scale deploy/mediagenda-api --replicas=3   # une troisième ligne apparaît (slot 3), puis --replicas=2
 ```
 
@@ -933,7 +933,7 @@ Le *slot* 0 est l'en-tête du service (nombre de backends, drapeaux) ; chaque *s
 **3. Suivi de connexion et NAT.**
 
 ```
-admin@adm01:~$ kubectl -n wb-pannes exec sonde-4xk2p -- sh -c 'while :; do curl -s -o /dev/null http://10.96.41.187:8000/sante; sleep 1; done' &
+admin@adm01:~$ kubectl -n wb-pannes exec sonde-4xk2p -- sh -c 'while :; do curl -s -o /dev/null http://10.96.41.187/sante; sleep 1; done' &
 admin@adm01:~$ kubectl -n kube-system exec cilium-7qz2m -c cilium-agent -- cilium-dbg bpf ct list global | grep 10.240.3.41 | head -3
 TCP OUT 10.240.3.41:50122 -> 10.240.5.22:8000 expires=21612 Packets=0 Bytes=0 RxFlagsSeen=0x1b … TxFlagsSeen=0x1b … SourceSecurityID=40213 …
 ```
@@ -983,7 +983,7 @@ Puis, entrée retirée (`kubectl delete cnp -n mediagenda-recette e44-temoin-ent
 3. Les adresses changent (pod recréé, nouvelle adresse) et se réutilisent ; une identité dérivée des étiquettes est stable et partagée par tous les pods qui ont les mêmes étiquettes de sécurité (même identité, donc même table de politique, calculée une fois). Au redémarrage d'un pod, seule l'association adresse → identité de l'*ipcache* change, la politique non.
 4. Les tables eBPF sont préallouées à la création (taille fixe connue du vérifieur, mémoire verrouillée) ; table de suivi pleine : les nouvelles connexions ne peuvent plus être suivies et sont jetées (`CT: Map insertion failed`), visible dans `cilium-dbg metrics list` (`cilium_drop_count_total` raison `CT map insertion failed`) et dans `hubble observe --verdict DROPPED`. On dimensionne par `bpf-ct-global-tcp-max` (ou `bpf-map-dynamic-size-ratio`).
 5. Redémarrage de l'agent : oui, les programmes et les tables restent dans le noyau, la connexion continue (observé : la boucle de `curl` ne perd rien). Suppression de la politique : non, la politique est évaluée pour chaque paquet qui n'est pas une réponse, la connexion est coupée au paquet suivant (observé à l'étape 5).
-6. Le paquet est encapsulé par `cilium_vxlan`, puis l'encapsulé est routé vers `cilium_wg0` qui le chiffre : sur `cilium_vxlan` on voit encore le paquet du pod en clair (dans son en-tête VXLAN), sur `ens18` seulement de l'UDP 51871 chiffré.
+6. Le paquet est encapsulé par `cilium_vxlan`, puis l'encapsulé est routé vers `cilium_wg0` qui le chiffre : sur `cilium_vxlan` on voit encore le paquet du pod en clair (dans son en-tête VXLAN), sur `eth0` seulement de l'UDP 51871 chiffré.
 7. XDP traiterait l'équilibrage du Service `LoadBalancer` au plus tôt, dans le pilote, avant l'allocation des tampons : gain réel pour des millions de paquets par seconde. Sur `k8s-par1` : pilote virtio-net (XDP natif possible mais avec contraintes de files et de MTU), un trafic modeste, et un proxy L7 (Envoy) de toute façon sur le chemin de la Gateway : aucun gain mesurable, une complexité de plus. Non activé, écrit dans l'ADR-0150.
 
 **Explications**
@@ -1004,7 +1004,7 @@ Cilium n'est pas une boîte noire : chaque décision a une trace dans une table 
 2. **QCM — b.** Sans backend, Cilium répond immédiatement : le *socket LB* fait échouer le `connect()` (`ECONNREFUSED`), et le chemin tc renvoie un ICMP « destination injoignable » (réglage `serviceNoBackendResponse` du chart, `reject` par défaut, `drop` possible ; à vérifier sur ta version). (a) était le comportement de certaines configurations kube-proxy (paquets jetés silencieusement, attente) ; (c) faux, la ClusterIP n'est routée nulle part hors de la traduction ; (d) faux, le DNS résout le Service indépendamment de ses points de terminaison (sauf Service *headless*, qui ne renvoie alors aucune adresse).
 3. **`externalTrafficPolicy`** : `Cluster` (défaut) : tout nœud qui reçoit le trafic l'envoie à n'importe quel backend (un saut de plus possible), l'adresse source est masquée (SNAT vers le nœud) sauf mode DSR, tous les nœuds sélectionnés annoncent l'adresse ; `Local` : le nœud n'envoie qu'à ses backends locaux, l'adresse source est préservée, **seuls** les nœuds qui ont un backend prêt annoncent la /32 (Cilium retire l'annonce quand le dernier pod local disparaît) ; l'équilibrage se fait par nœud (ECMP de la bordure), donc déséquilibré si les pods sont mal répartis. Pour la Gateway de Cilium, le backend est Envoy (présent sur chaque nœud) : `Local` coûte peu et garde la source jusqu'à Envoy (en-tête `X-Forwarded-For`).
 4. **`ndots:5`** permet à un nom comme `svc.ns.svc` (jusqu'à 4 points, le cas `<svc>.<ns>.svc.cluster` compris) d'être complété par la liste `search` avant d'être tenté tel quel. Coût : un nom externe à moins de 5 points déclenche jusqu'à 3 essais inutiles (`NXDOMAIN`), doublés en A et AAAA. Réduire : écrire les noms externes avec un point final (`s3-01.par1.medisphere.internal.`) ; baisser `ndots` par `dnsConfig.options` pour l'application (2 ou 3 garde `<svc>.<ns>` fonctionnel) ; un cache local (NodeLocal DNSCache) qui absorbe les `NXDOMAIN` (ne réduit pas le nombre de requêtes, mais leur coût).
-5. **CNP en plus de NetworkPolicy** : règles L7 (méthodes et chemins HTTP, Kafka retiré en 1.20, DNS), `toFQDNs`, entités (`host`, `kube-apiserver`, `ingress`, `world`, `cluster`), refus explicites (`*Deny`), politiques à l'échelle du cluster (CCNP), sélection de nœuds (politiques d'hôte), `enableDefaultDeny`, chiffrement mutuel (déprécié en 1.20). Garder le `default-deny` en NetworkPolicy standard : lisible par tout auditeur et tout outil, indépendant du CNI (portable en cas de changement), et c'est l'invariant de sécurité HDS (un objet simple, une seule intention) ; les CNP portent les règles fines.
+5. **CNP en plus de NetworkPolicy** : règles L7 (méthodes et chemins HTTP, Kafka retiré en 1.20, DNS), `toFQDNs`, entités (`host`, `kube-apiserver`, `ingress`, `world`, `cluster`), refus explicites (`*Deny`), politiques à l'échelle du cluster (CCNP), sélection de nœuds (politiques d'hôte), `enableDefaultDeny`, chiffrement mutuel (déprécié en 1.20). Garder le `refus-par-defaut` en NetworkPolicy standard : lisible par tout auditeur et tout outil, indépendant du CNI (portable en cas de changement), et c'est l'invariant de sécurité HDS (un objet simple, une seule intention) ; les CNP portent les règles fines.
 6. **QCM — b.** Dans Cilium, un refus correspondant à un flux l'emporte toujours sur une autorisation, quel que soit le type de politique ou l'ordre de création. (a) et (c) faux (aucune priorité par type ni par ordre) ; (d) faux : `enableDefaultDeny` règle le comportement *par défaut* d'un point de terminaison sélectionné, pas l'effet d'un refus explicite.
 7. **`toFQDNs`** : la règle DNS L7 (`toPorts.rules.dns`) fait passer les requêtes DNS du pod par le proxy DNS de l'agent, qui apprend les réponses (nom → adresses) et crée des identités de CIDR pour ces adresses, autorisées ensuite par la règle `toFQDNs`. Sans règle DNS L7, le proxy ne voit pas les réponses : aucune adresse n'est apprise, tout est refusé. TTL très court : Cilium garde les adresses au moins `tofqdns-min-ttl` (et les connexions établies vivantes), sinon une adresse expirerait entre la résolution et la connexion ; un service à adresses tournantes peut remplir le cache (`tofqdns-endpoint-max-ip-per-hostname`).
 8. **LB IPAM et BGP** : l'**opérateur** Cilium (LB IPAM) attribue l'adresse depuis un pool ; le `CiliumBGPClusterConfig` (sélecteur) et l'`externalTrafficPolicy` décident quels nœuds l'annoncent ; la bordure installe une /32 avec trois prochains sauts (ECMP, hachage par flux). Perte d'un nœud : la bordure s'en aperçoit à l'expiration du temps de maintien (ou par BFD), ou plus tard si le redémarrage gracieux garde les routes ; perte d'un pod : avec `Local`, l'agent retire l'annonce immédiatement (un UPDATE de retrait), convergence en secondes ; avec `Cluster`, rien ne change côté BGP.

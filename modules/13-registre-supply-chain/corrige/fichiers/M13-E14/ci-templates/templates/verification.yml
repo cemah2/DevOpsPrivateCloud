@@ -1,0 +1,67 @@
+# templates/verification.yml — vérification d'une image par son CONSOMMATEUR (M13-E14, SEC-1414).
+#
+# Inclusion (référence épinglée, comme templates/supply-chain.yml) :
+#   include:
+#     - project: plateforme/ci-templates
+#       ref: v1.<Y>.<Z>
+#       file: [templates/supply-chain.yml, templates/verification.yml]
+#   verifier-signature:
+#     extends: .verifier-signature
+#     needs: [sc:publication, sc:signature]      # SC_REF arrive par le rapport dotenv de sc:publication
+#
+# Le job caché .verifier-signature vérifie, pour UNE image désignée par son digest :
+#   1. une signature Cosign produite par la clé MédiSphère ;
+#   2. une attestation SBOM SPDX signée par la même clé ;
+# sans journal de transparence (lab sans Rekor, ADR-0130), et échoue sinon. Il ne fait confiance ni à
+# l'étiquette, ni à la politique de Harbor (qui vérifie la présence d'une signature, pas son auteur).
+#
+# Entrées :
+#   IMAGE_REF          image par digest : registry.par1.medisphere.internal/<projet>/<dépôt>@sha256:…
+#                      (une étiquette est refusée) ; par défaut SC_REF, sortie de sc:publication
+#   COSIGN_PUB         chemin de la clé publique : par défaut celle embarquée dans l'image outillée
+#                      (/etc/medisphere/cosign.pub, copie de docs/registre/cosign.pub) ; un consommateur
+#                      peut passer une variable de type FICHIER, son empreinte est contrôlée quand même
+#   COSIGN_PUB_SHA256  empreinte attendue de cette clé (épinglée ci-dessous, changée par MR à la rotation)
+# Identité registre : HARBOR_ROBOT_USER / HARBOR_ROBOT_TOKEN (lecture suffit).
+
+variables:
+  # Image outillée de la chaîne de livraison (M13-E09 : cosign, jq, clé publique), étiquette et digest.
+  MS_IMAGE_OUTILS: "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.0@sha256:<EMPREINTE>"   # même valeur que SC_OUTILS_IMAGE
+  COSIGN_PUB: /etc/medisphere/cosign.pub
+  COSIGN_PUB_SHA256: "<SHA256-DE-docs/registre/cosign.pub>"
+
+.verifier-signature:
+  stage: verification
+  image: $MS_IMAGE_OUTILS
+  tags: [docker]
+  variables:
+    GIT_STRATEGY: none
+  # Mêmes règles que la publication de templates/supply-chain.yml : pas de job (ni de « needs » vers
+  # sc:publication, absent) dans les pipelines de MR.
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - |
+      set -euo pipefail
+      IMAGE_REF="${IMAGE_REF:-${SC_REF:-}}"
+      case "${IMAGE_REF:-}" in
+        *@sha256:*) ;;
+        *) echo "IMAGE_REF doit désigner l'image par son digest (reçu : '${IMAGE_REF:-}')" >&2; exit 1 ;;
+      esac
+      echo "${COSIGN_PUB_SHA256}  ${COSIGN_PUB}" | sha256sum -c --quiet - \
+        || { echo "la clé publique fournie n'est pas celle de MédiSphère (empreinte)" >&2; exit 1; }
+      # Authentification du registre pour cosign, sans secret en argument ni dans le journal.
+      export DOCKER_CONFIG="$(mktemp -d)"
+      printf '%s' "$HARBOR_ROBOT_TOKEN" | cosign login registry.par1.medisphere.internal \
+        -u "$HARBOR_ROBOT_USER" --password-stdin >/dev/null
+      cosign verify --key "$COSIGN_PUB" --insecure-ignore-tlog=true "$IMAGE_REF" > signature.json
+      cosign verify-attestation --key "$COSIGN_PUB" --insecure-ignore-tlog=true \
+        --type spdxjson "$IMAGE_REF" > attestation.json
+      jq -r '.payload | @base64d | fromjson | .predicate.packages | length' attestation.json \
+        | awk '{ if ($1 + 0 < 1) { print "SBOM attestée vide" > "/dev/stderr"; exit 1 } else print "SBOM attestée :", $1, "paquets" }'
+      echo "Signature et SBOM vérifiées pour $IMAGE_REF"
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths: [signature.json, attestation.json]

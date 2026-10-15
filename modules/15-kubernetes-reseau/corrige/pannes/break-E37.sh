@@ -45,7 +45,7 @@ metadata:
   name: $_E37_CNP
   namespace: $_M15_NS_APP
   annotations:
-    medisphere.fr/demande: "modèle d'isolement d'incident (SEC-1620)"
+    medisphere.internal/demande: "modèle d'isolement d'incident (SEC-1620)"
 spec:
   endpointSelector: {}
   ingressDeny:

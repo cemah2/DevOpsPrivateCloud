@@ -8,7 +8,7 @@ sur ta version) :
 
     app@ctr02:~$ install -d -m 700 ~/.config/containers
     app@ctr02:~$ podman login --authfile ~/.config/containers/auth.json ctr01.par1.medisphere.internal:5000 \
-        --username plateforme --password-stdin < <MOT-DE-PASSE-DU-COMPTE-DE-LECTURE>
+        --username plateforme --password-stdin < <MOT-DE-PASSE-DU-COMPTE-PLATEFORME>
     app@ctr02:~$ chmod 600 ~/.config/containers/auth.json
 
 Le mot de passe vient du Vault (`vault_registre_travail_mdp_plateforme`, M12-E15) ; le fichier est

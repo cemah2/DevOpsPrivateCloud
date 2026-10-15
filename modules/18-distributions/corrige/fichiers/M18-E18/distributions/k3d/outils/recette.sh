@@ -55,7 +55,7 @@ creer() {
 
   expiration="$(date -d tomorrow +%F)"
   kubectl create namespace mediagenda-recette --dry-run=client -o yaml \
-    | kubectl label --local -f - -o yaml medisphere.fr/proprietaire=mediagenda "medisphere.fr/expiration=$expiration" \
+    | kubectl label --local -f - -o yaml medisphere.internal/proprietaire=mediagenda "medisphere.internal/expiration=$expiration" \
     | kubectl apply -f -
   "$src/k8s/outils/secret-tirage.sh" mediagenda-recette     # Secret harbor-pull (M14-E19), depuis harbor-k8s-pull.env
 

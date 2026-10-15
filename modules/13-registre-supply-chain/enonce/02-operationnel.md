@@ -184,19 +184,20 @@ Dans l'index produit par BuildKit, le manifeste d'attestation porte les annotati
 - Faire de chaque étape un contrôle bloquant qui porte sur une empreinte, et propager l'empreinte d'étape en étape.
 - Protéger les secrets de publication et de signature (robot, clé) dans la CI.
 
-**Prérequis** : M13-E04 à M13-E08 ; M12-E21 (construction sans privilège, gabarit `image.yml`) ; M01 (semantic-release, étiquettes `vX.Y.Z`).
+**Prérequis** : M13-E04 à M13-E08 ; M12-E21 (construction sans privilège, gabarit `templates/image.yml`) ; M01 (gabarits `templates/qualite.yml` et `templates/release.yml`, semantic-release, étiquettes `vX.Y.Z`).
 **Durée indicative** : 4 h.
 
 **Contexte technique**
 
 | Élément | Valeur |
 |---|---|
-| Gabarit | `plateforme/ci-templates`, fichier **`supply-chain.yml`**, inclus par `include: project` avec une référence épinglée (étiquette du dépôt de gabarits) |
+| Gabarit | `plateforme/ci-templates`, fichier **`templates/supply-chain.yml`** (même dossier que les gabarits de M01 et M12), inclus par `include: project` avec une référence **épinglée** : une étiquette `v1.x.y` du dépôt de gabarits, et non la branche `v1` qui avance seule |
 | Premier client | `mediagenda/api` → `registry.par1.medisphere.internal/medisphere/mediagenda-api` |
 | Exécuteur | `runner02`, exécuteur `docker`, étiquette `docker`, **sans mode privilégié** ; images des jobs tirées par les caches (E04) |
 | Robot | `robot$medisphere+ci` dans `HARBOR_ROBOT_USER` / `HARBOR_ROBOT_TOKEN` (groupes `mediagenda`, `medidoc`, `medinotif`, `legacy` ; protégées ; le jeton masqué) |
 | Signature | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD` (E07) ; `cosign.pub` et `signing-config.json` de `docs/registre/` |
-| Versions publiées | étiquettes Git `vX.Y.Z` posées par semantic-release sur `main` ; image publiée sous la même étiquette |
+| Versions publiées | étiquettes Git `vX.Y.Z` posées par semantic-release sur `main` ; image publiée sous **la même étiquette, `v` compris** (au M12, `image.yml` publiait `X.Y.Z` : les images migrées en E03 gardent ce nom, les nouvelles versions prennent `vX.Y.Z`, que visent l'immuabilité et la rétention de E10) |
+| Racine MédiSphère | variable d'**instance** GitLab `MEDISPHERE_ROOT_CA`, de type fichier, non protégée (la racine est publique), à créer ici : les jobs qui en ont besoin (BuildKit, Node.js de Renovate en E11, M17) la lisent par son chemin ; `runner02` monte aussi la racine dans chaque job (`/etc/medisphere/racine-ca.crt`, M12-E20) |
 
 **Travail demandé**
 
@@ -213,7 +214,7 @@ Conçois et livre le gabarit `supply-chain.yml` et son utilisation par `mediagen
 9. Publie une version de `mediagenda/api` par la chaîne (MR, fusion, semantic-release) et montre qu'une seconde publication de la même version échoue.
 
 **Critères de réussite**
-- [ ] `supply-chain.yml` est sur `main` de `plateforme/ci-templates` (et dans une étiquette du dépôt) ; il ne désigne que des images de Harbor, épinglées par empreinte, et aucun job n'y est autorisé à échouer.
+- [ ] `templates/supply-chain.yml` est sur `main` de `plateforme/ci-templates` (et dans une étiquette du dépôt) ; il ne désigne que des images de Harbor, épinglées par empreinte, et aucun job n'y est autorisé à échouer.
 - [ ] `mediagenda/api` inclut le gabarit par une référence épinglée ; le dernier pipeline de l'étiquette `vX.Y.Z` la plus récente a réussi.
 - [ ] `medisphere/mediagenda-api:vX.Y.Z` existe dans Harbor, porte une signature et une attestation SPDX vérifiables avec la clé publique publiée.
 - [ ] Les variables `HARBOR_ROBOT_USER` et `HARBOR_ROBOT_TOKEN` du groupe `mediagenda` sont protégées et non développées, `HARBOR_ROBOT_TOKEN` est masquée ; `HARBOR_ROBOT_USER` désigne `robot$medisphere+ci`.
@@ -315,7 +316,7 @@ Une rétention garde un artefact dès qu'**une** de ses règles le retient. Une 
 | Image | `ghcr.io/renovatebot/renovate:44`, tirée par le cache `ghcr` (variable `CI_RENOVATE_IMAGE` du gabarit), épinglée par empreinte |
 | Compte | utilisateur GitLab **`renovate-bot`** (non administrateur), membre *Developer* des projets qu'il traite ; jeton personnel portée `api`, expiration obligatoire, dans la variable `RENOVATE_TOKEN` de `plateforme/renovate` (protégée, masquée) |
 | Harbor | robot `robot$renovate` (système, tirage de `bibliotheque` et `plateforme`) dans `HARBOR_RENOVATE_USER` / `HARBOR_RENOVATE_TOKEN` (protégées, non développées ; le jeton masqué) |
-| CA | Renovate est une application Node.js : elle n'utilise pas le magasin de certificats du système ; `NODE_EXTRA_CA_CERTS` désigne un fichier de CA supplémentaire |
+| CA | Renovate est une application Node.js : elle n'utilise pas le magasin de certificats du système ; `NODE_EXTRA_CA_CERTS` désigne un fichier de CA supplémentaire ; la racine MédiSphère est dans la variable d'instance `MEDISPHERE_ROOT_CA` (type fichier, E09) |
 | Planification | chaque nuit, sur `main` de `plateforme/renovate`, exécuteur `runner02` (étiquette `docker`) |
 | Projets traités | `mediagenda/api`, `medidoc/medidoc`, `medinotif/worker`, `legacy/legacy-rdv`, `plateforme/ci-templates` |
 

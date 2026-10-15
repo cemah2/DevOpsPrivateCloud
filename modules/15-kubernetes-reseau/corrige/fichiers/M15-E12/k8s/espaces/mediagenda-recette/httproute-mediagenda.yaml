@@ -20,4 +20,4 @@ spec:
             value: /
       backendRefs:
         - name: mediagenda-api
-          port: 8000
+          port: 80          # port du Service (targetPort http = 8000 du conteneur, M14)

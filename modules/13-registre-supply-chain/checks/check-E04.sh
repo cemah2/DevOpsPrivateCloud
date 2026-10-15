@@ -54,13 +54,13 @@ check_ssh "runner02 : des images des caches sont présentes localement" runner02
 # --- Code ----------------------------------------------------------------------------------------------
 _m13_image_yml() {
   local c
-  c="$(_m13d_contenu_main "$_M13D_CITPL" image.yml)"
+  c="$(_m13d_contenu_main "$_M13D_CITPL" templates/image.yml)"
   [[ -n "$c" ]] || return 1
-  # Toute référence d'image (clé image:, name:, variables *_IMAGE:) désigne Harbor.
-  ! grep -Eo '^[[:space:]]*(image|name|[A-Z_]*IMAGE)[[:space:]]*:[[:space:]]*["'"'"']?[^ "'"'"'$#][^ "'"'"']*' <<<"$c" \
+  # Toute référence d'image (clé image:, name:, variables IMAGE_* ou *_IMAGE) désigne Harbor.
+  ! grep -Eo '^[[:space:]]*(image|name|[A-Z_]*IMAGE[A-Z_]*)[[:space:]]*:[[:space:]]*["'"'"']?[^ "'"'"'$#][^ "'"'"']*' <<<"$c" \
     | sed -E 's/^[^:]*:[[:space:]]*["'"'"']?//' | grep -v "^$_M13D_NOM/" | grep -q .
 }
-check_cmd "plateforme/ci-templates (main) : image.yml ne désigne que des images de Harbor" _m13_image_yml
+check_cmd "plateforme/ci-templates (main) : templates/image.yml ne désigne que des images de Harbor" _m13_image_yml
 _m13_podman() {
   local t
   t="$(gitlab_api "$_M13D_ANSIBLE/repository/tree?path=roles/podman_hote/templates&ref=main&per_page=100" 2>/dev/null | jq -r '.[].path' 2>/dev/null)"

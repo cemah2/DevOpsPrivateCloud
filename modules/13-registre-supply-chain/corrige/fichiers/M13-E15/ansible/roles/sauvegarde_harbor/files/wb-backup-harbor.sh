@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # /usr/local/sbin/wb-backup-harbor.sh — sauvegarde APPLICATIVE de Harbor vers PBS
-# M13-E15 (ticket PLAT-1433), RB-131. Déployé par le rôle Ansible sauvegarde_harbor ; lancé chaque
+# M13-E15 (ticket PLAT-1415), RB-131. Déployé par le rôle Ansible sauvegarde_harbor ; lancé chaque
 # nuit par wb-backup-harbor.timer.
 #
 # Ce qui est sauvegardé (une sauvegarde PBS « host/<WB_ID> », espace de noms WB_NS, quatre archives) :

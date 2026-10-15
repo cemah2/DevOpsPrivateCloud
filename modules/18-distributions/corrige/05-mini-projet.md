@@ -37,10 +37,10 @@ Ordre de grandeur attendu sur le lab : 8 à 12 minutes (clones liés, k3s en une
 5. **Templates 9060, 9061** : `qm destroy` après vérification qu'aucun clone ne les référence (clones complets : aucun), ou par le code d'image-builder s'il gère la suppression.
 6. **`wb-capi`** : ACL, jeton, utilisateur, rôle `WBCapi` (`pveum acl delete`, `pveum user token remove`, `pveum user delete`, `pveum role delete`), par le code de M18-E08 si c'est lui qui les a créés ; `~/.config/workbook/pve-capi.env` effacé ; registre des secrets mis à jour.
 7. **`etcd-m18`** : selon l'ADR. Proposition : supprimé (les instantanés de bancs détruits ne servent plus) par l'identité d'administration de `s3-01` (l'identité `etcd-m18` ne peut pas supprimer), puis identité retirée du rôle `seaweedfs`.
-8. **Flux** : règles `ref: M18-E14` et `ref: M18-E16` retirées de `group_vars/role_routeur/pare_feu.yml`, rôle `pare_feu` rejoué sur les deux passerelles (une à la fois, la passive d'abord, comme au M07), matrice des flux mise à jour.
+8. **Flux** : règles `ref: M18-E08` (et leurs définitions `M18_GESTION`, `CAPI_ESSAI_API`), `ref: M18-E14` et `ref: M18-E16` retirées de `group_vars/role_routeur/pare_feu.yml`, rôle `pare_feu` rejoué sur les deux passerelles (une à la fois, la passive d'abord, comme au M07) ; sur `pve01`, règle 8006 `+capi` puis IPSet `capi` supprimés (`pvesh delete /cluster/firewall/rules/<POS>` après lecture de la position, `pvesh delete /cluster/firewall/ipset/capi/<CIDR>` pour chaque entrée, puis `pvesh delete /cluster/firewall/ipset/capi`) ; matrice des flux mise à jour. Même si l'ADR garde `wb-capi`, ces règles partent : les clusters de gestion qu'elles visaient n'existent plus.
 9. **Fichiers locaux** : kubeconfig des clusters détruits et `talosconfig*` effacés ; `talos-secrets.yaml` effacé de `~/.config/workbook/m18/` (la copie chiffrée reste dans le dépôt, Vault `lab`, si l'ADR garde Talos en option).
 
-*5. `k8s-par1`* : redémarrage selon `docs/kubernetes/cluster.md` (M14-E05), puis :
+*5. `k8s-par1`* : redémarrage selon `docs/kubernetes/cluster.md` (M14-E05 : nœuds de contrôle d'abord, au moins deux pour le quorum, puis travailleurs). Ton identité personnelle (certificat de 7 jours) a expiré pendant le module : renouvelle-la d'abord avec `outils/kubeconfig-personnel.sh <MOI>` de `plateforme/k8s` (M14-E06, il passe par `k8s-cp01` en SSH). Puis :
 ```
 admin@k8s-cp01:~$ sudo kubeadm certs check-expiration    # un cluster arrêté longtemps peut avoir des certificats proches de l'échéance
 admin@adm01:~/DevOpsPrivateCloud$ lab/bin/check 14 46

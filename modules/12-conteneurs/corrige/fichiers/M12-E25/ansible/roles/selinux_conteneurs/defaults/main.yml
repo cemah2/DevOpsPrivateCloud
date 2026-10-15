@@ -1,5 +1,5 @@
 ---
-# Rôle selinux_conteneurs — SELinux pour les conteneurs des hôtes Rocky Linux (M12-E25, SEC-1351).
+# Rôle selinux_conteneurs — SELinux pour les conteneurs des hôtes Rocky Linux (M12-E25, SEC-1325).
 # Règles de Sophie Laurent : SELinux jamais désactivé ; pas de réétiquetage à la volée (:z/:Z)
 # des répertoires de l'hôte ; une politique dédiée (udica), versionnée, pour un accès inhabituel.
 

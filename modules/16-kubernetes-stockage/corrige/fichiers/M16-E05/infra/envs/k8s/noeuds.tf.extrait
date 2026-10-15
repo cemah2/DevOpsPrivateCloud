@@ -5,8 +5,8 @@
 # Les noms de locals et de champs (noeuds, suffixe, role…) sont ceux du corrigé du M14 : garde les
 # tiens. Règle partagée avec le rôle Ansible k8s_reseau_stockage :
 #   suffixe   = dernier octet de l'adresse VLAN 40 (61, 62, 63)
-#   VLAN 40   = 10.10.40.<suffixe>      (net0 / ens18 dans l'invité, passerelle 10.10.40.1)
-#   VLAN 30   = 10.10.30.<suffixe + 20> (net1 / ens19, MTU 9000, SANS passerelle)
+#   VLAN 40   = 10.10.40.<suffixe>      (net0 / eth0 dans l'invité, passerelle 10.10.40.1)
+#   VLAN 30   = 10.10.30.<suffixe + 20> (net1 / eth1, MTU 9000, SANS passerelle)
 #   MAC       = bc:24:11:<VLAN>:00:<suffixe>
 #
 # Un travailleur à la fois : passe son entrée à true dans une MR, nœud DRAINÉ (le fournisseur peut

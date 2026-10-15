@@ -6,7 +6,7 @@
 | **Niveau** | Cœur |
 | **Profil de lab** | k8s : socle + `k8s-cp01-03` (2141-2143, 4 Go chacun) + `k8s-w01-03` (2144-2146, 8 Go chacun) ; `k8s-w04` (2147) ponctuellement |
 | **Prérequis** | Modules 12 et 13 (images, Harbor) ; module 07 (keepalived, HAProxy, bordure) ; modules 04-06 (Ansible, OpenTofu, PKI, DNS) |
-| **Durée indicative** | 50 à 60 heures |
+| **Durée indicative** | 95 à 120 heures (palier 1 : 20-25 h ; palier 2 : 28-34 h ; palier 3 : 30-36 h ; palier 4 : 12-15 h ; mini-projet : 12-18 h) |
 
 ## Contexte MédiSphère
 

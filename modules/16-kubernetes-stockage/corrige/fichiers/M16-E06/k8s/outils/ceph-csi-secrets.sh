@@ -86,7 +86,7 @@ for entree in "${PILOTES[@]}"; do
       --from-file=userKey=<(printf '%s' "$cle") \
       --dry-run=client -o yaml \
       | kubectl label --local -f - -o yaml \
-          medisphere.fr/composant=stockage medisphere.fr/source=ansible-vault \
+          medisphere.internal/composant=stockage medisphere.internal/source=ansible-vault \
       | kubectl apply --server-side --field-manager=ceph-csi-secrets -f - >/dev/null
     info "[OK] $pilote : Secret $ESPACE/$secret (userID=$utilisateur) à jour"
     continue

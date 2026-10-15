@@ -9,8 +9,7 @@ After=mediagenda-pg.service
 ContainerName=mediagenda-migrations
 Image={{ pile_recette_registre }}/mediagenda/api:{{ pile_recette_versions.mediagenda }}
 Network=apps-recette.network
-Entrypoint=python
-Exec=-m mediagenda.migrate
+Exec=mediagenda-migrate
 Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
 Environment=MEDIAGENDA_VALKEY_URL=redis://mediagenda-valkey:6379/0
 DropCapability=ALL

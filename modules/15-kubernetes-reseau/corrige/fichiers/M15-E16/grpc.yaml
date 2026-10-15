@@ -19,7 +19,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: agnhost
-          image: registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.61
+          image: registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.66.1
           args: ["grpc-health-checking", "--port=5000", "--http-port=8080"]
           ports:
             - {name: app, containerPort: 5000}

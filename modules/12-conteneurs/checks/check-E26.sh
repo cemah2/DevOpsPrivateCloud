@@ -15,8 +15,8 @@ require_cmd jq curl
 title "Accès au démon"
 check_ssh_output "ctr01 : le groupe docker ne contient que admin" ctr01 '^(admin)?$' \
   "getent group docker | cut -d: -f4"
-check_ssh_output "runner02 : le groupe docker ne contient que admin et le compte du runner" runner02 \
-  '^((admin|gitlab-runner)(,(admin|gitlab-runner))*)?$' "getent group docker | cut -d: -f4"
+check_ssh_output "runner02 : le groupe docker est vide" runner02 \
+  '^$' "getent group docker | cut -d: -f4"
 check_ssh_output "ctr01 : les comptes demo-docker et essai-rootless n'existent plus" ctr01 '^ABSENTS$' \
   "getent passwd demo-docker essai-rootless >/dev/null || echo ABSENTS"
 for _m12_e26_h in ctr01 runner02; do

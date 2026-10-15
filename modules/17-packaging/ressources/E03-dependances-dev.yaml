@@ -9,11 +9,11 @@ metadata:
   name: mediagenda-db
   namespace: mediagenda-dev
   labels:
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 spec:
   instances: 1
   # Même image que la base de recette (M16-E18) : registre MédiSphère, cache « ghcr ».
-  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
   bootstrap:
     initdb:
       database: mediagenda

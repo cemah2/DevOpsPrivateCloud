@@ -1,6 +1,6 @@
 # Du PVC au bloc monté — un volume de `k8s-par1` suivi de bout en bout
 
-> Note d'exploration (PLAT-1790, M16-E44). Sorties réelles abrégées d'un volume `exploration` de l'espace `wb-essais`, recueillies le `<DATE>`. Outil associé : `k8s-suivre-volume.sh ESPACE PVC` (`plateforme/outils`).
+> Note d'exploration (PLAT-1744, M16-E44). Sorties réelles abrégées d'un volume `exploration` de l'espace `wb-essais`, recueillies le `<DATE>`. Outil associé : `k8s-suivre-volume.sh ESPACE PVC` (`plateforme/outils`).
 
 ## 1. Les étages
 

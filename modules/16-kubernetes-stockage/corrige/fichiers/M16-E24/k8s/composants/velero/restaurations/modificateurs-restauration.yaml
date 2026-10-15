@@ -37,14 +37,14 @@ data:
         - mediagenda-recette
       mergePatches:
       - patchData: |
-          {"metadata": {"labels": {"medisphere.fr/copie-de": "mediagenda-recette"}}}
+          {"metadata": {"labels": {"medisphere.internal/copie-de": "mediagenda-recette"}}}
     - conditions:
         groupResource: statefulsets.apps
         namespaces:
         - mediagenda-recette
       mergePatches:
       - patchData: |
-          {"metadata": {"labels": {"medisphere.fr/copie-de": "mediagenda-recette"}}}
+          {"metadata": {"labels": {"medisphere.internal/copie-de": "mediagenda-recette"}}}
     # 4. (Si tes politiques réseau désignent l'espace d'origine PAR SON NOM, par exemple un
     #    namespaceSelector sur kubernetes.io/metadata.name: mediagenda-recette, ajoute ici une
     #    règle « test » + « replace » sur le chemin concerné : sinon la copie accepterait du trafic

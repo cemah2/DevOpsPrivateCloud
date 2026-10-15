@@ -17,8 +17,24 @@ spec:
         - ingress
       toPorts:
         - ports:
-            - port: "8000"
-              protocol: TCP
+            - { port: "8000", protocol: TCP }
+          # Filtrage L7 repris de la politique api-entree du M15-E17 (SEC-1617) : seuls les appels
+          # prévus de l'API passent par la Gateway ; tout autre appel (dont /metrics) reçoit un 403
+          # du proxy. Chemins = expressions régulières sur le chemin complet, requête comprise.
+          rules:
+            http:
+              - { method: GET, path: "/sante" }
+              - { method: GET, path: "/pret" }
+              - { method: GET, path: "/api/v1/rendez-vous(\\?.*)?" }
+              - { method: POST, path: "/api/v1/rendez-vous" }
+              - { method: GET, path: "/api/v1/rendez-vous/[0-9]+" }
+              - { method: DELETE, path: "/api/v1/rendez-vous/[0-9]+" }
+              - { method: GET, path: "/api/v1/creneaux(\\?.*)?" }
+    # Sondes du kubelet (identité host), comme au M15-E17.
+    - fromEntities: [host]
+      toPorts:
+        - ports:
+            - { port: "8000", protocol: TCP }
 {{- if .Values.postgresql.cnpg.enabled }}
 ---
 # Le gestionnaire d'instance CNPG (dans chaque pod PostgreSQL) parle à l'API Kubernetes.

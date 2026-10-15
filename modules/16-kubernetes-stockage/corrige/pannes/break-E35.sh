@@ -106,7 +106,7 @@ kind: ResourceQuota
 metadata:
   name: $_E35_QUOTA
   namespace: $_M16_NS_T
-  annotations: {medisphere.fr/ticket: "CHG-1735 plafond provisoire, à revoir"}
+  annotations: {medisphere.internal/ticket: "CHG-1735 plafond provisoire, à revoir"}
 spec:
   hard:
     $_M16_SC_RBD.storageclass.storage.k8s.io/persistentvolumeclaims: "${nb:-0}"

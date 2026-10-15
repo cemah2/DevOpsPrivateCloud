@@ -59,8 +59,8 @@ postgresql:
     name: ""
     instances: 1
     # Image PostgreSQL 18 par le cache Harbor « ghcr » (la VAP du M14-E18 exige le registre MédiSphère).
-    # Aligne l'étiquette sur celle du cluster de recette (M16-E18).
-    imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18
+    # Même étiquette EXACTE que le cluster de recette (M16-E18) : jamais « 18 » flottant.
+    imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
     database: mediagenda
     owner: mediagenda
     storage:
@@ -97,7 +97,9 @@ valkeyImporte:
 
 service:
   type: ClusterIP
-  port: 8000
+  # Port du Service : 80, comme le Service mediagenda-api du M14 (les HTTPRoute visent ce port).
+  # Le conteneur écoute sur 8000 (port nommé « http », cible du Service et des politiques réseau).
+  port: 80
 
 # Exposition par la Gateway API (Gateway gw-par1 du M15).
 httpRoute:

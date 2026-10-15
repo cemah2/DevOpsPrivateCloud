@@ -13,7 +13,7 @@
 | 7 | Templates 9060-9069 (selon l'ADR) | après 2 : la réparation en dépendait | | `qm list` sans 9060-9069 |
 | 8 | `wb-capi` : ACL, jeton, utilisateur, rôle `WBCapi`, `pve-capi.env` (selon l'ADR) | après 2 : CAPMOX en avait besoin pour supprimer | | `pveum user list` sans `wb-capi@pve` |
 | 9 | Compartiment et identité `etcd-m18` (selon l'ADR) | plus de banc à restaurer | identité d'administration de `s3-01`, rôle `seaweedfs` | `aws s3 ls` sans `etcd-m18` |
-| 10 | Flux provisoires (refs `M18-E14`, `M18-E16`) retirés, rôle `pare_feu` rejoué (passive puis active) | plus aucun client | | `nft list ruleset` des deux passerelles, matrice des flux |
+| 10 | Flux provisoires (refs `M18-E08`, `M18-E14`, `M18-E16`) retirés, rôle `pare_feu` rejoué (passive puis active) ; règle 8006 `+capi` et IPSet `capi` retirés du pare-feu de `pve01` | plus aucun client | | `nft list ruleset` des deux passerelles, `pvesh get /cluster/firewall/ipset` sans `capi`, matrice des flux |
 | 11 | Fichiers de `~/.config/workbook/m18/` devenus inutiles | après tout le reste (servaient au démontage) | | `ls -la ~/.config/workbook/m18/` |
 | 12 | Registre des secrets mis à jour | | | MR |
 | 13 | `k8s-par1` redémarré (nœuds de contrôle, puis travailleurs), `lab/bin/check 14 46` | rend le lab aux modules suivants | | sortie du contrôle |

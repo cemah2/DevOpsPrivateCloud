@@ -45,7 +45,7 @@ _e41_route_temoin() {
   jq -n --arg nom "$_E41_ROUTE" --arg ns "$_M15_NS_APP" --arg h "$_E41_NOM" --argjson p "$pref" \
     --argjson b "$(jq -c '.spec.rules[0].backendRefs' <<<"$j")" '{
       apiVersion: "gateway.networking.k8s.io/v1", kind: "HTTPRoute",
-      metadata: {name: $nom, namespace: $ns, annotations: {"medisphere.fr/demande": "DEV-1645 : page de maintenance"}},
+      metadata: {name: $nom, namespace: $ns, annotations: {"medisphere.internal/demande": "DEV-1645 : page de maintenance"}},
       spec: {parentRefs: $p, hostnames: [$h], rules: [{backendRefs: $b}]}}' \
     | m15_k apply -f - >/dev/null 2>&1
 }

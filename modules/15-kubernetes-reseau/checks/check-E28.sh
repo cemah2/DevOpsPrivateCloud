@@ -14,9 +14,9 @@ require_cmd kubectl jq curl
 check_cmd "l'API de k8s-par1 répond (compte wb-checks)" _m15p_api_ok
 
 title "Équipes"
-check_cmd "mediagenda-dev porte medisphere.fr/equipe=mediagenda" _m15p_ns_label mediagenda-dev medisphere.fr/equipe mediagenda
-check_cmd "mediagenda-recette porte medisphere.fr/equipe=mediagenda" _m15p_ns_label mediagenda-recette medisphere.fr/equipe mediagenda
-check_cmd "medidoc-dev porte medisphere.fr/equipe=medidoc" _m15p_ns_label medidoc-dev medisphere.fr/equipe medidoc
+check_cmd "mediagenda-dev porte medisphere.internal/equipe=mediagenda" _m15p_ns_label mediagenda-dev medisphere.internal/equipe mediagenda
+check_cmd "mediagenda-recette porte medisphere.internal/equipe=mediagenda" _m15p_ns_label mediagenda-recette medisphere.internal/equipe mediagenda
+check_cmd "medidoc-dev porte medisphere.internal/equipe=medidoc" _m15p_ns_label medidoc-dev medisphere.internal/equipe medidoc
 
 _M15_E28_CCNP="$(_m15p_get ciliumclusterwidenetworkpolicies)"
 
@@ -34,8 +34,8 @@ for _m15_e28_ns in mediagenda-dev mediagenda-recette medidoc-dev; do
   check_cmd "$_m15_e28_ns : refus en entrée ET en sortie vers les autres espaces d'équipe" \
     _m15p_jq "$_M15_E28_CCNP" 'any(.items[];
        ((.spec.endpointSelector.matchLabels // {}) | to_entries | any((.key | test("io.kubernetes.pod.namespace$")) and .value == $ns))
-       and any(.spec.ingressDeny[]?; any(.fromEndpoints[]?; tostring | test("namespace.labels.medisphere.fr/equipe")))
-       and any(.spec.egressDeny[]?;  any(.toEndpoints[]?;   tostring | test("namespace.labels.medisphere.fr/equipe"))))' \
+       and any(.spec.ingressDeny[]?; any(.fromEndpoints[]?; tostring | test("namespace.labels.medisphere.internal/equipe")))
+       and any(.spec.egressDeny[]?;  any(.toEndpoints[]?;   tostring | test("namespace.labels.medisphere.internal/equipe"))))' \
     --arg ns "$_m15_e28_ns"
 done
 _m15_e28_pas_ouvert() {

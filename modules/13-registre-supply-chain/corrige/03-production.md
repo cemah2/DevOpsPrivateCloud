@@ -12,7 +12,7 @@
 - champs `systeminfo/volumes` (`storage[0].total`, `.free`) et `system/gc` (`job_status`, `creation_time`) de l'API 2.0 de Harbor 2.15 ; noms des métriques de l'exportateur (`harbor_up`, `harbor_health`, `harbor_project_quota_usage_byte`, `harbor_statistics_total_storage_consumption`…), déduits du code des collecteurs ;
 - `cosign verify-attestation` : forme de la sortie (enveloppe DSSE, champ `payload` en base64) avec le format *bundle* de Cosign 3.
 
-**Rappels** : les objets de Harbor sont décrits dans la configuration OpenTofu `registre` de `plateforme/infra` (M13-E03), le rôle `harbor` et le playbook `registre.yml` sont ceux de M13-E02. Nouveaux états : `envs/m13-registre` (VM `reg02`) et `registre-reg02` (objets de `reg02`). Fichiers de solution : `corrige/fichiers/M13-E13/` à `M13-E18/`.
+**Rappels** : les objets de Harbor sont décrits dans la configuration OpenTofu `registre` de `plateforme/infra` (M13-E03), le rôle `harbor` et le playbook `registre.yml` sont ceux de M13-E02. Nouveaux états : `m13-registre` (dossier `envs/m13`, clé `envs/m13-registre/terraform.tfstate` : VM `reg02`) et `registre-reg02` (dossier `registre-reg02/` : objets de `reg02`). Fichiers de solution : `corrige/fichiers/M13-E13/` à `M13-E18/`.
 
 ---
 
@@ -103,7 +103,7 @@ Un Harbor à PAR2 (finaux) en cible permanente, déclencheur sur événement + p
 
 **Solution**
 
-Fichiers : [extrait de `registre/projets.tf`](fichiers/M13-E14/infra/registre/projets.tf.extrait), gabarit [`ci-templates/verification.yml`](fichiers/M13-E14/ci-templates/verification.yml), [extrait du `.gitlab-ci.yml` de `mediagenda/api`](fichiers/M13-E14/mediagenda-api/.gitlab-ci.yml.extrait), [`docs/registre/politiques.md`](fichiers/M13-E14/medisphere/docs/registre/politiques.md).
+Fichiers : [extrait de `registre/projets.tf`](fichiers/M13-E14/infra/registre/projets.tf.extrait), gabarit [`ci-templates/templates/verification.yml`](fichiers/M13-E14/ci-templates/templates/verification.yml), [extrait du `.gitlab-ci.yml` de `mediagenda/api`](fichiers/M13-E14/mediagenda-api/.gitlab-ci.yml.extrait), [`docs/registre/politiques.md`](fichiers/M13-E14/medisphere/docs/registre/politiques.md).
 
 *1. Inventaire.*
 
@@ -139,7 +139,7 @@ Attention : `skopeo copy` d'une image signée ne copie **pas** la signature (ré
 
 *5. Ce que la politique ne voit pas.* Une paire jetable (`cosign generate-key-pair` dans `/dev/shm`), signature de `essai-politiques:autre-cle` : l'image **se tire**. L'API montre un accessoire `signature.cosign` comme pour une image de la CI : Harbor vérifie la **présence** d'une signature Cosign, pas la clé. L'auteur est vérifié par le consommateur (étape 6) et, sur Kubernetes, par l'admission (M26).
 
-*6. Le consommateur.* `verification.yml` : image outillée de la CI par digest, refus d'une référence par étiquette, empreinte de la clé publique épinglée (une clé publique substituée dans la variable ne passe pas), `cosign verify` puis `cosign verify-attestation --type spdxjson`, sans journal de transparence, et contrôle que la SBOM attestée n'est pas vide. Dans `mediagenda/api`, le job `verifier-signature` suit le job de signature et reçoit le digest par le rapport *dotenv* du gabarit. Pipeline de branche avec l'image signée par la clé jetable : `Error: no matching signatures` → échec ; pipeline normal : succès.
+*6. Le consommateur.* `templates/verification.yml` : image outillée de la CI (`plateforme/outils-supply-chain`, E09) par digest, refus d'une référence par étiquette, clé publique embarquée dans cette image (ou passée en variable de type fichier) dont l'empreinte est épinglée (une clé substituée ne passe pas), `cosign verify` puis `cosign verify-attestation --type spdxjson`, sans journal de transparence, et contrôle que la SBOM attestée n'est pas vide ; mêmes règles que la publication. Dans `mediagenda/api`, le job `verifier-signature` suit `sc:signature` et reçoit `SC_REF` (image par digest) par le rapport *dotenv* de `sc:publication`. Avant d'activer la politique, la chaîne de E09 a été relue : elle ne relit pas l'image par `skopeo` entre la poussée et la signature (empreinte prise dans `--digestfile`, provenance contrôlée sur l'archive), sinon `sc:publication` échouerait en `412`. Pipeline de branche avec l'image signée par la clé jetable : `Error: no matching signatures` → échec ; pipeline normal : succès.
 
 *7. Nettoyage* : suppression du dépôt `medisphere/essai-politiques` (interface ou `DELETE /projects/medisphere/repositories/essai-politiques`), clé jetable effacée (`/dev/shm`), `politiques.md` publié.
 

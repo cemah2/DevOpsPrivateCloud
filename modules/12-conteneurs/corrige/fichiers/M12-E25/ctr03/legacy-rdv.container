@@ -1,4 +1,4 @@
-# ~app/.config/containers/systemd/legacy-rdv.container — ctr03 (M12-E25, SEC-1351)
+# ~app/.config/containers/systemd/legacy-rdv.container — ctr03 (M12-E25, SEC-1325)
 # Legacy-RDV sans privilège, sous un type SELinux dédié produit par udica (module legacy_rdv,
 # rôle selinux_conteneurs). Aucun « :z »/« :Z », aucun SecurityLabelDisable : règles de Sophie.
 #   [app@ctr03 ~]$ systemctl --user daemon-reload && systemctl --user restart legacy-rdv.service

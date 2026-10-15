@@ -17,7 +17,7 @@ spec:
     solvers:
       # Solveur par défaut (aucun sélecteur) : HTTP-01, route temporaire sur l'écouteur http de gw-par1.
       # La route est créée dans l'espace du Certificate : cet espace doit être étiqueté
-      # medisphere.fr/exposition=oui (allowedRoutes de l'écouteur).
+      # medisphere.internal/exposition=oui (allowedRoutes de l'écouteur).
       - http01:
           gatewayHTTPRoute:
             parentRefs:

@@ -29,7 +29,7 @@ Les distributions ont toutes été installées par le code : k3s sur `k3s01`, RK
 - les VMs vivent dans `plateforme/infra/envs/m18/` (module `vm-noeud`, étiquette `env-m18`), les rôles dans `plateforme/ansible` (`k3s`, `rke2`, `outils_distributions`) ;
 - la documentation va dans `docs/kubernetes/distributions/` de `plateforme/medisphere` (`adr/`, `runbooks/`, `tests/`).
 
-Chaque changement passe par une MR et un pipeline vert. Les fichiers d'accès des clusters d'essai sont sous `~/.config/workbook/m18/` (mode 600) : `k3s01.kubeconfig`, `rke2.kubeconfig`, `talosconfig`, `talos.kubeconfig`, `talos-secrets.yaml`, `capi-essai.kubeconfig`, `kind-gestion.kubeconfig`, `k3s-ha.kubeconfig`.
+Chaque changement passe par une MR et un pipeline vert. Les fichiers d'accès des clusters d'essai sont sous `~/.config/workbook/m18/` (mode 600) : `k3s01.kubeconfig`, `rke2.kubeconfig`, `talosconfig`, `talos.kubeconfig`, `talos-secrets.yaml`, `capi-essai.kubeconfig` ; ce palier ajoute `k3s-ha.kubeconfig` (banc recréé en E14), `talosconfig-sauvegarde` (E14) et `recette-mediagenda.kubeconfig` (E18). `kind-gestion.kubeconfig` a disparu au pivot (E12).
 
 **État de départ attendu** (fin du palier 2) :
 - `k3s01` : k3s v1.36.5+k3s1 sur SQLite, cluster de gestion Cluster API 1.12 (pivot de M18-E12) avec CAPMOX 0.9 et le fournisseur IPAM *in-cluster* ;
@@ -60,7 +60,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 18 XX`). Les cl
 - Cluster de gestion : `k3s01` (`~/.config/workbook/m18/k3s01.kubeconfig`), espace `capi-essai`. Cluster de charge de travail : `~/.config/workbook/m18/capi-essai.kubeconfig`.
 - VMs créées par CAPMOX dans la plage `vmIDRange` 5180-5189, adresses 10.10.40.150-169 (pool `capi-essai-v4-icip`, créé par CAPMOX à partir du `ipv4Config` du `ProxmoxCluster`). Un remplacement crée une machine **avant** d'en supprimer une : compte les VMID et les adresses disponibles avant de lancer quoi que ce soit.
 - Nouvelle image : VMID **9061** `tpl-capi-ubuntu2404-k136-2`, Kubernetes **v1.36.5**, construite comme en E09 sur `m18-dev01`. À la fin, 9061 porte les étiquettes `capi` et `current`, et 9060 ne porte plus `current` (il reste en place tant qu'une machine en dépend).
-- Charge témoin dans `capi-essai` : un Deployment `temoin` de 3 réplicas (image `registry.k8s.io/pause:3.10`) dans l'espace `wb-essais`, protégé par un PDB `minAvailable: 2`. Le cluster de charge de travail tire ses images directement chez les registres publics (VLAN 40 → Internet), comme en E10.
+- Charge témoin dans `capi-essai` : un Deployment `temoin` de 3 réplicas (image `registry.k8s.io/pause:3.10`) dans l'espace `wb-essais`, protégé par un PDB `minAvailable: 2`. Le cluster de charge de travail tire ses images par le cache Harbor (miroirs `hosts.toml` posés par les manifestes de E10).
 - Les objets Cluster API qui portent des gabarits (`ProxmoxMachineTemplate`, `KubeadmConfigTemplate`) sont **immuables** par convention : on en crée un nouveau, sous un nouveau nom, et on change la référence.
 
 > ⚠️ **Attention** : un remplacement complet crée et détruit des VMs dans le pool `lab`. Avant de commencer, vérifie que la mémoire libre de `pve01` couvre une VM de plus que la taille du cluster (`free -g` sur `pve01`), que `k8s-par1` est arrêté, et que tu sais revenir en arrière : on revient à l'état précédent en remettant les anciennes références (version et template) dans les manifestes, ce qui déclenche un nouveau remplacement. On ne supprime jamais un `Machine` d'un nœud de contrôle unique à la main.
@@ -130,7 +130,8 @@ Ce n'est pas le changement du template Proxmox qui déclenche un remplacement, c
 **Contexte technique**
 - **Banc k3s etcd** : `k3s01` tourne sur SQLite. Pour pratiquer l'etcd intégré de k3s, recrée par le code de M18-E07 deux VMs jetables : `k3s-ha01` (5191, serveur `--cluster-init`) et `k3s-ha02` (5192, **agent**), v1.36.5+k3s1, 2 Go chacune (variable `k3s_ha_noeuds` de `plateforme/infra/envs/m18/`, rôle `k3s`). Kubeconfig : `~/.config/workbook/m18/k3s-ha.kubeconfig`. Le banc reste en place jusqu'au palier 4 (M18-E19) et il est détruit au mini-projet.
 - **Stockage objet** : compartiment `etcd-m18` sur `s3-01` (`https://s3-01.par1.medisphere.internal:8333`), versionné, dossiers `k3s-ha/`, `rke2/`, `talos/`, `gestion/`. Identité dédiée `etcd-m18` : lister, lire, écrire, **jamais supprimer** (la purge est faite par le cycle de vie, posé par l'administrateur, comme en M14-E24). Identifiants : Ansible Vault `lab` pour les nœuds, `~/.config/workbook/s3-etcd-m18.env` (600) sur `adm01`.
-- k3s et RKE2 lisent des fragments de configuration dans `/etc/rancher/<k3s|rke2>/config.yaml.d/*.yaml`. Les noms des options `etcd-s3-*` sont dans la page *etcd-snapshot* de chaque documentation.
+- k3s et RKE2 lisent des fragments de configuration dans `/etc/rancher/<k3s|rke2>/config.yaml.d/*.yaml`. La configuration des instantanés va dans un fragment dédié, **`config.yaml.d/50-etcd-s3.yaml`** (600, il contient les clés S3), posé par le rôle. Les noms des options `etcd-s3-*` sont dans la page *etcd-snapshot* de chaque documentation.
+- Noms dans `gestion/` : l'archive de la base de `k3s01` porte `k3s01` dans son nom, l'export Cluster API porte `capi` (par exemple `k3s01-<horodatage>.tar.gz.age`, `capi-essai-<date>.tar.gz.age`) ; le `talosconfig` de sauvegarde est `~/.config/workbook/m18/talosconfig-sauvegarde`.
 - Témoin de restauration : dans chaque cluster, une ConfigMap `temoin-restauration` dans l'espace `wb-essais`, avec `etat=avant-instantane` au moment de l'instantané, passée à `apres-instantane` juste après.
 - Flux : `k3s-ha01`, `rke2-01..03` (`vsandbox`) → `s3-01` 8333 est à ouvrir sur la bordure (rôle `pare_feu`, `group_vars/role_routeur/pare_feu.yml`, `docs/socle/matrice-flux.md`). Talos est sauvegardé depuis `adm01` (MGMT, déjà autorisé).
 
@@ -152,7 +153,7 @@ Ce n'est pas le changement du template Proxmox qui déclenche un remplacement, c
    - Instantané à la demande, puis restauration selon la procédure « multiple servers » de la doc RKE2. Avant de commencer, réponds par écrit : que se passe-t-il si `rke2-server` tourne encore sur `rke2-02` ou `rke2-03` pendant la réinitialisation de `rke2-01` ? Et si les conteneurs etcd de `rke2-01` tournent encore ? Les scripts installés par le paquet sous `/usr/bin/` t'aideront à les arrêter.
 4. **Talos.**
    - Reconstruis `talos-essai` par le code s'il est détruit, avec le même paquet de secrets.
-   - Crée un `talosconfig` dédié à la sauvegarde, avec le **seul** rôle `os:etcd:backup` (`talosctl config new --help`), en 600 sous `~/.config/workbook/m18/`. Vérifie qu'il ne permet pas de lire la configuration d'une machine.
+   - Crée un `talosconfig` dédié à la sauvegarde, avec le **seul** rôle `os:etcd:backup` (`talosctl config new --help`), en 600 : `~/.config/workbook/m18/talosconfig-sauvegarde`. Vérifie qu'il ne permet pas de lire la configuration d'une machine.
    - Écris `talos/outils/etcd-instantane.sh` dans `plateforme/distributions` : instantané par `talosctl etcd snapshot`, contrôle de l'empreinte (`etcdutl snapshot status`), chiffrement `age`, envoi dans `talos/`.
    - Restaure le cluster selon la page *Disaster Recovery* de Talos 1.14 : réinitialisation de la partition `EPHEMERAL` de `talos-01`, attente de l'état `Preparing` d'etcd, `talosctl bootstrap --recover-from`. Vérifie les nœuds et le témoin.
 5. **Comparer et documenter.**
@@ -249,7 +250,7 @@ Pour Talos, la restauration n'est permise que si etcd est en état `Preparing` s
 - [ ] Les rapports kube-bench (RKE2 avec deux référentiels, k3s) sont publiés, et chaque FAIL est classé.
 - [ ] `durcissement.md` contient le tableau à quatre colonnes et les critères demandés.
 
-**Vérification** : `lab/bin/check 18 15`
+**Vérification** : `lab/bin/check 18 15`. Avant de la lancer : retire Talos s'il est encore là (sa partie est finie), puis réveille `capi-essai` (≈ 28 Go avec RKE2 et `k3s01`) : le contrôle lit RKE2 et vérifie que le cluster de gestion voit toujours `capi-essai` disponible.
 
 <details><summary>Indice 1</summary>
 
@@ -396,6 +397,6 @@ Un critère qui a la même note pour toutes les options ne départage rien : ret
 - [ ] Après T5, le cluster éphémère n'existe plus et son kubeconfig est supprimé.
 - [ ] Le retour d'expérience (une demi-page) est rédigé et versé au dossier de l'ADR-0180.
 
-**Vérification** : `lab/bin/check 18 18` (à lancer à T4, avant la destruction).
+**Vérification** : `lab/bin/check 18 18` (à lancer à T4, avant la destruction). Le contrôle interroge `/sante` à l'adresse de `WB_M18_RECETTE_URL` (`lab/lab.env`, par défaut `http://m18-dev01.par1.medisphere.internal:8080`) : si tu choisis Cluster API, renseigne-la avec l'adresse notée dans la feuille de temps.
 
 **Pour aller plus loin** (facultatif) : refais l'exercice avec l'autre outil et compare les deux temps. Lequel des deux tiendrait si cinq équipes demandaient chacune un cluster le même jour ?

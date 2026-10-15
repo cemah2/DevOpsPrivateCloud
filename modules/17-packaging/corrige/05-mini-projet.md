@@ -2,13 +2,13 @@
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-**Testé** pendant la rédaction, sur le banc kube-apiserver 1.36 sans nœuds : la reprise du dev (point 2), avec la release Helm, l'overlay `dev` du corrigé M17-E09 et Helm 4.3. Le garde-fou de livraison a été rejoué : refus d'un `images:` en prod.
+**Testé** pour ce corrigé, sur le banc kube-apiserver 1.36 sans nœuds : la reprise du dev (point 2), avec la release Helm, l'overlay `dev` du corrigé M17-E09 et Helm 4.3. Le garde-fou de livraison a été rejoué : refus d'un `images:` en prod.
 
 **Non testé en conditions réelles** :
 - comportement de CloudNativePG si la spécification du `Cluster` du dev change à la reprise ;
 - durée réelle du contrôle global (`helmfile diff` de toute la plateforme).
 
-Piège vu pendant la rédaction (corrigé dans les fichiers de M17-E09) : un ResourceQuota écrit `services.loadbalancer` (au lieu de `services.loadbalancers`) est refusé par l'API, et une NetworkPolicy qui porte `egress: []` rend le `kubectl diff --server-side` jamais vide (le serveur retire la liste vide).
+Pièges constatés sur le banc d'essai (les fichiers de M17-E09 en tiennent compte) : un ResourceQuota écrit `services.loadbalancer` (au lieu de `services.loadbalancers`) est refusé par l'API, et une NetworkPolicy qui porte `egress: []` rend le `kubectl diff --server-side` jamais vide (le serveur retire la liste vide).
 
 ---
 
@@ -33,7 +33,7 @@ Une panne réparée sans `--annuler` reste marquée active : on lance `lab/bin/b
    ```
    admin@adm01:~/src/mediagenda-deploiement$ kubectl diff --server-side -k overlays/dev
    ```
-   Le diff doit se limiter aux étiquettes et aux annotations : l'environnement `medisphere.fr/environnement`, et le conteneur d'initialisation qui remplace le hook (`migrations.mode: initContainer` dans `values-communes.yaml`). Le `Cluster` `mediagenda-db` de `ressources/E03-…` et celui du component `dependances` doivent être identiques. Sinon, aligne d'abord le component sur l'existant, ou accepte en connaissance de cause le changement (instances, stockage) : en dev, les données sont jetables.
+   Le diff doit se limiter aux étiquettes et aux annotations (l'environnement `medisphere.internal/environnement`), au conteneur d'initialisation qui remplace le hook (`migrations.mode: initContainer` dans `values-communes.yaml`) et au **changement de Valkey** : le component `dependances` apporte un StatefulSet et un Service `valkey` (objets nouveaux), et l'API passe de `redis://mediagenda-valkey:6379/0` (sous-chart de la release) à `redis://valkey:6379/0`. Le cache de dev est jetable : sa perte ne coûte qu'un cache froid. Le `Cluster` `mediagenda-db` de `ressources/E03-…` et celui du component `dependances` doivent être identiques. Sinon, aligne d'abord le component sur l'existant, ou accepte en connaissance de cause le changement (instances, stockage) : en dev, les données sont jetables.
 2. **Faire oublier la release à Helm**, sans toucher aux objets. On sauvegarde puis on supprime ses Secrets de révision (M17-E23 : c'est tout ce que Helm sait de la release).
    ```
    admin@adm01:~$ kubectl get secret -n mediagenda-dev -l owner=helm,name=mediagenda -o yaml > ~/sauvegardes/dev-release-mediagenda.yaml && chmod 600 ~/sauvegardes/dev-release-mediagenda.yaml
@@ -52,11 +52,12 @@ Une panne réparée sans `--annuler` reste marquée active : on lance `lab/bin/b
    kubectl annotate <genre>/<nom> -n mediagenda-dev meta.helm.sh/release-name- meta.helm.sh/release-namespace-
    ```
    L'ordre compte : on applique **d'abord** l'overlay (étape 3), qui fait de `kubectl` un copropriétaire de chaque champ rendu, **puis** on retire `helm`. Dans l'ordre inverse, un champ que seul `helm` possédait resterait sans propriétaire : sans effet immédiat, mais source de dérive. Ce n'est pas grave, mais ce n'est pas propre.
-5. **Nettoyer** ce que l'overlay ne décrit pas : Job et NetworkPolicy de migration du hook (`mediagenda-migrations`), pod `mediagenda-test-pret` de `helm test`. On vérifie avec `kubectl get all,networkpolicy -n mediagenda-dev` et le rendu. L'étiquette `app.kubernetes.io/managed-by: Helm` reste sur les objets : elle vient du rendu du chart (`helm template`), comme en recette et en prod. Elle est commentée dans `base/kustomization.yaml`.
+5. **Nettoyer** ce que l'overlay ne décrit pas : Job et NetworkPolicy de migration du hook (`mediagenda-migrations`), pod `mediagenda-test-pret` de `helm test`, et le Valkey du sous-chart **une fois l'API passée sur `valkey`** (`kubectl -n mediagenda-dev get all,cm,sa,netpol -l app.kubernetes.io/instance=mediagenda,app.kubernetes.io/name=valkey` pour la liste, puis suppression de ces objets et de la NetworkPolicy `mediagenda-valkey` du chart). On vérifie avec `kubectl get all,networkpolicy -n mediagenda-dev` et le rendu. L'étiquette `app.kubernetes.io/managed-by: Helm` reste sur les objets : elle vient du rendu du chart (`helm template`), comme en recette et en prod. Elle est commentée dans `base/kustomization.yaml`.
 6. **Vérifier** : `kubectl diff --server-side -k overlays/dev` est vide, les pods sont prêts, et `https://mediagenda-dev.apps…/pret` répond 200.
 
 *3. Prod en 1.1.0.* Étapes :
-1. **Sauvegarde de la base**, à la demande, par le plugin Barman Cloud (M16-E19), puis vérification :
+1. **Brancher la base de prod sur le plugin Barman Cloud** (prérequis : le component `dependances` de M17-E09 ne le fait pas). Comme pour la recette au M16-E19 : Secret `cnpg-s3` et ConfigMap `medisphere-ca` créés dans `mediagenda-prod` **hors dépôt** par les scripts du M16 (identifiants du Vault `lab`) ; dans l'overlay `prod`, un `ObjectStore` `cnpg-s3` (même spécification qu'en recette, avec un chemin propre à la prod, par exemple `s3://cnpg-k8s-par1/mediagenda-prod/`), un patch du `Cluster` qui ajoute `spec.plugins` (`barman-cloud.cloudnative-pg.io`, `isWALArchiver: true`, `barmanObjectName: cnpg-s3`), et la sortie des pods `cnpg.io/cluster` vers `s3-01` (10.10.20.14, TCP 8333) dans les politiques du component (CiliumNetworkPolicy `toCIDR`, comme `postgresql-sortie` du M16-E19). Vérifie l'archivage continu (`kubectl cnpg status mediagenda-db -n mediagenda-prod` : WAL archivés, aucune erreur) avant d'aller plus loin. ⚠️ Non rejoué sur un cluster : reprends les noms exacts de ta recette du M16.
+   **Sauvegarde de la base**, à la demande, par le plugin, puis vérification :
    ```yaml
    apiVersion: postgresql.cnpg.io/v1
    kind: Backup

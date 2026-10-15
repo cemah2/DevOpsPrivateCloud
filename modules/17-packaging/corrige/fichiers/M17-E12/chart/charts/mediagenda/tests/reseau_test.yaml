@@ -29,13 +29,28 @@ tests:
       - hasDocuments:
           count: 3
 
-  - it: laisse entrer le trafic de la Gateway Cilium sur le port 8000
+  - it: laisse entrer le trafic de la Gateway Cilium sur le port 8000 du pod
     template: ciliumnetworkpolicy.yaml
     documentIndex: 0
     asserts:
       - equal:
           path: spec.ingress[0].fromEntities[0]
           value: ingress
+
+  - it: filtre en L7 les appels venant de la Gateway (/metrics n'est pas publié)
+    template: ciliumnetworkpolicy.yaml
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.ingress[0].toPorts[0].rules.http
+          content:
+            method: GET
+            path: /sante
+      - notContains:
+          path: spec.ingress[0].toPorts[0].rules.http
+          content:
+            method: GET
+            path: /metrics
 
   - it: ne rend aucune politique si networkPolicy.enabled est faux
     template: networkpolicy.yaml

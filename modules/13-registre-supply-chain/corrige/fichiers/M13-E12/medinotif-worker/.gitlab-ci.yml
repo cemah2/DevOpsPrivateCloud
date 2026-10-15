@@ -10,11 +10,23 @@ workflow:
 
 include:
   - project: plateforme/ci-templates
-    ref: v<X.Y.Z>
+    ref: v1.<Y>.<Z>                   # étiquette épinglée du dépôt de gabarits
     file:
-      - qualite.yml
-      - release.yml
-      - supply-chain.yml
+      - templates/qualite.yml
+      - templates/release.yml
+      - templates/image.yml           # job caché .hadolint
+      - templates/supply-chain.yml
+      - templates/verification.yml    # M13-E14 (job verifier-signature)
 
 variables:
   SC_IMAGE_NOM: medisphere/medinotif
+
+# Chaque gabarit déclare ses stages : le projet donne la liste complète (sinon le dernier inclus gagne).
+stages: [lint, test, construction, analyse, publication, signature, verification, release]
+
+hadolint:
+  extends: .hadolint
+
+verifier-signature:
+  extends: .verifier-signature
+  needs: [sc:publication, sc:signature]

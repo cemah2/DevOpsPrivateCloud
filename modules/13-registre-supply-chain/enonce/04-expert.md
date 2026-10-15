@@ -36,8 +36,8 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 ### M13-E19 — Panne : impossible de tirer l'image  `BF` `★★`
 
-> **Ticket INC-4031** — *De : Julien Petit*
-> *(Le détail du ticket s'affiche à l'injection : selon le cas, des jobs qui n'arrivent plus à tirer une image privée, une image « publique » qui ne l'est plus, un `runner02` qui ne fait plus confiance au registre, ou une nouvelle image de base qui ne passe pas alors que les anciennes passent.)* Lucas propose de « mettre le projet en public pour débloquer » : n'en fais rien.
+> **Ticket INC-4019** — *De : Julien Petit*
+> *(Le détail du ticket s'affiche à l'injection : selon le cas, des tirages qui échouent sur des images privées, sur une image publique, sur toutes les images depuis un seul runner, ou seulement sur une nouvelle image de base alors que les anciennes passent.)* Lucas propose de « mettre le projet en public pour débloquer » : n'en fais rien.
 
 **Objectifs pédagogiques**
 - Remonter d'un échec de tirage à son étage : TLS du client, service de jetons, identité (robot, expiration, droits), visibilité du projet, cache et registre amont.
@@ -87,7 +87,7 @@ Un cache de Harbor sert ce qu'il a déjà, même quand le registre amont est inj
 
 ### M13-E20 — Panne : la publication de l'image échoue  `BF` `★★★`
 
-> **Ticket INC-4032** — *De : Julien Petit*
+> **Ticket INC-4020** — *De : Julien Petit*
 > *(Le détail s'affiche à l'injection : le job de publication échoue au moment du `push`, après une construction réussie, avec un message différent selon le cas.)* On a une mise en production prévue cet après-midi. Ne touche ni aux politiques de `medisphere`, ni à l'immuabilité des versions : Sophie y tient.
 
 **Objectifs pédagogiques**
@@ -139,7 +139,7 @@ Une règle d'immuabilité se lit comme un filtre : « dépôts qui correspondent
 
 ### M13-E21 — Panne : la signature n'est plus reconnue  `BF` `★★★`
 
-> **Ticket INC-4033** — *De : Nadia Roussel* — *Copie : Sophie Laurent*
+> **Ticket INC-4021** — *De : Nadia Roussel* — *Copie : Sophie Laurent*
 > La vérification de signature avant déploiement échoue sur une image qu'on déploie depuis des semaines : « no matching signatures » ou « no signatures found » selon les essais. Personne n'a touché à l'image, paraît-il. Sophie demande qu'on ne contourne **rien** : pas de déploiement sans vérification, pas de re-signature d'une image dont on ne sait pas d'où elle vient.
 
 **Objectifs pédagogiques**
@@ -190,7 +190,7 @@ Le journal d'audit de Harbor (*Logs* du projet, API `/projects/{nom}/auditlog-ex
 
 ### M13-E22 — Panne : Harbor ne démarre plus  `BF` `★★★`
 
-> **Ticket INC-4034** — *De : Nadia Roussel* — *Priorité : critique*
+> **Ticket INC-4022** — *De : Nadia Roussel* — *Priorité : critique*
 > Après la maintenance de cette nuit sur `reg01`, Harbor ne revient pas : les pipelines échouent tous, l'interface ne répond pas ou renvoie une erreur. Karim est injoignable et a laissé un mot : « j'ai juste redémarré Harbor ». La sauvegarde de cette nuit est là si besoin, mais je préfère qu'on ne restaure que si c'est vraiment nécessaire. *(Des précisions s'affichent à l'injection.)*
 
 **Objectifs pédagogiques**
@@ -243,7 +243,7 @@ Le journal d'audit de Harbor (*Logs* du projet, API `/projects/{nom}/auditlog-ex
 
 ### M13-E23 — Sous le capot : l'API de distribution OCI  `LAB` `★★★`
 
-> **Ticket PLAT-1437** — *De : Karim Benali*
+> **Ticket PLAT-1423** — *De : Karim Benali*
 > Au module 14, containerd tirera nos images sans Docker, à travers le cache, avec un jeton. Le jour où ça casse, je veux que quelqu'un sache ce qui passe vraiment sur le fil. Fais-le une fois à la main : jeton, manifeste, index, blobs, référents. Et recalcule toi-même un digest : je veux que tu voies pourquoi une image « signée par digest » ne peut pas changer sous nos pieds.
 
 **Objectifs pédagogiques**
@@ -297,7 +297,7 @@ Les blobs peuvent être servis par une redirection (`curl -L`). Pour les référ
 
 ### M13-E24 — Questions expert : supply chain  `Q` `★★★`
 
-> **Ticket PLAT-1438** — *De : Claire Morel*
+> **Ticket PLAT-1424** — *De : Claire Morel*
 > Avant la revue du module, Karim te pose les questions qu'il pose en entretien. Réponds par écrit, en argumentant, comme si tu devais convaincre un auditeur.
 
 **Prérequis** : tout le module jusqu'à E23.

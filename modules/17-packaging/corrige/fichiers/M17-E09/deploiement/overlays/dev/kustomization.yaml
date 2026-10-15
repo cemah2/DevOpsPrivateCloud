@@ -8,7 +8,7 @@ resources:
   - livraison.yaml
 labels:
   - pairs:
-      medisphere.fr/environnement: dev
+      medisphere.internal/environnement: dev
     includeSelectors: false
     includeTemplates: true
 replicas:

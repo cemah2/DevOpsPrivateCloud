@@ -24,16 +24,16 @@ _m16_e29_pv="$(jq -r '.spec.volumeName // empty' <<<"$_m16_e29_pvc" 2>/dev/null)
 _m16_e29_img=""
 [[ -z "$_m16_e29_pv" ]] || _m16_e29_img="$(_m16p_image_pv "$_m16_e29_pv")" || _m16_e29_img=""
 check_cmd "l'image RBD du volume de Valkey est chiffrée (métadonnées ceph-csi)" _m16p_image_chiffree "$_m16_e29_img"
-check_cmd "plateforme : le StatefulSet décrit ceph-rbd-chiffre sur main d'un dépôt de MédiAgenda ou de plateforme/k8s" \
-  bash -c '[[ "$1" == oui ]]' _ "$( { _m16p_recherche_main mediagenda/deploiement ceph-rbd-chiffre || _m16p_recherche_main plateforme/k8s 'storageClassName: ceph-rbd-chiffre'; } && echo oui || echo non)"
+check_cmd "code : le StatefulSet décrit ceph-rbd-chiffre sur main de mediagenda/api (k8s/recette/30-valkey.yaml)" \
+  bash -c '[[ "$1" == oui ]]' _ "$( { _m16p_recherche_main mediagenda/api ceph-rbd-chiffre || _m16p_recherche_main plateforme/k8s 'storageClassName: ceph-rbd-chiffre'; } && echo oui || echo non)"
 
 title "Nettoyage"
 check_cmd "aucun PVC ni Job de migration dans mediagenda-recette" \
-  _m16p_jq "$(_m16p_kj pvc,jobs -n "$_M16P_RECETTE" -l medisphere.fr/migration)" '(.items | length) == 0'
+  _m16p_jq "$(_m16p_kj pvc,jobs -n "$_M16P_RECETTE" -l medisphere.internal/migration)" '(.items | length) == 0'
 check_cmd "aucun ancien volume de Valkey conservé (PV Released ou Available venant de donnees-valkey-0)" \
   _m16p_jq "$(_m16p_kj pv)" 'all(.items[]; (.status.phase == "Bound") or ((.spec.claimRef.name // "") != "donnees-valkey-0"))'
-# Valeur « normale » de failureThreshold des sondes de l'API : celle de M14 (3) ; 6 tolère un réglage
-# différent, mais pas la valeur de fenêtre de migration (30) oubliée.
+# Valeur « normale » de failureThreshold des sondes de l'API : celle de M14 (2) ; 6 tolère un réglage
+# différent, mais pas la valeur de fenêtre de migration (60) oubliée.
 check_cmd "sondes de disponibilité des Deployments de la recette revenues à la normale (failureThreshold ≤ 6)" \
   _m16p_jq "$(_m16p_kj deployments -n "$_M16P_RECETTE")" 'all(.items[].spec.template.spec.containers[]; (.readinessProbe.failureThreshold // 3) <= 6)'
 

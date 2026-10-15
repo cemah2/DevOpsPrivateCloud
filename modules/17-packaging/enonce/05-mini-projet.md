@@ -6,7 +6,7 @@ Le module a écrit, testé, publié, signé, livré, cassé et réparé. Il rest
 
 ### M17-E25 — Mini-projet : packaging MédiSphère v1  `LIBRE` `★★★`
 
-> **Ticket PLAT-1890** — *De : Claire Morel* — *Copie : Karim Benali, Sophie Laurent, Nadia Roussel, Julien Petit*
+> **Ticket PLAT-1825** — *De : Claire Morel* — *Copie : Karim Benali, Sophie Laurent, Nadia Roussel, Julien Petit*
 > Revue du packaging v1 la semaine prochaine. Je veux un contrôle global sans un seul rouge, et **rien de provisoire** : plus de release Helm de banc d'essai en dev, plus de release d'essai dans `wb-essais`, plus de panne ouverte. MédiAgenda 1.1.0, validée en recette, passe en production pendant la revue, par une MR, sous les yeux du comité.
 > Pendant la revue :
 > - Karim fera une MR de test sur le chart et une autre sur l'overlay de prod qui ajoute un `images:` : il veut voir les deux pipelines refuser ;
@@ -31,7 +31,7 @@ Le module a écrit, testé, publié, signé, livré, cassé et réparé. Il rest
   - `mediagenda-dev`, aujourd'hui une release Helm, à faire passer sous l'overlay `dev` ;
   - `mediagenda-recette` (overlay ; base PostgreSQL et Valkey du M16) ;
   - `mediagenda-prod` (overlay ; components `dependances`, `haute-disponibilite`, `livraison`), publiée en `mediagenda.apps.par1.medisphere.internal`.
-- La base de données du dev (`mediagenda-db`, d'abord fournie par `ressources/E03-…`, puis décrite par le component `dependances`) contient des données jetables. Celle de la prod est **à protéger** dès maintenant, comme si elle portait des données de santé.
+- La base de données du dev (`mediagenda-db`, créée par `ressources/E03-…`, reprise par la release Helm en E06, puis décrite par le component `dependances`) contient des données jetables. Valkey, lui, passe du sous-chart (`mediagenda-valkey`) au StatefulSet `valkey` du component. Celle de la prod est **à protéger** dès maintenant, comme si elle portait des données de santé.
 - Le contrôle global `lab/bin/check 17 25` vérifie :
   - le chart et son pipeline ;
   - les trois environnements (rendu d'un chart publié et signé, version, variable d'environnement, aucun geste manuel, aucune release Helm applicative, `kubectl diff --server-side` vide) ;

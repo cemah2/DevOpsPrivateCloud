@@ -205,7 +205,7 @@ symptome_E22() {
     4) l="Karim avait aussi prévu « une petite modification de configuration » pour le renouvellement des certificats." ;;
     *) l="Karim n'a rien noté d'autre." ;;
   esac
-  wb_symptome "Ticket INC-4034 — De : Nadia Roussel (priorité critique)" \
+  wb_symptome "Ticket INC-4022 — De : Nadia Roussel (priorité critique)" \
     "Après la maintenance de cette nuit sur reg01, Harbor ne revient pas : l'interface ne répond pas" \
     "ou renvoie une erreur, tous les pipelines échouent. Karim : « j'ai juste redémarré Harbor »." \
     "$l" \

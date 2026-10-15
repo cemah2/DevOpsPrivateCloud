@@ -23,10 +23,10 @@ check_cmd "… elle est analysée, sans vulnérabilité critique" _m13p_sans_cri
 check_cmd "le dépôt d'essai medisphere/essai-politiques n'existe plus" _m13p_repos_motif_absents medisphere '(^|/)essai-politiques$'
 
 title "Vérification par le consommateur"
-check_cmd "plateforme/ci-templates : verification.yml contient un « cosign verify » par clé" \
-  _m13p_fichier_motifs plateforme/ci-templates verification.yml 'cosign verify' '--key'
+check_cmd "plateforme/ci-templates : templates/verification.yml contient un « cosign verify » par clé" \
+  _m13p_fichier_motifs plateforme/ci-templates templates/verification.yml 'cosign verify' '--key'
 check_cmd "… et vérifie l'attestation SBOM (verify-attestation)" \
-  _m13p_fichier_motifs plateforme/ci-templates verification.yml 'verify-attestation'
+  _m13p_fichier_motifs plateforme/ci-templates templates/verification.yml 'verify-attestation'
 check_cmd "mediagenda/api : le dernier pipeline de main a réussi un job verifier-signature" \
   _m13p_job_reussi mediagenda/api verifier-signature
 check_cmd "docs/registre/politiques.md sur main (messages de refus, exception)" \

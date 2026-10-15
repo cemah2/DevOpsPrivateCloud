@@ -86,7 +86,7 @@ check_output "adm01 : kubectl 1.36 (une mineure d'écart au plus avec le cluster
 check_output "adm01 : Helm 4.3" '^v4\.3\.' helm version --short
 check_output "adm01 : CLI cilium 0.20" 'cilium-cli: v0\.20\.' cilium version --client
 check_output "adm01 : CLI hubble 1.20" '^hubble v1\.20\.' hubble version
-check_output "adm01 : etcdctl de la version d'etcd du cluster (3.6.6)" '^etcdctl version: 3\.6\.6$' etcdctl version
+check_output "adm01 : etcdctl de la version d'etcd du cluster ($_M14D_ETCD)" "^etcdctl version: ${_M14D_ETCD//./\\.}\$" etcdctl version
 check_cmd "adm01 : k9s installé" command -v k9s
 
 # --- 5. Le code et la documentation -------------------------------------------------------------------

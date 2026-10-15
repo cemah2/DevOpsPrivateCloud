@@ -28,7 +28,9 @@ database:
 valkeyUrl: redis://valkey:6379/0
 
 service:
-  port: 8000
+  # Port du Service : 80, comme le Service mediagenda-api du M14 (les HTTPRoute visent ce port).
+  # Le conteneur écoute sur 8000 (port nommé « http », cible du Service et des politiques réseau).
+  port: 80
 
 httpRoute:
   enabled: true

@@ -1,17 +1,23 @@
 # Chaîne de livraison des images
 
-> DEV-1409 (M13-E09). Gabarit `plateforme/ci-templates`, fichier `supply-chain.yml`. Premier client : `mediagenda/api`.
+> DEV-1409 (M13-E09). Gabarit `plateforme/ci-templates`, fichier `templates/supply-chain.yml`. Premier client : `mediagenda/api`.
 
 ## Utiliser la chaîne
 
 ```yaml
 include:
   - project: plateforme/ci-templates
-    ref: v<X.Y.Z>
-    file: supply-chain.yml
+    ref: v1.<Y>.<Z>               # étiquette épinglée (pas la branche v1)
+    file:
+      - templates/qualite.yml
+      - templates/release.yml
+      - templates/supply-chain.yml
 variables:
   SC_IMAGE_NOM: medisphere/<application>
+stages: [lint, test, construction, analyse, publication, signature, verification, release]
 ```
+
+Le projet déclare la liste complète des stages : chaque gabarit inclus déclare les siens, et seul le dernier compterait.
 
 Prérequis du projet : un `Dockerfile` qui accepte `ARG VERSION` ; les variables de groupe `HARBOR_ROBOT_USER` (non développée), `HARBOR_ROBOT_TOKEN` (masquée), `COSIGN_PRIVATE_KEY` (fichier), `COSIGN_PASSWORD` (masquée), toutes **protégées** ; les étiquettes `v*` **protégées** dans le projet GitLab (sinon une étiquette poussée par un développeur n'a pas accès aux secrets, et c'est voulu).
 

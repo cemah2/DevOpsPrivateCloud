@@ -243,7 +243,7 @@ resume_E42() {
 }
 
 symptome_E42() {
-  wb_symptome "Ticket INC-3948 — De : Julien Petit" \
+  wb_symptome "Ticket INC-3942 — De : Julien Petit" \
     "Depuis ce matin, le pipeline de mediagenda/api (et ceux des autres applications) ne publie plus" \
     "l'image dans le registre de travail de ctr01 : le job de construction ou de publication échoue" \
     "sur runner02. Personne n'a touché au .gitlab-ci.yml. Lucas propose de « passer le runner en" \

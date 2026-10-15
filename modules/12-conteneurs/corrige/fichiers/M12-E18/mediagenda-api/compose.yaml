@@ -2,7 +2,7 @@
 # avec les LIMITES de ressources, les journaux et les sondes de M12-E18 (PLAT-1318) ; image 0.2.0
 # de M12-E11. Les blocs nouveaux sont marqués « E18 ».
 #
-#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 600
+#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 700, fichier en 644
 #   admin@ctr01:~/src/mediagenda-api$ docker compose up -d --wait
 #   admin@ctr01:~/src/mediagenda-api$ docker compose --profile outils run --rm psql
 #
@@ -156,6 +156,7 @@ volumes:
   donnees-db: {}
 
 secrets:
-  # Fichier local, hors dépôt (.gitignore), en 600 ; créé par outils/secrets-compose.sh.
+  # Fichier local, hors dépôt (.gitignore) : dossier secrets/ en 700, fichier en 644 (lisible par
+  # l'UID 10001 une fois monté) ; créé par outils/secrets-compose.sh.
   db_mdp:
     file: ./secrets/db_mdp

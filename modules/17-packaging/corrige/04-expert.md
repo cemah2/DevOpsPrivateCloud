@@ -11,7 +11,7 @@ Les scripts d'injection sont dans `corrige/pannes/`. `_m17-commun.sh` contient l
 
 Les objets modifiés sont sauvegardés sur `adm01` dans `~/.local/state/workbook/k8s/M17-EXX/`, l'état de la panne dans `~/.local/state/workbook/M17-EXX/`.
 
-**Testé** pendant la rédaction, sur un banc kube-apiserver 1.36 + etcd sans nœuds (Helm 4.3.0, Kustomize 5.8.1 de kubectl 1.36.5, yq 4.54.1) :
+**Testé** pour ce corrigé, sur un banc kube-apiserver 1.36 + etcd sans nœuds (Helm 4.3.0, Kustomize 5.8.1 de kubectl 1.36.5, yq 4.54.1) :
 - injection, constat et annulation des variantes 1 à 3 de E19, 1 à 3 de E20, 1 et 2 de E21, 1 et 2 de E22 ;
 - les réparations décrites ici, et les messages d'erreur cités (sorties réelles) ;
 - le script `helm-release.sh` de E23, avec les deux pilotes.
@@ -151,7 +151,7 @@ externalValkey.url est obligatoire quand valkey.enabled est faux
 
 Pourtant `externalValkey.url` est bien dans `values.yaml`. `git show` : le gabarit `mediagenda.valkeyUrl` lit désormais `.Values.externalValkey.uri`. Le message de `required` décrit ce que l'auteur **croyait** lire. Correctif : revenir à `.url`, ou renommer partout (valeur, schéma, tests), ce qui serait une rupture : `feat!:`.
 
-Piège constaté pendant la rédaction : **`helm lint --strict` passe** sur cette variante. En mode lint, Helm ne rend pas `required` bloquant. Seul le rendu (`helm template`, job `helm-lint` du pipeline qui rend chaque environnement) l'arrête. Ajoute un test helm-unittest qui vérifie la valeur de `MEDIAGENDA_VALKEY_URL` rendue (`redis://valkey:6379/0`).
+Piège constaté sur le banc d'essai : **`helm lint --strict` passe** sur cette variante. En mode lint, Helm ne rend pas `required` bloquant. Seul le rendu (`helm template`, job `helm-lint` du pipeline qui rend chaque environnement) l'arrête. Ajoute un test helm-unittest qui vérifie la valeur de `MEDIAGENDA_VALKEY_URL` rendue (`redis://valkey:6379/0`).
 
 **Pourquoi Lucas ne l'a pas vu** : il n'a lancé que `helm lint` (v3), ou rien (v1, v2), et la branche n'a jamais été poussée, donc aucun pipeline. Prévention : `pre-commit` du projet (M01) avec un hook local `helm template` et `helm unittest`, et la règle « une branche se pousse le jour même ».
 
@@ -207,7 +207,7 @@ Il croyait le component `livraison` « toujours en dernier ». C'est vrai **parm
 2. appliquer les `components` dans l'ordre de la liste (`livraison`, ses `replacements`) ;
 3. appliquer les **transformateurs propres à l'overlay** : `images`, `replicas`, `patches`, `labels`…
 
-Le `images:` de l'overlay passe donc **après** `livraison` et l'emporte. Comportement vérifié pendant la rédaction avec Kustomize 5.8.2 et 5.8.1. Seul un overlay *parent*, qui inclurait celui-ci en ressource, passerait encore après.
+Le `images:` de l'overlay passe donc **après** `livraison` et l'emporte. Comportement vérifié avec Kustomize 5.8.2 et 5.8.1. Seul un overlay *parent*, qui inclurait celui-ci en ressource, passerait encore après.
 
 **Variante 2 — component `debogage` inclus à tort.** `components: [dependances, haute-disponibilite, debogage, livraison]` (commit `chore(prod): journaux détaillés pour le diagnostic…`). L'image est la bonne, mais :
 - `MEDIAGENDA_LOG_LEVEL=DEBUG` et `MEDIAGENDA_LOG_FORMAT=texte` (le correctif stratégique du component) ;
@@ -267,7 +267,7 @@ Puis `managedFields` (opération, sous-ressource, `time`) des objets nommés, et
   admin@adm01:~$ kubectl patch deploy mediagenda -n mediagenda-dev --type json -p "[{\"op\":\"remove\",\"path\":\"/metadata/managedFields/$i\"}]"
   ```
   `helm upgrade --force-conflicts` une seule fois donne le même résultat. Il est acceptable **après** l'analyse, pas à la place.
-- **Piège, testé pendant la rédaction** : remettre `INFO` à la main avec `kubectl edit` fait passer l'upgrade suivant, parce que `kubectl-edit` et `helm` **copossèdent** le champ (même valeur). Le jour où le chart change `logLevel`, l'upgrade échoue à nouveau. Seuls le retrait de l'entrée ou `--force-conflicts` rendent l'objet propre.
+- **Piège, vérifié sur le banc d'essai** : remettre `INFO` à la main avec `kubectl edit` fait passer l'upgrade suivant, parce que `kubectl-edit` et `helm` **copossèdent** le champ (même valeur). Le jour où le chart change `logLevel`, l'upgrade échoue à nouveau. Seuls le retrait de l'entrée ou `--force-conflicts` rendent l'objet propre.
 - **v3, HPA.** Deux décisions possibles :
   1. *L'HPA n'est pas voulu en dev* (cas du ticket) : on supprime l'HPA, on retire l'entrée `kube-controller-manager`/`scale`, puis `helm upgrade` repose `replicas: 1`.
   2. *L'HPA est voulu* : il entre **dans le chart**. Une valeur `autoscaling.enabled` rend l'HPA, et `spec.replicas` disparaît du Deployment ([extrait](fichiers/M17-E22/chart/charts/mediagenda/templates/deployment.extrait.yaml)). Attention : si `helm` est le seul propriétaire de `replicas`, l'appliquer sans le champ le **retire**, et le Deployment retombe à 1 réplica par défaut. On crée donc l'HPA **avant**, dans la même révision ou une révision précédente. Le contrôleur devient copropriétaire, et quand `helm` abandonne le champ, la valeur reste celle de l'HPA. C'est la démarche de la documentation Kubernetes (*Horizontal Pod Autoscaling*, migration).

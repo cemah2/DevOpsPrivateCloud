@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Statut** | En vigueur |
-| **Version** | 1.0 — 2026-10 (M12-E33, ticket PLAT-1359) |
+| **Version** | 1.0 — 2026-10 (M12-E33, ticket PLAT-1333) |
 | **Propriétaire** | Équipe Plateforme (Claire Morel) ; relecteurs : Sophie Laurent (sécurité), Julien Petit (équipes de développement), Karim Benali (exploitation) |
 | **Revue** | semestrielle, et à chaque ADR qui touche les conteneurs |
 
@@ -82,7 +82,7 @@ ADR-0120 (Podman sans privilège sur les serveurs, Docker pour la CI et Harbor).
 
 | Règle | Niveau | Justification | Contrôle |
 |---|---|---|---|
-| `CNT-HOTE-01` Groupe `docker` limité aux comptes qui ont déjà `sudo` (et au compte du runner) | DOIT | socket = root (E26) | CHECK |
+| `CNT-HOTE-01` Groupe `docker` limité aux comptes qui ont déjà `sudo` (vide sur `runner02`, dont le service tourne en root) | DOIT | socket = root (E26) | CHECK |
 | `CNT-HOTE-02` Démon Docker joignable en TCP | NE DOIT PAS | E26 | CHECK (`ss`) |
 | `CNT-HOTE-03` SELinux *enforcing* sur la famille RHEL ; accès inhabituel par un module udica versionné ; pas de `:z`/`:Z` sur un dossier non dédié | DOIT | E25 | CHECK, REV |
 | `CNT-HOTE-04` Audit des modifications du moteur (rôle `audit_conteneurs`) | DOIT | traçabilité (E26) | CHECK |

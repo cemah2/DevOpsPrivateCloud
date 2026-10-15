@@ -15,7 +15,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 spec:
   podSelector:
     matchLabels:
@@ -58,7 +58,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 automountServiceAccountToken: false
 
 ---
@@ -73,7 +73,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 data:
   MEDIAGENDA_LOG_LEVEL: "INFO"
   MEDIAGENDA_LOG_FORMAT: "json"
@@ -94,7 +94,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 spec:
   type: ClusterIP
   selector:
@@ -103,7 +103,7 @@ spec:
     app.kubernetes.io/component: api
   ports:
     - name: http
-      port: 8000
+      port: 80
       targetPort: http
 
 ---
@@ -118,7 +118,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 spec:
   replicas: 1
   selector:
@@ -135,7 +135,7 @@ spec:
         app.kubernetes.io/instance: mediagenda
         app.kubernetes.io/version: "v1.0.0"
         app.kubernetes.io/managed-by: Helm
-        medisphere.fr/environnement: dev
+        medisphere.internal/environnement: dev
         app.kubernetes.io/component: api
       annotations:
         checksum/config: 80ad697895de9909bf318bab4d8be611de344584aeacd8e67275e7bb3ca4d4f8
@@ -212,7 +212,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 spec:
   endpointSelector:
     matchLabels:
@@ -220,6 +220,23 @@ spec:
       app.kubernetes.io/instance: mediagenda
   ingress:
     - fromEntities: [ingress]
+      toPorts:
+        - ports:
+            - { port: "8000", protocol: TCP }
+          # Filtrage L7 repris de la politique api-entree du M15-E17 (SEC-1617) : seuls les appels
+          # prévus de l'API passent par la Gateway ; tout autre appel (dont /metrics) reçoit un 403
+          # du proxy. Chemins = expressions régulières sur le chemin complet, requête comprise.
+          rules:
+            http:
+              - { method: GET, path: "/sante" }
+              - { method: GET, path: "/pret" }
+              - { method: GET, path: "/api/v1/rendez-vous(\\?.*)?" }
+              - { method: POST, path: "/api/v1/rendez-vous" }
+              - { method: GET, path: "/api/v1/rendez-vous/[0-9]+" }
+              - { method: DELETE, path: "/api/v1/rendez-vous/[0-9]+" }
+              - { method: GET, path: "/api/v1/creneaux(\\?.*)?" }
+    # Sondes du kubelet (identité host), comme au M15-E17.
+    - fromEntities: [host]
       toPorts:
         - ports:
             - { port: "8000", protocol: TCP }
@@ -236,7 +253,7 @@ metadata:
     app.kubernetes.io/instance: mediagenda
     app.kubernetes.io/version: "v1.0.0"
     app.kubernetes.io/managed-by: Helm
-    medisphere.fr/environnement: dev
+    medisphere.internal/environnement: dev
 spec:
   parentRefs:
     - name: gw-par1
@@ -247,4 +264,4 @@ spec:
   rules:
     - backendRefs:
         - name: mediagenda
-          port: 8000
+          port: 80

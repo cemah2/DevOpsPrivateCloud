@@ -15,11 +15,13 @@
 #     ~/.local/state/workbook/M14-EXX/ sur adm01, en JSON nettoyé) ; l'annulation ne rétablit que ce
 #     qui porte encore la marque de la panne (une réparation de l'apprenant n'est jamais défaite).
 #
-# Pourquoi pas wb_k8s_restaurer de pannes-lib.sh : il recrée les objets par « replace --force »
-# (suppression puis création), ce qui est acceptable pour un témoin mais pas pour un Node (ses pods
-# seraient supprimés) ni pour CoreDNS. Ici, les taints se retirent une à une, CoreDNS est corrigé par
-# « patch », et les objets sauvegardés sont nettoyés (resourceVersion, uid, status…) puis remis par
-# « replace » simple (mise à jour inconditionnelle), ou recréés s'ils ont disparu.
+# Pourquoi un mécanisme propre plutôt que wb_k8s_restaurer de pannes-lib.sh : celui-ci remet un objet
+# entier tel qu'il était (replace simple), alors que ces pannes ne doivent défaire QUE ce qu'elles ont
+# changé et jamais une réparation de l'apprenant faite entre-temps. Ici, les taints se retirent une à
+# une, CoreDNS est corrigé par « patch », et les objets sauvegardés (nettoyés : resourceVersion, uid,
+# status…) ne sont remis par « replace » simple, ou recréés s'ils ont disparu, que s'ils portent encore
+# la marque de la panne (chaque script le vérifie avant m14_restaurer_objet, sinon m14_oublier_objet).
+# Jamais « replace --force » (suppression puis création).
 #
 # Témoins (m14_temoins) : espace wb-pannes, créé à la première injection et jamais supprimé par les
 # pannes (voir _m14-temoins.yaml et l'en-tête de enonce/04-expert.md).

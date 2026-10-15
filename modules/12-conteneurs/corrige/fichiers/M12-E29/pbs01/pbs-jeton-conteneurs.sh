@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pbs01 : espace de noms par1/conteneurs et jeton limité pour ctr01 (M12-E29, PLAT-1355).
+# pbs01 : espace de noms par1/conteneurs et jeton limité pour ctr01 (M12-E29, PLAT-1329).
 # Même méthode que pbs-jetons-socle.sh (M06-E28) : le jeton n'a que DatastoreBackup sur son espace
 # (droits du jeton = intersection avec ceux de wb-backup@pbs). À lancer en root sur pbs01.
 # Retour arrière : proxmox-backup-manager user delete-token wb-backup@pbs ctr01 ; supprimer l'ACL ;

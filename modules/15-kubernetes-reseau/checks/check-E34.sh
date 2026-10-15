@@ -32,7 +32,7 @@ check_cmd "HTTPRoute medidoc attachée à l'écouteur https de gw-par1, pour $_M
      and any(.spec.hostnames[]; . == $h)' --arg h "$_M15_E34_NOM"
 check_cmd "la route est acceptée par la Gateway" _m15p_condition "$_M15_E34_RT" Accepted
 check_cmd "les références de la route sont résolues" _m15p_condition "$_M15_E34_RT" ResolvedRefs
-check_cmd "l'espace porte medisphere.fr/exposition=oui" _m15p_ns_label "$_M15_E34_NS" medisphere.fr/exposition oui
+check_cmd "l'espace porte medisphere.internal/exposition=oui" _m15p_ns_label "$_M15_E34_NS" medisphere.internal/exposition oui
 
 title "4. Nom"
 for _m15_e34_d in "${_M15P_DNS[@]}"; do

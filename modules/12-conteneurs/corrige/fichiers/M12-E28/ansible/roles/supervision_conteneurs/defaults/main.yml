@@ -1,5 +1,5 @@
 ---
-# Rôle supervision_conteneurs — accès en LECTURE SEULE à l'état des conteneurs (M12-E28, PLAT-1354).
+# Rôle supervision_conteneurs — accès en LECTURE SEULE à l'état des conteneurs (M12-E28, PLAT-1328).
 # Compte « supervision » : sans mot de passe, clé autorisée à commande forcée et restreinte, une
 # seule règle sudo vers /usr/local/sbin/ms-etat-conteneurs. Il n'est PAS dans le groupe docker
 # (ce serait root sur l'hôte, M12-E26).

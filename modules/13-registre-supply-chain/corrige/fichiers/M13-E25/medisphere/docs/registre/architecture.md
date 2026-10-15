@@ -31,7 +31,7 @@
 
 ## Confiance
 
-Politique : ADR-0130 et `politiques.md`. Chaîne : `supply-chain.yml` (E09) → `verification.yml` (E14) → admission Kubernetes (M14 VAP, M26 Kyverno). Clé de signature : Vault `critique` + variable de CI protégée ; clé publique `docs/registre/cosign.pub`.
+Politique : ADR-0130 et `politiques.md`. Chaîne : `templates/supply-chain.yml` (E09) → `templates/verification.yml` (E14) → admission Kubernetes (M14 VAP, M26 Kyverno). Clé de signature : Vault `critique` + variable de CI protégée ; clé publique `docs/registre/cosign.pub`.
 
 ## Ce qui n'est PAS redondant
 

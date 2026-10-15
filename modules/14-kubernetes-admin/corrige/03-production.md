@@ -159,7 +159,7 @@ Ordre officiel : nœud de contrôle = dépôt, kubeadm, `upgrade plan`/`apply` (
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/k8s-montee-version.yml -e k8s_cible=1.36.5
 ```
 
-*6. Après* : RB-142 §7. Avertissement typique dans le journal de kubeadm ou de containerd : l'image *pause* configurée dans containerd (3.10.1) diffère de celle attendue par kubeadm (3.10.2). Corriger `k8s_image_pause` (dont dérive `containerd_image_sandbox`), rejouer le rôle `containerd` **nœud par nœud** (le redémarrage de containerd ne tue pas les conteneurs : les *shims* restent). Puis `etcd_instantane_outils_version: 3.6.8` (et son empreinte), rôle `etcd_instantane`. Fusion de la MR, rôles rejoués : `changed=0`.
+*6. Après* : RB-142 §7. Avertissement typique dans le journal de kubeadm ou de containerd : l'image *pause* configurée dans containerd (3.10.1) diffère de celle attendue par kubeadm (3.10.2). Corriger `k8s_image_pause` (dont dérive `containerd_image_sandbox`), rejouer le rôle `containerd` **nœud par nœud** (le redémarrage de containerd ne tue pas les conteneurs : les *shims* restent). Puis `etcd_instantane_outils_version: 3.6.8` (et son empreinte), rôle `etcd_instantane` ; même version pour `adm01` dans les valeurs du rôle `outils_k8s` (`playbooks/outils-k8s.yml`) : le check de M14-E05, rejoué après la montée, compare `etcdctl version` de `adm01` à l'etcd du cluster. Fusion de la MR, rôles rejoués : `changed=0`.
 
 *7. Runbook* : modèle fourni.
 
@@ -483,6 +483,8 @@ L'ADR est revue après le M18 avec les mêmes mesures sur RKE2 et Talos, et à c
 ---
 
 ### M14-E32 — Questions de production : Kubernetes
+
+**Barème** : 2 points par question, total sur 28. 2 = juste, argumenté et chiffré quand c'est possible ; 1 = idée juste mais incomplète ; 0 = faux ou blanc. Pour un QCM, la bonne lettre sans justification vaut 1.
 
 **1. Quorum.** Quorum = ⌊N/2⌋ + 1. Trois membres : quorum de 2, on peut en perdre **un**. Quatre membres : quorum de 3, on ne peut toujours en perdre qu'**un** — un quatrième membre ajoute une machine qui peut tomber sans ajouter de tolérance, et rend les écritures plus lentes (une majorité plus grande à attendre). D'où les nombres impairs (3, 5). Sans quorum : plus aucune écriture ni lecture cohérente ; les serveurs d'API échouent ; mais les **pods déjà lancés tournent** (le kubelet garde son état), les Services continuent de fonctionner (règles kube-proxy/Cilium déjà en place), CoreDNS répond depuis son cache tant que ses pods vivent. Rien de nouveau ne peut être planifié, rien ne se répare.
 

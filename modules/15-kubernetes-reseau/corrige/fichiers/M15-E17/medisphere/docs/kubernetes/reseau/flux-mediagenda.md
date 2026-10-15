@@ -13,6 +13,8 @@
 | 3 | kubelet du nœud (identité `host`) | `mediagenda-api` | 8000 | HTTP : `GET /sante`, `GET /pret` | sondes de vivacité et de disponibilité | `api-entree` |
 | 4 | `mediagenda-api` | `postgresql` (même espace) | 5432 | TCP | données des rendez-vous | `api-vers-donnees`, `postgresql-depuis-api` |
 | 5 | `mediagenda-api` | `valkey` (même espace) | 6379 | TCP | cache des créneaux | `api-vers-donnees`, `valkey-depuis-api` |
+| 6 | Job `mediagenda-migration-*` (à chaque version) et, en dev, CronJob `mediagenda-sauvegarde` | `postgresql` (même espace) | 5432 | TCP | migration du schéma (M14-E15/E21), sauvegarde `pg_dump` (M14-E15) | `taches-vers-postgresql`, `postgresql-depuis-api` |
+| 7 | `valkey-1`, `valkey-2` | `valkey-0` (même espace) | 6379 | TCP | réplication (`--replicaof`, M14-E15/E21) | `valkey-replication` |
 
 **Refusé explicitement (essais de la MR)** : `/metrics` depuis la Gateway (403) ; toute méthode ou tout chemin hors de la ligne 2 (403) ; tout pod d'un autre espace vers PostgreSQL, Valkey ou l'API ; toute sortie hors du cluster (aucune n'est nécessaire aujourd'hui).
 

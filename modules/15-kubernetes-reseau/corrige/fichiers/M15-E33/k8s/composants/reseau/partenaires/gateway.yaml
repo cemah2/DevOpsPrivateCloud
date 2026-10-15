@@ -34,4 +34,4 @@ spec:
           from: Selector
           selector:
             matchLabels:
-              medisphere.fr/exposition: oui
+              medisphere.internal/exposition: oui

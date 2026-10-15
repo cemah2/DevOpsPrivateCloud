@@ -81,9 +81,11 @@ Points structurants :
 | `rke2-01..03` | 2182-2184 | `vsandbox` DHCP, MAC `…:18:82` à `:84` | **Rocky Linux 10** (image dorée `current`) | 2 vCPU, 4 Go, 32 Gio | `env-m18`, `role-rke2` | E04 |
 | `talos-01..03` | 2185-2187 | `vsandbox` **adresses fixes** 10.10.99.85-87, MAC `…:18:85` à `:87` | Talos Linux 1.14, image *nocloud* | 2 vCPU, 3 Go, 20 Gio | `env-m18`, `role-talos` | E05, E06 |
 | `m18-dev01` | 2188 | `vsandbox` DHCP, MAC `…:18:88` | Debian 13 | 4 vCPU, 8 Go, 60 Gio | `env-m18`, `role-m18-dev` | E02, E08-E12 |
-| `k3s-ha01..03` | 5191-5193 | `vsandbox` DHCP, MAC `…:18:91` à `:93` | Debian 13 (clone lié) | 2 vCPU, 2 Go, 20 Gio | `env-m18`, `role-k3s-ha` | E07 (détruites à la fin de l'exercice) |
-| VMs de `capi-essai` | 5180-5189 | VLAN 40, 10.10.40.150-169, VIP 10.10.40.210 | Ubuntu 24.04 (template 9060) | 2 vCPU, 4 Go, 32 Gio | posées par CAPMOX : `env-m18`, `capi-essai` | E10 |
+| `k3s-ha01..03` | 5191-5193 | `vsandbox` DHCP, MAC `…:18:91` à `:93` | Debian 13 (clone lié) | 2 vCPU, 2 Go, 20 Gio | `env-m18`, `role-k3s-ha` | E07 (trois serveurs, détruites à la fin de l'exercice) ; E14 à E23 (`k3s-ha01` serveur, `k3s-ha02` agent) ; E25 (démonstration) |
+| VMs de `capi-essai` | 5180-5189 | VLAN 40, 10.10.40.150-169, VIP 10.10.40.210 | Ubuntu 24.04 (template 9060, puis 9061) | 2 vCPU, 4 Go, 32 Gio | posées par CAPMOX : `env-m18`, `capi-essai` | E10 à E13, E21 |
+| VMs jetables de contrôle | 5189 (E08), 5188 (E09) | `vsandbox` | clone d'un template | — | — | contrôle préalable de CAPMOX, essai du template ; supprimées aussitôt |
 | `tpl-capi-ubuntu2404-k136` | 9060 | — | Ubuntu 24.04 + Kubernetes 1.36.4 | — | `capi`, `current`, `k8s-v1.36.4` | E09 |
+| `tpl-capi-ubuntu2404-k136-2` | 9061 | — | Ubuntu 24.04 + Kubernetes 1.36.5 | — | `capi`, `current`, `k8s-v1.36.5` (9060 perd `current`) | E13 |
 
 Pourquoi des exceptions :
 
@@ -119,6 +121,10 @@ Les familles retirées (`rke2`, `talos`) sont reconstruites par le code au palie
 | **`m18-dev01`, `k3s01` → API de `pve01`** | 8006 | E08-E12 | **à ouvrir** : bordure **et** pare-feu Proxmox (IPSet dédié `capi`) |
 | **`m18-dev01`, `k3s01` → API du cluster `capi-essai`** (VIP et nœuds) | 6443 | E10-E12 | **à ouvrir** : `vsandbox` → 10.10.40.150-169 et 10.10.40.210 |
 | nœuds de `capi-essai` → `reg01`, `dns01/02`, Internet, NTP de la passerelle | 443, 53, 123 | E10 | existant (M14) |
+| **`k3s-ha01`, `rke2-01..03` (`vsandbox`) → `s3-01`** (instantanés etcd) | 8333 | E14 | **à ouvrir** (provisoire) |
+| **cluster de gestion éphémère sur `m18-dev01` → API OpenStack et IP flottantes** | 443, 6443 | E16 (facultatif) | **à ouvrir** (provisoire) |
+
+Tous les flux **à ouvrir** de ce tableau sont provisoires : le mini-projet les retire (règles de la bordure, IPSet `capi` et règle 8006 du pare-feu de `pve01`), sauf décision contraire écrite dans l'ADR-0180.
 
 Tout nouveau flux suit la règle du bloc A : une ligne commentée dans `group_vars/role_routeur/pare_feu.yml` (motif, exercice), une ligne dans `docs/socle/matrice-flux.md`, et pour `pve01`, une règle du pare-feu Proxmox.
 
@@ -158,12 +164,12 @@ Tout nouveau flux suit la règle du bloc A : une ligne commentée dans `group_va
 
 | Élément | Valeur |
 |---|---|
-| Versions (PLAN §6, relevées le 2026-10-15) | kind **0.33.0** (nœuds `kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed` : il n'existe pas d'image 1.36.5 pour kind 0.33) ; k3d **5.9.0** (son k3s par défaut est **v1.35.5-k3s1** : toujours passer l'image) avec `rancher/k3s:v1.36.5-k3s1` ; k3s **v1.36.5+k3s1** (canal `stable`) ; RKE2 **v1.36.5+rke2r1** (RPM `rke2-server-1.36.5~rke2r1-0.el10`) ; Talos **v1.14.1** puis **v1.14.2** (talosctl 1.14.2), Kubernetes **v1.36.4** puis **v1.36.5** (Talos 1.14 installe 1.37 si on ne fixe rien) ; system-upgrade-controller **v0.20.2** ; Cluster API / clusterctl **v1.12.11** ; CAPMOX **v0.9.1** (API `v1alpha2`) ; IPAM *in-cluster* **v1.1.1** ; kube-vip **v1.2.4** ; image-builder **v0.1.55** (Ubuntu 24.04.4) ; Cilium **1.20.2** |
+| Versions (PLAN §6, relevées le 2026-10-15) | kind **0.33.0** (nœuds `kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed` : il n'existe pas d'image 1.36.5 pour kind 0.33) ; k3d **5.9.0** (son k3s par défaut est **v1.35.5-k3s1** : toujours passer l'image) avec `rancher/k3s:v1.36.5-k3s1` ; k3s **v1.36.5+k3s1** (canal `stable`) ; RKE2 **v1.36.5+rke2r1** (RPM `rke2-server-1.36.5~rke2r1-0.el10`) ; Talos **v1.14.1** puis **v1.14.2** (talosctl 1.14.2), Kubernetes **v1.36.4** puis **v1.36.5** (Talos 1.14 installe 1.37 si on ne fixe rien) ; system-upgrade-controller **v0.20.2** ; Cluster API / clusterctl **v1.12.11** ; CAPMOX **v0.9.1** (API `v1alpha2`) ; IPAM *in-cluster* **v1.1.1** ; kube-vip **v1.2.4** ; image-builder **v0.1.55** (Ubuntu 24.04.4) ; Cilium **1.20.2** ; au palier 3 : kube-bench **0.16.0** (E15), CAPO **0.15.x** (E16, facultatif) |
 | Changements de comportement | Talos 1.14 : la plupart des champs du document `v1alpha1` sont **dépréciés** au profit de documents séparés (`KubeletConfig`, `KubeNodeConfig`, `RegistryMirrorConfig`, `TimeSyncConfig`, `UnattendedInstallConfig`…), un champ déprécié et son document de remplacement s'excluent ; l'image `ghcr.io/siderolabs/installer` n'est plus publiée (installeurs de l'Image Factory). RKE2 1.36 : Traefik est l'Ingress par défaut (ingress-nginx déprécié, retiré en 1.37). CAPMOX : sans clé `insecure` dans le Secret d'identifiants, **la vérification TLS de l'API Proxmox est désactivée**. Détails dans les exercices |
 | État OpenTofu | `envs/m18` (`plateforme/infra`) : variables `groupes` (`dev`, `k3s`, `rke2`, `talos`) et `k3s_ha_noeuds` |
 | Projets | `plateforme/distributions` (E02) ; `plateforme/ansible` : rôles `outils_distributions`, `k3s`, `rke2`, playbook `m18.yml`, sources `netbox-m18.yml` et `m18-k3s-ha.yml` ; `plateforme/images` : dossier `capi/` (E09) ; `plateforme/medisphere` : `docs/kubernetes/distributions/` |
 | Clusters | `dev` (kind et k3d, sur `m18-dev01`) ; `k3s01` (agence, SQLite) ; `rke2` (3 serveurs) ; `talos-essai` (1 nœud de contrôle `talos-01`, 2 travailleurs) ; `k3s-ha` (3 serveurs, etcd intégré) ; `gestion` (kind, cluster de gestion amorcé) ; `capi-essai` (1 nœud de contrôle, 2 travailleurs) |
-| Fichiers locaux sur `adm01` (600) | `~/.config/workbook/m18/` : `k3s01.kubeconfig`, `rke2.kubeconfig`, `talosconfig`, `talos.kubeconfig`, `talos-secrets.yaml`, `k3s-ha.kubeconfig`, `kind-gestion.kubeconfig`, `capi-essai.kubeconfig` ; `~/.config/workbook/pve-capi.env` (compte `wb-capi@pve!capi`) |
+| Fichiers locaux sur `adm01` (600) | `~/.config/workbook/m18/` : `k3s01.kubeconfig`, `rke2.kubeconfig`, `talosconfig`, `talos.kubeconfig`, `talos-secrets.yaml`, `k3s-ha.kubeconfig`, `kind-gestion.kubeconfig` (jusqu'au pivot de E12), `capi-essai.kubeconfig`, puis au palier 3 `talosconfig-sauvegarde` (E14) et `recette-mediagenda.kubeconfig` (E18) ; `~/.config/workbook/pve-capi.env` (compte `wb-capi@pve!capi`), `~/.config/workbook/s3-etcd-m18.env` (E14) |
 | Cluster API | espace `capi-essai` du cluster de gestion ; compte Proxmox `wb-capi@pve` + jeton `wb-capi@pve!capi`, rôle `WBCapi` ; Secret d'identifiants `capi-essai-proxmox` (par `credentialsRef`) ; template 9060 ; VMID 5180-5189 (`vmIDRange`) ; adresses 10.10.40.150-169 (`ipv4Config` du `ProxmoxCluster`, réservoir créé par CAPMOX : `capi-essai-v4-icip`) ; VIP 10.10.40.210 |
 | Brouillons | `~/m18/eXX/` sur `adm01` et `m18-dev01` (non versionnés, sans secret) |
 
@@ -176,6 +182,7 @@ Tout nouveau flux suit la règle du bloc A : une ligne commentée dans `group_va
 | `<IP-PVE01>` | Adresse de `pve01` sur le LAN maison (PLAN §4.1) |
 | `<IP-M18-DEV01>`, `<IP-K3S01>` | Adresses DHCP (stables : MAC imposée) de `m18-dev01` et `k3s01`, lues dans le DNS |
 | `<VERSION-TOFU-MODULES>` | Étiquette de `plateforme/tofu-modules` qui contient `vm-noeud` v2.4 (M12-E02) |
+| `<SECRET>` | Secret d'un jeton Proxmox (affiché une seule fois à sa création) : il ne va que dans un fichier 600 de `~/.config/workbook/` |
 
 ### Variables de `lab/lab.env`
 
@@ -187,6 +194,10 @@ WB_M18_DEV=m18-dev01                        # poste de développement (SSH : adm
 WB_M18_K3S=k3s01
 WB_M18_RKE2="rke2-01 rke2-02 rke2-03"
 WB_M18_TALOS="10.10.99.85 10.10.99.86 10.10.99.87"
+WB_M18_RECETTE_URL="http://m18-dev01.par1.medisphere.internal:8080"   # /sante du cluster de recette (E18)
+WB_OS_CLOUD_PLATEFORME=medisphere-plateforme   # nuage de clouds.yaml lu par le contrôle de E16 (facultatif)
+WB_M18_TEMPLATES_CONSERVES=0                # E25 : l'ADR-0180 garde-t-il les templates 9060-9069 ?
+WB_M18_WBCAPI_CONSERVE=0                    # E25 : l'ADR-0180 garde-t-il le compte wb-capi ?
 ```
 
 Les vérifications lisent les clusters d'essai avec leurs **kubeconfigs d'administration** (fichiers ci-dessus), en commandes de lecture seulement (`get`) : ces clusters sont jetables et n'ont pas de compte `wb-checks`. `k8s-par1` garde son compte de vérification, et le contrôle de sortie du module est `lab/bin/check 14 46`.
@@ -211,7 +222,7 @@ Vérifie l'état d'entrée et la mémoire :
 
 ```
 admin@adm01:~$ lab/bin/check 14 46
-admin@adm01:~$ lab/bin/check 17 46
+admin@adm01:~$ lab/bin/check 17 25
 admin@adm01:~$ ssh root@pve01 'free -g | head -2; qm list | grep -E " 90(1|2|3|4)[0-9] "'
 admin@adm01:~$ cd ~/src/ansible && uv run ansible-inventory --graph socle
 ```
@@ -250,8 +261,9 @@ E02 ─ E08 ─ E09 ─ E10 ─ E11 ─ E12
 2. **E02 → E05** — une distribution par exercice ; E02 crée l'environnement OpenTofu, le projet `plateforme/distributions` et `m18-dev01`, dont tout le reste dépend.
 3. **E06** juste après E05 (même cluster Talos) ; **E07** après E03 (même rôle `k3s`).
 4. **E08 → E12** dans l'ordre strict : Cluster API se construit pièce par pièce. E11 (revue) se fait idéalement après E10, quand tu as écrit tes propres manifestes.
+5. **Paliers 3 à 5** : l'ordre est donné en tête de chaque fichier (E13 → E14 → E15 → E17 → E18, E16 facultatif ; puis les pannes E19 à E22 une à une, E23, E24 ; enfin le mini-projet E25).
 
-Durée indicative : palier 1, 8 à 11 heures ; palier 2, 11 à 15 heures.
+Durée indicative : palier 1, 8 à 11 heures ; palier 2, 11 à 15 heures ; palier 3, 12 à 16 heures (sans E16) ; palier 4, 7 à 9 heures ; mini-projet, 8 à 12 heures.
 
 ## Pour aller plus loin
 

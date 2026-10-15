@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # outils/verifier-from.sh — refuse les images non autorisées dans les Dockerfile et Containerfile
-# (M12-E27, PLAT-1353). Lancé par le job « images-autorisees » de plateforme/ci-templates.
+# (M12-E27, PLAT-1327). Lancé par le job « images-autorisees » de plateforme/ci-templates.
 #
 # Usage : verifier-from.sh LISTE [FICHIER...]    (sans fichier : tous les Dockerfile*/Containerfile*
 #                                                  du dépôt, hors .git)

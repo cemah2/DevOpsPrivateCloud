@@ -117,7 +117,7 @@ kind: VolumeSnapshot
 metadata:
   name: $nom
   namespace: $_M16_NS_T
-  labels: {app.kubernetes.io/name: temoin-rbd, medisphere.fr/temoin: m16}
+  labels: {app.kubernetes.io/name: temoin-rbd, medisphere.internal/temoin: m16}
 spec:
   volumeSnapshotClassName: $_M16_VSC_RBD
   source: {persistentVolumeClaimName: temoin-rbd}

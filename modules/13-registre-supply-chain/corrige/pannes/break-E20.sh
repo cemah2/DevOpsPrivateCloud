@@ -132,7 +132,7 @@ annuler_E20() {
 resume_E20() { echo "La publication des images depuis runner02 échoue au moment de la poussée."; }
 
 symptome_E20() {
-  wb_symptome "Ticket INC-4032 — De : Julien Petit" \
+  wb_symptome "Ticket INC-4020 — De : Julien Petit" \
     "Le job de publication échoue au « push », après une construction réussie. Je l'ai relancé" \
     "deux fois, même résultat. La sonde le reproduit : « sudo wb-sonde-registre » sur runner02," \
     "étape « publication ». Mise en production cet après-midi : ne touche ni aux politiques de" \

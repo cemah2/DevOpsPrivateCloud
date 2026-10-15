@@ -6,7 +6,7 @@ metadata:
   name: e07-partage
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e07
+    medisphere.internal/exercice: m16-e07
 spec:
   storageClassName: cephfs
   accessModes: ["ReadWriteMany"]
@@ -21,7 +21,7 @@ metadata:
   namespace: wb-essais
   labels:
     app.kubernetes.io/name: e07-ecrivains
-    medisphere.fr/exercice: m16-e07
+    medisphere.internal/exercice: m16-e07
 spec:
   replicas: 2
   selector:
@@ -31,7 +31,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: e07-ecrivains
-        medisphere.fr/exercice: m16-e07
+        medisphere.internal/exercice: m16-e07
     spec:
       # Deux nœuds différents, obligatoirement : c'est ce que RWO ne permettrait pas.
       affinity:
@@ -78,7 +78,7 @@ metadata:
   name: e07-lecteur
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e07
+    medisphere.internal/exercice: m16-e07
 spec:
   automountServiceAccountToken: false
   securityContext:

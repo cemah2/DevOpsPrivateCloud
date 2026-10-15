@@ -3,6 +3,7 @@
 #
 #   admin@m18-dev01:~/src/images$ capi/construire.sh            construit (≈ 25 à 40 min)
 #   admin@m18-dev01:~/src/images$ capi/construire.sh --valider  « make validate-… » seulement
+#   admin@m18-dev01:~/src/images$ VARS=capi/ubuntu-2404-k136-2.json ETIQUETTES="capi;k8s-v1.36.5" capi/construire.sh
 #
 # image-builder v0.1.55, cloné À L'ÉTIQUETTE dans ~/m18/image-builder (hors dépôt). Deux
 # corrections locales de son gabarit Packer Proxmox, appliquées par jq et AFFICHÉES :
@@ -50,7 +51,9 @@ export PROXMOX_NODE="$NOEUD"
 export PROXMOX_ISO_POOL=hdd-bulk
 export PROXMOX_BRIDGE=vsandbox
 export PROXMOX_STORAGE_POOL=local-nvme
-export PACKER_VAR_FILES="$ICI/ubuntu-2404-k136.json"
+# VARS : fichier de variables de la version à construire (M18-E13 : capi/ubuntu-2404-k136-2.json).
+PACKER_VAR_FILES="$(realpath "${VARS:-$ICI/ubuntu-2404-k136.json}")"   # absolu : make tourne dans le clone
+export PACKER_VAR_FILES
 
 cd "$IB_DIR/images/capi"
 if [[ "${1:-}" == "--valider" ]]; then

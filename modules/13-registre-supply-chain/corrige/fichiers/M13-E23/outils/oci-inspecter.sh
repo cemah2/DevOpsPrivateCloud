@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# outils/oci-inspecter.sh — plateforme/outils (M13-E23, PLAT-1437). L'API de distribution OCI à la main :
+# outils/oci-inspecter.sh — plateforme/outils (M13-E23, PLAT-1423). L'API de distribution OCI à la main :
 # défi, jeton, manifeste (négociation de type), digest recalculé, configuration, référents.
 # Lecture seule. Identité : HARBOR_USER / HARBOR_PASSWORD dans l'environnement (jamais en argument).
 #

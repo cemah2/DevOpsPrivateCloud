@@ -232,7 +232,7 @@ Le rôle `certificats_acme` lance ses crochets (`avant_emission`, `recharger`…
    ```
    > ⚠️ **Attention** : `curl -u utilisateur:secret` place le secret dans les arguments du processus, visibles par `ps` le temps de la requête. Acceptable sur ton poste d'administration personnel pour une exploration ; dans un script, utilise un fichier `--netrc-file` en 600 ou `--config`.
 6. Migre les images du registre de travail : écris `outils/migrer-registre-travail.sh` (dépôt `plateforme/outils`) qui, pour chaque dépôt source et chaque étiquette, copie l'image vers sa cible avec `skopeo`, toutes architectures, empreintes **préservées** (et refuse sinon), en lisant les identifiants dans des fichiers (`--authfile`), jamais en argument. Lance-le depuis `adm01`, puis compare les empreintes source et cible d'au moins une image multi-architecture.
-7. Mets à jour le registre des secrets et l'inventaire de la plateforme. Garde `ctr01` jusqu'à ce que E09 publie les images directement dans Harbor, puis détruis-la par le code.
+7. Mets à jour le registre des secrets et l'inventaire de la plateforme. Une fois les empreintes comparées, `ctr01` et son registre de travail n'ont plus d'usage : détruis la VM par le code (état `m12-conteneurs`), retire `WB_M12_CTR01_CONSERVE` de `lab/lab.env` et, si elles existent encore, les règles de la matrice des flux qui visent `ctr01`. Jusqu'à E09, les jobs de publication des applications échouent faute de registre : c'est attendu, la chaîne de E09 les remplace.
 
 **Critères de réussite**
 - [ ] `~/.config/workbook/harbor-checks.env` et `harbor-moi.env` existent en 600 ; le robot `wb-checks` lit l'API et **ne peut pas** créer de projet.
@@ -273,7 +273,7 @@ Le nom complet d'un robot de projet est `robot$<projet>+<nom>` : le `$` est un p
 - Comprendre le comportement d'un cache (premier tirage, empreinte, disponibilité de l'amont, nom des dépôts).
 - Faire utiliser les caches par un exécuteur GitLab Docker, par les Dockerfiles et par Podman.
 
-**Prérequis** : M13-E03 ; M12-E20 (`runner02`, exécuteur `docker`) ; M12-E21 (gabarit `image.yml`) ; M12-E02 (rôle `podman_hote`).
+**Prérequis** : M13-E03 ; M12-E20 (`runner02`, exécuteur `docker`) ; M12-E21 (gabarit `templates/image.yml`) ; M12-E02 (rôle `podman_hote`).
 **Durée indicative** : 2 h 30.
 
 **Contexte technique**
@@ -293,7 +293,7 @@ Le nom complet d'un robot de projet est `robot$<projet>+<nom>` : le `$` est un p
 2. Déclare dans l'état `registre` les quatre points d'accès et les quatre projets cache (fichier `caches.tf`), avec un quota par cache (Docker Hub 40 Gio, GHCR 20 Gio, Quay 10 Gio, registry.k8s.io 15 Gio). MR, `apply` par le pipeline. Dans l'IHM, « Registries » : l'état de chaque point d'accès est « Healthy ».
 3. Depuis `runner02`, tire une image par chaque cache, puis observe dans Harbor ce qui est apparu (dépôts, artefacts, étiquettes). Retire l'image locale et tire-la de nouveau **par empreinte** : d'où vient-elle cette fois ? Lis `docker info` : pourquoi le réglage `registry-mirrors` du démon Docker ne convient-il pas à un cache Harbor ?
 4. Fais passer l'exécuteur de `runner02` par les caches, par le rôle `gitlab_runner` : image par défaut tirée du cache, et **liste d'images autorisées** limitée à `registry.par1.medisphere.internal` (lis la documentation de l'exécuteur Docker : `allowed_images`, `allowed_pull_policies`). Qu'arrive-t-il à un job qui déclare encore `image: python:3.13` ?
-5. Mets à jour le gabarit `image.yml` de `plateforme/ci-templates` et les Dockerfiles des quatre applications (`FROM`, `COPY --from`) pour passer par les caches (une MR par projet). Les images de base épinglées par empreinte au M12 gardent leur empreinte : pourquoi ?
+5. Mets à jour le gabarit `templates/image.yml` de `plateforme/ci-templates` (nouvelle version `1.x.y`, que la branche `v1` suit) et les Dockerfiles des quatre applications (`FROM`, `COPY --from`) pour passer par les caches (une MR par projet). Les images de base épinglées par empreinte au M12 gardent leur empreinte : pourquoi ?
 6. Étends le rôle `podman_hote` pour déclarer des miroirs (Docker Hub, Quay, GHCR, registry.k8s.io) dans `registries.conf` à partir d'une variable, sans changer les hôtes qui ne la définissent pas ; teste avec son scénario Molecule.
 7. Documente dans `docs/registre/caches.md` les noms à utiliser, le comportement en cas de panne de l'amont, et la façon de demander l'ajout d'un registre amont.
 
@@ -302,7 +302,7 @@ Le nom complet d'un robot de projet est `robot$<projet>+<nom>` : le `$` est un p
 - [ ] Les projets `dockerhub`, `quay`, `ghcr` et `k8s` sont des caches de ces points d'accès, publics, avec un quota.
 - [ ] Chaque cache contient au moins un dépôt (dont `dockerhub/library/debian`).
 - [ ] Sur `runner02`, l'exécuteur tire par défaut une image du cache et n'autorise que `registry.par1.medisphere.internal` ; des images des caches sont présentes localement.
-- [ ] Le gabarit `image.yml` de `plateforme/ci-templates` (sur `main`) ne désigne plus aucune image hors de Harbor ; le rôle `podman_hote` sur `main` sait déclarer des miroirs vers les caches.
+- [ ] Le gabarit `templates/image.yml` de `plateforme/ci-templates` (sur `main`) ne désigne plus aucune image hors de Harbor ; le rôle `podman_hote` sur `main` sait déclarer des miroirs vers les caches.
 
 **Vérification** : `lab/bin/check 13 04`
 

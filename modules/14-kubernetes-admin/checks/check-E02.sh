@@ -59,8 +59,8 @@ for _m14d_e02_nom in "${_M14D_CP[@]}" "${_M14D_W[@]}"; do
     "dpkg-query -W -f='\${Package} \${Version} \${db:Status-Abbrev}\n' containerd.io 2>/dev/null"
   check_ssh_output "$_m14d_e02_nom : kubelet, kubeadm, kubectl en $_M14D_VERSION-1.1 et retenus (hold)" "$_m14d_e02_nom" \
     '^3$' "dpkg-query -W -f='\${Package} \${Version} \${db:Status-Abbrev}\n' kubelet kubeadm kubectl 2>/dev/null | grep -c ' ${_M14D_VERSION//./\\.}-1\.1 hi '"
-  check_ssh "$_m14d_e02_nom : dépôt pkgs.k8s.io de la mineure 1.35, signé" "$_m14d_e02_nom" \
-    'grep -q "^URIs: https://pkgs.k8s.io/core:/stable:/v1.35/deb/" /etc/apt/sources.list.d/kubernetes.sources && grep -q "^Signed-By: /etc/apt/keyrings/" /etc/apt/sources.list.d/kubernetes.sources'
+  check_ssh "$_m14d_e02_nom : dépôt pkgs.k8s.io de la mineure $_M14D_MINEURE, signé" "$_m14d_e02_nom" \
+    "grep -q '^URIs: https://pkgs.k8s.io/core:/stable:/v${_M14D_MINEURE}/deb/' /etc/apt/sources.list.d/kubernetes.sources && grep -q '^Signed-By: /etc/apt/keyrings/' /etc/apt/sources.list.d/kubernetes.sources"
   check_ssh "$_m14d_e02_nom : containerd.io épinglé sur la branche 2.3 (préférence APT)" "$_m14d_e02_nom" \
     'apt-cache policy containerd.io | grep -Eq "^ +(\*\*\* )?2\.3\.[0-9]+[^ ]* 1001$"'
   check_ssh "$_m14d_e02_nom : pas de swap actif ni déclaré" "$_m14d_e02_nom" \

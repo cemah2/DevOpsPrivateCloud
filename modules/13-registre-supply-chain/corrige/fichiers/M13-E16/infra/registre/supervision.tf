@@ -1,4 +1,4 @@
-# registre/supervision.tf — robot de la sonde ms-verif-registre (M13-E16, CHG-1434).
+# registre/supervision.tf — robot de la sonde ms-verif-registre (M13-E16, CHG-1416).
 # Système, LECTURE de ce que la sonde lit : santé (sans identité), systeminfo, volumes, réplications,
 # ramasse-miettes. Aucun accès aux dépôts. Secret : Vault critique → /usr/local/etc/ms-verif-registre.secret
 # sur adm01 (admin:admin 600), par outils/publier-secrets-registre.sh (M13-E03).

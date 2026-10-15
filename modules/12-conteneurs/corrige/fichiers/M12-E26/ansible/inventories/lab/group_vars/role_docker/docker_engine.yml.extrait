@@ -1,5 +1,5 @@
-# Extrait de group_vars/role_docker/docker_engine.yml — options ajoutées en M12-E26 (SEC-1352) et
-# M12-E28 (PLAT-1354). Fusionnées récursivement avec docker_engine_daemon_defaut (journaux de E18,
+# Extrait de group_vars/role_docker/docker_engine.yml — options ajoutées en M12-E26 (SEC-1326) et
+# M12-E28 (PLAT-1328). Fusionnées récursivement avec docker_engine_daemon_defaut (journaux de E18,
 # default-address-pools de E02) par le rôle docker_engine ; validées par « dockerd --validate ».
 docker_engine_daemon_extra:
   # Les conteneurs survivent à un redémarrage ou une mise à jour de dockerd (pas de containerd).

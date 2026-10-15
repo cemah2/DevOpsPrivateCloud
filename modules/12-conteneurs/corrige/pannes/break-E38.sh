@@ -134,7 +134,7 @@ symptome_E38() {
     2) detail="Depuis que Lucas a « simplifié » le Dockerfile, chaque modification d'une seule ligne de code relance le téléchargement de toutes les dépendances : plus d'une minute par essai au lieu de quelques secondes." ;;
     *) detail="Depuis ce matin, « docker compose build api » échoue. Lucas a « repris des réglages de l'ancien projet » et « fait de la place » sur ctr01 hier soir." ;;
   esac
-  wb_symptome "Ticket INC-3944 — De : Julien Petit" \
+  wb_symptome "Ticket INC-3938 — De : Julien Petit" \
     "$detail" \
     "Sur ctr01, dans /srv/recette : sudo docker compose build api. L'image doit se reconstruire" \
     "correctement ET vite. Explique-moi aussi comment on s'en serait aperçu en revue." \

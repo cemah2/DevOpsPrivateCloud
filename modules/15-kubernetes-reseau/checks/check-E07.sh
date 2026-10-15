@@ -25,6 +25,16 @@ check_cmd "aucune CRD gateway.networking.k8s.io du canal experimental" _m15d_jso
   'all(.items[] | select(.spec.group == "gateway.networking.k8s.io");
        .metadata.annotations["gateway.networking.k8s.io/channel"] == "standard")'
 
+# --- Droits du compte des vérifications (ClusterRole agrégée wb-checks, M14-E06) ------------------------------------
+check_output "wb-checks lit les objets de la Gateway API (wb-checks-reseau)" '^yes$' \
+  kube auth can-i list gateways.gateway.networking.k8s.io --all-namespaces
+check_output "wb-checks lit les objets de cert-manager (wb-checks-reseau)" '^yes$' \
+  kube auth can-i list certificates.cert-manager.io --all-namespaces
+check_output "wb-checks ne lit toujours pas les Secrets" '^no$' \
+  bash -c 'kube auth can-i get secrets --all-namespaces 2>/dev/null || true'
+check_cmd "rbac/wb-checks-reseau.yaml sur main de plateforme/k8s" \
+  test -n "$(_m15d_contenu_main "$_M15D_PROJET_K8S" rbac/wb-checks-reseau.yaml)"
+
 # --- Contrôleur Gateway API de Cilium ----------------------------------------------------------------------------
 check_output "cilium-config : enable-gateway-api = true" '^true$' _m15d_cilium_cfg enable-gateway-api
 check_output "cilium-config : kube-proxy-replacement = true (exigé par la Gateway API de Cilium)" '^true$' \

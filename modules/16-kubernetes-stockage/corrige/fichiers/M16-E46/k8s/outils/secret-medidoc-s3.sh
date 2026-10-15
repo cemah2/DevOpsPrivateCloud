@@ -20,7 +20,7 @@ fichier="${MS_S3_MEDIDOC_ENV:-$HOME/.config/workbook/s3-medidoc-app.env}"
     --from-file=AWS_ACCESS_KEY_ID=<(printf '%s' "$AWS_ACCESS_KEY_ID") \
     --from-file=AWS_SECRET_ACCESS_KEY=<(printf '%s' "$AWS_SECRET_ACCESS_KEY") \
     --dry-run=client -o yaml \
-    | kubectl label --local -f - -o yaml medisphere.fr/source=workbook-config \
+    | kubectl label --local -f - -o yaml medisphere.internal/source=workbook-config \
     | kubectl apply --server-side --field-manager=secret-medidoc-s3 -f - >/dev/null
 )
 echo "Secret $espace/medidoc-s3 à jour (aucune valeur affichée)"

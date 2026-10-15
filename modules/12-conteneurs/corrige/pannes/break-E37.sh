@@ -112,7 +112,7 @@ symptome_E37() {
     3) detail="Lucas a « nettoyé » compose.yaml de la recette hier soir (« des lignes qui ne servaient à rien »)." ;;
     *) detail="InfoGér a passé son script de « durcissement réseau » sur ctr01 cette nuit ; Lucas n'a rien touché à la pile." ;;
   esac
-  wb_symptome "Ticket INC-3943 — De : Julien Petit" \
+  wb_symptome "Ticket INC-3937 — De : Julien Petit" \
     "Depuis ce matin, l'API de recette (ctr01) répond sur /sante mais /pret échoue (503, ou plus de réponse du tout) et toute" \
     "création de rendez-vous échoue : elle ne joint plus PostgreSQL. La base, elle, est saine." \
     "$detail" \

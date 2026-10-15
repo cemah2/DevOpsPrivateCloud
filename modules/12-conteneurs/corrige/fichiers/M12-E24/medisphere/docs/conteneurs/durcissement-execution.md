@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 — 2026-10 (M12-E24 SEC-1350, M12-E25 SEC-1351, M12-E26 SEC-1352) |
+| **Version** | 1.0 — 2026-10 (M12-E24 SEC-1324, M12-E25 SEC-1325, M12-E26 SEC-1326) |
 | **Propriétaire** | Équipe Plateforme ; validation : Sophie Laurent |
 | **Normes associées** | `docs/conteneurs/normes.md` (règles `CNT-RUN-*`, `CNT-HOTE-*`) |
 
@@ -48,7 +48,7 @@ Diagnostic d'un refus : `sudo ausearch -m AVC -ts recent | audit2why` (source, c
 
 ## 3. Moteur Docker (E26)
 
-- **Accès au socket = root.** Groupe `docker` : `admin` seul (il a déjà `sudo` ; seul écart : pas de trace `sudo`, compensée par l'audit) ; sur `runner02`, `admin` et le compte du runner. Jamais un compte de service, de supervision ou de développeur ; jamais le socket monté dans un conteneur.
+- **Accès au socket = root.** Groupe `docker` : `admin` seul (il a déjà `sudo` ; seul écart : pas de trace `sudo`, compensée par l'audit) ; sur `runner02`, personne (le service `gitlab-runner` tourne en root et parle seul au démon ; les humains passent par `sudo`). Jamais un compte de service, de supervision ou de développeur ; jamais le socket monté dans un conteneur.
 - **Jamais de TCP.** Administration distante par SSH (`DOCKER_HOST=ssh://…`). Constat : Docker 29.8.2 démarre encore avec `-H tcp://0.0.0.0:…` sans TLS (avertissements et démarrage ralenti) : la version ne nous protège pas.
 - **Options du démon** (`docker_engine_daemon_extra`) : `live-restore` (les conteneurs survivent au redémarrage du démon ; mesuré), `icc: false` (réseau `bridge` par défaut **seulement** ; les piles Compose s'isolent par leurs propres réseaux), `no-new-privileges` par défaut, journaux avec rotation (E18).
 - **`userns-remap` : non retenu** sur `ctr01` et `runner02`. Mesuré : Docker 29 désactive alors le stockage d'images containerd, range images, conteneurs et volumes à part (le registre « disparaît »), refuse `--network host`. La protection équivalente vient de Podman sans privilège sur les serveurs (ADR-0120).

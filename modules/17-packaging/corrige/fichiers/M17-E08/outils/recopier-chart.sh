@@ -8,7 +8,9 @@ set -euo pipefail
 
 registre="registry.par1.medisphere.internal"
 depot="${1:?dépôt}"; chart="${2:?chart}"; version="${3:?version}"
-: "${COSIGN_KEY:?COSIGN_KEY manquant}" "${COSIGN_PUB:?COSIGN_PUB manquant}"
+: "${COSIGN_KEY:?clé absente : source ~/src/outils/cosign-cle.sh avant}"
+sc="${MS_SIGNING_CONFIG:?MS_SIGNING_CONFIG absente}"
+pub="${MS_COSIGN_PUB:?MS_COSIGN_PUB absente}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -23,6 +25,7 @@ read -r -p "Relu, conforme ? Taper « oui » pour publier et signer : " reponse
 
 helm push "$archive" "oci://$registre/charts" | tee "$tmp/push.log"
 digest="$(sed -n 's/^Digest: //p' "$tmp/push.log")"
-cosign sign --yes --key "$COSIGN_KEY" --use-signing-config=false --tlog-upload=false "$registre/charts/$chart@$digest"
-cosign verify --key "$COSIGN_PUB" --insecure-ignore-tlog=true "$registre/charts/$chart@$digest" >/dev/null
+[[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "digest introuvable dans la sortie de helm push" >&2; exit 1; }
+cosign sign --key env://COSIGN_KEY --signing-config "$sc" "$registre/charts/$chart@$digest"
+cosign verify --key "$pub" --insecure-ignore-tlog=true "$registre/charts/$chart@$digest" >/dev/null
 echo "$registre/charts/$chart:$version recopié et signé : $digest"

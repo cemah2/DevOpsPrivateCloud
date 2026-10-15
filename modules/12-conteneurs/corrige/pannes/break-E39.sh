@@ -150,7 +150,7 @@ resume_E39() {
 }
 
 symptome_E39() {
-  wb_symptome "Ticket INC-3945 — De : Nadia Roussel" \
+  wb_symptome "Ticket INC-3939 — De : Nadia Roussel" \
     "Alerte de cette nuit : le disque de ctr01 est plein. Les créations de rendez-vous de la recette" \
     "échouent, la base de recette se plaint de « No space left on device ». Lucas propose de « faire" \
     "un docker system prune -a --volumes et on n'en parle plus » : surtout pas avant d'avoir compris" \

@@ -1,4 +1,4 @@
-# /etc/systemd/system/ms-verif-conteneurs.service — M12-E28 (PLAT-1354)
+# /etc/systemd/system/ms-verif-conteneurs.service — M12-E28 (PLAT-1328)
 # Sonde des conteneurs. Déclenchée par ms-verif-conteneurs.timer (toutes les 5 minutes).
 # Test manuel : sudo systemctl start ms-verif-conteneurs.service ; journalctl -u ms-verif-conteneurs -n 40
 

@@ -84,7 +84,7 @@ metadata:
   name: $_E42_CNC
   namespace: kube-system
   annotations:
-    medisphere.fr/demande: "PLAT-1629 : essai de port de tunnel (à retirer après l'essai)"
+    medisphere.internal/demande: "PLAT-1629 : essai de port de tunnel (à retirer après l'essai)"
 spec:
   nodeSelector:
     matchLabels:

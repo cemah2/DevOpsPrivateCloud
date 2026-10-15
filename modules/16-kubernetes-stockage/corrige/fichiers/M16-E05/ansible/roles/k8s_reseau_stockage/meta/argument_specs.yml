@@ -6,12 +6,12 @@ argument_specs:
       - Protège le nœud contre une « nouvelle instance » cloud-init, charge les modules rbd et ceph,
         écrit et valide le netplan de la carte de stockage reconnue par sa MAC ; si la carte vient
         d'apparaître, draine et redémarre le nœud ; vérifie adresse, MTU, routes, MTU de bout en bout
-        vers les moniteurs et adresse interne du nœud ; pose l'étiquette medisphere.fr/stockage-ceph.
+        vers les moniteurs et adresse interne du nœud ; pose l'étiquette medisphere.internal/stockage-ceph.
     options:
       k8s_reseau_stockage_interface:
         type: str
-        default: ens19
-        description: Nom donné à la carte dans l'invité (net1 → ens19).
+        default: eth1
+        description: Nom donné à la carte dans l'invité (net1 → eth1).
       k8s_reseau_stockage_vlan:
         type: int
         default: 30
@@ -43,7 +43,7 @@ argument_specs:
         description: Modules noyau chargés au démarrage.
       k8s_reseau_stockage_etiquette_cle:
         type: str
-        default: medisphere.fr/stockage-ceph
+        default: medisphere.internal/stockage-ceph
         description: Clé de l'étiquette posée sur le nœud vérifié.
       k8s_reseau_stockage_etiquette_valeur:
         type: str

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# securite/generer-seccomp.sh — produit securite/seccomp-mediagenda.json (M12-E24, SEC-1350).
+# securite/generer-seccomp.sh — produit securite/seccomp-mediagenda.json (M12-E24, SEC-1324).
 #
 # Point de départ : le profil seccomp PAR DÉFAUT de la version de Docker Engine des hôtes,
 # tel qu'il est publié dans le dépôt moby (copie « vendor » du module github.com/moby/profiles).

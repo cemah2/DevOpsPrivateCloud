@@ -36,4 +36,4 @@
 
 ## Vérification par le consommateur
 
-Gabarit `plateforme/ci-templates`, `verification.yml` : `cosign verify` puis `cosign verify-attestation --type spdxjson`, par digest, clé MédiSphère dont l'empreinte est épinglée, sans journal de transparence. Utilisé par le job `verifier-signature` des quatre applications ; il préfigure la vérification avant déploiement (M14) et l'admission (M26).
+Gabarit `plateforme/ci-templates`, `templates/verification.yml` : `cosign verify` puis `cosign verify-attestation --type spdxjson`, par digest, clé MédiSphère dont l'empreinte est épinglée, sans journal de transparence. Utilisé par le job `verifier-signature` des quatre applications ; il préfigure la vérification avant déploiement (M14) et l'admission (M26).

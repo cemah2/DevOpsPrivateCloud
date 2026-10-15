@@ -18,7 +18,8 @@ Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
 Environment=MEDIAGENDA_VALKEY_URL=redis://mediagenda-valkey:6379/0
 Environment=MEDIAGENDA_VERSION={{ pile_recette_versions.mediagenda }} MEDIAGENDA_LOG_FORMAT=json
 # Vivacité sur /sante (ne dépend ni de la base ni du cache) ; /pret sert aux contrôles externes.
-HealthCmd=python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"
+# Sonde en tableau JSON : en chaîne, le Quadlet de Podman 5.4 perd le guillemet final (M12-E14).
+HealthCmd=["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
 HealthInterval=10s
 HealthTimeout=3s
 HealthRetries=3

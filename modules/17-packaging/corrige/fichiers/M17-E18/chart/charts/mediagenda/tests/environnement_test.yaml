@@ -1,4 +1,4 @@
-# M17-E18 (ticket DEV-1836) : MédiAgenda 1.1.0 exige MEDIAGENDA_ENVIRONNEMENT, pour l'API comme
+# M17-E18 (ticket DEV-1818) : MédiAgenda 1.1.0 exige MEDIAGENDA_ENVIRONNEMENT, pour l'API comme
 # pour les migrations (gabarit commun mediagenda.envConnexion).
 suite: Variable MEDIAGENDA_ENVIRONNEMENT
 templates:

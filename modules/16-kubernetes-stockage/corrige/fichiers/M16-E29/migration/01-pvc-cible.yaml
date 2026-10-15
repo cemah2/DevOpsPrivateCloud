@@ -5,7 +5,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: migration-valkey-cible
   namespace: mediagenda-recette
-  labels: {medisphere.fr/migration: sec-1729}
+  labels: {medisphere.internal/migration: sec-1729}
 spec:
   accessModes: [ReadWriteOnce]
   storageClassName: ceph-rbd-chiffre

@@ -21,7 +21,7 @@ keywords:
   - medisphere
 annotations:
   # Lu par chart-testing et par les humains : images que le chart peut déployer.
-  medisphere.fr/images: |
+  medisphere.internal/images: |
     - registry.par1.medisphere.internal/medisphere/mediagenda-api
 dependencies:
   # Chart de bibliothèque interne (M17-E06) : livré DANS l'archive du chart à l'empaquetage.

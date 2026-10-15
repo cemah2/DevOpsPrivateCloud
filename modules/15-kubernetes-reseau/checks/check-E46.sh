@@ -59,7 +59,7 @@ _m15_e46_pf="${WB_SRC:-$HOME/src}/ansible/inventories/lab/group_vars/role_routeu
 check_cmd "bordure : flux vers 10.10.41.0/24 décrits dans group_vars/role_routeur/pare_feu.yml" grep -q '10\.10\.41\.' "$_m15_e46_pf"
 check_cmd "bordure : flux RFC 2136 (VLAN 40 → autoritaire de dns01, 5300) décrit dans pare_feu.yml" grep -Eq 'RFC ?2136|dnsupdate|M15-E14' "$_m15_e46_pf"
 check_cmd "documentation : ADR-0150" bash -c 'find "$1/docs/kubernetes" -name "ADR-0150*.md" 2>/dev/null | grep -q .' _ "$_m15x_depot"
-for _m15_e46_rb in RB-150 RB-151 RB-152; do
+for _m15_e46_rb in RB-150 RB-151 RB-152 RB-153; do
   check_cmd "documentation : runbook $_m15_e46_rb" bash -c 'find "$1/docs/kubernetes" -name "$2*.md" 2>/dev/null | grep -q .' _ "$_m15x_depot" "$_m15_e46_rb"
 done
 check_cmd "documentation : matrice des flux du cluster commitée" _m15x_doc_commite docs/kubernetes/reseau/matrice-flux-cluster.md

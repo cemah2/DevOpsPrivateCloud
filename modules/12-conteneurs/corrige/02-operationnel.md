@@ -604,7 +604,7 @@ Conteneuriser une application héritée, c'est d'abord **lister ce qu'elle suppo
 - Pièces jointes sur le partage NFS CephFS `/legacy-rdv` du M08 (volume NFS de Docker) : partageable entre instances, mais `ctr01` n'a pas de carte sur le VLAN 30.
 
 **Pièges classiques**
-- Garder Apache en root « parce que l'image le fait » : l'image démarre en root pour ouvrir le port 80 puis passe à `www-data` ; en non root, il faut un port > 1024 et les dossiers de journaux et de PID d'Apache accessibles (l'image officielle les prépare dans `/var/run/apache2` et `/var/log/apache2`, à vérifier si tu changes de base).
+- Garder Apache en root « parce que l'image le fait » : l'image démarre en root pour ouvrir le port 80 puis passe à `www-data` ; en non root, on choisit un port > 1024 (sous Docker 29 un non root peut ouvrir le port 80 du conteneur, car Docker y abaisse `net.ipv4.ip_unprivileged_port_start` à 0 — M12-E32 —, mais ni Podman sans privilège ni Kubernetes ne le garantissent) et il faut les dossiers de journaux et de PID d'Apache accessibles (l'image officielle les prépare dans `/var/run/apache2` et `/var/log/apache2`, à vérifier si tu changes de base).
 - `php_value` laissés dans l'hôte virtuel : sans effet hors `mod_php` et oubliés au premier changement de serveur.
 - `/dev/stderr` dans `config.php` : journal perdu sans message.
 - Sonde sur `index.php` : chaque panne de MariaDB fait redémarrer le serveur web.
@@ -692,7 +692,7 @@ Construire une image, c'est exécuter les `RUN` d'un Dockerfile dans des contene
 
 **Alternatives**
 - Buildah dans le job (`quay.io/buildah/stable`, `--isolation chroot`, stockage `vfs`) : mêmes exceptions en pratique, plus lent (`vfs`).
-- Kaniko : aucune exception, mais dépôt archivé par Google en 2025 ; forks à évaluer, non retenu.
+- Kaniko : ni mode privilégié ni option de sécurité, mais il tourne en root dans le conteneur du job ; le dépôt de Google a été archivé en juin 2025 (plus de correctifs amont), seuls des forks (Chainguard, autres) le maintiennent : non retenu.
 - Construire sur `runner02` en exécuteur shell avec le Docker de l'hôte : le compte du job serait dans le groupe `docker`, donc root (refusé).
 - Docker Buildx avec un constructeur distant (`buildx create --driver remote tcp://…` vers un BuildKit dédié en TLS mutuel) : séparation nette, une VM de plus.
 
@@ -706,7 +706,7 @@ Construire une image, c'est exécuter les `RUN` d'un Dockerfile dans des contene
 
 **En production chez MédiSphère**
 
-Au M13, le gabarit pousse dans Harbor avec un robot par projet, signe l'image (Cosign), attache SBOM et provenance, et l'immuabilité des étiquettes `v*` remplace le contrôle « ne jamais repousser une version ». Un profil seccomp dédié remplacera `seccomp=unconfined` une fois éprouvé.
+Au M13, le gabarit pousse dans Harbor avec un robot par projet, signe l'image (Cosign), attache SBOM et provenance, et l'immuabilité des étiquettes `v*` apporte le contrôle « ne jamais repousser une version » que ni le gabarit (qui refuse seulement `latest`) ni `registry:3` n'assurent aujourd'hui. Un profil seccomp dédié remplacera `seccomp=unconfined` une fois éprouvé.
 
 ---
 

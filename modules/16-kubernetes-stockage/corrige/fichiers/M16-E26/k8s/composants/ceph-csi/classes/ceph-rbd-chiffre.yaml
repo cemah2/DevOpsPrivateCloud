@@ -1,0 +1,43 @@
+# composants/ceph-csi/classes/ceph-rbd-chiffre.yaml (plateforme/k8s) — M16-E26 (SEC-1726)
+# Volumes RBD chiffrés PAR LE CLIENT (LUKS2 ouvert sur le nœud par le nodeplugin) : Ceph ne reçoit
+# que des blocs chiffrés. Une DEK par volume (KMS « secrets-metadata »), enveloppée par la KEK de
+# CETTE classe (Secret csi-rbd-secret-chiffre). Ne JAMAIS changer les paramètres de chiffrement
+# d'une classe qui a des volumes : créer une nouvelle classe (documentation ceph-csi).
+# Paramètres communs repris de ceph-rbd (E06) ; appliquée par composants/ceph-csi/installer.sh
+# avec les autres classes. <FSID> : sortie de « ceph fsid » (installer.sh refuse la valeur brute).
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ceph-rbd-chiffre
+  labels:
+    medisphere.internal/composant: stockage
+    medisphere.internal/chiffrement: client-luks
+provisioner: rbd.csi.ceph.com
+parameters:
+  clusterID: "<FSID>"
+  pool: k8s-rbd
+  imageFeatures: layering,exclusive-lock,object-map,fast-diff,deep-flatten
+  # Transit : msgr2 « secure » imposé par ceph-par1 (M08-E27) ; le client noyau le demande ici.
+  mapOptions: "krbd:ms_mode=secure"
+  csi.storage.k8s.io/fstype: ext4
+  # Chiffrement côté client
+  encrypted: "true"
+  encryptionType: block
+  encryptionKMSID: secrets-metadata
+  # Secrets : identité client.k8s ET KEK (encryptionPassphrase), distincts de csi-rbd-secret
+  csi.storage.k8s.io/provisioner-secret-name: csi-rbd-secret-chiffre
+  csi.storage.k8s.io/provisioner-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-expand-secret-name: csi-rbd-secret-chiffre
+  csi.storage.k8s.io/controller-expand-secret-namespace: ceph-csi
+  csi.storage.k8s.io/controller-publish-secret-name: csi-rbd-secret-chiffre
+  csi.storage.k8s.io/controller-publish-secret-namespace: ceph-csi
+  csi.storage.k8s.io/node-stage-secret-name: csi-rbd-secret-chiffre
+  csi.storage.k8s.io/node-stage-secret-namespace: ceph-csi
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+# Même mode de liaison que ceph-rbd (Immediate, décision du catalogue M16-E12).
+volumeBindingMode: Immediate
+# discard comme ceph-rbd ; à vérifier sur ta version : les blocs libérés ne reviennent au pool que
+# si ceph-csi ouvre le LUKS en laissant passer les discard (rbd du avant et après un fstrim).
+mountOptions:
+  - discard

@@ -14,7 +14,7 @@ check_cmd "plateforme/k8s (main) : helmfile.yaml" _m17d_gl_existe plateforme/k8s
 check_cmd "plateforme/k8s (main) : releases/_communs.yaml" _m17d_gl_existe plateforme/k8s releases/_communs.yaml
 check_cmd "plateforme/k8s (main) : au moins un releases/*.yaml.gotmpl" _m17o_compte_fichiers plateforme/k8s releases '\.yaml\.gotmpl$' 1
 
-_e10_attendues="kube-system/cilium cert-manager/cert-manager external-dns/external-dns ceph-csi/ceph-csi-rbd ceph-csi/ceph-csi-cephfs cnpg-system/cnpg velero/velero kube-system/metrics-server"
+_e10_attendues="kube-system/cilium cert-manager/cert-manager external-dns/external-dns ceph-csi/ceph-csi-rbd ceph-csi/ceph-csi-cephfs cnpg-system/cnpg cnpg-system/plugin-barman-cloud velero/velero kube-system/metrics-server"
 _e10_liste=""
 if command -v helmfile >/dev/null 2>&1; then
   _e10_k="$(_m17d_extraire "$_m17d_k8s_clone" .)" || _e10_k=""

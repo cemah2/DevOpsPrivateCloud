@@ -1,5 +1,5 @@
 ---
-# host_vars/ctr03/selinux_conteneurs.yml — M12-E25 (SEC-1351).
+# host_vars/ctr03/selinux_conteneurs.yml — M12-E25 (SEC-1325).
 selinux_conteneurs_dossiers:
   # Pièces jointes de Legacy-RDV migrées de legacy01 : écrites par www-data (UID 33) du conteneur,
   # qui est « app » sur l'hôte (UserNS=keep-id:uid=33,gid=33 dans l'unité Quadlet).

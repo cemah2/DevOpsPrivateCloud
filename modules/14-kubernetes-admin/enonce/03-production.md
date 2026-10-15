@@ -104,7 +104,7 @@ Un seul membre restauré ne démarre pas seul : il attend ses pairs pour former 
 **Contexte technique**
 - Version actuelle : 1.35.x (celle installée en E04). Cible : **v1.36.5** (dernier correctif de la 1.36 à la rédaction ; prends le dernier au moment où tu le fais). Paquets `pkgs.k8s.io` : un dépôt **par mineure** (`/core:/stable:/v1.36/deb/`), versions de la forme `1.36.5-1.1`, épinglés (`apt-mark hold`) par le rôle `k8s_noeud`.
 - Compatibilités à vérifier toi-même : Cilium 1.20 (sa page *requirements*), metrics-server (E20), kubectl 1.36 de `adm01`, containerd.io 2.3 (le `RELEASES.md` de containerd), la configuration kubeadm v1beta4 de `plateforme/k8s`.
-- Charge témoin : MédiAgenda en `mediagenda-recette` (2 réplicas, PDB de E16). Une boucle de requêtes depuis `adm01` (via `kubectl port-forward` ou un pod client dans l'espace) qui journalise chaque échec.
+- Charge témoin : MédiAgenda en `mediagenda-recette` (au moins deux réplicas et leur PDB, M14-E21). Une boucle de requêtes depuis `adm01` (via `kubectl port-forward` ou un pod client dans l'espace) qui journalise chaque échec.
 - La version est dans le code à trois endroits au moins : la version des paquets des faits partagés (`group_vars/k8s_par1/kubernetes.yml`, M14-E02), `kubernetesVersion` de `cluster/kubeadm-config.yaml`, la version des outils etcd du rôle `etcd_instantane`. Et une quatrième, cachée : l'image *pause* que containerd épingle. Le rôle `k8s_noeud` refuse de changer la version d'un nœud déjà membre hors d'un playbook de montée : lis comment il l'autorise.
 
 > ⚠️ **Attention** : (1) instantané etcd **juste avant** (`outils/etcd-instantane.sh`), vérifié ; (2) on ne saute **jamais** de mineure, et on ne redescend pas une mineure avec kubeadm : le retour arrière d'une montée réussie sur le plan de contrôle, c'est la restauration d'etcd (RB-141) et des paquets 1.35 — écris-le dans le plan ; (3) un seul nœud à la fois, et le nœud suivant seulement quand le précédent est `Ready` et ses pods revenus ; (4) le premier nœud de contrôle doit avoir `/etc/kubernetes/admin.conf`.
@@ -115,7 +115,7 @@ Un seul membre restauré ne démarre pas seul : il attend ses pairs pour former 
 3. **Charge témoin.** Lance la boucle vers MédiAgenda 10 minutes **avant** : c'est ta ligne de base.
 4. **Premier nœud de contrôle à la main** (`k8s-cp01`). Change le dépôt de paquets vers la 1.36, monte **seulement** `kubeadm`, lis `kubeadm upgrade plan` en entier (versions proposées, tableau des configurations de composants), lance `kubeadm upgrade apply v1.36.5`, puis drainage, `kubelet` et `kubectl`, redémarrage du kubelet, remise en service. Relève l'ordre des composants redémarrés et la durée de chaque étape ; regarde `/etc/kubernetes/tmp/`.
 5. **Le reste par le playbook.** Écris un playbook `playbooks/k8s-montee-version.yml` qui fait, pour les autres nœuds de contrôle **puis** les travailleurs, un nœud à la fois : dépôt, `kubeadm`, `kubeadm upgrade node`, drainage (depuis `adm01`), `kubelet`/`kubectl`, redémarrage, attente du `Ready`, remise en service, contrôle de santé avant de passer au suivant. Il doit être **rejouable** (un nœud déjà à jour est sauté sans rien casser) et s'arrêter au premier échec. Lance-le.
-6. **Après.** Vérifie les versions (nœuds, images du plan de contrôle, etcd, CoreDNS, kube-proxy, `kubeadm-config`), Cilium (`cilium status`), metrics-server (`kubectl top nodes`), l'avertissement éventuel de containerd sur l'image *pause* (et corrige le rôle `containerd`), les outils etcd des nœuds (version alignée). Fusionne la MR, rejoue les rôles des nœuds : aucun changement attendu. Arrête la boucle témoin et analyse son journal. Prends un instantané etcd de la 1.36.
+6. **Après.** Vérifie les versions (nœuds, images du plan de contrôle, etcd, CoreDNS, kube-proxy, `kubeadm-config`), Cilium (`cilium status`), metrics-server (`kubectl top nodes`), l'avertissement éventuel de containerd sur l'image *pause* (et corrige le rôle `containerd`), les outils etcd des nœuds de contrôle **et** de `adm01` (rôle `outils_k8s`) : version alignée sur l'etcd du cluster. Fusionne la MR, rejoue les rôles des nœuds : aucun changement attendu. Arrête la boucle témoin et analyse son journal. Prends un instantané etcd de la 1.36.
 7. **Runbook.** `docs/kubernetes/runbooks/RB-142-monter-de-version.md` : préalables, lecture des notes, ordre, commandes et playbook, critères de passage, retour arrière (y compris « la montée a échoué au milieu d'un nœud »), vérifications, nettoyage de `/etc/kubernetes/tmp/`, et ce que la montée **suivante** (1.37) devra vérifier en plus. Compte rendu dans `docs/kubernetes/tests/montee-1.36.md`.
 
 **Critères de réussite**
@@ -499,6 +499,21 @@ Pour le point d'accès, relis E03 et E29 : qu'est-ce qui a basculé, en combien 
 13. Pourquoi la VIP de l'API et HAProxy tournent-ils sur les nœuds de contrôle eux-mêmes, et pourquoi HAProxy écoute-t-il sur 8443 et non 6443 ? Que se passe-t-il si keepalived bascule la VIP vers un nœud dont le serveur d'API est arrêté ?
 14. Un collègue propose de passer `k8s-par1` à cinq nœuds de contrôle « pour être plus sûr ». Qu'est-ce que cela change pour la tolérance, la latence d'écriture, la mémoire du lab, la durée d'une montée de version ? Dans quel cas l'accepterais-tu ?
 
+**Critères de réussite**
+- [ ] Tu as répondu par écrit aux 14 questions, en chiffrant quand c'est possible et en justifiant chaque QCM (y compris pourquoi les autres options sont fausses).
+- [ ] Au moins cinq réponses s'appuient sur une mesure ou un compte rendu de ce palier (E24 à E29).
+- [ ] Tu as noté chaque réponse (0, 1 ou 2 points) avec le corrigé et listé les notions à revoir avant l'astreinte.
+
+<details><summary>Indice 1</summary>
+
+Pour etcd, raisonne en majorité stricte : combien de membres doivent répondre pour qu'une écriture soit validée, et combien de pannes cela laisse. Pour une restauration, distingue ce qui manque à l'**instantané** de ce qui manque au **cluster** autour (certificats, clés, versions).
+</details>
+
+<details><summary>Indice 2</summary>
+
+Pour les certificats et le chiffrement, demande-toi à chaque fois : qui détient la clé, qui la lit au démarrage, et que se passe-t-il pour un composant qui a gardé l'ancienne en mémoire.
+</details>
+
 Les réponses argumentées sont dans le corrigé.
 
 ---
@@ -554,6 +569,10 @@ Les rôles intégrés `edit` et `view` sont des ClusterRoles agrégés : `edit` 
 
 > **Ticket PLAT-1534** — *De : Claire Morel*
 > Tu vas prendre l'astreinte de `k8s-par1`. Avant, je veux te voir enchaîner des gestes d'administration courants, vite et juste, sans filet. Deux heures, quatorze tâches, sur le vrai cluster.
+
+**Objectifs pédagogiques**
+- Enchaîner sous contrainte de temps les gestes d'administration du module (objets, ordonnancement, RBAC, nœuds, etcd), sans corrigé.
+- Mesurer tes gestes lents ou hésitants et en tirer un plan de travail.
 
 **Règles de l'exercice**
 - Conditions d'examen : pas de corrigé, pas d'autres notes que **tes** runbooks et la documentation officielle de Kubernetes (kubernetes.io, etcd.io), comme à l'examen CKA. `kubectl explain`, `--help` et `--dry-run=client -o yaml` sont tes amis.

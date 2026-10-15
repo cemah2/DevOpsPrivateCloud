@@ -125,7 +125,7 @@ for _f in architecture.md politiques.md replication.md sauvegarde.md caches.md a
 done
 check_cmd "caches.md prépare containerd (hosts.toml)" _m13p_doc_main docs/registre/caches.md 'hosts\.toml'
 check_cmd "ADR-0130 publié" _m13p_doc_prefixe docs/registre/adr ADR-0130
-for _r in RB-131 RB-132 RB-133 RB-134 RB-135; do
+for _r in RB-130 RB-131 RB-132 RB-133 RB-134 RB-135; do
   check_cmd "runbook $_r" _m13p_doc_prefixe docs/registre/runbooks "$_r"
 done
 check_cmd "clé publique Cosign publiée (docs/registre/cosign.pub)" _m13p_doc_main docs/registre/cosign.pub 'PUBLIC KEY'

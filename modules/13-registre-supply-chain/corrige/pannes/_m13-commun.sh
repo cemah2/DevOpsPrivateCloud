@@ -7,7 +7,7 @@
 #
 # Principes (CONVENTIONS §8, PLAN §4.10 « Pannes du bloc C ») :
 #   - E19 à E21 agissent sur les TÉMOINS (projets wb-sonde et wb-sonde-public, robots wb-sonde-*), sur
-#     l'endpoint du cache dockerhub (URL seulement, valeur sauvegardée) et sur runner02 ; jamais sur les
+#     l'endpoint du cache dockerhub (identifiants seulement, et seulement s'il est anonyme) et sur runner02 ; jamais sur les
 #     images, robots ou politiques de medisphere ;
 #   - E22 agit sur reg01 (Harbor de production) après avoir vérifié qu'une sauvegarde de moins de 26 h a
 #     réussi (M13-E15) ; aucune donnée n'est effacée (fichier de remplissage, droits, configuration
@@ -282,7 +282,8 @@ cos() {
 }
 # Configuration de signature SANS aucun service (ni Fulcio, ni Rekor, ni horodatage), comme
 # docs/registre/signing-config.json (M13-E07) : rien ne part vers le journal public.
-[ -s "$K/signing-config.json" ] || printf '{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json"}\n' > "$K/signing-config.json"
+# Contenu identique à celui que produit « cosign signing-config create » sans service (Cosign 3.1.3).
+[ -s "$K/signing-config.json" ] || printf '%s\n' '{"mediaType":"application/vnd.dev.sigstore.signingconfig.v0.2+json","rekorTlogConfig":{},"tsaConfig":{}}' > "$K/signing-config.json"
 [ -s "$K/cosign-sonde.key" ] || cos generate-key-pair --output-key-prefix cosign-sonde >/dev/null 2>&1
 chmod 600 "$K/cosign-sonde.key"
 cp "$K/cosign-sonde.pub" "$D/cosign.pub"

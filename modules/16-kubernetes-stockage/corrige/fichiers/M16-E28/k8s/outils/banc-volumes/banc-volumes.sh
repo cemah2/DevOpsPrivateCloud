@@ -50,7 +50,7 @@ else
   kubectl apply -f - >/dev/null <<FIN
 apiVersion: v1
 kind: PersistentVolumeClaim
-metadata: {name: $nom, namespace: $ns, labels: {medisphere.fr/banc: "oui"}}
+metadata: {name: $nom, namespace: $ns, labels: {medisphere.internal/banc: "oui"}}
 spec:
   accessModes: [$acces]
   storageClassName: $cible
@@ -62,12 +62,12 @@ fi
 kubectl apply -f - >/dev/null <<FIN
 apiVersion: batch/v1
 kind: Job
-metadata: {name: $nom, namespace: $ns, labels: {medisphere.fr/banc: "oui"}}
+metadata: {name: $nom, namespace: $ns, labels: {medisphere.internal/banc: "oui"}}
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 3600
   template:
-    metadata: {labels: {medisphere.fr/banc: "oui"}}
+    metadata: {labels: {medisphere.internal/banc: "oui"}}
     spec:
       restartPolicy: Never
       nodeSelector: {kubernetes.io/hostname: $noeud}

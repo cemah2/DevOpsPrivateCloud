@@ -53,7 +53,7 @@ kind: PodDisruptionBudget
 metadata:
   name: $_E40_PDB
   namespace: $_M16_NS_DB
-  annotations: {medisphere.fr/ticket: "CHG-1738 protection de la base pendant la migration"}
+  annotations: {medisphere.internal/ticket: "CHG-1738 protection de la base pendant la migration"}
 spec:
   minAvailable: 3
   selector:

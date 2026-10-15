@@ -31,7 +31,7 @@ cephconf: |
 
 nodeplugin:
   nodeSelector:
-    medisphere.fr/stockage-ceph: "oui"
+    medisphere.internal/stockage-ceph: "oui"
   tolerations:
     - key: dedie
       operator: Exists
@@ -40,4 +40,4 @@ nodeplugin:
 provisioner:
   replicaCount: 2
   nodeSelector:
-    medisphere.fr/stockage-ceph: "oui"
+    medisphere.internal/stockage-ceph: "oui"

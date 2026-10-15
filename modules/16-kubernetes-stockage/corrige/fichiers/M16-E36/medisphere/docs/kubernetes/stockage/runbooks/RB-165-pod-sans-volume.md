@@ -34,7 +34,7 @@ Trouver le *nodeplugin* du nœud : `kubectl get pods -n ceph-csi -l component=no
 ### 3.1 Pilote absent
 - `kubectl get csinode <NŒUD> -o jsonpath='{.spec.drivers[*].name}'` ; pod *nodeplugin* présent sur le nœud ?
 - Sinon : affinité, `nodeSelector`, tolérances du DaemonSet comparés aux étiquettes et teintes du nœud ; état du DaemonSet (`DESIRED` = nombre de travailleurs).
-- Correctif : valeurs Helm `nodeplugin.*` dans `plateforme/k8s/composants/ceph-csi-rbd/values.yaml`, puis `task appliquer`.
+- Correctif : valeurs Helm `nodeplugin.*` dans `plateforme/k8s/composants/ceph-csi/values-rbd.yaml`, puis `task appliquer`.
 
 ### 3.2 Moniteurs injoignables depuis le nœud
 - Sur le nœud : `ip -br addr` (carte VLAN 30, 10.10.30.8x), `ip route get 10.10.30.51`, `ping -c2 -M do -s 8972 10.10.30.51`, `timeout 3 bash -c '</dev/tcp/10.10.30.51/3300'` (et 6789).

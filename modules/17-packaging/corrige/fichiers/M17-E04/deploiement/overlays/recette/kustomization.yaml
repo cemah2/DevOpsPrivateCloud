@@ -4,9 +4,11 @@ kind: Kustomization
 namespace: mediagenda-recette
 resources:
   - ../../base
+  # Accès de nos pods à la base et à Valkey du M16 (gérés hors de ce dépôt).
+  - acces-donnees.yaml
 labels:
   - pairs:
-      medisphere.fr/environnement: recette
+      medisphere.internal/environnement: recette
     # Jamais dans les sélecteurs : le sélecteur d'un Deployment est immuable.
     includeSelectors: false
     includeTemplates: true

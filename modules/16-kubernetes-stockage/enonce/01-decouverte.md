@@ -330,9 +330,9 @@ Un pod de *provisioner* a plusieurs réplicas, mais un seul **leader** par sidec
 
 | Élément | Valeur |
 |---|---|
-| Cartes | `net1` des seuls travailleurs `k8s-w01-03` (2144-2146) : VNet `vstopub`, MTU 9000, MAC `bc:24:11:30:00:61`, `:62`, `:63` ; adresse 10.10.30.81, .82, .83/24 (règle : dernier octet de l'adresse VLAN 40 + 20), **sans passerelle** ; nom `ens19` dans l'invité |
+| Cartes | `net1` des seuls travailleurs `k8s-w01-03` (2144-2146) : VNet `vstopub`, MTU 9000, MAC `bc:24:11:30:00:61`, `:62`, `:63` ; adresse 10.10.30.81, .82, .83/24 (règle : dernier octet de l'adresse VLAN 40 + 20), **sans passerelle** ; nom `eth1` dans l'invité |
 | OpenTofu | état `k8s` (`plateforme/infra`, `envs/k8s/`), module `vm-noeud` (`?ref=<VERSION-TOFU-MODULES>`) : liste `cartes` des travailleurs ; adresses enregistrées dans NetBox par le module |
-| Ansible | rôle `k8s_reseau_stockage` (nouveau), playbook `playbooks/k8s-reseau-stockage.yml` sur le groupe `k8s_travailleurs`, `serial: 1` ; fichier netplan `/etc/netplan/60-stockage.yaml` ; modules noyau `rbd` et `ceph` chargés au démarrage ; étiquette de nœud `medisphere.fr/stockage-ceph=oui` posée **après** vérification |
+| Ansible | rôle `k8s_reseau_stockage` (nouveau), playbook `playbooks/k8s-reseau-stockage.yml` sur le groupe `k8s_travailleurs`, `serial: 1` ; fichier netplan `/etc/netplan/60-stockage.yaml` ; modules noyau `rbd` et `ceph` chargés au démarrage ; étiquette de nœud `medisphere.internal/stockage-ceph=oui` posée **après** vérification |
 | Moniteurs | 10.10.30.51, .52, .53 (ports 3300 et 6789 en écoute ; seul 3300 servira) |
 | Documentation | ligne « travailleurs → `ceph-par1` » dans `docs/socle/matrice-flux.md` |
 
@@ -348,8 +348,8 @@ Un pod de *provisioner* a plusieurs réplicas, mais un seul **leader** par sidec
 *B. Un travailleur à la fois*
 
 5. `kubectl drain k8s-w01 --ignore-daemonsets --delete-emptydir-data`. Ajoute la carte de `k8s-w01` seulement dans l'état `k8s` ; `tofu plan` : lis-le (la VM doit être **modifiée**, pas remplacée ; NetBox reçoit une interface et une adresse). MR, `apply` par le pipeline. Selon la version du fournisseur, l'`apply` peut redémarrer la VM : c'est pour cela que le nœud est drainé.
-6. Joue le playbook limité à `k8s-w01`. Vérifie toi-même : `ip -d link show ens19` (MTU), `ip route` (aucune route par défaut par `ens19`), `ping -M do -s 8972 -c 3 -I ens19 10.10.30.51`, `ip route get 10.10.30.52` (par quelle carte ?), empreinte de la clé d'hôte, `sudo cloud-init query instance_id`, adresse interne du nœud. Remets le nœud en service (`kubectl uncordon`) si le playbook ne l'a pas fait, et attends que les pods reviennent.
-7. Depuis un pod **non** `hostNetwork` placé sur `k8s-w01` (image Debian du cache Harbor, `kubectl run … --overrides` avec un `nodeSelector`), teste `timeout 3 bash -c '</dev/tcp/10.10.30.51/3300'`. Le paquet sort par quelle carte, avec quelle adresse source ? Pourquoi est-ce que ça marche (ou pas) ? Observe pendant le test, sur `k8s-w01` : `sudo tcpdump -ni ens19 -c 4 host 10.10.30.51 and port 3300`, et depuis `adm01` : `hubble observe --to-ip 10.10.30.51 --last 20`.
+6. Joue le playbook limité à `k8s-w01`. Vérifie toi-même : `ip -d link show eth1` (MTU), `ip route` (aucune route par défaut par `eth1`), `ping -M do -s 8972 -c 3 -I eth1 10.10.30.51`, `ip route get 10.10.30.52` (par quelle carte ?), empreinte de la clé d'hôte, `sudo cloud-init query instance_id`, adresse interne du nœud. Remets le nœud en service (`kubectl uncordon`) si le playbook ne l'a pas fait, et attends que les pods reviennent.
+7. Depuis un pod **non** `hostNetwork` placé sur `k8s-w01` (image Debian du cache Harbor, `kubectl run … --overrides` avec un `nodeSelector`), teste `timeout 3 bash -c '</dev/tcp/10.10.30.51/3300'`. Le paquet sort par quelle carte, avec quelle adresse source ? Pourquoi est-ce que ça marche (ou pas) ? Observe pendant le test, sur `k8s-w01` : `sudo tcpdump -ni eth1 -c 4 host 10.10.30.51 and port 3300`, et depuis `adm01` : `hubble observe --to-ip 10.10.30.51 --last 20`.
 8. Recommence 5 et 6 pour `k8s-w02`, puis `k8s-w03`.
 
 *C. Documenter*
@@ -358,9 +358,9 @@ Un pod de *provisioner* a plusieurs réplicas, mais un seul **leader** par sidec
 
 **Critères de réussite**
 - [ ] Les VMs 2144-2146 ont une carte `net1` sur `vstopub`, MTU 9000, avec la MAC du contexte ; les VMs 2141-2143 n'ont aucune carte sur `vstopub`.
-- [ ] Sur chaque travailleur, `ens19` porte la bonne adresse en MTU 9000, sans route par défaut, et un ping de 9000 octets sans fragmentation joint les trois moniteurs ; l'adresse interne du nœud Kubernetes est restée celle du VLAN 40.
+- [ ] Sur chaque travailleur, `eth1` porte la bonne adresse en MTU 9000, sans route par défaut, et un ping de 9000 octets sans fragmentation joint les trois moniteurs ; l'adresse interne du nœud Kubernetes est restée celle du VLAN 40.
 - [ ] Les fichiers de protection de cloud-init et netplan sont en place, et les modules `rbd` et `ceph` sont chargés.
-- [ ] Les trois travailleurs (et seulement eux) portent l'étiquette `medisphere.fr/stockage-ceph=oui`, sont `Ready` et planifiables.
+- [ ] Les trois travailleurs (et seulement eux) portent l'étiquette `medisphere.internal/stockage-ceph=oui`, sont `Ready` et planifiables.
 - [ ] NetBox connaît 10.10.30.81-83 ; le rôle, le playbook et la modification de l'état `k8s` sont sur `main` ; la matrice des flux cite 10.10.30.81-83.
 
 **Vérification** : `lab/bin/check 16 05`
@@ -372,12 +372,12 @@ Le lecteur cloud-init de Proxmox porte des métadonnées dont l'identifiant d'in
 
 <details><summary>Indice 2</summary>
 
-Le rôle `noeud_openstack` du M10 (E02) montre la forme : MAC attendue vérifiée, fichier netplan validé à côté par `netplan generate --root-dir`, mise en place, redémarrage contrôlé. Ici, la carte principale reste à cloud-init (son fichier `50-cloud-init.yaml` ne bouge pas) : seul un fichier **en plus** décrit `ens19`. Pourquoi un redémarrage plutôt qu'un `netplan apply` sur un nœud où Cilium gère ses propres routes et règles ?
+Le rôle `noeud_openstack` du M10 (E02) montre la forme : MAC attendue vérifiée, fichier netplan validé à côté par `netplan generate --root-dir`, mise en place, redémarrage contrôlé. Ici, la carte principale reste à cloud-init (son fichier `50-cloud-init.yaml` ne bouge pas) : seul un fichier **en plus** décrit `eth1`. Pourquoi un redémarrage plutôt qu'un `netplan apply` sur un nœud où Cilium gère ses propres routes et règles ?
 </details>
 
 <details><summary>Indice 3</summary>
 
-Pour décider s'il faut redémarrer, compare l'état réel (`ansible_facts`, adresses de `ens19`) à l'état voulu, plutôt que de compter sur le « changed » de la tâche qui écrit le fichier : le fichier a pu être posé à l'étape 4, alors que la carte n'existait pas encore. Les commandes `kubectl` (drain, étiquette) se lancent sur `adm01` par `delegate_to: localhost`, sans `become`.
+Pour décider s'il faut redémarrer, compare l'état réel (`ansible_facts`, adresses de `eth1`) à l'état voulu, plutôt que de compter sur le « changed » de la tâche qui écrit le fichier : le fichier a pu être posé à l'étape 4, alors que la carte n'existait pas encore. Les commandes `kubectl` (drain, étiquette) se lancent sur `adm01` par `delegate_to: localhost`, sans `become`.
 </details>
 
 **Pour aller plus loin** (facultatif) : limite `client.k8s` aux adresses des travailleurs (capacités cephx avec `network 10.10.30.80/29`, M08-E13). Qu'est-ce que cela protège, et que faut-il prévoir pour `k8s-w04` ou un nœud remplacé ?
@@ -405,7 +405,7 @@ Pour décider s'il faut redémarrer, compare l'état réel (`ansible_facts`, adr
 | Espace | `ceph-csi`, Pod Security `privileged` (`plateforme/k8s/espaces/ceph-csi.yaml`) |
 | Chart | `ceph-csi-rbd` **3.18.1** du dépôt `https://ceph.github.io/csi-charts` (nom local `ceph-csi`), release `ceph-csi-rbd` ; values dans `composants/ceph-csi/values-rbd.yaml` ; installation par `composants/ceph-csi/installer.sh` |
 | Configuration du cluster Ceph | `clusterID` = `<FSID>` ; moniteurs `10.10.30.51:3300`, `10.10.30.52:3300`, `10.10.30.53:3300` (msgr2 seulement) |
-| Placement | *nodeplugin* et *provisioner* uniquement sur les nœuds `medisphere.fr/stockage-ceph=oui` ; 2 réplicas de *provisioner* |
+| Placement | *nodeplugin* et *provisioner* uniquement sur les nœuds `medisphere.internal/stockage-ceph=oui` ; 2 réplicas de *provisioner* |
 | Identité | `client.k8s` (Secret `ceph-csi/csi-rbd-secret`, clés `userID` = `k8s`, `userKey`) ; clé en Vault `critique` : `plateforme/k8s/secrets/ceph-csi.yml`, variable `ceph_csi_rbd_cle` ; Secret créé par `outils/ceph-csi-secrets.sh` |
 | StorageClass `ceph-rbd` | **par défaut** ; pool `k8s-rbd` ; fonctionnalités d'image `layering,exclusive-lock,object-map,fast-diff,deep-flatten` ; `ext4` ; mappage en msgr2 `secure` ; `Delete` ; agrandissement permis ; option de montage `discard` |
 | StorageClass `ceph-rbd-retain` | identique, mais `Retain` et non par défaut |
@@ -565,9 +565,10 @@ Pour le Deployment sur deux nœuds : une anti-affinité de pods **obligatoire** 
 
 | Élément | Valeur |
 |---|---|
-| Image | `registry.par1.medisphere.internal/dockerhub/valkey/valkey:9.1.2-trixie` (utilisateur 999, données dans `/data`) |
+| Image | `registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1` (utilisateur 999, données dans `/data`) |
 | Essai (`wb-essais`) | StatefulSet `e08-valkey` (Service sans tête `e08-valkey`), modèle de volume `donnees` 1 Gio `ceph-rbd` ; état final : **2** réplicas, politique `whenScaled: Delete`, `whenDeleted: Retain` |
-| Recette (`mediagenda-recette`) | StatefulSet `valkey`, 1 réplica, Service sans tête `valkey-interne` (le Service `valkey` existant, celui que vise `MEDIAGENDA_VALKEY_URL`, ne change pas) ; PVC `donnees-valkey-0` 1 Gio `ceph-rbd` ; politique `Retain` / `Retain` ; persistance AOF ; profil `restricted` ; mêmes étiquettes que l'ancien Valkey (le Service et les politiques réseau du M15 les sélectionnent) |
+| Existant (M14-E21) | StatefulSet `valkey` de trois instances (`valkey-0` primaire, deux répliques, `emptyDir`), Service sans tête `valkey`, URL de l'API `redis://valkey-0.valkey:6379/0` (ConfigMap `mediagenda-api-config`) ; manifeste `k8s/recette/30-valkey.yaml` du projet `mediagenda/api` |
+| Recette (`mediagenda-recette`) | StatefulSet `valkey` d'**une** instance (décision de Karim et Julien : sans Sentinel, les deux répliques n'assurent aucune bascule et l'API ne parle qu'à `valkey-0` ; la réplication avec bascule viendra au M27), même Service sans tête `valkey` comme `serviceName`, même URL ; PVC `donnees-valkey-0` 1 Gio `ceph-rbd` ; politique `Retain` / `Retain` ; persistance AOF ; profil `restricted` ; mêmes étiquettes que l'ancien Valkey (le Service et les politiques réseau du M15 les sélectionnent) |
 | Application | `https://mediagenda-recette.apps.par1.medisphere.internal/pret` répond 200 quand PostgreSQL **et** Valkey répondent |
 
 **Travail demandé**
@@ -582,15 +583,15 @@ Pour le Deployment sur deux nœuds : une anti-affinité de pods **obligatoire** 
 
 *B. Le Valkey de recette*
 
-6. Relève l'existant : `kubectl -n mediagenda-recette get deploy,sts,svc,netpol,pvc -o wide`, l'URL Valkey de l'API, les étiquettes de l'ancien Valkey et les sélecteurs du Service et des politiques réseau qui le concernent.
-7. Écris le StatefulSet `valkey` du contexte technique (avec le Service sans tête `valkey-interne`) dans le dépôt où vivent les manifestes de recette de MédiAgenda (M14-E46). Vérifie qu'il est accepté par Pod Security `restricted` et par la ValidatingAdmissionPolicy du M14 (`kubectl apply --dry-run=server`).
-8. Bascule : applique le StatefulSet, attends qu'il soit prêt, retire l'ancien Valkey, vérifie `/pret` et le nombre de clés (`valkey-cli DBSIZE`) après quelques requêtes de créneaux. Combien de temps `/pret` a-t-il répondu 503, s'il l'a fait ?
+6. Relève l'existant : `kubectl -n mediagenda-recette get deploy,sts,svc,netpol,pvc -o wide`, l'URL Valkey de l'API (ConfigMap `mediagenda-api-config`), les étiquettes de l'ancien Valkey et les sélecteurs du Service et des politiques réseau qui le concernent.
+7. Écris le StatefulSet `valkey` du contexte technique dans `k8s/recette/30-valkey.yaml` du projet `mediagenda/api` (il remplace celui du M14). Vérifie qu'il est accepté par Pod Security `restricted` et par la ValidatingAdmissionPolicy du M14 (`kubectl apply --dry-run=server`).
+8. Bascule : remplace l'ancien StatefulSet par le nouveau (un champ au moins ne se modifie pas en place : lequel ?), attends qu'il soit prêt et qu'il ne reste qu'un pod Valkey, vérifie `/pret` et le nombre de clés (`valkey-cli DBSIZE`) après quelques requêtes de créneaux. Combien de temps `/pret` a-t-il répondu 503, s'il l'a fait ?
 9. Draine le nœud du pod `valkey-0`, attends qu'il reparte ailleurs, `uncordon`. `DBSIZE` avant et après ? `/pret` ? MR des manifestes.
 
 **Critères de réussite**
 - [ ] `wb-essais/e08-valkey` a 2 réplicas prêts, la politique `whenScaled: Delete` / `whenDeleted: Retain`, et exactement les PVC `donnees-e08-valkey-0` et `-1` (liés, `ceph-rbd`).
-- [ ] `mediagenda-recette/valkey` est un StatefulSet d'1 réplica prêt, au profil `restricted` (non root, 999, capacités retirées, `seccompProfile`), image du contexte technique, persistance AOF activée, politique `Retain`/`Retain`, avec le Service sans tête `valkey-interne`.
-- [ ] Le PVC `donnees-valkey-0` est lié dans `ceph-rbd` ; il n'y a plus d'autre Valkey (Deployment ou pod avec `emptyDir`/`hostPath`) dans `mediagenda-recette`.
+- [ ] `mediagenda-recette/valkey` est un StatefulSet d'1 réplica prêt, au profil `restricted` (non root, 999, capacités retirées, `seccompProfile`), image du contexte technique, persistance AOF activée, politique `Retain`/`Retain`, dont le `serviceName` est le Service sans tête `valkey`.
+- [ ] Le PVC `donnees-valkey-0` est lié dans `ceph-rbd` ; il n'y a plus d'autre Valkey (répliques `valkey-1`/`valkey-2`, Deployment, pod avec `emptyDir`/`hostPath`) dans `mediagenda-recette`.
 - [ ] `https://mediagenda-recette.apps.par1.medisphere.internal/pret` répond 200.
 
 **Vérification** : `lab/bin/check 16 08`
@@ -607,7 +608,7 @@ L'image Valkey démarre en root pour corriger les droits de `/data`, puis abando
 
 <details><summary>Indice 3</summary>
 
-Pour une bascule sans changer l'adresse vue par l'API, laisse le Service `valkey` en place : s'il sélectionne les pods par étiquettes, il enverra le trafic au pod du StatefulSet dès qu'il est prêt, et à l'ancien tant qu'il existe. Le Service sans tête est un **second** Service, pour les noms stables des instances.
+L'API vise `valkey-0.valkey` : le nom d'un pod derrière le Service sans tête. Si le StatefulSet garde son nom, son `serviceName` et ses étiquettes, l'adresse ne change pas. Pour le champ qui ne se modifie pas, regarde les options de `kubectl delete` sur le sort des objets dépendants, et ce que fait un StatefulSet des pods qui portent déjà son nom et correspondent à son sélecteur.
 </details>
 
 **Pour aller plus loin** (facultatif) : Valkey en réplication (un primaire, deux répliques) avec Sentinel ou le futur opérateur : que changent les identités stables ? Pourquoi CloudNativePG (E18) ne gère-t-il **pas** ses pods par un StatefulSet ?

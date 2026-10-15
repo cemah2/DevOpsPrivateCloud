@@ -17,7 +17,7 @@ echo "PUT     $(code -X PUT "$U/api/v1/rendez-vous/1")"
 echo "docs    $(code "$U/docs")"
 echo "== Latéral : un pod de wb-essais vers PostgreSQL de la recette (attendu : échec)"
 kubectl -n wb-essais run essai-lateral --rm -i --restart=Never --quiet \
-  --image=registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.61 \
+  --image=registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.66.1 \
   -- connect --timeout=3s postgresql.mediagenda-recette.svc.cluster.local:5432 \
   && echo "ÉCHEC : connexion établie" || echo "OK : connexion refusée ou expirée"
 echo "== Hubble : chutes dans la recette pendant les essais"

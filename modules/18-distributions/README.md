@@ -5,8 +5,8 @@
 | **Bloc** | C — Conteneurs et Kubernetes |
 | **Niveau** | Secondaire |
 | **Profil de lab** | Socle + VMs 2181-2188 (≈ 30 Go en tout, jamais toutes allumées) et clusters Cluster API 5180-5189 ; `k8s-par1` **arrêté** pendant les parties lourdes |
-| **Prérequis** | Module 14 (kubeadm, `k8s-v1`) ; module 05 (OpenTofu) ; module 03 (Packer, pour l'image de nœud) ; module 17 (Helm) |
-| **Durée indicative** | 22 à 30 heures |
+| **Prérequis** | Module 14 (kubeadm, `k8s-v1`) ; module 05 (OpenTofu) ; module 03 (Packer, pour l'image de nœud) ; module 13 (cache Harbor) ; module 17 (`packaging-v1` : chart signé, Helm) ; module 10 pour E16 (facultatif) |
+| **Durée indicative** | 45 à 60 heures (dont mini-projet 8 à 12 h ; E16 facultatif en plus, 6 à 8 h) |
 
 ## Contexte MédiSphère
 
@@ -57,13 +57,14 @@
 
 | Hôte | VMID | Réseau | Rôle | Exercice |
 |---|---|---|---|---|
-| `k3s01` | 2181 | `vsandbox` (DHCP) | k3s monoœud (agence), puis cluster de gestion Cluster API | E03, E12 |
-| `rke2-01..03` | 2182-2184 | `vsandbox` (DHCP) | RKE2, profil CIS | E04 |
-| `talos-01..03` | 2185-2187 | `vsandbox` (DHCP) | Talos Linux 1.14 | E05 |
-| `m18-dev01` | 2188 | `vsandbox` (DHCP) | Docker, kind, k3d, clusterctl, image-builder | E02 |
-| `k3s-ha01..03` | 5191-5193 | `vsandbox` (DHCP) | k3s haute disponibilité (jetables) | E07 |
-| Clusters CAPMOX | 5180-5189 | VLAN 40 K8S (10.10.40.150-169, VIP 10.10.40.210) | VMs créées par Cluster API | E10 |
-| Template de nœud | 9060-9069 | — | Image de nœud Kubernetes 1.36 (image-builder) | E09 |
+| `k3s01` | 2181 | `vsandbox` (DHCP) | k3s monoœud (agence), puis cluster de gestion Cluster API | E03, E12 (et suite) |
+| `rke2-01..03` | 2182-2184 | `vsandbox` (DHCP) | RKE2 sur Rocky Linux 10, profil CIS ; détruits après E04, reconstruits par le code au palier 3 | E04, E14, E15, E22 |
+| `talos-01..03` | 2185-2187 | `vsandbox`, adresses fixes 10.10.99.85-87 | Talos Linux 1.14 ; détruits après E06, reconstruits au palier 3 | E05, E06, E14, E15, E20 |
+| `m18-dev01` | 2188 | `vsandbox` (DHCP) | Docker, kind, k3d, clusterctl, image-builder | E02, E08-E09, E13, E16, E18 |
+| `k3s-ha01..03` | 5191-5193 | `vsandbox` (DHCP) | k3s etcd intégré (jetables) : trois serveurs en E07, puis `k3s-ha01` serveur et `k3s-ha02` agent | E07, E14, E19, E23, E25 |
+| Clusters CAPMOX | 5180-5189 | VLAN 40 K8S (10.10.40.150-169, VIP 10.10.40.210) | VMs créées par Cluster API (`capi-essai`) | E10-E13, E21 |
+| VMs de contrôle | 5188, 5189 | `vsandbox` | Essai du template (E09), contrôle préalable de CAPMOX (E08) ; supprimées aussitôt | E08, E09 |
+| Templates de nœud | 9060, 9061 (plage 9060-9069) | — | Images de nœud Kubernetes 1.36.4 puis 1.36.5 (image-builder) | E09, E13 |
 
 Toutes ces VMs sont détruites en fin de module (sauf choix contraire écrit dans l'ADR-0180). Détails figés : [`PLAN.md`](../../PLAN.md) §4.10.
 

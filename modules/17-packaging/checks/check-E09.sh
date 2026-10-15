@@ -13,8 +13,10 @@ require_cmd jq kubectl curl
 _e09_ns="$(kube get namespace mediagenda-prod -o json 2>/dev/null)" || _e09_ns=""
 check_cmd "mediagenda-prod : Pod Security restricted (enforce)" _m17d_jq "$_e09_ns" \
   '.metadata.labels["pod-security.kubernetes.io/enforce"] == "restricted"'
-check_cmd "mediagenda-prod : étiquette medisphere.fr/exposition=oui" _m17d_jq "$_e09_ns" \
-  '.metadata.labels["medisphere.fr/exposition"] == "oui"'
+check_cmd "mediagenda-prod : étiquette medisphere.internal/exposition=oui" _m17d_jq "$_e09_ns" \
+  '.metadata.labels["medisphere.internal/exposition"] == "oui"'
+check_cmd "mediagenda-prod : étiquette medisphere.internal/equipe (politique d'images du M14-E18)" _m17d_jq "$_e09_ns" \
+  '.metadata.labels["medisphere.internal/equipe"] == "mediagenda"'
 check_cmd "mediagenda-prod : un ResourceQuota" _m17d_jq "$(_m17d_liste mediagenda-prod resourcequota)" '.items | length > 0'
 check_cmd "mediagenda-prod : une LimitRange" _m17d_jq "$(_m17d_liste mediagenda-prod limitrange)" '.items | length > 0'
 check_cmd "mediagenda-prod : politique de refus par défaut (entrée et sortie, tous les pods)" \

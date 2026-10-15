@@ -10,16 +10,16 @@ Le palier 1 t'a fait suivre les paquets dans `k8s-par1`, écrire tes premières 
 |---|---|
 | Cluster | `k8s-par1` 1.36, Cilium 1.20.x (CLI `cilium`, values `composants/cilium/values.yaml`), `kubeProxyReplacement: true` (M15-E08), tunnel VXLAN, Gateway API v1.6 canal standard et `gatewayAPI.enabled: true` (M15-E07) |
 | Pool LB IPAM (E10) | `CiliumLoadBalancerIPPool` **`lb-par1`** : 10.10.41.10-10.10.41.199 ; **10.10.41.10 réservée à `gw-par1`** ; adresses d'essai 10.10.41.20-10.10.41.49 demandées explicitement |
-| BGP (E11) | `CiliumBGPClusterConfig` **`bgp-par1`** (nœuds étiquetés `bgp=par1` : `k8s-w01` à `k8s-w03`), instance AS **65040** ; `CiliumBGPPeerConfig` **`bordure`** ; `CiliumBGPAdvertisement` **`services-lb`** (étiquette `bgp.medisphere.fr/annonce: services`) ; voisins `gw01` 10.10.40.2 et `gw02` 10.10.40.3, AS 65000, groupe `K8S` de la bordure (plage d'écoute 10.10.40.0/24, M07-E16) |
-| Gateway principale (E12) | `gw-par1`, espace **`passerelles`**, `spec.addresses` 10.10.41.10 (nom `gw-par1.par1.medisphere.internal` dans NetBox), écouteurs `http` (80) et `https` (443, `*.apps.par1.medisphere.internal`, Secret **`apps-joker`**), routes admises depuis les espaces étiquetés **`medisphere.fr/exposition: oui`** ; route `redirection-https` (80 → 443) |
-| Application publiée | MédiAgenda (`mediagenda-recette`, M14-E46) : HTTPRoute **`mediagenda`**, nom **`mediagenda-recette.apps.par1.medisphere.internal`**, Service `mediagenda-api` (port 8000), PostgreSQL `postgresql` (5432), Valkey `valkey` (6379) — si tes objets du M14 portent d'autres noms, garde les tiens et adapte |
+| BGP (E11) | `CiliumBGPClusterConfig` **`bgp-par1`** (nœuds étiquetés `bgp=par1` : `k8s-w01` à `k8s-w03`), instance AS **65040** ; `CiliumBGPPeerConfig` **`bordure`** ; `CiliumBGPAdvertisement` **`services-lb`** (étiquette `bgp.medisphere.internal/annonce: services`) ; voisins `gw01` 10.10.40.2 et `gw02` 10.10.40.3, AS 65000, groupe `K8S` de la bordure (plage d'écoute 10.10.40.0/24, M07-E16) |
+| Gateway principale (E12) | `gw-par1`, espace **`passerelles`**, `spec.addresses` 10.10.41.10 (nom `gw-par1.par1.medisphere.internal` dans NetBox), écouteurs `http` (80) et `https` (443, `*.apps.par1.medisphere.internal`, Secret **`apps-joker`**), routes admises depuis les espaces étiquetés **`medisphere.internal/exposition: oui`** ; route `redirection-https` (80 → 443) |
+| Application publiée | MédiAgenda (`mediagenda-recette`, M14-E46) : HTTPRoute **`mediagenda`**, nom **`mediagenda-recette.apps.par1.medisphere.internal`**, Service `mediagenda-api` (port **80**, `targetPort: http` = 8000 du conteneur), PostgreSQL `postgresql` (5432), Valkey `valkey` (6379) — si tes objets du M14 portent d'autres noms, garde les tiens et adapte |
 | cert-manager (E13, E14) | 1.21.x (chart OCI `quay.io/jetstack/charts/cert-manager`), espace `cert-manager` ; ClusterIssuer **`step-ca-acme`** (`https://ca01.par1.medisphere.internal/acme/acme/directory`) |
 | Zone `apps` (E14) | **`apps.par1.medisphere.internal`** sur l'autoritaire primaire `dns01` (**10.10.20.10:5300**), secondaire `dns02` (AXFR/NOTIFY, clé `axfr-par1`), signée DNSSEC, DS dans `par1` ; clés TSIG **`certmanager-k8s`** et **`externaldns-k8s`** (hmac-sha256) |
 | ExternalDNS (E15) | 0.23.x (chart 1.23.0), espace `external-dns`, fournisseur `rfc2136`, propriétaire `k8s-par1` |
-| Espaces d'essai | `wb-essais` (étiqueté `medisphere.fr/exposition: oui` en E12), `wb-essais-2` (E16, jetable). Les politiques d'essai de M15-E06 ne doivent plus s'y trouver (`kubectl -n wb-essais get netpol,cnp` vide) : sinon, retire-les avant ce palier |
-| Images d'essai | `registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.61` (cache Harbor de `registry.k8s.io`) |
+| Espaces d'essai | `wb-essais` (étiqueté `medisphere.internal/exposition: oui` en E12), `wb-essais-2` (E16, jetable). Les politiques d'essai de M15-E06 ne doivent plus s'y trouver (`kubectl -n wb-essais get netpol,cnp` vide) : sinon, retire-les avant ce palier |
+| Images d'essai | `registry.par1.medisphere.internal/k8s/e2e-test-images/agnhost:2.66.1` (cache Harbor de `registry.k8s.io`) |
 | VM d'essai (E19) | `m15-essai` (VMID 2151, `vsandbox`, 10.10.99.51, 2 vCPU, 4 Go, état OpenTofu `m15-essai`) ; adresses MetalLB 10.10.99.230-10.10.99.238 |
-| Documentation | `plateforme/medisphere` : `docs/kubernetes/reseau/`, runbooks `docs/kubernetes/runbooks/RB-15N-*.md` ; brouillons et journaux dans `~/m15/eXX/` sur `adm01` |
+| Documentation | `plateforme/medisphere` : `docs/kubernetes/reseau/`, runbooks `docs/kubernetes/reseau/runbooks/RB-15N-*.md` ; brouillons et journaux dans `~/m15/eXX/` sur `adm01` |
 
 Durée indicative du palier : 26 à 32 heures. Ordre conseillé :
 
@@ -172,7 +172,7 @@ Si les sessions restent en `active`/`idle` : vérifie dans l'ordre l'étiquette 
 
 **Contexte technique**
 - Gateway `gw-par1`, espace `passerelles` (nouvel espace, à décrire dans `espaces/` de `plateforme/k8s`, PSA `restricted`), classe `cilium`, adresse **10.10.41.10** par `spec.addresses`.
-- Écouteurs : `http` (port 80, sans nom d'hôte : il servira aussi aux défis ACME HTTP-01 d'E13 pour des noms hors `apps`) et `https` (port 443, `*.apps.par1.medisphere.internal`, terminaison TLS, Secret `apps-joker` du même espace). Routes admises sur les deux depuis les seuls espaces étiquetés `medisphere.fr/exposition: oui`.
+- Écouteurs : `http` (port 80, sans nom d'hôte : il servira aussi aux défis ACME HTTP-01 d'E13 pour des noms hors `apps`) et `https` (port 443, `*.apps.par1.medisphere.internal`, terminaison TLS, Secret `apps-joker` du même espace). Routes admises sur les deux depuis les seuls espaces étiquetés `medisphere.internal/exposition: oui`.
 - Le certificat définitif `apps-joker` sera émis par cert-manager en E14 (défi DNS-01, seul possible pour un nom joker). **Pour ce ticket**, tu l'émets à la main avec le provisioner JWK `admin` de `ca01` (7 jours au plus, `~/.config/workbook/step-admin.pass`), et tu le ranges dans le Secret sans laisser la clé sur un disque.
 - La zone `apps` n'existe pas encore (E14) : les essais se font avec `curl --resolve <nom>:443:10.10.41.10`. L'adresse 10.10.41.10 est déclarée dans NetBox (préfixe 10.10.41.0/24, rôle VIP, `dns_name` `gw-par1.par1.medisphere.internal`) : `medictl dns sync` (M06-E15) publie son A et son PTR.
 - Flux : MGMT joint déjà tout le lab (dont 10.10.41.0/24) ; rien à ouvrir pour ce ticket.
@@ -483,10 +483,10 @@ Un `ReferenceGrant` vit dans l'espace de la **cible** ; il nomme le type et l'es
 **Durée indicative** : 3 h.
 
 **Contexte technique**
-- Flux de MédiAgenda (code dans `apps/mediagenda`) : l'API écoute sur 8000 (`/sante`, `/pret`, `/metrics`, `/api/v1/rendez-vous` en `GET`/`POST`, `/api/v1/rendez-vous/{id}` en `GET`/`DELETE`, `/api/v1/creneaux` en `GET`) ; elle joint PostgreSQL (5432) et Valkey (6379) ; tout le monde résout des noms par CoreDNS.
+- Flux de MédiAgenda (code dans `apps/mediagenda`) : l'API écoute sur 8000 dans le pod (Service `mediagenda-api` en 80 ; une politique voit le port du **pod**) (`/sante`, `/pret`, `/metrics`, `/api/v1/rendez-vous` en `GET`/`POST`, `/api/v1/rendez-vous/{id}` en `GET`/`DELETE`, `/api/v1/creneaux` en `GET`) ; elle joint PostgreSQL (5432) et Valkey (6379) ; tout le monde résout des noms par CoreDNS. N'oublie pas ce qui ne tourne pas en permanence ou ne se voit pas dans un parcours de l'API : les manifestes du M14 (`mediagenda/api`, `k8s/dev/`, `k8s/recette/`) contiennent aussi des Jobs et un StatefulSet à trois répliques.
 - Le trafic qui sort de l'Envoy de la Gateway Cilium porte l'identité réservée **`ingress`** (page *Reference* de la Gateway API dans la doc Cilium) ; les sondes du kubelet arrivent de l'identité `host`.
 - Personne n'a besoin d'atteindre MédiAgenda depuis un autre espace, sauf la Gateway ; `/metrics` sera lu par Prometheus au M21 (espace pas encore connu) : aujourd'hui, personne.
-- Politiques rangées dans `espaces/mediagenda-dev/` et `espaces/mediagenda-recette/` de `plateforme/k8s`.
+- Politiques rangées sous `espaces/` de `plateforme/k8s` (organisation à ton choix, avec un seul jeu de fichiers pour les deux espaces : voir les contraintes).
 
 **Travail demandé**
 1. Écris la matrice des flux de MédiAgenda (source, destination, port, protocole, méthode et chemin HTTP s'il y a lieu, justification) dans `docs/kubernetes/reseau/flux-mediagenda.md`.
@@ -503,6 +503,7 @@ Un `ReferenceGrant` vit dans l'espace de la **cible** ; il nomme le type et l'es
 - [ ] Les deux espaces ont une politique de refus par défaut en entrée et en sortie.
 - [ ] `https://mediagenda-recette.apps.par1.medisphere.internal/pret` répond 200 (base et cache joignables) ; `/metrics` et une méthode non prévue sont refusés par la politique L7.
 - [ ] Un pod hors de l'espace ne joint pas PostgreSQL de la recette (essai consigné, *drop* visible dans Hubble).
+- [ ] Les répliques de Valkey suivent toujours le primaire (`valkey-cli info replication` dans `valkey-1` : `master_link_status:up`) et un Job de migration rejoué se termine.
 - [ ] Matrice des flux et politiques sur `main` ; MR avec la liste des essais.
 
 **Vérification** : `lab/bin/check 15 17`
@@ -745,7 +746,7 @@ Lis chaque fichier trois fois : une fois pour la **sécurité** (qui peut joindr
 **Durée indicative** : 2 h.
 
 **Travail demandé**
-1. Rédige `docs/kubernetes/runbooks/RB-150-service-injoignable.md` (`plateforme/medisphere`) selon le modèle des runbooks du socle (portée, symptômes, prérequis et accès, étapes, décisions, escalade, retour à la normale, historique).
+1. Rédige `docs/kubernetes/reseau/runbooks/RB-150-service-injoignable.md` (`plateforme/medisphere`) selon le modèle des runbooks du socle (portée, symptômes, prérequis et accès, étapes, décisions, escalade, retour à la normale, historique).
 2. Couvre au moins : résolution du nom (récurseurs, zone `apps`, ExternalDNS), annonce de l'adresse (BGP, bordure), Gateway et écouteurs, certificat, route, Service et EndpointSlices, pods, politiques (Hubble), et pour l'accès extérieur les répartiteurs.
 3. Pour chaque couche : une commande de lecture, la sortie attendue, ce que signifie un écart, qui appeler. Mets en tête un arbre de décision qui tient sur un écran.
 4. Teste-le : demande à quelqu'un (ou fais-le toi-même dans deux semaines) avec une panne que tu provoques dans `wb-essais` (Service au mauvais sélecteur, par exemple), et note dans l'historique ce qui manquait.

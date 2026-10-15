@@ -1,9 +1,9 @@
 # e02-hostpath.yaml — M16-E02, étapes 7 et 8 : ce que donne un hostPath.
 #
-# 1) kubectl apply -f e02-hostpath.yaml -l medisphere.fr/essai=refuse
+# 1) kubectl apply -f e02-hostpath.yaml -l medisphere.internal/essai=refuse
 #    → refusé par Pod Security (wb-essais est en baseline) :
 #      pods "e02-hote" is forbidden: violates PodSecurity "baseline:latest": hostPath volumes (volume "pki")
-# 2) kubectl apply -f e02-hostpath.yaml -l medisphere.fr/essai=privilegie
+# 2) kubectl apply -f e02-hostpath.yaml -l medisphere.internal/essai=privilegie
 #    → crée l'espace wb-privilegie (privileged) et le pod ; LISTER seulement (ls -l), jamais cat.
 # 3) kubectl delete namespace wb-privilegie
 ---
@@ -13,7 +13,7 @@ metadata:
   name: e02-hote
   namespace: wb-essais
   labels:
-    medisphere.fr/essai: refuse
+    medisphere.internal/essai: refuse
 spec:
   automountServiceAccountToken: false
   containers:
@@ -35,7 +35,7 @@ kind: Namespace
 metadata:
   name: wb-privilegie
   labels:
-    medisphere.fr/essai: privilegie
+    medisphere.internal/essai: privilegie
     # ⚠️ Aucune restriction : espace temporaire de M16-E02, à supprimer à la fin de l'étape 8.
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/warn: baseline
@@ -46,7 +46,7 @@ metadata:
   name: e02-hote
   namespace: wb-privilegie
   labels:
-    medisphere.fr/essai: privilegie
+    medisphere.internal/essai: privilegie
 spec:
   automountServiceAccountToken: false
   restartPolicy: Never

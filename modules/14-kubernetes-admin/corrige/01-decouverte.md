@@ -581,7 +581,7 @@ Les jonctions ne se font plus à la main du tout : un nouveau nœud est une VM (
    Écrit : /home/admin/.config/workbook/k8s-checks.kubeconfig
    admin@adm01:~$ lab/bin/check 14 06
    ```
-10. [`docs/kubernetes/acces.md`](fichiers/M14-E06/medisphere/docs/kubernetes/acces.md) et [`registre-secrets.md.extrait`](fichiers/M14-E06/medisphere/docs/socle/registre-secrets.md.extrait).
+10. [`docs/kubernetes/acces.md`](fichiers/M14-E06/medisphere/docs/kubernetes/acces.md) et [`registre-secrets.md.extrait`](fichiers/M14-E06/medisphere/docs/socle/registre-secrets.md.extrait). La section « Étendre les droits de wb-checks » est le contrat que suivent les modules 15 à 29 : une ClusterRole `wb-checks-<thème>` étiquetée `workbook.medisphere.internal/checks: "true"`, en lecture seule, jamais sur les Secrets ; `kubectl get clusterrole wb-checks -o yaml` montre aussitôt les règles agrégées.
 
 *D. k9s.*
 

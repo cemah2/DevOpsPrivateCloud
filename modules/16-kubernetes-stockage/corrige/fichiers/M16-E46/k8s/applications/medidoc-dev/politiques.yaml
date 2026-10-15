@@ -1,0 +1,58 @@
+# plateforme/k8s — applications/medidoc-dev/politiques.yaml (M15-E34, modifié en M16-E46).
+# 1. Refus par défaut en entrée ET en sortie de tout l'espace (inchangé depuis le M15).
+# 2. Autorisations : Gateway → 8080 ; DNS du cluster ; et, depuis M16-E46, le RGW de ceph-par1 en
+#    TCP 443 À LA PLACE de s3-01:8333 (MédiDoc n'écrit plus dans s3-01).
+# Le RGW est autorisé par son nom (toFQDNs, comme s3-01 au M15) : rgw.par1.medisphere.internal
+# résout vers la VIP 10.10.30.200 (VLAN 30). Chemin retenu : le trafic quitte le nœud par la
+# carte VLAN 30 du travailleur (eth1, M16-E05), traduit par Cilium sur 10.10.30.8x : il ne
+# traverse pas la bordure (aucune règle sur gw01/gw02). Adresse source à vérifier dans le journal
+# d'accès du RGW et avec « hubble observe -n medidoc-dev --to-fqdn rgw.par1.medisphere.internal ».
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: medidoc-dev
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-entree-gateway
+  namespace: medidoc-dev
+spec:
+  description: "MédiDoc : entrée depuis la Gateway (Envoy) seulement"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-sortie
+  namespace: medidoc-dev
+spec:
+  description: "MédiDoc : DNS du cluster et RGW de ceph-par1 en 443, rien d'autre"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    # M16-E46 : remplace « s3-01.par1.medisphere.internal:8333 » du M15-E34.
+    - toFQDNs:
+        - matchName: rgw.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

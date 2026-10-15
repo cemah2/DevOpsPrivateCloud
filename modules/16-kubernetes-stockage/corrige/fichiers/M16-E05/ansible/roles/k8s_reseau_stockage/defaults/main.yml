@@ -5,7 +5,7 @@
 #   adresse = <prefixe>.<suffixe + decalage>/<longueur>   → 10.10.30.81 à .83
 #   MAC     = bc:24:11:<vlan>:00:<suffixe>
 
-k8s_reseau_stockage_interface: ens19
+k8s_reseau_stockage_interface: eth1
 k8s_reseau_stockage_vlan: 30
 k8s_reseau_stockage_prefixe: "10.10.30"
 k8s_reseau_stockage_longueur: 24
@@ -26,7 +26,7 @@ k8s_reseau_stockage_modules:
 
 # Étiquette posée sur le nœud Kubernetes APRÈS vérification de la carte : c'est elle qui place les
 # pods de ceph-csi (nodeSelector des values, M16-E06).
-k8s_reseau_stockage_etiquette_cle: medisphere.fr/stockage-ceph
+k8s_reseau_stockage_etiquette_cle: medisphere.internal/stockage-ceph
 k8s_reseau_stockage_etiquette_valeur: "oui"
 
 # Un nœud dont la carte vient d'apparaître est drainé puis redémarré. false : le rôle s'arrête en

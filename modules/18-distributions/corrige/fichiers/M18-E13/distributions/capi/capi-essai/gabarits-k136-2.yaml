@@ -1,20 +1,23 @@
 # capi/capi-essai/gabarits-k136-2.yaml — gabarits d'infrastructure de la montée en v1.36.5 (M18-E13).
 # NOUVEAUX objets, sous de NOUVEAUX noms : un ProxmoxMachineTemplate est la recette des machines
 # futures ; le modifier en place ne remplacerait aucune machine existante.
-# Copie de tes gabarits de M18-E10 : seuls le nom et templateID changent. <NOEUD> = nom du nœud Proxmox
-# qui porte le template (celui de E10, pas forcément « pve01 »).
+# Copie exacte des gabarits de M18-E10 (capi-essai-plan-controle-1364, capi-essai-travailleurs-1364) :
+# seuls le nom (…-1365) et templateID (9061) changent. <NOEUD> = nom du nœud Proxmox qui porte le
+# template (celui de E10).
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
 kind: ProxmoxMachineTemplate
 metadata:
-  name: capi-essai-control-plane-k136-2
+  name: capi-essai-plan-controle-1365
   namespace: capi-essai
 spec:
   template:
     spec:
-      sourceNode: <NOEUD>
+      sourceNode: "<NOEUD>"
       templateID: 9061
       full: true                 # clone complet (local-nvme est en mode bloc : format raw, pas de « format »)
+      storage: local-nvme
       pool: lab
+      tags: ["env-m18", "capi-essai"]
       vmIDRange:
         start: 5180
         end: 5189
@@ -30,19 +33,22 @@ spec:
           - name: net0
             bridge: vk8s
             model: virtio
+            defaultIPv4: true
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha2
 kind: ProxmoxMachineTemplate
 metadata:
-  name: capi-essai-worker-k136-2
+  name: capi-essai-travailleurs-1365
   namespace: capi-essai
 spec:
   template:
     spec:
-      sourceNode: <NOEUD>
+      sourceNode: "<NOEUD>"
       templateID: 9061
       full: true
+      storage: local-nvme
       pool: lab
+      tags: ["env-m18", "capi-essai"]
       vmIDRange:
         start: 5180
         end: 5189
@@ -58,3 +64,4 @@ spec:
           - name: net0
             bridge: vk8s
             model: virtio
+            defaultIPv4: true

@@ -4,7 +4,7 @@ kind: Namespace
 metadata:
   name: medidoc-dev
   labels:
-    medisphere.fr/equipe: medidoc          # M15-E28 (cloisons)
-    medisphere.fr/exposition: oui          # allowedRoutes de gw-par1 (M15-E12)
+    medisphere.internal/equipe: medidoc    # M14-E33 ; cloisons de M15-E28
+    medisphere.internal/exposition: oui          # allowedRoutes de gw-par1 (M15-E12)
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/warn: restricted

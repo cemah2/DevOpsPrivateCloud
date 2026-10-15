@@ -96,8 +96,8 @@ En mode tunnel, un paquet entre pods est d'abord encapsulé en VXLAN, puis le pa
 - Bordure : `gw01` (maître VRRP, `nopreempt`) et `gw02`, FRR 10.7 AS 65000, groupe `K8S` en écoute sur 10.10.40.0/24 (M07, ouvert en E11) ; les nœuds annoncent les adresses de service en /32. La VIP `.1` de chaque VLAN suit le maître : c'est la table de routage du **maître** qui compte pour `adm01`.
 - Cilium : `CiliumBGPClusterConfig` `bgp-par1` (travailleurs portant le label `bgp=par1`, géré par `cluster/noeuds.yaml`) et `CiliumBGPPeerConfig` `bordure` (`composants/cilium/bgp/`), avec les temporisateurs posés en E11 (*hold* 9 s, *keepalive* 3 s) et **sans** redémarrage en douceur. Les deux passerelles sont des pairs de chaque nœud annonceur ; l'annonce `services-lb` couvre toutes les adresses `LoadBalancer`.
 - Sonde fournie : [`ressources/E25-sonde-http.sh`](../ressources/E25-sonde-http.sh) — une requête HTTPS toutes les 200 ms depuis `adm01`, horodatée, et le bilan des interruptions. Elle te sert dans tout le palier.
-- Service d'essai : un Service `LoadBalancer` `echo-lb` dans `wb-essais` (application `echo` de E03), adresse prise dans `lb-par1`.
-- Runbook : `docs/kubernetes/reseau/runbooks/RB-152-bgp.md` (créé en E11 si tu l'as amorcé ; sinon tu le crées ici).
+- Service d'essai : un Service `LoadBalancer` `echo-lb` dans `wb-essais` (application `echo` de E03), adresse **demandée** 10.10.41.23 (plage des essais de `lb-par1`, M15-E10).
+- Runbook : `docs/kubernetes/reseau/runbooks/RB-152-bgp.md`, créé ici (la fiche `docs/kubernetes/reseau/bgp.md` d'E11 en reste la description ; RB-152 dit quoi faire).
 
 > ⚠️ **Attention** : (1) l'arrêt brutal d'un travailleur (`qm stop` sur `pve01`) le prive de ses pods pendant plusieurs minutes : vérifie avant que MédiAgenda a deux réplicas sur deux nœuds différents et que les PDB le permettent ; (2) **aucun essai sur la passerelle maître** : on arrête FRR sur la passerelle de secours seulement, et la bascule de la bordure se fait par RB-071, aller et retour, hors des fenêtres de sauvegarde ; (3) une modification de FRR passe par le rôle, une passerelle à la fois, la secours d'abord.
 
@@ -172,7 +172,7 @@ Avec `nopreempt`, une baisse de priorité du maître ne fait pas basculer la bor
 2. **Certificats et sessions dans l'API.** Liste les certificats de la plateforme avec leur date d'expiration et leur date de renouvellement prévue (`kubectl get certificate -A`, les champs de `status`, et `cmctl status certificate` si tu installes `cmctl`). Liste l'état de chaque session BGP de chaque nœud (statut des `CiliumBGPNodeConfig`).
 3. **L'identité de la sonde.** Crée par le code (`plateforme/k8s`, dossier `rbac/`) l'espace `supervision`, le compte `ms-supervision`, un ClusterRole qui lit exactement ce dont la sonde a besoin (pas de Secrets), et un jeton long par Secret de type `kubernetes.io/service-account-token` (même exception documentée que `wb-checks`). Construis le kubeconfig sur `adm01` et prouve qu'il ne lit pas un Secret.
 4. **La sonde.** Écris `ms-verif-k8s-reseau` sur le modèle de `ms-verif-ceph` (bibliothèque `ms-commun.sh`, configuration séparée, aucune valeur en dur). Elle signale au minimum : un agent Cilium ou un Envoy non prêt (DaemonSet incomplet), l'opérateur indisponible ; un nœud dont les métriques sont injoignables ou qui voit des nœuds injoignables ; une session BGP qui n'est pas `established` (nœud et pair dans le message) ; une adresse de la configuration non installée dans la table d'une passerelle (lu par le compte `supervision` des passerelles, M07-E29, ou par `ms-verif-reseau`) ; un Certificate non prêt, ou qui expire dans moins de 10 jours ; un nom publié qui ne résout pas ou ne répond pas en HTTPS avec un certificat valide pour lui. Écris les tests `bats` (sans réseau, outils simulés), au moins un test « rouge » par contrôle.
-5. **Planification et alerte.** Installe par `task install:systeme`, crée le service et le timer, puis prouve la chaîne d'alerte : désactive les sessions d'**un** nœud en lui retirant à la main le label `bgp=par1` (geste de test, à noter dans ton journal : `cluster/noeuds.yaml` le remettra au prochain `task noeuds:etiqueter`), attends le passage de la sonde, constate l'alerte, remets le label par la tâche, vérifie le retour au vert. Note le délai.
+5. **Planification et alerte.** Installe par `task install:systeme`, crée le service et le timer, puis prouve la chaîne d'alerte : désactive les sessions d'**un** nœud en lui retirant à la main le label `bgp=par1` (geste de test, à noter dans ton journal : `cluster/noeuds.yaml` le remettra au prochain `task etiquettes`), attends le passage de la sonde, constate l'alerte, remets le label par la tâche, vérifie le retour au vert. Note le délai.
 6. **Hubble UI, protégée.** Active l'interface dans les *values*. Avant de la publier, pose une politique Cilium sur les pods `hubble-ui` qui n'accepte en entrée que le trafic venant de la Gateway (identité réservée). Puis publie : route `hubble-ui` dans `passerelles`, autorisation de référence dans `kube-system`, nom publié par ExternalDNS. Vérifie : la page s'ouvre depuis `adm01` en HTTPS ; un pod de `wb-essais` n'atteint pas `hubble-ui` directement ; le nom n'est **pas** servi par la VIP des répartiteurs (10.10.70.200). Écris dans `docs/kubernetes/reseau/supervision.md` qui peut voir quoi, et ce qui manque (authentification : module 24).
 7. **Astreinte.** Ajoute à `docs/astreinte.md` de `plateforme/outils` une section « Réseau du cluster » : lire le message de la sonde, les trois premières commandes, quand réveiller quelqu'un.
 
@@ -276,7 +276,7 @@ Avec Helm, un retour arrière se fait à une **révision** (`helm history`, `hel
 **Durée indicative** : 4 h.
 
 **Contexte technique**
-- Équipes et espaces : `mediagenda` → `mediagenda-dev`, `mediagenda-recette` ; `medidoc` → `medidoc-dev`. Chaque espace d'équipe porte le label **`medisphere.fr/equipe: <équipe>`** (à poser par le code, `espaces/`).
+- Équipes et espaces : `mediagenda` → `mediagenda-dev`, `mediagenda-recette` ; `medidoc` → `medidoc-dev`. Chaque espace d'équipe porte le label **`medisphere.internal/equipe: <équipe>`**, posé par le code de `plateforme/k8s` depuis le M14 (E10, E33) et déjà utilisé par l'admission (M14-E18) : c'est la seule source de l'appartenance à une équipe, ne crée pas d'autre label.
 - Règles de Sophie (SEC-1628) :
   1. aucun pod d'un espace d'équipe ne reçoit de connexion d'un pod d'un **autre** espace d'équipe, ni n'en ouvre vers lui — même entre deux espaces de la même équipe (le développement ne touche jamais la recette) ;
   2. cette règle ne peut pas être levée par une politique posée dans un espace d'équipe ;
@@ -289,7 +289,7 @@ Avec Helm, un retour arrière se fait à une **révision** (`helm history`, `hel
 
 **Travail demandé**
 1. **Lecture.** Dans la documentation de Cilium 1.20 (*Policy Enforcement Modes*, *Endpoint default policy*, *Layer 3 Examples*, *Deny Policies*, *DNS based*), réponds : quand un pod passe-t-il en refus par défaut, et qu'est-ce que `enableDefaultDeny` change ? Qu'est-ce qui l'emporte entre une autorisation et un refus ? Comment sélectionner les pods d'un espace par les **labels de l'espace** ? Comment fonctionne `toFQDNs` (qui résout, qui apprend les adresses, combien de temps) et pourquoi il faut une règle DNS L7 ?
-2. **Labels.** Pose les labels d'équipe sur les trois espaces par le code.
+2. **Labels.** Vérifie que les trois espaces portent le label d'équipe (dans le cluster **et** dans `espaces/` sur `main`), et qu'aucun espace de plateforme ni d'essai ne le porte : tes cloisons vont s'y fier.
 3. **Proxy DNS de base.** Écris une politique de cluster qui fait passer les requêtes DNS de tous les pods (hors `kube-system`) par le proxy DNS de Cilium, **sans** mettre aucun pod en refus par défaut. Vérifie dans Hubble que les requêtes DNS de `mediagenda-recette` apparaissent avec le nom demandé.
 4. **Cloisons.** Écris les politiques de cluster qui appliquent les règles 1 et 2 aux trois espaces d'équipe. Elles ne doivent changer **que** cela : aucun flux autorisé aujourd'hui à l'intérieur d'un espace, depuis la Gateway ou vers le DNS ne doit tomber (sonde de E25 lancée).
 5. **Preuve.** Construis une matrice de tests (source × destination × attendu × obtenu) avec des pods de sonde `netshoot` : `mediagenda-dev` → PostgreSQL de `mediagenda-recette` ; `medidoc-dev` → API de `mediagenda-recette` ; `mediagenda-recette` → son propre PostgreSQL ; Gateway → API ; `wb-essais` → API de `mediagenda-recette`. Puis la preuve de la règle 2 : pose **temporairement** dans `mediagenda-recette` une politique qui autorise toute entrée, constate que `mediagenda-dev` n'entre toujours pas, et retire-la. Lis les refus dans Hubble (raison affichée).
@@ -297,7 +297,7 @@ Avec Helm, un retour arrière se fait à une **révision** (`helm history`, `hel
 7. **Documentation.** `docs/kubernetes/reseau/segmentation.md` : les règles, les politiques qui les portent, la matrice de tests, comment une nouvelle équipe est ajoutée (une MR), et les limites (ce qui n'est pas couvert : trafic du réseau de l'hôte, pods `hostNetwork`, flux vers la bordure).
 
 **Critères de réussite**
-- [ ] Les trois espaces d'équipe portent le label `medisphere.fr/equipe` ; les politiques de cluster sont sur `main` de `plateforme/k8s` (`composants/reseau/politiques/`).
+- [ ] Les trois espaces d'équipe portent le label `medisphere.internal/equipe` ; les politiques de cluster sont sur `main` de `plateforme/k8s` (`composants/reseau/politiques/`).
 - [ ] Une politique de cluster fait passer le DNS de tous les pods par le proxy, sans refus par défaut.
 - [ ] Chaque espace d'équipe est couvert par des règles de **refus** en entrée et en sortie vers les autres espaces d'équipe ; aucune politique « tout autoriser » de test ne reste.
 - [ ] La sortie de MédiAgenda vers Internet est limitée par `toFQDNs` à `calendrier.api.gouv.fr`.
@@ -508,7 +508,7 @@ Auto-évaluation : grille fournie dans le corrigé.
 
 <details><summary>Indice 2</summary>
 
-Une ligne « autorisé par : `default-deny` » ne veut rien dire : une politique de refus par défaut n'autorise rien. Nomme la politique qui **autorise** chaque flux ; si tu n'en trouves pas et que le flux passe, tu viens de trouver un écart.
+Une ligne « autorisé par : `refus-par-defaut` » ne veut rien dire : une politique de refus par défaut n'autorise rien. Nomme la politique qui **autorise** chaque flux ; si tu n'en trouves pas et que le flux passe, tu viens de trouver un écart.
 </details>
 
 **Pour aller plus loin** (facultatif) : générer la partie « applications » de la matrice à partir des politiques versionnées (script dans `plateforme/outils`) pour qu'elle ne puisse plus diverger ; l'éditeur de politiques de Cilium (*Network Policy Editor*) pour visualiser.

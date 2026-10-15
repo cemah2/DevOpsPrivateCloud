@@ -1,0 +1,99 @@
+# plateforme/k8s — applications/medidoc-dev/deployment.yaml (M16-E46, PLAT-1746).
+# Le Deployment livré par l'équipe MédiDoc au M15-E34 (DEV-1634), passé du compartiment
+# « medidoc-dev » de s3-01 au compartiment « medidoc-documents » du RGW de ceph-par1
+# (https://rgw.par1.medisphere.internal, VIP 10.10.30.200, compte medidoc-app du M08-E12).
+# Seules changent les deux variables MEDIDOC_S3_ENDPOINT et MEDIDOC_S3_BUCKET ; le reste est
+# celui du M15 (noms, étiquettes, sondes, ressources, PSA « restricted »).
+#
+# Ce que ce Deployment suppose :
+#   - Secret « harbor-pull » dans medidoc-dev (M14-E33) ;
+#   - Secret « medidoc-s3 » (clés AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), désormais ceux du
+#     compte RGW medidoc-app : outils/secret-medidoc-s3.sh, depuis ~/.config/workbook/s3-medidoc-app.env
+#     (jamais dans ce dépôt) ;
+#   - ConfigMap « racine-medisphere » (clé medisphere-root-ca.crt, M15-E34, inchangée) : le
+#     certificat du RGW est émis par la PKI MédiSphère, comme celui de s3-01 ;
+#   - un accès réseau au RGW en 443 et au DNS du cluster (politiques.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medidoc
+  namespace: medidoc-dev
+  labels:
+    app.kubernetes.io/name: medidoc
+    app.kubernetes.io/part-of: medidoc
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medidoc
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: medidoc
+        app.kubernetes.io/part-of: medidoc
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: medidoc
+      containers:
+        - name: medidoc
+          # Étiquette signée du projet Harbor « medisphere » (M13), celle du M15-E34.
+          image: registry.par1.medisphere.internal/medisphere/medidoc:<VERSION-MEDIDOC>
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: MEDIDOC_S3_ENDPOINT
+              value: https://rgw.par1.medisphere.internal        # était : https://s3-01.par1.medisphere.internal:8333
+            - name: MEDIDOC_S3_BUCKET
+              value: medidoc-documents                          # était : medidoc-dev
+            - name: MEDIDOC_CA_FILE
+              value: /etc/medisphere/medisphere-root-ca.crt
+            - name: MEDIDOC_MAX_MB
+              value: "10"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: medidoc-s3, key: AWS_ACCESS_KEY_ID}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: medidoc-s3, key: AWS_SECRET_ACCESS_KEY}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+          resources:
+            # Chaque document est lu en mémoire (MEDIDOC_MAX_MB) : 10 Mio × requêtes simultanées.
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - name: racine
+              mountPath: /etc/medisphere
+              readOnly: true
+      volumes:
+        - name: racine
+          configMap:
+            name: racine-medisphere

@@ -2,7 +2,7 @@
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-**Testé** pendant la rédaction : Helm 4.3.0, helm-diff 3.15.15, helm-unittest 1.2.1, Kustomize 5.8.2 (et 5.8.1 de kubectl 1.36.5), Helmfile 1.8.1, Cosign 3.1.3, images `alpine/helm:4.3.0` et `quay.io/helmpack/chart-testing:v3.15.0`. Le banc d'essai était un serveur d'API Kubernetes 1.36 et etcd, sans nœuds ni contrôleurs, plus un registre OCI local. Sur ce banc, les points suivants ont été rejoués :
+**Testé** pour ce corrigé : Helm 4.3.0, helm-diff 3.15.15, helm-unittest 1.2.1, Kustomize 5.8.2 (et 5.8.1 de kubectl 1.36.5), Helmfile 1.8.1, Cosign 3.1.3, images `alpine/helm:4.3.0` et `quay.io/helmpack/chart-testing:v3.15.0`. Le banc d'essai était un serveur d'API Kubernetes 1.36 et etcd, sans nœuds ni contrôleurs, plus un registre OCI local. Sur ce banc, les points suivants ont été rejoués :
 - chaîne du pipeline : `helm lint --strict`, `ct lint --skip-helm-dependencies`, `helm unittest`, `helm package --version`, `helm push`, `cosign sign` et `cosign verify` sans journal de transparence, installation par digest ;
 - conflits de propriété des champs entre `helm` et un gestionnaire `kubectl-*` ;
 - `helm diff upgrade` avec et sans `--three-way-merge` ;
@@ -10,8 +10,8 @@
 
 **Points non testés en conditions réelles** (signale tes retours, ils corrigent le workbook) :
 - Harbor 2.15 (TLS de la PKI interne, robot de projet, immuabilité des étiquettes du projet `charts`) : la chaîne n'a été rejouée que contre un registre OCI local en HTTP. La façon dont Harbor présente une signature Cosign 3 sur un artefact de chart (accessoire `signature.cosign`, ou référent OCI seulement) est à vérifier. Le check E13 accepte l'un ou l'autre.
-- Racine de la PKI dans les jobs : le corrigé la passe par une variable de type fichier `MEDISPHERE_ROOT_CA` (`--ca-file` pour Helm, `SSL_CERT_FILE` pour Cosign, `GIT_SSL_CAINFO` pour Git). Aligne-toi sur ce que ton gabarit `supply-chain.yml` du M13 a retenu.
-- Cosign 3.1 : `--tlog-upload=false` est accepté, mais signalé comme déprécié au profit d'un `--signing-config` sans service de transparence (sortie réelle constatée). Le corrigé garde la forme du M13.
+- Racine de la PKI dans les jobs : variable d'instance de type fichier `MEDISPHERE_ROOT_CA` (M13) pour Helm (`--ca-file`) et Git (`GIT_SSL_CAINFO`) ; le job de signature utilise l'image outillée `plateforme/outils-supply-chain` du M13-E09, qui embarque déjà la racine, la clé publique et la configuration de signature.
+- Cosign 3.1 : signature avec la configuration de signature sans service du M13-E07 (`--signing-config`), comme les images. Les anciennes options `--use-signing-config=false --tlog-upload=false` fonctionnent encore, avec un avertissement de dépréciation (sortie réelle constatée) : ne les utilise plus.
 - Comportement de cert-manager pendant sa montée de correctif (E16) : interruption du webhook, durée.
 - Nom du gestionnaire de champs du contrôleur HPA (E22, rappelé en E14) : `kube-controller-manager` avec la sous-ressource `scale`.
 
@@ -66,24 +66,24 @@ Avec un chart en 0.x, `feat:` donne une mineure (0.6.0) et `fix:` un correctif (
 
 *4. Variables et robots.* Dans Harbor (projet `charts` → Robots), on crée deux robots :
 
-| Robot | Droits | Variables (projet `mediagenda/chart`) | Protégée | Masquée |
+| Robot | Droits | Variables (groupe `mediagenda`, comme en M17-E08) | Protégée | Masquée |
 |---|---|---|---|---|
-| `robot$charts+ci` | push + pull sur `charts` | `HARBOR_CHARTS_USER`, `HARBOR_CHARTS_TOKEN` | oui | oui |
-| `robot$charts+lecture` | pull sur `charts` | `HARBOR_CHARTS_RO_USER`, `HARBOR_CHARTS_RO_TOKEN` | **non** | oui |
+| `robot$charts+ci` | push + pull sur `charts` | `HARBOR_CHARTS_USER`, `HARBOR_CHARTS_TOKEN` | oui | jeton seulement (le nom contient `$` : non développé) |
+| `robot$charts+lecture` | pull sur `charts` | `HARBOR_CHARTS_RO_USER`, `HARBOR_CHARTS_RO_TOKEN` | **non** | jeton seulement |
 
 Le second robot existe parce que les pipelines de MR, sur des branches non protégées, ne voient pas les variables protégées. Sans lui, `helm dependency build` (dépendance `valkey` dans `charts`) échoue sur chaque MR. Un robot en lecture seule exposé aux branches est un risque acceptable : `charts` ne contient rien de secret, et une fuite ne permet ni d'écrire ni de signer. Écris-le dans la MR. `COSIGN_PRIVATE_KEY` et `COSIGN_PASSWORD` sont protégées (M13). Les étiquettes `v*` doivent être protégées (création par les mainteneurs et `bot-release`), sinon le pipeline d'étiquette ne voit pas ces variables.
 
 *5. Publication.* Les jobs `paquet`, `pousser` et `signer` ne tournent que sur une étiquette protégée.
 - `paquet` vérifie d'abord que la version n'existe pas (`helm show chart … --version`). L'immuabilité des étiquettes du projet `charts` (M13) le refuserait aussi, mais avec un `412` peu parlant.
 - `pousser` capture le digest affiché par `helm push` (`Digest: sha256:…`, sur la sortie standard) et le transmet par un artefact `dotenv`.
-- `signer` signe `registry…/charts/mediagenda@sha256:…`, **jamais** l'étiquette, puis vérifie avec `cosign.pub` versionnée dans le dépôt. La vérification avec la clé publique prouve que la clé privée de CI correspond bien à la clé publiée.
+- `signer` tourne dans l'image outillée du M13-E09 (`plateforme/outils-supply-chain`) : il signe `registry…/charts/mediagenda@sha256:…`, **jamais** l'étiquette, avec la configuration de signature sans journal embarquée, puis vérifie avec la clé publique embarquée (`/etc/medisphere/cosign.pub`, copie de `docs/registre/cosign.pub`). La vérification avec la clé publique prouve que la clé privée de CI correspond bien à la clé publiée.
 
 ```
-cosign sign --yes --key env://COSIGN_PRIVATE_KEY --use-signing-config=false --tlog-upload=false "$REF"
-cosign verify --key cosign.pub --insecure-ignore-tlog=true "$REF"
+cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$REF"
+cosign verify --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true "$REF"
 ```
 
-Sortie réelle de Cosign 3.1.3 : `Flag --tlog-upload has been deprecated, prefer using a --signing-config file with no transparency log services`. Ça fonctionne. Quand le M13 aura figé un fichier de configuration de signature sans Rekor, remplace les deux options par `--signing-config`.
+`COSIGN_PRIVATE_KEY` est une variable de type **fichier** (son contenu est écrit dans un fichier temporaire, la variable contient le chemin) : d'où `--key "$COSIGN_PRIVATE_KEY"` et non `env://`, exactement comme dans `supply-chain.yml` du M13. Sans `--signing-config`, Cosign 3 enverrait l'entrée au Rekor public sans poser de question.
 
 *6. Vérifications.*
 
@@ -99,7 +99,7 @@ admin@adm01:~$ cosign tree registry.par1.medisphere.internal/charts/mediagenda@s
 
 **Explications**
 
-Le pipeline sépare **vérifier** (sur chaque MR, sans droit d'écriture) et **publier** (seulement sur une étiquette protégée, avec les droits). La publication n'a lieu qu'une fois par version, et la version naît des commits. Un chart publié est donc un artefact immuable, tracé jusqu'au commit et signé par une clé que personne ne manipule. En recette, on peut en exiger la signature avant de le rendre (`outils/verifier-chart.sh` de M17-E09). Signer par digest est indispensable : une étiquette OCI est un pointeur, le digest est le contenu.
+Le pipeline sépare **vérifier** (sur chaque MR, sans droit d'écriture) et **publier** (seulement sur une étiquette protégée, avec les droits). La publication n'a lieu qu'une fois par version, et la version naît des commits. Un chart publié est donc un artefact immuable, tracé jusqu'au commit et signé par une clé que personne ne manipule. En recette, on peut en exiger la signature avant de le rendre (`outils/rendre-base.sh` de M17-E09, qui vérifie la signature du digest avant de rendre). Signer par digest est indispensable : une étiquette OCI est un pointeur, le digest est le contenu.
 
 **Alternatives**
 - **Version écrite dans `Chart.yaml` par un commit de release** (`@semantic-release/git`) : `Chart.yaml` reste exact dans le dépôt, mais il faut un bot qui pousse sur une `main` protégée, et un pipeline par commit de release (`[skip ci]`). Le gabarit M01 l'a écarté.
@@ -185,7 +185,7 @@ La release passe en `failed` et une révision `failed` s'ajoute à l'historique.
 | Défaire la modification | `kubectl edit` → `INFO`, puis `helm upgrade` | `helm` et `kubectl-edit` **copossèdent** le champ (même valeur) : l'upgrade passe… |
 | Retirer la propriété | `kubectl patch --type json -p '[{"op":"remove","path":"/metadata/managedFields/<i>"}]'`, puis `helm upgrade` | l'entrée `kubectl-edit` disparaît ; Helm repose sa valeur au prochain `Apply` |
 
-Le piège est la deuxième ligne. Si le chart change **plus tard** la valeur de ce champ, l'upgrade échoue à nouveau en conflit avec `kubectl-edit`, des semaines après la modification. Comportement reproduit pendant la rédaction. Seules la première et la troisième méthode rendent un objet propre. `<i>` est l'indice de l'entrée dans `.metadata.managedFields` (`jq 'map(.manager) | index("kubectl-edit")'`). Une mise à jour qui ne touche que `managedFields` n'ajoute pas de gestionnaire.
+Le piège est la deuxième ligne. Si le chart change **plus tard** la valeur de ce champ, l'upgrade échoue à nouveau en conflit avec `kubectl-edit`, des semaines après la modification. Comportement reproduit sur le banc d'essai. Seules la première et la troisième méthode rendent un objet propre. `<i>` est l'indice de l'entrée dans `.metadata.managedFields` (`jq 'map(.manager) | index("kubectl-edit")'`). Une mise à jour qui ne touche que `managedFields` n'ajoute pas de gestionnaire.
 
 *6. Kustomize.*
 
@@ -312,14 +312,17 @@ Fichiers (projet `plateforme/k8s`, structure de M17-E10) :
 
 ```
 admin@adm01:~/src/k8s$ helm list -A -o json | jq -r '.[] | "\(.namespace)\t\(.name)\t\(.chart)"' | sort
-admin@adm01:~/src/k8s$ helm search repo jetstack/cert-manager --versions | head -4
-NAME                    CHART VERSION   APP VERSION
-jetstack/cert-manager   v1.21.2         v1.21.2
-jetstack/cert-manager   v1.21.1         v1.21.1
-admin@adm01:~/src/k8s$ diff <(helm show values jetstack/cert-manager --version v1.21.1) <(helm show values jetstack/cert-manager --version v1.21.2)
+admin@adm01:~/src/k8s$ skopeo list-tags docker://quay.io/jetstack/charts/cert-manager | jq -r '.Tags[]' | grep '^v1\.21\.' | sort -V | tail -3
+v1.21.0
+v1.21.1
+v1.21.2
+admin@adm01:~/src/k8s$ C=oci://quay.io/jetstack/charts/cert-manager
+admin@adm01:~/src/k8s$ diff <(helm show values $C --version v1.21.1) <(helm show values $C --version v1.21.2)
 ```
 
-À l'écriture du module, M17-E10 épingle cert-manager en `v1.21.1`, et `v1.21.2` (10/09/2026) est le dernier correctif de la mineure : c'est la cible. Les notes d'un correctif de cert-manager listent des corrections et des montées de dépendances : pas de nouvelles CRD, pas de changement de valeurs. Vérifie-le, ne le suppose pas. Fais le tableau pour toutes les releases : metrics-server, ceph-csi, cnpg, velero, external-dns. Il servira à la répétition et aux prochaines MR (Renovate, M13).
+cert-manager vient d'un registre OCI (M15) : pas d'index, donc pas de `helm search repo` ; les versions sont les étiquettes du dépôt OCI (`skopeo list-tags`, ou la page des versions du projet). Pour les charts en dépôt HTTP (metrics-server, ceph-csi, cnpg, velero, external-dns) : `helm search repo <dépôt>/<chart> --versions`.
+
+À l'écriture du module, M17-E10 épingle cert-manager en `v1.21.1`, et `v1.21.2` (10/09/2026) est le dernier correctif de la mineure : c'est la cible. Les notes d'un correctif de cert-manager listent des corrections et des montées de dépendances : pas de nouvelles CRD, pas de changement de valeurs. Vérifie-le, ne le suppose pas. Fais le tableau pour toutes les releases : metrics-server, ceph-csi, cnpg, plugin-barman-cloud, velero, external-dns, Cilium. Il servira à la répétition et aux prochaines MR (Renovate, M13).
 
 *2. `needs` et la release `emetteurs`.* Avant, le `ClusterIssuer` était appliqué à la main après cert-manager. Après une réinstallation du cluster, oublier cette étape ou l'inverser fait échouer tout certificat. Le chart local `charts/emetteurs` le rend, avec la spécification **exacte** de M15 :
 
@@ -359,10 +362,12 @@ admin@adm01:~/src/k8s$ helmfile -e par1 list
 `wait`, `timeout` et `historyMax` sont déjà dans `helmDefaults` (`_communs.yaml`, M17-E10). `atomic: true` fonctionnerait aussi : Helmfile 1.8 le traduit en `--rollback-on-failure` sous Helm 4. Mais on garde le nom de Helm 4, pour ne pas lire « atomic » dans le dépôt et « rollback-on-failure » dans les journaux. Commande réelle, lue dans `helmfile -e par1 --debug apply` (forme constatée sur Helmfile 1.8.1) :
 
 ```
-exec: helm upgrade --install cert-manager jetstack/cert-manager --version v1.21.2 --wait --wait-for-jobs --timeout 600s --rollback-on-failure --namespace cert-manager … --history-max 10
+exec: helm upgrade --install cert-manager oci://quay.io/jetstack/charts/cert-manager --version v1.21.2 --wait --wait-for-jobs --timeout 600s --rollback-on-failure --namespace cert-manager … --history-max 10
 ```
 
-Avec Helm 4, `--wait` vaut `watcher` (kstatus). Sans `--wait`, la stratégie par défaut est `hookOnly` : Helm n'attend que les hooks. C'est pour cela que `--rollback-on-failure` force `--wait=watcher` (aide de `helm upgrade`). Fait constaté pendant la rédaction : un `helmfile apply` interrompu pendant l'attente laisse la release en `pending-install` ou `pending-upgrade`. C'est la panne M17-E19.
+(⚠️ À relire sur ta version : pour un dépôt déclaré `oci: true`, Helmfile peut passer à Helm la référence `oci://…` ou une copie locale du chart qu'il a tirée avant ; les options, elles, sont celles-ci.)
+
+Avec Helm 4, `--wait` vaut `watcher` (kstatus). Sans `--wait`, la stratégie par défaut est `hookOnly` : Helm n'attend que les hooks. C'est pour cela que `--rollback-on-failure` force `--wait=watcher` (aide de `helm upgrade`). Fait constaté sur le banc d'essai : un `helmfile apply` interrompu pendant l'attente laisse la release en `pending-install` ou `pending-upgrade`. C'est la panne M17-E19.
 
 *4. Répétition (metrics-server).* On épingle la version précédente ou suivante du chart dans `releases/40-observabilite.yaml.gotmpl`, MR, `helmfile -e par1 -l composant=metrics-server diff`, puis `apply`. Deux retours :
 

@@ -1,0 +1,18 @@
+# plateforme/k8s — composants/ceph-csi/values-rbd.yaml (E06) — EXTRAIT ajouté en M16-E26 (SEC-1726).
+# Fournisseur de clés (KMS) du pilote RBD : rendu par le chart dans la ConfigMap nommée par
+# kmsConfigMapName (défaut ceph-csi-encryption-kms-config), montée par les nodeplugins ET par les
+# contrôleurs (suppression d'un volume : nettoyage de la DEK chez les KMS qui la stockent ailleurs).
+#
+# Type « metadata » : une DEK aléatoire PAR VOLUME, chiffrée par une KEK et rangée dans les
+# métadonnées de l'image RBD (rbd.csi.ceph.com/dek). Sans secretName, la KEK est lue dans les
+# Secrets de la StorageClass (provisioner et node-stage), clé encryptionPassphrase : ici le Secret
+# dédié csi-rbd-secret-chiffre (créé par outils/secret-rbd-chiffre.sh depuis Ansible Vault).
+# Valeurs de type chaîne uniquement (map[string]string, documentation ceph-csi).
+encryptionKMSConfig:
+  secrets-metadata:
+    encryptionKMSType: metadata
+#
+# Rappel (charts 3.18) : les charts ceph-csi-rbd ET ceph-csi-cephfs créent chacun une ConfigMap
+# nommée par kmsConfigMapName, avec le même nom par défaut. C'est pour cela que values-cephfs.yaml
+# (E07) nomme la sienne ceph-csi-encryption-kms-config-cephfs : celle du pilote RBD garde le nom
+# par défaut, ceph-csi-encryption-kms-config, et c'est elle qui reçoit secrets-metadata.

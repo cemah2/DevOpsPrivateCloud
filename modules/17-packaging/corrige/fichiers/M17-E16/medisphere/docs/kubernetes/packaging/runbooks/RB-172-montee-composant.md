@@ -1,6 +1,6 @@
 # RB-172 — Monter un composant de plateforme par Helmfile
 
-*Créé en M17-E16 (CHG-1834). Périmètre : releases de `plateforme/k8s` (`releases/*.yaml.gotmpl`), cluster `k8s-par1`.*
+*Créé en M17-E16 (CHG-1816). Périmètre : releases de `plateforme/k8s` (`releases/*.yaml.gotmpl`), cluster `k8s-par1`.*
 
 ## Avant (J-2)
 

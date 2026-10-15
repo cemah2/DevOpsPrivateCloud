@@ -167,7 +167,7 @@ symptome_E19() {
     3) l="Après le redémarrage de Docker sur runner02 cette nuit, plus aucun tirage depuis Harbor ne passe sur ce runner. Depuis mon poste, ça marche." ;;
     *) l="Le nouveau job qui utilise $(m13_lire E19 image | sed 's|^library/||') par le cache dockerhub échoue. Les jobs qui utilisent les images de base habituelles passent." ;;
   esac
-  wb_symptome "Ticket INC-4031 — De : Julien Petit" \
+  wb_symptome "Ticket INC-4019 — De : Julien Petit" \
     "$l" \
     "Reproduction : « sudo wb-sonde-registre » sur runner02. Lucas propose de tout passer en public :" \
     "n'en fais rien." \

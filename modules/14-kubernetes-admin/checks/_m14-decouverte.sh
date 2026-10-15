@@ -25,8 +25,12 @@ _M14D_NVME="${WB_STORAGE_NVME:-local-nvme}"
 _M14D_DNS="10.10.20.10"
 _M14D_VIP="10.10.40.200"
 _M14D_API="k8s-api.par1.medisphere.internal"
+# Version de référence : 1.35.9 au palier 1 ; après la montée de version (M14-E25), celle que le
+# cluster déclare (ConfigMap kubeadm-config), pour que ces checks restent rejouables jusqu'à M14-E46.
+# Voir _m14d_version_cluster plus bas ; WB_M14_K8S_VERSION la force si besoin.
 _M14D_VERSION="1.35.9"
 _M14D_PAUSE="registry.k8s.io/pause:3.10.1"
+_M14D_ETCD="3.6.6"
 _M14D_REPLI_SIGNALE=0
 
 # Table du plan : nom → « VMID adresse rôle ».
@@ -49,6 +53,28 @@ _m14d_k() {
   printf -v args '%q ' "$@"
   remote "$_M14D_REF" "sudo -n kubectl --kubeconfig /etc/kubernetes/admin.conf --request-timeout=${WB_TIMEOUT:-5}s $args" 2>/dev/null || true
 }
+
+# _m14d_version_cluster — version déclarée par le cluster (kubernetesVersion de kubeadm-config, sans
+# le « v ») ; vide si le cluster n'existe pas encore ou ne répond pas.
+_m14d_version_cluster() {
+  _m14d_k -n kube-system get configmap kubeadm-config -o jsonpath='{.data.ClusterConfiguration}' |
+    sed -n 's/^kubernetesVersion: *v\{0,1\}\([0-9][0-9.]*\)$/\1/p' | head -n 1
+}
+_M14D_REPLI_SIGNALE=1   # pas de message de repli pour cette détection silencieuse
+_M14D_VERSION="${WB_M14_K8S_VERSION:-$(_m14d_version_cluster)}"
+_M14D_VERSION="${_M14D_VERSION:-1.35.9}"
+_M14D_MINEURE="${_M14D_VERSION%.*}"
+# Images de kubeadm par mineure (kubeadm config images list) : 1.35 → pause 3.10.1, etcd 3.6.6 ;
+# 1.36 → pause 3.10.2, etcd 3.6.8. Une autre mineure : à vérifier sur ta version.
+case "$_M14D_MINEURE" in
+  1.35) _M14D_PAUSE="registry.k8s.io/pause:3.10.1"; _M14D_ETCD="3.6.6" ;;
+  *) _M14D_PAUSE="registry.k8s.io/pause:3.10.2"; _M14D_ETCD="3.6.8" ;;
+esac
+# Version d'etcd réellement déployée (image du pod statique), si l'API la donne.
+_m14d_etcd_cluster="$(_m14d_k -n kube-system get pods -l component=etcd -o jsonpath='{.items[0].spec.containers[0].image}' |
+  sed -n 's|.*/etcd:\([0-9][0-9.]*\)-[0-9]*$|\1|p')"
+_M14D_ETCD="${_m14d_etcd_cluster:-$_M14D_ETCD}"
+_M14D_REPLI_SIGNALE=0
 
 # _m14d_json JSON FILTRE_JQ [ARGS jq…] — OK si le filtre jq (-e) est vrai sur le JSON donné.
 _m14d_json() {

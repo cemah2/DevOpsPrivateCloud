@@ -1,5 +1,5 @@
 ---
-# host_vars/ctr01/sauvegarde_conteneurs.yml — M12-E29 (PLAT-1355)
+# host_vars/ctr01/sauvegarde_conteneurs.yml — M12-E29 (PLAT-1329)
 # Base de la pile Compose de MédiAgenda (E08/E24) : export logique, cohérent à chaud.
 sauvegarde_conteneurs_bases:
   - "mediagenda-db-1|mediagenda|mediagenda"

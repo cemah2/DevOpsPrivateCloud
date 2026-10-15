@@ -22,7 +22,7 @@ spec:
         - sh
         - -c
         - |
-          url="http://mediagenda-api.mediagenda-dev.svc.cluster.local:8000/sante"
+          url="http://mediagenda-api.mediagenda-dev.svc.cluster.local/sante"   # Service en port 80 (→ 8000 du pod)
           while true; do
             if r="$(wget -q -T 2 -O - "$url" 2>&1)"; then
               echo "$(date +%T) OK $r"

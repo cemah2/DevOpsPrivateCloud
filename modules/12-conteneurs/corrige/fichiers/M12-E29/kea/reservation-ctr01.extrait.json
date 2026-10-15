@@ -1,6 +1,0 @@
-{
-  "commentaire": "Extrait de la configuration Kea (sous-réseau id 99, VLAN SANDBOX) — M12-E29 : adresse stable de ctr01 pour la règle de bordure vers pbs01. Même méthode que les réservations du M11 (rôle Kea, MR sur plateforme/ansible) ; MAC lue dans la configuration de la VM 2121 (qm config 2121 | grep net0).",
-  "reservations": [
-    { "hw-address": "<MAC-DE-CTR01>", "ip-address": "10.10.99.121", "hostname": "ctr01" }
-  ]
-}

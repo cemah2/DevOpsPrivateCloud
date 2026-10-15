@@ -15,4 +15,4 @@ spec:
       safi: unicast
       advertisements:
         matchLabels:
-          bgp.medisphere.fr/annonce: services
+          bgp.medisphere.internal/annonce: services

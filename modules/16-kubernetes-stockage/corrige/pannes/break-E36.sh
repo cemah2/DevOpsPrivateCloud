@@ -11,7 +11,7 @@
 #   2. moniteurs injoignables depuis le nœud : table nftables « filtrage_stockage » sur le
 #      travailleur, qui jette les NOUVELLES connexions vers 10.10.30.51-53 ports 3300 et 6789
 #      (les sessions déjà établies des volumes montés ne sont pas coupées) ;
-#   3. nœud sans pilote : le travailleur perd l'étiquette medisphere.fr/stockage-ceph qui sert de
+#   3. nœud sans pilote : le travailleur perd l'étiquette medisphere.internal/stockage-ceph qui sert de
 #      nodeSelector au DaemonSet ceph-csi-rbd-nodeplugin (M16-E05/E06) → le pod nodeplugin du nœud est
 #      retiré, plus de pilote rbd.csi.ceph.com enregistré sur ce nœud. Si le DaemonSet n'a pas ce
 #      sélecteur, une affinité qui exclut le nœud est ajoutée au DaemonSet à la place.
@@ -24,7 +24,7 @@ source "$WB_ROOT/lab/lib/pannes-lib.sh"
 source "$WB_ROOT/modules/16-kubernetes-stockage/corrige/pannes/_m16-commun.sh"
 
 _E36_TABLE=filtrage_stockage
-_E36_ETIQ=medisphere.fr/stockage-ceph
+_E36_ETIQ=medisphere.internal/stockage-ceph
 
 _e36_noeud() { m16_lire E36 noeud; }
 

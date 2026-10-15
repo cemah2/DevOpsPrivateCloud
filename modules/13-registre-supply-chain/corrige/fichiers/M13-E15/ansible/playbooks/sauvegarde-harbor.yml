@@ -1,6 +1,6 @@
 ---
 # playbooks/sauvegarde-harbor.yml — sauvegarde (reg01) ou outillage de restauration (reg02) de Harbor
-# (M13-E15, PLAT-1433). Le mode vient de host_vars/<hôte>/sauvegarde_harbor.yml.
+# (M13-E15, PLAT-1415). Le mode vient de host_vars/<hôte>/sauvegarde_harbor.yml.
 - name: Sauvegarde applicative de Harbor
   hosts: role_registre
   become: true

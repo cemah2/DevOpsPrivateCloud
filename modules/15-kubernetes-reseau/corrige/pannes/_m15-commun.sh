@@ -37,7 +37,7 @@ _M15_POOL=lb-par1
 _M15_BGP=bgp-par1
 _M15_NS_TEMOINS=wb-pannes
 _M15_ISSUER=step-ca-acme
-_M15_IMG_SONDE="${WB_M15_IMAGE_SONDE:-registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.13}"
+_M15_IMG_SONDE="${WB_M15_IMAGE_SONDE:-registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16}"
 # shellcheck disable=SC2034  # utilisée par les scripts qui sourcent ce fichier
 _M15_PASSERELLES=(gw01 gw02)
 read -r -a _M15_TRAVAILLEURS <<<"${WB_K8S_WORKERS:-k8s-w01 k8s-w02 k8s-w03}"
@@ -191,7 +191,7 @@ metadata:
   name: $_M15_NS_TEMOINS
   labels:
     pod-security.kubernetes.io/enforce: baseline
-    medisphere.fr/usage: pannes-m15
+    medisphere.internal/usage: pannes-m15
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

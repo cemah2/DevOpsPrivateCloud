@@ -410,10 +410,16 @@ Un volume qui ressemble à la pile (étiquettes Compose `recette`) mais qu'aucun
 
 **Commun : prévention.** Rotation par défaut au démon (déjà posée par `docker_engine` : `log-opts` `max-size`/`max-file`, ou pilote `local`) ; interdiction des options de journal dans les `compose.yaml` hors exception écrite ; nettoyage planifié de ce qui est jetable ([minuterie](fichiers/M12-E39/ansible/roles/docker_engine/templates/docker-menage.timer.j2) : `docker image prune -f` et `docker builder prune -f --filter until=168h`, **jamais** `--volumes` ni `-a`) ; seuil d'occupation dans `ms-verif-conteneurs` (alerte à 80 %). Le runbook : [RB-123](fichiers/M12-E39/medisphere/docs/conteneurs/runbooks/RB-123-disque-plein.md).
 
+**Explications**
+Un hôte de conteneurs remplit son disque par quatre canaux, qui ne se mesurent pas au même endroit : les journaux des conteneurs (`/var/lib/docker/containers/`, une option par conteneur peut contourner la rotation du démon), les images et leurs couches (`/var/lib/containerd` avec le stockage containerd de Docker 29), le cache de construction (BuildKit) et les volumes (`/var/lib/docker/volumes/`). Les trois premiers se recréent ; les volumes sont des **données**. La réserve d'ext4 explique l'ordre des symptômes : les processus non privilégiés (PostgreSQL) échouent d'abord, `dockerd` en root continue, ce qui laisse le temps de diagnostiquer avant que le moteur lui-même tombe.
+
 **Pièges classiques**
 - `docker system prune -a --volumes` : supprime aussi l'image de la recette et tout volume non monté à cet instant (la base si la pile est arrêtée).
 - Supprimer `/var/lib/docker/containers/*/…-json.log` sous un conteneur vivant.
 - Agrandir le disque sans chercher la cause.
+
+**En production chez MédiSphère**
+Un système de fichiers dédié à `/var/lib/docker` et `/var/lib/containerd` (un disque plein de conteneurs ne bloque plus le système), un seuil d'alerte par la sonde puis par Prometheus (M21, `node_filesystem_avail_bytes`), le ménage planifié de E39 sur tous les hôtes Docker (dont `runner02`, qui accumule images et cache de construction des jobs), et des journaux collectés hors de l'hôte (M22) : la rotation locale n'est plus qu'un tampon.
 
 ---
 
@@ -484,6 +490,9 @@ Quadlet est un **générateur** systemd : à chaque `daemon-reload` (et au déma
 - Écrire une unité à la main dans `~/.config/systemd/user/` « parce que Quadlet ne marche pas » : deux sources de vérité.
 - Oublier `daemon-reload` après une modification : l'ancienne unité générée continue de servir.
 - Tester en `sudo -iu app` sans `XDG_RUNTIME_DIR` et conclure à une panne de systemd.
+
+**En production chez MédiSphère**
+Les fichiers Quadlet ne sont jamais édités sur l'hôte : ils sont produits par un rôle Ansible (M12-E46, `pile_recette`) qui lance le générateur à blanc et échoue avant tout `daemon-reload` ; le *linger* est posé par `podman_hote` et vérifié par la sonde ; `ms-verif-conteneurs` signale un service attendu absent. Le runbook [RB-124](fichiers/M12-E40/medisphere/docs/conteneurs/runbooks/RB-124-service-quadlet-en-echec.md) commence par la commande qui distingue les trois cas.
 
 ---
 
@@ -590,11 +599,17 @@ BuildKit sans privilège (ou Buildah) doit créer un espace de noms `user`, mont
 
 **Clôture** : pipeline relancé au vert, `lab/bin/check 12 42`, puis `lab/bin/break 12 42 --annuler` (qui ne revient pas sur un mot de passe ou un certificat que tu as changés). Le runbook : [RB-125](fichiers/M12-E42/medisphere/docs/conteneurs/runbooks/RB-125-pipeline-ne-publie-plus.md).
 
+**Explications**
+Une chaîne de publication a quatre étages qui échouent avec des messages différents : l'**exécuteur** (tirage de l'image du job, politique de tirage), le **constructeur** (BuildKit sans privilège : il lui faut créer des espaces de noms et monter, d'où les exceptions `seccomp` et `apparmor` de E21), l'**authentification** (401 du registre) et la **confiance TLS** (certificat non reconnu). Reproduire l'étage en cause hors de la CI avec les mêmes identifiants (lus d'un fichier) et la même racine sépare un problème de pipeline d'un problème de service. Aucune réparation n'exige d'affaiblir la sécurité : chaque « solution » de Lucas (mode privilégié, `--insecure`) supprime un contrôle au lieu de corriger une cause.
+
 **Pièges classiques**
 - `privileged = true` : interdit (PLAN §4.10), et inutile.
 - Désactiver la vérification TLS dans le job (`--tls-verify=false`, `registry.insecure=true`).
 - Changer le mot de passe dans GitLab seulement, ou dans le registre seulement.
 - Modifier `config.toml` à la main sans le reporter dans le rôle : le prochain passage d'Ansible redonne la panne… ou la réparation de Lucas.
+
+**En production chez MédiSphère**
+Au M13, Harbor remplace le registre de travail : robots par projet avec expiration et rotation documentée, certificat ACME renouvelé et supervisé (date d'expiration lue par la sonde), et un pipeline planifié « canari » qui construit et pousse une image témoin chaque nuit pour détecter la panne avant les équipes. Les réglages de `runner02` restent dans `config.toml` généré par le rôle `gitlab_runner` : une modification à la main est écrasée au passage suivant d'Ansible.
 
 ---
 
@@ -623,7 +638,7 @@ Premier point à Nadia (exemple) : « 07:05 — Recette MédiAgenda indisponible
 3. **Les données et le réseau** (B) : une fois l'API stable, `/pret` révèle la panne B. Démarches de M12-E36 et M12-E37.
 4. **Tout revérifier** : `lab/bin/check 12 43` (partie technique) et l'API de bout en bout (création, lecture, annulation d'un rendez-vous de test).
 
-**Post-mortem** : un [exemple rédigé](fichiers/M12-E43/medisphere/docs/socle/post-mortems/2026-10-22-INC-3950.md) pour le tirage « disque plein (journal) + mémoire de l'API + alias supprimé ». Les points que la revue regarde : chronologie horodatée (détection, chaque hypothèse, chaque correction), **détection** (rien n'a alerté avant les utilisateurs : quelle sonde l'aurait fait ?), une cause racine par panne avec la sortie qui la prouve, et des actions vérifiables (« seuil disque dans `ms-verif-conteneurs`, vérifié par `lab/bin/check 12 39` », « MR de revue obligatoire sur `/srv/recette`, qui devient un dépôt »), pas « faire attention ».
+**Post-mortem** : un [exemple rédigé](fichiers/M12-E43/medisphere/docs/socle/post-mortems/2026-10-22-INC-3943.md) pour le tirage « disque plein (journal) + mémoire de l'API + alias supprimé ». Les points que la revue regarde : chronologie horodatée (détection, chaque hypothèse, chaque correction), **détection** (rien n'a alerté avant les utilisateurs : quelle sonde l'aurait fait ?), une cause racine par panne avec la sortie qui la prouve, et des actions vérifiables (« seuil disque dans `ms-verif-conteneurs`, vérifié par `lab/bin/check 12 39` », « MR de revue obligatoire sur `/srv/recette`, qui devient un dépôt »), pas « faire attention ».
 
 **Explications**
 Une astreinte multi-causes se perd quand on corrige la première anomalie vue au lieu de la plus basse. La règle : l'hôte, puis le processus, puis ses dépendances ; et après chaque correction, refaire l'état des lieux complet, car une panne masquée apparaît.
@@ -632,6 +647,9 @@ Une astreinte multi-causes se perd quand on corrige la première anomalie vue au
 - `docker compose down -v` : la base de recette disparaît (le volume), et deux causes sur trois restent.
 - S'arrêter après deux pannes parce que « ça répond ».
 - Un post-mortem qui accuse Lucas : les causes sont l'absence de revue sur `/srv/recette`, d'alerte disque, de sonde fiable.
+
+**En production chez MédiSphère**
+L'astreinte suit RB-120 à RB-125 et la sonde `ms-verif-conteneurs` ; les points d'étape partent sur le canal d'astreinte à heure fixe ; le post-mortem est relu en revue sans reproche et chaque action devient un ticket avec une vérification automatique (check, sonde ou job de CI). Les mêmes familles de pannes reviendront au M14 sur Kubernetes (`CrashLoopBackOff`, `OOMKilled`, politiques réseau), avec d'autres commandes et la même démarche.
 
 ---
 
@@ -705,6 +723,14 @@ Un conteneur n'est pas un objet du noyau : c'est un processus ordinaire auquel o
 - Oublier `--fork` avec `--pid` : le shell n'est pas le PID 1 du nouvel espace.
 - `runc run -d` sans redirection : la session SSH reste accrochée.
 - Oublier de retirer le cgroup (`rmdir`, une fois vide) et le conteneur (`runc delete`).
+
+**Alternatives**
+- `crun` au lieu de `runc` (`crun spec`, `crun run`) : même paquet OCI, runtime en C plus léger, celui de Podman sur Rocky.
+- `systemd-nspawn` ou `bwrap` (bubblewrap) : d'autres assemblages des mêmes primitives du noyau, sans format OCI.
+- `ctr run` ou `nerdctl run` : containerd fabrique le paquet et lance le *shim* à ta place.
+
+**En production chez MédiSphère**
+Personne ne lance `runc` à la main en production : cette démonstration sert à la formation et au diagnostic (lire un `config.json` produit par containerd sous `/run/containerd/io.containerd.runtime.v2.task/`, comprendre un refus de seccomp ou de cgroup). Sur les nœuds Kubernetes (M14), le même `runc` est piloté par containerd et le kubelet ; savoir lire ce paquet aide à diagnostiquer un pod qui ne démarre pas.
 
 ---
 

@@ -18,7 +18,7 @@ spec:
       labels: {app.kubernetes.io/name: relais-mtls, app.kubernetes.io/part-of: plateforme-reseau}
       annotations:
         # Changer ce numéro (ou la somme du fichier) redéploie après une rotation de l'autorité.
-        medisphere.fr/version-conf: "1"
+        medisphere.internal/version-conf: "1"
     spec:
       automountServiceAccountToken: false
       securityContext:

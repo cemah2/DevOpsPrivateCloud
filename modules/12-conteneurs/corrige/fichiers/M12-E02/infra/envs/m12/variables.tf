@@ -26,7 +26,7 @@ variable "hotes" {
     Hôtes du module 12 : nom => { n (VMID 2120 + n, MAC bc:24:11:99:12:0n), famille, rôle }.
     Tous sur vsandbox en DHCP (noms par le DDNS de Kea), 2 vCPU, 2 Go, 32 Gio (PLAN.md §4.10).
     Détruire l'environnement : retirer les entrées (ou tofu destroy), JAMAIS d'action dans Proxmox.
-    Mini-projet (M12-E46) : ctr01 peut être gardée jusqu'à M13-E02 (registre de travail).
+    Mini-projet (M12-E46) : ctr01 peut être gardée jusqu'à la fin de M13-E03 (registre de travail).
   EOT
   type = map(object({
     n       = number

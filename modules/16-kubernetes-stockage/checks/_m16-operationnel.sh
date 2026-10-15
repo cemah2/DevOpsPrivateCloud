@@ -8,7 +8,7 @@
 #
 # Accès utilisés (tous en lecture) :
 #   kube (check-lib) : compte de service wb-checks (WB_K8S_KUBECONFIG), complété par le
-#     ClusterRole wb-checks-stockage (M16-E10) — ne lit JAMAIS les Secrets
+#     ClusterRole wb-checks-stockage (M16-E10, agrégé à wb-checks) — ne lit JAMAIS les Secrets
 #   remote <travailleur> : état des disques et montages (SSH admin, sudo -n en lecture)
 #   gitlab_api : GET ; fichiers locaux de adm01 (~/m16/, ~/.config/workbook/, dépôt de doc)
 #

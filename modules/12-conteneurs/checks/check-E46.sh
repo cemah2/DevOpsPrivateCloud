@@ -8,7 +8,7 @@
 #     (non-root, multi-architecture pour MédiAgenda) et la pile de recette de ctr02 (quatre
 #     applications qui répondent, conteneurs sans privilège tirés du registre de travail) ;
 #   - CLÔTURE (ctr02 détruite) : les VMs d'environnement ont disparu (ctr01 peut rester si
-#     WB_M12_CTR01_CONSERVE=1 dans lab/lab.env, jusqu'à M13-E02) ; les contrôles « en direct » sont
+#     WB_M12_CTR01_CONSERVE=1 dans lab/lab.env, jusqu'à la fin de M13-E03) ; les contrôles « en direct » sont
 #     alors sautés, la preuve de la recette est docs/conteneurs/recette-v1.md.
 # Toujours : CI des quatre applications (Hadolint, construction sur runner02), runner02 dans le socle
 # (Proxmox, NetBox, DNS, PBS, supervision, sans privilège), documentation et étiquette conteneurs-v1.
@@ -231,9 +231,9 @@ if [[ "$_m12_e46_phase" == cloture ]]; then
     check_cmd "NetBox : $_m12_e46_h absent ou non actif" _m12_e46_nb_inactif "$_m12_e46_h"
   done
   if [[ "${WB_M12_CTR01_CONSERVE:-0}" == 1 ]]; then
-    skip "VM 2121 (ctr01) détruite" "conservée jusqu'à M13-E02 (WB_M12_CTR01_CONSERVE=1)"
+    skip "VM 2121 (ctr01) détruite" "conservée jusqu'à la fin de M13-E03 (WB_M12_CTR01_CONSERVE=1)"
   else
-    check_cmd "VM 2121 (ctr01) détruite (ou WB_M12_CTR01_CONSERVE=1 si gardée pour M13-E02)" _m12_e46_vm_absente 2121
+    check_cmd "VM 2121 (ctr01) détruite (ou WB_M12_CTR01_CONSERVE=1 si gardée jusqu'à la fin de M13-E03)" _m12_e46_vm_absente 2121
   fi
 elif [[ "$_m12_e46_phase" == inconnue ]]; then
   skip "destruction des VMs d'environnement" "pve01 ne répond pas"

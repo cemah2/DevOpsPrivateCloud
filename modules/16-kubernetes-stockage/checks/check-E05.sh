@@ -34,15 +34,15 @@ _m16d_e05_i=0
 for _m16d_e05_n in $_M16D_TRAVAILLEURS; do
   _m16d_e05_i=$((_m16d_e05_i + 1))
   _m16d_e05_ip="10.10.30.$((80 + _m16d_e05_i))"
-  check_ssh_output "$_m16d_e05_n : ens19 porte $_m16d_e05_ip/24 en MTU 9000" "$_m16d_e05_n" \
-    "^ok$" "ip -o -4 addr show dev ens19 | grep -q ' $_m16d_e05_ip/24 ' && [ \"\$(cat /sys/class/net/ens19/mtu)\" = 9000 ] && echo ok"
-  check_ssh "$_m16d_e05_n : une seule route par défaut, et pas par ens19" "$_m16d_e05_n" \
-    '[ "$(ip -4 route show default | wc -l)" = 1 ] && ! ip -4 route show default | grep -q ens19'
+  check_ssh_output "$_m16d_e05_n : eth1 porte $_m16d_e05_ip/24 en MTU 9000" "$_m16d_e05_n" \
+    "^ok$" "ip -o -4 addr show dev eth1 | grep -q ' $_m16d_e05_ip/24 ' && [ \"\$(cat /sys/class/net/eth1/mtu)\" = 9000 ] && echo ok"
+  check_ssh "$_m16d_e05_n : une seule route par défaut, et pas par eth1" "$_m16d_e05_n" \
+    '[ "$(ip -4 route show default | wc -l)" = 1 ] && ! ip -4 route show default | grep -q eth1'
   check_ssh "$_m16d_e05_n : 9000 octets sans fragmentation vers les trois moniteurs" "$_m16d_e05_n" \
-    "for m in $_M16D_MONS; do ping -M do -s 8972 -c 1 -W 2 -I ens19 \$m >/dev/null || exit 1; done"
-  check_ssh "$_m16d_e05_n : protection cloud-init (réseau figé, clés d'hôte conservées) et netplan de ens19" "$_m16d_e05_n" \
+    "for m in $_M16D_MONS; do ping -M do -s 8972 -c 1 -W 2 -I eth1 \$m >/dev/null || exit 1; done"
+  check_ssh "$_m16d_e05_n : protection cloud-init (réseau figé, clés d'hôte conservées) et netplan de eth1" "$_m16d_e05_n" \
     'f=/etc/cloud/cloud.cfg.d/99-medisphere-k8s.cfg; grep -Eq "^network: *\{ *config: *disabled *\}" $f \
-     && grep -Eq "^ssh_deletekeys: *false" $f && sudo -n grep -q "ens19" /etc/netplan/60-stockage.yaml'
+     && grep -Eq "^ssh_deletekeys: *false" $f && sudo -n grep -q "eth1" /etc/netplan/60-stockage.yaml'
   check_ssh "$_m16d_e05_n : modules rbd et ceph chargés" "$_m16d_e05_n" \
     'grep -q "^rbd " /proc/modules && grep -q "^ceph " /proc/modules'
   check_cmd "$_m16d_e05_n : adresse interne Kubernetes restée sur le VLAN 40 (10.10.40.$((60 + _m16d_e05_i)))" \

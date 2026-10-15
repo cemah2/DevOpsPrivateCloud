@@ -12,7 +12,7 @@ title "M16-E18 — CloudNativePG : la base de MédiAgenda"
 require_cmd jq kubectl curl
 
 _m16o_ns=mediagenda-recette
-_m16o_url="${WB_MEDIAGENDA_RECETTE_URL:-https://mediagenda-recette.apps.par1.medisphere.internal}"
+_m16o_url="${WB_M16_API_URL:-https://mediagenda-recette.apps.par1.medisphere.internal}"
 check_cmd "l'API du cluster répond au compte des vérifications" _m16o_api_repond
 _m16o_deps="$(_m16o_kj get deployments -n cnpg-system)"
 check_cmd "opérateur CloudNativePG 1.30.1 disponible, image de registry.par1.medisphere.internal" _m16o_json "$_m16o_deps" '

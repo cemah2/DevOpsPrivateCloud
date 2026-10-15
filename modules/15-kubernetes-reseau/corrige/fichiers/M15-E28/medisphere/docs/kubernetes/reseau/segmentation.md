@@ -18,11 +18,11 @@
 | Politique (cluster) | Règle | Mécanisme |
 |---|---|---|
 | `base-dns` | prérequis de 3 | DNS de tous les pods (hors `kube-system`) par le proxy DNS, `enableDefaultDeny` à `false` |
-| `isolement-mediagenda-dev`, `isolement-mediagenda-recette`, `isolement-medidoc-dev` | 1, 2 | `ingressDeny` et `egressDeny` vers les pods d'espaces portant `medisphere.fr/equipe`, sauf le sien ; un refus l'emporte sur toute autorisation |
+| `isolement-mediagenda-dev`, `isolement-mediagenda-recette`, `isolement-medidoc-dev` | 1, 2 | `ingressDeny` et `egressDeny` vers les pods d'espaces portant `medisphere.internal/equipe`, sauf le sien ; un refus l'emporte sur toute autorisation |
 | `sortie-mediagenda` | 3 | `toFQDNs` `calendrier.api.gouv.fr`, port 443 ; le reste d'Internet reste refusé par le refus par défaut de M15-E17 |
 | (aucune pour MédiDoc) | 3 | refus par défaut de l'espace (M15-E34) : aucune règle vers `world` |
 
-Label d'appartenance : `medisphere.fr/equipe: <équipe>` sur les Namespace, posé par `espaces/` de `plateforme/k8s`.
+Label d'appartenance : `medisphere.internal/equipe: <équipe>` sur les Namespace, posé par `espaces/` de `plateforme/k8s`.
 Les équipes ne créent ni ne modifient de politique Cilium ni de Namespace (RBAC du M14 :
 `kubectl auth can-i create ciliumnetworkpolicies -n mediagenda-dev --as julien.petit --as-group medisphere:mediagenda-devs` → `no`).
 
@@ -31,7 +31,7 @@ Les équipes ne créent ni ne modifient de politique Cilium ni de Namespace (RBA
 | # | Source | Destination | Attendu | Obtenu | Raison lue dans Hubble |
 |---|---|---|---|---|---|
 | 1 | `mediagenda-dev/sonde` | PostgreSQL de `mediagenda-recette` (5432) | refus | refus | `Policy denied by denylist` |
-| 2 | `medidoc-dev/sonde` | API de `mediagenda-recette` (8000) | refus | refus | `Policy denied by denylist` |
+| 2 | `medidoc-dev/sonde` | API de `mediagenda-recette` (Service 80, pod 8000) | refus | refus | `Policy denied by denylist` |
 | 3 | API de `mediagenda-recette` | son PostgreSQL | accepté | accepté | — |
 | 4 | Gateway (`ingress`) | API de `mediagenda-recette` | accepté | accepté | — |
 | 5 | `wb-essais` | API de `mediagenda-recette` | refus | refus | `Policy denied` (refus par défaut, pas la cloison : `wb-essais` n'est pas un espace d'équipe) |
@@ -54,7 +54,7 @@ connexion suivante : il faut qu'elle respecte le TTL (ou passe par le résolveur
 
 ## Ajouter une équipe
 
-Une MR sur `plateforme/k8s` : Namespace avec le label `medisphere.fr/equipe`, fichier
+Une MR sur `plateforme/k8s` : Namespace avec le label `medisphere.internal/equipe`, fichier
 `isolement-<espace>.yaml` (copie du modèle), éventuellement une politique de sortie par noms. Revue par
 l'équipe Plateforme et la RSSI.
 

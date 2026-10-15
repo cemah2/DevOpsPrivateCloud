@@ -7,14 +7,14 @@ Les valeurs lues sont celles du chart APPELANT (.Values.medisphere.*).
 
 {{/*
 medisphere-commun.etiquettes — étiquettes d'organisation de MédiSphère.
-  medisphere.fr/equipe         : équipe propriétaire (obligatoire)
-  medisphere.fr/environnement  : dev, recette ou prod (obligatoire)
-  medisphere.fr/donnees-sante  : « oui » si l'application traite des données de santé (HDS)
+  medisphere.internal/equipe         : équipe propriétaire (obligatoire)
+  medisphere.internal/environnement  : dev, recette ou prod (obligatoire)
+  medisphere.internal/donnees-sante  : « oui » si l'application traite des données de santé (HDS)
 */}}
 {{- define "medisphere-commun.etiquettes" -}}
-medisphere.fr/equipe: {{ required "medisphere.equipe est obligatoire (équipe propriétaire)" .Values.medisphere.equipe | quote }}
-medisphere.fr/environnement: {{ required "medisphere.environnement est obligatoire (dev, recette ou prod)" .Values.medisphere.environnement | quote }}
-medisphere.fr/donnees-sante: {{ ternary "oui" "non" (.Values.medisphere.donneesSante | default false) | quote }}
+medisphere.internal/equipe: {{ required "medisphere.equipe est obligatoire (équipe propriétaire)" .Values.medisphere.equipe | quote }}
+medisphere.internal/environnement: {{ required "medisphere.environnement est obligatoire (dev, recette ou prod)" .Values.medisphere.environnement | quote }}
+medisphere.internal/donnees-sante: {{ ternary "oui" "non" (.Values.medisphere.donneesSante | default false) | quote }}
 {{- end -}}
 
 {{/*

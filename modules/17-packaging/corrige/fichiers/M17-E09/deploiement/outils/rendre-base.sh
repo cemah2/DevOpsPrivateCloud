@@ -3,13 +3,13 @@
 # Usage : outils/rendre-base.sh [--verifier]
 #   --verifier : ne modifie rien ; code 1 si le rendu commité diffère du rendu attendu (job de CI).
 # Prérequis sur adm01 : helm 4.3, cosign 3.1, « helm registry login registry.par1.medisphere.internal »
-# fait, clé publique MédiSphère dans COSIGN_PUB (défaut : ~/medisphere/docs/registre/cosign.pub).
+# fait, clé publique MédiSphère dans COSIGN_PUB (défaut : MS_COSIGN_PUB du M13-E07, sinon ~/medisphere/docs/registre/cosign.pub).
 set -euo pipefail
 
 racine="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 source "$racine/chart.env"
-cle="${COSIGN_PUB:-$HOME/medisphere/docs/registre/cosign.pub}"
+cle="${COSIGN_PUB:-${MS_COSIGN_PUB:-$HOME/medisphere/docs/registre/cosign.pub}}"
 sortie="$racine/base/rendu/mediagenda.yaml"
 mode="${1:-rendre}"
 

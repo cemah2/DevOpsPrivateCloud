@@ -7,7 +7,7 @@ metadata:
   name: e06-essai
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   # Pas de storageClassName : la classe par défaut (ceph-rbd) est appliquée par l'admission.
   accessModes: ["ReadWriteOnce"]
@@ -22,7 +22,7 @@ metadata:
   namespace: wb-essais
   labels:
     app.kubernetes.io/name: e06-essai
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   automountServiceAccountToken: false
   securityContext:

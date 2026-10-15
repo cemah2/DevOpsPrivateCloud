@@ -31,6 +31,6 @@ check_cmd "performances.md : interprétation (surcoût, LUKS, limites du lab)" \
 
 title "Nettoyage"
 check_cmd "aucun Job, pod ou PVC de mesure dans wb-essais" \
-  _m16p_jq "$(_m16p_kj jobs,pods,pvc -n wb-essais -l medisphere.fr/banc=oui)" '(.items | length) == 0'
+  _m16p_jq "$(_m16p_kj jobs,pods,pvc -n wb-essais -l medisphere.internal/banc=oui)" '(.items | length) == 0'
 check_cmd "le volume témoin e26-temoin a été supprimé" \
   _m16p_jq "$(_m16p_kj pvc -n wb-essais)" 'all(.items[]?; .metadata.name != "e26-temoin")'

@@ -48,7 +48,7 @@ tasks:
       - kubectl apply --server-side -f espaces/passerelles.yaml -f espaces/cert-manager.yaml -f espaces/external-dns.yaml
 
   noeuds:
-    desc: Étiquettes de nœuds (bgp=par1, zones)
+    desc: Étiquettes et taints des nœuds (cluster/noeuds.yaml du M14-E14, bgp=par1 de M15-E11)
     cmds:
       - outils/etiqueter-noeuds.sh
 

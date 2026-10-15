@@ -18,6 +18,6 @@
 4. **Politiques** : `hubble observe --namespace <espace> --verdict DROPPED` ; un flux depuis l'identité `ingress` refusé vers l'API : voir la matrice des flux du cluster et les politiques de l'espace.
 5. **Ce que Cilium a programmé** (en cas de doute sur 1-2) : `kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg service list | grep <ClusterIP>`.
 
-**Qui a changé quoi** : `kubectl get svc <svc> -o yaml --show-managed-fields` (gestionnaire et heure de chaque champ), `git log -p` du dépôt de déploiement, journal d'audit de l'API (M14-E27).
+**Qui a changé quoi** : `kubectl get svc <svc> -o yaml --show-managed-fields` (gestionnaire et heure de chaque champ), `git log -p` du dépôt de l'application (`mediagenda/api`, `k8s/recette/`) ou de `plateforme/k8s` pour la route, journal d'audit de l'API (M14-E27).
 
-**Corriger** : par le dépôt de déploiement, jamais en adaptant les pods à un Service fautif. **Interdit** : supprimer les politiques de l'espace pour « tester ».
+**Corriger** : par le dépôt de l'application, jamais en adaptant les pods à un Service fautif. **Interdit** : supprimer les politiques de l'espace pour « tester ».

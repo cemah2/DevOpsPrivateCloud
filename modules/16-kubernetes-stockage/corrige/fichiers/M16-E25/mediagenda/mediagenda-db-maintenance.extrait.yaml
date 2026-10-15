@@ -1,4 +1,4 @@
-# EXTRAIT du manifeste du Cluster mediagenda-db (dépôt et chemin choisis en E18) — M16-E25.
+# EXTRAIT de espaces/mediagenda-recette/50-mediagenda-db.yaml (plateforme/k8s, M16-E18) — M16-E25.
 # Seuls les champs modifiés par l'exercice sont montrés. Deux MR successives :
 #   MR 1 : primaryUpdateStrategy: supervised (sans autre changement) ;
 #   MR 2 : le paramètre qui exige un redémarrage (max_connections).

@@ -1,5 +1,5 @@
 ---
-# group_vars/role_registre/harbor.yml — EXTRAIT : M13-E16 (CHG-1434).
+# group_vars/role_registre/harbor.yml — EXTRAIT : M13-E16 (CHG-1416).
 # Métriques : section « metric » de harbor.yml (rôle harbor, M13-E02), servies par le proxy sur 9090.
 harbor_metriques: true
 harbor_metriques_port: 9090

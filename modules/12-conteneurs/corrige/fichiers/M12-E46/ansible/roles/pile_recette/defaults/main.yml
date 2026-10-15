@@ -1,5 +1,5 @@
 ---
-# Rôle pile_recette — pile de recette « conteneurs v1 » (M12-E46, PLAT-1390).
+# Rôle pile_recette — pile de recette « conteneurs v1 » (M12-E46, PLAT-1346).
 # Quatre applications et leurs dépendances, en fichiers Quadlet du compte sans privilège
 # (ADR-0120 : Podman sans privilège + Quadlet sur les serveurs applicatifs hors Kubernetes).
 # Prérequis : rôle podman_hote (compte, subuid/subgid, linger, registries.conf).
@@ -7,7 +7,9 @@
 pile_recette_compte: app
 pile_recette_dossier_quadlet: ".config/containers/systemd"     # relatif au dossier personnel du compte
 
-# Registre de travail (M12-E15) et compte en LECTURE de la pile (« plateforme », Vault lab)
+# Registre de travail (M12-E15) et compte utilisé par la pile pour TIRER ses images : « plateforme »
+# (compte de l'équipe, Vault lab ; il peut aussi pousser, M12-E13 : le registre de travail n'a pas
+# de compte en lecture seule, Harbor apportera des robots limités au M13)
 pile_recette_registre: ctr01.par1.medisphere.internal:5000
 pile_recette_registre_utilisateur: plateforme
 pile_recette_registre_mdp: "{{ vault_pile_recette_registre_mdp }}"
@@ -76,6 +78,13 @@ pile_recette_unites:
   - medinotif-rabbitmq.volume
   - medinotif-rabbitmq.container
   - medinotif.container
+
+# Fichiers Quadlet de la pile d'essai de M12-E14/E30 qui n'existent pas dans la pile de recette
+# (pod publié sur le port 8000, réseau « mediagenda », construction locale) : arrêtés et retirés.
+pile_recette_unites_retirees:
+  - mediagenda.pod
+  - mediagenda.network
+  - mediagenda-api.build
 
 # Services à démarrer (les autres sont tirés par leurs dépendances)
 pile_recette_services:

@@ -11,7 +11,7 @@ Les sorties reproduites sont **représentatives** : noms d'objets, identifiants,
 **Points non testés en conditions réelles** (signale-les si ton comportement diffère) :
 - Ensemble des scripts de panne : écrits contre les manifestes et chartes de référence (rendu `helm template` de `ceph-csi-rbd` 3.18.1, manifestes d'external-snapshotter 8.6.0, CRD du plugin Barman Cloud 0.15.1), validés par `shellcheck` et `kubeconform`, mais **pas exécutés sur un cluster**. La restauration ciblée (`m16_restaurer`) passe par `kubectl create --dry-run=client --validate=false -o json`, qui a besoin de l'API du cluster pour reconnaître le type.
 - E35 v3 : formulation exacte du refus par le quota (`exceeded quota` ou `status unknown for quota` pendant les premières secondes).
-- E36 v1 : code d'erreur exact de `rbd map` avec une mauvaise clé (`(1) Operation not permitted` attendu, avec `libceph: … auth … error` dans `dmesg`) ; v2 : la table nftables ajoutée cohabite avec les règles de Cilium (`kubeProxyReplacement`) sans effet de bord ; v3 : étiquette `medisphere.fr/stockage-ceph` posée par le rôle de M16-E05 et lue par les valeurs de M16-E06.
+- E36 v1 : code d'erreur exact de `rbd map` avec une mauvaise clé (`(1) Operation not permitted` attendu, avec `libceph: … auth … error` dans `dmesg`) ; v2 : la table nftables ajoutée cohabite avec les règles de Cilium (`kubeProxyReplacement`) sans effet de bord ; v3 : étiquette `medisphere.internal/stockage-ceph` posée par le rôle de M16-E05 et lue par les valeurs de M16-E06.
 - E37 : délai de détachement forcé du contrôleur attach/detach en 1.36 (`--disable-force-detach-on-timeout`, valeur par défaut à lire dans `kube-controller-manager --help`) ; nom du conteneur du témoin pour `crictl`.
 - E38 v3 : syntaxe `ceph auth rotate --key-type=aes256k` (reprise du corrigé M08-E27) et longueur des clés `aes256k` ; v2 : comportement de ceph-csi quand la création d'image attend un pool plein (délai dépassé puis `Aborted` attendus).
 - E39 v1 : délai de prise en compte par Velero d'un Secret modifié (propagation du volume monté par le kubelet, puis validation de l'emplacement) ; étiquette `name=node-agent` des pods du DaemonSet.
@@ -188,7 +188,7 @@ admin@k8s-w0N:~$ timeout 3 bash -c '</dev/tcp/10.10.30.51/3300' ; echo $?
 admin@k8s-w0M:~$ timeout 3 bash -c '</dev/tcp/10.10.30.51/3300' ; echo $?      # un autre travailleur
 0
 admin@k8s-w0N:~$ ip route get 10.10.30.51
-10.10.30.51 dev ens19 src 10.10.30.8N …            # le bon chemin (VLAN 30), la route n'est pas en cause
+10.10.30.51 dev eth1 src 10.10.30.8N …            # le bon chemin (VLAN 30), la route n'est pas en cause
 admin@k8s-w0N:~$ ping -c2 -M do -s 8972 10.10.30.51                                # ICMP passe, MTU bon
 admin@k8s-w0N:~$ sudo nft list ruleset | grep -B4 -A2 'dport { 3300, 6789 }'
 table inet filtrage_stockage {
@@ -208,8 +208,8 @@ admin@adm01:~$ kubectl get csinode k8s-w0N -o jsonpath='{.spec.drivers[*].name}'
 cephfs.csi.ceph.com
 admin@adm01:~$ kubectl get ds -n ceph-csi ceph-csi-rbd-nodeplugin
 NAME                      DESIRED   CURRENT   READY   NODE SELECTOR
-ceph-csi-rbd-nodeplugin   2         2         2       medisphere.fr/stockage-ceph=oui
-admin@adm01:~$ kubectl get node k8s-w0N -L medisphere.fr/stockage-ceph        # colonne vide
+ceph-csi-rbd-nodeplugin   2         2         2       medisphere.internal/stockage-ceph=oui
+admin@adm01:~$ kubectl get node k8s-w0N -L medisphere.internal/stockage-ceph        # colonne vide
 ```
 
 Le DaemonSet n'a que 2 pods voulus pour 3 travailleurs : `k8s-w0N` ne porte plus l'étiquette qui le désigne comme raccordé au stockage (M16-E05/E06). Le pod *nodeplugin* a été retiré, `node-driver-registrar` a désinscrit le pilote. Le pilote CephFS est toujours là si son DaemonSet n'a pas le même sélecteur, d'où une panne « RBD seulement ». Correctif à la racine : rejouer le rôle Ansible `k8s_reseau_stockage` (M16-E05) qui pose l'étiquette après avoir vérifié la carte VLAN 30, plutôt qu'un `kubectl label` à la main (qui n'est acceptable qu'en urgence, reporté ensuite). L'audit Kubernetes donne qui a retiré l'étiquette (`verb: patch` sur `nodes`). Les volumes déjà montés sur ce nœud restent montés, mais ne pourraient plus être démontés proprement (le kubelet a besoin du pilote pour `NodeUnpublish`/`NodeUnstage`) : un drain du nœud resterait bloqué.
@@ -502,7 +502,7 @@ root@sonde-ecriture:/# psql "$URI" -c 'create table if not exists sonde_bascule 
 root@sonde-ecriture:/# while true; do timeout 2 psql "$URI" -qc 'insert into sonde_bascule default values' >/dev/null 2>&1 && echo "$(date +%T) ok" || echo "$(date +%T) ÉCHEC"; sleep 0.5; done
 ```
 
-Le pod a besoin d'une politique réseau qui l'autorise à joindre PostgreSQL (deny-par-défaut de `mediagenda-recette`, M15-E17) : réutilise l'étiquette de l'API ou crée une politique temporaire. La table de test se supprime à la fin.
+Le pod a besoin d'une politique réseau qui l'autorise à joindre PostgreSQL (refus par défaut de `mediagenda-recette`, M15-E17) : réutilise l'étiquette de l'API ou crée une politique temporaire. La table de test se supprime à la fin.
 
 **Variante 1 — PDB superposé.**
 
@@ -756,6 +756,10 @@ Ordre type : d'abord ce qui peut **corrompre ou perdre** (E37 avant toute procé
 
 L'astreinte entraîne ce que les exercices isolés n'entraînent pas : choisir quoi ne **pas** faire tout de suite, reconnaître qu'une panne en masque une autre, et ne déclarer la fin qu'après avoir prouvé la restaurabilité, puisque c'est elle que la recette de 8 h exige.
 
+**Alternatives**
+- Traiter dans l'ordre d'arrivée des remontées : plus simple à suivre, mais une base qui ne s'archive plus attend alors derrière un PVC Pending, et la fenêtre de restauration se dégrade pendant ce temps ; le tri par risque sur les données reste la règle.
+- Répartir les trois pannes entre plusieurs personnes (en équipe) : plus rapide, à condition d'un responsable d'incident qui tient la chronologie et décide des priorités, et d'un canal unique pour les points.
+
 **Pièges classiques**
 - Traiter dans l'ordre d'arrivée des remontées.
 - Corriger trois choses à la fois puis ne plus savoir laquelle a réparé quoi.
@@ -849,6 +853,10 @@ Le montage global (un par volume et par nœud) porte le système de fichiers ; l
 **Explications**
 
 CSI découpe la vie d'un volume en appels idempotents, chacun porté par un composant et un objet : `CreateVolume`/`DeleteVolume` (provisioner, PV), `ControllerPublish`/`Unpublish` (attacher, `VolumeAttachment`), `NodeStage`/`Unstage` (kubelet et *nodeplugin*, montage global), `NodePublish`/`Unpublish` (kubelet et *nodeplugin*, montage du pod). Pour chaque panne du palier, l'étage s'est lu sur l'objet ou le journal de l'appel concerné : c'est la carte de diagnostic que la note doit transmettre.
+
+**Alternatives**
+- Observer par les métriques et traces plutôt que par les journaux : `csi_operations_seconds` du kubelet et des sidecars, traces des appels gRPC quand le pilote les expose ; c'est l'outillage du M21-M23, moins précis aujourd'hui que les journaux à la verbosité 5.
+- `kubectl-df-pv`, `kubectl get --raw` vers `/api/v1/nodes/<N>/proxy/stats/summary`, ou un outil comme `rbd-nbd`/`rbd device list` pour la vue côté nœud : utiles en complément, mais ils ne relient pas à eux seuls PVC, PV, image, attachement et montage, ce que fait `k8s-suivre-volume.sh`.
 
 **Pièges classiques**
 - Faire l'exploration sur un témoin ou une base : un `nsenter` ou un `findmnt` ne casse rien, mais un démontage « pour voir » casse tout.

@@ -7,7 +7,7 @@ kind: StorageClass
 metadata:
   name: local-manuel
   labels:
-    medisphere.fr/exercice: m16-e03
+    medisphere.internal/exercice: m16-e03
   # Surtout PAS d'annotation storageclass.kubernetes.io/is-default-class : la classe par défaut
   # du cluster sera ceph-rbd (E06).
 provisioner: kubernetes.io/no-provisioner
@@ -23,7 +23,7 @@ kind: PersistentVolume
 metadata:
   name: e03-local-w01
   labels:
-    medisphere.fr/exercice: m16-e03
+    medisphere.internal/exercice: m16-e03
 spec:
   capacity:
     storage: 1Gi

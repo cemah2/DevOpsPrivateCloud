@@ -23,7 +23,7 @@ Le palier 1 a monté `k8s-par1` : trois nœuds de contrôle derrière la VIP d'A
 
 > ⚠️ **PostgreSQL et Valkey sont jetables dans tout ce module** (volumes `emptyDir`) : un pod recréé repart d'une base vide. Le stockage persistant arrive au module 16. Ne mets aucune donnée à laquelle tu tiens dans `mediagenda-*`.
 
-Durée indicative du palier : 24 à 30 heures. Ordre conseillé (E19 se fait **tôt** : c'est lui qui déploie MédiAgenda dans `mediagenda-dev`) :
+Durée indicative du palier : 28 à 34 heures. Ordre conseillé (E19 se fait **tôt** : c'est lui qui déploie MédiAgenda dans `mediagenda-dev`) :
 
 ```
 E10 ─ E11 ─ E12
@@ -761,10 +761,10 @@ Les délais par défaut (40 s avant `Unknown`, 300 s avant éviction) se lisent 
 
 <details><summary>Indice 1</summary>
 
-Pour l'inventaire, pars du cluster et non du dépôt : liste tous les objets qui ne viennent ni de kubeadm, ni de Cilium, ni d'une application, et demande-toi d'où vient chacun. `kubectl get … --show-managed-fields` dit qui a posé quel champ.
+Pour l'inventaire, pars du cluster et non du dépôt : liste tous les objets qui ne viennent ni de kubeadm, ni de Cilium, ni d'une application, et demande-toi d'où vient chacun. Les champs gérés (*managed fields*) d'un objet disent quel gestionnaire a posé quel champ.
 </details>
 
 <details><summary>Indice 2</summary>
 
-La dérive « dans le sens dépôt → cluster » se voit avec `kubectl diff --server-side`. L'autre sens (un objet créé à la main, absent du dépôt) demande une liste : les objets portant l'étiquette de ton dépôt, ou ceux dont le gestionnaire de champs est le tien, comparés aux fichiers.
+La dérive « dans le sens dépôt → cluster » se voit en demandant au serveur ce que changerait une application *server-side* de tes fichiers, sans l'appliquer. L'autre sens (un objet créé à la main, absent du dépôt) demande une liste : les objets portant l'étiquette de ton dépôt, ou ceux dont le gestionnaire de champs est le tien, comparés aux fichiers.
 </details>

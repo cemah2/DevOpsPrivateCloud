@@ -106,7 +106,7 @@ symptome_E40() {
     4) detail="ctr02 a été redémarré cette nuit pour maintenance. Depuis, le cache de recette (service Quadlet recette-cache du compte app) n'est pas revenu. Lucas l'a « réparé » hier en éditant le fichier." ;;
     *) detail="Lucas a retouché hier les fichiers Quadlet du compte app sur ctr02. Depuis, le service recette-cache ne démarre plus et « systemctl --user status recette-cache » ne le trouve même pas." ;;
   esac
-  wb_symptome "Ticket INC-3946 — De : Karim Benali" \
+  wb_symptome "Ticket INC-3940 — De : Karim Benali" \
     "$detail" \
     "Remets-le en service de façon durable (il doit survivre à un redémarrage de ctr02 et à la" \
     "déconnexion de tout le monde), et dis-moi comment tu l'as diagnostiqué." \

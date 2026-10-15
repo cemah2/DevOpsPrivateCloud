@@ -129,7 +129,7 @@ main() {
   unset _M12_ASTREINTE
   WB_EX=M12-E43
 
-  wb_symptome "Ticket INC-3950 — De : Nadia Roussel (responsable astreinte) — priorité P2" \
+  wb_symptome "Ticket INC-3943 — De : Nadia Roussel (responsable astreinte) — priorité P2" \
     "Tu es d'astreinte. Jeudi, 6 h 50 : la recette de MédiAgenda sur ctr01 est inutilisable, et" \
     "l'équipe de Julien lance sa campagne de tests de non-régression à 9 h. Remontées :" \
     "${lignes[@]}" \

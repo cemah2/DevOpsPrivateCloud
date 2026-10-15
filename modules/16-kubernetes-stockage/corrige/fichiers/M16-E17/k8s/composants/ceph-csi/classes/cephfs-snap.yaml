@@ -9,7 +9,7 @@ kind: VolumeSnapshotClass
 metadata:
   name: cephfs-snap
   labels:
-    medisphere.fr/composant: stockage
+    medisphere.internal/composant: stockage
     # M16-E17 : classe que Velero utilise pour les instantanés CSI de ce pilote (une seule par pilote).
     velero.io/csi-volumesnapshot-class: "true"
   annotations:

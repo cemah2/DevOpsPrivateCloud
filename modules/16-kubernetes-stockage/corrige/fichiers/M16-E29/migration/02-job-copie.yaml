@@ -11,13 +11,13 @@ kind: Job
 metadata:
   name: migration-valkey-copie-<PASSE>       # chaud, puis froid
   namespace: mediagenda-recette
-  labels: {medisphere.fr/migration: sec-1729}
+  labels: {medisphere.internal/migration: sec-1729}
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
-      labels: {medisphere.fr/migration: sec-1729}
+      labels: {medisphere.internal/migration: sec-1729}
     spec:
       restartPolicy: Never
       nodeName: <NŒUD-DE-VALKEY-0>

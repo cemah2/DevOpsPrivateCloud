@@ -2,28 +2,29 @@
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argumentés et les QCM expliquent pourquoi les autres options sont fausses. Les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice : `k8s/` reproduit l'arborescence de `plateforme/k8s`, `infra/` celle de `plateforme/infra`, `ansible/` celle de `plateforme/ansible`, `ceph/` celle de `plateforme/ceph`, `medisphere/` celle de la documentation, `essais/` les manifestes jetables de `wb-essais`. On **superpose** les dossiers dans l'ordre des exercices ; les `*.extrait` sont des morceaux à intégrer dans un fichier existant (l'emplacement est dit en tête), les `*.exemple` des modèles sans valeur réelle. `<FSID>` est à remplacer partout par la sortie de `ceph fsid`.
+Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argumentés et les QCM expliquent pourquoi les autres options sont fausses. Les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice : `k8s/` reproduit l'arborescence de `plateforme/k8s`, `infra/` celle de `plateforme/infra`, `ansible/` celle de `plateforme/ansible`, `ceph/` celle de `plateforme/ceph`, `medisphere/` celle de la documentation, `mediagenda-api/` celle du projet `mediagenda/api` (manifestes `k8s/recette/` de MédiAgenda), `essais/` les manifestes jetables de `wb-essais`. On **superpose** les dossiers dans l'ordre des exercices ; les `*.extrait` sont des morceaux à intégrer dans un fichier existant (l'emplacement est dit en tête), les `*.exemple` des modèles sans valeur réelle. `<FSID>` est à remplacer partout par la sortie de `ceph fsid`.
 
-**Ce qui a été vérifié à la rédaction** :
+**Ce qui a été vérifié hors cluster** (documentation et outils, sans `k8s-par1` réel) :
 - les charts `ceph-csi-rbd` et `ceph-csi-cephfs` **3.18.1** (téléchargés du dépôt `https://ceph.github.io/csi-charts`) : lecture de `values.yaml` et des gabarits ; `helm template` (Helm 4.3) avec les values du corrigé : configuration des moniteurs, `ceph.conf`, placement, réplicas conformes ; **aucun objet de même nom** entre les deux releases une fois les trois ConfigMaps de CephFS renommées (elles entrent en collision sans cela) ; noms produits : `ceph-csi-rbd-nodeplugin`, `ceph-csi-rbd-provisioner`, `ceph-csi-cephfs-…`, étiquettes de pods `app=ceph-csi-<pilote>,component=nodeplugin|provisioner` ;
 - la documentation de ceph-csi **au tag v3.18.1** : `docs/capabilities.md` (droits RBD et CephFS, création avec `--key-type=aes`), `docs/rbd/deploy.md` et `docs/cephfs/deploy.md` (paramètres des classes, `mapOptions`, `kernelMountOptions`, `mounter`), `deploy/csi-config-map-sample.yaml` (`csiConfig`, `cephFS.subvolumeGroup` qui doit exister) ;
 - la page `rbd(8)` de Ceph 20.2 : options `ms_mode=legacy|crc|secure|prefer-crc|prefer-secure` du mappage noyau (Linux ≥ 5.11), `abort_on_full` ;
 - external-snapshotter **v8.6.0** : `kubectl kustomize` des sources amont à l'étiquette (6 CRD, contrôleur dans `kube-system`, 2 réplicas) ; le manifeste du contrôleur cite encore l'image `v8.5.0`, d'où la surcharge ; l'image `registry.k8s.io/sig-storage/snapshot-controller:v8.6.0` existe ; les CRD de groupes de snapshots servent `v1beta1`, `v1beta2` **et** `v1` (stockage en `v1beta2`) ;
 - tous les manifestes (essais, classes, espace, rendus Helm) passent `kubeconform -strict` avec les schémas de Kubernetes 1.36 ;
 - le rôle `k8s_reseau_stockage` et son playbook passent `ansible-lint` 26.9 (profil `production`, ansible-core 2.21, `community.general` 13) ; les expressions de calcul (adresse, MAC, présence de la carte, carte configurée) ont été évaluées sur des faits simulés ;
-- l'image `valkey/valkey:9.1.2-trixie` : utilisateur et groupe 999, `WORKDIR /data`, point d'entrée qui ne change les droits que s'il démarre en root ;
+- l'image `valkey/valkey:8.1` (celle du M14 ; la 9.1 existe, la montée de version n'est pas l'objet de ce module) : utilisateur et groupe 999, `WORKDIR /data`, point d'entrée qui ne change les droits que s'il démarre en root ;
 - scripts (`installer.sh`, `ceph-csi-secrets.sh`) et vérifications : ShellCheck 0.11 (`-x`) et `bash -n` ; les vérifications ont été exécutées sur des réponses simulées de l'API (cas conforme et cas fautifs) pour s'assurer qu'elles vont au bout et passent au rouge quand il le faut.
 
 **Points non testés en conditions réelles**, à vérifier sur ton lab et à signaler s'ils diffèrent :
 - l'ensemble sur un vrai `k8s-par1` raccordé à `ceph-par1` : les sorties montrées sont **représentatives**, pas copiées ;
 - le changement d'identifiant d'instance cloud-init quand Proxmox ajoute un `ipconfig1` (E05, d'après le fonctionnement du lecteur NoCloud de Proxmox), et le redémarrage éventuel de la VM par le fournisseur `bpg/proxmox` pendant l'`apply` ;
-- le masquage par Cilium du trafic des pods du *provisioner* vers le VLAN 30 (E05, étape 7) : il dépend du mode de masquage retenu au M15 (iptables ou BPF) et de la détection de `ens19` par l'agent ;
+- le masquage par Cilium du trafic des pods du *provisioner* vers le VLAN 30 (E05, étape 7) : il dépend du mode de masquage retenu au M15 (iptables ou BPF) et de la détection de `eth1` par l'agent ;
 - le format `krbd:ms_mode=secure` de `mapOptions` (documenté), et le comportement du noyau 6.12 avec des moniteurs listés en `:3300` ;
 - les messages exacts : refus RWOP, refus RWX de RBD, éviction d'un `emptyDir`, `EDQUOT` de CephFS, lignes `GRPC call` des journaux du pilote ;
 - l'annotation `meta.helm.sh/release-name` posée par Helm 4 sur les objets d'une release (vérification E07) ;
 - la recherche de code de l'API GitLab (`scope=blobs`) utilisée par la vérification E05.
 - les versions du noyau citées pour les fonctionnalités krbd (`object-map`, `fast-diff` depuis Linux 5.3) : la vérification qui compte est le mappage réel sans `feature set mismatch` sur le 6.12 des travailleurs (E06, étape 9) ;
 - le droit restreint `mgr 'allow rw module=volumes'` pour `client.k8s-cephfs` (E07), cité comme piste.
+- l'adoption par le StatefulSet `valkey` recréé (E08, étape 8) des pods orphelins du M14 : retrait de `valkey-2` et `valkey-1`, puis remplacement de `valkey-0` par un pod qui monte son PVC (comportement documenté du contrôleur, ordre observé à confirmer).
 
 ---
 
@@ -159,7 +160,7 @@ Fichiers : [`e02-ephemere.yaml`](fichiers/M16-E02/essais/e02-ephemere.yaml) (Con
    INFO
    128
    app.kubernetes.io/name="e02-ephemere"
-   medisphere.fr/exercice="m16-e02"
+   medisphere.internal/exercice="m16-e02"
    admin@adm01:~$ kubectl -n wb-essais exec e02-ephemere -- cat /config/jeton | python3 -c '
    import sys, json, base64
    p = sys.stdin.read().split(".")[1]; p += "=" * (-len(p) % 4)
@@ -179,13 +180,13 @@ Fichiers : [`e02-ephemere.yaml`](fichiers/M16-E02/essais/e02-ephemere.yaml) (Con
 
 7. Refus dans `wb-essais` :
    ```
-   admin@adm01:~$ kubectl apply -f ~/m16/e02/e02-hostpath.yaml -l medisphere.fr/essai=refuse
+   admin@adm01:~$ kubectl apply -f ~/m16/e02/e02-hostpath.yaml -l medisphere.internal/essai=refuse
    Error from server (Forbidden): error when creating "…": pods "e02-hote" is forbidden: violates PodSecurity "baseline:latest": hostPath volumes (volume "pki")
    ```
    C'est le contrôleur d'admission **Pod Security** (intégré à l'API, réglé par les étiquettes de l'espace, M14-E18) : `baseline` et `restricted` interdisent tous deux les volumes `hostPath`.
 8. Dans un espace `privileged` :
    ```
-   admin@adm01:~$ kubectl apply -f ~/m16/e02/e02-hostpath.yaml -l medisphere.fr/essai=privilegie
+   admin@adm01:~$ kubectl apply -f ~/m16/e02/e02-hostpath.yaml -l medisphere.internal/essai=privilegie
    admin@adm01:~$ kubectl -n wb-privilegie exec e02-hote -- ls -l /pki-du-noeud
    -rw------- 1 root root 2814 … kubelet-client-2026-10-02-….pem
    lrwxrwxrwx 1 root root   59 … kubelet-client-current.pem -> /var/lib/kubelet/pki/kubelet-client-2026-10-02-….pem
@@ -242,13 +243,13 @@ Fichiers : [`e03-volume-local.yaml`](fichiers/M16-E03/essais/e03-volume-local.ya
 *B. Liaison*
 
 3. ```
-   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.fr/objet=pvc
+   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.internal/objet=pvc
    admin@adm01:~$ kubectl -n wb-essais describe pvc e03-donnees | tail -3
      Normal  WaitForFirstConsumer  …  waiting for first consumer to be created before binding
    ```
    Liaison **différée** : la classe le demande, pour que le planificateur choisisse d'abord le nœud du pod en tenant compte de tout (ressources, *taints*, affinité **du PV**), puis que le PVC soit lié à un PV compatible avec ce nœud.
 4. ```
-   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.fr/objet=ecrivain
+   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.internal/objet=ecrivain
    admin@adm01:~$ kubectl -n wb-essais get pod e03-ecrivain -o wide ; kubectl -n wb-essais get pvc e03-donnees
    e03-ecrivain   1/1  Running  …  k8s-w01
    e03-donnees    Bound    e03-local-w01   1Gi   RWO   local-manuel
@@ -284,8 +285,8 @@ Fichiers : [`e03-volume-local.yaml`](fichiers/M16-E03/essais/e03-volume-local.ya
    admin@adm01:~$ kubectl patch pv e03-local-w01 --type json \
        -p '[{"op":"remove","path":"/spec/claimRef/uid"},{"op":"remove","path":"/spec/claimRef/resourceVersion"}]'
    admin@adm01:~$ kubectl get pv e03-local-w01          # Available, réservé à wb-essais/e03-donnees
-   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.fr/objet=pvc
-   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.fr/objet=ecrivain
+   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.internal/objet=pvc
+   admin@adm01:~$ kubectl apply -f ~/m16/e03/e03-pvc-pods.yaml -l medisphere.internal/objet=ecrivain
    admin@k8s-w01:~$ awk '{print strftime("%T", $1), $2}' /srv/wb-local/e03/trace | sed -n '1p;$p'
    ```
    Le nouveau pod ajoute ses lignes à la suite des anciennes. Pour donner le volume à **une autre** équipe, on **efface** d'abord les données (`sudo find /srv/wb-local/e03 -mindepth 1 -delete` sur le nœud, après accord du propriétaire et, en production, après sauvegarde ou destruction tracée), puis on retire `claimRef` en entier (`{"op":"remove","path":"/spec/claimRef"}`) : le PV redevient `Available` pour n'importe quel PVC compatible. C'est exactement ce que la politique `Recycle` (dépréciée) faisait sans discernement, et ce que `Delete` fait par le pilote (E06).
@@ -437,8 +438,8 @@ Fichiers : [`noeuds.tf.extrait`](fichiers/M16-E05/infra/envs/k8s/noeuds.tf.extra
 1. État de départ :
    ```
    admin@k8s-w01:~$ ip -br link | grep -v lxc ; ip route | head -3 ; ls /etc/netplan/
-   ens18   UP   bc:24:11:40:00:61 …
-   default via 10.10.40.1 dev ens18 proto static
+   eth0   UP   bc:24:11:40:00:61 …
+   default via 10.10.40.1 dev eth0 proto static
    50-cloud-init.yaml
    admin@k8s-w01:~$ sudo cloud-init query instance_id
    7f3c0e4d…                                    ← à noter
@@ -446,8 +447,8 @@ Fichiers : [`noeuds.tf.extrait`](fichiers/M16-E05/infra/envs/k8s/noeuds.tf.extra
    256 SHA256:Qm8…  root@k8s-w01 (ED25519)    ← à noter
    admin@adm01:~$ kubectl get node k8s-w01 -o wide        # INTERNAL-IP 10.10.40.61
    ```
-   La configuration réseau vient de **cloud-init**, au premier démarrage, à partir du lecteur que Proxmox fabrique avec `ipconfig0` (`50-cloud-init.yaml` ; la carte y est reconnue par sa MAC). Le nom réel de la carte principale (`ens18` ou `eth0`, selon ton M14) n'a pas d'importance ici : on n'y touche pas.
-2. `qm config 2144` montre `net0`, `ipconfig0` et le lecteur `ide2: local-nvme:vm-2144-cloudinit`. Proxmox régénère ce lecteur (*NoCloud*) quand la configuration change, et l'identifiant d'instance de ses métadonnées est une **empreinte** des données utilisateur et réseau : ajouter `ipconfig1` le change. Au démarrage suivant, cloud-init croit voir une nouvelle machine et rejoue ses modules « par instance ». Les deux effets redoutés : (1) **les clés d'hôte SSH sont régénérées** (`ssh_deletekeys: true` dans le `cloud.cfg` de Debian), donc ne correspondent plus au certificat d'hôte signé par la CA SSH (M06) ni aux `known_hosts` ; (2) **le réseau est réécrit** depuis le nouveau lecteur, sous un nom et avec des options qui ne sont pas les nôtres (pas de MTU explicite, nommage `ethN`), en concurrence avec notre fichier. ⚠️ À vérifier sur ton lab : compare `sudo cloud-init query instance_id` avant et après l'étape 5.
+   La configuration réseau vient de **cloud-init**, au premier démarrage, à partir du lecteur que Proxmox fabrique avec `ipconfig0` (`50-cloud-init.yaml` ; la carte y est reconnue par sa MAC et nommée `eth0`, comme au M14). On n'y touche pas : la carte de stockage suit la même convention et s'appellera `eth1`.
+2. `qm config 2144` montre `net0`, `ipconfig0` et le lecteur `ide2: local-nvme:vm-2144-cloudinit`. Proxmox régénère ce lecteur (*NoCloud*) quand la configuration change, et l'identifiant d'instance de ses métadonnées est une **empreinte** des données utilisateur et réseau : ajouter `ipconfig1` le change. Au démarrage suivant, cloud-init croit voir une nouvelle machine et rejoue ses modules « par instance ». Les deux effets redoutés : (1) **les clés d'hôte SSH sont régénérées** (`ssh_deletekeys: true` dans le `cloud.cfg` de Debian), donc ne correspondent plus au certificat d'hôte signé par la CA SSH (M06) ni aux `known_hosts` ; (2) **le réseau est réécrit** depuis le nouveau lecteur, avec des options qui ne sont pas les nôtres (pas de MTU explicite, adresse de la seconde carte décrite par `ipconfig1`), en concurrence avec notre fichier. ⚠️ À vérifier sur ton lab : compare `sudo cloud-init query instance_id` avant et après l'étape 5.
 3. Le rôle (voir son `README.md`) : `cloud_init.yml` (fichier `99-medisphere-k8s.cfg` : `network: {config: disabled}` et `ssh_deletekeys: false`), `modules.yml` (`/etc/modules-load.d/ceph-csi.conf`), `reseau.yml` (netplan dans un dossier de répétition, `netplan generate --root-dir`, mise en place ; drain, redémarrage et attente seulement si la carte est présente **et** sans son adresse), `verifications.yml` (adresse et MTU, une seule route par défaut, `ping -M do -s 8972` vers les trois moniteurs, adresse interne Kubernetes inchangée, étiquette, `uncordon` si le rôle a drainé). La décision de redémarrer compare l'**état réel** (faits) à l'état voulu : le fichier netplan a pu être posé à l'étape 4 alors que la carte n'existait pas encore, et son « changed » ne veut plus rien dire au moment où la carte apparaît.
 4. ```
    admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/k8s-reseau-stockage.yml --diff
@@ -476,15 +477,15 @@ Fichiers : [`noeuds.tf.extrait`](fichiers/M16-E05/infra/envs/k8s/noeuds.tf.extra
    TASK [k8s_reseau_stockage : Joindre chaque moniteur en 9000 octets …] … ok (×3)
    TASK [k8s_reseau_stockage : Étiqueter le nœud raccordé au réseau de stockage] … changed
    TASK [k8s_reseau_stockage : Remettre en service le nœud que ce rôle a drainé] … changed
-   admin@k8s-w01:~$ ip -d link show ens19 | head -2 ; ip -4 addr show ens19 | grep inet
-   3: ens19: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 …
-       inet 10.10.30.81/24 brd 10.10.30.255 scope global ens19
+   admin@k8s-w01:~$ ip -d link show eth1 | head -2 ; ip -4 addr show eth1 | grep inet
+   3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 9000 …
+       inet 10.10.30.81/24 brd 10.10.30.255 scope global eth1
    admin@k8s-w01:~$ ip route ; ip route get 10.10.30.52
-   default via 10.10.40.1 dev ens18 proto static
-   10.10.30.0/24 dev ens19 proto kernel scope link src 10.10.30.81
-   10.10.40.0/24 dev ens18 proto kernel scope link src 10.10.40.61
-   10.10.30.52 dev ens19 src 10.10.30.81
-   admin@k8s-w01:~$ ping -M do -s 8972 -c 3 -I ens19 10.10.30.51        # 3 réponses, 0 % de perte
+   default via 10.10.40.1 dev eth0 proto static
+   10.10.30.0/24 dev eth1 proto kernel scope link src 10.10.30.81
+   10.10.40.0/24 dev eth0 proto kernel scope link src 10.10.40.61
+   10.10.30.52 dev eth1 src 10.10.30.81
+   admin@k8s-w01:~$ ping -M do -s 8972 -c 3 -I eth1 10.10.30.51        # 3 réponses, 0 % de perte
    admin@k8s-w01:~$ sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub   # empreinte INCHANGÉE
    admin@adm01:~$ kubectl get node k8s-w01 -o wide                          # INTERNAL-IP toujours 10.10.40.61
    ```
@@ -496,13 +497,13 @@ Fichiers : [`noeuds.tf.extrait`](fichiers/M16-E05/infra/envs/k8s/noeuds.tf.extra
        --overrides='{"spec":{"nodeSelector":{"kubernetes.io/hostname":"k8s-w01"}}}' \
        -- bash -c 'for i in 1 2 3; do timeout 3 bash -c "</dev/tcp/10.10.30.51/3300" && echo ouvert; sleep 2; done'
    ouvert
-   admin@k8s-w01:~$ sudo tcpdump -ni ens19 -c 4 host 10.10.30.51 and port 3300
+   admin@k8s-w01:~$ sudo tcpdump -ni eth1 -c 4 host 10.10.30.51 and port 3300
    10.10.30.81.41874 > 10.10.30.51.3300: Flags [S] …
    10.10.30.51.3300 > 10.10.30.81.41874: Flags [S.] …
    admin@adm01:~$ hubble observe --to-ip 10.10.30.51 --last 20
    … wb-essais/e05-test (ID:…) -> 10.10.30.51:3300 (world) to-stack FORWARDED (TCP Flags: SYN)
    ```
-   Le paquet quitte le pod (10.240.x.y), Cilium le remet à la pile de l'hôte (`to-stack`), la table de routage l'envoie par `ens19`, et il est **masqué** par l'adresse du nœud sur cette carte (10.10.30.81) : Cilium masque tout ce qui sort du réseau des pods vers l'extérieur du cluster. `ceph01` répond donc directement à 10.10.30.81, dans le VLAN 30. Si le paquet partait avec l'adresse du pod, `ceph01` répondrait par sa passerelle (`gw01`), qui ne connaît pas 10.240.0.0/16 : silence. ⚠️ À vérifier sur ton lab : avec le masquage **BPF** de Cilium, `ens19` doit figurer parmi les cartes que gère l'agent (`kubectl -n kube-system exec ds/cilium -- cilium-dbg status --verbose | grep -i -A3 masquerading`) ; s'il n'y est pas, redémarre l'agent de ce nœud (`kubectl -n kube-system delete pod -l k8s-app=cilium --field-selector spec.nodeName=k8s-w01`). Ce chemin est celui des pods du *provisioner* de ceph-csi, qui ne sont pas en `hostNetwork` (E06).
+   Le paquet quitte le pod (10.240.x.y), Cilium le remet à la pile de l'hôte (`to-stack`), la table de routage l'envoie par `eth1`, et il est **masqué** par l'adresse du nœud sur cette carte (10.10.30.81) : Cilium masque tout ce qui sort du réseau des pods vers l'extérieur du cluster. `ceph01` répond donc directement à 10.10.30.81, dans le VLAN 30. Si le paquet partait avec l'adresse du pod, `ceph01` répondrait par sa passerelle (`gw01`), qui ne connaît pas 10.240.0.0/16 : silence. ⚠️ À vérifier sur ton lab : avec le masquage **BPF** de Cilium, `eth1` doit figurer parmi les cartes que gère l'agent (`kubectl -n kube-system exec ds/cilium -- cilium-dbg status --verbose | grep -i -A3 masquerading`) ; s'il n'y est pas, redémarre l'agent de ce nœud (`kubectl -n kube-system delete pod -l k8s-app=cilium --field-selector spec.nodeName=k8s-w01`). Ce chemin est celui des pods du *provisioner* de ceph-csi, qui ne sont pas en `hostNetwork` (E06).
 8. Même chose pour `k8s-w02` (2145, .62 → .82), puis `k8s-w03` (2146, .63 → .83) : une MR OpenTofu chacun (l'entrée passe à `true`), un drain chacun.
 
 *C. Documenter*
@@ -511,12 +512,12 @@ Fichiers : [`noeuds.tf.extrait`](fichiers/M16-E05/infra/envs/k8s/noeuds.tf.extra
 
 **Explications**
 
-Le choix « une carte par VLAN, sans passerelle » est celui des clients Ceph depuis le module 08 (`cephcli01`) et d'OpenStack (M10) : le réseau public de Ceph est un réseau **de stockage**, pas un réseau d'accès. Le chemin direct évite trois problèmes à la fois : la charge et la latence de la bordure sur chaque E/S, le filtrage d'une plage de ports large (6800-7568 pour les OSD), et le MTU (le VLAN 40 est à 1500 ; le VLAN 30 en 9000 de bout en bout). Le rôle ne prend pas possession de tout le réseau du nœud (comme `noeud_openstack` le fait au M10) : il **ajoute** une carte, et neutralise seulement ce que cloud-init pourrait refaire derrière lui. Le redémarrage d'un nœud drainé, plutôt qu'un `netplan apply` à chaud, évite que `systemd-networkd`, reconfiguré, ne retire des routes ou des règles posées par Cilium, et prouve que la configuration tient au démarrage.
+Le choix « une carte par VLAN, sans passerelle » est celui des clients Ceph depuis le module 08 (`cephcli01`) et d'OpenStack (M10) : le réseau public de Ceph est un réseau **de stockage**, pas un réseau d'accès. Le chemin direct évite trois problèmes à la fois : la charge et la latence de la bordure sur chaque E/S, le filtrage d'une plage de ports large (6800-7568 pour les OSD), et le MTU (le VLAN 40 est à 1500 ; le VLAN 30 en 9000 de bout en bout). Sans `set-name`, udev donnerait à la nouvelle carte son nom prévisible (`ens19` pour `net1`) : le fichier netplan la renomme `eth1`, dans la convention de `eth0` posée par cloud-init (M14), et c'est ce nom que citent le rôle, les checks et la documentation. Le rôle ne prend pas possession de tout le réseau du nœud (comme `noeud_openstack` le fait au M10) : il **ajoute** une carte, et neutralise seulement ce que cloud-init pourrait refaire derrière lui. Le redémarrage d'un nœud drainé, plutôt qu'un `netplan apply` à chaud, évite que `systemd-networkd`, reconfiguré, ne retire des routes ou des règles posées par Cilium, et prouve que la configuration tient au démarrage.
 
 **Alternatives**
 - `netplan apply` à chaud, nœud non drainé : plus rapide, mais pari sur la cohabitation de `systemd-networkd` et de Cilium ; si tu le tentes, sur un nœud drainé, avec `ManageForeignRoutes=no` et `ManageForeignRoutingPolicyRules=no` dans `networkd.conf` (recommandation de la documentation de Cilium pour les systèmes à `systemd-networkd`).
 - Carte **sans adresse** dans OpenTofu (pas d'`ipconfig1`, donc pas de changement du lecteur cloud-init) et adresse posée par Ansible seulement : supprime le risque cloud-init, mais l'adresse n'est plus dans NetBox par le module : IPAM incomplet. Écartée.
-- VLAN 30 en sous-interface de `ens18` (une seule carte, VLAN étiqueté par l'invité) : possible sur un trunk, mais la carte des nœuds est sur un VNet non étiqueté, et on mélangerait le MTU 1500 et 9000 sur la même interface parente.
+- VLAN 30 en sous-interface de `eth0` (une seule carte, VLAN étiqueté par l'invité) : possible sur un trunk, mais la carte des nœuds est sur un VNet non étiqueté, et on mélangerait le MTU 1500 et 9000 sur la même interface parente.
 - Passer par la bordure (ouvrir 3300 et 6800-7568 du VLAN 40 vers le VLAN 30) : la solution de facilité, refusée par le ticket.
 
 **Pièges classiques**
@@ -528,7 +529,7 @@ Le choix « une carte par VLAN, sans passerelle » est celui des clients Ceph de
 - `kubectl` de l'Ansible lancé avec `become` sur `adm01` : il cherche `/root/.kube/config`.
 
 **En production chez MédiSphère**
-Deux cartes de stockage en agrégat (LACP sur deux commutateurs) par travailleur, MTU vérifié en continu par la supervision (sonde `ping -M do` des nœuds vers les moniteurs, M21) ; l'étiquette `medisphere.fr/stockage-ceph` posée par l'outillage de construction des nœuds (Cluster API, M18 ; F1) et une alerte sur tout travailleur sans elle.
+Deux cartes de stockage en agrégat (LACP sur deux commutateurs) par travailleur, MTU vérifié en continu par la supervision (sonde `ping -M do` des nœuds vers les moniteurs, M21) ; l'étiquette `medisphere.internal/stockage-ceph` posée par l'outillage de construction des nœuds (Cluster API, M18 ; F1) et une alerte sur tout travailleur sans elle.
 
 ---
 
@@ -677,7 +678,7 @@ Fichiers : [`espaces/ceph-csi.yaml`](fichiers/M16-E06/k8s/espaces/ceph-csi.yaml)
 
 **Explications**
 
-ceph-csi en mode « Ceph externe » n'a besoin que de trois choses : savoir **où** est le cluster (`csiConfig` : fsid et moniteurs ; le `clusterID` relie chaque classe à son cluster), **qui** il est (le Secret référencé par la classe pour chaque type d'opération), et **quoi** créer (les paramètres de la classe). Tout le reste est générique. Le chemin des données passe par le **noyau** du nœud (krbd), pas par le pod : le *nodeplugin* ne fait que piloter le mappage et le montage, puis s'efface ; un redémarrage du *nodeplugin* n'interrompt pas les E/S des volumes montés. Le chemin de contrôle (création, suppression, clones) passe par les bibliothèques Ceph du *provisioner*, depuis un pod masqué derrière l'adresse `ens19` du nœud. Les Secrets ne sont qu'un relais : la référence est le Vault, la vérité est Ceph, et `verifier` contrôle que les trois concordent.
+ceph-csi en mode « Ceph externe » n'a besoin que de trois choses : savoir **où** est le cluster (`csiConfig` : fsid et moniteurs ; le `clusterID` relie chaque classe à son cluster), **qui** il est (le Secret référencé par la classe pour chaque type d'opération), et **quoi** créer (les paramètres de la classe). Tout le reste est générique. Le chemin des données passe par le **noyau** du nœud (krbd), pas par le pod : le *nodeplugin* ne fait que piloter le mappage et le montage, puis s'efface ; un redémarrage du *nodeplugin* n'interrompt pas les E/S des volumes montés. Le chemin de contrôle (création, suppression, clones) passe par les bibliothèques Ceph du *provisioner*, depuis un pod masqué derrière l'adresse `eth1` du nœud. Les Secrets ne sont qu'un relais : la référence est le Vault, la vérité est Ceph, et `verifier` contrôle que les trois concordent.
 
 **Alternatives**
 - **ceph-csi-operator** (celui qu'utilise Rook) : un opérateur qui gère les pilotes à partir de ressources `Driver`, `CephConnection`, `ClientProfile` ; recommandé par la documentation de ceph-csi pour les nouveaux déploiements. Écarté ici pour voir les pièces une par une ; à réévaluer dans l'ADR-0160 (E30).
@@ -813,7 +814,7 @@ CephFS réservé aux cas de partage justifiés (liste dans la fiche, revue à ch
 
 **Solution**
 
-Fichiers : [`e08-valkey.yaml`](fichiers/M16-E08/essais/e08-valkey.yaml) (état final), [`mediagenda/recette/valkey.yaml`](fichiers/M16-E08/mediagenda/recette/valkey.yaml).
+Fichiers : [`e08-valkey.yaml`](fichiers/M16-E08/essais/e08-valkey.yaml) (état final), [`k8s/recette/30-valkey.yaml`](fichiers/M16-E08/mediagenda-api/k8s/recette/30-valkey.yaml) (projet `mediagenda/api`).
 
 *A. Le patron, dans `wb-essais`*
 
@@ -852,31 +853,37 @@ Fichiers : [`e08-valkey.yaml`](fichiers/M16-E08/essais/e08-valkey.yaml) (état f
 
 6. ```
    admin@adm01:~$ kubectl -n mediagenda-recette get deploy,sts,svc,netpol,pvc -o wide
-   admin@adm01:~$ kubectl -n mediagenda-recette get deploy mediagenda-api -o jsonpath='{.spec.template.spec.containers[0].env}' | jq '.[] | select(.name=="MEDIAGENDA_VALKEY_URL")'
-   {"name":"MEDIAGENDA_VALKEY_URL","value":"redis://valkey:6379/0"}
-   admin@adm01:~$ kubectl -n mediagenda-recette get svc valkey -o jsonpath='{.spec.selector}{"\n"}'
+   admin@adm01:~$ kubectl -n mediagenda-recette get configmap mediagenda-api-config -o jsonpath='{.data.MEDIAGENDA_VALKEY_URL}{"\n"}'
+   redis://valkey-0.valkey:6379/0
+   admin@adm01:~$ kubectl -n mediagenda-recette get svc valkey -o jsonpath='{.spec.clusterIP} {.spec.selector}{"\n"}'
+   None {"app.kubernetes.io/name":"valkey"}
    admin@adm01:~$ kubectl -n mediagenda-recette get netpol -o yaml | grep -B2 -A6 valkey
    ```
-   Note les étiquettes que sélectionnent le Service et les politiques (`app.kubernetes.io/name: valkey`… dans le corrigé du M14) : le nouveau Valkey doit les porter.
-7. Le StatefulSet : image du cache Harbor épinglée (VAP du M14), `restricted` (999, `fsGroup` 999 avec `OnRootMismatch`, capacités retirées, `seccompProfile`, système de fichiers racine en lecture seule), AOF chaque seconde, mémoire plafonnée avec éviction LRU, `Retain`/`Retain`, Service sans tête `valkey-interne` en plus du Service `valkey` inchangé.
+   L'existant est le StatefulSet `valkey` du M14 (trois pods `valkey-0..2`, `emptyDir`) derrière le Service sans tête `valkey` ; l'API ne parle qu'au primaire, `valkey-0.valkey`. Note les étiquettes que sélectionnent le Service et les politiques (`app.kubernetes.io/name: valkey` dans le corrigé du M14) : le nouveau Valkey doit les porter, et garder le même nom et le même `serviceName` pour que l'URL reste valable.
+7. Le StatefulSet : image du cache Harbor épinglée (VAP du M14), `restricted` (999, `fsGroup` 999 avec `OnRootMismatch`, capacités retirées, `seccompProfile`, système de fichiers racine en lecture seule), AOF chaque seconde, mémoire plafonnée avec éviction LRU, `Retain`/`Retain`, une instance, Service sans tête `valkey` inchangé (le fichier le décrit encore, tel quel).
    ```
-   admin@adm01:~$ kubectl apply --dry-run=server -f mediagenda/recette/valkey.yaml
-   service/valkey-interne created (server dry run)
-   statefulset.apps/valkey created (server dry run)
+   admin@adm01:~/src/mediagenda-api$ kubectl apply --dry-run=server -f k8s/recette/30-valkey.yaml
+   service/valkey unchanged (server dry run)
+   The StatefulSet "valkey" is invalid: spec: Forbidden: updates to statefulset spec for fields other than 'replicas', 'ordinals', 'template', 'updateStrategy', 'persistentVolumeClaimRetentionPolicy' and 'minReadySeconds' are forbidden
    ```
-   Aucun avertissement de Pod Security, aucun refus de la VAP.
-8. Bascule. Cas d'un ancien Valkey en **Deployment** :
+   Le refus est attendu : il confirme que `volumeClaimTemplates` ne s'ajoute pas en place (étape 8). Pour valider Pod Security et la VAP sans ce conflit, essaie le même StatefulSet sous un autre nom : `yq '(select(.kind == "StatefulSet") | .metadata.name) = "valkey-essai"' k8s/recette/30-valkey.yaml | kubectl apply --dry-run=server -f -` : aucun avertissement de Pod Security, aucun refus de la VAP (message du refus ci-dessus représentatif).
+8. Bascule. `volumeClaimTemplates` (comme `serviceName` et le sélecteur) est un champ **immuable** : on ne l'ajoute pas au StatefulSet du M14. On supprime donc l'**objet** StatefulSet sans ses pods, puis on applique le nouveau, qui adopte les pods existants (même nom, mêmes étiquettes) :
    ```
-   admin@adm01:~$ kubectl apply -f mediagenda/recette/valkey.yaml
+   admin@adm01:~$ kubectl -n mediagenda-recette delete sts valkey --cascade=orphan     # les pods valkey-0..2 continuent de servir
+   admin@adm01:~/src/mediagenda-api$ kubectl apply -f k8s/recette/30-valkey.yaml
+   admin@adm01:~$ kubectl -n mediagenda-recette get pod,pvc -l app.kubernetes.io/name=valkey -w
+   pod/valkey-2  Terminating                    ← ordinaux au-delà de replicas: 1, retirés un par un
+   pod/valkey-1  Terminating
+   pvc/donnees-valkey-0  Bound  …  1Gi  RWO  ceph-rbd
+   pod/valkey-0  Terminating → Pending → ContainerCreating → Running 1/1   ← nouvelle révision, avec son PVC
    admin@adm01:~$ kubectl -n mediagenda-recette rollout status sts/valkey
-   admin@adm01:~$ kubectl -n mediagenda-recette delete deploy valkey
    admin@adm01:~$ for i in $(seq 1 30); do curl -s -o /dev/null -w '%{http_code} ' https://mediagenda-recette.apps.par1.medisphere.internal/pret; sleep 1; done; echo
-   200 200 200 …
+   200 200 503 503 503 200 200 …
    admin@adm01:~$ curl -s "https://mediagenda-recette.apps.par1.medisphere.internal/api/v1/creneaux?date=2026-10-09" >/dev/null
    admin@adm01:~$ kubectl -n mediagenda-recette exec valkey-0 -- valkey-cli DBSIZE
    (integer) 1
    ```
-   Pendant quelques secondes, le Service envoie les connexions aux deux Valkey (même étiquettes) : sans gravité pour un cache (au pire un calcul de créneaux refait). Si l'ancien était déjà un **StatefulSet `valkey`** (M14-E15, avec un `emptyDir`) : `volumeClaimTemplates` est un champ **immuable**, on ne peut pas l'ajouter ; on supprime l'ancien sans ses pods (`kubectl -n mediagenda-recette delete sts valkey --cascade=orphan`), on applique le nouveau, qui **adopte** le pod existant `valkey-0` (même nom, mêmes étiquettes)… encore sans volume : on supprime ce pod (`kubectl delete pod valkey-0`), le StatefulSet le recrée avec son PVC. `/pret` répond 503 pendant ces quelques secondes (Valkey absent), ce que le ticket accepte.
+   Le contrôleur adopte les trois pods orphelins, retire `valkey-2` puis `valkey-1` (au-delà de `replicas`), puis remplace `valkey-0`, dont la révision n'est plus la bonne, par un pod qui monte `donnees-valkey-0`. Si `valkey-0` n'est pas remplacé de lui-même (stratégie `OnDelete` restée sur l'ancien objet, par exemple), supprime-le : `kubectl -n mediagenda-recette delete pod valkey-0`. `/pret` répond 503 pendant les quelques secondes où `valkey-0` est absent (provisionnement, attachement et montage du volume, démarrage), ce que le ticket accepte ; le cache repart vide une dernière fois. ⚠️ Sans `--cascade=orphan`, la suppression emporte les trois pods d'un coup et la coupure dure jusqu'à l'application du nouveau fichier.
 9. ```
    admin@adm01:~$ kubectl -n mediagenda-recette exec valkey-0 -- valkey-cli DBSIZE                # avant
    admin@adm01:~$ N=$(kubectl -n mediagenda-recette get pod valkey-0 -o jsonpath='{.spec.nodeName}')
@@ -892,13 +899,13 @@ Fichiers : [`e08-valkey.yaml`](fichiers/M16-E08/essais/e08-valkey.yaml) (état f
 Le StatefulSet ne fait rien de magique pour les données : il fabrique un PVC par identité à partir du modèle, et garantit qu'une identité n'existe qu'une fois. La persistance vient de la classe (`ceph-rbd`) ; la **survie au déplacement** vient de ce que le volume est un objet du cluster, pas du nœud. `fsGroup` est indispensable dès qu'on refuse root : un ext4 neuf a une racine `root:root 0755`, et l'image Valkey, lancée directement en 999, saute l'étape où elle corrigeait les droits ; le kubelet le fait à sa place parce que le `CSIDriver` annonce `fsGroupPolicy: File`. `OnRootMismatch` évite de reparcourir tout le volume à chaque montage.
 
 **Alternatives**
-- Valkey sans persistance, mais en **réplication** (un primaire, deux répliques, Sentinel) : un drain ne vide plus le cache, sans disque ; plus de pods, plus de complexité ; le chart Bitnami ou un opérateur le font (M27).
+- Garder les trois instances du M14 en leur donnant chacune un volume (`donnees-valkey-0..2`) : trois fois les volumes pour des répliques qui, sans Sentinel, ne prennent jamais le relais ; c'est la réplication **avec** bascule (Sentinel ou un opérateur, M27) qui rendra des répliques utiles, avec ou sans disque.
 - Persistance RDB seule (instantanés périodiques) : moins d'écritures que l'AOF, mais une perte jusqu'au dernier instantané ; pour un cache, suffisant.
 - `ReadWriteOncePod` dans le modèle de volume : garantie supplémentaire contre deux pods du même nœud ; redondant avec la garantie du StatefulSet, mais gratuit.
 - `podManagementPolicy: Parallel` : création et suppression simultanées ; utile quand les instances sont indépendantes (pas d'ordre de démarrage), comme ici dans `wb-essais`.
 
 **Pièges classiques**
-- Changer le Service `valkey` en Service sans tête (`clusterIP: None`) : champ immuable, il faut le supprimer et le recréer, coupure et risque sur les politiques réseau ; on ajoute un second Service.
+- Renommer le StatefulSet ou changer son `serviceName` « pour repartir propre » : le nom `valkey-0.valkey` que vise l'API ne résout plus, `/pret` reste à 503 jusqu'à la correction de la ConfigMap et le redémarrage de l'API.
 - Étiquettes du nouveau Valkey différentes de l'ancien : le Service ne le trouve pas, les politiques réseau du M15 le bloquent, `/pret` reste à 503.
 - Oublier `fsGroup` en `restricted` : Valkey démarre, ne peut pas écrire son AOF (`Permission denied`), et redémarre en boucle.
 - `whenScaled: Delete` sur une base unique : un `scale` à 0 « pour la maintenance » détruit les données.
@@ -913,13 +920,13 @@ Valkey de production en réplication avec Sentinel (M27), persistance AOF sur `c
 
 **Barème** : 2 points par question, total sur 24. Une réponse qui cite une observation du lab (sortie, mesure, message) vaut mieux qu'une réponse de cours.
 
-**1. Chemin d'une écriture.** Le processus écrit dans `/donnees` : le noyau la place dans le **cache de pages** d'ext4 (montage lié du pod → `globalmount` → `/dev/rbd0`). Au vidage (ou au `fsync`), ext4 envoie des requêtes bloc à `/dev/rbd0` ; le pilote **krbd** découpe en objets de 4 Mio (`rbd_data.<id>.<numéro>`), calcule le PG et l'OSD primaire par CRUSH (cartes obtenues des moniteurs au mappage), et envoie l'écriture **directement au primaire**, depuis `ens19` (10.10.30.8N), sur le VLAN 30, en msgr2 **chiffré** (`ms_mode=secure`). Le primaire écrit (BlueStore) et réplique vers deux secondaires sur le réseau **cluster** (VLAN 31) ; quand les trois ont rendu l'écriture persistante, il acquitte krbd, qui acquitte ext4. Ni Kubernetes, ni le *nodeplugin*, ni les moniteurs ne sont sur ce chemin (observé : `ss -tn` montre des connexions vers les OSD 68xx, et un redémarrage du *nodeplugin* n'interrompt pas l'écriture). Avec `exclusive-lock` et `object-map`, la première écriture d'un objet met aussi à jour l'index d'occupation.
+**1. Chemin d'une écriture.** Le processus écrit dans `/donnees` : le noyau la place dans le **cache de pages** d'ext4 (montage lié du pod → `globalmount` → `/dev/rbd0`). Au vidage (ou au `fsync`), ext4 envoie des requêtes bloc à `/dev/rbd0` ; le pilote **krbd** découpe en objets de 4 Mio (`rbd_data.<id>.<numéro>`), calcule le PG et l'OSD primaire par CRUSH (cartes obtenues des moniteurs au mappage), et envoie l'écriture **directement au primaire**, depuis `eth1` (10.10.30.8N), sur le VLAN 30, en msgr2 **chiffré** (`ms_mode=secure`). Le primaire écrit (BlueStore) et réplique vers deux secondaires sur le réseau **cluster** (VLAN 31) ; quand les trois ont rendu l'écriture persistante, il acquitte krbd, qui acquitte ext4. Ni Kubernetes, ni le *nodeplugin*, ni les moniteurs ne sont sur ce chemin (observé : `ss -tn` montre des connexions vers les OSD 68xx, et un redémarrage du *nodeplugin* n'interrompt pas l'écriture). Avec `exclusive-lock` et `object-map`, la première écriture d'un objet met aussi à jour l'index d'occupation.
 
 **2. Réponse B.** Les paramètres d'une StorageClass ne servent qu'à **créer** les volumes ; ce qui en reste est recopié dans le PV (`volumeAttributes`). Une image déjà créée garde ses fonctionnalités (on les modifie à la main, avec `rbd feature enable/disable`, quand c'est possible). A : le montage ne relit pas la classe. C : aucun pilote ne recrée un volume existant. D : la phase d'un PV ne dépend que de son PVC. D'ailleurs, une StorageClass ne se modifie pas : `kubectl apply` refuse le changement des paramètres (champ immuable), d'où le `delete` puis `apply` de l'énoncé.
 
-**3. Permissions du *nodeplugin*.** `privileged` : mapper un périphérique (`/sys/bus/rbd`, `/dev`), charger des modules, monter des systèmes de fichiers ; sans lui, ni mappage ni montage. `hostNetwork` : le client noyau (krbd, CephFS) parle à Ceph depuis l'espace réseau de **l'hôte** (c'est lui qui a la carte `ens19`) ; sans, il faudrait faire exécuter le mappage dans un autre espace réseau (`netNamespaceFilePath` de `csiConfig`), plus complexe. `mountPropagation: Bidirectional` : les montages faits dans le conteneur remontent vers l'hôte, où le kubelet et le pod du client les voient ; sans, le volume ne serait monté que dans le conteneur du pilote et le pod verrait un répertoire vide. (Et `hostPID` : retrouver les processus de l'hôte, utile au pilote pour certaines opérations de montage.)
+**3. Permissions du *nodeplugin*.** `privileged` : mapper un périphérique (`/sys/bus/rbd`, `/dev`), charger des modules, monter des systèmes de fichiers ; sans lui, ni mappage ni montage. `hostNetwork` : le client noyau (krbd, CephFS) parle à Ceph depuis l'espace réseau de **l'hôte** (c'est lui qui a la carte `eth1`) ; sans, il faudrait faire exécuter le mappage dans un autre espace réseau (`netNamespaceFilePath` de `csiConfig`), plus complexe. `mountPropagation: Bidirectional` : les montages faits dans le conteneur remontent vers l'hôte, où le kubelet et le pod du client les voient ; sans, le volume ne serait monté que dans le conteneur du pilote et le pod verrait un répertoire vide. (Et `hostPID` : retrouver les processus de l'hôte, utile au pilote pour certaines opérations de montage.)
 
-**4. Réseau du *provisioner*.** Ses requêtes (librados : création, suppression, clones) partent de l'adresse du **pod** (10.240.x.y), quittent le pod par l'interface de Cilium, sont remises à la pile de l'hôte, routées par `ens19` (route connectée 10.10.30.0/24) et **masquées** par l'adresse 10.10.30.8N : `ceph01-03` répondent au nœud, dans le VLAN 30 (observé en E05, étape 7, `tcpdump` sur `ens19`). Si le masquage cessait (par exemple, masquage BPF qui ne gère pas `ens19`), les paquets partiraient avec l'adresse du pod, les moniteurs répondraient par leur passerelle `gw01`, qui ne connaît pas 10.240.0.0/16 : plus aucune création ni suppression de volume (PVC `Pending`), alors que les volumes déjà montés continueraient de fonctionner (le *nodeplugin* est en `hostNetwork`). Panne type de M16-E35/E36.
+**4. Réseau du *provisioner*.** Ses requêtes (librados : création, suppression, clones) partent de l'adresse du **pod** (10.240.x.y), quittent le pod par l'interface de Cilium, sont remises à la pile de l'hôte, routées par `eth1` (route connectée 10.10.30.0/24) et **masquées** par l'adresse 10.10.30.8N : `ceph01-03` répondent au nœud, dans le VLAN 30 (observé en E05, étape 7, `tcpdump` sur `eth1`). Si le masquage cessait (par exemple, masquage BPF qui ne gère pas `eth1`), les paquets partiraient avec l'adresse du pod, les moniteurs répondraient par leur passerelle `gw01`, qui ne connaît pas 10.240.0.0/16 : plus aucune création ni suppression de volume (PVC `Pending`), alors que les volumes déjà montés continueraient de fonctionner (le *nodeplugin* est en `hostNetwork`). Panne type de M16-E35/E36.
 
 **5. 3300 et `ms_mode=secure`.** `ms_service_mode secure` côté `ceph-par1` ne s'applique qu'à **msgr2** : un client en msgr1 (port 6789, protocole sans mode `secure`) passe **en clair** (M08-E27, Q expert). Lister les moniteurs en `:3300` seulement et imposer `ms_mode=secure` au mappage et au montage garantit que le noyau n'emprunte jamais msgr1, même si les moniteurs l'annoncent encore. Avec `10.10.30.51:6789` dans la configuration et `ms_mode=secure`, le noyau tenterait msgr2 sur le port msgr1 : échec du mappage (`ContainerCreating`, `connection refused` ou délai) ; sans `ms_mode`, un client ancien mapperait en msgr1 et tout « marcherait », en clair.
 
@@ -933,6 +940,6 @@ Valkey de production en réplication avec Sentinel (M27), persistance AOF sur `c
 
 **10. `fsGroup`.** Au premier montage, le kubelet a parcouru le volume (vide, donc instantané) et donné le groupe 999 aux fichiers et répertoires, avec le bit *setgid* sur les répertoires (les fichiers créés ensuite héritent du groupe) et l'écriture pour le groupe : Valkey, qui tourne en 999 sans être root, peut écrire `/data`. Sans `OnRootMismatch` (politique `Always`), il le refait **à chaque montage** : sur un volume de plusieurs centaines de Gio et des millions de fichiers, cela retarde le démarrage du pod de plusieurs minutes (le pod reste en `ContainerCreating`) ; `OnRootMismatch` ne le refait que si la racine n'a pas déjà les bons droits.
 
-**11. Persister un cache.** Pour : un cache vide après chaque drain reporte **toute** la charge sur PostgreSQL au pire moment (pendant une maintenance, quand une partie du cluster est déjà indisponible) et dégrade les temps de réponse (constaté par Julien) ; le coût est faible (1 Gio sur `ceph-rbd`, une écriture AOF par seconde) ; et c'est l'occasion d'apprendre le patron StatefulSet sur un composant simple avant PostgreSQL. Contre : un cache doit pouvoir être perdu à tout moment ; le persister masque un défaut de conception (une application qui ne supporte pas un cache froid) et ajoute une dépendance à Ceph pour un composant qui n'en avait pas besoin (un Ceph lent ralentit le cache). La rendraient inutile : la **réplication** de Valkey (répliques sur d'autres nœuds, M27), ou une application qui « réchauffe » son cache progressivement et une base dimensionnée pour le cache froid.
+**11. Persister un cache.** Pour : un cache vide après chaque drain reporte **toute** la charge sur PostgreSQL au pire moment (pendant une maintenance, quand une partie du cluster est déjà indisponible) et dégrade les temps de réponse (constaté par Julien) ; le coût est faible (1 Gio sur `ceph-rbd`, une écriture AOF par seconde) ; et c'est l'occasion d'apprendre le patron StatefulSet sur un composant simple avant PostgreSQL. Contre : un cache doit pouvoir être perdu à tout moment ; le persister masque un défaut de conception (une application qui ne supporte pas un cache froid) et ajoute une dépendance à Ceph pour un composant qui n'en avait pas besoin (un Ceph lent ralentit le cache). La rendraient inutile : la réplication **avec bascule** de Valkey (Sentinel ou opérateur, M27 ; les répliques sans bascule du M14 ne protégeaient pas du drain du nœud de `valkey-0`), ou une application qui « réchauffe » son cache progressivement et une base dimensionnée pour le cache froid.
 
 **12. Réponse B.** Le pod est marqué pour suppression (éviction après la tolérance de 300 s), mais l'objet reste lié au nœud injoignable, et le contrôleur du StatefulSet ne crée pas de nouveau `valkey-0` tant que l'ancien n'a pas disparu : il ne peut pas savoir si le nœud est arrêté ou seulement isolé et encore en train d'écrire. A est le comportement souhaité… après l'arrêt non gracieux (*taint* `out-of-service`) ou une suppression forcée, sur décision humaine. C : un StatefulSet ne compense jamais par une autre identité. D : rien ne supprime un PVC dans ce cas (et la politique `Retain` l'interdirait de toute façon).

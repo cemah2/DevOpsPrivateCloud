@@ -10,7 +10,7 @@ metadata:
   namespace: wb-essais
   labels:
     app.kubernetes.io/name: e08-valkey
-    medisphere.fr/exercice: m16-e08
+    medisphere.internal/exercice: m16-e08
 spec:
   # Sans tête : un enregistrement DNS par pod (e08-valkey-0.e08-valkey.wb-essais.svc.cluster.local).
   clusterIP: None
@@ -28,7 +28,7 @@ metadata:
   namespace: wb-essais
   labels:
     app.kubernetes.io/name: e08-valkey
-    medisphere.fr/exercice: m16-e08
+    medisphere.internal/exercice: m16-e08
 spec:
   serviceName: e08-valkey
   replicas: 2
@@ -44,7 +44,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: e08-valkey
-        medisphere.fr/exercice: m16-e08
+        medisphere.internal/exercice: m16-e08
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -59,7 +59,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: valkey
-          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:9.1.2-trixie
+          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1
           args: ["--appendonly", "yes", "--appendfsync", "everysec", "--dir", "/data"]
           ports:
             - name: valkey
@@ -91,7 +91,7 @@ spec:
     - metadata:
         name: donnees
         labels:
-          medisphere.fr/exercice: m16-e08
+          medisphere.internal/exercice: m16-e08
       spec:
         storageClassName: ceph-rbd
         accessModes: ["ReadWriteOnce"]

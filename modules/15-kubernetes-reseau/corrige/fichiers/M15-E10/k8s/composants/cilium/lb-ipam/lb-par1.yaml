@@ -4,7 +4,11 @@
 #   10.10.41.10        gw-par1 (spec.addresses, E12) — personne d'autre ne la demande ;
 #   10.10.41.11-19     Gateways de plateforme et d'essai, adresses DEMANDÉES explicitement ;
 #   10.10.41.20-49     essais du workbook, adresses DEMANDÉES (annotation lbipam.cilium.io/ips) ;
-#   10.10.41.50-199    attribution automatique.
+#   10.10.41.50-199    Services d'application durables : adresse DEMANDÉE elle aussi, notée dans
+#                      la MR. ⚠️ LB IPAM attribue la PREMIÈRE adresse libre du pool, pas une adresse
+#                      de cette plage : un Service sans demande prendrait une adresse basse (.11…)
+#                      qui manquerait ensuite à une Gateway. Pas de Service LoadBalancer durable
+#                      sans annotation lbipam.cilium.io/ips (ou spec.addresses pour une Gateway).
 # ⚠️ Modifier un pool existant peut réattribuer des adresses (documentation Cilium, issue 40358) :
 # tout changement de ce fichier passe par une MR qui dit quels Services sont touchés.
 apiVersion: cilium.io/v2

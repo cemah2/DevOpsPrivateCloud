@@ -1,0 +1,41 @@
+# Recette : accès des pods de CE dépôt à la base et à Valkey du M16, qui restent gérés hors de ce
+# dépôt (plateforme/k8s). Leurs politiques d'ENTRÉE (postgresql-entree du M16-E18,
+# valkey-depuis-api du M15-E17) n'admettent que les pods étiquetés app.kubernetes.io/name:
+# mediagenda-api (M14) : sans ces deux politiques, les pods du chart (app.kubernetes.io/name:
+# mediagenda) seraient refusés et ne deviendraient jamais prêts (/pret en 503).
+# Les politiques s'ADDITIONNENT : on ouvre l'accès à nos pods sans toucher à celles de la plateforme.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-acces-base
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+              app.kubernetes.io/instance: mediagenda
+      ports:
+        - { port: 5432, protocol: TCP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-acces-valkey
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: valkey
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+              app.kubernetes.io/instance: mediagenda
+      ports:
+        - { port: 6379, protocol: TCP }

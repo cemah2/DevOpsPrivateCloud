@@ -8,7 +8,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: default-deny
+  name: refus-par-defaut
   namespace: medidoc-dev
 spec:
   podSelector: {}

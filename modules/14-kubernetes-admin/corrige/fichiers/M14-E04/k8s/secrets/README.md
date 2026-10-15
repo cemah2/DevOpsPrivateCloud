@@ -23,6 +23,6 @@ admin@adm01:~/src/ansible$ unset KUBECONFIG
 admin@adm01:~/src/ansible$ rm -f "$XDG_RUNTIME_DIR/k8s-admin.conf"
 ```
 
-Chaque usage est noté dans le journal de diagnostic (`docs/socle/journal/`) : qui, quand, pourquoi.
+Chaque usage est noté dans le journal de diagnostic (`docs/kubernetes/journal/`) : qui, quand, pourquoi.
 Les certificats de ces fichiers expirent au bout d'un an (`kubeadm certs check-expiration`) : après
 un renouvellement (M14-E26) ou une montée de version (M14-E25), on rechiffre la nouvelle version.

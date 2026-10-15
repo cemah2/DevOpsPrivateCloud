@@ -2,7 +2,7 @@
 
 > À ouvrir à **T0**, chrono lancé. Conditions d'examen : tes runbooks, ton code, la documentation officielle ; pas de corrigé.
 
-## Le besoin (ticket DEV-1836, Julien Petit)
+## Le besoin (ticket DEV-1818, Julien Petit)
 
 MédiAgenda **1.1.0** apporte deux changements :
 1. **Canal de prise** : chaque rendez-vous enregistre son canal (`web`, `telephone`, `guichet`). C'est la migration de schéma `V3__canal.sql`, *additive* : une colonne avec une valeur par défaut.

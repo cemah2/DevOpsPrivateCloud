@@ -41,4 +41,4 @@ admin@gw01:~$ sudo vtysh -c 'show ip route 10.10.41.10'      # 3 prochains sauts
 
 ## Retirer un nœud de l'annonce (maintenance)
 
-`kubectl drain` du nœud, puis retrait de `bgp: par1` dans `cluster/noeuds.yaml` (MR) et `task noeuds:etiqueter` : la session du nœud se ferme, la bordure retire ses chemins (quelques secondes). Remettre l'étiquette après la maintenance. Procédure détaillée : documentation Cilium *BGP Control Plane Operation → Shutting Down a Node*.
+`kubectl drain` du nœud, puis retrait de `bgp: par1` dans `cluster/noeuds.yaml` (MR) et `task etiquettes` : la session du nœud se ferme, la bordure retire ses chemins (quelques secondes). Remettre l'étiquette après la maintenance. Procédure détaillée : documentation Cilium *BGP Control Plane Operation → Shutting Down a Node*.

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# Dockerfile — MédiAnnuaire (projet mediagenda/annuaire), M12-E34 (CHG-1360).
+# Dockerfile — MédiAnnuaire (projet mediagenda/annuaire), M12-E34 (CHG-1334).
 # Conforme aux normes de conteneurisation (docs/conteneurs/normes.md, M12-E33) : les identifiants
 # CNT-… en commentaire renvoient aux règles.
 #
@@ -47,8 +47,8 @@ LABEL org.opencontainers.image.title="mediannuaire" \
 # CNT-IMG-05 : utilisateur dédié, UID/GID numériques fixes, sans shell ni dossier personnel.
 # Le dossier de cache existe et lui appartient (utile si la racine n'est pas en lecture seule) ;
 # en recette et en production, il est remplacé par un tmpfs (CNT-RUN-05).
-RUN useradd --system --uid 10002 --user-group --no-create-home --shell /usr/sbin/nologin mediannuaire \
- && install -d -o 10002 -g 10002 -m 0750 /var/cache/mediannuaire
+RUN useradd --system --uid 10003 --user-group --no-create-home --shell /usr/sbin/nologin mediannuaire \
+ && install -d -o 10003 -g 10003 -m 0750 /var/cache/mediannuaire
 
 COPY --from=construction /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:${PATH}" \
@@ -57,7 +57,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     MEDIANNUAIRE_VERSION=${VERSION} \
     MEDIANNUAIRE_PORT=8080
 
-USER 10002:10002
+USER 10003:10003
 EXPOSE 8080
 # CNT-IMG-08 : sonde intégrée à l'application (pas de curl dans l'image).
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 CMD ["mediannuaire", "sonde"]

@@ -3,7 +3,7 @@
 - **Statut** : accepté
 - **Date** : <AAAA-MM-JJ>
 - **Décideurs** : Claire Morel, Karim Benali, Julien Petit, équipe Plateforme
-- **Ticket** : PLAT-1835
+- **Ticket** : PLAT-1817
 
 ## Contexte
 

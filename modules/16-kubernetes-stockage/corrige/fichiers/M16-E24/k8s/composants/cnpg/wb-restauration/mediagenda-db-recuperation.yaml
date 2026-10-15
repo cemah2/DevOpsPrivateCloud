@@ -9,11 +9,11 @@ metadata:
   name: mediagenda-db
   namespace: wb-restauration
   labels:
-    medisphere.fr/copie-de: mediagenda-recette
+    medisphere.internal/copie-de: mediagenda-recette
 spec:
   instances: 1
   # Même image (même majeure) que la recette : une récupération ne change pas de version.
-  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-system-trixie
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
   storage:
     storageClass: ceph-rbd
     size: 5Gi                     # au moins la taille de la recette (E18)

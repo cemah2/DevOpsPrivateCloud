@@ -3,6 +3,6 @@ kind: Namespace
 metadata:
   name: medidoc-dev
   labels:
-    medisphere.fr/exposition: oui
+    medisphere.internal/exposition: oui
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/warn: privileged

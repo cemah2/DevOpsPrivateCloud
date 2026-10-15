@@ -13,8 +13,8 @@ spec:
   clusterName: capi-essai
   selector:
     matchLabels:
-      # Étiquette posée par le contrôleur de MachineDeployment (adapte au nom de TON MD).
-      cluster.x-k8s.io/deployment-name: capi-essai-workers
+      # Étiquette posée par le contrôleur de MachineDeployment (nom du MD de M18-E10).
+      cluster.x-k8s.io/deployment-name: capi-essai-travailleurs
   checks:
     # Clone complet sur local-nvme + premier démarrage + cloud-init + kubeadm join + tirages d'images :
     # le défaut de 10 min est trop juste sur le lab et provoquerait une boucle de remplacements.

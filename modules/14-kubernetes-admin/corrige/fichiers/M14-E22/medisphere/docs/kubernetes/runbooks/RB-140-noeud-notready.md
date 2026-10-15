@@ -14,7 +14,7 @@
 - **Un seul nœud à la fois.** Deux nœuds ou plus `NotReady`, ou un nœud de contrôle **et** l'API lente : escalade immédiate (étape 0).
 - **Interdit** tant que l'étape 3 n'a pas conclu : `kubectl delete node`, `kubeadm reset`, destruction de la VM, `drain --force`, `drain --disable-eviction`.
 - Ne jamais redémarrer **deux** nœuds de contrôle à la suite sans avoir vu le premier revenir (`Ready` et membre etcd sain).
-- Chaque commande passée est notée dans le journal de l'incident (`docs/socle/journal/`).
+- Chaque commande passée est notée dans le journal de l'incident (`docs/kubernetes/journal/`).
 
 ## 0. Escalader tout de suite si
 
@@ -90,7 +90,7 @@ admin@adm01:~$ kubectl get events -A --field-selector involvedObject.kind=Node,i
 
 ## 5. Après l'incident
 
-Compte rendu dans `docs/socle/journal/` (chronologie, cause, durée), ticket de prévention (supervision du disque, du swap, des certificats : M21), mise à jour de ce runbook si une branche manquait.
+Compte rendu dans `docs/kubernetes/journal/` (chronologie, cause, durée), ticket de prévention (supervision du disque, du swap, des certificats : M21), mise à jour de ce runbook si une branche manquait.
 
 ## Questions de relecture (Karim)
 

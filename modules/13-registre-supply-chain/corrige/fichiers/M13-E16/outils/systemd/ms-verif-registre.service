@@ -1,4 +1,4 @@
-# /etc/systemd/system/ms-verif-registre.service — M13-E16 (CHG-1434)
+# /etc/systemd/system/ms-verif-registre.service — M13-E16 (CHG-1416)
 # Sonde du registre Harbor. Déclenchée par ms-verif-registre.timer (toutes les 5 minutes).
 # Test manuel : sudo systemctl start ms-verif-registre.service ; journalctl -u ms-verif-registre -n 40
 

@@ -5,7 +5,7 @@
 | **Statut** | Accepté |
 | **Date** | 2026-10 |
 | **Décideurs** | Claire Morel ; consultés : Karim Benali, Sophie Laurent, Julien Petit |
-| **Ticket** | PLAT-1357 |
+| **Ticket** | PLAT-1331 |
 
 ## Contexte
 
@@ -30,7 +30,7 @@ Notes de 1 à 5, pondération de 1 à 3. O1 = Docker partout ; O2 = Podman parto
 
 **O3.** Sur les **serveurs** qui font tourner des applications hors Kubernetes : **Podman sans privilège + Quadlet**, compte applicatif dédié sans `sudo`, SELinux *enforcing* sur la famille RHEL, mise à jour automatique fondée sur la santé en recette. Pour la **CI** (`runner02`) : **Docker**, exécuteur `docker`, jamais privilégié, constructions par BuildKit sans privilège (E21), socket jamais exposé aux jobs. **Exception bornée** : les outils dont l'installation est fondée sur Docker Compose (**Harbor sur `reg01`**, M13) utilisent Docker, avec le durcissement de E26 (groupe `docker` restreint, `no-new-privileges`, `live-restore`, audit). **Postes** des développeurs : libres (Docker Desktop ou Podman), mais les fichiers livrés (Dockerfile, `compose.yaml`) suivent les normes et sont construits par la CI.
 
-Devenir des hôtes : `ctr01` (Docker) reste jusqu'à M13-E02 comme registre de travail puis est détruit ; `ctr02`/`ctr03` (Podman) sont le modèle des serveurs de recette ; `runner02` garde Docker ; `reg01` (M13) reçoit Docker au titre de l'exception.
+Devenir des hôtes : `ctr01` (Docker) reste jusqu'à la fin de M13-E03 comme registre de travail puis est détruit ; `ctr02`/`ctr03` (Podman) sont le modèle des serveurs de recette ; `runner02` garde Docker ; `reg01` (M13) reçoit Docker au titre de l'exception.
 
 ## Conséquences
 

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Statut** | En vigueur |
-| **Version** | 1.0 — 2026-10 (M12-E27, ticket PLAT-1353) |
+| **Version** | 1.0 — 2026-10 (M12-E27, ticket PLAT-1327) |
 | **Propriétaire** | Équipe Plateforme (Karim Benali) ; validation sécurité : Sophie Laurent |
 | **Revue** | trimestrielle, et à chaque changement de registre (Harbor, M13) |
 | **Code** | projet `plateforme/images-base` ; contrôle CI : `plateforme/ci-templates`, `images-autorisees.yml` |
@@ -26,7 +26,7 @@ Chaque image du catalogue ajoute à son amont, et rien d'autre : les correctifs 
 
 ## 3. Cycle de vie
 
-- **Hebdomadaire** : pipeline planifié « hebdomadaire » (lundi 04:00, Europe/Paris) sur `main` de `plateforme/images-base` ; chaque image reçoit une étiquette datée (jamais repoussée) et l'étiquette mobile est déplacée.
+- **Hebdomadaire** : pipeline planifié « hebdomadaire » (lundi 04:00, Europe/Paris) sur `main` de `plateforme/images-base` ; chaque image reçoit une étiquette datée et l'étiquette mobile est déplacée. L'étiquette datée ne doit jamais être repoussée : **aujourd'hui, rien ne l'empêche** (le gabarit ne refuse que `latest`, `registry:3` accepte la réécriture) ; on ne relance donc pas un pipeline de publication le même jour sans nécessité, et l'immuabilité des étiquettes de Harbor (M13) lèvera cette limite.
 - **Urgence** (faille critique) : lancement manuel du pipeline sur `main` ; **délai cible : 24 h** entre la publication du correctif Debian et l'image `bibliotheque/` corrigée, puis 5 jours ouvrés pour reconstruire les applications (leurs MR de montée d'empreinte).
 - **Changement d'amont** (nouvelle empreinte, nouvelle version mineure de Python) : MR qui change l'`ARG AMONT`, avec la raison ; au M13, Renovate propose ces MR.
 - **Retrait** : une image datée de plus de 90 jours n'est plus garantie ; les étiquettes datées sont conservées 180 jours dans le registre (ramasse-miettes de E15, puis règles de rétention de Harbor).

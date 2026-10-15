@@ -7,7 +7,7 @@ kind: CiliumBGPAdvertisement
 metadata:
   name: services-lb
   labels:
-    bgp.medisphere.fr/annonce: services
+    bgp.medisphere.internal/annonce: services
 spec:
   advertisements:
     - advertisementType: Service
@@ -16,4 +16,4 @@ spec:
           - LoadBalancerIP
       selector:
         matchExpressions:
-          - {key: medisphere.fr/jamais-utilisee, operator: NotIn, values: ["jamais"]}
+          - {key: medisphere.internal/jamais-utilisee, operator: NotIn, values: ["jamais"]}

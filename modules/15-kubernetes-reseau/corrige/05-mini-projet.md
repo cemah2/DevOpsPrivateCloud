@@ -4,7 +4,7 @@
 
 ### M15-E46 — Mini-projet : réseau Kubernetes MédiSphère v1
 
-Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, les points de contrôle de chaque étape, la préparation des deux démonstrations et la **grille de revue** avec laquelle Claire, Karim, Sophie, Nadia et Julien évaluent la livraison. Les fichiers de référence sont ceux des exercices du module ; les nouveaux sont le modèle d'[`architecture.md`](fichiers/M15-E46/medisphere/docs/kubernetes/reseau/architecture.md), la page de libre-service [`publier-une-application.md`](fichiers/M15-E46/medisphere/docs/kubernetes/reseau/publier-une-application.md), et les outils de détection de dérive (`derive-reseau.sh` de M15-E23 et [`derive-bordure-noeuds.sh`](fichiers/M15-E43/plateforme-k8s/outils/derive-bordure-noeuds.sh) du palier 4), qui servent ici de check-list « rien hors du dépôt ».
+Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, les points de contrôle de chaque étape, la préparation des deux démonstrations et la **grille de revue** avec laquelle Claire, Karim, Sophie, Nadia et Julien évaluent la livraison. Les fichiers de référence sont ceux des exercices du module ; les nouveaux sont le modèle d'[`architecture.md`](fichiers/M15-E46/medisphere/docs/kubernetes/reseau/architecture.md), la page de libre-service [`publier-une-application.md`](fichiers/M15-E46/medisphere/docs/kubernetes/reseau/publier-une-application.md), et les outils de détection de dérive (`derive-reseau.sh` de M15-E23 et [`derive-bordure-noeuds.sh`](fichiers/M15-E43/k8s/outils/derive-bordure-noeuds.sh) du palier 4), qui servent ici de check-list « rien hors du dépôt ».
 
 **Solution**
 
@@ -80,7 +80,7 @@ Deux Gateway au moins (interne et exposée) sur des nœuds dédiés, BFD vers la
 | Sophie | Documents | ADR-0150, matrice des flux du cluster et de la bordure, registre des secrets (emplacements seulement), aucune clé en clair |
 | Sophie | TLS | TLS 1.2 minimum, HSTS, joker par cert-manager, aucune clé privée hors des Secrets prévus |
 | Nadia | Résilience | démonstrations répétées, temps mesurés et écrits, supervision qui alerte, retour sans intervention |
-| Nadia | Runbooks | RB-150, RB-151, RB-152 à jour des pannes du palier 4, post-mortem INC-4250 publié |
+| Nadia | Runbooks | RB-150 à RB-153 (`docs/kubernetes/reseau/runbooks/`) à jour des pannes du palier 4, post-mortem INC-4250 publié |
 | Julien | Libre-service | nouvelle route publiée en HTTPS valide en moins de 5 minutes, sans ticket ; page claire sur ce qui exige un ticket |
 | Tous | Présentation | 10 minutes : le chemin d'une requête, les compromis, ce qui n'est pas redondant, ce que M16, M17, M20, M21 et M25 consommeront |
 

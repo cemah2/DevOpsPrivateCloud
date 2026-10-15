@@ -36,7 +36,7 @@ Lundi, 9 h 05. Les images de MédiAgenda, MédiDoc et MédiNotif sont construite
 - le réseau des pods par **Cilium 1.20** (kube-proxy conservé au M14, remplacé au M15) ;
 - le projet GitLab **`plateforme/k8s`** : configuration kubeadm du cluster, composants, espaces de noms, RBAC, admission, outils ; appliqué depuis `adm01` par une procédure unique (`task appliquer`), en attendant le GitOps du M20 ;
 - des identités personnelles à durée courte, un compte de service en lecture pour les vérifications, des rôles par équipe, Pod Security et des politiques d'admission ;
-- la sauvegarde d'etcd vers `s3-01` et sa restauration réelle, la montée de version, la gestion des certificats, l'audit, le chiffrement des Secrets ; ADR-0140 et ADR-0141, runbooks RB-140 à RB-143.
+- la sauvegarde d'etcd vers `s3-01` et sa restauration réelle, la montée de version, la gestion des certificats, l'audit, le chiffrement des Secrets ; ADR-0140 et ADR-0141, runbooks RB-140 à RB-149.
 
 Le **palier 1** (ce fichier et `01-decouverte.md`) crée et prépare les nœuds par le code, monte le point d'accès de l'API, amorce le cluster à la main pour comprendre chaque étape, joint les autres nœuds et installe Cilium, puis le fait rejouer par Ansible. Il installe les outils de `adm01`, crée ton identité personnelle et celle des vérifications, et déploie MédiAgenda dans un espace d'essai. Le palier s'ouvre et se ferme sur un questionnaire.
 
@@ -109,7 +109,7 @@ Aucune règle nouvelle sur les passerelles au palier 1 : tu documentes quand mê
 
 ## Le chemin imposé
 
-1. **OpenTofu** : les VMs sont déclarées dans l'état **`envs/k8s`** de `plateforme/infra` (un état à part : détruire le cluster ne touche jamais le socle), avec le module **`vm-noeud`** de `plateforme/tofu-modules` (M08-E02, v2.3 depuis M10-E02 pour les MAC imposées) ; noms DNS par `enregistrement-dns`, adresses dans NetBox.
+1. **OpenTofu** : les VMs sont déclarées dans l'état **`envs/k8s`** de `plateforme/infra` (un état à part : détruire le cluster ne touche jamais le socle), avec le module **`vm-noeud`** de `plateforme/tofu-modules` (M08-E02 ; MAC imposées depuis la v2.3 de M10-E02 ; v2.4.0 au M12, rétrocompatible) ; noms DNS par `enregistrement-dns`, adresses dans NetBox.
 2. **Ansible** : les nœuds entrent dans l'inventaire par leurs étiquettes NetBox ; groupes **`k8s_par1`**, **`k8s_plan_controle`**, **`k8s_travailleurs`** ; les rôles communs (`base`, `ssh_durci`, `ca_lab`, `ssh_ca_hote`, `ssh_ca_utilisateur`) puis **`containerd`**, **`k8s_noeud`**, **`k8s_plan_controle`** (qui réutilise `keepalived` et `haproxy` du M07), **`k8s_travailleur`** ; les faits partagés du cluster dans `group_vars/k8s_par1/kubernetes.yml`.
 3. **`plateforme/k8s`** (créé en E04) : ce qu'on applique **au cluster** — `cluster/kubeadm-config.yaml`, `composants/`, `espaces/`, `rbac/`, `admission/`, `outils/`, `Taskfile.yml`. Relu en MR, appliqué depuis `adm01` à partir de `main` (`task diff`, `task appliquer`). Le contexte kubectl est toujours explicite.
 4. **Secrets** : `admin.conf` et `super-admin.conf` chiffrés en Vault `critique` dans `plateforme/k8s` (`secrets/`) ; identités personnelles à 7 jours ; fichiers 600 de `~/.config/workbook/` ; rien en clair dans un dépôt, rien en argument de commande.
@@ -154,9 +154,9 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Projets | `plateforme/infra` : `envs/k8s/` (état `envs/k8s/terraform.tfstate`) ; `plateforme/ansible` : rôles `containerd`, `k8s_noeud`, `k8s_plan_controle`, `k8s_travailleur`, `outils_k8s`, playbooks `k8s-noeuds.yml`, `k8s-cluster.yml`, `outils-k8s.yml`, source d'inventaire `inventories/lab/netbox-k8s.yml`, faits partagés `group_vars/k8s_par1/` ; **`plateforme/k8s`** (créé en E04) ; `mediagenda/api` : manifestes d'essai `k8s/essais/` (E07-E08) ; `plateforme/medisphere` : `docs/kubernetes/` |
 | Groupes d'inventaire | `k8s_par1` (tous les nœuds, étiquette `env-k8s`), `k8s_plan_controle` (`role-k8s-cp`), `k8s_travailleurs` (`role-k8s-worker`) |
 | Espaces de noms du workbook | `wb-system` (compte de service des vérifications), `wb-essais` (essais des exercices) ; `mediagenda-dev`, `mediagenda-recette` en M14-E10 |
-| Identités | `<MOI>` (certificat client 7 jours, groupe `medisphere:plateforme-admins`, contexte `k8s-par1` de `~/.kube/config`) ; `wb-system/wb-checks` (lecture sans Secrets, `~/.config/workbook/k8s-checks.kubeconfig`) ; `admin.conf`, `super-admin.conf` chiffrés dans `plateforme/k8s` `secrets/` |
-| Secrets du palier 1 | Vault `critique` : `secrets/admin.conf.vault`, `secrets/super-admin.conf.vault` (`plateforme/k8s`) ; sur `adm01` (600) : `~/.config/workbook/k8s-checks.kubeconfig`, `~/.config/workbook/harbor-k8s-pull.env` (robot `robot$k8s-pull` du M13 : `HARBOR_USER=…`, `HARBOR_PASSWORD=…`) ; dans le cluster : Secrets `harbor-pull`, `postgresql`/`mediagenda-db` de `wb-essais` (jamais versionnés) |
-| Documentation | `docs/kubernetes/` dans `plateforme/medisphere` : `cluster.md` (E05), `acces.md` (E06), puis runbooks RB-140 à RB-143 et ADR-0140/0141 ; journal de diagnostic et post-mortems dans `docs/socle/journal/` et `docs/socle/post-mortems/` |
+| Identités | `<MOI>` (certificat client 7 jours, groupe `medisphere:plateforme-admins`, contexte `k8s-par1` de `~/.kube/config`) ; `wb-system/wb-checks` (lecture sans Secrets, `~/.config/workbook/k8s-checks.kubeconfig` ; ClusterRole **agrégée** `wb-checks`, que les modules suivants étendent par des ClusterRoles étiquetées `workbook.medisphere.internal/checks: "true"`, M14-E06) ; `admin.conf`, `super-admin.conf` chiffrés dans `plateforme/k8s` `secrets/` |
+| Secrets du palier 1 | Vault `critique` : `secrets/admin.conf.vault`, `secrets/super-admin.conf.vault` (`plateforme/k8s`) ; sur `adm01` (600) : `~/.config/workbook/k8s-checks.kubeconfig`, `~/.config/workbook/harbor-k8s-pull.env` (robot `robot$k8s-pull` du M13 : deux lignes `HARBOR_USER='robot$k8s-pull'` et `HARBOR_PASSWORD='…'`, **entre apostrophes** pour que le `$` du nom ne soit pas interprété) ; dans le cluster : Secrets `harbor-pull`, `postgresql`/`mediagenda-db` de `wb-essais` (jamais versionnés) |
+| Documentation | `docs/kubernetes/` dans `plateforme/medisphere` : `cluster.md` (E05), `acces.md` (E06), puis runbooks RB-140 à RB-143 et ADR-0140/0141 ; journal de diagnostic (incidents, usages du bris de glace) et post-mortems du cluster dans `docs/kubernetes/journal/` et `docs/kubernetes/post-mortems/` |
 | Brouillons | `~/m14/eXX/` sur `adm01` (non versionnés, sans secret) |
 
 ### Valeurs à adapter
@@ -165,7 +165,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 |---|---|
 | `<MOI>` | Ton compte GitLab personnel (M01-E05), aussi ton identité dans le cluster (CN de ton certificat) |
 | `<NOEUD>` | Nom du nœud Proxmox de `pve01` |
-| `<VERSION-TOFU-MODULES>` | Étiquette de `plateforme/tofu-modules` qui contient `vm-noeud` v2.3 (M10-E02 ; `v2.3.0` si la numérotation a suivi) |
+| `<VERSION-TOFU-MODULES>` | Dernière étiquette publiée de `plateforme/tofu-modules` : elle doit contenir `vm-noeud` v2.3 ou ultérieure (MAC imposées, M10-E02) ; `v2.4.0` si rien n'a été publié depuis M12-E02 |
 | `<VERSION-MEDIAGENDA>` | Dernière étiquette immuable de l'image `medisphere/mediagenda-api` publiée par le pipeline de M13-E09 (ex. `v1.0.0`) |
 
 ### Variables de `lab/lab.env`
@@ -218,14 +218,14 @@ Range les identifiants du robot de tirage dans un fichier 600 (ils viennent de H
 
 ```
 admin@adm01:~$ install -m 600 /dev/null ~/.config/workbook/harbor-k8s-pull.env
-admin@adm01:~$ editor ~/.config/workbook/harbor-k8s-pull.env      # HARBOR_USER=robot$k8s-pull  HARBOR_PASSWORD=…
+admin@adm01:~$ editor ~/.config/workbook/harbor-k8s-pull.env      # HARBOR_USER='robot$k8s-pull'  HARBOR_PASSWORD='…'
 ```
 
 ---
 
 ## Indices, corrigé, vérifications
 
-- Les vérifications se lancent depuis `adm01` : `lab/bin/check 14 <XX>`. Elles sont en lecture seule : configuration Proxmox lue sur `pve01`, état des nœuds en SSH, `kubectl get` avec le compte de service `wb-checks` (à partir de E06), questions DNS, NetBox et GitLab en lecture.
+- Les vérifications se lancent depuis `adm01` : `lab/bin/check 14 <XX>`. Elles sont en lecture seule : configuration Proxmox lue sur `pve01`, état des nœuds en SSH, `kubectl get` avec le compte de service `wb-checks` (à partir de E06), questions DNS, NetBox et GitLab en lecture. Celles du palier 1 restent rejouables après la montée de version (M14-E25) : elles prennent alors la version que déclare le cluster (1.36.x) et les images de kubeadm qui vont avec.
 - Les indices sont progressifs : ouvre-les un par un, seulement quand tu bloques.
 - Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Les fichiers complets sont dans `corrige/fichiers/M14-EXX/` : `ansible/` reproduit l'arborescence de `plateforme/ansible`, `infra/` celle de `plateforme/infra`, **`k8s/` celle de `plateforme/k8s`**, `mediagenda-api/` celle de `mediagenda/api`, `medisphere/` celle de la documentation. Même quand ta vérification est verte, lis « Pièges classiques ».
 - Les scripts de panne (`corrige/pannes/`, palier 4) révèlent les causes : ne les lis pas avant d'avoir résolu.
@@ -241,7 +241,7 @@ E01 ─ E02 ─ E03 ─ E04 ─ E05 ─ E06 ─ E07 ─ E08 ─ E09
 3. **E07 → E08** — MédiAgenda dans `wb-essais`, puis sa configuration, ses sondes et ses ressources.
 4. **E09** — en dernier : il demande d'avoir pratiqué.
 
-Durée indicative du palier 1 : 16 à 20 heures.
+Durée indicative du palier 1 : 20 à 25 heures.
 
 ## Pour aller plus loin
 

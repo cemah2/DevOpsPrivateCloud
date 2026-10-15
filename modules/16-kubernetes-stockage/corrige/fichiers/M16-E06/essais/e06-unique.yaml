@@ -10,7 +10,7 @@ metadata:
   name: e06-unique
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   storageClassName: ceph-rbd
   accessModes: ["ReadWriteOncePod"]
@@ -24,7 +24,7 @@ metadata:
   name: e06-unique-a
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   nodeSelector:
     kubernetes.io/hostname: <NOEUD>
@@ -56,7 +56,7 @@ metadata:
   name: e06-unique-b
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   nodeSelector:
     kubernetes.io/hostname: <NOEUD>

@@ -24,9 +24,9 @@ txtOwnerId: k8s-par1
 domainFilters:
   - apps.par1.medisphere.internal
 # Exclusion par étiquette des objets sources (routes, Services) : redirection-https porte
-# medisphere.fr/dns=non (sinon elle publierait le joker « *.apps », qui résoudrait tout nom).
+# medisphere.internal/dns=non (sinon elle publierait le joker « *.apps », qui résoudrait tout nom).
 # « clé!=valeur » retient aussi les objets SANS cette étiquette.
-labelFilter: "medisphere.fr/dns!=non"
+labelFilter: "medisphere.internal/dns!=non"
 
 interval: 1m
 triggerLoopOnEvent: true

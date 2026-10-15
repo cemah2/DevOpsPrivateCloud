@@ -12,7 +12,7 @@ Le chart `mediagenda` existe, il refuse les valeurs fausses, il tourne en dev ; 
 | Sous-chart Valkey | chart officiel `valkey` 0.12.0 (dépôt `https://valkey.io/valkey-helm/`), recopié dans Harbor `charts/valkey` en E08 ; activé par `valkey.enabled` ; Service `mediagenda-valkey` |
 | Base CNPG du chart | rendue si `postgresql.cnpg.enabled` : `Cluster` `mediagenda-db` (`<release>-db`), Secret `mediagenda-db-app`, annotation `helm.sh/resource-policy: keep` |
 | Espace jetable | `wb-ct` (chart-testing, E07), créé puis supprimé |
-| Harbor | projet `charts` (privé, OCI, immuabilité de toutes les étiquettes, signature Cosign exigée) ; robot `robot$charts+ci` (push/pull sur `charts`) ; variables CI `HARBOR_CHARTS_USER` / `HARBOR_CHARTS_TOKEN` (groupe `mediagenda`, protégées, masquées) |
+| Harbor | projet `charts` (privé, OCI, immuabilité de toutes les étiquettes, signature Cosign exigée) ; robot `robot$charts+ci` (push/pull sur `charts`) ; variables CI `HARBOR_CHARTS_USER` (protégée, non développée : le `$` empêche le masquage, comme `HARBOR_ROBOT_USER` au M13) et `HARBOR_CHARTS_TOKEN` (protégée, masquée), dans le groupe `mediagenda` |
 | Production | espace `mediagenda-prod` (créé en E09 par `overlays/prod`), nom publié `mediagenda.apps.par1.medisphere.internal` |
 | Plateforme | `plateforme/k8s` : `helmfile.yaml`, `releases/*.yaml.gotmpl`, `environnements/par1.yaml`, `composants/<release>/values.yaml` |
 | Revue | `ressources/E11-chart-medidoc/` (chart de MédiDoc de Lucas) ; ta version corrigée dans `~/m17/e11/medidoc/` |
@@ -45,7 +45,7 @@ E11 (quand tu veux, idéalement après E07)
 
 **Contexte technique**
 - Chart Valkey officiel : dépôt `https://valkey.io/valkey-helm/`, chart `valkey`, version **0.12.0** (Valkey 9.1). Lis ses valeurs (`helm show values`) avant de t'en servir : registre de l'image, format de `imagePullSecrets`, étiquettes de ses pods, nom de son Service.
-- Chart de bibliothèque `medisphere-commun` 0.1.0 dans `charts/medisphere-commun/` du même projet, référencé par `repository: file://../medisphere-commun`. Il fournit : étiquettes `medisphere.fr/*`, contextes de sécurité `restricted`, référence d'image.
+- Chart de bibliothèque `medisphere-commun` 0.1.0 dans `charts/medisphere-commun/` du même projet, référencé par `repository: file://../medisphere-commun`. Il fournit : étiquettes `medisphere.internal/*`, contextes de sécurité `restricted`, référence d'image.
 - Base rendue par le chart : `Cluster` `postgresql.cnpg.io/v1`, une instance en dev, `ceph-rbd`, image PostgreSQL 18 par le cache Harbor `ghcr`, `bootstrap.initdb` (`mediagenda` / `mediagenda`), et ses politiques réseau (clients, réplication, opérateur dans `cnpg-system`, accès à l'API Kubernetes par CiliumNetworkPolicy `toEntities: [kube-apiserver]`).
 - En dev, le `Cluster` `mediagenda-db` existe déjà (créé par `kubectl` en E03) : il doit être **repris**, pas recréé (les données de dev ne sont pas précieuses, mais c'est l'exercice). Les objets provisoires à retirer : StatefulSet et Service `valkey`, politiques `dev-base-provisoire`, `dev-base-provisoire-api-kubernetes`, `dev-valkey-provisoire`.
 - Chart 0.3.0.
@@ -105,7 +105,7 @@ Pour la reprise : `helm upgrade --help` décrit une option qui « ignore the che
 **Contexte technique**
 - helm-unittest 1.2.1 (installé en introduction) : tests dans `charts/mediagenda/tests/*_test.yaml`, lancés par `helm unittest charts/mediagenda`. Ils ne doivent pas partir dans l'archive du chart.
 - `helm test` : un pod `mediagenda-test-pret` (hook `test`) qui appelle `/pret` et `/sante` par le Service et vérifie la version. Image : celle de l'application (pas de `busybox` ni de `curl` publics : la VAP du M14 les refuse).
-- chart-testing 3.15 : `ct.yaml` à la racine du projet ; valeurs de test dans `charts/mediagenda/ci/*-values.yaml` (chaque fichier = un cas lint + installation). Constat de la rédaction : l'image `quay.io/helmpack/chart-testing:v3.15.0` embarque **Helm 3.16** ; sur `adm01`, `ct` utilise ton Helm 4.3.
+- chart-testing 3.15 : `ct.yaml` à la racine du projet ; valeurs de test dans `charts/mediagenda/ci/*-values.yaml` (chaque fichier = un cas lint + installation). Constat vérifié : l'image `quay.io/helmpack/chart-testing:v3.15.0` embarque **Helm 3.16** ; sur `adm01`, `ct` utilise ton Helm 4.3.
 - Espace jetable `wb-ct` : Pod Security `restricted` comme les espaces applicatifs, Secret `harbor-pull` recopié depuis `mediagenda-dev` (sans afficher son contenu), supprimé en fin d'exercice. Le cas d'installation de `ct` doit être **autonome** (base et Valkey intégrés, pas de route publiée).
 - Chart 0.4.0.
 
@@ -163,8 +163,8 @@ Dans `.helmignore`, un motif `tests/` exclut **tout** répertoire de ce nom, y c
 
 **Contexte technique**
 - Projet Harbor `charts` : à créer s'il n'existe pas (M13 l'a peut-être déjà fait : vérifie). Privé ; règle d'immuabilité sur **toutes** les étiquettes de tous les dépôts du projet ; politique « Cosign » comme le projet `medisphere` (M13-E14).
-- Publication manuelle par ton compte personnel Harbor (`<MOI>`) ; le robot `robot$charts+ci` (push et pull d'artefacts, projet `charts`, expiration 90 jours) est créé pour le pipeline du palier 3 : son jeton va directement dans les variables protégées et masquées du groupe GitLab `mediagenda` (`HARBOR_CHARTS_USER`, `HARBOR_CHARTS_TOKEN`), nulle part ailleurs.
-- Clé Cosign MédiSphère : privée en Vault `critique` (M13), publique dans `plateforme/medisphere` (`docs/registre/cosign.pub`). Signature **par digest**, sans Rekor public (combinaison d'options validée au M13 ; voir ton corrigé du M13-E07).
+- Publication manuelle par ton compte personnel Harbor (`<MOI>`) ; le robot `robot$charts+ci` (push et pull d'artefacts, projet `charts`, expiration 90 jours) est créé pour le pipeline du palier 3 : son jeton va directement dans les variables protégées du groupe GitLab `mediagenda` (`HARBOR_CHARTS_TOKEN`, masquée ; `HARBOR_CHARTS_USER`, non développée), nulle part ailleurs.
+- Clé Cosign MédiSphère : privée en Vault `critique` (M13), publique dans `plateforme/medisphere` (`docs/registre/cosign.pub`). Signature **par digest**, sans Rekor public, avec la même méthode que tes images : la configuration de signature sans service `docs/registre/signing-config.json` et le script de chargement de la clé `outils/cosign-cle.sh` du M13-E07.
 - Helm 4 : `helm registry login` n'accepte que le **nom de domaine** du registre.
 - Le chart Valkey 0.12.0 est recopié en `charts/valkey` ; ensuite la dépendance du chart pointe vers `oci://registry.par1.medisphere.internal/charts`.
 
@@ -227,8 +227,9 @@ Cosign s'authentifie auprès du registre avec la configuration Docker (`~/.docke
   - `components/` : `dependances` (base CNPG `mediagenda-db` et Valkey `valkey` **hors chart**, avec leurs politiques réseau), `haute-disponibilite` (3 réplicas, répartition par baie et par nœud, PDB à 2, base à 3 instances avec réplication synchrone), `debogage` (journaux `DEBUG`, format `texte`, cache court), `livraison` (remplacements) ;
   - `overlays/dev` (construit seulement : dev reste Helm jusqu'au mini-projet), `overlays/recette`, `overlays/prod` ;
   - `essais/helmcharts/` : la même recette, gonflée par `helmCharts`, pour comparer.
+- Mode de livraison retenu par MédiSphère : le **rendu vérifié et commité** (`chart.env` + `outils/rendre-base.sh`), appliqué par `kubectl apply --server-side -k overlays/<env>`. Les exercices suivants (E14, E18, E21, E25) s'appuient sur ce montage ; l'essai `helmCharts` sert à le confronter au gonfleur et à argumenter le choix dans l'ADR-0170.
 - Une ConfigMap locale `livraison` par overlay (`version`, `nom-publie`), annotée `config.kubernetes.io/local-config: "true"`, est la **seule** source de la version et du nom publié.
-- Production : `mediagenda-prod`, étiquettes Pod Security `restricted` (enforce, audit, warn), `medisphere.fr/exposition: oui` (routes admises par `gw-par1`), `ResourceQuota` et `LimitRange` comme au M14-E10, NetworkPolicy `default-deny` ; Secret de tirage `harbor-pull` créé hors dépôt comme au M14-E19. Nom publié `mediagenda.apps.par1.medisphere.internal`.
+- Production : `mediagenda-prod`, étiquettes d'espace d'équipe du M14-E10 (`medisphere.internal/equipe`, `medisphere.internal/environnement` : la politique d'images du M14-E18 et le RBAC s'en servent) et du M15-E28 (`medisphere.internal/equipe`), Pod Security `restricted` (enforce, audit, warn), `medisphere.internal/exposition: oui` (routes admises par `gw-par1`), `ResourceQuota` et `LimitRange` comme au M14-E10, NetworkPolicy de refus par défaut `refus-par-defaut` (même nom qu'au M15) ; Secret de tirage `harbor-pull` créé hors dépôt comme au M14-E19. Nom publié `mediagenda.apps.par1.medisphere.internal`.
 - La recette passe du rendu 0.1.0 (E04) au rendu 0.5.0 : le conteneur d'initialisation `migrations` apparaît.
 
 **Travail demandé**
@@ -239,11 +240,11 @@ Cosign s'authentifie auprès du registre avec la configuration Docker (`~/.docke
 5. Écris les overlays. Construis-les tous et vérifie au moins : prod à 3 réplicas avec la répartition et sans `DEBUG` ; dev avec `DEBUG` et **sans** PDB (une réplique) ; version identique dans les quatre champs de chaque overlay. Change la version de la recette dans `livraison.yaml` : combien de lignes as-tu modifiées pour une promotion ?
 6. Crée la production : `kubectl diff --server-side -k overlays/prod`, puis `apply`. Crée le Secret `harbor-pull` dès que l'espace existe (le premier `apply` s'arrêtera peut-être sur les pods en attente : c'est l'ordre normal, réapplique). Attends la base (3 instances), puis l'API. Vérifie l'exposition HTTPS.
 7. Mets à jour la recette avec le rendu 0.5.0 (`diff` puis `apply`). Observe le conteneur d'initialisation : que dit son journal sur une base déjà à jour ?
-8. Dans `essais/helmcharts/`, construis la même recette avec `kustomize build --enable-helm` et compare avec `overlays/recette`. Regarde en particulier la référence `envFrom` à la ConfigMap générée. Note le constat, puis choisis entre gonfleur et rendu commité, et justifie en cinq lignes dans le journal (tu reprendras l'argument dans l'ADR-0170).
+8. Dans `essais/helmcharts/`, construis la même recette avec `kustomize build --enable-helm` et compare avec `overlays/recette`. Regarde en particulier la référence `envFrom` à la ConfigMap générée. Note le constat, puis justifie en cinq lignes dans le journal le choix du rendu commité contre le gonfleur (ou, si ton constat te fait conclure l'inverse, ce qu'il faudrait changer dans le dépôt) : tu reprendras l'argument dans l'ADR-0170.
 9. MR « feat: production, components et chart 0.5.0 signé », relue par Karim, validée par Claire.
 
 **Critères de réussite**
-- [ ] `mediagenda-prod` existe avec Pod Security `restricted`, l'étiquette d'exposition, un quota, une LimitRange et une politique `default-deny`.
+- [ ] `mediagenda-prod` existe avec les étiquettes d'équipe, Pod Security `restricted`, l'étiquette d'exposition, un quota, une LimitRange et la politique `refus-par-defaut`.
 - [ ] En prod : 3 pods de l'API prêts sur au moins 2 nœuds, base `mediagenda-db` à 3 instances prêtes, Valkey prêt ; `https://mediagenda.apps.par1.medisphere.internal/sante` répond 200 avec la version de `livraison.yaml`.
 - [ ] En prod, aucun conteneur n'a `MEDIAGENDA_LOG_LEVEL=DEBUG` ; l'étiquette d'image, `MEDIAGENDA_VERSION` et `app.kubernetes.io/version` sont identiques.
 - [ ] La recette tourne le rendu 0.5.0 (conteneur d'initialisation `migrations`), toujours gérée par Kustomize.
@@ -284,23 +285,23 @@ Si le PDB de dev bloque, compte : une réplique et `minAvailable: 1`. Si la base
 **Durée indicative** : 2 h 30.
 
 **Contexte technique**
-- Releases attendues (vérifie noms, espaces et versions avec `helm list -A` : ce qui fait foi, c'est le cluster) : `cilium` (`kube-system`, installée par la CLI `cilium`, qui crée une release Helm), `cert-manager` (`cert-manager`), `external-dns` (`external-dns`), `ceph-csi-rbd` et `ceph-csi-cephfs` (`ceph-csi`), `cnpg` (`cnpg-system`), `velero` (`velero`), `metrics-server` (`kube-system`). Ce qui a été installé par manifeste (CRD Gateway API, external-snapshotter, plugin Barman Cloud) reste hors de Helmfile.
-- Dépôts : `https://helm.cilium.io`, `https://charts.jetstack.io`, `https://kubernetes-sigs.github.io/external-dns/`, `https://ceph.github.io/csi-charts`, `https://cloudnative-pg.github.io/charts`, `https://vmware-tanzu.github.io/helm-charts`, `https://kubernetes-sigs.github.io/metrics-server/`.
-- Organisation : `helmfile.yaml` à la racine (environnement `par1` et inclusion des fichiers de `releases/`), `releases/_communs.yaml` (environnements, dépôts, `helmDefaults`, partagé par `bases:`), un fichier `releases/NN-<groupe>.yaml.gotmpl` par groupe (`reseau`, `certificats`, `stockage`, `observabilite`), `environnements/par1.yaml`, valeurs dans `composants/<release>/values.yaml` (le répertoire existe depuis le M14 : complète-le). Chaque release porte les étiquettes `groupe` et `composant`.
+- Releases attendues (vérifie noms, espaces et versions avec `helm list -A` : ce qui fait foi, c'est le cluster) : `cilium` (`kube-system`, installée par la CLI `cilium`, qui crée une release Helm), `cert-manager` (`cert-manager`), `external-dns` (`external-dns`), `ceph-csi-rbd` et `ceph-csi-cephfs` (`ceph-csi`), `cnpg` et `plugin-barman-cloud` (`cnpg-system`), `velero` (`velero`), `metrics-server` (`kube-system`). Ce qui a été installé par manifeste ou par Kustomize (CRD Gateway API, external-snapshotter) reste hors de Helmfile.
+- Sources des charts : celles des installations d'origine (relis les commandes des modules 14 à 16) : `https://helm.cilium.io`, `oci://quay.io/jetstack/charts` (cert-manager, M15), `https://kubernetes-sigs.github.io/external-dns/`, `https://ceph.github.io/csi-charts`, `https://cloudnative-pg.github.io/charts`, `https://vmware-tanzu.github.io/helm-charts`, `https://kubernetes-sigs.github.io/metrics-server/`.
+- Organisation : `helmfile.yaml` à la racine (environnement `par1` et inclusion des fichiers de `releases/`), `releases/_communs.yaml` (environnements, dépôts, `helmDefaults`, partagé par `bases:`), un fichier `releases/NN-<groupe>.yaml.gotmpl` par groupe (`reseau`, `certificats`, `stockage`, `observabilite`), `environnements/par1.yaml`, valeurs dans `composants/` (le répertoire existe depuis le M14) : garde les fichiers existants à leur place (`composants/ceph-csi/values-rbd.yaml`, `composants/cloudnative-pg/values.yaml`…) et crée `composants/<release>/values.yaml` pour ceux qui manquent. Chaque release porte les étiquettes `groupe` et `composant`.
 - Helmfile 1.8.1 + helm-diff 3.15 ; Helm 4.3. Helmfile refuse un `helmfile.yaml` et un répertoire `helmfile.d/` côte à côte.
 - Aucun secret dans les valeurs : les Secrets (TSIG, S3 de Velero, Ceph) existent déjà, créés par les scripts des modules 15 et 16 ; les valeurs n'en citent que les **noms**.
 
 **Travail demandé**
 1. Inventaire : pour chaque release, version du chart (`helm list -A`), valeurs **fournies** (`helm get values <R> -n <NS>`), méthode d'application de la dernière révision (*server-side* ou non : regarde les `managedFields` d'un objet de la release). Note tout dans `~/m17/e10/inventaire.md`. Pour Cilium, note les valeurs que la CLI a ajoutées d'elle-même.
 2. Écris l'ossature (`helmfile.yaml`, `_communs.yaml`, `environnements/par1.yaml`) et un premier fichier de releases avec **metrics-server seul**. `helmfile -e par1 list`, puis `helmfile -e par1 diff -l composant=metrics-server`. Fais converger le fichier (version, valeurs) jusqu'à un diff vide. Ne lance aucun `apply` tant que le diff n'est pas vide.
-3. Ajoute les autres releases, une par une, avec la même discipline. Rassemble les valeurs fournies dans `composants/<release>/values.yaml` (un script de comparaison peut t'aider : `helm get values` contre le fichier du dépôt). Utilise au moins une valeur d'environnement dans un gabarit (`.Values` de `environnements/par1.yaml`, par exemple le domaine filtré par ExternalDNS).
+3. Ajoute les autres releases, une par une, avec la même discipline. Rassemble les valeurs fournies dans les fichiers de `composants/` (un script de comparaison peut t'aider : `helm get values` contre le fichier du dépôt). Utilise au moins une valeur d'environnement dans un gabarit (`.Values` de `environnements/par1.yaml`, par exemple le domaine filtré par ExternalDNS).
 4. Quand **tout** le diff est vide (`helmfile -e par1 diff --detailed-exitcode` renvoie 0), enregistre la sortie et le code dans `~/m17/e10/diff-final.txt`. Lance alors `helmfile -e par1 apply` : que fait-il, puisque rien ne diffère ? Vérifie avec `helm list -A` que les révisions n'ont pas bougé.
 5. Teste une modification réelle et sans risque : augmente une ressource de metrics-server dans `composants/metrics-server/values.yaml`, `diff`, `apply -l composant=metrics-server`, vérifie la nouvelle révision, puis reviens en arrière **par le fichier** (pas par `helm rollback`).
 6. Réponds dans le journal : que se passe-t-il si quelqu'un lance `helm upgrade cert-manager … --set …` à la main demain ? Qui s'en aperçoit, et quand ? Que changera Argo CD (M20) ?
 7. MR « feat: plateforme sous Helmfile », avec la sortie de `helmfile diff` vide dans la description ; relue par Karim. Ajoute à `Taskfile.yml` de `plateforme/k8s` les tâches `helmfile:diff` et `helmfile:apply`.
 
 **Critères de réussite**
-- [ ] `plateforme/k8s` contient `helmfile.yaml`, `releases/_communs.yaml` et des fichiers `releases/*.yaml.gotmpl` qui déclarent les huit releases, avec leurs étiquettes `groupe` et `composant`.
+- [ ] `plateforme/k8s` contient `helmfile.yaml`, `releases/_communs.yaml` et des fichiers `releases/*.yaml.gotmpl` qui déclarent les neuf releases, avec leurs étiquettes `groupe` et `composant`.
 - [ ] Pour chaque release, la version déclarée dans Helmfile est celle qui tourne (étiquettes de chart des objets) et la release existe toujours dans son espace.
 - [ ] `~/m17/e10/diff-final.txt` montre un `helmfile diff` sans écart (code de sortie 0).
 - [ ] Aucune valeur de `composants/` ne contient de secret (mot de passe, clé, jeton).

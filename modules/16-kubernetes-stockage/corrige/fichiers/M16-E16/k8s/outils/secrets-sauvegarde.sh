@@ -13,7 +13,7 @@
 # Remplacé en M16-E23 par outils/secrets-stockage.sh (qui couvre aussi ceph-csi).
 set -euo pipefail
 
-CONFIG="${WB_CONFIG:-$HOME/.config/workbook}"
+CONFIG="$HOME/.config/workbook"
 CA_RACINE="${MS_CA_RACINE:-/usr/local/share/ca-certificates/medisphere-root-ca.crt}"
 
 die() { echo "secrets-sauvegarde : $*" >&2; exit 1; }

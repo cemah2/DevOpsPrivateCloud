@@ -66,6 +66,29 @@
   changed_when: false
   no_log: true
 
+# La pile d'essai de M12-E14/E30 vit dans le même dossier : ses fichiers .container portent les mêmes
+# noms (remplacés ci-dessous), mais son pod publie le port 8000 de ctr02 et démarre avec la session.
+# On l'arrête et on retire ses fichiers propres AVANT de déposer la pile de recette.
+- name: Arrêter les unités de la pile d'essai de M12-E14 (si elles existent)
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  # mediagenda.pod → mediagenda-pod.service, mediagenda-api.build → mediagenda-api-build.service…
+  ansible.builtin.systemd_service:
+    name: "{{ item | replace('.', '-') }}.service"
+    state: stopped
+    scope: user
+  loop: "{{ pile_recette_unites_retirees }}"
+  # Unité absente (pile de E14 jamais installée, ou déjà retirée) : rien à faire.
+  failed_when: false
+
+- name: Retirer les fichiers Quadlet de la pile d'essai de M12-E14
+  ansible.builtin.file:
+    path: "{{ pile_recette__quadlet }}/{{ item }}"
+    state: absent
+  loop: "{{ pile_recette_unites_retirees }}"
+  register: pile_recette__retraits
+
 - name: Fichiers Quadlet de la pile
   ansible.builtin.template:
     src: "quadlet/{{ item }}.j2"
@@ -96,7 +119,7 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
     scope: user
-  when: pile_recette__fichiers is changed
+  when: pile_recette__fichiers is changed or pile_recette__retraits is changed
 
 - name: Tirer les images (le premier démarrage ne dépend pas du délai de systemd)
   become: true

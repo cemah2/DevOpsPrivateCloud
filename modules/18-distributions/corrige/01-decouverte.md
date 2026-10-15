@@ -357,7 +357,7 @@ Le `registries.yaml` de k3s est traduit au démarrage en `hosts.toml` de son con
    ```
    Les noms exacts des NetworkPolicies peuvent différer selon la version : ce qui compte, c'est qu'il y en ait dans les trois espaces de base et **aucune** dans `essai-cis`. Manifestes : [`rke2/essai-cis/`](fichiers/M18-E04/distributions/rke2/essai-cis/).
 
-7. Fiche [`rke2.md`](fichiers/M18-E04/medisphere/docs/kubernetes/distributions/rke2.md) ; mesures (≈ 13 min, ≈ 1,6 à 1,9 Go utilisés par nœud au repos) ; arrêt des trois VMs.
+7. Fiche [`rke2.md`](fichiers/M18-E04/medisphere/docs/kubernetes/distributions/rke2.md) ; mesures (≈ 13 min, ≈ 1,6 à 1,9 Go utilisés par nœud au repos) ; une fois le contrôle vert, `rke2` retiré de `groupes` et `tofu apply` (les trois VMs sont détruites, le palier 3 les reconstruit par le code).
 
 **Explications**
 

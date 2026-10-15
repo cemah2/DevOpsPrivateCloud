@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# helm-release.sh — décode une révision de release Helm SANS en afficher les valeurs (M17-E23, PLAT-1837).
+# helm-release.sh — décode une révision de release Helm SANS en afficher les valeurs (M17-E23, PLAT-1823).
 #
 # Usage : outils/helm-release.sh [--pilote secret|configmap] <espace> <release> [révision]
 #   Sans révision : la plus haute révision stockée. Sans --pilote : HELM_DRIVER, sinon détection

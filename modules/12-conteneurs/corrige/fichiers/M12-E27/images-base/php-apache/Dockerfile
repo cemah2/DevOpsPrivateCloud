@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# bibliotheque/php-apache — PHP 8.4 + Apache (Debian 13) pour Legacy-RDV (M12-E27, PLAT-1353).
+# bibliotheque/php-apache — PHP 8.4 + Apache (Debian 13) pour Legacy-RDV (M12-E27, PLAT-1327).
 # Choix : Legacy-RDV est la seule application PHP ; une image commune lui donne les correctifs
 # hebdomadaires sans que son Dockerfile (E19) ait à les gérer. Empreinte relevée le 2026-10-08.
 # (Pour la construction Go, MédiDoc part de golang:1.26-trixie et finit sur distroless :

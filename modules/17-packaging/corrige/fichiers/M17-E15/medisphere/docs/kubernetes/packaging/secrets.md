@@ -1,6 +1,6 @@
 # Registre des secrets consommés sur `k8s-par1`
 
-*M17-E15 — ticket SEC-1833. Des emplacements, jamais des valeurs. Mis à jour à chaque nouveau Secret (MR).*
+*M17-E15 — ticket SEC-1815. Des emplacements, jamais des valeurs. Mis à jour à chaque nouveau Secret (MR).*
 
 Règle : **aucun secret dans un chart, un overlay, un fichier de valeurs ni une release Helm**. Un paquet référence un Secret existant (`existingSecret`, `secretKeyRef`). Le pipeline de `mediagenda/chart` refuse tout rendu qui contient un objet `Secret` (job `sans-secret`). `plateforme/k8s/outils/audit-valeurs-helm.sh` vérifie les valeurs de toutes les releases.
 

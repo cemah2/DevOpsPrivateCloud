@@ -6,6 +6,7 @@ bases:
 releases:
   - name: cert-manager
     namespace: cert-manager
+    # Chart OCI de jetstack, comme l'installation du M15-E13 (oci://quay.io/jetstack/charts/cert-manager).
     chart: jetstack/cert-manager
     version: v1.21.1
     labels:

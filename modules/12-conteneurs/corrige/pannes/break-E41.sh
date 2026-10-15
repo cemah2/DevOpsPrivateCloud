@@ -132,7 +132,7 @@ symptome_E41() {
     3) detail="Depuis deux jours, l'API de recette (ctr01) est coupée toutes les une à deux minutes pendant quelques secondes : les tests automatiques de Julien échouent au hasard. Ses journaux ne montrent aucune erreur : elle s'arrête proprement, puis redémarre." ;;
     *) detail="Depuis la « passe d'optimisation des ressources » de Lucas hier soir, l'API de recette (ctr01) ne tient plus : « docker compose ps » la montre qui redémarre sans cesse, et Lucas ne trouve « rien dans les journaux qui explique pourquoi elle est tuée »." ;;
   esac
-  wb_symptome "Ticket INC-3947 — De : Julien Petit" \
+  wb_symptome "Ticket INC-3941 — De : Julien Petit" \
     "$detail" \
     "Trouve qui ou quoi arrête le conteneur, prouve-le, et corrige sans retirer les protections utiles." \
     "" \

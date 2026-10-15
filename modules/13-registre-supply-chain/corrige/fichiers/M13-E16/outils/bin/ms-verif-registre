@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ms-verif-registre — sonde de service du registre Harbor (M13-E16, CHG-1434).
+# ms-verif-registre — sonde de service du registre Harbor (M13-E16, CHG-1416).
 #
 # Vérifie que le registre REND le service : santé globale et par composant, métriques joignables,
 # version attendue, espace libre du volume de données, dernière exécution réussie et récente de chaque

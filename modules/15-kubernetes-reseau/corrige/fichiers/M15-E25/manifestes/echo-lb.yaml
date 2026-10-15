@@ -8,6 +8,10 @@ kind: Service
 metadata:
   name: echo-lb
   namespace: wb-essais
+  annotations:
+    # Adresse d'essai DEMANDÉE (convention de lb-par1.yaml, plage .20-.49) : sans elle, LB IPAM
+    # prendrait la première adresse libre du pool (.11, celle que M15-E33 donne à gw-partenaires).
+    lbipam.cilium.io/ips: 10.10.41.23
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Cluster

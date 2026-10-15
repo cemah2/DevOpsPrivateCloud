@@ -1,0 +1,12 @@
+{
+  "//": "plateforme/images, capi/ubuntu-2404-k136-2.json — image de nœud Cluster API en Kubernetes 1.36.5 (M18-E13, PLAT-1913). Même fichier que ubuntu-2404-k136.json (M18-E09) : seuls le VMID, le nom et les versions changent. Construit par « VARS=capi/ubuntu-2404-k136-2.json ETIQUETTES='capi;k8s-v1.36.5' NOEUD=<NOEUD> capi/construire.sh ».",
+  "vmid": "9061",
+  "artifact_name": "tpl-capi-ubuntu2404-k136-2",
+  "kubernetes_series": "v1.36",
+  "kubernetes_semver": "v1.36.5",
+  "kubernetes_deb_version": "1.36.5-1.1",
+  "disk_format": "raw",
+  "disk_size": "20G",
+  "iso_url": "",
+  "iso_file": "hdd-bulk:iso/ubuntu-24.04.4-live-server-amd64.iso"
+}

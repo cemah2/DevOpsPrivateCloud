@@ -9,7 +9,7 @@ metadata:
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
   labels:
-    medisphere.fr/composant: stockage
+    medisphere.internal/composant: stockage
 provisioner: rbd.csi.ceph.com
 parameters:
   clusterID: "<FSID>"

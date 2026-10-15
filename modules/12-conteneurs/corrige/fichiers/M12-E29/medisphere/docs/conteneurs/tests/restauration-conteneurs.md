@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Date** | <AAAA-MM-JJ> (M12-E29, PLAT-1355) |
+| **Date** | <AAAA-MM-JJ> (M12-E29, PLAT-1329) |
 | **Opérateur** | <MOI> ; validation : Julien Petit |
 | **Sauvegarde** | PBS `par1/conteneurs`, `host/ctr01/<HORODATAGE>` (passage de 01:40) |
 | **RPO** | 24 h (un export par nuit) ; perte réelle constatée : rendez-vous créés après 01:40 |

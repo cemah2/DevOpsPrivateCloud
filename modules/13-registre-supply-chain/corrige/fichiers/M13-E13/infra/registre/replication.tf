@@ -1,4 +1,4 @@
-# registre/replication.tf — réplication en poussée vers reg02 (M13-E13, PLAT-1431).
+# registre/replication.tf — réplication en poussée vers reg02 (M13-E13, PLAT-1413).
 # Ajouté à la configuration « registre » de reg01 (M13-E03). Retiré en M13-E25 (avant la VM reg02).
 #
 # Le robot utilisé est celui de reg02 (état « registre-reg02 », sortie robot_replication) ; son secret

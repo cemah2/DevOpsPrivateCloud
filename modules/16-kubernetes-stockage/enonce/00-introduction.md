@@ -41,7 +41,7 @@ Lundi, 9 h 10. `k8s-par1` tourne depuis deux modules : trois nœuds de contrôle
 - une comparaison pratiquée de **Rook 1.21** (un Ceph dans le cluster) et de **Longhorn 1.13** (stockage répliqué sur les disques des nœuds), puis leur **retrait complet** ;
 - **Velero 1.18** : sauvegarde des espaces de noms et de leurs volumes vers `s3-01` (Kopia, déplacement des données des snapshots CSI), restauration testée ailleurs ;
 - **CloudNativePG 1.30** : la base `mediagenda-db` (PostgreSQL 18, 3 instances), sauvegarde continue par le plugin Barman Cloud vers `s3-01`, restauration à un instant donné ;
-- le chiffrement, la supervision (sans Prometheus, qui arrive au M21), les mesures de performance, les mises à jour sans interruption, l'ADR-0160, la politique de sauvegarde et les runbooks RB-160 à RB-162.
+- le chiffrement, la supervision (sans Prometheus, qui arrive au M21), les mesures de performance, les mises à jour sans interruption, l'ADR-0160, la politique de sauvegarde et les runbooks RB-160 à RB-167.
 
 Le **palier 1** (ce fichier et `01-decouverte.md`) pose le modèle (volumes éphémères, PV, PVC, StorageClass, CSI), raccorde les travailleurs au réseau de stockage, installe ceph-csi pour RBD puis CephFS et passe le Valkey de MédiAgenda en StatefulSet persistant.
 
@@ -58,8 +58,8 @@ Le **palier 1** (ce fichier et `01-decouverte.md`) pose le modèle (volumes éph
       │.51-.53 │        │.61            │.62            │.63                 reg01 :443 (images)
   ┌───┴─────┐  │  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐
   │k8s-cp01-│  │  │ k8s-w01    │  │ k8s-w02    │  │ k8s-w03    │   ceph-csi : nodeplugin sur chaque
-  │03       │  │  │ ens18 .61  │  │ ens18 .62  │  │ ens18 .63  │   travailleur (krbd, montages CephFS),
-  │(taint : │  │  │ ens19 .81  │  │ ens19 .82  │  │ ens19 .83  │   provisioner sur deux travailleurs
+  │03       │  │  │ eth0 .61   │  │ eth0 .62   │  │ eth0 .63   │   travailleur (krbd, montages CephFS),
+  │(taint : │  │  │ eth1 .81   │  │ eth1 .82   │  │ eth1 .83   │   provisioner sur deux travailleurs
   │ pas de  │  │  │ (E05)      │  │ (E05)      │  │ (E05)      │   (création, attachement, snapshots)
   │ volumes)│  │  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘
   └─────────┘  │        │.81            │.82            │.83
@@ -85,8 +85,8 @@ Points structurants :
 
 | Élément | Valeur | Exercice |
 |---|---|---|
-| Carte STOR-PUB des travailleurs | `net1` sur le VNet `vstopub`, `ens19` dans l'invité, 10.10.30.81-83/24 (`k8s-w01-03`), MTU 9000, sans passerelle, MAC `bc:24:11:30:00:61-63` | E05 |
-| Étiquette des nœuds raccordés | `medisphere.fr/stockage-ceph=oui` (posée après vérification du réseau de stockage) | E05 |
+| Carte STOR-PUB des travailleurs | `net1` sur le VNet `vstopub`, `eth1` dans l'invité, 10.10.30.81-83/24 (`k8s-w01-03`), MTU 9000, sans passerelle, MAC `bc:24:11:30:00:61-63` | E05 |
+| Étiquette des nœuds raccordés | `medisphere.internal/stockage-ceph=oui` (posée après vérification du réseau de stockage) | E05 |
 | Contrôleur de snapshots | external-snapshotter 8.6 : CRD `snapshot.storage.k8s.io/v1`, `snapshot-controller` dans `kube-system` | E06 |
 | ceph-csi | espace `ceph-csi` (PSA `privileged`), releases Helm `ceph-csi-rbd` et `ceph-csi-cephfs` (charts 3.18.1) | E06, E07 |
 | Identités Ceph | `client.k8s` (RBD, pool `k8s-rbd`, M08-E46) ; `client.k8s-cephfs` (CephFS, groupe `csi`, E07) ; clés de type `aes` | E06, E07 |
@@ -158,12 +158,12 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Changements de version | voir [`annexes/versions-bloc-C.md`](../../../annexes/versions-bloc-C.md), section « Stockage » : ceph-csi testé jusqu'à Kubernetes 1.36 ; CRD et contrôleur de snapshots à installer **avant** le pilote ; Rook 1.21 exige msgr2 ; Longhorn 1.13 exige Kubernetes ≥ 1.34 ; Restic retiré de Velero (Kopia seul) ; `barmanObjectStore` intégré à CNPG déprécié (plugin Barman Cloud) |
 | `ceph-par1` | fsid `<FSID>` (`ceph fsid`), MON 10.10.30.51-53, port **3300** seulement (msgr2, `ms_service_mode secure` depuis M08-E27) ; pool `k8s-rbd` (règle `ssd-baie`, application `rbd`, quota 20 Gio, M08-E46) ; CephFS `cephfs` (MDS actif et en attente, M08-E10) |
 | Identités cephx | `client.k8s` : `mon 'profile rbd'`, `osd 'profile rbd pool=k8s-rbd'`, `mgr 'profile rbd pool=k8s-rbd'` (M08-E46) ; `client.k8s-cephfs` : droits de la documentation ceph-csi pour CephFS, limités au groupe `csi` (E07). Type de clé **`aes`** : le noyau 6.12 des travailleurs ne sait pas utiliser `aes256k` (M08-E27) |
-| Espaces de noms | `ceph-csi` (pilotes), `kube-system` (contrôleur de snapshots), `wb-essais` (essais, PSA `baseline`), `mediagenda-recette` et `mediagenda-dev` (PSA `restricted`, politiques réseau deny-par-défaut du M15) ; puis `rook-ceph` et `longhorn-system` (temporaires), `velero`, `cnpg-system`, `wb-restauration` |
+| Espaces de noms | `ceph-csi` (pilotes), `kube-system` (contrôleur de snapshots), `wb-essais` (essais, PSA `baseline`), `mediagenda-recette` et `mediagenda-dev` (PSA `restricted`, politiques réseau de refus par défaut du M15 (`refus-par-defaut`)) ; puis `rook-ceph` et `longhorn-system` (temporaires), `velero`, `cnpg-system`, `wb-restauration` |
 | Projets | `plateforme/infra` : `envs/k8s/` (état `k8s`) ; `plateforme/ansible` : rôle `k8s_reseau_stockage`, playbook `playbooks/k8s-reseau-stockage.yml` ; `plateforme/k8s` : `espaces/ceph-csi.yaml`, `composants/snapshot-controller/`, `composants/ceph-csi/` (values, classes, `installer.sh`), `outils/ceph-csi-secrets.sh`, `secrets/ceph-csi.yml` (Vault `critique`) ; `plateforme/ceph` : `allocations.yaml` ; `plateforme/medisphere` : `docs/kubernetes/stockage/` |
 | Groupes d'inventaire Ansible | `k8s_par1`, `k8s_plan_controle`, `k8s_travailleurs` (M14) |
 | Images | tirées par le cache Harbor (`hosts.toml` de containerd, M14-E19) : `quay.io/cephcsi/…`, `registry.k8s.io/sig-storage/…` sans changer les références ; dans `mediagenda-*`, la ValidatingAdmissionPolicy du M14 exige des références `registry.par1.medisphere.internal/…` explicites |
 | Accès | `~/.kube/config` (identité `<MOI>`, groupe `medisphere:plateforme-admins`) pour agir ; les vérifications lisent avec `wb-checks` (`WB_K8S_KUBECONFIG`), qui ne lit **pas** les Secrets |
-| Fichiers locaux sur `adm01` (600, `~/.config/workbook/`) | `s3-velero.env` (compte `velero`, E16), `s3-cnpg.env` (compte `cnpg`, E19) ; aucun pour le palier 1 (les clés cephx ne passent que par Vault) |
+| Fichiers locaux sur `adm01` (600, `~/.config/workbook/`) | `s3-longhorn-essai.env` (E15, supprimé au retrait de Longhorn), `s3-velero.env` (compte `velero`, E16), `s3-cnpg.env` (compte `cnpg`, E19), `k8s-supervision-stockage.kubeconfig` (E27), `s3-medidoc-app.env` (compte RGW `medidoc-app`, existant depuis M08-E12, E46) ; aucun pour le palier 1 (les clés cephx ne passent que par Vault) |
 | Brouillons | `~/m16/eXX/` sur `adm01` (non versionnés, **sans secret**) |
 
 ### Valeurs à adapter
@@ -176,7 +176,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-Aucune variable nouvelle. Les vérifications du module utilisent celles des modules 08 et 14 : `WB_CEPH_ADMIN` (nœud `_admin` où lancer `ceph` et `rbd`, `ceph01` par défaut), `WB_K8S_KUBECONFIG`, `WB_K8S_WORKERS`, `WB_PVE_HOST`, `WB_SRC`, et les jetons en lecture de GitLab et de NetBox. Si `ceph01` est arrêté, mets `WB_CEPH_ADMIN=ceph02` le temps de vérifier.
+Deux variables nouvelles, facultatives : `WB_M16_API_URL` (URL publiée de MédiAgenda en recette, `https://mediagenda-recette.apps.par1.medisphere.internal` par défaut) et `WB_M16_IMAGE_TEMOIN` (image des pods témoins des pannes, `registry.par1.medisphere.internal/dockerhub/library/busybox:1.37` par défaut). Les vérifications du module utilisent sinon celles des modules 08 et 14 : `WB_CEPH_ADMIN` (nœud `_admin` où lancer `ceph` et `rbd`, `ceph01` par défaut), `WB_K8S_KUBECONFIG`, `WB_K8S_ADMIN_KUBECONFIG` (pannes), `WB_K8S_WORKERS`, `WB_K8S_CP`, `WB_PVE_HOST`, `WB_STORAGE_SSD`, `WB_STORAGE_BULK`, `WB_SRC`, `WB_DEPOT`, et les jetons en lecture de GitLab et de NetBox. Si `ceph01` est arrêté, mets `WB_CEPH_ADMIN=ceph02` le temps de vérifier.
 
 ---
 
@@ -216,7 +216,7 @@ Les outils des paliers suivants (CLI `velero`, extension `kubectl cnpg`) s'insta
 
 - Les vérifications se lancent depuis `adm01` : `lab/bin/check 16 <XX>`. Elles sont en lecture seule : objets Kubernetes lus avec `wb-checks`, configuration Proxmox lue sur `pve01`, état des nœuds en SSH, commandes `ceph` et `rbd` **d'observation** sur le nœud `_admin` (`WB_CEPH_ADMIN`), NetBox et GitLab en lecture. Elles ne lisent jamais un Secret.
 - Les indices sont progressifs : ouvre-les un par un, seulement quand tu bloques.
-- Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Les fichiers complets sont dans `corrige/fichiers/M16-EXX/` : `k8s/` reproduit l'arborescence de `plateforme/k8s`, `infra/` celle de `plateforme/infra`, `ansible/` celle de `plateforme/ansible`, `ceph/` celle de `plateforme/ceph`, `medisphere/` celle de la documentation, `essais/` les manifestes jetables de `wb-essais`. Même quand ta vérification est verte, lis « Pièges classiques ».
+- Le corrigé (`corrige/`) donne une solution, le *pourquoi*, les alternatives, les pièges et la vision production. Les fichiers complets sont dans `corrige/fichiers/M16-EXX/` : `k8s/` reproduit l'arborescence de `plateforme/k8s`, `infra/` celle de `plateforme/infra`, `ansible/` celle de `plateforme/ansible`, `ceph/` celle de `plateforme/ceph`, `medisphere/` celle de la documentation, `mediagenda-api/` celle du projet `mediagenda/api` (manifestes `k8s/recette/` de MédiAgenda), `essais/` les manifestes jetables de `wb-essais`. Même quand ta vérification est verte, lis « Pièges classiques ».
 - Les scripts de panne (`corrige/pannes/`, palier 4) révèlent les causes : ne les lis pas avant d'avoir résolu.
 
 ## Ordre conseillé du palier 1

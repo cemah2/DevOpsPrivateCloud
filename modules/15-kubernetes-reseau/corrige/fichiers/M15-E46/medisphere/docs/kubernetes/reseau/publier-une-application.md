@@ -10,7 +10,7 @@
 
 ## Prérequis (une fois par espace, par l'équipe Plateforme)
 
-L'espace porte l'étiquette `medisphere.fr/exposition: oui` (posée par `plateforme/k8s/espaces/`) : sans elle, la Gateway refuse vos routes (condition `NotAllowedByListeners`).
+L'espace porte l'étiquette `medisphere.internal/exposition: oui` (posée par `plateforme/k8s/espaces/`) : sans elle, la Gateway refuse vos routes (condition `NotAllowedByListeners`).
 
 ## Ce que vous écrivez
 
@@ -65,4 +65,4 @@ Un nom hors de `*.apps.par1.medisphere.internal` ; un certificat propre à l'app
 
 ## Si ça ne marche pas
 
-`kubectl describe httproute <route>` (conditions et raisons), puis RB-150. Ne supprimez jamais la politique `default-deny` de votre espace.
+`kubectl describe httproute <route>` (conditions et raisons), puis RB-150. Ne supprimez jamais la politique `refus-par-defaut` de votre espace.

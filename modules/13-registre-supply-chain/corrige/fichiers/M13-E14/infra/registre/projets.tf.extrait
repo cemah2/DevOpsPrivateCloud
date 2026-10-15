@@ -1,4 +1,4 @@
-# registre/projets.tf — EXTRAIT : politiques de confiance (M13-E14, SEC-1432).
+# registre/projets.tf — EXTRAIT : politiques de confiance (M13-E14, SEC-1414).
 # Seul le bloc harbor_project.projet change (ajout de local.politiques) ; local.projets (descriptions,
 # quotas) et le reste du fichier (membres…) sont ceux de M13-E10.
 #

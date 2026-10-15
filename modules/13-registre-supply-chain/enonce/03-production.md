@@ -4,7 +4,7 @@ Harbor tourne sur `reg01` : des projets, des robots, des caches des registres pu
 
 > ⚠️ **Rappel** : `reg01` est désormais un service du socle. `runner02` y pousse et y tire à chaque pipeline, et le module 14 en dépendra pour démarrer chaque pod. Avant toute intervention qui redémarre Harbor (`systemctl restart harbor`, `install.sh`, `prepare`, mise à jour), vérifie qu'aucun pipeline important ne tourne (`plateforme/ci-templates`, `mediagenda/api`…), que `https://registry.par1.medisphere.internal/api/v2.0/health` répond `healthy`, et note la commande de retour arrière. **Les essais destructifs se font sur `reg02`**, jamais sur `reg01`.
 
-**Chemin imposé** (introduction du module) : la VM est décrite par OpenTofu (`plateforme/infra`, module `vm-debian`, comme `reg01` en E02) ; Harbor est installé et configuré par le rôle Ansible `harbor` (`plateforme/ansible`) ; les objets de Harbor (projets, robots, politiques, endpoints, réplications) sont décrits dans le **code de configuration de Harbor** mis en place en M13-E03 (le corrigé utilise OpenTofu et le fournisseur `goharbor/harbor` dans `plateforme/infra/registre/` ; garde l'outil que tu as retenu en E03). Tout flux qui traverse les passerelles est déclaré dans `group_vars/role_routeur/pare_feu.yml` et dans `docs/socle/matrice-flux.md`. Les secrets (mots de passe de Harbor, secrets des robots, clés Cosign, clés de chiffrement des sauvegardes) sont en Ansible Vault `critique` ou en variables de CI protégées et masquées, jamais en clair. La documentation va dans `docs/registre/` de `plateforme/medisphere` (`adr/`, `runbooks/`, `tests/`).
+**Chemin imposé** (introduction du module) : la VM est décrite par OpenTofu (`plateforme/infra`, module `vm-debian`, comme `reg01` en E02) ; Harbor est installé et configuré par le rôle Ansible `harbor` (`plateforme/ansible`) ; les objets de Harbor (projets, robots, politiques, endpoints, réplications) sont décrits dans le **code de configuration de Harbor** de M13-E03 : l'état OpenTofu `registre` de `plateforme/infra` (fournisseur `goharbor/harbor`), et, pour `reg02`, une configuration racine à part (E13). Tout flux qui traverse les passerelles est déclaré dans `group_vars/role_routeur/pare_feu.yml` et dans `docs/socle/matrice-flux.md`. Les secrets (mots de passe de Harbor, secrets des robots, clés Cosign, clés de chiffrement des sauvegardes) sont en Ansible Vault `critique` ou en variables de CI protégées et masquées, jamais en clair. La documentation va dans `docs/registre/` de `plateforme/medisphere` (`adr/`, `runbooks/`, `tests/`).
 
 **Hôtes de ce palier**
 
@@ -23,7 +23,7 @@ Harbor tourne sur `reg01` : des projets, des robots, des caches des registres pu
 
 ### M13-E13 — Répliquer vers un second registre  `LAB` `★★★`
 
-> **Ticket PLAT-1431** — *De : Claire Morel*
+> **Ticket PLAT-1413** — *De : Claire Morel*
 > Le comité HDS a lu notre analyse de risques : « registre unique, perte totale en cas de sinistre ». Avant la vraie copie à PAR2, je veux qu'on sache faire et qu'on mesure : un **second Harbor** qui reçoit chaque nuit les versions publiées de MédiSphère, **avec leurs signatures**, et qu'on puisse vérifier là-bas sans rien demander à `reg01`. Karim veut que ce second Harbor soit installé par exactement le même rôle que le premier : s'il faut des retouches à la main, c'est que le rôle est incomplet.
 
 **Objectifs pédagogiques**
@@ -82,7 +82,7 @@ Si les images arrivent sur `reg02` sans leurs signatures, regarde dans le détai
 
 ### M13-E14 — Politiques : signature obligatoire, vulnérabilités bloquantes  `LAB` `★★★`
 
-> **Ticket SEC-1432** — *De : Sophie Laurent*
+> **Ticket SEC-1414** — *De : Sophie Laurent*
 > On signe, on analyse, on produit des SBOM : bravo. Mais aujourd'hui, n'importe quelle image poussée dans `medisphere` peut être tirée, signée ou pas, avec ou sans vulnérabilité critique. Une signature que personne ne vérifie ne protège de rien. Je veux deux verrous : **le registre refuse** de servir une image de `medisphere` non signée ou porteuse d'une vulnérabilité critique, et **le consommateur vérifie lui-même** la signature avec notre clé avant de déployer. Montre-moi les deux refus.
 
 **Objectifs pédagogiques**
@@ -96,10 +96,10 @@ Si les images arrivent sur `reg02` sans leurs signatures, regarde dans le détai
 **Contexte technique**
 - Politiques à poser sur `medisphere` **par le code de configuration de Harbor** : signature Cosign exigée, analyse automatique à la poussée, prévention des images de sévérité **Critical** ou plus. La liste blanche de CVE du système reste vide ; une exception éventuelle est posée au niveau du projet, avec une date d'expiration et un ticket.
 - Clé publique : `docs/registre/cosign.pub` de `plateforme/medisphere` (M13-E07).
-- Gabarit à créer : `verification.yml` dans `plateforme/ci-templates`, qui fournit un job caché `.verifier-signature` (variables d'entrée : l'image **par digest**, la clé publique) ; utilisé dans le pipeline de `mediagenda/api` par un job `verifier-signature` qui suit la publication. Ce job préfigure la vérification avant déploiement du module 14.
+- Gabarit à créer : `templates/verification.yml` dans `plateforme/ci-templates` (à côté de `templates/supply-chain.yml`), qui fournit un job caché `.verifier-signature` (variables d'entrée : l'image **par digest**, la clé publique) ; utilisé dans le pipeline de `mediagenda/api` par un job `verifier-signature` qui suit la publication. Ce job préfigure la vérification avant déploiement du module 14.
 - Image de test vulnérable : n'importe quelle vieille image publique tirée par le cache `dockerhub` (une image Debian ou Python de plusieurs années en a toujours). Les essais se font dans un dépôt `medisphere/essai-politiques`, **supprimé** à la fin.
 
-> ⚠️ **Attention** : dès que la signature est exigée, **toute** image non signée de `medisphere` devient intirable, y compris celles que `runner02` ou un poste utilise aujourd'hui. Avant d'activer la politique, liste les artefacts de `medisphere` sans signature (API, `with_accessory=true`) et signe ou supprime-les. Retour arrière : désactiver la politique par le code (une MR), jamais à la main dans l'interface.
+> ⚠️ **Attention** : dès que la signature est exigée, **toute** image non signée de `medisphere` devient intirable, y compris celles que `runner02` ou un poste utilise aujourd'hui. Avant d'activer la politique, liste les artefacts de `medisphere` sans signature (API, `with_accessory=true`) et signe ou supprime-les. Vérifie aussi que ta chaîne de livraison (E09) ne relit pas l'image entre sa poussée et sa signature (contrôle d'empreinte, d'index) : Harbor la refuserait à ce moment-là. Retour arrière : désactiver la politique par le code (une MR), jamais à la main dans l'interface.
 
 **Travail demandé**
 1. **Inventaire.** Liste les artefacts de `medisphere` : étiquette, digest, signature présente ou non, résultat d'analyse. Traite ceux qui ne passeraient pas les politiques.
@@ -107,14 +107,14 @@ Si les images arrivent sur `reg02` sans leurs signatures, regarde dans le détai
 3. **Refus n° 1 — non signée.** Pousse une image dans `medisphere/essai-politiques:non-signee`, laisse l'analyse se terminer, puis tente de la tirer depuis `adm01` (`skopeo inspect` ou `docker pull`). Note le code HTTP et le message. Signe-la par digest et retire-la.
 4. **Refus n° 2 — vulnérable.** Copie une vieille image publique dans `medisphere/essai-politiques:vulnerable` (par exemple avec `skopeo copy` depuis le cache), **signe-la**, attends l'analyse et tente de la tirer. Note le message. Explique pourquoi une image *non encore analysée* est, elle aussi, refusée.
 5. **Ce que la politique ne voit pas.** Signe une image avec une **autre** clé (une paire jetable générée pour l'essai) et tente de la tirer. Que conclus-tu de ce que vérifie Harbor ? Qui doit vérifier l'**auteur** de la signature ?
-6. **Le consommateur.** Écris `verification.yml` dans `plateforme/ci-templates` : le job vérifie la signature **et** l'attestation SBOM de l'image par digest, avec la clé MédiSphère, sans journal de transparence, et échoue sinon. Branche-le dans `mediagenda/api` après la publication. Prouve qu'il échoue sur l'image signée par la clé jetable (pipeline de branche) et réussit sur une image signée par la CI.
+6. **Le consommateur.** Écris `templates/verification.yml` dans `plateforme/ci-templates` : le job vérifie la signature **et** l'attestation SBOM de l'image par digest, avec la clé MédiSphère, sans journal de transparence, et échoue sinon. Branche-le dans `mediagenda/api` après la publication. Prouve qu'il échoue sur l'image signée par la clé jetable (pipeline de branche) et réussit sur une image signée par la CI.
 7. **Nettoyage et trace.** Supprime le dépôt `medisphere/essai-politiques` et la clé jetable. Ajoute à `docs/registre/politiques.md` : les politiques par projet, ce qu'elles vérifient, leurs limites, la procédure d'exception (liste blanche datée), et les deux messages de refus.
 
 **Critères de réussite**
 - [ ] Le projet `medisphere` exige une signature Cosign, analyse à la poussée et refuse les images de sévérité Critical ou plus.
 - [ ] La dernière version `v*` de `medisphere/mediagenda-api` est signée et son analyse ne signale aucune vulnérabilité critique.
 - [ ] Le dépôt `medisphere/essai-politiques` n'existe plus.
-- [ ] `plateforme/ci-templates` contient `verification.yml` (vérification Cosign par clé) ; le dernier pipeline de `main` de `mediagenda/api` a réussi un job `verifier-signature`.
+- [ ] `plateforme/ci-templates` contient `templates/verification.yml` (vérification Cosign par clé) ; le dernier pipeline de `main` de `mediagenda/api` a réussi un job `verifier-signature`.
 - [ ] `docs/registre/politiques.md` est publié avec les deux messages de refus et la procédure d'exception.
 
 **Vérification** : `lab/bin/check 13 14`
@@ -140,7 +140,7 @@ Pour l'étape 5, compare ce que renvoie l'API pour l'artefact (ses accessoires e
 
 ### M13-E15 — Sauvegarder et restaurer Harbor  `LAB` `★★★`
 
-> **Ticket PLAT-1433** — *De : Nadia Roussel*
+> **Ticket PLAT-1415** — *De : Nadia Roussel*
 > La réplication, c'est bien, mais elle recopie aussi les erreurs : une image supprimée par erreur sur `reg01` reste sur `reg02` seulement parce qu'on a désactivé la propagation des suppressions, et ni les robots, ni les politiques, ni les membres ne sont copiés. Je veux une **vraie sauvegarde** de `reg01` vers PBS, chaque nuit, et la preuve qu'on sait **reconstruire Harbor à partir de rien** avec elle. Chronomètre : je veux un RTO écrit, pas une impression.
 
 **Objectifs pédagogiques**
@@ -200,7 +200,7 @@ Si les robots marchent après restauration mais que l'endpoint de réplication r
 
 ### M13-E16 — Superviser et mettre à jour Harbor  `LAB` `★★★`
 
-> **Ticket CHG-1434** — *De : Karim Benali* — *Copie : Nadia Roussel*
+> **Ticket CHG-1416** — *De : Karim Benali* — *Copie : Nadia Roussel*
 > Deux choses. Nadia veut une sonde comme pour Ceph : Harbor qui tombe, un disque `/data` qui se remplit, une réplication ou une sauvegarde qui échoue, un certificat qui expire — elle veut le savoir avant les développeurs. Et Harbor publie des correctifs de sécurité tous les mois : on doit savoir appliquer une version corrective **sans perdre la base** et **revenir en arrière** si ça tourne mal. Répète sur `reg02`, applique sur `reg01` dans une fenêtre annoncée.
 
 **Objectifs pédagogiques**
@@ -208,7 +208,7 @@ Si les robots marchent après restauration mais que l'endpoint de réplication r
 - Écrire une sonde de service dans la lignée des `ms-verif-*` et la brancher sur l'alerte.
 - Appliquer une mise à jour corrective de Harbor selon la procédure officielle (sauvegarde, migration de `harbor.yml` par `prepare migrate`, installation, migration du schéma au démarrage) et la défaire.
 
-**Prérequis** : M13-E15 (sauvegarde), M08-E24 (modèle `ms-verif-ceph`), M06-E29 (`ms-alerte@`), M02-E20 (`lib/ms-commun.sh`).
+**Prérequis** : M13-E15 (sauvegarde), M08-E24 (modèle `ms-verif-ceph`), M06-E29 (sondes des services du socle), M02-E26 (`ms-alerte@`), M02-E10 (`lib/ms-commun.sh`).
 **Durée indicative** : 3 h 30.
 
 **Contexte technique**
@@ -258,7 +258,7 @@ Pour le retour arrière, demande-toi ce qui a changé de façon irréversible pe
 
 ### M13-E17 — ADR : registre et politique de confiance des images  `RED` `★★`
 
-> **Ticket SEC-1435** — *De : Sophie Laurent* — *Copie : Claire Morel*
+> **Ticket SEC-1417** — *De : Sophie Laurent* — *Copie : Claire Morel*
 > L'auditeur HDS va demander « pourquoi Harbor ? » et « comment savez-vous qu'une image en production vient de chez vous ? ». Je veux un ADR qui réponde aux deux, que je puisse lui donner tel quel, et qui dise honnêtement ce que nous **n'avons pas** (journal de transparence, révocation…).
 
 **Objectifs pédagogiques**
@@ -301,7 +301,7 @@ Pour la signature sans clé, demande-toi ce que contient une entrée Rekor publi
 
 ### M13-E18 — Alerte CVE critique : répondre en temps limité  `CHRONO` `★★★`
 
-> **Ticket SEC-1436** — *De : Sophie Laurent* — *Priorité : critique*
+> **Ticket SEC-1418** — *De : Sophie Laurent* — *Priorité : critique*
 > Le CERT Santé vient de publier un avis (en pièce jointe). La faille est exploitable à distance et il n'y a **pas encore de correctif**. Dans une heure, je dois dire à la direction : quelles images de MédiSphère sont touchées, lesquelles sont exposées, ce qui est déjà corrigé, et quand le reste le sera. Pas de « je pense » : des preuves.
 
 **Conditions** : **60 minutes**, chronomètre lancé à la lecture de l'avis. Pas de corrigé ouvert. La documentation officielle des outils, tes notes et tes runbooks sont permis. Tu travailles seul ; Julien Petit (MédiAgenda) et l'équipe de MédiNotif fusionnent sans délai une MR que tu leur proposes, si son pipeline est vert.

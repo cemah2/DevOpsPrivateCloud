@@ -1,13 +1,15 @@
-# espaces/ — EXTRAIT à intégrer dans les manifestes des espaces d'équipe (M15-E28, SEC-1628).
-# Le label medisphere.fr/equipe est la SEULE source de l'appartenance à une équipe pour les politiques
-# de cluster : il est posé par le code de la plateforme, jamais par l'équipe (RBAC : les équipes ne
-# modifient pas les Namespace).
-# mediagenda-dev.yaml, mediagenda-recette.yaml :
+# espaces/ — RAPPEL (M15-E28, SEC-1628) : rien à ajouter, les labels existent depuis le M14.
+# Le label medisphere.internal/equipe, posé sur les Namespace d'équipe au M14 (E10 pour MédiAgenda,
+# E33 pour MédiDoc, gabarit gabarits/equipe/), est la SEULE source de l'appartenance à une équipe :
+# la ValidatingAdmissionPolicy medisphere-images (M14-E18) le sélectionne déjà, les politiques de
+# cluster de M15-E28 aussi. Il est posé par le code de la plateforme, jamais par l'équipe (RBAC :
+# les équipes ne modifient pas les Namespace). Ne crée pas un second label d'équipe « pour Cilium ».
+# espaces/mediagenda-dev/00-namespace.yaml, espaces/mediagenda-recette/00-namespace.yaml :
 metadata:
   labels:
-    medisphere.fr/equipe: mediagenda
+    medisphere.internal/equipe: mediagenda
 ---
-# medidoc-dev.yaml :
+# espaces/medidoc-dev/00-namespace.yaml :
 metadata:
   labels:
-    medisphere.fr/equipe: medidoc
+    medisphere.internal/equipe: medidoc

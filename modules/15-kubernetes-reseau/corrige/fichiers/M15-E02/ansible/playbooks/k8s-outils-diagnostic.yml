@@ -8,7 +8,7 @@
 # tourner Kubernetes, seulement à l'observer. On peut les retirer d'un nœud sans toucher au rôle
 # qui le construit, et le profil des nœuds de production pourra s'en passer (ADR-0150).
 #
-#   tcpdump        : capture sur les interfaces des nœuds (ens18, cilium_vxlan, lxc*) — E02, E05, E42
+#   tcpdump        : capture sur les interfaces des nœuds (eth0, cilium_vxlan, lxc*) — E02, E05, E42
 #   conntrack      : table de suivi des connexions du noyau (comparaison avec la table CT de Cilium) — E03, E44
 #   iptables       : lecture et nettoyage des règles laissées par kube-proxy (backend nft de Debian 13) — E03, E08
 #   bpftool        : programmes et tables eBPF chargés par Cilium — E44

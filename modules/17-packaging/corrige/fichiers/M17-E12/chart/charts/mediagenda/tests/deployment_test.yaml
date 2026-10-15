@@ -132,10 +132,10 @@ tests:
     template: deployment.yaml
     asserts:
       - equal:
-          path: metadata.labels["medisphere.fr/environnement"]
+          path: metadata.labels["medisphere.internal/environnement"]
           value: recette
       - equal:
-          path: metadata.labels["medisphere.fr/donnees-sante"]
+          path: metadata.labels["medisphere.internal/donnees-sante"]
           value: "oui"
 
   - it: ajoute les variables supplémentaires à la ConfigMap, rendues par tpl

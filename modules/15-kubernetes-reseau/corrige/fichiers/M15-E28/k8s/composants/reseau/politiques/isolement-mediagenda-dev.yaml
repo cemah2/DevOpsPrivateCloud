@@ -9,7 +9,7 @@
 # portent pas ce label : ils ne sont pas concernés. L'identité « ingress » (Gateway) n'est pas un pod
 # d'espace d'équipe : non concernée non plus.
 # enableDefaultDeny à false : la cloison ne fait passer personne en refus par défaut ; les
-# autorisations restent celles des politiques de l'espace (default-deny + règles de M15-E17).
+# autorisations restent celles des politiques de l'espace (refus-par-defaut + règles de M15-E17).
 apiVersion: cilium.io/v2
 kind: CiliumClusterwideNetworkPolicy
 metadata:
@@ -25,7 +25,7 @@ spec:
   ingressDeny:
     - fromEndpoints:
         - matchExpressions:
-            - key: io.cilium.k8s.namespace.labels.medisphere.fr/equipe
+            - key: io.cilium.k8s.namespace.labels.medisphere.internal/equipe
               operator: Exists
             - key: io.kubernetes.pod.namespace
               operator: NotIn
@@ -33,7 +33,7 @@ spec:
   egressDeny:
     - toEndpoints:
         - matchExpressions:
-            - key: io.cilium.k8s.namespace.labels.medisphere.fr/equipe
+            - key: io.cilium.k8s.namespace.labels.medisphere.internal/equipe
               operator: Exists
             - key: io.kubernetes.pod.namespace
               operator: NotIn

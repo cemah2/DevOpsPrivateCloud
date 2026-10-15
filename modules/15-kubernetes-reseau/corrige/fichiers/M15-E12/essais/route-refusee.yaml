@@ -15,4 +15,4 @@ spec:
   rules:
     - backendRefs:
         - name: mediagenda-api
-          port: 8000
+          port: 80

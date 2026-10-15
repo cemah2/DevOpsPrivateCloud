@@ -145,18 +145,18 @@ Pour les questions de politiques réseau, retiens une seule règle : une politiq
 
 *C. Même nœud*
 
-6. Lance une capture sur `k8s-w01`, sur l'interface `lxc…` de `sonde-w01b`, puis un `ping -c 3` de `sonde-w01a` vers `sonde-w01b`. Le paquet passe-t-il par `ens18` ? Note la ligne *Host Routing* de `cilium-dbg status --verbose` : tu la reliras en E08.
+6. Lance une capture sur `k8s-w01`, sur l'interface `lxc…` de `sonde-w01b`, puis un `ping -c 3` de `sonde-w01a` vers `sonde-w01b`. Le paquet passe-t-il par `eth0` ? Note la ligne *Host Routing* de `cilium-dbg status --verbose` : tu la reliras en E08.
 
 *D. Deux nœuds*
 
-7. Capture sur `ens18` de `k8s-w01` le trafic UDP 8472 (`tcpdump -ni ens18 -c 6 udp port 8472`), puis `ping -c 3` de `sonde-w01a` vers `sonde-w02`. Pour un paquet capturé, écris les adresses et ports de l'en-tête **externe**, le VNI, et les adresses de l'en-tête **interne**.
+7. Capture sur `eth0` de `k8s-w01` le trafic UDP 8472 (`tcpdump -ni eth0 -c 6 udp port 8472`), puis `ping -c 3` de `sonde-w01a` vers `sonde-w02`. Pour un paquet capturé, écris les adresses et ports de l'en-tête **externe**, le VNI, et les adresses de l'en-tête **interne**.
 8. Le VNI n'est pas un identifiant de réseau ici : `cilium-dbg identity get <VNI>`. Que transporte-t-il, et à quoi cela sert-il au nœud d'arrivée ?
 9. `cilium-dbg bpf ipcache list` (ou `bpf ipcache get <IP-DE-SONDE-W02>`) : comment `k8s-w01` sait-il à quel nœud envoyer un paquet pour `sonde-w02` ?
 10. MTU : dans `sonde-w01a`, envoie des `ping` non fragmentables vers `sonde-w02` (`ping -M do -s <TAILLE>`). Trouve la plus grande taille qui passe et explique-la à l'octet près.
 
 *E. Sortie du cluster*
 
-11. Depuis `sonde-w01a`, interroge `dns01` (`dig @10.10.20.10 git01.par1.medisphere.internal`) pendant une capture sur `ens18` de `k8s-w01` (port 53). Quelle adresse source part sur le VLAN 40 ? Qui fait la traduction, et qu'en déduis-tu pour la matrice des flux de la bordure ?
+11. Depuis `sonde-w01a`, interroge `dns01` (`dig @10.10.20.10 git01.par1.medisphere.internal`) pendant une capture sur `eth0` de `k8s-w01` (port 53). Quelle adresse source part sur le VLAN 40 ? Qui fait la traduction, et qu'en déduis-tu pour la matrice des flux de la bordure ?
 
 *F. Écrire*
 
@@ -182,7 +182,7 @@ Pour trouver l'interface d'un pod sur le nœud : le nombre après `eth0@if` est 
 
 <details><summary>Indice 3</summary>
 
-Pour le MTU : `ping -s` donne la taille des **données** ICMP ; ajoute 8 octets d'en-tête ICMP et 20 d'en-tête IP pour obtenir la taille du paquet, et compare-la au MTU de la route du pod. Pour le masquage, compare la capture sur `lxc…` (adresse du pod) et celle sur `ens18` du **même** paquet.
+Pour le MTU : `ping -s` donne la taille des **données** ICMP ; ajoute 8 octets d'en-tête ICMP et 20 d'en-tête IP pour obtenir la taille du paquet, et compare-la au MTU de la route du pod. Pour le masquage, compare la capture sur `lxc…` (adresse du pod) et celle sur `eth0` du **même** paquet.
 </details>
 
 **Pour aller plus loin** (facultatif) : refais la question 7 avec `cilium-dbg monitor --type trace` lancé dans l'agent de `k8s-w01` pendant le `ping` : chaque ligne est un point d'observation du plan de données eBPF. Compare avec ta capture.
@@ -519,9 +519,10 @@ Pour savoir quel côté refuse : un refus en sortie apparaît sur le nœud du cl
 | Gateway | `gw-essai`, espace `wb-essais`, écouteur `http` HTTP 80, noms `*.wb-essais.internal`, routes du même espace seulement |
 | Route | HTTPRoute `echo` : nom `echo.wb-essais.internal`, chemins **exacts** `/hostname` et `/clientip` vers le Service `echo` ; rien d'autre |
 | Gateway d'observation | `gw-attente`, classe `cilium`, supprimée en fin d'exercice |
+| Vérifications | le compte `wb-checks` (M14-E06) ne lit pas encore les objets `gateway.networking.k8s.io` ni, plus tard (E13), ceux de cert-manager : sa ClusterRole est **agrégée** (étiquette `workbook.medisphere.internal/checks: "true"`) ; ClusterRole de lecture `wb-checks-reseau` dans `rbac/wb-checks-reseau.yaml` de `plateforme/k8s`, sans Secrets |
 | Tests | depuis `adm01`, `curl -H "Host: echo.wb-essais.internal" http://10.10.40.61:<NODEPORT>/hostname` (aucun nom DNS : la zone `apps` arrive en E14) |
 
-> ⚠️ **Attention** : n'installe **jamais** les CRD du canal *experimental* sur `k8s-par1` sans décision écrite. Elles remplacent les CRD standard du même nom ; et Cilium 1.20 a changé la version de `TLSRoute` (v1alpha2 → v1) : des objets `TLSRoute` stockés dans une version que la CRD ne sert plus deviennent illisibles. Les ressources expérimentales sont étudiées en M15-E16.
+> ⚠️ **Attention** : n'installe **jamais** les CRD du canal *experimental* sur `k8s-par1` sans décision écrite. Elles remplacent les CRD standard du même nom ; et Cilium 1.20 a changé la version de `TLSRoute` (v1alpha2 → v1) : des objets `TLSRoute` stockés dans une version que la CRD ne sert plus deviennent illisibles. Depuis v1.6.1, `TLSRoute` est servie en `v1` par le canal **standard** : M15-E16 s'en sert sans rien installer de plus.
 
 **Travail demandé**
 
@@ -533,7 +534,7 @@ Pour savoir quel côté refuse : un refus en sortie apparaît sur le nœud du cl
 
 *B. Le contrôleur de Cilium*
 
-4. Active `gatewayAPI.enabled` dans le fichier de *values*, aperçu, MR, `cilium upgrade`, redémarrage de l'opérateur et des agents (même raison qu'en E05), `cilium status --wait`. Vérifie : `kubectl get gatewayclass`. Qui a créé la GatewayClass `cilium`, et pourquoi la documentation insiste-t-elle sur l'ordre « CRD d'abord » ?
+4. Active `gatewayAPI.enabled` dans le fichier de *values*, aperçu, MR, `cilium upgrade`, redémarrage de l'opérateur et des agents (même raison qu'en E05), `cilium status --wait`. Vérifie : `kubectl get gatewayclass`. Qui a créé la GatewayClass `cilium`, et pourquoi la documentation insiste-t-elle sur l'ordre « CRD d'abord » ? Écris aussi `rbac/wb-checks-reseau.yaml` (lecture seule des groupes de la Gateway API et de cert-manager, rien d'autre) et prouve qu'il suffit : `kubectl auth can-i list gateways.gateway.networking.k8s.io -A --as=system:serviceaccount:wb-system:wb-checks`, puis la même question pour `secrets` (réponse attendue : `no`).
 
 *C. Une Gateway sans adresse*
 
@@ -555,6 +556,7 @@ Pour savoir quel côté refuse : un refus en sortie apparaît sur le nœud du cl
 **Critères de réussite**
 - [ ] Les sept CRD de la Gateway API sont installées en v1.6.1, canal standard, et aucune CRD `gateway.networking.k8s.io` du canal experimental ; les fichiers sont sur `main` de `plateforme/k8s`.
 - [ ] Le contrôleur Gateway API de Cilium est actif (configuration des agents et *values* sur `main`) ; la GatewayClass `cilium` et la GatewayClass paramétrée `cilium-nodeport` sont acceptées.
+- [ ] Le compte `wb-checks` lit les objets de la Gateway API et de cert-manager, toujours pas les Secrets ; `rbac/wb-checks-reseau.yaml` est sur `main`.
 - [ ] `gw-essai` est acceptée et programmée, exposée par un Service NodePort, avec au moins une route attachée ; l'HTTPRoute `echo` est acceptée avec ses références résolues ; `gw-attente` n'existe plus.
 - [ ] Une CiliumNetworkPolicy autorise l'entité d'Envoy vers `echo` sur 8080, et rien de plus large.
 - [ ] Depuis `adm01` : `/hostname` répond 200 avec le bon nom d'hôte, 404 pour `/shell` et pour un autre nom d'hôte.

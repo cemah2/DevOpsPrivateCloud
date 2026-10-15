@@ -1,0 +1,20 @@
+# mediagenda/api — k8s/recette/40-api.yaml (EXTRAIT, M16-E18) : Deployment de l'API MédiAgenda.
+# Seule la connexion à la base change : MEDIAGENDA_DB_URL vient de la clé « uri » du Secret généré
+# par CloudNativePG, et MEDIAGENDA_DB_MDP (Secret mediagenda-db du M14, URL composée vers le
+# Service « postgresql ») disparaît. Le reste du Deployment du M14-E21 (compte de service
+# mediagenda-api, image v*, ConfigMap mediagenda-api-config dont MEDIAGENDA_VALKEY_URL, sondes
+# /sante et /pret, ressources, PDB) est inchangé.
+spec:
+  template:
+    spec:
+      containers:
+        - name: api
+          env:
+            - name: MEDIAGENDA_VERSION
+              value: "1.0.0"
+            # Supprimées : MEDIAGENDA_DB_MDP et l'ancienne MEDIAGENDA_DB_URL composée.
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mediagenda-db-app     # généré par CNPG
+                  key: uri                    # postgresql://mediagenda:…@mediagenda-db-rw.mediagenda-recette:5432/mediagenda

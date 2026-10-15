@@ -19,7 +19,7 @@ check_cmd "l'espace wb-restauration existe" _m16p_jq "$_m16_e24_ns" '.metadata.n
 check_cmd "wb-restauration : PSA restricted en enforce" \
   _m16p_jq "$_m16_e24_ns" '.metadata.labels["pod-security.kubernetes.io/enforce"] == "restricted"'
 check_cmd "wb-restauration : pas de label d'exposition (copie non publiable)" \
-  _m16p_jq "$_m16_e24_ns" '(.metadata.labels["medisphere.fr/exposition"] // "non") != "oui"'
+  _m16p_jq "$_m16_e24_ns" '(.metadata.labels["medisphere.internal/exposition"] // "non") != "oui"'
 check_cmd "plateforme/k8s : wb-restauration décrit sur main" _m16p_recherche_main plateforme/k8s "wb-restauration"
 
 title "Restauration Velero"

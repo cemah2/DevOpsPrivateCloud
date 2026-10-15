@@ -36,8 +36,8 @@ admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- iperf3 -c $B -t 30 -P 4
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- ping -c 100 -i 0.2 -q $B
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- ip link show eth0          # mtu 1450 (1500 − 50 de VXLAN)
 admin@adm01:~$ kubectl top node k8s-w01 k8s-w02                             # pendant le débit
-admin@k8s-w02:~$ ip -br address                                               # interface du VLAN 40 (ens18 dans le lab de référence)
-admin@k8s-w02:~$ sudo tcpdump -ni ens18 -A -c 40 'udp port 8472'
+admin@k8s-w02:~$ ip -br address                                               # interface du VLAN 40 (eth0 : nommée par cloud-init, M14)
+admin@k8s-w02:~$ sudo tcpdump -ni eth0 -A -c 40 'udp port 8472'
 admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- curl -s "http://$B:8080/echo?msg=donnees-de-test"
 ```
 
@@ -69,11 +69,11 @@ Encryption: Wireguard [cilium_wg0 (Pubkey: …, Port: 51871, Peers: 5)]
 admin@adm01:~$ kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg encrypt status
 admin@adm01:~$ kubectl get ciliumnodes -o custom-columns='NOEUD:.metadata.name,CLE:.metadata.annotations.network\.cilium\.io/wg-pub-key'
 admin@k8s-w02:~$ ip -d link show cilium_wg0
-admin@k8s-w02:~$ sudo tcpdump -ni ens18 -c 20 'udp port 51871 or udp port 8472'
+admin@k8s-w02:~$ sudo tcpdump -ni eth0 -c 20 'udp port 51871 or udp port 8472'
 admin@k8s-w02:~$ sudo tcpdump -ni cilium_wg0 -A -c 20 'tcp port 8080'
 ```
 
-Cinq pairs (six nœuds moins soi). Sur `ens18`, plus d'UDP 8472 entre pods : seulement de l'UDP 51871, illisible. Sur `cilium_wg0`, la requête est en clair : c'est l'interface **avant** chiffrement (le noyau chiffre en sortie de cette interface).
+Cinq pairs (six nœuds moins soi). Sur `eth0`, plus d'UDP 8472 entre pods : seulement de l'UDP 51871, illisible. Sur `cilium_wg0`, la requête est en clair : c'est l'interface **avant** chiffrement (le noyau chiffre en sortie de cette interface).
 
 *6. Mesure après* : mêmes commandes ; MTU des pods 1370 (1500 − 50 VXLAN − 80 réservés pour WireGuard). Tableau dans la fiche.
 
@@ -217,7 +217,7 @@ admin@adm01:~$ sudo systemctl enable --now ms-verif-k8s-reseau.timer
 admin@adm01:~$ ms-verif-k8s-reseau ; echo $?                  # 0
 admin@adm01:~$ kubectl label node k8s-w03 bgp-                # geste de test, noté au journal
 admin@adm01:~$ journalctl -t ms-alerte -f                     # alerte « bgp » (le nœud n'a plus d'instance) et « bordure » (2 sauts au lieu de 3 : toujours ≥ 2, donc OK)
-admin@adm01:~/src/k8s$ task noeuds:etiqueter                  # remet le label depuis cluster/noeuds.yaml
+admin@adm01:~/src/k8s$ task etiquettes                  # remet le label depuis cluster/noeuds.yaml
 ```
 
 Remarque sur le message : un nœud **désélectionné** n'a plus d'instance BGP du tout (son `CiliumBGPNodeConfig` disparaît) : la sonde le voit par le **compte** des sessions établies (4 au lieu de 6), pas par un état « non établi ». Délai : au plus 5 minutes (timer) + la durée d'un passage.
@@ -319,7 +319,7 @@ Fichiers : [`base-dns.yaml`](fichiers/M15-E28/k8s/composants/reseau/politiques/b
 
 *1. Lecture.* Un pod passe en refus par défaut dans une direction dès qu'une politique qui le **sélectionne** a une section de cette direction ; `enableDefaultDeny: {ingress: false, egress: false}` fait qu'une politique est ignorée pour ce calcul (elle ajoute des règles sans fermer le reste). Un **refus** l'emporte toujours sur une autorisation, d'où qu'elle vienne (CNP, CCNP, NetworkPolicy). Labels de l'espace : `io.cilium.k8s.namespace.labels.<clé>` dans `fromEndpoints`/`toEndpoints` ; nom de l'espace : `io.kubernetes.pod.namespace`. `toFQDNs` : le proxy DNS de l'agent voit les réponses aux requêtes qu'une règle DNS L7 lui fait intercepter, et autorise pour **ce pod** les adresses des noms qui correspondent, pour la durée du TTL (avec un minimum réglable).
 
-*2-3.* Labels par MR (`espaces/`), puis `base-dns` : aucun pod ne change d'état (vérifier `hubble observe -n wb-essais --verdict DROPPED` vide avant/après) ; `hubble observe -n mediagenda-recette --protocol dns` montre les noms demandés.
+*2-3.* Labels : rien à poser, `medisphere.internal/equipe` est sur les trois espaces depuis le M14 ([rappel](fichiers/M15-E28/k8s/espaces/labels-equipes.extrait.yaml)) ; `kubectl get ns -L medisphere.internal/equipe` le confirme et montre qu'aucun espace de plateforme ne le porte. Puis `base-dns` : aucun pod ne change d'état (vérifier `hubble observe -n wb-essais --verdict DROPPED` vide avant/après) ; `hubble observe -n mediagenda-recette --protocol dns` montre les noms demandés.
 
 *4.* Les cloisons sont des **refus** (`ingressDeny`/`egressDeny`), une politique par espace (le modèle « pas mon espace » n'existe pas en générique), sélection des pairs par `Exists` sur le label d'équipe **et** `NotIn` sur le nom de l'espace. `enableDefaultDeny` à `false` : elles ne ferment rien d'autre.
 
@@ -328,7 +328,7 @@ Fichiers : [`base-dns.yaml`](fichiers/M15-E28/k8s/composants/reseau/politiques/b
 ```
 admin@adm01:~$ kubectl apply -f corrige/fichiers/M15-E28/manifestes/sondes-segmentation.yaml   # sans la politique de test (commente-la)
 admin@adm01:~$ kubectl -n mediagenda-dev exec sonde -- nc -zv -w 3 postgresql.mediagenda-recette.svc 5432   # échec
-admin@adm01:~$ kubectl -n medidoc-dev exec sonde -- curl -s -m 3 http://mediagenda-api.mediagenda-recette.svc:8000/sante  # échec
+admin@adm01:~$ kubectl -n medidoc-dev exec sonde -- curl -s -m 3 http://mediagenda-api.mediagenda-recette.svc/sante  # échec
 admin@adm01:~$ hubble observe --from-namespace mediagenda-dev --verdict DROPPED -o compact | tail -3   # « Policy denied by denylist »
 ```
 
@@ -393,7 +393,7 @@ admin@adm01:~$ kubectl -n wb-perf exec mesure-a -- sh -c 'for i in $(seq 1000); 
 
 ```
 admin@adm01:~/src/k8s$ git switch m15-e29-natif && task cilium:appliquer && kubectl -n kube-system rollout restart ds/cilium && kubectl -n kube-system rollout status ds/cilium
-admin@k8s-w01:~$ ip route | grep 10.240                 # 10.240.<N>.0/24 via 10.10.40.6x dev ens18 pour chaque autre nœud
+admin@k8s-w01:~$ ip route | grep 10.240                 # 10.240.<N>.0/24 via 10.10.40.6x dev eth0 pour chaque autre nœud
 admin@adm01:~$ kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg status | grep -E 'Routing|Masquerading'
 ```
 
@@ -481,7 +481,7 @@ Exemple : [`matrice-flux-cluster.md`](fichiers/M15-E32/medisphere/docs/kubernete
 |---|---|
 | 1 | Les quatre familles sont couvertes, y compris ce qu'Hubble ne voit pas (réseau de l'hôte : etcd, kubelet, VRRP des nœuds de contrôle) |
 | 2 | Chaque ligne a source, destination, protocole et port, chiffrement, besoin |
-| 3 | « Autorisé par » nomme une politique qui **autorise** (ou une ligne de `pare_feu.yml`, ou « même VLAN ») ; jamais `default-deny` |
+| 3 | « Autorisé par » nomme une politique qui **autorise** (ou une ligne de `pare_feu.yml`, ou « même VLAN ») ; jamais `refus-par-defaut` |
 | 4 | Les flux sortants passent par la bordure et y retrouvent leur ligne (`ca01`, `reg01`, `s3-01`, `dns01`, Internet) |
 | 5 | Les flux refusés exprès sont listés avec la politique qui les refuse et une preuve |
 | 6 | La vérification cite des requêtes Hubble réelles, une période, et au moins un écart traité |
@@ -568,7 +568,7 @@ Autorité des partenaires dans Vault PKI (M25) avec liste de révocation, CSR fo
 Fichiers : [`service.yaml`](fichiers/M15-E34/k8s/applications/medidoc-dev/service.yaml), [`httproute.yaml`](fichiers/M15-E34/k8s/applications/medidoc-dev/httproute.yaml), [`politiques.yaml`](fichiers/M15-E34/k8s/applications/medidoc-dev/politiques.yaml), [labels de l'espace](fichiers/M15-E34/k8s/espaces/medidoc-dev.extrait.yaml), [extrait du Taskfile](fichiers/M15-E34/k8s/Taskfile-medidoc-extrait.yml) (Secret S3 depuis le fichier local, ConfigMap de la racine, ordre d'application), [feuille de temps et retour d'expérience](fichiers/M15-E34/medisphere/docs/kubernetes/reseau/chrono/E34-medidoc.md). Le Deployment est celui du dossier, copié dans `applications/medidoc-dev/deployment.yaml` avec la version de l'image.
 
 Déroulé efficace :
-1. (T0 → T1) Labels de l'espace (`medisphere.fr/exposition: oui`, et `medisphere.fr/equipe: medidoc` déjà là depuis E28) ; politiques **d'abord** (refus par défaut + autorisations) ; Secret et ConfigMap par la tâche ; Deployment ; Service.
+1. (T0 → T1) Labels de l'espace (`medisphere.internal/exposition: oui`, et `medisphere.internal/equipe: medidoc` déjà là depuis le M14-E33) ; politiques **d'abord** (refus par défaut + autorisations) ; Secret et ConfigMap par la tâche ; Deployment ; Service.
 2. (T1 → T2) Route sur `gw-par1`, écouteur `https` : le joker `apps-joker` couvre le nom, aucun certificat à demander ; `kubectl -n medidoc-dev get httproute medidoc -o yaml` : `Accepted` et `ResolvedRefs` à `True` ; ExternalDNS publie en moins de 2 minutes (`dig @10.10.20.10` et `@10.10.20.16`).
 3. (T2 → T3) `curl https://medidoc-dev.apps.par1.medisphere.internal/readyz` → 200 (le pod joint `s3-01` : sinon `/readyz` répond 503 et le pod n'est jamais prêt) ; dépôt et relecture d'un document de test ; `hubble observe -n medidoc-dev --verdict DROPPED` vide pour les flux légitimes.
 4. (T3 → T4) Matrice des flux (lignes MédiDoc) et feuille de temps ; `lab/bin/check 15 34`.

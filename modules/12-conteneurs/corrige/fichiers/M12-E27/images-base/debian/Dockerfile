@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# bibliotheque/debian — Debian 13 minimal de MédiSphère (M12-E27, PLAT-1353).
+# bibliotheque/debian — Debian 13 minimal de MédiSphère (M12-E27, PLAT-1327).
 # Amont épinglé par empreinte (changement = MR) ; reconstruit chaque semaine par le pipeline planifié
 # pour embarquer les correctifs de sécurité publiés depuis.
 #

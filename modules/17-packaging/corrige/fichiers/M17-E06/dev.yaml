@@ -1,0 +1,21 @@
+# M17-E06 — valeurs de la release de dev (mediagenda-dev) à partir du chart 0.3.0, passées par -f.
+# Base et Valkey INTÉGRÉS : le chart rend le Cluster CNPG mediagenda-db (repris à la première montée,
+# voir le corrigé) et le sous-chart Valkey (Service mediagenda-valkey).
+medisphere:
+  environnement: dev
+replicaCount: 1
+config:
+  logLevel: DEBUG
+# Vide : Secret <cluster>-app créé par CloudNativePG (mediagenda-db-app). Ne pas le renseigner en
+# même temps que postgresql.cnpg.enabled (refusé par le chart).
+database:
+  existingSecret: ""
+postgresql:
+  cnpg:
+    enabled: true
+    instances: 1
+valkey:
+  enabled: true
+# Nom publié calculé : mediagenda-dev.apps.par1.medisphere.internal
+httpRoute:
+  hostname: ""

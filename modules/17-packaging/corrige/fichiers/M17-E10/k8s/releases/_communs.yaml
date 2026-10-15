@@ -10,8 +10,10 @@ environments:
 repositories:
   - name: cilium
     url: https://helm.cilium.io
+  # cert-manager a été installé au M15 depuis son registre OCI : même source ici.
   - name: jetstack
-    url: https://charts.jetstack.io
+    url: quay.io/jetstack/charts
+    oci: true
   - name: external-dns
     url: https://kubernetes-sigs.github.io/external-dns/
   - name: ceph-csi

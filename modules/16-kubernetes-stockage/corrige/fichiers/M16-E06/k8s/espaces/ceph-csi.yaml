@@ -8,7 +8,7 @@ kind: Namespace
 metadata:
   name: ceph-csi
   labels:
-    medisphere.fr/composant: stockage
+    medisphere.internal/composant: stockage
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/enforce-version: latest
     # Les avertissements « baseline » rappellent, à chaque application, ce qui est accordé.

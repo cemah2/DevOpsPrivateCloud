@@ -17,7 +17,7 @@
 - On travaille avec son identité personnelle. Un certificat ne se révoque pas : on limite sa durée (7 jours) et on
   retire les droits du **groupe** si besoin (supprimer la liaison).
 - `admin.conf` ne sort d'un nœud de contrôle que chiffré. Son usage depuis `adm01` passe par le dossier de session en
-  mémoire (`$XDG_RUNTIME_DIR`), puis effacement ; chaque usage est noté au journal (`docs/socle/journal/`).
+  mémoire (`$XDG_RUNTIME_DIR`), puis effacement ; chaque usage est noté au journal (`docs/kubernetes/journal/`).
 - `super-admin.conf` n'est utilisé que si le RBAC lui-même est cassé. `system:masters` contourne toute autorisation
   et ne se retire qu'en changeant la CA du cluster.
 - Tout ce qui est appliqué au cluster vient de `plateforme/k8s` (`task appliquer`, gestionnaire de champs
@@ -31,3 +31,36 @@ Compensations : lecture seule sans Secrets, aucun pod ne monte ce jeton (`automo
 fichier 600 sur `adm01` seulement. **Révocation** : `kubectl -n wb-system delete secret wb-checks-jeton` (refus
 immédiat), `task appliquer` (nouveau jeton), `outils/kubeconfig-checks.sh`.
 Contrôle : `outils/kubeconfig-checks.sh --verifier`.
+
+## Étendre les droits de wb-checks (modules suivants)
+
+`wb-checks` est une ClusterRole **agrégée** : elle n'a pas de règles écrites, le contrôleur d'agrégation y
+recopie celles de toutes les ClusterRoles qui portent l'étiquette `workbook.medisphere.internal/checks: "true"`.
+Aujourd'hui, une seule : `wb-checks-base` (`rbac/wb-checks.yaml`). Un module qui installe des ressources que
+`wb-checks-base` ne couvre pas (nouveaux groupes d'API, CRD : Gateway API, cert-manager, ceph-csi, Velero,
+CloudNativePG, Prometheus…) et dont ses vérifications ont besoin **ajoute sa propre ClusterRole**, sans modifier
+ni `wb-checks` ni `wb-checks-base` :
+
+```yaml
+# rbac/wb-checks-<thème>.yaml (plateforme/k8s), appliqué par « task appliquer »
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-<thème>             # ex. wb-checks-reseau, wb-checks-stockage
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  - apiGroups: [<groupe de l'API>]     # ex. gateway.networking.k8s.io
+    resources: ["*"]                  # ou la liste exacte
+    verbs: [get, list, watch]
+```
+
+Règles : lecture seule (`get`, `list`, `watch`) ; jamais `secrets` (ni `*` sur le groupe cœur `""`), jamais
+`impersonate`, `escalate`, `bind`, ni sous-ressource qui exécute (`pods/exec`, `pods/attach`, `pods/portforward`,
+`nodes/proxy`) ; `services/proxy` en `get` seulement. Vérification après `task appliquer` :
+`kubectl get clusterrole wb-checks -o yaml` (les règles apparaissent), puis
+`kubectl auth can-i list <ressource>.<groupe> --as=system:serviceaccount:wb-system:wb-checks` (`yes`) et
+`kubectl auth can-i get secrets -A --as=system:serviceaccount:wb-system:wb-checks` (toujours `no`).
+Exception écrite : les vérifications qui lisent l'état des releases Helm (stocké dans des Secrets) utilisent le
+kubeconfig d'administration en lecture (`WB_K8S_ADMIN_KUBECONFIG`), jamais `wb-checks`.

@@ -11,7 +11,7 @@ Environment=MARIADB_DATABASE=legacy_rdv MARIADB_USER=legacy_rdv TZ=Europe/Paris
 Environment=MARIADB_PASSWORD_FILE=/run/secrets/legacy-rdv-db-mdp MARIADB_ROOT_PASSWORD_FILE=/run/secrets/legacy-rdv-db-root
 Secret=legacy-rdv-db-mdp,type=mount,mode=0444
 Secret=legacy-rdv-db-root,type=mount,mode=0444
-HealthCmd=healthcheck.sh --connect --innodb_initialized
+HealthCmd=["healthcheck.sh", "--connect", "--innodb_initialized"]
 HealthInterval=10s
 HealthStartPeriod=30s
 Notify=healthy

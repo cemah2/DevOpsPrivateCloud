@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # audit-valeurs-helm.sh — cherche, dans les valeurs FOURNIES de toutes les releases Helm du cluster,
-# ce qui ressemble à un secret (M17-E15, ticket SEC-1833). N'affiche JAMAIS une valeur : seulement
+# ce qui ressemble à un secret (M17-E15, ticket SEC-1815). N'affiche JAMAIS une valeur : seulement
 # « espace/release : chemin (raison) ».
 #
 # Usage : outils/audit-valeurs-helm.sh [--kubeconfig FICHIER]

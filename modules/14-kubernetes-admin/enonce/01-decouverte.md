@@ -472,7 +472,7 @@ Les nœuds de contrôle portent le *taint* `node-role.kubernetes.io/control-plan
 | Identité personnelle | certificat client CN=`<MOI>`, O=`medisphere:plateforme-admins`, **7 jours**, émis sur `k8s-cp01` par `kubeadm kubeconfig user` (avec le fichier `/etc/kubernetes/kubeadm/kubeadm-config.yaml`) ; rangé dans `~/.kube/config` (600), cluster, utilisateur et contexte nommés `k8s-par1`, `<MOI>`, `k8s-par1` ; script `outils/kubeconfig-personnel.sh <MOI>` de `plateforme/k8s` |
 | Droits | ClusterRoleBinding `medisphere:plateforme-admins` : groupe `medisphere:plateforme-admins` → ClusterRole `cluster-admin` (`rbac/plateforme-admins.yaml`) |
 | Espaces | `wb-system`, `wb-essais` (`espaces/`) |
-| Vérifications | compte de service `wb-system/wb-checks` (sans montage automatique de jeton) ; jeton durable porté par un Secret `wb-checks-jeton` de type `kubernetes.io/service-account-token` (**exception** documentée) ; ClusterRole **agrégée** `wb-checks` (sélecteur d'étiquette `workbook.medisphere.internal/checks: "true"`) et ClusterRole `wb-checks-base` étiquetée : lecture (`get`, `list`, `watch`) de tout **sauf les Secrets**, `get` sur `services/proxy`, `create` sur `subjectaccessreviews`, URL de santé ; liaison `wb-checks` ; script `outils/kubeconfig-checks.sh` qui écrit `~/.config/workbook/k8s-checks.kubeconfig` (600) |
+| Vérifications | compte de service `wb-system/wb-checks` (sans montage automatique de jeton) ; jeton durable porté par un Secret `wb-checks-jeton` de type `kubernetes.io/service-account-token` (**exception** documentée) ; ClusterRole **agrégée** `wb-checks` (sélecteur d'étiquette `workbook.medisphere.internal/checks: "true"`) et ClusterRole `wb-checks-base` étiquetée : lecture (`get`, `list`, `watch`) de tout **sauf les Secrets**, `get` sur `services/proxy`, `create` sur `subjectaccessreviews`, URL de santé ; liaison `wb-checks`. Convention pour la suite du workbook : chaque module qui a besoin de lire de nouvelles ressources ajoute une ClusterRole `wb-checks-<thème>` portant la même étiquette, sans toucher à celles-ci ; script `outils/kubeconfig-checks.sh` qui écrit `~/.config/workbook/k8s-checks.kubeconfig` (600) |
 | Application | `task diff`, `task appliquer` (server-side apply, gestionnaire de champs `plateforme-k8s`) |
 | Greffons krew | `ctx`, `ns`, `neat` |
 
@@ -505,7 +505,7 @@ Les nœuds de contrôle portent le *taint* `node-role.kubernetes.io/control-plan
 7. Écris `espaces/wb-system.yaml`, `espaces/wb-essais.yaml` et `rbac/wb-checks.yaml` (compte de service, Secret du jeton, ClusterRole agrégée, ClusterRole de base étiquetée, liaison). RBAC n'a pas de « tout sauf » : comment exclure les Secrets ? Pourquoi une ClusterRole **agrégée** (pense aux modules 15 à 29) ? Pourquoi `subjectaccessreviews` plutôt que le droit d'emprunter une identité ?
 8. MR, puis `task diff` et `task appliquer`. Vérifie avec `kubectl auth can-i --as=system:serviceaccount:wb-system:wb-checks get secrets -A` (toi, tu as le droit d'emprunter) et la même question pour `get pods`.
 9. Écris `outils/kubeconfig-checks.sh` : lit le jeton et la CA du Secret avec ton identité, écrit le kubeconfig des vérifications en 600 **sans** que le jeton apparaisse dans un argument de commande, contrôle l'identité obtenue (elle lit les nœuds, ne lit pas les Secrets, n'écrit pas). Lance-le, puis `lab/bin/check 14 06`.
-10. Documente dans `docs/kubernetes/acces.md` : les quatre identités (personnelle, vérifications, bris de glace, bris de glace ultime), les règles, et l'**exception** du jeton durable de `wb-checks` (pourquoi, compensations, révocation). Ajoute la ligne au registre des secrets.
+10. Documente dans `docs/kubernetes/acces.md` : les quatre identités (personnelle, vérifications, bris de glace, bris de glace ultime), les règles, l'**exception** du jeton durable de `wb-checks` (pourquoi, compensations, révocation) et la **règle d'extension** de `wb-checks` (comment un module ajoute des droits de lecture, ce qu'il ne doit jamais ajouter, comment le vérifier). Ajoute la ligne au registre des secrets.
 
 *D. k9s*
 
@@ -515,7 +515,7 @@ Les nœuds de contrôle portent le *taint* `node-role.kubernetes.io/control-plan
 - [ ] `~/.kube/config` (600) contient ton identité (CN=`<MOI>`, O=`medisphere:plateforme-admins`, 7 jours au plus) dans le contexte courant `k8s-par1` ; `kubectl auth whoami` la confirme ; aucune copie d'`admin.conf` ou de `super-admin.conf` ne reste sur `adm01`.
 - [ ] `wb-system`, `wb-essais`, la liaison `medisphere:plateforme-admins` et les objets de `wb-checks` sont appliqués par `task appliquer` (gestionnaire `plateforme-k8s`).
 - [ ] `~/.config/workbook/k8s-checks.kubeconfig` (600) identifie `system:serviceaccount:wb-system:wb-checks`, qui lit les nœuds mais ne peut ni lire les Secrets, ni supprimer un pod, ni emprunter une identité.
-- [ ] krew (`ctx`, `ns`, `neat`) et k9s fonctionnent ; les scripts, les manifestes et `docs/kubernetes/acces.md` sont sur `main`.
+- [ ] krew (`ctx`, `ns`, `neat`) et k9s fonctionnent ; les scripts, les manifestes et `docs/kubernetes/acces.md` (identités, exception, règle d'extension de `wb-checks`) sont sur `main`.
 
 **Vérification** : `lab/bin/check 14 06`
 

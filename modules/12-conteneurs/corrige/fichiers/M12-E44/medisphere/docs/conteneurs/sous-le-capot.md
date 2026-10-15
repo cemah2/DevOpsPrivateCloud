@@ -1,6 +1,6 @@
 # Sous le capot : un conteneur construit à la main
 
-> Démonstration de formation (PLAT-1360). Durée : une heure. Hôte : une VM Debian 13 jetable (ou `ctr01` pendant le module 12), en root. Scripts : `capot-manuel.sh` (partie 1) et `capot-runc.sh` (partie 2).
+> Démonstration de formation (PLAT-1344). Durée : une heure. Hôte : une VM Debian 13 jetable (ou `ctr01` pendant le module 12), en root. Scripts : `capot-manuel.sh` (partie 1) et `capot-runc.sh` (partie 2).
 > ⚠️ Tout ce qui monte ou démonte se fait dans un shell lancé par `unshare --mount` : un `pivot_root` ou un `umount` dans l'espace de noms de l'hôte peut le rendre inutilisable jusqu'au redémarrage.
 
 ## L'idée

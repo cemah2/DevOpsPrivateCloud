@@ -1,7 +1,7 @@
 # e03-pvc-pods.yaml — M16-E03 : la demande de l'équipe (PVC) et ses consommateurs.
-# kubectl apply -f e03-pvc-pods.yaml -l medisphere.fr/objet=pvc       (étape 3)
-# kubectl apply -f e03-pvc-pods.yaml -l medisphere.fr/objet=ecrivain  (étape 4, puis 8)
-# kubectl apply -f e03-pvc-pods.yaml -l medisphere.fr/objet=lecteur   (étape 5)
+# kubectl apply -f e03-pvc-pods.yaml -l medisphere.internal/objet=pvc       (étape 3)
+# kubectl apply -f e03-pvc-pods.yaml -l medisphere.internal/objet=ecrivain  (étape 4, puis 8)
+# kubectl apply -f e03-pvc-pods.yaml -l medisphere.internal/objet=lecteur   (étape 5)
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -9,8 +9,8 @@ metadata:
   name: e03-donnees
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e03
-    medisphere.fr/objet: pvc
+    medisphere.internal/exercice: m16-e03
+    medisphere.internal/objet: pvc
 spec:
   storageClassName: local-manuel
   accessModes: ["ReadWriteOnce"]
@@ -24,8 +24,8 @@ metadata:
   name: e03-ecrivain
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e03
-    medisphere.fr/objet: ecrivain
+    medisphere.internal/exercice: m16-e03
+    medisphere.internal/objet: ecrivain
 spec:
   automountServiceAccountToken: false
   securityContext:
@@ -61,8 +61,8 @@ metadata:
   name: e03-lecteur
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e03
-    medisphere.fr/objet: lecteur
+    medisphere.internal/exercice: m16-e03
+    medisphere.internal/objet: lecteur
 spec:
   automountServiceAccountToken: false
   securityContext:

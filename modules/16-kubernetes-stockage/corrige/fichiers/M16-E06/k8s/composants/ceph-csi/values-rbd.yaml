@@ -33,7 +33,7 @@ cephconf: |
 nodeplugin:
   # Seulement sur les nœuds raccordés et vérifiés (étiquette posée par k8s_reseau_stockage, E05).
   nodeSelector:
-    medisphere.fr/stockage-ceph: "oui"
+    medisphere.internal/stockage-ceph: "oui"
   # Un travailleur réservé (taint dedie=…:NoSchedule, M14-E14) doit pouvoir monter des volumes :
   # sans cette tolérance, les pods qui y sont autorisés resteraient en ContainerCreating.
   tolerations:
@@ -46,4 +46,4 @@ provisioner:
   # par nœud ; avec 3, un drain laisserait un réplica Pending à chaque maintenance.
   replicaCount: 2
   nodeSelector:
-    medisphere.fr/stockage-ceph: "oui"
+    medisphere.internal/stockage-ceph: "oui"

@@ -115,7 +115,7 @@ symptome_E35() {
     2) detail="Lucas a « simplifié » le service api du fichier compose.yaml de la recette hier soir. Depuis, plus rien ne répond sur http://ctr01.par1.medisphere.internal:18000, et « docker compose up » affiche une erreur qu'il n'a pas notée." ;;
     *) detail="Lucas a « aligné les noms de variables » dans compose.yaml de la recette hier soir. Depuis, plus rien ne répond sur http://ctr01.par1.medisphere.internal:18000 ; « docker compose ps » montre l'API qui redémarre sans cesse." ;;
   esac
-  wb_symptome "Ticket INC-3941 — De : Julien Petit" \
+  wb_symptome "Ticket INC-3935 — De : Julien Petit" \
     "$detail" \
     "La recette de ce matin est bloquée. Remets le service en route sans perdre la base de recette," \
     "et explique-moi comment on aurait pu le voir avant le déploiement." \

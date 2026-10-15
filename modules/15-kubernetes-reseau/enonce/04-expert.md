@@ -19,7 +19,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 15 35`) : il doit être vert. Le script de panne refuse d'ailleurs de casser un cluster où `https://mediagenda-recette.apps.par1.medisphere.internal/pret` ne répond pas 200 depuis `adm01`, ou dont les témoins ne se joignent pas d'un travailleur à l'autre.
 - **Témoins.** À la première injection, le script crée (s'ils n'existent pas) des témoins qu'il ne supprime jamais :
   - l'espace `wb-pannes` (PSA `baseline`) ;
-  - le DaemonSet `sonde` : un pod par travailleur, image `nicolaka/netshoot:v0.13` tirée par le cache Harbor (`registry.par1.medisphere.internal/dockerhub/…`). Chaque pod répond `sonde-<nœud>` sur le port TCP 8080 et contient `dig`, `curl`, `nc`, `tcpdump`, `iperf3`. C'est ton premier instrument : `kubectl -n wb-pannes exec <pod> -- nc -w 3 <IP-d-un-autre-pod> 8080` ;
+  - le DaemonSet `sonde` : un pod par travailleur, image `nicolaka/netshoot:v0.16` tirée par le cache Harbor (`registry.par1.medisphere.internal/dockerhub/…`). Chaque pod répond `sonde-<nœud>` sur le port TCP 8080 et contient `dig`, `curl`, `nc`, `tcpdump`, `iperf3`. C'est ton premier instrument : `kubectl -n wb-pannes exec <pod> -- nc -w 3 <IP-d-un-autre-pod> 8080` ;
   - la NetworkPolicy `sonde-interne` : trafic interne à l'espace et DNS vers `kube-dns`, rien d'autre.
 
   Si ta politique de base à l'échelle du cluster (M15-E28) isole les espaces au point d'interdire le trafic interne à `wb-pannes`, la préparation échoue avec un message clair : ajoute une exception pour cet espace dans `plateforme/k8s` (MR), c'est un bon exercice. Les témoins ne gênent pas le mini-projet ; tu peux supprimer `wb-pannes` après la recette (M15-E46).
@@ -52,7 +52,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 **Prérequis** : M15-E03, M15-E07, M15-E12, M15-E22 ; `lab/bin/check 15 35` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : la route `mediagenda` (espace `mediagenda-recette`) envoie le trafic de `mediagenda-recette.apps.par1.medisphere.internal` vers le Service de l'API (celui que tu as nommé en M14-E07, premier `backendRefs` de la route). MédiAgenda écoute sur le port 8000 et expose `/sante` (vivacité) et `/pret` (disponibilité). Le proxy de la Gateway de Cilium (Envoy) envoie directement aux adresses des pods que Cilium lui donne à partir des EndpointSlices.
+**Contexte technique** : la route `mediagenda` (espace `mediagenda-recette`) envoie le trafic de `mediagenda-recette.apps.par1.medisphere.internal` vers le Service de l'API (`mediagenda-api`, port 80, premier `backendRefs` de la route). MédiAgenda écoute sur le port 8000 du conteneur (port nommé `http`) et expose `/sante` (vivacité) et `/pret` (disponibilité). Le proxy de la Gateway de Cilium (Envoy) envoie directement aux adresses des pods que Cilium lui donne à partir des EndpointSlices.
 
 **Injection** : `lab/bin/break 15 35` (3 variantes).
 
@@ -60,7 +60,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 1. Reproduis depuis `adm01` avec `curl -sv` : code exact, corps de la réponse, en-têtes ajoutés par Envoy. Qu'est-ce que ce code dit, et ne dit pas, de l'étage en cause ?
 2. Lis les conditions de la route et l'état de la Gateway. Puis descends : Service (ports, `targetPort`, sélecteur), EndpointSlices (adresses, ports, `ready`), pods (étiquettes, ports déclarés, état de préparation).
 3. Pour chaque étage, écris dans ton journal la commande et la preuve que l'étage est sain ou cassé. Vérifie ton hypothèse **depuis l'intérieur du cluster**, sans la Gateway : depuis un pod témoin, joins le Service par son nom, puis un pod par son adresse.
-4. Trouve ce qui a changé et qui l'a changé (dépôt `plateforme/k8s` ou `mediagenda/deploiement`, `kubectl diff`, champ `managedFields`), corrige à la racine (dépôt et cluster), et vérifie de bout en bout.
+4. Trouve ce qui a changé et qui l'a changé (dépôt `plateforme/k8s` pour la route, `mediagenda/api` — dossier `k8s/recette/`, M14 — pour le Service, `kubectl diff`, champ `managedFields`), corrige à la racine (dépôt et cluster), et vérifie de bout en bout.
 5. Ajoute à RB-150 une section « Erreur 5xx de la Gateway » : l'arbre « route → Service → EndpointSlice → pod », avec pour chaque branche la commande et ce qu'elle doit montrer.
 
 **Critères de réussite**
@@ -82,10 +82,10 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 <details><summary>Indice 3</summary>
 
-`kubectl get svc <svc> -o yaml --show-managed-fields` montre quel gestionnaire (`kubectl-edit`, `kubectl-client-side-apply`, `helm`…) a écrit chaque champ, et quand. `git log -p` dans le dépôt de déploiement dit si le changement y est.
+`kubectl get svc <svc> -o yaml --show-managed-fields` montre quel gestionnaire (`kubectl-edit`, `kubectl-client-side-apply`, `helm`…) a écrit chaque champ, et quand. `git log -p` dans `mediagenda/api` (`k8s/recette/`) dit si le changement y est.
 </details>
 
-**Pour aller plus loin** : ajoute au pipeline de `mediagenda/deploiement` (ou à un test local `kubeconform` + `jq`) une vérification qui échoue si le sélecteur d'un Service ne correspond à aucune étiquette de gabarit de Deployment du même rendu, ou si un `targetPort` ne correspond à aucun `containerPort`.
+**Pour aller plus loin** : ajoute au pipeline de `mediagenda/api` (ou à un test local `kubeconform` + `jq`) une vérification qui échoue si le sélecteur d'un Service ne correspond à aucune étiquette de gabarit de Deployment du même rendu, ou si un `targetPort` ne correspond à aucun `containerPort`.
 
 ---
 
@@ -115,7 +115,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 **Critères de réussite**
 - [ ] Depuis un pod de `mediagenda-recette` et depuis un témoin : `kubernetes.default.svc.cluster.local`, le nom de la base de MédiAgenda, `s3-01.par1.medisphere.internal` et un nom Internet résolvent.
-- [ ] Le Corefile transfère `medisphere.internal` vers `dns01` et `dns02` ; aucune politique de `mediagenda-*` n'interdit la sortie vers `kube-dns` ; les Deployments de MédiAgenda sont en `ClusterFirst` et leur déploiement est terminé.
+- [ ] Le Corefile du cluster est celui du dépôt (transfert vers `dns01` et `dns02`, bloc `medisphere.internal`) ; les déploiements de MédiAgenda sont terminés, toutes leurs répliques prêtes.
 - [ ] La correction est dans le dépôt ; ton journal contient la trace Hubble ou `dig` qui a désigné la cause.
 
 **Vérification** : `lab/bin/check 15 36`
@@ -165,7 +165,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 **Critères de réussite**
 - [ ] `/pret` répond 200 de façon stable depuis `adm01`.
-- [ ] La NetworkPolicy de refus par défaut est intacte ; aucune règle de refus générale ne vise l'espace ; chaque politique d'autorisation sélectionne des pods existants ; l'API joint PostgreSQL sur 5432.
+- [ ] La NetworkPolicy de refus par défaut est intacte ; les politiques qui s'appliquent à l'espace (de l'espace et du cluster) sont celles des dépôts ; l'API joint PostgreSQL sur 5432.
 - [ ] Un pod de `wb-pannes` ne joint toujours pas l'API de MédiAgenda (preuve Hubble `DROPPED` dans ton journal).
 
 **Vérification** : `lab/bin/check 15 37`
@@ -219,7 +219,7 @@ Compare le sélecteur de chaque politique (`podSelector`, `endpointSelector`) au
 **Critères de réussite**
 - [ ] Aucun Service `LoadBalancer` en `<pending>` ; le pool est actif ; la Gateway a 10.10.41.10.
 - [ ] `bgp-par1` est en AS 65040, voisins 10.10.40.2 et 10.10.40.3 en AS 65000, et sélectionne des travailleurs ; les IP `LoadBalancer` sont annoncées.
-- [ ] Les **deux** passerelles ont une route BGP vers 10.10.41.10 et leur `PL-DEPUIS-K8S` accepte les /32 ; 10.10.41.10:443 répond depuis `adm01`.
+- [ ] Les **deux** passerelles ont une route BGP vers 10.10.41.10 et leur configuration courante de FRR est celle du fichier généré par Ansible ; 10.10.41.10:443 répond depuis `adm01`.
 - [ ] RB-152 est complété et publié ; la correction est dans le dépôt concerné.
 
 **Vérification** : `lab/bin/check 15 38`
@@ -256,7 +256,7 @@ Sur chaque passerelle, `ip -4 route show proto bgp | grep 10.10.41` dit ce qui e
 **Prérequis** : M15-E12, M15-E13, M15-E16 ; `lab/bin/check 15 39` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : `gw-par1` (espace `passerelles`, 10.10.41.10) : écouteur HTTP (80, redirection vers HTTPS) et écouteur HTTPS (443, `*.apps.par1.medisphere.internal`, certificat joker `apps-joker` émis par cert-manager dans `passerelles`), routes admises depuis les espaces étiquetés `medisphere.fr/exposition: oui`. Avec Cilium, un écouteur dont le certificat est introuvable n'est pas programmé : Envoy n'a aucune chaîne de filtres pour ce nom et coupe la négociation.
+**Contexte technique** : `gw-par1` (espace `passerelles`, 10.10.41.10) : écouteur HTTP (80, redirection vers HTTPS) et écouteur HTTPS (443, `*.apps.par1.medisphere.internal`, certificat joker `apps-joker` émis par cert-manager dans `passerelles`), routes admises depuis les espaces étiquetés `medisphere.internal/exposition: oui`. Avec Cilium, un écouteur dont le certificat est introuvable n'est pas programmé : Envoy n'a aucune chaîne de filtres pour ce nom et coupe la négociation.
 
 **Injection** : `lab/bin/break 15 39` (3 variantes).
 
@@ -269,7 +269,7 @@ Sur chaque passerelle, `ip -4 route show proto bgp | grep 10.10.41` dit ce qui e
 
 **Critères de réussite**
 - [ ] `gw-par1` est `Accepted` et `Programmed`, tous ses écouteurs ont `ResolvedRefs` et `Programmed` à `True` ; le certificat HTTPS est référencé dans l'espace `passerelles`.
-- [ ] `mediagenda-recette` porte `medisphere.fr/exposition: oui` ; la route `mediagenda` est acceptée ; `/sante` répond 200 en TLS vérifié ; le port 80 redirige.
+- [ ] La route `mediagenda` est acceptée par `gw-par1` ; `/sante` répond 200 en TLS vérifié ; le port 80 redirige ; les objets en cause sont conformes aux dépôts.
 - [ ] La raison exacte de la condition en échec figure dans ton journal ; la correction est dans le dépôt.
 
 **Vérification** : `lab/bin/check 15 39`
@@ -369,7 +369,7 @@ Compare le `ClusterIssuer` vivant au dépôt (`kubectl diff -f`). Pour la confia
 5. Pour un enregistrement orphelin : explique pourquoi ExternalDNS ne le supprimait pas, puis supprime-le **proprement** (laisse ExternalDNS le faire, ou `nsupdate` avec la clé d'ExternalDNS en supprimant le A **et** son TXT), jamais à la main dans la base de PowerDNS.
 
 **Critères de réussite**
-- [ ] ExternalDNS tourne avec le filtre `apps.par1.medisphere.internal`, le propriétaire `k8s-par1` et la source `gateway-httproute`, et son ClusterRole lui permet de lister et surveiller les HTTPRoute.
+- [ ] ExternalDNS tourne avec la configuration du dépôt (filtre `apps.par1.medisphere.internal`, propriétaire `k8s-par1`, source `gateway-httproute`) et voit les routes attachées à `gw-par1`.
 - [ ] `mediagenda-recette.apps…` résout vers 10.10.41.10 sur `dns01` et `dns02`, avec un TXT de propriété `k8s-par1` ; le nom témoin est publié si la route existe, absent sinon.
 - [ ] Ton journal contient la ligne de journal d'ExternalDNS (ou l'enregistrement TXT) qui a désigné la cause ; la correction est dans le dépôt.
 
@@ -407,7 +407,7 @@ Un ExternalDNS ne touche jamais un enregistrement dont le TXT désigne un autre 
 **Prérequis** : M15-E02, M15-E05, M15-E24, M15-E29 ; `lab/bin/check 15 42` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : routage en tunnel VXLAN (UDP 8472) chiffré par WireGuard (`cilium_wg0`, UDP 51871) : un paquet de pod à pod entre deux nœuds est d'abord encapsulé en VXLAN, puis chiffré ; sur le fil, on ne voit que de l'UDP 51871 entre les adresses des nœuds (10.10.40.61-63). Une `CiliumNodeConfig` (espace `kube-system`) peut surcharger, pour les nœuds qu'elle sélectionne, n'importe quelle clé de la configuration de Cilium ; elle ne s'applique qu'au redémarrage de l'agent. Les témoins de `wb-pannes` (un par travailleur) sont faits pour la matrice de connectivité.
+**Contexte technique** : routage en tunnel VXLAN (UDP 8472) chiffré par WireGuard (`cilium_wg0`, UDP 51871) : un paquet de pod à pod entre deux nœuds est d'abord encapsulé en VXLAN, puis chiffré ; sur le fil, on ne voit que de l'UDP 51871 entre les adresses des nœuds (10.10.40.61-63). Les témoins de `wb-pannes` (un par travailleur) sont faits pour la matrice de connectivité.
 
 **Injection** : `lab/bin/break 15 42` (3 variantes).
 
@@ -419,7 +419,7 @@ Un ExternalDNS ne touche jamais un enregistrement dont le TXT désigne un autre 
 5. Propose dans ton journal le contrôle qui aurait vu la panne avant Nadia (où il tourne, à quelle fréquence, ce qu'il mesure).
 
 **Critères de réussite**
-- [ ] Un agent Cilium prêt par nœud ; aucune `CiliumNodeConfig` ne surcharge le tunnel ; aucune règle ne filtre les ports 8472 ou 51871 sur les travailleurs ; `cilium_vxlan` et `cilium_wg0` sont actives.
+- [ ] Un agent Cilium prêt par nœud ; la configuration effective de chaque agent et le filtrage de chaque travailleur ne contiennent rien d'autre que ce que posent les dépôts et Cilium ; `cilium_vxlan` et `cilium_wg0` sont actives.
 - [ ] `cilium-health status --probe` : tous les nœuds et points de santé joignables ; `/pret` répond 200 de façon stable.
 - [ ] Ton journal contient la matrice de connectivité initiale et la capture (ou la trace Hubble) qui prouve la cause.
 
@@ -432,7 +432,7 @@ Un ExternalDNS ne touche jamais un enregistrement dont le TXT désigne un autre 
 
 <details><summary>Indice 2</summary>
 
-`cilium-dbg status --verbose` (sections `Encryption`, `Routing`, `Cluster health`) ; `kubectl -n kube-system get ciliumnodeconfigs` ; `cilium-dbg config --all` dans l'agent (ou `cilium config view` depuis `adm01`, qui ne montre que la configuration commune). Sur le nœud : `ip -d link show cilium_vxlan`, `ip link show cilium_wg0`, `sudo nft list ruleset | less` (cherche ce qui n'est ni Cilium ni kube).
+`cilium-dbg status --verbose` (sections `Encryption`, `Routing`, `Cluster health`) ; une `CiliumNodeConfig` (espace `kube-system`) peut surcharger, pour les nœuds qu'elle sélectionne, une clé de la configuration de Cilium au redémarrage de l'agent : `kubectl -n kube-system get ciliumnodeconfigs` ; `cilium-dbg config --all` dans l'agent (ou `cilium config view` depuis `adm01`, qui ne montre que la configuration commune). Sur le nœud : `ip -d link show cilium_vxlan`, `ip link show cilium_wg0`, `sudo nft list ruleset | less` (cherche ce qui n'est ni Cilium ni kube).
 </details>
 
 <details><summary>Indice 3</summary>
@@ -490,7 +490,7 @@ Les contrôles `lab/bin/check 15 35` à `15 42` sont des sondes ciblées : lance
 
 ### M15-E44 — Sous le capot : eBPF et les tables de Cilium  `LAB` `★★★★`
 
-> **Ticket PLAT-1680** — *De : Karim Benali*
+> **Ticket PLAT-1644** — *De : Karim Benali*
 > Pendant les pannes, tout le monde a dit « c'est Cilium » comme on disait « c'est le réseau ». Je veux que tu saches **montrer** ce que Cilium a réellement programmé dans le noyau pour un Service, une connexion et une politique, et suivre un paquet du pod au pod en le prouvant à chaque étage avec un outil différent. Compte rendu pour les prochains arrivants, et pour moi quand j'ouvrirai un ticket chez Isovalent ou sur le Slack de Cilium.
 
 **Objectifs pédagogiques**
@@ -503,7 +503,7 @@ Les contrôles `lab/bin/check 15 35` à `15 42` sont des sondes ciblées : lance
 
 **Contexte technique**
 - Dans l'agent : `cilium-dbg` (sous-commandes `bpf`, `service`, `endpoint`, `identity`, `monitor`, `map`). Sur le nœud : `bpftool` (paquet Debian `bpftool`, à installer par le rôle `k8s_noeud` si tu le gardes, ou dans un conteneur de diagnostic de nœud `kubectl debug node/<nœud> -it --image=<image netshoot du cache Harbor> --profile=sysadmin`, à supprimer après usage).
-- Objet d'étude : le Service de MédiAgenda en recette (`mediagenda-api`, port 8000, adresse ClusterIP en 10.96.0.0/16) et une connexion depuis un pod témoin de `wb-pannes` vers ce Service. Pour que la connexion soit permise, crée **temporairement** (par le dépôt, ou à la main en le notant dans ton journal) deux autorisations étroites : la sortie « témoins de `wb-pannes` → API de MédiAgenda, TCP 8000 » (la politique `sonde-interne` ne permet aux témoins que le trafic interne et le DNS) et l'entrée « témoins → API, TCP 8000 » dans `mediagenda-recette`. Tu les retires à la fin.
+- Objet d'étude : le Service de MédiAgenda en recette (`mediagenda-api`, port 80 vers le port 8000 des pods, adresse ClusterIP en 10.96.0.0/16) et une connexion depuis un pod témoin de `wb-pannes` vers ce Service. Pour que la connexion soit permise, crée **temporairement** (par le dépôt, ou à la main en le notant dans ton journal) deux autorisations étroites : la sortie « témoins de `wb-pannes` → API de MédiAgenda, TCP 8000 » (la politique `sonde-interne` ne permet aux témoins que le trafic interne et le DNS) et l'entrée « témoins → API, TCP 8000 » dans `mediagenda-recette`. Tu les retires à la fin.
 
 > ⚠️ **Attention** : `bpftool` sait aussi **modifier** (`map update`, `map delete`, `prog detach`, `net detach`…) et `cilium-dbg` aussi (`bpf ct flush`, `bpf lb delete`, `service delete`, `endpoint config`). Dans cet exercice, seules les opérations de lecture sont permises : `bpftool prog show`, `net show`, `cgroup tree`, `map show`, `map dump` (sur une petite table) ; `cilium-dbg … list`, `get`, `status`, `monitor`. Un `monitor` sans filtre sur un nœud chargé produit des milliers de lignes : filtre toujours (`--type drop`, `--related-to <id>`, `--from`/`--to`). Supprime le pod de diagnostic de nœud à la fin (`kubectl get pods -A | grep node-debugger`).
 
@@ -552,7 +552,7 @@ Les noms des programmes et des tables sont dans le code de Cilium (`bpf/bpf_lxc.
 
 ### M15-E45 — Questions expert : réseau Kubernetes  `Q` `★★★`
 
-> **Ticket PLAT-1681** — *De : Karim Benali*
+> **Ticket PLAT-1645** — *De : Karim Benali*
 > Dernière étape avant la recette du réseau v1 : ces questions, je les pose en entretien pour un poste d'ingénieur plateforme. Réponds par écrit, en argumentant. Pas de recherche pendant la première passe ; vérifie ensuite dans la documentation et corrige-toi en couleur.
 
 **Objectifs pédagogiques**
@@ -569,7 +569,7 @@ Les noms des programmes et des tables sont dans le code de Cilium (`bpf/bpf_lxc.
    a) la connexion reste en attente jusqu'à expiration ; b) le client reçoit immédiatement un refus (ICMP ou RST) ; c) le paquet part vers la passerelle par défaut du nœud ; d) le DNS du cluster ne résout plus le nom du Service.
 3. `externalTrafficPolicy: Local` contre `Cluster` sur un Service `LoadBalancer` annoncé en BGP : effet sur l'adresse source vue par le pod, sur l'équilibrage, sur les annonces BGP (quels nœuds annoncent ?), et sur ce qui se passe quand le dernier pod d'un nœud disparaît.
 4. Pourquoi `ndots:5` est-il la valeur par défaut, et que coûte-t-il ? Donne deux manières de réduire ce coût sans casser la résolution des noms courts de Services.
-5. NetworkPolicy standard et CiliumNetworkPolicy : qu'est-ce que la seconde exprime que la première ne peut pas exprimer (cite au moins quatre choses) ? Pourquoi garder malgré tout le `default-deny` en NetworkPolicy standard chez MédiSphère ?
+5. NetworkPolicy standard et CiliumNetworkPolicy : qu'est-ce que la seconde exprime que la première ne peut pas exprimer (cite au moins quatre choses) ? Pourquoi garder malgré tout le `refus-par-defaut` en NetworkPolicy standard chez MédiSphère ?
 6. QCM — Dans un espace, une NetworkPolicy autorise l'entrée depuis le pod A vers le pod B, et une CiliumNetworkPolicy contient un `ingressDeny` depuis le même pod A vers B. Le trafic A → B est :
    a) autorisé, la NetworkPolicy standard est prioritaire ; b) refusé, un refus l'emporte toujours ; c) autorisé ou refusé selon l'ordre de création ; d) refusé seulement si `enableDefaultDeny` est vrai.
 7. Comment fonctionne `toFQDNs` dans Cilium (proxy DNS, cache, identités de CIDR) ? Pourquoi une règle `toFQDNs` sans règle DNS L7 associée ne fonctionne-t-elle pas, et que se passe-t-il quand le TTL de la réponse est très court ?

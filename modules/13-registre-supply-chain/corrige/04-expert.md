@@ -6,7 +6,7 @@
 - comportement d'un **cache** Harbor dont l'amont refuse l'authentification : les images déjà en cache sont attendues servies (le contrôleur du cache consulte d'abord la copie locale quand l'amont échoue), les autres en erreur ; message exact côté client à relever (`manifest unknown`, `500` ou `404` selon la version) ;
 - mise à jour d'un robot système par `PUT /api/v2.0/robots/{id}` avec l'objet complet (durée ramenée à 1 jour pour l'expirer, `disable`) et effet immédiat sur les jetons ;
 - image `ghcr.io/sigstore/cosign/cosign:v2.5.0` tirée par le cache `ghcr` et son comportement face à une signature Cosign 3 en référent OCI (attendu : `no signatures found`) ;
-- signature des témoins avec `--signing-config` pointant sur un fichier ne contenant que le type de média (`application/vnd.dev.sigstore.signingconfig.v0.2+json`) : à aligner sur le `signing-config.json` produit en M13-E07 si le type diffère ;
+- signature des témoins avec `--signing-config` pointant sur une configuration sans service, de même contenu que le `signing-config.json` de M13-E07 (`mediaType` `…signingconfig.v0.2+json`, `rekorTlogConfig` et `tsaConfig` vides), dans l'image `cosign:v3.1.3` tirée par le cache `ghcr` ;
 - démarrage de `harbor-db` avec un volume `/data` saturé (attendu : échec d'écriture de `postmaster.pid` ou des journaux d'écriture) ; XFS (`/data`, rôle `harbor`) n'a pas de réserve pour root ;
 - message de `docker compose` quand les fichiers `env_file` de `common/config` manquent (attendu : `env file … not found`).
 

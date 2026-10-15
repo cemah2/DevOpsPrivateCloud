@@ -7,8 +7,9 @@ ContainerName=mediagenda-valkey
 Image={{ pile_recette_image_valkey }}
 Network=apps-recette.network
 User=999:999
-Exec=valkey-server --save "" --appendonly no
-HealthCmd=valkey-cli ping
+# Pas de --save "" : le Quadlet de Podman 5.4 supprime l'argument vide et tout ce qui le suit (M12-E14).
+Exec=valkey-server --appendonly no
+HealthCmd=["valkey-cli", "ping"]
 HealthInterval=10s
 Notify=healthy
 DropCapability=ALL

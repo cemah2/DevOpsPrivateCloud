@@ -39,9 +39,9 @@ check_output "TXT de propriété k8s-par1 à côté du nom (autoritaire)" 'exter
   bash -c 'for n in "a-$1" "$1"; do dig +short +norecurse -p 5300 @10.10.20.10 "$n" TXT; done' _ "$_M15O_NOM_MA"
 check_output "aucun joker publié : un nom inexistant de apps est NXDOMAIN" 'status: NXDOMAIN' \
   dig +time="$WB_TIMEOUT" @10.10.20.10 "inexistant-$RANDOM.$_M15O_APPS" A
-check_cmd "redirection-https porte l'étiquette d'exclusion medisphere.fr/dns=non" _m15o_jq \
-  "$(_m15o_kjson httproute redirection-https -n passerelles)" '.metadata.labels["medisphere.fr/dns"] == "non"'
-check_cmd "ExternalDNS exclut les objets étiquetés medisphere.fr/dns=non" bash -c \
+check_cmd "redirection-https porte l'étiquette d'exclusion medisphere.internal/dns=non" _m15o_jq \
+  "$(_m15o_kjson httproute redirection-https -n passerelles)" '.metadata.labels["medisphere.internal/dns"] == "non"'
+check_cmd "ExternalDNS exclut les objets étiquetés medisphere.internal/dns=non" bash -c \
   'grep -qxE -- "--label-filter=medisphere\\.fr/dns ?!= ?non" <<<"$1"' _ "$_m15o_args"
 check_dns "essai-lb.$_M15O_APPS publié vers l'adresse du Service (10.10.41.20)" "essai-lb.$_M15O_APPS" A '^10\.10\.41\.20$'
 

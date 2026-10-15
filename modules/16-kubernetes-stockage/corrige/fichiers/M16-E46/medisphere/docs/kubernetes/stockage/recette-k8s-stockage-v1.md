@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Ticket | PLAT-1799 |
+| Ticket | PLAT-1746 |
 | Date de la recette | `<AAAA-MM-JJ>` |
 | Présents | Claire Morel, Karim Benali, Sophie Laurent, Nadia Roussel, Julien Petit, `<MOI>` |
 | Contrôle global | `lab/bin/check 16 46` : `<N> OK, 0 KO` (sortie jointe en annexe) |

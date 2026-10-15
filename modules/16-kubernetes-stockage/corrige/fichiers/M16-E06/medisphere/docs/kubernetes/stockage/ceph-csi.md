@@ -6,9 +6,9 @@
 ## 1. Architecture
 
 ```
-k8s-w01-03 (étiquette medisphere.fr/stockage-ceph=oui)          ceph-par1 (Tentacle 20.2.4)
- ens18 10.10.40.6N  (Kubernetes, VLAN 40)                         MON 10.10.30.51-53:3300 (msgr2 secure)
- ens19 10.10.30.8N  MTU 9000 ─────────── VLAN 30, sans bordure ── OSD/MDS 10.10.30.51-53:6800-7568
+k8s-w01-03 (étiquette medisphere.internal/stockage-ceph=oui)          ceph-par1 (Tentacle 20.2.4)
+ eth0 10.10.40.6N  (Kubernetes, VLAN 40)                          MON 10.10.30.51-53:3300 (msgr2 secure)
+ eth1 10.10.30.8N  MTU 9000 ──────────── VLAN 30, sans bordure ── OSD/MDS 10.10.30.51-53:6800-7568
    ├─ ceph-csi-rbd-nodeplugin  (DaemonSet, privilégié, hostNetwork)  pool k8s-rbd (quota 20 Gio)
    ├─ ceph-csi-cephfs-nodeplugin (E07)                                CephFS cephfs, groupe csi (20 Gio)
    └─ ceph-csi-rbd-provisioner / -cephfs-provisioner (2 réplicas sur deux travailleurs, leader élu)
@@ -16,7 +16,7 @@ kube-system : snapshot-controller (external-snapshotter v8.6.0, 2 réplicas)
 ```
 
 - Seuls les travailleurs raccordés portent des pods de ceph-csi (sélecteur de nœud sur l'étiquette posée par le rôle `k8s_reseau_stockage` **après** vérification du MTU et des routes). Les nœuds de contrôle n'ont ni carte de stockage, ni pilote.
-- Les pods du *provisioner* ne sont pas en `hostNetwork` : leur trafic vers Ceph sort masqué par l'adresse `ens19` du nœud.
+- Les pods du *provisioner* ne sont pas en `hostNetwork` : leur trafic vers Ceph sort masqué par l'adresse `eth1` du nœud.
 - Images : `quay.io/cephcsi/cephcsi:v3.18.1` et sidecars `registry.k8s.io/sig-storage/…`, tirées par le cache Harbor (aucune référence modifiée).
 
 ## 2. Identités, clés et Secrets

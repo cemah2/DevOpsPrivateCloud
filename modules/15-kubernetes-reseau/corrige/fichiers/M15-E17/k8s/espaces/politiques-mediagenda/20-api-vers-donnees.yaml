@@ -1,5 +1,9 @@
-# L'API (et son éventuel conteneur d'initialisation de migration, même pod) parle à PostgreSQL et
-# à Valkey de SON espace, sur leurs seuls ports.
+# Sorties vers les données, dans SON espace, sur leurs seuls ports.
+#   - l'API parle à PostgreSQL et à Valkey ;
+#   - les tâches de MédiAgenda du M14 parlent à PostgreSQL : le Job de migration
+#     (mediagenda-migration-vX-Y-Z, rejoué à chaque version, M14-E15/E21) et, en dev, le CronJob
+#     de sauvegarde (mediagenda-sauvegarde, pg_dump vers un emptyDir, M14-E15). Sans cette règle,
+#     la prochaine montée de version de l'API resterait bloquée sur sa migration.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -22,3 +26,20 @@ spec:
               app.kubernetes.io/name: valkey
       ports:
         - {protocol: TCP, port: 6379}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: taches-vers-postgresql
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [mediagenda-migration, mediagenda-sauvegarde]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - {protocol: TCP, port: 5432}

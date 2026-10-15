@@ -18,7 +18,7 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{ include "mediagenda.selectorLabels" . }}
 app.kubernetes.io/version: {{ include "mediagenda.tag" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-medisphere.fr/environnement: {{ .Values.environnement }}
+medisphere.internal/environnement: {{ .Values.environnement }}
 {{- end -}}
 
 {{- define "mediagenda.tag" -}}

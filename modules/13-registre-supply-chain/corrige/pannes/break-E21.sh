@@ -149,7 +149,7 @@ annuler_E21() {
 resume_E21() { echo "La vérification de signature avant déploiement échoue sur une image déployée depuis des semaines."; }
 
 symptome_E21() {
-  wb_symptome "Ticket INC-4033 — De : Nadia Roussel (copie : Sophie Laurent)" \
+  wb_symptome "Ticket INC-4021 — De : Nadia Roussel (copie : Sophie Laurent)" \
     "La vérification Cosign avant déploiement échoue sur wb-sonde/signee:1.0, qu'on déploie depuis" \
     "des semaines. Personne n'a touché à l'image, paraît-il. Reproduction : « sudo wb-sonde-registre »" \
     "sur runner02, étape « signature ». Sophie : on ne contourne rien, et on ne re-signe pas une image" \

@@ -18,7 +18,7 @@ vX.Y.Z  : … → build : image X.Y.Z poussée (amd64 + arm64 pour MédiAgenda e
 | Socket de l'hôte monté (`/var/run/docker.sock`) | aucun « privilège », mais le job pilote le démon root de l'hôte : root sur `runner02` | **non** |
 | BuildKit sans privilège (`moby/buildkit:rootless`, `buildctl-daemonless.sh`) | deux exceptions : `seccomp=unconfined`, `apparmor=unconfined` ; démon sous l'UID 1000, sans capacité | **oui** |
 | Buildah (`--isolation=chroot`, stockage `vfs`) | mêmes exceptions en pratique ; plus lent | alternative |
-| Kaniko | aucune exception, mais dépôt archivé par Google en 2025 (forks communautaires, à évaluer) | non |
+| Kaniko | ni mode privilégié ni option de sécurité, mais l'exécuteur tourne en **root** dans le conteneur du job (il réécrit le système de fichiers du conteneur) ; dépôt `GoogleContainerTools/kaniko` archivé (lecture seule) par Google en juin 2025, maintenu depuis par des forks (Chainguard, autres) à évaluer | non |
 
 Exceptions accordées (`host_vars/runner02/gitlab_runner.yml`), et **seulement** celles-ci : le profil seccomp par défaut de Docker interdit `unshare` et `mount` sans `CAP_SYS_ADMIN` (BuildKit en a besoin pour isoler chaque `RUN` dans un espace de noms utilisateur), le profil AppArmor `docker-default` interdit `mount`. Le démon BuildKit est lancé avec `--oci-worker-no-process-sandbox` : pas de nouvel espace PID par `RUN` (le masque de `/proc` de Docker l'empêcherait) ; conséquence acceptée : un `RUN` voit les processus du démon de son propre job. Ce qui n'est **pas** accordé : capacités, périphériques, `/sys` en écriture, réseau de l'hôte.
 

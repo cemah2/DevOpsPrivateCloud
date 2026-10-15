@@ -16,7 +16,7 @@ Environment=LEGACY_RDV_DB_PASS_FILE=/run/secrets/legacy-rdv-db-mdp LEGACY_RDV_FU
 Secret=legacy-rdv-db-mdp,type=mount,mode=0444
 Volume=legacy-pieces.volume:/var/www/legacy-rdv/uploads
 Volume=legacy-sessions.volume:/var/lib/php/sessions
-HealthCmd=curl -fsS -o /dev/null http://127.0.0.1:8080/sante.php
+HealthCmd=["curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/sante.php"]
 HealthInterval=30s
 HealthStartPeriod=20s
 DropCapability=ALL

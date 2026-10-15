@@ -8,7 +8,7 @@ metadata:
   namespace: wb-essais
   labels:
     app.kubernetes.io/name: e02-ephemere
-    medisphere.fr/exercice: m16-e02
+    medisphere.internal/exercice: m16-e02
 data:
   niveau: "INFO"
   message: "configuration initiale"
@@ -20,7 +20,7 @@ metadata:
   namespace: wb-essais
   labels:
     app.kubernetes.io/name: e02-ephemere
-    medisphere.fr/exercice: m16-e02
+    medisphere.internal/exercice: m16-e02
 spec:
   # Le jeton projeté ci-dessous suffit : pas de jeton par défaut monté en plus.
   automountServiceAccountToken: false

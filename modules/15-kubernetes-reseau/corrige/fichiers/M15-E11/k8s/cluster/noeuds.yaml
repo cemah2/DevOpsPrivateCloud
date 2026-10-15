@@ -1,21 +1,37 @@
-# cluster/noeuds.yaml — étiquettes de nœuds gérées par le dépôt (M15-E11). Lu par
-# outils/etiqueter-noeuds.sh (task noeuds:etiqueter). Seules les clés listées ici sont gérées :
-# l'outil n'enlève jamais une étiquette qu'il ne connaît pas.
-# topology.kubernetes.io/zone : M14-E14 (baies CRUSH de M08) ; bgp : M15-E11.
-etiquettes_gerees: [bgp, topology.kubernetes.io/zone]
+# plateforme/k8s — cluster/noeuds.yaml (M14-E14, complété en M15-E11)
+# Source de vérité des étiquettes et des taints posées PAR MÉDISPHÈRE sur les nœuds
+# (celles de kubeadm et du kubelet ne sont pas listées ici et ne sont jamais touchées).
+# Appliqué par outils/etiqueter-noeuds.sh (task etiquettes), idempotent, rejoué après chaque jonction.
+# Zones : mêmes baies que la carte CRUSH de ceph-par1 (M08-E14) : par1-baie-a, -b, -c.
+# M15-E11 : étiquette bgp=par1 sur les travailleurs (sélecteur de CiliumBGPClusterConfig bgp-par1).
+#
+# etiquettes_gerees : clés que l'outil RETIRE d'un nœud qui ne les a pas dans ce fichier (un nœud
+# sorti de bgp=par1 doit cesser d'annoncer). Les autres étiquettes ne sont jamais retirées par l'outil.
+etiquettes_gerees: [bgp]
 noeuds:
-  k8s-w01:
-    bgp: par1
-    topology.kubernetes.io/zone: par1-baie-a
-  k8s-w02:
-    bgp: par1
-    topology.kubernetes.io/zone: par1-baie-b
-  k8s-w03:
-    bgp: par1
-    topology.kubernetes.io/zone: par1-baie-c
   k8s-cp01:
-    topology.kubernetes.io/zone: par1-baie-a
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-a
   k8s-cp02:
-    topology.kubernetes.io/zone: par1-baie-b
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-b
   k8s-cp03:
-    topology.kubernetes.io/zone: par1-baie-c
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-c
+  k8s-w01:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-a
+      bgp: par1
+  k8s-w02:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-b
+      bgp: par1
+  k8s-w03:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-c
+      medisphere.internal/dedie: bdd
+      bgp: par1
+    taints:
+      - cle: dedie
+        valeur: bdd
+        effet: NoSchedule

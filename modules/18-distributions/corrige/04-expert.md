@@ -18,7 +18,7 @@ Les fichiers modifiés sur un nœud sont sauvegardés dans `/var/lib/workbook/` 
 - création et annulation de la branche `lucas/talos-zones` (dépôt de test) ;
 - contrôle de l'empreinte de CA d'un jeton k3s (`check-E19`, sur fichiers de test).
 
-**Points non testés en conditions réelles** (aucun cluster de la bonne version sur le banc de rédaction) :
+**Points non testés en conditions réelles** (aucun cluster de la bonne version n'a pu être démarré pour la vérification) :
 - les messages exacts de k3s, RKE2 et CAPMOX cités ci-dessous : ils viennent de la documentation et des sources, **à confirmer sur ta version** ;
 - E20 variante 3 : réinitialisation de `STATE` et `EPHEMERAL` puis retour en maintenance sur 10.10.99.87 (le lecteur nocloud ne porte que le réseau ; d'après le code de la plateforme nocloud de Talos 1.14, un `user-data` `#cloud-config` n'est pas pris pour une configuration de machine) ;
 - E21 : refus d'un jeton Proxmox expiré par l'API de Proxmox VE 9 et réaction de CAPMOX ; ordre clone → réservation d'adresse dans CAPMOX 0.9 (d'après les raisons de la condition `VirtualMachineProvisioned`) ; `pvesh get /pools --poolid lab` sur PVE 9 ;

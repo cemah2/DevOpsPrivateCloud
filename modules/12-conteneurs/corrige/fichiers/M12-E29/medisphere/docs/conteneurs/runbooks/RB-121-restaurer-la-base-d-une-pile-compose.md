@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 — 2026-10 (M12-E29, PLAT-1355) |
+| **Version** | 1.0 — 2026-10 (M12-E29, PLAT-1329) |
 | **Périmètre** | bases PostgreSQL conteneurisées sauvegardées par `wb-backup-conteneurs` (PBS `par1/conteneurs`) |
 | **Durée mesurée** | 9 min de bout en bout sur la base de recette de MédiAgenda (voir `tests/restauration-conteneurs.md`) |
 

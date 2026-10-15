@@ -1,9 +1,10 @@
 ---
 # group_vars/role_routeur/pare_feu.yml — EXTRAIT : ajout de M12-E29 (matrice commune à gw01 et gw02, M07-E24).
 # docs/socle/matrice-flux.md est régénéré par ms-matrice-flux (job « matrice-a-jour »).
+# La définition CTR01 (10.10.99.121, réservation Kea du sous-réseau 99) existe depuis M12-E15 :
+# on la réutilise, on ne la redéclare pas.
 pare_feu_definitions:
-  # … définitions existantes (PBS01, WG_S2S, V_SANDBOX…) …
-  - {nom: CTR01, valeur: 10.10.99.121, commentaire: "ctr01 (M12), réservation Kea du sous-réseau 99"}
+  # … définitions existantes (PBS01, WG_S2S, V_SANDBOX, CTR01 de M12-E15…) …
 
 pare_feu_transit:
   # … règles existantes …

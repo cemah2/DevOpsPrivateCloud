@@ -1,4 +1,4 @@
-# compose.ha.yaml — recette « deux instances derrière un répartiteur » (M12-E30, CHG-1356).
+# compose.ha.yaml — recette « deux instances derrière un répartiteur » (M12-E30, CHG-1330).
 # Fichier de SURCHARGE, toujours utilisé avec compose.yaml :
 #
 #   admin@ctr01:~/src/mediagenda-api$ export COMPOSE_FILE=compose.yaml:compose.ha.yaml

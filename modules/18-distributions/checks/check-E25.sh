@@ -69,9 +69,15 @@ _e25_nb() {
   done
 }
 check_cmd "NetBox : aucune VM du module" _e25_nb
-check_cmd "matrice de la bordure (main) : plus aucune règle provisoire du module (M18-E14, M18-E16)" \
-  bash -c '[[ -n "$1" ]] && ! grep -Eq "ref: *M18-E1[46]" <<<"$1"' _ \
+check_cmd "matrice de la bordure (main) : plus aucune règle provisoire du module (M18-E08, M18-E14, M18-E16)" \
+  bash -c '[[ -n "$1" ]] && ! grep -Eq "ref: *M18-E(08|14|16)" <<<"$1"' _ \
   "$(_m18p_fichier_main plateforme/ansible inventories/lab/group_vars/role_routeur/pare_feu.yml)"
+_e25_ipsets="$(_m18p_pve 'pvesh get /cluster/firewall/ipset --output-format json')" || _e25_ipsets=""
+check_cmd "pare-feu de pve01 : plus d'IPSet capi (M18-E08)" _m18p_jq "${_e25_ipsets:-null}" \
+  '[.[]? | select(.name == "capi")] | length == 0'
+_e25_regles="$(_m18p_pve 'pvesh get /cluster/firewall/rules --output-format json')" || _e25_regles=""
+check_cmd "pare-feu de pve01 : plus de règle depuis +capi" _m18p_jq "${_e25_regles:-null}" \
+  '[.[]? | select((.source // "") == "+capi")] | length == 0'
 
 title "Poste d'administration"
 _e25_restes="$(find "$_M18P_DIR" -maxdepth 1 \( -name '*.kubeconfig' -o -name 'talosconfig*' \) -printf '%f ' 2>/dev/null)" || _e25_restes=""

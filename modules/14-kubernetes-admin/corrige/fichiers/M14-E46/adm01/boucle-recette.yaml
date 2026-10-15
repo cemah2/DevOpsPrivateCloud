@@ -1,0 +1,55 @@
+# ~/m14/e46/boucle-recette.yaml — pod de démonstration de M14-E46 (boucle de Julien, PLAT-1546).
+# Appelle /pret du Service de MédiAgenda (mediagenda-api, port 80 → 8000 du pod) chaque seconde et
+# journalise OK ou ECHEC. Le trafic va de pod à Service (kube-proxy) : il ne passe ni par l'API ni par
+# la VIP, contrairement à un port-forward. Objet d'essai, hors de tout dépôt : appliqué à la main le
+# temps de la répétition et de la revue, puis supprimé.
+#   kubectl apply -f ~/m14/e46/boucle-recette.yaml
+#   kubectl -n mediagenda-recette logs -f boucle-recette
+#   kubectl -n mediagenda-recette logs boucle-recette | grep -c ECHEC
+#   kubectl -n mediagenda-recette delete pod boucle-recette
+# Conforme au profil « restricted » de l'espace, à la politique medisphere-images (image de Harbor,
+# étiquette explicite) et au LimitRange (ressources déclarées).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: boucle-recette
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: boucle-recette
+    medisphere.internal/ticket: PLAT-1546
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: boucle
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command:
+        - sh
+        - -c
+        - |
+          url="http://mediagenda-api.mediagenda-recette.svc.cluster.local/pret"
+          while true; do
+            if r="$(wget -q -T 2 -O - "$url" 2>&1)"; then
+              echo "$(date +%T) OK $r"
+            else
+              echo "$(date +%T) ECHEC $r"
+            fi
+            sleep 1
+          done
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

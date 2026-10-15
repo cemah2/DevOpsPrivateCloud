@@ -59,7 +59,10 @@ Les manifestes de MédiAgenda sont copiés d'un environnement à l'autre et modi
 |---|---|---|
 | Chart | `mediagenda` (projet GitLab `mediagenda/chart`), publié dans Harbor `oci://registry.par1.medisphere.internal/charts` | E03, E08 |
 | Déploiements par environnement | projet `mediagenda/deploiement` (base + overlays `dev`, `recette`, `prod`) | E04, E09 |
-| Plateforme | `helmfile.yaml` du projet `plateforme/k8s` (composants des modules 14 à 16) | E10 |
+| Objets de MédiAgenda | `mediagenda` (Deployment, Service port 80, ConfigMap, compte, route, politiques), étiquettes `app.kubernetes.io/name: mediagenda` ; remplacent `mediagenda-api` du M14 en dev (E03) et en recette (E04) | E03, E04 |
+| Production | espace `mediagenda-prod` (`mediagenda.apps.par1.medisphere.internal`), base CNPG à 3 instances | E09 |
+| Plateforme | `helmfile.yaml` du projet `plateforme/k8s` : les neuf releases des modules 14 à 16 | E10 |
+| Harbor | projet `charts` (immuable, signature exigée), robots `robot$charts+ci` et `robot$charts+lecture` | E08, E13 |
 
 Détails figés : [`PLAN.md`](../../PLAN.md) §4.10.
 

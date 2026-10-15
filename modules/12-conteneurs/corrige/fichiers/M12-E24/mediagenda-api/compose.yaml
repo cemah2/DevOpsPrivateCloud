@@ -1,7 +1,8 @@
-# compose.yaml — MédiAgenda, PostgreSQL 18 et Valkey 8, DURCIS à l'exécution (M12-E24, SEC-1350).
-# Reprend le compose.yaml de M12-E08 ; seuls les blocs « Durcissement » sont nouveaux.
+# compose.yaml — MédiAgenda, PostgreSQL 18 et Valkey 8, DURCIS à l'exécution (M12-E24, SEC-1324).
+# Reprend le compose.yaml de M12-E18 (image 0.2.0 de M12-E11, limites, délais d'arrêt, sondes) ;
+# seuls les blocs marqués « Durcissement » sont nouveaux.
 #
-#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 600
+#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 700, fichier en 644
 #   admin@ctr01:~/src/mediagenda-api$ docker compose up -d --wait
 #   admin@ctr01:~/src/mediagenda-api$ docker exec -i mediagenda-api-1 python - < ~/E24-tests-evasion.py
 #
@@ -12,17 +13,19 @@
 #     ne donne plus aucun droit ;
 #   - système de fichiers racine en lecture seule, écritures sur tmpfs (noexec) ou volume nommé ;
 #   - seccomp : profil par défaut de Docker, et pour l'API un profil plus strict (sans ptrace).
+# Pas d'attribut « version: » ; nom du projet fixé (conteneurs mediagenda-…).
 name: mediagenda
 
-# Durcissement commun (ancre YAML) : fusionnée dans chaque service par « <<: *durci ».
+# Durcissement commun (ancre YAML) : fusionnée dans chaque service par « <<: *durci ». Une clé
+# redéfinie dans le service REMPLACE celle de l'ancre (c'est le cas de pids_limit, réglé par
+# service en E18, et de security_opt pour l'API et les migrations).
 x-durci: &durci
   read_only: true
   cap_drop: [ALL]
   security_opt:
     - no-new-privileges:true
-  # Borne le nombre de processus (une bombe fork ne sature pas l'hôte) : PostgreSQL en lance une
-  # dizaine, uvicorn un seul ; 256 laisse de la marge sans être illimité.
-  pids_limit: 256
+  # Valeur par défaut des services sans limite propre (le client psql) : une bombe fork ne sature pas l'hôte.
+  pids_limit: 64
 
 services:
   # --- Base de données ------------------------------------------------------------------------
@@ -42,14 +45,30 @@ services:
     environment:
       POSTGRES_DB: mediagenda
       POSTGRES_USER: mediagenda
+      # Variante « _FILE » de l'image officielle : le mot de passe est lu dans le secret monté,
+      # il n'apparaît ni dans ce fichier, ni dans « docker inspect », ni dans l'environnement.
       POSTGRES_PASSWORD_FILE: /run/secrets/db_mdp
+      # Base en UTF-8 (README de MédiAgenda).
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
     secrets:
       - db_mdp
     volumes:
+      # PostgreSQL 18 : l'image range les données dans /var/lib/postgresql/18/docker (PGDATA) et
+      # attend le volume sur /var/lib/postgresql (et non plus /var/lib/postgresql/data).
       - donnees-db:/var/lib/postgresql
     # PostgreSQL utilise la mémoire partagée POSIX (/dev/shm, 64 Mio par défaut) : suffisant ici.
+    # E18 — limites : PostgreSQL se règle sur la mémoire qu'il VOIT (shared_buffers par défaut :
+    # 128 Mo) ; 512 Mo laissent la place aux connexions et aux tris. Au-delà, le noyau tue un
+    # processus du conteneur (OOM du cgroup), pas un processus de l'hôte.
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    # E18 — arrêt : l'image arrête PostgreSQL par SIGINT (son STOPSIGNAL : arrêt « fast », les
+    # sessions sont coupées, un point de reprise est écrit) ; on lui laisse 30 s avant SIGKILL
+    # (10 s par défaut), sinon la base redémarre en récupération après crash.
+    stop_grace_period: 30s
     healthcheck:
+      # pg_isready dit si le serveur accepte les connexions, sans mot de passe.
       test: ["CMD", "pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
       interval: 5s
       timeout: 3s
@@ -62,9 +81,17 @@ services:
   valkey:
     <<: *durci
     image: docker.io/valkey/valkey:8-trixie
-    # Même raisonnement que pour PostgreSQL : l'entrypoint ne fait chown/setpriv que s'il est root.
+    # Durcissement : même raisonnement que pour PostgreSQL, l'entrypoint ne fait chown/setpriv
+    # que s'il est root ; sous l'UID 999 de l'image, il saute ces étapes.
     user: "999:999"
-    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    # Cache seulement : pas de persistance sur disque (il se reconstruit depuis la base).
+    # E18 — un cache borné : Valkey évince les clés les moins utilisées AVANT d'atteindre la
+    # limite du conteneur (sinon c'est le noyau qui le tue, OOM, et le cache repart vide).
+    command: ["valkey-server", "--save", "", "--appendonly", "no",
+              "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -74,19 +101,23 @@ services:
     networks: [arriere]
 
   # --- Migrations : un service PONCTUEL ---------------------------------------------------------
+  # Il applique V1, V2… puis s'arrête avec le code 0 ; l'API ne démarre qu'après ce succès.
   migrations:
     <<: *durci
-    image: mediagenda-api:${MEDIAGENDA_TAG:-0.1.0}
+    image: mediagenda-api:${MEDIAGENDA_TAG:-0.2.0}
     build:
       context: .
       args:
-        VERSION: ${MEDIAGENDA_TAG:-0.1.0}
+        VERSION: ${MEDIAGENDA_TAG:-0.2.0}
+    # Durcissement : même profil seccomp que l'API (même image, même code).
     security_opt:
       - no-new-privileges:true
       - seccomp=./securite/seccomp-mediagenda.json
     tmpfs:
       - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
     entrypoint: ["/bin/sh", "-c"]
+    # L'application ne lit sa configuration que dans l'environnement : on compose l'URL à partir
+    # du secret au dernier moment, et « exec » remplace le shell (le processus reçoit les signaux).
     command:
       - 'MEDIAGENDA_DB_URL="postgresql://mediagenda:$$(cat /run/secrets/db_mdp)@db:5432/mediagenda" exec mediagenda-migrate'
     environment:
@@ -97,14 +128,16 @@ services:
       db:
         condition: service_healthy
     restart: "no"
+    mem_limit: 256m
+    pids_limit: 64
     networks: [arriere]
 
   # --- L'API ------------------------------------------------------------------------------------
   api:
     <<: *durci
-    image: mediagenda-api:${MEDIAGENDA_TAG:-0.1.0}
-    # L'image fixe déjà USER 10001:10001 (M12-E05) ; le répéter ici protège contre une image
-    # reconstruite par erreur sans USER (le conteneur refuserait alors de tourner en root).
+    image: mediagenda-api:${MEDIAGENDA_TAG:-0.2.0}
+    # Durcissement : l'image fixe déjà USER 10001:10001 (M12-E05, E11) ; le répéter ici protège
+    # contre une image reconstruite par erreur sans USER.
     user: "10001:10001"
     # « security_opt » remplace la liste de l'ancre : on y redit no-new-privileges.
     # Le chemin du profil est relatif à ce fichier ; Compose lit le JSON et l'envoie au démon.
@@ -123,7 +156,8 @@ services:
     secrets:
       - db_mdp
     ports:
-      # Port 8000 > 1024 : aucune capacité NET_BIND_SERVICE nécessaire.
+      # Publié sur toutes les adresses de l'hôte, port 8000 (la recette est jointe depuis adm01) ;
+      # port > 1024 : aucune capacité NET_BIND_SERVICE nécessaire.
       - "8000:8000"
     depends_on:
       migrations:
@@ -131,15 +165,26 @@ services:
       valkey:
         condition: service_healthy
     healthcheck:
+      # Pas de curl dans l'image : le Python de l'image fait la requête. /sante seulement :
+      # la vivacité ne doit pas dépendre de la base (README de MédiAgenda).
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 10s
+    # E18 — limites mesurées (docker stats sous charge : ≈ 80 Mo, < 5 % d'un CPU) : 256 Mo et un
+    # CPU laissent une marge d'un facteur 3 ; 128 processus suffisent à un uvicorn sans travailleurs.
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    # E18 — arrêt : MEDIAGENDA_DELAI_ARRET (20 s) + marge, avant SIGKILL.
+    stop_grace_period: 30s
+    # E18 — journaux : le pilote et la rotation viennent du démon (daemon.json, rôle docker_engine :
+    # json-file, 10 Mo × 3, compressés). On ne les redéfinit ici que pour une exception.
     restart: unless-stopped
     networks: [avant, arriere]
 
-  # --- Outils (profil « outils ») ------------------------------------------------------------------
+  # --- Outils (profil « outils ») : jamais lancés par un simple « up » ------------------------------
   psql:
     <<: *durci
     profiles: [outils]
@@ -156,7 +201,9 @@ services:
     networks: [arriere]
 
 networks:
+  # « avant » : le seul réseau de l'API vers l'extérieur (publication de port).
   avant: {}
+  # « arriere » : base et cache ; internal = pas de route vers l'extérieur, aucun port publiable.
   arriere:
     internal: true
 
@@ -164,5 +211,7 @@ volumes:
   donnees-db: {}
 
 secrets:
+  # Fichier local, hors dépôt (.gitignore) : dossier secrets/ en 700, fichier en 644 (lisible par
+  # l'UID 10001 une fois monté) ; créé par outils/secrets-compose.sh (M12-E08).
   db_mdp:
     file: ./secrets/db_mdp

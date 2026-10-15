@@ -10,7 +10,7 @@ Network=apps-recette.network
 Volume=mediagenda-pg.volume:/var/lib/postgresql
 Environment=POSTGRES_DB=mediagenda POSTGRES_USER=mediagenda
 Secret=mediagenda-pg-mdp,type=env,target=POSTGRES_PASSWORD
-HealthCmd=pg_isready -U mediagenda -d mediagenda
+HealthCmd=["pg_isready", "-U", "mediagenda", "-d", "mediagenda"]
 HealthInterval=10s
 HealthRetries=5
 HealthStartPeriod=30s

@@ -6,7 +6,7 @@ kind: StorageClass
 metadata:
   name: cephfs
   labels:
-    medisphere.fr/composant: stockage
+    medisphere.internal/composant: stockage
 provisioner: cephfs.csi.ceph.com
 parameters:
   clusterID: "<FSID>"

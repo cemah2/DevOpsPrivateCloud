@@ -70,7 +70,7 @@ metadata:
   name: $_E36_CNP
   namespace: $_M15_NS_APP
   annotations:
-    medisphere.fr/demande: "SEC-1612 : aucune application ne parle aux composants de kube-system"
+    medisphere.internal/demande: "SEC-1612 : aucune application ne parle aux composants de kube-system"
 spec:
   endpointSelector: {}
   enableDefaultDeny:

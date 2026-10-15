@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ms-verif-conteneurs — sonde de service des conteneurs de MédiSphère (M12-E28, PLAT-1354).
+# ms-verif-conteneurs — sonde de service des conteneurs de MédiSphère (M12-E28, PLAT-1328).
 #
 # Pour chaque hôte de la configuration, lit l'état des conteneurs par ssh (compte « supervision »,
 # clé à commande forcée : l'hôte ne renvoie que la sortie de ms-etat-conteneurs, en lecture seule)

@@ -33,7 +33,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne : sinon elle reste marquée active et bloque le mini-projet. L'annulation ne rétablit que ce qui est encore dans l'état cassé et ne revient jamais sur ta réparation (pour E21, elle remet aussi le nombre de travailleurs d'origine).
 - Les pannes n'agissent que sur les VMs du module (`k3s-ha01/02`, `rke2-01..03`, `talos-01..03`), sur les objets Cluster API de l'espace `capi-essai` de `k3s01`, sur ta copie `~/src/distributions` (branche locale, jamais de `git push`) et sur ton poste (`~/.config/workbook/m18/`, toujours sauvegardé avant). Pour E21, elles touchent aussi **deux réglages Proxmox propres au module** : l'expiration du jeton `wb-capi@pve!capi` et l'appartenance du template de `capi-essai` au pool `lab`. Elles ne touchent jamais `k8s-par1`, la bordure, `pbs01` ni le réseau de `pve01`.
 - Si SSH vers un nœud refuse ta connexion, tu as toujours la console de la VM dans Proxmox et l'agent QEMU (`qm guest exec <VMID> -- <commande>` depuis `pve01`, en lecture d'abord). Le refus lui-même est un indice.
-- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion.
+- **Tiens un journal de diagnostic** pour chaque panne, dans `docs/socle/journal/` de `~/medisphere` (publié par MR), qui cite le numéro du ticket (`INC-4519`…) : heure, hypothèse, commande, résultat observé, conclusion.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 ---
@@ -75,7 +75,7 @@ L'agent fait plusieurs requêtes **avant** d'être un kubelet : il télécharge 
 
 <details><summary>Indice 2</summary>
 
-Un jeton au format sécurisé commence par `K10` et contient l'empreinte SHA-256 de la CA du cluster. `curl -sk https://<serveur>:6443/cacerts | sha256sum` donne celle du serveur. Et le superviseur de k3s n'écoute pas sur le même port que celui de RKE2.
+Un jeton au format sécurisé commence par `K10` et contient l'empreinte SHA-256 de la CA du cluster. `curl -sk https://<serveur>:6443/cacerts | sha256sum` donne celle du serveur. Compare aussi ce que l'agent essaie de joindre avec ce que le serveur écoute réellement (`ss -ltnp` sur `k3s-ha01`).
 </details>
 
 <details><summary>Indice 3</summary>
@@ -189,7 +189,7 @@ La validation d'une configuration Talos est stricte : un champ inconnu ou un cha
 
 **Critères de réussite**
 - [ ] Toutes les machines de `capi-essai` sont `Running` et le `MachineDeployment` a tous ses réplicas prêts (3 si la panne est encore active, le nombre d'origine après `--annuler`).
-- [ ] Le jeton `wb-capi@pve!capi` est valide (pas d'expiration passée), le template de `capi-essai` est dans le pool `lab`, et le pool d'adresses a au moins deux adresses libres. Aucune réservation d'adresses étrangère à Cluster API ne traîne dans `capi-essai`.
+- [ ] Le jeton `wb-capi@pve!capi`, le template de `capi-essai` et le pool d'adresses sont dans l'état que prévoit le code (M18-E08, M18-E10, M18-E13) : jeton accepté, template clonable, au moins deux adresses libres, aucune réservation d'adresses étrangère à Cluster API dans `capi-essai`.
 - [ ] Le rôle `WBCapi` n'a pas reçu de privilège en plus de ceux du code de M18-E08.
 - [ ] Ton journal suit la machine d'objet en objet jusqu'à la cause. RB-180 est publié.
 

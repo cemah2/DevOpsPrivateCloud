@@ -66,8 +66,8 @@ check_cmd "X7 : Cluster CloudNativePG sain" _m18p_jq "$_e18_pg" \
   '(.items | length) >= 1 and all(.items[]; (.status.phase // "") == "Cluster in healthy state")'
 _e18_nsj="$(_m18p_json "$_e18_kc" get namespace "$_e18_ns")"
 check_cmd "X9 : espace étiqueté propriétaire=mediagenda, expiration ≥ aujourd'hui" _m18p_jq "$_e18_nsj" "
-  .metadata.labels[\"medisphere.fr/proprietaire\"] == \"mediagenda\"
-  and ((.metadata.labels[\"medisphere.fr/expiration\"] // \"\") >= \"$(date +%F)\")"
+  .metadata.labels[\"medisphere.internal/proprietaire\"] == \"mediagenda\"
+  and ((.metadata.labels[\"medisphere.internal/expiration\"] // \"\") >= \"$(date +%F)\")"
 
 title "Service"
 _e18_sante="$(curl -s --max-time "$WB_TIMEOUT" "$_e18_url" 2>/dev/null)" || _e18_sante=""

@@ -25,7 +25,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 17 XX`). Le com
 
 ### M17-E13 — Le pipeline du chart  `LIBRE` `★★★`
 
-> **Ticket PLAT-1831** — *De : Karim Benali* — *Copie : Julien Petit*
+> **Ticket PLAT-1813** — *De : Karim Benali* — *Copie : Julien Petit*
 > La version 0.5 du chart a été poussée dans Harbor depuis ton poste, avec ta clé de signature chargée en mémoire. Ça a marché, mais je ne veux plus voir ça. À partir de maintenant, un chart publié sort d'un pipeline.
 > Il faut qu'il soit testé avant même qu'on le relise. Son numéro de version doit dire si la nouveauté est un correctif ou une rupture. Il doit être signé par la clé de MédiSphère, celle qu'aucun humain ne manipule. Et il doit être impossible de republier une version déjà sortie.
 
@@ -42,11 +42,11 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 17 XX`). Le com
 - Images disponibles, aux versions de PLAN §6 :
   - Helm 4.3 : `alpine/helm:4.3.0` sur Docker Hub ;
   - chart-testing 3.15 : `quay.io/helmpack/chart-testing:v3.15.0` ;
-  - Cosign 3.1 : `ghcr.io/sigstore/cosign/cosign:v3.1.3`, et sa variante `-dev` qui contient un shell.
+  - Cosign 3.1 : l'image outillée `plateforme/outils-supply-chain` de ton M13-E09 (Cosign, racine MédiSphère, clé publique et configuration de signature sans journal), déjà utilisée par la chaîne de livraison des images.
   Ouvre ces images avant de t'en servir. Toutes ne contiennent pas la version de Helm que tu crois.
 - Harbor : projet `charts` (OCI). Robot `robot$charts+ci`, à créer s'il n'existe pas encore (droits : pousser et tirer sur `charts`, rien d'autre). Il n'y a ni ChartMuseum ni index `index.yaml` : seulement de l'OCI.
 - Le gabarit `templates/qualite.yml` de `plateforme/ci-templates` ne crée **aucun** pipeline sur une étiquette (M01-E24). Le gabarit `release.yml` pose les étiquettes `vX.Y.Z` avec semantic-release sur `runner01`.
-- La clé privée Cosign et son mot de passe sont des variables de CI protégées et masquées (M13). La clé publique est `docs/registre/cosign.pub` de `plateforme/medisphere`.
+- La clé privée Cosign (variable de type fichier `COSIGN_PRIVATE_KEY`) et son mot de passe (`COSIGN_PASSWORD`) sont des variables de CI protégées du groupe (M13-E09). La clé publique est `docs/registre/cosign.pub` de `plateforme/medisphere`, la configuration de signature `docs/registre/signing-config.json` (M13-E07).
 - Le lab est souverain : aucune signature ne part vers le journal de transparence public (ADR-0130).
 
 **Contraintes**
@@ -84,7 +84,7 @@ Le gabarit de qualité dit « pas de pipeline sur les étiquettes ». Tu publies
 
 <details><summary>Indice 3</summary>
 
-`helm push` affiche le digest de ce qu'il vient de pousser. Un job suivant peut le recevoir par un artefact `dotenv`. Cosign lit une clé dans une variable d'environnement (`env://…`). En version 3, il faut lui dire explicitement de ne pas utiliser la configuration de signature publique (relis M13-E07). La clé publique a sa place dans le dépôt : elle n'est pas secrète.
+`helm push` affiche le digest de ce qu'il vient de pousser. Un job suivant peut le recevoir par un artefact `dotenv`. Une variable de CI de type fichier contient un **chemin**, pas le contenu. En version 3, Cosign utilise par défaut la configuration de signature publique de Sigstore : relis comment le M13-E07 l'en empêche, et ce que la chaîne des images (M13-E09) embarque déjà. La clé publique n'est pas secrète.
 </details>
 
 **Pour aller plus loin** (facultatif) : déplace les jobs du chart dans un gabarit `templates/helm-chart.yml` de `plateforme/ci-templates`, réutilisable par les futurs charts (MédiDoc). Ajoute un job `ct install` dans un espace jetable sur `k8s-par1` (il faudra un kubeconfig de CI : c'est le sujet du M19).
@@ -93,7 +93,7 @@ Le gabarit de qualité dit « pas de pipeline sur les étiquettes ». Tu publies
 
 ### M17-E14 — Différences et dérive : `helm diff`, `kubectl diff`, *server-side apply*  `LAB` `★★`
 
-> **Ticket PLAT-1832** — *De : Karim Benali*
+> **Ticket PLAT-1814** — *De : Karim Benali*
 > En revue, je ne veux plus lire « ça devrait juste changer la limite mémoire ». Je veux voir le diff de ce qui va **réellement** changer dans le cluster, pour la release Helm de dev comme pour la recette qui passe par Kustomize.
 > Et explique-moi un truc : vendredi, Lucas a fait un `kubectl edit` sur le dev pour « tester un truc ». Est-ce que le prochain `helm upgrade` l'écrase, l'ignore ou échoue ?
 
@@ -152,7 +152,7 @@ Le nom de gestionnaire (`--field-manager`) est une **identité**. Deux applicati
 
 ### M17-E15 — Des paquets sans secrets  `LAB` `★★`
 
-> **Ticket SEC-1833** — *De : Sophie Laurent*
+> **Ticket SEC-1815** — *De : Sophie Laurent*
 > Audit interne : je veux la preuve qu'aucun mot de passe, aucune clé, aucun jeton ne se trouve dans un chart, un overlay, un fichier de valeurs, **ni dans une release Helm**. Lucas m'a dit qu'« avec Helm, les valeurs sont chiffrées dans le cluster ». Je voudrais que tu me montres ce qu'il en est vraiment.
 > Et je veux savoir, pour chaque Secret que consomment MédiAgenda et la plateforme, qui le crée, d'où il vient et comment on le change.
 
@@ -208,7 +208,7 @@ Pour le garde-fou, `helm template` puis un filtre `yq` sur `.kind` suffit. Pense
 
 ### M17-E16 — Monter un composant de plateforme par Helmfile  `LAB` `★★★`
 
-> **Ticket CHG-1834** — *De : Claire Morel* — *Copie : Nadia Roussel*
+> **Ticket CHG-1816** — *De : Claire Morel* — *Copie : Nadia Roussel*
 > Changement planifié : cert-manager passe à la dernière version de correctif de sa mineure. C'est le premier changement de plateforme qui passe par Helmfile. Je veux que ce soit le modèle des suivants : diff relu en MR, ordre des dépendances explicite, fenêtre annoncée à Nadia, retour arrière **répété** avant le jour J, preuve que rien n'a bougé ailleurs.
 > Si cert-manager est déjà à jour, prends le composant qui a du retard. Le but est la procédure.
 
@@ -272,7 +272,7 @@ Pour cert-manager, « revenir en arrière » après une montée de correctif se 
 
 ### M17-E17 — ADR : Helm, Kustomize ou les deux  `RED` `★★`
 
-> **Ticket PLAT-1835** — *De : Claire Morel* — *Copie : Karim Benali, Julien Petit*
+> **Ticket PLAT-1817** — *De : Claire Morel* — *Copie : Karim Benali, Julien Petit*
 > On a maintenant les trois : un chart, des overlays Kustomize qui partent du rendu de ce chart, et Helmfile pour la plateforme. Julien voudrait « tout en Helm, c'est plus simple ». Karim voudrait « tout en Kustomize, au moins on voit ce qu'on applique ». Et dans deux modules, Argo CD va consommer tout ça.
 > Écris l'ADR-0170. Je veux une règle que l'équipe MédiDoc pourra appliquer seule le mois prochain.
 
@@ -331,7 +331,7 @@ Pour Argo CD, lis dès maintenant la page *Helm* de sa documentation : comment i
 
 ### M17-E18 — Livrer une nouvelle version de MédiAgenda en temps limité  `CHRONO` `★★★`
 
-> **Ticket DEV-1836** — *De : Julien Petit* — *Copie : Claire Morel*
+> **Ticket DEV-1818** — *De : Julien Petit* — *Copie : Claire Morel*
 > MédiAgenda 1.1.0 est prête : on enregistre maintenant par quel canal le rendez-vous a été pris, et l'API exige de savoir dans quel environnement elle tourne. Il y a une migration de schéma.
 > Claire veut savoir combien de temps il faut entre « le code est fusionné » et « la recette tourne la nouvelle version », quand on fait tout proprement. Chrono en main.
 

@@ -19,5 +19,5 @@ images:
     newTag: v8.6.0
 labels:
   - pairs:
-      medisphere.fr/composant: stockage
+      medisphere.internal/composant: stockage
     includeSelectors: false

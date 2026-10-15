@@ -1,0 +1,58 @@
+# mediagenda/api — k8s/recette/50-migration.yaml (M16-E18) : remplace le Job du M14-E21.
+# Migration du schéma MédiAgenda vers mediagenda-db (python -m mediagenda.migrate, idempotent :
+# n'applique que les migrations absentes de mediagenda_historique_schema).
+# Le gabarit d'un Job est immuable : on ne réapplique pas un Job terminé, on en crée un nouveau.
+# Le nom porte la version de l'image (convention du M14) ET la cible (-cnpg) : le Job
+# mediagenda-migration-v1-0-0 du M14 (terminé, vers l'ancien PostgreSQL) peut encore exister.
+# Procédure : kubectl apply -f k8s/recette/50-migration.yaml
+#             kubectl -n mediagenda-recette wait --for=condition=Complete job/mediagenda-migration-v1-0-0-cnpg --timeout=5m
+#             puis kubectl apply -f k8s/recette/40-api.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mediagenda-migration-v1-0-0-cnpg
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: mediagenda-migration
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: mediagenda
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 604800
+  template:
+    metadata:
+      labels:
+        # Sélectionnée par les politiques réseau de 40-reseau-postgresql.yaml (plateforme/k8s).
+        app.kubernetes.io/name: mediagenda-migration
+        app.kubernetes.io/part-of: mediagenda
+    spec:
+      restartPolicy: Never
+      # Compte de service de l'API : il porte le Secret de tirage harbor-pull (projet privé
+      # « medisphere » de Harbor, M14-E19).
+      serviceAccountName: mediagenda-api
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-standard
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migration
+          # Même image que l'API (version de recette du M14).
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef: {name: mediagenda-db-app, key: uri}
+            # La commande de migration ne lit que MEDIAGENDA_DB_URL (et MEDIAGENDA_MIGRATIONS_DIR,
+            # « migrations » relatif au répertoire de travail de l'image du M12 : à fixer ici si
+            # ton image range les migrations ailleurs).
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # la migration n'écrit rien sur disque
+            capabilities: {drop: ["ALL"]}

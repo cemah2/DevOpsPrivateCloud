@@ -83,7 +83,9 @@ MédiAgenda tourne sur `k8s-par1`, mais personne ne peut l'atteindre sans un `ku
 | BGP | nœuds en AS 65040 ↔ `gw01` (10.10.40.2) et `gw02` (10.10.40.3) en AS 65000 | E11 |
 | Gateway `gw-par1` | espace `passerelles`, 10.10.41.10, `*.apps.par1.medisphere.internal` | E12 |
 | Zone DNS | `apps.par1.medisphere.internal` (RFC 2136, clés TSIG `externaldns-k8s` et `certmanager-k8s`) | E14-E15 |
-| `m15-essai` | VMID 2151, `vsandbox`, kubeadm mononœud pour MetalLB (détruite en fin de module) | E19 |
+| `m15-essai` | VMID 2151, `vsandbox`, 10.10.99.51, kubeadm mononœud pour MetalLB (adresses 10.10.99.230-238), détruite en fin de module | E19 |
+| Interface de Hubble | `hubble.apps.par1.medisphere.internal` (par `gw-par1`, réservée au lab), sonde `ms-verif-k8s-reseau` (compte `supervision/ms-supervision`) | E26 |
+| Gateway des partenaires | `gw-partenaires` (espace `passerelles`), 10.10.41.11, TLS *passthrough* vers `relais-mtls` | E33 |
 
 Détails figés : [`PLAN.md`](../../PLAN.md) §4.10.
 

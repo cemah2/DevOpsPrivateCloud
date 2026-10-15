@@ -1,4 +1,4 @@
-# Certificats et noms publiés (M15-E13 à E15), version de M17-E16 (ticket CHG-1834).
+# Certificats et noms publiés (M15-E13 à E15), version de M17-E16 (ticket CHG-1816).
 # Changements par rapport à M17-E10 : cert-manager v1.21.1 → v1.21.2 ; retour automatique sur échec ;
 # les émetteurs (ClusterIssuer) deviennent une release, ordonnée APRÈS cert-manager par « needs ».
 # Les clés TSIG restent des Secrets créés par script (jamais dans ces valeurs).
@@ -8,6 +8,7 @@ bases:
 releases:
   - name: cert-manager
     namespace: cert-manager
+    # Chart OCI de jetstack, comme l'installation du M15-E13 (oci://quay.io/jetstack/charts/cert-manager).
     chart: jetstack/cert-manager
     version: v1.21.2
     labels:

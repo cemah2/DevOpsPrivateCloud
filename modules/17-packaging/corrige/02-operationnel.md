@@ -5,8 +5,8 @@
 **Les fichiers.** Comme au palier 1 : [`fichiers/M17-E12/chart/`](fichiers/M17-E12/chart/) est le projet `mediagenda/chart` complet à la fin du palier (E06, E07 et E12 y ont chacun leur part) ; [`fichiers/M17-E09/deploiement/`](fichiers/M17-E09/deploiement/) est le projet `mediagenda/deploiement` complet (il remplace celui de E04) ; [`fichiers/M17-E10/k8s/`](fichiers/M17-E10/k8s/) est l'extrait Helmfile de `plateforme/k8s` ; [`fichiers/M17-E08/`](fichiers/M17-E08/) contient les scripts de publication et la page du registre ; [`fichiers/M17-E11/medidoc/`](fichiers/M17-E11/medidoc/) le chart MédiDoc corrigé.
 
 **Ce qui a été vérifié, et comment** (en plus du palier 1).
-- *Chart* : `helm dependency update` réel (Valkey 0.12.0 depuis `https://valkey.io/valkey-helm/`, bibliothèque `file://`), `helm lint --strict`, rendus des trois profils validés par kubeconform (schémas 1.36 + catalogue de CRD), 35 tests helm-unittest, `ct lint` 3.15 dans son image (Helm 3.16 embarqué, puis Helm 4.3 monté) avec refus d'une modification sans montée de version, `helm package` et contenu de l'archive (tests unitaires exclus, `templates/tests/` inclus).
-- *Publication* : `helm push` vers un registre OCI local (CNCF Distribution), signature `cosign sign --key … --use-signing-config=false --tlog-upload=false` (Cosign **3.1.3**) et `cosign verify --insecure-ignore-tlog=true` réussies, `helm pull` par digest, échec de `helm pull --verify` (`failed to fetch provenance … .prov`). `outils/rendre-base.sh` a été exécuté contre ce registre : rendu écrit, mode `--verifier` vert, puis rouge après altération du rendu.
+- *Chart* : `helm dependency update` réel (Valkey 0.12.0 depuis `https://valkey.io/valkey-helm/`, bibliothèque `file://`), `helm lint --strict`, rendus des trois profils validés par kubeconform (schémas 1.36 + catalogue de CRD), 37 tests helm-unittest, `ct lint` 3.15 dans son image (Helm 3.16 embarqué, puis Helm 4.3 monté) avec refus d'une modification sans montée de version, `helm package` et contenu de l'archive (tests unitaires exclus, `templates/tests/` inclus).
+- *Publication* : `helm push` vers un registre OCI local (CNCF Distribution), signature `cosign sign --key … --signing-config <configuration sans service>` (Cosign **3.1.3**, méthode du M13-E07 : bundle sans entrée de journal) et `cosign verify --insecure-ignore-tlog=true` réussies, `helm pull` par digest, échec de `helm pull --verify` (`failed to fetch provenance … .prov`). `outils/rendre-base.sh` a été exécuté contre ce registre : rendu écrit, mode `--verifier` vert, puis rouge après altération du rendu.
 - *Kustomize* : tous les overlays de E09 construits par Kustomize 5.8.2 et validés par kubeconform ; comportements observés cités tels quels (référence non réécrite avec `helmCharts`, voir E09).
 - *Helmfile* : `helmfile -e par1 list` et `template` sur la structure de E10 (dépôts réels, valeurs fictives) ; refus de `helmfile.yaml` + `helmfile.d/` constaté.
 - *Scripts* : ShellCheck 0.11 et `bash -n`.
@@ -101,7 +101,7 @@ La base de production n'est **pas** dans le chart (E09) ; la base intégrée ser
 
 **Solution**
 
-Fichiers : [`tests/`](fichiers/M17-E12/chart/charts/mediagenda/tests/) (six suites, 35 tests : `deployment_test.yaml`, `exposition_test.yaml`, `migrations_test.yaml` (E12), `reseau_test.yaml`, `cnpg_test.yaml`, `schema_test.yaml`), [`templates/tests/test-pret.yaml`](fichiers/M17-E12/chart/charts/mediagenda/templates/tests/test-pret.yaml), [`.helmignore`](fichiers/M17-E12/chart/charts/mediagenda/.helmignore), [`ct.yaml`](fichiers/M17-E12/chart/ct.yaml), [`ci/autonome-values.yaml`](fichiers/M17-E12/chart/charts/mediagenda/ci/autonome-values.yaml), [`wb-ct.yaml`](fichiers/M17-E07/wb-ct.yaml).
+Fichiers : [`tests/`](fichiers/M17-E12/chart/charts/mediagenda/tests/) (six suites, 37 tests : `deployment_test.yaml`, `exposition_test.yaml`, `migrations_test.yaml` (E12), `reseau_test.yaml`, `cnpg_test.yaml`, `schema_test.yaml`), [`templates/tests/test-pret.yaml`](fichiers/M17-E12/chart/charts/mediagenda/templates/tests/test-pret.yaml), [`.helmignore`](fichiers/M17-E12/chart/charts/mediagenda/.helmignore), [`ct.yaml`](fichiers/M17-E12/chart/ct.yaml), [`ci/autonome-values.yaml`](fichiers/M17-E12/chart/charts/mediagenda/ci/autonome-values.yaml), [`wb-ct.yaml`](fichiers/M17-E07/wb-ct.yaml).
 
 1. **Tests unitaires.**
    ```
@@ -112,10 +112,10 @@ Fichiers : [`tests/`](fichiers/M17-E12/chart/charts/mediagenda/tests/) (six suit
     PASS  Migrations de schéma (hooks)            tests/migrations_test.yaml
     PASS  Politiques réseau                       tests/reseau_test.yaml
     PASS  Schéma des valeurs (values.schema.json) tests/schema_test.yaml
-   Tests:       35 passed, 35 total
+   Tests:       37 passed, 37 total
    ```
    Points de méthode : `set` au niveau de la suite pour les valeurs communes (`medisphere.environnement`), `release.name`/`namespace` fixés (le nom complet en dépend), `template:` par test quand la suite charge plusieurs gabarits, `documentSelector` (ou `documentIndex`) pour viser un document d'un gabarit qui en rend plusieurs (Job et sa politique), `chart.appVersion` pour figer la version.
-2. **Le test menteur.** Une suite qui ne charge que `deployment.yaml` : ce gabarit `include` `configmap.yaml` (empreinte), absent de la suite ; **chaque** rendu échoue (`no template "mediagenda/templates/configmap.yaml" associated with template "gotpl"`), donc `failedTemplate: {}` passe… avec des valeurs valides. Constaté à la rédaction. Corrections : charger `configmap.yaml` dans la suite, ajouter un **cas témoin** qui doit rendre (`isKind: Deployment`), et donner à chaque `failedTemplate` un `errorPattern` qui nomme la valeur (`"/image/tag"`). Règle à noter : un test d'échec sans motif précis ne prouve rien.
+2. **Le test menteur.** Une suite qui ne charge que `deployment.yaml` : ce gabarit `include` `configmap.yaml` (empreinte), absent de la suite ; **chaque** rendu échoue (`no template "mediagenda/templates/configmap.yaml" associated with template "gotpl"`), donc `failedTemplate: {}` passe… avec des valeurs valides. Constaté sur le banc d'essai. Corrections : charger `configmap.yaml` dans la suite, ajouter un **cas témoin** qui doit rendre (`isKind: Deployment`), et donner à chaque `failedTemplate` un `errorPattern` qui nomme la valeur (`"/image/tag"`). Règle à noter : un test d'échec sans motif précis ne prouve rien.
 3. **`helm test` et archive.**
    ```
    admin@adm01:~/src/mediagenda-chart$ helm package charts/mediagenda -d /tmp && tar -tzf /tmp/mediagenda-0.4.0.tgz | grep -E 'tests|ci/'
@@ -190,7 +190,7 @@ Le pipeline du chart (M17-E13) lance helm-unittest et `ct lint` à chaque MR, `c
 
 Fichiers : [`outils/publier-chart.sh`](fichiers/M17-E08/outils/publier-chart.sh), [`outils/recopier-chart.sh`](fichiers/M17-E08/outils/recopier-chart.sh) (projet `mediagenda/chart`), [`registre-charts.md`](fichiers/M17-E08/medisphere/docs/kubernetes/packaging/registre-charts.md) (`plateforme/medisphere`).
 
-1. **Projet et robot.** Dans Harbor (compte `admin` ou toi si tu es administrateur du projet) : projet `charts` privé ; *Policy → Tag Immutability* : dépôts `**`, étiquettes `**` ; *Configuration → Cosign* (« n'autoriser que les artefacts signés ») comme `medisphere`. Robot de projet `charts+ci` (Harbor le nomme `robot$charts+ci`) : *Push Repository*, *Pull Repository*, *Read Artifact*, expiration 90 jours. Harbor n'affiche le secret qu'une fois : colle-le directement dans *GitLab → groupe mediagenda → Settings → CI/CD → Variables* (`HARBOR_CHARTS_TOKEN`, protégée, masquée ; `HARBOR_CHARTS_USER` = `robot$charts+ci`, attention au `$` : coche « Expand variable reference » **désactivé**). ⚠️ À vérifier sur ton lab : avec la politique Cosign active, Harbor laisse-t-il `cosign sign` lire le manifeste de l'artefact non encore signé ? Le M13 a rencontré la même question pour les images : reprends la réponse que tu y as trouvée.
+1. **Projet et robot.** Dans Harbor (compte `admin` ou toi si tu es administrateur du projet) : projet `charts` privé ; *Policy → Tag Immutability* : dépôts `**`, étiquettes `**` ; *Configuration → Cosign* (« n'autoriser que les artefacts signés ») comme `medisphere`. Robot de projet `charts+ci` (Harbor le nomme `robot$charts+ci`) : *Push Repository*, *Pull Repository*, *Read Artifact*, expiration 90 jours. Harbor n'affiche le secret qu'une fois : colle-le directement dans *GitLab → groupe mediagenda → Settings → CI/CD → Variables* (`HARBOR_CHARTS_TOKEN`, protégée, masquée ; `HARBOR_CHARTS_USER` = `robot$charts+ci`, protégée mais **non masquable** à cause du `$`, avec « Expand variable reference » **désactivé**, comme `HARBOR_ROBOT_USER` au M13). ⚠️ À vérifier sur ton lab : avec la politique Cosign active, Harbor laisse-t-il `cosign sign` lire le manifeste de l'artefact non encore signé ? Le M13 a rencontré la même question pour les images : reprends la réponse que tu y as trouvée.
 2. **Connexion de Helm.**
    ```
    admin@adm01:~$ read -rs HARBOR_MDP && printf '%s' "$HARBOR_MDP" | helm registry login registry.par1.medisphere.internal -u <MOI> --password-stdin; unset HARBOR_MDP
@@ -199,12 +199,13 @@ Fichiers : [`outils/publier-chart.sh`](fichiers/M17-E08/outils/publier-chart.sh)
    Helm range l'identifiant dans `~/.config/helm/registry/config.json` (même format que Docker ; option globale `--registry-config`). Fichier en 600 : vérifie-le. Cosign, lui, lit `~/.docker/config.json` ou `cosign login`.
 3. **Valkey.**
    ```
-   admin@adm01:~/src/mediagenda-chart$ COSIGN_KEY=<CLÉ-PRIVÉE> COSIGN_PUB=~/medisphere/docs/registre/cosign.pub outils/recopier-chart.sh https://valkey.io/valkey-helm/ valkey 0.12.0
+   admin@adm01:~/src/mediagenda-chart$ . ~/src/outils/cosign-cle.sh        # M13-E07 : COSIGN_KEY, COSIGN_PASSWORD, MS_SIGNING_CONFIG, MS_COSIGN_PUB
+   admin@adm01:~/src/mediagenda-chart$ outils/recopier-chart.sh https://valkey.io/valkey-helm/ valkey 0.12.0
    == Images citées par le rendu par défaut :
          image: docker.io/valkey/valkey:9.1.2
    …
    ```
-   (`<CLÉ-PRIVÉE>` : la clé MédiSphère extraite du Vault `critique` dans un fichier temporaire en 600, supprimé ensuite, ou la référence que tu as utilisée au M13 ; `COSIGN_PASSWORD` dans l'environnement du seul terminal.) Puis `repository: oci://registry.par1.medisphere.internal/charts` dans `Chart.yaml` et `helm dependency update` : `Chart.lock` change (champ `repository` et empreinte `digest` de l'ensemble des dépendances), même si le contenu téléchargé est identique.
+   (La clé reste dans une variable du seul terminal, jamais sur disque ; `cosign_oublier` l'efface à la fin.) Puis `repository: oci://registry.par1.medisphere.internal/charts` dans `Chart.yaml` et `helm dependency update` : `Chart.lock` change (champ `repository` et empreinte `digest` de l'ensemble des dépendances), même si le contenu téléchargé est identique.
 4. **Publication.**
    ```
    admin@adm01:~/src/mediagenda-chart$ helm dependency build charts/mediagenda && helm package charts/mediagenda -d /tmp
@@ -218,9 +219,8 @@ Fichiers : [`outils/publier-chart.sh`](fichiers/M17-E08/outils/publier-chart.sh)
 5. **Immuabilité.** Republier 0.4.0 modifié : Harbor refuse (⚠️ message à relever sur ton lab, du type `… configured as immutable`). Après **suppression** de l'artefact, la republication passe : l'immuabilité protège contre l'écrasement, pas contre la suppression. D'où deux protections de plus : droits de suppression réservés (pas au robot de CI), et consommation **par digest** vérifié (E09) — un contenu republié sous la même étiquette a un autre digest et une signature absente.
 6. **Signature.**
    ```
-   admin@adm01:~$ cosign sign --yes --key <CLÉ-PRIVÉE> --use-signing-config=false --tlog-upload=false \
+   admin@adm01:~$ cosign sign --key env://COSIGN_KEY --signing-config "$MS_SIGNING_CONFIG" \
        registry.par1.medisphere.internal/charts/mediagenda@sha256:<DIGEST>
-   Flag --tlog-upload has been deprecated, prefer using a --signing-config file with no transparency log services
    Signing artifact...
    Pushing signature to: registry.par1.medisphere.internal/charts/mediagenda
    admin@adm01:~$ cosign verify --key ~/medisphere/docs/registre/cosign.pub --insecure-ignore-tlog=true \
@@ -230,7 +230,7 @@ Fichiers : [`outils/publier-chart.sh`](fichiers/M17-E08/outils/publier-chart.sh)
    Error: no matching signatures …
    admin@adm01:/tmp$ shred -u /tmp/cosign.key /tmp/cosign.pub
    ```
-   (Sorties observées avec Cosign 3.1.3 sur un registre OCI local.) Harbor affiche la signature comme **accessoire** de l'artefact (référent OCI 1.1, format *bundle* de Cosign 3, pris en charge par Harbor 2.15).
+   (Sorties observées avec Cosign 3.1.3 sur un registre OCI local.) La configuration de signature est celle du M13-E07 (`docs/registre/signing-config.json`, aucun service) : sans elle, Cosign 3 enverrait l'entrée au journal public **sans poser de question**. Les anciennes options `--use-signing-config=false --tlog-upload=false` fonctionnent encore avec un avertissement de dépréciation : ne les utilise pas. Harbor affiche la signature comme **accessoire** de l'artefact (référent OCI 1.1, format *bundle* de Cosign 3, pris en charge par Harbor 2.15).
 7. **Consommation.**
    ```
    admin@adm01:~$ helm pull oci://registry.par1.medisphere.internal/charts/mediagenda --version 0.4.0 -d /tmp/conso
@@ -316,7 +316,8 @@ Projet complet : [`fichiers/M17-E09/deploiement/`](fichiers/M17-E09/deploiement/
    {"statut":"ok","version":"v1.0.0"}
    ```
    ExternalDNS publie `mediagenda.apps.par1.medisphere.internal` (source `gateway-httproute`, M15) ; le certificat joker `*.apps…` de `gw-par1` le couvre.
-7. **Recette.** `kubectl diff --server-side -k overlays/recette` montre le conteneur d'initialisation, les nouvelles étiquettes `medisphere.fr/equipe`, `donnees-sante`, `part-of`, la nouvelle ConfigMap ; après `apply`, le journal du conteneur `migrations` dit qu'aucune migration n'est à appliquer (`"appliquees": []`) : la base du M16 est déjà en V2, et la commande est idempotente.
+   **Mêmes garde-fous que les autres espaces** : [`overlays/prod/espace.yaml`](fichiers/M17-E09/deploiement/overlays/prod/espace.yaml) pose les étiquettes d'espace d'équipe du M14-E10 (`medisphere.internal/equipe: mediagenda`, `medisphere.internal/environnement: prod`) : sans elles, la ValidatingAdmissionPolicy des images (M14-E18, sélection par `medisphere.internal/equipe`) ne s'appliquerait **pas** à la production. Côté `plateforme/k8s`, deux MR accompagnent la création : la cloison `isolement-mediagenda-prod` (CiliumClusterwideNetworkPolicy sur le modèle de `isolement-mediagenda-recette`, M15-E28 : « ajouter un espace d'équipe = ajouter un fichier ») et les liaisons RBAC de l'équipe (lecture seule pour `medisphere:mediagenda-devs`, comme en recette, M14-E11).
+7. **Recette.** `kubectl diff --server-side -k overlays/recette` montre le conteneur d'initialisation, les nouvelles étiquettes `medisphere.internal/equipe`, `donnees-sante`, `part-of`, la nouvelle ConfigMap ; après `apply`, le journal du conteneur `migrations` dit qu'aucune migration n'est à appliquer (`"appliquees": []`) : la base du M16 est déjà en V2, et la commande est idempotente. Le Job manuel du M16 (`k8s/recette/50-migration.yaml` de `mediagenda/api`) n'a plus de raison d'être : retire-le par MR, avec ce qui restait de `k8s/recette/` hormis Valkey.
 8. **`helmCharts` contre rendu commité.** Constaté avec Kustomize 5.8.2 : quand le chart est gonflé par `helmCharts`, la référence ajoutée par patch à la ConfigMap **générée** (`envFrom: mediagenda-parametres`) n'est **pas** réécrite avec son suffixe d'empreinte (le Deployment référence `mediagenda-parametres`, qui n'existe pas) ; la même kustomization sur un rendu commité réécrit correctement (`mediagenda-parametres-<empreinte>`). Les références **internes** au chart (un `namePrefix` sur le compte de service, la ConfigMap du chart) sont, elles, bien réécrites. ⚠️ Comportement observé sur cette version, à revérifier sur la tienne. Choix MédiSphère : **rendu commité**, parce que (a) la MR montre le diff exact de ce qui changera dans le cluster ; (b) la signature est vérifiée **une fois**, par un outil qui le dit, avant le rendu ; (c) construire l'overlay ne demande ni Helm, ni réseau, ni identifiants — Argo CD (M20) lira le dépôt tel quel ; (d) on évite les comportements fins du gonfleur (celui-ci). Coût : un rendu à régénérer, d'où `--verifier` dans le pipeline.
 
 **Explications**
@@ -350,7 +351,9 @@ Chaque promotion est une MR sur `livraison.yaml` de l'environnement suivant, ave
 
 Fichiers : [`helmfile.yaml`](fichiers/M17-E10/k8s/helmfile.yaml), [`releases/_communs.yaml`](fichiers/M17-E10/k8s/releases/_communs.yaml), [`releases/10-reseau.yaml.gotmpl`](fichiers/M17-E10/k8s/releases/10-reseau.yaml.gotmpl), [`20-certificats-dns`](fichiers/M17-E10/k8s/releases/20-certificats-dns.yaml.gotmpl), [`30-stockage`](fichiers/M17-E10/k8s/releases/30-stockage.yaml.gotmpl), [`40-observabilite`](fichiers/M17-E10/k8s/releases/40-observabilite.yaml.gotmpl), [`environnements/par1.yaml`](fichiers/M17-E10/k8s/environnements/par1.yaml), [`outils/comparer-releases.sh`](fichiers/M17-E10/k8s/outils/comparer-releases.sh), un exemple [`composants/metrics-server/values.yaml`](fichiers/M17-E10/k8s/composants/metrics-server/values.yaml), [`Taskfile.yml.extrait`](fichiers/M17-E10/k8s/Taskfile.yml.extrait).
 
-Versions déclarées dans le corrigé (dernières de chaque série au 8 octobre 2026, **à remplacer par celles que montre ton `helm list -A`**) : `cilium` 1.20.2, `cert-manager` v1.21.1 (le palier 3 monte en v1.21.2), `external-dns` 1.23.0 (application 0.23.0), `ceph-csi-rbd`/`ceph-csi-cephfs` 3.18.1, `cloudnative-pg` 0.29.1 (opérateur 1.30.1), `velero` 12.2.1 (application 1.18.2), `metrics-server` 3.14.0.
+Versions déclarées dans le corrigé (dernières de chaque série au 8 octobre 2026, **à remplacer par celles que montre ton `helm list -A`**) : `cilium` 1.20.2, `cert-manager` v1.21.1 (le palier 3 monte en v1.21.2), `external-dns` 1.23.0 (application 0.23.0), `ceph-csi-rbd`/`ceph-csi-cephfs` 3.18.1, `cloudnative-pg` 0.29.1 (opérateur 1.30.1), `plugin-barman-cloud` 0.8.1 (plugin 0.15.1), `velero` 12.2.1 (application 1.18.2), `metrics-server` 3.14.0. Neuf releases en tout.
+
+Deux points de reprise qui comptent pour un diff vide : la **source** de chaque chart et le **chemin** des valeurs. cert-manager a été installé au M15 depuis son registre OCI (`oci://quay.io/jetstack/charts/cert-manager`) : le dépôt `jetstack` de `_communs.yaml` est donc déclaré en OCI (`url: quay.io/jetstack/charts`, `oci: true`). Les valeurs restent là où les modules 14 à 16 les ont rangées (`composants/ceph-csi/values-rbd.yaml` et `values-cephfs.yaml`, `composants/cloudnative-pg/values.yaml`, `composants/plugin-barman-cloud/values.yaml`…) : on ne déplace pas un fichier que d'autres scripts lisent encore. `outils/comparer-releases.sh` connaît ces chemins.
 
 1. **Inventaire.**
    ```

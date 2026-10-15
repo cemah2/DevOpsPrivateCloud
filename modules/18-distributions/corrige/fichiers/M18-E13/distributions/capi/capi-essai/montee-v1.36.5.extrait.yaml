@@ -8,7 +8,7 @@
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
 metadata:
-  name: capi-essai-control-plane
+  name: capi-essai-plan-controle
   namespace: capi-essai
 spec:
   version: v1.36.5                     # était v1.36.4
@@ -17,7 +17,7 @@ spec:
       infrastructureRef:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: ProxmoxMachineTemplate
-        name: capi-essai-control-plane-k136-2   # était capi-essai-control-plane (template 9060)
+        name: capi-essai-plan-controle-1365   # était capi-essai-plan-controle-1364 (template 9060)
   rollout:
     strategy:
       type: RollingUpdate
@@ -28,7 +28,7 @@ spec:
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
-  name: capi-essai-workers
+  name: capi-essai-travailleurs
   namespace: capi-essai
 spec:
   rollout:
@@ -43,4 +43,4 @@ spec:
       infrastructureRef:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: ProxmoxMachineTemplate
-        name: capi-essai-worker-k136-2 # était capi-essai-worker (template 9060)
+        name: capi-essai-travailleurs-1365 # était capi-essai-travailleurs-1364 (template 9060)

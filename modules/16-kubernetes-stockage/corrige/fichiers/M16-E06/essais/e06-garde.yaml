@@ -7,7 +7,7 @@ metadata:
   name: e06-garde
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   storageClassName: ceph-rbd-retain
   accessModes: ["ReadWriteOnce"]
@@ -21,7 +21,7 @@ metadata:
   name: e06-garde
   namespace: wb-essais
   labels:
-    medisphere.fr/exercice: m16-e06
+    medisphere.internal/exercice: m16-e06
 spec:
   automountServiceAccountToken: false
   securityContext:

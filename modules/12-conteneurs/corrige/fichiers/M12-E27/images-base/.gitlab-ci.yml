@@ -1,23 +1,28 @@
-# plateforme/images-base — .gitlab-ci.yml (M12-E27, PLAT-1353)
+# plateforme/images-base — .gitlab-ci.yml (M12-E27, PLAT-1327)
 # Construit les images bibliotheque/* sur runner02 (BuildKit sans privilège, gabarit image.yml de
 # M12-E21) et les publie dans le registre de travail avec deux étiquettes :
-#   - <version>-AAAAMMJJ : datée, IMMUABLE (jamais repoussée : le job échoue si elle existe) ;
+#   - <version>-AAAAMMJJ : datée, immuable PAR CONVENTION : ni le gabarit (qui ne refuse que
+#                          « latest ») ni registry:3 n'empêchent de la repousser ; un second pipeline
+#                          le même jour la réécrirait (limite écrite dans images-de-base.md ; Harbor
+#                          l'interdit au M13 par l'immuabilité des étiquettes) ;
 #   - <version>          : MOBILE, déplacée à chaque construction réussie (suivie par les recettes).
 # Déclencheurs : pipeline planifié hebdomadaire (« hebdomadaire », lundi 04:00 Europe/Paris), MR
 # (construction sans publication), lancement manuel sur main (correctif urgent : « Run pipeline »).
 include:
   - project: plateforme/ci-templates
-    ref: v1.4.0          # version du gabarit qui contient image.yml (E21) ; à adapter à la tienne
-    file: [qualite.yml, image.yml]
+    ref: v1              # branche v1 (M01) : contient image.yml depuis M12-E21
+    file: [templates/qualite.yml, templates/image.yml]
 
-stages: [test, construction]
+# Stages : ceux de templates/qualite.yml (lint, test, build, release), non redéfinis : les jobs de
+# qualite.yml sont en « lint ». Les pipelines planifiés et manuels de main passent par la règle
+# « $CI_COMMIT_BRANCH » du workflow de qualite.yml.
 
 variables:
   REGISTRE_BIBLIOTHEQUE: ctr01.par1.medisphere.internal:5000/bibliotheque
   PLATEFORMES: linux/amd64,linux/arm64
 
 hadolint:
-  stage: test
+  stage: lint
   # Variante Debian de l'image : la boucle ci-dessous demande un shell (l'image par défaut n'en a pas).
   image: docker.io/hadolint/hadolint:v2.15.1-debian
   tags: [docker]
@@ -38,11 +43,12 @@ date:
 
 .bibliotheque:
   extends: .image-construction          # job caché de image.yml (E21)
-  stage: construction
+  stage: build
   needs: [hadolint, date]
   variables:
     CONTEXTE: .
-    ARGS_CONSTRUCTION: "REVISION=$CI_COMMIT_SHA DATE_CONSTRUCTION=$DATE_CONSTRUCTION"
+    # VERSION, REVISION et SOURCE_DATE_EPOCH sont ajoutés par le gabarit.
+    ARGS_CONSTRUCTION: "DATE_CONSTRUCTION=$DATE_CONSTRUCTION"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       variables: { PUBLIER: "oui" }

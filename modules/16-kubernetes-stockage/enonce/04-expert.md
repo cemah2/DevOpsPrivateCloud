@@ -124,7 +124,7 @@ Pour changer la classe d'un `volumeClaimTemplates`, il faut recréer le Stateful
 
 <details><summary>Indice 2</summary>
 
-`kubectl logs -n ceph-csi <nodeplugin-du-nœud> -c csi-rbdplugin --tail=80` montre l'appel `NodeStageVolume` et la commande `rbd map` qu'il lance, avec son code d'erreur : « délai dépassé », « opération non permise » et « pilote introuvable » ne mènent pas au même étage. Sur le nœud, `timeout 3 bash -c '</dev/tcp/10.10.30.51/3300'`, `ip route get 10.10.30.51` et `sudo nft list ruleset` (cherche ce qui ne vient pas de Cilium ni de la configuration Ansible du nœud).
+`kubectl logs -n ceph-csi <nodeplugin-du-nœud> -c csi-rbdplugin --tail=80` montre l'appel `NodeStageVolume` et la commande `rbd map` qu'il lance, avec son code d'erreur : « délai dépassé », « opération non permise » et « pilote introuvable » ne mènent pas au même étage. Sur le nœud, `timeout 3 bash -c '</dev/tcp/10.10.30.51/3300'`, `ip route get 10.10.30.51` et ce que le pare-feu local du nœud laisse passer (`sudo nft list ruleset`).
 </details>
 
 <details><summary>Indice 3</summary>
@@ -326,7 +326,7 @@ Le message de l'API d'éviction est explicite quand plusieurs budgets couvrent u
 
 <details><summary>Indice 3</summary>
 
-Pour mesurer la coupure : un pod jetable `postgres:18` (image du cache Harbor) dans `mediagenda-recette`, avec le Secret `mediagenda-db-app`, et une boucle qui insère une ligne horodatée toutes les 0,5 s dans une table de test, en notant les échecs. N'oublie pas les politiques réseau deny-par-défaut de l'espace (M15).
+Pour mesurer la coupure : un pod jetable `postgres:18` (image du cache Harbor) dans `mediagenda-recette`, avec le Secret `mediagenda-db-app`, et une boucle qui insère une ligne horodatée toutes les 0,5 s dans une table de test, en notant les échecs. N'oublie pas les politiques réseau de refus par défaut de l'espace (`refus-par-defaut`, M15).
 </details>
 
 **Pour aller plus loin** : compare une bascule déclenchée par le drain avec un `kubectl cnpg promote` explicite avant le drain : laquelle coupe le moins, et pourquoi ? Lis la section `switchoverDelay` / `smartShutdownTimeout` de la documentation CloudNativePG.
@@ -397,7 +397,7 @@ Les WAL d'un serveur sont rangés sous `<destinationPath>/<nom-du-serveur>/wals/
 **Prérequis** : M16-E10, M16-E17 ; `lab/bin/check 16 42` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : external-snapshotter 8.6 : CRD `snapshot.storage.k8s.io/v1` et Deployment `snapshot-controller` dans `kube-system` (installés au M16-E06/E10 depuis les manifestes du projet). Le sidecar `csi-snapshotter` tourne dans les pods `ceph-csi-rbd-provisioner`. La classe `ceph-rbd-snap` porte, comme la StorageClass, le `clusterID` et les références du Secret utilisé pour créer l'instantané.
+**Contexte technique** : external-snapshotter 8.6 : CRD `snapshot.storage.k8s.io/v1` et Deployment `snapshot-controller` dans `kube-system` (installés au M16-E06 depuis les manifestes du projet). Le sidecar `csi-snapshotter` tourne dans les pods `ceph-csi-rbd-provisioner`. La classe `ceph-rbd-snap` porte, comme la StorageClass, le `clusterID` et les références du Secret utilisé pour créer l'instantané.
 
 **Injection** : `lab/bin/break 16 42` (3 variantes).
 
@@ -422,7 +422,7 @@ Les WAL d'un serveur sont rangés sous `<destinationPath>/<nom-du-serveur>/wals/
 
 <details><summary>Indice 2</summary>
 
-`kubectl get deploy,pods -n kube-system -l app.kubernetes.io/name=snapshot-controller`, `kubectl logs -n kube-system deploy/snapshot-controller --tail=50` (cherche `forbidden`), `kubectl get clusterrolebinding -o wide | grep snapshot`, `kubectl logs -n ceph-csi <provisioner-leader> -c csi-snapshotter --tail=50`, `diff <(kubectl get volumesnapshotclass ceph-rbd-snap -o yaml) <(…)` contre ce qui est dans `plateforme/k8s`.
+`kubectl get deploy,pods -n kube-system -l app.kubernetes.io/name=snapshot-controller`, `kubectl logs -n kube-system deploy/snapshot-controller --tail=50`, `kubectl logs -n ceph-csi <provisioner-leader> -c csi-snapshotter --tail=50`, `diff <(kubectl get volumesnapshotclass ceph-rbd-snap -o yaml) <(…)` contre ce qui est dans `plateforme/k8s`.
 </details>
 
 **Pour aller plus loin** : la CRD `VolumeSnapshotContent` protège les instantanés par des finaliseurs. Explique dans RB-166 ce qui arriverait aux instantanés existants (et aux images RBD derrière) si quelqu'un supprimait la CRD « pour la réinstaller proprement ».
@@ -476,7 +476,7 @@ Les pannes peuvent se masquer : un instantané bloqué fait échouer une sauvega
 
 ### M16-E44 — Sous le capot : du PVC au bloc monté  `LAB` `★★★★`
 
-> **Ticket PLAT-1790** — *De : Karim Benali*
+> **Ticket PLAT-1744** — *De : Karim Benali*
 > Pendant les pannes, tu as vu passer des `NodeStageVolume`, des `globalmount`, des `/dev/rbd0` et des `csi-vol-…` sans toujours savoir qui fait quoi. Je veux une note qui suive **un** volume réel, du PVC jusqu'au bloc monté dans le conteneur et jusqu'à l'image dans Ceph, avec les commandes pour le refaire, et un petit outil qui le fasse pour n'importe quel PVC pendant une astreinte.
 
 **Objectifs pédagogiques**
@@ -542,7 +542,7 @@ Pour `nsenter`, il faut être root sur le nœud : `sudo crictl ps --name <conten
 
 ### M16-E45 — Questions expert : stockage dans Kubernetes  `Q` `★★★`
 
-> **Ticket PLAT-1791** — *De : Claire Morel*
+> **Ticket PLAT-1745** — *De : Claire Morel*
 > Avant la recette, je fais passer à chacun les questions qu'on posera aux candidats du futur poste « ingénieur stockage plateforme ». Réponds par écrit, en justifiant ; quand c'est un QCM, dis aussi pourquoi les autres réponses sont fausses.
 
 **Objectifs pédagogiques**

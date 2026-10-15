@@ -5,14 +5,14 @@
 | Date | <AAAA-MM-JJ> |
 | Volume | `mediagenda-recette/donnees-valkey-0` (<TAILLE>), `ceph-rbd` → `ceph-rbd-chiffre` |
 | Témoins | clés `e29:*` (<N> clés, empreinte <SHA256>) ; `outils/temoin-api.sh` (API publiée) |
-| Mesure prise pour l'API | sonde de disponibilité de l'API : `failureThreshold` 3 → 30 pendant la fenêtre (MR <!N>), rétablie (MR <!N>) ; DEV-1729 ouvert |
+| Mesure prise pour l'API | sonde de disponibilité de l'API : `failureThreshold` 2 → 60 pendant la fenêtre (MR <!N>), rétablie (MR <!N>) ; DEV-1729 ouvert |
 
 ## Répétition
 
 | Essai | Coupure de Valkey | Effet sur l'API (témoin) |
 |---|---|---|
-| Sans adaptation de la sonde | 2 min | <N> s d'échecs : pods de l'API retirés du Service après ~30 s |
-| Avec `failureThreshold: 30` | 2 min | 0 échec ; créneaux calculés depuis la base (mode dégradé) |
+| Sans adaptation de la sonde | 2 min | <N> s d'échecs : pods de l'API retirés du Service après ~10 s |
+| Avec `failureThreshold: 60` | 2 min | 0 échec ; créneaux calculés depuis la base (mode dégradé) |
 
 ## Chronologie
 

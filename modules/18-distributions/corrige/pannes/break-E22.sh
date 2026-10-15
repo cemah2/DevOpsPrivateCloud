@@ -55,7 +55,7 @@ f=/etc/rancher/rke2/config.yaml
 [ -f "$f" ] || exit 10
 grep -q '^node-label:' "$f" && exit 10
 sauver "$f"
-printf 'node-label:\n\t- "medisphere.fr/baie=par1-baie-c"\n' >> "$f"
+printf 'node-label:\n\t- "medisphere.internal/baie=par1-baie-c"\n' >> "$f"
 journal "config.yaml : étiquette de nœud ajoutée avec une tabulation"
 systemctl restart --no-block rke2-server
 EOF

@@ -36,7 +36,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 
 ### M12-E35 — Panne : le conteneur s'arrête aussitôt  `BF` `★★`
 
-> **Ticket INC-3941** — *De : Julien Petit*
+> **Ticket INC-3935** — *De : Julien Petit*
 > *(Le détail du ticket s'affiche à l'injection : selon le cas, l'API ou MédiDoc de la recette ne répond plus depuis une livraison de Lucas.)* La recette de ce matin est bloquée. Remets le service en route sans perdre la base de recette, et explique-moi comment on aurait pu le voir avant le déploiement.
 
 **Objectifs pédagogiques**
@@ -87,7 +87,7 @@ Pour regarder dans une image sans shell : `docker create` puis `docker cp` du fi
 
 ### M12-E36 — Panne : « permission denied » sur le volume  `BF` `★★`
 
-> **Ticket INC-3942** — *De : Nadia Roussel*
+> **Ticket INC-3936** — *De : Nadia Roussel*
 > *(Le détail s'affiche à l'injection : selon le cas, la base de recette de `ctr01` après une restauration, ou le cache de recette de `ctr02` ou de `ctr03` après un « nettoyage » de Lucas.)* Les journaux parlent de « Permission denied ». Répare sans perdre les données, et ne te contente pas d'un `chmod 777` : Sophie relira.
 
 **Objectifs pédagogiques**
@@ -132,7 +132,7 @@ Sur `ctr03` : `sudo ausearch -m avc -ts recent`, `ls -Zd`, et relis la ligne `Vo
 
 ### M12-E37 — Panne : l'application ne joint plus sa base  `BF` `★★★`
 
-> **Ticket INC-3943** — *De : Julien Petit*
+> **Ticket INC-3937** — *De : Julien Petit*
 > Depuis ce matin, l'API de recette (`ctr01`) répond sur `/sante` mais `/pret` échoue (503, ou plus de réponse du tout) et toute création de rendez-vous échoue : elle ne joint plus PostgreSQL. La base, elle, est saine. *(Le contexte de la veille s'affiche à l'injection.)* Rétablis le service, puis dis-moi ce qu'il fallait faire à la place.
 
 **Objectifs pédagogiques**
@@ -174,14 +174,14 @@ Sur `ctr03` : `sudo ausearch -m avc -ts recent`, `ls -Zd`, et relis la ligne `Vo
 
 <details><summary>Indice 3</summary>
 
-Le trafic entre deux conteneurs d'un même pont ne traverse pas la chaîne `forward` de la famille `inet`/`ip` ; d'autres familles de nftables le voient. Une règle qui jette (au lieu de refuser) laisse les connexions déjà ouvertes pendues.
+Une connexion refusée et une connexion qui pend ne viennent pas du même endroit : la seconde suggère un paquet jeté en route. Liste **toutes** les tables de `nft list ruleset`, quelle que soit leur famille, et demande-toi lesquelles voient le trafic entre deux conteneurs d'un même pont.
 </details>
 
 ---
 
 ### M12-E38 — Panne : la construction échoue ou ignore le cache  `BF` `★★`
 
-> **Ticket INC-3944** — *De : Julien Petit*
+> **Ticket INC-3938** — *De : Julien Petit*
 > *(Le détail s'affiche à l'injection : selon le cas, la reconstruction de l'image de recette de l'API échoue, ou elle prend plusieurs minutes au lieu de quelques secondes.)* Sur `ctr01`, dans `/srv/recette` : `sudo docker compose build api`. L'image doit se reconstruire correctement **et** vite. Explique-moi aussi comment on s'en serait aperçu en revue.
 
 **Objectifs pédagogiques**
@@ -224,7 +224,7 @@ Dans la sortie `--progress=plain`, cherche `transferring context:` et les lignes
 
 ### M12-E39 — Panne : le disque de l'hôte est plein  `BF` `★★`
 
-> **Ticket INC-3945** — *De : Nadia Roussel*
+> **Ticket INC-3939** — *De : Nadia Roussel*
 > Alerte de cette nuit : le disque de `ctr01` est plein. Les créations de rendez-vous de la recette échouent, la base de recette se plaint de « No space left on device ». Lucas propose de « faire un `docker system prune -a --volumes` et on n'en parle plus » : surtout pas avant d'avoir compris ce qui a rempli le disque et ce qu'on peut supprimer sans rien perdre.
 
 **Objectifs pédagogiques**
@@ -267,7 +267,7 @@ Images « orphelines » (`<none>`) et cache de construction se recréent ; un vo
 
 ### M12-E40 — Panne : le service Quadlet ne démarre pas  `BF` `★★★`
 
-> **Ticket INC-3946** — *De : Karim Benali*
+> **Ticket INC-3940** — *De : Karim Benali*
 > *(Le détail s'affiche à l'injection : selon le cas, après une retouche des fichiers Quadlet, une déconnexion de Lucas ou un redémarrage de `ctr02`.)* Remets le service `recette-cache` en service de façon durable (il doit survivre à un redémarrage de `ctr02` et à la déconnexion de tout le monde), et dis-moi comment tu l'as diagnostiqué.
 
 **Objectifs pédagogiques**
@@ -310,7 +310,7 @@ Images « orphelines » (`<none>`) et cache de construction se recréent ; un vo
 
 ### M12-E41 — Panne : le conteneur est tué sans prévenir  `BF` `★★★`
 
-> **Ticket INC-3947** — *De : Julien Petit*
+> **Ticket INC-3941** — *De : Julien Petit*
 > *(Le détail s'affiche à l'injection : selon le cas, l'API de recette redémarre sans cesse depuis une « passe d'optimisation », ou elle est coupée toutes les une à deux minutes sans erreur dans ses journaux.)* Trouve qui ou quoi arrête le conteneur, prouve-le, et corrige sans retirer les protections utiles.
 
 **Objectifs pédagogiques**
@@ -353,7 +353,7 @@ Code 137 avec `OOMKilled: true` : le noyau. Code 137 ou 143 sans OOM : quelqu'un
 
 ### M12-E42 — Panne : le pipeline ne publie plus l'image  `BF` `★★★`
 
-> **Ticket INC-3948** — *De : Julien Petit*
+> **Ticket INC-3942** — *De : Julien Petit*
 > Depuis ce matin, le pipeline de `mediagenda/api` (et ceux des autres applications) ne publie plus l'image dans le registre de travail de `ctr01` : le job de construction ou de publication échoue sur `runner02`. Personne n'a touché au `.gitlab-ci.yml`. Lucas propose de « passer le runner en `privileged = true`, comme tout le monde » : Sophie a déjà dit non.
 
 **Objectifs pédagogiques**
@@ -396,7 +396,7 @@ Sur `runner02` : `sudo ls -l --time-style=full-iso /etc/gitlab-runner/` et `sudo
 
 ### M12-E43 — Astreinte : la pile de recette est en panne  `BF` `★★★★`
 
-> **Ticket INC-3950** — *De : Nadia Roussel (responsable astreinte) — priorité P2*
+> **Ticket INC-3943** — *De : Nadia Roussel (responsable astreinte) — priorité P2*
 > Tu es d'astreinte. *(Les remontées s'affichent à l'injection : trois symptômes, d'étages différents.)* L'équipe de Julien lance sa campagne de tests de non-régression à 9 h. Rétablis la pile complète (API, base, cache, MédiDoc), tiens-moi informée toutes les 30 min (#astreinte), puis rédige le post-mortem avec le modèle de l'équipe.
 
 **Objectifs pédagogiques**
@@ -415,7 +415,7 @@ Sur `runner02` : `sudo ls -l --time-style=full-iso /etc/gitlab-runner/` et `sudo
 1. **Premiers 15 minutes** : état des lieux sans rien modifier (hôte, moteur, chaque service de la pile, réseaux, pare-feu, minuteries), premier point à Nadia : impact, hypothèses, prochaine étape.
 2. **Rétablissement** : traite les causes dans l'ordre qui rend les suivantes visibles ; après chaque correction, revérifie l'ensemble. Garde les preuves (sorties de commandes) au fur et à mesure.
 3. **Points d'étape** toutes les 30 minutes (dans ton journal, au format d'un message de canal : heure, état, prochaine action, besoin éventuel).
-4. **Post-mortem** `docs/socle/post-mortems/<AAAA-MM-JJ>-INC-3950.md` : résumé, impact, chronologie, détection (qui a vu quoi, quand, qu'est-ce qui aurait dû alerter), causes racines (une par panne, avec la sortie de diagnostic qui la prouve), ce qui a bien marché, actions (responsable, échéance, vérification). Publie-le par MR.
+4. **Post-mortem** `docs/socle/post-mortems/<AAAA-MM-JJ>-INC-3943.md` : résumé, impact, chronologie, détection (qui a vu quoi, quand, qu'est-ce qui aurait dû alerter), causes racines (une par panne, avec la sortie de diagnostic qui la prouve), ce qui a bien marché, actions (responsable, échéance, vérification). Publie-le par MR.
 
 **Critères de réussite**
 - [ ] Toute la pile de recette est saine et stable (contrôles de M12-E35, E36, E37, E39 et E41 verts) ; aucune panne du module n'est encore active.
@@ -438,7 +438,7 @@ Un service qui ne démarre pas cache tout ce qui se passe après lui : tant que 
 
 ### M12-E44 — Sous le capot : un conteneur construit à la main  `LAB` `★★★★`
 
-> **Ticket PLAT-1360** — *De : Karim Benali*
+> **Ticket PLAT-1344** — *De : Karim Benali*
 > Pour la formation des nouveaux arrivants, je veux une démonstration qui enlève la magie : un conteneur fait à la main, avec les commandes du noyau, puis le même avec `runc` seul, sans Docker ni Podman. Écris-la pour qu'un admin système la rejoue en une heure.
 
 **Objectifs pédagogiques**
@@ -496,10 +496,18 @@ Dans `config.json`, la racine est la clé `root` (`path`, `readonly`), les limit
 
 ### M12-E45 — Questions expert : conteneurs  `Q` `★★★`
 
-> **Ticket PLAT-1361** — *De : Claire Morel*
+> **Ticket PLAT-1345** — *De : Claire Morel*
 > Avant de te laisser former les équipes sur les conteneurs, je veux tes réponses écrites à ces questions, celles qu'on pose en entretien et celles qu'on se pose à 3 h du matin. Réponds en quelques lignes argumentées, avec la commande ou le fichier qui prouve ce que tu avances quand il y en a un.
 
-**Prérequis** : paliers 1 à 4. **Durée indicative** : 2 h.
+**Objectifs pédagogiques**
+- Expliquer, preuves à l'appui, le fonctionnement interne des conteneurs et les choix d'exploitation du module.
+- Repérer les notions encore fragiles avant de former les équipes.
+
+**Prérequis** : paliers 1 à 4.
+**Durée indicative** : 2 h.
+
+**Questions**
+
 
 1. Un conteneur sort avec le code 137 et `OOMKilled: false`. Donne trois causes possibles et la commande qui départage chacune.
 2. Pourquoi un processus en PID 1 dans un conteneur ignore-t-il `SIGTERM` alors que le même programme hors conteneur s'arrête ? Que change `--init` (ou `tini`) et pourquoi `exec` dans un script d'entrée ?
@@ -515,9 +523,9 @@ Dans `config.json`, la racine est la clé `root` (`path`, `readonly`), les limit
 12. `:z` et `:Z` sous SELinux : différence, risque de chacune (pense à un `:Z` sur `/home` ou `/var/lib/mysql` partagé), et pourquoi `chcon` n'est pas une correction durable.
 13. Une image est référencée par `mediagenda/api:1.2.0` dans la production et par une empreinte `@sha256:…` dans la recette. Laquelle des deux peut changer sans que personne ne modifie le déploiement ? Quels sont les avantages et les coûts de l'épinglage par empreinte ?
 14. Qu'est-ce qu'un index multi-architecture ? Comment le moteur choisit-il le manifeste, et comment vérifier qu'une étiquette couvre bien `linux/arm64` sans tirer l'image ?
-15. Construction reproductible : citez trois sources de non-reproductibilité d'une image et le moyen de les neutraliser (`SOURCE_DATE_EPOCH`, verrous, épinglage). À quoi sert la reproductibilité pour la sécurité ?
+15. Construction reproductible : cite trois sources de non-reproductibilité d'une image et le moyen de les neutraliser (`SOURCE_DATE_EPOCH`, verrous, épinglage). À quoi sert la reproductibilité pour la sécurité ?
 16. Une sonde de santé appelle `/pret` (base et cache) au lieu de `/sante`. Quel est le risque sous Docker, et quel sera-t-il sous Kubernetes quand la même sonde deviendra une sonde de vivacité ?
-17. Comparez `json-file`, `local` et `journald` comme pilotes de journaux : rotation, `docker logs`, collecte par un agent, perte en cas de disque plein.
+17. Compare `json-file`, `local` et `journald` comme pilotes de journaux : rotation, `docker logs`, collecte par un agent, perte en cas de disque plein.
 18. Qu'est-ce que le *shim* de containerd et pourquoi permet-il de redémarrer `dockerd` (ou containerd) sans tuer les conteneurs (`live-restore`) ?
 19. `runc`, `crun`, gVisor, Kata Containers : quels niveaux d'isolement, quels coûts, et quand MédiSphère devrait-elle envisager autre chose que `runc` ?
 20. Rootless Docker, Podman sans privilège et `userns-remap` : trois façons de ne pas être root sur l'hôte. Ce que chacune protège, ce qu'elle casse (ports < 1024, volumes, performances réseau), et laquelle MédiSphère a retenue (ADR-0120).

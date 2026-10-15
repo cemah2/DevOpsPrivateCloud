@@ -1,6 +1,6 @@
 # Dérive de configuration : la voir, la corriger
 
-*M17-E14 — ticket PLAT-1832. Concerne `k8s-par1`, Helm 4 et Kustomize.*
+*M17-E14 — ticket PLAT-1814. Concerne `k8s-par1`, Helm 4 et Kustomize.*
 
 ## Voir une dérive
 

@@ -72,7 +72,7 @@ _mE21_une() {
       [[ -d "$_M17_DEPLOIEMENT/components/debogage" ]] || return 10
       yq -e '.components | index("../../components/debogage")' "$_M17_DEPLOIEMENT/$_E21_KUS" >/dev/null 2>&1 && return 10
       yq -i '.components |= (.[0:-1] + ["../../components/debogage"] + .[-1:])' "$_M17_DEPLOIEMENT/$_E21_KUS" || return 1
-      br="lucas/diagnostic-prod"; msg="chore(prod): journaux détaillés pour le diagnostic du ticket INC-4398"
+      br="lucas/diagnostic-prod"; msg="chore(prod): journaux détaillés pour le diagnostic du ticket INC-4405"
       ;;
   esac
   if git -C "$_M17_DEPLOIEMENT" rev-parse --verify --quiet "refs/heads/$br" >/dev/null; then

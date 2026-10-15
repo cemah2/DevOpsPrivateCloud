@@ -47,7 +47,7 @@ check_cmd "données montées en lecture seule" _m12p_jq "$_m12_e34_j" '[.Mounts[
 check_cmd "le jeton d'administration n'est pas dans l'environnement du conteneur" _m12p_jq "$_m12_e34_j" \
   '(.Config.Env // []) | any(startswith("MEDIANNUAIRE_JETON_ADMIN=")) | not'
 check_cmd "le conteneur est sain" _m12p_jq "$_m12_e34_j" '.State.Health.Status == "healthy"'
-_m12_e34_url="http://ctr01.$_M12P_DOMAINE:8090"
+_m12_e34_url="http://ctr01.$_M12P_DOMAINE:8095"
 check_http "/sante répond 200" "$_m12_e34_url/sante" 200
 check_http "/pret répond 200" "$_m12_e34_url/pret" 200
 check_output "la liste des praticiens n'est pas vide" '"id"' curl -s --max-time "$WB_TIMEOUT" "$_m12_e34_url/api/v1/praticiens"

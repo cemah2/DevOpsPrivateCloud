@@ -1,4 +1,4 @@
-# Extrait à ajouter au .gitlab-ci.yml de mediagenda/chart (M17-E15, ticket SEC-1833).
+# Extrait à ajouter au .gitlab-ci.yml de mediagenda/chart (M17-E15, ticket SEC-1815).
 # Le chart ne doit JAMAIS rendre un Secret, quels que soient les valeurs et les sous-charts activés :
 # les secrets viennent d'objets créés hors du paquet (CloudNativePG, scripts depuis Vault Ansible).
 sans-secret:

@@ -293,7 +293,7 @@ kind: PersistentVolumeClaim
 metadata:
   name: @NOM@
   namespace: @NS@
-  labels: {app.kubernetes.io/name: @NOM@, app.kubernetes.io/part-of: wb-temoins, medisphere.fr/temoin: m16}
+  labels: {app.kubernetes.io/name: @NOM@, app.kubernetes.io/part-of: wb-temoins, medisphere.internal/temoin: m16}
 spec:
   accessModes: [@MODE@]
   storageClassName: @CLASSE@
@@ -304,14 +304,14 @@ kind: Deployment
 metadata:
   name: @NOM@
   namespace: @NS@
-  labels: {app.kubernetes.io/name: @NOM@, app.kubernetes.io/part-of: wb-temoins, medisphere.fr/temoin: m16}
+  labels: {app.kubernetes.io/name: @NOM@, app.kubernetes.io/part-of: wb-temoins, medisphere.internal/temoin: m16}
 spec:
   replicas: 1
   strategy: {type: Recreate}
   selector: {matchLabels: {app.kubernetes.io/name: @NOM@}}
   template:
     metadata:
-      labels: {app.kubernetes.io/name: @NOM@, app.kubernetes.io/part-of: wb-temoins, medisphere.fr/temoin: m16}
+      labels: {app.kubernetes.io/name: @NOM@, app.kubernetes.io/part-of: wb-temoins, medisphere.internal/temoin: m16}
     spec:
       terminationGracePeriodSeconds: 5
       securityContext:

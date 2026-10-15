@@ -16,7 +16,7 @@
 
 | Interface | Rôle |
 |---|---|
-| `ens18` | carte du nœud sur le VLAN 40 ; porte le tunnel VXLAN (UDP 8472) |
+| `eth0` | carte du nœud sur le VLAN 40 ; porte le tunnel VXLAN (UDP 8472) |
 | `cilium_host` / `cilium_net` | paire veth de l'agent : `cilium_host` porte l'adresse « routeur » du /24 du nœud, passerelle de tous ses pods |
 | `cilium_vxlan` | interface VXLAN en mode « collecte » (`external`) : pas de VNI ni de pair fixes, les programmes eBPF choisissent la destination paquet par paquet |
 | `lxcXXXXXXXXXXXX` | côté nœud de la paire veth de chaque pod (l'autre côté est `eth0` dans le pod) |
@@ -38,8 +38,8 @@ sonde-w01a (eth0) ──veth──> lxcA (nœud) ──[eBPF : identité, politi
 
 ```
 sonde-w01a ─> lxcA ─[eBPF : ipcache 10.240.Y.Z → identité + nœud 10.10.40.62]─> cilium_vxlan
-     ─> ens18 de k8s-w01 : IP 10.10.40.61 → 10.10.40.62, UDP → 8472, VXLAN (VNI = identité de la source)
-     ─> ens18 de k8s-w02 ─> cilium_vxlan ─[eBPF : politique d'entrée de la destination, identité lue dans le VNI]─> lxcC ─> sonde-w02
+     ─> eth0 de k8s-w01 : IP 10.10.40.61 → 10.10.40.62, UDP → 8472, VXLAN (VNI = identité de la source)
+     ─> eth0 de k8s-w02 ─> cilium_vxlan ─[eBPF : politique d'entrée de la destination, identité lue dans le VNI]─> lxcC ─> sonde-w02
 ```
 
 - L'**ipcache** (`cilium-dbg bpf ipcache list`) associe chaque adresse de pod du cluster à son identité et à l'adresse du nœud qui l'héberge (`tunnelendpoint`).
@@ -51,7 +51,7 @@ sonde-w01a ─> lxcA ─[eBPF : ipcache 10.240.Y.Z → identité + nœud 10.10.4
 ## 3. Pod → hors du cluster (ex. `dns01`)
 
 ```
-sonde-w01a ─> lxcA ─> routage du nœud ─> masquage (SNAT) : source 10.240.X.Y → 10.10.40.61 ─> ens18 ─> 10.10.40.1 (VIP bordure) ─> 10.10.20.10
+sonde-w01a ─> lxcA ─> routage du nœud ─> masquage (SNAT) : source 10.240.X.Y → 10.10.40.61 ─> eth0 ─> 10.10.40.1 (VIP bordure) ─> 10.10.20.10
 ```
 
 - Tout ce qui sort de 10.240.0.0/16 (sauf vers un autre pod) est **masqué** derrière l'adresse du nœud : la bordure et `dns01` ne voient jamais une adresse de pod. En conséquence, la matrice des flux de la bordure raisonne en **nœuds** (10.10.40.0/24), pas en pods.
@@ -70,7 +70,7 @@ Le pod vise l'adresse d'un Service (10.96.x.y) ; la traduction vers l'adresse d'
 | Labels d'une identité | `… cilium-dbg identity get <ID>` |
 | Nœuds connus et leurs adresses | `… cilium-dbg node list` |
 | Mode de routage, tunnel, masquage | `… cilium-dbg status --verbose` (lignes *Routing*, *Host Routing*, *Masquerading*) |
-| Le tunnel sur le fil | `sudo tcpdump -ni ens18 udp port 8472` sur un nœud |
+| Le tunnel sur le fil | `sudo tcpdump -ni eth0 udp port 8472` sur un nœud |
 | Trouver le pod Cilium d'un nœud | `kubectl -n kube-system get pods -l k8s-app=cilium --field-selector spec.nodeName=<NOEUD>` |
 
 Outils des nœuds : `playbooks/k8s-outils-diagnostic.yml` de `plateforme/ansible` (tcpdump, conntrack, iptables, bpftool, dig, iperf3).

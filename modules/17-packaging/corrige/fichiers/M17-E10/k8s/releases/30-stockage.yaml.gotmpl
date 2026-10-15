@@ -1,5 +1,6 @@
-# Stockage et données (M16). external-snapshotter et le plugin Barman Cloud sont installés par
-# manifestes (composants/…/) : ils ne sont pas des releases Helm et restent hors de ce fichier.
+# Stockage et données (M16). external-snapshotter est installé par Kustomize
+# (composants/snapshot-controller/, M16-E06) : ce n'est pas une release Helm, il reste hors de ce
+# fichier. Les fichiers de valeurs sont ceux des modules 14 à 16, à leurs chemins d'origine.
 bases:
   - _communs.yaml
 ---
@@ -12,7 +13,7 @@ releases:
       groupe: stockage
       composant: ceph-csi-rbd
     values:
-      - ../composants/ceph-csi-rbd/values.yaml
+      - ../composants/ceph-csi/values-rbd.yaml
 
   - name: ceph-csi-cephfs
     namespace: ceph-csi
@@ -22,7 +23,7 @@ releases:
       groupe: stockage
       composant: ceph-csi-cephfs
     values:
-      - ../composants/ceph-csi-cephfs/values.yaml
+      - ../composants/ceph-csi/values-cephfs.yaml
 
   - name: cnpg
     namespace: cnpg-system
@@ -32,7 +33,21 @@ releases:
       groupe: stockage
       composant: cnpg
     values:
-      - ../composants/cnpg/values.yaml
+      - ../composants/cloudnative-pg/values.yaml
+
+  # Plugin Barman Cloud de CloudNativePG (M16-E18), même espace que l'opérateur.
+  - name: plugin-barman-cloud
+    namespace: cnpg-system
+    chart: cnpg/plugin-barman-cloud
+    version: 0.8.1
+    labels:
+      groupe: stockage
+      composant: plugin-barman-cloud
+    # Ordre d'une installation neuve : les CRD et le webhook de l'opérateur d'abord.
+    needs:
+      - cnpg-system/cnpg
+    values:
+      - ../composants/plugin-barman-cloud/values.yaml
 
   - name: velero
     namespace: velero

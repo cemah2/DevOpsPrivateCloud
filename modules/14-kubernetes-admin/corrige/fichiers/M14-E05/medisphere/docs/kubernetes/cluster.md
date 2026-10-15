@@ -42,6 +42,6 @@ composants de plateforme.
 
 ## Liens
 
-- Accès et identités : [`acces.md`](acces.md)
+- Accès et identités : `acces.md` (écrit en M14-E06 ; ajoute alors le lien)
 - Runbooks : RB-140 (nœud NotReady), RB-141 (restaurer etcd), RB-142 (montée de version), RB-143 (certificats)
 - Décisions : ADR-0140 (distribution et topologie), ADR-0141 (politique de versions)

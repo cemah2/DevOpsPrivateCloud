@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0 — 2026-10 (M12-E30, CHG-1356) |
+| **Version** | 1.0 — 2026-10 (M12-E30, CHG-1330) |
 | **Périmètre** | piles Compose de `ctr01` (deux instances derrière HAProxy) ; unités Quadlet sans privilège de `ctr02` (mise à jour automatique) |
 
 ## 1. Préparer (dans tous les cas)
@@ -26,7 +26,7 @@ Le script recrée `api`, attend qu'il soit *healthy* puis **UP dans HAProxy**, p
 
 **Revenir en arrière** : `MEDIAGENDA_TAG=<PRÉCÉDENTE> outils/maj-progressive.sh` (même mécanisme, même absence de coupure). Une migration déjà appliquée **reste** : c'est pourquoi elle doit être compatible avec la version précédente.
 
-Mesures du test de recette (E30) : mise à jour 0.1.0 → 0.2.0 sous 20 requêtes/s, 16 s, **0 erreur** sur 915 requêtes ; image cassée (`0.3.0`, sonde jamais verte) : arrêt du script après la première instance, **0 erreur** sur 1 475 requêtes, retour à 0.2.0 sans erreur.
+Mesures du test de recette (E30) : mise à jour 0.2.0 → 0.2.1 sous 20 requêtes/s, 16 s, **0 erreur** sur 915 requêtes ; image cassée (`0.3.0`, sonde jamais verte) : arrêt du script après la première instance, **0 erreur** sur 1 475 requêtes, retour à 0.2.1 sans erreur.
 
 ## 3. Quadlet sur `ctr02` (mise à jour automatique)
 

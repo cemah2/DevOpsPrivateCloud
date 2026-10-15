@@ -1,5 +1,5 @@
 ---
-# Rôle sauvegarde_conteneurs — données des conteneurs vers PBS (M12-E29, PLAT-1355).
+# Rôle sauvegarde_conteneurs — données des conteneurs vers PBS (M12-E29, PLAT-1329).
 # Modèle : rôle sauvegarde_pbs (M06-E28). Variables par hôte : host_vars/<hôte>/sauvegarde_conteneurs.yml.
 # Secrets : Vault « critique ».
 

@@ -1,5 +1,5 @@
 # ~app/.config/containers/systemd/mediagenda-api.container — ctr02, EXTRAIT : clés ajoutées ou
-# modifiées en M12-E30 (CHG-1356). Le reste de l'unité (pod, réseau, secrets, variables) est celui
+# modifiées en M12-E30 (CHG-1330). Le reste de l'unité (pod, réseau, secrets, variables) est celui
 # de M12-E14 ; le nom de l'unité est celui de ton E14.
 #   app@ctr02:~$ systemctl --user daemon-reload && systemctl --user restart mediagenda-api.service
 
@@ -10,7 +10,8 @@ Image=ctr01.par1.medisphere.internal:5000/mediagenda/api:recette
 # registre (label io.containers.autoupdate=registry posé par Quadlet).
 AutoUpdate=registry
 # Sonde de santé (l'image n'a pas de curl) : /sante ne dépend ni de la base ni du cache.
-HealthCmd=python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"
+# Forme tableau JSON : écrite en chaîne, le Quadlet de Podman 5.4 perd le guillemet final (M12-E14).
+HealthCmd=["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"]
 HealthInterval=10s
 HealthTimeout=3s
 HealthRetries=3

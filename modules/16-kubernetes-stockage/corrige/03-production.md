@@ -83,7 +83,7 @@ Pendant la récupération, un pod `mediagenda-db-1-full-recovery-…` téléchar
 admin@adm01:~$ ~/src/k8s/outils/empreinte-mediagenda.sh wb-restauration
 rendez_vous=42 empreinte=3b9c…            # identique
 valkey_cles=118                           # identique
-admin@adm01:~$ kubectl port-forward -n wb-restauration deploy/<API> 18000:8000 &
+admin@adm01:~$ kubectl port-forward -n wb-restauration svc/mediagenda-api 18000:80 &
 admin@adm01:~$ curl -s localhost:18000/pret ; curl -s 'localhost:18000/api/v1/rendez-vous?limite=3' | jq length
 admin@adm01:~$ kubectl get secret mediagenda-db-app -n wb-restauration -o jsonpath='{.data.host}' | base64 -d ; echo
 admin@adm01:~$ kubectl cnpg psql mediagenda-db -n wb-restauration -- -At -c "SELECT count(*) FROM pg_stat_activity WHERE application_name NOT LIKE 'cnpg%' AND backend_type = 'client backend'"
@@ -94,7 +94,7 @@ admin@adm01:~$ set -a; . ~/.config/workbook/s3-cnpg.env; set +a
 admin@adm01:~$ aws --endpoint-url https://s3-01.par1.medisphere.internal:8333 s3 ls s3://cnpg-k8s-par1/          # un seul préfixe : mediagenda-db/
 ```
 
-`<API>` : le nom de ton Deployment (M14). Le dernier contrôle porte sur le compartiment : il ne doit y avoir que les préfixes des clusters qui archivent réellement (la copie n'a pas de `.spec.plugins`). Si ta CLI S3 n'est pas `aws`, prends celle du M05.
+Le Service `mediagenda-api` (M14) écoute en 80 et renvoie vers le port `http` (8000) des pods. Le dernier contrôle porte sur le compartiment : il ne doit y avoir que les préfixes des clusters qui archivent réellement (la copie n'a pas de `.spec.plugins`). Si ta CLI S3 n'est pas `aws`, prends celle du M05.
 
 *7. Écrire* : compte rendu et RB-161 (fichiers). RTO typique sur le lab : 10 à 20 minutes (téléchargement des volumes par le *data mover*, téléchargement de la sauvegarde de base, rejeu des WAL depuis la dernière sauvegarde) : **mesure-le**, ne le recopie pas.
 
@@ -233,7 +233,7 @@ Bascules planifiées en fenêtre, annoncées, avec le témoin ; exercice de basc
 
 **Solution**
 
-Fichiers : [extrait de valeurs du chart RBD](fichiers/M16-E26/k8s/composants/ceph-csi-rbd/values.chiffrement.extrait.yaml), [classe `ceph-rbd-chiffre`](fichiers/M16-E26/k8s/classes/ceph-rbd-chiffre.yaml), [`outils/secret-rbd-chiffre.sh`](fichiers/M16-E26/k8s/outils/secret-rbd-chiffre.sh), [volumes d'essai](fichiers/M16-E26/wb-essais/e26-volumes.yaml), [`chiffrement.md`](fichiers/M16-E26/medisphere/docs/kubernetes/stockage/chiffrement.md).
+Fichiers : [extrait de `values-rbd.yaml`](fichiers/M16-E26/k8s/composants/ceph-csi/values-rbd.chiffrement.extrait.yaml), [classe `ceph-rbd-chiffre`](fichiers/M16-E26/k8s/composants/ceph-csi/classes/ceph-rbd-chiffre.yaml), [`outils/secret-rbd-chiffre.sh`](fichiers/M16-E26/k8s/outils/secret-rbd-chiffre.sh) (voisin de `outils/ceph-csi-secrets.sh`, même fichier Vault), [volumes d'essai](fichiers/M16-E26/wb-essais/e26-volumes.yaml), [`chiffrement.md`](fichiers/M16-E26/medisphere/docs/kubernetes/stockage/chiffrement.md).
 
 *1. Lecture* (ceph-csi 3.18.1, `docs/rbd/deploy.md`) : à la **création**, l'image est créée et, si un KMS est utilisé, une phrase (DEK) est générée et stockée ; l'état `encryptionPrepared` est écrit dans les métadonnées de l'image. Au **premier montage**, le *nodeplugin* récupère la phrase, formate le périphérique en LUKS, passe l'état à `encrypted`. Aux montages suivants, il ouvre le LUKS et monte le périphérique du *device-mapper*. À la **suppression**, la phrase est retirée du KMS (erreurs ignorées). Fournisseurs : phrase **unique** dans les Secrets de la classe (clé `encryptionPassphrase`, une même phrase pour tous les volumes) ; `metadata` (DEK par volume, chiffrée par la KEK, rangée dans la métadonnée de l'image ; KEK lue dans un Secret nommé `secretName` ou, à défaut, dans les Secrets de la classe) ; Vault (`vault`, `vaulttokens`, `vaulttenantsa`) et d'autres KMS. **Interdit** : activer le chiffrement sur une classe qui a déjà des volumes, ou sur un volume existant. Paramètres : `encryptionCipher` (`aes-xts-plain64` par défaut), `encryptionKeySize`, `encryptionSectorSize`, `integrityMode` (dm-integrity : **interdit l'agrandissement**).
 
@@ -243,10 +243,10 @@ Fichiers : [extrait de valeurs du chart RBD](fichiers/M16-E26/k8s/composants/cep
 
 ```
 admin@adm01:~/src/k8s$ export KEK="$(openssl rand -base64 48)"
-admin@adm01:~/src/k8s$ uv run --project ~/src/ansible ansible-vault view --vault-id critique@$HOME/src/ansible/outils/vault-pass-client.sh secrets/ceph-csi.vault.yml \
+admin@adm01:~/src/k8s$ uv run --project ~/src/ansible ansible-vault view --vault-id critique@$HOME/src/ansible/outils/vault-pass-client.sh secrets/ceph-csi.yml \
     | yq '.ceph_csi_rbd_kek = strenv(KEK)' \
-    | uv run --project ~/src/ansible ansible-vault encrypt --vault-id critique@$HOME/src/ansible/outils/vault-pass-client.sh --output secrets/ceph-csi.vault.yml.nouveau -
-admin@adm01:~/src/k8s$ unset KEK ; mv secrets/ceph-csi.vault.yml.nouveau secrets/ceph-csi.vault.yml
+    | uv run --project ~/src/ansible ansible-vault encrypt --vault-id critique@$HOME/src/ansible/outils/vault-pass-client.sh --output secrets/ceph-csi.yml.nouveau -
+admin@adm01:~/src/k8s$ unset KEK ; mv secrets/ceph-csi.yml.nouveau secrets/ceph-csi.yml
 admin@adm01:~/src/k8s$ outils/secret-rbd-chiffre.sh --verifier
 ```
 
@@ -259,7 +259,7 @@ admin@adm01:~$ kubectl get cm -n ceph-csi -o json | jq -r '.items[] | select(.da
 admin@adm01:~$ kubectl get sc ceph-rbd -o yaml | grep -E 'encrypt|is-default'      # aucune clé encrypt, défaut true
 ```
 
-Si l'application du chart échoue avec un conflit de propriété sur la ConfigMap de KMS, c'est que les charts RBD et CephFS créent la même ConfigMap (même nom par défaut, même espace) : donne-lui un autre nom dans les valeurs du chart CephFS (`kmsConfigMapName`), ce qui ne gêne pas CephFS (aucun KMS utilisé).
+La ConfigMap de KMS du pilote RBD garde son nom par défaut (`ceph-csi-encryption-kms-config`) : celle du chart CephFS a été renommée en E07 (`ceph-csi-encryption-kms-config-cephfs`), justement parce que les deux charts créent par défaut la même ConfigMap dans le même espace. Si l'application du chart échoue avec un conflit de propriété sur cette ConfigMap, c'est que ce renommage manque dans `values-cephfs.yaml`.
 
 *5. La preuve* :
 
@@ -432,14 +432,14 @@ admin@adm01:~/src/k8s$ outils/banc-volumes/campagne.sh ceph-rbd ceph-rbd-chiffre
 admin@adm01:~$ kubectl top node k8s-w01        # pendant « debit » sur ceph-rbd-chiffre (et ssh k8s-w01 mpstat 5)
 ```
 
-Ordre de grandeur attendu sur le lab (indicatif, non mesuré par le rédacteur : **mesure les tiens**) : `wal` de quelques centaines d'opérations par seconde sur Ceph (latence de l'ordre de la milliseconde ou plus, aller-retour réseau et triple écriture) contre plusieurs milliers sur `emptyDir` ; `iops` limité par les OSD (tous sur un seul SSD physique) ; `debit` limité par le réseau virtuel et les OSD ; `ceph-rbd-chiffre` proche de `ceph-rbd` en latence, plus coûteux en processeur sur `debit` ; `cephfs` proche de RBD pour les gros blocs, plus lent sur `wal` (métadonnées, capacités du MDS).
+Ordre de grandeur attendu sur le lab (indicatif, non mesuré en conditions réelles : **mesure les tiens**) : `wal` de quelques centaines d'opérations par seconde sur Ceph (latence de l'ordre de la milliseconde ou plus, aller-retour réseau et triple écriture) contre plusieurs milliers sur `emptyDir` ; `iops` limité par les OSD (tous sur un seul SSD physique) ; `debit` limité par le réseau virtuel et les OSD ; `ceph-rbd-chiffre` proche de `ceph-rbd` en latence, plus coûteux en processeur sur `debit` ; `cephfs` proche de RBD pour les gros blocs, plus lent sur `wal` (métadonnées, capacités du MDS).
 
 *5. Interpréter* : voir le modèle, sections « Interprétation » et « Réserves » ; ce sont les réponses attendues aux cinq questions.
 
 *6. Nettoyer* :
 
 ```
-admin@adm01:~$ kubectl get job,pod,pvc -n wb-essais -l medisphere.fr/banc=oui          # rien
+admin@adm01:~$ kubectl get job,pod,pvc -n wb-essais -l medisphere.internal/banc=oui          # rien
 admin@adm01:~$ kubectl delete pod,pvc e26-temoin -n wb-essais
 ```
 
@@ -502,7 +502,7 @@ Puis un PVC `e29-essai` avec `volumeName: $PV` et `storageClassName: ceph-rbd` s
 
 Plan : Retain sur le PV source (retour arrière) → répétition → pré-copie → coupure (arrêt, copie finale, rattachement, StatefulSet recréé, redémarrage) → contrôles → suppression de l'ancien volume (point de non-retour, après validation).
 
-*3. Répétition et préparation* : constat attendu de la répétition : la sonde de disponibilité de l'API est `/pret`, qui répond 503 dès que Valkey ne répond pas ; au bout de `failureThreshold` × `periodSeconds` (30 s avec les valeurs du M14), **tous** les pods de l'API sortent du Service : l'API tombe alors que son code sait fonctionner sans cache (créneaux calculés depuis la base). La coupure de Valkey prévue (une à deux minutes) dépasse cette fenêtre. Mesure retenue : MR « avant » qui porte `failureThreshold` à 30 pendant la fenêtre (300 s), MR « après » qui le rétablit (chaque MR déclenche un déploiement progressif de l'API, sans coupure) ; ticket **DEV-1729** à l'équipe de Julien : la disponibilité ne devrait pas dépendre d'une dépendance facultative. Une autre réponse est d'écourter la coupure sous 30 s (pré-copie, volume petit, image déjà sur le nœud) : à mesurer, sans marge.
+*3. Répétition et préparation* : constat attendu de la répétition : la sonde de disponibilité de l'API est `/pret`, qui répond 503 dès que Valkey ne répond pas ; au bout de `failureThreshold` × `periodSeconds` (10 s avec les valeurs du M14 : `periodSeconds: 5`, `failureThreshold: 2`), **tous** les pods de l'API sortent du Service : l'API tombe alors que son code sait fonctionner sans cache (créneaux calculés depuis la base). La coupure de Valkey prévue (une à deux minutes) dépasse cette fenêtre. Mesure retenue : MR « avant » qui porte `failureThreshold` à 60 pendant la fenêtre (300 s), MR « après » qui le rétablit (chaque MR déclenche un déploiement progressif de l'API, sans coupure) ; ticket **DEV-1729** à l'équipe de Julien : la disponibilité ne devrait pas dépendre d'une dépendance facultative. Une autre réponse est d'écourter la coupure sous 10 s (pré-copie, volume petit, image déjà sur le nœud) : à mesurer, sans marge.
 
 Clés témoins :
 
@@ -531,9 +531,10 @@ admin@adm01:~$ kubectl delete job migration-valkey-copie-chaud migration-valkey-
 admin@adm01:~$ kubectl delete pvc migration-valkey-cible -n mediagenda-recette
 admin@adm01:~$ kubectl patch pv "$PVC" --type json -p '[{"op":"remove","path":"/spec/claimRef"}]'
 admin@adm01:~$ kubectl delete pvc donnees-valkey-0 -n mediagenda-recette          # PV source en Retain : conservé
-admin@adm01:~$ sed "s/<PV-CIBLE>/$PVC/; s/<TAILLE>/2Gi/" 03-pvc-final.yaml | kubectl apply -f -
+admin@adm01:~$ sed "s/<PV-CIBLE>/$PVC/; s/<TAILLE>/1Gi/" 03-pvc-final.yaml | kubectl apply -f -
 admin@adm01:~$ kubectl delete sts valkey -n mediagenda-recette --cascade=orphan
-admin@adm01:~/src/<dépôt-mediagenda>$ # MR : storageClassName: ceph-rbd-chiffre dans volumeClaimTemplates, fusion, application
+admin@adm01:~/src/mediagenda-api$ # MR : storageClassName: ceph-rbd-chiffre dans k8s/recette/30-valkey.yaml, fusion, puis :
+admin@adm01:~/src/mediagenda-api$ kubectl apply -f k8s/recette/30-valkey.yaml
 admin@adm01:~$ kubectl rollout status sts/valkey -n mediagenda-recette ; date +%T
 ```
 

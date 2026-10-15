@@ -82,7 +82,7 @@ Points structurants :
 | Hôte | VMID | Adresse | Ressources | Étiquettes | Rôles Ansible | Exercice |
 |---|---|---|---|---|---|---|
 | `reg01` | **1013** | 10.10.20.18 (VLAN 20), `reg01.par1.medisphere.internal` + CNAME `registry.par1.medisphere.internal` | 2 vCPU, 6 Go ; système 32 Gio `local-nvme` ; données 200 Gio `hdd-bulk` sur `/data` | `socle`, `role-registre` | `docker_engine` (M12), `certificats_acme` (M06), `harbor` | E02 |
-| `reg02` | 2131 | `vsandbox` (DHCP) | 2 vCPU, 4 Go | `env-m13` | `docker_engine`, `harbor` | E13 (palier 3) |
+| `reg02` | 2131 | 10.10.99.31 (VNet `vsandbox`, adresse imposée), `reg02.par1.medisphere.internal` | 2 vCPU, 4 Go ; système 32 Gio et données 64 Gio sur `local-nvme` | `env-m13`, `role-registre` | `docker_engine`, `certificats_acme`, `harbor`, `sauvegarde_harbor` (restauration) | E13 (palier 3), détruite en E25 |
 
 `reg01` rejoint le **socle** (état OpenTofu `socle`, sauvegarde, supervision) : il ne se détruit plus. Socle v3 ≈ 37 Go avec `runner02` (M12) et `reg01`.
 
@@ -149,10 +149,10 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Certificat | step-ca ACME (rôle `certificats_acme`, id `harbor`), noms `registry.par1.medisphere.internal` et `reg01.par1.medisphere.internal`, 30 jours, renouvelé par `cert-renewer@harbor.timer`, puis recopié dans `/data/secret/cert/` et pris en compte par `nginx -s reload` dans le conteneur `nginx` |
 | Comptes humains | base locale de Harbor : `admin` (bris de glace, mot de passe en Vault `critique`), `<MOI>`, `karim.benali`, `julien.petit`, `lucas.martin` |
 | Projets | `medisphere` (privé, images applicatives `medisphere/mediagenda-api`, `medisphere/medidoc`, `medisphere/medinotif`, `medisphere/legacy-rdv`), `plateforme` (privé, outils), `bibliotheque` (privé, images de base reconstruites, M12-E27), `charts` (privé, M17) ; caches `dockerhub`, `quay`, `ghcr`, `k8s` (E04) |
-| Robots | `robot$medisphere+ci` (poussée et tirage de `medisphere`), `robot$bibliotheque+ci` (idem pour `bibliotheque`), `robot$k8s-pull` (système, tirage seul, M14), `robot$wb-checks` (système, **lecture seule**, vérifications du workbook), `robot$renovate` (système, tirage de `bibliotheque` et `plateforme`, E11) |
+| Robots | `robot$medisphere+ci` (poussée et tirage de `medisphere`), `robot$bibliotheque+ci` (idem pour `bibliotheque`), `robot$plateforme+ci` (idem pour `plateforme` : image outillée de la CI, E09), `robot$k8s-pull` (système, tirage seul, M14), `robot$wb-checks` (système, **lecture seule**, vérifications du workbook), `robot$renovate` (système, tirage de `bibliotheque` et `plateforme`, E11), `robot$supervision` (système, lecture, sonde `ms-verif-registre`, E16) ; sur `reg02` : `robot$replication` et `robot$wb-checks` (E13) |
 | État OpenTofu | `plateforme/infra`, dossier **`registre/`**, clé `registre/terraform.tfstate` sur `s3-01`, chiffré (M05-E27) ; fournisseur `goharbor/harbor` ; appliqué par le pipeline de `plateforme/infra` avec les variables protégées et masquées `HARBOR_URL`, `HARBOR_USERNAME`, `HARBOR_PASSWORD` |
 | Ansible | groupe `role_registre` ; `group_vars/role_registre/harbor.yml`, `vault-critique.yml` (`vault_harbor_admin_mdp`, `vault_harbor_db_mdp`) ; `host_vars/reg01/certificats.yml` ; rôle `harbor` ; playbook `playbooks/registre.yml` ; rôle `outils_supply_chain` (E05) appliqué à `adm01` |
-| Fichiers sur `adm01` (`~/.config/workbook/`, 600) | `harbor-checks.env` (robot `wb-checks` : `HARBOR_USER=`, `HARBOR_PASSWORD=`, lu par les vérifications) ; `harbor-moi.env` (ton compte Harbor, mêmes variables) ; `registre-travail.env` (M12, jusqu'à la migration) |
+| Fichiers sur `adm01` (`~/.config/workbook/`, 600) | `harbor-checks.env` (robot `wb-checks` : `HARBOR_USER=`, `HARBOR_PASSWORD=`, lu par les vérifications ; le nom du robot **entre apostrophes**, à cause du `$`) ; `harbor-moi.env` (ton compte Harbor, mêmes variables) ; `harbor-reg02-checks.env` (robot `wb-checks` de `reg02`, E13 à E25) ; `harbor-pannes.env` (utilisateur `wb-pannes`, palier 4, supprimé en E25) ; `registre-travail.env` (M12, jusqu'à la migration) |
 | Variables de CI | groupes `mediagenda`, `medidoc`, `medinotif`, `legacy` : `HARBOR_ROBOT_USER` (protégée, **non développée** : le nom contient `$`, il ne peut pas être masqué), `HARBOR_ROBOT_TOKEN` (protégée, masquée), `COSIGN_PRIVATE_KEY` (type fichier, protégée), `COSIGN_PASSWORD` (protégée, masquée) |
 | Documentation | `docs/registre/` de `plateforme/medisphere` : `cosign.pub`, `signing-config.json`, fiches d'exploitation, `comparaison-analyseurs.md` (E06), `chaine-livraison.md` (E09), RB-130 (installer et reconstruire Harbor, E02), RB-131 et suivants |
 | Brouillons | `~/m13/eXX/` sur `adm01` (non versionnés, **sans secret**) |
@@ -168,12 +168,14 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-Les deux variables du module existent déjà dans `lab/lab.env.example` (section « Bloc C ») ; leurs valeurs par défaut conviennent :
+Les deux variables principales du module existent déjà dans `lab/lab.env.example` (section « Bloc C ») ; leurs valeurs par défaut conviennent :
 
 ```
 WB_HARBOR_URL="https://registry.par1.medisphere.internal"
 WB_HARBOR_CHECKS_FILE="$HOME/.config/workbook/harbor-checks.env"
 ```
+
+Variables facultatives, à ne poser que si tes valeurs diffèrent des défauts : `WB_HARBOR_REG02_URL` (`https://reg02.par1.medisphere.internal`) et `WB_HARBOR_REG02_CHECKS_FILE` (`~/.config/workbook/harbor-reg02-checks.env`) au palier 3 ; `WB_M13_HARBOR_VERSION` (`v2.15.3` : la version corrective attendue par les vérifications après M13-E16) ; `WB_HARBOR_PANNES_FILE` (`~/.config/workbook/harbor-pannes.env`), `WB_M13_RUNNER` (`runner02`) et `WB_M13_REG01` (`reg01`) pour les pannes du palier 4.
 
 Les vérifications utilisent aussi `WB_MOI`, `WB_SRC`, `WB_DEPOT`, `WB_PVE_HOST`, `WB_STORAGE_NVME`, `WB_STORAGE_BULK` et les jetons en lecture de GitLab et de NetBox. À partir de M13-E03, la fonction `harbor_api` de `lab/lib/check-lib.sh` lit l'API de Harbor avec le robot `wb-checks`.
 
@@ -204,7 +206,7 @@ admin@adm01:~$ ssh runner02 'sudo docker version --format "{{.Server.Version}}";
 admin@adm01:~$ curl -sf https://ctr01.par1.medisphere.internal:5000/v2/ -o /dev/null -w '%{http_code}\n'
 ```
 
-Le premier contrôle (mini-projet du module 12) doit être vert. Le deuxième affiche Docker 29.8.x et Compose 5.x. Le troisième répond `401` (le registre de travail demande une authentification) : il te faut encore `ctr01` et son registre jusqu'à la fin de M13-E03. Si tu l'as détruite au M12-E46, recrée-la par le code (état `m12-conteneurs`) avec son registre, ou prévois de reconstruire les images par leurs pipelines après E03.
+Le premier contrôle (mini-projet du module 12) doit être vert (avec `WB_M12_CTR01_CONSERVE=1` dans `lab/lab.env` si tu as gardé `ctr01`). Le deuxième affiche Docker 29.8.x et Compose 5.x. Le troisième répond `401` (le registre de travail demande une authentification) : il te faut encore `ctr01` et son registre jusqu'à la fin de M13-E03. Si tu l'as détruite au M12-E46, recrée-la par le code (état `m12-conteneurs`) avec son registre, ou prévois de reconstruire les images par leurs pipelines après E03.
 
 Installe les outils de lecture dont le module se sert (paquets Debian 13) :
 

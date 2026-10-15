@@ -31,8 +31,8 @@ TSIG="$valeur" N="$SECRET" E="$ESPACE" K="$NOM" yq -n '
   .apiVersion = "v1" | .kind = "Secret" | .type = "Opaque"
   | .metadata.name = strenv(N) | .metadata.namespace = strenv(E)
   | .metadata.labels."app.kubernetes.io/part-of" = "reseau-k8s-par1"
-  | .metadata.annotations."medisphere.fr/source" = "plateforme/ansible vault-lab (outils/secret-tsig.sh)"
-  | .metadata.annotations."medisphere.fr/cle-tsig" = strenv(K)
+  | .metadata.annotations."medisphere.internal/source" = "plateforme/ansible vault-lab (outils/secret-tsig.sh)"
+  | .metadata.annotations."medisphere.internal/cle-tsig" = strenv(K)
   | .stringData.secret = strenv(TSIG)' \
   | kubectl apply --server-side --force-conflicts --field-manager=secret-tsig -f -
 unset valeur

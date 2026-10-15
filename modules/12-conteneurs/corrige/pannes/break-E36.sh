@@ -134,7 +134,7 @@ symptome_E36() {
     3) detail="Sur ctr03, le cache de recette (service recette-cache du compte app) ne démarre plus depuis que Lucas a « nettoyé » le fichier Quadlet et « remis les droits par défaut » sur le répertoire de données. Les droits Unix lui semblent bons." ;;
     *) detail="Lucas a restauré hier soir la base de recette de MédiAgenda sur ctr01 (« docker cp » de la sauvegarde dans le volume). Depuis, le conteneur de la base redémarre sans cesse et http://ctr01.par1.medisphere.internal:18000/pret répond 503." ;;
   esac
-  wb_symptome "Ticket INC-3942 — De : Nadia Roussel" \
+  wb_symptome "Ticket INC-3936 — De : Nadia Roussel" \
     "$detail" \
     "Les journaux parlent de « Permission denied ». Répare sans perdre les données, et ne te contente pas" \
     "d'un chmod 777 : Sophie relira." \

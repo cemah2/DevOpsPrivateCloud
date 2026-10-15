@@ -17,13 +17,13 @@ poste (MGMT ou extérieur par lb01/lb02, VIP 10.10.70.200, TLS en passage direct
   ▼
 bordure gw01/gw02 (VIP .1)  ── route /32 10.10.41.10 apprise en BGP (AS 65040 → 65000), ECMP sur k8s-w01..03
   ▼
-nœud k8s-w0N (ens18) ── eBPF (cil_from_netdev) ── Service LoadBalancer de la Gateway ── Envoy (proxy L7 de Cilium)
+nœud k8s-w0N (eth0) ── eBPF (cil_from_netdev) ── Service LoadBalancer de la Gateway ── Envoy (proxy L7 de Cilium)
   │  écouteur HTTPS *.apps… (joker apps-joker, cert-manager / step-ca), HTTPRoute « mediagenda »
   ▼
 backend : pod de l'API (éventuellement sur un autre nœud : VXLAN chiffré par WireGuard, UDP 51871)
-  │  politiques : default-deny + « ingress → API 8000 » ; API → PostgreSQL 5432, Valkey 6379, DNS
+  │  politiques : refus-par-defaut + « ingress → API 8000 » ; API → PostgreSQL 5432, Valkey 6379, DNS
   ▼
-MédiAgenda (port 8000)
+MédiAgenda (Service mediagenda-api :80 → conteneur :8000)
 ```
 
 ## Composants et versions

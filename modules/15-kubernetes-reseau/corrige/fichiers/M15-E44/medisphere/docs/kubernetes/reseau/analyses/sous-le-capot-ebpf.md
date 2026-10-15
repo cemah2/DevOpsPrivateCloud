@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Ticket** | PLAT-1680 |
+| **Ticket** | PLAT-1644 |
 | **Cluster** | `k8s-par1`, Kubernetes 1.36, Cilium 1.20 (KPR, tunnel VXLAN, WireGuard), noyau 6.12 |
 | **Objet d'étude** | Service `mediagenda-recette/mediagenda-api`, ClusterIP **10.96.41.187**:80 → pods :8000 ; client : témoin `wb-pannes/sonde-4xk2p` (10.240.3.41, `k8s-w01`) |
 | **Auteur, date** | <MOI>, 2026-10-14 |
@@ -15,7 +15,7 @@ Sur `k8s-w01`, `bpftool net show` et `bpftool cgroup tree /sys/fs/cgroup` (depui
 
 | Point d'attache | Programme | Rôle |
 |---|---|---|
-| `ens18` tcx/ingress, egress | `cil_from_netdev`, `cil_to_netdev` | trafic qui entre et sort par l'interface du nœud (NodePort, LoadBalancer, hôte) |
+| `eth0` tcx/ingress, egress | `cil_from_netdev`, `cil_to_netdev` | trafic qui entre et sort par l'interface du nœud (NodePort, LoadBalancer, hôte) |
 | `cilium_host` tcx | `cil_to_host`, `cil_from_host` | trafic de et vers la pile de l'hôte |
 | `cilium_vxlan` tcx | `cil_from_overlay`, `cil_to_overlay` | entrée et sortie du tunnel |
 | `cilium_wg0` tcx/egress | `cil_to_wireguard` | marquage avant chiffrement |
@@ -48,5 +48,5 @@ Sur `k8s-w01`, `bpftool net show` et `bpftool cgroup tree /sys/fs/cgroup` (depui
 3. Identités : stables, partagées par étiquettes, indépendantes des adresses réutilisées.
 4. Tables de taille fixe (préallocation, vérifieur) ; table de suivi pleine : nouvelles connexions jetées, `cilium_drop_count_total{reason="CT map insertion failed"}`.
 5. Redémarrage de l'agent : la connexion survit ; politique supprimée : coupée au paquet suivant.
-6. Encapsulation VXLAN puis chiffrement WireGuard : clair sur `cilium_vxlan`, chiffré sur `ens18`.
+6. Encapsulation VXLAN puis chiffrement WireGuard : clair sur `cilium_vxlan`, chiffré sur `eth0`.
 7. XDP : gain inutile sur `k8s-par1` (virtio, trafic modeste, Envoy sur le chemin) ; non activé (ADR-0150).

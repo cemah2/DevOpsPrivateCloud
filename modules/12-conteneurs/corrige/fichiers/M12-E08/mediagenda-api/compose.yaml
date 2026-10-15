@@ -1,6 +1,6 @@
 # compose.yaml — MédiAgenda, PostgreSQL 18 et Valkey 8 sur un poste ou une VM de recette (M12-E08).
 #
-#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 600
+#   admin@ctr01:~/src/mediagenda-api$ ./outils/secrets-compose.sh      # une fois : secrets/ en 700, fichier en 644
 #   admin@ctr01:~/src/mediagenda-api$ docker compose up -d --wait
 #   admin@ctr01:~/src/mediagenda-api$ docker compose --profile outils run --rm psql
 #
@@ -127,6 +127,7 @@ volumes:
   donnees-db: {}
 
 secrets:
-  # Fichier local, hors dépôt (.gitignore), en 600 ; créé par outils/secrets-compose.sh.
+  # Fichier local, hors dépôt (.gitignore) : dossier secrets/ en 700, fichier en 644 (lisible par
+  # l'UID 10001 une fois monté) ; créé par outils/secrets-compose.sh.
   db_mdp:
     file: ./secrets/db_mdp

@@ -130,7 +130,7 @@ Un retour arrière ne réécrit pas l'histoire : il crée une **nouvelle** révi
 ### M17-E03 — Écrire le chart `mediagenda`  `LAB` `★★`
 
 > **Ticket DEV-1803** — *De : Julien Petit*
-> Je veux un vrai paquet pour MédiAgenda, que je puisse installer en dev avec une commande et des valeurs, et qui crée exactement les mêmes objets à chaque fois. Commence simple : l'API, sa configuration, son exposition. On ajoutera la base et le cache au paquet plus tard. Et garde les noms d'aujourd'hui (`mediagenda`), mes scripts et les tableaux de bord de Nadia s'en servent.
+> Je veux un vrai paquet pour MédiAgenda, que je puisse installer en dev avec une commande et des valeurs, et qui crée exactement les mêmes objets à chaque fois. Commence simple : l'API, sa configuration, son exposition. On ajoutera la base et le cache au paquet plus tard. Et profites-en pour fixer les noms une fois pour toutes : des objets `mediagenda` avec les étiquettes standard de Kubernetes, que mes scripts et les futurs tableaux de bord de Nadia suivront dans tous les environnements.
 
 **Objectifs pédagogiques**
 - Créer un chart `apiVersion: v2` : `Chart.yaml`, `values.yaml`, gabarits, `NOTES.txt`, `.helmignore`.
@@ -144,12 +144,14 @@ Un retour arrière ne réécrit pas l'histoire : il crée une **nouvelle** révi
 **Contexte technique**
 - Projet GitLab `mediagenda/chart` à créer (groupe `mediagenda`, branche `main` protégée, fusion par MR, Conventional Commits comme au M01), chart dans `charts/mediagenda/`.
 - Dépendances provisoires de dev : `ressources/E03-dependances-dev.yaml` (CNPG `mediagenda-db`, Valkey `valkey`, politiques réseau). L'espace `mediagenda-dev` existe (M14-E10, quotas) ; il est en refus réseau par défaut (M15) et en Pod Security `restricted`.
+- `mediagenda-dev` contient encore le MédiAgenda du M14, appliqué depuis `k8s/dev/` de `mediagenda/api` (clone `~/src/mediagenda-api`) : Deployment, Service et PDB `mediagenda-api`, ConfigMap `mediagenda-api-config`, PostgreSQL `postgresql` et Valkey `valkey` jetables, CronJob `mediagenda-sauvegarde`. Ses données sont jetables : il laisse la place au chart.
 - Ce que l'API attend (voir `apps/mediagenda/README.md`) : port 8000, `/sante` (vivacité), `/pret` (disponibilité : PostgreSQL et Valkey), variables `MEDIAGENDA_DB_URL` (Secret `mediagenda-db-app`, clé `uri`, créé par CNPG), `MEDIAGENDA_VALKEY_URL` (`redis://valkey:6379/0`), `MEDIAGENDA_LOG_LEVEL`, `MEDIAGENDA_LOG_FORMAT`, `MEDIAGENDA_VERSION`, `MEDIAGENDA_FUSEAU`, `MEDIAGENDA_CACHE_TTL`, `MEDIAGENDA_DELAI_ARRET` (20 s, à respecter à l'arrêt).
-- Objets attendus du chart 0.1.0 : ServiceAccount, ConfigMap, Deployment, Service, HTTPRoute (vers `gw-par1`, espace `passerelles`, écouteur `https`), NetworkPolicy (sorties DNS, PostgreSQL, Valkey) et CiliumNetworkPolicy (entrée depuis la Gateway, identité `ingress`). Tous nommés `mediagenda` pour la release `mediagenda`.
+- Objets attendus du chart 0.1.0 : ServiceAccount, ConfigMap, Deployment, Service (port **80** vers le port nommé `http` = 8000 du conteneur, comme au M14), HTTPRoute (vers `gw-par1`, espace `passerelles`, écouteur `https`, Service en port 80), NetworkPolicy (sorties DNS, PostgreSQL, Valkey) et CiliumNetworkPolicy (entrée depuis la Gateway, identité `ingress`, avec le même filtrage L7 que la politique `api-entree` du M15-E17). Tous nommés `mediagenda` pour la release `mediagenda`.
 - Le Secret de tirage `harbor-pull` existe dans l'espace (M14-E19).
 
 **Travail demandé**
-1. Applique les dépendances provisoires et attends que la base soit prête :
+1. Fais place nette en dev, puis applique les dépendances provisoires et attends que la base soit prête :
+   > ⚠️ **Attention** : vérifie l'espace avant de supprimer (`mediagenda-dev`, jamais `mediagenda-recette`). Liste d'abord ce que les manifestes du M14 ont créé (`kubectl -n mediagenda-dev get all,cm,pdb,cronjob --show-labels`), puis supprime-le **par ces mêmes manifestes** (`kubectl delete -n mediagenda-dev -f ~/src/mediagenda-api/k8s/dev/`). Retire ensuite `k8s/dev/` de `mediagenda/api` par une MR, pour que personne ne le réapplique : le dev appartient désormais à la release Helm.
    ```
    admin@adm01:~$ kubectl apply --server-side -f ~/DevOpsPrivateCloud/modules/17-packaging/ressources/E03-dependances-dev.yaml
    admin@adm01:~$ kubectl -n mediagenda-dev get cluster.postgresql.cnpg.io mediagenda-db -w
@@ -157,7 +159,7 @@ Un retour arrière ne réécrit pas l'histoire : il crée une **nouvelle** révi
    Vérifie que le Secret `mediagenda-db-app` existe et qu'il a une clé `uri` (sans en afficher la valeur).
 2. Crée le projet, clone-le dans `~/src/mediagenda-chart` et lance `helm create charts/mediagenda`. Lis ce que le squelette produit, puis **vide-le** : garde la structure, réécris chaque fichier pour MédiAgenda. Un chart qu'on ne comprend pas ligne par ligne n'entre pas en production.
 3. Écris `Chart.yaml` (version 0.1.0, `appVersion` = la version de l'API sans le `v`, `kubeVersion`, mainteneur) et `values.yaml` (image, réplicas, configuration, Secret de la base, URL de Valkey, nom publié, ressources). Aucune valeur secrète.
-4. Écris `templates/_helpers.tpl` : nom complet (qui ne répète pas `mediagenda` quand la release s'appelle déjà ainsi, et tient en 63 caractères), étiquettes communes (recommandations `app.kubernetes.io/*`, plus `medisphere.fr/environnement`), étiquettes **de sélection** séparées. Puis les gabarits des objets. Contraintes :
+4. Écris `templates/_helpers.tpl` : nom complet (qui ne répète pas `mediagenda` quand la release s'appelle déjà ainsi, et tient en 63 caractères), étiquettes communes (recommandations `app.kubernetes.io/*`, plus `medisphere.internal/environnement`), étiquettes **de sélection** séparées. Puis les gabarits des objets. Contraintes :
    - l'étiquette d'image vaut `v<appVersion>` sauf si une valeur l'impose ;
    - les pods respectent Pod Security `restricted` (non root, pas d'élévation, capacités retirées, `seccompProfile`), système de fichiers racine en lecture seule avec un `emptyDir` sur `/tmp` ;
    - sondes de démarrage et de vivacité sur `/sante`, de disponibilité sur `/pret` ;
@@ -205,7 +207,7 @@ Si la route reste refusée, relis `status.parents[].conditions` : `NotAllowedByL
 - Écrire une base et des overlays : `namespace`, `labels`, `images`, `replicas`, `namePrefix`.
 - Corriger une base par un *patch* stratégique et par un *patch* JSON 6902, savoir quand choisir l'un ou l'autre.
 - Générer une ConfigMap à suffixe d'empreinte et constater qu'elle redéploie les pods.
-- Reprendre des objets existants (créés aux modules 14 à 16) sans casser la recette.
+- Reprendre une application existante (objets créés aux modules 14 à 16) sans couper la recette : déployer à côté, basculer, retirer l'ancien.
 
 **Prérequis** : M17-E03.
 **Durée indicative** : 2 h 30.
@@ -213,30 +215,34 @@ Si la route reste refusée, relis `status.parents[].conditions` : `NotAllowedByL
 **Contexte technique**
 - Projet GitLab `mediagenda/deploiement` à créer, clone `~/src/mediagenda-deploiement`. Arborescence : `base/`, `overlays/dev/`, `overlays/recette/`, `overlays/essai/`.
 - Base : les manifestes **rendus** du chart 0.1.0 (`helm template mediagenda <chart> > base/mediagenda.yaml`), sans espace de noms. Tu verras en E09 comment brancher le chart lui-même.
-- Recette : objets actuels du M16 dans `mediagenda-recette` (Deployment, Service, HTTPRoute, politiques…). La base de données et Valkey **restent** hors de ce dépôt.
+- Recette : objets actuels des modules 14 à 16 dans `mediagenda-recette` : Deployment, Service et PDB `mediagenda-api`, ConfigMap `mediagenda-api-config` (manifestes `k8s/recette/` de `mediagenda/api`, M14) ; HTTPRoute `mediagenda` vers le Service `mediagenda-api` port 80 (`plateforme/k8s`, M15) ; politiques réseau (`plateforme/k8s`, M15 et M16). La base de données et Valkey **restent** hors de ce dépôt.
+- Le chart nomme ses objets `mediagenda` et pose ses propres étiquettes (`app.kubernetes.io/name: mediagenda`, `app.kubernetes.io/instance`, `app.kubernetes.io/component`) là où le M14 avait `mediagenda-api`. La reprise n'est donc pas une mise à jour en place : les nouveaux objets arrivent **à côté** des anciens, la route bascule de l'un à l'autre, puis l'ancien est retiré. Seule la route porte le même nom des deux côtés.
 - `overlays/dev` est seulement **construit** : `mediagenda-dev` appartient à la release Helm (règle d'un seul gestionnaire). `overlays/essai` sert à l'étape 6 et n'est jamais appliqué.
 
 **Travail demandé**
-1. Inventorie la recette telle qu'elle est : `kubectl -n mediagenda-recette get deploy,svc,cm,httproute,netpol,ciliumnetworkpolicy -o wide --show-labels`. Pour le Deployment, note le **sélecteur** (`spec.selector`) et ses gestionnaires de champs. Note tout dans `~/m17/e04/inventaire.md`.
+1. Inventorie la recette telle qu'elle est : `kubectl -n mediagenda-recette get deploy,svc,pdb,sa,cm,httproute,netpol,ciliumnetworkpolicy -o wide --show-labels`. Pour chaque objet, note qui l'a créé (quel dépôt, quel fichier : `git grep` dans `~/src/k8s` et dans le clone de `mediagenda/api`), ses étiquettes et, pour la route, le Service et le port visés. Pour chaque politique réseau, note **quels pods elle sélectionne** et lesquels elle admet en entrée : les nouveaux pods (`app.kubernetes.io/name: mediagenda`) seront-ils admis par la base et par Valkey ? Note tout dans `~/m17/e04/inventaire.md`.
 2. Crée le projet et `base/` : le rendu du chart, un `kustomization.yaml` qui le liste. `kustomize build base` doit rendre exactement le rendu.
 3. Écris `overlays/recette/` :
-   - espace `mediagenda-recette`, étiquette `medisphere.fr/environnement: recette` sur les objets et les pods mais **pas** dans les sélecteurs ;
+   - espace `mediagenda-recette`, étiquette `medisphere.internal/environnement: recette` sur les objets et les pods mais **pas** dans les sélecteurs ;
    - image fixée par le transformateur `images`, deux réplicas par `replicas` ;
    - ressources de la recette par un **patch stratégique** (fichier `ressources.yaml`) ;
    - nom publié `mediagenda-recette.apps.par1.medisphere.internal` par un **patch JSON 6902** ;
-   - une ConfigMap générée `mediagenda-parametres` (fichier `parametres.env`, par exemple `MEDIAGENDA_CACHE_TTL=120`) ajoutée **en dernier** aux `envFrom` du conteneur par un patch JSON 6902.
+   - une ConfigMap générée `mediagenda-parametres` (fichier `parametres.env`, par exemple `MEDIAGENDA_CACHE_TTL=120`) ajoutée **en dernier** aux `envFrom` du conteneur par un patch JSON 6902 ;
+   - les autorisations d'entrée qui manquent pour que **tes** pods joignent la base et Valkey de la recette (constat de l'étape 1), dans un fichier de l'overlay, sans modifier les politiques de `plateforme/k8s`.
 4. Fais de même pour `overlays/dev/` (une réplique, journaux en `DEBUG`), sans l'appliquer. Compare `kustomize build overlays/dev` et `kubectl kustomize overlays/dev` : même sortie ? Même version de Kustomize ?
-5. Prépare la reprise de la recette : `kubectl diff --server-side -k overlays/recette`. Compare le sélecteur rendu avec celui de l'étape 1.
-   > ⚠️ **Attention** : le sélecteur d'un Deployment est **immuable**. S'il diffère, l'application échouera (`field is immutable`) : il faudra supprimer l'ancien Deployment et le recréer, ce qui coupe la recette une à deux minutes. Préviens Julien avant, garde l'ancien manifeste (`kubectl get deploy mediagenda -o yaml > ~/m17/e04/ancien-deploy.yaml`) pour revenir en arrière, et ne touche **jamais** à la base `mediagenda-db` ni au StatefulSet `valkey`.
-   Applique (`kubectl apply --server-side -k overlays/recette`), surveille le déploiement, puis supprime les objets de la recette que la nouvelle version ne gère plus (anciens noms de ConfigMap ou de politiques) après avoir vérifié qu'ils ne servent plus. Note ce que tu as supprimé.
-6. Dans `overlays/essai` (espace `wb-essais`, `namePrefix: essai-`, sans route), construis et lis le résultat : quels noms ont changé ? Quelles **références** à ces noms ont été mises à jour (compte de service, ConfigMap, Service de la route…) et lesquelles ne l'ont pas été (le Secret `mediagenda-db-app`, les sélecteurs des politiques réseau) ? Explique pourquoi dans le journal.
+5. Prépare la reprise de la recette : `kubectl diff --server-side -k overlays/recette`. Quels objets sont nouveaux ? Lequel existe déjà, et que change le diff sur lui ?
+   > ⚠️ **Attention** : la route `mediagenda` existe déjà. L'appliquer la fait viser le nouveau Service : c'est la **bascule**, et si les nouveaux pods ne sont pas prêts à ce moment-là, la recette est coupée. Préviens Julien avant. Sauvegarde les objets actuels (`kubectl -n mediagenda-recette get deploy,svc,pdb,cm,httproute -o yaml > ~/m17/e04/avant-reprise.yaml`) pour revenir en arrière. Ne touche **jamais** à la base `mediagenda-db` ni au StatefulSet `valkey`.
+   Procède en deux temps : applique d'abord tout le rendu **sauf** la route, attends que les nouveaux pods soient prêts, puis applique l'overlay complet (`kubectl apply --server-side -k overlays/recette`). Vérifie `/sante` sur le nom publié pendant et après la bascule.
+   Enfin, retire l'ancienne version : les objets `mediagenda-api` que plus rien ne sert (après l'avoir vérifié), et, par MR, les fichiers de `plateforme/k8s` et de `mediagenda/api` qui les recréeraient (dont la route du M15, désormais gérée par ce dépôt). Note dans le journal ce que tu as supprimé et ce que tu laisses à la plateforme.
+6. Dans `overlays/essai` (espace `wb-essais`, `namePrefix: essai-`, sans route), construis et lis le résultat : quels noms ont changé ? Quelles **références** à ces noms ont été mises à jour (compte de service, ConfigMap…) et lesquelles ne l'ont pas été (le Secret `mediagenda-db-app`, les sélecteurs des politiques réseau) ? La route n'est pas dans cet overlay : construis la base seule avec un `namePrefix` pour savoir si sa référence au Service suit. Explique pourquoi dans le journal.
 7. Change `MEDIAGENDA_CACHE_TTL` dans `parametres.env`, reconstruis : que devient le nom de la ConfigMap ? Applique et observe le redéploiement. Que reste-t-il de l'ancienne ConfigMap dans le cluster ?
 8. MR relue par Karim, fusionnée ; la recette est maintenant gérée par `mediagenda/deploiement`.
 
 **Critères de réussite**
 - [ ] `mediagenda/deploiement` contient `base/` et les overlays `dev`, `recette`, `essai` ; `kustomize build` réussit pour chacun.
-- [ ] Dans `mediagenda-recette`, le Deployment `mediagenda` n'appartient pas à une release Helm, porte `medisphere.fr/environnement: recette`, a deux réplicas prêts et lit une ConfigMap `mediagenda-parametres-<empreinte>` qui existe.
-- [ ] La route `mediagenda` de la recette publie `mediagenda-recette.apps.par1.medisphere.internal` et `/sante` y répond 200.
+- [ ] Dans `mediagenda-recette`, le Deployment `mediagenda` n'appartient pas à une release Helm, porte `medisphere.internal/environnement: recette`, a deux réplicas prêts et lit une ConfigMap `mediagenda-parametres-<empreinte>` qui existe.
+- [ ] La route `mediagenda` de la recette publie `mediagenda-recette.apps.par1.medisphere.internal` vers le Service `mediagenda` (port 80) et `/sante` y répond 200.
+- [ ] Le Deployment `mediagenda-api` du M14 n'existe plus (un seul gestionnaire de l'application).
 - [ ] La base `mediagenda-db` de la recette n'a pas été recréée (son âge est antérieur au module).
 
 **Vérification** : `lab/bin/check 17 04`
@@ -253,7 +259,7 @@ Pour ajouter un élément **à la fin** d'une liste en JSON 6902, le chemin se t
 
 <details><summary>Indice 3</summary>
 
-Si `kubectl apply --server-side` signale un conflit sur un champ, lis le nom du gestionnaire qui le possède : c'est la trace de la façon dont l'objet a été créé au M16. Comprends le conflit avant d'utiliser `--force-conflicts`.
+Pour appliquer « tout sauf la route », `kubectl kustomize` écrit le rendu sur la sortie standard, et `yq` sait filtrer des documents par `kind`. Si `kubectl apply --server-side` signale un conflit sur un champ de la route, lis le nom du gestionnaire qui le possède : c'est la trace de la façon dont elle a été créée au M15. Comprends le conflit avant d'utiliser `--force-conflicts`. Si les nouveaux pods restent non prêts, relis ton inventaire des politiques d'entrée de la base et de Valkey.
 </details>
 
 **Pour aller plus loin** (facultatif) : `kubectl apply --prune` avec un *ApplySet* (fonction encore en alpha, variable `KUBECTL_APPLYSET=true`) supprime les objets retirés d'un overlay. Essaie-le sur `wb-essais` seulement.
@@ -275,7 +281,7 @@ Si `kubectl apply --server-side` signale un conflit sur un champ, lis le nom du 
 **Durée indicative** : 2 h.
 
 **Contexte technique**
-- Chart 0.2.0. Valeur d'environnement : `medisphere.environnement`, sans défaut, parmi `dev`, `recette`, `prod` ; équipe `medisphere.equipe` (`mediagenda`) ; `medisphere.donneesSante` (booléen, étiquette `medisphere.fr/donnees-sante`).
+- Chart 0.2.0. Valeur d'environnement : `medisphere.environnement`, sans défaut, parmi `dev`, `recette`, `prod` ; équipe `medisphere.equipe` (`mediagenda`) ; `medisphere.donneesSante` (booléen, étiquette `medisphere.internal/donnees-sante`).
 - Règles à faire respecter : registre `registry.par1.medisphere.internal` uniquement (la ValidatingAdmissionPolicy du M14-E18 refuse les autres) ; étiquette `vX.Y.Z` ou vide, jamais `latest` ; digest `sha256:…` accepté et prioritaire ; aucune clé `password` ou `url` dans `database` ; en `prod`, au moins deux réplicas ; variables supplémentaires `config.extraEnv` nommées `MEDIAGENDA_*`.
 - Le nom publié devient calculé (`mediagenda-<environnement>.apps.par1.medisphere.internal`) mais reste surchargeable, et la valeur peut contenir un gabarit (`{{ .Release.Namespace }}`).
 - La release de dev existe (E03) : la montée en 0.2.0 ne doit pas recréer le Deployment.
@@ -292,7 +298,7 @@ Si `kubectl apply --server-side` signale un conflit sur un champ, lis le nom du 
 
 **Critères de réussite**
 - [ ] `charts/mediagenda/values.schema.json` est sur `main` ; un rendu avec `image.tag=latest`, `replicaCount=deux`, une clé inconnue, `database.password` ou `medisphere.environnement=preprod` échoue avec un message qui nomme la valeur fautive.
-- [ ] La release de dev est en 0.2.0 ou plus ; ses objets portent `medisphere.fr/environnement: dev` et `medisphere.fr/donnees-sante`.
+- [ ] La release de dev est en 0.2.0 ou plus ; ses objets portent `medisphere.internal/environnement: dev` et `medisphere.internal/donnees-sante`.
 - [ ] Le Deployment de dev n'a pas été recréé (même `metadata.uid` qu'avant la montée, noté dans le journal).
 
 **Vérification** : `lab/bin/check 17 05`

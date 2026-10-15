@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # /usr/local/sbin/wb-backup-conteneurs.sh — sauvegarde des DONNÉES des conteneurs vers PBS
-# M12-E29 (ticket PLAT-1355). Même principe que wb-backup-socle.sh (M06-E28) et wb-backup-ceph.sh
+# M12-E29 (ticket PLAT-1329). Même principe que wb-backup-socle.sh (M06-E28) et wb-backup-ceph.sh
 # (M08-E25). Déployé par le rôle sauvegarde_conteneurs ; lancé chaque nuit par le timer (01:40).
 #
 # Configuration non secrète : /etc/wb-backup/conteneurs.conf

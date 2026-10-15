@@ -13,17 +13,19 @@ workflow:
 
 include:
   - project: plateforme/ci-templates
-    ref: v<X.Y.Z>                     # étiquette du dépôt de gabarits qui contient supply-chain.yml
+    ref: v1.<Y>.<Z>                   # ÉTIQUETTE du dépôt de gabarits (pas la branche v1, qui avance seule)
     file:
-      - qualite.yml                   # pre-commit, Gitleaks (M01)
-      - release.yml                   # semantic-release (M01)
-      - supply-chain.yml              # M13-E09
+      - templates/qualite.yml         # pre-commit, commitlint, Gitleaks (M01), stage lint
+      - templates/release.yml         # semantic-release (M01), stage release
+      - templates/image.yml           # pour le job caché .hadolint (M12-E16, M12-E21), stage lint
+      - templates/supply-chain.yml    # M13-E09 (remplace .image-construction)
 
 variables:
   SC_IMAGE_NOM: medisphere/mediagenda-api
 
+# Stages de templates/qualite.yml (lint, test, release) + ceux de la chaîne de livraison.
 stages:
-  - qualite
+  - lint
   - test
   - construction
   - analyse
@@ -45,3 +47,6 @@ tests:
     - uv run ruff check .
     - uv run ruff format --check .
     - uv run pytest
+
+hadolint:
+  extends: .hadolint
