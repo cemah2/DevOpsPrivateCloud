@@ -50,7 +50,7 @@ E21 (dès E17 fait)    E22 (dès E15 fait)    E23 (en dernier : il reprend tout)
 **Contexte technique**
 - LB IPAM est intégré à l'opérateur Cilium, actif mais dormant tant qu'aucun pool n'existe. Il ne fait **que** l'attribution : sans BGP (E11), l'adresse n'est joignable que depuis les nœuds et les pods du cluster.
 - Pool `lb-par1` : 10.10.41.10 à 10.10.41.199 (un bloc `start`/`stop`). Les adresses 10.10.41.200-254 restent hors pool (PLAN §4.2 : VIP futures, tests).
-- LB IPAM n'a pas de notion d'adresse réservée : une adresse libre du pool part au premier Service qui en demande une sans préciser laquelle. La Gateway `gw-essai` du palier 1 a un Service `LoadBalancer` en attente : tu lui donnes **avant** de créer le pool une adresse explicite d'essai (10.10.41.11), pour que `.10` reste libre jusqu'à E12.
+- LB IPAM n'a pas de notion d'adresse réservée : une adresse libre du pool part au premier Service qui en demande une sans préciser laquelle. Avant de créer le pool, aucun Service `LoadBalancer` ne doit attendre une adresse « au hasard » : la première libre serait `.10`, celle de `gw-par1` (E12). (Au palier 1, `gw-essai` passe par un Service `NodePort` et `gw-attente` a été supprimée : vérifie-le.)
 - Fichiers : `composants/cilium/lb-ipam/lb-par1.yaml` dans `plateforme/k8s`, appliqué par `task appliquer` ; essais dans `~/m15/e10/` et l'espace `wb-essais`.
 
 **Travail demandé**
@@ -59,8 +59,8 @@ E21 (dès E17 fait)    E22 (dès E15 fait)    E23 (en dernier : il reprend tout)
    ```
    admin@adm01:~$ kubectl get svc -A -o json | jq -r '.items[] | select(.spec.type=="LoadBalancer") | [.metadata.namespace, .metadata.name, (.status.loadBalancer.ingress // [] | map(.ip) | join(","))] | @tsv'
    ```
-   Pour chacun, décide de l'adresse qu'il doit avoir. Pour `gw-essai`, consulte la page *Gateway API Addresses Support* et donne-lui 10.10.41.11 par le champ prévu de la Gateway (pas par le Service, qui appartient à Cilium).
-3. Écris `lb-par1.yaml` (MR dans `plateforme/k8s`, puis `task appliquer`). Lis l'état du pool (`kubectl get ippools`, puis ses conditions en JSON) et vérifie que `gw-essai` a reçu 10.10.41.11.
+   Pour chacun, décide : supprimé, ou adresse explicite de la plage 10.10.41.11-10.10.41.19. Pour une Gateway, consulte la page *Gateway API Addresses Support* : l'adresse se demande par le champ prévu de la Gateway, pas sur son Service (qui appartient à Cilium).
+3. Écris `lb-par1.yaml` (MR dans `plateforme/k8s`, puis `task appliquer`). Lis l'état du pool (`kubectl get ippools`, puis ses conditions en JSON).
 4. Dans `wb-essais`, déploie `agnhost` (`netexec --http-port=8080`, 2 réplicas) et crée trois Services `LoadBalancer` port 80 → 8080 :
    - `essai-lb` qui **demande** 10.10.41.20 (annotation documentée par Cilium) ;
    - `essai-lb-a` et `essai-lb-b`, qui **partagent** l'adresse 10.10.41.22 (ports 80 et 8081).
@@ -72,7 +72,7 @@ E21 (dès E17 fait)    E22 (dès E15 fait)    E23 (en dernier : il reprend tout)
 **Critères de réussite**
 - [ ] Le pool `lb-par1` couvre exactement 10.10.41.10-10.10.41.199, il est actif et sans conflit ; c'est le seul pool du cluster.
 - [ ] `essai-lb` a l'adresse 10.10.41.20 et répond depuis un nœud ; `essai-lb-a` et `essai-lb-b` ont la même adresse.
-- [ ] Aucun Service n'occupe 10.10.41.10 ; `gw-essai` (s'il existe encore) a 10.10.41.11.
+- [ ] Aucun Service n'occupe 10.10.41.10.
 - [ ] `lb-par1.yaml` est sur `main` de `plateforme/k8s` ; le journal répond aux questions des étapes 1, 4, 5 et 6.
 
 **Vérification** : `lab/bin/check 15 10`
@@ -794,7 +794,7 @@ Lis chaque fichier trois fois : une fois pour la **sécurité** (qui peut joindr
 
 <details><summary>Indice 1</summary>
 
-`kubectl diff` sort avec un code non nul quand il y a une différence ; `helm` sait comparer des values attendues et appliquées (`helm get values`). Pense à ce qui est **généré** par les contrôleurs (Service de la Gateway, Secrets de cert-manager) : il ne doit pas être dans le dépôt.
+kubectl sait comparer un manifeste à l'objet du cluster et le signaler par son code de sortie ; Helm sait restituer les valeurs appliquées d'une release. Pense à ce qui est **généré** par les contrôleurs (Service de la Gateway, Secrets de cert-manager) : il ne doit pas être dans le dépôt.
 </details>
 
 <details><summary>Indice 2</summary>

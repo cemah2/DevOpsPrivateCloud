@@ -1,0 +1,20 @@
+# .gitlab-ci.yml — medinotif/worker, version corrigée de la MR !14 (M13-E12).
+# Toute la chaîne vient du gabarit commun (M13-E09) : rien à réécrire, rien à copier.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+include:
+  - project: plateforme/ci-templates
+    ref: v<X.Y.Z>
+    file:
+      - qualite.yml
+      - release.yml
+      - supply-chain.yml
+
+variables:
+  SC_IMAGE_NOM: medisphere/medinotif

@@ -1,0 +1,22 @@
+---
+# Ménage planifié des objets Docker jetables (M12-E39, RB-123). Inclure depuis tasks/main.yml :
+#   - name: Ménage planifié
+#     ansible.builtin.import_tasks: menage.yml
+#     tags: [docker_engine, menage]
+- name: Déposer l'unité de ménage
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - docker-menage.service
+    - docker-menage.timer
+
+- name: Activer la minuterie de ménage
+  ansible.builtin.systemd_service:
+    name: docker-menage.timer
+    enabled: "{{ docker_engine_menage_actif }}"
+    state: "{{ docker_engine_menage_actif | ternary('started', 'stopped') }}"
+    daemon_reload: true

@@ -1,0 +1,43 @@
+# boucle-recette.yaml — pod de démonstration de M14-E46 (boucle de Julien).
+# Appelle /pret du Service de MédiAgenda chaque seconde et journalise le code HTTP reçu.
+# Le trafic va de pod à Service (kube-proxy) : il ne passe ni par l'API ni par la VIP.
+# Adapte <SERVICE-MEDIAGENDA> et <PORT> au Service de ton équipe. Profil « restricted » respecté.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: boucle-recette
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/name: boucle-recette
+    medisphere.internal/ticket: PLAT-1546
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    runAsGroup: 101
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: boucle
+      image: registry.par1.medisphere.internal/dockerhub/curlimages/curl:8.16.0
+      command:
+        - /bin/sh
+        - -c
+        - |
+          while true; do
+            c="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://<SERVICE-MEDIAGENDA>:<PORT>/pret)"
+            echo "$(date +%T) $c"
+            sleep 1
+          done
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]

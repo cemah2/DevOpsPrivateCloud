@@ -38,8 +38,9 @@
     label: "{{ item.chemin }}"
 
 # restorecon seulement pour les règles qui viennent de changer (un dossier de pièces jointes peut
-# être gros : pas de parcours complet à chaque passage).
-- name: Appliquer les étiquettes de la politique (restorecon)
+# être gros : pas de parcours complet à chaque passage). Pas un gestionnaire : il faut le chemin de
+# CHAQUE règle modifiée, et l'étiquette doit être posée avant la suite du rôle.
+- name: Appliquer les étiquettes de la politique (restorecon)  # noqa: no-handler
   ansible.builtin.command:
     argv: [restorecon, -R, -v, "{{ item.item.chemin }}"]
   loop: "{{ selinux_conteneurs_fcontext.results }}"

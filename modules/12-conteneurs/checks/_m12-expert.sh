@@ -15,9 +15,9 @@ _m12x_ctr03="${WB_M12_CTR03:-ctr03}"
 _m12x_runner02="${WB_M12_RUNNER02:-runner02}"
 _m12x_nom01="${WB_M12_CTR01_NOM:-ctr01.par1.medisphere.internal}"
 # shellcheck disable=SC2034
-_m12x_url_api="http://$_m12x_nom01:${WB_M12_PORT_API:-8000}"
+_m12x_url_api="http://$_m12x_nom01:${WB_M12_PORT_API:-18000}"
 # shellcheck disable=SC2034
-_m12x_url_doc="http://$_m12x_nom01:${WB_M12_PORT_DOC:-8080}"
+_m12x_url_doc="http://$_m12x_nom01:${WB_M12_PORT_DOC:-18080}"
 
 # _m12x_root HÔTE <<'EOF' … EOF — script de lecture exécuté en root (sudo -n) sur l'hôte.
 _m12x_root() {

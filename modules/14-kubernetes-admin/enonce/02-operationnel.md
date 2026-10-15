@@ -130,7 +130,7 @@ Un refus de quota est une erreur d'**admission** de l'objet Pod. Or le pod n'est
 
 <details><summary>Indice 1</summary>
 
-Un rôle agrégé a un champ `aggregationRule.clusterRoleSelectors` et une liste `rules` vide : c'est le contrôleur `clusterrole-aggregation` du kube-controller-manager qui la remplit, et qui la réécrira si tu y touches.
+Un rôle agrégé a un champ `aggregationRule.clusterRoleSelectors` et **pas** de `rules` écrites : c'est le contrôleur d'agrégation du kube-controller-manager qui les remplit, et qui les réécrira si tu y touches (n'écris même pas `rules: []` : avec le *server-side apply* du Taskfile, ton dépôt deviendrait propriétaire du champ).
 </details>
 
 <details><summary>Indice 2</summary>

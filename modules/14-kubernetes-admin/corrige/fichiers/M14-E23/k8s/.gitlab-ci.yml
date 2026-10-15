@@ -1,0 +1,34 @@
+# .gitlab-ci.yml — plateforme/k8s (M14-E06, schémas en M14-E23). La CI VALIDE, elle n'applique pas :
+# l'application se fait depuis adm01 (task appliquer) jusqu'au GitOps du M20. La validation par le
+# serveur (--dry-run=server) exige l'accès au cluster : elle reste dans « task valider », sur adm01.
+include:
+  - project: plateforme/ci-templates
+    file: qualite.yml   # pre-commit, Gitleaks (M01)
+
+stages: [qualite, validation]
+
+yamllint:
+  stage: validation
+  tags: [shell, socle]
+  script:
+    - uvx yamllint==1.38.0 --strict .
+
+shellcheck:
+  stage: validation
+  tags: [shell, socle]
+  script:
+    - shellcheck -x outils/*.sh
+
+# Schémas des objets pour la version du cluster (M14-E23). Image du cache ghcr de Harbor, épinglée ;
+# les schémas viennent du dépôt public par défaut de kubeconform (runner02 a accès à Internet).
+# Les CRD (Cilium…) n'ont pas de schéma ici : rien de ce dépôt n'en applique encore au M14.
+kubeconform:
+  stage: validation
+  tags: [docker, socle]
+  image:
+    name: registry.par1.medisphere.internal/ghcr/yannh/kubeconform:v0.8.0-alpine
+    entrypoint: [""]
+  variables:
+    KUBERNETES_VERSION: "1.35.9"
+  script:
+    - /kubeconform -strict -summary -kubernetes-version "$KUBERNETES_VERSION" espaces rbac admission ordonnancement

@@ -132,7 +132,7 @@ symptome_E36() {
   case "$WB_VAR" in
     2) detail="Sur ctr02, le cache de recette (service recette-cache du compte app) ne démarre plus depuis que Lucas a « refait proprement » son répertoire de données. Lucas : « le répertoire appartient bien à app, je ne vois pas ce qui manque »." ;;
     3) detail="Sur ctr03, le cache de recette (service recette-cache du compte app) ne démarre plus depuis que Lucas a « nettoyé » le fichier Quadlet et « remis les droits par défaut » sur le répertoire de données. Les droits Unix lui semblent bons." ;;
-    *) detail="Lucas a restauré hier soir la base de recette de MédiAgenda sur ctr01 (« docker cp » de la sauvegarde dans le volume). Depuis, le conteneur de la base redémarre sans cesse et http://ctr01.par1.medisphere.internal:8000/pret répond 503." ;;
+    *) detail="Lucas a restauré hier soir la base de recette de MédiAgenda sur ctr01 (« docker cp » de la sauvegarde dans le volume). Depuis, le conteneur de la base redémarre sans cesse et http://ctr01.par1.medisphere.internal:18000/pret répond 503." ;;
   esac
   wb_symptome "Ticket INC-3942 — De : Nadia Roussel" \
     "$detail" \

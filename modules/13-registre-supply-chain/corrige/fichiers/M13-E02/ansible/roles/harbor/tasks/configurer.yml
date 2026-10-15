@@ -15,7 +15,7 @@
     fail_msg: "{{ harbor_tls_certificat }} absent : le rôle certificats_acme (id harbor) doit passer avant (playbooks/registre.yml)."
     quiet: true
 
-- name: harbor.yml (deux secrets : 600, root)
+- name: Écrire harbor.yml (deux secrets, 600, root)
   ansible.builtin.template:
     src: harbor.yml.j2
     dest: "{{ harbor_dossier }}/harbor.yml"
@@ -32,7 +32,7 @@
     creates: "{{ harbor_dossier }}/docker-compose.yml"
   register: harbor_installation
 
-- name: harbor.yml a changé sur une instance installée → prepare (régénère la configuration)
+- name: Relancer prepare si harbor.yml a changé sur une instance installée
   ansible.builtin.command:
     cmd: ./prepare --with-trivy
     chdir: "{{ harbor_dossier }}"

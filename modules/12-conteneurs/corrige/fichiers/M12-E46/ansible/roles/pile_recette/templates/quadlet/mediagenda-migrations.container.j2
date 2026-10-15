@@ -1,0 +1,22 @@
+# {{ pile_recette_entete }}
+# Service ponctuel : applique les migrations puis s'arrête (l'API en dépend).
+[Unit]
+Description=Migrations de la base de MédiAgenda (recette conteneurs v1)
+Requires=mediagenda-pg.service
+After=mediagenda-pg.service
+
+[Container]
+ContainerName=mediagenda-migrations
+Image={{ pile_recette_registre }}/mediagenda/api:{{ pile_recette_versions.mediagenda }}
+Network=apps-recette.network
+Entrypoint=python
+Exec=-m mediagenda.migrate
+Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
+Environment=MEDIAGENDA_VALKEY_URL=redis://mediagenda-valkey:6379/0
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=300

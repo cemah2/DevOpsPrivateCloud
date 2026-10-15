@@ -196,8 +196,8 @@ Chart complet : [`fichiers/M17-E03/chart/charts/mediagenda/`](fichiers/M17-E03/c
    (liste à vérifier sur ta version de CNPG ; seule `uri` compte ici.)
 2. **Projet.** Création dans GitLab (groupe `mediagenda`, projet `chart`, protection de `main`, fusion par MR ; reprends les réglages de `mediagenda/api`), puis :
    ```
-   admin@adm01:~/src$ git clone git@git01.par1.medisphere.internal:mediagenda/chart.git && cd chart
-   admin@adm01:~/src/chart$ mkdir charts && helm create charts/mediagenda
+   admin@adm01:~/src$ git clone git@git01.par1.medisphere.internal:mediagenda/chart.git mediagenda-chart && cd mediagenda-chart
+   admin@adm01:~/src/mediagenda-chart$ mkdir charts && helm create charts/mediagenda
    ```
    `helm create` produit un Deployment générique, Service, Ingress, HPA, ServiceAccount, `tests/test-connection.yaml` (image `busybox`) et un `_helpers.tpl`. On garde la structure et les idées des helpers ; on retire l'Ingress (pas d'ingress-nginx chez nous, la Gateway API le remplace), l'HPA (pas de métriques applicatives avant le M21), le test `busybox` (image hors registre MédiSphère, refusée par la VAP du M14 ; un test propre arrive en E07).
 3. **`Chart.yaml`.** `version` = version **du chart** (SemVer, change à chaque modification du chart) ; `appVersion` = version **de l'application** livrée par défaut (information, et ici source de l'étiquette d'image). `kubeVersion: ">=1.35.0-0"` (le suffixe `-0` accepte les versions de pré-publication que certains distributeurs annoncent, comme `v1.36.5-rc.0`, et ce que kubeadm rapporte parfois).
@@ -213,21 +213,21 @@ Chart complet : [`fichiers/M17-E03/chart/charts/mediagenda/`](fichiers/M17-E03/c
 5. **NOTES.txt** : rendu par Helm à la fin de `install`/`upgrade` (et `helm get notes`).
 6. **Contrôles.**
    ```
-   admin@adm01:~/src/chart$ helm lint --strict charts/mediagenda
+   admin@adm01:~/src/mediagenda-chart$ helm lint --strict charts/mediagenda
    ==> Linting charts/mediagenda
    [INFO] Chart.yaml: icon is recommended
    1 chart(s) linted, 0 chart(s) failed
-   admin@adm01:~/src/chart$ helm template mediagenda charts/mediagenda -n mediagenda-dev | less
-   admin@adm01:~/src/chart$ helm install mediagenda charts/mediagenda -n mediagenda-dev --dry-run=server
+   admin@adm01:~/src/mediagenda-chart$ helm template mediagenda charts/mediagenda -n mediagenda-dev | less
+   admin@adm01:~/src/mediagenda-chart$ helm install mediagenda charts/mediagenda -n mediagenda-dev --dry-run=server
    ```
    `--dry-run=server` envoie les objets au serveur **sans les enregistrer** : validation par les schémas OpenAPI (y compris des CRD : `HTTPRoute`, `CiliumNetworkPolicy`), passage par l'**admission** (Pod Security, ValidatingAdmissionPolicy du M14-E18, quotas), et détection d'objets existants qui n'appartiennent pas à la release.
 7. **Installation.**
    ```
-   admin@adm01:~/src/chart$ helm install mediagenda charts/mediagenda -n mediagenda-dev --wait --timeout 5m
-   admin@adm01:~/src/chart$ kubectl -n mediagenda-dev get httproute mediagenda -o jsonpath='{range .status.parents[*].conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+   admin@adm01:~/src/mediagenda-chart$ helm install mediagenda charts/mediagenda -n mediagenda-dev --wait --timeout 5m
+   admin@adm01:~/src/mediagenda-chart$ kubectl -n mediagenda-dev get httproute mediagenda -o jsonpath='{range .status.parents[*].conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
    Accepted=True Accepted
    ResolvedRefs=True ResolvedRefs
-   admin@adm01:~/src/chart$ curl -fsS https://mediagenda-dev.apps.par1.medisphere.internal/sante
+   admin@adm01:~/src/mediagenda-chart$ curl -fsS https://mediagenda-dev.apps.par1.medisphere.internal/sante
    {"statut":"ok","version":"v1.0.0"}
    ```
 8. **Valeurs.** `helm upgrade mediagenda charts/mediagenda -n mediagenda-dev --reuse-values --set config.cacheTtl=30` : l'empreinte change, nouveau ReplicaSet. Avec `--set cacheTTL=30` : rien ne change, aucun message — Helm accepte toute clé inconnue tant que rien ne la lit. C'est le problème de E05.
@@ -270,8 +270,8 @@ Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/
    Au M16, les objets ont été appliqués par `kubectl apply` (gestionnaire `kubectl-client-side-apply`, annotation `kubectl.kubernetes.io/last-applied-configuration`) ou `kubectl apply --server-side` (gestionnaire `kubectl`) : note ce que tu trouves.
 2. **Base.**
    ```
-   admin@adm01:~/src/deploiement$ helm template mediagenda ~/src/chart/charts/mediagenda > base/mediagenda.yaml
-   admin@adm01:~/src/deploiement$ kustomize build base | diff - <(yq ea '.' base/mediagenda.yaml) && echo identique
+   admin@adm01:~/src/mediagenda-deploiement$ helm template mediagenda ~/src/mediagenda-chart/charts/mediagenda > base/mediagenda.yaml
+   admin@adm01:~/src/mediagenda-deploiement$ kustomize build base | diff - <(yq ea '.' base/mediagenda.yaml) && echo identique
    ```
    (au formatage près : Kustomize réordonne les objets et les clés.)
 3. **Recette** — l'essentiel de [`overlays/recette/kustomization.yaml`](fichiers/M17-E04/deploiement/overlays/recette/kustomization.yaml) :
@@ -308,15 +308,15 @@ Projet complet : [`fichiers/M17-E04/deploiement/`](fichiers/M17-E04/deploiement/
 4. **Dev.** `kustomize build overlays/dev` et `kubectl kustomize overlays/dev` donnent la même sortie sur ces fonctions ; `kustomize version` → v5.8.2, `kubectl version --client` → `Kustomize Version: v5.8.1`. Un écart de version mineure peut changer un comportement fin : la CI (M19) épingle **une** version.
 5. **Reprise de la recette.**
    ```
-   admin@adm01:~/src/deploiement$ kubectl get deploy mediagenda -n mediagenda-recette -o yaml > ~/m17/e04/ancien-deploy.yaml
-   admin@adm01:~/src/deploiement$ kubectl diff --server-side -k overlays/recette
-   admin@adm01:~/src/deploiement$ kubectl apply --server-side -k overlays/recette
-   admin@adm01:~/src/deploiement$ kubectl -n mediagenda-recette rollout status deploy/mediagenda
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl get deploy mediagenda -n mediagenda-recette -o yaml > ~/m17/e04/ancien-deploy.yaml
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl diff --server-side -k overlays/recette
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl apply --server-side -k overlays/recette
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl -n mediagenda-recette rollout status deploy/mediagenda
    ```
    Si le sélecteur du M16 diffère (par exemple `app: mediagenda`) : l'`apply` échoue sur `spec.selector … field is immutable`. Après accord de Julien :
    ```
-   admin@adm01:~/src/deploiement$ kubectl -n mediagenda-recette delete deploy mediagenda --wait
-   admin@adm01:~/src/deploiement$ kubectl apply --server-side -k overlays/recette
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl -n mediagenda-recette delete deploy mediagenda --wait
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl apply --server-side -k overlays/recette
    ```
    Retour arrière : `kubectl apply -f ~/m17/e04/ancien-deploy.yaml` (après avoir retiré `metadata.uid`, `resourceVersion` et `status`). Si l'`apply` signale un **conflit** (un champ possédé par `kubectl-client-side-apply`), c'est que le champ a été positionné autrement au M16 ; la migration de propriété *client-side* → *server-side* est gérée par kubectl pour les champs de la dernière configuration appliquée, les autres conflits se règlent par `--force-conflicts` **après** lecture (M17-E14 y revient). Enfin, nettoyage :
    ```
@@ -406,14 +406,14 @@ Fichiers de l'état final (chart 0.5.0, qui contient tout le travail de E05) : [
 5. **`lookup`.** Dans `NOTES.txt` : avertissement si `lookup "v1" "Secret" .Release.Namespace <secret>` est vide à l'installation. Avec `helm template` et `--dry-run=client`, `lookup` renvoie toujours un dictionnaire vide : l'avertissement apparaît **à tort**. Avec `--dry-run=server` et une vraie installation, il reflète le cluster. Fonder un **rendu** sur `lookup` (créer un mot de passe seulement s'il n'existe pas, choisir une valeur selon un objet présent) produit un résultat qui dépend de qui rend et d'où : Argo CD rend sans `lookup` (comme `helm template`), Kustomize aussi (E09) ; le même chart donnerait deux sorties différentes, et chaque synchronisation tenterait de « corriger » l'écart. Le texte de `NOTES.txt` le dit en commentaire.
 6. **Montée en 0.2.0.**
    ```
-   admin@adm01:~/src/chart$ kubectl -n mediagenda-dev get deploy mediagenda -o jsonpath='{.metadata.uid}{"\n"}' | tee -a ~/m17/e05/journal.md
-   admin@adm01:~/src/chart$ helm get manifest mediagenda -n mediagenda-dev > /tmp/avant.yaml
-   admin@adm01:~/src/chart$ helm template mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e05/dev.yaml > /tmp/apres.yaml
-   admin@adm01:~/src/chart$ diff /tmp/avant.yaml /tmp/apres.yaml          # aucun changement de spec.selector
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e05/dev.yaml --dry-run=server
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e05/dev.yaml --wait
-   admin@adm01:~/src/chart$ kubectl -n mediagenda-dev get deploy mediagenda -o jsonpath='{.metadata.uid}{"\n"}'   # identique
-   admin@adm01:~/src/chart$ kubectl -n mediagenda-dev rollout history deploy/mediagenda
+   admin@adm01:~/src/mediagenda-chart$ kubectl -n mediagenda-dev get deploy mediagenda -o jsonpath='{.metadata.uid}{"\n"}' | tee -a ~/m17/e05/journal.md
+   admin@adm01:~/src/mediagenda-chart$ helm get manifest mediagenda -n mediagenda-dev > /tmp/avant.yaml
+   admin@adm01:~/src/mediagenda-chart$ helm template mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e05/dev.yaml > /tmp/apres.yaml
+   admin@adm01:~/src/mediagenda-chart$ diff /tmp/avant.yaml /tmp/apres.yaml          # aucun changement de spec.selector
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e05/dev.yaml --dry-run=server
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e05/dev.yaml --wait
+   admin@adm01:~/src/mediagenda-chart$ kubectl -n mediagenda-dev get deploy mediagenda -o jsonpath='{.metadata.uid}{"\n"}'   # identique
+   admin@adm01:~/src/mediagenda-chart$ kubectl -n mediagenda-dev rollout history deploy/mediagenda
    ```
    [`dev.yaml`](fichiers/M17-E05/dev.yaml) : `medisphere.environnement: dev`, une réplique, `httpRoute.hostname` vide (calculé). Remarque : tant que le chart n'a pas de base intégrée (E06), `database.existingSecret` reste `mediagenda-db-app`.
 7. Les deux erreurs de Lucas sont maintenant refusées : `- at '/replicaCount': got string, want integer` et `- at '': additional properties 'cacheTTL' not allowed` (à la racine ; sous `config`, le message dit `at '/config'`).

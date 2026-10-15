@@ -5,7 +5,7 @@
 # Prérequis : identité d'administration (kubectl diff demande les droits d'écriture en dry-run),
 # helm 4, cilium, jq, yq 4. À lancer depuis la racine du dépôt (task reseau:derive).
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 2
 # shellcheck source=/dev/null
 source composants/versions.env
 

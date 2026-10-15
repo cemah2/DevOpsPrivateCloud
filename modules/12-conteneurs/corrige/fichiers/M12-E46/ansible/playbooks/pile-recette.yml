@@ -1,0 +1,10 @@
+---
+# Pile de recette « conteneurs v1 » sur ctr02 (M12-E46). Exécution de référence : pipeline protégé
+# de plateforme/ansible (ADR-0040) ; à la main :
+#   admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/pile-recette.yml --limit ctr02 --diff
+- name: Pile de recette des applications MédiSphère
+  hosts: ctr02
+  become: true
+  roles:
+    - role: podman_hote
+    - role: pile_recette

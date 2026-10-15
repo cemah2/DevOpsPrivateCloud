@@ -1,0 +1,11 @@
+---
+# Pile de recette de ctr02 (M12-E46). Versions publiées par la CI ; empreintes en commentaire.
+pile_recette_versions:
+  mediagenda: "1.2.0"
+  medidoc: "1.1.0"
+  medinotif: "1.0.1"
+  legacy_rdv: "2.3.1"
+# MédiAgenda suit l'étiquette mobile « recette » posée par le pipeline (M12-E30, podman auto-update)
+pile_recette_mediagenda_etiquette_mobile: recette
+# Même version que s3-01 (relever l'étiquette exacte sur Docker Hub, puis l'empreinte)
+pile_recette_image_seaweedfs: "docker.io/chrislusf/seaweedfs:<VERSION-4.4X>"

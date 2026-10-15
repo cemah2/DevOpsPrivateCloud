@@ -3,7 +3,7 @@
 # shellcheck source-path=SCRIPTDIR
 # check-E42.sh — M14-E42 « Panne : le DNS du cluster ne répond plus » : CoreDNS disponible (au moins
 # deux réplicas, points d'accès prêts), Corefile cohérent (zone cluster.local, transfert vers les
-# résolveurs MédiSphère), sonde DNS et agenda prêts en dnsPolicy ClusterFirst, RB-148, panne close.
+# résolveurs MédiSphère), sonde DNS et agenda prêts en dnsPolicy ClusterFirst, RB-149, panne close.
 # Lecture seule.
 
 # shellcheck source=_m14-expert.sh
@@ -35,5 +35,5 @@ if _m14x_api_repond; then
 else
   skip "CoreDNS et témoins" "l'API ne répond pas au compte des checks (lab/bin/check 14 39)"
 fi
-check_cmd "RB-148 (DNS du cluster) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-148-*.md'
+check_cmd "RB-149 (DNS du cluster) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-149-*.md'
 check_cmd "panne M14-E42 close (lab/bin/break 14 42 --annuler après réparation)" _m14x_aucune_panne_active E42

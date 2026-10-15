@@ -1,0 +1,6 @@
+---
+# Valeurs à ajouter à defaults/main.yml du rôle docker_engine (M12-E39).
+docker_engine_menage_actif: true
+docker_engine_menage_quand: "*-*-* 04:30:00"
+# Âge minimal des entrées de cache de construction supprimées (filtre « until » de docker builder prune)
+docker_engine_menage_cache_age: 168h

@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Ménage des objets Docker jetables (RB-123) : jamais de volume, jamais d'image référencée.
+[Unit]
+Description=Ménage des objets Docker jetables (images orphelines, cache de construction)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker image prune -f
+ExecStart=/usr/bin/docker builder prune -f --filter until={{ docker_engine_menage_cache_age }}

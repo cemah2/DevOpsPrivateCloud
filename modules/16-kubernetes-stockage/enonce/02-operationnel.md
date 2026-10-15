@@ -622,6 +622,7 @@ Les pods d'instance portent l'étiquette `cnpg.io/cluster: mediagenda-db` (y com
 7. **Vérifier.** Compare `mediagenda-db` et `mediagenda-db-pitr` : les rendez-vous supprimés sont-ils revenus ? Les deux créés après T sont-ils absents ? Note les heures et le temps total de restauration (du `kubectl apply` à la première requête réussie).
 8. **Réparer sans tout restaurer.** Explique dans le journal (et fais-le) comment réinjecter **seulement** les lignes perdues dans `mediagenda-db` depuis `mediagenda-db-pitr` (`pg_dump --data-only --table` avec un filtre, ou `\copy`), sans écraser ce qui a été fait depuis.
 9. **Nettoyage.** Après le passage du check : supprime `mediagenda-db-pitr` et ses PVC. Explique pourquoi ses WAL n'ont pas été archivés et ce qu'il aurait fallu changer si l'on voulait le garder comme nouveau primaire.
+10. **Runbook.** Écris **RB-162** (`docs/kubernetes/stockage/runbooks/RB-162-restaurer-postgresql-instant-donne.md` dans `plateforme/medisphere`, format des runbooks du socle) à partir de ce que tu viens de faire : qualifier l'instant et la fenêtre de restauration, créer le cluster d'enquête, vérifier avec l'équipe, réparer (réinjection sélective ou bascule vers la base restaurée), clôturer, gestes interdits, escalade. Il servira tel quel en E34.
 
 **Critères de réussite**
 - [ ] L'`ObjectStore` `cnpg-s3` est en HTTPS avec `endpointCA`, rétention `14d`, sans `serverName` ; le `Cluster` `mediagenda-db` utilise le plugin comme archiveur de WAL et n'a **pas** de `spec.backup.barmanObjectStore`.
@@ -629,6 +630,7 @@ Les pods d'instance portent l'étiquette `cnpg.io/cluster: mediagenda-db` (y com
 - [ ] La `ScheduledBackup` `mediagenda-db-quotidienne` existe (six champs, méthode `plugin`).
 - [ ] `mediagenda-db-pitr` existe (au moment du check), a été amorcé par `recovery` avec un `targetTime` à fuseau explicite, et sa table `rendez_vous` diffère de celle de `mediagenda-db` comme attendu (le journal le montre).
 - [ ] La politique réseau des instances autorise la sortie vers `s3-01` sur le seul port 8333.
+- [ ] RB-162 est sur `main` de `plateforme/medisphere` (il cite `targetTime` et la réinjection sélective).
 
 **Vérification** : `lab/bin/check 16 19`
 

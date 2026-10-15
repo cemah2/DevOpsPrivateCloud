@@ -36,7 +36,7 @@ filtre='
   # Un objet entier sous une clé de contenu (ex. secretContents: {cloud: "…"}) :
   + [ paths(objects) as $p | ($p | map(tostring)) as $s
       | select(($s | last // "") | test("^(secretcontents|credentials\\.secretcontents)$"; "i"))
-      | select((getpath($p) | length) > 0) | "\($s | join(".")) (contenu d’identifiants)" ]
+      | select((getpath($p) | length) > 0) | "\($s | join(".")) (identifiants en clair)" ]
   | unique | .[]
 '
 

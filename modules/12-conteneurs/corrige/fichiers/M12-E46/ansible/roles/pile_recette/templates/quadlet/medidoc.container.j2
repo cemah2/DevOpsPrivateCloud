@@ -1,0 +1,27 @@
+# {{ pile_recette_entete }}
+[Unit]
+Description=MédiDoc (recette conteneurs v1)
+Requires=medidoc-s3.service
+After=medidoc-s3.service
+
+[Container]
+ContainerName=medidoc
+Image={{ pile_recette_registre }}/medidoc/medidoc:{{ pile_recette_versions.medidoc }}
+Network=apps-recette.network
+PublishPort={{ pile_recette_ports.medidoc }}:8080
+Environment=MEDIDOC_S3_ENDPOINT=http://medidoc-s3:8333 MEDIDOC_S3_BUCKET={{ pile_recette_medidoc_compartiment }}
+Environment=MEDIDOC_VERSION={{ pile_recette_versions.medidoc }}
+Secret=medidoc-s3-cle,type=env,target=AWS_ACCESS_KEY_ID
+Secret=medidoc-s3-secret,type=env,target=AWS_SECRET_ACCESS_KEY
+# Image sans shell (scratch/distroless) : pas de HealthCmd interne possible ; la vivacité est
+# suivie par ms-verif-conteneurs (/healthz) et l'unité redémarre si le processus s'arrête.
+DropCapability=ALL
+NoNewPrivileges=true
+ReadOnly=true
+PodmanArgs=--memory=128m --pids-limit=64
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

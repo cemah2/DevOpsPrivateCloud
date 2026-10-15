@@ -6,6 +6,7 @@
 
 **Ce qui a été vérifié, ce qui ne l'a pas été.**
 - *Admission, RBAC, quotas, ordonnancement* : tous les manifestes de `plateforme/k8s` et de `mediagenda/api` de ce palier ont été appliqués sur un **vrai** plan de contrôle Kubernetes **1.35.9** (kube-apiserver avec `NodeRestriction,LimitRanger,ResourceQuota,ServiceAccount,PodSecurity,Priority`, kube-controller-manager et kube-scheduler officiels, etcd 3.6.5), avec six objets Node factices aux noms, capacités et taints du lab (sans kubelet : les pods sont placés mais ne démarrent pas). Ont été constatés : agrégation des rôles (règles remplies par le contrôleur), matrice `matrice-droits.sh` sans écart, CSR signé et kubeconfig de Julien fonctionnel (`auth whoami`, `can-i`), refus du sujet piégé, quotas et LimitRanges (valeurs injectées, refus « maximum cpu », `exceeded quota` dans les événements), étiquettes et taints par `etiqueter-noeuds.sh`, placement de PostgreSQL sur `k8s-w03`, répartition 2+1 de l'API **et** le 3e réplica `Pending` sans `nodeTaintsPolicy: Honor`, DaemonSet sur six nœuds, Pod Security `restricted` (refus et avertissements), politique CEL `medisphere-images` (quatre refus, un accepté), et la revue de Lucas en `--dry-run=server` (refus et avertissements cités en E21).
+- *Outils de `plateforme/k8s`* : `kubeconfig-csr.sh`, `etiqueter-noeuds.sh`, `secret-tirage.sh`, `secret-mediagenda.sh`, `derive.sh`, `verifier-cluster.sh` et les tâches `espaces`, `diff`, `derive`, `etiquettes` du Taskfile (Task 3.45) exécutés contre ce plan de contrôle : dérive détectée dans les deux sens (quota modifié à la main, PriorityClass retirée du dépôt), conflit de *server-side apply* sans `--force-conflicts` constaté (d'où l'option, E23). Les checks du palier ont été lancés contre ce plan de contrôle avec le compte `wb-checks` d'E06 (statuts de pods simulés).
 - *Conteneurs* : Valkey 8.1 primaire + réplique avec la commande du StatefulSet, en utilisateur 999 et racine en lecture seule (réplication `master_link_status:up`) ; PostgreSQL 18 en utilisateur 999 sans capacité sur des volumes vides ; le pod `diag-memoire` tué à 64 Mio et non à 192 Mio (Docker 29, cgroup v2).
 - *Validation statique* : `kubeconform` 0.8 (schémas 1.35.0, `-strict`) sur tous les manifestes, `yamllint --strict` avec la configuration de `plateforme/k8s` (E04), `helm template` du chart metrics-server 3.14.0 avec les valeurs fournies, `shellcheck -x` et `bash -n` sur les scripts.
 - **Non rejoués sur un cluster réel** (signalés « ⚠️ À vérifier sur ton lab ») : tirage par les miroirs containerd et ce qu'en montre Harbor, renouvellement réel du jeton projeté par le kubelet, raison `OOMKilled` affichée pour `diag-memoire` (le processus tué n'est pas le PID 1), lecture de `/proc/1/environ` depuis un conteneur éphémère, `kubectl debug node/…` et ses profils, comportement fin de `drain` et de `kubeadm reset`, installation de metrics-server sur des kubelets kubeadm.
@@ -700,3 +701,234 @@ containerd résout une image par son nom de registre (`docker.io`, `quay.io`…)
 
 **En production chez MédiSphère**
 Robot de tirage à durée limitée et renouvelé par Vault (M25) avec External Secrets ; `KubeletEnsureSecretPulledImages` ou `AlwaysPullImages` selon l'état de la fonctionnalité ; condensés partout et vérification de signature à l'admission (M26) ; supervision des tirages en échec (`kubelet_image_pull_*`, M21) ; coupure d'Internet pour le VLAN 40 une fois tous les composants passés par Harbor.
+
+---
+
+### M14-E20 — Diagnostiquer un pod
+
+**Solution**
+
+Fichiers : [`espaces/wb-diagnostic.yaml`](fichiers/M14-E20/k8s/espaces/wb-diagnostic.yaml), [`composants/metrics-server/values.yaml`](fichiers/M14-E20/k8s/composants/metrics-server/values.yaml), [`diagnostic-corrige.yaml`](fichiers/M14-E20/essais/diagnostic-corrige.yaml) ; tâche `metrics-server` dans le [Taskfile d'E23](fichiers/M14-E23/k8s/Taskfile.yml).
+
+1. **Démarche** (à écrire avant de commencer, puis à garder) :
+   1. *État et raison* : `kubectl get pod -o wide`, puis `kubectl get pod <P> -o jsonpath='{.status.phase} {.status.containerStatuses[*].state} {.status.containerStatuses[*].lastState}'` — où en est le pod, quelle raison, quel code de sortie, combien de redémarrages ;
+   2. *Événements* : `kubectl describe pod <P>` (fin), `kubectl get events --field-selector involvedObject.name=<P>` — ordonnancement, tirage, montage, sondes ;
+   3. *Journaux* : `kubectl logs <P> [-c <C>]`, `--previous` si le conteneur a redémarré ;
+   4. *Intérieur* : `kubectl exec`, sinon conteneur éphémère (`kubectl debug --target`), ou copie du pod (`--copy-to`) ;
+   5. *Nœud* : `kubectl debug node/<N>` (`crictl`, `journalctl -u kubelet`, noyau), ou SSH.
+2. **Les cinq pods.**
+
+   | Pod | État observé | Preuve | Cause | Correction |
+   |---|---|---|---|---|
+   | `diag-config` | `CreateContainerConfigError`, 0 redémarrage, aucun journal | événement `Error: couldn't find key seuil-alerte in ConfigMap wb-essais/diag-config` | clé inexistante (les clés sont sensibles à la casse : la ConfigMap a `SEUIL_ALERTE`) | `key: SEUIL_ALERTE` (ou `optional: true` si la valeur est facultative) |
+   | `diag-crash` | `CrashLoopBackOff`, redémarrages croissants | `lastState.terminated.exitCode: 3` ; `kubectl logs --previous` : `RELAIS_DESTINATION absente : arrêt` | variable obligatoire manquante | ajouter la variable (ou la ConfigMap qui la porte) |
+   | `diag-memoire` | redémarrages, `lastState.terminated` avec code 137 | raison `OOMKilled` (⚠️ à vérifier : le processus tué est `tail`, pas le PID 1 ; selon le runtime, la raison affichée peut être `Error` avec le code 137) ; `journalctl -k` sur le nœud : `Memory cgroup out of memory: Killed process … (tail)` | limite de 64 Mio pour 96 Mio de données | limite (et requête) à 192 Mio, dimensionnée avec `kubectl top pod diag-memoire` une fois réparé |
+   | `diag-pret` | `Running`, `READY 0/1`, 0 redémarrage | événements `Readiness probe failed: … connect: connection refused` ; `kubectl get endpointslices -l kubernetes.io/service-name=diag-pret` : aucune adresse prête | sonde sur le port 8081, le serveur écoute 8080 | sonde sur le port nommé `http` |
+   | `diag-sans-shell` | `Running`, prêt, 0 redémarrage : **rien à réparer** | `kubectl exec … -- sh` : `exec: "sh": executable file not found in $PATH` | image minimale (pause) : ni shell ni outils | — (étape 3 pour l'inspecter) |
+
+   Le piège des 5 : ne pas « réparer » ce qui fonctionne. Un pod `Running` et prêt sans journal n'est pas un pod en panne.
+3. **Conteneur éphémère.**
+   ```
+   admin@adm01:~$ kubectl debug -n wb-essais diag-sans-shell -it --image=registry.par1.medisphere.internal/dockerhub/library/busybox:1.37 \
+       --target=minimal --profile=baseline -- sh
+   / # ps
+   PID   USER     COMMAND
+       1 65534    /pause
+      12 root     sh
+   / # cat /proc/1/cmdline; echo; stat -c %u /proc/1
+   /pause
+   65534
+   / # cat /proc/1/environ
+   cat: can't open '/proc/1/environ': Permission denied
+   ```
+   `--target` met le conteneur éphémère dans l'espace de processus du conteneur `minimal`. `cmdline` est lisible par tous, `environ` seulement par le même utilisateur (ou avec `CAP_SYS_PTRACE`, qu'un espace `baseline` interdit d'ajouter : le profil `general`, qui l'ajoute, est refusé par Pod Security ici). Solution : un conteneur éphémère qui tourne sous l'UID 65534, par un profil personnalisé :
+   ```
+   admin@adm01:~$ printf '{"securityContext":{"runAsUser":65534,"runAsNonRoot":true}}\n' > ~/m14/e20/meme-uid.json
+   admin@adm01:~$ kubectl debug -n wb-essais diag-sans-shell -it --image=…/busybox:1.37 --target=minimal \
+       --profile=baseline --custom=$HOME/m14/e20/meme-uid.json -- sh -c 'tr "\0" "\n" < /proc/1/environ'
+   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+   HOSTNAME=diag-sans-shell
+   KUBERNETES_SERVICE_HOST=10.96.0.1
+   …
+   ```
+   ⚠️ À vérifier sur ton lab : la disponibilité de `--custom` (bêta puis stable selon les versions de kubectl) et le comportement exact de chaque profil (`kubectl debug --help`). Les conteneurs éphémères ne se suppriment pas : ils restent dans la spécification du pod (terminés) jusqu'à la suppression du pod.
+4. **Copie de pod.**
+   ```
+   admin@adm01:~$ kubectl debug -n wb-essais diag-crash -it --copy-to=diag-crash-copie --container=relais -- sh
+   / $ env | grep RELAIS ; exit
+   admin@adm01:~$ kubectl delete pod diag-crash-copie -n wb-essais
+   ```
+   La copie a la même spécification sauf la commande remplacée : on explore l'environnement exact du conteneur qui plante, sans qu'il meure. (Avec `--set-image` on peut aussi changer d'image dans la copie.)
+5. **Nœud.**
+   ```
+   admin@adm01:~/src/k8s$ task appliquer                       # espaces/wb-diagnostic.yaml
+   admin@adm01:~$ kubectl debug node/k8s-w01 -n wb-diagnostic -it --profile=sysadmin --image=registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+   / # chroot /host
+   # crictl ps --name chargeur
+   # crictl inspect <ID> | grep -E '"(memory_limit_in_bytes|exitCode|reason)"'
+   # journalctl -u kubelet --since -10min | grep -i diag-
+   # journalctl -k --since -30min | grep -i -E 'oom|killed process'
+   # exit
+   admin@adm01:~$ kubectl delete pod -n wb-diagnostic --all
+   ```
+   Le pod de diagnostic de nœud partage le réseau et les processus de l'hôte, et monte sa racine sous `/host` : `chroot /host` donne les binaires du nœud (`crictl`, `journalctl`). Dans `wb-essais` (`baseline`), il serait refusé : d'où l'espace `privileged` réservé. Il porte le nom `node-debugger-k8s-w01-…` et ne disparaît pas tout seul.
+6. **metrics-server.** [`values.yaml`](fichiers/M14-E20/k8s/composants/metrics-server/values.yaml) : 2 réplicas, anti-affinité stricte par nœud, PDB, ressources, `--kubelet-insecure-tls` (dette).
+   ```
+   admin@adm01:~/src/k8s$ task metrics-server
+   admin@adm01:~$ kubectl get apiservice v1beta1.metrics.k8s.io
+   NAME                     SERVICE                      AVAILABLE   AGE
+   v1beta1.metrics.k8s.io   kube-system/metrics-server   True        2m
+   admin@adm01:~$ kubectl top node
+   admin@adm01:~$ kubectl top pod -n mediagenda-dev --containers
+   ```
+   Sans `--kubelet-insecure-tls`, les journaux de metrics-server montrent `x509: cannot validate certificate for 10.10.40.61 because it doesn't contain any IP SANs` (ou « signed by unknown authority ») : le certificat de service du kubelet est auto-signé par kubeadm. La bonne correction (E26) : `serverTLSBootstrap: true` dans la configuration du kubelet, approbation des CSR `kubernetes.io/kubelet-serving`, puis retrait de l'option. L'API typiquement consomme 60 à 90 Mio pour 192 Mio demandés en E08 : la requête peut baisser (à revoir au M21 sur une semaine de mesures, pas sur un instant). `metrics.k8s.io` est une API **agrégée** : le kube-apiserver relaie vers le Service de metrics-server, d'où l'`APIService`.
+7. **Réparation.** Les champs `env`, sondes, ressources d'un pod sont immuables (hors redimensionnement en place, `resize`) : `kubectl delete -f ressources/E20-diagnostic.yaml && kubectl apply -f ~/m14/e20/diagnostic-corrige.yaml` ; cinq `Running`, `1/1`.
+8. **Démarche finale** : la même, plus « commencer par lire la colonne `STATUS` et la raison exacte, elles orientent tout de suite » (table des états de l'objectif 4), « un pod sans journal se diagnostique par les événements », « une sonde en échec se lit dans les événements, pas dans les journaux de l'application ».
+
+**Explications**
+
+Chaque état correspond à une étape du kubelet : `Pending` (pas encore placé, ou volumes), `ContainerCreating` (tirage, montage, réseau du pod), `CreateContainerConfigError` (configuration référencée introuvable : ConfigMap, Secret, clé), `CrashLoopBackOff` (le conteneur s'arrête, le kubelet attend 10 s, 20 s… jusqu'à 5 min entre deux redémarrages), `OOMKilled` (le noyau a tué un processus du cgroup du conteneur à sa limite mémoire), `Running` non prêt (la sonde de disponibilité échoue : le pod sort des points de terminaison).
+
+**Alternatives**
+- `kubectl logs` sur un sélecteur (`-l app.kubernetes.io/name=…`, `--all-containers`, `--prefix`) pour un Deployment entier.
+- k9s (E06) : mêmes informations, plus vite, mais la démarche reste la même.
+- SSH sur le nœud au lieu de `debug node/` : plus direct, mais moins traçable (pas d'objet dans l'API) et demande l'accès SSH à l'astreinte.
+
+**Pièges classiques**
+- Lire `kubectl logs` sans `--previous` sur un conteneur qui vient de redémarrer : on lit le journal du nouveau, encore vide.
+- Chercher dans les journaux une erreur de configuration (elle est dans les événements).
+- Laisser les pods `node-debugger-*` après usage : ils ont accès à tout le nœud.
+- `kubectl top` juste après l'installation : `metrics not available yet` pendant une minute (résolution de 15 s, deux mesures nécessaires).
+
+**En production chez MédiSphère**
+Événements conservés au-delà d'une heure (M22, journaux), métriques historiques (M21) plutôt que `kubectl top`, runbook RB-140 et pannes du palier 4 bâtis sur cette démarche, espace `wb-diagnostic` remplacé par une procédure de bris de glace auditée (E27).
+
+---
+
+### M14-E21 — Revue : les manifestes du stagiaire
+
+**Solution**
+
+Fichiers : version corrigée [`k8s/recette/`](fichiers/M14-E21/mediagenda-api/k8s/recette/) (`10-config.yaml`, `20-postgresql.yaml`, `30-valkey.yaml`, `40-api.yaml`, `45-pdb.yaml`, `50-migration.yaml`, sans Secret).
+
+1. **Lecture rapide.** API : **une** instance, épinglée sur `k8s-w01` (`nodeName`) ; base : **deux** instances indépendantes (deux `hostPath` sur deux nœuds, ou le même nœud) derrière un même Service. Le mot de passe est en clair dans Git (`00-secret.yaml`) **et** dans une ConfigMap (`MEDIAGENDA_DB_URL`) : le groupe `medisphere:lecture` (support) et les développeurs en recette lisent les ConfigMaps, pas les Secrets. Au `kubectl apply` : la plupart des objets sont refusés (étape 2) ; ceux qui passent ne servent à rien (Service de l'API sans point de terminaison).
+2. **Par le serveur** (`kubectl apply --dry-run=server -f ressources/E21-manifestes-lucas/`, constaté sur 1.35.9) :
+   - politique d'images : `postgresql` (`postgres:18` = Docker Hub direct), `valkey` (`:latest`), `mediagenda-api` (`:latest`) **refusés dès le Deployment** ;
+   - quota : Service `valkey` refusé (`exceeded quota … services.nodeports=1 … limited: services.nodeports=0`) ;
+   - Pod Security : **avertissements** `would violate PodSecurity "restricted:latest"` sur les trois Deployments (`hostPort`, `hostPath`, root, `allowPrivilegeEscalation`, capacités, seccomp) : les Deployments seraient acceptés, leurs pods refusés ;
+   - LimitRange : l'API demanderait 4 CPU (requêtes = limites quand seules les limites sont écrites) > maximum de 2 : ses pods seraient refusés aussi.
+   **Passent l'admission** : le Secret versionné, la ConfigMap avec le mot de passe, le Service de l'API au mauvais sélecteur, le PDB qui bloque le drain, la sonde de vivacité sur `/pret`, `terminationGracePeriodSeconds: 5`, le sélecteur avec la version, `sh -c "…; …"`. C'est le cœur de la revue : l'admission ne remplace pas la relecture.
+3. **Revue.**
+
+   | N° | Fichier | Défaut | Catégorie | Gravité | Impact chez nous | Correction |
+   |---|---|---|---|---|---|---|
+   | 1 | `00-secret.yaml` | mot de passe en clair dans Git (`stringData`) | sécurité | critique | secret dans l'historique pour toujours, lisible par tout lecteur du dépôt ; Gitleaks (M01) bloquerait la MR | supprimer le fichier, Secret créé par `outils/secret-mediagenda.sh`, **changer** le mot de passe (il a fuité), nettoyer l'historique de la branche |
+   | 2 | `10-config.yaml` | URL avec mot de passe dans une ConfigMap | sécurité | critique | lisible par `medisphere:lecture` et par les développeurs en recette (les rôles de lecture donnent les ConfigMaps) | URL construite par interpolation `$(MEDIAGENDA_DB_MDP)` depuis le Secret |
+   | 3 | `20-postgresql.yaml` | 2 réplicas d'un Deployment PostgreSQL | fonctionnel | critique | deux bases indépendantes derrière un Service : un rendez-vous écrit sur l'une est absent de l'autre, une requête sur deux « perd » des données | 1 réplica, `strategy: Recreate` (HA réelle : CloudNativePG au M16) |
+   | 4 | `20-postgresql.yaml` | `hostPath` `/srv/mediagenda-pg` | sécurité / exploitation | élevée | interdit par `baseline` et `restricted` (refusé) ; données attachées à un nœud, laissées sur le disque après suppression ; promesse de persistance fausse | `emptyDir` assumé jetable jusqu'au M16 ; `k8s-w03` dédié |
+   | 5 | `20-postgresql.yaml` | image `postgres:18` (Docker Hub) | sécurité | élevée | refusée par `medisphere-images` ; sans politique, contournerait Harbor (analyse, cache) | `registry.par1.medisphere.internal/dockerhub/library/postgres:18-trixie` |
+   | 6 | `20-postgresql.yaml` | ni sondes, ni ressources, ni contexte de sécurité, pas de tolérance pour `k8s-w03` | disponibilité | élevée | refusé (`restricted`) ; base placée n'importe où, en `BestEffort`… | version d'E14 : sondes `pg_isready`, 500m/512 Mio, UID 999, tolérance + affinité, priorité critique |
+   | 7 | `30-valkey.yaml` | image `:latest` | exploitation | élevée | refusée ; non reproductible, retour arrière impossible | `valkey/valkey:8.1` du cache |
+   | 8 | `30-valkey.yaml` | Service `NodePort` 30379 « pour Julien » | sécurité | critique | quota refuse ; sinon, cache sans mot de passe ouvert sur les six nœuds (VLAN 40), données de session et créneaux lisibles | `ClusterIP` ; pour examiner le cache, Julien le fait en dev (`port-forward` permis) ; en recette, il passe par la plateforme |
+   | 9 | `40-api.yaml` | `selector` du Deployment avec `version: "1.0.0"` | exploitation | élevée | le sélecteur est immuable : la v1.1 impose de supprimer et recréer le Deployment (coupure) | sélecteur sur `app.kubernetes.io/name` seul ; version en étiquette de gabarit (`app.kubernetes.io/version`) si utile |
+   | 10 | `40-api.yaml` / Service | Service sélectionne `app: mediagenda-api`, les pods ont `app: mediagenda` | fonctionnel | critique | Service sans point de terminaison : l'API est injoignable | mêmes étiquettes partout (`app.kubernetes.io/name: mediagenda-api`) |
+   | 11 | `40-api.yaml` + `45-pdb.yaml` | 1 réplica et PDB `minAvailable: 1` | disponibilité | élevée | drain du nœud impossible (bloque les maintenances d'E17), aucune redondance | 3 réplicas répartis par zone, PDB `maxUnavailable: 1` |
+   | 12 | `40-api.yaml` | `nodeName: k8s-w01` | disponibilité | élevée | contourne l'ordonnanceur (taints, ressources, répartition) ; perte de `k8s-w01` = API perdue ; drain de `k8s-w01` : le pod ne peut aller nulle part | supprimer ; affinités/répartition d'E14 |
+   | 13 | `40-api.yaml` | `:latest` + `imagePullPolicy: Always` | exploitation | élevée | refusé ; version inconnue, deux pods peuvent tourner deux versions, immuabilité `v*` de Harbor inutilisée | `v1.0.0` (ou condensé), `IfNotPresent` |
+   | 14 | `40-api.yaml` | `command: sh -c "migrate; app"` | disponibilité | élevée | `sh` est PID 1 et ne relaie pas SIGTERM (arrêt brutal après le délai) ; migration à chaque démarrage de chaque pod ; si elle échoue, l'API démarre quand même (`;`) sur un schéma faux | commande de l'image ; Job de migration versionné (E15) |
+   | 15 | `40-api.yaml` | `livenessProbe` sur `/pret`, `failureThreshold: 1`, délai 5 s | disponibilité | élevée | une lenteur de la base fait **redémarrer** toutes les API en même temps ; redémarrage au démarrage (le délai est trop court) ; pas de sonde de disponibilité : trafic envoyé à un pod pas prêt | vivacité `/sante`, disponibilité `/pret`, démarrage `startupProbe` |
+   | 16 | `40-api.yaml` | `hostPort: 8000` | sécurité | élevée | interdit par `baseline` ; un seul pod par nœud ; contourne le Service | supprimer |
+   | 17 | `40-api.yaml` | `limits` 4 CPU / 4 Gio sans `requests` | exploitation | élevée | requêtes = limites = 4 CPU : refusé par le LimitRange (max 2) et dévore le quota | requêtes 100m/192 Mio, limites 500m/384 Mio (E08-E16) |
+   | 18 | `40-api.yaml` | `runAsUser: 0`, `allowPrivilegeEscalation: true` | sécurité | élevée | refusé par `restricted` ; root dans le conteneur sans raison | contexte d'E19 : non-root, `drop: [ALL]`, seccomp, racine en lecture seule |
+   | 19 | `40-api.yaml` | `terminationGracePeriodSeconds: 5` | disponibilité | moyenne | MédiAgenda laisse 20 s aux requêtes en cours : coupées à 5 s à chaque mise à jour | 30 s (> `MEDIAGENDA_DELAI_ARRET`) |
+   | 20 | tous | pas de compte de service nommé, pas d'étiquettes standard | exploitation | faible | identité `default` ; objets difficiles à sélectionner (supervision, PDB) | `serviceAccountName: mediagenda-api`, `app.kubernetes.io/*` |
+   | 21 | `10-config.yaml` | `DEBUG` en recette | exploitation | faible | volume de journaux, bruit pendant la recette | `INFO` |
+   | 22 | MR | « testé sur kind » | processus | moyenne | kind n'a ni nos quotas, ni Pod Security en `restricted`, ni la politique d'images, ni Harbor privé : le test ne prouvait rien | `kubectl apply --dry-run=server` sur `mediagenda-recette` dans la MR |
+4. **Ordre de traitement** : 1) n° 1 (le secret a fuité : il faut le changer **maintenant**, avant toute autre chose, et purger la branche) ; 2) n° 2 et 8 (exposition de données : mot de passe lisible, cache ouvert) ; 3) n° 3 et 10 (le service ne marche pas ou perd des données). Puis disponibilité (11-15), puis exploitation, puis le reste.
+5. **Version corrigée** : [`k8s/recette/`](fichiers/M14-E21/mediagenda-api/k8s/recette/) = la dev d'E14-E16 transposée (noms, espace, adresse du primaire Valkey), sans Secret ni CronJob.
+   ```
+   admin@adm01:~/src/k8s$ outils/secret-mediagenda.sh mediagenda-recette
+   admin@adm01:~/src/mediagenda-api$ kubectl apply -f k8s/recette/10-config.yaml -f k8s/recette/20-postgresql.yaml -f k8s/recette/30-valkey.yaml
+   admin@adm01:~/src/mediagenda-api$ kubectl apply -f k8s/recette/50-migration.yaml
+   admin@adm01:~$ kubectl wait --for=condition=Complete job/mediagenda-migration-v1-0-0 -n mediagenda-recette --timeout=5m
+   admin@adm01:~/src/mediagenda-api$ kubectl apply -f k8s/recette/40-api.yaml -f k8s/recette/45-pdb.yaml
+   admin@adm01:~$ kubectl get endpointslices -n mediagenda-recette -l kubernetes.io/service-name=mediagenda-api
+   ```
+   Le quota de recette (3 CPU de requêtes) loge l'API (3 × 100m), PostgreSQL (500m), Valkey (3 × 50m) et le Job.
+6. **Conseils à Lucas** : 1) tester là où ça tournera : `kubectl apply --dry-run=server -n mediagenda-recette` passe par **nos** admissions ; 2) lire chaque refus et chaque avertissement, et ne pas désactiver une règle pour « faire passer » ; 3) un test fonctionnel passe par le Service (comme les clients), pas par `localhost` dans un `port-forward` vers un pod.
+
+**Explications**
+
+Une revue de manifestes se fait avec le cluster en tête : ce que l'admission refusera (mieux vaut le savoir dans la MR), ce qu'elle laissera passer (le plus dangereux), et ce que les opérations feront (drain, mise à jour, perte de nœud). Les défauts « fonctionnels » silencieux (sélecteur faux, deux bases) sont souvent plus graves que ceux que la plateforme bloque.
+
+**Alternatives**
+- Contrôles automatiques dans la CI de `mediagenda/api` : kubeconform, `kube-score` ou `kube-linter`, et `--dry-run=server` contre la recette avec un compte de CI en lecture plus dry-run (M19).
+- Kustomize (M17) : une base commune dev/recette éviterait que la recette diverge de la dev.
+
+**Pièges classiques**
+- S'arrêter aux refus de l'admission.
+- Corriger sans changer le mot de passe qui a fuité.
+- Remplacer `nodeName` par un `nodeSelector` sur `k8s-w01` : même défaut, en plus discret.
+
+**En production chez MédiSphère**
+Gitleaks bloquant (M01), règles Kyverno en mode audit dans la CI (M26), MR de déploiement validées par `--dry-run=server`, binôme pour les premières MR d'un stagiaire.
+
+---
+
+### M14-E22 — Runbook : un nœud est NotReady
+
+**Solution**
+
+Modèle : [`RB-140-noeud-notready.md`](fichiers/M14-E22/medisphere/docs/kubernetes/runbooks/RB-140-noeud-notready.md).
+
+Points que le runbook doit contenir (grille d'auto-évaluation) :
+- **Déclencheur et impact minute par minute** : ≈ 40 s pour `Unknown` (le kubelet ne renouvelle plus son bail dans `kube-node-lease`) et taints `unreachable`/`not-ready` en `NoSchedule` + `NoExecute` ; 300 s pour l'éviction (tolérances par défaut ajoutées par l'admission `DefaultTolerationSeconds`) ; DaemonSets jamais évincés ; StatefulSets bloqués `Terminating` (un ordinal n'existe jamais deux fois) ; `emptyDir` perdus.
+- **Conditions d'escalade** explicites (plusieurs nœuds, API lente, nœud de contrôle avec un second souci, `k8s-w03` en recette).
+- **Arbre de diagnostic** ordonné : VM (Proxmox) → réseau → kubelet → containerd (`SystemdCgroup`) → disque → mémoire → swap → certificat du kubelet → horloge → Cilium → accès à l'API depuis le nœud. Chaque branche : commande, résultat attendu, action. Ce sont aussi, à peu près, les variantes des pannes d'E35.
+- **Actions graduées** avec risque, prérequis et retour arrière ; ⚠️ sur le drain de `k8s-w03` et sur les nœuds de contrôle.
+- **Nœud de contrôle** : etcd (quorum 2/3), VIP (une seule portée), keepalived/HAProxy ; pas de précipitation tant que deux sur trois vont bien.
+- **Retour à la normale** observable, dont `task etiquettes` après une reconstruction et la relance de la migration si les bases jetables ont été recréées.
+- **Questions de relecture** et réponses (exemples dans le modèle : supprimer le nœud tout de suite ? pod de StatefulSet bloqué ? API en panne ?).
+
+**Pièges classiques**
+- Commencer par `kubectl delete node` « pour que les pods repartent ».
+- Oublier que l'éviction a lieu toute seule : on « répare » en redémarrant des pods déjà recréés ailleurs.
+- `kubectl delete pod --force` sur un pod de StatefulSet d'un nœud qui n'est pas vraiment arrêté.
+- Écrire un runbook qui suppose `admin.conf`.
+
+**En production chez MédiSphère**
+Alerte `KubeNodeNotReady` et `KubeletDown` (M21) qui pointent vers RB-140 ; runbook rejoué à chaque exercice d'astreinte (E43, F3) ; remplacement automatique des travailleurs (Cluster API, M18) quand la reconstruction devient routinière.
+
+---
+
+### M14-E23 — Le cluster décrit par le code
+
+**Solution** (une solution possible ; d'autres organisations sont valables si les critères sont tenus)
+
+Fichiers : [`Taskfile.yml`](fichiers/M14-E23/k8s/Taskfile.yml), [`.gitlab-ci.yml`](fichiers/M14-E23/k8s/.gitlab-ci.yml), [`README.md`](fichiers/M14-E23/k8s/README.md), [`outils/derive.sh`](fichiers/M14-E23/k8s/outils/derive.sh), [`outils/verifier-cluster.sh`](fichiers/M14-E23/k8s/outils/verifier-cluster.sh), [`docs/kubernetes/reconstruction.md`](fichiers/M14-E23/medisphere/docs/kubernetes/reconstruction.md). Les autres fichiers de `plateforme/k8s` sont ceux des exercices précédents (E04-E06, E10-E20), superposés.
+
+1. **Inventaire.** Partir du cluster : `kubectl api-resources --verbs=list -o name` puis, pour chaque type, les objets qui ne viennent ni de kubeadm (`kube-system`, `kube-public`, ConfigMaps `kubeadm-config`, `kubelet-config`, RBAC `kubeadm:*`, `system:*`), ni de Cilium, ni des applications (`mediagenda-*` hors objets de plateforme). `kubectl get … --show-managed-fields -o json | jq '.metadata.managedFields[].manager'` dit qui a posé quoi : un gestionnaire `kubectl-client-side-apply`, `kubectl-edit`, `kubectl-label` ou `kubectl-create` sur un objet de plateforme signale un geste à la main à ramener dans le dépôt. Résultats typiques à ce stade : étiquettes et taints des nœuds (→ `cluster/noeuds.yaml`), PriorityClasses (→ `ordonnancement/`), metrics-server (→ `composants/metrics-server/` + tâche), Secrets `harbor-pull` et `mediagenda-db` (→ **outils** qui les recréent, jamais le contenu), `wb-diagnostic` (→ `espaces/`).
+2. **Taskfile** : en plus des tâches du palier 1, `espaces` (avant la validation), `valider-hors-ligne` (yamllint, kubeconform, shellcheck), `derive`, `etiquettes`, `metrics-server`, `verifier` ; `appliquer` enchaîne `espaces`, `valider`, application des dossiers, `etiquettes`. **Server-side apply avec `--force-conflicts`** dans `appliquer` et `diff` : un champ modifié à la main (`kubectl edit`) a changé de gestionnaire ; sans l'option, `diff` et `apply` s'arrêtent sur un *conflit* au lieu de montrer et de corriger la dérive (constaté sur 1.35.9). Le dépôt fait foi, mais on relit toujours `task diff` avant.
+3. **Rôles agrégés et server-side apply** : un rôle agrégé ne doit **pas** contenir `rules: []` dans le dépôt (c'est pourquoi le fichier d'E11 n'en a pas) : avec le server-side apply et `--force-conflicts`, le dépôt deviendrait propriétaire du champ `rules` et le viderait à chaque application, avant que le contrôleur d'agrégation le remplisse de nouveau (droits coupés quelques instants, et dérive permanente dans `task diff`).
+4. **CI** : `kubeconform` (image `ghcr/yannh/kubeconform:v0.8.0-alpine` du cache Harbor, sur `runner02`, schémas de la version du cluster, `-strict` : un champ inconnu ou mal placé est refusé) en plus de yamllint et shellcheck.
+5. **Dérive** : `task derive` ([`derive.sh`](fichiers/M14-E23/k8s/outils/derive.sh)) — sens dépôt → cluster par `kubectl diff --server-side --force-conflicts` ; sens cluster → dépôt par la liste des objets dont un champ est géré par `plateforme-k8s` mais qui ne figurent plus dans aucun fichier (un fichier supprimé du dépôt ne supprime rien dans le cluster). Essai : `kubectl patch resourcequota quota-equipe -n mediagenda-dev --type=merge -p '{"spec":{"hard":{"pods":"50"}}}'` → `task derive` montre `-pods: "50" / +pods: "20"` et sort en 1 ; `task appliquer` remet 20.
+6. **Conformité** : `task verifier` ([`verifier-cluster.sh`](fichiers/M14-E23/k8s/outils/verifier-cluster.sh)) — nœuds de `cluster/noeuds.yaml` présents, `Ready`, ordonnançables, étiquettes et taints ; `kubernetesVersion`, `controlPlaneEndpoint`, sous-réseaux et nom du cluster du dépôt comparés à la ConfigMap `kube-system/kubeadm-config` ; Cilium et `metrics.k8s.io` disponibles ; aucune dérive.
+7. **Reconstruction de `k8s-w02`** : procédure et compte rendu dans [`reconstruction.md`](fichiers/M14-E23/medisphere/docs/kubernetes/reconstruction.md) : drain, `kubectl delete node`, remplacement de la **ressource** VM par OpenTofu (`-replace`), `task noeuds -- --limit k8s-w02`, `task etiquettes`, `task verifier`. Avec trois réplicas de l'API sur deux zones et le PDB, la sonde ne voit pas de coupure ; Valkey perd un réplica (resynchronisé).
+
+**Explications**
+
+« Décrit par le code » veut dire : *tout* ce qui distingue ce cluster d'un cluster kubeadm vierge se retrouve dans un dépôt, ou dans un outil qui le recrée (les secrets), et l'écart entre le dépôt et le cluster se **mesure**. La reconstruction réelle d'un nœud est la seule preuve qui vaille : elle révèle les gestes oubliés (une étiquette posée à la main, un miroir absent, un jeton expiré).
+
+**Alternatives**
+- GitOps (Argo CD, M20) : la dérive devient un état affiché en continu, et la correction automatique possible ; c'est la suite naturelle de `task derive`.
+- Helmfile (M17) pour décrire tous les composants installés par Helm.
+- Reconstruire par Cluster API (M18) plutôt que par OpenTofu + Ansible.
+
+**Pièges classiques**
+- `rules: []` dans un rôle agrégé appliqué en server-side apply (point 3).
+- Appliquer `cluster/` comme un dossier d'objets (`kubeadm-config.yaml` n'en est pas).
+- Oublier que supprimer un fichier ne supprime pas l'objet : d'où la dérive « cluster → dépôt ».
+- Reconstruire un nœud de contrôle par cette procédure (membre etcd : M14-E29).
+
+**En production chez MédiSphère**
+`task verifier` dans un pipeline planifié chaque nuit (compte de lecture, M19) qui ouvre un ticket en cas d'écart ; GitOps au M20 ; reconstruction d'un travailleur tirée au sort chaque mois (exercice de résilience, M29).

@@ -1,0 +1,16 @@
+# Extrait du .gitlab-ci.yml de mediagenda/deploiement (M17-E21) : garde-fou de livraison, sur chaque MR
+# et sur main. Image kubectl épinglée (Kustomize 5.8.1 intégré) ; yq ajouté par binaire épinglé.
+verifier-livraison:
+  stage: lint
+  tags: [docker]
+  image:
+    name: registry.par1.medisphere.internal/k8s/kubectl:v1.36.5   # à vérifier : image du cache « k8s »
+    entrypoint: [""]
+  variables:
+    YQ_VERSION: v4.54.1
+    YQ_SHA256: "<EMPREINTE-SHA256-DU-BINAIRE>"
+  script:
+    - wget -q -O /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+    - echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+    - install -m 755 /tmp/yq /usr/local/bin/yq
+    - outils/verifier-livraison.sh

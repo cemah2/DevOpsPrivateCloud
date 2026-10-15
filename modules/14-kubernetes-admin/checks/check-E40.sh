@@ -3,7 +3,7 @@
 # shellcheck source-path=SCRIPTDIR
 # check-E40.sh — M14-E40 « Panne : un membre etcd est en détresse » : trois membres démarrés et en
 # bonne santé, aucune alarme, aucune clé hors de /registry/, quota d'espace par défaut ou plus grand,
-# horloges synchronisées, RB-146, panne close. Lecture seule (etcdctl endpoint/member/alarm list,
+# horloges synchronisées, RB-147, panne close. Lecture seule (etcdctl endpoint/member/alarm list,
 # get --keys-only).
 
 # shellcheck source=_m14-expert.sh
@@ -37,5 +37,5 @@ for _m14_e40_h in "${_m14x_cp[@]}"; do
   }
   check_cmd "$_m14_e40_h : écart d'horloge avec adm01 inférieur à 5 s" _m14_e40_ecart "$_m14_e40_h"
 done
-check_cmd "RB-146 (etcd en détresse) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-146-*.md'
+check_cmd "RB-147 (etcd en détresse) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-147-*.md'
 check_cmd "panne M14-E40 close (lab/bin/break 14 40 --annuler après réparation)" _m14x_aucune_panne_active E40

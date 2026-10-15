@@ -1,0 +1,88 @@
+---
+# Rôle pile_recette — pile de recette « conteneurs v1 » (M12-E46, PLAT-1390).
+# Quatre applications et leurs dépendances, en fichiers Quadlet du compte sans privilège
+# (ADR-0120 : Podman sans privilège + Quadlet sur les serveurs applicatifs hors Kubernetes).
+# Prérequis : rôle podman_hote (compte, subuid/subgid, linger, registries.conf).
+
+pile_recette_compte: app
+pile_recette_dossier_quadlet: ".config/containers/systemd"     # relatif au dossier personnel du compte
+
+# Registre de travail (M12-E15) et compte en LECTURE de la pile (« plateforme », Vault lab)
+pile_recette_registre: ctr01.par1.medisphere.internal:5000
+pile_recette_registre_utilisateur: plateforme
+pile_recette_registre_mdp: "{{ vault_pile_recette_registre_mdp }}"
+
+# Versions publiées par la CI (X.Y.Z, jamais latest). À remplacer par les empreintes
+# (« …@sha256:… ») pour une recette figée ; AutoUpdate=registry suit alors l'étiquette mobile.
+pile_recette_versions:
+  mediagenda: "1.0.0"
+  medidoc: "1.0.0"
+  medinotif: "1.0.0"
+  legacy_rdv: "2.3.1"
+
+# Étiquette mobile suivie par podman auto-update pour MédiAgenda (M12-E30) ; vide = version figée.
+pile_recette_mediagenda_etiquette_mobile: ""
+
+# Images publiques des dépendances : noms complets (short-name-mode = enforcing).
+pile_recette_image_postgres: docker.io/library/postgres:18-trixie
+pile_recette_image_valkey: docker.io/valkey/valkey:8-trixie
+pile_recette_image_mariadb: docker.io/library/mariadb:11.8
+pile_recette_image_rabbitmq: docker.io/library/rabbitmq:4.1
+# SeaweedFS de recette pour MédiDoc : même version majeure.mineure que s3-01 (PLAN §6, 4.4x).
+# Obligatoire : à fixer dans host_vars (étiquette exacte relevée sur Docker Hub, puis empreinte).
+pile_recette_image_seaweedfs: ""
+
+# Ports publiés sur l'hôte (sans privilège : > 1024)
+pile_recette_ports:
+  mediagenda: 8000
+  medidoc: 8080
+  legacy_rdv: 8081
+  medinotif_metriques: 9100
+
+pile_recette_medidoc_compartiment: medidoc-recette
+
+# Secrets (Vault lab) : jamais en clair, remis aux conteneurs par « podman secret ».
+# Mots de passe générés en hexadécimal (openssl rand -hex 24) : ils entrent dans des URL.
+pile_recette_secrets:
+  mediagenda-pg-mdp: "{{ vault_pile_recette_mediagenda_pg_mdp }}"
+  legacy-rdv-db-mdp: "{{ vault_pile_recette_legacy_db_mdp }}"
+  legacy-rdv-db-root: "{{ vault_pile_recette_legacy_db_root }}"
+  rabbitmq-mdp: "{{ vault_pile_recette_rabbitmq_mdp }}"
+  medidoc-s3-cle: "{{ vault_pile_recette_medidoc_s3_cle }}"
+  medidoc-s3-secret: "{{ vault_pile_recette_medidoc_s3_secret }}"
+  # Secrets composés (une URL contient un mot de passe : elle est elle-même un secret)
+  mediagenda-db-url: "postgresql://mediagenda:{{ vault_pile_recette_mediagenda_pg_mdp | urlencode }}@mediagenda-pg:5432/mediagenda"
+  medinotif-amqp-url: "amqp://medinotif:{{ vault_pile_recette_rabbitmq_mdp | urlencode }}@medinotif-rabbitmq:5672/%2F"
+  seaweedfs-s3-config: >-
+    {{ {'identities': [{'name': 'medidoc', 'credentials': [{'accessKey': vault_pile_recette_medidoc_s3_cle,
+        'secretKey': vault_pile_recette_medidoc_s3_secret}], 'actions': ['Read', 'Write', 'List', 'Tagging']}]} | to_json }}
+
+# Fichiers Quadlet déposés (modèles templates/quadlet/<nom>.j2), dans l'ordre de démarrage
+pile_recette_unites:
+  - apps-recette.network
+  - mediagenda-pg.volume
+  - mediagenda-pg.container
+  - mediagenda-valkey.container
+  - mediagenda-migrations.container
+  - mediagenda-api.container
+  - medidoc-s3.volume
+  - medidoc-s3.container
+  - medidoc.container
+  - legacy-mariadb.volume
+  - legacy-pieces.volume
+  - legacy-sessions.volume
+  - legacy-mariadb.container
+  - legacy-rdv.container
+  - medinotif-rabbitmq.volume
+  - medinotif-rabbitmq.container
+  - medinotif.container
+
+# Services à démarrer (les autres sont tirés par leurs dépendances)
+pile_recette_services:
+  - mediagenda-api.service
+  - medidoc.service
+  - legacy-rdv.service
+  - medinotif.service
+
+pile_recette_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle pile_recette).') | replace('\n', ' ') }}

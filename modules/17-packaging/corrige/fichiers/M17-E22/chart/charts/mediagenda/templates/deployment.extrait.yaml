@@ -1,0 +1,12 @@
+{{- /*
+M17-E22 — si l'équipe VEUT un HorizontalPodAutoscaler : le chart ne rend plus spec.replicas
+quand autoscaling.enabled est vrai (le contrôleur HPA en devient le seul propriétaire), et rend
+l'HPA lui-même. Valeurs ajoutées (et décrites dans values.schema.json) :
+  autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 4, cpuUtilisation: 80}
+Extrait : seul le début du Deployment change.
+*/ -}}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5

@@ -1,0 +1,11 @@
+---
+# host_vars/ctr02/vault.yml — CHIFFRÉ avec l'identité « lab » :
+#   uv run ansible-vault encrypt --vault-id lab@outils/vault-pass-client.sh host_vars/ctr02/vault.yml
+# Valeurs : openssl rand -hex 24 (hexadécimal : elles entrent dans des URL).
+vault_pile_recette_registre_mdp: "<MOT-DE-PASSE-DU-COMPTE-PLATEFORME-DU-REGISTRE>"
+vault_pile_recette_mediagenda_pg_mdp: "<HEX-24>"
+vault_pile_recette_legacy_db_mdp: "<HEX-24>"
+vault_pile_recette_legacy_db_root: "<HEX-24>"
+vault_pile_recette_rabbitmq_mdp: "<HEX-24>"
+vault_pile_recette_medidoc_s3_cle: "<HEX-16>"
+vault_pile_recette_medidoc_s3_secret: "<HEX-24>"

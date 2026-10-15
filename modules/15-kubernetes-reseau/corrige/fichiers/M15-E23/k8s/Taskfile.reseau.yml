@@ -30,11 +30,11 @@ tasks:
       - task: politiques
 
   crd-gateway-api:
-    desc: CRD de la Gateway API (canal standard, version épinglée, fichier vendu avec son empreinte)
-    dir: composants/gateway-api
+    desc: CRD de la Gateway API (canal standard, version épinglée, fichiers versionnés avec leurs empreintes, M15-E07)
+    dir: composants/gateway-api/{{.GATEWAY_API_VERSION}}
     cmds:
-      - sha256sum -c SHA256SUMS
-      - kubectl apply --server-side -f standard-install-{{.GATEWAY_API_VERSION}}.yaml
+      - sha256sum --check --strict ../SHA256SUMS-{{.GATEWAY_API_VERSION}}
+      - kubectl apply --server-side -f .
 
   cilium:
     desc: Cilium (CLI cilium = helm upgrade de la release « cilium »), puis attente

@@ -1,6 +1,7 @@
-# Extrait à intégrer à la Gateway gw-essai de M15-E07 (wb-essais), AVANT de créer lb-par1 :
-# l'adresse est demandée par la Gateway (le Service cilium-gateway-gw-essai appartient à Cilium,
-# toute modification directe serait écrasée).
+# Extrait à intégrer à une Gateway de la classe « cilium » restée en attente d'adresse (wb-essais),
+# AVANT de créer lb-par1 : l'adresse est demandée par la Gateway (le Service cilium-gateway-<nom>
+# appartient à Cilium, toute modification directe serait écrasée). (La gw-essai du palier 1 passe
+# par un Service NodePort : elle n'est pas concernée.)
 spec:
   addresses:
     - type: IPAddress

@@ -1,0 +1,20 @@
+# {{ pile_recette_entete }}
+# S3 de recette de MédiDoc : SeaweedFS (même famille que s3-01), un seul processus, données sur volume.
+[Unit]
+Description=SeaweedFS S3 de recette pour MédiDoc
+
+[Container]
+ContainerName=medidoc-s3
+Image={{ pile_recette_image_seaweedfs }}
+Network=apps-recette.network
+Volume=medidoc-s3.volume:/data
+# Identités S3 (JSON) remises en fichier par un secret Podman
+Secret=seaweedfs-s3-config,type=mount,target=/etc/seaweedfs/s3.json
+Exec=server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

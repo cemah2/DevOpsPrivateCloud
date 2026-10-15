@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Ménage quotidien des objets Docker jetables
+
+[Timer]
+OnCalendar={{ docker_engine_menage_quand }}
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

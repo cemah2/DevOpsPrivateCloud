@@ -1,0 +1,25 @@
+# {{ pile_recette_entete }}
+[Unit]
+Description=MariaDB 11.8 de Legacy-RDV (recette conteneurs v1)
+
+[Container]
+ContainerName=legacy-mariadb
+Image={{ pile_recette_image_mariadb }}
+Network=apps-recette.network
+Volume=legacy-mariadb.volume:/var/lib/mysql
+Environment=MARIADB_DATABASE=legacy_rdv MARIADB_USER=legacy_rdv TZ=Europe/Paris
+Environment=MARIADB_PASSWORD_FILE=/run/secrets/legacy-rdv-db-mdp MARIADB_ROOT_PASSWORD_FILE=/run/secrets/legacy-rdv-db-root
+Secret=legacy-rdv-db-mdp,type=mount,mode=0444
+Secret=legacy-rdv-db-root,type=mount,mode=0444
+HealthCmd=healthcheck.sh --connect --innodb_initialized
+HealthInterval=10s
+HealthStartPeriod=30s
+Notify=healthy
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

@@ -1,3 +1,3 @@
 # SUPPRIMÉ : pas de Gateway par équipe. MédiDoc s'attache à gw-par1 (passerelles), qui a déjà
-# l'adresse 10.10.41.10, l'écouteur https *.apps avec le joker et la redirection HTTP → HTTPS.
+# l'adresse réservée de l'entrée, l'écouteur https *.apps avec le joker et la redirection HTTP → HTTPS.
 # (Fichier conservé vide pour garder la numérotation de la revue.)

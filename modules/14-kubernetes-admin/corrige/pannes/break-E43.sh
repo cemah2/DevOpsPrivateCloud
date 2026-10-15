@@ -135,8 +135,8 @@ main() {
   echo "Injection en cours (trois pannes et un instantané etcd : compte 5 à 15 minutes)…"
   WB_EX=M14-E43
   WB_VAR=0
-  m14_temoins || { echo "Témoins du palier 4 impossibles à préparer : rien n'est cassé." >&2; return 1; }
   m14_sain || { echo "Cluster pas sain avant l'astreinte : rien n'est cassé." >&2; return 1; }
+  m14_temoins || { echo "Témoins du palier 4 impossibles à préparer : rien n'est cassé." >&2; return 1; }
   local r
   r="$(m14_etcd_relais)" || { echo "Aucun membre etcd joignable : rien n'est cassé." >&2; return 1; }
   if ! m14_instantane_etcd "$r"; then

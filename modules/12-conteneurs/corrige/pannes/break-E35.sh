@@ -103,17 +103,17 @@ EOF
 
 resume_E35() {
   case "${WB_VAR:-1}" in
-    3) echo "Depuis le déploiement de MédiDoc 1.1.0-rc1 par Lucas, http://ctr01.par1.medisphere.internal:8080/healthz ne répond plus." ;;
-    *) echo "L'API de recette de MédiAgenda (http://ctr01.par1.medisphere.internal:8000) ne répond plus depuis la dernière modification de compose.yaml." ;;
+    3) echo "Depuis le déploiement de MédiDoc 1.1.0-rc1 par Lucas, http://ctr01.par1.medisphere.internal:18080/healthz ne répond plus." ;;
+    *) echo "L'API de recette de MédiAgenda (http://ctr01.par1.medisphere.internal:18000) ne répond plus depuis la dernière modification de compose.yaml." ;;
   esac
 }
 
 symptome_E35() {
   local detail
   case "$WB_VAR" in
-    3) detail="Lucas a livré hier soir MédiDoc 1.1.0-rc1 sur la recette (« juste un Dockerfile plus simple »). Depuis, http://ctr01.par1.medisphere.internal:8080/healthz ne répond plus. Lucas : « l'image se construit sans erreur, je ne comprends pas »." ;;
-    2) detail="Lucas a « simplifié » le service api du fichier compose.yaml de la recette hier soir. Depuis, plus rien ne répond sur http://ctr01.par1.medisphere.internal:8000, et « docker compose up » affiche une erreur qu'il n'a pas notée." ;;
-    *) detail="Lucas a « aligné les noms de variables » dans compose.yaml de la recette hier soir. Depuis, plus rien ne répond sur http://ctr01.par1.medisphere.internal:8000 ; « docker compose ps » montre l'API qui redémarre sans cesse." ;;
+    3) detail="Lucas a livré hier soir MédiDoc 1.1.0-rc1 sur la recette (« juste un Dockerfile plus simple »). Depuis, http://ctr01.par1.medisphere.internal:18080/healthz ne répond plus. Lucas : « l'image se construit sans erreur, je ne comprends pas »." ;;
+    2) detail="Lucas a « simplifié » le service api du fichier compose.yaml de la recette hier soir. Depuis, plus rien ne répond sur http://ctr01.par1.medisphere.internal:18000, et « docker compose up » affiche une erreur qu'il n'a pas notée." ;;
+    *) detail="Lucas a « aligné les noms de variables » dans compose.yaml de la recette hier soir. Depuis, plus rien ne répond sur http://ctr01.par1.medisphere.internal:18000 ; « docker compose ps » montre l'API qui redémarre sans cesse." ;;
   esac
   wb_symptome "Ticket INC-3941 — De : Julien Petit" \
     "$detail" \

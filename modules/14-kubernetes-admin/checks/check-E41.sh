@@ -4,7 +4,7 @@
 # check-E41.sh — M14-E41 « Panne : accès refusé » : ton identité personnelle fonctionne (certificat
 # valable, pas system:masters), l'équipe MédiAgenda a son RoleBinding, aucune politique d'admission ne
 # refuse les volumes emptyDir des bases jetables, les témoins (postgres, sonde-api) sont prêts avec
-# leurs droits exacts, RB-147, panne close.
+# leurs droits exacts, RB-148, panne close.
 # Lecture seule : « auth whoami » et un « apply --dry-run=server » (rien n'est créé) avec TON
 # kubeconfig (WB_K8S_ADMIN_KUBECONFIG, défaut ~/.kube/config), le reste avec le compte des checks.
 
@@ -58,5 +58,5 @@ EOF
 else
   skip "objets RBAC et admission" "l'API ne répond pas au compte des checks (lab/bin/check 14 39)"
 fi
-check_cmd "RB-147 (accès refusé) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-147-*.md'
+check_cmd "RB-148 (accès refusé) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-148-*.md'
 check_cmd "panne M14-E41 close (lab/bin/break 14 41 --annuler après réparation)" _m14x_aucune_panne_active E41

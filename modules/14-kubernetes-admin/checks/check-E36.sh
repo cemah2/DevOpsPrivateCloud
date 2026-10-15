@@ -3,7 +3,7 @@
 # shellcheck source-path=SCRIPTDIR
 # check-E36.sh — M14-E36 « Panne : des pods restent Pending » : le témoin agenda est entièrement
 # déployé, aucun pod Pending dans les espaces du workbook, quota avec de la marge, travailleurs
-# ordonnançables, demandes de ressources raisonnables, RB-144 (section Pending), panne close.
+# ordonnançables, demandes de ressources raisonnables, RB-145 (section Pending), panne close.
 # Lecture seule.
 
 # shellcheck source=_m14-expert.sh
@@ -45,6 +45,6 @@ else
     _m14x_kq '[.spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[]?.matchExpressions[]?.values[]?] | index("par1-baie-d") | not' \
     -n "$_m14x_ns" deploy agenda
 fi
-check_cmd "RB-144 (un pod ne démarre pas) publié, avec une section sur les pods Pending" \
-  _m14x_doc_contient 'docs/kubernetes/runbooks/RB-144-*.md' '^#+ .*Pending'
+check_cmd "RB-145 (un pod ne démarre pas) publié, avec une section sur les pods Pending" \
+  _m14x_doc_contient 'docs/kubernetes/runbooks/RB-145-*.md' '^#+ .*Pending'
 check_cmd "panne M14-E36 close (lab/bin/break 14 36 --annuler après réparation)" _m14x_aucune_panne_active E36

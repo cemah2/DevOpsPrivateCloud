@@ -6,7 +6,7 @@
 - name: Installateur vérifié et version active
   ansible.builtin.import_tasks: installer.yml
 
-- name: harbor.yml, première installation ou prepare
+- name: Configuration, première installation ou prepare
   ansible.builtin.import_tasks: configurer.yml
 
 - name: Service

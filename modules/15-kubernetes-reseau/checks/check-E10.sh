@@ -19,9 +19,9 @@ _m15o_svcs="$(_m15o_kjson services -A)"
 check_cmd "le pool lb-par1 existe" _m15o_jq "$_m15o_pool" '.metadata.name == "lb-par1"'
 check_cmd "lb-par1 couvre exactement 10.10.41.10-10.10.41.199 (un seul bloc start/stop)" \
   _m15o_jq "$_m15o_pool" '(.spec.blocks | length) == 1 and .spec.blocks[0].start == "10.10.41.10" and .spec.blocks[0].stop == "10.10.41.199"'
-check_cmd "lb-par1 est actif (non désactivé)" _m15o_jq "$_m15o_pool" '(.spec.disabled // false) == false'
-check_output "lb-par1 n'est pas en conflit avec un autre pool" '^(False|)$' \
-  _m15o_condition "$_m15o_pool" cilium.io/PoolConflict
+check_cmd "lb-par1 est actif (non désactivé)" _m15o_jq "$_m15o_pool" '.metadata.name == "lb-par1" and (.spec.disabled // false) == false'
+check_cmd "lb-par1 n'est pas en conflit avec un autre pool" _m15o_jq "$_m15o_pool" \
+  '.metadata.name == "lb-par1" and ([.status.conditions[]? | select(.type == "cilium.io/PoolConflict" and .status == "True")] | length == 0)'
 check_output "lb-par1 est le seul pool du cluster (pools : $(jq -r '[.items[]?.metadata.name] | join(" ")' <<<"$_m15o_pools" 2>/dev/null || true))" \
   '^1$' jq -r '.items | length' <<<"$_m15o_pools"
 
@@ -36,12 +36,6 @@ check_cmd "essai-lb-a et essai-lb-b partagent une même adresse du pool (${_m15o
 _m15o_occupant="$(jq -r '[.items[]? | select(any(.status.loadBalancer.ingress[]?; .ip == "10.10.41.10")) | "\(.metadata.namespace)/\(.metadata.name)"] | join(" ")' <<<"$_m15o_svcs" 2>/dev/null || true)"
 check_cmd "10.10.41.10 n'est occupée par aucun Service autre que celui de gw-par1 (occupant : ${_m15o_occupant:-aucun})" \
   bash -c '[[ -z "$1" || "$1" == "passerelles/cilium-gateway-gw-par1" ]]' _ "$_m15o_occupant"
-_m15o_gwe="$(_m15o_kjson gateway gw-essai -n wb-essais)"
-if _m15o_jq "$_m15o_gwe" '.metadata.name == "gw-essai"'; then
-  check_cmd "gw-essai a l'adresse 10.10.41.11" _m15o_jq "$_m15o_gwe" 'any(.status.addresses[]?; .value == "10.10.41.11")'
-else
-  skip "gw-essai a l'adresse 10.10.41.11" "gw-essai supprimée"
-fi
 
 # --- Joignabilité depuis un nœud (eBPF de Cilium) ---------------------------------------------------
 _m15o_noeud="$(awk '{print $1}' <<<"${WB_K8S_WORKERS:-k8s-w01}")"

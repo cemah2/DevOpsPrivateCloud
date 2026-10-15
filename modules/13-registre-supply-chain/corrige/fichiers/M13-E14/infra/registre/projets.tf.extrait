@@ -1,5 +1,6 @@
 # registre/projets.tf — EXTRAIT : politiques de confiance (M13-E14, SEC-1432).
-# Seul le bloc harbor_project.projet change ; le reste du fichier (membres…) est celui de M13-E06/E10.
+# Seul le bloc harbor_project.projet change (ajout de local.politiques) ; local.projets (descriptions,
+# quotas) et le reste du fichier (membres…) sont ceux de M13-E10.
 #
 # Politiques par projet :
 #   medisphere : signature Cosign EXIGÉE, images Critical refusées (et images non analysées, voir le
@@ -23,6 +24,7 @@ resource "harbor_project" "projet" {
   name                   = each.key
   public                 = false
   vulnerability_scanning = true
+  storage_quota          = each.value.quota_gio
   auto_sbom_generation   = contains(["medisphere", "plateforme", "bibliotheque"], each.key)
 
   # M13-E14 : la signature exigée vérifie la PRÉSENCE d'une signature Cosign (accessoire), pas sa clé.

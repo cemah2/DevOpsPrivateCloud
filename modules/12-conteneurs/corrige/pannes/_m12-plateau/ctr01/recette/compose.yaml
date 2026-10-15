@@ -5,8 +5,8 @@
 # dans /srv/recette-archives/<date>/ puis la version de référence est remise en place.
 #
 #   sudo docker compose ps          (depuis /srv/recette)
-#   curl http://ctr01.par1.medisphere.internal:8000/pret
-#   curl http://ctr01.par1.medisphere.internal:8080/healthz
+#   curl http://ctr01.par1.medisphere.internal:18000/pret
+#   curl http://ctr01.par1.medisphere.internal:18080/healthz
 #
 # Le mot de passe de la base est dans .env (600) et secrets/db_password.txt (400, UID 999).
 name: recette
@@ -81,7 +81,7 @@ services:
       MEDIAGENDA_VERSION: "recette"
       MEDIAGENDA_LOG_FORMAT: "json"
     ports:
-      - "8000:8000"
+      - "18000:8000"
     networks:
       - front
       - donnees
@@ -116,7 +116,7 @@ services:
       AWS_SECRET_ACCESS_KEY: "recette-sans-valeur"
       MEDIDOC_VERSION: "recette"
     ports:
-      - "8080:8080"
+      - "18080:8080"
     networks:
       - front
 

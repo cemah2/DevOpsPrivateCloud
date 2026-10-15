@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2016  # filtres jq entre apostrophes
 # _m16-operationnel.sh — fonctions partagées par les checks M16-E10 à M16-E23 (lecture seule).
 # Sourcé par les check-EXX.sh du palier 2 (lab/bin/check ne lance que les check-EXX.sh).
 # Préfixe _m16o_ : pas de collision avec les fonctions des autres paliers.
@@ -129,4 +130,12 @@ _m16o_disque_vierge() {
 _m16o_ready_cnpg() {
   _m16o_json "$(_m16o_kj get clusters.postgresql.cnpg.io "$2" -n "$1")" '
     (.status.readyInstances // 0) >= $n and (.status.phase // "") == "Cluster in healthy state"' --argjson n "$3"
+}
+
+# _m16o_journal_tout EXX MIN REGEX… — journal d'au moins MIN lignes non vides contenant chaque REGEX.
+_m16o_journal_tout() {
+  local ex="$1" min="$2" r
+  shift 2
+  _m16o_journal "$ex" "$min" || return 1
+  for r in "$@"; do _m16o_journal_mentionne "$ex" "$r" || return 1; done
 }

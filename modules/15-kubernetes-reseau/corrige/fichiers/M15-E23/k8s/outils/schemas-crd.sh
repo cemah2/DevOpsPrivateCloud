@@ -4,12 +4,16 @@
 # installées : c'est ce qu'on veut valider) ou, en CI hors cluster, depuis des fichiers de CRD.
 # Usage : outils/schemas-crd.sh [fichier-de-crd.yaml…]   (sans argument : lit le cluster)
 set -euo pipefail
+# Fichiers lus AVANT de changer de répertoire (chemins relatifs à l'appelant).
+if (( $# )); then src="$(for f in "$@"; do cat "$f"; printf "\n---\n"; done)"; else
+  # Une CRD par ligne (JSON sur une ligne = YAML valide), séparées par « --- » pour yq.
+  src="$(kubectl get crd -o json \
+    | jq -c '.items[] | select(.spec.group | test("(cilium\\.io|gateway\\.networking\\.k8s\\.io|cert-manager\\.io)$"))' \
+    | awk '{print "---"; print}')"
+fi
 cd "$(dirname "$0")/.."
 sortie=ci/schemas/crd
 mkdir -p "$sortie"
-if (( $# )); then src="$(cat "$@")"; else
-  src="$(kubectl get crd -o json | jq '.items[] | select(.spec.group | test("(cilium\\.io|gateway\\.networking\\.k8s\\.io|cert-manager\\.io)$"))' | jq -s '.[]')"
-fi
 yq -o json -I0 'select(.kind == "CustomResourceDefinition")' <<<"$src" 2>/dev/null \
   | jq -c '. as $c | .spec.versions[] | select(.served) | {g: $c.spec.group, k: $c.spec.names.kind, v: .name, s: .schema.openAPIV3Schema}' \
   | while read -r l; do

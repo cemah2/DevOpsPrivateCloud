@@ -25,7 +25,7 @@ spec:
     pods: "30"
     persistentvolumeclaims: "10"
     requests.storage: 60Gi
-    services.loadbalancer: "0"
+    services.loadbalancers: "0"
     services.nodeports: "0"
 ---
 apiVersion: v1

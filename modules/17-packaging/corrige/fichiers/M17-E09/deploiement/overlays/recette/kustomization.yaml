@@ -20,5 +20,6 @@ configMapGenerator:
     envs:
       - parametres.env
 components:
-  # Toujours en dernier : ses remplacements doivent voir le résultat de tout le reste.
+  # En dernier des components. Pas d'« images: » dans cet overlay : il passerait APRÈS les
+  # remplacements de « livraison » et l'emporterait (version désalignée).
   - ../../components/livraison

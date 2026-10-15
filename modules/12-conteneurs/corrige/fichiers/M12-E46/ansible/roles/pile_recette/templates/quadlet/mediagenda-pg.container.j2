@@ -1,0 +1,25 @@
+# {{ pile_recette_entete }}
+[Unit]
+Description=PostgreSQL 18 de MédiAgenda (recette conteneurs v1)
+
+[Container]
+ContainerName=mediagenda-pg
+Image={{ pile_recette_image_postgres }}
+Network=apps-recette.network
+# PostgreSQL 18 : volume sur /var/lib/postgresql (PGDATA /var/lib/postgresql/18/docker)
+Volume=mediagenda-pg.volume:/var/lib/postgresql
+Environment=POSTGRES_DB=mediagenda POSTGRES_USER=mediagenda
+Secret=mediagenda-pg-mdp,type=env,target=POSTGRES_PASSWORD
+HealthCmd=pg_isready -U mediagenda -d mediagenda
+HealthInterval=10s
+HealthRetries=5
+HealthStartPeriod=30s
+Notify=healthy
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Pile de recette des quatre applications de MédiSphère, en Quadlet sous un compte sans privilège (M12-E46)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

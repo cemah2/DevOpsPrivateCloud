@@ -385,3 +385,400 @@ Le démon Docker est un service root qui obéit à quiconque parle à son socket
 Règles d'audit envoyées vers la plateforme de journaux (M22) avec une alerte sur toute modification de `/etc/docker` hors MR ; contrôle CIS automatisé (`docker-bench-security` en CI de `plateforme/ansible`, M26) ; `runner02` remplacé à terme par des exécuteurs Kubernetes (M19) où aucun démon n'est partagé entre jobs.
 
 ---
+
+### M12-E27 — Politique des images de base de MédiSphère
+
+**Solution**
+
+Fichiers : projet `plateforme/images-base` — [`debian/Dockerfile`](fichiers/M12-E27/images-base/debian/Dockerfile), [`python/Dockerfile`](fichiers/M12-E27/images-base/python/Dockerfile), [`php-apache/Dockerfile`](fichiers/M12-E27/images-base/php-apache/Dockerfile), [`images-autorisees.txt`](fichiers/M12-E27/images-base/images-autorisees.txt), [`outils/verifier-from.sh`](fichiers/M12-E27/images-base/outils/verifier-from.sh), [`.gitlab-ci.yml`](fichiers/M12-E27/images-base/.gitlab-ci.yml), [`pki/`](fichiers/M12-E27/images-base/pki/LISEZMOI.md) ; projet `plateforme/ci-templates` — [`images-autorisees.yml`](fichiers/M12-E27/ci-templates/images-autorisees.yml) ; [extrait du `.gitlab-ci.yml` de `mediagenda/api`](fichiers/M12-E27/mediagenda-api/gitlab-ci.yml.extrait) ; documentation [`images-de-base.md`](fichiers/M12-E27/medisphere/docs/conteneurs/images-de-base.md).
+
+Conception retenue (une solution parmi d'autres, défendable) :
+- **Trois images** : `bibliotheque/debian`, `bibliotheque/python` (MédiAgenda, MédiNotif, MédiAnnuaire) et `bibliotheque/php-apache` (Legacy-RDV). Pas de `bibliotheque/golang` : la chaîne de compilation Go ne part pas en production (étape de construction, autorisée par empreinte), et l'image finale de MédiDoc est *distroless* (pas de paquets à corriger chaque semaine : on suit l'amont par MR).
+- **Épinglage + reconstruction** : `ARG AMONT=…@sha256:…` (empreintes de l'index amont relevées le 2026-10-08), `apt-get upgrade` à chaque construction ; l'empreinte amont change par MR (Renovate au M13). Hadolint signale `apt-get upgrade` (DL3005) et l'absence de version des paquets (DL3008) : dérogations écrites **sur la ligne**, avec la raison (c'est l'objet même de l'image). Les trois Dockerfiles passent Hadolint 2.15.1 avec le `.hadolint.yaml` de E16 (vérifié).
+- **Étiquettes** : `trixie-AAAAMMJJ` immuable (le gabarit doit refuser de repousser une étiquette existante), `trixie` mobile ; la date est calculée **une fois par pipeline** (job `date`, artefact *dotenv*) pour que les trois images aient la même.
+- **Traçabilité** : `org.opencontainers.image.base.name` contient l'amont **avec** son empreinte, `revision` le commit, `created` la date ; les applications référencent `…/bibliotheque/python:3.13-trixie-AAAAMMJJ@sha256:…` et posent à leur tour `base.name`.
+- **Utilisateur** : les images du catalogue restent en root (`USER 0` explicite, dérogation DL3002 écrite ; Hadolint 2.15 exige un UID numérique, DL3066) : ce sont des bases de construction, les applications installent des paquets avant de fixer leur UID ; l'exigence « non root » porte sur l'image **finale** (`CNT-IMG-05`, contrôlée par Hadolint dans chaque application).
+- **Multi-architectures** : `PLATEFORMES=linux/amd64,linux/arm64` passé au gabarit ; il faut l'émulation (binfmt) sur `runner02`, comme sur `ctr01` en E12 ; sans elle, retire arm64 et écris-le (exception datée).
+- **Liste des images autorisées** : fichier texte (un motif *glob* par ligne et la consigne à afficher), lu par `verifier-from.sh`, qui résout les `ARG` (valeurs par défaut et `--build-arg` passés au job), ignore les étapes nommées et `scratch`, et vérifie aussi `COPY --from=` et `RUN --mount=…,from=` quand ils désignent une image. Résultats sur les solutions du module (vérifiés) : le Dockerfile de E05 (`FROM docker.io/library/python:3.13-slim-trixie`) est **refusé** ; celui de MédiAnnuaire (E34) passe ; celui de MédiDoc (E10, `golang:1.26-trixie` sans registre ni empreinte) est refusé : sa mise en conformité fait partie du mini-projet (E46).
+- **Partage de la liste** : le job du gabarit lit la liste et le script dans `plateforme/images-base` avec le **jeton du job** (`CI_JOB_TOKEN`) : ajoute les groupes consommateurs à la liste d'autorisation du jeton (*Settings > CI/CD > Job token permissions*) de `plateforme/images-base`. Alternative sans jeton : copier la liste dans `plateforme/ci-templates` à chaque version (mais deux sources de vérité).
+- **Pipeline planifié** : *Build > Pipeline schedules*, « hebdomadaire », `0 4 * * 1`, fuseau Europe/Paris, branche `main`, propriétaire un compte de service (pas une personne qui peut partir). Démonstration du refus : branche `essai-from-interdit` sur `mediagenda/api`, MR ouverte, job `images-autorisees` rouge, MR fermée.
+
+Vérifier une image publiée :
+
+```
+admin@adm01:~$ skopeo inspect --creds plateforme:<MDP> docker://ctr01.par1.medisphere.internal:5000/bibliotheque/debian:trixie \
+    | jq '.Labels | with_entries(select(.key | startswith("org.opencontainers.image")))'
+admin@adm01:~$ skopeo list-tags --creds plateforme:<MDP> docker://ctr01.par1.medisphere.internal:5000/bibliotheque/debian
+```
+
+**Explications**
+
+Épingler et corriger ne s'opposent pas si l'on sépare les deux rythmes : l'**amont** bouge rarement et par MR (on sait quand et pourquoi), la **couche de correctifs** bouge chaque semaine automatiquement (on reçoit les correctifs sans rien faire), et chaque résultat est **figé** sous une étiquette datée (on peut reconstruire ou revenir exactement à l'image d'une date). Les applications choisissent leur compromis : étiquette datée (reproductible, MR pour suivre) ou étiquette mobile en recette (correctifs sans MR, non reproductible). La liste des images autorisées transforme la politique en contrôle : sans elle, la politique n'existe que dans un document.
+
+**Alternatives**
+- Reconstruction **reproductible** des correctifs à partir d'un instantané daté de l'archive Debian (`snapshot.debian.org`) : même entrée, mêmes octets ; plus de travail.
+- Tout en *distroless* (ou `apko`/Wolfi) : moins de paquets, moins de failles, mais pas de shell pour dépanner et une chaîne d'outils de plus.
+- Une seule image de base par langage, sans Debian générique : moins d'images, mais les outils de CI perdent leur base commune.
+- Liste en YAML lue par `yq` : plus riche (exceptions datées en champs), au prix d'un outil de plus dans le job.
+
+**Pièges classiques**
+- Épingler l'empreinte d'un **manifeste de plateforme** (amd64) au lieu de l'**index** : l'image n'existe plus pour arm64.
+- Étiquette datée repoussée par un second pipeline le même jour : l'« immuable » ne l'est plus.
+- Contrôle qui ne regarde que le premier `FROM`, ou qui ne résout pas les `ARG` (un `FROM ${BASE}` passe toujours).
+- Pipeline planifié appartenant à un humain (il s'arrête quand le compte est bloqué), ou qui échoue en silence (aucune notification).
+- Mettre dans l'image de base des outils « utiles » (curl, vim, jq) : toutes les applications en héritent, et leurs failles aussi.
+
+**En production chez MédiSphère**
+Au M13 : projet Harbor `bibliotheque` (immuabilité, analyse Trivy, signature Cosign), Renovate qui propose les MR d'empreinte amont et celles des applications vers la nouvelle étiquette datée ; tableau de bord « âge des images de base » par application (M21) ; au M26, admission Kubernetes qui n'accepte que des images signées dont la base est dans le catalogue.
+
+---
+
+### M12-E28 — Superviser les conteneurs
+
+**Solution**
+
+Fichiers (projet `plateforme/outils`) : [`bin/ms-verif-conteneurs`](fichiers/M12-E28/outils/bin/ms-verif-conteneurs), [`etc/ms-verif-conteneurs.conf`](fichiers/M12-E28/outils/etc/ms-verif-conteneurs.conf), tests [`tests/bats/ms-verif-conteneurs.bats`](fichiers/M12-E28/outils/tests/bats/ms-verif-conteneurs.bats) (17 tests, sans réseau, tous verts), unités [`ms-verif-conteneurs.service`](fichiers/M12-E28/outils/systemd/ms-verif-conteneurs.service) et [`.timer`](fichiers/M12-E28/outils/systemd/ms-verif-conteneurs.timer), [extrait du Taskfile](fichiers/M12-E28/outils/Taskfile-install-extrait.yml), [section de `docs/astreinte.md`](fichiers/M12-E28/outils/docs/astreinte-extrait.md). Projet `plateforme/ansible` : rôle [`supervision_conteneurs`](fichiers/M12-E28/ansible/roles/supervision_conteneurs/) (script [`ms-etat-conteneurs`](fichiers/M12-E28/ansible/roles/supervision_conteneurs/files/ms-etat-conteneurs)), variables [`ctr01`](fichiers/M12-E28/ansible/inventories/lab/host_vars/ctr01/supervision_conteneurs.yml) et [`ctr02`](fichiers/M12-E28/ansible/inventories/lab/host_vars/ctr02/supervision_conteneurs.yml), [extrait du playbook](fichiers/M12-E28/ansible/playbooks/conteneurs.yml.extrait) ; `metrics-addr` dans l'[extrait de `docker_engine.yml`](fichiers/M12-E26/ansible/inventories/lab/group_vars/role_docker/docker_engine.yml.extrait). Documentation : [`supervision.md`](fichiers/M12-E28/medisphere/docs/conteneurs/supervision.md).
+
+*1. Sources.* `docker inspect` porte l'essentiel : `.State.Status` (`running`, `restarting`, `exited`…), `.State.Health.Status` et les dernières sondes avec leur sortie (`.State.Health.Log`), `.RestartCount`, `.State.OOMKilled`, `.State.ExitCode`. `docker events --filter type=container` donne en direct `start`, `die` (avec `exitCode`), `oom`, `health_status: unhealthy`, `restart`. `docker stats --no-stream` : CPU, mémoire, réseau, processus à l'instant. Côté Podman (compte `app`), mêmes champs dans `podman inspect`, événements dans `podman events` (journald). Piège central : un conteneur relancé par `restart: unless-stopped` garde son identité et incrémente **`RestartCount`** ; une unité Quadlet relancée par systemd (`Restart=`) **recrée** le conteneur (compteur à 0) : le compteur utile est celui de **l'unité** (`systemctl --user show -p NRestarts <unité>`). Le script `ms-etat-conteneurs` lit donc `NRestarts` pour les conteneurs qui portent l'étiquette `PODMAN_SYSTEMD_UNIT`.
+
+*2. Métriques du démon.*
+
+```
+admin@adm01:~$ curl -s http://ctr01.par1.medisphere.internal:9323/metrics | grep -E '^engine_daemon_(engine_info|container_states_containers|health_checks)'
+engine_daemon_engine_info{…,version="29.8.2"} 1
+engine_daemon_container_states_containers{state="paused"} 0
+engine_daemon_container_states_containers{state="running"} 6
+engine_daemon_container_states_containers{state="stopped"} 1
+engine_daemon_health_checks_failed_total 3
+```
+
+Noms à vérifier sur ta version. On y trouve l'état du **moteur** (nombre de conteneurs par état, sondes en échec, durée des actions, constructions) ; **rien** par conteneur (ni nom, ni mémoire). cAdvisor (`ghcr.io/google/cadvisor:v0.60.6`, montages de son README : `/:/rootfs:ro`, `/var/run:/var/run:ro`, `/sys:/sys:ro`, `/var/lib/docker/:/var/lib/docker:ro`, `/dev/disk/:/dev/disk:ro`, plus `--privileged` et `/dev/kmsg`) ajoute des séries par conteneur (`container_memory_working_set_bytes`, `container_cpu_usage_seconds_total`…), au prix d'un accès en lecture à **tout** l'hôte et souvent du mode privilégié — un agent de supervision est un composant critique pour la sécurité. Avec le stockage containerd de Docker 29, vérifie que cAdvisor rattache bien ses séries aux conteneurs (étiquettes `name`, `image`). Retiré : `docker rm -f cadvisor`.
+
+*3. Accès minimal.* Compte `supervision` système, mot de passe verrouillé, hors groupe `docker` ; `authorized_keys` : `restrict,from="10.10.10.10",command="sudo -n /usr/local/sbin/ms-etat-conteneurs" ssh-ed25519 …` ; `sudoers` : `supervision ALL=(root) NOPASSWD: /usr/local/sbin/ms-etat-conteneurs ""` (les guillemets vides interdisent tout argument). Le script n'utilise que des lectures (`ps`, `inspect`, `systemctl show`) et ignore `SSH_ORIGINAL_COMMAND`.
+
+```
+admin@adm01:~$ ssh -i ~/.config/workbook/ssh-supervision-conteneurs supervision@ctr01.par1.medisphere.internal 'rm -rf /' | tail -2
+docker	root	registre-registre-1	running	healthy	0	registry:3@sha256:…
+fin 7
+```
+
+*4. La sonde.* Points de conception : une ligne de fin (`fin N`) prouve que la réponse est complète (une connexion coupée au milieu n'est pas « tout va bien ») ; la liste des **attendus** détecte un conteneur disparu (aucune source « instantanée » ne le ferait) ; l'état des compteurs est réécrit **après** un passage complet, dans le dossier d'état fourni par systemd (`StateDirectory=`) ; une hausse entre deux passages est une anomalie, une baisse (conteneur recréé) est simplement enregistrée ; les exceptions à la sonde de santé sont **écrites** dans la configuration (HAProxy de test). Les 17 tests `bats` remplacent `ssh` et `curl` par des fonctions ; chaque contrôle a son test rouge.
+
+*5. Preuve.* Conteneur de test en boucle (méthode de RB-120 : `docker run -d --name essai-boucle --restart always debian:trixie-slim sh -c 'sleep 20; exit 1'`, ajouté temporairement aux attendus) : l'alerte arrive au passage suivant du timer (5 minutes au plus, plus 30 s de délai aléatoire) ; `journalctl -t ms-alerte` montre l'échec du service. Suppression du conteneur de test et de sa ligne, retour au vert au passage suivant.
+
+*6. Astreinte* : [extrait](fichiers/M12-E28/outils/docs/astreinte-extrait.md) ; [`supervision.md`](fichiers/M12-E28/medisphere/docs/conteneurs/supervision.md).
+
+**Explications**
+
+Superviser des conteneurs, c'est surtout surveiller ce qui **change** : un conteneur qui redémarre, qui passe *unhealthy*, qui disparaît. L'état instantané (`running`) ment sur une boucle de redémarrage ; les métriques du moteur ne nomment personne ; seules la comparaison entre deux passages et une liste d'attendus disent « quel conteneur, sur quel hôte ». L'accès aux hôtes est le point dur : lire l'état de Docker exige le socket, donc root ; on borne ce pouvoir à **un** script en lecture seule, comme pour la sauvegarde de Ceph (M08-E25).
+
+**Alternatives**
+- Abonnement continu à `docker events` / `podman events` (service qui alerte sur `die`, `oom`, `health_status`) : immédiat, mais un processus de plus par hôte, et rien ne signale un conteneur qui n'a jamais démarré.
+- Socket filtrant en lecture (`docker-socket-proxy`) exposé à la sonde : pas de SSH, mais un service de plus et un port à protéger.
+- Exportateur Prometheus par hôte (cAdvisor, exportateur Podman) dès maintenant : prépare M21, mais sans alerte avant Alertmanager.
+
+**Pièges classiques**
+- Ajouter `supervision` au groupe `docker` « pour lire » (E32 Q6).
+- Sonde qui lit le Podman **de root** au lieu de celui du compte `app` (elle ne voit rien et conclut que tout va bien).
+- Compteur de redémarrages Podman/Quadlet toujours à 0 (le conteneur est recréé par systemd).
+- Métriques du démon sur toutes les adresses d'un hôte joignable depuis d'autres VLAN : ici le VLAN 99 n'est joint que depuis MGMT ; sur `runner02` (INFRA), restreindre l'adresse d'écoute.
+
+**En production chez MédiSphère**
+Prometheus (M21) moissonne les métriques des démons, de cAdvisor ou de l'exportateur Podman, et des applications ; Alertmanager remplace `ms-alerte` pour les alertes de tendance ; la sonde reste comme contrôle de bout en bout indépendant, et sa liste d'attendus préfigure le catalogue des services (M28).
+
+---
+
+### M12-E29 — Sauvegarder et restaurer les données des conteneurs
+
+**Solution**
+
+Fichiers (projet `plateforme/ansible`) : rôle [`sauvegarde_conteneurs`](fichiers/M12-E29/ansible/roles/sauvegarde_conteneurs/) (script [`wb-backup-conteneurs.sh`](fichiers/M12-E29/ansible/roles/sauvegarde_conteneurs/files/wb-backup-conteneurs.sh), gabarits, unités), variables [`host_vars/ctr01/sauvegarde_conteneurs.yml`](fichiers/M12-E29/ansible/inventories/lab/host_vars/ctr01/sauvegarde_conteneurs.yml), [modèle de Vault](fichiers/M12-E29/ansible/inventories/lab/host_vars/ctr01/vault-critique.yml.exemple), [extrait de `pare_feu.yml`](fichiers/M12-E29/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), [réservation Kea](fichiers/M12-E29/kea/reservation-ctr01.extrait.json), [extrait du playbook](fichiers/M12-E29/ansible/playbooks/conteneurs.yml.extrait) ; PBS : [`pbs-jeton-conteneurs.sh`](fichiers/M12-E29/pbs01/pbs-jeton-conteneurs.sh), [règle d'entrée](fichiers/M12-E29/pbs01/pbs01-nftables-extrait.nft) ; documentation : [RB-121](fichiers/M12-E29/medisphere/docs/conteneurs/runbooks/RB-121-restaurer-la-base-d-une-pile-compose.md), [`tests/restauration-conteneurs.md`](fichiers/M12-E29/medisphere/docs/conteneurs/tests/restauration-conteneurs.md).
+
+*1. Sauvegarde logique.*
+
+```
+admin@ctr01:~$ docker exec mediagenda-db-1 pg_dump -U mediagenda -d mediagenda -Fc > /tmp/mediagenda.dump
+admin@ctr01:~$ docker exec -i mediagenda-db-1 pg_restore --list < /tmp/mediagenda.dump | grep 'TABLE DATA'
+… TABLE DATA public rendez_vous mediagenda
+… TABLE DATA public mediagenda_historique_schema mediagenda
+admin@ctr01:~$ shred -u /tmp/mediagenda.dump
+```
+
+`pg_dump` lit la base dans **une** transaction (instantané *repeatable read*) : il la voit telle qu'elle était à son démarrage, quelles que soient les écritures concurrentes. Le conteneur `db` est durci (E24, racine en lecture seule) : rien n'y est écrit, le flux sort par la sortie standard de `docker exec`. L'authentification passe par le socket Unix local (règle `local … trust` de l'image).
+
+*2. Sauvegarde de volume.* À chaud (boucle d'écritures en cours) :
+
+```
+admin@ctr01:~$ sudo install -d -m 700 /root/essai
+admin@ctr01:~$ docker run --rm -v mediagenda_donnees-db:/source:ro -v /root/essai:/dest debian:trixie-slim tar -C /source -cf /dest/chaud.tar .
+admin@ctr01:~$ docker volume create restau-chaud && docker run --rm -v restau-chaud:/v -v /root/essai:/a:ro debian:trixie-slim tar -C /v -xf /a/chaud.tar
+admin@ctr01:~$ docker run -d --name restau-chaud -v restau-chaud:/var/lib/postgresql -e POSTGRES_PASSWORD=x docker.io/library/postgres:18-trixie
+admin@ctr01:~$ docker logs restau-chaud 2>&1 | grep -iE 'recovery|redo|not properly shut down'
+… database system was not properly shut down; automatic recovery in progress
+… redo done at …
+```
+
+Elle démarre souvent… et c'est bien le problème : la « récupération automatique » rejoue le journal sur des fichiers copiés à des instants différents ; des pages peuvent être incohérentes sans aucune erreur visible (et parfois elle échoue franchement : `invalid record length`, `could not locate a valid checkpoint record`). À froid (`docker compose stop db`, copie, `start`) : cohérente, au prix d'une coupure. Une copie de fichiers d'une base en marche n'est une sauvegarde que si elle est faite **avec** la base (`pg_basebackup` et les WAL) ou par un instantané **atomique** de tout le système de fichiers (LVM, ZFS, RBD) suivi d'une récupération. Préfère la copie de volume pour des données **sans moteur** (fichiers téléversés, configuration générée) ou pour une migration planifiée. Nettoyage : `docker rm -f restau-chaud restau-froid ; docker volume rm restau-chaud restau-froid ; sudo rm -rf /root/essai`.
+
+*3. Images.*
+
+```
+admin@ctr01:~$ docker save ctr01.par1.medisphere.internal:5000/mediagenda/api:<VERSION> -o /tmp/api.tar && tar -tf /tmp/api.tar | head -5
+blobs/
+blobs/sha256/…
+index.json
+manifest.json
+oci-layout
+app@ctr02:~$ podman load -i /tmp/api.tar                   # après copie du fichier (scp) dans le dossier d'app
+app@ctr02:~$ skopeo copy docker://ctr01.par1.medisphere.internal:5000/mediagenda/api:<VERSION> oci-archive:/tmp/api-oci.tar
+```
+
+Avec le stockage containerd de Docker 29, `docker save` produit une archive au format **OCI** (`oci-layout`, `index.json`) **et** compatible avec l'ancien format (`manifest.json`) ; elle peut contenir plusieurs plateformes et les attestations de BuildKit (`--platform` pour n'en garder qu'une). Skopeo est installé sur `ctr02` (pas sur `ctr01`) ; depuis un hôte Docker, la source `docker-daemon:` de Skopeo lit directement le démon. Ce qui se **sauvegarde** : les données (bases, volumes de fichiers), les secrets (Vault) ; ce qui se **reconstruit** : les images (CI, empreintes dans Git), le registre de travail (repoussé par les pipelines), la configuration (Git, Ansible), les conteneurs eux-mêmes.
+
+*4. Vers PBS.* Script [`pbs-jeton-conteneurs.sh`](fichiers/M12-E29/pbs01/pbs-jeton-conteneurs.sh) sur `pbs01` (espace `par1/conteneurs`, jeton `wb-backup@pbs!ctr01`, `DatastoreBackup` sur l'espace seulement) ; clé `proxmox-backup-client key create --kdf none` (Vault `critique`, *paperkey*, `shred -u`) ; réservation Kea 10.10.99.121 (puis renouvellement du bail de `ctr01`) ; règle de bordure et règle d'entrée de `pbs01`. Le rôle reprend la structure de `sauvegarde_pbs` (M06-E28) ; `ctr01` n'étant pas dans le groupe `socle`, l'empreinte du certificat de PBS est répétée dans son Vault. Le script (testé hors lab avec un faux client PBS : export, vérification, copie à froid avec arrêt et relance de l'écrivain, nettoyage) vérifie chaque archive (`pg_restore --list`, présence de `TABLE DATA`), relance **toujours** un conteneur arrêté pour une copie à froid (`trap`), et rend un code non nul au moindre échec.
+
+```
+admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/conteneurs.yml --limit ctr01 --tags sauvegarde
+admin@ctr01:~$ sudo systemctl start wb-backup-conteneurs.service && journalctl -u wb-backup-conteneurs -n 5 -o cat
+wb-backup-conteneurs: base mediagenda (mediagenda-db-1) : 41231 octets, 2 table(s)
+wb-backup-conteneurs: sauvegarde envoyée vers par1/conteneurs/host/ctr01 en 7 s
+```
+
+La VM `ctr01` est déjà dans `lab-nuit` (pool `lab`) : `pvesh get /cluster/backup --output-format json | jq '.[] | select(.id=="lab-nuit") | .pool'` sur `pve01`. On ne double pas : la sauvegarde de VM restaure l'hôte, l'export logique restaure **la base**, plus finement et sur n'importe quel hôte.
+
+*5. Restauration* : voir RB-121 (restauration à côté dans `restau-db`, comparaison `count(*)` et empreinte `md5(string_agg(…))` des deux côtés, nettoyage, `shred` des fichiers restaurés) et le [compte rendu de test](fichiers/M12-E29/medisphere/docs/conteneurs/tests/restauration-conteneurs.md).
+
+*6. Runbook* : [RB-121](fichiers/M12-E29/medisphere/docs/conteneurs/runbooks/RB-121-restaurer-la-base-d-une-pile-compose.md).
+
+**Explications**
+
+La cohérence d'une sauvegarde se décide **au niveau de l'application** : seul le moteur de base sait quand ses fichiers forment un tout. L'export logique est lent pour de grosses bases, mais il est portable (autre hôte, autre version mineure, restauration d'une seule table) et toujours cohérent. Le conteneur ne change rien à ces principes ; il change **où** l'on exécute l'outil (dans le conteneur, avec sa version) et rend tentante une copie du volume, qui n'est qu'une copie de fichiers.
+
+**Alternatives**
+- `pg_basebackup` + archivage des WAL : restauration à la seconde près, plus complexe ; c'est ce que CloudNativePG fera (M16).
+- Sauvegarde de VM seule (`lab-nuit`) : simple, mais restaurer une base, c'est restaurer toute la VM (et le registre avec).
+- Service de sauvegarde dans la pile Compose (profil `outils`) déclenché par le timer : tout reste dans le dépôt de l'application, mais les secrets PBS entrent alors dans un conteneur.
+
+**Pièges classiques**
+- Croire qu'un PostgreSQL qui redémarre sur une copie à chaud prouve la sauvegarde.
+- Exporter avec le `pg_dump` de l'**hôte** (autre version) au lieu de celui du conteneur.
+- Laisser les fichiers restaurés (données de santé, en clair) sur l'hôte après le test.
+- Oublier de relancer un conteneur arrêté pour une copie à froid quand la copie échoue (d'où le `trap`).
+- Règle de bordure écrite sur une adresse DHCP qui change au prochain bail.
+
+**En production chez MédiSphère**
+Bases sous CloudNativePG avec archivage continu vers `s3-01` (M16), volumes Kubernetes par Velero (M16), test de restauration mensuel automatisé (F5), supervision de l'âge des sauvegardes (M21).
+
+---
+
+### M12-E30 — Mettre à jour sans interruption et revenir en arrière
+
+**Solution**
+
+Fichiers (projet `mediagenda/api`) : [`compose.ha.yaml`](fichiers/M12-E30/mediagenda-api/compose.ha.yaml), [`haproxy/haproxy.cfg`](fichiers/M12-E30/mediagenda-api/haproxy/haproxy.cfg), [`outils/maj-progressive.sh`](fichiers/M12-E30/mediagenda-api/outils/maj-progressive.sh). Sur `ctr02` : [extrait de l'unité Quadlet](fichiers/M12-E30/ctr02/mediagenda-api.container.extrait), [identifiants persistants et timer](fichiers/M12-E30/ctr02/auth-persistante.md). Documentation : [RB-122](fichiers/M12-E30/medisphere/docs/conteneurs/runbooks/RB-122-mettre-a-jour-une-application-conteneurisee.md).
+
+*1. La coupure actuelle.* Boucle témoin depuis `adm01` :
+
+```
+admin@adm01:~$ while :; do printf '%s %s\n' "$(date +%T.%N | cut -c1-12)" \
+    "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 'http://ctr01.par1.medisphere.internal:8000/api/v1/creneaux?date=2026-11-02')"; \
+    sleep 0.05; done | tee charge.log
+admin@adm01:~$ grep -vc ' 200$' charge.log
+```
+
+`docker compose up -d --wait` avec une nouvelle étiquette **arrête** le conteneur (SIGTERM, fin des requêtes en cours), le **supprime**, en **crée** un nouveau, puis attend la sonde : pendant ce temps (quelques secondes, plus la période de démarrage), le port 8000 refuse les connexions (`000`) ou renvoie des erreurs. `deploy.update_config` (parallélisme, ordre `start-first`) est une notion de la spécification Compose prévue pour Swarm : Docker Compose ne fait pas de mise à jour progressive d'un service et recrée les répliques ensemble.
+
+*2. Deux instances et un répartiteur.* `api-b` reprend `api` par `extends: {file: compose.yaml, service: api}` (image, durcissement de E24, sonde, secrets, réseaux) ; `ports: !reset []` retire la publication directe des deux instances (sinon un client resterait collé à l'instance qu'on redémarre, et deux services ne peuvent pas publier le même port) ; `depends_on` est redéclaré explicitement (lisible, et sans dépendre des règles de fusion de `extends` pour ce champ). HAProxy (`haproxy:3.2-trixie`, non root, port 8080, racine en lecture seule, aucune capacité) publie le port **8000** de l'hôte : les clients ne changent rien. Points de configuration :
+- sonde de **disponibilité** `GET /pret` (base et cache) : une instance qui perd sa base sort de la rotation sans être redémarrée ; `inter 1s fall 2 rise 2` ;
+- `resolvers docker` (127.0.0.11, `hold valid 1s`) et `init-addr none` : une instance recréée **change d'adresse IP** ; sans résolution dynamique, HAProxy garde l'ancienne adresse (résolue une fois au démarrage) et l'instance ne revient jamais, ou HAProxy refuse de démarrer si une instance manque ;
+- `retries 3`, `option redispatch 1`, `retry-on conn-failure empty-response` : une requête qui échoue **à la connexion** (instance qui vient de fermer son socket) est rejouée sur l'**autre** serveur ; on ne rejoue pas sur `response-timeout` (une requête `POST` déjà traitée serait doublée).
+
+*3. Mise à jour progressive.* `maj-progressive.sh` recrée `api` avec `--no-deps --wait`, attend qu'**HAProxy** le voie UP (page d'état `;csv`, colonne 18 `status`), puis fait de même pour `api-b` ; à la première erreur il s'arrête avant de toucher la seconde instance et affiche la commande de retour (version précédente lue par `docker compose images api --format json`). Mesures hors lab (Docker 29.8.2, mêmes fichiers) :
+
+```
+admin@ctr01:~/src/mediagenda-api$ export COMPOSE_FILE=compose.yaml:compose.ha.yaml
+admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.2.0 outils/maj-progressive.sh
+Version en service : 0.1.0 ; cible : 0.2.0
+== api : recréation
+== api : attente du passage UP dans HAProxy (api-a)
+== api-b : recréation
+== api-b : attente du passage UP dans HAProxy (api-b)
+Mise à jour terminée : les deux instances sont en 0.2.0.          # 16 s ; charge témoin : 915 × 200, 0 erreur
+admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.3.0 outils/maj-progressive.sh     # image cassée
+== api : recréation
+container mediagenda-api-1 is unhealthy
+ÉCHEC : api n'est pas devenu healthy. L'autre instance sert toujours.
+Retour arrière : MEDIAGENDA_TAG=0.2.0 outils/maj-progressive.sh
+admin@ctr01:~/src/mediagenda-api$ MEDIAGENDA_TAG=0.2.0 outils/maj-progressive.sh     # 1 475 × 200, 0 erreur sur tout l'essai
+```
+
+Image cassée utilisée : `printf 'FROM mediagenda-api:0.2.0\nENV MEDIAGENDA_PORT=8001\n' | docker build -t mediagenda-api:0.3.0 -` (le processus écoute ailleurs : la sonde et HAProxy échouent, l'instance n'entre jamais en rotation).
+
+*4. Mise à jour automatique (Podman).* Clés ajoutées à l'unité de E14 : `Image=…/mediagenda/api:recette`, `AutoUpdate=registry`, `HealthCmd=` (Python, l'image n'a pas de `curl`), `Notify=healthy` (l'unité n'est « démarrée » que lorsque le conteneur est *healthy* ; option `--sdnotify=healthy`, à vérifier sur ta version 5.4), et dans `[Service]` `TimeoutStartSec=90`. Identifiants dans `~/.config/containers/auth.json` (persistant) et non dans `$XDG_RUNTIME_DIR` (vidé au redémarrage) ; `systemctl --user enable --now podman-auto-update.timer`. Publication et essai :
+
+```
+admin@adm01:~$ skopeo copy --src-creds plateforme:<MDP> --dest-creds plateforme:<MDP> \
+    docker://ctr01.par1.medisphere.internal:5000/mediagenda/api:<NOUVELLE> docker://ctr01.par1.medisphere.internal:5000/mediagenda/api:recette
+app@ctr02:~$ podman auto-update --dry-run
+UNIT                    CONTAINER              IMAGE                                               POLICY    UPDATED
+mediagenda-api.service  … (mediagenda-api)     ctr01.par1.medisphere.internal:5000/mediagenda/api:recette  registry  pending
+app@ctr02:~$ podman auto-update                      # UPDATED = true ; /sante donne la nouvelle version
+```
+
+*5. Retour arrière automatique.* Après publication de `<CASSÉE>` sous `recette` : `podman auto-update` tire l'image, redémarre l'unité ; le conteneur démarre mais ne devient jamais *healthy* ; au bout de `TimeoutStartSec` systemd déclare l'échec du démarrage ; `podman auto-update` remet l'image précédente sur l'étiquette locale et redémarre l'unité (`UPDATED` : `rolled back`, libellé à vérifier ; `journalctl --user -u mediagenda-api.service` montre l'échec puis le redémarrage). À la fin, l'image en service est `<NOUVELLE>` (`podman inspect --format '{{.ImageDigest}}'`). Sans `Notify=healthy`, l'unité est démarrée dès que le processus est lancé : le redémarrage « réussit » avec l'image cassée et **aucun** retour arrière n'a lieu ; la sonde passe ensuite *unhealthy* sans autre effet. Remets `<NOUVELLE>` sous `recette`, sinon le prochain passage du timer retentera la mauvaise image.
+
+*6. Réflexion.* Étiquette mobile : acceptable en recette (on veut la dernière), jamais en production : on ne sait plus quelle version tourne ni comment la reproduire, et pousser sur la mauvaise étiquette met à jour un environnement sans MR. En production : version immuable désignée par son empreinte, changée par MR (GitOps au M20). Savoir ce qui tourne : l'**empreinte** du conteneur (`docker inspect --format '{{.Image}}'`, `podman inspect --format '{{.ImageDigest}}'`), pas l'étiquette. Runbook : [RB-122](fichiers/M12-E30/medisphere/docs/conteneurs/runbooks/RB-122-mettre-a-jour-une-application-conteneurisee.md).
+
+**Explications**
+
+Une mise à jour sans interruption repose sur trois propriétés, qu'il faut toutes : l'application **s'arrête proprement** (elle cesse d'accepter, finit ce qu'elle a commencé, E17) ; le répartiteur **ne lui envoie plus rien** et **rejoue ailleurs** ce qui a échoué sans effet ; l'orchestrateur **attend** que la nouvelle instance soit vraiment en service (pour le répartiteur, pas seulement pour le moteur) avant de toucher la suivante. Kubernetes fera tout cela en standard (`RollingUpdate`, sondes de disponibilité, M14) ; le faire ici à la main montre ce que ces mécanismes recouvrent. Le retour arrière automatique de Podman n'a de valeur que si « démarré » signifie « sain » : c'est tout l'objet de `Notify=healthy`.
+
+**Alternatives**
+- Bleu-vert : deux piles complètes, bascule du répartiteur d'un coup (retour arrière instantané, double ressource).
+- *Drain* explicite par l'API d'exécution de HAProxy (`set server api/api-a state drain`) avant l'arrêt : plus propre que de compter sur les nouvelles tentatives, demande un socket d'administration.
+- Docker Swarm (`docker service update --update-order start-first`) : la mise à jour progressive existe, au prix d'un orchestrateur de plus que MédiSphère n'adopte pas (ADR-0120, Kubernetes au M14).
+
+**Pièges classiques**
+- HAProxy sans `resolvers` : l'instance recréée n'a plus la même IP.
+- Passer à la seconde instance dès que Docker la dit *healthy*, avant qu'HAProxy l'ait remise en rotation.
+- `retry-on` trop large (`response-timeout`, `all-retryable-errors`) qui rejoue des `POST`.
+- Sonde de disponibilité sur `/sante` (ne voit pas la base) ou sonde de vivacité sur `/pret` (redémarre l'instance quand la base tombe).
+- `podman login` dans `$XDG_RUNTIME_DIR` : la mise à jour automatique échoue après le premier redémarrage de l'hôte.
+- Migration qui retire une colonne avant que l'ancienne version ait disparu (E32 Q12).
+
+**En production chez MédiSphère**
+Mises à jour par Kubernetes (`RollingUpdate`, `maxUnavailable: 0`, `PodDisruptionBudget`, M14-M17) pilotées par GitOps (M20), versions immuables par empreinte, analyse automatique de la mise à jour (taux d'erreur, M21) ; la règle « étendre puis contracter » des migrations devient une norme de revue de MédiAgenda.
+
+---
+
+### M12-E31 — ADR : Docker ou Podman sur les serveurs
+
+**Solution**
+
+Modèle : [`ADR-0120-docker-ou-podman.md`](fichiers/M12-E31/medisphere/docs/conteneurs/adr/ADR-0120-docker-ou-podman.md). Décision : **Podman sans privilège + Quadlet** sur les serveurs applicatifs hors Kubernetes ; **Docker** pour la CI (`runner02`, jamais privilégié, constructions BuildKit sans privilège) ; **exception bornée** pour les outils fondés sur Docker Compose (Harbor sur `reg01`, M13), avec le durcissement de E26 ; postes de développement libres, fichiers livrés conformes aux normes. Arguments décisifs : l'absence de privilège est le **fonctionnement normal** de Podman alors qu'elle coûte cher sous Docker 29 (*userns-remap* désactive le stockage containerd, E26) ; Quadlet donne systemd, la mise à jour automatique et le retour arrière fondé sur la santé (E30) ; SELinux et udica sont naturels sur la famille RHEL (E25). Contre-arguments écrits : Podman 5.4 figé sur Debian 13, deux moteurs à maintenir, piles Compose à traduire.
+
+**Explications**
+
+La bonne réponse n'est pas un moteur mais une **répartition par usage** : les critères n'ont pas le même poids sur un serveur qui fait tourner une application vingt-quatre heures sur vingt-quatre (sécurité par défaut, systemd) et sur un runner qui exécute des jobs de quelques minutes (compatibilité, outillage). Le score pondéré rend les compromis visibles ; il ne remplace pas la décision (une contrainte comme « Harbor s'installe avec Docker Compose » s'impose quelle que soit la note).
+
+**Alternatives** (également défendables)
+- Docker partout, durci (E26) : un seul outil, l'équipe le connaît ; il faut alors accepter le démon root ou payer *userns-remap*, et écrire la supervision et les mises à jour automatiques soi-même.
+- Podman partout, Harbor compris (`podman compose` ou socket compatible Docker de Podman) : cohérent, mais hors du chemin supporté par Harbor, risqué pour le composant le plus critique de la chaîne d'images.
+
+**Pièges classiques**
+- Comparer des fonctionnalités « possibles » et non vérifiées (Podman 6 et `podman quadlet install` alors que Debian 13 livre la 5.4).
+- Oublier que Kubernetes n'utilise ni l'un ni l'autre : l'ADR ne porte que sur l'extérieur de Kubernetes.
+- Taire le coût de l'exception (démon root sur `reg01`) et ne pas lui fixer de date de revue.
+
+**En production chez MédiSphère**
+Revue de l'ADR à Debian 14, à la sortie de Harbor M13 et au passage de la CI sur Kubernetes (M19) ; les normes (E33) restent indépendantes du moteur.
+
+**Grille d'auto-évaluation**
+
+| Critère | Attendu |
+|---|---|
+| Gabarit | MADR, statut, date, décideurs, ticket ; deux pages au plus |
+| Contexte | usages distingués, exigences de Sophie et de Karim, Kubernetes hors périmètre, versions réelles des distributions |
+| Critères | au moins 6, pondérés, dont sécurité par défaut, systemd, compatibilité outillage, CI sans privilège |
+| Options | au moins 3, chaque note appuyée sur un exercice cité |
+| Décision | par usage (serveurs, CI, outils imposant Docker, postes), devenir de `ctr01`, `runner02`, `reg01` |
+| Conséquences | négatives écrites, actions rattachées à un module ou datées |
+
+---
+
+### M12-E32 — Questions de production : conteneurs
+
+1. Avec les capacités par défaut et sans `no-new-privileges`, un processus UID 10001 n'a **aucune** capacité effective, mais le jeu limite en contient 14. Gestes encore possibles : déposer et **exécuter** un outil dans un dossier inscriptible (`/tmp`) → racine en lecture seule et `tmpfs` en `noexec` ; **`ptrace`** sur les autres processus du conteneur (lire des secrets en mémoire) → profil seccomp sans `ptrace` (ou `CAP_SYS_PTRACE` absente **et** `kernel.yama.ptrace_scope`) ; s'**élever** par un binaire setuid root de l'image → `no-new-privileges` (le setuid ne change plus l'identité) et `cap_drop: ALL` (même devenu root, plus de capacité) ; aussi : ouvrir des connexions vers les autres services du réseau (réseaux `internal`, E08). `su`, `passwd`, `mount` setuid sont précisément les vecteurs d'élévation : chacun est un programme root lancé par l'attaquant ; une faille dans l'un d'eux suffit. Les retirer (distroless) ou les neutraliser (`no-new-privileges`).
+2. **d)** Docker fixe `net.ipv4.ip_unprivileged_port_start=0` dans l'espace de noms réseau de chaque conteneur (hors `--network host`) : tout processus peut écouter sur le port 80, **même** avec `--cap-drop ALL` (constaté sur 29.8.2). a) est faux pour la raison inverse de ce qu'on croit : la capacité ajoutée n'est **pas** effective pour un processus non root (Docker ne pose pas de capacités ambiantes : `CapEff` reste à 0, seul `CapBnd` la contient) — si l'on remet le réglage à 1024 (`--sysctl net.ipv4.ip_unprivileged_port_start=1024`), l'écoute échoue malgré `--cap-add` ; b) décrit correctement la capacité mais pas le résultat ; c) faux, l'ajout après `ALL` est accepté. Pour écouter sur 80 sans root : s'appuyer sur ce réglage (Docker, ou le poser explicitement en Podman : `--sysctl`), écouter sur un port > 1024 et publier `80:8080` (le plus simple, norme `CNT-RUN-11`), ou poser une capacité de fichier (`setcap cap_net_bind_service+ep` sur le binaire, avec la capacité dans le jeu limite et sans `no-new-privileges`… ce qui contredit E24 : à éviter).
+3. Un profil minimal est fragile : il dépend de chaque bibliothèque, de la version de Python ou de la libc, des chemins de code rares (erreurs, arrêt) ; un appel oublié casse l'application en production, souvent de façon obscure. Le profil par défaut bloque déjà les appels les plus dangereux (environ 50 : `kexec_load`, `init_module`, `bpf`, `perf_event_open`, `keyctl`, `mount`, `unshare`/`clone` d'espaces de noms sans `CAP_SYS_ADMIN`, `io_uring_*` selon la version…), et beaucoup d'appels sont **conditionnés** à une capacité : c'est pourquoi retirer les capacités compte autant que seccomp. seccomp réduit la surface du **noyau** ; les capacités disent ce que root peut faire **dans** cette surface.
+4. `seccomp=unconfined` sans capacité : tous les appels système sont permis, mais ceux qui exigent une capacité échouent quand même (`mount`, `unshare` sans `CAP_SYS_ADMIN`… sauf la création d'un espace de noms **utilisateur**, permise sans capacité si le noyau l'autorise, ce qui redonne des capacités dans ce nouvel espace : c'est la porte vers les failles noyau que seccomp fermait). `--privileged` : toutes les capacités, aucun seccomp, aucun AppArmor/SELinux (`spc_t`), **tous les périphériques** de l'hôte (`/dev/sda`), `/sys` et `/proc` inscriptibles : root sur l'hôte en une commande (`mount /dev/sda1 /mnt`). Classement : `--privileged` ≫ `seccomp=unconfined` sans capacité > configuration par défaut.
+5. `:Z` sur le même dossier pour deux conteneurs : chaque démarrage réétiquette le dossier aux catégories **du conteneur qui démarre** ; le premier perd l'accès à ses fichiers (refus SELinux au milieu de son fonctionnement). Avec `:z` : étiquette `container_file_t:s0` partagée, les deux accèdent. `:Z` sur `/home/app` réétiquette tout le dossier personnel (dont `.ssh/authorized_keys`) en `container_file_t` : `sshd` ne lit plus les clés, la connexion d'`app` échoue ; réparation : `sudo restorecon -RFv /home/app`. Règle : `:z`/`:Z` seulement sur un dossier **dédié** aux conteneurs ; sinon `semanage fcontext` ou udica (E25).
+6. **b)** Le socket du démon ne connaît que « peut parler » ou « ne peut pas » : toute session sous `supervision` (une clé volée, une commande injectée dans un script) peut lancer `docker run -v /:/hote … chroot /hote` et devenir root, sans mot de passe ni trace `sudo`. a) faux, l'API n'a pas de droits par groupe ; c) hors sujet ; d) faux. La solution de E28 donne au compte **une seule** commande en root (règle `sudo` sans argument, clé à commande forcée et restreinte, origine limitée à `adm01`) : le pire que puisse faire la clé volée est de lire l'état des conteneurs.
+7. Conséquences : (1) Docker 29 **désactive le stockage d'images containerd** et revient aux anciens pilotes (plus d'images multi-plateformes ni d'attestations locales) ; (2) images, conteneurs et volumes rangés à part (`/var/lib/docker/<uid>.<gid>/`) : tout « disparaît » à l'activation ; (3) les fichiers écrits dans les volumes et les montages de l'hôte appartiennent aux UID décalés (100000+) ; (4) `--network host`, `--pid host`, certains montages exigent `--userns=host` (qui annule la protection). Apport : un processus **root** du conteneur (image qui l'exige, évasion qui donne root) n'est que l'UID 100000 sur l'hôte ; un conteneur non root reste, lui, root de l'hôte s'il s'évade **et** s'élève jusqu'à l'UID 0 du conteneur.
+8. Mise à jour de `docker-ce` avec `live-restore` : `dockerd` redémarre, les conteneurs **continuent** (gérés par containerd et leurs *shims*) ; pendant l'arrêt, journaux tamponnés, sondes et politiques de redémarrage suspendues, ports servis par `docker-proxy` interrompus. Mise à jour de `containerd.io` : le service containerd redémarre ; les *shims* survivent en général, mais c'est moins garanti (lis les notes de version ; prévois une fenêtre). Redémarrage de l'hôte : tout s'arrête ; au démarrage, c'est la **politique de redémarrage** (`restart: unless-stopped`, `always`) qui relance les conteneurs (pas `live-restore`) ; côté Podman, les unités Quadlet (`WantedBy=default.target` et *linger*).
+9. Le conteneur **boucle** : il plante, Docker le relance (`restart:`), il redevient `running` et même `healthy` pendant sa période de démarrage, puis replante. Un état instantané le voit sain la plupart du temps. Il faut une **dérivée** (le compteur qui monte entre deux passages, E28) ou l'événement **`die`** (avec `exitCode`) de `docker events`, émis à chaque arrêt, ou `oom` si c'est la mémoire.
+10. **b)** PostgreSQL qui démarre après une « récupération automatique » ne valide rien : il rejoue le WAL copié sur des fichiers de données copiés à d'autres instants ; des pages peuvent être déchirées ou incohérentes, découvertes des semaines plus tard (ou jamais). a) faux, il n'y a pas de vérification de cohérence globale au démarrage ; c) faux, la taille ne change pas le principe (une petite base copiée en 1 s peut quand même changer pendant la copie) ; d) faux, `tar` ne voit pas toutes les modifications et son silence ne prouve rien. Conditions d'une vraie sauvegarde de fichiers : base arrêtée (à froid) ; ou `pg_backup_start`/`pg_backup_stop` avec conservation des WAL produits pendant la copie (`pg_basebackup`) ; ou instantané atomique de **tout** le système de fichiers (données et WAL au même instant), restauré comme après une panne de courant.
+11. Côté application : arrêt propre sur SIGTERM (plus de nouvelle connexion, fin des requêtes en cours dans le délai), sonde de disponibilité honnête (`/pret`), démarrage complet avant d'être déclaré prêt, compatibilité des deux versions avec la base. Côté répartiteur : sonde de disponibilité, résolution dynamique des adresses, nouvelle tentative **ailleurs** pour les échecs de connexion, attente de la remise en rotation avant d'arrêter l'autre instance. `POST` en cours sur l'instance qu'on arrête : uvicorn le termine (délai de grâce) et la réponse part normalement. Requête qui arrive juste après la fermeture du socket : connexion refusée, HAProxy la rejoue sur l'autre serveur (`retry-on conn-failure`, `redispatch`) ; le client ne voit rien.
+12. Si la colonne obligatoire n'a pas de valeur par défaut, chaque `INSERT` de l'ancienne version (qui ne la connaît pas) échoue (`NOT NULL violation`) : erreurs 500 pendant toute la bascule, et un retour arrière vers l'ancienne version est impossible tant que la colonne reste obligatoire. Règle « **étendre puis contracter** » : version N+1 ajoute la colonne **facultative** (ou avec valeur par défaut) et écrit dedans ; une fois toutes les instances en N+1 (et le retour arrière abandonné), une migration ultérieure la rend obligatoire ; une suppression se fait en sens inverse (N+1 cesse de lire, N+2 supprime). Les migrations sont appliquées **avant** la mise à jour et doivent être compatibles avec N et N+1.
+13. Il faut que « l'unité a démarré » signifie « le conteneur est sain » (`Notify=healthy`, sonde qui teste vraiment le service, `TimeoutStartSec` suffisant) ; sans cela, `podman auto-update` voit un redémarrage réussi et garde l'image cassée. Une étiquette mobile partagée entre environnements (ou une production qui suit `recette`, voire `latest`) fait qu'une simple poussée met à jour sans MR ni revue. Ce qui l'empêche : production sur une version immuable par empreinte ; étiquettes immuables dans le registre (Harbor, M13) ; droits de poussée séparés par environnement (robots) ; signature exigée (M13).
+14. L'application à étiquette **datée** de trois mois reste exposée tant qu'une MR ne la fait pas avancer : l'image de base corrigée existe dès lundi (reconstruction d'urgence ou hebdomadaire), mais l'application ne la prend qu'à sa prochaine construction sur la nouvelle étiquette — exposition = délai de la MR (cible normes : 5 jours ouvrés, `CNT-EXP-03`), et les trois mois de correctifs manqués s'ajoutent. Coût : nul en reproductibilité, élevé en suivi. L'application qui suit l'étiquette **mobile** reçoit le correctif à sa prochaine **reconstruction** (pas avant : une image construite reste ce qu'elle est) ; si elle se reconstruit chaque nuit, exposition d'un jour ; coût : deux constructions du même commit donnent deux images différentes, un retour arrière exact demande l'empreinte. Compromis MédiSphère : étiquette datée + empreinte, MR automatiques (Renovate, M13).
+15. **b)** L'empreinte désigne des **octets** précis : tout le monde construit à partir de la même image, tant qu'elle reste disponible (un registre peut la supprimer). a) faux : une image épinglée ne reçoit plus aucun correctif, elle accumule les failles connues ; c) faux : l'empreinte est une somme de contrôle, pas une signature (rien ne dit **qui** l'a produite ; c'est le rôle de Cosign, M13) ; d) faux : `apt-get install` dans le Dockerfile tire les versions **du jour** depuis les dépôts, l'épinglage de l'image de base n'y change rien.
+16. Aujourd'hui : les normes (`CNT-IMG-05`, `CNT-RUN-02` à `05`, `CNT-RUN-12`), contrôlées **à la construction** (Hadolint : dernier `USER` numérique non root ; revue des `compose.yaml`) et **à l'exécution** par les vérifications d'exploitation (inspection des conteneurs, comme les checks de E24, à transformer en contrôle planifié), la sonde (liste des conteneurs attendus), l'audit des modifications du moteur (E26), et les journaux de CI qui prouvent quelle image a été publiée. Faiblesse honnête : un conteneur lancé à la main sur un hôte échappe aux contrôles de construction ; seule une inspection régulière le voit. Plus tard : signature et analyse des images à la publication, registre unique (M13) ; admission Kubernetes qui **refuse** un pod root ou privilégié (Pod Security *restricted*, Kyverno, M26), ce qui transforme la règle en impossibilité, avec rapports de conformité continus.
+
+---
+
+### M12-E33 — Normes de conteneurisation de MédiSphère
+
+**Solution**
+
+Modèle : [`normes.md`](fichiers/M12-E33/medisphere/docs/conteneurs/normes.md). Points structurants : règles à identifiant stable (`CNT-IMG-*`, `CNT-PUB-*`, `CNT-RUN-*`, `CNT-DON-*`, `CNT-EXP-*`, `CNT-HOTE-*`), niveau, justification d'une ligne et **contrôle** (CI, revue, sonde, vérification, admission future) ; interdits explicites (`latest`, root, `--privileged`, socket monté, `label=disable`, `seccomp=unconfined`, secrets en couche) ; exceptions datées et tracées ; tableau de correspondance règles → contrôles automatiques, qui servira au module 26 ; grille de revue de MR en fin de document.
+
+**Explications**
+
+Une norme utile est **courte**, **vérifiable** et **justifiée** : la justification permet à une équipe de comprendre (et de contester) la règle, le contrôle permet de la faire respecter sans revue héroïque. Écrire le moyen de contrôle à côté de chaque règle révèle les règles qui ne sont qu'un vœu (« non root à l'exécution » n'est vérifiable automatiquement qu'avec une inspection ou une admission) : on les marque comme telles et on planifie le contrôle.
+
+**Alternatives**
+- Reprendre le CIS Docker Benchmark tel quel : exhaustif, mais centré sur l'hôte Docker et peu lisible par une équipe de développement.
+- Normes sous forme de **politiques exécutables** (Conftest/OPA sur les `compose.yaml`, Kyverno au M26) : le document devient la politique ; c'est la cible, une fois les règles stabilisées.
+
+**Pièges classiques**
+- Règles sans moyen de contrôle, ou présentées comme contrôlées alors qu'elles ne le sont pas.
+- Normes qui contredisent l'existant sans plan de mise en conformité (MédiDoc et son `FROM` non épinglé : MR prévue au mini-projet).
+- Exceptions sans date de fin.
+- Document trop long, plein d'exemples : il n'est pas lu.
+
+**En production chez MédiSphère**
+Normes intégrées au gabarit de projet (M28), contrôlées en CI et par l'admission Kubernetes (M26) ; indicateur mensuel « applications conformes » ; revue semestrielle en comité (Claire, Sophie, Julien, Karim).
+
+**Grille d'auto-évaluation**
+
+| Relecteur | Critère | Attendu |
+|---|---|---|
+| Sophie | Sécurité | non root, capacités, `no-new-privileges`, lecture seule, seccomp, secrets, interdits explicites, SELinux et socket |
+| Sophie | Contrôle | chaque règle DOIT a un contrôle ; les contrôles manuels sont dits manuels |
+| Julien | Faisabilité | règles applicables par une équipe sans la Plateforme (gabarits, exemples hors du texte), exceptions possibles et rapides |
+| Julien | Clarté | identifiants stables, une ligne de justification, quatre à six pages |
+| Karim | Exploitation | sonde, sauvegarde, mise à jour et retour arrière, cycle de vie des images, runbooks |
+| Tous | Cohérence | rien qui contredise E24-E30, l'ADR-0120 ou la politique d'images de base (E27) |
+
+---
+
+### M12-E34 — Conteneuriser une application en temps limité
+
+**Solution** (déroulé de référence ; à ne lire qu'après ta tentative chronométrée)
+
+Fichiers (projet `mediagenda/annuaire`) : [`Dockerfile`](fichiers/M12-E34/annuaire/Dockerfile), [`.dockerignore`](fichiers/M12-E34/annuaire/.dockerignore), [`compose.yaml`](fichiers/M12-E34/annuaire/compose.yaml), [`.gitlab-ci.yml`](fichiers/M12-E34/annuaire/.gitlab-ci.yml) ; [extrait de la configuration de la sonde](fichiers/M12-E34/ms-verif-conteneurs.conf.extrait) ; [extrait du registre des secrets](fichiers/M12-E34/registre-secrets.extrait.md).
+
+| Jalon | Actions | Temps de référence |
+|---|---|---|
+| T0 → T1 | Lecture du dossier et du README (variables, sondes, **dossier de cache inscriptible**, codes de sortie) ; projet `mediagenda/annuaire` créé, code poussé ; Dockerfile multi-étapes (uv, `--no-editable`) à partir de `bibliotheque/python` daté et épinglé, UID 10002, `HEALTHCHECK` par `mediannuaire sonde`, étiquettes OCI ; `.dockerignore` en liste blanche ; construction et essai locaux sur `ctr01` | 25 min |
+| T1 → T2 | `.gitlab-ci.yml` : tests (`unittest`), Hadolint, `images-autorisees`, construction par le gabarit E21 ; étiquette `1.0.0` (ou version par semantic-release) ; pipeline vert, image publiée | 25 min |
+| T2 → T3 | Secret `secrets/jeton_admin` (700/644, hors Git), `compose.yaml` de recette (image publiée, `read_only` + `tmpfs` sur le cache, aucune capacité, limites, données `:ro`, secret en fichier), `docker compose up -d --wait` ; exigences 4 à 7 constatées | 20 min |
+| T3 → T4 | MR sur la configuration de la sonde, registre des secrets, `lab/bin/check 12 34` | 10 min |
+
+Le piège de l'application : avec la racine en lecture seule et sans `tmpfs` sur `/var/cache/mediannuaire`, elle refuse de démarrer (code 3, « cache inutilisable ») ; le `tmpfs` doit appartenir à l'UID du service (`uid=10002,gid=10002`), sinon même erreur. Constats hors lab avec ces fichiers : image construite et lue par Hadolint 2.15.1 sans avertissement ; recette saine (`/sante`, `/pret`, liste des cardiologues, `POST /admin/recharger` 200 avec le jeton, 401 sans) ; `docker compose stop` en 0,7 s, code de sortie 0 (« signal reçu, arrêt en cours » puis « arrêt terminé » dans le journal JSON) ; le script d'essais de E24 trouve un seul geste possible (`ptrace`, profil seccomp par défaut : acceptable au niveau `DEVRAIT` de `CNT-RUN-06`, à documenter).
+
+```
+admin@ctr01:~/src/annuaire$ docker inspect annuaire-annuaire-1 --format '{{.Config.User}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}} {{json .HostConfig.Tmpfs}}'
+10002:10002 true [ALL] [no-new-privileges:true] {"/var/cache/mediannuaire":"size=8m,mode=0700,uid=10002,gid=10002,noexec,nosuid,nodev"}
+admin@ctr01:~/src/annuaire$ docker inspect annuaire-annuaire-1 --format '{{json .Config.Env}}' | grep -c JETON_ADMIN=
+0
+```
+
+**Explications**
+
+L'exercice mesure l'**outillage** autant que l'opérateur : avec le gabarit de CI (E21), le contrôle des images (E27), les normes (E33) et un `compose.yaml` de référence (E24), conteneuriser une petite application est une affaire de choix, pas de recherche. Chaque geste manuel de la feuille de temps est un manque à corriger (gabarit de projet, M28). Le secret en **fichier** (`_FICHIER`) n'apparaît ni dans `docker inspect` ni dans l'environnement des processus ; la variable directe (`MEDIANNUAIRE_JETON_ADMIN`) l'exposerait.
+
+**Alternatives**
+- Image finale *distroless* Python (`gcr.io/distroless/python3-debian13`) : plus petite et sans setuid, mais elle n'est pas dans la liste autorisée (exception à demander) et la version de Python est imposée par l'image.
+- Lancer la recette sur `ctr02` en Quadlet (ADR-0120 : serveurs en Podman) : plus conforme à la cible, un peu plus long ; les deux sont acceptés par le dossier.
+
+**Pièges classiques**
+- Passer la racine en lecture seule sans lire le README : refus de démarrer (cache).
+- Jeton en variable d'environnement ou dans `compose.yaml`.
+- Recette lancée avec une image **construite à la main** (exigence 4 : l'image vérifiée est celle du pipeline).
+- `HEALTHCHECK` avec `curl` (absent de l'image) : sonde toujours en échec.
+- Shell entre Docker et le processus (`CMD mediannuaire` en forme shell) : SIGTERM n'arrive pas, `docker stop` attend 10 s puis tue (code 137).
+
+**En production chez MédiSphère**
+Gabarit de projet (Dockerfile, `.dockerignore`, `compose.yaml`, `.gitlab-ci.yml`, entrée de sonde) généré par la plateforme développeurs (M28) ; MédiAnnuaire déployé ensuite sur Kubernetes (M14-M17) avec le même contrat (sondes, signaux, secrets en fichiers).

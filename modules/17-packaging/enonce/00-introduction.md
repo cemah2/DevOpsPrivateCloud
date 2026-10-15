@@ -160,7 +160,7 @@ admin@adm01:~$ helm plugin list            # unittest 1.2.1, diff 3.15.x
 
 > ⚠️ **Attention** : `--verify=false` désactive la vérification de signature du plugin, que Helm 4 a introduite justement pour les plugins tiers. On l'accepte ici pour deux plugins bien identifiés, épinglés par version, installés depuis leur dépôt officiel. Ne prends pas l'habitude de l'ajouter par réflexe : un plugin s'exécute avec tes droits et ton `~/.kube/config`.
 
-**Clones de travail** (créés au fil des exercices) : `~/src/chart` (`mediagenda/chart`, E03), `~/src/deploiement` (`mediagenda/deploiement`, E04), `~/src/k8s` (`plateforme/k8s`, existant depuis le M14). Brouillons et journaux : `~/m17/eXX/`.
+**Clones de travail** (créés au fil des exercices) : `~/src/mediagenda-chart` (`mediagenda/chart`, E03), `~/src/mediagenda-deploiement` (`mediagenda/deploiement`, E04), `~/src/k8s` (`plateforme/k8s`, existant depuis le M14). Brouillons et journaux : `~/m17/eXX/`.
 
 ## Faits communs du module
 

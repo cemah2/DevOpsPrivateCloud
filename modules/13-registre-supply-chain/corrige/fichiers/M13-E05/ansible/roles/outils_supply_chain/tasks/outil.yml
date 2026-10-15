@@ -1,33 +1,33 @@
 ---
-- name: "{{ outils_supply_chain_nom }} : description du catalogue"
+- name: "Description du catalogue — {{ outils_supply_chain_nom }}"
   ansible.builtin.set_fact:
     outils_supply_chain_courant: "{{ outils_supply_chain_catalogue[outils_supply_chain_nom] }}"
     outils_supply_chain_deb: "{{ outils_supply_chain_cache }}/{{ outils_supply_chain_catalogue[outils_supply_chain_nom].fichier }}"
 
-- name: "{{ outils_supply_chain_nom }} : refuser une version interdite"
+- name: "Refuser une version interdite — {{ outils_supply_chain_nom }}"
   ansible.builtin.assert:
     that: outils_supply_chain_courant.version not in (outils_supply_chain_interdits[outils_supply_chain_nom] | default([]))
     fail_msg: "{{ outils_supply_chain_nom }} {{ outils_supply_chain_courant.version }} est une version INTERDITE (compromission connue) : voir PLAN §6."
     quiet: true
 
-- name: "{{ outils_supply_chain_nom }} : télécharger le paquet (gardé seulement si le SHA-256 correspond)"
+- name: "Télécharger le paquet (gardé seulement si le SHA-256 correspond) — {{ outils_supply_chain_nom }}"
   ansible.builtin.get_url:
     url: "{{ outils_supply_chain_courant.url }}"
     dest: "{{ outils_supply_chain_deb }}"
     checksum: "sha256:{{ outils_supply_chain_courant.sha256 }}"
     mode: "0640"
 
-- name: "{{ outils_supply_chain_nom }} : Cosign est-il disponible pour vérifier la signature ?"
+- name: "Cosign est-il disponible pour vérifier la signature ? — {{ outils_supply_chain_nom }}"
   ansible.builtin.stat:
     path: /usr/bin/cosign
   register: outils_supply_chain_cosign
 
-- name: "{{ outils_supply_chain_nom }} : vérifier la signature Sigstore"
+- name: "Vérifier la signature Sigstore — {{ outils_supply_chain_nom }}"
   when:
     - outils_supply_chain_verifier_signatures | bool
     - outils_supply_chain_cosign.stat.exists
   block:
-    - name: "{{ outils_supply_chain_nom }} : télécharger le bundle"
+    - name: "Télécharger le bundle — {{ outils_supply_chain_nom }}"
       ansible.builtin.get_url:
         url: "{{ outils_supply_chain_courant.signature.bundle_url }}"
         dest: "{{ outils_supply_chain_deb }}.sigstore.json"
@@ -35,7 +35,7 @@
         force: true
       changed_when: false
 
-    - name: "{{ outils_supply_chain_nom }} : télécharger le fichier d'empreintes signé"
+    - name: "Télécharger le fichier d'empreintes signé — {{ outils_supply_chain_nom }}"
       ansible.builtin.get_url:
         url: "{{ outils_supply_chain_courant.signature.empreintes_url }}"
         dest: "{{ outils_supply_chain_deb }}.empreintes.txt"
@@ -44,7 +44,7 @@
       changed_when: false
       when: outils_supply_chain_courant.signature.mode == 'empreintes'
 
-    - name: "{{ outils_supply_chain_nom }} : cosign verify-blob (identité et émetteur imposés)"
+    - name: "Cosign verify-blob (identité et émetteur imposés) — {{ outils_supply_chain_nom }}"
       ansible.builtin.command:
         argv:
           - /usr/bin/cosign
@@ -58,24 +58,28 @@
           - "{{ outils_supply_chain_courant.signature.emetteur }}"
       changed_when: false
 
-    - name: "{{ outils_supply_chain_nom }} : le fichier d'empreintes signé contient l'empreinte épinglée"
+    - name: "Le fichier d'empreintes signé contient l'empreinte épinglée — {{ outils_supply_chain_nom }}"
       ansible.builtin.command:
-        argv: [grep, -qxF, "{{ outils_supply_chain_courant.sha256 }}  {{ outils_supply_chain_courant.fichier }}", "{{ outils_supply_chain_deb }}.empreintes.txt"]
+        argv:
+          - grep
+          - -qxF
+          - "{{ outils_supply_chain_courant.sha256 }}  {{ outils_supply_chain_courant.fichier }}"
+          - "{{ outils_supply_chain_deb }}.empreintes.txt"
       changed_when: false
       when: outils_supply_chain_courant.signature.mode == 'empreintes'
 
-- name: "{{ outils_supply_chain_nom }} : installer le paquet"
+- name: "Installer le paquet — {{ outils_supply_chain_nom }}"
   ansible.builtin.apt:
     deb: "{{ outils_supply_chain_deb }}"
     state: present
 
-- name: "{{ outils_supply_chain_nom }} : version installée"
+- name: "Version installée — {{ outils_supply_chain_nom }}"
   ansible.builtin.command:
     argv: [dpkg-query, -W, "-f=${Version}", "{{ outils_supply_chain_courant.paquet }}"]
   register: outils_supply_chain_installe
   changed_when: false
 
-- name: "{{ outils_supply_chain_nom }} : contrôler la version installée"
+- name: "Contrôler la version installée — {{ outils_supply_chain_nom }}"
   ansible.builtin.assert:
     that: outils_supply_chain_installe.stdout == outils_supply_chain_courant.version
     fail_msg: "{{ outils_supply_chain_nom }} installé en {{ outils_supply_chain_installe.stdout }}, attendu {{ outils_supply_chain_courant.version }}."

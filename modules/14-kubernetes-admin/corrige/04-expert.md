@@ -273,7 +273,7 @@ admin@adm01:~$ kubectl -n wb-pannes get deploy agenda -o jsonpath='{.spec.templa
 
 Les zones de M14-E14 sont `par1-baie-a` à `-c` ; `requiredDuringScheduling…` est une exigence, pas une préférence. Correctif : `rollout undo`, puis, si l'intention était de répartir les pods entre baies, une `topologySpreadConstraints` sur `topology.kubernetes.io/zone` (M14-E14) plutôt qu'une affinité.
 
-**Clôture** : `kubectl -n wb-pannes rollout status deploy/agenda` se termine, l'ancien ReplicaSet est à 0, `lab/bin/check 14 36`, `--annuler`. RB-144 : `corrige/fichiers/M14-E38/medisphere/docs/kubernetes/runbooks/RB-144-pod-ne-demarre-pas.md` (sections `Pending`, `ImagePullBackOff`, `CrashLoopBackOff`).
+**Clôture** : `kubectl -n wb-pannes rollout status deploy/agenda` se termine, l'ancien ReplicaSet est à 0, `lab/bin/check 14 36`, `--annuler`. RB-145 : `corrige/fichiers/M14-E38/medisphere/docs/kubernetes/runbooks/RB-145-pod-ne-demarre-pas.md` (sections `Pending`, `ImagePullBackOff`, `CrashLoopBackOff`).
 
 **Explications**
 
@@ -573,7 +573,7 @@ admin@k8s-cp02:~$ sudo crictl stop $(sudo crictl ps -q --name '^kube-apiserver$'
 
 Le fichier ne contient qu'une `ClusterConfiguration` : kubeadm détecte l'adresse d'annonce par l'interface de la route par défaut (vérifie qu'il s'agit bien de 10.10.40.52 dans la sortie ; sinon, ajoute une `InitConfiguration` avec `localAPIEndpoint.advertiseAddress`). `admin.conf` est utilisé ici localement sur un nœud de contrôle, pour lire un ConfigMap : c'est un usage de bris de glace à noter si ton identité personnelle ne marche pas sur ce nœud ; sinon, lis le ConfigMap depuis `adm01` et copie le fichier. Supprime `/root/cluster-config.yaml` et, après vérification, `/root/certs-ig-2244/`.
 
-**Clôture** : les quatre tests du triage au vert, `lab/bin/check 14 39`, `--annuler`. RB-145 : `corrige/fichiers/M14-E39/medisphere/docs/kubernetes/runbooks/RB-145-api-ne-repond-plus.md`.
+**Clôture** : les quatre tests du triage au vert, `lab/bin/check 14 39`, `--annuler`. RB-146 : `corrige/fichiers/M14-E39/medisphere/docs/kubernetes/runbooks/RB-146-api-ne-repond-plus.md`.
 
 **Pourquoi la haute disponibilité n'a pas suffi** : elle protège contre la perte d'un **nœud entier** (M14-E29). Ici, un maillon s'est mis en défaut **sans se déclarer défaillant** : HAProxy arrêté sur un nœud qui garde la VIP faute de suivi (v1), un filtre invisible des contrôles locaux (v2), un certificat valide mais faux qu'aucun contrôle de santé ne vérifie (v4). Seule la variante 3 était couverte par la HA (HAProxy a écarté le serveur), et elle a quand même réduit la marge à zéro sans alerte. À changer : contrôle keepalived qui teste le chemin complet par l'adresse du nœud (et pas la boucle locale), suivi obligatoire vérifié par le rôle, contrôle externe du certificat (SAN) de chaque serveur, alerte sur les backends HAProxy `DOWN`.
 
@@ -627,7 +627,7 @@ admin@k8s-cp03:~$ sudo crictl logs <id> 2>&1 | tail -n 3
 {"level":"panic","msg":"failed to open database","path":"/var/lib/etcd/member/snap/db","error":"invalid database",…}
 ```
 
-La base bbolt du membre ne s'ouvre plus. On ne répare pas une base bbolt à la main : on **remplace le membre**, ses données viendront des deux autres (procédure de M14-E29, RB-141 section « remplacer un membre »). Un seul nœud est touché à la fois ; on vérifie avant chaque commande que les deux autres membres sont sains.
+La base bbolt du membre ne s'ouvre plus. On ne répare pas une base bbolt à la main : on **remplace le membre**, ses données viendront des deux autres (procédure de M14-E29, RB-144 « Remplacer un nœud de contrôle »). Un seul nœud est touché à la fois ; on vérifie avant chaque commande que les deux autres membres sont sains.
 
 ```
 admin@k8s-cp01:~$ sudo -E etcdctl member list -w table | grep k8s-cp03      # relever l'identifiant (ID) de k8s-cp03
@@ -682,7 +682,7 @@ admin@k8s-cp01:~$ sudo -E etcdctl endpoint health && sudo -E etcdctl alarm disar
 
 La suppression ne libère rien dans le fichier ; le compactage rend l'espace réutilisable dans la base ; la défragmentation rend l'espace au système de fichiers (et bloque le membre pendant l'opération : un à la fois). Le manifeste corrigé doit l'être aussi dans le code (la `ClusterConfiguration`, `etcd.local.extraArgs`, si tu fixes un quota explicite). Ne supprime **jamais** des clés `/registry/…` pour faire de la place : ce sont des objets de Kubernetes, à supprimer par l'API (`kubectl delete`) s'il le faut.
 
-**Clôture** : trois membres sains, aucune alarme, écriture d'essai réussie, `lab/bin/check 14 40`, `--annuler`. RB-146 : `corrige/fichiers/M14-E40/medisphere/docs/kubernetes/runbooks/RB-146-etcd-en-detresse.md`.
+**Clôture** : trois membres sains, aucune alarme, écriture d'essai réussie, `lab/bin/check 14 40`, `--annuler`. RB-147 : `corrige/fichiers/M14-E40/medisphere/docs/kubernetes/runbooks/RB-147-etcd-en-detresse.md`.
 
 **Explications**
 
@@ -764,7 +764,7 @@ admin@adm01:~$ kubectl -n wb-pannes get rolebinding sonde-api -o jsonpath='{.sub
 
 Un sujet `ServiceAccount` est identifié par son nom **et** son espace : `default/sonde-api` n'existe même pas, et RBAC ne le vérifie pas. Correctif : remettre `namespace: wb-pannes` (dans le code de l'équipe). Le pod n'a pas besoin d'être relancé : son jeton est bon, ce sont ses droits qui manquaient.
 
-**Clôture** : `lab/bin/check 14 41`, `--annuler`. RB-147 : `corrige/fichiers/M14-E41/medisphere/docs/kubernetes/runbooks/RB-147-acces-refuse.md`.
+**Clôture** : `lab/bin/check 14 41`, `--annuler`. RB-148 : `corrige/fichiers/M14-E41/medisphere/docs/kubernetes/runbooks/RB-148-acces-refuse.md`.
 
 **Explications**
 
@@ -851,7 +851,7 @@ search par1.medisphere.internal
 
 `Default` ne veut **pas** dire « par défaut » : c'est « comme le nœud ». Le pod interroge les récurseurs de MédiSphère, qui ne connaissent pas `postgres.wb-pannes.svc.cluster.local`. La valeur par défaut est `ClusterFirst`. Correctif : `rollout undo`, puis retrait du champ dans le manifeste de l'équipe. (Le conteneur éphémère `kubectl debug` respecte le profil `restricted` de l'espace si ta version de kubectl propose `--profile=restricted` ; sinon, utilise la sonde DNS pour comparer.)
 
-**Clôture** : quatre résolutions au vert (sauf Internet si la bordure ne le permet pas depuis le VLAN 40 : note-le), `sonde-dns` prête, `lab/bin/check 14 42`, `--annuler`. RB-148 : `corrige/fichiers/M14-E42/medisphere/docs/kubernetes/runbooks/RB-148-dns-du-cluster.md`.
+**Clôture** : quatre résolutions au vert (sauf Internet si la bordure ne le permet pas depuis le VLAN 40 : note-le), `sonde-dns` prête, `lab/bin/check 14 42`, `--annuler`. RB-149 : `corrige/fichiers/M14-E42/medisphere/docs/kubernetes/runbooks/RB-149-dns-du-cluster.md`.
 
 **Explications**
 

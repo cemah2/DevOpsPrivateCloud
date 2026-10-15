@@ -1,0 +1,29 @@
+# {{ pile_recette_entete }}
+# Legacy-RDV conteneurisé (M12-E19) : configuration par l'environnement, pièces jointes et
+# sessions sur volumes, journaux sur stderr. Le schéma est chargé une fois (voir le corrigé).
+[Unit]
+Description=Legacy-RDV (recette conteneurs v1)
+Requires=legacy-mariadb.service
+After=legacy-mariadb.service
+
+[Container]
+ContainerName=legacy-rdv
+Image={{ pile_recette_registre }}/legacy/legacy-rdv:{{ pile_recette_versions.legacy_rdv }}
+Network=apps-recette.network
+PublishPort={{ pile_recette_ports.legacy_rdv }}:8080
+Environment=LEGACY_RDV_DB_HOST=legacy-mariadb LEGACY_RDV_DB_NAME=legacy_rdv LEGACY_RDV_DB_USER=legacy_rdv
+Environment=LEGACY_RDV_DB_PASS_FILE=/run/secrets/legacy-rdv-db-mdp LEGACY_RDV_FUSEAU=Europe/Paris TZ=Europe/Paris
+Secret=legacy-rdv-db-mdp,type=mount,mode=0444
+Volume=legacy-pieces.volume:/var/www/legacy-rdv/uploads
+Volume=legacy-sessions.volume:/var/lib/php/sessions
+HealthCmd=curl -fsS -o /dev/null http://127.0.0.1:8080/sante.php
+HealthInterval=30s
+HealthStartPeriod=20s
+DropCapability=ALL
+NoNewPrivileges=true
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

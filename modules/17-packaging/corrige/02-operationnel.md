@@ -39,28 +39,28 @@ Fichiers : [`Chart.yaml`](fichiers/M17-E12/chart/charts/mediagenda/Chart.yaml), 
    ```
    `import-values` sous la forme `child/parent` recopie `valkey.service` (calculé par le sous-chart) dans `.Values.valkeyImporte` du parent : l'URL `redis://<release>-valkey:{{ .Values.valkeyImporte.port }}/0` suit le port du sous-chart. Quand le sous-chart est désactivé, l'import ne se fait pas et la valeur par défaut `valkeyImporte.port: 6379` s'applique.
    ```
-   admin@adm01:~/src/chart$ helm dependency update charts/mediagenda
+   admin@adm01:~/src/mediagenda-chart$ helm dependency update charts/mediagenda
    Saving 2 charts
    Downloading valkey from repo https://valkey.io/valkey-helm/
-   admin@adm01:~/src/chart$ git add charts/mediagenda/Chart.lock && git status --ignored | grep tgz
+   admin@adm01:~/src/mediagenda-chart$ git add charts/mediagenda/Chart.lock && git status --ignored | grep tgz
    ```
 4. **Valeurs du sous-chart.** Sous la clé `valkey:` du parent : `image.registry: registry.par1.medisphere.internal/dockerhub` (la VAP du M14 refuse `docker.io`), `imagePullSecrets: [harbor-pull]`, ressources. Piège réel rencontré : le chart Valkey attend une **liste de noms** (`- harbor-pull`), pas d'objets `{name: …}` ; avec un objet, il rend `name: "map[name:harbor-pull]"` sans erreur. Seul un `helm template` relu le montre. Ses pods sont déjà conformes à `restricted` (utilisateur 1000, `seccompProfile`, capacités retirées, conteneur d'initialisation compris).
 5. **Base CNPG.** Rendue si `postgresql.cnpg.enabled` ; `helm.sh/resource-policy: keep` empêche `helm uninstall` (et `ct`) de la supprimer ; `inheritedMetadata` propage les étiquettes MédiSphère aux pods et PVC ; anti-affinité dès deux instances. Le Secret vient de CNPG (`<cluster>-app`) : rien de secret dans le chart. Politiques : clients (pods de la release) → 5432, réplication entre instances (5432, 8000), opérateur (`cnpg-system`) → 8000, sortie DNS, et une CiliumNetworkPolicy `toEntities: [kube-apiserver]` (le gestionnaire d'instance lit et écrit dans l'API). ⚠️ À vérifier sur ton lab : la liste exacte des flux qu'exige CNPG 1.30 (compare avec les politiques de recette du M16).
 6. **Profils.**
    ```
-   admin@adm01:~/src/chart$ helm template mediagenda charts/mediagenda -n mediagenda-recette --set medisphere.environnement=recette | grep -E '^kind' | sort | uniq -c
-   admin@adm01:~/src/chart$ helm template mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml | kubeconform -summary -kubernetes-version 1.36.0 \
+   admin@adm01:~/src/mediagenda-chart$ helm template mediagenda charts/mediagenda -n mediagenda-recette --set medisphere.environnement=recette | grep -E '^kind' | sort | uniq -c
+   admin@adm01:~/src/mediagenda-chart$ helm template mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml | kubeconform -summary -kubernetes-version 1.36.0 \
        -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
    Summary: 18 resources found in 1 file - Valid: 18, Invalid: 0, Errors: 0, Skipped: 0
    ```
    [`dev.yaml`](fichiers/M17-E06/dev.yaml) : environnement `dev`, une réplique, base et Valkey intégrés. Recette : NetworkPolicy, PDB, ServiceAccount, ConfigMap, Service, Deployment, CiliumNetworkPolicy, HTTPRoute (+ hooks en E12). Dev : en plus le `Cluster`, le Deployment et le Service `mediagenda-valkey`, son ServiceAccount, sa ConfigMap de scripts, les politiques de la base et de Valkey.
 7. **Reprise.**
    ```
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --wait
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --wait
    Error: UPGRADE FAILED: Unable to continue with update: Cluster "mediagenda-db" in namespace "mediagenda-dev" exists and cannot be imported into the current release: invalid ownership metadata; label validation error: missing key "app.kubernetes.io/managed-by": must be set to "Helm"; annotation validation error: missing key "meta.helm.sh/release-name": must be set to "mediagenda"; …
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --dry-run=server --take-ownership | grep -c '^kind'
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --take-ownership --wait --timeout 10m
-   admin@adm01:~/src/chart$ kubectl -n mediagenda-dev get cluster.postgresql.cnpg.io mediagenda-db -o jsonpath='{.metadata.annotations}{"\n"}{.metadata.creationTimestamp}{"\n"}'
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --dry-run=server --take-ownership | grep -c '^kind'
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --take-ownership --wait --timeout 10m
+   admin@adm01:~/src/mediagenda-chart$ kubectl -n mediagenda-dev get cluster.postgresql.cnpg.io mediagenda-db -o jsonpath='{.metadata.annotations}{"\n"}{.metadata.creationTimestamp}{"\n"}'
    ```
    (Message d'erreur reconstitué depuis le code de Helm : ⚠️ à vérifier sur ton lab.) `--take-ownership` pose les annotations et l'étiquette de propriété sur tout objet du rendu qui existe déjà ; le `creationTimestamp` du `Cluster` ne change pas. Seul le `Cluster` est concerné ici : les autres noms rendus (`mediagenda-valkey`, politiques `mediagenda-db`…) n'existaient pas.
 8. **Bascule et ménage.** L'URL de Valkey a changé par la montée elle-même (`redis://mediagenda-valkey:6379/0`) ; une fois les pods de l'API renouvelés et prêts :
@@ -105,7 +105,7 @@ Fichiers : [`tests/`](fichiers/M17-E12/chart/charts/mediagenda/tests/) (six suit
 
 1. **Tests unitaires.**
    ```
-   admin@adm01:~/src/chart$ helm unittest charts/mediagenda
+   admin@adm01:~/src/mediagenda-chart$ helm unittest charts/mediagenda
     PASS  Base CloudNativePG rendue par le chart   tests/cnpg_test.yaml
     PASS  Deployment de l'API                     tests/deployment_test.yaml
     PASS  Exposition et disponibilité (HTTPRoute, PDB)  tests/exposition_test.yaml
@@ -118,18 +118,18 @@ Fichiers : [`tests/`](fichiers/M17-E12/chart/charts/mediagenda/tests/) (six suit
 2. **Le test menteur.** Une suite qui ne charge que `deployment.yaml` : ce gabarit `include` `configmap.yaml` (empreinte), absent de la suite ; **chaque** rendu échoue (`no template "mediagenda/templates/configmap.yaml" associated with template "gotpl"`), donc `failedTemplate: {}` passe… avec des valeurs valides. Constaté à la rédaction. Corrections : charger `configmap.yaml` dans la suite, ajouter un **cas témoin** qui doit rendre (`isKind: Deployment`), et donner à chaque `failedTemplate` un `errorPattern` qui nomme la valeur (`"/image/tag"`). Règle à noter : un test d'échec sans motif précis ne prouve rien.
 3. **`helm test` et archive.**
    ```
-   admin@adm01:~/src/chart$ helm package charts/mediagenda -d /tmp && tar -tzf /tmp/mediagenda-0.4.0.tgz | grep -E 'tests|ci/'
+   admin@adm01:~/src/mediagenda-chart$ helm package charts/mediagenda -d /tmp && tar -tzf /tmp/mediagenda-0.4.0.tgz | grep -E 'tests|ci/'
    mediagenda/templates/tests/test-pret.yaml
    ```
    Avec un `.helmignore` qui contient `tests/`, le test Helm **disparaît** du rendu et de l'archive sans aucun message (constaté) : le motif s'applique à tout répertoire nommé `tests`. Il faut l'ancrer : `/tests/` et `/ci/`. Le pod de test n'utilise que l'image de l'application (Python et `urllib`) : il passe la VAP (registre MédiSphère) et `restricted` ; il vérifie `/pret` (dépendances) **et** que `/sante` annonce la version déployée.
 4. **`ct lint`.**
    ```
-   admin@adm01:~/src/chart$ ct lint --config ct.yaml --all
+   admin@adm01:~/src/mediagenda-chart$ ct lint --config ct.yaml --all
    Linting chart with values file "charts/mediagenda/ci/autonome-values.yaml"...
    ✔︎ mediagenda => (version: "0.4.0", path: "charts/mediagenda")
    All charts linted successfully
-   admin@adm01:~/src/chart$ git switch -c essai && sed -i 's/replicaCount: 2/replicaCount: 3/' charts/mediagenda/values.yaml && git commit -qam essai
-   admin@adm01:~/src/chart$ ct lint --config ct.yaml
+   admin@adm01:~/src/mediagenda-chart$ git switch -c essai && sed -i 's/replicaCount: 2/replicaCount: 3/' charts/mediagenda/values.yaml && git commit -qam essai
+   admin@adm01:~/src/mediagenda-chart$ ct lint --config ct.yaml
    ✖︎ mediagenda => (version: "0.4.0", path: "charts/mediagenda") > chart version not ok. Needs a version bump!
    ```
    `ct lint` fait : `helm dependency build`, validation de `Chart.yaml` par yamale (`chart_schema.yaml`), yamllint de `Chart.yaml` et `values.yaml` (`lintconf.yaml`), `helm lint` avec **chaque** fichier `ci/*-values.yaml`, et la montée de version par rapport à `origin/main`. `excluded-charts: [medisphere-commun]` : un chart de bibliothèque ne se rend pas seul ; il est testé à travers `mediagenda`. Remarque : l'image `quay.io/helmpack/chart-testing:v3.15.0` contient **Helm 3.16.4** (constaté) ; `ct lint` y fonctionne aussi, mais le pipeline du palier 3 doit utiliser Helm 4.3 (image dérivée, ou binaire monté) pour tester avec la version de production.
@@ -139,7 +139,7 @@ Fichiers : [`tests/`](fichiers/M17-E12/chart/charts/mediagenda/tests/) (six suit
    admin@adm01:~$ kubectl -n mediagenda-dev get secret harbor-pull -o json \
        | jq 'del(.metadata.namespace,.metadata.uid,.metadata.resourceVersion,.metadata.creationTimestamp,.metadata.managedFields,.metadata.ownerReferences,.metadata.labels,.metadata.annotations)' \
        | kubectl -n wb-ct apply -f -
-   admin@adm01:~/src/chart$ ct install --config ct.yaml --namespace wb-ct --charts charts/mediagenda
+   admin@adm01:~/src/mediagenda-chart$ ct install --config ct.yaml --namespace wb-ct --charts charts/mediagenda
    admin@adm01:~$ kubectl -n wb-ct get pods,cluster.postgresql.cnpg.io,pvc -w        # dans un autre terminal
    ```
    `ct` installe une release au nom aléatoire (`mediagenda-<suffixe>`) avec `ci/autonome-values.yaml`, attend, lance `helm test`, affiche les journaux en cas d'échec, puis **désinstalle**. Avec `--namespace`, il ne supprime pas l'espace. La base, protégée par `keep`, **reste** : supprime-la, puis l'espace :
@@ -199,7 +199,7 @@ Fichiers : [`outils/publier-chart.sh`](fichiers/M17-E08/outils/publier-chart.sh)
    Helm range l'identifiant dans `~/.config/helm/registry/config.json` (même format que Docker ; option globale `--registry-config`). Fichier en 600 : vérifie-le. Cosign, lui, lit `~/.docker/config.json` ou `cosign login`.
 3. **Valkey.**
    ```
-   admin@adm01:~/src/chart$ COSIGN_KEY=<CLÉ-PRIVÉE> COSIGN_PUB=~/medisphere/docs/registre/cosign.pub outils/recopier-chart.sh https://valkey.io/valkey-helm/ valkey 0.12.0
+   admin@adm01:~/src/mediagenda-chart$ COSIGN_KEY=<CLÉ-PRIVÉE> COSIGN_PUB=~/medisphere/docs/registre/cosign.pub outils/recopier-chart.sh https://valkey.io/valkey-helm/ valkey 0.12.0
    == Images citées par le rendu par défaut :
          image: docker.io/valkey/valkey:9.1.2
    …
@@ -207,10 +207,10 @@ Fichiers : [`outils/publier-chart.sh`](fichiers/M17-E08/outils/publier-chart.sh)
    (`<CLÉ-PRIVÉE>` : la clé MédiSphère extraite du Vault `critique` dans un fichier temporaire en 600, supprimé ensuite, ou la référence que tu as utilisée au M13 ; `COSIGN_PASSWORD` dans l'environnement du seul terminal.) Puis `repository: oci://registry.par1.medisphere.internal/charts` dans `Chart.yaml` et `helm dependency update` : `Chart.lock` change (champ `repository` et empreinte `digest` de l'ensemble des dépendances), même si le contenu téléchargé est identique.
 4. **Publication.**
    ```
-   admin@adm01:~/src/chart$ helm dependency build charts/mediagenda && helm package charts/mediagenda -d /tmp
+   admin@adm01:~/src/mediagenda-chart$ helm dependency build charts/mediagenda && helm package charts/mediagenda -d /tmp
    Successfully packaged chart and saved it to: /tmp/mediagenda-0.4.0.tgz
-   admin@adm01:~/src/chart$ tar -tzf /tmp/mediagenda-0.4.0.tgz | head
-   admin@adm01:~/src/chart$ helm push /tmp/mediagenda-0.4.0.tgz oci://registry.par1.medisphere.internal/charts
+   admin@adm01:~/src/mediagenda-chart$ tar -tzf /tmp/mediagenda-0.4.0.tgz | head
+   admin@adm01:~/src/mediagenda-chart$ helm push /tmp/mediagenda-0.4.0.tgz oci://registry.par1.medisphere.internal/charts
    Pushed: registry.par1.medisphere.internal/charts/mediagenda:0.4.0
    Digest: sha256:<DIGEST>
    ```
@@ -270,11 +270,11 @@ Publication uniquement par le pipeline (M17-E13) avec le robot ; signature par l
 
 Projet complet : [`fichiers/M17-E09/deploiement/`](fichiers/M17-E09/deploiement/) — [`chart.env`](fichiers/M17-E09/deploiement/chart.env), [`outils/rendre-base.sh`](fichiers/M17-E09/deploiement/outils/rendre-base.sh), [`base/`](fichiers/M17-E09/deploiement/base/) (`kustomization.yaml`, `values-communes.yaml`, `rendu/mediagenda.yaml`), [`components/`](fichiers/M17-E09/deploiement/components/) (`dependances`, `haute-disponibilite`, `debogage`, `livraison`), [`overlays/`](fichiers/M17-E09/deploiement/overlays/) (`dev`, `recette`, `prod`), [`essais/helmcharts/`](fichiers/M17-E09/deploiement/essais/helmcharts/kustomization.yaml).
 
-1. **Ordre.** Une kustomization accumule ses `resources` (récursivement, chacune déjà transformée par sa propre kustomization), exécute ses générateurs, applique ses `components` **dans l'ordre de la liste**, puis ses propres transformations (espace, étiquettes, images, réplicas, correctifs), et en dernier les `replacements`. Les remplacements d'un component s'exécutent après les transformations de l'overlay qui l'inclut (vérifié : un `images:` de l'overlay est écrasé par le remplacement de `livraison`). `--enable-helm` : qui construit doit avoir le binaire `helm` (et sa version), un accès réseau au registre et des identifiants (`helm registry login`), et le rendu dépend de tout cela.
+1. **Ordre.** Une kustomization accumule ses `resources` (récursivement, chacune déjà transformée par sa propre kustomization), exécute ses propres générateurs, applique ses `components` **dans l'ordre de la liste** (chacun avec ses générateurs, transformateurs et remplacements), puis ses propres transformations (espace, étiquettes, images, réplicas, correctifs) et enfin ses propres `replacements`. Vérifié avec Kustomize 5.8.2 et kubectl 5.8.1 : un `merge` de ConfigMap fait par un component l'emporte sur celui de l'overlay qui l'inclut ; un `images:` posé dans l'overlay l'emporte sur les remplacements du component `livraison` (l'image change, `MEDIAGENDA_VERSION` non) — d'où la règle « pas d'`images:` dans un overlay de `mediagenda/deploiement` ». Seul un overlay **parent** qui inclurait cet overlay comme ressource passerait encore après. `--enable-helm` : qui construit doit avoir le binaire `helm` (et sa version), un accès réseau au registre et des identifiants (`helm registry login`), et le rendu dépend de tout cela.
 2. **Rendu vérifié.** `outils/rendre-base.sh` : `helm pull --version` → comparaison du digest reçu (ligne `Digest:` de `helm pull`) avec `chart.env` → `cosign verify` **de ce digest** → `helm template … --no-hooks --skip-tests` avec `base/values-communes.yaml` → écriture de `base/rendu/mediagenda.yaml` (avec un en-tête qui cite référence, version et digest). `--verifier` ne modifie rien et échoue si le rendu commité diffère (testé : vert, puis rouge après altération d'une ligne). Après E12 :
    ```
-   admin@adm01:~/src/deploiement$ sed -i "s/^CHART_DIGEST=.*/CHART_DIGEST=sha256:<DIGEST-0.5.0>/" chart.env
-   admin@adm01:~/src/deploiement$ outils/rendre-base.sh && git diff --stat
+   admin@adm01:~/src/mediagenda-deploiement$ sed -i "s/^CHART_DIGEST=.*/CHART_DIGEST=sha256:<DIGEST-0.5.0>/" chart.env
+   admin@adm01:~/src/mediagenda-deploiement$ outils/rendre-base.sh && git diff --stat
    ```
 3. **ConfigMap générée dans la base.** La base génère `mediagenda-parametres` (`MEDIAGENDA_CACHE_TTL=60`) et l'ajoute en fin d'`envFrom` ; recette et prod la complètent par `behavior: merge` (`parametres.env`), `debogage` aussi. Vérifié : dans chaque overlay, `envFrom` = `[mediagenda, mediagenda-parametres-<empreinte>]`.
 4. **Components.** Extraits :
@@ -306,8 +306,8 @@ Projet complet : [`fichiers/M17-E09/deploiement/`](fichiers/M17-E09/deploiement/
    - dans chaque overlay, les quatre champs de version sont égaux. Une promotion = **une ligne** (`version:` dans `overlays/<env>/livraison.yaml`).
 6. **Production.**
    ```
-   admin@adm01:~/src/deploiement$ kubectl diff --server-side -k overlays/prod
-   admin@adm01:~/src/deploiement$ kubectl apply --server-side -k overlays/prod
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl diff --server-side -k overlays/prod
+   admin@adm01:~/src/mediagenda-deploiement$ kubectl apply --server-side -k overlays/prod
    ```
    Le Secret `harbor-pull` se crée **après** l'espace et **hors** du dépôt, par la méthode du M14-E19 (depuis le robot `robot$k8s-pull`, jamais par un fichier commité). Les pods créés avant lui restent en `ErrImagePull` puis repartent seuls ; un second `apply` n'est même pas nécessaire. Ordre de démarrage : la base (3 instances, quelques minutes), puis l'API — dont le conteneur d'initialisation `migrations` attend que la base réponde (il échoue et le pod redémarre tant qu'elle n'est pas prête : `Init:CrashLoopBackOff` transitoire). Le quota (`requests.cpu: 4`, `requests.memory: 8Gi`) couvre 3 API + 3 instances PostgreSQL + Valkey ; l'anti-affinité **requise** exige 3 travailleurs disponibles (`k8s-w01-03`).
    ```
@@ -485,7 +485,7 @@ Fichiers : [`migrations-job.yaml`](fichiers/M17-E12/chart/charts/mediagenda/temp
 3. **Modes et tests.** `initContainer` : le conteneur `migrations` dans le Deployment (chaque pod migre avant de démarrer ; le verrou consultatif de `mediagenda.migrate` sérialise les exécutions) ; `none` : rien. Tests : phase selon la base, poids de la politique, compte de service, absence de hook en mode `initContainer` (cinq tests de `migrations_test.yaml`) et présence du conteneur d'initialisation (`deployment_test.yaml`).
 4. **Observation.**
    ```
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --wait --timeout 10m
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml --wait --timeout 10m
    admin@adm01:~$ kubectl -n mediagenda-dev get events --sort-by=.lastTimestamp -w      # autre terminal
    … NetworkPolicy … (aucun événement : les politiques n'en émettent pas)
    … job/mediagenda-migrations   SuccessfulCreate   Created pod: mediagenda-migrations-…
@@ -501,8 +501,8 @@ Fichiers : [`migrations-job.yaml`](fichiers/M17-E12/chart/charts/mediagenda/temp
    (format exact du journal : celui de `journal.py`, à vérifier.) Les migrations V1 et V2 avaient été appliquées par l'API ou par toi au M16 ; si la base de dev est neuve (E03), le Job les applique ici. L'empreinte est le SHA-256 du fichier : modifier `V1__init.sql` dans l'image ferait échouer toutes les migrations suivantes.
 5. **Échec provoqué.**
    ```
-   admin@adm01:~/src/chart$ kubectl -n mediagenda-dev get deploy mediagenda -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' | tee -a ~/m17/e12/journal.md
-   admin@adm01:~/src/chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml \
+   admin@adm01:~/src/mediagenda-chart$ kubectl -n mediagenda-dev get deploy mediagenda -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' | tee -a ~/m17/e12/journal.md
+   admin@adm01:~/src/mediagenda-chart$ helm upgrade mediagenda charts/mediagenda -n mediagenda-dev -f ~/m17/e06/dev.yaml \
        --set migrations.repertoire=/nexiste-pas --set migrations.backoffLimit=0 --wait --timeout 5m
    Error: UPGRADE FAILED: pre-upgrade hooks failed: … job mediagenda-migrations failed: BackoffLimitExceeded
    admin@adm01:~$ kubectl -n mediagenda-dev logs job/mediagenda-migrations

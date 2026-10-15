@@ -3,7 +3,7 @@
 # shellcheck source-path=SCRIPTDIR
 # check-E38.sh — M14-E38 « Panne : CrashLoopBackOff » : agenda déployé et stable, configuration
 # conforme au contrat de l'application (variables, sonde de vivacité sur /sante:8000, mémoire,
-# commande de l'image), plus aucun conteneur en boucle, RB-144 (section CrashLoopBackOff), panne close.
+# commande de l'image), plus aucun conteneur en boucle, RB-145 (section CrashLoopBackOff), panne close.
 # Lecture seule.
 
 # shellcheck source=_m14-expert.sh
@@ -43,7 +43,7 @@ else
     skip "témoins de wb-pannes" "absents : ils sont créés à la première injection (lab/bin/break 14 38)"
   fi
 fi
-check_cmd "RB-144 : section sur CrashLoopBackOff" \
-  _m14x_doc_contient 'docs/kubernetes/runbooks/RB-144-*.md' '^#+ .*CrashLoop'
-check_cmd "RB-144 commité dans le dépôt de documentation" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-144-*.md'
+check_cmd "RB-145 : section sur CrashLoopBackOff" \
+  _m14x_doc_contient 'docs/kubernetes/runbooks/RB-145-*.md' '^#+ .*CrashLoop'
+check_cmd "RB-145 commité dans le dépôt de documentation" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-145-*.md'
 check_cmd "panne M14-E38 close (lab/bin/break 14 38 --annuler après réparation)" _m14x_aucune_panne_active E38

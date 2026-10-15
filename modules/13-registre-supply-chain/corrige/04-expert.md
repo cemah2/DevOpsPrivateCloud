@@ -127,7 +127,7 @@ Quotas dimensionnés et suivis (`harbor_project_quota_usage_byte`, M21) ; règle
 
 ```
 admin@runner02:~$ sudo wb-sonde-registre --etape signature
-admin@adm01:~$ sudo -n true; ssh runner02 sudo cat /var/lib/workbook/temoins-m13/cosign-sonde.pub > /tmp/sonde.pub
+admin@adm01:~$ ssh runner02 sudo cat /var/lib/workbook/temoins-m13/cosign-sonde.pub > /tmp/sonde.pub
 admin@adm01:~$ cosign verify --key /tmp/sonde.pub --insecure-ignore-tlog=true registry.par1.medisphere.internal/wb-sonde/signee:1.0
 ```
 

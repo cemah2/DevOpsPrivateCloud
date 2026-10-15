@@ -189,7 +189,7 @@ for s in db valkey api; do
   set -- $(etat_ "$s"); [ "$1" = running ] && [ "$2" = healthy ] || exit 1
 done
 set -- $(etat_ doc); [ "$1" = running ] || exit 1
-[ "$(http_ http://127.0.0.1:8000/pret 8)" = 200 ] && [ "$(http_ http://127.0.0.1:8080/healthz 5)" = 200 ]
+[ "$(http_ http://127.0.0.1:18000/pret 8)" = 200 ] && [ "$(http_ http://127.0.0.1:18080/healthz 5)" = 200 ]
 EOF
 }
 
@@ -240,7 +240,7 @@ EOF
 # m12_api_pret_code — code HTTP de /pret vu de ctr01 (0 si pas de réponse).
 m12_api_pret_code() {
   m12_exec "$_M12_CTR01" <<'EOF'
-http_ http://127.0.0.1:8000/pret 8
+http_ http://127.0.0.1:18000/pret 8
 EOF
 }
 

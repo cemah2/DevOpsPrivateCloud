@@ -88,12 +88,18 @@ _m15o_contenu_main() {
   gitlab_api "$1/repository/files/$chemin/raw?ref=main" 2>/dev/null || true
 }
 
-# _m15o_arbre_main PROJET DOSSIER — chemins des fichiers sous DOSSIER sur main (récursif, 100 max).
+# _m15o_arbre_main PROJET DOSSIER — chemins des fichiers sous DOSSIER (vide = tout le dépôt) sur main,
+# récursif (jusqu'à 1 000 fichiers : 10 pages de 100).
 _m15o_arbre_main() {
-  local chemin
+  local chemin page lot
   chemin="$(jq -rn --arg v "$2" '$v | @uri')"
-  gitlab_api "$1/repository/tree?ref=main&recursive=true&per_page=100&path=$chemin" 2>/dev/null \
-    | jq -r '.[] | select(.type == "blob") | .path' 2>/dev/null || true
+  for page in 1 2 3 4 5 6 7 8 9 10; do
+    lot="$(gitlab_api "$1/repository/tree?ref=main&recursive=true&per_page=100&page=$page&path=$chemin" 2>/dev/null \
+      | jq -r '.[] | select(.type == "blob") | .path' 2>/dev/null || true)"
+    [[ -n "$lot" ]] || break
+    printf '%s\n' "$lot"
+    (( $(wc -l <<<"$lot") == 100 )) || break
+  done
 }
 
 # _m15o_journal FICHIER MIN_LIGNES — fichier de travail présent avec au moins MIN_LIGNES non vides.
@@ -121,4 +127,40 @@ _m15o_cabundle_medisphere() {
   pem="$(base64 -d <<<"$1" 2>/dev/null)" || return 1
   n="$(grep -c 'BEGIN CERTIFICATE' <<<"$pem" || true)"
   [[ "$n" == 1 ]] && openssl x509 -noout -subject <<<"$pem" 2>/dev/null | grep -q 'Sph'
+}
+
+# _m15o_versions_servies CRD — versions servies d'une CRD, séparées par des espaces (vide si absente).
+_m15o_versions_servies() {
+  kube get crd "$1" -o json 2>/dev/null | jq -r '[.spec.versions[] | select(.served) | .name] | join(" ")' 2>/dev/null || true
+}
+
+# _m15o_politiques_fermees JSON_NETPOL JSON_CNP — aucune autorisation « tout » : règle sans source ou
+# destination, élément vide, bloc 0.0.0.0/0, entités world/all, sélecteur d'endpoints vide.
+_m15o_politiques_fermees() {
+  jq -e '[.items[]?.spec | (.ingress[]? | select((.from // []) | length == 0 or any(.[]; . == {} or .ipBlock.cidr == "0.0.0.0/0"))),
+                           (.egress[]?  | select((.to // [])   | length == 0 or any(.[]; . == {} or .ipBlock.cidr == "0.0.0.0/0")))]
+         | length == 0' <<<"$1" >/dev/null 2>&1 || return 1
+  jq -e '[.items[]?.spec | (.ingress[]?, .egress[]?)
+          | select(((.fromEntities // []) + (.toEntities // [])) as $e | ($e | index("world")) or ($e | index("all"))
+                   or any((.fromEndpoints // [])[], (.toEndpoints // [])[]; . == {})
+                   or any((.fromCIDR // [])[], (.toCIDR // [])[]; . == "0.0.0.0/0"))]
+         | length == 0' <<<"$2" >/dev/null 2>&1
+}
+
+# _m15o_depot_sans_secret — (E23, après _m15o_arbre="…") aucun fichier de clé ou de Secret dans
+# composants/, espaces/, cluster/ (le dossier secrets/ du M14, chiffré par Ansible Vault, est hors champ).
+_m15o_depot_sans_secret() {
+  ! grep -E '^(composants|espaces|cluster)/' <<<"${_m15o_arbre:-}" | grep -qiE '\.(key|p12|pfx)$|secret[^/]*\.ya?ml$'
+}
+
+# _m15o_politiques_lucas JSON_TABLEAU — (E21) les politiques d'un tableau d'objets n'ouvrent rien :
+# fermées au sens de _m15o_politiques_fermees, sans toFQDNs « * » ni entité cluster.
+_m15o_politiques_lucas() {
+  local np cnp
+  np="$(jq '{items: [.[] | select(.kind == "NetworkPolicy")]}' <<<"$1" 2>/dev/null)" || return 1
+  cnp="$(jq '{items: [.[] | select(.kind == "CiliumNetworkPolicy")]}' <<<"$1" 2>/dev/null)" || return 1
+  _m15o_politiques_fermees "$np" "$cnp" || return 1
+  jq -e '[.items[]?.spec | (.ingress[]?, .egress[]?)
+          | select(any(.toFQDNs[]?; (.matchPattern // "") == "*") or ((.fromEntities // []) | index("cluster")))]
+         | length == 0' <<<"$cnp" >/dev/null 2>&1
 }

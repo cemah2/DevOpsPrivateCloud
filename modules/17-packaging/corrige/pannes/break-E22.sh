@@ -9,11 +9,11 @@
 #   2. « kubectl apply » côté client (gestionnaire kubectl-client-side-apply, annotation
 #      last-applied-configuration) d'une copie modifiée de la ConfigMap : MEDIAGENDA_CACHE_TTL=5 ;
 #   3. un HorizontalPodAutoscaler « mediagenda » (min 2, max 3) : le contrôleur porte spec.replicas à 2
-#      par la sous-ressource scale (gestionnaire kube-controller-manager).
+#      par la sous-ressource scale (gestionnaire kube-controller-manager, à vérifier sur ta version).
 # Tout « helm upgrade » de la release échoue ensuite en conflit, même à valeurs inchangées.
 # Annulation (seulement si c'est encore cassé) : suppression du HPA posé (même UID), retrait des
-# entrées managedFields injectées, puis « helm rollback » vers la révision courante avec
-# --force-conflicts : Helm repose et reprend ses valeurs.
+# entrées managedFields injectées, puis réapplication en SSA, sous le gestionnaire « helm », de
+# l'objet décrit par la révision courante (helm get manifest) : Helm reprend ses valeurs.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -38,6 +38,20 @@ _e22_retirer_gestionnaire() {
 
 _e22_a() { # _e22_a TYPE NOM GESTIONNAIRE [SOUS-RESSOURCE] — 0 si le gestionnaire est présent
   _e22_mf "$1" "$2" | jq -e --arg g "$3" --arg sr "${4:-}" 'any(.[]; .manager == $g and ((.subresource // "") == $sr))' >/dev/null 2>&1
+}
+
+# _e22_reappliquer GENRE — applique en SSA (gestionnaire helm, --force-conflicts) l'objet GENRE
+# « mediagenda » du manifeste de la release.
+_e22_reappliquer() {
+  local doc
+  doc="$(m17_helm get manifest "$_E22_REL" -n "$_E22_NS" 2>/dev/null \
+    | yq "select(.kind == \"$1\" and .metadata.name == \"$_E22_REL\")" 2>/dev/null)" || doc=""
+  if [[ -z "$doc" ]]; then
+    wb_avert "annulation : $1 $_E22_REL introuvable dans le manifeste de la release"
+    return 0
+  fi
+  printf '%s\n' "$doc" | wb_kubectl apply --server-side --field-manager=helm --force-conflicts -n "$_E22_NS" -f - >/dev/null 2>&1 \
+    || wb_avert "annulation : $1 $_E22_REL non réappliqué"
 }
 
 _mE22_une() {
@@ -108,7 +122,7 @@ EOF
 }
 
 _e22_injecter() {
-  m17_outils kubectl helm jq || return 1
+  m17_outils kubectl helm jq yq || return 1
   m17_rel_saine "$_E22_NS" "$_E22_REL" || { wb_avert "la release $_E22_REL de $_E22_NS doit être « deployed » (banc d'essai du chart, M17-E03)"; return 1; }
   m17_rel_ssa "$_E22_NS" "$_E22_REL" || { wb_avert "la release $_E22_REL n'est pas en server-side apply : réinstalle-la avec Helm 4 (M17-E14)"; return 1; }
   m17_essayer E22 3 "$1"
@@ -129,7 +143,7 @@ verifier_E22() {
 }
 
 annuler_E22() {
-  local v hpa uid rev a_rejouer=0
+  local v hpa uid a_rejouer=0
   v="$(m17_lire E22 variante)"
   case "${v:-${WB_VAR:-}}" in
     1)
@@ -157,12 +171,13 @@ annuler_E22() {
       fi
       ;;
   esac
-  if ((a_rejouer)) && [[ "$(m17_rel_statut "$_E22_NS" "$_E22_REL")" == deployed ]]; then
-    rev="$(m17_helm status "$_E22_REL" -n "$_E22_NS" -o json 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
-    if [[ -n "$rev" ]]; then
-      m17_helm rollback "$_E22_REL" "$rev" -n "$_E22_NS" --force-conflicts --no-hooks >/dev/null 2>&1 \
-        || wb_avert "annulation : « helm rollback $_E22_REL $rev » a échoué, relance-le à la main"
-    fi
+  if ((a_rejouer)); then
+    # Réapplique, sous le nom de gestionnaire « helm », l'objet tel que le décrit la révision courante
+    # de la release (un « helm rollback » vers la même révision ne réapplique pas un objet inchangé).
+    case "${v:-}" in
+      2) _e22_reappliquer ConfigMap ;;
+      *) _e22_reappliquer Deployment ;;
+    esac
   fi
   m17_journal E22 "annulation (variante ${v:-?})"
   rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/workbook/k8s/$WB_EX"

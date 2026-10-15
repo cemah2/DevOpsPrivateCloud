@@ -425,11 +425,11 @@ m14_temoins() {
   fi
 }
 
-# m14_preparer [temoins] — précondition commune : (témoins prêts) puis cluster sain. Pendant
+# m14_preparer — précondition commune : cluster sain, puis témoins prêts (créés au besoin). Pendant
 # l'astreinte (M14-E43, _M14_ASTREINTE=1), break-E43 a fait ces contrôles une fois avant la première
 # panne : les refaire ici échouerait à cause de la panne précédente.
 m14_preparer() {
   if [[ -n "${_M14_ASTREINTE:-}" ]]; then return 0; fi
-  m14_temoins || return 1
-  m14_sain
+  m14_sain || return 1
+  m14_temoins
 }

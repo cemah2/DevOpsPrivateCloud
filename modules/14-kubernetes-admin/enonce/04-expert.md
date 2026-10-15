@@ -108,12 +108,12 @@ Pour un nœud qui évince : `df -h /var/lib/containerd`, puis `du -xh --max-dept
 2. Explique le blocage en une phrase en citant le message exact (ordonnanceur ou contrôleur de ReplicaSet) et l'objet qui le produit.
 3. Corrige à la racine. Si l'objet fautif appartient à l'équipe (manifeste du déploiement) ou à l'espace (quota), dis où il aurait dû être corrigé dans le code (`plateforme/k8s/espaces/` ou dépôt de l'équipe) ; si c'est l'état d'un nœud, retrouve qui l'a modifié.
 4. Vérifie que la mise à jour se termine (`rollout status`) et que l'ancienne version a disparu.
-5. Commence RB-144 « Un pod ne démarre pas » (`docs/kubernetes/runbooks/`) avec une section `## Pending` : les causes, le message de chacune, la commande qui la confirme.
+5. Commence RB-145 « Un pod ne démarre pas » (`docs/kubernetes/runbooks/`) avec une section `## Pending` : les causes, le message de chacune, la commande qui la confirme.
 
 **Critères de réussite**
 - [ ] Le déploiement `agenda` est entièrement à jour et disponible ; aucun pod `Pending` depuis plus de 2 minutes dans les espaces `wb-*` et `mediagenda-*`.
 - [ ] Le quota de `wb-pannes` laisse au moins deux pods de marge ; aucune taint `maintenance` ne reste sur les nœuds ; au moins deux travailleurs acceptent des pods sans tolérance.
-- [ ] RB-144 contient sa section `Pending` ; ton journal contient le message exact du refus.
+- [ ] RB-145 contient sa section `Pending` ; ton journal contient le message exact du refus.
 
 **Vérification** : `lab/bin/check 14 36`
 
@@ -153,12 +153,12 @@ Le message de l'ordonnanceur compte les nœuds par raison : additionne-les, ils 
 2. Reproduis sur le nœud où le pod est placé : `crictl pull` avec la même référence, puis, si c'est un problème d'identifiants, avec les identifiants du robot (sans les afficher ni les laisser dans l'historique). Lis `journalctl -u containerd` au moment du tirage.
 3. Si c'est utile, vérifie côté Harbor : l'artefact existe-t-il (digest, étiquette) ? Qui a demandé quoi, avec quel compte ?
 4. Corrige à la racine (objet Kubernetes, Secret, configuration de containerd par son rôle Ansible) et vérifie que le pod démarre en tirant **par Harbor**.
-5. Complète RB-144 avec une section `## ImagePullBackOff` : une ligne par message d'erreur typique, sa cause, la commande qui la prouve.
+5. Complète RB-145 avec une section `## ImagePullBackOff` : une ligne par message d'erreur typique, sa cause, la commande qui la prouve.
 
 **Critères de réussite**
 - [ ] Aucun conteneur en `ErrImagePull` ni `ImagePullBackOff` dans `kube-system`, `wb-*`, `mediagenda-*`.
 - [ ] `agenda` est disponible, avec l'image du projet `medisphere` de Harbor et le Secret de tirage `harbor-pull` ; si l'outil d'équipe `outil-rapport` existe, il est disponible.
-- [ ] Le `hosts.toml` de `docker.io` de chaque travailleur pointe vers le cache Harbor ; RB-144 contient sa section `ImagePullBackOff`.
+- [ ] Le `hosts.toml` de `docker.io` de chaque travailleur pointe vers le cache Harbor ; RB-145 contient sa section `ImagePullBackOff`.
 
 **Vérification** : `lab/bin/check 14 37`
 
@@ -196,13 +196,13 @@ Sur le nœud : `sudo crictl pull <référence>` (anonyme) puis `sudo crictl pull
 2. Lis ce que le conteneur a dit avant de mourir ; s'il n'a rien dit, explique pourquoi et trouve l'information ailleurs.
 3. Compare le déploiement avec sa révision précédente (`kubectl rollout history … --revision=N`, `kubectl diff`) et avec le contrat de l'application.
 4. Corrige (retour arrière ou correctif, justifie ton choix) et vérifie que le déploiement se termine sans nouveau redémarrage.
-5. Complète RB-144 avec une section `## CrashLoopBackOff` : un tableau « ce que je vois → ce que ça veut dire → commande suivante ».
+5. Complète RB-145 avec une section `## CrashLoopBackOff` : un tableau « ce que je vois → ce que ça veut dire → commande suivante ».
 6. Réponds à Lucas : quelle vérification avant livraison (dans la CI de l'équipe ou par `kubectl apply --dry-run=server`, `kubectl diff`) aurait attrapé le problème, et laquelle ne l'aurait pas attrapé ?
 
 **Critères de réussite**
 - [ ] Aucun conteneur en `CrashLoopBackOff` ni en erreur de démarrage dans `wb-*` et `mediagenda-*` ; `agenda` est disponible et aucun de ses pods n'a redémarré plus de deux fois.
 - [ ] Le déploiement respecte le contrat de MédiAgenda : variables obligatoires fournies, sonde de vivacité sur `/sante` au port de l'application, limite de mémoire d'au moins 128 Mi, commande de l'image conservée.
-- [ ] RB-144 (sections `Pending`, `ImagePullBackOff`, `CrashLoopBackOff`) est publié par MR ; ta réponse à Lucas est dans ton journal.
+- [ ] RB-145 (sections `Pending`, `ImagePullBackOff`, `CrashLoopBackOff`) est publié par MR ; ta réponse à Lucas est dans ton journal.
 
 **Vérification** : `lab/bin/check 14 38`
 
@@ -242,12 +242,12 @@ Sur le nœud : `sudo crictl pull <référence>` (anonyme) puis `sudo crictl pull
 2. Sur le nœud en cause : état des services (keepalived, HAProxy), état des backends vus par HAProxy, filtrage, pod statique du kube-apiserver (`crictl ps -a`, `crictl logs`), certificat présenté. Avance maillon par maillon, sans redémarrer quoi que ce soit avant d'avoir une hypothèse.
 3. Corrige à la racine. Si le défaut vient d'une modification d'un fichier géré par Ansible, la correction passe par le rôle : rejoue-le en `--check --diff` sur le nœud pour **prouver** l'écart, puis applique-le.
 4. Explique pourquoi la haute disponibilité n'a pas suffi dans ton cas, et ce qu'il faudrait changer pour qu'elle suffise (contrôle de keepalived, contrôles de santé de HAProxy, cohérence des certificats).
-5. Rédige `RB-145 — L'API ne répond plus` dans `docs/kubernetes/runbooks/` : un test par maillon dans l'ordre, l'accès sans VIP, l'accès en bris de glace, ce qu'il ne faut pas faire.
+5. Rédige `RB-146 — L'API ne répond plus` dans `docs/kubernetes/runbooks/` : un test par maillon dans l'ordre, l'accès sans VIP, l'accès en bris de glace, ce qu'il ne faut pas faire.
 
 **Critères de réussite**
 - [ ] L'API répond par la VIP ; chacun des trois kube-apiserver répond en direct avec un certificat valable pour le nom **et** l'adresse de la VIP.
 - [ ] HAProxy et keepalived actifs sur les trois nœuds, VIP portée par un seul ; keepalived suit son contrôle de santé s'il en définit un ; aucune règle de filtrage ne jette le 8443 ; le manifeste du kube-apiserver vise l'etcd local.
-- [ ] RB-145 est publié ; ton journal contient le résultat de chaque test du triage et la preuve de la cause.
+- [ ] RB-146 est publié ; ton journal contient le résultat de chaque test du triage et la preuve de la cause.
 
 **Vérification** : `lab/bin/check 14 39`
 
@@ -292,14 +292,14 @@ kubeadm refuse de réutiliser un certificat existant qui ne correspond plus à l
 **Travail demandé**
 1. Constate depuis un nœud **sain** : liste des membres, santé et état de chacun (leader, révision, taille de la base, taille utilisée), alarmes. Combien de membres faut-il pour écrire ? Combien en reste-t-il ?
 2. Sur le nœud du membre en cause (ou sur le cluster entier si tout refuse d'écrire) : journaux du conteneur etcd (`crictl logs`), manifeste, données, horloge, certificats. Formule la cause en une phrase avec sa preuve.
-3. Corrige sans perte : selon la cause, rends au membre ce qui lui manque, ou remplace-le (procédure de M14-E29 et RB-141), ou libère de l'espace (trouve ce qui remplit la base, supprime-le si et seulement si ce n'est pas un objet de Kubernetes, compacte, défragmente membre par membre, lève l'alarme) et retire la cause du dépassement.
+3. Corrige sans perte : selon la cause, rends au membre ce qui lui manque, ou remplace-le (procédure de M14-E29 et RB-144), ou libère de l'espace (trouve ce qui remplit la base, supprime-le si et seulement si ce n'est pas un objet de Kubernetes, compacte, défragmente membre par membre, lève l'alarme) et retire la cause du dépassement.
 4. Vérifie : trois membres sains, aucune alarme, écritures possibles (`kubectl create configmap essai-e40 -n wb-essais --dry-run=server`, puis pour de vrai et supprime-le).
-5. Rédige `RB-146 — etcd en détresse` (`docs/kubernetes/runbooks/`) : les états possibles d'un membre, l'arbre « rendre / remplacer / restaurer », les commandes interdites tant qu'il reste un quorum, l'alarme `NOSPACE` pas à pas.
+5. Rédige `RB-147 — etcd en détresse` (`docs/kubernetes/runbooks/`) : les états possibles d'un membre, l'arbre « rendre / remplacer / restaurer », les commandes interdites tant qu'il reste un quorum, l'alarme `NOSPACE` pas à pas.
 
 **Critères de réussite**
 - [ ] Trois membres démarrés et en bonne santé, aucune alarme, aucune clé hors de `/registry/`.
 - [ ] Sur chaque nœud de contrôle : quota d'espace etcd par défaut ou d'au moins 2 Gio, horloge synchronisée, écart avec `adm01` inférieur à 5 s.
-- [ ] RB-146 est publié ; ton journal contient l'état initial des trois membres et la preuve de la cause ; aucune restauration d'instantané n'a été faite.
+- [ ] RB-147 est publié ; ton journal contient l'état initial des trois membres et la preuve de la cause ; aucune restauration d'instantané n'a été faite.
 
 **Vérification** : `lab/bin/check 14 40`
 
@@ -318,7 +318,7 @@ Sur un nœud sain : `sudo ETCDCTL_API=3 etcdctl --endpoints=https://10.10.40.51:
 Pour l'espace : `etcdctl get "" --from-key --keys-only | cut -d/ -f2 | sort | uniq -c`, puis la documentation *etcd — Maintenance* (*Space quota*, *Defragmentation*, *History compaction*) : l'ordre des opérations compte, et la défragmentation se fait **un membre à la fois**. Le quota d'un membre se lit dans son manifeste ; la valeur par défaut est documentée.
 </details>
 
-**Pour aller plus loin** : compare la taille physique et la taille utilisée de la base (`dbSize`, `dbSizeInUse`) sur trois semaines de fonctionnement du lab ; propose dans RB-146 un seuil d'alerte et une défragmentation planifiée (à quelle heure, avec quelle précaution pour le leader).
+**Pour aller plus loin** : compare la taille physique et la taille utilisée de la base (`dbSize`, `dbSizeInUse`) sur trois semaines de fonctionnement du lab ; propose dans RB-147 un seuil d'alerte et une défragmentation planifiée (à quelle heure, avec quelle précaution pour le leader).
 
 ---
 
@@ -342,12 +342,12 @@ Pour l'espace : `etcdctl get "" --from-key --keys-only | cut -d/ -f2 | sort | un
 2. Remonte la chaîne : pour l'authentification, le certificat présenté (émetteur, sujet, dates) ; pour l'autorisation, les liaisons qui devraient s'appliquer et leurs sujets exacts ; pour l'admission, la politique qui refuse et son expression ; pour un compte de service, ce que voit le pod (jeton monté, identité, droits).
 3. Retrouve dans le journal d'audit (M14-E27) qui a modifié l'objet en cause et quand, si c'est un objet de l'API.
 4. Corrige à la racine, au bon endroit (`outils/kubeconfig-personnel.sh`, `plateforme/k8s/rbac/`, `plateforme/k8s/admission/`), sans donner un droit de plus que nécessaire ; pour une politique de sécurité, corrige-la sans la désactiver et teste-la (`--dry-run=server`, `validationActions: [Warn]` le temps d'un essai).
-5. Rédige `RB-147 — Accès refusé` (`docs/kubernetes/runbooks/`) : un tableau message → porte → première commande, et la procédure de bris de glace (où est `admin.conf`, qui l'autorise, comment on le détruit après usage, comment on trace son usage).
+5. Rédige `RB-148 — Accès refusé` (`docs/kubernetes/runbooks/`) : un tableau message → porte → première commande, et la procédure de bris de glace (où est `admin.conf`, qui l'autorise, comment on le détruit après usage, comment on trace son usage).
 
 **Critères de réussite**
 - [ ] Ton kubeconfig personnel est accepté par l'API, hors du groupe `system:masters`, avec un certificat valable plus de 24 h.
 - [ ] Le groupe `medisphere:mediagenda-devs` a son RoleBinding dans `mediagenda-dev` ; un pod avec un volume `emptyDir` est admis dans `wb-pannes` ; les témoins `postgres` et `sonde-api` sont disponibles et `sonde-api` n'a que son rôle.
-- [ ] RB-147 est publié ; ton journal contient le message exact du refus, l'identité vue par l'API et, s'il y a lieu, l'entrée d'audit de la modification.
+- [ ] RB-148 est publié ; ton journal contient le message exact du refus, l'identité vue par l'API et, s'il y a lieu, l'entrée d'audit de la modification.
 
 **Vérification** : `lab/bin/check 14 41`
 
@@ -387,12 +387,12 @@ Un refus d'admission cite la politique et la liaison (`kubectl get validatingadm
 2. Teste les maillons : Service `kube-dns` et ses points d'accès, pods CoreDNS (état, journaux), Corefile, résolution directe vers l'adresse d'un pod CoreDNS, puis vers les récurseurs depuis un nœud.
 3. Trouve la cause racine ; si c'est une modification de configuration, retrouve-la (événements, journal d'audit, annotations).
 4. Corrige sans supprimer ni recréer CoreDNS ; vérifie les quatre résolutions de l'étape 1 et la disponibilité de `sonde-dns`.
-5. Rédige `RB-148 — DNS du cluster` (`docs/kubernetes/runbooks/`) : schéma du chemin d'une requête, un test par maillon, les pièges (`ndots:5`, `dnsPolicy`, cache, `reload`, boucle de transfert), et comment la modification du Corefile doit être portée par le code.
+5. Rédige `RB-149 — DNS du cluster` (`docs/kubernetes/runbooks/`) : schéma du chemin d'une requête, un test par maillon, les pièges (`ndots:5`, `dnsPolicy`, cache, `reload`, boucle de transfert), et comment la modification du Corefile doit être portée par le code.
 
 **Critères de réussite**
 - [ ] `coredns` a au moins deux réplicas, tous disponibles, et `kube-dns` au moins deux points d'accès prêts ; le Corefile sert `cluster.local` et transfère vers le résolveur des nœuds ou `dns01`/`dns02`.
 - [ ] `sonde-dns` et `agenda` (en `dnsPolicy` par défaut) sont disponibles.
-- [ ] RB-148 est publié ; ton journal contient les quatre résolutions de l'étape 1, avant et après.
+- [ ] RB-149 est publié ; ton journal contient les quatre résolutions de l'étape 1, avant et après.
 
 **Vérification** : `lab/bin/check 14 42`
 

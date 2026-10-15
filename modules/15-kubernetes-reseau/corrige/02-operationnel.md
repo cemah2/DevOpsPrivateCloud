@@ -6,7 +6,7 @@
 
 **Ce qui a été vérifié, ce qui ne l'a pas été.**
 - *CRD et champs* : relevés dans les sources au tag exact — documentation de Cilium **v1.20.2** (`lb-ipam.rst`, `bgp-control-plane-configuration.rst`, `bgp-control-plane-operation.rst`, `gateway-api/*.rst`, `ingress-reference.rst`, `upgrade-current.inc`), CRD de la Gateway API **v1.6.1** (`standard-install.yaml` de la publication : versions servies, filtres d'`HTTPRoute`, `TLSRoute` v1), chart et notes de version de cert-manager **v1.21.2** (`config.gatewayAPI.enabled`, `dns01RecursiveNameservers*`), documentation d'ExternalDNS **v0.23.0** (`docs/flags.md`, tutoriel RFC2136, sources Gateway API, préfixe d'annotations), page *Dynamic DNS Update* de PowerDNS **5.0** (ordre des autorisations, `metadata add`, `NOTIFY-DNSUPDATE`, `dnsupdate-require-tsig`), notes de version de MetalLB **0.16.1**, code d'`agnhost` 2.61 (`netexec`, `grpc-health-checking`, `connect`).
-- *Validation outillée* : tous les manifestes de `fichiers/` et de `ressources/E21-…` passent `kubeconform` 0.8.0 en mode strict, avec les schémas Kubernetes 1.36 et ceux générés depuis les CRD Cilium 1.20.2, Gateway API v1.6.1, cert-manager 1.21.2 et MetalLB 0.16.1 ; les values de cert-manager et d'ExternalDNS ont été rendues par `helm template` avec les charts épinglés ; `ingress2gateway` 1.2.0 a été **compilé et lancé** sur les Ingress fournis (sortie réelle dans [`fichiers/M15-E18/`](fichiers/M15-E18/)) ; la configuration HAProxy d'E20 a été rendue depuis le gabarit du rôle `haproxy` (M07-E28) et contrôlée par `haproxy -c` ; les fichiers Ansible passent `ansible-lint` (profil `production`) et `yamllint` ; les scripts et checks passent ShellCheck et `bash -n`.
+- *Validation outillée* : tous les manifestes de `fichiers/` et de `ressources/E21-…` passent `kubeconform` 0.8.0 en mode strict, avec les schémas Kubernetes 1.36 et ceux générés depuis les CRD Cilium 1.20.2, Gateway API v1.6.1, cert-manager 1.21.2 et MetalLB 0.16.1 ; les values de cert-manager et d'ExternalDNS ont été rendues par `helm template` avec les charts épinglés ; `ingress2gateway` 1.2.0 a été **compilé et lancé** sur les Ingress fournis (sortie réelle dans [`fichiers/M15-E18/`](fichiers/M15-E18/)) ; la configuration HAProxy d'E20 a été rendue par Ansible depuis le gabarit du rôle `haproxy` (M07-E28) et déclarée valide par `haproxy -c` (HAProxy **2.8** de l'environnement de rédaction, chemins de certificats remplacés : à refaire avec la 3.2 du lab, ce que fait le rôle avant chaque rechargement) ; les expressions Jinja de `dnsupdate.yml` ont été évaluées sur des sorties simulées de `pdnsutil` ; `outils/schemas-crd.sh` (E23) a produit les schémas des CRD utilisés pour `kubeconform` ; OpenTofu n'était pas disponible (`dns-apps.tf` et `envs/m15-essai/` non passés à `tofu validate`) ; les fichiers Ansible passent `ansible-lint` (profil `production`) et `yamllint` ; les scripts et checks passent ShellCheck et `bash -n`.
 
 **Non rejoués sur un cluster réel** (signalés « ⚠️ À vérifier sur ton lab ») : forme exacte des sorties de `cilium bgp peers` et des conditions des objets ; nombre de chemins ECMP réellement installés par FRR 10.7 avec `maximum-paths 8` ; comportement du proxy L7 de Cilium vis-à-vis de la chaîne de requête dans `path` ; prise en charge du filtre `CORS` par Cilium 1.20 ; rechargement du Secret `apps-joker` par l'Envoy de la Gateway sans coupure ; autocontrôle DNS-01 de cert-manager dirigé vers un serveur faisant autorité ; lecture de `/dev/stdin` par `kubectl create secret --from-file` (évitée : l'outil passe par `yq`) ; durée de bascule des répartiteurs avec le nouveau frontal TCP ; publication d'`ExternalIP` par le plan de contrôle BGP avec le remplacement de kube-proxy (E11, étape 7).
 
@@ -21,19 +21,16 @@
 Fichiers : [`lb-par1.yaml`](fichiers/M15-E10/k8s/composants/cilium/lb-ipam/lb-par1.yaml), [`essai-lb.yaml`](fichiers/M15-E10/essais/essai-lb.yaml), [`erreurs.yaml`](fichiers/M15-E10/essais/erreurs.yaml), [`gw-essai-adresse.extrait.yaml`](fichiers/M15-E10/essais/gw-essai-adresse.extrait.yaml).
 
 1. **Lecture.** Un Service dont `loadBalancerClass` n'est pas géré par Cilium (ni vide, ni `io.cilium/bgp-control-plane`, ni `io.cilium/l2-announcer`) est **entièrement ignoré** : pas d'adresse, pas même une condition (`default-lb-service-ipam: none` inverse le défaut). `allowFirstLastIPs` ne vaut que pour les blocs `cidr` (adresses réseau et diffusion) ; un bloc `start`/`stop` n'est pas concerné. Modifier un pool peut **réattribuer** des adresses de Services existants (issue 40358 citée par la documentation) : un changement du pool est donc un changement à part entière (MR qui dit qui est touché).
-2. **Inventaire.** Au palier 1, seul le Service `cilium-gateway-gw-essai` (créé par Cilium pour `gw-essai`) est en `LoadBalancer`. La Gateway reçoit `spec.addresses: [{type: IPAddress, value: 10.10.41.11}]` (extrait) : c'est la méthode documentée (*Gateway API Addresses Support*), l'ancienne annotation `io.cilium/lb-ipam-ips` dans `spec.infrastructure.annotations` existe encore mais **l'emporte** sur `spec.addresses` si les deux sont présentes et sera dépréciée. Modifier directement le Service serait écrasé par le contrôleur de Cilium.
+2. **Inventaire.** Au palier 1, `gw-essai` utilise la classe `cilium-nodeport` (Service `NodePort`, `CiliumGatewayClassConfig`) et `gw-attente` a été supprimée : la commande ne liste normalement **rien**. S'il reste un Service `LoadBalancer`, on le supprime ou on lui fixe une adresse de 10.10.41.11-19 ; pour une Gateway de la classe `cilium`, par `spec.addresses: [{type: IPAddress, value: 10.10.41.1X}]` ([extrait](fichiers/M15-E10/essais/gw-essai-adresse.extrait.yaml)) : c'est la méthode documentée (*Gateway API Addresses Support*) ; l'ancienne annotation `io.cilium/lb-ipam-ips` dans `spec.infrastructure.annotations` existe encore mais **l'emporte** sur `spec.addresses` si les deux sont présentes et sera dépréciée. Modifier directement le Service serait écrasé par le contrôleur de Cilium.
 3. **Pool.**
    ```
    admin@adm01:~/src/k8s$ task appliquer          # ou : kubectl apply --server-side -f composants/cilium/lb-ipam/
    admin@adm01:~$ kubectl get ippools
    NAME      DISABLED   CONFLICTING   IPS AVAILABLE   AGE
-   lb-par1   false      False         189             5s
+   lb-par1   false      False         190             5s
    admin@adm01:~$ kubectl get ippool lb-par1 -o jsonpath='{.status.conditions}' | jq -c '.[] | {type, message}'
-   admin@adm01:~$ kubectl -n wb-essais get gateway gw-essai
-   NAME       CLASS    ADDRESS       PROGRAMMED   AGE
-   gw-essai   cilium   10.10.41.11   True         …
    ```
-   190 adresses, une prise par `gw-essai` (`cilium.io/IPsUsed` = 1). Un seul bloc `start`/`stop` : avec deux tirets (`- start:` puis `- stop:`), on écrirait deux blocs incomplets que l'admission refuse.
+   190 adresses, aucune utilisée (`cilium.io/IPsUsed` = 0). Un seul bloc `start`/`stop` : avec deux tirets (`- start:` puis `- stop:`), on écrirait deux blocs incomplets que l'admission refuse.
 4. **Essais.** `essai-lb` reçoit 10.10.41.20 (annotation `lbipam.cilium.io/ips`). `essai-lb-a` et `essai-lb-b` reçoivent tous deux 10.10.41.22 : même `lbipam.cilium.io/sharing-key`, même espace, aucun port en commun (80 et 8081). L'adresse est demandée **sur les deux** : la documentation dit qu'un Service à clé de partage qui demande une adresse l'ajoute à l'ensemble de la clé, mais si le Service **sans** demande est créé le premier, il prend la première adresse libre… c'est-à-dire 10.10.41.10. Essaie-le (crée `essai-lb-b` sans annotation d'adresse, constate `.10`, supprime) : c'est exactement le piège qui menace `gw-par1`, d'où la convention écrite en tête de `lb-par1.yaml`. Une adresse libérée est réutilisable tout de suite. Si les ports se recouvraient, LB IPAM ajouterait une **seconde** adresse à l'ensemble de la clé. ⚠️ À vérifier sur ton lab : l'ordre exact d'attribution automatique (première adresse libre) n'est pas une garantie documentée ; ne t'y fie jamais, demande l'adresse.
 5. **Joignabilité.**
    ```
@@ -115,16 +112,16 @@ Fichiers : [`frr.yml`](fichiers/M15-E11/ansible/inventories/lab/group_vars/role_
    ```
    admin@adm01:~$ cilium bgp peers
    Node      Local AS   Peer AS   Peer Address    Session State   Uptime   Family         Received   Advertised
-   k8s-w01   65040      65000     10.10.40.2:179  established     2m       ipv4/unicast   0          3
-             65040      65000     10.10.40.3:179  established     2m       ipv4/unicast   0          3
+   k8s-w01   65040      65000     10.10.40.2:179  established     2m       ipv4/unicast   0          2
+             65040      65000     10.10.40.3:179  established     2m       ipv4/unicast   0          2
    k8s-w02   …
    admin@adm01:~$ cilium bgp routes advertised ipv4 unicast
    admin@adm01:~$ kubectl get ciliumbgpnodeconfigs k8s-w01 -o jsonpath='{.status.bgpInstances[0].peers}' | jq
    admin@gw01:~$ sudo vtysh -c 'show bgp summary'
    Neighbor        V  AS    MsgRcvd MsgSent  Up/Down State/PfxRcd   PfxSnt Desc
-   *10.10.40.61    4  65040 …                00:02:10            3        0 noeuds Kubernetes…
-   *10.10.40.62    4  65040 …                                    3        0
-   *10.10.40.63    4  65040 …                                    3        0
+   *10.10.40.61    4  65040 …                00:02:10            2        0 noeuds Kubernetes…
+   *10.10.40.62    4  65040 …                                    2        0
+   *10.10.40.63    4  65040 …                                    2        0
    * - dynamic neighbor
    admin@gw01:~$ sudo vtysh -c 'show ip route 10.10.41.20'
    Routing entry for 10.10.41.20/32
@@ -133,7 +130,7 @@ Fichiers : [`frr.yml`](fichiers/M15-E11/ansible/inventories/lab/group_vars/role_
      * 10.10.40.62, via ens19.40, weight 1
      * 10.10.40.63, via ens19.40, weight 1
    ```
-   `Received 0` côté Cilium : `RM-K8S-OUT` refuse tout, comme voulu ; `PfxSnt 0` côté FRR confirme. Trois préfixes reçus au moins : `.11` (`gw-essai`), `.20` (`essai-lb`), `.22` (adresse partagée d'E10), et toute autre adresse attribuée. ⚠️ À vérifier sur ton lab : le libellé exact des colonnes de `cilium bgp peers` (CLI 0.20) et le nombre de prochains sauts installés (ECMP).
+   `Received 0` côté Cilium : `RM-K8S-OUT` refuse tout, comme voulu ; `PfxSnt 0` côté FRR confirme. Deux préfixes reçus au moins : `.20` (`essai-lb`) et `.22` (adresse partagée d'E10), plus toute autre adresse attribuée. ⚠️ À vérifier sur ton lab : le libellé exact des colonnes de `cilium bgp peers` (CLI 0.20) et le nombre de prochains sauts installés (ECMP).
 6. **Trafic.** Les 20 requêtes répondent, réparties sur les deux pods. Le trafic entre par le nœud que la bordure a choisi par hachage ECMP (5-tuple) ; ce nœud n'est pas forcément celui d'un pod : avec `externalTrafficPolicy: Cluster`, l'eBPF le renvoie vers un pod d'un autre nœud (dans le tunnel VXLAN, avec traduction de la source sauf DSR). `hubble observe --ip 10.10.41.20` montre l'entrée sur un nœud et la traduction vers l'adresse du pod.
 7. **Politique.** Avec `ExternalIP` ajouté, Cilium **annonce** 10.10.42.10/32 (`cilium bgp routes advertised ipv4 unicast` le montre) ; la bordure le rejette à l'entrée : `show bgp ipv4 unicast 10.10.42.10/32` → « Network not in table ». `received-routes` n'est disponible qu'avec `soft-reconfiguration inbound` (absent du groupe : on ne garde pas en mémoire ce qu'on refuse) ; on peut le voir indirectement avec `show bgp neighbors 10.10.40.61` (compteur de préfixes reçus/acceptés). Sans `RM-K8S-IN`, n'importe quel utilisateur capable de créer un Service avec `externalIPs` détournerait l'adresse de son choix dans tout le lab (c'est la CVE-2020-8554 de Kubernetes, transposée au routage). ⚠️ À vérifier sur ton lab : avec le remplacement de kube-proxy, Cilium ne traite les `externalIPs` que si la fonction est activée (`externalIPs.enabled`) ; si rien n'est annoncé, note-le, l'essai garde son intérêt (lecture de la politique d'entrée).
 8. **Travailleur perdu.** `kubectl drain k8s-w02 --ignore-daemonsets`, retrait de `bgp: par1` dans `noeuds.yaml` puis `task noeuds:etiqueter` : la session de `w02` se ferme proprement (message `Cease`), `gw01` retire ses chemins en moins d'une seconde ; la boucle depuis `adm01` ne perd rien ou une requête (connexion en cours sur `w02`). Remise en place inverse. À comparer en E25 avec un arrêt brutal (détection par la durée de maintien : 9 s).
@@ -697,7 +694,7 @@ Fichiers : [`versions.env`](fichiers/M15-E23/k8s/composants/versions.env), [`Tas
 1. **Contenu du dépôt** (`plateforme/k8s`) :
    ```
    composants/versions.env                     versions épinglées (une seule source)
-   composants/gateway-api/                     standard-install-v1.6.1.yaml + SHA256SUMS (M15-E07)
+   composants/gateway-api/                     v1.6.1/ (CRD du canal standard) + SHA256SUMS-v1.6.1 (M15-E07)
    composants/cilium/values.yaml               KPR, Gateway API, BGP, Hubble (M14, M15-E07/E08/E11)
    composants/cilium/lb-ipam/lb-par1.yaml      (E10)
    composants/cilium/bgp/                      bgp-par1, bordure, services-lb (E11)

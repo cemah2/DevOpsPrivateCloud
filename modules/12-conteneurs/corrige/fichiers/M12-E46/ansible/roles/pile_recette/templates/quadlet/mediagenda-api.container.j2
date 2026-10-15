@@ -1,0 +1,38 @@
+# {{ pile_recette_entete }}
+[Unit]
+Description=API MédiAgenda (recette conteneurs v1)
+Requires=mediagenda-pg.service mediagenda-valkey.service mediagenda-migrations.service
+After=mediagenda-pg.service mediagenda-valkey.service mediagenda-migrations.service
+
+[Container]
+ContainerName=mediagenda-api
+{% if pile_recette_mediagenda_etiquette_mobile | length > 0 %}
+Image={{ pile_recette_registre }}/mediagenda/api:{{ pile_recette_mediagenda_etiquette_mobile }}
+AutoUpdate=registry
+{% else %}
+Image={{ pile_recette_registre }}/mediagenda/api:{{ pile_recette_versions.mediagenda }}
+{% endif %}
+Network=apps-recette.network
+PublishPort={{ pile_recette_ports.mediagenda }}:8000
+Secret=mediagenda-db-url,type=env,target=MEDIAGENDA_DB_URL
+Environment=MEDIAGENDA_VALKEY_URL=redis://mediagenda-valkey:6379/0
+Environment=MEDIAGENDA_VERSION={{ pile_recette_versions.mediagenda }} MEDIAGENDA_LOG_FORMAT=json
+# Vivacité sur /sante (ne dépend ni de la base ni du cache) ; /pret sert aux contrôles externes.
+HealthCmd=python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sante', timeout=2)"
+HealthInterval=10s
+HealthTimeout=3s
+HealthRetries=3
+HealthStartPeriod=10s
+Notify=healthy
+DropCapability=ALL
+NoNewPrivileges=true
+ReadOnly=true
+Tmpfs=/tmp:rw,size=16m,noexec,nosuid,nodev
+PodmanArgs=--memory=256m --pids-limit=128
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

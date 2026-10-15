@@ -1,0 +1,124 @@
+# Taskfile.yml — plateforme/k8s (M14-E05 ; complété en E10, E14, E20 ; état de fin du palier 2, M14-E23).
+# Lancé depuis adm01, à la racine de la copie de travail (~/src/k8s) :
+#   task --list
+#   task noeuds              # Ansible : nœuds puis cluster (idempotent)
+#   task etiquettes          # étiquettes et taints MédiSphère des nœuds (cluster/noeuds.yaml)
+#   task cilium | cilium-maj | metrics-server      # composants
+#   task valider / diff / derive / appliquer / verifier
+# Le contexte kubectl est TOUJOURS explicite : une commande ne part jamais vers « le contexte
+# courant » par accident.
+version: "3"
+
+vars:
+  CONTEXTE: k8s-par1
+  # Gestionnaire des champs posés par ce dépôt (server-side apply) : « kubectl get … --show-managed-fields ».
+  GESTIONNAIRE: plateforme-k8s
+  CILIUM_VERSION: 1.20.2
+  METRICS_SERVER_CHART: 3.14.0
+  # Version des schémas de kubeconform : celle du cluster.
+  KUBERNETES_VERSION: 1.35.9
+  # Dossiers de manifestes appliqués, dans l'ordre (les espaces de noms d'abord, voir « espaces »).
+  # PAS « cluster » (configuration kubeadm, cluster/noeuds.yaml : ce ne sont pas des objets).
+  DOSSIERS: espaces rbac admission ordonnancement
+  # Copie de travail de plateforme/ansible (WB_SRC de lab/lab.env, sinon ~/src).
+  ANSIBLE_DIR:
+    sh: echo "${WB_SRC:-$HOME/src}/ansible"
+
+tasks:
+  noeuds:
+    desc: Converger les nœuds de k8s-par1 (playbooks k8s-noeuds puis k8s-cluster de plateforme/ansible)
+    dir: "{{.ANSIBLE_DIR}}"
+    cmds:
+      - uv run ansible-playbook playbooks/k8s-noeuds.yml {{.CLI_ARGS}}
+      - >-
+        uv run ansible-playbook playbooks/k8s-cluster.yml
+        -e k8s_plan_controle_fichier_cluster={{.ROOT_DIR}}/cluster/kubeadm-config.yaml {{.CLI_ARGS}}
+
+  etiquettes:
+    desc: Poser les étiquettes et taints MédiSphère des nœuds (cluster/noeuds.yaml), idempotent (E14)
+    cmds:
+      - outils/etiqueter-noeuds.sh {{.CLI_ARGS}}
+
+  cilium:
+    desc: Installer Cilium (première fois) avec composants/cilium/values.yaml
+    cmds:
+      - cilium install --context {{.CONTEXTE}} --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium status --context {{.CONTEXTE}} --wait
+
+  cilium-maj:
+    desc: Appliquer un changement de composants/cilium/values.yaml (ou de version) à Cilium installé
+    cmds:
+      - cilium upgrade --context {{.CONTEXTE}} --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium status --context {{.CONTEXTE}} --wait
+
+  metrics-server:
+    desc: Installer ou mettre à jour metrics-server (chart {{.METRICS_SERVER_CHART}}, E20)
+    cmds:
+      - helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ --force-update
+      - >-
+        helm upgrade --install metrics-server metrics-server/metrics-server
+        --kube-context {{.CONTEXTE}} --namespace kube-system
+        --version {{.METRICS_SERVER_CHART}} -f composants/metrics-server/values.yaml --wait
+      - kubectl --context {{.CONTEXTE}} wait --for=condition=Available apiservice/v1beta1.metrics.k8s.io --timeout=2m
+
+  espaces:
+    desc: Créer ou mettre à jour les espaces de noms (avant toute validation par le serveur, E10)
+    cmds:
+      - >-
+        for f in espaces/*.yaml espaces/*/00-namespace.yaml; do
+        [ -e "$f" ] || continue;
+        kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}} -f "$f";
+        done
+
+  valider-hors-ligne:
+    desc: Valider sans cluster (yamllint, schémas kubeconform, shellcheck) — ce que fait la CI
+    cmds:
+      - yamllint --strict .
+      - kubeconform -strict -summary -kubernetes-version {{.KUBERNETES_VERSION}} {{.DOSSIERS}}
+      - shellcheck -x outils/*.sh
+
+  valider:
+    desc: Valider les manifestes (hors ligne, puis le serveur sans rien écrire)
+    cmds:
+      - task: valider-hors-ligne
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}}
+          --dry-run=server -R -f {{.ITEM}} ; fi
+
+  diff:
+    desc: Montrer ce qu'« appliquer » changerait (code 1 = des différences, ce n'est pas une erreur)
+    cmds:
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} diff --server-side --force-conflicts --field-manager={{.GESTIONNAIRE}}
+          -R -f {{.ITEM}} || [ $? -eq 1 ] ; fi
+
+  derive:
+    desc: Dérive dans les deux sens (dépôt → cluster, et objets posés par ce dépôt mais absents du dépôt)
+    cmds:
+      - outils/derive.sh {{.CONTEXTE}} {{.GESTIONNAIRE}} {{.DOSSIERS}}
+
+  appliquer:
+    desc: Appliquer les manifestes du dépôt (après MR fusionnée, depuis main à jour)
+    preconditions:
+      - sh: '[ "$(git rev-parse --abbrev-ref HEAD)" = main ] && git diff --quiet && git diff --cached --quiet'
+        msg: "Applique depuis main, sans modification locale (la MR fait foi)."
+    cmds:
+      - task: espaces
+      - task: valider
+      # --force-conflicts : le dépôt fait foi ; un champ modifié à la main (autre gestionnaire) est repris.
+      # Toujours précédé d'un « task diff » relu.
+      - for: {var: DOSSIERS, split: " "}
+        cmd: >-
+          if [ -d {{.ITEM}} ]; then
+          kubectl --context {{.CONTEXTE}} apply --server-side --force-conflicts --field-manager={{.GESTIONNAIRE}}
+          -R -f {{.ITEM}} ; fi
+      - task: etiquettes
+
+  verifier:
+    desc: Le cluster est-il conforme au dépôt ? (nœuds, étiquettes, kubeadm, dérive, composants)
+    cmds:
+      - outils/verifier-cluster.sh {{.CONTEXTE}}

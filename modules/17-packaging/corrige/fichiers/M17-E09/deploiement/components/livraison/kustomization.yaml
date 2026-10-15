@@ -1,8 +1,10 @@
 # Component « livraison » (M17-E09) : la ConfigMap locale « livraison » de chaque overlay est la
 # SEULE source de la version livrée et du nom publié (elle n'est pas déployée : annotation
-# config.kubernetes.io/local-config). Les remplacements passent après les autres transformations
-# de l'overlay (images, labels, correctifs) : ils l'emportent sur un « images: » qui traînerait.
-# Toujours en DERNIER dans la liste « components » de l'overlay.
+# config.kubernetes.io/local-config). À placer en DERNIER dans la liste « components » : ses
+# remplacements voient alors le travail des components précédents. ATTENTION : les transformateurs
+# propres à l'overlay qui l'inclut (images, labels, patches) passent APRÈS les components (vérifié
+# avec Kustomize 5.8.2 et kubectl 5.8.1) : un « images: » posé dans l'overlay L'EMPORTE sur ces
+# remplacements et désaligne l'image de MEDIAGENDA_VERSION. Aucun overlay ne doit donc en contenir.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 replacements:

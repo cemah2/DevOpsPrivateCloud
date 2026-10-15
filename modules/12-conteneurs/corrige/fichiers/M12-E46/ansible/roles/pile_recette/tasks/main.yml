@@ -1,0 +1,168 @@
+---
+# Rôle pile_recette (M12-E46). Toutes les commandes Podman et systemd tournent EN TANT QUE le
+# compte sans privilège, dans sa session systemd (XDG_RUNTIME_DIR), jamais en root.
+
+- name: Vérifier les paramètres obligatoires
+  ansible.builtin.assert:
+    that:
+      - pile_recette_image_seaweedfs | length > 0
+      - pile_recette_versions.values() | select('match', '^(latest|)$') | list | length == 0
+    fail_msg: "pile_recette_image_seaweedfs doit être fixée (host_vars) et aucune version ne peut être « latest »."
+    quiet: true
+
+- name: Lire le compte sans privilège
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ pile_recette_compte }}"
+
+- name: Calculer les chemins du compte
+  ansible.builtin.set_fact:
+    pile_recette__uid: "{{ getent_passwd[pile_recette_compte][1] }}"
+    pile_recette__maison: "{{ getent_passwd[pile_recette_compte][4] }}"
+
+- name: Calculer l'environnement de la session du compte
+  ansible.builtin.set_fact:
+    pile_recette__env:
+      XDG_RUNTIME_DIR: "/run/user/{{ pile_recette__uid }}"
+      DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ pile_recette__uid }}/bus"
+    pile_recette__quadlet: "{{ pile_recette__maison }}/{{ pile_recette_dossier_quadlet }}"
+
+- name: Vérifier que la session systemd du compte existe (linger, rôle podman_hote)
+  ansible.builtin.stat:
+    path: "/run/user/{{ pile_recette__uid }}/bus"
+  register: pile_recette__bus
+  failed_when: not pile_recette__bus.stat.exists
+
+- name: Dossier des fichiers Quadlet
+  ansible.builtin.file:
+    path: "{{ pile_recette__quadlet }}"
+    state: directory
+    owner: "{{ pile_recette_compte }}"
+    group: "{{ pile_recette_compte }}"
+    mode: "0700"
+
+- name: Authentification du compte au registre de travail (fichier d'authentification persistant)
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.command:
+    cmd: >-
+      podman login --authfile {{ pile_recette__maison }}/.config/containers/auth.json
+      --username {{ pile_recette_registre_utilisateur }} --password-stdin {{ pile_recette_registre }}
+    stdin: "{{ pile_recette_registre_mdp }}"
+  changed_when: false
+  no_log: true
+
+- name: Secrets Podman de la pile (créés ou remplacés)
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.command:
+    cmd: "podman secret create --replace {{ item.key }} -"
+    stdin: "{{ item.value }}"
+  loop: "{{ pile_recette_secrets | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: false
+  no_log: true
+
+- name: Fichiers Quadlet de la pile
+  ansible.builtin.template:
+    src: "quadlet/{{ item }}.j2"
+    dest: "{{ pile_recette__quadlet }}/{{ item }}"
+    owner: "{{ pile_recette_compte }}"
+    group: "{{ pile_recette_compte }}"
+    mode: "0600"
+  loop: "{{ pile_recette_unites }}"
+  register: pile_recette__fichiers
+
+- name: Essai à blanc du générateur Quadlet (refuse une clé inconnue ou une référence absente)
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.command:
+    cmd: /usr/libexec/podman/quadlet -dryrun -user
+  register: pile_recette__essai
+  changed_when: false
+  failed_when: >-
+    pile_recette__essai.rc != 0 or
+    (pile_recette__essai.stderr is search('(?i)unsupported|error|not found')) or
+    (pile_recette_services | reject('in', pile_recette__essai.stdout) | list | length > 0)
+
+- name: Recharger le gestionnaire systemd du compte  # noqa: no-handler
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    scope: user
+  when: pile_recette__fichiers is changed
+
+- name: Tirer les images (le premier démarrage ne dépend pas du délai de systemd)
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.command:
+    cmd: "podman pull -q {{ item }}"
+  loop:
+    - "{{ pile_recette_image_postgres }}"
+    - "{{ pile_recette_image_valkey }}"
+    - "{{ pile_recette_image_mariadb }}"
+    - "{{ pile_recette_image_rabbitmq }}"
+    - "{{ pile_recette_image_seaweedfs }}"
+    - "{{ pile_recette_registre }}/mediagenda/api:{{ pile_recette_versions.mediagenda }}"
+    - "{{ pile_recette_registre }}/medidoc/medidoc:{{ pile_recette_versions.medidoc }}"
+    - "{{ pile_recette_registre }}/medinotif/worker:{{ pile_recette_versions.medinotif }}"
+    - "{{ pile_recette_registre }}/legacy/legacy-rdv:{{ pile_recette_versions.legacy_rdv }}"
+  changed_when: false
+
+- name: Redémarrer les services dont le fichier Quadlet a changé
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.systemd_service:
+    name: "{{ item.item | regex_replace('\\.container$', '.service') }}"
+    state: restarted
+    scope: user
+  loop: "{{ pile_recette__fichiers.results | selectattr('changed') | selectattr('item', 'search', '\\.container$') | list }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Démarrer les services de la pile
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    scope: user
+  loop: "{{ pile_recette_services }}"
+
+- name: Compartiment S3 de MédiDoc dans le SeaweedFS de recette (à vérifier sur ta version de weed shell)
+  become: true
+  become_user: "{{ pile_recette_compte }}"
+  environment: "{{ pile_recette__env }}"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      echo "s3.bucket.list" | podman exec -i medidoc-s3 weed shell -master=localhost:9333 2>/dev/null
+      | grep -qw {{ pile_recette_medidoc_compartiment }} && echo present ||
+      { echo "s3.bucket.create -name {{ pile_recette_medidoc_compartiment }}"
+      | podman exec -i medidoc-s3 weed shell -master=localhost:9333 >/dev/null && echo cree; }
+    executable: /bin/bash
+  register: pile_recette__compartiment
+  changed_when: "'cree' in pile_recette__compartiment.stdout"
+
+- name: Points d'accès de la pile (vus de l'hôte)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ item.port }}{{ item.chemin }}"
+    status_code: 200
+  loop:
+    - {port: "{{ pile_recette_ports.mediagenda }}", chemin: /pret}
+    - {port: "{{ pile_recette_ports.medidoc }}", chemin: /readyz}
+    - {port: "{{ pile_recette_ports.legacy_rdv }}", chemin: /}
+    - {port: "{{ pile_recette_ports.medinotif_metriques }}", chemin: /metrics}
+  register: pile_recette__sondes
+  retries: 12
+  delay: 10
+  until: pile_recette__sondes.status == 200

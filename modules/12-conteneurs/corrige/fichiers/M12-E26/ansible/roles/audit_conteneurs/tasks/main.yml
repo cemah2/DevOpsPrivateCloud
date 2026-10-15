@@ -25,7 +25,7 @@
     mode: "0640"
   notify: Charger les règles d'audit
 
-- name: auditd actif au démarrage
+- name: Service auditd actif au démarrage
   ansible.builtin.systemd_service:
     name: auditd
     enabled: true

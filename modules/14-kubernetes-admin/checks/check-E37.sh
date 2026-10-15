@@ -3,7 +3,7 @@
 # shellcheck source-path=SCRIPTDIR
 # check-E37.sh — M14-E37 « Panne : ImagePullBackOff » : plus aucun pod en échec de tirage, agenda tiré
 # de Harbor avec le bon Secret, outil public tiré par le cache Harbor, hosts.toml de docker.io sains,
-# RB-144 (section images), panne close. Lecture seule.
+# RB-145 (section images), panne close. Lecture seule.
 
 # shellcheck source=_m14-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m14-expert.sh"
@@ -37,6 +37,6 @@ for _m14_e37_h in "${_m14x_w[@]}"; do
   check_cmd "$_m14_e37_h : hosts.toml de docker.io vers le cache Harbor (/v2/dockerhub)" \
     _m14x_noeud "$_m14_e37_h" 'grep -q "registry.par1.medisphere.internal/v2/dockerhub\"" /etc/containerd/certs.d/docker.io/hosts.toml'
 done
-check_cmd "RB-144 : section sur les échecs de tirage d'image" \
-  _m14x_doc_contient 'docs/kubernetes/runbooks/RB-144-*.md' '^#+ .*(ImagePull|image)'
+check_cmd "RB-145 : section sur les échecs de tirage d'image" \
+  _m14x_doc_contient 'docs/kubernetes/runbooks/RB-145-*.md' '^#+ .*(ImagePull|image)'
 check_cmd "panne M14-E37 close (lab/bin/break 14 37 --annuler après réparation)" _m14x_aucune_panne_active E37

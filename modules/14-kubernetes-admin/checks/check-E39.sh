@@ -4,7 +4,7 @@
 # check-E39.sh — M14-E39 « Panne : l'API ne répond plus » : l'API répond par la VIP, chacun des trois
 # kube-apiserver répond directement avec un certificat valable pour le nom ET l'adresse de la VIP,
 # HAProxy et keepalived actifs partout, VIP portée par un seul nœud, suivi keepalived en place,
-# aucun filtrage du 8443, manifeste kube-apiserver sain, RB-145, panne close. Lecture seule.
+# aucun filtrage du 8443, manifeste kube-apiserver sain, RB-146, panne close. Lecture seule.
 
 # shellcheck source=_m14-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m14-expert.sh"
@@ -37,5 +37,5 @@ _m14_e39_porteurs() {
   ((n == 1))
 }
 check_cmd "VIP $_m14x_vip portée par exactement un nœud de contrôle" _m14_e39_porteurs
-check_cmd "RB-145 (l'API ne répond plus) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-145-*.md'
+check_cmd "RB-146 (l'API ne répond plus) publié et commité" _m14x_doc_commite 'docs/kubernetes/runbooks/RB-146-*.md'
 check_cmd "panne M14-E39 close (lab/bin/break 14 39 --annuler après réparation)" _m14x_aucune_panne_active E39

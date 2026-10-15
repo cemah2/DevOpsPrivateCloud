@@ -1,0 +1,26 @@
+# {{ pile_recette_entete }}
+[Unit]
+Description=MédiNotif (recette conteneurs v1)
+Requires=medinotif-rabbitmq.service
+After=medinotif-rabbitmq.service
+
+[Container]
+ContainerName=medinotif
+Image={{ pile_recette_registre }}/medinotif/worker:{{ pile_recette_versions.medinotif }}
+Network=apps-recette.network
+PublishPort={{ pile_recette_ports.medinotif_metriques }}:9100
+Environment=MEDINOTIF_BACKEND=rabbitmq MEDINOTIF_VERSION={{ pile_recette_versions.medinotif }}
+Secret=medinotif-amqp-url,type=env,target=MEDINOTIF_AMQP_URL
+DropCapability=ALL
+NoNewPrivileges=true
+ReadOnly=true
+# Arrêt propre : le worker finit son message (M12-E17) ; délai supérieur au plus long traitement
+StopTimeout=30
+PodmanArgs=--memory=128m --pids-limit=64
+
+[Service]
+Restart=always
+TimeoutStopSec=45
+
+[Install]
+WantedBy=default.target

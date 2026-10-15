@@ -10,10 +10,10 @@ Les composants de la plateforme ont été installés par Helm sans que tu aies e
 |---|---|
 | Chart public d'essai | `podinfo` (Stefan Prodan), OCI `ghcr.io/stefanprodan/charts/podinfo`, versions 6.14.0 et 6.15.0, par le cache Harbor `ghcr` : `oci://registry.par1.medisphere.internal/ghcr/stefanprodan/charts/podinfo` |
 | Espace d'essai | `wb-essais` (Pod Security `baseline`), release `podinfo` |
-| Chart MédiAgenda | projet GitLab `mediagenda/chart` (groupe `mediagenda`, branche `main` protégée), clone `~/src/chart`, chart dans `charts/mediagenda/` ; version 0.1.0 (E03) puis 0.2.0 (E05) |
+| Chart MédiAgenda | projet GitLab `mediagenda/chart` (groupe `mediagenda`, branche `main` protégée), clone `~/src/mediagenda-chart`, chart dans `charts/mediagenda/` ; version 0.1.0 (E03) puis 0.2.0 (E05) |
 | Release de dev | `mediagenda` dans `mediagenda-dev`, nom publié `mediagenda-dev.apps.par1.medisphere.internal` |
 | Dépendances provisoires de dev | `ressources/E03-dependances-dev.yaml` : CNPG `mediagenda-db` (1 instance, `ceph-rbd` 2 Gio), Valkey `valkey` sans persistance, politiques réseau `dev-*-provisoire` (remplacées en E06) |
-| Dépôt de déploiement | projet GitLab `mediagenda/deploiement`, clone `~/src/deploiement` (E04) |
+| Dépôt de déploiement | projet GitLab `mediagenda/deploiement`, clone `~/src/mediagenda-deploiement` (E04) |
 | Brouillons | `~/m17/eXX/` sur `adm01` |
 
 Durée indicative du palier : 8 à 11 heures.
@@ -155,7 +155,7 @@ Un retour arrière ne réécrit pas l'histoire : il crée une **nouvelle** révi
    admin@adm01:~$ kubectl -n mediagenda-dev get cluster.postgresql.cnpg.io mediagenda-db -w
    ```
    Vérifie que le Secret `mediagenda-db-app` existe et qu'il a une clé `uri` (sans en afficher la valeur).
-2. Crée le projet, clone-le dans `~/src/chart` et lance `helm create charts/mediagenda`. Lis ce que le squelette produit, puis **vide-le** : garde la structure, réécris chaque fichier pour MédiAgenda. Un chart qu'on ne comprend pas ligne par ligne n'entre pas en production.
+2. Crée le projet, clone-le dans `~/src/mediagenda-chart` et lance `helm create charts/mediagenda`. Lis ce que le squelette produit, puis **vide-le** : garde la structure, réécris chaque fichier pour MédiAgenda. Un chart qu'on ne comprend pas ligne par ligne n'entre pas en production.
 3. Écris `Chart.yaml` (version 0.1.0, `appVersion` = la version de l'API sans le `v`, `kubeVersion`, mainteneur) et `values.yaml` (image, réplicas, configuration, Secret de la base, URL de Valkey, nom publié, ressources). Aucune valeur secrète.
 4. Écris `templates/_helpers.tpl` : nom complet (qui ne répète pas `mediagenda` quand la release s'appelle déjà ainsi, et tient en 63 caractères), étiquettes communes (recommandations `app.kubernetes.io/*`, plus `medisphere.fr/environnement`), étiquettes **de sélection** séparées. Puis les gabarits des objets. Contraintes :
    - l'étiquette d'image vaut `v<appVersion>` sauf si une valeur l'impose ;
@@ -211,7 +211,7 @@ Si la route reste refusée, relis `status.parents[].conditions` : `NotAllowedByL
 **Durée indicative** : 2 h 30.
 
 **Contexte technique**
-- Projet GitLab `mediagenda/deploiement` à créer, clone `~/src/deploiement`. Arborescence : `base/`, `overlays/dev/`, `overlays/recette/`, `overlays/essai/`.
+- Projet GitLab `mediagenda/deploiement` à créer, clone `~/src/mediagenda-deploiement`. Arborescence : `base/`, `overlays/dev/`, `overlays/recette/`, `overlays/essai/`.
 - Base : les manifestes **rendus** du chart 0.1.0 (`helm template mediagenda <chart> > base/mediagenda.yaml`), sans espace de noms. Tu verras en E09 comment brancher le chart lui-même.
 - Recette : objets actuels du M16 dans `mediagenda-recette` (Deployment, Service, HTTPRoute, politiques…). La base de données et Valkey **restent** hors de ce dépôt.
 - `overlays/dev` est seulement **construit** : `mediagenda-dev` appartient à la release Helm (règle d'un seul gestionnaire). `overlays/essai` sert à l'étape 6 et n'est jamais appliqué.

@@ -19,7 +19,7 @@
 
 ## 2. Ordre (`task reseau:installer`)
 
-1. CRD Gateway API (`v1.6.x`, canal standard, fichier vendu + empreinte) — **avant** Cilium, qui ne démarre son contrôleur Gateway que si elles existent.
+1. CRD Gateway API (`v1.6.x`, canal standard, fichiers versionnés dans `composants/gateway-api/<version>/` + empreintes, M15-E07) — **avant** Cilium, qui ne démarre son contrôleur Gateway que si elles existent.
 2. Cilium (`cilium upgrade --values`) : remplacement de kube-proxy, Gateway API, BGP ; attente `cilium status --wait`.
 3. Espaces (`passerelles`, `cert-manager`, `external-dns`), étiquettes de nœuds (`bgp=par1`).
 4. Pool `lb-par1`, objets BGP ; CoreDNS.

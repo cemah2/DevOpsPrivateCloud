@@ -15,7 +15,8 @@ aggregationRule:
   clusterRoleSelectors:
     - matchLabels:
         rbac.medisphere.internal/agreger-vers-lecture: "true"
-rules: []   # rempli par le contrôleur d'agrégation
+# Pas de « rules » : le contrôleur d'agrégation les écrit. Écrire « rules: [] » ferait du dépôt le
+# propriétaire de ce champ (server-side apply) : chaque « task appliquer » le viderait.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -27,7 +28,8 @@ aggregationRule:
   clusterRoleSelectors:
     - matchLabels:
         rbac.medisphere.internal/agreger-vers-developpeur: "true"
-rules: []   # rempli par le contrôleur d'agrégation
+# Pas de « rules » : le contrôleur d'agrégation les écrit. Écrire « rules: [] » ferait du dépôt le
+# propriétaire de ce champ (server-side apply) : chaque « task appliquer » le viderait.
 ---
 # Lecture des objets d'un espace (sans Secrets). Agrégé dans les deux rôles publics.
 apiVersion: rbac.authorization.k8s.io/v1
