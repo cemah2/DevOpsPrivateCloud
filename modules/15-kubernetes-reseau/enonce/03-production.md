@@ -587,7 +587,7 @@ Cilium recopie les labels et annotations de `spec.infrastructure` d'une Gateway 
 **Prérequis** : M15-E12 à E15 (Gateway, certificats, noms), M15-E17 et E28 (politiques, segmentation), M15-E22 (RB-150), M14-E33 (espace `medidoc-dev`).
 **Durée** : 60 minutes chronométrées + 30 minutes de retour d'expérience.
 
-**Préparation (hors chrono, la veille)** : le compartiment `medidoc-dev` et son identité S3 existent sur `s3-01` (méthode de M05), leurs clés sont dans `~/.config/workbook/s3-medidoc-dev.env` (600) et en Vault `lab` ; l'image `registry.par1.medisphere.internal/medisphere/medidoc:<VERSION-MEDIDOC>` (M13) est signée ; le Secret de tirage `harbor-pull` existe dans `medidoc-dev` (M14-E33).
+**Préparation (hors chrono, la veille)** : le compartiment `medidoc-dev` et son identité S3 existent sur `s3-01` (méthode de M05), leurs clés sont dans `~/.config/workbook/s3-medidoc-dev.env` (600) et en Vault `lab` ; l'image `registry.par1.medisphere.internal/medisphere/medidoc:<VERSION-MEDIDOC>` (M13) est signée ; le Secret de tirage `harbor-pull` existe dans `medidoc-dev` (M14-E33). La bordure laisse passer les **travailleurs** vers `s3-01` en TCP 8333 : la règle ouverte au M14-E24 ne couvre que les nœuds de contrôle (`K8S_CP`) ; élargis-la la veille par une MR sur `group_vars/role_routeur/pare_feu.yml` (définition `K8S_TRAV` = 10.10.40.61-63, source `[$K8S_CP, $K8S_TRAV]`), appliquée une passerelle à la fois comme au M07, et reporte-la dans la matrice des flux.
 
 **Dossier** : [`ressources/E34-dossier-chrono.md`](../ressources/E34-dossier-chrono.md) (le besoin, les exigences, la feuille de temps) et [`ressources/E34-medidoc/`](../ressources/E34-medidoc/) (le Deployment livré par l'équipe). Lis-les à T0, pas avant.
 

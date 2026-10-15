@@ -172,7 +172,8 @@ harbor_api() {
   [[ -r "$f" ]] || { echo "identifiants Harbor des checks illisibles : $f" >&2; return 1; }
   # shellcheck disable=SC1090
   source "$f"
-  curl -sf --max-time "$WB_TIMEOUT" -u "$HARBOR_USER:$HARBOR_PASSWORD" -H "Accept: application/json" \
+  # identifiants passés par un fichier de configuration curl (jamais sur la ligne de commande : visibles par ps)
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'user = "%s:%s"\n' "$HARBOR_USER" "$HARBOR_PASSWORD") -H "Accept: application/json" \
     "${WB_HARBOR_URL:-https://registry.par1.medisphere.internal}/api/v2.0/$1"
 }
 

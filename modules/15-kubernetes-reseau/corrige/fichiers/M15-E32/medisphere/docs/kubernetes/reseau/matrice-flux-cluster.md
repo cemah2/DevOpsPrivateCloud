@@ -55,7 +55,7 @@ sont ceux de ce corrigé : remplace-les par ceux de **ton** dépôt.
 | tous les pods | CoreDNS (10.96.0.10) | UDP/TCP 53 | WireGuard entre nœuds | DNS | `base-dns` (CCNP) + politiques DNS des espaces | M15-E04, E28 |
 | CoreDNS (masqué : nœud) | `dns01`, `dns02` | UDP/TCP 53 | non | récursion | bordure (DNS depuis tous les VLAN) | M15-E04 |
 | API MédiAgenda | `calendrier.api.gouv.fr` | TCP 443 | TLS | jours fériés | `sortie-mediagenda` (CCNP, `toFQDNs`) | M15-E28 |
-| `medidoc` | `s3-01` | TCP 8333 | TLS | documents | `medidoc-sortie` (E34) + bordure (VLAN 40 → `s3-01` 8333) | M15-E34 |
+| `medidoc` | `s3-01` | TCP 8333 | TLS | documents | `medidoc-sortie` (E34) + bordure (`K8S_TRAV` → `s3-01` 8333, règle élargie aux travailleurs la veille de M15-E34) | M15-E34 |
 
 ## 4. Applications
 

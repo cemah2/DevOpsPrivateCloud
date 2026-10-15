@@ -19,6 +19,9 @@ spec:
   bootstrap:
     recovery:
       source: origine
+      # Sans ces deux champs, l'opérateur crée une base « app » vide et le Secret -app la vise.
+      database: mediagenda
+      owner: mediagenda
       recoveryTarget:
         targetTime: "<T>"
   externalClusters:

@@ -39,7 +39,7 @@ tasks:
   cilium:
     desc: Cilium (CLI cilium = helm upgrade de la release « cilium »), puis attente
     cmds:
-      - cilium upgrade --version {{.CILIUM_VERSION}} --values composants/cilium/values.yaml
+      - cilium upgrade --version {{.CILIUM_VERSION}} --reset-values --values composants/cilium/values.yaml
       - cilium status --wait --wait-duration 10m
 
   espaces:

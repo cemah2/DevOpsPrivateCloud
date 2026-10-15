@@ -65,7 +65,7 @@ Les données perdues sont présentes dans l'enquête et absentes de la productio
 
 - Supprimer le cluster d'enquête (cas A) : `kubectl -n <ESPACE> delete cluster <CLUSTER>-enquete` (ses PVC partent avec lui).
 - Ticket : `T`, sauvegarde de base utilisée, heures (début, enquête prête, réparation faite), **RTO mesuré**, lignes réinjectées (nombre), écarts au runbook.
-- Post-mortem si production (`docs/socle/post-mortems/`).
+- Post-mortem si production (`docs/kubernetes/post-mortems/`).
 
 ## Retour arrière
 

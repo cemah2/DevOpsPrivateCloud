@@ -1,0 +1,16 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — préparation de M15-E34 (MédiDoc vers s3-01).
+# Matrice commune à gw01 et gw02. Appliquer une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff   (seule cette règle change)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01   puis   --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+#
+# 1) Définitions (section pare_feu_definitions, à côté de K8S_CP du M14-E24) :
+  - {nom: K8S_TRAV, valeur: "{ 10.10.40.61, 10.10.40.62, 10.10.40.63 }", commentaire: "travailleurs de k8s-par1 (pods masqués derrière l'adresse du nœud)"}
+#
+# 2) Transit : la règle du M14-E24 (source $K8S_CP seule) devient :
+  - {entree: $V_K8S, source: [$K8S_CP, $K8S_TRAV], sortie: $V_INFRA, destination: $S3_01, proto: tcp, ports: 8333,
+     motif: "k8s-par1 vers s3-01 : instantanés etcd (nœuds de contrôle, M14-E24) ; MédiDoc (travailleurs, M15-E34), puis Velero et CloudNativePG (M16)", ref: M14-E24/M15-E34}
+#
+# Pourquoi pas $NET_K8S (10.10.40.0/24) : le VLAN 40 accueillera d'autres clusters (M18, plages
+# CAPMOX), qui n'ont pas à écrire dans les compartiments de k8s-par1. Un travailleur ajouté
+# (k8s-w04) s'ajoute à K8S_TRAV par MR, comme à la matrice des flux.
