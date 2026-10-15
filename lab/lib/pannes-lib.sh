@@ -259,9 +259,12 @@ wb_k8s_sauver() {
 }
 
 # wb_k8s_restaurer — remet les objets sauvegardés par wb_k8s_sauver pour WB_EX (supprime ceux qui
-#   n'existaient pas), puis efface les sauvegardes. Les champs d'état sont ignorés par « replace ».
+#   n'existaient pas), puis efface les sauvegardes. Méthode : « replace » simple avec la resourceVersion
+#   COURANTE de l'objet (jamais « replace --force », qui supprime et recrée : dangereux pour un Node,
+#   une CRD ou un objet porteur de finaliseurs) ; si l'objet a disparu, il est recréé sans uid ni
+#   resourceVersion. Nécessite yq (mikefarah) sur adm01.
 wb_k8s_restaurer() {
-  local d f l type nom ns
+  local d f l type nom ns rv tmp echec=0
   d="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/k8s/$WB_EX"
   [[ -d "$d" ]] || return 0
   for f in "$d"/*.yaml; do
@@ -270,9 +273,18 @@ wb_k8s_restaurer() {
     if [[ "$l" == ABSENT* ]]; then
       read -r _ type nom ns <<<"$l"
       wb_kubectl delete "$type" "$nom" ${ns:+-n "$ns"} --ignore-not-found >/dev/null
-    else
-      wb_kubectl replace --force -f "$f" >/dev/null 2>&1 || wb_kubectl apply -f "$f" >/dev/null
+      continue
     fi
+    tmp="$(mktemp)"
+    rv="$(wb_kubectl get -f "$f" -o jsonpath='{.metadata.resourceVersion}' 2>/dev/null || true)"
+    if [[ -n "$rv" ]]; then
+      RV="$rv" yq '.metadata.resourceVersion = strenv(RV) | del(.status)' "$f" > "$tmp"
+      wb_kubectl replace -f "$tmp" >/dev/null || { wb_avert "restauration impossible : $f (conservé)"; echec=1; }
+    else
+      yq 'del(.metadata.resourceVersion) | del(.metadata.uid) | del(.metadata.creationTimestamp) | del(.metadata.managedFields) | del(.status)' "$f" > "$tmp"
+      wb_kubectl create -f "$tmp" >/dev/null || { wb_avert "recréation impossible : $f (conservé)"; echec=1; }
+    fi
+    rm -f "$tmp"
   done
-  rm -rf "$d"
+  if (( echec == 0 )); then rm -rf "$d"; else return 1; fi
 }
