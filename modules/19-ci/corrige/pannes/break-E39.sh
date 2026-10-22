@@ -82,7 +82,21 @@ _e39_mr_fusionner() {
     sleep 5
     t=$((t + 5))
   done
-  if [[ "$st" != mergeable ]] || ! m19_api PUT "projects/$(m19_enc "$_M19_PROJET_K8S")/merge_requests/$iid/merge" \
+  # « Pipelines must succeed » sur plateforme/k8s : le pipeline de la MR tourne encore (ou doit
+  # passer) ; on demande la fusion automatique (auto_merge, 17.11+) et on attend qu'elle ait lieu.
+  if [[ "$st" == ci_still_running || "$st" == ci_must_pass ]] &&
+    m19_api PUT "projects/$(m19_enc "$_M19_PROJET_K8S")/merge_requests/$iid/merge" \
+      --data-urlencode "auto_merge=true" --data-urlencode "should_remove_source_branch=true" >/dev/null 2>&1; then
+    t=0
+    while ((t < 900)); do
+      [[ "$(m19_api GET "projects/$(m19_enc "$_M19_PROJET_K8S")/merge_requests/$iid" | jq -r '.state // empty')" == merged ]] && st=fusionnee && break
+      sleep 15
+      t=$((t + 15))
+    done
+  fi
+  if [[ "$st" == fusionnee ]]; then
+    :
+  elif [[ "$st" != mergeable ]] || ! m19_api PUT "projects/$(m19_enc "$_M19_PROJET_K8S")/merge_requests/$iid/merge" \
     --data-urlencode "should_remove_source_branch=true" >/dev/null; then
     m19_api PUT "projects/$(m19_enc "$_M19_PROJET_K8S")/merge_requests/$iid" --data-urlencode "state_event=close" >/dev/null 2>&1 || true
     m19_api DELETE "projects/$(m19_enc "$_M19_PROJET_K8S")/repository/branches/$(m19_enc "$br")" >/dev/null 2>&1 || true

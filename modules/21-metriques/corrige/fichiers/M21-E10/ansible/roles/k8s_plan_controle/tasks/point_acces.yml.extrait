@@ -1,0 +1,18 @@
+# roles/k8s_plan_controle/tasks/point_acces.yml (plateforme/ansible) — EXTRAIT (M21-E10, PLAT-2210).
+# Sur les nœuds de contrôle, haproxy_sections n'est PAS une variable d'inventaire : la tâche
+# « HAProxy sur la VIP » du M14-E03 la passe au rôle haproxy par « include_role … vars: », à partir
+# de _k8s_plan_controle_haproxy_sections (construite par set_fact). Une variable posée dans
+# group_vars/k8s_plan_controle serait donc ÉCRASÉE (les vars d'un include_role passent avant celles
+# de l'inventaire) : le frontend de métriques n'apparaîtrait jamais, sans erreur.
+# On ouvre le rôle à des sections supplémentaires, déclarées dans l'inventaire :
+- name: HAProxy sur la VIP, vers les kube-apiserver — port {{ k8s_plan_controle_api_port }}
+  ansible.builtin.include_role:
+    name: haproxy
+    apply:
+      tags: [point_acces]
+  vars:
+    # Sections de l'API (M14-E03) PUIS sections ajoutées par l'inventaire (M21-E10 : fe_metriques).
+    haproxy_sections: "{{ _k8s_plan_controle_haproxy_sections + k8s_plan_controle_haproxy_sections_supplementaires }}"
+    # La VIP n'est portée que par un nœud : les autres écoutent une adresse qu'ils n'ont pas.
+    haproxy_bind_non_local: true
+    haproxy_verifications: []

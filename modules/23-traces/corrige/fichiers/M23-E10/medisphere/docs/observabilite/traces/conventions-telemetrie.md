@@ -39,7 +39,7 @@ Appliqué par `otel-agent` à toute span venue d'un pod du cluster, avant de qui
 | `transform/masquage` | supprime `url.query` ; coupe `?…` de `url.full` et `http.target` ; remplace les littéraux `'…'` de `db.query.text` et `db.statement` par `'?'` ; supprime tous les `http.request.header.*` et `http.response.header.*` | paramètres d'URL (nom de fichier de pièce jointe, M23-E06), requêtes non paramétrées, en-têtes d'authentification |
 | `redaction/donnees-sante` | remplace par `****` toute valeur d'attribut qui ressemble à un NIR ou à une adresse de courriel ; `redaction.masked.count` sur la span | filet par motif, quel que soit l'attribut |
 
-Ce qui n'est **pas** couvert : les noms de span (une application qui mettrait un nom de patient dans un nom de span), les événements et leurs attributs (`exception.message` peut citer une valeur), les ressources. Toute fuite constatée (`redaction.masked.count` > 0, requête TraceQL du check de M23-E10) ouvre un ticket `SEC-` à l'équipe de l'application : la correction est dans le code.
+Ce qui n'est **pas** couvert : les noms de span et d'événement (une application qui mettrait un nom de patient dans un nom de span) ; les attributs des événements (`exception.message` peut citer une valeur) et ceux de la ressource ne passent que par le filet par motifs de `redaction` (NIR, courriel), pas par les règles de `transform` ; toute autre donnée (un nom seul, un motif de rendez-vous) y passe. Toute fuite constatée (`redaction.masked.count` > 0, requête TraceQL du check de M23-E10) ouvre un ticket `SEC-` à l'équipe de l'application : la correction est dans le code.
 
 ## Contrôles réguliers (TraceQL, dernière heure)
 

@@ -52,7 +52,10 @@ for _m22o_e09_loc in "${_M22O_LOCATAIRES[@]}"; do
   _m22o_e09_nir="$(_m22o_e09_compte "{job=~\".+\"} |~ \`$_M22O_RE_NIR\`" "$_m22o_e09_loc")"
   check_cmd "$_m22o_e09_loc : aucune ligne ressemblant à un NIR depuis $_m22o_e09_depuis (trouvée(s) : ${_m22o_e09_nir})" \
     bash -c '[[ "$1" == 0 ]]' _ "$_m22o_e09_nir"
-  _m22o_e09_mel="$(_m22o_e09_compte "{job=~\".+\"} |~ \`$_M22O_RE_COURRIEL\` !~ \`@([a-z0-9-]+\\.)*medisphere\\.internal\`" "$_m22o_e09_loc")"
+  # Les adresses MédiSphère sont d'abord effacées de la ligne (line_format), puis on cherche une adresse
+  # restante : une ligne qui contient À LA FOIS une adresse externe et une adresse MédiSphère (cas du
+  # témoin) est donc trouvée, ce qu'un simple « !~ medisphere.internal » laisserait passer.
+  _m22o_e09_mel="$(_m22o_e09_compte "{job=~\".+\"} |~ \`$_M22O_RE_COURRIEL\` | line_format \`{{ regexReplaceAll \"[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\\\\.)*medisphere\\\\.internal\" __line__ \"\" }}\` |~ \`$_M22O_RE_COURRIEL\`" "$_m22o_e09_loc")"
   check_cmd "$_m22o_e09_loc : aucune adresse de courriel externe depuis $_m22o_e09_depuis (trouvée(s) : ${_m22o_e09_mel})" \
     bash -c '[[ "$1" == 0 ]]' _ "$_m22o_e09_mel"
 done

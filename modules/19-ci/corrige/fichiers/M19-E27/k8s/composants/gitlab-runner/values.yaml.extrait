@@ -22,9 +22,21 @@ topologySpreadConstraints:
     labelSelector:
       matchLabels:
         app: gitlab-runner
-# Arrêt gracieux : SIGQUIT, le gestionnaire ne prend plus de job et attend la fin des siens.
-# 3600 s = le délai maximal d'un job (maximum_timeout du runner).
+# Arrêt gracieux. Kubernetes envoie SIGTERM au PID 1 (dumb-init), qui le relaie à gitlab-runner :
+# sous Linux, SIGTERM = arrêt FORCÉ (les jobs en cours sont abandonnés, commands/multi.go et
+# « Signals » de la documentation des commandes) ; seul SIGQUIT est gracieux (plus de nouveau job,
+# sortie quand les jobs en cours sont finis). Le chart ne réécrit pas le signal : un preStop envoie
+# donc SIGQUIT et attend la fin du processus, AVANT le SIGTERM. Délai maximal : la période de grâce
+# (3600 s = maximum_timeout du runner). À vérifier sur ton lab : « kubectl delete pod » d'un réplica
+# pendant un job long ; le journal du gestionnaire doit montrer un arrêt gracieux et le job réussir.
 terminationGracePeriodSeconds: 3600
+deploymentLifecycle:
+  preStop:
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - 'kill -QUIT "$(pgrep -o -x gitlab-runner)"; while pgrep -x gitlab-runner > /dev/null; do sleep 5; done'
 # Le gestionnaire lui-même est un composant de plateforme (pas la classe des jobs).
 priorityClassName: medisphere-standard
 

@@ -306,13 +306,13 @@ L'opérateur stocke la configuration compressée (gzip) dans un Secret dont le n
    14. La mémoire de travail de chaque pod de l'API, avec le nom du nœud qui le porte (pris dans `kube_pod_info`).
    15. Le débit de MédiAgenda par nœud du cluster.
 3. Pour la question 5, essaie aussi la version **fausse** qui agrège sans garder `le`, puis celle qui calcule le quantile par pod avant de faire la moyenne. Note les écarts dans ton journal et explique-les.
-4. Pour la question 14, essaie sans `group_left` : quel message d'erreur, et pourquoi ?
+4. Pour les questions 14 et 15, essaie sans `group_left` (en gardant `on (namespace, pod)`) : que devient l'étiquette `node` dans le résultat de la 14 ? Quel message d'erreur obtiens-tu pour la 15, et pourquoi ?
 5. Vérifie la syntaxe de tout le fichier (`promtool --experimental promql format`), MR, fusion.
 
 **Critères de réussite**
 - [ ] `requetes/E04.promql` est sur `main` de `plateforme/observabilite`, avec au moins 15 requêtes commentées ; chacune s'évalue sans erreur et renvoie des données.
 - [ ] Le fichier contient au moins un `histogram_quantile` sur une agrégation qui garde `le`, une jointure `group_left` avec `kube_pod_info`, un `offset`, une sous-requête, un `absent`, un `increase`.
-- [ ] Ton journal explique les écarts entre les trois calculs de la question 5 et l'erreur de la question 14.
+- [ ] Ton journal explique les écarts entre les trois calculs de la question 5, et ce que change `group_left` pour les questions 14 et 15.
 
 **Vérification** : `lab/bin/check 21 04`
 
@@ -328,7 +328,7 @@ Une opération entre deux vecteurs n'apparie que les séries qui ont **exactemen
 
 <details><summary>Indice 3</summary>
 
-`kube_pod_info` vaut toujours 1 et porte l'étiquette `node` : multiplier par lui ne change pas la valeur, mais « plusieurs séries d'un côté pour une de l'autre » exige `group_left(<étiquettes à recopier>)` et un `on(namespace, pod)`.
+`kube_pod_info` vaut toujours 1 et porte l'étiquette `node` : multiplier par lui ne change pas la valeur. Une correspondance un-à-un ne garde que les étiquettes du côté gauche : pour **recopier** `node`, il faut `group_left(<étiquettes à recopier>)` et un `on(namespace, pod)`. Et « plusieurs séries d'un côté pour une de l'autre » (une série par route et par code pour un seul pod) exige `group_left`, sinon Prometheus refuse l'opération.
 </details>
 
 **Pour aller plus loin** (facultatif) : réécris la question 5 avec la vue *Explain* de l'interface de Prometheus 3, et lis la page « Histograms and summaries » de la documentation : quand un résumé (*summary*) serait-il acceptable ?
@@ -354,7 +354,7 @@ Une opération entre deux vecteurs n'apparie que les séries qui ont **exactemen
 | Élément | Valeur |
 |---|---|
 | Source de données | `Prometheus` (UID `prometheus`), provisionnée par le chart (non modifiable dans l'interface) ; `Alertmanager` (UID `alertmanager`) |
-| Comptes | `admin` (bris de glace, mot de passe du Secret `grafana-admin`) ; **`<MOI>`** (Admin de l'organisation) ; les comptes des personnages et les équipes arrivent par OpenTofu en E17 |
+| Comptes | `admin` (bris de glace, mot de passe du Secret `grafana-admin`) ; **`<MOI>`** (Admin de l'organisation) ; les comptes locaux des personnages (Karim, Nadia, Claire, Julien) sont créés au début d'E17, les équipes et les droits par OpenTofu en E17 |
 | Compte de service | **`wb-checks`**, rôle **Viewer**, jeton à durée limitée → `~/.config/workbook/grafana-checks.token` (600) |
 | Tableau | **« MédiAgenda — aperçu »**, dans un dossier **« MédiAgenda »** (créé à la main pour l'instant : E17 passera tout *as code*) |
 | Version | Grafana 13.2 : schéma de tableau de bord v2 actif par défaut ; `grafana-cli` n'existe plus |
@@ -575,7 +575,7 @@ Une `CiliumClusterwideNetworkPolicy` peut sélectionner les pods par une étique
 | node_exporter | **1.12.1**, `node_exporter-1.12.1.linux-amd64.tar.gz` de la publication GitHub du projet ; empreinte dans `sha256sums.txt` de la publication |
 | Hôtes | toutes les VMs étiquetées `socle` dans NetBox (15 dans un lab conforme au PLAN : `gw01`, `gw02`, `adm01`, `dns01`, `dns02`, `ca01`, `git01`, `nbx01`, `s3-01`, `runner01`, `runner02`, `reg01`, `lb01`, `lb02`, `mon01`) ; **pas** les nœuds Kubernetes (DaemonSet), ni `pve01`/`pbs01` (M21-E12) |
 | TLS | certificat `node-exporter` par ACME (step-ca, rôle `certificats_acme`), nom `<hôte>.par1.medisphere.internal`, renouvelé par `cert-renewer@node-exporter` ; HTTPS seulement sur 9100 |
-| Compatibilité | garder le dossier du collecteur textfile de la v1 (`/var/lib/prometheus/node-exporter`, les outils `ms-verif-*` y écrivent) et la métrique `medisphere_info` |
+| Compatibilité | garder le dossier du collecteur textfile de la v1 (`/var/lib/prometheus/node-exporter`, les outils `ms-verif-*` y écrivent) et la métrique `medisphere_info` ; sur `git01`, node_exporter vient de l'omnibus de GitLab (M01-E30, `gitlab.rb` géré à la main) et non du paquet Debian |
 | Cibles | ScrapeConfig **`vms`** (job **`vms`**) dans `plateforme/observabilite/scrape/vms.yaml`, **générée** par `playbooks/supervision-cibles.yml` depuis NetBox (jeton en lecture `netbox-ansible.env`), étiquettes **`site`**, **`role`** (de l'étiquette NetBox `role-<rôle>`), **`equipe`** (`plateforme`) |
 | Flux | Prometheus sort par les travailleurs (`K8S_TRAV`, adresses des nœuds) : bordure (transit vers les VLAN 10, 20, 70 ; entrée des passerelles elles-mêmes) et pare-feu local des VMs (`pare_feu_local_communes`) ; MGMT pour tes vérifications |
 
@@ -583,7 +583,7 @@ Une `CiliumClusterwideNetworkPolicy` peut sélectionner les pods par une étique
 
 *A. Préparer*
 
-1. Relis le rôle v1 et son scénario Molecule. Sur une VM du socle, relève ce qui tourne (`systemctl status prometheus-node-exporter`, `ss -ltnp | grep 9100`, `ls /var/lib/prometheus/node-exporter/`). Quels fichiers `.prom` y trouves-tu, et qui les écrit ?
+1. Relis le rôle v1 et son scénario Molecule. Sur une VM du socle, relève ce qui tourne (`systemctl status prometheus-node-exporter`, `ss -ltnp | grep 9100`, `ls /var/lib/prometheus/node-exporter/`). Quels fichiers `.prom` y trouves-tu, et qui les écrit ? Fais le même relevé sur `git01` : qui y fournit node_exporter depuis le M01-E30, sur quelle adresse, et que se passera-t-il quand ton rôle voudra écouter au même endroit ?
 2. Télécharge l'archive et `sha256sums.txt` de la 1.12.1 ; vérifie ; note l'empreinte. Pourquoi ne pas faire confiance à la seule connexion HTTPS vers GitHub ?
 
 *B. Le rôle, version 2*
@@ -681,7 +681,7 @@ Réponds aux 14 questions, en t'appuyant sur ce que tu as vu dans ton lab quand 
     - B. Le ServiceMonitor n'a pas l'étiquette `medisphere.internal/supervision: "oui"`
     - C. Le port `http` n'existe pas
     - D. La politique réseau bloque la collecte
-11. Pourquoi Prometheus a-t-il besoin de droits RBAC en lecture sur `endpointslices`, `services`, `pods` ? Et pourquoi `nodes/metrics` ?
+11. Pourquoi Prometheus a-t-il besoin de droits RBAC en lecture sur `endpoints` (ou `endpointslices`), `services`, `pods` ? Et pourquoi `nodes/metrics` ?
 12. Que gagne-t-on à un Prometheus par cluster plutôt qu'un Prometheus central qui collecte tous les clusters à travers le réseau ? Qu'est-ce que la **fédération**, et sa limite ?
 13. Prometheus n'est pas un système de stockage durable ni distribué : qu'en déduis-tu pour la haute disponibilité (deux réplicas qui collectent les mêmes cibles) ? Comment Alertmanager évite-t-il les doublons de notification avec deux Prometheus ?
 14. Quelles sont les limites du modèle *pull* que tu as rencontrées en E08 (pare-feu, TLS, découverte), et comment les as-tu traitées ?

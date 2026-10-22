@@ -79,7 +79,7 @@ Le chart crée la Role et son lien dans l'espace donné par `runners.jobNamespac
 
 <details><summary>Indice 2</summary>
 
-`[runners.kubernetes.pod_security_context]` couvre `run_as_non_root`, `run_as_user`, `run_as_group`, `fs_group` et une sous-table `seccomp_profile` ; `cap_drop`, `allow_privilege_escalation`, `privileged` et `automount_service_account_token` sont des clés directes de `[runners.kubernetes]`. Un volume de type Secret se déclare dans `[[runners.kubernetes.volumes.secret]]` (nom, chemin de montage, lecture seule) : il est monté dans le conteneur `build`.
+`[runners.kubernetes.pod_security_context]` couvre `run_as_non_root`, `run_as_user`, `run_as_group`, `fs_group` et une sous-table `seccomp_profile` ; `cap_drop`, `allow_privilege_escalation`, `privileged` et `automount_service_account_token` sont des clés directes de `[runners.kubernetes]`. Un volume de type Secret se déclare dans `[[runners.kubernetes.volumes.secret]]` (nom, chemin de montage, lecture seule) : il est monté dans **tous** les conteneurs du pod de job (`build`, `helper`, services) — pense à ce que cela implique pour les images de services admises sur le runner protégé.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -125,7 +125,7 @@ Une politique `toFQDNs` ne fonctionne que si la règle DNS de la même politique
 6. **Livrable.** `docs/livraison/ci/secrets-ci.md` : inventaire classé (sans valeurs), règles retenues (quel attribut pour quel cas), exceptions (variable Cosign de groupe, E24), `CI_JOB_TOKEN`, revendications OIDC pour le M25, calendrier de rotation.
 
 **Critères de réussite**
-- [ ] Aucune variable dont la clé désigne un secret (`*TOKEN*`, `*PASSWORD*`, `*KEY*`, `*SECRET*`) n'est non masquée dans les groupes `plateforme`, `mediagenda`, `medidoc` et leurs projets, ni non protégée — seule exception admise : les identités de **lecture** (`*_RO_*`), masquées ; `DEPLOIEMENT_TOKEN` est cachée et limitée à la portée `promotion/*`.
+- [ ] Aucune variable dont la clé désigne un secret (`*TOKEN*`, `*PASSWORD*`, `*KEY*`, `*SECRET*`) n'est non masquée dans les groupes `plateforme`, `mediagenda`, `medidoc` et leurs projets, ni non protégée — seules exceptions admises : les identités de **lecture** (`*_RO_*`), masquées, et la variable de groupe `COSIGN_PRIVATE_KEY` (type fichier, protégée, non masquable, exception écrite de E24 jusqu'au mini-projet) ; `DEPLOIEMENT_TOKEN` est cachée et limitée à la portée `promotion/*`.
 - [ ] La liste d'autorisation entrante du `CI_JOB_TOKEN` est active sur chaque projet des groupes `mediagenda`, `medidoc` et `plateforme`.
 - [ ] Le jeton de projet `ci-promotion` est actif, expire dans moins de 1 an et a été tourné il y a moins de 60 jours ; le dernier pipeline d'étiquette de `mediagenda/api` a réussi après la rotation.
 - [ ] Le dernier pipeline de `formation/ci-labo` contient un job `jeton-identite` réussi.
@@ -236,7 +236,7 @@ Le chart de l'agent lit `config.kasAddress` et `config.kasCaCert` ; en gRPC, le 
 > ⚠️ **Attention** : l'essai de charge (`parallel: 20`) charge les trois travailleurs ; ne le lance pas pendant qu'un composant temporaire (SonarQube ou Jenkins) tourne, ni pendant un pipeline d'étiquette. Garde `kubectl top nodes` ouvert et arrête l'essai (annulation du pipeline) si un nœud dépasse 90 % de mémoire. Un PDB `minAvailable: 2` avec deux réplicas **bloque** tout drainage : préfère `maxUnavailable: 1`.
 
 **Travail demandé**
-1. **Comprendre.** Dans la documentation de GitLab Runner, explique dans `capacite-runners.md` : `concurrent` (global au processus), `limit` (par `[[runners]]`), `request_concurrency` (requêtes simultanées de *long polling*) ; comment deux réplicas d'un même runner se partagent les jobs ; pourquoi `concurrent` × réplicas peut dépasser le quota de l'espace et ce qui se passe alors (pods `Pending`, `poll_timeout`).
+1. **Comprendre.** Dans la documentation de GitLab Runner, explique dans `capacite-runners.md` : `concurrent` (global au processus), `limit` (par `[[runners]]`), `request_concurrency` (requêtes simultanées de *long polling*) ; comment deux réplicas d'un même runner se partagent les jobs ; pourquoi `concurrent` × réplicas peut dépasser le quota de l'espace ou la place des nœuds, et ce qui se passe dans chaque cas (création du pod refusée par le quota, ou pod `Pending` jusqu'à `poll_timeout`).
 2. **Calcul.** À partir du quota de `ci-jobs`, des demandes par défaut d'un pod de job (build + helper + services), de la mémoire libre des travailleurs et de la capacité de buildkitd, calcule le nombre de jobs simultanés soutenable. Règle `concurrent`, `limit` et `request_concurrency` en conséquence, ainsi que les demandes, limites et maximums surchargeables du TOML.
 3. **Disponibilité.** Deux réplicas du gestionnaire `gitlab-runner`, répartis sur deux nœuds différents, PDB `maxUnavailable: 1`, arrêt gracieux suffisant pour finir un job. Vérifie par l'API que le runner a **deux** gestionnaires en ligne. Draine le nœud d'un réplica pendant qu'un job long tourne : le job survit-il ? Explique.
 4. **Priorité.** Crée `medisphere-ci` (valeur inférieure à `medisphere-standard`, sans préemption des autres pods) dans `ordonnancement/` de `plateforme/k8s`, appliquée aux pods de job par la configuration du runner. Le quota de `ci-jobs` doit-il en tenir compte ?
@@ -284,7 +284,7 @@ Un pod de job n'appartient à aucun contrôleur : le drainage l'**expulse** comm
 **Durée indicative** : 2 h.
 
 **Contexte technique**
-- Déploiements : environnements `dev`, `recette`, `prod` des projets `mediagenda/deploiement` (job `deployer-dev`, E18) ; API `GET /projects/:id/deployments` (filtres `environment`, `status`, `updated_after`), `GET /projects/:id/environments`.
+- Déploiements : environnements `dev`, `recette`, `prod` des projets `mediagenda/deploiement` (job `deployer-dev`, E18) ; API `GET /projects/:id/deployments` (filtres `environment`, `status`, `updated_after` — ce dernier exige `order_by=updated_at`, sinon `400`), `GET /projects/:id/environments`.
 - Changements : MR de promotion (`promotion/<env>-vX.Y.Z`) et MR applicatives de `mediagenda/api` (`merged_at`, commits).
 - Incidents : tickets étiquetés `incident` dans `mediagenda/api` (ou ceux de Nadia, `INC-…`). S'il n'y en a pas, la méthode suffit : écris-le.
 - Le point d'accès `…/dora/metrics` de l'API n'est pas disponible en Free.

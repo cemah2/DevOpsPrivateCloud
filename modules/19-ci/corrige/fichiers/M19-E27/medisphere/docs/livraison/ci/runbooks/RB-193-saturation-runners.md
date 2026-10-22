@@ -24,7 +24,7 @@ admin@adm01:~$ bin/ci-mesurer-pipeline.sh mediagenda/api <PIPELINE>
 |---|---|---|
 | Un seul gestionnaire en ligne (`/runners/:id/managers`) | réplica en panne ou nœud drainé | rétablir le réplica ; vérifier le PDB et la répartition |
 | Gestionnaires à `concurrent` jobs, pods tous `Running` | plafond atteint | normal en pic ; si chronique, §3 |
-| Pods `Pending`, événement `exceeded quota` | quota de `ci-jobs` atteint | ne pas augmenter `concurrent` ; revoir les demandes des jobs gourmands (surcharges `KUBERNETES_*`) ou le quota (§3) |
+| Jobs en échec dès la préparation, message `exceeded quota` dans le journal du job (aucun pod créé) | quota de `ci-jobs` atteint | ne pas augmenter `concurrent` ; revoir les demandes des jobs gourmands (surcharges `KUBERNETES_*`) ou le quota (§3) |
 | Pods `Pending`, `Insufficient memory/cpu` | nœuds pleins | jobs préemptés par les applications (normal) ou capacité du cluster : §3 |
 | Pods `Pending` après préemption (événement `Preempted`) | applications prioritaires | normal ; relancer les jobs |
 | Constructions lentes, autres jobs normaux | buildkitd saturé | étaler, cache BuildKit (E23) |

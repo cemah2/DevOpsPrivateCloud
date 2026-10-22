@@ -21,7 +21,7 @@ Réglages retenus (valeurs par défaut, écrites pour être lues) :
 |---|---|---|
 | `mgr/prometheus/server_addr` | défaut (toutes les adresses) | le mgr suit le nœud actif ; filtrage par firewalld |
 | `mgr/prometheus/server_port` | 9283 | port enregistré pour Ceph |
-| `mgr/prometheus/standby_behaviour` | `default` | les mgr en attente répondent 200 et un corps vide sur `/metrics` : les trois cibles restent `up`, et une bascule du mgr ne déclenche aucune alerte « cible injoignable » |
+| `mgr/prometheus/standby_behaviour` | `default` | les mgr en attente répondent 200 et un corps vide sur `/metrics` (dans les deux modes : `error` ne change que la page `/`, pour un répartiteur) : les trois cibles restent `up`, et une bascule du mgr ne déclenche aucune alerte « cible injoignable » |
 | `mgr/prometheus/cache` | `true` | le mgr ne recalcule pas ses métriques à chaque collecte |
 | `mgr/prometheus/exclude_perf_counters` | défaut (`true`) | les compteurs de performance des démons relèvent de `ceph-exporter` (non déployé : pile de supervision de cephadm désactivée au M08) |
 

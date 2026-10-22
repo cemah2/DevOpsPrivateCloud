@@ -263,7 +263,7 @@ Un profil *on-CPU* normal pendant une lenteur veut dire que le temps est passé 
 - Lire un message OTLP (ressource, portée, spans, identifiants, types, drapeaux) et connaître ses encodages.
 - Suivre une span de l'application jusqu'au bloc Tempo, et lire un bloc vParquet avec `tempo-cli`.
 
-**Prérequis** : M23-E01 à M23-E16 ; identité de lecture `~/.config/workbook/s3-tempo.env` (M23-E03) ; `uv` sur `adm01` (M12).
+**Prérequis** : M23-E01 à M23-E16 ; identifiants RGW de Tempo `~/.config/workbook/s3-tempo.env` (M23-E03 ; ils permettent d'écrire : ne t'en sers ici qu'en lecture) ; `uv` sur `adm01` (M12).
 **Durée indicative** : 3 h.
 
 **Contexte technique**
@@ -281,7 +281,7 @@ Un profil *on-CPU* normal pendant une lenteur veut dire que le temps est passé 
 **Critères de réussite**
 - [ ] Le livrable décompose un `traceparent` réel, décrit un message OTLP réel (`resourceSpans`, `scopeSpans`) et un bloc réel (identifiant UUID, `meta.json`, format vParquet) avec des sorties de `tempo-cli`.
 - [ ] Il décrit le chemin d'une span jusqu'au bloc (live-store, WAL) avec les délais mesurés.
-- [ ] Aucune écriture dans `tempo-k8s-par1` (identité de lecture seulement).
+- [ ] Aucune écriture dans `tempo-k8s-par1` (les identifiants de `s3-tempo.env` ne servent qu'à lister et copier).
 
 **Vérification** : `lab/bin/check 23 24`
 

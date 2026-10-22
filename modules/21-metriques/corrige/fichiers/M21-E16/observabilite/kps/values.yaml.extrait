@@ -22,8 +22,9 @@ alertmanager:
         min_version: TLS12
 
     # Intervalles nommés (section de premier niveau). Fuseau Europe/Paris, changement d'heure
-    # compris. ⚠️ À vérifier sur ton lab : Alertmanager lit la base des fuseaux du système de son
-    # image ; si la configuration est refusée (« unknown time zone »), écris les heures en UTC.
+    # compris. Alertmanager n'embarque pas la base des fuseaux dans son binaire : il lit celle de
+    # son image (quay.io/prometheus/alertmanager:v0.34.1 contient /usr/share/zoneinfo, vérifié à la
+    # relecture). Une image qui ne l'aurait pas refuserait la configuration (« unknown time zone »).
     time_intervals:
       - name: heures-ouvrees
         time_intervals:

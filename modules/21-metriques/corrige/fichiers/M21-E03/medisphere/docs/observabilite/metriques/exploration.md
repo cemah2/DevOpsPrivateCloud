@@ -23,7 +23,7 @@
 | `__meta_kubernetes_namespace` | `kube-system` | `namespace` |
 | `__meta_kubernetes_service_name` | `kps-kubelet` | `service` |
 | `__meta_kubernetes_service_label_k8s_app` | `kubelet` | `job` (`jobLabel: k8s-app`) |
-| `__meta_kubernetes_endpointslice_port_name` | `https-metrics` | `endpoint` |
+| `__meta_kubernetes_endpoint_port_name` | `https-metrics` | `endpoint` |
 | `__meta_kubernetes_endpoint_node_name` | `k8s-w01` | `node` |
 
 - `job`, `instance` : posés par Prometheus (`job` = nom du job, réécrit ici par la règle tirée de `jobLabel`) ; `namespace`, `service`, `pod`, `endpoint` : règles `replace` écrites par l'opérateur.
@@ -32,7 +32,7 @@
 ## 3. La configuration générée
 
 - Secret `supervision/prometheus-kps`, clé `prometheus.yaml.gz` (gzip, base64 dans l'objet) ; lu par `kubectl get secret … -o jsonpath | base64 -d | gunzip | less`, jamais écrit sur disque ; les règles sont dans les ConfigMaps `prometheus-kps-rulefiles-0…`.
-- Job `serviceMonitor/supervision/kps-kubelet/0` : `kubernetes_sd_configs` rôle `endpointslice`, espace `kube-system` ; `keep` sur les étiquettes du Service (`app.kubernetes.io/name=kubelet`, `k8s-app=kubelet`) ; `keep` sur le port `https-metrics` ; `replace` vers `namespace`, `service`, `pod`, `container` ; `job` depuis `k8s-app`.
+- Job `serviceMonitor/supervision/kps-kubelet/0` : `kubernetes_sd_configs` rôle `endpoints` (défaut de l'opérateur), espace `kube-system` ; `keep` sur les étiquettes du Service (`app.kubernetes.io/name=kubelet`, `k8s-app=kubelet`) ; `keep` sur le port `https-metrics` ; `replace` vers `namespace`, `service`, `pod`, `container` ; `job` depuis `k8s-app`.
 - `/api/v1/status/flags` : `web.enable-lifecycle=true` (le conteneur de rechargement appelle `/-/reload`), `web.enable-admin-api=false`, `config.file=/etc/prometheus/config_out/prometheus.env.yaml`.
 
 ## 4. La TSDB

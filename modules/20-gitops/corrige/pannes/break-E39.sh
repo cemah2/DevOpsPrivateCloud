@@ -287,7 +287,7 @@ verifier_E39() {
 annuler_E39() {
   case "${WB_VAR:-}" in
     [1-3]) _e39_defaire "$WB_VAR" ;;
-    *) _e39_defaire 3; _e39_defaire 1 ;;
+    *) _e39_defaire 3; _e39_defaire 2; m20_rafraichir hard "$_M20_APP_DEV" ;;
   esac
   m20_oublier E39 debut
   m20_journal E39 "annulation"

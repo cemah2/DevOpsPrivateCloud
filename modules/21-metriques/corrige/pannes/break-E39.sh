@@ -11,7 +11,11 @@
 #      prochain redémarrage) ;
 #   2. MR de Lucas sur les valeurs de kps : objectStorageConfig retiré de prometheus.prometheusSpec.thanos
 #      (« le sidecar n'a besoin que du gRPC ») : les Prometheus redémarrent, le sidecar n'envoie plus
-#      aucun bloc ;
+#      aucun bloc. La même MR pose disableCompaction: true (« comme le recommande la doc Thanos ») :
+#      GARDE-FOU de données. Sans lui, l'opérateur rendrait la compaction locale normale à Prometheus,
+#      qui fusionnerait les blocs de 2 h non envoyés ; or le sidecar n'envoie que des blocs de niveau 1 :
+#      ces heures-là manqueraient pour toujours au compartiment. Avec lui, les blocs restent de 2 h et
+#      partent dès que l'apprenant a remis le stockage objet ;
 #   3. MR de Lucas sur thanos/ : --min-time=-2d ajouté au Store Gateway (« le Store ne sert que le
 #      récent, ça le soulage ») : tout ce qui a plus de deux jours n'est plus servi par le Store
 #      (variante retenue seulement si le Store sert des données de plus de trois jours).
@@ -93,9 +97,20 @@ while debut > 0 and lignes[debut - 1].strip().startswith("#") and len(lignes[deb
     debut -= 1
 if debut == 0:
     sys.exit(1)
+# Clé « thanos: » qui contient le bloc : disableCompaction se pose à côté, dans prometheusSpec.
+j = i - 1
+while j >= 0 and not (re.match(r"^\s*thanos:\s*(#.*)?$", lignes[j]) and len(lignes[j]) - len(lignes[j].lstrip()) < retrait):
+    j -= 1
+if j < 0:
+    sys.exit(1)
+ind = lignes[j][:len(lignes[j]) - len(lignes[j].lstrip())]
+if any(re.match("^" + ind + r"disableCompaction:", l) for l in lignes):
+    sys.exit(1)
 open(etat + "/bloc.txt", "w").write("\n".join(lignes[debut:fin]))
 open(etat + "/ancre.txt", "w").write(lignes[debut - 1])
-sys.stdout.write("\n".join(lignes[:debut] + lignes[fin:]))
+ajout = [ind + "# M21-E39 (Lucas) : compaction locale coupée, comme le recommande la doc Thanos pour le sidecar",
+         ind + "disableCompaction: true"]
+sys.stdout.write("\n".join(lignes[:j] + ajout + lignes[j:debut] + lignes[fin:]))
 PY
 read -r -d '' _E39_PY_REMETTRE <<'PY' || true
 import sys
@@ -107,7 +122,13 @@ ancre = open(etat + "/ancre.txt").read()
 if ancre not in lignes:
     sys.exit(1)
 i = lignes.index(ancre)
-sys.stdout.write("\n".join(lignes[:i + 1] + bloc + lignes[i + 1:]))
+lignes = lignes[:i + 1] + bloc + lignes[i + 1:]
+# Retire le disableCompaction de la panne s'il est encore là (marque de Lucas suivie de la clé).
+for k in range(len(lignes) - 1):
+    if lignes[k].strip().startswith("# M21-E39 (Lucas)") and lignes[k + 1].strip() == "disableCompaction: true":
+        del lignes[k:k + 2]
+        break
+sys.stdout.write("\n".join(lignes))
 PY
 _e39_t2() {
   local c
@@ -148,6 +169,9 @@ _m21E39_une() {
       f="$(jq -r --arg k "$k" '.data[$k] // empty | @base64d' <<<"$j" |
         sed -E 's/^([[:space:]]*secret_key:[[:space:]]*)("?)([^"[:space:]]+)("?)[[:space:]]*$/\1\2\30\4/')"
       grep -q 'secret_key' <<<"$f" || { m21_oublier_objet E39 secret "$s" "$_M21_SUP"; return 10; }
+      # Empreinte du contenu faussé : l'annulation ne restaure que si le Secret l'a encore (une
+      # réparation par secrets-k8s.sh, ou une rotation de clé, n'est jamais défaite).
+      m21_ecrire E39 secret-faux "$(printf '%s' "$f" | base64 -w0 | sha256sum | cut -d' ' -f1)"
       jq --arg k "$k" --arg v "$f" --arg m "$_E39_MARQUE" '
         del(.metadata.resourceVersion, .metadata.managedFields)
         | .data[$k] = ($v | @base64) | .metadata.annotations[$m] = "coffre-2026-06"' <<<"$j" |
@@ -187,13 +211,20 @@ _e39_defaire() {
       read -r s k <<<"$(m21_lire E39 secret)"
       [[ -n "${s:-}" ]] || return 0
       j="$(wb_kubectl -n "$_M21_SUP" get secret "$s" -o json 2>/dev/null)" || j=""
-      if jq -e --arg m "$_E39_MARQUE" '.metadata.annotations[$m] == "coffre-2026-06"' >/dev/null 2>&1 <<<"$j"; then
+      # Restaure seulement si le contenu est encore celui de la panne (marque ET empreinte) ; sinon
+      # l'apprenant a réparé (secrets-k8s.sh) : on retire juste la marque si elle traîne.
+      if jq -e --arg m "$_E39_MARQUE" '.metadata.annotations[$m] == "coffre-2026-06"' >/dev/null 2>&1 <<<"$j" &&
+        [[ "$(jq -r --arg k "$k" '.data[$k] // ""' <<<"$j" | tr -d '\n' | sha256sum | cut -d' ' -f1)" == "$(m21_lire E39 secret-faux)" ]]; then
         m21_restaurer_objet E39 secret "$s" "$_M21_SUP"
         _e39_redemarrer_store
       else
         m21_oublier_objet E39 secret "$s" "$_M21_SUP"
+        if [[ -n "$j" ]]; then
+          wb_kubectl -n "$_M21_SUP" annotate secret "$s" "$_E39_MARQUE-" >/dev/null 2>&1 || true
+        fi
       fi
       m21_oublier E39 secret
+      m21_oublier E39 secret-faux
       ;;
     2) [[ -n "$_E39_ORIG" ]] && m21_git_defaire E39 fichier _e39_i2 "revert(kps): stockage objet du sidecar rétabli (M21-E39, annulation)" ;;
     3) m21_git_defaire E39 fichier _e39_i3 "revert(thanos): --min-time du Store rétabli (M21-E39, annulation)" ;;

@@ -30,7 +30,8 @@ nouveau="$(jq -r '.token // empty' <<<"$rep")"
 nid="$(jq -r '.id // empty' <<<"$rep")"
 unset rep
 [[ -n "$nouveau" ]] || { echo "rotation refusée" >&2; exit 1; }
-api PUT "projects/$P/variables/CANARI_JETON" --data-urlencode "value=$nouveau" \
+# La valeur passe par l'entrée standard de curl (« value@- »), jamais par ses arguments (visibles par ps).
+printf '%s' "$nouveau" | api PUT "projects/$P/variables/CANARI_JETON" --data-urlencode "value@-" \
   --data-urlencode "masked=true" --data-urlencode "protected=true" --data-urlencode "description=" |
   jq -r '"CANARI_JETON : masquée=\(.masked) protégée=\(.protected)"'
 unset nouveau

@@ -17,8 +17,8 @@ Les sorties reproduites sont **représentatives** : identifiants, noms de pods, 
 - E37 v1 : réémission immédiate du certificat client par cert-manager quand `issuerRef` change (raison `IncorrectIssuer`) ; message exact de `buildctl` face à un certificat client d'une autre autorité. E37 v3 : PUT d'un robot Harbor 2.15 avec le corps complet renvoyé par `GET /robots/{id}`. E37 v4 : présence de `fallocate` dans l'image `moby/buildkit:*-rootless` (sinon la variante est sautée).
 - E40 v2/v3 : le masquage de GitLab ne reconnaît pas la forme base64 d'une valeur (comportement attendu, mais les versions récentes du runner masquent aussi certaines formes encodées : vérifie ce que tu observes et note-le dans RB-198).
 - E41 v4 : un pipeline planifié dont le propriétaire est bloqué n'est plus exécuté (documenté) ; l'affichage exact dans la page *Schedules* varie.
-- E42 v2 : `MutatingAdmissionPolicy` en `admissionregistration.k8s.io/v1` (GA en 1.36) avec une mutation `ApplyConfiguration` sur `spec.activeDeadlineSeconds` ; si ton API refuse l'objet, la variante est sautée. E42 v4 : choix des victimes par l'ordonnanceur (le pod de job doit être le moins prioritaire du nœud).
-- E44 : noms exacts des classes Sidekiq de création du pipeline et clé `gitlab_workhorse['api_ci_long_polling_duration']` dans ta version d'omnibus.
+- E42 v2 : `MutatingAdmissionPolicy` en `admissionregistration.k8s.io/v1` (GA en 1.36) avec une mutation `ApplyConfiguration` sur `spec.activeDeadlineSeconds` ; si ton API refuse l'objet, la variante est sautée. E42 v4 : choix des victimes par l'ordonnanceur. Il épargne d'abord les pods les plus prioritaires : un pod sans PriorityClass (priorité 0) ou en `medisphere-essai` sur le même nœud serait préempté **avant** le job ; le script saute donc la variante si le nœud du job porte un tel pod (garde-fou : jamais une application touchée par une panne de CI).
+- E44 : noms exacts des classes Sidekiq de création du pipeline. Vérifié dans le code : la clé `gitlab_workhorse['api_ci_long_polling_duration']` existe dans `gitlab.rb` mais vaut `nil` par défaut (omnibus), et le drapeau `-apiCiLongPollingDuration` de Workhorse a pour défaut 50 **nanosecondes** : sans réglage, pas de *long polling* (documentation *Long polling* : « you should enable long polling », exemple `"50s"`).
 
 ---
 
@@ -85,7 +85,7 @@ admin@adm01:~$ gl runners/11 | jq '{tag_list, run_untagged, access_level, mainte
 }
 ```
 
-Le runner est en ligne, il interroge GitLab toutes les secondes… et ne reçoit rien : aucun job ne demande `k8s-par1`, et plus aucun runner ne porte `k8s`. Un job est attribué à un runner qui porte **toutes** ses étiquettes. Correctif : remettre `k8s,kubernetes`. Où ? Depuis 16.x, les étiquettes d'un runner créé par jeton `glrt-` sont des **attributs du runner dans GitLab** (posés à la création par `POST /user/runners`, modifiables dans l'interface ou par `PUT /runners/:id`), plus des options de `register` : c'est donc une source de vérité **hors Git**. MédiSphère les trace dans le code qui crée le runner (le script de M19-E04 qui appelle l'API, rejoué à l'identique) et les contrôle (check du module, puis alerte au M21).
+Le runner est en ligne, il interroge GitLab en continu (*long polling*, `check_interval`)… et ne reçoit rien : aucun job ne demande `k8s-par1`, et plus aucun runner ne porte `k8s`. Un job est attribué à un runner qui porte **toutes** ses étiquettes. Correctif : remettre `k8s,kubernetes`. Où ? Depuis 16.x, les étiquettes d'un runner créé par jeton `glrt-` sont des **attributs du runner dans GitLab** (posés à la création par `POST /user/runners`, modifiables dans l'interface ou par `PUT /runners/:id`), et non plus des options de `register` : c'est donc une source de vérité **hors Git**. MédiSphère les trace dans le code qui crée le runner (le script de M19-E04 qui appelle l'API, rejoué à l'identique) et les contrôle (check du module, puis alerte au M21).
 
 ```
 admin@adm01:~$ gl runners/11 -X PUT --data-urlencode 'tag_list=k8s,kubernetes' --data-urlencode 'maintenance_note=' | jq .tag_list
@@ -99,15 +99,15 @@ admin@adm01:~$ gl runners/11 -X PUT --data-urlencode 'tag_list=k8s,kubernetes' -
 Preparing the "kubernetes" executor
 Using Kubernetes namespace: ci-jobs
 …
-ERROR: Job failed (system failure): prepare environment: setting up build pod: pods "runner-…-project-58-concurrent-0-…" is forbidden: exceeded quota: quota-ci-jobs, requested: limits.memory=…,requests.memory=…, used: limits.memory=0,requests.memory=0, limited: limits.memory=16Mi,requests.memory=8Mi
+ERROR: Job failed (system failure): prepare environment: setting up build pod: pods "runner-…-project-58-concurrent-0-…" is forbidden: exceeded quota: quota-ci, requested: limits.memory=…,requests.memory=…, used: limits.memory=0,requests.memory=0, limited: limits.memory=24Mi,requests.memory=12Mi
 admin@adm01:~$ kubectl -n ci-jobs describe resourcequota
-Name:            quota-ci-jobs
+Name:            quota-ci
 Resource         Used  Hard
 --------         ----  ----
-limits.memory    0     16Mi
-requests.memory  0     8Mi
+limits.memory    0     24Mi
+requests.memory  0     12Mi
 …
-admin@adm01:~$ kubectl -n ci-jobs get resourcequota quota-ci-jobs -o jsonpath='{.metadata.annotations}'
+admin@adm01:~$ kubectl -n ci-jobs get resourcequota quota-ci -o jsonpath='{.metadata.annotations}'
 {"medisphere.internal/modifie-par":"lucas.martin"}
 ```
 
@@ -128,7 +128,7 @@ Le seul runner qui porte `protege` est en `ref_protected` : il ne prend que les 
 
 **Vérification** : un pipeline du canari (`gl "projects/$P/pipeline?ref=main" -X POST`) réussit sur `k8s-par1` ; `lab/bin/check 19 35`, puis `lab/bin/break 19 35 --annuler`.
 
-**Explications** : GitLab n'« envoie » rien aux runners ; chaque gestionnaire demande un job (`POST /api/v4/jobs/request`, *long polling* maintenu par Workhorse) en présentant son jeton ; GitLab choisit dans la file le premier job compatible (étiquettes, protection, pause, accès du projet). Un runner peut donc être `online` (il a contacté GitLab récemment) et ne jamais recevoir de job. Le statut `online` ne dit **rien** de sa capacité à prendre un job donné.
+**Explications** : GitLab n'« envoie » rien aux runners ; chaque gestionnaire demande un job (`POST /api/v4/jobs/request`, toutes les `check_interval` secondes, ou en *long polling* maintenu par Workhorse si `api_ci_long_polling_duration` est posé dans `gitlab.rb`) en présentant son jeton ; GitLab choisit dans la file le premier job compatible (étiquettes, protection, pause, accès du projet). Un runner peut donc être `online` (il a contacté GitLab récemment) et ne jamais recevoir de job. Le statut `online` ne dit **rien** de sa capacité à prendre un job donné.
 
 **Alternatives** : pour « voir » ce que demande un job sans le lancer, l'API `ci/lint` donne les étiquettes résolues ; pour les runners, une vue « runners × étiquettes » générée chaque jour (script de `plateforme/outils`) rend visible un changement d'étiquettes.
 
@@ -212,21 +212,24 @@ ERROR: Job failed (system failure): prepare environment: setting up build pod: p
 
 L'admission `ServiceAccount` refuse un pod qui désigne un compte inexistant. Correctif : réappliquer `plateforme/k8s/espaces/ci-jobs/` (le compte y est décrit, avec `automountServiceAccountToken: false`) ; `kubectl get sa -n ci-jobs ci-job -o yaml` pour vérifier. Retrouver qui l'a supprimé : journal d'audit de l'API (M14-E27), filtre `.objectRef.resource == "serviceaccounts" and .verb == "delete"`.
 
-**Variante 4 — image refusée par l'admission.**
+**Variante 4 — image hors de Harbor, refusée avant même le pod.**
 
 ```
-ERROR: Job failed (system failure): prepare environment: setting up build pod: pods "runner-…" is forbidden: ValidatingAdmissionPolicy 'medisphere-images' with binding 'medisphere-images' denied request: …
+ERROR: The "docker.io/library/python:3.13-slim-trixie" image is not present on list of allowed images:
+- registry.par1.medisphere.internal/**
+Please check runner's allowed_images configuration: …
+ERROR: Job failed (system failure): prepare environment: … disallowed image
 admin@adm01:~$ git -C ~/src/ci-pannes log --format='%h %an %s' -3 -- .gitlab-ci.yml
 a41c9e2 Lucas Martin ci: image Python officielle pour le canari, plus simple (M19-E36)
 ```
 
-La politique `medisphere-images` (M14-E18) n'accepte que les images de Harbor. `docker.io/library/python` aurait été tirée par le cache de toute façon (miroir `hosts.toml`), mais l'admission juge la **référence** écrite dans le pod, pas le chemin réel du tirage : c'est voulu (on veut voir partout d'où vient l'image). Correctif : revert du commit de Lucas (MR) ; réponse à Lucas : la bonne référence est `registry.par1.medisphere.internal/dockerhub/library/python:…`. Si la variante a été sautée chez toi, c'est que `ci-jobs` n'est pas couvert par la politique : note-le, c'est une exception à justifier dans l'ADR-0190 ou à corriger (étiquette `medisphere.internal/equipe` de l'espace).
+Deux barrières se suivent. La première est celle du **runner** : `allowed_images` (M19-E04, E24) n'admet que `registry.par1.medisphere.internal/**` (motifs `doublestar`) ; le gestionnaire refuse le job **avant** de créer le pod, d'où l'absence d'événement dans `ci-jobs`. La seconde, si la première manquait (runner mal configuré), est l'**admission** : la politique `medisphere-images` (M14-E18) refuserait le pod (`ValidatingAdmissionPolicy 'medisphere-images' … denied request`). `docker.io/library/python` aurait été tirée par le cache de toute façon (miroir `hosts.toml`), mais runner et admission jugent la **référence** écrite, pas le chemin réel du tirage : c'est voulu (on veut voir partout d'où vient l'image). Correctif : revert du commit de Lucas (MR) ; réponse à Lucas : la bonne référence est `registry.par1.medisphere.internal/dockerhub/library/python:…`. Vérifie au passage que `ci-jobs` est bien couvert par la politique (étiquette `medisphere.internal/equipe` de l'espace) : sinon, c'est une exception à justifier dans l'ADR-0190 ou à corriger.
 
 **RB-195 — modèle** : [`fichiers/M19-E36/medisphere/docs/livraison/ci/runbooks/RB-195-job-echoue-ou-tue.md`](fichiers/M19-E36/medisphere/docs/livraison/ci/runbooks/RB-195-job-echoue-ou-tue.md) (sections `Avant le script` et `Job tué`, cette dernière complétée en M19-E42).
 
 **Explications** : avant le script, l'exécuteur Kubernetes enchaîne : lecture de la configuration (au démarrage du gestionnaire), demande du job, construction de la spécification du pod (images, ressources, compte de service, volumes, sécurité), création par l'API (authentification du gestionnaire, autorisation, admission : `ServiceAccount`, LimitRange, ResourceQuota, Pod Security, VAP), ordonnancement, tirage des images (*helper* et build en premier), démarrage, attachement. Chaque refus remonte dans le journal du job sous la forme `prepare environment: …`, souvent tronqué : l'événement Kubernetes ou le journal du gestionnaire donne la phrase complète.
 
-**Alternatives** : `FF_RETRIEVE_POD_WARNING_EVENTS` (à vérifier dans la liste des *feature flags* de ta version) recopie les événements d'avertissement du pod dans le journal du job ; utile pour les équipes qui n'ont pas accès à `ci-jobs`.
+**Alternatives** : l'option `print_pod_warning_events` de `[runners.kubernetes]` (activée par défaut en 19.x ; l'ancien drapeau `FF_RETRIEVE_POD_WARNING_EVENTS` n'existe plus) recopie les événements d'avertissement du pod dans le journal du job, au démarrage et après un échec ; elle exige le droit `events: list` du gestionnaire dans `ci-jobs` (Role de E24). Utile pour les équipes qui n'ont pas accès à `ci-jobs`.
 
 **Pièges classiques**
 - Corriger la ConfigMap à la main (`kubectl edit`) : le gestionnaire ne relit pas le gabarit sans redémarrage, et le prochain `helmfile apply` écrase la correction si les values ne sont pas justes.
@@ -527,14 +530,14 @@ admin@adm01:~$ git -C ~/src/ci-pannes diff 1.0.0 "$(git -C ~/src/ci-pannes descr
 ```
 admin@adm01:~$ TID=$(gl "projects/$P/access_tokens?state=active" | jq -r '.[] | select(.name == "canari-lecture") | .id')
 admin@adm01:~$ R=$(gl "projects/$P/access_tokens/$TID/rotate" -X POST --data-urlencode "expires_at=$(date -d '+90 days' +%F)")
-admin@adm01:~$ gl "projects/$P/variables/CANARI_JETON" -X PUT --data-urlencode "value=$(jq -r .token <<<"$R")" \
+admin@adm01:~$ jq -j .token <<<"$R" | gl "projects/$P/variables/CANARI_JETON" -X PUT --data-urlencode "value@-" \
     --data-urlencode masked=true --data-urlencode protected=true --data-urlencode description= | jq '{masked, protected}'
 admin@adm01:~$ unset R
 admin@adm01:~$ gl "projects/$P/access_tokens/$TID" | jq '{active, revoked}'
 { "active": false, "revoked": true }
 ```
 
-La rotation crée un nouveau jeton et révoque l'ancien dans la même opération. Le script [`fichiers/M19-E40/outils/rotation-canari.sh`](fichiers/M19-E40/outils/rotation-canari.sh) enchaîne rotation, mise à jour de la variable et effacement des journaux, sans jamais afficher la valeur.
+La rotation crée un nouveau jeton et révoque l'ancien dans la même opération ; la nouvelle valeur passe par l'entrée standard de `curl` (`value@-`), jamais par ses arguments (visibles dans `ps`). Le script [`fichiers/M19-E40/outils/rotation-canari.sh`](fichiers/M19-E40/outils/rotation-canari.sh) enchaîne rotation, mise à jour de la variable et effacement des journaux, sans jamais afficher la valeur.
 
 **Étape 4 — Effacer les journaux exposés.**
 
@@ -589,13 +592,12 @@ admin@adm01:~$ gl "projects/$P" | jq '{builds_access_level, ci_config_path}'
 **Étape 3 — Faire évaluer la configuration sans pousser.**
 
 ```
-admin@adm01:~$ gl "projects/$P/ci/lint" -X POST -H 'Content-Type: application/json' \
-    -d '{"dry_run": true, "ref": "main", "content": null}' | jq '{valid, errors, warnings, jobs: [.jobs[]?.name]}'
+admin@adm01:~$ gl "projects/$P/ci/lint?dry_run=true&dry_run_ref=main&include_jobs=true" | jq '{valid, errors, warnings, jobs: [.jobs[]?.name]}'
 admin@adm01:~$ gl "projects/$P/pipeline?ref=main" -X POST | jq '{id, message}'
 { "message": { "base": ["Pipeline filtered out by workflow rules."] } }
 ```
 
-(Selon la version, `ci/lint` en `dry_run` sans `content` évalue le fichier du dépôt à la référence donnée ; s'il exige `content`, passe le contenu du `.gitlab-ci.yml`.)
+(`GET …/ci/lint` lit le fichier du dépôt (`content_ref`, par défaut la tête de la branche par défaut) et le simule sur `dry_run_ref` ; `POST …/ci/lint` exige le contenu à valider dans `content`, utile pour essayer une modification avant de la pousser.)
 
 - **Variante 1** : la version `1.x.0` du composant ne garde que `merge_request_event` et `CI_COMMIT_TAG` dans `workflow:rules` : plus de pipeline de branche, donc rien sur `main` (ni pour les pipelines planifiés, qui sont des pipelines de branche). La création manuelle répond « filtered out by workflow rules » : c'est la seule fois où GitLab le dit. Correctif : nouvelle version qui garde les pipelines de branche **et** évite les doublons (la règle du M19-E06 : `$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS` → `never`), ou retour à `1.0.0`. Leçon pour Lucas : un composant qui porte `workflow` impose sa politique à tous ses consommateurs ; c'est une décision de plateforme, pas une optimisation locale.
 
@@ -606,7 +608,7 @@ admin@adm01:~$ gl "projects/$P/pipeline_schedules" | jq '.[] | {id, description,
 { "id": 3, "description": "canari-quotidien", "active": true, "owner": "lucas.martin", "etat": "blocked", … }
 ```
 
-Un pipeline planifié s'exécute **au nom de son propriétaire** (ses droits, ses accès aux variables protégées). Compte bloqué : plus de pipeline. Correctif : un Maintainer reprend la propriété (`POST /projects/:id/pipeline_schedules/:id/take_ownership`, ou bouton *Take ownership*). Qui doit être propriétaire ? Un compte nominatif d'un membre permanent de l'équipe, ou un compte de service dédié (`svc-ci-plateforme`) dont la vie ne dépend pas d'un contrat de stage. La règle va dans RB-194 et dans le contrôle de M19-E32.
+Un pipeline planifié s'exécute **au nom de son propriétaire** (ses droits, ses accès aux variables protégées). Compte bloqué : plus de pipeline, et la planification passe en **Inactive** à sa première exécution manquée (documentation *Scheduled pipelines*, « Scheduled pipeline becomes inactive ») ; débloquer le compte ne la réactive pas. Correctif : un Maintainer reprend la propriété (`POST /projects/:id/pipeline_schedules/:id/take_ownership`, ou bouton *Take ownership*). Qui doit être propriétaire ? Un compte nominatif d'un membre permanent de l'équipe, ou un compte de service dédié (`svc-ci-plateforme`) dont la vie ne dépend pas d'un contrat de stage. La règle va dans RB-194 et dans le contrôle de M19-E32.
 
 > `--annuler` réactive le compte de Lucas : il sert aux pannes des modules suivants. Dans la réalité, on ne réactive pas un compte pour réparer un pipeline : on change de propriétaire.
 
@@ -644,12 +646,13 @@ Le script [`fichiers/M19-E42/essais/surveiller-ci-jobs.sh`](fichiers/M19-E42/ess
 ```
 "lastState"/"state": {"terminated": {"reason": "OOMKilled", "exitCode": 137, …}}
 admin@adm01:~$ kubectl -n ci-jobs get pod <pod> -o jsonpath='{.spec.containers[?(@.name=="build")].resources}'
-{"limits":{"memory":"64Mi"},"requests":{…}}
-admin@adm01:~$ kubectl -n gitlab-runner get cm <cm> -o jsonpath='{.data.config\.template\.toml}' | grep -E 'memory_limit'
-    memory_limit = "64Mi"
+{"limits":{"memory":"96Mi"},"requests":{"memory":"96Mi",…}}
+admin@adm01:~$ kubectl -n gitlab-runner get cm <cm> -o jsonpath='{.data.config\.template\.toml}' | grep -E 'memory_(request|limit) '
+    memory_request = "96Mi"
+    memory_limit = "96Mi"
 ```
 
-Correctif : `helmfile … apply` (valeur du code, M19-E27). Le noyau tue le processus qui dépasse `memory.max` de son cgroup ; le runner ne voit qu'une sortie 137 (ou un pod en échec).
+Correctif : `helmfile … apply` (valeurs du code, M19-E27). La demande a été baissée avec la limite : une demande supérieure à la limite rendrait le pod invalide (refusé par l'API, un tout autre symptôme). Le noyau tue le processus qui dépasse `memory.max` de son cgroup ; le runner ne voit qu'une sortie 137 (ou un pod en échec).
 
 **Variante 2 — délai actif imposé par une politique de mutation.**
 
@@ -663,15 +666,16 @@ mutatingadmissionpolicy.admissionregistration.k8s.io/ci-jobs-delai-maximal   2h
 admin@adm01:~$ kubectl get mutatingadmissionpolicy ci-jobs-delai-maximal -o yaml | yq '.spec.mutations'
 ```
 
-Le runner pose lui-même `activeDeadlineSeconds` = délai du job + 1 s (`FF_USE_POD_ACTIVE_DEADLINE_SECONDS`, actif par défaut) : une valeur de **30** ne peut pas venir de lui (le délai minimal d'un projet est de 10 minutes). Une politique de mutation (`MutatingAdmissionPolicy`, GA en 1.36) la réécrit à l'admission. Correctif : supprimer la politique et sa liaison (et poser la question à Lucas : les « jobs zombies » se traitent par les délais de job et du runner, `maximum_timeout`, pas par l'admission). Prévention : les politiques d'admission ne vivent que dans `plateforme/k8s/admission/` (revue obligatoire).
+Le runner pose lui-même `activeDeadlineSeconds` = délai du job + 1 s (`FF_USE_POD_ACTIVE_DEADLINE_SECONDS`, actif par défaut) : une valeur de **30** ne peut pas venir de lui (le délai du projet est d'au moins 10 minutes et le job du canari ne fixe pas de `timeout`). Une politique de mutation (`MutatingAdmissionPolicy`, GA en 1.36) la réécrit à l'admission. Correctif : supprimer la politique et sa liaison (et poser la question à Lucas : les « jobs zombies » se traitent par les délais de job et du runner, `maximum_timeout`, pas par l'admission). Prévention : les politiques d'admission ne vivent que dans `plateforme/k8s/admission/` (revue obligatoire).
 
 **Variante 3 — éviction pour stockage éphémère.**
 
 ```
 admin@adm01:~$ kubectl -n ci-jobs get events --field-selector reason=Evicted
 … Container build exceeded its local ephemeral storage limit "50Mi".
-admin@adm01:~$ kubectl -n gitlab-runner get cm <cm> -o jsonpath='{.data.config\.template\.toml}' | grep ephemeral_storage_limit
+admin@adm01:~$ kubectl -n gitlab-runner get cm <cm> -o jsonpath='{.data.config\.template\.toml}' | grep -E 'ephemeral_storage_(request|limit) '
     ephemeral_storage_limit = "50Mi"
+    ephemeral_storage_request = "50Mi"
 ```
 
 Le kubelet mesure périodiquement la couche inscriptible et les journaux de chaque conteneur ; au-delà de la limite, il **évince** le pod (phase `Failed`, raison `Evicted`). Correctif : valeur du code. Note : `/builds` est un `emptyDir`, compté au niveau du pod ; `/tmp` est dans la couche du conteneur.
@@ -751,7 +755,7 @@ admin@git01:~$ sudo grep -h '"uri":"/api/v4/jobs/request"' /var/log/gitlab/gitla
 {"status":201,"duration_ms":1873}
 ```
 
-Workhorse retient la requête du runner jusqu'à `api_ci_long_polling_duration` (de l'ordre de 50 s) et ne la transmet à Rails que si une notification Redis signale du nouveau pour ce runner : sans job, `204` au bout du délai ; avec un job, Rails exécute la sélection (`Ci::RegisterJobService` : étiquettes, protection, file), passe le job en `running`, répond `201` avec la charge utile (étapes du script, images, variables, jeton de job, informations de cache et d'artefacts). Dans le journal du gestionnaire : `Checking for jobs... received job=… repo_url=… runner=…`, puis `Using Kubernetes executor…`, `Waiting for pod…`.
+(Sorties après activation du *long polling* : `gitlab_workhorse['api_ci_long_polling_duration'] = "50s"` posé par le rôle Ansible de `git01`, puis `gitlab-ctl reconfigure`. Avant, sur un omnibus par défaut, chaque requête répond `204` en quelques millisecondes et le gestionnaire rappelle toutes les `check_interval` secondes : c'est la première chose à constater.) Workhorse retient alors la requête du runner jusqu'à `api_ci_long_polling_duration` et ne la transmet à Rails que si une notification Redis signale du nouveau pour ce runner : sans job, `204` au bout du délai ; avec un job, Rails exécute la sélection (`Ci::RegisterJobService` : étiquettes, protection, file), passe le job en `running`, répond `201` avec la charge utile (étapes du script, images, variables, jeton de job, informations de cache et d'artefacts). Dans le journal du gestionnaire : `Checking for jobs... received job=… repo_url=… runner=…`, puis `Using Kubernetes executor…`, `Waiting for pod…`.
 
 *4. Le pod.*
 
@@ -780,7 +784,7 @@ Le journal part par morceaux (`PATCH …/trace` avec `Content-Range`), rangés d
 **Réponses aux questions d'analyse**
 
 1. La poussée doit être rapide et ne jamais échouer à cause de la CI : la création du pipeline (lecture de la configuration, includes, composants, évaluation des règles) peut prendre des secondes et appeler d'autres projets ; elle est donc différée dans Sidekiq. Sidekiq saturé : le développeur voit son commit **sans pipeline** pendant de longues secondes ou minutes, puis le pipeline apparaît (rien n'est perdu, la file Redis garde les travaux).
-2. Interroger toutes les secondes ferait des milliers de requêtes Rails par minute pour rien ; le *long polling* garde une requête ouverte par gestionnaire et ne réveille Rails que quand une notification (Redis, clé de file du runner) arrive. Workhorse la maintient (`api_ci_long_polling_duration`) ; l'arrivée d'un job compatible publie la notification qui libère la requête.
+2. Interroger toutes les secondes ferait des milliers de requêtes Rails par minute pour rien ; le *long polling* garde une requête ouverte par gestionnaire et ne réveille Rails que quand une notification (Redis, clé de file du runner) arrive. Workhorse la maintient (`api_ci_long_polling_duration`, **à activer** : non posé par défaut dans omnibus, le runner se contente alors d'interroger toutes les `check_interval` secondes) ; l'arrivée d'un job compatible publie la notification qui libère la requête.
 3. La réponse contient l'identifiant du job, le jeton du job, les étapes (scripts), les images et services, les variables (dont les secrets qui lui reviennent), les informations Git (dépôt, référence, profondeur), cache et artefacts à télécharger. Le jeton de job est valable tant que le job tourne (et jusqu'à son délai) ; il permet de cloner le dépôt, de télécharger les artefacts des dépendances, d'envoyer le journal et les artefacts, et d'accéder aux projets qui l'autorisent (liste d'autorisation entrante, M19-E25).
 4. Le gestionnaire crée et pilote des pods (création, attachement ou `exec` pour envoyer les scripts, lecture des journaux, suppression) : il lui faut ces verbes dans `ci-jobs`, et rien d'autre (Role du M19-E24). Le pod de job exécute du code venu des projets : s'il avait un jeton d'API, n'importe quel développeur pourrait agir sur le cluster depuis un job.
 5. Dans Redis (morceaux de journal en direct), puis en base ou en stockage objet à la fin. Si le gestionnaire meurt, il n'envoie plus rien : GitLab ne sait pas que le job est fini ; le job reste `running` jusqu'à son délai, puis passe en échec (« job has not been triggered by a runner… » / *stuck* selon le cas) ; le pod, lui, peut rester orphelin dans `ci-jobs` jusqu'à son `activeDeadlineSeconds` : d'où l'intérêt de ce champ.
@@ -807,7 +811,7 @@ Le journal part par morceaux (`PATCH …/trace` avec `Content-Range`), rangés d
 10. DinD exige un conteneur privilégié (interdit, accès quasi root au nœud) ; Kaniko est archivé ; BuildKit sans démon dans chaque job exige des exceptions seccomp/AppArmor dans `ci-jobs` et perd le cache entre jobs. Le démon partagé *rootless* concentre les exceptions dans un seul espace surveillé et garde un cache chaud. Risques : un projet qui lit ou empoisonne le cache d'un autre (cache partagé par contenu), un démon compromis qui voit les constructions de tous, une indisponibilité commune. Réductions : TLS mutuel et politique réseau (seuls les jobs), cache en registre par projet (référence distincte), images de base par empreinte, signature et provenance qui lient l'image au job, démon distinct pour le runner protégé si l'analyse de risque l'exige.
 11. Cache : optimisation **sans garantie** (peut manquer, être ancien, partagé entre jobs et pipelines, séparé par protection), stocké dans `ci-cache`. Artefacts : résultat **garanti** d'un job, transmis aux jobs suivants du même pipeline (`needs`, `dependencies`), conservé selon `expire_in`, stocké par GitLab. Transmettre un résultat par le cache : un job suivant peut tourner sur un autre runner, avant la fin de l'écriture, ou ne pas trouver l'archive.
 12. PriorityClass basse : en cas de saturation, les applications (et les jobs prioritaires) préemptent les jobs de CI plutôt que l'inverse ; la file de CI s'allonge (les jobs attendent `poll_timeout` puis échouent, ou restent en attente côté GitLab si `limit`/`concurrent` sont atteints). Le PDB par job (`pod_disruption_budget`) ne protège que contre les **évictions** par l'API (drain) ; la préemption par l'ordonnanceur respecte les PDB « au mieux » mais peut les violer s'il n'y a pas d'autre choix, et l'OOM l'ignore complètement.
-13. Le pipeline planifié ne tourne plus (le propriétaire n'a plus de droits) ; selon la version, il est désactivé ou simplement ignoré. Règle : propriétaire = membre permanent ou compte de service dédié par équipe ; *take ownership* lors de chaque départ (procédure RH) ; contrôle hebdomadaire des propriétaires (M19-E32).
+13. Le pipeline planifié ne tourne plus (le propriétaire n'a plus de droits) et la planification devient *Inactive* ; *Take ownership* la réactive. Règle : propriétaire = membre permanent ou compte de service dédié par équipe ; *take ownership* lors de chaque départ (procédure RH) ; contrôle hebdomadaire des propriétaires (M19-E32).
 14. Free : branches et étiquettes protégées (seuls les Maintainers fusionnent ou étiquettent), runner protégé (seul à recevoir les secrets de signature et de promotion), variables protégées, jobs manuels, `resource_group` (un déploiement à la fois), MR obligatoire et relue sur `mediagenda/deploiement` (et Argo CD au M20). Moins bien qu'en Premium : pas d'approbation **obligatoire** d'un tiers imposée par GitLab (la règle tient par l'organisation et les Maintainers), pas de liste nominative de qui peut déployer dans tel environnement, pas de règle de *code owners* bloquante.
 15. GitLab d'abord (dans le chemin de montée officiel, une mineure à la fois, migrations d'arrière-plan **terminées** avant la suivante), puis runners et agent (même mineure ; un runner peut avoir une mineure de retard ou d'avance limitée selon la politique de compatibilité, à vérifier). Retour arrière : restauration de la sauvegarde **applicative** (`gitlab-backup` + `gitlab-secrets.json` + `gitlab.rb`) cohérente avec la version, ou de la VM entière. PBS seul ne suffit pas : instantané pris pendant que les migrations écrivent (incohérence), restauration de toute la VM pour un problème partiel, et pas de restauration croisée vers une autre version.
 16. Preuves : signature Cosign de l'image par la clé MédiSphère (vérifiable), attestation de provenance SLSA qui nomme le pipeline, le job, le commit et le runner ; SBOM attaché ; MR relue et fusionnée qui contient le commit ; journaux du pipeline ; promotion par MR dans `mediagenda/deploiement` ; événements d'audit de GitLab. Falsifiables par un administrateur de la plateforme : à peu près tout ce qui vit dans GitLab (un administrateur peut lancer un pipeline, accéder aux variables protégées, donc à la clé de signature) ; d'où la séparation des rôles (clé dans un HSM ou OpenBao au M25, signature sans clé exportable), les journaux exportés hors de GitLab (Loki, M22), et la vérification par un tiers.

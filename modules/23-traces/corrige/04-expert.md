@@ -32,7 +32,7 @@ Puis le périmètre dans Tempo : `{resource.service.name = "medidoc"}`, `{resour
 
 **Variante 1 — L'application exporte vers le mauvais port.**
 
-Seul MédiAgenda de dev a disparu ; les agents acceptent encore les spans de MédiDoc (qui arrivent maintenant **sans parent**, racines dans `medidoc` : un indice de plus). Journal de l'application :
+Seul MédiAgenda de dev a disparu ; les agents acceptent encore les spans de MédiDoc (qui arrivent maintenant avec un **parent introuvable** : leur `parentSpanId` désigne la span client de MédiAgenda, jamais reçue ; Tempo affiche la trace avec une racine manquante, `<root span not yet received>` : un indice de plus). Journal de l'application :
 
 ```
 admin@adm01:~$ kubectl -n mediagenda-dev logs deploy/mediagenda --since=10m | grep -i -m3 export
@@ -68,7 +68,7 @@ Error from server (NotFound): services "tempo-distributor" not found
 
 **Variante 3 — Une règle Cilium refuse le port 4317 de la passerelle.**
 
-Les agents acceptent, mais leurs envois vers la passerelle échouent ; la passerelle ne reçoit plus rien des agents (l'émetteur externe, qui arrive sur 14317, passe encore) :
+Les agents acceptent, mais leurs envois vers la passerelle échouent ; la passerelle ne reçoit plus rien des agents. L'émetteur externe, qui arrive sur 14317, ne passe plus qu'en partie : son pipeline `traces/externe` renvoie lui aussi chaque trace, par `loadbalancing`, vers le port 4317 d'un réplica ; seules celles que le hachage attribue au réplica qui les a reçues (connexion locale au pod, que Cilium ne filtre pas) arrivent encore :
 
 ```
 admin@adm01:~$ hubble observe -n traces --to-port 4317 --verdict DROPPED --last 5
@@ -401,7 +401,7 @@ admin@adm01:~/m23/e24$ jq -c '.resourceSpans[] | {svc: (.resource.attributes[] |
 
 *Le chemin d'une span réelle et ses délais* : requête au témoin ou à la main sur MédiAgenda de dev, en notant l'heure ; le SDK l'envoie au plus tard après `OTEL_BSP_SCHEDULE_DELAY` (5 s par défaut), l'agent après `batch.timeout` (2 s), la passerelle attend `decision_wait` (10 s) puis son `batch.timeout` (5 s) : la trace est trouvable par identifiant dans Tempo (*live-store*) après 15 à 25 s ; elle est dans un bloc du compartiment après la fermeture du bloc du *live-store* (`max_block_duration`, puis écriture), visible par `aws s3 ls` et `tempo-cli list blocks` quelques minutes plus tard.
 
-*Le bloc* : `tempo-cli-local.sh` copie le bloc le plus récent avec l'identité de **lecture** (`s3-tempo.env`), puis :
+*Le bloc* : `tempo-cli-local.sh` copie le bloc le plus récent avec les identifiants RGW de Tempo (`s3-tempo.env`), **en lecture seulement** (liste et copie : ces identifiants pourraient écrire, le script ne le fait jamais ; pour aller plus loin, crée une identité de lecture comme pour Pyroscope en M23-E14), puis :
 
 ```
 admin@adm01:~/m23/e24$ ./tempo-cli-local.sh

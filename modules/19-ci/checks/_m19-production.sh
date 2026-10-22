@@ -53,6 +53,12 @@ _m19p_toml() {
   kube -n "$_M19P_RUNNER_NS" get configmap "$1" -o jsonpath='{.data.config\.template\.toml}' 2>/dev/null || true
 }
 
+# _m19p_toml_global RELEASE — partie globale de la configuration (clé config.toml de la ConfigMap du
+# chart : concurrent, check_interval, shutdown_timeout ; les [[runners]] sont dans config.template.toml).
+_m19p_toml_global() {
+  kube -n "$_M19P_RUNNER_NS" get configmap "$1" -o jsonpath='{.data.config\.toml}' 2>/dev/null || true
+}
+
 # _m19p_toml_a TOML REGEX — la configuration contient une ligne (hors commentaire) qui correspond.
 _m19p_toml_a() { grep -v '^[[:space:]]*#' <<<"$1" | grep -Eq -- "$2"; }
 
@@ -204,8 +210,11 @@ _m19p_artefact_version() {
     | jq -c --arg re "$re" '[.[]? | select(any(.tags[]?; .name | test($re)))] | first // null' 2>/dev/null || echo null
 }
 
-# _m19p_signee_attestee ARTEFACT — au moins une signature Cosign et deux autres accessoires
-# (attestations SBOM et provenance). Types d'accessoires de Harbor 2.15 : à vérifier sur ton lab.
+# _m19p_signee_attestee ARTEFACT — au moins trois accessoires Cosign : la signature et les deux
+# attestations (SBOM, provenance). Harbor 2.15.3 range TOUS les bundles Sigstore de Cosign 3
+# (référents d'artifactType application/vnd.dev.sigstore.bundle.v0.3+json, signature comme
+# attestation) sous le type « signature.cosign » (src/server/middleware/subject/subject.go) :
+# on ne compte donc que ce type, pas le SBOM que Harbor génère lui-même (« sbom.harbor »).
 _m19p_signee_attestee() {
-  _m19p_jq "$1" '(.accessories | length) >= 3 and any(.accessories[]; .type == "signature.cosign")'
+  _m19p_jq "$1" '[.accessories[]? | select(.type == "signature.cosign")] | length >= 3'
 }

@@ -102,7 +102,7 @@ La production reçoit MédiDoc instrumenté avec le mini-projet, après la recet
 
 **Solution**
 
-1. [`essais/instrumentation.yaml`](fichiers/M23-E07/essais/instrumentation.yaml) : `Instrumentation` `python-essai` (`exporter.endpoint: http://otel-agent-collector.traces.svc.cluster.local:4318`, propagateurs `tracecontext` et `baggage`, `parentbased_traceidratio` à `"1"`, `resourceAttributes`, image `registry.par1.medisphere.internal/ghcr/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.66b1`, `initContainerSecurityContext` compatible `restricted`, variables `OTEL_PYTHON_EXCLUDED_URLS`, `OTEL_SEMCONV_STABILITY_OPT_IN=http,database`, `OTEL_METRICS_EXPORTER=none`, `OTEL_LOGS_EXPORTER=none`).
+1. [`essais/instrumentation.yaml`](fichiers/M23-E07/essais/instrumentation.yaml) : `Instrumentation` `python-essai` (`exporter.endpoint: http://otel-agent-collector.traces.svc.cluster.local:4318`, propagateurs `tracecontext` et `baggage`, échantillonneur `parentbased_always_on` (comme MédiAgenda en dev avant M23-E09), `resourceAttributes`, image `registry.par1.medisphere.internal/ghcr/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.66b1`, `initContainerSecurityContext` compatible `restricted`, variables `OTEL_PYTHON_EXCLUDED_URLS`, `OTEL_SEMCONV_STABILITY_OPT_IN=http,database`, `OTEL_METRICS_EXPORTER=none`, `OTEL_LOGS_EXPORTER=none`).
 2. [`essais/donnees-essai.yaml`](fichiers/M23-E07/essais/donnees-essai.yaml) (PostgreSQL et Valkey jetables) et [`essais/mediagenda-auto.yaml`](fichiers/M23-E07/essais/mediagenda-auto.yaml) (annotations **sur le gabarit du pod**) :
    ```
    admin@adm01:~$ kubectl -n wb-essais apply -f essais/
@@ -227,7 +227,7 @@ L'échantillonnage en queue ne peut décider qu'après avoir vu la trace : il **
 
 **En production chez MédiSphère**
 
-Le même réglage vaut pour la production, avec une surveillance de `dropped_too_early` et de `otelcol_processor_refused_spans` (alerte, M21). Les taux et SLO restent calculés sur les métriques des applications, jamais sur les traces.
+Le même réglage vaut pour la production, avec une surveillance de `dropped_too_early` et de `otelcol_processor_memory_limiter_refused_spans` (l'ancien `otelcol_processor_refused_spans` n'existe plus en 0.161) (alerte, M21). Les taux et SLO restent calculés sur les métriques des applications, jamais sur les traces.
 
 ---
 
@@ -264,7 +264,7 @@ EOF
 admin@adm01:~$ curl -s -H 'Content-Type: application/json' --data @/tmp/span-factice.json http://localhost:14318/v1/traces
 {"partialSuccess":{}}
 ```
-Avec l'agent ainsi configuré, la span arrive dans Tempo avec `url.full=http://x/essai`, sans `url.query`, `db.query.text=SELECT * FROM p WHERE nom = '?'`, `essai.libre=contact **** nir **** 78` (la clé du NIR, séparée par une espace, reste : les 13 chiffres suffisent à masquer l'identifiant, mais un NIR écrit avec des espaces partout passerait : limite à documenter), sans en-tête, `redaction.masked.count=2`. Une span `GET /sante` envoyée de la même façon n'arrive pas. Le port-forward passe par l'agent : `k8sattributes` n'enrichit pas ces spans (connexion depuis l'API, pas depuis un pod), ce qui est attendu.
+Avec l'agent ainsi configuré, la span arrive dans Tempo avec `url.full=http://x/essai`, sans `url.query`, `db.query.text=SELECT * FROM p WHERE nom = '?'`, `essai.libre=contact **** nir **** 78` (la clé du NIR, séparée par une espace, reste : les 13 chiffres suffisent à masquer l'identifiant, mais un NIR écrit avec des espaces partout passerait : limite à documenter), sans en-tête, `redaction.masked.count=1` (le compteur compte les **attributs** masqués, pas les valeurs : `essai.libre` en contenait deux). Une span `GET /sante` envoyée de la même façon n'arrive pas. Le port-forward passe par l'agent : `k8sattributes` n'enrichit pas ces spans (connexion depuis l'API, pas depuis un pod), ce qui est attendu.
 
 **Preuve sur les données réelles** (dernière heure, avec trafic), chacune doit répondre **vide** :
 ```

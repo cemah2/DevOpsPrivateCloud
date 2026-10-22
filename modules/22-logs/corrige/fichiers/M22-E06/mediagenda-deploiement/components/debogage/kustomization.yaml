@@ -1,0 +1,35 @@
+# mediagenda/deploiement — components/debogage/kustomization.yaml (version M22-E06, DEV-2306 ; créé en M17-E09)
+# Component « debogage » (dev, et ponctuellement ailleurs le temps d'un diagnostic) : journaux en
+# DEBUG, cache des créneaux réduit. Jamais en prod (le check M17-E09 y veille).
+#
+# M22-E06 : le format passe de « texte » à « json ». Le texte servait à lire « kubectl logs » ; depuis
+# Loki, c'est le JSON qu'on exploite (request_id, niveau en métadonnées structurées, horodatage de
+# l'application) : en texte, Alloy ne peut rien extraire des lignes de dev. Pour un œil humain,
+# « kubectl logs … | jq -r '.horodatage + " " + .niveau + " " + .message' » fait l'affaire.
+# Changer une variable « env » change le gabarit de pod : à la synchronisation d'Argo CD, le Deployment
+# remplace ses pods tout seul (aucun « kubectl rollout restart » sur l'espace applicatif).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  # Les variables MEDIAGENDA_LOG_* sont dans « env » (prioritaire sur envFrom) : correctif
+  # stratégique, qui fusionne la liste env par le champ « name ».
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mediagenda
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: MEDIAGENDA_LOG_LEVEL
+                    value: DEBUG
+                  - name: MEDIAGENDA_LOG_FORMAT
+                    value: json
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    literals:
+      - MEDIAGENDA_CACHE_TTL=5

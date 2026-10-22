@@ -79,7 +79,7 @@ _m19E41_une() {
 }
 
 _e41_defaire() {
-  local n="$1" pid p uid
+  local n="$1" pid p uid s
   pid="$(m19_temoin_id 2>/dev/null)" || pid=""
   case "$n" in
     1) m19_temoin_retablir E41 ;;
@@ -101,6 +101,14 @@ _e41_defaire() {
       [[ -n "$uid" ]] || uid="$(m19_lucas_id 2>/dev/null)"
       if [[ -n "$uid" ]] && m19_api GET "users/$uid" 2>/dev/null | jq -e '.state == "blocked"' >/dev/null 2>&1; then
         m19_api POST "users/$uid/unblock" >/dev/null || wb_avert "compte $_M19_LUCAS toujours bloqué : débloque-le (Admin > Users)"
+      fi
+      # GitLab rend « Inactive » un pipeline planifié dont le propriétaire est bloqué, à sa première
+      # exécution manquée ; débloquer le compte ne le réactive pas. Si la planification appartient
+      # encore à Lucas et est inactive, on tente de la réactiver (sinon : « Take ownership »).
+      s="$(_e41_planifie 2>/dev/null)" || s=""
+      if [[ -n "$s" && -n "$pid" ]] && jq -e --arg u "$_M19_LUCAS" '.owner.username == $u and (.active | not)' >/dev/null 2>&1 <<<"$s"; then
+        m19_api PUT "projects/$pid/pipeline_schedules/$(jq -r '.id' <<<"$s")" --data-urlencode "active=true" >/dev/null 2>&1 ||
+          wb_avert "pipeline planifié canari-quotidien inactif : reprends-en la propriété (Take ownership) pour le réactiver"
       fi
       m19_oublier E41 lucas-bloque
       ;;
@@ -144,8 +152,8 @@ symptome_E41() {
     4)
       wb_symptome "Ticket INC-4641 — De : Nadia Roussel" \
         "Le canari quotidien (pipeline planifié « canari-quotidien » de formation/ci-pannes) n'a" \
-        "pas tourné cette nuit, ni la précédente : aucun pipeline de source « schedule ». Le" \
-        "planning est toujours actif dans l'interface. Personne n'a touché au projet, à part les" \
+        "pas tourné cette nuit, ni la précédente : aucun pipeline de source « schedule ». La" \
+        "planification existe toujours dans l'interface. Personne n'a touché au projet, à part les" \
         "RH qui ont clôturé quelques comptes en fin de semaine. Remets-le en route proprement." \
         "" \
         "Temps cible : 30 min. Contrôle : lab/bin/check 19 41"

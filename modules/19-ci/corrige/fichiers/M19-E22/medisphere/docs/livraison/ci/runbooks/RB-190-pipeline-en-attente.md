@@ -103,12 +103,12 @@ admin@adm01:~$ kubectl --context k8s-par1 top nodes
 
 | Cause | Constat | Action en astreinte | Jour ouvré |
 |---|---|---|---|
-| Quota de `ci-jobs` épuisé | événement `FailedCreate … exceeded quota: quota-ci` ; le pod **n'existe pas** | annuler des jobs dépassés ; ne **pas** relever le quota la nuit sans Claire | revoir quota et demandes (E27) |
+| Quota de `ci-jobs` épuisé | journal du job : `prepare environment: setting up build pod: … forbidden: exceeded quota: quota-ci` (échec immédiat) ; le pod **n'existe pas**, aucun événement | annuler des jobs dépassés ; ne **pas** relever le quota la nuit sans Claire | revoir quota et demandes (E27) |
 | Demande hors des bornes du LimitRange (`KUBERNETES_*` d'un job) | `forbidden: maximum memory usage per Container` | — | corriger le job |
 | Pas de place sur les nœuds | pod `Pending`, `FailedScheduling: Insufficient memory` | vérifier qu'aucun composant temporaire (SonarQube, Jenkins) ne tourne en trop ; le mettre à 0 si c'est le cas, avec l'accord de l'équipe | capacité |
 | Image introuvable ou refusée (`ErrImagePull`, `ImagePullBackOff`, refus de la VAP `medisphere-images`) | événements du pod ; image hors Harbor ou sans version | — (le pod finit en échec, `poll_timeout`) | corriger l'image ; Harbor (RB-13x) si c'est lui |
 | Secret ou ConfigMap monté absent (`buildkit-client`, `medisphere-racine`) | `FailedMount` | recréer depuis le code (`helmfile -l composant=buildkitd apply`, `task appliquer`) | cause (suppression ?) |
-| Compte de service `ci-job` absent | `FailedCreate … serviceaccount "ci-job" not found` | `task appliquer` (espaces) | — |
+| Compte de service `ci-job` absent | journal du job : `… forbidden: error looking up service account ci-jobs/ci-job` (échec immédiat, pas de pod) | `task appliquer` (espaces) | — |
 
 ### F. Le pod tourne, le job ne progresse pas
 
@@ -137,8 +137,9 @@ en moins de 60 s, et les pipelines bloqués sont relancés ou annulés avec leur
 
 - Ajouter une étiquette au runner pour « débloquer » un job : on ouvre le runner à des jobs non prévus.
 - Relever le quota de `ci-jobs` : les jobs démarrent, puis ce sont les applications qui manquent de place.
-- Un quota dépassé ne crée **pas** de pod `Pending` : le pod n'existe pas, l'erreur est dans les
-  événements du gestionnaire (`FailedCreate`), pas dans `kubectl get pods`.
+- Un quota dépassé ne crée **pas** de pod `Pending` : le pod n'existe pas (pas d'événement non plus,
+  `FailedCreate` n'est émis que par les contrôleurs) ; l'erreur est dans le journal du job et dans
+  celui du gestionnaire, pas dans `kubectl get pods`.
 - Supprimer un pod de job : GitLab croit le job vivant jusqu'au délai ; annule le job dans GitLab.
 - « *This job is stuck* » s'affiche aussi quand le **seul** runner compatible est hors ligne.
 - Un job d'une branche non protégée qui vise l'étiquette `protege` ne sera **jamais** pris (E24).

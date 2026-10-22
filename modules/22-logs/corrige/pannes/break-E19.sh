@@ -11,8 +11,10 @@
 #   2. commit de Lucas dans plateforme/observabilite (alloy/values.yaml) : tolérances des nœuds de
 #      contrôle retirées de controller.tolerations « pour ne plus encombrer les nœuds de contrôle » :
 #      plus aucun journal des trois nœuds de contrôle, ni du journal d'audit de l'API ;
-#   3. drop-in journald « Storage=none » sur un travailleur (« économiser le disque, tout part dans
-#      Loki ») : journald ne garde plus rien, Alloy ne lit plus rien de ce nœud (journaux système) ;
+#   3. drop-in journald « Storage=volatile » sur un travailleur (« économiser le disque, tout part dans
+#      Loki ») : journald n'écrit plus qu'en mémoire (/run/log/journal), qu'Alloy ne lit pas ; plus rien
+#      des journaux système de ce nœud. Jamais « Storage=none » (qui jetterait les lignes : perte) ;
+#      l'annulation (ou la réparation) les remet sur le disque par « journalctl --flush » ;
 #   4. /var/log/journal renommé sur un travailleur (« archivage avant nettoyage ») puis journald
 #      relancé : le journal devient volatil (/run/log/journal), qu'Alloy ne lit pas. Sans effet si
 #      journald recrée /var/log/journal (Storage=persistent) ou si Alloy lit aussi /run/log/journal.
@@ -112,10 +114,10 @@ mkdir -p "$d"
 cat > "$f" <<'CONF'
 # Lucas — CHG-2319 : économiser le disque des travailleurs, les journaux partent dans Loki de toute façon
 [Journal]
-Storage=none
+Storage=volatile
 CONF
 systemctl restart systemd-journald
-journal "drop-in journald $f (Storage=none), journald relancé"
+journal "drop-in journald $f (Storage=volatile), journald relancé"
 EOF
       ((rc == 0)) || return "$rc"
       ;;
@@ -169,10 +171,11 @@ _e19_defaire() {
       [[ -n "$h" ]] || return 0
       m22_wb_exec "$h" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur $h (journald)"
 f=/etc/systemd/journald.conf.d/60-economie-disque.conf
-if grep -qs '^Storage=none' "$f"; then
+if grep -qs '^Storage=volatile' "$f"; then
   restaurer_fichiers
   systemctl restart systemd-journald
-  journal "annulation : drop-in journald retiré, journald relancé"
+  journalctl --flush >/dev/null 2>&1 || true
+  journal "annulation : drop-in journald retiré, journald relancé, journal volatil vidé vers le disque"
 else
   rm -f "$WB_DIR/$WB_EX.manifeste"
 fi

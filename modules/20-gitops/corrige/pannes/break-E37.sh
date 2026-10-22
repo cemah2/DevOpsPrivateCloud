@@ -72,11 +72,16 @@ _m20E37_une() {
       ((${#fichiers[@]} > 0)) || return 10
       actions=""
       for f in "${fichiers[@]}"; do
+        # Seules les Applications et ApplicationSets « déménagent » : l'AppProject labo garde
+        # l'ancienne adresse dans sourceRepos (c'est lui qui refuse la nouvelle, avant toute connexion).
+        m20_brut "$_M20_GITOPS" "$f" | yq -e 'select(.kind == "Application" or .kind == "ApplicationSet")' >/dev/null 2>&1 || continue
+        m20_brut "$_M20_GITOPS" "$f" | yq -e 'select(.kind == "AppProject")' >/dev/null 2>&1 && continue
         t="$(mktemp)"
         m20_brut "$_M20_GITOPS" "$f" | perl -pe 's{https://git01\.par1\.medisphere\.internal/formation/gitops-labo}{https://gitlab.par1.medisphere.internal/formation/gitops-labo}g' >"$t"
         actions+="${actions:+,}$(m20_action update "$f" "$t")"
         rm -f "$t"
       done
+      [[ -n "$actions" ]] || return 10
       m20_commit_lucas E37 "$_M20_GITOPS" "lucas/labo-nouvelle-adresse-forge" \
         "chore(labo): nouvelle adresse de la forge" \
         "PLAT-2137 : InfoGér annonce que la forge sera publiée sous gitlab.par1.medisphere.internal ; on anticipe sur labo." \

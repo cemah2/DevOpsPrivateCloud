@@ -11,9 +11,9 @@
 #      au redémarrage, l'enregistrement auprès de git01 échoue (x509), le gestionnaire boucle et ne
 #      prend plus de jobs ;
 #   3. compte de service ci-job supprimé de ci-jobs : l'API refuse les pods de job ;
-#   4. Lucas fait consommer au canari une image « officielle » prise directement sur Docker Hub : la
-#      ValidatingAdmissionPolicy medisphere-images refuse le pod (sans effet si ci-jobs n'est pas
-#      couvert par la politique : variante sautée).
+#   4. Lucas fait consommer au canari une image « officielle » prise directement sur Docker Hub :
+#      allowed_images du runner (E04, E24) refuse le job avant le pod ; à défaut, la
+#      ValidatingAdmissionPolicy medisphere-images refuserait le pod (variante sautée si le job passe).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"

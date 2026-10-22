@@ -665,7 +665,7 @@ Commence par la page du job dans GitLab : son message dit souvent quelle étique
 
 **Objectifs pédagogiques**
 - Mesurer un pipeline par l'API : durée de chaque job, temps d'attente, chemin critique.
-- Appliquer les leviers d'accélération et en mesurer chacun l'effet : `needs`, clés de cache par fichier de verrou, profondeur et stratégie Git, taille des artefacts, cache BuildKit, compression du cache (`FF_USE_FASTZIP`), `interruptible`.
+- Appliquer les leviers d'accélération et en mesurer chacun l'effet : `needs`, clés de cache par fichier de verrou, profondeur et stratégie Git, taille des artefacts, cache BuildKit, compression du cache et des artefacts (archiveur *fastzip*, niveaux de compression), `interruptible`.
 
 **Prérequis** : M19-E11, E13, E14, E15 ; M19-E07 (cache S3), E08 (cache BuildKit).
 **Durée indicative** : 3 h.
@@ -678,7 +678,7 @@ Commence par la page du job dans GitLab : son message dit souvent quelle étique
 **Travail demandé**
 1. Écris `~/m19/e23/mesurer.sh` (ou un script Python) qui, pour les N derniers pipelines de MR d'un projet, affiche la durée totale, le temps d'attente, et pour chaque job sa durée et son attente, puis la médiane. Mesure **5** pipelines de MR de `mediagenda/api` sans rien changer (pousse des commits vides sur une branche avec MR) : c'est la référence. Repère le chemin critique.
 2. Calcule le seuil (référence × 0,6) et écris-le dans le livrable.
-3. Applique les leviers **un par un**, en mesurant après chacun (trois pipelines suffisent) ; la plupart se font dans les composants (nouvelle version mineure) : `needs` pour casser l'attente par stage, cache `uv` par clé `files: [uv.lock]` et politique `pull` hors de `main`, `GIT_DEPTH` adapté à chaque job (Gitleaks a besoin d'historique, pas les autres), artefacts limités et compressés, `FF_USE_FASTZIP`, cache BuildKit en lecture dans les MR, `interruptible` et `workflow:auto_cancel`.
+3. Applique les leviers **un par un**, en mesurant après chacun (trois pipelines suffisent) ; la plupart se font dans les composants (nouvelle version mineure) : `needs` pour casser l'attente par stage, cache `uv` par clé `files: [uv.lock]` et politique `pull` hors de `main`, `GIT_DEPTH` adapté à chaque job (Gitleaks a besoin d'historique, pas les autres), artefacts limités et compressés (`FF_USE_FASTZIP` : vérifie sa valeur par défaut en 19.4 avant de compter sur lui ; `ARTIFACT_COMPRESSION_LEVEL`, `CACHE_COMPRESSION_LEVEL`), cache BuildKit en lecture dans les MR, `interruptible` et `workflow:auto_cancel`.
 4. Mesure finale sur 3 pipelines de MR : la médiane doit être sous le seuil. Remplis le tableau du livrable (levier, gain mesuré, coût, décision).
 5. Vérifie qu'aucune vérification n'a disparu (comparer la liste des jobs avant/après).
 

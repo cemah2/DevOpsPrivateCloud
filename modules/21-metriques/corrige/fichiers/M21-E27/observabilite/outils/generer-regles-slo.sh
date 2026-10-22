@@ -6,13 +6,15 @@
 # fichiers) ; sans effet sur les règles produites.
 # Ce rendu n'est PAS appliqué : dans le cluster, c'est l'opérateur Pyrra qui écrit les PrometheusRule.
 set -eu
+rm -rf build/slo
 mkdir -p build/slo
+# pyrra generate lit un motif (glob) : on lui donne un dossier temporaire, NEUF à chaque passage,
+# qui ne contient que les SLO (ni la kustomization, ni un SLO d'essai retiré depuis).
+entrees="$(mktemp -d)"
+trap 'rm -rf "$entrees"' EXIT
 for f in slo/*.yaml; do
   [ "$(basename "$f")" = kustomization.yaml ] && continue
-  printf '%s\n' "$f"
-done > /tmp/slo-liste
-# pyrra generate lit un motif (glob) ; on lui donne un dossier qui ne contient que les SLO.
-mkdir -p /tmp/slo-entrees
-while read -r f; do cp "$f" /tmp/slo-entrees/; done < /tmp/slo-liste
-pyrra generate --config-files='/tmp/slo-entrees/*.yaml' --prometheus-folder=build/slo/
+  cp "$f" "$entrees/"
+done
+pyrra generate --config-files="$entrees/*.yaml" --prometheus-folder=build/slo/
 ls build/slo

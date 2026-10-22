@@ -386,14 +386,20 @@ m23_tempo_uid() {
   grafana_api "frontend/settings" 2>/dev/null | jq -r '[.datasources[]? | select(.type == "tempo")][0].uid // empty' | grep .
 }
 
-# m23_traceql_nb 'TraceQL' DEPUIS — nombre de traces (au plus 100) qui commencent après DEPUIS (epoch).
+# m23_traceql_nb 'TraceQL' DEPUIS — nombre de traces (au plus 100) qui commencent après DEPUIS (epoch) ;
+# -1 si Tempo n'a pas répondu ou a refusé la requête (jamais confondu avec « aucune trace » : une panne
+# « plus de traces » ne doit pas être constatée sur un Tempo muet).
 m23_traceql_nb() {
-  local uid q fin
-  uid="$(m23_tempo_uid)" || { echo 0; return 1; }
+  local uid q fin r
+  uid="$(m23_tempo_uid)" || { echo -1; return 0; }
   q="$(_m23_enc "$1")"
   fin="$(date +%s)"
-  grafana_api "datasources/proxy/uid/$uid/api/search?q=$q&start=$2&end=$fin&limit=100" 2>/dev/null |
-    jq --argjson t "$2" '[.traces[]? | select(((.startTimeUnixNano // "0") | tonumber) / 1e9 >= $t)] | length' 2>/dev/null || echo 0
+  r="$(grafana_api "datasources/proxy/uid/$uid/api/search?q=$q&start=$2&end=$fin&limit=100" 2>/dev/null)" || r=""
+  if jq -e 'has("traces")' >/dev/null 2>&1 <<<"$r"; then
+    jq --argjson t "$2" '[.traces[]? | select(((.startTimeUnixNano // "0") | tonumber) / 1e9 >= $t)] | length' <<<"$r" 2>/dev/null || echo -1
+  else
+    echo -1
+  fi
 }
 
 # m23_prom_positif 'PromQL' — la requête renvoie au moins une valeur strictement positive.

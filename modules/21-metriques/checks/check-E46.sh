@@ -63,8 +63,10 @@ check_cmd "Alertmanager : routage par equipe et par gravite" \
   jq -e '[.route | .. | objects | .matchers? // empty | .[]] | (any(test("equipe")) and any(test("gravite")))' <<<"${_m21_e46_conf:-null}"
 _m21_e46_regles_completes() {
   prom_api 'rules?type=alert' | jq -e '[.data.groups[] | .rules[] | select((.labels.equipe // "") != "")
-    | select((.labels.gravite // "") == "" or (.annotations.runbook_url // "") == "")] | length == 0' >/dev/null
+    | select((.labels.gravite // .labels.severity // "") == "" or (.annotations.runbook_url // "") == "")] | length == 0' >/dev/null
 }
+# (Les alertes générées par Pyrra portent « severity » : Prometheus la recopie dans « gravite » à
+# l'envoi, M21-E27 ; la règle chargée ne montre donc pas encore « gravite ».)
 check_cmd "règles d'alerte : gravite et runbook_url sur toutes les alertes qui portent une equipe" _m21_e46_regles_completes
 check_cmd "SLO : trois ServiceLevelObjective Pyrra (mediagenda-disponibilite, mediagenda-latence, medidoc-disponibilite)" \
   _m21x_kq '[.items[].metadata.name] as $n | ["mediagenda-disponibilite","mediagenda-latence","medidoc-disponibilite"] | all(. as $x | $n | index($x) != null)' \

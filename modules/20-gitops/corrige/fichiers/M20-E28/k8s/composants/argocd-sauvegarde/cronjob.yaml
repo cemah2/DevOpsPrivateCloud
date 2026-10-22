@@ -74,6 +74,8 @@ spec:
                   rm -rf "$GNUPGHOME"
                   chmod 0644 "/travail/$nom"
                   printf '%s\n' "$nom" >/travail/nom
+                  # umask 077 : sans ce chmod, « envoi » (autre UID, 65534) ne pourrait pas lire le nom.
+                  chmod 0644 /travail/nom
                   echo "export chiffré : $nom ($(stat -c %s "/travail/$nom") octets)"
               securityContext:
                 runAsUser: 999

@@ -1,4 +1,4 @@
-# plateforme/gitops — applications/mediagenda-dev.yaml (M20-E08, PLAT-2108)
+# plateforme/gitops — applications/mediagenda-dev.yaml (M20-E08, DEV-2108)
 # MédiAgenda en développement, repris sous Argo CD SANS COUPURE (aucun pod recréé). L'overlay dev de
 # mediagenda/deploiement est celui qu'appliquait le job deployer-dev (M19-E18), retiré du pipeline.
 # M20-E10 remplacera ce fichier par l'ApplicationSet « mediagenda » (sans supprimer les objets).
@@ -18,7 +18,7 @@ spec:
     - name: revision-avant-reprise
       value: "7"
     - name: ticket
-      value: PLAT-2108
+      value: DEV-2108
   source:
     repoURL: https://git01.par1.medisphere.internal/mediagenda/deploiement.git
     targetRevision: main

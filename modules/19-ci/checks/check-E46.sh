@@ -90,16 +90,16 @@ title "M19-E46 — Clé de signature : fin de l'exception de M19-E24"
 # runner protégé : plus aucune variable COSIGN_* dans les groupes ni dans les projets applicatifs.
 _m19_e46_sans_cosign() {
   local p g
-  for g in mediagenda medidoc; do
+  for g in mediagenda medidoc medinotif legacy; do
     gitlab_api "groups/$g/variables?per_page=100" 2>/dev/null |
       jq -e '[.[].key | select(test("^COSIGN_"))] | length == 0' >/dev/null 2>&1 || return 1
   done
-  for p in mediagenda/api mediagenda/chart mediagenda/deploiement medidoc/medidoc mediagenda/annuaire; do
+  for p in mediagenda/api mediagenda/chart mediagenda/deploiement medidoc/medidoc mediagenda/annuaire medinotif/worker; do
     gitlab_api "projects/$(_m19x_enc "$p")/variables?per_page=100" 2>/dev/null |
       jq -e '[.[].key | select(test("^COSIGN_"))] | length == 0' >/dev/null 2>&1 || return 1
   done
 }
-check_cmd "plus aucune variable COSIGN_* (groupes mediagenda et medidoc, projets applicatifs)" _m19_e46_sans_cosign
+check_cmd "plus aucune variable COSIGN_* (groupes mediagenda, medidoc, medinotif, legacy ; projets signés)" _m19_e46_sans_cosign
 
 title "M19-E46 — Documentation et livraison"
 check_cmd "ADR-0190 présente et commitée" _m19x_doc_commite 'ADR-0190*.md'

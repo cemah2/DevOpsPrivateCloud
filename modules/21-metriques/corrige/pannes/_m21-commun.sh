@@ -20,7 +20,7 @@
 #         objets ajoutés dans des espaces non suivis, témoins de l'espace wb-pannes ;
 #       * par des fichiers des VMs (mon01, VMs du socle), sauvegardés avant (pannes-lib : sauver).
 #   - jamais de suppression de données : ni blocs Thanos (thanos-k8s-par1), ni volumes, ni séries ;
-#     la panne de cardinalité (E38) est bornée (200 000 séries au plus) ;
+#     la panne de cardinalité (E38) est bornée (60 000 séries au plus : ~200 à 600 Mo par réplica) ;
 #   - les objets Kubernetes modifiés sont sauvegardés en JSON nettoyé dans ~/.local/state/workbook/
 #     M21-EXX/ et ne sont restaurés que s'ils portent encore la marque de la panne.
 #
@@ -604,7 +604,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ETAT = "/etc/temoin/etat.json"
 DEBUT = time.time()
 FILES = ["f1", "f2", "f3", "f4", "f5"]
-BORNE = 100000   # valeurs distinctes au plus, par pod (2 pods : 200 000 séries au plus)
+BORNE = 30000    # valeurs distinctes au plus, par pod (2 pods : 60 000 séries au plus, sans OOM)
 LOT = 2500       # nouvelles valeurs par tranche de 15 s
 
 

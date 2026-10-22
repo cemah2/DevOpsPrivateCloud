@@ -106,7 +106,12 @@ verifier-images:
         elif ! jq -e -s 'map(.payload | @base64d | fromjson | .predicate.buildDefinition.buildType) | any(test("moby/buildkit"))' prov.json > /dev/null; then
           verdict=REFUS; motif="provenance non produite par BuildKit"
         else
-          src="$(skopeo inspect --authfile "$DOCKER_CONFIG/config.json" "docker://$image" 2>/dev/null \
+          # skopeo (containers/image) refuse une référence qui porte À LA FOIS une étiquette et une
+          # empreinte (« repo:vX.Y.Z@sha256:… », forme rendue par kustomize avec newTag + digest) :
+          # on retire l'étiquette, l'empreinte suffit à désigner l'image.
+          base="${image%@*}"
+          case "${base##*/}" in *:*) base="${base%:*}" ;; esac
+          src="$(skopeo inspect --authfile "$DOCKER_CONFIG/config.json" "docker://$base@${image#*@}" 2>/dev/null \
                  | jq -r '.Labels["org.opencontainers.image.source"] // ""')"
           case "$src" in
             "$[[ inputs.source_attendue ]]"*) ;;

@@ -58,4 +58,5 @@ title "Documentation"
 check_cmd "plan de changement CHG-2026 sur main (retour arrière, compte rendu)" \
   _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci CHG-2026 'retour arri' 'compte rendu'
 check_cmd "RB-192 sur main (docs/livraison/ci/runbooks/ : gestionnaires, agent)" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci/runbooks RB-192 'managers|gestionnaire' 'agent'
-[[ -n "$_m19_e26_v" ]] && echo "  (version de GitLab lue : $_m19_e26_v)"
+# (if et non « && » : sourcé sous set -e, un dernier statut non nul arrêterait lab/bin/check avant le bilan)
+if [[ -n "$_m19_e26_v" ]]; then echo "  (version de GitLab lue : $_m19_e26_v)"; fi

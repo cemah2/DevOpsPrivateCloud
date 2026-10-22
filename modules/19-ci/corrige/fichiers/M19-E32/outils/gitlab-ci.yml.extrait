@@ -6,7 +6,9 @@
 # qui peut partir).
 # Jeton : CI_CONFORMITE_TOKEN, variable de PROJET de type fichier, protégée, masquée et cachée :
 # jeton personnel du compte technique « ci-conformite » (portée api, 90 jours, RB-191), Developer
-# sur les groupes mediagenda, medidoc, medinotif, legacy et rien d'autre.
+# sur les groupes mediagenda, medidoc, medinotif, legacy ; et, pour POSSÉDER la planification, membre
+# de plateforme/outils autorisé à lancer un pipeline sur main protégée (Maintainer du projet, ou
+# Developer cité dans « Allowed to merge » de main) ; rien d'autre.
 ci-conformite:
   stage: test
   tags: [k8s]                       # jamais le runner protégé : aucun besoin de la clé de signature

@@ -26,7 +26,7 @@ Un ticket par projet non conforme, étiqueté `conformite-ci`, mis à jour chaqu
 
 ## Identité
 
-Compte technique `ci-conformite` (pas un compte de service : fonction Premium), sans connexion interactive, Developer sur les seuls groupes du périmètre ; jeton personnel portée `api`, 90 jours, tourné par RB-191 ; variable `CI_CONFORMITE_TOKEN` du projet `plateforme/outils` : fichier, protégée, masquée, cachée.
+Compte de service d'instance `ci-conformite` (Free depuis GitLab 18.11 : pas de connexion par l'interface ; à défaut, compte technique sans connexion interactive), Developer sur les seuls groupes du périmètre ; jeton personnel portée `api`, 90 jours, tourné par RB-191 ; variable `CI_CONFORMITE_TOKEN` du projet `plateforme/outils` : fichier, protégée, masquée, cachée.
 
 Limite connue : le compte peut lire le code de tous les projets du périmètre et y ouvrir des tickets ; il ne peut ni pousser sur une branche protégée ni fusionner.
 

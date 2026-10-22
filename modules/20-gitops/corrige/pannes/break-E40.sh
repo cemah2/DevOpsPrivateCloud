@@ -40,6 +40,16 @@ _e40_rollout_sain() {
   _e40_rollout | jq -e '.status.phase == "Healthy" and ((.spec.paused // false) == false) and ((.status.abort // false) == false)' >/dev/null 2>&1
 }
 
+# _e40_prod_au_repos — le Rollout de production (s'il existe) n'a aucun canary en cours : les
+# variantes 2 (contrôleur arrêté) et 3 (ApplicationSet commun à recette et prod) ne doivent jamais
+# figer ni perturber une mise en production en cours.
+_e40_prod_au_repos() {
+  local ro
+  ro="$(wb_kubectl -n "${WB_M20_NS_PROD:-mediagenda-prod}" get rollouts.argoproj.io mediagenda -o json 2>/dev/null)" || return 0
+  jq -e '.status.phase == "Healthy" and ((.spec.paused // false) == false)
+    and ((.status.pauseConditions // []) | length == 0)' >/dev/null 2>&1 <<<"$ro"
+}
+
 _e40_controleur_pret() {
   wb_kubectl -n "$_E40_NS_AR" get pods -l "$_E40_SEL_AR" -o json 2>/dev/null |
     jq -e '[.items[] | select(any(.status.conditions[]?; .type == "Ready" and .status == "True"))] | length > 0' >/dev/null 2>&1
@@ -160,6 +170,7 @@ _m20E40_une() {
       m20_attendre 600 _e40_analyse_echouee || { _e40_defaire 1; return 10; }
       ;;
     2)
+      _e40_prod_au_repos || { wb_avert "canary de production en cours : variante 2 écartée"; return 10; }
       f="$(_e40_fichier "$_M20_GITOPS" 'trafficRouterPlugins' "$_E40_YQ_GREFFON")" || return 10
       t="$(mktemp)"
       m20_brut "$_M20_GITOPS" "$f" >"$t" || { rm -f "$t"; return 1; }
@@ -198,6 +209,7 @@ _m20E40_une() {
       m20_attendre 300 _e40_controleur_ko || { _e40_defaire 2; return 10; }
       ;;
     3)
+      _e40_prod_au_repos || { wb_avert "canary de production en cours : variante 3 écartée"; return 10; }
       m20_app_jq "$_M20_APP_RECETTE" '[.spec.ignoreDifferences[]? | select(.kind == "HTTPRoute")] | length > 0' || return 10
       f="$(_e40_fichier "$_M20_GITOPS" 'kind:[[:space:]]*HTTPRoute' 'select(.kind == "ApplicationSet" and .metadata.name == "mediagenda")')" || return 10
       t="$(mktemp)"

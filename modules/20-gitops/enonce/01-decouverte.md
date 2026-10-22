@@ -386,7 +386,7 @@ Argo CD interroge le dépôt à intervalle régulier : regarde `timeout.reconcil
    admin@adm01:~$ argocd app set labo --sync-option ServerSideApply=true --sync-option CreateNamespace=false
    admin@adm01:~$ argocd app sync labo
    ```
-   Relis les `managedFields` et les annotations : qu'est-ce qui a changé, et quelle fonction d'Argo CD a fait la migration ? Les pods ont-ils été recréés ?
+   Relis les `managedFields` et les annotations : qu'est-ce qui a changé, et quel mécanisme a fait la migration (Argo CD, ou la bibliothèque `kubectl` qu'il embarque) ? Les pods ont-ils été recréés ?
 7. Le diff côté serveur : compare `argocd app diff labo` et `argocd app diff labo --server-side-diff`. Puis active-le pour toutes les Applications par les valeurs de la release (`configs.params`, clé `controller.diff.server.side`), `helmfile diff`, MR, `apply`. Le contrôleur redémarre-t-il ? (Lis les annotations du modèle de pod du StatefulSet.) Pourquoi ce réglage évite-t-il des `OutOfSync` permanents sur des objets dont l'API ou une CRD remplit des valeurs par défaut (une HTTPRoute, par exemple) ?
 8. Écris pour Nadia, dans `~/m20/e05/reglages.md` (tu le reverseras dans la documentation à l'E22) : ce que fait Argo CD dans chaque cas observé, et les réglages retenus pour `dev`, `recette` et `prod` (synchronisation automatique, auto-réparation, suppression), justifiés.
 
@@ -406,7 +406,7 @@ La synchronisation automatique ne se déclenche que lorsque **Git** change (une 
 
 <details><summary>Indice 2</summary>
 
-En *server-side apply*, un champ que ton manifeste ne mentionne pas n'appartient pas à Argo CD : il n'a aucune raison de l'effacer. En *client-side apply*, c'est l'annotation `last-applied-configuration` qui sert de mémoire. La documentation des *Sync Options* décrit la migration « Client-Side Apply Migration ».
+En *server-side apply*, un champ que ton manifeste ne mentionne pas n'appartient pas à Argo CD : il n'a aucune raison de l'effacer. En *client-side apply*, c'est l'annotation `last-applied-configuration` qui sert de mémoire. Lis la section « Client-Side Apply Migration » des *Sync Options* : quel gestionnaire migre-t-elle par défaut ? Est-ce celui qui a appliqué `labo` jusqu'ici ? `kubectl apply --server-side` sait aussi migrer de lui-même le gestionnaire qui possède l'annotation `last-applied-configuration`.
 </details>
 
 **Pour aller plus loin** (facultatif) : `retry` dans la politique de synchronisation (`--sync-retry-limit`) : dans quel cas une synchronisation automatique échouée n'est-elle jamais retentée sans lui ?
@@ -531,7 +531,7 @@ Après `argocd repo rm`, la prochaine comparaison de `labo` dira si les identifi
 5. **MR 1** : les quatre projets d'équipe et de plateforme (`projets/*.yaml`, avec le finaliseur qui empêche de supprimer un projet encore utilisé) et l'Application `projets` (`racine/projets.yaml`, **en projet `default`** pour l'instant). Fusion, puis `argocd proj list`.
 6. **MR 2** : range les Applications dans leurs projets : `racine`, `applications`, `projets` dans `plateforme`, `labo` dans `labo`. Pourquoi n'était-ce pas possible dans la MR 1 ?
 7. **MR 3** : verrouille `default` (`projets/default.yaml` : aucune source, aucune destination). Pourquoi en dernier ?
-   > ⚠️ **Attention** : si `racine` est encore dans `default` quand `default` est verrouillé, elle ne peut plus se synchroniser… y compris pour appliquer la correction. Retour arrière : retirer `projets/default.yaml` par une MR ne suffit pas (la racine ne synchronise plus) ; il faut rendre une source et une destination à `default` à la main (`argocd proj add-source default …`, `argocd proj add-destination default …`), laisser la racine converger, puis refaire les MR dans l'ordre.
+   > ⚠️ **Attention** : si `racine` (ou `projets`) est encore dans `default` quand `default` est verrouillé, elle ne peut plus se synchroniser… y compris pour appliquer la correction. Retour arrière, dans cet ordre : (1) une MR qui **rouvre** `default` dans Git (une source et une destination dans `projets/default.yaml` ; ne retire **pas** le fichier : avec `prune`, l'AppProject `default` serait supprimé) ; (2) si `projets` ne peut plus synchroniser, rends à la main une source et une destination à `default` (`argocd proj add-source default …`, `argocd proj add-destination default …`) — sans l'étape 1, l'auto-réparation de `projets` reverrouillerait aussitôt `default` ; (3) laisse `projets` puis `racine` converger (`argocd app get <app> --refresh`) ; (4) refais la MR 2, puis la MR 3.
 
 *D. Prouver*
 

@@ -32,7 +32,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Tiens un journal de diagnostic** pour chaque panne dans `docs/kubernetes/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Les runbooks du palier vont dans `docs/livraison/ci/runbooks/`, à côté de RB-190 (M19-E22) et de RB-191 à RB-193 (palier 3) : **RB-194** « Un pipeline ne se déclenche pas », **RB-195** « Un job échoue avant son script ou est tué », **RB-196** « Construction d'image et cache de CI », **RB-197** « Déploiement par l'agent GitLab », **RB-198** « Un secret apparaît dans un journal de CI ».
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
-> ⚠️ **Effets de bord** : certaines variantes arrêtent **toute** la CI sur Kubernetes (runner en pause, gestionnaire qui ne démarre plus, démon BuildKit inutilisable) ; une variante de M19-E41 **bloque le compte GitLab de Lucas** (`--annuler` le réactive toujours, les pannes suivantes en ont besoin) ; une variante de M19-E42 crée dans `wb-pannes-ci` un pod de priorité haute qui réserve la mémoire libre d'un travailleur. N'injecte pas pendant qu'un pipeline important tourne, et ne lance pas de composant temporaire lourd (SonarQube, Jenkins) pendant le palier.
+> ⚠️ **Effets de bord** : certaines variantes arrêtent **toute** la CI sur Kubernetes (runner en pause, gestionnaire qui ne démarre plus, démon BuildKit inutilisable) ; une variante de M19-E41 **bloque le compte GitLab de Lucas** (`--annuler` le réactive toujours, les pannes suivantes en ont besoin) ; une variante de M19-E42 crée dans `wb-pannes-ci` un pod de priorité haute qui réserve la mémoire libre d'un travailleur (elle est sautée si elle risquait de préempter autre chose qu'un pod de job) ; une variante de M19-E38 redémarre le service S3 de `s3-01` (quelques secondes d'indisponibilité pour tous ses utilisateurs, sans perte de données). N'injecte pas pendant qu'un pipeline important tourne, et ne lance pas de composant temporaire lourd (SonarQube, Jenkins) pendant le palier.
 
 ---
 
@@ -123,7 +123,7 @@ Un job `running` dont le journal s'arrête à « Waiting for pod… » ou qui é
 `kubectl -n gitlab-runner get configmap <cm> -o jsonpath='{.data.config\.template\.toml}'` montre le gabarit réellement monté ; compare-le au rendu de tes values (`helmfile … template`). Un Secret se compare sans afficher son contenu : `kubectl get secret … -o json | jq '.data | map_values(length)'`.
 </details>
 
-**Pour aller plus loin** : avec `FF_RETRIEVE_POD_WARNING_EVENTS` (à vérifier dans la liste des *feature flags* de ta version), le runner recopie les événements d'avertissement du pod dans le journal du job. Active-le dans un essai et compare ce que voit un développeur avant et après.
+**Pour aller plus loin** : l'option `print_pod_warning_events` de l'exécuteur Kubernetes (documentation *Kubernetes executor*) recopie les événements d'avertissement du pod dans le journal du job. Vérifie sa valeur effective et les droits qu'elle exige du gestionnaire, puis compare ce que voit un développeur avec et sans elle.
 
 ---
 
@@ -318,7 +318,7 @@ API : `GET /projects/:id/variables/:key` (attributs ; la valeur n'est pas à aff
 
 **Objectifs pédagogiques**
 - Connaître toutes les raisons pour lesquelles GitLab ne crée **pas** de pipeline, sans erreur visible : `workflow:rules`, `rules` qui ne retiennent aucun job, chemin de configuration, fonction CI/CD désactivée, `[skip ci]`, options de poussée, pipelines planifiés dont le propriétaire ne peut plus agir.
-- Tester une configuration sans pousser : *Pipeline editor*, API `ci/lint` (avec `dry_run` et la référence), configuration fusionnée.
+- Tester une configuration sans pousser : *Pipeline editor*, API `ci/lint` (simulation `dry_run` sur une référence), configuration fusionnée.
 - Comprendre au nom de qui tourne un pipeline planifié, et ce qui arrive quand cette personne part.
 
 **Prérequis** : M19-E06 (`workflow:rules`), M19-E10 (composants), M01 (pipelines planifiés) ; `lab/bin/check 19 41` vert avant l'injection.
@@ -329,7 +329,7 @@ API : `GET /projects/:id/variables/:key` (attributs ; la valeur n'est pas à aff
 **Travail demandé**
 1. Prouve l'absence : liste des pipelines du projet par commit (`GET /projects/:id/pipelines?sha=…`) et par source (`source=schedule`) ; compare avec l'historique des commits.
 2. Vérifie les réglages du projet qui conditionnent la création (fonctions, chemin de configuration) et l'historique des changements (*audit events* du projet si disponibles, sinon l'API du projet et la mémoire de l'équipe).
-3. Fais évaluer la configuration à GitLab sans pousser (`POST /projects/:id/ci/lint` avec `dry_run=true` et `ref=main`) et lis ce qu'elle produit ; compare deux versions du composant consommé.
+3. Fais évaluer la configuration à GitLab sans pousser (`GET /projects/:id/ci/lint` avec `dry_run=true`, `dry_run_ref=main` et `include_jobs=true` : le fichier du dépôt, simulé sur `main` ; `POST` exige, lui, le contenu à valider) et lis ce qu'elle produit ; compare deux versions du composant consommé.
 4. Pour un pipeline planifié : propriétaire, état de son compte, ce que montre la page *Schedules* ; corrige proprement (qui doit être propriétaire d'un pipeline planifié d'équipe ?).
 5. Corrige, puis prouve qu'un commit sur `main` crée de nouveau un pipeline (et que les MR ne créent pas de doublon).
 6. Rédige RB-194 « Un pipeline ne se déclenche pas » : une ligne par cause, la preuve et le correctif, et une règle d'équipe sur les propriétaires des pipelines planifiés.
@@ -343,7 +343,7 @@ API : `GET /projects/:id/variables/:key` (attributs ; la valeur n'est pas à aff
 
 <details><summary>Indice 1</summary>
 
-Un pipeline qui n'existe pas n'a pas de journal : la preuve est dans la configuration. `GET /projects/:id` (`builds_access_level`, `ci_config_path`) et `POST /projects/:id/ci/lint` répondent en quelques secondes. Le message « Pipeline filtered out by workflow rules » n'apparaît que dans certains cas (création manuelle ou par l'API) : essaie de créer un pipeline à la main.
+Un pipeline qui n'existe pas n'a pas de journal : la preuve est dans la configuration. `GET /projects/:id` (`builds_access_level`, `ci_config_path`) et `GET /projects/:id/ci/lint?dry_run=true&dry_run_ref=main&include_jobs=true` répondent en quelques secondes. Le message « Pipeline filtered out by workflow rules » n'apparaît que dans certains cas (création manuelle ou par l'API) : essaie de créer un pipeline à la main.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -449,7 +449,7 @@ Les contrôles `lab/bin/check 19 35` à `19 42` sont des sondes ciblées : lance
 
 **Objectifs pédagogiques**
 - Suivre la réception d'un push (gitlab-shell ou Workhorse, Gitaly, *hook* `post-receive`) et la création asynchrone du pipeline par Sidekiq.
-- Comprendre l'attribution des jobs : file, *long polling* de `POST /api/v4/jobs/request` maintenu par Workhorse, réponse `201` avec la charge utile du job ou `204` sans job, jeton de job.
+- Comprendre l'attribution des jobs : file, interrogation `POST /api/v4/jobs/request` (et *long polling* maintenu par Workhorse quand il est activé), réponse `201` avec la charge utile du job ou `204` sans job, jeton de job.
 - Suivre l'exécuteur Kubernetes : requêtes du compte de service du gestionnaire vers l'API (création du pod, attachement, suppression), conteneurs `build` et `helper`, journal envoyé par morceaux, artefacts téléversés par le *helper* à travers Workhorse.
 
 **Prérequis** : M19-E05, M19-E09, M19-E35 à M19-E42 ; M14-E27 (journal d'audit de l'API), M14-E44 (sous le capot de Kubernetes).
@@ -467,7 +467,7 @@ Les contrôles `lab/bin/check 19 35` à `19 42` sont des sondes ciblées : lance
 **Travail demandé**
 1. **Le push.** Note l'heure, pousse la branche `capot` en SSH. Sur `git01`, retrouve la poussée dans `gitlab-shell.log`, les appels internes (`/api/v4/internal/allowed`, `/api/v4/internal/post_receive`) dans `api_json.log`, puis le travail Sidekiq déclenché par la réception (`PostReceive`) et ce qu'il enchaîne.
 2. **Le pipeline.** Retrouve dans Sidekiq la création et le traitement du pipeline (classes `CreatePipelineWorker`, `Ci::InitialPipelineProcessWorker`, `PipelineProcessWorker` ou leurs équivalents dans ta version : cherche par `correlation_id` et par l'identifiant du pipeline). Relève la durée entre la poussée et le passage du job à `pending`.
-3. **La file et le runner.** Dans `api_json.log` et le journal de Workhorse, retrouve les requêtes `POST /api/v4/jobs/request` du runner : combien de temps chacune est maintenue, ce qu'elle renvoie quand il n'y a pas de job, et la requête qui reçoit le tien (`201`). Dans le journal du gestionnaire, retrouve la prise du job et la création du pod.
+3. **La file et le runner.** Regarde d'abord si le *long polling* est activé sur `git01` (`gitlab_workhorse['api_ci_long_polling_duration']` dans `gitlab.rb` : il ne l'est **pas** par défaut dans le paquet omnibus). Dans `api_json.log` et le journal de Workhorse, retrouve les requêtes `POST /api/v4/jobs/request` du runner : combien de temps chacune est maintenue, ce qu'elle renvoie quand il n'y a pas de job, et la requête qui reçoit le tien (`201`). Puis active le *long polling* par le code de `git01` (M01 : valeur recommandée par la documentation *Long polling*, `gitlab-ctl reconfigure` hors de tout pipeline important) et compare. Dans le journal du gestionnaire, retrouve la prise du job et la création du pod.
 4. **Le pod.** Pendant les 120 s : `kubectl -n ci-jobs get pod <pod> -o yaml` (conteneurs, init, volumes, compte de service, `activeDeadlineSeconds`, priorité) ; dans le journal d'audit, toutes les requêtes du compte de service du gestionnaire pour ce pod (création, `attach` ou `exec`, lectures, suppression), avec leur heure.
 5. **Le journal et les artefacts.** Dans `api_json.log`, retrouve l'envoi du journal par morceaux (`PATCH /api/v4/jobs/:id/trace`), la mise à jour d'état (`PUT /api/v4/jobs/:id`) et le téléversement de `capot.txt` (`…/artifacts/authorize` puis `…/artifacts`, à travers Workhorse). Où est rangé l'artefact sur `git01` (ou dans le stockage objet) ?
 6. **Compte rendu.** Rédige `docs/livraison/ci/sous-le-capot.md` avec exactement ces sections : `## Réception du push`, `## Création du pipeline`, `## File d'attente et runner (long polling)`, `## Le pod de job (Kubernetes)`, `## Artefacts et fin du job`, `## Réponses aux questions`. Pour chaque étape : l'heure relevée, la ligne de journal (raccourcie, sans secret) et une phrase d'explication ; cite l'identifiant de ton job. Publie-le par MR, remets `logLevel` et supprime la branche `capot`.
@@ -495,7 +495,7 @@ Chaque requête Rails porte un `correlation_id` qu'on retrouve dans Sidekiq pour
 
 <details><summary>Indice 2</summary>
 
-Le *long polling* est porté par Workhorse (réglage `gitlab_workhorse['api_ci_long_polling_duration']` dans `gitlab.rb`, à vérifier dans la documentation d'omnibus de ta version) : une réponse sans job arrive au bout de ce délai, une réponse avec job dès qu'il est attribué. Dans le journal d'audit : `jq 'select(.user.username | startswith("system:serviceaccount:gitlab-runner:")) | select(.objectRef.namespace == "ci-jobs")'`.
+Le *long polling* est porté par Workhorse (réglage `gitlab_workhorse['api_ci_long_polling_duration']` dans `gitlab.rb`, non posé par défaut : Workhorse répond alors aussitôt) : une fois activé, une réponse sans job arrive au bout de ce délai, une réponse avec job dès qu'il est attribué. Dans le journal d'audit : `jq 'select(.user.username | startswith("system:serviceaccount:gitlab-runner:")) | select(.objectRef.namespace == "ci-jobs")'`.
 </details>
 
 <details><summary>Indice 3</summary>

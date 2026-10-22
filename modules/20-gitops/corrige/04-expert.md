@@ -149,9 +149,11 @@ Phase:              Failed
 Message:            one or more objects failed to apply, reason: Deployment.apps "mediagenda" is invalid: spec.selector: Invalid value: v1.LabelSelector{…"medisphere.internal/equipe":"mediagenda"…}: field is immutable
 ```
 
-Argo CD fait d'abord un **essai à blanc côté client** (validation du YAML), puis applique vague par vague. Les refus de l'API (immutabilité, quota, webhook) n'apparaissent donc qu'à l'application réelle. Une synchronisation en échec n'est **pas relancée** pour la même révision, au-delà des `retry` de l'ApplicationSet (3 essais, 30 s puis 1 et 2 min) : le journal du contrôleur écrit ensuite `Skipping auto-sync: already attempted sync to e81f0c4…`. Ce qui tourne en dev n'a pas changé (l'objet refusé n'a pas été modifié ; les autres objets de la vague, inchangés, ont été réappliqués à l'identique).
+Argo CD fait d'abord un **essai à blanc côté client** (validation du YAML), puis applique vague par vague. Les refus de l'API (immutabilité, quota, webhook) n'apparaissent donc qu'à l'application réelle. Une synchronisation en échec n'est **pas relancée** pour la même révision, au-delà des `retry` de l'ApplicationSet (3 essais, 30 s puis 1 et 2 min) : le journal du contrôleur écrit ensuite `Skipping auto-sync: failed previous sync attempt to [e81f0c4…] and will not retry for [e81f0c4…]`, et l'Application porte une condition `SyncError` (« Failed last sync attempt to … »). (Le message `already attempted sync to … with timeout …` est celui de l'auto-réparation en attente, E39.) Ce qui tourne en dev n'a pas changé (l'objet refusé n'a pas été modifié ; les autres objets de la vague, inchangés, ont été réappliqués à l'identique).
 
 **Variante 1 — sélecteur modifié (champ immuable).** Le correctif de Lucas ajoute `medisphere.internal/equipe` au sélecteur **et** au modèle de pod. Le sélecteur d'un Deployment est immuable depuis `apps/v1` : changer de sélecteur, c'est créer un autre objet. Le besoin (filtrer par équipe dans les tableaux de bord) se satisfait par l'**étiquette du modèle de pod seule** (`labels` de Kustomize avec `includeTemplates: true`, `includeSelectors: false` — exactement ce que fait déjà l'overlay pour l'environnement), ou par les étiquettes déjà posées par le chart. Correctif : revert, puis MR qui pose l'étiquette au bon endroit. (Changer réellement un sélecteur : nouveau nom d'objet, bascule, retrait de l'ancien, planifiés.)
+
+*Avec la comparaison côté serveur* (`ServerSideDiff=true`, ApplicationSet de M20-E12, cas du lab de référence), cette variante ne va même pas jusqu'à la synchronisation : l'essai à blanc *server-side apply* du diff se heurte au champ immuable sur le Deployment **existant**, la comparaison entière échoue (`ComparisonError` : `Failed to compare desired state to live state: … serverSideDiff error: error running server side apply in dryrun mode for resource Deployment/mediagenda: … field is immutable`), le statut de synchronisation passe à `Unknown` et la synchronisation automatique ne se déclenche pas (`Skipping auto-sync: application status is Unknown`). Même diagnostic, même correctif ; après le revert, l'Application redevient `Synced` sans opération nouvelle : lance une synchronisation pour que la dernière opération porte sur la révision courante (critère de réussite).
 
 **Variante 2 — ressource de portée cluster refusée par l'AppProject.**
 
@@ -237,10 +239,10 @@ Sans identifiants : la résolution, la connexion et TLS passent (sinon le messag
 admin@adm01:~$ kubectl -n argocd get secrets -l argocd.argoproj.io/secret-type=repo-creds \
     -o custom-columns=NOM:.metadata.name,ANNOT:.metadata.annotations
 NOM                ANNOT
-creds-mediagenda   map[medisphere.internal/restaure-depuis:sauvegarde-2026-09]
-creds-plateforme   <none>
+repo-creds-mediagenda   map[medisphere.internal/restaure-depuis:sauvegarde-2026-09]
+repo-creds-plateforme   <none>
 …
-admin@adm01:~$ kubectl -n argocd get secret creds-mediagenda -o json --show-managed-fields | jq -r '.metadata.managedFields[] | [.manager, .operation, .time] | @tsv'
+admin@adm01:~$ kubectl -n argocd get secret repo-creds-mediagenda -o json --show-managed-fields | jq -r '.metadata.managedFields[] | [.manager, .operation, .time] | @tsv'
 secrets-k8s   Apply    2026-10-30T08:14:51Z
 kubectl-replace   Update   2026-11-04T13:02:17Z
 ```
@@ -249,7 +251,7 @@ Le Secret a été remplacé à la main (`kubectl-replace`, hors de `secrets-k8s.
 
 **Variante 2 — racine MédiSphère retirée d'`argocd-tls-certs-cm`.**
 
-Message : `x509: certificate signed by unknown authority`. `kubectl -n argocd get cm argocd-tls-certs-cm -o yaml` : l'entrée `git01.par1.medisphere.internal` a disparu (l'entrée `registry.par1.medisphere.internal` est encore là). `helmfile -e par1 -l composant=argocd diff` montre l'écart : la release la remettrait. Correctif : `helmfile -e par1 -l composant=argocd apply` (après le `diff`, qui ne doit montrer que cette entrée), attendre la propagation du volume (une minute), `--hard-refresh`. Une entrée par **nom d'hôte** : une forge publiée sous un autre nom aurait besoin de la sienne.
+Message : `x509: certificate signed by unknown authority`. `kubectl -n argocd get cm argocd-tls-certs-cm -o yaml` : l'entrée `git01.par1.medisphere.internal` a disparu (l'entrée `registry.par1.medisphere.internal` est encore là). `helmfile -e par1 -l composant=argocd diff --diff-args '--three-way-merge'` montre l'écart (sans `--three-way-merge`, helm-diff compare seulement les manifestes de la release et ne voit pas une modification faite à la main, M17-E14) : la release remettrait l'entrée. Correctif : `helmfile -e par1 -l composant=argocd sync` (une `apply` sans `--three-way-merge` conclurait « aucun changement » et ne ferait rien ; `sync` relance `helm upgrade`, dont l'application côté serveur remet l'entrée que la release possède), après le `diff`, qui ne doit montrer que cette entrée ; attendre la propagation du volume (une minute), `--hard-refresh`. Une entrée par **nom d'hôte** : une forge publiée sous un autre nom aurait besoin de la sienne.
 
 **Variante 3 — adresse du dépôt modifiée.**
 
@@ -315,7 +317,7 @@ Avec `maxUnavailable: 0`, l'ancien pod reste prêt et en service : livraison blo
 
 **Variante 2 — sonde mal réglée.** `kubectl describe pod` : `Readiness probe failed: HTTP probe failed with statuscode: 404`. Le correctif de Lucas vise `/ready` ; MédiAgenda expose `/pret` (apps/README). Le pod tourne, n'est jamais prêt, ne reçoit pas de trafic, et le rollout ne progresse pas. Correctif : revert. « Aligner les sondes » est une décision de l'application (code et chart), pas un correctif d'overlay.
 
-**Variante 3 — volume impossible à provisionner.** Pod neuf `Pending` : `0/6 nodes are available: pod has unbound immediate PersistentVolumeClaims` ; `kubectl describe pvc mediagenda-exports` : `storageclass.storage.k8s.io "ceph-rbd-ssd" not found`. Correctif : revert (ou `ceph-rbd`, si le besoin est confirmé, avec la protection d'E41). Le PVC `Pending` est élagué au revert (jamais lié, aucune donnée).
+**Variante 3 — volume impossible à provisionner.** Pod neuf `Pending` : `0/6 nodes are available: pod has unbound immediate PersistentVolumeClaims` ; `kubectl describe pvc mediagenda-exports` : `storageclass.storage.k8s.io "ceph-rbd-ssd" not found`. Correctif : revert (ou `ceph-rbd`, si le besoin est confirmé, avec la protection d'E41). Le PVC `Pending` est élagué au revert (jamais lié, aucune donnée) — sauf si le component `protection-donnees` d'E41 est déjà en place : il porte alors `Prune=false`, l'Application reste `OutOfSync` (« ignored (no prune) ») et c'est à toi de le supprimer, après avoir vérifié qu'il est bien `Pending` et jamais lié (`kubectl -n mediagenda-dev get pvc mediagenda-exports -o jsonpath='{.status.phase} {.spec.volumeName}'`).
 
 **Variante 4 — un contrôle de santé qui ment.**
 
@@ -326,12 +328,22 @@ admin@adm01:~$ kubectl -n mediagenda-dev get clusters.postgresql.cnpg.io mediage
 Cluster in healthy state
 admin@adm01:~$ kubectl -n argocd get cm argocd-cm -o json | jq -r '.data | keys[] | select(startswith("resource.customizations.health"))'
 resource.customizations.health.postgresql.cnpg.io_Cluster
-admin@adm01:~/src/k8s$ helmfile -e par1 -l composant=argocd diff | grep -A3 customizations.health
--  resource.customizations.health.postgresql.cnpg.io_Cluster: |
--    -- Santé des bases PostgreSQL (DEV-2138, Lucas) : reprise de notre ancien opérateur.
+admin@adm01:~$ kubectl -n argocd get cm argocd-cm --show-managed-fields -o json \
+>   | jq -r '.metadata.managedFields[] | select(.fieldsV1."f:data"."f:resource.customizations.health.postgresql.cnpg.io_Cluster") | "\(.manager) \(.operation) \(.time)"'
+kubectl-patch Update 2026-…
+admin@adm01:~/src/k8s$ grep -rn 'customizations.health' composants/argocd/      # rien : la release ne déclare pas cette clé
 ```
 
-La base va bien pour son opérateur ; Argo CD la dit `Degraded` parce qu'un script Lua ajouté à la main dans `argocd-cm` (hors de la release) attend une phase `Healthy` que CNPG ne publie pas. Les scripts de `argocd-cm` remplacent le contrôle **intégré** d'Argo CD pour ce type (dossier `resource_customizations/postgresql.cnpg.io/Cluster/` du projet, qui connaît les phases de CNPG). Toutes les Applications qui portent une base passent `Degraded` — la prod comprise, d'où les notifications `on-health-degraded`. Correctif : `helmfile -e par1 -l composant=argocd apply` (le `diff` montre que la release retire la clé), puis `argocd app get … --refresh`.
+La base va bien pour son opérateur ; Argo CD la dit `Degraded` parce qu'un script Lua ajouté à la main dans `argocd-cm` (hors de la release) attend une phase `Healthy` que CNPG ne publie pas. Les scripts de `argocd-cm` remplacent le contrôle **intégré** d'Argo CD pour ce type (dossier `resource_customizations/postgresql.cnpg.io/Cluster/` du projet, qui connaît les phases de CNPG). Toutes les Applications qui portent une base passent `Degraded` — la prod comprise, d'où les notifications `on-health-degraded`. Correctif : **défaire le geste manuel**, exactement, et le tracer dans le journal (qui, quand : l'entrée `kubectl-patch` des `managedFields`). Une `helmfile apply` ne suffit **pas** : la clé n'a jamais appartenu à la release, et ni la fusion à trois voies de Helm ni le *server-side apply* de Helm 4 ne retirent un champ posé par un autre gestionnaire (`helmfile diff`, même avec `--three-way-merge`, ne la montre d'ailleurs pas). On retire donc cette seule clé :
+
+```
+admin@adm01:~$ kubectl -n argocd patch configmap argocd-cm --type json \
+>   -p '[{"op":"remove","path":"/data/resource.customizations.health.postgresql.cnpg.io_Cluster"}]'
+admin@adm01:~/src/k8s$ helmfile -e par1 -l composant=argocd diff --diff-args '--three-way-merge'   # vide : argocd-cm = la release
+admin@adm01:~$ argocd app get mediagenda-dev --refresh
+```
+
+Si un contrôle de santé personnalisé était réellement voulu, il arriverait par la release (`configs.cm` dans `composants/argocd/`, MR avec la sortie de `tester-sante.sh`), jamais par `argocd-cm` directement.
 
 Éprouver un contrôle avant de le livrer (`corrige/fichiers/M20-E38/outils/tester-sante.sh`) :
 
@@ -355,7 +367,8 @@ MESSAGE:
 **Pièges classiques**
 - Supprimer le pod en `ImagePullBackOff` : le ReplicaSet le recrée à l'identique.
 - Allonger `progressDeadlineSeconds` ou supprimer la sonde « pour que ça passe ».
-- `kubectl edit configmap argocd-cm` pour retirer le Lua : ça marche, et la prochaine personne ne saura jamais ce qui s'est passé ; la release est la source.
+- `kubectl edit configmap argocd-cm` pour « arranger » le Lua, ou retirer la clé sans rien noter : la prochaine personne ne saura jamais ce qui s'est passé. Le retrait est un geste ciblé (une clé, tracée), pas une édition libre.
+- Croire qu'une `helmfile apply` nettoie tout ajout manuel : elle remet les champs **de la release**, pas ceux posés à côté par un autre gestionnaire.
 - Conclure que « la santé d'Argo CD ment souvent » et ignorer les alertes : un contrôle faux se corrige.
 
 **En production chez MédiSphère** : toute personnalisation de santé dans `composants/argocd/` avec la sortie de `tester-sante.sh` dans la MR ; alerte `argocd_app_info{health_status="Degraded"}` plus de 15 min (M21) ; déclencheur `on-health-degraded` limité à la prod pour l'astreinte, et à l'équipe pour dev et recette.
@@ -608,7 +621,7 @@ Depuis un travailleur (le trafic des pods d'Argo CD sort avec l'adresse du nœud
 
 **Variante 3 — autorité remplacée.** Message `x509: certificate signed by unknown authority`. La `caData` du Secret est la racine MédiSphère ; l'API de k3s présente un certificat signé par **sa** CA (`/var/lib/rancher/k3s/server/tls/server-ca.crt`). Correctif : `secrets-k8s.sh appliquer argocd` (le Vault contient `lyo_k3s01_ca`). Jamais `insecure: true`.
 
-**Variante 4 — droits retirés.** Message `failed to sync cluster …: forbidden: User "system:serviceaccount:agence:argocd-gestion" cannot list resource "deployments" …`. `k3s kubectl get rolebinding -n agence` : la liaison `argocd-gestion` a disparu (« ménage » de l'agence). Correctif : rejouer le playbook `m20-lyo.yml` (il redépose `argocd-gestion.yaml` dans les manifestes de k3s, qui le réapplique), puis vérifier que `argocd-gestion` n'a **que** le Role de l'espace `agence` : `k3s kubectl auth can-i '*' '*' --all-namespaces --as=…` → `no`.
+**Variante 4 — droits retirés.** Message `failed to sync cluster …: forbidden: User "system:serviceaccount:agence:argocd-gestion" cannot list resource "deployments" …`. `k3s kubectl get rolebinding -n agence` : la liaison `argocd-gestion` a disparu (« ménage » de l'agence). Correctif : par le code, mais en sachant comment k3s applique ses manifestes. Rejouer le playbook `m20-lyo.yml` **ne suffit pas** : le fichier `medisphere-argocd-gestion.yaml` n'a pas changé, et le contrôleur *deploy* de k3s ne réapplique un manifeste de `/var/lib/rancher/k3s/server/manifests/` qu'**au démarrage** de k3s ou quand son contenu change (empreinte gardée dans l'objet `Addon` `kube-system/medisphere-argocd-gestion` ; code de `pkg/deploy` de k3s). Deux gestes, tous deux à partir du fichier déposé par le code : `sudo k3s kubectl apply -f /var/lib/rancher/k3s/server/manifests/medisphere-argocd-gestion.yaml` sur `lyo-k3s01`, ou `sudo systemctl restart k3s` (réapplication forcée de tout le dossier ; l'API de l'agence est indisponible quelques secondes, les pods continuent de tourner). Puis vérifier que `argocd-gestion` n'a **que** le Role de l'espace `agence` : `k3s kubectl auth can-i '*' '*' --all-namespaces --as=…` → `no`.
 
 **Vérification** : `argocd cluster list` → `Successful` ; `labo-lyo-k3s01` `Synced`/`Healthy` ; `lab/bin/check 20 42`.
 
@@ -650,12 +663,12 @@ Le script tire trois pannes (au plus une sur `mediagenda-dev`) et les injecte da
 
 Livrable d'exemple : `corrige/fichiers/M20-E44/docs/sous-le-capot.md` ; outil : `corrige/fichiers/M20-E44/outils/chronometrer-livraison.sh`.
 
-1. **Mesure préparée.** Le passage en `debug` par `kubectl patch` est une **dérive volontaire et temporaire** de la release : `helmfile -e par1 -l composant=argocd diff` la montre (`controller.log.level: debug` contre `info` issu de `global.logging.level`), et l'étape 7 la défait par `apply`. L'alternative propre est une MR qui change `global.logging.level` puis une seconde qui le remet : plus lourd, mais tracé ; les deux se défendent pour une mesure d'une heure.
+1. **Mesure préparée.** Le passage en `debug` se fait **par la release**, avec deux `--set` passés à `helmfile apply` (`configs.params."controller.log.level"` et `configs.params."reposerver.log.level"`, qui valent sinon `info`, hérité de `global.logging.level`) : le chart réécrit `argocd-cmd-params-cm` et, par ses annotations `checksum/cmd-params`, redémarre lui-même le contrôleur et le repo-server. Ce n'est pas un `kubectl patch` : la release est en *server-side apply* (Helm 4, M20-E02) ; un `kubectl patch` sur des champs qu'elle possède les ferait passer au gestionnaire `kubectl-patch` : sans `--three-way-merge`, `helmfile diff` ne verrait pas l'écart (M17-E14) et `helmfile apply` ne ferait rien ; une `helm upgrade` forcée pourrait buter sur un conflit de *server-side apply* (comportement exact à vérifier sur ton lab : `kubectl -n argocd get cm argocd-cmd-params-cm --show-managed-fields`). La surcharge par `--set` laisse un état temporaire **hors de Git** (le dépôt dit `info`) : l'alternative tracée est une MR qui change `global.logging.level`, puis une seconde qui le remet ; les deux se défendent pour une mesure d'une heure.
 
 2. **Chronologie.** Lignes réelles d'Argo CD 3.5 (code source de la 3.5.5) :
    - serveur : `Received push event repo: https://git01.par1.medisphere.internal/mediagenda/deploiement, revision: main, touchedHead: true` ;
    - contrôleur (champ `application` = nom de l'Application) : `Refreshing app status (…), level (N)`, `Initialized new operation: …`, `updated 'argocd/mediagenda-dev' operation (phase: Succeeded)`, `Reconciliation completed` avec `time_ms`, `patch_ms`, `setop_ms`, `comparison-level` et les durées détaillées par étape ;
-   - si une opération est déjà en cours : `Skipping auto-sync: another operation is in progress` (E35 v1) ; après un échec : `Skipping auto-sync: already attempted sync to …` (E36).
+   - si une opération est déjà en cours : `Skipping auto-sync: another operation is in progress` (E35 v1) ; après un échec : `Skipping auto-sync: failed previous sync attempt to … and will not retry for …` (E36) ; pendant l'attente de l'auto-réparation : `Skipping auto-sync: already attempted sync to … with timeout …` (E39).
    L'outil `chronometrer-livraison.sh` relève `committed_date`, `merged_at` (API GitLab, jeton des checks), la ligne du webhook, les lignes du contrôleur, `startedAt`/`finishedAt` de l'opération (ou de l'historique), la création et la disponibilité du pod le plus récent. Ordres de grandeur attendus : webhook + rafraîchissement en une seconde ; génération en quelques secondes (premier rendu d'une révision) ; opération de quelques dizaines de secondes (vagues, Job de migration en vague -1, attente de santé de chaque vague) ; sonde `/pret` en une vingtaine de secondes. Sans webhook : jusqu'à `timeout.reconciliation` (180 s) plus la gigue en attente avant la moindre action — l'argument du webhook d'E27.
 
 3. **Repo-server.** `ls /tmp/_argocd-repo/` : un répertoire par dépôt, nommé par un UUID, pour ne pas faire apparaître l'URL (et d'éventuels identifiants) dans les journaux et les messages d'erreur (commentaire explicite dans le code du repo-server). `--refresh` recompare avec ce qui est en cache ; `--hard-refresh` invalide aussi le cache des manifestes et force la résolution de la révision et la régénération.
@@ -666,7 +679,7 @@ Livrable d'exemple : `corrige/fichiers/M20-E44/docs/sous-le-capot.md` ; outil : 
 
 6. **Métriques** (ports : contrôleur 8082, serveur 8083, repo-server 8084) : `argocd_app_reconcile` (histogramme de durée de réconciliation), `argocd_git_request_total` (requêtes Git par type) et `argocd_git_lsremote_fail_total` / `argocd_git_fetch_fail_total` (repo-server : E37 en une courbe), `argocd_app_sync_total` par phase (E36, E39 : rythme anormal de synchronisations automatiques), `argocd_app_info` (statuts de synchronisation et de santé : E35, E38), `argocd_app_condition` (conditions par type : `ComparisonError`, `SharedResourceWarning`), `argocd_cluster_api_resource_objects` et `argocd_cluster_connection_status` (E42). Noms et étiquettes à vérifier sur ta version (`curl -s localhost:8082/metrics | grep ^argocd_ | cut -d'{' -f1 | sort -u`).
 
-7. **Retour.** `helmfile -e par1 -l composant=argocd diff` ne montre plus que le retour des deux clés à `info`, `apply`, vérifier `argocd-cmd-params-cm`, commit du livrable.
+7. **Retour.** `helmfile -e par1 -l composant=argocd diff` (sans les `--set`) ne montre que le retour des deux clés à `info`, `apply`, vérifier `argocd-cmd-params-cm`, commit du livrable.
 
 **Explications** — Argo CD est un ensemble de boucles : le serveur reçoit et authentifie (interface, CLI, webhooks), le contrôleur réconcilie (cache d'état des clusters par *watch*, comparaison, opérations), le repo-server génère (Git, Kustomize, Helm, greffons), Redis met en cache ; l'ApplicationSet controller et le contrôleur de notifications sont des boucles à côté. Chaque panne du palier se situe dans une de ces boucles : la lecture des journaux et des métriques se fait boucle par boucle.
 

@@ -95,9 +95,11 @@ Ce corrigé suit l'ordre de l'énoncé. Le questionnaire (E01) est argumenté et
    deployment.apps/otel-passerelle-collector  1/1     1            1
    NAME                                           TYPE        CLUSTER-IP     PORT(S)
    service/otel-agent-collector                   ClusterIP   10.96.41.12    4317/TCP,4318/TCP
+   service/otel-agent-collector-extension         ClusterIP   10.96.52.7     13133/TCP
    service/otel-agent-collector-headless          ClusterIP   None           4317/TCP,4318/TCP
    service/otel-agent-collector-monitoring        ClusterIP   10.96.88.3     8888/TCP
    service/otel-passerelle-collector              ClusterIP   10.96.17.40    4317/TCP,4318/TCP
+   service/otel-passerelle-collector-extension    ClusterIP   10.96.63.21    13133/TCP
    service/otel-passerelle-collector-headless     ClusterIP   None           4317/TCP,4318/TCP
    service/otel-passerelle-collector-monitoring   ClusterIP   10.96.120.9    8888/TCP
    NAME                                            DATA
@@ -106,7 +108,7 @@ Ce corrigé suit l'ordre de l'énoncé. Le questionnaire (E01) est argumenté et
    admin@adm01:~$ kubectl -n traces get svc otel-agent-collector -o jsonpath='{.spec.internalTrafficPolicy}{"\n"}'
    Local
    ```
-   L'opérateur déduit les **ports** des Services de la configuration (récepteurs, lecteur de métriques), nomme la ConfigMap d'après l'empreinte de la configuration (un changement de configuration redéploie les pods) et, pour un DaemonSet, pose `internalTrafficPolicy: Local` : un pod n'est servi que par l'agent de son nœud ; s'il n'y en a pas, la connexion échoue au lieu d'aller ailleurs (c'est voulu : l'agent du nœud est la seule source fiable de l'adresse du pod).
+   Quatre Services par Collector : le Service principal (ports des récepteurs), `-headless`, `-monitoring` (8888) et `-extension` (ports des extensions, ici `health_check` 13133). L'opérateur déduit les **ports** des Services de la configuration (récepteurs, lecteur de métriques, extensions), nomme la ConfigMap d'après l'empreinte de la configuration (un changement de configuration redéploie les pods) et, pour un DaemonSet, pose `internalTrafficPolicy: Local` : un pod n'est servi que par l'agent de son nœud ; s'il n'y en a pas, la connexion échoue au lieu d'aller ailleurs (c'est voulu : l'agent du nœud est la seule source fiable de l'adresse du pod).
 7. **Des spans.**
    ```
    admin@adm01:~$ kubectl apply -f ~/DevOpsPrivateCloud/modules/23-traces/ressources/E02-essai/telemetrygen.yaml

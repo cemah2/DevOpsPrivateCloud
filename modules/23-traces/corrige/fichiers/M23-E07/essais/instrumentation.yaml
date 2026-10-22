@@ -36,7 +36,7 @@ spec:
     env:
       # Mêmes exclusions et conventions que l'instrumentation dans le code (M23-E04), pour comparer.
       - name: OTEL_PYTHON_EXCLUDED_URLS
-        value: "sante,pret,metrics"
+        value: "/sante$,/pret$,/metrics$"
       - name: OTEL_SEMCONV_STABILITY_OPT_IN
         value: http,database
       # Pas d'export des métriques ni des journaux par l'auto-instrumentation : traces seulement.

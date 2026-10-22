@@ -98,7 +98,10 @@ runners:
         # (outils-supply-chain : signature, attestations) et l'image du composant promotion de E17
         # (alpine/k8s par le cache dockerhub). Rien d'autre.
         allowed_images = ["registry.par1.medisphere.internal/plateforme/**", "registry.par1.medisphere.internal/dockerhub/alpine/k8s:*"]
-        allowed_services = []
+        # Aucun job protégé n'utilise « services: ». Attention : une liste VIDE autoriserait TOUT
+        # (common/allowed_images.go du runner : liste vide = pas de filtre) ; on ne garde donc que
+        # les images de « plateforme », comme pour les jobs.
+        allowed_services = ["registry.par1.medisphere.internal/plateforme/**"]
         allowed_pull_policies = ["if-not-present"]
         image = "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.1@sha256:<EMPREINTE>"
         # Même helper que k8s-par1 (étiquette ET empreinte, changé avec la version du runner en E26).

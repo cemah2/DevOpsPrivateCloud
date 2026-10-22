@@ -27,8 +27,8 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 4. **Données de santé** (30 min) : rejouer le témoin de E09 (`ressources/E09-temoin`), vérifier que ses lignes arrivent masquées, retirer le témoin ; `lab/bin/check 22 09` sur 24 h.
 5. **Règles appliquées** (30 min, puis attente) : une demande d'effacement sur `essai` **au début** du mini-projet (elle sera `processed` après 24 h et un passage du compactor) ; vérifier rétentions et limites (`/config/tenant/v1/limits`, ConfigMap `loki-runtime`), le compactor (`/services`, métriques).
 6. **Alertes** (1 h) : une alerte par locataire, déclenchée par un moyen réversible et noté :
-   - `audit` : quelques échecs d'authentification sur l'API (`kubectl --token=invalide get pods` répété) ;
-   - `mediagenda` : une rafale de 5xx sur `mediagenda-dev` (par exemple en coupant Valkey de dev quelques minutes avec l'accord de Julien, ou par le scénario prévu en E08) ;
+   - `audit` : plus de 20 échecs d'authentification en 5 minutes sur l'API, avec le kubeconfig jetable à jeton faux de E08 (jamais un jeton en argument de commande) ;
+   - `mediagenda` : une rafale de 5xx sur `mediagenda-dev`, avec l'accord de Julien : la base PostgreSQL de dev rendue indisponible quelques minutes **par une MR** de l'overlay `dev` de `mediagenda/deploiement` (puis son revert), jamais par `kubectl` sur l'espace. Couper Valkey ne suffit pas : MédiAgenda journalise « cache indisponible » et continue de répondre (pas de 5xx) ;
    - `plateforme` : la règle de E08 de ce locataire selon son déclencheur ;
    - « Alloy absent d'un nœud » (`AlloyAbsentDUnNoeud`, règle Prometheus écrite en E19 : [`regles/alloy-collecte.yaml`](fichiers/M22-E19/observabilite/regles/alloy-collecte.yaml), `for: 5m`) : taint de test sur un travailleur + suppression du pod Alloy (comme en E19), chronométré, puis retour.
    Vérifier la réception dans Mailpit par la bonne adresse (`equipe`).

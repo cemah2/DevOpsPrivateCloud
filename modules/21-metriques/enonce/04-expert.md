@@ -215,7 +215,7 @@ L'inspecteur de requête affiche la requête **après** interpolation des variab
 
 <details><summary>Indice 2</summary>
 
-Retirer l'étiquette (`labeldrop`) fait de milliers de séries **une seule**, alimentée par des milliers d'échantillons différents au même instant : Prometheus les refuse (échantillons dupliqués) et la collecte devient erreur. Le bon geste dépend de ce que la métrique vaut sans l'étiquette : la garder agrégée côté application, ou la jeter (`action: drop` sur `__name__`). Lis *metric_relabel_configs* dans la documentation de Prometheus et `metricRelabelings` dans l'API de prometheus-operator.
+Retirer l'étiquette (`labeldrop`) fait de milliers de séries **une seule**, alimentée par des milliers d'échantillons différents au même instant : Prometheus n'en garde qu'un, rejette les autres (échantillons dupliqués, compteur `prometheus_target_scrapes_sample_duplicate_timestamp_total`, avertissement dans son journal) et la valeur gardée ne veut plus rien dire — la cible reste pourtant `up`. Le bon geste dépend de ce que la métrique vaut sans l'étiquette : la garder agrégée côté application, ou la jeter (`action: drop` sur `__name__`). Lis *metric_relabel_configs* dans la documentation de Prometheus et `metricRelabelings` dans l'API de prometheus-operator.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -495,7 +495,7 @@ Une alerte muette est la pire des trois : tant qu'elle l'est, les autres pannes 
 2. Qu'est-ce que `chunks_head/`, et qu'a-t-il changé pour la mémoire et le temps de redémarrage depuis Prometheus 2.19 ?
 3. Pourquoi les blocs sont-ils **immuables** ? Comment une suppression de séries est-elle alors possible (tombstones), et quand l'espace est-il réellement libéré ?
 4. Comment la rétention par durée et par taille (`retention.size`) décide-t-elle quoi supprimer ? Pourquoi la rétention ne descend-elle jamais en dessous d'un bloc ?
-5. Avec Thanos, l'opérateur fixe la durée des blocs à 2 h dans le cluster (`min-block-duration` = `max-block-duration`) : pourquoi ? Qui compacte, et où ?
+5. Avec un sidecar Thanos qui envoie les blocs, l'opérateur doit empêcher Prometheus de compacter un bloc avant son envoi. Il a longtemps fixé la durée des blocs à 2 h (`min-block-duration` = `max-block-duration`) ; avec Prometheus ≥ 3.9 et Thanos ≥ 0.42, l'opérateur 0.94 garde la compaction locale et la **retarde** (M21-E24 : `--storage.tsdb.delay-compact-file.path`). Pourquoi faut-il l'une ou l'autre précaution ? Qu'est-ce qui est envoyé au compartiment dans chaque cas, qui compacte le compartiment, et où ?
 6. Que mesure « échantillons par chunk » de `analyze --extended`, et pourquoi un chunk se ferme-t-il vers 120 échantillons pour une série collectée régulièrement ?
 7. D'après tes chiffres, combien coûte une série en mémoire et sur disque sur le témoin ? Rapproche-le du débordement de M21-E38.
 8. Pourquoi faut-il travailler sur un instantané (ou une copie de bloc) et jamais sur le répertoire de données d'un Prometheus en marche ?

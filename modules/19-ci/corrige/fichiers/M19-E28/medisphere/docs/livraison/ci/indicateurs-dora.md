@@ -19,7 +19,7 @@
 ## 2. Les quatre indicateurs
 
 ### 2.1 Fréquence de déploiement
-- Source : `GET /projects/mediagenda%2Fdeploiement/deployments?environment=dev&updated_after=<J-30>` (`status` = `success`).
+- Source : `GET /projects/mediagenda%2Fdeploiement/deployments?environment=dev&updated_after=<J-30>&order_by=updated_at` (`status` = `success` ; l'API répond `400` à `updated_after` sans `order_by=updated_at`).
 - Calcul : nombre / 30. Fenêtre : 30 jours glissants.
 - Confiance : bonne. Biais : un redéploiement sans changement (relance de job) compte.
 

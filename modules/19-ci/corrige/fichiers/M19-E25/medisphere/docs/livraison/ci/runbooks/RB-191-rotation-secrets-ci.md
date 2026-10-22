@@ -28,7 +28,7 @@ admin@adm01:~$ ADM=~/.config/workbook/gitlab-admin.token       # api + admin_mod
    admin@adm01:~$ curl -sSf -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<$ADM)") \
        "$GL/projects/mediagenda%2Fdeploiement/access_tokens" | jq '.[] | {id, name, active, expires_at, scopes}'
    ```
-2. Tourner et remplacer la variable dans la même commande (la variable est **cachée** : on la supprime puis on la recrée avec ses attributs) :
+2. Tourner et remplacer la variable dans la même commande (la variable est **cachée** : on la supprime puis on la recrée avec ses attributs ; la valeur passe par l'entrée standard de `curl`, `value@-`, jamais par ses arguments visibles dans `ps`) :
    ```
    admin@adm01:~$ ID=<ID-DU-JETON>; EXP=$(date -d '+90 days' +%F)
    admin@adm01:~$ curl -sSf -X POST -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<$ADM)") \
@@ -37,9 +37,9 @@ admin@adm01:~$ ADM=~/.config/workbook/gitlab-admin.token       # api + admin_mod
      | { read -r t
          curl -sSf -X DELETE -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<$ADM)") \
            "$GL/projects/mediagenda%2Fapi/variables/DEPLOIEMENT_TOKEN?filter%5Benvironment_scope%5D=promotion/*"
-         curl -sSf -X POST -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<$ADM)") \
+         printf '%s' "$t" | curl -sSf -X POST -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<$ADM)") \
            "$GL/projects/mediagenda%2Fapi/variables" \
-           --data-urlencode key=DEPLOIEMENT_TOKEN --data-urlencode "value=$t" \
+           --data-urlencode key=DEPLOIEMENT_TOKEN --data-urlencode "value@-" \
            --data-urlencode protected=true --data-urlencode masked_and_hidden=true \
            --data-urlencode "environment_scope=promotion/*" --data-urlencode raw=true > /dev/null; }
    ```
@@ -56,7 +56,7 @@ admin@adm01:~$ ADM=~/.config/workbook/gitlab-admin.token       # api + admin_mod
 ## 4. Jetons des runners (`glrt-`)
 
 1. `POST /runners/:id/reset_authentication_token` (jeton d'administration) → nouvelle valeur dans un tuyau vers `ansible-vault encrypt` du fichier `secrets/<runner>.yml`.
-2. `outils/secrets-k8s.sh <runner>` puis redémarrage du gestionnaire (`kubectl -n gitlab-runner rollout restart deployment/<runner>`).
+2. `outils/secrets-k8s.sh appliquer <composant>` (`gitlab-runner` ou `gitlab-runner-protege`, table `outils/secrets-k8s.conf`) puis redémarrage du gestionnaire (`kubectl -n gitlab-runner rollout restart deployment/<runner>`).
 3. Vérifier : `GET /runners/:id/managers` montre un gestionnaire en ligne contacté il y a moins d'une minute ; un job passe.
 
 ## 5. Clé Cosign

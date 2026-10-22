@@ -4,7 +4,7 @@
 #
 # check-E06.sh — M22-E06 : Des journaux structurés : MédiAgenda en JSON
 # À lancer depuis adm01. Lecture seule : code de mediagenda/api et overlay dev de
-# mediagenda/deploiement (GitLab), ConfigMaps de mediagenda-dev et journaux (« kube »), requêtes
+# mediagenda/deploiement (GitLab), Deployments mediagenda de dev et de recette, ConfigMap alloy-config (« kube »), requêtes
 # LogQL dans le locataire mediagenda (15 min), compteur de lignes écartées par Alloy (Prometheus).
 # Prérequis du contrôle : du trafic sur mediagenda-dev dans les 15 dernières minutes
 # (ressources/E04-trafic/trafic.sh, voir l'énoncé).
@@ -20,10 +20,17 @@ _m22o_e06_sel='{namespace="mediagenda-dev", container="api"}'
 # --- 1. L'application et son environnement ------------------------------------------------------------
 check_output "mediagenda/api (main) : le middleware pose un request_id (X-Request-ID)" 'x-request-id|X-Request-ID' \
   _m22o_contenu_main projects/mediagenda%2Fapi src/mediagenda/app.py
+# Niveau et format : variables « env » du conteneur api (rendues par le chart, surchargées en dev par le
+# component debogage), prioritaires sur les ConfigMaps d'envFrom. Absentes = défauts de l'application.
+# shellcheck disable=SC2016
+_m22o_e06_env='[.spec.template.spec.containers[] | select(.name == "api") | .env[]? | {(.name): .value}] | add // {}'
+_m22o_e06_dev="$(_m22o_k get deployment mediagenda -n mediagenda-dev -o json)"
 check_cmd "mediagenda-dev : MédiAgenda journalise en DEBUG (les sondes sont donc écrites par l'application)" _m22o_json \
-  "$(_m22o_k get configmap mediagenda -n mediagenda-dev -o json)" '.data.MEDIAGENDA_LOG_LEVEL == "DEBUG"'
+  "$_m22o_e06_dev" "($_m22o_e06_env) | (.MEDIAGENDA_LOG_LEVEL // \"INFO\" | ascii_upcase) == \"DEBUG\""
+check_cmd "mediagenda-dev : MédiAgenda journalise en JSON (pas en texte)" _m22o_json \
+  "$_m22o_e06_dev" "($_m22o_e06_env) | (.MEDIAGENDA_LOG_FORMAT // \"json\" | ascii_downcase) == \"json\""
 check_cmd "mediagenda-recette : reste en INFO" _m22o_json \
-  "$(_m22o_k get configmap mediagenda -n mediagenda-recette -o json)" '(.data.MEDIAGENDA_LOG_LEVEL // "INFO") == "INFO"'
+  "$(_m22o_k get deployment mediagenda -n mediagenda-recette -o json)" "($_m22o_e06_env) | (.MEDIAGENDA_LOG_LEVEL // \"INFO\" | ascii_upcase) == \"INFO\""
 
 # --- 2. Ce que Loki reçoit (15 dernières minutes) ----------------------------------------------------
 check_cmd "des lignes de MédiAgenda (dev) dans les 15 dernières minutes (sinon : lance le trafic)" bash -c '[[ "$1" -ge 1 ]]' _ \

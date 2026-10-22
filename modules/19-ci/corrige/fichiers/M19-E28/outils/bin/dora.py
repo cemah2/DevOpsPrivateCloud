@@ -77,7 +77,8 @@ def calculer(gl: GitLab, deploiement: str, application: str, env: str, jours: in
     maintenant = maintenant or dt.datetime.now(dt.timezone.utc)
     debut = maintenant - dt.timedelta(days=jours)
     deps = [d for d in gl.pages(f"projects/{pid(deploiement)}/deployments", environment=env,
-                                 updated_after=debut.isoformat(), order_by="created_at", sort="asc")
+                                 # L'API refuse (400) updated_after sans order_by=updated_at.
+                                 updated_after=debut.isoformat(), order_by="updated_at", sort="asc")
             if d.get("status") in ("success", "failed")]
 
     reussis = [d for d in deps if d["status"] == "success"]

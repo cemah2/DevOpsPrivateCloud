@@ -359,7 +359,7 @@ Sous `[security]`, deux clés concernent les cookies ; sous `[auth]`, deux borne
 
 <details><summary>Indice 2</summary>
 
-Avec `enforcedNamespaceLabel`, l'opérateur exempte déjà les règles du chart s'il les connaît (regarde le rendu) ; il te reste les autres objets de `supervision` (tes règles, tes ScrapeConfig, les ServiceMonitor du chart — dont celui du kubelet) et ceux de `supervision-noeuds`. Une entrée d'exemption sans `name` couvre tout l'espace pour une ressource.
+Avec `enforcedNamespaceLabel`, le chart exempte déjà ses propres règles (regarde le rendu : `excludedFromEnforcement` du CR) ; il te reste les autres objets de `supervision` (tes règles, tes ScrapeConfig, les ServiceMonitor du chart — dont celui du kubelet) et ceux de `supervision-noeuds`. Une entrée d'exemption sans `name` couvre tout l'espace pour une ressource.
 </details>
 
 <details><summary>Indice 3</summary>

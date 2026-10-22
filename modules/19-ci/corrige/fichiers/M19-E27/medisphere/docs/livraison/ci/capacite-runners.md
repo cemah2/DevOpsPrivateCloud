@@ -17,7 +17,7 @@
 
 Deux réplicas du gestionnaire = deux **gestionnaires** (`/runners/:id/managers`) du même runner `k8s-par1`, chacun avec ses propres `concurrent`/`limit`/`request_concurrency` : la capacité théorique est **2 × 8 = 16**. GitLab remet chaque job au premier gestionnaire qui le demande : la répartition n'est pas équitable, mais aucun job n'est pris deux fois.
 
-Au-delà de ce que l'espace peut accueillir, le pod de job est créé mais reste `Pending` (quota dépassé : refus à la création ; mémoire des nœuds : `Insufficient memory`) ; le gestionnaire attend `poll_timeout` (600 s) puis fait échouer le job (« timed out waiting for pod to start »). D'où : `concurrent` × réplicas ≤ ce que le quota et les nœuds tiennent.
+Au-delà de ce que l'espace peut accueillir, deux cas : quota dépassé, l'API **refuse de créer** le pod (`exceeded quota`) et le job échoue aussitôt à la préparation ; mémoire des nœuds insuffisante, le pod est créé mais reste `Pending` (`Insufficient memory`), le gestionnaire attend `poll_timeout` (600 s) puis fait échouer le job (« timed out waiting for pod to start »). D'où : `concurrent` × réplicas ≤ ce que le quota et les nœuds tiennent.
 
 ## 2. Calcul de la capacité soutenable
 
@@ -39,7 +39,7 @@ Hypothèses (relevées le AAAA-MM-JJ ; remplace par tes valeurs) :
 ## 3. Disponibilité
 
 - Deux réplicas répartis par `topologySpreadConstraints` (un par nœud), PDB `maxUnavailable: 1`, mise à jour `maxUnavailable: 0`.
-- Arrêt gracieux : à `SIGQUIT`, un gestionnaire ne prend plus de job et attend la fin des siens (`terminationGracePeriodSeconds: 3600`).
+- Arrêt gracieux : à `SIGQUIT`, un gestionnaire ne prend plus de job et attend la fin des siens ; mais Kubernetes envoie `SIGTERM`, qui est un arrêt **forcé** pour GitLab Runner (jobs abandonnés). D'où le `preStop` du chart (`deploymentLifecycle`) qui envoie `SIGQUIT` et attend, dans la limite de `terminationGracePeriodSeconds: 3600`.
 - Essai de drainage (AAAA-MM-JJ) : nœud `k8s-w02` drainé pendant un job de 5 min pris par le gestionnaire de ce nœud. Le **gestionnaire** est déplacé (l'autre réplica continue de prendre des jobs) ; le **pod de job** sur `k8s-w02` est un pod nu : `kubectl drain` exige `--force`, et l'expulsion fait échouer le job (« pod … deleted »). Conséquence : on draine un nœud **après** avoir laissé finir les jobs (cordon, attente), RB-193 §4 ; l'option `pod_disruption_budget` de l'exécuteur protégerait les jobs mais bloquerait les drainages : non retenue.
 
 ## 4. Priorité

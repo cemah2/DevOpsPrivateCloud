@@ -16,8 +16,20 @@ _m19o_e21_ci="$(_m19o_contenu "$_M19O_P_LABO" .gitlab-ci.yml revue-lucas)"
 check_cmd "formation/ci-labo : .gitlab-ci.yml sur la branche revue-lucas" test -n "$_m19o_e21_ci"
 check_cmd "n'inclut que des composants de plateforme/ci-templates en v2.x.y épinglée" _m19o_que_des_composants "$_m19o_e21_ci"
 check_cmd "aucun Docker-in-Docker ni privilège" bash -c '[[ -n "$1" ]] && ! grep -qiE "dind|privileged|DOCKER_HOST" <<<"$1"' _ "$_m19o_e21_ci"
-check_cmd "aucune image « latest » ni image hors de Harbor" \
-  bash -c '[[ -n "$1" ]] && ! grep -qE ":latest\b" <<<"$1" && ! yq -r ".. | select(has(\"image\")?) | .image | select(type == \"!!str\")" <<<"$1" 2>/dev/null | grep -qvE "^registry\.par1\.medisphere\.internal/"' _ "$_m19o_e21_ci"
+# Images des jobs et des services (forme courte « image: x » ou longue « image: {name: x} ») ; un
+# YAML illisible fait échouer le contrôle (pas de faux vert).
+_m19o_e21_images() {
+  yq -r '[.. | select(tag == "!!map" and has("image")) | .image | (select(tag == "!!str"), (select(tag == "!!map") | .name))]
+         + [.. | select(tag == "!!map" and has("services")) | .services[] | (select(tag == "!!str"), (select(tag == "!!map") | .name))]
+         | .[]' <<<"$1"
+}
+_m19o_e21_harbor() {
+  local imgs
+  [[ -n "$1" ]] && ! grep -qE ":latest\b" <<<"$1" || return 1
+  imgs="$(_m19o_e21_images "$1" 2>/dev/null)" || return 1
+  ! grep -v '^$' <<<"$imgs" | grep -qvE '^registry\.par1\.medisphere\.internal/'
+}
+check_cmd "aucune image « latest » ni image hors de Harbor" _m19o_e21_harbor "$_m19o_e21_ci"
 check_cmd "aucun only/except (rules partout)" \
   bash -c '[[ -n "$1" ]] && yq -e "[.. | select(tag == \"!!map\" and (has(\"only\") or has(\"except\")))] | length == 0" <<<"$1" >/dev/null 2>&1' _ "$_m19o_e21_ci"
 check_cmd "aucun secret en clair (mot de passe, jeton) dans le fichier" \

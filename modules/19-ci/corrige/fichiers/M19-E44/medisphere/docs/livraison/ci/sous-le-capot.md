@@ -27,7 +27,8 @@ Durée poussée → job `pending` : 0,9 s (Sidekiq peu chargé). Ce sont ces sec
 
 ## File d'attente et runner (long polling)
 
-- Requêtes `POST /api/v4/jobs/request` sans job : réponse `204` au bout d'environ 50 s (`gitlab-workhorse/current`, `duration_ms≈50000`) : Workhorse retient la requête (*long polling*) et ne la passe à Rails que si une notification Redis signale du nouveau.
+- Avant réglage (omnibus par défaut, `gitlab_workhorse['api_ci_long_polling_duration']` non posé) : chaque `POST /api/v4/jobs/request` sans job répond `204` en quelques millisecondes, et le gestionnaire rappelle toutes les `check_interval` (3 s). Réglage posé à `"50s"` par le rôle Ansible de `git01` (documentation *Long polling*), `gitlab-ctl reconfigure`.
+- Après : requêtes `POST /api/v4/jobs/request` sans job : réponse `204` au bout d'environ 50 s (`gitlab-workhorse/current`, `duration_ms≈50000`) : Workhorse retient la requête (*long polling*) et ne la passe à Rails que si une notification Redis signale du nouveau.
 - 09:12:43.0 : une requête en attente reçoit la notification ; Rails choisit le job (étiquettes `k8s`, référence non protégée, runner non protégé) : `status=201 duration_s=0.21` dans `api_json.log`. Le job passe en `running`.
 - Gestionnaire (`kubectl -n gitlab-runner logs`, niveau `debug`) : `Checking for jobs... received job=5127 repo_url=https://git01…/formation/ci-labo.git runner=…`, puis `Using Kubernetes executor with image …busybox:1.37`, `Creating build pod`, `Waiting for pod ci-jobs/runner-…-project-31-concurrent-0-… to be running`.
 
@@ -58,7 +59,7 @@ Le pod lui-même n'a fait **aucune** requête à l'API (pas de jeton). Seul le g
 ## Réponses aux questions
 
 1. **Pourquoi Sidekiq ?** La poussée ne doit ni attendre ni échouer à cause de la CI ; la création du pipeline peut lire d'autres projets (composants) et durer. Sidekiq saturé : commits sans pipeline pendant un moment, rien n'est perdu.
-2. **Pourquoi le long polling ?** Une requête ouverte par gestionnaire au lieu de milliers de requêtes inutiles ; Workhorse la maintient (~50 s) et la libère sur notification Redis.
+2. **Pourquoi le long polling ?** Une requête ouverte par gestionnaire au lieu de milliers de requêtes inutiles ; Workhorse la maintient (~50 s, une fois `api_ci_long_polling_duration` posé ; sans lui, pas de *long polling*) et la libère sur notification Redis.
 3. **Réponse `201`** : identifiant, jeton du job, étapes, images et services, variables, informations Git, cache et artefacts. Le jeton du job vit le temps du job : clone, artefacts, journal, projets qui l'autorisent.
 4. **Droits** : le gestionnaire crée, attache, lit et supprime des pods dans `ci-jobs` (Role du M19-E24) ; le pod de job exécute du code de projet et n'a aucun jeton.
 5. **Journal** : Redis puis base ou stockage objet. Gestionnaire mort : job `running` jusqu'à son délai, puis échec ; pod orphelin arrêté par `activeDeadlineSeconds`.

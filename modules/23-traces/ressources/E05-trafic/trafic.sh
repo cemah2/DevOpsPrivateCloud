@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # trafic.sh — M23-E05 : génère un trafic VARIÉ sur l'API MédiAgenda (dev), pour avoir de quoi interroger
 # dans Tempo : créations, conflits (409), introuvables (404), créneaux servis par la base puis par le
-# cache, annulations, pièces jointes si MédiDoc est branché (M23-E06).
+# cache, listes. (Les pièces jointes vers MédiDoc, M23-E06, se déposent à la main : voir son corrigé.)
 # Usage (depuis adm01, dans un second terminal : kubectl -n mediagenda-dev port-forward svc/mediagenda 18000:80) :
 #   ./trafic.sh [URL=http://127.0.0.1:18000] [TOURS=20]
 # Données FACTICES uniquement (patients « Essai-… ») : jamais de vraie donnée de santé, même en dev.

@@ -54,11 +54,15 @@ check_cmd "identité RGW thanos présente sur adm01 ($_M21P_S3_ENV, mode 600)" \
 mapfile -t _m21_e24_blocs < <(_m21p_blocs)
 if (( ${#_m21_e24_blocs[@]} > 0 )); then
   check_cmd "le compartiment contient des blocs (${#_m21_e24_blocs[@]})" true
-  _m21_e24_meta="$(_m21p_meta "${_m21_e24_blocs[-1]}")"
-  check_cmd "le dernier bloc porte les étiquettes externes cluster=k8s-par1 et prometheus_replica" \
-    _m21p_jq "$_m21_e24_meta" '.thanos.labels.cluster == "k8s-par1" and ((.thanos.labels.prometheus_replica // "") | test("^prometheus-kps-[01]$"))'
+  # Les 12 derniers blocs (ordre des ULID). Après E25, les blocs produits par le Compactor ont un ULID
+  # récent et n'ont plus prometheus_replica (dédoublonnés) : on ne juge que les blocs envoyés par
+  # les sidecars (.thanos.source == "sidecar").
   _m21_e24_debut=$(( ${#_m21_e24_blocs[@]} > 12 ? ${#_m21_e24_blocs[@]} - 12 : 0 ))
-  _m21_e24_repl="$(for b in "${_m21_e24_blocs[@]:_m21_e24_debut}"; do _m21p_meta "$b" | jq -r '.thanos.labels.prometheus_replica // empty' 2>/dev/null; done | sort -u | grep -c . || true)"
+  _m21_e24_metas="$(for b in "${_m21_e24_blocs[@]:_m21_e24_debut}"; do _m21p_meta "$b"; done \
+    | jq -cs '[.[] | select(type == "object" and (.thanos.source // "") == "sidecar") | .thanos.labels]' 2>/dev/null || echo null)"
+  check_cmd "les blocs des sidecars portent les étiquettes externes cluster=k8s-par1 et prometheus_replica" \
+    _m21p_jq "$_m21_e24_metas" 'length > 0 and all(.[]; .cluster == "k8s-par1" and ((.prometheus_replica // "") | test("^prometheus-kps-[01]$")))'
+  _m21_e24_repl="$(jq -r '.[].prometheus_replica // empty' <<<"$_m21_e24_metas" 2>/dev/null | sort -u | grep -c . || true)"
   check_output "les deux réplicas envoient leurs blocs (parmi les 12 derniers)" '^2$' echo "$_m21_e24_repl"
 else
   check_cmd "le compartiment contient des blocs (aucun : un premier bloc part 2 à 3 h après la mise en service ; sinon identités, certificat, flux)" false

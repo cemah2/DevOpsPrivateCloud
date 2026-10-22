@@ -14,8 +14,10 @@ variable "grafana_jeton" {
 
 variable "equipes" {
   description = <<-EOT
-    Équipes Grafana et leurs membres (adresses des comptes locaux, créés au palier 1 ; un membre
-    absent de Grafana fait échouer l'apply). Les dossiers ont le même nom que l'équipe.
+    Équipes Grafana et leurs membres (adresses des comptes locaux, créés à la main au début
+    d'E17 ; le fournisseur ne crée pas les comptes, un membre absent de Grafana fait échouer
+    l'apply). Ajoute l'adresse de ton propre compte (<MOI>) à « plateforme ». Les dossiers ont le
+    même nom que l'équipe.
   EOT
   type = map(object({
     titre_dossier = string

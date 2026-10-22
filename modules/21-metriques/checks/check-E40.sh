@@ -28,7 +28,7 @@ else
   skip "règle témoin" "absente : elle est créée à la première injection (lab/bin/break 21 40)"
 fi
 check_cmd "boîte astreinte@ : au plus 4 courriels TemoinFileAttenteHaute dans les 30 dernières minutes" \
-  bash -c '[[ "$1" -le 4 ]]' _ "$(_m21x_courriels 'to:astreinte@medisphere.internal TemoinFileAttenteHaute' "$(($(date +%s) - 1800))")"
+  bash -c '[[ -n "$1" && "$1" -le 4 ]]' _ "$(_m21x_courriels 'to:astreinte@medisphere.internal TemoinFileAttenteHaute' "$(($(date +%s) - 1800))")"
 check_cmd "RB-218 : section « trop de courriels »" \
   _m21x_doc_contient "$_m21x_rb/RB-218-*.md" '^#+ .*(trop|bavard|sans arr|tempête|inond)'
 check_cmd "panne M21-E40 close (lab/bin/break 21 40 --annuler après réparation)" _m21x_aucune_panne_active E40

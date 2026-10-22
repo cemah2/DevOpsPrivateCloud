@@ -45,12 +45,14 @@ check_cmd "pods du contrôleur : copie du greffon réussie (conteneur d'initiali
 if _m20o_lisible rollouts.argoproj.io wb-essais; then
   check_cmd "wb-checks lit les objets d'Argo Rollouts (rollouts, analysisruns)" _m20o_lisible analysisruns.argoproj.io wb-essais
   _e15_ro="$(_m20o_obj wb-essais rollouts.argoproj.io labo)"
-  check_cmd "Rollout wb-essais/labo : stratégie canary avec au moins une pause" \
-    _m20o_jq "$_e15_ro" '[.spec.strategy.canary.steps[]? | select(has("pause"))] | length >= 1'
+  # M20-E17 repasse labo en blueGreen : après lui, la stratégie canary n'est plus attendue.
+  check_cmd "Rollout wb-essais/labo : stratégie canary avec au moins une pause (ou blueGreen après M20-E17)" \
+    _m20o_jq "$_e15_ro" '([.spec.strategy.canary.steps[]? | select(has("pause"))] | length >= 1)
+      or (.spec.strategy.blueGreen.activeService // "") == "labo"'
   check_cmd "Rollout labo : au moins une révision livrée en canary (révision ≥ 2)" \
     _m20o_jq "$_e15_ro" '(.metadata.annotations["rollout.argoproj.io/revision"] // "0" | tonumber) >= 2'
   check_cmd "Rollout labo : Healthy, dernière révision promue (stable = courante)" \
-    _m20o_jq "$_e15_ro" '.status.phase == "Healthy" and .status.stableRS == .status.currentPodHash'
+    _m20o_jq "$_e15_ro" '.status.phase == "Healthy" and (.status.stableRS // .status.blueGreen.activeSelector) == .status.currentPodHash'
   check_cmd "wb-essais : plus de Deployment labo (remplacé par le Rollout)" \
     bash -c '[[ -z "$1" ]]' _ "$(_m20o_obj wb-essais deployment labo)"
   _e15_hpa="$(_m20o_obj wb-essais horizontalpodautoscaler labo)"

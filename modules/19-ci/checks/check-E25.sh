@@ -13,7 +13,10 @@ title "M19-E25 — Secrets en CI"
 require_cmd jq curl
 
 # Clé de secret : TOKEN, PASSWORD, KEY, SECRET ; identités de lecture (*_RO_*) : masquées suffisent.
+# Exception écrite de E24 (jusqu'au mini-projet E46) : COSIGN_PRIVATE_KEY de groupe, type fichier et
+# protégée, que GitLab ne peut pas masquer (clé PEM multiligne, M13-E07).
 _m19_e25_filtre='if type != "array" then "illisible" else [.[] | select((.key | ascii_upcase | test("TOKEN|PASSWORD|PASSWD|SECRET|(^|_)KEY($|_)"))
+  and ((.key == "COSIGN_PRIVATE_KEY" and .variable_type == "file" and .protected) | not)
   and ((.masked | not) or ((.protected | not) and (.key | test("_RO_") | not))))] | map(.key) end'
 
 title "Variables des groupes et de leurs projets"

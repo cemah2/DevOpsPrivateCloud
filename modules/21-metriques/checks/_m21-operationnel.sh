@@ -151,7 +151,13 @@ _m21o_temoin_vide() {
 
 # _m21o_am_config — configuration chargée par l'Alertmanager du cluster, en JSON (yq).
 _m21o_am_config() {
-  am_api "status" 2>/dev/null | jq -r '.config.original // empty' 2>/dev/null | yq -o=json '.' 2>/dev/null || true
+  local y
+  y="$(am_api "status" 2>/dev/null | jq -r '.config.original // empty' 2>/dev/null || true)"
+  [[ -n "$y" ]] || return 0
+  # yq de Mike Farah, sinon yq de Python (surcouche de jq), sinon PyYAML (comme check-E06).
+  yq -o=json -I=0 '.' <<<"$y" 2>/dev/null && return 0
+  yq -c '.' <<<"$y" 2>/dev/null && return 0
+  python3 -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(sys.stdin)))' <<<"$y" 2>/dev/null || true
 }
 
 # _m21o_tableau UID — tableau Grafana (JSON de /api/dashboards/uid, vide si invisible).

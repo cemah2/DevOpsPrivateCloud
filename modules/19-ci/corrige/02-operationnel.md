@@ -232,11 +232,11 @@ Fichiers : [`ci-templates/templates/qualite/template.yml`](fichiers/M19-E14/ci-t
    init-permissions  registry…/gitlab-runner-helper:x86_64-v19.4.0   -     -
    build             registry…/ghcr/astral-sh/uv:0.12.23-python3.13…  -     512Mi
    helper            registry…/gitlab-runner-helper:x86_64-v19.4.0   -     128Mi
-   svc-0             registry…/dockerhub/library/postgres:18.6-trixie 999   128Mi
-   svc-1             registry…/dockerhub/valkey/valkey:8.1.10-trixie  999   128Mi
+   postgresql        registry…/dockerhub/library/postgres:18.6-trixie 999   128Mi
+   valkey            registry…/dockerhub/valkey/valkey:8.1.10-trixie  999   128Mi
    admin@adm01:~$ kubectl -n ci-jobs get pod <pod> -o jsonpath='{.spec.hostAliases}'
    ```
-   ⚠️ À vérifier sur ton lab : les noms exacts des conteneurs de service (`svc-0`, `svc-1`) et la façon dont ta version publie les alias (`hostAliases` vers `127.0.0.1` ou résolution interne).
+   Depuis le Runner 17.9, un service dont l'alias est un nom DNS valide donne ce nom à son conteneur (sinon `svc-0`, `svc-1`…), et les alias sont publiés par `hostAliases` vers `127.0.0.1` (documentation de l'exécuteur Kubernetes, code 19.4 `getHostAliases`).
 4. **Pannes provoquées.**
    - Service sans alias : le nom par défaut est dérivé de l'image (`registry.par1.medisphere.internal__dockerhub__library__postgres`…) : l'URL `postgresql://…@postgresql` ne résout plus (`could not translate host name`).
    - Deux services sur 5432 (deux PostgreSQL) : le second s'arrête (`could not bind IPv4 address "0.0.0.0": Address in use`), le job attend puis échoue selon lequel répond.
@@ -637,7 +637,7 @@ Fichiers : [`essais/mesurer.sh`](fichiers/M19-E23/essais/mesurer.sh), [`ci-templ
    - cache `uv` : `key: {files: [uv.lock], prefix: uv}` (partagé par toutes les branches tant que le verrou ne change pas), `policy` choisie par une variable posée par `rules` (`pull-push` sur `main`, `pull` ailleurs), `uv cache prune --ci` avant l'envoi ;
    - cache BuildKit **en lecture** dans les MR : robot Harbor `cache-buildkit-lecture` (tirage seul, état `registre` de `plateforme/infra`) dans les variables d'instance **non protégées** `BUILDKIT_CACHE_LECTURE_UTILISATEUR` / `_JETON` (masquée) ; `--import-cache` seulement, jamais `--export-cache` hors références protégées ;
    - `GIT_DEPTH: "1"` par défaut, `"0"` seulement pour `qualite:commitlint` (et Gitleaks dans `securite`, déjà en historique complet depuis E15) ;
-   - `FF_USE_FASTZIP: "true"` et niveaux `CACHE_COMPRESSION_LEVEL` / `ARTIFACT_COMPRESSION_LEVEL` (`fastest` pour `image.tar`, déjà compressée) ; ⚠️ À vérifier sur ton lab : la valeur par défaut de `FF_USE_FASTZIP` dépend de la version du Runner (désactivée dans les versions documentées jusqu'en 19.3, activée ensuite, puis l'option disparaît) : la poser explicitement ne coûte rien ;
+   - niveaux `CACHE_COMPRESSION_LEVEL` / `ARTIFACT_COMPRESSION_LEVEL` (`fastest` pour `image.tar`, déjà compressée) ; ils ne s'appliquent qu'avec l'archiveur *fastzip*, que GitLab Runner 19.4 active **déjà par défaut** (`FF_USE_FASTZIP` vaut `true` et est déprécié, retrait annoncé en 19.7 : `helpers/featureflags/flags.go`) ; le poser à `"true"` ne change donc rien, c'est le niveau de compression qui fait le gain ;
    - artefacts limités (rapports, `coverage.xml`, `image.tar` avec `expire_in: 1 day`) ;
    - `interruptible: true` sur tous les jobs sans effet de bord (pas sur la publication) et `workflow:auto_cancel:on_new_commit: interruptible` dans le projet (déjà présent depuis E11).
 4. **Mesure finale** : médiane de 3 pipelines de MR ≤ seuil (exemple : 254 s, −53 %). Le gain principal vient de `needs` et du cache BuildKit en lecture ; les autres leviers comptent peu en durée, davantage en charge des runners et en stockage.

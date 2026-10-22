@@ -55,11 +55,14 @@ _e36_synchro_en_echec() {
   debut="$(m20_lire E36 debut)"
   m20_rafraichir "$_M20_APP_DEV"
   # Opération terminée en échec depuis l'injection, ou refus de l'AppProject signalé en condition
-  # (selon la version, Argo CD refuse une ressource non permise avant même de lancer l'opération).
+  # (selon la version, Argo CD refuse une ressource non permise avant même de lancer l'opération),
+  # ou, variante 1 avec la comparaison côté serveur (ServerSideDiff=true, M20-E12), refus du champ
+  # immuable dès l'essai à blanc du diff : ComparisonError, statut Unknown, aucune opération.
   m20_app "$_M20_APP_DEV" | jq -e --argjson t "${debut:-0}" '
     (((.status.operationState.phase // "") | test("Failed|Error"))
       and ((.status.operationState.startedAt // "1970-01-01T00:00:00Z") | fromdateiso8601) >= ($t - 5))
-    or ([.status.conditions[]? | select((.message // "") | test("not permitted in project"))] | length > 0)' >/dev/null 2>&1
+    or ([.status.conditions[]? | select((.message // "") | test("not permitted in project"))] | length > 0)
+    or ([.status.conditions[]? | select(.type == "ComparisonError" and ((.message // "") | test("immutable")))] | length > 0)' >/dev/null 2>&1
 }
 
 _e36_deploy_json() { wb_kubectl -n "$_M20_NS_DEV" get deploy mediagenda -o json 2>/dev/null; }
@@ -216,10 +219,17 @@ resume_E36() {
 }
 
 symptome_E36() {
+  local l2="n'a changé en dev. Argo CD affiche « Sync failed » sur mediagenda-dev et l'application reste"
+  local l3="OutOfSync. Lucas propose de « forcer » la synchronisation ou de désactiver l'auto-sync de dev."
+  # Variante 1 avec la comparaison côté serveur : le refus arrive dès le diff (ComparisonError).
+  if m20_condition "$_M20_APP_DEV" '^ComparisonError$'; then
+    l2="n'a changé en dev. Argo CD affiche une erreur de comparaison sur mediagenda-dev (statut « Unknown »)."
+    l3="Lucas propose de « forcer » la synchronisation ou de désactiver l'auto-sync de dev."
+  fi
   wb_symptome "Ticket INC-4736 — De : Julien Petit" \
     "La MR de Lucas a été fusionnée ce matin dans mediagenda/deploiement (pipeline vert), mais rien" \
-    "n'a changé en dev. Argo CD affiche « Sync failed » sur mediagenda-dev et l'application reste" \
-    "OutOfSync. Lucas propose de « forcer » la synchronisation ou de désactiver l'auto-sync de dev." \
+    "$l2" \
+    "$l3" \
     "Fais plutôt passer ce qui doit passer, proprement, et explique-moi pourquoi la CI ne l'a pas vu." \
     "" \
     "Temps cible : 30 min. Contrôle : lab/bin/check 20 36"

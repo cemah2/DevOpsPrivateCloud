@@ -1,11 +1,17 @@
-# group_vars/k8s_plan_controle/haproxy.yml (plateforme/ansible) — EXTRAIT (M21-E10, PLAT-2210) :
-# section à AJOUTER à haproxy_sections des nœuds de contrôle (HAProxy de l'API, 8443 → 6443, M14).
+---
+# group_vars/k8s_plan_controle/haproxy_metriques.yml (plateforme/ansible) — M21-E10, PLAT-2210.
+# Frontend de métriques d'HAProxy sur les nœuds de contrôle (HAProxy de l'API, 8443 → 6443, M14).
+# ⚠️ Pas « haproxy_sections » ici : sur ces nœuds, le rôle k8s_plan_controle passe lui-même
+# haproxy_sections au rôle haproxy (include_role … vars:), qui écraserait une variable d'inventaire.
+# La variable ci-dessous est ajoutée par le rôle à ses propres sections
+# (roles/k8s_plan_controle/tasks/point_acces.yml.extrait de ce dossier).
+# Application, un nœud à la fois : playbook du plan de contrôle du M14, --tags point_acces --limit k8s-cp01.
+#
 # Prometheus est sur le même VLAN que les nœuds de contrôle : selon le chemin choisi par Cilium,
 # la source vue est l'adresse du travailleur ou celle du pod (10.240.0.0/16). Les deux sont
 # autorisées ; vérifie chez toi laquelle apparaît (journal d'HAProxy si tu enlèves « no log »).
 # ⚠️ À vérifier sur ton lab : adresse source vue par HAProxy.
-haproxy_sections:
-  # … sections existantes (fe_api_kubernetes, be_api_kubernetes, M14-E03) …
+k8s_plan_controle_haproxy_sections_supplementaires:
   - type: frontend
     nom: fe_metriques
     lignes:

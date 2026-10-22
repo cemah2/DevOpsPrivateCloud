@@ -20,7 +20,7 @@ pyroscope:
   extraVolumes:
     - name: racine-medisphere
       configMap:
-        name: racine-medisphere   # créée par plateforme/k8s dans chaque espace qui parle au RGW (M16)
+        name: racine-medisphere   # versionnée dans otel/ de plateforme/observabilite (M23-E02)
   extraVolumeMounts:
     - name: racine-medisphere
       mountPath: /etc/medisphere-ca
@@ -49,7 +49,7 @@ pyroscope:
         access_key_id: ${S3_CLE}
         secret_access_key: ${S3_SECRET}
         insecure: false
-        bucket_lookup_type: path
+        bucket_lookup_type: path-style   # valeurs admises : auto, path-style, virtual-hosted-style
     limits:
       # Profils gardés 14 jours (même durée que les traces) ; à vérifier sur ta version : en stockage v2,
       # c'est le nettoyage de l'index du métastore qui applique cette durée.

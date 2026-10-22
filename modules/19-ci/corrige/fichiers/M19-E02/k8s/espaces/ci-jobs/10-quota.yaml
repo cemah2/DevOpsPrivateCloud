@@ -2,7 +2,8 @@
 # Enveloppe de la CI dans k8s-par1 : de quoi faire tourner 6 jobs « moyens » (concurrent = 6 au
 # M19-E04) avec leurs helpers et services, sans jamais prendre plus de la moitié des demandes
 # allouables des trois travailleurs (3 × ≈ 9,3 Gi et 4 CPU après M19-E02). Un job qui ne rentre
-# pas reste « Pending » : le gestionnaire attend poll_timeout (600 s) puis le job échoue.
+# pas dans le quota n'a PAS de pod « Pending » : l'API refuse de créer le pod (« exceeded quota ») et
+# le job échoue aussitôt à la préparation (poll_timeout ne sert qu'à un pod créé qui ne démarre pas).
 apiVersion: v1
 kind: ResourceQuota
 metadata:

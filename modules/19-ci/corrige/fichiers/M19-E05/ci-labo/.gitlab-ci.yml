@@ -39,7 +39,8 @@ second:
 anatomie:
   services:
     # Un service = un conteneur de plus DANS le pod : il se joint par localhost (même espace de
-    # noms réseau), et aussi par son alias (le runner crée un Service Kubernetes à ce nom).
+    # noms réseau), et aussi par son alias (le runner l'ajoute au /etc/hosts du pod, hostAliases
+    # vers 127.0.0.1 ; depuis le Runner 17.9, l'alias nomme aussi le conteneur du service).
     - name: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
       alias: valkey
   variables:

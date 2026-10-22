@@ -50,9 +50,11 @@ CHG-2319 changement du disque de données (Lucas)
 
 ```
 admin@k8s-w02:~$ logger -t essai "ligne de test $(date +%T)"; sudo journalctl -t essai -n 1 --no-pager
--- No entries --
+nov. 05 09:20:14 k8s-w02 essai[41207]: ligne de test 09:20:14
+admin@k8s-w02:~$ sudo journalctl --header | grep 'File path'
+File path: /run/log/journal/3f1c…/system.journal
 admin@k8s-w02:~$ sudo systemd-analyze cat-config systemd/journald.conf | grep -v '^#' | grep -i storage
-Storage=none
+Storage=volatile
 admin@k8s-w02:~$ ls -l /etc/systemd/journald.conf.d/
 -rw-r--r-- 1 root root 141 nov.  5 09:12 60-economie-disque.conf
 ```
@@ -75,13 +77,13 @@ admin@adm01:~$ kubectl -n journaux logs <alloy-du-nœud> | grep -i journal | tai
 |---|---|---|
 | 1 | Taint `medisphere.internal/maintenance=disque:NoSchedule` posée sur un travailleur pour un changement de disque qui n'a pas eu lieu, puis pod Alloy du nœud supprimé : le DaemonSet ne recrée pas un pod qui ne tolère pas la taint (il ne tolère d'office que les taints posées par Kubernetes : `not-ready`, `unreachable`, pressions, `unschedulable`…) | `DESIRED` = nœuds − 1, `Taints` du nœud, annotation `maintenance-ticket` |
 | 2 | Commit de Lucas dans `alloy/values.yaml` : tolérance `node-role.kubernetes.io/control-plane` retirée de `controller.tolerations` : le DaemonSet supprime ses pods des nœuds de contrôle ; journaux des nœuds de contrôle **et** journal d'audit de l'API arrêtés | `DESIRED 3`, `git log -p -- alloy/values.yaml`, historique de l'Application `alloy` |
-| 3 | Fichier `/etc/systemd/journald.conf.d/60-economie-disque.conf` avec `Storage=none` : journald jette tout (ni disque, ni mémoire) ; Alloy n'a plus rien à lire ; `journalctl` sur le nœud est vide aussi | `systemd-analyze cat-config`, date du fichier |
+| 3 | Fichier `/etc/systemd/journald.conf.d/60-economie-disque.conf` avec `Storage=volatile` : journald n'écrit plus qu'en mémoire (`/run/log/journal`) ; `journalctl` sur le nœud montre toujours les lignes, mais Alloy lit `/var/log/journal` et n'y voit plus rien de neuf | `systemd-analyze cat-config`, `journalctl --header`, date du fichier |
 | 4 | `/var/log/journal` renommé (`journal.archive-AAAAMMJJ`) puis journald relancé : en `Storage=auto` (défaut), journald n'écrit sur disque que si le répertoire existe, il bascule en volatil (`/run/log/journal`) ; Alloy lit `/var/log/journal` (`path` du composant `loki.source.journal`) et ne voit plus rien | `journalctl --header`, `ls -ld` |
 
 *Correctif*
 - V1 : vérifier avec l'auteur que la maintenance n'a pas lieu, retirer la taint (`kubectl taint node k8s-w02 medisphere.internal/maintenance-`) ; le DaemonSet recrée le pod dans la minute. **Et** décider si Alloy doit tolérer toutes les taints : pour un agent de journaux, oui (`- operator: Exists` dans `controller.tolerations`), sauf `NoExecute` d'éviction volontaire — c'est le réglage de la plupart des agents ; le choix se fait par MR.
 - V2 : revert du commit par MR ; Argo CD remet les tolérances, les pods reviennent sur les nœuds de contrôle.
-- V3 : supprimer le fichier, `systemctl restart systemd-journald` ; vérifier `journalctl -n 5`. Ce qui n'a jamais été écrit est perdu.
+- V3 : supprimer le fichier, `systemctl restart systemd-journald`, puis `journalctl --flush` (le journal volatil accumulé pendant la panne part sur le disque) ; vérifier `journalctl --header` (fichier sous `/var/log/journal`). Rien n'est perdu sur le nœud tant qu'il n'a pas redémarré (le journal volatil vit en mémoire) ; dans Loki, les lignes de la panne arrivent avec du retard (dans la limite de `max_age`). Avec `Storage=none`, que la panne n'utilise jamais, les lignes seraient jetées : perdues.
 - V4 : remettre le répertoire (`mv /var/log/journal.archive-… /var/log/journal`), `systemctl restart systemd-journald`, puis `journalctl --flush` (le journal volatil accumulé pendant la panne part sur le disque) ; Alloy reprend à son curseur. Rien n'est perdu sur le nœud ; dans Loki, les lignes de la panne arrivent avec du retard si elles sont plus jeunes que `max_age` (7 h).
 - V3 et V4 : reporter dans le rôle Ansible des nœuds (`k8s_noeud`) un état explicite de journald (`Storage=persistent`, limites de taille), pour que la prochaine dérive soit corrigée par Ansible.
 

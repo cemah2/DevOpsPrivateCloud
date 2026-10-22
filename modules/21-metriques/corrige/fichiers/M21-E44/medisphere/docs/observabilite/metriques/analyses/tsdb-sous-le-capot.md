@@ -49,7 +49,7 @@ Le dernier bloc (1 h 45) n'existait pas : c'est la tête, écrite pour l'instant
 
 `promtool tsdb dump --match='probe_success{instance="https://grafana.apps.par1.medisphere.internal/api/health"}'` sur une heure : 240 lignes → un échantillon toutes les 15 s. (`promtool tsdb dump` exige un dossier `wal/` dans le répertoire analysé : créé vide dans la copie.)
 
-Coût d'une série sur le témoin : 14 Mio pour 1 906 séries sur 48 h ≈ 7,5 Kio par série et par 48 h, soit ≈ 1,3 octet par échantillon ; en mémoire, la mesure fiable est celle du cluster (M21-E30). Les 200 000 séries de M21-E38 auraient pesé ≈ 100 fois le témoin entier.
+Coût d'une série sur le témoin : 14 Mio pour 1 906 séries sur 48 h ≈ 7,5 Kio par série et par 48 h, soit ≈ 1,3 octet par échantillon ; en mémoire, la mesure fiable est celle du cluster (M21-E30). Les 60 000 séries de M21-E38 pesaient ≈ 30 fois le témoin entier.
 
 ## Réponses aux questions
 
@@ -59,5 +59,5 @@ Coût d'une série sur le témoin : 14 Mio pour 1 906 séries sur 48 h ≈ 7,5 K
 4. **Rétention** : par durée (blocs entièrement trop vieux) et par taille (blocs les plus anciens jusqu'à repasser sous la limite, WAL et `chunks_head` compris) ; granularité = un bloc.
 5. **Thanos** : blocs de 2 h fixes (`min` = `max`) car le sidecar envoie ce que Prometheus écrit ; compacter localement réécrirait des blocs déjà envoyés. Le Compactor compacte et sous-échantillonne dans le compartiment, seul.
 6. **Échantillons par chunk** : efficacité de compression ; fermeture à 120 échantillons (ou à la frontière de bloc) ; le *churn* laisse des chunks presque vides, chers.
-7. **Coût d'une série** : voir la section précédente ; rapporté à M21-E38, 200 000 séries ≈ plusieurs centaines de Mo de tête par réplica, et un index de bloc multiplié d'autant.
+7. **Coût d'une série** : voir la section précédente ; rapporté à M21-E38, 60 000 séries ≈ deux à six cents Mo de tête par réplica, et un index de bloc multiplié d'autant.
 8. **Instantané** : état figé et cohérent ; le répertoire vivant change sans cesse et est verrouillé ; `promtool` pourrait y rejouer le WAL et écrire.

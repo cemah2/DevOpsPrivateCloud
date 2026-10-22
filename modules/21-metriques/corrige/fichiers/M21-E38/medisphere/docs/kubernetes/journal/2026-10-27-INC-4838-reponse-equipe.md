@@ -16,7 +16,7 @@
 
 > Bonjour Julien,
 >
-> Ce matin, le module de rapports branché sur l'application de recette (`wb-pannes`) exposait le compteur `mediagenda_rapports_requetes_total` avec une étiquette `requete_id` : une valeur nouvelle par requête. Pour Prometheus, chaque valeur d'étiquette est une **série** à part, avec son index et sa mémoire : 2 500 séries nouvelles toutes les 15 secondes et par pod, soit environ 200 000 en un quart d'heure, et sans limite si l'application n'en avait pas eu. La mémoire des deux Prometheus a augmenté de plusieurs centaines de mégaoctets, et chaque série serait restée deux ans dans le stockage long.
+> Ce matin, le module de rapports branché sur l'application de recette (`wb-pannes`) exposait le compteur `mediagenda_rapports_requetes_total` avec une étiquette `requete_id` : une valeur nouvelle par requête. Pour Prometheus, chaque valeur d'étiquette est une **série** à part, avec son index et sa mémoire : 2 500 séries nouvelles toutes les 15 secondes et par pod, soit 60 000 en trois minutes avant que l'application ne recycle ses valeurs, et plus d'un million par heure si elle ne l'avait pas fait. La mémoire des deux Prometheus a augmenté de plusieurs centaines de mégaoctets, et chaque série serait restée deux ans dans le stockage long.
 >
 > Nous avons arrêté l'ingestion de cette métrique à 9 h 52 (filtre sur le ServiceMonitor) et posé une limite d'échantillons sur la cible. Rien d'autre n'est perdu ; la métrique n'est simplement plus collectée.
 >

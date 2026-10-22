@@ -86,7 +86,7 @@ Le journal du contrôleur (`kubectl -n argocd logs statefulset/argocd-applicatio
 ### M20-E36 — Panne : la synchronisation échoue  `BF` `★★`
 
 > **Ticket INC-4736** — *De : Julien Petit*
-> *(Le détail s'affiche à l'injection.)* Une MR de Lucas, pipeline vert, est fusionnée dans `mediagenda/deploiement` ; Argo CD affiche « Sync failed » sur `mediagenda-dev` et rien n'arrive en dev. Lucas veut « forcer » ou désactiver l'auto-synchronisation de dev.
+> *(Le détail s'affiche à l'injection.)* Une MR de Lucas, pipeline vert, est fusionnée dans `mediagenda/deploiement` ; Argo CD affiche « Sync failed » (ou, selon le cas, une erreur de comparaison) sur `mediagenda-dev` et rien n'arrive en dev. Lucas veut « forcer » ou désactiver l'auto-synchronisation de dev.
 
 **Objectifs pédagogiques**
 - Lire le résultat d'une opération en échec (message de l'opération, message par ressource, phase des hooks) et situer l'étage qui refuse : validation de l'API, AppProject, hook, admission (quotas).
@@ -121,7 +121,7 @@ Le message d'une opération en échec contient le message de l'API ou d'Argo CD 
 
 <details><summary>Indice 2</summary>
 
-Argo CD ne relance pas automatiquement une synchronisation qui a échoué pour la **même** révision (journal du contrôleur : `Skipping auto-sync: already attempted sync to …`), sauf `retry` configuré : c'est voulu, pour ne pas marteler l'API. Le prochain commit, ou un `argocd app sync` après correction, relance. kubeconform valide la forme des objets, pas l'immutabilité d'un champ, les AppProjects, les quotas ni les webhooks.
+Argo CD ne relance pas automatiquement une synchronisation qui a échoué pour la **même** révision (journal du contrôleur : `Skipping auto-sync: failed previous sync attempt to … and will not retry for …`, condition `SyncError` « Failed last sync attempt to … »), sauf `retry` configuré : c'est voulu, pour ne pas marteler l'API. Le prochain commit, ou un `argocd app sync` après correction, relance. kubeconform valide la forme des objets, pas l'immutabilité d'un champ, les AppProjects, les quotas ni les webhooks.
 </details>
 
 **Pour aller plus loin** (facultatif) : la comparaison côté serveur fait passer les manifestes par l'admission pendant le diff : quelles variantes de cette panne seraient alors visibles **avant** la synchronisation ? Documentation « Diff Strategies », section « Server-Side Diff ».
@@ -147,7 +147,7 @@ Argo CD ne relance pas automatiquement une synchronisation qui a échoué pour l
 1. Constate : quelles Applications sont touchées (toutes, un groupe de dépôts, une seule) ? Message exact de la condition. Ce que cela dit déjà de l'étage en cause.
 2. Reproduis depuis le repo-server (`kubectl -n argocd exec deploy/argocd-repo-server -- …`) : résolution du nom, connexion TCP, poignée de main TLS, `git ls-remote`. Note ce qui passe et ce qui casse.
 3. Trouve ce qui a changé (Git, Secret, ConfigMap, politique) et **qui** l'a changé (`managedFields`, annotations, historique des MR).
-4. Corrige à la source : un identifiant se recrée depuis le Vault par `secrets-k8s.sh` (jamais une valeur collée à la main), une CA par la release Helmfile `argocd` (`helmfile diff` d'abord), une adresse par un revert dans `plateforme/gitops`, un refus réseau par le code qui le porte.
+4. Corrige à la source : un identifiant se recrée depuis le Vault par `secrets-k8s.sh` (jamais une valeur collée à la main), une CA par la release Helmfile `argocd` (`helmfile diff` d'abord ; rappel du M17-E14 : sans `--three-way-merge`, il ne voit pas ce qui a été modifié à la main), une adresse par un revert dans `plateforme/gitops`, un refus réseau par le code qui le porte.
 5. Accélère la reprise (`--hard-refresh`) et vérifie qu'aucune Application ne reste en erreur.
 6. Complète RB-200 d'une section « Argo CD ne lit plus le dépôt ».
 
@@ -168,7 +168,7 @@ Argo CD garde quelques minutes la révision résolue d'une branche (`git ls-remo
 `kubectl -n argocd get secrets -l argocd.argoproj.io/secret-type=repo-creds` (sans afficher les valeurs) : qui a écrit en dernier (`--show-managed-fields`), quelles annotations ? `kubectl -n argocd get cm argocd-tls-certs-cm -o yaml` : une entrée par **nom d'hôte**. `hubble observe --namespace argocd --verdict DROPPED` montre un refus réseau en direct. Pour l'adresse d'un dépôt, l'AppProject peut refuser avant même toute connexion.
 </details>
 
-**Pour aller plus loin** (facultatif) : mesure le temps que met Argo CD à remarquer qu'un dépôt est illisible sans `--hard-refresh` ; relie-le à `timeout.reconciliation` et au cache des révisions (`reposerver.revision.cache.expiration`, à vérifier dans la documentation de `argocd-cmd-params-cm` de ta version).
+**Pour aller plus loin** (facultatif) : mesure le temps que met Argo CD à remarquer qu'un dépôt est illisible sans `--hard-refresh` ; relie-le à `timeout.reconciliation` et au cache des révisions résolues du repo-server (option `--revision-cache-expiration` de `argocd-repo-server`, qui n'a pas de clé dans `argocd-cmd-params-cm` en 3.5 et vaut par défaut `timeout.reconciliation`).
 
 ---
 
@@ -190,7 +190,7 @@ Argo CD garde quelques minutes la révision résolue d'une branche (`git ls-remo
 **Travail demandé**
 1. Constate : quelle ressource porte la santé dégradée, avec quel message ? L'ancienne version de l'application répond-elle encore ? Pourquoi ?
 2. Descends jusqu'à la cause (`kubectl rollout status`, pods neufs, événements, PVC, StorageClass, contrôle de santé). Si la ressource déclarée malade est saine pour son opérateur, prouve-le, puis trouve d'où vient le jugement d'Argo CD.
-3. Corrige à la source (MR dans `mediagenda/deploiement`, ou release Helmfile `argocd` pour un contrôle de santé). N'utilise pas `kubectl edit configmap argocd-cm`.
+3. Corrige à la source (MR dans `mediagenda/deploiement` ; pour un contrôle de santé, c'est la release Helmfile `argocd` qui porte ce qui est voulu). N'ajoute ni ne modifie rien à la main dans `argocd-cm` (pas de `kubectl edit`) ; si quelqu'un l'a fait, défais exactement son geste, trace-le dans ton journal, et vérifie que `argocd-cm` ne s'écarte plus de la release.
 4. Écris `outils/tester-sante.sh` (dans `plateforme/k8s`) : il évalue un contrôle de santé proposé dans les valeurs de la release contre un objet réel, avec `argocd admin settings resource-overrides health`, et le compare au contrôle intégré. Toute MR qui touche `resource.customizations.health` en joindra la sortie.
 5. Vérifie : `argocd app wait mediagenda-dev --health --timeout 600` ; plus aucune notification `health-degraded` erronée.
 6. Complète RB-200 d'une section « L'application est Degraded après une synchronisation réussie ».
@@ -375,7 +375,7 @@ Dans un `kustomize` de components, l'ordre compte : un correctif avec `target` n
 1. Constate côté Argo CD : `argocd cluster list`, `argocd cluster get https://lyo-k3s01.par1.medisphere.internal:6443`, conditions de `labo-lyo-k3s01`. Message exact.
 2. Teste la connexion depuis un pod de `k8s-par1` et depuis un nœud (TCP 6443, TLS avec la bonne autorité), puis côté `lyo-k3s01` : compte `argocd-gestion`, son jeton, ses droits (`k3s kubectl auth can-i … --as=system:serviceaccount:agence:argocd-gestion`), le pare-feu local (`nft list ruleset`).
 3. Trouve l'étage en cause et ce qui l'a modifié (Secret de cluster, règles, liaisons RBAC).
-4. Corrige à la source : Secret de cluster par `secrets-k8s.sh appliquer argocd` depuis le Vault ; règles et droits de `lyo-k3s01` par le playbook `m20-lyo.yml` (pas à la main), et note dans ton journal ce que l'agence voulait obtenir avec son « ménage ».
+4. Corrige à la source : Secret de cluster par `secrets-k8s.sh appliquer argocd` depuis le Vault ; règles et droits de `lyo-k3s01` à partir du code (playbook `m20-lyo.yml` et manifestes qu'il dépose ; vérifie que k3s les réapplique vraiment), pas à la main, et note dans ton journal ce que l'agence voulait obtenir avec son « ménage ».
 5. Vérifie : cluster `Successful`, `labo-lyo-k3s01` `Synced` et `Healthy`, et `argocd-gestion` toujours limité à l'espace `agence`.
 6. Complète RB-200 d'une section « Un cluster distant est Unknown ».
 
@@ -460,13 +460,14 @@ Un dépôt illisible pour Argo CD se corrige en premier : sans lui, aucun autre 
 > ⚠️ **Attention** : le niveau de journalisation `debug` du contrôleur et du repo-server multiplie le volume de leurs journaux (Loki les gardera au M22) et ralentit un peu la réconciliation. Active-le le temps des mesures seulement, note l'heure, et reviens au niveau `info` par la release Helmfile avant de clore l'exercice. Ne lance pas `kubectl debug` sur les pods d'Argo CD (un conteneur éphémère ne se retire qu'en recréant le pod) : `kubectl exec` suffit.
 
 **Travail demandé**
-1. **Préparer la mesure.** Copie le squelette `modules/20-gitops/ressources/E44-sous-le-capot/sous-le-capot.md` dans `~/medisphere/docs/livraison/gitops/`. Passe temporairement le contrôleur et le repo-server en `debug` :
+1. **Préparer la mesure.** Copie le squelette `modules/20-gitops/ressources/E44-sous-le-capot/sous-le-capot.md` dans `~/medisphere/docs/livraison/gitops/`. Passe temporairement le contrôleur et le repo-server en `debug` **par la release** (valeurs surchargées le temps de la mesure, sans rien modifier à la main dans `argocd-cmd-params-cm` : la release est en *server-side apply* depuis M20-E02 : un `kubectl patch` sur un champ qu'elle possède le ferait passer à un autre gestionnaire de champs, et le retour en arrière par la release deviendrait incertain — écart invisible pour `helmfile diff` sans `--three-way-merge` (M17-E14), conflit possible à l'`apply`) :
    ```
-   admin@adm01:~/src/k8s$ kubectl -n argocd patch configmap argocd-cmd-params-cm --type merge \
-       -p '{"data":{"controller.log.level":"debug","reposerver.log.level":"debug"}}'
-   admin@adm01:~/src/k8s$ kubectl -n argocd rollout restart statefulset/argocd-application-controller deploy/argocd-repo-server
-   admin@adm01:~/src/k8s$ helmfile -e par1 -l composant=argocd diff     # la dérive est visible : c'est voulu, et temporaire
+   admin@adm01:~/src/k8s$ helmfile -e par1 -l composant=argocd diff \
+       --set 'configs.params.controller\.log\.level=debug' --set 'configs.params.reposerver\.log\.level=debug'
+   admin@adm01:~/src/k8s$ helmfile -e par1 -l composant=argocd apply \
+       --set 'configs.params.controller\.log\.level=debug' --set 'configs.params.reposerver\.log\.level=debug'
    ```
+   Le `diff` ne doit montrer que ces deux clés (et les sommes de contrôle des pods qui en dépendent : le chart redémarre lui-même le contrôleur et le repo-server).
 2. **Une livraison chronométrée.** Fais fusionner une MR anodine sur `overlays/dev` de `mediagenda/deploiement` (un paramètre de `debogage`, par exemple), et relève pour cette révision : `committed_date` et `merged_at` (API GitLab), la ligne `Received push event` du serveur, les lignes `Refreshing app status`, `Initialized new operation`, `updated '…' operation (phase: …)` et `Reconciliation completed` (avec ses durées) du contrôleur, les lignes de génération du repo-server, `startedAt`/`finishedAt` de l'opération, la création et la disponibilité du pod neuf. Écris l'outil `outils/chronometrer-livraison.sh` (dans `plateforme/outils`) qui rassemble ces horodatages en une commande.
    ```
    admin@adm01:~$ kubectl -n argocd logs deploy/argocd-server --since=10m | grep 'push event'
@@ -495,7 +496,7 @@ Un dépôt illisible pour Argo CD se corrige en premier : sans lui, aucun autre 
    ```
    Relève l'annotation de suivi réelle du Deployment de dev et explique ce qu'Argo CD en fait.
 6. **Métriques.** Interroge les métriques du contrôleur (port 8082) et du repo-server (port 8084) par `kubectl port-forward` : `argocd_app_reconcile`, `argocd_git_request_total`, `argocd_app_sync_total`, `argocd_cluster_api_resource_objects`. Lesquelles auraient vu les pannes E35, E37 et E39 avant l'utilisateur ?
-7. **Rétablir.** Reviens au niveau `info` par la release (`helmfile -e par1 -l composant=argocd apply`, après un `diff` qui ne montre plus que le retour des deux clés), vérifie `argocd-cmd-params-cm`, commite le livrable.
+7. **Rétablir.** Reviens au niveau `info` par la release (`helmfile -e par1 -l composant=argocd apply` **sans** les `--set`, après un `diff` qui ne montre que le retour des deux clés), vérifie `argocd-cmd-params-cm`, commite le livrable.
 
 **Critères de réussite**
 - [ ] `docs/livraison/gitops/sous-le-capot.md` commité : chronologie mesurée (horodatages), copies du repo-server (`/tmp/_argocd-repo/…`), familles de clés Redis, journal `Reconciliation completed`, annotation de suivi réelle du Deployment de dev, comparaison des rendus par `argocd app manifests`, stratégie de comparaison établie par sa source.

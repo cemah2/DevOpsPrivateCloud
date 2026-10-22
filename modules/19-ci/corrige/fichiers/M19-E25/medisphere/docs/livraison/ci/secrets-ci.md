@@ -12,7 +12,7 @@
 | Secret | Où | Qui le reçoit | Attributs | Expiration / rotation |
 |---|---|---|---|---|
 | Clé Cosign + mot de passe | Vault `critique` (`plateforme/k8s/secrets/cosign-ci.yml`) → Secret `ci-jobs-protege/cosign-medisphere` | jobs du runner `k8s-par1-protege` seulement (volume) | — (hors GitLab) | pas d'expiration ; rotation = nouvelle paire + re-signature (procédure de M13, RB-13x) |
-| `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD` (groupe `mediagenda`… — **exception E24**) | variables de groupe | jobs des références protégées des projets v1 | protégées, masquées, fichier | supprimées au mini-projet (M19-E46) |
+| `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD` (groupe `mediagenda`… — **exception E24**) | variables de groupe | jobs des références protégées des projets v1 | protégées ; `COSIGN_PASSWORD` masquée ; `COSIGN_PRIVATE_KEY` de type fichier, **non masquable** (PEM multiligne, M13-E07) : seule variable à clé de secret non masquée admise | supprimées au mini-projet (M19-E46) |
 | `DEPLOIEMENT_TOKEN` (`mediagenda/api`) | variable de projet ; jeton de projet `ci-promotion` de `mediagenda/deploiement` | jobs `promouvoir-*` (environnement `promotion/*`) sur `protege` | protégée, masquée **et cachée**, portée `promotion/*` | 90 jours, rotation tous les 60 jours (RB-191 §2) |
 | `DEPLOIEMENT_TOKEN` (`medidoc/medidoc`, E33) | idem pour `medidoc/deploiement` | idem | idem | idem |
 | `HARBOR_ROBOT_USER` / `HARBOR_ROBOT_TOKEN` | variables de groupe ; robot `robot$medisphere+ci` (état OpenTofu `registre`) | jobs de publication | jeton : protégée, masquée, cachée | 90 jours, rotation tous les 60 jours (RB-191 §3) |

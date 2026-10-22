@@ -25,7 +25,7 @@ check_ssh "mon01 : service pve-exporter actif" "$_M21O_MON01" 'systemctl is-acti
 check_ssh_output "mon01 : pve-exporter n'écoute que sur 127.0.0.1:9221" "$_M21O_MON01" '^127\.0\.0\.1:9221$' \
   'ss -Htln "sport = :9221" | awk "{print \$4}" | sort -u'
 check_ssh "mon01 : aucune configuration ne désactive la vérification TLS (verify_ssl: false)" "$_M21O_MON01" \
-  '! sudo -n grep -rEqi "verify_ssl: *false" /etc/prometheus /etc/systemd/system/pve-exporter.service'
+  'sudo -n true && ! sudo -n grep -rEqi "verify_ssl: *false" /etc/prometheus /etc/systemd/system/pve-exporter.service'
 check_ssh_output "mon01 : pve.yml lisible par le seul utilisateur du service (600)" "$_M21O_MON01" '^600 pve-exporter$' \
   'sudo -n stat -c "%a %U" /etc/prometheus/pve.yml'
 

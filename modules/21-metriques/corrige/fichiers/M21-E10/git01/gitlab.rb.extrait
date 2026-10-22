@@ -28,8 +28,9 @@ redis_exporter['enable'] = false
 postgres_exporter['enable'] = false
 pgbouncer_exporter['enable'] = false
 
-# node_exporter : voir M21-E08 (le rôle node_exporter du palier 1 décide s'il remplace celui
-# d'omnibus ; les deux ne peuvent pas écouter sur 10.10.20.12:9100).
+# node_exporter d'omnibus (M01-E30, 10.10.20.12:9100) : ÉTEINT depuis M21-E08, où le rôle
+# node_exporter v2 (binaire amont, TLS) a pris sa place sur la même adresse et le même port.
+node_exporter['enable'] = false
 
 # gitlab-exporter (9168) : sur l'adresse INFRA, joignable par la bordure depuis K8S_TRAV seulement.
 gitlab_exporter['enable'] = true

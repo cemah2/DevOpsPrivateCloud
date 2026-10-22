@@ -5,14 +5,18 @@
 #
 # Le canari du témoin occupe 120 Mio de mémoire et 100 Mio de disque dans /tmp pendant 45 s.
 # Variantes :
-#   1. gabarit TOML du runner k8s-par1 : memory_limit (conteneur build) abaissé à 64Mi → OOMKilled ;
+#   1. gabarit TOML du runner k8s-par1 : memory_request et memory_limit (conteneur build) abaissés à
+#      96Mi → le canari (120 Mio) est tué par le noyau (OOMKilled) ;
 #   2. MutatingAdmissionPolicy (admissionregistration.k8s.io/v1, GA en 1.36) de Lucas qui impose
 #      activeDeadlineSeconds: 30 à tous les pods de ci-jobs (« tuer les jobs zombies ») → le pod
 #      passe en Failed (DeadlineExceeded) au bout de 30 s ;
-#   3. gabarit TOML : ephemeral_storage_limit (conteneur build) à 50Mi → éviction par le kubelet ;
+#   3. gabarit TOML : ephemeral_storage_request et ephemeral_storage_limit (conteneur build) à 50Mi
+#      → éviction par le kubelet (le canari écrit 100 Mio dans /tmp) ;
 #   4. Deployment « reindexation-nocturne » de Lucas (espace wb-pannes-ci, PriorityClass
 #      medisphere-critique) qui demande la mémoire libre du nœud où tourne le canari : l'ordonnanceur
-#      préempte le pod de job (PriorityClass medisphere-ci, la plus basse).
+#      préempte le pod de job (PriorityClass medisphere-ci). Garde-fou : la variante est sautée si le
+#      nœud porte un autre pod moins prioritaire que le job (pod sans classe = priorité 0, essai…),
+#      que l'ordonnanceur préempterait AVANT lui : jamais de charge sans rapport avec la CI touchée.
 # Vérification : un pipeline du témoin, le job canari échoue (variante 4 : événement Preempted).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
@@ -116,6 +120,18 @@ _e42_pod_canari() {
      | "\(.metadata.name) \(.spec.nodeName) \([.spec.containers[].resources.requests.memory // "0" | mio] | add | floor)"][0] // empty'
 }
 
+# _e42_autres_victimes NŒUD POD — pods du nœud (hors POD) de priorité strictement inférieure à celle
+# de POD : l'ordonnanceur les choisirait comme victimes AVANT le pod de job (il épargne d'abord les plus
+# prioritaires). S'il y en a, la variante 4 préempterait des charges sans rapport avec la CI : sautée.
+_e42_autres_victimes() {
+  local prio
+  prio="$(wb_kubectl -n "$_M19_NS_JOBS" get pod "$2" -o jsonpath='{.spec.priority}' 2>/dev/null)" || prio=""
+  [[ "$prio" =~ ^[0-9]+$ ]] || { echo inconnu; return 0; }
+  wb_kubectl get pods -A --field-selector "spec.nodeName=$1,status.phase!=Succeeded,status.phase!=Failed" -o json 2>/dev/null |
+    jq -r --arg p "$2" --argjson pr "$prio" '[.items[] | select(.metadata.name != $p and ((.spec.priority // 0) < $pr))
+      | "\(.metadata.namespace)/\(.metadata.name)"] | join(" ")'
+}
+
 # _e42_memoire_libre NŒUD — mémoire allouable moins demandes des pods non terminés (Mi).
 _e42_memoire_libre() {
   local alloc dem
@@ -131,11 +147,13 @@ _e42_memoire_libre() {
 }
 
 _m19E42_une() {
-  local n="$1" pl st id pod noeud dem libre t=0
+  local n="$1" pl st id pod noeud dem libre victimes t=0
   m19_debut E42
   case "$n" in
-    1) m19_toml_modifier E42 "$(_e42_toml_cle memory_limit 64Mi)" || return $? ;;
-    3) m19_toml_modifier E42 "$(_e42_toml_cle ephemeral_storage_limit 50Mi)" || return $? ;;
+    # La demande est abaissée avec la limite : une demande supérieure à la limite (256Mi et 512Mi
+    # depuis M19-E27) rendrait le pod invalide, refusé par l'API AVANT de démarrer (autre panne).
+    1) m19_toml_modifier E42 "$(_e42_toml_cle memory_request 96Mi); $(_e42_toml_cle memory_limit 96Mi)" || return $? ;;
+    3) m19_toml_modifier E42 "$(_e42_toml_cle ephemeral_storage_request 50Mi); $(_e42_toml_cle ephemeral_storage_limit 50Mi)" || return $? ;;
     2)
       _e42_map | wb_kubectl apply --dry-run=server -f - >/dev/null 2>&1 || return 10
       _e42_map | wb_kubectl apply -f - >/dev/null || return 1
@@ -152,6 +170,11 @@ _m19E42_une() {
         t=$((t + 5))
       done
       [[ -n "${pod:-}" ]] || return 10
+      victimes="$(_e42_autres_victimes "$noeud" "$pod")"
+      if [[ -n "$victimes" ]]; then
+        wb_avert "variante 4 sautée : sur $noeud, des pods moins prioritaires que le job seraient préemptés avant lui ($victimes)"
+        return 10
+      fi
       libre="$(_e42_memoire_libre "$noeud")"
       ((libre >= 0)) || libre=0
       m19_ecrire E42 demo "$noeud"
@@ -196,7 +219,7 @@ panne_E42_v4() { m19_preparer && m19_essayer E42 4 4; }
 
 verifier_E42() {
   case "${WB_VAR:-}" in
-    1) m19_toml "$(m19_lire E42 toml-cm)" | grep -Eq '^\s*memory_limit\s*=\s*"64Mi"' ;;
+    1) m19_toml "$(m19_lire E42 toml-cm)" | grep -Eq '^\s*memory_limit\s*=\s*"96Mi"' ;;
     3) m19_toml "$(m19_lire E42 toml-cm)" | grep -Eq '^\s*ephemeral_storage_limit\s*=\s*"50Mi"' ;;
     2) wb_kubectl get mutatingadmissionpolicies.admissionregistration.k8s.io "$_E42_MAP" >/dev/null 2>&1 ;;
     4) wb_kubectl -n "$_M19_NS_DEMO" get deploy "$_E42_DEMO" >/dev/null 2>&1 ;;

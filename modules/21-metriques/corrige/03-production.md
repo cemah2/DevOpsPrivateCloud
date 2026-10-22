@@ -65,9 +65,9 @@ Trois conteneurs par pod : `prometheus`, `config-reloader`, `thanos-sidecar`. De
 
 ```
 admin@adm01:~$ (set -a; . ~/.config/workbook/s3-thanos.env; set +a; aws s3 ls s3://thanos-k8s-par1/)
-                           PRE 01JB8Q5Y4K3M2N1P0Q9R8S7T6V/
-                           PRE 01JB8Q6A0C1D2E3F4G5H6J7K8M/
-admin@adm01:~$ (set -a; . ~/.config/workbook/s3-thanos.env; set +a; aws s3 cp s3://thanos-k8s-par1/01JB8Q5Y4K3M2N1P0Q9R8S7T6V/meta.json - | jq .thanos.labels)
+                           PRE 01M5KNGGR0K3M2N1P0Q9R8S7T6/
+                           PRE 01M5KNGH40C1D2E3F4G5H6J7K8/
+admin@adm01:~$ (set -a; . ~/.config/workbook/s3-thanos.env; set +a; aws s3 cp s3://thanos-k8s-par1/01M5KNGGR0K3M2N1P0Q9R8S7T6/meta.json - | jq .thanos.labels)
 { "cluster": "k8s-par1", "prometheus": "supervision/kps", "prometheus_replica": "prometheus-kps-0", "site": "par1" }
 ```
 
@@ -136,7 +136,7 @@ Fichiers : [`thanos/thanos-compactor.yaml`](fichiers/M21-E25/observabilite/thano
 admin@adm01:~$ cfg="$(~/src/observabilite/outils/objstore-local.sh)"
 admin@adm01:~$ thanos tools bucket inspect --objstore.config-file="$cfg" --sort-by=FROM | head -15
 |            ULID            |        FROM         |        UNTIL        | RANGE  | … | RESOLUTION | LEVEL | COMPACTED |                       LABELS                        | SOURCE  |
-| 01JB8Q5Y4K3M2N1P0Q9R8S7T6V | 23-10-2026 06:00:00 | 23-10-2026 08:00:00 | 2h0m0s | … | 0s         | 1     | false     | cluster=k8s-par1,…,prometheus_replica=prometheus-kps-0 | sidecar |
+| 01M5KNGGR0K3M2N1P0Q9R8S7T6 | 23-10-2026 06:00:00 | 23-10-2026 08:00:00 | 2h0m0s | … | 0s         | 1     | false     | cluster=k8s-par1,…,prometheus_replica=prometheus-kps-0 | sidecar |
 …
 admin@adm01:~$ rm -f "$cfg"
 ```
@@ -346,7 +346,7 @@ watchdog_cluster:
       - '"alertname":"Watchdog"'
 ```
 
-Cible (déjà encodée) : `http://prometheus.apps.par1.medisphere.internal:9090/api/v1/query?query=ALERTS%7Balertname%3D%22Watchdog%22%2Calertstate%3D%22firing%22%7D`. Prometheus encode encore la valeur de `target`, blackbox la décode une fois et envoie exactement la requête écrite (vérifié avec blackbox_exporter 0.29.1 contre un Thanos Query 0.42.4 : la requête arrive intacte et la sonde échoue, `probe_success 0`, quand le résultat est vide). Contrôle depuis `mon01` :
+Cible (déjà encodée) : `http://prometheus.apps.par1.medisphere.internal:9090/api/v1/query?query=ALERTS%7Balertname%3D%22Watchdog%22%2Calertstate%3D%22firing%22%7D`. Prometheus encode encore la valeur de `target`, blackbox la décode une fois et envoie la requête écrite (vérifié avec blackbox_exporter 0.29.1 contre un Thanos Query 0.42.4 : la requête arrive sous forme décodée, `ALERTS{alertname="Watchdog",…}` dans le journal de blackbox, Thanos Query l'accepte, `200`, et la sonde échoue, `probe_success 0`, quand le résultat est vide). Contrôle depuis `mon01` :
 
 ```
 admin@mon01:~$ curl -s 'http://127.0.0.1:9115/probe?module=watchdog_cluster&debug=true&target=http%3A%2F%2Fprometheus.apps.par1.medisphere.internal%3A9090%2Fapi%2Fv1%2Fquery%3Fquery%3DALERTS%257Balertname%253D%2522Watchdog%2522%257D' | grep -E 'probe_success|Body|body'

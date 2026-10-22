@@ -1,4 +1,0 @@
-# À AJOUTER à overlays/dev/kustomization.yaml de mediagenda/deploiement (MR relue par Julien Petit).
-patches:
-  - path: journalisation-debug.yaml
-  - path: redemarrage-debug.yaml

@@ -14,8 +14,11 @@ require_cmd kubectl jq curl
 
 _m21_e30_p="$(_m21p_prometheus)"
 check_cmd "rétention bornée en taille (retentionSize) sous la taille du volume" _m21p_jq "$_m21_e30_p" '
+  # retentionSize suit les unités de Prometheus (KB, MB, GB… en puissances de 1024) ; la taille du
+  # volume suit les quantités Kubernetes (G = 10^9, Gi = 2^30).
   def octets: capture("^(?<n>[0-9.]+)(?<u>[KMGTP]?i?B?)$") as $c
-    | ($c.n | tonumber) * ({"": 1, "B": 1, "KB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12,
+    | ($c.n | tonumber) * ({"": 1, "B": 1, "KB": 1024, "MB": 1048576, "GB": 1073741824, "TB": 1099511627776,
+                            "K": 1e3, "M": 1e6, "G": 1e9, "T": 1e12,
                             "Ki": 1024, "Mi": 1048576, "Gi": 1073741824, "Ti": 1099511627776}[$c.u] // 0);
   (.spec.retentionSize // "") != ""
   and ((.spec.retentionSize | octets) < (.spec.storage.volumeClaimTemplate.spec.resources.requests.storage | octets))'
@@ -47,7 +50,9 @@ if [[ -n "$_m21_e30_f" ]]; then
     _m21_e30_expr="$(grep -v '^[[:space:]]*#' <<<"$_m21_e30_bloc" | sed '/^[[:space:]]*$/d' || true)"
     [[ -n "$_m21_e30_expr" ]] || continue
     _m21_e30_nb=$((_m21_e30_nb + 1))
-    if ! prom_requete "$_m21_e30_expr" 2>/dev/null | jq -e '.status == "success"' >/dev/null 2>&1; then
+    # Délai élargi : certaines mesures (topk sur toutes les séries, fenêtres de 7 jours) dépassent
+    # les 5 s par défaut de WB_TIMEOUT sans être fausses.
+    if ! WB_TIMEOUT=60 prom_requete "$_m21_e30_expr" 2>/dev/null | jq -e '.status == "success"' >/dev/null 2>&1; then
       _m21_e30_ko=$((_m21_e30_ko + 1))
     fi
   done < <(awk 'BEGIN { RS = ""; ORS = "\0" } { print }' <<<"$_m21_e30_f")

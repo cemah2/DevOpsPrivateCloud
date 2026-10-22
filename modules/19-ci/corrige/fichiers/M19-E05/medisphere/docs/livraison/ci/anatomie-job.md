@@ -23,7 +23,8 @@ pod runner-<jeton court>-project-<id>-concurrent-<n>-<suffixe>     (espace ci-jo
 ├── « helper »   gitlab-runner-helper (même version que le gestionnaire)
 │     clone le dépôt, restaure/sauve le cache (S3), télécharge et téléverse les artefacts,
 │     relaie le journal du build vers le gestionnaire
-└── « svc-0 », « valkey »…  un conteneur par service (services: du job)
+└── « valkey », « svc-0 »…  un conteneur par service (services: du job), nommé par son alias
+      (Runner 17.9 et plus) ou « svc-N » sans alias valide ; alias résolus par /etc/hosts (hostAliases)
       même espace de noms réseau que le reste du pod : joignables par localhost
 volumes emptyDir partagés : « repo » (/builds : le dépôt cloné), « scripts » (/scripts-<projet>-<job> :
 étapes générées par le gestionnaire), « logs » (/logs-<projet>-<job> : journal du build)
@@ -77,7 +78,8 @@ Conséquences pratiques :
 | Symptôme | Regarder d'abord | Puis |
 |---|---|---|
 | Job « pending », aucun runner ne le prend | étiquettes du job et du runner, runner en pause ou hors ligne (*Admin → Runners*) | journal du gestionnaire : `kubectl -n gitlab-runner logs deploy/gitlab-runner` |
-| « Waiting for pod … status is Pending » puis échec après 10 min | `kubectl -n ci-jobs get events --sort-by=.lastTimestamp` | quota (`kubectl -n ci-jobs describe quota`), image introuvable (`ErrImagePull`), refus d'admission (VAP, Pod Security : l'erreur est dans le journal du job) |
+| « Waiting for pod … status is Pending » puis échec après 10 min (`poll_timeout`) | `kubectl -n ci-jobs get events --sort-by=.lastTimestamp` | pas de place sur les nœuds (`FailedScheduling`), image introuvable (`ErrImagePull`), volume absent (`FailedMount`) |
+| Échec immédiat à « Preparing environment » (`setting up build pod: … forbidden`) | journal du job (le pod n'a jamais existé : aucun événement) | quota épuisé (`exceeded quota`, `kubectl -n ci-jobs describe quota`), LimitRange, VAP, Pod Security, compte de service absent |
 | Échec avant le script (« Getting source ») | journal du job : clonage, TLS vers `git01` | flux `K8S_TRAV → git01:443`, Secret `gitlab-runner-certs` |
 | Job tué (`OOMKilled`, code 137) | `kubectl -n ci-jobs describe pod` pendant le job ; journal du job (message du runner 19.5 si c'est le `helper`) | limites (`KUBERNETES_MEMORY_LIMIT`, plafonds du runner, LimitRange) |
 | Artefact absent | lignes `Uploading artifacts` du journal (chemin, `expire_in`) | taille maximale des artefacts de l'instance, chemin hors de `$CI_PROJECT_DIR` |

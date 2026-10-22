@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Pour** | une application déjà déployée (par `kubectl apply`, un job de CI, Helm) qu'Argo CD doit désormais gérer |
-| **Référence** | M20-E08, PLAT-2108 (MédiAgenda dev, 23/10/2026) |
+| **Référence** | M20-E08, DEV-2108 (MédiAgenda dev, 23/10/2026) |
 | **Résultat attendu** | l'Application est `Synced`/`Healthy`, **aucun pod recréé**, un seul écrivain |
 
 ## 1. Avant : photographier

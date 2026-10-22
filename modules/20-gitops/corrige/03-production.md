@@ -135,7 +135,7 @@ admin@adm01:~$ hubble observe -n argocd --verdict DROPPED --to-fqdn github.com
 
 Le même `git ls-remote` vers `https://git01.par1.medisphere.internal/formation/gitops-labo.git` aboutit (demande d'identifiants : le flux passe ; le *repo-server* reçoit ses identifiants du contrôleur à chaque requête, pas d'une configuration Git locale). Pas de pod de test portant les étiquettes du *repo-server* : il entrerait dans son Service et recevrait des requêtes du contrôleur.
 
-*3. Interface et API* : `values-durcissement.yaml`. Les capacités : humains `login`, `ci-lecture` `apiKey`. Retirer `apiKey` empêche d'en générer de nouveaux ; les jetons existants d'un compte sont listés dans `argocd-secret` (`accounts.<nom>.tokens`) et se suppriment explicitement :
+*3. Interface et API* : `values-durcissement.yaml`. Les capacités : humains `login`, `ci-lecture` `apiKey`. Retirer `apiKey` empêche d'en générer de nouveaux **et** fait refuser aussitôt les jetons d'API existants du compte : le serveur vérifie la capacité à chaque requête (`account … does not have 'apiKey' capability`, `util/session/sessionmanager.go` de la 3.5.5). Mais ces jetons restent listés dans `argocd-secret` (`accounts.<nom>.tokens`) et **redeviendraient valides** si quelqu'un rendait `apiKey` au compte : on les supprime donc explicitement :
 
 ```
 admin@adm01:~$ argocd account get --account julien-petit

@@ -30,7 +30,9 @@ check_cmd "PriorityClass medisphere-ci : sous medisphere-standard, sans préempt
   _m19p_jq "$(_m19p_json get priorityclass medisphere-ci)" '.value < 10000 and .preemptionPolicy == "Never" and (.globalDefault | not)'
 _m19_e27_toml="$(_m19p_toml gitlab-runner)"
 check_cmd "configuration : pods de job en medisphere-ci" _m19p_toml_a "$_m19_e27_toml" '^\s*priority_class_name\s*=\s*"medisphere-ci"'
-check_cmd "configuration : concurrent explicite" _m19p_toml_a "$_m19_e27_toml" '^\s*concurrent\s*=\s*[1-9][0-9]*'
+# concurrent est global (clé config.toml de la ConfigMap, valeur « concurrent » du chart), pas dans [[runners]].
+check_cmd "configuration : concurrent > 1 (partie globale config.toml)" _m19p_toml_a "$(_m19p_toml_global gitlab-runner)" \
+  '^\s*concurrent\s*=\s*([2-9]|[1-9][0-9]+)\s*$'
 check_cmd "configuration : limit explicite (> 0)" _m19p_toml_a "$_m19_e27_toml" '^\s*limit\s*=\s*[1-9][0-9]*'
 check_cmd "configuration : request_concurrency > 1" _m19p_toml_a "$_m19_e27_toml" '^\s*request_concurrency\s*=\s*([2-9]|[1-9][0-9]+)\s*$'
 check_cmd "configuration : maximums de surcharge mémoire et CPU posés" bash -c \

@@ -105,7 +105,7 @@ admin@ceph01:~$ sudo cephadm shell -- radosgw-admin quota enable --quota-scope=u
 
 Le compartiment `pyroscope-k8s-par1` est créé avec l'identité `pyroscope` (`aws s3 mb`) ; les clés vont dans Vault `critique` (`secrets/pyroscope.yml`), `secrets-k8s.sh pyroscope` en fait le Secret `traces/pyroscope-objstore` (clés `S3_CLE`, `S3_SECRET`). Pour les checks, une seconde identité en **lecture** (sous-utilisateur ou politique de compartiment en lecture) dans `~/.config/workbook/s3-pyroscope.env` (600). Le chart s'ajoute à `charts.yaml` de `plateforme/charts-miroir` ([extrait](fichiers/M23-E14/charts-miroir/charts.extrait.yaml)) avec son empreinte relevée puis vérifiée.
 
-*2. Pyroscope.* [`pyroscope/values.yaml`](fichiers/M23-E14/observabilite/pyroscope/values.yaml) et l'Application [`pyroscope`](fichiers/M23-E14/gitops/plateforme/pyroscope.yaml). Points clés : `structuredConfig` (stockage S3 du RGW, `bucket_lookup_type: path`, `${S3_CLE}` avec `config.expand-env`), `SSL_CERT_DIR` qui ajoute la racine MédiSphère (ConfigMap `racine-medisphere` de l'espace, M23-E02) aux répertoires de CA lus par Go, `limits.retention_period: 14d`, volume persistant, **`alloy.enabled: false`** (le chart déploie sinon un second Alloy qui profilerait les pods annotés), ServiceMonitor étiqueté pour kps. Avant la MR :
+*2. Pyroscope.* [`pyroscope/values.yaml`](fichiers/M23-E14/observabilite/pyroscope/values.yaml) et l'Application [`pyroscope`](fichiers/M23-E14/gitops/plateforme/pyroscope.yaml). Points clés : `structuredConfig` (stockage S3 du RGW, `bucket_lookup_type: path-style` (seules valeurs admises : `auto`, `path-style`, `virtual-hosted-style` ; `path` fait échouer le démarrage : `invalid S3 bucket lookup type`), `${S3_CLE}` avec `config.expand-env`), `SSL_CERT_DIR` qui ajoute la racine MédiSphère (ConfigMap `racine-medisphere` de l'espace, M23-E02) aux répertoires de CA lus par Go, `limits.retention_period: 14d`, volume persistant, **`alloy.enabled: false`** (le chart déploie sinon un second Alloy qui profilerait les pods annotés), ServiceMonitor étiqueté pour kps. Avant la MR :
 
 ```
 admin@adm01:~/src/observabilite$ helm template pyroscope oci://registry.par1.medisphere.internal/charts/pyroscope --version 2.4.1 \
@@ -139,7 +139,7 @@ admin@adm01:~$ kubectl -n traces port-forward svc/pyroscope 4040 &
 admin@adm01:~$ curl -s -X POST -H 'Content-Type: application/json' \
     -d "{\"name\": \"service_name\", \"start\": $(( ($(date +%s) - 3600) * 1000 )), \"end\": $(date +%s)000}" \
     http://127.0.0.1:4040/querier.v1.QuerierService/LabelValues
-{"names":["medidoc","mediagenda-api","pyroscope"]}
+{"names":["medidoc","mediagenda-api"]}
 ```
 
 **Explications**

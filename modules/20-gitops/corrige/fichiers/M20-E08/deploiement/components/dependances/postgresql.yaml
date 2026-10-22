@@ -1,5 +1,5 @@
 # mediagenda/deploiement — components/dependances/postgresql.yaml
-# Base CloudNativePG de l'environnement (M17-E09). M20-E08 (PLAT-2108) ajoute les options de
+# Base CloudNativePG de l'environnement (M17-E09). M20-E08 (DEV-2108) ajoute les options de
 # synchronisation d'Argo CD : la base n'est JAMAIS supprimée par Argo CD, ni par un « prune » (fichier
 # retiré, renommé, déplacé par erreur), ni à la suppression de l'Application. Sans effet sur
 # l'opérateur CNPG (simple annotation de métadonnées). Supprimer une base reste un geste humain.

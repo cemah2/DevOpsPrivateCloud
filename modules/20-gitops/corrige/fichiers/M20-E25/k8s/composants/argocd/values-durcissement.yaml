@@ -30,7 +30,7 @@ configs:
     users.anonymous.enabled: false
     # Durée de vie d'une session (jeton de connexion) : une journée de travail, pas 24 h.
     users.session.duration: 8h
-    # Depuis Argo CD 3.2 : synchroniser une AUTRE révision que celle de l'Application (argocd app sync
+    # Depuis Argo CD 3.3 (défaut « false » encore en 3.5) : synchroniser une AUTRE révision que celle de l'Application (argocd app sync
     # --revision …) exige le droit « override » ; personne hors role:plateforme-admin ne l'a (E24).
     application.sync.requireOverridePrivilegeForRevisionSync: true
     # Capacités des comptes locaux (M20-E03) : les humains se connectent (login) mais ne fabriquent

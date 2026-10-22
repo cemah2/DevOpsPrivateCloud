@@ -443,7 +443,7 @@ Le fichier `gitlab-runner-certs` doit s'appeler **`<nom d'hôte de GitLab>.crt`*
    Relève : les conteneurs d'initialisation et les conteneurs, leur image, leur commande, leurs ressources, leur contexte de sécurité ; les volumes (lesquels sont partagés entre `build` et `helper`, et pourquoi) ; le compte de service et `automountServiceAccountToken` ; la classe QoS ; les étiquettes et annotations du runner ; le nœud.
 3. Explique la stratégie *attach* : quel processus tourne dans le conteneur `build` avant que ton script commence, et comment le gestionnaire lui envoie-t-il les étapes du job ? Que verrais-tu avec `kubectl -n ci-jobs logs $P -c build` ? Avec `-c helper` ?
 4. Mesure le cycle de vie : dans le journal du job, repère les lignes « Preparing environment », « Getting source from Git repository », « Executing step_script », « Uploading artifacts », « Cleaning up » ; relève leurs horodatages (journal téléchargé avec horodatage, ou chronomètre). Combien de temps pour obtenir un pod prêt ? Combien de temps le pod survit-il après la fin du job ?
-5. Essaie de surcharger la mémoire à 8 Gi : que dit le job ? Que se passerait-il si le quota de `ci-jobs` était épuisé (lis le `poll_timeout` du runner et l'état `Pending`) ? Ne provoque pas la panne : le palier 4 s'en charge.
+5. Essaie de surcharger la mémoire à 8 Gi : que dit le job ? Que se passerait-il si le quota de `ci-jobs` était épuisé, et en quoi est-ce différent d'un nœud sans place libre (lis le `poll_timeout` du runner : dans lequel des deux cas sert-il) ? Ne provoque pas la panne : le palier 4 s'en charge.
 6. Rédige **`docs/livraison/ci/anatomie-job.md`** dans `plateforme/medisphere` : schéma du pod, rôle de chaque conteneur, chronologie d'un job, correspondance « ligne du journal ↔ phase ↔ conteneur », où regarder (événements, `kubectl describe`, journal du gestionnaire) selon le symptôme, et les limites (ce qu'un job peut et ne peut pas faire). MR, relecture par Nadia (simulée), fusion.
 
 **Critères de réussite**
@@ -463,7 +463,7 @@ Les variables de surcharge des ressources s'appellent comme les clés du TOML, e
 Le compte de service n'a pas de jeton monté : `ls /var/run/secrets/kubernetes.io/` doit échouer. Les montages partagés entre `build` et `helper` sont des volumes `emptyDir` : le dépôt cloné, les scripts générés, les journaux. `kubectl get pod -o jsonpath='{.status.qosClass}'` donne la classe QoS.
 </details>
 
-**Pour aller plus loin** (facultatif) : active `FF_PRINT_POD_EVENTS` dans un job (variable) et compare le journal du job avec et sans : quelles lignes apparaissent ? Quel droit RBAC supplémentaire cette option demande-t-elle au gestionnaire ?
+**Pour aller plus loin** (facultatif) : active `FF_PRINT_POD_EVENTS` dans un job (variable) et compare le journal du job avec et sans : quelles lignes apparaissent ? Quel droit RBAC cette option demande-t-elle au gestionnaire (relis la table « Configure runner API permissions ») ? Ton Role de E04 le donne-t-il déjà, et pour quelle autre fonction ?
 
 ---
 
@@ -531,7 +531,7 @@ Sur un pipeline de **branche**, `changes` compare avec le commit précédent de 
 
 <details><summary>Indice 3</summary>
 
-Un job qui doit tourner même après un échec : `when: always` (dans ses `rules` ou au niveau du job). Mais un job avec `needs` sur un job **échoué** ne démarre pas, même en `always`… sauf si ses `needs` sont vides ou optionnels : réfléchis à ce dont `resume` a besoin.
+Un job qui doit tourner même après un échec : `when: always` (dans ses `rules` ou au niveau du job). Avec `needs`, ce sont les jobs **cités** (et non plus les stages précédents) dont le statut compte : un job en `on_success` qui dépend d'un job échoué ou **sauté** est sauté, un job en `always` démarre quand même. Réfléchis à ce dont `resume` a besoin : de **tous** les jobs, ou seulement de quelques-uns ?
 </details>
 
 **Pour aller plus loin** (facultatif) : `gitlab-ci-local` (4.76, facultatif) exécute un `.gitlab-ci.yml` sur ton poste : essaie-le sur `ci-labo` et note ce qu'il ne sait pas simuler (`rules:changes` d'une MR, variables protégées, exécuteur Kubernetes).

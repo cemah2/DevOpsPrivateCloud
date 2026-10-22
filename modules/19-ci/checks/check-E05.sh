@@ -34,8 +34,11 @@ else
   check_cmd "anatomie.txt présent dans les artefacts" test -n "$_m19d_e05_txt"
   check_output "anatomie.txt : limite mémoire du conteneur build = 1 Gi (1073741824)" '^1073741824$' \
     printf '%s\n' "$_m19d_e05_txt"
+  # Jeton monté = un montage sur …/kubernetes.io/serviceaccount (ligne de /proc/self/mounts) ou un
+  # fichier « token » listé dans ce dossier (« token -> ..data/token ») ; le message d'erreur de ls
+  # (dossier absent), lui, cite le chemin sans être un montage.
   check_cmd "anatomie.txt : aucun jeton de compte de service monté" bash -c \
-    '[[ -n "$1" ]] && ! grep -Eq "serviceaccount/token|[[:space:]]token$" <<<"$1"' _ "$_m19d_e05_txt"
+    '[[ -n "$1" ]] && ! grep -Eq "^[^[:space:]]+ (/var)?/run/secrets/kubernetes\.io/serviceaccount |serviceaccount/token|[[:space:]]token( -> |$)" <<<"$1"' _ "$_m19d_e05_txt"
   check_cmd "anatomie.txt : aucune valeur sensible recopiée (CI_JOB_TOKEN, mots de passe)" bash -c \
     '! grep -Eq "^(CI_JOB_TOKEN|CI_REGISTRY_PASSWORD|CI_JOB_JWT|CI_DEPENDENCY_PROXY_PASSWORD)=" <<<"$1"' _ "$_m19d_e05_txt"
 fi

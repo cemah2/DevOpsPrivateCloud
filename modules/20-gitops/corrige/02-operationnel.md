@@ -158,7 +158,7 @@ Les migrations de MédiAgenda sont **additives** par règle (revue de MR de l'é
 
 Fichiers : [`applications/mediagenda.yaml`](fichiers/M20-E12/gitops/applications/mediagenda.yaml) (version E12), [`labo.extrait-E12.yaml`](fichiers/M20-E12/gitops/applications/labo.extrait-E12.yaml), [`k8s/hpa.yaml`](fichiers/M20-E12/gitops-labo/k8s/hpa.yaml) et [`kustomization.yaml`](fichiers/M20-E12/gitops-labo/k8s/kustomization.yaml) de `labo`, [`base/kustomization.yaml`](fichiers/M20-E12/deploiement/base/kustomization.yaml), [`values.extrait-E12.yaml`](fichiers/M20-E12/k8s/composants/argocd/values.extrait-E12.yaml), modules [`secrets-k8s.d/mediagenda-*.sh`](fichiers/M20-E12/k8s/outils/secrets-k8s.d/), [`secrets/mediagenda-recette.yml.exemple`](fichiers/M20-E12/k8s/secrets/mediagenda-recette.yml.exemple).
 
-1. **Lecture.** `ignoreDifferences` seul agit sur la **comparaison** (le champ ne rend plus l'Application `OutOfSync`), pas sur la **synchronisation** : la prochaine synchronisation réapplique la valeur du dépôt. `RespectIgnoreDifferences=true` fait retirer les champs ignorés de ce qu'Argo CD applique (en *server-side apply*, Argo CD cesse alors d'en être propriétaire). `IgnoreExtraneous` est une option de **comparaison d'une ressource** : un objet suivi par l'Application mais absent du dépôt (« en trop ») ne compte plus dans l'état de synchronisation ; rien à voir avec un champ.
+1. **Lecture.** `ignoreDifferences` seul agit sur la **comparaison** (le champ ne rend plus l'Application `OutOfSync`), pas sur la **synchronisation** : la prochaine synchronisation réapplique la valeur du dépôt. `RespectIgnoreDifferences=true` fait recopier, dans ce qu'Argo CD applique, la **valeur vivante** des champs ignorés : la synchronisation n'écrase plus ce qu'a choisi le contrôleur (code de la 3.5 : `normalizeTargetResources` de `controller/sync.go`). En *server-side apply*, Argo CD réapplique donc cette même valeur et reste copropriétaire du champ, sans conflit : le HPA ou le Rollout, qui écrivent par `Update`, continuent de le modifier librement. `IgnoreExtraneous` est une option de **comparaison d'une ressource** : un objet suivi par l'Application mais absent du dépôt (« en trop ») ne compte plus dans l'état de synchronisation ; rien à voir avec un champ.
 2. **HPA.** Le gabarit de `labo` déclare `requests.cpu: 10m` : le HPA calcule. Charge :
    ```
    admin@adm01:~$ kubectl -n wb-essais run charge --image=registry.par1.medisphere.internal/dockerhub/curlimages/curl:8.23.0 \
@@ -593,7 +593,7 @@ Fichiers : [`values.extrait-E19.yaml`](fichiers/M20-E19/k8s/composants/argocd/va
    on-sync-failed      app.status.operationState != nil and app.status…     [synchro-en-echec]
    ```
 3. **Abonnements.** AppProjects `mediagenda` et `plateforme` (annotations `notifications.argoproj.io/subscribe.<déclencheur>.email`), et `on-deployed` sur `mediagenda-prod` seulement, par un bloc `{{- if eq .env "prod" }} metadata: annotations: …` du `templatePatch` (le contrôleur de l'ApplicationSet préserve en plus l'annotation `notified.notifications.argoproj.io`, qui mémorise ce qui a déjà été envoyé).
-4. **Essais.** Depuis le pod du contrôleur, parce que la commande exécute la notification **là où elle tourne** : sur `adm01`, elle partirait de MGMT vers `mon01:25`, flux que la bordure n'ouvre pas (seuls VLAN 20 et 40), avec un autre magasin de certificats.
+4. **Essais.** Depuis le pod du contrôleur, parce que la commande exécute la notification **là où elle tourne** : sur `adm01`, elle partirait de MGMT (qui joint tout le lab, M00) avec le magasin de certificats d'`adm01`, qui contient déjà la racine MédiSphère : l'essai réussirait sans rien prouver. Dans le pod, elle emprunte le vrai chemin du contrôleur : `K8S_TRAV` → `mon01:25` (flux du M19), sa variable `SSL_CERT_FILE`, sa configuration lue dans le cluster.
    ```
    admin@adm01:~$ kubectl -n argocd exec deploy/argocd-notifications-controller -- \
        argocd admin notifications template notify sante-degradee mediagenda-dev --recipient email:plateforme@medisphere.internal
@@ -733,7 +733,7 @@ Fichiers : état [`infra/envs/m20/`](fichiers/M20-E23/infra/envs/m20/) (`version
    ✔ all components are healthy
    admin@adm01:~$ unset GITLAB_TOKEN; flux check && flux get all -A
    ```
-   (Sortie abrégée ; ⚠️ à vérifier sur ton lab : la création du jeton de déploiement par un jeton **de projet**, et la reprise de `--ca-file` dans le Secret `flux-system` — clé `ca.crt` — pour les réconciliations suivantes.) Les images de Flux viennent de `ghcr.io/fluxcd` **par le miroir** k3s vers le cache Harbor `ghcr` (rien à changer dans le bootstrap ; `--registry` permettrait de viser un autre registre). Révocation du jeton d'amorçage (*Access tokens* → *Revoke*) : Flux continue, il utilise le jeton de déploiement (`kubectl -n flux-system get secret flux-system -o jsonpath='{.data.username}' | base64 -d` donne le nom d'utilisateur du jeton de déploiement, `gitlab+deploy-token-…`).
+   (Sortie abrégée ; ⚠️ à vérifier sur ton lab : la lecture du groupe `formation` et la création du jeton de déploiement par un jeton **de projet** — l'utilisateur robot du jeton n'est membre que du projet ; si le bootstrap échoue sur le groupe, crée un jeton de groupe à portée identique, expiré le lendemain, et note l'écart —, et la reprise de `--ca-file` dans le Secret `flux-system` — clé `ca.crt` — pour les réconciliations suivantes.) Les images de Flux viennent de `ghcr.io/fluxcd` **par le miroir** k3s vers le cache Harbor `ghcr` (rien à changer dans le bootstrap ; `--registry` permettrait de viser un autre registre). Révocation du jeton d'amorçage (*Access tokens* → *Revoke*) : Flux continue, il utilise le jeton de déploiement (`kubectl -n flux-system get secret flux-system -o jsonpath='{.data.username}' | base64 -d` donne le nom d'utilisateur du jeton de déploiement, `gitlab+deploy-token-…`).
 5. **labo.** `apps/labo/` reprend **les mêmes** manifestes que `formation/gitops-labo` (E04), dans un espace `labo` en `restricted` ; la Kustomization `labo` (`prune`, `wait`, `timeout`). Dérive :
    ```
    admin@adm01:~$ kubectl scale deploy labo -n labo --replicas=5 && kubectl get deploy labo -n labo -w
@@ -770,7 +770,7 @@ Argo CD et Flux appliquent le même principe (un contrôleur qui réconcilie le 
 **Pièges classiques**
 - `flux bootstrap gitlab` sans `--hostname` : il vise `gitlab.com`.
 - Sans `--ca-file` : `x509: certificate signed by unknown authority` au clonage.
-- Oublier `--owner` = groupe (sans `--personal`) : il cherche un utilisateur `formation`.
+- Ajouter `--personal` alors que `--owner` est un groupe : il cherche un utilisateur `formation` (sans `--personal`, `--owner` désigne un groupe, ce qu'on veut ici).
 - Laisser le jeton d'amorçage actif « au cas où » : c'est un jeton `api` de Maintainer.
 - `OCIRepository` sans `certSecretRef` : TLS refusé vers Harbor ; sans `secretRef` : 401 (projet `charts` privé).
 - Lancer `flux01` avec un autre composant temporaire : mémoire (PLAN §4.11).

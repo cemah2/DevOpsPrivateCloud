@@ -2,7 +2,8 @@
 # shellcheck disable=SC2016  # les accents graves sont des littéraux JMESPath de --query, pas une substitution
 # tempo-cli-local.sh — copie EN LECTURE un bloc de tempo-k8s-par1 sur adm01 et l'ouvre avec tempo-cli (M23-E24).
 # Usage : ./tempo-cli-local.sh [ID-DE-BLOC]   (sans argument : liste les blocs et copie le plus récent)
-# Identité de LECTURE du compartiment : ~/.config/workbook/s3-tempo.env (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).
+# Identifiants RGW de Tempo (M23-E03) : ~/.config/workbook/s3-tempo.env (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY),
+# utilisés en LECTURE seulement (liste et copie) : ils pourraient écrire, ce script ne le fait jamais.
 # tempo-cli lit la copie avec le moteur « local » : aucune écriture dans le compartiment, aucun accès au cluster.
 set -euo pipefail
 

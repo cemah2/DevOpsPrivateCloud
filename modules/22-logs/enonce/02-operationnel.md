@@ -27,7 +27,7 @@ Prérequis : palier 1 terminé (`lab/bin/check 22 02` à `22 05` verts). Les exe
 | Format de MédiAgenda | `apps/mediagenda/src/mediagenda/journal.py` : une ligne JSON par événement, clés `horodatage` (ISO 8601, ms, UTC), `niveau` (`DEBUG`, `INFO`, `WARNING`, `ERROR`…), `journal`, `message`, puis les champs passés en `extra` ; les sondes `/sante`, `/pret` et `/metrics` sont journalisées en **DEBUG** (`ROUTES_SONDES` dans `app.py`) |
 | Format de MédiDoc | `slog` JSON : `time`, `level`, `msg`, `route` (`GET /healthz`, `GET /readyz`, `GET /metrics` en DEBUG) |
 | Conteneurs | MédiAgenda : conteneur `api` (espaces `mediagenda-dev`, `-recette`, `-prod`) ; MédiDoc : conteneur `medidoc` |
-| Niveau de dev | ConfigMap `mediagenda` de `mediagenda-dev` (clé `MEDIAGENDA_LOG_LEVEL`), rendue par le chart (M17) ; modifiable **seulement** par l'overlay `dev` de `mediagenda/deploiement` |
+| Niveau et format | variables `MEDIAGENDA_LOG_LEVEL` et `MEDIAGENDA_LOG_FORMAT` du conteneur `api` (`env`, rendues par le chart : `INFO`, `json`) ; en dev, le component `debogage` de `mediagenda/deploiement` (M17-E09) les surcharge ; modifiables **seulement** par `mediagenda/deploiement` (MR, Argo CD) |
 | Identifiant de requête | en-tête `X-Request-ID` : repris s'il est sûr, sinon créé ; renvoyé dans la réponse ; présent sur **toutes** les lignes journalisées pendant la requête |
 | Trafic | `ressources/E04-trafic/trafic.sh <URL-MEDIAGENDA-DEV>` ; sans nom publié pour dev : `kubectl --context k8s-par1 -n mediagenda-dev port-forward svc/mediagenda 18000:80` puis `http://127.0.0.1:18000` (lecture seule, autorisé) |
 
@@ -37,7 +37,7 @@ Prérequis : palier 1 terminé (`lab/bin/check 22 02` à `22 05` verts). Les exe
 
 1. Dans `mediagenda/api`, sur une branche : ajoute l'identifiant de requête (middleware de `app.py`, et un mécanisme qui le pose sur toutes les lignes journalisées pendant la requête, pas seulement sur la ligne d'accès). Une valeur reçue qui contient autre chose que des lettres, chiffres, `.`, `_`, `-`, ou qui fait plus de 64 caractères, est remplacée. Ajoute les tests. `uv run pytest`, `ruff`.
 2. MR relue par Julien (compte `julien.petit`), fusion : la CI construit, signe et ouvre la MR de promotion dans `mediagenda/deploiement` (M19-M20). Fusionne-la pour `dev`.
-3. Dans `mediagenda/deploiement`, overlay `dev` : passe MédiAgenda en `DEBUG`. Le chart rend une annotation `checksum/config` au rendu : un correctif kustomize de la ConfigMap redémarre-t-il les pods ? Fais en sorte qu'ils redémarrent **sans** commande manuelle sur l'espace. MR, synchronisation d'Argo CD.
+3. Dans `mediagenda/deploiement`, retrouve ce qui fixe le niveau et le format des journaux de `mediagenda-dev` (overlay `dev` et ses components) et regarde ce que Loki reçoit aujourd'hui de dev : est-ce exploitable par ton futur traitement JSON ? Fais en sorte que dev journalise en `DEBUG` **et** en JSON, sans toucher à la recette ni à la prod. Les pods doivent redémarrer **sans** commande manuelle sur l'espace : est-ce le cas, et pourquoi ? MR relue par Julien, synchronisation d'Argo CD.
 4. Lance le trafic sur dev. Dans Explore (`Loki — mediagenda`) : les lignes de sonde arrivent-elles ? Combien par minute ? Retrouve, à partir de l'en-tête `X-Request-ID` d'une réponse (`curl -i`), toutes les lignes de cette requête.
 
 *B. La collecte*
@@ -51,7 +51,7 @@ Prérequis : palier 1 terminé (`lab/bin/check 22 02` à `22 05` verts). Les exe
 
 **Critères de réussite**
 - [ ] `mediagenda/api` (main) pose un `request_id` sur chaque ligne d'une requête et le renvoie dans `X-Request-ID` ; les tests passent.
-- [ ] `mediagenda-dev` journalise en `DEBUG` (par l'overlay `dev`), `mediagenda-recette` en `INFO`.
+- [ ] `mediagenda-dev` journalise en `DEBUG` et en JSON (par `mediagenda/deploiement`), `mediagenda-recette` en `INFO`.
 - [ ] Dans Loki : `request_id` et `niveau` sont des métadonnées structurées, aucun n'est une étiquette indexée ; aucune ligne de sonde n'arrive, et le compteur d'Alloy montre qu'elles ont été écartées.
 - [ ] L'horodatage des lignes de MédiAgenda est celui de l'application.
 - [ ] `log_level_fields` de Loki contient `niveau`.
@@ -70,7 +70,7 @@ Côté Python, une variable de contexte (`contextvars`) suit une requête, y com
 
 <details><summary>Indice 3</summary>
 
-Pour faire redémarrer les pods par GitOps, il faut que le **gabarit de pod** change : une annotation du gabarit posée par un second correctif de l'overlay suffit. `kubectl rollout restart` écrirait hors de Git dans un espace applicatif, et Argo CD y verrait une dérive.
+Une variable `env` d'un conteneur l'emporte sur la même clé venue d'une ConfigMap (`envFrom`) : modifier la ConfigMap ne servirait à rien. Pour que les pods redémarrent par GitOps, il faut que le **gabarit de pod** change — c'est le cas quand une variable `env` change. `kubectl rollout restart` écrirait hors de Git dans un espace applicatif, et Argo CD y verrait une dérive.
 </details>
 
 **Pour aller plus loin** (facultatif) : propage le `request_id` vers les appels sortants (PostgreSQL : `application_name` ou commentaire SQL ; Valkey : nom de client) ; c'est ce que le `trace_id` du M23 généralisera.

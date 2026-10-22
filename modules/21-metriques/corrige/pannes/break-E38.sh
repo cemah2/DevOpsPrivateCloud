@@ -3,9 +3,11 @@
 # break-E38.sh — M21-E38 « Panne : Prometheus déborde »
 #
 # L'application témoin (wb-pannes, 2 pods) se met à exposer mediagenda_rapports_requetes_total avec une
-# étiquette à valeurs non bornées par nature, mais BORNÉE ici à 100 000 valeurs par pod (200 000
-# séries au plus, atteintes en une dizaine de minutes : 2 500 nouvelles valeurs par pod et par
-# tranche de 15 s, chaque valeur ne vit qu'une collecte : c'est du « churn ») :
+# étiquette à valeurs non bornées par nature, mais BORNÉE ici à 30 000 valeurs par pod (60 000
+# séries au plus, atteintes en 3 minutes : 2 500 nouvelles valeurs par pod et par tranche de 15 s,
+# chaque valeur ne revient qu'une collecte sur douze : c'est du « churn »). La borne est choisie pour
+# rester sous la limite mémoire de Prometheus d'E30 (budget de 300 000 séries pour 3 Gio) : la panne
+# doit se voir, pas faire tomber les deux réplicas en OOM (le rejeu du WAL les ferait retomber) :
 #   1. un identifiant de requête (requete_id) ;
 #   2. le chemin HTTP brut, identifiant de rendez-vous compris (chemin="/api/v1/rendezvous/123456") ;
 #   3. l'adresse de courriel du patient (utilisateur="patient000123@exemple.invalid") : cardinalité

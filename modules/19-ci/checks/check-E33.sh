@@ -26,7 +26,9 @@ for _m19_e33_t in main etiquette; do
     _m19_e33_j="$(_m19p_jobs medidoc/medidoc "$(jq -r .id <<<"$_m19_e33_pl")")"
     check_cmd "pipeline ($_m19_e33_t) : aucun job sur runner02 (étiquette docker)" _m19p_jq "$_m19_e33_j" \
       'length > 0 and all(.[]; (.tag_list | index("docker") | not) and ((.runner.description // "") | test("runner02") | not))'
-    [[ "$_m19_e33_t" == main ]] && check_cmd "pipeline (main) : couverture relevée" _m19p_jq "$_m19_e33_pl" '.coverage != null'
+    # La liste des pipelines ne donne pas « coverage » : il faut le pipeline lui-même.
+    [[ "$_m19_e33_t" == main ]] && check_cmd "pipeline (main) : couverture relevée" _m19p_jq \
+      "$(_m19p_gl "projects/$(_m19p_p medidoc/medidoc)/pipelines/$(jq -r .id <<<"$_m19_e33_pl")")" '.coverage != null'
     [[ "$_m19_e33_t" == etiquette ]] && check_cmd "pipeline (étiquette) : signature sur $_M19P_RUNNER_PROTEGE" \
       _m19p_job_sur "$_m19_e33_j" securite:signature "$_M19P_RUNNER_PROTEGE"
   fi

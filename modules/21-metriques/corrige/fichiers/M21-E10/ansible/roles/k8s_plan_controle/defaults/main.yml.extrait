@@ -1,0 +1,5 @@
+# roles/k8s_plan_controle/defaults/main.yml (plateforme/ansible) — EXTRAIT (M21-E10, PLAT-2210) :
+# variable AJOUTÉE (à déclarer aussi dans meta/argument_specs.yml : type list, elements dict).
+# Sections HAProxy ajoutées après celles de l'API (fe_k8s_api, be_k8s_api), même format que
+# haproxy_sections du rôle haproxy (M07) : type, nom, lignes.
+k8s_plan_controle_haproxy_sections_supplementaires: []

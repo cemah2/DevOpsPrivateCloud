@@ -28,8 +28,9 @@ for _m19d_e08_ns in buildkit ci-jobs; do
 done
 check_cmd "le conteneur buildkitd tourne sous un UID non nul, sans mode privilégié" _m19d_json \
   "$(_m19d_kj -n buildkit get deployment buildkitd)" '
-  all(.spec.template.spec.containers[]; (.securityContext.privileged // false) == false
-      and ((.securityContext.runAsUser // .spec.template.spec.securityContext.runAsUser // 0) > 0))'
+  (.spec.template.spec.securityContext.runAsUser // 0) as $p
+  | all(.spec.template.spec.containers[]; (.securityContext.privileged // false) == false
+        and ((.securityContext.runAsUser // $p) > 0))'
 
 # --- 2. TLS mutuel (objets cert-manager, pas leurs Secrets) ----------------------------------------
 check_cmd "ClusterIssuer buildkit-ca prête (autorité CA)" _m19d_json \
