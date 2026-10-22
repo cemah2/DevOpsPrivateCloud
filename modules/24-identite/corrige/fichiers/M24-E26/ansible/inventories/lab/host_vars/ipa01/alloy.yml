@@ -1,0 +1,10 @@
+---
+# host_vars/ipa01/alloy.yml — M24-E26 : journaux de FreeIPA au locataire audit.
+# 389-ds : journal d'accès (liaisons, recherches ; écrit par blocs, avec quelques secondes de retard :
+# nsslapd-accesslog-logbuffering). KDC : délivrances de tickets (AS_REQ, TGS_REQ). httpd : erreurs de
+# l'API et de l'interface web (connexions refusées).
+alloy_audit_fichiers:
+  - {chemin: /var/log/dirsrv/slapd-PAR1-MEDISPHERE-INTERNAL/access, service: freeipa, fichier: access}
+  - {chemin: /var/log/krb5kdc.log, service: freeipa, fichier: krb5kdc}
+  - {chemin: /var/log/httpd/error_log, service: freeipa, fichier: httpd-erreurs}
+alloy_lecture_fichiers_proteges: true

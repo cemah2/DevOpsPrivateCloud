@@ -1,0 +1,4 @@
+# tasks/configuration.yml — EXTRAIT : à AJOUTER avant la tâche « Configuration openbao.hcl » (M25-E25).
+- name: Jeton du seal transit (M25-E25)
+  ansible.builtin.import_tasks: seal-transit.yml
+  when: openbao_seal_transit | bool

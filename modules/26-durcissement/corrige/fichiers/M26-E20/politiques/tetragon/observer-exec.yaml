@@ -1,0 +1,31 @@
+# plateforme/politiques — tetragon/observer-exec.yaml (M26-E20, SEC-2720)
+# Les exécutions (process_exec / process_exit) sont observées par Tetragon SANS politique. Celle-ci
+# ajoute ce que l'événement d'exécution ne dit pas au moment où il compte : le noyau s'apprête à
+# exécuter un fichier situé dans un répertoire temporaire (/tmp, /var/tmp, /dev/shm), où l'on dépose
+# un outil après une intrusion. Fonction du noyau : security_bprm_check (appelée à chaque execve,
+# AVANT le chargement du binaire), argument struct linux_binprm (chemin du fichier exécuté, relatif
+# à la racine du conteneur).
+# Observation seulement (action Post, par défaut). M26-E29 y ajoutera un Sigkill, d'abord dans
+# wb-essais. Même périmètre que la règle Falco « binaire exécuté depuis un répertoire temporaire » :
+# la corrélation des deux (E20, étape 6) montre deux capteurs indépendants sur le même fait.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: observer-exec
+  annotations:
+    medisphere.internal/ticket: SEC-2720
+spec:
+  kprobes:
+    - call: security_bprm_check
+      syscall: false
+      args:
+        - index: 0
+          type: linux_binprm
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /tmp/
+                - /var/tmp/
+                - /dev/shm/

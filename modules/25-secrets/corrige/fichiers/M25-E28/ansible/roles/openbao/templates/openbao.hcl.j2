@@ -1,0 +1,108 @@
+# {{ openbao_entete }}
+# /etc/openbao/openbao.hcl — rôle openbao. ÉTAT EN FIN DE PALIER 3 (M25-E03 ; grappe M25-E24 ; seal
+# transit M25-E25 ; audit déclaré M25-E21 ; télémétrie M25-E27 ; durcissement M25-E28).
+# Documentation : https://openbao.org/docs/configuration/
+# Validé par « bao operator validate-config » avant d'être posé (tâche template, validate:).
+#
+# Pas de « disable_mlock » : OpenBao a retiré mlock et la clé est signalée « unknown or unsupported
+# field » (avertissement = refus de la validation). La mémoire ne part pas en swap : MemorySwapMax=0
+# dans l'unité du paquet ; vidages mémoire coupés (LimitCORE=0, surcharge medisphere.conf).
+# ⚠️ Ce fichier doit être IDENTIQUE (aux noms du nœud près) sur les trois nœuds : le nœud qui devient
+# actif compare les dispositifs d'audit déclarés à ceux enregistrés et refuse de prendre la main en
+# cas d'écart (M25-E24, pièges).
+
+ui           = {{ openbao_ui | bool | lower }}
+cluster_name = "{{ openbao_nom_grappe }}"
+
+# (M25-E28) Durées de vie par défaut et maximales des jetons et des baux, pour tout montage qui ne
+# règle pas les siennes (chaque méthode et chaque moteur les règle explicitement dans
+# plateforme/secrets : ceci est le filet).
+default_lease_ttl = "{{ openbao_bail_defaut }}"
+max_lease_ttl     = "{{ openbao_bail_max }}"
+
+api_addr     = "https://{{ openbao_nom_noeud }}:{{ openbao_port_api }}"
+cluster_addr = "https://{{ openbao_nom_noeud }}:{{ openbao_port_grappe }}"
+
+storage "raft" {
+  path    = "{{ openbao_dossier_donnees }}"
+  node_id = "{{ inventory_hostname }}"
+{% for leader in openbao_raft_rejoindre %}
+
+  retry_join {
+    leader_api_addr     = "{{ leader }}"
+    leader_ca_cert_file = "{{ openbao_racine }}"
+  }
+{% endfor %}
+}
+
+listener "tcp" {
+  address         = "0.0.0.0:{{ openbao_port_api }}"
+  cluster_address = "{{ openbao_adresse_grappe }}:{{ openbao_port_grappe }}"
+  tls_cert_file   = "{{ openbao_tls_certificat }}"
+  tls_key_file    = "{{ openbao_tls_cle }}"
+  # (M25-E28) TLS 1.3 seulement : tous nos clients (CLI bao, Go, curl, Python 3.13, OpenTofu) le parlent.
+  tls_min_version = "{{ openbao_tls_version_min }}"
+  # (M25-E28) L'ancien point d'accès NON authentifié de génération du jeton racine est déjà coupé par
+  # défaut dans nos versions ; on l'écrit pour qu'une valeur par défaut changeante ne le rouvre pas.
+  disable_unauthed_generate_root_endpoints = true
+{% if openbao_entetes_reponse | length > 0 %}
+
+  # (M25-E28) En-têtes ajoutés à toutes les réponses de l'API (HSTS et Cache-Control sont déjà
+  # envoyés par OpenBao ; l'interface web envoie sa propre CSP et nosniff).
+  custom_response_headers {
+    "default" = {
+{% for nom, valeur in openbao_entetes_reponse | dictsort %}
+      "{{ nom }}" = ["{{ valeur }}"]
+{% endfor %}
+    }
+  }
+{% endif %}
+{% if openbao_metriques_sans_jeton | bool %}
+
+  # (M25-E27) /v1/sys/metrics sans jeton (y compris quand le nœud est scellé) ; accès borné par le
+  # pare-feu local (travailleurs de k8s-par1, mon01, MGMT). Décision : docs/securite/secrets/supervision.md.
+  telemetry {
+    unauthenticated_metrics_access = true
+  }
+{% endif %}
+}
+{% if openbao_telemetrie | bool %}
+
+# (M25-E27) Télémétrie au format Prometheus, gardée 24 h en mémoire ; pas de nom d'hôte dans les noms
+# de métriques (l'étiquette instance suffit).
+telemetry {
+  prometheus_retention_time = "24h"
+  disable_hostname          = true
+}
+{% endif %}
+{% if openbao_seal_transit | bool %}
+
+# (M25-E25) Auto-descellement par le moteur transit de kms01. Jeton : BAO_TOKEN de
+# /etc/openbao/kms.env (root 600, lu par systemd), jamais ici ; renouvelé par le serveur.
+# kms01 doit répondre au DÉMARRAGE, sinon le processus s'arrête (RB-251 § 3).
+seal "transit" {
+  address         = "{{ openbao_seal_transit_adresse }}"
+  key_name        = "{{ openbao_seal_transit_cle }}"
+  mount_path      = "{{ openbao_seal_transit_montage }}"
+  tls_ca_cert     = "{{ openbao_racine }}"
+  tls_server_name = "{{ openbao_seal_transit_nom_tls }}"
+}
+{% endif %}
+{% for dispositif in openbao_audit %}
+
+# (M25-E21) Dispositif d'audit déclaré : créé sur le nœud actif au démarrage et à chaque SIGHUP ;
+# immuable (changer une option = nouveau chemin).
+audit "{{ dispositif.type }}" "{{ dispositif.chemin }}" {
+  description = "{{ dispositif.description }}"
+  options {
+{% for cle, valeur in dispositif.options | dictsort %}
+    {{ cle }} = "{{ valeur }}"
+{% endfor %}
+  }
+}
+{% endfor %}
+{% if openbao_hcl_supplement | length > 0 %}
+
+# --- Supplément (blocs recopiés tels quels) ---
+{{ openbao_hcl_supplement }}
+{% endif %}

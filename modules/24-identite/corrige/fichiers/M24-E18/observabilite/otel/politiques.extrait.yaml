@@ -1,0 +1,24 @@
+# plateforme/observabilite — otel/politiques.yaml, politique traces-pyroscope (M23-E16), modifiée en
+# M24-E18 : une source de plus, OAuth2 Proxy (release oauth2-proxy-pyroscope), port 4040 (interface).
+# Remplace la politique du même nom ; les autres politiques du fichier sont inchangées.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: traces-pyroscope
+  namespace: traces
+spec:
+  description: "Pyroscope : SDK de MédiAgenda (poussée), Alloy (pprof de MédiDoc), Grafana, Prometheus, OAuth2 Proxy (interface)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: pyroscope}
+  ingress:
+    - fromEndpoints:
+        - matchExpressions:
+            - key: k8s:io.kubernetes.pod.namespace
+              operator: In
+              values: [mediagenda-dev, mediagenda-recette, mediagenda-prod]
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: journaux, app.kubernetes.io/name: alloy}
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: grafana}
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: oauth2-proxy, app.kubernetes.io/instance: oauth2-proxy-pyroscope}
+      toPorts:
+        - ports: [{port: "4040", protocol: TCP}]

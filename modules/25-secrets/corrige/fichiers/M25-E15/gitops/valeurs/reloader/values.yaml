@@ -1,0 +1,41 @@
+# plateforme/gitops — valeurs/reloader/values.yaml (M25-E15, SEC-2615). Chart reloader 2.2.18.
+# Relu sur le rendu (helm template) : en mode « espaces listés », le chart crée un Role et un
+# RoleBinding par espace (lecture des Secrets, mise à jour des Deployments…) et AUCUNE ClusterRole ;
+# il ne donne pas de droit sur les Rollouts d'Argo Rollouts (manifestes/reloader/).
+fullnameOverride: reloader
+
+image:
+  repository: registry.par1.medisphere.internal/ghcr/stakater/reloader
+  tag: v1.4.22
+
+reloader:
+  # Seules les charges de travail ANNOTÉES sont surveillées (pas de rechargement de tout le cluster).
+  autoReloadAll: false
+  # Rollouts d'Argo Rollouts (annotation reloader.stakater.com/rollout-strategy par Rollout).
+  isArgoRollouts: true
+  # Les Secrets seulement : les ConfigMaps de MédiAgenda changent de NOM à chaque modification
+  # (configMapGenerator), ce qui redéploie déjà.
+  ignoreConfigMaps: true
+  # « annotations » : un Deployment est redémarré par une annotation du gabarit (et non par une
+  # variable d'environnement ajoutée au conteneur).
+  reloadStrategy: annotations
+  # Espaces surveillés (Roles d'espace, pas de ClusterRole) : ajouter un espace = une MR.
+  watchGlobally: false
+  namespaces:
+    - mediagenda-recette
+    - mediagenda-prod
+    - medidoc-recette
+  # Système de fichiers en lecture seule (le chart monte alors un emptyDir sur /tmp).
+  readOnlyRootFileSystem: true
+  deployment:
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 128Mi

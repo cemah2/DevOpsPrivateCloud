@@ -1,0 +1,35 @@
+# plateforme/identite — oauth2-proxy/valeurs-pyroscope.yaml (M24-E18) : release oauth2-proxy-pyroscope,
+# devant l'interface de Pyroscope (traces/pyroscope:4040). Groupes : plateforme-admins, plateforme,
+# support, mediagenda, medidoc (les équipes lisent les profils de leurs applications).
+fullnameOverride: oauth2-proxy-pyroscope
+
+gatewayApi:
+  hostnames:
+    - pyroscope.apps.par1.medisphere.internal
+
+config:
+  cookieName: __Host-oauth2-pyroscope
+  configFile: |-
+    provider = "keycloak-oidc"
+    provider_display_name = "SSO MédiSphère"
+    oidc_issuer_url = "https://sso.par1.medisphere.internal/realms/medisphere"
+    provider_ca_files = ["/etc/medisphere-ca/medisphere-root-ca.crt"]
+    scope = "openid email profile"
+    code_challenge_method = "S256"
+    oidc_groups_claim = "groups"
+    user_id_claim = "preferred_username"
+    allowed_groups = ["plateforme-admins", "plateforme", "support", "mediagenda", "medidoc"]
+    email_domains = ["*"]
+    redirect_url = "https://pyroscope.apps.par1.medisphere.internal/oauth2/callback"
+    upstreams = ["http://pyroscope.traces.svc.cluster.local:4040"]
+    skip_provider_button = true
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "lax"
+    cookie_path = "/"
+    cookie_expire = "10h"
+    cookie_refresh = "5m"
+    reverse_proxy = true
+    trusted_proxy_ips = ["10.240.0.0/16"]
+    real_client_ip_header = "X-Forwarded-For"
+    silence_ping_logging = true

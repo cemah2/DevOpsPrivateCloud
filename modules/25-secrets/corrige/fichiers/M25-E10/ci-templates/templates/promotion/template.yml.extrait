@@ -1,0 +1,32 @@
+# plateforme/ci-templates — templates/promotion/template.yml, version v2.8.0 (M25-E10, SEC-2610).
+# EXTRAIT : différences avec la v2.7.0 (M19-E24/E25).
+#   - le job promouvoir-<overlay> se connecte au rôle ci-<groupe>-<projet>-promotion (revendication
+#     environment = promotion/*) et lit le jeton de promotion dans kv/<groupe>/ci/promotion ;
+#   - DEPLOIEMENT_TOKEN n'est plus une variable de projet : c'est une variable du SHELL du job.
+# Le job .openbao-connexion vient du composant securite (même pipeline) ; un projet qui inclut
+# promotion sans securite déclare lui-même id_tokens (même bloc).
+spec:
+  inputs:
+    # … entrées de la v2.7.0 inchangées …
+    image_k8s:
+      description: "Image du job (kubectl, kustomize, git, jq, bao) — outils-supply-chain:1.1.0 convient"
+      default: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.1.0@sha256:<EMPREINTE-1.1.0>
+---
+promouvoir-$[[ inputs.overlay ]]:
+  extends: [.openbao-connexion]
+  stage: $[[ inputs.stage ]]
+  tags: ["$[[ inputs.runner ]]"]
+  environment:
+    name: promotion/$[[ inputs.overlay ]]
+    action: prepare
+  variables:
+    # Rôle dédié : seul ce job (environnement promotion/*) obtient le jeton de promotion.
+    ROLE_OPENBAO: ""
+  before_script:
+    - export ROLE_OPENBAO="ci-$(printf '%s' "$CI_PROJECT_PATH" | tr '/' '-')-promotion"
+    - !reference [.openbao-connexion, before_script]
+    - DEPLOIEMENT_TOKEN="$(bao kv get -mount=kv -field=jeton "${CI_PROJECT_NAMESPACE}/ci/promotion")"
+  # … image, interruptible, rules, needs, resource_group et script de la v2.7.0 inchangés : le
+  #   script lit $DEPLOIEMENT_TOKEN comme avant (désormais variable du shell, non exportée) …
+  after_script:
+    - !reference [.openbao-connexion, after_script]

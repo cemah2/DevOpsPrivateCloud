@@ -1,0 +1,7 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M25-E27, PLAT-2627.
+# Une passerelle à la fois (--limit gw01, vérification, puis gw02). Retour arrière : git revert.
+# Définitions COFFRE (M25-E24) et KMS01 (M25-E25) déjà présentes.
+# Transit : Prometheus de k8s-par1 (travailleurs) vers la télémétrie des quatre OpenBao. mon01 est
+#    dans le même VLAN que les nœuds : pas de règle de bordure, seulement le pare-feu local.
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: [$COFFRE, $KMS01], proto: tcp, ports: 8200,
+     motif: "Prometheus de k8s-par1 → /v1/sys/metrics d'OpenBao (vault01-03, kms01)", ref: M25-E27}

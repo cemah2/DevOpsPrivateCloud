@@ -1,0 +1,17 @@
+# pyproject.toml — outils Python de plateforme/identite (M24-E03 ; M24-E11 : synchronisation GitLab).
+# uv sync --locked en CI : uv.lock est versionné, régénéré par « uv lock » après toute modification.
+[project]
+name = "identite"
+version = "0.2.0"
+description = "Identité de MédiSphère : annuaire FreeIPA (Ansible), royaume Keycloak (OpenTofu), outils"
+requires-python = ">=3.13"
+dependencies = [
+    "ansible-core>=2.21,<2.22",
+    "ansible-lint>=26,<27",
+    # M24-E11 : outils/synchro-gitlab.py (API GitLab, fichiers YAML de l'annuaire).
+    "requests>=2.32,<3",
+    "pyyaml>=6.0,<7",
+]
+
+[tool.uv]
+package = false

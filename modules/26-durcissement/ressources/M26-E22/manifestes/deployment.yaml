@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventaire
+  namespace: default
+  labels:
+    app: inventaire
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventaire
+  template:
+    metadata:
+      labels:
+        app: inventaire
+    spec:
+      serviceAccountName: inventaire
+      hostNetwork: true
+      containers:
+        - name: inventaire
+          image: registry.par1.medisphere.internal/plateforme/inventaire:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: HARBOR_URL
+              value: https://registry.par1.medisphere.internal
+            - name: HARBOR_ROBOT
+              value: robot$plateforme+inventaire
+            - name: HARBOR_TOKEN
+              value: "Hq9xT2vLr8eKpZ4mW7nC1sYb"
+            - name: CONTAINERD_SOCKET
+              value: /run/containerd/containerd.sock
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["NET_ADMIN", "SYS_PTRACE"]
+          volumeMounts:
+            - name: containerd
+              mountPath: /run/containerd/containerd.sock
+      volumes:
+        - name: containerd
+          hostPath:
+            path: /var/run/containerd/containerd.sock

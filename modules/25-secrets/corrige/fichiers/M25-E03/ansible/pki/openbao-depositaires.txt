@@ -1,0 +1,13 @@
+# pki/openbao-depositaires.txt — dépositaires des parts de la clé racine d'OpenBao (M25-E03).
+# Clés PUBLIQUES age seulement (aucun secret). Une ligne par part, dans l'ordre des parts :
+#   <identifiant> <clé publique age>
+# La clé privée de chaque dépositaire ne quitte jamais sa garde (voir
+# docs/securite/secrets/garde-des-parts.md de plateforme/medisphere). Au lab, celles de Claire,
+# Karim, Sophie et Nadia sont SIMULÉES : générées par toi, exportées chiffrées hors ligne, effacées
+# d'adm01. Changer un dépositaire = refaire les parts (bao operator rotate-keys), jamais
+# seulement cette liste.
+claire.morel   age1<CLÉ-PUBLIQUE-CLAIRE>
+karim.benali   age1<CLÉ-PUBLIQUE-KARIM>
+sophie.laurent age1<CLÉ-PUBLIQUE-SOPHIE>
+nadia.roussel  age1<CLÉ-PUBLIQUE-NADIA>
+<MOI>          age1<CLÉ-PUBLIQUE-MOI>

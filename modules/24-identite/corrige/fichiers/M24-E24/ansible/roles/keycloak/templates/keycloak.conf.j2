@@ -1,0 +1,55 @@
+# {{ keycloak_entete }}
+# /opt/keycloak/conf/keycloak.conf — Keycloak {{ keycloak_version }} sur {{ inventory_hostname }} (rôle keycloak, M24-E04 ; M24-E24).
+# Fichier en 0640 root:{{ keycloak_groupe }} : il contient le mot de passe de la base.
+# Les options de construction (db, cache, health, metrics, features) sont figées par « kc.sh build » :
+# en changer une exige une reconstruction (le rôle la fait) ; les autres sont lues au démarrage.
+
+# --- Base de données ------------------------------------------------------------------------------------
+db=postgres
+db-url-host={{ keycloak_bdd_hote }}
+db-url-port={{ keycloak_bdd_port }}
+db-url-database={{ keycloak_bdd_nom }}
+db-username={{ keycloak_bdd_utilisateur }}
+db-password={{ keycloak_bdd_mot_de_passe }}
+{% if keycloak_bdd_hote not in ['127.0.0.1', 'localhost'] %}
+# Base DISTANTE (M24-E24) : TLS demandé au pilote JDBC.
+db-url-properties={{ keycloak_bdd_url_proprietes }}
+{% endif %}
+
+# --- Cache ---------------------------------------------------------------------------------------------
+{% if keycloak_grappe | bool %}
+# Grappe (M24-E24) : Infinispan distribué, découverte par la base (table jgroups_ping).
+cache=ispn
+cache-stack=jdbc-ping
+cache-embedded-network-bind-address={{ keycloak_grappe_adresse }}
+{% else %}
+cache=local
+{% endif %}
+
+# --- HTTPS seul -----------------------------------------------------------------------------------------
+http-enabled=false
+https-port={{ keycloak_port_https }}
+https-certificate-file={{ keycloak_tls_certificat }}
+https-certificate-key-file={{ keycloak_tls_cle }}
+
+# --- Interface de gestion (santé, métriques), HTTPS hérité de l'interface principale ------------------
+health-enabled=true
+metrics-enabled=true
+http-management-port={{ keycloak_port_gestion }}
+
+# --- Nom public et mandataires (options hostname v2) ---------------------------------------------------
+hostname={{ keycloak_hostname }}
+hostname-backchannel-dynamic=false
+proxy-headers=xforwarded
+proxy-trusted-addresses={{ keycloak_mandataires | join(',') }}
+
+# --- Connexions sortantes (LDAPS vers l'annuaire, M24-E06) ----------------------------------------------
+truststore-paths={{ keycloak_racine }}
+
+# --- Journaux : JSON sur la sortie standard → journald (collectés par Alloy, M24-E26) -------------------
+log=console
+log-console-output=json
+{% for cle, valeur in keycloak_options | dictsort %}
+
+{{ cle }}={{ valeur }}
+{% endfor %}

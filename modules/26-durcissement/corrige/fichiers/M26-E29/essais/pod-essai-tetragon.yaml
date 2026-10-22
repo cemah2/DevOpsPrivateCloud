@@ -1,0 +1,46 @@
+# Pod d'essai de M26-E29 (SEC-2729), espace wb-essais (PSA restricted) — appliqué depuis adm01 :
+#   kubectl -n wb-essais apply -f pod-essai-tetragon.yaml ; supprimé en fin d'exercice.
+# Image du cache Harbor (celle des pods de mesure du M15). /tmp en emptyDir : l'attaquant simulé y dépose
+# un binaire ; le système de fichiers racine est en lecture seule (comme MédiAgenda, E21). Un second
+# emptyDir monté sur /etc/essai permet de TENTER une écriture sous /etc (sinon la racine en lecture seule
+# la refuserait dès l'ouverture, avant le crochet de Tetragon).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: essai-tetragon
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: essai-tetragon
+    medisphere.internal/usage: essai
+spec:
+  automountServiceAccountToken: false
+  terminationGracePeriodSeconds: 1
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: outils
+      image: registry.par1.medisphere.internal/dockerhub/nicolaka/netshoot:v0.16
+      command: ["sleep", "infinity"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {memory: 128Mi}
+      volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        - {name: essai-etc, mountPath: /etc/essai}
+  volumes:
+    - name: tmp
+      emptyDir:
+        sizeLimit: 64Mi
+    - name: essai-etc
+      emptyDir:
+        sizeLimit: 1Mi

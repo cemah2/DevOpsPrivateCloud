@@ -1,0 +1,10 @@
+# tofu/clients-grafana.tf — EXTRAIT (M24-E29) : arguments à AJOUTER (ou à remplacer) dans la ressource
+# keycloak_openid_client.grafana écrite au M24-E12. Si ton client a été créé avec un secret généré
+# par Keycloak, c'est ici qu'il passe au secret imposé : le premier apply le remplace par celui du Vault.
+resource "keycloak_openid_client" "grafana" {
+  # … arguments du M24-E12 inchangés (client_id, access_type = "CONFIDENTIAL", redirections exactes,
+  #   pkce_code_challenge_method, flux standard seul…) …
+
+  client_secret_wo         = var.secrets_clients["grafana"]
+  client_secret_wo_version = var.versions_secrets_clients["grafana"]
+}

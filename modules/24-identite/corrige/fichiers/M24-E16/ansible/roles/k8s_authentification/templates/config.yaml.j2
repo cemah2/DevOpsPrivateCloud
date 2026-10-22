@@ -1,0 +1,37 @@
+# {{ ansible_managed }}
+# {{ k8s_authentification_dossier }}/config.yaml — {{ inventory_hostname }} (rôle k8s_authentification, M24-E16).
+# Authentification structurée du serveur d'API (option --authentication-config, EXCLUSIVE des options
+# --oidc-* : les deux ensemble, le serveur d'API refuse de démarrer). Rechargé à chaud.
+apiVersion: apiserver.config.k8s.io/v1
+kind: AuthenticationConfiguration
+jwt:
+  - issuer:
+      url: {{ k8s_authentification_emetteur }}
+      audiences:
+{% for a in k8s_authentification_audiences %}
+        - {{ a }}
+{% endfor %}
+{% if k8s_authentification_audiences | length > 1 %}
+      audienceMatchPolicy: MatchAny
+{% endif %}
+      # Racine MédiSphère : vérifie le certificat de l'émetteur (découverte, JWKS).
+      certificateAuthority: |
+        {{ _k8s_authentification_racine | trim | indent(8) }}
+    claimValidationRules:
+      # Le jeton a été demandé par le client {{ k8s_authentification_azp }} lui-même.
+      - expression: "has(claims.azp) && claims.azp == '{{ k8s_authentification_azp }}'"
+        message: "jeton délivré à un autre client que {{ k8s_authentification_azp }} (azp)"
+    claimMappings:
+      username:
+        claim: {{ k8s_authentification_revendication_utilisateur }}
+        prefix: "{{ k8s_authentification_prefixe }}"
+      groups:
+        claim: {{ k8s_authentification_revendication_groupes }}
+        prefix: "{{ k8s_authentification_prefixe }}"
+      uid:
+        claim: sub
+    userValidationRules:
+      - expression: "!user.username.startsWith('system:')"
+        message: "un nom d'utilisateur venu de l'IdP ne peut pas commencer par system:"
+      - expression: "user.groups.all(g, !g.startsWith('system:'))"
+        message: "un groupe venu de l'IdP ne peut pas commencer par system:"

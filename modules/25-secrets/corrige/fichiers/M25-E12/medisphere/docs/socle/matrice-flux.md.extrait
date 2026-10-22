@@ -1,0 +1,3 @@
+<!-- docs/socle/matrice-flux.md — EXTRAIT : lignes ajoutées par M25-E12 (PLAT-2612). -->
+| vault01-03 (10.10.20.21-23) | VIP API k8s-par1 10.10.40.200 | 8443/tcp | méthode kubernetes d'OpenBao (TokenReview) | bordure (gw01/gw02) | M25-E12 |
+| pods d'ESO (K8S_TRAV) | VIP openbao 10.10.20.200 | 8200/tcp | lecture des secrets (déjà prévu au PLAN §4.12) | bordure + CNP external-secrets-sorties | M25-E12 |

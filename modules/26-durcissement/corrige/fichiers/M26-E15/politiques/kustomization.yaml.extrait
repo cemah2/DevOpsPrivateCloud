@@ -1,0 +1,4 @@
+# plateforme/politiques — kustomization.yaml (racine, E07) : lignes à AJOUTER à « resources » (M26-E15).
+resources:
+  - kyverno/acces/harbor-kyverno.externalsecret.yaml
+  - kyverno/images/exiger-signature-medisphere.yaml

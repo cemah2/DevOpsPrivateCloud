@@ -1,0 +1,25 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M24-E16, PLAT-2516) : AJOUTS au bloc
+# apiServer de M14-E27 (audit) et M14-E28 (chiffrement). v1beta4 : extraArgs et extraVolumes sont des
+# LISTES : on AJOUTE une entrée à chacune, on ne remplace rien.
+# Appliqué nœud par nœud : playbooks/k8s-api-fichiers.yml d'abord (le fichier doit exister), puis
+#   outils/reconfigurer-apiserver.sh k8s-cp01 → vérification → k8s-cp02 → k8s-cp03,
+#   puis outils/reconfigurer-apiserver.sh --televerser k8s-cp01 (ConfigMap kubeadm-config, sinon la
+#   prochaine montée de version régénère le manifeste SANS cette option).
+# Aucune option --oidc-* : elles sont EXCLUSIVES de --authentication-config (le serveur d'API
+# refuse de démarrer : « authentication-config file and oidc-* flags are mutually exclusive »).
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+# … kubernetesVersion, controlPlaneEndpoint, networking, etcd… inchangés …
+apiServer:
+  extraArgs:
+    # … options d'audit (M14-E27) et de chiffrement (M14-E28) inchangées …
+    - {name: authentication-config, value: /etc/kubernetes/authentification/config.yaml}
+  extraVolumes:
+    # … volumes d'audit et de chiffrement inchangés …
+    # Le DOSSIER, pas le fichier : un fichier remplacé par renommage (Ansible) reste visible, et le
+    # serveur d'API le recharge à chaud.
+    - name: authentification
+      hostPath: /etc/kubernetes/authentification
+      mountPath: /etc/kubernetes/authentification
+      readOnly: true
+      pathType: Directory

@@ -1,0 +1,9 @@
+# playbooks/coffre-instantanes.yml — instantanés horaires de la grappe OpenBao (M25-E26).
+#   uv run ansible-playbook playbooks/coffre-instantanes.yml --check --diff
+#   uv run ansible-playbook playbooks/coffre-instantanes.yml
+# Sans effet sur le service openbao (aucun redémarrage) : les trois nœuds peuvent passer ensemble.
+- name: Instantanés de la grappe OpenBao
+  hosts: role_coffre
+  become: true
+  roles:
+    - openbao_instantane

@@ -1,0 +1,17 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M26-E25, PLAT-2725) : collecte des kubelets
+# avec VÉRIFICATION du certificat de service (signé par la CA du cluster depuis M14-E26, approuvé par
+# kubelet-csr-approver). Prometheus contacte chaque kubelet par son ADRESSE : le certificat porte
+# l'adresse du VLAN 40 en nom alternatif (IP SAN), la vérification du nom passe.
+# La ConfigMap kube-root-ca.crt existe dans tout espace (dont supervision, espace des ServiceMonitor).
+kubelet:
+  serviceMonitor:
+    https: true
+    tlsConfig:
+      insecureSkipVerify: false
+      ca:
+        configMap:
+          name: kube-root-ca.crt
+          key: ca.crt
+# kubeControllerManager et kubeScheduler RESTENT en insecureSkipVerify (M21-E20) : kubeadm ne leur
+# donne pas de certificat de service signé (ils s'en fabriquent un auto-signé au démarrage). Dette
+# inscrite dans docs/observabilite/metriques/securite.md, levée par --tls-cert-file (pour aller plus loin).

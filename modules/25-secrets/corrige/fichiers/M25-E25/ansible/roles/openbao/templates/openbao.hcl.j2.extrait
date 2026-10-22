@@ -1,0 +1,17 @@
+{# templates/openbao.hcl.j2 — EXTRAIT : bloc ajouté au M25-E25, à placer après le bloc listener.
+   L'état complet du gabarit en fin de palier 3 est dans fichiers/M25-E28/ansible/roles/openbao/. #}
+{% if openbao_seal_transit | bool %}
+
+# Auto-descellement (M25-E25) : la clé racine est chiffrée par la clé de transit de kms01. Le jeton
+# vient de la variable d'environnement BAO_TOKEN (/etc/openbao/kms.env, root 600, lue par l'unité) :
+# il n'est jamais dans ce fichier. Le serveur le renouvelle lui-même (disable_renewal absent = false).
+# ⚠️ kms01 doit répondre au DÉMARRAGE : sinon le processus s'arrête (« Error configuring seal
+# "transit" ») et systemd abandonne après StartLimitBurst essais (RB-251).
+seal "transit" {
+  address         = "{{ openbao_seal_transit_adresse }}"
+  key_name        = "{{ openbao_seal_transit_cle }}"
+  mount_path      = "{{ openbao_seal_transit_montage }}"
+  tls_ca_cert     = "{{ openbao_racine }}"
+  tls_server_name = "{{ openbao_seal_transit_nom_tls }}"
+}
+{% endif %}

@@ -1,0 +1,25 @@
+# plateforme/observabilite — requetes/tetragon-falco.logql (M26-E20)
+# Requêtes du locataire « audit » (source Grafana loki-audit, organisation Sécurité).
+
+# 1. Exécutions dans un pod donné (arbre des processus : parent → enfant)
+{service="tetragon"} | json | process_exec_process_pod_name="<POD>"
+  | line_format "{{.time}} {{.process_exec_parent_binary}} → {{.process_exec_process_binary}} {{.process_exec_process_arguments}}"
+
+# 2. Exécutions depuis un répertoire temporaire (politique observer-exec)
+{service="tetragon"} | json | process_kprobe_policy_name="observer-exec"
+  | json chemin="process_kprobe.args[0].linux_binprm_arg.path"
+  | line_format "{{.time}} {{.process_kprobe_process_pod_namespace}}/{{.process_kprobe_process_pod_name}} {{.chemin}}"
+
+# 3. Accès aux fichiers sensibles, par fichier et par binaire (sur 24 h)
+sum by (fichier, binaire) (
+  count_over_time({service="tetragon"} | json | process_kprobe_policy_name="fichiers-sensibles"
+    | json fichier="process_kprobe.args[0].file_arg.path", binaire="process_kprobe.process.binary" [24h]))
+
+# 4. Connexions qui sortent du cluster, par espace et destination
+sum by (espace, destination, port) (
+  count_over_time({service="tetragon"} | json | process_kprobe_policy_name="connexions-sortantes"
+    | json espace="process_kprobe.process.pod.namespace", destination="process_kprobe.args[0].sock_arg.daddr",
+           port="process_kprobe.args[0].sock_arg.dport" [1h]))
+
+# 5. Corrélation : la même exécution vue par Falco (règle) et par Tetragon (politique), même pod
+{service=~"falco|tetragon"} |~ "<POD>" |~ "/tmp/|répertoire temporaire"

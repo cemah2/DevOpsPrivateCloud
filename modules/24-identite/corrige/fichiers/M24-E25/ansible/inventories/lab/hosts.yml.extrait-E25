@@ -1,0 +1,5 @@
+# inventories/lab/hosts.yml — EXTRAIT (M24-E25) : groupe des hôtes sauvegardés par sauvegarde_identite.
+    sauvegarde_identite:
+      children:
+        role_idp:
+        role_annuaire:

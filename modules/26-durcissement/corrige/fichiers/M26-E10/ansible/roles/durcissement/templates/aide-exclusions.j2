@@ -1,0 +1,7 @@
+# {{ durcissement_entete }}
+# Exclusions MédiSphère (rôle durcissement, M26-E12) : contenus qui changent par nature
+# (journaux, caches, données de services, conteneurs). Ce qu'on surveille : binaires, bibliothèques,
+# configuration (/etc), noyau, /usr/local, /opt, /root, /home.
+{% for chemin in durcissement_aide_exclusions %}
+!{{ chemin }}
+{% endfor %}

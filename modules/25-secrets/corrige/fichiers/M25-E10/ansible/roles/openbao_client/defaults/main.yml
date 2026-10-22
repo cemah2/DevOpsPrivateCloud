@@ -1,0 +1,16 @@
+---
+# Rôle openbao_client — client « bao » d'OpenBao, binaire seul, ÉPINGLÉ par empreinte (M25-E10,
+# SEC-2610). Pour adm01 (personnes, OpenTofu) et runner01 (pipelines de plateforme/secrets et
+# plateforme/ansible). Le serveur, lui, vient du rôle openbao (palier 1).
+# Archive amont « openbao_<version>_linux_amd64.tar.gz » (contient bao, LICENSE, README, CHANGELOG),
+# pas le paquet .deb, qui installe aussi l'unité systemd du serveur.
+# Une montée de version = une MR qui change version + sha256 (checksums.txt de la version publiée),
+# en même temps que le serveur (E29) : un client plus récent que le serveur est toléré, pas l'inverse.
+
+openbao_client_version: "2.6.4"
+openbao_client_sha256: "659a4875cb197d042b2c612e7b0e275f36ebacc16e3f1f6e8dc31275f6d84220"
+openbao_client_url: "https://github.com/openbao/openbao/releases/download/v{{ openbao_client_version }}/openbao_{{ openbao_client_version }}_linux_amd64.tar.gz"
+openbao_client_cache: /var/cache/openbao-client
+openbao_client_binaire: /usr/local/bin/bao
+# Adresse par défaut posée dans /etc/profile.d (sessions interactives) ; les jobs la fixent eux-mêmes.
+openbao_client_adresse: "https://openbao.par1.medisphere.internal:8200"

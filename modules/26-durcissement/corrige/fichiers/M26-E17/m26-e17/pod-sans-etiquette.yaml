@@ -1,0 +1,26 @@
+# ~/m26/e17/pod-sans-etiquette.yaml — essai de la MutatingAdmissionPolicy, SANS rien créer :
+#   kubectl create --dry-run=server -n mediagenda-dev -f pod-sans-etiquette.yaml -o jsonpath='{.metadata.labels}'
+# Conforme à « restricted » pour que seul l'effet de la mutation soit observé.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e17-sans-etiquette
+  labels:
+    app.kubernetes.io/name: e17-essai
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: essai
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+      resources:
+        requests: {cpu: 10m, memory: 16Mi}
+        limits: {memory: 32Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: ["ALL"]}

@@ -1,0 +1,35 @@
+---
+# annuaire/sudo.yml — qui peut faire QUOI en root, ou avec quel groupe (M24-E19, PLAT-2519).
+# Les règles sont lues par SSSD (sudoers: files sss dans nsswitch.conf, posé à l'inscription). Le compte
+# local admin garde son sudo sans mot de passe des fichiers locaux (Ansible, bris de glace).
+
+# Commandes de consultation, regroupées. « systemctl status * » : sudoers compare les arguments ; le
+# joker accepte n'importe quelle unité.
+annuaire_sudo_commandes:
+  - commande: /usr/bin/journalctl
+    description: Lecture du journal (toujours avec le groupe systemd-journal, jamais en root)
+  - commande: "/usr/bin/systemctl status *"
+    description: État d'une unité, avec ses dernières lignes de journal
+annuaire_sudo_groupes_commandes:
+  - nom: consultation-journaux
+    description: Lire les journaux et l'état des services sans devenir root
+    commandes: [/usr/bin/journalctl, "/usr/bin/systemctl status *"]
+
+annuaire_sudo_regles:
+  # Administrateurs : tout, comme n'importe qui. Mot de passe de l'annuaire demandé (pas de NOPASSWD :
+  # une session laissée ouverte ne donne pas root sans le mot de passe).
+  - nom: sudo-plateforme-admins
+    description: plateforme-admins — toutes commandes sur toutes les machines inscrites
+    groupes: [plateforme-admins]
+    hotes: all
+    commandes: all
+    en_tant_que: all
+  # Équipe Plateforme : consultation des journaux en gardant SON identité, avec le seul groupe local
+  # systemd-journal (sudo -g systemd-journal journalctl …). Ni root, ni afficheur paginé en root
+  # (l'afficheur sait lancer un shell), ni --vacuum possible (les fichiers du journal appartiennent à root).
+  - nom: sudo-plateforme
+    description: plateforme — journaux et état des services, avec le groupe systemd-journal
+    groupes: [plateforme]
+    hotes: all
+    groupes_commandes: [consultation-journaux]
+    groupe_execution: [systemd-journal]

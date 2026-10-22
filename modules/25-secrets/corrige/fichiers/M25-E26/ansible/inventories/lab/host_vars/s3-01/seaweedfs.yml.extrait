@@ -1,0 +1,15 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT : ajouts de M25-E26 (rôle seaweedfs, M05-E10 ; modèle M14-E24).
+seaweedfs_identites:
+  # … identités existantes (tofu-etat, admin-s3, etcd-k8s…) …
+  # Instantanés d'OpenBao : écriture (nœud actif), listage et lecture (contrôle de l'envoi,
+  # restauration depuis adm01). Suppression et modification de configuration refusées par la
+  # politique du compartiment (plateforme/infra outils/s3/politique-openbao-instantanes.json).
+  - nom: openbao-instantanes
+    cle_acces: "{{ vault_s3_openbao_instantanes_cle_acces }}"
+    cle_secrete: "{{ vault_s3_openbao_instantanes_cle_secrete }}"
+    actions: [Read:openbao-instantanes, Write:openbao-instantanes, List:openbao-instantanes]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: openbao-instantanes
+    versionnage: true

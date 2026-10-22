@@ -1,0 +1,37 @@
+# registre/projets.tf — MODIFICATION de M24-E14 (PLAT-2514) : les membres des projets deviennent des
+# GROUPES OIDC de l'annuaire (docs/securite/identite/modele-autorisation.md).
+#
+# MR 1 : AJOUTER le bloc ci-dessous, en GARDANT les harbor_project_member_user (les personnes ne
+#        perdent rien pendant la transition). La ressource crée le groupe OIDC dans Harbor (par son
+#        nom) s'il n'existe pas : rien n'attend la première connexion de quelqu'un.
+# MR 2 : SUPPRIMER locals.membres_medisphere, les trois harbor_project_member_user et utilisateurs.tf
+#        (harbor_user, random_password). Le plan annonce 4 + 10 destructions ; aucune image, aucun robot.
+# MR 3 : authentification.tf.
+locals {
+  # projet => { groupe de l'annuaire => rôle Harbor }. Rôles : projectadmin, maintainer, developer,
+  # guest, limitedguest. securite, support et direction : aucun accès aux images (modèle d'autorisation).
+  membres_groupes = {
+    medisphere = {
+      "plateforme-admins" = "projectadmin"
+      "plateforme"        = "maintainer"
+      "mediagenda"        = "developer"
+      "medidoc"           = "developer"
+    }
+    plateforme   = { "plateforme-admins" = "projectadmin", "plateforme" = "developer" }
+    bibliotheque = { "plateforme-admins" = "projectadmin", "plateforme" = "developer" }
+    charts       = { "plateforme-admins" = "projectadmin", "plateforme" = "developer" }
+  }
+  membres_groupes_a_plat = merge([
+    for projet, groupes in local.membres_groupes : {
+      for groupe, role in groupes : "${projet}/${groupe}" => { projet = projet, groupe = groupe, role = role }
+    }
+  ]...)
+}
+
+resource "harbor_project_member_group" "groupe" {
+  for_each   = local.membres_groupes_a_plat
+  project_id = harbor_project.projet[each.value.projet].id
+  group_name = each.value.groupe
+  type       = "oidc"
+  role       = each.value.role
+}

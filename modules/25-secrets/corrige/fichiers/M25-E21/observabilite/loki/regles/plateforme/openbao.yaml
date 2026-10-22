@@ -1,0 +1,19 @@
+# plateforme/observabilite — loki/regles/plateforme/openbao.yaml (M25-E21, SEC-2621).
+# Locataire « plateforme » : le JOURNAL DU SERVICE (journald de vault01-03, rôle alloy du M22), pas
+# l'audit. Quand plus AUCUN dispositif d'audit ne peut écrire, OpenBao REFUSE les requêtes (HTTP 500)
+# et le dit dans son propre journal : « failed to audit request/response … no audit backend succeeded ».
+# Le journal d'audit, lui, ne peut pas raconter sa propre panne. La métrique de l'audit
+# (OpenBaoAuditEnEchec, M25-E27) complétera cette alerte.
+groups:
+  - name: openbao.service
+    interval: 1m
+    rules:
+      - alert: OpenBaoAuditImpossible
+        expr: |
+          sum by (host) (count_over_time({job="journald", role=~"coffre|kms"} | unite="openbao.service" |= "failed to audit" [5m])) > 0
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao n'écrit plus son audit sur {{ $labels.host }} : il refuse les requêtes"
+          description: "Disque /var/log plein, droits du fichier, dossier supprimé ? Voir docs/securite/secrets/audit-openbao.md, section « Panne de l'audit »."

@@ -1,0 +1,53 @@
+---
+# Rôle openbao — point d'entrée (M25-E03).
+
+- name: Système pris en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+      - ansible_facts['architecture'] == 'x86_64'
+    fail_msg: "{{ inventory_hostname }} : rôle openbao écrit pour Debian 13 amd64 seulement."
+    quiet: true
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - openbao_sha256 is match('^[0-9a-f]{64}$')
+      - openbao_version is version('2.6.0', '>=')
+      - openbao_nom_service is match('^[a-z0-9.-]+$')
+      - openbao_tls_version_min in ['tls12', 'tls13']
+    fail_msg: "Empreinte SHA-256 attendue (64 caractères hexadécimaux), OpenBao ≥ 2.6, TLS 1.2 ou 1.3."
+    quiet: true
+
+# Avant toute modification : le service tournait-il déjà ? (décide du comportement des gestionnaires)
+- name: État du service avant ce passage
+  ansible.builtin.command:
+    argv: [systemctl, is-active, openbao.service]
+  register: _openbao_etat_initial
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Mémoriser l'état initial
+  ansible.builtin.set_fact:
+    _openbao_etait_actif: "{{ _openbao_etat_initial.stdout == 'active' }}"
+
+- name: Paquet amont (empreinte vérifiée)
+  ansible.builtin.import_tasks: paquet.yml
+  tags: [openbao_paquet]
+
+- name: Dossiers, configuration et surcharge systemd
+  ansible.builtin.import_tasks: configuration.yml
+  tags: [openbao_configuration]
+
+- name: Service
+  ansible.builtin.import_tasks: service.yml
+  tags: [openbao_service]
+
+- name: Appliquer (ou signaler) les changements
+  ansible.builtin.meta: flush_handlers
+
+- name: Contrôles finaux
+  ansible.builtin.import_tasks: controles.yml
+  when: openbao_verifier | bool and not ansible_check_mode

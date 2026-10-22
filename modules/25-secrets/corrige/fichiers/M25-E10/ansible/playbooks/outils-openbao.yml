@@ -1,0 +1,10 @@
+---
+# playbooks/outils-openbao.yml — client OpenBao sur le poste d'administration et le runner shell
+# du socle (M25-E10). Un hôte à la fois, contrôle de la version en fin de rôle.
+#   admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/outils-openbao.yml --limit runner01 --check --diff
+- name: Client OpenBao
+  hosts: adm01:runner01
+  become: true
+  serial: 1
+  roles:
+    - role: openbao_client

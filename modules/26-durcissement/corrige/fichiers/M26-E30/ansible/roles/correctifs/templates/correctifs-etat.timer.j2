@@ -1,0 +1,11 @@
+# {{ ansible_managed }} — rôle correctifs (M26-E30) : chaque jour, après la mise à niveau automatique.
+[Unit]
+Description=État quotidien des correctifs de sécurité
+
+[Timer]
+OnCalendar={{ correctifs_etat_calendrier }}
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

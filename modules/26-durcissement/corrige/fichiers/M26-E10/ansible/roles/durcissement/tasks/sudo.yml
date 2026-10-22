@@ -1,0 +1,53 @@
+---
+# Domaine « sudo » : pseudo-terminal, journal dédié, délai de réauthentification.
+# Les règles d'attribution restent ailleurs : compte admin (rôle base, M00/M04), comptes de service
+# (rôles concernés), personnes par les règles sudo de FreeIPA (M24-E19). Ce fichier n'en ajoute aucune.
+
+- name: Réglages globaux de sudo (validés par visudo avant d'être posés)
+  ansible.builtin.template:
+    src: sudoers-durcissement.j2
+    dest: /etc/sudoers.d/00-durcissement
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  tags: [sudo_add_use_pty, sudo_custom_logfile, sudo_require_reauthentication]
+
+- name: Rotation du journal de sudo
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/sudo-durcissement
+    content: |
+      # {{ durcissement_entete }}
+      {{ durcissement_sudo_journal }} {
+          weekly
+          rotate 26
+          compress
+          missingok
+          notifempty
+          create 0600 root root
+      }
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [sudo_custom_logfile]
+
+# Contrôle de l'ensemble (fichiers de tous les rôles), sans rien modifier.
+- name: La configuration complète de sudo est valide
+  ansible.builtin.command: /usr/sbin/visudo -c
+  changed_when: false
+  check_mode: false
+
+# Lecture seule : « !authenticate » dispense de mot de passe SANS le dire dans la règle ; il ne doit
+# exister nulle part (le NOPASSWD du compte admin est un autre mécanisme, déclaré).
+- name: Aucune règle « !authenticate »
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    grep -rlE '^[^#]*!authenticate' /etc/sudoers /etc/sudoers.d/ || true
+  args:
+    executable: /bin/bash
+  register: _durcissement_sudo_noauth
+  changed_when: false
+  check_mode: false
+  failed_when: _durcissement_sudo_noauth.stdout_lines | length > 0
+  when: "'sudo_remove_no_authenticate' not in _durcissement_exclues"
+  tags: [sudo_remove_no_authenticate]

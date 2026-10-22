@@ -1,0 +1,22 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT : ajouts de M26-E24 (rôle seaweedfs, M05-E10).
+# Les secrets vault_s3_conformite_* sont lus par s3-01 ET par toutes les VMs (rôle durcissement) :
+# un seul fichier Vault « critique » (ex. group_vars/all/vault-critique-s3.yml), pas de copie.
+# Les secrets vault_s3_conformite_lecture_* ne servent qu'à s3-01 et à adm01 (s3-conformite.env).
+seaweedfs_identites:
+  # … identités existantes (tofu-etat, etcd-k8s, ci-cache…) …
+  # Dépôt des résultats : écrire et lister, JAMAIS lire ni supprimer. Une VM compromise peut écraser
+  # un objet (SeaweedFS ne restreint pas par préfixe) : le versionnage garde l'ancienne version.
+  - nom: conformite
+    cle_acces: "{{ vault_s3_conformite_cle_acces }}"
+    cle_secrete: "{{ vault_s3_conformite_cle_secrete }}"
+    actions: [Write:conformite, List:conformite]
+  # Lecture des rapports (RSSI, audit, checks du workbook) depuis adm01.
+  - nom: conformite-lecture
+    cle_acces: "{{ vault_s3_conformite_lecture_cle_acces }}"
+    cle_secrete: "{{ vault_s3_conformite_lecture_cle_secrete }}"
+    actions: [Read:conformite, List:conformite]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: conformite
+    versionnage: true

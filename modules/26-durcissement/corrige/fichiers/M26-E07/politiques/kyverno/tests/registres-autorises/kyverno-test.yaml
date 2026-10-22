@@ -1,0 +1,30 @@
+# plateforme/politiques — kyverno/tests/registres-autorises/kyverno-test.yaml (M26-E07)
+# Lancé par « kyverno test kyverno/tests/ » (localement et en CI sur chaque MR).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: registres-autorises
+policies:
+  - ../../validation/registres-autorises.yaml
+resources:
+  - ressources.yaml
+variables: valeurs.yaml
+results:
+  - policy: registres-autorises
+    kind: Pod
+    resources: [image-harbor]
+    result: pass
+  - policy: registres-autorises
+    kind: Pod
+    resources: [image-docker-hub]
+    result: fail
+  # Conteneur d'initialisation hors registre, vu au niveau du Deployment (autogen).
+  - policy: registres-autorises
+    kind: Deployment
+    resources: [init-hors-registre]
+    result: fail
+  # Espace sans étiquette d'équipe : la politique ne s'applique pas.
+  - policy: registres-autorises
+    kind: Pod
+    resources: [hors-espace-equipe]
+    result: skip

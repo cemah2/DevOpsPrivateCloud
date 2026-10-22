@@ -1,0 +1,9 @@
+# outils/revue-acces/ecarts-acceptes.yml — écarts CONNUS et ACCEPTÉS (M24-E30).
+# Un écart listé ici n'est plus signalé comme nouveau tant que « jusqu_au » n'est pas dépassé ;
+# expiré, il redevient un écart. Toute ligne passe par une MR approuvée par Sophie Laurent.
+# Clé d'un écart = le champ « cle » affiché dans le rapport (type:service:sujet).
+acceptes:
+  - cle: "jeton-sans-expiration:gitlab:root"
+    raison: "jeton d'amorçage du M01 conservé au coffre pour la reprise de GitLab (RB-240)"
+    accepte_par: sophie.laurent
+    jusqu_au: "2027-03-31"

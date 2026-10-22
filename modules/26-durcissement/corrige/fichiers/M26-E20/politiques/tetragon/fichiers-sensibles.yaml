@@ -1,0 +1,42 @@
+# plateforme/politiques — tetragon/fichiers-sensibles.yaml (M26-E20, SEC-2720)
+# Accès (lecture ou écriture) à des fichiers sensibles, vus du noyau : security_file_permission est
+# appelée à chaque read()/write() sur un fichier ouvert (argument 1 : masque MAY_READ=4, MAY_WRITE=2).
+# Le chemin est résolu par rapport à la racine du PROCESSUS (celle du conteneur) : /etc/shadow d'un
+# conteneur s'écrit /etc/shadow, pas /run/containerd/…/rootfs/etc/shadow.
+# Jetons de compte de service : /var/run/secrets/… et /run/secrets/… (si /var/run est un lien vers
+# /run dans l'image, le montage est résolu à /run par le runtime, et c'est ce chemin que l'on voit).
+# Bruit : chaque lecture compte (un client Kubernetes relit son jeton périodiquement). rateLimit : au
+# plus un événement par minute pour un même processus et les mêmes arguments.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: fichiers-sensibles
+  annotations:
+    medisphere.internal/ticket: SEC-2720
+spec:
+  kprobes:
+    - call: security_file_permission
+      syscall: false
+      return: true
+      args:
+        - index: 0
+          type: file
+        - index: 1
+          type: int
+      returnArg:
+        index: 0
+        type: int
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/shadow
+                - /etc/gshadow
+                - /etc/sudoers
+                - /root/.ssh/
+                - /var/run/secrets/kubernetes.io/serviceaccount/
+                - /run/secrets/kubernetes.io/serviceaccount/
+          matchActions:
+            - action: Post
+              rateLimit: 1m

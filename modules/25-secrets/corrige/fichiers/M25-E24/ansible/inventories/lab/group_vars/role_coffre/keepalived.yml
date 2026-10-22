@@ -1,0 +1,45 @@
+---
+# group_vars/role_coffre/keepalived.yml — VIP du coffre (M25-E24, PLAN §4.12). Rôle keepalived du M07.
+# Une instance VRRP v3 unicast, VRID 120, VIP 10.10.20.200/24 sur eth0 (INFRA).
+#
+# La VIP doit être sur le nœud ACTIF d'OpenBao, et nulle part ailleurs : le script interroge
+# /v1/sys/health du nœud LOCAL. curl -f échoue sur tout code ≥ 400 : 429 (en attente), 503 (scellé),
+# 501 (non initialisé), 472/473 (réplication, sans objet ici) → l'instance passe en FAULT et ne
+# porte pas la VIP. Seul l'actif répond 200. Surtout pas « ?standbyok=true » : tous les nœuds
+# répondraient 200 et la VIP pourrait rester sur un nœud en attente (il transmettrait les requêtes,
+# mais un incident sur le port 8201 deviendrait une panne vue des clients).
+#
+# Le certificat du nœud ne porte pas 127.0.0.1 : --resolve envoie la requête à la boucle locale
+# sous le NOM du nœud, vérifié contre la racine MédiSphère (jamais -k). Pas de DNS dans la boucle.
+#
+# Sans préemption, état initial BACKUP partout, priorités égales : de toute façon, deux nœuds au plus
+# sont en FAULT, et le seul candidat est l'actif. Délai de bascule ≈ intervalle × échecs (2 × 2 s)
+# après le changement d'actif, plus l'élection d'OpenBao elle-même.
+keepalived_scripts:
+  - nom: chk_openbao_actif
+    commande: >-
+      /usr/bin/curl -fsS -o /dev/null --max-time 2
+      --cacert /usr/local/share/ca-certificates/medisphere-root-ca.crt
+      --resolve {{ inventory_hostname }}.par1.medisphere.internal:8200:127.0.0.1
+      https://{{ inventory_hostname }}.par1.medisphere.internal:8200/v1/sys/health
+    intervalle: 2
+    delai: 3
+    echecs: 2
+    succes: 1
+
+keepalived_instances:
+  - nom: VI_OPENBAO
+    interface: eth0
+    vrid: 120
+    priorite: 100
+    etat_initial: BACKUP
+    intervalle: 1
+    preemption: false
+    # Adresses tirées de coffre_adresses (openbao.yml), pas des faits : le playbook passe un nœud
+    # à la fois (serial: 1) et ne connaît pas les faits des deux autres.
+    source: "{{ coffre_adresses[inventory_hostname] }}"
+    pairs: >-
+      {{ coffre_adresses | dict2items | rejectattr('key', 'equalto', inventory_hostname)
+         | map(attribute='value') | list }}
+    vips: [10.10.20.200/24]
+    scripts: [chk_openbao_actif]

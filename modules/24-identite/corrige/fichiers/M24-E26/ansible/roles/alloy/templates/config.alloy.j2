@@ -1,0 +1,156 @@
+// {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible, rôle alloy).') }}
+// /etc/alloy/config.alloy — agent Alloy de {{ inventory_hostname }} (M22-E05 ; masquage M22-E09 ;
+// journaux d'audit de l'identité vers le locataire « audit » : M24-E26).
+// Journal systemd → Loki ({{ alloy_loki_url }}), locataire {{ alloy_locataire }}.
+// Étiquettes (liste fermée) : job, host, role, site ; unité et niveau en métadonnées structurées.
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unite"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "niveau"
+	}
+}
+
+loki.source.journal "vm" {
+	path          = "/var/log/journal"
+	max_age       = "{{ alloy_journal_age_max }}"
+	relabel_rules = loki.relabel.journal.rules
+	labels        = {
+		job  = "journald",
+		host = "{{ inventory_hostname }}",
+		role = "{{ alloy_role }}",
+		site = "{{ alloy_site }}",
+	}
+	forward_to = [loki.process.journal.receiver]
+}
+
+loki.process "journal" {
+{% for u in alloy_audit_unites %}
+	// {{ u.unite }} part au locataire audit (source dédiée plus bas), jamais au locataire général.
+	stage.drop {
+		source              = "unite"
+		value               = "{{ u.unite }}"
+		drop_counter_reason = "audit_{{ u.service }}"
+	}
+
+{% endfor %}
+{% for niveau in alloy_niveaux_ignores %}
+	stage.drop {
+		source              = "niveau"
+		value               = "{{ niveau }}"
+		drop_counter_reason = "journald_{{ niveau }}"
+	}
+
+{% endfor %}
+	stage.structured_metadata {
+		values = {
+			unite  = "",
+			niveau = "",
+		}
+	}
+
+	forward_to = [loki.process.masquage.receiver]
+}
+
+// Masquage des données personnelles (M22-E09, SEC-2309) : MÊMES règles que le DaemonSet du cluster
+// (plateforme/observabilite, alloy/config.alloy). Bloc entre « raw » : ses doubles accolades sont pour Alloy, pas pour Jinja.
+{% raw %}
+loki.process "masquage" {
+	// NIR (numéro de sécurité sociale) : sexe, année, mois (01-12, 20-99 pour les cas particuliers),
+	// département (2A/2B compris), commune, ordre, clé ; espaces ou points facultatifs.
+	// \b aux deux bouts : un horodatage en nanosecondes (19 chiffres) ne correspond pas.
+	stage.replace {
+		expression = "\\b([12][ .]?[0-9]{2}[ .]?(?:0[1-9]|1[0-2]|[2-9][0-9])[ .]?(?:2[ABab]|[0-9]{2})[ .]?[0-9]{3}[ .]?[0-9]{3}[ .]?[0-9]{2})\\b"
+		replace    = "[NIR-MASQUE]"
+	}
+
+	// Adresses de courriel, SAUF celles de MédiSphère (plateforme@, astreinte@… : utiles aux
+	// enquêtes sur Alertmanager, Argo CD, GitLab).
+	stage.replace {
+		expression = "([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})"
+		replace    = "{{ if eq (regexReplaceAll \"^.*@(?:[a-z0-9-]+\\\\.)*medisphere\\\\.internal$\" .Value \"interne\") \"interne\" }}{{ .Value }}{{ else }}[COURRIEL-MASQUE]{{ end }}"
+	}
+
+	// Champs nominatifs d'une ligne JSON (noms de clés convenus avec les équipes, politique-journaux.md).
+	stage.replace {
+		expression = "\"(?:patient|nom|prenom|nom_patient|nom_naissance|date_naissance|telephone)\"\\s*:\\s*\"([^\"]*)\""
+		replace    = "[MASQUE]"
+	}
+
+	forward_to = [loki.write.loki.receiver]
+}
+{% endraw %}
+
+loki.write "loki" {
+	endpoint {
+		url       = "{{ alloy_loki_url }}"
+		tenant_id = "{{ alloy_locataire }}"
+	}
+}
+
+{% if alloy_audit_unites | length > 0 or alloy_audit_fichiers | length > 0 %}
+// ---------------------------------------------------------------------------------------------------
+// Journaux d'AUDIT de l'identité (M24-E26, PLAT-2526) → locataire « audit » de Loki, et lui seul.
+// Étiquettes : la liste fermée (job, host, role, site) + service (keycloak, freeipa) et, pour les
+// fichiers, fichier (access, krb5kdc…) : deux étiquettes de plus, à faible cardinalité, réservées au
+// locataire audit (politique-journaux.md, M22-E13, mise à jour en M24-E26).
+// Pas de masquage : ni données de santé ni adresses externes ; identifiants et adresses IP des
+// personnes SONT la matière de l'audit (accès au locataire audit : sécurité et astreinte, M22-E16).
+{% for u in alloy_audit_unites %}
+loki.source.journal "audit_{{ u.service }}" {
+	path       = "/var/log/journal"
+	max_age    = "{{ alloy_journal_age_max }}"
+	matches    = "_SYSTEMD_UNIT={{ u.unite }}"
+	labels     = {
+		job     = "journald",
+		host    = "{{ inventory_hostname }}",
+		role    = "{{ alloy_role }}",
+		site    = "{{ alloy_site }}",
+		service = "{{ u.service }}",
+	}
+	forward_to = [loki.write.audit.receiver]
+}
+
+{% endfor %}
+{% if alloy_audit_fichiers | length > 0 %}
+local.file_match "audit" {
+	path_targets = [
+{% for f in alloy_audit_fichiers %}
+		{
+			__path__ = "{{ f.chemin }}",
+			job      = "fichiers",
+			host     = "{{ inventory_hostname }}",
+			role     = "{{ alloy_role }}",
+			site     = "{{ alloy_site }}",
+			service  = "{{ f.service }}",
+			fichier  = "{{ f.fichier }}",
+		},
+{% endfor %}
+	]
+}
+
+loki.source.file "audit" {
+	targets    = local.file_match.audit.targets
+	forward_to = [loki.write.audit.receiver]
+}
+
+{% endif %}
+loki.write "audit" {
+	endpoint {
+		url       = "{{ alloy_loki_url }}"
+		tenant_id = "audit"
+	}
+}
+{% endif %}

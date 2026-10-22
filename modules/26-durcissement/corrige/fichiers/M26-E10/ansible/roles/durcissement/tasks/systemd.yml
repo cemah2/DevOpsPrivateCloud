@@ -1,0 +1,74 @@
+---
+# Domaine « systemd » : services inutiles, vidages mémoire, Ctrl-Alt-Suppr.
+
+- name: Inventaire des unités installées
+  ansible.builtin.service_facts:
+
+- name: Services inutiles arrêtés, désactivés et masqués (s'ils existent)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: >-
+    {{ durcissement_services_inutiles
+       | select('in', ansible_facts.services.keys() | map('regex_replace', '\.service$', '') | list)
+       | list }}
+  tags: [service_avahi-daemon_disabled, service_cups_disabled, service_rpcbind_disabled, service_autofs_disabled]
+
+- name: Dossier des réglages de systemd-coredump
+  ansible.builtin.file:
+    path: /etc/systemd/coredump.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Pas de stockage des vidages mémoire
+  ansible.builtin.copy:
+    dest: /etc/systemd/coredump.conf.d/60-durcissement.conf
+    content: |
+      # {{ durcissement_entete }}
+      [Coredump]
+      Storage={{ durcissement_coredump_stockage }}
+      ProcessSizeMax=0
+    owner: root
+    group: root
+    mode: "0644"
+  when: "'coredump_disable_storage' not in _durcissement_exclues"
+  tags: [coredump_disable_storage, coredump_disable_backtraces]
+
+- name: Pas de vidage mémoire pour les utilisateurs (limits.d)
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/60-durcissement.conf
+    content: |
+      # {{ durcissement_entete }}
+      *    hard    core    0
+    owner: root
+    group: root
+    mode: "0644"
+  when: "'disable_users_coredumps' not in _durcissement_exclues"
+  tags: [disable_users_coredumps]
+
+# Rocky livre /etc/systemd/system/ctrl-alt-del.target → reboot.target : systemctl refuse de masquer
+# une unité dont le nom existe déjà dans /etc. On retire ce lien d'abord (jamais un vrai fichier).
+- name: Lien ctrl-alt-del.target existant dans /etc ?
+  ansible.builtin.stat:
+    path: /etc/systemd/system/ctrl-alt-del.target
+  register: _durcissement_cad
+
+- name: Retirer le lien vers reboot.target
+  ansible.builtin.file:
+    path: /etc/systemd/system/ctrl-alt-del.target
+    state: absent
+  when:
+    - durcissement_ctrl_alt_suppr_masque | bool
+    - _durcissement_cad.stat.islnk | default(false)
+    - _durcissement_cad.stat.lnk_target | default('') != '/dev/null'
+
+- name: Ctrl-Alt-Suppr ne redémarre pas l'hôte
+  ansible.builtin.systemd_service:
+    name: ctrl-alt-del.target
+    masked: true
+  when: durcissement_ctrl_alt_suppr_masque | bool
+  tags: [disable_ctrlaltdel_reboot]

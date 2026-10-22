@@ -1,0 +1,113 @@
+---
+# Domaine « mac » (M26-E13) : AppArmor (Debian) et SELinux (Rocky).
+# Le rôle ne bascule JAMAIS SELinux en permissif ni un profil AppArmor en « complain » sans que
+# l'inventaire le demande : un confinement se relâche par une décision écrite, pas par un correctif.
+
+# --- Debian : AppArmor -----------------------------------------------------------------------------
+- name: Debian — AppArmor et ses outils
+  ansible.builtin.package:
+    name: [apparmor, apparmor-utils]
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
+  tags: [package_apparmor_installed, package_apparmor-utils_installed]
+
+- name: Debian — AppArmor actif dans le noyau
+  ansible.builtin.command: aa-enabled
+  register: _durcissement_aa
+  changed_when: false
+  check_mode: false
+  failed_when: _durcissement_aa.stdout | trim != 'Yes'
+  when: ansible_facts['os_family'] == 'Debian'
+  tags: [grub2_enable_apparmor]
+
+# Le mode est écrit DANS le profil (flags=(complain)) par le gabarit : aa-complain/aa-enforce
+# modifieraient le fichier eux-mêmes, et le rôle le réécrirait à chaque passage.
+- name: Debian — profils MédiSphère
+  ansible.builtin.template:
+    src: "apparmor/{{ item.nom }}.j2"
+    dest: "/etc/apparmor.d/{{ item.nom }}"
+    owner: root
+    group: root
+    mode: "0644"
+    # Analyse du profil AVANT de le poser : une erreur de syntaxe ne remplace jamais un profil chargé.
+    validate: apparmor_parser --skip-kernel-load --skip-cache %s
+  loop: "{{ durcissement_apparmor_profils }}"
+  loop_control:
+    label: "{{ item.nom }} ({{ item.mode }})"
+  vars:
+    _durcissement_aa_mode: "{{ item.mode }}"
+  when: ansible_facts['os_family'] == 'Debian'
+  notify: Recharger les profils AppArmor
+
+- name: Debian — charger les profils maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Debian — état des profils chargés
+  ansible.builtin.command: aa-status --json
+  register: _durcissement_aa_statut
+  changed_when: false
+  check_mode: false
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Debian — chaque profil est chargé dans le mode demandé
+  ansible.builtin.assert:
+    that:
+      - (_durcissement_aa_statut.stdout | from_json).profiles[item.profil] | default('absent') == item.mode
+    fail_msg: >-
+      Le profil {{ item.profil }} n'est pas chargé en {{ item.mode }}
+      (aa-status : {{ (_durcissement_aa_statut.stdout | from_json).profiles[item.profil] | default('absent') }}).
+    quiet: true
+  loop: "{{ durcissement_apparmor_profils }}"
+  loop_control:
+    label: "{{ item.profil }}"
+  when: ansible_facts['os_family'] == 'Debian' and not ansible_check_mode
+
+# --- Rocky : SELinux --------------------------------------------------------------------------------
+- name: Rocky — outils SELinux (semanage, audit2why)
+  ansible.builtin.package:
+    name: [policycoreutils-python-utils, setools-console]
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Rocky — SELinux en mode enforcing, politique targeted
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['selinux']['status'] == 'enabled'
+      - ansible_facts['selinux']['mode'] == 'enforcing'
+      - ansible_facts['selinux']['config_mode'] == 'enforcing'
+      - ansible_facts['selinux']['type'] == 'targeted'
+    fail_msg: >-
+      SELinux n'est pas enforcing/targeted sur {{ inventory_hostname }} ({{ ansible_facts['selinux'] }}).
+      Le rôle ne le rétablit pas seul (réétiquetage et redémarrage) : RB-263, section SELinux.
+    quiet: true
+  when: ansible_facts['os_family'] == 'RedHat'
+  tags: [selinux_state, selinux_policytype, selinux_not_disabled]
+
+- name: Rocky — booléens SELinux déclarés
+  ansible.posix.seboolean:
+    name: "{{ item.nom }}"
+    state: "{{ item.valeur }}"
+    persistent: true
+  loop: "{{ durcissement_selinux_booleens }}"
+  loop_control:
+    label: "{{ item.nom }} = {{ item.valeur }}"
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Rocky — contextes de fichiers déclarés
+  community.general.sefcontext:
+    target: "{{ item.motif }}"
+    setype: "{{ item.type }}"
+    state: present
+  loop: "{{ durcissement_selinux_contextes }}"
+  loop_control:
+    label: "{{ item.motif }} → {{ item.type }}"
+  register: _durcissement_sefcontext
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Rocky — réétiqueter les chemins dont la règle a changé
+  ansible.builtin.command: restorecon -Rv {{ item.item.chemin }}
+  loop: "{{ _durcissement_sefcontext.results | default([]) | selectattr('changed') | list }}"
+  loop_control:
+    label: "{{ item.item.chemin }}"
+  changed_when: true
+  when: ansible_facts['os_family'] == 'RedHat'

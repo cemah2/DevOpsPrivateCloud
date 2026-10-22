@@ -1,0 +1,16 @@
+// {{ ansible_managed }} — rôle correctifs (M26-E30). Lu APRÈS 50unattended-upgrades du paquet.
+// Sécurité seulement ; jamais les paquets de la liste noire (montées contrôlées) ; jamais de
+// redémarrage automatique (playbooks/redemarrages-vague.yml).
+Unattended-Upgrade::Origins-Pattern {
+{% for o in correctifs_origines_debian %}
+        "{{ o }}";
+{% endfor %}
+};
+Unattended-Upgrade::Package-Blacklist {
+{% for p in correctifs_exclus_debian %}
+        "{{ p }}";
+{% endfor %}
+};
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::SyslogEnable "true";

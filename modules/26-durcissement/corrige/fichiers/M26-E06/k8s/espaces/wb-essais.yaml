@@ -1,0 +1,20 @@
+# plateforme/k8s — espaces/wb-essais.yaml (M14-E06 ; Pod Security M14-E18 ; M26-E06, SEC-2706)
+# Essais des exercices : objets jetables, rien d'important n'y vit. EXCEPTION écrite à « restricted » :
+# les exercices y lancent des conteneurs en root (debian, curl, outils de diagnostic réseau ; M26-E08
+# y lit /etc/shadow pour déclencher Falco). « baseline » interdit toujours l'accès à l'hôte et les
+# privilèges ; « restricted » reste signalé et journalisé. Revue : à chaque fin de module.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-essais
+  labels:
+    app.kubernetes.io/part-of: workbook
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/exception-psa: "essais des exercices : conteneurs root jetables (SEC-2706, revue en fin de module)"

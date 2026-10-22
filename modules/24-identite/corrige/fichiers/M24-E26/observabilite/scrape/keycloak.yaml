@@ -1,0 +1,33 @@
+# plateforme/observabilite — scrape/keycloak.yaml (M24-E26, PLAT-2526)
+# Keycloak 26 sur idp01 : interface de GESTION (port 9000, HTTPS, certificat ACME d'idp01) ; /metrics
+# n'a pas d'authentification : il est filtré par pare_feu_local d'idp01 (MGMT, travailleurs du cluster).
+# Familles utiles : http_server_requests_seconds_* (latence et codes par URI), agroal_* (pool de
+# connexions à PostgreSQL), jvm_*, vendor_cache_*, keycloak_user_events_total (événements, E26).
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: keycloak
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: keycloak
+  scheme: HTTPS
+  metricsPath: /metrics
+  tlsConfig:
+    ca:
+      configMap:
+        name: racine-medisphere
+        key: ca.crt
+  scrapeInterval: 30s
+  staticConfigs:
+    - targets:
+        - idp01.par1.medisphere.internal:9000
+      labels:
+        equipe: plateforme
+        role: idp
+  relabelings:
+    - targetLabel: instance
+      replacement: idp01
+      action: replace
+  sampleLimit: 20000

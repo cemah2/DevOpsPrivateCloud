@@ -1,0 +1,95 @@
+# plateforme/observabilite — loki/regles/audit/identite.yaml (M24-E26, PLAT-2526 ; M24-E28 y ajoute
+# les alertes de bris de glace : état E28 du fichier). Règles du ruler de Loki, locataire AUDIT : journaux de Keycloak
+# (service="keycloak", lignes JSON de Keycloak : champs level, loggerName, message) et de FreeIPA
+# (service="freeipa", étiquette fichier : access, krb5kdc, httpd-erreurs).
+groups:
+  - name: identite-federation
+    interval: 1m
+    rules:
+      # Keycloak 26.7 n'expose pas de métrique de la fédération (la fonction ldap-metrics n'arrive
+      # qu'en 26.8, désactivée par défaut) : on lit ses erreurs. Quand ipa01 ne répond pas, que le
+      # mot de passe de svc-keycloak a changé ou que le certificat n'est plus reconnu, Keycloak écrit
+      # des lignes WARN/ERROR qui citent LDAP (connexion, liaison, synchronisation). Filtre établi en
+      # provoquant l'erreur par « Test connection » avec une URL fausse (M24-E26, étape 6).
+      - alert: FederationLdapEnEchec
+        expr: |
+          sum(count_over_time({service="keycloak"} |~ "(?i)ldap" | json | level=~"ERROR|WARN" [10m])) > 0
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "Keycloak n'arrive plus à joindre ou à interroger l'annuaire (ipa01)"
+          description: >-
+            {{ $value }} erreurs LDAP dans le journal de Keycloak en 10 minutes : les personnes de
+            l'annuaire ne peuvent plus se connecter (liaison refusée) ou les nouveaux arrivants
+            n'apparaissent pas. Explore (Loki — audit) : {service="keycloak"} |~ "(?i)ldap" | json | level=~"ERROR|WARN"
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+
+  # --- Bris de glace (M24-E28, SEC-2528 ; RB-240) -----------------------------------------------
+  # Tout usage d'un compte de secours se VOIT. Gravité « avertissement » : routé vers Sophie Laurent
+  # (sécurité) ET l'astreinte (route « equipe=securite » d'Alertmanager, M21-E16). Pas de « for » :
+  # un seul événement suffit. Fenêtre 5 min, évaluation chaque minute : l'alerte reste active 5 min.
+  - name: identite-bris-de-glace
+    interval: 1m
+    rules:
+      # Connexion (réussie ou non) de kc-secours au royaume master. L'écouteur jboss-logging journalise
+      # les événements de master même sans stockage en base. Faux positif accepté : aucun (le compte
+      # ne sert qu'au bris de glace et à l'essai trimestriel, qui DOIT être vu).
+      - alert: BrisDeGlaceKeycloak
+        expr: |
+          sum by (host) (count_over_time({service="keycloak"} |= "kc-secours"
+            | json | loggerName="org.keycloak.events"
+            | message=~".*type=\"LOGIN(_ERROR)?\".*realmName=\"master\".*username=\"kc-secours\".*" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "Le compte de bris de glace kc-secours (Keycloak, master) a été utilisé"
+          description: >-
+            Connexion ou tentative de connexion de kc-secours. Si ce n'est ni un bris de glace déclaré
+            ni l'essai trimestriel : traiter comme une compromission (RB-240 §6). Détail :
+            {service="keycloak"} |= "kc-secours" | json
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+      # Ticket Kerberos délivré à admin (kinit, connexion à l'interface web, modules ansible-freeipa du
+      # job annuaire:appliquer). Faux positif accepté : chaque exécution du job (rapprocher du journal
+      # du pipeline de plateforme/identite).
+      - alert: BrisDeGlaceAnnuaire
+        expr: |
+          sum by (host) (count_over_time({service="freeipa", fichier="krb5kdc"} |= "AS_REQ" |= "ISSUE"
+            |~ " admin@PAR1\\.MEDISPHERE\\.INTERNAL for krbtgt/" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "Le compte admin de l'annuaire (FreeIPA) a obtenu un ticket Kerberos"
+          description: >-
+            Usage du compte admin de FreeIPA : job annuaire:appliquer (vérifie le pipeline à cette
+            heure) ou bris de glace. Sinon : RB-240 §6.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+      # Liaison LDAP simple réussie avec le DN d'admin (rare : outils qui ne parlent pas Kerberos).
+      - alert: BrisDeGlaceAnnuaireLiaisonLdap
+        expr: |
+          sum by (host) (count_over_time({service="freeipa", fichier="access"} |= "RESULT err=0 tag=97"
+            |~ "dn=\"uid=admin,cn=users,cn=accounts,dc=par1,dc=medisphere,dc=internal\"" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "Liaison LDAP réussie avec le compte admin de l'annuaire"
+          description: "Liaison simple de uid=admin sur 389-ds : qui, depuis où ? (connexion conn= dans le journal d'accès)."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+      # Requêtes du cluster faites avec admin.conf (utilisateur kubernetes-admin de kubeadm), lues dans
+      # le journal d'audit de l'API (M22-E07 : champ « user » en métadonnée structurée). Faux positif
+      # accepté : les tâches du rôle k8s_plan_controle qui utilisent admin.conf sur les nœuds.
+      - alert: BrisDeGlaceCluster
+        expr: |
+          sum (count_over_time({job="kubernetes-audit"} | user="kubernetes-admin" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "admin.conf (kubernetes-admin) a servi sur k8s-par1 : {{ $value }} requêtes en 5 minutes"
+          description: >-
+            Le kubeconfig de bris de glace a été utilisé. Si ce n'est ni un bris de glace déclaré ni
+            une opération Ansible du plan de contrôle : RB-240 §6. Détail : {job="kubernetes-audit"} | user="kubernetes-admin" | json
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md

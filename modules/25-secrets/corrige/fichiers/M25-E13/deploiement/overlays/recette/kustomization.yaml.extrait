@@ -1,0 +1,5 @@
+# mediagenda/deploiement — overlays/<env>/kustomization.yaml : EXTRAIT (M25-E13). Même ajout dans
+# dev, recette et prod ; le reste du fichier est inchangé.
+resources:
+  # … ressources existantes …
+  - harbor-pull.yaml

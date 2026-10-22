@@ -1,0 +1,8 @@
+# plateforme/politiques — kustomization.yaml (M26-E07, PLAT-2707), rendu par l'Application Argo CD
+# « politiques ». N'y figurent QUE les politiques à appliquer : jamais les ressources de test de
+# kyverno/tests/ (des pods non conformes exprès). Chaque exercice ajoute ses fichiers ici.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - kyverno/validation/registres-autorises.yaml
+  - kyverno/validation/exiger-etiquettes.yaml

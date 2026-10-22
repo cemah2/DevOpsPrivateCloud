@@ -1,0 +1,11 @@
+---
+# host_vars/mon01/certificats.yml — certificat AJOUTÉ au M24-E18 (le certificat « mailpit » du M19 est inchangé).
+certificats_acme_certificats:
+  # … entrée « mailpit » (M19-E03) inchangée …
+  - id: oauth2-proxy-mailpit
+    noms:
+      - mon01.par1.medisphere.internal
+    certificat: /etc/oauth2-proxy/mailpit/tls/oauth2-proxy.crt
+    cle: /etc/oauth2-proxy/mailpit/tls/oauth2-proxy.key
+    groupe: oauth2-proxy
+    recharger: /usr/bin/systemctl try-restart oauth2-proxy-mailpit.service

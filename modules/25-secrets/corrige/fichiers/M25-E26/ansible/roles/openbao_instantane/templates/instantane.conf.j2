@@ -1,0 +1,10 @@
+# /etc/openbao/instantane.conf — {{ inventory_hostname }} (M25-E26)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle openbao_instantane).') }}
+INSTANTANE_NOEUD={{ inventory_hostname }}
+INSTANTANE_BAO_ADDR={{ openbao_instantane_bao_addr }}
+INSTANTANE_APPROLE={{ openbao_instantane_approle }}
+INSTANTANE_CACERT=/usr/local/share/ca-certificates/medisphere-root-ca.crt
+INSTANTANE_S3_POINT={{ openbao_instantane_s3_point }}
+INSTANTANE_S3_COMPARTIMENT={{ openbao_instantane_s3_compartiment }}
+INSTANTANE_AGE_DESTINATAIRE={{ openbao_instantane_age_destinataire }}
+INSTANTANE_TEXTFILE={{ openbao_instantane_textfile }}

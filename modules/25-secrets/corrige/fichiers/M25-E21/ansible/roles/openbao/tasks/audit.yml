@@ -1,0 +1,16 @@
+---
+# roles/openbao/tasks/audit.yml — rotation du journal d'audit (M25-E21, SEC-2621).
+# À importer depuis tasks/main.yml après configuration.yml :
+#   - name: Rotation du journal d'audit
+#     ansible.builtin.import_tasks: audit.yml
+#     tags: [openbao_audit]
+# Le dossier /var/log/openbao (openbao:openbao 0750) est déjà créé par configuration.yml (M25-E03).
+
+- name: Logrotate du journal d'audit (SIGHUP à OpenBao après chaque rotation)
+  ansible.builtin.template:
+    src: logrotate-openbao-audit.j2
+    dest: /etc/logrotate.d/openbao-audit
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/logrotate --debug %s

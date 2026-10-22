@@ -1,0 +1,5 @@
+---
+# group_vars/all/ssh_ca.yml — variable AJOUTÉE au M24-E20 (le reste du fichier est inchangé).
+# Tous les hôtes inscrits dans l'annuaire (M24-E19) acceptent les certificats des personnes ; la
+# bordure (group_vars/role_routeur/ssh_ca.yml), non inscrite, reste aux comptes locaux.
+ssh_ca_utilisateur_principaux_annuaire: true

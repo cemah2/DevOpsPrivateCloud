@@ -1,0 +1,199 @@
+---
+# Domaine « ssh » : COMPLÉMENT du rôle ssh_durci (M04-E11) et des certificats (M06-E19/E20).
+#   - 01-ssh-durci.conf (ssh_durci) garde : root, mots de passe, transferts, vivacité, LogLevel ;
+#   - 02-ssh-ca-hote.conf et 03-ssh-ca-utilisateur.conf (M06) gardent : certificats d'hôte, CA
+#     d'utilisateurs, principaux ;
+#   - 00-durcissement.conf (ce rôle) ajoute : qui peut se connecter (AllowGroups), algorithmes,
+#     bannière, nombre de sessions. sshd retient la PREMIÈRE valeur lue : ce fichier passe devant
+#     tous les autres, il ne doit donc fixer AUCUN mot-clé qu'un autre fichier fixe déjà.
+# ⚠️ Une erreur ici coupe SSH, donc Ansible. Garde une session ouverte sur l'hôte (elle survit au
+# rechargement de sshd) et l'accès console Proxmox (RB-263) ; le rôle valide avant et contrôle après.
+
+- name: Groupes autorisés sur cet hôte
+  ansible.builtin.set_fact:
+    _durcissement_ssh_groupes: "{{ (durcissement_ssh_groupes + durcissement_ssh_groupes_supplementaires) | unique }}"
+
+# Garde-fou n° 1 : tout compte LOCAL qui a des clés autorisées et un shell de connexion doit être
+# couvert par AllowGroups, ou déclaré comme ne devant pas se connecter. Sinon on l'aurait coupé sans
+# le savoir (git sur git01, cephadm sur ceph0x, supervision sur gw0x/lb0x…).
+- name: Comptes locaux qui peuvent se connecter par clé
+  ansible.builtin.shell: |
+    set -o pipefail
+    getent -s files passwd | while IFS=: read -r nom _ _ _ _ maison shell; do
+      case "$shell" in */nologin|*/false|"") continue ;; esac
+      if [ -s "$maison/.ssh/authorized_keys" ] || [ -s "$maison/.ssh/authorized_keys2" ]; then
+        printf '%s:%s\n' "$nom" "$(id -nG "$nom" | tr ' ' ',')"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: _durcissement_comptes_cles
+  changed_when: false
+  check_mode: false
+
+- name: Chaque compte à clés est couvert par AllowGroups (ou déclaré sans SSH)
+  ansible.builtin.assert:
+    that:
+      - >-
+        (item.split(':')[1].split(',') | intersect(_durcissement_ssh_groupes) | length > 0)
+        or (item.split(':')[0] in durcissement_ssh_comptes_sans_ssh)
+    fail_msg: >-
+      Le compte local {{ item.split(':')[0] }} (groupes : {{ item.split(':')[1] }}) a des clés SSH mais
+      aucun de ses groupes n'est dans AllowGroups ({{ _durcissement_ssh_groupes | join(' ') }}) : il serait
+      coupé. Ajoute son groupe à durcissement_ssh_groupes_supplementaires (host_vars ou group_vars),
+      ou son nom à durcissement_ssh_comptes_sans_ssh si c'est voulu.
+    quiet: true
+  loop: "{{ _durcissement_comptes_cles.stdout_lines }}"
+  tags: [sshd_limit_user_access]
+
+# Garde-fou n° 2 : le compte qui exécute Ansible est couvert (sinon le rôle se couperait lui-même).
+- name: Le compte de connexion d'Ansible est couvert par AllowGroups
+  ansible.builtin.command: id -nG {{ ansible_user | default('admin') }}
+  register: _durcissement_groupes_ansible
+  changed_when: false
+  check_mode: false
+  failed_when: _durcissement_groupes_ansible.stdout.split() | intersect(_durcissement_ssh_groupes) | length == 0
+
+# Garde-fou n° 3 : aucun mot-clé de notre fichier n'est déjà fixé par un autre fichier géré.
+- name: Mots-clés fixés par les autres fichiers de sshd_config.d
+  ansible.builtin.shell: |
+    set -o pipefail
+    for f in /etc/ssh/sshd_config.d/*.conf; do
+      [ "$f" = "{{ durcissement_ssh_fichier }}" ] && continue
+      [ -e "$f" ] || continue
+      grep -hEv '^\s*(#|$)' "$f" | awk '{print tolower($1)}'
+    done | sort -u
+  args:
+    executable: /bin/bash
+  register: _durcissement_ssh_autres
+  changed_when: false
+  check_mode: false
+
+- name: Aucun conflit de mots-clés avec les autres fichiers
+  ansible.builtin.assert:
+    that:
+      - _durcissement_ssh_conflits | length == 0
+    fail_msg: >-
+      {{ durcissement_ssh_fichier }} fixerait {{ _durcissement_ssh_conflits | join(', ') }}, déjà fixé(s)
+      ailleurs dans sshd_config.d : la première valeur lue gagne, l'autre fichier serait ignoré sans bruit.
+      Règle-le à un seul endroit (ssh_durci_options, par exemple).
+    quiet: true
+  vars:
+    _durcissement_ssh_conflits: >-
+      {{ _durcissement_ssh_motscles | intersect(_durcissement_ssh_autres.stdout_lines) }}
+    _durcissement_ssh_motscles: >-
+      {{ ['allowgroups', 'maxsessions', 'banner', 'hostkeyalgorithms']
+         + (['kexalgorithms', 'ciphers', 'macs', 'pubkeyacceptedalgorithms', 'casignaturealgorithms']
+            if ansible_facts['os_family'] == 'Debian' else []) }}
+
+- name: Bannière avant authentification
+  ansible.builtin.copy:
+    dest: "{{ durcissement_ssh_banniere }}"
+    content: "{{ durcissement_banniere_texte }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [sshd_enable_warning_banner_net, banner_etc_issue_net_cis]
+
+# --- Rocky : politique cryptographique du système (sshd l'inclut par 50-redhat.conf) ---------------
+- name: Rocky — sous-politiques cryptographiques MédiSphère
+  ansible.builtin.copy:
+    src: "crypto-policies/{{ item }}.pmod"
+    dest: "/etc/crypto-policies/policies/modules/{{ item }}.pmod"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [NO-SSHCBC, NO-WEAKMAC, NO-SSHNIST]
+  when: ansible_facts['os_family'] == 'RedHat'
+  tags: [configure_crypto_policy]
+
+- name: Rocky — politique cryptographique en vigueur
+  ansible.builtin.command: update-crypto-policies --show
+  register: _durcissement_crypto
+  changed_when: false
+  check_mode: false
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Rocky — appliquer la politique cryptographique voulue
+  ansible.builtin.command: update-crypto-policies --set {{ durcissement_crypto_politique }}
+  when:
+    - ansible_facts['os_family'] == 'RedHat'
+    - _durcissement_crypto.stdout | trim != durcissement_crypto_politique
+  changed_when: true
+  notify: Recharger sshd
+  tags: [configure_crypto_policy]
+
+# --- Fichier de durcissement, validé, puis contrôlé ----------------------------------------------------
+- name: Fichier de durcissement de sshd
+  block:
+    - name: Poser 00-durcissement.conf (fragment validé seul)
+      ansible.builtin.template:
+        src: sshd-durcissement.conf.j2
+        dest: "{{ durcissement_ssh_fichier }}"
+        owner: root
+        group: root
+        mode: "0600"
+        validate: /usr/sbin/sshd -t -f %s
+        backup: true
+      register: _durcissement_ssh_pose
+      notify: Recharger sshd
+      tags: [sshd_limit_user_access, sshd_set_max_sessions, sshd_use_strong_ciphers, sshd_use_strong_kex, sshd_use_strong_macs]
+
+    # Le fragment seul est valide ; la configuration COMPLÈTE (avec les Include) l'est-elle ?
+    - name: La configuration complète de sshd est valide
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+      check_mode: false
+  rescue:
+    - name: Retour au fichier précédent
+      ansible.builtin.copy:
+        src: "{{ _durcissement_ssh_pose.backup_file }}"
+        dest: "{{ durcissement_ssh_fichier }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      when: _durcissement_ssh_pose.backup_file is defined
+
+    - name: Retirer le fichier s'il n'existait pas avant
+      ansible.builtin.file:
+        path: "{{ durcissement_ssh_fichier }}"
+        state: absent
+      when: _durcissement_ssh_pose.backup_file is not defined
+
+    - name: Arrêter ici
+      ansible.builtin.fail:
+        msg: "sshd -t refuse la configuration complète : fichier précédent remis, sshd NON rechargé."
+
+- name: Recharger sshd maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Lire la configuration effective de sshd
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: _durcissement_ssh_effectif
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Les réglages du rôle sont ceux que sshd applique
+  ansible.builtin.assert:
+    that:
+      # sshd -T affiche une ligne « allowgroups <groupe> » par groupe.
+      - >-
+        _durcissement_ssh_groupes | map('regex_replace', '^', 'allowgroups ') | list
+        | difference(_durcissement_ssh_effectif.stdout_lines) | length == 0
+        or 'sshd_limit_user_access' in _durcissement_exclues
+      - ('maxsessions ' ~ durcissement_ssh_max_sessions) in _durcissement_ssh_effectif.stdout_lines
+      - "'permitrootlogin no' in _durcissement_ssh_effectif.stdout_lines"
+      - "'passwordauthentication no' in _durcissement_ssh_effectif.stdout_lines"
+    fail_msg: >-
+      sshd -T ne montre pas les réglages attendus : un autre fichier les fixe avant le nôtre
+      (sudo sshd -T | grep -E 'allowgroups|maxsessions').
+    quiet: true
+  when: not ansible_check_mode
+
+# Garde-fou n° 4 : une NOUVELLE connexion d'Ansible passe (la session en cours ne prouve rien).
+- name: Fermer la connexion persistante
+  ansible.builtin.meta: reset_connection
+
+- name: Une nouvelle connexion SSH aboutit
+  ansible.builtin.ping:

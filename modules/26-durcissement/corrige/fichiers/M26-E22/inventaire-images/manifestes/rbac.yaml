@@ -1,0 +1,30 @@
+# plateforme/inventaire-images — manifestes/rbac.yaml (version corrigée, M26-E22)
+# Lire les pods de tout le cluster, rien d'autre. Les « Forbidden » de Lucas venaient d'appels
+# inutiles (le client listait aussi les nœuds et les espaces) : on corrige le code, pas le rôle.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: inventaire
+  namespace: inventaire
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: inventaire-lecture-pods
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: inventaire-lecture-pods
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: inventaire-lecture-pods
+subjects:
+  - kind: ServiceAccount
+    name: inventaire
+    namespace: inventaire

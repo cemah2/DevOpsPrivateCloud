@@ -1,0 +1,40 @@
+# plateforme/politiques — .gitlab-ci.yml (M26-E07, PLAT-2707 ; E16 y ajoute ses tests)
+# Le pipeline VALIDE ; c'est Argo CD (Application « politiques ») qui applique.
+# L'image officielle de la CLI Kyverno (ghcr.io/kyverno/kyverno-cli) n'a pas de shell : le runner
+# Kubernetes ne peut pas y exécuter un script. On prend une petite image avec un shell (cache
+# dockerhub de Harbor) et on y dépose le binaire de la publication, vérifié par son empreinte
+# (checksums.txt de la publication v1.19.2). Les jobs de ci-jobs ont droit à Internet en 443 (M19-E24).
+include:
+  # Contrôles communs (pre-commit, Gitleaks) : composant « qualite » de plateforme/ci-templates.
+  # Mets la version publiée chez toi.
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@2.2.0
+
+stages: [valider]
+
+default:
+  tags: [k8s]
+  interruptible: true
+
+variables:
+  IMAGE_OUTILS: registry.par1.medisphere.internal/dockerhub/curlimages/curl:8.23.0
+  KYVERNO_VERSION: v1.19.2
+  KYVERNO_SHA256: 357eaf1df8bc24ddd5a73979fadeaae6a032e8710f11af264229756e4956bf4a
+
+# Tests des politiques Kyverno : chaque politique a son dossier kyverno/tests/<politique>/ avec
+# des ressources conformes et non conformes. Nom de job attendu par les vérifications : kyverno:tests.
+kyverno:tests:
+  stage: valider
+  image:
+    name: $IMAGE_OUTILS
+    entrypoint: [""]
+  script:
+    - cd /tmp
+    - curl -fsSLo kyverno.tar.gz "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz"
+    - echo "${KYVERNO_SHA256}  kyverno.tar.gz" | sha256sum -c -
+    - tar -xzf kyverno.tar.gz kyverno
+    - cd "$CI_PROJECT_DIR"
+    - /tmp/kyverno version
+    - /tmp/kyverno test kyverno/tests/ --remove-color
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

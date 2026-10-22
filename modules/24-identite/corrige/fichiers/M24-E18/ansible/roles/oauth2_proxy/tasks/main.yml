@@ -1,0 +1,200 @@
+---
+# Rôle oauth2_proxy — point d'entrée (M24-E18).
+
+- name: Système pris en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "{{ inventory_hostname }} : rôle oauth2_proxy écrit pour Debian 13 seulement."
+    quiet: true
+
+- name: Paramètres cohérents (version, empreinte, secrets, instances)
+  ansible.builtin.assert:
+    that:
+      - oauth2_proxy_version is version('7.15.5', '>=')
+      - oauth2_proxy_sha256 is match('^[0-9a-f]{64}$')
+      - oauth2_proxy_client_secret | length >= 16
+      - oauth2_proxy_instances | length > 0
+      - oauth2_proxy_instances | map(attribute='nom') | list | unique | length == oauth2_proxy_instances | length
+      - oauth2_proxy_instances | selectattr('groupes', 'defined') | rejectattr('groupes', 'equalto', []) | list | length == oauth2_proxy_instances | length
+      - oauth2_proxy_instances | map(attribute='amont') | select('match', '^https://') | list | length == oauth2_proxy_instances | length
+      - (oauth2_proxy_instances | map(attribute='cookie_secret') | map('length') | unique | list) == [32]
+    fail_msg: >-
+      Version ≥ 7.15.5 (GHSA-63jm-59jj-478j, GHSA-wr5q-7wxw-x568), empreinte SHA-256, secret du
+      client lu dans le Vault, au moins une instance, noms uniques, au moins un groupe autorisé par
+      instance (sans groupe, toute personne du royaume entrerait), amont en HTTPS, secret de cookie
+      de 32 caractères (openssl rand -hex 16 : lu tel quel depuis un fichier, il doit faire 16, 24
+      ou 32 octets).
+    quiet: true
+  no_log: true
+
+- name: Groupe du service
+  ansible.builtin.group:
+    name: "{{ oauth2_proxy_groupe }}"
+    system: true
+
+- name: Utilisateur du service (sans shell, sans dossier personnel)
+  ansible.builtin.user:
+    name: "{{ oauth2_proxy_utilisateur }}"
+    group: "{{ oauth2_proxy_groupe }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+
+- name: Dossier de la version
+  ansible.builtin.file:
+    path: "{{ oauth2_proxy_dossier_versions }}/{{ oauth2_proxy_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Archive téléchargée et vérifiée (get_url refuse un fichier dont l'empreinte diffère)
+  ansible.builtin.get_url:
+    url: "{{ oauth2_proxy_url }}"
+    dest: "{{ oauth2_proxy_dossier_versions }}/{{ oauth2_proxy_version }}/oauth2-proxy.tar.gz"
+    checksum: "sha256:{{ oauth2_proxy_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Binaire extrait (l'archive contient un dossier oauth2-proxy-v<version>.linux-amd64/)
+  ansible.builtin.unarchive:
+    src: "{{ oauth2_proxy_dossier_versions }}/{{ oauth2_proxy_version }}/oauth2-proxy.tar.gz"
+    dest: "{{ oauth2_proxy_dossier_versions }}/{{ oauth2_proxy_version }}"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    creates: "{{ oauth2_proxy_dossier_versions }}/{{ oauth2_proxy_version }}/oauth2-proxy"
+    owner: root
+    group: root
+
+- name: Version active
+  ansible.builtin.file:
+    src: "{{ oauth2_proxy_dossier_versions }}/{{ oauth2_proxy_version }}/oauth2-proxy"
+    dest: "{{ oauth2_proxy_binaire }}"
+    state: link
+    force: true
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: Dossiers des instances (root, lisibles par le groupe du service)
+  ansible.builtin.file:
+    path: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}"
+    state: directory
+    owner: root
+    group: "{{ oauth2_proxy_groupe }}"
+    mode: "0750"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+
+# Secrets : fichiers 0640 root:oauth2-proxy, écrits SANS retour à la ligne final (oauth2-proxy lit
+# le fichier tel quel : un « \n » final finirait dans le secret ou dans l'en-tête). Jamais sur une
+# ligne de commande, jamais dans l'unité systemd, jamais affichés (no_log).
+- name: Secret du client Keycloak
+  ansible.builtin.copy:
+    content: "{{ oauth2_proxy_client_secret }}"
+    dest: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/client-secret"
+    owner: root
+    group: "{{ oauth2_proxy_groupe }}"
+    mode: "0640"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  no_log: true
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: Secret de chiffrement des cookies (propre à l'instance)
+  ansible.builtin.copy:
+    content: "{{ item.cookie_secret }}"
+    dest: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/cookie-secret"
+    owner: root
+    group: "{{ oauth2_proxy_groupe }}"
+    mode: "0640"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  no_log: true
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: En-tête d'autorisation vers l'amont (interfaces qui gardent leur propre authentification)
+  ansible.builtin.copy:
+    content: "{{ item.autorisation_amont }}"
+    dest: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/autorisation-amont"
+    owner: root
+    group: "{{ oauth2_proxy_groupe }}"
+    mode: "0640"
+  loop: "{{ oauth2_proxy_instances | selectattr('autorisation_amont', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  no_log: true
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: Options générales (format historique, sans secret)
+  ansible.builtin.template:
+    src: oauth2-proxy.cfg.j2
+    dest: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/oauth2-proxy.cfg"
+    owner: root
+    group: "{{ oauth2_proxy_groupe }}"
+    mode: "0640"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: Configuration structurée (fournisseur, serveur TLS, amont, en-têtes ; sans secret)
+  ansible.builtin.template:
+    src: oauth2-proxy-alpha.yaml.j2
+    dest: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/alpha.yaml"
+    owner: root
+    group: "{{ oauth2_proxy_groupe }}"
+    mode: "0640"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: Unités systemd durcies (une par instance)
+  ansible.builtin.template:
+    src: oauth2-proxy.service.j2
+    dest: "/etc/systemd/system/oauth2-proxy-{{ item.nom }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "oauth2-proxy-{{ item.nom }}"
+  notify: Redémarrer les instances oauth2-proxy
+
+- name: Pas de démarrage sans certificat (rôle certificats_acme)
+  ansible.builtin.stat:
+    path: "{{ item.tls_cle }}"
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _oauth2_proxy_cles
+
+- name: Certificats présents
+  ansible.builtin.assert:
+    that: _oauth2_proxy_cles.results | rejectattr('stat.exists') | list | length == 0
+    fail_msg: "Clé TLS absente pour une instance : applique d'abord certificats_acme."
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Instances actives au démarrage
+  ansible.builtin.systemd_service:
+    name: "oauth2-proxy-{{ item.nom }}.service"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "oauth2-proxy-{{ item.nom }}"
+
+- name: Appliquer les changements en attente avant les contrôles
+  ansible.builtin.meta: flush_handlers
+
+- name: Contrôles finaux
+  ansible.builtin.import_tasks: controles.yml
+  when: oauth2_proxy_verifier | bool and not ansible_check_mode

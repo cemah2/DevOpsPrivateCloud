@@ -1,0 +1,16 @@
+# composants/cilium/values.yaml de plateforme/k8s — EXTRAIT (M26-E26, SEC-2726) : section « Chiffrement
+# entre nœuds » après le module 26. Release Helmfile « cilium » (releases/10-reseau.yaml.gotmpl) :
+#   helmfile -e par1 -l composant=cilium diff     # ne doit montrer QUE encrypt-node dans cilium-config
+#   helmfile -e par1 -l composant=cilium apply
+#   kubectl -n kube-system rollout restart ds/cilium && kubectl -n kube-system rollout status ds/cilium
+# (rollOutCiliumPods: false : sans redémarrage, l'option reste dans la ConfigMap et rien ne change.)
+encryption:
+  enabled: true
+  type: wireguard
+  # M15-E24 : pod → pod seulement. M26-E26 : aussi nœud ↔ nœud, pod → nœud, nœud → pod (beta en 1.20),
+  # SAUF depuis et vers les nœuds de contrôle (étiquette node-role.kubernetes.io/control-plane, option
+  # node-encryption-opt-out-labels laissée à sa valeur par défaut : un travailleur qui régénère sa clé
+  # doit pouvoir la publier à l'API sans passer par WireGuard).
+  nodeEncryption: true
+  # strictMode (egress.enabled, egress.cidr, ingress.enabled) : NON, décision SEC-2726 (un nœud dont la
+  # clé publique est périmée chez ses pairs serait isolé jusqu'à la propagation de la nouvelle).

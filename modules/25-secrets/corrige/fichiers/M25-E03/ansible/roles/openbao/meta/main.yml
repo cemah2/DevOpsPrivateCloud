@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: openbao
+  author: Équipe Plateforme MédiSphère
+  description: Nœud OpenBao (paquet amont, stockage Raft, TLS ACME) sur Debian 13 (M25-E03).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

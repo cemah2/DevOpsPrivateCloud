@@ -1,0 +1,31 @@
+# host_vars/mon01/supervision_temoin.yml — EXTRAIT : sondes du coffre (M25-E27). Rôle supervision_temoin
+# (M21-E11). Le module openbao_sante est ajouté à blackbox.yml.j2 du rôle (voir plus bas).
+supervision_temoin_sondes:
+  # … sondes existantes …
+  # Le SERVICE : la VIP doit mener au nœud actif, qui seul répond 200.
+  - nom: openbao-service
+    module: https_2xx
+    etiquettes: {equipe: plateforme, role: coffre}
+    cibles:
+      - https://openbao.par1.medisphere.internal:8200/v1/sys/health
+  # Chaque nœud : 200 (actif) ou 429 (en attente, descellé) ; 503 (scellé), 501, refus : échec.
+  - nom: openbao-noeuds
+    module: openbao_sante
+    etiquettes: {equipe: plateforme}
+    cibles:
+      - https://vault01.par1.medisphere.internal:8200/v1/sys/health
+      - https://vault02.par1.medisphere.internal:8200/v1/sys/health
+      - https://vault03.par1.medisphere.internal:8200/v1/sys/health
+      - https://kms01.par1.medisphere.internal:8200/v1/sys/health
+
+# À AJOUTER dans templates/blackbox.yml.j2 (modules) :
+#   openbao_sante:
+#     prober: http
+#     timeout: 5s
+#     http:
+#       preferred_ip_protocol: ip4
+#       ip_protocol_fallback: false
+#       fail_if_not_ssl: true
+#       valid_status_codes: [200, 429]
+#       tls_config:
+#         ca_file: {{ supervision_temoin_racine_ca }}

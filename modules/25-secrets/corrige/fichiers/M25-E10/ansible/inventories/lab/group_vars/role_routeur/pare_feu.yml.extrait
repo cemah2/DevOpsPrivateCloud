@@ -1,0 +1,7 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT (M25-E10). Aucun flux nouveau à travers la bordure :
+#   - runner01, runner02, K8S_TRAV (pods des jobs), MGMT → openbao 10.10.20.200:8200 : déjà prévus
+#     au PLAN §4.12 (posés au palier 1 avec le coffre) ; à vérifier, pas à ajouter ;
+#   - vault01 → git01 443 (découverte OIDC et clés de GitLab) : même VLAN INFRA, ne traverse pas la
+#     bordure ; seul le pare-feu local de git01 compte (443 ouvert à INFRA depuis le M01).
+# La ligne correspondante va dans docs/socle/matrice-flux.md :
+#   | vault01-03 | git01 | 443/tcp | découverte OIDC et JWKS de GitLab (méthode jwt gitlab/) | M25-E10 |

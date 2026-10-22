@@ -1,0 +1,92 @@
+# plateforme/observabilite — tests/conformite.test.yaml (M26-E24, SEC-2724)
+# promtool test rules tests/conformite.test.yaml (après outils/extraire-regles.sh, M21-E14)
+rule_files:
+  - ../build/regles/conformite.yml
+evaluation_interval: 1m
+
+tests:
+  # Dérive : 90 la semaine dernière, 82 cette semaine → alerte ; 90 → 88 : pas d'alerte.
+  # (Pas d'une minute : avec un pas d'une heure, les évaluations entre deux échantillons ne trouvent
+  # plus la série au-delà de 5 minutes, et « for » repartirait de zéro.)
+  - interval: 1m
+    input_series:
+      - series: 'medisphere_conformite_score{instance="mon01", job="vms", referentiel="cis_l1_serveur"}'
+        values: '90x10080 82x180'
+      - series: 'medisphere_conformite_score{instance="nbx01", job="vms", referentiel="cis_l1_serveur"}'
+        values: '90x10080 88x180'
+    alert_rule_test:
+      - eval_time: 10140m
+        alertname: ConformiteDegradee
+        exp_alerts: []
+      - eval_time: 10230m
+        alertname: ConformiteDegradee
+        exp_alerts:
+          - exp_labels: {instance: mon01, job: vms, referentiel: cis_l1_serveur, gravite: avertissement, equipe: securite}
+            exp_annotations:
+              resume: "mon01 : score cis_l1_serveur en baisse de 8.0 points en une semaine"
+              description: "Un réglage a dérivé ou une nouvelle règle échoue. Compare les deux derniers ARF de l'hôte dans le compartiment conformite (AAAA-MM-JJ/mon01/), règles passées de pass à fail."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+
+  # Objectif par référentiel : 80 en CIS (objectif 85) alerte, 80 en ANSSI (objectif 75) non.
+  - interval: 1m
+    input_series:
+      - series: 'medisphere_conformite_score{instance="dns02", job="vms", referentiel="cis_l1_serveur"}'
+        values: '80x120'
+      - series: 'medisphere_conformite_score{instance="dns02", job="vms", referentiel="anssi_intermediaire"}'
+        values: '80x120'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: ConformiteSousObjectif
+        exp_alerts:
+          - exp_labels: {instance: dns02, job: vms, referentiel: cis_l1_serveur, gravite: avertissement, equipe: securite}
+            exp_annotations:
+              resume: "dns02 : score cis_l1_serveur sous l'objectif (80.0)"
+              description: "Le score, exceptions signées déjà appliquées (tailoring), est sous l'objectif du référentiel. Corriger par le rôle durcissement, ou ouvrir une dérogation (RB-261)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+
+  # Absence : ipa01 n'a JAMAIS été analysé (seulement « up ») → alerte ; mon01 analysé il y a 1 jour
+  # pour les deux référentiels → rien.
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="ipa01", job="vms"}'
+        values: '1x600'
+      - series: 'up{instance="mon01", job="vms"}'
+        values: '1x600'
+      - series: 'medisphere_conformite_derniere_analyse_secondes{instance="mon01", job="vms", referentiel="cis_l1_serveur"}'
+        values: '0x600'
+      - series: 'medisphere_conformite_derniere_analyse_secondes{instance="mon01", job="vms", referentiel="anssi_intermediaire"}'
+        values: '0x600'
+    alert_rule_test:
+      - eval_time: 8h
+        alertname: ConformiteAnalyseAbsente
+        exp_alerts:
+          - exp_labels: {instance: ipa01, job: vms, gravite: avertissement, equipe: securite}
+            exp_annotations:
+              resume: "ipa01 : pas d'analyse de conformité récente"
+              description: "Minuterie absente ou arrêtée, analyse en échec (journalctl -u conformite-analyse), ou hôte jamais couvert par le rôle. Sur un hôte nouveau, l'alerte est attendue jusqu'au premier dimanche."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+
+  # Absence : analyse vieille de plus de 8 jours (horodatage 0, évaluée au 9e jour).
+  - interval: 1m
+    input_series:
+      - series: 'medisphere_conformite_derniere_analyse_secondes{instance="git01", job="vms", referentiel="cis_l1_serveur"}'
+        values: '0x13000'
+      - series: 'medisphere_conformite_derniere_analyse_secondes{instance="git01", job="vms", referentiel="anssi_intermediaire"}'
+        values: '0x13000'
+    alert_rule_test:
+      - eval_time: 7d
+        alertname: ConformiteAnalyseAbsente
+        exp_alerts: []
+      - eval_time: 9d
+        alertname: ConformiteAnalyseAbsente
+        exp_alerts:
+          - exp_labels: {instance: git01, job: vms, referentiel: cis_l1_serveur, gravite: avertissement, equipe: securite}
+            exp_annotations:
+              resume: "git01 : pas d'analyse de conformité récente"
+              description: "Minuterie absente ou arrêtée, analyse en échec (journalctl -u conformite-analyse), ou hôte jamais couvert par le rôle. Sur un hôte nouveau, l'alerte est attendue jusqu'au premier dimanche."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+          - exp_labels: {instance: git01, job: vms, referentiel: anssi_intermediaire, gravite: avertissement, equipe: securite}
+            exp_annotations:
+              resume: "git01 : pas d'analyse de conformité récente"
+              description: "Minuterie absente ou arrêtée, analyse en échec (journalctl -u conformite-analyse), ou hôte jamais couvert par le rôle. Sur un hôte nouveau, l'alerte est attendue jusqu'au premier dimanche."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md

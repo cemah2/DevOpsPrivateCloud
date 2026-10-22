@@ -1,0 +1,59 @@
+## {{ durcissement_entete }}
+## /etc/audit/rules.d/30-cis.rules (rôle durcissement, M26-E12)
+## Règles d'audit inspirées du CIS (niveau 2 : le niveau 1 serveur n'en exige pas) et de l'ANSSI.
+## Clés (-k) : ce qu'on cherche ensuite dans Loki ({service="auditd"} |= "key=\"<clé>\"").
+
+## Heure du système
+-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -k heure
+-w /etc/localtime -p wa -k heure
+
+## Identités
+-w /etc/group -p wa -k identite
+-w /etc/passwd -p wa -k identite
+-w /etc/gshadow -p wa -k identite
+-w /etc/shadow -p wa -k identite
+-w /etc/security/opasswd -p wa -k identite
+-w /etc/nsswitch.conf -p wa -k identite
+-w /etc/pam.d -p wa -k pam
+-w /etc/security -p wa -k pam
+
+## Réseau du système
+-a always,exit -F arch=b64 -S sethostname,setdomainname -k reseau-systeme
+-w /etc/hosts -p wa -k reseau-systeme
+-w /etc/hostname -p wa -k reseau-systeme
+
+## Contrôle d'accès obligatoire
+{% if ansible_facts['os_family'] == 'Debian' %}
+-w /etc/apparmor/ -p wa -k mac
+-w /etc/apparmor.d/ -p wa -k mac
+{% else %}
+-w /etc/selinux/ -p wa -k mac
+{% endif %}
+
+## Connexions et sessions
+-w /var/log/lastlog -p wa -k connexions
+-w /var/run/faillock -p wa -k connexions
+-w /var/run/utmp -p wa -k session
+-w /var/log/wtmp -p wa -k session
+-w /var/log/btmp -p wa -k session
+
+## Changements de droits (comptes humains)
+-a always,exit -F arch=b64 -S chmod,fchmod,fchmodat -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k droits
+-a always,exit -F arch=b64 -S chown,fchown,lchown,fchownat -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k droits
+-a always,exit -F arch=b64 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k droits
+
+## Accès refusés
+-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k acces-refuse
+-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k acces-refuse
+
+## Montages et suppressions
+-a always,exit -F arch=b64 -S mount -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k montage
+-a always,exit -F arch=b64 -S unlink,unlinkat,rename,renameat -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k suppression
+
+## Élévation de privilèges et journal de sudo
+-w /usr/bin/sudo -p x -k sudo
+-w {{ durcissement_sudo_journal }} -p wa -k sudo-journal
+
+## Modules du noyau
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module -k modules
+-w /usr/sbin/modprobe -p x -k modules

@@ -1,0 +1,30 @@
+# plateforme/k8s — composants/cilium/hote/hote-travailleurs.yaml (M26-E27, SEC-2727)
+# Entrées PROPRES aux travailleurs (k8s-w01-03) étiquetés pour le pare-feu d'hôte.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: hote-travailleurs
+  labels:
+    medisphere.internal/composant: pare-feu-hote
+spec:
+  description: "Entrées des travailleurs de k8s-par1 (SEC-2727, RB-264)"
+  nodeSelector:
+    matchLabels:
+      medisphere.internal/pare-feu-hote: "oui"
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+  ingress:
+    # BGP (M15-E11) : les agents initient les sessions vers gw01 (10.10.40.2) et gw02 (10.10.40.3),
+    # la bordure est passive ; les réponses passent par le suivi de connexions. Règle explicite quand
+    # même : une bordure qui initierait (redémarrage de FRR, changement de configuration) ne doit pas
+    # être refusée en silence.
+    - fromCIDR:
+        - 10.10.40.2/32
+        - 10.10.40.3/32
+      toPorts:
+        - ports:
+            - {port: "179", protocol: TCP}
+    # Rien d'autre : les Services LoadBalancer (10.10.41.x) et leurs NodePort sont traduits par le
+    # remplacement de kube-proxy AVANT le pare-feu d'hôte ; leur trafic est filtré par les politiques
+    # des pods de destination (« Host Policies known issues »).

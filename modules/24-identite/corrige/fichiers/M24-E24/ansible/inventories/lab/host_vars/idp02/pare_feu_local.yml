@@ -1,0 +1,15 @@
+---
+# host_vars/idp02/pare_feu_local.yml — flux d'entrée d'idp02 (M24-E24). Copie de ceux d'idp01,
+# plus le transport de la grappe depuis idp01. Pas de 5432 : idp02 n'a pas de base.
+pare_feu_local_regles:
+  - {source: [10.10.70.10, 10.10.70.11], proto: tcp, ports: [8443, 9000],
+     motif: "lb01/lb02 : trafic re-chiffré (8443) et contrôle de santé (9000)", ref: M24-E24}
+  - {source: [10.10.10.0/24, 10.255.1.0/24], proto: tcp, ports: [8443, 9000],
+     motif: "MGMT et VPN d'administration : diagnostic direct", ref: M24-E24}
+  - {source: [10.10.20.11], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01", ref: M24-E24}
+  - {source: [10.10.20.30], proto: tcp, ports: [7800, 57800],
+     motif: "idp01 → transport Infinispan et détection de pannes", ref: M24-E24}
+pare_feu_local_verifications:
+  - {port: 8443, motif: "Keycloak (HTTPS)"}
+  - {port: 9000, motif: "Keycloak (gestion)"}

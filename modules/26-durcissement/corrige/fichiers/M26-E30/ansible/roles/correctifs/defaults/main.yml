@@ -1,0 +1,37 @@
+---
+# Rôle correctifs (M26-E30, CHG-2730) — correctifs de SÉCURITÉ automatiques, sans redémarrage, et
+# publication de l'état (redémarrage requis, mises à jour en attente) pour Prometheus.
+
+# Interrupteur (retour arrière : false → minuteries arrêtées ; les paquets installés restent).
+correctifs_auto: true
+
+# Paquets JAMAIS mis à jour automatiquement : montées contrôlées (cluster : RB-142 ; bordure,
+# répartiteurs, coffre : changement planifié, un hôte à la fois). Expressions régulières (Debian) ou
+# motifs glob (dnf).
+correctifs_exclus_debian:
+  - "^kubelet$"
+  - "^kubeadm$"
+  - "^kubectl$"
+  - "^containerd\\.io$"
+  - "^keepalived$"
+  - "^frr"
+  - "^nftables$"
+  - "^haproxy$"
+  - "^openbao$"
+  - "^gitlab-ce$"
+correctifs_exclus_rocky:
+  - "cephadm*"
+  - "ceph-common*"
+  - "podman*"
+  - "ipa-*"
+  - "389-ds-base*"
+  - "pki-*"
+  - "freeipa-*"
+
+# Debian : origines acceptées (sécurité seulement).
+correctifs_origines_debian:
+  - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+
+# Dossier du collecteur textfile (rôle node_exporter, M21 ; monté dans node-exporter de kps, M26-E24).
+correctifs_textfile: /var/lib/prometheus/node-exporter
+correctifs_etat_calendrier: "*-*-* 06:40:00"

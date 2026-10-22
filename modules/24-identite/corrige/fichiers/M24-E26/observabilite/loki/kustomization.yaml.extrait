@@ -1,0 +1,11 @@
+# plateforme/observabilite — loki/kustomization.yaml — EXTRAIT (M24-E26) : la ConfigMap des règles du
+# locataire audit (M22-E08) reçoit un SECOND fichier. Un fichier par sujet, même dossier /rules/audit.
+  - name: regles-loki-audit
+    files:
+      - audit-alertes.yaml=regles/audit/alertes.yaml
+      - identite.yaml=regles/audit/identite.yaml
+    options:
+      labels:
+        loki_rule: "1"
+      annotations:
+        k8s-sidecar-target-directory: /rules/audit

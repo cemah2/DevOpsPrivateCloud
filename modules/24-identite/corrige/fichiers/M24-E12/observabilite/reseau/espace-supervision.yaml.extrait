@@ -1,0 +1,22 @@
+# plateforme/observabilite — reseau/espace-supervision.yaml : AJOUT de M24-E12 (DEV-2512), à placer
+# dans la section « 3. Sorties propres à un composant ». Grafana appelle Keycloak (jeton, userinfo,
+# JWKS) par le nom public sso.par1.medisphere.internal = VIP lb 10.10.70.200 (lb01/lb02, M24-E04) :
+# sans cette règle, refus-par-defaut-sortie (M21-E29) coupe la connexion (« context deadline exceeded »
+# dans le journal de Grafana, et la page de retour du SSO en erreur).
+# Par adresse et non par nom (toFQDNs) : la VIP est fixe, et la règle se relit sans connaître le
+# proxy DNS de Cilium. À reporter dans docs/kubernetes/reseau/matrice-flux-cluster.md.
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grafana-sortie
+spec:
+  description: "Grafana : Keycloak (sso, VIP lb 443) pour le SSO (M24-E12)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  egress:
+    - toCIDR:
+        - 10.10.70.200/32
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

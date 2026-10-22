@@ -1,0 +1,38 @@
+# plateforme/identite — oauth2-proxy/valeurs-hubble.yaml (M24-E18) : release oauth2-proxy-hubble,
+# devant Hubble UI (kube-system/hubble-ui:80). Groupes : plateforme-admins, plateforme, support.
+fullnameOverride: oauth2-proxy-hubble
+
+gatewayApi:
+  hostnames:
+    - hubble.apps.par1.medisphere.internal
+
+config:
+  cookieName: __Host-oauth2-hubble
+  # Fichier oauth2_proxy.cfg complet (le chart ne génère alors rien) : options non secrètes seulement.
+  configFile: |-
+    provider = "keycloak-oidc"
+    provider_display_name = "SSO MédiSphère"
+    oidc_issuer_url = "https://sso.par1.medisphere.internal/realms/medisphere"
+    provider_ca_files = ["/etc/medisphere-ca/medisphere-root-ca.crt"]
+    # Pas « groups » (défaut de keycloak-oidc) : notre portée s'appelle « groupes » et elle est par défaut.
+    scope = "openid email profile"
+    code_challenge_method = "S256"
+    oidc_groups_claim = "groups"
+    user_id_claim = "preferred_username"
+    allowed_groups = ["plateforme-admins", "plateforme", "support"]
+    email_domains = ["*"]
+    redirect_url = "https://hubble.apps.par1.medisphere.internal/oauth2/callback"
+    upstreams = ["http://hubble-ui.kube-system.svc.cluster.local:80"]
+    skip_provider_button = true
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "lax"
+    cookie_path = "/"
+    cookie_expire = "10h"
+    cookie_refresh = "5m"
+    # Derrière l'Envoy de la Gateway Cilium : X-Forwarded-* acceptés de la plage des pods SEULEMENT
+    # (sans cette liste, 7.15.5 croit encore tout le monde par compatibilité).
+    reverse_proxy = true
+    trusted_proxy_ips = ["10.240.0.0/16"]
+    real_client_ip_header = "X-Forwarded-For"
+    silence_ping_logging = true

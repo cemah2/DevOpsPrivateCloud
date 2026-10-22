@@ -1,0 +1,25 @@
+# medidoc/deploiement — overlays/recette/medidoc-s3.yaml (M25-E13 ; 5 min en M25-E15, SEC-2615)
+# Identité RGW de MédiDoc (recette). Un secret qu'on fait TOURNER est relu toutes les 5 minutes :
+# entre l'écriture d'une nouvelle version dans le coffre et le redémarrage des pods, 5 min au plus
+# (+ le temps du redémarrage). L'ancienne clé d'accès n'est supprimée du RGW qu'après.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: medidoc-s3
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: medidoc-s3
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      mergePolicy: Merge
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+  dataFrom:
+    - extract:
+        key: medidoc/recette/s3

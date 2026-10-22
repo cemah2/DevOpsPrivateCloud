@@ -1,0 +1,10 @@
+---
+# group_vars/all/alloy_audit.yml — journaux d'audit envoyés au locataire « audit » de Loki (M26-E12).
+# Le rôle durcissement donne le groupe adm aux fichiers d'audit (auditd.conf : log_group = adm) ;
+# Alloy est membre de adm (rôle alloy, M22). D'autres rôles ajoutent leurs fichiers en group_vars
+# de leur groupe (openbao, keycloak : M24-M25) ; ici, le journal du noyau, partout.
+alloy_journaux_audit:
+  - chemin: /var/log/audit/audit.log
+    service: auditd
+# /var/log/sudo.log (rôle durcissement) n'est pas envoyé : sudo écrit aussi dans journald, déjà
+# collecté (locataire plateforme) ; le fichier reste la preuve locale.

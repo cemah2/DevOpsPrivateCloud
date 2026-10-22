@@ -1,0 +1,24 @@
+# Tests de l'exception partielle cnpg-operateur-sans-condense (M26-E18). Lancés par le job
+# kyverno:tester de la CI (E16), comme les autres dossiers de tests/.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: exiger-digest-exception
+policies:
+  - ../../validation/exiger-digest.yaml
+resources:
+  - ressources.yaml
+exceptions:
+  - ../../exceptions/cnpg-operateur-sans-condense.yaml
+variables: ../valeurs.yaml
+results:
+  - policy: exiger-digest
+    isValidatingPolicy: true
+    resources: [instance-cnpg-postgres-par-condense]
+    kind: Pod
+    result: pass
+  - policy: exiger-digest
+    isValidatingPolicy: true
+    resources: [instance-cnpg-postgres-par-etiquette, api-image-operateur]
+    kind: Pod
+    result: fail

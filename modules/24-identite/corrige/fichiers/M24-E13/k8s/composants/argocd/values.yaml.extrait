@@ -1,0 +1,19 @@
+# plateforme/k8s — composants/argocd/values.yaml : MODIFICATION de M24-E13 (SEC-2513).
+# Dans configs.cm, SUPPRIMER les quatre comptes de personnes (et le commentaire « Comptes locaux
+# jusqu'au SSO du M24 ») :
+#     accounts.<MOI-ARGO>: login
+#     accounts.karim-benali: login
+#     accounts.julien-petit: login
+#     accounts.nadia-roussel: login
+# et GARDER :
+configs:
+  cm:
+    # Compte « admin » : désactivé (M20-E03). Le réactiver est le geste de bris de glace d'Argo CD
+    # (RB-240, M24-E28) : SSO en panne ET personne de plateforme-admins ne peut entrer.
+    admin.enabled: false
+    # Compte technique des vérifications du workbook : jeton d'API seulement, jamais d'interface.
+    accounts.ci-lecture: apiKey
+    # … application.resourceTrackingMethod, exec.enabled : inchangés …
+  rbac:
+    # policy.csv : SEULE source, releases/argocd/policy.csv (M20-E24) ; plus de liste ici.
+    policy.default: ""

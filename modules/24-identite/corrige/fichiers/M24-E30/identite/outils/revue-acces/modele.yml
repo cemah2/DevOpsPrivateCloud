@@ -1,0 +1,40 @@
+# outils/revue-acces/modele.yml — ce qui DEVRAIT être (M24-E30). Traduction machine du modèle
+# d'autorisation de M24-E10 (docs/securite/identite/modele-autorisation.md) : toute différence entre
+# ce fichier et la matrice d'E10 se corrige dans les deux, par la même MR.
+#
+# Pour chaque service : le droit attendu par groupe de l'annuaire (le plus fort l'emporte), et les
+# comptes NON SSO attendus (locaux, de service, de secours) avec leur raison.
+groupes_personnes: [plateforme-admins, plateforme, mediagenda, medidoc, securite, support, direction]
+
+services:
+  grafana:
+    droits: {plateforme-admins: Admin, plateforme: Editor, support: Editor, mediagenda: Viewer, medidoc: Viewer, securite: Viewer, direction: Viewer}
+    comptes_hors_sso:
+      admin: "bris de glace (RB-240)"
+      wb-checks: "compte de service des vérifications du workbook (Viewer)"
+  argocd:
+    droits: {plateforme-admins: "role:admin", plateforme: "role:plateforme", mediagenda: "role:mediagenda", support: "role:readonly"}
+    comptes_hors_sso:
+      admin: "bris de glace, désactivé (RB-240)"
+      ci-lecture: "jeton de la CI en lecture (M20)"
+  gitlab:
+    # Les appartenances aux groupes GitLab sont posées par outils/synchro-gitlab.py (M24-E11).
+    administrateurs: [root]
+    comptes_hors_sso:
+      root: "bris de glace (RB-240)"
+      svc-synchro-identite: "compte de service de synchro-gitlab.py (M24-E11)"
+      svc-revue-acces: "compte de service de cette revue"
+  kubernetes:
+    # Sujets attendus des liaisons RBAC : tout sujet User/Group hors de cette liste et hors « oidc: »
+    # est un écart (les comptes de service et system:* ne sont pas des personnes : listés à part).
+    sujets_hors_oidc_attendus:
+      "kubeadm:cluster-admins": "admin.conf, bris de glace (RB-240)"
+      "system:masters": "super-admin.conf, bris de glace (RB-240)"
+  proxmox:
+    royaume_sso: medisphere
+    comptes_hors_sso:
+      root@pam: "bris de glace (RB-240)"
+      wb-automation@pve: "automatisation (OpenTofu, M00)"
+      wb-revue@pve: "compte de service de cette revue (PVEAuditor)"
+  keycloak_master:
+    administrateurs_attendus: ["<MOI>-admin", kc-secours]

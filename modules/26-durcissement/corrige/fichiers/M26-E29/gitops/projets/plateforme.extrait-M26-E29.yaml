@@ -1,0 +1,15 @@
+# plateforme/gitops — projets/plateforme.yaml, EXTRAIT (M26-E29) : l'Application « politiques » (projet
+# plateforme) écrit des TracingPolicyNamespaced dans wb-essais et mediagenda-recette.
+spec:
+  destinations:
+    # … destinations existantes …
+    - server: https://kubernetes.default.svc
+      namespace: wb-essais
+    - server: https://kubernetes.default.svc
+      namespace: mediagenda-recette
+  namespaceResourceWhitelist:
+    # … types existants …
+    - group: cilium.io
+      kind: TracingPolicyNamespaced
+# Et dans projets/mediagenda.yaml : TracingPolicyNamespaced dans namespaceResourceBlacklist (l'équipe
+# MédiAgenda ne peut ni créer ni supprimer une politique d'application de la plateforme).

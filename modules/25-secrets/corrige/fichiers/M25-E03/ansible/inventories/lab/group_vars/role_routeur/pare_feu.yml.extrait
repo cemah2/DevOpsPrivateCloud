@@ -1,0 +1,15 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M25-E03, PLAT-2603.
+# Une passerelle à la fois (--limit gw01, vérification, puis gw02). Retour arrière : git revert.
+#
+# 1) Définitions.
+  - {nom: VAULT01, valeur: 10.10.20.21, commentaire: "vault01 : OpenBao, nœud 1 (M25-E03)"}
+#    NET_MGMT, NET_VPN, V_MGMT, V_VPN, V_INFRA existent déjà. Au M25-E24, une définition OPENBAO
+#    (VIP 10.10.20.200) remplace VAULT01 dans les règles des clients.
+#
+# 2) Transit (bloc « Secrets »).
+  - {entree: $V_MGMT, source: $NET_MGMT, sortie: $V_INFRA, destination: $VAULT01, proto: tcp, ports: 8200,
+     motif: "MGMT (adm01) → OpenBao : CLI, OpenTofu, checks", ref: M25-E03}
+  - {entree: $V_VPN, source: $NET_VPN, sortie: $V_INFRA, destination: $VAULT01, proto: tcp, ports: 8200,
+     motif: "VPN d'administration → OpenBao : interface web, connexion OIDC par navigateur", ref: M25-E03}
+#    vault01 → sso (VIP lb 443, découverte OIDC et clés de Keycloak, M25-E06) : couvert par la règle
+#    « services du VLAN 20 → sso » du M24-E04 (vérifie qu'elle existe dans ta matrice).

@@ -1,0 +1,17 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M26-E24, SEC-2724) : le DaemonSet node-exporter
+# de kps (espace supervision-noeuds, PSA privileged) lit le dossier textfile des nœuds de k8s-par1, où
+# conformite-analyse écrit conformite.prom (et correctifs-etat, correctifs.prom, en E30).
+# ATTENTION : « extraArgs » REMPLACE la liste par défaut du sous-chart prometheus-node-exporter : les deux
+# options d'exclusion du chart sont recopiées telles quelles (values.yaml du sous-chart de ta version).
+prometheus-node-exporter:
+  extraArgs:
+    - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run/containerd/.+|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|erofs)$
+    - --collector.textfile.directory=/host/textfile
+  # Lecture seule : le DaemonSet ne fait que lire ce que les minuteries des nœuds écrivent.
+  extraHostVolumeMounts:
+    - name: textfile-medisphere
+      hostPath: /var/lib/prometheus/node-exporter
+      mountPath: /host/textfile
+      readOnly: true
+      type: DirectoryOrCreate

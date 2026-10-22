@@ -1,0 +1,55 @@
+---
+# inventories/lab/durcissement.yml — vagues de durcissement (M26-E14, RB-263). Inventaire statique
+# ajouté à la liste « inventory » d'ansible.cfg : il ne déclare que des GROUPES ; les hôtes, leurs
+# adresses et leurs variables viennent de NetBox (netbox.yml, netbox-ceph.yml, netbox-k8s.yml).
+# Règles : jamais les deux passerelles, deux répartiteurs ou deux nœuds d'une même grappe dans la
+# même passe (serial: 1 dans le playbook à partir de la vague 4) ; adm01 en dernier.
+all:
+  children:
+    durcissement_vague_0:
+      # VMs d'essai (E04, étiquette env-m26) : seules VMs touchées avant que le rôle soit éprouvé.
+      children:
+        env_m26:
+    durcissement_vague_1:
+      hosts:
+        mon01:
+        nbx01:
+        s3-01:
+    durcissement_vague_2:
+      hosts:
+        dns02:
+        runner01:
+        runner02:
+        reg01:
+    durcissement_vague_3:
+      hosts:
+        dns01:
+        ca01:
+        git01:
+        idp01:
+        vault01:
+    durcissement_vague_4:
+      hosts:
+        vault02:
+        vault03:
+        kms01:
+        ipa01:
+    durcissement_vague_5:
+      # Ordre = ordre de passage (serial: 1) : l'hôte en ATTENTE de chaque paire d'abord.
+      hosts:
+        lb02:
+        lb01:
+        gw02:
+        gw01:
+    durcissement_vague_6:
+      hosts:
+        k8s-w01:
+        k8s-w02:
+        k8s-w03:
+        k8s-cp01:
+        k8s-cp02:
+        k8s-cp03:
+        ceph01:
+        ceph02:
+        ceph03:
+        adm01:

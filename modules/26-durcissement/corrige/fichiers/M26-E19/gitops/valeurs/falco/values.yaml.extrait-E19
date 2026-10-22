@@ -1,0 +1,35 @@
+# plateforme/gitops — valeurs/falco/values.yaml (EXTRAIT M26-E19, SEC-2719) : à fusionner dans le
+# fichier posé en M26-E08 (pilote modern_ebpf, registres, falcoctl désactivé, falcosidekick 2.31.1 et
+# ses deux sorties, ressources). Seules les clés qui CHANGENT sont montrées.
+# Chart falcosecurity/falco 9.2.1 (Falco 0.45.1), sous-chart falcosidekick 0.14.1.
+# Les règles elles-mêmes NE SONT PAS ici : elles viennent de plateforme/politiques
+# (falco/regles-medisphere.yaml, clé customRules), troisième source de l'Application falco.
+
+falco:
+  # Le défaut du chart (« debug ») fait évaluer et émettre même les règles de bas niveau. NOTICE et
+  # plus : le tri fin se fait par sortie dans falcosidekick (minimumpriority), pas en aveuglant Falco.
+  priority: notice
+  # Champ « gravite » ajouté aux événements des règles MédiSphère, d'après leur étiquette (tag) :
+  # falcosidekick transforme chaque champ de sortie en étiquette d'alerte. La première entrée reprend
+  # le défaut du chart (remplacer la liste l'effacerait sinon).
+  append_output:
+    - suggested_output: true
+    - match:
+        tags: [medisphere, gravite_critique]
+      extra_fields:
+        - gravite: "critique"
+    - match:
+        tags: [medisphere, gravite_avertissement]
+      extra_fields:
+        - gravite: "avertissement"
+
+falcosidekick:
+  config:
+    alertmanager:
+      # E08 posait « gravite:avertissement » ici pour TOUT : la gravité vient désormais de la règle.
+      # alertname : les gabarits de courriel du M21 (medisphere.tmpl) l'affichent dans le sujet ;
+      # falcosidekick n'en pose pas, le nom de la règle reste dans l'étiquette « rule ».
+      extralabels: "equipe:plateforme,alertname:AlerteFalco"
+      # Une alerte Falco est un ÉVÉNEMENT : sans échéance, elle resterait « active » à jamais
+      # (falcosidekick n'envoie jamais de résolution). 30 min, puis résolue si rien ne se reproduit.
+      expireafter: "1800"

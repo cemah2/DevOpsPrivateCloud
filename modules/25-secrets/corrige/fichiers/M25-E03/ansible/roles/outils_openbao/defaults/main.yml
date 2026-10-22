@@ -1,0 +1,20 @@
+---
+# Rôle outils_openbao — CLI « bao » sur le poste d'administration adm01 (M25-E03).
+# Binaire amont (archive de la publication, empreinte vérifiée), MÊME version que les serveurs,
+# dans /opt/outils_openbao/bao-<version>/, lié dans /usr/local/bin (retour arrière = changer la
+# version). Pas le paquet .deb : il installerait aussi le serveur, son unité systemd, un
+# utilisateur et un certificat auto-signé sur le poste d'administration.
+
+outils_openbao_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle outils_openbao).') | replace('\n', ' ') }}
+
+outils_openbao_version: "2.6.4"
+# Empreinte de openbao_<version>_linux_amd64.tar.gz dans checksums.txt de la publication.
+outils_openbao_sha256: "659a4875cb197d042b2c612e7b0e275f36ebacc16e3f1f6e8dc31275f6d84220"
+outils_openbao_url: >-
+  https://github.com/openbao/openbao/releases/download/v{{ outils_openbao_version }}/openbao_{{ outils_openbao_version }}_linux_amd64.tar.gz
+outils_openbao_dossier: /opt/outils_openbao
+
+# Adresse du coffre pour les sessions interactives (BAO_ADDR dans ~/.bashrc de ces comptes).
+outils_openbao_adresse: https://openbao.par1.medisphere.internal:8200
+outils_openbao_utilisateurs: [admin]

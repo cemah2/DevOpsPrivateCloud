@@ -1,0 +1,23 @@
+---
+# group_vars/role_coffre/pare_feu_local.yml — flux d'entrée des nœuds du coffre (M25-E24).
+# REMPLACE host_vars/vault01/pare_feu_local.yml (M25-E03) : mêmes règles pour les trois nœuds,
+# plus ce qu'exige la grappe. Supprime l'ancien fichier dans la même MR (sinon host_vars l'emporte
+# et vault01 n'accepterait ni Raft ni VRRP).
+# Les flux des consommateurs (runners, nœuds k8s-par1, mon01) sont ajoutés par les exercices qui
+# les créent (M25-E10, E12, E27) : reporte-les ici si tu les avais mis dans host_vars/vault01.
+pare_feu_local_regles:
+  - {source: [10.10.10.0/24, 10.255.1.0/24], proto: tcp, ports: 8200,
+     motif: "MGMT et VPN d'administration : CLI bao, OpenTofu, interface web, checks", ref: M25-E03}
+  # Grappe : API (retry_join, transfert du défi) et port de grappe (Raft, transfert de requêtes).
+  - {source: [10.10.20.21, 10.10.20.22, 10.10.20.23], proto: tcp, ports: [8200, 8201],
+     motif: "grappe OpenBao : retry_join, Raft et transfert de requêtes entre nœuds", ref: M25-E24}
+  # VIP : annonces VRRP v3 unicast entre les trois nœuds.
+  - {source: [10.10.20.21, 10.10.20.22, 10.10.20.23], proto: vrrp,
+     motif: "keepalived VI_OPENBAO (VRID 120) entre nœuds du coffre", ref: M25-E24}
+  # Défi ACME : ca01 sur le port 80 (relais HAProxy), relais vers le serveur de défi en 8402.
+  - {source: [10.10.20.11], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 (relais HAProxy)", ref: M25-E24}
+  - {source: [10.10.20.21, 10.10.20.22, 10.10.20.23], proto: tcp, ports: 8402,
+     motif: "serveur de défi temporaire de step, joint par le relais du nœud actif", ref: M25-E24}
+pare_feu_local_verifications:
+  - {port: 8200, motif: "OpenBao (API et interface, HTTPS)"}

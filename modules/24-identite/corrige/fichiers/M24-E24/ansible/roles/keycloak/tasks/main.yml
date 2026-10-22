@@ -1,0 +1,72 @@
+---
+# Rôle keycloak — point d'entrée (M24-E04 ; base distante et grappe : M24-E24). Les tâches qui
+# manipulent un secret « critique » (mot de passe de la base) portent l'étiquette « critique ».
+
+- name: Système pris en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "{{ inventory_hostname }} : rôle keycloak écrit pour Debian 13 seulement."
+    quiet: true
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - keycloak_sha256 is match('^[0-9a-f]{64}$')
+      - keycloak_version is version('26.7.0', '>=')
+      - keycloak_hostname is match('^https://')
+      - keycloak_mandataires | length > 0
+      # Une base distante ne s'ouvre pas à d'autres nœuds : un seul porteur de la base.
+      - _keycloak_bdd_locale or (keycloak_bdd_clients_distants | length == 0)
+      # Plusieurs nœuds sur une même base sans grappe = caches incohérents (sessions, royaumes).
+      - keycloak_grappe | bool or (keycloak_bdd_clients_distants | length == 0 and _keycloak_bdd_locale)
+    fail_msg: >-
+      Empreinte SHA-256 (64 caractères hexadécimaux), Keycloak ≥ 26.7, hostname en URL https://,
+      au moins un mandataire ; base ouverte à distance seulement par le nœud qui la porte, et
+      jamais sans keycloak_grappe (deux nœuds sur une base avec cache=local divergent).
+    quiet: true
+  vars:
+    _keycloak_bdd_locale: "{{ keycloak_bdd_hote in ['127.0.0.1', 'localhost'] }}"
+
+- name: Paquets (Java 25 ; PostgreSQL 17 de Debian 13 si la base est locale)
+  ansible.builtin.apt:
+    name: "{{ [keycloak_paquet_java, 'curl'] + (['postgresql'] if keycloak_bdd_hote in ['127.0.0.1', 'localhost'] else []) }}"
+    state: present
+    cache_valid_time: 3600
+
+- name: Base locale (idp01)
+  when: keycloak_bdd_hote in ['127.0.0.1', 'localhost']
+  block:
+    - name: PostgreSQL actif et lancé au démarrage
+      ansible.builtin.systemd_service:
+        name: postgresql.service
+        enabled: true
+        state: started
+
+    - name: Base et rôle PostgreSQL ; ouverture éventuelle à des nœuds distants (M24-E24)
+      ansible.builtin.include_tasks:
+        file: postgresql.yml
+        apply:
+          tags: [keycloak_bdd, critique]
+      tags: [keycloak_bdd, critique]
+
+- name: Distribution Keycloak (archive vérifiée, une version par dossier)
+  ansible.builtin.import_tasks: distribution.yml
+  tags: [keycloak_distribution]
+
+- name: Configuration, construction optimisée et service
+  ansible.builtin.import_tasks: service.yml
+  tags: [keycloak_service, critique]
+
+- name: Construire et redémarrer si quelque chose a changé
+  ansible.builtin.meta: flush_handlers
+
+- name: Service démarré (rien à faire s'il vient d'être redémarré)
+  ansible.builtin.systemd_service:
+    name: keycloak.service
+    state: started
+
+- name: Contrôles finaux
+  ansible.builtin.import_tasks: controles.yml
+  when: keycloak_verifier | bool and not ansible_check_mode

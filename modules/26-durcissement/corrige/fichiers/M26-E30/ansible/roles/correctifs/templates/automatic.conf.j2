@@ -1,0 +1,15 @@
+# {{ ansible_managed }} — rôle correctifs (M26-E30) : dnf-automatic, sécurité seulement, sans redémarrage.
+[commands]
+upgrade_type = security
+random_sleep = 3600
+network_online_timeout = 60
+download_updates = yes
+apply_updates = yes
+reboot = never
+
+[emitters]
+emit_via = stdio
+
+[base]
+# Paquets à montée contrôlée (Ceph, FreeIPA) : jamais par l'automatique.
+exclude = {{ correctifs_exclus_rocky | join(' ') }}

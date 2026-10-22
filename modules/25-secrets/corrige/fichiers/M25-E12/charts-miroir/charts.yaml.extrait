@@ -1,0 +1,9 @@
+# plateforme/charts-miroir — charts.yaml : EXTRAIT, entrée ajoutée en M25-E12 (PLAT-2612).
+# Empreinte : champ « digest » de l'entrée 2.13.0 de https://charts.external-secrets.io/index.yaml,
+# recalculée après « helm pull » (sha256sum) et relue en MR.
+charts:
+  - nom: external-secrets
+    depot: https://charts.external-secrets.io
+    version: 2.13.0
+    empreinte: sha256:f693a96f0d929a07e000dd39e68b92a1a1343c5bc440ebab091b03da30bcac3a
+    usage: "External Secrets Operator 2.13.0 (M25-E12), Application plateforme/gitops plateforme/external-secrets.yaml"

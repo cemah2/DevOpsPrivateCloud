@@ -1,0 +1,23 @@
+---
+# roles/openbao/tasks/ca-postgresql.yml — M25-E14 (DEV-2614). À inclure depuis tasks/main.yml du
+# rôle (après l'installation du paquet, avant le démarrage) :
+#   - name: Autorités des bases PostgreSQL jointes par le moteur database
+#     ansible.builtin.import_tasks: ca-postgresql.yml
+# Certificats PUBLICS (CA propre à chaque Cluster CloudNativePG), lus par OpenBao à chaque connexion
+# (sslrootcert= dans l'URL de connexion) : aucun rechargement d'OpenBao n'est nécessaire.
+- name: Dossier des autorités PostgreSQL
+  ansible.builtin.file:
+    path: /etc/openbao/postgresql
+    state: directory
+    owner: root
+    group: openbao
+    mode: "0750"
+
+- name: Autorités des bases (une par connexion)
+  ansible.builtin.copy:
+    src: "openbao/postgresql/{{ item }}-ca.crt"
+    dest: "/etc/openbao/postgresql/{{ item }}-ca.crt"
+    owner: root
+    group: openbao
+    mode: "0640"
+  loop: "{{ openbao_bases_postgresql }}"

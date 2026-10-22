@@ -1,0 +1,14 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT : ajouts de M24-E25 (rôle seaweedfs, M05-E10 ; modèle M14-E24).
+seaweedfs_identites:
+  # … identités existantes …
+  # Sauvegardes de l'identité (idp01, ipa01) : écriture et listage par les hôtes, lecture pour la
+  # restauration depuis adm01. Suppression refusée par la politique du compartiment.
+  - nom: identite-sauvegardes
+    cle_acces: "{{ vault_s3_identite_sauvegardes_cle_acces }}"
+    cle_secrete: "{{ vault_s3_identite_sauvegardes_cle_secrete }}"
+    actions: [Read:identite-sauvegardes, Write:identite-sauvegardes, List:identite-sauvegardes]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: identite-sauvegardes
+    versionnage: true

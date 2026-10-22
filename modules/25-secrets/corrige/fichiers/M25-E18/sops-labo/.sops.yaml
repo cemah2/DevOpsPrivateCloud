@@ -1,0 +1,18 @@
+# formation/sops-labo — .sops.yaml (M25-E18, PLAT-2618) : règles de chiffrement de SOPS 3.13.
+# SOPS lit ce fichier en remontant depuis le fichier chiffré ; la PREMIÈRE règle dont path_regex
+# correspond s'applique. Chiffrer un fichier qu'aucune règle ne couvre échoue : c'est voulu.
+#
+# Destinataires (chacun suffit à déchiffrer : une seule « key group ») :
+#   - la clé de transit sops-plateforme d'OpenBao : l'usage quotidien, sans clé sur les postes ;
+#     droit donné par la politique sops-plateforme (groupes plateforme-admins et plateforme) ;
+#   - la clé age « secours » de l'équipe : privée HORS LIGNE (coffre physique de Claire, comme les
+#     parts Shamir), pour relire un fichier si OpenBao est perdu. Sa clé publique seule est ici.
+# La clé age personnelle de l'étape 2 (et celle de Karim) n'y est plus : retirées à l'étape 5.
+#
+# encrypted_regex : seules les valeurs sous data et stringData sont chiffrées ; apiVersion, kind,
+# metadata restent lisibles (revue de MR, kustomize, diff). Le MAC couvre TOUT le fichier.
+creation_rules:
+  - path_regex: ^k8s/.+\.sops\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    hc_vault_transit_uri: https://openbao.par1.medisphere.internal:8200/v1/transit/keys/sops-plateforme
+    age: <CLE-PUBLIQUE-AGE-SECOURS>

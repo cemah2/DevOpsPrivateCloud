@@ -1,0 +1,21 @@
+# roles/netbox/defaults/main.yml — AJOUT de M24-E15 (SEC-2515) : connexion par le SSO (Keycloak).
+# Désactivée par défaut : le rôle reste utilisable sans IdP (reconstruction, M06).
+netbox_sso_actif: false
+# Émetteur, SANS /.well-known/openid-configuration (python-social-auth l'ajoute).
+netbox_sso_emetteur: https://sso.par1.medisphere.internal/realms/medisphere
+netbox_sso_client: netbox
+# Secret : Vault « critique » secrets/identite.yml de plateforme/ansible, chargé par le playbook.
+netbox_sso_secret: ""
+netbox_sso_libelle: SSO MédiSphère
+# Groupes NetBox LOCAUX donnés à toute personne venue du SSO (ils doivent exister : sinon un message
+# d'erreur dans le journal, et la personne n'a aucun droit). Les groupes de l'annuaire ne sont pas
+# transmis par le flux OIDC de python-social-auth : écriture donnée à la main (modèle d'autorisation).
+netbox_sso_groupes_defaut: [sso-lecture]
+# Rattacher un compte LOCAL existant de même adresse à sa première connexion par le SSO (au lieu d'en
+# créer un second « lucas.martin<suffixe> »). Acceptable SEULEMENT parce que les adresses viennent de
+# notre annuaire (READ_ONLY, trust_email) : avec un IdP où chacun saisit son adresse, c'est une prise
+# de compte offerte.
+netbox_sso_rattacher_par_courriel: true
+# Magasin de certificats pour les appels de serveur à serveur (découverte, jeton, JWKS) : requests
+# utilise certifi par défaut, qui ne connaît pas la racine MédiSphère ; le magasin du système, si.
+netbox_ca_magasin: /etc/ssl/certs/ca-certificates.crt

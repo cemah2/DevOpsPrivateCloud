@@ -1,0 +1,28 @@
+# mediagenda/deploiement — overlays/dev/harbor-pull.yaml (M25-E13, PLAT-2613)
+# Secret de tirage des images (robot Harbor en lecture), jusqu'ici créé par secrets-k8s.sh
+# (module mediagenda-dev, M20-E12). Valeur recopiée telle quelle dans kv/mediagenda/dev/harbor-pull
+# (clé .dockerconfigjson) ; le SecretStore « openbao » de l'espace est celui de la plateforme.
+# À ajouter aux « resources » de l'overlay.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: harbor-pull
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: harbor-pull
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      # Le type n'est pas une donnée : le modèle le pose, et Merge garde les données de dataFrom.
+      type: kubernetes.io/dockerconfigjson
+      mergePolicy: Merge
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+  dataFrom:
+    - extract:
+        key: mediagenda/dev/harbor-pull

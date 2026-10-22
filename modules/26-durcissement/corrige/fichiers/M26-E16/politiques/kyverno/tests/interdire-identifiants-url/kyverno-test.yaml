@@ -1,0 +1,30 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: interdire-identifiants-url
+policies:
+  - ../../validation/interdire-identifiants-url.yaml
+resources:
+  - ressources.yaml
+variables: ../valeurs.yaml
+results:
+  - policy: interdire-identifiants-url
+    isValidatingPolicy: true
+    resources: [config-propre]
+    kind: ConfigMap
+    result: pass
+  - policy: interdire-identifiants-url
+    isValidatingPolicy: true
+    resources: [config-fuite]
+    kind: ConfigMap
+    result: fail
+  - policy: interdire-identifiants-url
+    isValidatingPolicy: true
+    resources: [env-fuite]
+    kind: Pod
+    result: fail
+  - policy: interdire-identifiants-url
+    isValidatingPolicy: true
+    resources: [env-secret-ref]
+    kind: Pod
+    result: pass

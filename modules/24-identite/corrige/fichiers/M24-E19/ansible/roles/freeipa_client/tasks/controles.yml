@@ -1,0 +1,37 @@
+---
+# Contrôles après inscription (consultation seulement).
+
+- name: SSSD actif
+  ansible.builtin.systemd_service:
+    name: sssd.service
+  register: _freeipa_client_sssd
+  failed_when: _freeipa_client_sssd.status.ActiveState != 'active'
+
+- name: Une personne de l'annuaire est résolue par SSSD
+  ansible.builtin.command:
+    argv: [getent, -s, sss, passwd, "{{ freeipa_client_personne_controle }}"]
+  changed_when: false
+
+- name: Les comptes locaux ne sont PAS résolus par SSSD
+  ansible.builtin.command:
+    argv: [getent, -s, sss, passwd, "{{ item }}"]
+  register: _freeipa_client_local
+  changed_when: false
+  failed_when: _freeipa_client_local.rc == 0
+  loop: "{{ freeipa_client_comptes_locaux }}"
+
+- name: Le compte admin reste celui de /etc/passwd
+  ansible.builtin.command:
+    argv: [getent, -s, files, passwd, admin]
+  changed_when: false
+
+- name: Le keytab de l'hôte permet d'obtenir un ticket (cache temporaire, détruit aussitôt)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export KRB5CCNAME="FILE:$(mktemp)"
+    trap 'kdestroy -q 2>/dev/null || true; rm -f "${KRB5CCNAME#FILE:}"' EXIT
+    kinit -k "host/{{ ansible_facts['fqdn'] }}@{{ freeipa_client_royaume }}"
+    klist | grep -q "krbtgt/{{ freeipa_client_royaume }}@{{ freeipa_client_royaume }}"
+  args:
+    executable: /bin/bash
+  changed_when: false

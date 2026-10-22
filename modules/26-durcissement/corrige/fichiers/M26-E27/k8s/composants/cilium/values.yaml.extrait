@@ -1,0 +1,18 @@
+# composants/cilium/values.yaml de plateforme/k8s — EXTRAIT (M26-E27, SEC-2727) : pare-feu d'hôte.
+# Release Helmfile « cilium » ; après « helmfile -e par1 -l composant=cilium apply », redémarrer les
+# agents un par un (kubectl -n kube-system rollout restart ds/cilium ; rollout status).
+# Effet immédiat : AUCUN filtrage tant qu'aucune politique ne sélectionne un nœud… SAUF pour les
+# protocoles que l'agent ne connaît pas : le VRRP de keepalived (protocole IP 112, sans port) des
+# nœuds de contrôle serait JETÉ (DROP_CT_UNKNOWN_PROTO, « Host Policies known issues ») et les trois
+# nœuds de contrôle porteraient la VIP 10.10.40.200 en même temps. D'où l'option ci-dessous, dans la
+# MÊME MR que hostFirewall.enabled.
+hostFirewall:
+  enabled: true
+# Le chart 1.20 n'a pas de clé dédiée : extraConfig ajoute l'option telle quelle à la ConfigMap
+# cilium-config (option de l'agent « enable-extended-ip-protocols », documentée dans « Host Policies »).
+extraConfig:
+  enable-extended-ip-protocols: "true"
+# devices : non fixé, détection automatique (eth0 sur tous les nœuds, eth1 VLAN 30 sur les
+# travailleurs). Vérifier : cilium-dbg status | grep 'Host firewall'. Les politiques ci-dessous n'ont
+# que des règles d'ENTRÉE : le trafic de Ceph (sortant, par eth1) n'est pas filtré, ses réponses sont
+# reconnues par le suivi de connexions.

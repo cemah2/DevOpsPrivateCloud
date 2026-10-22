@@ -1,0 +1,77 @@
+# plateforme/observabilite — tests/identite.test.yaml (M24-E26) : promtool test rules
+#   promtool test rules tests/identite.test.yaml
+# promtool lit des groupes de règles « bruts » : regles/identite.yaml est une PrometheusRule ; le
+# job de CI en extrait spec (yq '.spec' regles/identite.yaml > /tmp/identite.rules.yaml), comme au M21.
+rule_files:
+  - /tmp/identite.rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  - name: Keycloak arrêté pendant 3 minutes
+    interval: 30s
+    input_series:
+      - series: 'up{job="keycloak", instance="idp01"}'
+        values: '1 1 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: KeycloakIndisponible
+        exp_alerts: []
+      - eval_time: 3m30s
+        alertname: KeycloakIndisponible
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: keycloak, instance: idp01}
+            exp_annotations:
+              resume: "Keycloak (idp01) ne répond plus à la collecte depuis 2 minutes"
+              description: >-
+                Plus aucune nouvelle connexion n'est possible sur les services en SSO (GitLab, Grafana, Argo CD, Harbor, Proxmox, kubectl par kubelogin, step ssh login). Vérifie `systemctl status keycloak` et /health/ready sur idp01:9000 ; accès de secours : RB-240.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+
+  - name: Cible absente de la configuration
+    interval: 30s
+    input_series:
+      - series: 'up{job="autre"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: KeycloakIndisponible
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: keycloak}
+            exp_annotations:
+              resume: "Keycloak (idp01) ne répond plus à la collecte depuis 2 minutes"
+              description: >-
+                Plus aucune nouvelle connexion n'est possible sur les services en SSO (GitLab, Grafana, Argo CD, Harbor, Proxmox, kubectl par kubelogin, step ssh login). Vérifie `systemctl status keycloak` et /health/ready sur idp01:9000 ; accès de secours : RB-240.
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+
+  - name: Vague d'échecs de mot de passe, pas les actions requises
+    interval: 30s
+    input_series:
+      # +6 toutes les 30 s = 60 en 5 minutes : alerte.
+      - series: 'keycloak_user_events_total{realm="medisphere", event="login", error="invalid_user_credentials"}'
+        values: '0+6x12'
+      # +10 toutes les 30 s, mais une erreur écartée : pas d'alerte à elle seule.
+      - series: 'keycloak_user_events_total{realm="medisphere", event="login", error="resolve_required_actions"}'
+        values: '0+10x12'
+      # Les succès (error vide) ne comptent pas.
+      - series: 'keycloak_user_events_total{realm="medisphere", event="login", error=""}'
+        values: '0+50x12'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: KeycloakEchecsConnexion
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, realm: medisphere}
+            exp_annotations:
+              resume: "Royaume medisphere : 60 échecs de connexion en 5 minutes"
+              description: >-
+                Force brute en cours, ou annuaire qui refuse les liaisons (verrouillages en série). Explore le locataire audit : {service="keycloak"} | json | loggerName="org.keycloak.events" |= "LOGIN_ERROR" (adresse ipAddress, identifiant username, erreur error).
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+
+  - name: Quelques fautes de frappe, pas d'alerte
+    interval: 30s
+    input_series:
+      - series: 'keycloak_user_events_total{realm="medisphere", event="login", error="invalid_user_credentials"}'
+        values: '0+1x12'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: KeycloakEchecsConnexion
+        exp_alerts: []

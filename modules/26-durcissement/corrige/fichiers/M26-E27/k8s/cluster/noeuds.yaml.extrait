@@ -1,0 +1,39 @@
+# plateforme/k8s — cluster/noeuds.yaml, EXTRAIT (M26-E27, SEC-2727).
+# 1. L'étiquette du pare-feu d'hôte devient « gérée » : la retirer du fichier la retire du nœud
+#    (outils/etiqueter-noeuds.sh), c'est le retour arrière n° 2 de RB-264.
+etiquettes_gerees: [bgp, medisphere.internal/pare-feu-hote]
+noeuds:
+  # 2. Ajoutée nœud par nœud, dans l'ordre imposé, une MR par nœud, APRÈS avoir passé son point de
+  #    terminaison d'hôte en audit (outils/pare-feu-hote.sh audit <nœud>). État final :
+  k8s-cp01:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-a
+      medisphere.internal/pare-feu-hote: "oui"
+  k8s-cp02:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-b
+      medisphere.internal/pare-feu-hote: "oui"
+  k8s-cp03:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-c
+      medisphere.internal/pare-feu-hote: "oui"
+  k8s-w01:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-a
+      bgp: par1
+      medisphere.internal/pare-feu-hote: "oui"
+  k8s-w02:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-b
+      bgp: par1
+      medisphere.internal/pare-feu-hote: "oui"
+  k8s-w03:
+    etiquettes:
+      topology.kubernetes.io/zone: par1-baie-c
+      medisphere.internal/dedie: bdd
+      bgp: par1
+      medisphere.internal/pare-feu-hote: "oui"
+    taints:
+      - cle: dedie
+        valeur: bdd
+        effet: NoSchedule

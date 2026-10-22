@@ -1,0 +1,10 @@
+# {{ durcissement_entete }}
+# /etc/security/pwquality.conf.d/60-durcissement.conf (rôle durcissement, M26-E11)
+# Mots de passe LOCAUX (compte de secours) ; les personnes suivent la politique de FreeIPA (M24).
+{% for cle, valeur in durcissement_pwquality.items() %}
+{%   if valeur is sameas true %}
+{{ cle }}
+{%   elif valeur is not sameas false %}
+{{ cle }} = {{ valeur }}
+{%   endif %}
+{% endfor %}

@@ -1,0 +1,5 @@
+---
+# group_vars/role_kms/openbao.yml — kms01 (M25-E25). Même version que la grappe ; montée de version
+# EN DERNIER et seul (RB-253) : pendant son redémarrage, aucun nœud de la grappe ne peut redémarrer.
+openbao_version: "2.6.4"
+openbao_sha256: "09e0b4ced4cfa2f04a3573c5ec05c94ecd4f858d580d76c7422c51b99b74cce1"

@@ -1,0 +1,21 @@
+---
+# Domaine « journalisation » : journald persistant et compressé. L'envoi vers Loki est celui du rôle
+# alloy (M22) ; les journaux d'audit suivent en E12 (alloy_journaux_audit).
+
+- name: Dossier des réglages de journald
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Réglages de journald
+  ansible.builtin.template:
+    src: journald-durcissement.conf.j2
+    dest: /etc/systemd/journald.conf.d/60-durcissement.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer journald
+  tags: [journald_storage, journald_compress]

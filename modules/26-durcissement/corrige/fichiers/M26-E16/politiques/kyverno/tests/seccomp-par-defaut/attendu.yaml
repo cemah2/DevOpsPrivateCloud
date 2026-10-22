@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata: {name: sans-seccomp, namespace: mediagenda-recette}
+spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: api
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: sans-securitycontext, namespace: mediagenda-recette}
+spec:
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: api
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0

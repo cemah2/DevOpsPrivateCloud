@@ -1,0 +1,55 @@
+# .gitlab-ci.yml — plateforme/ansible : EXTRAIT, différences de M25-E11 (PLAT-2611) avec M04-E30.
+# Secrets — variables du projet : VAULT_PASS_LAB et VAULT_PASS_CRITIQUE SUPPRIMÉES (après un
+# pipeline complet vert). Restent : ANSIBLE_CI_SSH_KEY, PROXMOX_*, DERIVE_TOKEN (migrables plus tard,
+# même méthode). Les mots de passe Ansible Vault viennent d'OpenBao :
+#   - jobs « lab » (lint, Molecule, check-socle) : rôle JWT ci-plateforme-ansible ;
+#   - jobs de l'environnement lab/socle (appliquer, derive) : ci-plateforme-ansible-critique.
+# outils/vault-pass-client.sh est appelé par ansible-playbook, dans le même environnement : il lit le
+# jeton exporté par outils/openbao-ci.sh (BAO_TOKEN), et les lookups le lisent dans VAULT_TOKEN.
+
+.socle:
+  extends: .ansible
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  variables:
+    ROLE_OPENBAO: ci-plateforme-ansible
+  before_script:
+    - !reference [.ansible, before_script]
+    - . outils/openbao-ci.sh "$ROLE_OPENBAO"
+    - . outils/ci-secrets.sh
+    - mkdir -p rapports
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.ci-cle-ssh"
+    - . outils/openbao-ci.sh --fin
+  # … artifacts inchangés …
+
+# Jobs de l'environnement lab/socle : le rôle « critique ».
+appliquer:
+  extends: .socle
+  variables:
+    ROLE_OPENBAO: ci-plateforme-ansible-critique
+  # … stage, environment (name: lab/socle), resource_group, script, rules inchangés …
+
+derive:
+  extends: .socle
+  variables:
+    ROLE_OPENBAO: ci-plateforme-ansible-critique
+  # … inchangé …
+
+# Molecule n'étend pas .socle mais lit les fichiers « lab » (vault_identity_list) : même connexion.
+.molecule:
+  extends: .ansible
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  before_script:
+    - !reference [.ansible, before_script]
+    - . outils/openbao-ci.sh ci-plateforme-ansible
+  after_script:
+    - uv run molecule destroy -s "$SCENARIO" || echo "Destroy en échec : le ménage planifié supprimera l'instance."
+    - . outils/openbao-ci.sh --fin
+  # … stage, resource_group, timeout, script inchangés …
+
+# L'indicateur de présence des secrets dans les règles (PROXMOX_TOKEN_SECRET) ne change pas : une MR
+# d'une branche non protégée n'a ni les variables protégées ni de jeton OpenBao (ref_protected).

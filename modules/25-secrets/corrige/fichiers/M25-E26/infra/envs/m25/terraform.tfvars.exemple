@@ -1,0 +1,5 @@
+# envs/m25/terraform.tfvars — à adapter (non versionné si ta convention le veut, comme envs/m24).
+noeud         = "<NOEUD>"
+cle_ssh_admin = "<CONTENU-DE-~/.ssh/id_ed25519.pub>"
+# E26 : ["restauration"] ; fin d'E26 : [] ; E30 : ["essai"] ; fin d'E30 : [].
+groupes = ["restauration"]

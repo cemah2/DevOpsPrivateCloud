@@ -1,0 +1,31 @@
+# plateforme/observabilite — regles/falco.yaml (M26-E37)
+# Alertes « méta » sur la santé de la détection : un détecteur muet est pire qu'absent.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco-sante
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: falco-sante
+      rules:
+        - alert: FalcoCouvertureIncomplete
+          expr: >-
+            count(up{job="falco"} == 1) < count(kube_node_info)
+          for: 10m
+          labels: {gravite: critique, equipe: securite}
+          annotations:
+            resume: "Falco ne couvre pas tous les nœuds"
+            description: "Des agents Falco manquent : {{ $value }} agents prêts pour le nombre de nœuds."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-260-alerte-falco.md"
+        - alert: FalcoMuet
+          expr: >-
+            sum(increase(falcosecurity_falcosidekick_outputs_total[6h])) == 0
+          for: 30m
+          labels: {gravite: avertissement, equipe: securite}
+          annotations:
+            resume: "Falco n'a produit aucune détection depuis 6 h"
+            description: "Vérifier règles chargées, priorité minimale et acheminement falcosidekick."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-260-alerte-falco.md"

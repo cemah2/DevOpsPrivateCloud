@@ -1,0 +1,4 @@
+{# roles/netbox/templates/netbox.service.j2 — AJOUT de M24-E15 (SEC-2515), dans la section [Service].
+   Même ligne dans netbox-rq.service.j2 (les tâches de fond font aussi des requêtes HTTPS). #}
+# requests (python-social-auth) : magasin du système, qui contient la racine MédiSphère (rôle ca_lab).
+Environment=REQUESTS_CA_BUNDLE={{ netbox_ca_magasin }}

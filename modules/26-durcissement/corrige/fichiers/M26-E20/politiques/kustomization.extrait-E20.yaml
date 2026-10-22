@@ -1,0 +1,4 @@
+# plateforme/politiques — kustomization.yaml (EXTRAIT M26-E20) : ligne à ajouter à « resources ».
+# Le fichier de valeurs du chart n'est pas ici (plateforme/gitops, valeurs/tetragon/values.yaml).
+resources:
+  - tetragon

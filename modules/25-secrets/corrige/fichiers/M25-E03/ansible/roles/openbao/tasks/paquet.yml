@@ -1,0 +1,41 @@
+---
+# Paquet .deb de la publication amont, vérifié par empreinte AVANT installation. Ce fichier est
+# aussi appelé seul par le playbook (tasks_from: paquet) AVANT le certificat : c'est le paquet qui
+# crée l'utilisateur et le groupe « openbao » (preinst : useradd --system --user-group), et ce
+# preinst ÉCHOUE si un groupe « openbao » existe déjà. Ne crée donc jamais ce groupe toi-même.
+
+- name: Dossier des paquets téléchargés
+  ansible.builtin.file:
+    path: "{{ openbao_dossier_paquets }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Paquet OpenBao, empreinte vérifiée — {{ openbao_version }}
+  ansible.builtin.get_url:
+    url: "{{ openbao_url }}"
+    dest: "{{ openbao_dossier_paquets }}/openbao_{{ openbao_version }}_amd64.deb"
+    checksum: "sha256:{{ openbao_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+# force-confold : /etc/openbao/openbao.hcl est un fichier de configuration du paquet que NOUS
+# remplaçons ; à une montée de version (M25-E29), dpkg garde le nôtre au lieu de poser une question.
+- name: Installer le paquet — {{ openbao_version }}
+  ansible.builtin.apt:
+    deb: "{{ openbao_dossier_paquets }}/openbao_{{ openbao_version }}_amd64.deb"
+    dpkg_options: force-confold,force-confdef
+  register: _openbao_paquet
+
+- name: Version installée
+  ansible.builtin.command:
+    argv: [bao, version]
+  register: _openbao_version_installee
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _openbao_version_installee.rc != 0
+    or ('OpenBao v' ~ openbao_version) not in _openbao_version_installee.stdout
+  when: not ansible_check_mode or not _openbao_paquet.changed

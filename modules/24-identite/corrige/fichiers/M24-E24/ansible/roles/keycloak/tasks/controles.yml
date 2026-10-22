@@ -1,0 +1,46 @@
+---
+# Contrôles après déploiement (M24-E04 ; base ouverte et grappe : M24-E24), lecture seule.
+
+- name: Keycloak est prêt (interface de gestion, HTTPS vérifié avec la racine du lab)
+  ansible.builtin.uri:
+    url: "https://{{ inventory_hostname }}.par1.medisphere.internal:{{ keycloak_port_gestion }}/health/ready"
+    ca_path: "{{ keycloak_racine }}"
+    return_content: true
+  register: _keycloak_sante
+  retries: 30
+  delay: 5
+  until: _keycloak_sante.status == 200 and (_keycloak_sante.json.status | default('')) == 'UP'
+
+- name: L'émetteur publié est le nom public (option hostname)
+  ansible.builtin.uri:
+    url: "https://{{ inventory_hostname }}.par1.medisphere.internal:{{ keycloak_port_https }}/realms/master/.well-known/openid-configuration"
+    ca_path: "{{ keycloak_racine }}"
+  register: _keycloak_decouverte
+  failed_when: _keycloak_decouverte.json.issuer != keycloak_hostname ~ '/realms/master'
+
+- name: HTTP en clair fermé (aucune écoute sur 8080)
+  ansible.builtin.wait_for:
+    port: 8080
+    host: 127.0.0.1
+    state: stopped
+    timeout: 1
+
+# Sans nœud distant : boucle locale seulement. Avec : boucle locale + l'adresse déclarée, rien d'autre.
+- name: PostgreSQL n'écoute que là où il doit
+  ansible.builtin.command:
+    argv: [ss, -Hltn, "sport = :5432"]
+  register: _keycloak_pg_ecoute
+  changed_when: false
+  when: keycloak_bdd_hote in ['127.0.0.1', 'localhost']
+  failed_when: >-
+    _keycloak_pg_ecoute.stdout_lines | map('split') | map('extract', 3)
+    | reject('match', '^(127\.0\.0\.1|\[::1\]):5432$')
+    | reject('equalto', (keycloak_bdd_ecoute ~ ':5432') if keycloak_bdd_clients_distants | length > 0 else '-')
+    | list | length > 0
+
+- name: Grappe — le transport écoute sur l'adresse déclarée (7800)
+  ansible.builtin.wait_for:
+    host: "{{ keycloak_grappe_adresse }}"
+    port: 7800
+    timeout: 30
+  when: keycloak_grappe | bool

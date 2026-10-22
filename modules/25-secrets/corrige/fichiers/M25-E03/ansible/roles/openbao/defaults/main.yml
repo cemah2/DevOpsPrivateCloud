@@ -1,0 +1,65 @@
+---
+# Rôle openbao — nœud du coffre OpenBao de MédiSphère (M25-E03, PLAT-2603). PLAN §4.12.
+# Paquet .deb AMONT (pas de dépôt APT officiel pour Debian) épinglé par version ET empreinte ;
+# stockage Raft intégré dans /var/lib/openbao ; HTTPS seul sur 8200 (certificat ACME de step-ca,
+# rôle certificats_acme, id « openbao ») ; port de grappe 8201 (Raft et transfert de requêtes,
+# utilisé à partir du M25-E24).
+# Ce rôle n'INITIALISE ni ne DESCELLE jamais le coffre : l'initialisation produit les parts de la
+# clé racine, elle se fait une fois, à la main, en cérémonie (M25-E03) ; le descellement demande
+# trois dépositaires (Shamir) jusqu'au M25-E25 (auto-descellement par kms01).
+# Il ne REDÉMARRE jamais un service déjà actif sans qu'on le lui demande (openbao_redemarrer) :
+# un redémarrage SCELLE le nœud.
+
+openbao_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle openbao).') | replace('\n', ' ') }}
+
+# --- Version (changer de version = changer ces DEUX variables, puis RB-253 au M25-E29) ----------
+# 2.6.4 = dernière corrective de la 2.6 (01/10/2026). La 2.7 arrive en M25-E29 : lire d'abord ses
+# ruptures (stockage « file » supprimé, seals de cloud et PKCS#11 en greffons).
+openbao_version: "2.6.4"
+# Empreinte de openbao_<version>_linux_amd64.deb dans checksums.txt de la publication (relevée sur
+# adm01 après vérification de la signature de checksums.txt, M25-E03 étape 2).
+openbao_sha256: "09e0b4ced4cfa2f04a3573c5ec05c94ecd4f858d580d76c7422c51b99b74cce1"
+openbao_url: >-
+  https://github.com/openbao/openbao/releases/download/v{{ openbao_version }}/openbao_{{ openbao_version }}_linux_amd64.deb
+openbao_dossier_paquets: /var/cache/openbao
+
+# --- Noms et adresses ----------------------------------------------------------------------------
+openbao_domaine: par1.medisphere.internal
+# Nom du SERVICE (A vers vault01 au palier 1, vers la VIP 10.10.20.200 au M25-E24) : présent dans
+# le certificat de chaque nœud, à côté du nom du nœud.
+openbao_nom_service: "openbao.{{ openbao_domaine }}"
+openbao_nom_noeud: "{{ inventory_hostname }}.{{ openbao_domaine }}"
+openbao_nom_grappe: openbao-par1
+openbao_port_api: 8200
+openbao_port_grappe: 8201
+# Adresse d'écoute du trafic de grappe (8201) : l'adresse du nœud dans le VLAN 20.
+openbao_adresse_grappe: "{{ ansible_facts['default_ipv4']['address'] }}"
+
+# --- Fichiers ------------------------------------------------------------------------------------
+openbao_dossier_config: /etc/openbao
+openbao_dossier_donnees: /var/lib/openbao
+# Journal d'audit (dispositif « file », M25-E21) : le dossier existe dès l'installation.
+openbao_dossier_journaux: /var/log/openbao
+openbao_tls_certificat: /etc/openbao/tls/cert.pem
+openbao_tls_cle: /etc/openbao/tls/key.pem
+# Racine MédiSphère (rôle ca_lab) : contrôles du rôle, et retry_join au M25-E24.
+openbao_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# --- Réglages du serveur ---------------------------------------------------------------------------
+openbao_ui: true
+# TLS 1.2 minimum (défaut d'OpenBao) ; 1.3 au durcissement (M25-E28).
+openbao_tls_version_min: tls12
+# Grappe Raft (M25-E24) : liste des leader_api_addr à rejoindre. Vide = nœud seul.
+openbao_raft_rejoindre: []
+# Blocs HCL supplémentaires recopiés tels quels à la fin de openbao.hcl (seal « transit » au
+# M25-E25, telemetry au M25-E27…). Vide au palier 1.
+openbao_hcl_supplement: ""
+
+# --- Redémarrage ------------------------------------------------------------------------------------
+# false : si la configuration change alors que le service tourne, le rôle l'ÉCRIT mais ne
+# redémarre pas (il le signale). Un redémarrage scelle le nœud : on le décide, on le prépare
+# (dépositaires disponibles), puis on relance avec -e openbao_redemarrer=true.
+openbao_redemarrer: false
+
+openbao_verifier: true

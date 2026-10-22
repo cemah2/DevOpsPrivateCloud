@@ -1,0 +1,12 @@
+---
+# group_vars/role_coffre/openbao-postgresql.yml — M25-E14 (DEV-2614) : vault01-03.
+# CA des Clusters CloudNativePG de MédiAgenda, relevées par :
+#   admin@adm01:~$ kubectl -n mediagenda-recette get secret mediagenda-db-ca -o jsonpath='{.data.ca\.crt}' \
+#       | base64 -d > ~/src/ansible/files/openbao/postgresql/mediagenda-recette-ca.crt
+# (même chose pour mediagenda-prod). CloudNativePG RENOUVELLE sa CA (validité 90 jours, renouvelée
+# 7 jours avant l'échéance) : la copie doit suivre, sinon OpenBao ne se connecte plus (alerte
+# CertificatServicesExpireBientot étendue, M25-E27 ; la vraie correction est en M25-E16 : certificat
+# serveur de la base signé par la PKI de services).
+openbao_bases_postgresql:
+  - mediagenda-recette
+  - mediagenda-prod

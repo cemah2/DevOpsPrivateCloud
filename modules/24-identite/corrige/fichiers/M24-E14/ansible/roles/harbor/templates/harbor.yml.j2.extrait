@@ -1,0 +1,9 @@
+{# roles/harbor/templates/harbor.yml.j2 — AJOUT de M24-E14 (PLAT-2514), à placer après « data_volume ».
+   Une modification de harbor.yml n'agit qu'après « prepare » et le redémarrage de Harbor : le rôle le
+   fait déjà par son gestionnaire (M13-E02), fenêtre calme (les poussées en cours échouent). #}
+{% if harbor_ca_confiance | length > 0 %}
+# Autorité ajoutée au magasin des conteneurs de Harbor (vérification du certificat de Keycloak, OIDC).
+# Pas de pilote de stockage ici : Harbor garde « filesystem » sur {{ harbor_donnees }}.
+storage_service:
+  ca_bundle: {{ harbor_ca_confiance }}
+{% endif %}

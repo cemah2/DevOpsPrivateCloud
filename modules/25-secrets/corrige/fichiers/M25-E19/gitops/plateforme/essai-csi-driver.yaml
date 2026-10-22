@@ -1,0 +1,37 @@
+# plateforme/gitops — plateforme/essai-csi-driver.yaml (M25-E19, PLAT-2619, TEMPORAIRE).
+# Pilote Secrets Store CSI (CRD SecretProviderClass, DaemonSet privilégié, objet CSIDriver).
+# Supprimée par MR en fin d'exercice (finaliseur : suppression en cascade).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: essai-csi-driver
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2619"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: secrets-store-csi-driver
+      targetRevision: 1.6.1
+      helm:
+        releaseName: csi-secrets-store
+        valueFiles:
+          - $values/valeurs/essai-csi-driver/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: essai-csi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true

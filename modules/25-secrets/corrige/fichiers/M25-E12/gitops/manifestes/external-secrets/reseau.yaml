@@ -1,0 +1,31 @@
+# plateforme/gitops — manifestes/external-secrets/reseau.yaml (M25-E12, PLAT-2612)
+# Sorties des pods d'ESO. Sélectionner un pod en SORTIE le fait passer en refus par défaut dans ce
+# sens : TOUTES ses sorties sont listées (API du cluster, DNS, coffre). Les entrées (webhook appelé
+# par kube-apiserver, métriques collectées par Prometheus) ne sont pas restreintes ici.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: external-secrets-sorties
+spec:
+  description: "ESO : sorties vers l'API, le DNS du cluster et OpenBao (PLAT-2612)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: external-secrets
+  egress:
+    - toEntities:
+        - kube-apiserver
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+    # VIP du coffre (une seule adresse, un seul port).
+    - toCIDR:
+        - 10.10.20.200/32
+      toPorts:
+        - ports:
+            - port: "8200"
+              protocol: TCP

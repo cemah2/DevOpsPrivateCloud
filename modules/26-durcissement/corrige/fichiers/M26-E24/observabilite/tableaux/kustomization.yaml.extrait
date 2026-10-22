@@ -1,0 +1,5 @@
+# plateforme/observabilite — tableaux/kustomization.yaml, EXTRAIT (M26-E24) : à ajouter à configMapGenerator.
+  # --- Sécurité ----------------------------------------------------------------------------------
+  - name: tableau-securite-conformite
+    files: [securite/securite-conformite.json]
+    options: {annotations: {grafana_folder: Sécurité}}

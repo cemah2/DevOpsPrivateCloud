@@ -1,0 +1,4 @@
+# plateforme/k8s — rbac/openbao-auth-delegator.yaml : EXTRAIT (M25-E16) — sujet ajouté.
+subjects:
+  # … sujets de M25-E12 et M25-E13 …
+  - {kind: ServiceAccount, name: openbao-emetteur, namespace: cert-manager}

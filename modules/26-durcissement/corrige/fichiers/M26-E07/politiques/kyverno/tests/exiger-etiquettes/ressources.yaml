@@ -1,0 +1,69 @@
+# Ressources du test de exiger-etiquettes (jamais appliquées : hors de kustomization.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etiquette-correcte
+  namespace: mediagenda-recette
+  labels:
+    medisphere.internal/equipe: mediagenda
+spec:
+  selector:
+    matchLabels: {app: essai}
+  template:
+    metadata:
+      labels: {app: essai}
+    spec:
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sans-etiquette
+  namespace: mediagenda-recette
+spec:
+  selector:
+    matchLabels: {app: essai}
+  template:
+    metadata:
+      labels: {app: essai}
+    spec:
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: autre-equipe
+  namespace: mediagenda-recette
+  labels:
+    medisphere.internal/equipe: medidoc
+spec:
+  serviceName: autre-equipe
+  selector:
+    matchLabels: {app: essai}
+  template:
+    metadata:
+      labels: {app: essai}
+    spec:
+      containers:
+        - name: db
+          image: registry.par1.medisphere.internal/dockerhub/library/postgres:17
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tache-sans-etiquette
+  namespace: mediagenda-recette
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: tache
+              image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0

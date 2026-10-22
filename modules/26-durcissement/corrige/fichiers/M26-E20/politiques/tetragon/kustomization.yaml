@@ -1,0 +1,13 @@
+# plateforme/politiques — tetragon/kustomization.yaml (M26-E20)
+# Inclus par le kustomization.yaml racine (Application Argo CD « politiques », E07) : ajoute
+# « - tetragon » à sa liste resources. TracingPolicy : objets de portée cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - observer-exec.yaml
+  - fichiers-sensibles.yaml
+  - connexions-sortantes.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: politiques
+    includeSelectors: false

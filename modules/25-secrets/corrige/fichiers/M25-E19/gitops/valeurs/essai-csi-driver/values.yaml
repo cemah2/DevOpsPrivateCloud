@@ -1,0 +1,25 @@
+# plateforme/gitops — valeurs/essai-csi-driver/values.yaml (M25-E19, PLAT-2619, TEMPORAIRE).
+# Chart « secrets-store-csi-driver » 1.6.1. Images tirées par le cache « k8s » de Harbor
+# (registry.k8s.io). Espace essai-csi (PSA privileged : exception écrite, espaces/essai-csi.yaml).
+linux:
+  image:
+    repository: registry.par1.medisphere.internal/k8s/csi-secrets-store/driver
+    tag: v1.6.1
+  crds:
+    image:
+      repository: registry.par1.medisphere.internal/k8s/csi-secrets-store/driver-crds
+      tag: v1.6.1
+  registrarImage:
+    repository: registry.par1.medisphere.internal/k8s/sig-storage/csi-node-driver-registrar
+  livenessProbeImage:
+    repository: registry.par1.medisphere.internal/k8s/sig-storage/livenessprobe
+
+# Recopier aussi le contenu dans un Secret Kubernetes (secretObjects de la SecretProviderClass) :
+# pour comparer avec ESO (variables d'environnement), en sachant que le secret revient dans etcd.
+syncSecret:
+  enabled: true
+
+# Relire OpenBao périodiquement et mettre à jour le FICHIER monté (fonction alpha du pilote).
+# L'application doit relire le fichier : rien ne la redémarre.
+enableSecretRotation: true
+rotationPollInterval: 2m

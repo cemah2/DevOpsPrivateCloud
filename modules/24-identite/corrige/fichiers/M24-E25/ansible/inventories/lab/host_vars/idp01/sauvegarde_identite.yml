@@ -1,0 +1,4 @@
+---
+# host_vars/idp01/sauvegarde_identite.yml — M24-E25.
+sauvegarde_identite_mode: keycloak
+sauvegarde_identite_heure: "01:20"

@@ -1,0 +1,26 @@
+# plateforme/observabilite — loki/regles/audit/identite.yaml (M24-E26, PLAT-2526 ; M24-E28 y ajoute
+# les alertes de bris de glace). Règles du ruler de Loki, locataire AUDIT : journaux de Keycloak
+# (service="keycloak", lignes JSON de Keycloak : champs level, loggerName, message) et de FreeIPA
+# (service="freeipa", étiquette fichier : access, krb5kdc, httpd-erreurs).
+groups:
+  - name: identite-federation
+    interval: 1m
+    rules:
+      # Keycloak 26.7 n'expose pas de métrique de la fédération (la fonction ldap-metrics n'arrive
+      # qu'en 26.8, désactivée par défaut) : on lit ses erreurs. Quand ipa01 ne répond pas, que le
+      # mot de passe de svc-keycloak a changé ou que le certificat n'est plus reconnu, Keycloak écrit
+      # des lignes WARN/ERROR qui citent LDAP (connexion, liaison, synchronisation). Filtre établi en
+      # provoquant l'erreur par « Test connection » avec une URL fausse (M24-E26, étape 6).
+      - alert: FederationLdapEnEchec
+        expr: |
+          sum(count_over_time({service="keycloak"} |~ "(?i)ldap" | json | level=~"ERROR|WARN" [10m])) > 0
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "Keycloak n'arrive plus à joindre ou à interroger l'annuaire (ipa01)"
+          description: >-
+            {{ $value }} erreurs LDAP dans le journal de Keycloak en 10 minutes : les personnes de
+            l'annuaire ne peuvent plus se connecter (liaison refusée) ou les nouveaux arrivants
+            n'apparaissent pas. Explore (Loki — audit) : {service="keycloak"} |~ "(?i)ldap" | json | level=~"ERROR|WARN"
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md

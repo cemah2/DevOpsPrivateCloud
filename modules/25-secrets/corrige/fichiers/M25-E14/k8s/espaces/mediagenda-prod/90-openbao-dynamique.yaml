@@ -1,0 +1,50 @@
+# plateforme/k8s — espaces/mediagenda-prod/90-openbao-dynamique.yaml (M25-E14, DEV-2614)
+# Générateurs d'identifiants dynamiques de l'espace. Chaque appel (premier rendu, puis chaque
+# rafraîchissement de l'ExternalSecret qui l'utilise) LIT db-mediagenda/creds/<rôle> : OpenBao crée
+# un NOUVEAU compte PostgreSQL avec un bail d'une heure. ESO ne garde pas trace des valeurs
+# produites et ne révoque pas l'ancien bail : il expire seul (fin du bail = DROP ROLE).
+# Mêmes noms dans chaque environnement : le component « identifiants-dynamiques » de
+# mediagenda/deploiement ne dépend pas de l'environnement. Interdits aux équipes (AppProject).
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: VaultDynamicSecret
+metadata:
+  name: mediagenda-api
+  namespace: mediagenda-prod
+spec:
+  path: db-mediagenda/creds/mediagenda-api-prod
+  method: GET
+  resultType: Data
+  provider:
+    server: https://openbao.par1.medisphere.internal:8200
+    version: v2
+    caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+    auth:
+      kubernetes:
+        mountPath: k8s-par1
+        role: eso-mediagenda-prod
+        serviceAccountRef:
+          name: eso
+          audiences:
+            - openbao.medisphere.internal
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: VaultDynamicSecret
+metadata:
+  name: mediagenda-migrateur
+  namespace: mediagenda-prod
+spec:
+  path: db-mediagenda/creds/mediagenda-migrateur-prod
+  method: GET
+  resultType: Data
+  provider:
+    server: https://openbao.par1.medisphere.internal:8200
+    version: v2
+    caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+    auth:
+      kubernetes:
+        mountPath: k8s-par1
+        role: eso-mediagenda-prod
+        serviceAccountRef:
+          name: eso
+          audiences:
+            - openbao.medisphere.internal

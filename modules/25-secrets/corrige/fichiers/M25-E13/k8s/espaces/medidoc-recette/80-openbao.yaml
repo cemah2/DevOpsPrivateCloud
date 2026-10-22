@@ -1,0 +1,34 @@
+# plateforme/k8s — espaces/medidoc-recette/80-openbao.yaml (M25-E13, PLAT-2613)
+# Entrée de l'espace dans le coffre (même modèle que wb-essais, M25-E12) : compte « eso » sans jeton
+# monté, SecretStore « openbao » lié au rôle eso-medidoc-recette (kv/medidoc/recette/* seulement). L'équipe
+# écrit ses ExternalSecret dans son dépôt de déploiement ; elle ne peut pas changer ce magasin
+# (SecretStore interdit dans son AppProject, gitops/projets/).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso
+  namespace: medidoc-recette
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: medidoc-recette
+spec:
+  provider:
+    vault:
+      server: https://openbao.par1.medisphere.internal:8200
+      path: kv
+      version: v2
+      caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+      auth:
+        kubernetes:
+          mountPath: k8s-par1
+          role: eso-medidoc-recette
+          serviceAccountRef:
+            name: eso
+            audiences:
+              - openbao.medisphere.internal

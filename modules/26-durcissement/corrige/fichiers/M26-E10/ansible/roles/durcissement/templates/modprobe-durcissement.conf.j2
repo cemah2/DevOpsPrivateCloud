@@ -1,0 +1,12 @@
+# {{ durcissement_entete }}
+# /etc/modprobe.d/60-durcissement.conf (rôle durcissement, M26-E10)
+# « install … /bin/false » : modprobe refuse de charger le module (même à la demande d'un autre) ;
+# « blacklist » : pas de chargement automatique par alias. Les deux, comme le demandent CIS et ANSSI.
+{% for module, regle in durcissement_modules_interdits.items() %}
+{%   if regle not in _durcissement_exclues %}
+install {{ module }} /bin/false
+blacklist {{ module }}
+{%   else %}
+# {{ module }} : autorisé sur cet hôte ({{ regle }} en exception)
+{%   endif %}
+{% endfor %}

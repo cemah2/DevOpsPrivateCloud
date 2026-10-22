@@ -1,0 +1,48 @@
+---
+# Un binaire amont : archive vérifiée par la somme publiée, extraite dans un dossier versionné,
+# liens dans /usr/local/bin. Variable de boucle : outils_k8s_binaire.
+# M22-E04 : clé facultative « liens » ({fichier de l'archive: nom du lien}) pour les archives dont le
+# binaire porte la plateforme dans son nom (logcli-linux-amd64 → logcli). Sans elle : nom de base.
+# M25-E18 : clé facultative « brut: true » pour un binaire publié SANS archive (sops) : le fichier
+# téléchargé est lui-même l'exécutable (même vérification de somme, pas d'extraction).
+# « somme » : URL du fichier de sommes publié, OU l'empreinte SHA-256 elle-même quand l'amont n'en
+# publie pas (age) — relevée à la main et relue en MR.
+
+- name: Dossier versionné de l'outil
+  ansible.builtin.file:
+    path: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire.nom }}-{{ outils_k8s_binaire.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# get_url télécharge le fichier de sommes et y cherche la ligne du nom du fichier (ou compare à
+# l'empreinte donnée). Un binaire brut est rendu exécutable dès le téléchargement.
+- name: Télécharger l'archive ou le binaire (somme SHA-256 vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ outils_k8s_binaire.url }}"
+    dest: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire.nom }}-{{ outils_k8s_binaire.version }}/{{ outils_k8s_binaire.url | basename }}"
+    checksum: "sha256:{{ outils_k8s_binaire.somme }}"
+    owner: root
+    group: root
+    mode: "{{ '0755' if (outils_k8s_binaire.brut | default(false)) else '0644' }}"
+
+# unarchive lit aussi les .zip (paquet unzip requis sur adm01).
+- name: Extraire les binaires
+  ansible.builtin.unarchive:
+    src: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire.nom }}-{{ outils_k8s_binaire.version }}/{{ outils_k8s_binaire.url | basename }}"
+    dest: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire.nom }}-{{ outils_k8s_binaire.version }}"
+    remote_src: true
+    include: "{{ outils_k8s_binaire.fichiers }}"
+    creates: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire.nom }}-{{ outils_k8s_binaire.version }}/{{ outils_k8s_binaire.fichiers | first }}"
+    owner: root
+    group: root
+  when: not (outils_k8s_binaire.brut | default(false))
+
+- name: Lier les binaires dans /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire.nom }}-{{ outils_k8s_binaire.version }}/{{ item }}"
+    dest: "/usr/local/bin/{{ (outils_k8s_binaire.liens | default({}))[item] | default(item | basename) }}"
+    state: link
+    force: true
+  loop: "{{ outils_k8s_binaire.fichiers }}"

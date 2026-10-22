@@ -1,0 +1,60 @@
+# plateforme/politiques — tetragon/application/wb-essais/proteger-fichiers-systeme.yaml (M26-E29)
+# Version d'ESSAI (wb-essais) de la politique appliquée ensuite en recette (même contenu, autre espace
+# et sélecteur de pods). Modèle : examples/quickstart/file_monitoring_enforce.yaml de Tetragon v1.7.1,
+# RESTREINT à ce qui n'a aucune raison d'arriver dans un conteneur applicatif :
+#   - lire /etc/shadow ou /etc/gshadow (MAY_READ = 4) → processus tué (Sigkill) ;
+#   - écrire sous /etc, /usr, /bin, /sbin, /lib, /lib64 (MAY_WRITE = 2) → écriture refusée (Override,
+#     -EPERM) ET processus tué : la documentation « Enforcement » rappelle qu'un Sigkill seul pendant
+#     write() ne garantit pas que les données ne soient pas écrites.
+# Jamais de lecture sous /etc en général : /etc/hosts, /etc/resolv.conf, /etc/ssl… sont lus en permanence.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: proteger-fichiers-systeme
+  namespace: wb-essais
+  labels:
+    medisphere.internal/composant: tetragon-application
+spec:
+  kprobes:
+    - call: security_file_permission
+      syscall: false
+      return: true
+      args:
+        - index: 0
+          type: file
+        - index: 1
+          type: int
+      returnArg:
+        index: 0
+        type: int
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/shadow
+                - /etc/gshadow
+            - index: 1
+              operator: Equal
+              values:
+                - "4"
+          matchActions:
+            - action: Sigkill
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/
+                - /usr/
+                - /bin/
+                - /sbin/
+                - /lib/
+                - /lib64/
+            - index: 1
+              operator: Equal
+              values:
+                - "2"
+          matchActions:
+            - action: Override
+              argError: -1
+            - action: Sigkill

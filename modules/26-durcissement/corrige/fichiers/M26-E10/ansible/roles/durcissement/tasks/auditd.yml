@@ -1,0 +1,92 @@
+---
+# Domaine « auditd » (M26-E12) : journal d'audit du noyau, règles CIS et MédiSphère.
+# Le journal part vers Loki (locataire audit, service="auditd") par le rôle alloy (M22), étendu en E12 :
+# d'où le groupe « adm » sur les fichiers d'audit (Alloy est membre de adm).
+
+- name: Paquet auditd installé
+  ansible.builtin.package:
+    name: "{{ 'auditd' if ansible_facts['os_family'] == 'Debian' else 'audit' }}"
+    state: present
+  register: _durcissement_paquet_audit
+  tags: [package_audit_installed]
+
+# En mode vérification (--check), un paquet « à installer » n'est pas là : la suite du domaine
+# ne peut pas être simulée ; elle le sera au passage suivant.
+- name: Signaler la simulation incomplète (auditd)
+  ansible.builtin.debug:
+    msg: "auditd : paquet à installer, suite du domaine non simulée en mode vérification."
+  when: ansible_check_mode and _durcissement_paquet_audit is changed
+
+- name: Configuration (auditd)
+  when: not (ansible_check_mode and _durcissement_paquet_audit is changed)
+  block:
+    - name: Réglages d'auditd (taille, rotation, groupe du journal)
+      ansible.builtin.lineinfile:
+        path: /etc/audit/auditd.conf
+        regexp: '^\s*{{ item.cle }}\s*='
+        line: "{{ item.cle }} = {{ item.valeur }}"
+      loop:
+        - {cle: log_group, valeur: "{{ durcissement_auditd_groupe }}"}
+        - {cle: log_format, valeur: ENRICHED}
+        - {cle: max_log_file, valeur: "{{ durcissement_auditd_taille_max_mo }}"}
+        - {cle: num_logs, valeur: "{{ durcissement_auditd_nb_fichiers }}"}
+        - {cle: max_log_file_action, valeur: ROTATE}
+        # Disque presque plein : on prévient (syslog → journald → Loki), on ne bloque pas l'hôte.
+        # CIS niveau 2 demanderait halt : écart assumé (registre des exceptions, E23).
+        - {cle: space_left_action, valeur: SYSLOG}
+        - {cle: admin_space_left_action, valeur: SYSLOG}
+        - {cle: disk_full_action, valeur: ROTATE}
+        - {cle: disk_error_action, valeur: SYSLOG}
+      loop_control:
+        label: "{{ item.cle }}"
+      notify: Recharger la configuration d'auditd
+
+    - name: Groupe des fichiers d'audit existants
+      ansible.builtin.file:
+        path: /var/log/audit
+        state: directory
+        owner: root
+        group: "{{ durcissement_auditd_groupe }}"
+        mode: "0750"
+
+    - name: Service auditd actif au démarrage
+      ansible.builtin.systemd_service:
+        name: auditd
+        enabled: true
+        state: started
+      tags: [service_auditd_enabled]
+
+    # Une surveillance (-w) dont le dossier parent n'existe pas est refusée par le noyau, et le chargement
+    # s'arrête à la première erreur (sauf « -c ») : on ne pose que les surveillances des chemins présents.
+    - name: Chemins surveillés présents sur l'hôte
+      ansible.builtin.stat:
+        path: "{{ item.chemin }}"
+      loop: "{{ durcissement_auditd_surveillances }}"
+      loop_control:
+        label: "{{ item.chemin }}"
+      register: _durcissement_chemins_audit
+
+    - name: Règles d'audit (CIS, MédiSphère, fin)
+      ansible.builtin.template:
+        src: "audit/{{ item }}.j2"
+        dest: "/etc/audit/rules.d/{{ item }}"
+        owner: root
+        group: root
+        mode: "0640"
+      loop:
+        - 30-cis.rules
+        - 50-medisphere.rules
+        - 99-fin.rules
+      notify: Charger les règles d'audit
+      tags: [audit_rules_privileged_commands_sudo, audit_rules_immutable]
+
+    - name: Charger les règles maintenant
+      ansible.builtin.meta: flush_handlers
+
+    - name: Les règles chargées correspondent aux fichiers (augenrules --check)
+      ansible.builtin.command: augenrules --check
+      register: _durcissement_augenrules
+      changed_when: false
+      check_mode: false
+      failed_when: "'No change' not in _durcissement_augenrules.stdout"
+      when: not ansible_check_mode

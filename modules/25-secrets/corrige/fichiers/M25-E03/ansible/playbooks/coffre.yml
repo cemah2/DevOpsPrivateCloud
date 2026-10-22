@@ -1,0 +1,40 @@
+---
+# playbooks/coffre.yml — coffre OpenBao (groupe role_coffre). M25-E03, PLAT-2603.
+# Appliqué par le pipeline protégé de plateforme/ansible (ADR-0040), un nœud à la fois.
+#   uv run ansible-playbook playbooks/coffre.yml --check --diff
+#   uv run ansible-playbook playbooks/coffre.yml
+# Les rôles communs du socle (base, ssh_durci, ca_lab, ssh_ca_hote, pare_feu_local, alloy…)
+# viennent de site.yml.
+# Ordre : PAQUET d'abord (son preinst crée l'utilisateur et le groupe openbao ; il échoue si le
+# groupe existe déjà) → certificat ACME (la clé appartient au groupe openbao) → filtrage local →
+# configuration et service.
+# Ni initialisation ni descellement ici : M25-E03 (cérémonie), puis les dépositaires.
+
+- name: Coffre OpenBao
+  hosts: role_coffre
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Garde-fou — le groupe role_coffre ne contient que des nœuds attendus
+      ansible.builtin.assert:
+        that: inventory_hostname in ['vault01', 'vault02', 'vault03']
+        fail_msg: "{{ inventory_hostname }} n'est pas un nœud du coffre (vault01-03, PLAN §4.5)."
+        quiet: true
+  tasks:
+    - name: Paquet OpenBao (crée l'utilisateur et le groupe du service)
+      ansible.builtin.include_role:
+        name: openbao
+        tasks_from: paquet
+
+    - name: Certificat ACME de step-ca (id openbao)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: Filtrage d'entrée local
+      ansible.builtin.include_role:
+        name: pare_feu_local
+
+    - name: Configuration et service OpenBao
+      ansible.builtin.include_role:
+        name: openbao

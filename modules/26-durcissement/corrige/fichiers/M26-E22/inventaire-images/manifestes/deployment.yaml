@@ -1,0 +1,58 @@
+# plateforme/inventaire-images — manifestes/deployment.yaml (version corrigée, M26-E22)
+# Les images en service se lisent dans l'API (status.containerStatuses[].imageID : le condensé
+# réellement exécuté), pas dans le socket de containerd : plus besoin de privileged, de hostNetwork,
+# de hostPath ni de capacités. Le pod garde son jeton (il interroge l'API), avec un rôle minimal.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventaire
+  namespace: inventaire
+  labels:
+    app.kubernetes.io/name: inventaire
+    medisphere.internal/equipe: plateforme
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inventaire
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inventaire
+        medisphere.internal/equipe: plateforme
+    spec:
+      serviceAccountName: inventaire
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10004
+        runAsGroup: 10004
+        seccompProfile: {type: RuntimeDefault}
+        appArmorProfile: {type: RuntimeDefault}
+      containers:
+        - name: inventaire
+          image: registry.par1.medisphere.internal/plateforme/inventaire:v0.1.0@sha256:<CONDENSE-INVENTAIRE>
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HARBOR_URL
+              value: https://registry.par1.medisphere.internal
+            - name: HARBOR_ROBOT
+              valueFrom:
+                secretKeyRef: {name: inventaire-harbor, key: robot}
+            - name: HARBOR_TOKEN
+              valueFrom:
+                secretKeyRef: {name: inventaire-harbor, key: jeton}
+          readinessProbe:
+            httpGet: {path: /pret, port: http}
+          livenessProbe:
+            httpGet: {path: /sante, port: http}
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 192Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}

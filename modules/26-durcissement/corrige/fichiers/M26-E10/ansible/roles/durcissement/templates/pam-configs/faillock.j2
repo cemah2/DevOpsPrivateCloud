@@ -1,0 +1,6 @@
+Name: Verrouillage après échecs (pam_faillock authfail) — MédiSphère
+Default: yes
+Priority: 0
+Auth-Type: Primary
+Auth:
+	[default=die]	pam_faillock.so authfail

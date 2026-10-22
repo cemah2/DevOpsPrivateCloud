@@ -1,0 +1,67 @@
+# plateforme/k8s — composants/cert-manager/openbao-services.yaml (M25-E16, SEC-2616)
+# Émetteur de cluster « openbao-services » : certificats de SERVICE (TLS mutuel entre applications),
+# signés par « MédiSphère Services CA » dans OpenBao (pki-services/sign/services-k8s). cert-manager
+# reste dans la couche de base (Helmfile, M15) ; cet émetteur et ses droits s'appliquent comme les
+# autres objets de composants/cert-manager/ (task appliquer, même chemin que la ClusterIssuer
+# step-ca-acme du M15).
+#
+# Identité : compte de service « openbao-emetteur » de l'espace cert-manager (espace des « ressources
+# de cluster » de cert-manager : c'est là qu'une ClusterIssuer cherche le compte). Le CONTRÔLEUR de
+# cert-manager (compte « cert-manager ») demande pour lui un jeton projeté (TokenRequest) : il lui
+# faut le droit « create » sur serviceaccounts/token pour CE compte seulement.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao-emetteur
+  namespace: cert-manager
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-emetteur-jeton
+  namespace: cert-manager
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["openbao-emetteur"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-emetteur-jeton
+  namespace: cert-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-emetteur-jeton
+subjects:
+  # Compte du contrôleur de cert-manager (release Helmfile « cert-manager » du M15 : vérifie le nom
+  # réel par « kubectl -n cert-manager get deploy cert-manager -o jsonpath='{.spec.template.spec.serviceAccountName}' »).
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: openbao-services
+spec:
+  vault:
+    server: https://openbao.par1.medisphere.internal:8200
+    # « sign » : cert-manager envoie une CSR, la clé privée reste dans le cluster.
+    path: pki-services/sign/services-k8s
+    # Racine MédiSphère (publique), base64 : pour joindre OpenBao en HTTPS.
+    caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+    auth:
+      kubernetes:
+        # Chemin COMPLET de connexion (préfixe /v1/auth/ compris), contrairement à ESO.
+        mountPath: /v1/auth/k8s-par1
+        role: cert-manager-services
+        serviceAccountRef:
+          name: openbao-emetteur
+          # cert-manager met TOUJOURS une audience à lui (vault://openbao-services) ; on ajoute celle
+          # qu'exige le rôle OpenBao (il en accepte une parmi celles du jeton).
+          audiences:
+            - openbao.medisphere.internal

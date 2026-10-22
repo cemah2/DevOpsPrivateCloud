@@ -1,0 +1,46 @@
+---
+# Rôle k8s_authentification (M24-E16, PLAT-2516).
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - k8s_authentification_emetteur is match('^https://[^/]+(/.*[^/])?$')
+      - k8s_authentification_audiences | length >= 1
+      - k8s_authentification_prefixe | length > 0
+      - not (k8s_authentification_prefixe is match('^system:'))
+      - k8s_authentification_azp | length > 0
+    fail_msg: >-
+      Émetteur en https sans barre finale, au moins une audience, un préfixe non vide qui ne commence
+      pas par « system: », et un azp attendu. Rien n'est modifié sur {{ inventory_hostname }}.
+    quiet: true
+
+- name: Racine de confiance lue sur le contrôleur
+  ansible.builtin.set_fact:
+    _k8s_authentification_racine: "{{ lookup('ansible.builtin.file', k8s_authentification_racine_fichier) }}"
+
+- name: La racine est bien un certificat
+  ansible.builtin.assert:
+    that:
+      - "'-----BEGIN CERTIFICATE-----' in _k8s_authentification_racine"
+    fail_msg: "{{ k8s_authentification_racine_fichier }} n'est pas un certificat PEM."
+    quiet: true
+
+- name: Dossier de la configuration (monté dans le pod de kube-apiserver)
+  ansible.builtin.file:
+    path: "{{ k8s_authentification_dossier }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Écriture atomique (copie puis renommage) : le serveur d'API ne lit jamais un fichier à moitié écrit.
+# validate : le fichier rendu doit être un YAML lisible (le serveur d'API, lui, le valide au chargement
+# et garde l'ancienne configuration si la nouvelle est fausse — en la signalant dans son journal).
+- name: AuthenticationConfiguration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ k8s_authentification_dossier }}/config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    validate: python3 -c 'import sys, yaml; d = yaml.safe_load(open(sys.argv[1])); assert d["kind"] == "AuthenticationConfiguration"' %s
+  notify: Rappel du serveur d'API

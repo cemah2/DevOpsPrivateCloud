@@ -1,0 +1,52 @@
+# plateforme/gitops — valeurs/kubelet-csr-approver/values.yaml (M26-E25, PLAT-2725), chart 1.2.15.
+# Contrôles que l'approbateur applique AVANT d'approuver une demande kubelet-serving (README amont) :
+#   demandeur « system:node:<nom> » ; au plus allowedDnsNames noms DNS ; nom DNS conforme à
+#   providerRegex ET préfixé par le nom du nœud ; adresses IP dans providerIpPrefixes ; nom DNS
+#   résolu vers des adresses qui incluent celles de la demande (sauf bypassDnsResolution).
+# Une demande qui échoue un contrôle est REFUSÉE (condition Denied), pas ignorée (skipDenyStep: false).
+
+# Nos demandes portent le nom COURT du nœud (k8s-w01) et son adresse du VLAN 40 (M14-E26).
+providerRegex: '^k8s-(cp|w)0[1-9]$'
+providerIpPrefixes:
+  - 10.10.40.0/24
+# Le pod résout « k8s-w01 » grâce aux domaines de recherche du nœud ajoutés par le kubelet
+# (par1.medisphere.internal) : PowerDNS publie les nœuds (OpenTofu, M14). Contrôle conservé.
+bypassDnsResolution: false
+bypassHostnameCheck: false
+allowedDnsNames: 1
+# 365 jours au plus : la durée de kubeadm (8760 h). Le signataire du contrôleur plafonne de toute façon
+# à --cluster-signing-duration ; la valeur dit ce que l'approbateur ACCEPTE.
+maxExpirationSeconds: "31536000"
+ignoreNonSystemNode: false
+skipDenyStep: false
+
+replicas: 2
+leaderElection: true
+
+image:
+  # Cache ghcr de Harbor (M13). Étiquette = appVersion du chart.
+  repository: registry.par1.medisphere.internal/ghcr/postfinance/kubelet-csr-approver
+  tag: v1.2.15
+
+metrics:
+  enable: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+
+# Deux réplicas sur deux nœuds différents ; la tolérance du chart autorise les nœuds de contrôle.
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: kubelet-csr-approver
+        topologyKey: kubernetes.io/hostname
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi

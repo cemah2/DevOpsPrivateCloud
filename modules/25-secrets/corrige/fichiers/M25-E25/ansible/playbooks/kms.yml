@@ -1,0 +1,35 @@
+# playbooks/kms.yml — OpenBao de descellement kms01 (groupe role_kms). M25-E25, PLAT-2625.
+#   uv run ansible-playbook playbooks/kms.yml --check --diff
+#   uv run ansible-playbook playbooks/kms.yml
+# Ni initialisation ni descellement ici : cérémonie (M25-E25, comme E03), dépositaires de kms01.
+# ⚠️ Un redémarrage de kms01 le SCELLE ; tant qu'il l'est, aucun nœud de la grappe ne peut
+# redémarrer (RB-251). openbao_redemarrer reste false par défaut.
+
+- name: OpenBao de descellement
+  hosts: role_kms
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Garde-fou — seul kms01 est attendu
+      ansible.builtin.assert:
+        that: inventory_hostname == 'kms01'
+        fail_msg: "{{ inventory_hostname }} : le groupe role_kms ne doit contenir que kms01."
+        quiet: true
+  tasks:
+    - name: Paquet OpenBao
+      ansible.builtin.include_role:
+        name: openbao
+        tasks_from: paquet
+
+    - name: Certificat ACME (kms01.par1.medisphere.internal)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: Filtrage d'entrée local
+      ansible.builtin.include_role:
+        name: pare_feu_local
+
+    - name: OpenBao de descellement
+      ansible.builtin.include_role:
+        name: openbao_kms

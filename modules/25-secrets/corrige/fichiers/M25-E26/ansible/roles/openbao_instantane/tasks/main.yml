@@ -1,0 +1,108 @@
+---
+# Rôle openbao_instantane — point d'entrée (M25-E26 ; enveloppement du secret_id au M25-E28).
+
+- name: Paramètres présents (Vault critique, clé publique)
+  ansible.builtin.assert:
+    that:
+      - openbao_instantane_age_destinataire is match('^age1[0-9a-z]{58}$')
+      - openbao_instantane_role_id | length > 0
+      - openbao_instantane_s3_cle_acces | length > 0
+      - openbao_instantane_s3_cle_secrete | length > 0
+      - (openbao_instantane_secret_id | length > 0) or (openbao_instantane_secret_id_enveloppe | length > 0)
+    fail_msg: >-
+      Clé publique age, role_id, secret_id (ou jeton d'enveloppement) et identité S3 attendus
+      (group_vars/role_coffre/openbao_instantane.yml et Vault critique).
+    quiet: true
+
+- name: Outils (age, rclone, jq, curl)
+  ansible.builtin.apt:
+    name: [age, rclone, jq, curl]
+    state: present
+
+- name: Dossier d'état
+  ansible.builtin.file:
+    path: /var/lib/openbao-instantane
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Script
+  ansible.builtin.copy:
+    src: openbao-instantane.sh
+    dest: /usr/local/sbin/openbao-instantane
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Configuration (non secrète)
+  ansible.builtin.template:
+    src: instantane.conf.j2
+    dest: /etc/openbao/instantane.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Identité S3 (root 600)
+  ansible.builtin.template:
+    src: s3.env.j2
+    dest: /etc/openbao/s3.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+
+# Livraison du secret_id : en clair depuis le Vault critique (M25-E26), ou ENVELOPPÉ (M25-E28) :
+# le nœud déballe lui-même le jeton d'enveloppement (usage unique) et écrit le fichier ; si
+# quelqu'un l'a déballé avant, sys/wrapping/unwrap échoue et l'audit montre qui.
+- name: AppRole (root 600), secret_id en clair depuis le Vault critique
+  ansible.builtin.template:
+    src: instantanes.env.j2
+    dest: /etc/openbao/instantanes.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  when: openbao_instantane_secret_id_enveloppe | length == 0
+
+- name: AppRole (root 600), secret_id déballé sur le nœud (M25-E28)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      umask 077
+      # Le jeton d'enveloppement vient de l'environnement (jamais d'un argument), passé à curl par
+      # un fichier de configuration lu sur un descripteur.
+      sid="$(curl -sS --fail-with-body --cacert /usr/local/share/ca-certificates/medisphere-root-ca.crt \
+        -K <(printf 'header = "X-Vault-Token: %s"\n' "$JETON") -X POST \
+        "{{ openbao_instantane_bao_addr }}/v1/sys/wrapping/unwrap" | jq -er '.data.secret_id')"
+      printf 'BAO_ROLE_ID=%s\nBAO_SECRET_ID=%s\n' "$ROLE_ID" "$sid" > /etc/openbao/instantanes.env.tmp
+      chmod 0600 /etc/openbao/instantanes.env.tmp
+      mv -f /etc/openbao/instantanes.env.tmp /etc/openbao/instantanes.env
+    executable: /bin/bash
+  environment:
+    JETON: "{{ openbao_instantane_secret_id_enveloppe }}"
+    ROLE_ID: "{{ openbao_instantane_role_id }}"
+  no_log: true
+  changed_when: true
+  when: openbao_instantane_secret_id_enveloppe | length > 0
+
+- name: Unité et minuterie
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [openbao-instantane.service, openbao-instantane.timer]
+  notify: Recharger systemd
+
+- name: Appliquer le rechargement de systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: openbao-instantane.timer
+    enabled: true
+    state: started

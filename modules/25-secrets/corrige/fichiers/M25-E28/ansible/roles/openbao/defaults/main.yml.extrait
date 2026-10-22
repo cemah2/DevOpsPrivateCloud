@@ -1,0 +1,24 @@
+# defaults/main.yml — EXTRAIT : variables AJOUTÉES au palier 3 (M25-E24 à E28). Les variables du
+# palier 1 (M25-E03) et de l'audit (M25-E21, openbao_audit) restent ; openbao_tls_version_min passe
+# à tls13 (ci-dessous).
+
+# (M25-E25) Seal transit vers kms01 : désactivé par défaut (Shamir), activé dans group_vars/role_coffre.
+openbao_seal_transit: false
+openbao_seal_transit_adresse: ""
+openbao_seal_transit_cle: autodescellement-par1
+openbao_seal_transit_montage: transit/
+openbao_seal_transit_nom_tls: ""
+
+# (M25-E27) Télémétrie Prometheus et accès sans jeton à /v1/sys/metrics (choix écrit dans
+# docs/securite/secrets/supervision.md).
+openbao_telemetrie: true
+openbao_metriques_sans_jeton: true
+
+# (M25-E28) Durcissement.
+openbao_tls_version_min: tls13
+openbao_bail_defaut: 1h
+openbao_bail_max: 24h
+openbao_entetes_reponse:
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+openbao_unite_durcie: true

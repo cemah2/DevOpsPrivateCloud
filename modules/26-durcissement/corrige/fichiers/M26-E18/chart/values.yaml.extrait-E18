@@ -1,0 +1,11 @@
+# mediagenda/chart — charts/mediagenda/values.yaml (EXTRAIT M26-E18)
+# Réponse à la demande d'exception DEV-2718 (Julien) : le conteneur d'initialisation du sous-chart
+# valkey (valkey-io/valkey-helm 0.12.0) n'avait pas de ressources, d'où le refus d'exiger-limites.
+# Le chart l'expose (clé initResources, helm show values) : on CORRIGE, on ne déroge pas.
+valkey:
+  initResources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 32Mi

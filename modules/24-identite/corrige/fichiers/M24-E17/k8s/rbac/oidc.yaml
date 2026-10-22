@@ -1,0 +1,307 @@
+# plateforme/k8s — rbac/oidc.yaml (M24-E17, SEC-2517)
+# Droits des PERSONNES sur k8s-par1, par les groupes de l'annuaire. kube-apiserver lit la revendication
+# « groups » des jetons de Keycloak et la préfixe par « oidc: » (authentification structurée, M24-E16) :
+# le groupe plateforme de l'annuaire devient « oidc:plateforme » dans Kubernetes. Le préfixe empêche un
+# groupe de l'annuaire de se faire passer pour un groupe du système (system:masters…).
+#
+# Règles :
+#   - jamais un utilisateur nommé dans une liaison : une arrivée, une mobilité, un départ se font dans
+#     l'annuaire (annuaire/groupes.yml de plateforme/identite), ce fichier ne change pas ;
+#   - les ClusterRoles réutilisables du M14 (rbac/10-roles-medisphere.yaml) restent la base ;
+#   - aucun accès aux Secrets hors de wb-essais et de mediagenda-dev (« edit », modèle d'autorisation) ;
+#     ailleurs, les Secrets sont créés par la plateforme (secrets-k8s.sh, puis External Secrets au M25) ;
+#   - les liaisons s'appellent toutes oidc-* : « kubectl get clusterrolebindings,rolebindings -A |
+#     grep oidc- » donne la liste complète des droits des personnes (revue d'accès, M24-E30).
+# Remplace les liaisons aux groupes de CERTIFICATS (medisphere:*) du M14, supprimées en phase 2 d'E17.
+
+# =============================================================================================
+# Rôles ajoutés au M24
+# =============================================================================================
+---
+# Équipe Plateforme (exploitation courante) : TOUT lire, sauf les Secrets, y compris les objets des
+# composants (Argo CD, supervision, Gateway, Cilium…). Agrégé : le contrôleur d'agrégation y recopie
+# les règles de medisphere-lecture-charges et medisphere-lecture-cluster (étiquette
+# agreger-vers-lecture, M14) et de medisphere-plateforme-composants (étiquette agreger-vers-plateforme).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-plateforme
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        rbac.medisphere.internal/agreger-vers-lecture: "true"
+    - matchLabels:
+        rbac.medisphere.internal/agreger-vers-plateforme: "true"
+# Pas de « rules » : le contrôleur d'agrégation les écrit (voir 10-roles-medisphere.yaml).
+---
+# Lecture des objets des groupes d'API autres que le cœur (""). Les Secrets sont dans le cœur : un « * »
+# sur ces groupes ne les donne pas. Liste EXPLICITE des groupes (comme wb-checks-base) : un composant
+# ajouté plus tard n'est lisible qu'après une MR ici.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-plateforme-composants
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    rbac.medisphere.internal/agreger-vers-plateforme: "true"
+rules:
+  - apiGroups: [""]
+    resources: [persistentvolumes, podtemplates]
+    verbs: [get, list, watch]
+  - apiGroups:
+      - admissionregistration.k8s.io
+      - apiextensions.k8s.io
+      - apiregistration.k8s.io
+      - apps
+      - autoscaling
+      - batch
+      - certificates.k8s.io
+      - coordination.k8s.io
+      - discovery.k8s.io
+      - events.k8s.io
+      - networking.k8s.io
+      - node.k8s.io
+      - policy
+      - rbac.authorization.k8s.io
+      - scheduling.k8s.io
+      - storage.k8s.io
+      - snapshot.storage.k8s.io
+      - metrics.k8s.io
+      - cilium.io
+      - gateway.networking.k8s.io
+      - cert-manager.io
+      - acme.cert-manager.io
+      - argoproj.io
+      - monitoring.coreos.com
+      - pyrra.dev
+      - opentelemetry.io
+      - postgresql.cnpg.io
+      - velero.io
+    resources: ["*"]
+    verbs: [get, list, watch]
+---
+# Sécurité : tout lire sauf les Secrets (comme medisphere-lecture) ET savoir QUI a QUEL droit (revue
+# d'accès, audit HDS), sans rien pouvoir modifier. Agrégé : lecture du M14 + règles de
+# medisphere-securite-rbac (étiquette agreger-vers-securite).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-securite
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        rbac.medisphere.internal/agreger-vers-lecture: "true"
+    - matchLabels:
+        rbac.medisphere.internal/agreger-vers-securite: "true"
+# Pas de « rules » : le contrôleur d'agrégation les écrit.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: medisphere-securite-rbac
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    rbac.medisphere.internal/agreger-vers-securite: "true"
+rules:
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings, clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingadmissionpolicies, validatingadmissionpolicybindings, validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [get, list, watch]
+
+# =============================================================================================
+# Liaisons à l'échelle du cluster
+# =============================================================================================
+---
+# Administrateurs de la plateforme. Pas system:masters : ce groupe court-circuite l'autorisation et ne
+# se retire pas. admin.conf (groupe kubeadm:cluster-admins, Vault critique) reste le bris de glace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oidc-plateforme-admins
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/proprietaire: plateforme
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:plateforme-admins"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oidc-plateforme
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-plateforme
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:plateforme"
+---
+# Support et astreinte (Nadia) : tout voir sauf les Secrets et les composants, rien écrire. Reprend le
+# groupe de certificats medisphere:lecture du M14.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oidc-support
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-lecture
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:support"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oidc-securite
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: medisphere-securite
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:securite"
+
+# =============================================================================================
+# Liaisons par espace
+# =============================================================================================
+---
+# Équipe Plateforme : écrire dans le bac à sable (essais, diagnostics), et nulle part ailleurs à la main
+# (le reste passe par Git : Argo CD, Helmfile, task appliquer).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-plateforme-essais
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:plateforme"
+---
+# Équipe MédiAgenda (modèle d'autorisation, E10). dev : « edit » (charges, exec, port-forward, Secrets
+# de l'espace) ; Argo CD (selfHeal) remet ce qui est dans Git, une modification à la main ne dure pas.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-mediagenda-edition
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:mediagenda"
+---
+# « view » partout où l'équipe travaille : lecture sans Secrets, journaux, jamais d'exec.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-mediagenda-lecture
+  namespace: mediagenda-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:mediagenda"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-mediagenda-lecture
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:mediagenda"
+---
+# prod : données de santé, lecture seule.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-mediagenda-lecture
+  namespace: mediagenda-prod
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:mediagenda"
+---
+# Équipe MédiDoc : lecture de ses deux espaces (modèle d'autorisation : pas d'écriture à la main).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-medidoc-lecture
+  namespace: medidoc-dev
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:medidoc"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oidc-medidoc-lecture
+  namespace: medidoc-recette
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: "oidc:medidoc"

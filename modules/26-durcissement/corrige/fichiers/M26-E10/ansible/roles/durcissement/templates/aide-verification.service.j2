@@ -1,0 +1,17 @@
+# {{ durcissement_entete }}
+# aide-verification.service (rôle durcissement, M26-E12)
+[Unit]
+Description=Vérification d'intégrité AIDE (MédiSphère)
+Documentation=https://aide.github.io/
+After=local-fs.target
+
+[Service]
+Type=oneshot
+# Codes d'AIDE : 0 rien ; 1 ajouts ; 2 suppressions ; 4 modifications (cumulables, 1 à 7) ;
+# 14 et au-delà : erreur. Un écart n'est pas un échec du service, c'est une information.
+ExecStart={{ _durcissement_aide_binaire.stdout }} --config {{ _durcissement_aide.conf }} --check
+SuccessExitStatus=1 2 3 4 5 6 7
+ExecStopPost=/usr/local/sbin/aide-metrique
+Nice=19
+IOSchedulingClass=idle
+PrivateTmp=yes

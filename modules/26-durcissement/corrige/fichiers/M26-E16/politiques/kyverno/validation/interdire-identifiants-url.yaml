@@ -1,0 +1,61 @@
+# plateforme/politiques — kyverno/validation/interdire-identifiants-url.yaml (M26-E16, SEC-2716)
+# Promesse de M17 (audit des valeurs) et de M20 : refuser une ConfigMap, ou une variable
+# d'environnement écrite en clair dans un pod, qui contient une URL avec identifiants
+# (schéma://utilisateur:motdepasse@hôte). Un secret dans une ConfigMap est lisible par tout
+# compte qui a « view » sur l'espace, et finit dans Git.
+# Le motif exige un « : » ET un « @ » après « :// » et avant le premier « / » : une URL avec
+# seulement un utilisateur (https://jeton@hôte) n'est pas visée (cas rare, voir le corrigé).
+# Les Secrets ne sont PAS contrôlés : c'est leur place.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: interdire-identifiants-url
+  annotations:
+    policies.kyverno.io/title: Pas d'identifiants dans une URL en clair
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: SEC-2716
+spec:
+  validationActions: [Deny]
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [configmaps, pods]
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    # RE2 (pas de retour arrière) : coût linéaire, accepté par l'estimateur de coût de CEL.
+    - name: motif
+      expression: "'[a-zA-Z][a-zA-Z0-9+.-]*://[^/@:\\\\s]+:[^/@\\\\s]+@'"
+    - name: valeursConfigMap
+      expression: >-
+        object.kind == 'ConfigMap' && has(object.data) ?
+          object.data.filter(k, object.data[k].matches(variables.motif)) : []
+    - name: valeursEnv
+      expression: >-
+        object.kind == 'Pod' ?
+          (object.spec.containers +
+            (has(object.spec.initContainers) ? object.spec.initContainers : []))
+          .filter(c, has(c.env) && c.env.exists(e, has(e.value) && e.value.matches(variables.motif)))
+          .map(c, c.name) : []
+  validations:
+    - expression: size(variables.valeursConfigMap) == 0
+      messageExpression: >-
+        'ConfigMap : URL avec identifiants dans la ou les clé(s) ' + variables.valeursConfigMap.join(', ') +
+        ' (place le secret dans OpenBao, livré par un ExternalSecret)'
+      reason: Forbidden
+    - expression: size(variables.valeursEnv) == 0
+      messageExpression: >-
+        'variable(s) d\'environnement avec une URL à identifiants dans le(s) conteneur(s) ' +
+        variables.valeursEnv.join(', ') + ' (utilise valueFrom.secretKeyRef)'
+      reason: Forbidden

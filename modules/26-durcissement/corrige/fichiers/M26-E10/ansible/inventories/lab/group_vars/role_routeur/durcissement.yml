@@ -1,0 +1,4 @@
+---
+# group_vars/role_routeur/durcissement.yml (M26-E11) — groupe local autorisé en SSH en plus des groupes communs.
+# gw01, gw02 : sonde réseau de la supervision (compte supervision, M07-E29).
+durcissement_ssh_groupes_supplementaires: [supervision]

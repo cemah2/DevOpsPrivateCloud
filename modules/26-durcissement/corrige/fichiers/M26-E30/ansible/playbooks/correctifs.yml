@@ -1,0 +1,17 @@
+---
+# playbooks/correctifs.yml — plateforme/ansible (M26-E30, CHG-2730) : rôle correctifs sur le parc.
+#   uv run ansible-playbook playbooks/correctifs.yml -l durcissement_vague_1 --check --diff
+#   uv run ansible-playbook playbooks/correctifs.yml -l durcissement_vague_1
+# Ne redémarre rien (redémarrages : playbooks/redemarrages-vague.yml). Refuse de tourner sans -l :
+# on déploie vague par vague (E14), jamais tout le parc d'un coup.
+- name: Correctifs de sécurité automatiques
+  hosts: socle:k8s_par1
+  become: true
+  pre_tasks:
+    - name: Une limite (-l) est obligatoire
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Lance avec -l durcissement_vague_N (ou un hôte)."
+        quiet: true
+  roles:
+    - role: correctifs

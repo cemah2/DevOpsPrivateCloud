@@ -1,0 +1,17 @@
+# À INTÉGRER dans plateforme/k8s — espaces/mediagenda-recette/00-namespace.yaml (M26-E06, SEC-2706).
+# Seules les étiquettes Pod Security changent : la version d'application passe de v1.35 (M14-E18) à
+# v1.36 (version du cluster, M14 palier 3), APRÈS un essai « psa-inventaire.sh --essai restricted
+# --espace mediagenda-recette » sans avertissement. Garde toutes les autres étiquettes et annotations
+# du fichier (équipe, environnement, exposition M15, supervision M21…). Même changement pour
+# mediagenda-dev, mediagenda-prod, medidoc-dev, medidoc-recette (aucune exception admise).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-recette
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

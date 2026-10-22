@@ -1,0 +1,17 @@
+---
+# host_vars/idp01/keycloak.yml — état après M24-E26 (PLAT-2526). E24 (essai de grappe) est refermé.
+keycloak_version: "26.7.5"
+keycloak_sha256: "87d680d13cf4600d232ca0433a2553c57ebf03e56f7718fc0d03a1a8705497c8"
+keycloak_hostname: https://sso.par1.medisphere.internal
+keycloak_mandataires: [10.10.70.10, 10.10.70.11]   # lb01, lb02
+
+keycloak_options:
+  # Compteur keycloak_user_events_total{realm, event, error} sur /metrics (port 9000). Option de
+  # CONSTRUCTION : le rôle reconstruit. La fonction user-event-metrics est active par défaut (26.7) ;
+  # les étiquettes restent réduites à « realm » (défaut) : pas de clientId (cardinalité).
+  event-metrics-user-enabled: "true"
+  # Écouteur jboss-logging (actif par défaut sur chaque royaume) : succès en INFO (défaut : DEBUG,
+  # donc invisibles), erreurs en WARN. Les lignes partent en JSON dans journald, puis Alloy les envoie
+  # au locataire « audit » de Loki (rôle alloy, host_vars/idp01/alloy.yml).
+  spi-events-listener--jboss-logging--success-level: info
+  spi-events-listener--jboss-logging--error-level: warn

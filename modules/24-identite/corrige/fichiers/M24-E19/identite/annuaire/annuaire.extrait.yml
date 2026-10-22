@@ -1,0 +1,78 @@
+# annuaire/annuaire.yml — AJOUTS du M24-E19 (le reste du fichier, M24-E03, est inchangé).
+#
+# 1. Dans vars_files, après comptes-systeme.yml :
+#      - hbac.yml
+#      - sudo.yml
+#
+# 2. Tâches à ajouter à la fin de « tasks: » :
+
+    - name: Règles HBAC par groupe (membres synchronisés)
+      freeipa.ansible_freeipa.ipahbacrule:
+        name: "{{ item.nom }}"
+        description: "{{ item.description }}"
+        group: "{{ item.groupes }}"
+        hostcategory: "{{ 'all' if item.hotes == 'all' else omit }}"
+        host: "{{ omit if item.hotes == 'all' else item.hotes }}"
+        hbacsvc: "{{ item.services }}"
+        state: present
+      loop: "{{ annuaire_hbac_regles }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Règles HBAC actives
+      freeipa.ansible_freeipa.ipahbacrule:
+        name: "{{ item.nom }}"
+        state: enabled
+      loop: "{{ annuaire_hbac_regles }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    # Désactivée APRÈS les règles qui la remplacent (ordre des tâches) ; jamais supprimée.
+    - name: Règle allow_all de FreeIPA (tout le monde partout)
+      freeipa.ansible_freeipa.ipahbacrule:
+        name: allow_all
+        state: "{{ annuaire_hbac_allow_all }}"
+
+    - name: Commandes sudo
+      freeipa.ansible_freeipa.ipasudocmd:
+        name: "{{ item.commande }}"
+        description: "{{ item.description }}"
+        state: present
+      loop: "{{ annuaire_sudo_commandes }}"
+      loop_control:
+        label: "{{ item.commande }}"
+
+    - name: Groupes de commandes sudo
+      freeipa.ansible_freeipa.ipasudocmdgroup:
+        name: "{{ item.nom }}"
+        description: "{{ item.description }}"
+        sudocmd: "{{ item.commandes }}"
+        state: present
+      loop: "{{ annuaire_sudo_groupes_commandes }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Règles sudo par groupe
+      freeipa.ansible_freeipa.ipasudorule:
+        name: "{{ item.nom }}"
+        description: "{{ item.description }}"
+        group: "{{ item.groupes }}"
+        hostcategory: "{{ 'all' if item.hotes == 'all' else omit }}"
+        host: "{{ omit if item.hotes == 'all' else item.hotes }}"
+        cmdcategory: "{{ 'all' if (item.commandes | default('')) == 'all' else omit }}"
+        allow_sudocmdgroup: "{{ item.groupes_commandes | default(omit) }}"
+        runasusercategory: "{{ 'all' if (item.en_tant_que | default('')) == 'all' else omit }}"
+        runasgroupcategory: "{{ 'all' if (item.en_tant_que | default('')) == 'all' else omit }}"
+        runasgroup: "{{ item.groupe_execution | default(omit) }}"
+        state: present
+      loop: "{{ annuaire_sudo_regles }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Règles sudo actives
+      freeipa.ansible_freeipa.ipasudorule:
+        name: "{{ item.nom }}"
+        state: enabled
+      loop: "{{ annuaire_sudo_regles }}"
+      loop_control:
+        label: "{{ item.nom }}"

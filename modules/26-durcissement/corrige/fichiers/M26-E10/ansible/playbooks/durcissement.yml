@@ -1,0 +1,85 @@
+---
+# playbooks/durcissement.yml — durcissement des hôtes par vagues (M26-E10, E14 ; RB-263).
+#
+# Toujours en deux temps, une vague à la fois :
+#   uv run ansible-playbook playbooks/durcissement.yml -e vague=1 --check --diff   # relu
+#   uv run ansible-playbook playbooks/durcissement.yml -e vague=1
+# Un hôte seul : -e vague=1 --limit mon01. Les vagues 4 à 6 passent un hôte à la fois (serial: 1) :
+# un échec arrête tout (max_fail_percentage: 0) avant de toucher l'hôte suivant.
+# Vagues : inventories/lab/durcissement.yml. Domaines : variable durcissement_domaines.
+
+- name: Durcissement — vague {{ vague | default('?') }}
+  # Sans -e vague=N : groupe inexistant, aucun hôte touché (« no hosts matched »).
+  hosts: "durcissement_vague_{{ vague | default('non_precisee') }}"
+  become: true
+  gather_facts: true
+  serial: "{{ 1 if (vague | default(0) | int) >= 4 else '100%' }}"
+  max_fail_percentage: 0
+
+  vars:
+    # Kubeconfig de la personne qui lance (contexte OIDC du M24 : « kubectl auth whoami » AVANT,
+    # pour que le jeton soit frais) ; utilisé pour drain/uncordon des nœuds de la vague 6.
+    durcissement_kubeconfig: "{{ lookup('ansible.builtin.env', 'KUBECONFIG') | default('~/.kube/config', true) }}"
+    # Personne de l'annuaire servant de témoin (identifiant court, M24).
+    durcissement_personne_test: karim.benali
+
+  pre_tasks:
+    # adm01 est le poste depuis lequel on travaille : on ne le durcit qu'avec une session de secours
+    # ouverte (console Proxmox ou seconde session SSH), confirmée explicitement.
+    - name: Session de secours confirmée pour adm01
+      ansible.builtin.assert:
+        that: durcissement_secours_confirme | default(false) | bool
+        fail_msg: >-
+          adm01 : ouvre une session de secours (console Proxmox de la VM 1001, ou une seconde session
+          SSH laissée ouverte), puis relance avec -e durcissement_secours_confirme=true (RB-263).
+        quiet: true
+      when: inventory_hostname == 'adm01'
+
+    - name: Nœud Kubernetes — sortir le nœud de la charge (cordon, drain)
+      ansible.builtin.command: >-
+        kubectl --kubeconfig {{ durcissement_kubeconfig }} drain {{ inventory_hostname }}
+        --ignore-daemonsets --delete-emptydir-data --timeout=10m
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      when: "'k8s_par1' in group_names and not ansible_check_mode"
+
+    - name: Nœud Ceph — pas de rééquilibrage pendant l'intervention (noout)
+      # Exécuté sur un AUTRE nœud de la grappe (nœuds porteurs de l'étiquette _admin, M08).
+      ansible.builtin.command: cephadm shell -- ceph osd set noout
+      delegate_to: "{{ groups['role_ceph'] | reject('equalto', inventory_hostname) | first }}"
+      changed_when: true
+      when: "'role_ceph' in group_names and not ansible_check_mode"
+
+  roles:
+    - role: durcissement
+
+  post_tasks:
+    - name: Le compte d'Ansible garde sudo
+      ansible.builtin.command: "true"
+      changed_when: false
+
+    # SSSD et l'annuaire (M24) : sur un hôte inscrit, une personne de l'annuaire est toujours résolue.
+    - name: Hôte inscrit dans l'annuaire ?
+      ansible.builtin.stat:
+        path: /etc/sssd/sssd.conf
+      register: _durcissement_sssd
+
+    - name: Une personne de l'annuaire est toujours résolue
+      ansible.builtin.command: getent passwd {{ durcissement_personne_test }}
+      changed_when: false
+      check_mode: false
+      when: _durcissement_sssd.stat.exists
+
+    - name: Nœud Ceph — rééquilibrage rétabli
+      ansible.builtin.command: cephadm shell -- ceph osd unset noout
+      delegate_to: "{{ groups['role_ceph'] | reject('equalto', inventory_hostname) | first }}"
+      changed_when: true
+      when: "'role_ceph' in group_names and not ansible_check_mode"
+
+    - name: Nœud Kubernetes — remettre le nœud en service
+      ansible.builtin.command: kubectl --kubeconfig {{ durcissement_kubeconfig }} uncordon {{ inventory_hostname }}
+      delegate_to: localhost
+      become: false
+      changed_when: true
+      when: "'k8s_par1' in group_names and not ansible_check_mode"

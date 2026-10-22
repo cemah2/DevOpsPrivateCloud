@@ -1,0 +1,43 @@
+# plateforme/observabilite — tests/correctifs.test.yaml (M26-E30, CHG-2730)
+# promtool test rules tests/correctifs.test.yaml (après outils/extraire-regles.sh, M21-E14)
+rule_files:
+  - ../build/regles/correctifs.yml
+evaluation_interval: 1m
+
+tests:
+  # Redémarrage requis depuis 8 jours (git01) : alerte ; depuis 2 jours seulement (nbx01) : rien.
+  # Pas de 4 minutes (moins de 5 : la série reste visible entre deux échantillons) : une fenêtre de
+  # 7 jours au pas d'une minute dépasse la limite d'échantillons de promtool.
+  - interval: 4m
+    input_series:
+      - series: 'medisphere_redemarrage_requis{instance="git01", job="vms"}'
+        values: '1x2900'
+      - series: 'medisphere_redemarrage_requis{instance="nbx01", job="vms"}'
+        values: '0x2175 1x725'
+    alert_rule_test:
+      - eval_time: 11520m
+        alertname: RedemarrageEnAttente
+        exp_alerts:
+          - exp_labels: {instance: git01, job: vms, gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "git01 attend un redémarrage depuis plus de 7 jours"
+              description: "Des correctifs installés (noyau, bibliothèque C, OpenSSL…) ne sont pas actifs tant que l'hôte n'a pas redémarré. Programmer la vague : playbooks/redemarrages-vague.yml."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-263-durcissement-par-vagues.md
+
+  # Hôte supervisé sans état de correctifs (jamais vérifié) : alerte après 6 h.
+  - interval: 1m
+    input_series:
+      - series: 'up{instance="kms01", job="vms"}'
+        values: '1x500'
+    alert_rule_test:
+      - eval_time: 5h
+        alertname: CorrectifsVerificationAbsente
+        exp_alerts: []
+      - eval_time: 7h
+        alertname: CorrectifsVerificationAbsente
+        exp_alerts:
+          - exp_labels: {instance: kms01, job: vms, gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "kms01 : état des correctifs inconnu"
+              description: "correctifs-etat.timer absent ou en échec : l'hôte peut manquer des correctifs sans qu'on le sache."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-263-durcissement-par-vagues.md

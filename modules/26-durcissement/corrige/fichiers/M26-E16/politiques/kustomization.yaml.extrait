@@ -1,0 +1,8 @@
+# plateforme/politiques — kustomization.yaml (racine, E07) : lignes à AJOUTER à « resources » (M26-E16).
+# Jamais kyverno/tests/ : ce sont des données de test (ressources non conformes exprès).
+resources:
+  - kyverno/validation/exiger-limites.yaml
+  - kyverno/validation/exiger-digest.yaml
+  - kyverno/validation/interdire-identifiants-url.yaml
+  - kyverno/mutation/seccomp-par-defaut.yaml
+  - kyverno/generation/networkpolicy-par-defaut.yaml

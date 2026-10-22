@@ -1,0 +1,14 @@
+---
+# host_vars/idp01/keycloak.yml — état après M24-E27 (SEC-2527).
+keycloak_version: "26.7.5"
+keycloak_sha256: "87d680d13cf4600d232ca0433a2553c57ebf03e56f7718fc0d03a1a8705497c8"
+keycloak_hostname: https://sso.par1.medisphere.internal
+keycloak_mandataires: [10.10.70.10, 10.10.70.11]   # lb01, lb02
+
+keycloak_options:
+  event-metrics-user-enabled: "true"                        # M24-E26
+  spi-events-listener--jboss-logging--success-level: info   # M24-E26
+  spi-events-listener--jboss-logging--error-level: warn     # M24-E26
+  # M24-E27 : plus personne ne peut « se faire passer pour » une personne (Impersonate), pas même
+  # un administrateur de master. Option de CONSTRUCTION : reconstruction.
+  features-disabled: impersonation

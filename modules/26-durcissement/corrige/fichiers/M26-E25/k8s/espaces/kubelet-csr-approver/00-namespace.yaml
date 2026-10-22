@@ -1,0 +1,13 @@
+# plateforme/k8s — espaces/kubelet-csr-approver/00-namespace.yaml (M26-E25, PLAT-2725)
+# Espace de l'approbateur des certificats de service des kubelets. Composant de plateforme : PSA
+# restricted (le conteneur du chart est déjà conforme : non-root, sans capacité, seccomp RuntimeDefault).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubelet-csr-approver
+  labels:
+    medisphere.internal/composant: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

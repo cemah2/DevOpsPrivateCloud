@@ -1,0 +1,14 @@
+# playbooks/supervision.yml — tâches AJOUTÉES au M24-E18 à la fin du jeu « Supervision et messagerie du
+# lab » (après Mailpit) ; le secret du client vient de secrets/identite.yml (vars_files du jeu).
+    - name: Groupe du service avant le certificat (la clé lui appartient)
+      ansible.builtin.group:
+        name: oauth2-proxy
+        system: true
+
+    - name: Certificats ACME (dont oauth2-proxy-mailpit)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: OAuth2 Proxy devant l'interface de Mailpit
+      ansible.builtin.include_role:
+        name: oauth2_proxy

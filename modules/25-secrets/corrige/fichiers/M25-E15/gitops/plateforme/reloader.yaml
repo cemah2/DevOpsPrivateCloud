@@ -1,0 +1,38 @@
+# plateforme/gitops — plateforme/reloader.yaml (M25-E15, SEC-2615)
+# Reloader : redémarre les charges de travail ANNOTÉES quand un Secret qu'elles nomment change
+# (identifiants dynamiques de MédiAgenda, clés S3 de MédiDoc). Trois sources (comme external-secrets) :
+# chart recopié dans Harbor, valeurs de ce dépôt, et manifestes/reloader/ (droits sur les Rollouts
+# d'Argo Rollouts, que le chart ne donne pas en mode « espaces listés »).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reloader
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: securite
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: reloader
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: reloader
+      targetRevision: 2.2.18
+      helm:
+        releaseName: reloader
+        valueFiles:
+          - $values/valeurs/reloader/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      path: manifestes/reloader
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

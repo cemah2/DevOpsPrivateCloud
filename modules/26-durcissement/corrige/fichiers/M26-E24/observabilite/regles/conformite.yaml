@@ -1,0 +1,85 @@
+# plateforme/observabilite — regles/conformite.yaml (M26-E24, SEC-2724)
+# Conformité continue : séries écrites par /usr/local/sbin/conformite-analyse (collecteur textfile)
+# sur les VMs (job « vms ») et les nœuds de k8s-par1 (job « node-exporter »). Étiquette instance = nom
+# court de l'hôte dans les deux cas : les jointures « on (instance) » fonctionnent.
+# Testées par tests/conformite.test.yaml (promtool test rules, après outils/extraire-regles.sh).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: conformite
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: conformite.objectifs
+      rules:
+        # Objectifs par référentiel (registre des exceptions, E23) : une série constante par référentiel,
+        # pour comparer « score < objectif de SON référentiel » en une seule règle.
+        - record: medisphere:conformite_objectif
+          expr: vector(85)
+          labels:
+            referentiel: cis_l1_serveur
+        - record: medisphere:conformite_objectif
+          expr: vector(75)
+          labels:
+            referentiel: anssi_intermediaire
+    - name: conformite.alertes
+      rules:
+        # Dérive : la mesure de la semaine est inférieure de plus de 5 points à celle d'il y a 7 jours.
+        # Le score est une jauge constante toute la semaine : « offset 7d » lit l'analyse précédente.
+        - alert: ConformiteDegradee
+          expr: |
+            (medisphere_conformite_score offset 7d) - medisphere_conformite_score > 5
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: securite
+          annotations:
+            resume: "{{ $labels.instance }} : score {{ $labels.referentiel }} en baisse de {{ $value | printf \"%.1f\" }} points en une semaine"
+            description: >-
+              Un réglage a dérivé ou une nouvelle règle échoue. Compare les deux derniers ARF de l'hôte dans
+              le compartiment conformite (AAAA-MM-JJ/{{ $labels.instance }}/), règles passées de pass à fail.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+        - alert: ConformiteSousObjectif
+          expr: |
+            medisphere_conformite_score < on (referentiel) group_left () medisphere:conformite_objectif
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: securite
+          annotations:
+            resume: "{{ $labels.instance }} : score {{ $labels.referentiel }} sous l'objectif ({{ $value | printf \"%.1f\" }})"
+            description: >-
+              Le score, exceptions signées déjà appliquées (tailoring), est sous l'objectif du référentiel.
+              Corriger par le rôle durcissement, ou ouvrir une dérogation (RB-261).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+        # Absence de mesure : (1) une analyse trop ancienne (8 jours : une semaine + marge) ; (2) un hôte
+        # supervisé qui n'a JAMAIS produit la série (pas de série, donc pas d'âge à comparer) ;
+        # (3) un hôte qui n'a qu'un des deux référentiels.
+        - alert: ConformiteAnalyseAbsente
+          expr: |
+            (time() - medisphere_conformite_derniere_analyse_secondes) > 8 * 86400
+            or on (instance)
+            (up{job=~"vms|node-exporter"} == 1 unless on (instance) medisphere_conformite_derniere_analyse_secondes)
+            or on (instance)
+            (count by (instance) (medisphere_conformite_derniere_analyse_secondes) < 2)
+          for: 6h
+          labels:
+            gravite: avertissement
+            equipe: securite
+          annotations:
+            resume: "{{ $labels.instance }} : pas d'analyse de conformité récente"
+            description: >-
+              Minuterie absente ou arrêtée, analyse en échec (journalctl -u conformite-analyse), ou hôte
+              jamais couvert par le rôle. Sur un hôte nouveau, l'alerte est attendue jusqu'au premier dimanche.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+        - alert: LynisIndiceBas
+          expr: medisphere_lynis_indice < 70
+          for: 1h
+          labels:
+            gravite: info
+            equipe: securite
+          annotations:
+            resume: "{{ $labels.instance }} : indice Lynis {{ $value }}"
+            description: "Indice Lynis sous 70 : lire /var/log/lynis-report.dat (suggestion[] et warning[])."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md

@@ -1,0 +1,40 @@
+---
+# Rôle durcissement — gestionnaires. Rechargements plutôt que redémarrages ; sshd jamais redémarré.
+
+- name: Charger les paramètres du noyau
+  ansible.builtin.command: sysctl -p {{ durcissement_sysctl_fichier }}
+  changed_when: true
+
+- name: Recharger systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Redémarrer journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted
+
+- name: Recharger sshd
+  ansible.builtin.systemd_service:
+    name: "{{ 'ssh' if ansible_facts['os_family'] == 'Debian' else 'sshd' }}"
+    state: reloaded
+
+- name: Charger les règles d'audit
+  # augenrules assemble /etc/audit/rules.d/*.rules dans audit.rules et les charge (sans redémarrer
+  # auditd, que systemd refuse d'ailleurs d'arrêter : RefuseManualStop).
+  ansible.builtin.command: augenrules --load
+  changed_when: true
+
+- name: Recharger la configuration d'auditd
+  # SIGHUP : relit auditd.conf (droits du journal, rotation) sans perte d'événements.
+  ansible.builtin.command: pkill -HUP -x auditd
+  changed_when: true
+
+- name: Recharger les profils AppArmor
+  ansible.builtin.command: apparmor_parser --replace --write-cache /etc/apparmor.d/{{ item }}
+  loop: "{{ durcissement_apparmor_profils | map(attribute='nom') | list }}"
+  changed_when: true
+
+- name: Appliquer la politique cryptographique
+  ansible.builtin.command: update-crypto-policies --set {{ durcissement_crypto_politique }}
+  changed_when: true

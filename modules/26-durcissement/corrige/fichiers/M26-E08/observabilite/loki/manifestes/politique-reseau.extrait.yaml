@@ -1,0 +1,22 @@
+# À INTÉGRER dans plateforme/observabilite — loki/manifestes/politique-reseau.yaml, politique
+# « loki-entree » (M22-E02, resserrée en M22-E16), M26-E08 (SEC-2708).
+# Ajoute cette règle à la liste « ingress » existante : falcosidekick (espace falco) écrit dans Loki,
+# en POST /loki/api/v1/push seulement (règle HTTP, proxy Envoy de Cilium), comme les VMs. Le locataire
+# (en-tête X-Scope-OrgID: audit) est posé par falcosidekick. Les règles Cilium s'additionnent : ne
+# touche pas aux autres.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: loki-entree
+spec:
+  ingress:
+    # (… règles existantes : Alloy, Grafana, Prometheus, Loki, MGMT, VMs …)
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: falco
+            app.kubernetes.io/name: falcosidekick
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/loki/api/v1/push"}

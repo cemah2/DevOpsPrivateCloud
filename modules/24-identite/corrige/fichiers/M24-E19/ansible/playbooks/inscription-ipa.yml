@@ -1,0 +1,41 @@
+---
+# playbooks/inscription-ipa.yml — inscription des VMs dans l'annuaire FreeIPA (M24-E19, PLAT-2519).
+# Cibles : socle et nœuds de k8s-par1, SAUF la bordure (gw01, gw02 : comptes locaux et certificats SSH
+# seulement) et ipa01 (le serveur). Par VAGUES, avec --limit, un hôte à la fois :
+#   uv run ansible-playbook playbooks/inscription-ipa.yml --limit mon01
+#   uv run ansible-playbook playbooks/inscription-ipa.yml --limit 'ca01,git01,nbx01,s3-01,runner01,runner02,reg01,idp01'
+#   uv run ansible-playbook playbooks/inscription-ipa.yml --limit dns01   puis dns02
+#   uv run ansible-playbook playbooks/inscription-ipa.yml --limit lb02    puis lb01
+#   uv run ansible-playbook playbooks/inscription-ipa.yml --limit adm01
+#   uv run ansible-playbook playbooks/inscription-ipa.yml --limit k8s-cp01  … puis chaque nœud
+# Après chaque hôte : NOUVELLE connexion « ssh admin@<hôte> » et « sudo -n true » depuis adm01.
+# Le mot de passe d'admin de l'annuaire (host_vars/ipa01, Vault critique) n'est utilisé que sur ipa01.
+
+- name: Garde-fous
+  hosts: "socle:k8s_par1:!role_routeur:!role_annuaire"
+  gather_facts: false
+  tasks:
+    - name: Une vague est choisie (jamais tout le parc d'un coup)
+      ansible.builtin.assert:
+        that: ansible_limit is defined
+        fail_msg: "Lance ce playbook avec --limit (vagues : voir l'en-tête)."
+        quiet: true
+      run_once: true
+
+    - name: Jamais les deux répartiteurs ni deux nœuds de contrôle dans la même vague
+      ansible.builtin.assert:
+        that:
+          - (ansible_play_hosts_all | intersect(['lb01', 'lb02']) | length) < 2
+          - (ansible_play_hosts_all | intersect(['dns01', 'dns02']) | length) < 2
+          - (ansible_play_hosts_all | intersect(groups['k8s_plan_controle'] | default([])) | length) < 2
+        fail_msg: "Vague trop large : une seule machine d'une paire ou d'une grappe à la fois."
+        quiet: true
+      run_once: true
+
+- name: Inscription dans l'annuaire FreeIPA
+  hosts: "socle:k8s_par1:!role_routeur:!role_annuaire"
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - freeipa_client

@@ -1,0 +1,21 @@
+# roles/alloy/defaults/main.yml — EXTRAIT (M24-E26) à ajouter en fin de fichier.
+
+# --- Journaux d'audit (M24-E26) : locataire « audit » de Loki, étiquette service ------------------
+# Unités systemd dont le journal part au locataire audit (et PLUS au locataire général) :
+#   - {unite: keycloak.service, service: keycloak}
+alloy_audit_unites: []
+# Fichiers journaux envoyés au locataire audit (Rocky 10 : 389-ds et KDC n'écrivent pas dans journald) :
+#   - {chemin: /var/log/krb5kdc.log, service: freeipa, fichier: krb5kdc}
+alloy_audit_fichiers: []
+# Lecture de fichiers journaux protégés (krb5kdc.log : root 600) : capacité CAP_DAC_READ_SEARCH
+# (lecture et parcours de tout fichier, aucun autre pouvoir). Réservée aux hôtes qui en ont besoin.
+alloy_lecture_fichiers_proteges: false
+# Groupes supplémentaires selon la famille (Rocky n'a pas « adm » pour les journaux des services).
+alloy_groupes_par_famille:
+  Debian: [systemd-journal, adm]
+  RedHat: [systemd-journal]
+alloy_groupes: "{{ alloy_groupes_par_famille[ansible_facts['os_family']] }}"
+# Outils d'extraction selon la famille.
+alloy_paquets_par_famille:
+  Debian: [unzip]
+  RedHat: [unzip]

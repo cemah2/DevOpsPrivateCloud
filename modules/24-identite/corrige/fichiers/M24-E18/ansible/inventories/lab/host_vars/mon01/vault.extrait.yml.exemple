@@ -1,0 +1,7 @@
+---
+# host_vars/mon01/vault.yml — variables AJOUTÉES au M24-E18 (fichier chiffré, identité critique).
+# Exemple en clair : valeurs à générer, jamais à recopier.
+vault_mailpit_mdp_sso: "<GÉNÉRÉ : openssl rand -base64 24>"
+vault_oauth2_proxy_cookie_secret_mailpit: "<GÉNÉRÉ : openssl rand -hex 16>"   # 32 caractères exactement
+# Le secret du client Keycloak oauth2-proxy n'est PAS ici : secrets/identite.yml
+# (keycloak_secrets_clients.oauth2_proxy), commun aux trois instances.

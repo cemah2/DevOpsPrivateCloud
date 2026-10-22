@@ -1,0 +1,15 @@
+# plateforme/politiques — .gitlab-ci.yml (EXTRAIT M26-E18 : job ajouté à l'étape « valider » d'E07)
+# Sur chaque MR qui touche aux exceptions, ET chaque lundi par un pipeline planifié (variable
+# PLANIFIE=exceptions) : une exception qui arrive à échéance fait échouer le pipeline planifié, et
+# l'équipe reçoit le courriel d'échec de GitLab avant que la politique ne se réapplique en silence.
+kyverno:exceptions:
+  stage: valider
+  # Même image que les jobs kyverno:* d'E16 (CLI kyverno 1.19 + yq) : reprends son nom exact.
+  image: registry.par1.medisphere.internal/plateforme/outils-politiques:1.19.2
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $PLANIFIE == "exceptions"
+    - changes:
+        - kyverno/**/*
+        - outils/verifier-exceptions.sh
+  script:
+    - outils/verifier-exceptions.sh kyverno/exceptions

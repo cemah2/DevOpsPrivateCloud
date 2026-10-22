@@ -1,0 +1,12 @@
+# mediagenda/deploiement — overlays/recette : EXTRAITS (M25-E16, SEC-2616).
+#   parametres.env : remplacer la ligne de M23-E06 par
+#     MEDIAGENDA_MEDIDOC_URL=http://127.0.0.1:8081
+#   (la ConfigMap générée change de nom : nouvelle révision, comme au M23).
+#   kustomization.yaml :
+resources:
+  # … ressources existantes (dont sortie-medidoc.yaml, remplacée par la version 8443) …
+  - mtls.yaml
+patches:
+  # … correctifs existants …
+  - path: relais-tls.yaml
+    target: {kind: Deployment, name: mediagenda}

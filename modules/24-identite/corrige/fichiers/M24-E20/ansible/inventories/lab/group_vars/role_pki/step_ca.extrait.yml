@@ -1,0 +1,46 @@
+---
+# group_vars/role_pki/step_ca.yml — provisioner AJOUTÉ au M24-E20 (SEC-2520) à la fin de
+# step_ca_provisioners (les provisioners admin, acme, sshpop du M06 sont inchangés).
+#
+# « keycloak » : certificats SSH d'UTILISATEUR de 16 h au plus, délivrés à qui présente un ID token du
+# royaume medisphere émis pour le client « step-ca ». Aucun administrateur (« admins » absent) : personne
+# ne peut demander d'autres principaux que le sien ni un certificat d'hôte par ce provisioner.
+#
+# Les gabarits contiennent des accolades Go ({{ … }}) : la balise !unsafe empêche Ansible (Jinja2) de les
+# interpréter ; to_nice_json les écrit telles quelles dans ca.json.
+step_ca_provisioners:
+  # … admin (JWK), acme (ACME), sshpop (SSHPOP) : inchangés …
+  - type: OIDC
+    name: keycloak
+    clientID: step-ca
+    # Client PUBLIC dans Keycloak : step-ca publie de toute façon ce champ (GET /provisioners). Chaîne
+    # vide permise (« ClientSecret is mandatory, but it can be an empty string »).
+    clientSecret: ""
+    configurationEndpoint: https://sso.par1.medisphere.internal/realms/medisphere/.well-known/openid-configuration
+    # Seuls les courriels du domaine sont acceptés (revendication email de l'ID token).
+    domains: [medisphere.internal]
+    # Adresse FIXE de la CLI : seule URI de retour enregistrée dans Keycloak (http://127.0.0.1:10000).
+    listenAddress: 127.0.0.1:10000
+    claims:
+      enableSSHCA: true
+      minUserSSHCertDuration: 5m
+      maxUserSSHCertDuration: 16h
+      defaultUserSSHCertDuration: 16h
+    options:
+      ssh:
+        # UN principal : l'identifiant de l'annuaire (preferred_username), jamais dérivé du courriel
+        # (par défaut : « lucasmartin », « lucas.martin », « lucas.martin@medisphere.internal »).
+        template: !unsafe |-
+          {{- if not .Token.preferred_username }}{{ fail "ID token sans preferred_username : certificat refusé" }}{{ end -}}
+          {
+            "type": {{ toJson .Type }},
+            "keyId": {{ toJson .KeyID }},
+            "principals": [{{ toJson .Token.preferred_username }}],
+            "extensions": {{ toJson .Extensions }},
+            "criticalOptions": {{ toJson .CriticalOptions }}
+          }
+      x509:
+        # Ce provisioner ne délivre PAS de certificat X.509 (un ID token suffirait sinon à obtenir un
+        # certificat client au nom du courriel) : le gabarit échoue toujours.
+        template: !unsafe |-
+          {{ fail "provisioner keycloak : certificats SSH d'utilisateur seulement" }}

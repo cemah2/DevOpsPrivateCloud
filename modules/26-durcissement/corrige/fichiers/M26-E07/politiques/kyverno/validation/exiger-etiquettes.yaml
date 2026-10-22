@@ -1,0 +1,49 @@
+# plateforme/politiques — kyverno/validation/exiger-etiquettes.yaml (M26-E07, PLAT-2707)
+# Tout contrôleur de charge d'un espace d'équipe porte l'étiquette medisphere.internal/equipe, ÉGALE à
+# celle de son espace : c'est elle qui relie une alerte, un coût, un rapport de politique à une équipe
+# (supervision M21, règles réseau M15, génération de la NetworkPolicy par défaut en E16).
+# On vise directement les contrôleurs (pas les pods : les charts n'étiquettent pas toujours le
+# gabarit de pod, et une étiquette posée sur le contrôleur suffit au rattachement).
+# Mode : [Audit, Warn] ; failurePolicy Ignore.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: exiger-etiquettes
+  annotations:
+    policies.kyverno.io/title: Étiquette d'équipe obligatoire
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: >-
+      Deployment, StatefulSet, DaemonSet et CronJob des espaces d'équipes portent medisphere.internal/equipe,
+      égale à celle de leur espace.
+    medisphere.internal/ticket: "PLAT-2707"
+spec:
+  validationActions: [Audit, Warn]
+  failurePolicy: Ignore
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [deployments, statefulsets, daemonsets]
+      - apiGroups: [batch]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [cronjobs]
+  variables:
+    # namespaceObject : l'espace de l'objet, fourni par Kyverno (comme dans une VAP native).
+    - name: equipeEspace
+      expression: namespaceObject.metadata.?labels[?'medisphere.internal/equipe'].orValue('')
+    - name: equipeObjet
+      expression: object.metadata.?labels[?'medisphere.internal/equipe'].orValue('')
+  validations:
+    - expression: variables.equipeObjet != ''
+      messageExpression: >-
+        object.kind + ' ' + object.metadata.name + " : étiquette medisphere.internal/equipe absente"
+    - expression: variables.equipeObjet == '' || variables.equipeObjet == variables.equipeEspace
+      messageExpression: >-
+        object.kind + ' ' + object.metadata.name + ' : medisphere.internal/equipe=' + variables.equipeObjet
+        + " ne correspond pas à l’équipe de l’espace (" + variables.equipeEspace + ')'

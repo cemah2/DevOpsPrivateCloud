@@ -1,0 +1,89 @@
+{
+  "uid": "securite-conformite",
+  "title": "Sécurité — Conformité",
+  "tags": ["securite", "conformite", "medisphere"],
+  "editable": false,
+  "description": "Conformité continue (M26-E24) : scores OpenSCAP par hôte et par référentiel (profil adapté, exceptions appliquées), règles en échec, âge des analyses, indice Lynis. Rapports complets : compartiment conformite de s3-01.",
+  "timezone": "browser",
+  "refresh": "5m",
+  "time": {"from": "now-90d", "to": "now"},
+  "schemaVersion": 41,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {"name": "datasource", "label": "Source", "type": "datasource", "query": "prometheus", "current": {}, "hide": 0, "refresh": 1, "regex": "", "options": []},
+      {
+        "name": "referentiel", "label": "Référentiel", "type": "query",
+        "datasource": {"type": "prometheus", "uid": "${datasource}"},
+        "query": {"query": "label_values(medisphere_conformite_score, referentiel)", "refId": "variable"},
+        "definition": "label_values(medisphere_conformite_score, referentiel)",
+        "refresh": 2, "sort": 1, "multi": false, "includeAll": false, "current": {}, "hide": 0, "options": [], "regex": ""
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Score moyen", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "avg(medisphere_conformite_score{referentiel=\"$referentiel\"})"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "decimals": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 75}, {"color": "green", "value": 85}]}}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 2, "type": "stat", "title": "Hôtes sous l'objectif", "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "count(medisphere_conformite_score{referentiel=\"$referentiel\"} < on (referentiel) group_left () medisphere:conformite_objectif) or vector(0)"}],
+      "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 3, "type": "stat", "title": "Analyse la plus ancienne", "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "max(time() - medisphere_conformite_derniere_analyse_secondes{referentiel=\"$referentiel\"})"}],
+      "fieldConfig": {"defaults": {"unit": "s", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 691200}]}}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 4, "type": "stat", "title": "Hôtes supervisés sans analyse", "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "count(up{job=~\"vms|node-exporter\"} == 1 unless on (instance) medisphere_conformite_derniere_analyse_secondes) or vector(0)"}],
+      "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "colorMode": "value", "graphMode": "none", "textMode": "auto"}
+    },
+    {
+      "id": 5, "type": "bargauge", "title": "Score par hôte", "gridPos": {"h": 12, "w": 12, "x": 0, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "sort(medisphere_conformite_score{referentiel=\"$referentiel\"})", "legendFormat": "{{instance}}", "instant": true}],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 75}, {"color": "green", "value": 85}]}}, "overrides": []},
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Évolution du score (90 jours)", "gridPos": {"h": 12, "w": 12, "x": 12, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "medisphere_conformite_score{referentiel=\"$referentiel\"}", "legendFormat": "{{instance}}", "interval": "1h"}],
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min"]}}
+    },
+    {
+      "id": 7, "type": "table", "title": "Règles en échec et âge de l'analyse, par hôte", "gridPos": {"h": 10, "w": 16, "x": 0, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"refId": "A", "expr": "medisphere_conformite_regles{referentiel=\"$referentiel\", resultat=\"fail\"}", "format": "table", "instant": true},
+        {"refId": "B", "expr": "time() - medisphere_conformite_derniere_analyse_secondes{referentiel=\"$referentiel\"}", "format": "table", "instant": true}
+      ],
+      "transformations": [
+        {"id": "joinByField", "options": {"byField": "instance", "mode": "outer"}},
+        {"id": "organize", "options": {"includeByName": {"instance": true, "Value #A": true, "Value #B": true}, "renameByName": {"Value #A": "Règles en échec", "Value #B": "Âge de l'analyse (s)"}}}
+      ],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true, "sortBy": [{"displayName": "Règles en échec", "desc": true}]}
+    },
+    {
+      "id": 8, "type": "bargauge", "title": "Indice Lynis", "gridPos": {"h": 10, "w": 8, "x": 16, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [{"refId": "A", "expr": "sort(medisphere_lynis_indice)", "legendFormat": "{{instance}}", "instant": true}],
+      "fieldConfig": {"defaults": {"min": 0, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "orange", "value": 70}, {"color": "green", "value": 80}]}}, "overrides": []},
+      "options": {"orientation": "horizontal", "displayMode": "basic", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    }
+  ]
+}

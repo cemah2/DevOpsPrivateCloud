@@ -1,0 +1,18 @@
+# mediagenda/deploiement — overlays/recette/sortie-medidoc.yaml (M23-E06 ; port 8443 en M25-E16)
+# L'API sort vers MédiDoc (environnement homologue) par le relais TLS mutuel seulement : port 8443 du
+# pod MédiDoc (après traduction du Service medidoc:8443).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-sortie-medidoc
+spec:
+  description: "API MédiAgenda : sortie TLS mutuel vers MédiDoc (medidoc-recette), SEC-2616"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: mediagenda}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: medidoc-recette
+            app.kubernetes.io/name: medidoc
+      toPorts:
+        - ports: [{port: "8443", protocol: TCP}]

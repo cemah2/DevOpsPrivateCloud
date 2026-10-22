@@ -1,0 +1,7 @@
+---
+- name: Unité activée au démarrage, démarrée si elle ne tourne pas (elle démarre SCELLÉE)
+  ansible.builtin.systemd_service:
+    name: openbao.service
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,11 @@
+# plateforme/gitops — projets/medidoc.yaml : MODIFICATION de M24-E13 (SEC-2513), rôle « equipe ».
+# Le groupe prévu au M20 (medisphere:medidoc-devs) n'existe pas : la revendication « groups » de
+# Keycloak porte le NOM COURT du groupe de l'annuaire. Le reste de l'AppProject (sources, destinations,
+# politiques du rôle) est inchangé.
+spec:
+  roles:
+    - name: equipe
+      description: "Équipe MédiDoc (groupe medidoc de l'annuaire, M24-E13) : dev et recette, production en lecture"
+      groups:
+        - medidoc
+      # policies : inchangées (M20-E24).

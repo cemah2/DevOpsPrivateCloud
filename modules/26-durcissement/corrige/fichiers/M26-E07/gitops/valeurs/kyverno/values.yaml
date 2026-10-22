@@ -1,0 +1,61 @@
+# plateforme/gitops — valeurs/kyverno/values.yaml (M26-E07, PLAT-2707)
+# Chart kyverno/kyverno 3.9.2 (Kyverno 1.19.2), recopié dans Harbor par plateforme/charts-miroir.
+# Rendu vérifié : helm template kyverno oci://registry.par1.medisphere.internal/charts/kyverno \
+#   --version 3.9.2 -n kyverno -f valeurs/kyverno/values.yaml --api-versions monitoring.coreos.com/v1
+
+global:
+  image:
+    # Les images de Kyverno sont publiées sur reg.kyverno.io ET ghcr.io/kyverno ; Harbor n'a pas de
+    # cache pour le premier. Ce registre remplace celui de toutes les images des contrôleurs.
+    registry: registry.par1.medisphere.internal/ghcr
+
+config:
+  # Sélecteur des webhooks : fusionné par Kyverno avec le namespaceSelector de chaque politique.
+  # Jamais kube-system (composants du cluster), argocd (sinon une politique cassée empêche Argo CD de
+  # la réparer), cilium (si Cilium y vit). L'espace kyverno est exclu par excludeKyvernoNamespace.
+  webhooks:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: [kube-system, argocd, cilium]
+  excludeKyvernoNamespace: true
+
+admissionController:
+  # Trois réplicas (un par nœud travailleur si possible) : un webhook à « Fail » sans réplica prêt
+  # bloquerait les créations visées. Le chart active un PodDisruptionBudget dès 2 réplicas.
+  replicas: 3
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+
+backgroundController:
+  # Analyse de l'existant (rapports) et génération (E16) : deux réplicas, élection d'un meneur.
+  replicas: 2
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+
+reportsController:
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+
+cleanupController:
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+
+# Hooks Helm (pods de test, Jobs de nettoyage à la suppression) : leur image ne suit pas
+# global.image.registry pour tous, et leur étiquette par défaut est « latest ». On impose les deux.
+test:
+  image:
+    registry: registry.par1.medisphere.internal/ghcr
+    tag: v1.19.2
+webhooksCleanup:
+  image:
+    registry: registry.par1.medisphere.internal/ghcr

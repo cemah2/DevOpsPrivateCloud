@@ -1,0 +1,37 @@
+# plateforme/infra/observabilite-grafana/variables.tf — MODIFICATION de M24-E12 (DEV-2512) : la
+# description et la valeur par défaut de « equipes ». Les membres sont les PERSONNES de l'annuaire
+# (adresses de annuaire/personnes.yml), selon le modèle d'autorisation (M24-E10) ; plus de comptes
+# locaux. <MOI> : ton identifiant (la valeur réelle est dans terraform.tfvars, pas ici).
+variable "equipes" {
+  description = <<-EOT
+    Équipes Grafana (dossiers et droits, M21-E17) et leurs membres, par adresse de courriel des
+    personnes de l'annuaire. Les comptes sont créés par le SSO à la première connexion : un membre
+    pas encore connecté est ignoré (utilisateurs.tf) et ajouté au plan suivant.
+  EOT
+  type = map(object({
+    titre_dossier = string
+    membres       = list(string)
+    admins        = list(string)
+  }))
+  default = {
+    plateforme = {
+      titre_dossier = "Plateforme"
+      membres       = ["karim.benali@medisphere.internal", "lucas.martin@medisphere.internal", "nadia.roussel@medisphere.internal"]
+      admins        = ["claire.morel@medisphere.internal"]
+    }
+    mediagenda = {
+      titre_dossier = "MédiAgenda"
+      membres       = []
+      admins        = ["julien.petit@medisphere.internal"]
+    }
+    medidoc = {
+      titre_dossier = "MédiDoc"
+      membres       = []
+      admins        = []
+    }
+  }
+  validation {
+    condition     = alltrue([for k in keys(var.equipes) : can(regex("^[a-z0-9-]+$", k))])
+    error_message = "Clé d'équipe en minuscules : elle sert aussi d'UID au dossier."
+  }
+}

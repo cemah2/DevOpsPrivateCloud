@@ -1,0 +1,10 @@
+# medidoc/deploiement — overlays/recette/kustomization.yaml : EXTRAIT (M25-E16, SEC-2616).
+resources:
+  # … ressources existantes (dont entree-mediagenda.yaml du M23, remplacée par la version 8443) …
+  - mtls.yaml
+patches:
+  # … correctifs existants (compartiment, nom publié, annotation Reloader de M25-E15) …
+  - path: relais-tls.yaml
+    target: {kind: Deployment, name: medidoc}
+  - path: service-https.yaml
+    target: {kind: Service, name: medidoc}

@@ -1,0 +1,14 @@
+# medidoc/deploiement — base/deployment.yaml (EXTRAIT M26-E21) : seul le contexte de pod change.
+# MédiDoc était déjà conforme sur C1-C6 et C8 (M19-E33). Ajout : AppArmor écrit. Pas de /tmp :
+# l'application lit les téléversements en flux (r.MultipartReader(), apps/medidoc/internal/serveur),
+# sans fichier temporaire ; ajouter un emptyDir « au cas où » ouvrirait un endroit inscriptible inutile.
+# C7 (condensé) : l'overlay fixe déjà l'image par condensé (promotion M20-E33).
+spec:
+  template:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+        appArmorProfile: {type: RuntimeDefault}

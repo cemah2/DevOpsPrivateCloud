@@ -1,0 +1,4 @@
+# host_vars/idp01/pare_feu_local.yml — EXTRAIT (M24-E26) à ajouter à pare_feu_local_regles.
+# Les travailleurs de k8s-par1 (10.10.40.54-56 ; tout le VLAN 40 par simplicité de la matrice) → 9000.
+  - {source: [10.10.40.0/24], proto: tcp, ports: [9000],
+     motif: "Prometheus du cluster : /metrics de Keycloak", ref: M24-E26}

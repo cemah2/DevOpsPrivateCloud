@@ -1,0 +1,68 @@
+# playbooks/coffre.yml — coffre OpenBao (groupe role_coffre). M25-E03, étendu au M25-E24 (PLAT-2624).
+# Appliqué par le pipeline protégé de plateforme/ansible (ADR-0040), UN NŒUD À LA FOIS.
+#   uv run ansible-playbook playbooks/coffre.yml --limit vault02 --check --diff
+#   uv run ansible-playbook playbooks/coffre.yml --limit vault02
+# Les rôles communs du socle (base, ssh_durci, ca_lab, ssh_ca_hote, pare_feu_local, alloy…)
+# viennent de site.yml.
+# Ordre : paquet (crée l'utilisateur openbao) → relais du défi ACME (HAProxy, port 80) → certificat
+# ACME → filtrage local → configuration et service OpenBao → keepalived (la VIP en dernier : un nœud
+# ne doit jamais pouvoir la prendre avant d'être un OpenBao sain).
+# Ni initialisation, ni descellement, ni « operator raft join » ici : un nœud vide rejoint seul par
+# retry_join ; on le descelle ensuite (Shamir jusqu'au M25-E25).
+
+- name: Coffre OpenBao
+  hosts: role_coffre
+  become: true
+  serial: 1
+  order: sorted
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Garde-fou — le groupe role_coffre ne contient que des nœuds attendus
+      ansible.builtin.assert:
+        that: inventory_hostname in ['vault01', 'vault02', 'vault03']
+        fail_msg: "{{ inventory_hostname }} n'est pas un nœud du coffre (vault01-03, PLAN §4.5)."
+        quiet: true
+  tasks:
+    - name: Paquet OpenBao (crée l'utilisateur et le groupe du service)
+      ansible.builtin.include_role:
+        name: openbao
+        tasks_from: paquet
+
+    - name: Relais du défi ACME (HAProxy sur le port 80 seulement, M25-E24)
+      ansible.builtin.include_role:
+        name: haproxy
+
+    - name: Certificat ACME de step-ca (id openbao, deux noms)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: Filtrage d'entrée local
+      ansible.builtin.include_role:
+        name: pare_feu_local
+
+    - name: Configuration et service OpenBao
+      ansible.builtin.include_role:
+        name: openbao
+
+    - name: VIP du nœud actif (keepalived, VRID 120, M25-E24)
+      ansible.builtin.include_role:
+        name: keepalived
+
+  post_tasks:
+    # Contrôle d'ensemble, une fois le dernier nœud passé : une VIP et une seule.
+    - name: Porteurs de la VIP 10.10.20.200
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, to, 10.10.20.200/32]
+      register: _vip
+      changed_when: false
+      check_mode: false
+
+    - name: Une VIP et une seule dans la grappe (quand tous les nœuds sont passés)
+      ansible.builtin.assert:
+        that: >-
+          ansible_play_hosts_all | map('extract', hostvars, ['_vip', 'stdout'])
+          | select('search', '10.10.20.200') | list | length <= 1
+        fail_msg: "La VIP est portée par plusieurs nœuds : arrête keepalived sur l'un d'eux et lis RB-251."
+        quiet: true
+      run_once: true
+      when: inventory_hostname == ansible_play_hosts_all | last

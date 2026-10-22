@@ -1,0 +1,25 @@
+---
+# annuaire/hbac.yml — qui peut ENTRER sur quelle machine (M24-E19, PLAT-2519). Appliqué par annuaire.yml.
+# HBAC (host-based access control) est évalué par SSSD à l'étape « account » de PAM, pour chaque
+# service PAM (sshd ici). Il ne concerne QUE les personnes de l'annuaire : les comptes locaux (admin,
+# root) ne sont pas résolus par SSSD sur les hôtes inscrits (rôle freeipa_client, filter_users).
+# Règles par GROUPE, jamais par personne. Les hôtes sont désignés par leur nom complet (ils doivent
+# être inscrits avant l'application de ce fichier) ou par la catégorie « all ».
+annuaire_hbac_regles:
+  - nom: hbac-plateforme
+    description: Équipe Plateforme (administrateurs compris) — SSH sur toutes les machines inscrites
+    groupes: [plateforme-admins, plateforme]
+    hotes: all
+    services: [sshd]
+  - nom: hbac-support
+    description: Support et astreinte — SSH sur la supervision et la source de vérité, pour diagnostiquer
+    groupes: [support]
+    hotes:
+      - mon01.par1.medisphere.internal
+      - nbx01.par1.medisphere.internal
+    services: [sshd]
+
+# Règle « allow_all » de FreeIPA (tout le monde partout) : enabled pendant la mise en place, puis
+# disabled (seconde MR, après « ipa hbactest --rules=… »). Jamais supprimée : la réactiver est le
+# retour arrière le plus rapide (RB-240).
+annuaire_hbac_allow_all: disabled

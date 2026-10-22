@@ -1,0 +1,7 @@
+---
+# group_vars/role_netbox/sso.yml — connexion de NetBox par Keycloak (M24-E15, SEC-2515).
+# Le secret vient du Vault « critique » secrets/identite.yml (chargé par playbooks/netbox.yml).
+netbox_sso_actif: true
+netbox_sso_secret: "{{ keycloak_secrets_clients.netbox }}"
+netbox_sso_groupes_defaut: [sso-lecture]
+netbox_sso_rattacher_par_courriel: true

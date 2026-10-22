@@ -1,0 +1,12 @@
+# plateforme/gitops — plateforme/oauth2-proxy.yaml — EXTRAIT (M24-E34, PLAT-2534) : une TROISIÈME
+# release du même chart dans l'Application « oauth2-proxy » d'E18, à insérer dans spec.sources après
+# la release oauth2-proxy-pyroscope. Mêmes valeurs communes, même Secret (oauth2-proxy-oidc), même
+# version de chart.
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: oauth2-proxy
+      targetRevision: 10.7.1
+      helm:
+        releaseName: oauth2-proxy-pyrra
+        valueFiles:
+          - $identite/oauth2-proxy/valeurs-communes.yaml
+          - $identite/oauth2-proxy/valeurs-pyrra.yaml

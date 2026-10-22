@@ -1,0 +1,19 @@
+# {{ durcissement_entete }}
+# {{ durcissement_sysctl_fichier }} (rôle durcissement, M26-E10)
+# Une ligne par règle du référentiel (identifiant XCCDF en commentaire). Les règles en exception sur
+# {{ inventory_hostname }} sont listées à la fin, sans valeur imposée (registre : exceptions.md).
+{% for parametre, mesure in durcissement_sysctl.items() %}
+{%   if mesure.regle not in _durcissement_exclues %}
+{{ parametre }} = {{ mesure.valeur }}    # {{ mesure.regle }}
+{%   elif parametre.endswith('rp_filter') %}
+# {{ mesure.regle }} en exception : filtrage lâche plutôt qu'aucun
+{{ parametre }} = {{ durcissement_rp_filter_repli }}
+{%   endif %}
+{% endfor %}
+{% if _durcissement_exclues | length > 0 %}
+
+# Exceptions de cet hôte (non appliquées ici) :
+{%   for e in _durcissement_exceptions_hote %}
+#   - {{ e.regle }} : {{ e.justification | replace('\n', ' ') | truncate(140) }} (revue {{ e.revue }})
+{%   endfor %}
+{% endif %}

@@ -1,0 +1,17 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M25-E15, SEC-2615) — BASCULE
+# de la prod aux identifiants dynamiques, une fois le redémarrage automatique éprouvé en recette.
+# MR approuvée par Julien Petit et Karim Benali ; synchronisation MANUELLE (M20) ; /pret surveillé.
+# Ordre : « migrations » et « canary » avant « identifiants-dynamiques » (qui modifie leur Job et
+# leur Rollout), « livraison » en dernier. La prod a une dernière marche de canary SANS durée (promotion
+# humaine, M20-E16) : avec la stratégie « rollout » de Reloader, chaque rafraîchissement créerait une
+# révision bloquée à cette marche… pendant que les identifiants des anciens pods expirent. D'où
+# « restart » (spec.restartAt : pas de révision, pas de canary).
+components:
+  - ../../components/dependances
+  - ../../components/haute-disponibilite
+  - ../../components/migrations
+  - ../../components/canary
+  - ../../components/identifiants-dynamiques
+  - ../../components/livraison
+# (resources et patches d'E14 — reseau-openbao.yaml, base-openbao.yaml — inchangés ; le
+#  passwordSecret de base-openbao.yaml a été retiré après rotate-root.)

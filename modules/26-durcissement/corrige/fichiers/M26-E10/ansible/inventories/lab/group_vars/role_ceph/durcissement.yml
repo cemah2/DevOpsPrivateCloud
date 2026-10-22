@@ -1,0 +1,4 @@
+---
+# group_vars/role_ceph/durcissement.yml (M26-E11) — groupe local autorisé en SSH en plus des groupes communs.
+# ceph0x : l'orchestrateur de cephadm se connecte de nœud à nœud avec le compte cephadm (M08).
+durcissement_ssh_groupes_supplementaires: [cephadm]

@@ -1,0 +1,7 @@
+# {{ durcissement_entete }}
+# /etc/systemd/journald.conf.d/60-durcissement.conf (rôle durcissement, M26-E10)
+# La taille maximale reste celle du rôle base (M04) : ce fichier ne la fixe pas.
+[Journal]
+{% for cle, valeur in durcissement_journald_options.items() %}
+{{ cle }}={{ valeur }}
+{% endfor %}

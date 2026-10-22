@@ -1,0 +1,14 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M25-E12, PLAT-2612.
+# Même format que les extraits du M24 (définitions, puis règles de transit). Une passerelle à la fois
+# (--limit gw01, vérification, puis gw02). Retour arrière : git revert et même playbook.
+#
+# 1) Définitions (si elles n'existent pas déjà depuis le palier 1).
+  - {nom: VAULT_NOEUDS, valeur: "10.10.20.21-10.10.20.23", commentaire: "vault01-03 : OpenBao (M25)"}
+  - {nom: VIP_K8S_API, valeur: 10.10.40.200, commentaire: "VIP de l'API de k8s-par1 (M14)"}
+#
+# 2) Transit (bloc « Secrets »).
+#    OpenBao vérifie les jetons de comptes de service par l'API TokenReview (méthode k8s-par1/).
+  - {entree: $V_INFRA, source: $VAULT_NOEUDS, sortie: $V_K8S, destination: $VIP_K8S_API, proto: tcp, ports: 8443,
+     motif: "OpenBao → API k8s-par1 (TokenReview de la méthode kubernetes)", ref: M25-E12}
+#    Les pods d'ESO (sortie par l'adresse du travailleur, K8S_TRAV) → VIP openbao 8200 : prévu au
+#    PLAN §4.12, normalement posé au palier 1 ; à vérifier, pas à dupliquer.

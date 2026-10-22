@@ -1,0 +1,14 @@
+---
+# Domaine « paquets » : rien d'inutile installé, le nécessaire présent.
+
+- name: Paquets interdits absents
+  ansible.builtin.package:
+    name: "{{ durcissement_paquets_interdits[ansible_facts['os_family']] }}"
+    state: absent
+  tags: [package_telnet_removed, package_telnetd_removed, package_avahi_removed, package_tftp_removed]
+
+- name: Paquets requis par le durcissement
+  ansible.builtin.package:
+    name: "{{ durcissement_paquets_requis[ansible_facts['os_family']] }}"
+    state: present
+  tags: [package_pam_pwquality_installed, package_sudo_installed]

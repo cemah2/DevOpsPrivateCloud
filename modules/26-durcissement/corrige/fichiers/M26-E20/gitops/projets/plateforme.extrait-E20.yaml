@@ -1,0 +1,10 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject), M26-E20.
+spec:
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: tetragon
+  # Types sans espace : les TracingPolicy (Application « politiques »). Les CRD de Tetragon sont
+  # installées par son opérateur (crds.installMethod: operator, défaut du chart), pas par Argo CD.
+  clusterResourceWhitelist:
+    - group: cilium.io
+      kind: TracingPolicy

@@ -1,0 +1,44 @@
+## /etc/gitlab/gitlab.rb de git01 — EXTRAIT de M24-E11 (PLAT-2511), à AJOUTER au fichier du M01.
+## gitlab.rb est géré à la main (M01) : copie datée AVANT toute modification
+##   sudo cp -a /etc/gitlab/gitlab.rb /etc/gitlab/gitlab.rb.$(date +%F-%H%M)
+## puis « sudo gitlab-ctl reconfigure ». Le fichier est root:root 600 : il contient le secret du client
+## « gitlab », recopié depuis le Vault (secrets/identite.yml de plateforme/ansible) avec sudoedit.
+## Racine MédiSphère : déjà dans /etc/gitlab/trusted-certs/ (M01) ; sinon GitLab refuse la découverte.
+
+### OmniAuth : connexion par Keycloak (royaume medisphere).
+# Un utilisateur qui n'existe pas encore est CRÉÉ à sa première connexion (personne nouvelle de
+# l'annuaire) ; il n'est pas bloqué en attente d'un administrateur : l'annuaire a déjà décidé.
+gitlab_rails['omniauth_enabled'] = true
+gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
+gitlab_rails['omniauth_block_auto_created_users'] = false
+# Rattachement d'un compte EXISTANT de même adresse de courriel à l'identité OIDC, à sa première
+# connexion par le SSO. Acceptable ICI parce que les adresses viennent de notre annuaire (READ_ONLY,
+# trust_email) : personne ne peut se donner l'adresse d'un autre. Dangereux avec un IdP où chacun
+# choisit son adresse.
+gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']
+# Mot de passe local : CONSERVÉ jusqu'au mini-projet (M24-E46), où il ne restera que pour root.
+
+gitlab_rails['omniauth_providers'] = [
+  {
+    name: "openid_connect",
+    label: "SSO MédiSphère",
+    args: {
+      name: "openid_connect",
+      scope: ["openid", "profile", "email"],
+      response_type: "code",
+      issuer: "https://sso.par1.medisphere.internal/realms/medisphere",
+      discovery: true,
+      client_auth_method: "basic",
+      # Identifiant STABLE de la personne : « sub » (identifiant interne de Keycloak, lui-même lié à
+      # ipaUniqueID). preferred_username changerait si l'identifiant de la personne était renommé.
+      uid_field: "sub",
+      pkce: true,
+      send_scope_to_token_endpoint: false,
+      client_options: {
+        identifier: "gitlab",
+        secret: "<SECRET-DU-CLIENT-GITLAB>",
+        redirect_uri: "https://git01.par1.medisphere.internal/users/auth/openid_connect/callback"
+      }
+    }
+  }
+]

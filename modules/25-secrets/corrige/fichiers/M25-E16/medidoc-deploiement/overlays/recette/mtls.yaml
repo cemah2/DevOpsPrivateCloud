@@ -1,0 +1,27 @@
+# medidoc/deploiement — overlays/recette/mtls.yaml (M25-E16, SEC-2616)
+# Certificat SERVEUR (et client, pour l'uniformité) de MédiDoc en recette, émis par la PKI de
+# services : 48 h, renouvelé 16 h avant l'échéance, nouvelle clé à chaque renouvellement. Les noms
+# sont ceux du Service (le relais de MédiAgenda vérifie le nom qu'il appelle).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: medidoc-mtls
+spec:
+  secretName: medidoc-mtls
+  duration: 48h
+  renewBefore: 16h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages:
+    - server auth
+    - client auth
+    - digital signature
+  dnsNames:
+    - medidoc.medidoc-recette.svc
+    - medidoc.medidoc-recette.svc.cluster.local
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: openbao-services

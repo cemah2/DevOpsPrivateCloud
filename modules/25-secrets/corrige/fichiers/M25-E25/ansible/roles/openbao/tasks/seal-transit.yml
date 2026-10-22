@@ -1,0 +1,25 @@
+---
+# Rôle openbao — jeton du seal transit (M25-E25). Importé par configuration.yml quand
+# openbao_seal_transit est vrai.
+
+- name: Le jeton du seal transit est fourni (Vault critique)
+  ansible.builtin.assert:
+    that:
+      - openbao_seal_transit_jeton is defined
+      - openbao_seal_transit_jeton | length > 20
+      - openbao_seal_transit_jeton is not search('<')
+    fail_msg: "vault_openbao_kms_jeton manquant : group_vars/role_coffre/vault-critique-kms.yml (M25-E25)."
+    quiet: true
+
+# root:root 0600 : systemd le lit en root (EnvironmentFile) avant de lancer le service sous
+# l'utilisateur openbao. no_log : la valeur ne passe ni dans la sortie ni dans le --diff.
+- name: /etc/openbao/kms.env (BAO_TOKEN du seal transit)
+  ansible.builtin.copy:
+    dest: /etc/openbao/kms.env
+    content: "BAO_TOKEN={{ openbao_seal_transit_jeton }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: configuration openbao modifiee

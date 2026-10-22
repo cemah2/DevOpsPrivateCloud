@@ -1,0 +1,7 @@
+---
+# Rôle openbao_kms — valeurs propres à kms01 (passées au rôle openbao dont il dépend).
+openbao_nom_grappe: kms-par1
+# Le nom du « service » est celui de l'hôte : personne d'autre ne porte kms01.par1….
+openbao_nom_service: "{{ inventory_hostname }}.{{ openbao_domaine }}"
+openbao_raft_rejoindre: []
+openbao_seal_transit: false

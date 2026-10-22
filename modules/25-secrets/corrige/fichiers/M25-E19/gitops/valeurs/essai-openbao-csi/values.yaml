@@ -1,0 +1,38 @@
+# plateforme/gitops — valeurs/essai-openbao-csi/values.yaml (M25-E19, PLAT-2619, TEMPORAIRE).
+# Chart « openbao » 0.30.4 réduit au FOURNISSEUR CSI : ni serveur (le coffre est vault01-03), ni
+# injecteur. Le fournisseur (openbao-csi-provider 2.0.3) parle à un agent OpenBao (bao agent) dans le
+# même pod, par une socket Unix ; l'agent parle au coffre en HTTPS et garde les jetons en cache.
+global:
+  externalBaoAddr: https://openbao.par1.medisphere.internal:8200
+
+server:
+  enabled: false
+injector:
+  enabled: false
+
+csi:
+  enabled: true
+  image:
+    registry: registry.par1.medisphere.internal
+    repository: quay/openbao/openbao-csi-provider
+    tag: 2.0.3
+  agent:
+    enabled: true
+    image:
+      registry: registry.par1.medisphere.internal
+      repository: quay/openbao/openbao
+      # Même version que le coffre (palier 2 : 2.6.4) ; suivra la montée de version d'E29.
+      tag: 2.6.4
+  # L'agent vérifie le certificat du coffre : il doit connaître la racine MédiSphère. Le chart ne
+  # permet pas de régler la CA de l'agent ; on remplace donc, DANS CES CONTENEURS SEULEMENT, le
+  # paquet d'autorités du système par la racine (l'agent ne parle qu'au coffre). ConfigMap
+  # « medisphere-racine » de l'espace essai-csi (même contenu que celle de ci-jobs, M19-E07).
+  volumes:
+    - name: racine-medisphere
+      configMap:
+        name: medisphere-racine
+  volumeMounts:
+    - name: racine-medisphere
+      mountPath: /etc/ssl/certs/ca-certificates.crt
+      subPath: medisphere-root-ca.crt
+      readOnly: true

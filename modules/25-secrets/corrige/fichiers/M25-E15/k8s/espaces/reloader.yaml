@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/reloader.yaml (M25-E15, SEC-2615)
+# Espace de Reloader, créé avant l'Application reloader (CreateNamespace=false). Pod non-root, sans
+# privilège, seccomp RuntimeDefault, système de fichiers en lecture seule (valeurs du chart).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: reloader
+  labels:
+    medisphere.internal/equipe: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "SEC-2615"

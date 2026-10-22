@@ -1,0 +1,23 @@
+# plateforme/infra — outils/charger-acces.sh : AJOUT de M24-E14 (PLAT-2514 ; resservi en M24-E15).
+# Secrets des clients OIDC pour les variables ÉPHÉMÈRES des états registre/ et acces-proxmox/, lus
+# dans le Vault « critique » secrets/identite.yml de plateforme/ansible (clone ~/src/ansible), jamais
+# écrits sur disque ni affichés. À placer dans _ca_charger, avant le message final.
+
+  # _ca_secret_client CLÉ VARIABLE — exporte VARIABLE (ex. TF_VAR_harbor_oidc_secret) depuis
+  # keycloak_secrets_clients.CLÉ ; absent = avertissement seulement (l'état concerné en aura besoin).
+  _ca_secret_client() {
+    local v
+    v="$(cd "${MS_ANSIBLE_DIR:-$HOME/src/ansible}" && uv run ansible-vault view secrets/identite.yml 2>/dev/null \
+      | yq -r ".keycloak_secrets_clients.$1 // \"\"")"
+    if [[ ${#v} -lt 32 ]]; then
+      echo "charger-acces : keycloak_secrets_clients.$1 absent de secrets/identite.yml (ranger-secret-client.sh $1)" >&2
+      return 0
+    fi
+    export "$2=$v"
+  }
+  _ca_secret_client harbor TF_VAR_harbor_oidc_secret
+  _ca_secret_client proxmox TF_VAR_proxmox_oidc_secret
+  unset -f _ca_secret_client
+
+# En CI (pipeline de plateforme/infra) : variables du projet PROTÉGÉES, MASQUÉES et CACHÉES
+# TF_VAR_harbor_oidc_secret (M24-E14). L'état acces-proxmox/ n'est pas appliqué par la CI (M24-E15).

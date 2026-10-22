@@ -1,0 +1,67 @@
+# plateforme/outils — src/medictl/cli.py : À AJOUTER (M25-E17, SEC-2617).
+# Assemblé dans le cli.py de M02 et vérifié (ruff, pytest, essai réel contre OpenBao 2.6.4).
+#
+# 1) Imports : « import json » et « from pathlib import Path » rejoignent les imports de la
+#    bibliothèque standard (ordre alphabétique : json après enum, pathlib après enum/datetime) ;
+#    la ligne suivante rejoint les imports « from medictl… » (après medictl.sortie) :
+import json
+from pathlib import Path
+
+from medictl.transit import (
+    ClientTransit,
+    chiffrer_champs,
+    dechiffrer_champs,
+    rechiffrer_champs,
+)
+
+# 2) Après « app.add_typer(vm_app, name="vm") » :
+transit_app = typer.Typer(
+    help="Chiffrer des champs de fiches JSON par la clé de transit d'OpenBao.",
+    no_args_is_help=True,
+)
+app.add_typer(transit_app, name="transit")
+
+CLE_TRANSIT = "medictl-donnees"
+Champs = Annotated[
+    list[str],
+    typer.Option("--champ", "-c", help="Champ à traiter (répétable), ex. -c code_baie"),
+]
+Fichier = Annotated[
+    Path,
+    typer.Argument(help="Document JSON (objet ou liste d'objets), réécrit sur place."),
+]
+
+
+def fabriquer_client_transit() -> ClientTransit:
+    """Point d'injection : les tests remplacent cette fonction par un faux client."""
+    return ClientTransit.depuis_environnement(CLE_TRANSIT)
+
+
+def _traiter(fichier: Path, champs: list[str], operation, verbe: str) -> None:
+    with erreurs_propres():
+        donnees = json.loads(fichier.read_text(encoding="utf-8"))
+        n = operation(donnees, set(champs), fabriquer_client_transit())
+        # Réécriture atomique : un fichier à moitié chiffré ne doit jamais exister.
+        provisoire = fichier.with_suffix(fichier.suffix + ".tmp")
+        texte = json.dumps(donnees, ensure_ascii=False, indent=2) + "\n"
+        provisoire.write_text(texte, encoding="utf-8")
+        provisoire.replace(fichier)
+        typer.echo(f"{n} champ(s) {verbe}(s) dans {fichier}", err=True)
+
+
+@transit_app.command("chiffrer")
+def transit_chiffrer(fichier: Fichier, champs: Champs) -> None:
+    """Chiffre les champs encore en clair (un champ déjà chiffré est laissé tel quel)."""
+    _traiter(fichier, champs, chiffrer_champs, "chiffré")
+
+
+@transit_app.command("rechiffrer")
+def transit_rechiffrer(fichier: Fichier, champs: Champs) -> None:
+    """Passe les champs à la dernière version de la clé (rewrap), sans jamais voir le clair."""
+    _traiter(fichier, champs, rechiffrer_champs, "rechiffré")
+
+
+@transit_app.command("dechiffrer")
+def transit_dechiffrer(fichier: Fichier, champs: Champs) -> None:
+    """Déchiffre les champs : le fichier redevient sensible (le temps de l'intervention)."""
+    _traiter(fichier, champs, dechiffrer_champs, "déchiffré")

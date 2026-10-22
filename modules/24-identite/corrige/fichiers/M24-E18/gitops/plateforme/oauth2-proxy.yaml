@@ -1,0 +1,48 @@
+# plateforme/gitops — plateforme/oauth2-proxy.yaml (M24-E18, PLAT-2518)
+# DEUX releases du même chart (recopié et signé dans Harbor « charts ») dans une Application à
+# sources multiples, plus les manifestes de l'espace (racine MédiSphère, politique d'entrée).
+# Valeurs et manifestes dans plateforme/identite (oauth2-proxy/) : l'identité vit avec l'identité.
+# L'espace oauth2-proxy est créé par plateforme/k8s (espaces/oauth2-proxy.yaml), pas par Argo CD.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oauth2-proxy
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: oauth2-proxy
+      targetRevision: 10.7.1
+      helm:
+        releaseName: oauth2-proxy-hubble
+        valueFiles:
+          - $identite/oauth2-proxy/valeurs-communes.yaml
+          - $identite/oauth2-proxy/valeurs-hubble.yaml
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: oauth2-proxy
+      targetRevision: 10.7.1
+      helm:
+        releaseName: oauth2-proxy-pyroscope
+        valueFiles:
+          - $identite/oauth2-proxy/valeurs-communes.yaml
+          - $identite/oauth2-proxy/valeurs-pyroscope.yaml
+    # Référence pour les fichiers de valeurs ($identite/…) : une source « ref » sans chemin.
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/identite.git
+      targetRevision: main
+      ref: identite
+    # Manifestes de l'espace (Kustomize) : une source distincte, avec son chemin.
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/identite.git
+      targetRevision: main
+      path: oauth2-proxy/manifestes
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: oauth2-proxy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

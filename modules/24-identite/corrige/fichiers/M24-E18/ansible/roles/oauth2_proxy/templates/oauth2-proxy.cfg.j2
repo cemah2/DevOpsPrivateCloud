@@ -1,0 +1,27 @@
+# {{ oauth2_proxy_entete }}
+# Instance « {{ item.nom }} » — options générales d'OAuth2 Proxy {{ oauth2_proxy_version }} (format TOML historique).
+# Le fournisseur, le serveur TLS, l'amont et les en-têtes sont dans alpha.yaml (configuration
+# structurée) : ces clés-là sont INTERDITES ici quand --alpha-config est utilisé.
+# Aucun secret : fichiers client-secret, cookie-secret, autorisation-amont (0640, root:{{ oauth2_proxy_groupe }}).
+
+redirect_url = "{{ item.url_publique }}/oauth2/callback"
+email_domains = ["*"]
+skip_provider_button = true
+
+# Cookie de session : préfixe __Host- (le navigateur l'exige Secure, Path=/ et SANS Domain : il ne
+# part que vers {{ item.url_publique | urlsplit('hostname') }}), jamais lisible par JavaScript.
+cookie_name = "__Host-oauth2-{{ item.nom }}"
+cookie_secret_file = "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/cookie-secret"
+cookie_secure = true
+cookie_httponly = true
+cookie_samesite = "lax"
+cookie_path = "/"
+# Durée maximale = session SSO maximale de Keycloak (10 h) ; rafraîchissement par le jeton de
+# rafraîchissement toutes les 5 min (durée du jeton d'accès) : une personne désactivée est coupée
+# au plus 5 min après (le rafraîchissement échoue).
+cookie_expire = "10h"
+cookie_refresh = "5m"
+
+# Personne devant cette instance : les en-têtes X-Forwarded-* ne sont pas crus.
+reverse_proxy = false
+silence_ping_logging = true

@@ -1,0 +1,36 @@
+---
+# Contrôles après déploiement (M25-E03), lecture seule. Un coffre neuf n'est ni initialisé ni
+# descellé : ces contrôles portent sur ce que le rôle maîtrise (écoute TLS, version, stockage).
+
+- name: L'API répond en HTTPS, certificat vérifié avec la racine du lab (nom du nœud)
+  ansible.builtin.uri:
+    url: "https://{{ openbao_nom_noeud }}:{{ openbao_port_api }}/v1/sys/seal-status"
+    ca_path: "{{ openbao_racine }}"
+    return_content: true
+  register: _openbao_etat
+  retries: 20
+  delay: 3
+  until: _openbao_etat.status == 200
+
+- name: Version et stockage attendus
+  ansible.builtin.assert:
+    that:
+      - _openbao_etat.json.version == openbao_version
+      - _openbao_etat.json.storage_type == 'raft'
+    fail_msg: >-
+      Le serveur annonce la version {{ _openbao_etat.json.version | default('?') }} et le stockage
+      {{ _openbao_etat.json.storage_type | default('?') }} : attendu {{ openbao_version }} et raft
+      (configuration non relue ? redémarrage non autorisé ?).
+    quiet: true
+
+- name: Rien n'écoute en clair (une requête HTTP sur 8200 est refusée)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ openbao_port_api }}/v1/sys/seal-status"
+    status_code: 400
+
+- name: État du coffre (information)
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} : initialisé={{ _openbao_etat.json.initialized }},
+      scellé={{ _openbao_etat.json.sealed }}, seal={{ _openbao_etat.json.type }}.
+      {% if not _openbao_etat.json.initialized %}Initialisation : une fois, en cérémonie (M25-E03).{% endif %}

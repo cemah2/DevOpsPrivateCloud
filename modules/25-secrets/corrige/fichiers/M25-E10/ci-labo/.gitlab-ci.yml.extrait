@@ -1,0 +1,15 @@
+# formation/ci-labo — .gitlab-ci.yml : EXTRAIT, essai du refus (M25-E10). RETIRÉ après l'essai, avec
+# le rôle ci-formation-ci-labo et le secret kv/formation/ci/essai.
+# Lancer une fois sur une branche NON protégée (essai-oidc), une fois sur main.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.9.0
+
+essai-openbao:
+  extends: .openbao-connexion
+  image: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.1.0@sha256:<EMPREINTE-1.1.0>
+  tags: [k8s]
+  script:
+    # On ne lit PAS la valeur : on prouve seulement qu'on y a accès (longueur).
+    - echo "longueur du secret d'essai : $(bao kv get -mount=kv -field=valeur formation/ci/essai | wc -c)"
+  rules:
+    - if: $CI_COMMIT_BRANCH

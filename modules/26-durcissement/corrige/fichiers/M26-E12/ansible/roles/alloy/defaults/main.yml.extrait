@@ -1,0 +1,7 @@
+# roles/alloy/defaults/main.yml — EXTRAIT à ajouter à la fin (M26-E12, SEC-2712).
+
+# Journaux d'audit lus en fichier et envoyés au locataire « audit » de Loki (rétention 1 an, M22),
+# avec une étiquette « service » (même convention que keycloak et openbao, M24-M25).
+# Liste de { chemin, service }. Vide = aucun envoi. Alloy doit pouvoir LIRE le fichier (groupe adm).
+alloy_journaux_audit: []
+alloy_locataire_audit: audit

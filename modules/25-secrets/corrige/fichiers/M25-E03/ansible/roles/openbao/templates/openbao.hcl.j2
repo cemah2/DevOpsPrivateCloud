@@ -1,0 +1,42 @@
+# {{ openbao_entete }}
+# /etc/openbao/openbao.hcl — rôle openbao (M25-E03). Documentation : https://openbao.org/docs/configuration/
+#
+# Pas de « disable_mlock » : OpenBao a retiré mlock (2.0) et la clé est ignorée (avertissement au
+# démarrage). La mémoire du processus ne part pas en swap parce que l'unité du paquet pose
+# MemorySwapMax=0 (cgroup v2) ; les vidages mémoire sont coupés par la surcharge (LimitCORE=0).
+
+ui           = {{ openbao_ui | bool | lower }}
+cluster_name = "{{ openbao_nom_grappe }}"
+
+# Adresses annoncées aux clients (redirections) et aux autres nœuds : le NOM du nœud, qui est dans
+# son certificat ; jamais une adresse IP, jamais le nom du service (il désigne n'importe quel nœud).
+api_addr     = "https://{{ openbao_nom_noeud }}:{{ openbao_port_api }}"
+cluster_addr = "https://{{ openbao_nom_noeud }}:{{ openbao_port_grappe }}"
+
+# Stockage intégré (Raft) : les données chiffrées par la barrière, sur le disque local du nœud.
+storage "raft" {
+  path    = "{{ openbao_dossier_donnees }}"
+  node_id = "{{ inventory_hostname }}"
+{% for leader in openbao_raft_rejoindre %}
+
+  retry_join {
+    leader_api_addr     = "{{ leader }}"
+    leader_ca_cert_file = "{{ openbao_racine }}"
+  }
+{% endfor %}
+}
+
+# Une seule écoute, en TLS. 0.0.0.0 : l'adresse du nœud, la boucle locale (contrôles) et, au
+# M25-E24, la VIP portée par keepalived.
+listener "tcp" {
+  address         = "0.0.0.0:{{ openbao_port_api }}"
+  cluster_address = "{{ openbao_adresse_grappe }}:{{ openbao_port_grappe }}"
+  tls_cert_file   = "{{ openbao_tls_certificat }}"
+  tls_key_file    = "{{ openbao_tls_cle }}"
+  tls_min_version = "{{ openbao_tls_version_min }}"
+}
+{% if openbao_hcl_supplement | length > 0 %}
+
+# --- Supplément (paliers suivants : seal, telemetry…) ---
+{{ openbao_hcl_supplement }}
+{% endif %}

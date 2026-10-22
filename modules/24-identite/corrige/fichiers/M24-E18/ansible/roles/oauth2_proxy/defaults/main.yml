@@ -1,0 +1,47 @@
+---
+# Rôle oauth2_proxy — OAuth2 Proxy sur une VM, devant une interface sans SSO natif (M24-E18, PLAT-2518).
+# Une INSTANCE = une unité systemd oauth2-proxy-<nom>.service, ses fichiers dans
+# /etc/oauth2-proxy/<nom>/ ; toutes les instances partagent le binaire et le client Keycloak
+# « oauth2-proxy » (une application cliente, des URI de retour listées une à une côté Keycloak).
+
+oauth2_proxy_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle oauth2_proxy).') | replace('\n', ' ') }}
+
+# --- Version (PLAN §6 : ≥ 7.15.5, contournements d'authentification corrigés) ----------------
+oauth2_proxy_version: "7.15.5"
+# SHA-256 de oauth2-proxy-v<version>.linux-amd64.tar.gz, comparée au fichier
+# oauth2-proxy-v<version>.linux-amd64.tar.gz-sha256sum.txt publié avec la version (relevé par MR).
+oauth2_proxy_sha256: ""
+oauth2_proxy_url: >-
+  https://github.com/oauth2-proxy/oauth2-proxy/releases/download/v{{ oauth2_proxy_version }}/oauth2-proxy-v{{ oauth2_proxy_version }}.linux-amd64.tar.gz
+oauth2_proxy_dossier_versions: /opt/oauth2-proxy
+oauth2_proxy_binaire: /usr/local/bin/oauth2-proxy
+
+# --- Compte du service --------------------------------------------------------------------------
+oauth2_proxy_utilisateur: oauth2-proxy
+oauth2_proxy_groupe: oauth2-proxy
+oauth2_proxy_dossier_config: /etc/oauth2-proxy
+
+# --- Fournisseur d'identité (commun à toutes les instances) ---------------------------------------
+oauth2_proxy_emetteur: https://sso.par1.medisphere.internal/realms/medisphere
+oauth2_proxy_client_id: oauth2-proxy
+# Secret du client Keycloak « oauth2-proxy » : Vault critique (keycloak_secrets_clients.oauth2_proxy).
+oauth2_proxy_client_secret: ""
+# Racine de confiance pour joindre Keycloak (rôle ca_lab).
+oauth2_proxy_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# --- Instances ------------------------------------------------------------------------------------
+# Liste de dictionnaires :
+#   nom                 identifiant court (unité oauth2-proxy-<nom>.service, cookie __Host-oauth2-<nom>)
+#   ecoute              adresse:port HTTPS d'écoute
+#   url_publique        https://hôte:port, base de l'URI de retour /oauth2/callback (déclarée dans Keycloak)
+#   amont               URL de l'interface protégée (HTTPS vérifié)
+#   groupes             groupes de l'annuaire autorisés (au moins un)
+#   tls_certificat, tls_cle   certificat de l'instance (rôle certificats_acme)
+#   cookie_secret       32 caractères aléatoires (openssl rand -hex 16, Vault critique), propre à
+#                       l'instance ; lu TEL QUEL dans un fichier (pas de base64) : 16, 24 ou 32 octets
+#   autorisation_amont  (facultatif) valeur COMPLÈTE de l'en-tête Authorization envoyé à l'amont
+#                       (« Basic … ») quand l'interface exige sa propre authentification
+oauth2_proxy_instances: []
+
+oauth2_proxy_verifier: true

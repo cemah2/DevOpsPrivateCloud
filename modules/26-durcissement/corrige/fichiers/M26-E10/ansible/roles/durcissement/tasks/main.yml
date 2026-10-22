@@ -1,0 +1,147 @@
+---
+# Rôle durcissement (M26-E10). Point d'entrée : contrôles préalables, exceptions, puis un fichier de
+# tâches par domaine, dans un ordre fixe (on ne touche à l'accès qu'une fois le reste en place).
+#
+# Toujours d'abord : ansible-playbook playbooks/durcissement.yml --limit <hôte> --check --diff
+
+- name: Famille de système prise en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] in ['Debian', 'RedHat']
+      - (ansible_facts['os_family'] == 'Debian' and ansible_facts['distribution_major_version'] == '13')
+        or (ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution_major_version'] == '10')
+    fail_msg: >-
+      {{ inventory_hostname }} : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+      n'est pas une cible du rôle (Debian 13 ou Rocky Linux 10).
+    quiet: true
+  tags: [always]
+
+# --- Exceptions : complètes, signées, à jour, puis réduites à celles de CET hôte ---------------------
+- name: Rassembler les exceptions déclarées
+  ansible.builtin.set_fact:
+    _durcissement_toutes_exceptions: "{{ durcissement_exceptions + durcissement_exceptions_locales }}"
+  tags: [always]
+
+- name: Chaque exception est complète et signée par un valideur reconnu
+  ansible.builtin.assert:
+    that:
+      - item.regle is defined and item.regle is match('^[a-z0-9_.-]+$')
+      - item.hotes is defined and item.hotes is sequence and item.hotes is not string and item.hotes | length > 0
+      - item.justification is defined and item.justification | length >= 20
+      - item.valideur is defined and item.valideur in durcissement_valideurs
+      - item.revue is defined and (item.revue | string) is match('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+    fail_msg: >-
+      Exception incomplète ou non signée : {{ item }}. Champs obligatoires : regle (identifiant XCCDF
+      court), hotes (liste), justification (une vraie phrase), valideur ({{ durcissement_valideurs | join(', ') }}),
+      revue (AAAA-MM-JJ). Procédure : RB-261.
+    quiet: true
+  loop: "{{ _durcissement_toutes_exceptions }}"
+  loop_control:
+    label: "{{ item.regle | default('?') }}"
+  tags: [always]
+
+# Une exception échue n'est plus une décision : c'est un écart. On refuse de continuer.
+- name: Aucune exception n'a dépassé sa date de revue
+  ansible.builtin.assert:
+    that:
+      - (item.revue | string) >= ansible_facts['date_time']['date']
+    fail_msg: >-
+      L'exception {{ item.regle }} ({{ item.hotes | join(', ') }}) devait être revue le {{ item.revue }} :
+      la renouveler (nouvelle date, même valideur ou un autre) ou la retirer, par MR (RB-261).
+    quiet: true
+  loop: "{{ _durcissement_toutes_exceptions }}"
+  loop_control:
+    label: "{{ item.regle }} → {{ item.revue }}"
+  tags: [always]
+
+# « hotes » accepte des noms d'hôtes, des noms de groupes d'inventaire (role_routeur, k8s_par1…)
+# et « all ».
+- name: Exceptions qui concernent cet hôte
+  ansible.builtin.set_fact:
+    _durcissement_exceptions_hote: >-
+      {%- set retenues = [] -%}
+      {%- for e in _durcissement_toutes_exceptions -%}
+      {%-   if e.hotes | intersect([inventory_hostname, 'all'] + group_names) | length > 0 -%}
+      {%-     set _ = retenues.append(e) -%}
+      {%-   endif -%}
+      {%- endfor -%}
+      {{ retenues }}
+  tags: [always]
+
+- name: Règles exclues sur cet hôte
+  ansible.builtin.set_fact:
+    _durcissement_exclues: "{{ _durcissement_exceptions_hote | map(attribute='regle') | unique | list }}"
+  tags: [always]
+
+- name: Exceptions de cet hôte (pour mémoire dans la sortie)
+  ansible.builtin.debug:
+    msg: "{{ _durcissement_exclues if _durcissement_exclues | length > 0 else 'aucune' }}"
+  tags: [always]
+
+# --- Domaines, dans l'ordre ---------------------------------------------------------------------------
+# import_tasks (statique) et non include_tasks : les étiquettes des tâches (identifiants de règles)
+# restent visibles, « --tags sshd_disable_root_login » fonctionne, et « --list-tasks » montre tout.
+- name: Paquets
+  ansible.builtin.import_tasks: paquets.yml
+  when: "'paquets' in durcissement_domaines"
+  tags: [paquets]
+
+- name: Noyau (sysctl, modules)
+  ansible.builtin.import_tasks: noyau.yml
+  when: "'noyau' in durcissement_domaines"
+  tags: [noyau]
+
+- name: Services de systemd, vidages mémoire, Ctrl-Alt-Suppr
+  ansible.builtin.import_tasks: systemd.yml
+  when: "'systemd' in durcissement_domaines"
+  tags: [systemd]
+
+- name: Journalisation (journald)
+  ansible.builtin.import_tasks: journalisation.yml
+  when: "'journalisation' in durcissement_domaines"
+  tags: [journalisation]
+
+- name: Montages (/tmp, /dev/shm)
+  ansible.builtin.import_tasks: montages.yml
+  when: "'montages' in durcissement_domaines"
+  tags: [montages]
+
+- name: Comptes (login.defs, umask, su, délai d'inactivité)
+  ansible.builtin.import_tasks: comptes.yml
+  when: "'comptes' in durcissement_domaines"
+  tags: [comptes]
+
+- name: PAM (faillock, pwquality, historique)
+  ansible.builtin.import_tasks: pam.yml
+  when: "'pam' in durcissement_domaines"
+  tags: [pam]
+
+- name: Réglages de sudo
+  ansible.builtin.import_tasks: sudo.yml
+  when: "'sudo' in durcissement_domaines"
+  tags: [sudo]
+
+- name: SSH
+  ansible.builtin.import_tasks: ssh.yml
+  when: "'ssh' in durcissement_domaines"
+  tags: [ssh]
+
+- name: Audit du noyau (auditd)
+  ansible.builtin.import_tasks: auditd.yml
+  when: "'auditd' in durcissement_domaines"
+  tags: [auditd]
+
+- name: AIDE
+  ansible.builtin.import_tasks: aide.yml
+  when: "'aide' in durcissement_domaines"
+  tags: [aide]
+
+- name: Contrôle d'accès obligatoire (AppArmor, SELinux)
+  ansible.builtin.import_tasks: mac.yml
+  when: "'mac' in durcissement_domaines"
+  tags: [mac]
+
+- name: Conformité (contenu OpenSCAP, profil adapté, registre des exceptions)
+  ansible.builtin.import_tasks: conformite.yml
+  when: "'conformite' in durcissement_domaines"
+  tags: [conformite]

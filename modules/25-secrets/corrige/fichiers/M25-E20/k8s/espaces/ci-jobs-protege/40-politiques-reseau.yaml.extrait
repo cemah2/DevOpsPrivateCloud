@@ -1,0 +1,8 @@
+# plateforme/k8s — espaces/ci-jobs-protege/40-politiques-reseau.yaml (M25-E20) : la sortie vers le
+# coffre. Si M25-E10 l'a déjà ajoutée à ci-jobs-protege (essai sur branche protégée), rien à faire ;
+# sinon, ajoute ce bloc à la fin de « egress » de ci-jobs-protege-sortie (VIP 10.10.20.200:8200 ;
+# flux K8S_TRAV → openbao de la matrice, PLAN §4.12).
+    - toFQDNs:
+        - matchName: openbao.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "8200", protocol: TCP}]

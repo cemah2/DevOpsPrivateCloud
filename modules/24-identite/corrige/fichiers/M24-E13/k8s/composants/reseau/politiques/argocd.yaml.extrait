@@ -1,0 +1,9 @@
+# plateforme/k8s — composants/reseau/politiques/argocd.yaml : AJOUT de M24-E13 (SEC-2513) à la
+# politique « argocd-server » (section egress). argocd-server lit la découverte et les clés de
+# Keycloak (JWKS) et échange les codes : sso.par1.medisphere.internal = VIP lb 10.10.70.200, port 443.
+# Règle par NOM (toFQDNs), comme les sorties de repo-server vers git01 et Harbor (M20-E25) : elle exige
+# la règle DNS « matchPattern » déjà présente dans la sortie DNS de cette même politique.
+    - toFQDNs:
+        - matchName: sso.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

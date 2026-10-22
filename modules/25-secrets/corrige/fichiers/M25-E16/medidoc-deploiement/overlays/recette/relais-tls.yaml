@@ -1,0 +1,55 @@
+# medidoc/deploiement — overlays/recette/relais-tls.yaml (M25-E16, SEC-2616) : CORRECTIF du
+# Deployment « medidoc » (à ajouter aux « patches » de l'overlay, cible kind: Deployment, name: medidoc).
+# Relais TLS mutuel ghostunnel 1.11.5, conteneur annexe natif (initContainer, restartPolicy: Always) :
+# démarre avant MédiDoc, s'arrête après lui. Il écoute 8443, exige un certificat client signé par la
+# PKI de services AU NOM du Service de MédiAgenda, et transmet en clair à 127.0.0.1:8080 (même pod).
+# La Gateway continue d'arriver sur 8080 (utilisateurs) ; seul MédiAgenda passe par 8443.
+# Certificats rechargés toutes les 5 min (--timed-reload) : le renouvellement par cert-manager (Secret
+# monté, mis à jour par le kubelet) est pris sans redémarrage.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medidoc
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: relais-tls
+          image: registry.par1.medisphere.internal/dockerhub/ghostunnel/ghostunnel:v1.11.5-distroless@sha256:<EMPREINTE-GHOSTUNNEL>
+          restartPolicy: Always
+          args:
+            - server
+            - --listen=0.0.0.0:8443
+            - --target=127.0.0.1:8080
+            - --cert=/etc/mtls/tls.crt
+            - --key=/etc/mtls/tls.key
+            - --cacert=/etc/mtls/ca.crt
+            - --allow-dns=mediagenda.mediagenda-recette.svc
+            - --timed-reload=300s
+            - --status=127.0.0.1:6060
+          ports:
+            - name: https
+              containerPort: 8443
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: mtls
+              mountPath: /etc/mtls
+              readOnly: true
+      volumes:
+        - name: mtls
+          secret:
+            secretName: medidoc-mtls

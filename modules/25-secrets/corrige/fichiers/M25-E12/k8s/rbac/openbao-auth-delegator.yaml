@@ -1,0 +1,26 @@
+# plateforme/k8s — rbac/openbao-auth-delegator.yaml (M25-E12, PLAT-2612)
+# OpenBao vérifie les jetons de comptes de service par l'API TokenReview EN PRÉSENTANT LE JETON DU
+# CLIENT (aucun jeton de vérification dédié dans le coffre, tofu/auth-k8s-par1.tf). Chaque compte de
+# service qui se connecte au coffre doit donc pouvoir créer des TokenReview (et des
+# SubjectAccessReview) : ClusterRole system:auth-delegator. Rien d'autre (ni lecture de Secrets, ni
+# emprunt d'identité).
+# Une ligne par compte client ; le compte external-secrets/external-secrets reçoit ce droit du chart
+# lui-même (systemAuthDelegator: true, valeurs d'ESO).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-auth-delegator
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+  annotations:
+    medisphere.internal/ticket: "PLAT-2612"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: eso
+    namespace: wb-essais
+  # M25-E13 : un compte « eso » par espace applicatif.
+  # M25-E16 : cert-manager/openbao-emetteur.

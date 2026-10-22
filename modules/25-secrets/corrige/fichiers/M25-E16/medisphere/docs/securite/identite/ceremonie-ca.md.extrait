@@ -1,0 +1,20 @@
+<!-- docs/securite/identite/ceremonie-ca.md — EXTRAIT : procès-verbal AJOUTÉ par M25-E16 (SEC-2616),
+     à la suite de celui de la CA de FreeIPA (M24-E02). La procédure du document ne change pas. -->
+
+### AAAA-MM — MédiSphère Services CA (OpenBao, `pki-services/`), M25-E16
+
+| Élément | Valeur |
+|---|---|
+| Date, lieu | `<AAAA-MM-JJ>`, `adm01` (session locale) |
+| Officiant / témoin | `<MOI>` / `<MOI>` (relecture à voix haute) — en production : deux personnes (Sophie Laurent témoin) |
+| CSR | `pki/openbao-services.csr`, produite par OpenBao (`pki-services/intermediate/generate/internal`) : clé EC P-256 générée **dans** le coffre, non exportable |
+| Sujet | `CN=MédiSphère Services CA` |
+| Profil | `intermediate-ca`, `CA:TRUE, pathlen:0`, `keyCertSign, cRLSign` |
+| Durée | **3 ans** (`DUREE_INTERMEDIAIRE=26280h ceremonie-pki.sh signer …`) : valide jusqu'au `<DATE-FIN>` |
+| Empreinte SHA-256 | `<EMPREINTE-SHA256>` |
+| Numéro de série | `<NUMÉRO-DE-SÉRIE>` (aussi dans `~/pki-racine/journal-ceremonies.log`) |
+| Certificat | `pki/openbao-services.crt` (MR `!<NUMÉRO>`) ; importé avec la racine (`intermediate/set-signed`), émetteur `services-2026` défini par défaut |
+| Archive | `pki-racine-<AAAAMMJJ-HHMMSS>.tar.gpg`, copiée sur `<SUPPORT>` |
+| Renouvellement | rappel au `<DATE-FIN moins un an>` ; procédure : nouvelle clé et CSR dans OpenBao (nouvel émetteur `services-AAAA`), cérémonie, import, bascule de l'émetteur par défaut, l'ancien gardé jusqu'à l'expiration de ses derniers certificats (72 h) |
+
+Pourquoi trois ans et non cinq (FreeIPA) : la clé vit dans un service en ligne (OpenBao), plus exposé qu'un annuaire ; une durée plus courte borne l'effet d'une compromission non détectée et oblige à répéter la procédure de renouvellement.

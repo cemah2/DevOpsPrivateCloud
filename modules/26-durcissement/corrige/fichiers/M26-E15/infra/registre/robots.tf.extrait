@@ -1,0 +1,39 @@
+# plateforme/infra — registre/robots.tf (état registre/, fournisseur goharbor/harbor, M13-E03)
+# EXTRAIT à ajouter (M26-E15, SEC-2715) : robot de LECTURE pour Kyverno, qui vérifie les signatures
+# à l'admission. Il lit le manifeste, les référents (API Referrers) et les bundles Cosign : tirage,
+# lecture des artefacts et de leurs accessoires. Rien d'autre (ni poussée, ni suppression).
+# Nom complet : robot$medisphere+kyverno. Même conventions que les robots du M13 (secret généré ici,
+# 180 jours, rotation par « tofu apply -replace=random_password.robot_kyverno »).
+
+resource "random_password" "robot_kyverno" {
+  length      = 32
+  special     = false
+  min_upper   = 2
+  min_lower   = 2
+  min_numeric = 2
+}
+
+resource "harbor_robot_account" "kyverno" {
+  name        = "kyverno"
+  level       = "project"
+  description = "Kyverno (k8s-par1) : vérification des signatures et attestations à l'admission — M26-E15"
+  duration    = var.duree_robots_jours
+  secret      = random_password.robot_kyverno.result
+
+  permissions {
+    kind      = "project"
+    namespace = harbor_project.projet["medisphere"].name
+    access {
+      resource = "repository"
+      action   = "pull"
+    }
+    access {
+      resource = "artifact"
+      action   = "read"
+    }
+    access {
+      resource = "accessory"
+      action   = "list"
+    }
+  }
+}

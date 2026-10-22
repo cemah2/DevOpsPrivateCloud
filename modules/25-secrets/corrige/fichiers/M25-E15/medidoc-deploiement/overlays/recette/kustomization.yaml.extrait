@@ -1,0 +1,13 @@
+# medidoc/deploiement — overlays/recette/kustomization.yaml : EXTRAIT (M25-E15, SEC-2615).
+# Le Deployment medidoc redémarre (rolling update ordinaire, 2 réplicas) quand medidoc-s3 change.
+# Stratégie « annotations » de Reloader : il pose une annotation dans le gabarit du pod.
+patches:
+  # … correctifs existants (compartiment, nom publié) …
+  - target: {kind: Deployment, name: medidoc}
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: medidoc
+        annotations:
+          secret.reloader.stakater.com/reload: "medidoc-s3"

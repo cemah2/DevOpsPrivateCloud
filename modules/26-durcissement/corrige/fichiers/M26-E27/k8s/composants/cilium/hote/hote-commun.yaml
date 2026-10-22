@@ -1,0 +1,98 @@
+# plateforme/k8s — composants/cilium/hote/hote-commun.yaml (M26-E27, SEC-2727)
+# Pare-feu d'hôte de Cilium, règles d'ENTRÉE communes à TOUS les nœuds de k8s-par1 étiquetés
+# medisphere.internal/pare-feu-hote: "oui" (cluster/noeuds.yaml). Un nœud non étiqueté n'est
+# sélectionné par aucune politique d'hôte : il accepte tout (état d'avant M26-E27).
+# Une politique d'hôte ne filtre que le sens où elle a des règles : aucune règle « egress » ici, la
+# sortie des nœuds n'est pas filtrée (DNS, NTP, Harbor, s3-01, Ceph…), et les RÉPONSES aux connexions
+# sortantes sont reconnues par le suivi de connexions.
+# Identités : « remote-node » = un autre nœud du cluster ; « kube-apiserver » = un nœud qui porte le
+# serveur d'API (nœuds de contrôle) ; « health » = sondes de cilium-health ; un pod qui joint le nœud
+# arrive avec SON identité (fromEndpoints), pas « remote-node » ; « fromCIDR » ne sélectionne JAMAIS
+# un nœud du cluster (mode de correspondance CIDR par défaut), seulement l'extérieur (MGMT, mon01…).
+# Les flux entre deux travailleurs chiffrés par WireGuard nœud à nœud (E26) arrivent par cilium_wg0, où
+# les politiques d'hôte ne s'appliquent pas (« known issues ») : voir RB-264 et la matrice des flux.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: hote-commun
+  labels:
+    medisphere.internal/composant: pare-feu-hote
+spec:
+  description: "Entrées communes des nœuds de k8s-par1 (SEC-2727, RB-264)"
+  nodeSelector:
+    matchLabels:
+      medisphere.internal/pare-feu-hote: "oui"
+  ingress:
+    # --- Mécanique de Cilium entre nœuds ------------------------------------------------------------
+    # 4240 : cilium-health ; 8472/UDP : VXLAN (routage tunnel, ADR-0150) ; 51871/UDP : WireGuard.
+    - fromEntities: [remote-node, health]
+      toPorts:
+        - ports:
+            - {port: "4240", protocol: TCP}
+            - {port: "8472", protocol: UDP}
+            - {port: "51871", protocol: UDP}
+    # Sondes ICMP de cilium-health entre nœuds.
+    - fromEntities: [remote-node, health]
+      icmps:
+        - fields:
+            - {type: 8, family: IPv4}
+    # --- Kubelet (10250) --------------------------------------------------------------------------------
+    # Serveur d'API vers les kubelets : logs, exec, port-forward, métriques des nœuds (M14).
+    - fromEntities: [kube-apiserver]
+      toPorts:
+        - ports:
+            - {port: "10250", protocol: TCP}
+    # metrics-server (kube-system) : kubectl top, HPA (M14-E20).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:app.kubernetes.io/name: metrics-server
+      toPorts:
+        - ports:
+            - {port: "10250", protocol: TCP}
+    # --- Collecte de Prometheus (espace supervision, M21) ----------------------------------------------
+    # 9100 node-exporter (hostNetwork) ; 9962 agent Cilium, 9964 Envoy, 9965 Hubble (M15-E26) ;
+    # 10250 kubelet et cAdvisor ; 2112 Tetragon (hostNetwork, M26-E20).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+      toPorts:
+        - ports:
+            - {port: "9100", protocol: TCP}
+            - {port: "9962", protocol: TCP}
+            - {port: "9964", protocol: TCP}
+            - {port: "9965", protocol: TCP}
+            - {port: "10250", protocol: TCP}
+            - {port: "2112", protocol: TCP}
+    # --- Hubble Relay vers le serveur Hubble de chaque agent (M14, M15) ----------------------------------
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: hubble-relay
+      toPorts:
+        - ports:
+            - {port: "4244", protocol: TCP}
+    # --- Administration --------------------------------------------------------------------------------
+    # SSH : MGMT (adm01, bastion) et runner01 (pipeline Ansible protégé, ADR-0040 ; retire-le si ton
+    # pipeline n'atteint pas les nœuds : la bordure le dit, group_vars/role_routeur/pare_feu.yml).
+    - fromCIDR:
+        - 10.10.10.0/24
+        - 10.10.20.15/32
+      toPorts:
+        - ports:
+            - {port: "22", protocol: TCP}
+    # Ping depuis MGMT et depuis le témoin de mon01 (sondes ICMP du blackbox_exporter, M21).
+    - fromCIDR:
+        - 10.10.10.0/24
+        - 10.10.20.19/32
+      icmps:
+        - fields:
+            - {type: 8, family: IPv4}
+    # ICMP « destination injoignable » (dont « fragmentation nécessaire », découverte du MTU du chemin)
+    # depuis le lab : normalement reconnu comme lié à une connexion existante, autorisé ici en plus
+    # pour ne jamais créer de trou noir de MTU (E26 : cilium_wg0 à 1405).
+    - fromCIDR:
+        - 10.10.0.0/16
+      icmps:
+        - fields:
+            - {type: 3, family: IPv4}

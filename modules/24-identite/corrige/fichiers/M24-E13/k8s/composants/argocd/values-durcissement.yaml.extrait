@@ -1,0 +1,13 @@
+# plateforme/k8s — composants/argocd/values-durcissement.yaml : MODIFICATION de M24-E13 (SEC-2513).
+# Les capacités des comptes locaux de M20-E25 répétaient les quatre comptes de personnes : les SUPPRIMER
+# ici AUSSI. Helm FUSIONNE les dictionnaires des fichiers de valeurs : un compte retiré de values.yaml
+# mais laissé ici existerait toujours (avec un mot de passe que plus personne ne surveille).
+configs:
+  cm:
+    exec.enabled: false
+    users.anonymous.enabled: false
+    # Durée d'une session d'Argo CD : 8 h. Avec le SSO, c'est la durée pendant laquelle une personne
+    # désactivée dans l'annuaire garde l'interface déjà ouverte (RB-242, M24-E23).
+    users.session.duration: 8h
+    application.sync.requireOverridePrivilegeForRevisionSync: true
+    accounts.ci-lecture: apiKey

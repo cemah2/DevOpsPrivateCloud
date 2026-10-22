@@ -1,0 +1,10 @@
+# plateforme/gitops — valeurs/kyverno/values.yaml (E07) : EXTRAIT à fusionner (M26-E15, SEC-2715).
+# Kyverno lit Harbor en HTTPS pour vérifier les signatures : la racine MédiSphère doit être dans le
+# magasin de certificats des contrôleurs. Clé « caCertificates » sous « global » (le bloc global
+# existe déjà : image.registry) ; elle vaut pour tous les contrôleurs, chacun pouvant la surcharger.
+global:
+  caCertificates:
+    data: |
+      -----BEGIN CERTIFICATE-----
+      <RACINE-MEDISPHERE-PEM : contenu de /usr/local/share/ca-certificates/medisphere-root-ca.crt>
+      -----END CERTIFICATE-----

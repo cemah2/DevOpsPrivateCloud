@@ -1,0 +1,49 @@
+# ~/m26/e05/kube-bench-k8s-w01.yaml — M26-E05 (SEC-2705). Adapté de job-node.yaml de kube-bench
+# v0.16.0 : cible « node » (kubelet, fichiers du nœud) du référentiel cis-1.12 sur le travailleur
+# k8s-w01. Mêmes principes que pour k8s-cp01 ; pas d'etcd ni de plan de contrôle ici, donc pas de
+# montage de /var/lib/etcd (le runtime le créerait vide sur le travailleur).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kube-bench-k8s-w01
+  namespace: wb-diagnostic
+  labels:
+    app.kubernetes.io/name: kube-bench
+    medisphere.internal/ticket: SEC-2705
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-bench
+    spec:
+      nodeName: k8s-w01
+      hostPID: true
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: kube-bench
+          image: registry.par1.medisphere.internal/dockerhub/aquasec/kube-bench:v0.16.0
+          command: [kube-bench, run, --benchmark, cis-1.12, --targets, node, --json]
+          resources:
+            requests: {cpu: 100m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: var-lib-cni, mountPath: /var/lib/cni, readOnly: true}
+            - {name: var-lib-kubelet, mountPath: /var/lib/kubelet, readOnly: true}
+            - {name: etc-systemd, mountPath: /etc/systemd, readOnly: true}
+            - {name: lib-systemd, mountPath: /lib/systemd/, readOnly: true}
+            - {name: etc-kubernetes, mountPath: /etc/kubernetes, readOnly: true}
+            - {name: usr-bin, mountPath: /usr/local/mount-from-host/bin, readOnly: true}
+            - {name: etc-cni-netd, mountPath: /etc/cni/net.d/, readOnly: true}
+            - {name: opt-cni-bin, mountPath: /opt/cni/bin/, readOnly: true}
+      volumes:
+        - {name: var-lib-cni, hostPath: {path: /var/lib/cni, type: Directory}}
+        - {name: var-lib-kubelet, hostPath: {path: /var/lib/kubelet, type: Directory}}
+        - {name: etc-systemd, hostPath: {path: /etc/systemd, type: Directory}}
+        - {name: lib-systemd, hostPath: {path: /lib/systemd, type: Directory}}
+        - {name: etc-kubernetes, hostPath: {path: /etc/kubernetes, type: Directory}}
+        - {name: usr-bin, hostPath: {path: /usr/bin, type: Directory}}
+        - {name: etc-cni-netd, hostPath: {path: /etc/cni/net.d, type: Directory}}
+        - {name: opt-cni-bin, hostPath: {path: /opt/cni/bin, type: Directory}}

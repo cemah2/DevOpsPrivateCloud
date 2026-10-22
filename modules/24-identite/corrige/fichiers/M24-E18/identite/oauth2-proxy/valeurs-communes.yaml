@@ -1,0 +1,44 @@
+# plateforme/identite — oauth2-proxy/valeurs-communes.yaml (M24-E18, PLAT-2518)
+# Valeurs communes aux deux releases du chart oauth2-proxy/oauth2-proxy 10.7.1 (OAuth2 Proxy 7.15.5),
+# recopié et signé dans Harbor « charts » par plateforme/charts-miroir, déployé par l'Application
+# Argo CD « oauth2-proxy » (plateforme/gitops). Chaque release ajoute son fichier (valeurs-<nom>.yaml).
+image:
+  registry: registry.par1.medisphere.internal/quay   # cache Harbor de quay.io (M13)
+  repository: oauth2-proxy/oauth2-proxy
+  tag: v7.15.5                                       # ≥ 7.15.5 : contournements d'authentification corrigés
+
+config:
+  # Secret hors Git (plateforme/k8s/outils/secrets-k8s.sh, composant oauth2-proxy, Vault critique) :
+  # clés client-id (oauth2-proxy), client-secret (client Keycloak), cookie-secret (openssl rand -hex 16).
+  existingSecret: oauth2-proxy-oidc
+
+# Deux réplicas : le PodDisruptionBudget du chart (minAvailable: 1) bloquerait sinon la vidange d'un
+# nœud. Sessions dans le cookie chiffré : aucun état partagé entre réplicas.
+replicaCount: 2
+
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 96Mi}
+
+# Racine MédiSphère pour joindre https://sso.par1.medisphere.internal (l'image distroless ne la connaît pas).
+extraVolumes:
+  - name: racine-medisphere
+    configMap:
+      name: racine-medisphere
+extraVolumeMounts:
+  - name: racine-medisphere
+    mountPath: /etc/medisphere-ca
+    readOnly: true
+
+# Pas de jeton de l'API Kubernetes dans les pods : OAuth2 Proxy n'en a pas besoin.
+serviceAccount:
+  automountServiceAccountToken: false
+
+# Publication : HTTPRoute rendue par le chart dans l'espace oauth2-proxy (étiquette
+# medisphere.internal/exposition: oui → acceptée par gw-par1, M15-E12).
+gatewayApi:
+  enabled: true
+  gatewayRef:
+    name: gw-par1
+    namespace: passerelles
+    sectionName: https

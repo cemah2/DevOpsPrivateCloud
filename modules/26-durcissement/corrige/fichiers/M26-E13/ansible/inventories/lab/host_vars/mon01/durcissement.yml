@@ -1,0 +1,11 @@
+---
+# host_vars/mon01/durcissement.yml — confinement AppArmor de Mailpit (M26-E13, SEC-2713).
+# 1. mode complain une semaine (journal : journalctl -k | grep 'apparmor="ALLOWED"'), aa-logprof ;
+# 2. profil complété dans roles/durcissement/templates/apparmor/usr.local.bin.mailpit.j2 (MR) ;
+# 3. mode enforce (cette valeur), puis essais (réception SMTP, interface 8443/8025, API des checks).
+# Retour arrière immédiat sur l'hôte : sudo aa-complain /etc/apparmor.d/usr.local.bin.mailpit
+# (puis MR qui remet « complain » ici, sinon le prochain passage d'Ansible remet « enforce »).
+durcissement_apparmor_profils:
+  - nom: usr.local.bin.mailpit
+    profil: mailpit
+    mode: enforce

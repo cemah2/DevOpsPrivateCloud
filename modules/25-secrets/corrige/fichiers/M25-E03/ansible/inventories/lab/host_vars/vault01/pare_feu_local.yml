@@ -1,0 +1,13 @@
+---
+# host_vars/vault01/pare_feu_local.yml — flux d'entrée de vault01 (M25-E03, rôle pare_feu_local).
+# Le SSH (adm01, runner01) vient de group_vars/socle/pare_feu_local.yml. Les flux depuis MGMT et le
+# VPN traversent AUSSI la bordure (group_vars/role_routeur/pare_feu.yml).
+# Les paliers suivants ajoutent : runner01/runner02 (CI, M25-E10), nœuds de k8s-par1 (ESO, M25-E12),
+# mon01 (supervision, M25-E27), vault02-03 (8200-8201, M25-E24).
+pare_feu_local_regles:
+  - {source: [10.10.10.0/24, 10.255.1.0/24], proto: tcp, ports: 8200,
+     motif: "MGMT et VPN d'administration : CLI bao, OpenTofu, interface web, checks", ref: M25-E03}
+  - {source: [10.10.20.11], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 (émission du certificat d'OpenBao)", ref: M25-E03}
+pare_feu_local_verifications:
+  - {port: 8200, motif: "OpenBao (API et interface, HTTPS)"}

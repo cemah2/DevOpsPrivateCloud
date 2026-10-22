@@ -1,0 +1,8 @@
+# defaults/main.yml — EXTRAIT : variables AJOUTÉES au M25-E25. L'état complet du palier 3 est dans
+# fichiers/M25-E28/ansible/roles/openbao/defaults/main.yml.
+# Seal transit vers kms01 : désactivé par défaut (Shamir), activé dans group_vars/role_coffre.
+openbao_seal_transit: false
+openbao_seal_transit_adresse: ""
+openbao_seal_transit_cle: autodescellement-par1
+openbao_seal_transit_montage: transit/
+openbao_seal_transit_nom_tls: ""

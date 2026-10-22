@@ -1,0 +1,22 @@
+# outils/synchro-gitlab.yml — table de synchronisation annuaire → GitLab (M24-E11, PLAT-2511).
+# Traduit la ligne « GitLab » du modèle d'autorisation (docs/securite/identite/modele-autorisation.md,
+# M24-E10). GitLab CE n'a pas de groupes OIDC : outils/synchro-gitlab.py applique cette table par l'API.
+#
+# Une ligne : un groupe de l'annuaire (annuaire/groupes.yml) donne un niveau dans un groupe GitLab de
+# premier niveau. Si une personne arrive au même groupe GitLab par plusieurs lignes, le niveau le plus
+# élevé l'emporte. Niveaux : reporter, developer, maintainer. « owner » est refusé : le compte de
+# synchronisation est Owner (GitLab l'exige pour gérer les membres d'un groupe), mais l'outil ne donne ni
+# ne retire jamais ce niveau ; les Owners se gèrent à la main, deux au plus.
+# Un groupe GitLab cité ici est GÉRÉ : toute personne de annuaire/personnes.yml qui y est membre
+# directe sans ligne correspondante en est retirée. Les comptes qui ne sont pas des personnes de
+# l'annuaire (root, svc-*, robots, comptes de projet) ne sont jamais touchés.
+synchro_gitlab:
+  - {annuaire: plateforme-admins, gitlab: plateforme, niveau: maintainer}
+  - {annuaire: plateforme, gitlab: plateforme, niveau: developer}
+  - {annuaire: securite, gitlab: plateforme, niveau: reporter}
+  - {annuaire: support, gitlab: plateforme, niveau: reporter}
+  - {annuaire: direction, gitlab: plateforme, niveau: reporter}
+  - {annuaire: mediagenda, gitlab: mediagenda, niveau: maintainer}
+  - {annuaire: securite, gitlab: mediagenda, niveau: reporter}
+  - {annuaire: medidoc, gitlab: medidoc, niveau: maintainer}
+  - {annuaire: securite, gitlab: medidoc, niveau: reporter}

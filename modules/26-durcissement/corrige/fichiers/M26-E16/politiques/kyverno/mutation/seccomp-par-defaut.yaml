@@ -1,0 +1,51 @@
+# plateforme/politiques — kyverno/mutation/seccomp-par-defaut.yaml (M26-E16, PLAT-2716)
+# Tout pod d'un espace d'équipe qui ne dit rien de seccomp reçoit le profil RuntimeDefault du
+# moteur (containerd) au niveau du pod. Un pod qui a déjà choisi (RuntimeDefault, Localhost, ou
+# Unconfined dans un espace où PSA le permet) n'est PAS modifié : on complète, on ne réécrit pas.
+# Complément, pas remplacement : PSA « restricted » (E06) REFUSE un pod sans seccomp ; cette
+# mutation le rend conforme avant la validation. Au palier 3 (E25), seccompDefault: true côté
+# kubelet couvre aussi ce qui n'est pas admis par l'API (pods statiques).
+# Ordre d'admission : les webhooks de MUTATION passent avant la VALIDATION (dont PSA), c'est ce
+# qui rend cette politique utile (E44 y revient).
+apiVersion: policies.kyverno.io/v1
+kind: MutatingPolicy
+metadata:
+  name: seccomp-par-defaut
+  annotations:
+    policies.kyverno.io/title: Profil seccomp RuntimeDefault par défaut
+    medisphere.internal/ticket: PLAT-2716
+spec:
+  failurePolicy: Ignore
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [pods]
+  # Seuls les pods sans seccomp au niveau du pod sont modifiés.
+  matchConditions:
+    - name: sans-seccomp-de-pod
+      expression: >-
+        !has(object.spec.securityContext) || !has(object.spec.securityContext.seccompProfile)
+  # Pas d'autogénération : muter le gabarit d'un Deployment créerait un écart permanent avec Git
+  # (Argo CD le verrait « OutOfSync »). On mute le pod, que personne ne déclare dans Git.
+  autogen:
+    podControllers:
+      controllers: []
+  mutations:
+    - patchType: ApplyConfiguration
+      applyConfiguration:
+        expression: >-
+          Object{
+            spec: Object.spec{
+              securityContext: Object.spec.securityContext{
+                seccompProfile: Object.spec.securityContext.seccompProfile{
+                  type: "RuntimeDefault"
+                }
+              }
+            }
+          }

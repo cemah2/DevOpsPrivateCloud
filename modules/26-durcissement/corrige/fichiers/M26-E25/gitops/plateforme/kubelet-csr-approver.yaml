@@ -1,0 +1,34 @@
+# plateforme/gitops — plateforme/kubelet-csr-approver.yaml (M26-E25, PLAT-2725)
+# Approbateur automatique (mais contrôlé) des demandes kubernetes.io/kubelet-serving. Chart recopié
+# et signé dans Harbor par plateforme/charts-miroir ; valeurs versionnées dans valeurs/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubelet-csr-approver
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: kubelet-csr-approver
+      targetRevision: 1.2.15
+      helm:
+        releaseName: kubelet-csr-approver
+        valueFiles:
+          - $values/valeurs/kubelet-csr-approver/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubelet-csr-approver
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      # L'espace (et ses étiquettes PSA) appartient à plateforme/k8s.
+      - CreateNamespace=false

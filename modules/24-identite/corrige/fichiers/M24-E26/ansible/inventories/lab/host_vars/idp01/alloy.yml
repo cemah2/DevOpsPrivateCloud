@@ -1,0 +1,5 @@
+---
+# host_vars/idp01/alloy.yml — M24-E26 : le journal de Keycloak (connexions, échecs, administration)
+# part au locataire audit, plus au locataire plateforme.
+alloy_audit_unites:
+  - {unite: keycloak.service, service: keycloak}

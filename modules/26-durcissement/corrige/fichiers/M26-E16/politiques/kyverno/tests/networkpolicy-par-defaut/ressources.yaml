@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: medinotif-dev
+  labels:
+    medisphere.internal/equipe: medinotif
+    medisphere.internal/environnement: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-essais-reseau
+  labels:
+    medisphere.internal/proprietaire: plateforme

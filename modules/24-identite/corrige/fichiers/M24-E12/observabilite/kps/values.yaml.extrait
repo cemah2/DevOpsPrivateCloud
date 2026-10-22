@@ -1,0 +1,72 @@
+# plateforme/observabilite — kps/values.yaml : changements de M24-E12 (DEV-2512).
+# EXTRAIT : seules les clés ajoutées ou modifiées sont montrées ; les clés grafana.ini de M21-E02 et
+# M21-E29 (server, analytics, users, security, auth, auth.basic, auth.anonymous, snapshots) restent.
+# Aucun secret ici : le secret du client vient du Secret supervision/grafana-oidc (secrets-k8s.sh,
+# composant « identite »), chargé en variables d'environnement. GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+# remplace la clé client_secret de [auth.generic_oauth].
+
+grafana:
+  envFromSecret: grafana-oidc
+  # Racine MédiSphère (ConfigMap racine-medisphere, clé ca.crt, M21-E06) : Grafana appelle Keycloak
+  # (jeton, userinfo, JWKS) de serveur à serveur et vérifie son certificat avec CETTE autorité.
+  extraConfigmapMounts:
+    - name: racine-medisphere
+      mountPath: /etc/grafana/racine
+      configMap: racine-medisphere
+      readOnly: true
+  grafana.ini:
+    auth:
+      # Sessions bornées (M21-E29), inchangées.
+      login_maximum_inactive_lifetime_duration: 8h
+      login_maximum_lifetime_duration: 24h
+      # Étape 8 seulement (après le test du SSO par deux personnes) : plus de formulaire local.
+      # Le compte « admin » reste joignable par l'API en authentification basique (bris de glace,
+      # fournisseur OpenTofu admin_serveur de M22-E16).
+      disable_login_form: true
+      # Pas de recherche d'un compte existant par l'adresse de courriel (défaut, écrit) : les comptes
+      # locaux des personnes sont SUPPRIMÉS, Grafana crée le compte SSO à la première connexion.
+      oauth_allow_insecure_email_lookup: false
+      # Bouton « SSO MédiSphère » ; pas de redirection automatique (le bris de glace garde /login).
+      oauth_auto_login: false
+    auth.generic_oauth:
+      enabled: true
+      name: SSO MédiSphère
+      icon: signin
+      client_id: grafana
+      scopes: openid profile email
+      auth_url: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/auth
+      token_url: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/token
+      api_url: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/userinfo
+      signout_redirect_url: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/logout?client_id=grafana&post_logout_redirect_uri=https%3A%2F%2Fgrafana.apps.par1.medisphere.internal%2Flogin
+      tls_client_ca: /etc/grafana/racine/ca.crt
+      tls_skip_verify_insecure: false
+      use_pkce: true
+      use_refresh_token: true
+      # Un compte est créé à la première connexion d'une personne de l'annuaire.
+      allow_sign_up: true
+      login_attribute_path: preferred_username
+      email_attribute_path: email
+      name_attribute_path: name
+      # Rôle dans l'organisation principale, d'après les GROUPES (noms courts, portée « groupes »).
+      # GrafanaAdmin = administrateur du serveur ET Admin de l'organisation (allow_assign_grafana_admin).
+      role_attribute_path: >-
+        contains(groups[*], 'plateforme-admins') && 'GrafanaAdmin' ||
+        contains(groups[*], 'plateforme') && 'Editor' ||
+        contains(groups[*], 'support') && 'Editor' ||
+        'Viewer'
+      allow_assign_grafana_admin: true
+      # Revendication « groups » absente (portée retirée, mappeur cassé) : REFUS, pas Viewer par défaut.
+      role_attribute_strict: true
+      # Organisations : la même revendication, lue comme liste ; « Sécurité » est créée par OpenTofu
+      # (M22-E16). Rôle final dans une organisation = le plus élevé de role_attribute_path et
+      # d'org_mapping (organisation principale, id 1).
+      org_attribute_path: groups
+      org_mapping: >-
+        securite:Sécurité:Editor
+        plateforme-admins:Sécurité:Viewer
+        support:Sécurité:Viewer
+        direction:Sécurité:Viewer
+        *:1:Viewer
+      # Synchronisation des rôles à CHAQUE connexion (défaut) : OpenTofu ne gère plus les membres
+      # de l'organisation « Sécurité » (observabilite-grafana, ignore_changes).
+      skip_org_role_sync: false

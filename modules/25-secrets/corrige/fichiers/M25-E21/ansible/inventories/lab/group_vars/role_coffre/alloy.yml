@@ -1,0 +1,10 @@
+---
+# group_vars/role_coffre/alloy.yml — Alloy sur vault01-03 (M25-E21, SEC-2621).
+# Le rôle alloy (M22-E05) lit journald ; on lui fait lire AUSSI le journal d'audit d'OpenBao, envoyé
+# au locataire « audit » de Loki (rétention 1 an), jamais au locataire « plateforme ».
+# Lecture par le groupe « openbao » : le fichier est en 0640 openbao:openbao, le dossier en 0750.
+alloy_groupes: [systemd-journal, adm, openbao]
+
+alloy_fichiers_audit:
+  - chemin: /var/log/openbao/audit.log
+    service: openbao

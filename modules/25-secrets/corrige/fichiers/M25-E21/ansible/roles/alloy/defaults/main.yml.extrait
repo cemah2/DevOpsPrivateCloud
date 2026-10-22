@@ -1,0 +1,6 @@
+# roles/alloy/defaults/main.yml — À AJOUTER (M25-E21, SEC-2621).
+# Fichiers de journal d'AUDIT à envoyer au locataire « audit » de Loki, avec l'étiquette service.
+# Vide par défaut (la plupart des VMs n'en ont pas). Si le M24-E26 a déjà ajouté un mécanisme
+# équivalent (journaux de FreeIPA), garde UN seul mécanisme et range-y OpenBao.
+alloy_fichiers_audit: []
+alloy_locataire_audit: audit

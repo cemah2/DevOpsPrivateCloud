@@ -1,0 +1,86 @@
+# plateforme/observabilite — loki/regles/audit/securite.yaml (M26-E28, SEC-2728)
+# Détections de sécurité sur le journal d'audit de l'API (locataire audit, {job="kubernetes-audit"}).
+# Métadonnées structurées posées par Alloy (M22-E07) : verb, user, code, resource, object_ns,
+# object_name. La SOUS-RESSOURCE (exec, attach…) et les groupes de l'utilisateur ne sont pas dans les
+# métadonnées : filtre de ligne d'abord (rapide), analyse JSON ensuite.
+# Personnes : « oidc:<identifiant> » depuis le M24 ; bris de glace : admin.conf = kubernetes-admin,
+# super-admin.conf = groupe system:masters.
+groups:
+  - name: audit-securite
+    interval: 1m
+    rules:
+      # Shell ou attachement dans un conteneur de PRODUCTION par une personne. Le verbe n'est pas
+      # filtré : kubectl ≥ 1.31 passe par WebSocket (verbe « get » dans l'événement) ; les anciens
+      # clients SPDY donnent « create ». Seul le code 101 (protocole changé) prouve que la session a
+      # été ouverte ; 403 = tentative refusée (comptée aussi : c'est un signal).
+      - alert: AuditExecProduction
+        expr: |
+          sum by (user, object_ns, object_name) (
+            count_over_time(
+              {job="kubernetes-audit"} |~ `"subresource":"(exec|attach)"`
+                | object_ns=~"mediagenda-prod|medidoc-prod" | user=~"oidc:.*" [5m]
+            )
+          ) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "{{ $labels.user }} a ouvert un shell dans {{ $labels.object_ns }}/{{ $labels.object_name }}"
+          description: >-
+            exec/attach en production par une personne. Un ticket CHG ou INC doit exister. Commande :
+            champ requestURI (paramètres command=) de l'événement ; activité du shell : Falco et Tetragon.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-260-alerte-falco.md
+      # Lecture d'un Secret par une personne (les contrôleurs et ESO lisent par leurs comptes de service).
+      - alert: AuditLectureSecretParPersonne
+        expr: |
+          sum by (user, object_ns, verb) (
+            count_over_time(
+              {job="kubernetes-audit"} | resource="secrets" | verb=~"get|list|watch" | user=~"oidc:.*" | code=~"2.." [5m]
+            )
+          ) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "{{ $labels.user }} a lu des Secrets dans {{ $labels.object_ns }} ({{ $labels.verb }})"
+          description: >-
+            Depuis le M25, les secrets viennent d'OpenBao par ESO : une lecture humaine d'un Secret
+            Kubernetes doit être justifiée (incident, migration). Vérifie le ticket associé.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-220-chercher-dans-les-journaux.md
+      # Liaison de rôle de cluster créée, modifiée ou supprimée hors des comptes système (Argo CD et
+      # Helmfile passent par leurs comptes de service ou par une personne identifiée en MR).
+      - alert: AuditLiaisonRoleCluster
+        expr: |
+          sum by (user, verb, object_name) (
+            count_over_time(
+              {job="kubernetes-audit"} | resource="clusterrolebindings" | verb=~"create|update|patch|delete"
+                | user!~"system:.*" | code=~"2.." [5m]
+            )
+          ) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "{{ $labels.user }} : {{ $labels.verb }} du ClusterRoleBinding {{ $labels.object_name }}"
+          description: >-
+            Un droit de niveau cluster a changé hors de l'automatisation. Lire le corps de la requête
+            (niveau Request) : sujet et rôle visés ; vérifier la MR correspondante.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-220-chercher-dans-les-journaux.md
+      # Bris de glace : toute requête authentifiée par admin.conf ou super-admin.conf. CRITIQUE : en
+      # dehors d'un incident déclaré, c'est soit une erreur grave, soit une compromission.
+      - alert: AuditBrisDeGlace
+        expr: |
+          sum by (user) (
+            count_over_time(
+              {job="kubernetes-audit"} |~ `"username":"kubernetes-admin"|"system:masters"` [5m]
+            )
+          ) > 0
+        labels:
+          gravite: critique
+          equipe: securite
+        annotations:
+          resume: "Bris de glace de k8s-par1 utilisé ({{ $labels.user }})"
+          description: >-
+            Requêtes authentifiées par admin.conf (kubernetes-admin) ou super-admin.conf (system:masters).
+            Vérifier qu'un incident est déclaré et que le fichier est rangé et chiffré après usage (M24).
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-262-reponse-incident-conteneur.md

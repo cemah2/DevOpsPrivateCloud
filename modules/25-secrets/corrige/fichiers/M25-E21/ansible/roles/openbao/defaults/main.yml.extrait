@@ -1,0 +1,25 @@
+# roles/openbao/defaults/main.yml — À AJOUTER (M25-E21, SEC-2621) : dispositifs d'audit DÉCLARÉS.
+#
+# Depuis OpenBao 2.4 (CVE-2025-6000), l'API ne crée plus de dispositif d'audit : « bao audit enable »
+# répond « cannot enable audit device via API; use declarative, config-based audit device management
+# instead » (sauf unsafe_allow_api_audit_creation = true, que nous n'activons pas : un dispositif
+# « file » créé par l'API peut écrire n'importe où sur le nœud). On les déclare dans openbao.hcl :
+# ils sont créés ou retirés sur le nœud ACTIF au démarrage et à chaque SIGHUP (systemctl reload).
+#
+# Un dispositif déclaré est IMMUABLE : changer une option d'un chemin existant est refusé au
+# rechargement (« modifications to audit devices are not allowed ») et l'ancien reste actif. Pour
+# changer une option : déclarer un NOUVEAU chemin (fichier-v2), recharger, puis retirer l'ancien.
+# Il ne se supprime pas non plus par l'API (« cannot disable configuration-managed audit device »).
+# Même déclaration sur TOUS les nœuds de la grappe (M25-E24) : group_vars/role_coffre.
+openbao_audit:
+  - type: file
+    chemin: fichier
+    description: "Journal d'audit local, envoyé à Loki (locataire audit) par Alloy"
+    options:
+      file_path: /var/log/openbao/audit.log
+      # 0640 openbao:openbao : Alloy le lit par le groupe openbao (group_vars/role_coffre/alloy.yml).
+      mode: "0640"
+      # Accessors EN CLAIR (un accessor ne donne pas le jeton : il permet de le consulter ou de le
+      # révoquer avec un droit dédié). Indispensable pour révoquer vite un jeton vu dans l'audit
+      # (RB-250). Les valeurs des secrets restent en HMAC (sys/audit-hash/fichier pour comparer).
+      hmac_accessor: "false"

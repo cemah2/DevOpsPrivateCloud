@@ -1,0 +1,27 @@
+# group_vars/role_lb/haproxy.yml — EXTRAIT (M24-E24) : section be_sso PENDANT l'essai.
+# Une passerelle de répartition à la fois (--limit lb02, contrôle, puis lb01). Fin d'essai : retirer
+# la ligne idp02 (même ordre), AVANT de passer idp01 en cache=local.
+  - type: backend
+    nom: be_sso
+    lignes:
+      # Répartition simple : chaque nouvelle connexion TCP va au nœud suivant. Keycloak 26 garde
+      # les sessions en base et les distribue dans la grappe : pas d'affinité obligatoire. On la
+      # laisse volontairement de côté pour que la bascule se VOIE dans la mesure.
+      - balance roundrobin
+      - option httpchk
+      - http-check send meth GET uri /health/ready ver HTTP/1.1 hdr Host idp01.par1.medisphere.internal
+      - http-check expect status 200
+      - >-
+        server idp01 10.10.20.30:8443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(idp01.par1.medisphere.internal) verifyhost idp01.par1.medisphere.internal
+        check port 9000 check-ssl check-sni idp01.par1.medisphere.internal inter 2s fall 2 rise 2
+      - >-
+        server idp02 10.10.20.42:8443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(idp02.par1.medisphere.internal) verifyhost idp02.par1.medisphere.internal
+        check port 9000 check-ssl check-sni idp02.par1.medisphere.internal inter 2s fall 2 rise 2
+#
+# Note : le contrôle de santé envoie « Host: idp01… » aux deux serveurs ; Keycloak n'en tient pas
+# compte pour /health/ready (interface de gestion). Contrôle plus fréquent (inter 2s, fall 2) pendant
+# l'essai pour mesurer la bascule, pas en production (bruit dans les journaux).

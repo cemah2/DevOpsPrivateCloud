@@ -1,0 +1,12 @@
+# plateforme/gitops — projets/plateforme.yaml, AJOUTS du M24-E18 (le reste du fichier est inchangé).
+# Une source de plus (valeurs et manifestes d'OAuth2 Proxy dans plateforme/identite) et une
+# destination de plus (l'espace oauth2-proxy). Le dépôt est lu avec l'identifiant repo-creds-plateforme
+# (préfixe https://git01.par1.medisphere.internal/plateforme/, M20) : rien à créer.
+spec:
+  sourceRepos:
+    # … entrées existantes (plateforme/gitops, plateforme/observabilite, registry…/charts) …
+    - https://git01.par1.medisphere.internal/plateforme/identite.git
+  destinations:
+    # … entrées existantes …
+    - server: https://kubernetes.default.svc
+      namespace: oauth2-proxy

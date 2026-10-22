@@ -1,0 +1,317 @@
+---
+# Rôle durcissement — valeurs par défaut (M26-E10 à E14, PLAN §4.12 « Durcissement des hôtes »).
+#
+# Référentiels : CIS niveau 1 serveur (Debian 13 v1.0.0, RHEL 10 v1.0.1 pour Rocky 10) et
+# ANSSI-BP-028 intermédiaire, tels que les implémente ComplianceAsCode 0.1.82. Chaque mesure est
+# ÉTIQUETÉE (tags) par l'identifiant de la règle XCCDF correspondante (sans le préfixe
+# xccdf_org.ssgproject.content_rule_) : « --tags sshd_disable_root_login » rejoue une règle,
+# « --skip-tags » en écarte une le temps d'un essai (une exception durable se DÉCLARE, voir plus bas).
+#
+# Mode d'emploi (RB-263) : toujours « --check --diff » d'abord, sur un hôte, relu ; puis application.
+# Les defaults ont la précédence la plus faible : tout se surcharge dans l'inventaire
+# (group_vars/all/durcissement.yml pour le parc, group_vars/role_* et host_vars pour le reste).
+
+durcissement_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle durcissement).') | replace('\n', ' ') }}
+
+# --- Référentiel et périmètre --------------------------------------------------------------------
+# cis_l1_serveur : seul référentiel appliqué par le rôle ; ANSSI est MESURÉ (rapport) en plus.
+durcissement_referentiel: cis_l1_serveur
+durcissement_anssi_niveau: intermediaire
+
+# Domaines appliqués (un fichier de tâches chacun). E10 commence par les domaines sans risque
+# d'accès ; E11 ajoute ssh, pam, sudo, comptes ; E12 auditd et aide ; E13 mac.
+# Ordre imposé par le rôle (pas par cette liste) : paquets, noyau, systemd, journalisation, montages,
+# comptes, pam, sudo, ssh, auditd, aide, mac, conformite.
+durcissement_domaines:
+  - paquets
+  - noyau
+  - systemd
+  - journalisation
+  - montages
+  - comptes
+  - pam
+  - sudo
+  - ssh
+  - auditd
+  - aide
+  - mac
+  - conformite
+
+# --- Exceptions ------------------------------------------------------------------------------------
+# Une exception = une règle XCCDF qui n'est PAS appliquée sur des hôtes donnés, pour une raison écrite,
+# validée, avec une date de revue. Le rôle :
+#   - refuse une exception incomplète ou dont la date de revue est passée (échec, pas avertissement) ;
+#   - n'applique pas la mesure correspondante sur ces hôtes (conditions « when » des tâches) ;
+#   - désélectionne la règle dans le profil adapté (tailoring) d'OpenSCAP de ces hôtes, pour que le
+#     score mesure l'écart NON justifié ;
+#   - les reporte dans /etc/medisphere/durcissement-exceptions.json (lu par le rapport, E14 et E24).
+# Format : { regle: <id>, hotes: [<inventory_hostname>|all], justification, valideur, revue: AAAA-MM-JJ }
+# Registre lisible : docs/securite/durcissement/exceptions.md (E23) ; procédure : RB-261.
+durcissement_exceptions: []
+# Exceptions propres à un groupe ou un hôte, ajoutées aux précédentes (group_vars/role_*, host_vars).
+durcissement_exceptions_locales: []
+# Valideurs reconnus (RB-261) : une exception signée par quelqu'un d'autre est refusée.
+durcissement_valideurs: [sophie.laurent]
+
+# --- Paquets -------------------------------------------------------------------------------------
+durcissement_paquets_interdits:
+  Debian: [telnet, inetutils-telnet, telnetd, inetutils-telnetd, rsh-client, rsh-server, nis, talk, tftp-hpa, xinetd, avahi-daemon]
+  RedHat: [telnet, telnet-server, tftp, tftp-server, ypserv, rsh, xinetd, avahi]
+durcissement_paquets_requis:
+  Debian: [libpam-pwquality, sudo]
+  RedHat: [libpwquality, sudo, authselect]
+
+# --- Noyau (sysctl, modules) ---------------------------------------------------------------------
+# Valeurs appliquées partout ; une règle en exception sur l'hôte retire sa ligne du fichier.
+# Clé = paramètre sysctl, valeur = { valeur, regle } (identifiant XCCDF pour exceptions et tags).
+durcissement_sysctl:
+  kernel.kptr_restrict: {valeur: 2, regle: sysctl_kernel_kptr_restrict}
+  kernel.dmesg_restrict: {valeur: 1, regle: sysctl_kernel_dmesg_restrict}
+  kernel.yama.ptrace_scope: {valeur: 1, regle: sysctl_kernel_yama_ptrace_scope}
+  kernel.randomize_va_space: {valeur: 2, regle: sysctl_kernel_randomize_va_space}
+  kernel.sysrq: {valeur: 0, regle: sysctl_kernel_sysrq}
+  kernel.unprivileged_bpf_disabled: {valeur: 1, regle: sysctl_kernel_unprivileged_bpf_disabled}
+  net.core.bpf_jit_harden: {valeur: 2, regle: sysctl_net_core_bpf_jit_harden}
+  fs.protected_hardlinks: {valeur: 1, regle: sysctl_fs_protected_hardlinks}
+  fs.protected_symlinks: {valeur: 1, regle: sysctl_fs_protected_symlinks}
+  fs.protected_fifos: {valeur: 2, regle: sysctl_fs_protected_fifos}
+  fs.protected_regular: {valeur: 2, regle: sysctl_fs_protected_regular}
+  fs.suid_dumpable: {valeur: 0, regle: sysctl_fs_suid_dumpable}
+  # Routage : 0 partout SAUF exception (passerelles, nœuds Kubernetes, hôtes Docker : voir
+  # group_vars/all/durcissement.yml). « all.forwarding » et « ip_forward » sont le même réglage.
+  net.ipv4.ip_forward: {valeur: 0, regle: sysctl_net_ipv4_ip_forward}
+  net.ipv4.conf.all.forwarding: {valeur: 0, regle: sysctl_net_ipv4_conf_all_forwarding}
+  net.ipv4.conf.default.forwarding: {valeur: 0, regle: sysctl_net_ipv4_conf_default_forwarding}
+  net.ipv6.conf.all.forwarding: {valeur: 0, regle: sysctl_net_ipv6_conf_all_forwarding}
+  net.ipv6.conf.default.forwarding: {valeur: 0, regle: sysctl_net_ipv6_conf_default_forwarding}
+  # Filtrage par chemin de retour : strict (1). ⚠️ Cilium (nœuds K8s) et les tunnels des passerelles.
+  net.ipv4.conf.all.rp_filter: {valeur: 1, regle: sysctl_net_ipv4_conf_all_rp_filter}
+  net.ipv4.conf.default.rp_filter: {valeur: 1, regle: sysctl_net_ipv4_conf_default_rp_filter}
+  net.ipv4.conf.all.accept_redirects: {valeur: 0, regle: sysctl_net_ipv4_conf_all_accept_redirects}
+  net.ipv4.conf.default.accept_redirects: {valeur: 0, regle: sysctl_net_ipv4_conf_default_accept_redirects}
+  net.ipv4.conf.all.secure_redirects: {valeur: 0, regle: sysctl_net_ipv4_conf_all_secure_redirects}
+  net.ipv4.conf.default.secure_redirects: {valeur: 0, regle: sysctl_net_ipv4_conf_default_secure_redirects}
+  net.ipv4.conf.all.send_redirects: {valeur: 0, regle: sysctl_net_ipv4_conf_all_send_redirects}
+  net.ipv4.conf.default.send_redirects: {valeur: 0, regle: sysctl_net_ipv4_conf_default_send_redirects}
+  net.ipv4.conf.all.accept_source_route: {valeur: 0, regle: sysctl_net_ipv4_conf_all_accept_source_route}
+  net.ipv4.conf.default.accept_source_route: {valeur: 0, regle: sysctl_net_ipv4_conf_default_accept_source_route}
+  net.ipv4.conf.all.log_martians: {valeur: 1, regle: sysctl_net_ipv4_conf_all_log_martians}
+  net.ipv4.conf.default.log_martians: {valeur: 1, regle: sysctl_net_ipv4_conf_default_log_martians}
+  net.ipv4.icmp_echo_ignore_broadcasts: {valeur: 1, regle: sysctl_net_ipv4_icmp_echo_ignore_broadcasts}
+  net.ipv4.icmp_ignore_bogus_error_responses: {valeur: 1, regle: sysctl_net_ipv4_icmp_ignore_bogus_error_responses}
+  net.ipv4.tcp_syncookies: {valeur: 1, regle: sysctl_net_ipv4_tcp_syncookies}
+  net.ipv6.conf.all.accept_ra: {valeur: 0, regle: sysctl_net_ipv6_conf_all_accept_ra}
+  net.ipv6.conf.default.accept_ra: {valeur: 0, regle: sysctl_net_ipv6_conf_default_accept_ra}
+  net.ipv6.conf.all.accept_redirects: {valeur: 0, regle: sysctl_net_ipv6_conf_all_accept_redirects}
+  net.ipv6.conf.default.accept_redirects: {valeur: 0, regle: sysctl_net_ipv6_conf_default_accept_redirects}
+  net.ipv6.conf.all.accept_source_route: {valeur: 0, regle: sysctl_net_ipv6_conf_all_accept_source_route}
+  net.ipv6.conf.default.accept_source_route: {valeur: 0, regle: sysctl_net_ipv6_conf_default_accept_source_route}
+# Valeur de repli quand rp_filter strict est en exception : 2 (lâche) plutôt que rien.
+durcissement_rp_filter_repli: 2
+durcissement_sysctl_fichier: /etc/sysctl.d/60-durcissement.conf
+
+# Modules du noyau rendus non chargeables (install /bin/false + blacklist).
+durcissement_modules_interdits:
+  cramfs: kernel_module_cramfs_disabled
+  freevxfs: kernel_module_freevxfs_disabled
+  hfs: kernel_module_hfs_disabled
+  hfsplus: kernel_module_hfsplus_disabled
+  jffs2: kernel_module_jffs2_disabled
+  usb-storage: kernel_module_usb-storage_disabled
+  firewire-core: kernel_module_firewire-core_disabled
+  atm: kernel_module_atm_disabled
+  can: kernel_module_can_disabled
+  dccp: kernel_module_dccp_disabled
+  rds: kernel_module_rds_disabled
+  tipc: kernel_module_tipc_disabled
+  # sctp : Cilium peut s'en servir (désactivé par défaut chez nous) ; exception sur les nœuds K8s.
+  sctp: kernel_module_sctp_disabled
+
+# --- systemd ---------------------------------------------------------------------------------------
+# Services désactivés et masqués s'ils existent (aucun échec s'ils sont absents).
+durcissement_services_inutiles: [avahi-daemon, cups, bluetooth, autofs, rpcbind, nfs-server, rsyncd, snmpd]
+# Ctrl-Alt-Suppr depuis la console Proxmox ne redémarre plus la VM (ANSSI).
+durcissement_ctrl_alt_suppr_masque: true
+# Pas de vidage mémoire stocké (données de santé possibles dans la mémoire d'un processus).
+durcissement_coredump_stockage: none
+
+# --- Journalisation (journald) ---------------------------------------------------------------------
+durcissement_journald_options:
+  Storage: persistent
+  Compress: "yes"
+
+# --- Montages --------------------------------------------------------------------------------------
+# /tmp en tmpfs (unité tmp.mount) avec nodev,nosuid,noexec ; /dev/shm idem.
+durcissement_tmp_taille: "25%"
+durcissement_tmp_options: [nodev, nosuid, noexec]
+durcissement_shm_options: [nodev, nosuid, noexec]
+
+# --- Comptes ---------------------------------------------------------------------------------------
+durcissement_umask: "027"
+durcissement_tmout: 900
+durcissement_mdp_duree_max: 365
+durcissement_mdp_avertissement: 7
+# su réservé aux membres de ce groupe (vide : personne, on passe par sudo).
+durcissement_groupe_su: sugroup
+
+# --- PAM -------------------------------------------------------------------------------------------
+# Comptes LOCAUX seulement (les comptes de l'annuaire suivent la politique de FreeIPA, M24) ; le
+# verrouillage s'applique toutefois à toute authentification par mot de passe qui passe par PAM.
+durcissement_faillock_essais: 5
+durcissement_faillock_deverrouillage: 900
+durcissement_faillock_intervalle: 900
+durcissement_pwquality:
+  minlen: 14
+  minclass: 4
+  maxrepeat: 3
+  maxsequence: 3
+  difok: 2
+  dictcheck: 1
+  enforce_for_root: true
+durcissement_pwhistory_memoire: 24
+
+# --- sudo ------------------------------------------------------------------------------------------
+durcissement_sudo_journal: /var/log/sudo.log
+durcissement_sudo_delai: 5
+
+# --- SSH (en complément de ssh_durci, M04-E11, et des certificats, M06-E19/E20) --------------------
+# Fichier lu AVANT 01-ssh-durci.conf : il ne fixe QUE des mots-clés que ssh_durci ne fixe pas
+# (sinon il le contredirait en silence) ; le rôle le vérifie.
+durcissement_ssh_fichier: /etc/ssh/sshd_config.d/00-durcissement.conf
+# Groupes autorisés à se connecter (AllowGroups). Groupe principal du compte local d'Ansible et de
+# bris de glace (admin), groupes de personnes de l'annuaire (HBAC décide ensuite hôte par hôte, M24).
+durcissement_ssh_groupes:
+  - admin
+  - plateforme-admins
+  - plateforme
+  - support
+# Groupes en plus sur certains hôtes (git01 : git ; ceph0x : cephadm ; gw0x, lb0x : supervision).
+durcissement_ssh_groupes_supplementaires: []
+# Comptes locaux qui ont des clés SSH mais ne doivent PAS se connecter (contrôle anti-oubli).
+durcissement_ssh_comptes_sans_ssh: []
+durcissement_ssh_max_sessions: 10
+durcissement_ssh_banniere: /etc/issue.net
+durcissement_banniere_texte: |
+  Système d'information de MédiSphère. Accès réservé aux personnes autorisées.
+  Les connexions et les actions sont journalisées.
+# Algorithmes (Debian ; sur Rocky, la politique cryptographique du système s'en charge).
+# Les certificats SSH de step-ca (hôtes et utilisateurs, M06) doivent rester acceptés : variantes
+# « -cert-v01@openssh.com » et algorithme de signature de la CA (CASignatureAlgorithms).
+durcissement_ssh_kex:
+  - mlkem768x25519-sha256
+  - sntrup761x25519-sha512
+  - sntrup761x25519-sha512@openssh.com
+  - curve25519-sha256
+  - curve25519-sha256@libssh.org
+  - diffie-hellman-group18-sha512
+  - diffie-hellman-group16-sha512
+durcissement_ssh_chiffrements:
+  - chacha20-poly1305@openssh.com
+  - aes256-gcm@openssh.com
+  - aes128-gcm@openssh.com
+  - aes256-ctr
+  - aes192-ctr
+  - aes128-ctr
+durcissement_ssh_macs:
+  - hmac-sha2-512-etm@openssh.com
+  - hmac-sha2-256-etm@openssh.com
+  - umac-128-etm@openssh.com
+# Clés d'HÔTE : ed25519 (certificat d'hôte de step-ca, M06-E19) puis RSA-SHA2 pour les vieux clients ;
+# pas d'ECDSA NIST (ssh-audit : « fail »). Côté UTILISATEURS et CA, ECDSA reste accepté : la CA SSH de
+# step-ca peut signer en ECDSA P-256 (vérifie « Signing CA » de ssh-keygen -L sur un certificat).
+durcissement_ssh_algos_cles_hote:
+  - ssh-ed25519-cert-v01@openssh.com
+  - ssh-ed25519
+  - rsa-sha2-512
+  - rsa-sha2-256
+durcissement_ssh_algos_cles_publiques:
+  - ssh-ed25519-cert-v01@openssh.com
+  - ssh-ed25519
+  - sk-ssh-ed25519-cert-v01@openssh.com
+  - sk-ssh-ed25519@openssh.com
+  - ecdsa-sha2-nistp256-cert-v01@openssh.com
+  - ecdsa-sha2-nistp256
+  - rsa-sha2-512
+  - rsa-sha2-256
+durcissement_ssh_algos_ca:
+  - ssh-ed25519
+  - ecdsa-sha2-nistp256
+  - rsa-sha2-512
+  - rsa-sha2-256
+# Rocky : politique cryptographique du système (update-crypto-policies) et sous-politiques du rôle
+# (files/crypto-policies : CBC, MAC faibles, échange de clés NIST retirés pour SSH). Rocky 10 n'a
+# plus de module NO-SHA1 : DEFAULT refuse déjà les signatures SHA-1. HostKeyAlgorithms est fixé par
+# 00-durcissement.conf sur les deux familles (lu avant la politique du système).
+durcissement_crypto_politique: "DEFAULT:NO-SSHCBC:NO-WEAKMAC:NO-SSHNIST"
+
+# --- auditd ----------------------------------------------------------------------------------------
+durcissement_auditd_taille_max_mo: 32
+durcissement_auditd_nb_fichiers: 10
+# Groupe des journaux d'audit : adm, pour que l'agent Alloy (membre de adm, M22) puisse les lire.
+durcissement_auditd_groupe: adm
+# Règles immuables (-e 2) : toute modification exigerait un redémarrage. Désactivé (exception
+# audit_rules_immutable, registre) tant que les règles évoluent au rythme des exercices.
+durcissement_auditd_immuable: false
+# UID à partir duquel un compte est « humain » (comptes locaux ≥ 1000 et comptes de l'annuaire).
+durcissement_auditd_uid_min: 1000
+# Chemins surveillés en plus des règles CIS (une règle n'est posée que si le chemin existe).
+durcissement_auditd_surveillances:
+  - {chemin: /etc/sudoers, droits: wa, cle: sudoers}
+  - {chemin: /etc/sudoers.d, droits: wa, cle: sudoers}
+  - {chemin: /etc/ssh, droits: wa, cle: ssh}
+  - {chemin: /etc/openbao, droits: rwa, cle: openbao}
+  - {chemin: /opt/keycloak/conf, droits: rwa, cle: keycloak}
+  - {chemin: /etc/kubernetes, droits: wa, cle: kubernetes}
+  - {chemin: /etc/medisphere, droits: wa, cle: medisphere}
+
+# --- AIDE ------------------------------------------------------------------------------------------
+# Répertoires qui changent par nature : exclus (sinon chaque vérification est un mur de bruit).
+durcissement_aide_exclusions:
+  - /var/log
+  - /var/cache
+  - /var/tmp
+  - /var/spool
+  - /var/lib/aide
+  - /var/lib/apt
+  - /var/lib/dnf
+  - /var/lib/containerd
+  - /var/lib/kubelet
+  - /var/lib/docker
+  - /var/lib/ceph
+  - /var/lib/containers
+  - /var/opt/gitlab
+  - /var/lib/openbao
+  - /var/lib/postgresql
+  - /var/lib/mailpit
+  - /var/lib/prometheus
+  - /var/lib/alloy
+  - /var/lib/sss
+  - /var/lib/systemd
+  - /run
+  - /proc
+  - /sys
+  - /tmp
+durcissement_aide_heure: "04:20"
+durcissement_aide_dossier_metriques: "{{ node_exporter_dossier_textfile | default('/var/lib/prometheus/node-exporter') }}"
+
+# --- MAC (AppArmor sur Debian, SELinux sur Rocky) --------------------------------------------------
+# Profils AppArmor posés par le rôle (fichiers dans files/apparmor/) :
+# { nom: <fichier>, profil: <nom du profil dans le fichier>, mode: complain|enforce }.
+durcissement_apparmor_profils: []
+# SELinux : le rôle EXIGE enforcing (il ne bascule jamais un hôte permissif tout seul : relabel et
+# redémarrage nécessaires, décision humaine). Booléens et contextes déclarés, jamais setenforce 0.
+# Booléens : { nom, valeur: true|false } ; contextes : { motif (expression semanage), chemin
+# (à réétiqueter), type }.
+durcissement_selinux_booleens: []
+durcissement_selinux_contextes: []
+
+# --- Conformité (contenu OpenSCAP et profil adapté) ------------------------------------------------
+durcissement_ssg_version: "0.1.82"
+durcissement_ssg_url: >-
+  https://github.com/ComplianceAsCode/content/releases/download/v{{ durcissement_ssg_version
+  }}/scap-security-guide-{{ durcissement_ssg_version }}.zip
+# SHA-256 de l'archive (fichier .sha512 publié avec la version : contrôlé une fois, puis SHA-256 relevé).
+durcissement_ssg_sha256: "765e84bdce7f9055f9b9c2dd0ee2b713d4255f8eec94eac6d35ea4973c28919c"
+durcissement_ssg_dossier: "/usr/local/share/scap/ssg-{{ durcissement_ssg_version }}"
+durcissement_conformite_dossier: /etc/medisphere/conformite

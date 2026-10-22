@@ -1,0 +1,10 @@
+---
+# group_vars/k8s_plan_controle/authentification.yml — OIDC du serveur d'API (M24-E16, PLAT-2516).
+# Rôle k8s_authentification (playbooks/k8s-api-fichiers.yml). Modèle : docs/kubernetes/acces.md.
+k8s_authentification_emetteur: https://sso.par1.medisphere.internal/realms/medisphere
+k8s_authentification_audiences: [kubernetes]
+k8s_authentification_azp: kubernetes
+k8s_authentification_racine_fichier: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+k8s_authentification_revendication_utilisateur: preferred_username
+k8s_authentification_revendication_groupes: groups
+k8s_authentification_prefixe: "oidc:"

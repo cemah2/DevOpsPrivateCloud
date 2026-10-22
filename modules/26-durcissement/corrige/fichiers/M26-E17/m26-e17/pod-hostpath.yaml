@@ -1,0 +1,18 @@
+# ~/m26/e17/pod-hostpath.yaml (fichier de travail) — essai (kubectl apply --dry-run=server) : un pod qui monte /root du nœud.
+# Espace wb-essais (Pod Security « baseline » : le hostPath y est DÉJÀ refusé par Pod Security, avec
+# un autre message ; on lit les deux refus) puis falco (« privileged » : seule la VAP refuse).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: e17-hostpath
+spec:
+  containers:
+    - name: essai
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      command: ["sleep", "3600"]
+      volumeMounts:
+        - {name: hote, mountPath: /hote, readOnly: true}
+  volumes:
+    - name: hote
+      hostPath:
+        path: /root

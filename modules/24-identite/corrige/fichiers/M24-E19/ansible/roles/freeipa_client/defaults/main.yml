@@ -1,0 +1,23 @@
+---
+# Rôle freeipa_client — inscription d'un hôte Debian 13 dans l'annuaire FreeIPA (M24-E19, PLAT-2519).
+# S'appuie sur le rôle « ipaclient » de freeipa.ansible_freeipa (1.17.0). Le mot de passe d'admin de
+# l'annuaire ne quitte jamais le contrôleur et ipa01 : l'hôte reçoit un mot de passe à USAGE UNIQUE,
+# généré sur ipa01 pour lui seul, consommé par l'inscription.
+
+freeipa_client_domaine: par1.medisphere.internal
+freeipa_client_royaume: PAR1.MEDISPHERE.INTERNAL
+freeipa_client_serveur: ipa01.par1.medisphere.internal
+# Hôte d'INVENTAIRE où générer le mot de passe à usage unique (connexion Ansible connue).
+freeipa_client_hote_serveur: ipa01
+# Mot de passe d'admin de l'annuaire (Vault critique de host_vars/ipa01, M24-E02) : utilisé sur ipa01 seulement.
+freeipa_client_admin_mot_de_passe: "{{ hostvars[freeipa_client_hote_serveur]['vault_freeipa_admin_mot_de_passe'] }}"
+
+# Comptes LOCAUX que SSSD ne doit jamais résoudre (section [nss], filter_users / filter_groups) :
+# « admin » existe AUSSI dans l'annuaire (bris de glace de FreeIPA). Sans ce filtre, pam_sss évalue
+# HBAC pour « admin » et la désactivation d'allow_all enferme Ansible et l'astreinte dehors.
+freeipa_client_comptes_locaux: [root, admin]
+freeipa_client_groupes_locaux: [root, admin, sudo]
+
+freeipa_client_verifier: true
+# Une personne de l'annuaire qui doit être résolue après inscription (contrôle).
+freeipa_client_personne_controle: lucas.martin

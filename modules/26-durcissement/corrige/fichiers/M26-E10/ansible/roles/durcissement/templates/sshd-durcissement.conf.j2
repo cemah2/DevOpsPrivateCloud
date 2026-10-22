@@ -1,0 +1,25 @@
+# {{ durcissement_entete }}
+# {{ durcissement_ssh_fichier }} (rôle durcissement, M26-E11)
+# Lu AVANT 01-ssh-durci.conf (M04) et 02/03 (certificats, M06) : ne fixe que des mots-clés absents
+# de ces fichiers (le rôle le contrôle). Effet réel : sudo sshd -T
+{% if 'sshd_limit_user_access' not in _durcissement_exclues %}
+
+# Qui peut se connecter : groupe du compte local d'automatisation et de bris de glace, groupes de
+# personnes de l'annuaire (la règle HBAC de FreeIPA décide ensuite hôte par hôte, M24-E19).
+AllowGroups {{ _durcissement_ssh_groupes | join(' ') }}
+{% endif %}
+MaxSessions {{ durcissement_ssh_max_sessions }}
+Banner {{ durcissement_ssh_banniere }}
+
+# Clés d'hôte présentées : ed25519 (et son certificat step-ca), RSA-SHA2 ; pas d'ECDSA NIST.
+HostKeyAlgorithms {{ durcissement_ssh_algos_cles_hote | join(',') }}
+{% if ansible_facts['os_family'] == 'Debian' %}
+
+# Algorithmes (ssh-audit 3.9, politique MédiSphère). Les certificats de step-ca restent acceptés
+# (variantes -cert-v01, algorithme de signature de la CA). Sur Rocky : politique crypto du système.
+KexAlgorithms {{ durcissement_ssh_kex | join(',') }}
+Ciphers {{ durcissement_ssh_chiffrements | join(',') }}
+MACs {{ durcissement_ssh_macs | join(',') }}
+PubkeyAcceptedAlgorithms {{ durcissement_ssh_algos_cles_publiques | join(',') }}
+CASignatureAlgorithms {{ durcissement_ssh_algos_ca | join(',') }}
+{% endif %}

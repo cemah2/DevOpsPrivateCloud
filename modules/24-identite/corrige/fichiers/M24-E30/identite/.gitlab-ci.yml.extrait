@@ -1,0 +1,33 @@
+# plateforme/identite — .gitlab-ci.yml — EXTRAIT (M24-E30) : job de la revue des accès.
+# Planification : Build → Pipeline schedules → « Revue des accès mensuelle », cron « 17 6 1 * * »,
+# fuseau Europe/Paris, branche main, variable REVUE_MENSUELLE=1.
+revue-acces:
+  stage: verifier
+  tags: [shell]
+  environment:
+    name: lab/revue-acces
+    action: access
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $REVUE_MENSUELLE == "1"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "web" && $REVUE_ESSAI == "1"
+  script:
+    - cd outils/revue-acces
+    # Jeton Kubernetes lié, de courte durée, demandé avec le kubeconfig du runner (M19) ; jamais affiché.
+    - export REVUE_K8S_TOKEN="$(kubectl --kubeconfig "$KUBECONFIG_REVUE" -n wb-outils create token revue-acces --duration=1h)"
+    # JSON du mois précédent (s'il existe) depuis plateforme/medisphere, pour la comparaison.
+    - |
+      PRECEDENT="$(date -d "$(date +%Y-%m-01) -1 day" +%Y-%m)"
+      # jeton par un fichier de configuration curl (-K) : jamais sur la ligne de commande (ps)
+      curl -sf -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$REVUE_GITLAB_TOKEN_DOC") -o precedent.json \
+        "$CI_API_V4_URL/projects/plateforme%2Fmedisphere/repository/files/docs%2Fsecurite%2Fidentite%2Frevue-acces%2F${PRECEDENT}.json/raw?ref=main" \
+        || echo "pas de revue précédente ($PRECEDENT)"
+    - |
+      if [ "${REVUE_ESSAI:-0}" = "1" ]; then
+        uv run revue_acces.py --sortie "$CI_PROJECT_DIR/rapport" --precedent precedent.json
+      else
+        uv run revue_acces.py --sortie "$CI_PROJECT_DIR/rapport" --precedent precedent.json --envoyer --mr
+      fi
+  artifacts:
+    paths: [rapport/]
+    expire_in: 400 days
+    access: developer

@@ -1,0 +1,9 @@
+# plateforme/charts-miroir — charts.yaml : EXTRAIT, entrée ajoutée en M25-E15 (SEC-2615).
+# Reloader 1.4.22 (stakater), chart 2.2.18 du 30/09/2026 ; la série 3.0.0-beta (Reloader 2.0 bêta)
+# n'est pas retenue. Empreinte : champ « digest » de l'index du dépôt, recalculée après helm pull.
+charts:
+  - nom: reloader
+    depot: https://stakater.github.io/stakater-charts
+    version: 2.2.18
+    empreinte: sha256:5eb4576ba75a0e165897e8a98a6ffef15d68939430da6eb8fe80796bba75cb17
+    usage: "Reloader 1.4.22 (M25-E15), Application plateforme/gitops plateforme/reloader.yaml"

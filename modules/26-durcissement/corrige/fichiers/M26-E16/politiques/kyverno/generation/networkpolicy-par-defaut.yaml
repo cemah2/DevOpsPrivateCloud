@@ -1,0 +1,80 @@
+# plateforme/politiques — kyverno/generation/networkpolicy-par-defaut.yaml (M26-E16, SEC-2716)
+# Promesse de M15-E17 et M20 : tout NOUVEL espace d'équipe (étiquette medisphere.internal/equipe)
+# naît avec le modèle réseau de la plateforme :
+#   - refus-par-defaut : rien n'entre, rien ne sort (M15-E17) ;
+#   - sortie-dns : résolution de noms vers CoreDNS, pour tous les pods (sinon plus rien ne marche).
+# Les autorisations propres à l'application viennent ensuite de son dépôt (chart, …/deploiement).
+#
+# synchronize : Kyverno remet l'objet s'il est supprimé ou modifié (une équipe ne peut plus
+# « écraser » refus-par-defaut par un objet de même nom dans son dépôt : Kyverno le rétablit,
+# et Argo CD affiche l'écart). generateExisting désactivé : les espaces existants ont déjà ces
+# politiques, posées par plateforme/k8s ; les reprendre est un geste à part (voir le corrigé).
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: networkpolicy-par-defaut
+  annotations:
+    policies.kyverno.io/title: Refus réseau par défaut dans les espaces d'équipe
+    medisphere.internal/ticket: SEC-2716
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: false
+    orphanDownstreamOnPolicyDelete:
+      # Supprimer la politique ne doit JAMAIS retirer le refus par défaut des espaces.
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [namespaces]
+  matchConditions:
+    - name: espace-d-equipe
+      expression: >-
+        has(object.metadata.labels) && 'medisphere.internal/equipe' in object.metadata.labels
+  variables:
+    - name: espace
+      expression: object.metadata.name
+    - name: politiques
+      expression: >-
+        [
+          {
+            "apiVersion": dyn("networking.k8s.io/v1"),
+            "kind": dyn("NetworkPolicy"),
+            "metadata": dyn({
+              "name": "refus-par-defaut",
+              "labels": {"app.kubernetes.io/managed-by": "kyverno", "medisphere.internal/modele": "reseau-v1"}
+            }),
+            "spec": dyn({
+              "podSelector": dyn({}),
+              "policyTypes": dyn(["Ingress", "Egress"])
+            })
+          },
+          {
+            "apiVersion": dyn("networking.k8s.io/v1"),
+            "kind": dyn("NetworkPolicy"),
+            "metadata": dyn({
+              "name": "sortie-dns",
+              "labels": {"app.kubernetes.io/managed-by": "kyverno", "medisphere.internal/modele": "reseau-v1"}
+            }),
+            "spec": dyn({
+              "podSelector": dyn({}),
+              "policyTypes": dyn(["Egress"]),
+              "egress": dyn([{
+                "to": dyn([{
+                  "namespaceSelector": dyn({"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}}),
+                  "podSelector": dyn({"matchLabels": {"k8s-app": "kube-dns"}})
+                }]),
+                "ports": dyn([
+                  {"protocol": "UDP", "port": 53},
+                  {"protocol": "TCP", "port": 53}
+                ])
+              }])
+            })
+          }
+        ]
+  generate:
+    - expression: generator.Apply(variables.espace, variables.politiques)

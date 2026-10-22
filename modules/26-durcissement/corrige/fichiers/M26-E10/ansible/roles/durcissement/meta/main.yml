@@ -1,0 +1,16 @@
+---
+# Rôle durcissement (M26-E10) — CIS niveau 1 serveur et ANSSI-BP-028 intermédiaire, exceptions déclarées.
+galaxy_info:
+  role_name: durcissement
+  namespace: medisphere
+  author: Équipe Plateforme MédiSphère
+  description: Durcissement des hôtes Debian 13 et Rocky Linux 10 (CIS, ANSSI-BP-028), exceptions déclarées
+  license: MIT
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+    - name: EL
+      versions: ["10"]
+  galaxy_tags: [securite, durcissement, cis, anssi]
+dependencies: []

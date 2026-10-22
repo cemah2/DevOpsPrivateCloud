@@ -1,0 +1,37 @@
+# plateforme/k8s — cilium/hote/pare-feu-noeuds.yaml (M26-E27, corrigé M26-E40)
+# Pare-feu d'hôte Cilium : politique appliquée NŒUD PAR NŒUD, après une phase en policyAuditMode.
+# Elle liste TOUS les flux entre nœuds à autoriser (la panne M26-E40 v1 en oublie un : santé 4240).
+# Appliquée par l'Application Argo CD « politiques ». RB-264.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: pare-feu-noeuds
+  labels:
+    medisphere.internal/domaine: securite
+spec:
+  description: "pare-feu d'hote des noeuds k8s-par1 (flux entre noeuds et depuis MGMT)"
+  nodeSelector:
+    matchLabels:
+      medisphere.internal/pare-feu-hote: "oui"   # posée nœud par nœud (RB-264)
+  ingress:
+    # Entre nœuds : API, etcd (CP), kubelet, santé Cilium, WireGuard, VXLAN.
+    - fromEntities: [host, remote-node]
+      toPorts:
+        - ports:
+            - {port: "6443", protocol: TCP}    # kube-apiserver
+            - {port: "8443", protocol: TCP}    # HAProxy → apiserver (M14)
+            - {port: "2379", protocol: TCP}    # etcd (entre nœuds de contrôle)
+            - {port: "2380", protocol: TCP}    # etcd pair
+            - {port: "10250", protocol: TCP}   # kubelet
+            - {port: "4240", protocol: TCP}    # santé Cilium — NE PAS OUBLIER (panne M26-E40 v1)
+            - {port: "4244", protocol: TCP}    # Hubble relay
+            - {port: "51871", protocol: UDP}   # WireGuard
+            - {port: "8472", protocol: UDP}    # VXLAN (si tunnel)
+    # BGP depuis les passerelles (annonce des IP de service).
+    - fromCIDR: ["10.10.40.2/32", "10.10.40.3/32"]
+      toPorts: [{ports: [{port: "179", protocol: TCP}]}]
+    # Administration depuis MGMT (SSH) et collecte node_exporter depuis les travailleurs.
+    - fromCIDR: ["10.10.10.0/24"]
+      toPorts: [{ports: [{port: "22", protocol: TCP}]}]
+    - fromEntities: [remote-node]
+      toPorts: [{ports: [{port: "9100", protocol: TCP}]}]

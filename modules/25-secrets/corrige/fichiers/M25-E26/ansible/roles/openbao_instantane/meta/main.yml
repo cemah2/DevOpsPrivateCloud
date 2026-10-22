@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: plateforme
+  description: Instantané Raft horaire d'OpenBao, chiffré age, vers s3-01 (M25-E26)
+  license: MPL-2.0
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

@@ -1,0 +1,12 @@
+# {{ openbao_entete }}
+# /etc/systemd/system/openbao.service.d/medisphere.conf — rôle openbao (M25-E03 ; M25-E25 : kms.env).
+# L'unité du paquet (/usr/lib/systemd/system/openbao.service) reste telle quelle. Le durcissement
+# complet arrive au M25-E28 (cette surcharge est alors remplacée).
+[Service]
+LimitCORE=0
+LimitNOFILE=65536
+{% if openbao_seal_transit | default(false) | bool %}
+# Jeton du seal transit (BAO_TOKEN), lu par systemd en root AVANT de passer à l'utilisateur
+# openbao : le fichier reste root:root 0600, le processus n'a pas besoin de pouvoir le relire.
+EnvironmentFile=/etc/openbao/kms.env
+{% endif %}

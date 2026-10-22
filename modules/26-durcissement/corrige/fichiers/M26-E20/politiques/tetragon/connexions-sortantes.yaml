@@ -1,0 +1,27 @@
+# plateforme/politiques — tetragon/connexions-sortantes.yaml (M26-E20, SEC-2720)
+# Connexions TCP qui SORTENT des réseaux du cluster : tcp_connect (noyau) avec la socket en argument.
+# Exclus : pods (10.240.0.0/16), Services (10.96.0.0/16 — avec le remplacement de kube-proxy, Cilium
+# a déjà traduit l'adresse du Service en adresse de pod au moment du connect()), boucle locale.
+# Restent : vers les VMs du socle (10.10.0.0/16 : registre, S3, OpenBao, RGW…), vers Internet.
+# C'est l'inventaire réel des sorties de chaque charge, à confronter à la matrice des flux.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: connexions-sortantes
+  annotations:
+    medisphere.internal/ticket: SEC-2720
+spec:
+  kprobes:
+    - call: tcp_connect
+      syscall: false
+      args:
+        - index: 0
+          type: sock
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: NotDAddr
+              values:
+                - 10.240.0.0/16
+                - 10.96.0.0/16
+                - 127.0.0.0/8

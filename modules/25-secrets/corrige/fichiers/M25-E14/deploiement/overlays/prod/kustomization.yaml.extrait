@@ -1,0 +1,12 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (M25-E14 : préparation ; la
+# bascule de l'API — component identifiants-dynamiques — est faite à la fin de M25-E15).
+resources:
+  # … ressources existantes …
+  - reseau-openbao.yaml
+patches:
+  # … correctifs existants …
+  - path: base-openbao.yaml
+    target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db

@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: sauvegarde_identite
+  author: Équipe Plateforme MédiSphère
+  description: Sauvegarde chiffrée (age) de Keycloak et de FreeIPA vers s3-01 (M24-E25).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+    - name: EL
+      versions: ["10"]
+dependencies: []

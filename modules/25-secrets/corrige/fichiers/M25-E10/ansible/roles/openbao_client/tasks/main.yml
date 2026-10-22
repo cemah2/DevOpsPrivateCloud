@@ -1,0 +1,58 @@
+---
+- name: Dossier de téléchargement
+  ansible.builtin.file:
+    path: "{{ openbao_client_cache }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Télécharger l'archive (gardée seulement si l'empreinte est la bonne)
+  ansible.builtin.get_url:
+    url: "{{ openbao_client_url }}"
+    dest: "{{ openbao_client_cache }}/openbao_{{ openbao_client_version }}_linux_amd64.tar.gz"
+    checksum: "sha256:{{ openbao_client_sha256 }}"
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: Dossier de la version
+  ansible.builtin.file:
+    path: "{{ openbao_client_cache }}/{{ openbao_client_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Extraire le binaire bao seulement
+  ansible.builtin.unarchive:
+    src: "{{ openbao_client_cache }}/openbao_{{ openbao_client_version }}_linux_amd64.tar.gz"
+    dest: "{{ openbao_client_cache }}/{{ openbao_client_version }}"
+    remote_src: true
+    include: [bao]
+    creates: "{{ openbao_client_cache }}/{{ openbao_client_version }}/bao"
+
+- name: Installer le binaire
+  ansible.builtin.copy:
+    src: "{{ openbao_client_cache }}/{{ openbao_client_version }}/bao"
+    dest: "{{ openbao_client_binaire }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Adresse du coffre pour les sessions interactives
+  ansible.builtin.copy:
+    dest: /etc/profile.d/openbao.sh
+    content: |
+      # Géré par Ansible (rôle openbao_client, M25-E10).
+      export BAO_ADDR="{{ openbao_client_adresse }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Contrôler la version installée
+  ansible.builtin.command: "{{ openbao_client_binaire }} version"
+  register: openbao_client_sortie
+  changed_when: false
+  failed_when: ("v" ~ openbao_client_version) not in openbao_client_sortie.stdout

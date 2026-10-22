@@ -1,0 +1,54 @@
+# plateforme/observabilite — regles/identite.yaml (M24-E26, PLAT-2526)
+# Alertes sur le SYMPTÔME vu par les utilisateurs : on ne peut plus se connecter (Keycloak absent),
+# ou beaucoup de connexions échouent (attaque, annuaire, mot de passe de service changé…).
+# La fédération LDAP en échec est détectée dans les JOURNAUX (ruler de Loki, locataire audit :
+# loki/regles/audit/identite.yaml) : Keycloak 26.7 n'a pas de métrique LDAP.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: identite
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: identite.alertes
+      rules:
+        # La collecte échoue (Keycloak arrêté, port 9000 fermé, certificat refusé) ou la cible a
+        # disparu de la configuration (absent). 2 minutes = 4 collectes manquées.
+        - alert: KeycloakIndisponible
+          expr: |
+            up{job="keycloak"} == 0
+            or
+            absent(up{job="keycloak"})
+          for: 2m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Keycloak (idp01) ne répond plus à la collecte depuis 2 minutes"
+            description: >-
+              Plus aucune nouvelle connexion n'est possible sur les services en SSO (GitLab, Grafana,
+              Argo CD, Harbor, Proxmox, kubectl par kubelogin, step ssh login). Vérifie
+              `systemctl status keycloak` et /health/ready sur idp01:9000 ; accès de secours : RB-240.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md
+        # Échecs de connexion « parlants » : mauvais mot de passe, personne inconnue, compte
+        # désactivé ou verrouillé. On écarte resolve_required_actions (action requise en attente),
+        # expired_code et les erreurs de client (redirection, PKCE) qui disent un problème de
+        # service, pas une attaque.
+        - alert: KeycloakEchecsConnexion
+          expr: |
+            sum by (realm) (
+              increase(keycloak_user_events_total{realm="medisphere", event="login",
+                error=~"invalid_user_credentials|user_not_found|user_disabled|user_temporarily_disabled"}[5m])
+            ) > 20
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Royaume {{ $labels.realm }} : {{ $value | humanize }} échecs de connexion en 5 minutes"
+            description: >-
+              Force brute en cours, ou annuaire qui refuse les liaisons (verrouillages en série).
+              Explore le locataire audit : {service="keycloak"} | json | loggerName="org.keycloak.events" |= "LOGIN_ERROR"
+              (adresse ipAddress, identifiant username, erreur error).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/identite/runbooks/RB-240-bris-de-glace.md

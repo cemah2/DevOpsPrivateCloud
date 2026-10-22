@@ -1,0 +1,23 @@
+---
+# host_vars/mon01/oauth2_proxy.yml — OAuth2 Proxy devant l'interface de Mailpit (M24-E18, PLAT-2518).
+# Personnes : https://mon01.par1.medisphere.internal:8443 (SSO, groupes ci-dessous).
+# Vérifications : l'API reste sur 8025 en authentification basique, filtrée à MGMT (pare_feu_local.yml).
+oauth2_proxy_version: "7.15.5"
+# SHA-256 de oauth2-proxy-v7.15.5.linux-amd64.tar.gz, identique au fichier
+# oauth2-proxy-v7.15.5.linux-amd64.tar.gz-sha256sum.txt publié avec la version (relevé le 22/10/2026).
+oauth2_proxy_sha256: "f63f94bf72c5f46ab002a0a275aa8b3cf19b4d828aed08a13978cb9a62c3a1fd"
+oauth2_proxy_client_secret: "{{ keycloak_secrets_clients.oauth2_proxy }}"
+
+oauth2_proxy_instances:
+  - nom: mailpit
+    ecoute: "0.0.0.0:8443"
+    url_publique: https://mon01.par1.medisphere.internal:8443
+    # Par le NOM (le certificat de Mailpit ne couvre pas 127.0.0.1) : l'adresse est locale, le
+    # trafic passe par « lo ».
+    amont: https://mon01.par1.medisphere.internal:8025
+    groupes: [plateforme-admins, plateforme, support]
+    tls_certificat: /etc/oauth2-proxy/mailpit/tls/oauth2-proxy.crt
+    tls_cle: /etc/oauth2-proxy/mailpit/tls/oauth2-proxy.key
+    cookie_secret: "{{ vault_oauth2_proxy_cookie_secret_mailpit }}"
+    # Compte technique « sso » de Mailpit (mailpit_comptes) : « Basic » + base64(sso:<mot de passe>).
+    autorisation_amont: "Basic {{ ('sso:' ~ vault_mailpit_mdp_sso) | b64encode }}"

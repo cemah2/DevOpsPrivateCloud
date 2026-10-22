@@ -1,0 +1,24 @@
+# plateforme/charts-miroir — .gitlab-ci.yml : job « signer » REMPLACÉ (M25-E20, SEC-2620).
+# Plus de variables COSIGN_PRIVATE_KEY / COSIGN_PASSWORD (à supprimer du projet et du groupe
+# plateforme après le premier pipeline vert) : le job prouve son identité à OpenBao.
+signer:
+  stage: signer
+  tags: [protege]
+  resource_group: charts-miroir
+  interruptible: false
+  needs: [recopier]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+  image: registry.par1.medisphere.internal/plateforme/outils-supply-chain:<VERSION-E20>@sha256:<EMPREINTE>
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  variables:
+    BAO_ADDR: https://openbao.par1.medisphere.internal:8200
+  script:
+    - |
+      BAO_TOKEN="$(printf '{"role":"ci-signature","jwt":"%s"}' "$OPENBAO_ID_TOKEN" \
+        | bao write -field=token auth/gitlab/login -)"
+      export BAO_TOKEN
+    - bash outils/signer.sh
+    - bao token revoke -self > /dev/null

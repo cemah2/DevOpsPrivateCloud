@@ -1,0 +1,28 @@
+#!/bin/bash
+# {{ durcissement_entete }}
+# /usr/local/sbin/aide-metrique (rôle durcissement, M26-E12) — lancé par ExecStopPost de
+# aide-verification.service : traduit le code de sortie d'AIDE en métriques pour node_exporter.
+# systemd fournit EXIT_STATUS (code ou nom du signal) aux commandes ExecStopPost.
+set -euo pipefail
+
+dossier="{{ durcissement_aide_dossier_metriques }}"
+fichier="$dossier/aide.prom"
+code="${EXIT_STATUS:-255}"
+case "$code" in
+  ''|*[!0-9]*) code=255 ;;
+esac
+
+mkdir -p "$dossier"
+tmp="$(mktemp "$dossier/.aide.prom.XXXXXX")"
+{
+  echo "# HELP medisphere_aide_code_sortie Code de sortie de la dernière vérification AIDE (0 rien, 1-7 écarts, >= 14 erreur)."
+  echo "# TYPE medisphere_aide_code_sortie gauge"
+  echo "medisphere_aide_code_sortie $code"
+  echo "# HELP medisphere_aide_derniere_verification_secondes Horodatage de la dernière vérification AIDE."
+  echo "# TYPE medisphere_aide_derniere_verification_secondes gauge"
+  echo "medisphere_aide_derniere_verification_secondes $(date +%s)"
+} > "$tmp"
+chmod 0644 "$tmp"
+# Renommage atomique : node_exporter ne lit jamais un fichier à moitié écrit.
+mv -f "$tmp" "$fichier"
+logger -t aide-verification "vérification terminée, code $code"

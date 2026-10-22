@@ -1,0 +1,5 @@
+# host_vars/kms01/pare_feu_local.yml — EXTRAIT : AJOUT du M25-E27 (supervision de kms01).
+pare_feu_local_regles:
+  # … règles du M25-E25 …
+  - {source: [10.10.40.61, 10.10.40.62, 10.10.40.63, 10.10.20.19], proto: tcp, ports: 8200,
+     motif: "télémétrie et sonde de kms01 : Prometheus de k8s-par1 et témoin mon01", ref: M25-E27}

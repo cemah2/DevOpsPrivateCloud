@@ -1,0 +1,27 @@
+---
+# Un changement de openbao.hcl ou de la surcharge systemd ne prend effet qu'au redémarrage, et un
+# redémarrage SCELLE le nœud. Deux gestionnaires sur le même sujet : l'un redémarre (seulement si
+# on l'a autorisé), l'autre prévient. Aucun des deux n'agit à la première installation (le service
+# n'était pas actif : service.yml le démarre directement avec la bonne configuration).
+
+- name: Redémarrer openbao (autorisé)
+  ansible.builtin.systemd_service:
+    name: openbao.service
+    state: restarted
+    daemon_reload: true
+  listen: configuration openbao modifiee
+  when:
+    - _openbao_etait_actif | default(false) | bool
+    - openbao_redemarrer | bool
+
+- name: Prévenir qu'un redémarrage est nécessaire
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} : configuration d'OpenBao modifiée, NON appliquée (le service tourne).
+      Un redémarrage scellera le nœud : prévois les dépositaires (ou kms01 après M25-E25), puis
+      relance avec -e openbao_redemarrer=true --limit {{ inventory_hostname }}.
+  listen: configuration openbao modifiee
+  changed_when: true
+  when:
+    - _openbao_etait_actif | default(false) | bool
+    - not (openbao_redemarrer | bool)

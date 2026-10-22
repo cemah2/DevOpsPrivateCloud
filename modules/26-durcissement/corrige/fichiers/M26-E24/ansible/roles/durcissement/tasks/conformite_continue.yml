@@ -1,0 +1,114 @@
+---
+# roles/durcissement/tasks/conformite_continue.yml — M26-E24 (SEC-2724).
+# Pose l'analyse de conformité hebdomadaire : outils, paramètres, identifiants S3, script, unités.
+# Lecture seule pour le système analysé ; idempotent ; désactivable (durcissement_conformite_continue_actif: false).
+
+- name: Retour arrière — minuterie arrêtée et désactivée
+  when: not (durcissement_conformite_continue_actif | bool)
+  ansible.builtin.systemd_service:
+    name: conformite-analyse.timer
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Conformité continue active
+  when: durcissement_conformite_continue_actif | bool
+  block:
+    - name: Dépôt CISOfy de Lynis (Debian)
+      when: ansible_os_family == 'Debian' and durcissement_conformite_lynis | bool
+      ansible.builtin.deb822_repository:
+        name: cisofy-lynis
+        uris: "{{ durcissement_conformite_lynis_depot_debian }}"
+        suites: stable
+        components: main
+        signed_by: "{{ durcissement_conformite_lynis_cle_debian }}"
+        state: present
+
+    - name: Outils d'analyse (Debian)
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.apt:
+        name: "{{ ['openscap-scanner', 'libxml2-utils', 'curl', 'gzip'] + (['lynis'] if durcissement_conformite_lynis | bool else []) }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Outils d'analyse (Rocky)
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.dnf:
+        name: "{{ ['openscap-scanner', 'scap-security-guide', 'libxml2', 'curl', 'gzip'] + (['lynis'] if durcissement_conformite_lynis | bool else []) }}"
+        state: present
+
+    - name: Le datastream existe sur l'hôte
+      ansible.builtin.stat:
+        path: "{{ durcissement_conformite_datastream }}"
+      register: durcissement_conformite_ds
+
+    - name: Arrêt si le contenu ComplianceAsCode manque (E10 doit être appliqué avant)
+      ansible.builtin.assert:
+        that: durcissement_conformite_ds.stat.exists
+        fail_msg: "{{ durcissement_conformite_datastream }} absent : le rôle (conformite.yml d'E10) doit déplier ComplianceAsCode d'abord."
+        quiet: true
+
+    - name: Dossier des paramètres
+      ansible.builtin.file:
+        path: /etc/conformite
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Sur les nœuds de k8s-par1, le rôle node_exporter n'est pas appliqué : le dossier n'existe pas.
+    - name: Dossier du collecteur textfile
+      ansible.builtin.file:
+        path: "{{ durcissement_conformite_textfile }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Paramètres de l'analyse
+      ansible.builtin.template:
+        src: conformite.env.j2
+        dest: /etc/conformite/conformite.env
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Identifiants S3 (identité « conformite »)
+      ansible.builtin.template:
+        src: s3.env.j2
+        dest: /etc/conformite/s3.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Script d'analyse
+      ansible.builtin.copy:
+        src: conformite-analyse.sh
+        dest: /usr/local/sbin/conformite-analyse
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Unités systemd
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - conformite-analyse.service
+        - conformite-analyse.timer
+
+    # On n'ACTIVE que la minuterie : le service ne démarre jamais pendant le jeu du rôle (une vague
+    # entière qui lance oscap en même temps saturerait pve01). Premier essai : à la main (E24 étape 4).
+    # daemon_reload à chaque jeu : systemd relit les unités avant d'activer (idempotent, sans handler
+    # dont dépendrait l'ordre des tâches du rôle).
+    - name: Minuterie active
+      ansible.builtin.systemd_service:
+        name: conformite-analyse.timer
+        daemon_reload: true
+        state: started
+        enabled: true

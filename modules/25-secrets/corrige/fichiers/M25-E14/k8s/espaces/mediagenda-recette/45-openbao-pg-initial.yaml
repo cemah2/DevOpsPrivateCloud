@@ -1,0 +1,43 @@
+# plateforme/k8s — espaces/mediagenda-recette/45-openbao-pg-initial.yaml (M25-E14, DEV-2614)
+# Mot de passe INITIAL du rôle PostgreSQL « openbao », produit DANS le cluster par le générateur
+# Password d'ESO (aucun humain ne le choisit), une seule fois (refreshPolicy: CreatedOnce).
+# Il ne sert qu'une fois : passé à OpenBao par un tube, puis remplacé par rotate-root. Ce fichier est
+# RETIRÉ dans la MR suivante, avec le passwordSecret du rôle géré.
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: openbao-pg-initial
+  namespace: mediagenda-recette
+spec:
+  length: 32
+  digits: 6
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openbao-pg-initial
+  namespace: mediagenda-recette
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: openbao-pg-initial
+    creationPolicy: Owner
+    deletionPolicy: Delete
+    template:
+      # Format attendu par CloudNativePG pour passwordSecret.
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: openbao
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: openbao-pg-initial

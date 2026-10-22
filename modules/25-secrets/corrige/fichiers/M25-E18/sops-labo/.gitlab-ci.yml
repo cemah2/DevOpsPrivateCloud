@@ -1,0 +1,15 @@
+# formation/sops-labo — .gitlab-ci.yml (M25-E18, PLAT-2618).
+# Un seul contrôle, sur chaque MR et sur main : aucun Secret en clair, tout *.sops.yaml chiffré.
+# Le job ne déchiffre rien et n'a besoin d'aucun accès au coffre (image avec yq du composant
+# deploiement, M19-E10, par étiquette ET empreinte).
+stages: [verifier]
+
+sops:verifier:
+  stage: verifier
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - bash outils/verifier-chiffres.sh k8s

@@ -1,0 +1,33 @@
+{{/*
+medisphere-commun — EXTRAIT M26-E21 : remplace les deux gabarits de sécurité du M17-E06.
+Version du chart de bibliothèque : 0.2.0 (changement de comportement : AppArmor explicite, UID fixe).
+
+medisphere-commun.securite.pod — contexte de pod « charge sûre » (docs/securite/durcissement/charges-sures.md) :
+  - runAsNonRoot ET un UID/GID numériques explicites (medisphere.uid, défaut 10001) : le pod ne
+    dépend plus de la ligne USER de l'image pour être conforme ;
+  - seccomp et AppArmor « RuntimeDefault » écrits : le runtime les appliquerait souvent seul, mais ce
+    qui n'est pas écrit ne se vérifie pas (kube-bench, kubescape, Kyverno lisent le manifeste).
+*/}}
+{{- define "medisphere-commun.securite.pod" -}}
+runAsNonRoot: true
+runAsUser: {{ .Values.medisphere.uid | default 10001 }}
+runAsGroup: {{ .Values.medisphere.uid | default 10001 }}
+seccompProfile:
+  type: RuntimeDefault
+appArmorProfile:
+  type: RuntimeDefault
+{{- end -}}
+
+{{/*
+medisphere-commun.securite.conteneur — inchangé sur le fond ; AppArmor ajouté au niveau du pod.
+*/}}
+{{- define "medisphere-commun.securite.conteneur" -}}
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
+runAsNonRoot: true
+capabilities:
+  drop:
+    - ALL
+seccompProfile:
+  type: RuntimeDefault
+{{- end -}}

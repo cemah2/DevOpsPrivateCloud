@@ -1,0 +1,107 @@
+---
+# Domaine « pam » : verrouillage après échecs (faillock), qualité et historique des mots de passe.
+# ⚠️ Toucher à PAM peut empêcher TOUTE authentification par mot de passe (console, sudo des personnes
+# de l'annuaire). Avant d'appliquer : une session root ouverte sur l'hôte, et le compte de secours
+# testé à la console (RB-263). La pile n'est jamais éditée à la main : pam-auth-update (Debian) et
+# authselect (Rocky) la génèrent, SSSD (M24) compris.
+
+- name: Réglages de faillock
+  ansible.builtin.template:
+    src: faillock.conf.j2
+    dest: /etc/security/faillock.conf
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [accounts_passwords_pam_faillock_deny, accounts_passwords_pam_faillock_unlock_time]
+
+- name: Dossier des réglages de pwquality
+  ansible.builtin.file:
+    path: /etc/security/pwquality.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Réglages de pwquality
+  ansible.builtin.template:
+    src: pwquality-durcissement.conf.j2
+    dest: /etc/security/pwquality.conf.d/60-durcissement.conf
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [accounts_password_pam_minlen, accounts_password_pam_minclass, accounts_password_pam_maxrepeat]
+
+- name: Réglages de pwhistory
+  ansible.builtin.copy:
+    dest: /etc/security/pwhistory.conf
+    content: |
+      # {{ durcissement_entete }}
+      remember = {{ durcissement_pwhistory_memoire }}
+      enforce_for_root
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [accounts_password_pam_pwhistory_remember]
+
+# --- Debian : profils de pam-auth-update -------------------------------------------------------------
+- name: Debian — profils pam-auth-update (faillock, pwhistory)
+  ansible.builtin.template:
+    src: "pam-configs/{{ item }}.j2"
+    dest: "/usr/share/pam-configs/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [faillock, faillock_notify, pwhistory]
+  register: _durcissement_profils_pam
+  when: ansible_facts['os_family'] == 'Debian'
+  tags: [accounts_passwords_pam_faillock_enabled, accounts_password_pam_pwhistory_enabled]
+
+- name: Debian — modules actifs de la pile commune
+  ansible.builtin.command: grep -hE 'pam_(faillock|pwhistory|pwquality)\.so' /etc/pam.d/common-auth /etc/pam.d/common-account /etc/pam.d/common-password
+  register: _durcissement_pile_pam
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: ansible_facts['os_family'] == 'Debian'
+
+# pam-auth-update régénère common-* à partir de TOUS les profils actifs (sss de SSSD compris) :
+# on active les nôtres sans désactiver les autres.
+- name: Debian — activer les profils (pam-auth-update)
+  ansible.builtin.command: pam-auth-update --package --enable faillock faillock_notify pwhistory pwquality
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - _durcissement_profils_pam is changed
+      or 'pam_faillock.so' not in _durcissement_pile_pam.stdout
+      or 'pam_pwhistory.so' not in _durcissement_pile_pam.stdout
+      or 'pam_pwquality.so' not in _durcissement_pile_pam.stdout
+  changed_when: true
+  tags: [accounts_passwords_pam_faillock_enabled, accounts_password_pam_pwquality_enabled]
+
+# --- Rocky : fonctions d'authselect ------------------------------------------------------------------
+- name: Rocky — profil authselect en place
+  ansible.builtin.command: authselect current --raw
+  register: _durcissement_authselect
+  changed_when: false
+  failed_when: _durcissement_authselect.rc != 0
+  check_mode: false
+  when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Rocky — fonctions faillock et pwhistory d'authselect
+  ansible.builtin.command: authselect enable-feature {{ item }}
+  loop: [with-faillock, with-pwhistory]
+  when:
+    - ansible_facts['os_family'] == 'RedHat'
+    - item not in _durcissement_authselect.stdout.split()
+  changed_when: true
+  tags: [accounts_passwords_pam_faillock_enabled, accounts_password_pam_pwhistory_enabled]
+
+# --- Contrôle : la pile se lit encore ------------------------------------------------------------------
+- name: Les fichiers de la pile commune existent et ne sont pas vides
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: >-
+    {{ ['/etc/pam.d/common-auth', '/etc/pam.d/common-account', '/etc/pam.d/common-password']
+       if ansible_facts['os_family'] == 'Debian'
+       else ['/etc/pam.d/system-auth', '/etc/pam.d/password-auth'] }}
+  register: _durcissement_pile
+  failed_when: not _durcissement_pile.stat.exists or _durcissement_pile.stat.size == 0

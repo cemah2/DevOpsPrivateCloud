@@ -1,0 +1,39 @@
+# plateforme/k8s — releases/argocd.yaml.gotmpl : ce que M24-E13 (SEC-2513) AJOUTE au bloc de valeurs
+# en ligne de la release (état M20-E27, voir M20-E24 pour le reste du fichier, inchangé).
+# La configuration OIDC est ici, et pas dans un values-*.yaml, parce qu'elle contient la racine
+# MédiSphère en PEM (rootCA) : seul le gabarit sait lire le fichier composants/argocd/medisphere-root-ca.crt.
+# Rien de secret : clientSecret est une RÉFÉRENCE à la clé clientSecret du Secret argocd/argocd-oidc
+# (créé par secrets-k8s.sh appliquer identite, étiquette app.kubernetes.io/part-of=argocd).
+releases:
+  - name: argocd
+    # … namespace, chart, version, labels, fichiers values : inchangés …
+    values:
+      # … ../composants/argocd/values*.yaml : inchangés …
+      - global:
+          domain: argocd.{{ .Values.domaineApps }}
+        configs:
+          # … tls.certificates et rbac.policy.csv (M20) : inchangés …
+          cm:
+            # OIDC natif (Dex reste désactivé, M20-E02). nindent 14 : plus indenté que « oidc.config ».
+            oidc.config: |
+              name: SSO MédiSphère
+              issuer: https://sso.par1.medisphere.internal/realms/medisphere
+              clientID: argocd
+              clientSecret: $argocd-oidc:clientSecret
+              # Client PUBLIC de la CLI (argocd login --sso) : PKCE S256 envoyé par la CLI elle-même.
+              cliClientID: argocd-cli
+              # Écrite en entier : par défaut Argo CD demande aussi « groups », une portée qui
+              # n'existe pas chez nous (la revendication groups vient de la portée par DÉFAUT « groupes »).
+              requestedScopes: ["openid", "profile", "email"]
+              # Jeton d'accès Keycloak de 5 min : on rafraîchit 2 min avant l'échéance (doc Keycloak d'Argo CD).
+              refreshTokenThreshold: 2m
+              # Déconnexion : ferme aussi la session SSO (sinon « Log out » ne ferait que vider le cookie
+              # d'Argo CD, et le prochain clic reconnecterait sans formulaire).
+              logoutURL: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/logout?id_token_hint={{ "{{" }}token{{ "}}" }}&post_logout_redirect_uri={{ "{{" }}logoutRedirectURL{{ "}}" }}
+              # Pas d'enablePKCEAuthentication : avec lui, l'INTERFACE ferait l'échange du code depuis
+              # le navigateur, sans secret (client public). Le client « argocd » est confidentiel.
+              rootCA: |
+                {{- readFile "../composants/argocd/medisphere-root-ca.crt" | nindent 16 }}
+          rbac:
+            # Groupes OIDC lus dans la revendication « groups » (déjà posé en M20-E24, rappelé ici).
+            scopes: "[groups]"

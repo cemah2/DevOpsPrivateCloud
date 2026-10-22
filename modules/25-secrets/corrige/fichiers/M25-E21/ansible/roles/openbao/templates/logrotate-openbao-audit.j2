@@ -1,0 +1,23 @@
+# {{ openbao_entete }}
+# /etc/logrotate.d/openbao-audit — rôle openbao (M25-E21, SEC-2621).
+# Le dispositif « file » ne tourne pas son fichier : logrotate le renomme, en CRÉE un neuf avec les
+# bons droits, puis SIGHUP (systemctl reload) fait rouvrir le fichier à OpenBao. Jamais
+# « copytruncate » : des lignes écrites entre la copie et la troncature seraient perdues.
+# Conservation locale courte : la copie de référence est dans Loki (locataire audit, 1 an, M22).
+# ⚠️ SIGHUP relit AUSSI openbao.hcl (dispositifs d'audit, certificat TLS, niveau de journal) : une
+# configuration écrite par Ansible mais pas encore voulue s'appliquerait au prochain passage.
+{{ openbao_audit | selectattr('type', 'equalto', 'file') | map(attribute='options.file_path') | join(' ') }} {
+    daily
+    maxsize 200M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    create 0640 openbao openbao
+    sharedscripts
+    postrotate
+        /usr/bin/systemctl reload openbao.service >/dev/null 2>&1 || true
+    endscript
+}

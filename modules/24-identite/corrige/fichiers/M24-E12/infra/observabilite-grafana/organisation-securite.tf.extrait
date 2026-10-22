@@ -1,0 +1,17 @@
+# plateforme/infra/observabilite-grafana/organisation-securite.tf — MODIFICATION de M24-E12 (DEV-2512).
+# Les membres de l'organisation « Sécurité » viennent désormais d'org_mapping (generic_oauth de
+# Grafana), réécrits à CHAQUE connexion d'une personne. Si OpenTofu les gérait aussi, chaque plan
+# voudrait les remettre (et chaque connexion les re-changerait) : dérive perpétuelle. OpenTofu ne
+# garde que l'existence de l'organisation et sa source de données ; les listes sont retirées du code et
+# ignorées. Le bloc locals securite_admins / securite_viewers est SUPPRIMÉ.
+resource "grafana_organization" "securite" {
+  provider     = grafana.admin_serveur
+  name         = "Sécurité"
+  admin_user   = "admin"
+  create_users = false
+
+  lifecycle {
+    # Membres : org_mapping (kps/values.yaml de plateforme/observabilite). Voir modele-autorisation.md.
+    ignore_changes = [admins, editors, viewers, users_without_access]
+  }
+}

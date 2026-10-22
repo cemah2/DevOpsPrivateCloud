@@ -1,0 +1,55 @@
+# plateforme/observabilite — tests/politiques-admission.test.yaml (M26-E18)
+# promtool test rules (règles extraites de la PrometheusRule par outils/extraire-regles.sh, M21).
+rule_files:
+  - ../regles-extraites/politiques-admission.yaml
+evaluation_interval: 1m
+tests:
+  # Refus en rafale : 2 refus par minute pendant 30 min dans mediagenda-recette.
+  - interval: 1m
+    input_series:
+      - series: 'kyverno_validating_policy_results_total{policy_name="exiger-limites", resource_namespace="mediagenda-recette", execution_cause="admission_request", policy_validation_mode="Deny", result="fail"}'
+        values: '0+2x30'
+      - series: 'kyverno_validating_policy_results_total{policy_name="exiger-limites", resource_namespace="mediagenda-dev", execution_cause="admission_request", policy_validation_mode="Deny", result="fail"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: PolitiqueRefusEnRafale
+        exp_alerts:
+          - exp_labels:
+              policy_name: exiger-limites
+              resource_namespace: mediagenda-recette
+              gravite: avertissement
+              equipe: plateforme
+            exp_annotations:
+              resume: "La politique exiger-limites refuse des objets en boucle dans mediagenda-recette"
+              description: "30 refus en 15 min. Un déploiement est probablement bloqué : lire les événements des ReplicaSet de l'espace (kubectl get events -n mediagenda-recette) et l'état de synchronisation d'Argo CD. Tableau : politiques-admission."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-261-derogation.md
+  # Audit (pas Deny) : jamais d'alerte de rafale.
+  - interval: 1m
+    input_series:
+      - series: 'kyverno_validating_policy_results_total{policy_name="exiger-etiquettes", resource_namespace="mediagenda-dev", execution_cause="admission_request", policy_validation_mode="Audit", result="fail"}'
+        values: '0+5x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: PolitiqueRefusEnRafale
+        exp_alerts: []
+  # Violation de fond en production (une analyse par heure qui trouve 1 objet non conforme).
+  - interval: 1h
+    input_series:
+      - series: 'kyverno_validating_policy_results_total{policy_name="exiger-digest", resource_namespace="mediagenda-prod", execution_cause="background_scan", policy_validation_mode="Deny", result="fail"}'
+        values: '0+1x6'
+      - series: 'kyverno_validating_policy_results_total{policy_name="exiger-digest", resource_namespace="mediagenda-recette", execution_cause="background_scan", policy_validation_mode="Deny", result="fail"}'
+        values: '0+1x6'
+    alert_rule_test:
+      - eval_time: 4h
+        alertname: PolitiqueEnEchecEnProduction
+        exp_alerts:
+          - exp_labels:
+              policy_name: exiger-digest
+              resource_namespace: mediagenda-prod
+              gravite: avertissement
+              equipe: plateforme
+            exp_annotations:
+              resume: "Ressource(s) non conforme(s) à exiger-digest dans mediagenda-prod"
+              description: "L'analyse de fond trouve des objets en place qui violent exiger-digest. Lire le rapport : kubectl get policyreports -n mediagenda-prod -o wide. Corriger, ou ouvrir une dérogation (RB-261) si la correction est impossible à court terme."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-261-derogation.md

@@ -1,0 +1,20 @@
+# tasks/paquet.yml — EXTRAIT (M25-E29) : un nouveau paquet ne sert à rien tant que le SERVICE n'a pas
+# redémarré (le postinst ne relance pas openbao, et « bao version » ne lit que le binaire sur disque).
+# On notifie donc le même gestionnaire que la configuration : redémarrage si openbao_redemarrer=true,
+# avertissement sinon. Le contrôle de version qui compte est celui du SERVICE (sys/health).
+- name: Installer le paquet — {{ openbao_version }}
+  ansible.builtin.apt:
+    deb: "{{ openbao_dossier_paquets }}/openbao_{{ openbao_version }}_amd64.deb"
+    dpkg_options: force-confold,force-confdef
+  register: _openbao_paquet
+  notify: configuration openbao modifiee
+
+# À ajouter dans tasks/controles.yml, après le redémarrage :
+- name: Version servie par le nœud (pas seulement le binaire sur disque)
+  ansible.builtin.uri:
+    url: "https://{{ openbao_nom_noeud }}:{{ openbao_port_api }}/v1/sys/health?standbycode=200&sealedcode=200&uninitcode=200"
+    ca_path: "{{ openbao_racine }}"
+    return_content: true
+  register: _openbao_sante
+  failed_when: (_openbao_sante.json.version | default('')) != openbao_version
+  when: _openbao_etait_actif | default(false) | bool and openbao_redemarrer | bool

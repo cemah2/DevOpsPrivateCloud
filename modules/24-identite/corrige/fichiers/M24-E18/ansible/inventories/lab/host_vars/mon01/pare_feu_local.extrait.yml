@@ -1,0 +1,13 @@
+---
+# host_vars/mon01/pare_feu_local.yml — règles MODIFIÉES au M24-E18 (les autres sont inchangées).
+pare_feu_local_regles:
+  # … SMTP depuis git01 et les nœuds, défi ACME : inchangés …
+  # AVANT (M19-E03) : 25 et 8025 depuis MGMT et le VPN. APRÈS :
+  - {source: [10.10.10.0/24, 10.255.1.0/24], proto: tcp, ports: [25, 8443],
+     motif: "Mailpit : interface par OAuth2 Proxy (SSO), essais SMTP depuis adm01", ref: M24-E18}
+  - {source: [10.10.10.0/24], proto: tcp, ports: 8025,
+     motif: "Mailpit : API en authentification basique (vérifications depuis adm01)", ref: M24-E18}
+pare_feu_local_verifications:
+  - {port: 25, motif: "SMTP (Mailpit)"}
+  - {port: 8025, motif: "API de Mailpit"}
+  - {port: 8443, motif: "interface de Mailpit par OAuth2 Proxy"}

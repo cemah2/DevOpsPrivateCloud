@@ -1,0 +1,136 @@
+---
+# playbooks/redemarrages-vague.yml — plateforme/ansible (M26-E30, CHG-2730)
+# Redémarre, VAGUE PAR VAGUE (groupes durcissement_vague_N d'E14), les seuls hôtes qui en ont besoin
+# (medisphere_redemarrage_requis = 1 : /run/reboot-required ou « dnf needs-restarting -r »).
+#   uv run ansible-playbook playbooks/redemarrages-vague.yml -e vague=1 --check   # qui serait redémarré
+#   uv run ansible-playbook playbooks/redemarrages-vague.yml -e vague=1
+# Règles : un hôte à la fois à partir de la vague 4 (passerelles, répartiteurs, coffre, grappes,
+# nœuds K8s, Ceph, adm01) ; jamais les deux passerelles ni deux nœuds d'une grappe ensemble ; arrêt
+# de la vague au premier échec. adm01 (vague 6, en dernier) n'est JAMAIS redémarré par ce playbook :
+# il en est le contrôleur (redémarrage à la main, session de secours ouverte).
+- name: Redémarrages par vague (groupe durcissement_vague_N, -e vague=N)
+  # Sans -e vague=N : groupe inexistant, aucun hôte (jamais « tout le parc » par oubli).
+  hosts: "durcissement_vague_{{ vague | default('aucune') }}:!adm01"
+  become: true
+  gather_facts: true
+  serial: "{{ 1 if (vague | default(0) | int) >= 4 else '100%' }}"
+  any_errors_fatal: true
+  vars:
+    kubeconfig_adm01: "{{ lookup('ansible.builtin.env', 'HOME') }}/.kube/config"
+    # Les commandes « ceph » partent d'un AUTRE nœud de la grappe (étiquette _admin de cephadm : trousseau
+    # client.admin présent), jamais du nœud qu'on redémarre.
+    ceph_pilote: "{{ (groups['role_ceph'] | default([])) | difference([inventory_hostname]) | first | default('') }}"
+
+  pre_tasks:
+    - name: La vague est un nombre entre 1 et 6
+      ansible.builtin.assert:
+        that: (vague | int) in range(1, 7)
+        quiet: true
+
+    - name: Redémarrage requis ? (Debian)
+      when: ansible_os_family == 'Debian'
+      ansible.builtin.stat:
+        path: /run/reboot-required
+      register: _reboot_debian
+
+    - name: Redémarrage requis ? (Rocky)
+      when: ansible_os_family == 'RedHat'
+      ansible.builtin.command: dnf -q needs-restarting -r
+      register: _reboot_rocky
+      changed_when: false
+      failed_when: _reboot_rocky.rc not in [0, 1]
+
+    - name: Décision
+      ansible.builtin.set_fact:
+        _a_redemarrer: >-
+          {{ (ansible_os_family == 'Debian' and _reboot_debian.stat.exists)
+             or (ansible_os_family == 'RedHat' and _reboot_rocky.rc == 1) }}
+
+  tasks:
+    - name: Hôte à redémarrer
+      when: _a_redemarrer | bool
+      block:
+        # --- Passerelles et répartiteurs : l'autre membre de la paire doit être sain ------------------
+        - name: Le pair VRRP est actif (keepalived)
+          when: "'role_routeur' in group_names or 'role_lb' in group_names"
+          ansible.builtin.systemd_service:
+            name: keepalived
+          register: _pair_keepalived
+          failed_when: _pair_keepalived.status.ActiveState != 'active'
+          delegate_to: "{{ (groups['role_routeur'] if 'role_routeur' in group_names else groups['role_lb']) | difference([inventory_hostname]) | first }}"
+
+        # --- Nœuds de k8s-par1 : vider le nœud ------------------------------------------------------
+        - name: Vider le nœud Kubernetes
+          when: "'k8s_par1' in group_names"
+          ansible.builtin.command: >-
+            kubectl --kubeconfig {{ kubeconfig_adm01 }} drain {{ inventory_hostname }}
+            --ignore-daemonsets --delete-emptydir-data --timeout=10m
+          delegate_to: localhost
+          become: false
+          changed_when: true
+
+        # --- Ceph : pas de rééquilibrage pendant le redémarrage, grappe saine avant ------------------
+        - name: Ceph en HEALTH_OK avant
+          when: "'role_ceph' in group_names"
+          ansible.builtin.command: ceph health
+          delegate_to: "{{ ceph_pilote }}"
+          register: _ceph_sante
+          changed_when: false
+          failed_when: "'HEALTH_OK' not in _ceph_sante.stdout"
+        - name: Ceph noout
+          when: "'role_ceph' in group_names"
+          ansible.builtin.command: ceph osd set noout
+          delegate_to: "{{ ceph_pilote }}"
+          changed_when: true
+
+        # --- OpenBao : la grappe garde son quorum (2 nœuds sur 3) ------------------------------------
+        - name: Les deux autres nœuds d'OpenBao répondent (déscellés)
+          when: "'role_coffre' in group_names"
+          ansible.builtin.uri:
+            url: "https://{{ item }}.par1.medisphere.internal:8200/v1/sys/health?standbyok=true&perfstandbyok=true"
+            status_code: [200, 429]
+          loop: "{{ groups['role_coffre'] | difference([inventory_hostname]) }}"
+          delegate_to: localhost
+          become: false
+
+        - name: Redémarrer
+          ansible.builtin.reboot:
+            reboot_timeout: 900
+            msg: "Redémarrage pour correctifs de sécurité (CHG-2730, playbooks/redemarrages-vague.yml)"
+
+        - name: Ceph de retour, noout levé
+          when: "'role_ceph' in group_names"
+          block:
+            - name: Attendre que les OSD de l'hôte soient revenus
+              ansible.builtin.command: ceph osd stat -f json
+              delegate_to: "{{ ceph_pilote }}"
+              register: _osd
+              changed_when: false
+              until: (_osd.stdout | from_json).num_up_osds == (_osd.stdout | from_json).num_osds
+              retries: 30
+              delay: 10
+            - name: Lever noout
+              ansible.builtin.command: ceph osd unset noout
+              delegate_to: "{{ ceph_pilote }}"
+              changed_when: true
+
+        - name: Remettre le nœud Kubernetes en service
+          when: "'k8s_par1' in group_names"
+          ansible.builtin.command: >-
+            kubectl --kubeconfig {{ kubeconfig_adm01 }} uncordon {{ inventory_hostname }}
+          delegate_to: localhost
+          become: false
+          changed_when: true
+
+        - name: Nœud Kubernetes Ready
+          when: "'k8s_par1' in group_names"
+          ansible.builtin.command: >-
+            kubectl --kubeconfig {{ kubeconfig_adm01 }} wait --for=condition=Ready node/{{ inventory_hostname }} --timeout=5m
+          delegate_to: localhost
+          become: false
+          changed_when: false
+
+    - name: Rafraîchir l'état publié (redémarrage requis = 0)
+      ansible.builtin.systemd_service:
+        name: correctifs-etat.service
+        state: started

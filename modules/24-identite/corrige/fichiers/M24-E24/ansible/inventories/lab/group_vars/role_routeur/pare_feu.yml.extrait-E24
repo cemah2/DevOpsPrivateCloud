@@ -1,0 +1,6 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT (M24-E24), le temps de l'essai, puis RETIRÉ.
+# Une passerelle à la fois (--limit gw01, contrôle, gw02). Rien pour 5432/7800/57800 : idp01 et
+# idp02 sont dans le même VLAN, ce trafic ne traverse pas la bordure (pare_feu_local seulement).
+  - {nom: IDP02, valeur: 10.10.20.42, commentaire: "idp02 : second nœud Keycloak d'essai (M24-E24, TEMPORAIRE)"}
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: $IDP02, proto: tcp, ports: "8443,9000",
+     motif: "lb01/lb02 → idp02 (essai de grappe, TEMPORAIRE)", ref: M24-E24}

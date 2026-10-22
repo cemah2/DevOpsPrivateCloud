@@ -1,0 +1,27 @@
+# plateforme/inventaire-images — values.yaml (version corrigée, M26-E22)
+image:
+  repository: registry.par1.medisphere.internal/plateforme/inventaire
+  # Étiquette immuable (Harbor, v*) ET condensé : ce qui tourne est ce qui a été signé.
+  tag: v0.1.0
+  digest: sha256:<CONDENSE-INVENTAIRE>
+  pullPolicy: IfNotPresent
+
+# Espace dédié, créé par plateforme/k8s (Pod Security restricted), pas « default ».
+namespace: inventaire
+
+harbor:
+  url: https://registry.par1.medisphere.internal
+  # Le robot et son jeton vivent dans OpenBao (kv/plateforme/inventaire/harbor) ; l'ExternalSecret
+  # les recopie dans le Secret « inventaire-harbor ». Aucune valeur secrète dans ce fichier.
+  secretName: inventaire-harbor
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 192Mi

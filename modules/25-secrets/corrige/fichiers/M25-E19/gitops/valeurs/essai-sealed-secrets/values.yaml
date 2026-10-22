@@ -1,0 +1,24 @@
+# plateforme/gitops — valeurs/essai-sealed-secrets/values.yaml (M25-E19, PLAT-2619, TEMPORAIRE).
+# Chart « sealed-secrets » 2.20.0 du PROJET (Sealed Secrets 0.40.0), recopié dans Harbor.
+# Image : celle que publie le projet lui-même (docker.io/bitnami/sealed-secrets-controller, hors du
+# catalogue Bitnami retiré), tirée par le cache « dockerhub » de Harbor.
+
+# Nom attendu par défaut par kubeseal (--controller-name) : on garde « sealed-secrets-controller »,
+# seul --controller-namespace sealed-secrets est à donner.
+fullnameOverride: sealed-secrets-controller
+
+image:
+  registry: registry.par1.medisphere.internal
+  repository: dockerhub/bitnami/sealed-secrets-controller
+  tag: 0.40.0
+
+# Renouvellement de la clé de scellement (défaut du contrôleur : 30 jours). Les anciennes clés sont
+# GARDÉES (pour desceller l'existant) : renouveler ne protège que l'avenir.
+keyrenewperiod: "720h"
+
+resources:
+  requests: {cpu: 10m, memory: 32Mi}
+  limits: {memory: 128Mi}
+
+# Le chart lie « system:authenticated » au proxy du service (kubeseal --fetch-cert passe par l'API) :
+# le certificat est PUBLIC, c'est acceptable. Laissé par défaut, noté dans la comparaison.

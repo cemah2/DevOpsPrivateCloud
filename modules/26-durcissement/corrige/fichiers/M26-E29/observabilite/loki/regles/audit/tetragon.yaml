@@ -1,0 +1,26 @@
+# plateforme/observabilite — loki/regles/audit/tetragon.yaml (M26-E29, SEC-2729)
+# Un processus a été TUÉ ou une opération REFUSÉE par une politique d'application de Tetragon.
+# Événements JSON de Tetragon (process_kprobe) exportés par Alloy vers le locataire audit
+# (service="tetragon", M26-E20) ; « action » vaut KPROBE_ACTION_SIGKILL ou KPROBE_ACTION_OVERRIDE.
+groups:
+  - name: tetragon-application
+    interval: 1m
+    rules:
+      - alert: TetragonProcessusTue
+        expr: |
+          sum by (namespace) (
+            count_over_time(
+              {service="tetragon"} |~ `"action":"KPROBE_ACTION_(SIGKILL|OVERRIDE)"`
+                | json namespace="process_kprobe.process.pod.namespace" [5m]
+            )
+          ) > 0
+        labels:
+          gravite: avertissement
+          equipe: securite
+        annotations:
+          resume: "Tetragon a bloqué une opération dans {{ $labels.namespace }}"
+          description: >-
+            Une politique d'application (plateforme/politiques, tetragon/application/) a tué un processus
+            ou refusé une opération. Lire l'événement (binaire, argument, policy_name) : tentative réelle
+            (RB-262) ou faux positif (RB-260, arrêt d'urgence si la recette est cassée).
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-260-alerte-falco.md

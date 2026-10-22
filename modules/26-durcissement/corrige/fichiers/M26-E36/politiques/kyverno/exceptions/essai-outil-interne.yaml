@@ -1,0 +1,22 @@
+# plateforme/politiques — kyverno/exceptions/essai-outil-interne.yaml (M26-E36, M26-E18)
+# Exception CIBLÉE et DATÉE, au lieu de l'exemption trop large de la panne : elle ne vise qu'UN outil
+# interne précis dans wb-pannes, pour UNE politique, avec une date d'expiration. Toute exception est
+# inscrite au registre docs/securite/durcissement/exceptions.md (RB-261).
+apiVersion: policies.kyverno.io/v1
+kind: PolicyException
+metadata:
+  name: essai-outil-interne
+  namespace: wb-pannes
+  annotations:
+    medisphere.internal/justification: "essai d'un outil interne tiré d'un registre public, périmètre bac à sable"
+    medisphere.internal/valideur: sophie.laurent
+    medisphere.internal/ticket: SEC-2636
+spec:
+  policyRefs:
+    - name: registres-autorises
+      kind: ValidatingPolicy
+  expiresAt: "2026-12-31T00:00:00Z"
+  matchConditions:
+    - name: seul-cet-outil
+      expression: >-
+        object.metadata.namespace == 'wb-pannes' && object.metadata.name.startsWith('essai-outil-interne')

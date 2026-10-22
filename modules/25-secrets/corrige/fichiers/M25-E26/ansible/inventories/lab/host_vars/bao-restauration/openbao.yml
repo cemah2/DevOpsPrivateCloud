@@ -1,0 +1,19 @@
+---
+# host_vars/bao-restauration/openbao.yml — VM de restauration d'essai (M25-E26, RB-252). Inventaire
+# d'ESSAI (inventories/essai-restauration/), jamais celui du lab : aucun rôle commun ne doit lui
+# ouvrir de flux ni lui donner d'identité (alloy, ESO…).
+# Rôle openbao seul : nœud unique, pas de retry_join, pas de keepalived, pas de relais ACME ; seal
+# transit vers kms01 avec un jeton DÉDIÉ de courte durée (créé sur kms01 pour l'essai, révoqué après).
+openbao_version: "2.6.4"     # la version de la grappe au moment de l'instantané (2.7.1 après E29)
+openbao_sha256: "09e0b4ced4cfa2f04a3573c5ec05c94ecd4f858d580d76c7422c51b99b74cce1"
+openbao_nom_grappe: restauration-essai
+openbao_nom_service: "bao-restauration.par1.medisphere.internal"
+openbao_raft_rejoindre: []
+openbao_seal_transit: true
+openbao_seal_transit_adresse: https://kms01.par1.medisphere.internal:8200
+openbao_seal_transit_nom_tls: kms01.par1.medisphere.internal
+# Jeton d'essai : orphelin, TTL 4 h, politique kms-autodescellement (même clé : sinon la clé racine
+# de l'instantané serait illisible). Passé à la commande par -e @<fichier chiffré>, jamais en clair.
+openbao_seal_transit_jeton: "{{ vault_kms_jeton_essai }}"
+# Le redémarrage après la restauration est voulu (preuve que le nœud se descelle seul).
+openbao_redemarrer: true

@@ -1,0 +1,22 @@
+# À AJOUTER à la liste outils_k8s_binaires de roles/outils_k8s/defaults/main.yml (M25-E18, PLAT-2618).
+# Empreintes relevées le 22/10/2026 ; la MR qui ajoute ces lignes cite la vérification faite à la main :
+#   - sops : le fichier de sommes est signé (bundle Sigstore, workflow de publication du projet) :
+#       cosign verify-blob --bundle sops-v3.13.3.checksums.sigstore.json \
+#         --certificate-identity https://github.com/getsops/sops/.github/workflows/release.yml@refs/tags/v3.13.3 \
+#         --certificate-oidc-issuer https://token.actions.githubusercontent.com sops-v3.13.3.checksums.txt
+#     puis la somme du binaire linux.amd64 est lue DANS ce fichier vérifié (évite 3.13.2 : MAC erroné).
+#   - age : pas de fichier de sommes publié (l'amont publie une preuve de transparence « .proof ») ;
+#     empreinte relevée à la main, comparée sur deux réseaux, inscrite ici.
+  - nom: sops
+    version: "3.13.3"
+    url: https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+    somme: https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.checksums.txt
+    brut: true
+    fichiers: [sops-v3.13.3.linux.amd64]
+    liens:
+      sops-v3.13.3.linux.amd64: sops
+  - nom: age
+    version: "1.3.2"
+    url: https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
+    somme: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+    fichiers: [age/age, age/age-keygen]

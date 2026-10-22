@@ -1,0 +1,11 @@
+# plateforme/gitops — projets/mediagenda.yaml : MODIFICATION de M24-E13 (SEC-2513), rôle « equipe ».
+# Le groupe medisphere:mediagenda-devs est RETIRÉ sans remplaçant : le groupe « mediagenda » reçoit
+# role:mediagenda-equipe par policy.csv (plateforme/k8s), qui est testé en CI. Deux chemins vers les
+# mêmes droits, c'est deux endroits à relire et un seul de testé. Le rôle de projet reste (sans
+# groupe) pour d'éventuels jetons de projet limités à mediagenda (argocd proj role create-token).
+spec:
+  roles:
+    - name: equipe
+      description: "Équipe MédiAgenda : rôle porteur de jetons de projet seulement ; les personnes passent par role:mediagenda-equipe (policy.csv)"
+      groups: []
+      # policies : inchangées (M20-E24).

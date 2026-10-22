@@ -1,0 +1,12 @@
+# Taskfile.yml de plateforme/k8s — EXTRAIT (M26-E27) : les politiques d'hôte sont appliquées par
+# « task appliquer » avec les autres manifestes ; les nœuds ne sont sélectionnés que par l'étiquette
+# medisphere.internal/pare-feu-hote (cluster/noeuds.yaml, task etiquettes).
+vars:
+  # … (ajouter composants/cilium/hote à la fin de la liste existante)
+  DOSSIERS: espaces rbac admission composants/reseau composants/cilium/lb-ipam composants/cilium/bgp composants/cilium/hote
+tasks:
+  pare-feu-hote:etat:
+    desc: État du pare-feu d'hôte de chaque nœud (point de terminaison, audit, application)
+    cmds:
+      - for: [k8s-cp01, k8s-cp02, k8s-cp03, k8s-w01, k8s-w02, k8s-w03]
+        cmd: outils/pare-feu-hote.sh etat {{.ITEM}} || true

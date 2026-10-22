@@ -1,0 +1,53 @@
+# plateforme/politiques — kyverno/validation/exiger-limites.yaml (M26-E16, PLAT-2716)
+# Tout conteneur d'un espace d'équipe déclare ses demandes (CPU, mémoire) et sa limite de mémoire.
+# Pas de limite de CPU exigée : elle bride sans protéger le nœud (choix expliqué dans le corrigé).
+# Les conteneurs d'initialisation sont contrôlés aussi ; les conteneurs éphémères (kubectl debug)
+# ne peuvent pas porter de ressources : ils sont ignorés.
+# Mise en service : Audit (rapports) d'abord, Deny ensuite, par MR (voir le corrigé).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: exiger-limites
+  annotations:
+    policies.kyverno.io/title: Demandes et limite de mémoire obligatoires
+    policies.kyverno.io/severity: medium
+    medisphere.internal/ticket: PLAT-2716
+spec:
+  validationActions: [Deny]
+  # Kyverno indisponible : on laisse passer (règle d'hygiène, pas de sécurité dure).
+  failurePolicy: Ignore
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  # Autogénération pour les contrôleurs : l'erreur arrive à la création du Deployment (Argo CD la
+  # montre dans la synchronisation), pas plus tard dans les événements du ReplicaSet.
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    - name: conteneurs
+      expression: >-
+        object.spec.containers +
+        (has(object.spec.initContainers) ? object.spec.initContainers : [])
+    - name: fautifs
+      expression: >-
+        variables.conteneurs.filter(c,
+          !has(c.resources) ||
+          !has(c.resources.requests) || !('cpu' in c.resources.requests) || !('memory' in c.resources.requests) ||
+          !has(c.resources.limits) || !('memory' in c.resources.limits)
+        ).map(c, c.name)
+  validations:
+    - expression: size(variables.fautifs) == 0
+      messageExpression: >-
+        'conteneur(s) sans requests.cpu, requests.memory ou limits.memory : ' + variables.fautifs.join(', ')
+      reason: Forbidden

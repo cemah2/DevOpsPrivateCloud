@@ -1,0 +1,25 @@
+# medidoc/deploiement — overlays/dev/medidoc-s3.yaml (M25-E13, PLAT-2613)
+# Identité RGW de MédiDoc (dev) : clés AWS_ACCESS_KEY_ID et AWS_SECRET_ACCESS_KEY, lues en variables
+# d'environnement par le Deployment medidoc. Recopiées dans kv/medidoc/dev/s3. Rafraîchie toutes les
+# heures ; ramenée à 5 min en recette par M25-E15 (rotation des clés). À ajouter aux « resources ».
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: medidoc-s3
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: medidoc-s3
+    creationPolicy: Owner
+    deletionPolicy: Retain
+    template:
+      mergePolicy: Merge
+      metadata:
+        labels:
+          medisphere.internal/source: openbao
+  dataFrom:
+    - extract:
+        key: medidoc/dev/s3

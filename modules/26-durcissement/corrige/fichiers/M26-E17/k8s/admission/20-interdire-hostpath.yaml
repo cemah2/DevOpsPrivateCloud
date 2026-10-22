@@ -1,0 +1,115 @@
+# plateforme/k8s — admission/20-interdire-hostpath.yaml (M26-E17, SEC-2717)
+# ValidatingAdmissionPolicy native (CEL dans le kube-apiserver, aucun webhook) :
+#   aucun volume hostPath, sauf les chemins listés pour l'espace dans le paramètre
+#   medisphere-hostpath (ConfigMap de kube-system, une clé par espace).
+# Pourquoi en plus de Pod Security : « restricted » et « baseline » interdisent déjà tout hostPath,
+# mais un espace « privileged » (supervision-noeuds, falco, tetragon, journaux pour Alloy…) les
+# autorise TOUS. Cette politique réduit ces espaces aux seuls chemins dont leurs agents ont besoin.
+# Appliquée aux pods ET à leurs contrôleurs (même forme que medisphere-images, M14-E18) : le refus
+# arrive à la synchronisation d'Argo CD, pas plus tard dans les événements d'un ReplicaSet.
+# Mise en service : liaison en [Warn, Audit] (une semaine, lecture de l'audit), puis [Deny] par MR.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-hostpath
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+data:
+  # Clé = espace ; valeur = chemins autorisés séparés par des virgules (le chemin lui-même ou un
+  # sous-dossier : « /proc » autorise /proc et /proc/1, pas /procfoo ; « / » n'autorise que / exact,
+  # ce qui revient à tout voir de l'hôte : c'est la plus large des exceptions, à justifier).
+  # Listes relevées sur les charts déployés (helm template … | yq '…hostPath.path') ET confirmées en
+  # mode [Warn, Audit] sur k8s-par1 (étape 3) : reprends TES listes, pas celles-ci les yeux fermés.
+  supervision-noeuds: "/,/proc,/sys"
+  journaux: "/var/log,/var/lib/alloy"
+  ceph-csi: "/dev,/sys,/lib/modules,/run/mount,/etc/selinux,/var/lib/kubelet,/var/log/ceph"
+  velero: "/var/lib/kubelet/pods,/var/lib/kubelet/plugins"
+  # Falco (E08, chart 9.2, driver.kind: modern_ebpf ; avec « auto », le chart monte aussi /dev et
+  # /sys/module). Sockets de tous les moteurs de conteneurs activés par défaut, d'où /var/run.
+  falco: "/proc,/boot,/lib/modules,/usr,/etc,/sys/kernel,/var/run,/run/containerd,/run/crio,/run/host-containerd,/run/k3s/containerd,/run/podman"
+  # Tetragon (E20) : préparé ici pour que son installation ne soit pas refusée.
+  tetragon: "/proc,/sys/fs/bpf,/var/run/cilium,/var/run/tetragon"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: medisphere-interdire-hostpath
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+  annotations:
+    medisphere.internal/ticket: SEC-2717
+spec:
+  # Fail : une erreur d'évaluation (paramètre mal formé) refuse plutôt que de laisser passer.
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["jobs", "cronjobs"]
+  variables:
+    - name: specPod
+      expression: >-
+        object.kind == 'Pod' ? object.spec :
+        (object.kind == 'CronJob' ? object.spec.jobTemplate.spec.template.spec : object.spec.template.spec)
+    - name: chemins
+      expression: >-
+        has(variables.specPod.volumes) ?
+        variables.specPod.volumes.filter(v, has(v.hostPath)).map(v, v.hostPath.path) : []
+    - name: autorises
+      expression: >-
+        request.namespace in params.data ?
+        params.data[request.namespace].split(',').map(p, p.trim()).filter(p, p != '') : []
+    # Chemin exact ou sous-dossier : « /proc » autorise /proc et /proc/1, pas /procfoo. Kubernetes
+    # refuse déjà « .. » dans un hostPath (validation de l'API) : pas de contournement par remontée.
+    - name: refuses
+      expression: >-
+        variables.chemins.filter(c, !variables.autorises.exists(a,
+          c == a || c.startsWith(a.endsWith('/') ? a : a + '/')))
+  validations:
+    - expression: "size(variables.refuses) == 0"
+      messageExpression: >-
+        'volume(s) hostPath interdit(s) dans l\'espace ' + request.namespace + ' : ' + variables.refuses.join(', ') +
+        (size(variables.autorises) == 0 ? ' (aucun chemin de l\'hôte autorisé ici)' :
+          ' (autorisés : ' + variables.autorises.join(', ') + ')') +
+        ' — dérogation : RB-261'
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: medisphere-interdire-hostpath
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+spec:
+  policyName: medisphere-interdire-hostpath
+  # Étape 3 : ["Warn", "Audit"] ; étape 5 (après lecture de l'audit et MR) : ["Deny"].
+  validationActions: ["Deny"]
+  paramRef:
+    name: medisphere-hostpath
+    namespace: kube-system
+    # Paramètre absent : tout est refusé (comportement sûr, mais panne d'admission : la ConfigMap
+    # est dans le même fichier que la politique, appliquée avant elle).
+    parameterNotFoundAction: Deny
+  matchResources:
+    # Tout le cluster SAUF ce que gère la couche de base (Helmfile) : kube-system (Cilium, CoreDNS,
+    # kube-proxy retiré, composants kubeadm) et l'espace cilium s'il existe. Une erreur ici ne doit
+    # jamais empêcher le réseau ou le DNS du cluster de redémarrer.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: ["kube-system", "cilium"]

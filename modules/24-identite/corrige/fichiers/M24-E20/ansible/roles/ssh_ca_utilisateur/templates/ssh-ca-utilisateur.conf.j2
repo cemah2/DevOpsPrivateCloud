@@ -1,0 +1,15 @@
+# {{ ssh_ca_utilisateur_entete }}
+# {{ ssh_ca_utilisateur_fichier_conf }} (rôle ssh_ca_utilisateur, M06-E20 ; M24-E20 pour l'annuaire)
+# sshd retient la PREMIÈRE valeur lue : rien dans 01-ssh-durci.conf ni 02-ssh-ca-hote.conf ne
+# fixe ces mots-clés. Effet réel : sudo sshd -T | grep -E 'trustedusercakeys|authorizedprincipals'
+TrustedUserCAKeys {{ ssh_ca_utilisateur_fichier_ca }}
+# %u = compte visé. Pour un certificat, le principal doit figurer dans ce fichier
+# (sans cette directive, il devrait être ÉGAL au nom du compte).
+AuthorizedPrincipalsFile {{ ssh_ca_utilisateur_dossier_principaux }}/%u
+{% if ssh_ca_utilisateur_principaux_annuaire | bool %}
+# Hôte inscrit dans l'annuaire (M24-E20) : si le fichier ci-dessus n'autorise rien, sshd demande à
+# cette commande les principaux acceptés ; elle répond le nom du compte pour une personne de
+# l'annuaire (SSSD), rien pour un compte local. HBAC (PAM, étape account) décide ensuite.
+AuthorizedPrincipalsCommand {{ ssh_ca_utilisateur_commande_principaux }} %u
+AuthorizedPrincipalsCommandUser {{ ssh_ca_utilisateur_commande_utilisateur }}
+{% endif %}

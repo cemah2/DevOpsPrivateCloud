@@ -1,0 +1,13 @@
+# plateforme/identite — oauth2-proxy/manifestes/ (M24-E18) : ce que le chart ne fournit pas.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: oauth2-proxy
+resources:
+  - politique-entree.yaml
+# Racine MédiSphère (PUBLIQUE) : copie de pki/medisphere-root-ca.crt de plateforme/ansible.
+configMapGenerator:
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt
+    options:
+      disableNameSuffixHash: true

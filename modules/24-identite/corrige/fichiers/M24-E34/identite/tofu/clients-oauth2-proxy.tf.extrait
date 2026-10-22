@@ -1,0 +1,11 @@
+# tofu/clients-oauth2-proxy.tf — EXTRAIT (M24-E34, PLAT-2534) : UNE redirection de plus, exacte, dans
+# le client partagé « oauth2-proxy » écrit au M24-E18. Ne touche à rien d'autre (secret, flux, PKCE).
+resource "keycloak_openid_client" "oauth2_proxy" {
+  # … arguments du M24-E18 inchangés …
+  valid_redirect_uris = [
+    "https://hubble.apps.par1.medisphere.internal/oauth2/callback",
+    "https://pyroscope.apps.par1.medisphere.internal/oauth2/callback",
+    "https://mon01.par1.medisphere.internal:8443/oauth2/callback",
+    "https://slo.apps.par1.medisphere.internal/oauth2/callback", # M24-E34 : Pyrra
+  ]
+}

@@ -1,0 +1,72 @@
+# =============================================================================
+# .gitlab-ci.yml de plateforme/identite — EXTRAIT de M24-E11 (PLAT-2511) : à AJOUTER à l'état de
+# M24-E08 (stages lint, verifier, plan, appliquer inchangés ; une étape « synchro » en plus).
+#
+#   stages:
+#     - lint
+#     - verifier
+#     - plan
+#     - appliquer
+#     - synchro          # ← ajouter
+#
+# Variables du projet (protégées, masquées et cachées) :
+#   GITLAB_SYNCHRO_JETON   jeton personnel « api » de svc-synchro-identite (expiration ≤ 1 an,
+#                          date de rotation dans le registre des secrets)
+# Planification (Build → Pipeline schedules) : « Synchronisation GitLab », toutes les heures
+# (« 7 * * * * », fuseau Europe/Paris), branche main, variable SYNCHRO=gitlab.
+# =============================================================================
+
+.synchro:
+  stage: synchro
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - test "$(id -un)" = gitlab-runner
+    - uv sync --locked
+    # requests utilise le magasin de certifi par défaut : on lui donne celui du système (racine
+    # MédiSphère installée sur runner01 par le rôle ca_lab).
+    - export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+
+# Aperçu sur les MR qui changent l'annuaire ou la table : le relecteur voit ce que la fusion fera
+# dans GitLab. Le jeton n'existe que sur les MR issues d'une branche protégée (conf/*), comme le plan
+# d'OpenTofu (M24-E08) ; ailleurs, le job est absent (pas de faux vert).
+synchro:gitlab:apercu:
+  extends: .synchro
+  script:
+    - uv run outils/synchro-gitlab.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $GITLAB_SYNCHRO_JETON
+      changes:
+        - annuaire/personnes.yml
+        - annuaire/groupes.yml
+        - outils/synchro-gitlab.*
+
+# Application : par la planification horaire de main, ou à la demande sur main (après une fusion
+# qui touche l'annuaire, pour ne pas attendre l'heure suivante).
+synchro:gitlab:
+  extends: .synchro
+  interruptible: false
+  resource_group: synchro-gitlab
+  script:
+    - uv run outils/synchro-gitlab.py --appliquer | tee synchro.txt
+    # Second passage : il ne doit plus rester que des écarts « signalés » (Owner, compte absent).
+    - uv run outils/synchro-gitlab.py | tee controle.txt
+    - "! grep -E '^ÉCART .*→ [a-z]+ *$' controle.txt"
+  artifacts:
+    when: always
+    expire_in: 90 days
+    paths: [synchro.txt, controle.txt]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SYNCHRO == "gitlab" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      changes:
+        - annuaire/personnes.yml
+        - annuaire/groupes.yml
+        - outils/synchro-gitlab.*
+      when: manual
+      allow_failure: true
+
+# Les jobs existants (ansible-lint, annuaire:*, tofu:*) ne doivent pas tourner dans un pipeline
+# planifié : ajoute en TÊTE de leurs « rules » :
+#     - if: $CI_PIPELINE_SOURCE == "schedule"
+#       when: never

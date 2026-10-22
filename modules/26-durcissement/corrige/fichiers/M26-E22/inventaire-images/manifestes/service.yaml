@@ -1,0 +1,16 @@
+# plateforme/inventaire-images — manifestes/service.yaml (version corrigée, M26-E22)
+# Interne au cluster. La page contient la liste des vulnérabilités de nos images : elle ne se publie
+# que derrière une authentification (HTTPRoute sur gw-par1 + OAuth2 Proxy du M24, groupe securite).
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventaire
+  namespace: inventaire
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: inventaire
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

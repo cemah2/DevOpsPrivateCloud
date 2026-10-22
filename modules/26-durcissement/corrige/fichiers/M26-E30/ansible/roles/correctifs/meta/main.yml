@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: Correctifs de sécurité automatiques sans redémarrage, état exposé à Prometheus (M26-E30)
+  license: proprietary
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+    - name: EL
+      versions: ["10"]
+dependencies: []

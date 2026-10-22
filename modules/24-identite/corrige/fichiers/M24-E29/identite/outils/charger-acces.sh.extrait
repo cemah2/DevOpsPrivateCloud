@@ -1,0 +1,15 @@
+# outils/charger-acces.sh — EXTRAIT (M24-E29) : à ajouter dans _ca_charger, après le mot de passe de
+# svc-keycloak. Lit TOUS les secrets de clients du Vault de plateforme/ansible (dépôt cloné dans
+# ~/src/ansible) et les passe en JSON à OpenTofu (variable éphémère secrets_clients). Rien n'est affiché.
+  local depot_ansible="${WB_SRC:-$HOME/src}/ansible" json
+  json="$( (cd "$depot_ansible" && uv run ansible-vault view secrets/identite.yml 2>/dev/null) \
+    | uv run --project "$depot_ansible" python -c 'import json, sys, yaml; print(json.dumps(yaml.safe_load(sys.stdin)["keycloak_secrets_clients"]))' 2>/dev/null)"
+  if [[ -z "$json" || "$json" == "null" ]]; then
+    echo "charger-acces : secrets des clients introuvables (secrets/identite.yml de plateforme/ansible)" >&2
+    return 1
+  fi
+  export TF_VAR_secrets_clients="$json"
+# En CI : GitLab ne masque que des valeurs d'un jeu de caractères restreint (pas d'accolades ni de
+# guillemets) : range le JSON encodé en base64 dans une variable protégée et masquée
+# SECRETS_CLIENTS_B64, et décode-le dans outils/ci-preparer.sh :
+#   export TF_VAR_secrets_clients="$(base64 -d <<<"$SECRETS_CLIENTS_B64")" 

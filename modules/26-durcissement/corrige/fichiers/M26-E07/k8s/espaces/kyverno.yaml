@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/kyverno.yaml (M26-E07, PLAT-2707)
+# Espace du moteur de politiques Kyverno. Créé par la plateforme (task appliquer) AVANT l'Application
+# kyverno (CreateNamespace=false). Tous les conteneurs du chart 3.9.2 respectent « restricted »
+# (non-root, système de fichiers en lecture seule, capacités retirées, seccomp RuntimeDefault : vérifié
+# au rendu). Kyverno s'exclut lui-même de ses webhooks (config.excludeKyvernoNamespace) : aucune
+# politique ne s'applique ici, ni ne doit jamais s'y appliquer (règle des pannes du bloc F).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "PLAT-2707"

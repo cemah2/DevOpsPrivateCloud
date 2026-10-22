@@ -1,0 +1,171 @@
+---
+# Domaine « conformite » (M26-E10) : contenu OpenSCAP de référence, profil adapté (tailoring) qui
+# désélectionne les règles en exception, registre machine des exceptions de l'hôte.
+# L'analyse hebdomadaire (minuterie, envoi des rapports, métriques) s'ajoute au palier 3 (E24).
+#   Debian 13 : ComplianceAsCode 0.1.82 amont (ssg-debian de Debian 13 n'a pas de produit debian13).
+#   Rocky 10  : scap-security-guide 0.1.82 d'AppStream (contenu adapté à Rocky par la distribution ;
+#               le flux RHEL 10 de l'archive amont ne s'applique pas à Rocky : règles « notapplicable »).
+
+- name: Scanner OpenSCAP
+  ansible.builtin.package:
+    name: >-
+      {{ ['openscap-scanner', 'unzip'] if ansible_facts['os_family'] == 'Debian'
+         else ['openscap-scanner', 'scap-security-guide'] }}
+    state: present
+  register: _durcissement_paquet_oscap
+
+# En mode vérification (--check), un paquet « à installer » n'est pas là : la suite du domaine
+# ne peut pas être simulée ; elle le sera au passage suivant.
+- name: Signaler la simulation incomplète (OpenSCAP)
+  ansible.builtin.debug:
+    msg: "OpenSCAP : paquet à installer, suite du domaine non simulée en mode vérification."
+  when: ansible_check_mode and _durcissement_paquet_oscap is changed
+
+- name: Configuration (OpenSCAP)
+  when: not (ansible_check_mode and _durcissement_paquet_oscap is changed)
+  block:
+    - name: Debian — dossier du contenu de référence
+      ansible.builtin.file:
+        path: "{{ durcissement_ssg_dossier }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian — flux de données Debian 13 déjà extrait ?
+      ansible.builtin.stat:
+        path: "{{ durcissement_ssg_dossier }}/ssg-debian13-ds.xml"
+      register: _durcissement_ds_present
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian — archive ComplianceAsCode vérifiée par empreinte
+      ansible.builtin.get_url:
+        url: "{{ durcissement_ssg_url }}"
+        dest: "/var/cache/scap-security-guide-{{ durcissement_ssg_version }}.zip"
+        checksum: "sha256:{{ durcissement_ssg_sha256 }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_facts['os_family'] == 'Debian' and not _durcissement_ds_present.stat.exists
+
+    # Seul le flux de données Debian 13 est extrait (13 Mo au lieu de 1,4 Go pour toute l'archive).
+    - name: Debian — extraire le flux de données Debian 13
+      ansible.builtin.unarchive:
+        src: "/var/cache/scap-security-guide-{{ durcissement_ssg_version }}.zip"
+        dest: "{{ durcissement_ssg_dossier }}"
+        remote_src: true
+        include: ["scap-security-guide-{{ durcissement_ssg_version }}/ssg-debian13-ds.xml"]
+        # -j : sans l'arborescence de l'archive (le fichier arrive directement dans le dossier).
+        extra_opts: [-j]
+        creates: "{{ durcissement_ssg_dossier }}/ssg-debian13-ds.xml"
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Debian — archive supprimée une fois extraite
+      ansible.builtin.file:
+        path: "/var/cache/scap-security-guide-{{ durcissement_ssg_version }}.zip"
+        state: absent
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Rocky — flux de données de la distribution
+      ansible.builtin.find:
+        paths: /usr/share/xml/scap/ssg/content
+        patterns: ["ssg-rl10-ds.xml", "ssg-rhel10-ds.xml"]
+      register: _durcissement_ds_rocky
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Flux de données et profils de cet hôte
+      ansible.builtin.set_fact:
+        _durcissement_ds: >-
+          {{ durcissement_ssg_dossier ~ '/ssg-debian13-ds.xml' if ansible_facts['os_family'] == 'Debian'
+             else (_durcissement_ds_rocky.files | map(attribute='path') | sort | select('search', 'rl10') | list
+                   + _durcissement_ds_rocky.files | map(attribute='path') | sort | list) | first | default('') }}
+        _durcissement_profil_cis: "{{ 'cis_level1_server' if ansible_facts['os_family'] == 'Debian' else 'cis_server_l1' }}"
+        _durcissement_profil_anssi: >-
+          anssi_bp28_{{ {'minimal': 'minimal', 'intermediaire': 'intermediary',
+                         'renforce': 'enhanced', 'eleve': 'high'}[durcissement_anssi_niveau] }}
+
+    - name: Un flux de données est disponible
+      ansible.builtin.assert:
+        that: _durcissement_ds | length > 0
+        fail_msg: "Aucun flux de données SCAP trouvé pour {{ inventory_hostname }} (paquet scap-security-guide ?)."
+        quiet: true
+
+    - name: Dossier de conformité de l'hôte
+      ansible.builtin.file:
+        path: "{{ durcissement_conformite_dossier }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    # Une exception peut viser une règle qui n'existe que pour l'autre famille (ufw sur Debian,
+    # firewalld sur Rocky) : on ne désélectionne que les règles connues du flux de cet hôte.
+    - name: Règles connues du flux de données
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        grep -oE 'xccdf_org\.ssgproject\.content_rule_[A-Za-z0-9_.-]+' {{ _durcissement_ds }}
+        | sed 's/^xccdf_org\.ssgproject\.content_rule_//' | sort -u
+      args:
+        executable: /bin/bash
+      register: _durcissement_regles_ds
+      changed_when: false
+      check_mode: false
+
+    - name: Exceptions applicables au flux de cet hôte
+      ansible.builtin.set_fact:
+        _durcissement_exceptions_tailoring: >-
+          {{ _durcissement_exceptions_hote | selectattr('regle', 'in', _durcissement_regles_ds.stdout_lines) | list }}
+        _durcissement_exceptions_inconnues: >-
+          {{ _durcissement_exceptions_hote | rejectattr('regle', 'in', _durcissement_regles_ds.stdout_lines)
+             | map(attribute='regle') | list }}
+
+    - name: Signaler les exceptions sans règle correspondante dans ce flux
+      ansible.builtin.debug:
+        msg: >-
+          Exceptions ignorées pour le score de {{ inventory_hostname }} (règle absente du flux
+          {{ _durcissement_ds | basename }}) : {{ _durcissement_exceptions_inconnues | join(', ') }}.
+          Normal si la règle est propre à l'autre famille ; sinon, faute de frappe dans l'identifiant.
+      when: _durcissement_exceptions_inconnues | length > 0
+
+    # Profils adaptés : mêmes règles que le référentiel, moins les exceptions de l'hôte. Le score mesure
+    # ainsi l'écart NON justifié ; les exceptions figurent à part dans le rapport (E14, E24, E34).
+    - name: Profils adaptés (tailoring) CIS et ANSSI
+      ansible.builtin.template:
+        src: tailoring.xml.j2
+        dest: "{{ durcissement_conformite_dossier }}/tailoring-{{ item.nom }}.xml"
+        owner: root
+        group: root
+        mode: "0640"
+      loop:
+        - {nom: cis, profil: "{{ _durcissement_profil_cis }}"}
+        - {nom: anssi, profil: "{{ _durcissement_profil_anssi }}"}
+      loop_control:
+        label: "{{ item.nom }} ← {{ item.profil }}"
+      tags: [conformite_tailoring]
+
+    - name: Registre machine des exceptions de l'hôte
+      ansible.builtin.copy:
+        dest: "{{ durcissement_conformite_dossier }}/exceptions.json"
+        content: "{{ {'hote': inventory_hostname, 'flux': _durcissement_ds, 'exceptions': _durcissement_exceptions_hote} | to_nice_json }}\n"
+        owner: root
+        group: root
+        mode: "0640"
+
+    # « oscap info » ne valide pas le profil adapté : une évaluation d'UNE règle bon marché le charge
+    # vraiment (codes : 0 conforme, 2 au moins un échec, 1 erreur de contenu).
+    - name: Les profils adaptés se chargent dans oscap
+      ansible.builtin.command: >-
+        oscap xccdf eval --tailoring-file {{ durcissement_conformite_dossier }}/tailoring-{{ item.nom }}.xml
+        --profile xccdf_org.ssgproject.content_profile_{{ item.profil }}_medisphere
+        --rule xccdf_org.ssgproject.content_rule_package_sudo_installed {{ _durcissement_ds }}
+      register: _durcissement_essai_tailoring
+      changed_when: false
+      check_mode: false
+      failed_when: _durcissement_essai_tailoring.rc not in [0, 2]
+      loop:
+        - {nom: cis, profil: "{{ _durcissement_profil_cis }}"}
+        - {nom: anssi, profil: "{{ _durcissement_profil_anssi }}"}
+      loop_control:
+        label: "{{ item.nom }}"
+      when: not ansible_check_mode

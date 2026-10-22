@@ -1,0 +1,19 @@
+# plateforme/k8s — rbac/wb-checks-securite.yaml : EXTRAIT, règles AJOUTÉES en M25-E12 (PLAT-2612) à
+# la ClusterRole de M24-E16 (qui couvre déjà externalsecrets, clusterexternalsecrets, secretstores,
+# clustersecretstores, pushsecrets). Jamais de Secret.
+rules:
+  # External Secrets Operator : pushsecrets de cluster et GÉNÉRATEURS (configuration seulement).
+  # PAS « generatorstates » : un état de générateur peut garder les valeurs produites.
+  - apiGroups: ["external-secrets.io"]
+    resources: ["clusterpushsecrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["generators.external-secrets.io"]
+    resources:
+      - vaultdynamicsecrets
+      - passwords
+      - clustergenerators
+    verbs: ["get", "list", "watch"]
+  # cert-manager (M25-E16) : émetteurs et certificats (la clé privée est dans un Secret, non lu).
+  - apiGroups: ["cert-manager.io"]
+    resources: ["clusterissuers", "issuers", "certificates", "certificaterequests"]
+    verbs: ["get", "list", "watch"]

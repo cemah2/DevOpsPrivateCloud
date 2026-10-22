@@ -1,0 +1,32 @@
+{# roles/netbox/templates/configuration.py.j2 — AJOUT de M24-E15 (SEC-2515), en fin de fichier.
+   Le fichier reste root:netbox 0640 : il contient désormais aussi le secret du client « netbox ». #}
+{% if netbox_sso_actif %}
+
+# --- Connexion par le SSO (Keycloak, royaume medisphere), M24-E15 -------------------------------
+# Le formulaire local reste : « admin » (bris de glace) et les comptes de service (jetons d'API).
+REMOTE_AUTH_BACKEND = 'social_core.backends.open_id_connect.OpenIdConnectAuth'
+REMOTE_AUTH_DEFAULT_GROUPS = {{ netbox_sso_groupes_defaut | to_json }}
+SOCIAL_AUTH_OIDC_OIDC_ENDPOINT = {{ netbox_sso_emetteur | to_json }}
+SOCIAL_AUTH_OIDC_KEY = {{ netbox_sso_client | to_json }}
+SOCIAL_AUTH_OIDC_SECRET = {{ netbox_sso_secret | to_json }}
+# PKCE S256 (exigé par le client Keycloak).
+SOCIAL_AUTH_OIDC_USE_PKCE = True
+# Identifiant NetBox = identifiant de l'annuaire (défaut du backend, écrit pour être lu).
+SOCIAL_AUTH_OIDC_USERNAME_KEY = 'preferred_username'
+SOCIAL_AUTH_BACKEND_ATTRS = {'oidc': ({{ netbox_sso_libelle | to_json }}, 'login')}
+{% if netbox_sso_rattacher_par_courriel %}
+# Pipeline par défaut de NetBox 4.6 (netbox/settings.py) + associate_by_email AVANT create_user.
+SOCIAL_AUTH_PIPELINE = (
+    'social_core.pipeline.social_auth.social_details',
+    'social_core.pipeline.social_auth.social_uid',
+    'social_core.pipeline.social_auth.social_user',
+    'social_core.pipeline.user.get_username',
+    'social_core.pipeline.social_auth.associate_by_email',
+    'social_core.pipeline.user.create_user',
+    'social_core.pipeline.social_auth.associate_user',
+    'netbox.authentication.user_default_groups_handler',
+    'social_core.pipeline.social_auth.load_extra_data',
+    'social_core.pipeline.user.user_details',
+)
+{% endif %}
+{% endif %}

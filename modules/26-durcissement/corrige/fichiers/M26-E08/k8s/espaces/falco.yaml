@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/falco.yaml (M26-E08, SEC-2708, exception écrite dans pod-security.md)
+# Espace du capteur Falco (DaemonSet, un pod par nœud) et de falcosidekick. Le capteur charge une sonde
+# eBPF et lit /proc, /sys/kernel et les sockets du runtime de l'hôte : conteneur « privileged », que
+# seul le profil privileged admet. Comme supervision-noeuds (M21) : enforce privileged, audit et warn en
+# restricted (toute autre charge posée ici laisse une trace), personne n'écrit ici hors Argo CD.
+# falcosidekick, lui, est conforme à restricted (non-root, sans privilège).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: falco
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+  annotations:
+    medisphere.internal/responsable: "karim.benali"
+    medisphere.internal/ticket: "SEC-2708"
+    medisphere.internal/exception-psa: "capteur Falco : privileged, montages /proc, /sys/kernel, sockets du runtime (SEC-2708)"

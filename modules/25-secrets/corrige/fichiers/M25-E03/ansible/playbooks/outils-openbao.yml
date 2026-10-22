@@ -1,0 +1,10 @@
+---
+# playbooks/outils-openbao.yml — CLI OpenBao du poste d'administration (M25-E03).
+#   uv run ansible-playbook playbooks/outils-openbao.yml --check --diff
+#   uv run ansible-playbook playbooks/outils-openbao.yml
+- name: CLI bao sur adm01
+  hosts: adm01
+  become: true
+  roles:
+    - role: outils_openbao
+      tags: [outils_openbao]

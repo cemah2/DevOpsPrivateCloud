@@ -1,0 +1,43 @@
+# mediagenda/deploiement — overlays/prod/base-openbao.yaml (M25-E14, DEV-2614) : CORRECTIF du Cluster
+# « mediagenda-db » de la prod (rendu par components/dependances) : rôles gérés et Service pour
+# OpenBao, comme en recette (plateforme/k8s/espaces/mediagenda-recette/50-mediagenda-db.yaml) mais
+# à l'adresse 10.10.41.65. Dans l'overlay de PROD seulement : components/dependances sert aussi à
+# dev, qui ne doit ni exposer sa base ni prendre l'adresse de la prod. À ajouter aux « patches ».
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  managed:
+    roles:
+      - name: mediagenda_api
+        ensure: present
+        comment: "Droits de l'API MédiAgenda (comptes dynamiques d'OpenBao) — M25-E14"
+        login: false
+        inherit: true
+      - name: openbao
+        ensure: present
+        comment: "OpenBao, moteur db-mediagenda (identifiants dynamiques) — M25-E14"
+        login: true
+        createrole: true
+        superuser: false
+        createdb: false
+        inherit: false
+        connectionLimit: 10
+        inRoles:
+          - mediagenda
+          - mediagenda_api
+        # Retiré après rotate-root (MR suivante), comme en recette.
+        passwordSecret:
+          name: openbao-pg-initial
+    services:
+      additional:
+        - selectorType: rw
+          serviceTemplate:
+            metadata:
+              name: mediagenda-db-openbao
+              annotations:
+                lbipam.cilium.io/ips: 10.10.41.65
+            spec:
+              type: LoadBalancer
+              externalTrafficPolicy: Local

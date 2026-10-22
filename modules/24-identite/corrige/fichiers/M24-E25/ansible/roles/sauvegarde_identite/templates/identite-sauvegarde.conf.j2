@@ -1,0 +1,10 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible, rôle sauvegarde_identite).') }}
+# /etc/identite-sauvegarde/identite-sauvegarde.conf — M24-E25. Aucun secret ici (voir s3.env).
+IDENTITE_MODE={{ sauvegarde_identite_mode }}
+IDENTITE_HOTE={{ inventory_hostname }}
+IDENTITE_BDD={{ sauvegarde_identite_bdd }}
+IDENTITE_GARDER_LOCAL={{ sauvegarde_identite_garder_local }}
+IDENTITE_S3_POINT={{ sauvegarde_identite_s3_point }}
+IDENTITE_S3_COMPARTIMENT={{ sauvegarde_identite_s3_compartiment }}
+IDENTITE_AGE_DESTINATAIRE={{ sauvegarde_identite_age_destinataire }}
+IDENTITE_TRAVAIL=/var/backups/identite

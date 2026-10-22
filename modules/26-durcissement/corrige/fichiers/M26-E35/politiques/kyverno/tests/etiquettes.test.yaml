@@ -1,0 +1,20 @@
+# plateforme/politiques — kyverno/tests/etiquettes.test.yaml (M26-E35)
+# Test CLI « kyverno test » (joué en CI) : une charge conforme de recette est ADMISE, une charge sans
+# étiquette d'équipe est REFUSÉE. Arrête la panne M26-E35 (passage prématuré en Deny trop large).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: exiger-etiquettes
+policies:
+  - ../validation/exiger-etiquettes.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: exiger-etiquettes
+    rule: exiger-etiquettes
+    resources: [mediagenda-conforme]
+    result: pass
+  - policy: exiger-etiquettes
+    rule: exiger-etiquettes
+    resources: [mediagenda-sans-equipe]
+    result: fail

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- {{ durcissement_entete }} -->
+<!-- Profil adapté de {{ inventory_hostname }} (rôle durcissement, M26-E10) : {{ item.profil }} moins les
+     règles en exception sur cet hôte (registre : docs/securite/durcissement/exceptions.md). -->
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2" id="xccdf_medisphere.internal_tailoring_{{ item.nom }}">
+  <xccdf-1.2:benchmark href="{{ _durcissement_ds }}"/>
+  <!-- Version = empreinte des exceptions, date = plus lointaine date de revue : le fichier ne change
+       que si les exceptions changent (l'attribut time est obligatoire pour oscap). -->
+  <xccdf-1.2:version time="{{ (_durcissement_exceptions_tailoring | map(attribute='revue') | map('string') | max | default('2026-01-01', true)) }}T00:00:00Z">{{ (_durcissement_exceptions_tailoring | to_json | hash('sha1'))[:12] }}</xccdf-1.2:version>
+  <xccdf-1.2:Profile id="xccdf_org.ssgproject.content_profile_{{ item.profil }}_medisphere" extends="xccdf_org.ssgproject.content_profile_{{ item.profil }}">
+    <xccdf-1.2:title xml:lang="fr-FR">{{ item.profil }} — MédiSphère ({{ inventory_hostname }})</xccdf-1.2:title>
+    <xccdf-1.2:description xml:lang="fr-FR">Référentiel {{ item.profil }} moins les exceptions validées de l'hôte.</xccdf-1.2:description>
+{% for e in _durcissement_exceptions_tailoring | sort(attribute='regle') %}
+    <!-- {{ e.regle }} : {{ e.justification | replace('--', '-') | replace('\n', ' ') | truncate(120) }} ({{ e.valideur }}, revue {{ e.revue }}) -->
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_{{ e.regle }}" selected="false"/>
+{% endfor %}
+  </xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>

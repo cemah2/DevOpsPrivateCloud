@@ -1,0 +1,12 @@
+# medidoc/deploiement — overlays/recette/service-https.yaml (M25-E16) : CORRECTIF du Service medidoc
+# (à ajouter aux « patches ») : port 8443 vers le relais TLS. Le port 80 (→ 8080) reste pour la Gateway.
+apiVersion: v1
+kind: Service
+metadata:
+  name: medidoc
+spec:
+  ports:
+    - name: https
+      port: 8443
+      targetPort: https
+      protocol: TCP

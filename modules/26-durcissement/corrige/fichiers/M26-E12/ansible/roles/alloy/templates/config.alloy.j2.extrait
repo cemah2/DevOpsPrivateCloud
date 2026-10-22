@@ -1,0 +1,36 @@
+// roles/alloy/templates/config.alloy.j2 — EXTRAIT à ajouter à la fin du gabarit (M26-E12, SEC-2712).
+// Journaux d'audit en FICHIER (auditd écrit dans /var/log/audit/audit.log, pas dans journald) vers
+// le locataire « audit ». Pas de masquage ici : les lignes d'audit sont des preuves, elles ne doivent
+// pas être réécrites ; le locataire audit n'est lisible que par la sécurité (M22, organisation
+// Grafana « Sécurité »). Un fichier par service, une étiquette « service » par fichier.
+{% if alloy_journaux_audit | length > 0 %}
+
+local.file_match "audit" {
+	path_targets = [
+{% for j in alloy_journaux_audit %}
+		{
+			__path__ = "{{ j.chemin }}",
+			job      = "audit",
+			service  = "{{ j.service }}",
+			host     = "{{ inventory_hostname }}",
+			role     = "{{ alloy_role }}",
+			site     = "{{ alloy_site }}",
+		},
+{% endfor %}
+	]
+}
+
+loki.source.file "audit" {
+	targets    = local.file_match.audit.targets
+	// Premier démarrage : on ne renvoie pas tout l'historique, on part de la fin du fichier.
+	tail_from_end = true
+	forward_to = [loki.write.audit.receiver]
+}
+
+loki.write "audit" {
+	endpoint {
+		url       = "{{ alloy_loki_url }}"
+		tenant_id = "{{ alloy_locataire_audit }}"
+	}
+}
+{% endif %}

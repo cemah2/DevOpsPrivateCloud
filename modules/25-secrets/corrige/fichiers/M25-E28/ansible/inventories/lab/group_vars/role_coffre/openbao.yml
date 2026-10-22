@@ -1,0 +1,25 @@
+---
+# group_vars/role_coffre/openbao.yml — nœuds du coffre. ÉTAT EN FIN DE M25-E28 (la version passe à
+# 2.7.1 au M25-E29, RB-253). On écrit ici ce qu'on relit à chaque audit et à chaque montée de version.
+openbao_version: "2.6.4"
+openbao_sha256: "09e0b4ced4cfa2f04a3573c5ec05c94ecd4f858d580d76c7422c51b99b74cce1"
+openbao_nom_grappe: openbao-par1
+
+# (M25-E24) Grappe Raft : la liste de tous les nœuds du groupe (un nœud déjà membre l'ignore).
+openbao_raft_rejoindre: >-
+  {{ groups['role_coffre'] | sort
+     | map('regex_replace', '^', 'https://')
+     | map('regex_replace', '$', '.' ~ openbao_domaine ~ ':' ~ openbao_port_api) | list }}
+coffre_adresses:
+  vault01: 10.10.20.21
+  vault02: 10.10.20.22
+  vault03: 10.10.20.23
+
+# (M25-E25) Seal transit (jeton : Vault critique, vault-critique-kms.yml).
+openbao_seal_transit: true
+openbao_seal_transit_adresse: https://kms01.par1.medisphere.internal:8200
+openbao_seal_transit_nom_tls: kms01.par1.medisphere.internal
+openbao_seal_transit_jeton: "{{ vault_openbao_kms_jeton }}"
+
+# (M25-E27, E28) Valeurs par défaut du rôle (télémétrie, TLS 1.3, baux 1 h / 24 h, unité durcie) :
+# rien à surcharger ici. Le redémarrage reste décidé nœud par nœud (openbao_redemarrer).

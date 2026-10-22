@@ -1,0 +1,13 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13), M26-E08 (SEC-2708).
+# Empreinte : sha256 de l'archive publiée, relevée dans l'index du dépôt amont
+#   curl -s https://falcosecurity.github.io/charts/index.yaml \
+#     | yq '.entries.falco[] | select(.version == "9.2.1") | .digest'
+# et recalculée sur l'archive téléchargée : les deux doivent être égales.
+# Le sous-chart falcosidekick 0.14.1 (et k8s-metacollector, falco-talon, non utilisés) est DANS l'archive.
+charts:
+  # … entrées existantes …
+  - nom: falco
+    depot: https://falcosecurity.github.io/charts
+    version: 9.2.1
+    empreinte: sha256:726c1fe08c3fd3e2789d4072b34f9eee94ecccad734fee471cc7546124570c6c
+    usage: "Détection à l'exécution (M26-E08), Application plateforme/gitops plateforme/falco.yaml"

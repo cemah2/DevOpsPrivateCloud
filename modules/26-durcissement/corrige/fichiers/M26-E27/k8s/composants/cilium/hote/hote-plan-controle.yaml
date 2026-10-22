@@ -1,0 +1,61 @@
+# plateforme/k8s — composants/cilium/hote/hote-plan-controle.yaml (M26-E27, SEC-2727)
+# Entrées PROPRES aux nœuds de contrôle (k8s-cp01-03) étiquetés pour le pare-feu d'hôte. S'ajoute à
+# hote-commun (les politiques d'autorisation s'additionnent).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: hote-plan-controle
+  labels:
+    medisphere.internal/composant: pare-feu-hote
+spec:
+  description: "Entrées des nœuds de contrôle de k8s-par1 (SEC-2727, RB-264)"
+  nodeSelector:
+    matchLabels:
+      medisphere.internal/pare-feu-hote: "oui"
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+  ingress:
+    # --- Entre nœuds de contrôle seulement ------------------------------------------------------------
+    # etcd (client 2379 depuis les serveurs d'API des AUTRES nœuds ; pairs 2380) et VRRP de keepalived
+    # (VIP 10.10.40.200, VRID 140, unicast entre les trois). VRRP n'a pas de port : protocole « VRRP »,
+    # accepté par l'agent grâce à enable-extended-ip-protocols (values du chart).
+    - fromEntities: [kube-apiserver]
+      toPorts:
+        - ports:
+            - {port: "2379", protocol: TCP}
+            - {port: "2380", protocol: TCP}
+            - protocol: VRRP
+    # --- Serveur d'API ----------------------------------------------------------------------------------
+    # 6443 (kube-apiserver) : HAProxy des trois nœuds (remote-node, kube-apiserver) ET tous les pods
+    # (le Service « kubernetes » est traduit vers 10.10.40.51-53:6443 par le remplacement de kube-proxy :
+    # le paquet arrive avec l'identité du pod). « cluster » couvre les deux.
+    # 8443 (HAProxy, VIP 10.10.40.200) : kubelets et agents Cilium des travailleurs (k8sServiceHost).
+    - fromEntities: [cluster]
+      toPorts:
+        - ports:
+            - {port: "6443", protocol: TCP}
+            - {port: "8443", protocol: TCP}
+    # 8443 depuis l'extérieur du cluster : MGMT (kubectl, kubelogin), vault01-03 (méthode
+    # d'authentification kubernetes « k8s-par1 » d'OpenBao : TokenReview, M25), mon01 (sonde du témoin).
+    - fromCIDR:
+        - 10.10.10.0/24
+        - 10.10.20.21/32
+        - 10.10.20.22/32
+        - 10.10.20.23/32
+        - 10.10.20.19/32
+      toPorts:
+        - ports:
+            - {port: "8443", protocol: TCP}
+    # --- Collecte de Prometheus sur les nœuds de contrôle (M21-E10, E20) --------------------------------
+    # 2381 métriques d'etcd (HTTP) ; 10257 kube-controller-manager ; 10259 kube-scheduler ;
+    # 8405 exportateur de HAProxy de l'API (M21-E10).
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+      toPorts:
+        - ports:
+            - {port: "2381", protocol: TCP}
+            - {port: "10257", protocol: TCP}
+            - {port: "10259", protocol: TCP}
+            - {port: "8405", protocol: TCP}

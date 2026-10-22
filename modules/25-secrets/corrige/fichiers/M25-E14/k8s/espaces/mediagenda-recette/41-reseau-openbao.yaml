@@ -1,0 +1,23 @@
+# plateforme/k8s — espaces/mediagenda-recette/41-reseau-openbao.yaml (M25-E14, DEV-2614)
+# Le port 5432 des instances n'est ouvert, de l'extérieur du cluster, qu'aux trois nœuds OpenBao
+# (Service mediagenda-db-openbao, 10.10.41.64, externalTrafficPolicy: Local). S'ajoute à
+# 40-reseau-postgresql.yaml (M16) sans le modifier.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-db-depuis-openbao
+  namespace: mediagenda-recette
+spec:
+  description: "PostgreSQL de recette : entrée depuis vault01-03 seulement (DEV-2614)"
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  ingress:
+    - fromCIDR:
+        - 10.10.20.21/32
+        - 10.10.20.22/32
+        - 10.10.20.23/32
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

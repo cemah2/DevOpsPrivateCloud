@@ -1,0 +1,9 @@
+---
+# host_vars/idp02/certificats.yml — certificat ACME d'idp02 (M24-E24) : HAProxy vérifie le nom du
+# nœud (verifyhost idp02…), comme pour idp01.
+certificats_acme_certificats:
+  - id: keycloak
+    noms: [idp02.par1.medisphere.internal]
+    certificat: /etc/keycloak/tls/keycloak.crt
+    cle: /etc/keycloak/tls/keycloak.key
+    groupe: keycloak

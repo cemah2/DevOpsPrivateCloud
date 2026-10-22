@@ -1,0 +1,37 @@
+---
+# Rôle ssh_ca_utilisateur — tâches AJOUTÉES au M24-E20, À INSÉRER avant « Configuration de sshd
+# (validée avant d'être posée) » ; l'assertion finale du rôle est complétée comme indiqué en bas.
+
+- name: Hôte inscrit dans l'annuaire (préalable à la commande de principaux)
+  ansible.builtin.stat:
+    path: /etc/ipa/default.conf
+  register: _ssh_ca_utilisateur_ipa
+  when: ssh_ca_utilisateur_principaux_annuaire | bool
+
+- name: Pas de commande de principaux sur un hôte non inscrit
+  ansible.builtin.assert:
+    that: _ssh_ca_utilisateur_ipa.stat.exists
+    fail_msg: >-
+      {{ inventory_hostname }} n'est pas inscrit dans l'annuaire (M24-E19) : inscris-le d'abord, ou mets
+      ssh_ca_utilisateur_principaux_annuaire à false pour cet hôte.
+    quiet: true
+  when: ssh_ca_utilisateur_principaux_annuaire | bool and not ansible_check_mode
+
+# Propriété de root, non modifiable par le compte qui l'exécute (sshd vérifie aussi les droits du
+# chemin, comme pour AuthorizedKeysCommand).
+- name: Commande des principaux de l'annuaire
+  ansible.builtin.copy:
+    src: principaux-annuaire
+    dest: "{{ ssh_ca_utilisateur_commande_principaux }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: ssh_ca_utilisateur_principaux_annuaire | bool
+
+# --- À la fin du rôle, ajouter à l'assertion « Les réglages du rôle sont ceux que sshd applique » :
+#      - (not ssh_ca_utilisateur_principaux_annuaire | bool) or
+#        (('authorizedprincipalscommand ' ~ ssh_ca_utilisateur_commande_principaux ~ ' %u')
+#          in _ssh_ca_utilisateur_effectif.stdout_lines)
+#      - (not ssh_ca_utilisateur_principaux_annuaire | bool) or
+#        (('authorizedprincipalscommanduser ' ~ ssh_ca_utilisateur_commande_utilisateur)
+#          in _ssh_ca_utilisateur_effectif.stdout_lines)

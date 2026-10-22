@@ -1,0 +1,21 @@
+# mediagenda/deploiement — overlays/prod/reseau-openbao.yaml (M25-E14, DEV-2614)
+# Le refus par défaut de la prod (espace.yaml) bloque aussi OpenBao : entrée 5432 depuis vault01-03
+# seulement, vers les instances CNPG. À ajouter aux « resources » de l'overlay de prod.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-db-depuis-openbao
+spec:
+  description: "PostgreSQL de prod : entrée depuis vault01-03 seulement (DEV-2614)"
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+  ingress:
+    - fromCIDR:
+        - 10.10.20.21/32
+        - 10.10.20.22/32
+        - 10.10.20.23/32
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP

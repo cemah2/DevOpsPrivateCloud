@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: oauth2_proxy
+  author: equipe-plateforme
+  description: OAuth2 Proxy (binaire épinglé, une unité systemd durcie par instance) devant une interface sans SSO
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

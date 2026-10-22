@@ -1,0 +1,13 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject du M20-E07), M26-E08.
+# Le chart falco 9.2.1 (avec falcosidekick) ne crée aucun objet sans espace dans notre configuration
+# (rendu vérifié : ServiceAccount, Secret, ConfigMap, Role, RoleBinding, Service, DaemonSet,
+# Deployment, ServiceMonitor) : seule la destination s'ajoute.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: plateforme
+  namespace: argocd
+spec:
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: falco

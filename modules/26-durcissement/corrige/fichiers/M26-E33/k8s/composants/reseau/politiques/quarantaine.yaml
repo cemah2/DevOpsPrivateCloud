@@ -1,0 +1,32 @@
+# plateforme/k8s — composants/reseau/politiques/quarantaine.yaml (M26-E33, SEC-2733, RB-262)
+# Isolement réseau d'un pod suspect, posé À L'AVANCE : il ne sélectionne rien tant que personne
+# n'étiquette un pod medisphere.internal/quarantaine=oui.
+# Règles de REFUS (ingressDeny/egressDeny) : un refus l'emporte sur toute autorisation, y compris les
+# NetworkPolicy et CiliumNetworkPolicy des équipes ; une simple politique sans règle ne suffirait pas
+# (les autorisations s'additionnent).
+# Ce qui reste permis, volontairement : le trafic depuis l'HÔTE LOCAL (entité « host » non refusée),
+# c'est-à-dire les sondes du kubelet. Une sonde de vivacité qui échoue ferait REDÉMARRER le conteneur
+# et détruirait la mémoire et l'état du processus suspect (preuves). La sonde de disponibilité, elle,
+# continue aussi : c'est l'étape « sortir le pod de son contrôleur » de RB-262 qui le retire du Service.
+# kubectl exec / debug / logs passent par le kubelet et l'API (pas par le réseau du pod) : ils restent
+# possibles pour la collecte.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: quarantaine
+  labels:
+    medisphere.internal/composant: reponse-incident
+spec:
+  description: "Quarantaine réseau d'un pod (RB-262) : aucune entrée sauf l'hôte local, aucune sortie"
+  endpointSelector:
+    matchLabels:
+      medisphere.internal/quarantaine: "oui"
+  ingressDeny:
+    # Tout sauf « host » (sondes locales du kubelet).
+    - fromEntities: [world, remote-node, kube-apiserver, ingress, health, init, unmanaged]
+    # Tous les pods du cluster, quel que soit leur espace.
+    - fromEndpoints:
+        - {}
+  egressDeny:
+    # Aucune sortie : ni DNS, ni l'API, ni Internet, ni l'hôte.
+    - toEntities: [all]

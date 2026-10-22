@@ -1,0 +1,4 @@
+# plateforme/politiques — kustomization.yaml (EXTRAIT M26-E18) : ligne à ajouter à « resources »
+# (le dossier a son propre kustomization.yaml, qui fixe l'espace kyverno-exceptions).
+resources:
+  - kyverno/exceptions

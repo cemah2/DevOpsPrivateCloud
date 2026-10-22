@@ -1,0 +1,20 @@
+# plateforme/k8s — espaces/wb-diagnostic.yaml (M14-E20 ; M26-E05, M26-E06, SEC-2706)
+# Pods de diagnostic de NŒUD (« kubectl debug node/… ») et Jobs kube-bench (M26-E05) : ils partagent
+# le réseau, les processus et le système de fichiers de l'hôte, ce que « baseline » et « restricted »
+# interdisent. Seul le groupe plateforme-admins y a des droits. On n'y laisse rien tourner.
+# EXCEPTION écrite : privileged en enforce ; audit et warn en restricted (M26-E06) pour que tout
+# objet posé ici laisse une trace dans le journal d'audit (locataire Loki « audit »).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-diagnostic
+  labels:
+    app.kubernetes.io/part-of: workbook
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/exception-psa: "diagnostic de nœud et kube-bench : hostPID, hostNetwork, hostPath (M14-E20, SEC-2705)"

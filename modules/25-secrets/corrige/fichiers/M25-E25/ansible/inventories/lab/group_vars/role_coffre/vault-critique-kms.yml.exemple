@@ -1,0 +1,12 @@
+# group_vars/role_coffre/vault-critique-kms.yml — MODÈLE (M25-E25). Le vrai fichier est chiffré
+# (identité « critique ») et produit SANS que le jeton passe par l'écran ni par un fichier clair :
+#   (sur adm01, avec le jeton racine de kms01 chargé dans ~/.vault-token par « bao login - »)
+#   BAO_ADDR=https://kms01.par1.medisphere.internal:8200 bao token create -format=json -orphan \
+#       -no-default-policy -policy=kms-autodescellement -period=168h \
+#       -display-name=autodescellement-par1 \
+#     | jq -r '"vault_openbao_kms_jeton: \(.auth.client_token)\nvault_openbao_kms_accesseur: \(.auth.accessor)"' \
+#     | uv run ansible-vault encrypt --encrypt-vault-id critique \
+#         --output inventories/lab/group_vars/role_coffre/vault-critique-kms.yml -
+vault_openbao_kms_jeton: "<JETON-PÉRIODIQUE-ORPHELIN>"
+# L'accesseur n'est pas secret (il ne permet pas d'utiliser le jeton) : lookup, révocation, audit.
+vault_openbao_kms_accesseur: "<ACCESSEUR>"

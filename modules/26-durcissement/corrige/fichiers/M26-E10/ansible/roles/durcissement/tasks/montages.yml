@@ -1,0 +1,90 @@
+---
+# Domaine « montages » : /tmp et /dev/shm sans exécution, sans périphériques, sans setuid.
+# Les images dorées (M03) n'ont qu'une partition racine : /tmp devient un tmpfs (unité tmp.mount,
+# livrée par systemd sur Debian 13 comme sur Rocky 10), réglé par un fichier de surcharge.
+# ⚠️ Passer /tmp en tmpfs sur un hôte qui ne l'avait pas MASQUE le contenu actuel de /tmp (sockets,
+# fichiers de services) : le rôle ne monte PAS à chaud dans ce cas, il le signale (redémarrage).
+
+- name: Lire le montage actuel de /tmp
+  ansible.builtin.command: findmnt --noheadings --output FSTYPE,OPTIONS /tmp
+  register: _durcissement_tmp
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Options voulues pour /tmp sur cet hôte
+  ansible.builtin.set_fact:
+    _durcissement_options_tmp: >-
+      {{ durcissement_tmp_options
+         | reject('in', ['noexec'] if 'mount_option_tmp_noexec' in _durcissement_exclues else [])
+         | list }}
+
+- name: Dossier de surcharge de tmp.mount
+  ansible.builtin.file:
+    path: /etc/systemd/system/tmp.mount.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Options de /tmp (surcharge de tmp.mount)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tmp.mount.d/60-durcissement.conf
+    content: |
+      # {{ durcissement_entete }}
+      [Mount]
+      Options=mode=1777,strictatime,size={{ durcissement_tmp_taille }},{{ _durcissement_options_tmp | join(',') }}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger systemd
+  tags: [mount_option_tmp_noexec, mount_option_tmp_nosuid, mount_option_tmp_nodev, partition_for_tmp]
+
+- name: Unité tmp.mount activée au démarrage
+  ansible.builtin.systemd_service:
+    name: tmp.mount
+    enabled: true
+  tags: [partition_for_tmp]
+
+- name: Appliquer maintenant (systemd relit la surcharge)
+  ansible.builtin.meta: flush_handlers
+
+# /tmp déjà en tmpfs : on applique les options à chaud (remount ne masque rien).
+- name: Options de /tmp appliquées à chaud
+  # remount d'un tmpfs géré par systemd (pas par fstab) : ansible.posix.mount ne s'applique pas.
+  ansible.builtin.command: mount -o remount,{{ _durcissement_options_tmp | join(',') }} /tmp  # noqa: command-instead-of-module
+  when:
+    - _durcissement_tmp.stdout is search('^tmpfs')
+    - _durcissement_options_tmp | reject('in', _durcissement_tmp.stdout.split()[-1].split(',')) | list | length > 0
+  changed_when: true
+  tags: [mount_option_tmp_noexec, mount_option_tmp_nosuid, mount_option_tmp_nodev]
+
+- name: Signaler un /tmp qui ne deviendra tmpfs qu'au prochain redémarrage
+  ansible.builtin.debug:
+    msg: >-
+      /tmp n'est pas un tmpfs ({{ _durcissement_tmp.stdout | default('?') }}) : tmp.mount est activé,
+      prise en compte au PROCHAIN REDÉMARRAGE de {{ inventory_hostname }} (à planifier, RB-263).
+  when: not _durcissement_tmp.stdout is search('^tmpfs')
+
+- name: Options de /dev/shm (fstab)
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: "defaults,{{ durcissement_shm_options | join(',') }}"
+    state: present
+  tags: [mount_option_dev_shm_noexec, mount_option_dev_shm_nosuid, mount_option_dev_shm_nodev]
+
+- name: Lire le montage actuel de /dev/shm
+  ansible.builtin.command: findmnt --noheadings --output OPTIONS /dev/shm
+  register: _durcissement_shm
+  changed_when: false
+  check_mode: false
+
+- name: Options de /dev/shm appliquées à chaud
+  # ansible.posix.mount (state: remounted) remonterait avec les options de fstab : même résultat, mais
+  # sans pouvoir dire si un changement a eu lieu ; on compare d'abord, on remonte seulement si besoin.
+  ansible.builtin.command: mount -o remount,{{ durcissement_shm_options | join(',') }} /dev/shm  # noqa: command-instead-of-module
+  when: durcissement_shm_options | reject('in', _durcissement_shm.stdout | trim | split(',')) | list | length > 0
+  changed_when: true
+  tags: [mount_option_dev_shm_noexec]

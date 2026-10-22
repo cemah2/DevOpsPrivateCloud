@@ -1,0 +1,22 @@
+# plateforme/politiques — .gitlab-ci.yml (E07) : MODIFICATIONS de M26-E16 (PLAT-2716).
+# Le job kyverno:tests d'E07 (CLI 1.19.2 vérifiée par empreinte) reste ; on lui demande d'échouer
+# s'il ne trouve aucun test, et on ajoute un garde-fou contre les types de politiques supprimés en 1.20.
+
+# 1. Dans kyverno:tests, remplacer la dernière ligne du script par :
+#      - /tmp/kyverno test kyverno/tests/ --require-tests --remove-color --detailed-results
+
+# 2. Nouveau job (même étape « valider ») :
+politiques:types-cel:
+  stage: valider
+  image:
+    name: $IMAGE_OUTILS
+    entrypoint: [""]
+  script:
+    - |
+      if grep -rlE '^kind: *(ClusterPolicy|Policy|ClusterCleanupPolicy|CleanupPolicy)$' kyverno/; then
+        echo "politique d'ancien type trouvée (ci-dessus) : réécris-la en policies.kyverno.io/v1" >&2
+        exit 1
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,38 @@
+# plateforme/gitops — plateforme/essai-openbao-csi.yaml (M25-E19, PLAT-2619, TEMPORAIRE).
+# Fournisseur OpenBao du pilote CSI (DaemonSet : openbao-csi-provider + agent OpenBao).
+# Synchronisée APRÈS essai-csi-driver (le fournisseur se branche sur le pilote). Supprimée par MR
+# en fin d'exercice (finaliseur : suppression en cascade).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: essai-openbao-csi
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2619"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: openbao
+      targetRevision: 0.30.4
+      helm:
+        releaseName: openbao-csi
+        valueFiles:
+          - $values/valeurs/essai-openbao-csi/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: essai-csi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true

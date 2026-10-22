@@ -1,0 +1,10 @@
+# {{ ansible_managed }} — rôle correctifs (M26-E30)
+[Unit]
+Description=État des correctifs de sécurité pour Prometheus (MédiSphère)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/correctifs-etat {{ correctifs_textfile }}
+Nice=10

@@ -1,0 +1,17 @@
+# registre/variables.tf — AJOUT de M24-E14 (PLAT-2514). Les variables moi et moi_nom de M13-E03 ne
+# servent plus (utilisateurs.tf supprimé) : les retirer, ainsi que leurs valeurs dans terraform.tfvars
+# et dans les variables de CI (TF_VAR_moi, TF_VAR_moi_nom).
+
+variable "harbor_oidc_secret" {
+  description = "Secret du client OIDC « harbor » de Keycloak (Vault critique secrets/identite.yml de plateforme/ansible)."
+  type        = string
+  sensitive   = true
+  # Jamais dans un plan enregistré ni dans l'état : il n'alimente que oidc_client_secret_wo.
+  ephemeral = true
+}
+
+variable "harbor_oidc_secret_version" {
+  description = "Version du secret poussé dans Harbor : à incrémenter à chaque rotation (RB-244)."
+  type        = number
+  default     = 1
+}

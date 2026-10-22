@@ -1,0 +1,29 @@
+# /etc/systemd/system/openbao-instantane.service — {{ inventory_hostname }} (M25-E26)
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle openbao_instantane).') }}
+[Unit]
+Description=Instantané Raft d'OpenBao (nœud actif seulement), chiffré, vers s3-01 (openbao-instantanes)
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-252-sauvegarde-restauration-openbao.md
+Wants=network-online.target
+After=network-online.target openbao.service
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/openbao-instantane
+# rclone cherche sa configuration et son cache sous HOME : ProtectHome masque /root.
+Environment=HOME=/var/lib/openbao-instantane
+SyslogIdentifier=openbao-instantane
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=10min
+# L'instantané clair ne vit que dans ce /tmp privé, détruit à la fin du service.
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/openbao-instantane {{ openbao_instantane_textfile }}
+ProtectHome=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX

@@ -1,0 +1,85 @@
+# plateforme/gitops — valeurs/falco/values.yaml (M26-E08, SEC-2708)
+# Chart falcosecurity/falco 9.2.1 (Falco 0.45.1) + sous-chart falcosidekick 0.14.1.
+# Rendu vérifié : helm template falco oci://registry.par1.medisphere.internal/charts/falco \
+#   --version 9.2.1 -n falco -f valeurs/falco/values.yaml --api-versions monitoring.coreos.com/v1
+
+image:
+  # Cache dockerhub de Harbor ; étiquette = version applicative du chart (0.45.1).
+  registry: registry.par1.medisphere.internal/dockerhub
+
+driver:
+  # Sonde eBPF « moderne », compilée dans le binaire (CO-RE, BTF du noyau) : rien à compiler ni à
+  # télécharger sur le nœud. Debian 13 (noyau 6.12) la prend en charge.
+  kind: modern_ebpf
+
+falcoctl:
+  image:
+    registry: registry.par1.medisphere.internal/dockerhub
+  # falcoctl télécharge (install) et suit (follow) les règles et greffons depuis Internet. Désactivé :
+  # nous utilisons les règles livrées dans l'image (/etc/falco/falco_rules.yaml) et le greffon
+  # « container » de l'image ; une nouvelle version des règles arrive par une montée de version relue.
+  artifact:
+    install:
+      enabled: false
+    follow:
+      enabled: false
+
+falco:
+  # Sortie JSON (exigée par falcosidekick) ; le chart branche http_output vers falcosidekick.
+  json_output: true
+  # Priorité minimale des règles chargées : notice (le shell interactif est de priorité NOTICE).
+  priority: notice
+
+# Valeurs par défaut du chart : 512 Mi réservés par nœud (3 Go sur le cluster). Observé : 200 à
+# 300 Mi par nœud au repos avec les règles par défaut (à remesurer chez toi, kubectl top).
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+falcosidekick:
+  enabled: true
+  image:
+    registry: registry.par1.medisphere.internal/dockerhub
+    # Le sous-chart 0.14.1 a pour version applicative 2.31.1 mais tire 2.32.0 par défaut :
+    # on impose la version de référence (PLAN §6).
+    tag: 2.31.1
+  replicaCount: 2
+  # falcosidekick n'a besoin d'aucun privilège : conforme à « restricted » (audit et warn de l'espace).
+  podSecurityContext:
+    runAsUser: 1234
+    runAsNonRoot: true
+    fsGroup: 1234
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      medisphere.internal/supervision: "oui"
+  config:
+    # Ajouté à chaque événement : devient une étiquette dans Loki et dans Alertmanager.
+    customfields: "service:falco,cluster:k8s-par1"
+    alertmanager:
+      hostport: "http://kps-alertmanager.supervision.svc:9093"
+      # Alertmanager ≥ 0.27 n'a plus d'API v1 (défaut de falcosidekick : /api/v1/alerts).
+      endpoint: "/api/v2/alerts"
+      minimumpriority: "warning"
+      # Étiquettes de routage de MédiSphère (M21) ; « gravite » sera calculée par règle en E19.
+      extralabels: "equipe:plateforme,gravite:avertissement"
+    loki:
+      hostport: "http://loki.journaux.svc:3100"
+      tenant: "audit"
+      format: "json"
+      minimumpriority: "notice"
+      grafanaDashboard:
+        enabled: false
+# Note : le sous-chart rend un pod de test Helm (« helm.sh/hook: test-success », image curlimages/curl
+# sans étiquette). Argo CD n'exécute pas les tests Helm et ignore ce pod ; il n'est jamais créé.

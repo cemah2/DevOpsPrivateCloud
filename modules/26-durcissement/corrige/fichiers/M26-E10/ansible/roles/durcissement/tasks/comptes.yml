@@ -1,0 +1,90 @@
+---
+# Domaine « comptes » : durées de mot de passe (comptes locaux), umask, délai d'inactivité, su.
+# Les comptes eux-mêmes (admin, secours, comptes de service) restent ceux du rôle base (M04-E14) ;
+# les personnes viennent de l'annuaire (M24). Ce domaine ne crée ni ne supprime aucun compte.
+
+- name: Un seul compte d'UID 0 (root)
+  ansible.builtin.command: "awk -F: '$3 == 0 {print $1}' /etc/passwd"
+  register: _durcissement_uid0
+  changed_when: false
+  check_mode: false
+  failed_when: _durcissement_uid0.stdout_lines != ['root']
+  tags: [accounts_no_uid_except_zero]
+
+- name: Aucun compte local avec un mot de passe vide
+  ansible.builtin.command: "awk -F: '($2 == \"\") {print $1}' /etc/shadow"
+  register: _durcissement_vides
+  changed_when: false
+  check_mode: false
+  failed_when: _durcissement_vides.stdout_lines | length > 0
+  tags: [no_empty_passwords_etc_shadow]
+
+- name: Durées des mots de passe et masque par défaut (login.defs)
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^\s*#?\s*{{ item.cle }}\s'
+    line: "{{ item.cle }}\t{{ item.valeur }}"
+  loop:
+    - {cle: PASS_MAX_DAYS, valeur: "{{ durcissement_mdp_duree_max }}", regle: accounts_maximum_age_login_defs}
+    - {cle: PASS_WARN_AGE, valeur: "{{ durcissement_mdp_avertissement }}", regle: accounts_password_warn_age_login_defs}
+    - {cle: UMASK, valeur: "{{ durcissement_umask }}", regle: accounts_umask_etc_login_defs}
+  loop_control:
+    label: "{{ item.cle }}"
+  when: item.regle not in _durcissement_exclues
+  tags: [accounts_maximum_age_login_defs, accounts_password_warn_age_login_defs, accounts_umask_etc_login_defs]
+
+# readonly : un utilisateur ne peut pas lever le délai dans sa session. Les sessions d'Ansible ne
+# sont pas interactives : non concernées.
+- name: Délai d'inactivité et masque des sessions interactives
+  ansible.builtin.copy:
+    dest: /etc/profile.d/60-durcissement.sh
+    content: |
+      # {{ durcissement_entete }}
+      # Délai d'inactivité des shells interactifs (accounts_tmout) et masque (accounts_umask_etc_profile).
+      if [ -n "${PS1:-}" ]; then
+        TMOUT={{ durcissement_tmout }}
+        readonly TMOUT
+        export TMOUT
+      fi
+      umask {{ durcissement_umask }}
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [accounts_tmout, accounts_umask_etc_profile]
+
+# Les shells non « login » (bash lancé depuis une session existante) lisent bashrc, pas profile.d.
+- name: Masque par défaut des shells interactifs (bashrc)
+  ansible.builtin.lineinfile:
+    path: "{{ '/etc/bash.bashrc' if ansible_facts['os_family'] == 'Debian' else '/etc/bashrc' }}"
+    regexp: '^\s*umask\s+[0-7]+\s*(#.*)?$'
+    line: "umask {{ durcissement_umask }}  # rôle durcissement (accounts_umask_etc_bashrc)"
+  when: "'accounts_umask_etc_bashrc' not in _durcissement_exclues"
+  tags: [accounts_umask_etc_bashrc]
+
+- name: Groupe autorisé à utiliser su (vide)
+  ansible.builtin.group:
+    name: "{{ durcissement_groupe_su }}"
+    state: present
+    system: true
+  tags: [ensure_pam_wheel_group_empty]
+
+- name: Le groupe de su reste vide
+  ansible.builtin.command: getent group {{ durcissement_groupe_su }}
+  register: _durcissement_groupe_su
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _durcissement_groupe_su.rc == 0 and (_durcissement_groupe_su.stdout.split(':') | last | trim) != ''
+  tags: [ensure_pam_wheel_group_empty]
+
+# su n'est plus qu'une voie de bris de glace pour root (pam_rootok, plus haut dans le fichier) :
+# on passe par sudo, qui journalise.
+- name: Commande su réservée au groupe vide (pam_wheel)
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    # Seulement la ligne « required pam_wheel.so [use_uid] [group=…] » (pas la variante « deny »).
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so(\s+use_uid)?(\s+group=\S+)?\s*$'
+    line: "auth       required   pam_wheel.so use_uid group={{ durcissement_groupe_su }}"
+    insertafter: '^auth\s+sufficient\s+pam_rootok\.so'
+  when: "'use_pam_wheel_group_for_su' not in _durcissement_exclues"
+  tags: [use_pam_wheel_group_for_su]

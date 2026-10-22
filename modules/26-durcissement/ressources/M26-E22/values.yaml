@@ -1,0 +1,25 @@
+# Valeurs du chart inventaire-images (Lucas)
+image:
+  repository: registry.par1.medisphere.internal/plateforme/inventaire
+  tag: latest
+  pullPolicy: Always
+
+namespace: default
+
+harbor:
+  url: https://registry.par1.medisphere.internal
+  robot: robot$plateforme+inventaire
+  token: "Hq9xT2vLr8eKpZ4mW7nC1sYb"
+
+containerd:
+  socket: /var/run/containerd/containerd.sock
+
+service:
+  type: LoadBalancer
+  ip: 10.10.41.80
+  port: 80
+
+rbac:
+  create: true
+
+resources: {}

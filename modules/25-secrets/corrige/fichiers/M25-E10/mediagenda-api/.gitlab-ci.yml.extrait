@@ -1,0 +1,13 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M25-E10, SEC-2610). Seules les versions changent.
+# Après un pipeline de main vert (signature ET promotion), supprimer du projet : DEPLOIEMENT_TOKEN,
+# GITLAB_TOKEN ; du groupe mediagenda : HARBOR_ROBOT_USER, HARBOR_ROBOT_TOKEN (et COSIGN_* s'il en
+# reste) ; révoquer l'ancien jeton de projet ci-promotion de mediagenda/deploiement.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.0.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.0.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.9.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/release@v2.1.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.8.0
+    inputs:
+      overlay: dev
+# (garde TES versions des composants qualite et construction-image, et tes entrées de promotion)

@@ -1,0 +1,40 @@
+# plateforme/politiques — kyverno/exceptions/cnpg-operateur-sans-condense.yaml (M26-E18, CHG-2718)
+# Dérogation PARTIELLE et DATÉE à exiger-digest, enregistrée dans docs/securite/durcissement/exceptions.md.
+# Constat : les instances CloudNativePG de mediagenda-prod portent un conteneur d'initialisation
+# « bootstrap-controller » dont l'image est celle de l'OPÉRATEUR (variable OPERATOR_IMAGE_NAME de son
+# Deployment), désignée par étiquette. Elle ne se règle pas dans le Cluster de l'application : il faut
+# redéployer l'opérateur (release Helmfile cnpg de la couche de base) avec une image par condensé,
+# puis redémarrer les instances une à une — changement CHG-2718, planifié.
+# En attendant : seule CETTE image est tolérée, seulement sur les pods d'instance CNPG de la prod.
+# Le PostgreSQL lui-même (imageName du Cluster) reste contrôlé : il doit être par condensé.
+apiVersion: policies.kyverno.io/v1
+kind: PolicyException
+metadata:
+  name: cnpg-operateur-sans-condense
+  labels:
+    medisphere.internal/registre-exceptions: "oui"
+spec:
+  policyRefs:
+    - name: exiger-digest
+      kind: ValidatingPolicy
+  # Pods d'instance d'un Cluster CNPG, en production, et rien d'autre.
+  matchConditions:
+    - name: instances-cnpg-prod
+      expression: >-
+        object.metadata.namespace == 'mediagenda-prod' &&
+        has(object.metadata.labels) && 'cnpg.io/cluster' in object.metadata.labels &&
+        'cnpg.io/podRole' in object.metadata.labels && object.metadata.labels['cnpg.io/podRole'] == 'instance'
+  # Exception partielle : seule cette image échappe au contrôle (variable exceptions.allowedImages).
+  images:
+    - registry.par1.medisphere.internal/ghcr/cloudnative-pg/cloudnative-pg:1.30.1
+  # Échéance : au-delà, l'exception est ignorée (la politique s'applique de nouveau).
+  expiresAt: "2027-01-15T00:00:00Z"
+  # Les résultats exemptés apparaissent dans les rapports comme « skip » (visibles, pas « pass »).
+  reportResult: skip
+  properties:
+    raison: "image de l'opérateur CNPG par étiquette dans bootstrap-controller ; correction CHG-2718 (opérateur par condensé)"
+    ticket: "CHG-2718"
+    valideur: "sophie.laurent"
+    demandeur: "karim.benali"
+    revue: "2027-01-08"
+    registre: "docs/securite/durcissement/exceptions.md#EXC-K-001"

@@ -1,0 +1,144 @@
+---
+# playbooks/identite-essai-resto.yml — restauration d'ESSAI de Keycloak sur idp-resto (M24-E25,
+# RB-243 ; resservi en E33 pour l'essai de montée de version). Inventaire inventories/essai-resto.
+#   1. uv run ansible-playbook -i inventories/essai-resto playbooks/identite-essai-resto.yml --tags isolation,base
+#   2. restauration de la base depuis adm01 (RB-243 §3 : pg_restore sur l'entrée standard)
+#   3. uv run ansible-playbook -i inventories/essai-resto playbooks/identite-essai-resto.yml --tags keycloak
+# L'ordre compte : Keycloak ne doit JAMAIS démarrer sur une base vide (il créerait un royaume master
+# neuf, puis la restauration écraserait une base en cours d'usage).
+
+- name: Restauration d'essai de Keycloak (VM isolée)
+  hosts: idp-resto
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Garde-fou — inventaire d'essai et VM d'essai seulement
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'idp-resto'
+          - inventory_dir is search('essai-resto')
+        fail_msg: "Ce playbook ne vise que idp-resto, avec inventories/essai-resto."
+        quiet: true
+      tags: [always]
+
+  tasks:
+    - name: Isolation (nftables) AVANT toute copie de secret
+      tags: [isolation]
+      block:
+        - name: Paquet nftables
+          ansible.builtin.apt:
+            name: nftables
+            state: present
+            cache_valid_time: 3600
+
+        - name: Règles d'isolation
+          ansible.builtin.copy:
+            dest: /etc/nftables.conf
+            owner: root
+            group: root
+            mode: "0600"
+            content: |
+              #!/usr/sbin/nft -f
+              # idp-resto — isolation de la restauration d'essai (M24-E25). Géré par Ansible.
+              flush ruleset
+              table inet filter {
+                chain input {
+                  type filter hook input priority 0; policy drop;
+                  iif lo accept
+                  ct state established,related accept
+                  ip saddr {{ essai_resto_admin }} tcp dport { 22, 8443, 9000 } accept
+                  icmp type echo-request accept
+                }
+                chain output {
+                  type filter hook output priority 0; policy accept;
+                  oif lo accept
+                  ct state established,related accept
+                  ip daddr { {{ essai_resto_resolveurs | join(', ') }} } udp dport 53 accept
+                  ip daddr { {{ essai_resto_resolveurs | join(', ') }} } tcp dport 53 accept
+                  ip daddr { {{ essai_resto_sorties_interdites | join(', ') }} } counter reject
+                }
+              }
+          register: _essai_nft
+
+        - name: Charger les règles (et au démarrage)
+          ansible.builtin.systemd_service:
+            name: nftables.service
+            enabled: true
+            state: "{{ 'restarted' if _essai_nft is changed else 'started' }}"
+
+        - name: Preuve — ipa01 injoignable depuis idp-resto
+          ansible.builtin.command:
+            argv: [timeout, "3", bash, -c, "exec 3<>/dev/tcp/10.10.20.31/636"]
+          register: _essai_ipa
+          changed_when: false
+          failed_when: _essai_ipa.rc == 0
+
+    - name: Base PostgreSQL vide (rôle keycloak, tâches de la base seulement)
+      tags: [base]
+      block:
+        - name: PostgreSQL 17
+          ansible.builtin.apt:
+            name: postgresql
+            state: present
+            cache_valid_time: 3600
+
+        - name: Base et rôle keycloak (vides)
+          ansible.builtin.include_role:
+            name: keycloak
+            tasks_from: postgresql.yml
+
+    - name: Keycloak avec un certificat auto-signé d'essai
+      tags: [keycloak]
+      block:
+        - name: Groupe et dossier du certificat
+          ansible.builtin.group:
+            name: keycloak
+            system: true
+
+        - name: Dossier TLS
+          ansible.builtin.file:
+            path: /etc/keycloak/tls
+            state: directory
+            owner: root
+            group: keycloak
+            mode: "0750"
+
+        - name: Certificat auto-signé (sso et idp-resto), valable 7 jours
+          ansible.builtin.command:
+            argv:
+              - openssl
+              - req
+              - -x509
+              - -newkey
+              - rsa:3072
+              - -nodes
+              - -days
+              - "7"
+              - -subj
+              - /CN=idp-resto.par1.medisphere.internal
+              - -addext
+              - subjectAltName=DNS:idp-resto.par1.medisphere.internal,DNS:sso.par1.medisphere.internal
+              - -keyout
+              - /etc/keycloak/tls/keycloak.key
+              - -out
+              - /etc/keycloak/tls/keycloak.crt
+            creates: /etc/keycloak/tls/keycloak.crt
+
+        - name: Droits de la clé (groupe keycloak)
+          ansible.builtin.file:
+            path: /etc/keycloak/tls/keycloak.key
+            owner: root
+            group: keycloak
+            mode: "0640"
+
+        - name: Racine MédiSphère (certificat public ; truststore-paths de keycloak.conf)
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../pki/medisphere-root-ca.crt"
+            dest: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Keycloak (même rôle que la production)
+          ansible.builtin.include_role:
+            name: keycloak

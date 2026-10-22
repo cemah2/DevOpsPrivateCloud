@@ -1,0 +1,26 @@
+// plateforme/observabilite — alloy/config.alloy (EXTRAIT M26-E20)
+// À AJOUTER dans discovery.relabel "pods", APRÈS les deux règles qui calculent « locataire »
+// (défaut plateforme, puis mediagenda|medidoc) : les événements de Tetragon (conteneur export-stdout
+// de l'espace tetragon, une ligne JSON par événement) partent dans le locataire « audit », comme
+// auditd, OpenBao et Falco, avec l'étiquette service="tetragon".
+// « service » n'existe dans le flux des pods QUE pour cette source (une étiquette vide n'est pas
+// envoyée) : la liste fermée d'étiquettes de l'ADR-0220 est respectée pour tout le reste.
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+		separator     = "/"
+		regex         = "tetragon/export-stdout"
+		target_label  = "locataire"
+		replacement   = "audit"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+		separator     = "/"
+		regex         = "tetragon/export-stdout"
+		target_label  = "service"
+		replacement   = "tetragon"
+	}
+
+// Et, dans loki.process "pods", la ligne de Tetragon est déjà du JSON : rien à analyser à l'envoi
+// (on garde le volume d'étiquettes minimal) ; les champs se lisent à la requête par « | json ».

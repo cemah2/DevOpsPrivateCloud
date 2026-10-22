@@ -1,0 +1,56 @@
+# {{ oauth2_proxy_entete }}
+# Instance « {{ item.nom }} » — configuration structurée (--alpha-config) d'OAuth2 Proxy {{ oauth2_proxy_version }}.
+# Les secrets sont lus dans des fichiers (fromFile, clientSecretFile), jamais écrits ici.
+server:
+  secureBindAddress: "{{ item.ecoute }}"
+  tls:
+    cert:
+      fromFile: "{{ item.tls_certificat }}"
+    key:
+      fromFile: "{{ item.tls_cle }}"
+    minVersion: TLS1.2
+
+upstreamConfig:
+  upstreams:
+    - id: "{{ item.nom }}"
+      path: /
+      uri: "{{ item.amont }}"
+      # Host d'origine transmis : l'interface vérifie le nom demandé (liste d'hôtes autorisés).
+      passHostHeader: true
+      proxyWebSockets: true
+
+{% if item.autorisation_amont is defined %}
+# L'interface garde sa propre authentification (API des vérifications) : OAuth2 Proxy présente un
+# compte technique, une fois la personne authentifiée et autorisée par son groupe. Tout en-tête
+# Authorization envoyé par le navigateur est retiré (preserveRequestValue: false).
+injectRequestHeaders:
+  - name: Authorization
+    preserveRequestValue: false
+    values:
+      - secretSource:
+          fromFile: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/autorisation-amont"
+{% endif %}
+
+providers:
+  - id: keycloak-medisphere
+    provider: keycloak-oidc
+    name: SSO MédiSphère
+    clientID: "{{ oauth2_proxy_client_id }}"
+    clientSecretFile: "{{ oauth2_proxy_dossier_config }}/{{ item.nom }}/client-secret"
+    code_challenge_method: S256
+    # Portées demandées EXPLICITEMENT : par défaut, keycloak-oidc demande aussi « groups », que notre
+    # royaume ne connaît pas (notre portée s'appelle « groupes ») → Keycloak répond invalid_scope.
+    # « groupes » est une portée PAR DÉFAUT du royaume : elle s'applique sans être demandée.
+    scope: "openid email profile"
+    caFiles:
+      - "{{ oauth2_proxy_racine }}"
+    allowedGroups:
+{% for groupe in item.groupes %}
+      - "{{ groupe }}"
+{% endfor %}
+    oidcConfig:
+      issuerURL: "{{ oauth2_proxy_emetteur }}"
+      emailClaim: email
+      groupsClaim: groups
+      userIDClaim: preferred_username
+      audienceClaims: [aud]

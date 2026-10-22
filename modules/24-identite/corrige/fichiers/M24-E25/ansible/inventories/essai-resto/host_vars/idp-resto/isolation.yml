@@ -1,0 +1,9 @@
+---
+# host_vars/idp-resto/isolation.yml — M24-E25. La VM va contenir TOUS les secrets de l'identité
+# (clés de signature, secrets des clients, OTP, comptes de master) : elle ne parle qu'à adm01.
+essai_resto_admin: 10.10.10.10            # adm01 : SSH, 8443, 9000
+essai_resto_resolveurs: [10.10.20.10, 10.10.20.16]
+# Sorties interdites : tout le lab (la fédération ne doit pas joindre ipa01, rien ne doit joindre
+# sso, s3-01, git01…), sauf les résolveurs DNS. Internet reste joignable (paquets Debian, archive
+# de Keycloak sur Maven Central) par la passerelle du VLAN 99.
+essai_resto_sorties_interdites: [10.10.0.0/16, 10.20.0.0/16, 10.255.0.0/16]

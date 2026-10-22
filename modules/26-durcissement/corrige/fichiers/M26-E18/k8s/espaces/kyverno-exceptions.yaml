@@ -1,0 +1,12 @@
+# plateforme/k8s — espaces/kyverno-exceptions.yaml (M26-E18)
+# Seul espace où Kyverno lit les PolicyException. Personne n'y écrit à la main : l'Application Argo CD
+# « politiques » y synchronise kyverno/exceptions/ (MR relue par Sophie Laurent, RB-261).
+# RBAC : aucune équipe n'a de droit d'écriture ici (créer une exception = désactiver une politique).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno-exceptions
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    medisphere.internal/proprietaire: plateforme

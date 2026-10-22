@@ -1,0 +1,10 @@
+---
+# Rôle ssh_ca_utilisateur — variables AJOUTÉES au M24-E20 (defaults/main.yml du M06-E20, à la suite).
+
+# Hôtes inscrits dans l'annuaire (M24-E19) : sshd accepte aussi, pour un compte de l'ANNUAIRE, un
+# certificat dont le principal est le nom du compte (AuthorizedPrincipalsCommand). Les comptes locaux
+# restent régis par ssh_ca_utilisateur_principaux (fichiers de /etc/ssh/principaux/).
+ssh_ca_utilisateur_principaux_annuaire: false
+ssh_ca_utilisateur_commande_principaux: /usr/local/sbin/principaux-annuaire
+# Utilisateur sans droit qui exécute la commande (sshd refuse de démarrer sans lui).
+ssh_ca_utilisateur_commande_utilisateur: nobody

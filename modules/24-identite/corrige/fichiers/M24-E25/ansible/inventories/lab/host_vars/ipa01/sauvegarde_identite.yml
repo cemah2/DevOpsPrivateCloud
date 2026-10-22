@@ -1,0 +1,4 @@
+---
+# host_vars/ipa01/sauvegarde_identite.yml — M24-E25.
+sauvegarde_identite_mode: freeipa
+sauvegarde_identite_heure: "01:30"

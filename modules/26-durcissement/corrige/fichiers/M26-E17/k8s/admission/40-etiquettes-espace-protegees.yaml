@@ -1,0 +1,68 @@
+# plateforme/k8s — admission/40-etiquettes-espace-protegees.yaml (M26-E17, SEC-2717)
+# ValidatingAdmissionPolicy native : les étiquettes de SÉCURITÉ d'un espace (Pod Security
+# pod-security.kubernetes.io/* et organisation medisphere.internal/*) ne changent que par le dépôt
+# plateforme/k8s, appliqué par un administrateur de la plateforme. Promesse du M15 (« VAP au M26 qui
+# refuse leur retrait hors du compte d'automatisation »).
+# Exception : le contrôleur d'Argo CD, qui applique des Namespace versionnés (journaux, M22) : ses
+# changements viennent eux aussi d'une MR relue.
+# Ce que Pod Security ne fait pas : il LIT l'étiquette ; quiconque peut la modifier (patch du
+# Namespace) choisit son propre niveau de contrôle. Ici, on regarde QUI modifie (request.userInfo)
+# et QUOI (comparaison object / oldObject), ce qu'aucun profil de Pod Security ne sait faire.
+# ⚠️ Avant [Deny] : vérifie ton identité avec « kubectl auth whoami » (groupe oidc:plateforme-admins).
+#    Bris de glace : admin.conf (groupe kubeadm:cluster-admins) et super-admin.conf (system:masters).
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: medisphere-etiquettes-espace-protegees
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+  annotations:
+    medisphere.internal/ticket: SEC-2717
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    # Les administrateurs de la plateforme (task appliquer depuis adm01), le contrôleur d'Argo CD et
+    # le bris de glace ne sont pas concernés : la condition écarte la requête AVANT toute évaluation.
+    - name: hors-administrateurs
+      expression: >-
+        !request.userInfo.groups.exists(g, g in ['oidc:plateforme-admins', 'kubeadm:cluster-admins', 'system:masters'])
+        && request.userInfo.username != 'system:serviceaccount:argocd:argocd-application-controller'
+  variables:
+    - name: protegee
+      expression: >-
+        ['pod-security.kubernetes.io/', 'medisphere.internal/']
+    - name: avant
+      expression: "has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}"
+    - name: apres
+      expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
+    # Clés protégées ajoutées, retirées ou modifiées.
+    - name: changees
+      expression: >-
+        (variables.avant.filter(k, variables.protegee.exists(p, k.startsWith(p)) &&
+            (!(k in variables.apres) || variables.apres[k] != variables.avant[k])) +
+         variables.apres.filter(k, variables.protegee.exists(p, k.startsWith(p)) && !(k in variables.avant)))
+  validations:
+    - expression: "size(variables.changees) == 0"
+      messageExpression: >-
+        'étiquette(s) de sécurité de l\'espace modifiée(s) hors du dépôt plateforme/k8s : ' +
+        variables.changees.join(', ') + ' (demande : ' + request.userInfo.username + ')'
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: medisphere-etiquettes-espace-protegees
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+spec:
+  policyName: medisphere-etiquettes-espace-protegees
+  validationActions: ["Deny"]
+  # Pas de matchResources : tous les espaces, kube-system compris (personne d'autre que les
+  # administrateurs n'a à changer leurs étiquettes de sécurité).

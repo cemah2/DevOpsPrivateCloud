@@ -1,0 +1,95 @@
+---
+# playbooks/conformite-mesure.yml — mesure de conformité À LA DEMANDE (M26-E10, E14).
+# Évalue chaque hôte contre ses profils adaptés (CIS et ANSSI, exceptions désélectionnées), rapatrie
+# les résultats sur adm01 et affiche le score. L'analyse HEBDOMADAIRE automatique est au palier 3 (E24).
+#   uv run ansible-playbook playbooks/conformite-mesure.yml -e vague=1 [-e moment=apres]
+# Résultats : ~/m26/conformite/<hôte>/<AAAAMMJJ-HHMM>-<moment>-{cis,anssi}.{arf.xml,html}
+# Lecture seule sur les hôtes (oscap évalue, ne corrige rien), hors fichiers temporaires.
+
+- name: Mesure de conformité — vague {{ vague | default('?') }}
+  hosts: "durcissement_vague_{{ vague | default('non_precisee') }}"
+  become: true
+  gather_facts: true
+  vars:
+    moment: avant
+    _horodatage: >-
+      {{ ansible_facts['date_time']['date'] | replace('-', '') }}-{{ ansible_facts['date_time']['hour']
+      }}{{ ansible_facts['date_time']['minute'] }}
+    _destination: "{{ lookup('ansible.builtin.env', 'HOME') }}/m26/conformite/{{ inventory_hostname }}"
+    _conformite: /etc/medisphere/conformite
+
+  tasks:
+    - name: Registre des exceptions de l'hôte (posé par le rôle durcissement)
+      ansible.builtin.slurp:
+        src: "{{ _conformite }}/exceptions.json"
+      register: _registre
+
+    - name: Profils de l'hôte
+      ansible.builtin.set_fact:
+        _flux: "{{ (_registre.content | b64decode | from_json).flux }}"
+        _profils:
+          - nom: cis
+            id: "{{ 'cis_level1_server' if ansible_facts['os_family'] == 'Debian' else 'cis_server_l1' }}"
+          - nom: anssi
+            id: anssi_bp28_intermediary
+
+    # Codes de sortie d'oscap : 0 tout conforme, 2 au moins une règle en échec, 1 erreur.
+    - name: Évaluation OpenSCAP (plusieurs minutes par hôte)
+      ansible.builtin.command: >-
+        oscap xccdf eval
+        --tailoring-file {{ _conformite }}/tailoring-{{ item.nom }}.xml
+        --profile xccdf_org.ssgproject.content_profile_{{ item.id }}_medisphere
+        --results-arf /var/tmp/conformite-{{ item.nom }}.arf.xml
+        --report /var/tmp/conformite-{{ item.nom }}.html
+        {{ _flux }}
+      register: _evaluation
+      changed_when: false
+      failed_when: _evaluation.rc not in [0, 2]
+      loop: "{{ _profils }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Score de chaque profil
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        grep -o '<score[^>]*urn:xccdf:scoring:default[^>]*>[0-9.]*' /var/tmp/conformite-{{ item.nom }}.arf.xml
+        | head -n 1 | sed 's/.*>//'
+      args:
+        executable: /bin/bash
+      register: _scores
+      changed_when: false
+      loop: "{{ _profils }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
+    - name: Dossier de résultats sur adm01
+      ansible.builtin.file:
+        path: "{{ _destination }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Rapatrier les résultats
+      ansible.builtin.fetch:
+        src: "/var/tmp/conformite-{{ item.0.nom }}.{{ item.1 }}"
+        dest: "{{ _destination }}/{{ _horodatage }}-{{ moment }}-{{ item.0.nom }}.{{ item.1 }}"
+        flat: true
+      loop: "{{ _profils | product(['arf.xml', 'html']) | list }}"
+      loop_control:
+        label: "{{ item.0.nom }}.{{ item.1 }}"
+
+    - name: Nettoyer les fichiers temporaires de l'hôte
+      ansible.builtin.file:
+        path: "/var/tmp/conformite-{{ item.0.nom }}.{{ item.1 }}"
+        state: absent
+      loop: "{{ _profils | product(['arf.xml', 'html']) | list }}"
+      loop_control:
+        label: "{{ item.0.nom }}.{{ item.1 }}"
+
+    - name: Scores
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }} ({{ moment }}) — CIS : {{ _scores.results[0].stdout }} ;
+          ANSSI intermédiaire : {{ _scores.results[1].stdout }} ;
+          exceptions : {{ ((_registre.content | b64decode | from_json).exceptions | length) }}

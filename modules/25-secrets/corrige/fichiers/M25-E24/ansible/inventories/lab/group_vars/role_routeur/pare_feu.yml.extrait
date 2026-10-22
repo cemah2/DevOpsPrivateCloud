@@ -1,0 +1,17 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M25-E24, PLAT-2624.
+# Une passerelle à la fois (--limit gw01, vérification, puis gw02). Retour arrière : git revert.
+#
+# 1) Définitions : la VIP du service et les trois nœuds (administration et supervision les visent
+#    un par un ; les clients ne visent que la VIP).
+  - {nom: OPENBAO, valeur: 10.10.20.200, commentaire: "VIP du coffre OpenBao, nœud actif (M25-E24)"}
+  - {nom: COFFRE, valeur: [10.10.20.21, 10.10.20.22, 10.10.20.23], commentaire: "nœuds du coffre vault01-03 (M25-E24)"}
+#    VAULT01 (M25-E03) disparaît : remplace-le dans toutes les règles par $OPENBAO (clients :
+#    runners, travailleurs) ou par [$OPENBAO, $COFFRE] (MGMT et VPN : on vise aussi un nœud précis).
+#
+# 2) Transit (bloc « Secrets ») : les règles de M25-E03, élargies.
+  - {entree: $V_MGMT, source: $NET_MGMT, sortie: $V_INFRA, destination: [$OPENBAO, $COFFRE], proto: tcp, ports: 8200,
+     motif: "MGMT (adm01) → OpenBao (VIP et nœuds) : CLI, OpenTofu, checks, descellement", ref: M25-E24}
+  - {entree: $V_VPN, source: $NET_VPN, sortie: $V_INFRA, destination: [$OPENBAO, $COFFRE], proto: tcp, ports: 8200,
+     motif: "VPN d'administration → OpenBao : interface web, connexion OIDC par navigateur", ref: M25-E24}
+#    Entre nœuds, VRRP, défi ACME (ca01 → nœuds et VIP, port 80) : même VLAN, la bordure ne voit
+#    rien ; tout est dans le pare-feu local (group_vars/role_coffre/pare_feu_local.yml).

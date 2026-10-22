@@ -1,0 +1,6 @@
+# medidoc/deploiement — overlays/<env>/kustomization.yaml : EXTRAIT (M25-E13). Même ajout dans
+# dev et recette ; le reste du fichier est inchangé.
+resources:
+  # … ressources existantes …
+  - harbor-pull.yaml
+  - medidoc-s3.yaml

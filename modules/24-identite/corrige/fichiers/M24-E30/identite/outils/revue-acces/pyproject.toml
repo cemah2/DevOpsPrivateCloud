@@ -1,0 +1,16 @@
+[project]
+name = "revue-acces"
+version = "1.0.0"
+description = "Revue mensuelle des accès de MédiSphère : qui a accès à quoi, et les écarts (M24-E30, SEC-2530)."
+requires-python = ">=3.13"
+dependencies = [
+  "ldap3>=2.9",
+  "requests>=2.32",
+  "pyyaml>=6.0",
+]
+
+[project.scripts]
+revue-acces = "revue_acces:principal"
+
+[tool.uv]
+package = false

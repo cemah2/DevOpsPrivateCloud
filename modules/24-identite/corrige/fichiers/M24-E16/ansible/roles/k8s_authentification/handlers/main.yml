@@ -1,0 +1,9 @@
+---
+# Le fichier est rechargé à chaud par un serveur d'API qui a DÉJÀ --authentication-config ; la
+# première fois, l'option arrive par outils/reconfigurer-apiserver.sh (un nœud à la fois).
+- name: Rappel du serveur d'API
+  ansible.builtin.debug:
+    msg: >-
+      {{ inventory_hostname }} : {{ k8s_authentification_dossier }}/config.yaml a changé. Si le serveur
+      d'API a déjà --authentication-config, il le recharge seul (≈ 1 min ; vérifie son journal) ;
+      sinon, applique cluster/kubeadm-config.yaml par outils/reconfigurer-apiserver.sh {{ inventory_hostname }}.

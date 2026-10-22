@@ -1,0 +1,135 @@
+# shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
+# shellcheck disable=SC2016  # filtres jq et scripts distants entre apostrophes
+# break-E40.sh — M26-E40 « Panne : des nœuds ne se parlent plus »
+#
+# Sur UN SEUL travailleur (jamais un nœud de contrôle, jamais plus d'un nœud) :
+#   1. une CiliumClusterwideNetworkPolicy de pare-feu d'hôte, posée à la main avec un nodeSelector sur ce
+#      nœud, oublie un flux (santé Cilium 4240 entre nœuds) : le nœud devient « injoignable » pour les
+#      autres (cilium_unreachable_nodes) ;
+#   2. le pare-feu local (nftables) du nœud filtre le port WireGuard 51871/UDP : le chiffrement entre ce
+#      nœud et les autres ne s'établit plus ;
+#   3. la MTU de eth0 du nœud est incohérente (1400) : les gros paquets tombent (symptôme intermittent).
+#
+# Annulation : la CCNP par kubectl depuis adm01 (indépendant du nœud) ; nftables et MTU par SSH, avec
+# l'agent QEMU en secours. Jamais sur un nœud de contrôle.
+#
+# shellcheck source=../../../../lab/lib/pannes-lib.sh
+source "$WB_ROOT/lab/lib/pannes-lib.sh"
+# shellcheck source=_m26-commun.sh
+source "$WB_ROOT/modules/26-durcissement/corrige/pannes/_m26-commun.sh"
+
+_E40_NOEUD="${WB_M26_NOEUD:-k8s-w03}"
+
+panne_E40_v1() { _e40_injecter 1; }
+panne_E40_v2() { _e40_injecter 2; }
+panne_E40_v3() { _e40_injecter 3; }
+
+_e40_injecter() {
+  local n="$1"
+  m26_kube_sain || return 1
+  wb_kubectl get node "$_E40_NOEUD" >/dev/null 2>&1 || { wb_avert "nœud $_E40_NOEUD introuvable"; return 1; }
+  m26_ecrire E40 variante "$n"
+  case "$n" in
+    1)
+      # Pare-feu d'hôte qui n'autorise plus la santé Cilium (4240) depuis les autres nœuds, sur CE nœud.
+      # Suppose hostFirewall activé (M26-E27) ; sinon la politique n'a pas d'effet d'hôte → sans effet.
+      wb_kubectl get ciliumclusterwidenetworkpolicies >/dev/null 2>&1 || return 10
+      m26_sauver_objet E40 ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai
+      wb_kubectl apply -f - >/dev/null <<EOF || return 1
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: wb-pare-feu-hote-essai
+  annotations: {medisphere.internal/auteur: lucas.martin, medisphere.internal/ticket: "PLAT-2740"}
+  labels: {medisphere.internal/panne: M26-E40}
+spec:
+  description: "essai de pare-feu d'hote (oublie la sante Cilium 4240)"
+  nodeSelector:
+    matchLabels: {kubernetes.io/hostname: $_E40_NOEUD}
+  ingress:
+    - fromEntities: [host, remote-node]
+      toPorts: [{ports: [{port: "10250", protocol: TCP}, {port: "4244", protocol: TCP}]}]
+EOF
+      m26_attendre 180 _e40_effet 1 || { _e40_defaire 1; return 10; }
+      ;;
+    2)
+      m26_hote_sain "$_E40_NOEUD" || return 10
+      m26_wb_exec "$_E40_NOEUD" >/dev/null <<'EOF' || return 1
+nft add table inet wb_e40 2>/dev/null || true
+nft add chain inet wb_e40 entree '{ type filter hook input priority filter - 20 ; policy accept ; }' 2>/dev/null || true
+nft add rule inet wb_e40 entree udp dport 51871 counter drop comment "PLAT-2740 (Lucas) : fermer WireGuard"
+journal "nftables local : UDP 51871 (WireGuard Cilium) filtré en entrée"
+EOF
+      m26_ecrire E40 cible "$_E40_NOEUD"
+      ;;
+    3)
+      m26_hote_sain "$_E40_NOEUD" || return 10
+      m26_wb_exec "$_E40_NOEUD" >/dev/null <<'EOF' || return 1
+i=eth0
+mtu="$(cat /sys/class/net/$i/mtu 2>/dev/null)"
+[ -n "$mtu" ] || { echo "interface $i absente" >&2; exit 1; }
+echo "$mtu" > "$WB_DIR/$WB_EX.mtu-$i"
+ip link set dev "$i" mtu 1400
+journal "MTU de $i abaissée de $mtu à 1400"
+EOF
+      m26_ecrire E40 cible "$_E40_NOEUD"
+      ;;
+  esac
+  m26_journal E40 "variante $n posée sur $_E40_NOEUD"
+}
+
+_e40_effet() {
+  case "$1" in
+    1) wb_kubectl get ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai >/dev/null 2>&1 ;;
+    2) m26_ssh "$_E40_NOEUD" 'nft list table inet wb_e40' >/dev/null 2>&1 ;;
+    3) [[ "$(m26_ssh "$_E40_NOEUD" 'cat /sys/class/net/eth0/mtu' 2>/dev/null)" == 1400 ]] ;;
+  esac
+}
+
+verifier_E40() { _e40_effet "$WB_VAR"; }
+
+_e40_defaire() {
+  case "$1" in
+    1) m26_restaurer_objet E40 ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai ;;
+    2)
+      WB_EX=M26-E40 m26_wb_exec_invite "$_E40_NOEUD" >/dev/null <<'EOF' || wb_avert "annulation nftables incomplète sur le nœud"
+nft delete table inet wb_e40 2>/dev/null || true
+journal "annulation : table nftables wb_e40 retirée (agent QEMU)"
+EOF
+      ;;
+    3)
+      WB_EX=M26-E40 m26_wb_exec_invite "$_E40_NOEUD" >/dev/null <<'EOF' || wb_avert "annulation MTU incomplète sur le nœud"
+i=eth0
+m="$(cat "$WB_DIR/$WB_EX.mtu-$i" 2>/dev/null)"
+[ -n "$m" ] && ip link set dev "$i" mtu "$m" && rm -f "$WB_DIR/$WB_EX.mtu-$i"
+journal "annulation : MTU de $i rétablie à ${m:-?} (agent QEMU)"
+EOF
+      ;;
+  esac
+}
+
+annuler_E40() {
+  local v="${WB_VAR:-}"
+  [[ "$v" =~ ^[1-3]$ ]] || v="$(m26_lire E40 variante)"
+  [[ -n "$v" ]] && _e40_defaire "$v"
+  m26_oublier E40 variante
+  m26_oublier E40 cible
+  m26_journal E40 "annulation"
+}
+
+resume_E40() { echo "Un travailleur ne communique plus normalement avec les autres (santé Cilium, WireGuard ou MTU)."; }
+
+symptome_E40() {
+  wb_symptome "Ticket INC-5340 — De : Nadia Roussel" \
+    "Depuis la vague « réseau » du durcissement (pare-feu d'hôte, chiffrement WireGuard), des pods d'un" \
+    "nœud n'arrivent plus à joindre ceux des autres : des connexions tombent, des sondes échouent par" \
+    "intermittence, Hubble montre des paquets perdus. Un seul travailleur semble concerné." \
+    "Un nœud de contrôle à la fois, un retour arrière écrit : ne touche pas tout le cluster." \
+    "" \
+    "Temps cible : 45 min. Contrôle : lab/bin/check 26 40"
+}
+
+if [[ -z "${WB_PANNES_LIB:-}" ]]; then
+  main() { wb_main 26 E40 3 "$@"; }
+fi

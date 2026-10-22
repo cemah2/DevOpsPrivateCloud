@@ -1,0 +1,16 @@
+---
+# Rôle openbao_kms — OpenBao de descellement kms01 (M25-E25, PLAT-2625).
+# Même installation que les nœuds du coffre : il s'appuie sur le rôle openbao (paquet épinglé par
+# empreinte, configuration validée, surcharge systemd, contrôles). Ce qui change est dans
+# defaults/main.yml : pas de grappe (aucun retry_join), pas de seal transit (kms01 est scellé par
+# Shamir : c'est lui, la racine de confiance), pas de VIP, pas de relais ACME.
+galaxy_info:
+  author: plateforme
+  description: OpenBao mononœud servant le seal transit de la grappe (kms01)
+  license: MPL-2.0
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies:
+  - role: openbao

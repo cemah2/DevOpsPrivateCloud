@@ -1,0 +1,64 @@
+# plateforme/politiques — tetragon/application/mediagenda-recette/proteger-fichiers-systeme.yaml (M26-E29)
+# Politique d'APPLICATION de la recette de MédiAgenda, limitée aux pods de l'API (podSelector) ; MR
+# relue par Julien Petit ; arrêt d'urgence : RB-260. Modèle : examples/quickstart/file_monitoring_enforce.yaml de Tetragon v1.7.1,
+# RESTREINT à ce qui n'a aucune raison d'arriver dans un conteneur applicatif :
+#   - lire /etc/shadow ou /etc/gshadow (MAY_READ = 4) → processus tué (Sigkill) ;
+#   - écrire sous /etc, /usr, /bin, /sbin, /lib, /lib64 (MAY_WRITE = 2) → écriture refusée (Override,
+#     -EPERM) ET processus tué : la documentation « Enforcement » rappelle qu'un Sigkill seul pendant
+#     write() ne garantit pas que les données ne soient pas écrites.
+# Jamais de lecture sous /etc en général : /etc/hosts, /etc/resolv.conf, /etc/ssl… sont lus en permanence.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: proteger-fichiers-systeme
+  namespace: mediagenda-recette
+  labels:
+    medisphere.internal/composant: tetragon-application
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  kprobes:
+    - call: security_file_permission
+      syscall: false
+      return: true
+      args:
+        - index: 0
+          type: file
+        - index: 1
+          type: int
+      returnArg:
+        index: 0
+        type: int
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/shadow
+                - /etc/gshadow
+            - index: 1
+              operator: Equal
+              values:
+                - "4"
+          matchActions:
+            - action: Sigkill
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/
+                - /usr/
+                - /bin/
+                - /sbin/
+                - /lib/
+                - /lib64/
+            - index: 1
+              operator: Equal
+              values:
+                - "2"
+          matchActions:
+            - action: Override
+              argError: -1
+            - action: Sigkill

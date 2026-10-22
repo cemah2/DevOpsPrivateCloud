@@ -1,0 +1,5 @@
+# plateforme/observabilite — tableaux/kustomization.yaml (EXTRAIT M26-E18) : entrée à ajouter à
+# configMapGenerator, section « Plateforme » (dossier Grafana « Plateforme », M21-E17).
+  - name: tableau-plateforme-politiques-admission
+    files: [plateforme/plateforme-politiques-admission.json]
+    options: {annotations: {grafana_folder: Plateforme}}

@@ -1,0 +1,87 @@
+---
+# Rôle durcissement — variables documentées et contrôlées à l'entrée du rôle (M26-E10).
+# Le détail et les valeurs par défaut : defaults/main.yml.
+argument_specs:
+  main:
+    short_description: Durcissement CIS niveau 1 / ANSSI-BP-028 des hôtes Debian 13 et Rocky 10
+    description:
+      - Applique les mesures par domaine (paquets, noyau, systemd, journalisation, montages, comptes,
+        pam, sudo, ssh, auditd, aide, mac, conformite), chacune étiquetée par l'identifiant XCCDF de sa règle.
+      - Les exceptions déclarées ne sont pas appliquées et sont désélectionnées du profil OpenSCAP adapté.
+      - Toujours lancer d'abord en --check --diff (RB-263).
+    options:
+      durcissement_referentiel:
+        type: str
+        choices: [cis_l1_serveur]
+        default: cis_l1_serveur
+        description: Référentiel appliqué par le rôle.
+      durcissement_anssi_niveau:
+        type: str
+        choices: [minimal, intermediaire, renforce, eleve]
+        default: intermediaire
+        description: Niveau ANSSI-BP-028 mesuré (profil adapté ANSSI).
+      durcissement_domaines:
+        type: list
+        elements: str
+        description: Domaines appliqués sur l'hôte (sous-ensemble de la liste par défaut).
+      durcissement_exceptions:
+        type: list
+        elements: dict
+        default: []
+        description:
+          - Exceptions du parc (group_vars/all) ; champs regle, hotes, justification, valideur, revue.
+      durcissement_exceptions_locales:
+        type: list
+        elements: dict
+        default: []
+        description: Exceptions ajoutées par un groupe ou un hôte.
+      durcissement_valideurs:
+        type: list
+        elements: str
+        description: Personnes habilitées à valider une exception (RB-261).
+      durcissement_couper_routage:
+        type: bool
+        default: false
+        description: Autorise le rôle à couper le routage d'un hôte qui route aujourd'hui (sinon il refuse).
+      durcissement_ssh_groupes:
+        type: list
+        elements: str
+        description: Groupes autorisés en SSH (AllowGroups) sur tous les hôtes.
+      durcissement_ssh_groupes_supplementaires:
+        type: list
+        elements: str
+        default: []
+        description: Groupes autorisés en plus sur certains hôtes (git, cephadm, supervision).
+      durcissement_ssh_comptes_sans_ssh:
+        type: list
+        elements: str
+        default: []
+        description: Comptes locaux à clés qui ne doivent volontairement plus se connecter.
+      durcissement_auditd_immuable:
+        type: bool
+        default: false
+        description: Règles d'audit immuables (-e 2) jusqu'au prochain redémarrage.
+      durcissement_apparmor_profils:
+        type: list
+        elements: dict
+        default: []
+        description: Profils AppArmor (nom, profil, mode complain|enforce) posés depuis templates/apparmor/.
+      durcissement_selinux_booleens:
+        type: list
+        elements: dict
+        default: []
+        description: Booléens SELinux (nom, valeur).
+      durcissement_selinux_contextes:
+        type: list
+        elements: dict
+        default: []
+        description: Règles de contexte SELinux (motif, chemin, type).
+      durcissement_crypto_politique:
+        type: str
+        description: Politique cryptographique de Rocky (update-crypto-policies).
+      durcissement_ssg_version:
+        type: str
+        description: Version de ComplianceAsCode (archive amont, Debian).
+      durcissement_ssg_sha256:
+        type: str
+        description: Empreinte SHA-256 de l'archive ComplianceAsCode.

@@ -1,0 +1,17 @@
+# plateforme/k8s — cilium/hote/quarantaine.yaml (M26-E33)
+# Politique de QUARANTAINE posée À L'AVANCE : tout pod étiqueté medisphere.internal/quarantaine=oui
+# est coupé de tout (aucune entrée, aucune sortie, pas même le DNS). On étiquette le pod compromis
+# pendant l'incident (M26-E42) ; la coupure est immédiate. On n'éteint pas le pod (preuves en mémoire).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: quarantaine
+  labels:
+    medisphere.internal/domaine: securite
+spec:
+  description: "isolement total d'un pod marque medisphere.internal/quarantaine=oui"
+  endpointSelector:
+    matchLabels:
+      medisphere.internal/quarantaine: "oui"
+  ingress: []      # aucune règle d'entrée => refus total en entrée
+  egress: []       # aucune règle de sortie => refus total en sortie (pas même le DNS)

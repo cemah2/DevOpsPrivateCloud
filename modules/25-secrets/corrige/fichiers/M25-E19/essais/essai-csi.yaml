@@ -1,0 +1,74 @@
+# ~/m25/e19/essai-csi.yaml — SecretProviderClass, compte de service et pod d'essai (M25-E19).
+# Appliqué dans wb-essais seulement (kubectl apply -n wb-essais -f essai-csi.yaml), supprimé à la fin.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: essai-csi
+  namespace: wb-essais
+---
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: essai-openbao
+  namespace: wb-essais
+spec:
+  provider: openbao
+  parameters:
+    roleName: essai-csi
+    baoAuthMountPath: k8s-par1
+    # Audience du jeton de compte de service que le fournisseur demande au cluster : celle du rôle.
+    audience: openbao.medisphere.internal
+    objects: |
+      - objectName: "message"
+        secretPath: "kv/data/plateforme/essais/csi-demo"
+        secretKey: "message"
+  # Recopie dans un Secret Kubernetes (pour une variable d'environnement) : créé quand un pod monte le
+  # volume, supprimé quand plus aucun pod ne le monte.
+  secretObjects:
+    - secretName: essai-csi
+      type: Opaque
+      data:
+        - objectName: message
+          key: message
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: essai-csi
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: essai-csi
+spec:
+  serviceAccountName: essai-csi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile: {type: RuntimeDefault}
+  containers:
+    - name: lecteur
+      image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+      # Relit le FICHIER toutes les 30 s (ce que la rotation du pilote met à jour) et affiche la
+      # variable d'environnement (lue UNE fois, au démarrage du conteneur).
+      command: ["sh", "-c", "while true; do echo \"$(date +%T) fichier=$(cat /mnt/secrets/message) env=$MESSAGE\"; sleep 30; done"]
+      env:
+        - name: MESSAGE
+          valueFrom:
+            secretKeyRef: {name: essai-csi, key: message}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: {drop: ["ALL"]}
+      resources:
+        requests: {cpu: 5m, memory: 8Mi}
+        limits: {memory: 16Mi}
+      volumeMounts:
+        - name: secrets-openbao
+          mountPath: /mnt/secrets
+          readOnly: true
+  volumes:
+    - name: secrets-openbao
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: essai-openbao

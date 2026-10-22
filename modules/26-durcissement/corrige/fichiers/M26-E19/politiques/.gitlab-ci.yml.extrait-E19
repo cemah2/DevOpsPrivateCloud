@@ -1,0 +1,39 @@
+# plateforme/politiques — .gitlab-ci.yml (EXTRAIT M26-E19 : jobs ajoutés à l'étape « valider » d'E07)
+# Même principe qu'E07 pour la CLI Kyverno : une petite image avec un shell ($IMAGE_OUTILS) et le binaire
+# amont vérifié par son empreinte. Puis le binaire Falco de LA VERSION DU CLUSTER, dans son image
+# officielle (cache dockerhub de Harbor), qui contient les règles par défaut et le greffon container.
+# Falco n'a besoin d'aucun pilote pour valider des règles (-V ne capture rien).
+variables:
+  YQ_VERSION: v4.54.1
+  # SHA256 de yq_linux_amd64, fichier checksums-bsd de la publication v4.54.1.
+  YQ_SHA256: 8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
+  IMAGE_FALCO: registry.par1.medisphere.internal/dockerhub/falcosecurity/falco:0.45.1
+
+falco:conventions:
+  stage: valider
+  image:
+    name: $IMAGE_OUTILS
+    entrypoint: [""]
+  script:
+    - curl -fsSLo /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+    - echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+    - chmod +x /tmp/yq && mkdir -p /tmp/bin && mv /tmp/yq /tmp/bin/yq && export PATH="/tmp/bin:$PATH"
+    - sh outils/valider-falco.sh conventions falco/regles-medisphere.yaml
+  artifacts:
+    paths: [regles-extraites/]
+    expire_in: 1 day
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+falco:valider:
+  stage: valider
+  needs: [falco:conventions]
+  image:
+    name: $IMAGE_FALCO
+    entrypoint: [""]
+  script:
+    - sh outils/valider-falco.sh moteur
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

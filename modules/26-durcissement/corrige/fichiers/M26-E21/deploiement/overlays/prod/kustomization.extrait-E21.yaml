@@ -1,0 +1,22 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml (EXTRAIT M26-E21)
+# Toutes les images de la prod par condensé, pas seulement celle de l'API (promue par
+# outils/promouvoir.sh) : Valkey du component « dependances » et PostgreSQL du Cluster CNPG.
+# Condensés relevés dans Harbor (crane digest / skopeo inspect --format '{{.Digest}}') : à TES valeurs.
+images:
+  - name: registry.par1.medisphere.internal/medisphere/mediagenda-api
+    newTag: <VERSION-PROMUE>
+    digest: sha256:<DIGEST-PROMU>
+  - name: registry.par1.medisphere.internal/dockerhub/valkey/valkey
+    digest: sha256:<DIGEST-VALKEY>
+patches:
+  # Le transformateur « images » ne connaît pas spec.imageName d'un Cluster CloudNativePG : on le
+  # remplace par un patch. Changer imageName déclenche une mise à jour progressive des instances
+  # (réplicas d'abord, puis bascule) : le faire hors des heures de pointe, comme une montée mineure.
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      - op: replace
+        path: /spec/imageName
+        value: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<DIGEST-POSTGRESQL>

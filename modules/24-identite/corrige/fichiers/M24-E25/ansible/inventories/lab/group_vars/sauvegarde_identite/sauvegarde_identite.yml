@@ -1,0 +1,6 @@
+---
+# group_vars/sauvegarde_identite/sauvegarde_identite.yml — M24-E25. Groupe d'inventaire
+# « sauvegarde_identite » (enfants : role_idp, role_annuaire) : idp01 et ipa01.
+# Clé PUBLIQUE age générée sur adm01 (age-keygen, voir le corrigé) ; la privée est au Vault
+# « critique » (secrets/identite-sauvegardes.yml) et sur papier.
+sauvegarde_identite_age_destinataire: "<CLÉ-PUBLIQUE-AGE-age1…>"

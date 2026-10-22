@@ -1,0 +1,23 @@
+# plateforme/k8s — rbac/openbao-auth-delegator.yaml (M25-E12 ; comptes des espaces applicatifs en
+# M25-E13, PLAT-2613). Voir l'en-tête du M25-E12 : OpenBao présente le jeton du client à l'API
+# TokenReview ; chaque compte client doit pouvoir créer des TokenReview (system:auth-delegator).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openbao-auth-delegator
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+  annotations:
+    medisphere.internal/ticket: "PLAT-2612, PLAT-2613"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - {kind: ServiceAccount, name: eso, namespace: wb-essais}
+  - {kind: ServiceAccount, name: eso, namespace: mediagenda-dev}
+  - {kind: ServiceAccount, name: eso, namespace: mediagenda-recette}
+  - {kind: ServiceAccount, name: eso, namespace: mediagenda-prod}
+  - {kind: ServiceAccount, name: eso, namespace: medidoc-dev}
+  - {kind: ServiceAccount, name: eso, namespace: medidoc-recette}
+  # M25-E16 : cert-manager/openbao-emetteur.

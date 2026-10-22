@@ -1,0 +1,4 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT (M24-E26). Une passerelle à la fois.
+# Prometheus du cluster (pods sur les travailleurs, sortie par l'adresse du nœud) → métriques de Keycloak.
+  - {entree: $V_K8S, source: $NET_K8S, sortie: $V_INFRA, destination: $IDP01, proto: tcp, ports: 9000,
+     motif: "Prometheus (k8s-par1) → Keycloak /metrics (interface de gestion)", ref: M24-E26}

@@ -1,0 +1,27 @@
+# plateforme/politiques — kyverno/tests/exiger-etiquettes/kyverno-test.yaml (M26-E07)
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: exiger-etiquettes
+policies:
+  - ../../validation/exiger-etiquettes.yaml
+resources:
+  - ressources.yaml
+variables: valeurs.yaml
+results:
+  - policy: exiger-etiquettes
+    kind: Deployment
+    resources: [etiquette-correcte]
+    result: pass
+  - policy: exiger-etiquettes
+    kind: Deployment
+    resources: [sans-etiquette]
+    result: fail
+  - policy: exiger-etiquettes
+    kind: StatefulSet
+    resources: [autre-equipe]
+    result: fail
+  - policy: exiger-etiquettes
+    kind: CronJob
+    resources: [tache-sans-etiquette]
+    result: fail

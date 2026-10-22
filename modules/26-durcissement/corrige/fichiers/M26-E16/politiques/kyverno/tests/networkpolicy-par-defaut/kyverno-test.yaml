@@ -1,0 +1,22 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: networkpolicy-par-defaut
+policies:
+  - ../../generation/networkpolicy-par-defaut.yaml
+resources:
+  - ressources.yaml
+results:
+  # Un nouvel espace d'équipe reçoit les deux politiques du modèle réseau.
+  - policy: networkpolicy-par-defaut
+    isGeneratingPolicy: true
+    resources: [medinotif-dev]
+    kind: Namespace
+    generatedResource: attendu.yaml
+    result: pass
+  # Un espace sans étiquette d'équipe ne déclenche rien.
+  - policy: networkpolicy-par-defaut
+    isGeneratingPolicy: true
+    resources: [wb-essais-reseau]
+    kind: Namespace
+    result: skip

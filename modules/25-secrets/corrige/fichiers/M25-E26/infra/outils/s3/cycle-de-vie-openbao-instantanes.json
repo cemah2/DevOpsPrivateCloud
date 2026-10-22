@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "horaire-30-jours",
+      "Filter": { "Prefix": "horaire/" },
+      "Status": "Enabled",
+      "Expiration": { "Days": 30 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    }
+  ]
+}

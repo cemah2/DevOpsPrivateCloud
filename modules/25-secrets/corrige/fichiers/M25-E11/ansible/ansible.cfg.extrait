@@ -1,0 +1,12 @@
+# ansible.cfg — EXTRAIT : section ajoutée en M25-E11 (PLAT-2611). Le reste est inchangé
+# (vault_identity_list = lab@outils/vault-pass-client.sh, critique@outils/vault-pass-client.sh).
+#
+# Options de connexion communes des greffons de community.hashi_vault (lookups vault_kv2_get…).
+# hvac n'utilise PAS le magasin d'autorités du système mais celui de « requests » (certifi) : sans
+# ca_cert, la racine MédiSphère n'est pas reconnue (« certificate verify failed »).
+# Jeton : le greffon le cherche dans l'ordre token=, ANSIBLE_HASHI_VAULT_TOKEN, VAULT_TOKEN, puis le
+# fichier ~/.vault-token (token_path/token_file) : celui que « bao login » écrit. En CI, VAULT_TOKEN
+# est posé par outils/openbao-ci.sh.
+[hashi_vault_collection]
+url = https://openbao.par1.medisphere.internal:8200
+ca_cert = /usr/local/share/ca-certificates/medisphere-root-ca.crt

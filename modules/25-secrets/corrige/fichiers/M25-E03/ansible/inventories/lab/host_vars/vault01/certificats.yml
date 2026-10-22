@@ -1,0 +1,14 @@
+---
+# host_vars/vault01/certificats.yml — certificat ACME d'OpenBao (M25-E03, rôle certificats_acme).
+# Deux noms : celui du nœud (api_addr, cluster_addr, contrôles) et celui du SERVICE, que tous les
+# clients utilisent. Défi HTTP-01 : ca01 vient chercher le jeton sur le port 80 des deux noms ;
+# au palier 1, openbao.par1… pointe sur vault01, le défi aboutit (au M25-E24, le nom passe sur la VIP).
+# Rechargement : SIGHUP (systemctl reload) relit le certificat SANS sceller le nœud. Jamais
+# « restart » ici : un redémarrage scellerait le coffre à chaque renouvellement.
+certificats_acme_certificats:
+  - id: openbao
+    noms: [vault01.par1.medisphere.internal, openbao.par1.medisphere.internal]
+    certificat: /etc/openbao/tls/cert.pem
+    cle: /etc/openbao/tls/key.pem
+    groupe: openbao
+    recharger: /bin/sh -c "! systemctl is-active --quiet openbao.service || systemctl reload openbao.service"

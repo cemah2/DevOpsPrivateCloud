@@ -1,0 +1,38 @@
+# plateforme/inventaire-images — manifestes/networkpolicy.yaml (version corrigée, M26-E22)
+# CiliumNetworkPolicy plutôt qu'une NetworkPolicy standard : l'API Kubernetes tourne sur les NŒUDS,
+# et Cilium ne fait pas correspondre par défaut un ipBlock aux adresses des nœuds (identités réservées
+# host / remote-node, option policy-cidr-match-mode) ; l'entité kube-apiserver, elle, est exacte.
+# Entrée : la passerelle seulement (si la page est publiée). Sorties : DNS, API, Harbor. Rien d'autre.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: inventaire
+  namespace: inventaire
+spec:
+  description: "MédiInventaire : entrée par la passerelle, sorties DNS, API Kubernetes, Harbor (M26-E22)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: inventaire
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    # Harbor (reg01) : adresse d'une VM, hors du cluster.
+    - toCIDR:
+        - 10.10.20.18/32
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

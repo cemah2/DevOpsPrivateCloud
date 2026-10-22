@@ -1,0 +1,18 @@
+# medidoc/deploiement — overlays/recette/entree-mediagenda.yaml (M23-E06 ; port 8443 en M25-E16)
+# MédiAgenda (recette) n'entre plus QUE par le relais TLS mutuel (8443) ; 8080 lui est fermé.
+# Étape intermédiaire de la bascule (corrigé) : les deux ports, le temps que MédiAgenda passe au relais.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-entree-mediagenda
+spec:
+  description: "MédiDoc : entrée TLS mutuel depuis l'API MédiAgenda de mediagenda-recette (SEC-2616)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: mediagenda-recette
+            app.kubernetes.io/name: mediagenda
+      toPorts:
+        - ports: [{port: "8443", protocol: TCP}]

@@ -1,0 +1,16 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M26-E25, PLAT-2725) : document
+# KubeletConfiguration complet après le module 26. Référence sur le cluster EXISTANT : le ConfigMap
+# kube-system/kubelet-config (même contenu, appliqué par la même MR), recopié sur chaque nœud par
+# playbooks/k8s-kubelet-config.yml (kubeadm upgrade node phase kubelet-config), un nœud à la fois.
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+rotateCertificates: true
+# Certificat de SERVICE (10250) signé par la CA du cluster (M14-E26). Approbation des demandes :
+# kubelet-csr-approver (M26-E25), à défaut RB-143 §5 (approbation manuelle après lecture).
+serverTLSBootstrap: true
+# M26-E25 : tout conteneur sans profil seccomp déclaré reçoit RuntimeDefault (le profil par défaut de
+# containerd) au lieu d'« Unconfined ». Sans effet sur les conteneurs privilégiés (Cilium, Falco,
+# Tetragon, node-exporter…), ni sur ceux qui déclarent leur profil (PSA restricted l'exige déjà).
+seccompDefault: true

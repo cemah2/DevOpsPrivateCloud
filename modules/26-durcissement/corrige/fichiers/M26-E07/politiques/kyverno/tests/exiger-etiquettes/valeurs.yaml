@@ -1,0 +1,10 @@
+# Valeurs du test : la CLI ne voit pas de cluster ; on lui dit quelles étiquettes portent les espaces.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+namespaceSelector:
+  - name: mediagenda-recette
+    labels:
+      medisphere.internal/equipe: mediagenda
+  - name: wb-essais
+    labels:
+      medisphere.internal/proprietaire: plateforme

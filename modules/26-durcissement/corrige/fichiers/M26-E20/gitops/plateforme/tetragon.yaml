@@ -1,0 +1,39 @@
+# plateforme/gitops — plateforme/tetragon.yaml (M26-E20, SEC-2720)
+# Application « tetragon », projet « plateforme » : chart recopié dans Harbor + valeurs de ce dépôt
+# (référence « values », comme kyverno et falco). Les TracingPolicy, elles, arrivent par l'Application
+# « politiques » (Kustomize, dossier tetragon/ de plateforme/politiques) : le moteur et les règles
+# évoluent séparément.
+# Espace tetragon créé par plateforme/k8s (espaces/tetragon.yaml, Pod Security « privileged » : agent
+# eBPF, réseau de l'hôte) ; hostPath limités par la VAP medisphere-interdire-hostpath (E17).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tetragon
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "SEC-2720"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tetragon
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: tetragon
+      targetRevision: 1.7.1
+      helm:
+        releaseName: tetragon
+        valueFiles:
+          - $values/valeurs/tetragon/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

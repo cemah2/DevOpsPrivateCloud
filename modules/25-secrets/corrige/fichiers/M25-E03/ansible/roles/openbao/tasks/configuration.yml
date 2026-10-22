@@ -1,0 +1,70 @@
+---
+# Dossiers et configuration. Le paquet pose un openbao.hcl d'exemple (stockage « file » dans
+# /opt/openbao/data, certificat auto-signé généré par le postinst dans /opt/openbao/tls) : on le
+# remplace entièrement ; /opt/openbao n'est pas utilisé (le postinst le recrée à chaque mise à jour).
+
+- name: Données Raft (seul l'utilisateur du service y accède)
+  ansible.builtin.file:
+    path: "{{ openbao_dossier_donnees }}"
+    state: directory
+    owner: openbao
+    group: openbao
+    mode: "0700"
+
+- name: Journaux d'audit (M25-E21)
+  ansible.builtin.file:
+    path: "{{ openbao_dossier_journaux }}"
+    state: directory
+    owner: openbao
+    group: openbao
+    mode: "0750"
+
+- name: Dossier du certificat (root, lisible par le groupe du service)
+  ansible.builtin.file:
+    path: "{{ openbao_tls_certificat | dirname }}"
+    state: directory
+    owner: root
+    group: openbao
+    mode: "0750"
+
+- name: Le certificat TLS est en place (rôle certificats_acme, id openbao)
+  ansible.builtin.stat:
+    path: "{{ openbao_tls_cle }}"
+  register: _openbao_cle
+
+- name: Pas de configuration sans certificat
+  ansible.builtin.assert:
+    that: _openbao_cle.stat.exists
+    fail_msg: >-
+      {{ openbao_tls_cle }} absent : applique d'abord certificats_acme (playbooks/coffre.yml le fait
+      entre l'installation du paquet et la configuration).
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Configuration openbao.hcl (root:openbao 0640)
+  ansible.builtin.template:
+    src: openbao.hcl.j2
+    dest: "{{ openbao_dossier_config }}/openbao.hcl"
+    owner: root
+    group: openbao
+    mode: "0640"
+    # bao operator validate-config : 1 = erreur, 2 = avertissement (clé inconnue…) : tout est refusé.
+    validate: /usr/bin/bao operator validate-config -config=%s
+  notify: configuration openbao modifiee
+
+- name: Dossier de surcharge de l'unité
+  ansible.builtin.file:
+    path: /etc/systemd/system/openbao.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Surcharge systemd de MédiSphère (l'unité du paquet reste intacte)
+  ansible.builtin.template:
+    src: medisphere.conf.j2
+    dest: /etc/systemd/system/openbao.service.d/medisphere.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: configuration openbao modifiee

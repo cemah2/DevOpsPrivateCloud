@@ -1,0 +1,112 @@
+# plateforme/k8s — espaces/mediagenda-recette/50-mediagenda-db.yaml (M16-E18, E19 ; M25-E14, DEV-2614)
+# M25-E14 ajoute deux blocs au Cluster du M16 (le reste est INCHANGÉ, garde TON fichier) :
+#   spec.managed.roles      rôle « openbao » (identifiants dynamiques) et rôle de groupe « mediagenda_api »
+#   spec.managed.services   Service LoadBalancer 10.10.41.64 vers le primaire, pour OpenBao (hors cluster)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  namespace: mediagenda-recette
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  description: "Base de recette de MédiAgenda (DEV-1718)"
+  instances: 3
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+      encoding: UTF8
+
+  storage:
+    storageClass: ceph-rbd
+    size: 5Gi
+
+  postgresql:
+    parameters:
+      shared_buffers: 128MB
+      max_connections: "100"
+      timezone: Europe/Paris
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  enableSuperuserAccess: false
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3
+
+  # --- M25-E14 ---------------------------------------------------------------------------------
+  managed:
+    roles:
+      # Rôle de groupe SANS connexion : porte les droits de l'API (posés par sql/preparer-openbao.sql).
+      # Les comptes dynamiques « mediagenda-api-recette » en deviennent membres.
+      - name: mediagenda_api
+        ensure: present
+        comment: "Droits de l'API MédiAgenda (comptes dynamiques d'OpenBao) — M25-E14"
+        login: false
+        inherit: true
+      # Compte d'OpenBao : se connecte, crée des rôles. JAMAIS superutilisateur.
+      #   inherit: false  il n'hérite PAS des droits des rôles dont il est membre (il ne lit pas les
+      #                   données) ; l'option ADMIN (donner l'appartenance) est posée par le SQL de
+      #                   préparation : CloudNativePG ne sait pas la déclarer.
+      #   inRoles         OBLIGATOIRE : CloudNativePG révoque les appartenances qui n'y figurent pas,
+      #                   ce qui retirerait l'option ADMIN posée par le SQL.
+      #   passwordSecret  mot de passe INITIAL (généré dans le cluster, 45-openbao-pg-initial.yaml),
+      #                   aussitôt remplacé par OpenBao (rotate-root). Ce bloc est RETIRÉ ensuite (MR
+      #                   suivante) : CloudNativePG réappliquerait sinon l'ancien mot de passe au
+      #                   prochain changement du Secret.
+      - name: openbao
+        ensure: present
+        comment: "OpenBao, moteur db-mediagenda (identifiants dynamiques) — M25-E14"
+        login: true
+        createrole: true
+        superuser: false
+        createdb: false
+        inherit: false
+        connectionLimit: 10
+        inRoles:
+          - mediagenda
+          - mediagenda_api
+        passwordSecret:
+          name: openbao-pg-initial
+    services:
+      additional:
+        # Primaire (rw) exposé hors du cluster pour OpenBao seulement : adresse réservée, filtrage
+        # par 41-reseau-openbao.yaml. externalTrafficPolicy: Local garde l'adresse source (le filtre
+        # voit 10.10.20.21-23, pas l'adresse d'un nœud).
+        - selectorType: rw
+          serviceTemplate:
+            metadata:
+              name: mediagenda-db-openbao
+              annotations:
+                lbipam.cilium.io/ips: 10.10.41.64
+            spec:
+              type: LoadBalancer
+              externalTrafficPolicy: Local

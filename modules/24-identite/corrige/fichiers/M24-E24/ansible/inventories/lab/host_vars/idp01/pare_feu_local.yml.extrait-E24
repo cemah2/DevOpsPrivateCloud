@@ -1,0 +1,7 @@
+# host_vars/idp01/pare_feu_local.yml — EXTRAIT à AJOUTER à pare_feu_local_regles pendant l'essai
+# (M24-E24), à RETIRER à la fin (même MR que le retour à keycloak_grappe: false).
+# idp01 et idp02 sont dans le même VLAN : la bordure n'est pas traversée, seul le filtrage local compte.
+  - {source: [10.10.20.42], proto: tcp, ports: [5432],
+     motif: "idp02 → base de Keycloak (essai de grappe, hostssl)", ref: M24-E24}
+  - {source: [10.10.20.42], proto: tcp, ports: [7800, 57800],
+     motif: "idp02 → transport Infinispan (7800) et détection de pannes FD_SOCK2 (57800)", ref: M24-E24}

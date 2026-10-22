@@ -1,0 +1,38 @@
+# Pods d'instance CNPG de la prod : le conteneur d'initialisation de l'opérateur est par étiquette.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: instance-cnpg-postgres-par-condense
+  namespace: mediagenda-prod
+  labels: {cnpg.io/cluster: mediagenda-db, cnpg.io/podRole: instance}
+spec:
+  initContainers:
+    - name: bootstrap-controller
+      image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/cloudnative-pg:1.30.1
+  containers:
+    - name: postgres
+      image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+---
+# Même pod, mais PostgreSQL par étiquette : l'exception ne le couvre pas.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: instance-cnpg-postgres-par-etiquette
+  namespace: mediagenda-prod
+  labels: {cnpg.io/cluster: mediagenda-db, cnpg.io/podRole: instance}
+spec:
+  initContainers:
+    - name: bootstrap-controller
+      image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/cloudnative-pg:1.30.1
+  containers:
+    - name: postgres
+      image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+---
+# Pod de l'API qui utiliserait l'image de l'opérateur : hors du périmètre de l'exception.
+apiVersion: v1
+kind: Pod
+metadata: {name: api-image-operateur, namespace: mediagenda-prod, labels: {app.kubernetes.io/name: mediagenda}}
+spec:
+  containers:
+    - name: api
+      image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/cloudnative-pg:1.30.1

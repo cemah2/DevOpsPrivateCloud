@@ -1,0 +1,11 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (rôle sauvegarde_identite).') }}
+[Unit]
+Description=Sauvegarde nocturne de l'identité ({{ sauvegarde_identite_mode }}, M24-E25)
+
+[Timer]
+OnCalendar=*-*-* {{ sauvegarde_identite_heure }}:00
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,50 @@
+# plateforme/gitops — valeurs/tetragon/values.yaml (M26-E20, SEC-2720)
+# Valeurs du chart cilium/tetragon 1.7.1 (recopié dans Harbor charts/ par plateforme/charts-miroir),
+# lues par l'Application Argo CD « tetragon » (référence « values », comme kyverno et falco).
+# Images par le cache « quay » de Harbor (M13), jamais tirées d'Internet par les nœuds.
+
+tetragon:
+  image:
+    repository: registry.par1.medisphere.internal/quay/cilium/tetragon
+    tag: v1.7.1
+  # Capacités du processus dans les événements (élévation de privilèges visible) ; les espaces de noms
+  # Linux restent masqués (volume).
+  enableProcessCred: true
+  enableProcessNs: false
+  # Ce qui part vers la sortie JSON (puis Alloy → Loki, locataire audit). Une ligne = un filtre ; les
+  # champs d'une ligne se cumulent (ET), les lignes s'additionnent (OU).
+  #   1. exécutions et fins de processus : espaces applicatifs et banc d'essai seulement (le reste du
+  #      cluster produirait des millions de lignes par jour sans intérêt de sécurité) ;
+  #   2. événements de NOS politiques (observer-exec, fichiers-sensibles, connexions-sortantes), partout
+  #      sauf ce qu'exclut la liste de refus.
+  exportAllowList: |-
+    {"event_set":["PROCESS_EXEC","PROCESS_EXIT"],"namespace_regex":["^(mediagenda|medidoc)-.+$","^wb-essais$"]}
+    {"event_set":["PROCESS_KPROBE"],"policy_names":["observer-exec","fichiers-sensibles","connexions-sortantes"]}
+  # Défaut du chart : sondes de santé, hôte (espace vide), cilium, kube-system. Les événements de
+  # l'HÔTE ne partent donc pas : sur les nœuds, auditd (E12) fait ce travail.
+  exportDenyList: |-
+    {"health_check":true}
+    {"namespace":["", "cilium", "kube-system"]}
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      extraLabels:
+        medisphere.internal/supervision: "oui"
+
+tetragonOperator:
+  image:
+    repository: registry.par1.medisphere.internal/quay/cilium/tetragon-operator
+    tag: v1.7.1
+  prometheus:
+    serviceMonitor:
+      enabled: true
+      extraLabels:
+        medisphere.internal/supervision: "oui"
+
+export:
+  mode: stdout
+  stdout:
+    image:
+      repository: registry.par1.medisphere.internal/quay/cilium/hubble-export-stdout
+      tag: v1.1.1

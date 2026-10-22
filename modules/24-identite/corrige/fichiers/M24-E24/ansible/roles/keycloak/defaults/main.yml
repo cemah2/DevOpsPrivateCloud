@@ -1,0 +1,74 @@
+---
+# Rôle keycloak — fournisseur d'identité de MédiSphère (M24-E04, PLAT-2504 ; grappe et base
+# distante : M24-E24, PLAT-2524). PLAN §4.12.
+# Distribution « zip » officielle (archive tar.gz de Maven Central) + OpenJDK 25 de Debian 13 +
+# PostgreSQL 17 local ; démarrage optimisé (kc.sh build, puis start --optimized) ; HTTPS seul
+# (8443), interface de gestion en HTTPS (9000 : santé, métriques) ; publié par lb01/lb02 sous
+# https://sso.par1.medisphere.internal (option hostname v2).
+# Ce rôle ne crée AUCUN administrateur : l'amorçage (compte temporaire) se fait une fois, à la main,
+# par « kc.sh bootstrap-admin user » (M24-E04), puis les comptes nominatifs et de bris de glace.
+
+keycloak_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle keycloak).') | replace('\n', ' ') }}
+
+# --- Version (changer de version = changer ces DEUX variables, puis RB-245 au M24-E33) ---------
+keycloak_version: "26.7.5"
+keycloak_sha256: "87d680d13cf4600d232ca0433a2553c57ebf03e56f7718fc0d03a1a8705497c8"
+keycloak_url: >-
+  https://repo1.maven.org/maven2/org/keycloak/keycloak-quarkus-dist/{{ keycloak_version }}/keycloak-quarkus-dist-{{ keycloak_version }}.tar.gz
+keycloak_dossier_parent: /opt
+keycloak_dossier_archives: /opt/keycloak-archives
+keycloak_paquet_java: openjdk-25-jre-headless
+
+# --- Compte du service ---------------------------------------------------------------------------
+keycloak_utilisateur: keycloak
+keycloak_groupe: keycloak
+
+# --- Nom public et mandataires -------------------------------------------------------------------
+keycloak_hostname: https://sso.par1.medisphere.internal
+keycloak_mandataires: [10.10.70.10, 10.10.70.11]
+
+# --- Ports et TLS ------------------------------------------------------------------------------------
+keycloak_port_https: 8443
+keycloak_port_gestion: 9000
+keycloak_tls_certificat: /etc/keycloak/tls/keycloak.crt
+keycloak_tls_cle: /etc/keycloak/tls/keycloak.key
+keycloak_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# --- Base de données ---------------------------------------------------------------------------------
+keycloak_bdd_nom: keycloak
+keycloak_bdd_utilisateur: keycloak
+keycloak_bdd_mot_de_passe: "{{ vault_keycloak_bdd_mot_de_passe }}"
+# Hôte de la base. 127.0.0.1 = PostgreSQL LOCAL, installé et géré par ce rôle (idp01). Un autre
+# nom = base DISTANTE (idp02 pendant l'essai de grappe, M24-E24) : le rôle n'installe alors pas
+# PostgreSQL et demande TLS au pilote JDBC.
+keycloak_bdd_hote: 127.0.0.1
+keycloak_bdd_port: 5432
+# Base distante : propriétés de l'URL JDBC. « require » chiffre sans vérifier le certificat
+# (PostgreSQL de Debian présente un certificat auto-signé « snakeoil ») : acceptable pour un essai
+# entre deux VMs du même VLAN, PAS pour une production (voir le corrigé d'E24).
+keycloak_bdd_url_proprietes: "?sslmode=require"
+# Sur le nœud qui PORTE la base (idp01) : adresses autorisées à s'y connecter à distance, en TLS
+# (hostssl, scram-sha-256), et adresse d'écoute supplémentaire. Liste vide = boucle locale seule.
+keycloak_bdd_clients_distants: []
+keycloak_bdd_ecoute: "{{ ansible_facts['default_ipv4']['address'] }}"
+keycloak_pg_version: "17"
+keycloak_pg_conf: "/etc/postgresql/{{ keycloak_pg_version }}/main"
+
+# --- Mémoire (VM de 3 Go avec PostgreSQL) ---------------------------------------------------------
+keycloak_tas: "-Xms512m -Xmx1024m"
+
+# --- Grappe (M24-E24, essai à deux nœuds) ---------------------------------------------------------
+# false : cache local (un seul nœud). true : cache Infinispan distribué, découverte par la base
+# (pile jdbc-ping : table jgroups_ping), transport TCP 7800 + détection de pannes 57800, chiffré
+# (mTLS par défaut). Les ports s'ouvrent dans pare_feu_local (host_vars), pas ici.
+keycloak_grappe: false
+# Adresse de liaison du transport : écrite plutôt que devinée par Keycloak.
+keycloak_grappe_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+
+# --- Options supplémentaires de keycloak.conf (clé: valeur), pour les paliers suivants ------------
+# M24-E26 : métriques d'événements, niveau des événements dans le journal ; M24-E27 : fonctions
+# désactivées. Une option de construction ajoutée ici provoque une reconstruction (témoin).
+keycloak_options: {}
+
+keycloak_verifier: true

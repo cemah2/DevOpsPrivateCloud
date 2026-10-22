@@ -1,0 +1,47 @@
+# plateforme/politiques — kyverno/validation/registres-autorises.yaml (M26-E07, PLAT-2707)
+# Toute image d'un pod des espaces d'équipes vient de Harbor (registry.par1.medisphere.internal/ :
+# projets MédiSphère et caches dockerhub, quay, ghcr, k8s). Même règle que la VAP « medisphere-images »
+# du M14-E18 (en Deny), en double volontaire : Kyverno ajoute les rapports sur l'EXISTANT (analyse en
+# arrière-plan) et servira de base aux règles de signature (E15).
+# Mode : [Audit, Warn] (rapport + avertissement au client), jamais Deny avant décision écrite.
+# failurePolicy Ignore : une politique d'audit ne doit jamais bloquer l'API si Kyverno est indisponible.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: registres-autorises
+  annotations:
+    policies.kyverno.io/title: Registres autorisés
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Les images des pods des espaces d'équipes viennent exclusivement de Harbor (registry.par1.medisphere.internal).
+    medisphere.internal/ticket: "PLAT-2707"
+spec:
+  validationActions: [Audit, Warn]
+  failurePolicy: Ignore
+  matchConstraints:
+    # Espaces d'équipes : ceux qui portent l'étiquette medisphere.internal/equipe (comme la VAP du M14).
+    namespaceSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists
+    # On vise les pods ; l'« autogen » de Kyverno produit les règles équivalentes pour les
+    # Deployment, StatefulSet, DaemonSet, Job, CronJob… (erreur visible dès l'apply du contrôleur).
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  variables:
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image)
+        + object.spec.?initContainers.orValue([]).map(c, c.image)
+        + object.spec.?ephemeralContainers.orValue([]).map(c, c.image)
+    - name: horsRegistre
+      expression: >-
+        variables.images.filter(i, !i.startsWith('registry.par1.medisphere.internal/'))
+  validations:
+    - expression: size(variables.horsRegistre) == 0
+      messageExpression: >-
+        'image(s) hors du registre MédiSphère : ' + variables.horsRegistre.join(', ')
+        + " (les images publiques passent par les caches de Harbor : registry.par1.medisphere.internal/<cache>/…)"

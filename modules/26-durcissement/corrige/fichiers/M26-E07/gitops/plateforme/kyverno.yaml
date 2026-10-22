@@ -1,0 +1,47 @@
+# plateforme/gitops — plateforme/kyverno.yaml (M26-E07, PLAT-2707)
+# Moteur de politiques Kyverno 1.19 (chart 3.9.2) dans l'espace kyverno. Deux sources (M20-E13) :
+# le chart recopié et signé dans Harbor, et les valeurs versionnées ici (référence « values »).
+# Les politiques elles-mêmes vivent dans plateforme/politiques (Application « politiques »).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno
+  namespace: argocd
+  # PAS de finaliseur de suppression en cascade : supprimer cette Application par erreur ne doit pas
+  # supprimer les CRD de Kyverno, donc toutes les politiques et tous les rapports du cluster.
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2707"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: kyverno
+      # Version EXACTE, celle de charts.yaml de plateforme/charts-miroir (Kyverno 1.19.2).
+      targetRevision: 3.9.2
+      helm:
+        releaseName: kyverno
+        valueFiles:
+          - $values/valeurs/kyverno/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Les CRD de Kyverno dépassent la taille de l'annotation last-applied-configuration.
+      - ServerSideApply=true
+      # L'espace est décrit dans plateforme/k8s (espaces/kyverno.yaml).
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

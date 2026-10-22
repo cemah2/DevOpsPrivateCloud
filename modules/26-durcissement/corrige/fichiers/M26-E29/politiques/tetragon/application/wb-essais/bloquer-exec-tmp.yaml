@@ -1,0 +1,34 @@
+# plateforme/politiques — tetragon/application/wb-essais/bloquer-exec-tmp.yaml (M26-E29, SEC-2729)
+# Interdit, dans l'espace wb-essais SEULEMENT, l'exécution d'un fichier situé sous /tmp ou /dev/shm
+# (binaire déposé par un attaquant, E19 le détecte avec Falco ; ici Tetragon l'empêche).
+# Crochet : security_bprm_check(struct linux_binprm *bprm), appelé pendant execve() avec le NOUVEAU
+# binaire (bprm->file) ; matchBinaries regarderait le processus APPELANT (le shell), pas ce qu'il lance.
+# Action : Override → execve() échoue avec -EPERM (-1), le shell survit et affiche « Operation not
+# permitted ». Exige CONFIG_BPF_KPROBE_OVERRIDE (noyau ≥ 5.7 pour un crochet security_*) : vérifié en
+# étape 2 ; sinon remplacer par « action: Sigkill » (le processus qui tente l'exec est tué).
+# « resolve: file » lit le champ file de struct linux_binprm (documentation « Hooks », section resolve).
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicyNamespaced
+metadata:
+  name: bloquer-exec-tmp
+  namespace: wb-essais
+  labels:
+    medisphere.internal/composant: tetragon-application
+spec:
+  kprobes:
+    - call: security_bprm_check
+      syscall: false
+      args:
+        - index: 0
+          type: file
+          resolve: file
+      selectors:
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /tmp/
+                - /dev/shm/
+          matchActions:
+            - action: Override
+              argError: -1

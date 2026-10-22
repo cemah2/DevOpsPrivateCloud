@@ -1,0 +1,22 @@
+# plateforme/observabilite — regles/kubelets.yaml (M26-E41)
+# Alertes sur l'approbation des certificats de service des kubelets.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubelets-certificats
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision-regles: "oui"
+spec:
+  groups:
+    - name: kubelets-certificats
+      rules:
+        - alert: CsrKubeletEnAttente
+          expr: >-
+            sum(apiserver_pending_csr_requests{signer_name="kubernetes.io/kubelet-serving"}) > 0
+          for: 15m
+          labels: {gravite: critique, equipe: plateforme}
+          annotations:
+            resume: "Une CSR de service de kubelet est en attente d'approbation"
+            description: "kubectl logs/exec peut échouer en x509 ; vérifier kubelet-csr-approver (regex)."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-263-durcissement-par-vagues.md"

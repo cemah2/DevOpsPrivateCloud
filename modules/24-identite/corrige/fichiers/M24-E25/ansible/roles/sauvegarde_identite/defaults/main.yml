@@ -1,0 +1,30 @@
+---
+# Rôle sauvegarde_identite (M24-E25, PLAT-2525) — sauvegarde applicative de l'identité, chiffrée
+# (age) et envoyée vers s3-01 (rclone), sur le modèle d'etcd_instantane (M14-E24).
+#   idp01 : mode keycloak (pg_dump -Fc de la base keycloak)
+#   ipa01 : mode freeipa  (ipa-backup --data --online)
+# Valeurs : group_vars/sauvegarde_identite/ et host_vars/<hôte>/sauvegarde_identite.yml ;
+# secrets S3 : group_vars/all/vault-critique-s3.yml (Vault « critique », lu aussi par s3-01, M14-E24).
+
+sauvegarde_identite_mode: ""            # keycloak | freeipa (host_vars)
+sauvegarde_identite_heure: "01:20"      # décalée par hôte (host_vars), avant identite-nuit (01:45)
+sauvegarde_identite_bdd: keycloak
+sauvegarde_identite_garder_local: 3     # mode freeipa : dossiers ipa-data-* gardés sur place
+
+# --- Destination -----------------------------------------------------------------------------------
+sauvegarde_identite_s3_point: https://s3-01.par1.medisphere.internal:8333
+sauvegarde_identite_s3_compartiment: identite-sauvegardes
+# Identité S3 « identite-sauvegardes » : lecture, écriture, listage du seul compartiment, PAS de
+# suppression (politique de compartiment) : un hôte compromis ne peut pas effacer ses sauvegardes.
+sauvegarde_identite_s3_cle_acces: "{{ vault_s3_identite_sauvegardes_cle_acces }}"
+sauvegarde_identite_s3_cle_secrete: "{{ vault_s3_identite_sauvegardes_cle_secrete }}"
+
+# --- Chiffrement -------------------------------------------------------------------------------------
+# Clé PUBLIQUE age (« age1… »), non secrète. La clé privée : Vault « critique » de plateforme/ansible
+# (secrets/identite-sauvegardes.yml) et copie papier ; jamais sur une VM.
+sauvegarde_identite_age_destinataire: ""
+
+# Paquets selon la famille : Debian 13 (idp01), Rocky 10 (ipa01 : age et rclone viennent d'EPEL 10).
+sauvegarde_identite_paquets:
+  Debian: [age, rclone, jq]
+  RedHat: [age, rclone, jq]

@@ -1,0 +1,17 @@
+# Étiquettes des espaces utilisés par les tests (l'API n'est pas interrogée par « kyverno test »).
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+metadata:
+  name: valeurs
+namespaceSelector:
+  - name: mediagenda-recette
+    labels:
+      medisphere.internal/equipe: mediagenda
+      medisphere.internal/environnement: recette
+  - name: mediagenda-prod
+    labels:
+      medisphere.internal/equipe: mediagenda
+      medisphere.internal/environnement: prod
+  - name: wb-essais
+    labels:
+      medisphere.internal/proprietaire: plateforme

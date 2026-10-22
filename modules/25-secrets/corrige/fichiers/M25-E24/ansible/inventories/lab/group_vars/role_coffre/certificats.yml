@@ -1,0 +1,23 @@
+---
+# group_vars/role_coffre/certificats.yml — certificat ACME d'OpenBao sur CHAQUE nœud (M25-E24).
+# REMPLACE host_vars/vault01/certificats.yml (M25-E03) : supprime ce fichier dans la même MR.
+#
+# Deux noms : le nœud (api_addr, cluster_addr, retry_join, contrôles) et le SERVICE (clients).
+# Défi HTTP-01 : ca01 vérifie CHAQUE nom séparément. Le nom du nœud mène au nœud lui-même ; le nom
+# du service mène à la VIP, donc au nœud ACTIF, qui n'est pas forcément celui qui demande. Même
+# solution qu'au M07-E12 (lb01/lb02) : le serveur de défi de step écoute sur 8402 (« ecoute_http »)
+# chez le seul demandeur ; HAProxy, sur le port 80 de chaque nœud, relaie /.well-known/acme-challenge/
+# vers les TROIS nœuds en 8402 et réessaie ailleurs quand un nœud refuse la connexion
+# (group_vars/role_coffre/haproxy.yml). Le RENOUVELLEMENT (cert-renewer@openbao, step ca renew) se
+# fait par TLS mutuel avec le certificat en place : aucun défi, aucun port 80.
+# Rechargement : SIGHUP (systemctl reload), qui relit le certificat sans sceller le nœud.
+certificats_acme_certificats:
+  - id: openbao
+    noms:
+      - "{{ inventory_hostname }}.par1.medisphere.internal"
+      - openbao.par1.medisphere.internal
+    certificat: /etc/openbao/tls/cert.pem
+    cle: /etc/openbao/tls/key.pem
+    groupe: openbao
+    ecoute_http: ":8402"
+    recharger: /bin/sh -c "! systemctl is-active --quiet openbao.service || systemctl reload openbao.service"

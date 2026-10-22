@@ -1,0 +1,38 @@
+# plateforme/gitops — plateforme/falco.yaml (M26-E08, SEC-2708)
+# Falco 0.45.1 (chart 9.2.1) et falcosidekick 2.31.1 dans l'espace falco. Deux sources (M20-E13) :
+# le chart recopié et signé dans Harbor, et les valeurs versionnées ici (référence « values »).
+# Les règles propres à MédiSphère (plateforme/politiques, falco/regles-medisphere.yaml) arrivent en E19.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "SEC-2708"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: falco
+      # Version EXACTE, celle de charts.yaml de plateforme/charts-miroir (Falco 0.45.1).
+      targetRevision: 9.2.1
+      helm:
+        releaseName: falco
+        valueFiles:
+          - $values/valeurs/falco/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      # L'espace est décrit dans plateforme/k8s (espaces/falco.yaml), avec son exception Pod Security.
+      - CreateNamespace=false

@@ -1,0 +1,10 @@
+# plateforme/k8s — composants/gitlab-runner-protege/values.yaml : À RETIRER (M25-E20, SEC-2620).
+# La clé de signature n'est plus un fichier : supprime ce bloc de la configuration du runner (et les
+# lignes de commentaire d'en-tête qui parlent de « cosign-medisphere »). La racine MédiSphère
+# (volumes.config_map « medisphere-racine ») RESTE : Cosign et bao en ont besoin pour joindre
+# Harbor et OpenBao.
+        # La clé de signature n'existe QUE dans ci-jobs-protege et n'est montée QUE par ce runner.
+        [[runners.kubernetes.volumes.secret]]
+          name = "cosign-medisphere"
+          mount_path = "/run/secrets/medisphere/cosign"
+          read_only = true

@@ -1,0 +1,24 @@
+{# roles/alloy/templates/config.alloy.j2 — À AJOUTER à la fin du fichier (M25-E21, SEC-2621). #}
+{% if alloy_fichiers_audit | length > 0 %}
+
+// Journaux d'AUDIT (M25-E21) : fichiers JSON lus tels quels, sans masquage (les valeurs de secrets y sont
+// en HMAC ; identités et chemins en clair), vers le locataire {{ alloy_locataire_audit }}. Étiquettes : job, host, site, service
+// (liste fermée : jamais le chemin de la requête ni l'identité, qui restent dans la ligne).
+// tail_from_end : au premier démarrage, on ne renvoie pas tout l'historique local.
+loki.source.file "audit" {
+	targets = [
+{% for f in alloy_fichiers_audit %}
+		{"__path__" = "{{ f.chemin }}", "job" = "audit-fichier", "service" = "{{ f.service }}", "host" = "{{ inventory_hostname }}", "site" = "{{ alloy_site }}"},
+{% endfor %}
+	]
+	tail_from_end = true
+	forward_to    = [loki.write.audit.receiver]
+}
+
+loki.write "audit" {
+	endpoint {
+		url       = "{{ alloy_loki_url }}"
+		tenant_id = "{{ alloy_locataire_audit }}"
+	}
+}
+{% endif %}

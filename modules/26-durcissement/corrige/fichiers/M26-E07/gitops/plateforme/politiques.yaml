@@ -1,0 +1,39 @@
+# plateforme/gitops — plateforme/politiques.yaml (M26-E07, PLAT-2707)
+# Politiques de la plateforme (Kyverno ; règles Falco et TracingPolicy aux exercices suivants), rendues
+# par Kustomize depuis la racine de plateforme/politiques (kustomization.yaml : seules les
+# politiques y figurent, jamais les ressources de test de kyverno/tests/).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: politiques
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "PLAT-2707"
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/politiques.git
+    targetRevision: main
+    path: .
+  destination:
+    server: https://kubernetes.default.svc
+    # Les ValidatingPolicy sont sans espace ; les PolicyException (E18) iront dans kyverno.
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+      # Tant que l'Application kyverno n'a pas installé les CRD, la simulation échouerait sur un type
+      # inconnu : on la saute pour ces types, et le retry attend les CRD.
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

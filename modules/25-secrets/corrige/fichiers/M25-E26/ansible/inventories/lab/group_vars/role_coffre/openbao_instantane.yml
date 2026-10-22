@@ -1,0 +1,15 @@
+---
+# group_vars/role_coffre/openbao_instantane.yml — instantanés de la grappe (M25-E26, SEC-2626).
+# Secrets (Vault « critique », group_vars/role_coffre/vault-critique-instantanes.yml) :
+#   vault_openbao_instantanes_role_id, vault_openbao_instantanes_secret_id (jusqu'à M25-E28),
+#   vault_s3_openbao_instantanes_cle_acces, vault_s3_openbao_instantanes_cle_secrete.
+# Ces secrets restent dans Ansible Vault et NON dans OpenBao : la sauvegarde du coffre ne doit pas
+# dépendre du coffre (amorçage, PLAN §4.12).
+openbao_instantane_minute: "07"
+openbao_instantane_role_id: "{{ vault_openbao_instantanes_role_id }}"
+openbao_instantane_secret_id: "{{ vault_openbao_instantanes_secret_id | default('') }}"
+openbao_instantane_s3_cle_acces: "{{ vault_s3_openbao_instantanes_cle_acces }}"
+openbao_instantane_s3_cle_secrete: "{{ vault_s3_openbao_instantanes_cle_secrete }}"
+# Clé publique de restauration de l'équipe (age-keygen sur adm01, privée chiffrée dans
+# secrets/openbao-restauration.age du Vault critique et imprimée pour le coffre-fort).
+openbao_instantane_age_destinataire: "<CLÉ-PUBLIQUE-AGE-RESTAURATION>"

@@ -1,0 +1,17 @@
+# {{ durcissement_entete }}
+# /etc/sudoers.d/00-durcissement (rôle durcissement, M26-E11)
+# Réglages par défaut seulement : aucune règle d'attribution ici.
+{% if 'sudo_add_use_pty' not in _durcissement_exclues %}
+# Toute commande dans un pseudo-terminal : un programme lancé par sudo ne peut pas injecter de
+# caractères dans le terminal de l'appelant après la fin de la commande.
+Defaults use_pty
+{% endif %}
+{% if 'sudo_custom_logfile' not in _durcissement_exclues %}
+# Journal dédié, en plus de syslog/journald (preuve d'audit, envoyée aussi par auditd en E12).
+Defaults logfile="{{ durcissement_sudo_journal }}"
+{% endif %}
+{% if 'sudo_require_reauthentication' not in _durcissement_exclues %}
+# Mot de passe redemandé après {{ durcissement_sudo_delai }} min (comptes qui en ont un : personnes de l'annuaire).
+Defaults timestamp_timeout={{ durcissement_sudo_delai }}
+{% endif %}
+Defaults env_reset

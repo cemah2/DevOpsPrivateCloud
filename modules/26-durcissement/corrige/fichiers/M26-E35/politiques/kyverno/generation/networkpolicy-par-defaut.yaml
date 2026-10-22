@@ -1,0 +1,41 @@
+# plateforme/politiques — kyverno/generation/networkpolicy-par-defaut.yaml (M26-E16)
+# État SAIN : à la création d'un espace étiqueté medisphere.internal/equipe, pose un refus par défaut
+# qui LAISSE SORTIR le DNS et LAISSE ENTRER la collecte de supervision (sinon les pods ne passent plus
+# leurs sondes : c'est la panne M26-E35 variante 3). GeneratingPolicy CEL policies.kyverno.io/v1.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: networkpolicy-par-defaut
+  labels:
+    medisphere.internal/domaine: securite
+spec:
+  evaluation:
+    synchronize:
+      enabled: true
+    generateExisting:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE]
+        resources: [namespaces]
+    objectSelector:
+      matchExpressions:
+        - key: medisphere.internal/equipe
+          operator: Exists
+  variables:
+    - name: nsName
+      expression: object.metadata.name
+    - name: refusDefaut
+      expression: >-
+        [{"apiVersion": dyn("networking.k8s.io/v1"), "kind": dyn("NetworkPolicy"),
+          "metadata": dyn({"name": "refus-par-defaut"}),
+          "spec": dyn({"podSelector": dyn({}), "policyTypes": dyn(["Ingress", "Egress"]),
+            "egress": dyn([
+              {"to": dyn([{"namespaceSelector": dyn({"matchLabels": dyn({"kubernetes.io/metadata.name": "kube-system"})})}]),
+               "ports": dyn([{"protocol": dyn("UDP"), "port": dyn(53)}, {"protocol": dyn("TCP"), "port": dyn(53)}])}]),
+            "ingress": dyn([
+              {"from": dyn([{"namespaceSelector": dyn({"matchLabels": dyn({"kubernetes.io/metadata.name": "supervision"})})}])}])})}]
+  generate:
+    - expression: generator.Apply(variables.nsName, variables.refusDefaut)

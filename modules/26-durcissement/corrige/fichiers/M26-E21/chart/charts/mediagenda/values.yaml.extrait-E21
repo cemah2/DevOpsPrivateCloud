@@ -1,0 +1,11 @@
+# mediagenda/chart — charts/mediagenda/values.yaml (EXTRAIT M26-E21) ; chart mediagenda 0.6.0
+# (dépendance medisphere-commun 0.2.0).
+medisphere:
+  # UID/GID de l'image MédiAgenda (M12 : USER 10001:10001), posés explicitement par le gabarit commun.
+  uid: 10001
+
+# /tmp de l'API (emptyDir) : borné. Sans limite, un processus peut remplir le disque du nœud
+# (éviction de TOUS les pods du nœud quand il est plein). L'emptyDir n'est pas « noexec » :
+# c'est aussi pourquoi Falco (E19) et Tetragon (E20) surveillent les exécutions depuis /tmp.
+tmp:
+  sizeLimit: 64Mi

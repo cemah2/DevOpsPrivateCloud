@@ -1,0 +1,107 @@
+# plateforme/ci-templates — templates/securite/template.yml, version v2.9.0 (M25-E10, SEC-2610).
+# EXTRAIT : différences avec la v2.8.0 (M19-E29), elle-même dérivée des v2.7.0 (M19-E24) et v2.3.0.
+#   - nouvelle image par défaut outils-supply-chain:1.1.0 (client bao) ;
+#   - job caché .openbao-connexion : jeton d'identité GitLab → jeton OpenBao de 10 min (fichier de
+#     l'assistant de jetons ~/.vault-token du pod du job), révoqué en after_script ;
+#   - securite:signature et securite:verification lisent le robot Harbor dans le coffre
+#     (kv/plateforme/harbor/robot-ci) : plus de variables HARBOR_ROBOT_USER / HARBOR_ROBOT_TOKEN.
+# La clé Cosign reste le fichier monté par le runner protégé (M19-E24) jusqu'à E20.
+# Pour un projet consommateur : passer à @v2.9.0, puis supprimer HARBOR_ROBOT_* de ses variables.
+spec:
+  inputs:
+    # … entrées de la v2.8.0 inchangées, sauf le défaut de image_outils …
+    image_outils:
+      description: "Image outillée de la chaîne (Cosign 3, Trivy, Syft, Skopeo, jq, bao), étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.1.0@sha256:<EMPREINTE-1.1.0>
+      regex: ^registry\.par1\.medisphere\.internal/.+@sha256:.+$
+    role_openbao:
+      description: "Rôle JWT d'OpenBao (montage gitlab/) ; vide : ci-<groupe>-<projet> déduit de CI_PROJECT_PATH"
+      default: ""
+    chemin_robot_harbor:
+      description: "Secret KV v2 (moteur kv/) du robot Harbor de publication : clés utilisateur et jeton"
+      default: plateforme/harbor/robot-ci
+---
+# … .securite-v2-code, securite:semgrep, securite:gitleaks, .securite-v2-base, .securite-v2-toujours,
+#   .securite-v2-publiee, securite:trivy, securite:sbom de la v2.8.0 inchangés …
+
+# Connexion au coffre par le jeton d'identité du job. Réutilisable par les autres composants et par
+# les projets (extends: .openbao-connexion ou !reference [.openbao-connexion, before_script]).
+# Le jeton d'identité passe par l'entrée standard (jwt=-) : jamais dans les arguments d'un processus.
+# Le jeton OpenBao est écrit dans ~/.vault-token (HOME du pod du job, détruit avec lui) : la CLI le
+# lit d'elle-même, il n'est dans aucune variable, aucun journal, aucun artefact.
+.openbao-connexion:
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  variables:
+    BAO_ADDR: https://openbao.par1.medisphere.internal:8200
+    ROLE_OPENBAO: "$[[ inputs.role_openbao ]]"
+  before_script:
+    - |
+      role="${ROLE_OPENBAO:-ci-$(printf '%s' "$CI_PROJECT_PATH" | tr '/' '-')}"
+      umask 077
+      if ! printf '%s' "$OPENBAO_ID_TOKEN" | bao write -field=token auth/gitlab/login role="$role" jwt=- > "$HOME/.vault-token"; then
+        rm -f "$HOME/.vault-token"
+        echo "OpenBao refuse le rôle $role pour $CI_PROJECT_PATH@$CI_COMMIT_REF_NAME (référence protégée ? projet lié au rôle ?)"
+        exit 1
+      fi
+      echo "OpenBao : connecté au rôle $role ($(bao token lookup -format=json | jq -r '.data.policies | join(",")'))"
+  after_script:
+    - bao token revoke -self > /dev/null 2>&1 || true
+    - rm -f "$HOME/.vault-token"
+
+securite:signature:
+  extends: [.securite-v2-base, .securite-v2-publiee, .openbao-connexion]
+  tags: ["$[[ inputs.runner_protege ]]"]
+  stage: $[[ inputs.stage ]]
+  interruptible: false
+  needs:
+    - job: "$[[ inputs.job_construction ]]"
+      artifacts: true
+    - job: "$[[ inputs.job_publication ]]"
+      artifacts: true
+    - job: securite:sbom
+      artifacts: true
+  variables:
+    DOCKER_CONFIG: /tmp/auth-registre
+  script:
+    - echo "composant securite $[[ component.version ]] sur $CI_RUNNER_DESCRIPTION"
+    - case "${IMAGE_REF:-}" in *@sha256:*) ;; *) echo "IMAGE_REF doit désigner une empreinte (reçu « ${IMAGE_REF:-} »)"; exit 1 ;; esac
+    - test "${IMAGE_REF#*@}" = "$IMAGE_EMPREINTE" || { echo "IMAGE_REF ne désigne pas l'image construite"; exit 1; }
+    - |
+      if [ ! -r "$[[ inputs.cle_cosign ]]" ]; then
+        echo "clé de signature absente de $[[ inputs.cle_cosign ]] : ce job doit tourner sur le runner protégé"
+        exit 1
+      fi
+    - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+    # v2.9.0 : le robot Harbor vient du coffre. Valeurs dans des variables du SHELL du job (jamais
+    # affichées, jamais exportées vers un artefact) ; le jeton passe à cosign par l'entrée standard.
+    - HARBOR_ROBOT_USER="$(bao kv get -mount=kv -field=utilisateur "$[[ inputs.chemin_robot_harbor ]]")"
+    - HARBOR_ROBOT_TOKEN="$(bao kv get -mount=kv -field=jeton "$[[ inputs.chemin_robot_harbor ]]")"
+    - printf '%s' "$HARBOR_ROBOT_TOKEN" | cosign login "${IMAGE_REF%%/*}" -u "$HARBOR_ROBOT_USER" --password-stdin > /dev/null
+    - COSIGN_PASSWORD="$(cat "$[[ inputs.mot_de_passe_cosign ]]")"; export COSIGN_PASSWORD
+    # … boucle d'attente de l'analyse de Harbor de la v2.3.0, inchangée (elle lit HARBOR_ROBOT_USER
+    #   et HARBOR_ROBOT_TOKEN, désormais remplis ci-dessus) …
+    # … signatures et attestations de la v2.8.0, inchangées …
+  after_script:
+    - !reference [.openbao-connexion, after_script]
+    - rm -rf /tmp/auth-registre
+
+securite:verification:
+  extends: [.securite-v2-base, .securite-v2-publiee, .openbao-connexion]
+  stage: $[[ inputs.stage ]]
+  needs:
+    - job: "$[[ inputs.job_publication ]]"
+      artifacts: true
+    - job: securite:signature
+      artifacts: false
+  variables:
+    DOCKER_CONFIG: /tmp/auth-registre
+  script:
+    - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+    - HARBOR_ROBOT_USER="$(bao kv get -mount=kv -field=utilisateur "$[[ inputs.chemin_robot_harbor ]]")"
+    - bao kv get -mount=kv -field=jeton "$[[ inputs.chemin_robot_harbor ]]" | cosign login "${IMAGE_REF%%/*}" -u "$HARBOR_ROBOT_USER" --password-stdin > /dev/null
+    # … vérifications de la v2.8.0 inchangées …
+  after_script:
+    - !reference [.openbao-connexion, after_script]
+    - rm -rf /tmp/auth-registre

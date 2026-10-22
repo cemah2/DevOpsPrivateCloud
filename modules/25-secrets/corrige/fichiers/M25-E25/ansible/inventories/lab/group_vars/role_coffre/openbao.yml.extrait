@@ -1,0 +1,14 @@
+# group_vars/role_coffre/openbao.yml — EXTRAIT : AJOUTS du M25-E25 (seal transit vers kms01).
+# Le jeton n'est PAS ici : il est dans le Vault « critique » (vault_openbao_kms_jeton, fichier
+# group_vars/role_coffre/vault-critique-kms.yml) et finit dans /etc/openbao/kms.env (root, 600),
+# que l'unité lit (surcharge medisphere.conf). Jamais dans openbao.hcl (lisible par le groupe
+# openbao, et recopié dans les sauvegardes de configuration).
+openbao_seal_transit: true
+openbao_seal_transit_adresse: https://kms01.par1.medisphere.internal:8200
+openbao_seal_transit_cle: autodescellement-par1
+openbao_seal_transit_montage: transit/
+openbao_seal_transit_nom_tls: kms01.par1.medisphere.internal
+openbao_seal_transit_jeton: "{{ vault_openbao_kms_jeton }}"
+
+# Migration (M25-E25, étape 4) : le rôle ÉCRIT la configuration ; le redémarrage d'un nœud se
+# décide nœud par nœud (openbao_redemarrer=true --limit <nœud>), dans l'ordre de la procédure.

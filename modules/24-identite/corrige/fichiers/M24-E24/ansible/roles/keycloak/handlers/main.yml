@@ -1,0 +1,18 @@
+---
+- name: Redémarrer keycloak
+  ansible.builtin.systemd_service:
+    name: keycloak.service
+    state: restarted
+    daemon_reload: true
+
+# listen_addresses ne se relit qu'au redémarrage de PostgreSQL (M24-E24).
+- name: Redémarrer postgresql
+  ansible.builtin.systemd_service:
+    name: postgresql.service
+    state: restarted
+
+# pg_hba.conf se relit par un rechargement (sans couper les connexions).
+- name: Recharger postgresql
+  ansible.builtin.systemd_service:
+    name: postgresql.service
+    state: reloaded

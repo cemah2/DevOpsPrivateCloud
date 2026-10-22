@@ -1,0 +1,13 @@
+# plateforme/gitops — valeurs/kyverno/values.yaml (EXTRAIT M26-E18) : à ajouter au fichier d'E07.
+# Clé vérifiée dans le values.yaml du chart 3.9.2 (helm show values) ; les ServiceMonitor sont déjà
+# actifs depuis E07.
+features:
+  # Les PolicyException sont DÉSACTIVÉES par défaut dans le chart : sans ceci, une exception est
+  # acceptée par l'API et IGNORÉE par Kyverno, sans erreur. Le drapeau vaut pour les deux familles
+  # (kyverno.io et policies.kyverno.io/v1). Il est passé aux trois contrôleurs (admission, fond,
+  # rapports) : --enablePolicyException=true --exceptionNamespace=kyverno-exceptions.
+  policyExceptions:
+    enabled: true
+    # Un seul espace lu : qui peut écrire dans kyverno-exceptions peut désactiver une politique.
+    # « * » (tous les espaces) donnerait ce pouvoir à toute équipe qui a « edit » sur son espace.
+    namespace: kyverno-exceptions

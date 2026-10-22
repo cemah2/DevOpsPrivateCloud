@@ -1,0 +1,12 @@
+# À AJOUTER à la liste outils_k8s_binaires de roles/outils_k8s/defaults/main.yml (M25-E19, PLAT-2619).
+# kubeseal : MÊME version que le contrôleur (0.40.0) ; archive et fichier de sommes de la publication.
+# Empreinte de kubeseal-0.40.0-linux-amd64.tar.gz relevée le 22/10/2026 :
+#   9314c35916646e9d59c8f06b1314574b4e79c4d76f079433607ed7b697bb5eb7
+# Retirée de la liste en fin d'exercice ; le rôle n'enlève pas ce qu'il ne gère plus : supprime alors
+# le lien et le dossier à la main sur adm01 (sudo rm /usr/local/bin/kubeseal ; sudo rm -r
+# /opt/outils_k8s/kubeseal-0.40.0) et dis-le dans la MR.
+  - nom: kubeseal
+    version: "0.40.0"
+    url: https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.40.0/kubeseal-0.40.0-linux-amd64.tar.gz
+    somme: https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.40.0/sealed-secrets_0.40.0_checksums.txt
+    fichiers: [kubeseal]

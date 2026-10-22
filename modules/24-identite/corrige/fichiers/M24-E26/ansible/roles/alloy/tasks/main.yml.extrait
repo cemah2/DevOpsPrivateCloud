@@ -1,0 +1,21 @@
+# roles/alloy/tasks/main.yml — EXTRAIT (M24-E26) : prise en charge de Rocky Linux 10 (ipa01).
+# Remplace les deux premières tâches (assertion Debian 13, paquet unzip par apt) par :
+
+- name: Système pris en charge (Debian 13 ; Rocky Linux 10 pour ipa01, M24-E26)
+  ansible.builtin.assert:
+    that: >-
+      (ansible_facts['distribution'] == 'Debian' and ansible_facts['distribution_major_version'] == '13')
+      or (ansible_facts['distribution'] == 'Rocky' and ansible_facts['distribution_major_version'] == '10')
+    fail_msg: "Le rôle alloy vise Debian 13 et Rocky Linux 10 (trouvé : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})."
+    quiet: true
+
+# (la vérification du journal persistant /var/log/journal reste identique)
+
+- name: Outils d'extraction de l'archive
+  ansible.builtin.package:
+    name: "{{ alloy_paquets_par_famille[ansible_facts['os_family']] }}"
+    state: present
+
+# Sur Rocky 10 (SELinux en mode enforcing) : un binaire lancé par systemd depuis /opt/alloy/<version>
+# (contexte usr_t) s'exécute dans le domaine unconfined_service_t, qui lit /var/log. Contrôle après
+# application : ps -eZ | grep alloy. Si ta politique confine /opt, voir le corrigé (semanage fcontext).

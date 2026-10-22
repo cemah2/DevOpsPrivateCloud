@@ -1,0 +1,84 @@
+# plateforme/observabilite — regles/politiques-admission.yaml (M26-E18, SEC-2718)
+# Règles d'enregistrement et alertes sur les politiques d'admission (Kyverno 1.19, politiques CEL).
+# Métriques (compteurs OpenTelemetry exportés au format Prometheus, suffixe _total) :
+#   kyverno_validating_policy_results_total        (ValidatingPolicy)
+#   kyverno_image_validating_policy_results_total  (ImageValidatingPolicy)
+# Étiquettes utiles : policy_name, policy_validation_mode (Deny|Audit), resource_namespace,
+# resource_kind, execution_cause (admission_request|background_scan), result (pass|fail|warn|error|skip).
+# ⚠️ execution_cause="background_scan" : un compteur qui avance à CHAQUE analyse de fond (une par heure
+#    par défaut) tant que la ressource reste non conforme. C'est un ÉTAT déguisé en compteur.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: politiques-admission
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: politiques-admission.enregistrement
+      rules:
+        # Refus à l'admission par politique et par espace (requêtes refusées par seconde).
+        - record: policy_name_resource_namespace:kyverno_refus:taux5m
+          expr: >-
+            sum by (policy_name, resource_namespace) (
+              rate({__name__=~"kyverno_(image_)?validating_policy_results_total",
+                    execution_cause="admission_request", policy_validation_mode="Deny", result="fail"}[5m]))
+        # Violations constatées par l'analyse de fond (ressources EN PLACE non conformes), sur 2 h.
+        - record: policy_name_resource_namespace:kyverno_violations_fond:augmentation2h
+          expr: >-
+            sum by (policy_name, resource_namespace) (
+              increase({__name__=~"kyverno_(image_)?validating_policy_results_total",
+                        execution_cause="background_scan", result="fail"}[2h]))
+    - name: politiques-admission.alertes
+      rules:
+        # Un contrôleur (ReplicaSet, Job, Argo CD) qui réessaie sans fin contre un refus : un
+        # déploiement est bloqué. Seuil : plus de 10 refus en 15 minutes pour une même politique.
+        - alert: PolitiqueRefusEnRafale
+          expr: >-
+            sum by (policy_name, resource_namespace) (
+              increase({__name__=~"kyverno_(image_)?validating_policy_results_total",
+                        execution_cause="admission_request", policy_validation_mode="Deny", result="fail"}[15m])) > 10
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "La politique {{ $labels.policy_name }} refuse des objets en boucle dans {{ $labels.resource_namespace }}"
+            description: >-
+              {{ $value | humanize }} refus en 15 min. Un déploiement est probablement bloqué : lire les
+              événements des ReplicaSet de l'espace (kubectl get events -n {{ $labels.resource_namespace }})
+              et l'état de synchronisation d'Argo CD. Tableau : politiques-admission.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-261-derogation.md
+        # Ressource non conforme EN PRODUCTION, vue par l'analyse de fond (créée avant le passage en
+        # Deny, ou par un chemin qui échappe à l'admission). Pas de réveil : heures ouvrées.
+        - alert: PolitiqueEnEchecEnProduction
+          expr: >-
+            policy_name_resource_namespace:kyverno_violations_fond:augmentation2h{resource_namespace=~".+-prod"} > 0
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Ressource(s) non conforme(s) à {{ $labels.policy_name }} dans {{ $labels.resource_namespace }}"
+            description: >-
+              L'analyse de fond trouve des objets en place qui violent {{ $labels.policy_name }}. Lire le
+              rapport : kubectl get policyreports -n {{ $labels.resource_namespace }} -o wide. Corriger, ou
+              ouvrir une dérogation (RB-261) si la correction est impossible à court terme.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-261-derogation.md
+        # Une politique qui ne s'évalue plus (expression CEL en erreur, contexte manquant) : avec
+        # failurePolicy Fail elle refuse tout, avec Ignore elle ne protège plus rien.
+        - alert: PolitiqueEnErreur
+          expr: >-
+            sum by (policy_name) (
+              rate({__name__=~"kyverno_(image_)?validating_policy_results_total", result="error"}[10m])) > 0
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "La politique {{ $labels.policy_name }} est en erreur d'évaluation"
+            description: >-
+              Erreurs d'évaluation depuis 10 min. Journaux du contrôleur d'admission :
+              kubectl -n kyverno logs deploy/kyverno-admission-controller | grep {{ $labels.policy_name }}.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-261-derogation.md

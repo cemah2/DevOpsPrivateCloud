@@ -1,0 +1,48 @@
+# {{ durcissement_entete }}
+# /etc/apparmor.d/usr.local.bin.mailpit (rôle durcissement, M26-E13) — Mailpit de mon01 (M19).
+# Nom de fichier par convention (chemin du lancement), mais le profil s'attache au binaire RÉEL :
+# /usr/local/bin/mailpit est un lien vers /opt/mailpit/<version>/mailpit, et AppArmor attache un
+# profil au chemin résolu. Un motif sur /usr/local/bin/mailpit ne confinerait rien.
+# Élaboré en mode complain (aa-logprof sur les journaux d'une semaine d'usage), puis enforce.
+# Mode actuel : {{ _durcissement_aa_mode }}.
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile mailpit /opt/mailpit/*/mailpit {{ 'flags=(complain) ' if _durcissement_aa_mode == 'complain' else '' }}{
+  include <abstractions/base>
+  include <abstractions/nameservice>
+  include <abstractions/ssl_certs>
+
+  # Port 25 sans root (capacité donnée par l'unité systemd, M19) ; rien d'autre.
+  capability net_bind_service,
+
+  network inet stream,
+  network inet6 stream,
+  network unix stream,
+
+  # Le binaire lui-même (lecture et projection en mémoire).
+  /opt/mailpit/*/mailpit mr,
+
+  # Configuration et certificat (lecture seule).
+  /etc/mailpit/ r,
+  /etc/mailpit/** r,
+
+  # Base SQLite et ses fichiers annexes (-wal, -shm) : lecture, écriture, verrous.
+  /var/lib/mailpit/ r,
+  /var/lib/mailpit/** rwk,
+
+  # Fichiers temporaires de SQLite (PrivateTmp : /tmp propre au service).
+  owner /tmp/** rwk,
+
+  # Lectures du moteur d'exécution de Go et du fuseau horaire.
+  @{PROC}/sys/net/core/somaxconn r,
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/@{pid}/mountinfo r,
+  /sys/fs/cgroup/** r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  /usr/share/zoneinfo/** r,
+
+  # Rien d'autre à exécuter, rien d'autre à lire : tout le reste est refusé (et journalisé).
+  include if exists <local/usr.local.bin.mailpit>
+}

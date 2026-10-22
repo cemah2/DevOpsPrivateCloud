@@ -1,0 +1,5 @@
+# group_vars/all/vault-critique-s3.yml (Vault « critique », M14-E24) — EXTRAIT à ajouter (M24-E25).
+#   uv run ansible-vault edit inventories/lab/group_vars/all/vault-critique-s3.yml
+# Lu par s3-01 (création de l'identité) ET par idp01, ipa01 (rôle sauvegarde_identite) : un seul exemplaire.
+vault_s3_identite_sauvegardes_cle_acces: "<CLÉ-D-ACCÈS-S3>"     # openssl rand -hex 10 | tr a-f A-F
+vault_s3_identite_sauvegardes_cle_secrete: "<CLÉ-SECRÈTE-S3>"   # openssl rand -base64 30 | tr -d '/+='

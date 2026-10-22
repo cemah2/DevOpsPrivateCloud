@@ -1,0 +1,9 @@
+# mediagenda/deploiement — overlays/recette/kustomization.yaml : EXTRAIT (M25-E14). Ordre des
+# components : « migrations » et « canary » AVANT « identifiants-dynamiques » (il modifie le Job du
+# premier et, à partir de M25-E15, le Rollout du second : un correctif dont la cible n'existe pas
+# encore est ignoré SANS erreur par Kustomize), « livraison » en dernier.
+components:
+  - ../../components/migrations
+  - ../../components/canary
+  - ../../components/identifiants-dynamiques
+  - ../../components/livraison

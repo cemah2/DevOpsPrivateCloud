@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "identite-35-jours",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "" },
+      "Expiration": { "Days": 35 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 7 }
+    }
+  ]
+}

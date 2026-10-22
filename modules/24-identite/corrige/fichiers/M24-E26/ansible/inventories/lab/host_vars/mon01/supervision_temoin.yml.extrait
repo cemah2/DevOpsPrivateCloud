@@ -1,0 +1,6 @@
+# host_vars/mon01/supervision_temoin.yml — EXTRAIT (M24-E26) : une cible de plus dans le groupe
+# « https » (module https_2xx). La découverte du royaume medisphere est servie par Keycloak lui-même
+# (base comprise) en passant par la VIP et HAProxy : c'est le chemin de tous les services.
+      - https://sso.par1.medisphere.internal/realms/medisphere/.well-known/openid-configuration
+# Et dans les règles du témoin (rôle supervision_temoin, regles-temoin) : l'alerte de sonde existante
+# (M21-E11) couvre la nouvelle cible ; rien à ajouter si elle porte sur probe_success == 0 par instance.

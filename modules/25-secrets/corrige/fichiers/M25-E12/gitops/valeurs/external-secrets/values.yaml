@@ -1,0 +1,54 @@
+# plateforme/gitops — valeurs/external-secrets/values.yaml (M25-E12, PLAT-2612)
+# Chart external-secrets 2.13.0 (ESO v2.13.0). Relu sur le rendu (helm template) avant la MR :
+# CRD en external-secrets.io/v1 (v1beta1 présente mais NON servie), PushSecret en v1alpha1,
+# trois déploiements conformes à « restricted ».
+
+# Images par le cache ghcr de Harbor (étiquette = appVersion du chart, v2.13.0).
+global:
+  repository: registry.par1.medisphere.internal/ghcr/external-secrets/external-secrets
+
+installCRDs: true
+crds:
+  # Jamais v1beta1 (dépréciée, non servie par défaut ; un tutoriel 0.x qui l'emploie est périmé).
+  unsafeServeV1Beta1: false
+
+# Le compte du contrôleur (external-secrets) est celui du ClusterSecretStore : il doit pouvoir créer
+# des TokenReview, parce qu'OpenBao vérifie son jeton en le présentant lui-même à l'API.
+systemAuthDelegator: true
+
+# Les jetons OpenBao sont réutilisés jusqu'à leur expiration au lieu d'une connexion par
+# synchronisation (moins de charge, un audit plus lisible).
+vault:
+  enableTokenCache: true
+
+# Rien de « Cluster » hors des magasins : pas de ClusterExternalSecret ni de ClusterPushSecret au lab.
+processClusterExternalSecret: false
+processClusterPushSecret: false
+processPushSecret: false
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 96Mi
+  limits:
+    memory: 256Mi
+webhook:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 48Mi
+    limits:
+      memory: 128Mi
+certController:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 48Mi
+    limits:
+      memory: 128Mi
+
+# Supervision (M21) : sélecteur commun medisphere.internal/supervision: "oui".
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    medisphere.internal/supervision: "oui"

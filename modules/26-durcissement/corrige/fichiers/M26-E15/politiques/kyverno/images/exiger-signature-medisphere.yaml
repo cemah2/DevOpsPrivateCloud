@@ -1,0 +1,104 @@
+# plateforme/politiques — kyverno/images/exiger-signature-medisphere.yaml (M26-E15, SEC-2715)
+#
+# Toute image de registry.par1.medisphere.internal/medisphere/* admise dans un espace visé doit :
+#   1. être désignée par son condensé (verifyDigest) ;
+#   2. porter une signature Cosign d'une clé MédiSphère (bundle Cosign 3, référent OCI, sans
+#      journal de transparence : ADR-0130) ;
+#   3. porter une attestation SBOM SPDX signée par la même clé (exigée en production, M13-E08).
+# Les autres images (caches de Harbor, bibliotheque/, plateforme/) ne sont pas visées ici : leur
+# provenance est contrôlée par « registres-autorises » (E07) et par la politique de Harbor (M13-E14).
+#
+# Deux clés acceptées (période de recouvrement, ADR-0130 et M25-E20) :
+#   - cleHistorique : docs/registre/cosign.pub (clé du M13) ;
+#   - cleTransit    : clé publique de transit/cosign-medisphere (M25-E20), exportée par
+#                     « cosign public-key --key hashivault://cosign-medisphere ».
+# Si ton M25-E20 a gardé une seule clé, ne garde qu'un attesteur. Retirer une clé = MR relue par
+# Sophie Laurent (changement de sécurité), APRÈS re-signature de tout ce qui tourne.
+#
+# Historique de mise en service (voir le corrigé) : Audit + Ignore sur mediagenda-recette, lecture
+# des rapports ; puis Deny + Fail sur recette ; puis production. État ci-dessous : final.
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: exiger-signature-medisphere
+  annotations:
+    policies.kyverno.io/title: Images MédiSphère signées et attestées
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: SEC-2715
+spec:
+  validationActions: [Deny]
+  # Fail : si Kyverno ne sait pas vérifier (Harbor injoignable, Kyverno arrêté), le pod est REFUSÉ
+  # dans ces espaces. Choix de la RSSI pour la recette et la production ; contrepartie écrite dans
+  # le corrigé (cache de vérification, RB-260 et RB-261).
+  failurePolicy: Fail
+  webhookConfiguration:
+    # La vérification interroge Harbor (manifeste, référents, bundles) : plus que les 10 s par défaut.
+    timeoutSeconds: 15
+  evaluation:
+    background:
+      # Les rapports (PolicyReport) montrent aussi les pods déjà en place qui ne passeraient plus.
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [mediagenda-recette, mediagenda-prod, medidoc-dev, medidoc-recette, wb-essais]
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  matchImageReferences:
+    - glob: "registry.par1.medisphere.internal/medisphere/*"
+  validationConfigurations:
+    # GitOps : on ne réécrit pas l'image (Argo CD verrait un écart) ; on EXIGE le condensé.
+    mutateDigest: false
+    verifyDigest: true
+    required: true
+  # Projet Harbor « medisphere » privé : robot en lecture robot$medisphere+kyverno, Secret
+  # dockerconfigjson « harbor-kyverno » de l'espace kyverno (ExternalSecret depuis OpenBao).
+  credentials:
+    secrets: [harbor-kyverno]
+  attestors:
+    - name: cleHistorique
+      cosign:
+        key:
+          data: |
+            -----BEGIN PUBLIC KEY-----
+            <CONTENU-DE-docs/registre/cosign.pub>
+            -----END PUBLIC KEY-----
+        ctlog:
+          # Pas de Rekor dans le lab (signature par configuration sans service, M13-E07).
+          insecureIgnoreTlog: true
+    - name: cleTransit
+      cosign:
+        key:
+          data: |
+            -----BEGIN PUBLIC KEY-----
+            <SORTIE-DE-cosign-public-key--key-hashivault://cosign-medisphere>
+            -----END PUBLIC KEY-----
+        ctlog:
+          insecureIgnoreTlog: true
+  attestations:
+    - name: sbom
+      intoto:
+        type: https://spdx.dev/Document
+  validations:
+    - expression: >-
+        images.containers.map(image,
+          verifyImageSignatures(image, [attestors.cleHistorique, attestors.cleTransit])).all(e, e > 0)
+      message: >-
+        image MédiSphère sans signature valide d'une clé MédiSphère (cosign verify --key
+        docs/registre/cosign.pub --insecure-ignore-tlog=true <image>@<condensé> pour diagnostiquer)
+    - expression: >-
+        images.initContainers.map(image,
+          verifyImageSignatures(image, [attestors.cleHistorique, attestors.cleTransit])).all(e, e > 0)
+      message: conteneur d'initialisation avec une image MédiSphère non signée par une clé MédiSphère
+    - expression: >-
+        images.containers.map(image,
+          verifyAttestationSignatures(image, attestations.sbom, [attestors.cleHistorique, attestors.cleTransit])).all(e, e > 0)
+      message: image MédiSphère sans attestation SBOM SPDX signée (chaîne de livraison, M13-E09)

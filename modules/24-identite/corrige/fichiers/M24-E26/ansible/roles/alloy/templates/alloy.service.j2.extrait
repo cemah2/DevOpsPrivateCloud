@@ -1,0 +1,12 @@
+# roles/alloy/templates/alloy.service.j2 — EXTRAIT (M24-E26) : remplace les deux dernières lignes de
+# durcissement « CapabilityBoundingSet= » et « AmbientCapabilities= » par :
+{% if alloy_lecture_fichiers_proteges | bool %}
+# Lecture des journaux protégés de l'annuaire (krb5kdc.log en root 600) : CAP_DAC_READ_SEARCH seule
+# (contourne les droits de LECTURE et de parcours, rien d'autre ; écriture toujours refusée par
+# ProtectSystem=strict). Choix écrit dans le corrigé de M24-E26, limité à ipa01.
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+{% else %}
+CapabilityBoundingSet=
+AmbientCapabilities=
+{% endif %}

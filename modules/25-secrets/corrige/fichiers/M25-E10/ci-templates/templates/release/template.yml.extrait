@@ -1,0 +1,25 @@
+# plateforme/ci-templates — templates/release/template.yml, version v2.1.0 (M25-E10, SEC-2610).
+# EXTRAIT : différences avec la v2.0.0 (M19-E10). L'image Node n'a ni bao ni jq : la connexion passe
+# par l'API HTTP d'OpenBao avec curl (présent dans l'image Node officielle, à vérifier sur la tienne)
+# et Node pour lire le JSON. Rien n'est affiché ; corps des requêtes par l'entrée standard.
+# Plus de variable GITLAB_TOKEN : le jeton de projet « bot-release » est dans kv/<groupe>/ci/release.
+release:semantic-release:
+  # … image, stage, tags, rules, variables de la v2.0.0 inchangés …
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  script:
+    - |
+      role="ci-$(printf '%s' "$CI_PROJECT_PATH" | tr '/' '-')"
+      coffre=https://openbao.par1.medisphere.internal:8200
+      jeton_bao="$(printf '{"role":"%s","jwt":"%s"}' "$role" "$OPENBAO_ID_TOKEN" \
+        | curl -sf --data @- "$coffre/v1/auth/gitlab/login" \
+        | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).auth.client_token))')"
+      test -n "$jeton_bao" || { echo "OpenBao refuse le rôle $role"; exit 1; }
+      GITLAB_TOKEN="$(printf 'header = "X-Vault-Token: %s"\n' "$jeton_bao" \
+        | curl -sf -K - "$coffre/v1/kv/data/${CI_PROJECT_NAMESPACE}/ci/release" \
+        | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>process.stdout.write(JSON.parse(d).data.data.jeton))')"
+      export GITLAB_TOKEN
+      printf 'header = "X-Vault-Token: %s"\n' "$jeton_bao" | curl -sf -K - -X POST "$coffre/v1/auth/token/revoke-self" > /dev/null || true
+      unset jeton_bao
+    # … installation des paquets et npx semantic-release de la v2.0.0 inchangés …

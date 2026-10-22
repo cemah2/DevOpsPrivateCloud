@@ -1,0 +1,7 @@
+# plateforme/charts-miroir — charts.yaml, EXTRAIT (M26-E25, PLAT-2725) : entrée à ajouter à « charts: ».
+  - nom: kubelet-csr-approver
+    depot: https://postfinance.github.io/kubelet-csr-approver
+    version: 1.2.15
+    # Champ « digest » de l'index du dépôt amont, recontrôlé par helm pull + sha256sum.
+    empreinte: sha256:a8697589fadc4aedb68f01a66f2cf50a780d9648ad3f463d041722902091e32f
+    usage: "Approbation des CSR de service des kubelets (M26-E25), Application plateforme/gitops plateforme/kubelet-csr-approver.yaml"

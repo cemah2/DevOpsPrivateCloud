@@ -1,0 +1,7 @@
+# collections/requirements.yml — EXTRAIT (M25-E11) : collection ajoutée. Garde les autres lignes.
+# Bibliothèque Python requise : hvac, ajoutée à l'environnement uv du projet :
+#   admin@adm01:~/src/ansible$ uv add hvac
+# (vérifie dans uv.lock la version résolue ; elle est épinglée par le fichier de verrou.)
+collections:
+  - name: community.hashi_vault
+    version: 7.1.0

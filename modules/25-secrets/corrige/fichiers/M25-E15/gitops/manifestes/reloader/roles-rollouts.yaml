@@ -1,0 +1,52 @@
+# plateforme/gitops — manifestes/reloader/roles-rollouts.yaml (M25-E15, SEC-2615)
+# Le chart 2.2.18 ne donne les droits sur les Rollouts que dans sa ClusterRole (mode global) ; en mode
+# « espaces listés », Reloader ne pourrait pas redémarrer le Rollout de MédiAgenda (« forbidden » dans
+# ses journaux). Mêmes verbes que la ClusterRole du chart (list, get, update, patch), dans les seuls
+# espaces de MédiAgenda.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reloader-rollouts
+  namespace: mediagenda-recette
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["list", "get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: reloader-rollouts
+  namespace: mediagenda-recette
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: reloader-rollouts
+subjects:
+  - kind: ServiceAccount
+    name: reloader
+    namespace: reloader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reloader-rollouts
+  namespace: mediagenda-prod
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["rollouts"]
+    verbs: ["list", "get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: reloader-rollouts
+  namespace: mediagenda-prod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: reloader-rollouts
+subjects:
+  - kind: ServiceAccount
+    name: reloader
+    namespace: reloader

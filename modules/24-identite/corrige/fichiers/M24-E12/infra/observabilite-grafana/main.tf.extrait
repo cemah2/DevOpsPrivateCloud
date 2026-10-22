@@ -1,0 +1,11 @@
+# plateforme/infra/observabilite-grafana/main.tf — MODIFICATION de M24-E12 (DEV-2512).
+# Seule la ressource grafana_team change : ses membres viennent de local.equipes_effectives
+# (utilisateurs.tf), qui ne garde que les comptes existants. Dossiers et permissions : inchangés.
+resource "grafana_team" "equipe" {
+  for_each = var.equipes
+
+  name    = each.key
+  email   = "${each.key}@medisphere.internal"
+  members = local.equipes_effectives[each.key].membres
+  admins  = local.equipes_effectives[each.key].admins
+}

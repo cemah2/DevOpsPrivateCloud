@@ -1,0 +1,18 @@
+# plateforme/gitops — projets/mediagenda.yaml et projets/medidoc.yaml : EXTRAIT (M25-E13, PLAT-2613).
+# Les équipes écrivent leurs ExternalSecret ; elles ne définissent NI leur magasin (SecretStore : la
+# plateforme décide du serveur, de la méthode et du rôle), NI des générateurs. Le Secret produit par
+# ESO a un propriétaire (l'ExternalSecret) : ce n'est plus une ressource orpheline à ignorer.
+spec:
+  namespaceResourceBlacklist:
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: external-secrets.io, kind: SecretStore}
+    - {group: external-secrets.io, kind: PushSecret}
+    - {group: generators.external-secrets.io, kind: "*"}
+  orphanedResources:
+    warn: true
+    ignore:
+      # harbor-pull et medidoc-s3 retirés de la liste : ils sont désormais suivis (ExternalSecret
+      # versionné). Restent ignorés les objets que la PLATEFORME pose dans l'espace :
+      - {group: external-secrets.io, kind: SecretStore, name: openbao}
+      - {group: "", kind: ServiceAccount, name: eso}

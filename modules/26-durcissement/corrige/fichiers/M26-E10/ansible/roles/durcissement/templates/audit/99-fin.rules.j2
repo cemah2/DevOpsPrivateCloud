@@ -1,0 +1,8 @@
+## {{ durcissement_entete }}
+## /etc/audit/rules.d/99-fin.rules (rôle durcissement, M26-E12)
+{% if durcissement_auditd_immuable and 'audit_rules_immutable' not in _durcissement_exclues %}
+## Règles immuables jusqu'au prochain redémarrage (audit_rules_immutable).
+-e 2
+{% else %}
+## Règles NON immuables (exception audit_rules_immutable, registre) : elles évoluent encore.
+{% endif %}

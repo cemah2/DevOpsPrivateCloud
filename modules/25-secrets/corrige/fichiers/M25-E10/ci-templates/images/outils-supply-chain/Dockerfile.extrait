@@ -1,0 +1,22 @@
+# plateforme/ci-templates — images/outils-supply-chain/Dockerfile, version 1.1.0 (M25-E10, SEC-2610).
+# EXTRAIT : ajouts à la version 1.0.1 (M13-E09, M19). Le reste du fichier est inchangé.
+# Client OpenBao « bao » : archive amont (binaire seul, pas le paquet .deb qui installe aussi le
+# service), même version que le serveur, vérifiée par SHA-256 relevée dans checksums.txt de la
+# version (https://github.com/openbao/openbao/releases/download/v<VERSION>/checksums.txt).
+
+ARG BAO_VERSION=2.6.4
+ARG BAO_SHA256=659a4875cb197d042b2c612e7b0e275f36ebacc16e3f1f6e8dc31275f6d84220
+
+# À placer après l'installation des paquets Cosign/Trivy/Syft/Grype, avant « USER 10001:10001 ».
+RUN set -eux; cd /tmp; \
+    curl -fsSLO "https://github.com/openbao/openbao/releases/download/v${BAO_VERSION}/openbao_${BAO_VERSION}_linux_amd64.tar.gz"; \
+    printf '%s  %s\n' "$BAO_SHA256" "openbao_${BAO_VERSION}_linux_amd64.tar.gz" | sha256sum -c -; \
+    tar -xzf "openbao_${BAO_VERSION}_linux_amd64.tar.gz" bao; \
+    install -m 0755 bao /usr/local/bin/bao; \
+    rm -f bao "openbao_${BAO_VERSION}_linux_amd64.tar.gz"; \
+    bao version
+
+# Adresse du coffre par défaut (la racine MédiSphère est déjà dans le magasin système de l'image).
+ENV BAO_ADDR=https://openbao.par1.medisphere.internal:8200
+
+LABEL org.opencontainers.image.description="Cosign, Trivy, Syft, Grype, Skopeo, client OpenBao pour la chaîne de livraison MédiSphère"

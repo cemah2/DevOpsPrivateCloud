@@ -1,0 +1,26 @@
+# plateforme/identite — oauth2-proxy/manifestes/politique-entree.yaml (M24-E18)
+# Les pods d'OAuth2 Proxy n'acceptent en entrée que le trafic de l'Envoy de la Gateway (identité
+# réservée « ingress ») sur 4180, et Prometheus sur 44180 (métriques). Rien d'autre du cluster ne
+# peut les joindre (même modèle que hubble-ui au M15-E26).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: oauth2-proxy-entree
+spec:
+  description: "OAuth2 Proxy : entrée par la Gateway seulement, métriques pour Prometheus (M24-E18)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+  ingress:
+    - fromEntities:
+        - ingress
+      toPorts:
+        - ports:
+            - port: "4180"
+              protocol: TCP
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+      toPorts:
+        - ports:
+            - port: "44180"
+              protocol: TCP

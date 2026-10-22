@@ -1,0 +1,10 @@
+---
+# host_vars/kms01/certificats.yml — certificat ACME de kms01 (M25-E25). Un seul nom : personne
+# d'autre ne le porte, le défi HTTP-01 arrive directement (step en écoute sur le port 80).
+certificats_acme_certificats:
+  - id: openbao
+    noms: [kms01.par1.medisphere.internal]
+    certificat: /etc/openbao/tls/cert.pem
+    cle: /etc/openbao/tls/key.pem
+    groupe: openbao
+    recharger: /bin/sh -c "! systemctl is-active --quiet openbao.service || systemctl reload openbao.service"

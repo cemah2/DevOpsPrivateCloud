@@ -1,0 +1,11 @@
+# {{ openbao_entete }}
+# /etc/systemd/system/openbao.service.d/medisphere.conf — rôle openbao (M25-E03).
+# L'unité du paquet (/usr/lib/systemd/system/openbao.service) reste telle quelle : Type=notify,
+# utilisateur openbao, ProtectSystem=full, NoNewPrivileges, MemorySwapMax=0, rechargement par
+# SIGHUP (ExecReload), arrêt par SIGINT. On n'ajoute ici que ce qui manque ; le durcissement
+# complet vient au M25-E28.
+[Service]
+# Un vidage mémoire contiendrait la clé de la barrière en clair : jamais de fichier core.
+LimitCORE=0
+# Raft, connexions clientes et grappe : de la marge sur le nombre de descripteurs.
+LimitNOFILE=65536

@@ -1,0 +1,30 @@
+---
+# Rôle k8s_authentification (M24-E16, PLAT-2516) — fichier d'authentification structurée du serveur
+# d'API (AuthenticationConfiguration, apiserver.config.k8s.io/v1, GA depuis Kubernetes 1.34) sur les
+# nœuds de contrôle. Le rôle ne pose QUE le fichier : l'option --authentication-config et le volume
+# sont dans la ClusterConfiguration (plateforme/k8s, cluster/kubeadm-config.yaml), appliquée nœud par
+# nœud par outils/reconfigurer-apiserver.sh (M14-E27). Valeurs du lab :
+# group_vars/k8s_plan_controle/authentification.yml.
+
+# DOSSIER monté dans le pod (pas le fichier) : un fichier remplacé par renommage (copie atomique
+# d'Ansible) reste visible, et le serveur d'API le recharge à chaud (leçon de M14-E28).
+k8s_authentification_dossier: /etc/kubernetes/authentification
+
+# Émetteur : EXACTEMENT la valeur « iss » des jetons (pas de barre finale), unique dans le fichier, et
+# différent de --service-account-issuer.
+k8s_authentification_emetteur: ""
+# Audiences acceptées (« aud » du jeton) : l'ID token délivré au client « kubernetes ».
+k8s_authentification_audiences: [kubernetes]
+# Le jeton doit avoir été demandé PAR ce client (azp) : un ID token d'un autre client qui aurait
+# « kubernetes » dans aud (mappeur d'audience mal placé) est refusé.
+k8s_authentification_azp: kubernetes
+
+# Racine de confiance pour joindre l'émetteur (découverte, JWKS), lue sur le CONTRÔLEUR (adm01) et
+# recopiée en PEM dans le fichier : le conteneur de kube-apiserver n'utilise pas le magasin du nœud.
+k8s_authentification_racine_fichier: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# Correspondance des revendications. Préfixe OBLIGATOIRE : aucun nom venu de l'IdP ne peut tomber sur
+# un nom du cluster (system:masters, kubeadm:cluster-admins, comptes de service).
+k8s_authentification_revendication_utilisateur: preferred_username
+k8s_authentification_revendication_groupes: groups
+k8s_authentification_prefixe: "oidc:"

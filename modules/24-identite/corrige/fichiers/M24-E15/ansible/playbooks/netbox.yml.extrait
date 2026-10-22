@@ -1,0 +1,9 @@
+# playbooks/netbox.yml — MODIFICATION de M24-E15 (SEC-2515) : charger le Vault des secrets des clients
+# OIDC (secrets/identite.yml, identité « critique », écrit par ranger-secret-client.sh). Chemin relatif
+# au dossier du playbook. Le reste du play (hôtes role_netbox, rôles) est inchangé.
+- name: NetBox
+  hosts: role_netbox
+  become: true
+  vars_files:
+    - ../secrets/identite.yml
+  # roles : inchangés (… netbox)

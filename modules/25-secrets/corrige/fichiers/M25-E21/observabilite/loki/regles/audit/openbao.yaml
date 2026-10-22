@@ -1,0 +1,45 @@
+# plateforme/observabilite — loki/regles/audit/openbao.yaml (M25-E21, SEC-2621).
+# Règles du ruler de Loki pour le locataire « audit » : elles ne voient que le journal d'audit
+# d'OpenBao (étiquette service="openbao", envoyé par Alloy depuis vault01-03 et kms01).
+# Une ligne par requête ET une par réponse : on compte les réponses (type="response"), qui portent
+# aussi les refus et les erreurs.
+# Vérifié : expressions évaluées par un ruler Loki 3.7.9 sur un vrai journal d'audit d'OpenBao 2.6.4.
+groups:
+  - name: openbao.audit
+    interval: 1m
+    rules:
+      # Un jeton racine ne sert qu'en cérémonie (generate-root, M25-E28) : toute utilisation alerte.
+      # Le journal compact écrit les politiques telles quelles : "policies":["root"].
+      - alert: OpenBaoJetonRacineUtilise
+        expr: |
+          sum by (host) (count_over_time({service="openbao"} |= `"policies":["root"]` | json type="type" | type="response" [5m])) > 0
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao : un jeton racine a été utilisé sur {{ $labels.host }}"
+          description: "Requête faite avec un jeton portant la politique root. Si ce n'est pas une cérémonie planifiée (ticket), traiter comme une compromission (RB-250)."
+          runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/secrets/runbooks/RB-250-fuite-de-secret.md"
+      # Toute écriture de politique hors du pipeline de plateforme/secrets se voit ici aussi ; la règle
+      # ne sait pas qui est « légitime » : elle prévient, la personne d'astreinte vérifie la MR.
+      - alert: OpenBaoPolitiqueModifiee
+        expr: |
+          sum by (host) (count_over_time({service="openbao"} | json type="type", chemin="request.path", operation="request.operation"
+            | type="response" | operation=~"create|update|delete" | chemin=~"sys/(policies/acl|policy)/.+" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao : politique créée, modifiée ou supprimée"
+          description: "Vérifier qu'une MR de plateforme/secrets correspond (requête LogQL de docs/securite/secrets/audit-openbao.md, section « Politiques »)."
+      # Réglage, rotation, découpage ou suppression d'une clé de transit (exportable, min_decryption_version…).
+      - alert: OpenBaoCleTransitModifiee
+        expr: |
+          sum by (host) (count_over_time({service="openbao"} | json type="type", chemin="request.path", operation="request.operation"
+            | type="response" | operation=~"create|update|delete" | chemin=~"transit/keys/[^/]+(/(config|rotate|trim|import|import_version))?" [5m])) > 0
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "OpenBao : une clé de transit a été créée, réglée, tournée ou supprimée"
+          description: "Vérifier le ticket (rotation planifiée, E17, E20) ; une clé de signature ou de chiffrement rendue exportable est irréversible."

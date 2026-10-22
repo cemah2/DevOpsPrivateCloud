@@ -1,0 +1,25 @@
+# composants/reseau/hubble-ui/cnp-hubble-ui.yaml — M15-E26, modifié en M24-E18 (PLAT-2518).
+# Hubble UI n'a plus de route à lui : la seule porte est OAuth2 Proxy (release oauth2-proxy-hubble,
+# espace oauth2-proxy), qui authentifie par Keycloak et filtre par groupe. Les pods hubble-ui
+# n'acceptent donc plus l'Envoy de la Gateway (« ingress ») mais seulement OAuth2 Proxy, sur 8081.
+# httproute.yaml et referencegrant.yaml du M15-E26 sont SUPPRIMÉS (kubectl delete, puis git rm).
+# Les sondes du kubelet (réseau de l'hôte) restent permises (allow-localhost de Cilium).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: hubble-ui-entree
+  namespace: kube-system
+spec:
+  description: "hubble-ui : entrée par OAuth2 Proxy seulement (M24-E18)"
+  endpointSelector:
+    matchLabels:
+      k8s-app: hubble-ui
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: oauth2-proxy
+            app.kubernetes.io/instance: oauth2-proxy-hubble
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP

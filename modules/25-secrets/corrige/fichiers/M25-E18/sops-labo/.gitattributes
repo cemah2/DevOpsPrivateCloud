@@ -1,0 +1,5 @@
+# formation/sops-labo — .gitattributes (M25-E18) : « git diff » et « git log -p » montrent le CLAIR
+# des fichiers SOPS, pour qui peut les déchiffrer. Chaque poste déclare le pilote une fois :
+#   git config --global diff.sopsdiffer.textconv "sops decrypt"
+# Sans ce pilote (ou sans droit sur la clé), git montre le chiffré : rien ne fuit.
+*.sops.yaml diff=sopsdiffer

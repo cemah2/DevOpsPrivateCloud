@@ -1,0 +1,4 @@
+# roles/openbao/defaults/main.yml — EXTRAIT (M25-E14) : variable ajoutée.
+# Noms des connexions du moteur database dont la CA est déposée dans /etc/openbao/postgresql/
+# (fichiers files/openbao/postgresql/<nom>-ca.crt du projet).
+openbao_bases_postgresql: []

@@ -1,0 +1,56 @@
+# mediagenda/deploiement — components/identifiants-dynamiques (M25-E14, DEV-2614)
+# L'API et le Job de migration lisent leur URL de base dans des Secrets produits par ESO à partir des
+# identifiants DYNAMIQUES d'OpenBao, au lieu du Secret du propriétaire (mediagenda-db-app, CNPG) :
+#   mediagenda-db-api        compte membre de mediagenda_api (lignes seulement), pour l'API
+#   mediagenda-db-migrateur  compte qui agit en tant que mediagenda (schéma), pour le Job de migration
+# Indépendant de l'environnement : les générateurs de l'espace portent les mêmes noms partout
+# (plateforme/k8s/espaces/<espace>/90-openbao-dynamique.yaml).
+# À inclure APRÈS « migrations » et « canary » (dont il modifie le Job et le Rollout) et AVANT
+# « livraison ». Kustomize ignore SANS erreur un correctif dont la cible n'est pas encore rendue.
+# M25-E15 ajoute le redémarrage automatique du Rollout (Reloader) : sans lui, les pods perdent leur
+# base à la fin du bail des identifiants qu'ils ont lus au démarrage.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - externalsecrets.yaml
+patches:
+  # L'API (gabarit du Deployment rendu par le chart, que le Rollout référence en workloadRef).
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: mediagenda
+      spec:
+        template:
+          spec:
+            containers:
+              - name: api
+                env:
+                  - name: MEDIAGENDA_DB_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: mediagenda-db-api
+                        key: uri
+  # Le Job de migration (hook Sync, vague -1, component « migrations »).
+  - target:
+      kind: Job
+      name: mediagenda-migrate
+    patch: |-
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: mediagenda-migrate
+      spec:
+        template:
+          spec:
+            containers:
+              - name: migrate
+                env:
+                  - name: MEDIAGENDA_DB_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: mediagenda-db-migrateur
+                        key: uri

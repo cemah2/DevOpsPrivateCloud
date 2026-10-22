@@ -1,0 +1,77 @@
+# plateforme/observabilite — pyrra/pyrra-api.yaml (M21-E26, PLAT-2226 ; publication retirée : M24-E34, PLAT-2534)
+# D'après examples/kubernetes/manifests/pyrra-api*.yaml de Pyrra v0.10.2 (mêmes écarts que
+# pyrra-kubernetes.yaml). L'interface et l'API de lecture : liste des objectifs (demandée à
+# pyrra-kubernetes), puis disponibilité, budget restant et taux de consommation calculés par des
+# requêtes PromQL envoyées à Thanos Query (fenêtre de 28 jours : au-delà de la rétention locale de
+# Prometheus, d'où Thanos Query et pas kps-prometheus).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pyrra-api
+  labels:
+    app.kubernetes.io/component: api
+    app.kubernetes.io/name: pyrra
+# L'API ne parle pas à Kubernetes.
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyrra-api
+  labels:
+    app.kubernetes.io/component: api
+    app.kubernetes.io/name: pyrra
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      app.kubernetes.io/name: pyrra
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: api
+        app.kubernetes.io/name: pyrra
+    spec:
+      serviceAccountName: pyrra-api
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-standard
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65533
+        runAsGroup: 65533
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: pyrra
+          image: ghcr.io/pyrra-dev/pyrra
+          args:
+            - api
+            - --api-url=http://pyrra-kubernetes.supervision.svc.cluster.local:9444
+            - --prometheus-url=http://thanos-query.supervision.svc.cluster.local:9090
+            # Liens « ouvrir dans Prometheus » de l'interface : l'adresse vue depuis MGMT.
+            - --prometheus-external-url=http://prometheus.apps.par1.medisphere.internal:9090
+          ports:
+            - {name: http, containerPort: 9099}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyrra-api
+  labels:
+    app.kubernetes.io/component: api
+    app.kubernetes.io/name: pyrra
+spec:
+  selector:
+    app.kubernetes.io/component: api
+    app.kubernetes.io/name: pyrra
+  ports:
+    - {name: http, port: 9099, targetPort: http}
+# (M24-E34) Plus d'HTTPRoute ici : slo.apps.par1.medisphere.internal est publié par l'instance
+# oauth2-proxy-pyrra (espace oauth2-proxy), qui relaie vers ce Service APRÈS authentification.

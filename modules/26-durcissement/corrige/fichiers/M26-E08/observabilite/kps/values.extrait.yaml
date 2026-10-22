@@ -1,0 +1,19 @@
+# À INTÉGRER dans plateforme/observabilite — kps/values.yaml (M21-E02), dans extraManifests, politique
+# « alertmanager-entree » de l'espace supervision, M26-E08 (SEC-2708).
+# Ajoute cette règle à la liste « ingress » existante : falcosidekick (espace falco) pousse ses alertes
+# sur l'API v2 d'Alertmanager (port 9093). Le reste de la politique ne change pas.
+extraManifests:
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: alertmanager-entree
+      namespace: supervision
+    spec:
+      ingress:
+        # (… règles existantes : MGMT, mon01, espace supervision …)
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: falco
+                app.kubernetes.io/name: falcosidekick
+          toPorts:
+            - ports: [{port: "9093", protocol: TCP}]

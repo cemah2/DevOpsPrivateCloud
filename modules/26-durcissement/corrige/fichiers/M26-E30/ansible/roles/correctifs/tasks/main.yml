@@ -1,0 +1,91 @@
+---
+# Rôle correctifs — M26-E30. Toujours : ansible-playbook … --check --diff d'abord.
+
+- name: Retour arrière — minuteries arrêtées
+  when: not (correctifs_auto | bool)
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ ['apt-daily-upgrade.timer'] if ansible_os_family == 'Debian' else ['dnf-automatic.timer'] }}"
+  failed_when: false
+
+- name: Correctifs automatiques (Debian)
+  when: correctifs_auto | bool and ansible_os_family == 'Debian'
+  block:
+    - name: Paquets
+      ansible.builtin.apt:
+        name: [unattended-upgrades, needrestart, apt-listchanges]
+        state: present
+    - name: Origines, exclusions, pas de redémarrage automatique
+      ansible.builtin.template:
+        src: 52medisphere-unattended-upgrades.j2
+        dest: /etc/apt/apt.conf.d/52medisphere-unattended-upgrades
+        mode: "0644"
+    - name: Activation quotidienne (listes et mises à niveau)
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          // {{ ansible_managed }}
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+    - name: Needrestart en mode liste (aucun service redémarré sans nous)
+      ansible.builtin.copy:
+        dest: /etc/needrestart/conf.d/50-medisphere.conf
+        mode: "0644"
+        content: |
+          # {{ ansible_managed }} — M26-E30 : lister, ne jamais redémarrer automatiquement.
+          $nrconf{restart} = 'l';
+    - name: Minuterie de mise à niveau active
+      ansible.builtin.systemd_service:
+        name: apt-daily-upgrade.timer
+        state: started
+        enabled: true
+
+- name: Correctifs automatiques (Rocky)
+  when: correctifs_auto | bool and ansible_os_family == 'RedHat'
+  block:
+    - name: Paquets
+      ansible.builtin.dnf:
+        name: [dnf-automatic, dnf-utils]
+        state: present
+    - name: Configuration de dnf-automatic (sécurité, sans redémarrage)
+      ansible.builtin.template:
+        src: automatic.conf.j2
+        dest: /etc/dnf/automatic.conf
+        mode: "0644"
+    - name: Minuterie de dnf-automatic active
+      ansible.builtin.systemd_service:
+        name: dnf-automatic.timer
+        state: started
+        enabled: true
+
+- name: Script d'état des correctifs
+  ansible.builtin.copy:
+    src: correctifs-etat.sh
+    dest: /usr/local/sbin/correctifs-etat
+    mode: "0750"
+
+- name: Dossier du collecteur textfile
+  ansible.builtin.file:
+    path: "{{ correctifs_textfile }}"
+    state: directory
+    mode: "0755"
+
+- name: Unités de l'état des correctifs
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop: [correctifs-etat.service, correctifs-etat.timer]
+  notify: Recharger systemd
+
+- name: Appliquer le rechargement de systemd maintenant
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie de l'état des correctifs
+  ansible.builtin.systemd_service:
+    name: correctifs-etat.timer
+    state: started
+    enabled: true

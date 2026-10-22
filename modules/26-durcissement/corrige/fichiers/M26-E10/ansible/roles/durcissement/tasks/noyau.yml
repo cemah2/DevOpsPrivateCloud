@@ -1,0 +1,90 @@
+---
+# Domaine « noyau » : paramètres sysctl et modules non chargeables.
+# Les règles en exception sur l'hôte disparaissent du fichier (et du profil OpenSCAP adapté).
+
+# Garde-fou : couper le routage d'une passerelle, d'un nœud Kubernetes ou d'un hôte Docker coupe
+# une partie du lab À L'INSTANT où le fichier est chargé. On refuse si l'hôte route aujourd'hui et
+# qu'aucune exception ne le couvre (ou si l'exception est incomplète : les trois réglages sont un seul).
+- name: Lire l'état actuel du routage
+  ansible.builtin.command: sysctl -n net.ipv4.ip_forward
+  register: _durcissement_routage
+  changed_when: false
+  check_mode: false
+
+- name: Le routage d'un hôte qui route est couvert par une exception complète
+  ansible.builtin.assert:
+    that:
+      - >-
+        _durcissement_regles_routage | intersect(_durcissement_exclues) | length in [0, _durcissement_regles_routage | length]
+      - >-
+        _durcissement_routage.stdout | trim != '1'
+        or _durcissement_regles_routage | difference(_durcissement_exclues) | length == 0
+        or durcissement_couper_routage | default(false) | bool
+    fail_msg: >-
+      {{ inventory_hostname }} route aujourd'hui (net.ipv4.ip_forward = {{ _durcissement_routage.stdout | trim }}).
+      Déclare les TROIS exceptions {{ _durcissement_regles_routage | join(', ') }} (passerelle, nœud
+      Kubernetes, hôte Docker) ou, si couper le routage est voulu, durcissement_couper_routage: true.
+    quiet: true
+  vars:
+    _durcissement_regles_routage:
+      - sysctl_net_ipv4_ip_forward
+      - sysctl_net_ipv4_conf_all_forwarding
+      - sysctl_net_ipv4_conf_default_forwarding
+
+- name: Paramètres du noyau (un fichier, lignes en exception retirées)
+  ansible.builtin.template:
+    src: sysctl-durcissement.conf.j2
+    dest: "{{ durcissement_sysctl_fichier }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Charger les paramètres du noyau
+  tags:
+    - sysctl_kernel_kptr_restrict
+    - sysctl_kernel_dmesg_restrict
+    - sysctl_kernel_yama_ptrace_scope
+    - sysctl_kernel_randomize_va_space
+    - sysctl_fs_protected_hardlinks
+    - sysctl_fs_protected_symlinks
+    - sysctl_fs_suid_dumpable
+    - sysctl_net_ipv4_ip_forward
+    - sysctl_net_ipv4_conf_all_forwarding
+    - sysctl_net_ipv4_conf_all_rp_filter
+    - sysctl_net_ipv4_conf_all_accept_redirects
+    - sysctl_net_ipv4_conf_all_send_redirects
+    - sysctl_net_ipv4_tcp_syncookies
+
+- name: Modules du noyau non chargeables
+  ansible.builtin.template:
+    src: modprobe-durcissement.conf.j2
+    dest: /etc/modprobe.d/60-durcissement.conf
+    owner: root
+    group: root
+    mode: "0644"
+  tags:
+    - kernel_module_cramfs_disabled
+    - kernel_module_usb-storage_disabled
+    - kernel_module_dccp_disabled
+    - kernel_module_sctp_disabled
+
+# Lecture seule : un module déjà chargé reste en mémoire jusqu'au prochain redémarrage.
+- name: Modules interdits encore chargés
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    lsmod | awk 'NR > 1 {print $1}' | grep -Ex '{{ _durcissement_modules_actifs | map("replace", "-", "_") | join("|") }}' || true
+  args:
+    executable: /bin/bash
+  register: _durcissement_modules_charges
+  changed_when: false
+  check_mode: false
+  vars:
+    _durcissement_modules_actifs: >-
+      {{ durcissement_modules_interdits | dict2items | rejectattr('value', 'in', _durcissement_exclues)
+         | map(attribute='key') | list }}
+
+- name: Signaler les modules interdits encore chargés
+  ansible.builtin.debug:
+    msg: >-
+      Modules interdits chargés : {{ _durcissement_modules_charges.stdout_lines | join(', ') }}.
+      Ils ne seront plus chargeables après redémarrage ; décharge-les (modprobe -r) si rien ne s'en sert.
+  when: _durcissement_modules_charges.stdout_lines | length > 0

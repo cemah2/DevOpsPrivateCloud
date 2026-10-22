@@ -1,0 +1,4 @@
+---
+# group_vars/role_gitlab/durcissement.yml (M26-E11) — groupe local autorisé en SSH en plus des groupes communs.
+# git01 : sshd sert aussi « git@git01 » (clones et poussées en SSH, compte git d'omnibus, M01).
+durcissement_ssh_groupes_supplementaires: [git]

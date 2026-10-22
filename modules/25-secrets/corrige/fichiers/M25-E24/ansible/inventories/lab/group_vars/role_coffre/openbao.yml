@@ -1,0 +1,23 @@
+---
+# group_vars/role_coffre/openbao.yml — nœuds du coffre (vault01 au M25-E03, vault02-03 au M25-E24).
+# On écrit ici ce qu'on relit à chaque audit et à chaque montée de version (RB-253).
+openbao_version: "2.6.4"
+openbao_sha256: "09e0b4ced4cfa2f04a3573c5ec05c94ecd4f858d580d76c7422c51b99b74cce1"
+openbao_nom_grappe: openbao-par1
+
+# (M25-E24) Grappe Raft : chaque nœud reçoit la liste de TOUS les nœuds du groupe (lui compris).
+# Un nœud déjà membre (données Raft présentes) ignore retry_join ; un nœud vide et non initialisé
+# essaie chaque adresse jusqu'à ce qu'un nœud DESCELLÉ lui réponde, puis attend d'être descellé
+# lui-même (Shamir) ou se descelle seul (seal transit, M25-E25). Calculé : un nœud ajouté au groupe
+# apparaît chez tous les autres au passage suivant (aucun redémarrage requis : la liste ne sert
+# qu'aux nœuds vides).
+openbao_raft_rejoindre: >-
+  {{ groups['role_coffre'] | sort
+     | map('regex_replace', '^', 'https://')
+     | map('regex_replace', '$', '.' ~ openbao_domaine ~ ':' ~ openbao_port_api) | list }}
+
+# Adresses des nœuds (PLAN §4.5) : keepalived (source et pairs unicast), contrôles.
+coffre_adresses:
+  vault01: 10.10.20.21
+  vault02: 10.10.20.22
+  vault03: 10.10.20.23

@@ -1,0 +1,39 @@
+---
+# Rôle openbao_instantane (M25-E26, SEC-2626) — instantané Raft horaire de la grappe OpenBao, chiffré
+# (age) et envoyé vers s3-01 (rclone). Appliqué au groupe role_coffre (les trois nœuds : seul l'actif
+# travaille). Modèle : rôle etcd_instantane (M14-E24). Valeurs : group_vars/role_coffre/openbao_instantane.yml ;
+# secrets : Vault « critique ».
+
+# --- Planification ------------------------------------------------------------------------------------
+# Même minute sur les trois nœuds : un seul est actif, les deux autres sortent aussitôt. Une minute
+# fixe rend le RPO lisible (« au plus 1 h », plus la durée d'envoi).
+openbao_instantane_minute: "07"
+
+# --- Coffre ---------------------------------------------------------------------------------------------
+# Adresse du nœud LOCAL (pas la VIP) : le script doit savoir si CE nœud est actif.
+openbao_instantane_bao_addr: "https://{{ inventory_hostname }}.par1.medisphere.internal:8200"
+openbao_instantane_approle: approle
+# role_id (non secret) et secret_id (secret) de l'AppRole openbao-instantanes (plateforme/secrets),
+# depuis le Vault « critique ». À partir de M25-E28, le secret_id est livré ENVELOPPÉ : voir
+# tasks/main.yml (openbao_instantane_secret_id_enveloppe).
+openbao_instantane_role_id: ""
+openbao_instantane_secret_id: ""
+# (M25-E28) jeton d'enveloppement d'un secret_id (usage unique, 5 min) : s'il est fourni, le nœud le
+# déballe lui-même et écrit instantanes.env ; le secret_id ne transite jamais en clair par Ansible.
+openbao_instantane_secret_id_enveloppe: ""
+
+# --- Destination ----------------------------------------------------------------------------------------
+openbao_instantane_s3_point: https://s3-01.par1.medisphere.internal:8333
+openbao_instantane_s3_compartiment: openbao-instantanes
+# Identité S3 openbao-instantanes (Vault « critique ») : lecture, écriture, listage du seul
+# compartiment ; suppression refusée par la politique de compartiment (le cycle de vie purge).
+openbao_instantane_s3_cle_acces: ""
+openbao_instantane_s3_cle_secrete: ""
+
+# --- Chiffrement ----------------------------------------------------------------------------------------
+# Clé PUBLIQUE age de restauration (« age1… »), non secrète. La privée : Vault « critique »
+# (secrets/openbao-restauration.age) et copie papier au coffre ; jamais sur un nœud.
+openbao_instantane_age_destinataire: ""
+
+# Collecteur textfile de node_exporter (M21) : métrique du dernier succès (alerte M25-E27).
+openbao_instantane_textfile: "{{ node_exporter_dossier_textfile | default('/var/lib/prometheus/node-exporter') }}"

@@ -1,0 +1,5 @@
+# roles/durcissement/tasks/main.yml — EXTRAIT : à la fin du fichier (après conformite.yml d'E10, qui
+# déplie le contenu ComplianceAsCode et génère le tailoring), M26-E24.
+- name: Conformité continue (analyse hebdomadaire, résultats, métriques)
+  ansible.builtin.import_tasks: conformite_continue.yml
+  tags: [conformite, conformite_continue]

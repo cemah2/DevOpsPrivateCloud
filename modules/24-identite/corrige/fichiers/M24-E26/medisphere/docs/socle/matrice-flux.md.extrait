@@ -1,0 +1,3 @@
+<!-- docs/socle/matrice-flux.md — EXTRAIT (M24-E26) : lignes à ajouter au tableau des flux de la bordure. -->
+| VLAN 40 (`k8s-par1`, Prometheus) | `idp01` 10.10.20.30 | TCP 9000 | Métriques de Keycloak (interface de gestion, HTTPS) | M24-E26 |
+| `idp01`, `ipa01` | VIP Loki 10.10.41.62 | TCP 3100 | Journaux vers Loki, locataire `audit` (Alloy) — déjà couvert par « VLAN 20 → 10.10.41.62:3100 » (M22-E05) | M24-E26 |

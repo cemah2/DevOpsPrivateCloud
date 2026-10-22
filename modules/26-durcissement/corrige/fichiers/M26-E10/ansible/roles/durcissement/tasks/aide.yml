@@ -1,0 +1,128 @@
+---
+# Domaine « aide » (M26-E12) : base d'intégrité des fichiers, vérification quotidienne, écarts en
+# métrique (collecteur textfile de node_exporter, M21) et dans le journal (→ Loki).
+# Après CHAQUE vague de durcissement (et chaque changement voulu), on refait la base :
+# /usr/local/sbin/aide-nouvelle-base (sinon le changement légitime reste un « écart » pour toujours).
+
+- name: Paquet AIDE installé
+  ansible.builtin.package:
+    name: aide
+    state: present
+  register: _durcissement_paquet_aide
+  tags: [package_aide_installed]
+
+# En mode vérification (--check), un paquet « à installer » n'est pas là : la suite du domaine
+# ne peut pas être simulée ; elle le sera au passage suivant.
+- name: Signaler la simulation incomplète (AIDE)
+  ansible.builtin.debug:
+    msg: "AIDE : paquet à installer, suite du domaine non simulée en mode vérification."
+  when: ansible_check_mode and _durcissement_paquet_aide is changed
+
+- name: Configuration (AIDE)
+  when: not (ansible_check_mode and _durcissement_paquet_aide is changed)
+  block:
+    - name: Chemins d'AIDE selon la famille
+      ansible.builtin.set_fact:
+        _durcissement_aide: >-
+          {{ {'conf': '/etc/aide/aide.conf', 'base': '/var/lib/aide/aide.db', 'nouvelle': '/var/lib/aide/aide.db.new'}
+             if ansible_facts['os_family'] == 'Debian' else
+             {'conf': '/etc/aide.conf', 'base': '/var/lib/aide/aide.db.gz', 'nouvelle': '/var/lib/aide/aide.db.new.gz'} }}
+
+    - name: Emplacement du binaire aide
+      ansible.builtin.shell: command -v aide
+      args:
+        executable: /bin/bash
+      register: _durcissement_aide_binaire
+      changed_when: false
+      check_mode: false
+
+    # Debian lit /etc/aide/aide.conf.d/ (noms sans point) ; Rocky n'a qu'un fichier : bloc géré.
+    - name: Debian — exclusions de la plateforme
+      ansible.builtin.template:
+        src: aide-exclusions.j2
+        dest: /etc/aide/aide.conf.d/99_medisphere_exclusions
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Rocky — exclusions de la plateforme
+      ansible.builtin.blockinfile:
+        path: /etc/aide.conf
+        marker: "# {mark} exclusions MédiSphère (rôle durcissement)"
+        block: "{{ lookup('ansible.builtin.template', 'aide-exclusions.j2') }}"
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: La configuration d'AIDE est valide
+      ansible.builtin.command: "{{ _durcissement_aide_binaire.stdout }} --config {{ _durcissement_aide.conf }} --config-check"
+      changed_when: false
+      check_mode: false
+
+    - name: Base existante ?
+      ansible.builtin.stat:
+        path: "{{ _durcissement_aide.base }}"
+      register: _durcissement_aide_base
+
+    # Plusieurs minutes sur un hôte chargé : tâche asynchrone surveillée.
+    - name: Base initiale (première exécution seulement)
+      ansible.builtin.command: "{{ _durcissement_aide_binaire.stdout }} --config {{ _durcissement_aide.conf }} --init"
+      async: 3600
+      poll: 20
+      register: _durcissement_aide_init
+      # Codes de sortie : 0 = base écrite ; > 0 = erreur (lire la sortie).
+      changed_when: _durcissement_aide_init.rc == 0
+      when: not _durcissement_aide_base.stat.exists and not ansible_check_mode
+      tags: [aide_build_database]
+
+    - name: Nouvelle base mise en service
+      ansible.builtin.copy:
+        src: "{{ _durcissement_aide.nouvelle }}"
+        dest: "{{ _durcissement_aide.base }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+      # Pas un gestionnaire : la base doit être en service AVANT la suite du rôle (minuterie, métrique).
+      when: _durcissement_aide_init is changed  # noqa: no-handler
+      tags: [aide_build_database]
+
+    - name: Scripts d'AIDE (métrique, nouvelle base)
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/usr/local/sbin/{{ item }}"
+        owner: root
+        group: root
+        mode: "0750"
+      loop: [aide-metrique, aide-nouvelle-base]
+
+    - name: Unités de vérification quotidienne
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [aide-verification.service, aide-verification.timer]
+      notify: Recharger systemd
+      tags: [aide_periodic_checking_systemd_timer]
+
+    - name: Prise en compte des unités
+      ansible.builtin.meta: flush_handlers
+
+    # Debian livre sa propre vérification quotidienne : une seule suffit (la nôtre écrit la métrique).
+    - name: Inventaire des unités
+      ansible.builtin.service_facts:
+
+    - name: Debian — minuterie fournie par le paquet désactivée
+      ansible.builtin.systemd_service:
+        name: dailyaidecheck.timer
+        enabled: false
+        state: stopped
+      when: "'dailyaidecheck.service' in ansible_facts.services"
+
+    - name: Vérification quotidienne programmée
+      ansible.builtin.systemd_service:
+        name: aide-verification.timer
+        enabled: true
+        state: started
+      tags: [aide_periodic_checking_systemd_timer]

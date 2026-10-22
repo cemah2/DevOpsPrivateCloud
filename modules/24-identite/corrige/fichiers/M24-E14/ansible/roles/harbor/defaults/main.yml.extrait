@@ -1,0 +1,9 @@
+# roles/harbor/defaults/main.yml — AJOUT de M24-E14 (PLAT-2514).
+# Autorité ajoutée au magasin de confiance des CONTENEURS de Harbor (core, jobservice, registry…).
+# Harbor n'a pas de clé harbor.yml dédiée à cela : « prepare » copie le paquet de
+# storage_service.ca_bundle dans common/config/shared/trust-certificates/, monté en /harbor_cust_cert
+# dans chaque conteneur et ajouté au magasin au démarrage (install_cert.sh de l'image). Le stockage
+# reste « filesystem » (aucun pilote déclaré dans storage_service). Chemin sur l'HÔTE (prepare le lit
+# par /hostfs), lisible par tous (prepare refuse sinon) : la racine posée par le rôle ca_lab (M06).
+# Sert à vérifier Keycloak (oidc_verify_cert, M24-E14) ; vide = rien n'est ajouté.
+harbor_ca_confiance: /usr/local/share/ca-certificates/medisphere-root-ca.crt

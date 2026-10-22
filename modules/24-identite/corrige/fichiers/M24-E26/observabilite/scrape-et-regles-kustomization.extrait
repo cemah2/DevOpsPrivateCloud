@@ -1,0 +1,4 @@
+# plateforme/observabilite — EXTRAITS (M24-E26) à ajouter aux listes « resources » existantes :
+#   scrape/kustomization.yaml :  - keycloak.yaml      # M24-E26
+#   regles/kustomization.yaml :  - identite.yaml      # M24-E26
+# Et au job de tests des règles (.gitlab-ci.yml, M21-E15) : tests/identite.test.yaml.

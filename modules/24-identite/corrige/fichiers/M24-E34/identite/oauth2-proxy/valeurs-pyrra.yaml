@@ -1,0 +1,39 @@
+# plateforme/identite — oauth2-proxy/valeurs-pyrra.yaml (M24-E34, PLAT-2534) : release oauth2-proxy-pyrra,
+# devant l'interface de Pyrra (supervision/pyrra-api:9099). Modèle : valeurs-hubble.yaml (M24-E18).
+# Groupes autorisés : plateforme-admins, plateforme, support, direction (comité de direction : SLO).
+fullnameOverride: oauth2-proxy-pyrra
+
+gatewayApi:
+  hostnames:
+    - slo.apps.par1.medisphere.internal
+
+config:
+  # Cookie propre à l'instance (préfixe __Host- : lié à slo.apps… exactement). Le Secret
+  # oauth2-proxy-oidc (client, cookie-secret) est commun aux instances du cluster : la signature du
+  # cookie inclut son nom, un cookie de Hubble ne vaut rien ici, et chaque instance revérifie ses
+  # propres groupes à chaque requête.
+  cookieName: __Host-oauth2-pyrra
+  configFile: |-
+    provider = "keycloak-oidc"
+    provider_display_name = "SSO MédiSphère"
+    oidc_issuer_url = "https://sso.par1.medisphere.internal/realms/medisphere"
+    provider_ca_files = ["/etc/medisphere-ca/medisphere-root-ca.crt"]
+    scope = "openid email profile"
+    code_challenge_method = "S256"
+    oidc_groups_claim = "groups"
+    user_id_claim = "preferred_username"
+    allowed_groups = ["plateforme-admins", "plateforme", "support", "direction"]
+    email_domains = ["*"]
+    redirect_url = "https://slo.apps.par1.medisphere.internal/oauth2/callback"
+    upstreams = ["http://pyrra-api.supervision.svc.cluster.local:9099"]
+    skip_provider_button = true
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "lax"
+    cookie_path = "/"
+    cookie_expire = "10h"
+    cookie_refresh = "5m"
+    reverse_proxy = true
+    trusted_proxy_ips = ["10.240.0.0/16"]
+    real_client_ip_header = "X-Forwarded-For"
+    silence_ping_logging = true

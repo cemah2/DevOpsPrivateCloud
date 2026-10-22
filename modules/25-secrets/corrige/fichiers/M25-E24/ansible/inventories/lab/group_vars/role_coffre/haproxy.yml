@@ -1,0 +1,41 @@
+---
+# group_vars/role_coffre/haproxy.yml — relais du défi ACME sur les nœuds du coffre (M25-E24).
+# Rôle haproxy du M07. HAProxy ne fait QUE cela ici : le port 80, le chemin du défi, rien d'autre ;
+# OpenBao (8200, 8201) ne passe jamais par HAProxy (la VIP est portée par keepalived, le TLS reste
+# de bout en bout chez OpenBao). Coût : une dizaine de Mo de mémoire par nœud.
+#
+# Le défi d'un nom porté par la VIP arrive sur le nœud actif ; be_acme essaie les trois nœuds en
+# 8402 : seul le demandeur y écoute (serveur de défi temporaire de step) ; les autres refusent la
+# connexion (RST) et HAProxy réessaie sur un autre serveur (retry-on conn-failure + redispatch à
+# chaque nouvel essai). Trois serveurs : trois essais au plus (retries 3).
+haproxy_bind_non_local: false
+
+haproxy_sections:
+  - type: frontend
+    nom: fe_acme
+    lignes:
+      - bind :80
+      - acl defi_acme path_beg /.well-known/acme-challenge/
+      - http-request deny deny_status 404 unless defi_acme
+      - default_backend be_acme
+
+  - type: backend
+    nom: be_acme
+    lignes:
+      - retries 3
+      - retry-on conn-failure
+      - option redispatch 1
+      - timeout connect 2s
+      - server vault01 10.10.20.21:8402
+      - server vault02 10.10.20.22:8402
+      - server vault03 10.10.20.23:8402
+
+  - type: listen
+    nom: stats
+    lignes:
+      - bind 127.0.0.1:8404
+      - stats enable
+      - stats uri /stats
+
+# Aucune URL à vérifier en TLS : HAProxy ne sert pas de page.
+haproxy_verifications: []

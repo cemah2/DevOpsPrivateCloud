@@ -1,0 +1,17 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (rôle sauvegarde_identite).') }}
+[Unit]
+Description=Sauvegarde chiffrée de l'identité ({{ sauvegarde_identite_mode }}) vers s3-01 (M24-E25)
+Wants=network-online.target
+After=network-online.target{{ ' postgresql.service' if sauvegarde_identite_mode == 'keycloak' else ' ipa.service' }}
+OnFailure=ms-alerte@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/identite-sauvegarde
+# root est nécessaire (pg_dump en postgres, ipa-backup) ; on limite le reste.
+PrivateTmp=yes
+ProtectHome=yes
+NoNewPrivileges=yes
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=1h

@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# conformite-analyse.service — rôle durcissement (M26-E24). Analyse OpenSCAP + Lynis, en lecture seule.
+# PAS de bac à sable qui change la VUE du système (PrivateTmp, ProtectSystem, ProtectHome…) : oscap
+# vérifie justement les options de montage de /tmp, /home, /var… ; un /tmp privé fausserait les règles
+# « partition /tmp nodev,nosuid,noexec » et la mesure ne vaudrait plus rien. On borne la CHARGE à la place.
+[Unit]
+Description=Analyse de conformité OpenSCAP et Lynis (MédiSphère)
+Documentation=https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/conformite-continue.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/conformite-analyse
+# Priorité basse : l'analyse cède le processeur et le disque à tout le reste.
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=10
+CPUQuota={{ durcissement_conformite_quota_cpu }}
+MemoryMax={{ durcissement_conformite_memoire_max }}
+TimeoutStartSec=3h
+NoNewPrivileges=yes

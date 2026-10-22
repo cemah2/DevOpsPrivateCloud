@@ -1,0 +1,14 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (format de M20-E13 : liste « charts: »,
+# champs nom, depot, version, empreinte, usage), M26-E07 (PLAT-2707). Une entrée de plus.
+# Empreinte : sha256 de l'archive publiée, relevée dans l'index du dépôt amont
+#   curl -s https://kyverno.github.io/kyverno/index.yaml \
+#     | yq '.entries.kyverno[] | select(.version == "3.9.2") | .digest'
+# et recalculée sur l'archive téléchargée (sha256sum kyverno-3.9.2.tgz) : les deux doivent être égales.
+# Les sous-charts (crds = kyverno-api, openreports, reports-server, grafana) sont DANS l'archive.
+charts:
+  # … entrées existantes …
+  - nom: kyverno
+    depot: https://kyverno.github.io/kyverno/
+    version: 3.9.2
+    empreinte: sha256:f6fe7184544d5e2ee33a77808c09e67aa603ce6560cc197038fde31d727c861e
+    usage: "Admission (M26-E07), Application plateforme/gitops plateforme/kyverno.yaml"

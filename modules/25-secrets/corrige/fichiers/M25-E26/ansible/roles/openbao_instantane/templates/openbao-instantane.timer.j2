@@ -1,0 +1,11 @@
+# /etc/systemd/system/openbao-instantane.timer — {{ inventory_hostname }} (M25-E26)
+# Même minute sur les trois nœuds : seul l'actif envoie (RPO ≤ 1 h + durée d'envoi).
+[Unit]
+Description=Instantané horaire d'OpenBao (M25-E26)
+
+[Timer]
+OnCalendar=*-*-* *:{{ openbao_instantane_minute }}:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

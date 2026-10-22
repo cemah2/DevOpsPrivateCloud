@@ -1,0 +1,44 @@
+# plateforme/gitops — plateforme/falco.yaml (version M26-E19 ; créée en M26-E08)
+# Application « falco », projet « plateforme ». Une source de plus qu'en E08 :
+#   1. le chart recopié dans Harbor charts/ par plateforme/charts-miroir (jamais tiré d'Internet) ;
+#   2. ce dépôt (référence « values ») : valeurs du chart, valeurs/falco/values.yaml (E08, E19) ;
+#   3. plateforme/politiques (référence « politiques ») : règles MédiSphère, falco/regles-medisphere.yaml
+#      (fichier de valeurs dont la clé customRules devient la ConfigMap falco-rules).
+# Ordre des valueFiles : le second complète le premier. Une MR sur les règles change la ConfigMap ;
+# la somme de contrôle posée par le chart (checksum/rules) redémarre les pods de Falco un à un.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+  annotations:
+    medisphere.internal/ticket: "SEC-2719"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: falco
+      targetRevision: 9.2.1
+      helm:
+        releaseName: falco
+        valueFiles:
+          - $values/valeurs/falco/values.yaml
+          - $politiques/falco/regles-medisphere.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/politiques.git
+      targetRevision: main
+      ref: politiques
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

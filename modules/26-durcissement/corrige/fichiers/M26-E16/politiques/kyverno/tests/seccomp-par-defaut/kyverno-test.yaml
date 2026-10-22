@@ -1,0 +1,23 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: seccomp-par-defaut
+policies:
+  - ../../mutation/seccomp-par-defaut.yaml
+resources:
+  - ressources.yaml
+variables: ../valeurs.yaml
+results:
+  # Le pod modifié doit être EXACTEMENT celui d'attendu.yaml (runAsNonRoot conservé).
+  - policy: seccomp-par-defaut
+    isMutatingPolicy: true
+    resources: [sans-seccomp, sans-securitycontext]
+    kind: Pod
+    patchedResources: attendu.yaml
+    result: pass
+  # Un pod qui a déjà choisi son profil n'est pas touché.
+  - policy: seccomp-par-defaut
+    isMutatingPolicy: true
+    resources: [seccomp-localhost]
+    kind: Pod
+    result: skip

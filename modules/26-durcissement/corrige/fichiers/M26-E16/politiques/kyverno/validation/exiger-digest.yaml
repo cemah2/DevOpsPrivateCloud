@@ -1,0 +1,44 @@
+# plateforme/politiques — kyverno/validation/exiger-digest.yaml (M26-E16, PLAT-2716)
+# En production, toute image est désignée par son condensé (@sha256:…) : ce qui tourne est
+# exactement ce qui a été signé et analysé (promesse de M14-E21 et M20). Une étiquette, même
+# immuable dans Harbor, ne se vérifie pas dans le manifeste.
+# Espaces visés : étiquette medisphere.internal/environnement=prod (posée par plateforme/k8s/espaces).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: exiger-digest
+  annotations:
+    policies.kyverno.io/title: Images par condensé en production
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: PLAT-2716
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        medisphere.internal/environnement: prod
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image) +
+        (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : [])
+    - name: sansCondense
+      expression: variables.images.filter(i, !i.matches('@sha256:[a-f0-9]{64}$'))
+  validations:
+    - expression: size(variables.sansCondense) == 0
+      messageExpression: >-
+        'image(s) sans condensé en production : ' + variables.sansCondense.join(', ') +
+        ' (attendu : registry.par1.medisphere.internal/<projet>/<dépôt>@sha256:<64 hex>)'
+      reason: Forbidden

@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: freeipa_client
+  author: equipe-plateforme
+  description: Inscription d'un hôte Debian 13 dans FreeIPA (mot de passe à usage unique, SSSD, comptes locaux protégés)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

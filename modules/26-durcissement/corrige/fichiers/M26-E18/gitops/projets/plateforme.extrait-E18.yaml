@@ -1,0 +1,6 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject, M20 ; complété en E07).
+# M26-E18 : l'Application « politiques » synchronise aussi kyverno/exceptions/ dans kyverno-exceptions.
+spec:
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: kyverno-exceptions

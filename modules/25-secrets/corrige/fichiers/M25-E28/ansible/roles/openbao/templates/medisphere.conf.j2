@@ -1,0 +1,49 @@
+# {{ openbao_entete }}
+# /etc/systemd/system/openbao.service.d/medisphere.conf — rôle openbao. ÉTAT EN FIN DE PALIER 3
+# (M25-E03 ; kms.env M25-E25 ; durcissement M25-E28). L'unité du paquet reste intacte (c'est un
+# fichier de configuration du paquet : la modifier, c'est s'exposer à une question de dpkg à chaque
+# montée de version) ; on la complète ici. Contrôle : systemd-analyze security openbao.service.
+# ⚠️ Appliquer un nœud EN ATTENTE à la fois (openbao_redemarrer=true --limit) ; retour arrière :
+# remettre la version précédente de ce fichier (git revert), daemon-reload, redémarrer.
+[Service]
+# Un vidage mémoire contiendrait la clé de la barrière en clair : jamais de fichier core.
+LimitCORE=0
+LimitNOFILE=65536
+{% if openbao_seal_transit | default(false) | bool %}
+# Jeton du seal transit (BAO_TOKEN), lu par systemd en root avant de passer à l'utilisateur openbao.
+EnvironmentFile=/etc/openbao/kms.env
+{% endif %}
+{% if openbao_unite_durcie | bool %}
+
+# --- Durcissement (M25-E28) ---
+# Tout le système en lecture seule, sauf les données Raft et le journal d'audit.
+ProtectSystem=strict
+ReadWritePaths={{ openbao_dossier_donnees }} {{ openbao_dossier_journaux }}
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+UMask=0077
+# Noyau, journaux du noyau, cgroups, horloge, nom d'hôte : rien à y faire.
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+# Réseau IP et sockets locales seulement ; pas d'espaces de noms, pas de temps réel, pas de setuid.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Le runtime Go n'écrit pas de pages exécutables ; aucun greffon externe chez nous (tous intégrés).
+# Si un jour un greffon (plugin_directory) ne démarre plus, c'est la première ligne à suspecter.
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# Ensemble prévu pour les services système ; un appel hors liste reçoit EPERM au lieu de tuer le
+# processus (diagnostic plus simple : l'erreur apparaît dans le journal).
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# CapabilityBoundingSet=CAP_SYSLOG et NoNewPrivileges=yes viennent déjà de l'unité du paquet.
+{% endif %}

@@ -1,0 +1,37 @@
+# plateforme/k8s — espaces/wb-essais/80-openbao.yaml (M25-E12, PLAT-2612)
+# Entrée de l'espace dans le coffre : compte de service « eso » (aucun pod ne l'utilise ; ESO demande
+# pour lui des jetons projetés d'audience openbao.medisphere.internal) et SecretStore « openbao ».
+# La plateforme décide COMMENT un espace entre dans le coffre (serveur, méthode, rôle) ; l'équipe
+# décide QUOI lire (ExternalSecret). Même modèle pour chaque espace applicatif (M25-E13).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: eso
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/part-of: external-secrets
+# Aucun pod ne monte ce compte : pas de jeton automatique.
+automountServiceAccountToken: false
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: openbao
+  namespace: wb-essais
+spec:
+  provider:
+    vault:
+      server: https://openbao.par1.medisphere.internal:8200
+      # Chemin du MOTEUR, sans « data/ » : ESO l'ajoute lui-même pour la version v2.
+      path: kv
+      version: v2
+      # Racine MédiSphère (publique), en base64 : ESO ne lit pas le magasin d'autorités du nœud.
+      caBundle: <RACINE-MEDISPHERE-EN-BASE64>
+      auth:
+        kubernetes:
+          mountPath: k8s-par1
+          role: eso-wb-essais
+          serviceAccountRef:
+            name: eso
+            audiences:
+              - openbao.medisphere.internal

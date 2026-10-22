@@ -1,0 +1,45 @@
+# plateforme/observabilite — scrape/openbao.yaml (M25-E27, PLAT-2627).
+# Télémétrie d'OpenBao : /v1/sys/metrics?format=prometheus sur CHAQUE nœud (pas la VIP : on veut
+# l'état de chacun, y compris des nœuds en attente et de kms01). Accès sans jeton (écouteur :
+# telemetry { unauthenticated_metrics_access = true }), choix écrit dans
+# docs/securite/secrets/supervision.md. Un nœud SCELLÉ répond quand même (vault_core_unsealed 0) ;
+# un nœud dont le processus est arrêté ne répond pas (up == 0) : l'alerte OpenBaoScelle regarde les deux.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: openbao
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: openbao
+  scheme: HTTPS
+  metricsPath: /v1/sys/metrics
+  params:
+    format: [prometheus]
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  tlsConfig:
+    ca:
+      configMap:
+        name: racine-medisphere
+        key: ca.crt
+  relabelings:
+    - sourceLabels: [__address__]
+      regex: '([^.:]+)[.:].*'
+      targetLabel: instance
+      replacement: '${1}'
+  staticConfigs:
+    - targets:
+        - vault01.par1.medisphere.internal:8200
+        - vault02.par1.medisphere.internal:8200
+        - vault03.par1.medisphere.internal:8200
+      labels:
+        role: coffre
+        site: par1
+        equipe: plateforme
+    - targets: ["kms01.par1.medisphere.internal:8200"]
+      labels:
+        role: kms
+        site: par1
+        equipe: plateforme

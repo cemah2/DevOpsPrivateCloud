@@ -1,0 +1,6 @@
+# plateforme/k8s — rbac/wb-checks-securite.yaml (EXTRAIT M26-E20)
+# Règle à AJOUTER à la ClusterRole agrégée wb-checks-securite (créée au M24, étendue en M25-E12 à ESO
+# et en M26-E07 à Kyverno) : lecture des objets de Tetragon. Jamais les Secrets.
+  - apiGroups: ["cilium.io"]
+    resources: ["tracingpolicies", "tracingpoliciesnamespaced", "podinfo"]
+    verbs: ["get", "list", "watch"]

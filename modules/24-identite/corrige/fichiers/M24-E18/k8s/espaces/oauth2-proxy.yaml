@@ -1,0 +1,12 @@
+# plateforme/k8s — espaces/oauth2-proxy.yaml (M24-E18). Créé par « task espaces » AVANT la première
+# synchronisation de l'Application oauth2-proxy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oauth2-proxy
+  labels:
+    app.kubernetes.io/part-of: plateforme-identite
+    medisphere.internal/exposition: oui          # allowedRoutes de gw-par1 (M15-E12) : les HTTPRoute du chart
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

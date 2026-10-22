@@ -1,0 +1,8 @@
+# plateforme/charts-miroir — entrée à AJOUTER à charts.yaml (M24-E18), sous la clé « charts: ».
+# Empreinte : champ « digest » de l'index https://oauth2-proxy.github.io/manifests/index.yaml pour
+# 10.7.1, recalculée par « helm pull » + sha256sum le 22/10/2026 ; vérifie-la toi-même avant la MR.
+- nom: oauth2-proxy
+  depot: https://oauth2-proxy.github.io/manifests
+  version: 10.7.1
+  empreinte: sha256:a5cb2bb8368a6d7d11e2b135ed51ddd5612cfd20381d242d72242a8aaffe75e8
+  usage: "OAuth2 Proxy 7.15.5 (M24-E18), Application plateforme/gitops plateforme/oauth2-proxy.yaml (deux releases)"

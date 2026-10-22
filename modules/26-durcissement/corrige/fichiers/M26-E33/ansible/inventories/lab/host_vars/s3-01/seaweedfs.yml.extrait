@@ -1,0 +1,22 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT : ajouts de M26-E33 (SEC-2733).
+seaweedfs_identites:
+  # … identités existantes …
+  # Dépôt des preuves (RB-262) : écrire et lister, JAMAIS supprimer. Lecture : RSSI seulement.
+  - nom: preuves-depot
+    cle_acces: "{{ vault_s3_preuves_depot_cle_acces }}"
+    cle_secrete: "{{ vault_s3_preuves_depot_cle_secrete }}"
+    actions: [Write:preuves, List:preuves]
+  - nom: preuves-lecture
+    cle_acces: "{{ vault_s3_preuves_lecture_cle_acces }}"
+    cle_secrete: "{{ vault_s3_preuves_lecture_cle_secrete }}"
+    actions: [Read:preuves, List:preuves]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  # Versionné : une preuve réécrite garde sa version d'origine (l'identité de dépôt peut écraser un objet).
+  # Rétention immuable (verrouillage d'objet S3) : à activer SI la version de SeaweedFS en place le prend
+  # en charge (vérifié dans sa documentation au moment de l'exercice) ; sinon, compensation : versionnage,
+  # empreintes SHA-256 de chaque pièce consignées dans le ticket INC et dans le journal d'incident (Git),
+  # copie hebdomadaire vers PBS (par1/preuves).
+  - nom: preuves
+    versionnage: true

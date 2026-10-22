@@ -1,0 +1,6 @@
+# group_vars/<groupe>/openbao.yml — EXTRAIT : montée de version (M25-E29, CHG-2629). Deux lignes, une MR.
+# Empreinte relevée dans checksums.txt de la publication v2.7.1 (après vérification de sa signature),
+# comme au M25-E03. Appliquer en roulement : RB-253 (role_coffre : en attente, step-down, actif ;
+# role_kms en DERNIER et seul).
+openbao_version: "2.7.1"
+openbao_sha256: "aa5dd78f590a89256dffae7c7f8664b11e4380478da86454d8030020f6af0add"

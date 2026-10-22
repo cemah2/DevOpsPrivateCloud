@@ -1,0 +1,8 @@
+# plateforme/politiques — kyverno/exceptions/kustomization.yaml (M26-E18)
+# Toutes les PolicyException vivent dans l'espace kyverno-exceptions, le SEUL que Kyverno lit
+# (features.policyExceptions.namespace) : une exception posée ailleurs n'a aucun effet.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kyverno-exceptions
+resources:
+  - cnpg-operateur-sans-condense.yaml

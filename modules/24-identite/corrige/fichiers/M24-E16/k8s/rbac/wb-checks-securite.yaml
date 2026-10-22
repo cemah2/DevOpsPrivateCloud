@@ -1,0 +1,35 @@
+# plateforme/k8s — rbac/wb-checks-securite.yaml (M24-E16, PLAN §4.12)
+# Lecture seule des objets de SÉCURITÉ du bloc F pour le compte des vérifications du workbook
+# (wb-system/wb-checks, M14-E06). AGRÉGÉE au ClusterRole « wb-checks » par l'étiquette
+# workbook.medisphere.internal/checks=true (comme wb-checks-observabilite, -livraison…) : aucune
+# liaison à écrire. Prévue pour M24 à M26 ; une règle sur un groupe d'API absent ne gêne pas.
+# JAMAIS de Secret : ni la ressource « secrets », ni les objets qui en recopient les valeurs.
+# Déjà couverts par wb-checks-base (M14-E06) : RBAC (rôles et liaisons, dont celles des groupes
+# oidc:… de M24-E17), espaces et leurs étiquettes Pod Security, politiques d'admission natives
+# (admissionregistration.k8s.io), politiques Cilium et CRD de Tetragon (cilium.io), et la création de
+# SubjectAccessReview (« kubectl auth can-i --as » des checks d'E17, sans droit d'emprunt d'identité).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-securite
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  # External Secrets Operator (M25) : descriptions des magasins et des synchronisations, statuts. Les
+  # VALEURS sont dans des Secrets, que ce rôle ne lit pas.
+  - apiGroups: ["external-secrets.io"]
+    resources:
+      - externalsecrets
+      - clusterexternalsecrets
+      - secretstores
+      - clustersecretstores
+      - pushsecrets
+    verbs: ["get", "list", "watch"]
+  # Kyverno (M26) : politiques CEL (policies.kyverno.io) et rapports.
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["wgpolicyk8s.io", "reports.kyverno.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]

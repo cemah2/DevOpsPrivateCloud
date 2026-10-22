@@ -1,0 +1,49 @@
+# roles/durcissement/defaults/main.yml — EXTRAIT : variables ajoutées en M26-E24 (conformité continue).
+# Les variables du rôle d'E10 (durcissement_referentiel, durcissement_exceptions…) sont inchangées.
+
+# Interrupteur (retour arrière : false, puis rejouer le rôle → minuterie arrêtée et désactivée).
+durcissement_conformite_continue_actif: true
+
+# Contenu ComplianceAsCode 0.1.82 déplié par le rôle (E10). Les noms des datastreams et des profils
+# sont ceux relevés en E04 (docs/securite/durcissement/referentiels.md) : vérifie-les avec
+# « oscap info <datastream> ». Rocky 10 : le datastream RHEL 10 amont vise la CPE de RHEL et marque
+# l'essentiel des règles « notapplicable » sur Rocky ; on prend celui du paquet scap-security-guide
+# d'AppStream (même version 0.1.82, adapté à Rocky).
+durcissement_conformite_datastream_par_famille:
+  Debian: /usr/local/share/scap/ssg-0.1.82/ssg-debian13-ds.xml
+  RedHat: /usr/share/xml/scap/ssg/content/ssg-rl10-ds.xml
+durcissement_conformite_datastream: "{{ durcissement_conformite_datastream_par_famille[ansible_os_family] }}"
+
+# Profil adapté généré par le rôle à partir de durcissement_exceptions (E10). Si ton tailoring
+# DÉRIVE de nouveaux profils (nouvel identifiant), mets ces identifiants dans durcissement_conformite_profils.
+durcissement_conformite_tailoring: /etc/durcissement/tailoring.xml
+durcissement_conformite_profils_par_famille:
+  Debian:
+    cis_l1_serveur: xccdf_org.ssgproject.content_profile_cis_level1_server
+    anssi_intermediaire: xccdf_org.ssgproject.content_profile_anssi_bp28_intermediary
+  RedHat:
+    cis_l1_serveur: xccdf_org.ssgproject.content_profile_cis_server_l1
+    anssi_intermediaire: xccdf_org.ssgproject.content_profile_anssi_bp28_intermediary
+durcissement_conformite_profils: "{{ durcissement_conformite_profils_par_famille[ansible_os_family] }}"
+
+# Planification : dimanche 03:30, décalage aléatoire fixe par hôte jusqu'à 30 min.
+durcissement_conformite_heure: "03:30"
+durcissement_conformite_calendrier: "Sun *-*-* {{ durcissement_conformite_heure }}:00"
+durcissement_conformite_decalage: 30min
+# Bornes de charge (mesurées sur mon01 : ~6 min et ~350 Mio par référentiel, à remplacer par TES mesures).
+durcissement_conformite_quota_cpu: 50%
+durcissement_conformite_memoire_max: 1G
+
+# Résultats.
+durcissement_conformite_s3_url: https://s3-01.par1.medisphere.internal:8333
+durcissement_conformite_compartiment: conformite
+durcissement_conformite_s3_cle_acces: "{{ vault_s3_conformite_cle_acces }}"
+durcissement_conformite_s3_cle_secrete: "{{ vault_s3_conformite_cle_secrete }}"
+# Même dossier que le rôle node_exporter (M21-E08) ; monté dans le DaemonSet node-exporter de kps
+# pour les nœuds de k8s-par1.
+durcissement_conformite_textfile: /var/lib/prometheus/node-exporter
+
+# Lynis (dépôt CISOfy sur Debian : Debian 13 livre une 3.1.4 jugée trop ancienne par Lynis ; EPEL sur Rocky).
+durcissement_conformite_lynis: true
+durcissement_conformite_lynis_depot_debian: https://packages.cisofy.com/community/lynis/deb/
+durcissement_conformite_lynis_cle_debian: https://packages.cisofy.com/keys/cisofy-software-public.key

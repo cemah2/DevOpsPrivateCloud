@@ -1,0 +1,14 @@
+# {{ durcissement_entete }}
+# /etc/security/faillock.conf (rôle durcissement, M26-E11)
+# Verrouillage après {{ durcissement_faillock_essais }} échecs en {{ durcissement_faillock_intervalle }} s,
+# pendant {{ durcissement_faillock_deverrouillage }} s.
+# root n'est PAS verrouillé (pas de even_deny_root) : la console reste une voie de secours.
+# Déverrouiller : faillock --user <compte> --reset (root) ; état : faillock --user <compte>.
+# Comptes LOCAUX seulement : les personnes de l'annuaire ont la politique de verrouillage de FreeIPA
+# (M24) ; les compter ici aussi les verrouillerait deux fois, avec deux procédures de déblocage.
+local_users_only
+deny = {{ durcissement_faillock_essais }}
+fail_interval = {{ durcissement_faillock_intervalle }}
+unlock_time = {{ durcissement_faillock_deverrouillage }}
+audit
+silent

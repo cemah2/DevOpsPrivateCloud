@@ -1,0 +1,24 @@
+#!/bin/bash
+# {{ durcissement_entete }}
+# /usr/local/sbin/aide-nouvelle-base (rôle durcissement, M26-E12)
+# Refait la base AIDE après un changement VOULU (vague de durcissement, montée de version) et garde
+# l'ancienne pour comparaison. À lancer par root, après avoir LU le dernier rapport :
+#   journalctl -u aide-verification --since today
+set -euo pipefail
+
+conf="{{ _durcissement_aide.conf }}"
+base="{{ _durcissement_aide.base }}"
+nouvelle="{{ _durcissement_aide.nouvelle }}"
+
+[[ $EUID -eq 0 ]] || { echo "à lancer en root" >&2; exit 1; }
+# --update compare à l'ancienne base ET écrit la nouvelle : code 0-7 attendu.
+code=0
+{{ _durcissement_aide_binaire.stdout }} --config "$conf" --update || code=$?
+if (( code >= 14 )); then
+  echo "aide --update a échoué (code $code) : base inchangée" >&2
+  exit "$code"
+fi
+cp -p "$base" "$base.$(date +%Y%m%d-%H%M%S)"
+mv -f "$nouvelle" "$base"
+logger -t aide-verification "nouvelle base AIDE en service (écarts acceptés : code $code)"
+echo "Nouvelle base en service ; ancienne gardée à côté (horodatée)."

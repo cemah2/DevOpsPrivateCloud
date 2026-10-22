@@ -1,0 +1,4 @@
+# ansible.cfg — section [defaults] : M26-E10 ajoute l'inventaire des vagues de durcissement (groupes
+# seulement ; les hôtes viennent des sources NetBox). Garde les sources des modules précédents.
+[defaults]
+inventory = inventories/lab/netbox.yml,inventories/lab/netbox-ceph.yml,inventories/lab/netbox-k8s.yml,inventories/lab/durcissement.yml

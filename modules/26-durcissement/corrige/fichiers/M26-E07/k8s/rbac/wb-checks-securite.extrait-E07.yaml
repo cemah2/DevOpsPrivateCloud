@@ -1,0 +1,42 @@
+# À INTÉGRER dans plateforme/k8s — rbac/wb-checks-securite.yaml (ClusterRole agrégée créée au M24,
+# étendue au M25 pour ESO), M26-E07 (PLAT-2707). Ajoute les règles ci-dessous à la liste « rules »
+# existante, sans retirer celles des modules précédents. Si le fichier n'existe pas encore, crée-le
+# tel quel : en-tête ci-dessous (étiquette d'agrégation au ClusterRole « wb-checks », M14-E06).
+# Lecture seule ; JAMAIS de Secrets ; aucune sous-ressource d'écriture.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-securite
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  # (… règles du M24 et du M25 …)
+  # Kyverno 1.19 : politiques CEL et exceptions (policies.kyverno.io), toutes versions servies.
+  - apiGroups: ["policies.kyverno.io"]
+    resources:
+      - validatingpolicies
+      - namespacedvalidatingpolicies
+      - imagevalidatingpolicies
+      - namespacedimagevalidatingpolicies
+      - mutatingpolicies
+      - namespacedmutatingpolicies
+      - generatingpolicies
+      - namespacedgeneratingpolicies
+      - deletingpolicies
+      - namespaceddeletingpolicies
+      - policyexceptions
+    verbs: ["get", "list", "watch"]
+  # Anciens types (dépréciés en 1.19, supprimés en 1.20) : lus pour PROUVER qu'il n'y en a pas.
+  - apiGroups: ["kyverno.io"]
+    resources: ["clusterpolicies", "policies", "policyexceptions"]
+    verbs: ["get", "list", "watch"]
+  # Rapports de politiques (Policy Reports API, groupe wgpolicyk8s.io).
+  - apiGroups: ["wgpolicyk8s.io"]
+    resources: ["policyreports", "clusterpolicyreports"]
+    verbs: ["get", "list", "watch"]
+  # Configurations des webhooks d'admission (sélecteurs d'espaces, failurePolicy) : pas de secret,
+  # le caBundle est un certificat public.
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations", "mutatingwebhookconfigurations"]
+    verbs: ["get", "list", "watch"]

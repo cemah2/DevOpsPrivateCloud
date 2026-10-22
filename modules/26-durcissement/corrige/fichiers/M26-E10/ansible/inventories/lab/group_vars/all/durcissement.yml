@@ -1,0 +1,88 @@
+---
+# group_vars/all/durcissement.yml — exceptions du parc au référentiel (M26-E10, E14 ; registre lisible :
+# docs/securite/durcissement/exceptions.md, E23 ; procédure : RB-261).
+# Une exception : { regle (identifiant XCCDF court), hotes (hôtes, groupes d'inventaire ou all),
+# justification, valideur, revue (AAAA-MM-JJ) }. Le rôle refuse une exception incomplète ou échue.
+# Compensation et risque résiduel : dans le registre lisible, pas ici (une ligne par exception).
+
+durcissement_exceptions:
+  # --- Routage : passerelles, nœuds Kubernetes (CNI), hôtes Docker (réseau des conteneurs) -----------
+  # Les trois règles décrivent le même réglage du noyau : toujours ensemble (le rôle le vérifie).
+  - regle: sysctl_net_ipv4_ip_forward
+    hotes: [role_routeur, k8s_par1, runner02, reg01]
+    justification: >-
+      Routeurs de bordure (gw01, gw02) ; nœuds Kubernetes (Cilium route le trafic des pods) ;
+      runner02 et reg01 (Docker Engine route le réseau de ses conteneurs).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: sysctl_net_ipv4_conf_all_forwarding
+    hotes: [role_routeur, k8s_par1, runner02, reg01]
+    justification: Même réglage que net.ipv4.ip_forward (voir l'exception sysctl_net_ipv4_ip_forward).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: sysctl_net_ipv4_conf_default_forwarding
+    hotes: [role_routeur, k8s_par1, runner02, reg01]
+    justification: Même réglage que net.ipv4.ip_forward (voir l'exception sysctl_net_ipv4_ip_forward).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+
+  # --- Filtrage strict par chemin de retour -----------------------------------------------------------
+  - regle: sysctl_net_ipv4_conf_all_rp_filter
+    hotes: [role_routeur, k8s_par1]
+    justification: >-
+      rp_filter strict sur « all » l'emporte sur le 0 que Cilium pose sur ses interfaces (trafic des
+      pods rejeté) ; sur la bordure, tunnels WireGuard et routes de politique. Filtrage lâche (2) appliqué.
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: sysctl_net_ipv4_conf_default_rp_filter
+    hotes: [role_routeur, k8s_par1]
+    justification: Les interfaces créées après le démarrage (lxc de Cilium, wg) héritent de « default ».
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+
+  # --- Pare-feu local : nftables par le rôle pare_feu_local (M06), pas ufw ---------------------------
+  - regle: service_ufw_enabled
+    hotes: [all]
+    justification: >-
+      Le pare-feu local des VMs Debian est nftables, géré par le rôle pare_feu_local depuis le M06 ;
+      ufw ajouterait une seconde source de règles. Règle propre à Debian (ignorée sur Rocky).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+
+  # --- Services que l'hôte rend (le référentiel les veut absents d'un serveur « générique ») ----------
+  - regle: service_kea_dhcp4_server_disabled
+    hotes: [dns01, dns02]
+    justification: Serveurs DHCP du lab (Kea, M06) en paire haute disponibilité.
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: service_nginx_disabled
+    hotes: [nbx01]
+    justification: Frontal HTTPS de NetBox (M06).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: service_dnsmasq_disabled
+    hotes: [role_routeur]
+    justification: Relais DHCP des VLAN routés par la bordure (dnsmasq, M00-E14 puis rôle relais_dhcp).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: package_httpd_removed
+    hotes: [ipa01]
+    justification: FreeIPA sert son interface et son API par Apache httpd (M24).
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+
+  # --- Choix de la plateforme ----------------------------------------------------------------------------
+  - regle: sshd_set_loglevel_info
+    hotes: [all]
+    justification: >-
+      LogLevel VERBOSE (M04-E11) : journalise l'empreinte de la clé ou du certificat utilisé, preuve
+      d'attribution exigée par la RSSI. VERBOSE inclut tout ce que donne INFO.
+    valideur: sophie.laurent
+    revue: "2027-04-30"
+  - regle: audit_rules_immutable
+    hotes: [all]
+    justification: >-
+      Règles d'audit encore en évolution pendant le programme ; « -e 2 » imposerait un redémarrage à
+      chaque changement. Compensation : modification des règles auditée (clé « mac » et « medisphere »).
+    valideur: sophie.laurent
+    revue: "2027-01-31"

@@ -1,0 +1,17 @@
+## {{ durcissement_entete }}
+## /etc/audit/rules.d/50-medisphere.rules (rôle durcissement, M26-E12) — exigences MédiSphère (HDS).
+
+## Toute commande lancée par une personne (session ouverte par un compte d'UID ≥ {{ durcissement_auditd_uid_min }},
+## y compris après sudo : l'auid ne change pas). Le compte d'automatisation admin en fait partie :
+## c'est voulu (bris de glace), le volume est mesuré en E12.
+-a always,exit -F arch=b64 -S execve,execveat -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k exec-humain
+-a always,exit -F arch=b32 -S execve,execveat -F auid>={{ durcissement_auditd_uid_min }} -F auid!=unset -k exec-humain
+
+## Fichiers sensibles (posés seulement si le chemin existe sur {{ inventory_hostname }})
+{% for r in _durcissement_chemins_audit.results %}
+{%   if r.stat.exists %}
+-w {{ r.item.chemin }} -p {{ r.item.droits }} -k {{ r.item.cle }}
+{%   else %}
+## (absent ici) {{ r.item.chemin }}
+{%   endif %}
+{% endfor %}

@@ -1,0 +1,17 @@
+#!/bin/sh
+# /usr/local/sbin/principaux-annuaire — AuthorizedPrincipalsCommand de sshd (rôle ssh_ca_utilisateur, M24-E20).
+# Appelé par sshd avec le nom du compte visé (%u), sous l'utilisateur nobody.
+# Imprime le nom du compte si, et seulement si, SSSD le résout (personne de l'annuaire) : le certificat
+# est alors accepté s'il porte ce principal (preferred_username, gabarit du provisioner keycloak).
+# N'imprime RIEN pour un compte local (admin, root… : filter_users de SSSD, M24-E19) : ceux-là ne
+# dépendent que de AuthorizedPrincipalsFile (/etc/ssh/principaux/<compte>).
+# Lecture seule ; n'écrit rien ; code 0 dans tous les cas (sshd traite une sortie vide comme un refus).
+set -eu
+compte="${1:-}"
+case "$compte" in
+  '' | *[!a-z0-9._-]* | .* | -*) exit 0 ;;
+esac
+if getent -s sss passwd "$compte" >/dev/null 2>&1; then
+  printf '%s\n' "$compte"
+fi
+exit 0

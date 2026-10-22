@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Pod
+metadata: {name: limites-ok, namespace: mediagenda-recette}
+spec:
+  containers:
+    - name: api
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+      resources:
+        requests: {cpu: 100m, memory: 128Mi}
+        limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: sans-limite-memoire, namespace: mediagenda-recette}
+spec:
+  containers:
+    - name: api
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+      resources:
+        requests: {cpu: 100m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: init-sans-ressources, namespace: mediagenda-recette}
+spec:
+  initContainers:
+    - name: migration
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+  containers:
+    - name: api
+      image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+      resources:
+        requests: {cpu: 100m, memory: 128Mi}
+        limits: {memory: 256Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: deploiement-sans-ressources, namespace: mediagenda-recette}
+spec:
+  selector: {matchLabels: {app: x}}
+  template:
+    metadata: {labels: {app: x}}
+    spec:
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: hors-equipe, namespace: wb-essais}
+spec:
+  containers:
+    - name: essai
+      image: registry.par1.medisphere.internal/bibliotheque/debian:13

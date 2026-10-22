@@ -1,0 +1,41 @@
+---
+# Contrôles après déploiement : l'instance répond, ne laisse rien passer sans session, et renvoie
+# vers le bon émetteur avec PKCE. Aucun secret affiché.
+
+- name: Santé de chaque instance (/ping, sans authentification)
+  ansible.builtin.uri:
+    url: "{{ item.url_publique }}/ping"
+    ca_path: "{{ oauth2_proxy_racine }}"
+    status_code: 200
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _oauth2_proxy_ping
+  retries: 5
+  delay: 3
+  until: _oauth2_proxy_ping is succeeded
+
+- name: Sans session, la page protégée renvoie vers Keycloak (jamais vers l'amont)
+  ansible.builtin.uri:
+    url: "{{ item.url_publique }}/oauth2/start?rd=%2F"
+    ca_path: "{{ oauth2_proxy_racine }}"
+    follow_redirects: none
+    status_code: 302
+  loop: "{{ oauth2_proxy_instances }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  register: _oauth2_proxy_depart
+
+- name: La redirection vise l'émetteur du royaume medisphere, le client oauth2-proxy et PKCE S256
+  ansible.builtin.assert:
+    that:
+      - item.location is search('^' ~ (oauth2_proxy_emetteur | regex_escape) ~ '/protocol/openid-connect/auth\\?')
+      - item.location is search('client_id=' ~ oauth2_proxy_client_id)
+      - item.location is search('code_challenge_method=S256')
+    fail_msg: >-
+      {{ item.item.nom }} : redirection inattendue
+      ({{ item.location | default('aucune') | regex_replace('(state|code_challenge|nonce)=[^&]*', '\\1=…') }})
+    quiet: true
+  loop: "{{ _oauth2_proxy_depart.results }}"
+  loop_control:
+    label: "{{ item.item.nom }}"

@@ -1,0 +1,16 @@
+<!-- plateforme/medisphere — docs/kubernetes/acces.md : section AJOUTÉE par M24-E16 (PLAT-2516). -->
+
+## Identités humaines par OIDC (depuis M24-E16)
+
+| | |
+|---|---|
+| Émetteur | `https://sso.par1.medisphere.internal/realms/medisphere` (Keycloak, client public `kubernetes`, PKCE) |
+| Côté serveur d'API | `/etc/kubernetes/authentification/config.yaml` (rôle `k8s_authentification`), option `--authentication-config` (`cluster/kubeadm-config.yaml`) ; audience `kubernetes`, `azp` = `kubernetes` ; utilisateur `oidc:<identifiant>`, groupes `oidc:<groupe>` ; aucun nom en `system:` |
+| Côté poste | kubelogin 1.36 (`kubectl oidc-login`), contexte `k8s-par1-oidc` (`outils/kubeconfig-oidc.sh`) ; tunnel SSH vers `localhost:8000` depuis le poste |
+| Durées | ID token 5 min, rafraîchi par kubelogin tant que la session SSO vit (30 min d'inactivité, 10 h au plus) |
+| Droits | aucun par défaut : liaisons de groupes `oidc:…` dans `rbac/oidc.yaml` (M24-E17) |
+| Départ d'une personne | désactivée dans l'annuaire : plus de nouveau jeton ; un ID token déjà émis vit encore 5 min au plus (RB-242) |
+| Bris de glace | `admin.conf` (Vault `critique`) : ne dépend ni de Keycloak ni de la VIP `lb` |
+| Certificats personnels (M14-E06) | plus renouvelés à partir de M24-E17 ; ceux qui restent expirent seuls (7 jours au plus) |
+
+Le serveur d'API ne contacte Keycloak que pour la découverte et les clés publiques (JWKS), gardées en cache : une panne de Keycloak empêche les **nouvelles** connexions, pas la vérification des jetons déjà émis tant que les clés sont en cache et les jetons valides.

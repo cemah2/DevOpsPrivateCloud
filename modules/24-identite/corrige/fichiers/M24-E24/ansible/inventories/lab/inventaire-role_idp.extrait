@@ -1,0 +1,7 @@
+# inventories/lab/hosts.yml (plateforme/ansible) — EXTRAIT (M24-E24) : idp02 rejoint role_idp le
+# temps de l'essai (le garde-fou de playbooks/identite.yml l'accepte déjà). À RETIRER à la fin
+# (avec le dossier host_vars/idp02/), dans la même MR que la destruction d'envs/m24.
+    role_idp:
+      hosts:
+        idp01:
+        idp02:

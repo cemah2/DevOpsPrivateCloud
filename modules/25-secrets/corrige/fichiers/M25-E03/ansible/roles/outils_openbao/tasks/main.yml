@@ -1,0 +1,54 @@
+---
+# Rôle outils_openbao — point d'entrée (M25-E03).
+
+- name: Dossier versionné de la CLI
+  ansible.builtin.file:
+    path: "{{ outils_openbao_dossier }}/bao-{{ outils_openbao_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Archive de la publication, empreinte vérifiée — {{ outils_openbao_version }}
+  ansible.builtin.get_url:
+    url: "{{ outils_openbao_url }}"
+    dest: "{{ outils_openbao_dossier }}/bao-{{ outils_openbao_version }}/openbao.tar.gz"
+    checksum: "sha256:{{ outils_openbao_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extraire le binaire bao
+  ansible.builtin.unarchive:
+    src: "{{ outils_openbao_dossier }}/bao-{{ outils_openbao_version }}/openbao.tar.gz"
+    dest: "{{ outils_openbao_dossier }}/bao-{{ outils_openbao_version }}"
+    remote_src: true
+    include: [bao]
+    creates: "{{ outils_openbao_dossier }}/bao-{{ outils_openbao_version }}/bao"
+    owner: root
+    group: root
+
+- name: Lier bao dans /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ outils_openbao_dossier }}/bao-{{ outils_openbao_version }}/bao"
+    dest: /usr/local/bin/bao
+    state: link
+    force: true
+
+- name: BAO_ADDR dans les sessions interactives (le magasin système porte déjà la racine du lab)
+  ansible.builtin.blockinfile:
+    path: "~{{ item }}/.bashrc"
+    marker: "# {mark} OpenBao (rôle outils_openbao, plateforme/ansible)"
+    block: |
+      export BAO_ADDR={{ outils_openbao_adresse }}
+      complete -C /usr/local/bin/bao bao
+  loop: "{{ outils_openbao_utilisateurs }}"
+
+- name: Version de la CLI
+  ansible.builtin.command:
+    argv: [/usr/local/bin/bao, version]
+  register: _outils_openbao_version
+  changed_when: false
+  check_mode: false
+  failed_when: ('OpenBao v' ~ outils_openbao_version) not in _outils_openbao_version.stdout
+  when: not ansible_check_mode

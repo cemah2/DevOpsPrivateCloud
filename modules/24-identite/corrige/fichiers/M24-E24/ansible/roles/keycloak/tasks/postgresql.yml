@@ -1,0 +1,100 @@
+---
+# Base et rôle PostgreSQL de Keycloak, sans collection supplémentaire : psql en tant que postgres,
+# requêtes idempotentes (on teste avant de créer). Le mot de passe ne passe JAMAIS en argument
+# (visible dans ps) : il est envoyé sur l'entrée standard de psql, ou dans l'environnement.
+
+- name: Le rôle PostgreSQL de Keycloak existe-t-il ?
+  ansible.builtin.command:
+    argv: [psql, -XtAc, "SELECT 1 FROM pg_roles WHERE rolname = '{{ keycloak_bdd_utilisateur }}'"]
+  become: true
+  become_user: postgres
+  register: _keycloak_pg_role
+  changed_when: false
+  check_mode: false
+
+- name: Créer le rôle PostgreSQL de Keycloak (sans droit d'administration)
+  ansible.builtin.command:
+    argv: [psql, -X, -v, ON_ERROR_STOP=1, -c, "CREATE ROLE {{ keycloak_bdd_utilisateur }} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE"]
+  become: true
+  become_user: postgres
+  when: _keycloak_pg_role.stdout | trim != '1'
+  changed_when: true
+
+- name: La base de Keycloak existe-t-elle ?
+  ansible.builtin.command:
+    argv: [psql, -XtAc, "SELECT 1 FROM pg_database WHERE datname = '{{ keycloak_bdd_nom }}'"]
+  become: true
+  become_user: postgres
+  register: _keycloak_pg_base
+  changed_when: false
+  check_mode: false
+
+- name: Créer la base de Keycloak (propriétaire = rôle Keycloak, encodage UTF-8)
+  ansible.builtin.command:
+    argv: [createdb, "--owner={{ keycloak_bdd_utilisateur }}", --encoding=UTF8, "{{ keycloak_bdd_nom }}"]
+  become: true
+  become_user: postgres
+  when: _keycloak_pg_base.stdout | trim != '1'
+  changed_when: true
+
+# Le mot de passe ne se lit pas dans PostgreSQL : on essaie de se connecter avec lui, et on ne le
+# (re)définit que si la connexion échoue.
+- name: Le mot de passe du rôle Keycloak est-il le bon ?
+  ansible.builtin.command:
+    argv: [psql, -X, -h, 127.0.0.1, -U, "{{ keycloak_bdd_utilisateur }}", -d, "{{ keycloak_bdd_nom }}", -tAc, "SELECT 1"]
+  environment:
+    PGPASSWORD: "{{ keycloak_bdd_mot_de_passe }}"
+  register: _keycloak_pg_connexion
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Définir le mot de passe du rôle Keycloak (sur l'entrée standard de psql)
+  ansible.builtin.command:
+    argv: [psql, -X, -v, ON_ERROR_STOP=1, -f, "-"]
+    stdin: "ALTER ROLE {{ keycloak_bdd_utilisateur }} PASSWORD '{{ keycloak_bdd_mot_de_passe | replace(\"'\", \"''\") }}';"
+  become: true
+  become_user: postgres
+  when: _keycloak_pg_connexion.rc != 0
+  changed_when: true
+  no_log: true
+
+# --- Ouverture à des nœuds distants (essai de grappe, M24-E24) -------------------------------------
+# Liste keycloak_bdd_clients_distants vide (cas normal) : fichier d'écoute absent, bloc pg_hba absent :
+# PostgreSQL n'écoute que sur la boucle locale (contrôle final). Rejouer le rôle avec une liste vide
+# REFERME la base : c'est le retour arrière.
+- name: Écoute de PostgreSQL (boucle locale + adresse de l'hôte si des nœuds distants existent)
+  ansible.builtin.copy:
+    dest: "{{ keycloak_pg_conf }}/conf.d/90-keycloak-grappe.conf"
+    content: |
+      # {{ keycloak_entete }}
+      # Essai de grappe Keycloak (M24-E24) : idp01 porte la base des deux nœuds.
+      listen_addresses = 'localhost,{{ keycloak_bdd_ecoute }}'
+    owner: postgres
+    group: postgres
+    mode: "0644"
+  when: keycloak_bdd_clients_distants | length > 0
+  notify: Redémarrer postgresql
+
+- name: Plus d'écoute réseau quand aucun nœud distant n'est déclaré
+  ansible.builtin.file:
+    path: "{{ keycloak_pg_conf }}/conf.d/90-keycloak-grappe.conf"
+    state: absent
+  when: keycloak_bdd_clients_distants | length == 0
+  notify: Redémarrer postgresql
+
+# hostssl : refus de toute connexion distante en clair ; une ligne par adresse, /32, base et rôle
+# de Keycloak seulement. Le bloc est placé EN TÊTE (pg_hba.conf est lu de haut en bas, première
+# ligne qui correspond) ; les lignes de Debian (boucle locale, socket) restent dessous.
+- name: Accès distants à la base de Keycloak (pg_hba.conf)
+  ansible.builtin.blockinfile:
+    path: "{{ keycloak_pg_conf }}/pg_hba.conf"
+    marker: "# {mark} rôle keycloak — nœuds distants (M24-E24)"
+    insertbefore: BOF
+    block: |
+      {% for adresse in keycloak_bdd_clients_distants %}
+      hostssl {{ keycloak_bdd_nom }} {{ keycloak_bdd_utilisateur }} {{ adresse }}/32 scram-sha-256
+      {% endfor %}
+    state: "{{ 'present' if keycloak_bdd_clients_distants | length > 0 else 'absent' }}"
+  notify: Recharger postgresql

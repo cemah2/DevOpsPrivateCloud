@@ -1,0 +1,106 @@
+---
+# Rôle freeipa_client — point d'entrée (M24-E19).
+
+- name: Système pris en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "{{ inventory_hostname }} : rôle freeipa_client écrit pour Debian 13 seulement (ipa01 est le serveur, gw01/gw02 restent hors annuaire)."
+    quiet: true
+
+- name: Nom complet cohérent (il s'inscrit dans le principal Kerberos de l'hôte et ne change plus)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['fqdn'] == inventory_hostname ~ '.' ~ freeipa_client_domaine
+    fail_msg: "{{ inventory_hostname }} : hostname -f vaut {{ ansible_facts['fqdn'] }}, attendu {{ inventory_hostname }}.{{ freeipa_client_domaine }}"
+    quiet: true
+
+- name: Horloge synchronisée (Kerberos refuse au-delà de 5 minutes d'écart)
+  ansible.builtin.command: chronyc -n tracking
+  register: _freeipa_client_chrony
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    _freeipa_client_chrony.rc != 0 or
+    (_freeipa_client_chrony.stdout | regex_search('Leap status\s*:\s*Normal')) is none
+
+- name: Le serveur de l'annuaire est résolu (enregistrements publiés par OpenTofu, M24-E02)
+  ansible.builtin.command:
+    argv: [getent, ahosts, "{{ freeipa_client_serveur }}"]
+  changed_when: false
+  check_mode: false
+
+- name: Déjà inscrit ?
+  ansible.builtin.stat:
+    path: /etc/ipa/default.conf
+  register: _freeipa_client_conf
+
+- name: Inscription (seulement si l'hôte ne l'est pas)
+  when: not _freeipa_client_conf.stat.exists
+  block:
+    # Le mot de passe est généré SUR ipa01 (hôte d'inventaire), pour CET hôte seulement ; il ne sert
+    # qu'une fois (ipa-join le consomme). update_password: on_create : rejouer le rôle sur un hôte
+    # déjà inscrit ne génère rien (et ce bloc ne s'exécute de toute façon pas).
+    - name: Mot de passe à usage unique généré sur ipa01
+      freeipa.ansible_freeipa.ipahost:
+        ipaadmin_password: "{{ freeipa_client_admin_mot_de_passe }}"
+        name: "{{ ansible_facts['fqdn'] }}"
+        random: true
+        update_password: on_create
+        state: present
+      delegate_to: "{{ freeipa_client_hote_serveur }}"
+      become: true
+      register: _freeipa_client_hote
+      no_log: true
+
+    - name: Le mot de passe a bien été généré (hôte absent ou non inscrit)
+      ansible.builtin.assert:
+        that: _freeipa_client_hote.host.randompassword is defined
+        fail_msg: >-
+          ipa01 n'a pas généré de mot de passe pour {{ ansible_facts['fqdn'] }} : l'entrée d'hôte existe
+          déjà avec un keytab (ancienne inscription ?). Vérifie « ipa host-show » avant toute réinscription.
+        quiet: true
+
+    # Rôle de la collection : installe freeipa-client, rejoint l'annuaire avec le mot de passe à usage
+    # unique (ipaclient_otp), configure Kerberos, SSSD, NSS, PAM et sudo. Pas de NTP (chrony vers les
+    # passerelles reste), pas de SSHFP, sshd non modifié (certificats SSH : M24-E20).
+    - name: Inscription par le rôle ipaclient
+      ansible.builtin.include_role:
+        name: freeipa.ansible_freeipa.ipaclient
+      vars:
+        ipaclient_domain: "{{ freeipa_client_domaine }}"
+        ipaclient_realm: "{{ freeipa_client_royaume }}"
+        ipaclient_servers: ["{{ freeipa_client_serveur }}"]
+        ipaclient_hostname: "{{ ansible_facts['fqdn'] }}"
+        ipaclient_otp: "{{ _freeipa_client_hote.host.randompassword }}"
+        ipaclient_mkhomedir: true
+        ipaclient_no_ntp: true
+        ipaclient_no_dns_sshfp: true
+        ipaclient_no_sshd: true
+        ipaclient_ssh_trust_dns: false
+        state: present
+
+# Les comptes locaux ne sont JAMAIS résolus par SSSD (voir defaults) : posé à chaque passage.
+- name: SSSD ne répond jamais pour les comptes locaux
+  community.general.ini_file:
+    path: /etc/sssd/sssd.conf
+    section: nss
+    option: "{{ item.option }}"
+    value: "{{ item.valeur | join(', ') }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - {option: filter_users, valeur: "{{ freeipa_client_comptes_locaux }}"}
+    - {option: filter_groups, valeur: "{{ freeipa_client_groupes_locaux }}"}
+  loop_control:
+    label: "{{ item.option }}"
+  notify: Redémarrer sssd
+
+- name: Appliquer maintenant le redémarrage de sssd
+  ansible.builtin.meta: flush_handlers
+
+- name: Contrôles finaux
+  ansible.builtin.import_tasks: controles.yml
+  when: freeipa_client_verifier | bool and not ansible_check_mode

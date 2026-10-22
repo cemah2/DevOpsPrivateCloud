@@ -1,0 +1,4 @@
+---
+# group_vars/role_routeur/ssh_ca.yml — bordure (gw01, gw02) : pas d'annuaire (M24-E19), comptes locaux et
+# certificats admin/astreinte seulement (M06-E20).
+ssh_ca_utilisateur_principaux_annuaire: false

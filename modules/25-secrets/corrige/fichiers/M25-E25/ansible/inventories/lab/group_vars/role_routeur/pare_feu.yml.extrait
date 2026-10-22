@@ -1,0 +1,11 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M25-E25, PLAT-2625.
+# Une passerelle à la fois (--limit gw01, vérification, puis gw02). Retour arrière : git revert.
+# 1) Définition.
+  - {nom: KMS01, valeur: 10.10.20.24, commentaire: "kms01 : OpenBao de descellement (M25-E25)"}
+# 2) Transit : administration et descellement de kms01 depuis MGMT seulement (pas le VPN : les
+#    dépositaires descellent depuis adm01). La grappe → kms01 reste dans le VLAN 20 (pare-feu local).
+  - {entree: $V_MGMT, source: $NET_MGMT, sortie: $V_INFRA, destination: $KMS01, proto: tcp, ports: 8200,
+     motif: "MGMT (adm01) → kms01 : descellement Shamir, administration, checks", ref: M25-E25}
+# 3) (M25-E26, TEMPORAIRE) bao-restauration → kms01, retiré à la fin de l'essai :
+#  - {entree: $V_SANDBOX, source: 10.10.99.52, sortie: $V_INFRA, destination: $KMS01, proto: tcp, ports: 8200,
+#     motif: "TEMPORAIRE M25-E26 : seal transit de la restauration d'essai", ref: M25-E26}

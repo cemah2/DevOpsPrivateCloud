@@ -1,0 +1,73 @@
+---
+# Rôle sauvegarde_identite (M24-E25). Étiquette « critique » sur les tâches qui posent un secret.
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - sauvegarde_identite_mode in ['keycloak', 'freeipa']
+      - sauvegarde_identite_age_destinataire is match('^age1[0-9a-z]{58}$')
+      - sauvegarde_identite_heure is match('^[0-2][0-9]:[0-5][0-9]$')
+      - ansible_facts['os_family'] in sauvegarde_identite_paquets
+      - sauvegarde_identite_mode != 'freeipa' or ansible_facts['os_family'] == 'RedHat'
+    fail_msg: >-
+      Mode keycloak ou freeipa, clé publique age (age1…), heure HH:MM, système Debian ou Rocky
+      (le mode freeipa n'existe que sur ipa01, Rocky 10).
+    quiet: true
+
+- name: Outils (age, rclone, jq)
+  ansible.builtin.package:
+    name: "{{ sauvegarde_identite_paquets[ansible_facts['os_family']] }}"
+    state: present
+
+- name: Dossier de configuration (root seul)
+  ansible.builtin.file:
+    path: /etc/identite-sauvegarde
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Configuration non secrète
+  ansible.builtin.template:
+    src: identite-sauvegarde.conf.j2
+    dest: /etc/identite-sauvegarde/identite-sauvegarde.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Identifiants S3 (root:root 600, jamais en argument d'une commande)
+  ansible.builtin.template:
+    src: s3.env.j2
+    dest: /etc/identite-sauvegarde/s3.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  tags: [critique]
+
+- name: Script de sauvegarde
+  ansible.builtin.copy:
+    src: identite-sauvegarde.sh
+    dest: /usr/local/sbin/identite-sauvegarde
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Unité et minuterie
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [identite-sauvegarde.service, identite-sauvegarde.timer]
+  notify: Recharger systemd
+
+- name: Appliquer le rechargement de systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie active
+  ansible.builtin.systemd_service:
+    name: identite-sauvegarde.timer
+    enabled: true
+    state: started

@@ -1,0 +1,54 @@
+# plateforme/observabilite — regles/correctifs.yaml (M26-E30, CHG-2730)
+# État des correctifs publié par /usr/local/sbin/correctifs-etat (rôle correctifs, collecteur textfile)
+# sur les VMs (job « vms ») et les nœuds de k8s-par1 (job « node-exporter »).
+# Testées par tests/correctifs.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: correctifs
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: correctifs.alertes
+      rules:
+        # Un redémarrage attendu depuis plus de 7 jours : la vague de redémarrages n'est pas passée.
+        - alert: RedemarrageEnAttente
+          expr: min_over_time(medisphere_redemarrage_requis[7d]) == 1
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} attend un redémarrage depuis plus de 7 jours"
+            description: >-
+              Des correctifs installés (noyau, bibliothèque C, OpenSSL…) ne sont pas actifs tant que l'hôte
+              n'a pas redémarré. Programmer la vague : playbooks/redemarrages-vague.yml.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-263-durcissement-par-vagues.md
+        # Des mises à jour de sécurité disponibles et NON installées depuis 3 jours : l'automatique est
+        # bloqué (paquet exclu, dépendance cassée, dépôt injoignable).
+        - alert: CorrectifsSecuriteEnAttente
+          expr: min_over_time(medisphere_correctifs_securite_en_attente[3d]) > 0
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : {{ $value }} mise(s) à jour de sécurité en attente depuis 3 jours"
+            description: >-
+              Paquet exclu de l'automatique (montée contrôlée à planifier) ou échec de unattended-upgrades /
+              dnf-automatic (journalctl -u apt-daily-upgrade / -u dnf-automatic).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-263-durcissement-par-vagues.md
+        - alert: CorrectifsVerificationAbsente
+          expr: |
+            (time() - medisphere_correctifs_derniere_verification_secondes) > 2 * 86400
+            or on (instance)
+            (up{job=~"vms|node-exporter"} == 1 unless on (instance) medisphere_correctifs_derniere_verification_secondes)
+          for: 6h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : état des correctifs inconnu"
+            description: "correctifs-etat.timer absent ou en échec : l'hôte peut manquer des correctifs sans qu'on le sache."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/securite/durcissement/runbooks/RB-263-durcissement-par-vagues.md

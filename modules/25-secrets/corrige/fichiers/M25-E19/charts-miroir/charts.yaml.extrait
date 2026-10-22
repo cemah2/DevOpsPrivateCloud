@@ -1,0 +1,20 @@
+# plateforme/charts-miroir — charts.yaml : À AJOUTER à « charts: » (M25-E19, PLAT-2619), puis À
+# RETIRER par une seconde MR à la fin de l'exercice (comparaison terminée ; les copies restent dans
+# Harbor, sans consommateur, et la règle de rétention du projet « charts » les nettoiera).
+# Empreintes : champ « digest » de l'index de chaque dépôt, contrôlé par « helm pull » + sha256sum
+# le 22/10/2026.
+  - nom: sealed-secrets
+    depot: https://bitnami.github.io/sealed-secrets
+    version: 2.20.0
+    empreinte: sha256:6092d219c697f3c9ae3a386ba24bfdd86877c5e2fc8892e2af8a810145b990ef
+    usage: "Sealed Secrets 0.40.0, comparaison M25-E19 (essai-sealed-secrets), retiré en fin d'exercice. Chart du PROJET (bitnami.github.io/sealed-secrets), jamais bitnamicharts/sealed-secrets"
+  - nom: secrets-store-csi-driver
+    depot: https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+    version: 1.6.1
+    empreinte: sha256:d312041d5334a1e5b0b9fe602a5cdcc1bfe028e0e9a4a8b3a14a24236497e1b6
+    usage: "Secrets Store CSI Driver 1.6.1, comparaison M25-E19 (essai-csi-driver), retiré en fin d'exercice"
+  - nom: openbao
+    depot: https://openbao.github.io/openbao-helm
+    version: 0.30.4
+    empreinte: sha256:f9d464f0288a96374fcddb33abb31bc3f134ccaa32da3e4cf272f143b34bb96b
+    usage: "Fournisseur CSI openbao-csi-provider 2.0.3 SEUL (serveur et injecteur désactivés), comparaison M25-E19 (essai-openbao-csi), retiré en fin d'exercice"

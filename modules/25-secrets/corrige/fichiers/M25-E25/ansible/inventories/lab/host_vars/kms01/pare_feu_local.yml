@@ -1,0 +1,14 @@
+---
+# host_vars/kms01/pare_feu_local.yml — flux d'entrée de kms01 (M25-E25). Le moins possible :
+# la grappe (seal transit), MGMT (administration, descellement), et la supervision (M25-E27).
+pare_feu_local_regles:
+  - {source: [10.10.20.21, 10.10.20.22, 10.10.20.23], proto: tcp, ports: 8200,
+     motif: "seal transit de la grappe vault01-03 (encrypt/decrypt de la clé racine)", ref: M25-E25}
+  - {source: [10.10.10.0/24], proto: tcp, ports: 8200,
+     motif: "MGMT : descellement Shamir, administration, checks", ref: M25-E25}
+  - {source: [10.10.20.11], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 (émission du certificat de kms01)", ref: M25-E25}
+  # (M25-E26, TEMPORAIRE, à retirer après l'essai) restauration d'essai :
+  # - {source: [10.10.99.52], proto: tcp, ports: 8200, motif: "bao-restauration (essai E26)", ref: M25-E26}
+pare_feu_local_verifications:
+  - {port: 8200, motif: "OpenBao de descellement (HTTPS)"}

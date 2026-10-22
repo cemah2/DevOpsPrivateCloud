@@ -1,0 +1,12 @@
+# {{ durcissement_entete }}
+# aide-verification.timer (rôle durcissement, M26-E12)
+[Unit]
+Description=Vérification d'intégrité AIDE quotidienne
+
+[Timer]
+OnCalendar=*-*-* {{ durcissement_aide_heure }}
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

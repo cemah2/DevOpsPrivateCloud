@@ -1,0 +1,14 @@
+{# roles/openbao/templates/openbao.hcl.j2 — À AJOUTER après le bloc « listener » (M25-E21, SEC-2621). #}
+
+# Dispositifs d'audit déclarés (openbao_audit). Créés sur le nœud actif au démarrage et à chaque
+# SIGHUP ; immuables (voir defaults). Les valeurs d'options sont des CHAÎNES (map string → string).
+{% for dispositif in openbao_audit %}
+audit "{{ dispositif.type }}" "{{ dispositif.chemin }}" {
+  description = "{{ dispositif.description }}"
+  options {
+{% for cle, valeur in dispositif.options | dictsort %}
+    {{ cle }} = "{{ valeur }}"
+{% endfor %}
+  }
+}
+{% endfor %}

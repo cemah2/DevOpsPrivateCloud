@@ -1,0 +1,5 @@
+# group_vars/role_coffre/pare_feu_local.yml — EXTRAIT : AJOUTS du M25-E27 (supervision).
+pare_feu_local_regles:
+  # … règles du M25-E24 …
+  - {source: [10.10.40.61, 10.10.40.62, 10.10.40.63, 10.10.20.19], proto: tcp, ports: 8200,
+     motif: "télémétrie et sondes : Prometheus de k8s-par1 (travailleurs) et témoin mon01", ref: M25-E27}

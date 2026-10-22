@@ -1,0 +1,47 @@
+# plateforme/politiques — kyverno/validation/exiger-digest.yaml (version M26-E18 ; créée en M26-E16)
+# En production, toute image est désignée par son condensé (@sha256:…).
+# CHANGEMENT d'E18 : la politique accepte des exceptions PARTIELLES. Une PolicyException qui liste des
+# images (spec.images) ne dispense plus le pod entier : seules ces images sont ignorées
+# (exceptions.allowedImages), les autres conteneurs du même pod restent contrôlés. Sans cette
+# variable, une exception serait forcément totale (le pod échappe à la politique).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: exiger-digest
+  annotations:
+    policies.kyverno.io/title: Images par condensé en production
+    policies.kyverno.io/severity: high
+    medisphere.internal/ticket: PLAT-2716
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  evaluation:
+    background:
+      enabled: true
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        medisphere.internal/environnement: prod
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  autogen:
+    podControllers:
+      controllers: [deployments, statefulsets, daemonsets, jobs, cronjobs]
+  variables:
+    - name: images
+      expression: >-
+        object.spec.containers.map(c, c.image) +
+        (has(object.spec.initContainers) ? object.spec.initContainers.map(c, c.image) : [])
+    - name: sansCondense
+      expression: >-
+        variables.images.filter(i, !i.matches('@sha256:[a-f0-9]{64}$')
+          && !(i in exceptions.allowedImages))
+  validations:
+    - expression: size(variables.sansCondense) == 0
+      messageExpression: >-
+        'image(s) sans condensé en production : ' + variables.sansCondense.join(', ') +
+        ' (attendu : registry.par1.medisphere.internal/<projet>/<dépôt>@sha256:<64 hex>)'
+      reason: Forbidden
