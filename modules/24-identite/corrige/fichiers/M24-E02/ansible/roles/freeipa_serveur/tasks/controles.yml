@@ -1,0 +1,42 @@
+---
+# Contrôles après installation (M24-E02). Lecture seule, sauf le ticket Kerberos de test, créé
+# dans un cache temporaire puis détruit (jamais dans le cache de root).
+
+- name: Tous les services de FreeIPA sont démarrés
+  ansible.builtin.command: ipactl status
+  register: _freeipa_serveur_ipactl
+  changed_when: false
+  failed_when: "'The ipactl command was successful' not in (_freeipa_serveur_ipactl.stdout ~ _freeipa_serveur_ipactl.stderr)"
+
+- name: Pas de DNS intégré, pas de NTP servi par l'annuaire
+  ansible.builtin.command: firewall-cmd --list-services
+  register: _freeipa_serveur_services_fw
+  changed_when: false
+  failed_when: >-
+    'freeipa-ldaps' not in _freeipa_serveur_services_fw.stdout.split()
+    or 'dns' in _freeipa_serveur_services_fw.stdout.split()
+    or 'ntp' in _freeipa_serveur_services_fw.stdout.split()
+
+- name: La CA de FreeIPA est signée par la racine MédiSphère
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      certutil -L -d /etc/pki/pki-tomcat/alias -n 'caSigningCert cert-pki-ca' -a
+      | openssl x509 -noout -issuer -nameopt utf8,sep_comma_plus
+    executable: /bin/bash
+  register: _freeipa_serveur_emetteur
+  changed_when: false
+  failed_when: _freeipa_serveur_emetteur.stdout != 'issuer=CN=MédiSphère Root CA'
+
+- name: Kerberos délivre un ticket à admin (cache temporaire, mot de passe sur l'entrée standard)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      cache="$(mktemp)"
+      trap 'kdestroy -c "FILE:$cache" 2>/dev/null; rm -f "$cache"' EXIT
+      kinit -c "FILE:$cache" admin >/dev/null
+      klist -c "FILE:$cache" | grep -q "krbtgt/{{ freeipa_serveur_royaume }}@{{ freeipa_serveur_royaume }}"
+    stdin: "{{ freeipa_serveur_admin_mot_de_passe }}"
+    executable: /bin/bash
+  changed_when: false
+  no_log: true

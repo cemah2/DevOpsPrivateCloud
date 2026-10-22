@@ -1,0 +1,77 @@
+---
+- name: Dossier du certificat (root, lisible par le groupe du service)
+  ansible.builtin.file:
+    path: "{{ keycloak_tls_certificat | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ keycloak_groupe }}"
+    mode: "0750"
+
+- name: Le certificat TLS est en place (rôle certificats_acme, id keycloak)
+  ansible.builtin.stat:
+    path: "{{ keycloak_tls_cle }}"
+  register: _keycloak_cle
+
+- name: Pas de démarrage sans certificat
+  ansible.builtin.assert:
+    that: _keycloak_cle.stat.exists
+    fail_msg: >-
+      {{ keycloak_tls_cle }} absent : applique d'abord certificats_acme (playbooks/identite.yml le
+      fait avant ce rôle).
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Configuration keycloak.conf en 0640, groupe du service (contient le mot de passe de la base)
+  ansible.builtin.template:
+    src: keycloak.conf.j2
+    dest: "{{ keycloak_dossier_parent }}/keycloak-{{ keycloak_version }}/conf/keycloak.conf"
+    owner: root
+    group: "{{ keycloak_groupe }}"
+    mode: "0640"
+  register: _keycloak_conf
+  no_log: true
+  notify: Redémarrer keycloak
+
+# Construction optimisée (kc.sh build) : seulement si la version ou keycloak.conf ont changé depuis
+# la dernière construction. Le témoin garde l'empreinte de la configuration construite ; il est dans
+# le dossier de la version, donc absent après une montée de version (nouvelle construction).
+- name: Témoin de la dernière construction
+  ansible.builtin.slurp:
+    src: "{{ keycloak_dossier_parent }}/keycloak-{{ keycloak_version }}/lib/quarkus/.construit-pour"
+  register: _keycloak_temoin
+  failed_when: false
+  check_mode: false
+
+- name: Construire l'image optimisée (kc.sh build), en root, avant tout démarrage
+  ansible.builtin.command:
+    argv: ["{{ keycloak_dossier_parent }}/keycloak-{{ keycloak_version }}/bin/kc.sh", build]
+  environment:
+    JAVA_OPTS_KC_HEAP: "{{ keycloak_tas }}"
+  when: (_keycloak_temoin.content | default('') | b64decode | trim) != _keycloak_conf.checksum
+  changed_when: true
+  notify: Redémarrer keycloak
+
+- name: Témoin mis à jour
+  ansible.builtin.copy:
+    content: "{{ _keycloak_conf.checksum }}\n"
+    dest: "{{ keycloak_dossier_parent }}/keycloak-{{ keycloak_version }}/lib/quarkus/.construit-pour"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Unité systemd durcie
+  ansible.builtin.template:
+    src: keycloak.service.j2
+    dest: /etc/systemd/system/keycloak.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer keycloak
+
+# Pas de « state: started » ici : à la première installation, le service ne doit démarrer
+# qu'APRÈS la construction (tâche ci-dessus) : c'est le gestionnaire « Redémarrer » qui le lance.
+- name: Service activé au démarrage de la machine
+  ansible.builtin.systemd_service:
+    name: keycloak.service
+    enabled: true
+    daemon_reload: true

@@ -1,0 +1,40 @@
+---
+# Rôle freeipa_serveur — serveur FreeIPA 4.13 de MédiSphère (M24-E02, PLAT-2502). PLAN §4.12.
+#
+# Enveloppe autour du rôle « ipaserver » de la collection freeipa.ansible_freeipa (le rôle officiel
+# du projet FreeIPA) : il ajoute ce que le lab impose et que le rôle amont ne sait pas faire seul.
+#   - DEUX PHASES, comme le rôle step_ca du M06 : la CA de FreeIPA est SUBORDONNÉE à « MédiSphère
+#     Root CA », dont la clé ne quitte jamais ~/pki-racine d'adm01 (racine hors ligne).
+#       phase 1 : installation interrompue après la création de la CSR (--external-ca), CSR
+#                 rapatriée dans pki/ du dépôt, arrêt propre de l'hôte (meta: end_host) ;
+#       cérémonie : « ceremonie-pki.sh signer pki/ipa01-ipa.csr » sur adm01 (M06-E02), MR ;
+#       phase 2 : certificat signé et racine copiés sur ipa01, installation terminée.
+#   - Pas de DNS intégré (PowerDNS reste l'autorité, enregistrements par OpenTofu).
+#   - Pas de NTP géré par FreeIPA : chrony suit la passerelle du VLAN comme toutes les VMs du lab
+#     (rôles communs) ; FreeIPA n'ouvre pas le port 123 et ne réécrit pas chrony.conf.
+#   - Contrôles finaux (ipactl, Kerberos, CA signée par la racine).
+# Les mots de passe (admin de FreeIPA, Directory Manager) viennent de l'Ansible Vault « critique »
+# (host_vars/ipa01/vault-critique.yml) : le rôle amont les passe à ses modules, jamais sur une
+# ligne de commande (ps), et toutes les tâches qui les manipulent sont en no_log.
+
+freeipa_serveur_domaine: par1.medisphere.internal
+freeipa_serveur_royaume: PAR1.MEDISPHERE.INTERNAL
+freeipa_serveur_base: dc=par1,dc=medisphere,dc=internal
+
+# Pièces publiques de la PKI, dans le dépôt plateforme/ansible (dossier pki/, M06-E02).
+freeipa_serveur_dossier_pki: "{{ playbook_dir }}/../pki"
+freeipa_serveur_racine: "{{ freeipa_serveur_dossier_pki }}/medisphere-root-ca.crt"
+freeipa_serveur_csr: "{{ freeipa_serveur_dossier_pki }}/{{ inventory_hostname }}-ipa.csr"
+freeipa_serveur_certificat: "{{ freeipa_serveur_dossier_pki }}/{{ inventory_hostname }}-ipa.crt"
+# Sujet de la CA : la valeur par défaut de FreeIPA, écrite pour être relue à la cérémonie.
+freeipa_serveur_sujet_ca: "CN=Certificate Authority,O={{ freeipa_serveur_royaume }}"
+
+# Secrets (Vault critique). Longueur minimale vérifiée par le rôle.
+freeipa_serveur_admin_mot_de_passe: "{{ vault_freeipa_admin_mot_de_passe }}"
+freeipa_serveur_dm_mot_de_passe: "{{ vault_freeipa_dm_mot_de_passe }}"
+
+# La règle HBAC « allow_all » reste jusqu'à M24-E19 : la retirer maintenant couperait l'accès
+# de tous les comptes de l'annuaire aux futures VMs inscrites, avant qu'une règle la remplace.
+freeipa_serveur_sans_allow_all: false
+
+freeipa_serveur_verifier: true

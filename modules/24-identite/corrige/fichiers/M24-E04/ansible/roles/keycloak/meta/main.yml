@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: keycloak
+  author: Équipe Plateforme MédiSphère
+  description: Keycloak (distribution officielle) + PostgreSQL local sur Debian 13 (M24-E04).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

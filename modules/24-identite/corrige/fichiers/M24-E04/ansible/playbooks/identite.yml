@@ -1,0 +1,38 @@
+---
+# playbooks/identite.yml — fournisseur d'identité (groupe role_idp). M24-E04, PLAT-2504.
+# Appliqué par le pipeline protégé de plateforme/ansible (ADR-0040), un hôte à la fois.
+#   uv run ansible-playbook playbooks/identite.yml --check --diff
+#   uv run ansible-playbook playbooks/identite.yml
+# Les rôles communs du socle (base, ssh_durci, ca_lab, ssh_ca_hote, alloy…) viennent de site.yml.
+# Ordre : groupe du service (la clé TLS lui appartient) → certificat ACME (défi HTTP-01 sur le
+# port 80, libre sur idp01) → filtrage local → Keycloak.
+# Le compte administrateur n'est PAS créé ici : amorçage à la main, une fois (M24-E04).
+
+- name: Fournisseur d'identité Keycloak
+  hosts: role_idp
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Garde-fou — le groupe role_idp ne contient que des hôtes attendus
+      ansible.builtin.assert:
+        that: inventory_hostname in ['idp01', 'idp02']
+        fail_msg: "{{ inventory_hostname }} n'est pas un nœud Keycloak connu (idp01, idp02 au M24-E24)."
+        quiet: true
+  tasks:
+    - name: Groupe du service avant le certificat (la clé lui appartient)
+      ansible.builtin.group:
+        name: keycloak
+        system: true
+
+    - name: Certificat ACME de step-ca (id keycloak)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: Filtrage d'entrée local
+      ansible.builtin.include_role:
+        name: pare_feu_local
+
+    - name: Keycloak et sa base PostgreSQL
+      ansible.builtin.include_role:
+        name: keycloak

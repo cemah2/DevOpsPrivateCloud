@@ -1,0 +1,17 @@
+---
+# host_vars/idp01/pare_feu_local.yml — flux d'entrée de idp01 (M24-E04, rôle pare_feu_local).
+# Le SSH (adm01, runner01) vient de group_vars/socle/pare_feu_local.yml. Les flux depuis la DMZ
+# traversent AUSSI la bordure (group_vars/role_routeur/pare_feu.yml).
+# Personne d'autre que les répartiteurs ne parle à 8443 : les utilisateurs et les services passent
+# par https://sso.par1.medisphere.internal (VIP 10.10.70.200). MGMT et le VPN d'administration
+# gardent un accès direct pour le diagnostic.
+pare_feu_local_regles:
+  - {source: [10.10.70.10, 10.10.70.11], proto: tcp, ports: [8443, 9000],
+     motif: "lb01/lb02 : trafic re-chiffré (8443) et contrôle de santé /health/ready (9000)", ref: M24-E04}
+  - {source: [10.10.10.0/24, 10.255.1.0/24], proto: tcp, ports: [8443, 9000],
+     motif: "MGMT et VPN d'administration : diagnostic direct, santé et métriques", ref: M24-E04}
+  - {source: [10.10.20.11], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 (réémission du certificat de Keycloak)", ref: M24-E04}
+pare_feu_local_verifications:
+  - {port: 8443, motif: "Keycloak (HTTPS)"}
+  - {port: 9000, motif: "Keycloak (gestion : santé, métriques)"}

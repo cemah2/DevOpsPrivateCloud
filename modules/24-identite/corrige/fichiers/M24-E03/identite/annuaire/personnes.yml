@@ -1,0 +1,46 @@
+---
+# annuaire/personnes.yml — les personnes de MédiSphère dans l'annuaire (M24-E03, PLAT-2503).
+# SOURCE DE VÉRITÉ : aucune personne n'est créée à la main dans FreeIPA. Une arrivée = une MR
+# ici (RB-241, M24-E23) ; un départ = « etat: disabled » ici, jamais une suppression (RB-242) :
+# l'identifiant reste réservé et l'historique (journaux, Git) garde un sens.
+# Identifiants identiques à GitLab (PLAN §4.8). Aucun mot de passe ici : le premier mot de passe
+# est posé par « ipa passwd » (expiré d'office) et changé par la personne (kinit), voir RB-241.
+#
+# Champs : identifiant (uid), prenom, nom, courriel ; titre facultatif ; etat (present par défaut,
+# ou disabled pour un départ).
+annuaire_personnes:
+  - identifiant: "<MOI>"
+    prenom: "<PRÉNOM>"
+    nom: "<NOM>"
+    courriel: "<MOI>@medisphere.internal"
+    titre: Ingénieur·e plateforme
+  - identifiant: claire.morel
+    prenom: Claire
+    nom: Morel
+    courriel: claire.morel@medisphere.internal
+    titre: Responsable infrastructure
+  - identifiant: karim.benali
+    prenom: Karim
+    nom: Benali
+    courriel: karim.benali@medisphere.internal
+    titre: Ingénieur plateforme senior
+  - identifiant: sophie.laurent
+    prenom: Sophie
+    nom: Laurent
+    courriel: sophie.laurent@medisphere.internal
+    titre: RSSI
+  - identifiant: julien.petit
+    prenom: Julien
+    nom: Petit
+    courriel: julien.petit@medisphere.internal
+    titre: Lead dev MédiAgenda
+  - identifiant: nadia.roussel
+    prenom: Nadia
+    nom: Roussel
+    courriel: nadia.roussel@medisphere.internal
+    titre: Responsable support et astreinte
+  - identifiant: lucas.martin
+    prenom: Lucas
+    nom: Martin
+    courriel: lucas.martin@medisphere.internal
+    titre: Stagiaire Plateforme

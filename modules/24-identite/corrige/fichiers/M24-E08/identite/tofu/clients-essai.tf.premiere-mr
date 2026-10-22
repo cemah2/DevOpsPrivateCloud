@@ -1,0 +1,18 @@
+# tofu/clients-essai.tf — PREMIÈRE MR seulement (M24-E08) : le client d'essai d'E05/E07 est
+# importé tel qu'il est, pour que le plan d'import soit vide. La SECONDE MR supprime ce fichier
+# (et son bloc import) : OpenTofu détruit alors le client, et la trace de sa suppression est la MR.
+resource "keycloak_openid_client" "essai_oidc" {
+  realm_id    = keycloak_realm.medisphere.id
+  client_id   = "essai-oidc"
+  access_type = "CONFIDENTIAL"
+
+  standard_flow_enabled        = true
+  implicit_flow_enabled        = false
+  direct_access_grants_enabled = false
+  service_accounts_enabled     = false
+  valid_redirect_uris          = ["http://localhost:8765/rappel"]
+  pkce_code_challenge_method   = "S256"
+
+  use_refresh_tokens                  = true
+  backchannel_logout_session_required = true
+}

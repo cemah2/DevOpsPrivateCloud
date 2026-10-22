@@ -1,0 +1,61 @@
+---
+# Base et rôle PostgreSQL de Keycloak, sans collection supplémentaire : psql en tant que postgres,
+# requêtes idempotentes (on teste avant de créer). Le mot de passe ne passe JAMAIS en argument
+# (visible dans ps) : il est envoyé sur l'entrée standard de psql, ou dans l'environnement.
+
+- name: Le rôle PostgreSQL de Keycloak existe-t-il ?
+  ansible.builtin.command:
+    argv: [psql, -XtAc, "SELECT 1 FROM pg_roles WHERE rolname = '{{ keycloak_bdd_utilisateur }}'"]
+  become: true
+  become_user: postgres
+  register: _keycloak_pg_role
+  changed_when: false
+  check_mode: false
+
+- name: Créer le rôle PostgreSQL de Keycloak (sans droit d'administration)
+  ansible.builtin.command:
+    argv: [psql, -X, -v, ON_ERROR_STOP=1, -c, "CREATE ROLE {{ keycloak_bdd_utilisateur }} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE"]
+  become: true
+  become_user: postgres
+  when: _keycloak_pg_role.stdout | trim != '1'
+  changed_when: true
+
+- name: La base de Keycloak existe-t-elle ?
+  ansible.builtin.command:
+    argv: [psql, -XtAc, "SELECT 1 FROM pg_database WHERE datname = '{{ keycloak_bdd_nom }}'"]
+  become: true
+  become_user: postgres
+  register: _keycloak_pg_base
+  changed_when: false
+  check_mode: false
+
+- name: Créer la base de Keycloak (propriétaire = rôle Keycloak, encodage UTF-8)
+  ansible.builtin.command:
+    argv: [createdb, "--owner={{ keycloak_bdd_utilisateur }}", --encoding=UTF8, "{{ keycloak_bdd_nom }}"]
+  become: true
+  become_user: postgres
+  when: _keycloak_pg_base.stdout | trim != '1'
+  changed_when: true
+
+# Le mot de passe ne se lit pas dans PostgreSQL : on essaie de se connecter avec lui, et on ne le
+# (re)définit que si la connexion échoue.
+- name: Le mot de passe du rôle Keycloak est-il le bon ?
+  ansible.builtin.command:
+    argv: [psql, -X, -h, 127.0.0.1, -U, "{{ keycloak_bdd_utilisateur }}", -d, "{{ keycloak_bdd_nom }}", -tAc, "SELECT 1"]
+  environment:
+    PGPASSWORD: "{{ keycloak_bdd_mot_de_passe }}"
+  register: _keycloak_pg_connexion
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+
+- name: Définir le mot de passe du rôle Keycloak (sur l'entrée standard de psql)
+  ansible.builtin.command:
+    argv: [psql, -X, -v, ON_ERROR_STOP=1, -f, "-"]
+    stdin: "ALTER ROLE {{ keycloak_bdd_utilisateur }} PASSWORD '{{ keycloak_bdd_mot_de_passe | replace(\"'\", \"''\") }}';"
+  become: true
+  become_user: postgres
+  when: _keycloak_pg_connexion.rc != 0
+  changed_when: true
+  no_log: true

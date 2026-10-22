@@ -1,0 +1,22 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M24-E02, PLAT-2502.
+# Matrice commune à gw01 et gw02. Une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff   (seules ces règles changent)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01   puis   --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+#
+# 1) Définitions (section pare_feu_definitions).
+  - {nom: IPA01, valeur: 10.10.20.31, commentaire: "ipa01 : annuaire FreeIPA (M24-E02)"}
+#    NET_K8S et NET_DMZ existent déjà (M15, M22-E05).
+#
+# 2) Transit (bloc « Identité ») : les VMs qui seront inscrites dans l'annuaire (M24-E19) parlent
+#    Kerberos (88, 464), LDAP (389, 636) et HTTPS (443 : API JSON-RPC, ipa-client-install).
+#    MGMT joint déjà tout le lab (M00) ; le VLAN 20 ne traverse pas la bordure (pare-feu de ipa01).
+#    gw01/gw02 ne sont PAS inscrites (bordure : comptes locaux, PLAN §4.12) : rien pour elles.
+  - {entree: $V_K8S, source: $NET_K8S, sortie: $V_INFRA, destination: $IPA01, proto: tcp_udp, ports: "88,464",
+     motif: "nœuds de k8s-par1 → Kerberos de l'annuaire (SSSD, M24-E19)", ref: M24-E02}
+  - {entree: $V_K8S, source: $NET_K8S, sortie: $V_INFRA, destination: $IPA01, proto: tcp, ports: "389,443,636",
+     motif: "nœuds de k8s-par1 → LDAP, LDAPS et API de l'annuaire (SSSD, inscription)", ref: M24-E02}
+  - {entree: $V_DMZ, source: $NET_DMZ, sortie: $V_INFRA, destination: $IPA01, proto: tcp_udp, ports: "88,464",
+     motif: "lb01/lb02 → Kerberos de l'annuaire (SSSD, M24-E19)", ref: M24-E02}
+  - {entree: $V_DMZ, source: $NET_DMZ, sortie: $V_INFRA, destination: $IPA01, proto: tcp, ports: "389,443,636",
+     motif: "lb01/lb02 → LDAP, LDAPS et API de l'annuaire", ref: M24-E02}

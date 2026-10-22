@@ -1,0 +1,63 @@
+---
+# Rôle keycloak — fournisseur d'identité de MédiSphère sur idp01 (M24-E04, PLAT-2504). PLAN §4.12.
+# Distribution « zip » officielle (archive tar.gz de Maven Central) + OpenJDK 25 de Debian 13 +
+# PostgreSQL 17 local ; démarrage optimisé (kc.sh build, puis start --optimized) ; HTTPS seul
+# (8443), interface de gestion en HTTPS (9000 : santé, métriques) ; publié par lb01/lb02 sous
+# https://sso.par1.medisphere.internal (option hostname v2).
+# Ce rôle ne crée AUCUN administrateur : l'amorçage (compte temporaire) se fait une fois, à la main,
+# par « kc.sh bootstrap-admin user » (M24-E04), puis les comptes nominatifs et de bris de glace.
+
+keycloak_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle keycloak).') | replace('\n', ' ') }}
+
+# --- Version (changer de version = changer ces DEUX variables, puis RB-245 au M24-E33) ---------
+# 26.7.5 = dernière corrective de la 26.7 (Maven Central). La 26.8.1 arrive en M24-E33.
+keycloak_version: "26.7.5"
+# Empreinte publiée par Maven Central (fichier .sha256 à côté de l'archive), recalculée sur adm01.
+keycloak_sha256: "87d680d13cf4600d232ca0433a2553c57ebf03e56f7718fc0d03a1a8705497c8"
+keycloak_url: >-
+  https://repo1.maven.org/maven2/org/keycloak/keycloak-quarkus-dist/{{ keycloak_version }}/keycloak-quarkus-dist-{{ keycloak_version }}.tar.gz
+# L'archive se décompresse en keycloak-<version>/ : une version par dossier, lien /opt/keycloak.
+keycloak_dossier_parent: /opt
+keycloak_dossier_archives: /opt/keycloak-archives
+keycloak_paquet_java: openjdk-25-jre-headless
+
+# --- Compte du service ---------------------------------------------------------------------------
+keycloak_utilisateur: keycloak
+keycloak_groupe: keycloak
+
+# --- Nom public et mandataires -------------------------------------------------------------------
+# Option hostname v2 : URL complète. Tous les clients (navigateurs, services du lab, kube-apiserver)
+# passent par ce nom, donc par lb01/lb02 : un seul émetteur dans les jetons.
+keycloak_hostname: https://sso.par1.medisphere.internal
+# En-têtes X-Forwarded-* acceptés de ces adresses seulement (lb01, lb02).
+keycloak_mandataires: [10.10.70.10, 10.10.70.11]
+
+# --- Ports et TLS ------------------------------------------------------------------------------------
+keycloak_port_https: 8443
+keycloak_port_gestion: 9000
+# Certificat ACME posé par le rôle certificats_acme (id keycloak, host_vars/idp01/certificats.yml) ;
+# Keycloak relit les fichiers tout seul (https-certificates-reload-period, 1 h par défaut).
+keycloak_tls_certificat: /etc/keycloak/tls/keycloak.crt
+keycloak_tls_cle: /etc/keycloak/tls/keycloak.key
+# Magasin de confiance des connexions SORTANTES (LDAPS vers ipa01, M24-E06) : la racine du lab.
+keycloak_racine: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# --- Base de données ---------------------------------------------------------------------------------
+keycloak_bdd_nom: keycloak
+keycloak_bdd_utilisateur: keycloak
+keycloak_bdd_mot_de_passe: "{{ vault_keycloak_bdd_mot_de_passe }}"
+
+# --- Mémoire (VM de 3 Go avec PostgreSQL) ---------------------------------------------------------
+# Sans cette variable, kc.sh fixe -Xmx512m hors conteneur : trop juste dès quelques royaumes.
+keycloak_tas: "-Xms512m -Xmx1024m"
+
+# --- Grappe (M24-E24, essai à deux nœuds) ---------------------------------------------------------
+# false : cache local (un seul nœud). true : cache Infinispan distribué, découverte par la base
+# (pile jdbc-ping, par défaut depuis la 26.1) ; le reste est traité au palier 3.
+keycloak_grappe: false
+
+# --- Options supplémentaires de keycloak.conf (clé: valeur), pour les paliers suivants ------------
+keycloak_options: {}
+
+keycloak_verifier: true

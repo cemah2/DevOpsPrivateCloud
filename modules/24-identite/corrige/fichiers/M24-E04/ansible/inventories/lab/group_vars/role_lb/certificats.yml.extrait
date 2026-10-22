@@ -1,0 +1,8 @@
+# group_vars/role_lb/certificats.yml (plateforme/ansible) — EXTRAIT à ajouter à la liste
+# certificats_acme_certificats (M24-E04). Un certificat par nom publié (M07-E13) : HAProxy charge
+# tout /etc/haproxy/certs/ et choisit par SNI.
+  - id: sso
+    noms: [sso.par1.medisphere.internal]
+    certificat: /etc/haproxy/certs/sso.crt
+    cle: /etc/haproxy/certs/sso.key
+    <<: *commun

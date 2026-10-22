@@ -1,0 +1,6 @@
+# socle/publication.tf (plateforme/infra) — EXTRAIT (M24-E04) : ajouter « sso » à la liste des noms
+# publiés par les répartiteurs (A vers la VIP 10.10.70.200, sans PTR). La liste a pu grandir depuis
+# M07-E13 : garde les noms déjà présents.
+locals {
+  noms_publies = ["gitlab", "netbox", "sso"]
+}

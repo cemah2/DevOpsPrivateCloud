@@ -1,0 +1,96 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/identite, état de fin de M24-E03 (PLAT-2503)
+#
+# Étapes :
+#   lint       gabarits communs (pre-commit, commitlint, gitleaks) + ansible-lint
+#   verifier   annuaire:verifier — annuaire.yml --check --diff (aperçu exact des changements)
+#   appliquer  annuaire:appliquer — MANUEL, sur main seulement, environnement lab/identite
+# M24-E08 ajoute les étapes plan et apply d'OpenTofu (royaume Keycloak).
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell », utilisateur gitlab-runner, uv).
+# Flux : runner01 → ipa01:22 (même VLAN INFRA ; firewalld de ipa01 laisse passer SSH).
+#
+# Secrets — variables du projet, toutes PROTÉGÉES, de PORTÉE D'ENVIRONNEMENT lab/identite :
+#   ANSIBLE_CI_SSH_KEY   (fichier)  clé privée « ansible-ci » (déjà autorisée sur le socle, M04-E27,
+#                                   restreinte à from=10.10.20.15)
+#   VAULT_PASS_CRITIQUE  (fichier)  mot de passe de l'identité Vault « critique »
+# GitLab CE n'a pas d'environnements protégés : un job manuel de main ne peut être lancé que par
+# qui peut fusionner dans main (Maintainers du projet : groupe plateforme-admins au M24-E11).
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+
+stages:
+  - lint
+  - verifier
+  - appliquer
+
+variables:
+  ANSIBLE_NOCOLOR: "1"
+  ANSIBLE_CACHE_PLUGIN: memory
+
+.ansible:
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - test "$(id -un)" = gitlab-runner
+    - uv sync --locked
+    - uv run ansible-galaxy collection install -r collections/requirements.yml -p collections
+    - uv run ansible --version | head -n 1
+
+# Jobs qui se connectent à ipa01 : copie de la clé effacée même si le job échoue ou est annulé.
+.annuaire:
+  extends: .ansible
+  environment:
+    name: lab/identite
+  before_script:
+    - !reference [.ansible, before_script]
+    - install -m 600 "$ANSIBLE_CI_SSH_KEY" "$CI_PROJECT_DIR/.ci-cle-ssh"
+    - export ANSIBLE_PRIVATE_KEY_FILE="$CI_PROJECT_DIR/.ci-cle-ssh"
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.ci-cle-ssh"
+
+ansible-lint:
+  extends: .ansible
+  stage: lint
+  script:
+    - uv run ansible-lint --offline annuaire/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+annuaire:verifier:
+  extends: .annuaire
+  stage: verifier
+  environment:
+    name: lab/identite
+    action: prepare        # reçoit les variables de l'environnement sans compter comme déploiement
+  script:
+    - uv run ansible-playbook annuaire/annuaire.yml --check --diff
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+annuaire:appliquer:
+  extends: .annuaire
+  stage: appliquer
+  interruptible: false
+  resource_group: annuaire-ipa01
+  script:
+    - uv run ansible-playbook annuaire/annuaire.yml
+    - |
+      # Convergence : un second passage ne doit rien changer.
+      uv run ansible-playbook annuaire/annuaire.yml | tee controle.txt
+      grep -Eq 'changed=0 +unreachable=0 +failed=0' controle.txt
+  artifacts:
+    when: always
+    expire_in: 1 year
+    paths:
+      - controle.txt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: manual

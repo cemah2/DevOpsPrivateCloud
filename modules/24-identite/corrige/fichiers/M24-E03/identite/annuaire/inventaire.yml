@@ -1,0 +1,9 @@
+---
+# annuaire/inventaire.yml — l'annuaire n'a qu'une cible : le serveur FreeIPA. Les modules de
+# freeipa.ansible_freeipa s'y exécutent (contexte « server ») et s'authentifient par Kerberos
+# avec le mot de passe d'admin (cache de tickets temporaire, détruit après chaque tâche).
+all:
+  hosts:
+    ipa01:
+      ansible_host: ipa01.par1.medisphere.internal
+      ansible_user: admin

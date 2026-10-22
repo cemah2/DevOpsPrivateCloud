@@ -1,0 +1,8 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — lignes à ajouter (M24-E02). -->
+| Source | Destination | Port | Motif | Où c'est filtré | Réf. |
+|---|---|---|---|---|---|
+| MGMT (10.10.10.0/24), VPN d'administration | `ipa01` 10.10.20.31 | 22, 80, 443, 389, 636, 88, 464 | administration de l'annuaire, interface web, LDAPS, Kerberos | firewalld de `ipa01` (MGMT joint déjà tout le lab) | M24-E02 |
+| VLAN 20 (VMs à inscrire, `idp01`) | `ipa01` | 88, 464 (TCP/UDP), 389, 443, 636 | Kerberos, LDAP(S), API (SSSD, fédération Keycloak) | firewalld de `ipa01` (même VLAN, pas de bordure) | M24-E02 |
+| VLAN 40 (nœuds `k8s-par1`) | `ipa01` | 88, 464 (TCP/UDP), 389, 443, 636 | SSSD et inscription des nœuds (M24-E19) | bordure (`pare_feu_transit`) + firewalld | M24-E02 |
+| DMZ (`lb01`, `lb02`) | `ipa01` | 88, 464 (TCP/UDP), 389, 443, 636 | SSSD et inscription des répartiteurs (M24-E19) | bordure + firewalld | M24-E02 |
+| `ipa01` | `ca01` 443 | — | aucun : la CA de FreeIPA est signée hors ligne, pas d'ACME pour `ipa01` | — | M24-E02 |

@@ -1,0 +1,6 @@
+---
+# collections/requirements.yml — plateforme/identite (M24-E03). Même version que plateforme/ansible.
+#   uv run ansible-galaxy collection install -r collections/requirements.yml -p collections
+collections:
+  - name: freeipa.ansible_freeipa
+    version: "==1.17.0"

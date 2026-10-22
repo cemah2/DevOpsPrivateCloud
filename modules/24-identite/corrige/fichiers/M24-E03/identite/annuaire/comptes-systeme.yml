@@ -1,0 +1,16 @@
+---
+# annuaire/comptes-systeme.yml — comptes système LDAP (cn=sysaccounts,cn=etc), M24-E03.
+# Un compte système n'est pas une personne : pas de Kerberos, pas de connexion aux machines,
+# seulement une liaison LDAP (bind) avec un mot de passe. Les droits viennent des ACI de lecture
+# par défaut de FreeIPA (lecture des personnes et des groupes par tout compte authentifié).
+# Mots de passe : Vault critique (vault-critique.yml), posés à la création seulement
+# (update_password: on_create) ; une rotation passe par « mise_a_jour_mot_de_passe: always »
+# le temps d'une MR (RB-244, M24-E29).
+annuaire_comptes_systeme:
+  - nom: svc-keycloak
+    description: Keycloak (idp01) — fédération LDAPS en lecture seule (M24-E06)
+    mot_de_passe: "{{ vault_annuaire_svc_keycloak_mot_de_passe }}"
+  - nom: wb-checks
+    description: Vérifications du workbook (lecture seule, adm01)
+    mot_de_passe: "{{ vault_annuaire_wb_checks_mot_de_passe }}"
+annuaire_comptes_systeme_mise_a_jour: on_create

@@ -1,0 +1,7 @@
+---
+# host_vars/ipa01/freeipa.yml — serveur FreeIPA (M24-E02). Les valeurs du rôle conviennent au lab ;
+# ce fichier ne fait que rendre explicites celles qu'on relit à chaque audit.
+freeipa_serveur_domaine: par1.medisphere.internal
+freeipa_serveur_royaume: PAR1.MEDISPHERE.INTERNAL
+# allow_all reste jusqu'à M24-E19 (règles HBAC par groupe d'abord, puis désactivation testée).
+freeipa_serveur_sans_allow_all: false

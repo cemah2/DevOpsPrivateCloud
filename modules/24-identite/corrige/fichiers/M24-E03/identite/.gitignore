@@ -1,0 +1,9 @@
+# Collections installées par ansible-galaxy, environnement uv, copies de clés de CI
+/collections/ansible_collections/
+/.venv/
+/.ci-cle-ssh
+# OpenTofu (M24-E08) : dossier de travail et plans ; le verrou .terraform.lock.hcl, lui, est versionné
+**/.terraform/
+*.tfplan
+*.tfstate
+*.tfstate.*

@@ -1,0 +1,134 @@
+---
+# Rôle freeipa_serveur — point d'entrée (M24-E02). Voir defaults/main.yml pour les deux phases.
+
+- name: "Système pris en charge (FreeIPA serveur : Rocky Linux 10)"
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Rocky'
+      - ansible_facts['distribution_major_version'] == '10'
+    fail_msg: "{{ inventory_hostname }} : FreeIPA serveur n'est installé que sur Rocky Linux 10 dans le lab."
+    quiet: true
+
+- name: Nom complet de l'hôte cohérent avec le domaine IPA (exigé par ipa-server-install)
+  ansible.builtin.assert:
+    that: ansible_facts['fqdn'] == inventory_hostname ~ '.' ~ freeipa_serveur_domaine
+    fail_msg: >-
+      hostname -f renvoie « {{ ansible_facts['fqdn'] }} », attendu
+      « {{ inventory_hostname }}.{{ freeipa_serveur_domaine }} » : corrige /etc/hosts ou le nom
+      posé par cloud-init AVANT l'installation (il est inscrit dans tous les certificats).
+    quiet: true
+
+- name: Secrets présents et assez longs (Vault critique)
+  ansible.builtin.assert:
+    that:
+      - freeipa_serveur_admin_mot_de_passe | length >= 16
+      - freeipa_serveur_dm_mot_de_passe | length >= 16
+      - freeipa_serveur_admin_mot_de_passe != freeipa_serveur_dm_mot_de_passe
+    fail_msg: "Mots de passe admin et Directory Manager : 16 caractères au moins, différents (host_vars/ipa01/vault-critique.yml)."
+    quiet: true
+  no_log: true
+
+- name: L'horloge est synchronisée (Kerberos refuse un écart de plus de 5 minutes)
+  ansible.builtin.command: chronyc tracking
+  register: _freeipa_serveur_chrony
+  changed_when: false
+  check_mode: false
+  failed_when: "'Leap status     : Normal' not in _freeipa_serveur_chrony.stdout"
+
+- name: FreeIPA est-il déjà installé ?
+  ansible.builtin.stat:
+    path: /etc/ipa/default.conf
+  register: _freeipa_serveur_installe
+
+- name: Le certificat signé par la racine est-il dans le dépôt ?
+  ansible.builtin.stat:
+    path: "{{ freeipa_serveur_certificat }}"
+  delegate_to: localhost
+  become: false
+  register: _freeipa_serveur_crt_local
+
+- name: Une CSR attend-elle déjà sa signature (phase 1 déjà jouée) ?
+  ansible.builtin.stat:
+    path: /root/ipa.csr
+  register: _freeipa_serveur_csr_distante
+
+- name: Phase 1 — installation jusqu'à la CSR de la CA (CA externe)
+  when:
+    - not _freeipa_serveur_installe.stat.exists
+    - not _freeipa_serveur_crt_local.stat.exists
+  block:
+    # Rejouer la phase 1 créerait une NOUVELLE clé de CA : la CSR déjà signée (ou en cours de
+    # cérémonie) ne correspondrait plus. On ne la rejoue que si aucune CSR n'existe.
+    - name: Phase 1 — ipa-server-install --external-ca (rôle ipaserver)
+      when: not _freeipa_serveur_csr_distante.stat.exists
+      ansible.builtin.include_role:
+        name: freeipa.ansible_freeipa.ipaserver
+      vars:
+        ipaserver_domain: "{{ freeipa_serveur_domaine }}"
+        ipaserver_realm: "{{ freeipa_serveur_royaume }}"
+        ipaadmin_password: "{{ freeipa_serveur_admin_mot_de_passe }}"
+        ipadm_password: "{{ freeipa_serveur_dm_mot_de_passe }}"
+        ipaserver_setup_dns: false
+        ipaclient_no_ntp: true
+        ipaserver_setup_firewalld: true
+        ipaserver_no_hbac_allow: "{{ freeipa_serveur_sans_allow_all }}"
+        ipaserver_random_serial_numbers: true
+        ipaserver_ca_subject: "{{ freeipa_serveur_sujet_ca }}"
+        ipaserver_external_ca: true
+        ipaserver_external_ca_type: generic
+        state: present
+
+    - name: Phase 1 — CSR rapatriée dans pki/ du dépôt (pièce publique)
+      ansible.builtin.fetch:
+        src: /root/ipa.csr
+        dest: "{{ freeipa_serveur_csr }}"
+        flat: true
+
+    - name: Phase 1 — consigne
+      ansible.builtin.debug:
+        msg: >-
+          CSR de la CA de FreeIPA prête : {{ freeipa_serveur_csr }}. Relis-la
+          (step certificate inspect … --short), signe-la avec la racine hors ligne
+          (ceremonie-pki.sh signer {{ freeipa_serveur_csr | basename }} depuis pki/), versionne
+          la CSR et le certificat par MR, puis relance ce playbook (phase 2).
+
+    - name: Phase 1 — arrêt propre de cet hôte (la suite exige la cérémonie)
+      ansible.builtin.meta: end_host
+
+- name: Phase 2 — fin de l'installation avec le certificat signé
+  when:
+    - not _freeipa_serveur_installe.stat.exists
+    - _freeipa_serveur_crt_local.stat.exists
+  block:
+    - name: Phase 2 — le certificat signé correspond à la CSR et à la racine (sur le contrôleur)
+      ansible.builtin.command:
+        argv: [openssl, verify, -CAfile, "{{ freeipa_serveur_racine }}", "{{ freeipa_serveur_certificat }}"]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      check_mode: false
+
+    - name: Phase 2 — ipa-server-install --external-cert-file (rôle ipaserver)
+      ansible.builtin.include_role:
+        name: freeipa.ansible_freeipa.ipaserver
+      vars:
+        ipaserver_domain: "{{ freeipa_serveur_domaine }}"
+        ipaserver_realm: "{{ freeipa_serveur_royaume }}"
+        ipaadmin_password: "{{ freeipa_serveur_admin_mot_de_passe }}"
+        ipadm_password: "{{ freeipa_serveur_dm_mot_de_passe }}"
+        ipaserver_setup_dns: false
+        ipaclient_no_ntp: true
+        ipaserver_setup_firewalld: true
+        ipaserver_no_hbac_allow: "{{ freeipa_serveur_sans_allow_all }}"
+        ipaserver_random_serial_numbers: true
+        ipaserver_ca_subject: "{{ freeipa_serveur_sujet_ca }}"
+        # Copiés dans /root/ de ipa01 par le rôle amont, puis passés à --external-cert-file :
+        # le certificat de la CA de FreeIPA ET la chaîne jusqu'à la racine.
+        ipaserver_external_cert_files_from_controller:
+          - "{{ freeipa_serveur_certificat }}"
+          - "{{ freeipa_serveur_racine }}"
+        state: present
+
+- name: Contrôles
+  ansible.builtin.import_tasks: controles.yml
+  when: freeipa_serveur_verifier | bool and not ansible_check_mode

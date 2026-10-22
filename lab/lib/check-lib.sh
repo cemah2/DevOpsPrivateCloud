@@ -240,7 +240,7 @@ loki_requete() {
 
 # keycloak_api "chemin" — API d'administration de Keycloak (royaume medisphere par défaut) avec le
 #   compte de service des checks (client « wb-checks » du royaume medisphere, rôles view-realm,
-#   view-users, view-clients de realm-management ; flux client_credentials, M24-E04).
+#   view-users, view-clients de realm-management ; flux client_credentials, M24-E05).
 #   Le fichier WB_KEYCLOAK_CHECKS_FILE contient KEYCLOAK_CLIENT_ID=... et KEYCLOAK_CLIENT_SECRET=...
 #   Exemple : keycloak_api "clients?clientId=grafana" | jq -r '.[0].enabled'
 #   Chemin absolu (commençant par /realms/…) : envoyé tel quel (ex. /realms/medisphere/.well-known/openid-configuration).

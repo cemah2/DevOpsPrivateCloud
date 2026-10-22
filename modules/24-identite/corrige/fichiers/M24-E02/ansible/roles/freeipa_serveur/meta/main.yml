@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: freeipa_serveur
+  author: Équipe Plateforme MédiSphère
+  description: Serveur FreeIPA 4.13 du lab, CA subordonnée à la racine MédiSphère (M24-E02).
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: EL
+      versions: ["10"]
+# Le rôle amont freeipa.ansible_freeipa.ipaserver est inclus dynamiquement (include_role) : la
+# collection doit figurer dans collections/requirements.yml.
+dependencies: []

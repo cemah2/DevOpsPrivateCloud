@@ -1,0 +1,11 @@
+---
+# host_vars/idp01/certificats.yml — certificat ACME de Keycloak (M24-E04, rôle certificats_acme).
+# Un seul nom : idp01. Le nom public sso.par1.medisphere.internal est porté par le certificat des
+# RÉPARTITEURS (TLS terminé sur lb01/lb02, re-chiffré vers idp01:8443 en vérifiant « idp01 »).
+# Keycloak relit le fichier tout seul (https-certificates-reload-period) : pas de rechargement.
+certificats_acme_certificats:
+  - id: keycloak
+    noms: [idp01.par1.medisphere.internal]
+    certificat: /etc/keycloak/tls/keycloak.crt
+    cle: /etc/keycloak/tls/keycloak.key
+    groupe: keycloak

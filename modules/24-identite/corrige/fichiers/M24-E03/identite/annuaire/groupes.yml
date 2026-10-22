@@ -1,0 +1,28 @@
+---
+# annuaire/groupes.yml — groupes de personnes (M24-E03). PLAN §4.12.
+# Les droits de TOUS les services découlent de ces groupes (modèle d'autorisation, M24-E10).
+# L'appartenance est SYNCHRONISÉE : un membre retiré ici est retiré de l'annuaire au prochain
+# passage (module ipagroup, action « group »). Un groupe vide se déclare avec « membres: [] ».
+# Pas d'imbrication de groupes : la revendication « groups » des jetons reste lisible (noms courts).
+annuaire_groupes:
+  - nom: plateforme-admins
+    description: Administrateurs de la plateforme (droits complets, OTP obligatoire)
+    membres: ["<MOI>", karim.benali]
+  - nom: plateforme
+    description: Équipe Plateforme (exploitation courante)
+    membres: ["<MOI>", karim.benali, lucas.martin]
+  - nom: mediagenda
+    description: Équipe MédiAgenda
+    membres: [julien.petit]
+  - nom: medidoc
+    description: Équipe MédiDoc
+    membres: []
+  - nom: securite
+    description: Sécurité des systèmes d'information (OTP obligatoire)
+    membres: [sophie.laurent]
+  - nom: support
+    description: Support et astreinte (lecture, diagnostic)
+    membres: [nadia.roussel]
+  - nom: direction
+    description: Direction (rapports, revues d'accès)
+    membres: [claire.morel]

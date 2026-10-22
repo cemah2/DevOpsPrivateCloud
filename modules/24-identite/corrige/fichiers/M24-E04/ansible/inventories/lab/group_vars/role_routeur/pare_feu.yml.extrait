@@ -1,0 +1,19 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M24-E04, PLAT-2504.
+# Une passerelle à la fois (--limit gw01, vérification, puis gw02). Retour arrière : git revert.
+#
+# 1) Définitions.
+  - {nom: IDP01, valeur: 10.10.20.30, commentaire: "idp01 : Keycloak (M24-E04)"}
+#    LB01, LB02, VIP_LB, NET_K8S, NET_INFRA, NET_DMZ existent déjà.
+#
+# 2) Transit (bloc « Identité »).
+#    Répartiteurs → Keycloak : trafic re-chiffré et contrôle de santé.
+  - {entree: $V_DMZ, source: [$LB01, $LB02], sortie: $V_INFRA, destination: $IDP01, proto: tcp, ports: "8443,9000",
+     motif: "lb01/lb02 → Keycloak (re-chiffrement TLS, santé /health/ready)", ref: M24-E04}
+#    Les services joignent le fournisseur d'identité par son nom public (VIP) : un seul émetteur.
+#    N'ajoute une règle que si ta matrice ne contient pas déjà un équivalent (INFRA → VIP 443 existe
+#    peut-être depuis la publication de GitLab, M07-E13).
+  - {entree: $V_INFRA, source: $NET_INFRA, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "services du VLAN 20 (git01, reg01, nbx01, ca01, mon01, vault01-03) → sso (OIDC)", ref: M24-E04}
+  - {entree: $V_K8S, source: $NET_K8S, sortie: $V_DMZ, destination: $VIP_LB, proto: tcp, ports: 443,
+     motif: "nœuds de k8s-par1 (kube-apiserver, Argo CD, Grafana, OAuth2 Proxy) → sso (OIDC)", ref: M24-E04}
+#    pve01 et pbs01 → sso : au M24-E15 (royaumes OpenID de Proxmox VE et de PBS).

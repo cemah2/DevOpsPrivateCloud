@@ -1,0 +1,9 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — lignes à ajouter (M24-E04). -->
+| Source | Destination | Port | Motif | Où c'est filtré | Réf. |
+|---|---|---|---|---|---|
+| `lb01`, `lb02` | `idp01` 10.10.20.30 | 8443, 9000 | trafic re-chiffré vers Keycloak, contrôle de santé | bordure (DMZ → INFRA) + nftables de `idp01` | M24-E04 |
+| MGMT, VPN d'administration | `idp01` | 8443, 9000 | diagnostic direct, santé, métriques | nftables de `idp01` | M24-E04 |
+| `ca01` | `idp01` | 80 | défi ACME HTTP-01 (émission, réémission) | nftables de `idp01` | M24-E04 |
+| VLAN 20, VLAN 40 | VIP `lb` 10.10.70.200 | 443 | services → `sso.par1.medisphere.internal` (OIDC) | bordure | M24-E04 |
+| Tous | `sso…/admin`, `sso…/realms/master` | 443 | **refusé** (403) sauf MGMT, VPN d'administration et `runner01` | HAProxy (`fe_publication`) | M24-E04 |
+| `idp01` | `ipa01` | 636 | fédération LDAPS (M24-E06) | firewalld de `ipa01` (même VLAN) | M24-E04 |

@@ -1,0 +1,18 @@
+---
+# annuaire/politiques.yml — politique de mot de passe globale du royaume (M24-E03, SEC-2503).
+# Exigences de Sophie Laurent : 12 caractères au moins, historique de 6, verrouillage après
+# 6 échecs. Le reste est un choix argumenté (corrigé de M24-E03) :
+#   - durée de vie 365 jours (pas de changement imposé tous les 90 jours : il pousse aux mots de
+#     passe prévisibles ; un changement est exigé sur soupçon de compromission) ;
+#   - 3 classes de caractères sur 5 ;
+#   - verrouillage de 10 minutes, compteur remis à zéro après 60 secondes sans échec.
+# Valeurs de FreeIPA : durées en jours (maxlife) ou en heures (minlife), secondes ailleurs.
+annuaire_politique_globale:
+  minlength: 12
+  history: 6
+  maxfail: 6
+  failinterval: 60
+  lockouttime: 600
+  minclasses: 3
+  maxlife: 365
+  minlife: 1

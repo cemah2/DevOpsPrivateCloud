@@ -1,0 +1,5 @@
+# collections/requirements.yml (plateforme/ansible) — EXTRAIT à ajouter (M24-E02).
+# Collection officielle du projet FreeIPA : rôles ipaserver/ipaclient et modules ipauser,
+# ipagroup, ipahbacrule, ipasudorule, ipapwpolicy, ipasysaccount (FreeIPA ≥ 4.13)…
+  - name: freeipa.ansible_freeipa
+    version: "==1.17.0"

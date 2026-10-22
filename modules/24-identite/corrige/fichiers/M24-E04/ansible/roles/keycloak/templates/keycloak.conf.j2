@@ -1,0 +1,50 @@
+# {{ keycloak_entete }}
+# /opt/keycloak/conf/keycloak.conf — Keycloak {{ keycloak_version }} sur {{ inventory_hostname }} (rôle keycloak, M24-E04).
+# Fichier en 0640 root:{{ keycloak_groupe }} : il contient le mot de passe de la base.
+# Les options de construction (db, cache, health, metrics, features) sont figées par « kc.sh build » :
+# en changer une exige une reconstruction (le rôle la fait) ; les autres sont lues au démarrage.
+
+# --- Base de données (PostgreSQL local, boucle locale seulement) ---------------------------------
+db=postgres
+db-url-host=127.0.0.1
+db-url-port=5432
+db-url-database={{ keycloak_bdd_nom }}
+db-username={{ keycloak_bdd_utilisateur }}
+db-password={{ keycloak_bdd_mot_de_passe }}
+
+# --- Cache ---------------------------------------------------------------------------------------------
+{% if keycloak_grappe | bool %}
+cache=ispn
+cache-stack=jdbc-ping
+{% else %}
+cache=local
+{% endif %}
+
+# --- HTTPS seul -----------------------------------------------------------------------------------------
+http-enabled=false
+https-port={{ keycloak_port_https }}
+https-certificate-file={{ keycloak_tls_certificat }}
+https-certificate-key-file={{ keycloak_tls_cle }}
+
+# --- Interface de gestion (santé, métriques), HTTPS hérité de l'interface principale ------------------
+health-enabled=true
+metrics-enabled=true
+http-management-port={{ keycloak_port_gestion }}
+
+# --- Nom public et mandataires (options hostname v2) ---------------------------------------------------
+hostname={{ keycloak_hostname }}
+# Les services du lab joignent Keycloak par le même nom public (pas de nom « interne ») : un seul émetteur.
+hostname-backchannel-dynamic=false
+proxy-headers=xforwarded
+proxy-trusted-addresses={{ keycloak_mandataires | join(',') }}
+
+# --- Connexions sortantes (LDAPS vers l'annuaire, M24-E06) ----------------------------------------------
+truststore-paths={{ keycloak_racine }}
+
+# --- Journaux : JSON sur la sortie standard → journald (collectés par Alloy au M24-E26) -------------
+log=console
+log-console-output=json
+{% for cle, valeur in keycloak_options | dictsort %}
+
+{{ cle }}={{ valeur }}
+{% endfor %}

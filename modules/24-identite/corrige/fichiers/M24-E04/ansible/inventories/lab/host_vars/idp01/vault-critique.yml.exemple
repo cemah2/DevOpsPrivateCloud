@@ -1,0 +1,6 @@
+---
+# host_vars/idp01/vault-critique.yml — MODÈLE (M24-E04). Le vrai fichier est chiffré :
+#   uv run ansible-vault create --encrypt-vault-id critique inventories/lab/host_vars/idp01/vault-critique.yml
+# Mot de passe de la base : openssl rand -hex 24 (hexadécimal : keycloak.conf est un fichier de
+# propriétés, une barre oblique inverse ou un « # » y seraient interprétés).
+vault_keycloak_bdd_mot_de_passe: "<MOT-DE-PASSE-BASE-KEYCLOAK>"

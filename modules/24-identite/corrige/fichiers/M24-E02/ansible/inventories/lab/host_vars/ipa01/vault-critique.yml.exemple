@@ -1,0 +1,7 @@
+---
+# host_vars/ipa01/vault-critique.yml — MODÈLE (M24-E02). Le vrai fichier est chiffré :
+#   uv run ansible-vault create --encrypt-vault-id critique inventories/lab/host_vars/ipa01/vault-critique.yml
+# Mots de passe générés (openssl rand -base64 24), différents, recopiés aussi dans le coffre papier
+# de bris de glace (RB-240 au palier 3) : admin est le compte de secours de l'annuaire.
+vault_freeipa_admin_mot_de_passe: "<MOT-DE-PASSE-ADMIN-IPA>"
+vault_freeipa_dm_mot_de_passe: "<MOT-DE-PASSE-DIRECTORY-MANAGER>"

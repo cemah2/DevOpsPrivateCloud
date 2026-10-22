@@ -1,0 +1,62 @@
+---
+# Rôle keycloak — point d'entrée (M24-E04). Les tâches qui manipulent un secret « critique »
+# (mot de passe de la base) portent l'étiquette « critique » (convention de M04-E30).
+
+- name: Système pris en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "{{ inventory_hostname }} : rôle keycloak écrit pour Debian 13 seulement."
+    quiet: true
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - keycloak_sha256 is match('^[0-9a-f]{64}$')
+      - keycloak_version is version('26.7.0', '>=')
+      - keycloak_hostname is match('^https://')
+      - keycloak_mandataires | length > 0
+    fail_msg: >-
+      Empreinte SHA-256 attendue (64 caractères hexadécimaux), Keycloak ≥ 26.7, hostname en URL
+      https:// complète (option hostname v2), au moins un mandataire de confiance.
+    quiet: true
+
+- name: Paquets (Java 25, PostgreSQL 17 de Debian 13)
+  ansible.builtin.apt:
+    name:
+      - "{{ keycloak_paquet_java }}"
+      - postgresql
+      - curl
+    state: present
+    cache_valid_time: 3600
+
+- name: PostgreSQL actif et lancé au démarrage
+  ansible.builtin.systemd_service:
+    name: postgresql.service
+    enabled: true
+    state: started
+
+- name: Base et rôle PostgreSQL
+  ansible.builtin.import_tasks: postgresql.yml
+  tags: [keycloak_bdd, critique]
+
+- name: Distribution Keycloak (archive vérifiée, une version par dossier)
+  ansible.builtin.import_tasks: distribution.yml
+  tags: [keycloak_distribution]
+
+- name: Configuration, construction optimisée et service
+  ansible.builtin.import_tasks: service.yml
+  tags: [keycloak_service, critique]
+
+- name: Construire et redémarrer si quelque chose a changé
+  ansible.builtin.meta: flush_handlers
+
+- name: Service démarré (rien à faire s'il vient d'être redémarré)
+  ansible.builtin.systemd_service:
+    name: keycloak.service
+    state: started
+
+- name: Contrôles finaux
+  ansible.builtin.import_tasks: controles.yml
+  when: keycloak_verifier | bool and not ansible_check_mode

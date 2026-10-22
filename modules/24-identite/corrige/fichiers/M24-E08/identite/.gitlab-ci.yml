@@ -1,0 +1,191 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/identite, état de fin de M24-E08 (PLAT-2508). REMPLACE celui d'E03.
+#
+# Étapes :
+#   lint       gabarits communs (pre-commit, commitlint, gitleaks) + ansible-lint + tofu fmt/validate
+#   verifier   annuaire:verifier — annuaire.yml --check --diff (aperçu exact des changements)
+#   plan       tofu:plan — plan ENREGISTRÉ du royaume medisphere (MR et main)
+#   appliquer  annuaire:appliquer et tofu:apply — MANUELS, sur main seulement
+#
+# Runner : runner01 (exécuteur shell, étiquette « shell », utilisateur gitlab-runner, uv, tofu).
+# Flux : runner01 → ipa01:22 (même VLAN) ; runner01 → s3-01:8333 (même VLAN) ; runner01 → VIP lb
+# 443 (sso) : HAProxy n'ouvre /admin et /realms/master qu'à MGMT, au VPN et à runner01 (M24-E04).
+#
+# Secrets — variables du projet, toutes PROTÉGÉES :
+#   portée d'environnement lab/identite (jobs de l'annuaire) :
+#     ANSIBLE_CI_SSH_KEY   (fichier)  clé privée « ansible-ci » (autorisée sur le socle, from=10.10.20.15)
+#     VAULT_PASS_CRITIQUE  (fichier)  mot de passe de l'identité Vault « critique »
+#   toutes portées (jobs OpenTofu) : voir outils/ci-preparer.sh (S3, client svc-tofu-keycloak,
+#     mot de passe de svc-keycloak, phrase de chiffrement de l'état). KEYCLOAK_CLIENT_SECRET sert
+#     d'INDICATEUR de leur présence dans les règles.
+# GitLab CE n'a pas d'environnements protégés : un job manuel de main ne peut être lancé que par
+# qui peut fusionner dans main (Maintainers du projet : groupe plateforme-admins au M24-E11).
+# =============================================================================
+
+include:
+  - project: plateforme/ci-templates
+    ref: v1
+    file:
+      - templates/qualite.yml
+
+stages:
+  - lint
+  - verifier
+  - plan
+  - appliquer
+
+variables:
+  ANSIBLE_NOCOLOR: "1"
+  ANSIBLE_CACHE_PLUGIN: memory
+
+.ansible:
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - test "$(id -un)" = gitlab-runner
+    - uv sync --locked
+    - uv run ansible-galaxy collection install -r collections/requirements.yml -p collections
+    - uv run ansible --version | head -n 1
+
+# Jobs qui se connectent à ipa01 : copie de la clé effacée même si le job échoue ou est annulé.
+.annuaire:
+  extends: .ansible
+  environment:
+    name: lab/identite
+  before_script:
+    - !reference [.ansible, before_script]
+    - install -m 600 "$ANSIBLE_CI_SSH_KEY" "$CI_PROJECT_DIR/.ci-cle-ssh"
+    - export ANSIBLE_PRIVATE_KEY_FILE="$CI_PROJECT_DIR/.ci-cle-ssh"
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.ci-cle-ssh"
+
+ansible-lint:
+  extends: .ansible
+  stage: lint
+  script:
+    - uv run ansible-lint --offline annuaire/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+annuaire:verifier:
+  extends: .annuaire
+  stage: verifier
+  environment:
+    name: lab/identite
+    action: prepare        # reçoit les variables de l'environnement sans compter comme déploiement
+  script:
+    - uv run ansible-playbook annuaire/annuaire.yml --check --diff
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_BRANCH_PROTECTED == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+annuaire:appliquer:
+  extends: .annuaire
+  stage: appliquer
+  interruptible: false
+  resource_group: annuaire-ipa01
+  script:
+    - uv run ansible-playbook annuaire/annuaire.yml
+    - |
+      # Convergence : un second passage ne doit rien changer.
+      uv run ansible-playbook annuaire/annuaire.yml | tee controle.txt
+      grep -Eq 'changed=0 +unreachable=0 +failed=0' controle.txt
+  artifacts:
+    when: always
+    expire_in: 1 year
+    paths:
+      - controle.txt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+      when: manual
+
+# --- OpenTofu : royaume medisphere de Keycloak (M24-E08) --------------------------------------
+.tofu:
+  tags: [shell]
+  interruptible: true
+  before_script:
+    - . outils/ci-preparer.sh
+
+tofu:valider:
+  extends: .tofu
+  stage: lint
+  script:
+    - tofu -chdir=tofu fmt -check -recursive
+    - tofu -chdir=tofu init -backend=false -input=false -lockfile=readonly
+    - tofu -chdir=tofu validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# Une MR d'une branche non protégée ne reçoit pas les secrets : un échec qui explique, pas un
+# pipeline vert trompeur (même principe que plateforme/infra, M05-E26).
+tofu:secrets-indisponibles:
+  stage: plan
+  tags: [shell]
+  script:
+    - echo "Cette MR vient de « $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME », branche non protégée."
+    - echo "Le plan exige les accès du projet (S3, Keycloak), réservés aux branches conf/*."
+    - exit 1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $KEYCLOAK_CLIENT_SECRET == null
+
+tofu:plan:
+  extends: .tofu
+  stage: plan
+  script:
+    - tofu -chdir=tofu init -input=false -lockfile=readonly
+    - |
+      rc=0
+      tofu -chdir=tofu plan -input=false -lock-timeout=10m -detailed-exitcode -out=plan.tfplan || rc=$?
+      if [ "$rc" -eq 1 ]; then echo "Plan en ERREUR : rien ne sera appliqué."; exit 1; fi
+      echo "$rc" > tofu/plan.code
+    - tofu -chdir=tofu show -no-color plan.tfplan > tofu/plan.txt
+    - grep -E '^(Plan:|No changes)' tofu/plan.txt || true
+    - |
+      # Garde-fou de relecture : toute destruction est annoncée en tête du journal.
+      if grep -Eq '^Plan: .* [1-9][0-9]* to destroy' tofu/plan.txt; then
+        echo "⚠️  CE PLAN DÉTRUIT des objets du royaume : lire chaque ligne « - » ou « -/+ » de plan.txt."
+      fi
+  artifacts:
+    name: "${CI_JOB_NAME_SLUG}-${CI_COMMIT_SHORT_SHA}"
+    # Le plan enregistré est chiffré (chiffrement.tf), mais il décrit le royaume : pas pour les Guests.
+    access: developer
+    expire_in: 30 days
+    paths:
+      - tofu/plan.tfplan
+      - tofu/plan.txt
+      - tofu/plan.code
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $KEYCLOAK_CLIENT_SECRET
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $KEYCLOAK_CLIENT_SECRET
+
+# Manuel, sur main seulement ; applique le plan relu du MÊME pipeline, puis vérifie la convergence.
+# La variable éphémère (mot de passe de svc-keycloak) n'est pas dans le plan : elle est relue dans
+# l'environnement du job, comme à la création du plan.
+tofu:apply:
+  extends: .tofu
+  stage: appliquer
+  needs: ["tofu:plan"]
+  interruptible: false
+  resource_group: tofu-identite
+  environment:
+    name: lab/identite-keycloak
+  script:
+    - test -s tofu/plan.tfplan
+    - tofu -chdir=tofu init -input=false -lockfile=readonly
+    - tofu -chdir=tofu apply -input=false -lock-timeout=10m plan.tfplan
+    - |
+      rc=0
+      tofu -chdir=tofu plan -input=false -lock-timeout=10m -detailed-exitcode -no-color > tofu/controle.txt 2>&1 || rc=$?
+      grep -E '^(Plan:|No changes)' tofu/controle.txt || true
+      if [ "$rc" -ne 0 ]; then echo "Après l'apply, le plan n'est pas vide (code $rc) : voir controle.txt."; exit 1; fi
+  artifacts:
+    when: always
+    access: developer
+    expire_in: 1 year
+    paths:
+      - tofu/controle.txt
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push" && $KEYCLOAK_CLIENT_SECRET
+      when: manual

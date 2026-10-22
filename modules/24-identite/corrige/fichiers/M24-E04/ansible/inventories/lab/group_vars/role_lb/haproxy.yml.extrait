@@ -1,0 +1,48 @@
+# group_vars/role_lb/haproxy.yml (plateforme/ansible) — EXTRAIT à intégrer (M24-E04, PLAT-2504).
+# Base : la version de M15-E20 (aiguillage par SNI, terminaison TLS locale dans fe_publication).
+# sso.par1.medisphere.internal n'est PAS un nom du cluster : il tombe dans « default_backend
+# be_terminaison_locale » de fe_tls_sni, donc dans fe_publication, comme GitLab et NetBox.
+# Une passerelle de répartition à la fois : --limit lb02 (secours), contrôle, puis --limit lb01.
+#
+# 1) Dans la section fe_publication, AVANT les lignes « use_backend » existantes (les règles
+#    http-request s'évaluent avant use_backend ; les écrire avant évite l'avertissement de HAProxy) :
+      # --- (M24-E04) sso : fournisseur d'identité -------------------------------------------------
+      - acl sso_hote var(txn.hote) -m str sso.par1.medisphere.internal
+      # Ce que le public a le droit de joindre : le royaume medisphere et les fichiers statiques.
+      # Tout le reste (console /admin, royaume master, API /admin/realms) : réseaux d'administration
+      # (MGMT, VPN d'administration) et runner01 (pipeline OpenTofu de plateforme/identite, M24-E08).
+      - acl sso_public path_beg /realms/medisphere/ /resources/
+      - acl reseaux_admin_sso src 10.10.10.0/24 10.255.1.0/24 10.10.20.15
+      # Pas de normalisation d'URL dans HAProxy 3.2 hors mode expérimental : on refuse ce qui
+      # ressemble à un contournement (« .. », points ou barres encodés) ; Keycloak refuse de son côté
+      # les chemins non normalisés (http-accept-non-normalized-paths=false, défaut).
+      - acl sso_chemin_suspect path_sub -i /.. %2e %2f %5c
+      - http-request deny deny_status 400 if sso_hote sso_chemin_suspect
+      - http-request deny deny_status 403 if sso_hote !sso_public !reseaux_admin_sso
+      # Adresse du client : HAProxy l'ajoute (option forwardfor) ; on retire d'abord ce que le client
+      # aurait pu envoyer lui-même, sinon Keycloak (proxy-headers=xforwarded) pourrait le croire.
+      - http-request del-header X-Forwarded-For if sso_hote
+      - http-request del-header X-Forwarded-Host if sso_hote
+      - http-request del-header X-Forwarded-Port if sso_hote
+      - use_backend be_sso if sso_hote
+#
+# 2) Nouvelle section, après be_netbox :
+  - type: backend
+    nom: be_sso
+    lignes:
+      - option httpchk
+      # Santé sur l'interface de gestion (9000, HTTPS) : /health/ready répond 200 quand la base est
+      # joignable et Keycloak initialisé. Le trafic, lui, va sur 8443. Avec un « port » explicite,
+      # le contrôle n'hérite pas du TLS du serveur : « check-ssl » l'impose (mêmes réglages : CA, verify).
+      - http-check send meth GET uri /health/ready ver HTTP/1.1 hdr Host idp01.par1.medisphere.internal
+      - http-check expect status 200
+      - >-
+        server idp01 10.10.20.30:8443 ssl verify required
+        ca-file /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        sni str(idp01.par1.medisphere.internal) verifyhost idp01.par1.medisphere.internal
+        check port 9000 check-ssl check-sni idp01.par1.medisphere.internal inter 5s fall 3 rise 2
+#
+# 3) Vérification ajoutée à haproxy_verifications (le rôle les joue après rechargement) :
+#  - url: "https://sso.par1.medisphere.internal/realms/medisphere/.well-known/openid-configuration"
+#    tls: true
+#    (à ajouter seulement APRÈS M24-E05 : avant, le royaume medisphere n'existe pas et la page répond 404)

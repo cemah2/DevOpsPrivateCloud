@@ -1,0 +1,10 @@
+---
+# annuaire/vault-critique.yml — MODÈLE (M24-E03). Le vrai fichier est chiffré, identité « critique » :
+#   uv run ansible-vault create --encrypt-vault-id critique annuaire/vault-critique.yml
+# vault_annuaire_admin_mot_de_passe : le mot de passe de « admin » de FreeIPA (le même que
+# vault_freeipa_admin_mot_de_passe de plateforme/ansible, M24-E02 : un secret à deux endroits,
+# donc deux MR à chaque rotation ; le M25 les ramène dans OpenBao).
+# Les deux autres : openssl rand -base64 30 (sans retour à la ligne), propres à ce dépôt.
+vault_annuaire_admin_mot_de_passe: "<MOT-DE-PASSE-ADMIN-IPA>"
+vault_annuaire_svc_keycloak_mot_de_passe: "<MOT-DE-PASSE-SVC-KEYCLOAK>"
+vault_annuaire_wb_checks_mot_de_passe: "<MOT-DE-PASSE-WB-CHECKS>"

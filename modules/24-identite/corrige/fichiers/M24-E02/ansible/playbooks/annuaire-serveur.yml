@@ -1,0 +1,25 @@
+---
+# playbooks/annuaire-serveur.yml — serveur FreeIPA (groupe role_annuaire). M24-E02, PLAT-2502.
+# Deux passages (rôle freeipa_serveur) :
+#   1. uv run ansible-playbook playbooks/annuaire-serveur.yml
+#      → CSR de la CA dans pki/ipa01-ipa.csr, l'hôte s'arrête là (meta: end_host) ;
+#   2. cérémonie sur adm01 (racine hors ligne) : cd pki && ceremonie-pki.sh signer ipa01-ipa.csr
+#      → pki/ipa01-ipa.crt ; MR (CSR + certificat, deux pièces publiques) ;
+#   3. uv run ansible-playbook playbooks/annuaire-serveur.yml → installation terminée, contrôles.
+# Les rôles communs du socle (base, ssh_durci, ca_lab, ssh_ca_hote…) viennent de site.yml, comme
+# pour tout hôte du groupe socle. L'identité Vault « critique » est nécessaire (mots de passe).
+# ⚠️ Ce playbook ne se lance PAS en --check pour une première installation (rien à simuler).
+
+- name: Annuaire FreeIPA
+  hosts: role_annuaire
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Garde-fou — le groupe role_annuaire ne contient que des hôtes attendus
+      ansible.builtin.assert:
+        that: inventory_hostname in ['ipa01']
+        fail_msg: "{{ inventory_hostname }} n'est pas un serveur d'annuaire connu (ipa01)."
+        quiet: true
+  roles:
+    - role: freeipa_serveur

@@ -1,0 +1,99 @@
+---
+# annuaire/annuaire.yml — applique l'annuaire décrit dans ce dossier (M24-E03, PLAT-2503).
+# Exécution de référence : job manuel protégé « annuaire:appliquer » de main (.gitlab-ci.yml).
+# Depuis adm01, pour relire seulement :
+#   uv run ansible-playbook annuaire/annuaire.yml --check --diff
+# Idempotent : un second passage ne change rien. Les personnes absentes du fichier ne sont PAS
+# supprimées (un départ se déclare par « etat: disabled », RB-242) ; les appartenances aux groupes,
+# elles, sont synchronisées (un membre retiré du fichier est retiré du groupe).
+
+- name: Annuaire de MédiSphère (personnes, groupes, politique de mot de passe, comptes système)
+  hosts: ipa01
+  become: true
+  gather_facts: false
+  vars_files:
+    - personnes.yml
+    - groupes.yml
+    - politiques.yml
+    - comptes-systeme.yml
+    - vault-critique.yml
+  module_defaults:
+    group/freeipa.ansible_freeipa.modules:
+      ipaadmin_password: "{{ vault_annuaire_admin_mot_de_passe }}"
+  pre_tasks:
+    - name: Les données sont cohérentes (identifiants uniques, membres déclarés, aucun espace réservé)
+      ansible.builtin.assert:
+        that:
+          - _ids | unique | length == _ids | length
+          - (_membres | difference(_ids)) | length == 0
+          - _ids | select('search', '[<>]') | list | length == 0
+        fail_msg: >-
+          personnes.yml / groupes.yml : identifiant en double, membre de groupe absent de
+          personnes.yml, ou valeur <À-ADAPTER> restée telle quelle ({{ (_membres | difference(_ids)) + (_ids | select('search', '[<>]') | list) }}).
+        quiet: true
+      vars:
+        _ids: "{{ annuaire_personnes | map(attribute='identifiant') | list }}"
+        _membres: "{{ annuaire_groupes | map(attribute='membres') | flatten | unique }}"
+
+  tasks:
+    - name: Politique de mot de passe globale
+      freeipa.ansible_freeipa.ipapwpolicy:
+        name: global_policy
+        minlength: "{{ annuaire_politique_globale.minlength }}"
+        history: "{{ annuaire_politique_globale.history }}"
+        maxfail: "{{ annuaire_politique_globale.maxfail }}"
+        failinterval: "{{ annuaire_politique_globale.failinterval }}"
+        lockouttime: "{{ annuaire_politique_globale.lockouttime }}"
+        minclasses: "{{ annuaire_politique_globale.minclasses }}"
+        maxlife: "{{ annuaire_politique_globale.maxlife }}"
+        minlife: "{{ annuaire_politique_globale.minlife }}"
+
+    - name: Personnes présentes (identité, courriel, titre)
+      freeipa.ansible_freeipa.ipauser:
+        name: "{{ item.identifiant }}"
+        first: "{{ item.prenom }}"
+        last: "{{ item.nom }}"
+        email: ["{{ item.courriel }}"]
+        title: "{{ item.titre | default(omit) }}"
+        state: present
+      loop: "{{ annuaire_personnes }}"
+      loop_control:
+        label: "{{ item.identifiant }}"
+
+    - name: Personnes actives ou désactivées (départ = disabled, jamais supprimé)
+      freeipa.ansible_freeipa.ipauser:
+        name: "{{ item.identifiant }}"
+        state: "{{ 'disabled' if (item.etat | default('present')) == 'disabled' else 'enabled' }}"
+      loop: "{{ annuaire_personnes }}"
+      loop_control:
+        label: "{{ item.identifiant }} → {{ item.etat | default('present') }}"
+
+    - name: Groupes et appartenances (synchronisées)
+      freeipa.ansible_freeipa.ipagroup:
+        name: "{{ item.nom }}"
+        description: "{{ item.description }}"
+        user: "{{ item.membres }}"
+        state: present
+      loop: "{{ annuaire_groupes }}"
+      loop_control:
+        label: "{{ item.nom }} ({{ item.membres | length }} membres)"
+
+    - name: Comptes système LDAP (mot de passe posé à la création)
+      freeipa.ansible_freeipa.ipasysaccount:
+        name: "{{ item.nom }}"
+        description: "{{ item.description }}"
+        password: "{{ item.mot_de_passe }}"
+        update_password: "{{ annuaire_comptes_systeme_mise_a_jour }}"
+        state: present
+      loop: "{{ annuaire_comptes_systeme }}"
+      loop_control:
+        label: "{{ item.nom }}"
+      no_log: true
+
+    - name: Comptes système actifs (liaison LDAP permise)
+      freeipa.ansible_freeipa.ipasysaccount:
+        name: "{{ item.nom }}"
+        state: enabled
+      loop: "{{ annuaire_comptes_systeme }}"
+      loop_control:
+        label: "{{ item.nom }}"
