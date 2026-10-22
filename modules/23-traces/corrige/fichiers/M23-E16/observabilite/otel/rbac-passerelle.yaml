@@ -1,0 +1,29 @@
+# plateforme/observabilite — otel/rbac-passerelle.yaml (M23-E16, SEC-2416) : droits du résolveur « k8s » de
+# l'exportateur loadbalancing/passerelle de la PASSERELLE (renvoi par traceID des données externes vers les
+# réplicas). La passerelle n'a pas de compte de service déclaré dans son CR : l'opérateur crée et utilise
+# « otel-passerelle-collector ». Sans ce droit, sa liste de réplicas reste vide et toutes les spans reçues
+# par 10.10.41.63 sont perdues (« couldn't find the exporter for the endpoint "" »), sans que les agents,
+# qui ont leurs propres droits (rbac-agent.yaml, M23-E09), en souffrent. Ajouté à otel/kustomization.yaml.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: otel-passerelle-loadbalancing
+  namespace: traces
+rules:
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: otel-passerelle-loadbalancing
+  namespace: traces
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: otel-passerelle-loadbalancing
+subjects:
+  - kind: ServiceAccount
+    name: otel-passerelle-collector
+    namespace: traces

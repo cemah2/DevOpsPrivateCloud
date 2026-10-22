@@ -30,11 +30,11 @@ done
 _m20_e24_admins="$(awk -F', *' '/^g,/ && ($3 ~ /^role:(admin|plateforme-admin)[[:space:]]*$/) && $2 != "role:plateforme-admin" {print $2}' \
   <<<"$_m20_e24_csv" | sort -u | tr '\n' ' ' || true)"
 if [[ -n "$_M20P_MOI_ARGO" ]]; then
-  check_output "seuls <MOI> ($_M20P_MOI_ARGO) et karim-benali sont administrateurs (trouvés : ${_m20_e24_admins:-aucun})" '^ok$' \
+  check_output "seuls <MOI-ARGO> ($_M20P_MOI_ARGO) et karim-benali sont administrateurs (trouvés : ${_m20_e24_admins:-aucun})" '^ok$' \
     bash -c 'for s in $1; do [[ "$s" == "$2" || "$s" == karim-benali ]] || exit 1; done; echo ok' _ \
     "$_m20_e24_admins" "$_M20P_MOI_ARGO"
 else
-  skip "administrateurs limités à <MOI> et karim-benali" "WB_MOI non défini dans lab/lab.env"
+  skip "administrateurs limités à <MOI-ARGO> et karim-benali" "WB_MOI non défini dans lab/lab.env"
 fi
 
 title "Évaluation de la politique en vigueur (argocd admin settings rbac can, hors ligne)"

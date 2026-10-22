@@ -10,7 +10,6 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-
   project: labo
   source:
     repoURL: https://git01.par1.medisphere.internal/formation/gitops-labo.git

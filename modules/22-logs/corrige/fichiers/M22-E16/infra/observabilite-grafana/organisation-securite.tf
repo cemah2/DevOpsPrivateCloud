@@ -5,7 +5,8 @@
 # Les sources des autres locataires restent dans l'organisation principale (org_id 1), provisionnées
 # comme en M22-E02. La source « Loki — audit » est RETIRÉE de ce provisionnement (sinon elle revient).
 #
-# Fournisseur grafana/grafana ~> 4.51 (déjà déclaré dans l'état observabilite-grafana, M21-E17).
+# Fournisseur grafana/grafana ~> 4.50 (4.51.x de référence), déjà déclaré dans l'état observabilite-grafana (M21-E17).
+# Chaque membre doit exister dans Grafana (comptes locaux du M21) : crée celui de Sophie Laurent s'il manque.
 
 locals {
   # Comptes locaux de Grafana (M21), désignés par leur adresse ; SSO au M24.

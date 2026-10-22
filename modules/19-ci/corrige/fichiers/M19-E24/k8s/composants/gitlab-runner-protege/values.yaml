@@ -2,22 +2,25 @@
 # Runner d'instance « k8s-par1-protege » : access_level ref_protected, étiquette « protege »,
 # run_untagged false (réglés côté GitLab à la création par l'API : outils/creer-runner-protege.sh).
 # Il n'exécute que les jobs des branches et étiquettes PROTÉGÉES qui demandent l'étiquette
-# « protege » : signature et attestations (composant securite ≥ 2.1.0), promotion (composant
-# promotion ≥ 2.1.0). Pods dans ci-jobs-protege (PSA restricted, sans Internet).
+# « protege » : signature et attestations (composant securite ≥ v2.7.0), promotion (composant
+# promotion ≥ v2.7.0). Pods dans ci-jobs-protege (PSA restricted, sans Internet).
 #
 # Secrets que lui seul remet aux jobs (jamais des variables de GitLab) :
 #   - « cosign-medisphere » (clés cosign.key et cosign.password) de ci-jobs-protege, monté en lecture
 #     seule dans /run/secrets/medisphere/cosign/ ; créé par outils/secrets-k8s.sh depuis
 #     secrets/cosign-ci.yml (Vault critique).
-# Jeton du runner : Secret « gitlab-runner-protege-jeton » (secrets/gitlab-runner-protege.yml).
+# Jeton du runner : Secret « gitlab-runner-protege-jeton » (secrets/gitlab-runner-protege.yml) ;
+# racine MédiSphère du gestionnaire : Secret gitlab-runner-certs de M19-E04 (même espace).
+# Tous deux posés par « outils/secrets-k8s.sh appliquer gitlab-runner-protege|cosign-ci ».
 
 gitlabUrl: https://git01.par1.medisphere.internal/
 
 image:
   registry: registry.par1.medisphere.internal
   image: gitlab/gitlab-org/gitlab-runner
+  tag: alpine-v19.4.0@sha256:a4838319e55b510c05b36d701d06362b9197458558c7b0d3d63f2c7588c7cd2f
 
-certsSecretName: gitlab-runner-racine
+certsSecretName: gitlab-runner-certs
 
 sessionServer:
   enabled: false
@@ -83,7 +86,7 @@ runners:
   config: |
     [[runners]]
       output_limit = 4096
-      environment = ["HOME=/tmp"]
+      environment = ["SSL_CERT_DIR=/etc/ssl/certs:/etc/medisphere/ca", "HOME=/tmp"]
       [runners.kubernetes]
         namespace = "{{ .Values.runners.jobNamespace }}"
         service_account = "ci-job"
@@ -91,13 +94,15 @@ runners:
         privileged = false
         allow_privilege_escalation = false
         cap_drop = ["ALL"]
-        # Plus strict que k8s-par1 : seulement les images outillées du projet Harbor « plateforme »
-        # (outils-supply-chain, et l'image du composant promotion de E17, qui doit y vivre aussi).
-        allowed_images = ["registry.par1.medisphere.internal/plateforme/**/*"]
+        # Plus strict que k8s-par1 : les images outillées du projet Harbor « plateforme »
+        # (outils-supply-chain : signature, attestations) et l'image du composant promotion de E17
+        # (alpine/k8s par le cache dockerhub). Rien d'autre.
+        allowed_images = ["registry.par1.medisphere.internal/plateforme/**", "registry.par1.medisphere.internal/dockerhub/alpine/k8s:*"]
         allowed_services = []
         allowed_pull_policies = ["if-not-present"]
-        image = "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.1"
-        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v${CI_RUNNER_VERSION}"
+        image = "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.1@sha256:<EMPREINTE>"
+        # Même helper que k8s-par1 (étiquette ET empreinte, changé avec la version du runner en E26).
+        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.4.0@sha256:13188cca15a2d44fc621d42da4efb42b81c9527e072d07aab29468dea15af831"
         poll_timeout = 300
         cpu_request = "100m"
         cpu_limit = "1"
@@ -114,7 +119,13 @@ runners:
           [runners.kubernetes.pod_security_context.seccomp_profile]
             type = "RuntimeDefault"
         [runners.kubernetes.pod_labels]
-          "medisphere.internal/role" = "ci-job-protege"
+          "medisphere.internal/ci" = "job-protege"
+        # Racine MédiSphère (ConfigMap de ci-jobs-protege, comme dans ci-jobs en E07) : git et curl
+        # du composant promotion (GIT_SSL_CAINFO), cosign vers Harbor.
+        [[runners.kubernetes.volumes.config_map]]
+          name = "medisphere-racine"
+          mount_path = "/etc/medisphere/ca"
+          read_only = true
         # La clé de signature n'existe QUE dans ci-jobs-protege et n'est montée QUE par ce runner.
         [[runners.kubernetes.volumes.secret]]
           name = "cosign-medisphere"

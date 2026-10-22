@@ -1,0 +1,10 @@
+# medidoc/deploiement — overlays/dev/livraison.yaml (M19-E33, DEV-2033).
+# Version livrée dans cet overlay, mise à jour par la MR de promotion (composant promotion de
+# plateforme/ci-templates : « yq '.data.version = …' livraison.yaml ») en même temps que l'image par
+# digest ; le garde-fou outils/verifier-livraison.sh exige que les deux disent la même version.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livraison
+data:
+  version: v0.0.0

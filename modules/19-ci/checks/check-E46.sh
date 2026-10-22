@@ -25,8 +25,9 @@ for _m19_e46_c in E04 E08 E10 E17 E18 E24 E29; do
 done
 
 title "M19-E46 — Adoption des composants CI/CD"
-# Projets applicatifs : uniquement des composants de plateforme/ci-templates en version ≥ 2, plus aucun
-# include « project: plateforme/ci-templates » (anciens gabarits v1.x).
+# Projets applicatifs : uniquement des composants de plateforme/ci-templates épinglés à une version
+# complète vX.Y.Z ≥ v2.0.0 (forme des étiquettes publiées : « v » compris, pas de version partielle ni
+# ~latest), plus aucun include « project: plateforme/ci-templates » (anciens gabarits v1.x).
 _m19_e46_composants() {
   local ci
   ci="$(_m19x_brut "$1" .gitlab-ci.yml main)" || return 1
@@ -35,10 +36,10 @@ _m19_e46_composants() {
     (.include // []) as $i
     | ($i | length) > 0
       and ($i | all_c(has("component")))
-      and ($i | all_c(.component | test("/plateforme/ci-templates/[a-z-]+@([2-9]|[1-9][0-9])(\\.|$)")))' <<<"$ci" >/dev/null 2>&1
+      and ($i | all_c(.component | test("/plateforme/ci-templates/[a-z-]+@v([2-9]|[1-9][0-9])\\.[0-9]+\\.[0-9]+$")))' <<<"$ci" >/dev/null 2>&1
 }
 for _m19_e46_p in mediagenda/api mediagenda/chart mediagenda/deploiement medidoc/medidoc mediagenda/annuaire; do
-  check_cmd "$_m19_e46_p : includes = composants de plateforme/ci-templates ≥ 2.0 seulement" _m19_e46_composants "$_m19_e46_p"
+  check_cmd "$_m19_e46_p : includes = composants de plateforme/ci-templates @vX.Y.Z ≥ v2.0.0 seulement" _m19_e46_composants "$_m19_e46_p"
   check_cmd "$_m19_e46_p : dernier pipeline de main réussi" _m19x_pipeline_vert "$_m19_e46_p" main
 done
 check_cmd "plateforme/ci-templates : une release v2 (ou plus) publiée" \
@@ -84,13 +85,29 @@ _m19_e46_sans_variables() {
 }
 check_cmd "plus aucune variable de CI SONAR_* ni JENKINS_* (projets et groupes applicatifs)" _m19_e46_sans_variables
 
+title "M19-E46 — Clé de signature : fin de l'exception de M19-E24"
+# La clé Cosign n'existe plus que dans le Secret ci-jobs-protege/cosign-medisphere, monté par le seul
+# runner protégé : plus aucune variable COSIGN_* dans les groupes ni dans les projets applicatifs.
+_m19_e46_sans_cosign() {
+  local p g
+  for g in mediagenda medidoc; do
+    gitlab_api "groups/$g/variables?per_page=100" 2>/dev/null |
+      jq -e '[.[].key | select(test("^COSIGN_"))] | length == 0' >/dev/null 2>&1 || return 1
+  done
+  for p in mediagenda/api mediagenda/chart mediagenda/deploiement medidoc/medidoc mediagenda/annuaire; do
+    gitlab_api "projects/$(_m19x_enc "$p")/variables?per_page=100" 2>/dev/null |
+      jq -e '[.[].key | select(test("^COSIGN_"))] | length == 0' >/dev/null 2>&1 || return 1
+  done
+}
+check_cmd "plus aucune variable COSIGN_* (groupes mediagenda et medidoc, projets applicatifs)" _m19_e46_sans_cosign
+
 title "M19-E46 — Documentation et livraison"
 check_cmd "ADR-0190 présente et commitée" _m19x_doc_commite 'ADR-0190*.md'
 _m19_e46_runbooks() {
   local n
-  for n in 190 194 195 196 197 198; do _m19x_doc_commite "RB-$n*.md" || return 1; done
+  for n in 190 191 192 193 194 195 196 197 198; do _m19x_doc_commite "RB-$n*.md" || return 1; done
 }
-check_cmd "runbooks RB-190 et RB-194 à RB-198 commités" _m19_e46_runbooks
+check_cmd "runbooks RB-190 à RB-198 commités dans docs/livraison/ci/runbooks/" _m19_e46_runbooks
 check_cmd "état livré : docs/livraison/ci/etat-ci-v1.md (ce que trouve le M20)" _m19x_doc_contient 'etat-ci-v1.md' 'M20|module 20'
 check_cmd "étiquette ci-v1 posée sur plateforme/medisphere" \
   _m19x_gl '.name == "ci-v1"' "projects/$(_m19x_enc plateforme/medisphere)/repository/tags/ci-v1"

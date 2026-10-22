@@ -11,7 +11,7 @@ sans_image = ["mediagenda/deploiement", "medidoc/deploiement", "mediagenda/chart
 # Chemin du composant, sans hôte ni version.
 chemin = "plateforme/ci-templates/securite"
 # Version minimale supportée (E24 : signature sur le runner protégé).
-version_minimale = "2.1.0"
+version_minimale = "v2.7.0"
 # Versions retirées malgré leur numéro (faille connue dans le composant, par exemple).
 versions_retirees = []
 

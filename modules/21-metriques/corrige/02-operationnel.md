@@ -629,6 +629,8 @@ Fichiers : [Job de charge](fichiers/M21-E23/essais/charge-oha.yaml) (à partir d
    sum by (pod) (cnpg_backends_total{namespace="mediagenda-recette"})
    sum by (resultat) (rate(mediagenda_cache_total{environnement="recette"}[2m]))
    ```
+   On raisonne en **périodes** : `container_cpu_cfs_throttled_seconds_total` n'existe pas dans Prometheus, le chart la jette par défaut (`kubelet.serviceMonitor.cAdvisorMetricRelabelings`, avec `container_cpu_load_average_10s` et les temps système et utilisateur) ; la retirer de cette liste coûterait une série par conteneur pour une information que le rapport des périodes donne déjà.
+
    Ce qui sature d'abord, dans l'essai type : le **CPU bridé** de l'API (plus de la moitié des périodes de 100 ms dès 50 req/s), alors que l'utilisation « moyenne » plafonne à la limite ; puis, au palier sur la base, le réservoir de **10 connexions** par processus (`ConnectionPool(max_size=10)` dans le code) : conséquence, pas cause.
 5. **Vérification de l'hypothèse** : même palier contre une copie de MédiAgenda dans `wb-essais` avec une limite plus haute (un seul paramètre changé) : p95 revenu à la normale, plus de bridage. L'écart entre le p95 d'`oha` et celui de l'application dit que l'attente se passe **avant** le traitement (file d'attente du processus, passerelle).
 6. **Journal** : chronologie, tableau des mesures par palier, hypothèses testées, cause, recommandations chiffrées (ressources explicites de l'API dans `mediagenda/deploiement`, réplicas × 10 connexions sous `max_connections`, HPA au M28).

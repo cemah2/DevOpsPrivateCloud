@@ -1,12 +1,14 @@
 # À INTÉGRER dans charts.yaml de plateforme/charts-miroir (M20-E13) — M22-E02 et M22-E03.
-# Garde exactement les clés de ton fichier (celles-ci suivent le corrigé de M20-E13) ; l'empreinte
-# est le SHA-256 de l'archive publiée dans l'index du dépôt amont (champ « digest »), relevée le
-# 22/10/2026. Le pipeline refuse de pousser une archive dont l'empreinte diffère.
+# Mêmes clés que le corrigé de M20-E13 (outils/lister.sh exige « empreinte: sha256:<64 hexa> ») ;
+# l'empreinte est le SHA-256 de l'archive publiée dans l'index du dépôt amont (champ « digest »),
+# relevée le 22/10/2026. Le pipeline refuse de pousser une archive dont l'empreinte diffère.
   - nom: loki
     depot: https://grafana-community.github.io/helm-charts
     version: 19.0.3
-    empreinte: bf3e8a09821c0f7aae095314fcbf16a20ee101e00523dcf0ddada2ae99821a99
+    empreinte: sha256:bf3e8a09821c0f7aae095314fcbf16a20ee101e00523dcf0ddada2ae99821a99
+    usage: "Loki 3.7.9 (M22-E02), Application plateforme/gitops plateforme/loki.yaml"
   - nom: alloy
     depot: https://grafana.github.io/helm-charts
     version: 1.14.1
-    empreinte: 4b31686f69ef1e3280382cb311a40edb555ecf8ed049770e3efe5da70d614d53
+    empreinte: sha256:4b31686f69ef1e3280382cb311a40edb555ecf8ed049770e3efe5da70d614d53
+    usage: "Alloy 1.21.1 (M22-E03), Application plateforme/gitops plateforme/alloy.yaml"

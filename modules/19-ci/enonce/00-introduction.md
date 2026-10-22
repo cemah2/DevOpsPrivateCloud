@@ -35,7 +35,7 @@ Lundi, 8 h 40. Julien Petit a posté une capture d'écran dans le canal de l'éq
 - un démon **BuildKit *rootless* partagé** (`buildkitd`, espace `buildkit`, TLS mutuel) : plus aucun job ne construit d'image avec des privilèges ;
 - des **composants CI/CD** versionnés dans `plateforme/ci-templates` (v2.0.0, palier 2) : construction, qualité, sécurité (Semgrep CE, Gitleaks, Trivy, SBOM, signature), promotion, déploiement ;
 - la **promotion par MR** des images de MédiAgenda dans `mediagenda/deploiement` et le déploiement en dev par l'**agent GitLab pour Kubernetes** ;
-- Jenkins et SonarQube **pratiqués puis retirés** (ADR-0190), la montée GitLab 19.4 → 19.5, des runbooks (RB-190 et suivants), des pannes réalistes.
+- Jenkins et SonarQube **pratiqués puis retirés** (ADR-0190), la montée GitLab 19.4 → 19.5, des runbooks (RB-190 à RB-198, dans `docs/livraison/ci/runbooks/`), des pannes réalistes.
 
 Le **palier 1** (ce fichier et `01-decouverte.md`) prépare le cluster (travailleurs à 10 Go, espaces, quotas, compte des vérifications), crée `mon01` et Mailpit et branche GitLab dessus, installe le premier runner Kubernetes par Helmfile, puis te fait **lire** un job dans Kubernetes et pratiquer la syntaxe de GitLab CI en profondeur (`rules`, `needs`, `workflow`, variables, artefacts, cache, environnements) sur un projet d'essai, `formation/ci-labo`. Il se termine par le démon BuildKit partagé et la première image de MédiAgenda construite dans le cluster. Le palier s'ouvre et se ferme sur un questionnaire.
 
@@ -136,7 +136,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-Les vérifications du module lisent, en plus de celles des blocs précédents (`WB_GITLAB_*`, `WB_K8S_*`, `WB_HARBOR_*`, `WB_MOI`) :
+Les vérifications et les pannes du module lisent, en plus de celles des blocs précédents (`WB_GITLAB_*` dont `WB_GITLAB_ADMIN_TOKEN_FILE` pour les pannes, `WB_K8S_*`, `WB_HARBOR_*`, `WB_MOI`, `WB_DEPOT` pour ton clone de `plateforme/medisphere`) :
 
 ```
 WB_MAILPIT_URL="https://mon01.par1.medisphere.internal:8025"        # API de Mailpit (E03)
@@ -144,9 +144,18 @@ WB_MAILPIT_CHECKS_FILE="$HOME/.config/workbook/mailpit-checks.env"  # MAILPIT_US
 WB_S3_CI_CACHE_FILE="$HOME/.config/workbook/s3-ci-cache.env"        # identité ci-cache de s3-01 (E07)
 #WB_M19_LABO="formation/ci-labo"                                    # projet d'exercice, si tu l'as nommé autrement
 #WB_M19_MON01="mon01"                                               # alias SSH de mon01
+#WB_M19_RUNNER="k8s-par1"                                           # runner Kubernetes (pannes du palier 4)
+#WB_M19_SONAR_URL="https://sonarqube.apps.par1.medisphere.internal" # SonarQube (E16, temporaire)
+#WB_M19_SONAR_TOKEN_FILE="$HOME/.config/workbook/sonar-checks.token"    # jeton de lecture wb-checks (E16)
+#WB_M19_JENKINS_URL="https://jenkins.apps.par1.medisphere.internal" # Jenkins (E19-E20, temporaire)
+#WB_M19_JENKINS_CHECKS_FILE="$HOME/.config/workbook/jenkins-checks.env" # JENKINS_USER=… JENKINS_TOKEN=… (E19)
+#WB_M19_TEMOIN="formation/ci-pannes"                                # projet témoin des pannes (palier 4)
+#WB_M19_HARBOR_ADMIN_FILE="$HOME/.config/workbook/harbor-moi.env"   # ton compte Harbor (M13), pour les pannes
+#WB_M19_S3="s3-01"                                                  # alias SSH de s3-01 (pannes du cache)
+#WB_M19_IMAGE_BUILDKIT="registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.1-rootless"
 ```
 
-Les deux premières ont des valeurs par défaut dans `lab/lib/check-lib.sh` ; ne les pose que si les tiennes diffèrent.
+Les trois premières ont des valeurs par défaut dans `lab/lib/check-lib.sh` ou dans les scripts du module ; les lignes commentées donnent les valeurs par défaut : ne les pose que si les tiennes diffèrent. Fichiers créés par le module sous `~/.config/workbook/` (700, fichiers 600) : `mailpit-checks.env` (E03), `s3-ci-cache.env` (E07), `sonar-checks.token` (E16), `jenkins-checks.env` (E19), supprimés ou laissés sans effet après le retrait de SonarQube et de Jenkins (E46).
 
 ---
 

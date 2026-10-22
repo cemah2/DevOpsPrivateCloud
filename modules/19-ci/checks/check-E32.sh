@@ -43,4 +43,4 @@ check_output "mediagenda/api (conforme) : aucun ticket conformite-ci ouvert" '^0
 
 title "Documentation"
 check_cmd "conformite.md sur main (règles, dérogations)" \
-  _m19p_fichier_contient plateforme/medisphere docs/livraison/ci/conformite.md 'securite' 'd[ée]rogation'
+  _m19p_fichier_contient plateforme/medisphere docs/livraison/ci/conformite.md 'securite' 'd(e|é)rogation'

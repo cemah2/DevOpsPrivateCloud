@@ -1,0 +1,8 @@
+# plateforme/charts-miroir — entrée TEMPORAIRE à ajouter à charts.yaml (M23-E15), dans la forme des entrées
+# existantes (M20-E13). Empreinte : champ « digest » de l'index du dépôt amont, relevée le 22/10/2026 ; vérifie-la
+# avant la MR. À retirer avec l'essai si l'équipe ne garde pas le chart en miroir (corrigé de M23-E15, étape 5).
+- nom: jaeger
+  depot: https://jaegertracing.github.io/helm-charts
+  version: 4.16.1
+  empreinte: sha256:b33c73f3b45f23a4bdacbb915eaf7961b79e10ca7804f1ebdd61a5ccec1c3b9b
+  usage: "Jaeger 2.22.0, essai de comparaison (M23-E15), Application plateforme/gitops plateforme/jaeger-essai.yaml"

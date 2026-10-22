@@ -302,7 +302,7 @@ Règles testées en CI (`lokitool rules lint`, et des tests de règles sur des j
    …
    ```
    Et le sens inverse : une ligne non masquée poussée à la main dans le locataire `essai` est bien trouvée par la même requête (le contrôle sait passer au rouge).
-5. Politique : [`docs/observabilite/journaux/politique-journaux.md`](fichiers/M22-E09/medisphere/docs/observabilite/journaux/politique-journaux.md) (section 1 ; sections 2 et 3 réservées à E13 et E16) : la règle, les deux lignes de défense, ce qui est masqué et par quoi, les **limites** (un nom en texte libre n'est pas reconnaissable), la vérification, la conduite à tenir si une donnée est trouvée (incident SEC, suppression par l'API de Loki, registre).
+5. Politique : [`docs/observabilite/journaux/politique-journaux.md`](fichiers/M22-E09/medisphere/docs/observabilite/journaux/politique-journaux.md) (section 1 ; sections 2 à 4 réservées à E13 et E16) : la règle, les deux lignes de défense, ce qui est masqué et par quoi, les **limites** (un nom en texte libre n'est pas reconnaissable), la vérification, la conduite à tenir si une donnée est trouvée (incident SEC, suppression par l'API de Loki, registre).
 
 **Explications**
 

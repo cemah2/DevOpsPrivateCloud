@@ -133,8 +133,13 @@ _m19x_aucune_panne_active() {
   done
 }
 
-# _m19x_doc MOTIF — premier fichier du dépôt de documentation dont le nom correspond (sous docs/).
-_m19x_doc() { (cd "$_m19x_depot" 2>/dev/null && find docs -type f -name "$1" 2>/dev/null | sort | head -n 1); }
+# _m19x_doc MOTIF — premier fichier du dépôt de documentation dont le nom correspond (sous docs/) ;
+# un runbook (MOTIF « RB-… ») n'est cherché qu'à son emplacement unique, docs/livraison/ci/runbooks/.
+_m19x_doc() {
+  local d=docs
+  [[ "$1" == RB-* ]] && d=docs/livraison/ci/runbooks
+  (cd "$_m19x_depot" 2>/dev/null && find "$d" -type f -name "$1" 2>/dev/null | sort | head -n 1)
+}
 
 # _m19x_doc_contient MOTIF 'regex' — ce fichier existe et contient la regex (insensible à la casse).
 _m19x_doc_contient() {

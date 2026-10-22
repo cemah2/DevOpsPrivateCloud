@@ -1,7 +1,9 @@
 # plateforme/k8s — composants/gitlab-runner/values.yaml et composants/gitlab-runner-protege/values.yaml
 # M19-E26 : le chart 0.94 renomme image.image en image.repository. L'ancienne clé est encore lue
 # (« DEPRECATED … kept for backward compatibility », values.yaml du chart 0.94.0) : on migre tout de
-# suite pour ne pas la perdre à une montée suivante. Rien d'autre ne change dans les values.
+# suite pour ne pas la perdre à une montée suivante. Deux autres lignes suivent la version du runner :
+# l'étiquette (et l'empreinte) de l'image du gestionnaire, et celles du helper dans le TOML (relève les
+# nouvelles empreintes par skopeo à travers Harbor, comme en E04). Rien d'autre ne change.
 --- a/composants/gitlab-runner/values.yaml
 +++ b/composants/gitlab-runner/values.yaml
 @@
@@ -9,6 +11,11 @@
    registry: registry.par1.medisphere.internal
 -  image: gitlab/gitlab-org/gitlab-runner
 +  repository: gitlab/gitlab-org/gitlab-runner
+-  tag: alpine-v19.4.0@sha256:a4838319e55b510c05b36d701d06362b9197458558c7b0d3d63f2c7588c7cd2f
++  tag: alpine-v19.5.0@sha256:<EMPREINTE-19.5.0>
+@@
+-        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.4.0@sha256:13188cca15a2d44fc621d42da4efb42b81c9527e072d07aab29468dea15af831"
++        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.5.0@sha256:<EMPREINTE-HELPER-19.5.0>"
 --- a/composants/gitlab-runner-protege/values.yaml
 +++ b/composants/gitlab-runner-protege/values.yaml
 @@
@@ -16,3 +23,8 @@
    registry: registry.par1.medisphere.internal
 -  image: gitlab/gitlab-org/gitlab-runner
 +  repository: gitlab/gitlab-org/gitlab-runner
+-  tag: alpine-v19.4.0@sha256:a4838319e55b510c05b36d701d06362b9197458558c7b0d3d63f2c7588c7cd2f
++  tag: alpine-v19.5.0@sha256:<EMPREINTE-19.5.0>
+@@
+-        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.4.0@sha256:13188cca15a2d44fc621d42da4efb42b81c9527e072d07aab29468dea15af831"
++        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.5.0@sha256:<EMPREINTE-HELPER-19.5.0>"

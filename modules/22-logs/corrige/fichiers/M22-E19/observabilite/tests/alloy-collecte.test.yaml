@@ -1,0 +1,35 @@
+# Test promtool de regles/alloy-collecte.yaml (le job de tests de la CI extrait spec.groups, comme en M21-E15).
+rule_files:
+  - alloy-collecte.rules.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # six nœuds Ready
+      - series: 'kube_node_status_condition{condition="Ready", status="true", node="k8s-cp01"}'
+        values: '1x30'
+      - series: 'kube_node_status_condition{condition="Ready", status="true", node="k8s-cp02"}'
+        values: '1x30'
+      - series: 'kube_node_status_condition{condition="Ready", status="true", node="k8s-cp03"}'
+        values: '1x30'
+      - series: 'kube_node_status_condition{condition="Ready", status="true", node="k8s-w01"}'
+        values: '1x30'
+      - series: 'kube_node_status_condition{condition="Ready", status="true", node="k8s-w02"}'
+        values: '1x30'
+      - series: 'kube_node_status_condition{condition="Ready", status="true", node="k8s-w03"}'
+        values: '1x30'
+      # six pods prêts pendant 10 min, puis cinq (taint sur un travailleur : desired baisse aussi)
+      - series: 'kube_daemonset_status_number_ready{namespace="journaux", daemonset="alloy"}'
+        values: '6x10 5x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: AlloyAbsentDUnNoeud
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: AlloyAbsentDUnNoeud
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme}
+            exp_annotations:
+              resume: "Alloy ne tourne pas (ou n'est pas prêt) sur tous les nœuds Ready de k8s-par1"
+              description: "Un nœud n'envoie plus ses journaux (pods, journald, audit sur le plan de contrôle). Comparer « kubectl -n journaux get ds alloy » au nombre de nœuds, puis taints et tolérances."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-222-journaux-manquants.md"

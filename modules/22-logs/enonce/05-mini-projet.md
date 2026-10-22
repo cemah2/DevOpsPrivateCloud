@@ -1,4 +1,4 @@
-# Module 22 — Journaux : palier 5 — Mini-projet
+# Module 22 — Palier 5 : Mini-projet
 
 Le module a centralisé, structuré, cloisonné, protégé, cassé et réparé les journaux de MédiSphère. Il reste à les **livrer** comme une brique de la plateforme : tout le lab journalisé (pods, nœuds, audit de l'API, événements, VMs du socle), chaque équipe dans son locataire, des durées de conservation écrites et appliquées, aucune donnée de santé dans Loki, des alertes tirées des journaux, des accès maîtrisés, des essais retirés, et une documentation qui dit à l'astreinte comment s'en servir et aux modules suivants ce qu'ils trouvent. C'est ce que Claire Morel présentera au comité et à l'auditeur HDS comme « Journaux MédiSphère v1 ».
 
@@ -19,7 +19,7 @@ Le module a centralisé, structuré, cloisonné, protégé, cassé et réparé l
 
 **Contexte technique**
 - Ce que les exercices du module ont posé : Loki 3.7 (`journaux`, Application `loki`, compartiment `loki-k8s-par1`, Service 10.10.41.62), Alloy 1.21 (DaemonSet, Application `alloy`, rôle Ansible `alloy` sur les VMs), locataires `plateforme`, `mediagenda`, `medidoc`, `audit` (et `essai`), sources Grafana par locataire et organisation Sécurité, règles du *ruler*, politiques réseau, versionnage du compartiment, documentation `docs/observabilite/journaux/`.
-- Le contrôle global `lab/bin/check 22 25` rejoue les vérifications clés des exercices E02, E03, E05 à E09, E13, E14 et E16, puis vérifie la livraison (Applications, essais retirés, pannes closes, rétentions, documentation, pipeline, étiquette). Il prend 3 à 5 minutes ; chaque partie a son titre.
+- Le contrôle global `lab/bin/check 22 25` rejoue les vérifications clés des exercices E02, E03, E05 à E09, E13, E14 et E16, puis vérifie la livraison (Applications, essais retirés, pannes closes, rétentions, documentation, pipeline, étiquette). Il prend 3 à 5 minutes ; chaque partie a son titre. Avant de le lancer : 10 minutes de trafic sur `mediagenda-dev` (`ressources/E04-trafic/trafic.sh`, comme en E06). Rejoués ici, deux contrôles s'adaptent à la livraison : celui de E07 ne cherche plus la trace de ton enquête (elle a plus de 24 h), et celui de E09 n'exige plus le témoin (retiré) mais cherche les motifs de données personnelles sur **24 h** dans tous les locataires.
 
 **État livré `journaux-v1`** — ce que le M23 et les modules suivants trouveront. Rien ne doit manquer, rien ne doit porter un autre nom.
 
@@ -29,8 +29,8 @@ Le module a centralisé, structuré, cloisonné, protégé, cassé et réparé l
 | Locataires | `plateforme` (14 j), `mediagenda` et `medidoc` (30 j, effacement possible), `audit` (1 an, jamais effaçable), `essai` (24 h) ; limites d'ingestion et de flux par locataire ; compactor actif |
 | Collecte | Alloy sur les six nœuds (pods, journald, audit de l'API, événements), rôle `alloy` sur toutes les VMs du socle ; liste fermée d'étiquettes ; métadonnées structurées (`request_id`, prêtes pour `trace_id` au M23) ; masquage des données personnelles en dernière étape |
 | Consultation | sources Grafana « Loki — plateforme / mediagenda / medidoc » (organisation principale) et « Loki — audit » (organisation Sécurité), déclarées par code ; `logcli` sur `adm01` |
-| Alertes | règles du *ruler* par locataire (MédiAgenda, audit, plateforme) routées par `equipe` ; règles Prometheus de capacité de Loki ; alerte « Alloy absent d'un nœud » |
-| Essais | `journaux-essai` et `opensearch-essai` supprimés, aucune Application, aucun PVC ni PV d'essai, aucun témoin de panne (`journal-temoin`) |
+| Alertes | règles du *ruler* par locataire (MédiAgenda, audit, plateforme) routées par `equipe` ; règles Prometheus de capacité de Loki (E14) ; alerte Prometheus « Alloy absent d'un nœud » (E19) |
+| Essais | `journaux-essai` et `opensearch-essai` supprimés, aucune Application, aucun PVC ni PV d'essai, plus de chart `fluent-bit` ni `opensearch` dans `charts-miroir`, aucun témoin (`journal-temoin` des pannes, `temoin-donnees` de E09) |
 | Documentation | `docs/observabilite/journaux/` : `loki.md`, `politique-journaux.md` (sections 1 à 4), `performance.md`, `comparatif-collecteurs.md`, `comparatif-opensearch.md`, `sous-le-capot.md`, ADR-0220, runbooks RB-220 à RB-224 ; matrice des flux (socle et cluster) à jour ; journaux de diagnostic et post-mortem INC-4923 |
 | Livraison | MR fusionnées, pipeline de `main` de `plateforme/observabilite` vert, étiquette **`journaux-v1`** sur `plateforme/medisphere` |
 
@@ -69,4 +69,4 @@ Lance `lab/bin/check 22 25` dès le début : la liste des points rouges est ton 
 Pour éprouver une alerte sans fabriquer de faux incident sur une application, utilise ce que les règles surveillent réellement (un échec d'authentification sur l'API pour l'audit, une rafale de réponses 5xx sur `mediagenda-dev`) et note l'heure : c'est aussi une preuve pour Sophie.
 </details>
 
-**Pour aller plus loin** : mesure la consommation réelle de la brique (mémoire et CPU de Loki et d'Alloy, volume quotidien par locataire, taille du compartiment à l'équilibre) et ajoute-la à l'ADR-0220 comme référence de dimensionnement pour les finaux.
+**Pour aller plus loin** (facultatif) : mesure la consommation réelle de la brique (mémoire et CPU de Loki et d'Alloy, volume quotidien par locataire, taille du compartiment à l'équilibre) et ajoute-la à l'ADR-0220 comme référence de dimensionnement pour les finaux.

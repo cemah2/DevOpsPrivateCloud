@@ -36,9 +36,9 @@ configs:
     # Capacités des comptes locaux (M20-E03) : les humains se connectent (login) mais ne fabriquent
     # pas de jetons d'API ; ci-lecture ne fait QUE porter un jeton (pas de connexion à l'interface).
     # Remplace la valeur posée en E03 si elle donnait « apiKey, login » à tout le monde.
-    # <MOI> : ton nom GitLab, points remplacés par des tirets (une clé accounts.<nom> est découpée
+    # <MOI-ARGO> : ton nom GitLab, points remplacés par des tirets (une clé accounts.<nom> est découpée
     # sur les points).
-    accounts.<MOI>: login
+    accounts.<MOI-ARGO>: login
     accounts.karim-benali: login
     accounts.julien-petit: login
     accounts.nadia-roussel: login

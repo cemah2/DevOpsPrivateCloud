@@ -2,7 +2,7 @@
 
 > À ouvrir à T0 seulement. Première commande, avant de lire la suite :
 > ```
-> admin@adm01:~$ mkdir -p ~/m20-e34 && date -u +%FT%TZ > ~/m20-e34/T0 && cat ~/m20-e34/T0
+> admin@adm01:~$ mkdir -p ~/m20/e34 && date -u +%FT%TZ > ~/m20/e34/T0 && cat ~/m20/e34/T0
 > ```
 
 ## Le changement
@@ -23,7 +23,7 @@
 
 | # | Poids | Tâche |
 |---|---|---|
-| 1 | 10 | **Préparer.** Crée `~/m20-e34/journal.md` : ligne `CHG-2134`, la version à livrer, son digest, l'état de départ de la production (version, digest, `Synced`/`Healthy`), les fenêtres de synchronisation applicables à `mediagenda-prod` et ton plan de retour arrière en trois lignes. |
+| 1 | 10 | **Préparer.** Crée `~/m20/e34/journal.md` : ligne `CHG-2134`, la version à livrer, son digest, l'état de départ de la production (version, digest, `Synced`/`Healthy`), les fenêtres de synchronisation applicables à `mediagenda-prod` et ton plan de retour arrière en trois lignes. |
 | 2 | 15 | **Promouvoir.** Ouvre la MR qui porte en production le digest validé en recette (ton outil de promotion du M20-E14), fais-la valider et fusionne-la. La MR cite `CHG-2134`. |
 | 3 | 10 | **Vérifier avant de synchroniser.** Sur `main`, l'overlay `prod` référence **le même digest** que l'overlay `recette`. Relève dans le journal le diff que montre Argo CD pour `mediagenda-prod` avant la synchronisation (quels objets changent). |
 | 4 | 15 | **Synchroniser.** Synchronise **à la main** `mediagenda-prod` sur la révision fusionnée, avec ton compte nominatif ; l'opération réussit. |
@@ -34,7 +34,7 @@
 
 ## Vérification
 
-À T1 : `lab/bin/check 20 34` (score par tâche et total). Le check lit `~/m20-e34/T0` : ne le modifie pas.
+À T1 : `lab/bin/check 20 34` (score par tâche et total). Le check lit `~/m20/e34/T0` : ne le modifie pas.
 
 ## Feuille de temps
 

@@ -43,7 +43,13 @@ _m20d_e08_quand="$(_m20d_e08_info "$_m20d_e08_app" reprise)"
 _m20d_e08_rev="$(_m20d_e08_info "$_m20d_e08_app" revision-avant-reprise)"
 _m20d_e08_dep="$(_m20d_k -n "$_m20d_e08_ns" get deployment mediagenda -o json)"
 _m20d_e08_rev_now="$(jq -r '.metadata.annotations["deployment.kubernetes.io/revision"] // ""' <<<"$_m20d_e08_dep" 2>/dev/null || true)"
-if [[ -z "$_m20d_e08_quand" || -z "$_m20d_e08_rev" ]]; then
+_m20d_e08_par_appset="$(jq -r '[.metadata.ownerReferences[]? | select(.kind == "ApplicationSet") | .name][0] // ""' \
+  <<<"$_m20d_e08_app" 2>/dev/null || true)"
+if [[ -z "$_m20d_e08_quand" && -n "$_m20d_e08_par_appset" ]]; then
+  # M20-E10 : l'ApplicationSet régénère l'Application sans spec.info ; la reprise a été contrôlée
+  # avant (check d'E08 joué à la fin de l'E08). Le mini-projet rejoue ce check : sans objet ici.
+  skip "Aucun ReplicaSet créé par la reprise" "mediagenda-dev est générée par l'ApplicationSet $_m20d_e08_par_appset (M20-E10) : spec.info de la reprise n'existe plus, contrôle fait à l'E08"
+elif [[ -z "$_m20d_e08_quand" || -z "$_m20d_e08_rev" ]]; then
   _ko "Reprise consignée dans l'Application (spec.info : « reprise » et « revision-avant-reprise »)"
 elif ! _m20d_e08_epoch="$(date -d "$_m20d_e08_quand" +%s 2>/dev/null)"; then
   _ko "spec.info « reprise » illisible ($_m20d_e08_quand) : date ISO 8601 attendue, ex. 2026-10-23T09:40:00Z"

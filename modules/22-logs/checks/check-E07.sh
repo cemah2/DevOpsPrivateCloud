@@ -32,11 +32,16 @@ check_cmd "cloisonnement : aucun événement d'audit dans le locataire plateform
   "$(_m22o_nb '{job="kubernetes-audit"}' plateforme 15m)"
 
 # --- 2. L'enquête « qui a supprimé quoi » --------------------------------------------------------------
+# Rejouée par le mini-projet (_M22_MINI_PROJET) : la trace de l'enquête date alors de plus de 24 h.
+if [[ -n "${_M22_MINI_PROJET:-}" ]]; then
+  skip "enquête de M22-E07 (wb-essais/configmaps/m22-e07-temoin)" "propre à l'exercice : la démonstration de Sophie la remplace au mini-projet"
+else
 _m22o_e07_qui="$(_m22o_requete '{job="kubernetes-audit"} | verb="delete" | resource="configmaps" | object_ns="wb-essais" | object_name="m22-e07-temoin"' audit 24h)"
 check_cmd "audit : la suppression de wb-essais/configmaps/m22-e07-temoin est retrouvée (24 h)" _m22o_json "$_m22o_e07_qui" \
   '[.data.result[]?.values[]?] | length >= 1'
 check_cmd "…avec l'utilisateur qui l'a faite (${WB_MOI:-ton compte})" _m22o_json "$_m22o_e07_qui" \
   '[.data.result[]? | .stream.user // empty] | any(. == $moi or ($moi == "" and . != ""))' --arg moi "${WB_MOI:-}"
+fi
 
 # --- 3. Événements Kubernetes ------------------------------------------------------------------------------
 check_cmd "événements : reçus dans le locataire plateforme (job=kubernetes-events, 2 h)" bash -c '[[ "$1" -ge 1 ]]' _ \

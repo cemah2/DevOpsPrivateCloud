@@ -17,7 +17,7 @@ _m19_e34_l="$(_m19p_lint "$_m19_e34_p")"
 title "Exigence 1 : composants seulement"
 check_cmd "configuration valide, n'incluant que des composants" _m19p_seulement_composants "$_m19_e34_l"
 for _m19_e34_c in qualite construction-image securite; do
-  check_cmd "composant $_m19_e34_c inclus en 2.2.0 ou plus" _m19p_inclut_composant "$_m19_e34_l" "$_m19_e34_c" 2.2.0
+  check_cmd "composant $_m19_e34_c inclus en v2.8.0 ou plus" _m19p_inclut_composant "$_m19_e34_l" "$_m19_e34_c" 2.8.0
 done
 
 title "Exigences 2, 3 et 6 : pipelines"

@@ -1,6 +1,8 @@
-# Module 22 — Journaux : palier 3 — Production
+# Module 22 — Palier 3 : Production
 
 Les paliers 1 et 2 ont centralisé les journaux de tout le lab : Loki multi-locataire sur le RGW, Alloy sur chaque nœud et sur chaque VM, des journaux applicatifs structurés, le journal d'audit de l'API, des alertes tirées des journaux, le masquage des données de santé. Il reste ce qui fait d'un Loki « qui marche » un service qu'on peut présenter à un auditeur HDS et confier à l'astreinte : **combien de temps** on garde quoi et comment on efface sur demande, ce qui se passe quand un locataire envoie dix fois trop, pourquoi une requête sur sept jours met trente secondes, ce que vaut la solution concurrente que l'ancien infogérant recommandait, **qui** peut lire le journal d'audit, et ce qu'on perd si le compartiment disparaît. Sophie Laurent veut des règles écrites et appliquées ; Karim Benali veut des mesures avant les réglages ; Claire Morel veut une décision d'architecture qu'elle peut défendre.
+
+Prérequis : paliers 1 et 2 terminés (`lab/bin/check 22 02` à `22 11` verts, essai Fluent Bit de E10 retiré). Lis la règle 3 de l'[introduction](00-introduction.md) : on ne supprime pas de données pour réparer.
 
 > ⚠️ **Rappel** : Loki porte maintenant la seule copie des journaux du lab ; plusieurs réglages de ce palier sont **destructeurs par nature** (rétention, effacement). Avant chaque changement de la configuration de Loki : (1) relis le diff que montrera Argo CD (`argocd app diff loki`) ; (2) vérifie que le versionnage du compartiment n'est pas ta seule protection — il n'existe pas encore avant M22-E16 ; (3) un seul changement à la fois, observé (`/config`, `/config/tenant/v1/limits`, métriques) avant le suivant. Une rétention trop courte appliquée par le compactor **ne se rattrape pas**.
 
@@ -78,7 +80,7 @@ Une rétention se compte en heures dans la configuration ; `/config/tenant/v1/li
 Le statut d'une demande reste `received` tant que le délai d'annulation n'est pas écoulé ; la suppression réelle des chunks a lieu ensuite, au passage suivant du compactor. Ce qui change tout de suite, c'est ce que **renvoient les requêtes** : compare la même requête avant et après la création de la demande.
 </details>
 
-**Pour aller plus loin** : lis le compteur `loki_discarded_samples_total` et l'étiquette `retention_hours` de `loki_distributor_bytes_received_total` : Loki sait, dès l'ingestion, quelle rétention s'appliquera à chaque flux. Construis le tableau « volume reçu par rétention » de chaque locataire et déduis-en la taille du compartiment à l'équilibre.
+**Pour aller plus loin** (facultatif) : lis le compteur `loki_discarded_samples_total` et l'étiquette `retention_hours` de `loki_distributor_bytes_received_total` : Loki sait, dès l'ingestion, quelle rétention s'appliquera à chaque flux. Construis le tableau « volume reçu par rétention » de chaque locataire et déduis-en la taille du compartiment à l'équilibre.
 
 ---
 
@@ -134,7 +136,7 @@ Le temps d'une requête Loki se décompose en temps passé à **trouver** les ch
 La règle d'alerte se fait sur les métriques que Prometheus collecte déjà sur Loki (`loki_ingester_memory_streams{tenant=…}`, `loki_discarded_samples_total{reason=…}`). Le seuil ne peut pas lire la limite dans Loki : écris-le en dur dans la règle, avec un commentaire qui renvoie à `performance.md`.
 </details>
 
-**Pour aller plus loin** : compare le volume d'index et de chunks d'une journée dans le compartiment (`aws s3 ls --summarize --recursive s3://loki-k8s-par1/index/loki_index_<N>/`) avec le volume brut reçu ce jour-là (métriques du distributeur) : quel est le taux de compression réel de tes journaux ?
+**Pour aller plus loin** (facultatif) : compare le volume d'index et de chunks d'une journée dans le compartiment (`aws s3 ls --summarize --recursive s3://loki-k8s-par1/index/loki_index_<N>/`) avec le volume brut reçu ce jour-là (métriques du distributeur) : quel est le taux de compression réel de tes journaux ?
 
 ---
 
@@ -167,12 +169,12 @@ La règle d'alerte se fait sur les métriques que Prometheus collecte déjà sur
 3. **Fluent Bit.** Déploie Fluent Bit dans le même espace (Application `fluent-bit-opensearch`) : entrée `tail` sur les journaux des pods des espaces `mediagenda-*`, filtre `kubernetes`, sortie `opensearch` en TLS vérifié, compte `fluentbit`, index quotidiens `journaux-AAAA.MM.JJ`, compatibilité OpenSearch 2+ (types de mapping). Vérifie que les documents arrivent (`_cat/indices`).
 4. **Comparer.** Pendant au moins une heure de collecte, sur les **mêmes** journaux de MédiAgenda dans Loki et dans OpenSearch, exécute et chronomètre les recherches de `ressources/E15-comparaison/requetes.md` (mot rare, mot fréquent, champ JSON, agrégation par code HTTP sur 1 h, expression régulière). Relève : volume sur disque des deux côtés pour la même heure (`_cat/indices?v&bytes=b` contre les objets de la journée dans `loki-k8s-par1`), mémoire et CPU des pods (`kubectl top`), nombre de réglages qu'il a fallu toucher.
 5. **Rédiger.** `docs/observabilite/journaux/comparatif-opensearch.md` : tableau des mesures, ce qu'OpenSearch fait mieux (et pour qui), ce que Loki fait mieux, coût d'exploitation (montées de version, mapping, rotation des index — ISM —, sécurité), recommandation. Ce document nourrit l'ADR de M22-E17.
-6. **Retirer.** Supprime les Applications par Git (avec suppression en cascade des ressources), puis les volumes et l'espace `opensearch-essai` ; retire l'émetteur et les certificats ; garde les deux charts dans le miroir ou retire-les (dis pourquoi). Vérifie qu'il ne reste **rien** (PVC, PV, volumes RBD orphelins).
+6. **Retirer.** Supprime les Applications par Git (avec suppression en cascade des ressources), puis les volumes et l'espace `opensearch-essai` ; retire l'émetteur et les certificats ; retire les deux charts du miroir (même règle qu'en M22-E10 : un chart qu'aucune Application n'utilise n'a rien à faire dans `charts-miroir`). Vérifie qu'il ne reste **rien** (PVC, PV, volumes RBD orphelins).
 
 **Critères de réussite**
 - [ ] Pendant l'essai : OpenSearch répond en HTTPS avec un certificat de l'autorité de l'essai, refuse une requête anonyme, et l'index `journaux-*` reçoit des documents du compte `fluentbit`.
 - [ ] `comparatif-opensearch.md` est publié avec des mesures chiffrées des deux côtés (temps, disque, mémoire) et une recommandation.
-- [ ] À la fin : l'espace `opensearch-essai` n'existe plus, aucune Application `opensearch-essai` ni `fluent-bit-opensearch`, aucun PV orphelin de l'essai.
+- [ ] À la fin : l'espace `opensearch-essai` n'existe plus, aucune Application `opensearch-essai` ni `fluent-bit-opensearch`, aucun PV orphelin de l'essai, aucun DaemonSet Fluent Bit dans le cluster, plus de chart `opensearch` ni `fluent-bit` dans `charts-miroir`.
 
 **Vérification** : `lab/bin/check 22 15` (en fin d'exercice, après le retrait)
 
@@ -191,7 +193,7 @@ Une `Certificate` de cert-manager choisit le format de la clé privée (`spec.pr
 Pour comparer le disque : `GET _cat/indices/journaux-*?v&bytes=b` donne la taille de l'index (avec ses réplicas, qu'un nœud unique n'a pas — vérifie `number_of_replicas`), et la même heure dans Loki se lit dans les métriques de l'ingester (octets de chunks stockés) ou dans le compartiment. Pour le retrait, un PVC de StatefulSet survit à la suppression de l'Application : c'est voulu.
 </details>
 
-**Pour aller plus loin** : active une politique ISM (*Index State Management*) qui supprime les index de plus de 30 jours, et compare l'effort avec la rétention par locataire de Loki (E13). Essaie la même agrégation en PPL (*Piped Processing Language*) et en LogQL.
+**Pour aller plus loin** (facultatif) : active une politique ISM (*Index State Management*) qui supprime les index de plus de 30 jours, et compare l'effort avec la rétention par locataire de Loki (E13). Essaie la même agrégation en PPL (*Piped Processing Language*) et en LogQL.
 
 ---
 
@@ -213,7 +215,7 @@ Pour comparer le disque : `GET _cat/indices/journaux-*?v&bytes=b` donne la taill
 - Qui parle à Loki aujourd'hui (politique `loki-entree` d'E02) : Alloy (DaemonSet de `journaux`) et Grafana (`supervision`) sur tout le port 3100, Prometheus sur `/metrics`, les VMs du socle en `POST /loki/api/v1/push` seulement (règle HTTP posée dès E02), MGMT sans restriction. Aucune politique ne couvre la **sortie** de Loki. Le *ruler* de Loki tourne **dans** `loki-0` et parle à Alertmanager ; le conteneur `sidecar` du pod lit les ConfigMaps de règles par l'API Kubernetes.
 - Le Service `LoadBalancer` a `externalTrafficPolicy: Local` : l'adresse source des VMs est conservée jusqu'au pod, ce qui permet de filtrer par CIDR.
 - Cilium sait appliquer des règles HTTP (méthode, chemin) en faisant passer le trafic concerné par son proxy Envoy ; mesure ce que cela coûte et ce que cela casse (connexions longues, `tail`).
-- Grafana OSS 13 : les permissions par source de données sont une fonction d'**Enterprise** ; les **organisations**, elles, sont dans l'édition libre, chacune avec ses sources de données et ses utilisateurs. Le fournisseur OpenTofu `grafana/grafana` 4.51 gère organisations et sources de données (état `observabilite-grafana`).
+- Grafana OSS 13 : les permissions par source de données sont une fonction d'**Enterprise** ; les **organisations**, elles, sont dans l'édition libre, chacune avec ses sources de données et ses utilisateurs. Le fournisseur OpenTofu `grafana/grafana` (contrainte `~> 4.50` posée au M21-E17, 4.51.x de référence) gère organisations et sources de données (état `observabilite-grafana`). Les comptes locaux des personnages viennent du M21 ; si celui de Sophie Laurent n'existe pas encore, crée-le comme au M21 avant d'en faire une membre de l'organisation.
 - Le compte des checks `wb-checks` de Grafana est *Viewer* dans l'organisation principale.
 
 > ⚠️ **Attention** : une politique réseau Cilium qui sélectionne `loki-0` passe ce pod en **refus par défaut** dans le sens qu'elle couvre. Une règle oubliée coupe la collecte de tout le lab, ou les sondes du kubelet (pod redémarré en boucle). Avant d'appliquer : garde un terminal sur `hubble observe -n journaux --verdict DROPPED -f` ; applique d'abord l'entrée, observe 10 minutes, puis la sortie. Retour arrière : `git revert` du commit dans `plateforme/observabilite` (Argo CD supprime la politique) — prépare la commande avant de fusionner.
@@ -249,7 +251,7 @@ Dans le fournisseur OpenTofu de Grafana, une ressource de source de données pre
 Le RGW de Ceph comprend `put-bucket-versioning` et `put-bucket-lifecycle-configuration` de l'API S3 (`aws s3api … --endpoint-url https://rgw.par1.medisphere.internal`). Avec le versionnage, une suppression par le compactor laisse un marqueur de suppression et une version non courante : c'est elle que la règle de cycle de vie expire.
 </details>
 
-**Pour aller plus loin** : mesure la latence de poussée d'Alloy (`loki_write_request_duration_seconds`) avant et après la règle de niveau 7 ; lis la page « Authentication » de la documentation de Loki et esquisse la passerelle authentifiante du M24 (qui pose l'en-tête, à partir de quelle identité).
+**Pour aller plus loin** (facultatif) : mesure la latence de poussée d'Alloy (`loki_write_request_duration_seconds`) avant et après la règle de niveau 7 ; lis la page « Authentication » de la documentation de Loki et esquisse la passerelle authentifiante du M24 (qui pose l'en-tête, à partir de quelle identité).
 
 ---
 
@@ -289,7 +291,12 @@ Reprends les ADR du M21 (ADR-0210) et du M14 pour la forme. Un bon test : un lec
 > **Ticket PLAT-2318** — *De : Karim Benali*
 > Avant de te mettre seul(e) d'astreinte sur les journaux, je te pose les questions que je pose à tout le monde. Réponses argumentées, pas de « ça dépend » sans dire de quoi.
 
-**Durée indicative** : 45 min.
+**Objectifs pédagogiques**
+- Raisonner sur les conséquences réelles (perte, perte de vue, refus) des réglages de Loki et d'Alloy.
+- Relier un symptôme d'exploitation au mécanisme qui le produit, et à ce qui l'aurait évité.
+
+**Prérequis** : M22-E13 à M22-E16.
+**Durée indicative** : 45 min (+ 20 min d'auto-correction).
 
 **Questions**
 1. La rétention de `mediagenda` passe de 30 à 7 jours par une MR fusionnée lundi à 10 h. Quand les données de plus de 7 jours disparaissent-elles réellement du compartiment ? Peut-on revenir en arrière à 11 h ? À 14 h ? Qu'aurait-il fallu en place pour être tranquille ?
@@ -303,5 +310,9 @@ Reprends les ADR du M21 (ADR-0210) et du M14 pour la forme. Un bon test : un lec
 9. Un locataire dépasse `max_global_streams_per_user`. Quels flux sont refusés, les anciens ou les nouveaux ? Quel symptôme voient les équipes ? Pourquoi est-ce pire qu'une limite de débit ?
 10. Loki ou OpenSearch pour chercher une chaîne rare (un identifiant de transaction) sur 30 jours dans tous les espaces ? Explique le coût de chacune des deux requêtes et propose une organisation des journaux qui rend la recherche Loki raisonnable.
 11. Alloy tombe sur un nœud pendant 20 minutes puis redémarre. Les journaux des pods de ce nœud pendant ces 20 minutes sont-ils perdus ? Et ceux de journald ? De quoi cela dépend-il (deux réglages, un fichier) ?
-12. Pourquoi la politique réseau de M22-E16 ne suffit-elle pas à empêcher une VM du socle compromise de lire le journal d'audit ? Que faudrait-il, et quel module l'apporte ?
+12. Pourquoi la politique réseau de M22-E16 ne suffit-elle pas à protéger le locataire `audit` contre une VM du socle compromise (en écriture comme en lecture) ? Que faudrait-il, et quel module l'apporte ?
 13. Le RGW de `ceph-par1` est indisponible 15 minutes. Que deviennent les écritures ? les requêtes sur la dernière heure ? sur hier ? Quelles alertes doivent sonner, et dans quel ordre ?
+
+**Critères de réussite**
+- [ ] Tu as répondu par écrit aux 13 questions avant d'ouvrir le corrigé, en distinguant chaque fois perte réelle et perte de vue.
+- [ ] Chaque réponse cite le réglage, la métrique ou la commande qui le prouve sur le lab.

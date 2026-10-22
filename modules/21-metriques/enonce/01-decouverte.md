@@ -1,8 +1,8 @@
-# Module 21 — Métriques et alerting : palier 1 — Découverte
+# Module 21 — Palier 1 : Découverte
 
 Avant d'écrire une alerte, il faut des mesures qu'on sait lire. Ce palier déploie la pile de supervision du cluster par Argo CD, apprend à interroger Prometheus (cibles, étiquettes, PromQL), branche Grafana et Alertmanager jusqu'au premier courriel, fait collecter MédiAgenda et MédiDoc par les dépôts des équipes, et passe node_exporter en TLS sur toutes les VMs du socle. Il s'ouvre et se ferme sur un questionnaire.
 
-Prérequis : module 20 terminé (`lab/bin/check 20 46` vert : Argo CD, `plateforme/charts-miroir`, Rollouts) ; module 19 (`mon01`, Mailpit) ; modules 14 à 17 (cluster, réseau, stockage `ceph-rbd`, Helmfile). Lis [`00-introduction.md`](00-introduction.md), en particulier le chemin imposé, les faits techniques, les règles du module et l'**ordre conseillé** (E07 avant E04).
+Prérequis : module 20 terminé (`lab/bin/check 20 46` vert : Argo CD, `plateforme/charts-miroir`, Rollouts) ; module 19 (`mon01`, Mailpit) ; modules 14 à 17 (cluster, réseau, stockage `ceph-rbd`, Helmfile). Lis [`00-introduction.md`](00-introduction.md), en particulier le chemin imposé, les faits techniques, les règles du module et l'**ordre conseillé** (E06 et E07 avant E04 et E05).
 
 ---
 
@@ -147,7 +147,7 @@ Pour les questions d'alerte, mets-toi à la place de Nadia : elle est réveillé
 
 4. Rends le DaemonSet de node-exporter : quels champs sont refusés par le profil de Pod Security `restricted` de l'espace `supervision` ? Décide où le placer pour ne pas abaisser tout l'espace. Écris les fichiers d'espaces dans `plateforme/k8s/espaces/` (l'espace `supervision` y migre depuis `rbac/supervision/`, avec l'étiquette qui permet à `gw-par1` d'accepter la route de Grafana), avec l'exception écrite en annotation. `task espaces`.
 5. Ajoute la ClusterRole `wb-checks-observabilite` dans `plateforme/k8s/rbac/` (lecture seule, aucune ressource `secrets`) ; applique-la par la procédure de `plateforme/k8s`.
-6. Crée le Secret `grafana-admin` par `outils/secrets-k8s.sh` (nouveau composant `grafana` dans le Vault `critique` ; mot de passe d'au moins 24 caractères). Inscris-le au registre des secrets.
+6. Crée le Secret `grafana-admin` par `outils/secrets-k8s.sh` (nouveau composant `grafana` : fichier `secrets/grafana.yml` du Vault `critique`, et ce qu'il faut dans la table `secrets-k8s.conf` ou dans `secrets-k8s.d/` selon la forme du Secret — M19-E04, M20-E06 ; mot de passe d'au moins 24 caractères). Inscris-le au registre des secrets.
 
 *C. Les values*
 
@@ -346,7 +346,7 @@ Une opération entre deux vecteurs n'apparie que les séries qui ont **exactemen
 - Utiliser des variables de tableau de bord (source de données, environnement).
 - Créer des comptes nominatifs et un compte de service à droits minimaux.
 
-**Prérequis** : M21-E04 (requêtes de MédiAgenda), M21-E02.
+**Prérequis** : M21-E07 (MédiAgenda collecté), M21-E04 (requêtes de MédiAgenda), M21-E02.
 **Durée indicative** : 3 h.
 
 **Contexte technique**
@@ -498,7 +498,7 @@ Trois alertes du même nom dans le même espace forment **un** groupe si `pod` n
 |---|---|
 | MédiAgenda | conteneur `api`, port nommé `http` (8000), `/metrics` ; étiquettes des pods du chart : `app.kubernetes.io/name: mediagenda`, `app.kubernetes.io/instance: mediagenda`, `app.kubernetes.io/component: api` ; espaces `mediagenda-dev`, `mediagenda-recette`, `mediagenda-prod` |
 | Base | Cluster CloudNativePG `mediagenda-db` : chaque instance expose ses métriques sur le port nommé `metrics` (9187) |
-| MédiDoc | `/metrics` sur 8080 ; `medidoc-dev` (et `medidoc-recette` s'il existe, M20-E33) |
+| MédiDoc | `/metrics` sur 8080 ; `medidoc-dev` et `medidoc-recette` (M20-E33 ; la recette portera le SLO de MédiDoc au palier 3) |
 | Noms | ServiceMonitor **`mediagenda`** (job **`mediagenda`**), PodMonitor **`mediagenda-db`** (job `mediagenda-db`), ServiceMonitor **`medidoc`** (job **`medidoc`**) ; component **`components/supervision`** dans chaque dépôt `…/deploiement` |
 | Réseau | les espaces d'équipe sont en refus par défaut : la collecte (Prometheus de `supervision` vers 8000, 8080, 9187) est autorisée par la **plateforme**, dans `plateforme/k8s` |
 | `plateforme/observabilite` | arborescence : `kps/`, `regles/`, `scrape/`, `alertmanager/`, `tableaux/`, `requetes/`, `tests/`, `outils/` ; une `kustomization.yaml` à la racine ; Application Argo CD **`observabilite`** (projet `plateforme`, destination `supervision`) |
@@ -528,7 +528,7 @@ Trois alertes du même nom dans le même espace forment **un** groupe si `pod` n
 
 **Critères de réussite**
 - [ ] `components/supervision` est sur `main` de `mediagenda/deploiement` et de `medidoc/deploiement`, inclus dans les overlays ; les ServiceMonitor `mediagenda` portent l'étiquette de sélection et un port nommé dans les trois environnements.
-- [ ] Dans chaque environnement de MédiAgenda, il y a autant de cibles `up{job="mediagenda"}` que de pods prêts de l'API, et une seule série `up` par pod ; aucune cible `mediagenda` ou `medidoc` en échec ; `mediagenda_http_requests_total` existe dans les trois environnements ; `medidoc-dev` est collecté.
+- [ ] Dans chaque environnement de MédiAgenda, il y a autant de cibles `up{job="mediagenda"}` que de pods prêts de l'API, et une seule série `up` par pod ; aucune cible `mediagenda` ou `medidoc` en échec ; `mediagenda_http_requests_total` existe dans les trois environnements ; `medidoc-dev` et `medidoc-recette` sont collectés.
 - [ ] Le PodMonitor `mediagenda-db` existe en recette et les instances PostgreSQL sont collectées (`cnpg_collector_up`).
 - [ ] Une politique Cilium à l'échelle du cluster autorise la collecte depuis `supervision`.
 - [ ] `plateforme/observabilite` a sa structure, sa CI (dernier pipeline de `main` réussi) ; l'Application `observabilite` est `Synced` et `Healthy`.

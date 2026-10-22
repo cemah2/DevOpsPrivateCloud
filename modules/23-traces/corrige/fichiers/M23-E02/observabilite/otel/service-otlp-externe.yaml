@@ -10,7 +10,7 @@ metadata:
   namespace: traces
   annotations:
     lbipam.cilium.io/ips: "10.10.41.63"
-    external-dns.alpha.kubernetes.io/hostname: otlp.apps.par1.medisphere.internal
+    external-dns.kubernetes.io/hostname: otlp.apps.par1.medisphere.internal
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Local

@@ -136,7 +136,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Étiquettes d'alerte | **`gravite`** (`critique`, `avertissement`, `info`), **`equipe`** (`plateforme`, `mediagenda`, `medidoc`) ; annotations `resume`, `description`, `runbook_url` |
 | Récepteurs (E06) | `plateforme-mail` (`plateforme@medisphere.internal`), `astreinte-mail` (`astreinte@`), `mediagenda-mail` (`mediagenda@`), `medidoc-mail` (`medidoc@`) ; SMTP `smtp.par1.medisphere.internal:25` (STARTTLS, racine MédiSphère) |
 | Jobs Prometheus | `kubelet`, `apiserver`, `node-exporter`, `kube-state-metrics`… (chart) ; **`mediagenda`**, **`mediagenda-db`**, **`medidoc`** (E07) ; **`vms`** (E08) |
-| Projets | `plateforme/observabilite` (E02, E07) ; `plateforme/gitops` (`plateforme/kube-prometheus-stack.yaml`, `plateforme/observabilite.yaml`) ; `plateforme/charts-miroir` ; `plateforme/k8s` (`espaces/supervision.yaml`, `espaces/supervision-noeuds.yaml`, `rbac/wb-checks-observabilite.yaml`, `composants/reseau/politiques/collecte-prometheus.yaml`) ; `plateforme/ansible` (rôle `node_exporter` v2, playbooks `node-exporter.yml`, `supervision-cibles.yml`) |
+| Projets | `plateforme/observabilite` (E02, E07) ; `plateforme/gitops` (`plateforme/kube-prometheus-stack.yaml`, `plateforme/observabilite.yaml`) ; `plateforme/charts-miroir` ; `plateforme/k8s` (`espaces/supervision.yaml`, `espaces/supervision-noeuds.yaml`, `rbac/wb-checks-observabilite.yaml`, `composants/reseau/politiques/collecte-prometheus.yaml`, composant `grafana` de `outils/secrets-k8s.sh`) ; `plateforme/ansible` (rôle `node_exporter` v2, playbooks `node-exporter.yml`, `supervision-cibles.yml`) |
 | Documentation | `docs/observabilite/metriques/` de `plateforme/medisphere` : `exploration.md` (E03), `acces.md` (E05) ; runbooks RB-210 et suivants au palier 2 ; ADR-0210 au palier 3 |
 | Tickets | PLAT-22xx, DEV-22xx, SEC-22xx, INC-48xx (xx = exercice) |
 | Brouillons | `~/m21/eXX/` sur `adm01` (non versionnés, sans secret) |
@@ -151,16 +151,28 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-Les fonctions de vérification du bloc E existent déjà ; leurs adresses par défaut conviennent au lab. Le palier 1 ajoute trois variables facultatives :
+Les fonctions de vérification du bloc E existent déjà (`lab/lib/check-lib.sh`) ; leurs adresses par défaut conviennent au lab. Toutes les variables ci-dessous sont **facultatives** : ne les décommente dans `lab/lab.env` que si ton lab s'écarte des valeurs par défaut.
 
 ```
-WB_PROM_URL="http://prometheus.apps.par1.medisphere.internal:9090"     # prom_api, prom_requete
-WB_AM_URL="http://alertmanager.apps.par1.medisphere.internal:9093"     # am_api
-WB_GRAFANA_URL="https://grafana.apps.par1.medisphere.internal"         # grafana_api
-WB_GRAFANA_TOKEN_FILE="$HOME/.config/workbook/grafana-checks.token"    # jeton Viewer (E05)
-WB_M21_VMS_SOCLE=15                  # VMs du socle supervisées par node_exporter (E08)
-WB_M21_HOTES_TLS="mon01 dns01"       # hôtes dont le check E08 vérifie le TLS depuis adm01
-WB_M21_NOEUDS=6                      # nœuds de k8s-par1 (DaemonSet node-exporter, kubelets)
+# Communes au bloc E (check-lib.sh)
+#WB_PROM_URL="http://prometheus.apps.par1.medisphere.internal:9090"     # prom_api, prom_requete (Thanos Query après E24)
+#WB_AM_URL="http://alertmanager.apps.par1.medisphere.internal:9093"     # am_api
+#WB_GRAFANA_URL="https://grafana.apps.par1.medisphere.internal"         # grafana_api
+#WB_GRAFANA_TOKEN_FILE="$HOME/.config/workbook/grafana-checks.token"    # jeton Viewer (E05)
+# Module 21
+#WB_M21_VMS_SOCLE=15                                     # VMs du socle supervisées par node_exporter (E08)
+#WB_M21_HOTES_TLS="mon01 dns01"                          # hôtes dont le check E08 vérifie le TLS depuis adm01
+#WB_M21_NOEUDS=6                                         # nœuds de k8s-par1 (DaemonSet node-exporter, kubelets)
+#WB_M21_MON01="mon01"                                    # alias SSH de mon01 (témoin, E11-E12, E28, E42, E44)
+#WB_M21_TEMOIN_URL="http://mon01.par1.medisphere.internal:9090"     # Prometheus témoin (E11 et suivants)
+#WB_M21_TEMOIN_AM_URL="http://mon01.par1.medisphere.internal:9093"  # Alertmanager témoin (E28, E42)
+#WB_M21_S3_THANOS_FILE="$HOME/.config/workbook/s3-thanos.env"      # identifiants RGW de Thanos (E24)
+#WB_M21_RGW_URL="https://rgw.par1.medisphere.internal"              # RGW de ceph-par1 (E24, E25, E39)
+#WB_M21_SLO_URL="https://slo.apps.par1.medisphere.internal"         # interface de Pyrra (E26)
+#WB_M21_RECETTE_URL="https://mediagenda-recette.apps.par1.medisphere.internal"   # E34
+#WB_M21_IMAGE_CURL="registry.par1.medisphere.internal/dockerhub/curlimages/curl:8.22.0"          # E34
+#WB_M21_IMAGE_PYTHON="registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie"  # témoins de wb-pannes (E35-E43)
+#WB_M21_VMS_PANNE="nbx01 dns02 runner01"                 # VMs du socle que les pannes du palier 4 peuvent toucher
 ```
 
 Si ton socle compte plus ou moins de 15 VMs (une VM ajoutée ou retirée dans un module précédent), ajuste `WB_M21_VMS_SOCLE` au nombre de VMs étiquetées `socle` dans NetBox.
@@ -172,7 +184,7 @@ Si ton socle compte plus ou moins de 15 VMs (une VM ajoutée ou retirée dans un
 1. **La supervision ne supprime rien.** Les volumes de Prometheus, d'Alertmanager et de Grafana portent l'historique : pas de `kubectl delete pvc`, pas de suppression de l'Application `kube-prometheus-stack` en cascade.
    > ⚠️ **Attention** : supprimer l'Application `kube-prometheus-stack` avec suppression en cascade supprime aussi les **CRD** de l'opérateur, donc **tous** les `ServiceMonitor`, `PrometheusRule`… de **tous** les espaces, y compris ceux des équipes. C'est pourquoi cette Application n'a pas de finaliseur de suppression (E02).
 2. **Ce qui est collecté se décide par étiquette.** Un objet de supervision sans `medisphere.internal/supervision: "oui"` est ignoré en silence. Quand une cible « n'apparaît pas », c'est la première chose à vérifier.
-3. **Pas de vérification TLS désactivée** : ni `insecureSkipVerify` dans une configuration de collecte que tu écris, ni `curl -k`. La racine MédiSphère est distribuée là où il faut (ConfigMap `racine-medisphere`, magasin système des VMs). Seule exception héritée du chart : la collecte des kubelets (certificats auto-signés, discutée en E02 et traitée en E29).
+3. **Pas de vérification TLS désactivée** : ni `insecureSkipVerify` dans une configuration de collecte que tu écris, ni `curl -k`. La racine MédiSphère est distribuée là où il faut (ConfigMap `racine-medisphere`, magasin système des VMs). Seule exception héritée du chart : la collecte des kubelets et, à partir d'E20, du plan de contrôle (certificats auto-signés par kubeadm, discutée en E02, inscrite aux risques résiduels en E29).
 4. **Pas de charge sur la production.** Le trafic d'essai (E04, E05) vise la **recette** ; les alertes d'essai portent un nom qui commence par `Essai`.
 5. **Mémoire.** Profil des blocs D et E ≈ 100 Go (socle v4, `ceph-par1`, `k8s-par1` à travailleurs de 10 Go). La pile du palier 1 demande environ 2,5 Go de requêtes mémoire dans le cluster (Prometheus 1 Gio, Grafana, Alertmanager, opérateur, kube-state-metrics, six node-exporter). Aucun composant temporaire d'un module précédent ne doit tourner (Jenkins, SonarQube, `lyo-k3s01`, `flux01`).
 
@@ -224,14 +236,15 @@ admin@adm01:~$ printf 'alertmanager.url: http://alertmanager.apps.par1.medispher
 ## Ordre conseillé
 
 ```
-E01 ─ E02 ─ E03 ─ E07 ─ E04 ─ E05 ─ E06 ─ E08 ─ E09
+E01 ─ E02 ─ E03 ─ E06 ─ E07 ─ E04 ─ E05 ─ E08 ─ E09
 ```
 
 1. **E01** — positionnement, à froid.
 2. **E02 → E03** — la pile, puis l'exploration de ce qu'elle collecte d'elle-même.
-3. **E07 avant E04 et E05** — PromQL et le premier tableau de bord portent sur les métriques de MédiAgenda : il faut d'abord que MédiAgenda soit collecté. Les numéros suivent la logique de la carte (les outils avant l'intégration), l'ordre de travail suit les dépendances.
-4. **E06** — Alertmanager ; **E08** a besoin de la ConfigMap `racine-medisphere` qu'E06 crée.
-5. **E09** — en dernier : il demande d'avoir pratiqué.
+3. **E06** — Alertmanager : ses essais de routage deviennent les tests de la CI d'E07, et sa ConfigMap `racine-medisphere` sert à E08.
+4. **E07 avant E04 et E05** — PromQL et le premier tableau de bord portent sur les métriques de MédiAgenda : il faut d'abord que MédiAgenda soit collecté. Les numéros suivent la logique de la carte (les outils avant l'intégration), l'ordre de travail suit les dépendances.
+5. **E08** — node_exporter en TLS sur le socle (il a besoin d'E06 et d'E07).
+6. **E09** — en dernier : il demande d'avoir pratiqué.
 
 Durée indicative du palier 1 : 16 à 20 heures.
 

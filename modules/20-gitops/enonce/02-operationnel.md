@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : palier 2 — Opérationnel
+# Module 20 — Palier 2 : Opérationnel
 
 Le palier 1 a installé Argo CD, créé les comptes, le dépôt `plateforme/gitops` et son application racine, les AppProjects, et repris `mediagenda-dev` sans coupure. Ce palier en fait l'outil du quotidien : **un seul gabarit** pour les trois environnements de MédiAgenda (ApplicationSet), des synchronisations **ordonnées** (vagues, migrations de schéma par hook), ce qu'Argo CD doit **laisser à d'autres** (champs écrits par des contrôleurs, Secrets), les charts tiers **recopiés et signés** dans Harbor, la **promotion** par MR de dev à la prod et le retour arrière, puis les **déploiements progressifs** avec Argo Rollouts (canary par la Gateway API, blue/green, analyses automatiques) et les **notifications**. Tu termines en relisant les Applications de Lucas, en écrivant le runbook « application OutOfSync ou Degraded » et en refaisant le même déploiement avec **Flux**, pour comparer.
 
@@ -123,7 +123,7 @@ Dans `templatePatch`, le texte est d'abord un gabarit Go, puis un correctif YAML
 
 **Critères de réussite**
 - [ ] La dernière synchronisation de `mediagenda-recette` a réussi et a exécuté le hook `mediagenda-migrate` (phase `Sync`) avec succès.
-- [ ] Le gabarit de pod de l'API n'a plus de conteneur d'initialisation de migration ; le component `migrations` porte les vagues -3 et -2 et figure dans les trois overlays ; `base/values-communes.yaml` dit `migrations.mode: none`.
+- [ ] Le gabarit de pod de l'API n'a plus de conteneur d'initialisation de migration ; le component `migrations` (Job en vague -1, autres objets en vagues -3 et -2) figure dans les trois overlays ; `base/values-communes.yaml` dit `migrations.mode: none`.
 - [ ] `mediagenda-dev` est revenue Synced et Healthy après l'échec provoqué.
 - [ ] Le journal répond aux étapes 1, 2, 6 et 7.
 
@@ -652,7 +652,7 @@ Lis le générateur et le fichier `medinotif-prod.yaml` ensemble : combien de fo
 
 **Travail demandé**
 
-Rédige `docs/livraison/gitops/RB-200-application-outofsync-ou-degraded.md` dans `plateforme/medisphere` (MR relue par Nadia), sur le modèle des runbooks du M14. Il contient au moins :
+Rédige `docs/livraison/gitops/runbooks/RB-200-application-outofsync-ou-degraded.md` dans `plateforme/medisphere` (MR relue par Nadia), sur le modèle des runbooks du M14. Il contient au moins :
 - les déclencheurs (courriels d'E19, interface, ticket), la gravité selon l'environnement, les accès nécessaires ;
 - une qualification rapide : quelles commandes, et comment distinguer une erreur de comparaison (`ComparisonError`), un écart (`OutOfSync`), une synchronisation en échec et un problème de santé (`Degraded`, `Progressing` qui dure, `Missing`, `Suspended`) ;
 - pour chaque cas, une table « constat → cause probable → action », dont : jeton de dépôt expiré, racine absente, rendu en échec, dépôt ou espace hors projet, dérive manuelle, champ réécrit par un contrôleur, ressource en trop, hook de migration en échec, quota, objet refusé par l'admission, canary interrompu par une analyse, pause de canary en prod ;

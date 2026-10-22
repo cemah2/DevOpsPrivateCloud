@@ -223,7 +223,7 @@ Garantis, et démontre, qu'aucune donnée personnelle de patient ne peut entrer 
 - quelle que soit la source collectée par la plateforme : pods, journald des nœuds, journal d'audit, événements, **et** VMs du socle ;
 - sans masquer les adresses de courriel de MédiSphère, ni les horodatages, ni les identifiants techniques ;
 - de façon vérifiable par l'équipe Plateforme à tout moment, et par l'auditeur ;
-- en écrivant la règle (ce qui est interdit, ce qui est masqué et par quoi, ce qui n'est pas couvert, que faire si une donnée est trouvée) dans `docs/observabilite/journaux/politique-journaux.md` (première section ; les rétentions et les accès viendront en E13 et E16).
+- en écrivant la règle (ce qui est interdit, ce qui est masqué et par quoi, ce qui n'est pas couvert, que faire si une donnée est trouvée) dans `docs/observabilite/journaux/politique-journaux.md` (section 1 ; les rétentions et l'effacement viendront en section 2 avec E13, les accès et la sauvegarde en sections 3 et 4 avec E16).
 
 Contraintes :
 - tout passe par le code (`plateforme/observabilite`, `plateforme/ansible`) et la CI ;
@@ -236,7 +236,7 @@ Contraintes :
 - [ ] Le masquage est dans la configuration d'Alloy du cluster **et** dans celle des VMs (rôle `alloy`), sur `main`.
 - [ ] `politique-journaux.md` est sur `main` de `plateforme/medisphere`, avec la règle des données de santé.
 
-**Vérification** : `lab/bin/check 22 09`
+**Vérification** : `lab/bin/check 22 09` (la recherche des motifs couvre la dernière heure : les lignes du témoin arrivées **avant** le masquage la font échouer pendant une heure, ce qui prouve qu'elle sait passer au rouge)
 
 <details><summary>Indice 1</summary>
 

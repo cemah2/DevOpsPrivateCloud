@@ -1,24 +1,26 @@
 # medidoc/medidoc — .gitlab-ci.yml (M19-E33, DEV-2033). Remplace le pipeline v1 du M12/M13 (runner02).
-# Pipeline standard par composants (plateforme/ci-templates 2.2.0) + deux jobs propres à Go :
+# Pipeline standard par composants (plateforme/ci-templates v2.8.0) + deux jobs propres à Go :
 #   qualite (Go)        : commitlint, go vet, tests JUnit (composant) ;
 #   go:race-couverture  : tests avec le détecteur de concurrence et couverture Cobertura (local : le
-#                         composant qualite ne le fait pas encore ; proposé en 2.3.0, voir corrigé) ;
+#                         composant qualite ne le fait pas encore ; proposé en v2.9.0, voir corrigé) ;
 #   construction-image  : buildkitd distant, archive OCI + provenance, publication par digest ;
 #   securite            : Trivy, SBOM, provenance, signature et attestations sur le runner protégé ;
 #   promotion           : MR dans medidoc/deploiement (overlay dev, image par digest).
 # Aucun job sur runner02 (étiquette docker), aucun privilège.
 include:
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.8.0
     inputs:
       langage: go
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.8.0
     inputs:
       image_nom: medisphere/medidoc
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@2.2.0
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.8.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.8.0
     inputs:
+      overlay: dev
+      declenchement: on_success
       projet_deploiement: medidoc/deploiement
-      image_nom: medisphere/medidoc
+      nom_image: registry.par1.medisphere.internal/medisphere/medidoc
 
 stages: [lint, test, construction, analyse, publication, signature, promotion]
 

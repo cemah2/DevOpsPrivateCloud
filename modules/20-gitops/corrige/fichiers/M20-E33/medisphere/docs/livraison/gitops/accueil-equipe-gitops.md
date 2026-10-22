@@ -10,8 +10,9 @@
 
 | Élément | Où | Qui (MR relue par) |
 |---|---|---|
-| Espace, étiquettes (`medisphere.internal/equipe`, Pod Security, exposition), quota, LimitRange, refus réseau par défaut, compte `default` | `plateforme/k8s` `espaces/<équipe>-<env>/` | Plateforme |
-| Cloison `isolement-<équipe>-<env>`, politiques d'entrée et de sortie de l'application | `plateforme/k8s` `composants/reseau/politiques/`, `applications/<équipe>-<env>/` | Plateforme + RSSI |
+| Espace, étiquettes (`medisphere.internal/equipe`, Pod Security, exposition), quota, LimitRange, compte `default` | `plateforme/k8s` `espaces/<équipe>-<env>/` | Plateforme |
+| Cloison `isolement-<équipe>-<env>` (refus de cluster) | `plateforme/k8s` `composants/reseau/politiques/` | Plateforme + RSSI |
+| Politiques réseau de l'application (refus par défaut, entrée par la Gateway, sorties) | dépôt de déploiement de l'équipe (`base/`), relu en MR par la plateforme | Équipe |
 | Secrets (`harbor-pull`, identifiants S3…) | Vault `critique` `secrets/<équipe>-<env>.yml`, `outils/secrets-k8s.sh appliquer <équipe>-<env>` | Plateforme |
 | Compte et compartiment de stockage objet par environnement | RGW (IAM, méthode du M08-E12) | Plateforme |
 | AppProject `<équipe>` (sources, destinations, listes noires, rôle `equipe`, fenêtres) | `plateforme/gitops` `projets/` | Plateforme |
@@ -23,7 +24,7 @@
 
 1. Fiche d'équipe (`docs/kubernetes/equipes/<équipe>.md`) : environnements, enveloppe, référent, dépôts.
 2. Stockage et secrets : compte et compartiment par environnement, entrées du Vault.
-3. MR `plateforme/k8s` : `espaces/<équipe>-<env>/`, politiques ; `task appliquer` ; `secrets-k8s.sh appliquer <équipe>-<env>`.
+3. MR `plateforme/k8s` : `espaces/<équipe>-<env>/`, cloison ; `task appliquer` ; `secrets-k8s.sh appliquer <équipe>-<env>`.
 4. MR `plateforme/gitops` : AppProject (destinations), ApplicationSet (élément de liste).
 5. L'équipe : overlay `<env>` dans son dépôt (MR), image par digest.
 6. Contrôles : `argocd app get <équipe>-<env>` `Synced`/`Healthy` ; `/readyz` par le nom publié ; `kubectl auth can-i` des personnes de l'équipe ; recherche de `kind: Secret` dans le dépôt de l'équipe (aucun).

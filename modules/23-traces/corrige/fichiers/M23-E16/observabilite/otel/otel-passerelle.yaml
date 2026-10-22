@@ -3,7 +3,7 @@
 # l'entrée externe TLS + jeton, le renvoi par traceID des données externes, des lots bornés.
 #
 # Deux entrées, deux pipelines :
-#   - « otlp » (4317/4318, sans TLS) : réservée aux agents du cluster (CiliumNetworkPolicy cnp-traces.yaml),
+#   - « otlp » (4317/4318, sans TLS) : réservée aux agents du cluster (CiliumNetworkPolicy traces-passerelle de politiques.yaml),
 #     qui équilibrent déjà par traceID (exportateur loadbalancing, M23-E09) ;
 #   - « otlp/externe » (14317/14318, TLS + jeton) : derrière le Service LoadBalancer 10.10.41.63
 #     (otlp.apps.par1.medisphere.internal:4317/4318). Ces données ne sont PAS équilibrées par traceID quand

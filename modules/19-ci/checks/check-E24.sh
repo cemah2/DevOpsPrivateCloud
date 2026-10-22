@@ -83,7 +83,7 @@ else
   check_cmd "dernière étiquette ($(jq -r .ref <<<"$_m19_e24_pl")) : signature réussie sur $_M19P_RUNNER_PROTEGE" \
     _m19p_job_sur "$_m19_e24_jobs" securite:signature "$_M19P_RUNNER_PROTEGE"
   check_cmd "dernière étiquette : promotion vers dev réussie sur $_M19P_RUNNER_PROTEGE" \
-    _m19p_jq "$_m19_e24_jobs" "any(.[]; (.name | test(\"^promotion\")) and .status == \"success\" and .runner.description == \"$_M19P_RUNNER_PROTEGE\")"
+    _m19p_jq "$_m19_e24_jobs" "any(.[]; (.name | test(\"^promouvoir-dev$\")) and .status == \"success\" and .runner.description == \"$_M19P_RUNNER_PROTEGE\")"
 fi
 _m19_e24_v="$(_m19p_variables projects mediagenda/api)"
 check_cmd "mediagenda/api : aucune variable Cosign de projet" _m19p_jq "$_m19_e24_v" 'all(.[]; .key | test("COSIGN") | not)'

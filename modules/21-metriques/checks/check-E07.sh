@@ -48,6 +48,12 @@ check_cmd "Pas de double collecte : une seule série up par pod de l'API" _m21d_
 check_cmd "Métriques applicatives présentes (mediagenda_http_requests_total) dans les trois environnements" \
   _m21d_au_moins 'count(count by (namespace) (mediagenda_http_requests_total))' 3
 check_cmd "medidoc-dev : cible up{job=\"medidoc\"} qui répond" _m21d_au_moins 'count(up{job="medidoc", namespace="medidoc-dev"} == 1)' 1
+# medidoc-recette (M20-E33) porte le SLO medidoc-disponibilite du palier 3 : il doit être collecté aussi.
+if kube get namespace medidoc-recette >/dev/null 2>&1; then
+  check_cmd "medidoc-recette : cible up{job=\"medidoc\"} qui répond" _m21d_au_moins 'count(up{job="medidoc", namespace="medidoc-recette"} == 1)' 1
+else
+  skip "medidoc-recette collecté" "espace medidoc-recette absent (M20-E33 : lab/bin/check 20 33)"
+fi
 check_cmd "PodMonitor mediagenda-db en recette, étiqueté $_M21D_SELECTEUR=oui" _m21d_json \
   "$(_m21d_k -n mediagenda-recette get podmonitors.monitoring.coreos.com mediagenda-db -o json)" \
   '.metadata.labels[$l] == "oui"' --arg l "$_M21D_SELECTEUR"

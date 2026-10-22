@@ -54,4 +54,4 @@ check_cmd "plateforme/outils : bin/ci-inventaire-variables.sh sur main (sans val
   _m19p_fichier_contient plateforme/outils bin/ci-inventaire-variables.sh 'del\(\.value\)'
 check_cmd "secrets-ci.md sur main (CI_JOB_TOKEN, revendications OIDC, rotation)" \
   _m19p_fichier_contient plateforme/medisphere docs/livraison/ci/secrets-ci.md 'CI_JOB_TOKEN' 'ref_protected' 'rotation'
-check_cmd "RB-196 sur main" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci RB-196 'ci-promotion' 'rotat'
+check_cmd "RB-191 sur main (docs/livraison/ci/runbooks/)" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci/runbooks RB-191 'ci-promotion' 'rotat'

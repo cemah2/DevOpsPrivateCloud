@@ -52,7 +52,7 @@ rm -f ~/m21/objstore.yml
 Dernier bloc de résolution 0 de source `sidecar` : moins de 3 h attendu. Seules `inspect`, `ls` et `web` sont permises.
 
 **Diagnostic par composant**
-- **Store** absent ou en erreur : `kubectl -n supervision logs <pod thanos-store>` (`SignatureDoesNotMatch`, `AccessDenied`, `NoSuchBucket`) ; le Secret `thanos-objstore` se recrée **depuis Vault** (`plateforme/k8s/outils/secrets-k8s.sh thanos`), jamais depuis une copie ; puis redémarrer le Store, et penser au sidecar et au Compactor qui l'ont chargé au démarrage.
+- **Store** absent ou en erreur : `kubectl -n supervision logs <pod thanos-store>` (`SignatureDoesNotMatch`, `AccessDenied`, `NoSuchBucket`) ; le Secret `thanos-objstore` se recrée **depuis Vault** (`plateforme/k8s/outils/secrets-k8s.sh appliquer thanos`), jamais depuis une copie ; puis redémarrer le Store, et penser au sidecar et au Compactor qui l'ont chargé au démarrage.
 - **Sidecar** qui n'envoie plus : `kubectl -n supervision get sts prometheus-kps -o json | jq -r '.spec.template.spec.containers[] | select(.name=="thanos-sidecar") | .args[]'` (`--objstore.config` présent ?) ; `q 'thanos_shipper_uploads_total'` (absent = pas d'expéditeur) ; cause : `objectStorageConfig` de `prometheus.prometheusSpec.thanos` (valeurs de kps). **Compte à rebours** : au-delà de 15 jours, les blocs locaux non envoyés sont supprimés.
 - **Compactor** arrêté : `thanos_compact_halted == 1` (RB-214).
 

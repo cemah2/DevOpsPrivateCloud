@@ -1,16 +1,16 @@
 # mediagenda/annuaire — .gitlab-ci.yml (M19-E34, DEV-2034). Remplace le pipeline d'urgence du M12-E34.
-# Composants 2.2.0 uniquement : qualite (Python : commitlint, ruff, pytest qui exécute les tests
+# Composants v2.8.0 uniquement : qualite (Python : commitlint, ruff, pytest qui exécute les tests
 # unittest), construction-image (buildkitd, archive OCI + provenance, publication par digest),
 # securite (Trivy, SBOM, provenance, signature et attestations sur le runner protégé).
 # Pas de promotion : MédiAnnuaire n'a pas encore de dépôt de déploiement.
 include:
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.8.0
     inputs:
       langage: python
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.8.0
     inputs:
       image_nom: medisphere/annuaire
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.8.0
 
 stages: [lint, test, construction, analyse, publication, signature]
 

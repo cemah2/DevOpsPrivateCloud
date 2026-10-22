@@ -103,7 +103,7 @@ Pour une cible en échec : `curl -s http://prometheus.apps.par1.medisphere.inter
 1. Prouve chaque maillon dans l'ordre, sans rien modifier : l'alerte est-elle `firing` dans Prometheus (pas seulement `pending`) ? Alertmanager la connaît-il, et dans quel état (`active`, `suppressed`) ? Vers quel(s) récepteur(s) ? Un envoi a-t-il été tenté, a-t-il échoué, pour quelle raison ?
 2. Reproduis la décision de routage avec la configuration **chargée** (pas celle de ton dépôt local) : `amtool config routes test` avec les étiquettes exactes de l'alerte.
 3. Trouve la cause racine et son origine (commit, silence, auteur, date), corrige au bon endroit et vérifie que le courriel `EssaiChaineAlerteCritique` arrive dans `astreinte@`.
-4. Ajoute ce qui aurait détecté la panne avant Nadia : un essai de routage de plus dans `alertmanager/routes-tests.txt` pour une alerte critique de la plateforme ; et pour les échecs d'envoi, kube-prometheus-stack fournit déjà `AlertmanagerFailedToSendAlerts` : par quel chemin part-elle quand c'est le courriel qui est cassé ? Fais en sorte qu'un échec d'envoi atteigne quelqu'un **par un autre chemin** (relis M21-E28 : le témoin interroge la vue globale).
+4. Ajoute ce qui aurait détecté la panne avant Nadia : un essai de routage de plus dans `alertmanager/routes-tests.txt` pour une alerte critique de la plateforme ; et pour les échecs d'envoi, kube-prometheus-stack fournit déjà `AlertmanagerFailedToSendAlerts` : par quel chemin part-elle quand c'est le courriel qui est cassé ? Relis le chemin de secours de M21-E28 (alertes `Alertmanager…` envoyées aussi à l'Alertmanager témoin) : l'astreinte a-t-elle reçu quelque chose de `mon01`, quand, avec quelle gravité ? Fais en sorte qu'un échec d'envoi des courriels atteigne l'astreinte **en critique**, par ce chemin qui ne dépend pas du courriel du cluster.
 5. Complète **RB-218** avec une section `## L'alerte n'arrive pas` : l'arbre de décision maillon par maillon, la commande qui prouve chaque maillon, et la règle de l'équipe sur les silences (durée maximale, commentaire, auteur).
 
 **Critères de réussite**
@@ -128,7 +128,7 @@ Pour une cible en échec : `curl -s http://prometheus.apps.par1.medisphere.inter
 Une règle d'inhibition éteint les **cibles** quand une **source** est active et que les étiquettes de `equal` sont identiques (ou absentes des deux côtés). Écris sur papier, pour l'essai critique, quelles sources possibles sont actives en même temps qu'elle.
 </details>
 
-**Pour aller plus loin** : le témoin de `mon01` reçoit-il les alertes du cluster (M21-E28) ? Si l'Alertmanager du cluster ne sait plus envoyer de courriel, quelle alerte part, par quel chemin, et en combien de temps ? Mesure-le en arrêtant l'envoi de façon contrôlée (smarthost faux en `recette` d'Alertmanager… ou en lisant ta politique d'alerte).
+**Pour aller plus loin** : le témoin de `mon01` reçoit-il les alertes du cluster (M21-E28) ? Si l'Alertmanager du cluster ne sait plus envoyer de courriel, quelle alerte part, par quel chemin, et en combien de temps ? Mesure-le en arrêtant l'envoi de façon contrôlée (smarthost faux en `recette` d'Alertmanager… ou en lisant ta politique d'alerte). Et si c'est le flux `K8S_TRAV` → `mon01`:9093 qui est coupé en même temps ? Un second chemin, **tiré** par le témoin (une sonde de la vue globale, comme pour le Watchdog), ne dépend plus de ce flux.
 
 ---
 

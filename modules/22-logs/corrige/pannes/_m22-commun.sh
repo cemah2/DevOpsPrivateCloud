@@ -36,10 +36,13 @@ _M22_LUCAS_COURRIEL="lucas.martin@medisphere.internal"
 _M22_REGISTRE=registry.par1.medisphere.internal
 read -r -a _M22_CP <<<"${WB_K8S_CP:-k8s-cp01 k8s-cp02 k8s-cp03}"
 read -r -a _M22_W <<<"${WB_K8S_WORKERS:-k8s-w01 k8s-w02 k8s-w03}"
-# Chemins des fichiers du dépôt plateforme/observabilite (M22-E02, E03, E13) ; surchargeables.
+# Chemins des fichiers du dépôt plateforme/observabilite créés par le palier 1 (M22-E02 : loki/values.yaml
+# et grafana/sources-loki.yaml ; M22-E03 : alloy/values.yaml et alloy/config.alloy) ; surchargeables par
+# lab/lab.env si le dépôt de l'apprenant les range ailleurs.
 _M22_F_LOKI="${WB_M22_FICHIER_LOKI:-loki/values.yaml}"
 _M22_F_ALLOY="${WB_M22_FICHIER_ALLOY:-alloy/values.yaml}"
 _M22_F_ALLOY_CONFIG="${WB_M22_FICHIER_ALLOY_CONFIG:-alloy/config.alloy}"
+_M22_F_SOURCES="${WB_M22_FICHIER_SOURCES:-grafana/sources-loki.yaml}"
 # Applications Argo CD rafraîchies après un commit
 _M22_APPS=(loki alloy observabilite kube-prometheus-stack)
 

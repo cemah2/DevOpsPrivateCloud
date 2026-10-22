@@ -99,10 +99,10 @@ title "M21-E46 — 5/6 Documentation"
 _m21_e46_doc() {
   (cd "$_m21x_depot" 2>/dev/null && git ls-files | grep -Eq -- "$1")
 }
-check_cmd "ADR-0210 présente et commitée" _m21_e46_doc '^docs/observabilite/.*ADR-0210[^/]*\.md$'
+check_cmd "ADR-0210 présente et commitée (docs/observabilite/metriques/adr/)" _m21_e46_doc '^docs/observabilite/metriques/adr/ADR-0210[^/]*\.md$'
 check_cmd "politique d'alerte (docs/observabilite/metriques/politique-alerte.md)" _m21_e46_doc '^docs/observabilite/metriques/politique-alerte\.md$'
 check_cmd "politique de budget d'erreur (docs/observabilite/metriques/politique-budget-erreur.md)" _m21_e46_doc '^docs/observabilite/metriques/politique-budget-erreur\.md$'
-for _m21_e46_rb in 210 211 212 213 217 218 219; do
+for _m21_e46_rb in 210 211 212 213 214 215 216 217 218 219; do
   check_cmd "runbook RB-$_m21_e46_rb présent" _m21_e46_doc "^docs/observabilite/metriques/runbooks/RB-$_m21_e46_rb-[^/]*\\.md$"
 done
 check_cmd "fiche de livraison docs/observabilite/metriques/supervision-v1.md (ce qui est couvert, ce qui ne l'est pas)" \

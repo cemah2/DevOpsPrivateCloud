@@ -6,7 +6,7 @@
     "plateforme",
     "m23"
   ],
-  "description": "Chaîne application → agents → passerelle → Tempo : ce qui entre, ce qui sort, ce qui se perd (M23-E16, RB-237).",
+  "description": "Chaîne application → agents → passerelle → Tempo : ce qui entre, ce qui sort, ce qui se perd (M23-E16, RB-232).",
   "schemaVersion": 41,
   "version": 1,
   "editable": false,
@@ -33,9 +33,9 @@
   },
   "links": [
     {
-      "title": "RB-237",
+      "title": "RB-232",
       "type": "link",
-      "url": "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/traces/runbooks/RB-237-collector-perd-des-donnees.md"
+      "url": "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/traces/runbooks/RB-232-collector-perd-des-donnees.md"
     }
   ],
   "panels": [

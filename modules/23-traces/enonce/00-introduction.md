@@ -31,9 +31,9 @@ Mardi, 10 h 40. La revue d'incident de la semaine dernière tourne en rond. Les 
 - **Tempo 3.1** monolithique (Application `tempo`), blocs dans le compartiment RGW **`tempo-k8s-par1`**, rétention 14 jours, source Grafana `tempo` déclarée par code ;
 - **MédiAgenda** (SDK Python) et **MédiDoc** (SDK Go) instrumentées dans le code, avec un vrai appel de l'une à l'autre (pièces jointes des rendez-vous) ; l'auto-instrumentation de l'opérateur essayée et comparée ;
 - les liens métriques ↔ traces ↔ journaux, l'échantillonnage en tête et en queue, le filtrage et le masquage dans les Collectors ;
-- au palier 3 : métriques tirées des traces, **Pyroscope 2.4**, Jaeger v2 en comparaison (retiré), TLS et authentification de l'entrée externe ; ADR-0230, runbooks RB-230 et suivants.
+- au palier 3 : métriques tirées des traces, **Pyroscope 2.4**, Jaeger v2 en comparaison (retiré), TLS et authentification de l'entrée externe, ADR-0230 ; au palier 4 : les pannes de la chaîne et les runbooks RB-230 à RB-233.
 
-Le **palier 1** (ce fichier et `01-decouverte.md`) monte la chaîne (opérateur, Collectors, Tempo), instrumente MédiAgenda et t'apprend TraceQL. Le **palier 2** (`02-operationnel.md`) instrumente MédiDoc, compare l'auto-instrumentation, relie les trois signaux, échantillonne, protège les données, fait relire une configuration ratée et met tout cela au service d'un vrai diagnostic de lenteur.
+Le **palier 1** (ce fichier et `01-decouverte.md`) monte la chaîne (opérateur, Collectors, Tempo), instrumente MédiAgenda et t'apprend TraceQL. Le **palier 2** (`02-operationnel.md`) instrumente MédiDoc, compare l'auto-instrumentation, relie les trois signaux, échantillonne, protège les données, fait relire une configuration ratée et met tout cela au service d'un vrai diagnostic de lenteur. Le **palier 3** (`03-production.md`) tire des métriques des traces, ajoute le profilage continu (Pyroscope), compare Jaeger, sécurise et dimensionne la chaîne, puis écrit l'ADR-0230. Le **palier 4** (`04-expert.md`) casse la chaîne (traces absentes, coupées, perdues, liens morts), te met d'astreinte et descend sous le capot (OTLP, `traceparent`, blocs vParquet). Le **mini-projet** (`05-mini-projet.md`) livre l'ensemble en production avec l'étiquette `traces-v1`.
 
 ## Architecture du module
 
@@ -107,7 +107,7 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Stockage objet | utilisateur RGW **`tempo`**, compartiment **`tempo-k8s-par1`** ; Secret `tempo-objstore` dans `traces` (hors Git, composant `tempo` de `secrets-k8s.sh`) ; sur `adm01` : `~/.config/workbook/s3-tempo.env` (600) |
 | Attributs de ressource | `service.name` = `mediagenda-api` / `medidoc` ; `service.namespace=medisphere` ; `deployment.environment.name` = `dev` / `recette` / `prod` ; `k8s.*` et `medisphere.equipe` par l'agent |
 | Grafana | sources par code (ConfigMaps `grafana_datasource: "1"` de `supervision`, comme au M22) : `tempo` (uid `tempo`), `loki-mediagenda`, `loki-medidoc`… (M22), `prometheus` (M21) |
-| Documentation | `docs/observabilite/traces/` : `architecture.md`, `conventions-telemetrie.md`, `auto-instrumentation.md`, `correlation.md`, `echantillonnage.md`, `revue-collector-lucas.md`, puis ADR-0230 et RB-230… ; journaux de diagnostic dans `docs/kubernetes/journal/` |
+| Documentation | `docs/observabilite/traces/` : `architecture.md`, `conventions-telemetrie.md`, `auto-instrumentation.md`, `correlation.md`, `echantillonnage.md`, `revue-collector-lucas.md`, puis `adr/ADR-0230-traces-et-profilage.md` (palier 3) et `runbooks/` : RB-230 à RB-233 (palier 4), RB-234 « l'API est lente » (facultatif, M23-E12) ; journaux de diagnostic dans `docs/kubernetes/journal/`, post-mortems dans `docs/kubernetes/post-mortems/` |
 | Tickets | `PLAT-24xx`, `DEV-24xx`, `SEC-24xx`, `INC-50xx` (xx = numéro de l'exercice) |
 
 ### Valeurs à adapter
@@ -123,12 +123,20 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 Facultatives, avec des valeurs par défaut qui conviennent :
 
 ```
-WB_M23_TEMPO_UID=tempo                                   # UID de la source Grafana Tempo
+WB_M23_TEMPO_UID=tempo                                   # UID de la source Grafana Tempo (paliers 3-4 : découvert si vide)
 WB_M23_S3_TEMPO="$HOME/.config/workbook/s3-tempo.env"    # identifiants RGW de Tempo (lecture du compartiment par les checks)
+WB_M23_PYROSCOPE_UID=                                    # UID de la source Grafana Pyroscope (défaut : découvert, « pyroscope »)
+WB_M23_ATTR_ENV=resource.deployment.environment.name     # attribut TraceQL de l'environnement (checks et pannes)
+WB_M23_IMAGE_AGENDA=                                     # palier 4 : image du témoin de trafic (défaut : celle de MédiAgenda en dev)
+WB_M23_TRAFIC_URL=https://mediagenda-dev.apps.par1.medisphere.internal   # palier 4 : URL visée par le témoin
+WB_M23_APPEL_DOC=                                        # palier 4 : « MÉTHODE /chemin » de l'appel vers MédiDoc (défaut : lu dans /openapi.json)
 WB_RGW_ENDPOINT=https://rgw.par1.medisphere.internal
+WB_RACINE_PKI=/usr/local/share/ca-certificates/medisphere-root-ca.crt   # racine MédiSphère (TLS de 10.10.41.63, M23-E16)
 ```
 
-Les checks du module lisent aussi Prometheus (`WB_PROM_URL`), Grafana (`grafana-checks.token`), Loki et GitLab comme aux M21 et M22, et le cluster avec le compte `wb-checks` (la ClusterRole `wb-checks-observabilite` du M21-E02 couvre déjà `opentelemetry.io`).
+Les checks du module lisent aussi Prometheus (`WB_PROM_URL`), Grafana (`grafana-checks.token`), Loki et GitLab comme aux M21 et M22, et le cluster avec le compte `wb-checks` (la ClusterRole `wb-checks-observabilite` du M21-E02 couvre déjà `opentelemetry.io`). Les pannes du palier 4 poussent avec le jeton d'administration du lab (`WB_GITLAB_ADMIN_TOKEN_FILE`) et demandent `yq` (mikefarah).
+
+Fichiers créés dans `~/.config/workbook/` (700, fichiers en 600) : `s3-tempo.env` (M23-E03), `s3-pyroscope.env` (identité de **lecture** de `pyroscope-k8s-par1`, M23-E14), `otlp-essai.token` (jeton de l'émetteur d'essai `adm01-essai`, M23-E16).
 
 ---
 
@@ -172,14 +180,19 @@ Il te faut une dizaine de Go libres sur `pve01` au-delà du profil des blocs D e
 E01 ─ E02 ─ E03 ─ E04 ─ E05 ─ E06 ─┬─ E07
                                    ├─ E08 ─ E09 ─ E10 ─ E11
                                    └──────────────────────── E12
+E13 ─ E14 ─ E15 ─ E16 ─ E17 ─ E18                        (palier 3)
+E19 ─ E20 ─ E21 ─ E22 ─ E23 ─ E24                        (palier 4)
+E25                                                      (mini-projet)
 ```
 
 1. **E01** — à froid.
 2. **E02 → E05** dans l'ordre : la chaîne, puis le stockage, puis la première application, puis les requêtes.
 3. **E06** avant tout le reste du palier 2 (la trace distribuée sert partout).
 4. **E07** (essai jetable) quand tu veux ; **E08 → E11** dans l'ordre ; **E12** en dernier.
+5. Palier 3 : **E13** et **E14** dans l'ordre ; **E15** (Jaeger, temporaire) quand aucun autre composant temporaire ne tourne ; **E16** avant **E17** (l'ADR s'appuie sur les mesures) ; **E18** à la fin.
+6. Palier 4 : **E19 → E22** dans n'importe quel ordre, **E23** après eux (il les combine), **E24** quand tu veux.
 
-Durée indicative : palier 1, 7 à 9 heures ; palier 2, 11 à 14 heures.
+Durée indicative : palier 1, 7 à 9 heures ; palier 2, 11 à 14 heures ; palier 3, 9 à 11 heures ; palier 4, 6 à 8 heures ; mini-projet, 4 à 6 heures.
 
 ## Pour aller plus loin
 

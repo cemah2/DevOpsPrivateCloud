@@ -58,7 +58,7 @@ deploiement:valider:
     - echo "composant deploiement $[[ component.version ]] — overlays/$OVERLAY"
     - kustomize version && kubeconform -v
     - cd "$[[ inputs.repertoire ]]"
-    - test -d "overlays/$OVERLAY" || { echo "overlay absent : overlays/$OVERLAY"; exit 1; }
+    - test -d "overlays/$OVERLAY" || { echo "overlay absent — overlays/$OVERLAY"; exit 1; }
     - mkdir -p rendus && kustomize build "overlays/$OVERLAY" > "rendus/$OVERLAY.yaml"
     - >-
       kubeconform -strict -summary -kubernetes-version "$[[ inputs.version_kubernetes ]]"

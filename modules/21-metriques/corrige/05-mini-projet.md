@@ -35,12 +35,12 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 
 ```
 1 - (
-  sum(increase(http_requests_total{job="mediagenda", namespace="mediagenda-prod", code=~"5.."}[28d]))
-  / sum(increase(http_requests_total{job="mediagenda", namespace="mediagenda-prod"}[28d]))
+  sum(increase(mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics", code=~"5.."}[28d]))
+  / sum(increase(mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics"}[28d]))
 )
 ```
 
-(adapte le nom de la métrique et le sélecteur à la définition de ton SLO, M21-E26). Les trois chiffres doivent concorder à l'arrondi près ; un écart s'explique (fenêtre glissante contre calendaire, requêtes de sondes exclues ou non, recording rules de Pyrra contre requête brute sur des données sous-échantillonnées : sur 28 jours, Thanos peut servir du 5 min si la requête le permet).
+(même sélecteur que le SLO `mediagenda-disponibilite`, M21-E26). Les chiffres doivent concorder à l'arrondi près **ou** l'écart doit être expliqué. Le principal est connu d'avance : la règle `…:increase4w` de Pyrra est évaluée par Prometheus sur sa base locale (15 jours, `dimensionnement.md`), alors que la requête ci-dessus, envoyée à Thanos Query (10.10.41.60), lit le compartiment et couvre vraiment 28 jours. Les autres : fenêtre glissante contre calendaire, sondes exclues ou non, données sous-échantillonnées (sur 28 jours, Thanos peut servir du 5 min). Pour la latence, rappelle que l'objectif mesuré est 250 ms (pas de seau 0,3 s), plus strict que le contrat.
 
 *Ajout d'une cible par Karim* : il choisit une VM ou un service (par exemple le récurseur de `dns02`) ; tu montres le chemin complet par le code : inventaire NetBox ou ScrapeConfig, flux (matrice et rôle `pare_feu`), MR, synchronisation, cible `up`, alerte de disparition, ligne dans `supervision-v1.md`. Temps attendu : moins de 30 minutes.
 

@@ -10,7 +10,7 @@
 
 | N° | Exigence | Comment c'est vérifié |
 |---|---|---|
-| 1 | Le `.gitlab-ci.yml` de `mediagenda/annuaire` n'inclut **que** des composants de `plateforme/ci-templates` en **2.2.0** (ou plus) : `qualite` (Python), `construction-image`, `securite`. Aucun `include: project`/`file` vers les gabarits v1. Tu ne modifies ni `src/` ni `tests/` ; tu peux modifier `pyproject.toml`, `uv.lock`, le `Dockerfile` et le `.gitlab-ci.yml` | configuration fusionnée (API `ci/lint`) |
+| 1 | Le `.gitlab-ci.yml` de `mediagenda/annuaire` n'inclut **que** des composants de `plateforme/ci-templates` en **v2.8.0** (ou plus) : `qualite` (Python), `construction-image`, `securite`. Aucun `include: project`/`file` vers les gabarits v1. Tu ne modifies ni `src/` ni `tests/` ; tu peux modifier `pyproject.toml`, `uv.lock`, le `Dockerfile` et le `.gitlab-ci.yml` | configuration fusionnée (API `ci/lint`) |
 | 2 | Aucun job sur `runner02` (étiquette `docker`), aucun job privilégié, aucune image `latest` dans le pipeline | jobs du dernier pipeline |
 | 3 | Pipeline de `main` vert ; puis étiquette **`v1.1.0`** dont le pipeline publie `registry.par1.medisphere.internal/medisphere/annuaire:v1.1.0`, signée et attestée (SBOM, provenance) **par le runner protégé** | pipelines, Harbor (`cosign tree`) |
 | 4 | Pipeline de MR : lint, tests et analyse de l'image, sans publication ; durée totale **< 10 min** | une MR de ton choix |

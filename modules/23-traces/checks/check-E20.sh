@@ -24,6 +24,6 @@ check_cmd "agent : exportateur loadbalancing (clé de routage traceID) dans le p
      and all(.service.pipelines | to_entries[] | select(.key | test("^traces")); any(.value.exporters[]; test("^loadbalancing")))'
 check_cmd "passerelle : au moins 2 réplicas disponibles" \
   _m23p_kq '(.status.availableReplicas // 0) >= 2' -n traces deployment otel-passerelle-collector
-check_cmd "runbook RB-236 « Traces coupées » publié" \
-  _m23p_doc "$_m23x_runbooks" RB-236 'traceparent' 'loadbalancing' 'parentbased'
+check_cmd "runbook RB-231 « Traces coupées » publié" \
+  _m23p_doc "$_m23x_runbooks" RB-231 'traceparent' 'loadbalancing' 'parentbased'
 check_cmd "panne M23-E20 close (lab/bin/break 23 20 --annuler après réparation)" _m23x_aucune_panne_active E20

@@ -113,7 +113,7 @@ Pour la cardinalité, multiplie : nombre d'espaces × de conteneurs × de valeur
 | Stockage | RGW `https://rgw.par1.medisphere.internal` ; utilisateur RGW `loki` (quota 50 Gio) ; compartiment `loki-k8s-par1` ; Secret `loki-objstore` (clés `LOKI_S3_ACCESS_KEY_ID`, `LOKI_S3_SECRET_ACCESS_KEY`) par `secrets-k8s.sh` (composant `loki`, Vault `critique` `secrets/loki.yml`) ; `~/.config/workbook/s3-loki.env` (600 : `AWS_ACCESS_KEY_ID=…`, `AWS_SECRET_ACCESS_KEY=…`) |
 | Index | TSDB, schéma `v13`, tables de 24 h, préfixe `loki_index_`, à partir du `2026-10-01` |
 | Service externe | `loki-externe`, `LoadBalancer`, adresse demandée **10.10.41.62**, port **3100** seul, `externalTrafficPolicy: Local`, nom `loki.apps.par1.medisphere.internal` (ExternalDNS) |
-| Politique réseau | CiliumNetworkPolicy `loki-entree` : Alloy (espace `journaux`), Grafana et Prometheus (`supervision`), MGMT (10.10.10.0/24) ; les autres réseaux du lab **en écriture seulement** |
+| Politique réseau | CiliumNetworkPolicy `loki-entree` : Alloy (espace `journaux`), Grafana et Prometheus (`supervision`), MGMT (10.10.10.0/24) ; les réseaux des VMs du socle (INFRA 10.10.20.0/24, DMZ 10.10.70.0/24, et l'adresse des passerelles sur le VLAN 40) **en écriture seulement** |
 | Grafana | quatre sources `Loki — <locataire>` (UID `loki-<locataire>`) déclarées par code (ConfigMap étiquetée `grafana_datasource: "1"` dans `supervision`) |
 
 **Travail demandé**
@@ -335,7 +335,7 @@ Une requête de journaux commence **toujours** par un sélecteur `{…}` avec au
 | Configuration | `/etc/alloy/config.alloy` ; positions sous `/var/lib/alloy` ; interface de l'agent sur `127.0.0.1:12345` seulement |
 | Étiquettes | `job="journald"`, `host` (nom court), `role` (groupe d'inventaire `role_*` sans le préfixe), `site="par1"` ; unité et niveau en métadonnées structurées |
 | Destination | `http://loki.apps.par1.medisphere.internal:3100/loki/api/v1/push`, locataire `plateforme` |
-| Flux | VLAN 20 et VLAN 70 → 10.10.41.62 TCP 3100 (bordure) ; MGMT déjà ouvert ; trafic propre de `gw01`/`gw02` |
+| Flux | VLAN 20 (INFRA) et VLAN 70 (DMZ) → 10.10.41.62 TCP 3100 (bordure) ; MGMT (`adm01`) déjà ouvert ; trafic propre de `gw01`/`gw02` (adresses du VLAN 40) ; ces trois cas couvrent les 15 VMs du groupe `socle` |
 
 **Travail demandé**
 

@@ -24,7 +24,7 @@
   _m23d_rgw="${WB_RGW_ENDPOINT:-https://rgw.par1.medisphere.internal}"
   _m23d_lb=10.10.41.63
   # Image des Collectors : distribution contrib, par Harbor, version 0.16x épinglée.
-  _m23d_re_image='^registry\.par1\.medisphere\.internal/.+/opentelemetry-collector-contrib:0\.16[0-9]\.[0-9]+$'
+  _m23d_re_image='^registry\.par1\.medisphere\.internal/.+/opentelemetry-collector-contrib:0\.161\.[0-9]+$'
 }
 
 # --- Kubernetes ---------------------------------------------------------------------------------

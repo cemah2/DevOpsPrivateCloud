@@ -1,7 +1,7 @@
 # Politique des journaux de MédiSphère
 
 > Propriétaire : équipe Plateforme. Validée par Sophie Laurent (RSSI). Version 1 : M22-E09 (SEC-2309).
-> Les sections 2 (rétentions et effacement) et 3 (accès) sont ajoutées par M22-E13 et M22-E16. Version 2 : M22-E13 (SEC-2313). Version 3 : M22-E16 (SEC-2316).
+> Les sections 2 (rétentions et effacement), 3 (accès) et 4 (sauvegarde) sont ajoutées par M22-E13 et M22-E16. Version 2 : M22-E13 (SEC-2313). Version 3 : M22-E16 (SEC-2316).
 
 ## 1. Données de santé et données personnelles
 

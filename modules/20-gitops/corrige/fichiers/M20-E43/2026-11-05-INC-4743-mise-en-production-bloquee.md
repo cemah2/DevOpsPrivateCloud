@@ -28,7 +28,7 @@ pas été synchronisée ; aucune donnée n'a été touchée.
 | 17 h 46 | Aucune notification reçue ; `argocd app list` : trois applications MédiAgenda `Unknown` |
 | 17 h 50 | `argocd app get mediagenda-dev -o json \| jq .status.conditions` : `authentication required` |
 | 17 h 58 | `kubectl -n argocd exec deploy/argocd-repo-server -- git ls-remote …` : même refus ; Secret `repo-creds` du groupe mediagenda annoté `restaure-depuis` à 16 h 12 |
-| 18 h 05 | `secrets-k8s.sh argocd` depuis le Vault ; `argocd app get --hard-refresh` : comparaisons rétablies |
+| 18 h 05 | `secrets-k8s.sh appliquer argocd` depuis le Vault ; `argocd app get --hard-refresh` : comparaisons rétablies |
 | 18 h 10 | Point à Nadia : prod gelée, recette et dev en cours |
 | 18 h 20 | Recette : Rollout `Degraded`, `RolloutAborted` ; AnalysisRun `pret` en `Error` (404 sur `/prets`) |
 | 18 h 31 | `git log -p overlays/recette` : correctif de Lucas (commit 4c1e9a2b) ; MR de revert !87 fusionnée |

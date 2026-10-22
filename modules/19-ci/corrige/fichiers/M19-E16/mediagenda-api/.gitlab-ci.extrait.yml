@@ -27,7 +27,7 @@ sonarqube:
     key: sonar-$CI_PROJECT_PATH_SLUG
     paths: [.sonar/cache]
   script:
-    - test -n "${SONAR_TOKEN:-}" || { echo "SONAR_TOKEN absente (variable protégée : main seulement)"; exit 1; }
+    - test -n "${SONAR_TOKEN:-}" || { echo "SONAR_TOKEN absente (variable protégée — main seulement)"; exit 1; }
     # Le certificat de sonarqube.apps… est signé par la racine MédiSphère : magasin de confiance Java.
     - keytool -importcert -noprompt -alias medisphere -file /etc/medisphere/ca/medisphere-root-ca.crt -keystore /tmp/confiance.p12 -storetype PKCS12 -storepass jetable
     - >-

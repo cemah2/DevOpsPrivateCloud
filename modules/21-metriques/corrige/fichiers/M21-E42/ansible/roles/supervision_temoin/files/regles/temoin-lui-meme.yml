@@ -29,9 +29,11 @@ groups:
             Soit le lab entier est tombé, soit le témoin ne sait plus sonder (module blackbox, DNS,
             famille d'adresses, sortie réseau de mon01). Vérifier depuis adm01 avant de conclure.
           runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md
-      # L'Alertmanager témoin n'arrive plus à envoyer : la règle part… par lui. Elle est donc AUSSI
-      # lue par le cluster (fédération de M21-E28 : TemoinNotificationsEnEchec) ; ici, elle sert de
-      # trace locale et de déclencheur pour l'inhibition des doublons.
+      # L'Alertmanager témoin n'arrive plus à envoyer : la règle part… par lui. Elle sert donc surtout
+      # de trace locale (page Alerts du témoin) et de déclencheur pour l'inhibition des doublons.
+      # Le cluster ne collecte que le Prometheus témoin (ScrapeConfig temoin-mon01, M21-E28 :
+      # TemoinNotificationsEnEchec y voit Prometheus → Alertmanager témoin, pas Alertmanager → SMTP) :
+      # c'est le corrigé de M21-E42 qui dit comment le cluster apprend l'échec d'envoi du témoin.
       - alert: TemoinEnvoisEnEchec
         expr: sum(increase(alertmanager_notifications_failed_total{job="alertmanager-temoin"}[15m])) > 0
         for: 5m

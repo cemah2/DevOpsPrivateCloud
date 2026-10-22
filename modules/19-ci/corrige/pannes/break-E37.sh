@@ -47,7 +47,8 @@ kind: Pod
 metadata:
   name: $_E37_SONDE
   namespace: $_M19_NS_JOBS
-  labels: {app.kubernetes.io/name: $_E37_SONDE, medisphere.internal/role: sonde-workbook}
+  # medisphere.internal/ci=job : seule étiquette admise en entrée par la politique de buildkitd (M19-E08).
+  labels: {app.kubernetes.io/name: $_E37_SONDE, medisphere.internal/ci: job, medisphere.internal/role: sonde-workbook}
 spec:
   restartPolicy: Never
   activeDeadlineSeconds: 60

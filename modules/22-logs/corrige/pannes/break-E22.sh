@@ -39,7 +39,11 @@ _m22E22_une() {
   local n="$1" chemin
   case "$n" in
     1)
-      chemin="$(m22_git_chercher 'regex.*mediagenda' | grep -E '^alloy/' | head -n 1)" || chemin=""
+      # Fichier attendu (M22-E03) d'abord ; sinon, recherche dans alloy/ du dépôt.
+      chemin="$_M22_F_ALLOY_CONFIG"
+      if ! m22_git_lire "$chemin" 2>/dev/null | grep -Eq 'regex.*mediagenda'; then
+        chemin="$(m22_git_chercher 'regex.*mediagenda' | grep -E '^alloy/' | head -n 1)" || chemin=""
+      fi
       [[ -n "$chemin" ]] || return 10
       _m22_transformer() {
         # Sur les règles « regex » qui affectent le locataire : MédiAgenda retiré de l'alternative
@@ -52,7 +56,11 @@ Le stage.match « mediagenda » s'occupe déjà de ses journaux. -- Lucas" || re
       m22_attendre 480 _e22_v1_effective || return 1
       ;;
     2)
-      chemin="$(m22_git_chercher 'Loki — mediagenda' | head -n 1)" || chemin=""
+      # Fichier attendu (M22-E02, ConfigMap sources-loki) d'abord ; sinon, recherche dans le dépôt.
+      chemin="$_M22_F_SOURCES"
+      if ! m22_git_lire "$chemin" 2>/dev/null | grep -q 'Loki — mediagenda'; then
+        chemin="$(m22_git_chercher 'Loki — mediagenda' | head -n 1)" || chemin=""
+      fi
       [[ -n "$chemin" ]] || return 10
       _m22_transformer() {
         local f

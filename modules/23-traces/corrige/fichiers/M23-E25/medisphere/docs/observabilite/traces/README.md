@@ -21,7 +21,7 @@ Applications instrumentées : MédiAgenda (`mediagenda-api`, dev/recette/prod), 
 - Règles d'instrumentation, attributs interdits : [conventions-telemetrie.md](conventions-telemetrie.md).
 - Capacité, rétention, jetons, flux : [capacite-securite.md](capacite-securite.md) ; métriques tirées des traces : [metriques-depuis-traces.md](metriques-depuis-traces.md) ; profilage : [profilage.md](profilage.md).
 - Preuves de conformité : [conformite.md](conformite.md) ; démonstration du parcours complet : [demonstration.md](demonstration.md).
-- Runbooks : [RB-235 plus aucune trace](runbooks/RB-235-plus-aucune-trace.md), [RB-236 traces coupées](runbooks/RB-236-traces-coupees.md), [RB-237 le Collector perd des données](runbooks/RB-237-collector-perd-des-donnees.md), [RB-238 lien trace ↔ journaux](runbooks/RB-238-lien-trace-journaux.md).
+- Runbooks : [RB-230 plus aucune trace](runbooks/RB-230-plus-aucune-trace.md), [RB-231 traces coupées](runbooks/RB-231-traces-coupees.md), [RB-232 le Collector perd des données](runbooks/RB-232-collector-perd-des-donnees.md), [RB-233 lien trace ↔ journaux](runbooks/RB-233-lien-trace-journaux.md).
 - Tableaux : « MédiAgenda — SLO, traces et profils » (`m23-slo-traces`), « MédiAgenda — RED depuis les traces » (`m23-red-traces`), « Pipeline de traces ».
 - Alertes : `regles/traces-collectors.yaml` (`TracesAbsentes`, `CollectorPerdDesSpans`, `CollectorRefuseDesSpans`, `CollectorFileDAttentePleine`).
 

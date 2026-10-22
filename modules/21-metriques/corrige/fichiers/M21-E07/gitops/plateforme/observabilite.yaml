@@ -8,6 +8,8 @@ kind: Application
 metadata:
   name: observabilite
   namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
   annotations:
     medisphere.internal/ticket: "PLAT-2207"
   # Ici le finaliseur est voulu : supprimer l'Application retire ses règles et ScrapeConfig (pas de

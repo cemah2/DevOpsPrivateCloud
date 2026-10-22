@@ -23,7 +23,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Ne lis pas** les scripts de `corrige/pannes/` ni `~/.local/state/workbook/` sur `adm01` : ils contiennent la cause.
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 23 19 --annuler` remet l'état sain par un **commit inverse** (jamais par réécriture d'historique), filet de sécurité qui compte l'exercice comme non réussi. **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne : l'annulation ne revient jamais sur ta réparation (elle ne touche un fichier que s'il porte encore exactement le contenu de la panne).
 - Les pannes ne suppriment **jamais** de données (compartiments `tempo-k8s-par1`, `loki-k8s-par1`, `pyroscope-k8s-par1`, bases) et ne désactivent jamais l'auto-synchronisation d'Argo CD.
-- **Tiens un journal de diagnostic** par panne dans `docs/kubernetes/journal/` de `plateforme/medisphere` : heure, hypothèse, commande, résultat, conclusion. Il nourrit les runbooks RB-235 à RB-238 et le post-mortem de M23-E23.
+- **Tiens un journal de diagnostic** par panne dans `docs/kubernetes/journal/` de `plateforme/medisphere` : heure, hypothèse, commande, résultat, conclusion. Il nourrit les runbooks RB-230 à RB-233 et le post-mortem de M23-E23.
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 > ⚠️ **Effets de bord** : une panne de la chaîne commune prive de traces **tous** les environnements tant qu'elle dure ; préviens Julien avant d'injecter (canal de l'équipe) et répare avant de passer à autre chose. Pour revenir en arrière à tout moment : `lab/bin/break 23 <XX> --annuler`, puis `argocd app get otel` (ou l'Application concernée) jusqu'à `Synced`.
@@ -51,11 +51,11 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 1. Constate : depuis quand plus rien n'arrive dans Tempo ? Tous les services ou un seul ? Tous les environnements ? Réponds par les métriques des Collectors (ce qui est accepté, envoyé, en échec, à chaque maillon), avant de lire une configuration.
 2. Descends au maillon muet : journaux de l'émetteur, configuration vivante du Collector concerné (`kubectl get otelcol … -o yaml`), politiques réseau de l'espace `traces` et Hubble (`hubble observe … --verdict DROPPED`), historique Git du dépôt concerné.
 3. Corrige à la racine, par le code, et vérifie : nouvelles traces de `mediagenda-api` et `medidoc` dans Tempo, compteurs d'échec à zéro.
-4. Écris RB-235 « Plus aucune trace » (`docs/observabilite/traces/runbooks/`) : arbre de diagnostic par maillon, avec pour chacun la métrique ou la commande qui le prouve et le correctif. Dis quelle alerte aurait dû prévenir avant Julien.
+4. Écris RB-230 « Plus aucune trace » (`docs/observabilite/traces/runbooks/`) : arbre de diagnostic par maillon, avec pour chacun la métrique ou la commande qui le prouve et le correctif. Dis quelle alerte aurait dû prévenir avant Julien.
 
 **Critères de réussite**
 - [ ] Collectors prêts ; traces récentes de `mediagenda-api` et `medidoc` en dev ; aucune règle Cilium ne refuse l'OTLP dans `traces` ; exportateur de la passerelle vers un Tempo qui existe ; récepteur de l'agent en gRPC et HTTP ; aucune erreur d'export récente.
-- [ ] RB-235 publié ; ton journal contient le maillon en cause et sa preuve ; la panne est close.
+- [ ] RB-230 publié ; ton journal contient le maillon en cause et sa preuve ; la panne est close.
 
 **Vérification** : `lab/bin/check 23 19`
 
@@ -95,12 +95,12 @@ Un client gRPC qui parle à un port HTTP/1, ou l'inverse, échoue avec un messag
 2. Pose les trois hypothèses (propagation, échantillonnage en tête, échantillonnage en queue) et teste-les dans l'ordre le moins coûteux : variables des pods des deux services, en-têtes réellement reçus par MédiDoc, configuration de l'agent et répartition des spans d'une trace entre les deux réplicas de la passerelle.
 3. Retrouve le changement en cause (commit, MR) et corrige par le code.
 4. Vérifie : traces entières sur 15 min, aucune racine dans MédiDoc, arête `mediagenda-api` → `medidoc` dans le graphe de services.
-5. Écris RB-236 « Traces coupées en morceaux ».
+5. Écris RB-231 « Traces coupées en morceaux ».
 
 **Critères de réussite**
 - [ ] Des traces distribuées MédiAgenda → MédiDoc récentes, aucune trace de dev enracinée dans MédiDoc depuis 10 min.
 - [ ] Propagateurs avec `tracecontext`, échantillonneurs `parentbased_*`, agents équilibrés par `traceID` vers une passerelle à 2 réplicas.
-- [ ] RB-236 publié ; ton journal contient la requête TraceQL qui a prouvé la cause ; la panne est close.
+- [ ] RB-231 publié ; ton journal contient la requête TraceQL qui a prouvé la cause ; la panne est close.
 
 **Vérification** : `lab/bin/check 23 20`
 
@@ -140,12 +140,12 @@ Un client gRPC qui parle à un port HTTP/1, ou l'inverse, échoue avec un messag
 2. Confirme par les journaux du Collector et de Tempo (message exact) et par la configuration vivante ; retrouve le commit.
 3. Corrige par le code. Si plusieurs réglages ont bougé, explique le rôle de chacun dans la perte.
 4. Vérifie sous trafic : plus de refus ni de pertes pendant 15 min, files sous 50 %.
-5. Écris RB-237 « Le Collector perd des données » et vérifie que les alertes de M23-E16 auraient sonné (sinon, corrige-les : expression, durée, gravité).
+5. Écris RB-232 « Le Collector perd des données » et vérifie que les alertes de M23-E16 auraient sonné (sinon, corrige-les : expression, durée, gravité).
 
 **Critères de réussite**
 - [ ] Aucun refus, aucun échec de mise en file ni d'envoi depuis 10 min ; files sous 50 %.
 - [ ] `memory_limiter` dimensionné, files d'au moins 100 éléments, lots bornés, Tempo sans délai artificiel et avec une rafale d'au moins 4 Mo.
-- [ ] Une alerte Prometheus surveille la perte de spans ; RB-237 publié ; la panne est close.
+- [ ] Une alerte Prometheus surveille la perte de spans ; RB-232 publié ; la panne est close.
 
 **Vérification** : `lab/bin/check 23 21`
 
@@ -184,11 +184,11 @@ Dans les journaux de la passerelle : `kubectl -n traces logs deploy/otel-passere
 1. Reproduis dans les deux sens (trace → journaux, journaux → trace) et note ce que fait exactement Grafana (requête construite, source ouverte, erreur).
 2. Compare la configuration servie par Grafana à celle de Git, puis à ce que contiennent vraiment les journaux (nom du champ, locataire).
 3. Corrige par le code, attends le *sidecar* (ou le redémarrage de Grafana s'il le faut), et vérifie dans les deux sens.
-4. Écris RB-238 « Plus de lien trace ↔ journaux ».
+4. Écris RB-233 « Plus de lien trace ↔ journaux ».
 
 **Critères de réussite**
 - [ ] La source Tempo envoie vers la source Loki d'un locataire applicatif qui existe ; la source Loki de MédiAgenda a un champ dérivé sur `trace_id` vers Tempo ; les journaux de dev portent `trace_id`.
-- [ ] RB-238 publié ; la panne est close.
+- [ ] RB-233 publié ; la panne est close.
 
 **Vérification** : `lab/bin/check 23 22`
 
@@ -230,7 +230,7 @@ Un lien qui « ne renvoie rien » sans erreur interroge souvent le **mauvais loc
 **Travail demandé**
 1. Prends l'astreinte : ouvre ton journal, note l'heure, préviens Julien et Nadia (canal de l'équipe), pose le premier point de situation dans les 15 min.
 2. Délimite la lenteur par les **métriques** (quelles routes, depuis quand, quel percentile, CPU, étranglement, connexions) et les **journaux** (`duree_ms`, erreurs), même si les traces manquent.
-3. Rétablis l'observabilité défaillante (runbooks RB-235 à RB-238), puis utilise traces et profils pour trouver **où** passe le temps. Note ce que chaque signal t'a appris et ce qu'il ne pouvait pas t'apprendre.
+3. Rétablis l'observabilité défaillante (runbooks RB-230 à RB-233), puis utilise traces et profils pour trouver **où** passe le temps. Note ce que chaque signal t'a appris et ce qu'il ne pouvait pas t'apprendre.
 4. Corrige la cause de la lenteur à la racine, en accord avec Julien (c'est leur environnement), et vérifie : latence revenue, aucune panne active (`--annuler` pour clore).
 5. Rédige le post-mortem `docs/kubernetes/post-mortems/AAAA-MM-JJ-INC-5023-<titre>.md` avec le modèle de l'équipe (`modules/00-lab/ressources/M00-E46/modele-post-mortem.md`) : résumé, chronologie, causes (les deux), détection (pourquoi si tard, quel signal a manqué), actions avec responsables. Mets-y les requêtes PromQL, LogQL et TraceQL qui ont servi de preuve.
 

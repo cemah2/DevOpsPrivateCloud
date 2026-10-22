@@ -58,8 +58,8 @@ Meilleure isolation, mais quotas, politiques et RBAC à multiplier ; la séparat
 ## Conséquences
 
 - **Démontage** (mini-projet M19-E46) : releases `jenkins` et `sonarqube`, leurs espaces, la base CNPG `sonarqube-db`, les enregistrements DNS, les variables de CI associées (`SONAR_TOKEN`…) ; variables de groupe `COSIGN_*` (dernière exception de E24).
-- **Dettes acceptées** : `CI_JOB_TOKEN` encore utile entre quelques projets (liste d'autorisation) ; secrets longue durée (jetons de promotion, robot Harbor) tournés à la main tous les 60 jours (RB-196) jusqu'au M25 (OpenBao, jetons d'identité) ; pas d'admission par signature dans le cluster avant le M26.
-- **Exploitation** : RB-190, RB-195 à RB-197 ; capacité de 16 jobs simultanés (E27) ; montée de GitLab à chaque arrêt obligatoire au moins.
+- **Dettes acceptées** : `CI_JOB_TOKEN` encore utile entre quelques projets (liste d'autorisation) ; secrets longue durée (jetons de promotion, robot Harbor) tournés à la main tous les 60 jours (RB-191) jusqu'au M25 (OpenBao, jetons d'identité) ; pas d'admission par signature dans le cluster avant le M26.
+- **Exploitation** : RB-190 à RB-193 (puis RB-194 à RB-198, pannes du palier 4) ; capacité de 16 jobs simultanés (E27) ; montée de GitLab à chaque arrêt obligatoire au moins.
 
 ## Révision
 

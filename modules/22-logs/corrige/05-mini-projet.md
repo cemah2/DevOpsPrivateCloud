@@ -1,4 +1,4 @@
-# Module 22 — Journaux : palier 5 — Mini-projet — Corrigé
+# Module 22 — Palier 5 : Mini-projet — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -18,11 +18,11 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
    admin@adm01:~$ ls ~/.local/state/workbook/pannes-actives/ | grep M22
    admin@adm01:~$ kubectl -n mediagenda-recette get rolebindings -o wide
    ```
-2. **Rien de provisoire** (1 h) : clore les pannes (`lab/bin/break 22 XX --annuler`, qui ne défait pas tes réparations), supprimer le déploiement `journal-temoin` s'il reste, le témoin de données de E09 (`wb-essais/temoin-donnees`) **après** l'essai du point 4, les Applications et espaces d'essai (E10, E15) avec leurs volumes, les entrées devenues inutiles du miroir des charts (ou une ligne dans l'ADR qui dit pourquoi on les garde).
+2. **Rien de provisoire** (1 h) : clore les pannes (`lab/bin/break 22 XX --annuler`, qui ne défait pas tes réparations), supprimer le déploiement `journal-temoin` s'il reste, le témoin de données de E09 (`wb-essais/temoin-donnees`) **après** l'essai du point 4, les Applications et espaces d'essai (E10, E15) avec leurs volumes, les entrées `fluent-bit` et `opensearch` du miroir des charts (aucune Application ne s'en sert ; le contrôle global le vérifie).
 3. **Couverture** (1 h) : pour chaque nœud et chaque VM du socle, une ligne récente ; pour chaque espace applicatif, des lignes dans le bon locataire ; `logcli series --analyze-labels` sur chaque locataire.
    ```
    admin@adm01:~$ for n in k8s-cp01 k8s-cp02 k8s-cp03 k8s-w01 k8s-w02 k8s-w03; do printf '%-9s ' $n; logcli query --org-id=plateforme --since=10m --quiet --limit=1 "{node=\"$n\"}" | wc -l; done
-   admin@adm01:~$ for h in $WB_M22_VMS_SOCLE; do printf '%-9s ' $h; logcli query --org-id=plateforme --since=15m --quiet --limit=1 "{host=\"$h\"}" | wc -l; done
+   admin@adm01:~$ for h in ${WB_M22_VMS_SOCLE:-gw01 gw02 adm01 dns01 dns02 ca01 git01 runner01 runner02 nbx01 s3-01 reg01 mon01 lb01 lb02}; do printf '%-9s ' $h; logcli query --org-id=plateforme --since=15m --quiet --limit=1 "{host=\"$h\"}" | wc -l; done
    ```
 4. **Données de santé** (30 min) : rejouer le témoin de E09 (`ressources/E09-temoin`), vérifier que ses lignes arrivent masquées, retirer le témoin ; `lab/bin/check 22 09` sur 24 h.
 5. **Règles appliquées** (30 min, puis attente) : une demande d'effacement sur `essai` **au début** du mini-projet (elle sera `processed` après 24 h et un passage du compactor) ; vérifier rétentions et limites (`/config/tenant/v1/limits`, ConfigMap `loki-runtime`), le compactor (`/services`, métriques).
@@ -30,7 +30,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
    - `audit` : quelques échecs d'authentification sur l'API (`kubectl --token=invalide get pods` répété) ;
    - `mediagenda` : une rafale de 5xx sur `mediagenda-dev` (par exemple en coupant Valkey de dev quelques minutes avec l'accord de Julien, ou par le scénario prévu en E08) ;
    - `plateforme` : la règle de E08 de ce locataire selon son déclencheur ;
-   - « Alloy absent d'un nœud » : taint de test sur un travailleur + suppression du pod Alloy (comme en E19), chronométré, puis retour.
+   - « Alloy absent d'un nœud » (`AlloyAbsentDUnNoeud`, règle Prometheus écrite en E19 : [`regles/alloy-collecte.yaml`](fichiers/M22-E19/observabilite/regles/alloy-collecte.yaml), `for: 5m`) : taint de test sur un travailleur + suppression du pod Alloy (comme en E19), chronométré, puis retour.
    Vérifier la réception dans Mailpit par la bonne adresse (`equipe`).
 7. **Accès et sauvegarde** (30 min) : `lab/bin/check 22 16` ; essai depuis un compte d'équipe dans Grafana ; `aws s3api get-bucket-versioning`.
 8. **Documentation** (1 h 30) : compléter les documents de l'état livré, la note de livraison (modèle fourni), la matrice des flux (socle : VMs → 10.10.41.62:3100 ; cluster : section `journaux`).

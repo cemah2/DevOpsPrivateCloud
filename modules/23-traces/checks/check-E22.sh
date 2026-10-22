@@ -28,6 +28,6 @@ _m23_e22_lignes() {
     jq -e '[.data.result[]?.values[]?] | length > 0' >/dev/null 2>&1
 }
 check_cmd "journaux de mediagenda-dev porteurs d'un trace_id (15 min, locataire mediagenda)" _m23_e22_lignes
-check_cmd "runbook RB-238 « Plus de lien trace ↔ journaux » publié" \
-  _m23p_doc "$_m23x_runbooks" RB-238 'tracesToLogs' 'derivedFields|champ d[ée]riv' 'X-Scope-OrgID|locataire'
+check_cmd "runbook RB-233 « Plus de lien trace ↔ journaux » publié" \
+  _m23p_doc "$_m23x_runbooks" RB-233 'tracesToLogs' 'derivedFields|champ d[ée]riv' 'X-Scope-OrgID|locataire'
 check_cmd "panne M23-E22 close (lab/bin/break 23 22 --annuler après réparation)" _m23x_aucune_panne_active E22

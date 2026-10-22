@@ -3,8 +3,10 @@
 # Ce que la recette change par rapport à la base du M19-E33 (Deployment, Service et HTTPRoute
 # « medidoc ») : l'espace, l'image (par DIGEST, recopié de dev par MR de promotion), deux réplicas,
 # le compartiment du RGW, le nom publié, la racine MédiSphère.
-# Ce qui n'est PAS ici : espace, quota, LimitRange, politiques réseau (plateforme/k8s) ; Secrets
-# medidoc-s3 et harbor-pull (secrets-k8s.sh, Vault).
+# Les politiques réseau de l'application (refus par défaut, entrée Gateway, sortie DNS et RGW) viennent
+# de la base (M19-E33) : la sortie RGW vaut pour tout compartiment du RGW de ceph-par1.
+# Ce qui n'est PAS ici : espace, quota, LimitRange, cloison isolement-medidoc-recette (plateforme/k8s) ;
+# Secrets medidoc-s3 et harbor-pull (secrets-k8s.sh, Vault).
 #   kustomize build overlays/recette | kubeconform -strict -summary -kubernetes-version 1.36.0 -
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

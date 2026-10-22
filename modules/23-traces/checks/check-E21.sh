@@ -32,6 +32,6 @@ _m23_e21_alerte() {
             | select(test("otelcol_(exporter_send_failed|exporter_enqueue_failed|receiver_refused|processor_memory_limiter_refused)"))] | length >= 1' >/dev/null 2>&1
 }
 check_cmd "une alerte Prometheus surveille la perte de spans des collectors" _m23_e21_alerte
-check_cmd "runbook RB-237 « Le Collector perd des données » publié" \
-  _m23p_doc "$_m23x_runbooks" RB-237 'memory_limiter' 'sending_queue|file' 'RATE_LIMITED|burst'
+check_cmd "runbook RB-232 « Le Collector perd des données » publié" \
+  _m23p_doc "$_m23x_runbooks" RB-232 'memory_limiter' 'sending_queue|file' 'RATE_LIMITED|burst'
 check_cmd "panne M23-E21 close (lab/bin/break 23 21 --annuler après réparation)" _m23x_aucune_panne_active E21

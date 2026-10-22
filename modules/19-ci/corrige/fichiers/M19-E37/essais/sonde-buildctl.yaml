@@ -1,6 +1,6 @@
 # Pod jetable de diagnostic de buildkitd (M19-E37), dans ci-jobs : profil restricted, sans privilège,
-# sans jeton d'API. Remplace <SECRET-CLIENT> par le Secret du certificat client de buildkitd monté
-# dans les pods de job (kubectl get certificates -A -o wide). À supprimer après usage.
+# sans jeton d'API. Monte le Secret buildkit-client (certificat client de buildkitd, M19-E08), le même
+# que celui des pods de job. À supprimer après usage.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -8,6 +8,9 @@ metadata:
   namespace: ci-jobs
   labels:
     app.kubernetes.io/name: sonde-buildctl
+    # Seule étiquette admise en entrée par la politique de buildkitd (M19-E08) : sans elle, la sonde
+    # serait refusée comme n'importe quel pod qui n'est pas un job.
+    medisphere.internal/ci: job
 spec:
   restartPolicy: Never
   activeDeadlineSeconds: 120
@@ -47,4 +50,4 @@ spec:
   volumes:
     - name: certs
       secret:
-        secretName: <SECRET-CLIENT>
+        secretName: buildkit-client          # certificat client de M19-E08 (cert-manager, ClusterIssuer buildkit-ca)

@@ -1,4 +1,4 @@
-# Module 19 — Intégration continue : palier 4 — Expert — Corrigé
+# Module 19 — Palier 4 : Expert — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -202,7 +202,7 @@ admin@adm01:~$ kubectl -n gitlab-runner get secret <certs> -o json | jq '{annota
 { "annotations": {"medisphere.internal/restaure-depuis": "sauvegarde-vide-lucas"}, "tailles": {"git01.par1.medisphere.internal.crt": 0} }
 ```
 
-Le chart monte le Secret `certsSecretName` dans `/home/gitlab-runner/.gitlab-runner/certs/` ; le runner y lit la chaîne de confiance de `git01` (fichier nommé d'après le nom d'hôte). Vide, la racine MédiSphère manque : l'enregistrement par jeton `glrt-` (revérifié à chaque démarrage par `register-the-runner`) échoue, le conteneur sort, redémarre. Les pods qui tournaient avant n'avaient rien vu (le fichier est lu au démarrage) : la panne ne se révèle qu'au premier redémarrage, ici celui de la nuit. C'est pour cela qu'un Secret « nettoyé » en journée peut casser la CI le lendemain. Correctif par le code : `outils/secrets-k8s.sh gitlab-runner` (qui reconstruit le Secret depuis Vault `secrets/gitlab-runner.yml`), puis suppression des pods en échec. Vérifie avant que le contenu de Vault est le bon (`openssl x509 -noout -subject -issuer` sur la racine).
+Le chart monte le Secret `certsSecretName` dans `/home/gitlab-runner/.gitlab-runner/certs/` ; le runner y lit la chaîne de confiance de `git01` (fichier nommé d'après le nom d'hôte). Vide, la racine MédiSphère manque : l'enregistrement par jeton `glrt-` (revérifié à chaque démarrage par `register-the-runner`) échoue, le conteneur sort, redémarre. Les pods qui tournaient avant n'avaient rien vu (le fichier est lu au démarrage) : la panne ne se révèle qu'au premier redémarrage, ici celui de la nuit. C'est pour cela qu'un Secret « nettoyé » en journée peut casser la CI le lendemain. Correctif par le code : `outils/secrets-k8s.sh appliquer gitlab-runner` (qui reconstruit le Secret depuis Vault `secrets/gitlab-runner.yml`), puis suppression des pods en échec. Vérifie avant que le contenu de Vault est le bon (`openssl x509 -noout -subject -issuer` sur la racine).
 
 **Variante 3 — compte de service absent.**
 
@@ -220,9 +220,9 @@ admin@adm01:~$ git -C ~/src/ci-pannes log --format='%h %an %s' -3 -- .gitlab-ci.
 a41c9e2 Lucas Martin ci: image Python officielle pour le canari, plus simple (M19-E36)
 ```
 
-La politique `medisphere-images` (M14-E28) n'accepte que les images de Harbor. `docker.io/library/python` aurait été tirée par le cache de toute façon (miroir `hosts.toml`), mais l'admission juge la **référence** écrite dans le pod, pas le chemin réel du tirage : c'est voulu (on veut voir partout d'où vient l'image). Correctif : revert du commit de Lucas (MR) ; réponse à Lucas : la bonne référence est `registry.par1.medisphere.internal/dockerhub/library/python:…`. Si la variante a été sautée chez toi, c'est que `ci-jobs` n'est pas couvert par la politique : note-le, c'est une exception à justifier dans l'ADR-0190 ou à corriger (étiquette `medisphere.internal/equipe` de l'espace).
+La politique `medisphere-images` (M14-E18) n'accepte que les images de Harbor. `docker.io/library/python` aurait été tirée par le cache de toute façon (miroir `hosts.toml`), mais l'admission juge la **référence** écrite dans le pod, pas le chemin réel du tirage : c'est voulu (on veut voir partout d'où vient l'image). Correctif : revert du commit de Lucas (MR) ; réponse à Lucas : la bonne référence est `registry.par1.medisphere.internal/dockerhub/library/python:…`. Si la variante a été sautée chez toi, c'est que `ci-jobs` n'est pas couvert par la politique : note-le, c'est une exception à justifier dans l'ADR-0190 ou à corriger (étiquette `medisphere.internal/equipe` de l'espace).
 
-**RB-195 — modèle** : [`fichiers/M19-E36/medisphere/docs/livraison/ci/RB-195-job-echoue-ou-tue.md`](fichiers/M19-E36/medisphere/docs/livraison/ci/RB-195-job-echoue-ou-tue.md) (sections `Avant le script` et `Job tué`, cette dernière complétée en M19-E42).
+**RB-195 — modèle** : [`fichiers/M19-E36/medisphere/docs/livraison/ci/runbooks/RB-195-job-echoue-ou-tue.md`](fichiers/M19-E36/medisphere/docs/livraison/ci/runbooks/RB-195-job-echoue-ou-tue.md) (sections `Avant le script` et `Job tué`, cette dernière complétée en M19-E42).
 
 **Explications** : avant le script, l'exécuteur Kubernetes enchaîne : lecture de la configuration (au démarrage du gestionnaire), demande du job, construction de la spécification du pod (images, ressources, compte de service, volumes, sécurité), création par l'API (authentification du gestionnaire, autorisation, admission : `ServiceAccount`, LimitRange, ResourceQuota, Pod Security, VAP), ordonnancement, tirage des images (*helper* et build en premier), démarrage, attachement. Chaque refus remonte dans le journal du job sous la forme `prepare environment: …`, souvent tronqué : l'événement Kubernetes ou le journal du gestionnaire donne la phrase complète.
 
@@ -254,7 +254,7 @@ La politique `medisphere-images` (M14-E28) n'accepte que les images de Harbor. `
 | `401 Unauthorized` / `unauthorized: …` sur `plateforme/cache-buildkit` à l'export du cache | registre, robot (variante 3) |
 | `no space left on device` (export, décompression des couches) | stockage du démon (variante 4) |
 
-**Étape 2 — Reproduire hors pipeline**, avec un pod jetable qui respecte le profil `restricted` de `ci-jobs` et monte le Secret client (fichier d'exemple : [`fichiers/M19-E37/essais/sonde-buildctl.yaml`](fichiers/M19-E37/essais/sonde-buildctl.yaml), à adapter au nom de ton Secret client) :
+**Étape 2 — Reproduire hors pipeline**, avec un pod jetable qui respecte le profil `restricted` de `ci-jobs` et monte le Secret client (fichier d'exemple : [`fichiers/M19-E37/essais/sonde-buildctl.yaml`](fichiers/M19-E37/essais/sonde-buildctl.yaml), qui monte le Secret `buildkit-client` de M19-E08) :
 
 ```
 admin@adm01:~$ kubectl -n ci-jobs apply -f sonde-buildctl.yaml
@@ -267,16 +267,17 @@ admin@adm01:~$ kubectl -n ci-jobs delete pod sonde-buildctl
 **Variante 1 — certificat client réémis par une autre autorité.**
 
 ```
-admin@adm01:~$ kubectl get certificates -A -o custom-columns=NS:.metadata.namespace,NOM:.metadata.name,EMETTEUR:.spec.issuerRef.name,PRET:.status.conditions[0].status
-NS         NOM                     EMETTEUR             PRET
-buildkit   buildkitd-serveur       buildkit-ca          True
-ci-jobs    buildkit-client         buildkit-ca-2026     True
-ci-jobs    buildkit-ca-2026        buildkit-ca-2026-racine  True
+admin@adm01:~$ kubectl get certificates -A -o custom-columns=NS:.metadata.namespace,NOM:.metadata.name,TYPE:.spec.issuerRef.kind,EMETTEUR:.spec.issuerRef.name,PRET:.status.conditions[0].status
+NS         NOM                     TYPE            EMETTEUR                 PRET
+cert-manager buildkit-ca           ClusterIssuer   buildkit-amorce          True
+buildkit   buildkitd-serveur       ClusterIssuer   buildkit-ca              True
+ci-jobs    buildkit-client         Issuer          buildkit-ca-2026         True
+ci-jobs    buildkit-ca-2026        Issuer          buildkit-ca-2026-racine  True
 admin@adm01:~$ kubectl -n ci-jobs get secret buildkit-client -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -issuer -dates
 issuer=CN = buildkit-ca-2026
 ```
 
-Tout est « vert » pour cert-manager : le certificat est valide… mais signé par une autorité que `buildkitd` ne connaît pas (il n'accepte que les clients signés par `buildkit-ca`). La poignée de main TLS échoue côté serveur. Correctif : remettre `issuerRef: buildkit-ca` dans le manifeste de `plateforme/k8s` (`task appliquer`), laisser cert-manager réémettre (`cmctl renew -n ci-jobs buildkit-client` pour accélérer), retirer les objets parasites (`buildkit-ca-2026*`). Les jobs suivants montent le nouveau Secret.
+Tout est « vert » pour cert-manager : le certificat est valide… mais signé par une autorité que `buildkitd` ne connaît pas (il n'accepte que les clients signés par `buildkit-ca`). La poignée de main TLS échoue côté serveur. Correctif : le `Certificate` `buildkit-client` est rendu par le chart local `charts/buildkitd` (M19-E08 : `issuerRef` de type **ClusterIssuer** `buildkit-ca`, autorité amorcée par la ClusterIssuer `buildkit-amorce`) ; on le rend au code par `helmfile -e par1 -l composant=buildkitd diff` puis `apply` (le diff montre l'`issuerRef` modifié à la main), on laisse cert-manager réémettre (`cmctl renew -n ci-jobs buildkit-client` pour accélérer), retirer les objets parasites (`buildkit-ca-2026*`). Les jobs suivants montent le nouveau Secret.
 
 **Variante 2 — refus explicite dans Cilium.**
 
@@ -317,7 +318,7 @@ admin@adm01:~$ kubectl -n buildkit exec deploy/buildkitd -- sh -c 'du -sh /home/
 
 Le chemin exact dépend de ton chart (`--root` du démon). Ce qui occupe la place n'est pas du cache : un fichier posé à la main. On le retire, en notant ce que c'est ; le cache, lui, se gère par `buildctl prune` (avec `--keep-storage`) et par la politique de ramasse-miettes du démon (`buildkitd.toml`). Si c'était du cache : `buildctl … prune --keep-storage 10GB` depuis un pod client, jamais `rm -rf` dans le dossier du démon (il perdrait son état et refuserait de redémarrer).
 
-**Fichiers** : [`fichiers/M19-E37/medisphere/docs/livraison/ci/RB-196-construction-et-cache.md`](fichiers/M19-E37/medisphere/docs/livraison/ci/RB-196-construction-et-cache.md) (sections `buildkitd` et `Cache`, complétée en M19-E38).
+**Fichiers** : [`fichiers/M19-E37/medisphere/docs/livraison/ci/runbooks/RB-196-construction-et-cache.md`](fichiers/M19-E37/medisphere/docs/livraison/ci/runbooks/RB-196-construction-et-cache.md) (sections `buildkitd` et `Cache`, complétée en M19-E38).
 
 **Explications** : la construction distante sépare trois identités : le **client** (pod de job, certificat client pour le démon, identifiants de registre pour pousser), le **démon** (certificat serveur, aucun identifiant de registre), le **registre** (Harbor). Les identifiants de registre voyagent du client vers le démon par la session BuildKit, à la demande : c'est pourquoi un robot désactivé échoue « dans le démon » alors qu'il appartient au job.
 
@@ -452,7 +453,7 @@ admin@adm01:~$ gl "projects/$AK/cluster_agents/<id>/tokens" | jq -r '.[] | [.id,
 admin@adm01:~$ gl "projects/$AK/cluster_agents/<id>/tokens/34"     ← le jeton « rotation-lucas » : révoqué
 ```
 
-Le Secret contient le jeton « rotation-lucas » (créé puis révoqué) ; le bon jeton est toujours actif dans GitLab et dans Vault. Correctif : `outils/secrets-k8s.sh gitlab-agent` (reconstruit le Secret depuis `secrets/gitlab-agent.yml`), puis redémarrage des pods de l'agent. Si tu doutes de l'intégrité du jeton de Vault (a-t-il pu être exposé ?), fais une vraie rotation : nouveau jeton par l'API, Vault, `secrets-k8s.sh`, contrôle de connexion, **puis** révocation de l'ancien (un agent accepte deux jetons actifs, ce qui permet de tourner sans coupure).
+Le Secret contient le jeton « rotation-lucas » (créé puis révoqué) ; le bon jeton est toujours actif dans GitLab et dans Vault. Correctif : `outils/secrets-k8s.sh appliquer gitlab-agent` (reconstruit le Secret depuis `secrets/gitlab-agent.yml`), puis redémarrage des pods de l'agent. Si tu doutes de l'intégrité du jeton de Vault (a-t-il pu être exposé ?), fais une vraie rotation : nouveau jeton par l'API, Vault, `secrets-k8s.sh`, contrôle de connexion, **puis** révocation de l'ancien (un agent accepte deux jetons actifs, ce qui permet de tourner sans coupure).
 
 **Variante 2 — RoleBinding supprimé.** `kubectl auth can-i patch deployments -n mediagenda-dev --as=system:serviceaccount:gitlab-agent:<sa>` répond `no`. Le RoleBinding est décrit dans `plateforme/k8s` (M19-E18) : `task appliquer`. Le journal d'audit dit qui l'a supprimé.
 
@@ -475,7 +476,7 @@ La MR a été fusionnée (par toi, dans le lab : le script agit avec ton jeton).
 
 Modification à chaud du Deployment : `helmfile -e par1 -l composant=gitlab-agent diff` la montre et `apply` la défait. Rappel du M19-E26 : en 19.5 l'adresse peut être en `grpcs://` ; vérifie que tes values sont cohérentes avec la version de l'agent.
 
-**Fichiers** : [`fichiers/M19-E39/medisphere/docs/livraison/ci/RB-197-deploiement-agent.md`](fichiers/M19-E39/medisphere/docs/livraison/ci/RB-197-deploiement-agent.md).
+**Fichiers** : [`fichiers/M19-E39/medisphere/docs/livraison/ci/runbooks/RB-197-deploiement-agent.md`](fichiers/M19-E39/medisphere/docs/livraison/ci/runbooks/RB-197-deploiement-agent.md).
 
 **Explications** : dans le *CI/CD workflow*, GitLab injecte dans chaque job autorisé par `ci_access` un kubeconfig (`KUBECONFIG`) dont les contextes `<projet de l'agent>:<agent>` passent par KAS ; KAS relaie chaque requête à `agentk` par la connexion que celui-ci a ouverte (sortante, authentifiée par son jeton) ; `agentk` appelle l'API Kubernetes **avec son propre compte de service** (sans usurpation d'identité en Free). Trois autorisations successives : GitLab (`ci_access`), connexion (`agentk` authentifié), Kubernetes (RBAC du compte de l'agent).
 
@@ -545,7 +546,7 @@ L'effacement retire journal **et** artefacts ; le job reste listé (traçabilit�
 
 **Étape 5 — Corriger la cause** : variante 1, remasquer (et passer en « masquée et cachée » si l'équipe n'a jamais besoin de relire la valeur : elle ne pourra plus être démasquée) ; variante 2, publier une version sans `set -x` et y consommer (ou revenir à `1.0.0`) ; variante 3, supprimer `CI_DEBUG_TRACE`. Rejoue le canari : `CANARI_JETON=[MASKED]`.
 
-**Fichiers** : [`fichiers/M19-E40/medisphere/docs/livraison/ci/RB-198-fuite-secret-ci.md`](fichiers/M19-E40/medisphere/docs/livraison/ci/RB-198-fuite-secret-ci.md).
+**Fichiers** : [`fichiers/M19-E40/medisphere/docs/livraison/ci/runbooks/RB-198-fuite-secret-ci.md`](fichiers/M19-E40/medisphere/docs/livraison/ci/runbooks/RB-198-fuite-secret-ci.md).
 
 *Réponse à Sophie (exemple)* : « Cause : [variante]. Exposition : jobs 4911 et 4913 du projet formation/ci-pannes, entre 06:12 et 07:40, journaux lisibles par les membres du projet (8 personnes, `internal` : tout compte connecté). Valeur : jeton de projet en lecture du seul dépôt formation/ci-pannes. Actions : jeton remplacé par rotation à 08:02 (ancien révoqué), journaux et artefacts effacés à 08:05, cause corrigée par la MR !12, canari vérifié à 08:10. Aucune autre exposition trouvée dans les 50 derniers jobs ni dans les artefacts. Prévention : interdiction de `set -x` et de `CI_DEBUG_TRACE` dans les composants (règle Semgrep de `securite`), variables sensibles en « masquée et cachée ». »
 
@@ -609,7 +610,7 @@ Un pipeline planifié s'exécute **au nom de son propriétaire** (ses droits, se
 
 > `--annuler` réactive le compte de Lucas : il sert aux pannes des modules suivants. Dans la réalité, on ne réactive pas un compte pour réparer un pipeline : on change de propriétaire.
 
-**Fichiers** : [`fichiers/M19-E41/medisphere/docs/livraison/ci/RB-194-pipeline-non-declenche.md`](fichiers/M19-E41/medisphere/docs/livraison/ci/RB-194-pipeline-non-declenche.md).
+**Fichiers** : [`fichiers/M19-E41/medisphere/docs/livraison/ci/runbooks/RB-194-pipeline-non-declenche.md`](fichiers/M19-E41/medisphere/docs/livraison/ci/runbooks/RB-194-pipeline-non-declenche.md).
 
 **Explications** : avant de créer un pipeline, GitLab vérifie que la fonction est active, trouve la configuration (chemin, projet externe éventuel), la fusionne (includes, composants), évalue `workflow:rules`, puis les `rules` de chaque job ; s'il ne reste aucun job, il n'y a pas de pipeline. La plupart de ces refus sont **silencieux** pour un `push` (aucun pipeline en échec n'est créé), ce qui rend le diagnostic contre-intuitif : on cherche une erreur là où il n'y a qu'une absence.
 
@@ -682,13 +683,13 @@ admin@adm01:~$ kubectl -n ci-jobs get events --field-selector reason=Preempted
 … Preempted by pod 5f0c… on node k8s-w02
 admin@adm01:~$ kubectl get pods -A --field-selector spec.nodeName=k8s-w02 \
     -o custom-columns=NS:.metadata.namespace,NOM:.metadata.name,CLASSE:.spec.priorityClassName,PRIO:.spec.priority | sort -k4 -n | tail -n 3
-wb-pannes-ci   reindexation-nocturne-…   medisphere-critique   1000000
+wb-pannes-ci   reindexation-nocturne-…   medisphere-critique   100000
 admin@adm01:~$ kubectl -n wb-pannes-ci get deploy reindexation-nocturne -o jsonpath='{.spec.template.spec.containers[0].resources}'
 ```
 
-Un pod de priorité haute demande plus de mémoire que le nœud n'en a de libre : l'ordonnanceur cherche des victimes de priorité **plus basse** et choisit le pod de job (`medisphere-ci`, la plus basse, voulue en M19-E27 pour que la CI cède la place aux applications). Le comportement est correct ; la faute est d'avoir donné `medisphere-critique` à un traitement par lots. Correctif : supprimer la charge (et la refaire, si elle est utile, avec une priorité `medisphere-standard` et des demandes réalistes) ; prévention : `ResourceQuota` avec `scopeSelector` sur `PriorityClass` qui réserve `medisphere-critique` aux espaces de production.
+Un pod de priorité haute demande plus de mémoire que le nœud n'en a de libre : l'ordonnanceur cherche des victimes de priorité **plus basse** et choisit le pod de job (`medisphere-ci`, valeur 1000, la plus basse des pods présents ; elle a `preemptionPolicy: Never`, ce qui l'empêche de préempter les autres, pas d'être préemptée : voulue en M19-E27 pour que la CI cède la place aux applications). Le comportement est correct ; la faute est d'avoir donné `medisphere-critique` à un traitement par lots. Correctif : supprimer la charge (et la refaire, si elle est utile, avec une priorité `medisphere-standard` et des demandes réalistes) ; prévention : `ResourceQuota` avec `scopeSelector` sur `PriorityClass` qui réserve `medisphere-critique` aux espaces de production.
 
-**Fichiers** : la section `Job tué` de [`RB-195`](fichiers/M19-E36/medisphere/docs/livraison/ci/RB-195-job-echoue-ou-tue.md).
+**Fichiers** : la section `Job tué` de [`RB-195`](fichiers/M19-E36/medisphere/docs/livraison/ci/runbooks/RB-195-job-echoue-ou-tue.md).
 
 **Explications** : quatre « tueurs » qui ne sont pas le script : le **noyau** (OOM, au niveau du cgroup du conteneur, immédiat), le **kubelet** (éviction par pression ou limite de stockage, sondes, délai actif : il arrête le pod avec un délai de grâce), l'**ordonnanceur** (préemption : il supprime des pods moins prioritaires pour en placer un plus prioritaire), et le **runner** (délai du job, annulation). Le journal du job ne montre que la conséquence (flux coupé) : la cause est dans `status` du pod et dans les événements, qui disparaissent avec le pod (une heure pour les événements).
 

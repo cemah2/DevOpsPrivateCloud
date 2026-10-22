@@ -57,5 +57,5 @@ check_cmd "mediagenda/deploiement : dernier pipeline de main réussi" _m19p_jq "
 title "Documentation"
 check_cmd "plan de changement CHG-2026 sur main (retour arrière, compte rendu)" \
   _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci CHG-2026 'retour arri' 'compte rendu'
-check_cmd "RB-195 sur main (gestionnaires, agent)" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci RB-195 'managers|gestionnaire' 'agent'
+check_cmd "RB-192 sur main (docs/livraison/ci/runbooks/ : gestionnaires, agent)" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci/runbooks RB-192 'managers|gestionnaire' 'agent'
 [[ -n "$_m19_e26_v" ]] && echo "  (version de GitLab lue : $_m19_e26_v)"

@@ -1,8 +1,8 @@
-# Module 23 — Traces et profilage : palier 2 — Opérationnel — Corrigé
+# Module 23 — Palier 2 : Opérationnel — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
-Mêmes conventions que le corrigé du palier 1 : les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice (`observabilite/` = `plateforme/observabilite`, `deploiement-mediagenda/` et `deploiement-medidoc/` = les dépôts de déploiement, `mediagenda-api/` et `medidoc/` = des **correctifs** `git apply` sur le code, `medisphere/` = la documentation). Les correctifs s'appliquent **dans l'ordre** : M22-E06 (`request_id`), M23-E04, M23-E06, M23-E08.
+Mêmes conventions que le corrigé du palier 1 : les fichiers complets sont dans [`fichiers/`](fichiers/), exercice par exercice (`observabilite/` = `plateforme/observabilite`, `deploiement-mediagenda/` et `deploiement-medidoc/` = les dépôts de déploiement, `mediagenda-api/` et `medidoc/` = des **correctifs** `git apply` sur le code, `medisphere/` = la documentation). Les correctifs s'appliquent **dans l'ordre**, chacun sur l'état laissé par le précédent : pour `mediagenda/api`, M22-E06 (`request-id.patch`), M23-E04 (`traces.patch`), M23-E06 (`medidoc.patch`), M23-E08 (`correlation.patch`), puis M23-E14 (`profilage.patch`, palier 3) ; pour `medidoc/medidoc`, M23-E06 (`traces.patch`), M23-E08 (`correlation.patch`), puis M23-E14 (`profilage.patch`). Les dépendances s'ajoutent par `uv add` (Python) avant chaque correctif ; `go.mod` et `go.sum` sont dans les correctifs Go.
 
 **Ce qui a été vérifié à la rédaction** :
 - MédiDoc : correctifs E06 puis E08 appliqués sur une copie de `apps/medidoc` ; `go vet ./...` et `go test ./...` verts (Go 1.26, otel 1.47.0, otelhttp/otelaws/autoprop 0.72.0) ; exécuté contre un S3 simulé : spans serveur nommées d'après le motif de route, spans S3 `S3.PutObject` filles de la span serveur, sondes absentes ;
@@ -184,7 +184,7 @@ Trois mécanismes, un même identifiant. Journal → trace : le `trace_id` est u
 
 **En production chez MédiSphère**
 
-Les trois liens sont le premier réflexe du runbook « l'API est lente » (palier 3). Les exemplars ne vivent que dans le WAL de Prometheus (quelques heures) : pour un incident de la veille, partir des journaux.
+Les trois liens sont le premier réflexe du runbook RB-234 « l'API est lente » (pour aller plus loin de M23-E12). Les exemplars ne vivent que dans le WAL de Prometheus (quelques heures) : pour un incident de la veille, partir des journaux.
 
 ---
 
@@ -387,7 +387,7 @@ admin@adm01:~$ kubectl cnpg psql mediagenda-db -n mediagenda-recette -- -d media
 admin@adm01:~$ kubectl -n mediagenda-recette exec sts/valkey -- valkey-cli INFO commandstats | grep -E 'cmdstat_client\|pause'
 cmdstat_client|pause:calls=412,usec=…
 ```
-Le compteur augmente d'environ un par seconde : quelqu'un suspend Valkey (`CLIENT PAUSE 300 ALL`). Qui ? Le journal d'audit de l'API (locataire `audit`, M22-E07) :
+Le compteur augmente d'environ un par seconde : quelqu'un suspend Valkey (`CLIENT PAUSE 300 ALL`). Qui ? Le journal d'audit de l'API (locataire `audit`, M22-E07 ; dans Grafana, organisation « Sécurité » depuis M22-E16) :
 ```
 {job="kubernetes-audit"} |= "mediagenda-recette" |= "exec" |= "valkey"
 ```
@@ -396,7 +396,7 @@ montre des `create pods/exec` répétés, avec l'identité du kubeconfig d'admin
 4. **Retour à la normale** : mêmes requêtes avec du trafic (`trafic.sh` sur un port-forward de `svc/mediagenda` en recette) : aucune span PostgreSQL > 300 ms, aucune span Valkey > 200 ms, aucune requête serveur > 300 ms.
 5. **Journal** : exemple complet (variante 1, avec un paragraphe pour la variante 2) : [`2026-11-04-INC-5012-recette-lente.md`](fichiers/M23-E12/medisphere/docs/kubernetes/journal/2026-11-04-INC-5012-recette-lente.md).
 
-Le script de panne est [`fichiers/M23-E12/break-E12.sh`](fichiers/M23-E12/break-E12.sh) (copié en `corrige/pannes/break-E12.sh` pour `lab/bin/break`) ; il ne supprime aucune donnée, le déclencheur et la boucle sont marqués `wb:M23-E12`.
+Le script de panne est [`pannes/break-E12.sh`](pannes/break-E12.sh) ; il ne supprime aucune donnée, le déclencheur et la boucle sont marqués `wb:M23-E12`. Clôture : `lab/bin/break 23 12 --annuler` après la correction (il ne défait rien de ta réparation) ; s'il trouve la lenteur encore active, il la retire et laisse un témoin d'abandon que le check signale.
 
 **Explications**
 
@@ -414,9 +414,9 @@ Les métriques disent **quoi** (quelle route, depuis quand), les traces disent *
 - Conclure « PostgreSQL est lent » sans regarder **quelles** requêtes : les `SELECT` sont rapides.
 - Supprimer la table ou restaurer une sauvegarde : la panne ne touche aucune donnée, la correction est un `DROP TRIGGER`.
 - Chercher dans les traces la cause de la variante 2 : elles montrent l'effet (Valkey lent), pas l'auteur ; c'est l'audit qui le donne.
-- Utiliser `--annuler` : le check le détecte (la lenteur doit être corrigée par toi).
+- Utiliser `--annuler` pour se débarrasser de la lenteur : le check le détecte (témoin `M23-E12.abandon`) ; la lenteur doit être corrigée par toi, `--annuler` ne sert qu'à clore.
 - Oublier le trafic après la correction : aucune trace récente, le check ne peut rien conclure.
 
 **En production chez MédiSphère**
 
-Les deux causes ont leur prévention : schéma comparé aux migrations en CI et droits DDL retirés au compte applicatif (M16) ; `exec` sur les pods de données réservé au bris de glace (RBAC, M24) et alerte sur la latence des commandes Valkey. La démarche (métriques → traces → composant) devient le runbook « l'API est lente » (palier 3).
+Les deux causes ont leur prévention : schéma comparé aux migrations en CI et droits DDL retirés au compte applicatif (M16) ; `exec` sur les pods de données réservé au bris de glace (RBAC, M24) et alerte sur la latence des commandes Valkey. La démarche (métriques → traces → composant) devient le runbook RB-234 « l'API est lente » (pour aller plus loin de M23-E12).

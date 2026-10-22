@@ -1,6 +1,9 @@
-# plateforme/charts-miroir — entrée à ajouter à charts.yaml (M23-E14), au format de tes entrées de M20-E13
-# (dépôt amont, nom, version, empreinte vérifiée avant le « helm push » vers Harbor charts/ et la signature).
+# plateforme/charts-miroir — entrée à AJOUTER à charts.yaml (M23-E14), dans la forme des entrées existantes
+# (M20-E13 : nom, dépôt amont, version, empreinte, usage), sous la clé « charts: ». Empreinte : champ « digest »
+# de l'index du dépôt amont, relevée le 22/10/2026 ; vérifie-la toi-même (« helm pull » puis « sha256sum »)
+# avant la MR.
 - nom: pyroscope
   depot: https://grafana.github.io/helm-charts
   version: 2.4.1
-  # empreinte : celle que tu as relevée (helm pull … puis sha256sum) ; jamais recopiée d'un tutoriel
+  empreinte: sha256:1c1a070d9006dfaded4dadec7f3e9fa9b790b180c7a8b479a9f36278941fc3ba
+  usage: "Pyroscope 2.4.1 (M23-E14), Application plateforme/gitops plateforme/pyroscope.yaml"

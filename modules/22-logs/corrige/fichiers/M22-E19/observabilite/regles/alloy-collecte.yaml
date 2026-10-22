@@ -1,0 +1,32 @@
+# plateforme/observabilite/regles/alloy-collecte.yaml — M22-E19 (INC-4919, prévention)
+# « Alloy absent d'un nœud » : le DaemonSet n'a pas un pod prêt sur CHAQUE nœud Ready.
+# Les alertes KubeDaemonSet* de kube-prometheus-stack ne suffisent pas : quand une taint écarte un nœud
+# (variante 1 de la panne) ou qu'une tolérance disparaît (variante 2), desiredNumberScheduled baisse avec
+# numberReady et le DaemonSet paraît « complet ». On compare donc au nombre de nœuds Ready.
+# À ajouter à regles/kustomization.yaml (M21-E07) ; testé par tests/alloy-collecte.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alloy-collecte
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: alloy-collecte
+      rules:
+        - alert: AlloyAbsentDUnNoeud
+          expr: |
+            (
+              count(kube_node_status_condition{condition="Ready", status="true"} == 1)
+              - on() sum(kube_daemonset_status_number_ready{namespace="journaux", daemonset="alloy"})
+            ) > 0
+            or on() absent(kube_daemonset_status_number_ready{namespace="journaux", daemonset="alloy"})
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Alloy ne tourne pas (ou n'est pas prêt) sur tous les nœuds Ready de k8s-par1"
+            description: "Un nœud n'envoie plus ses journaux (pods, journald, audit sur le plan de contrôle). Comparer « kubectl -n journaux get ds alloy » au nombre de nœuds, puis taints et tolérances."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-222-journaux-manquants.md"

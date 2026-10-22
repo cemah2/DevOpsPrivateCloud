@@ -8,8 +8,12 @@ kind: Kustomization
 namespace: medidoc-dev
 resources:
   - ../../base
+  - livraison.yaml
+# Écrit par « kustomize edit set image <nom>=<nom>:vX.Y.Z@sha256:… » (composant promotion) :
+# newTag = version de livraison.yaml, digest = image publiée et signée.
 images:
   - name: registry.par1.medisphere.internal/medisphere/medidoc
+    newTag: v0.0.0
     digest: sha256:<EMPREINTE-DE-LA-VERSION-PROMUE>
 patches:
   - target:

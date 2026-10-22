@@ -16,6 +16,8 @@
 
 `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-agent-collector.traces.svc.cluster.local:4317`, `OTEL_TRACES_SAMPLER`, `OTEL_PROPAGATORS=tracecontext,baggage`, `OTEL_SEMCONV_STABILITY_OPT_IN=http,database` (Python : noms stables des conventions HTTP et base de données). `OTEL_SDK_DISABLED=true` coupe tout.
 
+**Protocoles d'export** (inventaire, à tenir à jour) : MédiAgenda et MédiDoc en OTLP/**gRPC** vers l'agent du nœud (4317) ; l'auto-instrumentation Python (essai M23-E07) en OTLP/**HTTP** (4318) ; les émetteurs hors cluster par 10.10.41.63 (M23-E16). Le récepteur de l'agent accepte donc **les deux** protocoles.
+
 ## Spans
 
 - **Nommage** : spans automatiques selon les conventions sémantiques (`POST /api/v1/rendez-vous` : méthode + **modèle** de route, jamais le chemin réel ; `SELECT mediagenda` ; `GET` pour Valkey). Spans métier : `<service>.<objet>.<verbe>` en minuscules (`mediagenda.rendez_vous.creer`, `mediagenda.creneaux.calculer`, `mediagenda.cache.invalider`).
@@ -23,9 +25,9 @@
 - **Statut** : `ERROR` seulement pour une défaillance **du service** (5xx, dépendance en panne). Un 4xx (conflit, introuvable) n'est pas une erreur de la span serveur ; un conflit de créneau est un **événement** (`mediagenda.conflit_creneau`).
 - **Sondes** (`/sante`, `/pret`, `/metrics`) : jamais tracées.
 
-## Interdits (données de santé, RGPD, HDS)
+## Attributs interdits (données de santé, RGPD, HDS)
 
-Jamais en attribut, en événement ni en nom de span : nom, prénom, date de naissance, NIR, courriel, téléphone du patient ; motif du rendez-vous ; contenu ou nom d'un document ; valeur d'un paramètre SQL ; jeton, mot de passe, en-tête `Authorization`. Les instrumentations sont réglées en conséquence (pas de capture des paramètres SQL, pas de capture d'en-têtes). Une fuite se corrige **dans le code** ; le masquage du Collector (M23-E10) n'est qu'un filet.
+Jamais en attribut, en événement ni en nom de span : nom, prénom, date de naissance, NIR, courriel, téléphone du patient ; motif du rendez-vous ; contenu ou nom d'un document ; valeur d'un paramètre SQL ; jeton, mot de passe, en-tête `Authorization` ; toute entrée de *baggage* hors de la liste blanche (`medisphere.canal`). Les instrumentations sont réglées en conséquence (pas de capture des paramètres SQL, pas de capture d'en-têtes). Une fuite se corrige **dans le code** ; le masquage du Collector (M23-E10) n'est qu'un filet.
 
 ## Filet du Collector (M23-E10)
 

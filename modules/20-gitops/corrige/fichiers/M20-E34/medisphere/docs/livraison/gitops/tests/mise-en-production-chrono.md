@@ -12,12 +12,12 @@
 
 | Heure (UTC) | Étape | Remarque |
 |---|---|---|
-| T0 + 0:00 | ouverture du sujet, `~/m20-e34/T0` | |
+| T0 + 0:00 | ouverture du sujet, `~/m20/e34/T0` | |
 | T0 + 0:06 | journal : état de départ, fenêtres, plan de retour arrière | fenêtre deny inactive |
 | T0 + 0:11 | MR de promotion !<N> (`outils/promouvoir.sh recette prod`), titre cite CHG-2134 | pipeline de validation : 2 min 40 |
 | T0 + 0:16 | fusion par Karim (Maintainer) | |
 | T0 + 0:18 | `argocd app diff mediagenda-prod` relu (image, ConfigMap livraison, Job de migration) | |
-| T0 + 0:19 | `argocd app sync mediagenda-prod` (compte nominatif) | hook PreSync `mediagenda-migrate` réussi en 25 s |
+| T0 + 0:19 | `argocd app sync mediagenda-prod` (compte nominatif) | hook `mediagenda-migrate` (phase Sync, vague -1) réussi en 25 s |
 | T0 + 0:20 | marche 10 % ; analyse `fumee-mediagenda` réussie (Job, 18 s) ; `pret-mediagenda` en fond | |
 | T0 + 0:23 → 0:29 | marches 25 %, 50 % (pauses de 2 min) | aucun 5xx (boucle `curl` depuis adm01) |
 | T0 + 0:30 | pause finale : contrôles (journaux, `kubectl argo rollouts get`, page publique) | |

@@ -4,7 +4,7 @@
 |---|---|
 | Ticket | SEC-2029 (M19-E29) |
 | Propriétaire | Équipe Plateforme ; relecture : Sophie Laurent |
-| Code | `plateforme/ci-templates` v2.2.0 : composants `construction-image`, `securite`, `deploiement` |
+| Code | `plateforme/ci-templates` v2.8.0 : composants `construction-image`, `securite`, `deploiement` |
 | Clé publique | `docs/registre/cosign.pub` (M13), empreinte épinglée dans les composants |
 
 ## 1. Ce qui est produit, par qui
@@ -43,9 +43,9 @@ Les deux jobs sont bloquants ; `mediagenda/deploiement` exige un pipeline réuss
 |---|---|
 | Image construite sur `adm01`, poussée sans signature dans `plateforme/essai-porte` (projet sans politique de signature), référencée par digest dans `overlays/dev` | `verifier-images` en échec : « signature MédiSphère absente ou invalide » ; MR non fusionnable |
 | Même image signée par une clé jetable | échec : signature invalide pour la clé MédiSphère |
-| Image `medisphere/mediagenda-api` signée par la chaîne v2.1.0 (sans provenance attestée) | échec : « attestation de provenance (slsaprovenance1) absente » |
+| Image `medisphere/mediagenda-api` signée par la chaîne v2.7.0 (sans provenance attestée) | échec : « attestation de provenance (slsaprovenance1) absente » |
 | Image par étiquette (`…:v1.6.0`) | échec : « image sans digest » |
-| Promotion légitime (v2.2.0) | succès |
+| Promotion légitime (v2.8.0) | succès |
 
 Nettoyage : dépôt `plateforme/essai-porte` supprimé, branches de test supprimées, clé jetable détruite.
 
@@ -54,5 +54,5 @@ Nettoyage : dépôt `plateforme/essai-porte` supprimé, branches de test supprim
 Un correctif urgent dont l'image ne passe pas la porte **n'est pas** une raison de désactiver le job ni de retirer « Pipelines must succeed » (un retrait laisserait passer la MR suivante aussi). Dans l'ordre :
 
 1. Comprendre le refus (`rapport-images.tsv`) : la plupart des refus sont une image mal référencée (étiquette au lieu du digest) ou une chaîne non terminée (signature en attente de l'analyse de Harbor).
-2. Si la chaîne est en cause (runner protégé en panne) : la réparer (RB-190, RB-195) ; c'est elle qui produit des images de confiance.
+2. Si la chaîne est en cause (runner protégé en panne) : la réparer (RB-190, puis les runbooks des pannes de la chaîne) ; c'est elle qui produit des images de confiance.
 3. Dernier recours, décision de Sophie Laurent **et** Claire Morel, tracée dans le ticket : un Maintainer fusionne une MR dédiée qui ajoute l'image au fichier `images-tierces.txt` avec la mention `URGENCE <ticket>` ; une seconde MR la retire dans les 24 h après reconstruction par la chaîne. La porte reste active pendant toute l'opération.

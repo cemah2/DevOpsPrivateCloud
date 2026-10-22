@@ -5,7 +5,7 @@
 | Ticket | SEC-2025 (M19-E25) |
 | Propriétaire | Équipe Plateforme ; relecture : Sophie Laurent (RSSI) |
 | Inventaire | `plateforme/outils` : `bin/ci-inventaire-variables.sh` (TSV, sans valeurs), relancé chaque mois |
-| Rotation | RB-196 |
+| Rotation | RB-191 |
 
 ## 1. Où vivent les secrets de la CI
 
@@ -13,13 +13,13 @@
 |---|---|---|---|---|
 | Clé Cosign + mot de passe | Vault `critique` (`plateforme/k8s/secrets/cosign-ci.yml`) → Secret `ci-jobs-protege/cosign-medisphere` | jobs du runner `k8s-par1-protege` seulement (volume) | — (hors GitLab) | pas d'expiration ; rotation = nouvelle paire + re-signature (procédure de M13, RB-13x) |
 | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD` (groupe `mediagenda`… — **exception E24**) | variables de groupe | jobs des références protégées des projets v1 | protégées, masquées, fichier | supprimées au mini-projet (M19-E46) |
-| `DEPLOIEMENT_TOKEN` (`mediagenda/api`) | variable de projet ; jeton de projet `ci-promotion` de `mediagenda/deploiement` | jobs `promotion:*` (environnement `promotion/*`) sur `protege` | protégée, masquée **et cachée**, portée `promotion/*` | 90 jours, rotation tous les 60 jours (RB-196 §2) |
+| `DEPLOIEMENT_TOKEN` (`mediagenda/api`) | variable de projet ; jeton de projet `ci-promotion` de `mediagenda/deploiement` | jobs `promouvoir-*` (environnement `promotion/*`) sur `protege` | protégée, masquée **et cachée**, portée `promotion/*` | 90 jours, rotation tous les 60 jours (RB-191 §2) |
 | `DEPLOIEMENT_TOKEN` (`medidoc/medidoc`, E33) | idem pour `medidoc/deploiement` | idem | idem | idem |
-| `HARBOR_ROBOT_USER` / `HARBOR_ROBOT_TOKEN` | variables de groupe ; robot `robot$medisphere+ci` (état OpenTofu `registre`) | jobs de publication | jeton : protégée, masquée, cachée | 90 jours, rotation tous les 60 jours (RB-196 §3) |
+| `HARBOR_ROBOT_USER` / `HARBOR_ROBOT_TOKEN` | variables de groupe ; robot `robot$medisphere+ci` (état OpenTofu `registre`) | jobs de publication | jeton : protégée, masquée, cachée | 90 jours, rotation tous les 60 jours (RB-191 §3) |
 | `GITLAB_TOKEN` (semantic-release, M01) | variable de projet ; jeton de projet | job `release` | protégée, masquée, cachée | 1 an maximum, rotation annuelle |
 | `SONAR_TOKEN` (E16) | variable de projet | job d'analyse | protégée, masquée | **supprimé** avec SonarQube (M19-E46) |
 | `MEDISPHERE_ROOT_CA` | variable d'instance, type fichier | tous les jobs | non secrète, visible | renouvelée avec la racine (2035) |
-| Jetons `glrt-` des runners | Vault `critique` → Secrets `gitlab-runner/*-jeton` | gestionnaires | — | rotation par `POST /runners/:id/reset_authentication_token` (RB-196 §4) |
+| Jetons `glrt-` des runners | Vault `critique` → Secrets `gitlab-runner/*-jeton` | gestionnaires | — | rotation par `POST /runners/:id/reset_authentication_token` (RB-191 §4) |
 | Jeton de l'agent `k8s-par1` | Vault `critique` → Secret `gitlab-agent` | `agentk` | — | rotation par l'interface (deux jetons actifs au plus) |
 | Identité S3 `ci-cache` | Vault `critique` → Secret `gitlab-runner/ci-cache-s3` | gestionnaire (URL présignées) | — | annuelle |
 

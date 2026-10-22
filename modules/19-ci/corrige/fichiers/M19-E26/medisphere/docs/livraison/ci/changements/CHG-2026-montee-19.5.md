@@ -16,7 +16,7 @@
 | 19.5 = arrêt obligatoire du chemin de montée | on ne la saute pas ; la 19.8 sera le prochain | calendrier : 19.8 en janvier |
 | Migrations d'arrière-plan | la 19.4 doit avoir fini les siennes | contrôle à J-1 et à H-10 min |
 | Agent 19.5 : `grpcs://` par défaut | notre agent est en `wss://` explicite : il continue de marcher ; on migre (étape 6) | valeur du chart |
-| `CI_RUNNER_TAGS` / `CI_JOB_TAGS` : encodage JSON strict des étiquettes | nos étiquettes sont simples (`k8s`, `protege`…) : sortie identique ; aucun script ne découpe ces variables (recherche ci-dessous) | job témoin `etiquettes-job` |
+| `CI_RUNNER_TAGS` rendue en JSON strict (changement amont à confirmer dans les notes de la 19.5 ; `CI_JOB_TAGS`, 19.3, est déjà un tableau JSON) | nos étiquettes sont simples (`k8s`, `protege`…) : sortie identique ; aucun script ne découpe ces variables (recherche ci-dessous) | job témoin `etiquettes-job` |
 | Runner 19.5 (exécuteur Kubernetes) : message explicite quand le *helper* est tué par manque de mémoire ; classe QoS corrigée | aucun réglage à changer | — |
 | Chart 0.94 : `image.image` → `image.repository` (ancienne clé encore lue) | deux fichiers de values | MR `values-runner-0.94` |
 
@@ -30,7 +30,7 @@ Recherche des usages : `grep -rn 'CI_JOB_TAGS\|CI_RUNNER_TAGS'` sur les clones d
 | 1 | Sauvegarde PBS de `git01` (tâche manuelle) **vérifiée** ; `gitlab-backup create` + secrets ; `qm snapshot 1004 avant-19-5` | 15 min | sauvegarde « ok » dans PBS ; archive dans `/var/opt/gitlab/backups` | — |
 | 2 | Pause des 4 runners (API `PUT /runners/:id paused=true`) | 2 min | plus aucun job en cours | réactiver |
 | 3 | `apt-get install gitlab-ce=19.5.Z-ce.0` (après `unhold`), `hold` | 15 min | sortie sans erreur, `gitlab-ctl status` | `qm rollback 1004 avant-19-5` |
-| 4 | Contrôles GitLab (RB-195 §4) puis **réouverture** | 10 min | tous les contrôles verts | jusqu'ici : rollback ; après : RB-010 |
+| 4 | Contrôles GitLab (RB-192 §4) puis **réouverture** | 10 min | tous les contrôles verts | jusqu'ici : rollback ; après : RB-010 |
 | 5 | Runners : `gitlab-runner`, puis `gitlab-runner-protege`, puis `runner01`, `runner02` ; réactivation un par un | 15 min | gestionnaire en 19.5 en ligne, job témoin vert | release précédente (`helmfile` sur le commit d'avant), paquet 19.4 (le runner accepte un GitLab plus récent d'une mineure) |
 | 6 | Agent : chart 2.33, puis `kasAddress` en `grpcs://` | 10 min | agent connecté, `deployer-dev` vert | `wss://` (commit précédent) |
 | 7 | Pipelines témoins, compte rendu | 15 min | MR + étiquette `mediagenda/api`, pipeline `mediagenda/deploiement` verts | — |

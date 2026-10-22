@@ -1,4 +1,4 @@
-# Module 19 — Intégration continue : palier 4 — Expert
+# Module 19 — Palier 4 : Expert
 
 La chaîne de CI de MédiSphère tourne : deux runners dans `k8s-par1` (dont un protégé), un démon BuildKit partagé, un cache S3, des composants CI/CD versionnés, des images signées et promues par MR, un agent GitLab qui déploie en dev. Tout le monde en dépend désormais, et Nadia Roussel pose la question qu'elle pose à chaque nouvelle brique : « Quand un pipeline reste bloqué à 7 h du matin le jour d'une mise en production, qui sait chercher, et où ? » Karim Benali a préparé huit pannes, toutes tirées d'incidents réels de chaînes GitLab CI sur Kubernetes : des jobs qui attendent, des jobs qui meurent avant leur script, une construction d'image qui échoue, un cache qui ne sert plus, un déploiement refusé, un secret qui fuit dans un journal, des pipelines qui ne se déclenchent plus, des jobs tués en plein vol. Une astreinte en combine trois. Puis tu suis un `git push` jusqu'au pod de job, preuves à l'appui, et tu passes les questions qu'on pose en entretien.
 
@@ -29,7 +29,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 - **Périmètre.** Les pannes n'agissent que sur : le runner `k8s-par1` (API GitLab, ConfigMap et Secret de son chart dans `gitlab-runner`), l'espace `ci-jobs`, le démon `buildkitd` et ses certificats, le robot Harbor du cache de construction, l'identité S3 `ci-cache` de `s3-01`, l'agent `k8s-par1` (Deployment et Secret dans `gitlab-agent`, RoleBinding dans `mediagenda-dev`, configuration dans `plateforme/k8s`), le job `deployer-dev` de `mediagenda/deploiement` (relancé à l'identique) et le témoin. Toute modification d'un dépôt est un **commit identifiable** (auteur Lucas Martin, marqueur `M19-EXX` dans le message ; par MR fusionnée sur `plateforme/k8s`), défait par un commit inverse, jamais par réécriture d'historique. **Aucune donnée n'est supprimée** : ni volume, ni compartiment, ni base, ni projet, ni image.
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `~/.local/state/workbook/` sur `adm01`, ni `/var/lib/workbook/` sur `s3-01` : ils contiennent la cause.
 - Une seule panne active à la fois par exercice. Si tu abandonnes : `lab/bin/break 19 35 --annuler` remet l'état sain (filet de sécurité, pas un correctif : compte l'exercice comme non réussi). **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne (sinon elle reste marquée active et bloque l'astreinte et le mini-projet) : l'annulation ne rétablit que ce qui est encore dans l'état cassé et ne revient jamais sur ta réparation.
-- **Tiens un journal de diagnostic** pour chaque panne dans `docs/kubernetes/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Les runbooks du palier vont dans `docs/livraison/ci/`, à côté de RB-190 (M19-E22) : **RB-194** « Un pipeline ne se déclenche pas », **RB-195** « Un job échoue avant son script ou est tué », **RB-196** « Construction d'image et cache de CI », **RB-197** « Déploiement par l'agent GitLab », **RB-198** « Un secret apparaît dans un journal de CI ».
+- **Tiens un journal de diagnostic** pour chaque panne dans `docs/kubernetes/journal/` de `~/medisphere` (publié par MR) : heure, hypothèse, commande, résultat observé, conclusion. Les runbooks du palier vont dans `docs/livraison/ci/runbooks/`, à côté de RB-190 (M19-E22) et de RB-191 à RB-193 (palier 3) : **RB-194** « Un pipeline ne se déclenche pas », **RB-195** « Un job échoue avant son script ou est tué », **RB-196** « Construction d'image et cache de CI », **RB-197** « Déploiement par l'agent GitLab », **RB-198** « Un secret apparaît dans un journal de CI ».
 - Le **temps cible** est indicatif. Le dépasser n'est pas un échec ; corriger sans comprendre en est un.
 
 > ⚠️ **Effets de bord** : certaines variantes arrêtent **toute** la CI sur Kubernetes (runner en pause, gestionnaire qui ne démarre plus, démon BuildKit inutilisable) ; une variante de M19-E41 **bloque le compte GitLab de Lucas** (`--annuler` le réactive toujours, les pannes suivantes en ont besoin) ; une variante de M19-E42 crée dans `wb-pannes-ci` un pod de priorité haute qui réserve la mémoire libre d'un travailleur. N'injecte pas pendant qu'un pipeline important tourne, et ne lance pas de composant temporaire lourd (SonarQube, Jenkins) pendant le palier.
@@ -92,7 +92,7 @@ Un job `running` dont le journal s'arrête à « Waiting for pod… » ou qui é
 - Lire un `ERROR: Job failed (system failure)` jusqu'au message Kubernetes qu'il résume, et les journaux du gestionnaire quand il n'y a même pas de job.
 - Corriger dans les values Helmfile et dans Vault, pas seulement dans le cluster.
 
-**Prérequis** : M19-E04, M19-E05 (anatomie d'un pod de job), M19-E24 ; M14-E28 (admission, VAP `medisphere-images`) ; `lab/bin/check 19 36` vert avant l'injection.
+**Prérequis** : M19-E04, M19-E05 (anatomie d'un pod de job), M19-E24 ; M14-E18 (admission, VAP `medisphere-images`) ; `lab/bin/check 19 36` vert avant l'injection.
 **Durée indicative** : 30 min (temps cible).
 
 **Contexte technique** : le chart `gitlab/gitlab-runner` rend `runners.config` dans une ConfigMap (clé `config.template.toml`) que le gestionnaire fusionne à son démarrage ; il monte le Secret désigné par `certsSecretName` dans `/home/gitlab-runner/.gitlab-runner/certs/` ; l'enregistrement par jeton `glrt-` est revérifié à chaque démarrage. Les pods de job sont créés avec le compte de service `ci-job` et passent par toute la chaîne d'admission de `ci-jobs`.
@@ -365,7 +365,7 @@ Page *Build > Pipeline schedules* : colonne *Owner*. Un pipeline planifié tourn
 - Attraper la preuve à temps : les pods de job sont supprimés à la fin du job (événements de l'espace, `kubectl get pods -w`, journal d'audit M14-E27, `KUBERNETES_*` de surcharge pour garder des traces).
 - Relier chaque cause à son réglage : gabarit du runner (limites et maximums de surcharge), politiques d'admission, `PriorityClass`.
 
-**Prérequis** : M19-E05, M19-E27 (capacité, PriorityClass `medisphere-ci`) ; M14-E38 (façons de mourir d'un conteneur), M14-E28 (admission) ; `lab/bin/check 19 42` vert avant l'injection.
+**Prérequis** : M19-E05, M19-E27 (capacité, PriorityClass `medisphere-ci`) ; M14-E38 (façons de mourir d'un conteneur), M14-E18 (admission) ; `lab/bin/check 19 42` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
 **Injection** : `lab/bin/break 19 42` (4 variantes).

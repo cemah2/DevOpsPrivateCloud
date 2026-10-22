@@ -46,7 +46,7 @@ secrets_mediagenda_appliquer() {
 
 # secrets_mediagenda_verifier ESPACE — lecture seule : Secret présent, du bon type, identique au Vault.
 secrets_mediagenda_verifier() {
-  local espace="$1" json e_vault e_secret
+  local espace="$1" json config e_vault e_secret
   json="$(k get secret harbor-pull --namespace "$espace" -o json 2>/dev/null)" || json=""
   if [[ -z "$json" ]]; then
     info "[KO] $espace/harbor-pull absent"
@@ -56,9 +56,11 @@ secrets_mediagenda_verifier() {
     info "[KO] $espace/harbor-pull n'est pas de type kubernetes.io/dockerconfigjson"
     return 1
   fi
-  e_vault="$(_mediagenda_dockerconfig | empreinte)" || e_vault=""
+  # Même forme que le Secret appliqué (printf '%s', sans fin de ligne) : sinon les empreintes diffèrent.
+  config="$(_mediagenda_dockerconfig)" || config=""
+  e_vault="$(printf '%s' "$config" | empreinte)"
   e_secret="$(jq -r '.data[".dockerconfigjson"] // ""' <<<"$json" | base64 -d 2>/dev/null | empreinte)"
-  if [[ -z "$e_vault" || "$e_vault" != "$e_secret" ]]; then
+  if [[ -z "$config" || "$e_vault" != "$e_secret" ]]; then
     info "[KO] $espace/harbor-pull diffère du Vault (rotation du robot non reportée ?)"
     return 1
   fi

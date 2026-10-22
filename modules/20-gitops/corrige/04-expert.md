@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : palier 4 — Expert — Corrigé
+# Module 20 — Palier 4 : Expert — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -187,7 +187,7 @@ $ outils/verifier-overlay.sh overlays/dev origin/main
 REFUS : overlays/dev : sélecteur modifié pour Deployment/mediagenda (champ immuable : l'API refusera la synchronisation)
 ```
 
-Testé hors cluster avec Kustomize 5.8.1 sur les overlays du M17 complétés aux paliers 1 à 3 (il signale aussi le `Namespace` de l'ancien `overlays/prod` du M17, s'il est encore là : il relève de `plateforme/k8s` depuis M20-E10).
+Testé hors cluster avec Kustomize 5.8.1 sur les overlays du M17 complétés aux paliers 1 à 3 : aucun refus sur `main`. Sur l'`overlays/prod` du M17 **d'avant** M20-E07, il aurait refusé le `Namespace` (`ResourceQuota` et `LimitRange`, eux, sont refusés par l'AppProject) : ces trois objets relèvent de `plateforme/k8s` (`espaces/mediagenda-prod/`) depuis M20-E07, et `overlays/prod/espace.yaml` ne garde que la NetworkPolicy `refus-par-defaut`.
 
 **Explications** — la chaîne de validation a trois étages : la CI (forme et règles écrites), Argo CD (AppProject, essai à blanc client), l'API (validation, admission). Chaque étage voit ce que le précédent ne voit pas. La comparaison côté serveur (ApplicationSet de M20-E12) fait passer les manifestes par l'admission **pendant le diff** pour les objets existants : un webhook de validation ou un champ immuable y apparaissent dès le diff, avant toute synchronisation (pas pour un objet nouveau, comme le Service de la variante 4).
 
@@ -245,7 +245,7 @@ secrets-k8s   Apply    2026-10-30T08:14:51Z
 kubectl-replace   Update   2026-11-04T13:02:17Z
 ```
 
-Le Secret a été remplacé à la main (`kubectl-replace`, hors de `secrets-k8s.sh`) avec un ancien jeton de déploiement révoqué. Correctif : `plateforme/k8s/outils/secrets-k8s.sh argocd` (il réécrit les Secrets depuis le Vault `critique`), puis `argocd app get mediagenda-dev --hard-refresh`. Si le jeton du Vault était lui-même révoqué : nouveau jeton de déploiement (`read_repository`, expiration) dans GitLab, Vault mis à jour, `secrets-k8s.sh` ; jamais un jeton personnel.
+Le Secret a été remplacé à la main (`kubectl-replace`, hors de `secrets-k8s.sh`) avec un ancien jeton de déploiement révoqué. Correctif : `plateforme/k8s/outils/secrets-k8s.sh appliquer argocd` (il réécrit les Secrets depuis le Vault `critique`), puis `argocd app get mediagenda-dev --hard-refresh`. Si le jeton du Vault était lui-même révoqué : nouveau jeton de déploiement (`read_repository`, expiration) dans GitLab, Vault mis à jour, `secrets-k8s.sh` ; jamais un jeton personnel.
 
 **Variante 2 — racine MédiSphère retirée d'`argocd-tls-certs-cm`.**
 
@@ -602,11 +602,11 @@ admin@lyo-k3s01:~$ sudo nft list ruleset | grep -n 6443
 
 Depuis un travailleur (le trafic des pods d'Argo CD sort avec l'adresse du nœud) : un code HTTP, même `401` (pas d'accès anonyme à l'API de k3s), prouve que le réseau et TLS passent ; un délai dépassé désigne le réseau ; une erreur de certificat, l'autorité. Copie d'abord la CA de k3s (`/var/lib/rancher/k3s/server/tls/server-ca.crt`, publique) dans `/tmp/k3s-server-ca.crt` du nœud, et compare-la à la `caData` du Secret de cluster.
 
-**Variante 1 — jeton périmé.** Message `Unauthorized` / « provide credentials ». Le Secret `cluster-lyo-k3s01` porte l'annotation `medisphere.internal/restaure-depuis` et un manager `kubectl-replace` récent ; son jeton (longueur, début) ne correspond pas à celui du Secret `argocd-gestion-jeton` de `lyo-k3s01`. Correctif : `secrets-k8s.sh argocd` (fonction `secret_cluster_lyo_k3s01`, M20-E26), depuis le Vault.
+**Variante 1 — jeton périmé.** Message `Unauthorized` / « provide credentials ». Le Secret `cluster-lyo-k3s01` porte l'annotation `medisphere.internal/restaure-depuis` et un manager `kubectl-replace` récent ; son jeton (longueur, début) ne correspond pas à celui du Secret `argocd-gestion-jeton` de `lyo-k3s01`. Correctif : `secrets-k8s.sh appliquer argocd` (fonction `secret_cluster_lyo_k3s01`, M20-E26), depuis le Vault.
 
 **Variante 2 — pare-feu local de l'agence.** Message `dial tcp 10.10.99.61:6443: i/o timeout`. Le test depuis un pod échoue aussi, depuis `adm01` (MGMT) il passe : le filtrage vise la source. `nft list ruleset` sur `lyo-k3s01` : une table `inet filtrage_agence` refuse 6443 depuis 10.10.40.0/24 et 10.240.0.0/16 (« API réservée à l'agence »). Correctif : `nft delete table inet filtrage_agence`, puis porter l'intention légitime (restreindre l'API de l'agence) dans le rôle Ansible de la machine, **avec** l'exception pour `K8S_TRAV`, et la matrice des flux. Une règle posée à la main sur une VM disparaît au redémarrage… ou survit si quelqu'un l'a rendue persistante : dans les deux cas, elle n'est dans aucun code.
 
-**Variante 3 — autorité remplacée.** Message `x509: certificate signed by unknown authority`. La `caData` du Secret est la racine MédiSphère ; l'API de k3s présente un certificat signé par **sa** CA (`/var/lib/rancher/k3s/server/tls/server-ca.crt`). Correctif : `secrets-k8s.sh argocd` (le Vault contient `lyo_k3s01_ca`). Jamais `insecure: true`.
+**Variante 3 — autorité remplacée.** Message `x509: certificate signed by unknown authority`. La `caData` du Secret est la racine MédiSphère ; l'API de k3s présente un certificat signé par **sa** CA (`/var/lib/rancher/k3s/server/tls/server-ca.crt`). Correctif : `secrets-k8s.sh appliquer argocd` (le Vault contient `lyo_k3s01_ca`). Jamais `insecure: true`.
 
 **Variante 4 — droits retirés.** Message `failed to sync cluster …: forbidden: User "system:serviceaccount:agence:argocd-gestion" cannot list resource "deployments" …`. `k3s kubectl get rolebinding -n agence` : la liaison `argocd-gestion` a disparu (« ménage » de l'agence). Correctif : rejouer le playbook `m20-lyo.yml` (il redépose `argocd-gestion.yaml` dans les manifestes de k3s, qui le réapplique), puis vérifier que `argocd-gestion` n'a **que** le Role de l'espace `agence` : `k3s kubectl auth can-i '*' '*' --all-namespaces --as=…` → `no`.
 

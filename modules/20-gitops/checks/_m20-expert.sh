@@ -18,8 +18,8 @@ _m20x_ns_recette="${WB_M20_NS_RECETTE:-mediagenda-recette}"
 _m20x_ns_prod="${WB_M20_NS_PROD:-mediagenda-prod}"
 _m20x_lyo="${WB_M20_LYO_HOTE:-10.10.99.61}"
 _m20x_argocd_url="${WB_ARGOCD_URL:-https://argocd.apps.par1.medisphere.internal}"
-# RB-200 (M20-E22) : à la racine de docs/livraison/gitops/ ou dans son sous-dossier runbooks/.
-_m20x_rb200="docs/livraison/gitops/RB-200*.md docs/livraison/gitops/runbooks/RB-200*.md"
+# RB-200 (M20-E22) : docs/livraison/gitops/runbooks/ (emplacement unique des runbooks du module).
+_m20x_rb200="docs/livraison/gitops/runbooks/RB-200*.md"
 # shellcheck disable=SC2034  # utilisées par les checks qui sourcent ce fichier
 {
   _m20x_gitops=plateforme/gitops

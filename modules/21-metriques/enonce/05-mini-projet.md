@@ -35,7 +35,7 @@ Le module a construit la supervision de MédiSphère, l'a éprouvée, cassée et
 | Alertmanager | récepteurs `plateforme-mail`, `astreinte-mail`, `mediagenda-mail`, `medidoc-mail` ; routage par `equipe` et `gravite`, `time_intervals` ; inhibitions testées ; essais de routage en CI ; aucun silence de plus de 7 jours |
 | Tableaux | JSON de `tableaux/` (UID stables, sources par variable), dossiers et équipes par OpenTofu (état `observabilite-grafana`), tableaux USE et RED de référence, contrôles de CI (JSON, UID, sources, règles et étiquettes citées) |
 | Historique long | Thanos Query, Store, Compactor (un seul) ; compartiment `thanos-k8s-par1` (utilisateur RGW `thanos`, quota) ; rétentions 30 j / 180 j / 2 ans ; Grafana sur Thanos Query |
-| SLO | Pyrra : `mediagenda-disponibilite` (99,5 % sur 28 j), `mediagenda-latence` (95 % < 300 ms), `medidoc-disponibilite` ; alertes multi-fenêtres ; `slo.apps.par1.medisphere.internal` |
+| SLO | Pyrra : `mediagenda-disponibilite` (99,5 % sur 28 j), `mediagenda-latence` (95 % sous 250 ms mesurés, faute de seau 0,3 s : plus strict que les 300 ms du contrat), `medidoc-disponibilite` ; alertes multi-fenêtres ; `slo.apps.par1.medisphere.internal` |
 | Livraison continue | ClusterAnalysisTemplate `taux-erreur-mediagenda` branchée sur les canaries de recette et de prod |
 | Témoin `mon01` | Prometheus 3.13 LTS, Alertmanager, blackbox, pve-exporter par le rôle `supervision_temoin` ; *dead man's switch* sur le Watchdog du cluster ; sondes des points d'entrée ; relais des alertes de transport du cluster ; alertes sur lui-même ; API d'administration fermée |
 | Documentation | `docs/observabilite/metriques/` : ADR-0210, `politique-alerte.md`, `politique-budget-erreur.md`, runbooks RB-210 à RB-219, `supervision-v1.md` (fiche de livraison) ; journaux et post-mortem INC-4843 dans `docs/kubernetes/` ; matrice des flux à jour (9100, exportateurs, `mon01`) ; étiquette **`metriques-v1`** sur `plateforme/medisphere` |
@@ -45,7 +45,7 @@ Le module a construit la supervision de MédiSphère, l'a éprouvée, cassée et
 2. **Tout le lab collecté.** Chaque élément du tableau « Collecte » est présent et `up`, avec ses étiquettes ; une alerte de disparition couvre chaque job attendu.
 3. **Alertes qu'on peut croire.** Chaque alerte a une gravité, une équipe, un runbook qui existe et un test ; chaque route est couverte par un essai de routage ; chaque inhibition par un essai d'inhibition ; le bruit d'une semaine est mesuré (alertes les plus notifiées) et justifié ou corrigé.
 4. **La supervision de la supervision.** Le témoin prévient quand le cluster ne prévient plus (Watchdog, Alertmanager arrêté, courriel cassé), et le cluster prévient quand le témoin ne voit plus juste ; démonstration de Nadia répétée **avant** la revue et chronométrée.
-5. **SLO et déploiements.** Les trois SLO ont leurs alertes de budget ; le rapport de Claire (disponibilité sur 28 jours, budget restant) se lit dans Pyrra et dans Grafana, chiffres concordants ; le canary défaillant de Julien est interrompu par l'analyse Prometheus en recette (démonstration répétée).
+5. **SLO et déploiements.** Les trois SLO ont leurs alertes de budget ; le rapport de Claire (disponibilité sur 28 jours, budget restant) se lit dans Pyrra et dans Grafana, chiffres concordants ou écart expliqué (rétention locale de 15 jours, M21-E30) ; le canary défaillant de Julien est interrompu par l'analyse Prometheus en recette (démonstration répétée).
 6. **Historique.** Une requête sur toute la période depuis l'installation de Thanos répond sans trou ni avertissement ; l'inventaire du compartiment est consigné ; le Compactor est seul et sain.
 7. **Sécurité et données.** Revue de Sophie préparée : accès aux points d'entrée, Grafana, Secrets hors Git, API d'administration, et la preuve qu'aucune métrique ne contient de donnée personnelle (étiquettes interdites contrôlées, recherche faite et consignée).
 8. **Documentation.** `supervision-v1.md` (architecture, couverture, **limites assumées**, ce que trouvent les modules 22 et 23), ADR-0210, politiques, runbooks RB-210 à RB-219, matrice des flux.
@@ -62,7 +62,7 @@ Le module a construit la supervision de MédiSphère, l'a éprouvée, cassée et
 - [ ] `lab/bin/check 21 46` est entièrement vert.
 - [ ] Démonstration de Nadia : Alertmanager du cluster arrêté, courriel du témoin reçu par `astreinte@` dans le délai annoncé par la politique d'alerte ; retour à la normale sans intervention manuelle autre que le redémarrage.
 - [ ] Démonstration de Julien : le canary défaillant est interrompu par `taux-erreur-mediagenda`, la version stable reste servie, l'événement est visible dans Argo CD et dans Grafana.
-- [ ] Le rapport SLO de Claire est cohérent entre Pyrra, Grafana et une requête PromQL écrite à la main.
+- [ ] Le rapport SLO de Claire est cohérent entre Pyrra, Grafana et une requête PromQL écrite à la main, ou l'écart est expliqué.
 - [ ] `supervision-v1.md` dit ce qui n'est **pas** couvert et ce que les modules 22 et 23 devront traiter ; la revue est passée (auto-évaluation avec la grille du corrigé si tu travailles seul).
 
 **Vérification** : `lab/bin/check 21 46`

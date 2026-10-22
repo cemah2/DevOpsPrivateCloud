@@ -1,4 +1,4 @@
-# Module 23 — Traces et profilage : palier 1 — Découverte — Corrigé
+# Module 23 — Palier 1 : Découverte — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -339,4 +339,4 @@ L'éditeur de recherche de Grafana (*Search*) construit des requêtes simples sa
 
 **En production chez MédiSphère**
 
-Le fichier devient la source du runbook « l'API est lente » (palier 3) et des panneaux « traces » des tableaux de l'astreinte ; les requêtes sont rejouées par le check de ce module à chaque montée de Tempo (une syntaxe qui change se voit tout de suite).
+Le fichier devient la source du runbook RB-234 « l'API est lente » (pour aller plus loin de M23-E12) et des panneaux « traces » des tableaux de l'astreinte ; les requêtes sont rejouées par le check de ce module à chaque montée de Tempo (une syntaxe qui change se voit tout de suite).

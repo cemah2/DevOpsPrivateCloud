@@ -5,7 +5,7 @@
 | Ticket | PLAT-2027 (M19-E27) |
 | Propriétaire | Équipe Plateforme |
 | Code | `plateforme/k8s` : `composants/gitlab-runner/values.yaml`, `ordonnancement/priorite-ci.yaml`, `espaces/ci-jobs/10-quota.yaml` |
-| Runbook | RB-197 « saturation des runners » |
+| Runbook | RB-193 « saturation des runners » |
 
 ## 1. Les trois réglages
 
@@ -40,7 +40,7 @@ Hypothèses (relevées le AAAA-MM-JJ ; remplace par tes valeurs) :
 
 - Deux réplicas répartis par `topologySpreadConstraints` (un par nœud), PDB `maxUnavailable: 1`, mise à jour `maxUnavailable: 0`.
 - Arrêt gracieux : à `SIGQUIT`, un gestionnaire ne prend plus de job et attend la fin des siens (`terminationGracePeriodSeconds: 3600`).
-- Essai de drainage (AAAA-MM-JJ) : nœud `k8s-w02` drainé pendant un job de 5 min pris par le gestionnaire de ce nœud. Le **gestionnaire** est déplacé (l'autre réplica continue de prendre des jobs) ; le **pod de job** sur `k8s-w02` est un pod nu : `kubectl drain` exige `--force`, et l'expulsion fait échouer le job (« pod … deleted »). Conséquence : on draine un nœud **après** avoir laissé finir les jobs (cordon, attente), RB-197 §4 ; l'option `pod_disruption_budget` de l'exécuteur protégerait les jobs mais bloquerait les drainages : non retenue.
+- Essai de drainage (AAAA-MM-JJ) : nœud `k8s-w02` drainé pendant un job de 5 min pris par le gestionnaire de ce nœud. Le **gestionnaire** est déplacé (l'autre réplica continue de prendre des jobs) ; le **pod de job** sur `k8s-w02` est un pod nu : `kubectl drain` exige `--force`, et l'expulsion fait échouer le job (« pod … deleted »). Conséquence : on draine un nœud **après** avoir laissé finir les jobs (cordon, attente), RB-193 §4 ; l'option `pod_disruption_budget` de l'exécuteur protégerait les jobs mais bloquerait les drainages : non retenue.
 
 ## 4. Priorité
 
@@ -59,4 +59,4 @@ Répartition par gestionnaire (après) : `s_…` : … jobs ; `s_…` : … jobs
 
 ## 6. Seuil
 
-**Attente p95 des jobs de MR de `mediagenda/api` ≤ 60 s** sur une heure ouvrée. Au-delà, deux fois dans la semaine : RB-197. Le module 21 en fera une alerte (métriques du gestionnaire `gitlab_runner_jobs`, `gitlab_runner_concurrent`, et durée d'attente).
+**Attente p95 des jobs de MR de `mediagenda/api` ≤ 60 s** sur une heure ouvrée. Au-delà, deux fois dans la semaine : RB-193. Le module 21 en fera une alerte (métriques du gestionnaire `gitlab_runner_jobs`, `gitlab_runner_concurrent`, et durée d'attente).

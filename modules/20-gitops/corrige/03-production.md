@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : corrigé du palier 3 — Production
+# Module 20 — Palier 3 : Production — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -18,7 +18,7 @@
 - noms des jobs du composant `deploiement` du M19 et de ses `inputs` (le check de E30 cherche des mots-clés : `valid`, `kubeconform`, `kustomize`, `verif`, `signature`) ;
 - format exact de la sortie de `argocd admin cluster stats` et des textes de condition des fenêtres de synchronisation.
 
-**Faits partagés avec les autres paliers** : comptes locaux d'Argo CD sans point (`karim-benali`, `julien-petit`, `nadia-roussel`, `<MOI>` avec tirets) ; valeurs de la release dans `composants/argocd/` (M20-E02) ; politique et tests RBAC dans `releases/argocd/` ; `role:lecture` = `role:readonly` **sans** `logs` (ce que lit `ci-lecture`) ; ApplicationSet `labo-agences` ; Secret de cluster `cluster-lyo-k3s01` ; RB-201 ; ADR-0200.
+**Faits partagés avec les autres paliers** : comptes locaux d'Argo CD sans point (`karim-benali`, `julien-petit`, `nadia-roussel`, `<MOI-ARGO>` = `<MOI>` avec des tirets) ; valeurs de la release dans `composants/argocd/` (M20-E02) ; politique et tests RBAC dans `releases/argocd/` ; `role:lecture` = `role:readonly` **sans** `logs` (ce que lit `ci-lecture`) ; ApplicationSet `labo-agences` ; Secret de cluster `cluster-lyo-k3s01` ; RB-201 ; ADR-0200.
 
 **Rappel** : une seule VM dans ce palier, `lyo-k3s01` (2201). Fichiers de solution : `corrige/fichiers/M20-E24/` à `M20-E31/`, `M20-E33/`, `M20-E34/`.
 
@@ -51,7 +51,7 @@ admin@adm01:~/src/k8s$ helmfile -e par1 -l composant=argocd diff
 
 ```
 admin@adm01:~/src/k8s$ outils/argocd-rbac-tests.sh
-ok    oui <MOI> sync applications mediagenda/mediagenda-prod
+ok    oui <MOI-ARGO> sync applications mediagenda/mediagenda-prod
 ok    oui karim-benali update projects mediagenda
 …
 ok    non inconnu get projects mediagenda
@@ -181,12 +181,12 @@ TLS de bout en bout jusqu'au serveur ; métriques ouvertes à Prometheus seuleme
 
 **Solution**
 
-Fichiers : [VM](fichiers/M20-E26/infra/envs/m20/lyo-k3s01.tf) ; Ansible : [`host_vars`](fichiers/M20-E26/ansible/inventories/lab/host_vars/lyo-k3s01/k3s.yml), [jeton k3s (modèle de Vault)](fichiers/M20-E26/ansible/inventories/lab/group_vars/role_k3s/vault-lab.extrait-E26.yml.exemple), [playbook](fichiers/M20-E26/ansible/playbooks/m20-lyo.yml), [manifestes de gestion](fichiers/M20-E26/ansible/playbooks/files/m20-lyo/argocd-gestion.yaml), [pare-feu](fichiers/M20-E26/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) ; `plateforme/k8s` : [`values-multicluster.yaml`](fichiers/M20-E26/k8s/composants/argocd/values-multicluster.yaml), [Secret de cluster](fichiers/M20-E26/k8s/outils/secrets-k8s.extrait-argocd-E26.sh), [Vault](fichiers/M20-E26/k8s/secrets/argocd.extrait-E26.yml.exemple), sortie du contrôleur dans [`argocd.yaml`](fichiers/M20-E25/k8s/composants/reseau/politiques/argocd.yaml) (règle `lyo-k3s01`) ; `plateforme/gitops` : [ApplicationSet `labo-agences`](fichiers/M20-E26/gitops/applications/labo-agences.yaml), [AppProject `labo`](fichiers/M20-E26/gitops/projets/labo.extrait-E26.yaml) ; `formation/gitops-labo` : [`agence/`](fichiers/M20-E26/gitops-labo/agence/) ; documentation : [`multi-cluster.md`](fichiers/M20-E26/medisphere/docs/livraison/gitops/multi-cluster.md), [matrice des flux](fichiers/M20-E26/medisphere/docs/socle/matrice-flux.extrait-E26.md).
+Fichiers : [VM](fichiers/M20-E26/infra/envs/m20/terraform.tfvars.exemple) (groupe `lyo` du catalogue `hotes.tf` d'E23 : aucune nouvelle déclaration) ; Ansible : [`host_vars`](fichiers/M20-E26/ansible/inventories/lab/host_vars/lyo-k3s01/k3s.yml), [jeton k3s (modèle de Vault)](fichiers/M20-E26/ansible/inventories/lab/group_vars/role_k3s/vault-lab.extrait-E26.yml.exemple), [playbook](fichiers/M20-E26/ansible/playbooks/m20-lyo.yml), [manifestes de gestion](fichiers/M20-E26/ansible/playbooks/files/m20-lyo/argocd-gestion.yaml), [pare-feu](fichiers/M20-E26/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait) ; `plateforme/k8s` : [`values-multicluster.yaml`](fichiers/M20-E26/k8s/composants/argocd/values-multicluster.yaml), [Secret de cluster](fichiers/M20-E26/k8s/outils/secrets-k8s.d/argocd.sh) (module `argocd` d'E06 complété : `secret_cluster_lyo_k3s01`, `verifier_cluster_lyo_k3s01`), [Vault](fichiers/M20-E26/k8s/secrets/argocd.extrait-E26.yml.exemple), sortie du contrôleur dans [`argocd.yaml`](fichiers/M20-E25/k8s/composants/reseau/politiques/argocd.yaml) (règle `lyo-k3s01`) ; `plateforme/gitops` : [ApplicationSet `labo-agences`](fichiers/M20-E26/gitops/applications/labo-agences.yaml), [AppProject `labo`](fichiers/M20-E26/gitops/projets/labo.extrait-E26.yaml) ; `formation/gitops-labo` : [`agence/`](fichiers/M20-E26/gitops-labo/agence/) ; documentation : [`multi-cluster.md`](fichiers/M20-E26/medisphere/docs/livraison/gitops/multi-cluster.md), [matrice des flux](fichiers/M20-E26/medisphere/docs/socle/matrice-flux.extrait-E26.md).
 
 *1. La VM* :
 
 ```
-admin@adm01:~/src/infra/envs/m20$ tofu plan -out m20.plan        # + module.lyo_k3s01[0], + module.dns_lyo_k3s01[0]
+admin@adm01:~/src/infra/envs/m20$ tofu plan -out m20.plan        # groupes = ["lyo"] : + module.hote["lyo-k3s01"], + module.dns_hote["lyo-k3s01"]
 admin@adm01:~/src/infra/envs/m20$ tofu apply m20.plan
 admin@adm01:~/src/ansible$ uv run ansible-inventory --host lyo-k3s01 | jq '.group_names? // empty'   # role_k3s (étiquette role-k3s)
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/m20-lyo.yml
@@ -275,7 +275,7 @@ Liaison chiffrée vers l'agence (le tunnel `wg2` du M07 pour un vrai site), rota
 
 **Solution**
 
-Fichiers : [`values-ha.yaml`](fichiers/M20-E27/k8s/composants/argocd/values-ha.yaml), [script des webhooks](fichiers/M20-E27/k8s/outils/argocd-webhooks-gitlab.sh), [Secret du webhook](fichiers/M20-E27/k8s/outils/secrets-k8s.extrait-argocd-E27.sh), [Vault](fichiers/M20-E27/k8s/secrets/argocd.extrait-E27.yml.exemple), [pare-feu](fichiers/M20-E27/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), [matrice des flux](fichiers/M20-E27/medisphere/docs/socle/matrice-flux.extrait-E27.md), [`performance.md`](fichiers/M20-E27/medisphere/docs/livraison/gitops/performance.md). Le Secret de cluster de `lyo-k3s01` reçoit `shard=1` (déjà dans la fonction d'E26).
+Fichiers : [`values-ha.yaml`](fichiers/M20-E27/k8s/composants/argocd/values-ha.yaml), [script des webhooks](fichiers/M20-E27/k8s/outils/argocd-webhooks-gitlab.sh), [Secret du webhook et partition du cluster](fichiers/M20-E27/k8s/outils/secrets-k8s.d/argocd.sh), [Vault](fichiers/M20-E27/k8s/secrets/argocd.extrait-E27.yml.exemple), [pare-feu](fichiers/M20-E27/ansible/inventories/lab/group_vars/role_routeur/pare_feu.yml.extrait), [matrice des flux](fichiers/M20-E27/medisphere/docs/socle/matrice-flux.extrait-E27.md), [`performance.md`](fichiers/M20-E27/medisphere/docs/livraison/gitops/performance.md). Le Secret de cluster de `lyo-k3s01` reçoit `shard=1` (déjà dans la fonction d'E26).
 
 *1. Mesure de départ* : pour chaque essai, une MR qui change une annotation de `overlays/dev` (sans quoi Argo CD rafraîchit mais n'a rien à synchroniser), puis, **au moment de la fusion** :
 
@@ -349,7 +349,7 @@ Trois travailleurs généralistes et `redis-ha` ; alertes sur `argocd_app_reconc
 
 **Solution**
 
-Fichiers : `plateforme/k8s` : [`composants/argocd-sauvegarde/`](fichiers/M20-E28/k8s/composants/argocd-sauvegarde/) (Kustomization, compte, CronJob, clé publique), [politique réseau](fichiers/M20-E28/k8s/composants/reseau/politiques/argocd-sauvegarde.yaml), [Taskfile](fichiers/M20-E28/k8s/Taskfile.extrait-E28.yml), [Secret S3](fichiers/M20-E28/k8s/outils/secrets-k8s.extrait-argocd-E28.sh), [Vault](fichiers/M20-E28/k8s/secrets/argocd.extrait-E28.yml.exemple), [restauration d'`argocd-secret`](fichiers/M20-E28/k8s/outils/argocd-restaurer-secret.sh) ; stockage : [identité et compartiment](fichiers/M20-E28/ansible/inventories/lab/host_vars/s3-01/seaweedfs.yml.extrait), [politique](fichiers/M20-E28/infra/outils/s3/politique-argocd-sauvegardes.json), [cycle de vie](fichiers/M20-E28/infra/outils/s3/cycle-de-vie-argocd-sauvegardes.json), [`s3-argocd-sauvegardes.env`](fichiers/M20-E28/adm01/s3-argocd-sauvegardes.env.exemple) ; documentation : [RB-201](fichiers/M20-E28/medisphere/docs/livraison/gitops/runbooks/RB-201-reconstruire-argo-cd.md), [compte rendu](fichiers/M20-E28/medisphere/docs/livraison/gitops/tests/reconstruction-argo-cd.md).
+Fichiers : `plateforme/k8s` : [`composants/argocd-sauvegarde/`](fichiers/M20-E28/k8s/composants/argocd-sauvegarde/) (Kustomization, compte, CronJob, clé publique), [politique réseau](fichiers/M20-E28/k8s/composants/reseau/politiques/argocd-sauvegarde.yaml), [Taskfile](fichiers/M20-E28/k8s/Taskfile.extrait-E28.yml), [Secret S3](fichiers/M20-E28/k8s/outils/secrets-k8s.d/argocd.sh), [Vault](fichiers/M20-E28/k8s/secrets/argocd.extrait-E28.yml.exemple), [restauration d'`argocd-secret`](fichiers/M20-E28/k8s/outils/argocd-restaurer-secret.sh) ; stockage : [identité et compartiment](fichiers/M20-E28/ansible/inventories/lab/host_vars/s3-01/seaweedfs.yml.extrait), [politique](fichiers/M20-E28/infra/outils/s3/politique-argocd-sauvegardes.json), [cycle de vie](fichiers/M20-E28/infra/outils/s3/cycle-de-vie-argocd-sauvegardes.json), [`s3-argocd-sauvegardes.env`](fichiers/M20-E28/adm01/s3-argocd-sauvegardes.env.exemple) ; documentation : [RB-201](fichiers/M20-E28/medisphere/docs/livraison/gitops/runbooks/RB-201-reconstruire-argo-cd.md), [compte rendu](fichiers/M20-E28/medisphere/docs/livraison/gitops/tests/reconstruction-argo-cd.md).
 
 *1. Inventaire* : RB-201 §2. Ce qui ne revient de nulle part sans l'export : `server.secretkey` et les comptes locaux (`accounts.<nom>.password`, `.passwordMtime`, `.tokens`). Si `server.secretkey` change, tous les jetons (dont `argocd-checks.token` de `ci-lecture`) sont refusés : ce sont des JWT signés par cette clé, et la liste `accounts.ci-lecture.tokens` doit en plus contenir leur identifiant.
 
@@ -454,11 +454,11 @@ Calendrier des gels publié (fin d'année, audits HDS), MR de gel et MR inverse 
 
 **Solution** (une solution possible ; `LIBRE` : d'autres choix sont valables s'ils respectent les exigences)
 
-Fichiers : [configuration de l'agent](fichiers/M20-E30/k8s/.gitlab/agents/k8s-par1/config.yaml), [RBAC de l'agent](fichiers/M20-E30/k8s/rbac/gitlab-agent.yaml), [`.gitlab-ci.yml` de `mediagenda/deploiement`](fichiers/M20-E30/deploiement/gitlab-ci.yml), [nettoyage des gestionnaires de champs](fichiers/M20-E30/k8s/outils/nettoyer-gestionnaires.sh), [`acces-ci.md`](fichiers/M20-E30/medisphere/docs/livraison/gitops/acces-ci.md).
+Fichiers : [configuration de l'agent](fichiers/M20-E30/k8s/.gitlab/agents/k8s-par1/config.yaml), [RBAC de l'agent](fichiers/M20-E30/k8s/rbac/gitlab-agent/10-agent.yaml), [`.gitlab-ci.yml` de `mediagenda/deploiement`](fichiers/M20-E30/deploiement/.gitlab-ci.yml), [nettoyage des gestionnaires de champs](fichiers/M20-E30/k8s/outils/nettoyer-gestionnaires.sh), [`acces-ci.md`](fichiers/M20-E30/medisphere/docs/livraison/gitops/acces-ci.md).
 
 Déroulé :
 1. **Inventaire** : `kubectl get rolebindings,clusterrolebindings -A -o json | jq …` (requêtes de `acces-ci.md`) ; `ci_access` actuel ; variables de CI des groupes (`KUBE_*`) ; jobs des pipelines de `mediagenda/deploiement` et `medidoc/deploiement`.
-2. **Agent** : MR sur `plateforme/k8s` qui réduit `ci_access` à `formation/ci-labo` ; l'agent relit sa configuration depuis le dépôt (pas de redéploiement). Puis suppression du RoleBinding de `mediagenda-dev` (et de tout autre espace applicatif) : `kubectl -n mediagenda-dev delete rolebinding <nom>` — retirer le fichier du dépôt ne supprime rien (`task appliquer` applique, il ne nettoie pas), d'où la suppression explicite tracée dans le ticket.
+2. **Agent** : MR sur `plateforme/k8s` qui réduit `ci_access` à `formation/ci-labo` ; l'agent relit sa configuration depuis le dépôt (pas de redéploiement). Puis `rbac/gitlab-agent/10-agent.yaml` réduit à `wb-essais` (MR) et suppression des RoleBindings `gitlab-agent-edit` et `gitlab-agent-crd` de `mediagenda-dev` (et de tout autre espace applicatif où l'inventaire en trouve) : `kubectl --context k8s-par1 -n mediagenda-dev delete rolebinding gitlab-agent-edit gitlab-agent-crd` — retirer les objets du dépôt ne les supprime pas (`task appliquer` applique, il ne nettoie pas), d'où la suppression explicite tracée dans le ticket.
 3. **Pipelines** : `.gitlab-ci.yml` de `mediagenda/deploiement` et de `medidoc/deploiement` réduits au composant `deploiement` (validation) ; `workflow:rules` sur MR et `main`.
 4. **Gestionnaires de champs** : pour chaque objet,
 
@@ -479,7 +479,7 @@ admin@adm01:~/src/k8s$ outils/nettoyer-gestionnaires.sh mediagenda-prod deployme
 ```
 
 Boucle sur tous les Deployments, StatefulSets et Services des espaces `mediagenda-*` et `medidoc-*` (après revue de l'essai de chacun). Hors heures ouvrées pour la production, comme toute action sur elle.
-5. **Preuves** : `kubectl auth can-i … --as system:serviceaccount:gitlab-agent:<compte>` et essai depuis un job de `formation/ci-labo` (refus dans `mediagenda-dev`, succès dans `wb-essais`) ; `acces-ci.md`.
+5. **Preuves** : `kubectl auth can-i create deployments -n mediagenda-dev --as system:serviceaccount:gitlab-agent:gitlab-agent` → `no` (de même dans `mediagenda-recette`, `mediagenda-prod`, `medidoc-*` ; `yes` dans `wb-essais`) et essai depuis un job de `formation/ci-labo` (refus dans `mediagenda-dev`, succès dans `wb-essais`) ; `acces-ci.md`.
 
 **Explications**
 
@@ -571,14 +571,14 @@ L'ADR est relue au M24 (SSO), au M25 (Secrets) et à chaque mineure d'Argo CD.
 
 **Solution** (une solution possible ; `LIBRE` : d'autres choix sont valables s'ils respectent les exigences)
 
-Fichiers : `plateforme/k8s` : [`espaces/medidoc-recette/`](fichiers/M20-E33/k8s/espaces/medidoc-recette/), [cloison](fichiers/M20-E33/k8s/composants/reseau/politiques/isolement-medidoc-recette.yaml), [politiques de l'application](fichiers/M20-E33/k8s/applications/medidoc-recette/politiques.yaml), [Secrets](fichiers/M20-E33/k8s/outils/secrets-k8s.extrait-medidoc.sh), [Vault](fichiers/M20-E33/k8s/secrets/medidoc-recette.yml.exemple) ; RGW : [politique du compte `medidoc-recette`](fichiers/M20-E33/ceph/politiques/medidoc-recette.json) ; `medidoc/deploiement` : [`overlays/recette/`](fichiers/M20-E33/deploiement/overlays/recette/) ; `plateforme/gitops` : [ApplicationSet `medidoc`](fichiers/M20-E33/gitops/applications/medidoc.yaml), [AppProject](fichiers/M20-E33/gitops/projets/medidoc.extrait-E33.yaml) ; documentation : [note d'accueil](fichiers/M20-E33/medisphere/docs/livraison/gitops/accueil-equipe-gitops.md), [fiche d'équipe](fichiers/M20-E33/medisphere/docs/kubernetes/equipes/medidoc.extrait-E33.md).
+Fichiers : `plateforme/k8s` : [`espaces/medidoc-recette/`](fichiers/M20-E33/k8s/espaces/medidoc-recette/), [cloison](fichiers/M20-E33/k8s/composants/reseau/politiques/isolement-medidoc-recette.yaml), [Secrets](fichiers/M20-E33/k8s/outils/secrets-k8s.d/), [Vault](fichiers/M20-E33/k8s/secrets/medidoc-recette.yml.exemple) ; RGW : [politique du compte `medidoc-recette`](fichiers/M20-E33/ceph/politiques/medidoc-recette.json) ; `medidoc/deploiement` : [`overlays/recette/`](fichiers/M20-E33/deploiement/overlays/recette/) ; `plateforme/gitops` : [ApplicationSet `medidoc`](fichiers/M20-E33/gitops/applications/medidoc.yaml), [AppProject](fichiers/M20-E33/gitops/projets/medidoc.extrait-E33.yaml) ; documentation : [note d'accueil](fichiers/M20-E33/medisphere/docs/livraison/gitops/accueil-equipe-gitops.md), [fiche d'équipe](fichiers/M20-E33/medisphere/docs/kubernetes/equipes/medidoc.extrait-E33.md).
 
 Déroulé :
 1. **Stockage** : compte `medidoc-recette` et compartiment `medidoc-recette-documents` sur le RGW, par l'IAM du RGW comme `medidoc-app` au M08-E12 (`aws iam create-user`, `put-user-policy` avec la politique fournie, `create-access-key`, compartiment créé avec le compte) ; clés dans le Vault (`secrets/medidoc-recette.yml`).
-2. **Plateforme** (MR `plateforme/k8s`) : `espaces/medidoc-recette/` (espace, quota, LimitRange, refus par défaut, compte `default`), cloison, politiques de l'application ; `task appliquer` ; politiques ; `outils/secrets-k8s.sh appliquer medidoc-recette` (et `medidoc-dev`, qui passe du script du M16 au Vault).
-3. **Projet et ApplicationSet** (MR `plateforme/gitops`) : destinations `medidoc-dev` et `medidoc-recette`, liste noire étendue à `CiliumNetworkPolicy`, ressources orphelines signalées avec les exceptions de la plateforme ; élément `recette` dans l'ApplicationSet.
+2. **Plateforme** (MR `plateforme/k8s`) : `espaces/medidoc-recette/` (espace, quota, LimitRange, compte `default`), cloison `isolement-medidoc-recette` ; `task appliquer` ; modules `medidoc-dev` et `medidoc-recette` de `secrets-k8s.sh` (`outils/secrets-k8s.d/`, comme `mediagenda-*` en M20-E12), puis `outils/secrets-k8s.sh appliquer medidoc-recette` et `appliquer medidoc-dev` (qui passe du script du M16 au Vault). Les politiques réseau de l'application (refus par défaut, entrée Gateway, sortie DNS et RGW) viennent de `base/politiques.yaml` de `medidoc/deploiement` (M19-E33) : la recette les reçoit par l'overlay, comme la dev.
+3. **Projet et ApplicationSet** (MR `plateforme/gitops`) : destinations `medidoc-dev` et `medidoc-recette`, liste noire `ResourceQuota` et `LimitRange` (choix de M20-E07 : les politiques réseau d'application restent permises à l'équipe), ressources orphelines signalées avec les exceptions de la plateforme (`harbor-pull`, `medidoc-s3`) ; ApplicationSet `medidoc` (éléments `dev` et `recette`, même modèle que `mediagenda`).
 4. **Équipe** (MR `medidoc/deploiement`) : `overlays/recette` ; image par **digest** recopié de dev.
-5. **Reprise de dev** : si `medidoc-dev` était déjà une Application (palier 2) de même nom, l'ApplicationSet la reprend ; sinon (dev appliqué à la main jusqu'ici), `argocd app diff medidoc-dev` doit être vide **avant** la première synchronisation (même rendu que l'existant) : ajuster l'overlay `dev` jusqu'à ce qu'il le soit ; aucun pod recréé (UID relevés avant/après).
+5. **Reprise de dev** (méthode d'E08 ; dev était appliqué à la main jusqu'ici) : élément `dev` d'abord sans synchronisation automatique, `argocd app diff medidoc-dev` doit être vide **avant** la première synchronisation (même rendu que l'existant) : ajuster l'overlay `dev` jusqu'à ce qu'il le soit ; aucun pod recréé (UID relevés avant/après).
 6. **Contrôles** :
 
 ```
@@ -593,7 +593,7 @@ admin@adm01:~$ for f in $(git -C ~/src/medidoc-deploiement ls-files '*.yaml' '*.
 
 **Explications**
 
-L'accueil d'une équipe en GitOps sépare deux mondes : ce que la **plateforme** possède (espace, enveloppe, politiques, Secrets, projet, ApplicationSet) et ce que l'**équipe** possède (ses manifestes, ses promotions). L'AppProject matérialise la frontière : destinations limitées, aucun objet de cluster, listes noires des garde-fous. Chaque environnement a ses propres identifiants de stockage : une fuite des identifiants de recette n'expose pas les documents de dev (ni, demain, de production). La cloison réseau sépare même deux espaces de la même équipe.
+L'accueil d'une équipe en GitOps sépare deux mondes : ce que la **plateforme** possède (espace, enveloppe, politiques, Secrets, projet, ApplicationSet) et ce que l'**équipe** possède (ses manifestes, ses promotions). L'AppProject matérialise la frontière : destinations limitées, aucun objet de cluster, liste noire de l'enveloppe (quota, LimitRange) ; les invariants réseau sont des refus de cluster, hors d'atteinte du projet. Chaque environnement a ses propres identifiants de stockage : une fuite des identifiants de recette n'expose pas les documents de dev (ni, demain, de production). La cloison réseau sépare même deux espaces de la même équipe.
 
 **Alternatives**
 - Générateur de dossiers Git (`overlays/*`) : l'équipe crée un environnement en créant un dossier ; refusé ici (un dossier créé par erreur devient un environnement synchronisé) — le choix du palier 2.
@@ -602,7 +602,8 @@ L'accueil d'une équipe en GitOps sépare deux mondes : ce que la **plateforme**
 
 **Pièges classiques**
 - Réutiliser le compte RGW de dev en recette.
-- Oublier `CiliumNetworkPolicy` dans la liste noire : l'équipe pourrait ouvrir sa sortie.
+- Croire qu'une politique d'espace de l'équipe protège la plateforme : l'équipe peut toujours ouvrir sa propre sortie ; ce qui la borne, c'est la cloison de cluster `isolement-medidoc-recette` (des refus qu'aucune politique d'espace ne lève) et le refus par défaut de la bordure.
+- Décrire la même politique (`refus-par-defaut`) dans `plateforme/k8s` **et** dans le dépôt de l'équipe : deux propriétaires, et Argo CD l'adopte à la première synchronisation.
 - Créer l'espace par l'overlay de l'équipe (refusé par le projet : `Namespace` est un objet de cluster).
 - Oublier la racine MédiSphère (volume) ou le Secret `harbor-pull` : pods en `ContainerCreating` ou `ImagePullBackOff`.
 - Ne pas relire `argocd app diff medidoc-dev` avant la reprise : des pods recréés.
@@ -619,7 +620,7 @@ Le gabarit `outils/nouvelle-equipe.sh` (M14-E33) étendu à la partie GitOps (pr
 Modèles : [journal](fichiers/M20-E34/adm01/journal.md), [compte rendu](fichiers/M20-E34/medisphere/docs/livraison/gitops/tests/mise-en-production-chrono.md).
 
 ```
-admin@adm01:~$ mkdir -p ~/m20-e34 && date -u +%FT%TZ > ~/m20-e34/T0
+admin@adm01:~$ mkdir -p ~/m20/e34 && date -u +%FT%TZ > ~/m20/e34/T0
 admin@adm01:~/src/deploiement$ git pull && yq '.images' overlays/recette/kustomization.yaml overlays/prod/kustomization.yaml
 admin@adm01:~$ argocd app get mediagenda-prod | grep -E 'Sync Status|Health|SyncWindow'
 admin@adm01:~$ argocd proj windows list mediagenda

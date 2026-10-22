@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : palier 2 — Opérationnel — Corrigé
+# Module 20 — Palier 2 : Opérationnel — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -684,7 +684,7 @@ Une Application GitOps est un **programme** qui agit sur la prod, pas un fichier
 
 ### M20-E22 — Runbook : une application est `OutOfSync` ou `Degraded`
 
-Exemple de runbook : [`RB-200-application-outofsync-ou-degraded.md`](fichiers/M20-E22/medisphere/docs/livraison/gitops/RB-200-application-outofsync-ou-degraded.md).
+Exemple de runbook : [`RB-200-application-outofsync-ou-degraded.md`](fichiers/M20-E22/medisphere/docs/livraison/gitops/runbooks/RB-200-application-outofsync-ou-degraded.md).
 
 Points de contrôle pour l'auto-évaluation :
 - **Qualification en une commande** (`argocd app get <app> --refresh`) et une table qui envoie vers la bonne section selon ce qu'on lit (condition `ComparisonError`, statut de synchronisation, phase de la dernière opération, santé). Un runbook qui commence par « regarde les journaux d'Argo CD » perd l'astreinte.
@@ -756,7 +756,7 @@ Fichiers : état [`infra/envs/m20/`](fichiers/M20-E23/infra/envs/m20/) (`version
    ```
    Flux installe une **vraie release Helm** (historique, hooks Helm exécutés par Helm, `helm rollback` possible) ; Argo CD rend le chart en manifestes et ne laisse aucune release (`helm list` vide, E13). L'espace `podinfo` est en `baseline` (le chart ne fixe pas d'utilisateur numérique) avec avertissement `restricted` : écart documenté dans le fichier.
 7. **Comparatif** : voir l'exemple. L'essentiel pour MédiSphère : interface et RBAC pour les équipes, ApplicationSets, Argo Rollouts déjà intégré, vue centrale de plusieurs clusters → Argo CD ; Flux : léger, sans interface, un contrôleur par cluster qui tire — idéal pour un site isolé.
-8. **Fin.** `flux01` reste jusqu'au check ; puis, si la mémoire manque avant E26 : `groupes = []`, `tofu apply`, MR qui retire la règle `FLUX01` de la bordure (une passerelle à la fois) et la ligne de la matrice. Sinon, le mini-projet (E46) le fait.
+8. **Fin.** `flux01` reste jusqu'au check ; puis, si la mémoire manque avant E26 : `groupes = []`, `tofu apply`, MR qui retire la règle et la définition `FLUX01` de la bordure (une passerelle à la fois) et la ligne de la matrice. Sinon, le mini-projet (E46) le fait.
 
 **Explications**
 

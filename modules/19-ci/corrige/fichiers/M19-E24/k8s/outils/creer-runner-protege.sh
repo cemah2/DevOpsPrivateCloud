@@ -56,10 +56,10 @@ echo "runner $NOM créé (id $id)"
 
 # Le jeton ne quitte la réponse que vers ansible-vault (entrée standard), jamais vers le terminal.
 umask 077
-jq -r '"espace: gitlab-runner\nsecret: gitlab-runner-protege-jeton\ndonnees:\n  runner-token: \"" + .token + "\"\n  runner-registration-token: \"\""' <<<"$reponse" \
+jq -r '"---\ngitlab_runner_protege_jeton: \"" + .token + "\""' <<<"$reponse" \
   | uv run --project "$ANSIBLE_DIR" ansible-vault encrypt \
       --vault-id "critique@$ANSIBLE_DIR/outils/vault-pass-client.sh" \
       --output "$SORTIE"
 unset reponse
-echo "jeton chiffré dans $SORTIE (à committer, puis : outils/secrets-k8s.sh gitlab-runner-protege)"
+echo "jeton chiffré dans $SORTIE (à committer, puis : outils/secrets-k8s.sh appliquer gitlab-runner-protege)"
 echo "inscris le runner $NOM (id $id) au registre des secrets."

@@ -79,16 +79,24 @@ fi
 
 # --- 5. Sources de données de Grafana ----------------------------------------------------------------------
 _m22d_e02_cm="$(_m22d_k get configmaps -n supervision -l grafana_datasource=1 -o json)"
-for _m22d_e02_t in "${_M22D_LOCATAIRES[@]}"; do
+# À partir de M22-E16, « Loki — audit » quitte ce provisionnement (deleteDatasources) et vit dans
+# l'organisation Grafana « Sécurité » (OpenTofu, même UID loki-audit) : elle n'est plus attendue ici.
+_m22d_e02_attendus=("${_M22D_LOCATAIRES[@]}")
+if jq -r '.items[].data[]' <<<"${_m22d_e02_cm:-{\}}" 2>/dev/null | grep -A4 'deleteDatasources:' | grep -q 'Loki — audit'; then
+  _m22d_e02_attendus=(plateforme mediagenda medidoc)
+  _ok "source « Loki — audit » retirée du provisionnement de l'organisation principale (M22-E16 : organisation Sécurité)"
+fi
+for _m22d_e02_t in "${_m22d_e02_attendus[@]}"; do
   check_cmd "source Grafana du locataire $_m22d_e02_t déclarée par code (en-tête X-Scope-OrgID)" bash -c '
     jq -r ".items[].data[]" <<<"$1" 2>/dev/null | grep -A12 -E "uid: *loki-$2\$" | grep -Eq "httpHeaderValue1: *$2\$"' \
     _ "$_m22d_e02_cm" "$_m22d_e02_t"
 done
 _m22d_e02_reg="$(grafana_api frontend/settings 2>/dev/null || true)"
 if [[ -n "$_m22d_e02_reg" ]]; then
-  check_cmd "Grafana a chargé les 4 sources Loki (loki-plateforme, -mediagenda, -medidoc, -audit)" _m22d_json "$_m22d_e02_reg" \
-    '[.datasources[]? | select(.type == "loki") | .uid] as $u
-     | ["loki-plateforme","loki-mediagenda","loki-medidoc","loki-audit"] | all(. as $x | $u | index($x))'
+  _m22d_e02_uids="$(printf 'loki-%s\n' "${_m22d_e02_attendus[@]}" | jq -R . | jq -sc .)"
+  check_cmd "Grafana a chargé les sources Loki attendues dans l'organisation principale (${_m22d_e02_attendus[*]})" _m22d_json "$_m22d_e02_reg" \
+    '[.datasources[]? | select(.type == "loki") | .uid] as $u | $attendus | all(. as $x | $u | index($x))' \
+    --argjson attendus "$_m22d_e02_uids"
 else
   skip "sources chargées par Grafana" "API de Grafana injoignable avec le jeton des checks (grafana-checks.token, M21-E05)"
 fi

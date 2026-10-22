@@ -36,9 +36,9 @@ configs:
     admin.enabled: false
     # Comptes locaux jusqu'au SSO du M24. ⚠️ Un nom de compte ne contient JAMAIS de point : Argo CD
     # découpe la clé « accounts.<nom>.<suffixe> » sur les points (karim.benali deviendrait le
-    # compte « karim » doté d'un réglage « benali »). Convention : prénom-nom, ton compte = WB_MOI
-    # avec des tirets. Les mots de passe ne sont pas ici : argocd account update-password.
-    accounts.<MOI>: login
+    # compte « karim » doté d'un réglage « benali »). Convention : prénom-nom, ton compte = <MOI-ARGO> (WB_MOI
+    # avec des tirets). Les mots de passe ne sont pas ici : argocd account update-password.
+    accounts.<MOI-ARGO>: login
     accounts.karim-benali: login
     accounts.julien-petit: login
     accounts.nadia-roussel: login
@@ -55,7 +55,7 @@ configs:
     policy.default: ""
     # Rôles intégrés seulement à ce stade ; le modèle par équipe et par projet vient en M20-E24.
     policy.csv: |
-      g, <MOI>, role:admin
+      g, <MOI-ARGO>, role:admin
       g, karim-benali, role:admin
       g, julien-petit, role:readonly
       g, nadia-roussel, role:readonly

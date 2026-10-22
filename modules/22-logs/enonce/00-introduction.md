@@ -33,7 +33,7 @@ Mardi, 10 h 40. MédiAgenda a renvoyé des erreurs 500 en recette pendant vingt 
 - des rétentions par locataire, des limites, la sécurité et la sauvegarde (palier 3) ; des comparaisons avec **Fluent Bit 5.1** et **OpenSearch 3.9**, installés puis **retirés** ;
 - la documentation : `docs/observabilite/journaux/` (fiche de Loki, `politique-journaux.md`, comparatifs), ADR-0220, runbooks RB-220 et suivants.
 
-Le **palier 1** (ce fichier et `01-decouverte.md`) installe Loki et Alloy, apprend LogQL et branche les VMs. Le **palier 2** (`02-operationnel.md`) traite les tickets du quotidien : journaux JSON de MédiAgenda, audit de l'API, alertes, données de santé, essai de Fluent Bit, revue, runbook.
+Le **palier 1** (ce fichier et `01-decouverte.md`) installe Loki et Alloy, apprend LogQL et branche les VMs. Le **palier 2** (`02-operationnel.md`) traite les tickets du quotidien : journaux JSON de MédiAgenda, audit de l'API, alertes, données de santé, essai de Fluent Bit, revue, runbook. Le **palier 3** (`03-production.md`) fixe les rétentions, les limites et l'effacement, mesure la performance et la cardinalité, compare avec OpenSearch, verrouille les accès et la sauvegarde, et écrit l'ADR-0220. Le **palier 4** (`04-expert.md`) casse et répare la chaîne des journaux (cinq pannes, dont une astreinte) et descend sous le capot de Loki. Le **mini-projet** (`05-mini-projet.md`) livre l'état `journaux-v1`.
 
 ## Architecture du module
 
@@ -78,18 +78,22 @@ Points structurants :
 | logcli | `adm01`, rôle `outils_k8s` | 3.7.9 | E04 |
 | Ruler de Loki | dans le binaire Loki, règles `loki/regles/<locataire>/` | — | E08 |
 | Fluent Bit (essai) | espace `journaux-essai`, **retiré** | 5.1.3 (chart `fluent/fluent-bit` 0.58.3) | E10 |
-| OpenSearch (essai) | espace `opensearch-essai`, **retiré** | 3.9 | E15 |
+| OpenSearch (essai) | espace `opensearch-essai`, **retiré** | 3.9.0 (chart `opensearch/opensearch` 3.9.0) | E15 |
 
-### Flux réseau du palier 1 et 2
+### Flux réseau du module
 
 | Flux | Port | Exercice | Où c'est appliqué |
 |---|---|---|---|
-| pods Alloy → Loki (dans le cluster) | TCP 3100 | E03 | CNP `journaux/loki-entree` |
-| Grafana, Prometheus (`supervision`) → Loki | TCP 3100 | E02 | CNP `loki-entree` |
-| Loki → RGW 10.10.30.200 (par `eth1` des travailleurs) | TCP 443 | E02 | existant (M16) |
-| MGMT → 10.10.41.62 (lecture, vérifications) | TCP 3100 | E02 | bordure : existant ; CNP `loki-entree` |
-| VLAN 20 et 70 → 10.10.41.62 (agents des VMs) | TCP 3100 | E05 | **nouveau** : `pare_feu.yml` (`gw01`/`gw02`) + CNP |
-| ruler de Loki → Alertmanager (`supervision`) | TCP 9093 | E08 | CNP de `supervision` si elle filtre (M21-E29) |
+| pods Alloy → Loki (dans le cluster) | TCP 3100 | E03 | CNP `journaux/loki-entree` (limité à `POST /loki/api/v1/push` en E16) |
+| Grafana, Prometheus (`supervision`) → Loki | TCP 3100 | E02 | CNP `loki-entree` (chemins de lecture et `/metrics` en E16) |
+| Loki → RGW 10.10.30.200 (par `eth1` des travailleurs) | TCP 443 | E02 | existant (M16) ; CNP `loki-sortie` en E16 |
+| MGMT (`adm01`, son agent et les vérifications) → 10.10.41.62 | TCP 3100 | E02, E05 | bordure : existant ; CNP `loki-entree` (tout l'HTTP) |
+| INFRA (VLAN 20) et DMZ (VLAN 70) → 10.10.41.62 (agents des VMs) | TCP 3100 | E05 | **nouveau** : `pare_feu.yml` (`gw01`/`gw02`) + CNP (`POST /loki/api/v1/push` seulement) |
+| `gw01`/`gw02` eux-mêmes (10.10.40.2/.3) → 10.10.41.62 | TCP 3100 | E05 | chaîne `output` des passerelles (ouverte) + CNP (`push` seulement) |
+| ruler de Loki → Alertmanager (`supervision`) | TCP 9093 | E08 | CNP de `supervision` si elle filtre (M21-E29) ; CNP `loki-sortie` en E16 |
+| Loki → DNS du cluster, API Kubernetes (sidecar des règles) | UDP/TCP 53, TCP 6443 | E16 | CNP `loki-sortie` |
+
+Les VMs qui envoient leur journal sont celles du groupe d'inventaire `socle` (liste en E05 : `adm01` sur MGMT, les passerelles, les VMs d'INFRA et de DMZ) : ces réseaux couvrent toutes les VMs visées par le rôle `alloy`. Les VMs de `ceph-par1` (VLAN 30) et les VMs d'environnement (VLAN 99) ne sont **pas** branchées dans ce module ; les ajouter demande une règle de la bordure **et** une ligne de la CNP (piste de M22-E05, « Pour aller plus loin »).
 
 ---
 
@@ -138,9 +142,9 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 | Locataires | `plateforme` (cluster, nœuds, VMs, plateforme), `mediagenda` (espaces `mediagenda-*`), `medidoc` (`medidoc-*`), `audit` (journal d'audit de l'API) ; `essai` pour les comparaisons |
 | Étiquettes Loki | liste **fermée** : `cluster`, `namespace`, `app`, `container`, `node`, `job` ; pour les VMs `host`, `role`, `site` ; valeurs de `job` : `pods`, `journald`, `kubernetes-audit`, `kubernetes-events` |
 | Métadonnées structurées | `pod`, `stream` (pods) ; `unite`, `niveau` (journald) ; `niveau`, `request_id` (MédiAgenda, E06) ; `verb`, `user`, `code`, `resource`, `object_ns`, `object_name` (audit, E07) |
-| Grafana | sources `Loki — plateforme`, `Loki — mediagenda`, `Loki — medidoc`, `Loki — audit` (UID `loki-<locataire>`), ConfigMap `supervision/sources-loki` |
+| Grafana | sources `Loki — plateforme`, `Loki — mediagenda`, `Loki — medidoc`, `Loki — audit` (UID `loki-<locataire>`), ConfigMap `supervision/sources-loki` (fichier `grafana/sources-loki.yaml`) ; à partir de M22-E16, `Loki — audit` (même UID `loki-audit`) n'est plus dans ce fichier : elle est créée par OpenTofu (état `observabilite-grafana`) dans l'organisation Grafana **Sécurité** |
 | Projets | `plateforme/observabilite` (`loki/`, `alloy/`, `requetes/`) ; `plateforme/gitops` (`plateforme/loki.yaml`, `plateforme/alloy.yaml`) ; `plateforme/charts-miroir` ; `plateforme/k8s` (`secrets/loki.yml`) ; `plateforme/ansible` (rôle `alloy`, playbook `journaux-vms.yml`) ; `mediagenda/api` et `mediagenda/deploiement` (E06) |
-| Documentation | `docs/observabilite/journaux/` : `loki.md` (E02), `politique-journaux.md` (E09, E13, E16), `comparatif-collecteurs.md` (E10), `runbooks/RB-220-…` (E12) ; ADR-0220 (E17) |
+| Documentation | `docs/observabilite/journaux/` : `loki.md` (E02), `politique-journaux.md` (section 1 en E09, section 2 en E13, sections 3 et 4 en E16), `comparatif-collecteurs.md` (E10), `performance.md` (E14), `comparatif-opensearch.md` (E15), `sous-le-capot.md` (E24), `adr/ADR-0220-architecture-journaux.md` (E17), `runbooks/RB-220-…` (E12), `RB-221-…` (E13), `RB-222-…` (E19, E22), `RB-223-…` (E20), `RB-224-…` (E21) ; post-mortem INC-4923 dans `docs/kubernetes/post-mortems/` (E23) |
 | Brouillons | `~/m22/eXX/` sur `adm01` (non versionnés, sans secret) |
 
 ### Valeurs à adapter
@@ -152,16 +156,20 @@ Une synthèse pour se repérer ; la documentation officielle (liens en fin de fi
 
 ### Variables de `lab/lab.env`
 
-`WB_LOKI_URL` (défaut : `http://loki.apps.par1.medisphere.internal:3100`) sert à `loki_api` et `loki_requete`. Le module en ajoute quatre, facultatives :
+`WB_LOKI_URL` (défaut : `http://loki.apps.par1.medisphere.internal:3100`) sert à `loki_api` et `loki_requete`. Le module en ajoute huit, toutes facultatives (les valeurs ci-dessous sont les défauts) :
 
 ```
 #WB_M22_VMS_SOCLE="gw01 gw02 adm01 dns01 dns02 ca01 git01 runner01 runner02 nbx01 s3-01 reg01 mon01 lb01 lb02"  # VMs qui envoient leur journal (E05)
 #WB_M22_MEDIAGENDA_URL="https://mediagenda-recette.apps.par1.medisphere.internal"   # cible de ressources/E04-trafic/trafic.sh
 #WB_M22_S3_LOKI_ENV="$HOME/.config/workbook/s3-loki.env"                              # identifiants S3 de Loki (E02)
-#WB_M22_RGW_URL="https://rgw.par1.medisphere.internal"
+#WB_M22_RGW_URL="https://rgw.par1.medisphere.internal"                                 # point d'accès du RGW (E02, E13, E16, E24)
+#WB_M22_FICHIER_LOKI="loki/values.yaml"                     # fichiers de plateforme/observabilite que modifient
+#WB_M22_FICHIER_ALLOY="alloy/values.yaml"                   # les pannes du palier 4, si ton dépôt les range
+#WB_M22_FICHIER_ALLOY_CONFIG="alloy/config.alloy"           # ailleurs
+#WB_M22_FICHIER_SOURCES="grafana/sources-loki.yaml"
 ```
 
-Le check de E07 utilise aussi `WB_MOI` (ton compte, bloc A).
+Le check de E07 utilise aussi `WB_MOI` (ton compte, bloc A) ; ceux du palier 4 utilisent `WB_K8S_CP` et `WB_K8S_WORKERS` (M14), et les pannes `WB_GITLAB_ADMIN_TOKEN_FILE` (M01). Fichiers de `~/.config/workbook/` : `s3-loki.env` (E02, 600), et ceux du M21 (`grafana-checks.token`, `mailpit-checks.env`, `k8s-checks.kubeconfig`).
 
 ---
 
@@ -210,6 +218,9 @@ admin@adm01:~$ ssh k8s-cp01 'sudo ls -l /var/log/kubernetes/audit/'
 ```
 Palier 1 :  E01 ─ E02 ─ E03 ─ E04 ─ E05
 Palier 2 :  E06 ─ E07 ─ E08 ─ E09 ─ E10 ─ E11 ─ E12
+Palier 3 :  E13 ─ E14 ─ E15 ─ E16 ─ E17 ─ E18
+Palier 4 :  E19 ─ E20 ─ E21 ─ E22 ─ E23 ─ E24
+Palier 5 :  E25 (mini-projet)
 ```
 
 1. **E01** — positionnement, à froid.
@@ -217,8 +228,11 @@ Palier 2 :  E06 ─ E07 ─ E08 ─ E09 ─ E10 ─ E11 ─ E12
 3. **E04** — LogQL, dès que des journaux arrivent ; **E05** — les VMs (peut se faire avant E04).
 4. **E06 → E09** — dans l'ordre : chaque exercice modifie `alloy/config.alloy` (E06 et E07 l'étendent, E09 y ajoute le masquage) ; E08 a besoin de l'audit (E07).
 5. **E10** — à faire d'une traite (l'essai est retiré à la fin) ; **E11** et **E12** en dernier.
+6. **E13 → E14** — rétentions et limites avant les mesures de performance ; **E15** (OpenSearch, ≈ 3 Go, retiré à la fin) jamais en même temps qu'un autre essai ; **E16** avant l'ADR (**E17**) ; **E18** pour finir le palier.
+7. **E19 → E22** — une panne à la fois, chacune close (`--annuler`) avant la suivante ; **E23** enchaîne une de ces pannes ; **E24** quand tu veux après E16.
+8. **E25** — en dernier : le contrôle global rejoue les vérifications clés des paliers 1 à 3.
 
-Durée indicative : palier 1, 7 à 9 heures ; palier 2, 10 à 13 heures.
+Durée indicative : palier 1, 7 à 9 heures ; palier 2, 10 à 13 heures ; palier 3, 9 à 11 heures ; palier 4, 6 à 8 heures ; mini-projet, 4 à 6 heures.
 
 ## Pour aller plus loin
 

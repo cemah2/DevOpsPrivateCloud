@@ -1,5 +1,6 @@
 # shellcheck shell=bash
 # shellcheck source-path=SCRIPTDIR
+# shellcheck disable=SC2016  # bash -c et filtres jq entre apostrophes
 # check-E15.sh — M22-E15 « OpenSearch : la recherche plein texte en comparaison » : à lancer APRÈS le
 # retrait. Comparatif publié avec des mesures, espace opensearch-essai et Applications d'essai absents,
 # aucun volume orphelin. Lecture seule.
@@ -25,6 +26,14 @@ _m22_e15_mesures() {
 }
 check_cmd "le comparatif contient au moins six valeurs mesurées (temps, tailles)" _m22_e15_mesures
 
+_m22_e15_miroir="$(_m22p_fichier_main plateforme/charts-miroir charts.yaml 2>/dev/null || true)"
+if [[ -n "$_m22_e15_miroir" ]]; then
+  check_cmd "charts-miroir : charts opensearch et fluent-bit retirés après l'essai" \
+    bash -c '! grep -Eq "nom: *(fluent-bit|opensearch)\b" <<<"$1"' _ "$_m22_e15_miroir"
+else
+  skip "charts de l'essai retirés du miroir" "charts.yaml illisible sur main de plateforme/charts-miroir"
+fi
+
 if ! kube get namespaces >/dev/null 2>&1; then
   skip "retrait de l'essai" "le compte des checks ne joint pas l'API Kubernetes"
 else
@@ -48,4 +57,10 @@ else
     jq -e '[.items[] | select(.metadata.name | test("fluent-bit"))] | length == 0' >/dev/null 2>&1 <<<"$l"
   }
   check_cmd "plus aucun DaemonSet Fluent Bit dans le cluster" _m22_e15_pas_de_fluentbit
+  _m22_e15_pas_de_clusterrole() {
+    local l
+    l="$(kube get clusterroles -o json 2>/dev/null)" || return 1
+    jq -e '[.items[] | select(.metadata.name | test("fluent-bit|opensearch"))] | length == 0' >/dev/null 2>&1 <<<"$l"
+  }
+  check_cmd "plus aucune ClusterRole de Fluent Bit ni d'OpenSearch" _m22_e15_pas_de_clusterrole
 fi

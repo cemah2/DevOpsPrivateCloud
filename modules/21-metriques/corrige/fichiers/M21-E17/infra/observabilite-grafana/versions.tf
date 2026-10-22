@@ -15,7 +15,7 @@ terraform {
   required_providers {
     grafana = {
       source = "grafana/grafana"
-      # Référence du module : 4.51.x (PLAN §6). Le registre d'OpenTofu reflète les versions avec un
+      # Version visée : 4.51.x (dernière publiée par Grafana). Le registre d'OpenTofu reflète les versions avec un
       # décalage (4.50.0 au 22/10/2026) : « ~> 4.50 » accepte 4.51 dès qu'il y est publié, sans
       # passer à une version majeure. tofu init écrit la version retenue dans .terraform.lock.hcl
       # (à committer) : c'est elle qui fait foi.

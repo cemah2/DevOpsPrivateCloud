@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : palier 5 — Mini-projet — Corrigé
+# Module 20 — Palier 5 : Mini-projet — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -22,10 +22,10 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 3. **Livraison de Julien, répétition** (1 à 2 h) — voir le tableau plus bas. Faite **avant** le retrait du provisoire : si quelque chose ne va pas, tu as encore le temps.
 4. **Retirer `lyo-k3s01`** (1 à 2 h), dans cet ordre :
    1. *Ce qui le cible dans Argo CD.* L'ApplicationSet `labo-agences` (générateur `clusters`, politique `create-update`) ne supprime **pas** l'Application `labo-lyo-k3s01` quand le cluster disparaît, et l'Application n'a pas de finaliseur de cascade (`preserveResourcesOnDeletion`). Décision à écrire : retirer `applications/labo-agences.yaml` de `plateforme/gitops` (MR) — l'Application `applications` élague l'ApplicationSet, puis supprimer `labo-lyo-k3s01` (`argocd app delete labo-lyo-k3s01 --cascade=false` après avoir vérifié `metadata.finalizers`) ; ou garder l'ApplicationSet « prêt pour une prochaine agence » (sans cluster, il ne génère rien) et le dire dans `multi-cluster.md`.
-   2. *Le Secret de cluster.* Retirer `secret_cluster_lyo_k3s01` du traitement du composant `argocd` de `secrets-k8s.sh` **et** les clés `lyo_k3s01_jeton`, `lyo_k3s01_ca` de `secrets/argocd.yml` (Vault `critique`), MR ; puis `kubectl -n argocd delete secret cluster-lyo-k3s01`. Dans l'autre ordre, le prochain `secrets-k8s.sh argocd` recréerait le cluster. `argocd cluster list` ne montre plus que `in-cluster`.
-   3. *La VM.* `plateforme/infra/envs/m20` : variable `lyo_k3s01 = false` (fichier `lyo-k3s01.tf` d'E26) — ou suppression du fichier, selon ta version de l'état —, `tofu plan` (uniquement des destructions : VM 2201, enregistrement DNS), `tofu apply`. Le module `vm-noeud` retire aussi l'objet NetBox ; vérifie-le.
+   2. *Le Secret de cluster.* Retirer `secret_cluster_lyo_k3s01`, `verifier_cluster_lyo_k3s01` et leurs appels du module `outils/secrets-k8s.d/argocd.sh` de `plateforme/k8s` **et** les clés `lyo_k3s01_jeton`, `lyo_k3s01_ca` de `secrets/argocd.yml` (Vault `critique`), MR ; puis `kubectl -n argocd delete secret cluster-lyo-k3s01`. Dans l'autre ordre, le prochain `secrets-k8s.sh appliquer argocd` recréerait le cluster. `argocd cluster list` ne montre plus que `in-cluster`.
+   3. *La VM.* `plateforme/infra/envs/m20` : groupe `lyo` retiré de `groupes` (`terraform.tfvars`, catalogue `hotes.tf` d'E23), `tofu plan` (uniquement des destructions : VM 2201, enregistrement DNS), `tofu apply`. Le module `vm-noeud` retire aussi l'objet NetBox ; vérifie-le.
    4. *Les flux.* `group_vars/role_routeur/pare_feu.yml` : règle VLAN 40 (`K8S_TRAV`) → `LYO_K3S01` 6443 et définition `LYO_K3S01` retirées ; `playbooks/routeurs.yml --limit gw01 --check --diff` (seule cette règle disparaît), puis `gw01`, puis `gw02`. `docs/socle/matrice-flux.md` : lignes marquées « retiré (M20-E46) » ou supprimées.
-5. **Retirer `flux01`** (30 min à 1 h), s'il existe encore (le palier 3 conseillait de le détruire avant E26) : `groupes` de `envs/m20` sans `flux`, `tofu plan`/`apply` ; flux VLAN 99 → `git01` 443 retiré de la bordure (même méthode) ; projet `formation/flux-labo` archivé (pas supprimé : il illustre le comparatif) et son jeton de déploiement révoqué.
+5. **Retirer `flux01`** (30 min à 1 h), s'il existe encore (le palier 3 conseillait de le détruire avant E26) : `groupes` de `envs/m20` sans `flux`, `tofu plan`/`apply` ; règle VLAN 99 (`FLUX01`) → `git01` 443 **et** définition `FLUX01` retirées de la bordure (même méthode) ; projet `formation/flux-labo` archivé (pas supprimé : il illustre le comparatif) et son jeton de déploiement révoqué.
 6. **État `envs/m20` vide** : `tofu state list` ne rend rien ; garder le dossier `envs/m20` (le code des VMs reste un exemple réutilisable) ou le retirer, et le dire dans la MR.
 7. **Converger** (1 à 2 h) : `helmfile diff` vide pour `argocd` ; `argocd app list` tout `Synced`/`Healthy` ; `lab/bin/check 20 30` (aucun droit de la CI) ; component `protection-donnees` dans les trois overlays ; ApplicationSet `mediagenda` avec `PruneLast` et `FailOnSharedResource` ; plus aucune MR `lucas/…` ni `wb/annulation-…`.
 8. **Documentation et livraison** (2 à 3 h) : `recette-gitops-v1.md`, RB-200 complet, `multi-cluster.md` marqué historique, liste pour le M21 (ci-dessous), étiquette `gitops-v1`.
@@ -43,7 +43,7 @@ Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** épro
 
 Durée typique : 25 à 40 minutes, dont l'essentiel en pauses de canary (2 × 3 pauses de 2 min) ; à consigner dans `recette-gitops-v1.md`.
 
-*Vérification de Sophie* : `kubectl auth can-i create deployments -n mediagenda-prod --as=system:serviceaccount:gitlab-agent:<compte de l'agent>` → `no` (et pour `medidoc-*`) ; configuration de l'agent `k8s-par1` (`ci_access` limité à `wb-essais`) ; `lab/bin/check 20 24`, `20 25`, `20 30`.
+*Vérification de Sophie* : `kubectl auth can-i create deployments -n mediagenda-prod --as=system:serviceaccount:gitlab-agent:gitlab-agent` → `no` (et pour `medidoc-*`) ; configuration de l'agent `k8s-par1` (`ci_access` limité à `wb-essais`) ; `lab/bin/check 20 24`, `20 25`, `20 30`.
 
 *La panne de Karim* : n'importe quelle panne du palier 4 (il choisira probablement E37 ou E40). Ce qui est évalué : la photographie (`outils/argocd-diagnostic.sh`), la lecture du message entier, l'arbre de RB-200, le correctif par Git, la vérification. Pas la vitesse.
 

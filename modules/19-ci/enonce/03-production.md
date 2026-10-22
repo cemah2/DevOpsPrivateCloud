@@ -1,6 +1,6 @@
 # Module 19 — Palier 3 : Production
 
-Les paliers 1 et 2 ont donné à MédiSphère une vraie chaîne d'intégration continue : un runner `k8s-par1` dont les jobs tournent dans `ci-jobs`, un démon BuildKit *rootless* partagé, un cache S3, des composants CI/CD publiés en **v2.0.0**, des analyses de sécurité, une promotion des images par MR dans `mediagenda/deploiement` (jeton `ci-promotion`) et un déploiement en dev par l'agent `k8s-par1`. Mais tout cela tourne encore comme un banc d'essai : n'importe quel job de n'importe quelle branche partage le même runner, le même espace, le même réseau que les jobs qui signent les images et qui ouvrent les MR de promotion ; personne ne sait quels secrets traînent dans les variables de CI ni quand expirent les jetons ; GitLab est en 19.4, qui n'est plus qu'en maintenance ; un pic de pipelines le lundi matin fait la queue ; et la porte d'entrée de la production — la MR de promotion — accepte n'importe quelle image pourvu qu'elle soit écrite par digest. Sophie Laurent veut des cloisons et une chaîne d'approvisionnement vérifiée ; Claire Morel veut une plateforme montée de version, dimensionnée, mesurée et une décision écrite ; Julien Petit veut que ses équipes (MédiDoc, MédiAnnuaire) entrent dans la chaîne sans attendre. Ce palier fait passer la CI en production.
+Les paliers 1 et 2 ont donné à MédiSphère une vraie chaîne d'intégration continue : un runner `k8s-par1` dont les jobs tournent dans `ci-jobs`, un démon BuildKit *rootless* partagé, un cache S3, des composants CI/CD publiés au catalogue (**v2.0.0** en E10, **v2.6.0** à la fin du palier 2), des analyses de sécurité, une promotion des images par MR dans `mediagenda/deploiement` (jeton `ci-promotion`) et un déploiement en dev par l'agent `k8s-par1`. Mais tout cela tourne encore comme un banc d'essai : n'importe quel job de n'importe quelle branche partage le même runner, le même espace, le même réseau que les jobs qui signent les images et qui ouvrent les MR de promotion ; personne ne sait quels secrets traînent dans les variables de CI ni quand expirent les jetons ; GitLab est en 19.4, qui n'est plus qu'en maintenance ; un pic de pipelines le lundi matin fait la queue ; et la porte d'entrée de la production — la MR de promotion — accepte n'importe quelle image pourvu qu'elle soit écrite par digest. Sophie Laurent veut des cloisons et une chaîne d'approvisionnement vérifiée ; Claire Morel veut une plateforme montée de version, dimensionnée, mesurée et une décision écrite ; Julien Petit veut que ses équipes (MédiDoc, MédiAnnuaire) entrent dans la chaîne sans attendre. Ce palier fait passer la CI en production.
 
 > ⚠️ **Rappel** : la CI est désormais le chemin de **toute** livraison. Avant toute intervention qui touche les runners, GitLab ou l'agent : (1) aucun pipeline de `main` ou d'étiquette en cours sur les projets applicatifs (`mediagenda/*`, `medidoc/*`) — sinon attends ou mets le runner en pause ; (2) l'ancienne configuration est dans Git (Helmfile de `plateforme/k8s`) et `helmfile -e par1 diff` est relu avant chaque `apply` ; (3) un seul runner touché à la fois : `runner02` (étiquette `docker`) reste le filet de secours des constructions tant que `k8s-par1` n'est pas revenu ; (4) les jobs qui **signent** ou **promeuvent** ne tournent jamais pendant un changement de leur runner.
 
@@ -11,14 +11,14 @@ Les paliers 1 et 2 ont donné à MédiSphère une vraie chaîne d'intégration c
 | Élément | Valeur |
 |---|---|
 | GitLab | `git01` (10.10.20.12), `https://git01.par1.medisphere.internal`, **19.4.x** au début du palier, **19.5.x** à partir de E26 |
-| Runner `k8s-par1` (E04) | instance, étiquettes `k8s`, `kubernetes`, `run_untagged: false` ; release Helmfile `gitlab-runner` (espace `gitlab-runner`), values `composants/gitlab-runner/values.yaml` ; jobs dans `ci-jobs`, compte de service `ci-job` |
-| Runner `k8s-par1-protege` (E24) | instance, `access_level: ref_protected`, étiquette **`protege`**, `run_untagged: false` ; release Helmfile **`gitlab-runner-protege`** (espace `gitlab-runner`), values `composants/gitlab-runner-protege/values.yaml`, Secret de jeton **`gitlab-runner-protege-jeton`** (`secrets/gitlab-runner-protege.yml`) ; jobs dans **`ci-jobs-protege`**, compte de service `ci-job` |
+| Runner `k8s-par1` (E04) | instance, étiquettes `k8s`, `kubernetes`, `run_untagged: false` ; release Helmfile `gitlab-runner` (espace `gitlab-runner`, fichier `releases/50-ci.yaml.gotmpl`), values `composants/gitlab-runner/values.yaml` ; Secrets `gitlab-runner` (jeton), `gitlab-runner-certs` (racine), `ci-cache-s3` (cache, E07) ; jobs dans `ci-jobs` (étiquette de pod `medisphere.internal/ci: job`, racine par la ConfigMap `medisphere-racine`, certificat client `buildkit-client`), compte de service `ci-job` |
+| Runner `k8s-par1-protege` (E24) | instance, `access_level: ref_protected`, étiquette **`protege`**, `run_untagged: false` ; release Helmfile **`gitlab-runner-protege`** (espace `gitlab-runner`), values `composants/gitlab-runner-protege/values.yaml`, Secret de jeton **`gitlab-runner-protege-jeton`** (`secrets/gitlab-runner-protege.yml`, une ligne de plus dans la table `outils/secrets-k8s.conf` de E04), racine MédiSphère par le Secret `gitlab-runner-certs` de E04 ; jobs dans **`ci-jobs-protege`**, compte de service `ci-job` |
 | Clé de signature (E24) | Secret **`cosign-medisphere`** de `ci-jobs-protege` (clés `cosign.key`, `cosign.password`), depuis `secrets/cosign-ci.yml` (Vault `critique`) ; monté **par le seul runner protégé** dans les jobs sous `/run/secrets/medisphere/cosign/` |
 | BuildKit (E08) | Service `buildkitd.buildkit:1234`, TLS mutuel, pods étiquetés `app.kubernetes.io/name: buildkitd` |
-| Composants | `plateforme/ci-templates`, `templates/<composant>/template.yml` ; **v2.0.0** à l'entrée (E10), **v2.1.0** après E24 (signature et promotion sur `protege`), **v2.2.0** après E29 (attestations et porte de vérification) |
+| Composants | `plateforme/ci-templates`, `templates/<composant>/template.yml` ; **v2.6.0** à l'entrée (fin du palier 2 : v2.0.0 en E10, puis une mineure par exercice jusqu'à E23), **v2.7.0** après E24 (signature et promotion sur `protege`), **v2.8.0** après E29 (attestations et porte de vérification) |
 | Promotion (E17) | jeton de projet `ci-promotion` de `mediagenda/deploiement`, variable `DEPLOIEMENT_TOKEN` de `mediagenda/api` ; branches `promotion/<env>-vX.Y.Z` ; seuls Julien Petit et Karim Benali fusionnent sur `main` |
 | Agent (E18) | `k8s-par1`, espace `gitlab-agent`, release `gitlab-agent`, `config.kasAddress` en `wss://git01.par1.medisphere.internal/-/kubernetes-agent/` jusqu'à E26 |
-| Documentation | `docs/livraison/ci/` : `cloisonnement.md` (E24), `secrets-ci.md` (E25), `capacite-runners.md` (E27), `indicateurs-dora.md` (E28), `chaine-approvisionnement.md` (E29), `adr/ADR-0190-chaine-ci.md` (E30), `conformite.md` (E32) ; runbooks RB-195 « monter GitLab, les runners et l'agent » (E26), RB-196 « faire tourner les secrets de CI » (E25), RB-197 « saturation des runners » (E27) |
+| Documentation | `docs/livraison/ci/` : `cloisonnement.md` (E24), `secrets-ci.md` (E25), `capacite-runners.md` (E27), `indicateurs-dora.md` (E28), `chaine-approvisionnement.md` (E29), `adr/ADR-0190-chaine-ci.md` (E30), `conformite.md` (E32) ; runbooks dans `docs/livraison/ci/runbooks/` (à côté de RB-190, E22) : RB-191 « faire tourner les secrets de CI » (E25), RB-192 « monter GitLab, les runners et l'agent » (E26), RB-193 « saturation des runners » (E27) |
 
 **Ordre conseillé** : E24 → E25 → E26 → E27 → E29 → E28 → E30 → E31 → E32 → E33 → E34. Le cloisonnement (E24) précède tout : les exercices suivants supposent le runner protégé. La montée de version (E26) vient avant la capacité (E27), qui change la configuration des mêmes releases. La chaîne d'approvisionnement (E29) précède la rédaction (E28, E30) et l'accueil des nouvelles équipes (E33, E34), qui en héritent. **Durée totale indicative** : 22 à 27 h.
 
@@ -47,7 +47,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 19 XX`).
 - Les images sont tirées par le **kubelet** (pas par le pod) : la politique réseau des pods n'a pas à ouvrir Harbor pour cela ; les conteneurs *helper* (clone, cache, artefacts) et *build* (dépendances, client BuildKit) partagent, eux, le réseau du pod.
 - Pod Security `restricted` exige, pour **chaque** conteneur (y compris `init-permissions`, `helper` et les services) : utilisateur non root, `allowPrivilegeEscalation: false`, toutes les capacités retirées, profil seccomp `RuntimeDefault` (ou `Localhost`). Les options correspondantes de l'exécuteur Kubernetes sont décrites dans la documentation de GitLab Runner (*Kubernetes executor*, sections *security context* et *capabilities*). Une image qui suppose root (installation de paquets par `apt-get`, écriture dans `/root`) ne tournera plus dans `ci-jobs` : c'est voulu.
 - Le runner protégé : jeton `glrt-` créé par l'API (`POST /user/runners`, comme en E04), **jamais** de jeton d'enregistrement. Le niveau d'accès d'un runner créé par un jeton `glrt-` se règle **côté GitLab** (à la création ou par `PUT /runners/:id`), pas par les options du chart.
-- La clé Cosign est aujourd'hui une variable **de groupe** (M13 : `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`) : une variable protégée est remise à **tous** les jobs des références protégées, sur **tous** les runners. Seul un secret monté par le runner protégé lui-même ne quitte jamais son espace. Les projets encore sur les gabarits v1 et `runner02` (signature du chart, MédiDoc avant E33) gardent la variable de groupe jusqu'à leur migration : c'est une **exception écrite**, avec sa date de fin.
+- La clé Cosign est aujourd'hui une variable **de groupe** (M13 : `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD`) : une variable protégée est remise à **tous** les jobs des références protégées, sur **tous** les runners. Seul un secret monté par le runner protégé lui-même ne quitte jamais son espace. Les projets encore sur les gabarits v1 et `runner02` (signature du chart, MédiDoc avant E33) gardent la variable de groupe jusqu'à leur migration : c'est une **exception écrite**, avec sa date de fin — au plus tard le mini-projet (M19-E46), qui supprime ces variables de groupe.
 - Mémoire : le second gestionnaire coûte ≈ 128 Mio ; ses jobs consomment le quota de `ci-jobs-protege`, pas celui de `ci-jobs`.
 
 > ⚠️ **Attention** : passer `ci-jobs` en `restricted` fait échouer **à la création du pod** tout job dont un conteneur ne respecte pas le niveau (message `violates PodSecurity "restricted:…"` dans le journal du job). Fais d'abord l'essai à blanc (`kubectl label --dry-run=server … --overwrite`) et relève les avertissements ; applique la configuration du runner **avant** l'étiquette de l'espace ; garde la MR de retour arrière prête (étiquette `baseline`). De même, une politique réseau de sortie trop serrée casse silencieusement le clone ou le cache : observe avec Hubble (`hubble observe -n ci-jobs --verdict DROPPED`) pendant un pipeline complet avant de déclarer la cloison finie.
@@ -59,7 +59,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 19 XX`).
 4. **Réseau.** Dans `espaces/ci-jobs/40-politiques-reseau.yaml` : refus par défaut en entrée et en sortie de l'espace, puis une CiliumNetworkPolicy de sortie qui n'autorise que la liste du contexte (noms du lab par `toFQDNs`, buildkitd par sélecteur d'espace et d'étiquette, Internet en 443 **sans** les réseaux privés). Observe un pipeline complet avec Hubble, ajuste, puis relance les sondes : tableau « après ». Reporte les flux dans `docs/kubernetes/reseau/matrice-flux-cluster.md`. Si une analyse SonarQube (E16) ou un job Jenkins (E20) passe encore par la Gateway, écris-le comme exception temporaire (retirée au mini-projet).
 5. **Espace protégé.** Crée `espaces/ci-jobs-protege/` sur le modèle de `ci-jobs` : PSA `restricted`, quota et LimitRange (plus petits), compte `ci-job` sans jeton, politiques réseau (mêmes sorties, **sans** Internet : les jobs qui signent et promeuvent n'en ont pas besoin — vérifie-le).
 6. **Runner protégé.** Crée le runner d'instance `k8s-par1-protege` par l'API (niveau `ref_protected`, étiquette `protege`, pas de jobs sans étiquette, délai maximal), range le jeton en Vault (`secrets/gitlab-runner-protege.yml`), crée le Secret par `outils/secrets-k8s.sh`, et ajoute la release `gitlab-runner-protege` (mêmes durcissements, `ci-jobs-protege`, `concurrent` faible). Ajoute le Secret `cosign-medisphere` (depuis `secrets/cosign-ci.yml`) et monte-le, en lecture seule, **par la configuration de ce runner seulement**.
-7. **Déplacer les jobs sensibles.** Publie la version **v2.1.0** de `plateforme/ci-templates` : le job de signature du composant `securite` lit la clé dans le fichier monté (plus de variable `COSIGN_PRIVATE_KEY`) et tourne sur l'étiquette `protege` ; le job de promotion du composant `promotion` aussi. Passe `mediagenda/api` sur `@2.1.0`, pose une étiquette de version et vérifie quel runner a signé et promu. Supprime les variables Cosign **de projet** qui traîneraient ; inventorie les consommateurs restants de la variable **de groupe** et écris l'exception.
+7. **Déplacer les jobs sensibles.** Publie la version **v2.7.0** de `plateforme/ci-templates` : le job de signature du composant `securite` lit la clé dans le fichier monté (plus de variable `COSIGN_PRIVATE_KEY`) et tourne sur l'étiquette `protege` ; le job de promotion du composant `promotion` aussi. Passe `mediagenda/api` sur `@v2.7.0`, pose une étiquette de version et vérifie quel runner a signé et promu. Supprime les variables Cosign **de projet** qui traîneraient ; inventorie les consommateurs restants de la variable **de groupe** et écris l'exception.
 8. **Essai inverse.** Sur une branche **non protégée** de `formation/ci-labo`, un job étiqueté `protege` : que se passe-t-il ? Note le message, et pourquoi c'est le comportement voulu.
 
 **Critères de réussite**
@@ -102,7 +102,7 @@ Une politique `toFQDNs` ne fonctionne que si la règle DNS de la même politique
 - Choisir pour chaque secret la bonne combinaison : protégée, masquée et **cachée**, type fichier, portée d'environnement (projet), et savoir ce que chaque attribut protège ou non.
 - Fermer le `CI_JOB_TOKEN` : liste d'autorisation entrante de chaque projet, réglage d'instance.
 - Comprendre les jetons d'identité (`id_tokens`) : émission, audience, revendications, signature vérifiable par les clés publiques de GitLab.
-- Faire tourner les jetons longue durée (jeton de projet `ci-promotion`, robot Harbor de CI) et écrire RB-196.
+- Faire tourner les jetons longue durée (jeton de projet `ci-promotion`, robot Harbor de CI) et écrire RB-191.
 
 **Prérequis** : M19-E24 (runner protégé), E17 (jeton `ci-promotion`), M13-E05 (robots Harbor), M01-E20 (jetons GitLab, registre des secrets).
 **Durée indicative** : 3 h 30.
@@ -121,7 +121,7 @@ Une politique `toFQDNs` ne fonctionne que si la règle DNS de la même politique
 2. **Durcir les variables.** Pour chaque secret : protégée ; masquée et **cachée** quand la valeur s'y prête ; type fichier pour les clés et certificats ; `raw` pour les valeurs qui contiennent `$`. Recrée `DEPLOIEMENT_TOKEN` en masquée et cachée, protégée, avec la portée d'environnement `promotion/*`, et adapte le job de promotion du composant (environnement `promotion/<cible>` sans déploiement). Montre qu'un job de `main` **sans** cet environnement ne la reçoit plus. Que protège exactement le masquage, et que ne protège-t-il pas (pense à `base64`, à un fichier d'artefact, à `set -x`) ?
 3. **`CI_JOB_TOKEN`.** Pour chaque projet des groupes ci-dessus, relève `inbound_enabled` et la liste d'autorisation. Active la liste pour tous, n'autorise que les accès réellement utilisés (lequel des pipelines de E12 en a besoin ? et la promotion ?), puis active le réglage d'instance qui l'impose. Prouve qu'un job de `formation/ci-labo` ne peut plus cloner `mediagenda/deploiement` avec son `CI_JOB_TOKEN`.
 4. **Jetons d'identité.** Dans `formation/ci-labo`, un job `jeton-identite` qui demande un jeton d'audience `openbao.medisphere.internal`, en décode l'en-tête et la charge utile (pas la signature) et vérifie la signature contre les clés publiques de GitLab, sans jamais écrire le jeton. Lance-le sur une branche non protégée **et** sur `main` : compare `sub`, `ref`, `ref_protected`, `project_path`, `namespace_path`, `runner_id`, `environment`, `exp - iat`. Écris dans `secrets-ci.md` quelles revendications la politique d'OpenBao devra exiger (M25) et pourquoi `sub` seul ne suffit pas.
-5. **Échéances et rotation.** Liste les jetons longue durée avec leur date d'expiration (API GitLab des jetons de projet, robots Harbor). Fais tourner `ci-promotion` (API `rotate`, nouvelle valeur dans la variable, ancienne révoquée) et le secret du robot `medisphere+ci`, avec un pipeline témoin après chacun. Écris RB-196 « faire tourner les secrets de CI » (une section par secret : où il vit, qui le consomme, geste de rotation, vérification, retour arrière) et le calendrier.
+5. **Échéances et rotation.** Liste les jetons longue durée avec leur date d'expiration (API GitLab des jetons de projet, robots Harbor). Fais tourner `ci-promotion` (API `rotate`, nouvelle valeur dans la variable, ancienne révoquée) et le secret du robot `medisphere+ci`, avec un pipeline témoin après chacun. Écris RB-191 « faire tourner les secrets de CI » (une section par secret : où il vit, qui le consomme, geste de rotation, vérification, retour arrière) et le calendrier.
 6. **Livrable.** `docs/livraison/ci/secrets-ci.md` : inventaire classé (sans valeurs), règles retenues (quel attribut pour quel cas), exceptions (variable Cosign de groupe, E24), `CI_JOB_TOKEN`, revendications OIDC pour le M25, calendrier de rotation.
 
 **Critères de réussite**
@@ -129,7 +129,7 @@ Une politique `toFQDNs` ne fonctionne que si la règle DNS de la même politique
 - [ ] La liste d'autorisation entrante du `CI_JOB_TOKEN` est active sur chaque projet des groupes `mediagenda`, `medidoc` et `plateforme`.
 - [ ] Le jeton de projet `ci-promotion` est actif, expire dans moins de 1 an et a été tourné il y a moins de 60 jours ; le dernier pipeline d'étiquette de `mediagenda/api` a réussi après la rotation.
 - [ ] Le dernier pipeline de `formation/ci-labo` contient un job `jeton-identite` réussi.
-- [ ] `secrets-ci.md` et RB-196 sont sur `main` de `plateforme/medisphere`, `bin/ci-inventaire-variables.sh` sur `main` de `plateforme/outils`.
+- [ ] `secrets-ci.md` et RB-191 sont sur `main` de `plateforme/medisphere`, `bin/ci-inventaire-variables.sh` sur `main` de `plateforme/outils`.
 
 **Vérification** : `lab/bin/check 19 25`
 
@@ -159,7 +159,7 @@ Un JWT, c'est trois morceaux en base64url séparés par des points ; la charge u
 > Fenêtre : un mardi entre 7 h et 8 h, avant l'arrivée des équipes. Je veux le plan, la sauvegarde **vérifiée**, le retour arrière écrit **avant**, et un compte rendu.
 
 **Objectifs pédagogiques**
-- Préparer une montée de version de la forge comme un changement : notes de version de chaque version traversée, arrêts obligatoires, migrations d'arrière-plan, compatibilité des runners et de l'agent, effets sur les pipelines (`CI_JOB_TAGS`).
+- Préparer une montée de version de la forge comme un changement : notes de version de chaque version traversée, arrêts obligatoires, migrations d'arrière-plan, compatibilité des runners et de l'agent, effets sur les pipelines (`CI_RUNNER_TAGS`, `CI_JOB_TAGS`).
 - Sauvegarder de deux façons (PBS de la VM, `gitlab-backup` + secrets) et savoir laquelle sert à quoi.
 - Monter dans l'ordre : GitLab, puis les runners (charts et paquets), puis l'agent, en vérifiant chaque étape.
 - Changer l'adresse de l'agent de WebSocket (`wss://`) à gRPC natif (`grpcs://`) et comprendre ce qui change sur le chemin réseau.
@@ -169,7 +169,7 @@ Un JWT, c'est trois morceaux en base64url séparés par des points ; la charge u
 
 **Contexte technique**
 - Versions : GitLab **19.5.z** (dernier correctif) ; chart `gitlab/gitlab-runner` **0.94.x** (Runner 19.5) pour les releases `gitlab-runner` et `gitlab-runner-protege` ; chart `gitlab/gitlab-agent` de la mineure 19.5 (lis `appVersion` dans l'index du dépôt de charts) ; paquets `gitlab-runner` 19.5 sur `runner01` (exécuteur `shell`) et `runner02` (exécuteur `docker`, rôle `gitlab_runner`).
-- GitLab 19.5 encode chaque étiquette de `CI_JOB_TAGS` et de `CI_RUNNER_TAGS` en JSON (`annexes/versions-bloc-DE.md`). Cherche **dans tous tes projets et composants** ce qui découpe ces variables à la main.
+- `CI_RUNNER_TAGS` est documentée comme un tableau JSON, mais GitLab la rendait jusqu'ici à la manière d'un tableau Ruby ; un changement amont (MR « Serialize CI_RUNNER_TAGS as valid JSON ») la rend en JSON strict : vérifie dans les notes de version s'il est dans ta 19.5 (`annexes/versions-bloc-DE.md` le donne pour acquis). `CI_JOB_TAGS` (apparue en 19.3) est un tableau JSON dès l'origine. Cherche **dans tous tes projets et composants** ce qui découpe ces variables à la main.
 - Agent 19.5 : adresse de KAS par défaut en `grpcs://<hôte de GitLab>` quand NGINX d'omnibus termine TLS en HTTP/2 ; `wss://…/-/kubernetes-agent/` reste accepté. Les travailleurs joignent `git01` directement en 443 (flux `K8S_TRAV → git01` du M19).
 - Sauvegarde : tâche PBS de `git01` (M01, `wb-backup-gitlab.service`) **et** `gitlab-backup create` + copie de `/etc/gitlab/gitlab-secrets.json` et `gitlab.rb` (Vault `critique`), RB-010.
 
@@ -182,14 +182,14 @@ Un JWT, c'est trois morceaux en base64url séparés par des points ; la charge u
 4. **GitLab.** Runners en pause, migrations d'arrière-plan à zéro, montée du paquet en version exacte, lecture de la sortie. Contrôles : services, `readiness`, version par l'API, `gitlab:check`, `doctor:secrets`, migrations de la 19.5 en cours ou terminées, connexion et clone.
 5. **Runners.** Montée des releases `gitlab-runner` puis `gitlab-runner-protege` (chart 0.94, un à la fois, `helmfile diff` relu, PDB respecté si E27 est déjà fait), puis des paquets de `runner01` et `runner02` par Ansible. Réactive chaque runner et vérifie la version de **chaque gestionnaire** par l'API, l'image *helper* utilisée par un job (elle doit suivre la version du runner).
 6. **Agent.** Montée de la release `gitlab-agent` sur la mineure 19.5, puis passage de `config.kasAddress` en `grpcs://git01.par1.medisphere.internal` (certificat de la racine MédiSphère toujours fourni). Vérifie la connexion (API des agents, journaux d'`agentk`) et le job `deployer-dev` de `mediagenda/deploiement`.
-7. **Après.** Pipelines témoins (une MR et une étiquette de `mediagenda/api`, un pipeline de `mediagenda/deploiement`), job qui affiche `CI_JOB_TAGS` (format JSON constaté). RB-195 « monter GitLab, les runners et l'agent » (généralise RB-011 au périmètre CI) et compte rendu dans le plan de changement (durées réelles, écarts). Supprime l'instantané de VM après 24 à 48 h.
+7. **Après.** Pipelines témoins (une MR et une étiquette de `mediagenda/api`, un pipeline de `mediagenda/deploiement`), job qui affiche `CI_RUNNER_TAGS` et `CI_JOB_TAGS` (format constaté avant et après). RB-192 « monter GitLab, les runners et l'agent » (généralise RB-011 au périmètre CI) et compte rendu dans le plan de changement (durées réelles, écarts). Supprime l'instantané de VM après 24 à 48 h.
 
 **Critères de réussite**
 - [ ] GitLab répond en 19.5.x ; le paquet `gitlab-ce` est figé (`hold`) ; aucune migration d'arrière-plan n'est en échec ni en attente.
 - [ ] Chaque gestionnaire en ligne des runners `k8s-par1`, `k8s-par1-protege`, de `runner01` et de `runner02` est en 19.5.x ; les releases `gitlab-runner` et `gitlab-runner-protege` utilisent le chart 0.94.x.
 - [ ] L'agent `k8s-par1` tourne en 19.5.x, est connecté, et sa release déclare une adresse `grpcs://`.
 - [ ] Le dernier pipeline d'étiquette de `mediagenda/api` et le dernier pipeline de `main` de `mediagenda/deploiement` ont réussi après la montée.
-- [ ] Le plan de changement (avec compte rendu) et RB-195 sont sur `main` de `plateforme/medisphere`.
+- [ ] Le plan de changement (avec compte rendu) et RB-192 sont sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 19 26`
 
@@ -222,7 +222,7 @@ Le chart de l'agent lit `config.kasAddress` et `config.kasCaCert` ; en gRPC, le 
 - Distinguer les trois réglages de débit d'un gestionnaire (`concurrent`, `limit`, `request_concurrency`) et ce qui borne réellement la capacité (quota de l'espace, mémoire des nœuds, buildkitd).
 - Rendre le gestionnaire disponible : plusieurs réplicas d'un même runner (plusieurs *runner managers*), répartition sur les nœuds, PodDisruptionBudget, arrêt gracieux.
 - Placer les pods de job sous une PriorityClass basse et préemptible, avec des demandes et limites par défaut et des maximums surchargeables.
-- Mesurer : temps d'attente (`queued_duration`), durée, saturation ; fixer un seuil et écrire RB-197.
+- Mesurer : temps d'attente (`queued_duration`), durée, saturation ; fixer un seuil et écrire RB-193.
 
 **Prérequis** : M19-E04, E05, E24, E26 ; M14-E14 (PriorityClasses `medisphere-*`), M14-E16 (PDB), M14-E10 (quotas).
 **Durée indicative** : 3 h.
@@ -241,13 +241,13 @@ Le chart de l'agent lit `config.kasAddress` et `config.kasCaCert` ; en gRPC, le 
 3. **Disponibilité.** Deux réplicas du gestionnaire `gitlab-runner`, répartis sur deux nœuds différents, PDB `maxUnavailable: 1`, arrêt gracieux suffisant pour finir un job. Vérifie par l'API que le runner a **deux** gestionnaires en ligne. Draine le nœud d'un réplica pendant qu'un job long tourne : le job survit-il ? Explique.
 4. **Priorité.** Crée `medisphere-ci` (valeur inférieure à `medisphere-standard`, sans préemption des autres pods) dans `ordonnancement/` de `plateforme/k8s`, appliquée aux pods de job par la configuration du runner. Le quota de `ci-jobs` doit-il en tenir compte ?
 5. **Essai de charge.** Dans `formation/ci-labo`, un job `charge` en `parallel: 20` (une minute de travail chacun, demandes réalistes). Mesure par l'API, pour chaque job : attente, durée, gestionnaire qui l'a pris. Fais l'essai avec l'ancienne configuration (une valeur de `concurrent`) et la nouvelle, compare (médiane et 95e centile de l'attente).
-6. **Seuil et runbook.** Fixe un seuil d'attente acceptable (écrit dans `capacite-runners.md`) et ce qu'on fait quand il est dépassé : RB-197 « saturation des runners » (diagnostic, réglages, quand ajouter de la capacité, quand refuser). Le module 21 en fera une alerte.
+6. **Seuil et runbook.** Fixe un seuil d'attente acceptable (écrit dans `capacite-runners.md`) et ce qu'on fait quand il est dépassé : RB-193 « saturation des runners » (diagnostic, réglages, quand ajouter de la capacité, quand refuser). Le module 21 en fera une alerte.
 
 **Critères de réussite**
 - [ ] Le Deployment `gitlab-runner` a 2 réplicas prêts sur 2 nœuds différents ; un PDB couvre ses pods et autorise au moins une interruption ; le runner `k8s-par1` a 2 gestionnaires en ligne.
 - [ ] La PriorityClass `medisphere-ci` existe (valeur < 10000, `preemptionPolicy: Never`) et la configuration du runner l'applique ; `concurrent`, `limit` et `request_concurrency` > 1 sont posés explicitement, avec des maximums de surcharge.
 - [ ] Un pipeline de `formation/ci-labo` contient au moins 20 jobs `charge` réussis, pris par les deux gestionnaires.
-- [ ] `capacite-runners.md` (calcul, mesures avant et après, seuil) et RB-197 sont sur `main` de `plateforme/medisphere`.
+- [ ] `capacite-runners.md` (calcul, mesures avant et après, seuil) et RB-193 sont sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 19 27`
 
@@ -336,15 +336,15 @@ Un « échec de changement » peut être un déploiement en échec, un retour ar
 
 **Travail demandé**
 1. **État des lieux.** Pour la dernière version de `mediagenda/api` dans Harbor : liste les référents (signature, attestations) avec `cosign tree` et dans l'interface de Harbor. Que manque-t-il par rapport au M13 depuis que la construction est passée par les composants ?
-2. **Côté producteur (composant `securite`).** Publie la version **v2.2.0** de `plateforme/ci-templates` : SBOM SPDX (Syft) sur l'archive ; après publication, sur le runner `protege`, signature de l'index **et** des manifestes de plateforme, attestation SBOM (`spdxjson`) et attestation de provenance (`slsaprovenance1`, prédicat extrait du manifeste d'attestation de BuildKit), puis vérification. Passe `mediagenda/api` sur `@2.2.0` et publie une version : `cosign tree` doit montrer signature et deux attestations.
-3. **Côté consommateur (composant `deploiement`).** Ajoute à la v2.2.0 un job `verifier-images` qui, dans les pipelines de MR : détermine les overlays modifiés, rend chacun (`kustomize build`), en extrait **toutes** les images (conteneurs, conteneurs d'initialisation, CronJobs), refuse toute image sans digest, puis pour chaque image vérifie la signature et les deux attestations avec la clé MédiSphère, et contrôle dans la provenance qu'elle a été construite par BuildKit à partir d'un dépôt de `git01`. Le job écrit un rapport (artefact) image par image.
+2. **Côté producteur (composant `securite`).** Publie la version **v2.8.0** de `plateforme/ci-templates` : SBOM SPDX (Syft) sur l'archive ; après publication, sur le runner `protege`, signature de l'index **et** des manifestes de plateforme, attestation SBOM (`spdxjson`) et attestation de provenance (`slsaprovenance1`, prédicat extrait du manifeste d'attestation de BuildKit), puis vérification. Passe `mediagenda/api` sur `@v2.8.0` et publie une version : `cosign tree` doit montrer signature et deux attestations.
+3. **Côté consommateur (composant `deploiement`).** Ajoute à la v2.8.0 un job `verifier-images` qui, dans les pipelines de MR : détermine les overlays modifiés, rend chacun (`kustomize build`), en extrait **toutes** les images (conteneurs, conteneurs d'initialisation, CronJobs), refuse toute image sans digest, puis pour chaque image vérifie la signature et les deux attestations avec la clé MédiSphère, et contrôle dans la provenance qu'elle a été construite par BuildKit à partir d'un dépôt de `git01`. Le job écrit un rapport (artefact) image par image.
 4. **Bloquant.** Fais-le tourner en `allow_failure: true` sur une MR de promotion légitime (doit passer), décide du sort des images antérieures, puis passe-le en bloquant et active « Pipelines must succeed » sur `mediagenda/deploiement` (si ce n'est pas déjà fait en E13).
 5. **Essai inverse.** Reproduis la MR de Lucas : une image construite sur `adm01`, poussée **sans signature** dans un dépôt de test de `medisphere` (ou signée par une autre clé), référencée par digest dans `overlays/dev`. La MR doit être bloquée, avec un message clair. Puis une image signée mais **sans provenance** : bloquée aussi. Supprime ensuite l'image et la branche de test.
 6. **Documentation.** `docs/livraison/ci/chaine-approvisionnement.md` : ce qui est produit, par qui (quel runner, quelle clé), où c'est stocké, ce que la porte vérifie et ce qu'elle ne vérifie pas (contenu de la provenance, révocation de clé, Harbor lui-même), la procédure d'urgence.
 
 **Critères de réussite**
 - [ ] La dernière version `vX.Y.Z` de `mediagenda-api` dans Harbor porte une signature Cosign et au moins deux attestations (SBOM et provenance), produites par un job du runner `k8s-par1-protege`.
-- [ ] Le composant `deploiement` v2.2.0 contient le job `verifier-images` ; `mediagenda/deploiement` l'inclut, le job a tourné, sans `allow_failure`, dans le dernier pipeline de MR, et le projet exige des pipelines réussis pour fusionner.
+- [ ] Le composant `deploiement` v2.8.0 contient le job `verifier-images` ; `mediagenda/deploiement` l'inclut, le job a tourné, sans `allow_failure`, dans le dernier pipeline de MR, et le projet exige des pipelines réussis pour fusionner.
 - [ ] Une MR de `mediagenda/deploiement` avec une image non signée a un pipeline en échec sur `verifier-images`.
 - [ ] `chaine-approvisionnement.md` est sur `main` de `plateforme/medisphere`.
 
@@ -427,7 +427,7 @@ Distingue ce qui est une **contrainte** (édition Free, mémoire de 100 Go, HDS)
 9. Combien coûte une minute de pipeline chez MédiSphère (mémoire, CPU, temps humain) ? Quels sont les trois réglages qui ont le plus d'effet sur ce coût d'après tes mesures (E23, E27) ?
 10. La montée 19.4 → 19.5 a été faite. Qu'est-ce qui garantit que la suivante (19.8, arrêt obligatoire) ne sera pas oubliée ? Où est le calendrier, qui est prévenu, que surveille-t-on ?
 11. Pourquoi la porte de vérification (E29) est-elle dans le pipeline du **consommateur** et pas seulement dans celui du producteur ? Que faudra-t-il en plus au moment du déploiement (module 26) ?
-12. Les composants sont épinglés (`@2.2.0`). Comment une faille corrigée dans un composant arrive-t-elle dans tous les projets ? Compare épinglage exact, version partielle (`@2`) et `@~latest`.
+12. Les composants sont épinglés (`@v2.8.0`). Comment une faille corrigée dans un composant arrive-t-elle dans tous les projets ? Compare épinglage exact, version partielle (`@2`) et `@~latest`.
 13. Un auditeur demande la liste des personnes qui pouvaient faire signer une image de production le 3 du mois dernier. Comment la reconstitues-tu ?
 14. Jenkins a été retiré. Une équipe d'un éditeur racheté arrive avec 40 `Jenkinsfile`. Quelle stratégie de migration, et quelles erreurs éviter ?
 
@@ -453,7 +453,7 @@ Distingue ce qui est une **contrainte** (édition Free, mémoire de 100 Go, HDS)
 **Contexte technique**
 - Périmètre : projets non archivés des groupes `mediagenda`, `medidoc`, `medinotif`, `legacy` (et leurs sous-groupes).
 - Configuration fusionnée : `GET /projects/:id/ci/lint` (réponse `valid`, `merged_yaml`, `includes`) ; réglage « Pipelines must succeed » : attribut de projet `only_allow_merge_if_pipeline_succeeds`.
-- Version minimale supportée du composant `securite` : **2.1.0** (signature sur le runner protégé, E24) ; la liste des versions supportées fait partie de la configuration de l'outil, pas du code.
+- Version minimale supportée du composant `securite` : **v2.7.0** (signature sur le runner protégé, E24) ; la liste des versions supportées fait partie de la configuration de l'outil, pas du code.
 - Identité : aucun jeton personnel. Un compte de service ou un compte technique dédié, droits minimaux sur les seuls groupes du périmètre, jeton à expiration, variable protégée, masquée et cachée du projet qui porte le contrôle.
 
 **Contraintes**
@@ -486,6 +486,7 @@ Distingue ce qui est une **contrainte** (édition Free, mémoire de 100 Go, HDS)
 - Étendre la promotion par MR à un second couple application / déploiement, avec son propre jeton.
 
 **Prérequis** : M19-E10, E11, E17, E24, E25, E29 ; M15-E34 et M16-E46 (MédiDoc dans `medidoc-dev`), M17 (Kustomize, `mediagenda/deploiement`).
+**Durée indicative** : 4 h.
 
 **Contexte technique**
 - Code : `medidoc/medidoc` (Go 1.26, `go vet ./...`, `go test ./...`, port 8080). Image `registry.par1.medisphere.internal/medisphere/medidoc`.
@@ -493,7 +494,7 @@ Distingue ce qui est une **contrainte** (édition Free, mémoire de 100 Go, HDS)
 - Le déploiement en `medidoc-dev` reste fait depuis `adm01` (`kubectl apply --server-side -k`) jusqu'au module 20 : l'agent `k8s-par1` n'a pas d'accès à `medidoc-dev` et n'en recevra pas.
 
 **Contraintes**
-- `.gitlab-ci.yml` de `medidoc/medidoc` : composants `@2.2.0` uniquement pour tout ce qui existe en composant ; jobs locaux pour ce qui est propre à Go (et dis pourquoi ce n'est pas un composant… ou fais-en un) ; aucun job sur `docker`, aucun privilège ; tests avec `-race` ; couverture visible dans la MR (rapport de couverture et pourcentage).
+- `.gitlab-ci.yml` de `medidoc/medidoc` : composants `@v2.8.0` uniquement pour tout ce qui existe en composant ; jobs locaux pour ce qui est propre à Go (et dis pourquoi ce n'est pas un composant… ou fais-en un) ; aucun job sur `docker`, aucun privilège ; tests avec `-race` ; couverture visible dans la MR (rapport de couverture et pourcentage).
 - Image construite par buildkitd, analysée, SBOM et provenance attestés, signée sur `protege`, promue par MR dans **`medidoc/deploiement`** (branche `promotion/dev-vX.Y.Z`, image par digest), jeton de projet `ci-promotion` propre à ce dépôt, variable protégée, masquée, cachée, de portée `promotion/*`.
 - `medidoc/deploiement` : `base/` (objets de l'application sans espace de noms ni image figée), `overlays/dev/` (espace `medidoc-dev`, image par digest), pipeline de MR par le composant `deploiement` (porte E29 comprise) ; `main` protégée, fusion par les Maintainers de MédiDoc et de la Plateforme.
 - Reprise sans coupure : le premier `apply` du dépôt prend la main sur les objets existants (gestionnaire de champs) ; `applications/medidoc-dev/` est retiré de `plateforme/k8s` **après**, par MR qui renvoie vers le nouveau dépôt.

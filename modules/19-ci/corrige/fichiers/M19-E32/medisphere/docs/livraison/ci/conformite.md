@@ -14,7 +14,7 @@
 |---|---|---|
 | R1 | Configuration CI présente et valide | un projet sans CI échappe à tout |
 | R2 | Composant `securite` inclus par `include: component` | une copie locale diverge et n'a plus les correctifs |
-| R3 | Version ≥ 2.1.0 (signature sur le runner protégé), hors versions retirées | les versions plus anciennes signent avec une variable de groupe (E24) |
+| R3 | Version ≥ v2.7.0 (signature sur le runner protégé), hors versions retirées | les versions plus anciennes signent avec une variable de groupe (E24) |
 | R4 | « Pipelines must succeed » activé | sinon une analyse rouge n'empêche rien |
 | R5 | Aucun job `securite:*` rendu facultatif (`allow_failure: true`) par le projet | contournement le plus simple du socle |
 
@@ -26,7 +26,7 @@ Un ticket par projet non conforme, étiqueté `conformite-ci`, mis à jour chaqu
 
 ## Identité
 
-Compte technique `ci-conformite` (pas un compte de service : fonction Premium), sans connexion interactive, Developer sur les seuls groupes du périmètre ; jeton personnel portée `api`, 90 jours, tourné par RB-196 ; variable `CI_CONFORMITE_TOKEN` du projet `plateforme/outils` : fichier, protégée, masquée, cachée.
+Compte technique `ci-conformite` (pas un compte de service : fonction Premium), sans connexion interactive, Developer sur les seuls groupes du périmètre ; jeton personnel portée `api`, 90 jours, tourné par RB-191 ; variable `CI_CONFORMITE_TOKEN` du projet `plateforme/outils` : fichier, protégée, masquée, cachée.
 
 Limite connue : le compte peut lire le code de tous les projets du périmètre et y ouvrir des tickets ; il ne peut ni pousser sur une branche protégée ni fusionner.
 

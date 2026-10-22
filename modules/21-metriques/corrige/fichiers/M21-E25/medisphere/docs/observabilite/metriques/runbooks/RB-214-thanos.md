@@ -48,7 +48,7 @@ admin@adm01:~$ thanos tools bucket inspect --objstore.config-file="$cfg" --sort-
 
 | Message ou constat | Cause probable | Correctif |
 |---|---|---|
-| `SignatureDoesNotMatch`, `InvalidAccessKeyId` | Secret `thanos-objstore` faux ou clés RGW changées | `secrets-k8s.sh thanos` depuis le Vault ; les pods relisent le Secret au redémarrage (sidecar : supprimer un pod Prometheus à la fois) |
+| `SignatureDoesNotMatch`, `InvalidAccessKeyId` | Secret `thanos-objstore` faux ou clés RGW changées | `secrets-k8s.sh appliquer thanos` depuis le Vault ; les pods relisent le Secret au redémarrage (sidecar : supprimer un pod Prometheus à la fois) |
 | `x509: certificate signed by unknown authority` | `ca_file` absent ou ConfigMap `racine-medisphere` vide | volume monté dans le conteneur ? chemin `/etc/thanos/ca/ca.crt` ? |
 | `QuotaExceeded` | quota de l'utilisateur RGW atteint | `ssh ceph01 sudo radosgw-admin user stats --uid=thanos --sync-stats` ; rétention appliquée (§3) ? Relever le quota est une décision (capacité de `ceph-par1`), pas un réflexe |
 | `dial tcp 10.10.30.200:443: i/o timeout` | chemin réseau du pod vers le RGW (carte `eth1`, politique de sortie de l'espace depuis M21-E29) | `hubble observe -n supervision --to-ip 10.10.30.200 --verdict DROPPED` |

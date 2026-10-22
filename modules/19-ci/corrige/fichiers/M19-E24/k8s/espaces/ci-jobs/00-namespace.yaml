@@ -7,12 +7,14 @@
 # n'a pas sa place dans la CI partagée (construction d'images : buildkitd distant, E08).
 # Retour arrière : remettre enforce=baseline par MR (les pods existants ne sont jamais évincés par
 # un changement d'étiquette PSA : seules les créations sont contrôlées).
+# Étiquettes medisphere.internal/* de M19-E02 inchangées (equipe : liaison de la VAP medisphere-images).
 apiVersion: v1
 kind: Namespace
 metadata:
   name: ci-jobs
   labels:
-    medisphere.internal/role: ci-jobs
+    medisphere.internal/equipe: plateforme
+    medisphere.internal/composant: ci
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: v1.36
     pod-security.kubernetes.io/warn: restricted
@@ -20,5 +22,5 @@ metadata:
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/audit-version: latest
   annotations:
-    medisphere.internal/responsable: "equipe-plateforme"
+    medisphere.internal/responsable: "<MOI>"
     medisphere.internal/ticket: "SEC-2024"

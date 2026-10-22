@@ -27,14 +27,14 @@ else
   check_cmd "dernière étiquette : vérification du producteur réussie" \
     _m19p_jq "$_m19_e29_jobs" 'any(.[]; .name == "securite:verification" and .status == "success")'
 fi
-check_cmd "mediagenda/api inclut le composant securite en 2.2.0 ou plus" \
-  _m19p_inclut_composant "$(_m19p_lint mediagenda/api)" securite 2.2.0
+check_cmd "mediagenda/api inclut le composant securite en v2.8.0 ou plus" \
+  _m19p_inclut_composant "$(_m19p_lint mediagenda/api)" securite 2.8.0
 
 title "Côté consommateur (mediagenda/deploiement)"
 check_cmd "plateforme/ci-templates : le composant deploiement contient la porte verifier-images" \
   _m19p_fichier_contient plateforme/ci-templates templates/deploiement/template.yml 'verifier-images' 'verify-attestation' 'slsaprovenance1'
-check_cmd "mediagenda/deploiement inclut le composant deploiement en 2.2.0 ou plus" \
-  _m19p_inclut_composant "$(_m19p_lint mediagenda/deploiement)" deploiement 2.2.0
+check_cmd "mediagenda/deploiement inclut le composant deploiement en v2.8.0 ou plus" \
+  _m19p_inclut_composant "$(_m19p_lint mediagenda/deploiement)" deploiement 2.8.0
 check_cmd "mediagenda/deploiement : fusion seulement si le pipeline a réussi" \
   _m19p_jq "$(_m19p_gl "projects/$(_m19p_p mediagenda/deploiement)")" '.only_allow_merge_if_pipeline_succeeds == true'
 _m19_e29_mr="$(_m19p_pipeline_mr mediagenda/deploiement)"

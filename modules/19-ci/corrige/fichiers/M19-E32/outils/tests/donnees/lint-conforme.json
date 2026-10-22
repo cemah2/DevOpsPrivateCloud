@@ -1,6 +1,6 @@
 {"valid": true, "errors": [], "warnings": [],
  "merged_yaml": "securite:trivy:\n  stage: analyse\n  script: [trivy]\nsecurite:signature:\n  stage: signature\n  script: [cosign]\n",
  "includes": [
-   {"type": "component", "location": "git01.par1.medisphere.internal/plateforme/ci-templates/construction-image@2.2.0", "blob": null, "raw": null, "extra": {}},
-   {"type": "component", "location": "git01.par1.medisphere.internal/plateforme/ci-templates/securite@2.2.0", "blob": null, "raw": null, "extra": {}}
+   {"type": "component", "location": "git01.par1.medisphere.internal/plateforme/ci-templates/construction-image@v2.8.0", "blob": null, "raw": null, "extra": {}},
+   {"type": "component", "location": "git01.par1.medisphere.internal/plateforme/ci-templates/securite@v2.8.0", "blob": null, "raw": null, "extra": {}}
  ]}

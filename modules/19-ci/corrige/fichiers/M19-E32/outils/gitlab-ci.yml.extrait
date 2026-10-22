@@ -5,7 +5,7 @@
 # ci-conformite (un pipeline planifié s'exécute avec les droits de son propriétaire : jamais un humain
 # qui peut partir).
 # Jeton : CI_CONFORMITE_TOKEN, variable de PROJET de type fichier, protégée, masquée et cachée :
-# jeton personnel du compte technique « ci-conformite » (portée api, 90 jours, RB-196), Developer
+# jeton personnel du compte technique « ci-conformite » (portée api, 90 jours, RB-191), Developer
 # sur les groupes mediagenda, medidoc, medinotif, legacy et rien d'autre.
 ci-conformite:
   stage: test

@@ -1,0 +1,29 @@
+# plateforme/observabilite — otel/profils-vers-pyroscope.yaml (M23-E14) : sortie des pods de MédiAgenda vers
+# Pyroscope (le SDK pyroscope-io POUSSE ses profils sur 4040). Même raison que telemetrie-vers-otel-agent
+# (M23-E02) : les espaces applicatifs sont en refus par défaut et la politique du chart ne laisse sortir que
+# DNS, PostgreSQL et Valkey ; politique de cluster portée par la plateforme. enableDefaultDeny.egress: false :
+# elle AJOUTE une sortie sans changer le régime des pods. L'entrée côté Pyroscope est la CNP traces-pyroscope
+# (M23-E16). Ajoutée à otel/kustomization.yaml (resources).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: profils-vers-pyroscope
+spec:
+  description: "MédiAgenda (SDK Python) → Pyroscope 4040 (profils poussés)"
+  endpointSelector:
+    matchExpressions:
+      - key: k8s:io.kubernetes.pod.namespace
+        operator: In
+        values: [mediagenda-dev, mediagenda-recette, mediagenda-prod]
+      - key: k8s:app.kubernetes.io/name
+        operator: In
+        values: [mediagenda]
+  enableDefaultDeny:
+    egress: false
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: traces
+            app.kubernetes.io/name: pyroscope
+      toPorts:
+        - ports: [{port: "4040", protocol: TCP}]

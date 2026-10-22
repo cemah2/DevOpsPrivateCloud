@@ -7,7 +7,7 @@
 # K8S_TRAV → mon01:9093 est NOUVEAU (Prometheus du cluster → Alertmanager témoin, chemin de secours).
 
 pare_feu_definitions:
-  # … définitions existantes (MON01 depuis M19/M21-E11) …
+  # … définitions existantes (MON01 depuis M19-E03) …
   - {nom: LB_PROMETHEUS, valeur: "10.10.41.60", commentaire: "Thanos Query du cluster (prometheus.apps…), M21-E24"}
   - {nom: LB_ALERTMANAGER, valeur: "10.10.41.61", commentaire: "Alertmanager du cluster (alertmanager.apps…), M21-E02"}
 

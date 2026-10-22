@@ -3,7 +3,7 @@ rule_files:
   - ../build/regles/alertmanager.yml
 evaluation_interval: 30s
 tests:
-  - name: des échecs d'envoi répétés déclenchent l'alerte relayée par le témoin
+  - name: des échecs d'envoi répétés déclenchent l'alerte (chemin de secours vers le témoin)
     interval: 1m
     input_series:
       # 0 pendant 5 min, puis 2 échecs par minute (tentatives et nouvelles tentatives).
@@ -27,7 +27,7 @@ tests:
             exp_annotations:
               resume: "Alertmanager du cluster (alertmanager-kps-0) n'arrive plus à envoyer de courriel"
               description: >-
-                20 envois en échec en 15 minutes. Aucune alerte du cluster n'arrive plus par courriel : c'est le témoin de mon01 qui relaie celle-ci. RB-218 § « l'alerte n'arrive pas ».
+                20 envois en échec en 15 minutes. Aucune alerte du cluster n'arrive plus par courriel : c'est l'Alertmanager témoin de mon01 qui relaie celle-ci. RB-218 § « l'alerte n'arrive pas ».
               runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md
   - name: un seul échec isolé, puis plus rien, ne déclenche rien
     interval: 1m

@@ -1,0 +1,82 @@
+# rbac/gitlab-agent/10-agent.yaml (M19-E18, PLAT-2018 ; RÉDUIT en M20-E30, SEC-2130) — droits du
+# compte de service de l'agent k8s-par1 (gitlab-agent/gitlab-agent).
+# En édition gratuite, un job autorisé par ci_access agit avec l'identité de l'AGENT : ces droits sont
+# donc ceux de TOUT job autorisé. Depuis M20, les applications sont déployées par Argo CD (pull) :
+#   - edit (rôle intégré) et agent-ci-crd dans wb-essais SEULEMENT (exercices de formation/ci-labo) ;
+#   - plus rien dans mediagenda-dev : les RoleBindings gitlab-agent-edit et gitlab-agent-crd de cet
+#     espace sont retirés de ce fichier ET SUPPRIMÉS du cluster (« task appliquer » n'efface pas un
+#     objet qui disparaît du dépôt : kubectl delete explicite, tracé dans le ticket SEC-2130) ;
+#   - le fonctionnement d'agentk lui-même dans son espace (Leases, Events), inchangé.
+# Aucun ClusterRoleBinding (le chart a rbac.create: false) : les checks M19-E18 et M20-E30 le vérifient.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-ci-crd
+  labels:
+    medisphere.internal/proprietaire: plateforme
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [httproutes]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [cilium.io]
+    resources: [ciliumnetworkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitlab-agent-edit
+  namespace: wb-essais
+subjects:
+  - kind: ServiceAccount
+    name: gitlab-agent
+    namespace: gitlab-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitlab-agent-crd
+  namespace: wb-essais
+subjects:
+  - kind: ServiceAccount
+    name: gitlab-agent
+    namespace: gitlab-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agent-ci-crd
+---
+# Fonctionnement d'agentk dans son espace (élection d'un meneur entre les deux réplicas, événements).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentk
+  namespace: gitlab-agent
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentk
+  namespace: gitlab-agent
+subjects:
+  - kind: ServiceAccount
+    name: gitlab-agent
+    namespace: gitlab-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: agentk

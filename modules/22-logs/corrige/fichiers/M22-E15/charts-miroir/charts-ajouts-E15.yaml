@@ -1,13 +1,14 @@
-# Entrées à AJOUTER à la liste charts.yaml de plateforme/charts-miroir (M20-E13) pour M22-E15.
-# Empreintes : sha256 des archives publiées (identiques au champ « digest » des index Helm amont,
-# relevés le 2026-10-22). Le pipeline refuse une archive dont l'empreinte diffère.
-- nom: opensearch
-  depot: https://opensearch-project.github.io/helm-charts
-  version: 3.9.0
-  sha256: 4fd262e7e85130bd2167daea37d6335264a27f8e2ab7007e673cae4acbc59b1e
-  note: "M22-E15, essai temporaire : à retirer de la liste après l'essai si l'ADR-0220 écarte OpenSearch"
-- nom: fluent-bit
-  depot: https://fluent.github.io/helm-charts
-  version: 0.58.3
-  sha256: 99e025e461fa080e68dcfe65b8bc0bf64dd74d2c04b87cb910f9192fbf954f20
-  note: "M22-E10 et M22-E15 (Fluent Bit 5.1.3)"
+# À INTÉGRER dans charts.yaml de plateforme/charts-miroir (M20-E13) pour M22-E15, et à RETIRER avec
+# l'essai. Mêmes clés que le corrigé de M20-E13 (outils/lister.sh exige « empreinte: sha256:<64 hexa> ») ;
+# empreintes = SHA-256 des archives publiées (champ « digest » des index Helm amont, relevé le 22/10/2026).
+# Le pipeline refuse une archive dont l'empreinte diffère.
+  - nom: opensearch
+    depot: https://opensearch-project.github.io/helm-charts
+    version: 3.9.0
+    empreinte: sha256:4fd262e7e85130bd2167daea37d6335264a27f8e2ab7007e673cae4acbc59b1e
+    usage: "OpenSearch 3.9.0, essai temporaire M22-E15 (Application opensearch-essai) : retiré avec l'essai"
+  - nom: fluent-bit
+    depot: https://fluent.github.io/helm-charts
+    version: 0.58.3
+    empreinte: sha256:99e025e461fa080e68dcfe65b8bc0bf64dd74d2c04b87cb910f9192fbf954f20
+    usage: "Fluent Bit 5.1.3, essai temporaire M22-E15 (Application fluent-bit-opensearch) : retiré avec l'essai"

@@ -1,4 +1,4 @@
-# Module 22 — Journaux : palier 3 — Production — Corrigé
+# Module 22 — Palier 3 : Production — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -222,7 +222,7 @@ avec un pas d'1 h : le filtre de ligne écarte 90 % des lignes avant l'analyseur
 
 *5. Réglages* : blocs `M22-E14` de [`values.yaml`](fichiers/M22-E13/observabilite/loki/values.yaml) (`split_queries_by_interval: 1h` au lieu de 15m, `query_timeout: 2m` au lieu de 300s, `querier.max_concurrent: 4`, `max_query_parallelism: 16`, `query_range.cache_results` avec `embedded_cache` de 100 Mo). Deuxième exécution d'une requête identique : seule la dernière tranche (plus récente que `max_cache_freshness_per_query`, 10 min) est recalculée.
 
-*6. Livrables* : [`performance.md`](fichiers/M22-E14/medisphere/docs/observabilite/journaux/performance.md) et la règle [`regles/loki-capacite.yaml`](fichiers/M22-E14/observabilite/regles/loki-capacite.yaml) avec son test [`tests/loki-capacite.test.yaml`](fichiers/M22-E14/observabilite/tests/loki-capacite.test.yaml) (l'étiquette `medisphere.internal/supervision: "oui"` est celle que l'opérateur sélectionne depuis M21-E02).
+*6. Livrables* : [`performance.md`](fichiers/M22-E14/medisphere/docs/observabilite/journaux/performance.md) et la règle [`regles/loki-capacite.yaml`](fichiers/M22-E14/observabilite/regles/loki-capacite.yaml) avec son test [`tests/loki-capacite.test.yaml`](fichiers/M22-E14/observabilite/tests/loki-capacite.test.yaml) (l'étiquette `medisphere.internal/supervision: "oui"` est celle que l'opérateur sélectionne depuis M21-E02) ; ajoute le fichier à `regles/kustomization.yaml` (M21-E07), sinon l'Application `observabilite` ne l'applique pas.
 
 **Explications**
 
@@ -307,7 +307,7 @@ admin@adm01:~$ kubectl -n opensearch-essai delete pvc --all && kubectl delete na
 admin@adm01:~$ kubectl get pv | grep opensearch-essai || echo "aucun PV restant"
 ```
 
-Retirer aussi les dossiers `opensearch-essai/` et `fluent-bit-opensearch/` de `plateforme/observabilite` et les deux entrées du miroir (ou garder `fluent-bit` si E10 le réutilise : dis-le). La classe `ceph-rbd` est en `Delete` : le PV et l'image RBD partent avec le PVC (vérifier `rbd ls k8s-rbd` côté Ceph si un doute subsiste).
+Retirer aussi les dossiers `opensearch-essai/` et `fluent-bit-opensearch/` de `plateforme/observabilite` et les deux entrées du miroir (`opensearch`, `fluent-bit`) : aucune Application ne s'en sert plus, et `lab/bin/check 22 10` comme `22 15` vérifient leur absence. La classe `ceph-rbd` est en `Delete` : le PV et l'image RBD partent avec le PVC (vérifier `rbd ls k8s-rbd` côté Ceph si un doute subsiste).
 
 **Explications**
 
@@ -363,13 +363,15 @@ admin@adm01:~$ ssh git01 "curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Scope-O
 
 Depuis une VM, la lecture répond `403 Access denied` (refus de niveau 7 par le proxy) ; l'écriture continue. Vérifie la collecte : `lab/bin/check 22 03` et `lab/bin/check 22 05` restent verts, `lab/bin/check 22 08` aussi (le *ruler* joint Alertmanager par la sortie autorisée).
 
-*4. Grafana* : [`organisation-securite.tf`](fichiers/M22-E16/infra/observabilite-grafana/organisation-securite.tf) dans l'état `observabilite-grafana`, et nouvelle version de [`grafana/sources-loki.yaml`](fichiers/M22-E16/observabilite/grafana/sources-loki.yaml) : la source « Loki — audit » quitte la liste **et** figure dans `deleteDatasources` (sinon Grafana la garde dans l'organisation principale).
+*4. Grafana* : [`organisation-securite.tf`](fichiers/M22-E16/infra/observabilite-grafana/organisation-securite.tf) dans l'état `observabilite-grafana`, et nouvelle version de [`grafana/sources-loki.yaml`](fichiers/M22-E16/observabilite/grafana/sources-loki.yaml) : la source « Loki — audit » quitte la liste **et** figure dans `deleteDatasources` (sinon Grafana la garde dans l'organisation principale). Elle renaît dans l'organisation Sécurité avec le **même UID** `loki-audit` : les liens et tableaux qui la citent restent valables une fois dans la bonne organisation, et `lab/bin/check 22 02` reconnaît le déplacement (il n'attend plus que trois sources dans le provisionnement).
 
 ```
 admin@adm01:~/src/infra/observabilite-grafana$ tofu plan -out plan.bin && tofu apply plan.bin
   # grafana_organization.securite will be created
   # grafana_data_source.loki_audit will be created
 ```
+
+Le fournisseur reste celui de l'état (`~> 4.50`, M21-E17). Chaque membre doit exister dans Grafana (sinon l'`apply` échoue) : le compte de Sophie Laurent n'était dans aucune équipe du M21 ; crée-le d'abord comme les autres comptes locaux du M21 s'il manque.
 
 Vérification avec le compte *Viewer* des checks (organisation principale) : la source n'apparaît plus dans `GET /api/frontend/settings` (`.datasources`) ; Sophie bascule d'organisation dans le menu de Grafana pour l'interroger. Les alertes du locataire `audit` (*ruler*, E08) ne dépendent pas de Grafana : elles continuent.
 
@@ -443,7 +445,7 @@ Exemple : [`ADR-0220-architecture-journaux.md`](fichiers/M22-E17/medisphere/docs
 
 ### M22-E18 — Questions de production : journaux
 
-1. **Rétention raccourcie à 10 h.** Argo CD synchronise, le pod redémarre (le changement touche `runtimeConfig` seulement ? alors pas de redémarrage, prise en compte en ~1 min). Au passage suivant du compactor (≤ 10 min), l'index de `mediagenda` est réécrit **sans** les chunks de plus de 7 jours, ces chunks sont marqués ; ils sont **supprimés** du compartiment `retention_delete_delay` plus tard (2 h). À 11 h : un revert remet 30 jours, mais l'index a déjà été réécrit : les chunks marqués seront supprimés quand même, et les références ont disparu de l'index — la fenêtre de 2 h protège surtout contre une suppression **effective** qu'on aurait le temps d'arrêter en arrêtant le compactor ; en pratique, la récupération passe par le versionnage (index et chunks). À 14 h : les chunks sont supprimés ; sans versionnage, c'est perdu ; avec le versionnage d'E16 (7 jours), on restaure les versions (procédure de la politique, § 4). Ce qu'il fallait : versionnage, relecture des MR de rétention par deux personnes, alerte sur la chute brutale du nombre d'objets.
+1. **Rétention passée de 30 à 7 jours, lundi à 10 h.** Argo CD synchronise ; le changement ne touche que `runtimeConfig` (surcharge du locataire) : pas de redémarrage, prise en compte en ~1 min. Au passage suivant du compactor (≤ 10 min), l'index de `mediagenda` est réécrit **sans** les chunks de plus de 7 jours, ces chunks sont marqués ; ils sont **supprimés** du compartiment `retention_delete_delay` plus tard (2 h). À 11 h : un revert remet 30 jours, mais l'index a déjà été réécrit : les chunks marqués seront supprimés quand même, et les références ont disparu de l'index — la fenêtre de 2 h protège surtout contre une suppression **effective** qu'on aurait le temps d'arrêter en arrêtant le compactor ; en pratique, la récupération passe par le versionnage (index et chunks). À 14 h : les chunks sont supprimés ; sans versionnage, c'est perdu ; avec le versionnage d'E16 (7 jours), on restaure les versions (procédure de la politique, § 4). Ce qu'il fallait : versionnage, relecture des MR de rétention par deux personnes, alerte sur la chute brutale du nombre d'objets.
 2. **`request_id` en étiquette.** Chaque requête crée un **nouveau flux** : des milliers de flux par heure pour MédiAgenda, chacun avec un chunk d'une ou deux lignes ; l'ingester garde un chunk en tête par flux actif (mémoire), l'index TSDB grossit d'une série par flux, `max_global_streams_per_user` (2 000) est atteint en quelques minutes et les **nouveaux** flux sont refusés : on perd justement les journaux récents. À la place : `request_id` en **métadonnée structurée** (M22-E06), interrogée par `{namespace="mediagenda-prod"} | request_id="…"` — le sélecteur borne la lecture, le filtre sur métadonnée est peu coûteux.
 3. **429.** Alloy (`loki.write`) traite le 429 comme récupérable (`retry_on_http_429: true` par défaut) : il réessaie avec un recul exponentiel de 500 ms à 5 min, 10 fois au plus (`max_backoff_retries`), soit plusieurs minutes ; pendant ce temps, le lot est bloqué et les suivants s'accumulent en mémoire. Après le dernier essai, le lot est **abandonné** (lignes perdues). Côté Alloy : `loki_write_batch_retries_total`, `loki_write_dropped_entries_total` (et les journaux d'Alloy) ; côté Loki : `loki_discarded_samples_total{reason="rate_limited", tenant="mediagenda"}` et le message `ingestion rate limit exceeded for user mediagenda (limit: … bytes/sec)`.
 4. **Volume de `loki-0`.** Il porte le **WAL** de l'ingester (tout ce qui est reçu et pas encore vidé en chunks, jusqu'à 2 h), l'index TSDB actif (avant téléversement), le répertoire du compactor (marques de rétention, demandes) et le WAL du *ruler*. Volume détruit pendant que le pod tourne : le processus échoue en écriture, redémarre sans WAL : perte de tout ce qui n'était pas vidé (≤ 2 h) et des marques en cours (chunks orphelins, non supprimés). Pendant un arrêt propre : `flush_on_shutdown: true` vide les chunks au stockage avant l'arrêt, donc presque rien n'est perdu ; seules les marques non traitées du compactor manquent.

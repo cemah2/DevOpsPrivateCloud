@@ -91,7 +91,7 @@ check_cmd "conformite.md : requêtes TraceQL de contrôle des données sensibles
 check_cmd "demonstration.md : parcours alerte → exemplar → trace → journaux → profil, identifiant de trace à l'appui" \
   _m23p_doc docs/observabilite/traces demonstration 'exemplar' '[0-9a-f]{32}' 'profil'
 check_cmd "README.md de docs/observabilite/traces : page d'accueil" _m23p_doc docs/observabilite/traces README '.'
-for _m23_e25_rb in RB-235 RB-236 RB-237 RB-238; do
+for _m23_e25_rb in RB-230 RB-231 RB-232 RB-233; do
   check_cmd "runbook $_m23_e25_rb publié" _m23p_doc "$_m23x_runbooks" "$_m23_e25_rb" '.'
 done
 _m23_e25_pipeline() {

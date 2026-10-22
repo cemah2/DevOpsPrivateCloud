@@ -74,7 +74,7 @@ Le mois dernier, la production de MédiAgenda a répondu en dix secondes pendant
 | M21-E45 | Questions expert : PromQL et Prometheus | Q | ★★★ | 4 |
 | M21-E46 | Mini-projet : la supervision de MédiSphère v1 | LIBRE | ★★★ | 5 |
 
-**Répartition** : 45 exercices + mini-projet · 9 break & fix · 5 questionnaires · 1 revue · 3 rédactions · 1 chronométré.
+**Répartition** : 45 exercices + mini-projet · 9 break & fix · 4 questionnaires · 1 revue · 3 rédactions · 1 chronométré.
 
 ## Hôtes et composants créés dans ce module
 

@@ -5,7 +5,9 @@
 # Réglages du projet : main protégée (fusion : Maintainers MédiDoc et Plateforme), « Pipelines must
 # succeed », liste d'autorisation du CI_JOB_TOKEN active (E25).
 include:
-  - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@v2.8.0
+    inputs:
+      overlays: [dev]               # un seul overlay pour MédiDoc ; pas de deployer-dev (deployer: false)
 
 workflow:
   rules:

@@ -29,7 +29,7 @@ Le module a instrumenté MédiAgenda et MédiDoc, monté la chaîne OpenTelemetr
 1. **Trois environnements tracés et profilés** : MédiAgenda en dev, recette et production, MédiDoc en dev et recette, chacun avec le composant de télémétrie, des traces distribuées entre les deux applications en recette, des profils pour les deux applications.
 2. **Tableau « MédiAgenda — SLO, traces et profils »** (UID `m23-slo-traces`, dans `tableaux/`, sources en variables) : les SLO de M21 (disponibilité, latence) et le budget restant, la latence par route **avec exemplars** vers Tempo, les traces en erreur ou lentes, le profil CPU du service ; liens vers Pyrra et les runbooks. C'est le support de la démonstration de Claire.
 3. **Données sensibles** : une preuve reproductible (requêtes TraceQL et LogQL écrites dans `docs/observabilite/traces/conformite.md`, avec leur résultat daté) qu'aucune span ne porte de sonde, d'identifiant de patient, de paramètre SQL ou d'en-tête d'authentification sur 24 h dans les trois environnements.
-4. **Documentation** dans `docs/observabilite/traces/` : `conventions-telemetrie.md` finalisé (noms de services, attributs de ressource obligatoires, attributs métier autorisés, section « attributs interdits », nommage des spans), ADR-0230, `capacite-securite.md` à jour, runbooks RB-235 à RB-238 relus après le palier 4, et une page d'accueil `README.md` qui dit où trouver quoi (architecture, adresses, comptes, procédures).
+4. **Documentation** dans `docs/observabilite/traces/` : `conventions-telemetrie.md` finalisé (noms de services, attributs de ressource obligatoires, attributs métier autorisés, section « attributs interdits », nommage des spans), ADR-0230, `capacite-securite.md` à jour, runbooks RB-230 à RB-233 relus après le palier 4, et une page d'accueil `README.md` qui dit où trouver quoi (architecture, adresses, comptes, procédures).
 5. **Démonstration écrite** : le parcours « alerte → exemplar → trace → journaux → profil » réalisé en recette, capturé pas à pas (requêtes, identifiants de trace, captures d'écran sans donnée de santé) dans `docs/observabilite/traces/demonstration.md`.
 6. **Rien de provisoire** : essais retirés (voir contraintes), aucune panne M23 active, pipeline de `plateforme/observabilite` vert.
 7. **Étiquette `traces-v1`** sur `plateforme/medisphere`, posée quand tout le reste est livré.
@@ -40,7 +40,7 @@ Le module a instrumenté MédiAgenda et MédiDoc, monté la chaîne OpenTelemetr
 - [ ] Les contrôles de M23-E13, M23-E14 et M23-E16 (et ceux des paliers 1 et 2 rejoués) sont verts.
 - [ ] Le tableau `m23-slo-traces` est provisionné depuis `tableaux/` et relie SLO, exemplars, traces et profils.
 - [ ] Jaeger, l'`Instrumentation` d'essai et toute injection automatique hors `wb-essais` ont disparu ; aucune panne active.
-- [ ] ADR-0230, `conventions-telemetrie.md` (avec ses attributs interdits), RB-235 à RB-238 publiés ; pipeline vert ; étiquette `traces-v1` posée.
+- [ ] ADR-0230, `conventions-telemetrie.md` (avec ses attributs interdits), RB-230 à RB-233 publiés ; pipeline vert ; étiquette `traces-v1` posée.
 
 **Vérification** : `lab/bin/check 23 25` (3 à 6 minutes ; il rejoue les contrôles clés du module).
 

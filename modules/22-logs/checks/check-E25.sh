@@ -16,6 +16,9 @@ title "M22-E25 — Journaux de MédiSphère v1 : contrôle global"
 require_cmd kubectl jq curl
 
 # --- 1. Vérifications clés des exercices (chacune affiche son propre titre) ----------------------------
+# _M22_MINI_PROJET : les checks rejoués adaptent ce qui n'a de sens que pendant l'exercice (E07 : trace
+# de l'enquête de plus de 24 h ; E09 : témoin retiré, motifs cherchés sur 24 h).
+_M22_MINI_PROJET=1
 for _m22_e25_ex in 02 03 05 06 07 08 09 13 14 16; do
   _m22_e25_f="$_m22_e25_dir/check-E$_m22_e25_ex.sh"
   if [[ -f "$_m22_e25_f" ]]; then
@@ -38,6 +41,8 @@ if _m22x_api_repond; then
   done
   check_cmd "aucun DaemonSet Fluent Bit ni pod OpenSearch restant" _m22x_kq \
     '[.items[] | select(.metadata.name | test("fluent-bit|opensearch"))] | length == 0' daemonsets,statefulsets -A
+  check_cmd "aucune ClusterRole de Fluent Bit restante (essais E10 et E15)" _m22x_kq \
+    '[.items[] | select(.metadata.name | test("fluent-bit"))] | length == 0' clusterroles
   check_cmd "aucune Application d'essai (Fluent Bit, OpenSearch) dans Argo CD" _m22x_kq \
     '[.items[].metadata.name | select(test("essai|fluent-bit|opensearch"))] | length == 0' -n argocd applications.argoproj.io
   check_cmd "pas de pod témoin de panne journal-temoin restant" bash -c '! "$@" >/dev/null 2>&1' _ kube -n wb-pannes get deployment journal-temoin
@@ -45,6 +50,18 @@ else
   skip "Applications et essais" "l'API ne répond pas au compte des checks"
 fi
 check_cmd "aucune panne M22 encore marquée active (lab/bin/break)" _m22x_aucune_panne_active
+_m22_e25_miroir="$(_m22p_fichier_main plateforme/charts-miroir charts.yaml 2>/dev/null || true)"
+if [[ -n "$_m22_e25_miroir" ]]; then
+  check_cmd "charts-miroir : plus de chart d'essai (fluent-bit, opensearch)" bash -c '! grep -Eq "nom: *(fluent-bit|opensearch)\b" <<<"$1"' _ "$_m22_e25_miroir"
+else
+  skip "charts d'essai retirés du miroir" "charts.yaml illisible sur main de plateforme/charts-miroir"
+fi
+_m22_e25_alerte_alloy() {
+  prom_api rules 2>/dev/null |
+    jq -e '[.data.groups[].rules[] | select(.type == "alerting")
+            | select((.query | test("daemonset=\"alloy\"")) or (.name | test("^Alloy")))] | length >= 1' >/dev/null 2>&1
+}
+check_cmd "alerte « Alloy absent d'un nœud » chargée dans Prometheus (règle sur le DaemonSet alloy)" _m22_e25_alerte_alloy
 
 for _m22_e25_t in plateforme mediagenda medidoc audit; do
   check_cmd "locataire $_m22_e25_t : rétention appliquée (non nulle)" bash -c '[[ "$1" -gt 0 ]]' _ "$(_m22p_heures "$(_m22p_limite "$_m22_e25_t" retention_period)")"

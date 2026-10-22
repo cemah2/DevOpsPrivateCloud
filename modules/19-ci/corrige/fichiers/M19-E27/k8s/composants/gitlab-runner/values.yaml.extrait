@@ -37,8 +37,7 @@ checkInterval: 3
 runners:
   config: |
     [[runners]]
-      output_limit = 8192
-      environment = ["HOME=/tmp"]
+      # … output_limit et environment de E24 inchangés …
       # 8 jobs par gestionnaire (= concurrent : un seul [[runners]] par processus).
       limit = 8
       # Plusieurs requêtes de « long polling » simultanées : un gestionnaire peut prendre plusieurs

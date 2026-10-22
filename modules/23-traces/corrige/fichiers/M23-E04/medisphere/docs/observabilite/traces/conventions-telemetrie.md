@@ -23,6 +23,6 @@
 - **Statut** : `ERROR` seulement pour une défaillance **du service** (5xx, dépendance en panne). Un 4xx (conflit, introuvable) n'est pas une erreur de la span serveur ; un conflit de créneau est un **événement** (`mediagenda.conflit_creneau`).
 - **Sondes** (`/sante`, `/pret`, `/metrics`) : jamais tracées.
 
-## Interdits (données de santé, RGPD, HDS)
+## Attributs interdits (données de santé, RGPD, HDS)
 
 Jamais en attribut, en événement ni en nom de span : nom, prénom, date de naissance, NIR, courriel, téléphone du patient ; motif du rendez-vous ; contenu ou nom d'un document ; valeur d'un paramètre SQL ; jeton, mot de passe, en-tête `Authorization`. Les instrumentations sont réglées en conséquence (pas de capture des paramètres SQL, pas de capture d'en-têtes). Une fuite se corrige **dans le code** ; le masquage du Collector (M23-E10) n'est qu'un filet.

@@ -14,7 +14,7 @@ l'exception de sécurité. Le nombre de conteneurs « non confinés » passe de 
 
 | Barrière | Ce qu'elle empêche |
 |---|---|
-| CiliumNetworkPolicy `buildkitd` (entrée) | tout pod qui n'est pas un pod de job (`medisphere.internal/ci: job`) de `ci-jobs` (et `ci-jobs-protege` au M19-E24) : un pod de `wb-essais` ou d'une équipe ne joint pas le port 1234 |
+| CiliumNetworkPolicy `buildkitd` (entrée) | tout pod qui n'est pas un pod de job (`medisphere.internal/ci: job`) de `ci-jobs` (le runner protégé de M19-E24 ne construit pas et n'y a pas accès) : un pod de `wb-essais` ou d'une équipe ne joint pas le port 1234 |
 | TLS mutuel (`[grpc.tls] ca`) | un client sans certificat signé par `buildkit-ca` : la poignée de main échoue avant tout appel gRPC |
 | Autorité `buildkit-ca` dédiée | sa clé privée reste dans l'espace `cert-manager` ; seuls les administrateurs du cluster la lisent |
 | Certificat client par espace | il n'existe que dans `ci-jobs` ; le compte des jobs (`ci-job`) ne peut pas lire de Secret, le Secret est monté par le runner |

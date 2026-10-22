@@ -1,7 +1,7 @@
-# plateforme/ci-templates — templates/deploiement/template.yml, version 2.2.0 (M19-E29, SEC-2029).
+# plateforme/ci-templates — templates/deploiement/template.yml, version v2.8.0 (M19-E29, SEC-2029).
 # EXTRAIT : ajout de la PORTE DE VÉRIFICATION des images dans les pipelines de MR d'un dépôt de
-# déploiement (mediagenda/deploiement, medidoc/deploiement). Les jobs de validation de E10/E17
-# (kustomize build + kubeconform) sont inchangés.
+# déploiement (mediagenda/deploiement, medidoc/deploiement). Différences avec la v2.5.0 (M19-E18) :
+# les jobs deploiement:valider et deployer-<environnement> sont inchangés.
 #
 # Deux jobs : « deploiement:images » rend les overlays touchés par la MR et liste leurs images
 # (image du composant : kustomize, yq) ; « verifier-images » vérifie chaque image avec Cosign
@@ -10,7 +10,7 @@
 # une image n'est pas conforme ne peut pas être fusionnée.
 spec:
   inputs:
-    # … entrées de la v2.0.0 (image_deploiement, version_kubernetes, …) inchangées …
+    # … entrées de la v2.5.0 (stage, runner, overlays, image_k8s, version_kubernetes, …) inchangées …
     image_outils:
       description: "Image outillée de la supply chain (cosign, skopeo, jq, /etc/medisphere/cosign.pub)"
       default: "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.0@sha256:<EMPREINTE>"
@@ -28,9 +28,11 @@ spec:
       default: "https://git01.par1.medisphere.internal/"
 ---
 deploiement:images:
-  stage: test
-  image: $[[ inputs.image_deploiement ]]
-  tags: [k8s]
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image_k8s ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
   variables:
     GIT_DEPTH: "0"                 # il faut la base de la MR pour le diff
   rules:
@@ -61,9 +63,11 @@ deploiement:images:
     expire_in: 30 days
 
 verifier-images:
-  stage: test
-  image: $[[ inputs.image_outils ]]
-  tags: [k8s]
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image_outils ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
   needs: [deploiement:images]
   variables:
     GIT_STRATEGY: fetch

@@ -17,7 +17,7 @@ Le palier 1 a posé la machinerie : un runner `k8s-par1` dont les jobs tournent 
 | Nouveaux composants du cluster | espaces `sonarqube` (E16), `gitlab-agent` (E18), `jenkins` (E19) ; releases Helmfile `gitlab-agent` (ajoutée à `releases/50-ci.yaml.gotmpl`, à côté de `gitlab-runner` et `buildkitd`), `sonarqube` (`releases/80-sonarqube.yaml.gotmpl`), `jenkins` (`releases/81-jenkins.yaml.gotmpl`) ; SonarQube et Jenkins **jamais en même temps** |
 | Promotion (E17) | jeton de projet `ci-promotion` de `mediagenda/deploiement` (Developer, `api` + `write_repository`, 90 jours) → variable protégée et masquée `DEPLOIEMENT_TOKEN` de `mediagenda/api` ; branches `promotion/<env>-vX.Y.Z` |
 | Agent (E18) | `k8s-par1`, configuration `.gitlab/agents/k8s-par1/config.yaml` de `plateforme/k8s`, contexte CI `plateforme/k8s:k8s-par1`, `config.kasAddress` = `wss://git01.par1.medisphere.internal/-/kubernetes-agent/` (19.4) |
-| Documentation | `docs/livraison/ci/` : `normes-pipeline.md` (E11), `comparatif-jenkins.md` (E20), `RB-190-pipeline-en-attente.md` (E22), `mesures-pipeline.md` (E23) ; brouillons dans `~/m19/eXX/` |
+| Documentation | `docs/livraison/ci/` : `normes-pipeline.md` (E11), `comparatif-jenkins.md` (E20), `runbooks/RB-190-pipeline-en-attente.md` (E22), `mesures-pipeline.md` (E23) ; brouillons dans `~/m19/eXX/` |
 
 > 💡 **Mémoire.** Le profil du bloc compte ≈ 100 Go. SonarQube (E16, ≈ 3 Gio) et Jenkins (E19-E20, ≈ 2 Gio avec un agent) sont **temporaires et jamais ensemble** : SonarQube passe à `replicas: 0` avant E19. Garde `kubectl top nodes` sous les yeux quand ils tournent.
 
@@ -639,7 +639,7 @@ Il y a au moins un défaut dans chacune de ces familles : image, privilège, sec
 **Durée indicative** : 2 h.
 
 **Travail demandé**
-Rédige `docs/livraison/ci/RB-190-pipeline-en-attente.md` dans `plateforme/medisphere` (MR relue par Nadia). Il doit contenir :
+Rédige `docs/livraison/ci/runbooks/RB-190-pipeline-en-attente.md` dans `plateforme/medisphere` (MR relue par Nadia). Il doit contenir :
 1. Le périmètre et les symptômes (job `pending`, `created`, « *This job is stuck because…* », pipeline qui ne se crée pas du tout, job qui attend un `resource_group`).
 2. Un arbre de décision : pipeline créé ou non ; job en `created` ou `pending` ; runner éligible (étiquettes, `run_untagged`, `ref_protected`, pause, verrouillage au projet, runner hors ligne) ; capacité du gestionnaire (`concurrent`, `limit`, `request_concurrency`) ; pod de job (événements, quota et LimitRange de `ci-jobs`, `Pending` par manque de ressources, taints, image introuvable, Secret absent) ; dépendances externes (Harbor, buildkitd, `s3-01`).
 3. Pour chaque branche : la commande exacte (API GitLab, `kubectl`, journaux du gestionnaire), ce qu'on lit, la cause, l'action **autorisée en astreinte** et ce qui attend le jour ouvré.

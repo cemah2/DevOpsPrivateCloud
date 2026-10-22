@@ -16,7 +16,7 @@ title "Pipeline de medidoc/medidoc"
 _m19_e33_l="$(_m19p_lint medidoc/medidoc)"
 check_cmd "configuration valide, n'incluant que des composants (et des fichiers locaux)" _m19p_seulement_composants "$_m19_e33_l"
 for _m19_e33_c in qualite construction-image securite promotion; do
-  check_cmd "composant $_m19_e33_c inclus en 2.2.0 ou plus" _m19p_inclut_composant "$_m19_e33_l" "$_m19_e33_c" 2.2.0
+  check_cmd "composant $_m19_e33_c inclus en v2.8.0 ou plus" _m19p_inclut_composant "$_m19_e33_l" "$_m19_e33_c" 2.8.0
 done
 check_cmd "tests avec le détecteur de concurrence (-race)" bash -c 'jq -r ".merged_yaml // empty" <<<"$1" | grep -q -- "-race"' _ "$_m19_e33_l"
 for _m19_e33_t in main etiquette; do

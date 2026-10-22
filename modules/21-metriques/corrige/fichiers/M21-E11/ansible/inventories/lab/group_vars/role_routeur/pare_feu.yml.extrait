@@ -6,9 +6,9 @@
 # (pare_feu_entree), pas de transit.
 
 pare_feu_definitions:
-  # … définitions existantes …
-  # (MON01 existe peut-être déjà depuis le M19 : ne la redéfinis pas)
-  - {nom: MON01, valeur: "10.10.20.19", commentaire: "mon01 : Mailpit (M19), supervision témoin (M21)"}
+  # … définitions existantes : MON01 (10.10.20.19) est définie depuis M19-E03 (Mailpit, « supervision
+  # témoin au M21 ») ; on la réutilise telle quelle, sans la redéfinir (une seule définition par
+  # nom dans la matrice commune) …
 
 pare_feu_transit:
   # … règles existantes …

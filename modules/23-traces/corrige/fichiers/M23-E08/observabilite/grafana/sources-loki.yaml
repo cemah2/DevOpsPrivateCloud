@@ -1,5 +1,10 @@
-# plateforme/observabilite — grafana/sources-loki.yaml (M22-E02 ; champs dérivés trace_id ajoutés en M23-E08, DEV-2408)
-# Quatre sources de données Loki, une par locataire, provisionnées par le « sidecar » de Grafana
+# plateforme/observabilite — grafana/sources-loki.yaml (version M23-E08, DEV-2408 : champs dérivés trace_id
+# sur loki-mediagenda et loki-medidoc ; part de la version M22-E16, créée en M22-E02)
+# M22-E16 (SEC-2316) : la source « Loki — audit » QUITTE l'organisation principale. Elle est recréée
+# par OpenTofu dans l'organisation « Sécurité » (plateforme/infra, état observabilite-grafana,
+# organisation-securite.tf). Retirer la source de la liste ne la supprime pas de Grafana : d'où
+# « deleteDatasources », que le provisionnement applique avant de (re)créer les sources.
+# Trois sources de données Loki (plateforme, mediagenda, medidoc ; audit est dans l'organisation Sécurité), provisionnées par le « sidecar » de Grafana
 # (kube-prometheus-stack, M21) : il lit les ConfigMaps étiquetées grafana_datasource: "1" de
 # l'espace supervision. Ajoute ce fichier aux ressources de la kustomization racine de
 # plateforme/observabilite (Application « observabilite », espace supervision).
@@ -16,6 +21,9 @@ metadata:
 data:
   sources-loki.yaml: |
     apiVersion: 1
+    deleteDatasources:
+      - name: Loki — audit
+        orgId: 1
     datasources:
       - name: Loki — plateforme
         uid: loki-plateforme
@@ -73,15 +81,3 @@ data:
               urlDisplayLabel: "Voir la trace"
         secureJsonData:
           httpHeaderValue1: medidoc
-      - name: Loki — audit
-        uid: loki-audit
-        type: loki
-        access: proxy
-        url: http://loki.journaux.svc.cluster.local:3100
-        editable: false
-        jsonData:
-          maxLines: 1000
-          timeout: 60
-          httpHeaderName1: X-Scope-OrgID
-        secureJsonData:
-          httpHeaderValue1: audit

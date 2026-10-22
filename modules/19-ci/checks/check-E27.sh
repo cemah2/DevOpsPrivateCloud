@@ -44,4 +44,4 @@ check_cmd "formation/ci-labo : un pipeline avec au moins 20 jobs « charge » r�
 title "Documentation"
 check_cmd "capacite-runners.md sur main (calcul, mesures, seuil)" \
   _m19p_fichier_contient plateforme/medisphere docs/livraison/ci/capacite-runners.md 'request_concurrency' 'seuil' 'p95|centile|médiane'
-check_cmd "RB-197 sur main" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci RB-197 'quota' 'concurrent'
+check_cmd "RB-193 sur main (docs/livraison/ci/runbooks/)" _m19p_doc_prefixe plateforme/medisphere docs/livraison/ci/runbooks RB-193 'quota' 'concurrent'

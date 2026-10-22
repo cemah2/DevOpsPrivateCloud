@@ -22,7 +22,7 @@
 
 | Rôle | Où | Comptes ou groupes | Raison |
 |---|---|---|---|
-| `role:plateforme-admin` | `policy.csv` (hérite de `role:admin`) | `<MOI>`, `karim-benali` | exploitation de la plateforme |
+| `role:plateforme-admin` | `policy.csv` (hérite de `role:admin`) | `<MOI-ARGO>`, `karim-benali` | exploitation de la plateforme |
 | `role:mediagenda-equipe` | `policy.csv` | `julien-petit` | livrer dev et recette, voir la production |
 | `role:lecture` | `policy.csv` | `nadia-roussel`, `ci-lecture` | support, astreinte, vérifications ; **sans** journaux des pods (données de santé possibles : ils se lisent dans Loki au M22, par locataire) |
 | `proj:mediagenda:equipe` | AppProject `mediagenda` | groupe SSO `medisphere:mediagenda-devs` (M24) | même droits que `role:mediagenda-equipe`, portés par le projet |

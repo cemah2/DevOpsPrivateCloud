@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Déclencheurs | Ticket « plus de journaux de X » ; alertes `AlloyAbsentDUnNoeud`, `NoeudMuet` (à créer, voir § 4) |
+| Déclencheurs | Ticket « plus de journaux de X » ; alertes `AlloyAbsentDUnNoeud` (Prometheus) et `NoeudMuet` (ruler), voir § 4 |
 | Durée | 20 à 45 min |
 | Références | RB-220 (chercher), RB-223 (Loki refuse les écritures), RB-224 (requêtes), politique des journaux § 2 et § 3 |
 
@@ -62,6 +62,6 @@ admin@adm01:~$ curl -s -H 'X-Scope-OrgID: medidoc' $LOKI_ADDR/config/tenant/v1/l
 
 ## 4. Ce qui aurait dû alerter
 
-- `kube_daemonset_status_number_ready{daemonset="alloy"} < kube_daemonset_status_desired_number_scheduled` et nombre de pods Alloy < nombre de nœuds (Prometheus).
+- `AlloyAbsentDUnNoeud` (Prometheus, `plateforme/observabilite/regles/alloy-collecte.yaml`) : pods Alloy prêts < nombre de nœuds `Ready` (`kube_daemonset_status_number_ready` contre `kube_node_status_condition`). Comparer à `desiredNumberScheduled` ne suffit pas : une taint ou une tolérance retirée le fait baisser aussi.
 - Nœud muet : `count by (node) (count_over_time({job="journald"}[10m]))` absent pour un nœud `Ready` (règle du *ruler*, locataire `plateforme`).
 - Flux d'une équipe dans `plateforme` : `sum(count_over_time({namespace=~"(mediagenda|medidoc)-.+"}[5m])) > 0` (*ruler*, locataire `plateforme`).

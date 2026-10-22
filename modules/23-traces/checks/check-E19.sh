@@ -23,6 +23,6 @@ check_cmd "agent : récepteur OTLP en gRPC et en HTTP" \
   _m23p_config_collector "$_m23p_agent" '[.receivers[] | select(.protocols.grpc? != null and .protocols.http? != null)] | length >= 1'
 check_cmd "aucune erreur d'export récente des collectors (otelcol_exporter_send_failed_spans, 10 min)" \
   _m23p_prom_nul_ou_absent 'sum(increase({__name__=~"otelcol_exporter_send_failed_spans(_total)?"}[10m]))'
-check_cmd "runbook RB-235 « Plus aucune trace » publié" \
-  _m23p_doc "$_m23x_runbooks" RB-235 'agent' 'passerelle' 'otelcol_'
+check_cmd "runbook RB-230 « Plus aucune trace » publié" \
+  _m23p_doc "$_m23x_runbooks" RB-230 'agent' 'passerelle' 'otelcol_'
 check_cmd "panne M23-E19 close (lab/bin/break 23 19 --annuler après réparation)" _m23x_aucune_panne_active E19

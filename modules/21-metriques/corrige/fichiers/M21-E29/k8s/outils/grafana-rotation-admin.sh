@@ -10,7 +10,7 @@
 # Préalable : le NOUVEAU mot de passe est déjà dans le Vault « critique » (secrets/grafana.yml, clé
 # $CLE_VAULT), saisi par « ansible-vault edit » ; l'ANCIEN est encore dans le Secret du cluster.
 # Ordre : 1. lire l'ancien (Secret) ; 2. lire le nouveau (Vault) ; 3. changer dans Grafana (API) ;
-# 4. vérifier avec le nouveau ; 5. réaligner le Secret (secrets-k8s.sh grafana).
+# 4. vérifier avec le nouveau ; 5. réaligner le Secret (secrets-k8s.sh appliquer grafana, M21-E02).
 # Aucun mot de passe n'est affiché ni passé en argument d'une commande (visible dans ps).
 set -euo pipefail
 
@@ -47,5 +47,6 @@ if curl -sf --max-time 10 -K <(printf 'user = "admin:%s"\n' "$ancien") "$GRAFANA
 fi
 
 # 5. Secret aligné sur le Vault (réinstallation de Grafana sur un volume neuf).
-outils/secrets-k8s.sh grafana
+outils/secrets-k8s.sh appliquer grafana
+outils/secrets-k8s.sh verifier grafana
 echo "rotation faite : base de Grafana, Vault et Secret alignés. Note la date au registre des secrets."

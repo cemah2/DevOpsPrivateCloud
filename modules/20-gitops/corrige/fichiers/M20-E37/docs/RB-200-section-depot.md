@@ -16,7 +16,7 @@
    CA et un autre chemin réseau) :
    `kubectl -n argocd exec deploy/argocd-repo-server -- git ls-remote https://git01.par1.medisphere.internal/<groupe>/<projet>.git`
    (sans identifiants : une erreur d'authentification prouve que TLS et réseau passent).
-3. **Corriger à la source** : identifiants → `plateforme/k8s/outils/secrets-k8s.sh argocd` depuis
+3. **Corriger à la source** : identifiants → `plateforme/k8s/outils/secrets-k8s.sh appliquer argocd` depuis
    le Vault (jamais une valeur collée à la main) ; CA → `helmfile -e par1 -l composant=argocd apply`
    après un `diff` qui montre exactement l'écart ; adresse → revert par MR dans plateforme/gitops ;
    réseau → retirer la politique fautive par le code qui la porte (plateforme/k8s), matrice des flux.

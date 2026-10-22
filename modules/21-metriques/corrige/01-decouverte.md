@@ -1,4 +1,4 @@
-# Module 21 — Métriques et alerting : palier 1 — Découverte — Corrigé
+# Module 21 — Palier 1 : Découverte — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -20,7 +20,7 @@ Ce corrigé suit l'ordre de l'énoncé. Les questionnaires (E01, E09) sont argum
 - les droits du rôle Viewer de Grafana 13.2 sur `/api/datasources/uid/<uid>/health` et `/api/datasources` (le check d'E05 passe en « ignoré » ou en KO selon la réponse) ; la lecture d'un tableau enregistré au **schéma v2** par `/api/dashboards/uid/` ;
 - l'émission ACME du certificat de node_exporter sur les hôtes qui n'avaient pas de certificat ACME (`adm01`, `runner01`, `runner02`) : flux `ca01` → port 80 à ouvrir si besoin ;
 - le relais du rechargement de certificat par node_exporter (exporter-toolkit relit le fichier web à chaque connexion : documenté, non observé sur un renouvellement réel) ;
-- le format de `charts.yaml` du miroir et celui de `secrets-k8s.sh` (M20) : les extraits suivent la fiche du module 20 ; reprends les noms de champs de **ton** dépôt.
+- `charts.yaml` du miroir et `secrets-k8s.sh` suivent les formats écrits au M20-E13 (liste `charts:`) et au M19-E04 / M20-E06 (table `secrets-k8s.conf`, modules `secrets-k8s.d/`) : si ton dépôt s'en écarte, reprends **ses** noms de champs.
 
 ---
 
@@ -99,11 +99,11 @@ Objets sans espace : `ClusterRole`, `ClusterRoleBinding`, `MutatingWebhookConfig
 ```
 admin@adm01:~/src/k8s$ task espaces
 admin@adm01:~/src/k8s$ task diff && task appliquer
-admin@adm01:~/src/k8s$ ansible-vault edit --vault-id critique@~/.config/workbook/ansible-vault-critique.pass secrets/grafana.yml
-admin@adm01:~/src/k8s$ outils/secrets-k8s.sh grafana        # → Secret supervision/grafana-admin (admin-user, admin-password)
+admin@adm01:~/src/k8s$ uv run --project ~/src/ansible ansible-vault create --vault-id critique@$HOME/src/ansible/outils/vault-pass-client.sh secrets/grafana.yml
+admin@adm01:~/src/k8s$ outils/secrets-k8s.sh appliquer grafana && outils/secrets-k8s.sh verifier grafana   # → supervision/grafana-admin
 ```
 
-(Le format de `secrets/<composant>.yml` est celui de ton script du M20 : un Secret `grafana-admin` dans `supervision`, clés `admin-user: admin` et `admin-password`.)
+Le Secret est une simple liste de clés : une ligne de la table `outils/secrets-k8s.conf` (format de M19-E04) suffit, sans module `secrets-k8s.d/` ([`secrets-k8s.conf.extrait`](fichiers/M21-E02/k8s/outils/secrets-k8s.conf.extrait), modèle du Vault [`secrets/grafana.yml.exemple`](fichiers/M21-E02/k8s/secrets/grafana.yml.exemple)) : Secret `supervision/grafana-admin`, clés `admin-user` (`admin`) et `admin-password`.
 
 *C. Les values.* Fichier complet commenté : [`kps/values.yaml`](fichiers/M21-E02/observabilite/kps/values.yaml). L'essentiel :
 
@@ -206,7 +206,7 @@ Depuis `wb-essais`, `curl --max-time 5 http://10.10.41.60:9090/-/ready` reste sa
 - Un Service `LoadBalancer` **sans** adresse demandée : LB IPAM prend la première adresse libre du pool (10.10.41.11…), réservée aux Gateways (convention du M15).
 - `externalTrafficPolicy: Cluster` avec une politique `fromCIDR` : tout est refusé (adresse source remplacée), ou tout est accepté si l'on a autorisé les nœuds par facilité.
 - Mettre un finaliseur `resources-finalizer` « comme sur les autres Applications » : une suppression dans l'interface d'Argo CD supprime les CRD, donc tous les `ServiceMonitor` et `PrometheusRule` des équipes.
-- Collecte des kubelets : le chart utilise `insecureSkipVerify: true` (certificats de service des kubelets auto-signés par kubeadm). C'est la seule exception tolérée à la règle 3 du module ; M21-E29 la retire en faisant signer les certificats des kubelets par la CA du cluster (`serverTLSBootstrap`).
+- Collecte des kubelets : le chart utilise `insecureSkipVerify: true` (certificats de service des kubelets auto-signés par kubeadm). C'est la seule exception tolérée à la règle 3 du module (E20 l'étend au plan de contrôle, pour la même raison) ; M21-E29 l'inscrit aux limites acceptées de `securite.md`, avec sa correction (certificats des kubelets signés par la CA du cluster, `serverTLSBootstrap`), qui touche tous les nœuds et sort du périmètre du module.
 
 **En production chez MédiSphère**
 
@@ -410,7 +410,7 @@ Essai (étape 6) : groupe visible tout de suite dans l'interface ; courriel de d
 
 - **Arbre de routage.** Une alerte descend depuis la racine ; la première sous-route qui correspond la prend (sauf `continue: true`) ; sans correspondance, la racine (`plateforme-mail`). Les paramètres de groupe sont hérités.
 - **Les trois délais.** `group_wait` : attente avant le **premier** envoi d'un groupe nouveau (réunir les alertes sœurs) ; `group_interval` : attente avant de renvoyer un groupe **qui a changé** ; `repeat_interval` : rappel d'un groupe **inchangé** toujours actif. Avec 4 h, une alerte non résolue rappelle trois fois par nuit, pas toutes les 5 minutes.
-- **Watchdog** est une alerte toujours active livrée par le chart : elle prouve que toute la chaîne règles → Alertmanager fonctionne. On ne la notifie pas par courriel ; M21-E28 l'envoie à la supervision témoin qui, elle, alerte sur son **absence**.
+- **Watchdog** est une alerte toujours active livrée par le chart : sa présence prouve que Prometheus collecte et évalue ses règles. On ne la notifie pas par courriel ; en M21-E28, la supervision témoin de `mon01` vérifie chaque minute qu'elle est toujours là (elle interroge l'API de requête de la vue globale) et alerte sur son **absence** ; Alertmanager, lui, est surveillé par des sondes à part.
 - **La racine dans une ConfigMap**, pas un Secret : c'est un certificat public. L'image d'Alertmanager ne connaît que les autorités publiques, et un `insecure_skip_verify` ouvrirait la porte à n'importe quel serveur qui se ferait passer pour `smtp.par1`.
 
 **Alternatives**

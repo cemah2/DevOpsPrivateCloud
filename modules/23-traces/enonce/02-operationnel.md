@@ -1,4 +1,4 @@
-# Module 23 — Traces et profilage : palier 2 — Opérationnel
+# Module 23 — Palier 2 : Opérationnel
 
 Une seule application tracée ne montre pas l'essentiel : la requête qui traverse plusieurs services. Ce palier instrumente MédiDoc en Go et lui fait recevoir un vrai appel de MédiAgenda ; compare ce que l'instrumentation dans le code apporte par rapport à l'auto-instrumentation de l'opérateur ; relie les traces aux journaux et aux métriques ; réduit le volume sans perdre les traces utiles ; retire des spans ce qui ne doit pas y être ; relit la configuration du stagiaire ; et finit par un vrai diagnostic de lenteur.
 
@@ -332,7 +332,7 @@ Lance-la sur ton poste avec le binaire `otelcol-contrib` 0.161 (en changeant les
 **Prérequis** : M23-E05 à M23-E10.
 **Durée indicative** : 1 h 30 (temps cible du diagnostic : 30 min).
 
-**Contexte technique** : la lenteur est injectée par `lab/bin/break 23 12` (ne lis pas le script). Elle ne supprime aucune donnée. Pour générer de la charge sur la recette, réutilise `ressources/E05-trafic/trafic.sh` avec un port-forward de `svc/mediagenda` de `mediagenda-recette`. Si tu abandonnes : `lab/bin/break 23 12 --annuler`.
+**Contexte technique** : la lenteur est injectée par `lab/bin/break 23 12` (ne lis pas le script de `corrige/pannes/`). Elle ne supprime aucune donnée. Pour générer de la charge sur la recette, réutilise `ressources/E05-trafic/trafic.sh` avec un port-forward de `svc/mediagenda` de `mediagenda-recette`. Quand tu as corrigé, lance `lab/bin/break 23 12 --annuler` pour **clore** la panne : il ne touche pas à ta réparation. Si tu abandonnes, la même commande retire la lenteur, mais l'exercice compte alors comme non réussi.
 
 **Travail demandé**
 
@@ -343,7 +343,7 @@ Lance-la sur ton poste avec le binaire `otelcol-contrib` 0.161 (en changeant les
 5. Écris le journal de diagnostic `docs/kubernetes/journal/AAAA-MM-JJ-INC-5012-<titre>.md` : chronologie, cause, correction, prévention, ce que les traces ont apporté.
 
 **Critères de réussite**
-- [ ] La lenteur n'est plus active (et pas par `--annuler`).
+- [ ] La lenteur est corrigée par toi, puis la panne close par `--annuler` (qui ne l'a pas trouvée encore en place).
 - [ ] Avec du trafic récent sur la recette : aucune span PostgreSQL de plus de 300 ms, aucune span Valkey de plus de 200 ms, aucune requête serveur de plus de 300 ms.
 - [ ] Le journal de diagnostic INC-5012 est sur `main` de `plateforme/medisphere` (traces, spans, cause, prévention).
 
@@ -359,4 +359,4 @@ Commence large : `{ resource.deployment.environment.name = "recette" && kind = s
 Une span de base de données lente ne dit pas *pourquoi* : sur le primaire PostgreSQL, `pg_stat_activity` (colonnes `wait_event_type`, `wait_event`) dit si la session attend un verrou, un disque ou autre chose ; `\d` d'une table montre ses index et ses déclencheurs. Pour Valkey, `INFO commandstats` compte chaque commande reçue.
 </details>
 
-**Pour aller plus loin** (facultatif) : écris le runbook « l'API est lente » (RB-23x, palier 3) à partir de ton journal.
+**Pour aller plus loin** (facultatif) : écris le runbook RB-234 « l'API est lente » (`docs/observabilite/traces/runbooks/`) à partir de ton journal ; il servira à l'astreinte de M23-E23.

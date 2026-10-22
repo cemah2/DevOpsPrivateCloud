@@ -1,4 +1,4 @@
-# Module 22 — Journaux : palier 4 — Expert — Corrigé
+# Module 22 — Palier 4 : Expert — Corrigé
 
 > ⚠️ Corrigé — à lire après avoir cherché.
 
@@ -10,7 +10,7 @@ Les scripts d'injection sont dans `corrige/pannes/` : `_m22-commun.sh` contient 
 
 Les sorties reproduites sont **représentatives** (Loki 3.7.9, Alloy 1.21.1, Kubernetes 1.36, Debian 13).
 
-**Validé hors du lab** : messages d'erreur de Loki 3.7.9 (limite de débit, limite de flux, entrée trop ancienne, durée de plage, nombre de séries, délai) obtenus sur une instance locale ; format des clés de chunks (`<locataire>/<empreinte>/<début>:<fin>:<somme>`, code de `pkg/storage/config/schema_config.go`), des tables d'index (`index/loki_index_<N>/<locataire>/<ns>-compactor-<début>-<fin>-<somme>.tsdb.gz`) et des demandes d'effacement (`index/delete_requests/delete_requests.gz`) observés sur cette instance ; transformations `yq`/`sed`/`awk` des pannes rejouées sur les fichiers de référence de M22-E07 à E09 ; `shellcheck -x` et `bash -n` sur tous les scripts ; code Python d'E23 compilé.
+**Validé hors du lab** : messages d'erreur de Loki 3.7.9 (limite de débit, limite de flux, entrée trop ancienne, durée de plage, nombre de séries, délai) obtenus sur une instance locale ; format des clés de chunks (`<locataire>/<empreinte>/<début>:<fin>:<somme>`, code de `pkg/storage/config/schema_config.go`), des tables d'index (`index/loki_index_<N>/<locataire>/<ns>-compactor-<début>-<fin>-<somme>.tsdb.gz`) et des demandes d'effacement (`index/delete_requests/delete_requests.gz`) observés sur cette instance ; transformations `yq`/`sed`/`awk` des pannes rejouées sur les fichiers de référence de M22-E07 à E09 ; `shellcheck -x` et `bash -n` sur tous les scripts ; code Python d'E23 compilé ; règle `AlloyAbsentDUnNoeud` par `promtool check rules` et `promtool test rules` (Prometheus 3.15).
 
 **Points non testés en conditions réelles** (signale tes retours) :
 - délai entre un commit, la synchronisation d'Argo CD, la mise à jour des ConfigMaps par le kubelet et le rechargement par Loki ou Alloy (les scripts attendent jusqu'à 7 à 8 minutes) ;
@@ -85,7 +85,7 @@ admin@adm01:~$ kubectl -n journaux logs <alloy-du-nœud> | grep -i journal | tai
 - V4 : remettre le répertoire (`mv /var/log/journal.archive-… /var/log/journal`), `systemctl restart systemd-journald`, puis `journalctl --flush` (le journal volatil accumulé pendant la panne part sur le disque) ; Alloy reprend à son curseur. Rien n'est perdu sur le nœud ; dans Loki, les lignes de la panne arrivent avec du retard si elles sont plus jeunes que `max_age` (7 h).
 - V3 et V4 : reporter dans le rôle Ansible des nœuds (`k8s_noeud`) un état explicite de journald (`Storage=persistent`, limites de taille), pour que la prochaine dérive soit corrigée par Ansible.
 
-*Prévention* : alertes du runbook RB-222 § 4 (Alloy absent d'un nœud, nœud muet), revue des MR de `alloy/` par la plateforme, politique « un agent de journaux tolère tout ».
+*Prévention* : alertes du runbook RB-222 § 4 — « Alloy absent d'un nœud » en règle Prometheus [`regles/alloy-collecte.yaml`](fichiers/M22-E19/observabilite/regles/alloy-collecte.yaml) (`AlloyAbsentDUnNoeud`, avec son test [`tests/alloy-collecte.test.yaml`](fichiers/M22-E19/observabilite/tests/alloy-collecte.test.yaml), à ajouter à `regles/kustomization.yaml`) : elle compare les pods prêts au nombre de nœuds `Ready`, car les alertes `KubeDaemonSet*` de kube-prometheus-stack ne voient rien quand une taint ou une tolérance retirée fait baisser `desiredNumberScheduled` ; « nœud muet » en règle du *ruler* ; revue des MR de `alloy/` par la plateforme, politique « un agent de journaux tolère tout ».
 
 **Livrable** : [`RB-222`](fichiers/M22-E19/medisphere/docs/observabilite/journaux/runbooks/RB-222-journaux-manquants.md) (version complétée en E22 : [`fichiers/M22-E22/…/RB-222-journaux-manquants.md`](fichiers/M22-E22/medisphere/docs/observabilite/journaux/runbooks/RB-222-journaux-manquants.md)).
 

@@ -1,6 +1,7 @@
 # plateforme/gitops — plateforme/kube-prometheus-stack.yaml (M21-E02, PLAT-2202)
 # Pile de métriques du cluster : prometheus-operator, Prometheus, Alertmanager, kube-state-metrics,
-# node-exporter, Grafana. Gérée par l'Application racine (App of Apps, M20-E06), projet plateforme.
+# node-exporter, Grafana. Appliquée par l'Application de groupe « plateforme » (racine/plateforme.yaml,
+# M20-E15, dossier plateforme/ de plateforme/gitops), projet plateforme.
 # Deux sources (M20-E13) :
 #   1. le chart, recopié et signé dans Harbor par plateforme/charts-miroir (jamais tiré d'Internet) ;
 #   2. le dépôt plateforme/observabilite, qui ne sert QUE de référence « $values ».
@@ -12,6 +13,8 @@ metadata:
   # PAS de finaliseur resources-finalizer.argocd.argoproj.io : supprimer cette Application par erreur
   # ne doit pas supprimer en cascade les CRD de l'opérateur (et avec elles TOUS les ServiceMonitor,
   # PrometheusRule… des équipes, dans tous les espaces) ni les volumes de Prometheus.
+  labels:
+    medisphere.internal/equipe: plateforme
   annotations:
     medisphere.internal/ticket: "PLAT-2202"
 spec:

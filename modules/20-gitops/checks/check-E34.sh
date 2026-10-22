@@ -3,7 +3,7 @@
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
 #
 # check-E34.sh — M20-E34 « Une mise en production en temps limité » (CHG-2134), à lancer à T1.
-# Lecture seule : ~/m20-e34/T0 et ~/m20-e34/journal.md d'adm01 ; Application mediagenda-prod,
+# Lecture seule : ~/m20/e34/T0 et ~/m20/e34/journal.md d'adm01 ; Application mediagenda-prod,
 # Deployments mediagenda de recette et de production, Rollout, ReplicaSets, AnalysisRuns, HTTPRoute
 # (wb-checks) ; MR et fichiers de mediagenda/deploiement, documentation (GitLab) ; Mailpit.
 # Chaque tâche vaut ses points si TOUS ses contrôles passent ; l'exercice est validé à 70 points.
@@ -15,7 +15,7 @@ title "M20-E34 — Une mise en production en temps limité"
 require_cmd kubectl jq curl
 check_cmd "l'API du cluster répond (readyz)" _m20p_joignable
 
-_M20_E34_DIR="${WB_M20_E34_DIR:-$HOME/m20-e34}"
+_M20_E34_DIR="${WB_M20_E34_DIR:-$HOME/m20/e34}"
 _m20_e34_t0_txt="$(head -1 "$_M20_E34_DIR/T0" 2>/dev/null || true)"
 _m20_e34_t0="$(_m20p_epoch "$_m20_e34_t0_txt" || true)"
 check_output "T0 lisible dans $_M20_E34_DIR/T0 (${_m20_e34_t0_txt:-absent})" '^[0-9]+$' echo "${_m20_e34_t0:-}"

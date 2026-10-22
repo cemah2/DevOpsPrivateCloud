@@ -83,7 +83,7 @@ traces-tempo                 12d
 admin@adm01:~$ kubectl -n traces get cnp traces-exposition-reduite -o yaml | yq '.metadata.annotations, .metadata.managedFields[0].manager, .spec'
 ```
 
-Une politique de **refus** (`ingressDeny` depuis `all` vers 4317) l'emporte sur toutes les autorisations ; elle n'est pas dans Git (pas d'annotation de suivi d'Argo CD, gestionnaire de champs `kubectl`), elle porte un ticket `CHG-5019` qui n'existe pas. Correctif : la supprimer (elle n'est pas gérée par Argo CD, rien ne la recréera), retrouver qui l'a posée (journal d'audit de l'API, M22 : `{job="audit"} | json | objectRef_resource="ciliumnetworkpolicies" and verb="create"`), et le noter. Prévention : les politiques de l'espace `traces` ne viennent que de Git ; une alerte sur les paquets refusés par politique dans les espaces de plateforme (métriques de Hubble `hubble_drop_total{reason="POLICY_DENIED"}`, M21-E20).
+Une politique de **refus** (`ingressDeny` depuis `all` vers 4317) l'emporte sur toutes les autorisations ; elle n'est pas dans Git (pas d'annotation de suivi d'Argo CD, gestionnaire de champs `kubectl`), elle porte un ticket `CHG-5019` qui n'existe pas. Correctif : la supprimer (elle n'est pas gérée par Argo CD, rien ne la recréera), retrouver qui l'a posée (journal d'audit de l'API, locataire `audit` du M22, lu dans l'organisation « Sécurité » de Grafana depuis M22-E16 : `{job="kubernetes-audit"} | resource="ciliumnetworkpolicies" | verb="create"`), et le noter. Prévention : les politiques de l'espace `traces` ne viennent que de Git ; une alerte sur les paquets refusés par politique dans les espaces de plateforme (métriques de Hubble `hubble_drop_total{reason="POLICY_DENIED"}`, M21-E20).
 
 **Variante 4 — Le récepteur de l'agent n'accepte plus le gRPC.**
 
@@ -100,7 +100,7 @@ admin@adm01:~$ kubectl -n traces get svc otel-agent-collector -o jsonpath='{.spe
 
 L'opérateur a retiré le port 4317 du Service quand le protocole a disparu de la configuration ; nos applications exportent en gRPC (4317). « Réduire la surface » sans inventaire des émetteurs a coupé tout le monde. Correctif : revert du commit (MR), synchronisation, vérification du Service (4317 et 4318). Prévention : l'inventaire des protocoles utilisés est dans `conventions-telemetrie.md` ; le check de M23-E19 vérifie les deux protocoles.
 
-**Clôture** : nouvelles traces de `mediagenda-api` et `medidoc` en dev, compteurs d'échec à zéro, `lab/bin/check 23 19`, `lab/bin/break 23 19 --annuler`. Runbook : [`RB-235`](fichiers/M23-E19/medisphere/docs/observabilite/traces/runbooks/RB-235-plus-aucune-trace.md).
+**Clôture** : nouvelles traces de `mediagenda-api` et `medidoc` en dev, compteurs d'échec à zéro, `lab/bin/check 23 19`, `lab/bin/break 23 19 --annuler`. Runbook : [`RB-230`](fichiers/M23-E19/medisphere/docs/observabilite/traces/runbooks/RB-230-plus-aucune-trace.md).
 
 **Explications**
 
@@ -176,7 +176,7 @@ admin@adm01:~$ kubectl get pods -A -o wide -l 'app.kubernetes.io/name in (mediag
 
 Le Service ClusterIP répartit **par connexion** : l'agent d'un nœud parle à un réplica, celui d'un autre nœud peut parler à l'autre. MédiAgenda et MédiDoc tournent sur des nœuds différents : leurs spans d'une même trace arrivent sur deux réplicas, qui décident chacun sur une trace partielle (une moitié peut être gardée, l'autre jetée). Métriques par réplica : `otelcol_processor_tail_sampling_*` (décisions) très différentes d'un réplica à l'autre. Origine : commit « envoi simplifié » dans `plateforme/observabilite`. Correctif : revert (exportateur `loadbalancing` à clé `traceID`, résolveur `k8s` sur le Service sans tête). Prévention : le check de M23-E20 et un commentaire dans `otel-agent.yaml` qui explique pourquoi.
 
-**Clôture** : traces entières sur 15 min, aucune racine dans MédiDoc, arête stable ; `lab/bin/check 23 20`, `--annuler`. Runbook : [`RB-236`](fichiers/M23-E20/medisphere/docs/observabilite/traces/runbooks/RB-236-traces-coupees.md).
+**Clôture** : traces entières sur 15 min, aucune racine dans MédiDoc, arête stable ; `lab/bin/check 23 20`, `--annuler`. Runbook : [`RB-231`](fichiers/M23-E20/medisphere/docs/observabilite/traces/runbooks/RB-231-traces-coupees.md).
 
 **Explications**
 
@@ -201,7 +201,7 @@ Test de propagation dans la CI de chaque application (requête de bout en bout, 
 
 *Hypothèses* : refus à l'entrée (mémoire), file pleine (destination lente), envoi refusé par Tempo (limites), lots trop gros.
 
-**Étape 1 — Le bilan entrée/sortie par Collector** (requêtes de [RB-237](fichiers/M23-E21/medisphere/docs/observabilite/traces/runbooks/RB-237-collector-perd-des-donnees.md)) ; **étape 2** — le message exact dans les journaux de la passerelle et de Tempo ; **étape 3** — la configuration vivante et l'historique Git.
+**Étape 1 — Le bilan entrée/sortie par Collector** (requêtes de [RB-232](fichiers/M23-E21/medisphere/docs/observabilite/traces/runbooks/RB-232-collector-perd-des-donnees.md)) ; **étape 2** — le message exact dans les journaux de la passerelle et de Tempo ; **étape 3** — la configuration vivante et l'historique Git.
 
 **Variante 1 — `memory_limiter` trop bas.**
 
@@ -286,7 +286,7 @@ admin@adm01:~/src/observabilite$ git log -3 --format='%h %an %s' -- grafana/
 
 `tracesToLogsV2.datasourceUid: loki-plateforme` : le lien ouvre une requête valide (`{namespace="mediagenda-dev"} | trace_id="…"`) dans la source du locataire `plateforme`, qui n'a pas les journaux de MédiAgenda (ils sont chez `mediagenda`, M22) : résultat vide, sans erreur. Correctif : revert. C'est la plus traîtresse : le lien « marche ».
 
-**Clôture** : dans les deux sens depuis une trace de MédiAgenda de dev ; `lab/bin/check 23 22`, `--annuler`. Le *sidecar* recharge les sources provisionnées en une minute environ ; si rien ne change, redémarre Grafana (`kubectl -n supervision rollout restart deploy/<grafana>`). Runbook : [`RB-238`](fichiers/M23-E22/medisphere/docs/observabilite/traces/runbooks/RB-238-lien-trace-journaux.md).
+**Clôture** : dans les deux sens depuis une trace de MédiAgenda de dev ; `lab/bin/check 23 22`, `--annuler`. Le *sidecar* recharge les sources provisionnées en une minute environ ; si rien ne change, redémarre Grafana (`kubectl -n supervision rollout restart deploy/<grafana>`). Runbook : [`RB-233`](fichiers/M23-E22/medisphere/docs/observabilite/traces/runbooks/RB-233-lien-trace-journaux.md).
 
 **Explications**
 

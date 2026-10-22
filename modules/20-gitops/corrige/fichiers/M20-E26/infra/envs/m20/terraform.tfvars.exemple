@@ -1,0 +1,11 @@
+# terraform.tfvars — valeurs NON secrètes de l'environnement envs/m20 (copie ce fichier sans .exemple).
+# M20-E26 (PLAT-2126) : lyo-k3s01 est DÉJÀ décrite dans le catalogue de hotes.tf (M20-E23, groupe
+# « lyo », VM 2201, 10.10.99.61, enregistrement DNS par dns.tf) : une seule déclaration, on l'active ici.
+# flux01 détruite avant (mémoire, PLAN §4.11) : son groupe « flux » est retiré en même temps.
+# tofu plan doit montrer : - module.hote["flux01"] et son DNS (si elle existait encore),
+#                          + module.hote["lyo-k3s01"], + module.dns_hote["lyo-k3s01"].
+# Mini-projet (M20-E46) : groupes = [] puis tofu apply (état vide).
+noeud         = "<NOEUD>"
+cle_ssh_admin = "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+
+groupes = ["lyo"]

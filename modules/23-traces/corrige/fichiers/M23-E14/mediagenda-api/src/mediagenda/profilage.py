@@ -1,7 +1,7 @@
 """Profilage continu de MédiAgenda (Pyroscope) et lien span → profil.
 
 Activé seulement si MEDIAGENDA_PYROSCOPE_URL est définie (posée par le composant kustomize
-« telemetrie » de mediagenda/deploiement) : en local et dans les tests, rien ne démarre.
+« profilage » de mediagenda/deploiement) : en local et dans les tests, rien ne démarre.
 
 À appeler une seule fois, dans le processus qui sert les requêtes, APRÈS la configuration des traces
 (le fournisseur de traces doit exister pour recevoir le processeur de spans) et avant uvicorn.run.

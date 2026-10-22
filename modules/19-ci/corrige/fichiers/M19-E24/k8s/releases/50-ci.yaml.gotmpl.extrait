@@ -1,12 +1,12 @@
-# plateforme/k8s — releases/50-ci.yaml.gotmpl (fichier des releases de la CI créé en M19-E04 ; si le
-# tien porte un autre nom, ajoute la release au même endroit que « gitlab-runner »).
-# Ajout de M19-E24 : la release « gitlab-runner-protege », même chart, même version que
-# « gitlab-runner » (une seule ligne à changer à la montée de version, E26).
-bases:
-  - _communs.yaml
----
+# releases/50-ci.yaml.gotmpl (plateforme/k8s) — EXTRAIT : release ajoutée par M19-E24 (SEC-2024) sous
+# « gitlab-runner » (E04), « buildkitd » (E08) et « gitlab-agent » (E18). Même chart, même version que
+# « gitlab-runner » (une seule ligne à changer par release à la montée de version, E26).
+# Avant le premier apply : espaces/ci-jobs-protege/ (task appliquer), puis
+# « outils/secrets-k8s.sh appliquer gitlab-runner-protege » (Secret gitlab-runner-protege-jeton) et
+# « outils/secrets-k8s.sh appliquer cosign-ci » (Secret ci-jobs-protege/cosign-medisphere) :
+# Helmfile ne crée ni l'espace des jobs ni les Secrets.
 releases:
-  # … release gitlab-runner (E04), buildkitd (E08), gitlab-agent (E18) inchangées …
+  # … gitlab-runner, buildkitd, gitlab-agent …
   - name: gitlab-runner-protege
     namespace: gitlab-runner
     chart: gitlab/gitlab-runner
@@ -14,7 +14,6 @@ releases:
     labels:
       groupe: ci
       composant: gitlab-runner-protege
-    # L'espace des jobs et son Secret de clé doivent exister avant (espaces/ci-jobs-protege/,
-    # outils/secrets-k8s.sh gitlab-runner-protege cosign-ci) : Helmfile ne les crée pas.
+    rollbackOnFailure: true
     values:
       - ../composants/gitlab-runner-protege/values.yaml

@@ -330,7 +330,7 @@ qualite:tests-integration:
                   time.sleep(2)
       PY
     - uv run --no-sync python /tmp/attendre_services.py
-    - if [ -n "$QUALITE_PREPARATION" ]; then echo "préparation : $QUALITE_PREPARATION"; eval "$QUALITE_PREPARATION"; fi
+    - if [ -n "$QUALITE_PREPARATION" ]; then echo "préparation — $QUALITE_PREPARATION"; eval "$QUALITE_PREPARATION"; fi
     - uv run --no-sync pytest -m "$[[ inputs.marqueur_integration ]]" --junitxml=rapport-integration.xml -p no:cacheprovider
   artifacts:
     when: always

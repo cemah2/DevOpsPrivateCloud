@@ -44,7 +44,7 @@ def test_sans_configuration():
 
 
 def test_version_prefixee_v_acceptee():
-    assert conformite.version("v2.2.0") == (2, 2, 0)
+    assert conformite.version("v2.8.0") == (2, 8, 0)
 
 
 def test_projet_sans_image():

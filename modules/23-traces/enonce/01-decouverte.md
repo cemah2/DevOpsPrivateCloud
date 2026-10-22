@@ -1,4 +1,4 @@
-# Module 23 — Traces et profilage : palier 1 — Découverte
+# Module 23 — Palier 1 : Découverte
 
 Une trace se construit à trois endroits : dans l'application (qui crée les spans et propage le contexte), dans les Collectors (qui reçoivent, enrichissent, relaient) et dans le stockage (qui indexe et répond aux requêtes). Ce palier monte la chaîne dans cet ordre inverse, pour qu'à chaque étape quelque chose de visible arrive au bout : l'opérateur OpenTelemetry et ses deux Collectors d'abord, avec des spans synthétiques ; Tempo sur le RGW ensuite ; puis MédiAgenda, instrumentée dans son code et livrée par le chemin habituel ; enfin le langage TraceQL pour interroger ce que tu as collecté.
 
@@ -230,6 +230,7 @@ Une trace n'est pas cherchable dans les secondes qui suivent son envoi : le *liv
 
 | Élément | Valeur |
 |---|---|
+| Base de code | `mediagenda/api` tel que l'a laissé M22-E06 (journaux JSON avec `request_id`) : les modifications des M23-E06, E08 et E14 s'appliqueront ensuite dans cet ordre |
 | Paquets | `opentelemetry-sdk` 1.45.x, `opentelemetry-exporter-otlp-proto-grpc` 1.45.x, `opentelemetry-instrumentation-fastapi`, `-psycopg`, `-redis` **0.66b1** (bornes `>=0.66b1,<0.67` : les instrumentations suivent le SDK) |
 | Variables (component `components/telemetrie` de `mediagenda/deploiement`) | `OTEL_SERVICE_NAME=mediagenda-api` ; `OTEL_RESOURCE_ATTRIBUTES=service.namespace=medisphere,deployment.environment.name=<env>` ; `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-agent-collector.traces.svc.cluster.local:4317` ; `OTEL_TRACES_SAMPLER=parentbased_always_on` ; `OTEL_PROPAGATORS=tracecontext,baggage` ; `OTEL_SEMCONV_STABILITY_OPT_IN=http,database` |
 | Environnement | l'étiquette `medisphere.internal/environnement` que chaque overlay pose sur le gabarit du pod |

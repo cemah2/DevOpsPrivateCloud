@@ -17,7 +17,7 @@
 
 **Faits que ce palier fixe pour la suite** : CR Prometheus `kps` à 2 réplicas, sidecar Thanos 0.42.4 ; 10.10.41.60 = Thanos Query ; Services `thanos-query`, `thanos-store`, `thanos-compactor` ; Secret `thanos-objstore` ; utilisateur RGW `thanos`, compartiment `thanos-k8s-par1` ; Application Argo CD `pyrra` ; SLO `mediagenda-disponibilite`, `mediagenda-latence` (seuil **250 ms**, faute de seau 0.3), `medidoc-disponibilite` (recette) ; étiquette d'espace `medisphere.internal/supervision-regles: "oui"` ; alertes `Thanos*`, `ErrorBudgetBurn`/`SLOMetricAbsent` (Pyrra), `Temoin*` (cluster), `SupervisionCluster*` (témoin), `Prometheus*` (capacité) ; RB-214, RB-215, RB-216.
 
-Fichiers de solution : `corrige/fichiers/M21-E24/` à `M21-E32/` et `M21-E34/`. Les fichiers `*.extrait` ne montrent que ce qui change dans un fichier existant d'un autre exercice.
+Fichiers de solution : `corrige/fichiers/M21-E24/` à `M21-E32/` ; script d'injection d'E34 : `corrige/pannes/break-E34.sh`. Les fichiers `*.extrait` ne montrent que ce qui change dans un fichier existant d'un autre exercice.
 
 ---
 
@@ -25,7 +25,7 @@ Fichiers de solution : `corrige/fichiers/M21-E24/` à `M21-E32/` et `M21-E34/`. 
 
 **Solution**
 
-Fichiers : [`ceph/thanos-rgw.sh`](fichiers/M21-E24/ceph/thanos-rgw.sh) (utilisateur, quota, compartiment), [`adm01/s3-thanos.env.exemple`](fichiers/M21-E24/adm01/s3-thanos.env.exemple), [`k8s/outils/secrets-k8s.sh.extrait`](fichiers/M21-E24/k8s/outils/secrets-k8s.sh.extrait) et [`k8s/secrets/thanos.yml.exemple`](fichiers/M21-E24/k8s/secrets/thanos.yml.exemple) ; dans `plateforme/observabilite` : [`kps/values.yaml.extrait`](fichiers/M21-E24/observabilite/kps/values.yaml.extrait), [`thanos/`](fichiers/M21-E24/observabilite/thanos/) (Query, Store, ServiceMonitors, politiques), [`kustomization.yaml.extrait`](fichiers/M21-E24/observabilite/kustomization.yaml.extrait) ; documentation : [`thanos.md`](fichiers/M21-E24/medisphere/docs/observabilite/metriques/thanos.md).
+Fichiers : [`ceph/thanos-rgw.sh`](fichiers/M21-E24/ceph/thanos-rgw.sh) (utilisateur, quota, compartiment), [`adm01/s3-thanos.env.exemple`](fichiers/M21-E24/adm01/s3-thanos.env.exemple), [`k8s/outils/secrets-k8s.d/thanos.sh`](fichiers/M21-E24/k8s/outils/secrets-k8s.d/thanos.sh) et [`k8s/secrets/thanos.yml.exemple`](fichiers/M21-E24/k8s/secrets/thanos.yml.exemple) ; dans `plateforme/observabilite` : [`kps/values.yaml.extrait`](fichiers/M21-E24/observabilite/kps/values.yaml.extrait), [`thanos/`](fichiers/M21-E24/observabilite/thanos/) (Query, Store, ServiceMonitors, politiques), [`kustomization.yaml.extrait`](fichiers/M21-E24/observabilite/kustomization.yaml.extrait) ; documentation : [`thanos.md`](fichiers/M21-E24/medisphere/docs/observabilite/metriques/thanos.md).
 
 *1. Lecture* (réponses attendues) :
 - Un bloc de 2 h est un répertoire immuable (index, morceaux compressés, `meta.json`) que Prometheus écrit quand la **tête** (mémoire + WAL) a couvert 2 h ; avant, les données ne sont que dans le WAL. Le sidecar n'envoie que des blocs fermés (immuables) : il surveille le répertoire de la base et envoie chaque nouveau bloc. Conséquence : le compartiment a 2 à 3 h de retard sur le temps réel ; les dernières heures ne sont servies que par les sidecars.
@@ -46,7 +46,7 @@ contrôles : liste autorisée, second compartiment refusé (max-buckets=1)
 
 Les gestes clés : `radosgw-admin user create --uid=thanos --max-buckets=1` dont la sortie va **directement** dans `jq`, puis dans un fichier temporaire 600 (jamais l'écran) ; `radosgw-admin quota set --quota-scope=user --uid=thanos --max-size=40G` puis `quota enable` ; compartiment créé **avec les identifiants de `thanos`** (il en est propriétaire) ; vérification inverse (un second `create-bucket` échoue). Puis la paire dans le Vault (`ansible-vault edit … secrets/thanos.yml`, modèle fourni) et au registre des secrets. Pourquoi un utilisateur « classique » et pas un compte IAM (M08-E12) : un composant, un compartiment, aucune délégation à faire ; le compte apporterait un utilisateur racine et des politiques IAM sans usage ici.
 
-*3. Secret* : fonction `composant_thanos` ([extrait](fichiers/M21-E24/k8s/outils/secrets-k8s.sh.extrait)) : `yq -n` construit `objstore.yml` en mémoire à partir des variables d'environnement, `kubectl create secret … --from-file=objstore.yml=/dev/stdin --dry-run=client -o yaml | kubectl apply --server-side -f -`. Contrôle : `kubectl -n supervision get secret thanos-objstore -o jsonpath='{.data}' | jq 'keys'` → `["objstore.yml"]` (les clés, pas les valeurs).
+*3. Secret* : module [`secrets-k8s.d/thanos.sh`](fichiers/M21-E24/k8s/outils/secrets-k8s.d/thanos.sh) (fonctions `secrets_thanos_appliquer` et `secrets_thanos_verifier`, sur le modèle d'`argocd.sh` du M20 : la table `secrets-k8s.conf` ne sait pas décrire un document construit) : `yq -n` construit `objstore.yml` en mémoire à partir du Vault déchiffré, passé à `kubectl create secret … --from-file=objstore.yml=<(…) --dry-run=client -o yaml | kubectl apply --server-side -f -`. `outils/secrets-k8s.sh appliquer thanos`, puis `verifier thanos` (comparaison par empreintes). Contrôle : `kubectl -n supervision get secret thanos-objstore -o jsonpath='{.data}' | jq 'keys'` → `["objstore.yml"]` (les clés, pas les valeurs).
 
 *4. Prometheus ×2 et sidecar* ([extrait des values](fichiers/M21-E24/observabilite/kps/values.yaml.extrait)) : `replicas: 2`, `podAntiAffinity: hard`, `thanosService.enabled`, `thanosServiceMonitor.enabled`, `prometheusSpec.thanos` (image et version explicites, `objectStorageConfig.existingSecret`, `volumeMounts` de la CA), `prometheusSpec.volumes` (ConfigMap `racine-medisphere`). Après synchronisation :
 
@@ -110,7 +110,7 @@ Thanos ne remplace pas Prometheus : il lui ajoute une lecture globale (Query) et
 - Style d'adressage virtuel : le client cherche `thanos-k8s-par1.rgw.par1.medisphere.internal`, inconnu du DNS.
 - Changer l'uid de la source Grafana : tous les tableaux qui la désignent par uid deviennent vides (c'est une variante de M21-E37).
 - Versionnage ou règle de cycle de vie sur le compartiment : le premier remplit le quota de versions cachées, la seconde supprime des blocs que le Compactor croit présents (« halted »).
-- Croire que 10.10.41.60 « est encore Prometheus » : `/federate` et `/api/v1/status/config` y répondent 404 (le témoin d'E12 fédère depuis `mon01`, pas vers 10.10.41.60 : vérifie quand même ton E11).
+- Croire que 10.10.41.60 « est encore Prometheus » : `/federate` et `/api/v1/status/config` y répondent 404. La fédération d'E12 n'est pas touchée (c'est le cluster qui lit `mon01:9090/federate`) ; en revanche, tout ce que le témoin lit sur 10.10.41.60 doit passer par l'API de requête (c'est l'objet d'E28).
 
 **En production chez MédiSphère**
 Compartiment répliqué hors site (RGW multisite vers PAR2, F5) ; Thanos Query Frontend devant Query (cache des requêtes longues, découpage par jour) ; deux Alertmanager en grappe ; alertes de E25 ; quotas RGW suivis (`radosgw-admin user stats`) et inscrits au plan de capacité de `ceph-par1` ; montée de version de Thanos **simultanée** pour le sidecar (values) et les composants (kustomization), testée sur une copie du compartiment.
@@ -608,7 +608,7 @@ Exemple complet : [`politique-alerte.md`](fichiers/M21-E32/medisphere/docs/obser
 
 **Démarche de diagnostic**
 
-Le script d'injection est [`break-E34.sh`](fichiers/M21-E34/break-E34.sh) (installé dans `corrige/pannes/`). Dans les deux variantes, un trafic de testeurs réaliste tourne en permanence (Job `trafic-recette` dans `wb-pannes`, par la Gateway : créneaux de trois praticiens, liste des rendez-vous, une création toutes les 10 s). La démarche est la même pour les deux, et c'est elle qui compte.
+Le script d'injection est [`pannes/break-E34.sh`](pannes/break-E34.sh) (lancé par `lab/bin/break 21 34`, comme les pannes du palier 4). Dans les deux variantes, un trafic de testeurs réaliste tourne en permanence (Job `trafic-recette` dans `wb-pannes`, par la Gateway : créneaux de trois praticiens, liste des rendez-vous, une création toutes les 10 s). La démarche est la même pour les deux, et c'est elle qui compte.
 
 *Symptôme, chiffré (5 min)* : tableau RED de MédiAgenda (E19) filtré sur `mediagenda-recette`, ou directement :
 

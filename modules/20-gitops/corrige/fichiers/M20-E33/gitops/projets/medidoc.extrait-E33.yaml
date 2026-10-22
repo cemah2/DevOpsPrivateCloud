@@ -1,5 +1,9 @@
 # plateforme/gitops — projets/medidoc.yaml : état de spec après M20-E33 (DEV-2133) — destinations
 # et listes de ressources ; roles (E24) et syncWindows (E29) inchangés.
+# Même modèle que mediagenda (M20-E07) : l'équipe garde ses politiques réseau d'application
+# (base/politiques.yaml de medidoc/deploiement, M19-E33 : refus par défaut, entrée par la Gateway,
+# sortie DNS et RGW) ; les invariants de la plateforme sont des REFUS de cluster
+# (CiliumClusterwideNetworkPolicy isolement-medidoc-*, M15-E28) qu'aucune politique d'espace ne lève.
 spec:
   sourceRepos:
     - https://git01.par1.medisphere.internal/medidoc/deploiement.git
@@ -9,15 +13,12 @@ spec:
       namespace: medidoc-dev
     - server: https://kubernetes.default.svc
       namespace: medidoc-recette
-  # Aucun objet de cluster (Namespace, CRD, ClusterRole…).
+  # Aucun objet de cluster (Namespace, CRD, ClusterRole, CiliumClusterwideNetworkPolicy…).
   clusterResourceWhitelist: []
-  # Garde-fous de la plateforme (E07) : l'équipe ne peut ni créer ni modifier son enveloppe ni ses
-  # politiques réseau ; Cilium compris (une CiliumNetworkPolicy d'équipe pourrait tout ouvrir).
+  # Enveloppe de l'espace, gouvernée par la plateforme (plateforme/k8s, espaces/medidoc-*/).
   namespaceResourceBlacklist:
     - {group: "", kind: ResourceQuota}
     - {group: "", kind: LimitRange}
-    - {group: networking.k8s.io, kind: NetworkPolicy}
-    - {group: cilium.io, kind: CiliumNetworkPolicy}
   # Ressources orphelines (dans ces espaces, sans annotation de suivi) signalées dans l'interface.
   # Ce que la plateforme crée elle-même dans ces espaces n'est pas un oubli : ignoré.
   orphanedResources:
@@ -25,9 +26,3 @@ spec:
     ignore:
       - {group: "", kind: Secret, name: harbor-pull}
       - {group: "", kind: Secret, name: medidoc-s3}
-      - {group: "", kind: ServiceAccount, name: default}
-      - {group: "", kind: ConfigMap, name: kube-root-ca.crt}
-      - {group: cilium.io, kind: CiliumNetworkPolicy}
-      - {group: networking.k8s.io, kind: NetworkPolicy}
-      - {group: "", kind: ResourceQuota}
-      - {group: "", kind: LimitRange}

@@ -1,74 +1,86 @@
-# plateforme/k8s — composants/gitlab-runner/values.yaml
-# Runner d'instance « k8s-par1 » (M19-E04, cache S3 en E07, durci en M19-E24 SEC-2024).
-# Chart gitlab/gitlab-runner 0.93.x (Runner 19.4) ; 0.94.x à partir de M19-E26 (voir ce fichier dans
-# corrige/fichiers/M19-E26/ : clé image.repository). Capacité et disponibilité : M19-E27.
+# composants/gitlab-runner/values.yaml (plateforme/k8s) — runner « k8s-par1 », chart
+# gitlab/gitlab-runner 0.93.0 (GitLab Runner 19.4.0) ; 0.94.x à partir de M19-E26 (clé
+# image.repository, voir corrige/fichiers/M19-E26/). Historique : M19-E04 (runner), E07 (cache S3,
+# racine MédiSphère dans les jobs), E08 (buildkitd), **E24 (SEC-2024) : durcissement Pod Security
+# « restricted » des pods de job et droits du gestionnaire réduits**. Capacité et disponibilité : E27.
+# Lu par la release gitlab-runner de releases/50-ci.yaml.gotmpl.
 #
-# Jeton : runner créé par l'API (POST /user/runners, E04), jeton glrt- en Vault critique
-# (secrets/gitlab-runner.yml) puis Secret « gitlab-runner-jeton » par outils/secrets-k8s.sh.
+# AUCUN secret ici. Secrets de l'espace gitlab-runner, créés par
+# « outils/secrets-k8s.sh appliquer gitlab-runner » depuis secrets/gitlab-runner.yml (Vault critique) :
+#   gitlab-runner        jeton glrt- (clés runner-token et runner-registration-token vide) ;
+#   gitlab-runner-certs  racine MédiSphère (fichier git01.par1.medisphere.internal.crt) ;
+#   ci-cache-s3          clés de l'identité ci-cache de s3-01 (accesskey, secretkey).
 # Avec un jeton glrt-, étiquettes, niveau d'accès et « run_untagged » se règlent CÔTÉ GITLAB :
-# runners.tags / runners.protected / runners.runUntagged du chart sont ignorés, on ne les pose pas.
+# runners.tags / runners.protected / runners.runUntagged du chart sont sans effet, on ne les pose pas.
+#
+# Changements de M19-E24 par rapport à M19-E08 (le reste est inchangé) :
+#   - [runners.kubernetes] : privileged, allow_privilege_escalation, cap_drop, pod_security_context
+#     (UID/GID 1000, fs_group, seccomp RuntimeDefault), contexte des services (UID 999) ;
+#   - environment : HOME=/tmp (images qui supposent /root inscriptible) ;
+#   - aucune clé *_overwrite_allowed (compte de service, espace, étiquettes de pod) : surcharge interdite ;
+#   - sessionServer désactivé, contexte de sécurité du gestionnaire complété (seccomp).
 
-gitlabUrl: https://git01.par1.medisphere.internal/
-
+# --- Image du gestionnaire : par le cache Harbor « gitlab » (registry.gitlab.com) ----------------
 image:
-  # Image du gestionnaire par le cache Harbor « gitlab » (registry.gitlab.com, M19-E04).
   registry: registry.par1.medisphere.internal
   image: gitlab/gitlab-org/gitlab-runner
-  # tag : alpine-v<appVersion du chart> par défaut ; ne pas le figer ici (il suit le chart).
+  tag: alpine-v19.4.0@sha256:a4838319e55b510c05b36d701d06362b9197458558c7b0d3d63f2c7588c7cd2f
+imagePullPolicy: IfNotPresent
 
-# Racine MédiSphère pour parler à git01 (E04) : Secret dont la clé porte le nom de l'hôte
-# (git01.par1.medisphere.internal.crt), monté dans /home/gitlab-runner/.gitlab-runner/certs/.
-certsSecretName: gitlab-runner-racine
-
-# Gestionnaire : pas de session interactive (terminal web), pas de métriques avant le M21.
-sessionServer:
-  enabled: false
+# --- Connexion à GitLab ---------------------------------------------------------------------------
+gitlabUrl: https://git01.par1.medisphere.internal/
+certsSecretName: gitlab-runner-certs
 unregisterRunners: true
 terminationGracePeriodSeconds: 3600
+# Pas de terminal web interactif vers les jobs (port de session) : rien à exposer.
+sessionServer:
+  enabled: false
 
-concurrent: 10
+concurrent: 6
 checkInterval: 3
 
-# --- Droits du gestionnaire (E24 étape 3) ---------------------------------------------------------
-# Une Role dans l'espace des JOBS (runners.jobNamespace), liée au compte du gestionnaire (espace
-# gitlab-runner). Liste de la documentation de GitLab Runner 19.x (« Configure runner API
-# permissions ») réduite aux fonctions utilisées : stratégie attach (pods/attach), exec, journaux,
-# Secrets d'identifiants de registre créés par job, compte de service vérifié, Services des
-# « services: » de job, événements (affichage des avertissements du pod).
+# --- Droits du gestionnaire (E24 étape 3) : une Role DANS ci-jobs, rien ailleurs ----------------
+# Liste de la documentation de GitLab Runner (« Configure runner API permissions ») réduite aux
+# fonctions utilisées : stratégie attach (pods/attach), exec, journaux, Secrets d'identifiants de
+# registre créés par job, compte de service vérifié, Services des « services: » de job, événements.
 # Pas de namespaces (pas de namespace_per_job), pas de configmaps/PVC (pas d'environnements
-# suspendables), pas de PDB par job (pod_disruption_budget non activé), pas d'autoscaler.
-# NB : le chart refuse « resourceNames » dans ces règles.
+# suspendables), pas de PDB par job. Une liste VIDE donnerait tout (« * » sur le groupe cœur).
 rbac:
   create: true
   clusterWideAccess: false
   rules:
     - apiGroups: [""]
-      resources: ["pods"]
-      verbs: ["create", "delete", "get", "list", "watch"]
+      resources: [pods]
+      verbs: [create, delete, get, list, watch]
     - apiGroups: [""]
-      resources: ["pods/attach", "pods/exec"]
-      verbs: ["create", "delete", "get", "patch"]
+      resources: [pods/attach, pods/exec]
+      verbs: [create, delete, get, patch]
     - apiGroups: [""]
-      resources: ["pods/log"]
-      verbs: ["get", "list"]
+      resources: [pods/log]
+      verbs: [get, list]
     - apiGroups: [""]
-      resources: ["secrets"]
-      verbs: ["create", "delete", "get", "update"]
+      resources: [secrets]
+      verbs: [create, delete, get, update]
     - apiGroups: [""]
-      resources: ["serviceaccounts"]
-      verbs: ["get"]
+      resources: [serviceaccounts]
+      verbs: [get]
     - apiGroups: [""]
-      resources: ["services"]
-      verbs: ["create", "get"]
+      resources: [services]
+      verbs: [create, get]
     - apiGroups: [""]
-      resources: ["events"]
-      verbs: ["list", "watch"]
-
+      resources: [events]
+      verbs: [list, watch]
 serviceAccount:
   create: true
   name: gitlab-runner
 
-# Conteneur du gestionnaire : valeurs du chart, explicites (non root, sans capacité).
+# --- Sécurité du pod du gestionnaire : Pod Security « restricted » --------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 100
+  fsGroup: 65533
+  seccompProfile:
+    type: RuntimeDefault
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: false
@@ -78,28 +90,34 @@ securityContext:
     drop: ["ALL"]
   seccompProfile:
     type: RuntimeDefault
-podSecurityContext:
-  runAsUser: 100
-  fsGroup: 65533
-
 resources:
-  requests: {cpu: 50m, memory: 128Mi}
-  limits: {cpu: 500m, memory: 256Mi}
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
 
+# --- Les runners de ce gestionnaire -----------------------------------------------------------------
 runners:
-  # Espace des pods de job : le chart y crée la Role (rbac.create) ; le TOML ci-dessous le reprend.
-  jobNamespace: ci-jobs
-  secret: gitlab-runner-jeton
-  name: k8s-par1
-  executor: kubernetes
-  # Cache S3 (E07) : Secret « ci-cache-s3 » (clés accesskey, secretkey) de l'espace gitlab-runner.
+  secret: gitlab-runner
   cache:
     secretName: ci-cache-s3
+  # Espace des pods de job : le chart y crée la Role (rbac.create) ; le TOML ci-dessous le reprend.
+  jobNamespace: ci-jobs
+  executor: kubernetes
+  name: k8s-par1
   config: |
     [[runners]]
       output_limit = 8192
-      # HOME inscriptible pour les images qui supposent root (/root non inscriptible en UID 1000).
-      environment = ["HOME=/tmp"]
+      # E07 : racine MédiSphère pour le helper (Go lit SSL_CERT_DIR) ; E08 : démon BuildKit partagé ;
+      # E24 : HOME inscriptible pour les images qui supposent /root (UID 1000 désormais).
+      environment = [
+        "SSL_CERT_DIR=/etc/ssl/certs:/etc/medisphere/ca",
+        "BUILDKIT_HOST=tcp://buildkitd.buildkit.svc.cluster.local:1234",
+        "BUILDKIT_TLS_DIR=/etc/buildkit/client",
+        "HOME=/tmp",
+      ]
       [runners.cache]
         Type = "s3"
         Path = "k8s-par1"
@@ -108,41 +126,52 @@ runners:
           ServerAddress = "s3-01.par1.medisphere.internal:8333"
           BucketName = "ci-cache"
           BucketLocation = "us-east-1"
+          PathStyle = true
           Insecure = false
       [runners.kubernetes]
         namespace = "{{ .Values.runners.jobNamespace }}"
         service_account = "ci-job"
         # --- E24 : aucun accès à l'API Kubernetes depuis un job -----------------------------------
         automount_service_account_token = false
-        # Aucune surcharge par les variables KUBERNETES_* du .gitlab-ci.yml pour l'identité et
-        # l'espace : clés *_overwrite_allowed absentes (vides = fonction désactivée).
-        # --- E24 : Pod Security « restricted » ------------------------------------------------------
+        # Aucune clé *_overwrite_allowed (service_account, namespace, pod_labels, pod_annotations) :
+        # absentes = surcharge par les variables KUBERNETES_* interdite.
+        # --- E24 : Pod Security « restricted » pour TOUS les conteneurs du pod -------------------
         privileged = false
         allow_privilege_escalation = false
         cap_drop = ["ALL"]
-        # Images : Harbor seulement (caches dockerhub, quay, ghcr, gitlab, k8s et projets internes).
-        # Motif « ** » (plusieurs niveaux de chemin) : à vérifier sur ton lab, sinon énumère
-        # registry.par1.medisphere.internal/*/*:* et …/*/*/*:*.
-        allowed_images = ["registry.par1.medisphere.internal/**/*"]
-        allowed_services = ["registry.par1.medisphere.internal/**/*"]
+        image = "registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad"
+        # Helper par le cache Harbor « gitlab », étiquette ET empreinte (E04) : à changer avec la
+        # version du runner (E26). Alternative documentée : « x86_64-v${CI_RUNNER_VERSION} », qui suit
+        # seule la montée mais perd l'empreinte (choix à écrire dans cloisonnement.md).
+        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.4.0@sha256:13188cca15a2d44fc621d42da4efb42b81c9527e072d07aab29468dea15af831"
+        allowed_images = ["registry.par1.medisphere.internal/**"]
+        allowed_services = ["registry.par1.medisphere.internal/**"]
+        pull_policy = ["if-not-present"]
         allowed_pull_policies = ["if-not-present", "always"]
-        image = "registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim"
-        # Image helper par le cache Harbor « gitlab », version suivie automatiquement (E26).
-        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v${CI_RUNNER_VERSION}"
-        poll_timeout = 600
-        # Demandes et limites par défaut, surcharges bornées (valeurs de E04 ; revues en E27).
-        cpu_request = "100m"
-        cpu_limit = "1"
-        cpu_limit_overwrite_max_allowed = "2"
-        memory_request = "256Mi"
-        memory_limit = "1Gi"
-        memory_limit_overwrite_max_allowed = "3Gi"
-        helper_cpu_request = "50m"
-        helper_memory_request = "64Mi"
-        helper_memory_limit = "256Mi"
+        # Demandes et limites (E04 ; revues en E27).
+        cpu_request = "250m"
+        memory_request = "512Mi"
+        cpu_limit = "2"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "4"
+        memory_request_overwrite_max_allowed = "4Gi"
+        cpu_limit_overwrite_max_allowed = "4"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        helper_cpu_request = "100m"
+        helper_memory_request = "128Mi"
+        helper_cpu_limit = "1"
+        helper_memory_limit = "512Mi"
         service_cpu_request = "100m"
         service_memory_request = "256Mi"
+        service_cpu_limit = "1"
         service_memory_limit = "1Gi"
+        # M19-E14 : plafonds de ce qu'un job peut demander pour chacun de ses services.
+        service_cpu_request_overwrite_max_allowed = "500m"
+        service_memory_request_overwrite_max_allowed = "512Mi"
+        service_cpu_limit_overwrite_max_allowed = "1"
+        service_memory_limit_overwrite_max_allowed = "1Gi"
+        poll_timeout = 600
+        # Contexte du POD : hérité par init-permissions, build et helper.
         [runners.kubernetes.pod_security_context]
           run_as_non_root = true
           run_as_user = 1000
@@ -150,11 +179,19 @@ runners:
           fs_group = 1000
           [runners.kubernetes.pod_security_context.seccomp_profile]
             type = "RuntimeDefault"
-        # Les services (PostgreSQL, Valkey : E14) gardent leur utilisateur d'image s'il n'est pas root ;
-        # les images officielles postgres et valkey démarrent en root puis changent d'utilisateur :
-        # on leur impose l'utilisateur de l'image (999) — voir cloisonnement.md.
+        # Services (PostgreSQL, Valkey : E14) : les images officielles démarrent en root puis changent
+        # d'utilisateur ; on leur impose directement l'utilisateur de l'image (999), voir cloisonnement.md.
         [runners.kubernetes.service_container_security_context]
           run_as_user = 999
           run_as_group = 999
+        # Étiquette de E04 : sélecteur des politiques réseau (buildkitd, E08) et des vérifications.
         [runners.kubernetes.pod_labels]
-          "medisphere.internal/role" = "ci-job"
+          "medisphere.internal/ci" = "job"
+        [[runners.kubernetes.volumes.config_map]]
+          name = "medisphere-racine"
+          mount_path = "/etc/medisphere/ca"
+          read_only = true
+        [[runners.kubernetes.volumes.secret]]
+          name = "buildkit-client"
+          mount_path = "/etc/buildkit/client"
+          read_only = true

@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : palier 5 — Mini-projet
+# Module 20 — Palier 5 : Mini-projet
 
 Le module a fait passer MédiSphère d'un `helmfile apply` et d'un `kubectl apply -k` lancés depuis `adm01` à une plateforme où Git décrit tout, où Argo CD converge en continu, où les versions passent de dev à la production par MR, canary et analyses, où la CI n'a plus aucun droit sur les applications, et où chaque panne du palier 4 a laissé un runbook. Il reste à le **livrer** : une brique propre, sans provisoire — le cluster de l'agence et la VM de comparaison avec Flux ont fait leur temps —, documentée, et prête pour les modules suivants, qui ajouteront leurs services de plateforme comme des Applications de `plateforme/gitops`. C'est ce que Claire Morel présentera au comité de direction et à l'auditeur HDS comme « MédiSphère en GitOps v1 ».
 
@@ -28,7 +28,7 @@ Le module a fait passer MédiSphère d'un `helmfile apply` et d'un `kubectl appl
 
 | Élément | État attendu à la livraison |
 |---|---|
-| Argo CD | 3.5.5, release Helmfile `argocd` sans dérive (`helmfile diff` vide) ; HA (E27) ; `admin` désactivé, comptes locaux `<MOI>`, `karim-benali`, `julien-petit`, `nadia-roussel`, `ci-lecture` ; RBAC par équipe testé en CI (E24) ; durcissement (E25) ; webhooks GitLab → Argo CD (E27) ; sauvegarde et procédure de reconstruction (E28, RB-201) ; notifications vers Mailpit (E19) |
+| Argo CD | 3.5.5, release Helmfile `argocd` sans dérive (`helmfile diff` vide) ; HA (E27) ; `admin` désactivé, comptes locaux `<MOI-ARGO>`, `karim-benali`, `julien-petit`, `nadia-roussel`, `ci-lecture` ; RBAC par équipe testé en CI (E24) ; durcissement (E25) ; webhooks GitLab → Argo CD (E27) ; sauvegarde et procédure de reconstruction (E28, RB-201) ; notifications vers Mailpit (E19) |
 | `plateforme/gitops` | racine Synced et propriétaire de tout ; AppProjects par équipe ; **toutes** les Applications de `mediagenda-*` et `medidoc-*` générées par un ApplicationSet ; `prod` sans synchronisation automatique, fenêtres de synchronisation et gel (E29) ; `PruneLast=true`, `FailOnSharedResource=true` ; services de plateforme : `argo-rollouts` (les modules 21 à 23 ajouteront les leurs dans `plateforme/`) |
 | Livraison | promotion par MR (`outils/promouvoir.sh`, E14) ; canary + analyses (`fumee-mediagenda`, `pret-mediagenda`) en recette et en prod ; component `protection-donnees` dans les trois overlays ; porte de MR `verifier-overlays` (E36) |
 | CI | aucun droit d'écriture sur les espaces applicatifs (agent `k8s-par1` limité à `wb-essais`, E30) ; pipeline de `mediagenda/deploiement` = validation seulement |

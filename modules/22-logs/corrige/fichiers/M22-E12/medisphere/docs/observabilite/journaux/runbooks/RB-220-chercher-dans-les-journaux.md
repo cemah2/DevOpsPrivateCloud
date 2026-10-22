@@ -53,9 +53,10 @@ admin@adm01:~$ logcli --org-id=mediagenda query --tail '{namespace="mediagenda-r
 
 ## 3. Droits : qui voit quoi
 
-- Grafana : chaque équipe voit **sa** source (dossiers et équipes du M21) ; l'astreinte et la
-  Plateforme voient les quatre. Grafana OSS ne restreint pas une source par équipe : voir M22-E16 et
-  `politique-journaux.md` §3.
+- Grafana : chaque équipe interroge **sa** source (dossiers et équipes du M21) ; l'astreinte et la
+  Plateforme utilisent les quatre. Grafana OSS ne restreint pas une source par équipe : à partir de
+  M22-E16, « Loki — audit » (UID `loki-audit`) n'existe plus que dans l'organisation Grafana
+  **Sécurité** (bascule d'organisation dans le menu de Grafana) ; voir `politique-journaux.md` §3.
 - `logcli` depuis `adm01` : réservé à l'équipe Plateforme (le Service 10.10.41.62 n'est lisible que
   depuis MGMT, CNP `loki-entree`).
 - Locataire `audit` : Plateforme et RSSI seulement. Toute recherche dans l'audit pendant un incident

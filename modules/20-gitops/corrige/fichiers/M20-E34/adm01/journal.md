@@ -1,4 +1,4 @@
-# ~/m20-e34/journal.md — journal de changement (M20-E34), exemple de référence
+# ~/m20/e34/journal.md — journal de changement (M20-E34), exemple de référence
 
 CHG-2134 — mise en production de MédiAgenda v1.4.0
 Digest livré : sha256:<DIGEST-DE-LA-RECETTE>   (overlays/recette/kustomization.yaml, main)
@@ -14,4 +14,4 @@ Digest livré : sha256:<DIGEST-DE-LA-RECETTE>   (overlays/recette/kustomization.
 3. Dans tous les cas : ticket INC si des utilisateurs ont été touchés.
 
 ## Diff montré par Argo CD avant synchronisation (tâche 3)
-- Deployment/mediagenda : image (digest) ; ConfigMap livraison (version) ; Job mediagenda-migrate (crochet PreSync, nouvelle image)
+- Deployment/mediagenda : image (digest) ; ConfigMap livraison (version) ; Job mediagenda-migrate (hook Sync en vague -1, nouvelle image)

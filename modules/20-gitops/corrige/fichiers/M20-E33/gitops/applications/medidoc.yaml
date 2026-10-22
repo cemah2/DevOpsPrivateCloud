@@ -1,8 +1,8 @@
-# plateforme/gitops — applications/medidoc.yaml (palier 2 : dev ; M20-E33, DEV-2133 : + recette)
+# plateforme/gitops — applications/medidoc.yaml (M20-E33, DEV-2133 : dev et recette)
 # Même modèle que l'ApplicationSet mediagenda (M20-E10) : liste explicite, create-update,
 # preserveResourcesOnDeletion, ServerSideApply, pas de CreateNamespace (espaces créés par la plateforme).
-# Ajouter l'environnement « recette » = un élément de liste ; l'Application medidoc-dev existante est
-# reprise à l'identique (même nom, même source, même destination) : aucun objet recréé.
+# Un environnement = un élément de liste. medidoc-dev, appliqué à la main jusqu'ici (M19-E33), est
+# repris par la méthode d'E08 (diff vide avant la première synchronisation) : aucun objet recréé.
 # Future production : un élément « prod » avec auto: false (synchronisation manuelle, fenêtre de E29).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet

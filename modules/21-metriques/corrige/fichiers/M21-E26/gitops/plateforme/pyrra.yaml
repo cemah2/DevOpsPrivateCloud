@@ -8,6 +8,8 @@ metadata:
   name: pyrra
   namespace: argocd
   # Pas de finaliseur : supprimer cette Application ne supprime pas la CRD (donc pas les SLO).
+  labels:
+    medisphere.internal/equipe: plateforme
   annotations:
     medisphere.internal/ticket: "PLAT-2226"
 spec:

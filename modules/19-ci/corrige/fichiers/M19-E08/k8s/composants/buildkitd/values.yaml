@@ -7,7 +7,7 @@ image:
   empreinte: sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89
 
 tls:
-  # M19-E24 ajoute ci-jobs-protege (runner protégé).
+  # Le runner protégé (M19-E24) ne construit pas : ci-jobs-protege n'est PAS client du démon.
   clients:
     - ci-jobs
 

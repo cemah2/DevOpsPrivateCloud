@@ -1,14 +1,14 @@
-# plateforme/ci-templates — templates/securite/template.yml, version 2.1.0 (M19-E24, SEC-2024).
-# EXTRAIT : différences avec la v2.0.0 de M19-E10 (même fichier dans corrige/fichiers/M19-E10/).
+# plateforme/ci-templates — templates/securite/template.yml, version v2.7.0 (M19-E24, SEC-2024).
+# EXTRAIT : différences avec la v2.3.0 de M19-E15 (dernière version du composant, corrige/fichiers/M19-E15/).
 #   - trois entrées ajoutées à « spec » (runner protégé, chemins de la clé montée) ;
 #   - securite:signature tourne sur le runner protégé et lit la clé dans le fichier MONTÉ PAR LE
 #     RUNNER (plus de variable COSIGN_PRIVATE_KEY / COSIGN_PASSWORD) ;
 #   - securite:trivy, securite:sbom et securite:verification sont inchangés.
-# Pour un projet consommateur : passer de @2.0.0 à @2.1.0, rien d'autre.
+# Pour un projet consommateur : passer de @v2.3.0 (ou plus) à @v2.7.0, rien d'autre.
 spec:
   inputs:
-    # … entrées de la v2.0.0 inchangées (stage_analyse, stage, runner, severite_bloquante,
-    #   plateforme_analyse, image_outils, job_construction, job_publication) …
+    # … entrées de la v2.3.0 inchangées (stage_lint, stage_analyse, stage, runner, severite_bloquante,
+    #   plateforme_analyse, semgrep_*, image_*, signer, job_construction, job_publication) …
     runner_protege:
       description: "Étiquette du runner protégé, seul à détenir la clé de signature (M19-E24)"
       default: protege
@@ -19,8 +19,8 @@ spec:
       description: "Chemin du mot de passe de la clé, monté par le runner protégé"
       default: /run/secrets/medisphere/cosign/cosign.password
 ---
-# … .securite-v2-base, .securite-v2-toujours, .securite-v2-publiee, securite:trivy, securite:sbom
-#   inchangés …
+# … .securite-v2-code, securite:semgrep, securite:gitleaks, .securite-v2-base, .securite-v2-toujours,
+#   .securite-v2-publiee, securite:trivy, securite:sbom de la v2.3.0 inchangés …
 
 securite:signature:
   extends: [.securite-v2-base, .securite-v2-publiee]
@@ -49,7 +49,7 @@ securite:signature:
     # Mot de passe lu dans le fichier monté, jamais affiché ni passé en argument (Cosign lit
     # COSIGN_PASSWORD dans l'environnement).
     - COSIGN_PASSWORD="$(cat "$[[ inputs.mot_de_passe_cosign ]]")"; export COSIGN_PASSWORD
-    # … boucle d'attente de l'analyse de Harbor de la v2.0.0, inchangée …
+    # … boucle d'attente de l'analyse de Harbor de la v2.3.0, inchangée …
     - cosign sign --key "$[[ inputs.cle_cosign ]]" --signing-config /etc/medisphere/signing-config.json "$IMAGE_REF"
     - |
       depot="${IMAGE_REF%@*}"; empreinte="${IMAGE_REF#*@}"

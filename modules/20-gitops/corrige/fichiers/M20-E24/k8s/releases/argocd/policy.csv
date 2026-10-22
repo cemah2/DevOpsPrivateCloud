@@ -8,14 +8,14 @@
 # Objet : <projet>/<application> pour applications, applicationsets, logs, exec ; nom du projet pour
 # projects ; URL du serveur pour clusters ; URL du dépôt pour repositories.
 # Comptes locaux (M20-E03) : pas de point dans un nom de compte local (accounts.<nom> d'argocd-cm est
-# découpé sur les points) ; <MOI> = ton nom GitLab, points remplacés par des tirets.
+# découpé sur les points) ; <MOI-ARGO> = ton nom GitLab, points remplacés par des tirets.
 # Une ligne vide ou commençant par « # » est ignorée par Argo CD.
 
 # --- Administration de la plateforme ------------------------------------------------------------
 # role:admin est le rôle intégré (assets/builtin-policy.csv) : tout, y compris clusters, dépôts,
 # projets et comptes. Deux personnes seulement ; le compte « admin » est désactivé (argocd-cm).
 g, role:plateforme-admin, role:admin
-g, <MOI>, role:plateforme-admin
+g, <MOI-ARGO>, role:plateforme-admin
 g, karim-benali, role:plateforme-admin
 
 # --- Lecture (support, astreinte, vérifications du workbook) --------------------------------------

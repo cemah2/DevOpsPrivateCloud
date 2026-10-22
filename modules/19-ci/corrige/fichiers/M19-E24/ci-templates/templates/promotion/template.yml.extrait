@@ -1,49 +1,26 @@
-# plateforme/ci-templates — templates/promotion/template.yml, version 2.1.0 (M19-E24, SEC-2024),
+# plateforme/ci-templates — templates/promotion/template.yml, version v2.7.0 (M19-E24, SEC-2024),
 # complétée en M19-E25 (portée d'environnement de DEPLOIEMENT_TOKEN).
-# EXTRAIT : seuls changent l'étiquette du runner et l'environnement déclaré par les jobs de
-# promotion de E17 (promotion:dev automatique sur étiquette vX.Y.Z, promotion:recette et
-# promotion:prod manuels). Leur script (clone de mediagenda/deploiement avec DEPLOIEMENT_TOKEN,
-# kustomize edit set image par digest, branche promotion/<env>-vX.Y.Z, MR) est inchangé.
+# EXTRAIT : différences avec la v2.4.0 (M19-E17, même fichier dans corrige/fichiers/M19-E17/).
+#   - le job promouvoir-<overlay> tourne sur le runner protégé (entrée « runner », défaut « protege ») ;
+#   - E25 : il déclare l'environnement « promotion/<overlay> » en action « prepare », pour recevoir
+#     DEPLOIEMENT_TOKEN de portée « promotion/* » sans enregistrer de déploiement.
+# Les entrées (overlay, declenchement, projet_deploiement, nom_image, stage, job_publication,
+# job_verification, image_k8s), les règles et le script de E17 sont inchangés.
+# Pour un projet consommateur : passer de @v2.4.0 (ou plus) à @v2.7.0, rien d'autre.
 spec:
   inputs:
-    # … entrées de la v2.0.0 (projet_deploiement, image, …) inchangées …
-    etiquette_runner_protege:
-      description: "Étiquette du runner protégé (seul à recevoir DEPLOIEMENT_TOKEN en pratique)"
-      default: "protege"
+    # … entrées de la v2.4.0 inchangées, sauf le défaut de « runner » …
+    runner:
+      description: "Étiquette du runner : le runner protégé k8s-par1-protege (seul à prendre ces jobs)"
+      default: protege
 ---
-.promotion-commun:
-  tags: ["$[[ inputs.etiquette_runner_protege ]]"]
+promouvoir-$[[ inputs.overlay ]]:
+  stage: $[[ inputs.stage ]]
+  tags: ["$[[ inputs.runner ]]"]
   # E25 : DEPLOIEMENT_TOKEN est une variable de projet de portée « promotion/* » : seul un job qui
   # déclare un environnement de ce nom la reçoit. « prepare » : aucun déploiement n'est enregistré
   # (la promotion ouvre une MR, elle ne déploie pas).
   environment:
-    name: promotion/$CIBLE
+    name: promotion/$[[ inputs.overlay ]]
     action: prepare
-
-promotion:dev:
-  extends: .promotion-commun
-  variables:
-    CIBLE: dev
-  rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
-  # … script de E17 …
-
-promotion:recette:
-  extends: .promotion-commun
-  variables:
-    CIBLE: recette
-  rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
-      when: manual
-      allow_failure: true
-  # … script de E17 …
-
-promotion:prod:
-  extends: .promotion-commun
-  variables:
-    CIBLE: prod
-  rules:
-    - if: $CI_COMMIT_REF_PROTECTED == "true" && $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
-      when: manual
-      allow_failure: true
-  # … script de E17 …
+  # … image, interruptible, rules, needs, resource_group, variables et script de la v2.4.0 inchangés …

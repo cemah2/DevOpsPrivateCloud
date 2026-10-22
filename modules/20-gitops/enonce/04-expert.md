@@ -1,4 +1,4 @@
-# Module 20 — GitOps et déploiement continu : palier 4 — Expert
+# Module 20 — Palier 4 : Expert
 
 MédiSphère est en GitOps : Argo CD réconcilie les trois environnements de MédiAgenda, MédiDoc, le cluster de l'agence de Lyon et les services de plateforme ; la CI n'a plus aucun droit d'écriture sur les espaces applicatifs ; les mises en production passent par MR, canary et analyses. Nadia Roussel pose la question que tout le monde évite : « Quand Argo CD affiche du jaune ou du rouge, qui sait lire ce qu'il dit ? Et quand il affiche du vert alors que rien n'est déployé ? » Karim Benali a préparé huit pannes, toutes de celles qu'on trouve dans les post-mortems publics des équipes GitOps : une application qui ne revient jamais à `Synced`, une synchronisation refusée, un dépôt devenu illisible, une application `Degraded` après une synchronisation « réussie », une dérive qui revient sans cesse, un canary qui ne va pas au bout, une synchronisation qui a supprimé des ressources, un cluster distant perdu. Une astreinte en combine trois pendant une mise en production. Puis tu descends sous le capot, du commit à l'objet, et tu passes les questions qu'on pose en entretien.
 
@@ -375,7 +375,7 @@ Dans un `kustomize` de components, l'ordre compte : un correctif avec `target` n
 1. Constate côté Argo CD : `argocd cluster list`, `argocd cluster get https://lyo-k3s01.par1.medisphere.internal:6443`, conditions de `labo-lyo-k3s01`. Message exact.
 2. Teste la connexion depuis un pod de `k8s-par1` et depuis un nœud (TCP 6443, TLS avec la bonne autorité), puis côté `lyo-k3s01` : compte `argocd-gestion`, son jeton, ses droits (`k3s kubectl auth can-i … --as=system:serviceaccount:agence:argocd-gestion`), le pare-feu local (`nft list ruleset`).
 3. Trouve l'étage en cause et ce qui l'a modifié (Secret de cluster, règles, liaisons RBAC).
-4. Corrige à la source : Secret de cluster par `secrets-k8s.sh argocd` depuis le Vault ; règles et droits de `lyo-k3s01` par le playbook `m20-lyo.yml` (pas à la main), et note dans ton journal ce que l'agence voulait obtenir avec son « ménage ».
+4. Corrige à la source : Secret de cluster par `secrets-k8s.sh appliquer argocd` depuis le Vault ; règles et droits de `lyo-k3s01` par le playbook `m20-lyo.yml` (pas à la main), et note dans ton journal ce que l'agence voulait obtenir avec son « ménage ».
 5. Vérifie : cluster `Successful`, `labo-lyo-k3s01` `Synced` et `Healthy`, et `argocd-gestion` toujours limité à l'espace `agence`.
 6. Complète RB-200 d'une section « Un cluster distant est Unknown ».
 

@@ -12,8 +12,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m23-operationnel.sh"
 title "M23-E12 — Trouver où passe le temps"
 require_cmd jq kubectl curl
 
-_m23o_e12_marqueur="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/pannes-actives/M23-E12"
-check_cmd "la lenteur injectée n'est plus active (lab/bin/break 23 12 réparé, sans --annuler en cours)" test ! -e "$_m23o_e12_marqueur"
+_m23o_e12_etat="${XDG_STATE_HOME:-$HOME/.local/state}/workbook"
+check_cmd "panne close après réparation (lab/bin/break 23 12 --annuler lancé une fois la lenteur corrigée)" \
+  test ! -e "$_m23o_e12_etat/pannes-actives/M23-E12"
+check_cmd "lenteur corrigée par toi (l'annulation ne l'a pas trouvée encore en place)" \
+  test ! -e "$_m23o_e12_etat/M23-E12.abandon"
 check_cmd "plateforme/medisphere : journal de diagnostic INC-5012 (traces, span, cause, prévention)" \
   _m23d_doc_nom docs/kubernetes/journal INC-5012 'trace' 'span' 'cause' 'pr[ée]vention'
 

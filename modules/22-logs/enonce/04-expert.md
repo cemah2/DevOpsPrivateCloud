@@ -1,4 +1,4 @@
-# Module 22 — Journaux : palier 4 — Expert
+# Module 22 — Palier 4 : Expert
 
 Les journaux de MédiSphère sont centralisés, cloisonnés, conservés selon des règles écrites, protégés. Nadia Roussel pose la question qu'elle pose à la fin de chaque module : « Le jour où les journaux eux-mêmes tombent en panne, au moment précis où on en a besoin, qui sait quoi faire ? » Karim Benali a préparé quatre pannes tirées de vrais incidents de plateformes de journaux — un nœud qui devient muet, Loki qui refuse d'écrire, des requêtes qui expirent, une équipe qui ne voit plus rien — puis une astreinte où il faut **enquêter par les journaux** pendant que l'outillage des journaux fait des siennes. Tu finis sous le capot : ce que deviennent une ligne, un chunk et un index entre Alloy et le compartiment.
 
@@ -51,7 +51,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 2. Situe l'étage : le pod Alloy du nœud existe-t-il, est-il prêt, que disent son interface (composants en erreur) et ses journaux ? Sinon, pourquoi le DaemonSet ne le planifie-t-il pas (`desiredNumberScheduled`, événements, taints, tolérances) ? Si Alloy tourne, sur le nœud : journald écrit-il encore, et où (`journalctl --header`, `systemd-analyze cat-config systemd/journald.conf`) ?
 3. Trouve la cause racine et son auteur (commit, annotation, fichier, journal du nœud), corrige-la au bon endroit (Git si c'est la configuration d'Alloy, le nœud par Ansible si c'est le système), sans perdre ce qu'il reste du journal.
 4. Vérifie le retour : lignes récentes de chaque nœud, journal d'audit, `lab/bin/check 22 19`. Ce qui n'a pas été collecté pendant la panne l'est-il après coup ? Pourquoi ?
-5. Écris le runbook **RB-222** « Des journaux manquent (nœud, équipe) » (`docs/observabilite/journaux/runbooks/RB-222-*.md`) : un arbre de décision par étage (planification du DaemonSet, état d'Alloy, sources sur le nœud, envoi), avec la commande qui prouve chaque branche. Ajoute ce qui aurait dû alerter (Alloy absent d'un nœud, nœud muet depuis 10 min).
+5. Écris le runbook **RB-222** « Des journaux manquent (nœud, équipe) » (`docs/observabilite/journaux/runbooks/RB-222-*.md`) : un arbre de décision par étage (planification du DaemonSet, état d'Alloy, sources sur le nœud, envoi), avec la commande qui prouve chaque branche. Ajoute ce qui aurait dû alerter (Alloy absent d'un nœud, nœud muet depuis 10 min), et écris l'alerte « Alloy absent d'un nœud » en règle Prometheus dans `plateforme/observabilite/regles/` (le mini-projet l'éprouve).
 
 **Critères de réussite**
 - [ ] Alloy est prêt sur les six nœuds, avec une tolérance qui couvre les nœuds de contrôle ; aucune taint de maintenance oubliée.
@@ -75,7 +75,7 @@ Si Alloy tourne sur le nœud, écris une ligne de test dans journald (`logger -t
 `git log -p -- alloy/` dans `plateforme/observabilite`, l'historique de l'Application `alloy` dans Argo CD, les annotations du nœud, la date des fichiers de `/etc/systemd/journald.conf.d/` : la panne a laissé une trace. Un répertoire du journal renommé se remet en place et se recharge (`journalctl --flush`) ; on ne le supprime pas.
 </details>
 
-**Pour aller plus loin** : mesure combien de temps Alloy met à rattraper un nœud après 10 minutes d'arrêt de son pod (métrique `loki_write_sent_entries_total` et âge des lignes) ; écris l'alerte « nœud muet » en LogQL (*ruler*) et en PromQL (`kube_daemonset_status_number_ready`), et compare.
+**Pour aller plus loin** (facultatif) : mesure combien de temps Alloy met à rattraper un nœud après 10 minutes d'arrêt de son pod (métrique `loki_write_sent_entries_total` et âge des lignes) ; écris l'alerte « nœud muet » en LogQL (*ruler*) et en PromQL (`kube_daemonset_status_number_ready`), et compare.
 
 ---
 
@@ -120,7 +120,7 @@ Si Alloy tourne sur le nœud, écris une ligne de test dans journald (`logger -t
 Pour un problème de stockage : `kubectl -n journaux logs loki-0 -c loki | grep -i -E 's3|bucket|denied|signature'`, puis une requête sur une plage ancienne (qui doit lire le compartiment). Compare les identifiants du Secret avec ceux de `~/.config/workbook/s3-loki.env` **sans les afficher** (une empreinte `sha256sum` suffit).
 </details>
 
-**Pour aller plus loin** : provoque toi-même un `429` sur le locataire `essai` (limite basse, `ressources/E13-effacement/pousser-essai.sh` en boucle) et mesure le comportement d'Alloy (`max_backoff_retries`, `retry_on_http_429`) ; lis dans la documentation d'Alloy ce que change le WAL expérimental de `loki.write` en 1.21.
+**Pour aller plus loin** (facultatif) : provoque toi-même un `429` sur le locataire `essai` (limite basse, `ressources/E13-effacement/pousser-essai.sh` en boucle) et mesure le comportement d'Alloy (`max_backoff_retries`, `retry_on_http_429`) ; lis dans la documentation d'Alloy ce que change le WAL expérimental de `loki.write` en 1.21.
 
 ---
 
@@ -163,7 +163,7 @@ Pour un problème de stockage : `kubectl -n journaux logs loki-0 -c loki | grep 
 Une limite par locataire peut venir de deux endroits : `limits_config` (pour tous) ou une surcharge du locataire dans `runtimeConfig`. `git log -p -- loki/values.yaml` dans `plateforme/observabilite` dit lequel a bougé.
 </details>
 
-**Pour aller plus loin** : mesure l'effet de `split_queries_by_interval: 0` (découpage désactivé) sur la requête de 7 jours, puis l'effet du cache des résultats sur la deuxième exécution ; ajoute les deux mesures à `performance.md`.
+**Pour aller plus loin** (facultatif) : mesure l'effet de `split_queries_by_interval: 0` (découpage désactivé) sur la requête de 7 jours, puis l'effet du cache des résultats sur la deuxième exécution ; ajoute les deux mesures à `performance.md`.
 
 ---
 
@@ -206,7 +206,7 @@ Une limite par locataire peut venir de deux endroits : `limits_config` (pour tou
 Une requête qui ne renvoie que les dernières minutes, toujours la même durée, quelle que soit la plage demandée, ressemble à une limite. `curl -s -H 'X-Scope-OrgID: medidoc' "$LOKI_ADDR/config/tenant/v1/limits"` et l'historique de `loki/values.yaml` le confirment ou l'infirment.
 </details>
 
-**Pour aller plus loin** : écris une alerte du *ruler* qui sonne quand des flux d'espaces `mediagenda-*` ou `medidoc-*` apparaissent dans le locataire `plateforme`.
+**Pour aller plus loin** (facultatif) : écris une alerte du *ruler* qui sonne quand des flux d'espaces `mediagenda-*` ou `medidoc-*` apparaissent dans le locataire `plateforme`.
 
 ---
 
@@ -256,7 +256,7 @@ Dans le locataire `audit`, un geste se trouve par sa ressource et sa sous-ressou
 Ton propre nom apparaît aussi dans l'audit à l'heure de l'injection (le script de panne agit avec ton kubeconfig, comme au M14) : en production, ce serait l'identité de la personne qui a préparé « l'outil ». Ne le confonds pas avec l'identité qui a supprimé.
 </details>
 
-**Pour aller plus loin** : transforme l'alerte du point 4 en règle du *ruler* (locataire `audit`) avec son test, et ajoute à RB-220 une section « enquête » avec les requêtes qui t'ont servi.
+**Pour aller plus loin** (facultatif) : transforme l'alerte du point 4 en règle du *ruler* (locataire `audit`) avec son test, et ajoute à RB-220 une section « enquête » avec les requêtes qui t'ont servi.
 
 ---
 
@@ -305,4 +305,4 @@ Les clés de chunks commencent par le locataire ; `aws s3 ls s3://loki-k8s-par1/
 `N` dans `loki_index_N` est un numéro de période : le nombre de jours depuis le 1er janvier 1970 (la période d'index est de 24 h). `date -u -d @$((N * 86400))` le vérifie. Les fichiers d'une table sont compressés (`.gz`) : on peut en compter et en mesurer, pas les lire sans outil.
 </details>
 
-**Pour aller plus loin** : construis `tools/tsdb/index-analyzer` du dépôt de Loki et analyse une table d'index téléchargée ; compare le nombre de séries avec `logcli series` sur la même journée.
+**Pour aller plus loin** (facultatif) : construis `tools/tsdb/index-analyzer` du dépôt de Loki et analyse une table d'index téléchargée ; compare le nombre de séries avec `logcli series` sur la même journée.

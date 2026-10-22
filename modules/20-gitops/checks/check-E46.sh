@@ -142,7 +142,7 @@ check_cmd "matrice des flux (docs/socle/matrice-flux.md) sans flux actif vers ly
   bash -c '[ -f "$1" ] && ! grep -E "10\.10\.99\.6[12]|lyo-k3s01|flux01" "$1" | grep -viq "retir"' _ "$_m20x_depot/docs/socle/matrice-flux.md"
 
 # --- 6. Documentation et étiquette ---------------------------------------------------------------
-for _m20_e46_d in "docs/livraison/gitops/ADR-0200*.md docs/livraison/gitops/adr/ADR-0200*.md" "$_m20x_rb200" \
+for _m20_e46_d in "docs/livraison/gitops/adr/ADR-0200*.md" "$_m20x_rb200" \
   "docs/livraison/gitops/promotion.md" "docs/livraison/gitops/politique-changements.md" \
   "docs/livraison/gitops/comparatif-flux.md" "docs/livraison/gitops/sous-le-capot.md" \
   "docs/livraison/gitops/recette-gitops-v1.md"; do

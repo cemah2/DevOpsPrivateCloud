@@ -2,7 +2,7 @@
 # Tests de la politique RBAC d'Argo CD, joués par outils/argocd-rbac-tests.sh (CI et adm01).
 # Une ligne par cas : ATTENDU SUJET ACTION RESSOURCE OBJET
 #   ATTENDU   oui | non
-#   SUJET     compte local ou rôle (role:…) ; <MOI> comme dans policy.csv
+#   SUJET     compte local ou rôle (role:…) ; <MOI-ARGO> comme dans policy.csv
 #   ACTION    get, create, update, delete, sync, override, action/<groupe>/<kind>/<action>, invoke
 #   RESSOURCE applications, applicationsets, projects, clusters, repositories, logs, exec, accounts…
 #   OBJET     <projet>/<application>, nom du projet, URL du cluster ou du dépôt, ou « * »
@@ -10,7 +10,7 @@
 # test « non » qui montre sa limite.
 
 # Administration
-oui <MOI>          sync     applications mediagenda/mediagenda-prod
+oui <MOI-ARGO>     sync     applications mediagenda/mediagenda-prod
 oui karim-benali   update   projects     mediagenda
 oui karim-benali   create   clusters     https://lyo-k3s01.par1.medisphere.internal:6443
 

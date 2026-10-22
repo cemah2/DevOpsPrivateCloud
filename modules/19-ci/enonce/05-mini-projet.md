@@ -1,4 +1,4 @@
-# Module 19 — Intégration continue : palier 5 — Mini-projet
+# Module 19 — Palier 5 : Mini-projet
 
 Le module a monté une chaîne de livraison complète, l'a cassée et réparée : runners dans `k8s-par1`, constructions sans privilège, composants CI/CD, analyses de sécurité, signature et provenance, promotion par MR, déploiement en dev par l'agent. Jenkins et SonarQube ont été essayés, comparés, et la décision est écrite. Il reste à **livrer** la chaîne comme une brique de la plateforme : chaque équipe applicative sur le pipeline standard, plus rien de provisoire, la documentation qui dit au module 20 ce qu'il trouve. C'est ce que Claire Morel présentera au comité de direction comme « la chaîne de CI de MédiSphère v1 ».
 
@@ -20,7 +20,8 @@ Le module a monté une chaîne de livraison complète, l'a cassée et réparée 
 
 **Contexte technique**
 - Projets applicatifs concernés : `mediagenda/api`, `mediagenda/chart`, `mediagenda/deploiement`, `medidoc/medidoc` (et `medidoc/deploiement`, M19-E33), `mediagenda/annuaire` (M19-E34).
-- Composants de `plateforme/ci-templates` en version 2 ou plus ; les anciens gabarits v1.x restent publiés mais ne sont plus consommés par les projets applicatifs.
+- Composants de `plateforme/ci-templates` épinglés à une version complète `@vX.Y.Z` (v2.0.0 ou plus, en pratique la dernière : v2.8.0 à la fin du palier 3) ; les anciens gabarits v1.x restent publiés mais ne sont plus consommés par les projets applicatifs.
+- Clé de signature : l'exception écrite en M19-E24 (variables de groupe `COSIGN_PRIVATE_KEY` et `COSIGN_PASSWORD` gardées pour les projets pas encore migrés) **prend fin ici** : la clé ne vit plus que dans le Secret `ci-jobs-protege/cosign-medisphere`, monté par le seul runner protégé.
 - Runners : `k8s-par1`, `k8s-par1-protege`, et `runner02` gardé pour l'étiquette `docker` (ses usages restants sont listés et justifiés).
 - Le projet témoin `formation/ci-pannes` du palier 4 peut rester ou être supprimé : la décision est écrite dans l'état livré.
 - Le contrôle global `lab/bin/check 19 46` rejoue les contrôles clés des paliers précédents (`19 04`, `19 08`, `19 10`, `19 17`, `19 18`, `19 24`, `19 29`), puis vérifie l'adoption des composants, les runners, le retrait de Jenkins et de SonarQube, la documentation et l'étiquette. Il prend quelques minutes.
@@ -33,20 +34,20 @@ Le module a monté une chaîne de livraison complète, l'a cassée et réparée 
 | Runners | `k8s-par1` (étiquettes `k8s`, `kubernetes`, jobs dans `ci-jobs`, gestionnaire en deux réplicas avec PDB) et `k8s-par1-protege` (références protégées, étiquette `protege`, jobs dans `ci-jobs-protege`) en ligne, chart 0.94.x sous Helmfile ; `runner02` en ligne (étiquette `docker`) |
 | Constructions et cache | `buildkitd` rootless partagé (TLS mutuel, politique réseau, cache dans `plateforme/cache-buildkit`) ; cache S3 `ci-cache` sur `s3-01` ; aucun conteneur privilégié dans `ci-jobs`, `ci-jobs-protege`, `buildkit` |
 | Composants | `plateforme/ci-templates` publié en v2.x au catalogue : `construction-image`, `qualite`, `securite`, `deploiement`, `promotion` |
-| Projets applicatifs | les cinq projets n'incluent **que** des composants ≥ 2.0 ; derniers pipelines de `main` verts |
-| Chaîne d'approvisionnement | images `vX.Y.Z` signées par le runner protégé, SBOM et provenance attachés ; porte de vérification dans les MR de `mediagenda/deploiement` |
+| Projets applicatifs | les cinq projets n'incluent **que** des composants `@vX.Y.Z` ≥ v2.0.0 ; derniers pipelines de `main` verts |
+| Chaîne d'approvisionnement | images `vX.Y.Z` signées par le runner protégé, SBOM et provenance attachés ; porte de vérification dans les MR de `mediagenda/deploiement` ; **plus aucune variable `COSIGN_*`** dans les groupes `mediagenda` et `medidoc` ni dans les projets (exception de M19-E24 close) |
 | Promotion et dev | MR de promotion par `ci-promotion` (overlay `dev` par digest) ; `deployer-dev` par l'agent `k8s-par1` (accès limités à `mediagenda-dev` et `wb-essais`, retirés au M20) |
 | Retraits | Jenkins et SonarQube : releases, espaces, base CNPG `sonarqube-db`, enregistrements DNS, Secrets de Vault, variables de CI `SONAR_*` et `JENKINS_*`, jetons ; aucune panne `M19` active |
-| Documentation | ADR-0190 ; RB-190 et RB-194 à RB-198 ; état livré `docs/livraison/ci/etat-ci-v1.md` (ce que trouve le M20, ce qui n'est pas redondant) ; journal et post-mortem INC-4643 ; matrice des flux à jour |
+| Documentation | ADR-0190 ; RB-190 à RB-198 (`docs/livraison/ci/runbooks/`) ; état livré `docs/livraison/ci/etat-ci-v1.md` (ce que trouve le M20, ce qui n'est pas redondant) ; journal et post-mortem INC-4643 ; matrice des flux à jour |
 | Livraison | étiquette **`ci-v1`** sur `plateforme/medisphere` |
 
 **Travail demandé**
 1. **Rien de provisoire.** Aucune panne du palier 4 ouverte ; Jenkins et SonarQube retirés **par le code** (et tout ce qui leur était attaché, jusqu'aux enregistrements DNS et aux secrets) ; variables, jetons et branches d'essai des paliers supprimés ou justifiés ; décision écrite sur le témoin `formation/ci-pannes` et sur les usages restants de `runner02`.
-2. **Le pipeline standard partout.** Les cinq projets applicatifs n'incluent que des composants ≥ 2.0 (plus aucun `include` de fichiers de gabarits v1.x) ; leurs pipelines de `main` et de MR sont verts ; une équipe nouvelle peut adopter le pipeline standard en suivant `normes-pipeline.md` sans aide.
+2. **Le pipeline standard partout.** Les cinq projets applicatifs n'incluent que des composants épinglés `@vX.Y.Z` ≥ v2.0.0 (plus aucun `include` de fichiers de gabarits v1.x) ; leurs pipelines de `main` et de MR sont verts ; une équipe nouvelle peut adopter le pipeline standard en suivant `normes-pipeline.md` sans aide.
 3. **Runners et capacité.** Les deux runners Kubernetes et `runner02` sont en ligne, leur configuration est entièrement dans le code (values, Vault, script de création des runners), `helmfile diff` est vide ; les limites et priorités des jobs sont celles du M19-E27.
-4. **Sécurité de la chaîne.** Aucun secret sensible accessible à un pipeline de branche non protégée ; jetons longue durée inventoriés avec expiration et procédure de rotation ; signature et provenance par le runner protégé ; une image non signée est refusée par la porte de vérification.
+4. **Sécurité de la chaîne.** Fin de l'exception de M19-E24 : le dernier consommateur de la clé en variable (`mediagenda/chart`, signature du chart sur `runner02`) passe sur le runner protégé, puis les variables de groupe `COSIGN_PRIVATE_KEY` et `COSIGN_PASSWORD` sont **supprimées** (`mediagenda` et `medidoc`) et l'exception est close dans `cloisonnement.md` et `secrets-ci.md`. Aucun secret sensible accessible à un pipeline de branche non protégée ; jetons longue durée inventoriés avec expiration et procédure de rotation ; signature et provenance par le runner protégé ; une image non signée est refusée par la porte de vérification.
 5. **Bout en bout.** Un changement de `mediagenda/api` va de la MR jusqu'à `mediagenda-dev` sans intervention manuelle autre que les fusions prévues ; le délai est mesuré.
-6. **Documentation.** ADR-0190 relue ; runbooks RB-190 et RB-194 à RB-198 ; `etat-ci-v1.md` (ce que trouve le M20, ce qui n'est pas redondant, ce qui reste à faire) ; matrice des flux à jour (flux ajoutés par le module, flux de Jenkins et de SonarQube retirés).
+6. **Documentation.** ADR-0190 relue ; runbooks RB-190 à RB-198 dans `docs/livraison/ci/runbooks/` ; `etat-ci-v1.md` (ce que trouve le M20, ce qui n'est pas redondant, ce qui reste à faire) ; matrice des flux à jour (flux ajoutés par le module, flux de Jenkins et de SonarQube retirés).
 7. **Livraison.** Tout est fusionné, les pipelines de `main` sont verts, l'étiquette `ci-v1` est posée sur `plateforme/medisphere`.
 8. **La revue.** Présentation de 10 minutes (architecture, choix, limites), puis les démonstrations de Julien, Sophie et Nadia.
 

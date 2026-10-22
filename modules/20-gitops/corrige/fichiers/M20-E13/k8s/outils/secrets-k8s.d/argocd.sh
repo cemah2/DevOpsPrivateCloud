@@ -2,9 +2,10 @@
 # shellcheck disable=SC2154  # CONTENU, MODE, info, erreur, k, empreinte : fournis par secrets-k8s.sh
 # =============================================================================
 # plateforme/k8s — outils/secrets-k8s.d/argocd.sh : composant « argocd » de secrets-k8s.sh
-# (M20-E06, PLAT-2106 ; dépôt Helm OCI de Harbor en M20-E13). Sourcé par secrets-k8s.sh (voir secrets-k8s.sh.extrait-E06) quand le
-# composant demandé est « argocd » : les Secrets d'Argo CD portent des ÉTIQUETTES que la table
-# secrets-k8s.conf ne sait pas poser (argocd.argoproj.io/secret-type=…), d'où une fonction.
+# (M20-E06, PLAT-2106 ; dépôt Helm OCI de Harbor en M20-E13).
+# Sourcé par secrets-k8s.sh (voir secrets-k8s.sh.extrait-E06) quand le composant demandé est
+# « argocd » : les Secrets d'Argo CD portent des ÉTIQUETTES que la table secrets-k8s.conf ne sait
+# pas poser (argocd.argoproj.io/secret-type=…), d'où une fonction.
 #
 # Source : secrets/argocd.yml (Ansible Vault « critique »), clé argocd_depots :
 #   argocd_depots:

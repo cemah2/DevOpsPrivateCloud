@@ -51,6 +51,6 @@ release:semantic-release:
     paths: [.cache/npm]
   script:
     - echo "composant release $[[ component.version ]]"
-    - test -n "${GITLAB_TOKEN:-}" || { echo "GITLAB_TOKEN absent : variable protégée et masquée du projet (jeton bot-release)"; exit 1; }
+    - test -n "${GITLAB_TOKEN:-}" || { echo "GITLAB_TOKEN absent — variable protégée et masquée du projet (jeton bot-release)"; exit 1; }
     - npm install --no-save --no-audit --no-fund --prefix /tmp/outils-release $[[ inputs.paquets ]]
     - /tmp/outils-release/node_modules/.bin/semantic-release

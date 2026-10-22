@@ -88,7 +88,7 @@ Points structurants :
 2. **`plateforme/gitops`** (créé en E06) : tout ce qu'Argo CD gère. Une modification d'Application, de projet ou de politique de synchronisation est une **MR**, jamais un `argocd app set` (sauf à l'E04-E05, sur l'application d'essai, pour apprendre).
 3. **Les dépôts des équipes** (`mediagenda/deploiement`, `formation/gitops-labo`) restent la source des manifestes ; Argo CD ne fait que les lire.
 4. **Secrets** : jetons de déploiement et mots de passe en Vault `critique` (`plateforme/k8s/secrets/argocd.yml`), Secrets créés par `secrets-k8s.sh` (composant `argocd`), jeton des vérifications dans `~/.config/workbook/argocd-checks.token` (600). Jamais de secret en argument de commande : les commandes `argocd` qui en demandent un le lisent au clavier si on ne le donne pas.
-5. **Documentation** : `plateforme/medisphere`, dossier `docs/livraison/gitops/` (procédures, ADR-0200 au palier 3, runbooks RB-200 et suivants).
+5. **Documentation** : `plateforme/medisphere`, dossier `docs/livraison/gitops/` (procédures), avec ses sous-dossiers `runbooks/` (RB-200 en E22, complété au palier 4 ; RB-201 en E28) et `adr/` (ADR-0200 en E31).
 
 Une manipulation à la main n'est permise que pour **explorer** (`argocd app get`, `kubectl get`), pour l'application d'essai `labo` aux E04-E05, ou quand l'énoncé la demande comme geste à connaître (créer la racine une fois).
 
@@ -153,7 +153,19 @@ WB_ARGOCD_URL="https://argocd.apps.par1.medisphere.internal"     # serveur d'Arg
 WB_ARGOCD_TOKEN_FILE="$HOME/.config/workbook/argocd-checks.token" # jeton du compte ci-lecture (E03)
 ```
 
-`WB_MOI` (bloc A) doit être renseigné : le check d'E03 en déduit le nom de ton compte local.
+`WB_MOI` (bloc A) doit être renseigné : les checks d'E03 et d'E24 en déduisent le nom de ton compte local (`<MOI-ARGO>`). Les checks et les pannes utilisent aussi `WB_DEPOT`, `WB_SRC`, `WB_PVE_HOST`, `WB_S3_ENDPOINT`, `WB_GITLAB_ADMIN_TOKEN_FILE` et `WB_K8S_ADMIN_KUBECONFIG`, déjà définies.
+
+Variables **facultatives** propres au module, à ne renseigner que si ton lab diffère du corrigé (valeur par défaut entre parenthèses) :
+
+| Variable | Rôle |
+|---|---|
+| `WB_M20_APP_DEV`, `WB_M20_APP_RECETTE`, `WB_M20_APP_PROD`, `WB_M20_APP_LABO`, `WB_M20_APP_ROLLOUTS` | noms des Applications (`mediagenda-dev`, `mediagenda-recette`, `mediagenda-prod`, `labo`, `argo-rollouts`) |
+| `WB_M20_NS_DEV`, `WB_M20_NS_RECETTE`, `WB_M20_NS_PROD`, `WB_M20_NS_ROLLOUTS` | espaces correspondants (`mediagenda-dev`, `mediagenda-recette`, `mediagenda-prod`, `argo-rollouts`) |
+| `WB_M20_OVERLAY_DEV`, `WB_M20_OVERLAY_RECETTE` | overlays visés par les pannes (`overlays/dev`, `overlays/recette`) |
+| `WB_M20_FLUX01`, `WB_M20_LYO`, `WB_M20_LYO_HOTE` | hôtes SSH de `flux01` et `lyo-k3s01` (`flux01`, `lyo-k3s01`) et adresse de `lyo-k3s01` (`10.10.99.61`) |
+| `WB_M20_S3_SAUVEGARDES_ENV` | identité S3 de lecture des sauvegardes d'Argo CD (`~/.config/workbook/s3-argocd-sauvegardes.env`, E28) |
+| `WB_M20_E34_DIR` | dossier de l'exercice chronométré (`~/m20/e34`) |
+| `WB_M20_DELAI_FUSION`, `WB_M20_OBSERVATION` | attente maximale du pipeline d'une MR de panne (`900` s) ; durée d'observation du check d'E39 (`60` s) |
 
 ---
 
