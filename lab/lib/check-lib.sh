@@ -236,6 +236,75 @@ loki_requete() {
     "${WB_LOKI_URL:-http://loki.apps.par1.medisphere.internal:3100}/loki/api/v1/query_range"
 }
 
+# --- Bloc F (PLAN §4.12) : lecture seule ---
+
+# keycloak_api "chemin" — API d'administration de Keycloak (royaume medisphere par défaut) avec le
+#   compte de service des checks (client « wb-checks » du royaume medisphere, rôles view-realm,
+#   view-users, view-clients de realm-management ; flux client_credentials, M24-E04).
+#   Le fichier WB_KEYCLOAK_CHECKS_FILE contient KEYCLOAK_CLIENT_ID=... et KEYCLOAK_CLIENT_SECRET=...
+#   Exemple : keycloak_api "clients?clientId=grafana" | jq -r '.[0].enabled'
+#   Chemin absolu (commençant par /realms/…) : envoyé tel quel (ex. /realms/medisphere/.well-known/openid-configuration).
+keycloak_api() {
+  local f="${WB_KEYCLOAK_CHECKS_FILE:-$HOME/.config/workbook/keycloak-checks.env}" KEYCLOAK_CLIENT_ID="" KEYCLOAK_CLIENT_SECRET=""
+  local base="${WB_KEYCLOAK_URL:-https://sso.par1.medisphere.internal}" royaume="${WB_KEYCLOAK_ROYAUME:-medisphere}" jeton
+  if [[ "$1" == /* ]]; then
+    curl -sf --max-time "$WB_TIMEOUT" -H "Accept: application/json" "$base$1"
+    return
+  fi
+  [[ -r "$f" ]] || { echo "identifiants Keycloak des checks illisibles : $f" >&2; return 1; }
+  # shellcheck disable=SC1090
+  source "$f"
+  jeton="$(curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'user = "%s:%s"\n' "$KEYCLOAK_CLIENT_ID" "$KEYCLOAK_CLIENT_SECRET") \
+    -d grant_type=client_credentials "$base/realms/$royaume/protocol/openid-connect/token" | jq -r '.access_token // empty')" || return 1
+  [[ -n "$jeton" ]] || return 1
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'header = "Authorization: Bearer %s"\n' "$jeton") -H "Accept: application/json" \
+    "$base/admin/realms/$royaume/$1"
+}
+
+# ipa_ldap 'filtre' [attributs...] — recherche LDAPS en lecture dans l'annuaire FreeIPA (ipa01, M24)
+#   avec le compte système des checks (uid=wb-checks,cn=sysaccounts,cn=etc,<base>).
+#   Le fichier WB_IPA_CHECKS_FILE contient IPA_BIND_DN=... et IPA_BIND_PASSWORD=... ; sortie LDIF sans retour à la ligne.
+#   Exemple : ipa_ldap '(&(objectClass=posixgroup)(cn=plateforme-admins))' member
+ipa_ldap() {
+  local f="${WB_IPA_CHECKS_FILE:-$HOME/.config/workbook/ipa-checks.env}" IPA_BIND_DN="" IPA_BIND_PASSWORD="" filtre="$1"
+  shift
+  [[ -r "$f" ]] || { echo "identifiants LDAP des checks illisibles : $f" >&2; return 1; }
+  # shellcheck disable=SC1090
+  source "$f"
+  # mot de passe par un fichier (-y), jamais sur la ligne de commande
+  ldapsearch -LLL -o ldif-wrap=no -o nettimeout="$WB_TIMEOUT" -H "${WB_IPA_URL:-ldaps://ipa01.par1.medisphere.internal}" \
+    -D "$IPA_BIND_DN" -y <(printf '%s' "$IPA_BIND_PASSWORD") \
+    -b "${WB_IPA_BASE:-dc=par1,dc=medisphere,dc=internal}" "$filtre" "$@"
+}
+
+# bao_api "chemin" — API HTTP d'OpenBao (M25) avec l'identité AppRole en lecture des checks (politique
+#   « wb-checks » : métadonnées, jamais de valeur de secret). Le jeton obtenu est gardé le temps du check.
+#   Le fichier WB_OPENBAO_CHECKS_FILE contient BAO_ROLE_ID=... et BAO_SECRET_ID=...
+#   Exemple : bao_api "sys/auth" | jq -r '.data | keys[]'
+#   Les chemins sys/health, sys/seal-status et sys/leader sont lus sans jeton.
+_WB_BAO_JETON=""
+bao_api() {
+  local f="${WB_OPENBAO_CHECKS_FILE:-$HOME/.config/workbook/openbao-checks.env}" BAO_ROLE_ID="" BAO_SECRET_ID=""
+  local base="${WB_OPENBAO_URL:-https://openbao.par1.medisphere.internal:8200}"
+  case "$1" in
+    sys/health* | sys/seal-status | sys/leader)
+      # sys/health répond 429/472/473/501/503 selon l'état : on renvoie le corps quel que soit le code
+      curl -s --max-time "$WB_TIMEOUT" -H "Accept: application/json" "$base/v1/$1"
+      return
+      ;;
+  esac
+  if [[ -z "$_WB_BAO_JETON" ]]; then
+    [[ -r "$f" ]] || { echo "identifiants OpenBao des checks illisibles : $f" >&2; return 1; }
+    # shellcheck disable=SC1090
+    source "$f"
+    _WB_BAO_JETON="$(jq -nc --arg r "$BAO_ROLE_ID" --arg s "$BAO_SECRET_ID" '{role_id: $r, secret_id: $s}' |
+      curl -sf --max-time "$WB_TIMEOUT" --data @- "$base/v1/auth/approle/login" | jq -r '.auth.client_token // empty')" || return 1
+    [[ -n "$_WB_BAO_JETON" ]] || return 1
+  fi
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'header = "X-Vault-Token: %s"\n' "$_WB_BAO_JETON") -H "Accept: application/json" \
+    "$base/v1/$1"
+}
+
 # summary — affiche le bilan et renvoie 0 si aucun KO
 summary() {
   echo
