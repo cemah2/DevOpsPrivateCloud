@@ -1,0 +1,17 @@
+# regles/enregistrement-lucas.yaml — proposé par Lucas Martin (MR !14)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: enregistrement-lucas
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: lucas.enregistrement
+      interval: 5s
+      rules:
+        - record: mediagenda_http_requests_total
+          expr: sum by (pod, route, code, methode) (mediagenda_http_requests_total)
+        - record: taux_erreurs
+          expr: rate(mediagenda_http_requests_total{code=~"5.."}[30s])

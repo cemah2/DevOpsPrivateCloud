@@ -1,0 +1,2 @@
+# Dépendances du canari : aucune (bibliothèque standard de Python).
+# Ce fichier sert de clé au cache du job (cache:key:files).

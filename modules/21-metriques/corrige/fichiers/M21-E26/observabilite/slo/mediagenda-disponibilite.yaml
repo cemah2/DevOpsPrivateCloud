@@ -1,0 +1,25 @@
+# plateforme/observabilite — slo/mediagenda-disponibilite.yaml (M21-E26, PLAT-2226)
+# SLI : part des requêtes de l'API de PRODUCTION servies sans erreur serveur (5xx), mesurée par
+# l'application (compteur mediagenda_http_requests_total, étiquettes methode, route, code).
+# Exclus : les sondes (/sante, /pret) et /metrics, qui ne sont pas des requêtes d'utilisateurs.
+# Objectif : 99,5 % sur 28 jours glissants (contrat HDS, Claire Morel) : budget = 0,5 % des
+# requêtes, soit environ 3 h 22 min d'indisponibilité totale sur 28 jours.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: mediagenda-disponibilite
+spec:
+  description: "API MédiAgenda (production) : requêtes servies sans erreur 5xx"
+  target: "99.5"
+  window: 28d
+  indicator:
+    ratio:
+      errors:
+        metric: mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics", code=~"5.."}
+      total:
+        metric: mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics"}
+  # Pas d'alerte tant que le routage et la politique de budget ne sont pas écrits (M21-E27) :
+  # ni taux de consommation, ni métrique absente (« disabled » est déprécié depuis Pyrra 0.10).
+  alerting:
+    burnrates: false
+    absent: false

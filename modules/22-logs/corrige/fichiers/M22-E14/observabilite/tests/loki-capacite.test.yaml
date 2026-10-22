@@ -1,0 +1,30 @@
+# Test promtool de regles/loki-capacite.yaml (le job de tests de la CI extrait spec.groups, comme en M21-E15).
+rule_files:
+  - loki-capacite.rules.yaml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'loki_ingester_memory_streams{tenant="mediagenda", pod="loki-0"}'
+        values: '800x10 1500x40'
+      - series: 'loki_ingester_memory_streams{tenant="plateforme", pod="loki-0"}'
+        values: '3000x50'
+      - series: 'loki_discarded_samples_total{tenant="essai", reason="rate_limited"}'
+        values: '0 0 10+10x30'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: LokiFluxActifsEleves
+        exp_alerts:
+          - exp_labels: {tenant: mediagenda, gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "Loki : le locataire mediagenda a 1500 flux actifs (plus de la moitié de sa limite)"
+              description: "Cardinalité en hausse : une étiquette à forte variabilité a probablement été ajoutée (pod, identifiant). Au-delà de la limite, les NOUVEAUX flux sont refusés (429)."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-223-ingestion-refusee.md"
+      - eval_time: 20m
+        alertname: LokiEchantillonsRejetes
+        exp_alerts:
+          - exp_labels: {tenant: essai, reason: rate_limited, gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "Loki rejette des lignes du locataire essai (raison : rate_limited)"
+              description: "166.7m lignes/s rejetées depuis 10 min. rate_limited et stream_limit : limites de E13 ; too_far_behind et greater_than_max_sample_age : horodatages ; line_too_long : ligne > max_line_size."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-223-ingestion-refusee.md"

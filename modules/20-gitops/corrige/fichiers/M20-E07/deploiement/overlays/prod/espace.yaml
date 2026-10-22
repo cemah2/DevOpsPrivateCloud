@@ -1,0 +1,15 @@
+# mediagenda/deploiement — overlays/prod/espace.yaml (M17-E09 ; M20-E07, PLAT-2107)
+# Jusqu'au M20-E07, ce fichier créait aussi l'espace mediagenda-prod, son ResourceQuota et sa
+# LimitRange. Ces trois objets sont désormais décrits dans plateforme/k8s
+# (espaces/mediagenda-prod/), comme ceux de dev et de recette : le projet Argo CD « mediagenda »
+# interdit à l'équipe les objets de cluster et les quotas. Ne reste ici que le refus réseau par
+# défaut, qui fait partie de l'application en production (M17-E09).
+# ⚠️ Le retrait de ces objets du dépôt ne les supprime pas du cluster (kubectl apply ne supprime
+# rien) : ils sont repris par « task espaces » de plateforme/k8s AVANT la fusion de cette MR.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

@@ -1,0 +1,16 @@
+# composants/buildkitd/values.yaml (plateforme/k8s) — démon BuildKit partagé de k8s-par1 (M19-E08).
+# Chart local charts/buildkitd ; valeurs par défaut dans charts/buildkitd/values.yaml.
+image:
+  version: v0.34.1-rootless
+  # skopeo inspect --format '{{.Digest}}' \
+  #   docker://registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.1-rootless
+  empreinte: sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89
+
+tls:
+  # M19-E24 ajoute ci-jobs-protege (runner protégé).
+  clients:
+    - ci-jobs
+
+reseau:
+  espacesClients:
+    - ci-jobs

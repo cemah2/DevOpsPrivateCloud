@@ -1,0 +1,31 @@
+# À INTÉGRER dans plateforme/gitops — projets/plateforme.yaml (AppProject du M20-E07), M21-E02.
+# Seuls les ajouts sont montrés ; garde le reste de ton projet tel quel (rôles, fenêtres, etc.).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: plateforme
+  namespace: argocd
+spec:
+  sourceRepos:
+    # (existant) le dépôt OCI des charts recopiés et les dépôts de la plateforme
+    - registry.par1.medisphere.internal/charts
+    - https://git01.par1.medisphere.internal/plateforme/observabilite.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: supervision
+    - server: https://kubernetes.default.svc
+      namespace: supervision-noeuds
+  # Objets sans espace que crée kube-prometheus-stack. Liste FERMÉE : un chart qui voudrait créer
+  # autre chose (ClusterRole d'un autre composant, PriorityClass…) échouera à la synchronisation,
+  # ce qui est le comportement voulu.
+  clusterResourceWhitelist:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration

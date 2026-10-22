@@ -1,0 +1,13 @@
+# formation/ci-labo — ci/enfant.yml (M19-E12) : configuration d'un pipeline enfant.
+# Un pipeline enfant a son propre « stages » et ses propres règles ; il voit les variables du
+# pipeline parent si le job déclencheur les transmet (trigger:forward).
+stages: [test]
+
+bonjour-enfant:
+  stage: test
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "pipeline enfant $CI_PIPELINE_ID (source $CI_PIPELINE_SOURCE), parent $CI_PARENT_PIPELINE_ID"

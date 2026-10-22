@@ -1,0 +1,10 @@
+---
+# playbooks/supervision-temoin.yml — supervision témoin hors cluster sur mon01 (M21-E11, E12).
+# Exécution de référence : pipeline protégé de plateforme/ansible (ADR-0040). Depuis adm01 :
+#   uv run ansible-playbook playbooks/supervision-temoin.yml --check --diff
+#   uv run ansible-playbook playbooks/supervision-temoin.yml
+- name: Supervision témoin
+  hosts: mon01
+  become: true
+  roles:
+    - role: supervision_temoin

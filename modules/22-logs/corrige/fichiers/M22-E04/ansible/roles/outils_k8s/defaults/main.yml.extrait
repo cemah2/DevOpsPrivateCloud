@@ -1,0 +1,11 @@
+# À AJOUTER à la liste outils_k8s_binaires de roles/outils_k8s/defaults/main.yml (M22-E04).
+# logcli : MÊME version que Loki (3.7.9) ; archive et SHA256SUMS de la publication de Loki.
+# Empreinte de logcli-linux-amd64.zip relevée le 22/10/2026 :
+#   176bc538c72d959daa168bd127dece211ff3e9e435ad13a6946748170cbda5b4
+  - nom: logcli
+    version: "3.7.9"
+    url: https://github.com/grafana/loki/releases/download/v3.7.9/logcli-linux-amd64.zip
+    somme: https://github.com/grafana/loki/releases/download/v3.7.9/SHA256SUMS
+    fichiers: [logcli-linux-amd64]
+    liens:
+      logcli-linux-amd64: logcli

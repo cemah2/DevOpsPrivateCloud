@@ -1,0 +1,19 @@
+---
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M21-E08, PLAT-2208.
+# Matrice commune à gw01 et gw02. Une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01   puis   --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+#
+# 1) Transit (section pare_feu_transit) : les travailleurs vers node_exporter des VMs du socle.
+#    MGMT (adm01) joint déjà tout le lab (règle « bastion »). Les VMs du VLAN 40 n'en ont pas
+#    besoin (nœuds K8s : DaemonSet) ; le VLAN 30 (ceph) est joint par eth1 sans la bordure.
+pare_feu_transit:
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: [$V_MGMT, $V_INFRA, $V_DMZ], proto: tcp, ports: 9100,
+     motif: "Prometheus de k8s-par1 vers node_exporter (HTTPS) des VMs du socle", ref: M21-E08}
+# 2) Entrée (section pare_feu_entree) : node_exporter des passerelles elles-mêmes.
+pare_feu_entree:
+  - {entree: $V_K8S, source: $K8S_TRAV, proto: tcp, ports: 9100,
+     motif: "Prometheus de k8s-par1 vers node_exporter de la passerelle", ref: M21-E08}
+  - {entree: $V_MGMT, proto: tcp, ports: 9100,
+     motif: "node_exporter de la passerelle depuis MGMT (vérifications)", ref: M21-E08}

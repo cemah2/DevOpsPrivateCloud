@@ -1,0 +1,3 @@
+{"valid": true, "errors": [], "warnings": [],
+ "merged_yaml": "tests:\n  script: [phpunit]\n",
+ "includes": [{"type": "file", "location": "templates/qualite.yml", "extra": {"project": "plateforme/ci-templates", "ref": "v1"}}]}

@@ -1,0 +1,40 @@
+# plateforme/observabilite — scrape/harbor.yaml (M21-E10, PLAT-2210)
+# Harbor 2.15 (reg01) : « metric: enabled: true, port: 9090, path: /metrics » dans harbor.yml (M13).
+# Le même point d'accès sert l'exportateur de Harbor (projets, artefacts, quotas, tâches) et, avec
+# le paramètre ?comp=, les métriques de chaque composant : core, registry, jobservice.
+# Les « params » d'un ScrapeConfig valent pour toutes ses cibles : on pose __param_comp par cible,
+# à partir d'une étiquette « composant » du groupe de cibles.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: harbor
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: harbor
+  scheme: HTTP
+  metricsPath: /metrics
+  # Les métriques de l'exportateur interrogent la base de Harbor à chaque collecte : une minute.
+  scrapeInterval: 60s
+  scrapeTimeout: 30s
+  staticConfigs:
+    - targets: [reg01.par1.medisphere.internal:9090]
+      labels: {equipe: plateforme, role: registre, composant: exporter}
+    - targets: [reg01.par1.medisphere.internal:9090]
+      labels: {equipe: plateforme, role: registre, composant: core}
+    - targets: [reg01.par1.medisphere.internal:9090]
+      labels: {equipe: plateforme, role: registre, composant: registry}
+    - targets: [reg01.par1.medisphere.internal:9090]
+      labels: {equipe: plateforme, role: registre, composant: jobservice}
+  relabelings:
+    # Même adresse pour les quatre cibles : sans paramètre distinct, Prometheus les fusionnerait
+    # (cibles identiques) ; __param_comp les distingue et ajoute ?comp=… à l'URL.
+    - sourceLabels: [composant]
+      regex: (core|registry|jobservice)
+      targetLabel: __param_comp
+      replacement: $1
+      action: replace
+    - targetLabel: instance
+      replacement: reg01
+      action: replace

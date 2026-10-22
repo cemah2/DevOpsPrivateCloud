@@ -1,0 +1,5 @@
+# plateforme/observabilite — regles/kustomization.yaml : ajout de M21-E30 (PLAT-2230).
+# EXTRAIT : ajoute le fichier à la liste « resources » existante.
+resources:
+  # (… thanos.yaml, supervision-temoin.yaml, autres règles …)
+  - capacite-prometheus.yaml

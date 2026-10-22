@@ -1,0 +1,16 @@
+# plateforme/k8s — espaces/buildkit/40-racine-ca.yaml (M19-E08, PLAT-2008)
+# Racine « MédiSphère Root CA » (PUBLIQUE) pour que buildkitd vérifie le certificat de Harbor
+# ([registry."registry.par1.medisphere.internal"] ca = […] de buildkitd.toml). Même contenu que
+# espaces/ci-jobs/40-racine-ca.yaml (M19-E07).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-racine
+  namespace: buildkit
+  labels:
+    medisphere.internal/composant: ci
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU DE medisphere-root-ca.crt, RECOPIÉ TEL QUEL>
+    -----END CERTIFICATE-----

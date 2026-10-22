@@ -1,0 +1,16 @@
+# medidoc/deploiement — base/kustomization.yaml (M19-E33, DEV-2033).
+# Objets de MédiDoc SANS espace de noms ni image figée, repris de plateforme/k8s
+# applications/medidoc-dev/ (M15-E34, M16-E46). Les Secrets (medidoc-s3, harbor-pull) et la
+# ConfigMap racine-medisphere restent HORS de ce dépôt (outils de plateforme/k8s).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: medidoc
+      app.kubernetes.io/managed-by: medidoc-deploiement
+    includeSelectors: false
+resources:
+  - deployment.yaml
+  - service.yaml
+  - httproute.yaml
+  - politiques.yaml

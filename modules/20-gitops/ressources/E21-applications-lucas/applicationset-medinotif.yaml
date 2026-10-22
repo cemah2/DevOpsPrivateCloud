@@ -1,0 +1,42 @@
+# Environnements de MédiNotif : un par dossier de overlays/ (Lucas)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: medinotif
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://git01.par1.medisphere.internal/medinotif/deploiement.git
+        revision: HEAD
+        directories:
+          - path: overlays/*
+  template:
+    metadata:
+      name: "medinotif-{{path.basename}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://git01.par1.medisphere.internal/medinotif/deploiement.git
+        targetRevision: HEAD
+        path: "{{path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "medinotif-{{path.basename}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: -1
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec

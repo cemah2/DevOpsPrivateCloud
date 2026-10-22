@@ -1,0 +1,45 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/supervision-cluster.yml (M21-E28, PLAT-2228)
+# Règles du Prometheus TÉMOIN de mon01 : il surveille la supervision du cluster depuis l'extérieur.
+# Copié par le rôle dans le dossier des règles du témoin (rule_files), vérifié par
+# « promtool check rules » avant rechargement (validate: de la tâche de copie).
+#
+# Mécanisme (« dead man's switch ») : la règle Watchdog de kube-prometheus-stack est TOUJOURS en
+# alerte dans le cluster. Le témoin interroge Thanos Query (10.10.41.60) : « ALERTS{alertname=
+# "Watchdog", alertstate="firing"} existe-t-il ? » par une sonde blackbox (module watchdog_cluster).
+# Si la réponse ne contient plus Watchdog, c'est que la chaîne Prometheus → règles → Thanos Query
+# est rompue — y compris si TOUT le cluster est arrêté, cas où le cluster ne peut rien dire.
+# (Thanos Query ne sert pas /federate : on ne peut pas fédérer depuis 10.10.41.60, d'où la sonde.)
+# Les sondes /-/healthy et /-/ready couvrent Thanos Query (10.10.41.60) et Alertmanager (10.10.41.61).
+groups:
+  - name: supervision.cluster
+    rules:
+      - alert: SupervisionClusterMuette
+        expr: probe_success{job="watchdog-cluster"} == 0
+        for: 5m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "La supervision du cluster k8s-par1 est muette : plus d'alerte Watchdog"
+          description: "Thanos Query (10.10.41.60) ne renvoie plus l'alerte Watchdog : Prometheus arrêté, règles non évaluées, sidecars ou Query en panne, ou cluster entier hors service. Aucune alerte du cluster n'est plus fiable. RB-215 §1."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+      - alert: SupervisionClusterSondeAbsente
+        expr: absent(probe_success{job="watchdog-cluster"})
+        for: 10m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "La sonde Watchdog du témoin ne produit plus de mesure"
+          description: "Le job watchdog-cluster n'existe plus ou blackbox_exporter est arrêté sur mon01 : le témoin est aveugle. RB-215 §3."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+      - alert: SupervisionClusterComposantKO
+        expr: probe_success{job="supervision-cluster"} == 0
+        for: 5m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "{{ $labels.composant }} du cluster ne répond pas à {{ $labels.instance }}"
+          description: "Sonde HTTP en échec depuis 5 min. Alertmanager arrêté = plus aucune notification du cluster ; Thanos Query arrêté = plus de lecture des métriques. RB-215 §2."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md

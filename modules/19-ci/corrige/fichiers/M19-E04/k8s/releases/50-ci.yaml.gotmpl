@@ -1,0 +1,23 @@
+# Intégration continue (M19) : runners GitLab dans k8s-par1. PLAN §4.11.
+# M19-E04 : release gitlab-runner (runner d'instance « k8s-par1 »).
+# Les modules et exercices suivants ajoutent ici : buildkitd (M19-E08), gitlab-agent (M19-E18),
+# gitlab-runner-protege (M19-E24) ; sonarqube et jenkins (temporaires, M19-E16/E19).
+# Le jeton du runner et la racine MédiSphère sont des Secrets créés hors Git
+# (outils/secrets-k8s.sh gitlab-runner) : ils doivent exister AVANT le premier apply.
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: gitlab-runner
+    namespace: gitlab-runner
+    chart: gitlab/gitlab-runner
+    # Chart 0.93.0 = GitLab Runner 19.4.0 : même mineure que GitLab (19.4.x). Monte avec GitLab
+    # (0.94.x pour 19.5, M19-E26), jamais avant.
+    version: 0.93.0
+    labels:
+      groupe: ci
+      composant: gitlab-runner
+    # Helm 4 : --rollback-on-failure (attend aussi que le Deployment soit prêt).
+    rollbackOnFailure: true
+    values:
+      - ../composants/gitlab-runner/values.yaml

@@ -1,0 +1,13 @@
+# À INTÉGRER dans plateforme/charts-miroir — charts.yaml (M20-E13), M21-E02.
+# Reprends EXACTEMENT les noms de champs de ton fichier (ceux ci-dessous suivent la fiche du M20 :
+# nom, dépôt amont, version, empreinte) : c'est le pipeline du miroir qui les lit.
+# Empreinte : sha256 de l'archive publiée par le projet, relevée dans l'index du dépôt amont
+#   curl -s https://prometheus-community.github.io/helm-charts/index.yaml \
+#     | yq '.entries."kube-prometheus-stack"[] | select(.version == "92.11.0") | .digest'
+# et recalculée sur l'archive téléchargée (sha256sum) : les deux doivent être égales.
+# Les sous-charts (crds, kube-state-metrics, prometheus-node-exporter, grafana) sont DANS
+# l'archive (dossier charts/) : rien d'autre à recopier, Argo CD ne tire rien de ghcr.io.
+- nom: kube-prometheus-stack
+  depot: https://prometheus-community.github.io/helm-charts
+  version: 92.11.0
+  empreinte: sha256:c357a259965187edcbed86591461bfbd56997591afba09be3a49a09b2bec8a2c

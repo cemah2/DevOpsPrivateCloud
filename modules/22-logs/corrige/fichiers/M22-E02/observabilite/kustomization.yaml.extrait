@@ -1,0 +1,6 @@
+# À AJOUTER à la liste « resources » de kustomization.yaml à la RACINE de plateforme/observabilite
+# (Application « observabilite », espace supervision, état M21-E17) — M22-E02.
+# Les dossiers loki/ et alloy/ n'y figurent PAS : ce sont les troisièmes sources des Applications
+# « loki » et « alloy » (espace journaux), pas des ressources de l'Application « observabilite ».
+resources:
+  - grafana/sources-loki.yaml

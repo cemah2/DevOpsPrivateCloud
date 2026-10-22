@@ -1,0 +1,28 @@
+---
+# Rôle k8s_travailleur — joindre un travailleur à k8s-par1 (M14-E05, PLAN §4.10), puis réglages
+# propres aux travailleurs (M19-E02, PLAN §4.11).
+# Prérequis : rôles containerd et k8s_noeud ; au moins un nœud de contrôle qui porte le cluster.
+
+k8s_travailleur_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+k8s_travailleur_adresse: "{{ k8s_noeuds[inventory_hostname].ip }}"
+# Groupe où chercher un nœud de contrôle qui porte le cluster (création du jeton).
+k8s_travailleur_groupe_controle: k8s_plan_controle
+k8s_travailleur_api_nom: "{{ k8s_api_nom }}"
+k8s_travailleur_api_port: "{{ k8s_api_port | default(8443) }}"
+k8s_travailleur_socket_cri: "{{ k8s_socket_cri | default('unix:///run/containerd/containerd.sock') }}"
+k8s_travailleur_dossier: /etc/kubernetes/kubeadm
+k8s_travailleur_jonction_auto: true
+k8s_travailleur_jeton_duree: 15m
+
+# M19-E02 : paramètres noyau des TRAVAILLEURS seulement (ceux de tous les nœuds sont dans
+# k8s_noeud_sysctl, fichier 90-kubernetes.conf). Un fichier distinct : le retrait d'un réglage
+# ici ne touche pas ceux de k8s_noeud.
+#   vm.max_map_count : nombre de zones mémoire (mmap) par processus. Elasticsearch/OpenSearch
+#   (embarqué par SonarQube, M19-E16 ; OpenSearch au M22) refusent de démarrer sous 262144
+#   (« bootstrap checks ») ; 524288 laisse de la marge (valeur de la documentation de SonarQube).
+#   Valeur du noyau par défaut : 65530. Le contrôle du rôle lit la valeur EFFECTIVE.
+k8s_travailleur_sysctl:
+  vm.max_map_count: 524288
+k8s_travailleur_sysctl_fichier: /etc/sysctl.d/91-k8s-travailleur.conf

@@ -1,0 +1,15 @@
+# mediagenda/deploiement — overlays/dev/redemarrage-debug.yaml (M22-E06, DEV-2306)
+# Le Deployment rendu par le chart porte checksum/config, calculée AU RENDU : le correctif de la
+# ConfigMap (journalisation-debug.yaml) ne la change pas, donc ne redémarre pas les pods, et
+# l'application ne relit son niveau qu'au démarrage. Cette annotation du gabarit de pod change avec
+# lui : Argo CD applique, le Deployment remplace ses pods. Pas de « kubectl rollout restart » (écriture
+# hors Git sur un espace applicatif, interdite depuis M20-E30 ; Argo CD la verrait comme une dérive).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda
+spec:
+  template:
+    metadata:
+      annotations:
+        medisphere.internal/journalisation: debug

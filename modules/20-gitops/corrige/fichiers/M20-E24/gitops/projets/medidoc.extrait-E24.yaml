@@ -1,0 +1,20 @@
+# plateforme/gitops — projets/medidoc.yaml : AJOUT de M20-E24 (SEC-2124) à l'AppProject d'E07.
+# Aucun compte local pour l'équipe MédiDoc (personne de l'équipe n'a de compte Argo CD avant le SSO) :
+# ce rôle de projet est la SEULE porte d'entrée prévue, à partir du M24. Production à venir : lecture
+# seule, comme MédiAgenda (les motifs couvrent déjà medidoc-prod).
+spec:
+  roles:
+    - name: equipe
+      description: "Équipe MédiDoc (SSO, M24) : dev et recette, production en lecture"
+      groups:
+        - medisphere:medidoc-devs
+      policies:
+        - p, proj:medidoc:equipe, applications, get, medidoc/*, allow
+        - p, proj:medidoc:equipe, applications, sync, medidoc/medidoc-dev, allow
+        - p, proj:medidoc:equipe, applications, sync, medidoc/medidoc-recette, allow
+        - p, proj:medidoc:equipe, logs, get, medidoc/medidoc-dev, allow
+        - p, proj:medidoc:equipe, logs, get, medidoc/medidoc-recette, allow
+        - p, proj:medidoc:equipe, applications, sync, medidoc/medidoc-prod, deny
+        - p, proj:medidoc:equipe, applications, delete, medidoc/*, deny
+        - p, proj:medidoc:equipe, applications, override, medidoc/*, deny
+        - p, proj:medidoc:equipe, exec, create, medidoc/*, deny

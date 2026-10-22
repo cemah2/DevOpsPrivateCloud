@@ -1,0 +1,10 @@
+# Espace « traces » : Collectors, Tempo (M23-E03), Pyroscope (M23-E14). Pod Security « restricted » :
+# aucun conteneur privilégié, pas de hostPath, pas de réseau de l'hôte (l'agent n'en a pas besoin).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traces
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    medisphere.internal/equipe: plateforme

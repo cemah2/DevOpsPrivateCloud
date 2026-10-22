@@ -1,0 +1,19 @@
+# mediagenda/deploiement — overlays/dev/sortie-medidoc.yaml (M23-E06, DEV-2406)
+# La politique du chart ne laisse sortir l'API que vers DNS, PostgreSQL et Valkey : on AJOUTE la sortie
+# vers MédiDoc de l'environnement homologue (port du conteneur 8080 : la politique s'applique après la
+# traduction du Service medidoc:80 vers le pod).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-sortie-medidoc
+spec:
+  description: "API MédiAgenda : sortie vers MédiDoc (medidoc-dev)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: mediagenda}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: medidoc-dev
+            app.kubernetes.io/name: medidoc
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]

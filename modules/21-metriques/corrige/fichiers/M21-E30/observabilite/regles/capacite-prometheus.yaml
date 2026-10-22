@@ -1,0 +1,73 @@
+# plateforme/observabilite — regles/capacite-prometheus.yaml (M21-E30, PLAT-2230)
+# Alertes de CAPACITÉ de Prometheus : prévenir avant la saturation, pas après. Les seuils viennent
+# de docs/observabilite/metriques/dimensionnement.md (budget de séries, taille de rétention).
+# Testées par tests/capacite-prometheus.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: capacite-prometheus
+spec:
+  groups:
+    - name: capacite.prometheus
+      rules:
+        # Budget de séries actives par réplica (dimensionnement §3) : 300 000 pour 3 Gio de limite.
+        - alert: PrometheusSeriesProchesDuBudget
+          expr: prometheus_tsdb_head_series{job="kps-prometheus"} > 0.8 * 300000
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} : {{ $value | humanize }} séries actives (budget 300 000)"
+            description: "Au-delà du budget, la mémoire dépasse la limite (OOMKilled). Chercher la cible responsable : topk(10, scrape_series_added) et la page TSDB status. Dimensionnement §5."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md
+        # Une cible dépasse enforcedSampleLimit : elle est collectée en échec (up=0). Souvent une
+        # explosion de cardinalité chez une équipe (M21-E38).
+        - alert: PrometheusLimiteEchantillonsAtteinte
+          expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total{job="kps-prometheus"}[15m]) > 0
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Des collectes dépassent la limite d'échantillons par cible (enforcedSampleLimit)"
+            description: "Les cibles concernées sont en échec : up == 0 et scrape_samples_scraped élevé. Voir avec l'équipe propriétaire (relabeling, étiquettes à forte cardinalité). Dimensionnement §5."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md
+        # Mémoire résidente proche de la limite du conteneur.
+        - alert: PrometheusMemoireProcheLimite
+          expr: |
+            max by (pod) (container_memory_working_set_bytes{namespace="supervision", container="prometheus", pod=~"prometheus-kps-.*"})
+              / max by (pod) (kube_pod_container_resource_limits{namespace="supervision", container="prometheus", resource="memory"})
+              > 0.85
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} utilise {{ $value | humanizePercentage }} de sa limite mémoire"
+            description: "Risque d'OOMKilled (relecture du WAL au redémarrage encore plus gourmande). Séries en hausse ? Requête lourde ? Dimensionnement §3."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md
+        # La rétention par taille a supprimé des blocs plus jeunes que 15 jours.
+        - alert: PrometheusRetentionParTaille
+          expr: increase(prometheus_tsdb_size_retentions_total{job="kps-prometheus"}[1h]) > 0
+          labels:
+            gravite: info
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} supprime des blocs pour respecter retentionSize"
+            description: "La base locale garde moins de 15 jours (le compartiment Thanos a les données). Le volume ou retentionSize est à revoir. Dimensionnement §4."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md
+        # Volume de la TSDB presque plein (la rétention par taille aurait dû l'empêcher).
+        - alert: PrometheusVolumePresquePlein
+          expr: |
+            kubelet_volume_stats_available_bytes{namespace="supervision", persistentvolumeclaim=~"prometheus-kps-db-prometheus-kps-.*"}
+              / kubelet_volume_stats_capacity_bytes{namespace="supervision", persistentvolumeclaim=~"prometheus-kps-db-prometheus-kps-.*"}
+              < 0.10
+          for: 15m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Le volume {{ $labels.persistentvolumeclaim }} a moins de 10 % d'espace libre"
+            description: "Volume plein = plus d'écriture du WAL = plus de collecte ni d'alerte de ce réplica. Agrandir le PVC (ceph-rbd, M16) ou baisser retentionSize. Dimensionnement §4."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md

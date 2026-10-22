@@ -1,0 +1,56 @@
+# plateforme/ci-templates — composant « release » v2.0.0 (M19-E10, PLAT-2010).
+# semantic-release sur la branche par défaut PROTÉGÉE : calcule la version à partir des Conventional
+# Commits et pose l'étiquette vX.Y.Z (le pipeline de l'étiquette construit et publie). Remplace le
+# gabarit v1 templates/release.yml, qui tournait sur runner01 (outillage Node installé sur l'hôte).
+# Utilisation :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/release@v2.0.0
+# Exigences du projet : .releaserc.json (sinon le job n'existe pas) ; variable GITLAB_TOKEN, PROTÉGÉE
+# et MASQUÉE (jeton de projet « bot-release », M01-E25) ; étiquettes v* protégées.
+# Versions des paquets npm épinglées ci-dessous ; leurs dépendances transitives ne le sont pas
+# (pas de fichier de verrou dans un composant) : écart accepté, revu à chaque montée (Renovate).
+spec:
+  description: "semantic-release sur la branche par défaut protégée (étiquette vX.Y.Z, notes de version)."
+  component: [version]
+  inputs:
+    stage:
+      default: release
+    runner:
+      default: k8s
+    image_node:
+      description: "Image Node.js 24 avec git, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/library/node:24.19.0-trixie@sha256:e3883d5e4d0b1998cc27f355bd9202cbaf86edc14d07b54b715def0ed4c71093
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    paquets:
+      description: "Paquets npm installés pour le job (versions exactes)"
+      default: "semantic-release@25.0.9 @semantic-release/gitlab@13.3.3 conventional-changelog-conventionalcommits@10.4.0"
+      regex: ^([@a-z0-9/._-]+@[0-9]+\.[0-9]+\.[0-9]+ ?)+$
+---
+release:semantic-release:
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image_node ]]
+  tags: ["$[[ inputs.runner ]]"]
+  # Deux pipelines de main rapprochés ne publient jamais en même temps.
+  resource_group: release
+  interruptible: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+      exists:
+        - .releaserc.json
+  variables:
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+    # Node n'utilise pas le magasin du système : racine MédiSphère montée par le runner (E07).
+    NODE_EXTRA_CA_CERTS: /etc/medisphere/ca/medisphere-root-ca.crt
+    GIT_SSL_CAINFO: /etc/medisphere/ca/medisphere-root-ca.crt
+    npm_config_cache: $CI_PROJECT_DIR/.cache/npm
+    # Les greffons nommés dans .releaserc.json sont installés à côté de semantic-release.
+    NODE_PATH: /tmp/outils-release/node_modules
+  cache:
+    key: npm-release-$[[ component.version ]]
+    paths: [.cache/npm]
+  script:
+    - echo "composant release $[[ component.version ]]"
+    - test -n "${GITLAB_TOKEN:-}" || { echo "GITLAB_TOKEN absent : variable protégée et masquée du projet (jeton bot-release)"; exit 1; }
+    - npm install --no-save --no-audit --no-fund --prefix /tmp/outils-release $[[ inputs.paquets ]]
+    - /tmp/outils-release/node_modules/.bin/semantic-release

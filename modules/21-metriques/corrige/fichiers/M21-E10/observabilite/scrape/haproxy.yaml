@@ -1,0 +1,45 @@
+# plateforme/observabilite — scrape/haproxy.yaml (M21-E10, PLAT-2210)
+# Exportateur intégré d'HAProxy 3.2 (service « prometheus-exporter »), frontend fe_metriques sur 8405,
+# qui ne sert que /metrics et seulement aux adresses autorisées (ACL du rôle haproxy).
+#   - lb01/lb02 (DMZ) : Prometheus traverse la bordure (règle K8S_TRAV → LB01/LB02 8405) ;
+#   - k8s-cp01-03 (HAProxy de l'API du cluster, M14) : même VLAN que les travailleurs.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: haproxy
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: haproxy
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - lb01.par1.medisphere.internal:8405
+        - lb02.par1.medisphere.internal:8405
+      labels:
+        equipe: plateforme
+        role: lb
+    - targets:
+        - k8s-cp01.par1.medisphere.internal:8405
+        - k8s-cp02.par1.medisphere.internal:8405
+        - k8s-cp03.par1.medisphere.internal:8405
+      labels:
+        equipe: plateforme
+        role: k8s-api
+  relabelings:
+    # instance = nom court de l'hôte (lb01, k8s-cp02…), comme le job « vms » d'E08 : les jointures
+    # avec node_exporter (même instance) restent possibles.
+    - sourceLabels: [__address__]
+      regex: ([^.]+)\..*
+      targetLabel: instance
+      replacement: $1
+      action: replace
+  # Les séries par serveur et par frontend sont nombreuses (une par serveur × état × code) : on ne
+  # garde pas les « haproxy_server_*_bytes_* » en double des « haproxy_backend_* », et on borne.
+  metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: haproxy_(sticktable|resolver)_.*
+      action: drop
+  sampleLimit: 20000

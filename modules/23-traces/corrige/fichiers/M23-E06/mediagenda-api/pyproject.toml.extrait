@@ -1,0 +1,21 @@
+# mediagenda/api — pyproject.toml : EXTRAIT après M23-E06 (DEV-2406). Ajouté par :
+#   uv add "httpx>=0.28.1,<1" "opentelemetry-instrumentation-httpx>=0.66b1,<0.67"
+# httpx était une dépendance de DÉVELOPPEMENT (client de test de Starlette) : elle devient aussi une
+# dépendance de production (client de MédiDoc). Commite pyproject.toml et uv.lock.
+[project]
+dependencies = [
+    "fastapi>=0.142.4,<1",
+    "httpx>=0.28.1,<1",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45.1,<2",
+    "opentelemetry-instrumentation-fastapi>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-httpx>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-psycopg>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-redis>=0.66b1,<0.67",
+    "opentelemetry-sdk>=1.45.1,<2",
+    "prometheus-client>=0.26.0,<1",
+    "psycopg-pool>=3.3.3,<4",
+    "psycopg[binary]>=3.3.6,<4",
+    "redis>=8.1.0,<9",
+    "tzdata>=2026.5",
+    "uvicorn>=0.54.0,<1",
+]

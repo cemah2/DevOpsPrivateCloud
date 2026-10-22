@@ -1,0 +1,27 @@
+# formation/ci-labo, branche revue-lucas — pipeline du service « rappels » CORRIGÉ (M19-E21, DEV-2021).
+# Uniquement des composants de plateforme/ci-templates ; aucun secret dans le dépôt ; rien de privilégié.
+# Publication, signature et déploiement retirés de l'essai : un service se publie depuis son propre
+# projet (robot Harbor de son groupe, variables protégées) et se déploie par promotion (MR, E17-E18).
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never                      # défaut 5 : plus de pipelines en double
+    - if: $CI_COMMIT_BRANCH
+  auto_cancel:
+    on_new_commit: interruptible
+
+stages: [lint, test, construction, analyse]
+
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.3.0
+    inputs:
+      langage: python
+      paquet_python: labo
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.3.0
+    inputs:
+      image_nom: medisphere/rappels   # nom réservé ; rien n'est poussé depuis ci-labo
+      publier: false
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.3.0
+    inputs:
+      signer: false                   # Trivy (bloquant, avant toute publication), SBOM, Semgrep, Gitleaks

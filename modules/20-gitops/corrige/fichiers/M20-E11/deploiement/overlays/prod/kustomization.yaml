@@ -1,0 +1,27 @@
+# Production (mediagenda-prod) — M17-E09 ; Application mediagenda-prod (synchronisée À LA MAIN) depuis
+# M20-E10. L'espace, son quota et son LimitRange sont à la plateforme depuis M20-E07 (plateforme/k8s,
+# espaces/mediagenda-prod/) ; espace.yaml ne porte plus que le refus réseau par défaut.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-prod
+resources:
+  - espace.yaml
+  - ../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  # « migrations » (M20-E11) après « dependances » (il en annote la base et Valkey) et avant
+  # « livraison » (qui fixe l'image de son Job).
+  - ../../components/dependances
+  - ../../components/haute-disponibilite
+  - ../../components/migrations
+  - ../../components/livraison

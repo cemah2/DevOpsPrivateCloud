@@ -1,0 +1,9 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — EXTRAIT (M21-E10, PLAT-2210) : lignes ajoutées. -->
+| Source | Destination | Port | Pourquoi | Où c'est ouvert | Réf. |
+|---|---|---|---|---|---|
+| `K8S_TRAV` (10.10.40.61-63) | `lb01`, `lb02` | TCP 8405 | Prometheus → exportateur intégré d'HAProxy | bordure ; ACL du frontend `fe_metriques` | M21-E10 |
+| `K8S_TRAV` | `k8s-cp01-03` | TCP 8405 | Prometheus → HAProxy de l'API (même VLAN) | ACL du frontend `fe_metriques` | M21-E10 |
+| `K8S_TRAV` | `dns01`, `dns02` | TCP 8081, 8082 | Prometheus → `/metrics` de PowerDNS (autoritaire, récurseur) | bordure ; `webserver-allow-from`, `webservice.allow_from` | M21-E10 |
+| `K8S_TRAV` | `git01` | TCP 8082, 9168, 9229, 9236 (443 déjà ouvert) | Prometheus → exportateurs d'omnibus ; `/-/metrics` par 443 | bordure ; `monitoring_whitelist` | M21-E10 |
+| `K8S_TRAV` | `reg01` | TCP 9090 | Prometheus → métriques de Harbor | bordure | M21-E10 |
+| travailleurs (`eth1`, 10.10.30.81-83) | `ceph01-03` (10.10.30.51-53) | TCP 9283 | Prometheus → module `prometheus` du mgr | firewalld des nœuds Ceph (pas de bordure) | M21-E10 |

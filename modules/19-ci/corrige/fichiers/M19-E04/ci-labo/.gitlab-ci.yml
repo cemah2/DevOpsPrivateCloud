@@ -1,0 +1,34 @@
+# .gitlab-ci.yml — formation/ci-labo (M19-E04, PLAT-2004) : premier pipeline sur le runner k8s-par1.
+#
+# Les jobs portent l'étiquette « k8s » : seul le runner k8s-par1 (exécuteur kubernetes) les prend.
+# Un job SANS étiquette resterait en attente (« pending ») : aucun runner de l'instance n'accepte
+# les jobs non étiquetés (run_untagged = false sur runner01, runner02 et k8s-par1). Correction
+# retenue : une étiquette par défaut pour tout le fichier, plutôt que d'ouvrir un runner aux jobs
+# non étiquetés (qui les prendrait tous, de tous les projets, sans que personne l'ait choisi).
+default:
+  tags: [k8s]
+
+# Image par défaut : celle du runner (debian:trixie-slim de Harbor, épinglée). Rien à déclarer.
+
+bonjour:
+  script:
+    # Attention : « : » suivi d'une espace dans un élément non entre guillemets ferait de la ligne
+    # une table YAML. Toute la commande est donc entre apostrophes.
+    - 'echo "pod : $HOSTNAME"'
+    - id
+    - 'echo "runner : $CI_RUNNER_DESCRIPTION (étiquettes $CI_RUNNER_TAGS)"'
+    - echo "projet $CI_PROJECT_PATH, pipeline $CI_PIPELINE_ID, source $CI_PIPELINE_SOURCE"
+    # Le compte de service ci-job n'a aucun droit ET son jeton n'est pas monté : le prouver.
+    - |
+      if [ -e /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+        echo "ANOMALIE : un jeton de compte de service est monté dans le pod du job" >&2
+        exit 1
+      fi
+      echo "aucun jeton de compte de service monté : correct"
+    # Version de git du helper : le build n'a pas besoin de git, le helper a cloné pour lui.
+    - ls -la "$CI_PROJECT_DIR"
+
+# Second job (étape 9 de l'énoncé) : sans « default: tags », il serait resté en attente.
+second:
+  script:
+    - echo "pris par $CI_RUNNER_DESCRIPTION grâce à l'étiquette par défaut"

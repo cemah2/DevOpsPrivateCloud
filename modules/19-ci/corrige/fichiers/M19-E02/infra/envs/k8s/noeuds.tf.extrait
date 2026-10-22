@@ -1,0 +1,48 @@
+# envs/k8s/noeuds.tf (plateforme/infra) — EXTRAIT, M19-E02 (PLAT-2002) : mémoire des travailleurs.
+#
+# À intégrer dans le fichier du M14 (complété au M16 : carte de stockage). Seuls changent : le local
+# « memoire_travailleurs_mo » et le champ memoire_mo des travailleurs dans local.noeuds. Garde tes
+# noms de locals et de champs s'ils diffèrent de ceux du corrigé du M14.
+#
+# Un travailleur à la fois (PLAN §4.11) : une MR qui ne change QU'UNE entrée de la table ; avant
+# l'apply, le nœud est drainé et sa VM arrêtée proprement (procédure du corrigé). Le module
+# vm-noeud déclare « started = true » : l'apply change la mémoire de la VM arrêtée puis la
+# redémarre. Sur une VM restée démarrée, le fournisseur bpg/proxmox la redémarrerait lui-même
+# (reboot_after_update, vrai par défaut, M05-E06) : sans drain, ce serait une coupure brutale.
+#
+# Plan attendu pour la MR de k8s-w01 (extrait) :
+#   # module.noeud["k8s-w01"].proxmox_virtual_environment_vm.vm will be updated in-place
+#     ~ memory {
+#         ~ dedicated = 8192 -> 10240
+#       }
+#   Plan: 0 to add, 1 to change, 0 to destroy.
+# Toute autre ligne (autre VM, « must be replaced ») : on n'applique pas.
+
+locals {
+  # Mémoire de chaque travailleur, en Mo. M14 : 8192 ; M19-E02 : 10240 (SonarQube, Jenkins,
+  # OpenSearch au M22, et la CI dans le cluster). Le profil des blocs D et E en tient compte
+  # (≈ 100 Go sur pve01, PLAN §4.11).
+  memoire_travailleurs_mo = {
+    "k8s-w01" = 10240
+    "k8s-w02" = 10240 # deuxième MR, après le retour de k8s-w01
+    "k8s-w03" = 10240 # troisième MR, après le retour de k8s-w02
+  }
+
+  noeuds = merge(
+    { for nom, n in local.plan_controle : nom => merge(n, {
+      coeurs         = 2
+      memoire_mo     = 4096
+      disque_go      = 40
+      etiquette_role = "role-k8s-cp"
+      description    = "k8s-par1 : plan de contrôle (etcd empilé, keepalived + HAProxy de la VIP d'API). plateforme/k8s."
+    }) },
+    { for nom, n in local.travailleurs : nom => merge(n, {
+      coeurs = 4
+      # Valeur de la table ; 8192 pour un travailleur qui n'y figure pas (k8s-w04 du M14-E17).
+      memoire_mo     = lookup(local.memoire_travailleurs_mo, nom, 8192)
+      disque_go      = 60
+      etiquette_role = "role-k8s-worker"
+      description    = "k8s-par1 : travailleur. plateforme/k8s."
+    }) },
+  )
+}

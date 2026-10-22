@@ -1,0 +1,6 @@
+# mediagenda/deploiement — overlays/recette : AJOUTS de M23-E06.
+#   kustomization.yaml : ajouter « - sortie-medidoc.yaml » aux resources ;
+#   parametres.env : ajouter la ligne ci-dessous (la ConfigMap générée change de nom → nouveau déploiement).
+# MEDIAGENDA_MEDIDOC_URL=http://medidoc.medidoc-recette.svc.cluster.local
+resources:
+  - sortie-medidoc.yaml

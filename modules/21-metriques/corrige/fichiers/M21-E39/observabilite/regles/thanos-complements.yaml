@@ -1,0 +1,44 @@
+# plateforme/observabilite — regles/thanos-complements.yaml (M21-E39, INC-4839)
+# Compléments aux alertes de M21-E25 (thanos.yaml), pour deux pannes qu'elles ne voient pas :
+#   - un sidecar SANS stockage objet ne crée pas d'expéditeur, donc pas de thanos_shipper_* :
+#     « increase(thanos_shipper_uploads_total[5h]) == 0 » n'a alors aucune série à évaluer ;
+#   - un Store Gateway restreint par --min-time/--max-time est sain et connecté : il écarte
+#     simplement les blocs hors de sa fenêtre (état « time-excluded » de son synchroniseur).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thanos-complements
+spec:
+  groups:
+    - name: thanos.complements
+      rules:
+        - alert: ThanosSidecarSansExpediteur
+          expr: |
+            up{job="kps-thanos-discovery"} == 1
+              unless on (pod)
+            thanos_shipper_uploads_total{job="kps-thanos-discovery"}
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le sidecar Thanos de {{ $labels.pod }} tourne sans envoyer de blocs"
+            description: >-
+              Le sidecar répond mais n'a pas d'expéditeur : son objet Prometheus n'a plus de
+              configuration de stockage objet (objectStorageConfig). Les blocs restent sur le volume
+              local et disparaîtront à la fin de la rétention locale (15 j). RB-219 § « Historique long ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md
+        - alert: ThanosStoreBlocsExclus
+          expr: |
+            sum by (pod) (thanos_blocks_meta_synced{job="thanos-store", state="time-excluded"}) > 0
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le Store Gateway {{ $labels.pod }} écarte {{ $value }} blocs par sa fenêtre de temps"
+            description: >-
+              Des blocs du compartiment sont hors de la fenêtre --min-time/--max-time du Store : si
+              aucun autre Store ne les sert, cette période n'est plus visible. Sans partage de Store
+              voulu (ADR), c'est une erreur de configuration. RB-219 § « Historique long ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md

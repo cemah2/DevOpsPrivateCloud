@@ -1,0 +1,26 @@
+# plateforme/k8s — .gitlab-ci.yml : AJOUT de M20-E24 (SEC-2124). Job à placer dans le stage de
+# validation existant (« valider », M17/M19 ; adapte le nom si le tien diffère).
+# Image : celle d'Argo CD DÉPLOYÉE (même version, même empreinte que composants/argocd/
+# values-durcissement.yaml), par le cache Harbor « quay » : la CLI qui évalue la politique est celle
+# du serveur qui l'appliquera. Aucune variable secrète, aucun accès au cluster (kubeconfig factice
+# fabriqué par le script) : le job tourne sur le runner k8s ordinaire, pas sur le runner protégé.
+argocd-rbac:
+  stage: valider
+  image:
+    name: registry.par1.medisphere.internal/quay/argoproj/argocd:v3.5.5@sha256:13db7b10db23283b1b36f855046602e18539a8a8204c9f6f039e8896c8897518
+    # L'image a pour point d'entrée tini ; le runner lance lui-même son shell.
+    entrypoint: [""]
+  tags: [k8s]
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - releases/argocd/**/*
+        - releases/argocd.yaml.gotmpl
+        - composants/argocd/values-rbac.yaml
+        - outils/argocd-rbac-tests.sh
+    # Toujours sur main : le dernier pipeline de main prouve que la politique en vigueur passe ses tests.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - argocd version --client --short
+    - outils/argocd-rbac-tests.sh releases/argocd/policy.csv releases/argocd/rbac-tests.txt

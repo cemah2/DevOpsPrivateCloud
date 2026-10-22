@@ -1,0 +1,14 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M20-E23, PLAT-2123.
+# Matrice commune à gw01 et gw02. Appliquer une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff   (seule cette règle change)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01   puis   --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+# Retrait au mini-projet (M20-E46), avec la VM.
+#
+# 1) Définition (section pare_feu_definitions, avec les autres hôtes d'environnement) :
+  - {nom: FLUX01, valeur: 10.10.99.62, commentaire: "flux01 (M20-E23), k3s de comparaison avec Flux, détruit en fin de module"}
+#
+# 2) Transit (section pare_feu_transit) : Flux, DANS flux01, lit son dépôt sur git01 en HTTPS. Rien
+#    d'autre : les images viennent du cache Harbor (règle [$V_K8S, $V_SANDBOX] → $REG01:443 du M13).
+  - {entree: $V_SANDBOX, source: $FLUX01, sortie: $V_INFRA, destination: $GIT01, proto: tcp, ports: 443,
+     motif: "flux01 → git01 HTTPS : source-controller de Flux (dépôt formation/flux-labo)", ref: M20-E23}

@@ -1,0 +1,47 @@
+# plateforme/gitops — applications/labo-agences.yaml (M20-E26, PLAT-2126)
+# Une Application « labo-<cluster> » pour CHAQUE cluster enregistré dans Argo CD avec l'étiquette
+# site=lyo1 (Secret de cluster créé par secrets-k8s.sh). Une deuxième agence = un Secret de cluster de
+# plus avec la bonne étiquette, rien à changer ici.
+#
+# Garde-fous (comme l'ApplicationSet mediagenda, M20-E10) :
+#   - create-update : un cluster qui disparaît ne fait PAS supprimer son Application (et ses objets) ;
+#   - preserveResourcesOnDeletion : pas de finaliseur de suppression en cascade sur les Applications ;
+#   - projet « labo » : ses destinations autorisent lyo-k3s01/agence et rien d'autre de ce cluster ;
+#   - CreateNamespace=false : l'espace agence est créé par la plateforme (playbook m20-lyo.yml).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: labo-agences
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - clusters:
+        selector:
+          matchLabels:
+            site: lyo1
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "labo-{{ .nameNormalized }}"
+      labels:
+        medisphere.internal/site: "{{ .metadata.labels.site }}"
+    spec:
+      project: labo
+      source:
+        repoURL: https://git01.par1.medisphere.internal/formation/gitops-labo.git
+        targetRevision: main
+        path: agence
+      destination:
+        server: "{{ .server }}"
+        namespace: agence
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false

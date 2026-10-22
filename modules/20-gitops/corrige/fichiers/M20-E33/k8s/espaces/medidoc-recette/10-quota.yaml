@@ -1,0 +1,17 @@
+# plateforme/k8s — espaces/medidoc-recette/10-quota.yaml (M20-E33). Enveloppe de la recette : celle de
+# medidoc-dev (M14-E33) ; MédiDoc n'a ni base ni volume (documents dans le RGW).
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-equipe
+  namespace: medidoc-recette
+spec:
+  hard:
+    requests.cpu: "2"
+    limits.cpu: "4"
+    requests.memory: 4Gi
+    limits.memory: 8Gi
+    pods: "20"
+    persistentvolumeclaims: "0"
+    services.loadbalancers: "0"
+    services.nodeports: "0"

@@ -1,0 +1,18 @@
+# plateforme/k8s — espaces/mediagenda-prod/00-namespace.yaml (M20-E07, PLAT-2107)
+# Repris de mediagenda/deploiement (overlays/prod/espace.yaml, M17-E09) : mêmes étiquettes, mêmes
+# valeurs, pour que la reprise par « task espaces » (gestionnaire plateforme-k8s) ne change rien.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-prod
+  labels:
+    medisphere.internal/equipe: mediagenda
+    medisphere.internal/environnement: prod
+    medisphere.internal/exposition: oui
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/responsable: "julien.petit"
+    medisphere.internal/ticket: "PLAT-1809"

@@ -1,0 +1,32 @@
+# plateforme/gitops — racine/racine.yaml (M20-E06, projet « plateforme » depuis M20-E07)
+# L'application racine (« App of Apps ») : elle gère les Applications du dossier racine/, y compris
+# ELLE-MÊME. Créée une seule fois à la main (kubectl apply --server-side), puis plus jamais : toute
+# modification passe par une MR sur ce fichier.
+# ⚠️ Ne retire jamais ce fichier du dépôt : la racine se supprimerait elle-même (prune).
+# Pas de finaliseur resources-finalizer : supprimer la racine ne doit RIEN supprimer en cascade.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: racine
+  namespace: argocd
+  labels:
+    medisphere.internal/niveau: racine
+spec:
+
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+    targetRevision: main
+    path: racine
+    directory:
+      include: "*.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

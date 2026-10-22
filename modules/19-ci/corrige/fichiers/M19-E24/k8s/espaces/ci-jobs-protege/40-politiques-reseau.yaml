@@ -1,0 +1,39 @@
+# plateforme/k8s — espaces/ci-jobs-protege/40-politiques-reseau.yaml (M19-E24, SEC-2024).
+# Comme ci-jobs, SANS Internet et sans buildkitd : les jobs protégés signent, attestent et promeuvent
+# des images DÉJÀ construites. Ils parlent à git01 (clone, API, MR de promotion) et à Harbor (cosign).
+# Vérifié en E24 : signature, attestations et promotion passent avec ces seules sorties.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: ci-jobs-protege
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ci-jobs-protege-sortie
+  namespace: ci-jobs-protege
+spec:
+  description: "Jobs protégés : DNS, git01:443, Harbor:443 ; rien d'autre (ni Internet, ni cluster)"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: git01.par1.medisphere.internal
+        - matchName: registry.par1.medisphere.internal
+        - matchName: reg01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

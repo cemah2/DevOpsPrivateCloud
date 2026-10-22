@@ -1,0 +1,12 @@
+# plateforme/observabilite — .gitlab-ci.yml : job ajouté en M21-E37 (INC-4837), à côté des
+# contrôles de tableaux de M21-E17. Le fichier tableaux-etiquettes.txt de ce dossier va dans
+# tableaux/etiquettes.txt du dépôt (étiquettes garanties par la plateforme : E13).
+tableaux:references:
+  stage: valider
+  image:
+    name: $IMAGE_YQ
+    entrypoint: [""]
+  script:
+    - sh outils/verifier-tableaux.sh
+  rules:
+    - changes: [tableaux/**/*, regles/**/*, outils/verifier-tableaux.sh]

@@ -1,0 +1,9 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — EXTRAIT (M21-E11, E12) : lignes ajoutées. -->
+| Source | Destination | Port | Pourquoi | Où c'est ouvert | Réf. |
+|---|---|---|---|---|---|
+| `mon01` | 10.10.41.10 (`gw-par1`) | TCP 443 | sondes HTTPS du témoin (Grafana, Argo CD, MédiAgenda) | bordure | M21-E11 |
+| `mon01` | VIP `.1` des VLAN 10, 20, 30, 40, 70 | ICMP | sondes ICMP du témoin | bordure (entrée) | M21-E11 |
+| `mon01` | `git01`, `nbx01`, `reg01`, `dns01`, `dns02` | TCP 443, UDP/TCP 53 | sondes du témoin (même VLAN) | pare-feu locaux s'il y en a | M21-E11 |
+| `mon01` | `pve01` | TCP 8006, 9100 | pve-exporter (jeton `PVEAuditor`), node_exporter | bordure (sortie WAN) ; pare-feu Proxmox, IPSet `supervision` | M21-E12 |
+| `mon01` | `pbs01` (10.20.10.10) | TCP 9100 | node_exporter de `pbs01` | bordure (`wg0`) ; pare-feu local de `pbs01` | M21-E12 |
+| `K8S_TRAV` | `mon01` | TCP 9090 | fédération (`/federate`) par le Prometheus du cluster | bordure ; pare-feu local de `mon01` | M21-E12 |

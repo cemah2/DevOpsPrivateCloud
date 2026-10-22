@@ -1,0 +1,43 @@
+# plateforme/observabilite — tests/saturation-mediagenda.test.yaml (M21-E23, INC-4823)
+rule_files:
+  - ../build/regles/enregistrement-mediagenda.yml
+  - ../build/regles/alertes-mediagenda.yml
+evaluation_interval: 30s
+tests:
+  - name: CPU bridé ET latence élevée en recette ; bridé sans lenteur en dev
+    interval: 1m
+    input_series:
+      # recette : 600 périodes par minute (100 ms), dont 300 bridées (50 %).
+      - series: 'container_cpu_cfs_periods_total{namespace="mediagenda-recette",pod="mediagenda-x",container="api"}'
+        values: '0+600x30'
+      - series: 'container_cpu_cfs_throttled_periods_total{namespace="mediagenda-recette",pod="mediagenda-x",container="api"}'
+        values: '0+300x30'
+      # dev : aussi bridé, mais l'API reste rapide.
+      - series: 'container_cpu_cfs_periods_total{namespace="mediagenda-dev",pod="mediagenda-y",container="api"}'
+        values: '0+600x30'
+      - series: 'container_cpu_cfs_throttled_periods_total{namespace="mediagenda-dev",pod="mediagenda-y",container="api"}'
+        values: '0+300x30'
+      # Latence : recette lente (tout entre 0,5 et 1 s), dev rapide (tout sous 0,1 s).
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="recette",route="/api/v1/creneaux",code="200"}'
+        values: '0+600x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="recette",route="/api/v1/creneaux",le="0.5"}'
+        values: '0x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="recette",route="/api/v1/creneaux",le="1"}'
+        values: '0+600x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="recette",route="/api/v1/creneaux",le="+Inf"}'
+        values: '0+600x30'
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="dev",route="/api/v1/creneaux",code="200"}'
+        values: '0+60x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="dev",route="/api/v1/creneaux",le="0.1"}'
+        values: '0+60x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="dev",route="/api/v1/creneaux",le="+Inf"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: MediagendaCpuBride
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaCpuBride, namespace: mediagenda-recette, pod: mediagenda-x, gravite: avertissement, equipe: mediagenda}
+            exp_annotations:
+              resume: "mediagenda-x (mediagenda-recette) bridé par sa limite de CPU pendant que l'API ralentit"
+              description: "50% des périodes d'ordonnancement de mediagenda-x sont bridées par la limite de CPU depuis 15 minutes, et le p95 de l'API dépasse 300 ms. Voir le journal INC-4823 : relever la limite, ou ajouter des réplicas."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-212-mediagenda-latence.md

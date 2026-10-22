@@ -1,0 +1,16 @@
+# alertmanager/routes-tests.txt — essais de routage joués par la CI (M21-E06/E07, complétés en E16).
+# Format : <récepteurs attendus, dans l'ordre, séparés par des virgules> | <étiquettes de l'alerte>
+# amtool ne tient pas compte des intervalles de temps : il teste l'ARBRE seulement.
+null                           | alertname=Watchdog severity=none
+null                           | alertname=EssaiInfo equipe=mediagenda gravite=info
+astreinte-mail,plateforme-mail | alertname=KubePodCrashLooping severity=critical namespace=mediagenda-prod
+astreinte-mail,mediagenda-mail | alertname=MediagendaIndisponible gravite=critique equipe=mediagenda
+astreinte-mail,mediagenda-mail | alertname=MediagendaTauxErreurEleve gravite=critique equipe=mediagenda environnement=prod
+mediagenda-mail                | alertname=MediagendaTauxErreurEleve gravite=avertissement equipe=mediagenda environnement=recette
+mediagenda-mail                | alertname=MediagendaLatenceElevee gravite=avertissement equipe=mediagenda environnement=prod
+medidoc-mail                   | alertname=EssaiMedidoc gravite=avertissement equipe=medidoc
+astreinte-mail,medidoc-mail    | alertname=EssaiMedidocCritique gravite=critique equipe=medidoc
+plateforme-mail                | alertname=EssaiPLAT2206 gravite=avertissement equipe=plateforme
+plateforme-mail                | alertname=DisqueBientotPlein gravite=avertissement equipe=plateforme instance=git01
+plateforme-mail                | alertname=KubePodNotReady severity=warning namespace=mediagenda-dev
+plateforme-mail                | alertname=SansEtiquette

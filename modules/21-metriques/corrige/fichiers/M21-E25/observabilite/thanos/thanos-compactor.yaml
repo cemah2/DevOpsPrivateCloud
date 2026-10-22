@@ -1,0 +1,130 @@
+# plateforme/observabilite — thanos/thanos-compactor.yaml (M21-E25, PLAT-2225)
+# Le Compactor est le SEUL composant qui écrit et supprime dans le compartiment après les sidecars :
+#  - compaction : fusionne les blocs de 2 h en blocs de 8 h, 2 j, 14 j (index plus petits) ;
+#  - dédoublonnage hors ligne des deux réplicas (même période, étiquettes externes égales sauf
+#    prometheus_replica) ;
+#  - sous-échantillonnage : blocs 5 min (à partir de blocs bruts de plus de 40 h) et 1 h (à partir
+#    de blocs 5 min de plus de 10 j) ;
+#  - rétention par résolution, puis suppression des blocs marqués (après --delete-delay).
+# ⚠️ JAMAIS DEUX INSTANCES sur le même compartiment : il n'y a pas de verrou ; deux compactors
+# compactent ou suppriment les mêmes blocs en même temps (chevauchements, blocs perdus, Compactor
+# arrêté en « halted »). D'où : StatefulSet à 1 réplica, stratégie OnDelete, pas de HPA, pas de PDB
+# « minAvailable » qui empêcherait l'arrêt.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: thanos-compactor
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-compactor
+  labels:
+    app.kubernetes.io/name: thanos-compactor
+spec:
+  selector:
+    app.kubernetes.io/name: thanos-compactor
+  ports:
+    - {name: http, port: 10902, targetPort: http}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: thanos-compactor
+  labels:
+    app.kubernetes.io/name: thanos-compactor
+    app.kubernetes.io/component: compactor
+spec:
+  serviceName: thanos-compactor
+  replicas: 1
+  # Le pod n'est remplacé que lorsqu'on le supprime : pas de nouveau pod qui démarre pendant que
+  # l'ancien termine une compaction (le StatefulSet garantit déjà « un pod d'ordinal 0 à la fois »).
+  updateStrategy:
+    type: OnDelete
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-compactor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: thanos-compactor
+        app.kubernetes.io/component: compactor
+    spec:
+      serviceAccountName: thanos-compactor
+      automountServiceAccountToken: false
+      # Peut attendre : priorité standard, il rattrape son retard au redémarrage.
+      priorityClassName: medisphere-standard
+      # Laisse finir l'envoi d'un bloc compacté avant l'arrêt.
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: thanos-compactor
+          image: quay.io/thanos/thanos
+          args:
+            - compact
+            - --log.level=info
+            - --http-address=0.0.0.0:10902
+            - --data-dir=/var/thanos/compact
+            - --objstore.config-file=/etc/thanos/objstore/objstore.yml
+            # Tourne en continu (sinon il s'arrête après un passage) ; un passage toutes les 5 min.
+            - --wait
+            - --wait-interval=5m
+            # Rétention par résolution (PLAN §4.11). 0d = pour toujours : ne jamais l'oublier.
+            - --retention.resolution-raw=30d
+            - --retention.resolution-5m=180d
+            - --retention.resolution-1h=2y
+            # Dédoublonnage hors ligne des deux réplicas Prometheus. L'algorithme « penalty » est
+            # celui de Thanos Query : il tolère les trous et décalages d'un réplica (le défaut,
+            # 1 pour 1, ne convient qu'à des échantillons identiques, ce que deux Prometheus ne
+            # produisent jamais).
+            - --deduplication.replica-label=prometheus_replica
+            - --deduplication.func=penalty
+            # Délai entre le marquage d'un bloc à supprimer et sa suppression : laisse au Store le
+            # temps de ne plus l'utiliser (il relit la liste toutes les 5 min).
+            - --delete-delay=48h
+            # Ne touche pas aux blocs trop récents (encore en cours d'envoi ou de réplication).
+            - --consistency-delay=30m
+          ports:
+            - {name: http, containerPort: 10902}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /-/healthy, port: http}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: travail, mountPath: /var/thanos/compact}
+            - {name: objstore, mountPath: /etc/thanos/objstore, readOnly: true}
+            - {name: racine-medisphere, mountPath: /etc/thanos/ca, readOnly: true}
+      volumes:
+        - name: objstore
+          secret:
+            secretName: thanos-objstore
+        - name: racine-medisphere
+          configMap:
+            name: racine-medisphere
+  # Espace de travail : le Compactor télécharge les blocs qu'il fusionne. Il doit contenir les
+  # blocs du plus gros groupe compacté (14 j de données brutes d'un réplica, ×2 au dédoublonnage) :
+  # trop petit, la compaction échoue (« no space left on device ») et le Compactor s'arrête.
+  volumeClaimTemplates:
+    - metadata:
+        name: travail
+      spec:
+        storageClassName: ceph-rbd
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

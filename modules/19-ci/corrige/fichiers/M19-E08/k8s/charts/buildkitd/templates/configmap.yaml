@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: buildkitd
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+data:
+  # Référence : cmd/buildkitd/config (BuildKit {{ .Values.image.version }}), docs/buildkitd.toml.md.
+  buildkitd.toml: |
+    [grpc]
+      # TCP pour les jobs (TLS mutuel), socket local pour les sondes (sans TLS : BuildKit ne
+      # l'applique jamais aux sockets locaux).
+      address = ["tcp://0.0.0.0:{{ .Values.service.port }}", "unix:///run/user/1000/buildkit/buildkitd.sock"]
+      [grpc.tls]
+        cert = "/etc/buildkit/tls/tls.crt"
+        key = "/etc/buildkit/tls/tls.key"
+        # Avec « ca », le démon EXIGE un certificat client signé par cette autorité.
+        ca = "/etc/buildkit/tls/ca.crt"
+
+    [worker.oci]
+      enabled = true
+      rootless = true
+      # Pas de nouvel espace PID ni de /proc par RUN : impossible sans privilège dans un pod
+      # (masquage de /proc). Les RUN voient les processus du démon (risque accepté, ADR-0190).
+      noProcessSandbox = true
+      gc = true
+      maxUsedSpace = "{{ .Values.ramasseMiettes.maxUtilise }}"
+      reservedSpace = "{{ .Values.ramasseMiettes.reserve }}"
+
+    [worker.containerd]
+      enabled = false
+
+    # Harbor : certificat vérifié par la racine MédiSphère (jamais « insecure »).
+    [registry."{{ .Values.registre.hote }}"]
+      ca = ["/etc/medisphere/ca/medisphere-root-ca.crt"]

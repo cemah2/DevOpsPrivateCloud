@@ -1,0 +1,60 @@
+# plateforme/observabilite — otel/operateur/values.yaml (M23-E02, PLAT-2402)
+# Values du chart open-telemetry/opentelemetry-operator 0.126.1 (opérateur 0.161.0), recopié et signé dans
+# Harbor charts/ par plateforme/charts-miroir. Consommé par l'Application Argo CD « opentelemetry-operator »
+# (source multiple : chart OCI de Harbor + ce fichier en $values), espace opentelemetry-operator-system.
+# Toutes les clés ci-dessous existent dans values.yaml du chart 0.126.1 (helm show values).
+
+manager:
+  image:
+    # Politique medisphere-images (M14-E18) : uniquement des images de Harbor, étiquette explicite.
+    repository: registry.par1.medisphere.internal/ghcr/open-telemetry/opentelemetry-operator/opentelemetry-operator
+    tag: "0.161.0"
+  # Image par défaut des Collectors créés sans « spec.image ». Les nôtres la fixent toujours (contrib) :
+  # cette valeur ne sert qu'à éviter qu'un CR oublié tire une image hors de Harbor.
+  collectorImage:
+    repository: registry.par1.medisphere.internal/dockerhub/otel/opentelemetry-collector-contrib
+    tag: "0.161.0"
+  # Image d'auto-instrumentation Python (M23-E07) : celle de la version de l'opérateur (versions.txt :
+  # autoinstrumentation-python=0.66b1), par le cache ghcr de Harbor.
+  autoInstrumentationImage:
+    python:
+      repository: registry.par1.medisphere.internal/ghcr/open-telemetry/opentelemetry-operator/autoinstrumentation-python
+      tag: "0.66b1"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # Métriques du gestionnaire (port 8443, HTTPS, authentification par jeton du compte de service).
+  serviceMonitor:
+    enabled: true
+    extraLabels:
+      medisphere.internal/supervision: "oui"
+  # L'opérateur NE crée PAS lui-même les ClusterRoles des Collectors (k8sattributes…) : on les écrit
+  # (otel/rbac-agent.yaml), relus en MR, plutôt que de donner à l'opérateur le droit d'en fabriquer.
+  createRbacPermissions: false
+
+# Webhooks d'admission (validation des CR, mutation des pods pour l'auto-instrumentation) : certificat
+# délivré par cert-manager (émetteur auto-signé créé par le chart), renouvelé sans « helm upgrade ».
+admissionWebhooks:
+  certManager:
+    enabled: true
+  autoGenerateCert:
+    enabled: false
+  # Un pod ne doit jamais être bloqué parce que l'opérateur est indisponible (valeur par défaut, rappelée).
+  pods:
+    failurePolicy: Ignore
+
+# Les CRD sont rendues par le chart (templates) : Argo CD les applique avec ServerSideApply (taille).
+crds:
+  create: true
+
+priorityClassName: medisphere-standard
+
+# Pods de test du chart (crochets « helm test », qu'Argo CD n'exécute pas) : même règle d'images, au cas où
+# quelqu'un lance « helm test » à la main.
+testFramework:
+  image:
+    repository: registry.par1.medisphere.internal/dockerhub/library/busybox
+    tag: "1.37"

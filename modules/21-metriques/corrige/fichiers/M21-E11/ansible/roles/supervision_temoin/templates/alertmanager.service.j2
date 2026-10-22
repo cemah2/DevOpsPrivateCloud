@@ -1,0 +1,45 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Alertmanager témoin (rôle supervision_temoin, M21-E11)
+Documentation=https://prometheus.io/docs/alerting/latest/alertmanager/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=alertmanager
+Group=alertmanager
+# --cluster.listen-address vide : pas de grappe (un seul Alertmanager témoin, port 9094 fermé).
+ExecStart=/usr/local/bin/alertmanager \
+  --config.file={{ supervision_temoin_dossier_config }}/alertmanager.yml \
+  --storage.path={{ supervision_temoin_dossier_alertmanager }} \
+  --web.listen-address={{ supervision_temoin_alertmanager_ecoute }} \
+  --web.external-url={{ supervision_temoin_alertmanager_url_externe }} \
+  --cluster.listen-address=
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+ReadWritePaths={{ supervision_temoin_dossier_alertmanager }}
+CapabilityBoundingSet=
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

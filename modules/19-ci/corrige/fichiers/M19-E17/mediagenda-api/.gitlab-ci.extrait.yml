@@ -1,0 +1,20 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M19-E17, PLAT-2017). Ajoute le stage « promotion » après
+# « signature » et trois inclusions du composant promotion (une par overlay). Les autres composants
+# passent à la même version (une seule version de plateforme/ci-templates par projet : plus simple
+# à suivre pour Renovate et pour les relecteurs).
+stages: [lint, test, construction, analyse, publication, signature, promotion, release]
+
+include:
+  # … qualite, construction-image, securite, release à la même version …
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.4.0
+    inputs:
+      overlay: dev
+      declenchement: on_success     # chaque version est PROPOSÉE en dev, Julien ou Karim fusionnent
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.4.0
+    inputs:
+      overlay: recette
+      declenchement: manual
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.4.0
+    inputs:
+      overlay: prod
+      declenchement: manual

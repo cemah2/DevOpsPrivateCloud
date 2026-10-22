@@ -1,0 +1,41 @@
+# formation/flux-labo — clusters/flux01/apps.yaml (M20-E23). Lu par la Kustomization « flux-system »
+# créée par « flux bootstrap » (elle applique tout clusters/flux01/) : c'est l'équivalent de
+# l'application racine d'Argo CD.
+# Deux Kustomizations Flux (rien à voir avec un kustomization.yaml de Kustomize : c'est le nom de la
+# ressource du kustomize-controller), qui appliquent chacune un dossier du même dépôt.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: labo
+  namespace: flux-system
+spec:
+  interval: 5m
+  # Réessai plus rapide qu'interval quand l'application échoue.
+  retryInterval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/labo
+  # prune : supprime ce qui disparaît du dossier (équivalent de prune d'Argo CD). La dérive (un
+  # « kubectl scale ») est corrigée à chaque intervalle : pas d'option selfHeal, c'est le comportement
+  # par défaut de Flux.
+  prune: true
+  # Prête quand les objets appliqués sont prêts (kstatus) : santé, comme celle d'Argo CD.
+  wait: true
+  timeout: 3m
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 1m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  path: ./apps/podinfo
+  prune: true
+  wait: true
+  timeout: 5m

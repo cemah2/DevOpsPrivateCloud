@@ -1,0 +1,14 @@
+# espaces/gitlab-agent/00-namespace.yaml — agent GitLab pour Kubernetes « k8s-par1 » (M19-E18).
+# Pod Security « restricted » : agentk tourne sans root, sans capacité, système de fichiers en lecture seule.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitlab-agent
+  labels:
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

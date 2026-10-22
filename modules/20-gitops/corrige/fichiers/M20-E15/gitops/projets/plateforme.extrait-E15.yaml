@@ -1,0 +1,11 @@
+# plateforme/gitops — projets/plateforme.yaml : AJOUT de M20-E15 (destination du premier service de
+# plateforme). Chaque service ajouté ensuite (M21-M23) ajoute SA destination, rien de plus large.
+spec:
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/plateforme/gitops.git
+    - registry.par1.medisphere.internal/charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+    - server: https://kubernetes.default.svc
+      namespace: argo-rollouts

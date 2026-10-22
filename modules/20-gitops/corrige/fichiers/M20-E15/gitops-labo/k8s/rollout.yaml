@@ -1,0 +1,80 @@
+# formation/gitops-labo — k8s/rollout.yaml (M20-E15) : REMPLACE deployment.yaml (même gabarit de pod).
+# Conversion directe d'un Deployment en Rollout : apiVersion, kind, plus de « replicas » (le HPA le fixe,
+# Argo CD l'ignore : applications/labo.yaml), et la stratégie. Sur ce banc, la bascule recrée les pods
+# (le Deployment est supprimé par prune, le Rollout crée les siens) : coupure de quelques secondes
+# acceptée ; MédiAgenda (E16) se reprend sans coupure, par workloadRef.
+# Canary SANS routage de trafic : le poids est obtenu par le NOMBRE de pods derrière le même Service
+# (25 % de 4 pods = 1 pod de la nouvelle version).
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: labo
+  labels:
+    app.kubernetes.io/name: labo
+spec:
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: labo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: labo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          # Image officielle sans privilège (UID 101, port 8080) par le cache Harbor « dockerhub ».
+          image: registry.par1.medisphere.internal/dockerhub/nginxinc/nginx-unprivileged:1.30.6-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: page
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+            # nginx écrit son PID et ses fichiers temporaires sous /tmp (image « unprivileged »).
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: page
+          configMap:
+            name: labo-page
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+  strategy:
+    canary:
+      steps:
+        - setWeight: 25
+        # Pause sans durée : on observe, puis « kubectl argo rollouts promote labo -n wb-essais ».
+        - pause: {}
+        - setWeight: 50
+        - pause: {duration: 30s}
+        - setWeight: 75
+        - pause: {duration: 30s}

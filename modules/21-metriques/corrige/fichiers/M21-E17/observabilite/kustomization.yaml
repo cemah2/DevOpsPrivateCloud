@@ -1,0 +1,13 @@
+# plateforme/observabilite — kustomization.yaml (racine ; état après M21-E17, PLAT-2217).
+# M21-E17 ajoute tableaux/ (ConfigMaps des tableaux de bord, lues par le sidecar de Grafana).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: supervision
+resources:
+  - regles
+  - scrape
+  - tableaux
+labels:
+  - pairs:
+      medisphere.internal/supervision: "oui"
+    includeSelectors: false

@@ -1,0 +1,71 @@
+# plateforme/gitops — applications/mediagenda.yaml (M20-E10, PLAT-2110)
+# UN générateur pour les trois environnements de MédiAgenda. Remplace applications/mediagenda-dev.yaml
+# (Application écrite à la main en M20-E08), qui est REPRISE par l'ApplicationSet sans être supprimée.
+#
+# Garde-fous :
+#   - applicationsSync: create-update : le contrôleur des ApplicationSets crée et met à jour les
+#     Applications, mais ne les SUPPRIME jamais (un élément retiré de la liste ne détruit rien).
+#     Ne vaut que si argocd-cmd-params-cm porte applicationsetcontroller.enable.policy.override: "true"
+#     (composants/argocd/values.yaml de plateforme/k8s, M20-E10) ; sinon, politique globale « sync ».
+#   - preserveResourcesOnDeletion: true : les Applications générées n'ont PAS le finaliseur
+#     resources-finalizer.argocd.argoproj.io ; supprimer une Application ne supprime pas les charges.
+#   - liste explicite (pas de générateur de répertoires) : un dossier ajouté par erreur dans overlays/
+#     ne devient pas un environnement synchronisé automatiquement.
+#   - prod : pas de synchronisation automatique (templatePatch) ; on synchronise à la main après la MR.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mediagenda
+  namespace: argocd
+spec:
+  goTemplate: true
+  # Une clé absente dans un élément de la liste est une ERREUR, pas une chaîne vide.
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: dev
+            auto: true
+          - env: recette
+            auto: true
+          - env: prod
+            auto: false
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "mediagenda-{{ .env }}"
+      labels:
+        medisphere.internal/equipe: mediagenda
+        medisphere.internal/environnement: "{{ .env }}"
+    spec:
+      # Le projet ne peut PAS être changé par templatePatch (le contrôleur le remet).
+      project: mediagenda
+      source:
+        repoURL: https://git01.par1.medisphere.internal/mediagenda/deploiement.git
+        targetRevision: main
+        path: "overlays/{{ .env }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "mediagenda-{{ .env }}"
+  # templatePatch : le seul moyen de rendre conditionnel un champ qui n'est pas une chaîne
+  # (ici l'objet « automated »). Toujours une section syncPolicy non vide : un patch vide ou un
+  # « spec: » sans contenu effacerait des champs du gabarit.
+  templatePatch: |
+    spec:
+      syncPolicy:
+        {{- if .auto }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

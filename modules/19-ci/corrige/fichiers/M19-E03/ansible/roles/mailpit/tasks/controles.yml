@@ -1,0 +1,43 @@
+---
+# Contrôles finaux, depuis mon01 lui-même (la vérification depuis adm01 est celle du check).
+
+- name: Version en service
+  ansible.builtin.command:
+    argv: ["{{ mailpit_binaire }}", version, --no-release-check]
+  register: _mailpit_version
+  changed_when: false
+  failed_when: mailpit_version not in _mailpit_version.stdout
+
+- name: SMTP — bannière et STARTTLS annoncé
+  ansible.builtin.command:
+    argv: [swaks, --server, "{{ inventory_hostname }}:25", --quit-after, EHLO, --helo, "{{ inventory_hostname }}"]
+  register: _mailpit_ehlo
+  changed_when: false
+  failed_when: _mailpit_ehlo.rc != 0 or 'STARTTLS' not in _mailpit_ehlo.stdout
+
+- name: SMTP — session STARTTLS vérifiée contre la racine MédiSphère
+  ansible.builtin.command:
+    argv:
+      - swaks
+      - --server
+      - "smtp.par1.medisphere.internal:25"
+      - --tls
+      - --tls-verify
+      - --tls-ca-path
+      - /usr/local/share/ca-certificates/medisphere-root-ca.crt
+      - --quit-after
+      - TLS
+  register: _mailpit_tls
+  changed_when: false
+
+- name: Interface — /readyz en HTTPS vérifié (sans authentification)
+  ansible.builtin.uri:
+    url: "https://{{ ansible_facts['fqdn'] }}:8025/readyz"
+    ca_path: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+    status_code: 200
+
+- name: API — refus sans mot de passe
+  ansible.builtin.uri:
+    url: "https://{{ ansible_facts['fqdn'] }}:8025/api/v1/info"
+    ca_path: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+    status_code: 401

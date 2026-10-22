@@ -1,0 +1,61 @@
+# Compte de service de l'agent et droits du processeur k8sattributes (lecture seule, tout le cluster) :
+# pods et espaces (métadonnées des pods émetteurs), replicasets (nom du Deployment), nœuds (k8snode du
+# processeur resourcedetection). Sans ce RBAC, k8sattributes n'enrichit RIEN et le dit seulement dans
+# ses journaux (« forbidden ») : piège classique (M23-E11).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-agent
+  namespace: traces
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-agent-k8sattributes
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-agent-k8sattributes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-agent-k8sattributes
+subjects:
+  - kind: ServiceAccount
+    name: otel-agent
+    namespace: traces
+---
+# M23-E09 : résolveur « k8s » de l'exportateur loadbalancing (lecture des EndpointSlices de l'espace
+# traces). Sans ce droit, la liste des réplicas reste vide et l'agent journalise
+# « couldn't find the exporter for the endpoint "" » : toutes les spans sont perdues.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: otel-agent-loadbalancing
+  namespace: traces
+rules:
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: otel-agent-loadbalancing
+  namespace: traces
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: otel-agent-loadbalancing
+subjects:
+  - kind: ServiceAccount
+    name: otel-agent
+    namespace: traces

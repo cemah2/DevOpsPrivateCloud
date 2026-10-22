@@ -1,0 +1,30 @@
+# formation/ci-labo — .gitlab-ci.yml : EXTRAIT (M19-E18). Essais de l'agent k8s-par1 (accès CI du
+# projet : toutes branches, voir .gitlab/agents/k8s-par1/config.yaml de plateforme/k8s).
+.agent:
+  stage: deploiement
+  tags: [k8s]
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+    entrypoint: [""]
+  when: manual
+  variables:
+    GIT_STRATEGY: none
+    SSL_CERT_FILE: /etc/medisphere/ca/medisphere-root-ca.crt
+  before_script:
+    - kubectl config get-contexts
+    - kubectl config use-context plateforme/k8s:k8s-par1
+
+agent-essai-wb-essais:
+  extends: .agent
+  script:
+    - kubectl create configmap essai-agent-$CI_PIPELINE_ID -n wb-essais --from-literal=job=$CI_JOB_ID --dry-run=client -o yaml | kubectl apply --server-side -f -
+    - kubectl get configmap essai-agent-$CI_PIPELINE_ID -n wb-essais -o name
+    - kubectl delete configmap essai-agent-$CI_PIPELINE_ID -n wb-essais
+
+# Doit ÉCHOUER (Forbidden) : l'agent n'a aucun droit dans mediagenda-recette.
+agent-essai-recette-refuse:
+  extends: .agent
+  allow_failure: true
+  script:
+    - kubectl auth can-i create configmaps -n mediagenda-recette || true
+    - kubectl create configmap essai-agent -n mediagenda-recette --from-literal=a=b

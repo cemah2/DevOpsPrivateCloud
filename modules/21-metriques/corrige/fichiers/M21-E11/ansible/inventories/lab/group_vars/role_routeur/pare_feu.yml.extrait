@@ -1,0 +1,22 @@
+# group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — EXTRAIT (M21-E11, PLAT-2211) :
+# sondes du témoin (mon01) vers les points d'entrée du lab. Une passerelle à la fois (--limit gw01,
+# vérification, puis gw02) ; retour arrière : git revert de la MR et même playbook.
+# Les cibles du VLAN 20 (git01, nbx01, reg01, dns01, dns02) ne traversent pas la bordure.
+# Les VIP .1 des passerelles sont des adresses de la passerelle elle-même : règle d'ENTRÉE
+# (pare_feu_entree), pas de transit.
+
+pare_feu_definitions:
+  # … définitions existantes …
+  # (MON01 existe peut-être déjà depuis le M19 : ne la redéfinis pas)
+  - {nom: MON01, valeur: "10.10.20.19", commentaire: "mon01 : Mailpit (M19), supervision témoin (M21)"}
+
+pare_feu_transit:
+  # … règles existantes …
+  # Sortie : interface du VLAN 40 (les /32 de 10.10.41.0/24 sont routées vers les nœuds, BGP, M15).
+  - {entree: $V_INFRA, source: $MON01, sortie: $V_K8S, destination: $GW_PAR1, proto: tcp, ports: 443,
+     motif: "sondes HTTPS du témoin vers la Gateway gw-par1 (Grafana, Argo CD, MédiAgenda)", ref: M21-E11}
+
+pare_feu_entree:
+  # … règles existantes …
+  - {entree: $V_INFRA, source: $MON01, proto: icmp,
+     motif: "sondes ICMP du témoin vers les VIP des passerelles (adresses de la passerelle)", ref: M21-E11}

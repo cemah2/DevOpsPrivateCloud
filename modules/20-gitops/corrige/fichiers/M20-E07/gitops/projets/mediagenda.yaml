@@ -1,0 +1,44 @@
+# plateforme/gitops — projets/mediagenda.yaml (M20-E07, PLAT-2107)
+# Projet de l'équipe MédiAgenda : un seul dépôt source, trois espaces, aucun objet de cluster, et
+# rien de ce que la plateforme gouverne dans les espaces (quotas, limites par défaut).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: mediagenda
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: MédiAgenda (équipe de Julien Petit) — dev, recette, prod
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/mediagenda/deploiement.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: mediagenda-dev
+    - server: https://kubernetes.default.svc
+      namespace: mediagenda-recette
+    - server: https://kubernetes.default.svc
+      namespace: mediagenda-prod
+  # Liste blanche VIDE : aucun objet de cluster (Namespace, ClusterRole, CRD, PV…).
+  clusterResourceWhitelist: []
+  # Liste noire des objets d'espace gouvernés par plateforme/k8s (espaces/) : l'équipe ne peut ni
+  # les créer, ni les modifier, ni les supprimer par Argo CD. Les NetworkPolicy restent permises :
+  # le chart mediagenda (M17) livre ses propres politiques (micro-segmentation de l'application) ;
+  # les invariants réseau de la plateforme sont des refus de cluster (M15-E28), hors d'atteinte.
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+  orphanedResources:
+    # Signaler tout objet de ces espaces qu'aucune Application ne gère (geste manuel, reste d'un
+    # ancien déploiement) ; sauf ceux que la plateforme crée HORS Git, connus et listés ici.
+    warn: true
+    ignore:
+      # Identifiants de tirage Harbor, créés par la plateforme (M14).
+      - kind: Secret
+        name: harbor-pull
+      # Refus par défaut posé par plateforme/k8s (espaces/politiques-mediagenda, M15-E17).
+      - group: networking.k8s.io
+        kind: NetworkPolicy
+        name: refus-par-defaut

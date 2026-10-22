@@ -1,0 +1,57 @@
+# =============================================================================
+# /etc/gitlab/gitlab.rb — EXTRAIT (M21-E10, PLAT-2210) : exportateurs pour le Prometheus du cluster.
+# Remplace le bloc « sondes et métriques » de M01-E30 (une clé, une seule affectation : une clé
+# affectée deux fois garde la DERNIÈRE valeur). gitlab.rb reste géré à la main (M01, M07-E13).
+# Avant : instantané de git01 (ms-snapshot --prefix avant-m21e10 1004), free -m, gitlab-ctl status.
+# Après : sudo gitlab-ctl reconfigure ; gitlab-ctl status ; free -m.
+# Mesuré sur git01 (8 Go) au M01-E30 : gitlab-exporter ≈ 100 à 150 Mo ; Sidekiq, Workhorse et
+# Gitaly n'ajoutent qu'un écouteur à un processus existant (coût négligeable).
+# ⚠️ À vérifier sur ton lab : la mémoire réellement consommée après reconfigure.
+# =============================================================================
+
+# Liste blanche de /-/readiness, /-/liveness, /-/metrics : on GARDE celle du M07-E13 (répartiteurs)
+# et du M01-E30 (adm01), et on ajoute les travailleurs de k8s-par1 (Prometheus, masqué derrière
+# l'adresse du nœud). Vu de git01, la requête vient du travailleur : vérifie-le dans
+# /var/log/gitlab/nginx/gitlab_access.log (adresse cliente des requêtes /-/metrics).
+gitlab_rails['monitoring_whitelist'] = ['127.0.0.0/8', '::1/128', '10.10.10.10/32',
+                                        '10.10.70.10/32', '10.10.70.11/32',
+                                        '10.10.40.61/32', '10.10.40.62/32', '10.10.40.63/32']
+
+# Interrupteur général : vrai (déjà au M01-E30 pour node_exporter). On éteint un par un ce qu'on
+# ne veut pas : pas de Prometheus ni d'Alertmanager embarqués (c'est le rôle du cluster) ; pas
+# d'exportateurs PostgreSQL et Redis (20-40 Mo chacun, et gitlab-exporter donne déjà l'essentiel
+# vu de l'application : files de jobs, base) — à reconsidérer si un incident l'exige.
+prometheus_monitoring['enable'] = true
+prometheus['enable'] = false
+alertmanager['enable'] = false
+redis_exporter['enable'] = false
+postgres_exporter['enable'] = false
+pgbouncer_exporter['enable'] = false
+
+# node_exporter : voir M21-E08 (le rôle node_exporter du palier 1 décide s'il remplace celui
+# d'omnibus ; les deux ne peuvent pas écouter sur 10.10.20.12:9100).
+
+# gitlab-exporter (9168) : sur l'adresse INFRA, joignable par la bordure depuis K8S_TRAV seulement.
+gitlab_exporter['enable'] = true
+gitlab_exporter['listen_address'] = '10.10.20.12'
+gitlab_exporter['listen_port'] = '9168'
+
+# Sidekiq : exportateur intégré (8082).
+sidekiq['metrics_enabled'] = true
+sidekiq['listen_address'] = '10.10.20.12'
+sidekiq['listen_port'] = 8082
+
+# Workhorse (9229).
+gitlab_workhorse['prometheus_listen_addr'] = '10.10.20.12:9229'
+
+# Gitaly (9236) : clé dans le hachage « configuration » de Gitaly (GitLab ≥ 16). Si ton gitlab.rb
+# contient déjà un gitaly['configuration'] (M01), AJOUTE la clé dans ce hachage au lieu de le
+# réaffecter : une seconde affectation remplacerait tout le hachage.
+gitaly['configuration'] = {
+  prometheus_listen_addr: '10.10.20.12:9236'
+}
+
+# Puma : pas d'exportateur séparé (puma['exporter_enabled'] reste à false) : les métriques de
+# Rails passent par /-/metrics sur le port HTTPS d'omnibus, servi aux adresses de la liste blanche.
+# Vérifie aussi Admin → Settings → Metrics and profiling → « Enable GitLab Prometheus metrics
+# endpoint » (réglage applicatif ; activé par défaut).

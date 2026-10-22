@@ -1,0 +1,12 @@
+# plateforme/observabilite — thanos/thanos-query.yaml : options ajoutées en M21-E30 (PLAT-2230).
+# EXTRAIT : à ajouter aux « args » du conteneur thanos-query ; --query.timeout=1m REMPLACE le
+# --query.timeout=2m d'E24 (Thanos refuse de démarrer si une option est répétée).
+# Thanos Query lit aussi le compartiment (Store) : une requête de 90 jours en données brutes
+# coûterait bien plus qu'à Prometheus. Bornes du même ordre que Prometheus, plus une par appel
+# aux points d'accès.
+            - --query.timeout=1m
+            - --query.max-concurrent=10
+            # Échantillons (et séries) qu'un appel à UN point d'accès (sidecar ou Store) peut renvoyer :
+            # au-delà, la requête échoue avec un message explicite au lieu de saturer la mémoire.
+            - --store.limits.request-samples=20000000
+            - --store.limits.request-series=500000

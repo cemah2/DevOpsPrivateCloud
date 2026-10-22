@@ -1,0 +1,13 @@
+# plateforme/k8s — espaces/ : étiquette ajoutée en M21-E29 (SEC-2229).
+# EXTRAIT : ajoute l'étiquette aux espaces existants (supervision, mediagenda-dev, mediagenda-recette,
+# mediagenda-prod, medidoc-dev, medidoc-recette). Prometheus ne lit les PrometheusRule QUE dans les
+# espaces qui la portent (ruleNamespaceSelector, kps/values.yaml). Un nouvel espace d'équipe ne
+# reçoit cette étiquette que par une MR relue par la plateforme.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mediagenda-prod
+  labels:
+    # (… étiquettes existantes : medisphere.internal/equipe, Pod Security, exposition …)
+    medisphere.internal/supervision-regles: "oui"
+# Idem pour : supervision, mediagenda-dev, mediagenda-recette, medidoc-dev, medidoc-recette.

@@ -1,0 +1,17 @@
+---
+# playbooks/node-exporter.yml — node_exporter v2 (TLS) sur les VMs du socle (M21-E08, PLAT-2208).
+# Par le pipeline protégé de plateforme/ansible (ADR-0040), ou depuis adm01 :
+#   uv run ansible-playbook playbooks/node-exporter.yml --limit mon01        # un hôte d'essai d'abord
+#   uv run ansible-playbook playbooks/node-exporter.yml
+# Les nœuds Kubernetes n'en ont PAS (DaemonSet de kube-prometheus-stack) ; pve01 et pbs01 sont
+# traités en M21-E12 (scrutés par mon01).
+- name: Exportateur de métriques en TLS sur le socle
+  hosts: socle:!k8s_par1
+  become: true
+  # Un hôte à la fois : la bascule depuis le paquet Debian coupe la collecte quelques secondes, et
+  # l'émission ACME arrête parfois le service qui tient le port 80 (nginx, Harbor) : jamais deux
+  # services du socle arrêtés en même temps.
+  serial: 1
+  any_errors_fatal: true
+  roles:
+    - role: node_exporter

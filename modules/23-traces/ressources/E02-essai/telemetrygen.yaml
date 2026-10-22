@@ -1,0 +1,47 @@
+# M23-E02 — générateur de spans d'essai (outil telemetrygen du projet OpenTelemetry), dans wb-essais.
+# Il envoie des traces synthétiques à l'agent Collector de SON nœud, comme le fera une application.
+#   kubectl apply -f telemetrygen.yaml
+#   kubectl -n wb-essais logs -f job/telemetrygen-essai
+#   kubectl -n wb-essais delete job telemetrygen-essai      (le Job se supprime aussi seul après 1 h)
+# Options : « telemetrygen traces --help » (image : /telemetrygen).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: telemetrygen-essai
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: telemetrygen-essai
+    medisphere.internal/ticket: PLAT-2402
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: telemetrygen-essai
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: telemetrygen
+          image: registry.par1.medisphere.internal/ghcr/open-telemetry/opentelemetry-collector-contrib/telemetrygen:v0.161.0
+          args:
+            - traces
+            - --otlp-endpoint=otel-agent-collector.traces.svc.cluster.local:4317
+            - --otlp-insecure
+            - --service=essai-telemetrygen
+            - --duration=2m
+            - --rate=5
+            - --child-spans=2
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}

@@ -1,0 +1,14 @@
+# mediagenda/deploiement — components/supervision (M21-E07, DEV-2207)
+# Ce que l'équipe MédiAgenda déclare pour être supervisée, dans SON dépôt, pour chaque environnement
+# qui inclut ce component (dev, recette, prod) :
+#   - un Service sans adresse (headless) réservé à la collecte, qui désigne TOUS les pods de l'API ;
+#   - le ServiceMonitor « mediagenda » qui le collecte ;
+#   - le PodMonitor « mediagenda-db » des instances CloudNativePG (pas de Service par instance).
+# L'étiquette medisphere.internal/supervision=oui est celle que sélectionne le Prometheus de la
+# plateforme (M21-E02) : sans elle, rien n'est collecté, sans erreur visible.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - service-metriques.yaml
+  - servicemonitor.yaml
+  - podmonitor-db.yaml

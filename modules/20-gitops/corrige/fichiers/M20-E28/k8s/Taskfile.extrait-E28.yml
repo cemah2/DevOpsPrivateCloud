@@ -1,0 +1,20 @@
+# plateforme/k8s — Taskfile.yml : AJOUT de M20-E28 (PLAT-2128), dans « tasks: ».
+  argocd-sauvegarde:
+    desc: Appliquer le CronJob de sauvegarde d'Argo CD (composants/argocd-sauvegarde) et sa politique réseau
+    cmds:
+      - >-
+        kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}}
+        -f composants/reseau/politiques/argocd-sauvegarde.yaml
+      - >-
+        kubectl --context {{.CONTEXTE}} apply --server-side --field-manager={{.GESTIONNAIRE}}
+        -k composants/argocd-sauvegarde
+
+  argocd-sauvegarde-maintenant:
+    desc: Lancer une sauvegarde d'Argo CD tout de suite (Job tiré du CronJob) et attendre sa fin
+    cmds:
+      - >-
+        kubectl --context {{.CONTEXTE}} -n argocd create job --from=cronjob/argocd-export
+        argocd-export-manuel-$(date +%Y%m%d%H%M%S)
+      - >-
+        kubectl --context {{.CONTEXTE}} -n argocd wait --for=condition=Complete --timeout=10m
+        $(kubectl --context {{.CONTEXTE}} -n argocd get jobs -o name --sort-by=.metadata.creationTimestamp | tail -1)

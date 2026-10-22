@@ -1,0 +1,55 @@
+# plateforme/observabilite — tests/thanos-complements.test.yaml (M21-E39)
+rule_files:
+  - ../build/regles/thanos-complements.yml
+evaluation_interval: 30s
+tests:
+  - name: le sidecar de prometheus-kps-1 perd son expéditeur, celui de prometheus-kps-0 non
+    interval: 1m
+    input_series:
+      - series: 'up{job="kps-thanos-discovery", pod="prometheus-kps-0"}'
+        values: '1x40'
+      - series: 'up{job="kps-thanos-discovery", pod="prometheus-kps-1"}'
+        values: '1x40'
+      - series: 'thanos_shipper_uploads_total{job="kps-thanos-discovery", pod="prometheus-kps-0"}'
+        values: '3x40'
+      - series: 'thanos_shipper_uploads_total{job="kps-thanos-discovery", pod="prometheus-kps-1"}'
+        values: '3x10 _x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ThanosSidecarSansExpediteur
+        exp_alerts: []
+      - eval_time: 35m
+        alertname: ThanosSidecarSansExpediteur
+        exp_alerts:
+          - exp_labels:
+              alertname: ThanosSidecarSansExpediteur
+              gravite: avertissement
+              equipe: plateforme
+              job: kps-thanos-discovery
+              pod: prometheus-kps-1
+            exp_annotations:
+              resume: "Le sidecar Thanos de prometheus-kps-1 tourne sans envoyer de blocs"
+              description: >-
+                Le sidecar répond mais n'a pas d'expéditeur : son objet Prometheus n'a plus de configuration de stockage objet (objectStorageConfig). Les blocs restent sur le volume local et disparaîtront à la fin de la rétention locale (15 j). RB-219 § « Historique long ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md
+  - name: un Store qui écarte des blocs par sa fenêtre de temps est signalé
+    interval: 1m
+    input_series:
+      - series: 'thanos_blocks_meta_synced{job="thanos-store", pod="thanos-store-0", state="loaded"}'
+        values: '120x10 30x40'
+      - series: 'thanos_blocks_meta_synced{job="thanos-store", pod="thanos-store-0", state="time-excluded"}'
+        values: '0x10 90x40'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: ThanosStoreBlocsExclus
+        exp_alerts:
+          - exp_labels:
+              alertname: ThanosStoreBlocsExclus
+              gravite: avertissement
+              equipe: plateforme
+              pod: thanos-store-0
+            exp_annotations:
+              resume: "Le Store Gateway thanos-store-0 écarte 90 blocs par sa fenêtre de temps"
+              description: >-
+                Des blocs du compartiment sont hors de la fenêtre --min-time/--max-time du Store : si aucun autre Store ne les sert, cette période n'est plus visible. Sans partage de Store voulu (ADR), c'est une erreur de configuration. RB-219 § « Historique long ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md

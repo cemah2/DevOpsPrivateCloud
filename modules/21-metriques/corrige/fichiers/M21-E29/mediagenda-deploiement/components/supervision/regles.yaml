@@ -1,0 +1,38 @@
+# mediagenda/deploiement — components/supervision/regles.yaml (M21-E29, SEC-2229)
+# Règles de l'ÉQUIPE MédiAgenda, dans l'espace de chaque environnement (composant kustomize déjà
+# inclus par les overlays depuis E07). L'opérateur ajoute namespace="<espace>" à chaque sélecteur :
+# la règle n'a pas besoin de le dire (et ne peut pas lire un autre espace).
+# Vocabulaire commun obligatoire : gravite, equipe ; resume, description, runbook_url.
+# Les alertes « plateforme » (nœuds, Prometheus, Thanos) ne sont PAS ici.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mediagenda-equipe
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: mediagenda.equipe
+      rules:
+        - alert: MediagendaRedemarrages
+          expr: increase(kube_pod_container_status_restarts_total{container="api", pod=~"mediagenda-.*"}[30m]) > 3
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "Le conteneur api de {{ $labels.pod }} redémarre en boucle"
+            description: "Plus de 3 redémarrages en 30 min dans {{ $labels.namespace }}."
+            runbook_url: https://git01.par1.medisphere.internal/mediagenda/deploiement/-/blob/main/docs/runbooks/redemarrages.md
+        - alert: MediagendaCacheInefficace
+          expr: |
+            sum(rate(mediagenda_cache_total{resultat="miss"}[15m]))
+              / sum(rate(mediagenda_cache_total[15m])) > 0.8
+          for: 30m
+          labels:
+            gravite: info
+            equipe: mediagenda
+          annotations:
+            resume: "Plus de 80 % des consultations des créneaux ratent le cache Valkey"
+            description: "Charge reportée sur PostgreSQL ; Valkey redémarré, vidé, ou TTL trop court ?"
+            runbook_url: https://git01.par1.medisphere.internal/mediagenda/deploiement/-/blob/main/docs/runbooks/cache.md

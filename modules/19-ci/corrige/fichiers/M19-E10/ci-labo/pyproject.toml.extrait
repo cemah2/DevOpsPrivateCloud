@@ -1,0 +1,8 @@
+# formation/ci-labo — pyproject.toml : EXTRAIT (M19-E10). Le composant qualite (Python) attend ruff
+# et pytest dans le groupe « dev ». Commande, depuis ~/src/ci-labo :  uv add --dev "ruff>=0.17,<0.18"
+# (uv réécrit pyproject.toml ET uv.lock ; commite les deux).
+[dependency-groups]
+dev = [
+    "pytest>=9,<10",
+    "ruff>=0.17,<0.18",
+]

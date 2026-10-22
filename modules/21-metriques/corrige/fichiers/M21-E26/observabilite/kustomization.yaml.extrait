@@ -1,0 +1,9 @@
+# plateforme/observabilite — kustomization.yaml (racine) : ajout de M21-E26 (PLAT-2226).
+# EXTRAIT : ajoute « slo » à la liste. Le dossier pyrra/ n'y figure PAS : il est rendu par sa
+# propre Application Argo CD (gitops : plateforme/pyrra.yaml).
+resources:
+  - regles
+  - scrape
+  # (… tableaux …)
+  - thanos
+  - slo

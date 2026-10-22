@@ -1,0 +1,31 @@
+# plateforme/gitops — plateforme/otel.yaml (M23-E02, PLAT-2402)
+# Collectors (otel-agent, otel-passerelle), RBAC, Service 10.10.41.63, politiques réseau : dossier otel/ de
+# plateforme/observabilite, rendu par kustomize.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel
+  namespace: argocd
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traces
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+    targetRevision: main
+    path: otel
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Les CR OpenTelemetryCollector reçoivent des valeurs par défaut du webhook de l'opérateur.
+      - ServerSideApply=true
+    # Tant que l'opérateur (et ses CRD) n'est pas prêt, la synchronisation échoue : on réessaie.
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

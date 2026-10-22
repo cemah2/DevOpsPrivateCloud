@@ -1,0 +1,20 @@
+# Extrait de otel/otel-passerelle.yaml pendant l'essai M23-E15 SEULEMENT (à retirer à la fin) : la passerelle
+# envoie les mêmes traces, après échantillonnage, à Tempo ET à Jaeger. Les deux exportateurs ont chacun leur
+# file d'attente : si Jaeger tombe, Tempo continue de recevoir (pas de couplage entre les deux).
+spec:
+  config:
+    exporters:
+      otlp_grpc/jaeger:
+        endpoint: jaeger.jaeger-essai.svc.cluster.local:4317
+        tls: {insecure: true}
+        sending_queue:
+          enabled: true
+          sizer: items
+          queue_size: 10000
+        retry_on_failure:
+          enabled: true
+          max_elapsed_time: 60s
+    service:
+      pipelines:
+        traces:
+          exporters: [otlp_grpc/tempo, otlp_grpc/jaeger]

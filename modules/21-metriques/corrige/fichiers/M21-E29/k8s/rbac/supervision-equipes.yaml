@@ -1,0 +1,85 @@
+# plateforme/k8s — rbac/supervision-equipes.yaml (M21-E29, SEC-2229)
+# Les équipes ÉCRIVENT leurs règles et moniteurs par Git (dépôt …/deploiement, synchronisé par Argo CD,
+# projet mediagenda ou medidoc) et les LISENT dans le cluster. Aucun droit d'écriture direct : à
+# partir du M20, rien ne s'applique à la main dans les espaces applicatifs.
+# ClusterRole de lecture, lié par RoleBinding (donc limité aux espaces de l'équipe).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: supervision-lecture-equipe
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: [monitoring.coreos.com]
+    resources: [prometheusrules, servicemonitors, podmonitors]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-mediagenda
+  namespace: mediagenda-prod
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: medisphere:mediagenda-devs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-mediagenda
+  namespace: mediagenda-recette
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: medisphere:mediagenda-devs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-mediagenda
+  namespace: mediagenda-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: medisphere:mediagenda-devs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-medidoc
+  namespace: medidoc-recette
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: medisphere:medidoc-devs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: supervision-lecture-medidoc
+  namespace: medidoc-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: supervision-lecture-equipe
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: medisphere:medidoc-devs

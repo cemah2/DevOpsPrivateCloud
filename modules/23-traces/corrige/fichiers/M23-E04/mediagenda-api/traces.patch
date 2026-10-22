@@ -1,0 +1,349 @@
+M23-E04 (DEV-2404) — MédiAgenda : traces OpenTelemetry dans le code.
+Base : mediagenda/api après M22-E06 (request_id). Sur une branche :
+  uv add "opentelemetry-sdk>=1.45.1,<2" "opentelemetry-exporter-otlp-proto-grpc>=1.45.1,<2" \
+         "opentelemetry-instrumentation-fastapi>=0.66b1,<0.67" \
+         "opentelemetry-instrumentation-psycopg>=0.66b1,<0.67" \
+         "opentelemetry-instrumentation-redis>=0.66b1,<0.67"
+  git apply --index traces.patch
+  uv run pytest && uv run ruff check . && uv run ruff format --check .
+- telemetrie.py (nouveau) : fournisseur de traces, exportateur OTLP gRPC (variables OTEL_*), psycopg et redis instrumentés ;
+- __main__.py : telemetrie.configurer() avant l'application, telemetrie.arreter() après l'arrêt d'uvicorn ;
+- app.py : instrumentation FastAPI (sondes exclues), télémétrie native de FastAPI sans auto-configuration,
+  spans métier mediagenda.rendez_vous.creer, mediagenda.creneaux.calculer, mediagenda.cache.invalider ;
+- tests/test_telemetrie.py : spans produites, sondes exclues, contexte W3C repris, aucune donnée patient.
+
+diff --git a/src/mediagenda/__main__.py b/src/mediagenda/__main__.py
+index 045b9b2..3d3d6b0 100644
+--- a/src/mediagenda/__main__.py
++++ b/src/mediagenda/__main__.py
+@@ -17,7 +17,7 @@ import sys
+ 
+ import uvicorn
+ 
+-from . import journal
++from . import journal, telemetrie
+ from .app import create_app
+ from .config import ErreurConfiguration, Settings
+ 
+@@ -30,6 +30,8 @@ def main() -> None:
+         logging.getLogger("mediagenda").critical("configuration invalide : %s", exc)
+         sys.exit(2)
+     journal.configurer(settings.log_level, settings.log_format)
++    # Traces (M23-E04) : avant create_app, donc avant le pool PostgreSQL et le client Valkey.
++    telemetrie.configurer(settings.version)
+     uvicorn.run(
+         create_app(settings),
+         host="0.0.0.0",  # noqa: S104 - écoute sur toutes les interfaces (conteneur)
+@@ -38,6 +40,8 @@ def main() -> None:
+         access_log=False,  # remplacé par la ligne JSON de app.py
+         timeout_graceful_shutdown=settings.delai_arret,
+     )
++    # uvicorn rend la main après l'arrêt propre : on envoie les dernières spans.
++    telemetrie.arreter()
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/src/mediagenda/app.py b/src/mediagenda/app.py
+index 5fac494..13e3a95 100644
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -14,6 +14,8 @@ from zoneinfo import ZoneInfo
+ 
+ from fastapi import FastAPI, HTTPException, Query, Request, Response
+ from fastapi.responses import JSONResponse
++from opentelemetry import trace
++from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+ 
+ from .cache import Cache, CacheValkey
+@@ -21,11 +23,15 @@ from .config import Settings
+ from .depot import ConflitCreneau, Depot, DepotPostgres
+ from .journal import FiltreRequete, request_id_courant
+ from .modeles import Creneaux, RendezVous, RendezVousCreation
++from .telemetrie import URLS_EXCLUES
+ 
+ journal = logging.getLogger("mediagenda")
+ journal_acces = logging.getLogger("mediagenda.acces")
+ for _j in (journal, journal_acces):
+     _j.addFilter(FiltreRequete())
++# Spans « métier » (M23-E04). Attributs : préfixe mediagenda.*, jamais de donnée de santé ni
++# d'identité de patient (nom, motif) — voir docs/observabilite/traces/conventions-telemetrie.md.
++traceur = trace.get_tracer("mediagenda")
+ 
+ # Identifiant de requête reçu (X-Request-ID d'un client ou d'un mandataire) : accepté seulement s'il
+ # est court et sans caractère spécial, sinon remplacé (pas d'injection dans les journaux).
+@@ -75,8 +81,22 @@ def create_app(
+         app.state.depot.fermer()
+         app.state.cache.fermer()
+ 
+-    app = FastAPI(title="MédiAgenda", version=settings.version, lifespan=cycle_de_vie)
++    # FastAPI 0.142 a sa propre télémétrie OpenTelemetry : elle s'efface d'elle-même devant
++    # l'instrumentation contrib ci-dessous (détectée dans la pile) ; on lui interdit seulement
++    # d'ajouter un exportateur d'après les variables OTEL_* (telemetrie.py s'en charge).
++    app = FastAPI(
++        title="MédiAgenda",
++        version=settings.version,
++        lifespan=cycle_de_vie,
++        telemetry={"auto_configure": False},
++    )
+     fuseau = ZoneInfo(settings.fuseau)
++    # Une span serveur par requête (nom « POST /api/v1/rendez-vous » : le modèle de route, pas le
++    # chemin réel), contexte W3C lu dans les en-têtes entrants. Sondes et /metrics exclues. Sans
++    # fournisseur configuré (tests), le traceur global ne fait rien.
++    FastAPIInstrumentor.instrument_app(
++        app, excluded_urls=URLS_EXCLUES, exclude_spans=["receive", "send"]
++    )
+ 
+     @app.middleware("http")
+     async def mesurer(request: Request, call_next):
+@@ -148,11 +168,23 @@ def create_app(
+ 
+     @app.post("/api/v1/rendez-vous", status_code=201)
+     def creer(request: Request, rdv: RendezVousCreation) -> RendezVous:
+-        try:
+-            cree = request.app.state.depot.creer(rdv)
+-        except ConflitCreneau:
+-            raise HTTPException(409, "créneau déjà pris pour ce praticien") from None
+-        _invalider(request.app.state.cache, cree)
++        with traceur.start_as_current_span("mediagenda.rendez_vous.creer") as span:
++            # Le praticien est un identifiant professionnel, pas une donnée de santé ; le patient
++            # et le motif ne sont JAMAIS mis en attribut.
++            span.set_attribute("mediagenda.praticien", rdv.praticien)
++            span.set_attribute("mediagenda.rendez_vous.duree_minutes", rdv.duree_minutes)
++            try:
++                cree = request.app.state.depot.creer(rdv)
++            except ConflitCreneau:
++                # 409 : erreur du client, pas du service. Un événement, pas un statut d'erreur :
++                # l'exception est levée APRÈS la span (sinon elle serait notée en erreur).
++                span.add_event("mediagenda.conflit_creneau")
++                cree = None
++            else:
++                span.set_attribute("mediagenda.rendez_vous.id", cree.id)
++                _invalider(request.app.state.cache, cree)
++        if cree is None:
++            raise HTTPException(409, "créneau déjà pris pour ce praticien")
+         journal.info("rendez-vous créé", extra={"rdv_id": cree.id, "praticien": cree.praticien})
+         return cree
+ 
+@@ -181,19 +213,26 @@ def create_app(
+         """Créneaux libres d'un jour. Résultat mis en cache dans Valkey (60 s par défaut)."""
+         cache: Cache = request.app.state.cache
+         cle = cle_creneaux(praticien, jour)
++        span = trace.get_current_span()  # span serveur de la requête
++        span.set_attribute("mediagenda.praticien", praticien)
+         try:
+             en_cache = cache.lire(cle)
+         except Exception as exc:
+             # Cache en panne : on sert quand même, depuis la base (mode dégradé).
+             journal.warning("cache indisponible", extra={"erreur": str(exc)})
+             CACHE.labels("erreur").inc()
++            span.set_attribute("mediagenda.cache.resultat", "erreur")
+             en_cache = None
+         else:
+-            CACHE.labels("hit" if en_cache is not None else "miss").inc()
++            resultat_cache = "hit" if en_cache is not None else "miss"
++            CACHE.labels(resultat_cache).inc()
++            span.set_attribute("mediagenda.cache.resultat", resultat_cache)
+         if en_cache is not None:
+             return Creneaux.model_validate_json(en_cache)
+ 
+-        resultat = calculer_creneaux(request.app.state.depot, praticien, jour, fuseau)
++        with traceur.start_as_current_span("mediagenda.creneaux.calculer") as calcul:
++            resultat = calculer_creneaux(request.app.state.depot, praticien, jour, fuseau)
++            calcul.set_attribute("mediagenda.creneaux.libres", len(resultat.libres))
+         try:
+             cache.ecrire(cle, resultat.model_dump_json(), settings.cache_ttl)
+         except Exception as exc:
+@@ -203,11 +242,12 @@ def create_app(
+     def _invalider(cache: Cache, rdv: RendezVous) -> None:
+         """Un rendez-vous créé ou supprimé change les créneaux de son jour."""
+         jour = rdv.debut.astimezone(fuseau).date()
+-        for praticien in (rdv.praticien, "tous"):
+-            try:
+-                cache.effacer(cle_creneaux(praticien, jour))
+-            except Exception as exc:
+-                journal.warning("invalidation du cache impossible", extra={"erreur": str(exc)})
++        with traceur.start_as_current_span("mediagenda.cache.invalider"):
++            for praticien in (rdv.praticien, "tous"):
++                try:
++                    cache.effacer(cle_creneaux(praticien, jour))
++                except Exception as exc:
++                    journal.warning("invalidation du cache impossible", extra={"erreur": str(exc)})
+ 
+     return app
+ 
+diff --git a/src/mediagenda/telemetrie.py b/src/mediagenda/telemetrie.py
+new file mode 100644
+index 0000000..8605925
+--- /dev/null
++++ b/src/mediagenda/telemetrie.py
+@@ -0,0 +1,81 @@
++"""Traces OpenTelemetry de MédiAgenda (M23-E04).
++
++Tout se règle par les variables d'environnement STANDARD d'OpenTelemetry, posées par la
++plateforme (composant kustomize « telemetrie » de mediagenda/deploiement) ; le code n'ajoute
++aucune variable MEDIAGENDA_* :
++
++- OTEL_SERVICE_NAME            nom du service (mediagenda-api) ;
++- OTEL_RESOURCE_ATTRIBUTES     deployment.environment.name=…,service.namespace=medisphere ;
++- OTEL_EXPORTER_OTLP_ENDPOINT  agent Collector du nœud (http://…:4317, gRPC sans TLS dans le cluster) ;
++- OTEL_TRACES_SAMPLER(_ARG)    échantillonnage en tête (parentbased_traceidratio, M23-E09) ;
++- OTEL_PROPAGATORS             tracecontext,baggage par défaut (W3C) ;
++- OTEL_SDK_DISABLED=true       coupe tout (le SDK ne crée plus que des spans vides).
++
++Sans OTEL_EXPORTER_OTLP_ENDPOINT (poste de développement, tests), les spans sont créées
++(identifiants de trace disponibles) mais rien n'est exporté : pas d'erreur de connexion en boucle
++vers un localhost:4317 qui n'existe pas.
++"""
++
++from __future__ import annotations
++
++import logging
++import os
++
++from opentelemetry import trace
++from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
++from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
++from opentelemetry.instrumentation.redis import RedisInstrumentor
++from opentelemetry.sdk.resources import Resource
++from opentelemetry.sdk.trace import TracerProvider
++from opentelemetry.sdk.trace.export import BatchSpanProcessor
++
++journal = logging.getLogger("mediagenda.telemetrie")
++
++# Chemins jamais tracés : sondes de Kubernetes et collecte de Prometheus (une requête toutes les
++# quelques secondes, sans intérêt pour le diagnostic). Expressions rationnelles cherchées dans
++# l'URL complète, séparées par des virgules (format d'excluded_urls de l'instrumentation).
++URLS_EXCLUES = "/sante$,/pret$,/metrics$"
++
++_fournisseur: TracerProvider | None = None
++
++
++def configurer(version: str) -> None:
++    """Installe le fournisseur de traces global et instrumente psycopg et redis.
++
++    À appeler UNE fois, au démarrage du processus, AVANT la création du pool PostgreSQL et du
++    client Valkey : l'instrumentation remplace les fonctions de connexion des bibliothèques.
++    """
++    global _fournisseur
++    if _fournisseur is not None:
++        return
++    # Resource.create lit OTEL_SERVICE_NAME et OTEL_RESOURCE_ATTRIBUTES ; on y ajoute la version
++    # livrée (MEDIAGENDA_VERSION), la même que celle de /sante et de l'étiquette de l'image.
++    ressource = Resource.create({"service.version": version})
++    # L'échantillonneur n'est pas passé : le SDK lit OTEL_TRACES_SAMPLER et OTEL_TRACES_SAMPLER_ARG
++    # (défaut : parentbased_always_on).
++    _fournisseur = TracerProvider(resource=ressource)
++    if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or os.environ.get(
++        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
++    ):
++        # Point d'accès, TLS (schéma http:// = sans TLS), en-têtes, délai et compression viennent
++        # des variables OTEL_EXPORTER_OTLP_*. Envoi par lots, en tâche de fond : une requête HTTP
++        # n'attend jamais le Collector.
++        _fournisseur.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
++        journal.info("traces exportées en OTLP", extra={"version": version})
++    else:
++        journal.info("OTEL_EXPORTER_OTLP_ENDPOINT absente : traces non exportées")
++    trace.set_tracer_provider(_fournisseur)
++
++    # Une span par requête SQL (nom « SELECT mediagenda », attributs db.*). Les paramètres des
++    # requêtes ne sont PAS enregistrés (capture_parameters=False, valeur par défaut) : ils
++    # contiennent des données de patients. Pas de sqlcommenter : il modifierait le texte des
++    # requêtes envoyées à PostgreSQL.
++    PsycopgInstrumentor().instrument(tracer_provider=_fournisseur)
++    # Une span par commande Valkey (GET, SET, DEL…) ; la valeur des clés n'est pas enregistrée.
++    RedisInstrumentor().instrument(tracer_provider=_fournisseur)
++
++
++def arreter() -> None:
++    """Vide les spans en attente (fin de processus, après l'arrêt propre d'uvicorn)."""
++    if _fournisseur is not None:
++        _fournisseur.shutdown()
+diff --git a/tests/test_telemetrie.py b/tests/test_telemetrie.py
+new file mode 100644
+index 0000000..c5ad189
+--- /dev/null
++++ b/tests/test_telemetrie.py
+@@ -0,0 +1,82 @@
++"""Traces (M23-E04) : spans produites, sondes exclues, contexte W3C repris, aucune donnée patient."""
++
++from __future__ import annotations
++
++import pytest
++from opentelemetry import trace
++from opentelemetry.sdk.trace import TracerProvider
++from opentelemetry.sdk.trace.export import SimpleSpanProcessor
++from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
++
++RDV = {
++    "patient": "Jeanne Dupont",
++    "praticien": "dr-morel",
++    "debut": "2026-11-02T09:00:00+01:00",
++    "motif": "Contrôle annuel",
++}
++
++_EXPORTATEUR = InMemorySpanExporter()
++
++
++@pytest.fixture(scope="module", autouse=True)
++def fournisseur():
++    # Le fournisseur global ne se pose qu'une fois par processus : on le pose ici, pour ce module.
++    fournisseur = TracerProvider()
++    fournisseur.add_span_processor(SimpleSpanProcessor(_EXPORTATEUR))
++    trace.set_tracer_provider(fournisseur)
++    yield fournisseur
++
++
++@pytest.fixture
++def spans():
++    _EXPORTATEUR.clear()
++    yield _EXPORTATEUR
++    _EXPORTATEUR.clear()
++
++
++def _par_nom(exportateur):
++    return {s.name: s for s in exportateur.get_finished_spans()}
++
++
++def test_creation_trace_serveur_et_metier(client, spans):
++    assert client.post("/api/v1/rendez-vous", json=RDV).status_code == 201
++    noms = _par_nom(spans)
++    serveur = noms["POST /api/v1/rendez-vous"]
++    metier = noms["mediagenda.rendez_vous.creer"]
++    assert serveur.kind == trace.SpanKind.SERVER
++    assert metier.parent.span_id == serveur.context.span_id
++    assert metier.attributes["mediagenda.praticien"] == "dr-morel"
++    assert metier.attributes["mediagenda.rendez_vous.id"] == 1
++    assert "mediagenda.cache.invalider" in noms
++
++
++def test_aucune_donnee_patient_dans_les_attributs(client, spans):
++    client.post("/api/v1/rendez-vous", json=RDV)
++    for span in spans.get_finished_spans():
++        for valeur in (span.attributes or {}).values():
++            assert "Jeanne" not in str(valeur)
++            assert "Contrôle" not in str(valeur)
++
++
++def test_sondes_et_metriques_non_tracees(client, spans):
++    for chemin in ("/sante", "/pret", "/metrics"):
++        assert client.get(chemin).status_code == 200
++    assert spans.get_finished_spans() == ()
++
++
++def test_contexte_w3c_repris(client, spans):
++    trace_id = "4bf92f3577b34da6a3ce929d0e0e4736"
++    entete = {"traceparent": f"00-{trace_id}-00f067aa0ba902b7-01"}
++    client.get("/api/v1/creneaux", params={"date": "2026-11-02"}, headers=entete)
++    serveur = _par_nom(spans)["GET /api/v1/creneaux"]
++    assert format(serveur.context.trace_id, "032x") == trace_id
++    assert serveur.attributes["mediagenda.cache.resultat"] == "miss"
++    assert "mediagenda.creneaux.calculer" in _par_nom(spans)
++
++
++def test_conflit_est_un_evenement_pas_une_erreur(client, spans):
++    client.post("/api/v1/rendez-vous", json=RDV)
++    spans.clear()
++    assert client.post("/api/v1/rendez-vous", json=RDV).status_code == 409
++    metier = _par_nom(spans)["mediagenda.rendez_vous.creer"]
++    assert [e.name for e in metier.events] == ["mediagenda.conflit_creneau"]

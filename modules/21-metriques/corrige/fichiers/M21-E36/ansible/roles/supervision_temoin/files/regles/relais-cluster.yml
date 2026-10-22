@@ -1,0 +1,21 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/relais-cluster.yml (M21-E36, INC-4836)
+# Règle du Prometheus TÉMOIN (mon01). Relaie les alertes du cluster marquées relais="temoin" (celles
+# qui disent que le cluster ne sait plus prévenir) par l'Alertmanager du témoin, qui a son propre
+# chemin d'envoi. Déployée et validée (promtool check rules) comme les règles de M21-E28.
+groups:
+  - name: relais.cluster
+    rules:
+      - alert: ClusterNePrevientPlus
+        expr: probe_success{job="relais-cluster"} == 0
+        for: 2m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "Le cluster signale qu'il ne sait plus envoyer ses alertes (relayé par mon01)"
+          description: >-
+            Une alerte marquée relais="temoin" est active dans le cluster (AlertmanagerCourrielEnEchec),
+            ou la vue globale ne répond plus à mon01 (voir aussi SupervisionClusterComposantKO).
+            Toutes les alertes du cluster sont peut-être muettes : consulter Alertmanager du cluster
+            (10.10.41.61) directement. RB-218 § « l'alerte n'arrive pas ».
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md

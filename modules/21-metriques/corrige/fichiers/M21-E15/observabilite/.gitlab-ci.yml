@@ -1,0 +1,90 @@
+# plateforme/observabilite — .gitlab-ci.yml (M21-E07, PLAT-2207 ; état après M21-E15 : extraction,
+# vérification et tests des règles). M21-E17 ajoute la validation des tableaux. Le pipeline VALIDE ; c'est Argo CD qui applique (M20).
+# Images tirées par les caches de Harbor (projets quay, dockerhub), versions épinglées.
+include:
+  # Contrôles communs (pre-commit, Gitleaks) : composant « qualite » de plateforme/ci-templates.
+  # Mets la version publiée chez toi (v2.2.0 en fin de M19).
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@2.2.0
+
+stages: [valider]
+
+default:
+  tags: [k8s]
+  interruptible: true
+
+variables:
+  IMAGE_PROMETHEUS: registry.par1.medisphere.internal/quay/prometheus/prometheus:v3.15.1
+  IMAGE_ALERTMANAGER: registry.par1.medisphere.internal/quay/prometheus/alertmanager:v0.34.1
+  IMAGE_YQ: registry.par1.medisphere.internal/dockerhub/mikefarah/yq:4.54.1
+
+# Syntaxe de toutes les requêtes de travail (sans serveur).
+promql:
+  stage: valider
+  image:
+    name: $IMAGE_PROMETHEUS
+    entrypoint: [""]
+  script:
+    - sh outils/verifier-promql.sh requetes/*.promql
+  rules:
+    - exists: [requetes/*.promql]
+
+# Configuration d'Alertmanager : extraite des values du chart, puis vérifiée par amtool et
+# confrontée aux essais de routage. Deux jobs, parce qu'aucune image ne contient yq ET amtool.
+alertmanager:extraire:
+  stage: valider
+  image:
+    name: $IMAGE_YQ
+    entrypoint: [""]
+  script:
+    - mkdir -p am
+    - yq '.alertmanager.config' kps/values.yaml > am/alertmanager.yaml
+    - yq '.alertmanager.templateFiles["medisphere.tmpl"]' kps/values.yaml > am/medisphere.tmpl
+    # Dans le pod, les gabarits sont montés dans /etc/alertmanager/config/ ; ici, à côté.
+    - yq -i '.templates = ["medisphere.tmpl"]' am/alertmanager.yaml
+  artifacts:
+    paths: [am/]
+    expire_in: 1 day
+
+alertmanager:verifier:
+  stage: valider
+  needs: ["alertmanager:extraire"]
+  image:
+    name: $IMAGE_ALERTMANAGER
+    entrypoint: [""]
+  script:
+    - cd am && amtool check-config alertmanager.yaml && cd ..
+    - sh outils/tester-routes.sh am/alertmanager.yaml alertmanager/routes-tests.txt
+
+# --- Règles (M21-E15, PLAT-2215) -------------------------------------------------------------------
+# promtool lit des fichiers de règles Prometheus (« groups: »), pas des PrometheusRule : on extrait
+# la « spec » de chacune (outils/extraire-regles.sh, yq), puis on vérifie et on teste.
+regles:extraire:
+  stage: valider
+  image:
+    name: $IMAGE_YQ
+    entrypoint: [""]
+  script:
+    - sh outils/extraire-regles.sh
+  artifacts:
+    paths: [build/]
+    expire_in: 1 day
+
+regles:verifier:
+  stage: valider
+  needs: ["regles:extraire"]
+  image:
+    name: $IMAGE_PROMETHEUS
+    entrypoint: [""]
+  script:
+    - promtool check rules build/regles/*.yml
+
+# Tests unitaires des règles (tests/*.test.yaml) : un cas qui déclenche, un cas qui ne déclenche
+# pas, par alerte. Nom de job attendu par les vérifications du module : tests-regles.
+tests-regles:
+  stage: valider
+  needs: ["regles:extraire"]
+  image:
+    name: $IMAGE_PROMETHEUS
+    entrypoint: [""]
+  script:
+    - promtool test rules tests/*.test.yaml

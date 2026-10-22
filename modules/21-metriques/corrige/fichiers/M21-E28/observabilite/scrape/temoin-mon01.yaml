@@ -1,0 +1,23 @@
+# plateforme/observabilite — scrape/temoin-mon01.yaml (M21-E28, PLAT-2228)
+# Supervision RÉCIPROQUE : le Prometheus du cluster collecte les métriques propres du Prometheus
+# témoin de mon01 (job « temoin-mon01 »). Si le témoin tombe, ou ne joint plus son Alertmanager, ou
+# n'arrive plus à notifier, c'est le cluster qui le dit (regles/supervision-temoin.yaml).
+# Flux K8S_TRAV → mon01:9090 : déjà ouvert pour la fédération (M21-E12).
+# Même schéma que la fédération d'E12 : si le Prometheus témoin écoute en HTTPS chez toi (choix
+# d'E11), reprends ici scheme et tlsConfig de ta ScrapeConfig de fédération.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: temoin-mon01
+spec:
+  jobName: temoin-mon01
+  scheme: HTTP
+  metricsPath: /metrics
+  scrapeInterval: 30s
+  staticConfigs:
+    - targets:
+        - mon01.par1.medisphere.internal:9090
+      labels:
+        site: par1
+        role: supervision
+        equipe: plateforme

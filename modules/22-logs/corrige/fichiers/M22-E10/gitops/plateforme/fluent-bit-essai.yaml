@@ -1,0 +1,42 @@
+# plateforme/gitops — plateforme/fluent-bit-essai.yaml (M22-E10) — ESSAI TEMPORAIRE, À RETIRER.
+# Finaliseur resources-finalizer : retirer ce fichier de Git supprime l'Application ET ses objets
+# (DaemonSet, RBAC…). L'espace journaux-essai, créé par CreateNamespace, reste : on le supprime à la
+# main après coup (seul geste manuel de l'essai, consigné dans le comparatif).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fluent-bit-essai
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    medisphere.internal/domaine: observabilite
+    medisphere.internal/temporaire: "oui"
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: journaux-essai
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: fluent-bit
+      targetRevision: 0.58.3
+      helm:
+        releaseName: fluent-bit
+        valueFiles:
+          - $values/fluent-bit-essai/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/warn: restricted
+        medisphere.internal/temporaire: "oui"

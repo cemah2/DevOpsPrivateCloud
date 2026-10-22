@@ -1,0 +1,52 @@
+# plateforme/k8s — composants/argocd/values-durcissement.yaml (M20-E25, SEC-2125)
+# Durcissement d'Argo CD, chargé APRÈS values.yaml et values-rbac.yaml (releases/argocd.yaml.gotmpl).
+# Chaque réglage : la raison, et la commande qui le vérifie (docs/livraison/gitops/durcissement-argocd.md).
+
+global:
+  image:
+    # Étiquette ET empreinte de l'index multi-architecture (quay.io/argoproj/argocd:v3.5.5, relevée le
+    # 22/10/2026) : l'étiquette documente, l'empreinte décide. Une étiquette réécrite en amont (ou dans
+    # le cache Harbor) ne change plus ce qui tourne. À changer en même temps que la version du chart.
+    #   crane digest quay.io/argoproj/argocd:v3.5.5   (ou skopeo inspect --format '{{.Digest}}')
+    tag: "v3.5.5@sha256:13db7b10db23283b1b36f855046602e18539a8a8204c9f6f039e8896c8897518"
+  networkPolicy:
+    # Les NetworkPolicy du chart ne filtrent que l'ENTRÉE, et laissent tout entrer sur argocd-server.
+    # Une seule source de vérité : composants/reseau/politiques/argocd.yaml (refus par défaut dans les
+    # deux sens + une politique Cilium par composant).
+    create: false
+
+redis:
+  image:
+    # docker.io/library/redis:8.6.4-alpine (index multi-architecture), par le cache « dockerhub ».
+    tag: "8.6.4-alpine@sha256:2cc044fc5a07c9b701f8f1255a309ae9ad7856e694ac03513bf3648c01e40763"
+
+configs:
+  cm:
+    # Terminal web : déjà le défaut du chart et d'Argo CD, écrit pour qu'un changement de défaut en
+    # amont ne l'ouvre pas en silence. Un « exec » depuis l'interface serait un kubectl exec avec les
+    # droits du serveur d'Argo CD, tracé seulement dans ses journaux.
+    exec.enabled: false
+    # Pas d'accès anonyme (défaut), écrit explicitement pour la même raison.
+    users.anonymous.enabled: false
+    # Durée de vie d'une session (jeton de connexion) : une journée de travail, pas 24 h.
+    users.session.duration: 8h
+    # Depuis Argo CD 3.2 : synchroniser une AUTRE révision que celle de l'Application (argocd app sync
+    # --revision …) exige le droit « override » ; personne hors role:plateforme-admin ne l'a (E24).
+    application.sync.requireOverridePrivilegeForRevisionSync: true
+    # Capacités des comptes locaux (M20-E03) : les humains se connectent (login) mais ne fabriquent
+    # pas de jetons d'API ; ci-lecture ne fait QUE porter un jeton (pas de connexion à l'interface).
+    # Remplace la valeur posée en E03 si elle donnait « apiKey, login » à tout le monde.
+    # <MOI> : ton nom GitLab, points remplacés par des tirets (une clé accounts.<nom> est découpée
+    # sur les points).
+    accounts.<MOI>: login
+    accounts.karim-benali: login
+    accounts.julien-petit: login
+    accounts.nadia-roussel: login
+    accounts.ci-lecture: apiKey
+    # Exclusions de ressources : PAS ici. La liste resourceExclusionsAdditional est dans values.yaml
+    # (M20-E12, complétée en M20-E25 : values.extrait-E25.yaml) ; Helm REMPLACE une liste redéfinie
+    # dans un fichier de valeurs suivant au lieu de la fusionner.
+  # Pas de clé « application.namespaces » ni « applicationsetcontroller.namespaces » dans
+  # configs.params : les Applications et ApplicationSets ne vivent QUE dans l'espace argocd. Les ouvrir
+  # à d'autres espaces déplacerait la frontière de sécurité vers le RBAC Kubernetes de ces espaces
+  # (qui peut y créer un objet Application ?) et vers sourceNamespaces des AppProjects.

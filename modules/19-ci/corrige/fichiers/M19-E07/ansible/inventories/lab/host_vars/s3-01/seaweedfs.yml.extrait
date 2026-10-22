@@ -1,0 +1,23 @@
+# plateforme/ansible — inventories/lab/host_vars/s3-01/seaweedfs.yml (EXTRAIT, M19-E07, PLAT-2007)
+# Ajouts aux listes seaweedfs_identites et seaweedfs_compartiments (M05-E10, complétées aux M14 et
+# M16) : ne rien retirer de l'existant.
+
+seaweedfs_identites:
+  # … identités existantes (tofu-etat, admin-s3, etcd-k8s, velero, cnpg…) …
+  # M19-E07 : cache des runners GitLab. Le gestionnaire signe des URL présignées avec ces clés ;
+  # le helper des jobs lit et écrit par ces URL. Write couvre l'écrasement d'un cache existant.
+  - nom: ci-cache
+    cle_acces: "{{ vault_seaweedfs_ci_cache_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_ci_cache_cle_secrete }}"
+    actions:
+      - Read:ci-cache
+      - Write:ci-cache
+      - List:ci-cache
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  # Pas de versionnage : un cache se réécrit sans cesse ; avec le versionnage, chaque écriture
+  # garderait une version cachée et remplirait s3-01. Le cache n'est PAS une donnée à protéger
+  # (perdu = reconstruit au job suivant). Ménage des clés abandonnées : voir le corrigé (E07, étape 8).
+  - nom: ci-cache
+    versionnage: false

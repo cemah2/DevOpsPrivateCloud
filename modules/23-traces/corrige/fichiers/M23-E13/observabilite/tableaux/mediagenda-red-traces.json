@@ -1,0 +1,348 @@
+{
+  "uid": "m23-red-traces",
+  "title": "MédiAgenda — RED depuis les traces",
+  "tags": [
+    "traces",
+    "mediagenda",
+    "m23"
+  ],
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "env",
+        "label": "Environnement",
+        "type": "custom",
+        "query": "dev,recette,prod",
+        "current": {
+          "text": "recette",
+          "value": "recette"
+        },
+        "options": [
+          {
+            "text": "dev",
+            "value": "dev",
+            "selected": false
+          },
+          {
+            "text": "recette",
+            "value": "recette",
+            "selected": true
+          },
+          {
+            "text": "prod",
+            "value": "prod",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Runbooks traces",
+      "type": "link",
+      "url": "https://git01.par1.medisphere.internal/plateforme/medisphere/-/tree/main/docs/observabilite/traces/runbooks"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Débit — métriques applicatives vs traces",
+      "description": "L'écart mesure l'échantillonnage (en tête et en queue) : les span metrics de Tempo ne comptent que les traces arrivées.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[5m]))",
+          "legendFormat": "métriques applicatives (toutes les requêtes)"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"mediagenda-api\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"$env\", span_name=~\".*/api/.*\"}[5m]))",
+          "legendFormat": "spans serveur conservées (après échantillonnage)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Part des requêtes vue par les traces",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"mediagenda-api\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"$env\", span_name=~\".*/api/.*\"}[5m])) / sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[5m]))",
+          "legendFormat": "traces / métriques"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Taux d'erreurs (5xx) — deux sources",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\", code=~\"5..\"}[5m])) / sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[5m]))",
+          "legendFormat": "métriques applicatives"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"mediagenda-api\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"$env\", span_name=~\".*/api/.*\", status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(traces_spanmetrics_calls_total{service=\"mediagenda-api\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"$env\", span_name=~\".*/api/.*\"}[5m]))",
+          "legendFormat": "traces (biaisé : erreurs gardées à 100 %)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Latence p95 — deux sources",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(mediagenda_http_request_duration_seconds_bucket{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[5m])))",
+          "legendFormat": "métriques applicatives"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{service=\"mediagenda-api\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"$env\", span_name=~\".*/api/.*\"}[5m])))",
+          "legendFormat": "traces (biaisé : lentes gardées à 100 %)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Appels sortants de MédiAgenda (graphe de services)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (server) (rate(traces_service_graph_request_total{client=\"mediagenda-api\"}[5m]))",
+          "legendFormat": "{{server}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Latence côté serveur des arêtes (p95)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, server) (rate(traces_service_graph_request_server_seconds_bucket{client=\"mediagenda-api\"}[5m])))",
+          "legendFormat": "{{server}}"
+        }
+      ]
+    }
+  ]
+}

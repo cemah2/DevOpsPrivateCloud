@@ -1,0 +1,21 @@
+# plateforme/observabilite — grafana/sources-pyroscope.yaml (M23-E14) : source Grafana « Pyroscope » déclarée par
+# le code, lue par le sidecar de Grafana (étiquette grafana_datasource), comme sources-tempo (M23-E03).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sources-pyroscope
+  namespace: supervision
+  labels:
+    grafana_datasource: "1"
+data:
+  sources-pyroscope.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Pyroscope
+        uid: pyroscope
+        type: grafana-pyroscope-datasource
+        access: proxy
+        url: http://pyroscope.traces.svc.cluster.local:4040
+        editable: false
+        jsonData:
+          minStep: 15s

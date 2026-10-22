@@ -1,0 +1,258 @@
+# plateforme/k8s — composants/reseau/politiques/argocd.yaml (M20-E25, SEC-2125 ; complété en M20-E26)
+# Politiques réseau de l'espace argocd, appliquées comme les autres politiques de plateforme (M15-E28).
+# Les NetworkPolicy du chart sont désactivées (values-durcissement.yaml : global.networkPolicy.create).
+#
+# 1. Refus par défaut en entrée ET en sortie de tout l'espace (NetworkPolicy standard, comme au M15).
+# 2. Une CiliumNetworkPolicy par composant, qui n'ouvre que sa ligne de la matrice des flux
+#    (docs/kubernetes/reseau/matrice-flux-cluster.md, section « Argo CD »).
+# DNS : chaque composant qui sort a sa règle DNS (port 53 vers kube-dns, avec règle L7 « * ») ; la
+# politique de cluster base-dns (M15-E28) fait déjà passer le DNS par le proxy de Cilium, prérequis
+# des règles toFQDNs ci-dessous. Hors cluster, les destinations sont désignées par leur NOM (toFQDNs),
+# comme au M15 ; registry.par1.medisphere.internal est un CNAME de reg01 : les deux noms sont cités.
+# API du cluster : entité « kube-apiserver », port 6443 (après traduction du Service kubernetes.default).
+#
+# Vérification : hubble observe -n argocd --verdict DROPPED -f   (pendant une synchronisation)
+# Retour arrière d'une politique : kubectl --context k8s-par1 -n argocd delete ciliumnetworkpolicy <nom>
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: argocd
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-server
+  namespace: argocd
+spec:
+  description: "argocd-server : entrée par la Gateway seulement ; sortie API, repo-server, Redis, DNS"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-server}
+  ingress:
+    # Interface, API (CLI en grpc-web) et webhooks de GitLab (M20-E27) : tous arrivent par gw-par1.
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-repo-server}
+      toPorts:
+        - ports: [{port: "8081", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-redis}
+      toPorts:
+        - ports: [{port: "6379", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-repo-server
+  namespace: argocd
+spec:
+  description: "argocd-repo-server : sortie vers git01 et Harbor en 443, Redis, DNS ; rien d'autre"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-repo-server}
+  ingress:
+    # Qui demande des manifestes : serveur, contrôleur, ApplicationSets, notifications (métadonnées
+    # des commits pour les modèles de messages).
+    - fromEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-server}
+        - matchLabels: {app.kubernetes.io/name: argocd-application-controller}
+        - matchLabels: {app.kubernetes.io/name: argocd-applicationset-controller}
+        - matchLabels: {app.kubernetes.io/name: argocd-notifications-controller}
+      toPorts:
+        - ports: [{port: "8081", protocol: TCP}]
+  egress:
+    # Dépôts Git (jetons de déploiement read_repository) et charts OCI du miroir (M20-E13).
+    - toFQDNs:
+        - matchName: git01.par1.medisphere.internal
+        - matchName: registry.par1.medisphere.internal
+        - matchName: reg01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    # Cache des manifestes générés.
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-redis}
+      toPorts:
+        - ports: [{port: "6379", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-application-controller
+  namespace: argocd
+spec:
+  description: "contrôleur : sortie vers les API des clusters gérés, repo-server, Redis, DNS"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-application-controller}
+  # Aucune entrée : le refus par défaut de l'espace s'applique (métriques : à ouvrir au M21).
+  egress:
+    # Cluster local (in-cluster).
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    # M20-E26 : cluster de l'agence LYO1 (k3s, lyo-k3s01, VLAN 99), joint par l'adresse du nœud
+    # (flux K8S_TRAV → 10.10.99.61:6443 sur la bordure). Retirée avec la VM au mini-projet.
+    - toFQDNs:
+        - matchName: lyo-k3s01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-repo-server}
+      toPorts:
+        - ports: [{port: "8081", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-redis}
+      toPorts:
+        - ports: [{port: "6379", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-applicationset-controller
+  namespace: argocd
+spec:
+  description: "ApplicationSets : sortie API et repo-server (générateurs Git par le repo-server), DNS"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-applicationset-controller}
+  # Aucune entrée (refus par défaut) : le webhook des générateurs (port 7000) n'est pas publié.
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-repo-server}
+      toPorts:
+        - ports: [{port: "8081", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-notifications-controller
+  namespace: argocd
+spec:
+  description: "notifications : sortie API, repo-server, SMTP de mon01 (Mailpit, M19), DNS"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-notifications-controller}
+  # Aucune entrée (refus par défaut de l'espace).
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-repo-server}
+      toPorts:
+        - ports: [{port: "8081", protocol: TCP}]
+    # Service « email » de M20-E19 : smtp.par1.medisphere.internal est un CNAME de mon01.
+    - toFQDNs:
+        - matchName: smtp.par1.medisphere.internal
+        - matchName: mon01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "25", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-redis
+  namespace: argocd
+spec:
+  description: "Redis (cache) : entrée depuis serveur, repo-server et contrôleur ; aucune sortie"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-redis}
+  # Aucune sortie : le refus par défaut de l'espace s'applique.
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {app.kubernetes.io/name: argocd-server}
+        - matchLabels: {app.kubernetes.io/name: argocd-repo-server}
+        - matchLabels: {app.kubernetes.io/name: argocd-application-controller}
+      toPorts:
+        - ports: [{port: "6379", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-redis-secret-init
+  namespace: argocd
+spec:
+  description: "Job de pré-installation du chart (Secret argocd-redis) : API du cluster seulement"
+  # Crochet Helm pre-install/pre-upgrade : sans cette règle, la PROCHAINE helmfile apply échoue.
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-redis-secret-init}
+  # Aucune entrée (refus par défaut de l'espace).
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"

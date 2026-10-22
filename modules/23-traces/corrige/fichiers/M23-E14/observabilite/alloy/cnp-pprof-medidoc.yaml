@@ -1,0 +1,36 @@
+# plateforme/observabilite/alloy/cnp-pprof-medidoc.yaml (M23-E14) : Alloy (espace journaux) collecte les profils
+# pprof de MédiDoc sur le port interne 6060. enableDefaultDeny.ingress: false : cette politique AJOUTE un
+# flux sans faire passer les pods de MédiDoc en « refus par défaut » (ce que décident leurs propres politiques).
+# Le port 6060 n'est publié par aucun Service : seul ce flux l'atteint, par l'adresse du pod.
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-pprof-alloy
+  namespace: medidoc-dev
+spec:
+  description: "Collecte des profils pprof de MédiDoc par Alloy (M23-E14)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  enableDefaultDeny: {ingress: false}
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: journaux, app.kubernetes.io/name: alloy}
+      toPorts:
+        - ports: [{port: "6060", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-pprof-alloy
+  namespace: medidoc-recette
+spec:
+  description: "Collecte des profils pprof de MédiDoc par Alloy (M23-E14)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  enableDefaultDeny: {ingress: false}
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: journaux, app.kubernetes.io/name: alloy}
+      toPorts:
+        - ports: [{port: "6060", protocol: TCP}]

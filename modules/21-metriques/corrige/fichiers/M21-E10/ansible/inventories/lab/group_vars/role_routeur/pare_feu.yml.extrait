@@ -1,0 +1,22 @@
+# group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — EXTRAIT (M21-E10, PLAT-2210) :
+# Prometheus du cluster (travailleurs, K8S_TRAV) vers les exportateurs natifs du socle.
+# Matrice commune à gw01 et gw02 : une MR, puis une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01      puis      --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+# Pas de règle vers ceph-par1 : les travailleurs le joignent par eth1 (VLAN 30), sans la bordure.
+# Pas de règle vers k8s-cp01-03 : même VLAN que les travailleurs.
+
+pare_feu_definitions:
+  # … définitions existantes (K8S_TRAV du M15-E34, LB01, LB02, DNS01, DNS02, GIT01, REG01…) …
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_DMZ, destination: [$LB01, $LB02], proto: tcp, ports: 8405,
+     motif: "Prometheus du cluster vers l'exportateur intégré d'HAProxy des répartiteurs", ref: M21-E10}
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: [$DNS01, $DNS02], proto: tcp, ports: "8081-8082",
+     motif: "Prometheus du cluster vers /metrics de PowerDNS (autoritaire 8081, récurseur 8082)", ref: M21-E10}
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: $GIT01, proto: tcp, ports: "8082,9168,9229,9236",
+     motif: "Prometheus du cluster vers les exportateurs d'omnibus (Sidekiq, gitlab-exporter, Workhorse, Gitaly) ; /-/metrics passe par 443 (déjà ouvert, M19)", ref: M21-E10}
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: $REG01, proto: tcp, ports: 9090,
+     motif: "Prometheus du cluster vers les métriques de Harbor", ref: M21-E10}

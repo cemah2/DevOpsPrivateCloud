@@ -1,0 +1,45 @@
+# plateforme/observabilite — regles/capacite-cardinalite.yaml (M21-E38, INC-4838)
+# Complète capacite-prometheus.yaml (M21-E30) : PrometheusSeriesProchesDuBudget sonne quand la tête
+# a DÉJÀ atteint 80 % du budget, depuis 30 min. Une explosion de cardinalité se voit bien plus tôt
+# au RYTHME de création des séries, et la cible fautive se désigne d'elle-même (scrape_series_added).
+# Seuils à étalonner sur ton lab : mesure le rythme normal sur une semaine
+#   quantile_over_time(0.99, sum by (pod) (rate(prometheus_tsdb_head_series_created_total{job="kps-prometheus"}[10m]))[7d:10m])
+# puis prends trois fois cette valeur, au moins 100 séries/s.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: capacite-cardinalite
+spec:
+  groups:
+    - name: capacite.cardinalite
+      rules:
+        - alert: PrometheusCreationSeriesRapide
+          expr: |
+            sum by (pod) (rate(prometheus_tsdb_head_series_created_total{job="kps-prometheus"}[10m])) > 100
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} crée {{ $value | humanize }} séries par seconde"
+            description: >-
+              Le rythme de création de séries est très au-dessus de la normale : nouvelle étiquette à
+              valeurs non bornées ou « churn ». Voir CibleTropDeSeriesNouvelles pour la cible en cause.
+              RB-219 § « Cardinalité ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md
+        - alert: CibleTropDeSeriesNouvelles
+          expr: |
+            max by (namespace, job, pod) (max_over_time(scrape_series_added[10m])) > 500
+            and on (namespace, job, pod)
+            max by (namespace, job, pod) (min_over_time(scrape_series_added[10m])) > 100
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "La cible {{ $labels.job }} ({{ $labels.namespace }}/{{ $labels.pod }}) crée des séries à chaque collecte"
+            description: >-
+              Chaque collecte de cette cible ajoute au moins 100 séries nouvelles depuis 10 min :
+              étiquette à valeurs non bornées. Contenir par metricRelabelings et sampleLimit sur son
+              ServiceMonitor, puis prévenir l'équipe propriétaire. RB-219 § « Cardinalité ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md

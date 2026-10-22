@@ -1,0 +1,52 @@
+# Composant « canari » du projet témoin formation/ci-pannes (palier 4 du module 19).
+# Un job court qui exerce ce que la chaîne de CI doit savoir faire : prendre un job sur l'étiquette
+# k8s, démarrer un pod dans ci-jobs, restaurer et sauvegarder un cache, lire une variable sensible,
+# joindre git01 en HTTPS, consommer un peu de mémoire et de disque, durer quelques dizaines de
+# secondes. Publié par étiquettes X.Y.Z du projet témoin, consommé par son propre .gitlab-ci.yml.
+spec:
+  inputs:
+    stage:
+      default: test
+      description: Stage du job canari.
+    image:
+      default: registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie
+      description: Image du job (toujours par Harbor).
+    fichier_verrou:
+      default: requirements.txt
+      description: Fichier dont l'empreinte sert de clé de cache.
+    duree:
+      type: number
+      default: 45
+      description: Durée de l'attente finale, en secondes.
+---
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+canari:
+  stage: $[[ inputs.stage ]]
+  image: $[[ inputs.image ]]
+  tags: [k8s]
+  interruptible: true
+  timeout: 15m
+  variables:
+    CANARI_DUREE: "$[[ inputs.duree ]]"
+    CANARI_CACHE_DIR: .cache/canari
+    CANARI_MEMOIRE_MIO: "120"
+    CANARI_DISQUE_MIO: "100"
+  cache:
+    key:
+      files:
+        - $[[ inputs.fichier_verrou ]]
+    paths:
+      - .cache/canari/
+  script:
+    - 'if [ -f "$CANARI_CACHE_DIR/temoin" ]; then echo "CANARI cache restauré : oui"; else echo "CANARI cache restauré : non"; fi'
+    - 'env | grep "^CANARI_" | sort'
+    - 'if [ -n "${CANARI_JETON:-}" ]; then CANARI_AUTH="$(printf "canari:%s" "$CANARI_JETON" | base64 | tr -d "\n")"; export CANARI_AUTH; fi'
+    - python3 outils/canari.py
+    - 'mkdir -p "$CANARI_CACHE_DIR" && date -u +%FT%TZ > "$CANARI_CACHE_DIR/temoin"'

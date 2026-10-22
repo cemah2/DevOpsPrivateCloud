@@ -1,0 +1,15 @@
+# group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — EXTRAIT (M21-E12, PLAT-2212).
+# Une passerelle à la fois (--limit gw01, vérification, puis gw02) ; retour arrière : git revert.
+
+pare_feu_transit:
+  # … règles existantes (dont celles du M21-E11) …
+  # Témoin → API de pve01 (pve-exporter) et node_exporter de pve01 : pve01 est sur le LAN maison,
+  # derrière la sortie WAN (comme l'IPSet « automation » du M03-E15 pour runner01).
+  - {entree: $V_INFRA, source: $MON01, sortie: $WAN, destination: $PVE01, proto: tcp, ports: "8006,9100",
+     motif: "supervision témoin : API de pve01 (pve-exporter, jeton PVEAuditor) et node_exporter", ref: M21-E12}
+  # Témoin → node_exporter de pbs01, par le tunnel inter-sites wg0.
+  - {entree: $V_INFRA, source: $MON01, sortie: $WG_S2S, destination: $PBS01, proto: tcp, ports: 9100,
+     motif: "supervision témoin : node_exporter de pbs01 (PAR2)", ref: M21-E12}
+  # Prometheus du cluster → témoin (fédération des jobs blackbox, pve, hyperviseurs).
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: $MON01, proto: tcp, ports: 9090,
+     motif: "fédération : Prometheus de k8s-par1 lit /federate du témoin", ref: M21-E12}

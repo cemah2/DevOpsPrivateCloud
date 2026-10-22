@@ -1,0 +1,20 @@
+# mediagenda/deploiement — .gitlab-ci.yml (M19-E17/E29 ; M20-E08 : job deployer-dev retiré ;
+# M20-E30 : VALIDATION SEULEMENT, SEC-2130).
+# Ce pipeline ne parle jamais à l'API du cluster : pas de contexte d'agent, pas de kubeconfig, pas de
+# variable KUBE_*. Argo CD applique ce que main décrit ; la promotion est une MR (jeton ci-promotion,
+# portées api + write_repository sur CE dépôt, aucun droit Kubernetes).
+#
+# Le composant « deploiement » de plateforme/ci-templates (v2, M19) porte la validation : rendu
+# Kustomize de chaque overlay modifié, schémas (kubeconform, CRD comprises), vérification des
+# signatures et attestations des images de l'overlay (cosign verify / verify-attestation, M19-E29).
+# Version et noms des « inputs » : ceux de TA version du composant (lis son README) ; l'exemple suit
+# la forme du catalogue du M19.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@2.0.0
+    inputs:
+      overlays: "overlays/dev overlays/recette overlays/prod"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

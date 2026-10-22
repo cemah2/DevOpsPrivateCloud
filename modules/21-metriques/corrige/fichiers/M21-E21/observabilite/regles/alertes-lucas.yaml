@@ -1,0 +1,66 @@
+# plateforme/observabilite — regles/alertes-lucas.yaml, branche revue-lucas (M21-E21, PLAT-2221)
+# Version corrigée de la MR !14 de Lucas Martin. Supprimé : ApiErreurs, ApiLente, MediagendaDown
+# (déjà couvertes, correctement, par alertes-mediagenda : MediagendaTauxErreurEleve,
+# MediagendaLatenceElevee, MediagendaIndisponible) et DisquePresquePlein (DisqueBientotPlein
+# d'alertes-socle). Conservé et corrigé : ce qui manquait vraiment, en AVERTISSEMENT (heures
+# ouvrées) : ce sont des causes, pas des symptômes vus par les utilisateurs.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertes-lucas
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: lucas.alertes
+      rules:
+        # Était PodRedemarre : comparer un COMPTEUR à 0 sonne pour toujours dès le premier
+        # redémarrage. On compte les redémarrages sur une heure (increase), par conteneur.
+        - alert: MediagendaRedemarragesFrequents
+          expr: |
+            sum by (namespace, pod, container) (
+              increase(kube_pod_container_status_restarts_total{namespace=~"mediagenda-.+"}[1h])
+            ) > 3
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "{{ $labels.pod }} ({{ $labels.namespace }}) redémarre souvent"
+            description: >-
+              Le conteneur {{ $labels.container }} de {{ $labels.pod }} a redémarré
+              {{ $value | humanize }} fois en une heure (OOMKilled ? sonde de vivacité trop stricte ?).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+        # Était MemoireQuiBaisse : rate() sur une JAUGE n'a pas de sens (il traite chaque baisse
+        # comme une remise à zéro d'un compteur). Ce qui compte : la mémoire disponible restante.
+        - alert: MemoireBientotEpuisee
+          expr: |
+            node_memory_MemAvailable_bytes{job="vms"} / node_memory_MemTotal_bytes{job="vms"} < 0.10
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : moins de 10 % de mémoire disponible"
+            description: >-
+              Il reste {{ $value | humanizePercentage }} de mémoire disponible sur
+              {{ $labels.instance }} depuis 15 minutes.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+        # Était CpuEleve : une alerte PAR CŒUR (étiquette cpu) et un CPU occupé n'est pas un
+        # problème en soi. La saturation, c'est la file d'attente : charge rapportée aux cœurs.
+        - alert: CpuSature
+          expr: |
+            node_load15{job="vms"}
+            / on (instance) count by (instance) (node_cpu_seconds_total{job="vms", mode="idle"})
+            > 2
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : file d'attente CPU à {{ $value | humanize }} par cœur"
+            description: >-
+              La charge sur 15 minutes de {{ $labels.instance }} vaut {{ $value | humanize }} fois
+              son nombre de cœurs depuis 30 minutes : des processus attendent le CPU.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md

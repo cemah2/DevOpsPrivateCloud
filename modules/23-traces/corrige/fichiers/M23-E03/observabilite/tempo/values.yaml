@@ -1,0 +1,99 @@
+# plateforme/observabilite — tempo/values.yaml (M23-E03, PLAT-2403)
+# Chart grafana-community/tempo 3.2.1 (Tempo 3.1.1, MONOLITHIQUE : un seul processus, sans Kafka), recopié
+# dans Harbor charts/. Application Argo CD « tempo », espace traces. Rendu avant la MR :
+#   helm template tempo oci://registry.par1.medisphere.internal/charts/tempo --version 3.2.1 \
+#     -n traces -f tempo/values.yaml > /tmp/tempo-e03.yaml
+# Ajouts de M23-E13 (metrics-generator) et M23-E16 (capacité) : à fusionner ici.
+
+# Noms courts et stables : Service « tempo » (3200 HTTP, 4317/4318 OTLP), StatefulSet « tempo ».
+fullnameOverride: tempo
+replicas: 1
+
+tempo:
+  # Image par le cache dockerhub de Harbor (politique medisphere-images).
+  registry: registry.par1.medisphere.internal
+  repository: dockerhub/grafana/tempo
+  tag: "3.1.1"
+  # Lab sans sortie vers Grafana Labs : pas de statistiques d'usage.
+  reportingEnabled: false
+  # Recherche en flux (gRPC sur HTTP) : Grafana affiche les résultats au fil de l'eau.
+  streamOverHttpEnabled: true
+  # ${…} dans la configuration remplacés par les variables d'environnement au démarrage.
+  extraArgs:
+    config.expand-env: "true"
+  # Secret hors Git (outils/secrets-k8s.sh de plateforme/k8s, composant « tempo ») : clés
+  # AWS_ACCESS_KEY_ID et AWS_SECRET_ACCESS_KEY de l'utilisateur RGW « tempo ».
+  extraEnvFrom:
+    - secretRef:
+        name: tempo-objstore
+  extraVolumeMounts:
+    - name: racine-medisphere
+      mountPath: /etc/medisphere
+      readOnly: true
+  # Rétention EXPLICITE : 14 jours (le défaut du chart 3.2 est 24 h, enfin appliqué — annexes/versions-bloc-DE).
+  # Rendue dans backend_scheduler et backend_worker (block_retention), qui suppriment les blocs anciens.
+  retention: 336h
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: tempo-k8s-par1
+        endpoint: rgw.par1.medisphere.internal
+        access_key: ${AWS_ACCESS_KEY_ID}
+        secret_key: ${AWS_SECRET_ACCESS_KEY}
+        # RGW sans DNS joker : style « chemin » (https://rgw…/tempo-k8s-par1/…).
+        forcepathstyle: true
+        # Certificat du RGW signé par la PKI MédiSphère (M08) : racine montée depuis la ConfigMap.
+        tls_ca_path: /etc/medisphere/medisphere-root-ca.crt
+      # Le chart définit « local » par défaut : on le retire (null) pour ne garder que s3.
+      local: null
+      wal:
+        path: /var/tempo/wal
+  # Récepteurs : OTLP seulement est utilisé (la passerelle). Le chart exige la clé « jaeger » (il en tire
+  # des ports de Service) : elle reste, la politique traces-tempo n'ouvre que 4317 depuis la passerelle.
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+# Contexte de sécurité du POD (Pod Security « restricted » de l'espace traces).
+securityContext:
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+priorityClassName: medisphere-standard
+
+# /var/tempo : WAL des blocs et du live-store (traces récentes, pas encore dans le RGW). Sur volume :
+# un redémarrage du pod ne perd pas les dernières minutes.
+persistence:
+  enabled: true
+  storageClassName: ceph-rbd
+  size: 10Gi
+
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    medisphere.internal/supervision: "oui"
+
+extraVolumes:
+  - name: racine-medisphere
+    configMap:
+      name: racine-medisphere

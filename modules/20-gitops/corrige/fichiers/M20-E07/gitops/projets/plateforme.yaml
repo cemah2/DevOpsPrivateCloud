@@ -1,0 +1,31 @@
+# plateforme/gitops — projets/plateforme.yaml (M20-E07, PLAT-2107)
+# Projet des ADMINISTRATEURS de la plateforme : la racine, les groupes d'Applications, les AppProjects
+# et, à partir de M20-E15, les services de plateforme (une Application par service, dossier
+# plateforme/). ⚠️ Un projet qui peut écrire dans l'espace argocd donne des droits
+# d'administrateur d'Argo CD (création d'Applications dans N'IMPORTE QUEL projet) : seul
+# plateforme/gitops, protégé (fusion par les Maintainers), y est admis.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: plateforme
+  namespace: argocd
+  # Le projet ne peut pas être supprimé tant qu'une Application s'en sert.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Services de plateforme et configuration d'Argo CD (équipe Plateforme)
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/plateforme/gitops.git
+  destinations:
+    # Les objets d'Argo CD (Applications, ApplicationSets, AppProjects). Chaque service de
+    # plateforme ajouté ensuite ajoute SA destination ici (M20-E15 : argo-rollouts).
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  # Pas de surveillance des orphelins : l'espace argocd contient aussi les objets de la release
+  # Helmfile (hors Argo CD). Le champ orphanedResources, même avec warn: false, ACTIVE la
+  # surveillance (visible dans l'interface) : on l'omet.
+  # Les services de plateforme installent des CRD, des ClusterRoles, des webhooks : tout type
+  # d'objet de cluster est permis à CE projet seulement.
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"

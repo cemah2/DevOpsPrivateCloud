@@ -1,0 +1,11 @@
+---
+- name: Recharger alloy
+  ansible.builtin.systemd_service:
+    name: alloy
+    state: reloaded
+
+- name: Redémarrer alloy
+  ansible.builtin.systemd_service:
+    name: alloy
+    state: restarted
+    daemon_reload: true

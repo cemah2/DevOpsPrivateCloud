@@ -1,0 +1,9 @@
+# plateforme/k8s — composants/argocd/values.yaml : AJOUT de M20-E10 (à fusionner dans le fichier d'E02).
+# Sans ce paramètre, le contrôleur des ApplicationSets IGNORE spec.syncPolicy.applicationsSync de
+# chaque ApplicationSet et applique sa politique globale (« sync » par défaut : il supprimerait une
+# Application dont l'élément disparaît du générateur). Le chart le recopie dans argocd-cmd-params-cm,
+# lu par le Deployment argocd-applicationset-controller (variable
+# ARGOCD_APPLICATIONSET_CONTROLLER_ENABLE_POLICY_OVERRIDE) : redémarrage du contrôleur au déploiement.
+configs:
+  params:
+    applicationsetcontroller.enable.policy.override: "true"

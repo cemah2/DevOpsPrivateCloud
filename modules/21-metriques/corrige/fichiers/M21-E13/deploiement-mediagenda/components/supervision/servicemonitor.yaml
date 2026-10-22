@@ -1,0 +1,53 @@
+# mediagenda/deploiement — components/supervision/servicemonitor.yaml (M21-E13, PLAT-2213)
+# ServiceMonitor « mediagenda » d'E07 (Service de collecte mediagenda-metriques, job="mediagenda",
+# empreinte de révision rollouts_pod_template_hash), complété : étiquettes communes et nettoyage
+# des histogrammes des routes de sonde. Inclus par les trois overlays (dev, recette, prod).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mediagenda
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      medisphere.internal/collecte: prometheus
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      # --- Avant la collecte : étiquettes de la CIBLE (une fois par cible, coût nul) ---------
+      relabelings:
+        # (E07) Révision du pod, pour les analyses de canary (E18).
+        - sourceLabels: [__meta_kubernetes_pod_label_rollouts_pod_template_hash]
+          targetLabel: rollouts_pod_template_hash
+        # equipe : constante (pas de source). Elle REMPLACE celle posée par la classe de collecte
+        # par défaut (« plateforme »), dont les réécritures passent AVANT celles du moniteur.
+        - targetLabel: equipe
+          replacement: mediagenda
+          action: replace
+        # environnement : tiré du nom de l'espace (mediagenda-dev → dev). Les étiquettes de
+        # l'espace (medisphere.internal/environnement) ne sont pas des méta-étiquettes du rôle
+        # endpoints : on ne peut pas les lire ici.
+        - sourceLabels: [__meta_kubernetes_namespace]
+          regex: mediagenda-(.+)
+          targetLabel: environnement
+          replacement: $1
+          action: replace
+        # Version et composant du pod, copiés par un labelmap RESTREINT à deux étiquettes :
+        # un labelmap sur toutes les étiquettes du pod importerait pod-template-hash & co.
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_app_kubernetes_io_(version|component)
+          replacement: $1
+      # --- Après la collecte : sur chaque SÉRIE (à chaque collecte, coût proportionnel) -------
+      metricRelabelings:
+        # Seaux de l'histogramme des routes de sonde (/sante, /pret, /metrics) : interrogées toutes
+        # les 10 s par le kubelet et Prometheus, elles n'intéressent personne en latence.
+        # _sum et _count restent (débit des sondes) ; les seaux des routes de l'API restent.
+        - sourceLabels: [__name__, route]
+          separator: ";"
+          regex: mediagenda_http_request_duration_seconds_bucket;/(sante|pret|metrics)
+          action: drop

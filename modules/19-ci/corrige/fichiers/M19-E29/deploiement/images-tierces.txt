@@ -1,0 +1,8 @@
+# mediagenda/deploiement — images-tierces.txt (M19-E29, SEC-2029).
+# Images NON construites par la chaîne MédiSphère admises dans les overlays, par référence COMPLÈTE
+# (digest obligatoire), une par ligne, identique à celle rendue par kustomize. Toute ligne est relue
+# par la Plateforme (CODEOWNERS : /images-tierces.txt @karim.benali @<MOI>) : source, raison,
+# date de revue en commentaire au-dessus.
+#
+# Valkey (dépendance du chart mediagenda, M17), par le cache Harbor « dockerhub ». Revue AAAA-MM-JJ.
+registry.par1.medisphere.internal/dockerhub/valkey/valkey:<VERSION>@sha256:<EMPREINTE>

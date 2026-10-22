@@ -1,0 +1,62 @@
+// {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible, rôle alloy).') }}
+// /etc/alloy/config.alloy — agent Alloy de {{ inventory_hostname }} (M22-E05).
+// Journal systemd → Loki ({{ alloy_loki_url }}), locataire {{ alloy_locataire }}.
+// Étiquettes (liste fermée) : job, host, role, site ; unité et niveau en métadonnées structurées.
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unite"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "niveau"
+	}
+}
+
+loki.source.journal "vm" {
+	path          = "/var/log/journal"
+	max_age       = "{{ alloy_journal_age_max }}"
+	relabel_rules = loki.relabel.journal.rules
+	labels        = {
+		job  = "journald",
+		host = "{{ inventory_hostname }}",
+		role = "{{ alloy_role }}",
+		site = "{{ alloy_site }}",
+	}
+	forward_to = [loki.process.journal.receiver]
+}
+
+loki.process "journal" {
+{% for niveau in alloy_niveaux_ignores %}
+	stage.drop {
+		source              = "niveau"
+		value               = "{{ niveau }}"
+		drop_counter_reason = "journald_{{ niveau }}"
+	}
+
+{% endfor %}
+	stage.structured_metadata {
+		values = {
+			unite  = "",
+			niveau = "",
+		}
+	}
+
+	forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+	endpoint {
+		url       = "{{ alloy_loki_url }}"
+		tenant_id = "{{ alloy_locataire }}"
+	}
+}

@@ -1,0 +1,15 @@
+{# roles/powerdns_recursor/templates/recursor.yml.j2 — EXTRAIT (M21-E10) : la construction de
+   « conf » (M06-E26) gagne la section webservice. Noms de clés : documentation « YAML settings »
+   du Recursor 5.4 (webservice.webserver, address, port, allow_from). #}
+{%- set conf = {
+  "incoming": {"listen": powerdns_recursor_ecoute, "allow_from": powerdns_recursor_autorises},
+  "recursor": recursor,
+  "dnssec": dnssec
+} -%}
+{%- if powerdns_recursor_webservice_active -%}
+{%-   set conf = conf | combine({"webservice": {
+        "webserver": true,
+        "address": powerdns_recursor_webservice_adresse,
+        "port": powerdns_recursor_webservice_port | int,
+        "allow_from": powerdns_recursor_webservice_autorises}}) -%}
+{%- endif -%}

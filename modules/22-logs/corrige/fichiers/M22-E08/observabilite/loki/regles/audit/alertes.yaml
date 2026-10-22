@@ -1,0 +1,36 @@
+# plateforme/observabilite — loki/regles/audit/alertes.yaml (M22-E08, SEC-2308)
+# Règles du locataire audit (journal d'audit du serveur d'API, M22-E07). Les champs verb, user, code,
+# resource, object_ns, object_name sont des métadonnées structurées posées par Alloy : filtrables
+# sans analyser la ligne (| code="401").
+groups:
+  - name: audit-api
+    interval: 1m
+    rules:
+      # Échecs d'authentification en série : jeton volé ou expiré, script mal configuré, essai de
+      # force brute sur l'API (par la VIP 10.10.40.200:8443).
+      - alert: AuditEchecsAuthentification
+        expr: |
+          sum(count_over_time({job="kubernetes-audit"} | code="401" [5m])) > 20
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "API de k8s-par1 : plus de 20 échecs d'authentification en 5 minutes"
+          description: >-
+            {{ $value }} requêtes refusées (401) en 5 minutes. Explore (source « Loki — audit ») :
+            {job="kubernetes-audit"} | code="401" | json  (champ sourceIPs : d'où viennent-elles ?)
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-220-chercher-dans-les-journaux.md
+      # Une suppression en production faite par un humain (pas par Argo CD ni un contrôleur) :
+      # en GitOps, elle ne devrait jamais arriver hors incident déclaré.
+      - alert: AuditSuppressionManuelleProd
+        expr: |
+          sum by (user, resource, object_ns) (
+            count_over_time({job="kubernetes-audit"} | verb="delete" | object_ns=~"mediagenda-prod|medidoc-prod" | user!~"system:.*" [5m])
+          ) > 0
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+        annotations:
+          resume: "{{ $labels.user }} a supprimé des {{ $labels.resource }} dans {{ $labels.object_ns }}"
+          description: "Suppression manuelle en production, hors Argo CD. Vérifie le ticket CHG associé."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-220-chercher-dans-les-journaux.md

@@ -1,0 +1,11 @@
+# mediagenda/deploiement — overlays/dev/journalisation-debug.yaml (M22-E06, DEV-2306)
+# Correctif stratégique : en dev seulement, MédiAgenda journalise en DEBUG (demande de Julien Petit
+# pour suivre le cache et les requêtes). Conséquence voulue pour l'exercice : les sondes /sante,
+# /pret et la collecte /metrics, journalisées en DEBUG par l'application, apparaissent… et Alloy
+# doit les écarter avant Loki. recette et prod restent en INFO (valeur du chart).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mediagenda
+data:
+  MEDIAGENDA_LOG_LEVEL: DEBUG

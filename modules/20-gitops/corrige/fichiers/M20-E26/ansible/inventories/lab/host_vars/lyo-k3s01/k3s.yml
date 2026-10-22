@@ -1,0 +1,18 @@
+---
+# lyo-k3s01 — k3s mononœud de l'agence LYO1 (M20-E26, PLAT-2126), géré par l'Argo CD de k8s-par1.
+# Rôle k3s du M18 (script figé, miroirs Harbor de group_vars/role_k3s/k3s.yml). SQLite (kine) : pas de
+# cluster-init. Jeton : Vault « lab » (group_vars/role_k3s/vault-lab.yml).
+k3s_version: v1.36.5+k3s1
+k3s_role: server
+k3s_jeton: "{{ vault_k3s_jeton_lyo_k3s01 }}"
+k3s_config:
+  write-kubeconfig-mode: "0600"
+  # Le serveur d'API est joint par Argo CD sous ce NOM (Secret de cluster) et par son adresse depuis
+  # adm01 : les deux doivent être dans le certificat du kube-apiserver de k3s.
+  tls-san:
+    - lyo-k3s01.par1.medisphere.internal
+    - 10.10.99.61
+  disable:
+    - traefik
+    - servicelb
+  node-name: lyo-k3s01

@@ -1,0 +1,71 @@
+# plateforme/observabilite — tests/collecte.test.yaml (M21-E35)
+# Fichier de règles extrait par outils/extraire-regles.sh (M21-E15) dans build/regles/.
+rule_files:
+  - ../build/regles/collecte.yml
+evaluation_interval: 30s
+tests:
+  - name: une application qui ne répond plus sonne au bout de 5 minutes, pas avant
+    interval: 30s
+    input_series:
+      - series: 'up{job="mediagenda", namespace="mediagenda-recette", pod="mediagenda-7c9-abc", instance="10.240.1.37:8000"}'
+        values: '1x10 0x20'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ApplicationCibleEnEchec
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: ApplicationCibleEnEchec
+        exp_alerts:
+          - exp_labels:
+              alertname: ApplicationCibleEnEchec
+              gravite: avertissement
+              equipe: plateforme
+              job: mediagenda
+              namespace: mediagenda-recette
+              pod: mediagenda-7c9-abc
+              instance: 10.240.1.37:8000
+            exp_annotations:
+              resume: "La cible mediagenda mediagenda-7c9-abc (mediagenda-recette) ne répond plus à Prometheus"
+              description: >-
+                Prometheus n'arrive plus à collecter 10.240.1.37:8000 depuis 5 minutes. Cause fréquente : politique réseau, sonde de l'application, délai de collecte. Les tableaux et les analyses canary de cet environnement sont aveugles. RB-217 § « cible disparue ou muette ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-217-collecte-et-regles.md
+
+  - name: la disparition des cibles de la recette est signalée, pas celle d'un seul pod
+    interval: 1m
+    input_series:
+      # dev, prod, MédiDoc, VMs, nœuds et fédération : présents tout du long.
+      - series: 'up{job="mediagenda", namespace="mediagenda-dev", pod="a"}'
+        values: '1x30'
+      - series: 'up{job="mediagenda", namespace="mediagenda-prod", pod="b"}'
+        values: '1x30'
+      - series: 'up{job="medidoc", namespace="medidoc-dev", pod="c"}'
+        values: '1x30'
+      - series: 'up{job="vms", instance="nbx01"}'
+        values: '1x30'
+      - series: 'up{job="node-exporter", instance="k8s-w01"}'
+        values: '1x30'
+      - series: 'up{job="federation-mon01", instance="mon01"}'
+        values: '1x30'
+      # recette : deux pods ; l'un est remplacé (le second continue), puis plus rien à 10 min.
+      - series: 'up{job="mediagenda", namespace="mediagenda-recette", pod="r1"}'
+        values: '1x4 _x26'
+      - series: 'up{job="mediagenda", namespace="mediagenda-recette", pod="r2"}'
+        values: '1x9 _x21'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: CibleDisparue
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: CibleDisparue
+        exp_alerts:
+          - exp_labels:
+              alertname: CibleDisparue
+              gravite: critique
+              equipe: plateforme
+              job: mediagenda
+              namespace: mediagenda-recette
+            exp_annotations:
+              resume: "Plus aucune cible pour mediagenda mediagenda-recette depuis 10 min"
+              description: >-
+                Prometheus ne découvre plus aucune cible pour ce job : ServiceMonitor non retenu (étiquette de sélection), port nommé, ScrapeConfig ou fichier de cibles. Aucune autre alerte ne peut le voir. RB-217 § « cible disparue ou muette ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-217-collecte-et-regles.md

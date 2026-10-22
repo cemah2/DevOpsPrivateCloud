@@ -1,0 +1,39 @@
+# plateforme/gitops — applications/mediagenda-dev.yaml (M20-E08, PLAT-2108)
+# MédiAgenda en développement, repris sous Argo CD SANS COUPURE (aucun pod recréé). L'overlay dev de
+# mediagenda/deploiement est celui qu'appliquait le job deployer-dev (M19-E18), retiré du pipeline.
+# M20-E10 remplacera ce fichier par l'ApplicationSet « mediagenda » (sans supprimer les objets).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mediagenda-dev
+  namespace: argocd
+  # PAS de finaliseur resources-finalizer : supprimer cette Application (erreur, ou reprise par
+  # l'ApplicationSet en E10) ne doit pas supprimer MédiAgenda.
+spec:
+  project: mediagenda
+  # Traçabilité de la reprise : lue par le check de M20-E08 (et par toi dans six mois).
+  info:
+    - name: reprise
+      value: "2026-10-23T09:40:00Z"
+    - name: revision-avant-reprise
+      value: "7"
+    - name: ticket
+      value: PLAT-2108
+  source:
+    repoURL: https://git01.par1.medisphere.internal/mediagenda/deploiement.git
+    targetRevision: main
+    path: overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mediagenda-dev
+  syncPolicy:
+    # Synchronisation automatique, posée APRÈS la première synchronisation manuelle relue (étape 7).
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Même méthode que l'ancien chemin (kubectl apply --server-side) : Argo CD prend la propriété
+      # des champs (--force-conflicts) sans annotation last-applied-configuration.
+      - ServerSideApply=true
+      # L'espace est créé et gouverné par plateforme/k8s (espaces/), jamais par l'application.
+      - CreateNamespace=false

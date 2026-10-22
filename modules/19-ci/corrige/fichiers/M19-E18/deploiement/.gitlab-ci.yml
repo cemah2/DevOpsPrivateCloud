@@ -1,0 +1,117 @@
+# mediagenda/deploiement — .gitlab-ci.yml (M19-E18, PLAT-2018 ; base M17-E21, composants M19-E10,
+# pipeline amont M19-E12).
+#   MR et main        : validation des overlays (composant deploiement), garde-fou de livraison (M17-E21)
+#                       et rendu vérifié de la base (rendre-base --verifier).
+#   fusion sur main   : + deployer-dev (agent GitLab k8s-par1) : overlays/dev appliqué en
+#                       server-side apply, environnement GitLab « dev ».
+#   pipeline amont    : (déclenché par une étiquette de mediagenda/chart, CHART_VERSION/CHART_DIGEST)
+#                       vérification de la signature du chart, notes de version, puis pipeline ENFANT
+#                       généré : un job par overlay qui rend la base avec la nouvelle version et valide.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline" && $CHART_VERSION && $CHART_DIGEST
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages: [lint, amont, validation, deploiement]
+
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@v2.5.0
+    inputs:
+      overlays: [dev, recette, prod]
+      deployer: true
+      environnement: dev
+
+variables:
+  IMAGE_K8S: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+  IMAGE_OUTILS: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.1@sha256:<EMPREINTE>
+
+# Les jobs du composant ne tournent pas dans un pipeline amont : seule la nouvelle version compte.
+deploiement:valider:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# Garde-fou de livraison (M17-E21), sur MR et main.
+verifier-livraison:
+  stage: lint
+  tags: [k8s]
+  image:
+    name: $IMAGE_K8S
+    entrypoint: [""]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+      when: never
+    - when: on_success
+  script:
+    - outils/verifier-livraison.sh
+
+# --- Pipeline amont : une étiquette de mediagenda/chart -----------------------------------------
+.amont:
+  stage: amont
+  tags: [k8s]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+
+chart:verifier-signature:
+  extends: .amont
+  image: $IMAGE_OUTILS
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "chart $CHART_VERSION ($CHART_DIGEST), étiquette $CHART_ETIQUETTE de mediagenda/chart"
+    - '[[ "$CHART_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "CHART_DIGEST invalide"; exit 1; }'
+    - printf '%s' "$HARBOR_CHARTS_RO_TOKEN" | cosign login registry.par1.medisphere.internal -u "$HARBOR_CHARTS_RO_USER" --password-stdin > /dev/null
+    - cosign verify --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true "registry.par1.medisphere.internal/charts/mediagenda@$CHART_DIGEST" > /dev/null
+    - echo "signature MédiSphère vérifiée"
+
+# Lecture d'un AUTRE projet avec le CI_JOB_TOKEN : mediagenda/chart doit avoir ajouté
+# mediagenda/deploiement à la liste d'autorisation entrante de son jeton (sinon 404/403).
+chart:notes:
+  extends: .amont
+  image:
+    name: $IMAGE_K8S
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - >-
+      curl -sSf --cacert /etc/medisphere/ca/medisphere-root-ca.crt --header "JOB-TOKEN: $CI_JOB_TOKEN"
+      "$CI_API_V4_URL/projects/mediagenda%2Fchart/releases/$CHART_ETIQUETTE"
+      | jq -r '"# Chart mediagenda \(.tag_name)\n\n\(.description)"' > notes-chart.md
+    - cat notes-chart.md
+  artifacts:
+    paths: [notes-chart.md]
+    expire_in: 1 month
+
+chart:generer-validation:
+  extends: .amont
+  image:
+    name: $IMAGE_K8S
+    entrypoint: [""]
+  needs: [chart:verifier-signature]
+  script:
+    - outils/generer-validation.sh > validation-chart.yml
+    - cat validation-chart.yml
+  artifacts:
+    paths: [validation-chart.yml]
+    expire_in: 1 day
+
+chart:valider:
+  stage: validation
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "pipeline"
+  needs: [chart:generer-validation]
+  # Transmis au pipeline enfant comme variables de ce job (yaml_variables, par défaut).
+  variables:
+    CHART_VERSION: $CHART_VERSION
+    CHART_DIGEST: $CHART_DIGEST
+  trigger:
+    include:
+      - artifact: validation-chart.yml
+        job: chart:generer-validation
+    strategy: mirror

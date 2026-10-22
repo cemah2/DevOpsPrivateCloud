@@ -1,0 +1,9 @@
+# plateforme/k8s — espaces/ci-jobs-protege/30-comptes-service.yaml (M19-E24).
+# Compte des pods de job : AUCUN droit (aucune RoleBinding ne le cite) et jeton jamais monté.
+# Le runner le refuse aussi de son côté (automount_service_account_token = false) : deux verrous.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-job
+  namespace: ci-jobs-protege
+automountServiceAccountToken: false

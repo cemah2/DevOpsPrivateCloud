@@ -1,0 +1,124 @@
+# plateforme/observabilite — pyrra/pyrra-kubernetes.yaml (M21-E26, PLAT-2226)
+# D'après examples/kubernetes/manifests/pyrra-kubernetes*.yaml de Pyrra v0.10.2 (manifestes amont,
+# générés par jsonnet ; pas de chart officiel). Écarts avec l'amont, tous commentés : espace
+# supervision (l'amont dit « monitoring »), image par le cache ghcr de Harbor et en v0.10.2 (l'amont
+# affiche encore v0.9.0), contexte de sécurité complet (Pod Security « restricted »), ressources,
+# options --generic-rules et --external-url.
+#
+# Rôle : l'« opérateur ». Il lit les ServiceLevelObjective (pyrra.dev/v1alpha1) de tous les espaces
+# et écrit, pour chacun, une PrometheusRule du même nom dans le même espace (règles d'enregistrement
+# des taux d'erreur par fenêtre + alertes ErrorBudgetBurn + SLOMetricAbsent). Il sert aussi au
+# conteneur pyrra-api la liste des objectifs (port 9444, protocole connect).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pyrra-kubernetes
+  labels:
+    app.kubernetes.io/component: kubernetes
+    app.kubernetes.io/name: pyrra
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pyrra-kubernetes
+  labels:
+    app.kubernetes.io/component: kubernetes
+    app.kubernetes.io/name: pyrra
+rules:
+  - apiGroups: [monitoring.coreos.com]
+    resources: [prometheusrules]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [monitoring.coreos.com]
+    resources: [prometheusrules/status]
+    verbs: [get]
+  - apiGroups: [pyrra.dev]
+    resources: [servicelevelobjectives]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [pyrra.dev]
+    resources: [servicelevelobjectives/status]
+    verbs: [get, patch, update]
+  - apiGroups: [pyrra.dev]
+    resources: [servicelevelobjectives/finalizers]
+    verbs: [update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pyrra-kubernetes
+  labels:
+    app.kubernetes.io/component: kubernetes
+    app.kubernetes.io/name: pyrra
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pyrra-kubernetes
+subjects:
+  - kind: ServiceAccount
+    name: pyrra-kubernetes
+    namespace: supervision
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pyrra-kubernetes
+  labels:
+    app.kubernetes.io/component: kubernetes
+    app.kubernetes.io/name: pyrra
+spec:
+  # Un seul réplica : sans --enable-leader-election, deux réplicas écriraient les mêmes règles.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: kubernetes
+      app.kubernetes.io/name: pyrra
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: kubernetes
+        app.kubernetes.io/name: pyrra
+    spec:
+      serviceAccountName: pyrra-kubernetes
+      priorityClassName: medisphere-standard
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65533
+        runAsGroup: 65533
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: pyrra
+          image: ghcr.io/pyrra-dev/pyrra
+          args:
+            - kubernetes
+            # Règles « génériques » en plus (pyrra_objective, pyrra_window, pyrra_availability,
+            # pyrra_requests:rate5m, pyrra_errors:rate5m) : mêmes noms pour tous les SLO, pratiques
+            # pour un tableau Grafana unique.
+            - --generic-rules
+            # Lien vers l'interface dans les annotations des alertes.
+            - --external-url=https://slo.apps.par1.medisphere.internal
+          ports:
+            - {name: metrics, containerPort: 8080}
+            - {name: http, containerPort: 9444}
+          resources:
+            requests: {cpu: 10m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pyrra-kubernetes
+  labels:
+    app.kubernetes.io/component: kubernetes
+    app.kubernetes.io/name: pyrra
+spec:
+  selector:
+    app.kubernetes.io/component: kubernetes
+    app.kubernetes.io/name: pyrra
+  ports:
+    - {name: metrics, port: 8080, targetPort: metrics}
+    - {name: http, port: 9444, targetPort: http}

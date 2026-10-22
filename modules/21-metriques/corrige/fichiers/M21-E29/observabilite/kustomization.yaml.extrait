@@ -1,0 +1,9 @@
+# plateforme/observabilite — kustomization.yaml (racine) : ajout de M21-E29 (SEC-2229).
+# EXTRAIT : ajoute « reseau » à la liste (en dernier : le retirer est le retour arrière).
+resources:
+  - regles
+  - scrape
+  # (… tableaux …)
+  - thanos
+  - slo
+  - reseau

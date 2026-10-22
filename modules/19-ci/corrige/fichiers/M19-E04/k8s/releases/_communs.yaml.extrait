@@ -1,0 +1,7 @@
+# releases/_communs.yaml (plateforme/k8s) — EXTRAIT, M19-E04 : un dépôt de charts de plus.
+# À ajouter à la liste « repositories » existante (M17-E10). Charts officiels de GitLab : runner
+# (M19-E04) et agent pour Kubernetes (M19-E18).
+repositories:
+  # … dépôts existants (cilium, jetstack, external-dns, ceph-csi, cnpg, vmware-tanzu, metrics-server) …
+  - name: gitlab
+    url: https://charts.gitlab.io

@@ -1,0 +1,13 @@
+# composants/buildkitd/values.yaml (plateforme/k8s) — EXTRAIT : EXCEPTION TEMPORAIRE de M19-E20
+# (comparatif Jenkins). Le chart émet un certificat buildkit-client dans l'espace jenkins et ouvre
+# l'entrée de buildkitd aux pods de cet espace étiquetés medisphere.internal/ci=job.
+# À RETIRER après la relecture du comparatif (étape 5) : certificat et ouverture disparaissent avec.
+tls:
+  clients:
+    - ci-jobs
+    - jenkins          # M19-E20, temporaire (PLAT-2020)
+
+reseau:
+  espacesClients:
+    - ci-jobs
+    - jenkins          # M19-E20, temporaire (PLAT-2020)

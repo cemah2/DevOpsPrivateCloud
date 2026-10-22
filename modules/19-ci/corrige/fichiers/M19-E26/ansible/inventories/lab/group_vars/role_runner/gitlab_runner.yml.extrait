@@ -1,0 +1,8 @@
+# plateforme/ansible — inventories/lab/group_vars/role_runner/gitlab_runner.yml (rôle gitlab_runner,
+# M04 puis M12) : version des paquets de runner01 (exécuteur shell) et runner02 (exécuteur docker).
+# M19-E26 : alignement sur la mineure de GitLab. Version EXACTE (apt-cache madison gitlab-runner),
+# paquet figé par le rôle (apt-mark hold) ; gitlab-runner-helper-images suit la même version.
+gitlab_runner_version: "19.5.0-1"
+# Application, un runner à la fois, après la montée de GitLab (runner mis en pause dans GitLab avant) :
+#   uv run ansible-playbook playbooks/socle.yml --limit runner01 --tags gitlab_runner
+#   uv run ansible-playbook playbooks/socle.yml --limit runner02 --tags gitlab_runner

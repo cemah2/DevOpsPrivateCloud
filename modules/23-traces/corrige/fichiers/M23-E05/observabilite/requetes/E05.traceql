@@ -1,0 +1,43 @@
+# plateforme/observabilite — requetes/E05.traceql (M23-E05, PLAT-2405)
+# Une requête TraceQL par question, sur UNE ligne ; les lignes « # » sont des commentaires.
+# Les lignes qui commencent par « # métrique » sont des requêtes de métriques TraceQL (onglet « Metrics »
+# d'Explore) : elles ne sont pas rejouées par la vérification. Données : environnement dev, après
+# ressources/E05-trafic/trafic.sh.
+
+# Q1 — Toutes les traces de l'API MédiAgenda en dev (sélection par attribut de RESSOURCE).
+{ resource.service.name = "mediagenda-api" && resource.deployment.environment.name = "dev" }
+
+# Q2 — Requêtes serveur de plus de 100 ms (intrinsèques kind et duration).
+{ resource.service.name = "mediagenda-api" && kind = server && duration > 100ms }
+
+# Q3 — Réponses en erreur côté client ou serveur (attribut de SPAN, conventions stables).
+{ resource.service.name = "mediagenda-api" && span.http.response.status_code >= 400 }
+
+# Q4 — Spans de base de données de plus de 2 ms, avec la requête (select ajoute des attributs au résultat).
+{ span.db.system.name = "postgresql" && duration > 2ms } | select(span.db.query.text)
+
+# Q5 — Créneaux servis SANS le cache (miss) : quelle part des appels va jusqu'à PostgreSQL ?
+{ span.http.route = "/api/v1/creneaux" && span.mediagenda.cache.resultat = "miss" }
+
+# Q6 — Conflits de créneau : un ÉVÉNEMENT de span (pas un statut d'erreur).
+{ event:name = "mediagenda.conflit_creneau" }
+
+# Q7 — Opérateur STRUCTUREL « descendant » (>>) : requêtes serveur qui ont touché PostgreSQL.
+{ resource.service.name = "mediagenda-api" && kind = server } >> { span.db.system.name = "postgresql" }
+
+# Q8 — Opérateur « enfant direct » (>) : l'invalidation du cache et ses commandes Valkey.
+{ name = "mediagenda.cache.invalider" } > { span.db.system.name = "redis" }
+
+# Q9 — Agrégat par ensemble de spans : traces de plus de 4 spans de l'API.
+{ resource.service.name = "mediagenda-api" } | count() > 4
+
+# Q10 — Intrinsèques de TRACE : traces dont la racine est l'API et qui durent plus de 50 ms.
+{ trace:rootService = "mediagenda-api" && trace:duration > 50ms }
+
+# Q11 — Deux conditions sur des spans DIFFÉRENTES de la même trace (&& entre ensembles).
+{ span.http.request.method = "POST" } && { span.db.system.name = "redis" }
+
+# métrique Q12 — Taux de requêtes par route (TraceQL metrics, Tempo 3 : à vérifier sur ton lab).
+# { resource.service.name = "mediagenda-api" && kind = server } | rate() by (span.http.route)
+# métrique Q13 — p95 de la durée par route.
+# { resource.service.name = "mediagenda-api" && kind = server } | quantile_over_time(duration, .95) by (span.http.route)

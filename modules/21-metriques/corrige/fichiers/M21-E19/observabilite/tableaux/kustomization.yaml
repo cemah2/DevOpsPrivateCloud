@@ -1,0 +1,31 @@
+# plateforme/observabilite — tableaux/kustomization.yaml (état après M21-E19 : tableaux de référence)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: supervision
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+    medisphere.internal/composant: tableaux
+configMapGenerator:
+  # --- MédiAgenda --------------------------------------------------------------------------------
+  - name: tableau-mediagenda-apercu
+    files: [mediagenda/mediagenda-apercu.json]
+    options: {annotations: {grafana_folder: MédiAgenda}}
+  - name: tableau-mediagenda-red
+    files: [mediagenda/mediagenda-red.json]
+    options: {annotations: {grafana_folder: MédiAgenda}}
+  # --- MédiDoc -----------------------------------------------------------------------------------
+  - name: tableau-medidoc-red
+    files: [medidoc/medidoc-red.json]
+    options: {annotations: {grafana_folder: MédiDoc}}
+  # --- Plateforme --------------------------------------------------------------------------------
+  - name: tableau-plateforme-use-noeuds
+    files: [plateforme/plateforme-use-noeuds.json]
+    options: {annotations: {grafana_folder: Plateforme}}
+  - name: tableau-plateforme-use-ceph
+    files: [plateforme/plateforme-use-ceph.json]
+    options: {annotations: {grafana_folder: Plateforme}}
+  - name: tableau-plateforme-red-passerelle
+    files: [plateforme/plateforme-red-passerelle.json]
+    options: {annotations: {grafana_folder: Plateforme}}

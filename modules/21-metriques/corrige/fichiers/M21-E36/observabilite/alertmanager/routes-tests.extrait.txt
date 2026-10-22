@@ -1,0 +1,7 @@
+# alertmanager/routes-tests.txt — lignes AJOUTÉES en M21-E36 (INC-4836), à la suite de celles de M21-E07.
+# Une critique de la PLATEFORME (pas seulement d'une équipe applicative) doit aller à l'astreinte,
+# ainsi que l'essai mensuel ; les alertes relayées par le témoin aussi.
+astreinte-mail  | alertname=EssaiChaineAlerteCritique gravite=critique equipe=plateforme namespace=wb-pannes
+astreinte-mail  | alertname=CibleDisparue gravite=critique equipe=plateforme job=vms
+astreinte-mail  | alertname=AlertmanagerCourrielEnEchec gravite=critique equipe=plateforme relais=temoin
+plateforme-mail | alertname=EssaiChaineAlerteAvertissement gravite=avertissement equipe=plateforme namespace=wb-pannes

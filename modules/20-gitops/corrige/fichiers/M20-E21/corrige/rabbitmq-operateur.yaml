@@ -1,0 +1,29 @@
+# Opérateur RabbitMQ (version corrigée de la revue M20-E21) : service de PLATEFORME (projet plateforme).
+# Pas de chart Bitnami (catalogue gratuit retiré, images non maintenues) ni rien d'Internet : les
+# manifestes OFFICIELS de l'opérateur (cluster-operator.yml de la version v2.23.1 de
+# rabbitmq/cluster-operator), téléchargés une fois, empreinte relevée et relue en MR, sont recopiés
+# dans plateforme/gitops, dossier tiers/rabbitmq-operateur/v2.23.1/ (hors des dossiers lus par la
+# racine). Images de l'opérateur par le cache Harbor (kustomization.yaml du dossier, « images: »).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rabbitmq-operateur
+  namespace: argocd
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+    targetRevision: main
+    path: tiers/rabbitmq-operateur/v2.23.1
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: rabbitmq-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # CRD volumineuses : server-side apply obligatoire.
+      - ServerSideApply=true
+      # L'espace rabbitmq-system est créé par la plateforme (plateforme/k8s, espaces/).
+      - CreateNamespace=false

@@ -1,0 +1,40 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M19-E16, PLAT-2016). Job PROPRE AU PROJET pendant
+# l'essai de SonarQube : exception écrite dans docs/livraison/ci/normes-pipeline.md (§4), à retirer
+# au mini-projet avec SonarQube. Ajoute « analyse-qualite » à « stages: » après « test ».
+#   stages: [lint, test, analyse-qualite, construction, analyse, publication, signature, release]
+#
+# Variables du projet : SONAR_HOST_URL = https://sonarqube.apps.par1.medisphere.internal (visible) ;
+# SONAR_TOKEN = jeton d'ANALYSE DE PROJET (mediagenda-api), protégé et masqué : main seulement.
+sonarqube:
+  stage: analyse-qualite
+  tags: [k8s]
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/sonarsource/sonar-scanner-cli:12.2.0.4256_8.1.0@sha256:a3f4215076706c95a17a68c19322ee916e40a3acd081a8c1a1e839e0194afa57
+    entrypoint: [""]
+  rules:
+    # Édition communautaire : seule la branche principale s'analyse (pas de MR, pas de branches).
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+  needs:
+    - job: qualite:tests
+      artifacts: true          # coverage.xml et rapport-tests.xml
+  interruptible: true
+  # La porte qualité informe sans bloquer pendant l'essai (décision de l'ADR-0190).
+  allow_failure: true
+  variables:
+    GIT_DEPTH: "0"             # blâme (« new code ») : SonarQube lit l'historique
+    SONAR_USER_HOME: $CI_PROJECT_DIR/.sonar
+  cache:
+    key: sonar-$CI_PROJECT_PATH_SLUG
+    paths: [.sonar/cache]
+  script:
+    - test -n "${SONAR_TOKEN:-}" || { echo "SONAR_TOKEN absente (variable protégée : main seulement)"; exit 1; }
+    # Le certificat de sonarqube.apps… est signé par la racine MédiSphère : magasin de confiance Java.
+    - keytool -importcert -noprompt -alias medisphere -file /etc/medisphere/ca/medisphere-root-ca.crt -keystore /tmp/confiance.p12 -storetype PKCS12 -storepass jetable
+    - >-
+      sonar-scanner
+      -Dsonar.scanner.truststorePath=/tmp/confiance.p12
+      -Dsonar.scanner.truststorePassword=jetable
+      -Dsonar.scanner.skipJreProvisioning=true
+      -Dsonar.qualitygate.wait=true
+      -Dsonar.qualitygate.timeout=600
+      -Dsonar.projectVersion=$CI_COMMIT_SHORT_SHA

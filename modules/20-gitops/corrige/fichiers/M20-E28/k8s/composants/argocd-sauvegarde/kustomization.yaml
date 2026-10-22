@@ -1,0 +1,25 @@
+# plateforme/k8s — composants/argocd-sauvegarde/ (M20-E28, PLAT-2128)
+# Export quotidien d'Argo CD (argocd admin export), chiffré pour la clé GPG de sauvegarde, envoyé vers
+# s3-01 (compartiment argocd-sauvegardes). Hors de la release Helmfile exprès : la sauvegarde ne doit
+# pas disparaître avec un « helmfile destroy » d'Argo CD (E28, étape 4 : à supprimer à part, en
+# dernier, ou à garder si l'espace argocd n'est pas supprimé).
+#   task argocd-sauvegarde        (Taskfile.extrait-E28.yml)
+#   kubectl --context k8s-par1 apply --server-side --field-manager=plateforme-k8s -k composants/argocd-sauvegarde
+# Le Secret argocd-sauvegardes-s3 n'est PAS ici : secrets-k8s.sh (composant argocd), depuis le Vault.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - compte.yaml
+  - cronjob.yaml
+configMapGenerator:
+  # Clé PUBLIQUE de sauvegarde (gpg --export --armor), versionnée : elle ne permet que de chiffrer.
+  # La clé privée est dans le Vault « critique » (secrets/argocd-sauvegarde-gpg.cle), jamais ici.
+  - name: argocd-sauvegarde-cle-publique
+    files:
+      - argocd-sauvegarde.pub.asc
+generatorOptions:
+  # Nom fixe : le CronJob le référence tel quel.
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: argocd-sauvegarde

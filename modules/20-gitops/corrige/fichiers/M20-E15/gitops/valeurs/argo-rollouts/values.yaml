@@ -1,0 +1,90 @@
+# plateforme/gitops — valeurs/argo-rollouts/values.yaml (M20-E15) — chart argo-rollouts 2.43.8.
+# Lu par l'Application plateforme/argo-rollouts.yaml (source « $values »).
+
+# CRD installées et conservées à la désinstallation (défauts du chart, écrits pour être relus).
+installCRDs: true
+keepCRDs: true
+
+controller:
+  # Deux contrôleurs, un seul actif (élection de chef) : un nœud drainé ne fige pas les déploiements.
+  replicas: 2
+  image:
+    # Image tirée par le cache Harbor de quay.io (M13), épinglée par digest (index multi-architecture).
+    registry: registry.par1.medisphere.internal
+    repository: quay/argoproj/argo-rollouts
+    tag: v1.10.1@sha256:fbcc4cf0a29da25d86230992b1dfdeadf30b6f1baa74ea7c9c98e3e580769396
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # --- Greffon Gateway API (PLAN §4.11 : rollouts-plugin-trafficrouter-gatewayapi 0.17.0) ---------
+  # Le contrôleur charge ses greffons AU DÉMARRAGE, depuis l'emplacement déclaré dans
+  # argo-rollouts-config (clé trafficRouterPlugins) :
+  #   - https://… : il télécharge le binaire et, si « sha256 » est donné, vérifie son empreinte ;
+  #     IMPOSSIBLE ici : le cluster ne sort pas vers github.com ;
+  #   - file://… : il COPIE un fichier déjà présent dans le conteneur (sans contrôle d'empreinte : le
+  #     code de la 1.10 ne vérifie « sha256 » que pour http(s)).
+  # Choix MédiSphère : l'image officielle du greffon (ghcr.io/argoproj-labs/…, sur Alpine, utilisateur
+  # 999), tirée par le cache Harbor « ghcr » et ÉPINGLÉE PAR DIGEST, copie le binaire dans un volume
+  # partagé ; le contrôleur le prend en file://. L'intégrité repose sur le digest de l'image (contenu
+  # immuable, relu en MR), comme pour toutes les images du cluster.
+  initContainers:
+    - name: copie-greffon-gatewayapi
+      image: registry.par1.medisphere.internal/ghcr/argoproj-labs/rollouts-plugin-trafficrouter-gatewayapi:v0.17.0@sha256:bc40d5edf13307e455f6c18cbf9cc79715165cbee8b05a674fd88119f119d4a2
+      command: ["/bin/sh", "-c"]
+      args:
+        - cp /bin/rollouts-plugin-trafficrouter-gatewayapi /greffons/ && echo "greffon gatewayAPI copié"
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 64Mi
+      volumeMounts:
+        - name: greffons
+          mountPath: /greffons
+  volumes:
+    - name: greffons
+      emptyDir:
+        sizeLimit: 200Mi
+  volumeMounts:
+    - name: greffons
+      mountPath: /greffons
+  trafficRouterPlugins:
+    # Le nom est celui que les Rollouts citent sous trafficRouting.plugins.
+    - name: argoproj-labs/gatewayAPI
+      location: file:///greffons/rollouts-plugin-trafficrouter-gatewayapi
+
+# Droits du contrôleur (et donc du greffon, qui tourne sous son compte de service) sur les HTTPRoute
+# (get, list, watch, update) : règles « providerRBAC » du chart. Le chart y ajoute create/update sur
+# les ConfigMaps, dont les anciennes versions du greffon se servaient pour leur état (la 0.17 n'en a
+# plus besoin). On coupe les fournisseurs qui n'existent pas chez MédiSphère : moins de droits inutiles.
+providerRBAC:
+  enabled: true
+  providers:
+    istio: false
+    smi: false
+    ambassador: false
+    awsLoadBalancerController: false
+    awsAppMesh: false
+    traefik: false
+    apisix: false
+    contour: false
+    glooPlatform: false
+    gatewayAPI: true
+
+# Tableau de bord web d'Argo Rollouts : non (kubectl argo rollouts et l'interface d'Argo CD suffisent).
+dashboard:
+  enabled: false

@@ -1,0 +1,48 @@
+# medidoc/deploiement — base/politiques.yaml (M19-E33) : politiques de M15-E34 modifiées en M16-E46
+# (refus par défaut ; entrée depuis la Gateway ; sortie DNS et RGW 443), sans espace de noms.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-entree-gateway
+spec:
+  description: "MédiDoc : entrée depuis la Gateway (Envoy) seulement"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-sortie
+spec:
+  description: "MédiDoc : DNS du cluster et RGW de ceph-par1 en 443, rien d'autre"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    # M16-E46 : remplace « s3-01.par1.medisphere.internal:8333 » du M15-E34.
+    - toFQDNs:
+        - matchName: rgw.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

@@ -1,0 +1,17 @@
+# Métriques internes des Collectors (otelcol_*) : Services « <nom>-collector-monitoring » créés par
+# l'opérateur (port « monitoring », 8888). Étiquette de sélection de kube-prometheus-stack (M21-E02).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collectors
+  namespace: traces
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: opentelemetry-collector
+      operator.opentelemetry.io/collector-service-type: monitoring
+  endpoints:
+    - port: monitoring
+      interval: 30s

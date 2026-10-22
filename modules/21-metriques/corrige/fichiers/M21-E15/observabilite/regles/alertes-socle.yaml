@@ -1,0 +1,67 @@
+# plateforme/observabilite — regles/alertes-socle.yaml (M21-E15, PLAT-2215)
+# Alertes du socle (VMs, certificats). Gravité avertissement : on les traite aux heures ouvrées,
+# sauf si elles annoncent une panne avant la prochaine (prédiction de remplissage).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertes-socle
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: socle.alertes
+      rules:
+        # Une VM du socle (node_exporter, job vms d'E08) ne répond plus. Cause plutôt que symptôme,
+        # mais sur le socle, c'est le premier signal ; E16 en fait la SOURCE d'une inhibition
+        # (les autres alertes de la même instance se taisent).
+        - alert: CibleInjoignable
+          expr: up{job="vms"} == 0
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} ne répond plus à Prometheus"
+            description: >-
+              node_exporter de {{ $labels.instance }} ne répond plus depuis 5 minutes (VM arrêtée,
+              réseau, pare-feu, certificat). Les autres alertes de cette instance sont inhibées.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+        # Système de fichiers qui sera plein dans moins de 24 h au rythme des 6 dernières heures,
+        # ET déjà rempli aux trois quarts (sinon une écriture ponctuelle sur un disque vide
+        # suffirait à déclencher). Systèmes de fichiers virtuels exclus, lecture seule exclue.
+        - alert: DisqueBientotPlein
+          expr: |
+            (
+              node_filesystem_avail_bytes{job="vms", fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.*"}
+              / node_filesystem_size_bytes{job="vms", fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.*"}
+              < 0.25
+            )
+            and
+            predict_linear(node_filesystem_avail_bytes{job="vms", fstype!~"tmpfs|ramfs|overlay|squashfs|nsfs|fuse.*"}[6h], 24 * 3600) < 0
+            and
+            node_filesystem_readonly{job="vms"} == 0
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.instance }} : {{ $labels.mountpoint }} sera plein dans moins de 24 h"
+            description: >-
+              Il reste {{ $value | humanizePercentage }} d'espace libre sur {{ $labels.mountpoint }}
+              ({{ $labels.instance }}), et au rythme des 6 dernières heures il sera plein avant demain.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-213-disque-plein.md
+        # Certificat sondé par le témoin de mon01 (séries fédérées, M21-E12) : à 7 jours, le
+        # renouvellement automatique (15 jours avant l'échéance) a échoué depuis une semaine.
+        - alert: CertificatBientotExpire
+          expr: (probe_ssl_earliest_cert_expiry{job="blackbox"} - time()) < 7 * 86400
+          for: 1h
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le certificat de {{ $labels.instance }} expire dans {{ $value | humanizeDuration }}"
+            description: >-
+              Le certificat présenté par {{ $labels.instance }} (sonde {{ $labels.module }} du
+              témoin) expire dans {{ $value | humanizeDuration }} : le renouvellement ACME a échoué.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md

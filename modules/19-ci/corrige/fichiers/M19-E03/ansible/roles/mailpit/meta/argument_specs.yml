@@ -1,0 +1,72 @@
+---
+argument_specs:
+  main:
+    short_description: Installer et configurer Mailpit (messagerie de lab)
+    options:
+      mailpit_version:
+        type: str
+        required: true
+        description: Version de Mailpit (sans « v »).
+      mailpit_sha256:
+        type: str
+        required: true
+        description: SHA-256 de l'archive mailpit-linux-amd64.tar.gz de cette version.
+      mailpit_url:
+        type: str
+        description: URL de l'archive.
+      mailpit_dossier_versions:
+        type: path
+        description: Dossier des versions installées (/opt/mailpit/<version>/).
+      mailpit_binaire:
+        type: path
+        description: Lien vers le binaire de la version active.
+      mailpit_utilisateur:
+        type: str
+        description: Utilisateur système du service.
+      mailpit_groupe:
+        type: str
+        description: Groupe du service (propriétaire de la clé TLS).
+      mailpit_dossier_config:
+        type: path
+        description: Dossier de configuration.
+      mailpit_dossier_donnees:
+        type: path
+        description: Dossier de la base SQLite.
+      mailpit_smtp_ecoute:
+        type: str
+        description: Adresse et port d'écoute SMTP.
+      mailpit_ui_ecoute:
+        type: str
+        description: Adresse et port de l'interface et de l'API.
+      mailpit_smtp_starttls_obligatoire:
+        type: bool
+        description: Refuser les sessions SMTP qui ne passent pas en STARTTLS.
+      mailpit_noms_autorises:
+        type: list
+        elements: str
+        description: Valeurs autorisées de l'en-tête Host de l'interface.
+      mailpit_tls_certificat:
+        type: path
+        description: Certificat (chaîne) de l'interface et de STARTTLS.
+      mailpit_tls_cle:
+        type: path
+        description: Clé privée du certificat.
+      mailpit_max_messages:
+        type: int
+        description: Nombre maximal de messages conservés.
+      mailpit_max_age:
+        type: str
+        description: Âge maximal des messages (ex. 30d).
+      mailpit_comptes:
+        type: list
+        elements: dict
+        description: Comptes de l'interface et de l'API ({nom, mot_de_passe}).
+      mailpit_label:
+        type: str
+        description: Libellé affiché dans l'interface.
+      mailpit_verifier:
+        type: bool
+        description: Contrôles finaux (SMTP, STARTTLS, HTTPS).
+      mailpit_entete:
+        type: str
+        description: En-tête des fichiers gérés.

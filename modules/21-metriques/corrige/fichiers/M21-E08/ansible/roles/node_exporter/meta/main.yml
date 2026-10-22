@@ -1,0 +1,14 @@
+---
+galaxy_info:
+  author: Équipe Plateforme MédiSphère
+  description: node_exporter amont (binaire épinglé), TLS step-ca, utilisateur dédié, unité systemd durcie
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+    - name: EL
+      versions:
+        - "10"
+dependencies: []

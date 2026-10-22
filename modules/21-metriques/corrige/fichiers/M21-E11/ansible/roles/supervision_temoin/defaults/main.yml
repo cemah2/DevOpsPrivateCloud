@@ -1,0 +1,74 @@
+---
+# Rôle supervision_temoin (M21-E11, étendu en M21-E12) — supervision « témoin » HORS du cluster,
+# sur mon01 : Prometheus 3.13 LTS, Alertmanager 0.34, blackbox_exporter 0.29 (E11) et
+# prometheus-pve-exporter 3.10 dans un environnement uv (E12, inactif par défaut).
+# Binaires amont (GitHub, archives linux-amd64) vérifiés par leur empreinte SHA-256, relevée dans
+# le fichier sha256sums.txt de chaque version. Le rôle REFUSE de continuer sans empreinte.
+# Chaque configuration est validée par l'outil du composant AVANT d'être posée, et les services
+# sont rechargés par signal (SIGHUP) : pas de trou dans la collecte.
+
+# --- Versions et empreintes ----------------------------------------------------------------------
+supervision_temoin_prometheus_version: 3.13.5
+supervision_temoin_prometheus_sha256: 0388822ace519c5a3a8ef556a541ce1b536e21d872f82deded465bd27a5a0699
+supervision_temoin_alertmanager_version: 0.34.1
+supervision_temoin_alertmanager_sha256: 265b9d1e55ef0d5306a436018af6d2b686c2ce051f03d968f7464ecb1372a7e8
+supervision_temoin_blackbox_version: 0.29.1
+supervision_temoin_blackbox_sha256: b82b81839e6317e84fdd367f46d7ddd3b773fa09cbe2e3d5633a59171d741e76
+supervision_temoin_url_github: https://github.com/prometheus
+
+# --- Emplacements ----------------------------------------------------------------------------------
+supervision_temoin_dossier_logiciels: /opt/supervision-temoin
+supervision_temoin_dossier_config: /etc/prometheus
+supervision_temoin_dossier_donnees: /var/lib/prometheus
+supervision_temoin_dossier_alertmanager: /var/lib/alertmanager
+supervision_temoin_racine_ca: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# --- Prometheus témoin -----------------------------------------------------------------------------
+supervision_temoin_prometheus_ecoute: 0.0.0.0:9090
+supervision_temoin_prometheus_url_externe: http://mon01.par1.medisphere.internal:9090
+supervision_temoin_retention: 30d
+supervision_temoin_intervalle: 30s
+# Étiquettes externes : distinguent ses séries et ses alertes de celles du cluster.
+supervision_temoin_etiquettes_externes:
+  site: par1
+  prometheus: temoin
+
+# --- Alertmanager témoin ---------------------------------------------------------------------------
+supervision_temoin_alertmanager_ecoute: 0.0.0.0:9093
+supervision_temoin_alertmanager_url_externe: http://mon01.par1.medisphere.internal:9093
+supervision_temoin_smtp_relais: smtp.par1.medisphere.internal:25
+supervision_temoin_smtp_expediteur: supervision-temoin@medisphere.internal
+supervision_temoin_destinataire: astreinte@medisphere.internal
+
+# --- blackbox_exporter -----------------------------------------------------------------------------
+supervision_temoin_blackbox_ecoute: 127.0.0.1:9115
+# Groupes de cibles du job « blackbox » : un fichier par groupe dans cibles/, relu à chaud
+# (file_sd_configs). {nom, module, cibles: [...], etiquettes: {}}
+supervision_temoin_sondes: []
+
+# --- Règles du témoin ------------------------------------------------------------------------------
+supervision_temoin_seuil_certificat_jours: 14
+
+# --- pve-exporter et hyperviseurs (M21-E12) --------------------------------------------------------
+supervision_temoin_pve_active: false
+supervision_temoin_pve_version: 3.10.1
+supervision_temoin_pve_ecoute: 127.0.0.1:9221
+# Nœuds Proxmox VE interrogés par l'exportateur (adresse joignable par mon01, nom du certificat).
+supervision_temoin_pve_cibles: []
+supervision_temoin_pve_utilisateur: wb-supervision@pve
+supervision_temoin_pve_jeton_nom: prometheus
+# Secret du jeton : Ansible Vault « critique » (secrets/supervision_temoin.yml).
+supervision_temoin_pve_jeton_valeur: ""
+# Racine de confiance de l'API de pve01 (M02-E08), copiée sur mon01 et ajoutée au paquet de
+# racines utilisé par requests (REQUESTS_CA_BUNDLE).
+supervision_temoin_pve_racine_source: ""
+# node_exporter des hyperviseurs (rôle node_exporter, E08), collectés en HTTPS par le témoin.
+# [{cible: "<adresse>:9100", instance: pve01, nom_tls: "<nom du certificat>"}]
+supervision_temoin_hyperviseurs: []
+
+# Contrôles après application (depuis mon01).
+supervision_temoin_verifier: true
+
+# uv (environnement de pve-exporter, M21-E12) : binaire amont épinglé par empreinte.
+supervision_temoin_uv_version: 0.13.5
+supervision_temoin_uv_sha256: f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f

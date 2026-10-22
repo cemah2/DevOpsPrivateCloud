@@ -1,0 +1,85 @@
+# plateforme/observabilite — tests/alertes-lucas.test.yaml, branche revue-lucas (M21-E21)
+rule_files:
+  - ../build/regles/alertes-lucas.yml
+  - ../build/regles/enregistrement-lucas.yml
+evaluation_interval: 30s
+tests:
+  - name: redémarrages fréquents (et un ancien redémarrage qui ne sonne plus)
+    interval: 1m
+    input_series:
+      # 6 redémarrages dans la dernière heure.
+      - series: 'kube_pod_container_status_restarts_total{namespace="mediagenda-recette",pod="mediagenda-a",container="api"}'
+        values: '0x30 1 2 3 4 5 6 6x60'
+      # Un redémarrage il y a longtemps : la règle de Lucas sonnerait encore.
+      - series: 'kube_pod_container_status_restarts_total{namespace="mediagenda-prod",pod="mediagenda-b",container="api"}'
+        values: '1x96'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: MediagendaRedemarragesFrequents
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaRedemarragesFrequents, namespace: mediagenda-recette, pod: mediagenda-a, container: api, gravite: avertissement, equipe: mediagenda}
+            exp_annotations:
+              resume: "mediagenda-a (mediagenda-recette) redémarre souvent"
+              description: "Le conteneur api de mediagenda-a a redémarré 6 fois en une heure (OOMKilled ? sonde de vivacité trop stricte ?)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+      - eval_time: 95m
+        alertname: MediagendaRedemarragesFrequents
+        exp_alerts: []
+
+  - name: mémoire bientôt épuisée
+    interval: 1m
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{job="vms",instance="git01"}'
+        values: '536870912x30'
+      - series: 'node_memory_MemTotal_bytes{job="vms",instance="git01"}'
+        values: '8589934592x30'
+      - series: 'node_memory_MemAvailable_bytes{job="vms",instance="nbx01"}'
+        values: '1073741824x30'
+      - series: 'node_memory_MemTotal_bytes{job="vms",instance="nbx01"}'
+        values: '4294967296x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: MemoireBientotEpuisee
+        exp_alerts:
+          - exp_labels: {alertname: MemoireBientotEpuisee, job: vms, instance: git01, gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "git01 : moins de 10 % de mémoire disponible"
+              description: "Il reste 6.25% de mémoire disponible sur git01 depuis 15 minutes."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+
+  - name: CPU saturé (une alerte par instance, pas par cœur)
+    interval: 1m
+    input_series:
+      - series: 'node_load15{job="vms",instance="runner01"}'
+        values: '5x40'
+      - series: 'node_cpu_seconds_total{job="vms",instance="runner01",cpu="0",mode="idle"}'
+        values: '0+1x40'
+      - series: 'node_cpu_seconds_total{job="vms",instance="runner01",cpu="1",mode="idle"}'
+        values: '0+1x40'
+      - series: 'node_load15{job="vms",instance="dns01"}'
+        values: '1x40'
+      - series: 'node_cpu_seconds_total{job="vms",instance="dns01",cpu="0",mode="idle"}'
+        values: '0+1x40'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: CpuSature
+        exp_alerts:
+          - exp_labels: {alertname: CpuSature, instance: runner01, gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "runner01 : file d'attente CPU à 2.5 par cœur"
+              description: "La charge sur 15 minutes de runner01 vaut 2.5 fois son nombre de cœurs depuis 30 minutes : des processus attendent le CPU."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+
+  - name: erreurs par pod (règle d'enregistrement)
+    interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod",pod="a",route="/api/v1/creneaux",code="500"}'
+        values: '0+30x10'
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod",pod="a",route="/sante",code="500"}'
+        values: '0+600x10'
+    promql_expr_test:
+      - expr: namespace_pod:mediagenda_requetes_5xx:taux5m
+        eval_time: 8m
+        exp_samples:
+          - labels: 'namespace_pod:mediagenda_requetes_5xx:taux5m{namespace="mediagenda-prod",pod="a"}'
+            value: 0.5

@@ -1,0 +1,39 @@
+# scrape/vms.yaml — GÉNÉRÉ par plateforme/ansible playbooks/supervision-cibles.yml depuis NetBox
+# (M21-E08). Ne pas modifier à la main : la prochaine génération l'écraserait. Pour ajouter une VM,
+# ajoute-la dans NetBox (étiquette socle, statut actif) et relance le playbook.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: vms
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  # job="vms" (sinon l'opérateur nomme le job « scrapeConfig/supervision/vms »).
+  jobName: vms
+  scheme: https
+  metricsPath: /metrics
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  # Certificat de chaque node_exporter vérifié contre la racine MédiSphère (ConfigMap posée par
+  # kps/values.yaml, M21-E06), pour le NOM de la cible : jamais insecureSkipVerify.
+  tlsConfig:
+    ca:
+      configMap:
+        name: racine-medisphere
+        key: ca.crt
+  relabelings:
+    # instance = nom court de l'hôte, plus lisible que « nom.complet:9100 ».
+    - sourceLabels: [__address__]
+      regex: '([^.:]+)[.:].*'
+      targetLabel: instance
+      replacement: '${1}'
+  staticConfigs:
+{% for c in _cibles %}
+    - targets: ["{{ c.adresse }}"]
+      labels:
+        hote: {{ c.hote }}
+        role: {{ c.role }}
+        site: {{ c.site }}
+        equipe: plateforme
+{% endfor %}

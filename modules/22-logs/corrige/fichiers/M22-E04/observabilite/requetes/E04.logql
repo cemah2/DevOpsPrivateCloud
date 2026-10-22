@@ -1,0 +1,45 @@
+# plateforme/observabilite — requetes/E04.logql (M22-E04, PLAT-2304)
+# Une requête par question, sur UNE ligne. « # locataire: X » vaut pour les requêtes qui suivent.
+# Exécution : logcli query --since=1h '<requête>' (variables LOKI_ADDR et LOKI_ORG_ID, voir le corrigé).
+# Vérification : lab/bin/check 22 04 (chaque requête doit s'exécuter et renvoyer des données sur 1 h).
+# Le trafic de MédiAgenda vient de ressources/E04-trafic/trafic.sh (recette).
+
+# locataire: plateforme
+
+# Q1 — Sélecteur : les journaux du conteneur Loki lui-même.
+{namespace="journaux", container="loki"}
+
+# Q2 — Filtres de ligne : ce que Loki journalise au niveau info, sans les vidages (flush) d'ingester, très bavards.
+{namespace="journaux", container="loki"} |= "level=info" != "flush"
+
+# Q3 — logfmt + filtre d'étiquette extraite + line_format : composant et message des lignes de Loki.
+{namespace="journaux", container="loki"} | logfmt | level="info" | line_format "{{.caller}} {{.msg}}"
+
+# Q4 — pattern : même ligne, découpée par un motif (plus rapide que logfmt ou une regex).
+{namespace="journaux", container="loki"} | pattern "level=<niveau> ts=<_> caller=<appelant> <_>" | niveau="info"
+
+# Q5 — Métrique : lignes par espace et par minute, dans les espaces de la plateforme.
+sum by (namespace) (count_over_time({job="pods", namespace=~"kube-system|journaux"}[1m]))
+
+# Q6 — Volume : les cinq applications qui écrivent le plus (octets sur l'heure).
+topk(5, sum by (app) (bytes_over_time({job="pods"}[1h])))
+
+# Q7 — Journal systemd des nœuds : lignes par nœud sur l'heure.
+sum by (node) (count_over_time({job="journald"}[1h]))
+
+# locataire: mediagenda
+
+# Q8 — json + filtre numérique : les requêtes de MédiAgenda en erreur client ou serveur.
+{namespace="mediagenda-recette", container="api"} | json | journal="mediagenda.acces" | code >= 400
+
+# Q9 — json + line_format : une ligne d'accès lisible (méthode, route, code, durée).
+{namespace="mediagenda-recette", container="api"} | json | journal="mediagenda.acces" | line_format "{{.methode}} {{.route}} {{.code}} {{.duree_ms}} ms"
+
+# Q10 — rate : requêtes par seconde de MédiAgenda, par code HTTP.
+sum by (code) (rate({namespace="mediagenda-recette", container="api"} | json | journal="mediagenda.acces" [5m]))
+
+# Q11 — unwrap + quantile_over_time : 95e centile de la durée par route (en ms), lignes non numériques écartées.
+quantile_over_time(0.95, {namespace="mediagenda-recette", container="api"} | json | journal="mediagenda.acces" | unwrap duree_ms | __error__="" [5m]) by (route)
+
+# Q12 — Part des requêtes en erreur (4xx et 5xx) sur 10 minutes : ratio de deux métriques de journaux.
+sum(count_over_time({namespace="mediagenda-recette", container="api"} | json | journal="mediagenda.acces" | code >= 400 [10m])) / sum(count_over_time({namespace="mediagenda-recette", container="api"} | json | journal="mediagenda.acces" [10m]))

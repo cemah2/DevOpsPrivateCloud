@@ -1,0 +1,167 @@
+# otel-passerelle — état de référence après M23-E16 (SEC-2416), dépôt plateforme/observabilite, dossier otel/,
+# Application Argo CD « otel ». REMPLACE la version de M23-E09 (même échantillonnage en queue) : ajoute
+# l'entrée externe TLS + jeton, le renvoi par traceID des données externes, des lots bornés.
+#
+# Deux entrées, deux pipelines :
+#   - « otlp » (4317/4318, sans TLS) : réservée aux agents du cluster (CiliumNetworkPolicy cnp-traces.yaml),
+#     qui équilibrent déjà par traceID (exportateur loadbalancing, M23-E09) ;
+#   - « otlp/externe » (14317/14318, TLS + jeton) : derrière le Service LoadBalancer 10.10.41.63
+#     (otlp.apps.par1.medisphere.internal:4317/4318). Ces données ne sont PAS équilibrées par traceID quand
+#     elles arrivent : le pipeline « traces/externe » les renvoie d'abord vers les réplicas par l'exportateur
+#     loadbalancing, puis elles suivent le chemin commun (échantillonnage en queue, export vers Tempo).
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-passerelle
+  namespace: traces
+  labels:
+    medisphere.internal/equipe: plateforme
+spec:
+  mode: deployment
+  replicas: 2
+  podDisruptionBudget:
+    maxUnavailable: 1
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: traces.otel-passerelle
+  image: registry.par1.medisphere.internal/dockerhub/otel/opentelemetry-collector-contrib:0.161.0
+  priorityClassName: medisphere-standard
+  resources:
+    requests: {cpu: 200m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  env:
+    - name: GOMEMLIMIT
+      value: 800MiB
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    capabilities: {drop: ["ALL"]}
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  volumes:
+    - name: tls-externe
+      secret: {secretName: otlp-externe-tls}
+    - name: jetons
+      secret: {secretName: otlp-jetons}
+  volumeMounts:
+    - {name: tls-externe, mountPath: /etc/otlp-externe, readOnly: true}
+    - {name: jetons, mountPath: /etc/otlp-jetons, readOnly: true}
+  config:
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      # Jetons hors Git : Secret « otlp-jetons » (clé « jetons », un jeton par ligne suivi d'un commentaire
+      # qui nomme l'émetteur), créé par secrets-k8s.sh depuis Ansible Vault « critique » (secrets/otel.yml).
+      bearertokenauth/externe:
+        filename: /etc/otlp-jetons/jetons
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 8
+          http:
+            endpoint: 0.0.0.0:4318
+            max_request_body_size: 8388608
+      otlp/externe:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14317
+            max_recv_msg_size_mib: 4
+            tls:
+              cert_file: /etc/otlp-externe/tls.crt
+              key_file: /etc/otlp-externe/tls.key
+              min_version: "1.2"
+              reload_interval: 1h
+            auth:
+              authenticator: bearertokenauth/externe
+          http:
+            endpoint: 0.0.0.0:14318
+            max_request_body_size: 4194304
+            tls:
+              cert_file: /etc/otlp-externe/tls.crt
+              key_file: /etc/otlp-externe/tls.key
+              min_version: "1.2"
+              reload_interval: 1h
+            auth:
+              authenticator: bearertokenauth/externe
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 20
+      # M23-E09 : erreurs et requêtes lentes gardées en entier, 10 % du reste.
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: 20000
+        expected_new_traces_per_sec: 50
+        decision_cache:
+          sampled_cache_size: 20000
+          non_sampled_cache_size: 20000
+        policies:
+          - name: erreurs
+            type: status_code
+            status_code: {status_codes: [ERROR]}
+          - name: lentes
+            type: latency
+            latency: {threshold_ms: 500}
+          - name: reste-10-pourcent
+            type: probabilistic
+            probabilistic: {sampling_percentage: 10}
+      # Lots BORNÉS (send_batch_max_size) : un lot doit rester sous la rafale d'ingestion de Tempo
+      # (burst_size_bytes) et sous la taille de message de son récepteur, sinon il est refusé en entier.
+      batch:
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+        timeout: 5s
+    exporters:
+      loadbalancing/passerelle:
+        routing_key: traceID
+        protocol:
+          otlp:
+            tls: {insecure: true}
+            timeout: 5s
+        resolver:
+          k8s:
+            service: otel-passerelle-collector-headless.traces
+            ports: [4317]
+      otlp_grpc/tempo:
+        endpoint: tempo.traces.svc.cluster.local:4317
+        tls: {insecure: true}
+        timeout: 10s
+        sending_queue:
+          enabled: true
+          sizer: items
+          queue_size: 50000
+          num_consumers: 4
+        retry_on_failure:
+          enabled: true
+          initial_interval: 1s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    service:
+      extensions: [health_check, bearertokenauth/externe]
+      pipelines:
+        traces/externe:
+          receivers: [otlp/externe]
+          processors: [memory_limiter]
+          exporters: [loadbalancing/passerelle]
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, tail_sampling, batch]
+          exporters: [otlp_grpc/tempo]
+      telemetry:
+        metrics:
+          level: normal
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888

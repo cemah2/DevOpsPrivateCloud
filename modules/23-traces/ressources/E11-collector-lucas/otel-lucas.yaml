@@ -1,0 +1,124 @@
+# Proposition de Lucas Martin (MR !57 de plateforme/observabilite, branche « lucas/collectors-v2 »)
+# « J'ai refait les deux Collectors plus simplement, ça marche chez moi sur kind. J'ai aussi ajouté
+#   l'envoi vers l'outil de traces d'InfoGér qu'ils nous ont prêté pour la migration. »
+# NE PAS APPLIQUER : à relire (M23-E11).
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-lucas
+  namespace: traces
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/instance: traces.otel-passerelle
+  ports:
+    - {name: otlp-grpc, port: 4317, targetPort: 4317}
+    - {name: otlp-http, port: 4318, targetPort: 4318}
+    - {name: zpages, port: 55679, targetPort: 55679}
+    - {name: pprof, port: 1777, targetPort: 1777}
+---
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-agent
+  namespace: traces
+spec:
+  mode: daemonset
+  image: otel/opentelemetry-collector-contrib:latest
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      # pour réduire le volume dès le départ
+      probabilistic_sampler:
+        sampling_percentage: 10
+      k8sattributes:
+        extract:
+          metadata: [k8s.namespace.name, k8s.pod.name, k8s.deployment.name]
+          annotations:
+            - tag_name: $$1
+              key_regex: (.*)
+              from: pod
+      batch:
+        send_batch_size: 100000
+        timeout: 30s
+    exporters:
+      otlp:
+        endpoint: otel-passerelle-collector.traces.svc.cluster.local:4317
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: false
+        retry_on_failure:
+          enabled: false
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [probabilistic_sampler, k8sattributes, batch]
+          exporters: [otlp]
+---
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-passerelle
+  namespace: traces
+spec:
+  mode: deployment
+  replicas: 2
+  image: otel/opentelemetry-collector-contrib:latest
+  config:
+    extensions:
+      zpages:
+        endpoint: 0.0.0.0:55679
+      pprof:
+        endpoint: 0.0.0.0:1777
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch: {}
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 4000
+      tail_sampling:
+        decision_wait: 10s
+        policies:
+          - name: erreurs
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+          - name: reste
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: 10
+    exporters:
+      debug:
+        verbosity: detailed
+      otlp/tempo:
+        endpoint: tempo.traces.svc.cluster.local:4317
+        tls:
+          insecure: true
+      otlphttp/infoger:
+        endpoint: http://traces.infoger-services.example:4318
+        tls:
+          insecure: true
+    service:
+      extensions: [zpages, pprof]
+      telemetry:
+        metrics:
+          level: none
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch, memory_limiter, tail_sampling]
+          exporters: [debug, otlp/tempo, otlphttp/infoger]

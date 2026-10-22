@@ -1,0 +1,136 @@
+# plateforme/observabilite — loki/manifestes/politique-reseau.yaml (version M22-E16 ; créée en M22-E02)
+# Remplace la politique d'E02. Ce qui change (SEC-2316) :
+#   - Alloy n'a plus que le droit d'ÉCRIRE (POST /loki/api/v1/push) : un collecteur ne lit pas ;
+#   - Grafana n'a plus que l'API de REQUÊTE (lecture) ;
+#   - les VMs (réseaux du lab hors MGMT) : écriture seulement (inchangé depuis E02) ;
+#   - MGMT : accès complet, réservé à l'administration (checks, logcli, effacement RB-221) ;
+#   - sondes du kubelet écrites explicitement (entité host) ;
+#   - NOUVEAU : politique de SORTIE de Loki (DNS, RGW, Alertmanager, API Kubernetes, lui-même).
+# Ce qui reste : l'en-tête X-Scope-OrgID n'est pas authentifié ; Grafana et MGMT peuvent lire tous les
+# locataires (cloisonnement des sources par organisation dans Grafana, passerelle authentifiante au M24).
+#
+# ⚠️ Appliquer en deux temps : d'abord loki-entree seule (commente loki-sortie), observer
+#    « hubble observe -n journaux --verdict DROPPED -f » pendant 10 min, puis loki-sortie.
+#    Retour arrière : git revert du commit (Argo CD remet la version précédente).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: loki-entree
+spec:
+  description: "Loki : écriture seule pour les collecteurs, lecture seule pour Grafana, MGMT complet (M22-E16)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+      app.kubernetes.io/instance: loki
+  ingress:
+    # Alloy (DaemonSet de journaux) : écriture seulement
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux
+            app.kubernetes.io/name: alloy
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/loki/api/v1/push"}
+    # Grafana : API de requête seulement (requêtes, étiquettes, séries, volume, motifs, champs détectés)
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: grafana
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: GET, path: "/loki/api/v1/.*"}
+              - {method: POST, path: "/loki/api/v1/(query|query_range|series|index/.*)"}
+              - {method: GET, path: "/(ready|loki/api/v1/status/buildinfo)"}
+              - {method: GET, path: "/prometheus/api/v1/(rules|alerts)"}
+    # Prometheus : métriques seulement
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: GET, path: "/metrics"}
+    # Loki avec lui-même : memberlist, gRPC interne (requêteur, compactor)
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux
+            app.kubernetes.io/name: loki
+      toPorts:
+        - ports:
+            - {port: "7946", protocol: TCP}
+            - {port: "9095", protocol: TCP}
+    # Sondes du kubelet (vivacité, disponibilité)
+    - fromEntities:
+        - host
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+    # MGMT (adm01 : administration, vérifications, logcli, effacement) : tout l'HTTP
+    - fromCIDR:
+        - 10.10.10.0/24
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+    # VMs du lab (rôle alloy, M22-E05) par le Service 10.10.41.62 : écriture seulement
+    - fromCIDR:
+        - 10.10.20.0/24     # INFRA
+        - 10.10.70.0/24     # DMZ
+        - 10.10.40.2/32     # gw01
+        - 10.10.40.3/32     # gw02
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/loki/api/v1/push"}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: loki-sortie
+spec:
+  description: "Loki : sorties nécessaires seulement (M22-E16)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+      app.kubernetes.io/instance: loki
+  egress:
+    # DNS du cluster
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+    # RGW de ceph-par1 (VIP de l'ingress cephadm ; le trafic sort par eth1 des travailleurs)
+    - toCIDR:
+        - 10.10.30.200/32
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    # Alertmanager du cluster (ruler, M22-E08)
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: alertmanager
+      toPorts:
+        - ports: [{port: "9093", protocol: TCP}]
+    # API Kubernetes (conteneur sidecar qui recopie les règles du ruler, M22-E08)
+    - toEntities:
+        - kube-apiserver
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    # Loki avec lui-même
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux
+            app.kubernetes.io/name: loki
+      toPorts:
+        - ports:
+            - {port: "7946", protocol: TCP}
+            - {port: "9095", protocol: TCP}
+            - {port: "3100", protocol: TCP}

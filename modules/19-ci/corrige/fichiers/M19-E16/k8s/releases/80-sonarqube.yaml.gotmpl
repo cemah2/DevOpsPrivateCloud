@@ -1,0 +1,28 @@
+# releases/80-sonarqube.yaml.gotmpl (plateforme/k8s) — SonarQube Community Build 26.10, À L'ESSAI
+# (M19-E16, PLAT-2016). Fichier à part : le retrait (M19-E46) = « helmfile destroy » puis suppression
+# de ce fichier, sans toucher aux releases durables.
+# Avant le premier apply (dans l'ordre) :
+#   kubectl apply --server-side -f espaces/sonarqube/                      # espace, politiques
+#   kubectl apply --server-side -f composants/sonarqube/cluster-postgresql.yaml
+#   outils/secrets-k8s.sh appliquer sonarqube                             # code des sondes
+# ⚠️ Jamais en même temps que la release jenkins (81-jenkins) : mémoire des travailleurs.
+bases:
+  - _communs.yaml
+---
+# Dépôt propre à ce fichier : un sous-helmfile qui déclare « repositories » remplace la liste de la
+# base (constaté avec Helmfile 1.8.1) ; il ne lui faut que celui-ci.
+repositories:
+  - name: sonarqube
+    url: https://SonarSource.github.io/helm-chart-sonarqube
+releases:
+  - name: sonarqube
+    namespace: sonarqube
+    chart: sonarqube/sonarqube
+    version: 2026.5.1002
+    labels:
+      groupe: ci-essais
+      composant: sonarqube
+    # Démarrage lent (index Elasticsearch, migrations de la base) : 10 min.
+    timeout: 900
+    values:
+      - ../composants/sonarqube/values.yaml

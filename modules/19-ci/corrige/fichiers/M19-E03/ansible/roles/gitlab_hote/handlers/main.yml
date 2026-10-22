@@ -1,0 +1,8 @@
+---
+# gitlab-ctl reconfigure : rejoue la configuration (Chef) ; redémarre les services dont la
+# configuration change (quelques secondes d'indisponibilité de l'interface et de l'API).
+- name: Reconfigurer GitLab
+  ansible.builtin.command: gitlab-ctl reconfigure
+  register: _gitlab_hote_reconfigure
+  changed_when: true
+  failed_when: _gitlab_hote_reconfigure.rc != 0

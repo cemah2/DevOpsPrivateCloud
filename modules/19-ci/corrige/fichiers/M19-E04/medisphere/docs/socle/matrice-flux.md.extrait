@@ -1,0 +1,5 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — EXTRAIT, ligne ajoutée en M19-E04 (bordure, transit). -->
+
+| Source | Destination | Port | Motif | Réf. |
+|---|---|---|---|---|
+| `K8S_TRAV` (10.10.40.61-63) | `git01` 10.10.20.12 | TCP 443 | runners (long polling, journaux), helper des jobs (clonage, artefacts) ; agent KAS (M19-E18), Argo CD (M20) | M19-E04 |

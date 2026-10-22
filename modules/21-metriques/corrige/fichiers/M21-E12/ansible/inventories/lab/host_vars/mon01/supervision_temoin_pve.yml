@@ -1,0 +1,18 @@
+---
+# host_vars/mon01/supervision_temoin_pve.yml (plateforme/ansible) — M21-E12, PLAT-2212.
+# Active la partie Proxmox du rôle supervision_temoin. Le secret du jeton vient du Vault
+# « critique » (vault-critique-supervision.yml, même dossier).
+supervision_temoin_pve_active: true
+# Nœud Proxmox VE interrogé : l'adresse par laquelle mon01 joint pve01 (LAN maison, par la bordure).
+# Le certificat de l'API de pve01 (racine Proxmox de pve01) contient cette adresse.
+supervision_temoin_pve_cibles:
+  - {cible: "<IP-PVE01>", instance: pve01}
+supervision_temoin_pve_jeton_valeur: "{{ vault_supervision_pve_jeton }}"
+# Racine de l'API de pve01 construite au M02-E08, lue sur le contrôleur Ansible (adm01).
+supervision_temoin_pve_racine_source: "{{ lookup('ansible.builtin.env', 'HOME') }}/.config/workbook/pve-root-ca.pem"
+# node_exporter des hyperviseurs (rôle node_exporter du M21-E08, en TLS). La cible est le NOM du
+# certificat (vérifié par Prometheus) : ajoute l'enregistrement DNS s'il manque (zone par1 pour
+# pve01 → <IP-PVE01>, zone par2 pour pbs01 → 10.20.10.10, joint par le tunnel wg0).
+supervision_temoin_hyperviseurs:
+  - {cible: "pve01.par1.medisphere.internal:9100", instance: pve01}
+  - {cible: "pbs01.par2.medisphere.internal:9100", instance: pbs01}

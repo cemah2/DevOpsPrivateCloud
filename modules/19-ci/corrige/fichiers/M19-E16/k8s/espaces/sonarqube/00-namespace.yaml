@@ -1,0 +1,19 @@
+# espaces/sonarqube/00-namespace.yaml — SonarQube Community Build, à l'ESSAI (M19-E16, PLAT-2016).
+# Temporaire : retiré au mini-projet (M19-E46) si l'ADR-0190 le confirme. Jamais en même temps que
+# Jenkins (espace jenkins) : mémoire des travailleurs.
+# Pod Security « restricted » appliqué : le conteneur SonarQube du chart 2026.5 y est conforme (UID
+# 1000, sans capacité, seccomp RuntimeDefault) à condition de désactiver les conteneurs
+# d'initialisation initSysctl (PRIVILÉGIÉ) et initFs (root + CHOWN) — voir composants/sonarqube/values.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sonarqube
+  labels:
+    medisphere.internal/proprietaire: plateforme
+    medisphere.internal/temporaire: "oui"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

@@ -1,0 +1,46 @@
+# {{ ansible_managed | default('Fichier géré par Ansible (projet plateforme/ansible, rôle alloy).') }}
+# Agent Grafana Alloy {{ alloy_version }} (M22-E05). Rechargement de la configuration : SIGHUP.
+[Unit]
+Description=Grafana Alloy (journaux vers Loki)
+Documentation=https://grafana.com/docs/alloy/latest/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ alloy_utilisateur }}
+Group={{ alloy_utilisateur }}
+ExecStart=/usr/local/bin/alloy run /etc/alloy/config.alloy \
+  --storage.path={{ alloy_etat }} \
+  --server.http.listen-addr={{ alloy_ecoute }} \
+  --disable-reporting
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+# Durcissement : lecture seule partout sauf l'état ; pas de nouveaux privilèges.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths={{ alloy_etat }}
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

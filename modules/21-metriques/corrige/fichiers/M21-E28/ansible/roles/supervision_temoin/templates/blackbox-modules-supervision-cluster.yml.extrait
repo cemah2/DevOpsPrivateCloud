@@ -1,0 +1,24 @@
+# plateforme/ansible — roles/supervision_temoin/templates/blackbox.yml.j2 : modules ajoutés en M21-E28.
+# EXTRAIT, à insérer sous « modules: » du gabarit d'E11.
+
+  # Réussit si, et seulement si, la réponse de Thanos Query CONTIENT l'alerte Watchdog.
+  # Un 200 avec un résultat vide (« "result":[] ») est un ÉCHEC : c'est tout l'intérêt.
+  watchdog_cluster:
+    prober: http
+    timeout: 15s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+      fail_if_body_not_matches_regexp:
+        - '"alertname":"Watchdog"'
+
+  # Simple santé HTTP (200 attendu), sans suivre de redirection.
+  http_sante:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+      follow_redirects: false

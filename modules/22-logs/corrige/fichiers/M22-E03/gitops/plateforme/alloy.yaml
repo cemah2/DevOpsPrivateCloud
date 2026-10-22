@@ -1,0 +1,37 @@
+# plateforme/gitops — plateforme/alloy.yaml (M22-E03, PLAT-2303)
+# Application « alloy » : DaemonSet de collecte des journaux de k8s-par1, dans l'espace journaux
+# (créé par l'Application « loki », M22-E02). Même forme que « loki » : chart recopié, valeurs et
+# configuration dans plateforme/observabilite.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: observabilite
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: journaux
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: alloy
+      targetRevision: 1.14.1
+      helm:
+        releaseName: alloy
+        valueFiles:
+          - $values/alloy/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      path: alloy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

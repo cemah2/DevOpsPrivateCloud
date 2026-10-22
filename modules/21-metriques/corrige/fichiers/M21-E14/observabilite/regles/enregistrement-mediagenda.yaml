@@ -1,0 +1,60 @@
+# plateforme/observabilite — regles/enregistrement-mediagenda.yaml (M21-E14, PLAT-2214)
+# Règles d'enregistrement de MédiAgenda. Convention MédiSphère « niveau:métrique:opérations » :
+#   niveau     = étiquettes conservées après agrégation (environnement ; environnement_le pour les
+#                seaux d'histogramme, qui gardent aussi « le ») ;
+#   métrique   = nom d'origine, en français, sans _total ;
+#   opérations = de la plus récente à la plus ancienne (taux5m = rate sur 5 min ; ratio_taux5m =
+#                rapport de deux taux ; p95_5m = 95e centile sur 5 min).
+# Les routes de sonde (/sante, /pret, /metrics) sont exclues : elles ne disent rien de ce que
+# vivent les utilisateurs. equipe et environnement viennent du ServiceMonitor (M21-E13).
+# Toutes les règles d'un groupe sont évaluées dans l'ordre : une règle peut réutiliser le résultat
+# d'une règle précédente du MÊME groupe, calculé au même instant.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: enregistrement-mediagenda
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: mediagenda.enregistrement
+      interval: 30s
+      rules:
+        # Débit servi (requêtes par seconde), par environnement.
+        - record: environnement:mediagenda_requetes:taux5m
+          expr: |
+            sum by (equipe, environnement) (
+              rate(mediagenda_http_requests_total{route!~"/sante|/pret|/metrics"}[5m])
+            )
+        # Réponses 5xx par seconde. N'existe pas tant qu'aucune erreur n'a eu lieu (le compteur
+        # d'un code n'apparaît qu'à sa première occurrence).
+        - record: environnement:mediagenda_requetes_5xx:taux5m
+          expr: |
+            sum by (equipe, environnement) (
+              rate(mediagenda_http_requests_total{route!~"/sante|/pret|/metrics", code=~"5.."}[5m])
+            )
+        # Part des 5xx. « or … * 0 » : sans aucune erreur, la part vaut 0 au lieu d'être absente
+        # (une série absente ne déclenche pas d'alerte, mais elle vide aussi les tableaux).
+        # Sans trafic : 0/0 = NaN, ce qui est juste (aucune information).
+        - record: environnement:mediagenda_requetes_5xx:ratio_taux5m
+          expr: |
+            (
+              environnement:mediagenda_requetes_5xx:taux5m
+              or
+              environnement:mediagenda_requetes:taux5m * 0
+            )
+            / environnement:mediagenda_requetes:taux5m
+        # Seaux de l'histogramme de durée, agrégés en gardant « le » : rate AVANT sum (un rate
+        # sur une somme de compteurs ne voit pas les remises à zéro de chaque pod).
+        - record: environnement_le:mediagenda_duree_requetes_seaux:taux5m
+          expr: |
+            sum by (equipe, environnement, le) (
+              rate(mediagenda_http_request_duration_seconds_bucket{route!~"/sante|/pret|/metrics"}[5m])
+            )
+        # 95e centile de la durée. Calculé depuis les seaux enregistrés : on peut en tirer d'autres
+        # centiles plus tard, et agréger encore (tous environnements) ; un centile, lui, ne
+        # s'agrège pas (la moyenne de deux p95 n'est pas un p95).
+        - record: environnement:mediagenda_duree_requetes:p95_5m
+          expr: |
+            histogram_quantile(0.95, environnement_le:mediagenda_duree_requetes_seaux:taux5m)

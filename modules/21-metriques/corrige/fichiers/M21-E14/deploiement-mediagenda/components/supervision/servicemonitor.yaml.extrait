@@ -1,0 +1,13 @@
+# mediagenda/deploiement — components/supervision/servicemonitor.yaml, EXTRAIT (M21-E14) :
+# limites ajoutées à la spec du ServiceMonitor d'E13 (au même niveau que « selector »).
+spec:
+  # Mesuré : scrape_samples_post_metric_relabeling ≈ 350 à 450 échantillons par pod (Python,
+  # histogrammes de 12 routes × 15 seaux, sans les routes de sonde). Marge × 5 environ.
+  # Au-delà : la collecte ENTIÈRE de la cible échoue (up = 0, « sample limit exceeded »),
+  # prometheus_target_scrapes_exceeded_sample_limit_total augmente : les alertes du chart
+  # PrometheusScrapeSampleLimitHit et TargetDown le signalent.
+  sampleLimit: 2000
+  # Une valeur d'étiquette de plus de 128 caractères (un corps de requête, un jeton…) fait aussi
+  # échouer la collecte : mieux vaut une cible en panne qu'une base polluée.
+  labelValueLengthLimit: 128
+  labelLimit: 30

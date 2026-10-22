@@ -1,0 +1,74 @@
+# Rollout « mediagenda » (M20-E16, DEV-2116 ; analyses M20-E18) : Argo Rollouts pilote les pods de l'API à la place du
+# Deployment, SANS réécrire le chart. Le Deployment reste la description des pods (gabarit rendu par
+# le chart, image promue par MR) ; le Rollout le référence (workloadRef) et crée ses propres
+# ReplicaSets à partir de ce gabarit. Changer le gabarit du Deployment (nouveau digest) = nouvelle
+# révision du Rollout = nouveau canary.
+#
+#   scaleDown: progressively : à la reprise, chaque pod prêt du Rollout retire un pod du Deployment ;
+#   ensuite le Deployment reste à 0 réplica (Argo CD ignore ce champ : ignoreDifferences d'E12).
+#   Trafic : le greffon Gateway API règle les poids des deux backendRefs de l'HTTPRoute « mediagenda »
+#   (Services « mediagenda » = stable, « mediagenda-canary » = canary). Argo Rollouts ajoute aussi
+#   rollouts-pod-template-hash au sélecteur de chaque Service.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: mediagenda
+spec:
+  # Recette : 2 ; la prod passe à 3 par un correctif de son overlay.
+  replicas: 2
+  revisionHistoryLimit: 5
+  # Retour arrière rapide : revenir (par un git revert) à l'une des 2 révisions précédentes saute les
+  # étapes et les analyses ; toute autre modification refait le canary complet.
+  rollbackWindow:
+    revisions: 2
+  # Même sélecteur que le Deployment et le PDB du chart.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/instance: mediagenda
+      app.kubernetes.io/component: api
+  workloadRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mediagenda
+    scaleDown: progressively
+  # Au-delà, une révision dont les pods ne deviennent pas prêts est déclarée en échec (Degraded).
+  progressDeadlineSeconds: 600
+  strategy:
+    canary:
+      stableService: mediagenda
+      canaryService: mediagenda-canary
+      trafficRouting:
+        plugins:
+          # Nom du greffon déclaré dans argo-rollouts-config (M20-E15).
+          argoproj-labs/gatewayAPI:
+            httpRoute: mediagenda
+      # Pendant le canary, autant de pods stables qu'avant : 100 % de capacité côté stable.
+      maxSurge: "25%"
+      maxUnavailable: 0
+      # Analyse de fond (M20-E18) : dès la première marche et jusqu'à la fin du canary.
+      analysis:
+        templates:
+          - templateName: pret-mediagenda
+        startingStep: 0
+        args:
+          - name: espace
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+      steps:
+        - setWeight: 10
+        # Tests de fumée (M20-E18) : bloquants, sur les pods canary qui reçoivent 10 % du trafic.
+        - analysis:
+            templates:
+              - templateName: fumee-mediagenda
+            args:
+              - name: espace
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.namespace
+        - pause: {duration: 2m}
+        - setWeight: 25
+        - pause: {duration: 2m}
+        - setWeight: 50
+        - pause: {duration: 2m}

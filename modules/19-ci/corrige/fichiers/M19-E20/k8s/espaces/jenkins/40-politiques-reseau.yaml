@@ -1,0 +1,89 @@
+# espaces/jenkins/40-politiques-reseau.yaml (M19-E19) — refus par défaut, puis :
+#   contrôleur : entrée Gateway (8080) et agents (8080, WebSocket) ; sortie DNS, API Kubernetes (le
+#                greffon kubernetes crée les pods d'agents), Internet 443 (téléchargement des greffons
+#                épinglés au démarrage : updates.jenkins.io et ses miroirs — exception de l'essai) ;
+#   agents     : sortie DNS, contrôleur 8080, git01 443 (dépôts), Internet 443 (PyPI, E20).
+# M19-E20 : sortie des agents vers buildkitd:1234 (EXCEPTION TEMPORAIRE de l'essai, avec l'entrée
+# côté buildkit ouverte par le chart buildkitd : reseau.espacesClients) — retirée après le comparatif.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: jenkins
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: jenkins-controleur
+  namespace: jenkins
+spec:
+  description: "Contrôleur Jenkins : Gateway et agents en entrée ; DNS, API Kubernetes, Internet 443 en sortie"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: jenkins-controller
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            jenkins/jenkins-jenkins-agent: "true"
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+    - toEntities: [kube-apiserver]
+    - toEntities: [world]
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: jenkins-agents
+  namespace: jenkins
+spec:
+  description: "Agents Jenkins : DNS, contrôleur, git01:443, buildkitd:1234 (essai), Internet 443"
+  endpointSelector:
+    matchLabels:
+      jenkins/jenkins-jenkins-agent: "true"
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/component: jenkins-controller
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+    - toFQDNs:
+        - matchName: git01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: buildkit
+            app.kubernetes.io/name: buildkitd
+      toPorts:
+        - ports: [{port: "1234", protocol: TCP}]
+    - toEntities: [world]
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

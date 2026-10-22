@@ -1,0 +1,10 @@
+# formation/flux-labo — apps/podinfo (M20-E23) : un chart Helm recopié et signé dans Harbor
+# (plateforme/charts-miroir), installé par le helm-controller de Flux.
+# Secrets hors Git, créés à la main dans flux-system (voir le corrigé) : harbor-charts (robot
+# charts+lecture) et medisphere-ca (racine MédiSphère, clé ca.crt).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - ocirepository.yaml
+  - helmrelease.yaml

@@ -1,0 +1,23 @@
+# plateforme/observabilite — .gitlab-ci.yml : ajout de M21-E27 (PLAT-2227).
+# EXTRAIT : un job qui produit les règles des SLO (build/slo/) avec la même version de Pyrra que
+# l'opérateur, et la dépendance du job de tests d'E14/E15 vers lui (needs + artefacts).
+# Localement, dans cet ordre (outils/extraire-regles.sh d'E14 commence par vider build/) :
+#   outils/extraire-regles.sh && sh outils/generer-regles-slo.sh && promtool test rules tests/*.test.yaml
+variables:
+  IMAGE_PYRRA: registry.par1.medisphere.internal/ghcr/pyrra-dev/pyrra:v0.10.2
+
+slo:generer:
+  stage: valider
+  image:
+    name: $IMAGE_PYRRA
+    entrypoint: [""]
+  script:
+    - sh outils/generer-regles-slo.sh
+  artifacts:
+    paths: [build/slo/]
+    expire_in: 1 day
+
+# Dans TON job de tests de règles (E14/E15), ajoute :
+#   needs: [<ton job d'extraction>, "slo:generer"]
+# et, avant « promtool test rules tests/*.test.yaml » :
+#   - promtool check rules build/slo/*.yaml

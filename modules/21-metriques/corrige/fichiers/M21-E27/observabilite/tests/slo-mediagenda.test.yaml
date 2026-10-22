@@ -1,0 +1,59 @@
+# plateforme/observabilite — tests/slo-mediagenda.test.yaml (M21-E27, PLAT-2227)
+# Teste les règles que Pyrra génère pour mediagenda-disponibilite (règles d'enregistrement des taux
+# + alertes ErrorBudgetBurn). Les règles sont produites dans la CI par « pyrra generate » (même
+# version que l'opérateur), dans build/slo/, puis testées : on teste ce qui sera chargé.
+#   sh outils/generer-regles-slo.sh && promtool test rules tests/slo-mediagenda.test.yaml
+rule_files:
+  - ../build/slo/mediagenda-disponibilite.yaml
+evaluation_interval: 1m
+
+tests:
+  # 600 requêtes/min sans erreur pendant 2 h, puis 8 % d'erreurs 5xx (52 sur 652 par minute).
+  # Seuil rapide : 14 × 0,5 % = 7 % sur 5 min ET sur 1 h. Après 30 min d'erreurs, la fenêtre d'1 h
+  # n'en contient que ~4 % : rien. Après 1 h : 8 % > 7 % sur les deux fenêtres → critique.
+  # Les autres paires de fenêtres ne sont pas encore « firing » à 3 h (seuils ou « for » non atteints).
+  - interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod", route="/api/v1/creneaux", methode="GET", code="200"}'
+        values: '0+600x240'
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod", route="/api/v1/creneaux", methode="GET", code="500"}'
+        values: '0x120 52+52x119'
+    alert_rule_test:
+      - eval_time: 150m
+        alertname: ErrorBudgetBurn
+        exp_alerts: []
+      - eval_time: 180m
+        alertname: ErrorBudgetBurn
+        exp_alerts:
+          - exp_labels: {equipe: mediagenda, exhaustion: 2d, long: 1h, short: 5m, namespace: mediagenda-prod, severity: critique, slo: mediagenda-disponibilite}
+            exp_annotations:
+              resume: "MédiAgenda (prod) consomme son budget d'erreurs trop vite"
+              description: "Taux de 5xx au-dessus de ce que permet l'objectif de 99,5 % sur 28 jours (voir les étiquettes short/long et exhaustion : délai avant épuisement à ce rythme)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-216-budget-erreur.md
+
+  # Les sondes en erreur ne consomment pas le budget (route /pret exclue du SLI).
+  - interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod", route="/api/v1/creneaux", methode="GET", code="200"}'
+        values: '0+600x180'
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-prod", route="/pret", methode="GET", code="503"}'
+        values: '0+60x180'
+    alert_rule_test:
+      - eval_time: 180m
+        alertname: ErrorBudgetBurn
+        exp_alerts: []
+
+  # Plus aucune mesure de l'API de prod : SLOMetricAbsent, critique.
+  - interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{namespace="mediagenda-recette", route="/api/v1/creneaux", methode="GET", code="200"}'
+        values: '0+600x120'
+    alert_rule_test:
+      - eval_time: 120m
+        alertname: SLOMetricAbsent
+        exp_alerts:
+          - exp_labels: {equipe: mediagenda, namespace: mediagenda-prod, severity: critique, slo: mediagenda-disponibilite}
+            exp_annotations:
+              resume: "MédiAgenda (prod) consomme son budget d'erreurs trop vite"
+              description: "Taux de 5xx au-dessus de ce que permet l'objectif de 99,5 % sur 28 jours (voir les étiquettes short/long et exhaustion : délai avant épuisement à ce rythme)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-216-budget-erreur.md

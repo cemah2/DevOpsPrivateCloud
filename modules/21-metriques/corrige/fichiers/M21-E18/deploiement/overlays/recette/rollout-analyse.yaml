@@ -1,0 +1,28 @@
+# mediagenda/deploiement — overlays/recette/rollout-analyse.yaml (M21-E18, DEV-2218)
+# Correctif (patch stratégique) de la Rollout mediagenda de recette (M20-E16) : analyse Prometheus
+# en ARRIÈRE-PLAN, du premier palier à la promotion. Les analyses du M20 (fumee-mediagenda en
+# étape, pret-mediagenda) restent inchangées. Dans overlays/recette/kustomization.yaml :
+#   patches:
+#     - path: rollout-analyse.yaml
+# Une analyse d'arrière-plan en échec fait AVORTER la Rollout (poids canary remis à 0).
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: mediagenda
+spec:
+  strategy:
+    canary:
+      analysis:
+        templates:
+          - templateName: taux-erreur-mediagenda
+            clusterScope: true
+        # Démarre à l'étape 1 (après le premier setWeight), quand le canary reçoit du trafic.
+        startingStep: 1
+        args:
+          # Valeur écrite en clair dans l'overlay : lisible, et sans dépendance à la résolution
+          # d'un fieldRef sur la Rollout.
+          - name: namespace
+            value: mediagenda-recette
+          - name: hash-canary
+            valueFrom:
+              podTemplateHashValue: Latest

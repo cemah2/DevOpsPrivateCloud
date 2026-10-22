@@ -1,0 +1,14 @@
+---
+# playbooks/journaux-vms.yml — agent Alloy sur les VMs Debian 13 du socle (M22-E05, PLAT-2305).
+#   uv run ansible-playbook playbooks/journaux-vms.yml --check --diff
+#   uv run ansible-playbook playbooks/journaux-vms.yml --limit mon01      (une VM d'abord)
+#   uv run ansible-playbook playbooks/journaux-vms.yml
+# Exécution de référence : pipeline protégé de plateforme/ansible (ADR-0040).
+# Les nœuds Kubernetes ne sont pas dans « socle » : leur journal est lu par le DaemonSet (M22-E03).
+- name: Agent Alloy sur les VMs du socle
+  hosts: socle
+  become: true
+  serial: 3
+  roles:
+    - role: alloy
+      tags: [alloy]

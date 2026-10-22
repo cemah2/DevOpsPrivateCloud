@@ -1,0 +1,5 @@
+# plateforme/ansible — roles/supervision_temoin/defaults/main.yml : variable ajoutée en M21-E44.
+# EXTRAIT, à ajouter aux valeurs par défaut du rôle (et à meta/argument_specs.yml : type bool).
+# API d'administration de la TSDB du Prometheus témoin (instantanés, mais aussi suppression de séries).
+# Fermée par défaut ; ouverte le temps d'une analyse (M21-E44), par le code, puis refermée.
+supervision_temoin_api_admin: false

@@ -1,0 +1,50 @@
+# plateforme/k8s — releases/argocd/rbac-tests.txt (M20-E24, SEC-2124)
+# Tests de la politique RBAC d'Argo CD, joués par outils/argocd-rbac-tests.sh (CI et adm01).
+# Une ligne par cas : ATTENDU SUJET ACTION RESSOURCE OBJET
+#   ATTENDU   oui | non
+#   SUJET     compte local ou rôle (role:…) ; <MOI> comme dans policy.csv
+#   ACTION    get, create, update, delete, sync, override, action/<groupe>/<kind>/<action>, invoke
+#   RESSOURCE applications, applicationsets, projects, clusters, repositories, logs, exec, accounts…
+#   OBJET     <projet>/<application>, nom du projet, URL du cluster ou du dépôt, ou « * »
+# Règle de la maison : tout nouveau droit dans policy.csv arrive avec au moins un test « oui » ET un
+# test « non » qui montre sa limite.
+
+# Administration
+oui <MOI>          sync     applications mediagenda/mediagenda-prod
+oui karim-benali   update   projects     mediagenda
+oui karim-benali   create   clusters     https://lyo-k3s01.par1.medisphere.internal:6443
+
+# Équipe MédiAgenda : dev et recette
+oui julien-petit   get      applications mediagenda/mediagenda-dev
+oui julien-petit   sync     applications mediagenda/mediagenda-dev
+oui julien-petit   sync     applications mediagenda/mediagenda-recette
+oui julien-petit   action/argoproj.io/Rollout/promote-full applications mediagenda/mediagenda-recette
+oui julien-petit   get      logs         mediagenda/mediagenda-recette
+non julien-petit   delete   applications mediagenda/mediagenda-dev
+non julien-petit   override applications mediagenda/mediagenda-recette
+non julien-petit   create   exec         mediagenda/mediagenda-dev
+non julien-petit   update   projects     mediagenda
+
+# Équipe MédiAgenda : production en lecture seule
+oui julien-petit   get      applications mediagenda/mediagenda-prod
+non julien-petit   sync     applications mediagenda/mediagenda-prod
+non julien-petit   action/argoproj.io/Rollout/promote-full applications mediagenda/mediagenda-prod
+non julien-petit   get      logs         mediagenda/mediagenda-prod
+
+# Équipe MédiAgenda : rien hors de son projet
+non julien-petit   get      applications medidoc/medidoc-dev
+non julien-petit   sync     applications labo/labo
+non julien-petit   get      clusters     https://lyo-k3s01.par1.medisphere.internal:6443
+
+# Lecture (support et checks)
+oui nadia-roussel  get      applications mediagenda/mediagenda-prod
+oui ci-lecture     get      clusters     https://lyo-k3s01.par1.medisphere.internal:6443
+oui ci-lecture     get      projects     medidoc
+non nadia-roussel  sync     applications mediagenda/mediagenda-prod
+non nadia-roussel  get      logs         mediagenda/mediagenda-prod
+non ci-lecture     sync     applications mediagenda/mediagenda-dev
+non ci-lecture     update   applications mediagenda/mediagenda-dev
+
+# Personne d'autre (policy.default vide)
+non lucas-martin   get      applications mediagenda/mediagenda-dev
+non inconnu        get      projects     mediagenda

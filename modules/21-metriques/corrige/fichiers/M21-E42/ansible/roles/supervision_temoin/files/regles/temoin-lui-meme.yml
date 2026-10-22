@@ -1,0 +1,42 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/temoin-lui-meme.yml (M21-E42, INC-4842)
+# Règles du Prometheus TÉMOIN sur LUI-MÊME : ce qui l'aurait fait parler pendant les pannes de E42.
+# Les seuils « nombre de cibles » viennent du gabarit (voir temoin-lui-meme-cibles.yml.j2) ; ici,
+# les règles qui ne dépendent pas de l'inventaire.
+groups:
+  - name: temoin.lui-meme
+    rules:
+      # Un rechargement refusé laisse tourner l'ANCIENNE configuration : silencieux sans cette règle.
+      - alert: TemoinRechargementRefuse
+        expr: prometheus_config_last_reload_successful{job="prometheus-temoin"} == 0
+        for: 5m
+        labels: {gravite: avertissement, equipe: plateforme}
+        annotations:
+          resume: "Le Prometheus témoin de mon01 a refusé sa dernière configuration"
+          description: "Il tourne avec la précédente. journalctl -u prometheus sur mon01. RB-218 § « Le témoin de mon01 se trompe »."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md
+      # Toutes les sondes HTTP en échec en même temps : le témoin est probablement aveugle (module,
+      # réseau de mon01), pas le lab entier en panne. Gravité avertissement : c'est le témoin qu'il
+      # faut réparer ; les sondes individuelles disent déjà « critique » si c'est vrai.
+      - alert: TemoinToutesSondesHttpEnEchec
+        expr: |
+          count(probe_success{job="blackbox", module=~"https.*"} == 0)
+            == count(probe_success{job="blackbox", module=~"https.*"})
+        for: 5m
+        labels: {gravite: avertissement, equipe: plateforme}
+        annotations:
+          resume: "Toutes les sondes HTTPS du témoin échouent en même temps"
+          description: >-
+            Soit le lab entier est tombé, soit le témoin ne sait plus sonder (module blackbox, DNS,
+            famille d'adresses, sortie réseau de mon01). Vérifier depuis adm01 avant de conclure.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md
+      # L'Alertmanager témoin n'arrive plus à envoyer : la règle part… par lui. Elle est donc AUSSI
+      # lue par le cluster (fédération de M21-E28 : TemoinNotificationsEnEchec) ; ici, elle sert de
+      # trace locale et de déclencheur pour l'inhibition des doublons.
+      - alert: TemoinEnvoisEnEchec
+        expr: sum(increase(alertmanager_notifications_failed_total{job="alertmanager-temoin"}[15m])) > 0
+        for: 5m
+        labels: {gravite: critique, equipe: plateforme}
+        annotations:
+          resume: "L'Alertmanager témoin de mon01 n'arrive plus à envoyer"
+          description: "Le cluster relaie cette alerte (TemoinNotificationsEnEchec). journalctl -u alertmanager sur mon01."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md

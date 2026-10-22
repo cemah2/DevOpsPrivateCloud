@@ -1,0 +1,61 @@
+# Flux des analyses (M20-E18). La NetworkPolicy « mediagenda » du chart n'admet vers l'API que les pods
+# de la release : sans ces règles, le Job de fumée et le contrôleur d'Argo Rollouts sont refusés
+# (connexion qui expire, analyse en erreur). Reportées dans docs/kubernetes/reseau/matrice-flux-cluster.md.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-analyses-entree
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Job de fumée (même espace).
+        - podSelector:
+            matchLabels:
+              medisphere.internal/role: analyse
+        # Mesures « web » : le contrôleur d'Argo Rollouts.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argo-rollouts
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argo-rollouts
+      ports:
+        - port: http
+          protocol: TCP
+---
+# Sorties du Job de fumée : DNS et l'API, rien d'autre (refus par défaut en prod, M20-E10).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-analyses-sortie
+spec:
+  podSelector:
+    matchLabels:
+      medisphere.internal/role: analyse
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mediagenda
+              app.kubernetes.io/component: api
+      ports:
+        - port: 8000
+          protocol: TCP

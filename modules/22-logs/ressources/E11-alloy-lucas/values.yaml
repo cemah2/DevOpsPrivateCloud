@@ -1,0 +1,11 @@
+# values.yaml — proposition de Lucas Martin pour le chart grafana/alloy
+alloy:
+  configMap:
+    create: true
+    content: ""            # « je colle config.alloy ici au moment du déploiement »
+  mounts:
+    varlog: true
+controller:
+  type: daemonset
+image:
+  tag: latest

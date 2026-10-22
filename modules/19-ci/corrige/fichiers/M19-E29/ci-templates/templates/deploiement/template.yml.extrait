@@ -1,0 +1,125 @@
+# plateforme/ci-templates — templates/deploiement/template.yml, version 2.2.0 (M19-E29, SEC-2029).
+# EXTRAIT : ajout de la PORTE DE VÉRIFICATION des images dans les pipelines de MR d'un dépôt de
+# déploiement (mediagenda/deploiement, medidoc/deploiement). Les jobs de validation de E10/E17
+# (kustomize build + kubeconform) sont inchangés.
+#
+# Deux jobs : « deploiement:images » rend les overlays touchés par la MR et liste leurs images
+# (image du composant : kustomize, yq) ; « verifier-images » vérifie chaque image avec Cosign
+# (image outillée de la supply chain : cosign, skopeo, jq, clé publique MédiSphère embarquée).
+# Les deux sont BLOQUANTS (allow_failure: false) : avec « Pipelines must succeed », une MR dont
+# une image n'est pas conforme ne peut pas être fusionnée.
+spec:
+  inputs:
+    # … entrées de la v2.0.0 (image_deploiement, version_kubernetes, …) inchangées …
+    image_outils:
+      description: "Image outillée de la supply chain (cosign, skopeo, jq, /etc/medisphere/cosign.pub)"
+      default: "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.0@sha256:<EMPREINTE>"
+    cosign_pub_sha256:
+      description: "Empreinte attendue de la clé publique (docs/registre/cosign.pub, M13-E14)"
+      default: "<SHA256-DE-docs/registre/cosign.pub>"
+    prefixes_signes:
+      description: "Préfixes d'images qui DOIVENT être signées et attestées par la chaîne MédiSphère"
+      default: "registry.par1.medisphere.internal/medisphere/ registry.par1.medisphere.internal/bibliotheque/"
+    fichier_images_tierces:
+      description: "Liste revue des images tierces admises par digest (une référence complète par ligne)"
+      default: "images-tierces.txt"
+    source_attendue:
+      description: "Préfixe attendu du label org.opencontainers.image.source"
+      default: "https://git01.par1.medisphere.internal/"
+---
+deploiement:images:
+  stage: test
+  image: $[[ inputs.image_deploiement ]]
+  tags: [k8s]
+  variables:
+    GIT_DEPTH: "0"                 # il faut la base de la MR pour le diff
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+  script:
+    - |
+      set -euo pipefail
+      base="${CI_MERGE_REQUEST_DIFF_BASE_SHA:?pipeline de MR attendu}"
+      # Overlays touchés ; si base/ ou components/ changent, TOUS les overlays le sont.
+      if git diff --name-only "$base" HEAD -- base/ components/ | grep -q .; then
+        mapfile -t overlays < <(find overlays -mindepth 1 -maxdepth 1 -type d | sort)
+      else
+        mapfile -t overlays < <(git diff --name-only "$base" HEAD -- overlays/ | cut -d/ -f1-2 | sort -u)
+      fi
+      : > images.txt
+      for o in "${overlays[@]}"; do
+        [ -f "$o/kustomization.yaml" ] || continue
+        echo "rendu de $o"
+        # Toute clé « image » de tout objet : conteneurs, initContainers, CronJobs, etc.
+        kustomize build "$o" | yq -r '.. | select(tag == "!!map" and has("image")) | .image' \
+          | sed "s|^|$o\t|" >> images.txt
+      done
+      sort -u -o images.txt images.txt
+      echo "images à vérifier :"; cat images.txt
+  artifacts:
+    paths: [images.txt]
+    expire_in: 30 days
+
+verifier-images:
+  stage: test
+  image: $[[ inputs.image_outils ]]
+  tags: [k8s]
+  needs: [deploiement:images]
+  variables:
+    GIT_STRATEGY: fetch
+    DOCKER_CONFIG: /tmp/auth-registre
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  allow_failure: false
+  script:
+    - |
+      set -uo pipefail
+      echo "$[[ inputs.cosign_pub_sha256 ]]  /etc/medisphere/cosign.pub" | sha256sum -c --quiet - \
+        || { echo "clé publique inattendue dans l'image outillée"; exit 1; }
+      mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+      printf '%s' "$HARBOR_ROBOT_RO_TOKEN" | cosign login registry.par1.medisphere.internal \
+        -u "$HARBOR_ROBOT_RO_USER" --password-stdin > /dev/null
+      V=(--key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true)
+      tierces="$[[ inputs.fichier_images_tierces ]]"
+      ko=0
+      printf 'overlay\timage\tverdict\tmotif\n' > rapport-images.tsv
+      while IFS=$'\t' read -r overlay image; do
+        [ -n "$image" ] || continue
+        verdict=OK; motif=""
+        signee=non
+        for p in $[[ inputs.prefixes_signes ]]; do case "$image" in "$p"*) signee=oui ;; esac; done
+        if [[ "$image" != *@sha256:* ]]; then
+          verdict=REFUS; motif="image sans digest"
+        elif [ "$signee" = non ]; then
+          # Image tierce : admise seulement si elle figure, à l'identique, dans la liste revue.
+          if ! grep -qxF "$image" "$tierces" 2>/dev/null; then verdict=REFUS; motif="image tierce absente de $tierces"; fi
+        elif ! cosign verify "${V[@]}" "$image" > /dev/null 2> err.txt; then
+          verdict=REFUS; motif="signature MédiSphère absente ou invalide"
+        elif ! cosign verify-attestation "${V[@]}" --type spdxjson "$image" > /dev/null 2>> err.txt; then
+          verdict=REFUS; motif="attestation SBOM (spdxjson) absente"
+        elif ! cosign verify-attestation "${V[@]}" --type slsaprovenance1 "$image" > prov.json 2>> err.txt; then
+          verdict=REFUS; motif="attestation de provenance (slsaprovenance1) absente"
+        elif ! jq -e -s 'map(.payload | @base64d | fromjson | .predicate.buildDefinition.buildType) | any(test("moby/buildkit"))' prov.json > /dev/null; then
+          verdict=REFUS; motif="provenance non produite par BuildKit"
+        else
+          src="$(skopeo inspect --authfile "$DOCKER_CONFIG/config.json" "docker://$image" 2>/dev/null \
+                 | jq -r '.Labels["org.opencontainers.image.source"] // ""')"
+          case "$src" in
+            "$[[ inputs.source_attendue ]]"*) ;;
+            *) verdict=REFUS; motif="source de construction inattendue : '${src:-absente}'" ;;
+          esac
+        fi
+        [ "$verdict" = OK ] || ko=1
+        printf '%s\t%s\t%s\t%s\n' "$overlay" "$image" "$verdict" "$motif" | tee -a rapport-images.tsv
+      done < images.txt
+      if [ "$ko" -ne 0 ]; then
+        echo
+        echo "REFUS : au moins une image n'est pas conforme à la chaîne MédiSphère (rapport-images.tsv)."
+        echo "Procédure d'urgence : docs/livraison/ci/chaine-approvisionnement.md §5 (jamais désactiver ce job)."
+        exit 1
+      fi
+      echo "Toutes les images sont conformes."
+  artifacts:
+    when: always
+    paths: [rapport-images.tsv]
+    expire_in: 1 year

@@ -1,0 +1,51 @@
+# composants/gitlab-agent/values.yaml — chart gitlab/gitlab-agent 2.32.0, agentk v19.4.0 (M19-E18).
+# Lu : helm show values gitlab/gitlab-agent --version 2.32.0 (et templates/clusterrolebinding.yaml).
+image:
+  # Image par le cache « gitlab » de Harbor (registry.gitlab.com, M19-E04). Étiquette = appVersion.
+  repository: registry.par1.medisphere.internal/gitlab/gitlab-org/cluster-integration/gitlab-agent/agentk
+  tag: v19.4.0
+
+# ⚠️ Par défaut le chart lie le compte de l'agent à cluster-admin (ClusterRoleBinding
+# « <espace>:<release>-cluster-admin »). Désactivé : les droits sont écrits dans rbac/gitlab-agent/.
+rbac:
+  create: false
+serviceAccount:
+  create: true
+  name: gitlab-agent
+
+config:
+  # GitLab 19.4 : KAS d'omnibus joint en WebSocket derrière NGINX de git01. La valeur par défaut du
+  # chart (grpcs://kas.gitlab.com) est celle de GitLab.com. M19-E26 (19.5) passe en grpcs://.
+  kasAddress: wss://git01.par1.medisphere.internal/-/kubernetes-agent/
+  # Secret créé hors Git (outils/secrets-k8s.sh appliquer gitlab-agent), clé « token ».
+  secretName: gitlab-agent-jeton
+  # Racine MédiSphère (publique) : l'agent vérifie le certificat de git01.
+  kasCaCert: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU DE /usr/local/share/ca-certificates/medisphere-root-ca.crt>
+    -----END CERTIFICATE-----
+  # Analyse de vulnérabilités des conteneurs du cluster par l'agent : non utilisée (Trivy est dans la
+  # CI, M13) ; elle créerait un compte de service à droits larges et des Jobs dans l'espace.
+  operational_container_scanning:
+    enabled: false
+
+# Deux réplicas (défaut du chart) : une montée de version sans coupure de la connexion à KAS.
+replicas: 2
+
+# Pod Security « restricted » (espaces/gitlab-agent) : l'image agentk tourne déjà sans root.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

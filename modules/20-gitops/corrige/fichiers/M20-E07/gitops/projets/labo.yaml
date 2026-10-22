@@ -1,0 +1,25 @@
+# plateforme/gitops — projets/labo.yaml (M20-E07, PLAT-2107)
+# Projet des essais : le dépôt formation/gitops-labo, l'espace jetable wb-essais. M20-E26 y ajoutera
+# la destination du cluster de l'agence (lyo-k3s01).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: labo
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Essais de la plateforme (jetables)
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/formation/gitops-labo.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: wb-essais
+  # Pas de surveillance des orphelins : wb-essais accueille aussi les essais à la main des autres
+  # exercices. (orphanedResources, même avec warn: false, ACTIVE la surveillance : on l'omet.)
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange

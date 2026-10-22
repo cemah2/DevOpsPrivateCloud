@@ -1,0 +1,13 @@
+# espaces/jenkins/30-racine-ca.yaml (M19-E20) — racine MédiSphère (PUBLIQUE), même ConfigMap que dans
+# ci-jobs (E07) : git du contrôleur et des agents fait confiance à git01.
+# Contenu : /usr/local/share/ca-certificates/medisphere-root-ca.crt de adm01.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-racine
+  namespace: jenkins
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU DE /usr/local/share/ca-certificates/medisphere-root-ca.crt>
+    -----END CERTIFICATE-----

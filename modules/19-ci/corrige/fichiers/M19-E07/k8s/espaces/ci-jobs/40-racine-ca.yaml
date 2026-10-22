@@ -1,0 +1,20 @@
+# plateforme/k8s — espaces/ci-jobs/40-racine-ca.yaml (M19-E07, PLAT-2007)
+# Racine « MédiSphère Root CA » (PUBLIQUE), montée par le runner dans les conteneurs des jobs sous
+# /etc/medisphere/ca/ (volumes.config_map du runner) : le helper s'en sert pour s3-01 (cache).
+# Une ConfigMap et non un Secret : ce n'est pas un secret, et le compte des vérifications peut la lire.
+# Contenu : copie exacte de /usr/local/share/ca-certificates/medisphere-root-ca.crt (M06).
+# Vérification après application :
+#   kubectl --context k8s-par1 -n ci-jobs get cm medisphere-racine -o jsonpath='{.data.medisphere-root-ca\.crt}' \
+#     | openssl x509 -noout -subject -fingerprint -sha256
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: medisphere-racine
+  namespace: ci-jobs
+  labels:
+    medisphere.internal/composant: ci
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU DE medisphere-root-ca.crt, RECOPIÉ TEL QUEL>
+    -----END CERTIFICATE-----

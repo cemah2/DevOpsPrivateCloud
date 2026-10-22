@@ -1,0 +1,55 @@
+# {{ ansible_managed }}
+# node_exporter {{ node_exporter_version }} — unité durcie (M21-E08). Contrôle du durcissement :
+#   systemd-analyze security node_exporter.service
+[Unit]
+Description=Exportateur de métriques système Prometheus (node_exporter {{ node_exporter_version }})
+Documentation=https://github.com/prometheus/node_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=node_exporter
+Group=node_exporter
+ExecStart=/usr/local/bin/node_exporter \
+  --web.listen-address={{ node_exporter_adresse }}:{{ node_exporter_port }} \
+  --web.config.file=/etc/node_exporter/web.yml \
+{% for c in node_exporter_collecteurs_desactives %}
+  --no-collector.{{ c }} \
+{% endfor %}
+  --collector.systemd \
+  --collector.systemd.unit-include=({{ node_exporter_unites_systemd | join('|') }})[.]service \
+  --collector.textfile.directory={{ node_exporter_dossier_textfile }}
+Restart=on-failure
+RestartSec=5s
+
+# --- Durcissement : node_exporter LIT le système, il n'écrit rien et n'a besoin d'aucun privilège.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+# read-only et non « yes » : le collecteur filesystem fait statfs() sur les points de montage,
+# /home compris.
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# AF_UNIX : le collecteur systemd parle à systemd par D-Bus ; AF_NETLINK : collecteurs réseau.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

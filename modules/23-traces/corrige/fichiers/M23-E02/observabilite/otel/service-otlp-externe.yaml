@@ -1,0 +1,22 @@
+# Point d'entrée OTLP hors cluster (M23-E02) : 10.10.41.63, otlp.apps.par1.medisphere.internal, 4317/4318.
+# En M23-E02, il vise directement le récepteur « otlp » de la passerelle, SANS TLS ni authentification :
+# seul adm01 (MGMT) l'utilise pour les essais. M23-E16 le fait passer sur une entrée TLS + jeton (ports
+# cibles 14317/14318) : ne publie aucune donnée réelle par cette adresse avant.
+# externalTrafficPolicy: Local : l'adresse source reste celle du client (filtrage par réseau dans la CNP).
+apiVersion: v1
+kind: Service
+metadata:
+  name: otlp-externe
+  namespace: traces
+  annotations:
+    lbipam.cilium.io/ips: "10.10.41.63"
+    external-dns.alpha.kubernetes.io/hostname: otlp.apps.par1.medisphere.internal
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/instance: traces.otel-passerelle
+    app.kubernetes.io/component: opentelemetry-collector
+  ports:
+    - {name: otlp-grpc, port: 4317, targetPort: 4317, protocol: TCP, appProtocol: grpc}
+    - {name: otlp-http, port: 4318, targetPort: 4318, protocol: TCP, appProtocol: http}

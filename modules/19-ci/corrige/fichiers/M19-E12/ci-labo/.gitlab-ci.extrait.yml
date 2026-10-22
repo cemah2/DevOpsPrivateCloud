@@ -1,0 +1,31 @@
+# formation/ci-labo — .gitlab-ci.yml : EXTRAIT (M19-E12, échauffement). À ajouter sous les jobs
+# existants ; le stage « enfants » s'ajoute à la liste « stages: ».
+#   stages: [lint, test, enfants, deploiement]
+
+# 1. Pipeline enfant depuis un fichier du dépôt (même commit, même projet).
+enfant-fichier:
+  stage: enfants
+  trigger:
+    include: ci/enfant.yml
+    strategy: mirror            # le job déclencheur prend exactement le statut du pipeline enfant
+
+# 2. Pipeline enfant généré : un job par fichier de tests, écrit par un script.
+generer:
+  stage: enfants
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+  script:
+    - ci/generer-enfant.sh > enfant-genere.yml
+    - cat enfant-genere.yml
+  artifacts:
+    paths: [enfant-genere.yml]
+    expire_in: 1 day
+
+enfant-genere:
+  stage: enfants
+  needs: [generer]
+  trigger:
+    include:
+      - artifact: enfant-genere.yml
+        job: generer
+    strategy: mirror

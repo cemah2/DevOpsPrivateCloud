@@ -1,0 +1,50 @@
+# Pod jetable de diagnostic de buildkitd (M19-E37), dans ci-jobs : profil restricted, sans privilège,
+# sans jeton d'API. Remplace <SECRET-CLIENT> par le Secret du certificat client de buildkitd monté
+# dans les pods de job (kubectl get certificates -A -o wide). À supprimer après usage.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sonde-buildctl
+  namespace: ci-jobs
+  labels:
+    app.kubernetes.io/name: sonde-buildctl
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 120
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: buildctl
+      image: registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.1-rootless
+      command:
+        - buildctl
+        - --addr
+        - tcp://buildkitd.buildkit.svc.cluster.local:1234
+        - --tlscacert
+        - /certs/ca.crt
+        - --tlscert
+        - /certs/tls.crt
+        - --tlskey
+        - /certs/tls.key
+        - debug
+        - workers
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {cpu: 200m, memory: 128Mi}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: certs
+          mountPath: /certs
+          readOnly: true
+  volumes:
+    - name: certs
+      secret:
+        secretName: <SECRET-CLIENT>

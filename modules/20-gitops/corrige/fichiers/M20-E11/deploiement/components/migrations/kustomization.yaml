@@ -1,0 +1,91 @@
+# Component « migrations » (M20-E11, DEV-2111) : migrations de schéma par un hook Argo CD, et ordre de
+# synchronisation par vagues. À inclure dans les TROIS overlays, AVANT « livraison » (qui fixe l'image
+# du Job) et APRÈS « dependances » (dont il annote la base et Valkey).
+#
+# Vagues (annotation argocd.argoproj.io/sync-wave ; défaut 0 ; Argo CD attend qu'une vague soit
+# saine avant de passer à la suivante) :
+#   -3  ConfigMaps, compte de service, NetworkPolicy, CiliumNetworkPolicy : ce dont le Job a besoin
+#   -2  base PostgreSQL (Cluster CNPG) et Valkey, là où l'overlay les apporte (dev, prod)
+#   -1  Job mediagenda-migrate (hook Sync)
+#    0  tout le reste : Deployment, Service, HTTPRoute, PDB
+# Ces annotations ne changent rien pour kubectl, qui les ignore.
+# Les migrations quittent les pods : base/values-communes.yaml passe à migrations.mode: none (le
+# rendu du chart n'a plus de conteneur d'initialisation), et « livraison » vise ce Job.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - job.yaml
+patches:
+  # Correctifs stratégiques avec « target » : ils s'appliquent à CHAQUE objet visé (le nom écrit dans
+  # le correctif est ignoré) et AJOUTENT l'annotation sans écraser celles qui existent déjà.
+  - target:
+      kind: ConfigMap
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      kind: ServiceAccount
+    patch: |-
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      group: networking.k8s.io
+      kind: NetworkPolicy
+    patch: |-
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  - target:
+      group: cilium.io
+      kind: CiliumNetworkPolicy
+    patch: |-
+      apiVersion: cilium.io/v2
+      kind: CiliumNetworkPolicy
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-3"
+  # Base et Valkey : la cible ne trouve rien en recette (gérées hors de ce dépôt), ce n'est pas une erreur.
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-2"
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: valkey
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-2"
+  - target:
+      kind: Service
+      name: valkey
+    patch: |-
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-wave: "-2"

@@ -1,0 +1,25 @@
+# ~/m21/e14/cardinalite.promql — requêtes de cardinalité (M21-E14). Une requête par bloc.
+
+# 1. Les 10 noms de métriques qui ont le plus de séries (même chiffre que « Top 10 series count
+#    by metric names » de la page TSDB Status, à la tête près).
+topk(10, count by (__name__) ({__name__=~".+"}))
+
+# 2. Nombre de séries par job (qui coûte le plus ?).
+sort_desc(count by (job) ({__name__=~".+"}))
+
+# 3. Nombre de valeurs distinctes d'une étiquette (ici « pod », « route ») : cardinalité d'une étiquette.
+count(count by (pod) ({__name__=~".+"}))
+count(count by (route) ({__name__=~"mediagenda_.*|medidoc_.*"}))
+
+# 4. Séries par cible, après réécriture (vue de Prometheus lui-même, à comparer à sampleLimit).
+sort_desc(scrape_samples_post_metric_relabeling)
+
+# 5. Nouvelles séries créées par collecte (le « churn » : des pods qui changent de nom, une
+#    étiquette version qui change à chaque déploiement…).
+topk(10, scrape_series_added)
+
+# 6. Séries en tête de la base (mémoire de Prometheus).
+prometheus_tsdb_head_series
+
+# NB : les requêtes 1 à 3 touchent TOUTES les séries : sur un gros Prometheus, à lancer hors des
+# heures de pointe, et jamais dans un tableau de bord rafraîchi.

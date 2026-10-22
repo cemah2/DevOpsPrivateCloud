@@ -1,0 +1,44 @@
+# plateforme/k8s — applications/medidoc-recette/politiques.yaml (M20-E33, DEV-2133).
+# Copie des autorisations de medidoc-dev (M15-E34, M16-E46), le refus par défaut étant dans
+# espaces/medidoc-recette/ : Gateway → 8080 ; DNS ; RGW de ceph-par1 en 443 (par la carte VLAN 30 des
+# travailleurs, sans traverser la bordure). Politiques de la PLATEFORME : l'équipe ne peut pas les
+# modifier par son dépôt (et l'AppProject medidoc met NetworkPolicy en liste noire).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-entree-gateway
+  namespace: medidoc-recette
+spec:
+  description: "MédiDoc recette : entrée depuis la Gateway (Envoy) seulement"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-sortie
+  namespace: medidoc-recette
+spec:
+  description: "MédiDoc recette : DNS du cluster et RGW de ceph-par1 en 443, rien d'autre"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: rgw.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]

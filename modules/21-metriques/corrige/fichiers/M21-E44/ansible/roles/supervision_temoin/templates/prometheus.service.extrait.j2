@@ -1,0 +1,14 @@
+{# plateforme/ansible — roles/supervision_temoin/templates/prometheus.service.j2 (M21-E44)
+   EXTRAIT : la ligne ExecStart de M21-E11 avec l'option conditionnelle. Chaque ligne se termine par
+   « \ » sauf la dernière ; l'option conditionnelle est placée AVANT la dernière ligne pour que la
+   continuation reste juste que la condition soit vraie ou non. Changer ExecStart impose un
+   redémarrage (daemon-reload puis restart), pas un rechargement. #}
+ExecStart=/usr/local/bin/prometheus \
+  --config.file={{ supervision_temoin_dossier_config }}/prometheus.yml \
+  --storage.tsdb.path={{ supervision_temoin_dossier_donnees }}/data \
+  --storage.tsdb.retention.time={{ supervision_temoin_retention }} \
+  --web.listen-address={{ supervision_temoin_prometheus_ecoute }} \
+{% if supervision_temoin_api_admin | bool %}
+  --web.enable-admin-api \
+{% endif %}
+  --web.external-url={{ supervision_temoin_prometheus_url_externe }}

@@ -1,0 +1,21 @@
+# Instances PostgreSQL de CloudNativePG (cluster mediagenda-db) : chaque instance expose ses
+# métriques sur le port nommé « metrics » (9187). Le cas typique du PodMonitor : on veut CHAQUE
+# instance (primaire et réplicas), et aucun Service ne les désigne toutes de façon stable (les
+# Services -rw/-ro/-r de CNPG désignent des rôles, pas des instances).
+# (L'option spec.monitoring.enablePodMonitor du Cluster est dépréciée par CNPG au profit d'un
+# PodMonitor écrit à la main.)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: mediagenda-db
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: cnpg.io/cluster
+  selector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db
+      cnpg.io/podRole: instance
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s

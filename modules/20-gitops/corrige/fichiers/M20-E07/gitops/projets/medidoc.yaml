@@ -1,0 +1,33 @@
+# plateforme/gitops — projets/medidoc.yaml (M20-E07, PLAT-2107)
+# Projet de l'équipe MédiDoc : même modèle que mediagenda. L'espace medidoc-recette sera créé par la
+# plateforme en M20-E33 ; une destination vers un espace absent ne gêne pas.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: medidoc
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: MédiDoc — dev, recette
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/medidoc/deploiement.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: medidoc-dev
+    - server: https://kubernetes.default.svc
+      namespace: medidoc-recette
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+  orphanedResources:
+    warn: true
+    ignore:
+      - kind: Secret
+        name: harbor-pull
+      - group: networking.k8s.io
+        kind: NetworkPolicy
+        name: refus-par-defaut

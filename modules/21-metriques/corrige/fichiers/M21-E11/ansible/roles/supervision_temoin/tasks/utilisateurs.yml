@@ -1,0 +1,47 @@
+---
+- name: Utilisateurs système dédiés (sans shell ni dossier personnel)
+  ansible.builtin.user:
+    name: "{{ item }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    home: /nonexistent
+  loop: "{{ ['prometheus', 'alertmanager', 'blackbox'] + (['pve-exporter'] if supervision_temoin_pve_active | bool else []) }}"
+
+- name: Dossier des logiciels
+  ansible.builtin.file:
+    path: "{{ supervision_temoin_dossier_logiciels }}/archives"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Dossiers lisibles par tous les services du rôle, modifiables par root seulement. Chaque fichier
+# a ensuite le groupe de SON service (0640) ; seul pve.yml contient un secret (0600).
+- name: Dossiers de configuration
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ supervision_temoin_dossier_config }}"
+    - "{{ supervision_temoin_dossier_config }}/regles"
+    - "{{ supervision_temoin_dossier_config }}/cibles"
+
+- name: Données de Prometheus
+  ansible.builtin.file:
+    path: "{{ supervision_temoin_dossier_donnees }}"
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: "0750"
+
+- name: Données d'Alertmanager
+  ansible.builtin.file:
+    path: "{{ supervision_temoin_dossier_alertmanager }}"
+    state: directory
+    owner: alertmanager
+    group: alertmanager
+    mode: "0750"

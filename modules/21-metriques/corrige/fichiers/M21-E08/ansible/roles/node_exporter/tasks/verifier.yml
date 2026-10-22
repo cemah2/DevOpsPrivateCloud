@@ -1,0 +1,26 @@
+---
+# Contrôles depuis le contrôleur, comme le fera Prometheus : nom du certificat, chaîne vers la
+# racine MédiSphère (magasin système du contrôleur), et refus du HTTP en clair.
+- name: /metrics répond en HTTPS avec un certificat vérifié pour le nom de l'hôte
+  ansible.builtin.uri:
+    url: "https://{{ node_exporter_fqdn }}:{{ node_exporter_port }}/metrics"
+    validate_certs: true
+    return_content: true
+  register: _node_exporter_metrics
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  when: node_exporter_tls and not ansible_check_mode
+  failed_when: >-
+    _node_exporter_metrics.status != 200
+    or 'node_exporter_build_info{' not in _node_exporter_metrics.content
+    or ('version="' ~ node_exporter_version ~ '"') not in _node_exporter_metrics.content
+
+- name: Le HTTP en clair est refusé
+  ansible.builtin.uri:
+    url: "http://{{ node_exporter_fqdn }}:{{ node_exporter_port }}/metrics"
+    status_code: [400]
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  when: node_exporter_tls and not ansible_check_mode

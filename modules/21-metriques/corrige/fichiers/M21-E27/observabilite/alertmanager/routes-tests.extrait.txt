@@ -1,0 +1,7 @@
+# alertmanager/routes-tests.txt — lignes ajoutées en M21-E27 (PLAT-2227). Les étiquettes sont celles
+# qu'Alertmanager REÇOIT : gravite y est déjà (recopiée de severity par Prometheus).
+# Le récepteur attendu pour un avertissement dépend de ton routage par équipe d'E16 : adapte.
+astreinte-mail  | alertname=ErrorBudgetBurn severity=critique gravite=critique equipe=mediagenda slo=mediagenda-disponibilite namespace=mediagenda-prod
+mediagenda-mail | alertname=ErrorBudgetBurn severity=avertissement gravite=avertissement equipe=mediagenda slo=mediagenda-disponibilite namespace=mediagenda-prod
+medidoc-mail    | alertname=ErrorBudgetBurn severity=avertissement gravite=avertissement equipe=medidoc slo=medidoc-disponibilite namespace=medidoc-recette
+astreinte-mail  | alertname=SLOMetricAbsent severity=critique gravite=critique equipe=mediagenda slo=mediagenda-disponibilite namespace=mediagenda-prod

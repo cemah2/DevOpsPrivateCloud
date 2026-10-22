@@ -1,0 +1,15 @@
+# plateforme/k8s — composants/gitlab-runner/values.yaml : EXTRAIT (M19-E14). Dans le TOML de
+# runners.config, section [runners.kubernetes], sous les valeurs « Helper et services » de E04 :
+# sans « service_*_overwrite_max_allowed », les variables KUBERNETES_SERVICE_* d'un job sont
+# IGNORÉES et chaque service reçoit les valeurs par défaut (service_cpu_request…).
+runners:
+  config: |
+    [[runners]]
+      [runners.kubernetes]
+        # … valeurs de E04-E08 inchangées (service_cpu_request = "100m", service_memory_request = "256Mi",
+        #   service_cpu_limit = "1", service_memory_limit = "1Gi") …
+        # M19-E14 : plafonds de ce qu'un job peut demander pour CHACUN de ses services.
+        service_cpu_request_overwrite_max_allowed = "500m"
+        service_memory_request_overwrite_max_allowed = "512Mi"
+        service_cpu_limit_overwrite_max_allowed = "1"
+        service_memory_limit_overwrite_max_allowed = "1Gi"

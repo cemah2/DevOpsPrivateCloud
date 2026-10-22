@@ -1,0 +1,6 @@
+# formation/ci-pannes — projet témoin du palier 4 du module 19 (créé par lab/bin/break 19 …).
+# Il consomme son propre composant « canari » à une version publiée (étiquette X.Y.Z).
+include:
+  - component: $CI_SERVER_FQDN/formation/ci-pannes/canari@1.0.0
+    inputs:
+      duree: 45

@@ -1,0 +1,56 @@
+# plateforme/observabilite — tests/enregistrement-mediagenda.test.yaml (M21-E14, PLAT-2214)
+# promtool test rules tests/enregistrement-mediagenda.test.yaml   (après outils/extraire-regles.sh)
+# Chemins de rule_files : relatifs au fichier de test.
+rule_files:
+  - ../build/regles/enregistrement-mediagenda.yml
+evaluation_interval: 30s
+tests:
+  - interval: 1m
+    input_series:
+      # Deux pods en prod : 60 et 120 requêtes par minute sur l'API (1 et 2 req/s).
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",pod="a",methode="GET",route="/api/v1/creneaux",code="200"}'
+        values: '0+60x20'
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",pod="b",methode="GET",route="/api/v1/creneaux",code="200"}'
+        values: '0+114x20'
+      # 6 erreurs 500 par minute sur le pod b (0,1 req/s).
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",pod="b",methode="POST",route="/api/v1/rendez-vous",code="500"}'
+        values: '0+6x20'
+      # Sondes : très nombreuses, doivent être ignorées.
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",pod="a",methode="GET",route="/sante",code="200"}'
+        values: '0+600x20'
+      # Recette : du trafic, aucune erreur (le compteur des 5xx n'existe pas).
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="recette",pod="c",methode="GET",route="/api/v1/creneaux",code="200"}'
+        values: '0+30x20'
+      # Histogramme prod : sur 60 requêtes/min, 54 sous 0,25 s, 59 sous 0,5 s, toutes sous 1 s.
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",pod="a",methode="GET",route="/api/v1/creneaux",le="0.25"}'
+        values: '0+54x20'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",pod="a",methode="GET",route="/api/v1/creneaux",le="0.5"}'
+        values: '0+59x20'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",pod="a",methode="GET",route="/api/v1/creneaux",le="1"}'
+        values: '0+60x20'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",pod="a",methode="GET",route="/api/v1/creneaux",le="+Inf"}'
+        values: '0+60x20'
+    promql_expr_test:
+      - expr: environnement:mediagenda_requetes:taux5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'environnement:mediagenda_requetes:taux5m{equipe="mediagenda",environnement="prod"}'
+            value: 3
+          - labels: 'environnement:mediagenda_requetes:taux5m{equipe="mediagenda",environnement="recette"}'
+            value: 0.5
+      - expr: environnement:mediagenda_requetes_5xx:ratio_taux5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'environnement:mediagenda_requetes_5xx:ratio_taux5m{equipe="mediagenda",environnement="prod"}'
+            value: 0.03333333333333333
+          # Sans aucune erreur : 0, et non une série absente.
+          - labels: 'environnement:mediagenda_requetes_5xx:ratio_taux5m{equipe="mediagenda",environnement="recette"}'
+            value: 0
+      # p95 : rang 0,95 × 1 req/s = 0,95, entre le seau 0,25 (0,9) et 0,5 (0,9833) :
+      # interpolation linéaire 0,25 + (0,95 - 0,9) / (0,9833 - 0,9) × 0,25 = 0,4 s. Arrondi au
+      # millième : le calcul en virgule flottante donne 0,39999…, que promtool ne confond pas avec 0,4.
+      - expr: round(environnement:mediagenda_duree_requetes:p95_5m, 0.001)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{equipe="mediagenda",environnement="prod"}'
+            value: 0.4

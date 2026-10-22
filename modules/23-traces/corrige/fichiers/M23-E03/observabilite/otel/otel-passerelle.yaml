@@ -1,0 +1,79 @@
+# otel-passerelle — Collector central (M23-E02, PLAT-2402), espace traces. Reçoit des agents (et, par le
+# Service otlp-externe 10.10.41.63, des émetteurs hors cluster), traitera l'échantillonnage en queue
+# (M23-E09) et exporte vers Tempo.
+# ÉTAT DE M23-E03 (PLAT-2403) : l'exportateur « debug » de M23-E02 est retiré, remplacé par Tempo.
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-passerelle
+  namespace: traces
+  labels:
+    medisphere.internal/equipe: plateforme
+spec:
+  mode: deployment
+  replicas: 1
+  image: registry.par1.medisphere.internal/dockerhub/otel/opentelemetry-collector-contrib:0.161.0
+  priorityClassName: medisphere-standard
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  env:
+    - name: GOMEMLIMIT
+      value: 400MiB
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: ["ALL"]}
+  config:
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 20
+      batch:
+        send_batch_size: 1024
+        timeout: 5s
+    exporters:
+      # Tempo (Service du chart, port OTLP gRPC). Trafic interne au cluster, sans TLS.
+      otlp_grpc/tempo:
+        endpoint: tempo.traces.svc.cluster.local:4317
+        tls:
+          insecure: true
+        # File d'attente en mémoire et reprises : un redémarrage de Tempo (quelques dizaines de
+        # secondes) ne perd rien tant que la file n'est pas pleine (otelcol_exporter_queue_size).
+        sending_queue:
+          enabled: true
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 1s
+          max_interval: 30s
+          max_elapsed_time: 300s
+    service:
+      extensions: [health_check]
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp_grpc/tempo]

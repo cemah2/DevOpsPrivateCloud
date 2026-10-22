@@ -1,0 +1,47 @@
+# formation/ci-labo — job « jeton-identite » (M19-E25, SEC-2025), à inclure dans .gitlab-ci.yml
+# (include: local: ci/jeton-identite.gitlab-ci.yml) ou à recopier.
+# Demande un jeton d'identité OIDC à GitLab, en affiche l'EN-TÊTE et la CHARGE UTILE décodés (jamais
+# le jeton entier, qui est un secret valable quelques minutes), et vérifie sa signature contre les
+# clés publiques de l'instance (JWKS). Lancé sur une branche non protégée et sur main pour comparer.
+jeton-identite:
+  stage: test
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie
+  id_tokens:
+    JETON_OPENBAO:
+      aud: openbao.medisphere.internal
+  variables:
+    GIT_STRATEGY: none
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web"
+  script:
+    # Dépendances épinglées (version exacte) ; HOME=/tmp vient du runner (E24).
+    - python -m pip install --quiet --user "pyjwt==2.15.1" "cryptography==50.0.2"
+    - |
+      python - <<'PY'
+      import base64, json, os, sys, time
+      import jwt  # PyJWT
+
+      jeton = os.environ["JETON_OPENBAO"]
+      def morceau(i):
+          m = jeton.split(".")[i]
+          return json.loads(base64.urlsafe_b64decode(m + "=" * (-len(m) % 4)))
+      entete, charge = morceau(0), morceau(1)
+      print("en-tête :", json.dumps(entete, indent=2))
+      print("charge utile :", json.dumps(charge, indent=2, ensure_ascii=False))
+      print("durée de validité (exp - iat) :", charge["exp"] - charge["iat"], "s")
+
+      # Vérification : clés publiques de l'instance, audience attendue, émetteur = l'instance.
+      url_jwks = os.environ["CI_SERVER_URL"] + "/oauth/discovery/keys"
+      ca = os.environ.get("MEDISPHERE_ROOT_CA")   # variable d'instance de type fichier (M13)
+      import ssl, urllib.request
+      contexte = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
+      with urllib.request.urlopen(url_jwks, context=contexte, timeout=10) as r:
+          jwks = json.load(r)
+      cle = next(k for k in jwks["keys"] if k["kid"] == entete["kid"])
+      verifie = jwt.decode(jeton, jwt.PyJWK(cle).key, algorithms=[entete["alg"]],
+                           audience="openbao.medisphere.internal",
+                           issuer=os.environ["CI_SERVER_URL"])
+      print("signature, audience et émetteur VÉRIFIÉS pour", verifie["sub"])
+      PY

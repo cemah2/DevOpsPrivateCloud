@@ -1,0 +1,38 @@
+# espaces/gitlab-agent/40-politiques-reseau.yaml (M19-E18) — agentk ne reçoit rien (il ouvre lui-même
+# la connexion vers KAS) ; il sort vers le DNS, git01:443 (KAS) et l'API Kubernetes. Rien d'autre.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: gitlab-agent
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: agentk-sortie
+  namespace: gitlab-agent
+spec:
+  description: "agentk : DNS, KAS (git01:443) et API Kubernetes seulement"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: gitlab-agent
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: git01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    - toEntities: [kube-apiserver]

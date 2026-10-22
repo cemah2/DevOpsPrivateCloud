@@ -1,0 +1,110 @@
+# plateforme/gitops — applications/mediagenda.yaml (M20-E10, PLAT-2110 ; différences ignorées M20-E12 ;
+# notification de déploiement de la prod M20-E19)
+# UN générateur pour les trois environnements de MédiAgenda. Remplace applications/mediagenda-dev.yaml
+# (Application écrite à la main en M20-E08), qui est REPRISE par l'ApplicationSet sans être supprimée.
+#
+# Garde-fous :
+#   - applicationsSync: create-update : le contrôleur des ApplicationSets crée et met à jour les
+#     Applications, mais ne les SUPPRIME jamais (un élément retiré de la liste ne détruit rien).
+#     Ne vaut que si argocd-cmd-params-cm porte applicationsetcontroller.enable.policy.override: "true"
+#     (composants/argocd/values.yaml de plateforme/k8s, M20-E10) ; sinon, politique globale « sync ».
+#   - preserveResourcesOnDeletion: true : les Applications générées n'ont PAS le finaliseur
+#     resources-finalizer.argocd.argoproj.io ; supprimer une Application ne supprime pas les charges.
+#   - liste explicite (pas de générateur de répertoires) : un dossier ajouté par erreur dans overlays/
+#     ne devient pas un environnement synchronisé automatiquement.
+#   - prod : pas de synchronisation automatique (templatePatch) ; on synchronise à la main après la MR.
+#   - M20-E12 : webhooks de mutation inclus dans le diff côté serveur (valeurs par défaut de CNPG),
+#     et, en recette et prod (« progressif »), deux champs laissés à d'autres contrôleurs : les poids
+#     de l'HTTPRoute (greffon Gateway API d'Argo Rollouts) et les réplicas du Deployment (réduits à 0
+#     par le Rollout, workloadRef). RespectIgnoreDifferences : la synchronisation ne les remet pas.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mediagenda
+  namespace: argocd
+spec:
+  goTemplate: true
+  # Une clé absente dans un élément de la liste est une ERREUR, pas une chaîne vide.
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: dev
+            auto: true
+            progressif: false
+          - env: recette
+            auto: true
+            progressif: true
+          - env: prod
+            auto: false
+            progressif: true
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "mediagenda-{{ .env }}"
+      labels:
+        medisphere.internal/equipe: mediagenda
+        medisphere.internal/environnement: "{{ .env }}"
+      annotations:
+        # Le diff côté serveur est actif pour toutes les Applications depuis M20-E05
+        # (controller.diff.server.side) ; on y fait participer les webhooks de MUTATION, dont celui de
+        # CloudNativePG qui complète le Cluster : plus de faux OutOfSync sur des valeurs par défaut que
+        # le dépôt n'écrit pas.
+        argocd.argoproj.io/compare-options: IncludeMutationWebhook=true
+    spec:
+      # Le projet ne peut PAS être changé par templatePatch (le contrôleur le remet).
+      project: mediagenda
+      source:
+        repoURL: https://git01.par1.medisphere.internal/mediagenda/deploiement.git
+        targetRevision: main
+        path: "overlays/{{ .env }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "mediagenda-{{ .env }}"
+  # templatePatch : le seul moyen de rendre conditionnel un champ qui n'est pas une chaîne
+  # (ici l'objet « automated »). Toujours une section syncPolicy non vide : un patch vide ou un
+  # « spec: » sans contenu effacerait des champs du gabarit.
+  templatePatch: |
+    {{- if eq .env "prod" }}
+    metadata:
+      annotations:
+        # Abonnement propre à la prod (M20-E19) : chaque version mise en production est annoncée.
+        # Les autres abonnements sont ceux de l'AppProject « mediagenda ».
+        notifications.argoproj.io/subscribe.on-deployed.email: plateforme@medisphere.internal;julien.petit@medisphere.internal
+    {{- end }}
+    spec:
+      syncPolicy:
+        {{- if .auto }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false
+          {{- if .progressif }}
+          - RespectIgnoreDifferences=true
+          {{- end }}
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+      {{- if .progressif }}
+      ignoreDifferences:
+        # Poids des deux backendRefs : réglés par le greffon Gateway API pendant un canary (M20-E16).
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: mediagenda
+          jqPathExpressions:
+            - .spec.rules[].backendRefs[]?.weight
+        # Réplicas du Deployment : le Rollout (workloadRef, scaleDown) le ramène à 0 (M20-E16).
+        - group: apps
+          kind: Deployment
+          name: mediagenda
+          jsonPointers:
+            - /spec/replicas
+      {{- end }}

@@ -1,0 +1,21 @@
+# Service « mediagenda-canary » (M20-E16) : même sélecteur et même port que le Service « mediagenda »
+# du chart. Argo Rollouts restreint chacun des deux à SA révision (rollouts-pod-template-hash).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-canary
+  labels:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

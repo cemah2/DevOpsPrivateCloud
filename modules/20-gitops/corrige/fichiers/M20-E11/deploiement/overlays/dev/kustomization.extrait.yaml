@@ -1,0 +1,8 @@
+# overlays/dev/kustomization.yaml — EXTRAIT (M20-E11) : seule la liste « components » change. Le reste
+# du fichier (dont le bloc « images: » posé par la promotion de la CI, M19-E17) est inchangé.
+components:
+  - ../../components/dependances
+  - ../../components/debogage
+  # Après « dependances » (il en annote la base et Valkey), avant « livraison » (image de son Job).
+  - ../../components/migrations
+  - ../../components/livraison

@@ -1,0 +1,10 @@
+# plateforme/observabilite — regles/kustomization.yaml, branche revue-lucas (M21-E21)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - enregistrement-mediagenda.yaml   # E14
+  - enregistrement-medidoc.yaml      # E14
+  - alertes-mediagenda.yaml          # E15
+  - alertes-socle.yaml               # E15
+  - alertes-lucas.yaml               # E21 (proposition à Lucas)
+  - enregistrement-lucas.yaml        # E21

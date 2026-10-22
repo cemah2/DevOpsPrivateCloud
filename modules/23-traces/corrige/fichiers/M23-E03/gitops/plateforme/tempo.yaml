@@ -1,0 +1,34 @@
+# plateforme/gitops — plateforme/tempo.yaml (M23-E03, PLAT-2403)
+# Tempo monolithique : chart recopié dans Harbor, values dans plateforme/observabilite.
+# Pas de finaliseur de cascade : supprimer l'Application par erreur ne doit pas emporter le volume
+# (WAL) ; les blocs, eux, sont dans le RGW et n'appartiennent pas au cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  annotations:
+    medisphere.internal/ticket: "PLAT-2403"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: tempo
+      targetRevision: 3.2.1
+      helm:
+        releaseName: tempo
+        valueFiles:
+          - $values/tempo/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traces
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # L'espace traces appartient à l'Application « otel » (otel/espace.yaml).
+      - CreateNamespace=false

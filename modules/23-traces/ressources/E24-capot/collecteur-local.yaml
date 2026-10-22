@@ -1,0 +1,25 @@
+# Collector local d'observation (M23-E24), lancé sur adm01 — jamais dans le cluster :
+#   admin@adm01:~/m23/e24$ ./otelcol-contrib --config collecteur-local.yaml
+# Il écoute en local seulement, affiche chaque span reçue (exportateur debug détaillé) et écrit le message
+# OTLP reçu, tel quel, en JSON dans otlp-recu.json (exportateur file), pour lecture avec jq.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:24317
+      http:
+        endpoint: 127.0.0.1:24318
+exporters:
+  debug:
+    verbosity: detailed
+  file:
+    path: ./otlp-recu.json
+    format: json
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug, file]
+  telemetry:
+    metrics:
+      level: none

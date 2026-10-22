@@ -1,0 +1,29 @@
+# Tests de la règle relais-cluster du témoin (promtool test rules), M21-E36.
+rule_files:
+  - relais-cluster.yml
+evaluation_interval: 30s
+tests:
+  - name: la sonde de relais échoue trois minutes, l'astreinte est prévenue par le témoin
+    interval: 1m
+    input_series:
+      - series: 'probe_success{job="relais-cluster", instance="k8s-par1", cluster="k8s-par1"}'
+        values: '1x5 0x5'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: ClusterNePrevientPlus
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: ClusterNePrevientPlus
+        exp_alerts:
+          - exp_labels:
+              alertname: ClusterNePrevientPlus
+              gravite: critique
+              equipe: plateforme
+              job: relais-cluster
+              instance: k8s-par1
+              cluster: k8s-par1
+            exp_annotations:
+              resume: "Le cluster signale qu'il ne sait plus envoyer ses alertes (relayé par mon01)"
+              description: >-
+                Une alerte marquée relais="temoin" est active dans le cluster (AlertmanagerCourrielEnEchec), ou la vue globale ne répond plus à mon01 (voir aussi SupervisionClusterComposantKO). Toutes les alertes du cluster sont peut-être muettes : consulter Alertmanager du cluster (10.10.41.61) directement. RB-218 § « l'alerte n'arrive pas ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md

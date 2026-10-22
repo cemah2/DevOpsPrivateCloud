@@ -1,0 +1,38 @@
+---
+# Paramètres noyau propres aux travailleurs (M19-E02, PLAT-2002).
+# Écrits dans un fichier à part (k8s_travailleur_sysctl_fichier), appliqués tout de suite
+# (reload), puis relus : la valeur EFFECTIVE doit être celle de l'inventaire.
+
+- name: Fichier des paramètres noyau des travailleurs
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_file: "{{ k8s_travailleur_sysctl_fichier }}"
+    state: present
+    reload: true
+  loop: "{{ k8s_travailleur_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} = {{ item.value }}"
+
+- name: Lire les valeurs effectives
+  ansible.builtin.command:
+    argv: [/usr/sbin/sysctl, -n, "{{ item.key }}"]
+  loop: "{{ k8s_travailleur_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _k8s_travailleur_sysctl_effectif
+  changed_when: false
+  check_mode: false
+
+- name: Les valeurs effectives sont celles de l'inventaire
+  ansible.builtin.assert:
+    that: (item.stdout | trim) == (item.item.value | string)
+    fail_msg: >-
+      {{ inventory_hostname }} : {{ item.item.key }} vaut {{ item.stdout | trim }} au lieu de
+      {{ item.item.value }} (un autre fichier de /etc/sysctl.d/ l'écrase ?
+      « sudo sysctl --system » liste l'ordre de lecture).
+    quiet: true
+  loop: "{{ _k8s_travailleur_sysctl_effectif.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: not ansible_check_mode

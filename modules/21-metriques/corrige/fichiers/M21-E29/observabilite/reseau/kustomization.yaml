@@ -1,0 +1,7 @@
+# plateforme/observabilite — reseau/kustomization.yaml (M21-E29, SEC-2229)
+# Politiques de l'espace supervision (refus par défaut, sorties, entrées manquantes).
+# La kustomization racine l'inclut (resources += reseau) et pose l'espace supervision.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - espace-supervision.yaml

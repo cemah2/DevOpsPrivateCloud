@@ -1,0 +1,224 @@
+# plateforme/observabilite/opensearch-essai/values.yaml — M22-E15 (PLAT-2315), ESSAI TEMPORAIRE
+# Chart opensearch/opensearch 3.9.0 recopié dans Harbor charts/ ; Application Argo CD « opensearch-essai ».
+# Un nœud, plugin de sécurité ACTIF avec les certificats de l'émetteur de l'essai (cert-manager),
+# configuration de démonstration désactivée. Les mots de passe ne sont PAS ici : seulement leurs
+# empreintes bcrypt (les mots de passe sont dans Ansible Vault critique, secrets/opensearch-essai.yml).
+# À SUPPRIMER avec l'Application à la fin de l'exercice.
+
+clusterName: opensearch-essai
+nodeGroup: master
+masterService: opensearch-essai-master # = clusterName-nodeGroup : nom du Service et du StatefulSet
+singleNode: true # discovery.type=single-node, 1 réplica imposé
+replicas: 1
+
+global:
+  dockerRegistry: registry.par1.medisphere.internal/dockerhub
+image:
+  repository: opensearchproject/opensearch
+  tag: "3.9.0"
+
+opensearchJavaOpts: "-Xms1g -Xmx1g" # tas = moitié de la mémoire demandée ; le reste sert au cache du système de fichiers
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    memory: 2560Mi
+
+persistence:
+  enabled: true
+  storageClass: ceph-rbd
+  size: 10Gi
+  enableInitChown: false # pas de conteneur d'init root : fsGroup suffit
+
+sysctlInit:
+  enabled: false # vm.max_map_count est déjà posé par le rôle k8s_travailleur (M19-E02)
+
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  capabilities:
+    drop: [ALL]
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+extraEnvs:
+  - name: DISABLE_INSTALL_DEMO_CONFIG # pas de certificats ni de comptes de démonstration
+    value: "true"
+
+# Certificats émis par cert-manager (voir extraObjects plus bas) : tls.crt, tls.key (PKCS#8), ca.crt
+secretMounts:
+  - name: certs-noeud
+    secretName: opensearch-essai-noeud
+    path: /usr/share/opensearch/config/certs/noeud
+  - name: certs-admin
+    secretName: opensearch-essai-admin
+    path: /usr/share/opensearch/config/certs/admin
+
+config:
+  opensearch.yml: |
+    cluster.name: opensearch-essai
+    network.host: 0.0.0.0
+    # TLS entre nœuds (obligatoire même avec un seul nœud quand le plugin de sécurité est actif)
+    plugins.security.ssl.transport.pemcert_filepath: certs/noeud/tls.crt
+    plugins.security.ssl.transport.pemkey_filepath: certs/noeud/tls.key
+    plugins.security.ssl.transport.pemtrustedcas_filepath: certs/noeud/ca.crt
+    plugins.security.ssl.transport.enforce_hostname_verification: false
+    # TLS de l'API REST (9200)
+    plugins.security.ssl.http.enabled: true
+    plugins.security.ssl.http.pemcert_filepath: certs/noeud/tls.crt
+    plugins.security.ssl.http.pemkey_filepath: certs/noeud/tls.key
+    plugins.security.ssl.http.pemtrustedcas_filepath: certs/noeud/ca.crt
+    # Initialise l'index de sécurité à partir de config/opensearch-security/ au premier démarrage
+    plugins.security.allow_default_init_securityindex: true
+    # Seul le certificat d'administration peut modifier la configuration de sécurité (securityadmin.sh)
+    plugins.security.authcz.admin_dn:
+      - "CN=admin-essai"
+    # Certificats reconnus comme nœuds du cluster
+    plugins.security.nodes_dn:
+      - "CN=opensearch-essai-master"
+    plugins.security.restapi.roles_enabled: ["all_access"]
+    plugins.security.audit.type: internal_opensearch
+
+securityConfig:
+  enabled: true
+  config:
+    dataComplete: false # on ne remplace que ces quatre fichiers ; les autres viennent de l'image
+    data:
+      config.yml: |-
+        _meta:
+          type: "config"
+          config_version: 2
+        config:
+          dynamic:
+            http:
+              anonymous_auth_enabled: false
+            authc:
+              basic_internal_auth_domain:
+                http_enabled: true
+                transport_enabled: true
+                order: 0
+                http_authenticator:
+                  type: basic
+                  challenge: true
+                authentication_backend:
+                  type: intern
+      internal_users.yml: |-
+        _meta:
+          type: "internalusers"
+          config_version: 2
+        admin:
+          # Empreinte bcrypt du mot de passe de Vault critique (secrets/opensearch-essai.yml : admin)
+          hash: "<EMPREINTE-BCRYPT-ADMIN>"
+          reserved: true
+          backend_roles: ["admin"]
+          description: "Administrateur de l'essai M22-E15"
+        fluentbit:
+          hash: "<EMPREINTE-BCRYPT-FLUENTBIT>"
+          reserved: false
+          description: "Écriture des journaux par Fluent Bit (M22-E15)"
+      roles.yml: |-
+        _meta:
+          type: "roles"
+          config_version: 2
+        ecriture_journaux:
+          cluster_permissions:
+            - "cluster_monitor"
+            - "indices:data/write/bulk"
+          index_permissions:
+            - index_patterns: ["journaux-*"]
+              allowed_actions:
+                - "crud"
+                - "create_index"
+      roles_mapping.yml: |-
+        _meta:
+          type: "rolesmapping"
+          config_version: 2
+        all_access:
+          reserved: false
+          backend_roles: ["admin"]
+        ecriture_journaux:
+          reserved: false
+          users: ["fluentbit"]
+
+service:
+  type: ClusterIP
+
+# Autorité de certification PROPRE À L'ESSAI (détruite avec lui) et deux certificats.
+extraObjects:
+  - apiVersion: cert-manager.io/v1
+    kind: Issuer
+    metadata:
+      name: essai-autosigne
+      namespace: opensearch-essai
+    spec:
+      selfSigned: {}
+  - apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: opensearch-essai-ca
+      namespace: opensearch-essai
+    spec:
+      isCA: true
+      commonName: "MediSphere essai OpenSearch CA"
+      secretName: opensearch-essai-ca
+      duration: 720h
+      privateKey:
+        algorithm: ECDSA
+        size: 256
+      issuerRef:
+        kind: Issuer
+        name: essai-autosigne
+  - apiVersion: cert-manager.io/v1
+    kind: Issuer
+    metadata:
+      name: essai-ca
+      namespace: opensearch-essai
+    spec:
+      ca:
+        secretName: opensearch-essai-ca
+  - apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: opensearch-essai-noeud
+      namespace: opensearch-essai
+    spec:
+      secretName: opensearch-essai-noeud
+      commonName: opensearch-essai-master
+      duration: 720h
+      dnsNames:
+        - opensearch-essai-master
+        - opensearch-essai-master.opensearch-essai.svc
+        - opensearch-essai-master.opensearch-essai.svc.cluster.local
+        - opensearch-essai-master-headless
+        - opensearch-essai-master-0.opensearch-essai-master-headless.opensearch-essai.svc.cluster.local
+        - localhost
+      usages: ["server auth", "client auth"]
+      privateKey:
+        algorithm: RSA
+        size: 2048
+        encoding: PKCS8 # le plugin de sécurité refuse les clés PKCS#1
+      issuerRef:
+        kind: Issuer
+        name: essai-ca
+  - apiVersion: cert-manager.io/v1
+    kind: Certificate
+    metadata:
+      name: opensearch-essai-admin
+      namespace: opensearch-essai
+    spec:
+      secretName: opensearch-essai-admin
+      commonName: admin-essai
+      duration: 720h
+      usages: ["client auth"]
+      privateKey:
+        algorithm: RSA
+        size: 2048
+        encoding: PKCS8
+      issuerRef:
+        kind: Issuer
+        name: essai-ca

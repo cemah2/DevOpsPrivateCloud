@@ -1,0 +1,23 @@
+{# plateforme/ansible — roles/supervision_temoin : prise en compte des règles ajoutées en M21-E42.
+   EXTRAIT à reporter dans tasks/configuration.yml (même forme que les règles de M21-E28). Les règles
+   sont lues par « rule_files: …/regles/*.yml » du gabarit de M21-E11 ; l'étiquette « groupe » est
+   posée par cibles-blackbox.yml.j2 (M21-E11). #}
+- name: Règles du témoin sur lui-même (M21-E42)
+  ansible.builtin.copy:
+    src: regles/temoin-lui-meme.yml
+    dest: "{{ supervision_temoin_dossier_config }}/regles/temoin-lui-meme.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+    validate: /usr/local/bin/promtool check rules %s
+  notify: Recharger prometheus
+
+- name: Règles du témoin sur ses propres cibles (M21-E42)
+  ansible.builtin.template:
+    src: temoin-lui-meme-cibles.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/regles/temoin-lui-meme-cibles.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+    validate: /usr/local/bin/promtool check rules %s
+  notify: Recharger prometheus

@@ -1,0 +1,6 @@
+# À INTÉGRER dans charts.yaml de plateforme/charts-miroir (M22-E10). Retiré avec l'essai : un chart
+# qu'aucune Application n'utilise n'a rien à faire dans le miroir (le pipeline le resignerait).
+  - nom: fluent-bit
+    depot: https://fluent.github.io/helm-charts
+    version: 0.58.3
+    empreinte: 99e025e461fa080e68dcfe65b8bc0bf64dd74d2c04b87cb910f9192fbf954f20

@@ -1,0 +1,118 @@
+---
+- name: Refuser tout autre système que Debian 13
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "Le rôle alloy ne vise que Debian 13 (trouvé : {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }})."
+    quiet: true
+
+- name: Le journal systemd est persistant (/var/log/journal)
+  ansible.builtin.stat:
+    path: /var/log/journal
+  register: alloy_journal_persistant
+
+- name: Refuser une VM dont le journal est volatil
+  ansible.builtin.assert:
+    that: alloy_journal_persistant.stat.isdir | default(false)
+    fail_msg: "/var/log/journal absent : le journal est en mémoire, rien ne survivrait à un redémarrage."
+    quiet: true
+
+- name: Paquet unzip (extraction de l'archive)
+  ansible.builtin.apt:
+    name: unzip
+    state: present
+
+- name: Compte système alloy
+  ansible.builtin.user:
+    name: "{{ alloy_utilisateur }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ alloy_etat }}"
+    create_home: false
+    groups: "{{ alloy_groupes }}"
+    append: true
+  notify: Redémarrer alloy
+
+- name: Dossiers (version, configuration, état)
+  ansible.builtin.file:
+    path: "{{ item.chemin }}"
+    state: directory
+    owner: "{{ item.proprietaire }}"
+    group: "{{ item.groupe }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {chemin: "{{ alloy_dossier }}/{{ alloy_version }}", proprietaire: root, groupe: root, mode: "0755"}
+    - {chemin: /etc/alloy, proprietaire: root, groupe: "{{ alloy_utilisateur }}", mode: "0750"}
+    - {chemin: "{{ alloy_etat }}", proprietaire: "{{ alloy_utilisateur }}", groupe: "{{ alloy_utilisateur }}", mode: "0750"}
+  loop_control:
+    label: "{{ item.chemin }}"
+
+# get_url télécharge SHA256SUMS et y cherche la ligne du nom de l'archive.
+- name: Télécharger l'archive (somme SHA-256 vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ alloy_archive_url }}"
+    dest: "{{ alloy_dossier }}/{{ alloy_version }}/alloy-linux-amd64.zip"
+    checksum: "sha256:{{ alloy_sommes_url }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Extraire le binaire
+  ansible.builtin.unarchive:
+    src: "{{ alloy_dossier }}/{{ alloy_version }}/alloy-linux-amd64.zip"
+    dest: "{{ alloy_dossier }}/{{ alloy_version }}"
+    remote_src: true
+    creates: "{{ alloy_dossier }}/{{ alloy_version }}/alloy-linux-amd64"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Lier la version courante dans /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ alloy_dossier }}/{{ alloy_version }}/alloy-linux-amd64"
+    dest: /usr/local/bin/alloy
+    state: link
+    force: true
+  notify: Redémarrer alloy
+
+# Validée AVANT d'être posée : une configuration refusée laisse l'ancienne en place.
+- name: Configuration /etc/alloy/config.alloy
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: /etc/alloy/config.alloy
+    owner: root
+    group: "{{ alloy_utilisateur }}"
+    mode: "0640"
+    validate: /usr/local/bin/alloy validate %s
+  notify: Recharger alloy
+
+- name: Unité systemd durcie
+  ansible.builtin.template:
+    src: alloy.service.j2
+    dest: /etc/systemd/system/alloy.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer alloy
+
+- name: Service actif au démarrage
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Appliquer les redémarrages en attente avant le contrôle
+  ansible.builtin.meta: flush_handlers
+
+# Contrôle final : l'agent répond, et ses composants sont sains (API locale de l'interface).
+- name: Contrôle — composants d'Alloy sains
+  ansible.builtin.uri:
+    url: "http://{{ alloy_ecoute }}/-/ready"
+    status_code: 200
+  register: alloy_pret
+  retries: 10
+  delay: 3
+  until: alloy_pret.status == 200
+  changed_when: false

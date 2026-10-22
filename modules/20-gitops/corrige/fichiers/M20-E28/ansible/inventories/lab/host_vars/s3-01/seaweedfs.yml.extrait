@@ -1,0 +1,16 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT : ajouts de M20-E28 (rôle seaweedfs, M05-E10 ; même
+# méthode que etcd-k8s au M14-E24). Secrets vault_s3_argocd_sauvegardes_* : Vault « critique ».
+seaweedfs_identites:
+  # … identités existantes (tofu-etat, etcd-k8s, velero, cnpg, ci-cache…) …
+  # Sauvegardes d'Argo CD : écriture (CronJob argocd-export), lecture (restauration depuis adm01),
+  # listage (relecture de l'envoi, checks). Suppression et versionnage refusés par la politique du
+  # compartiment (plateforme/infra outils/s3/politique-argocd-sauvegardes.json).
+  - nom: argocd-sauvegardes
+    cle_acces: "{{ vault_s3_argocd_sauvegardes_cle_acces }}"
+    cle_secrete: "{{ vault_s3_argocd_sauvegardes_cle_secrete }}"
+    actions: [Read:argocd-sauvegardes, Write:argocd-sauvegardes, List:argocd-sauvegardes]
+
+seaweedfs_compartiments:
+  # … compartiments existants …
+  - nom: argocd-sauvegardes
+    versionnage: true

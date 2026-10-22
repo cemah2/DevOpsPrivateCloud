@@ -1,0 +1,10 @@
+# mediagenda/api — pyproject.toml : EXTRAIT (M19-E13). Ajouté par :
+#   admin@adm01:~/src/mediagenda-api$ uv add --dev "pytest-cov>=7.1,<8"
+# uv réécrit pyproject.toml ET uv.lock (pytest-cov 7.1.0, coverage 7.16.x) : commite les deux.
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1,<1",
+    "pytest>=9.1.1,<10",
+    "pytest-cov>=7.1,<8",
+    "ruff>=0.16.10,<0.17",
+]

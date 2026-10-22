@@ -1,0 +1,31 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M21-E13, PLAT-2213) : à fusionner sous
+# prometheus.prometheusSpec (le reste du fichier, palier 1, ne change pas).
+prometheus:
+  prometheusSpec:
+    # Classe de collecte par DÉFAUT : appliquée à tout ServiceMonitor, PodMonitor, Probe et
+    # ScrapeConfig qui n'en désigne pas d'autre (y compris ceux du chart : kubelet, node-exporter…).
+    # Ordre des réécritures (API de prometheus-operator, ScrapeClass.relabelings) : celles de
+    # l'opérateur, puis CELLES DE LA CLASSE, puis celles du moniteur. Une équipe qui pose « equipe »
+    # dans son moniteur l'emporte donc toujours.
+    scrapeClasses:
+      - name: medisphere
+        default: true
+        relabelings:
+          # equipe="plateforme" seulement si la cible n'en a pas : une étiquette de groupe statique
+          # (ScrapeConfig vms d'E08, alimentée par NetBox) est déjà là et ne doit pas être écrasée.
+          # « ^$ » et non « » : une expression vide serait omise et remplacée par le défaut (.*).
+          - sourceLabels: [equipe]
+            regex: "^$"
+            targetLabel: equipe
+            replacement: plateforme
+            action: replace
+          # site="par1" sur toutes les séries, comme celles des VMs (ScrapeConfig vms d'E08, qui le
+          # pose déjà : la règle ne s'applique qu'en son absence). C'est AUSSI une étiquette externe
+          # (externalLabels, E02) : celle-ci n'apparaît qu'à l'extérieur (alertes, fédération,
+          # Thanos), pas dans une requête directe à ce Prometheus. Les deux ont la même valeur :
+          # pas de conflit (une étiquette externe ne remplace jamais celle d'une série).
+          - sourceLabels: [site]
+            regex: "^$"
+            targetLabel: site
+            replacement: par1
+            action: replace

@@ -1,0 +1,14 @@
+# plateforme/k8s — espaces/ci-jobs-protege/20-limites.yaml (M19-E24).
+# Valeurs par défaut et maximums par conteneur (le runner pose ses propres demandes ; ces valeurs
+# couvrent un conteneur qui n'en aurait pas et bornent les surcharges KUBERNETES_*).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ci-jobs-protege
+  namespace: ci-jobs-protege
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 100m, memory: 128Mi, ephemeral-storage: 256Mi}
+      default: {cpu: "1", memory: 512Mi, ephemeral-storage: 1Gi}
+      max: {cpu: "2", memory: 2Gi, ephemeral-storage: 4Gi}

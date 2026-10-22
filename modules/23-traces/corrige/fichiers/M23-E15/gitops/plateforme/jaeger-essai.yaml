@@ -1,0 +1,33 @@
+# plateforme/gitops — plateforme/jaeger-essai.yaml (M23-E15, ESSAI) : à supprimer à la fin de l'exercice.
+# Pas de finaliseur de ressources : la suppression de l'Application ne doit rien laisser derrière elle, on
+# supprime donc l'Application AVEC cascade (comportement par défaut de « argocd app delete »), puis l'espace.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jaeger-essai
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: jaeger
+      targetRevision: 4.16.1
+      helm:
+        releaseName: jaeger
+        valueFiles:
+          - $values/jaeger-essai/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: jaeger-essai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

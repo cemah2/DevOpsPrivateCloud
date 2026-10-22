@@ -1,0 +1,56 @@
+# plateforme/observabilite — scrape/powerdns.yaml (M21-E10, PLAT-2210)
+# PowerDNS Authoritative 5.0 : /metrics du serveur web (8081, celui de l'API sur dns01 ; sur dns02,
+# serveur web SANS API ouvert pour les seules métriques). PowerDNS Recursor 5.4 : /metrics du
+# webservice (8082). Aucun mot de passe du serveur web n'est posé (M06) : l'accès est borné par
+# webserver-allow-from / webservice.allow_from et par les pare-feu. Si tu poses un mot de passe,
+# ajoute « basicAuth » (Secret hors Git, plateforme/k8s/outils/secrets-k8s.sh) : PowerDNS
+# n'utilise que le mot de passe, l'utilisateur est libre.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: powerdns-autoritaire
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: powerdns-autoritaire
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - dns01.par1.medisphere.internal:8081
+        - dns02.par1.medisphere.internal:8081
+      labels:
+        equipe: plateforme
+        role: dns
+  relabelings:
+    - sourceLabels: [__address__]
+      regex: ([^.]+)\..*
+      targetLabel: instance
+      replacement: $1
+      action: replace
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: powerdns-recurseur
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: powerdns-recurseur
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - dns01.par1.medisphere.internal:8082
+        - dns02.par1.medisphere.internal:8082
+      labels:
+        equipe: plateforme
+        role: dns
+  relabelings:
+    - sourceLabels: [__address__]
+      regex: ([^.]+)\..*
+      targetLabel: instance
+      replacement: $1
+      action: replace

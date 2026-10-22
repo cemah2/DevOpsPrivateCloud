@@ -1,0 +1,15 @@
+# plateforme/gitops — projets/default.yaml (M20-E07, PLAT-2107)
+# Le projet « default » existe toujours (Argo CD le recrée s'il manque) et, par défaut, PERMET TOUT :
+# n'importe quel dépôt, n'importe quelle destination, tout type d'objet. On le décrit dans Git pour
+# le verrouiller : plus aucune Application ne peut y être créée ni synchronisée.
+# ⚠️ À fusionner en DERNIER, quand plus aucune Application n'est dans « default ».
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  description: Verrouillé — utiliser plateforme, mediagenda, medidoc ou labo
+  sourceRepos: []
+  destinations: []
+  clusterResourceWhitelist: []

@@ -1,0 +1,42 @@
+# plateforme/observabilite/tempo/values.yaml — ajouts de M23-E13 (chart grafana-community/tempo 3.2.x,
+# Tempo 3.1 monolithique : le distributeur pousse les spans au metrics-generator dans le même processus,
+# sans Kafka). À fusionner dans tempo/values.yaml de M23-E03 (fullnameOverride: tempo, S3, persistance…).
+tempo:
+  metricsGenerator:
+    enabled: true
+    processor:
+      service_graphs:
+        # Arêtes vers la base et le cache : nœuds « virtuels » nommés d'après db.name / db.system.
+        dimensions: [deployment.environment.name]
+        histogram_buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
+      span_metrics:
+        # Une dimension de plus = une étiquette de plus sur chaque série : deployment_environment_name.
+        dimensions: [deployment.environment.name]
+        histogram_buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5]
+    registry:
+      collection_interval: 15s
+      external_labels:
+        source: tempo
+    storage:
+      # Sur le volume persistant de M23-E03 (/var/tempo) : le WAL du generator survit à un redémarrage.
+      path: /var/tempo/generator
+      # Deux réplicas de Prometheus (M21-E24) : chacun doit recevoir TOUTES les séries, sinon chaque réplica
+      # n'en a que la moitié et la déduplication de Thanos Query mélange deux demi-séries. On écrit donc sur
+      # chaque pod par le Service sans tête « prometheus-operated », jamais par le Service kps-prometheus.
+      remote_write:
+        - url: http://prometheus-kps-prometheus-0.prometheus-operated.supervision.svc.cluster.local:9090/api/v1/write
+          send_exemplars: true
+          queue_config: {max_samples_per_send: 2000}
+        - url: http://prometheus-kps-prometheus-1.prometheus-operated.supervision.svc.cluster.local:9090/api/v1/write
+          send_exemplars: true
+          queue_config: {max_samples_per_send: 2000}
+  overrides:
+    defaults:
+      metrics_generator:
+        processors: [service-graphs, span-metrics]
+        # Garde-fou de cardinalité (séries actives par instance de metrics-generator) ; au-delà, les nouvelles
+        # séries sont ignorées et tempo_metrics_generator_registry_series_limited_total augmente.
+        max_active_series: 20000
+        # Nom de l'étiquette d'exemplar qui porte l'identifiant de trace. Défaut de Tempo : « traceID » ;
+        # Grafana (exemplarTraceIdDestinations, M23-E08) et nos applications utilisent « trace_id » : on aligne.
+        trace_id_label_name: trace_id

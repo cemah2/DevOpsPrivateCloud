@@ -1,0 +1,10 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M20-E27, PLAT-2127.
+# Matrice commune à gw01 et gw02. Une passerelle à la fois (--check --diff, puis --limit gw01, puis gw02).
+# Retour arrière : git revert de la MR, même playbook.
+# Définitions existantes : GIT01 (M00/M06), GW_PAR1 (M15-E13), V_INFRA, V_K8S.
+# Transit (bloc « Points d'entrée ») : GitLab (Sidekiq) appelle le webhook d'Argo CD sur la Gateway.
+  - {entree: $V_INFRA, source: $GIT01, sortie: $V_K8S, destination: $GW_PAR1, proto: tcp, ports: 443,
+     motif: "webhooks GitLab vers Argo CD (argocd.apps.par1.medisphere.internal/api/webhook)", ref: M20-E27}
+# Le retour de 10.10.41.10 vers git01 est une réponse (état établi). Côté GitLab, la liste
+# d'autorisation des requêtes locales (Admin → Paramètres → Réseau → Requêtes sortantes) contient
+# argocd.apps.par1.medisphere.internal : sans elle, GitLab refuse l'appel avant même de l'envoyer.

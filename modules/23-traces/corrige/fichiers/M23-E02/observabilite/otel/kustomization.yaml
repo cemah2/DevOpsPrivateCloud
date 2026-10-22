@@ -1,0 +1,13 @@
+# plateforme/observabilite — otel/kustomization.yaml (M23-E02) : ce que l'Application « otel » applique.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - espace.yaml
+  - racine-medisphere.yaml
+  - rbac-agent.yaml
+  - otel-agent.yaml
+  - otel-passerelle.yaml
+  - service-otlp-externe.yaml
+  - politiques.yaml
+  - telemetrie-applications.yaml
+  - servicemonitor.yaml

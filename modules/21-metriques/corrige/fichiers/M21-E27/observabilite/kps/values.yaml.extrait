@@ -1,0 +1,19 @@
+# plateforme/observabilite — kps/values.yaml : changement de M21-E27 (PLAT-2227).
+# EXTRAIT : seule la clé ajoutée est montrée.
+prometheus:
+  prometheusSpec:
+    # Réétiquetage des alertes AVANT leur envoi à Alertmanager (après les étiquettes externes ; la
+    # règle de l'opérateur qui retire prometheus_replica passe en premier).
+    # Pyrra ne sait poser que l'étiquette « severity » (valeurs choisies dans chaque SLO :
+    # critique, avertissement, info) ; notre routage lit « gravite ». On recopie severity dans
+    # gravite quand gravite est absente et que severity porte déjà une valeur de notre vocabulaire.
+    # Les alertes qui ont déjà « gravite » ne sont pas touchées ; celles du chart (severity=critical,
+    # warning) non plus : elles sont traitées par les routes d'E06/E16.
+    # Le chart rend ces règles dans un Secret (kps-prometheus-am-relabel-confg) référencé par le CR.
+    additionalAlertRelabelConfigs:
+      - source_labels: [gravite, severity]
+        separator: ";"
+        regex: ";(critique|avertissement|info)"
+        target_label: gravite
+        replacement: "$1"
+        action: replace

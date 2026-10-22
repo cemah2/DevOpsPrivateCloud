@@ -1,0 +1,18 @@
+# formation/ci-labo — job « etiquettes-job » (M19-E26) : constater le format de CI_JOB_TAGS et
+# CI_RUNNER_TAGS avant et après la montée en 19.5, et la bonne façon de les lire.
+etiquettes-job:
+  stage: test
+  tags: [k8s, kubernetes]
+  image: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.0
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - 'printf "CI_JOB_TAGS    = %s\n" "$CI_JOB_TAGS"'
+    - 'printf "CI_RUNNER_TAGS = %s\n" "$CI_RUNNER_TAGS"'
+    # Lecture robuste : JSON si c'en est, sinon ancienne liste séparée par des virgules.
+    - |
+      if jq -e 'type == "array"' >/dev/null 2>&1 <<<"$CI_RUNNER_TAGS"; then
+        jq -r '.[]' <<<"$CI_RUNNER_TAGS"
+      else
+        tr ',' '\n' <<<"$CI_RUNNER_TAGS" | sed 's/^ *//'
+      fi

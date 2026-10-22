@@ -1,0 +1,271 @@
+# plateforme/ci-templates — composant « securite » v2.3.0 (M19-E10 ; Semgrep CE et Gitleaks : M19-E15, SEC-2015).
+# Sécurité de l'image produite par le composant construction-image : analyse Trivy de l'archive
+# (bloquante, AVANT publication), SBOM Syft (artefact), signature Cosign de l'index et de chaque
+# manifeste de plateforme après publication (méthode M13 : configuration de signature sans service,
+# aucun journal public), vérification avec la clé publique.
+# Utilisation (après construction-image) :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.3.0
+# Jobs : securite:semgrep, securite:gitleaks (code et historique, stage_lint, sans attendre l'image) ;
+#        securite:trivy, securite:sbom (stage_analyse) ; securite:signature, securite:verification (stage).
+# Secrets (variables PROTÉGÉES du groupe, M13) : COSIGN_PRIVATE_KEY (fichier), COSIGN_PASSWORD,
+# HARBOR_ROBOT_USER, HARBOR_ROBOT_TOKEN. Ils n'existent pas dans un pipeline de MR : la signature
+# n'y est pas créée. M19-E24 déplace la signature sur le runner protégé.
+spec:
+  description: "Analyse Trivy (bloquante), SBOM Syft, signature Cosign et vérification d'une image construite par construction-image."
+  component: [version]
+  inputs:
+    stage_lint:
+      description: "Stage des analyses du code (Semgrep, Gitleaks)"
+      default: lint
+    stage_analyse:
+      default: analyse
+    stage:
+      description: "Stage de la signature et de la vérification"
+      default: signature
+    runner:
+      default: k8s
+    severite_bloquante:
+      description: "Sévérités Trivy qui font échouer l'analyse (vulnérabilités AVEC correctif seulement)"
+      default: CRITICAL
+      options: [CRITICAL, "CRITICAL,HIGH"]
+    plateforme_analyse:
+      description: "Variante de l'image analysée par Trivy (os/arch)"
+      default: linux/amd64
+      options: [linux/amd64, linux/arm64]
+    semgrep_regles:
+      description: "Jeux de règles Semgrep (registre : usage interne, « Semgrep Rules License v1.0 » ; ou fichiers du dépôt)"
+      type: array
+      default: ["p/python", "p/secrets"]
+    semgrep_severite_bloquante:
+      description: "Sévérité Semgrep à partir de laquelle le job échoue"
+      default: ERROR
+      options: [ERROR, WARNING]
+    image_semgrep:
+      description: "Image Semgrep CE (variante nonroot), étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/semgrep/semgrep:1.182.0-nonroot@sha256:a1787d079e6a958fabce7733091b635ae52db99d51ef7fc604ad8d41701f2a39
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_gitleaks:
+      description: "Image Gitleaks, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/ghcr/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_outils:
+      description: "Image outillée de la chaîne (Cosign 3, Trivy 0.75, Syft, Skopeo, jq, clé publique), étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.1@sha256:<EMPREINTE>
+      regex: ^registry\.par1\.medisphere\.internal/.+@sha256:.+$
+    signer:
+      description: "Signer et vérifier l'image publiée (false : analyse et SBOM seulement, quand rien n'est publié)"
+      type: boolean
+      default: true
+    job_construction:
+      description: "Nom du job de construction (artefact image.tar, dotenv IMAGE_EMPREINTE)"
+      default: "image:construction"
+    job_publication:
+      description: "Nom du job de publication (dotenv IMAGE_REF)"
+      default: "image:publication"
+---
+# --- Analyses du code (pas besoin de l'image : elles démarrent tout de suite) --------------------
+.securite-v2-code:
+  tags: ["$[[ inputs.runner ]]"]
+  stage: $[[ inputs.stage_lint ]]
+  interruptible: true
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# SAST : Semgrep CE. Rapport complet au format GitLab (téléchargeable ; le widget de sécurité de MR
+# est Ultimate), échec si un résultat atteint la sévérité bloquante. Exceptions : commentaire
+# « nosemgrep: <id-de-règle> -- <raison> (<ticket>) » sur la ligne ou la ligne précédente.
+securite:semgrep:
+  extends: .securite-v2-code
+  image:
+    name: $[[ inputs.image_semgrep ]]
+    entrypoint: [""]
+  variables:
+    SEMGREP_REGLES: "$[[ inputs.semgrep_regles ]]"
+    SEMGREP_SEVERITE: $[[ inputs.semgrep_severite_bloquante ]]
+    # Pas de télémétrie, pas de connexion au service SaaS ; les règles du registre sont téléchargées.
+    SEMGREP_SEND_METRICS: "off"
+    SEMGREP_ENABLE_VERSION_CHECK: "0"
+    HOME: /tmp
+  script:
+    - semgrep --version
+    - |
+      set --
+      for r in $(printf '%s' "$SEMGREP_REGLES" | tr -d '[]",' ); do set -- "$@" --config "$r"; done
+      # 1. Tout ce que les règles trouvent, pour le rapport SAST (jamais bloquant).
+      semgrep scan --metrics=off --disable-version-check "$@" \
+        --gitlab-sast-output=gl-sast-report.json --json-output=semgrep.json --quiet .
+      # 2. Le contrôle bloquant : seulement la sévérité choisie et au-dessus, résultats dans le journal.
+      if [ "$SEMGREP_SEVERITE" = WARNING ]; then set -- "$@" --severity WARNING; fi
+      semgrep scan --metrics=off --disable-version-check "$@" --severity ERROR --error .
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths: [semgrep.json]
+    reports:
+      sast: gl-sast-report.json
+
+# Secrets dans l'HISTORIQUE de la plage (MR ou push), pas seulement dans l'état final : un secret
+# ajouté puis retiré dans la même MR reste dans les commits poussés. --redact : jamais en clair.
+# Faux positif : .gitleaksignore (empreinte du résultat), validé par la RSSI (normes, §4).
+securite:gitleaks:
+  extends: .securite-v2-code
+  image:
+    name: $[[ inputs.image_gitleaks ]]
+    entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0"
+    HOME: /tmp
+  script:
+    - gitleaks version
+    # Dépôt cloné par le helper sous un autre UID que celui de l'image : git refuserait de le lire.
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+    - |
+      DEBUT=""
+      if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+        DEBUT="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      elif [ "${CI_COMMIT_BRANCH:-}" != "$CI_DEFAULT_BRANCH" ]; then
+        git fetch --quiet origin "$CI_DEFAULT_BRANCH"
+        DEBUT="$(git merge-base FETCH_HEAD "$CI_COMMIT_SHA")"
+      elif ! printf '%s' "${CI_COMMIT_BEFORE_SHA:-0}" | grep -Eq '^0+$' \
+           && git cat-file -e "${CI_COMMIT_BEFORE_SHA}^{commit}" 2>/dev/null; then
+        DEBUT="$CI_COMMIT_BEFORE_SHA"
+      fi
+      if [ -n "$DEBUT" ]; then PLAGE="${DEBUT}..${CI_COMMIT_SHA}"; else PLAGE="$CI_COMMIT_SHA"; fi
+      echo "Plage contrôlée : $PLAGE"
+      gitleaks git --no-banner --redact --verbose --log-opts="$PLAGE" \
+        --report-format junit --report-path gl-gitleaks.xml .
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      junit: gl-gitleaks.xml
+
+# --- Analyses et preuves de l'image ------------------------------------------------------------
+.securite-v2-base:
+  image: $[[ inputs.image_outils ]]
+  tags: ["$[[ inputs.runner ]]"]
+  variables:
+    GIT_STRATEGY: none
+
+.securite-v2-toujours:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+.securite-v2-publiee:
+  rules:
+    - if: '"$[[ inputs.signer ]]" != "true"'
+      when: never
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+
+securite:trivy:
+  extends: [.securite-v2-base, .securite-v2-toujours]
+  stage: $[[ inputs.stage_analyse ]]
+  interruptible: true
+  needs:
+    - job: "$[[ inputs.job_construction ]]"
+      artifacts: true
+  variables:
+    GIT_STRATEGY: fetch          # pour lire .trivyignore du projet, s'il existe
+    GIT_DEPTH: "1"
+    TRIVY_CACHE_DIR: $CI_PROJECT_DIR/.cache/trivy
+    PLATEFORME: $[[ inputs.plateforme_analyse ]]
+  cache:
+    key: trivy-db
+    paths: [.cache/trivy]
+  script:
+    - trivy --version
+    # Trivy lit une archive « docker save » : conversion locale de la variante (empreintes des couches inchangées).
+    - skopeo copy --override-os "${PLATEFORME%/*}" --override-arch "${PLATEFORME#*/}" oci-archive:image.tar docker-archive:image-analyse.tar
+    - IGNORE=""; if [ -f .trivyignore ]; then IGNORE="--ignorefile .trivyignore"; fi
+    - trivy image --input image-analyse.tar $IGNORE --format json --output trivy.json --exit-code 0
+    - trivy image --input image-analyse.tar $IGNORE --severity "$[[ inputs.severite_bloquante ]]" --ignore-unfixed --exit-code 1
+  artifacts:
+    when: always
+    paths: [trivy.json]
+    expire_in: 30 days
+
+securite:sbom:
+  extends: [.securite-v2-base, .securite-v2-toujours]
+  stage: $[[ inputs.stage_analyse ]]
+  interruptible: true
+  needs:
+    - job: "$[[ inputs.job_construction ]]"
+      artifacts: true
+  script:
+    - syft version
+    - syft scan oci-archive:image.tar --platform "$[[ inputs.plateforme_analyse ]]" --quiet -o spdx-json=sbom.spdx.json -o cyclonedx-json=sbom.cdx.json
+    - jq -e '.spdxVersion == "SPDX-2.3" and (.packages | length) > 0' sbom.spdx.json > /dev/null
+  artifacts:
+    paths: [sbom.spdx.json, sbom.cdx.json]
+    expire_in: 1 year
+
+securite:signature:
+  extends: [.securite-v2-base, .securite-v2-publiee]
+  stage: $[[ inputs.stage ]]
+  interruptible: false
+  needs:
+    - job: "$[[ inputs.job_construction ]]"
+      artifacts: true
+    - job: "$[[ inputs.job_publication ]]"
+      artifacts: true
+  variables:
+    DOCKER_CONFIG: /tmp/auth-registre
+  script:
+    - echo "composant securite $[[ component.version ]]"
+    - case "${IMAGE_REF:-}" in *@sha256:*) ;; *) echo "IMAGE_REF doit désigner une empreinte (reçu « ${IMAGE_REF:-} »)"; exit 1 ;; esac
+    - test -n "${COSIGN_PRIVATE_KEY:-}" || { echo "COSIGN_PRIVATE_KEY absente : référence non protégée ?"; exit 1; }
+    - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+    - printf '%s' "$HARBOR_ROBOT_TOKEN" | cosign login "${IMAGE_REF%%/*}" -u "$HARBOR_ROBOT_USER" --password-stdin > /dev/null
+    # Harbor ne sert pas le manifeste tant que son analyse n'est pas finie (politique M13-E14) :
+    # Cosign lit le manifeste avant de signer. Attente bornée (10 min), identifiants par la
+    # configuration curl lue sur l'entrée standard (jamais en argument).
+    - |
+      registre="${IMAGE_REF%%/*}"; reste="${IMAGE_REF#*/}"; depot_complet="${reste%@*}"; empreinte="${IMAGE_REF#*@}"
+      projet="${depot_complet%%/*}"; depot="${depot_complet#*/}"; depot="$(printf '%s' "$depot" | sed 's#/#%252F#g')"
+      url="https://$registre/api/v2.0/projects/$projet/repositories/$depot/artifacts/$empreinte?with_scan_overview=true"
+      etat=absente
+      for _ in $(seq 1 60); do
+        etat="$(printf 'user = "%s:%s"\n' "$HARBOR_ROBOT_USER" "$HARBOR_ROBOT_TOKEN" | curl -sf --max-time 20 -K - "$url" \
+          | jq -r '[(.scan_overview // {})[] | .scan_status] | first // "absente"')" || etat=illisible
+        echo "analyse de Harbor : $etat"
+        case "$etat" in Success) break ;; Error | Stopped) exit 1 ;; esac
+        sleep 10
+      done
+      test "$etat" = Success
+    # Index, puis chaque manifeste de plateforme (Harbor vérifie chaque manifeste tiré, M13-E09).
+    - cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$IMAGE_REF"
+    - |
+      depot="${IMAGE_REF%@*}"; empreinte="${IMAGE_REF#*@}"
+      tar -xOf image.tar "blobs/sha256/${empreinte#sha256:}" > index-archive.json
+      for m in $(jq -r '.manifests[] | select((.platform.os // "unknown") != "unknown") | .digest' index-archive.json); do
+        cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$depot@$m"
+      done
+  after_script:
+    - rm -rf /tmp/auth-registre
+
+securite:verification:
+  extends: [.securite-v2-base, .securite-v2-publiee]
+  stage: $[[ inputs.stage ]]
+  needs:
+    - job: "$[[ inputs.job_publication ]]"
+      artifacts: true
+    - job: securite:signature
+      artifacts: false
+  variables:
+    DOCKER_CONFIG: /tmp/auth-registre
+  script:
+    - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+    - printf '%s' "$HARBOR_ROBOT_TOKEN" | cosign login "${IMAGE_REF%%/*}" -u "$HARBOR_ROBOT_USER" --password-stdin > /dev/null
+    # Comme le fera le consommateur : clé PUBLIQUE embarquée dans l'image outillée, pas de journal.
+    - cosign verify --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true "$IMAGE_REF" > /dev/null
+    - echo "Publiée, signée, vérifiée -> $IMAGE_REF ($IMAGE_ETIQUETTE)"
+  after_script:
+    - rm -rf /tmp/auth-registre

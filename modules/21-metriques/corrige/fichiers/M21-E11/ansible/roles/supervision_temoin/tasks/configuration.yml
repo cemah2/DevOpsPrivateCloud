@@ -1,0 +1,70 @@
+---
+# Chaque fichier est rendu dans un fichier TEMPORAIRE, validé par l'outil du composant (directive
+# validate), et posé seulement si la validation passe : une erreur n'arrête jamais un service.
+# Les chemins écrits dans les configurations sont ABSOLUS (le fichier validé n'est pas à sa place).
+
+- name: Règles du témoin (validées par promtool)
+  ansible.builtin.template:
+    src: regles-temoin.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/regles/temoin.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+    validate: /usr/local/bin/promtool check rules %s
+  notify: Recharger prometheus
+
+- name: Fichiers de cibles du job blackbox (relus à chaud par file_sd_configs)
+  ansible.builtin.template:
+    src: cibles-blackbox.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/cibles/blackbox-{{ item.nom }}.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+  loop: "{{ supervision_temoin_sondes }}"
+  loop_control:
+    label: "{{ item.nom }} ({{ item.module }})"
+
+- name: Inventaire des fichiers de cibles présents
+  ansible.builtin.find:
+    paths: "{{ supervision_temoin_dossier_config }}/cibles"
+    patterns: "blackbox-*.yml"
+  register: supervision_temoin_cibles_presentes
+
+- name: Retrait des fichiers de cibles qui ne sont plus déclarés
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ supervision_temoin_cibles_presentes.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: (item.path | basename) not in (supervision_temoin_sondes | map(attribute='nom') | map('regex_replace', '^(.*)$', 'blackbox-\\1.yml') | list)
+
+- name: Configuration de Prometheus (validée par promtool)
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/prometheus.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+    validate: /usr/local/bin/promtool check config %s
+  notify: Recharger prometheus
+
+- name: Configuration d'Alertmanager (validée par amtool)
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/alertmanager.yml"
+    owner: root
+    group: alertmanager
+    mode: "0640"
+    validate: /usr/local/bin/amtool check-config %s
+  notify: Recharger alertmanager
+
+- name: Modules de blackbox_exporter (validés par l'exportateur)
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/blackbox.yml"
+    owner: root
+    group: blackbox
+    mode: "0640"
+    validate: /usr/local/bin/blackbox_exporter --config.check --config.file=%s
+  notify: Recharger blackbox

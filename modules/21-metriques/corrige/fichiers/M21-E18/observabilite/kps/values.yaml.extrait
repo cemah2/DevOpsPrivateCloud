@@ -1,0 +1,37 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M21-E18, DEV-2218) : dans extraManifests,
+# la politique prometheus-entree (palier 1) gagne une règle pour le contrôleur d'Argo Rollouts.
+# Remplace l'objet entier dans la liste extraManifests (les autres objets ne changent pas).
+extraManifests:
+  # … Services prometheus-externe et alertmanager-externe, politique alertmanager-entree (E02) …
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: prometheus-entree
+      namespace: supervision
+    spec:
+      description: "Prometheus : 9090 depuis MGMT, mon01, l'espace supervision et Argo Rollouts (PLAT-2202, DEV-2218)"
+      endpointSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+          operator.prometheus.io/name: kps
+      ingress:
+        - fromCIDR:
+            - 10.10.10.0/24
+            - 10.10.20.19/32
+          toPorts:
+            - ports: [{port: "9090", protocol: TCP}]
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: supervision
+          toPorts:
+            - ports:
+                - {port: "9090", protocol: TCP}
+                - {port: "8080", protocol: TCP}
+        # Analyses Prometheus des canaries (ClusterAnalysisTemplate taux-erreur-mediagenda) :
+        # c'est le CONTRÔLEUR d'Argo Rollouts qui interroge Prometheus, pas les pods applicatifs.
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: argo-rollouts
+                app.kubernetes.io/name: argo-rollouts
+          toPorts:
+            - ports: [{port: "9090", protocol: TCP}]

@@ -1,0 +1,63 @@
+# ressources/E23-charge/charge-oha.yaml — SQUELETTE du Job de charge (M21-E23, INC-4823).
+# À compléter (les « À COMPLÉTER ») puis : kubectl apply -f charge-oha.yaml   (espace wb-essais)
+# Arrêt immédiat : kubectl delete job -n wb-essais charge-oha
+#
+# Prérequis dans wb-essais : la ConfigMap de la racine MédiSphère, créée une fois :
+#   kubectl create configmap racine-medisphere -n wb-essais \
+#     --from-file=ca.crt=/usr/local/share/ca-certificates/medisphere-root-ca.crt
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: charge-oha
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: charge-oha
+    medisphere.internal/ticket: INC-4823
+spec:
+  backoffLimit: 0
+  # Borne ABSOLUE de l'essai, quoi qu'il arrive : À COMPLÉTER (secondes)
+  activeDeadlineSeconds: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: charge-oha
+    spec:
+      restartPolicy: Never
+      priorityClassName: medisphere-essai
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65535
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: oha
+          image: registry.par1.medisphere.internal/ghcr/hatoo/oha:1.16.0
+          # L'image a /bin/oha pour point d'entrée : « args » ne donne que les options.
+          # Paliers : un Job par palier, ou un script qui enchaîne plusieurs oha (l'image n'a pas de
+          # shell : il faudra une autre image, ou plusieurs conteneurs/Jobs). À COMPLÉTER.
+          args:
+            - --no-tui
+            - --cacert
+            - /etc/medisphere/ca.crt
+            # - -z         (durée)            À COMPLÉTER
+            # - -q         (débit maximum)    À COMPLÉTER
+            # - -c         (connexions)       À COMPLÉTER
+            # - URL de recette avec une date   À COMPLÉTER
+          resources:
+            requests: {cpu: 200m, memory: 64Mi}
+            limits: {cpu: "1", memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: racine
+              mountPath: /etc/medisphere
+              readOnly: true
+      volumes:
+        - name: racine
+          configMap:
+            name: racine-medisphere

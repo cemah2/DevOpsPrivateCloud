@@ -1,0 +1,143 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M21-E16, PLAT-2216) : la clé
+# alertmanager.config COMPLÈTE après E16. Elle remplace celle d'E06 ; global, récepteurs, gabarit
+# (templateFiles « medisphere.tmpl ») et inhibitions d'E06 sont repris tels quels.
+# Helm FUSIONNE les dictionnaires avec les valeurs par défaut du chart mais REMPLACE les listes
+# (routes, inhibit_rules, receivers) : rien du défaut ne subsiste dans ces listes.
+# Vérification locale (comme la CI d'E07) :
+#   yq '.alertmanager.config' kps/values.yaml > /tmp/am/alertmanager.yaml
+#   yq '.alertmanager.templateFiles["medisphere.tmpl"]' kps/values.yaml > /tmp/am/medisphere.tmpl
+#   yq -i '.templates = ["medisphere.tmpl"]' /tmp/am/alertmanager.yaml
+#   (cd /tmp/am && amtool check-config alertmanager.yaml)
+#   sh outils/tester-routes.sh /tmp/am/alertmanager.yaml alertmanager/routes-tests.txt
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: smtp.par1.medisphere.internal:25
+      smtp_from: alertmanager-k8s@medisphere.internal
+      smtp_hello: alertmanager.apps.par1.medisphere.internal
+      smtp_require_tls: true
+      smtp_tls_config:
+        ca_file: /etc/alertmanager/configmaps/racine-medisphere/ca.crt
+        min_version: TLS12
+
+    # Intervalles nommés (section de premier niveau). Fuseau Europe/Paris, changement d'heure
+    # compris. ⚠️ À vérifier sur ton lab : Alertmanager lit la base des fuseaux du système de son
+    # image ; si la configuration est refusée (« unknown time zone »), écris les heures en UTC.
+    time_intervals:
+      - name: heures-ouvrees
+        time_intervals:
+          - weekdays: ["monday:friday"]
+            times:
+              - start_time: "08:00"
+                end_time: "19:00"
+            location: Europe/Paris
+
+    route:
+      # Racine : tout ce qui n'a pas d'équipe (règles du chart, qui agrègent souvent sans garder
+      # « equipe ») part à la plateforme. Réglages hérités par toutes les routes filles.
+      receiver: plateforme-mail
+      group_by: [alertname, namespace, environnement]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        # Watchdog (règle du chart, toujours active) : jamais notifié (M21-E28 : témoin).
+        - receiver: "null"
+          matchers: ['alertname = "Watchdog"']
+        - receiver: "null"
+          matchers: ['alertname = "InfoInhibitor"']
+        # Informations : jamais notifiées (visibles dans Alertmanager et Grafana).
+        - receiver: "null"
+          matchers: ['gravite = "info"']
+        - receiver: "null"
+          matchers: ['severity = "info"']
+        # Critiques : l'astreinte, à toute heure, PUIS (continue) la route de l'équipe. Sans
+        # « continue » (E06), l'équipe concernée ne recevait jamais ses alertes critiques.
+        - receiver: astreinte-mail
+          matchers: ['gravite = "critique"']
+          repeat_interval: 1h
+          continue: true
+        - receiver: astreinte-mail
+          matchers: ['severity = "critical"']
+          repeat_interval: 1h
+          continue: true
+        # Équipes. Sous chacune, les avertissements ne partent qu'aux heures ouvrées : hors de
+        # l'intervalle, la notification attend qu'il s'ouvre (si l'alerte est encore active).
+        - receiver: mediagenda-mail
+          matchers: ['equipe = "mediagenda"']
+          routes:
+            - matchers: ['gravite = "avertissement"']
+              active_time_intervals: [heures-ouvrees]
+        - receiver: medidoc-mail
+          matchers: ['equipe = "medidoc"']
+          routes:
+            - matchers: ['gravite = "avertissement"']
+              active_time_intervals: [heures-ouvrees]
+        - receiver: plateforme-mail
+          matchers: ['equipe = "plateforme"']
+          routes:
+            - matchers: ['gravite = "avertissement"']
+              active_time_intervals: [heures-ouvrees]
+        # Règles du chart (sans « equipe ») : la plateforme, avertissements aux heures ouvrées.
+        # La route « critical » est nécessaire : la route d'astreinte a trouvé une correspondance,
+        # la racine ne sert donc plus de repli, et l'alerte n'irait QU'À l'astreinte.
+        - receiver: plateforme-mail
+          matchers: ['severity = "warning"']
+          active_time_intervals: [heures-ouvrees]
+        - receiver: plateforme-mail
+          matchers: ['severity = "critical"']
+
+    inhibit_rules:
+      # (E06) Une critique fait taire les avertissements et infos de même nom dans le même espace.
+      - source_matchers: ['gravite = "critique"']
+        target_matchers: ['gravite =~ "avertissement|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity =~ "warning|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['alertname = "InfoInhibitor"']
+        target_matchers: ['severity = "info"']
+        equal: [namespace]
+      # (E16) Une VM injoignable : ses autres alertes (disque, mémoire…) n'apportent rien.
+      # « equal » exige la MÊME instance ; la source a toujours une instance (up{job="vms"}) :
+      # une cible sans instance n'est jamais éteinte par erreur.
+      - source_matchers: ['alertname = "CibleInjoignable"']
+        target_matchers: ['alertname != "CibleInjoignable"']
+        equal: [instance]
+      # (E16) Un nœud Kubernetes non prêt ou injoignable : les pods MédiAgenda non prêts SUR CE
+      # NŒUD. Les règles du chart sur les pods n'ont pas d'étiquette « node » : c'est pourquoi
+      # MediagendaPodsNonPrets la calcule (jointure avec kube_pod_info, E15).
+      - source_matchers: ['alertname =~ "KubeNodeNotReady|KubeNodeUnreachable"']
+        target_matchers: ['alertname = "MediagendaPodsNonPrets"']
+        equal: [node]
+
+    # (E06, inchangés)
+    receivers:
+      - name: "null"
+      - name: plateforme-mail
+        email_configs:
+          - to: plateforme@medisphere.internal
+            send_resolved: true
+            headers:
+              Subject: '{{ template "medisphere.sujet" . }}'
+      - name: astreinte-mail
+        email_configs:
+          - to: astreinte@medisphere.internal
+            send_resolved: true
+            headers:
+              Subject: '{{ template "medisphere.sujet" . }}'
+      - name: mediagenda-mail
+        email_configs:
+          - to: mediagenda@medisphere.internal
+            send_resolved: true
+            headers:
+              Subject: '{{ template "medisphere.sujet" . }}'
+      - name: medidoc-mail
+        email_configs:
+          - to: medidoc@medisphere.internal
+            send_resolved: true
+            headers:
+              Subject: '{{ template "medisphere.sujet" . }}'
+    templates:
+      - /etc/alertmanager/config/*.tmpl

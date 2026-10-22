@@ -1,0 +1,22 @@
+# plateforme/k8s — composants/argocd/values.yaml : AJOUT de M20-E12 (à fusionner).
+# Exclusions de ressources : Argo CD ne surveille ni n'affiche ces types (moins de requêtes de
+# surveillance vers l'API, arbre des Applications lisible). On n'y met que des objets CRÉÉS par des
+# contrôleurs, jamais décrits dans Git : les exclure ne masque aucune dérive. resourceExclusionsAdditional
+# COMPLÈTE la liste par défaut du chart (Endpoints, EndpointSlice, Lease, CiliumIdentity…) au lieu de la
+# remplacer : on garde ainsi les exclusions du chart à chaque montée de version.
+configs:
+  cm:
+    resourceExclusionsAdditional:
+      # Velero (M16) : sauvegardes et restaurations créées par les planifications, très nombreuses.
+      # Les Schedule et BackupStorageLocation, eux, restent visibles (décrits dans plateforme/k8s).
+      - apiGroups:
+          - velero.io
+        kinds:
+          - Backup
+          - Restore
+          - PodVolumeBackup
+          - PodVolumeRestore
+          - DataUpload
+          - DataDownload
+        clusters:
+          - "*"

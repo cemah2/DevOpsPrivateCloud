@@ -1,0 +1,55 @@
+# medidoc/deploiement — overlays/recette/kustomization.yaml (M20-E33, DEV-2133)
+# Recette de MédiDoc, synchronisée par Argo CD (Application medidoc-recette, ApplicationSet medidoc).
+# Ce que la recette change par rapport à la base du M19-E33 (Deployment, Service et HTTPRoute
+# « medidoc ») : l'espace, l'image (par DIGEST, recopié de dev par MR de promotion), deux réplicas,
+# le compartiment du RGW, le nom publié, la racine MédiSphère.
+# Ce qui n'est PAS ici : espace, quota, LimitRange, politiques réseau (plateforme/k8s) ; Secrets
+# medidoc-s3 et harbor-pull (secrets-k8s.sh, Vault).
+#   kustomize build overlays/recette | kubeconform -strict -summary -kubernetes-version 1.36.0 -
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medidoc-recette
+resources:
+  - ../../base
+labels:
+  - pairs:
+      medisphere.internal/environnement: recette
+    includeSelectors: false
+    includeTemplates: true
+images:
+  # Digest validé en dev (promotion par MR : outils/promouvoir.sh ou composant « promotion » du M19).
+  - name: registry.par1.medisphere.internal/medisphere/medidoc
+    digest: sha256:<DIGEST-VALIDE-EN-DEV>
+replicas:
+  - name: medidoc
+    count: 2
+# Racine MédiSphère (certificat PUBLIC) pour vérifier le RGW : copie de composants/argocd/
+# medisphere-root-ca.crt. Si ta base la génère déjà (M19-E33), retire ce générateur.
+configMapGenerator:
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt
+    options:
+      disableNameSuffixHash: true
+patches:
+  # Compartiment propre à la recette, compte RGW propre (Secret medidoc-s3 de l'espace).
+  - target: {kind: Deployment, name: medidoc}
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: medidoc
+      spec:
+        template:
+          spec:
+            containers:
+              - name: medidoc
+                env:
+                  - name: MEDIDOC_S3_BUCKET
+                    value: medidoc-recette-documents
+  - target: {kind: HTTPRoute, name: medidoc}
+    patch: |-
+      - op: replace
+        path: /spec/hostnames
+        value:
+          - medidoc-recette.apps.par1.medisphere.internal

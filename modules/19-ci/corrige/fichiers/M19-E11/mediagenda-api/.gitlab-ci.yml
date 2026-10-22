@@ -1,0 +1,24 @@
+# mediagenda/api — pipeline standard MédiSphère (M19-E11, DEV-2011).
+# Normes : docs/livraison/ci/normes-pipeline.md de plateforme/medisphere.
+#   MR             : commitlint, lint, tests, construction (rien n'est publié, aucune variable protégée)
+#   main           : + publication main-<sha>, signature, vérification, semantic-release (étiquette vX.Y.Z)
+#   étiquette vX.Y.Z : construction, analyse, publication vX.Y.Z, signature, vérification
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  auto_cancel:
+    on_new_commit: interruptible
+
+stages: [lint, test, construction, analyse, publication, signature, release]
+
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.0.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@v2.0.0
+    inputs:
+      image_nom: medisphere/mediagenda-api
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@v2.0.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/release@v2.0.0

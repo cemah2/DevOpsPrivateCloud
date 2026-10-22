@@ -1,0 +1,35 @@
+# wb-pannes — ServiceMonitor temoin-metriques corrigé (M21-E38, INC-4838).
+# En vrai, ce ServiceMonitor vit dans le dépôt de l'équipe (components/supervision) et se corrige par
+# MR ; les témoins du palier 4 sont des objets du lab, corrigés sur place :
+#   kubectl -n wb-pannes apply --server-side --force-conflicts -f servicemonitor-temoin.yaml
+# (les étiquettes de sélection sont celles que le script de panne a posées : vérifie-les avec
+#  « kubectl -n wb-pannes get servicemonitor temoin-metriques --show-labels » avant d'appliquer).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: temoin-metriques
+  namespace: wb-pannes
+  labels:
+    app.kubernetes.io/name: temoin-metriques
+    app.kubernetes.io/part-of: workbook-m21
+    medisphere.internal/supervision: "oui"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temoin-metriques
+  # Garde-fous de la cible : le témoin expose une quinzaine d'échantillons ; marge x30. Au-delà, la
+  # collecte est refusée en bloc (up == 0, prometheus_target_scrapes_exceeded_sample_limit_total).
+  sampleLimit: 500
+  labelLimit: 20
+  labelValueLengthLimit: 200
+  endpoints:
+    - port: metriques
+      path: /metrics
+      interval: 15s
+      metricRelabelings:
+        # INC-4838 : métrique à étiquette non bornée (identifiant, chemin brut ou adresse de patient),
+        # jetée à l'ingestion tant que l'équipe ne l'expose pas agrégée. Pas de « labeldrop » : sans
+        # l'étiquette, des milliers d'échantillons tomberaient sur la même série au même instant.
+        - action: drop
+          sourceLabels: [__name__]
+          regex: mediagenda_rapports_requetes_total

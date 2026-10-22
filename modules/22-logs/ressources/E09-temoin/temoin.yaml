@@ -1,0 +1,60 @@
+# temoin.yaml — M22-E09 : pod témoin qui journalise des DONNÉES PERSONNELLES FACTICES, toutes les 15 s.
+# Aucune de ces valeurs ne correspond à une personne réelle (NIR de test, domaines example.org /
+# exemple.fr réservés). À déployer dans wb-essais (jetable) :
+#   kubectl --context k8s-par1 -n wb-essais apply -f temoin.yaml
+# Ce qu'il écrit (une ligne JSON, puis une ligne de texte) :
+#   - un nom de patient (champ « patient »), un NIR avec et sans espaces, deux courriels externes ;
+#   - une adresse MédiSphère (astreinte@medisphere.internal), qui, elle, doit rester lisible ;
+#   - un horodatage en nanosecondes (19 chiffres), qui ne doit PAS être pris pour un NIR ;
+#   - le marqueur « M22-E09 » pour retrouver ses lignes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temoin-donnees
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: temoin-donnees
+    app.kubernetes.io/part-of: workbook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: temoin-donnees
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temoin-donnees
+        app.kubernetes.io/part-of: workbook
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-essai
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: temoin
+          image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+          command:
+            - /bin/sh
+            - -c
+            - |
+              while true; do
+                ns="$(date +%s)000000000"
+                echo "{\"niveau\":\"INFO\",\"message\":\"M22-E09 témoin : compte rendu envoyé\",\"patient\":\"Jeanne Témoin\",\"nir\":\"2 85 07 75 123 456 78\",\"courriel\":\"jeanne.temoin@example.org\",\"copie\":\"astreinte@medisphere.internal\",\"horodatage_ns\":\"$ns\"}"
+                echo "M22-E09 témoin : envoi du dossier à jean.dupont@exemple.fr (NIR 185077512345678), copie à plateforme@par1.medisphere.internal"
+                sleep 15
+              done
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              memory: 16Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

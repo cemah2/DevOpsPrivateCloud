@@ -1,0 +1,12 @@
+# mediagenda/annuaire — pyproject.toml : ajout de M19-E34 (le reste est celui du M12-E34).
+# Le composant qualite lance « uv run ruff check », « uv run ruff format --check » et
+# « uv run pytest » : il faut ces outils dans le groupe « dev » (et uv.lock régénéré : uv lock).
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120

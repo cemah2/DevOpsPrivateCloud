@@ -1,0 +1,21 @@
+# plateforme/observabilite — thanos/kustomization.yaml (M21-E24, PLAT-2224 ; Compactor ajouté en M21-E25, PLAT-2225)
+# Manifestes de Thanos écrits ici, à la main (jamais le chart ni les images Bitnami : catalogue
+# gratuit retiré en 2025). Appliqués par l'Application « observabilite » (racine : resources += thanos).
+# L'espace (supervision) et l'étiquette de sélection sont posés par la kustomization racine.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - thanos-query.yaml
+  - thanos-store.yaml
+  - thanos-compactor.yaml
+  - servicemonitors.yaml
+  - politiques.yaml
+# Une seule version de Thanos pour tous les composants (et la même que le sidecar, kps/values.yaml).
+images:
+  - name: quay.io/thanos/thanos
+    newName: registry.par1.medisphere.internal/quay/thanos/thanos
+    newTag: v0.42.4
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: thanos
+    includeSelectors: false

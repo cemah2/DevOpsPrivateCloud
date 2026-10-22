@@ -1,0 +1,17 @@
+---
+# host_vars/mon01/pare_feu_local.yml — flux d'entrée de mon01 (M19-E03, rôle pare_feu_local).
+# Le SSH (adm01, runner01) vient de group_vars/socle/pare_feu_local.yml.
+# Les flux depuis le VLAN 40 traversent AUSSI la bordure (group_vars/role_routeur/pare_feu.yml) ;
+# celui de git01 (même VLAN 20) n'est filtré qu'ici.
+pare_feu_local_regles:
+  - {source: [10.10.20.12], proto: tcp, ports: 25,
+     motif: "SMTP : courriels de GitLab (git01)", ref: M19-E03}
+  - {source: [10.10.40.51, 10.10.40.52, 10.10.40.53, 10.10.40.61, 10.10.40.62, 10.10.40.63], proto: tcp, ports: 25,
+     motif: "SMTP : nœuds de k8s-par1 (Argo CD au M20, Alertmanager au M21)", ref: M19-E03}
+  - {source: [10.10.10.0/24, 10.255.1.0/24], proto: tcp, ports: [25, 8025],
+     motif: "Mailpit : interface et API (MGMT, VPN d'administration), essais SMTP depuis adm01", ref: M19-E03}
+  - {source: [10.10.20.11], proto: tcp, ports: 80,
+     motif: "défi ACME HTTP-01 de ca01 (certificat de Mailpit)", ref: M19-E03}
+pare_feu_local_verifications:
+  - {port: 25, motif: "SMTP (Mailpit)"}
+  - {port: 8025, motif: "interface de Mailpit"}

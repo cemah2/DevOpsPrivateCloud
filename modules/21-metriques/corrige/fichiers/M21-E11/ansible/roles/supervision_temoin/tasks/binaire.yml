@@ -1,0 +1,43 @@
+---
+# Un composant : archive téléchargée et vérifiée, dépliée dans un dossier par version, liens
+# symboliques dans /usr/local/bin. Changer de version = changer version ET empreinte ; l'ancienne
+# arborescence reste (retour arrière en une ligne).
+- name: Chemins du composant
+  ansible.builtin.set_fact:
+    supervision_temoin_nom_archive: "{{ supervision_temoin_composant.nom }}-{{ supervision_temoin_composant.version }}.linux-amd64"
+    supervision_temoin_url_version: >-
+      {{ supervision_temoin_url_github }}/{{ supervision_temoin_composant.nom }}/releases/download/v{{ supervision_temoin_composant.version }}
+
+- name: Archive vérifiée par empreinte - {{ supervision_temoin_composant.nom }}
+  ansible.builtin.get_url:
+    url: "{{ supervision_temoin_url_version }}/{{ supervision_temoin_nom_archive }}.tar.gz"
+    dest: "{{ supervision_temoin_dossier_logiciels }}/archives/{{ supervision_temoin_nom_archive }}.tar.gz"
+    checksum: "sha256:{{ supervision_temoin_composant.sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dépliage - {{ supervision_temoin_composant.nom }}
+  ansible.builtin.unarchive:
+    src: "{{ supervision_temoin_dossier_logiciels }}/archives/{{ supervision_temoin_nom_archive }}.tar.gz"
+    dest: "{{ supervision_temoin_dossier_logiciels }}"
+    remote_src: true
+    owner: root
+    group: root
+    creates: "{{ supervision_temoin_dossier_logiciels }}/{{ supervision_temoin_nom_archive }}/{{ supervision_temoin_composant.executables[0] }}"
+
+- name: Liens dans /usr/local/bin - {{ supervision_temoin_composant.nom }}
+  ansible.builtin.file:
+    src: "{{ supervision_temoin_dossier_logiciels }}/{{ supervision_temoin_nom_archive }}/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop: "{{ supervision_temoin_composant.executables }}"
+  register: supervision_temoin_liens
+
+# Nouvelle version = nouveau binaire : redémarrage (pas un simple rechargement), fait à la fin
+# de services.yml, une fois les unités en place (un gestionnaire ne connaîtrait pas le composant).
+- name: Composant à redémarrer - {{ supervision_temoin_composant.nom }}
+  ansible.builtin.set_fact:
+    supervision_temoin_a_redemarrer: "{{ supervision_temoin_a_redemarrer | default([]) + [supervision_temoin_composant.unite] }}"
+  when: supervision_temoin_liens is changed  # noqa: no-handler

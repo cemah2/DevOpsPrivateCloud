@@ -1,0 +1,24 @@
+# plateforme/observabilite — pyrra/kustomization.yaml (M21-E26, PLAT-2226)
+# Rendu par l'Application Argo CD « pyrra » (plateforme/gitops, plateforme/pyrra.yaml), PAS par
+# l'Application « observabilite » : la CRD vit ici, et supprimer par erreur l'Application des règles
+# ne doit pas supprimer la CRD (et avec elle tous les SLO).
+# Montée de version : recopier les fichiers amont de la nouvelle étiquette, relire le diff, changer
+# newTag. Image par le cache ghcr de Harbor.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: supervision
+resources:
+  - crd-servicelevelobjectives.yaml
+  - pyrra-kubernetes.yaml
+  - pyrra-api.yaml
+  - surveillance-et-politiques.yaml
+images:
+  - name: ghcr.io/pyrra-dev/pyrra
+    newName: registry.par1.medisphere.internal/ghcr/pyrra-dev/pyrra
+    newTag: v0.10.2
+labels:
+  - pairs:
+      medisphere.internal/supervision: "oui"
+      app.kubernetes.io/part-of: pyrra
+      app.kubernetes.io/version: v0.10.2
+    includeSelectors: false

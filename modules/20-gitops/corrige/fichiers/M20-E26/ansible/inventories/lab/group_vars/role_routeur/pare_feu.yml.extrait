@@ -1,0 +1,16 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M20-E26, PLAT-2126.
+# Matrice commune à gw01 et gw02. Appliquer une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff   (seule cette règle change)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01   puis   --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+# Retirée avec la VM au mini-projet (M20-E46), comme la définition LYO_K3S01.
+#
+# 1) Définitions (section pare_feu_definitions, à côté de K8S_TRAV du M16-E16) :
+  - {nom: LYO_K3S01, valeur: 10.10.99.61, commentaire: "lyo-k3s01, k3s de l'agence LYO1 (M20-E26, jetable)"}
+#
+# 2) Transit (bloc « Kubernetes ») : le contrôleur d'Argo CD sort par l'adresse de son nœud
+#    (masquage de Cilium) ; seuls les travailleurs, pas tout le VLAN 40 (clusters du M18, plages CAPMOX).
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_SANDBOX, destination: $LYO_K3S01, proto: tcp, ports: 6443,
+     motif: "Argo CD (k8s-par1) vers l'API de k3s de l'agence LYO1", ref: M20-E26}
+# Rien d'autre : lyo-k3s01 tire ses images par le cache Harbor (VLAN 99 → reg01 443, M13) ; adm01 (MGMT)
+# joint déjà tout le lab (kubeconfig local de k3s, SSH).

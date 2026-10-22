@@ -1,0 +1,11 @@
+# medidoc/deploiement — base/service.yaml (M19-E33) : objet de M15-E34, sans espace de noms.
+apiVersion: v1
+kind: Service
+metadata:
+  name: medidoc
+  labels: {app.kubernetes.io/name: medidoc}
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/name: medidoc}
+  ports:
+    - {name: http, port: 80, targetPort: http, protocol: TCP}

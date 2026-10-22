@@ -1,0 +1,43 @@
+# plateforme/gitops/plateforme/opensearch-essai.yaml — M22-E15, ESSAI TEMPORAIRE (à supprimer en fin d'exercice)
+# Le finaliseur fait supprimer par Argo CD toutes les ressources de l'Application quand on la retire
+# de Git (les PVC du StatefulSet, eux, restent : on les supprime à la main, voir le corrigé).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opensearch-essai
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    medisphere.internal/essai: m22-e15
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts # dépôt OCI Helm déclaré en M20-E13
+      chart: opensearch
+      targetRevision: 3.9.0
+      helm:
+        releaseName: opensearch-essai
+        valueFiles:
+          - $values/opensearch-essai/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opensearch-essai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    managedNamespaceMetadata:
+      labels:
+        medisphere.internal/equipe: plateforme
+        medisphere.internal/essai: m22-e15
+        # Fluent Bit lit /var/log de l'hôte (hostPath) : interdit en baseline et restricted.
+        # Exception écrite et TEMPORAIRE (ticket PLAT-2315), l'espace disparaît en fin d'essai.
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/warn: restricted

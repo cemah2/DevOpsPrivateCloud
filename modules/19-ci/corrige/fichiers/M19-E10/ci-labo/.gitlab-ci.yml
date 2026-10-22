@@ -1,0 +1,38 @@
+# formation/ci-labo — .gitlab-ci.yml après M19-E10 (PLAT-2010) : uniquement des composants.
+# Les jobs d'apprentissage de E06-E07 (environnements, artefacts, resource_group) restent propres
+# au projet : ils sont écrits ici, sous les inclusions. Aucun include: project/local/template.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  auto_cancel:
+    on_new_commit: interruptible
+
+stages: [lint, test, deploiement]
+
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.0.0
+    inputs:
+      langage: python
+      # Les commits du labo ne suivent pas tous les Conventional Commits (essais de E06) :
+      # commitlint reste actif, c'est la norme (corrige l'historique de ta branche, pas le contrôle).
+      commitlint: true
+
+# Job propre au projet (E07) : un « déploiement » simulé dans l'environnement dev.
+deployer-dev:
+  stage: deploiement
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+  needs: [qualite:tests]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: dev
+    deployment_tier: development
+  resource_group: ci-labo-dev
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "déploiement simulé de $CI_COMMIT_SHORT_SHA en dev"

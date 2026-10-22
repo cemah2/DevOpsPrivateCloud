@@ -1,0 +1,17 @@
+# releases/50-ci.yaml.gotmpl (plateforme/k8s) — EXTRAIT : release ajoutée par M19-E18 sous
+# « gitlab-runner » (E04) et « buildkitd » (E08). Dépôt « gitlab » déjà déclaré dans _communs.yaml (E04).
+# Avant le premier apply : espaces/gitlab-agent/, rbac/gitlab-agent/ (task appliquer) et
+# « outils/secrets-k8s.sh appliquer gitlab-agent » (Secret gitlab-agent-jeton).
+releases:
+  # … gitlab-runner, buildkitd …
+  - name: gitlab-agent
+    namespace: gitlab-agent
+    chart: gitlab/gitlab-agent
+    # 2.32.0 = agentk v19.4.0 : même mineure que GitLab (19.4.x). 2.33.x (19.5) en M19-E26.
+    version: 2.32.0
+    labels:
+      groupe: ci
+      composant: gitlab-agent
+    rollbackOnFailure: true
+    values:
+      - ../composants/gitlab-agent/values.yaml

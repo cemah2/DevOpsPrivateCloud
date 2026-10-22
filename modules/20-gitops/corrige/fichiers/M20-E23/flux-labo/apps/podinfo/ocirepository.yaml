@@ -1,0 +1,16 @@
+# Source : l'artefact OCI du chart dans Harbor, à une étiquette exacte (immuable dans Harbor).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 10m
+  url: oci://registry.par1.medisphere.internal/charts/podinfo
+  ref:
+    tag: 6.15.0
+  # Identifiants du robot en lecture (Secret de type dockerconfigjson) et racine MédiSphère (ca.crt).
+  secretRef:
+    name: harbor-charts
+  certSecretRef:
+    name: medisphere-ca

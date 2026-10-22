@@ -1,0 +1,23 @@
+# releases/81-jenkins.yaml.gotmpl (plateforme/k8s) — Jenkins LTS 2.580.1, À L'ESSAI (M19-E19, PLAT-2019).
+# Fichier à part : retrait (M19-E46) = « helmfile destroy », puis suppression de ce fichier et du PVC.
+# Avant le premier apply : SonarQube à 0 réplica (composants/sonarqube/values.yaml), puis
+#   kubectl apply --server-side -f espaces/jenkins/
+#   outils/secrets-k8s.sh appliquer jenkins        # jenkins-admin, jenkins-comptes
+bases:
+  - _communs.yaml
+---
+repositories:
+  - name: jenkins
+    url: https://charts.jenkins.io
+releases:
+  - name: jenkins
+    namespace: jenkins
+    chart: jenkins/jenkins
+    version: 5.9.72
+    labels:
+      groupe: ci-essais
+      composant: jenkins
+    # Premier démarrage : téléchargement des greffons, chargement du JCasC.
+    timeout: 900
+    values:
+      - ../composants/jenkins/values.yaml

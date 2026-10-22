@@ -1,0 +1,33 @@
+# plateforme/gitops — plateforme/observabilite.yaml (M21-E07, PLAT-2207)
+# Objets de supervision de la plateforme (règles, ScrapeConfig, Probe, puis tableaux) décrits dans
+# plateforme/observabilite et rendus par kustomize (kustomization.yaml à la racine du dépôt).
+# Séparée de kube-prometheus-stack : on change une règle sans toucher au chart, et une erreur dans
+# une règle ne bloque pas la synchronisation de Prometheus lui-même.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observabilite
+  namespace: argocd
+  annotations:
+    medisphere.internal/ticket: "PLAT-2207"
+  # Ici le finaliseur est voulu : supprimer l'Application retire ses règles et ScrapeConfig (pas de
+  # CRD, pas de volume dans ce périmètre).
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+    targetRevision: main
+    path: .
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: supervision
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      # Les PrometheusRule passent par le webhook de l'opérateur (refus = échec de synchro visible).
+      - ServerSideApply=true

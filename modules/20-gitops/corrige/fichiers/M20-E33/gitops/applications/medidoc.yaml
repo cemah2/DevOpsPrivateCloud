@@ -1,0 +1,56 @@
+# plateforme/gitops — applications/medidoc.yaml (palier 2 : dev ; M20-E33, DEV-2133 : + recette)
+# Même modèle que l'ApplicationSet mediagenda (M20-E10) : liste explicite, create-update,
+# preserveResourcesOnDeletion, ServerSideApply, pas de CreateNamespace (espaces créés par la plateforme).
+# Ajouter l'environnement « recette » = un élément de liste ; l'Application medidoc-dev existante est
+# reprise à l'identique (même nom, même source, même destination) : aucun objet recréé.
+# Future production : un élément « prod » avec auto: false (synchronisation manuelle, fenêtre de E29).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: medidoc
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: dev
+            auto: true
+          - env: recette
+            auto: true
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "medidoc-{{ .env }}"
+      labels:
+        medisphere.internal/equipe: medidoc
+        medisphere.internal/environnement: "{{ .env }}"
+    spec:
+      project: medidoc
+      source:
+        repoURL: https://git01.par1.medisphere.internal/medidoc/deploiement.git
+        targetRevision: main
+        path: "overlays/{{ .env }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "medidoc-{{ .env }}"
+  templatePatch: |
+    spec:
+      syncPolicy:
+        {{- if .auto }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

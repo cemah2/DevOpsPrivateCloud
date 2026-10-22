@@ -1,0 +1,16 @@
+# espaces/jenkins/00-namespace.yaml — Jenkins LTS à l'ESSAI (M19-E19, PLAT-2019). Temporaire : retiré au
+# mini-projet si l'ADR-0190 le confirme. Jamais en même temps que SonarQube (mémoire).
+# Pod Security « restricted » : contrôleur, sidecar et agents (restrictedPssSecurityContext) conformes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jenkins
+  labels:
+    medisphere.internal/proprietaire: plateforme
+    medisphere.internal/temporaire: "oui"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

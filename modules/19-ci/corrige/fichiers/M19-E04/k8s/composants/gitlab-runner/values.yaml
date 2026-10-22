@@ -1,0 +1,143 @@
+# composants/gitlab-runner/values.yaml (plateforme/k8s) — runner « k8s-par1 », chart
+# gitlab/gitlab-runner 0.93.0 (GitLab Runner 19.4.0). M19-E04 (PLAT-2004 / SEC-2004).
+# Lu par la release gitlab-runner de releases/50-ci.yaml.gotmpl.
+#
+# AUCUN secret ici. Le jeton glrt- du runner est dans le Secret gitlab-runner/gitlab-runner (clés
+# runner-token et runner-registration-token, cette dernière vide) et la racine MédiSphère dans
+# gitlab-runner/gitlab-runner-certs : tous deux créés par « outils/secrets-k8s.sh appliquer
+# gitlab-runner » depuis secrets/gitlab-runner.yml (Vault « critique »).
+# Le runner lui-même (description, étiquettes k8s et kubernetes, run_untagged, portée d'instance)
+# est un objet de GitLab créé par l'API (POST /user/runners) : rien ici ne le décrit.
+
+# --- Image du gestionnaire : par le cache Harbor « gitlab » (registry.gitlab.com) ----------------
+# Étiquette ET empreinte (relevée par skopeo à travers Harbor : même manifeste que l'amont).
+image:
+  registry: registry.par1.medisphere.internal
+  image: gitlab/gitlab-org/gitlab-runner
+  tag: alpine-v19.4.0@sha256:a4838319e55b510c05b36d701d06362b9197458558c7b0d3d63f2c7588c7cd2f
+imagePullPolicy: IfNotPresent
+
+# --- Connexion à GitLab ---------------------------------------------------------------------------
+gitlabUrl: https://git01.par1.medisphere.internal/
+# Secret avec un fichier « <nom de GitLab>.crt » (la racine MédiSphère) : monté dans
+# /home/gitlab-runner/.gitlab-runner/certs/ ; le gestionnaire s'en sert pour l'API de GitLab et le
+# transmet au helper des jobs (CI_SERVER_TLS_CA_FILE) pour le clonage et les artefacts.
+certsSecretName: gitlab-runner-certs
+# Désenregistrer à la désinstallation : avec un jeton glrt-, supprime le GESTIONNAIRE (pas le runner).
+unregisterRunners: true
+# Un arrêt (nouvelle version, nouvelle configuration) attend la fin des jobs en cours, jusqu'à 1 h.
+terminationGracePeriodSeconds: 3600
+
+# Jobs simultanés de CE gestionnaire (tous runners confondus). Dimensionné sur le quota de ci-jobs
+# (6 CPU demandés) : 6 jobs à 250m + helper 100m + services, avec de la marge. Revu en M19-E27.
+concurrent: 6
+checkInterval: 3
+
+# --- Droits du gestionnaire : un Role DANS ci-jobs, pas dans gitlab-runner ----------------------
+rbac:
+  create: true
+  clusterWideAccess: false
+  # Liste minimale (documentation de l'exécuteur Kubernetes, « Configure runner API permissions »),
+  # pour les fonctions utilisées : pas d'espace par job, pas d'environnement suspendable, pas de PDB
+  # par job. Une liste VIDE donnerait tout (« * » sur le groupe cœur : voir templates/role.yaml).
+  rules:
+    - apiGroups: [""]
+      resources: [pods]
+      verbs: [create, delete, get, list, watch]
+    - apiGroups: [""]
+      resources: [pods/attach, pods/exec]
+      verbs: [create, delete, get, patch]
+    - apiGroups: [""]
+      resources: [pods/log]
+      verbs: [get, list]
+    # Secrets propres à chaque job (identifiants de registre), créés puis supprimés par le gestionnaire.
+    - apiGroups: [""]
+      resources: [secrets]
+      verbs: [create, delete, get, update]
+    - apiGroups: [""]
+      resources: [serviceaccounts]
+      verbs: [get]
+    # Services des jobs (alias de services), créés à la demande.
+    - apiGroups: [""]
+      resources: [services]
+      verbs: [create, get]
+    # Événements d'avertissement du pod recopiés dans le journal du job.
+    - apiGroups: [""]
+      resources: [events]
+      verbs: [list, watch]
+serviceAccount:
+  create: true
+  name: gitlab-runner
+
+# --- Sécurité du pod du gestionnaire : compatible Pod Security « restricted » --------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 100        # utilisateur gitlab-runner de l'image alpine
+  fsGroup: 65533
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # l'entrée du chart écrit dans l'image au démarrage (à vérifier avant de durcir)
+  runAsNonRoot: true
+  privileged: false
+  capabilities:
+    drop: ["ALL"]
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# --- Les runners de ce gestionnaire ------------------------------------------------------------------
+runners:
+  # Secret du jeton (clés runner-token et runner-registration-token).
+  secret: gitlab-runner
+  # Espace des pods de job : c'est AUSSI là que le chart crée le Role et la RoleBinding.
+  jobNamespace: ci-jobs
+  executor: kubernetes
+  name: k8s-par1
+  # Configuration TOML de l'exécuteur, rendue par « tpl » (les {{ }} de Helm y sont évalués).
+  # Référence : https://docs.gitlab.com/runner/configuration/advanced-configuration/
+  config: |
+    [[runners]]
+      [runners.kubernetes]
+        namespace = "{{ .Values.runners.jobNamespace }}"
+        # Compte de service des pods de job : aucun droit (espaces/ci-jobs/30-comptes-service.yaml).
+        service_account = "ci-job"
+        automount_service_account_token = false
+        # Image par défaut d'un job qui n'en déclare pas : Harbor, étiquette ET empreinte.
+        image = "registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad"
+        # Helper (clonage, artefacts, cache) et init-permissions : même version que le gestionnaire.
+        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v19.4.0@sha256:13188cca15a2d44fc621d42da4efb42b81c9527e072d07aab29468dea15af831"
+        # Images de job et de services : Harbor seulement (la VAP medisphere-images de ci-jobs
+        # refuserait de toute façon le pod ; ici l'erreur arrive plus tôt et plus clairement).
+        allowed_images = ["registry.par1.medisphere.internal/**"]
+        allowed_services = ["registry.par1.medisphere.internal/**"]
+        pull_policy = ["if-not-present"]
+        allowed_pull_policies = ["if-not-present", "always"]
+        # Conteneur build : demandes et limites par défaut, et plafonds des surcharges
+        # KUBERNETES_CPU_REQUEST, KUBERNETES_MEMORY_LIMIT… qu'un job peut demander.
+        cpu_request = "250m"
+        memory_request = "512Mi"
+        cpu_limit = "2"
+        memory_limit = "2Gi"
+        cpu_request_overwrite_max_allowed = "4"
+        memory_request_overwrite_max_allowed = "4Gi"
+        cpu_limit_overwrite_max_allowed = "4"
+        memory_limit_overwrite_max_allowed = "4Gi"
+        # Helper et services
+        helper_cpu_request = "100m"
+        helper_memory_request = "128Mi"
+        helper_cpu_limit = "1"
+        helper_memory_limit = "512Mi"
+        service_cpu_request = "100m"
+        service_memory_request = "256Mi"
+        service_cpu_limit = "1"
+        service_memory_limit = "1Gi"
+        # Attente d'un pod prêt (image à tirer, quota, place sur un nœud) avant d'abandonner.
+        poll_timeout = 600
+        [runners.kubernetes.pod_labels]
+          "medisphere.internal/ci" = "job"

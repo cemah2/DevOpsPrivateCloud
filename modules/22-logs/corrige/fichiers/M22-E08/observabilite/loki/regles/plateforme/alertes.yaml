@@ -1,0 +1,19 @@
+# plateforme/observabilite — loki/regles/plateforme/alertes.yaml (M22-E08, PLAT-2308)
+# Règles du locataire plateforme : la collecte elle-même.
+groups:
+  - name: collecte-journaux
+    interval: 1m
+    rules:
+      # Plus AUCUNE ligne des pods de l'espace journaux depuis 15 minutes : Loki et Alloy écrivent sans
+      # cesse ; un silence total veut dire que la collecte (ou l'écriture) est arrêtée.
+      - alert: CollecteJournauxArretee
+        expr: |
+          absent_over_time({job="pods", namespace="journaux"}[15m])
+        for: 5m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "Aucun journal de pod reçu par Loki depuis 15 minutes"
+          description: "La collecte des journaux de k8s-par1 est arrêtée (Alloy, Loki ou le réseau entre eux)."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-220-chercher-dans-les-journaux.md

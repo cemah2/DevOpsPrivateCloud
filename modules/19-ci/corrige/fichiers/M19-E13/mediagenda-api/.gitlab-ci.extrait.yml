@@ -1,0 +1,7 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M19-E13, DEV-2013). Seule l'inclusion de « qualite »
+# change : version mineure qui ajoute la couverture, et le paquet mesuré.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.1.0
+    inputs:
+      paquet_python: mediagenda      # --cov=mediagenda : le code de src/mediagenda, pas les tests
+  # … construction-image, securite et release inchangés …

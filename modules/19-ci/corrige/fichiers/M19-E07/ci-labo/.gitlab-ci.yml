@@ -1,0 +1,275 @@
+# .gitlab-ci.yml — formation/ci-labo (M19-E07, PLAT-2007) : version de M19-E06 + variables,
+# artefacts (dotenv), cache S3 (uv, clé par uv.lock), environnements et resource_group.
+#
+# Rappels de M19-E06 : ne lancer que ce qui est utile (rules:changes), le plus tôt possible
+# (needs), une seule fois par commit (workflow:rules), annuler l'inutile (auto_cancel).
+
+# --- Quand un pipeline est-il créé ? -------------------------------------------------------------
+# Évaluées dans l'ordre, la première règle qui s'applique décide.
+workflow:
+  rules:
+    # 1. Pipelines de MR : le cas normal pendant le développement.
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # 2. Planifications et lancements manuels (« Run pipeline ») : toujours, quelle que soit la branche.
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"
+    # 3. Une poussée sur une branche qui a une MR ouverte : pas de pipeline de branche (la règle 1
+    #    crée déjà le pipeline de MR pour ce commit) — c'est ce qui supprime le doublon.
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    # 4. La branche par défaut et les étiquettes.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    # Tout le reste (poussée sur une branche sans MR, déclencheurs non prévus) : pas de pipeline.
+  # Un nouveau commit sur la même référence annule les jobs « interruptible » du pipeline précédent.
+  auto_cancel:
+    on_new_commit: interruptible
+
+default:
+  tags: [k8s]
+  image: $IMAGE_UV
+  # Par défaut, un job peut être annulé s'il devient inutile ; les jobs qui publient ou déploient
+  # le refusent explicitement (« interruptible: false »).
+  interruptible: true
+
+variables:
+  IMAGE_UV: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:a6aeb5c166af9f765f9c68e585b5a5148c28f3b8a362f90151cecea88b21a3e2
+  IMAGE_DEBIAN: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+  UV_LINK_MODE: copy
+  # Cache de uv DANS le dossier du projet : le runner ne met en cache que ce qui est sous
+  # $CI_PROJECT_DIR.
+  UV_CACHE_DIR: $CI_PROJECT_DIR/.cache/uv
+  # Démonstration de priorité (étape 1) : la valeur du fichier, la plus faible des quatre.
+  NIVEAU: "fichier (global)"
+
+stages: [lint, test, build, deploiement, rapport]
+
+# --- Cache de uv : clé calculée à partir de uv.lock ----------------------------------------------
+# Même uv.lock = même clé = même cache, sur toutes les branches (non protégées d'un côté, protégées
+# de l'autre : GitLab sépare les deux par défaut). Un nouveau uv.lock = une nouvelle clé : le cache
+# est reconstruit, l'ancien reste dans s3-01 jusqu'au ménage (le runner ne supprime rien).
+.cache-uv: &cache-uv
+  key:
+    files: [uv.lock]
+    prefix: uv
+  paths: [.cache/uv]
+
+# --- Quels jobs ? ---------------------------------------------------------------------------------
+# Fichiers qui touchent au code : changer l'un d'eux relance ruff, tests et paquet.
+.fichiers-code: &fichiers-code
+  - src/**/*
+  - tests/**/*
+  - pyproject.toml
+  - uv.lock
+
+.regles-code:
+  rules:
+    # Planification, lancement manuel et étiquettes : tout s'exécute (explicite, même si
+    # « changes » vaut toujours vrai hors poussée et hors MR).
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web" || $CI_COMMIT_TAG
+    # Branche et MR : seulement si le code a changé (MR : par rapport à la branche cible ;
+    # branche : par rapport au commit précédent de la branche).
+    - changes: *fichiers-code
+
+# --- Variables et rapport dotenv ----------------------------------------------------------------
+version:
+  stage: lint
+  needs: []
+  image: $IMAGE_DEBIAN
+  script:
+    - |
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then VERSION="${CI_COMMIT_TAG#v}"
+      else VERSION="0.1.0-${CI_COMMIT_SHORT_SHA}"; fi
+      echo "VERSION=$VERSION" | tee version.env
+  artifacts:
+    reports:
+      # Les jobs suivants (ceux qui ont « needs: [version] », ou tous ceux des stages suivants
+      # sans « needs ») reçoivent VERSION comme une variable.
+      dotenv: version.env
+    expire_in: 1 day
+
+variables-demo:
+  stage: lint
+  needs: []
+  image: $IMAGE_DEBIAN
+  # Démonstration (étapes 1 et 2) : seulement sur les lancements manuels, où l'on peut aussi
+  # fournir NIVEAU dans le formulaire « Run pipeline ».
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+  variables:
+    NIVEAU: "job"
+  script:
+    - 'echo "NIVEAU vaut : $NIVEAU"'
+    # Variable de type FICHIER (réglages du projet) : la variable contient un CHEMIN.
+    - 'echo "LABO_CONFIG = ${LABO_CONFIG:-absente}"'
+    - if [ -f "${LABO_CONFIG:-}" ]; then cat "$LABO_CONFIG"; fi
+    # Variable de projet « LABO_CHEMIN » = « $CI_PROJECT_DIR/labo » : développée par GitLab ou
+    # laissée telle quelle selon sa case « Expand variable reference » (API : raw).
+    - 'echo "LABO_CHEMIN = ${LABO_CHEMIN:-absente}"'
+
+ruff:
+  stage: lint
+  extends: .regles-code
+  # Démarre tout de suite, comme tests : rien à attendre.
+  needs: []
+  # ruff passe par « uvx » : son environnement d'outil est aussi dans le cache de uv. En lecture
+  # seule (pull) : seul tests écrit le cache, deux jobs parallèles ne téléversent pas la même clé.
+  cache:
+    <<: *cache-uv
+    policy: pull
+  script:
+    - uvx ruff@0.16.10 check src tests
+    - uvx ruff@0.16.10 format --check src tests
+
+docs:
+  stage: lint
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web" || $CI_COMMIT_TAG
+    - changes: [docs/**/*]
+  script:
+    - test -s docs/index.md
+    # Chaque page commence par un titre de niveau 1.
+    - for f in docs/*.md; do head -n 1 "$f" | grep -q '^# ' || { echo "$f sans titre"; exit 1; }; done
+
+tests:
+  stage: test
+  extends: .regles-code
+  # Sans « needs », tests attendrait la fin de TOUT le stage lint (docs compris). Avec « needs: [] »,
+  # il démarre en même temps que ruff : un échec de ruff n'empêche pas de voir les tests.
+  needs: []
+  cache:
+    <<: *cache-uv
+    policy: pull-push
+  script:
+    - uv sync --locked
+    - uv run pytest --junitxml=rapport-junit.xml
+    # Recommandation de uv pour la CI : retirer du cache ce qui se reconstruit vite (roues
+    # construites localement) pour ne garder que les téléchargements.
+    - uv cache prune --ci
+  artifacts:
+    when: always
+    reports:
+      junit: rapport-junit.xml
+    expire_in: 1 week
+
+paquet:
+  stage: build
+  extends: .regles-code
+  # N'attend que tests (pas ruff, pas docs).
+  # tests (succès exigé) et version (variable VERSION par le rapport dotenv).
+  needs: [tests, version]
+  script:
+    - 'echo "construction de la version $VERSION"'
+    - uv build
+    # Nom du fichier produit, versionné (la version du paquet Python reste celle de pyproject.toml).
+    - for f in dist/*; do mv "$f" "dist/${VERSION}-$(basename "$f")"; done
+  artifacts:
+    paths: [dist/]
+    expire_in: 1 week
+
+# --- Déploiements (simulés) -----------------------------------------------------------------------
+# Un environnement GitLab par cible ; un resource_group par cible (deux déploiements de la même cible
+# ne se chevauchent jamais) ; jamais interruptibles (un déploiement à moitié fait est pire qu'un
+# déploiement fini). Les jobs manuels ont allow_failure: true : sinon le pipeline resterait
+# « bloqué » tant que personne ne les lance.
+.deploiement:
+  stage: deploiement
+  image: $IMAGE_DEBIAN
+  interruptible: false
+  # paquet peut être absent (un commit qui ne touche que docs/) : dépendance facultative, sinon
+  # GitLab refuserait de CRÉER le pipeline (« needs » vers un job qui n'existe pas).
+  needs:
+    - version
+    - job: paquet
+      optional: true
+  script:
+    - |
+      printf 'version=%s\nenvironnement=%s\ndate=%s\npipeline=%s\n' \
+        "$VERSION" "$CI_ENVIRONMENT_NAME" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CI_PIPELINE_URL" | tee deploiement.txt
+    # Le vrai déploiement viendra au palier 2 (promotion par MR, agent GitLab) puis au M20 (Argo CD).
+    - sleep 20
+  artifacts:
+    paths: [deploiement.txt]
+    expire_in: 30 days
+
+deployer-dev:
+  extends: .deploiement
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: dev
+    deployment_tier: development
+    url: $CI_JOB_URL/artifacts/file/deploiement.txt
+  resource_group: ci-labo-dev
+
+deployer-recette:
+  extends: .deploiement
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+      allow_failure: true
+  environment:
+    name: recette
+    deployment_tier: staging
+    url: $CI_JOB_URL/artifacts/file/deploiement.txt
+  resource_group: ci-labo-recette
+
+deployer-prod:
+  extends: .deploiement
+  # Seulement sur une étiquette de version : les étiquettes v* sont PROTÉGÉES (M01), seuls les
+  # Maintainers les posent. C'est, en édition gratuite, ce qui empêche un développeur de déployer
+  # en production depuis sa branche (pas d'environnements protégés, ADR-0051).
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+[.][0-9]+[.][0-9]+$/
+      when: manual
+      allow_failure: true
+  environment:
+    name: prod
+    deployment_tier: production
+    url: $CI_JOB_URL/artifacts/file/deploiement.txt
+  resource_group: ci-labo-prod
+
+resume:
+  stage: rapport
+  # Pas de « needs » : il attend la fin des stages précédents (quels que soient les jobs présents),
+  # et « when: always » le lance même après un échec. allow_failure : il ne bloque rien.
+  when: always
+  allow_failure: true
+  image: $IMAGE_DEBIAN
+  script:
+    - 'echo "pipeline $CI_PIPELINE_ID ($CI_PIPELINE_SOURCE) sur $CI_COMMIT_REF_NAME, commit $CI_COMMIT_SHORT_SHA"'
+    - echo "voir $CI_PIPELINE_URL"
+
+# M19-E05 : le job à disséquer, gardé pour les lancements manuels seulement (il dort 2 minutes).
+anatomie:
+  stage: rapport
+  needs: []
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+  image: $IMAGE_DEBIAN
+  services:
+    - name: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
+      alias: valkey
+  variables:
+    KUBERNETES_CPU_REQUEST: "500m"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "1Gi"
+  script:
+    - |
+      {
+        echo "== pod";            echo "$HOSTNAME"
+        echo "== identité";       id
+        echo "== limite mémoire du conteneur build (cgroup v2)"; cat /sys/fs/cgroup/memory.max
+        echo "== montages (hors /proc, /sys, /dev)"
+        grep -vE ' (/proc|/sys|/dev)' /proc/self/mounts
+        echo "== jeton de compte de service"
+        ls -la /var/run/secrets/kubernetes.io/serviceaccount 2>&1 || true
+        echo "== résolution DNS";  cat /etc/resolv.conf
+        echo "== variables CI_ et KUBERNETES_ (sans aucune valeur sensible)"
+        env | grep -E '^(CI_|KUBERNETES_)' | grep -vE 'TOKEN|PASSWORD|KEY|SECRET|AUTH' | sort
+      } > anatomie.txt
+    - echo "pause de 120 s pour l'observation du pod" && sleep 120
+  artifacts:
+    paths: [anatomie.txt]
+    expire_in: 1 week

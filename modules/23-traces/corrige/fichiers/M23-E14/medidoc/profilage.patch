@@ -1,0 +1,423 @@
+# medidoc/medidoc — profilage.patch (M23-E14, DEV-2414) : à appliquer APRÈS traces.patch (M23-E06) et correlation.patch
+# (M23-E08) : « git apply profilage.patch », puis go build, go vet, go test. Ajoute internal/profilage (fichier
+# complet aussi dans internal/profilage/profilage.go) et son appel dans cmd/medidoc/main.go ; go.mod et go.sum
+# gagnent github.com/grafana/pyroscope-go/godeltaprof v0.1.12.
+diff --git a/cmd/medidoc/main.go b/cmd/medidoc/main.go
+index b287473..76d0aa4 100644
+--- a/cmd/medidoc/main.go
++++ b/cmd/medidoc/main.go
+@@ -22,6 +22,7 @@ import (
+ 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+ 
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/config"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/profilage"
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/serveur"
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage"
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/telemetrie"
+@@ -54,6 +55,9 @@ func lancer() error {
+ 	ctx, arreter := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+ 	defer arreter()
+ 
++	// Profils pprof sur un port interne (M23-E14), jamais sur le port de l'API.
++	profilage.Demarrer(ctx, os.Getenv("MEDIDOC_PPROF_ADDR"), journal)
++
+ 	// Traces (M23-E06) : avant le client S3, que l'instrumentation AWS enveloppe.
+ 	arreterTraces, err := telemetrie.Demarrer(ctx, cfg.Version)
+ 	if err != nil {
+diff --git a/go.mod b/go.mod
+index 5a556d8..0f65195 100644
+--- a/go.mod
++++ b/go.mod
+@@ -6,6 +6,7 @@ require (
+ 	github.com/aws/aws-sdk-go-v2 v1.47.1
+ 	github.com/aws/aws-sdk-go-v2/config v1.33.7
+ 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.1
++	github.com/grafana/pyroscope-go/godeltaprof v0.1.12
+ 	github.com/prometheus/client_golang v1.24.1
+ 	go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws v0.72.0
+ 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
+@@ -44,6 +45,7 @@ require (
+ 	github.com/go-logr/stdr v1.2.2 // indirect
+ 	github.com/google/uuid v1.6.0 // indirect
+ 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
++	github.com/klauspost/compress v1.19.1 // indirect
+ 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+ 	github.com/prometheus/client_model v0.6.2 // indirect
+ 	github.com/prometheus/common v0.70.1 // indirect
+diff --git a/go.sum b/go.sum
+index a6a86d8..4db557b 100644
+--- a/go.sum
++++ b/go.sum
+@@ -63,6 +63,8 @@ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+ github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+ github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+ github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
++github.com/grafana/pyroscope-go/godeltaprof v0.1.12 h1:X6OemT2WcLtxdmNukEQuIp0c+efWVI/tBTd0oeWeDHI=
++github.com/grafana/pyroscope-go/godeltaprof v0.1.12/go.mod h1:aNSXN1bn1VHAd06EiepmwhAabHsMc67gx8itecdF2c8=
+ github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 h1:/Tnpcb2E0Pz/tN9s3bfEY2Q8ePCEX9iuS+cneUwncnw=
+ github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0/go.mod h1:zOBXOsUaBSjKgmH4OGzV1esUpR3oUSCPYVd2cUBjKYY=
+ github.com/klauspost/compress v1.19.1 h1:VsB4HPswih7mmZ8WleSFQ75c/Ui1M4trX5oAsJnhSlk=
+diff --git a/internal/profilage/profilage.go b/internal/profilage/profilage.go
+new file mode 100644
+index 0000000..3958d75
+--- /dev/null
++++ b/internal/profilage/profilage.go
+@@ -0,0 +1,61 @@
++// Package profilage expose les profils pprof de MédiDoc sur un port INTERNE, séparé de l'API publique.
++//
++// Le port (MEDIDOC_PPROF_ADDR, ex. « :6060 ») n'est publié par aucun Service ni par la Gateway : seul Alloy
++// (espace journaux) le joint, par l'adresse du pod, et une CiliumNetworkPolicy refuse tout le reste.
++// Profils servis : ceux de net/http/pprof (CPU, goroutines, tas…) et les profils « delta » de godeltaprof
++// (tas, blocages, verrous), qu'Alloy préfère parce qu'ils ne sont pas cumulés depuis le démarrage.
++package profilage
++
++import (
++	"context"
++	"errors"
++	"log/slog"
++	"net/http"
++	"net/http/pprof"
++	"runtime"
++	"time"
++
++	deltapprof "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
++)
++
++// Demarrer lance le serveur pprof si adresse n'est pas vide ; il s'arrête quand ctx est annulé.
++// Une erreur d'écoute est journalisée sans arrêter MédiDoc : le profilage ne doit jamais coûter le service.
++func Demarrer(ctx context.Context, adresse string, journal *slog.Logger) {
++	if adresse == "" {
++		journal.Info("profilage désactivé (MEDIDOC_PPROF_ADDR vide)")
++		return
++	}
++	// Échantillonnage des verrous (1 sur 5) et des attentes de plus de 10 ms : surcoût faible, à mesurer.
++	runtime.SetMutexProfileFraction(5)
++	runtime.SetBlockProfileRate(int(10 * time.Millisecond))
++
++	mux := http.NewServeMux()
++	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
++	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
++	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
++	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
++	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
++	mux.HandleFunc("GET /debug/pprof/delta_heap", deltapprof.Heap)
++	mux.HandleFunc("GET /debug/pprof/delta_block", deltapprof.Block)
++	mux.HandleFunc("GET /debug/pprof/delta_mutex", deltapprof.Mutex)
++
++	srv := &http.Server{
++		Addr:              adresse,
++		Handler:           mux,
++		ReadHeaderTimeout: 5 * time.Second,
++		// Un profil CPU dure « seconds » (15 s chez Alloy) : l'écriture doit pouvoir durer davantage.
++		WriteTimeout: 60 * time.Second,
++	}
++	go func() {
++		journal.Info("profilage pprof démarré", "adresse", adresse)
++		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
++			journal.Error("serveur pprof arrêté", "erreur", err.Error())
++		}
++	}()
++	go func() {
++		<-ctx.Done()
++		arret, annuler := context.WithTimeout(context.Background(), 5*time.Second)
++		defer annuler()
++		_ = srv.Shutdown(arret)
++	}()
++}
+diff --git a/internal/telemetrie/journal.go b/internal/telemetrie/journal.go
+new file mode 100644
+index 0000000..066f467
+--- /dev/null
++++ b/internal/telemetrie/journal.go
+@@ -0,0 +1,34 @@
++package telemetrie
++
++import (
++	"context"
++	"log/slog"
++
++	"go.opentelemetry.io/otel/trace"
++)
++
++// JournalCorrele enveloppe un gestionnaire slog : chaque ligne écrite AVEC un contexte qui porte une
++// span (s.journal.InfoContext(ctx, …), Log(ctx, …)) reçoit trace_id et span_id au format W3C
++// (hexadécimal, 32 et 16 caractères), les mêmes que dans Tempo (M23-E08).
++type JournalCorrele struct{ slog.Handler }
++
++// Handle ajoute les identifiants de la span courante puis délègue.
++func (j JournalCorrele) Handle(ctx context.Context, r slog.Record) error {
++	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
++		r.AddAttrs(
++			slog.String("trace_id", sc.TraceID().String()),
++			slog.String("span_id", sc.SpanID().String()),
++		)
++	}
++	return j.Handler.Handle(ctx, r)
++}
++
++// WithAttrs et WithGroup gardent l'enveloppe (sinon journal.With(…) la perdrait).
++func (j JournalCorrele) WithAttrs(a []slog.Attr) slog.Handler {
++	return JournalCorrele{j.Handler.WithAttrs(a)}
++}
++
++// WithGroup : voir WithAttrs.
++func (j JournalCorrele) WithGroup(nom string) slog.Handler {
++	return JournalCorrele{j.Handler.WithGroup(nom)}
++}
+diff --git a/internal/telemetrie/journal_test.go b/internal/telemetrie/journal_test.go
+new file mode 100644
+index 0000000..1f0a27b
+--- /dev/null
++++ b/internal/telemetrie/journal_test.go
+@@ -0,0 +1,36 @@
++package telemetrie_test
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"log/slog"
++	"testing"
++
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/telemetrie"
++)
++
++func TestJournalCorrele(t *testing.T) {
++	var sortie bytes.Buffer
++	journal := slog.New(telemetrie.JournalCorrele{Handler: slog.NewJSONHandler(&sortie, nil)}).With("composant", "essai")
++	ctx, span := sdktrace.NewTracerProvider().Tracer("essai").Start(context.Background(), "requête")
++	journal.InfoContext(ctx, "dans une requête")
++	span.End()
++	journal.Info("hors requête")
++
++	lignes := bytes.Split(bytes.TrimSpace(sortie.Bytes()), []byte("\n"))
++	var avec, sans map[string]any
++	_ = json.Unmarshal(lignes[0], &avec)
++	_ = json.Unmarshal(lignes[1], &sans)
++	if avec["trace_id"] != span.SpanContext().TraceID().String() || avec["span_id"] != span.SpanContext().SpanID().String() {
++		t.Errorf("trace_id/span_id absents ou faux : %v", avec)
++	}
++	if avec["composant"] != "essai" {
++		t.Error("With() a perdu l'enveloppe")
++	}
++	if _, ok := sans["trace_id"]; ok {
++		t.Error("trace_id hors requête")
++	}
++}
+diff --git a/internal/telemetrie/telemetrie.go b/internal/telemetrie/telemetrie.go
+new file mode 100644
+index 0000000..1158fce
+--- /dev/null
++++ b/internal/telemetrie/telemetrie.go
+@@ -0,0 +1,81 @@
++// Package telemetrie installe les traces OpenTelemetry de MédiDoc (M23-E06).
++//
++// Tout se règle par les variables d'environnement STANDARD d'OpenTelemetry, posées par la
++// plateforme (composant kustomize « telemetrie » de medidoc/deploiement) :
++//
++//	OTEL_SERVICE_NAME            medidoc
++//	OTEL_RESOURCE_ATTRIBUTES     deployment.environment.name=…,service.namespace=medisphere
++//	OTEL_EXPORTER_OTLP_ENDPOINT  http://otel-agent-collector.traces.svc.cluster.local:4317 (gRPC sans TLS)
++//	OTEL_TRACES_SAMPLER(_ARG)    lus par le SDK (défaut : parentbased_always_on)
++//	OTEL_PROPAGATORS             lus par autoprop (défaut : tracecontext,baggage)
++//	OTEL_SDK_DISABLED=true       aucune trace
++//
++// Sans OTEL_EXPORTER_OTLP_ENDPOINT (poste de développement, tests), les spans existent (identifiants
++// disponibles pour les journaux) mais ne sont pas exportées.
++package telemetrie
++
++import (
++	"context"
++	"errors"
++	"net/http"
++	"os"
++	"strings"
++
++	"go.opentelemetry.io/contrib/propagators/autoprop"
++	"go.opentelemetry.io/otel"
++	"go.opentelemetry.io/otel/attribute"
++	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
++	"go.opentelemetry.io/otel/sdk/resource"
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++)
++
++// Arret vide les spans en attente et ferme l'exportateur.
++type Arret func(context.Context) error
++
++// Demarrer installe le fournisseur de traces et le propagateur globaux. À appeler une fois, au
++// démarrage, AVANT de créer le client S3 et le serveur HTTP.
++func Demarrer(ctx context.Context, version string) (Arret, error) {
++	rien := func(context.Context) error { return nil }
++	if strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true") {
++		return rien, nil
++	}
++	// Propagation W3C (traceparent, baggage) par défaut ; OTEL_PROPAGATORS peut la changer.
++	otel.SetTextMapPropagator(autoprop.NewTextMapPropagator())
++
++	// Ressource : OTEL_SERVICE_NAME et OTEL_RESOURCE_ATTRIBUTES (WithFromEnv), SDK, et la version
++	// livrée (la même que /healthz). Pas de semconv importé : une seule clé, écrite en clair.
++	res, err := resource.New(ctx,
++		resource.WithFromEnv(),
++		resource.WithTelemetrySDK(),
++		resource.WithAttributes(attribute.String("service.version", version)),
++	)
++	if err != nil && !errors.Is(err, resource.ErrPartialResource) {
++		return rien, err
++	}
++
++	opts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
++	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" {
++		// Point d'accès, TLS (http:// = sans TLS), en-têtes et délais : variables OTEL_EXPORTER_OTLP_*.
++		// La connexion gRPC est paresseuse : un Collector absent au démarrage ne bloque rien.
++		exp, err := otlptracegrpc.New(ctx)
++		if err != nil {
++			return rien, err
++		}
++		// Envoi par lots en tâche de fond : une requête HTTP n'attend jamais le Collector.
++		opts = append(opts, sdktrace.WithBatcher(exp))
++	}
++	// L'échantillonneur n'est pas passé : le SDK lit OTEL_TRACES_SAMPLER et OTEL_TRACES_SAMPLER_ARG.
++	fournisseur := sdktrace.NewTracerProvider(opts...)
++	otel.SetTracerProvider(fournisseur)
++	return fournisseur.Shutdown, nil
++}
++
++// HorsSondes est le filtre de l'instrumentation HTTP : ni les sondes de Kubernetes ni la collecte
++// de Prometheus ne produisent de span (une requête toutes les quelques secondes, sans intérêt).
++func HorsSondes(r *http.Request) bool {
++	switch r.URL.Path {
++	case "/healthz", "/readyz", "/metrics":
++		return false
++	}
++	return true
++}
+diff --git a/internal/telemetrie/telemetrie_test.go b/internal/telemetrie/telemetrie_test.go
+new file mode 100644
+index 0000000..e99f8d9
+--- /dev/null
++++ b/internal/telemetrie/telemetrie_test.go
+@@ -0,0 +1,122 @@
++package telemetrie_test
++
++import (
++	"bytes"
++	"io"
++	"log/slog"
++	"mime/multipart"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
++	"go.opentelemetry.io/otel/propagation"
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++	"go.opentelemetry.io/otel/sdk/trace/tracetest"
++
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/serveur"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage/stockagetest"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/telemetrie"
++)
++
++// serveurTrace monte le serveur comme main.go, avec un fournisseur de traces local qui enregistre
++// les spans en mémoire (pas de fournisseur global : les tests restent indépendants).
++func serveurTrace(t *testing.T) (*httptest.Server, *tracetest.SpanRecorder) {
++	t.Helper()
++	enreg := tracetest.NewSpanRecorder()
++	fournisseur := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(enreg))
++	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
++	srv := serveur.Nouveau(stockage.NouveauDepot(stockagetest.Nouveau(), "medidoc-documents"), 1<<20, "1.2.3", log)
++	h := otelhttp.NewHandler(srv.Handler(), "medidoc",
++		otelhttp.WithFilter(telemetrie.HorsSondes),
++		otelhttp.WithTracerProvider(fournisseur),
++		otelhttp.WithPropagators(propagation.TraceContext{}),
++	)
++	ts := httptest.NewServer(h)
++	t.Cleanup(ts.Close)
++	return ts, enreg
++}
++
++func TestSondesNonTracees(t *testing.T) {
++	ts, enreg := serveurTrace(t)
++	for _, chemin := range []string{"/healthz", "/readyz", "/metrics"} {
++		r, err := http.Get(ts.URL + chemin)
++		if err != nil {
++			t.Fatal(err)
++		}
++		_ = r.Body.Close()
++	}
++	if n := len(enreg.Ended()); n != 0 {
++		t.Fatalf("les sondes ne doivent produire aucune span, %d obtenue(s)", n)
++	}
++}
++
++func TestSpanNommeeParLaRouteEtContexteRepris(t *testing.T) {
++	ts, enreg := serveurTrace(t)
++	var corps bytes.Buffer
++	mw := multipart.NewWriter(&corps)
++	_ = mw.WriteField("patient", "PAT-000123")
++	fw, _ := mw.CreateFormFile("fichier", "compte-rendu-échographie.pdf")
++	_, _ = fw.Write([]byte("%PDF-1.7 contenu"))
++	_ = mw.Close()
++	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/documents", &corps)
++	req.Header.Set("Content-Type", mw.FormDataContentType())
++	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
++	req.Header.Set("traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
++	r, err := http.DefaultClient.Do(req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	_ = r.Body.Close()
++	if r.StatusCode != http.StatusCreated {
++		t.Fatalf("code %d", r.StatusCode)
++	}
++
++	spans := enreg.Ended()
++	if len(spans) != 1 {
++		t.Fatalf("une span attendue, %d obtenue(s)", len(spans))
++	}
++	s := spans[0]
++	if s.Name() != "POST /documents" {
++		t.Errorf("nom de span %q, attendu « POST /documents »", s.Name())
++	}
++	if got := s.SpanContext().TraceID().String(); got != traceID {
++		t.Errorf("trace %s, attendue %s (contexte W3C non repris)", got, traceID)
++	}
++	if !s.Parent().IsRemote() {
++		t.Error("le parent devrait être distant (MédiAgenda)")
++	}
++	for _, kv := range s.Attributes() {
++		v := kv.Value.Emit()
++		if strings.Contains(v, "PAT-000123") || strings.Contains(v, "échographie") {
++			t.Errorf("donnée de santé dans l'attribut %s=%s", kv.Key, v)
++		}
++	}
++}
++
++func TestExemplarEnOpenMetrics(t *testing.T) {
++	ts, enreg := serveurTrace(t)
++	r, err := http.Get(ts.URL + "/documents")
++	if err != nil {
++		t.Fatal(err)
++	}
++	_ = r.Body.Close()
++	traceID := enreg.Ended()[0].SpanContext().TraceID().String()
++
++	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/metrics", nil)
++	req.Header.Set("Accept", "application/openmetrics-text; version=1.0.0")
++	r, err = http.DefaultClient.Do(req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	corps, _ := io.ReadAll(r.Body)
++	_ = r.Body.Close()
++	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/openmetrics-text") {
++		t.Fatalf("OpenMetrics attendu, reçu %q", r.Header.Get("Content-Type"))
++	}
++	if !strings.Contains(string(corps), `trace_id="`+traceID+`"`) {
++		t.Errorf("exemplar de la trace %s absent de /metrics", traceID)
++	}
++}

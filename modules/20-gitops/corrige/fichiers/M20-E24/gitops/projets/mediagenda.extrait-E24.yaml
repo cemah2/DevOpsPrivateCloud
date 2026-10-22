@@ -1,0 +1,25 @@
+# plateforme/gitops — projets/mediagenda.yaml : AJOUT de M20-E24 (SEC-2124) à l'AppProject d'E07.
+# Rôle de PROJET : défini et versionné avec le projet, il ne peut donner de droits QUE sur ce projet
+# (Argo CD refuse une politique de rôle de projet dont l'objet sort de « mediagenda/… »).
+# Il ne sert qu'à partir du SSO (M24) : « groups » liste les groupes de la revendication « groups »
+# de Keycloak, mêmes noms que les groupes Kubernetes du M14. Les comptes LOCAUX, eux, sont affectés
+# aux rôles GLOBAUX dans policy.csv (plateforme/k8s) ; on n'affecte pas un compte local à un rôle de
+# projet (le compte local et le groupe SSO de même nom seraient confondus : documentation RBAC).
+# Mêmes droits que role:mediagenda-equipe, pour que le passage au SSO ne change rien pour l'équipe.
+spec:
+  roles:
+    - name: equipe
+      description: "Équipe MédiAgenda (SSO, M24) : dev et recette, production en lecture"
+      groups:
+        - medisphere:mediagenda-devs
+      policies:
+        - p, proj:mediagenda:equipe, applications, get, mediagenda/*, allow
+        - p, proj:mediagenda:equipe, applications, sync, mediagenda/mediagenda-dev, allow
+        - p, proj:mediagenda:equipe, applications, sync, mediagenda/mediagenda-recette, allow
+        - p, proj:mediagenda:equipe, applications, action/argoproj.io/Rollout/*, mediagenda/mediagenda-recette, allow
+        - p, proj:mediagenda:equipe, logs, get, mediagenda/mediagenda-dev, allow
+        - p, proj:mediagenda:equipe, logs, get, mediagenda/mediagenda-recette, allow
+        - p, proj:mediagenda:equipe, applications, sync, mediagenda/mediagenda-prod, deny
+        - p, proj:mediagenda:equipe, applications, delete, mediagenda/*, deny
+        - p, proj:mediagenda:equipe, applications, override, mediagenda/*, deny
+        - p, proj:mediagenda:equipe, exec, create, mediagenda/*, deny

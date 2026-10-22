@@ -1,0 +1,70 @@
+# plateforme/observabilite/jaeger-essai/values.yaml (M23-E15, ESSAI retiré en fin d'exercice) — chart
+# jaegertracing/jaeger 4.16.x (Jaeger 2.22, binaire unique construit sur le Collector OpenTelemetry).
+# Stockage EN MÉMOIRE : rien ne survit à un redémarrage, c'est voulu (comparaison, pas production).
+jaeger:
+  replicas: 1
+  image:
+    registry: registry.par1.medisphere.internal/dockerhub
+    repository: jaegertracing/jaeger
+    tag: "2.22.0"
+  resources:
+    requests: {cpu: 100m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  podSecurityContext:
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: ["ALL"]}
+# Configuration complète (format Collector OpenTelemetry), reprise de cmd/jaeger/internal/all-in-one.yaml de la
+# v2.22.0 : écoute sur toutes les interfaces du pod, mémoire bornée à 20 000 traces, OTLP seulement.
+userconfig:
+  service:
+    extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [jaeger_storage_exporter]
+    telemetry:
+      resource:
+        service.name: jaeger
+      metrics:
+        level: detailed
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
+      logs:
+        level: info
+  extensions:
+    healthcheckv2:
+      use_v2: true
+      http:
+        endpoint: 0.0.0.0:13133
+    jaeger_query:
+      storage:
+        traces: memoire
+    jaeger_storage:
+      backends:
+        memoire:
+          memory:
+            max_traces: 20000
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  processors:
+    batch: {}
+  exporters:
+    jaeger_storage_exporter:
+      trace_storage: memoire

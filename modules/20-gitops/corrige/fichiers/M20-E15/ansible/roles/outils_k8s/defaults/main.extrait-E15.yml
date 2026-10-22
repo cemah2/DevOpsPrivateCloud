@@ -1,0 +1,12 @@
+# plateforme/ansible — roles/outils_k8s/defaults/main.yml : AJOUT de M20-E15 (PLAT-2115).
+# Le greffon kubectl d'Argo Rollouts est un binaire NU (pas d'archive), comme la CLI argocd ajoutée en
+# E03 : même traitement que celle-ci dans le rôle (téléchargement vérifié, dossier versionné, lien).
+# Nom du lien : kubectl-argo-rollouts (kubectl trouve ses greffons « kubectl-* » dans le PATH :
+# « kubectl argo rollouts … »). Version = celle du contrôleur (1.10.1). Somme relevée dans
+# argo-rollouts-checksums.txt de la version (fichier publié avec les binaires).
+outils_k8s_binaires_nus:
+  # (entrée argocd d'E03 inchangée)
+  - nom: kubectl-argo-rollouts
+    version: "1.10.1"
+    url: https://github.com/argoproj/argo-rollouts/releases/download/v1.10.1/kubectl-argo-rollouts-linux-amd64
+    somme: "sha256:fb28a5ba80939aae8e6cb4c04c1e809d080938a2f0d03d496311fc643b4b92cd"

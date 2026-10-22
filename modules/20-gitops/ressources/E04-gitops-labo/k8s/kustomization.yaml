@@ -1,0 +1,14 @@
+# formation/gitops-labo — k8s/kustomization.yaml (M20-E04)
+# Argo CD reconnaît un dossier Kustomize à la présence de ce fichier et lance « kustomize build ».
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: gitops-labo
+      medisphere.internal/proprietaire: plateforme
+    includeSelectors: false
+    includeTemplates: true

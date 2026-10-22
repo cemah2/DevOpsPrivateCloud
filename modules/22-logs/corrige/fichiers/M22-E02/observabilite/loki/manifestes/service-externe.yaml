@@ -1,0 +1,29 @@
+# Service loki-externe (M22-E02) : l'API de Loki hors du cluster, pour les agents des VMs (écriture,
+# M22-E05) et les vérifications depuis MGMT (lecture). Seul le port HTTP 3100 est publié (pas le gRPC
+# 9095 du Service « loki » du chart).
+# - lbipam.cilium.io/ips : adresse DEMANDÉE dans le pool lb-par1 (plage .50-.199 des services, M15) ;
+# - externalTrafficPolicy: Local : l'adresse source du client est conservée (la CiliumNetworkPolicy
+#   filtre sur elle) et seul le nœud qui porte le pod annonce 10.10.41.62/32 en BGP ;
+# - ExternalDNS (source « service ») publie loki.apps.par1.medisphere.internal.
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki-externe
+  labels:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/component: acces-externe
+  annotations:
+    lbipam.cilium.io/ips: 10.10.41.62
+    external-dns.kubernetes.io/hostname: loki.apps.par1.medisphere.internal
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/instance: loki
+    app.kubernetes.io/component: single-binary
+  ports:
+    - name: http
+      port: 3100
+      targetPort: http-metrics
+      protocol: TCP

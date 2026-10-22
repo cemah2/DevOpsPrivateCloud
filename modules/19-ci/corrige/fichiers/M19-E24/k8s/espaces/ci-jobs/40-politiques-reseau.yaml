@@ -1,0 +1,81 @@
+# plateforme/k8s — espaces/ci-jobs/40-politiques-reseau.yaml (M19-E24, SEC-2024).
+# 1. Refus par défaut en entrée ET en sortie de l'espace (NetworkPolicy standard, comme M15-E34).
+#    Aucune entrée n'est nécessaire : le gestionnaire du runner parle au pod par l'API Kubernetes
+#    (attach/exec, relayés par le kubelet), jamais en direct.
+# 2. Sorties autorisées (CiliumNetworkPolicy), et rien d'autre du cluster ni du lab :
+#    - DNS du cluster (avec la règle DNS qui fait passer les requêtes par le mandataire de Cilium,
+#      indispensable à toFQDNs) ;
+#    - git01 en 443 (clone, artefacts, API, registre de paquets) ;
+#    - Harbor en 443 (cache BuildKit côté client, skopeo, cosign, API) ;
+#    - s3-01 en 8333 (cache du runner, E07 ; téléversement par le helper) ;
+#    - buildkitd en 1234 (E08) ;
+#    - Internet en 443 SANS les réseaux privés (dépendances : PyPI, proxy Go, Semgrep…).
+# Les images des pods sont tirées par le kubelet (réseau du nœud) : rien à ouvrir ici pour cela.
+# Flux reportés dans docs/kubernetes/reseau/matrice-flux-cluster.md (plateforme/medisphere).
+# Les sorties vers le lab (git01, reg01, s3-01) traversent la bordure : flux K8S_TRAV → git01 443,
+# → reg01 443, → s3-01 8333 déjà ouverts (M14, M15-E34, M19-E04) ; Internet : NAT de la bordure.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: ci-jobs
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: ci-jobs-sortie
+  namespace: ci-jobs
+spec:
+  description: "Jobs de CI : DNS, git01:443, Harbor:443, s3-01:8333, buildkitd:1234, Internet:443 hors réseaux privés"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toFQDNs:
+        - matchName: git01.par1.medisphere.internal
+        - matchName: registry.par1.medisphere.internal
+        - matchName: reg01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    - toFQDNs:
+        - matchName: s3-01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "8333", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: buildkit
+            app.kubernetes.io/name: buildkitd
+      toPorts:
+        - ports: [{port: "1234", protocol: TCP}]
+    # Internet en 443 : tout l'IPv4 SAUF les réseaux privés (le lab entier est en 10.0.0.0/8 ; les
+    # Services et les pods aussi). Le NAT de la bordure fait le reste.
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            - 100.64.0.0/10
+            - 169.254.0.0/16
+            - 127.0.0.0/8
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    # EXCEPTION TEMPORAIRE (cloisonnement.md, retirée au mini-projet M19-E46) : analyse SonarQube (E16)
+    # par la Gateway gw-par1. Décommente seulement si ton job d'analyse passe par
+    # https://sonarqube.apps.par1.medisphere.internal (à vérifier sur ton lab : avec la Gateway de
+    # Cilium, le trafic interne vers 10.10.41.10 est vu comme allant vers l'entité « ingress »).
+    # - toEntities: [ingress]
+    #   toPorts:
+    #     - ports: [{port: "443", protocol: TCP}]

@@ -1,0 +1,22 @@
+# plateforme/observabilite/supervision/cnp-ecriture-tempo.yaml (M23-E13) — complète les politiques de
+# l'espace supervision (M21-E29) : le metrics-generator de Tempo écrit dans les deux réplicas de Prometheus.
+# Les politiques Cilium s'additionnent : celle-ci n'ouvre que ce flux, et enableDefaultDeny.ingress: false
+# garantit qu'elle ne fait pas, à elle seule, passer Prometheus en « refus par défaut » si M21-E29 ne l'a pas fait.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus-ecriture-tempo
+  namespace: supervision
+spec:
+  description: "Écriture distante (remote write) du metrics-generator de Tempo vers Prometheus"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: prometheus}
+  enableDefaultDeny: {ingress: false}
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: traces, app.kubernetes.io/name: tempo}
+      toPorts:
+        - ports: [{port: "9090", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/api/v1/write"}

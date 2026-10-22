@@ -1,0 +1,27 @@
+# cluster/kubeadm-config.yaml de plateforme/k8s — EXTRAIT (M21-E20, PLAT-2220) : ClusterConfiguration.
+# On AJOUTE aux listes extraArgs existantes (M14 : audit, chiffrement… pour apiServer) ; ne
+# remplace pas une liste entière. API v1beta4 : extraArgs = liste d'objets {name, value}.
+# Vérification : kubeadm config validate --config cluster/kubeadm-config.yaml (kubeadm 1.36).
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+# … kubernetesVersion, controlPlaneEndpoint, networking, apiServer… inchangés …
+controllerManager:
+  extraArgs:
+    # 10257 en HTTPS, authentification ET autorisation déléguées à l'API (jeton de Prometheus,
+    # ClusterRole du chart qui donne GET /metrics) : écouter sur toutes les adresses n'expose
+    # que ce qu'un client AUTORISÉ peut lire. Les sondes du kubelet restent sur 127.0.0.1.
+    - name: bind-address
+      value: 0.0.0.0
+scheduler:
+  extraArgs:
+    - name: bind-address
+      value: 0.0.0.0
+etcd:
+  local:
+    extraArgs:
+      # /metrics et /health d'etcd en HTTP, SANS authentification, sur 2381 : on y lit l'état de
+      # la base (leader, latences, taille), pas les données. Le client et les pairs (2379, 2380)
+      # restent en TLS mutuel. Alternative plus fermée : l'adresse du nœud seulement, par un
+      # « patch » kubeadm propre à chaque nœud (--patches), au lieu de 0.0.0.0 commun.
+      - name: listen-metrics-urls
+        value: http://0.0.0.0:2381

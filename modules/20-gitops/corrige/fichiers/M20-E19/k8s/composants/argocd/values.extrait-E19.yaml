@@ -1,0 +1,75 @@
+# plateforme/k8s — composants/argocd/values.yaml : AJOUT de M20-E19 (PLAT-2119), notifications.
+# Le contrôleur de notifications est livré par le chart (activé par défaut) ; le chart ne pose AUCUN
+# déclencheur ni modèle : le catalogue d'Argo CD n'est pas installé par Helm. On écrit les trois dont
+# MédiSphère a besoin, en français, sur le modèle du catalogue (mêmes conditions « when »).
+notifications:
+  enabled: true
+  # Lien vers l'interface dans les messages ({{.context.argocdUrl}}).
+  argocdUrl: https://argocd.apps.par1.medisphere.internal
+  # Mailpit (mon01, M19-E03) en SMTP 25 avec STARTTLS : le contrôleur (Go) vérifie le certificat avec le
+  # magasin du système ; on lui donne la racine MédiSphère, déjà présente dans argocd-tls-certs-cm
+  # (clé git01.par1.medisphere.internal, E06). SSL_CERT_FILE REMPLACE le magasin du système : sans
+  # conséquence ici, le contrôleur ne parle qu'à Mailpit et à l'API Kubernetes (qui a sa propre CA).
+  extraVolumes:
+    - name: racine-medisphere
+      configMap:
+        name: argocd-tls-certs-cm
+        items:
+          - key: git01.par1.medisphere.internal
+            path: medisphere-root-ca.crt
+  extraVolumeMounts:
+    - name: racine-medisphere
+      mountPath: /etc/ssl/medisphere
+      readOnly: true
+  extraEnv:
+    - name: SSL_CERT_FILE
+      value: /etc/ssl/medisphere/medisphere-root-ca.crt
+  notifiers:
+    # Pas d'authentification : Mailpit accepte les messages du lab sans compte (M19-E03).
+    service.email: |
+      host: smtp.par1.medisphere.internal
+      port: 25
+      from: argocd@medisphere.internal
+  triggers:
+    trigger.on-sync-failed: |
+      - description: La synchronisation a échoué
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [synchro-en-echec]
+    trigger.on-health-degraded: |
+      - description: L'application est dégradée
+        when: app.status.health.status == 'Degraded'
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [sante-degradee]
+    trigger.on-deployed: |
+      - description: Nouvelle version synchronisée et saine (une fois par révision)
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy' and (!time.Parse(app.status.health.lastTransitionTime).Add(1 * time.Minute).Before(time.Parse(app.status.operationState.finishedAt)) or time.Parse(app.status.health.lastTransitionTime).Before(time.Parse(app.status.operationState.startedAt)))
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [deploye]
+  templates:
+    template.synchro-en-echec: |
+      email:
+        subject: "[Argo CD] Échec de synchronisation : {{.app.metadata.name}}"
+      message: |
+        La synchronisation de {{.app.metadata.name}} (projet {{.app.spec.project}}) a échoué le {{.app.status.operationState.finishedAt}}.
+        Révision : {{.app.status.operationState.syncResult.revision}}
+        Message : {{.app.status.operationState.message}}
+        Détail : {{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}?operation=true
+        Runbook : RB-200 (docs/livraison/gitops/ de plateforme/medisphere).
+    template.sante-degradee: |
+      email:
+        subject: "[Argo CD] Application dégradée : {{.app.metadata.name}}"
+      message: |
+        {{.app.metadata.name}} (espace {{.app.spec.destination.namespace}}) est Degraded.
+        {{range .app.status.resources}}{{if and .health (eq .health.status "Degraded")}}- {{.kind}}/{{.name}} : {{.health.message}}
+        {{end}}{{end}}
+        Détail : {{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}
+        Runbook : RB-200 (docs/livraison/gitops/ de plateforme/medisphere).
+    template.deploye: |
+      email:
+        subject: "[Argo CD] {{.app.metadata.name}} déployée"
+      message: |
+        {{.app.metadata.name}} est synchronisée et saine.
+        Révision : {{.app.status.operationState.syncResult.revision}}
+        Lancée par : {{if .app.status.operationState.operation.initiatedBy.automated}}synchronisation automatique{{else}}{{.app.status.operationState.operation.initiatedBy.username}}{{end}}
+        Historique : {{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}?view=history

@@ -1,0 +1,314 @@
+# plateforme/ci-templates — templates/supply-chain.yml : chaîne de livraison d'une image (M13-E09, DEV-1409 ;
+# constructeur partagé de k8s-par1 au M19-E08, PLAT-2008).
+#
+# Inclusion (référence ÉPINGLÉE sur une étiquette du dépôt de gabarits) :
+#   include:
+#     - project: plateforme/ci-templates
+#       ref: v1.<Y>.<Z>                                 # étiquette, pas la branche v1
+#       file: templates/supply-chain.yml
+#   variables:
+#     SC_IMAGE_NOM: medisphere/mediagenda-api        # projet/dépôt dans Harbor (obligatoire)
+#
+# Étapes, toutes sur l'EMPREINTE produite par la construction (jamais une étiquette re-résolue) :
+#   sc:construction  BuildKit sans privilège → archive OCI image.tar + provenance SLSA (mode=max)
+#   sc:analyse       Trivy : critique AVEC correctif = échec, AVANT toute publication
+#   sc:sbom          Syft : SBOM SPDX (référence) + CycloneDX, artefacts du pipeline
+#   sc:publication   Skopeo, robot du projet : copie de l'archive vers Harbor, empreintes préservées ;
+#                    refus si l'étiquette existe déjà (et immuabilité des v* côté Harbor, M13-E10)
+#   sc:signature     Cosign : signature de l'index ET de chaque manifeste de plateforme, attestations
+#                    SPDX, CycloneDX et provenance SLSA (extraite de l'archive), sans journal
+#   sc:verification  Cosign : vérification avec la clé PUBLIQUE embarquée dans l'image outillée
+# Sorties (rapports dotenv) : SC_EMPREINTE (sc:construction), SC_REF = <registre>/<dépôt>@<empreinte>
+# (sc:publication), utilisée par le job « verifier-signature » de templates/verification.yml (E14).
+#
+# Compatible avec les politiques de M13-E14 (signature exigée, images vulnérables refusées) : entre la
+# poussée et la signature, Harbor refuse de SERVIR le manifeste ; aucun job ne relit donc l'image par
+# skopeo après la poussée (empreinte publiée lue dans --digestfile, provenance contrôlée sur l'archive).
+# sc:signature attend la fin de l'analyse de Harbor, et la première signature d'une image d'un projet
+# qui exige la signature suppose l'exemption de Harbor 2.15.3+ (rôle harbor, variable
+# harbor_cosign_lecture_avant_signature, M13-E14).
+#
+# Quand :
+#   - étiquette Git vX.Y.Z (semantic-release, étiquettes protégées) → publication sous vX.Y.Z ;
+#   - branche par défaut → publication sous main-<sha court> (suivi ; nettoyé par la rétention) ;
+#   - merge request → construction, analyse, SBOM seulement (rien n'est publié, aucun secret exposé).
+#
+# Secrets (variables de CI protégées, donc disponibles seulement sur main et les étiquettes
+# protégées) : HARBOR_ROBOT_USER (non développée), HARBOR_ROBOT_TOKEN (masquée), COSIGN_PRIVATE_KEY
+# (fichier), COSIGN_PASSWORD (masquée), MEDISPHERE_ROOT_CA (fichier, variable d'instance : racine
+# MédiSphère pour BuildKit). Aucun secret en argument de commande ni dans le journal.
+#
+# Exécuteur : runner02 (étiquette docker), sans mode privilégié ; BuildKit rootless exige les
+# options de sécurité de l'exécuteur posées au M12-E21 (seccomp/apparmor non confinés pour ce job).
+# M19-E08 : sc:construction peut tourner sur le runner k8s-par1 (le projet surcharge « tags: [k8s] ») :
+# le job n'est alors qu'un client (buildctl) du démon partagé buildkitd, en TLS mutuel (BUILDKIT_HOST et
+# BUILDKIT_TLS_DIR posés par le runner), avec un cache en registre partagé par projet :
+#   registry.par1.medisphere.internal/plateforme/cache-buildkit:<CI_PROJECT_PATH_SLUG>
+# lu ET écrit seulement dans les pipelines protégés (robot cache-buildkit, variables d'instance
+# PROTÉGÉES BUILDKIT_CACHE_UTILISATEUR et BUILDKIT_CACHE_JETON) ; une MR construit sans ce cache.
+
+variables:
+  SC_REGISTRE: registry.par1.medisphere.internal
+  SC_IMAGE_NOM: ""                     # obligatoire : <projet>/<dépôt> (ex. medisphere/mediagenda-api)
+  SC_CONTEXTE: "."
+  SC_DOCKERFILE: Dockerfile            # relatif au contexte
+  SC_PLATEFORME: linux/amd64
+  SC_SEVERITE_BLOQUANTE: CRITICAL      # liste Trivy (CRITICAL ou CRITICAL,HIGH)
+  # Images des jobs : Harbor uniquement, étiquette ET empreinte (Renovate les tient à jour).
+  SC_BUILDKIT_IMAGE: registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.0-rootless@sha256:<EMPREINTE>
+  SC_OUTILS_IMAGE: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.0@sha256:<EMPREINTE>
+
+stages:
+  - construction
+  - analyse
+  - publication
+  - signature
+  - verification
+
+# --- Quand publier, sous quelle étiquette -------------------------------------------------------
+.sc-regles-toujours:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+      variables:
+        SC_ETIQUETTE: $CI_COMMIT_TAG
+        SC_VERSION: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        SC_ETIQUETTE: main-$CI_COMMIT_SHORT_SHA
+        SC_VERSION: main-$CI_COMMIT_SHORT_SHA
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        SC_VERSION: mr-$CI_MERGE_REQUEST_IID
+
+.sc-regles-publication:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+      variables:
+        SC_ETIQUETTE: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        SC_ETIQUETTE: main-$CI_COMMIT_SHORT_SHA
+
+.sc-outils:
+  image: $SC_OUTILS_IMAGE
+  tags: [docker]
+  # Fichier d'authentification du registre hors de l'espace de travail (jamais dans un artefact).
+  variables:
+    DOCKER_CONFIG: /tmp/sc-auth
+  before_script:
+    - test -n "$SC_IMAGE_NOM" || { echo "SC_IMAGE_NOM non défini (ex. medisphere/mediagenda-api)"; exit 1; }
+
+.sc-connexion: &sc-connexion
+  - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+  - printf '%s' "$HARBOR_ROBOT_TOKEN" | skopeo login --authfile "$DOCKER_CONFIG/config.json" --username "$HARBOR_ROBOT_USER" --password-stdin "$SC_REGISTRE"
+
+# --- 1. Construction (BuildKit rootless, sans démon privilégié) ---------------------------------
+sc:construction:
+  stage: construction
+  extends: .sc-regles-toujours
+  tags: [docker]
+  image:
+    name: $SC_BUILDKIT_IMAGE
+    entrypoint: [""]
+  variables:
+    # Démon éphémère seulement (runner02) ; ignoré par le démon partagé.
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox --config /tmp/buildkitd.toml
+    # Démon partagé (M19-E08) : cache en registre par projet.
+    SC_CACHE_BUILDKIT: $SC_REGISTRE/plateforme/cache-buildkit:$CI_PROJECT_PATH_SLUG
+  script:
+    - test -n "$SC_IMAGE_NOM" || { echo "SC_IMAGE_NOM non défini"; exit 1; }
+    - |
+      set -- --frontend dockerfile.v0 \
+        --local context="$SC_CONTEXTE" \
+        --local dockerfile="$SC_CONTEXTE" \
+        --opt filename="$SC_DOCKERFILE" \
+        --opt platform="$SC_PLATEFORME" \
+        --opt build-arg:VERSION="$SC_VERSION" \
+        --opt label:org.opencontainers.image.source="$CI_PROJECT_URL" \
+        --opt label:org.opencontainers.image.revision="$CI_COMMIT_SHA" \
+        --opt label:org.opencontainers.image.version="$SC_VERSION" \
+        --opt attest:provenance=mode=max \
+        --output type=oci,dest=image.tar \
+        --metadata-file metadata.json
+      if [ -n "${BUILDKIT_HOST:-}" ]; then
+        # Démon partagé de k8s-par1 : il connaît déjà la racine MédiSphère (sa configuration) ;
+        # les identifiants du cache sont ceux du CLIENT (session gRPC), jamais du démon.
+        echo "constructeur : démon partagé $BUILDKIT_HOST"
+        if [ -n "${BUILDKIT_CACHE_UTILISATEUR:-}" ] && [ -n "${BUILDKIT_CACHE_JETON:-}" ]; then
+          export DOCKER_CONFIG=/tmp/bk-auth
+          ( umask 077; mkdir -p "$DOCKER_CONFIG"
+            printf '{"auths":{"%s":{"auth":"%s"}}}\n' "$SC_REGISTRE" \
+              "$(printf '%s:%s' "$BUILDKIT_CACHE_UTILISATEUR" "$BUILDKIT_CACHE_JETON" | base64 | tr -d '\n')" \
+              > "$DOCKER_CONFIG/config.json" )
+          set -- "$@" --import-cache "type=registry,ref=$SC_CACHE_BUILDKIT" \
+            --export-cache "type=registry,ref=$SC_CACHE_BUILDKIT,mode=max"
+          echo "cache en registre : $SC_CACHE_BUILDKIT"
+        else
+          echo "pipeline non protégé : pas de cache en registre (cache local du démon seulement)"
+        fi
+        buildctl --addr "$BUILDKIT_HOST" --tlsdir "${BUILDKIT_TLS_DIR:-/etc/buildkit/client}" build "$@"
+      else
+        # Démon éphémère (runner02) : BuildKit tire les images de base dans Harbor, il doit
+        # connaître la racine MédiSphère.
+        echo "constructeur : démon éphémère dans le job (buildctl-daemonless.sh)"
+        printf '[registry."%s"]\n  ca = ["%s"]\n' "$SC_REGISTRE" "$MEDISPHERE_ROOT_CA" > /tmp/buildkitd.toml
+        buildctl-daemonless.sh build "$@"
+      fi
+    # Empreinte de l'index (image + attestation de provenance) : c'est elle qu'on publiera et signera.
+    - |
+      SC_EMPREINTE="$(sed -n 's/.*"containerimage.digest": *"\(sha256:[0-9a-f]\{64\}\)".*/\1/p' metadata.json | head -n 1)"
+    - test -n "$SC_EMPREINTE" || { echo "empreinte introuvable dans metadata.json"; cat metadata.json; exit 1; }
+    - echo "SC_EMPREINTE=$SC_EMPREINTE" | tee construction.env
+  after_script:
+    - rm -rf /tmp/bk-auth
+  artifacts:
+    paths: [image.tar, metadata.json]
+    reports:
+      dotenv: construction.env
+    expire_in: 1 day
+
+# --- 2. Analyse (bloquante, avant publication) --------------------------------------------------
+sc:analyse:
+  stage: analyse
+  extends: [.sc-outils, .sc-regles-toujours]
+  needs: [sc:construction]
+  cache:
+    key: trivy-db
+    paths: [.trivy/]
+  variables:
+    TRIVY_CACHE_DIR: $CI_PROJECT_DIR/.trivy
+  script:
+    # Trivy lit une archive « docker save » ou un dossier OCI, pas une archive OCI : conversion
+    # locale de la variante de la plateforme (les empreintes des couches ne changent pas).
+    - skopeo copy --override-os linux --override-arch amd64 oci-archive:image.tar docker-archive:image-amd64.tar
+    - trivy --version
+    - IGNORE=(); if [ -f .trivyignore ]; then IGNORE=(--ignorefile .trivyignore); fi
+    # Rapport complet (non bloquant), puis contrôle bloquant : critique AVEC correctif.
+    - trivy image --input image-amd64.tar "${IGNORE[@]}" --format json --output trivy.json --exit-code 0
+    - trivy image --input image-amd64.tar "${IGNORE[@]}" --severity "$SC_SEVERITE_BLOQUANTE" --ignore-unfixed --exit-code 1
+  artifacts:
+    when: always
+    paths: [trivy.json]
+    expire_in: 30 days
+
+# --- 3. SBOM --------------------------------------------------------------------------------------
+sc:sbom:
+  stage: analyse
+  extends: [.sc-outils, .sc-regles-toujours]
+  needs: [sc:construction]
+  script:
+    - syft version
+    - syft scan oci-archive:image.tar --platform "$SC_PLATEFORME" --quiet -o spdx-json=sbom.spdx.json -o cyclonedx-json=sbom.cdx.json
+    - jq -e '.spdxVersion == "SPDX-2.3" and (.packages | length) > 0' sbom.spdx.json
+  artifacts:
+    paths: [sbom.spdx.json, sbom.cdx.json]
+    expire_in: 1 year
+
+# --- 4. Publication (robot du projet) ------------------------------------------------------------
+# La provenance de BuildKit est dans l'index de l'archive (même empreinte que l'image publiée, donc
+# couverte par la signature) : contrôle AVANT publication, sur l'archive, sans requête au registre.
+sc:publication:
+  stage: publication
+  extends: [.sc-outils, .sc-regles-publication]
+  needs: [sc:construction, sc:analyse, sc:sbom]
+  resource_group: publication-$SC_IMAGE_NOM
+  script:
+    - *sc-connexion
+    - CIBLE="docker://$SC_REGISTRE/$SC_IMAGE_NOM:$SC_ETIQUETTE"
+    # Une version publiée ne bouge plus : on refuse si l'étiquette existe. « absente » (manifest
+    # unknown) est le seul cas qui autorise la poussée ; toute autre erreur (réseau, droits) arrête.
+    - |
+      if skopeo inspect --raw --authfile "$DOCKER_CONFIG/config.json" "$CIBLE" > /dev/null 2> inspect.err; then
+        echo "REFUS : $SC_IMAGE_NOM:$SC_ETIQUETTE existe déjà dans Harbor (une version publiée ne se réécrit pas)."
+        exit 1
+      elif ! grep -qiE 'manifest unknown|not found' inspect.err; then
+        echo "Registre injoignable ou accès refusé :"; cat inspect.err; exit 1
+      fi
+    - |
+      INDEX="$(tar -xOf image.tar index.json | jq -r '.manifests[0].digest')"
+      test "$INDEX" = "$SC_EMPREINTE" || { echo "archive : index $INDEX ≠ construite $SC_EMPREINTE"; exit 1; }
+      tar -xOf image.tar "blobs/sha256/${INDEX#sha256:}" \
+        | jq -e '[.manifests[]? | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 1' > /dev/null \
+        || { echo "archive : aucune attestation de provenance dans l'index"; exit 1; }
+    - skopeo copy --all --preserve-digests --digestfile publiee.txt --authfile "$DOCKER_CONFIG/config.json" oci-archive:image.tar "$CIBLE"
+    # L'empreinte publiée est-elle celle qui a été analysée ? (lue dans --digestfile : avec la politique
+    # « signature exigée » de M13-E14, Harbor refuserait de servir le manifeste avant la signature)
+    - PUBLIEE="$(cat publiee.txt)"
+    - test "$PUBLIEE" = "$SC_EMPREINTE" || { echo "empreinte publiée $PUBLIEE ≠ construite $SC_EMPREINTE"; exit 1; }
+    - echo "SC_REF=$SC_REGISTRE/$SC_IMAGE_NOM@$SC_EMPREINTE" | tee publication.env
+  artifacts:
+    reports:
+      dotenv: publication.env
+
+# --- 5. Signature et attestations (par empreinte, sans journal) ---------------------------------
+sc:signature:
+  stage: signature
+  extends: [.sc-outils, .sc-regles-publication]
+  # sc:construction : l'archive (image.tar) donne les manifestes de l'index et la provenance.
+  needs: [sc:construction, sc:publication, sc:sbom]
+  script:
+    - *sc-connexion
+    # Cosign LIT le manifeste avant de signer. Avec la politique « images vulnérables » de M13-E14,
+    # Harbor ne le sert à personne (Cosign compris, sans exemption possible) tant que l'analyse lancée
+    # à la poussée n'est pas terminée : on attend sa fin (10 min au plus). Sans politique, l'attente
+    # est courte et ne change rien. Identifiants par la configuration de curl lue sur l'entrée
+    # standard (jamais en argument). Champ lu : scan_overview (résumé de l'index pour une image
+    # multi-manifeste : à vérifier sur ta version de Harbor).
+    - |
+      projet="${SC_IMAGE_NOM%%/*}"; depot="${SC_IMAGE_NOM#*/}"; depot="${depot//\//%252F}"
+      url="https://$SC_REGISTRE/api/v2.0/projects/$projet/repositories/$depot/artifacts/$SC_EMPREINTE?with_scan_overview=true"
+      etat=absente
+      for _ in $(seq 1 60); do
+        etat="$(printf 'user = "%s:%s"\n' "$HARBOR_ROBOT_USER" "$HARBOR_ROBOT_TOKEN" \
+          | curl -sf --max-time 20 -K - "$url" \
+          | jq -r '[(.scan_overview // {})[] | .scan_status] | first // "absente"')" || etat=illisible
+        echo "analyse de Harbor : $etat"
+        case "$etat" in
+          Success) break ;;
+          Error | Stopped) echo "l'analyse de Harbor a échoué : voir l'artefact dans Harbor"; exit 1 ;;
+        esac
+        sleep 10
+      done
+      test "$etat" = Success || { echo "analyse de Harbor non terminée après 10 min"; exit 1; }
+    # COSIGN_PRIVATE_KEY est une variable de type FICHIER (chemin) ; COSIGN_PASSWORD est lue par Cosign.
+    # --signing-config : configuration MédiSphère SANS journal public (sinon : Rekor public, sans question).
+    - cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$SC_REF"
+    # La politique « signature exigée » de Harbor vérifie CHAQUE manifeste tiré : un moteur (Docker,
+    # containerd) tire l'index PUIS le manifeste de sa plateforme, qui doit donc être signé lui aussi
+    # (src/server/middleware/contenttrust/contentrust.go de Harbor 2.15.3 : pas d'héritage de
+    # l'index). On signe chaque manifeste de plateforme listé dans l'index de l'archive. Le manifeste
+    # d'attestation de BuildKit (plateforme unknown/unknown) n'est jamais tiré par un moteur, et
+    # Harbor ne l'analyse pas : il reste illisible sous les politiques ; sa provenance est attestée
+    # ci-dessous par Cosign (référent signé, lisible).
+    - |
+      tar -xOf image.tar "blobs/sha256/${SC_EMPREINTE#sha256:}" > index-archive.json
+      for m in $(jq -r '.manifests[] | select((.platform.os // "unknown") != "unknown") | .digest' index-archive.json); do
+        cosign sign --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json "$SC_REGISTRE/$SC_IMAGE_NOM@$m"
+      done
+    - cosign attest --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json --type spdxjson --predicate sbom.spdx.json "$SC_REF"
+    - cosign attest --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json --type cyclonedx --predicate sbom.cdx.json "$SC_REF"
+    # Provenance SLSA v1 de BuildKit (couche in-toto du manifeste d'attestation de l'archive),
+    # attestée par Cosign sur l'index : vérifiable par « cosign verify-attestation --type slsaprovenance1 ».
+    - |
+      att="$(jq -r '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")][0].digest' index-archive.json)"
+      couche="$(tar -xOf image.tar "blobs/sha256/${att#sha256:}" \
+        | jq -r '[.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://slsa.dev/provenance/v1")][0].digest')"
+      tar -xOf image.tar "blobs/sha256/${couche#sha256:}" | jq -e '.predicate' > provenance.json
+      cosign attest --key "$COSIGN_PRIVATE_KEY" --signing-config /etc/medisphere/signing-config.json --type slsaprovenance1 --predicate provenance.json "$SC_REF"
+  artifacts:
+    paths: [provenance.json]
+    expire_in: 1 year
+
+# --- 6. Vérification (comme le fera le consommateur) --------------------------------------------
+sc:verification:
+  stage: verification
+  extends: [.sc-outils, .sc-regles-publication]
+  needs: [sc:publication, sc:signature]
+  script:
+    - *sc-connexion
+    - cosign verify --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true "$SC_REF" > /dev/null
+    - cosign verify-attestation --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true --type spdxjson "$SC_REF" > /dev/null
+    - cosign verify-attestation --key /etc/medisphere/cosign.pub --insecure-ignore-tlog=true --type slsaprovenance1 "$SC_REF" > /dev/null
+    # La provenance de BuildKit (dans l'index, contrôlée sur l'archive par sc:publication) est couverte
+    # par la signature de l'index vérifiée ci-dessus.
+    - echo "Publiée, signée, attestée et vérifiée -> $SC_REF"

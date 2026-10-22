@@ -1,0 +1,41 @@
+# plateforme/gitops — plateforme/loki.yaml (M22-E02, PLAT-2302)
+# Application « loki », projet « plateforme », sous l'application racine (App of Apps, M20-E06).
+# Trois sources (même forme que l'Application kube-prometheus-stack du M21-E02) :
+#   1. le chart recopié dans Harbor charts/ par plateforme/charts-miroir (jamais tiré d'Internet) ;
+#   2. le dépôt plateforme/observabilite, référencé « values » pour le fichier de valeurs ;
+#   3. le même dépôt, dossier loki/ : Namespace, Service 10.10.41.62, CiliumNetworkPolicy, racine.
+# Pas de finaliseur resources-finalizer : supprimer l'Application (erreur, reconstruction d'Argo CD)
+# ne supprime pas Loki ni son volume. Synchronisation automatique : composant de plateforme.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+  labels:
+    medisphere.internal/domaine: observabilite
+spec:
+  project: plateforme
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: journaux
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: loki
+      targetRevision: 19.0.3
+      helm:
+        releaseName: loki
+        valueFiles:
+          - $values/loki/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      path: loki
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

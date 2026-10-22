@@ -1,0 +1,48 @@
+# Compte de service du CronJob argocd-export : lecture de CE QUE LIT « argocd admin export », dans
+# l'espace argocd seulement (code de la commande, v3.5.5 : Get des ConfigMaps nommées, List des
+# Secrets, List des AppProjects, Applications et ApplicationSets).
+# « list » sur les Secrets donne leur contenu : c'est le prix de l'export (argocd-secret, dépôts,
+# clusters). D'où le chiffrement avant tout envoi, et un compte qui ne sert qu'à ça.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: argocd-export
+  labels:
+    app.kubernetes.io/part-of: argocd-sauvegarde
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-export
+  labels:
+    app.kubernetes.io/part-of: argocd-sauvegarde
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames:
+      - argocd-cm
+      - argocd-rbac-cm
+      - argocd-ssh-known-hosts-cm
+      - argocd-tls-certs-cm
+      - argocd-cmd-params-cm
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [list]
+  - apiGroups: [argoproj.io]
+    resources: [applications, appprojects, applicationsets]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-export
+  labels:
+    app.kubernetes.io/part-of: argocd-sauvegarde
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: argocd-export
+subjects:
+  - kind: ServiceAccount
+    name: argocd-export

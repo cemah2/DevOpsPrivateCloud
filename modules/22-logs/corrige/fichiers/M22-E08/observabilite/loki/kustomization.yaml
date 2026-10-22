@@ -1,0 +1,45 @@
+# plateforme/observabilite — loki/kustomization.yaml (version M22-E08 ; créé en M22-E02)
+# Troisième source de l'Application « loki » (path: loki) : ce que le chart ne fournit pas, et les
+# règles du ruler (M22-E08).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: journaux
+resources:
+  - manifestes/namespace.yaml
+  - manifestes/service-externe.yaml
+  - manifestes/politique-reseau.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+configMapGenerator:
+  # Racine MédiSphère (certificat PUBLIC, versionnable) : copie de
+  # /usr/local/share/ca-certificates/medisphere-root-ca.crt de adm01 dans loki/racine/.
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt=racine/medisphere-root-ca.crt
+  # Règles du ruler : UNE ConfigMap par locataire. Le conteneur « sidecar » du pod Loki recopie
+  # chaque ConfigMap étiquetée loki_rule=1 dans le dossier que donne son annotation : le nom du
+  # dossier sous /rules EST le locataire pour le ruler.
+  - name: regles-loki-mediagenda
+    files:
+      - mediagenda-alertes.yaml=regles/mediagenda/alertes.yaml
+    options:
+      labels:
+        loki_rule: "1"
+      annotations:
+        k8s-sidecar-target-directory: /rules/mediagenda
+  - name: regles-loki-audit
+    files:
+      - audit-alertes.yaml=regles/audit/alertes.yaml
+    options:
+      labels:
+        loki_rule: "1"
+      annotations:
+        k8s-sidecar-target-directory: /rules/audit
+  - name: regles-loki-plateforme
+    files:
+      - plateforme-alertes.yaml=regles/plateforme/alertes.yaml
+    options:
+      labels:
+        loki_rule: "1"
+      annotations:
+        k8s-sidecar-target-directory: /rules/plateforme

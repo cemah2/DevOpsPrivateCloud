@@ -1,0 +1,18 @@
+# registre/caches.tf (plateforme/infra, état « registre ») — EXTRAIT, M19-E04 (PLAT-2004).
+# Seule la table local.caches change : une entrée « gitlab » (images de GitLab Runner : gestionnaire
+# et helper, publiées sur registry.gitlab.com seulement depuis 2024). Les ressources harbor_registry
+# et harbor_project du M13-E04 la prennent en compte sans autre modification (for_each).
+# Plan attendu : 2 to add (harbor_registry.amont["gitlab"], harbor_project.cache["gitlab"]), 0 to change.
+
+locals {
+  caches = {
+    dockerhub = { fournisseur = "docker-hub", url = "https://hub.docker.com", quota_gio = 40, description = "Docker Hub" }
+    quay      = { fournisseur = "quay", url = "https://quay.io", quota_gio = 10, description = "Quay.io" }
+    ghcr      = { fournisseur = "github", url = "https://ghcr.io", quota_gio = 20, description = "GitHub Container Registry" }
+    k8s       = { fournisseur = "docker-registry", url = "https://registry.k8s.io", quota_gio = 15, description = "registry.k8s.io (images de Kubernetes, M14)" }
+    # M19-E04 : type « Docker Registry » générique (registry.gitlab.com applique le protocole
+    # d'authentification par jeton de la distribution OCI, que le type générique sait suivre en
+    # anonyme pour des images publiques). 10 Gio : quelques versions du gestionnaire et du helper.
+    gitlab = { fournisseur = "docker-registry", url = "https://registry.gitlab.com", quota_gio = 10, description = "registry.gitlab.com (GitLab Runner, M19)" }
+  }
+}

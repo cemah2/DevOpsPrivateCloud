@@ -1,0 +1,34 @@
+# plateforme/observabilite — slo/medidoc-disponibilite.yaml (M21-E26, PLAT-2226 ; alertes M21-E27, PLAT-2227)
+# MédiDoc n'a pas de production dans le lab : l'objectif porte sur la recette (medidoc-recette,
+# M20-E33), environnement le plus proche de la future production ; il en changera d'espace avec elle.
+# Exclus : sondes (/healthz, /readyz) et /metrics (motifs du routeur Go : « GET /healthz »).
+# Recette : rien ne réveille (politique de budget, § environnements hors production).
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: medidoc-disponibilite
+  labels:
+    pyrra.dev/equipe: medidoc
+  annotations:
+    pyrra.dev/resume: "MédiDoc (recette) consomme son budget d'erreurs trop vite"
+    pyrra.dev/description: "Taux de 5xx au-dessus de ce que permet l'objectif de 99 % sur 28 jours."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-216-budget-erreur.md
+spec:
+  description: "MédiDoc (recette) : requêtes servies sans erreur 5xx"
+  target: "99"
+  window: 28d
+  indicator:
+    ratio:
+      errors:
+        metric: medidoc_http_requests_total{namespace="medidoc-recette", route!~".*(/healthz|/readyz|/metrics)", code=~"5.."}
+      total:
+        metric: medidoc_http_requests_total{namespace="medidoc-recette", route!~".*(/healthz|/readyz|/metrics)"}
+  alerting:
+    burnrates: true
+    absent: true
+    severities:
+      fastBurn: avertissement
+      mediumBurn: avertissement
+      slowBurn: info
+      longTermBurn: info
+      absent: avertissement

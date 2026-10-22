@@ -1,0 +1,6 @@
+# scrape/ — ScrapeConfig et Probe de la plateforme (VMs : M21-E08 ; exportateurs : M21-E10).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Généré par plateforme/ansible playbooks/supervision-cibles.yml (NetBox) : ne pas éditer.
+  - vms.yaml

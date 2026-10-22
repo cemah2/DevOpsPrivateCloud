@@ -1,0 +1,45 @@
+# plateforme/k8s — rbac/wb-checks-observabilite.yaml (M21-E02, PLAT-2202)
+# Lecture seule des objets d'observabilité pour le compte des vérifications du workbook
+# (wb-system/wb-checks, M14-E06). AGRÉGÉE au ClusterRole « wb-checks » par l'étiquette
+# workbook.medisphere.internal/checks=true (comme wb-checks-reseau, -stockage, -livraison) :
+# aucune liaison à écrire. Aucun verbe d'écriture, aucun accès aux Secrets (la configuration
+# d'Alertmanager, le jeton de Prometheus et le mot de passe de Grafana sont des Secrets).
+# Prévu pour tout le bloc E : prometheus-operator (M21), Pyrra (M21-E26), OpenTelemetry (M23) ;
+# une règle sur un groupe absent ne gêne pas.
+# Déjà couverts par wb-checks-base (M14) : pods, services, configmaps, namespaces, PVC,
+# déploiements, statefulsets, daemonsets ; politiques réseau (M15) ; HTTPRoute (M15).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-observabilite
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  - apiGroups: ["monitoring.coreos.com"]
+    resources:
+      - prometheuses
+      - prometheusagents
+      - alertmanagers
+      - thanosrulers
+      - servicemonitors
+      - podmonitors
+      - prometheusrules
+      - scrapeconfigs
+      - probes
+      - alertmanagerconfigs
+    verbs: ["get", "list", "watch"]
+  # Statut des CR (conditions Available/Reconciled, réplicas) : sous-ressource status.
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheuses/status", "alertmanagers/status"]
+    verbs: ["get"]
+  - apiGroups: ["pyrra.dev"]
+    resources: ["servicelevelobjectives"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["opentelemetry.io"]
+    resources: ["opentelemetrycollectors", "instrumentations", "opampbridges", "targetallocators"]
+    verbs: ["get", "list", "watch"]
+  # Certificats des webhooks de l'opérateur (cert-manager) : état seulement, pas les Secrets.
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates", "issuers"]
+    verbs: ["get", "list", "watch"]

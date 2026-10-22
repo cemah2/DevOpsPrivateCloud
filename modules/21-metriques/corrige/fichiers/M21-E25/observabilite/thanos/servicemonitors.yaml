@@ -1,0 +1,39 @@
+# plateforme/observabilite — thanos/servicemonitors.yaml (M21-E24 ; Compactor ajouté en M21-E25, PLAT-2225)
+# Collecte des métriques de Thanos Query et du Store Gateway (jobs « thanos-query » et
+# « thanos-store », « thanos-compactor », du nom des Services). Les sidecars sont collectés par le ServiceMonitor du
+# chart (job « kps-thanos-discovery »). L'étiquette de sélection vient de la kustomization racine.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: thanos-query
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-query
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: thanos-store
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-store
+  endpoints:
+    - port: http
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: thanos-compactor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-compactor
+  endpoints:
+    - port: http
+      interval: 30s

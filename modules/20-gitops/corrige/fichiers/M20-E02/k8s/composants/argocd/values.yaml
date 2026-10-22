@@ -1,0 +1,112 @@
+# plateforme/k8s — composants/argocd/values.yaml (M20-E02, PLAT-2102)
+# Valeurs de la release Helmfile « argocd » (chart argo/argo-cd 10.10.5, Argo CD v3.5.5).
+# Ne contient QUE ce qui diffère des défauts du chart, chaque écart justifié. Aucune donnée secrète :
+# les Secrets d'Argo CD (identifiants des dépôts, mots de passe des comptes) ne passent jamais par
+# ces valeurs (secrets-k8s.sh à partir de M20-E04, argocd account update-password en M20-E03).
+# Le domaine (global.domain) et la racine MédiSphère (configs.tls) sont posés par
+# releases/argocd.yaml.gotmpl, qui connaît l'environnement.
+
+global:
+  # Images par le cache Harbor « quay » (quay.io/argoproj/argocd), étiquette = appVersion du chart
+  # (v3.5.5) : on ne la répète pas ici, elle suit la version du chart épinglée dans la release.
+  image:
+    repository: registry.par1.medisphere.internal/quay/argoproj/argocd
+  # Argo CD est un composant critique : sans lui, plus aucune réconciliation (M14-E14).
+  priorityClassName: medisphere-critique
+  # Journaux structurés : lus par Loki au M22.
+  logging:
+    format: json
+    level: info
+
+configs:
+  params:
+    # TLS terminé par la Gateway gw-par1 (joker *.apps, M15) : le serveur parle HTTP en clair
+    # DERRIÈRE la Gateway (h2c / HTTP/1.1 vers le Service, port 80). Justification et limites :
+    # voir le corrigé de M20-E02 ; le chiffrement de bout en bout est traité en M20-E25.
+    server.insecure: true
+  cm:
+    # Compte admin intégré : actif le temps de créer les comptes locaux (M20-E03), puis désactivé.
+    admin.enabled: true
+    # Suivi des ressources par annotation (défaut de la 3.x, écrit pour être lu) :
+    # argocd.argoproj.io/tracking-id sur chaque objet géré.
+    application.resourceTrackingMethod: annotation
+    # Terminal web dans l'interface : non (M20-E25 le confirme).
+    exec.enabled: false
+
+# SSO : pas avant le M24 (Keycloak). Dex désactivé : un pod de moins, une surface de moins.
+dex:
+  enabled: false
+
+controller:
+  # Un seul réplica pour l'instant (sharding en M20-E27).
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 768Mi
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+notifications:
+  # Contrôleur présent mais sans service ni déclencheur jusqu'à M20-E19.
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# Redis du chart (un pod, cache seulement : rien à sauvegarder). Image officielle de Docker Hub par
+# le cache Harbor « dockerhub » ; le chart pointe sur la copie ECR publique de la même image.
+redis:
+  image:
+    repository: registry.par1.medisphere.internal/dockerhub/library/redis
+    tag: 8.6.4-alpine
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+server:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # Route sur la Gateway principale, écouteur HTTPS (joker apps-joker). L'espace argocd porte
+  # l'étiquette medisphere.internal/exposition=oui (allowedRoutes de gw-par1).
+  httproute:
+    enabled: true
+    parentRefs:
+      - name: gw-par1
+        namespace: passerelles
+        sectionName: https
+    hostnames:
+      - argocd.apps.par1.medisphere.internal
+    rules:
+      - matches:
+          - path:
+              type: PathPrefix
+              value: /

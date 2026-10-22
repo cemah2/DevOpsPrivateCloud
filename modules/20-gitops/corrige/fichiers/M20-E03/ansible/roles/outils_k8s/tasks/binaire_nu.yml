@@ -1,0 +1,28 @@
+---
+# Un binaire nu (M20-E03) : téléchargé dans un dossier versionné, empreinte SHA-256 vérifiée par
+# get_url AVANT d'être rendu exécutable, lien dans /usr/local/bin. Variable de boucle :
+# outils_k8s_binaire_nu ({nom, version, url, somme}).
+
+- name: Dossier versionné de l'outil
+  ansible.builtin.file:
+    path: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire_nu.nom }}-{{ outils_k8s_binaire_nu.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Télécharger le binaire (empreinte SHA-256 vérifiée)
+  ansible.builtin.get_url:
+    url: "{{ outils_k8s_binaire_nu.url }}"
+    dest: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire_nu.nom }}-{{ outils_k8s_binaire_nu.version }}/{{ outils_k8s_binaire_nu.nom }}"
+    checksum: "{{ outils_k8s_binaire_nu.somme }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Lier le binaire dans /usr/local/bin
+  ansible.builtin.file:
+    src: "{{ outils_k8s_dossier }}/{{ outils_k8s_binaire_nu.nom }}-{{ outils_k8s_binaire_nu.version }}/{{ outils_k8s_binaire_nu.nom }}"
+    dest: "/usr/local/bin/{{ outils_k8s_binaire_nu.nom }}"
+    state: link
+    force: true

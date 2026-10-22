@@ -1,0 +1,23 @@
+# formation/gitops-labo — k8s/hpa.yaml (M20-E12) : « labo » suit sa charge, entre 2 et 4 pods.
+# metrics-server (M14-E20) fournit l'utilisation CPU ; les pods de labo doivent déclarer une requête
+# CPU (sinon : « missing request for cpu », pas de mise à l'échelle).
+# Dès que ce HPA existe, spec.replicas du Deployment appartient au HPA : voir ignoreDifferences dans
+# applications/labo.yaml de plateforme/gitops. À partir de M20-E15, la cible devient le Rollout.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: labo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: labo
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

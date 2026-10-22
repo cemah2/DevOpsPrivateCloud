@@ -1,0 +1,51 @@
+# Base de MédiAgenda (M17-E09) : le rendu du chart mediagenda signé, à la version et au digest fixés
+# dans chart.env. Le rendu est produit par outils/rendre-base.sh (vérification Cosign du digest, puis
+# « helm template ») et COMMITÉ : la MR montre exactement ce qui changera dans le cluster.
+# Ne modifie jamais base/rendu/ à la main ; modifie chart.env ou values-communes.yaml et relance le script.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rendu/mediagenda.yaml
+# Paramètres d'environnement : ConfigMap générée (nom suffixé de l'empreinte de son contenu), que les
+# overlays complètent par « behavior: merge ». Ajoutée APRÈS la ConfigMap du chart dans envFrom : en
+# cas de clé en double, la dernière source l'emporte.
+configMapGenerator:
+  - name: mediagenda-parametres
+    # M20-E12 : chaque changement de paramètres crée une NOUVELLE ConfigMap (suffixe d'empreinte).
+    # En prod, synchronisée à la main sans prune, l'ancienne reste dans l'espace : sans cette
+    # annotation, elle rendrait l'Application OutOfSync (« requires pruning ») pour toujours.
+    options:
+      annotations:
+        argocd.argoproj.io/compare-options: IgnoreExtraneous
+    literals:
+      - MEDIAGENDA_CACHE_TTL=60
+patches:
+  # En-têtes de sécurité de l'entrée (M15-E33, SEC-1633), repris de l'overlay de recette de M17-E04 :
+  # le chart ne les rend pas. Dans la base, ils valent pour la recette ET la production.
+  - target:
+      kind: HTTPRoute
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - name: Strict-Transport-Security
+                  value: max-age=31536000; includeSubDomains
+                - name: X-Content-Type-Options
+                  value: nosniff
+                - name: Referrer-Policy
+                  value: no-referrer
+                - name: X-Frame-Options
+                  value: DENY
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/envFrom/-
+        value:
+          configMapRef:
+            name: mediagenda-parametres

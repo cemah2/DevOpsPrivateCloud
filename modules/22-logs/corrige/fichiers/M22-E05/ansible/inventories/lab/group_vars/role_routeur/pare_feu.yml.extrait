@@ -1,0 +1,24 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M22-E05, PLAT-2305.
+# Matrice commune à gw01 et gw02. Appliquer une passerelle à la fois :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01 --check --diff   (seules ces règles changent)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw01   puis   --limit gw02
+# Retour arrière : git revert de la MR, même playbook sur gw01 puis gw02.
+#
+# 1) Définitions (section pare_feu_definitions ; NET_K8S_LB existe depuis M15-E13).
+#    Ajoute NET_INFRA et NET_DMZ seulement si ta matrice ne les a pas déjà sous un autre nom.
+  - {nom: LOKI, valeur: 10.10.41.62, commentaire: "Loki de k8s-par1, écriture des journaux des VMs (M22-E02)"}
+  - {nom: NET_INFRA, valeur: 10.10.20.0/24, commentaire: "VLAN 20 INFRA (services du socle)"}
+  - {nom: NET_DMZ, valeur: 10.10.70.0/24, commentaire: "VLAN 70 DMZ (lb01, lb02)"}
+#
+# 2) Transit (bloc « Observabilité ») : les agents Alloy des VMs écrivent dans Loki.
+#    La sortie est l'interface du VLAN 40 : les /32 de 10.10.41.0/24 sont routées vers les nœuds (BGP).
+  - {entree: $V_INFRA, source: $NET_INFRA, sortie: $V_K8S, destination: $LOKI, proto: tcp, ports: 3100,
+     motif: "agents Alloy des VMs du VLAN 20 vers Loki (journald, locataire plateforme)", ref: M22-E05}
+  - {entree: $V_DMZ, source: $NET_DMZ, sortie: $V_K8S, destination: $LOKI, proto: tcp, ports: 3100,
+     motif: "agents Alloy de lb01/lb02 vers Loki", ref: M22-E05}
+#
+# Rien pour MGMT (adm01 joint déjà tout le lab, M00) ni pour gw01/gw02 eux-mêmes : leur propre
+# trafic sort par la chaîne « output », ouverte ; Loki le voit venir de 10.10.40.2 / 10.10.40.3
+# (adresse de la passerelle sur le VLAN 40), d'où les deux /32 dans la CiliumNetworkPolicy loki-entree.
+# Les VMs de ceph-par1 (VLAN 30) et des environnements (VLAN 99) viendront s'ajouter ici le jour où
+# on y déploie l'agent : ni l'un ni l'autre n'est dans le groupe « socle ».

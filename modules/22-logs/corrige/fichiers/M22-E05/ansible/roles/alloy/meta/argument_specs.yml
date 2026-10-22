@@ -1,0 +1,49 @@
+---
+argument_specs:
+  main:
+    short_description: Agent Grafana Alloy (journal systemd vers Loki)
+    options:
+      alloy_version:
+        type: str
+        description: Version d'Alloy (sans le « v »).
+      alloy_archive_url:
+        type: str
+        description: Archive zip amont du binaire.
+      alloy_sommes_url:
+        type: str
+        description: Fichier SHA256SUMS publié avec la version.
+      alloy_dossier:
+        type: path
+        description: Dossier des versions installées.
+      alloy_utilisateur:
+        type: str
+        description: Compte système qui exécute Alloy.
+      alloy_groupes:
+        type: list
+        elements: str
+        description: Groupes supplémentaires du compte (lecture du journal).
+      alloy_etat:
+        type: path
+        description: Dossier des positions de lecture (--storage.path).
+      alloy_ecoute:
+        type: str
+        description: Adresse d'écoute HTTP de l'agent.
+      alloy_loki_url:
+        type: str
+        description: URL d'écriture de Loki.
+      alloy_locataire:
+        type: str
+        description: Locataire Loki (en-tête X-Scope-OrgID).
+      alloy_site:
+        type: str
+        description: Valeur de l'étiquette site.
+      alloy_role:
+        type: str
+        description: Valeur de l'étiquette role.
+      alloy_journal_age_max:
+        type: str
+        description: Âge maximal des entrées lues au premier démarrage (durée Alloy).
+      alloy_niveaux_ignores:
+        type: list
+        elements: str
+        description: Niveaux de priorité syslog jamais envoyés (mots-clés de journald).

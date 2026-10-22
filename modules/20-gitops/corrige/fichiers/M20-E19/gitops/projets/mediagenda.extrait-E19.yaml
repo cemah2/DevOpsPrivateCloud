@@ -1,0 +1,8 @@
+# plateforme/gitops — projets/mediagenda.yaml : AJOUT de M20-E19 à l'AppProject d'E07.
+# Abonnements de PROJET : valent pour toutes ses Applications (mediagenda-dev, -recette, -prod).
+# Clé : notifications.argoproj.io/subscribe.<déclencheur>.<service> ; plusieurs destinataires séparés
+# par « ; ». Le déclencheur on-deployed n'est PAS ici : il ne vaut que pour la prod (ApplicationSet).
+metadata:
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.email: plateforme@medisphere.internal;julien.petit@medisphere.internal
+    notifications.argoproj.io/subscribe.on-health-degraded.email: astreinte@medisphere.internal;julien.petit@medisphere.internal

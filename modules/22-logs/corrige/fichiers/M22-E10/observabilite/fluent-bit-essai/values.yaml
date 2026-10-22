@@ -1,0 +1,98 @@
+# plateforme/observabilite — fluent-bit-essai/values.yaml (M22-E10, PLAT-2310) — ESSAI TEMPORAIRE
+# Chart fluent/fluent-bit 0.58.3 (Fluent Bit 5.1.3), recopié dans Harbor charts/. Application
+# « fluent-bit-essai », espace journaux-essai, RETIRÉE à la fin de l'exercice.
+# Périmètre volontairement réduit : les conteneurs de mediagenda-recette et de journaux, envoyés au
+# locataire « essai » de Loki, pour comparer avec ce qu'Alloy envoie des mêmes pods.
+
+kind: DaemonSet
+
+image:
+  # Image de Docker Hub (cache Harbor « dockerhub ») : cr.fluentbit.io n'a pas de cache dans Harbor.
+  repository: fluent/fluent-bit
+  tag: 5.1.3
+
+testFramework:
+  enabled: false
+
+priorityClassName: medisphere-essai
+
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: dedie
+    operator: Equal
+    value: bdd
+    effect: NoSchedule
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+# Lecture de /var/log (fichiers de root) : UID 0, aucune capacité, racine en lecture seule.
+securityContext:
+  runAsUser: 0
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+# Volumes : /var/log en lecture seule et un dossier d'état sur le nœud (base des positions).
+# Pas de /var/lib/docker/containers (containerd) ni /etc/machine-id (pas d'entrée systemd ici).
+daemonSetVolumes:
+  - name: varlog
+    hostPath:
+      path: /var/log
+  - name: etat
+    hostPath:
+      path: /var/lib/fluent-bit-essai
+      type: DirectoryOrCreate
+daemonSetVolumeMounts:
+  - name: varlog
+    mountPath: /var/log
+    readOnly: true
+  - name: etat
+    mountPath: /var/lib/fluent-bit
+
+serviceMonitor:
+  enabled: true
+  selector:
+    medisphere.internal/supervision: "oui"
+
+config:
+  inputs: |
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*_mediagenda-recette_*.log,/var/log/containers/*_journaux_*.log
+        multiline.parser  cri
+        Tag               kube.*
+        DB                /var/lib/fluent-bit/positions.db
+        DB.locking        true
+        Mem_Buf_Limit     16MB
+        Skip_Long_Lines   On
+        Refresh_Interval  10
+
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Merge_Log           Off
+        Labels              On
+        Annotations         Off
+        K8S-Logging.Exclude Off
+
+  outputs: |
+    [OUTPUT]
+        Name                loki
+        Match               kube.*
+        Host                loki.journaux.svc.cluster.local
+        Port                3100
+        tenant_id           essai
+        labels              job=fluent-bit, cluster=k8s-par1, namespace=$kubernetes['namespace_name'], container=$kubernetes['container_name'], app=$kubernetes['labels']['app.kubernetes.io/name'], node=$kubernetes['host']
+        structured_metadata pod=$kubernetes['pod_name']
+        remove_keys         kubernetes, stream, _p, time
+        drop_single_key     raw
+        line_format         json

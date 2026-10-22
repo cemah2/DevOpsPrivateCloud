@@ -1,0 +1,7 @@
+# mediagenda/deploiement — components/supervision/kustomization.yaml : ajout de M21-E29.
+# EXTRAIT : ajoute regles.yaml aux ressources du composant (créé en E07).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  # (… servicemonitor.yaml, podmonitor-db.yaml, service-metriques.yaml …)
+  - regles.yaml

@@ -1,0 +1,67 @@
+# plateforme/observabilite — kps/values.yaml : changements de M21-E29 (SEC-2229).
+# EXTRAIT : seules les clés ajoutées ou modifiées sont montrées (les clés grafana.ini d'E02 —
+# server, analytics, users.allow_sign_up, auth.anonymous — restent).
+
+grafana:
+  grafana.ini:
+    security:
+      # Cookies de session envoyés seulement en HTTPS (Grafana est derrière gw-par1, TLS terminé à la
+      # Gateway : Grafana voit du HTTP, mais root_url est en https, et le navigateur aussi).
+      cookie_secure: true
+      # « lax » et pas « strict » : le SSO du M24 (OIDC) revient sur Grafana par une redirection
+      # depuis Keycloak ; avec « strict », le cookie d'état ne serait pas renvoyé et la connexion
+      # échouerait. « lax » bloque déjà les requêtes POST intersites.
+      cookie_samesite: lax
+      # Pas d'appel à gravatar.com (fuite des adresses de courriel, et pas d'Internet dans le lab).
+      disable_gravatar: true
+      # En-têtes de sécurité : HSTS sur ce seul nom (pas les sous-domaines), CSP de Grafana.
+      strict_transport_security: true
+      # Entre guillemets : sans eux, Helm écrit 3.1536e+07 dans grafana.ini (nombre flottant).
+      strict_transport_security_max_age_seconds: "31536000"
+      content_security_policy: true
+    users:
+      allow_sign_up: false
+      allow_org_create: false
+      # Nouvel utilisateur : lecture seule tant qu'une équipe ne lui donne pas plus (E17).
+      auto_assign_org_role: Viewer
+    auth:
+      # Sessions bornées : 8 h d'inactivité, 24 h au plus.
+      login_maximum_inactive_lifetime_duration: 8h
+      login_maximum_lifetime_duration: 24h
+    auth.basic:
+      # Mots de passe des comptes locaux : 12 caractères, majuscule, minuscule, chiffre, symbole.
+      password_policy: true
+    auth.anonymous:
+      enabled: false
+    # Les instantanés publics partiraient vers snapshots.raintank.io (données de santé : interdit).
+    snapshots:
+      external_enabled: false
+
+prometheus:
+  prometheusSpec:
+    # API d'administration (suppression de séries, instantanés de la TSDB) : DÉSACTIVÉE dans le
+    # cluster. C'est le défaut du chart ; on l'écrit pour qu'un changement de défaut ou une MR
+    # distraite se voie en revue. Elle n'est activée que sur le témoin de mon01 (M21-E44).
+    enableAdminAPI: false
+    # Règles par équipe : les équipes posent leurs PrometheusRule dans LEURS espaces (dépôt
+    # …/deploiement, composant supervision). Deux garde-fous :
+    #  1. seuls les espaces étiquetés medisphere.internal/supervision-regles=oui sont lus
+    #     (plateforme/k8s, espaces/) ;
+    #  2. l'opérateur IMPOSE namespace="<espace de l'objet>" dans chaque sélecteur des règles et sur
+    #     chaque série collectée par les ServiceMonitor/PodMonitor des équipes : une règle de
+    #     mediagenda-prod ne lit QUE les séries de mediagenda-prod, et ses alertes portent
+    #     namespace=mediagenda-prod (elle ne peut pas se faire passer pour une autre équipe).
+    ruleNamespaceSelector:
+      matchLabels:
+        medisphere.internal/supervision-regles: "oui"
+    enforcedNamespaceLabel: namespace
+    # La plateforme est exemptée : ses objets (dans supervision et supervision-noeuds) collectent et
+    # interrogent TOUT le cluster (kubelet, kube-state-metrics, node-exporter, SLO de Pyrra…).
+    # Sans ces exceptions, toutes les séries du kubelet porteraient namespace="supervision".
+    excludedFromEnforcement:
+      - {group: monitoring.coreos.com, resource: prometheusrules, namespace: supervision}
+      - {group: monitoring.coreos.com, resource: servicemonitors, namespace: supervision}
+      - {group: monitoring.coreos.com, resource: podmonitors, namespace: supervision}
+      - {group: monitoring.coreos.com, resource: probes, namespace: supervision}
+      - {group: monitoring.coreos.com, resource: scrapeconfigs, namespace: supervision}
+      - {group: monitoring.coreos.com, resource: servicemonitors, namespace: supervision-noeuds}

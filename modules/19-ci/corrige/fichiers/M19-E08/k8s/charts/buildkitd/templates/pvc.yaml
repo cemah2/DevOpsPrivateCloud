@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: buildkitd-donnees
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+  annotations:
+    # Le cache local se reconstruit : on garde le volume si la release est supprimée par erreur,
+    # mais il ne contient rien de précieux.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: {{ .Values.stockage.classe }}
+  resources:
+    requests:
+      storage: {{ .Values.stockage.taille }}

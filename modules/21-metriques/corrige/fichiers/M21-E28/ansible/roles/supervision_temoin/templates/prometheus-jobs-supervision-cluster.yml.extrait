@@ -1,0 +1,56 @@
+# plateforme/ansible — roles/supervision_temoin/templates/prometheus.yml.j2 : jobs ajoutés en M21-E28.
+# EXTRAIT, à insérer dans « scrape_configs: » du gabarit d'E11 (après le job « blackbox »). Jobs
+# DISTINCTS du job « blackbox » d'E11 : ses règles (SondeEnEchec…) ne doublent pas celles-ci.
+# blackbox_exporter écoute sur {{ supervision_temoin_blackbox_ecoute }} (127.0.0.1:9115).
+# Validation avant rechargement : « promtool check config » (validate: de la tâche template).
+
+  # 1. Dead man's switch : l'alerte Watchdog du cluster est-elle visible par Thanos Query ?
+  #    La requête PromQL est DÉJÀ encodée dans la cible : Prometheus encode la valeur de « target »
+  #    une fois de plus, blackbox la décode une fois, et envoie donc la requête telle qu'écrite ici.
+  - job_name: watchdog-cluster
+    metrics_path: /probe
+    params:
+      module: [watchdog_cluster]
+    scrape_interval: 1m
+    scrape_timeout: 20s
+    static_configs:
+      - targets:
+          - "http://prometheus.apps.par1.medisphere.internal:9090/api/v1/query?query=ALERTS%7Balertname%3D%22Watchdog%22%2Calertstate%3D%22firing%22%7D"
+        labels:
+          cluster: k8s-par1
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      # Une instance lisible plutôt que l'URL complète.
+      - target_label: instance
+        replacement: k8s-par1
+      - target_label: __address__
+        replacement: "{{ supervision_temoin_blackbox_ecoute }}"
+
+  # 2. Santé et disponibilité de la lecture (Thanos Query sur .60) et des notifications
+  #    (Alertmanager sur .61). Le composant est porté par une étiquette pour les messages.
+  - job_name: supervision-cluster
+    metrics_path: /probe
+    params:
+      module: [http_sante]
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - http://prometheus.apps.par1.medisphere.internal:9090/-/healthy
+          - http://prometheus.apps.par1.medisphere.internal:9090/-/ready
+        labels:
+          composant: thanos-query
+          cluster: k8s-par1
+      - targets:
+          - http://alertmanager.apps.par1.medisphere.internal:9093/-/healthy
+          - http://alertmanager.apps.par1.medisphere.internal:9093/-/ready
+        labels:
+          composant: alertmanager
+          cluster: k8s-par1
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ supervision_temoin_blackbox_ecoute }}"

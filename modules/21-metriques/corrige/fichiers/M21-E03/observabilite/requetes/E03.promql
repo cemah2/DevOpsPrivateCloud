@@ -1,0 +1,20 @@
+# requetes/E03.promql — exploration de Prometheus (M21-E03, PLAT-2203).
+# Une requête par bloc, blocs séparés par une ligne vide. Chaque requête doit renvoyer des données.
+
+# 1. Combien de cibles par job, et combien répondent ?
+count by (job) (up)
+
+# 2. Cibles qui répondent, par job (à comparer avec la 1 : l'écart, ce sont les cibles en échec).
+count by (job) (up == 1)
+
+# 3. Les cinq collectes les plus lentes (secondes) : qui coûte le plus à Prometheus ?
+topk(5, scrape_duration_seconds)
+
+# 4. Échantillons ingérés par collecte, par job, APRÈS les metricRelabelings (ce qui est gardé).
+sort_desc(sum by (job) (scrape_samples_post_metric_relabeling))
+
+# 5. Séries actives dans la tête de la TSDB (le chiffre de la page « TSDB Status »).
+prometheus_tsdb_head_series
+
+# 6. Les dix noms de métriques qui ont le plus de séries (cardinalité).
+topk(10, count by (__name__) ({__name__=~".+"}))

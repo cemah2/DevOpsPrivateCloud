@@ -1,0 +1,20 @@
+[project]
+name = "echantillon"
+version = "0.1.0"
+description = "Échantillon de test des composants qualite (plateforme/ci-templates, M19-E10)"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1,<10",
+    "ruff>=0.17,<0.18",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

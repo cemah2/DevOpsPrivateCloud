@@ -1,0 +1,26 @@
+# mediagenda/chart — .gitlab-ci.yml : EXTRAIT (M19-E12, DEV-2012). À ajouter au pipeline de M17-E13.
+# Après publication et signature d'une étiquette vX.Y.Z, déclenche la validation de cette version
+# du chart dans mediagenda/deploiement (branche main) et prend le statut de ce pipeline aval.
+#   - CHART_VERSION et CHART_DIGEST viennent du rapport dotenv du job « pousser » (M17-E13) : un job
+#     déclencheur reçoit les variables dotenv de ses « needs » et les transmet en les nommant.
+#   - Le pipeline aval est créé au nom de l'utilisateur qui a lancé CE pipeline (droit de lancer un
+#     pipeline sur main de deploiement requis : Developer au moins).
+valider-deploiement:
+  stage: publication
+  needs:
+    - job: pousser
+      artifacts: true
+    - job: signer
+      artifacts: false
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"
+  variables:
+    CHART_VERSION: $CHART_VERSION
+    CHART_DIGEST: $CHART_DIGEST
+    CHART_ETIQUETTE: $CI_COMMIT_TAG
+  trigger:
+    project: mediagenda/deploiement
+    branch: main
+    # « mirror » (GitLab 18.2+) : le job prend exactement le statut de l'aval. « depend » n'est plus
+    # recommandé (statut « running » tant que l'aval attend une action manuelle, échecs tolérés mal reflétés).
+    strategy: mirror

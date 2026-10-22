@@ -1,0 +1,38 @@
+---
+# playbooks/supervision.yml — hôte(s) de supervision hors cluster (groupe role_supervision).
+# M19-E03 (PLAT-2003) : mon01 = messagerie du lab (Mailpit). Le M21 ajoute ici Prometheus et
+# Alertmanager « témoins », blackbox_exporter et pve-exporter.
+# Appliqué par le pipeline protégé de plateforme/ansible (ADR-0040), un hôte à la fois. Les rôles
+# communs du socle (base, ssh_durci, ca_lab, ssh_ca_hote, ssh_ca_utilisateur…) sont appliqués par
+# site.yml comme à tous les hôtes du groupe socle ; ce playbook ne fait que la supervision.
+#   uv run ansible-playbook playbooks/supervision.yml --check --diff
+#   uv run ansible-playbook playbooks/supervision.yml
+
+- name: Supervision et messagerie du lab
+  hosts: role_supervision
+  become: true
+  serial: 1
+  any_errors_fatal: true
+  pre_tasks:
+    - name: Garde-fou — le groupe role_supervision ne contient que des hôtes attendus
+      ansible.builtin.assert:
+        that: inventory_hostname in ['mon01']
+        fail_msg: "{{ inventory_hostname }} n'est pas un hôte de supervision connu (mon01)."
+        quiet: true
+  tasks:
+    - name: Groupe du service avant le certificat (la clé lui appartient)
+      ansible.builtin.group:
+        name: mailpit
+        system: true
+
+    - name: Certificat ACME de step-ca (id mailpit)
+      ansible.builtin.include_role:
+        name: certificats_acme
+
+    - name: Filtrage d'entrée local
+      ansible.builtin.include_role:
+        name: pare_feu_local
+
+    - name: Mailpit
+      ansible.builtin.include_role:
+        name: mailpit

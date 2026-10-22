@@ -1,0 +1,29 @@
+# .gitlab-ci.yml — formation/ci-labo, M19-E06 ÉTAPE 1 : la version « en stages », sans needs ni rules.
+# Sert de point de comparaison (mesures de l'étape 1) ; remplacée par .gitlab-ci.yml (version finale).
+default:
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:a6aeb5c166af9f765f9c68e585b5a5148c28f3b8a362f90151cecea88b21a3e2
+
+stages: [lint, test, build, rapport]
+
+ruff:
+  stage: lint
+  script: [uvx ruff@0.16.10 check src tests]
+
+docs:
+  stage: lint
+  script: [test -s docs/index.md, grep -q '^# ' docs/index.md]
+
+tests:
+  stage: test
+  script: [uv sync --locked, uv run pytest]
+
+paquet:
+  stage: build
+  script: [uv build]
+  artifacts:
+    paths: [dist/]
+
+resume:
+  stage: rapport
+  script: [echo "pipeline $CI_PIPELINE_ID terminé"]

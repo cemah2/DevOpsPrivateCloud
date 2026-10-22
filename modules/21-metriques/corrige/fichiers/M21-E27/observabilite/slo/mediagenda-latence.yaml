@@ -1,0 +1,37 @@
+# plateforme/observabilite — slo/mediagenda-latence.yaml (M21-E26, PLAT-2226 ; alertes M21-E27, PLAT-2227)
+# SLI : part des requêtes de l'API de PRODUCTION servies en moins de 250 ms.
+# Pourquoi 250 ms et pas 300 ms (ticket) : l'histogramme mediagenda_http_request_duration_seconds
+# garde les seaux par défaut du client Python (… 0.1, 0.25, 0.5 …) : il n'existe AUCUN seau
+# le="0.3", et on ne peut pas compter « < 300 ms » sans lui. On mesure donc un objectif plus
+# strict (250 ms) jusqu'à ce que l'équipe MédiAgenda ajoute un seau 0.3 (ticket DEV-2226).
+# Alertes : la lenteur ne réveille pas (politique de budget) : tout en avertissement, sauf la
+# consommation la plus rapide (5 % du budget… en 1 h = service quasi inutilisable).
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: mediagenda-latence
+  labels:
+    pyrra.dev/equipe: mediagenda
+  annotations:
+    pyrra.dev/resume: "MédiAgenda (prod) trop lente : budget de latence consommé trop vite"
+    pyrra.dev/description: "Trop de requêtes au-delà de 250 ms pour l'objectif de 95 % sur 28 jours."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-216-budget-erreur.md
+spec:
+  description: "API MédiAgenda (production) : requêtes servies en moins de 250 ms"
+  target: "95"
+  window: 28d
+  indicator:
+    latency:
+      success:
+        metric: mediagenda_http_request_duration_seconds_bucket{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics", le="0.25"}
+      total:
+        metric: mediagenda_http_request_duration_seconds_count{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics"}
+  alerting:
+    burnrates: true
+    # L'absence de mesure est déjà signalée par mediagenda-disponibilite (même compteur d'origine).
+    absent: false
+    severities:
+      fastBurn: critique
+      mediumBurn: avertissement
+      slowBurn: avertissement
+      longTermBurn: avertissement

@@ -1,0 +1,24 @@
+# plateforme/observabilite — kps/values.yaml : changements de M23-E08 (DEV-2408). EXTRAIT à fusionner
+# dans le fichier complet (les clés absentes d'ici ne changent pas). Rendu et diff avant la MR, comme au
+# M21 (helm template … | yq 'select(.kind == "Prometheus")').
+
+prometheus:
+  prometheusSpec:
+    # Stockage des exemplars (toujours derrière une option en Prometheus 3.15 : docs/feature_flags.md).
+    # Tampon circulaire en mémoire (≈ 100 octets par exemplar) + WAL : ils ne vont PAS dans les blocs
+    # envoyés au RGW par le sidecar Thanos (lien vers une trace récente seulement, ce qui suffit).
+    enableFeatures:
+      - exemplar-storage
+    # Taille du tampon (nombre d'exemplars, tous séries confondues) ; relu à chaud.
+    exemplars:
+      maxSize: 100000
+
+grafana:
+  sidecar:
+    datasources:
+      # Prometheus → Tempo : un point d'exemplar ouvre la trace. Étiquette « trace_id » : le nom posé
+      # par MédiAgenda (prometheus_client) et MédiDoc (client_golang) sur leurs exemplars.
+      exemplarTraceIdDestinations:
+        datasourceUid: tempo
+        traceIdLabelName: trace_id
+        urlDisplayLabel: "Voir la trace"

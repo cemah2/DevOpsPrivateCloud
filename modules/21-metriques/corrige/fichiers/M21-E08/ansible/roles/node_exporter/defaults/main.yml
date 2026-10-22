@@ -1,0 +1,50 @@
+---
+# roles/node_exporter/defaults/main.yml — version 2 (M21-E08, PLAT-2208). Remplace celle de M04-E34.
+# Voir README.md et meta/argument_specs.yml.
+
+# --- Binaire amont, épinglé par empreinte (le paquet Debian 13 livre la 1.9 : trop ancienne) ---
+node_exporter_version: 1.12.1
+# sha256 de node_exporter-1.12.1.linux-amd64.tar.gz, relevé dans sha256sums.txt de la publication
+# (github.com/prometheus/node_exporter/releases/tag/v1.12.1) et recalculé sur l'archive.
+node_exporter_sha256: b51d8a76aa2a9156a55d501aca6276fae09e262259a5e4e831d2c2222f084e63
+node_exporter_url: >-
+  https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+# Cache de l'archive sur le contrôleur (adm01 ou runner01) : téléchargée UNE fois, vérifiée, puis
+# copiée sur les hôtes (qui n'ont pas besoin de sortir vers GitHub).
+node_exporter_cache_controleur: "{{ lookup('ansible.builtin.env', 'HOME') }}/.cache/medisphere/node_exporter"
+node_exporter_dossier_installation: /opt/node_exporter
+
+# --- Écoute ---
+node_exporter_port: 9100
+# IPv4 de la route par défaut (M04-E34). Les passerelles (plusieurs VLAN, route par défaut sur le
+# WAN) écoutent sur 0.0.0.0 et filtrent par leur chaîne input (group_vars/role_routeur).
+node_exporter_adresse: "{{ ansible_facts['default_ipv4']['address'] }}"
+
+# --- TLS (certificat step-ca par ACME, rôle certificats_acme du M06) ---
+node_exporter_tls: true
+# Nom présenté par le certificat : celui que Prometheus utilise comme cible.
+node_exporter_fqdn: "{{ inventory_hostname }}.par1.medisphere.internal"
+node_exporter_dossier_tls: /etc/node_exporter/tls
+# Le défi HTTP-01 a besoin du port 80 de l'hôte le temps de l'émission. Par défaut, on reprend les
+# crochets du premier certificat ACME déjà déclaré pour l'hôte (même contrainte, même service à
+# arrêter : nginx de NetBox, Harbor, GitLab…) ; à surcharger dans host_vars si besoin.
+node_exporter_acme_avant_emission: "{{ (certificats_acme_certificats | default([]) | first | default({})).avant_emission | default('') }}"
+node_exporter_acme_apres_emission: "{{ (certificats_acme_certificats | default([]) | first | default({})).apres_emission | default('') }}"
+node_exporter_acme_ecoute_http: "{{ (certificats_acme_certificats | default([]) | first | default({})).ecoute_http | default('') }}"
+
+# --- Collecteurs ---
+node_exporter_collecteurs_desactives:
+  - infiniband
+  - zfs
+  - nfs
+  - nfsd
+# Unités publiées par le collecteur systemd (noms sans « .service »).
+node_exporter_unites_systemd:
+  - ssh
+  - chrony
+  - nftables
+  - node_exporter
+  - cert-renewer@node-exporter
+# Même dossier qu'en M04-E34 (les outils ms-verif-* y écrivent leurs .prom) : rien à déplacer.
+node_exporter_dossier_textfile: /var/lib/prometheus/node-exporter
+node_exporter_site: par1

@@ -1,0 +1,12 @@
+---
+# host_vars/dns02/supervision.yml (plateforme/ansible) — M21-E10, PLAT-2210.
+# Secondaire sans API : serveur web pour les seules métriques (api=no, webserver=yes).
+powerdns_auth_metriques_active: true
+powerdns_auth_metriques_adresse: 10.10.20.16
+powerdns_auth_metriques_autorises:
+  - 127.0.0.1
+  - 10.10.10.10
+  - 10.10.40.61
+  - 10.10.40.62
+  - 10.10.40.63
+powerdns_recursor_webservice_adresse: 10.10.20.16

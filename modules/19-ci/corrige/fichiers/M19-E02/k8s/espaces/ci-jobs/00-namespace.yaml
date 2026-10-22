@@ -1,0 +1,28 @@
+# plateforme/k8s — espaces/ci-jobs/00-namespace.yaml (M19-E02, PLAT-2002)
+# Pods des jobs du runner k8s-par1 (un pod par job, M19-E04/E05).
+#
+# Pod Security : « baseline » APPLIQUÉ, « restricted » en avertissement et en audit. Le conteneur
+# init-permissions du runner et la plupart des images de job (debian, python, uv…) tournent en
+# root : « restricted » les refuserait aujourd'hui. Le passage à « restricted », avec les
+# contextes de sécurité du runner et les exceptions écrites, est l'objet de M19-E24 (palier 3) ;
+# en attendant, les avertissements « restricted » (audit de l'API, réponses aux créations de pods)
+# mesurent l'écart.
+#
+# medisphere.internal/equipe : sélectionne l'espace pour la liaison de la VAP medisphere-images
+# (M14-E18) : toute image de job doit venir de Harbor, avec une version explicite.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-jobs
+  labels:
+    medisphere.internal/equipe: plateforme
+    medisphere.internal/composant: ci
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "<MOI>"
+    medisphere.internal/ticket: "PLAT-2002"

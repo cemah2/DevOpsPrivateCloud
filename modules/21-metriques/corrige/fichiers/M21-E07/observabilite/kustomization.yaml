@@ -1,0 +1,18 @@
+# plateforme/observabilite — kustomization.yaml (racine, M21-E07, PLAT-2207)
+# Ce que l'Application Argo CD « observabilite » applique (kustomize build .) : les objets de
+# supervision de la PLATEFORME (règles, ScrapeConfig, Probe…), dans l'espace supervision.
+# Ce qui n'est pas listé ici n'est pas appliqué : kps/ (values du chart, lues par l'Application
+# kube-prometheus-stack), requetes/ (requêtes de travail), tests/, outils/.
+# Chaque dossier a sa propre kustomization.yaml : ajouter un fichier = l'ajouter à SON dossier.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: supervision
+resources:
+  - regles
+  - scrape
+# Étiquette de sélection posée sur TOUT ce qui sort d'ici (y compris ce qu'on oubliera
+# d'étiqueter à la main) : Prometheus ne prend que les objets qui la portent (M21-E02).
+labels:
+  - pairs:
+      medisphere.internal/supervision: "oui"
+    includeSelectors: false

@@ -1,0 +1,20 @@
+# plateforme/k8s — releases/50-ci.yaml.gotmpl (fichier des releases de la CI créé en M19-E04 ; si le
+# tien porte un autre nom, ajoute la release au même endroit que « gitlab-runner »).
+# Ajout de M19-E24 : la release « gitlab-runner-protege », même chart, même version que
+# « gitlab-runner » (une seule ligne à changer à la montée de version, E26).
+bases:
+  - _communs.yaml
+---
+releases:
+  # … release gitlab-runner (E04), buildkitd (E08), gitlab-agent (E18) inchangées …
+  - name: gitlab-runner-protege
+    namespace: gitlab-runner
+    chart: gitlab/gitlab-runner
+    version: 0.93.0                  # = celle de la release gitlab-runner ; 0.94.x en M19-E26
+    labels:
+      groupe: ci
+      composant: gitlab-runner-protege
+    # L'espace des jobs et son Secret de clé doivent exister avant (espaces/ci-jobs-protege/,
+    # outils/secrets-k8s.sh gitlab-runner-protege cosign-ci) : Helmfile ne les crée pas.
+    values:
+      - ../composants/gitlab-runner-protege/values.yaml

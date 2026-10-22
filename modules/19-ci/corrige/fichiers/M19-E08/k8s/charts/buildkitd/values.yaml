@@ -1,0 +1,54 @@
+# Valeurs par défaut du chart local buildkitd (plateforme/k8s, M19-E08).
+# Les valeurs propres à k8s-par1 sont dans composants/buildkitd/values.yaml.
+
+image:
+  # Par le cache Harbor « dockerhub » ; étiquette ET empreinte (relevée à travers Harbor).
+  depot: registry.par1.medisphere.internal/dockerhub/moby/buildkit
+  version: v0.34.1-rootless
+  empreinte: ""          # sha256:… (obligatoire)
+
+ressources:
+  requests: {cpu: 500m, memory: 1Gi}
+  limits: {cpu: "3", memory: 4Gi}
+
+# Stockage du démon (instantanés, cache local de construction) : volume persistant, pour que le
+# cache local survive à un redémarrage. Le ramasse-miettes le garde sous maxUtilise.
+stockage:
+  taille: 30Gi
+  classe: ceph-rbd
+ramasseMiettes:
+  maxUtilise: 20GB       # au-delà, BuildKit libère le cache le plus ancien
+  reserve: 2GB           # gardé quoi qu'il arrive (les dernières couches utiles)
+
+# Registre dont le démon doit vérifier le certificat (images de base, cache en registre).
+registre:
+  hote: registry.par1.medisphere.internal
+  # ConfigMap de l'espace qui porte la racine MédiSphère (clé medisphere-root-ca.crt).
+  racineConfigMap: medisphere-racine
+
+service:
+  port: 1234
+
+tls:
+  # Autorité dédiée (cert-manager) : ClusterIssuer auto-signé d'amorçage → certificat d'autorité
+  # (Secret dans l'espace de cert-manager) → ClusterIssuer « buildkit-ca ».
+  emetteurAmorce: buildkit-amorce
+  autorite: buildkit-ca
+  espaceCertManager: cert-manager
+  dureeAutorite: 43800h      # 5 ans
+  dureeServeur: 8760h        # 1 an ; buildkitd ne relit PAS son certificat : voir le corrigé
+  renouvelerServeur: 720h
+  dureeClient: 2160h         # 90 jours ; relu à chaque job (Secret monté dans le pod)
+  renouvelerClient: 720h
+  # Un certificat client (Secret « buildkit-client ») par espace de jobs.
+  clients:
+    - ci-jobs
+
+reseau:
+  # Espaces dont les pods (étiquette medisphere.internal/ci=job) peuvent joindre le démon.
+  espacesClients:
+    - ci-jobs
+  # Harbor (reg01) : images de base, cache en registre.
+  harbor: 10.10.20.18/32
+  # Index de paquets des RUN (PyPI, proxy Go…) : Internet en 443, jamais le lab ni les réseaux privés.
+  internet443: true

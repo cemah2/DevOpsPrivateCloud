@@ -1,0 +1,111 @@
+# M23-E07 — PostgreSQL et Valkey JETABLES (emptyDir) pour la copie de MédiAgenda de wb-essais.
+# Mot de passe hors dépôt :
+#   kubectl -n wb-essais create secret generic postgresql-essai-auto \
+#     --from-literal=mot-de-passe="$(openssl rand -hex 16)"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql-essai-auto
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: postgresql-essai-auto, medisphere.internal/ticket: PLAT-2407}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: postgresql-essai-auto}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: postgresql-essai-auto}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgresql
+          image: registry.par1.medisphere.internal/dockerhub/library/postgres:18-trixie
+          env:
+            - name: POSTGRES_USER
+              value: mediagenda
+            - name: POSTGRES_DB
+              value: mediagenda
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: postgresql-essai-auto, key: mot-de-passe}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - {name: postgresql, containerPort: 5432}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: donnees, mountPath: /var/lib/postgresql/data}
+            - {name: run, mountPath: /var/run/postgresql}
+      volumes:
+        - name: donnees
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-essai-auto
+  namespace: wb-essais
+spec:
+  selector: {app.kubernetes.io/name: postgresql-essai-auto}
+  ports:
+    - {name: postgresql, port: 5432, targetPort: postgresql}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey-essai-auto
+  namespace: wb-essais
+  labels: {app.kubernetes.io/name: valkey-essai-auto, medisphere.internal/ticket: PLAT-2407}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: valkey-essai-auto}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: valkey-essai-auto}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: valkey
+          image: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - {name: valkey, containerPort: 6379}
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: donnees, mountPath: /data}
+      volumes:
+        - name: donnees
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-essai-auto
+  namespace: wb-essais
+spec:
+  selector: {app.kubernetes.io/name: valkey-essai-auto}
+  ports:
+    - {name: valkey, port: 6379, targetPort: valkey}

@@ -1,0 +1,71 @@
+# plateforme/k8s — composants/gitlab-runner/values.yaml : changements de M19-E27 (PLAT-2027).
+# Le reste du fichier est celui de M19-E24 (avec image.repository depuis E26).
+
+# --- Disponibilité du gestionnaire -----------------------------------------------------------------
+# Deux réplicas = deux « runner managers » du même runner k8s-par1 (même jeton glrt-, system_id
+# différents) qui interrogent GitLab chacun de leur côté.
+replicas: 2
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+# Une interruption volontaire à la fois (drain d'un nœud) ; jamais minAvailable: 2, qui bloquerait
+# tout drainage avec deux réplicas.
+podDisruptionBudget:
+  maxUnavailable: 1
+# Un réplica par nœud, quand c'est possible (trois travailleurs).
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app: gitlab-runner
+# Arrêt gracieux : SIGQUIT, le gestionnaire ne prend plus de job et attend la fin des siens.
+# 3600 s = le délai maximal d'un job (maximum_timeout du runner).
+terminationGracePeriodSeconds: 3600
+# Le gestionnaire lui-même est un composant de plateforme (pas la classe des jobs).
+priorityClassName: medisphere-standard
+
+# --- Débit -------------------------------------------------------------------------------------------
+# Capacité soutenable calculée dans docs/livraison/ci/capacite-runners.md : 16 jobs simultanés au plus
+# (quota de ci-jobs), soit 8 par gestionnaire.
+concurrent: 8
+checkInterval: 3
+
+runners:
+  config: |
+    [[runners]]
+      output_limit = 8192
+      environment = ["HOME=/tmp"]
+      # 8 jobs par gestionnaire (= concurrent : un seul [[runners]] par processus).
+      limit = 8
+      # Plusieurs requêtes de « long polling » simultanées : un gestionnaire peut prendre plusieurs
+      # jobs par cycle au lieu d'un seul (défaut 1).
+      request_concurrency = 4
+      # … [runners.cache] de E07 inchangé …
+      [runners.kubernetes]
+        # … réglages de E24 inchangés (namespace, service_account, sécurité, images) …
+        priority_class_name = "medisphere-ci"
+        poll_timeout = 600
+        # Demandes par défaut (ce que le planificateur réserve) et limites ; maximums que les jobs
+        # peuvent demander par KUBERNETES_CPU_LIMIT, KUBERNETES_MEMORY_LIMIT…
+        cpu_request = "100m"
+        cpu_request_overwrite_max_allowed = "1"
+        cpu_limit = "1"
+        cpu_limit_overwrite_max_allowed = "2"
+        memory_request = "256Mi"
+        memory_request_overwrite_max_allowed = "2Gi"
+        memory_limit = "1Gi"
+        memory_limit_overwrite_max_allowed = "3Gi"
+        ephemeral_storage_request = "512Mi"
+        ephemeral_storage_limit = "4Gi"
+        ephemeral_storage_limit_overwrite_max_allowed = "8Gi"
+        helper_cpu_request = "50m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        service_cpu_request = "100m"
+        service_memory_request = "256Mi"
+        service_memory_limit = "1Gi"
+        service_memory_limit_overwrite_max_allowed = "2Gi"

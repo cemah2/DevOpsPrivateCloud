@@ -1,0 +1,11 @@
+# plateforme/observabilite — slo/kustomization.yaml (M21-E26, PLAT-2226 ; alertes M21-E27, PLAT-2227)
+# Objectifs de niveau de service (Pyrra, pyrra.dev/v1alpha1). Pyrra en tire une PrometheusRule du
+# même nom (même espace), qui porte les mêmes étiquettes que le SLO : dont l'étiquette de sélection
+# de Prometheus, posée par la kustomization racine.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - mediagenda-disponibilite.yaml
+  - mediagenda-latence.yaml
+  - medidoc-disponibilite.yaml
+# sloth/ n'est PAS appliqué : comparaison seulement (M21-E27).

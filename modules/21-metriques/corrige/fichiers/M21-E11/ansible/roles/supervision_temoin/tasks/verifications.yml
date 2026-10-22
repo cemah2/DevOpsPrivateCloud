@@ -1,0 +1,20 @@
+---
+- name: Points de santé locaux
+  ansible.builtin.uri:
+    url: "{{ item }}"
+    status_code: 200
+  register: supervision_temoin_sante
+  until: supervision_temoin_sante.status == 200
+  retries: 12
+  delay: 5
+  loop: "{{ ['http://127.0.0.1:9090/-/ready', 'http://127.0.0.1:9093/-/ready', 'http://' ~ supervision_temoin_blackbox_ecoute ~ '/-/healthy']
+            + (['http://' ~ supervision_temoin_pve_ecoute ~ '/'] if supervision_temoin_pve_active | bool else []) }}"
+
+- name: Règles chargées sans erreur
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/rules
+    return_content: true
+  register: supervision_temoin_regles
+  failed_when: >-
+    supervision_temoin_regles.json.data.groups | map(attribute='rules') | flatten
+    | selectattr('health', 'eq', 'err') | list | length > 0

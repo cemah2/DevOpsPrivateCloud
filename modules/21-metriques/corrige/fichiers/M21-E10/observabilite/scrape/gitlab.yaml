@@ -1,0 +1,136 @@
+# plateforme/observabilite — scrape/gitlab.yaml (M21-E10, PLAT-2210)
+# Exportateurs d'omnibus GitLab 19.5 sur git01 (gitlab.rb : fichiers/M21-E10/git01/gitlab.rb.extrait).
+#   gitlab-rails     https://git01…/-/metrics (Puma, servi par nginx d'omnibus ; liste blanche
+#                    gitlab_rails['monitoring_whitelist'] : les travailleurs y sont ajoutés)
+#   gitlab-exporter  9168 (gitlab-exporter, Ruby : ~100-150 Mo, d'où l'arbitrage du M01-E30)
+#   gitlab-sidekiq   8082 (exportateur de Sidekiq)
+#   gitlab-workhorse 9229
+#   gitlab-gitaly    9236
+# Le serveur Prometheus embarqué, Alertmanager, postgres_exporter et redis_exporter restent éteints.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: gitlab-rails
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: gitlab-rails
+  scheme: HTTPS
+  metricsPath: /-/metrics
+  # Certificat de git01 émis par step-ca (racine MédiSphère, ConfigMap du palier 1).
+  tlsConfig:
+    ca:
+      configMap:
+        name: racine-medisphere
+        key: ca.crt
+  # Rails expose beaucoup de séries (une par contrôleur × action) : collecte toutes les minutes.
+  scrapeInterval: 60s
+  scrapeTimeout: 30s
+  staticConfigs:
+    - targets:
+        - git01.par1.medisphere.internal:443
+      labels:
+        equipe: plateforme
+        role: gitlab
+  relabelings:
+    - targetLabel: instance
+      replacement: git01
+      action: replace
+  sampleLimit: 50000
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: gitlab-exporter
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  # gitlab-exporter (Ruby) : état de la base et des files, vu de l'application.
+  jobName: gitlab-exporter
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - git01.par1.medisphere.internal:9168
+      labels:
+        equipe: plateforme
+        role: gitlab
+  relabelings:
+    - targetLabel: instance
+      replacement: git01
+      action: replace
+  sampleLimit: 20000
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: gitlab-sidekiq
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  # exportateur de Sidekiq : jobs traités, durées, files d'attente.
+  jobName: gitlab-sidekiq
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - git01.par1.medisphere.internal:8082
+      labels:
+        equipe: plateforme
+        role: gitlab
+  relabelings:
+    - targetLabel: instance
+      replacement: git01
+      action: replace
+  sampleLimit: 20000
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: gitlab-workhorse
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  # gitlab-workhorse : requêtes HTTP et Git, envois de fichiers.
+  jobName: gitlab-workhorse
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - git01.par1.medisphere.internal:9229
+      labels:
+        equipe: plateforme
+        role: gitlab
+  relabelings:
+    - targetLabel: instance
+      replacement: git01
+      action: replace
+  sampleLimit: 10000
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: gitlab-gitaly
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  # Gitaly : appels RPC vers les dépôts Git (durées, erreurs).
+  jobName: gitlab-gitaly
+  scheme: HTTP
+  metricsPath: /metrics
+  staticConfigs:
+    - targets:
+        - git01.par1.medisphere.internal:9236
+      labels:
+        equipe: plateforme
+        role: gitlab
+  relabelings:
+    - targetLabel: instance
+      replacement: git01
+      action: replace
+  sampleLimit: 20000

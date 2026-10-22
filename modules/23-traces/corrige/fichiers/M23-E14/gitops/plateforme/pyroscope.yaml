@@ -1,0 +1,31 @@
+# plateforme/gitops — plateforme/pyroscope.yaml (M23-E14) : Application de Pyroscope, même modèle que tempo et
+# loki : chart recopié et signé dans Harbor « charts » (plateforme/charts-miroir), values dans plateforme/observabilite.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pyroscope
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: pyroscope
+      targetRevision: 2.4.1
+      helm:
+        releaseName: pyroscope
+        valueFiles:
+          - $values/pyroscope/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traces
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

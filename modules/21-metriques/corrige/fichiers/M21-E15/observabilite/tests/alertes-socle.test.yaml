@@ -1,0 +1,78 @@
+# plateforme/observabilite — tests/alertes-socle.test.yaml (M21-E15, PLAT-2215)
+rule_files:
+  - ../build/regles/alertes-socle.yml
+evaluation_interval: 30s
+tests:
+  - name: VM injoignable
+    interval: 1m
+    input_series:
+      - series: 'up{job="vms",instance="nbx01"}'
+        values: '1x5 0x10'
+      - series: 'up{job="vms",instance="git01"}'
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: CibleInjoignable
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: CibleInjoignable
+        exp_alerts:
+          - exp_labels: {alertname: CibleInjoignable, job: vms, instance: nbx01, equipe: plateforme, gravite: avertissement}
+            exp_annotations:
+              resume: "nbx01 ne répond plus à Prometheus"
+              description: "node_exporter de nbx01 ne répond plus depuis 5 minutes (VM arrêtée, réseau, pare-feu, certificat). Les autres alertes de cette instance sont inhibées."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+
+  # /var de git01 : 100 Gio, 20 Gio libres, perd 1 Gio par heure → plein dans 20 h : alerte.
+  # / de nbx01 : 10 % libre mais STABLE → pas d'alerte (pas plein avant demain).
+  # /data de reg01 : perd 1 Gio par heure aussi, mais 56 % libre → pas d'alerte (ce n'est pas encore un problème).
+  - name: disque bientôt plein
+    # Un échantillon par minute : avec un intervalle plus long que la fenêtre de recherche (5 min),
+    # les séries seraient « absentes » entre deux échantillons et le « for » repartirait de zéro.
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="vms",instance="git01",mountpoint="/var",fstype="ext4",device="/dev/sdb1"}'
+        values: '21474836480-17895697.0666667x600'
+      - series: 'node_filesystem_size_bytes{job="vms",instance="git01",mountpoint="/var",fstype="ext4",device="/dev/sdb1"}'
+        values: '107374182400x600'
+      - series: 'node_filesystem_readonly{job="vms",instance="git01",mountpoint="/var",fstype="ext4",device="/dev/sdb1"}'
+        values: '0x600'
+      - series: 'node_filesystem_avail_bytes{job="vms",instance="nbx01",mountpoint="/",fstype="ext4",device="/dev/sda1"}'
+        values: '1073741824x600'
+      - series: 'node_filesystem_size_bytes{job="vms",instance="nbx01",mountpoint="/",fstype="ext4",device="/dev/sda1"}'
+        values: '10737418240x600'
+      - series: 'node_filesystem_readonly{job="vms",instance="nbx01",mountpoint="/",fstype="ext4",device="/dev/sda1"}'
+        values: '0x600'
+      - series: 'node_filesystem_avail_bytes{job="vms",instance="reg01",mountpoint="/data",fstype="xfs",device="/dev/sdb"}'
+        values: '128849018880-17895697.0666667x6000'
+      - series: 'node_filesystem_size_bytes{job="vms",instance="reg01",mountpoint="/data",fstype="xfs",device="/dev/sdb"}'
+        values: '214748364800x600'
+      - series: 'node_filesystem_readonly{job="vms",instance="reg01",mountpoint="/data",fstype="xfs",device="/dev/sdb"}'
+        values: '0x600'
+    alert_rule_test:
+      - eval_time: 8h
+        alertname: DisqueBientotPlein
+        exp_alerts:
+          - exp_labels: {alertname: DisqueBientotPlein, job: vms, instance: git01, mountpoint: /var, fstype: ext4, device: /dev/sdb1, equipe: plateforme, gravite: avertissement}
+            exp_annotations:
+              resume: "git01 : /var sera plein dans moins de 24 h"
+              description: "Il reste 12% d'espace libre sur /var (git01), et au rythme des 6 dernières heures il sera plein avant demain."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-213-disque-plein.md
+
+  - name: certificat bientôt expiré (séries fédérées depuis mon01)
+    interval: 1m
+    input_series:
+      # Échéances exprimées en secondes depuis l'origine des tests (t = 0) : 5 jours et 60 jours.
+      - series: 'probe_ssl_earliest_cert_expiry{job="blackbox",instance="https://nbx01.par1.medisphere.internal/login/",module="https_2xx"}'
+        values: '432000x120'
+      - series: 'probe_ssl_earliest_cert_expiry{job="blackbox",instance="https://git01.par1.medisphere.internal/users/sign_in",module="https_2xx"}'
+        values: '5184000x120'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: CertificatBientotExpire
+        exp_alerts:
+          - exp_labels: {alertname: CertificatBientotExpire, job: blackbox, instance: "https://nbx01.par1.medisphere.internal/login/", module: https_2xx, equipe: plateforme, gravite: avertissement}
+            exp_annotations:
+              resume: "Le certificat de https://nbx01.par1.medisphere.internal/login/ expire dans 4d 22h 30m 0s"
+              description: "Le certificat présenté par https://nbx01.par1.medisphere.internal/login/ (sonde https_2xx du témoin) expire dans 4d 22h 30m 0s : le renouvellement ACME a échoué."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md

@@ -1,0 +1,18 @@
+# Espace « journaux » (M22-E02) : Loki, puis Alloy (M22-E03).
+# Pod Security : « privileged » en application, « restricted » en avertissement et en audit.
+# Exception écrite (politique de la plateforme, M14-E18) : le DaemonSet Alloy lit /var/log du nœud
+# (hostPath), ce que « baseline » interdit. Loki lui-même respecte « restricted » (contexte de
+# sécurité du chart), ce que l'avertissement continue de vérifier à chaque déploiement.
+# Prune=false : supprimer l'Application ne doit jamais supprimer l'espace (WAL sur PVC).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: journaux
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+    medisphere.internal/plateforme: "oui"
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/sync-options: Prune=false

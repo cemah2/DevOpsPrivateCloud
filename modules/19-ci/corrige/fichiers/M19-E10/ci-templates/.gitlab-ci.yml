@@ -1,0 +1,172 @@
+# =============================================================================
+# .gitlab-ci.yml — plateforme/ci-templates (M19-E10, PLAT-2010)
+#
+# 1. Les composants v2 se testent eux-mêmes, depuis le commit en cours (@$CI_COMMIT_SHA), sur les
+#    échantillons de tests/ : une erreur d'en-tête (spec:inputs) ou de YAML fait échouer la
+#    CRÉATION du pipeline de la MR, avant toute fusion.
+# 2. La présence des jobs attendus est contrôlée à la création par « composants:presents »
+#    (ses « needs » échouent si un composant ne produit plus un job promis aux projets).
+# 3. main : semantic-release (composant release, depuis CE commit) calcule la version et pose
+#    l'étiquette vX.Y.Z, SANS release par l'API (.releaserc.json : commit-analyzer seul).
+# 4. Étiquette vX.Y.Z : mêmes tests, puis « publier-catalogue » crée la release par le mot-clé
+#    « release: » : seule voie qui publie la version dans le catalogue CI/CD.
+# La chaîne de l'image outillée (M13-E09) est inchangée ; son gabarit a quitté templates/ pour
+# gabarits-v1/ (tout fichier de templates/ serait pris pour un composant).
+# =============================================================================
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  auto_cancel:
+    on_new_commit: interruptible
+
+stages:
+  - lint
+  - test
+  - construction
+  - analyse
+  - publication
+  - signature
+  - verification
+  - release
+
+include:
+  # Gabarit v1 encore utilisé par ce dépôt : la chaîne de l'image outillée (M13-E09).
+  - local: gabarits-v1/supply-chain.yml
+  # --- Composants v2, testés depuis CE commit -------------------------------------------------
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/qualite@$CI_COMMIT_SHA
+    inputs:
+      langage: python
+      repertoire: tests/echantillon-python
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/construction-image@$CI_COMMIT_SHA
+    inputs:
+      image_nom: plateforme/echantillon-composants
+      contexte: tests/echantillon-image
+      publier: false               # on prouve la construction, on ne remplit pas Harbor
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/securite@$CI_COMMIT_SHA
+    inputs:
+      signer: false                # rien n'est publié : rien à signer
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/deploiement@$CI_COMMIT_SHA
+    inputs:
+      repertoire: tests/echantillon-kustomize
+      overlays: [essai]
+  # semantic-release de CE dépôt, par son propre composant (GITLAB_TOKEN = jeton bot-release).
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/release@$CI_COMMIT_SHA
+
+# Variables globales de templates/supply-chain.yml (image outillée, M13-E09).
+variables:
+  SC_IMAGE_NOM: plateforme/outils-supply-chain
+  SC_CONTEXTE: images/outils-supply-chain
+
+# Le job M01 qui faisait avancer la branche « v1 » est retiré : la v1 est gelée (correctifs de
+# sécurité seulement, à la main), les projets v2 épinglent une version du catalogue.
+
+# Contrôle de présence : si un composant ne produit plus un job promis, la création du pipeline
+# échoue (« job needs … but it was not added to the pipeline »).
+composants:presents:
+  stage: test
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+  rules:
+    - if: $CI_COMMIT_BRANCH || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_TAG
+  needs:
+    - job: qualite:lint
+      artifacts: false
+    - job: qualite:tests
+      artifacts: false
+    - job: image:hadolint
+      artifacts: false
+    - job: image:construction
+      artifacts: false
+    - job: deploiement:valider
+      artifacts: false
+      parallel:
+        matrix:
+          - OVERLAY: essai
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "qualite, construction-image, deploiement : jobs présents et réussis"
+
+# Les jobs d'analyse du composant securite dépendent de la construction : présents aussi.
+composants:securite:
+  stage: analyse
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+  needs:
+    - job: securite:trivy
+      artifacts: false
+    - job: securite:sbom
+      artifacts: false
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "securite : analyse et SBOM présents et réussis"
+
+# --- Publication au catalogue (étiquettes vX.Y.Z protégées) -------------------------------------
+.sur-etiquette-protegee:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"
+
+# Notes de version : les sujets des commits depuis l'étiquette précédente, par type. Image avec git.
+notes-de-version:
+  extends: .sur-etiquette-protegee
+  stage: release
+  tags: [k8s]
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+    entrypoint: [""]
+  needs:
+    - job: composants:presents
+      artifacts: false
+    - job: composants:securite
+      artifacts: false
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - git fetch --quiet --tags --force origin
+    - PRECEDENTE="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' "${CI_COMMIT_TAG}^" 2>/dev/null || true)"
+    - PLAGE="${PRECEDENTE:+$PRECEDENTE..}$CI_COMMIT_TAG"
+    - |
+      {
+        echo "## $CI_COMMIT_TAG"
+        echo
+        echo "Composants : qualite, construction-image, securite, deploiement (voir README.md)."
+        for type in feat fix perf; do
+          lignes="$(git log --no-merges --format='- %s (%h)' "$PLAGE" | grep -E "^- ${type}(\(.*\))?!?:" || true)"
+          [ -z "$lignes" ] || printf '\n### %s\n\n%s\n' "$type" "$lignes"
+        done
+        ruptures="$(git log --no-merges --format='%s%n%b' "$PLAGE" | grep -E '^BREAKING CHANGE:|^[a-z]+(\(.*\))?!:' || true)"
+        [ -z "$ruptures" ] || printf '\n### Ruptures\n\n%s\n' "$ruptures"
+      } > notes.md
+    - cat notes.md
+  artifacts:
+    paths: [notes.md]
+    expire_in: 1 week
+
+# Le mot-clé « release: » (glab) est la SEULE voie qui publie une version au catalogue.
+publier-catalogue:
+  extends: .sur-etiquette-protegee
+  stage: release
+  tags: [k8s]
+  image:
+    # glab est obligatoire pour « release: » ; image tirée par le cache « gitlab » de Harbor (E04).
+    name: registry.par1.medisphere.internal/gitlab/gitlab-org/cli:v1.124.0@sha256:f6837b5aea075ca297281b554556d2fc4f8fb291ace6b48286790790dce622cd
+    entrypoint: [""]
+  needs:
+    - job: notes-de-version
+      artifacts: true
+  variables:
+    GIT_STRATEGY: none
+    # glab vérifie le certificat de git01 : racine MédiSphère (variable d'instance de type fichier).
+    ADDITIONAL_CA_CERT_BUNDLE: $MEDISPHERE_ROOT_CA
+  script:
+    - echo "publication de $CI_COMMIT_TAG au catalogue"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "Composants CI/CD $CI_COMMIT_TAG"
+    description: ./notes.md

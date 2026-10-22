@@ -1,0 +1,30 @@
+# mediagenda/deploiement — components/supervision/regle-valkey.yaml (M21-E41, INC-4841)
+# Règle d'équipe : mémoire de Valkey près de sa limite (une éviction coupe les sessions).
+# L'étiquette de sélection est posée sur tout le composant par kustomization.yaml (labels:) ;
+# l'expression a retrouvé ses parenthèses d'agrégation (refus du webhook de prometheus-operator).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mediagenda-valkey
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.internal/equipe: mediagenda
+spec:
+  groups:
+    - name: mediagenda-valkey
+      rules:
+        - alert: MediagendaValkeyMemoireHaute
+          expr: |
+            max by (namespace, pod) (
+              container_memory_working_set_bytes{namespace=~"mediagenda-.*", container="valkey"}
+              / on (namespace, pod, container)
+              kube_pod_container_resource_limits{namespace=~"mediagenda-.*", container="valkey", resource="memory"}
+            ) > 0.9
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "Valkey de {{ $labels.namespace }} au-delà de 90 % de sa limite mémoire"
+            description: "Le pod {{ $labels.pod }} utilise {{ $value | humanizePercentage }} de sa limite mémoire depuis 10 min : risque d'éviction des sessions."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-211-mediagenda-erreurs.md

@@ -1,0 +1,7 @@
+---
+# À AJOUTER à pare_feu_local_communes dans group_vars/socle/pare_feu_local.yml (M21-E08).
+# Collecte de node_exporter : Prometheus (pods masqués derrière l'adresse de leur travailleur) et
+# MGMT (vérifications depuis adm01).
+pare_feu_local_communes:
+  - {source: [10.10.40.61, 10.10.40.62, 10.10.40.63, 10.10.10.0/24], proto: tcp, ports: 9100,
+     motif: "node_exporter (HTTPS) : Prometheus de k8s-par1 (travailleurs) et MGMT", ref: M21-E08}

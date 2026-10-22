@@ -1,0 +1,49 @@
+# M23-E07 (PLAT-2407) — auto-instrumentation de l'opérateur, ESSAI dans wb-essais seulement.
+# L'opérateur injecte, dans les pods annotés « instrumentation.opentelemetry.io/inject-python: python-essai »,
+# un conteneur d'initialisation qui copie les bibliothèques d'instrumentation (image autoinstrumentation-python
+# 0.66b1) dans un volume, puis règle PYTHONPATH et les variables OTEL_* du conteneur de l'application :
+# le SDK démarre par sitecustomize.py, sans une ligne de code dans l'application.
+#   kubectl apply -f instrumentation.yaml        (essai : hors GitOps, comme tout ce qui vit dans wb-essais)
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: python-essai
+  namespace: wb-essais
+  labels:
+    medisphere.internal/ticket: PLAT-2407
+spec:
+  # Python auto-instrumenté exporte en OTLP/HTTP (protobuf) : port 4318 de l'agent, pas 4317.
+  exporter:
+    endpoint: http://otel-agent-collector.traces.svc.cluster.local:4318
+  propagators: [tracecontext, baggage]
+  sampler:
+    type: parentbased_always_on
+  resource:
+    resourceAttributes:
+      deployment.environment.name: essai
+      service.namespace: medisphere
+  # Pod Security « restricted » de wb-essais : le conteneur d'initialisation injecté doit s'y conformer.
+  initContainerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities:
+      drop: ["ALL"]
+    seccompProfile:
+      type: RuntimeDefault
+  python:
+    # Politique medisphere-images : image par le cache ghcr de Harbor, étiquette explicite.
+    image: registry.par1.medisphere.internal/ghcr/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.66b1
+    env:
+      # Mêmes exclusions et conventions que l'instrumentation dans le code (M23-E04), pour comparer.
+      - name: OTEL_PYTHON_EXCLUDED_URLS
+        value: "sante,pret,metrics"
+      - name: OTEL_SEMCONV_STABILITY_OPT_IN
+        value: http,database
+      # Pas d'export des métriques ni des journaux par l'auto-instrumentation : traces seulement.
+      - name: OTEL_METRICS_EXPORTER
+        value: none
+      - name: OTEL_LOGS_EXPORTER
+        value: none
+    resourceRequirements:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 64Mi}

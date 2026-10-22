@@ -1,0 +1,24 @@
+# plateforme/k8s — espaces/ci-jobs/00-namespace.yaml (créé en M19-E02, durci en M19-E24, SEC-2024).
+# Pods des jobs du runner k8s-par1 (étiquettes k8s, kubernetes). M19-E24 passe « enforce » de
+# baseline à RESTRICTED, après la configuration du runner (composants/gitlab-runner/values.yaml) :
+# tout conteneur du pod de job (init-permissions, build, helper, services) tourne sans root, sans
+# capacité, sans élévation de privilège, avec le profil seccomp RuntimeDefault.
+# Exceptions : aucune dans cet espace (docs/livraison/ci/cloisonnement.md) ; un job qui exige root
+# n'a pas sa place dans la CI partagée (construction d'images : buildkitd distant, E08).
+# Retour arrière : remettre enforce=baseline par MR (les pods existants ne sont jamais évincés par
+# un changement d'étiquette PSA : seules les créations sont contrôlées).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-jobs
+  labels:
+    medisphere.internal/role: ci-jobs
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "equipe-plateforme"
+    medisphere.internal/ticket: "SEC-2024"

@@ -1,0 +1,45 @@
+# plateforme/observabilite — slo/mediagenda-disponibilite.yaml (M21-E26, PLAT-2226 ; alertes M21-E27, PLAT-2227)
+# SLI : part des requêtes de l'API de PRODUCTION servies sans erreur serveur (5xx), mesurée par
+# l'application (compteur mediagenda_http_requests_total, étiquettes methode, route, code).
+# Exclus : les sondes (/sante, /pret) et /metrics, qui ne sont pas des requêtes d'utilisateurs.
+# Objectif : 99,5 % sur 28 jours glissants (contrat HDS, Claire Morel) : budget = 0,5 % des
+# requêtes, soit environ 3 h 22 min d'indisponibilité totale sur 28 jours.
+#
+# Alertes (M21-E27) : quatre paires de fenêtres de Pyrra (calculées pour 28 j) :
+#   facteur 14 : 5 min ET 1 h  (2 % du budget en 1 h)  → critique (réveille)
+#   facteur 7  : 30 min ET 6 h (5 % du budget en 6 h)  → critique
+#   facteur 2  : 2 h ET 1 j    (10 % du budget en 1 j) → avertissement (heures ouvrées)
+#   facteur 1  : 6 h ET 4 j    (budget épuisé à la fin de la fenêtre) → avertissement
+# Pyrra pose l'étiquette « severity » (valeurs ci-dessous) ; Prometheus la recopie dans « gravite »
+# (alert_relabel_configs, kps/values.yaml) pour le routage d'Alertmanager.
+# Étiquettes et annotations « pyrra.dev/<nom> » : recopiées SANS le préfixe dans les règles et alertes.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: mediagenda-disponibilite
+  labels:
+    pyrra.dev/equipe: mediagenda
+  annotations:
+    pyrra.dev/resume: "MédiAgenda (prod) consomme son budget d'erreurs trop vite"
+    pyrra.dev/description: "Taux de 5xx au-dessus de ce que permet l'objectif de 99,5 % sur 28 jours (voir les étiquettes short/long et exhaustion : délai avant épuisement à ce rythme)."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-216-budget-erreur.md
+spec:
+  description: "API MédiAgenda (production) : requêtes servies sans erreur 5xx"
+  target: "99.5"
+  window: 28d
+  indicator:
+    ratio:
+      errors:
+        metric: mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics", code=~"5.."}
+      total:
+        metric: mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics"}
+  alerting:
+    burnrates: true
+    absent: true
+    severities:
+      fastBurn: critique
+      mediumBurn: critique
+      slowBurn: avertissement
+      longTermBurn: avertissement
+      # Plus aucune mesure de l'API de prod : on ne sait plus si le budget brûle.
+      absent: critique

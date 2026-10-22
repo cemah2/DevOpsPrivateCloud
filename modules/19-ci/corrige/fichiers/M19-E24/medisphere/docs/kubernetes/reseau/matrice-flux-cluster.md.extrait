@@ -1,0 +1,13 @@
+<!-- plateforme/medisphere — docs/kubernetes/reseau/matrice-flux-cluster.md (M15), lignes ajoutées en M19-E24. -->
+
+| Source | Destination | Port | Politique | Motif | Exercice |
+|---|---|---|---|---|---|
+| `ci-jobs` (tous les pods) | `kube-system/kube-dns` | 53 UDP/TCP | `ci-jobs/ci-jobs-sortie` | résolution (mandataire DNS de Cilium pour `toFQDNs`) | M19-E24 |
+| `ci-jobs` | `git01.par1.medisphere.internal` (10.10.20.12) | 443 | `ci-jobs/ci-jobs-sortie` | clone, artefacts, API | M19-E24 |
+| `ci-jobs` | `registry.par1.medisphere.internal` (`reg01`, 10.10.20.18) | 443 | `ci-jobs/ci-jobs-sortie` | cache BuildKit, skopeo, cosign | M19-E24 |
+| `ci-jobs` | `s3-01.par1.medisphere.internal` (10.10.20.14) | 8333 | `ci-jobs/ci-jobs-sortie` | cache du runner | M19-E24 |
+| `ci-jobs` | `buildkit/buildkitd` | 1234 | `ci-jobs/ci-jobs-sortie` (+ entrée de `buildkit`, E08) | constructions d'images | M19-E24 |
+| `ci-jobs` | Internet (hors 10/8, 172.16/12, 192.168/16, 100.64/10) | 443 | `ci-jobs/ci-jobs-sortie` | dépendances (PyPI, proxy Go…) | M19-E24 |
+| `ci-jobs-protege` | `kube-system/kube-dns` | 53 UDP/TCP | `ci-jobs-protege/ci-jobs-protege-sortie` | résolution | M19-E24 |
+| `ci-jobs-protege` | `git01`, Harbor | 443 | `ci-jobs-protege/ci-jobs-protege-sortie` | MR de promotion, signature | M19-E24 |
+| tout | `ci-jobs`, `ci-jobs-protege` | — | `refus-par-defaut` | aucune entrée | M19-E24 |

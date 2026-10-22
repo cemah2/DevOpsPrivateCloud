@@ -1,0 +1,21 @@
+# plateforme/k8s — espaces/ci-jobs-protege/10-quota.yaml (M19-E24).
+# Quatre jobs protégés simultanés au plus (concurrent = 4 du runner protégé) : signature, attestations,
+# promotion. Demandes par défaut du runner : build 100m/256Mi + helper 50m/64Mi par pod.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ci-jobs-protege
+  namespace: ci-jobs-protege
+spec:
+  hard:
+    pods: "6"
+    requests.cpu: "2"
+    requests.memory: 3Gi
+    limits.cpu: "4"
+    limits.memory: 6Gi
+    requests.ephemeral-storage: 6Gi
+    limits.ephemeral-storage: 12Gi
+    # Les jobs protégés ne créent ni volume ni Service exposé.
+    persistentvolumeclaims: "0"
+    services.loadbalancers: "0"
+    services.nodeports: "0"

@@ -1,0 +1,10 @@
+# plateforme/k8s — composants/argocd/values-multicluster.yaml (M20-E26, PLAT-2126)
+# À ajouter à la liste « values » de releases/argocd.yaml.gotmpl, après values-durcissement.yaml.
+configs:
+  cm:
+    # Le compte argocd-gestion de lyo-k3s01 n'a qu'un Role dans « agence » : sans ce réglage, le
+    # contrôleur essaie de surveiller TOUS les types namespacés de cet espace (Secrets, Roles…), reçoit
+    # des refus, et le cache du cluster passe en erreur. « normal » : un « list » refusé fait retirer le
+    # type de la surveillance (sans SelfSubjectAccessReview, contrairement à « strict »).
+    # Sans effet sur in-cluster, où le contrôleur a tous les droits.
+    resource.respectRBAC: normal

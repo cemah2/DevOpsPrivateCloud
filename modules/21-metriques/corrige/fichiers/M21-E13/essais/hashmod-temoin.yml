@@ -1,0 +1,28 @@
+# ~/m21/e13/hashmod-temoin.yml — essai de hashmod sur le Prometheus TÉMOIN (M21-E13, étape 6).
+# Job temporaire à ajouter à la main dans /etc/prometheus/prometheus.yml de mon01 (copie du job
+# blackbox), validé par « promtool check config », rechargé (systemctl reload prometheus),
+# observé, puis RETIRÉ (le playbook supervision-temoin.yml le retire de toute façon).
+  - job_name: essai-hashmod
+    metrics_path: /probe
+    file_sd_configs:
+      - files: [/etc/prometheus/cibles/blackbox-*.yml]
+    relabel_configs:
+      # Empreinte de l'adresse de la cible, modulo 2 : 0 ou 1, stable pour une même cible.
+      - source_labels: [__address__]
+        modulus: 2
+        target_label: __tmp_hash
+        action: hashmod
+      # Ce Prometheus ne garde que la « moitié 0 ». Un second Prometheus avec « 1 » prendrait
+      # l'autre : c'est le partage de la collecte (sharding), que prometheus-operator fait avec
+      # spec.shards (hashmod sur __address__ dans chaque fragment).
+      - source_labels: [__tmp_hash]
+        regex: "0"
+        action: keep
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115

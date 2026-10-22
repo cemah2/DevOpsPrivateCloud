@@ -1,0 +1,341 @@
+# plateforme/ci-templates — composant « qualite » v2.6.0 (M19-E10 ; couverture : M19-E13 ;
+# tests d'intégration avec services PostgreSQL et Valkey : M19-E14 ; accélération : M19-E23, DEV-2023).
+# Messages de commit (commitlint), lint et tests d'un projet Python (uv, ruff, pytest) ou Go.
+# Utilisation :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.6.0
+#       inputs:
+#         langage: python
+# Jobs : qualite:commitlint, qualite:lint, qualite:tests (rapport JUnit ; couverture Cobertura et
+# pourcentage si « couverture: true », le défaut) ; qualite:tests-integration si « integration: true »
+# (Python : services PostgreSQL 18 et Valkey 8.1 dans le pod du job, pytest -m <marqueur>).
+# Exigences côté projet : Python → pyproject.toml + uv.lock, ruff, pytest et pytest-cov dans le
+# groupe « dev » (pytest-cov si couverture: true) ;
+# Go → go.mod. Aucun job sur les étiquettes (le pipeline de main a déjà tout vérifié).
+spec:
+  description: "Qualité d'un projet Python (uv, ruff, pytest) ou Go : commitlint, lint, tests avec rapport JUnit."
+  component: [version]
+  inputs:
+    langage:
+      description: "Langage du projet"
+      options: [python, go]
+      default: python
+    stage_lint:
+      description: "Stage des jobs commitlint et lint"
+      default: lint
+    stage_tests:
+      description: "Stage du job de tests"
+      default: test
+    runner:
+      description: "Étiquette du runner"
+      default: k8s
+    repertoire:
+      description: "Répertoire du projet dans le dépôt (relatif à la racine)"
+      default: "."
+      regex: ^[A-Za-z0-9._/-]+$
+    commitlint:
+      description: "Contrôler les messages de commit de la plage (MR ou push)"
+      type: boolean
+      default: true
+    image_python:
+      description: "Image des jobs Python (uv + Python), étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:a6aeb5c166af9f765f9c68e585b5a5148c28f3b8a362f90151cecea88b21a3e2
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_go:
+      description: "Image des jobs Go, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/library/golang:1.26-trixie@sha256:909771fef53e3dcb0950255f0c9a8b4728c3b841e61509c7b29b098de7ee02d4
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_commitlint:
+      description: "Image commitlint, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/commitlint/commitlint:21.2.3@sha256:33f225c84111a38ebac0c81fa21c488a79709b8a8e04056dfaaf4f80ef20be25
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    couverture:
+      description: "Mesurer la couverture : rapport Cobertura (vue ligne à ligne des MR) et pourcentage (expression coverage)"
+      type: boolean
+      default: true
+    paquet_python:
+      description: "Paquet Python mesuré par pytest-cov (--cov=…) ; vide = tout le projet"
+      default: ""
+      regex: ^[A-Za-z0-9_.]*$
+    integration:
+      description: "Ajouter le job qualite:tests-integration (services PostgreSQL et Valkey, Python seulement)"
+      type: boolean
+      default: false
+    marqueur_integration:
+      description: "Marqueur pytest des tests d'intégration"
+      default: integration
+      regex: ^[A-Za-z0-9_ ]+$
+    variable_postgresql:
+      description: "Nom de la variable qui reçoit l'URL de la base de test (lue par les tests du projet)"
+      default: TEST_DB_URL
+      regex: ^[A-Z][A-Z0-9_]*$
+    variable_valkey:
+      description: "Nom de la variable qui reçoit l'URL de Valkey"
+      default: TEST_VALKEY_URL
+      regex: ^[A-Z][A-Z0-9_]*$
+    commande_preparation:
+      description: "Commande lancée une fois les services prêts, avant les tests (ex. migrations)"
+      default: ""
+    image_postgresql:
+      description: "Image du service PostgreSQL, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/library/postgres:18.6-trixie@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_valkey:
+      description: "Image du service Valkey, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1.10-trixie@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    options_pytest:
+      description: "Options supplémentaires de pytest (ex. -m 'not lent')"
+      default: ""
+---
+# --- Socle commun (caché, préfixé pour ne pas entrer en collision avec un job du projet) ---------
+.qualite-v2-base:
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: true
+  # M19-E23 : seule la branche par défaut ÉCRIT le cache ; les MR et les autres branches le lisent.
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      variables:
+        QUALITE_POLITIQUE_CACHE: pull-push
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        QUALITE_POLITIQUE_CACHE: pull
+    - if: $CI_COMMIT_BRANCH
+      variables:
+        QUALITE_POLITIQUE_CACHE: pull
+  variables:
+    # M19-E23 : archiveur rapide (cache et artefacts), compression légère ; clone superficiel.
+    FF_USE_FASTZIP: "true"
+    CACHE_COMPRESSION_LEVEL: fast
+    ARTIFACT_COMPRESSION_LEVEL: fast
+    GIT_DEPTH: "1"
+
+.qualite-v2-python:
+  extends: .qualite-v2-base
+  image: $[[ inputs.image_python ]]
+  variables:
+    UV_CACHE_DIR: $CI_PROJECT_DIR/.cache/uv
+    UV_LINK_MODE: copy
+    UV_PYTHON_DOWNLOADS: never
+  cache:
+    # M19-E23 : clé calculée sur le verrou (même dépendances = même cache, quelle que soit la branche) ;
+    # « uv cache prune --ci » avant l'envoi garde les roues construites, pas les téléchargements.
+    key:
+      files: ["$[[ inputs.repertoire ]]/uv.lock"]
+      prefix: uv
+    paths: [.cache/uv]
+    policy: $QUALITE_POLITIQUE_CACHE
+  after_script:
+    - uv cache prune --ci > /dev/null 2>&1 || true
+
+.qualite-v2-go:
+  extends: .qualite-v2-base
+  image: $[[ inputs.image_go ]]
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.cache/go
+    GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+    GOFLAGS: -mod=readonly
+  cache:
+    key:
+      files: ["$[[ inputs.repertoire ]]/go.sum"]
+      prefix: go
+    paths: [.cache/go/pkg/mod, .cache/go-build]
+    policy: $QUALITE_POLITIQUE_CACHE
+
+# Plage de commits contrôlée (reprise du gabarit v1 de M01-E24). DEBUT vide = premier push.
+.qualite-v2-plage: &qualite-v2-plage |
+  DEBUT=""
+  if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+    DEBUT="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+  elif [ "${CI_COMMIT_BRANCH:-}" != "$CI_DEFAULT_BRANCH" ]; then
+    git fetch --quiet origin "$CI_DEFAULT_BRANCH"
+    DEBUT="$(git merge-base FETCH_HEAD "$CI_COMMIT_SHA")"
+  elif ! printf '%s' "${CI_COMMIT_BEFORE_SHA:-0}" | grep -Eq '^0+$' \
+       && git cat-file -e "${CI_COMMIT_BEFORE_SHA}^{commit}" 2>/dev/null; then
+    DEBUT="$CI_COMMIT_BEFORE_SHA"
+  fi
+  echo "Plage contrôlée : ${DEBUT:-<origine>}..${CI_COMMIT_SHA}"
+
+# --- Jobs ----------------------------------------------------------------------------------------
+qualite:commitlint:
+  extends: .qualite-v2-base
+  stage: $[[ inputs.stage_lint ]]
+  image:
+    name: $[[ inputs.image_commitlint ]]
+    entrypoint: [""]
+  needs: []
+  variables:
+    GIT_DEPTH: "0"             # merge-base avec la cible : historique nécessaire
+  rules:
+    - if: '"$[[ inputs.commitlint ]]" != "true"'
+      when: never
+    - !reference [.qualite-v2-base, rules]
+  script:
+    - commitlint --version
+    - *qualite-v2-plage
+    - |
+      if [ -n "$DEBUT" ]; then
+        commitlint --default-config --verbose --from "$DEBUT" --to "$CI_COMMIT_SHA"
+      else
+        commitlint --default-config --verbose --last
+      fi
+    # fixup!/squash!/amend! ignorés par commitlint : refusés ici (M01-E14).
+    - |
+      if [ -n "$DEBUT" ] && git log --format=%s "${DEBUT}..${CI_COMMIT_SHA}" | grep -E '^(fixup|squash|amend)!'; then
+        echo "Commits à intégrer avant fusion : git rebase -i --autosquash" >&2
+        exit 1
+      fi
+
+qualite:lint:
+  extends: .qualite-v2-$[[ inputs.langage ]]
+  stage: $[[ inputs.stage_lint ]]
+  needs: []
+  script:
+    - cd "$[[ inputs.repertoire ]]"
+    - echo "composant qualite $[[ component.version ]] — langage $[[ inputs.langage ]]"
+    - |
+      case "$[[ inputs.langage ]]" in
+        python)
+          uv sync --locked --only-group dev --no-install-project
+          uv run --no-sync ruff --version
+          # Rapport Code Quality (toujours écrit), puis le contrôle bloquant lisible dans le journal.
+          uv run --no-sync ruff check --exit-zero --output-format=gitlab --output-file=gl-code-quality.json .
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+          ;;
+        go)
+          test -z "$(gofmt -l . | tee /dev/stderr)" || { echo "fichiers non formatés (gofmt -l)"; exit 1; }
+          go vet ./...
+          ;;
+      esac
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      codequality: $[[ inputs.repertoire ]]/gl-code-quality.json
+
+qualite:tests:
+  extends: .qualite-v2-$[[ inputs.langage ]]
+  stage: $[[ inputs.stage_tests ]]
+  # M19-E23 : les tests n'attendent pas la fin du stage de lint.
+  needs: []
+  variables:
+    QUALITE_COUVERTURE: "$[[ inputs.couverture ]]"
+    QUALITE_PAQUET: "$[[ inputs.paquet_python ]]"
+  script:
+    - cd "$[[ inputs.repertoire ]]"
+    - |
+      case "$[[ inputs.langage ]]" in
+        python)
+          uv sync --locked
+          set -- --junitxml=rapport-tests.xml
+          if [ "$QUALITE_COUVERTURE" = true ]; then
+            # Rapport Cobertura (coverage.xml) pour GitLab, ligne TOTAL dans le journal pour « coverage: ».
+            set -- "$@" "--cov=${QUALITE_PAQUET:-.}" --cov-report=term --cov-report=xml:coverage.xml
+          fi
+          # shellcheck disable=SC2086  # options libres du projet, découpées volontairement
+          uv run --no-sync pytest "$@" $[[ inputs.options_pytest ]]
+          ;;
+        go)
+          if [ "$QUALITE_COUVERTURE" = true ]; then
+            go run gotest.tools/gotestsum@v1.13.0 --junitfile rapport-tests.xml -- -coverprofile=couverture.out ./...
+            go tool cover -func=couverture.out | tail -n 1          # « total: (statements) 81.2% »
+            go run github.com/boumenot/gocover-cobertura@v1.5.0 < couverture.out > coverage.xml
+          else
+            go run gotest.tools/gotestsum@v1.13.0 --junitfile rapport-tests.xml -- ./...
+          fi
+          ;;
+      esac
+  # Python : « TOTAL  395  100  75% » ; Go : « total: (statements) 75.0% ». La dernière ligne qui
+  # correspond donne le pourcentage (MR, liste des jobs, graphiques d'analyse du dépôt).
+  coverage: '/(?i)^total\b[^%\n]*?(\d+(?:\.\d+)?)%/'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    # coverage.xml aussi en « paths » : les rapports ne sont pas transmis aux jobs suivants (needs),
+    # les fichiers de « paths » le sont (analyse SonarQube de M19-E16, par exemple).
+    paths:
+      - "$[[ inputs.repertoire ]]/rapport-tests.xml"
+      - "$[[ inputs.repertoire ]]/coverage.xml"
+    reports:
+      junit: "$[[ inputs.repertoire ]]/rapport-tests.xml"
+      coverage_report:
+        coverage_format: cobertura
+        path: "$[[ inputs.repertoire ]]/coverage.xml"
+
+# Tests d'intégration : PostgreSQL et Valkey sont des conteneurs du MÊME pod que le job (exécuteur
+# Kubernetes) : même interface réseau (127.0.0.1), noms d'alias résolus (Runner ≥ 17.9). Base jetable,
+# propre au job : rien n'est partagé avec un autre pipeline, tout disparaît avec le pod.
+qualite:tests-integration:
+  extends: .qualite-v2-python
+  stage: $[[ inputs.stage_tests ]]
+  needs: []
+  rules:
+    - if: '"$[[ inputs.integration ]]" != "true" || "$[[ inputs.langage ]]" != "python"'
+      when: never
+    - !reference [.qualite-v2-base, rules]
+  services:
+    - name: $[[ inputs.image_postgresql ]]
+      alias: postgresql
+      # UID:GID de l'utilisateur « postgres » de l'image : le script d'entrée ne fait alors aucune
+      # opération de propriétaire (il ne les fait qu'en root) et le conteneur passe « restricted ».
+      kubernetes:
+        user: "999:999"
+      variables:
+        POSTGRES_DB: integration
+        POSTGRES_USER: integration
+        # Base jetable, joignable seulement depuis le pod du job : pas de mot de passe à gérer.
+        POSTGRES_HOST_AUTH_METHOD: trust
+        POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+    - name: $[[ inputs.image_valkey ]]
+      alias: valkey
+      kubernetes:
+        user: "999:999"
+      command: ["valkey-server", "--save", "", "--appendonly", "no"]
+  variables:
+    $[[ inputs.variable_postgresql ]]: postgresql://integration@postgresql:5432/integration
+    $[[ inputs.variable_valkey ]]: redis://valkey:6379/15
+    # Ressources des conteneurs de service (chacun) : bornées par les maximums du runner
+    # (service_*_overwrite_max_allowed) et par le LimitRange de ci-jobs.
+    KUBERNETES_SERVICE_CPU_REQUEST: 100m
+    KUBERNETES_SERVICE_CPU_LIMIT: "1"
+    KUBERNETES_SERVICE_MEMORY_REQUEST: 128Mi
+    KUBERNETES_SERVICE_MEMORY_LIMIT: 512Mi
+    QUALITE_PREPARATION: "$[[ inputs.commande_preparation ]]"
+  script:
+    - cd "$[[ inputs.repertoire ]]"
+    - uv sync --locked
+    # « Conteneur démarré » ne veut pas dire « base prête ». Le script d'entrée de PostgreSQL initialise
+    # la base sur une socket locale SANS écoute TCP, puis redémarre en TCP : un connect() TCP réussi
+    # signifie « prêt ». Attente bornée (60 s), bibliothèque standard de Python seulement.
+    - |
+      cat > /tmp/attendre_services.py <<'PY'
+      import socket, sys, time
+      fin = time.monotonic() + 60
+      for hote, port, sonde in (("postgresql", 5432, None), ("valkey", 6379, b"PING\r\n")):
+          while True:
+              try:
+                  with socket.create_connection((hote, port), timeout=3) as s:
+                      if sonde:
+                          s.sendall(sonde)
+                          if not s.recv(16).startswith(b"+PONG"):
+                              raise OSError("réponse inattendue")
+                  print(f"{hote}:{port} prêt")
+                  break
+              except OSError as e:
+                  if time.monotonic() > fin:
+                      sys.exit(f"{hote}:{port} non prêt après 60 s : {e}")
+                  time.sleep(2)
+      PY
+    - uv run --no-sync python /tmp/attendre_services.py
+    - if [ -n "$QUALITE_PREPARATION" ]; then echo "préparation : $QUALITE_PREPARATION"; eval "$QUALITE_PREPARATION"; fi
+    - uv run --no-sync pytest -m "$[[ inputs.marqueur_integration ]]" --junitxml=rapport-integration.xml -p no:cacheprovider
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - "$[[ inputs.repertoire ]]/rapport-integration.xml"
+    reports:
+      junit: "$[[ inputs.repertoire ]]/rapport-integration.xml"

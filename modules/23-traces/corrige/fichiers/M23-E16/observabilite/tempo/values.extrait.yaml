@@ -1,0 +1,25 @@
+# plateforme/observabilite/tempo/values.yaml — ajouts de M23-E16 (à fusionner avec tes values de M23-E03 et
+# M23-E13 ; chart grafana-community/tempo 3.2.x). Dimensionnement : docs/observabilite/traces/capacite-securite.md.
+tempo:
+  # Déjà posé en M23-E03 : on le garde EXPLICITE (rendu dans backend_worker.compaction.block_retention et
+  # l'ordonnanceur ; le défaut du chart est 24h).
+  retention: 336h
+  resources:
+    requests: {cpu: 500m, memory: 2Gi}
+    limits: {memory: 3Gi}
+  overrides:
+    defaults:
+      ingestion:
+        rate_strategy: local
+        # Un seul distributeur (monolithique) : 15 Mo/s soutenus, rafale de 20 Mo (une requête plus grosse
+        # que la rafale ne passera jamais : à garder au-dessus de la taille d'un lot de la passerelle).
+        rate_limit_bytes: 15000000
+        burst_size_bytes: 20000000
+        max_traces_per_user: 20000
+      global:
+        max_bytes_per_trace: 5000000
+# Volume : on GARDE persistence.size de M23-E03 (10Gi). Le gabarit de volume d'un StatefulSet est immuable :
+# le changer dans les values ferait échouer la synchronisation d'Argo CD. Si la mesure de capacite-securite.md
+# montre qu'il faut plus (WAL du live-store et du metrics-generator), on agrandit le PVC lui-même
+# (« kubectl -n traces patch pvc storage-tempo-0 -p '{"spec":{"resources":{"requests":{"storage":"20Gi"}}}}' »,
+# ceph-rbd autorise l'expansion) et on le consigne dans capacite-securite.md.

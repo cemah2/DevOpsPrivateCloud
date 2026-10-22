@@ -1,0 +1,73 @@
+# plateforme/observabilite — pyrra/surveillance-et-politiques.yaml (M21-E26, PLAT-2226)
+# ServiceMonitor (jobs « pyrra-kubernetes » et « pyrra-api ») et politiques d'entrée de Pyrra.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pyrra-kubernetes
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: kubernetes
+      app.kubernetes.io/name: pyrra
+  endpoints:
+    - port: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pyrra-api
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      app.kubernetes.io/name: pyrra
+  endpoints:
+    - port: http
+---
+# L'interface n'est jointe que par Envoy de la Gateway (identité réservée « ingress », M15) et
+# collectée par Prometheus.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: pyrra-api-entree
+spec:
+  description: "Pyrra (interface) : depuis la Gateway et Prometheus seulement (PLAT-2226)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: api
+      app.kubernetes.io/name: pyrra
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "9099", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "9099", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: pyrra-kubernetes-entree
+spec:
+  description: "Pyrra (opérateur) : 9444 depuis pyrra-api, 8080 depuis Prometheus (PLAT-2226)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: kubernetes
+      app.kubernetes.io/name: pyrra
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/component: api
+            app.kubernetes.io/name: pyrra
+      toPorts:
+        - ports: [{port: "9444", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]

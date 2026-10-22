@@ -1,0 +1,35 @@
+---
+# playbooks/m20.yml — environnement du module 20 : k3s de flux01 (M20-E23), puis lyo-k3s01 (M20-E26).
+#   uv run ansible-playbook playbooks/m20.yml --check --diff
+#   uv run ansible-playbook playbooks/m20.yml
+# Hors de site.yml : l'environnement du module a son propre cycle (détruit au mini-projet).
+
+- name: Socle commun des hôtes du module 20
+  hosts: env_m20
+  become: true
+  pre_tasks:
+    - name: Le garde-fou d'inventaire (hôtes du plan seulement)
+      ansible.builtin.assert:
+        that:
+          - groups['env_m20'] | default([]) | difference(['flux01', 'lyo-k3s01']) | length == 0
+        fail_msg: "Inventaire env_m20 inattendu : {{ groups['env_m20'] | default([]) }} (étiquettes NetBox ?)."
+        quiet: true
+      tags: [always]
+  roles:
+    - role: base
+      tags: [base]
+    - role: ssh_durci
+      tags: [ssh]
+    - role: medisphere.socle.ca_lab
+      tags: [pki]
+    - role: ssh_ca_hote
+      tags: [ssh_ca]
+    - role: ssh_ca_utilisateur
+      tags: [ssh_ca]
+
+- name: Distribution k3s (rôle du M18)
+  hosts: role_k3s:&env_m20
+  become: true
+  roles:
+    - role: k3s
+      tags: [k3s]

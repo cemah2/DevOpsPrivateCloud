@@ -1,0 +1,19 @@
+{# plateforme/ansible — roles/supervision_temoin/templates/temoin-lui-meme-cibles.yml.j2 (M21-E42)
+   Une règle par groupe de sondes de host_vars/mon01/supervision_temoin.yml : le nombre de cibles
+   découvertes ne doit pas descendre sous celui que décrit le code. Un fichier de cibles vidé ou
+   commenté est VALIDE pour Prometheus : sans cette règle, le témoin perd des sondes sans un mot.
+   Déposé à côté des autres règles du témoin, validé par « promtool check rules » (validate:). #}
+# {{ ansible_managed }}
+groups:
+  - name: temoin.cibles
+    rules:
+{% for s in supervision_temoin_sondes %}
+      - alert: TemoinCiblesManquantes
+        expr: count(up{job="blackbox", groupe="{{ s.nom }}"}) < {{ s.cibles | length }} or absent(up{job="blackbox", groupe="{{ s.nom }}"})
+        for: 10m
+        labels: {gravite: avertissement, equipe: plateforme, groupe: "{{ s.nom }}"}
+        annotations:
+          resume: "Le témoin ne sonde plus que {{ '{{' }} $value {{ '}}' }} cible(s) du groupe {{ s.nom }} (attendu : {{ s.cibles | length }})"
+          description: "Comparer /etc/prometheus/cibles/ avec host_vars/mon01/supervision_temoin.yml (--check --diff du rôle)."
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md
+{% endfor %}

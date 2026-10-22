@@ -1,0 +1,68 @@
+# CiliumNetworkPolicy loki-entree (M22-E02, SEC-2302) : qui peut parler à Loki, et pour quoi faire.
+# Dès qu'une politique sélectionne les pods Loki en entrée, tout ce qui n'est pas listé est refusé.
+# Les sondes du kubelet restent permises (Cilium autorise l'hôte local vers ses pods).
+#
+#   source                                  port   autorisé
+#   Alloy (DaemonSet, espace journaux)      3100   tout (écriture des journaux)
+#   Grafana (espace supervision)            3100   tout (lecture ; règles et alertes en E08)
+#   Prometheus (espace supervision)         3100   GET /metrics
+#   Loki lui-même                           7946, 9095   memberlist, gRPC interne (requêteur, compactor)
+#   MGMT 10.10.10.0/24 (adm01, checks)      3100   tout : lecture des vérifications, écriture de l'agent de adm01
+#   autres réseaux du lab (VMs)             3100   POST /loki/api/v1/push seulement (règle HTTP, proxy Envoy de Cilium)
+#
+# Limite connue : le locataire (en-tête X-Scope-OrgID) n'est pas authentifié ; une VM pourrait écrire
+# dans le locataire d'une autre équipe. Traité en M22-E16 (et M24 pour l'authentification).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: loki-entree
+spec:
+  description: "Loki : écriture par Alloy et les VMs, lecture par Grafana, Prometheus et MGMT (M22-E02)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+      app.kubernetes.io/instance: loki
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux
+            app.kubernetes.io/name: alloy
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: grafana
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: GET, path: "/metrics"}
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux
+            app.kubernetes.io/name: loki
+      toPorts:
+        - ports:
+            - {port: "7946", protocol: TCP}
+            - {port: "9095", protocol: TCP}
+    - fromCIDR:
+        - 10.10.10.0/24
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+    - fromCIDR:
+        - 10.10.20.0/24     # INFRA : dns01/02, ca01, git01, nbx01, s3-01, runners, reg01, mon01
+        - 10.10.70.0/24     # DMZ : lb01, lb02
+        - 10.10.40.2/32     # gw01 (sa propre adresse sur le VLAN 40, interface de sortie vers 10.10.41.0/24)
+        - 10.10.40.3/32     # gw02
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/loki/api/v1/push"}

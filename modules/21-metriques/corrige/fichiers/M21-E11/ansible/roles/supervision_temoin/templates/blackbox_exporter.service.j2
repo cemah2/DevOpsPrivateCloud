@@ -1,0 +1,43 @@
+# {{ ansible_managed }}
+[Unit]
+Description=blackbox_exporter du témoin (rôle supervision_temoin, M21-E11)
+Documentation=https://github.com/prometheus/blackbox_exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=blackbox
+Group=blackbox
+ExecStart=/usr/local/bin/blackbox_exporter \
+  --config.file={{ supervision_temoin_dossier_config }}/blackbox.yml \
+  --web.listen-address={{ supervision_temoin_blackbox_ecoute }}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+MemoryMax=64M
+# Sondes ICMP : socket brute. La capacité est donnée au SEUL processus de blackbox_exporter
+# (ambiante), et c'est la seule qu'il peut obtenir (ensemble limite).
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

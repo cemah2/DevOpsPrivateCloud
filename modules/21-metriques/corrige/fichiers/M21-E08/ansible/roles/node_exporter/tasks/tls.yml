@@ -1,0 +1,26 @@
+---
+# Certificat du service par le rôle certificats_acme (M06-E18/E27) : émission ACME (défi HTTP-01),
+# renouvellement par cert-renewer@node-exporter (mTLS, sans port 80). On ne réécrit pas la liste
+# certificats_acme_certificats de l'hôte (host_vars) : on appelle le rôle avec UNE entrée.
+# set_fact d'abord : l'entrée est calculée maintenant, avec les crochets lus dans la liste de
+# l'hôte (sinon la variable de l'appel se référencerait elle-même : boucle de gabarits).
+- name: Décrire le certificat de node_exporter
+  ansible.builtin.set_fact:
+    _node_exporter_certificat:
+      id: node-exporter
+      noms: ["{{ node_exporter_fqdn }}"]
+      certificat: "{{ node_exporter_dossier_tls }}/node_exporter.crt"
+      cle: "{{ node_exporter_dossier_tls }}/node_exporter.key"
+      groupe: node_exporter
+      avant_emission: "{{ node_exporter_acme_avant_emission }}"
+      apres_emission: "{{ node_exporter_acme_apres_emission }}"
+      ecoute_http: "{{ node_exporter_acme_ecoute_http }}"
+      # Rien à recharger : node_exporter relit son fichier web (et donc le certificat) à chaque
+      # connexion (exporter-toolkit).
+      recharger: ""
+
+- name: Émettre ou vérifier le certificat (rôle certificats_acme)
+  ansible.builtin.include_role:
+    name: certificats_acme
+  vars:
+    certificats_acme_certificats: ["{{ _node_exporter_certificat }}"]

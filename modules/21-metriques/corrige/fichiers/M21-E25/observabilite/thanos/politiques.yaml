@@ -1,0 +1,72 @@
+# plateforme/observabilite — thanos/politiques.yaml (M21-E24, PLAT-2224 ; Compactor en M21-E25)
+# Entrées des composants Thanos. Rappel : dès qu'une politique sélectionne un pod en entrée, tout
+# ce qu'elle n'autorise pas est refusé — clients du cluster compris. Les sondes du kubelet viennent
+# de l'hôte et restent permises. La sortie n'est pas encore filtrée (M21-E29 le fait pour tout
+# l'espace) : les sidecars, le Store et le Compactor joignent le RGW (10.10.30.200:443) par la
+# carte eth1 des travailleurs, flux déjà ouvert au M16.
+# À reporter dans docs/kubernetes/reseau/matrice-flux-cluster.md (plateforme/medisphere).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thanos-query-entree
+spec:
+  description: "Thanos Query : API HTTP depuis MGMT, mon01 (10.10.41.60) et l'espace supervision (PLAT-2224)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-query
+  ingress:
+    # Service prometheus-externe (externalTrafficPolicy: Local : l'adresse source est conservée).
+    - fromCIDR:
+        - 10.10.10.0/24
+        - 10.10.20.19/32
+      toPorts:
+        - ports: [{port: "10902", protocol: TCP}]
+    # Grafana, Pyrra (E26), et Prometheus qui collecte /metrics.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+      toPorts:
+        - ports: [{port: "10902", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thanos-store-entree
+spec:
+  description: "Thanos Store : StoreAPI pour Thanos Query, métriques pour Prometheus (PLAT-2224)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-store
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: thanos-query
+      toPorts:
+        - ports: [{port: "10901", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "10902", protocol: TCP}]
+---
+# Compactor : rien ne l'appelle, sauf Prometheus (métriques) et toi par « kubectl port-forward »
+# (interface des blocs) : le port-forward entre par l'intérieur du pod (localhost), sans passer par
+# la politique.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thanos-compactor-entree
+spec:
+  description: "Thanos Compactor : métriques pour Prometheus seulement (PLAT-2225)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-compactor
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "10902", protocol: TCP}]

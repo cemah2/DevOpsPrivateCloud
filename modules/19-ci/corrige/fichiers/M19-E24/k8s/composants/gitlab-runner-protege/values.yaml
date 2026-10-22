@@ -1,0 +1,122 @@
+# plateforme/k8s — composants/gitlab-runner-protege/values.yaml (M19-E24, SEC-2024).
+# Runner d'instance « k8s-par1-protege » : access_level ref_protected, étiquette « protege »,
+# run_untagged false (réglés côté GitLab à la création par l'API : outils/creer-runner-protege.sh).
+# Il n'exécute que les jobs des branches et étiquettes PROTÉGÉES qui demandent l'étiquette
+# « protege » : signature et attestations (composant securite ≥ 2.1.0), promotion (composant
+# promotion ≥ 2.1.0). Pods dans ci-jobs-protege (PSA restricted, sans Internet).
+#
+# Secrets que lui seul remet aux jobs (jamais des variables de GitLab) :
+#   - « cosign-medisphere » (clés cosign.key et cosign.password) de ci-jobs-protege, monté en lecture
+#     seule dans /run/secrets/medisphere/cosign/ ; créé par outils/secrets-k8s.sh depuis
+#     secrets/cosign-ci.yml (Vault critique).
+# Jeton du runner : Secret « gitlab-runner-protege-jeton » (secrets/gitlab-runner-protege.yml).
+
+gitlabUrl: https://git01.par1.medisphere.internal/
+
+image:
+  registry: registry.par1.medisphere.internal
+  image: gitlab/gitlab-org/gitlab-runner
+
+certsSecretName: gitlab-runner-racine
+
+sessionServer:
+  enabled: false
+unregisterRunners: true
+terminationGracePeriodSeconds: 1800
+
+# Peu de jobs, courts : quatre au plus à la fois (quota de ci-jobs-protege : 6 pods).
+concurrent: 4
+checkInterval: 3
+
+rbac:
+  create: true
+  clusterWideAccess: false
+  rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["create", "delete", "get", "list", "watch"]
+    - apiGroups: [""]
+      resources: ["pods/attach", "pods/exec"]
+      verbs: ["create", "delete", "get", "patch"]
+    - apiGroups: [""]
+      resources: ["pods/log"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["create", "delete", "get", "update"]
+    - apiGroups: [""]
+      resources: ["serviceaccounts"]
+      verbs: ["get"]
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["list", "watch"]
+    # Pas de « services » : aucun job protégé n'utilise « services: ».
+
+serviceAccount:
+  create: true
+  name: gitlab-runner-protege
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  privileged: false
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+podSecurityContext:
+  runAsUser: 100
+  fsGroup: 65533
+
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 256Mi}
+
+runners:
+  jobNamespace: ci-jobs-protege
+  secret: gitlab-runner-protege-jeton
+  name: k8s-par1-protege
+  executor: kubernetes
+  # Pas de cache : les jobs protégés n'en ont pas besoin, et un cache partagé avec des branches non
+  # protégées serait un chemin d'empoisonnement (E31 Q5).
+  config: |
+    [[runners]]
+      output_limit = 4096
+      environment = ["HOME=/tmp"]
+      [runners.kubernetes]
+        namespace = "{{ .Values.runners.jobNamespace }}"
+        service_account = "ci-job"
+        automount_service_account_token = false
+        privileged = false
+        allow_privilege_escalation = false
+        cap_drop = ["ALL"]
+        # Plus strict que k8s-par1 : seulement les images outillées du projet Harbor « plateforme »
+        # (outils-supply-chain, et l'image du composant promotion de E17, qui doit y vivre aussi).
+        allowed_images = ["registry.par1.medisphere.internal/plateforme/**/*"]
+        allowed_services = []
+        allowed_pull_policies = ["if-not-present"]
+        image = "registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.1"
+        helper_image = "registry.par1.medisphere.internal/gitlab/gitlab-org/gitlab-runner/gitlab-runner-helper:x86_64-v${CI_RUNNER_VERSION}"
+        poll_timeout = 300
+        cpu_request = "100m"
+        cpu_limit = "1"
+        memory_request = "256Mi"
+        memory_limit = "512Mi"
+        helper_cpu_request = "50m"
+        helper_memory_request = "64Mi"
+        helper_memory_limit = "256Mi"
+        [runners.kubernetes.pod_security_context]
+          run_as_non_root = true
+          run_as_user = 1000
+          run_as_group = 1000
+          fs_group = 1000
+          [runners.kubernetes.pod_security_context.seccomp_profile]
+            type = "RuntimeDefault"
+        [runners.kubernetes.pod_labels]
+          "medisphere.internal/role" = "ci-job-protege"
+        # La clé de signature n'existe QUE dans ci-jobs-protege et n'est montée QUE par ce runner.
+        [[runners.kubernetes.volumes.secret]]
+          name = "cosign-medisphere"
+          mount_path = "/run/secrets/medisphere/cosign"
+          read_only = true

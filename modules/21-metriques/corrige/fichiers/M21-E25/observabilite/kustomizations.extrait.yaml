@@ -1,0 +1,5 @@
+# plateforme/observabilite — ajout de M21-E25 (PLAT-2225) à regles/kustomization.yaml.
+# EXTRAIT : ajoute le fichier à la liste « resources » existante.
+resources:
+  # (… règles existantes …)
+  - thanos.yaml

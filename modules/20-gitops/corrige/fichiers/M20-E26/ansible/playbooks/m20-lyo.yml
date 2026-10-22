@@ -1,0 +1,32 @@
+---
+# playbooks/m20-lyo.yml — lyo-k3s01, cluster de l'agence LYO1 (M20-E26, PLAT-2126).
+#   uv run ansible-playbook playbooks/m20-lyo.yml
+# 1. k3s par le rôle du M18 ;
+# 2. objets de gestion pour Argo CD, déposés dans le dossier des manifestes auto-appliqués de k3s
+#    (/var/lib/rancher/k3s/server/manifests/) : k3s les applique au démarrage et à chaque changement
+#    du fichier. Ils sont donc décrits ICI, dans le code, et pas par un kubectl apply à la main.
+- name: Cluster k3s de l'agence LYO1
+  hosts: lyo-k3s01
+  become: true
+  roles:
+    - role: k3s
+
+  tasks:
+    - name: Objets de gestion pour Argo CD (espace agence, compte argocd-gestion, droits, jeton)
+      ansible.builtin.copy:
+        src: files/m20-lyo/argocd-gestion.yaml
+        dest: /var/lib/rancher/k3s/server/manifests/medisphere-argocd-gestion.yaml
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Attendre que le compte argocd-gestion ait son jeton
+      ansible.builtin.command: >-
+        /usr/local/bin/k3s kubectl -n agence get secret argocd-gestion-jeton
+        -o jsonpath={.data.token}
+      register: _jeton
+      changed_when: false
+      no_log: true
+      retries: 30
+      delay: 5
+      until: _jeton.rc == 0 and (_jeton.stdout | length) > 0

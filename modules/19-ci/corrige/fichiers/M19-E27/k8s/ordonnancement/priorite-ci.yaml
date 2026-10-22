@@ -1,0 +1,14 @@
+# plateforme/k8s — ordonnancement/priorite-ci.yaml (M19-E27, PLAT-2027), à côté de priorites.yaml (M14-E14).
+# Pods de job de la CI : sous les applications (medisphere-standard = 10000), au-dessus des essais
+# (medisphere-essai = 100). preemptionPolicy Never : un job ne déloge JAMAIS un pod pour prendre sa
+# place (il attend) ; mais un pod applicatif plus prioritaire peut déloger un job (préemptible).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medisphere-ci
+  labels:
+    medisphere.internal/role: ci
+value: 1000
+globalDefault: false
+preemptionPolicy: Never
+description: "Pods de job de la CI (runners k8s-par1 et k8s-par1-protege) : préemptibles, ne préemptent pas (M19-E27)."

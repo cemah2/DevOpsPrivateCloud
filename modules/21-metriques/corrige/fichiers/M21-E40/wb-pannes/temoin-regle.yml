@@ -1,0 +1,19 @@
+# wb-pannes — règle témoin TemoinFileAttenteHaute, au format des fichiers de règles (M21-E40).
+# En vrai, la règle vit dans le dépôt de l'équipe et ce test tourne dans sa CI (M21-E41) ; ici, on
+# corrige l'objet sur place :
+#   kubectl -n wb-pannes patch prometheusrule temoin-metriques --type json \
+#     -p '[{"op":"add","path":"/spec/groups/0/rules/0/for","value":"5m"},
+#          {"op":"add","path":"/spec/groups/0/rules/0/keep_firing_for","value":"10m"}]'
+# (vérifie d'abord que la règle 0 du groupe 0 est bien TemoinFileAttenteHaute).
+groups:
+  - name: temoin-m21
+    rules:
+      - alert: TemoinFileAttenteHaute
+        expr: temoin_file_attente > 50
+        for: 5m
+        keep_firing_for: 10m
+        labels:
+          gravite: critique
+          equipe: plateforme
+        annotations:
+          resume: "File {{ $labels.file }} du service de rappels témoin au-dessus de 50 depuis 5 min"

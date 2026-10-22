@@ -1,0 +1,75 @@
+# espaces/sonarqube/40-politiques-reseau.yaml (M19-E16) — refus par défaut, puis :
+#   entrée  : Gateway gw-par1 → SonarQube 9000 ; SonarQube → base sonarqube-db 5432 ; opérateur CNPG
+#   sortie  : DNS du cluster ; SonarQube → base ; base → API Kubernetes (instance CNPG)
+# Aucune sortie vers Internet : sonar.updatecenter.activate=false dans les values (pas de place de
+# marché de greffons), et les analyses arrivent par la Gateway (jobs de CI → https://sonarqube.apps…).
+# Report dans docs/kubernetes/reseau/matrice-flux-cluster.md.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: sonarqube
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: sonarqube
+  namespace: sonarqube
+spec:
+  description: "SonarQube : entrée par la Gateway sur 9000 ; sortie DNS et base sonarqube-db"
+  endpointSelector:
+    matchLabels: {app: sonarqube, release: sonarqube}
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "9000", protocol: TCP}]
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+    - toEndpoints:
+        - matchLabels:
+            cnpg.io/cluster: sonarqube-db
+      toPorts:
+        - ports: [{port: "5432", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: sonarqube-db
+  namespace: sonarqube
+spec:
+  description: "Base CNPG de SonarQube : depuis SonarQube et l'opérateur ; vers l'API Kubernetes et le DNS"
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: sonarqube-db
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {app: sonarqube, release: sonarqube}
+      toPorts:
+        - ports: [{port: "5432", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: cnpg-system
+      toPorts:
+        - ports:
+            - {port: "8000", protocol: TCP}
+            - {port: "5432", protocol: TCP}
+  egress:
+    - toEntities: [kube-apiserver]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}

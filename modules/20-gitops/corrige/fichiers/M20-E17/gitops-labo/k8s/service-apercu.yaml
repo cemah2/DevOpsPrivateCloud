@@ -1,0 +1,16 @@
+# formation/gitops-labo — k8s/service-apercu.yaml (M20-E17) : Service d'aperçu du blue/green.
+# Même sélecteur et même port que « labo » : Argo Rollouts ajoute à chacun le rollouts-pod-template-hash
+# de SA révision (active sur « labo », en aperçu sur « labo-apercu »).
+apiVersion: v1
+kind: Service
+metadata:
+  name: labo-apercu
+  labels:
+    app.kubernetes.io/name: labo
+spec:
+  selector:
+    app.kubernetes.io/name: labo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

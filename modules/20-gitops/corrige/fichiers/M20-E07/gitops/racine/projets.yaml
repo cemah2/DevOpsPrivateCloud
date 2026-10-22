@@ -1,0 +1,30 @@
+# plateforme/gitops — racine/projets.yaml (M20-E07, PLAT-2107)
+# Application « projets » : les AppProjects du dossier projets/. Projet « default » le temps de la
+# première MR (le projet « plateforme » n'existe pas encore), puis « plateforme » (MR suivante).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: projets
+  namespace: argocd
+  labels:
+    medisphere.internal/niveau: groupe
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+    targetRevision: main
+    path: projets
+    directory:
+      include: "*.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # prune : un AppProject retiré de Git est supprimé… mais son finaliseur le retient tant
+      # qu'une Application s'en sert (voir le corrigé).
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

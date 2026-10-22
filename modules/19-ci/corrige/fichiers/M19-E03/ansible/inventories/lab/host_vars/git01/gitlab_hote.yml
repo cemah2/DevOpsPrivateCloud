@@ -1,0 +1,23 @@
+---
+# host_vars/git01/gitlab_hote.yml — fragments de configuration de GitLab (M19-E03, PLAT-2003).
+gitlab_hote_fragments:
+  # Courriels sortants vers Mailpit (mon01) : STARTTLS VÉRIFIÉ, sans authentification (Mailpit
+  # n'en demande pas). Clés documentées dans « SMTP settings » du paquet Linux de GitLab.
+  smtp: |
+    gitlab_rails['smtp_enable'] = true
+    gitlab_rails['smtp_address'] = "smtp.par1.medisphere.internal"
+    gitlab_rails['smtp_port'] = 25
+    # Nom annoncé dans EHLO.
+    gitlab_rails['smtp_domain'] = "git01.par1.medisphere.internal"
+    # STARTTLS sur le port 25 (pas de TLS implicite, qui serait le port 465).
+    gitlab_rails['smtp_enable_starttls_auto'] = true
+    gitlab_rails['smtp_tls'] = false
+    # Le certificat de Mailpit est VÉRIFIÉ contre la racine MédiSphère (jamais 'none').
+    gitlab_rails['smtp_openssl_verify_mode'] = 'peer'
+    gitlab_rails['smtp_ca_file'] = "/etc/gitlab/trusted-certs/medisphere-root-ca.crt"
+    # Pas de smtp_authentication : Mailpit n'en demande pas (une authentification sans besoin
+    # obligerait à stocker un mot de passe pour rien).
+    gitlab_rails['gitlab_email_enabled'] = true
+    gitlab_rails['gitlab_email_from'] = "gitlab@medisphere.internal"
+    gitlab_rails['gitlab_email_display_name'] = "GitLab MédiSphère"
+    gitlab_rails['gitlab_email_reply_to'] = "plateforme@medisphere.internal"

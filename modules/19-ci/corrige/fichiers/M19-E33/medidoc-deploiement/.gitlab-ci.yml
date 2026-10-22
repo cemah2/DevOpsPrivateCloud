@@ -1,0 +1,15 @@
+# medidoc/deploiement — .gitlab-ci.yml (M19-E33, DEV-2033).
+# Pipelines de MR : validation des overlays (kustomize build + kubeconform) et PORTE de vérification
+# des images (M19-E29) du composant deploiement. Pas de déploiement automatique : jusqu'au M20,
+# l'overlay dev est appliqué depuis adm01 ; l'agent k8s-par1 n'a aucun accès à medidoc-dev.
+# Réglages du projet : main protégée (fusion : Maintainers MédiDoc et Plateforme), « Pipelines must
+# succeed », liste d'autorisation du CI_JOB_TOKEN active (E25).
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@2.2.0
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

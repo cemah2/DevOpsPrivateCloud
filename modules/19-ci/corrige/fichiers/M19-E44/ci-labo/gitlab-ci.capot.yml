@@ -1,0 +1,17 @@
+# formation/ci-labo, branche « capot » (M19-E44) : job d'étude à ajouter au .gitlab-ci.yml de la
+# branche. Il dort 120 s pour laisser le temps d'observer son pod, et produit un artefact.
+capot:
+  stage: test
+  image: registry.par1.medisphere.internal/dockerhub/library/busybox:1.37
+  tags: [k8s]
+  interruptible: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == "capot"
+  script:
+    - date -u +%FT%TZ | tee capot.txt
+    - 'echo "job $CI_JOB_ID, pipeline $CI_PIPELINE_ID, runner $CI_RUNNER_DESCRIPTION" | tee -a capot.txt'
+    - sleep 120
+    - date -u +%FT%TZ | tee -a capot.txt
+  artifacts:
+    paths: [capot.txt]
+    expire_in: 1 day

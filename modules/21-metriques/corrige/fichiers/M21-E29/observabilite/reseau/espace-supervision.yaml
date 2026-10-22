@@ -1,0 +1,185 @@
+# plateforme/observabilite — reseau/espace-supervision.yaml (M21-E29, SEC-2229)
+# Cloisonnement de l'espace supervision : refus par défaut en ENTRÉE et en SORTIE pour tous les
+# pods, puis autorisations explicites. Les autorisations d'entrée par composant existent déjà et
+# restent où elles sont :
+#   prometheus-entree, alertmanager-entree   (kps/values.yaml, extraManifests, E02/E24)
+#   thanos-query-entree, thanos-store-entree, thanos-compactor-entree (thanos/politiques.yaml)
+#   pyrra-api-entree, pyrra-kubernetes-entree (pyrra/, Application pyrra)
+# Ce fichier ajoute : les refus par défaut, les entrées des composants qui n'en avaient pas
+# (Grafana, kube-state-metrics, opérateur) et toutes les sorties.
+# Rappel Cilium : les autorisations s'ADDITIONNENT (union) ; un refus explicite l'emporte ; un pod
+# sélectionné par une politique dans un sens passe en refus par défaut dans ce sens.
+# Les sondes du kubelet (hôte local) restent permises sans règle ; « kubectl port-forward » entre
+# par l'intérieur du pod et n'est pas filtré.
+# ⚠️ Appliquer d'abord SANS les deux premières politiques (refus par défaut), vérifier dans Hubble
+# qu'aucun flux légitime n'est refusé (« hubble observe -n supervision --verdict DROPPED »), puis
+# ajouter les refus par défaut. Retour arrière : retirer « reseau » de la kustomization racine
+# (Argo CD supprime ces politiques, prune).
+# À reporter dans docs/kubernetes/reseau/matrice-flux-cluster.md.
+
+# --- 1. Refus par défaut -----------------------------------------------------------------------
+# Une règle vide ({}) sélectionne les pods sans rien autoriser : tout ce qu'une autre politique
+# n'autorise pas est refusé.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: refus-par-defaut-entree
+spec:
+  description: "supervision : refus par défaut en entrée (SEC-2229)"
+  endpointSelector: {}
+  ingress:
+    - {}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: refus-par-defaut-sortie
+spec:
+  description: "supervision : refus par défaut en sortie (SEC-2229)"
+  endpointSelector: {}
+  egress:
+    - {}
+---
+# --- 2. Sorties communes à tous les pods de l'espace ------------------------------------------
+# DNS (par le proxy DNS de Cilium, comme base-dns du M15), API Kubernetes (opérateur, découverte
+# de Prometheus, kube-state-metrics, sidecars de Grafana, Pyrra), et tout l'espace lui-même (les
+# ENTRÉES de chaque composant restent filtrées finement, c'est là que se fait le contrôle).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: sortie-commune
+spec:
+  description: "supervision : DNS, API Kubernetes et espace supervision (SEC-2229)"
+  endpointSelector: {}
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"
+    - toEntities: [kube-apiserver]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+---
+# --- 3. Sorties propres à un composant ------------------------------------------------------------
+# Prometheus collecte TOUT : pods et nœuds du cluster (kubelet 10250, exportateurs), VMs du lab
+# (node_exporter 9100 et exportateurs natifs, E08-E12), mon01 (fédération, témoin). Les ports sont
+# trop nombreux et changeants pour être listés ici : le filtrage par port se fait à l'ARRIVÉE
+# (bordure, pare-feu local des VMs, politiques des espaces d'équipe). Le sidecar Thanos, dans le
+# même pod, écrit dans le RGW (10.10.30.200:443, inclus dans 10.10.0.0/16).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: prometheus-sortie
+spec:
+  description: "Prometheus et sidecar : collecte du cluster et du lab, RGW (SEC-2229)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+      operator.prometheus.io/name: kps
+  egress:
+    - toEntities: [cluster]
+    - toCIDR:
+        - 10.10.0.0/16
+---
+# Alertmanager : courriels vers Mailpit (smtp.par1.medisphere.internal = mon01, port 25).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: alertmanager-sortie
+spec:
+  description: "Alertmanager : SMTP vers mon01 (SEC-2229)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+      alertmanager: kps
+  egress:
+    - toCIDR:
+        - 10.10.20.19/32
+      toPorts:
+        - ports: [{port: "25", protocol: TCP}]
+---
+# Store Gateway et Compactor : le compartiment thanos-k8s-par1 sur le RGW.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: thanos-stockage-sortie
+spec:
+  description: "Thanos Store et Compactor : RGW de ceph-par1 (SEC-2229)"
+  endpointSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [thanos-store, thanos-compactor]
+  egress:
+    - toCIDR:
+        - 10.10.30.200/32
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+---
+# --- 4. Entrées des composants qui n'en avaient pas -------------------------------------------
+# Grafana : par la Gateway (identité réservée « ingress ») et collecté par Prometheus.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: grafana-entree
+spec:
+  description: "Grafana : depuis la Gateway et Prometheus (SEC-2229)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "3000", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "3000", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: kube-state-metrics-entree
+spec:
+  description: "kube-state-metrics : collecté par Prometheus seulement (SEC-2229)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - {port: "8080", protocol: TCP}
+            - {port: "8081", protocol: TCP}
+---
+# Opérateur : webhooks d'admission appelés par le serveur d'API (validation des PrometheusRule :
+# sans cette entrée, plus AUCUNE règle ne peut être créée — failurePolicy: Fail), métriques.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: operateur-entree
+spec:
+  description: "prometheus-operator : webhooks (serveur d'API) et métriques (SEC-2229)"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+  ingress:
+    - fromEntities: [kube-apiserver, remote-node, host]
+      toPorts:
+        - ports: [{port: "10250", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "10250", protocol: TCP}]

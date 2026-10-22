@@ -1,0 +1,23 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M21-E20, PLAT-2220) : les cibles du plan de
+# contrôle et de CoreDNS désactivées en E02 sont activées (kube-proxy reste désactivé : il n'existe
+# plus depuis le M15). Le chart crée lui-même, dans kube-system, des Services sans adresse
+# (headless) qui sélectionnent les pods statiques par leur étiquette « component » (CoreDNS :
+# k8s-app=kube-dns), et leurs ServiceMonitor (étiquette commonLabels : sélectionnés).
+# Authentification : jeton d'un compte de service de Prometheus dans un Secret créé par le chart
+# (depuis la version 90 : section « authorization » des ServiceMonitor), autorisé par la
+# ClusterRole du chart (nonResourceURLs /metrics). TLS non vérifié (insecureSkipVerify) : les
+# certificats de service de kube-controller-manager et kube-scheduler sont auto-signés (kubeadm).
+kubeControllerManager:
+  enabled: true
+kubeScheduler:
+  enabled: true
+kubeEtcd:
+  enabled: true
+  # etcd sert /metrics en HTTP sur 2381 (listen-metrics-urls, cluster/kubeadm-config.yaml).
+  service:
+    port: 2381
+    targetPort: 2381
+coreDns:
+  enabled: true
+kubeProxy:
+  enabled: false

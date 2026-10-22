@@ -1,0 +1,24 @@
+# plateforme/k8s — espaces/argocd.yaml (M20-E02, PLAT-2102)
+# Espace d'Argo CD. Appliqué par « task espaces » (gestionnaire de champs plateforme-k8s) AVANT
+# « helmfile apply » : helmDefaults.createNamespace vaut false (M17-E10).
+# - Pod Security « restricted » appliqué : tous les pods du chart 10.10.5 le respectent (vérifié sur
+#   le rendu : runAsNonRoot, allowPrivilegeEscalation false, capabilities drop ALL, seccomp
+#   RuntimeDefault, pas de hostPath) ;
+# - exposition=oui : la Gateway gw-par1 n'accepte que les routes des espaces ainsi étiquetés (M15) ;
+# - PAS d'étiquette medisphere.internal/equipe : ce n'est pas un espace d'équipe (ni quota d'équipe,
+#   ni cloison isolement-*, ni ValidatingAdmissionPolicy medisphere-images, qui sélectionnent
+#   les espaces par cette étiquette).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/proprietaire: plateforme
+    medisphere.internal/exposition: oui
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/ticket: "PLAT-2102"

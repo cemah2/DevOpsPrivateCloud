@@ -1,0 +1,423 @@
+// plateforme/observabilite — alloy/config.alloy (version M22-E09, SEC-2309)
+// Configuration du DaemonSet Alloy de k8s-par1 (espace journaux) : un pod par nœud, qui lit
+//   1. les journaux des conteneurs des pods DE SON NŒUD (/var/log/pods, format CRI)       — M22-E03
+//      avec le traitement des journaux JSON de MédiAgenda et de MédiDoc                     — M22-E06
+//   2. le journal systemd du nœud (/var/log/journal : kubelet, containerd, sshd…)          — M22-E03
+//   3. le journal d'audit du serveur d'API (nœuds de contrôle seulement)                     — M22-E07
+//   4. les événements Kubernetes (un seul pod les lit : clustering)                          — M22-E07
+// et fait tout passer par un MASQUAGE des données personnelles avant l'envoi              — M22-E09
+//
+// Règles de la plateforme (PLAN §4.11, ADR-0220) :
+//   - étiquettes Loki : liste FERMÉE cluster, namespace, app, container, node, job ;
+//     tout le reste (pod, unité systemd, niveau, request_id…) en métadonnées structurées ou dans la ligne ;
+//   - locataire : espaces mediagenda-* → « mediagenda », medidoc-* → « medidoc », audit de l'API →
+//     « audit », le reste → « plateforme ».
+// Validé par : alloy fmt --test ; alloy validate (pipeline de plateforme/observabilite).
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+// =============================================================================================
+// 1. Journaux des pods
+// =============================================================================================
+
+// Découverte limitée aux pods du nœud : chaque pod du DaemonSet ne lit que ses fichiers locaux.
+// NODE_NAME vient de spec.nodeName (alloy.extraEnv des values).
+discovery.kubernetes "pods" {
+	role = "pod"
+
+	selectors {
+		role  = "pod"
+		field = "spec.nodeName=" + sys.env("NODE_NAME")
+	}
+}
+
+discovery.relabel "pods" {
+	targets = discovery.kubernetes.pods.targets
+
+	rule {
+		target_label = "cluster"
+		replacement  = "k8s-par1"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "pods"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_name"]
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_node_name"]
+		target_label  = "node"
+	}
+
+	// app = première valeur non vide parmi app.kubernetes.io/name, app, k8s-app, nom du conteneur.
+	rule {
+		source_labels = [
+			"__meta_kubernetes_pod_label_app_kubernetes_io_name",
+			"__meta_kubernetes_pod_label_app",
+			"__meta_kubernetes_pod_label_k8s_app",
+			"__meta_kubernetes_pod_container_name",
+		]
+		separator    = ";"
+		regex        = ";*([^;]+).*"
+		target_label = "app"
+	}
+
+	// Nom du pod : étiquette TEMPORAIRE, déplacée en métadonnée structurée par loki.process.pods.
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+
+	// Locataire : étiquette TEMPORAIRE lue par stage.tenant puis retirée. Défaut explicite.
+	rule {
+		target_label = "locataire"
+		replacement  = "plateforme"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		regex         = "(mediagenda|medidoc)-.+"
+		target_label  = "locataire"
+		replacement   = "$1"
+	}
+
+	// Fichiers du conteneur : /var/log/pods/<espace>_<pod>_<uid>/<conteneur>/<n>.log
+	rule {
+		source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+		separator     = "/"
+		target_label  = "__path__"
+		replacement   = "/var/log/pods/*$1/*.log"
+	}
+}
+
+local.file_match "pods" {
+	path_targets = discovery.relabel.pods.output
+}
+
+loki.source.file "pods" {
+	targets    = local.file_match.pods.targets
+	forward_to = [loki.process.pods.receiver]
+}
+
+loki.process "pods" {
+	// Format CRI : « <horodatage> <flux> <F|P> <message> ». L'horodatage du runtime devient celui
+	// de l'entrée ; les lignes partielles (P) sont recollées ; le flux devient l'étiquette « stream ».
+	stage.cri { }
+
+	// --- MédiAgenda (M22-E06) : une ligne JSON par événement (apps/mediagenda/journal.py) ---------
+	stage.match {
+		pipeline_name = "mediagenda"
+		selector      = "{namespace=~\"mediagenda-.+\", container=\"api\"}"
+
+		stage.json {
+			expressions = {
+				horodatage = "",
+				niveau     = "",
+				route      = "",
+				request_id = "",
+			}
+		}
+
+		// Sondes du kubelet et collecte de Prometheus : journalisées en DEBUG par l'application,
+		// visibles dès que l'équipe passe en DEBUG (dev). Aucune valeur pour l'enquête.
+		stage.drop {
+			source              = "route"
+			expression          = "^/(sante|pret|metrics)$"
+			drop_counter_reason = "sonde"
+		}
+
+		// L'horodatage de l'application (milliseconde, UTC) plutôt que celui de la lecture.
+		stage.timestamp {
+			source            = "horodatage"
+			format            = "RFC3339"
+			action_on_failure = "skip"
+		}
+
+		// request_id : une valeur par requête → JAMAIS une étiquette. niveau : 5 valeurs, mais une
+		// étiquette multiplierait les flux (et les petits chunks) par 5 pour un filtre que la
+		// métadonnée structurée rend aussi bien.
+		stage.structured_metadata {
+			values = {
+				niveau     = "",
+				request_id = "",
+			}
+		}
+	}
+
+	// --- MédiDoc (M22-E06) : slog JSON (time, level, msg, route…) ---------------------------------
+	stage.match {
+		pipeline_name = "medidoc"
+		selector      = "{namespace=~\"medidoc-.+\", container=\"medidoc\"}"
+
+		stage.json {
+			expressions = {
+				time  = "",
+				route = "",
+			}
+		}
+
+		stage.drop {
+			source              = "route"
+			expression          = "^GET /(healthz|readyz|metrics)$"
+			drop_counter_reason = "sonde"
+		}
+
+		stage.timestamp {
+			source            = "time"
+			format            = "RFC3339Nano"
+			action_on_failure = "skip"
+		}
+	}
+
+	stage.tenant {
+		label = "locataire"
+	}
+
+	// pod (une valeur par pod, change à chaque déploiement) et stream (stdout/stderr, ajouté par
+	// stage.cri) : métadonnées structurées, pas étiquettes.
+	stage.structured_metadata {
+		values = {
+			pod    = "",
+			stream = "",
+		}
+	}
+
+	// « filename » est ajouté par loki.source.file (chemin du fichier, une valeur par redémarrage).
+	stage.label_drop {
+		values = ["filename", "locataire"]
+	}
+
+	forward_to = [loki.process.masquage.receiver]
+}
+
+// =============================================================================================
+// 2. Journal systemd du nœud
+// =============================================================================================
+
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unite"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "niveau"
+	}
+}
+
+loki.source.journal "noeud" {
+	path          = "/var/log/journal"
+	max_age       = "12h"
+	relabel_rules = loki.relabel.journal.rules
+	labels        = {
+		cluster = "k8s-par1",
+		job     = "journald",
+		node    = sys.env("NODE_NAME"),
+	}
+	forward_to = [loki.process.journal.receiver]
+}
+
+loki.process "journal" {
+	// Niveau debug (7) : jamais envoyé.
+	stage.drop {
+		source              = "niveau"
+		value               = "debug"
+		drop_counter_reason = "journald_debug"
+	}
+
+	stage.structured_metadata {
+		values = {
+			unite  = "",
+			niveau = "",
+		}
+	}
+
+	stage.tenant {
+		value = "plateforme"
+	}
+
+	forward_to = [loki.process.masquage.receiver]
+}
+
+// =============================================================================================
+// 3. Journal d'audit du serveur d'API (M22-E07)
+// =============================================================================================
+
+// Le fichier n'existe que sur les nœuds de contrôle (rôle k8s_audit, M14-E27) : sur un travailleur,
+// la cible ne trouve rien et ne lit rien. Seul audit.log est lu : les rotations sont compressées
+// (audit-log-compress) et déjà envoyées quand elles étaient le fichier courant.
+local.file_match "audit" {
+	path_targets = [{
+		"__path__" = "/var/log/kubernetes/audit/audit.log",
+		"cluster"  = "k8s-par1",
+		"job"      = "kubernetes-audit",
+		"node"     = sys.env("NODE_NAME"),
+	}]
+}
+
+loki.source.file "audit" {
+	targets    = local.file_match.audit.targets
+	forward_to = [loki.process.audit.receiver]
+	// Premier démarrage (aucune position enregistrée) : on part de la fin. Les 30 jours d'historique
+	// restent dans les fichiers du nœud ; les renvoyer saturerait la limite d'ingestion et Loki
+	// refuserait de toute façon ce qui a plus de 7 jours (reject_old_samples_max_age).
+	tail_from_end = true
+}
+
+loki.process "audit" {
+	stage.json {
+		expressions = {
+			horodatage  = "requestReceivedTimestamp",
+			verb        = "verb",
+			user        = "user.username",
+			code        = "responseStatus.code",
+			resource    = "objectRef.resource",
+			object_ns   = "objectRef.namespace",
+			object_name = "objectRef.name",
+		}
+	}
+
+	stage.timestamp {
+		source            = "horodatage"
+		format            = "RFC3339Nano"
+		action_on_failure = "skip"
+	}
+
+	// « Qui a fait quoi sur quel objet » sans analyser la ligne à chaque requête.
+	stage.structured_metadata {
+		values = {
+			verb        = "",
+			user        = "",
+			code        = "",
+			resource    = "",
+			object_ns   = "",
+			object_name = "",
+		}
+	}
+
+	stage.tenant {
+		value = "audit"
+	}
+
+	stage.label_drop {
+		values = ["filename"]
+	}
+
+	forward_to = [loki.process.masquage.receiver]
+}
+
+// =============================================================================================
+// 4. Événements Kubernetes (M22-E07)
+// =============================================================================================
+
+// Avec le clustering d'Alloy (alloy.clustering.enabled dans les values), UN SEUL pod du DaemonSet
+// lit les événements de tous les espaces ; sans lui, chacun des six les enverrait : six doublons.
+loki.source.kubernetes_events "evenements" {
+	job_name   = "kubernetes-events"
+	log_format = "logfmt"
+	forward_to = [loki.relabel.evenements.receiver]
+
+	clustering {
+		enabled = true
+	}
+}
+
+loki.relabel "evenements" {
+	forward_to = [loki.process.evenements.receiver]
+
+	rule {
+		target_label = "cluster"
+		replacement  = "k8s-par1"
+	}
+
+	rule {
+		target_label = "locataire"
+		replacement  = "plateforme"
+	}
+
+	rule {
+		source_labels = ["namespace"]
+		regex         = "(mediagenda|medidoc)-.+"
+		target_label  = "locataire"
+		replacement   = "$1"
+	}
+
+	// « instance » (identifiant du composant Alloy) : hors liste, sans intérêt.
+	rule {
+		action = "labeldrop"
+		regex  = "instance"
+	}
+}
+
+loki.process "evenements" {
+	stage.tenant {
+		label = "locataire"
+	}
+
+	stage.label_drop {
+		values = ["locataire"]
+	}
+
+	forward_to = [loki.process.masquage.receiver]
+}
+
+// =============================================================================================
+// 5. Masquage des données personnelles (M22-E09, SEC-2309) — DERNIÈRE étape avant l'envoi
+// =============================================================================================
+
+// Toutes les sources passent par ici. Ce qui est masqué n'entre jamais dans Loki (ni dans le
+// compartiment, ni dans les sauvegardes, ni dans le cache des requêtes).
+// Chaque groupe CAPTURANT de l'expression est remplacé ; les groupes (?:…) ne le sont pas.
+loki.process "masquage" {
+	// NIR (numéro de sécurité sociale) : sexe, année, mois (01-12, 20-99 pour les cas particuliers),
+	// département (2A/2B compris), commune, ordre, clé ; espaces ou points facultatifs.
+	// \b aux deux bouts : un horodatage en nanosecondes (19 chiffres) ne correspond pas.
+	stage.replace {
+		expression = "\\b([12][ .]?[0-9]{2}[ .]?(?:0[1-9]|1[0-2]|[2-9][0-9])[ .]?(?:2[ABab]|[0-9]{2})[ .]?[0-9]{3}[ .]?[0-9]{3}[ .]?[0-9]{2})\\b"
+		replace    = "[NIR-MASQUE]"
+	}
+
+	// Adresses de courriel, SAUF celles de MédiSphère (plateforme@, astreinte@… : utiles aux
+	// enquêtes sur Alertmanager, Argo CD, GitLab).
+	stage.replace {
+		expression = "([A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,})"
+		replace    = "{{ if eq (regexReplaceAll \"^.*@(?:[a-z0-9-]+\\\\.)*medisphere\\\\.internal$\" .Value \"interne\") \"interne\" }}{{ .Value }}{{ else }}[COURRIEL-MASQUE]{{ end }}"
+	}
+
+	// Champs nominatifs d'une ligne JSON (noms de clés convenus avec les équipes, politique-journaux.md).
+	stage.replace {
+		expression = "\"(?:patient|nom|prenom|nom_patient|nom_naissance|date_naissance|telephone)\"\\s*:\\s*\"([^\"]*)\""
+		replace    = "[MASQUE]"
+	}
+
+	forward_to = [loki.write.loki.receiver]
+}
+
+// =============================================================================================
+// 6. Écriture
+// =============================================================================================
+
+// Service ClusterIP du chart Loki (pas le LoadBalancer : le trafic reste dans le cluster).
+// tenant_id = locataire par défaut quand une entrée n'en porte pas (ne devrait pas arriver).
+loki.write "loki" {
+	endpoint {
+		url       = "http://loki.journaux.svc.cluster.local:3100/loki/api/v1/push"
+		tenant_id = "plateforme"
+	}
+}

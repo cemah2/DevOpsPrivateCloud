@@ -1,0 +1,9 @@
+# plateforme/observabilite — kps/values.yaml : ESSAI de M21-E28 (CHG-2228), à défaire juste après.
+# EXTRAIT. Arrêter l'Alertmanager du cluster « par le code » : une MR (relue, ticket CHG) qui met ses
+# réplicas à 0, puis un « git revert » de ce commit. Pas de « kubectl scale » : l'opérateur et
+# Argo CD (selfHeal) remettraient l'état de Git en quelques secondes, et l'essai ne prouverait rien.
+# ⚠️ Pendant l'essai, AUCUNE alerte du cluster n'est notifiée : prévenir Nadia, faire l'essai en
+# heures ouvrées, le borner à 20 minutes, et ne pas en lancer d'autre en même temps.
+alertmanager:
+  alertmanagerSpec:
+    replicas: 0     # CHG-2228 — essai du témoin, à défaire (git revert) dès le courriel reçu

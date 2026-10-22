@@ -1,0 +1,14 @@
+# formation/gitops-labo — agence/kustomization.yaml (M20-E26)
+# Service d'essai de l'agence LYO1, déployé sur lyo-k3s01 par l'ApplicationSet labo-agences.
+# Volontairement indépendant de k8s/ (application labo de wb-essais) : celle-ci est pilotée par un
+# Rollout depuis M20-E15, et lyo-k3s01 n'a pas Argo Rollouts.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Pas de « namespace: » ni d'objet Namespace : l'espace vient de l'Application (destination) et
+# existe déjà (créé par la plateforme sur lyo-k3s01).
+resources:
+  - labo.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: labo-agences
+    includeSelectors: false

@@ -1,0 +1,9 @@
+# plateforme/gitops — applications/labo.yaml : ignoreDifferences de M20-E12, cible changée en M20-E15.
+# Le HPA écrit maintenant spec.replicas du ROLLOUT ; la règle sur le Deployment (supprimé) est retirée.
+spec:
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Rollout
+      name: labo
+      jsonPointers:
+        - /spec/replicas

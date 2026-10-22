@@ -1,0 +1,18 @@
+# medidoc/deploiement — overlays/dev/entree-mediagenda.yaml (M23-E06, DEV-2406)
+# MédiAgenda (dev) dépose les pièces jointes des rendez-vous : entrée sur 8080 depuis SES pods seulement
+# (l'espace est en refus par défaut, base/politiques.yaml). Un environnement ne parle qu'à son homologue.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: medidoc-entree-mediagenda
+spec:
+  description: "MédiDoc : entrée depuis l'API MédiAgenda de mediagenda-dev"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: medidoc}
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: mediagenda-dev
+            app.kubernetes.io/name: mediagenda
+      toPorts:
+        - ports: [{port: "8080", protocol: TCP}]

@@ -1,0 +1,36 @@
+# plateforme/k8s — releases/argocd.yaml.gotmpl : ce que les exercices du palier 3 AJOUTENT à la release
+# de M20-E02 (le reste du fichier est inchangé). État après M20-E27.
+#   M20-E24 : values-rbac.yaml + policy.csv lu par readFile (chemin relatif au dossier releases/)
+#   M20-E25 : values-durcissement.yaml
+#   M20-E26 : values-multicluster.yaml
+#   M20-E27 : values-ha.yaml
+# L'ordre compte : un fichier plus bas l'emporte sur les précédents (fusion des valeurs par Helm,
+# les listes étant REMPLACÉES et non fusionnées).
+releases:
+  - name: argocd
+    namespace: argocd
+    chart: argo/argo-cd
+    version: 10.10.5
+    labels:
+      groupe: livraison
+      composant: argocd
+    values:
+      - ../composants/argocd/values.yaml
+      - ../composants/argocd/values-rbac.yaml            # M20-E24
+      - ../composants/argocd/values-durcissement.yaml    # M20-E25
+      - ../composants/argocd/values-multicluster.yaml    # M20-E26
+      - ../composants/argocd/values-ha.yaml              # M20-E27
+      - global:
+          domain: argocd.{{ .Values.domaineApps }}
+        configs:
+          tls:
+            certificates:
+              git01.par1.medisphere.internal: |
+                {{- readFile "../composants/argocd/medisphere-root-ca.crt" | nindent 16 }}
+              registry.par1.medisphere.internal: |
+                {{- readFile "../composants/argocd/medisphere-root-ca.crt" | nindent 16 }}
+          # M20-E24 : la politique RBAC, seule source releases/argocd/policy.csv (testée en CI).
+          # nindent 14 : le contenu doit être plus indenté que la clé « policy.csv » (12 espaces).
+          rbac:
+            policy.csv: |
+              {{- readFile "argocd/policy.csv" | nindent 14 }}

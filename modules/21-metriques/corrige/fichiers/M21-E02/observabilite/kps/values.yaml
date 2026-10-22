@@ -1,0 +1,327 @@
+# plateforme/observabilite — kps/values.yaml (M21-E02, PLAT-2202)
+# Valeurs de kube-prometheus-stack 92.11.0 (prometheus-operator 0.94.1, Prometheus 3.15, Alertmanager
+# 0.34, kube-state-metrics 2.20, node-exporter 1.12, Grafana 13.2), lues par l'Application Argo CD
+# « kube-prometheus-stack » (plateforme/gitops, source « $values »).
+# Règle : ne contient QUE ce qui diffère des valeurs par défaut du chart, chaque écart commenté.
+# Aucun secret ici : le mot de passe d'admin de Grafana est un Secret créé hors Git
+# (plateforme/k8s/outils/secrets-k8s.sh, composant grafana).
+# Rendu local avant toute MR :
+#   helm template kps oci://registry.par1.medisphere.internal/charts/kube-prometheus-stack \
+#     --version 92.11.0 -n supervision -f kps/values.yaml > /tmp/kps.yaml
+
+# --- Noms ---------------------------------------------------------------------------------------
+# Des noms courts et stables, indépendants du nom de la release : le CR Prometheus s'appelle
+# « kps » (StatefulSet prometheus-kps, pods prometheus-kps-N), le CR Alertmanager aussi
+# (alertmanager-kps-N), les Services kps-prometheus, kps-alertmanager, kps-grafana…
+# Ces noms sont repris par tous les exercices du module : ne les change plus.
+fullnameOverride: kps
+cleanPrometheusOperatorObjectNames: true
+
+# Étiquette de sélection posée sur tous les objets du chart (dont ses ServiceMonitor et ses
+# PrometheusRule) : c'est elle que Prometheus sélectionne (voir prometheusSpec plus bas). Les
+# sous-charts (kube-state-metrics, node-exporter, Grafana) ne lisent pas commonLabels : leurs
+# moniteurs reçoivent l'étiquette plus bas, un par un.
+commonLabels:
+  medisphere.internal/supervision: "oui"
+
+# --- Cibles du plan de contrôle -----------------------------------------------------------------
+# Désactivées pour l'instant (M21-E20 les active) :
+#  - kube-controller-manager, kube-scheduler et etcd n'écoutent leurs métriques que sur 127.0.0.1
+#    (défaut de kubeadm) : la collecte échouerait et TargetDown sonnerait en permanence ;
+#  - kube-proxy n'existe plus depuis M15 (remplacé par Cilium) : désactivé pour de bon ;
+#  - CoreDNS : activé en E20 avec les autres (un Service dans kube-system, à déclarer dans le projet).
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+coreDns:
+  enabled: false
+# Pas de nœuds Windows, AIX ni Darwin dans k8s-par1.
+windowsMonitoring:
+  enabled: false
+nodeExporter:
+  operatingSystems:
+    aix:
+      enabled: false
+    darwin:
+      enabled: false
+
+# --- Opérateur ----------------------------------------------------------------------------------
+prometheusOperator:
+  # Webhooks d'admission (validation des PrometheusRule et des AlertmanagerConfig) : certificat
+  # émis par cert-manager (M15) plutôt que par les Jobs « certgen » du chart, qui sont des hooks
+  # Helm (PreSync sous Argo CD) et qui réécrivent les configurations de webhooks après coup.
+  # cert-manager injecte le caBundle (cainjector) : Argo CD doit ignorer ce champ (Application).
+  admissionWebhooks:
+    failurePolicy: Fail
+    certManager:
+      enabled: true
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}
+  prometheusConfigReloader:
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 64Mi}
+
+# --- Prometheus ---------------------------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    # 1 réplica pour commencer ; M21-E24 passe à 2 (avec Thanos).
+    replicas: 1
+    # Étiquettes externes : identifient ce Prometheus dans une vue globale (fédération, Thanos,
+    # Alertmanager partagé). M21-E24 ajoute l'étiquette de réplica.
+    externalLabels:
+      cluster: k8s-par1
+      site: par1
+    # Sélection : Prometheus ne prend QUE les objets étiquetés medisphere.internal/supervision=oui,
+    # dans TOUS les espaces ({} = tous). Sans « …NilUsesHelmValues: false », un sélecteur vide
+    # serait remplacé par « release: kps » (comportement historique du chart) ; on fixe ici un
+    # sélecteur explicite, les deux réglages documentent la même intention.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels: {medisphere.internal/supervision: "oui"}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector:
+      matchLabels: {medisphere.internal/supervision: "oui"}
+    podMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector:
+      matchLabels: {medisphere.internal/supervision: "oui"}
+    ruleNamespaceSelector: {}
+    probeSelectorNilUsesHelmValues: false
+    probeSelector:
+      matchLabels: {medisphere.internal/supervision: "oui"}
+    probeNamespaceSelector: {}
+    scrapeConfigSelectorNilUsesHelmValues: false
+    scrapeConfigSelector:
+      matchLabels: {medisphere.internal/supervision: "oui"}
+    scrapeConfigNamespaceSelector: {}
+    # Rétention locale : 15 jours, bornée aussi en taille (la plus petite des deux limites gagne) :
+    # un volume plein arrête l'ingestion, une taille plafonnée supprime les blocs les plus anciens.
+    retention: 15d
+    retentionSize: 32GB
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ceph-rbd
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 40Gi
+    resources:
+      requests: {cpu: 250m, memory: 1Gi}
+      limits: {memory: 3Gi}
+    priorityClassName: medisphere-critique
+    # URL publiée dans les liens des alertes (« Source » des courriels).
+    externalUrl: http://prometheus.apps.par1.medisphere.internal:9090
+  # Le Service du chart (kps-prometheus) reste en ClusterIP : c'est l'adresse interne (Grafana,
+  # Argo Rollouts). L'accès depuis MGMT et mon01 passe par un Service dédié (extraManifests).
+  service:
+    type: ClusterIP
+
+# --- Alertmanager -------------------------------------------------------------------------------
+alertmanager:
+  # La configuration des routes et des récepteurs arrive en M21-E06 (clé alertmanager.config).
+  alertmanagerSpec:
+    replicas: 1
+    # Silences et journal des notifications conservés au redémarrage : sans volume, un
+    # redémarrage oublie les silences et renvoie toutes les notifications.
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: ceph-rbd
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi
+    resources:
+      requests: {cpu: 20m, memory: 64Mi}
+      limits: {memory: 128Mi}
+    priorityClassName: medisphere-critique
+    externalUrl: http://alertmanager.apps.par1.medisphere.internal:9093
+
+# --- kube-state-metrics (sous-chart) ------------------------------------------------------------
+kube-state-metrics:
+  prometheus:
+    monitor:
+      additionalLabels:
+        medisphere.internal/supervision: "oui"
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 256Mi}
+
+# --- node-exporter (sous-chart) -----------------------------------------------------------------
+prometheus-node-exporter:
+  # Espace à part : node-exporter exige hostNetwork, hostPID et des montages de l'hôte, que la
+  # Pod Security « restricted » de l'espace supervision refuse. L'espace supervision-noeuds
+  # (plateforme/k8s) est en « privileged », et ne contient QUE ce DaemonSet.
+  namespaceOverride: supervision-noeuds
+  prometheus:
+    monitor:
+      additionalLabels:
+        medisphere.internal/supervision: "oui"
+  resources:
+    requests: {cpu: 20m, memory: 32Mi}
+    limits: {memory: 64Mi}
+
+# --- Grafana (sous-chart grafana-community/grafana 14.x) ----------------------------------------
+grafana:
+  # Mot de passe d'admin : Secret grafana-admin (clés admin-user, admin-password), créé hors Git.
+  admin:
+    existingSecret: grafana-admin
+  # Base SQLite sur un volume ceph-rbd. RWO : la mise à jour doit ARRÊTER l'ancien pod avant de
+  # démarrer le nouveau (sinon le nouveau attend un volume encore attaché ailleurs : Multi-Attach).
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: ceph-rbd
+    size: 5Gi
+  deploymentStrategy:
+    type: Recreate
+  # Le conteneur d'initialisation « init-chown-data » tourne en root : refusé par la Pod Security
+  # « restricted ». Inutile ici : fsGroup (472) donne les droits sur le volume ceph-rbd.
+  initChownData:
+    enabled: false
+  # Pod de test Helm : jamais lancé par Argo CD, inutile.
+  testFramework:
+    enabled: false
+  grafana.ini:
+    server:
+      domain: grafana.apps.par1.medisphere.internal
+      root_url: https://grafana.apps.par1.medisphere.internal
+    # Lab sans sortie vers grafana.com : pas de vérification de versions ni de statistiques.
+    analytics:
+      check_for_updates: false
+      check_for_plugin_updates: false
+      reporting_enabled: false
+    users:
+      allow_sign_up: false
+    auth.anonymous:
+      enabled: false
+  # Publication par la Gateway du M15 (TLS terminé par gw-par1, joker *.apps) ; ExternalDNS publie
+  # le nom (source gateway-httproute). L'espace supervision doit porter
+  # medisphere.internal/exposition=oui (plateforme/k8s).
+  route:
+    main:
+      enabled: true
+      hostnames:
+        - grafana.apps.par1.medisphere.internal
+      parentRefs:
+        - name: gw-par1
+          namespace: passerelles
+          sectionName: https
+  serviceMonitor:
+    labels:
+      medisphere.internal/supervision: "oui"
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+  sidecar:
+    resources:
+      requests: {cpu: 10m, memory: 64Mi}
+      limits: {memory: 128Mi}
+
+# --- Accès depuis MGMT et mon01 -----------------------------------------------------------------
+# Deux Services LoadBalancer à adresse DEMANDÉE (convention lb-par1 du M15 : .50-.199 = services
+# durables, toujours demandés), publiés dans le DNS par ExternalDNS (source service), filtrés par
+# CiliumNetworkPolicy. externalTrafficPolicy: Local : l'adresse source du client est conservée
+# jusqu'au pod (sinon la politique verrait l'adresse d'un nœud et ne pourrait rien filtrer) ;
+# seuls les nœuds qui portent un pod annoncent l'adresse (BGP).
+# M21-E24 repointe prometheus-externe vers Thanos Query (sélecteur) sans changer d'adresse.
+extraManifests:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: prometheus-externe
+      namespace: supervision
+      annotations:
+        lbipam.cilium.io/ips: 10.10.41.60
+        external-dns.kubernetes.io/hostname: prometheus.apps.par1.medisphere.internal
+    spec:
+      type: LoadBalancer
+      externalTrafficPolicy: Local
+      selector:
+        app.kubernetes.io/name: prometheus
+        operator.prometheus.io/name: kps
+      ports:
+        - name: http-web
+          port: 9090
+          targetPort: 9090
+          protocol: TCP
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: alertmanager-externe
+      namespace: supervision
+      annotations:
+        lbipam.cilium.io/ips: 10.10.41.61
+        external-dns.kubernetes.io/hostname: alertmanager.apps.par1.medisphere.internal
+    spec:
+      type: LoadBalancer
+      externalTrafficPolicy: Local
+      selector:
+        app.kubernetes.io/name: alertmanager
+        alertmanager: kps
+      ports:
+        - name: http-web
+          port: 9093
+          targetPort: 9093
+          protocol: TCP
+  # Politiques d'entrée. Dès qu'une politique sélectionne un pod en entrée, tout ce qu'elle
+  # n'autorise pas est refusé : il faut donc aussi autoriser les clients DU CLUSTER (Grafana,
+  # Prometheus → Alertmanager ; plus tard Thanos, Argo Rollouts, Pyrra).
+  # Les sondes du kubelet viennent de l'hôte : autorisées par Cilium sans règle.
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: prometheus-entree
+      namespace: supervision
+    spec:
+      description: "Prometheus : 9090 depuis MGMT, mon01 et l'espace supervision seulement (PLAT-2202)"
+      endpointSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+          operator.prometheus.io/name: kps
+      ingress:
+        - fromCIDR:
+            - 10.10.10.0/24
+            - 10.10.20.19/32
+          toPorts:
+            - ports: [{port: "9090", protocol: TCP}]
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: supervision
+          toPorts:
+            - ports:
+                - {port: "9090", protocol: TCP}
+                - {port: "8080", protocol: TCP}
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: alertmanager-entree
+      namespace: supervision
+    spec:
+      description: "Alertmanager : 9093 depuis MGMT, mon01 et l'espace supervision seulement (PLAT-2202)"
+      endpointSelector:
+        matchLabels:
+          app.kubernetes.io/name: alertmanager
+          alertmanager: kps
+      ingress:
+        - fromCIDR:
+            - 10.10.10.0/24
+            - 10.10.20.19/32
+          toPorts:
+            - ports: [{port: "9093", protocol: TCP}]
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: supervision
+          toPorts:
+            - ports:
+                - {port: "9093", protocol: TCP}
+                - {port: "8080", protocol: TCP}

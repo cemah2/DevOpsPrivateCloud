@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildkitd
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Volume RWO : l'ancien pod doit libérer le volume avant que le nouveau démarre.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "buildkitd.selecteur" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "buildkitd.etiquettes" . | nindent 8 }}
+      annotations:
+        # Une nouvelle configuration redémarre le démon (buildkitd.toml est lu au démarrage).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      # Le démon ne parle pas à l'API Kubernetes.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        # Le volume persistant appartient au groupe 1000 (utilisateur « user » de l'image).
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: buildkitd
+          image: {{ include "buildkitd.image" . }}
+          imagePullPolicy: IfNotPresent
+          # L'image démarre « rootlesskit buildkitd » ; on ne fait qu'ajouter la configuration.
+          args:
+            - --config
+            - /etc/buildkit/buildkitd.toml
+          ports:
+            - name: buildkit
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command: [buildctl, debug, workers]
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+          livenessProbe:
+            exec:
+              command: [buildctl, debug, workers]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 4
+          resources:
+            {{- toYaml .Values.ressources | nindent 12 }}
+          # EXCEPTION DOCUMENTÉE (ADR-0120 reprise dans l'ADR-0190 ; espace « buildkit » en Pod
+          # Security « privileged » pour cette raison, espaces/buildkit/00-namespace.yaml) :
+          #   seccomp et AppArmor « Unconfined » : rootlesskit crée des espaces de noms utilisateur et
+          #   monte des systèmes de fichiers (overlay) dans le conteneur, ce que les profils par défaut
+          #   interdisent (documentation BuildKit, « Rootless mode »).
+          #   allowPrivilegeEscalation non forcé à false : newuidmap/newgidmap (setuid) établissent
+          #   la correspondance des UID de l'espace de noms utilisateur ; « no_new_privs » les casse.
+          # Ce qui reste interdit : conteneur privilégié, UID 0, volumes de l'hôte, réseau de l'hôte.
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+          volumeMounts:
+            - name: config
+              mountPath: /etc/buildkit/buildkitd.toml
+              subPath: buildkitd.toml
+              readOnly: true
+            - name: tls
+              mountPath: /etc/buildkit/tls
+              readOnly: true
+            - name: racine
+              mountPath: /etc/medisphere/ca
+              readOnly: true
+            - name: donnees
+              mountPath: /home/user/.local/share/buildkit
+      volumes:
+        - name: config
+          configMap:
+            name: buildkitd
+        - name: tls
+          secret:
+            secretName: buildkitd-serveur
+        - name: racine
+          configMap:
+            name: {{ .Values.registre.racineConfigMap }}
+        - name: donnees
+          persistentVolumeClaim:
+            claimName: buildkitd-donnees

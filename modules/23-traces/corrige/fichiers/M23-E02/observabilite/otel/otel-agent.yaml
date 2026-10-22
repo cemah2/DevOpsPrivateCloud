@@ -1,0 +1,120 @@
+# otel-agent — un Collector par nœud de travail (M23-E02, PLAT-2402), espace traces.
+# Les applications lui envoient leurs spans par le Service « otel-agent-collector » (créé par l'opérateur
+# avec internalTrafficPolicy: Local en mode daemonset : un pod parle TOUJOURS à l'agent de son nœud).
+#   http://otel-agent-collector.traces.svc.cluster.local:4317 (gRPC) et :4318 (HTTP), sans TLS dans le cluster.
+# L'agent ajoute les métadonnées Kubernetes de l'émetteur (k8sattributes : il lit l'adresse source de la
+# connexion, conservée de bout en bout par Cilium), puis relaie à la passerelle.
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-agent
+  namespace: traces
+  labels:
+    medisphere.internal/equipe: plateforme
+spec:
+  mode: daemonset
+  image: registry.par1.medisphere.internal/dockerhub/otel/opentelemetry-collector-contrib:0.161.0
+  serviceAccount: otel-agent
+  priorityClassName: medisphere-standard
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 256Mi}
+  env:
+    - name: K8S_NODE_NAME
+      valueFrom:
+        fieldRef: {fieldPath: spec.nodeName}
+    # Le Go du Collector ramasse ses déchets avant d'atteindre la limite du conteneur.
+    - name: GOMEMLIMIT
+      value: 200MiB
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities: {drop: ["ALL"]}
+  config:
+    extensions:
+      # Sondes de vivacité et de disponibilité posées par l'opérateur quand cette extension existe.
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          # Depuis la 0.104, le récepteur écoute sur localhost par défaut : il faut le dire.
+          # La CiliumNetworkPolicy traces-agent restreint qui peut s'y connecter.
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      # TOUJOURS en premier : refuse les données (le client réessaie) avant que le pod soit tué par
+      # manque de mémoire. Pourcentages de la limite du conteneur (256 Mi).
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 20
+      k8sattributes:
+        auth_type: serviceAccount
+        # L'agent ne surveille que les pods de SON nœud (moins de mémoire, moins de charge sur l'API).
+        filter:
+          node_from_env_var: K8S_NODE_NAME
+        pod_association:
+          - sources:
+              - from: connection
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.node.name
+          labels:
+            # Étiquette d'équipe de l'espace (M14) → attribut de ressource medisphere.equipe.
+            - tag_name: medisphere.equipe
+              key: medisphere.internal/equipe
+              from: namespace
+      resourcedetection:
+        # env : OTEL_RESOURCE_ATTRIBUTES du Collector (aucune ici) ; k8snode : uid du nœud.
+        detectors: [env, k8snode]
+        k8snode:
+          node_from_env_var: K8S_NODE_NAME
+        override: false
+      resource/cluster:
+        attributes:
+          - key: k8s.cluster.name
+            value: k8s-par1
+            action: upsert
+      batch:
+        send_batch_size: 512
+        timeout: 2s
+    exporters:
+      otlp_grpc/passerelle:
+        endpoint: otel-passerelle-collector.traces.svc.cluster.local:4317
+        # Trafic interne au cluster (chiffré par Cilium entre nœuds si le chiffrement transparent est actif,
+        # M15) ; l'entrée externe 10.10.41.63 passe en TLS au M23-E16.
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          queue_size: 1000
+        retry_on_failure:
+          enabled: true
+          max_elapsed_time: 120s
+    service:
+      extensions: [health_check]
+      telemetry:
+        metrics:
+          # Métriques internes (otelcol_*) : localhost par défaut depuis la 0.12x ; ouvertes au pod pour que
+          # Prometheus les collecte par le Service « …-monitoring » créé par l'opérateur.
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, resourcedetection, resource/cluster, batch]
+          exporters: [otlp_grpc/passerelle]

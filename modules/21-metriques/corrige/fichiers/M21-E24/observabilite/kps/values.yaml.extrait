@@ -1,0 +1,126 @@
+# plateforme/observabilite — kps/values.yaml : changements de M21-E24 (PLAT-2224).
+# EXTRAIT : seules les clés ajoutées ou modifiées sont montrées, à fusionner dans le fichier
+# complet d'E02/E06 (les clés absentes d'ici ne changent pas). Rendu avant la MR :
+#   helm template kps oci://registry.par1.medisphere.internal/charts/kube-prometheus-stack \
+#     --version 92.11.0 -n supervision -f kps/values.yaml > /tmp/kps-e24.yaml
+#   diff <(yq 'select(.kind == "Prometheus")' /tmp/kps-e23.yaml) <(yq 'select(.kind == "Prometheus")' /tmp/kps-e24.yaml)
+
+prometheus:
+  # Service de découverte des sidecars (headless « kps-thanos-discovery », ports grpc 10901 et
+  # http 10902) : Thanos Query y trouve les deux sidecars par un enregistrement SRV
+  # (_grpc._tcp.kps-thanos-discovery.supervision.svc.cluster.local).
+  thanosService:
+    enabled: true
+  # Collecte des métriques des sidecars (job « kps-thanos-discovery ») : sans elle, aucune alerte
+  # sur les envois vers le RGW (M21-E25). L'étiquette de sélection vient de commonLabels.
+  thanosServiceMonitor:
+    enabled: true
+  prometheusSpec:
+    # Deux réplicas IDENTIQUES : même configuration, mêmes cibles, chacun sa base (volume ceph-rbd).
+    # Ce n'est pas un partage de charge, c'est de la redondance : chaque cible est collectée deux
+    # fois. Thanos Query dédoublonne à la lecture (étiquette prometheus_replica), Alertmanager
+    # dédoublonne les alertes (l'opérateur retire prometheus_replica des alertes envoyées).
+    replicas: 2
+    # Un réplica par travailleur au plus (le défaut du chart est « soft » : préférence seulement).
+    # Deux réplicas sur le même nœud = un seul domaine de panne.
+    podAntiAffinity: hard
+    podAntiAffinityTopologyKey: kubernetes.io/hostname
+    # externalLabels inchangées (cluster, site). L'opérateur AJOUTE lui-même deux étiquettes
+    # externes : prometheus="supervision/kps" et prometheus_replica="prometheus-kps-0|1" (nom par
+    # défaut, gardé tel quel : c'est le nom que Thanos Query et le Compactor dédoublonnent).
+    #
+    # Volume monté dans le sidecar : la racine MédiSphère (ConfigMap racine-medisphere, créée en
+    # E06), pour vérifier le certificat du RGW (step-ca). Même chemin dans tous les composants Thanos.
+    volumes:
+      - name: racine-medisphere
+        configMap:
+          name: racine-medisphere
+    thanos:
+      # Image par le cache quay de Harbor ; version explicite : l'opérateur en déduit les options
+      # du sidecar (avec Prometheus ≥ 3.9 et Thanos ≥ 0.42, il garde la compaction locale active et
+      # la coordonne avec les envois : --storage.tsdb.delay-compact-file.path).
+      image: registry.par1.medisphere.internal/quay/thanos/thanos:v0.42.4
+      version: v0.42.4
+      # Configuration du stockage objet : Secret hors Git (composant « thanos » de secrets-k8s.sh).
+      objectStorageConfig:
+        existingSecret:
+          name: thanos-objstore
+          key: objstore.yml
+      volumeMounts:
+        - name: racine-medisphere
+          mountPath: /etc/thanos/ca
+      resources:
+        requests: {cpu: 20m, memory: 64Mi}
+        limits: {memory: 256Mi}
+    # Deux réplicas = deux fois la mémoire. Mesuré avant le changement (E14, E23) :
+    #   max_over_time(process_resident_memory_bytes{job="kps-prometheus"}[7d])
+    # Garde la limite au-dessus du double de ce pic (le dimensionnement fin est l'objet d'E30).
+    resources:
+      requests: {cpu: 250m, memory: 1Gi}
+      limits: {memory: 3Gi}
+
+grafana:
+  sidecar:
+    datasources:
+      # La source par défaut du chart (uid « prometheus », gardé : tous les tableaux d'E05 et d'E17
+      # la désignent par cet uid ou par la variable ${datasource}) pointe désormais sur Thanos Query.
+      url: http://thanos-query.supervision.svc.cluster.local:9090/
+      # Grafana adapte certaines requêtes (dédoublonnage, résolution) au type de serveur.
+      extraJsonData:
+        prometheusType: Thanos
+
+extraManifests:
+  # (… ConfigMap racine-medisphere et Service alertmanager-externe d'E06 : inchangés …)
+  #
+  # 10.10.41.60 sert désormais Thanos Query : MÊME adresse, même nom, même port pour les clients
+  # (checks, mon01, navigateur). Seuls le sélecteur et le port cible changent.
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: prometheus-externe
+      namespace: supervision
+      annotations:
+        lbipam.cilium.io/ips: 10.10.41.60
+        external-dns.kubernetes.io/hostname: prometheus.apps.par1.medisphere.internal
+    spec:
+      type: LoadBalancer
+      externalTrafficPolicy: Local
+      selector:
+        app.kubernetes.io/name: thanos-query
+      ports:
+        - name: http
+          port: 9090
+          targetPort: http
+          protocol: TCP
+  # prometheus-entree (E02) : MGMT et mon01 ne parlent plus aux pods Prometheus (plus d'adresse
+  # externe), mais Thanos Query doit joindre le sidecar en gRPC (10901) et Prometheus collecter le
+  # sidecar (10902) : on ouvre ces deux ports à l'espace supervision, et 9090 à Argo Rollouts
+  # (analyses d'E18, adresse interne kps-prometheus).
+  - apiVersion: cilium.io/v2
+    kind: CiliumNetworkPolicy
+    metadata:
+      name: prometheus-entree
+      namespace: supervision
+    spec:
+      description: "Prometheus et sidecar Thanos : espace supervision et Argo Rollouts seulement (PLAT-2224)"
+      endpointSelector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus
+          operator.prometheus.io/name: kps
+      ingress:
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: supervision
+          toPorts:
+            - ports:
+                - {port: "9090", protocol: TCP}
+                - {port: "8080", protocol: TCP}
+                - {port: "10901", protocol: TCP}
+                - {port: "10902", protocol: TCP}
+        - fromEndpoints:
+            - matchLabels:
+                io.kubernetes.pod.namespace: argo-rollouts
+          toPorts:
+            - ports:
+                - {port: "9090", protocol: TCP}
+  # (… alertmanager-entree d'E02 : inchangée …)

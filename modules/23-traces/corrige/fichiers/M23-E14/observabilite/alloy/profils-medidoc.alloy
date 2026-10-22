@@ -1,0 +1,104 @@
+// plateforme/observabilite/alloy/config.alloy — ajout de M23-E14 (à la suite de la configuration du M22).
+// Collecte « pull » des profils pprof de MédiDoc (port de conteneur nommé « pprof ») et envoi à Pyroscope.
+// Le DaemonSet Alloy tourne sur chaque nœud : chaque instance ne collecte que les pods de SON nœud (sinon
+// chaque profil serait collecté une fois par nœud).
+
+discovery.kubernetes "pods_profils" {
+	role = "pod"
+
+	namespaces {
+		names = ["medidoc-dev", "medidoc-recette"]
+	}
+
+	selectors {
+		role  = "pod"
+		field = "spec.nodeName=" + sys.env("HOSTNAME")
+	}
+}
+
+discovery.relabel "profils_medidoc" {
+	targets = discovery.kubernetes.pods_profils.targets
+
+	// Seulement le port nommé « pprof » des pods en cours d'exécution.
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_port_name"]
+		regex         = "pprof"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_phase"]
+		regex         = "Succeeded|Failed|Completed"
+		action        = "drop"
+	}
+	// service_name = même nom que les traces (OTEL_SERVICE_NAME) : clé du lien Tempo → Pyroscope.
+	rule {
+		target_label = "service_name"
+		replacement  = "medidoc"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		regex         = "medidoc-(.*)"
+		target_label  = "environnement"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+}
+
+pyroscope.scrape "medidoc" {
+	targets         = discovery.relabel.profils_medidoc.output
+	forward_to      = [pyroscope.write.pyroscope.receiver]
+	scrape_interval = "15s"
+
+	profiling_config {
+		profile.process_cpu {
+			enabled = true
+		}
+
+		profile.godeltaprof_memory {
+			enabled = true
+		}
+
+		profile.memory {
+			enabled = false
+		}
+
+		profile.godeltaprof_mutex {
+			enabled = true
+		}
+
+		profile.mutex {
+			enabled = false
+		}
+
+		profile.godeltaprof_block {
+			enabled = true
+		}
+
+		profile.block {
+			enabled = false
+		}
+
+		profile.goroutine {
+			enabled = true
+		}
+	}
+}
+
+pyroscope.write "pyroscope" {
+	endpoint {
+		url = "http://pyroscope.traces.svc.cluster.local:4040"
+	}
+	external_labels = {
+		"cluster" = "k8s-par1",
+	}
+}

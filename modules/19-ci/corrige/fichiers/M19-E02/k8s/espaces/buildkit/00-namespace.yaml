@@ -1,0 +1,28 @@
+# plateforme/k8s — espaces/buildkit/00-namespace.yaml (M19-E02, PLAT-2002)
+# Démon BuildKit rootless partagé (release buildkitd, M19-E08).
+#
+# EXCEPTION DOCUMENTÉE (reprise de l'ADR-0120 du M12, à reporter dans l'ADR-0190) : Pod Security
+# « privileged » APPLIQUÉ. BuildKit rootless crée des espaces de noms utilisateur et monte des
+# systèmes de fichiers (overlay) DANS le conteneur : il exige seccomp « Unconfined » et AppArmor
+# « Unconfined » (documentation BuildKit, « Rootless mode » ; manifeste amont
+# examples/kubernetes/deployment+service.rootless.yaml), ce que « baseline » interdit. Le
+# conteneur n'est pas privilégié pour autant (privileged: false, UID 1000, aucun volume de l'hôte).
+# Compensations : un seul pod dans l'espace, aucune autre charge ; personne n'y a de droit
+# d'écriture hors plateforme/k8s ; entrée réseau limitée aux pods de job, en TLS mutuel (M19-E08) ;
+# avertissement et audit en « restricted » pour voir tout écart supplémentaire.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: buildkit
+  labels:
+    medisphere.internal/composant: ci
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "<MOI>"
+    medisphere.internal/ticket: "PLAT-2002"
+    medisphere.internal/exception-pss: "ADR-0120 / ADR-0190 : BuildKit rootless (seccomp et AppArmor Unconfined)"

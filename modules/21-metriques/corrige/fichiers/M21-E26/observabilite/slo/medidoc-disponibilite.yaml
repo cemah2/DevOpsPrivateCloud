@@ -1,0 +1,22 @@
+# plateforme/observabilite — slo/medidoc-disponibilite.yaml (M21-E26, PLAT-2226)
+# MédiDoc n'a pas de production dans le lab : l'objectif porte sur la recette (medidoc-recette,
+# M20-E33), environnement le plus proche de la future production ; il en changera d'espace avec elle.
+# Exclus : sondes (/healthz, /readyz) et /metrics. Les routes de MédiDoc sont des motifs du routeur
+# Go (« GET /documents/{id} ») : le filtre porte donc sur la fin de la chaîne.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: medidoc-disponibilite
+spec:
+  description: "MédiDoc (recette) : requêtes servies sans erreur 5xx"
+  target: "99"
+  window: 28d
+  indicator:
+    ratio:
+      errors:
+        metric: medidoc_http_requests_total{namespace="medidoc-recette", route!~".*(/healthz|/readyz|/metrics)", code=~"5.."}
+      total:
+        metric: medidoc_http_requests_total{namespace="medidoc-recette", route!~".*(/healthz|/readyz|/metrics)"}
+  alerting:
+    burnrates: false
+    absent: false

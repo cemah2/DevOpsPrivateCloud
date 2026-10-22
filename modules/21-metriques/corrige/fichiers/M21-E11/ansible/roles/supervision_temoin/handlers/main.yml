@@ -1,0 +1,26 @@
+---
+- name: Recharger systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# Rechargement par SIGHUP (ExecReload des unités) : la configuration est déjà validée.
+- name: Recharger prometheus
+  ansible.builtin.systemd_service:
+    name: prometheus
+    state: reloaded
+
+- name: Recharger alertmanager
+  ansible.builtin.systemd_service:
+    name: alertmanager
+    state: reloaded
+
+- name: Recharger blackbox
+  ansible.builtin.systemd_service:
+    name: blackbox_exporter
+    state: reloaded
+
+# pve-exporter lit pve.yml au démarrage seulement.
+- name: Redémarrer pve-exporter
+  ansible.builtin.systemd_service:
+    name: pve-exporter
+    state: restarted

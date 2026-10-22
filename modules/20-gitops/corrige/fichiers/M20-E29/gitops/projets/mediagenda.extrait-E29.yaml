@@ -1,0 +1,26 @@
+# plateforme/gitops — projets/mediagenda.yaml : AJOUT de M20-E29 (CHG-2129) à l'AppProject d'E07.
+# Règle de la maison : pas de mise en production du vendredi 16:00 au lundi 08:00 (heure de Paris).
+# - kind deny : pendant la fenêtre, ni synchronisation automatique ni auto-réparation ;
+# - manualSync : l'astreinte peut synchroniser À LA MAIN (qui le peut : RBAC, E24 — role:plateforme-admin) ;
+# - schedule évalué dans timeZone ; duration est une durée RÉELLE : 64 h après vendredi 16:00, soit
+#   lundi 08:00… sauf le week-end du changement d'heure (fin mars : lundi 09:00 ; fin octobre : 07:00) ;
+# - applications : motif « *-prod » (mediagenda-prod, et toute future Application de production du
+#   projet) ; dev et recette restent libres.
+spec:
+  syncWindows:
+    - kind: deny
+      schedule: "0 16 * * 5"
+      duration: 64h
+      timeZone: Europe/Paris
+      applications:
+        - "*-prod"
+      manualSync: true
+      description: "CHG-2129 : pas de mise en production du vendredi 16h au lundi 8h (dérogation : astreinte, ticket INC)"
+    # GEL ponctuel (exemple, à ajouter par MR le jour du gel et à retirer par la MR inverse préparée) :
+    # - kind: deny
+    #   schedule: "0 0 21 12 *"        # le 21 décembre à 00:00
+    #   duration: 288h                  # 12 jours : jusqu'au 2 janvier 00:00
+    #   timeZone: Europe/Paris
+    #   applications: ["*-prod"]
+    #   manualSync: true
+    #   description: "CHG-21xx : gel de fin d'année 2026, fin le 02/01/2027 00:00 (MR inverse !NNN prête)"

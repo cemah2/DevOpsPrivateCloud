@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: labo-page
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="fr">
+      <head><meta charset="utf-8"><title>labo</title></head>
+      <body>
+        <h1>labo — version 1</h1>
+        <p>Déployé par Argo CD depuis formation/gitops-labo.</p>
+      </body>
+    </html>

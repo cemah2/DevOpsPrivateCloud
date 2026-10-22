@@ -1,0 +1,14 @@
+# plateforme/charts-miroir — entrées à AJOUTER à charts.yaml (M23-E02 et M23-E03), dans la forme des entrées
+# existantes (M20-E13 : nom, dépôt amont, version, empreinte, usage), sous la clé « charts: » existante. Empreintes : champ « digest » de l'index du
+# dépôt amont (sha256 de l'archive .tgz), relevées le 22/10/2026 ; vérifie-les toi-même (« helm pull » puis
+# « sha256sum ») avant la MR : c'est tout l'intérêt de l'empreinte.
+- nom: opentelemetry-operator
+  depot: https://open-telemetry.github.io/opentelemetry-helm-charts
+  version: 0.126.1
+  empreinte: sha256:8bd4312051bea439c0471826341cc875298373e938cd33e3ace82c11a4e42fca
+  usage: "Opérateur OpenTelemetry 0.161.0 (M23-E02), Application plateforme/gitops plateforme/opentelemetry-operator.yaml"
+- nom: tempo
+  depot: https://grafana-community.github.io/helm-charts
+  version: 3.2.1
+  empreinte: sha256:3389c896bd3c8f2a54f054ac00eb1881c34eff2b8e53053e3ad42c9f394925c3
+  usage: "Tempo 3.1.1 monolithique (M23-E03), Application plateforme/gitops plateforme/tempo.yaml"

@@ -1,0 +1,152 @@
+# plateforme/ci-templates — composant « deploiement » v2.5.0 (M19-E10 ; déploiement par l'agent GitLab :
+# M19-E18, PLAT-2018).
+# Validation d'un dépôt de déploiement Kustomize (mediagenda/deploiement, M17) : chaque overlay doit
+# se rendre (kustomize build) et le rendu doit être valide pour Kubernetes 1.36 et pour les CRD
+# utilisées (kubeconform, schémas du catalogue datreeio pour Cilium, Gateway API, CloudNativePG…).
+# Utilisation :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@v2.5.0
+#       inputs:
+#         overlays: [dev, recette, prod]
+#         deployer: true            # M19-E18 : job deployer-<environnement> par l'agent GitLab
+#         environnement: dev
+# Jobs : deploiement:valider (un par overlay ; artefact : les rendus, à relire dans la MR) ;
+#        deployer-<environnement> (si deployer: true) : à chaque poussée sur la branche par défaut
+#        protégée (fusion d'une MR), diff puis « kubectl apply --server-side -k overlays/<env> » par le
+#        contexte de l'agent, attente du déploiement, environnement GitLab. M19-E29 : vérification des images.
+spec:
+  description: "Validation des overlays Kustomize d'un dépôt de déploiement : rendu et kubeconform (Kubernetes + CRD)."
+  component: [version]
+  inputs:
+    stage:
+      default: lint
+    runner:
+      default: k8s
+    repertoire:
+      description: "Racine du dépôt de déploiement (contient overlays/)"
+      default: "."
+      regex: ^[A-Za-z0-9._/-]+$
+    overlays:
+      description: "Overlays à valider (dossiers de overlays/)"
+      type: array
+      default: [dev, recette, prod]
+    deployer:
+      description: "Ajouter le job deployer-<environnement> (agent GitLab pour Kubernetes)"
+      type: boolean
+      default: false
+    environnement:
+      description: "Environnement GitLab ET overlay déployés par deployer-<environnement>"
+      options: [dev]
+      default: dev
+    stage_deploiement:
+      default: deploiement
+    contexte_agent:
+      description: "Contexte kubectl fourni par l'agent (<projet de l'agent>:<nom de l'agent>)"
+      default: "plateforme/k8s:k8s-par1"
+    espace:
+      description: "Espace de noms déployé (pour l'attente du déploiement)"
+      default: mediagenda-dev
+      regex: ^[a-z0-9-]+$
+    objets_a_attendre:
+      description: "Objets dont on attend la fin du déploiement (kubectl rollout status)"
+      type: array
+      default: ["deployment/mediagenda"]
+    url_environnement:
+      description: "URL publiée de l'environnement (lien dans GitLab)"
+      default: https://mediagenda-dev.apps.par1.medisphere.internal
+    version_kubernetes:
+      description: "Version de Kubernetes des schémas de kubeconform"
+      default: "1.36.0"
+      regex: ^1\.[0-9]+\.[0-9]+$
+    schemas_crd:
+      description: "Emplacement des schémas des CRD (gabarit kubeconform)"
+      default: "https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+    image_k8s:
+      description: "Image avec kubectl, kustomize, kubeconform, git, curl, jq — étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+---
+deploiement:valider:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image_k8s ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  # Un job par overlay (« deploiement:valider: [dev] »…) : l'entrée de type array remplace une valeur
+  # entière, elle est donc interpolée comme une vraie liste YAML.
+  parallel:
+    matrix:
+      - OVERLAY: $[[ inputs.overlays ]]
+  script:
+    - echo "composant deploiement $[[ component.version ]] — overlays/$OVERLAY"
+    - kustomize version && kubeconform -v
+    - cd "$[[ inputs.repertoire ]]"
+    - test -d "overlays/$OVERLAY" || { echo "overlay absent : overlays/$OVERLAY"; exit 1; }
+    - mkdir -p rendus && kustomize build "overlays/$OVERLAY" > "rendus/$OVERLAY.yaml"
+    - >-
+      kubeconform -strict -summary -kubernetes-version "$[[ inputs.version_kubernetes ]]"
+      -schema-location default -schema-location '$[[ inputs.schemas_crd ]]'
+      "rendus/$OVERLAY.yaml"
+  artifacts:
+    when: always
+    paths:
+      - "$[[ inputs.repertoire ]]/rendus/"
+    expire_in: 1 week
+
+# Déploiement par l'agent GitLab (M19-E18). Le job n'a AUCUN identifiant du cluster : GitLab lui
+# fournit un KUBECONFIG dont le contexte « <projet>:<agent> » passe par KAS (git01) puis par la
+# connexion de l'agent ; l'API Kubernetes voit le compte de service de l'agent (droits limités).
+deployer-$[[ inputs.environnement ]]:
+  stage: $[[ inputs.stage_deploiement ]]
+  image:
+    name: $[[ inputs.image_k8s ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: false
+  rules:
+    - if: '"$[[ inputs.deployer ]]" != "true"'
+      when: never
+    # Fusion sur la branche par défaut protégée (poussée) ou relance à la main ; jamais dans un
+    # pipeline déclenché par un autre projet (validation d'un chart, M19-E12) ni planifié.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true" && ($CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "web")
+  needs:
+    - job: deploiement:valider
+      artifacts: false
+      parallel:
+        matrix:
+          - OVERLAY: $[[ inputs.environnement ]]
+  # Un seul déploiement à la fois par environnement ; les suivants attendent (ordre des fusions).
+  resource_group: deploiement-$[[ inputs.environnement ]]
+  environment:
+    name: $[[ inputs.environnement ]]
+    url: $[[ inputs.url_environnement ]]
+    deployment_tier: development
+  variables:
+    # kubectl (Go) joint KAS par git01 : certificat de la racine MédiSphère.
+    SSL_CERT_FILE: /etc/medisphere/ca/medisphere-root-ca.crt
+    OBJETS: "$[[ inputs.objets_a_attendre ]]"
+  script:
+    - echo "composant deploiement $[[ component.version ]] — overlays/$[[ inputs.environnement ]] par $[[ inputs.contexte_agent ]]"
+    - kubectl config get-contexts
+    - kubectl config use-context "$[[ inputs.contexte_agent ]]"
+    - kubectl auth whoami -o jsonpath='{.status.userInfo.username}{"\n"}' || true
+    # diff : code 1 = des différences (normal), > 1 = erreur.
+    - kubectl diff --server-side -k "overlays/$[[ inputs.environnement ]]" > diff.txt || [ $? -eq 1 ]
+    - cat diff.txt
+    # Gestionnaire de champs par défaut « kubectl » : c'est déjà lui qui possède les champs de
+    # l'overlay (M17-E25, application depuis adm01). Un autre nom créerait des conflits partout.
+    - kubectl apply --server-side -k "overlays/$[[ inputs.environnement ]]"
+    - |
+      for o in $(printf '%s' "$OBJETS" | tr -d '[]",'); do
+        kubectl rollout status "$o" -n "$[[ inputs.espace ]]" --timeout=300s
+      done
+  artifacts:
+    when: always
+    paths: [diff.txt]
+    expire_in: 1 month

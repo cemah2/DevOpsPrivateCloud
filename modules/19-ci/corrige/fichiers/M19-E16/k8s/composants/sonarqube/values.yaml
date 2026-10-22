@@ -1,0 +1,75 @@
+# composants/sonarqube/values.yaml — chart sonarqube/sonarqube 2026.5.1002 (M19-E16, PLAT-2016).
+# Lu : README et values.yaml du chart (helm show values sonarqube/sonarqube --version 2026.5.1002).
+
+# Édition communautaire, image FORCÉE : le chart 2026.5 déploie encore 26.9 par défaut. L'étiquette
+# de la communautaire se calcule depuis community.buildNumber ; on la fixe aussi explicitement, par
+# le cache dockerhub de Harbor (image publique : pas de Secret de tirage).
+community:
+  enabled: true
+  buildNumber: "26.10.0.133078"
+image:
+  repository: registry.par1.medisphere.internal/dockerhub/library/sonarqube
+  tag: 26.10.0.133078-community
+
+# Désactivés : initSysctl est PRIVILÉGIÉ (écrit vm.max_map_count sur le nœud : déjà fait par le
+# rôle k8s_travailleur, M19-E02) ; initFs tourne en root avec CHOWN (inutile : ceph-rbd applique
+# fsGroup) ; l'exportateur Prometheus télécharge un agent Java sur Internet à chaque démarrage.
+initSysctl:
+  enabled: false
+initFs:
+  enabled: false
+prometheusExporter:
+  enabled: false
+tests:
+  enabled: false
+
+# Code des sondes du chart (en-tête X-Sonar-Passcode) : Secret créé hors Git (outils/secrets-k8s.sh).
+monitoringPasscodeSecretName: sonarqube-supervision
+monitoringPasscodeSecretKey: code
+
+# Base externe : CloudNativePG (cluster-postgresql.yaml). Secret de l'opérateur, clé « password ».
+jdbcOverwrite:
+  enabled: true
+  jdbcUrl: "jdbc:postgresql://sonarqube-db-rw.sonarqube.svc:5432/sonarqube"
+  jdbcUsername: sonarqube
+  jdbcSecretName: sonarqube-db-app
+  jdbcSecretPasswordKey: password
+
+# Données (index Elasticsearch, extensions) : un PVC ceph-rbd ; perdues avec l'espace au retrait.
+persistence:
+  enabled: true
+  storageClass: ceph-rbd
+  size: 10Gi
+
+# Le chart demande 4 Go et limite à 10 Go par défaut : trop pour le lab. 2 Gio suffisent à un projet.
+resources:
+  requests:
+    cpu: 400m
+    memory: 2Gi
+    ephemeral-storage: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+    ephemeral-storage: 4Gi
+
+sonarProperties:
+  # Pas de place de marché (sortie Internet fermée) ; pas de télémétrie.
+  sonar.updatecenter.activate: "false"
+  sonar.telemetry.enable: "false"
+  # Toute requête doit être authentifiée (déjà le défaut depuis la 25.x : rappel explicite).
+  sonar.forceAuthentication: "true"
+
+# Publication par la Gateway principale (certificat joker *.apps…, ExternalDNS).
+httproute:
+  enabled: true
+  gateway: gw-par1
+  gatewayNamespace: passerelles
+  hostnames:
+    - sonarqube.apps.par1.medisphere.internal
+
+# Politiques réseau écrites dans espaces/sonarqube/ (Cilium), pas celles du chart.
+networkPolicy:
+  enabled: false
+
+# Arrêt pendant l'essai de Jenkins (M19-E19) : passer à 0, puis « helmfile … apply ».
+replicaCount: 1

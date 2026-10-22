@@ -1,0 +1,60 @@
+# ~/m21/e23/charge-oha.yaml — Job de charge COMPLET (M21-E23, INC-4823), à partir du squelette.
+# Trois paliers successifs (20, 50, 100 requêtes/s, 3 minutes chacun), un conteneur d'initialisation
+# par palier : un conteneur d'initialisation ne démarre qu'à la fin du précédent, ce qui enchaîne
+# les paliers sans shell (l'image oha n'en a pas). Le dernier palier est le conteneur principal.
+# Bornes : -z (durée par palier), -q (débit max), activeDeadlineSeconds (15 min au total).
+# Arrêt immédiat : kubectl delete job -n wb-essais charge-oha
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: charge-oha
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: charge-oha
+    medisphere.internal/ticket: INC-4823
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: charge-oha
+    spec:
+      restartPolicy: Never
+      priorityClassName: medisphere-essai
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65535
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: palier-20
+          image: registry.par1.medisphere.internal/ghcr/hatoo/oha:1.16.0
+          args: [--no-tui, --cacert, /etc/medisphere/ca.crt, -z, 3m, -q, "20", -c, "10",
+                 "https://mediagenda-recette.apps.par1.medisphere.internal/api/v1/creneaux?date=2026-11-17&praticien=tous"]
+          resources: {requests: {cpu: 200m, memory: 64Mi}, limits: {cpu: "1", memory: 128Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: racine, mountPath: /etc/medisphere, readOnly: true}]
+        - name: palier-50
+          image: registry.par1.medisphere.internal/ghcr/hatoo/oha:1.16.0
+          args: [--no-tui, --cacert, /etc/medisphere/ca.crt, -z, 3m, -q, "50", -c, "25",
+                 "https://mediagenda-recette.apps.par1.medisphere.internal/api/v1/creneaux?date=2026-11-18&praticien=tous"]
+          resources: {requests: {cpu: 200m, memory: 64Mi}, limits: {cpu: "1", memory: 128Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: racine, mountPath: /etc/medisphere, readOnly: true}]
+      containers:
+        # Palier 100 req/s sur la liste des rendez-vous (lecture en base, pas de cache) : c'est
+        # elle qui sollicite le réservoir de connexions PostgreSQL de chaque pod.
+        - name: palier-100
+          image: registry.par1.medisphere.internal/ghcr/hatoo/oha:1.16.0
+          args: [--no-tui, --cacert, /etc/medisphere/ca.crt, -z, 3m, -q, "100", -c, "50",
+                 "https://mediagenda-recette.apps.par1.medisphere.internal/api/v1/rendez-vous?limite=100"]
+          resources: {requests: {cpu: 200m, memory: 64Mi}, limits: {cpu: "1", memory: 128Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: racine, mountPath: /etc/medisphere, readOnly: true}]
+      volumes:
+        - name: racine
+          configMap:
+            name: racine-medisphere

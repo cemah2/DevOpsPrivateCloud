@@ -1,0 +1,21 @@
+# plateforme/k8s — espaces/ci-jobs/10-quota.yaml (M19-E02)
+# Enveloppe de la CI dans k8s-par1 : de quoi faire tourner 6 jobs « moyens » (concurrent = 6 au
+# M19-E04) avec leurs helpers et services, sans jamais prendre plus de la moitié des demandes
+# allouables des trois travailleurs (3 × ≈ 9,3 Gi et 4 CPU après M19-E02). Un job qui ne rentre
+# pas reste « Pending » : le gestionnaire attend poll_timeout (600 s) puis le job échoue.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: quota-ci
+  namespace: ci-jobs
+spec:
+  hard:
+    requests.cpu: "6"
+    requests.memory: 12Gi
+    limits.cpu: "16"
+    limits.memory: 24Gi
+    pods: "20"
+    # Les jobs ne publient rien : ni LoadBalancer, ni NodePort, ni volume persistant.
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    persistentvolumeclaims: "0"

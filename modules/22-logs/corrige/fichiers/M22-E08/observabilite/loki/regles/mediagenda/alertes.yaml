@@ -1,0 +1,26 @@
+# plateforme/observabilite — loki/regles/mediagenda/alertes.yaml (M22-E08, PLAT-2308)
+# Règles du ruler de Loki pour le LOCATAIRE mediagenda (le dossier = le locataire). Format des règles
+# de Prometheus, expressions en LogQL. Les étiquettes « gravite » et « equipe » sont celles que route
+# l'Alertmanager du cluster (M21) ; « source: loki » est ajoutée par le ruler (external_labels).
+groups:
+  - name: mediagenda-journaux
+    interval: 1m
+    rules:
+      # Rafale d'erreurs serveur vue dans les journaux d'accès de l'API. Complète l'alerte sur les
+      # métriques (M21-E15) : elle donne tout de suite les lignes à lire (request_id, route).
+      - alert: MediagendaErreurs5xxRafale
+        expr: |
+          sum by (namespace) (
+            count_over_time({namespace=~"mediagenda-.+", container="api"} | json | journal="mediagenda.acces" | code >= 500 [5m])
+          ) > 10
+        for: 2m
+        labels:
+          gravite: avertissement
+          equipe: mediagenda
+        annotations:
+          resume: "MédiAgenda ({{ $labels.namespace }}) : plus de 10 réponses 5xx en 5 minutes"
+          description: >-
+            {{ $value }} réponses 5xx journalisées en 5 minutes dans {{ $labels.namespace }}.
+            Explore (source « Loki — mediagenda ») :
+            {namespace="{{ $labels.namespace }}", container="api"} | json | code >= 500
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-220-chercher-dans-les-journaux.md

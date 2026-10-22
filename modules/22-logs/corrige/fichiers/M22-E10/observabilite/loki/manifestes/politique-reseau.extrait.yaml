@@ -1,0 +1,8 @@
+# À AJOUTER TEMPORAIREMENT à la liste « ingress » de loki/manifestes/politique-reseau.yaml
+# (CiliumNetworkPolicy loki-entree) pendant l'essai M22-E10, et à RETIRER avec lui.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux-essai
+            app.kubernetes.io/name: fluent-bit
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]

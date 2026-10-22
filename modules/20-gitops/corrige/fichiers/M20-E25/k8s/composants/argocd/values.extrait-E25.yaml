@@ -1,0 +1,25 @@
+# plateforme/k8s — composants/argocd/values.yaml : liste resourceExclusionsAdditional d'E12, COMPLÉTÉE
+# en M20-E25 (SEC-2125). À remplacer dans values.yaml (pas dans un autre fichier de valeurs : une liste
+# redéfinie ailleurs remplacerait celle-ci au lieu de s'y ajouter).
+# Ajouts d'E25 : les trois types de « demandes » de Velero, créés à chaque « velero backup describe »,
+# téléchargement de journaux ou contrôle d'état, jamais décrits dans Git.
+# Non ajoutés, volontairement : les Backup de CloudNativePG (postgresql.cnpg.io). Enfants des
+# ScheduledBackup décrits dans mediagenda/deploiement, ils montrent dans l'arbre de l'Application la
+# dernière sauvegarde de la base et son état : une information utile à l'astreinte.
+configs:
+  cm:
+    resourceExclusionsAdditional:
+      - apiGroups:
+          - velero.io
+        kinds:
+          - Backup
+          - Restore
+          - PodVolumeBackup
+          - PodVolumeRestore
+          - DataUpload
+          - DataDownload
+          - DeleteBackupRequest
+          - DownloadRequest
+          - ServerStatusRequest
+        clusters:
+          - "*"

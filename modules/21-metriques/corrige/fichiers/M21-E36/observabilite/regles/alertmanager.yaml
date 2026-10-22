@@ -1,0 +1,28 @@
+# plateforme/observabilite — regles/alertmanager.yaml (M21-E36, INC-4836)
+# kube-prometheus-stack fournit déjà AlertmanagerFailedToSendAlerts (severity: warning) : elle sonne
+# bien quand le courriel est cassé… et part par le courriel cassé. Cette alerte-ci est faite pour
+# être lue par un AUTRE chemin : le Prometheus témoin de mon01 l'interroge sur la vue globale
+# (job « relais-cluster » du témoin, M21-E36) et prévient l'astreinte par son propre Alertmanager.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertmanager
+spec:
+  groups:
+    - name: alertmanager.transport
+      rules:
+        - alert: AlertmanagerCourrielEnEchec
+          expr: |
+            sum by (pod) (increase(alertmanager_notifications_failed_total{namespace="supervision", integration="email"}[15m])) > 0
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+            relais: temoin
+          annotations:
+            resume: "Alertmanager du cluster ({{ $labels.pod }}) n'arrive plus à envoyer de courriel"
+            description: >-
+              {{ $value | humanize }} envois en échec en 15 minutes. Aucune alerte du cluster n'arrive
+              plus par courriel : c'est le témoin de mon01 qui relaie celle-ci. RB-218 § « l'alerte
+              n'arrive pas ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-218-alertes-muettes-ou-bavardes.md

@@ -1,0 +1,98 @@
+{{- $t := .Values.tls -}}
+# 1. Émetteur d'amorçage : auto-signé, ne sert qu'à créer l'autorité ci-dessous.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ $t.emetteurAmorce }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+# 2. L'autorité du TLS mutuel de buildkitd. Son Secret (clé privée comprise) reste dans l'espace de
+# cert-manager, que seuls les administrateurs lisent : ni les jobs, ni le gestionnaire du runner,
+# ni le démon n'ont accès à la clé de l'autorité.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $t.autorite }}
+  namespace: {{ $t.espaceCertManager }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+spec:
+  isCA: true
+  commonName: "MédiSphère — autorité BuildKit (k8s-par1)"
+  secretName: {{ $t.autorite }}
+  duration: {{ $t.dureeAutorite }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ $t.emetteurAmorce }}
+---
+# 3. ClusterIssuer de l'autorité : une ClusterIssuer (et non une Issuer d'espace) parce que les
+# certificats clients vivent dans les espaces des jobs, pas dans « buildkit ».
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ $t.autorite }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ $t.autorite }}
+---
+# 4. Certificat serveur : les noms du Service (le client vérifie le nom de BUILDKIT_HOST).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: buildkitd-serveur
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+spec:
+  secretName: buildkitd-serveur
+  commonName: buildkitd.{{ .Release.Namespace }}.svc
+  dnsNames:
+    - buildkitd
+    - buildkitd.{{ .Release.Namespace }}
+    - buildkitd.{{ .Release.Namespace }}.svc
+    - buildkitd.{{ .Release.Namespace }}.svc.cluster.local
+  duration: {{ $t.dureeServeur }}
+  renewBefore: {{ $t.renouvelerServeur }}
+  usages: [server auth, digital signature]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ $t.autorite }}
+{{- range $espace := $t.clients }}
+---
+# 5. Certificat client des jobs de l'espace {{ $espace }} (Secret monté par le runner).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: buildkit-client
+  namespace: {{ $espace }}
+  labels:
+    {{- include "buildkitd.etiquettes" $ | nindent 4 }}
+spec:
+  secretName: buildkit-client
+  commonName: {{ $espace }}
+  duration: {{ $t.dureeClient }}
+  renewBefore: {{ $t.renouvelerClient }}
+  usages: [client auth, digital signature]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ $t.autorite }}
+{{- end }}

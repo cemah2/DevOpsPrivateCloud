@@ -1,0 +1,133 @@
+# plateforme/observabilite — thanos/thanos-query.yaml (M21-E24, PLAT-2224)
+# Thanos Query : point de lecture unique (API HTTP compatible Prometheus) qui interroge en gRPC
+# (StoreAPI) les deux sidecars (données récentes, base locale de chaque Prometheus) et le Store
+# Gateway (blocs du compartiment RGW), fusionne et DÉDOUBLONNE les séries des deux réplicas.
+# Sans état : deux réplicas, derrière 10.10.41.60 (Service prometheus-externe, kps/values.yaml) et
+# derrière thanos-query:9090 dans le cluster (Grafana, Pyrra).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: thanos-query
+# Aucun accès à l'API Kubernetes : la découverte passe par le DNS (SRV des Services headless).
+automountServiceAccountToken: false
+---
+# Points d'accès StoreAPI. « dnssrv+ » : Thanos résout l'enregistrement SRV et suit les pods qui
+# apparaissent ou disparaissent (relu toutes les --store.sd-dns-interval, 30 s par défaut).
+# Format de --endpoint.sd-config-file (Thanos 0.42) : l'option --endpoint est dépréciée.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: thanos-query-points
+data:
+  points.yaml: |
+    endpoints:
+      # Les deux sidecars (Service headless du chart, port nommé grpc).
+      - address: dnssrv+_grpc._tcp.kps-thanos-discovery.supervision.svc.cluster.local
+      # Le Store Gateway (blocs du RGW).
+      - address: dnssrv+_grpc._tcp.thanos-store.supervision.svc.cluster.local
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: thanos-query
+  labels:
+    app.kubernetes.io/name: thanos-query
+    app.kubernetes.io/component: query
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-query
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: thanos-query
+        app.kubernetes.io/component: query
+    spec:
+      serviceAccountName: thanos-query
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-critique
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: thanos-query
+      containers:
+        - name: thanos-query
+          image: quay.io/thanos/thanos
+          args:
+            - query
+            - --log.level=info
+            - --http-address=0.0.0.0:10902
+            - --grpc-address=0.0.0.0:10901
+            - --endpoint.sd-config-file=/etc/thanos/points/points.yaml
+            # Étiquette qui distingue les deux réplicas (posée par l'opérateur) : les séries qui ne
+            # diffèrent que par elle sont fusionnées. Sans ce réglage, chaque série apparaît deux fois.
+            - --query.replica-label=prometheus_replica
+            # Choisit seul la résolution (brute, 5 min, 1 h) selon le pas de la requête (M21-E25).
+            - --query.auto-downsampling
+            # Si un point d'accès ne répond pas, la réponse est rendue avec un avertissement plutôt
+            # qu'en erreur (un sidecar redémarre : l'autre réplica suffit).
+            - --query.partial-response
+            - --query.timeout=2m
+          ports:
+            - {name: http, containerPort: 10902}
+            - {name: grpc, containerPort: 10901}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /-/healthy, port: http}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - name: points
+              mountPath: /etc/thanos/points
+      volumes:
+        - name: points
+          configMap:
+            name: thanos-query-points
+---
+# Service interne : Grafana (source « prometheus »), Pyrra (M21-E26). Port 9090 côté client,
+# comme un Prometheus.
+apiVersion: v1
+kind: Service
+metadata:
+  name: thanos-query
+  labels:
+    app.kubernetes.io/name: thanos-query
+spec:
+  selector:
+    app.kubernetes.io/name: thanos-query
+  ports:
+    - {name: http, port: 9090, targetPort: http}
+    - {name: grpc, port: 10901, targetPort: grpc}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: thanos-query
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-query

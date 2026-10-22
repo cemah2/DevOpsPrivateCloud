@@ -1,0 +1,8 @@
+---
+# host_vars/mon01/vault.yml — EXEMPLE EN CLAIR (M19-E03). Le fichier réel est chiffré sous
+# l'identité « critique » :
+#   uv run ansible-vault create --encrypt-vault-id critique inventories/lab/host_vars/mon01/vault.yml
+# Mots de passe générés (openssl rand -base64 24), le second recopié dans
+# ~/.config/workbook/mailpit-checks.env (600) ; lignes au registre des secrets.
+vault_mailpit_mdp_moi: "<MOT-DE-PASSE-MOI>"
+vault_mailpit_mdp_wb_checks: "<MOT-DE-PASSE-WB-CHECKS>"

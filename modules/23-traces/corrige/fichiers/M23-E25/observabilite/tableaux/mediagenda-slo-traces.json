@@ -1,0 +1,319 @@
+{
+  "uid": "m23-slo-traces",
+  "title": "MédiAgenda — SLO, traces et profils",
+  "tags": [
+    "slo",
+    "traces",
+    "mediagenda",
+    "m23"
+  ],
+  "description": "Tableau d'astreinte : SLO (M21), exemplars vers Tempo, traces fautives, profil CPU. Sources en variables.",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "tempo",
+        "label": "Tempo",
+        "type": "datasource",
+        "query": "tempo",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "profils",
+        "label": "Pyroscope",
+        "type": "datasource",
+        "query": "grafana-pyroscope-datasource",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "env",
+        "label": "Environnement",
+        "type": "custom",
+        "query": "dev,recette,prod",
+        "current": {
+          "text": "prod",
+          "value": "prod"
+        },
+        "options": [
+          {
+            "text": "dev",
+            "value": "dev",
+            "selected": false
+          },
+          {
+            "text": "recette",
+            "value": "recette",
+            "selected": false
+          },
+          {
+            "text": "prod",
+            "value": "prod",
+            "selected": true
+          }
+        ]
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "SLO (Pyrra)",
+      "type": "link",
+      "url": "https://slo.apps.par1.medisphere.internal"
+    },
+    {
+      "title": "Runbooks traces",
+      "type": "link",
+      "url": "https://git01.par1.medisphere.internal/plateforme/medisphere/-/tree/main/docs/observabilite/traces/runbooks"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "SLO disponibilité (objectif 99,5 %) — SLI sur 1 h",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "description": "Même SLI que le SLO Pyrra mediagenda-disponibilite (M21-E26) : part des requêtes /api sans erreur 5xx.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.995
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "1 - (sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\", code=~\"5..\"}[1h])) / sum(rate(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[1h])))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Budget d'erreur restant (28 jours)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.25
+              },
+              {
+                "color": "green",
+                "value": 0.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "1 - ((sum(increase(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\", code=~\"5..\"}[28d])) / sum(increase(mediagenda_http_requests_total{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[28d]))) / (1 - 0.995))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "SLO latence : part des requêtes sous 250 ms (1 h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "description": "Le SLO mediagenda-latence vise 95 % sous 300 ms ; 0,25 s est la borne d'histogramme la plus proche par défaut. Si ton histogramme a une borne à 0,3 (M21), utilise-la.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(mediagenda_http_request_duration_seconds_bucket{namespace=\"mediagenda-$env\", route=~\"/api/.*\", le=\"0.25\"}[1h])) / sum(rate(mediagenda_http_request_duration_seconds_count{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[1h]))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Latence p95 par route, avec exemplars (clic sur un point → la trace)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "exemplar": true,
+          "legendFormat": "{{methode}} {{route}}",
+          "expr": "histogram_quantile(0.95, sum by (le, methode, route) (rate(mediagenda_http_request_duration_seconds_bucket{namespace=\"mediagenda-$env\", route=~\"/api/.*\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Traces en erreur ou lentes (Tempo, 1 h)",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
+          "queryType": "traceql",
+          "limit": 20,
+          "query": "{resource.service.name = \"mediagenda-api\" && resource.deployment.environment.name = \"$env\" && (status = error || duration > 300ms)}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "flamegraph",
+      "title": "Profil CPU de mediagenda-api (Pyroscope)",
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "${profils}"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "${profils}"
+          },
+          "queryType": "profile",
+          "profileTypeId": "process_cpu:cpu:nanoseconds:cpu:nanoseconds",
+          "labelSelector": "{service_name=\"mediagenda-api\", environnement=\"$env\"}",
+          "groupBy": []
+        }
+      ]
+    }
+  ]
+}

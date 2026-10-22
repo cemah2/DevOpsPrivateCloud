@@ -1,0 +1,38 @@
+---
+# host_vars/mon01/supervision_temoin.yml (plateforme/ansible) — M21-E11, PLAT-2211.
+# Les sondes regardent le lab comme un utilisateur : une URL qui prouve que le SERVICE fonctionne.
+supervision_temoin_sondes:
+  - nom: https
+    module: https_2xx
+    etiquettes: {equipe: plateforme}
+    cibles:
+      # GitLab : /-/readiness est réservé à la liste blanche ; /users/sign_in rend une page
+      # produite par Rails (Puma, base, Redis) : un nginx seul ne la sert pas.
+      - https://git01.par1.medisphere.internal/users/sign_in
+      # NetBox : /login/ est rendu par Django (gunicorn + PostgreSQL).
+      - https://nbx01.par1.medisphere.internal/login/
+      # Harbor : /api/v2.0/ping répond « Pong » par le service core.
+      - https://registry.par1.medisphere.internal/api/v2.0/ping
+      # Grafana : /api/health (base comprise).
+      - https://grafana.apps.par1.medisphere.internal/api/health
+      # Argo CD : /healthz du serveur.
+      - https://argocd.apps.par1.medisphere.internal/healthz
+  - nom: mediagenda
+    module: https_2xx
+    etiquettes: {equipe: mediagenda}
+    cibles:
+      # /pret : PostgreSQL et Valkey répondent (503 sinon). Autorisé par la politique L7 de
+      # MédiAgenda (M17) depuis la Gateway.
+      - https://mediagenda.apps.par1.medisphere.internal/pret
+  - nom: passerelles
+    module: icmp
+    etiquettes: {equipe: plateforme}
+    cibles: [10.10.10.1, 10.10.20.1, 10.10.30.1, 10.10.40.1, 10.10.70.1]
+  - nom: dns
+    module: dns_soa
+    etiquettes: {equipe: plateforme}
+    cibles: [10.10.20.10, 10.10.20.16]
+  - nom: smtp
+    module: smtp_starttls
+    etiquettes: {equipe: plateforme}
+    cibles: ["smtp.par1.medisphere.internal:25"]

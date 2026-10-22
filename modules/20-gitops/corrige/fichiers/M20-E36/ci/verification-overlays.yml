@@ -1,0 +1,30 @@
+# ci/verification-overlays.yml — job ajouté au pipeline de MR de mediagenda/deploiement (M20-E36),
+# à côté de la validation du composant « deploiement » du M19 (kustomize build, kubeconform,
+# signatures). Inclus depuis .gitlab-ci.yml :
+#   include:
+#     - local: ci/verification-overlays.yml
+# Image : alpine/k8s (kubectl, kustomize, yq, jq, git) tirée par le cache Harbor « dockerhub ».
+# À épingler par empreinte comme les autres images de CI (normes du M19) ; vérifie au premier
+# passage que « kustomize version » affiche v5.8.1 (version d'Argo CD 3.5), sinon le job le signale.
+verifier-overlays:
+  stage: test
+  image: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5
+  tags: [k8s]
+  interruptible: true
+  variables:
+    GIT_DEPTH: "0"            # la comparaison avec main a besoin de l'historique
+    KUSTOMIZE_ATTENDUE: v5.8.1
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - overlays/**/*
+        - base/**/*
+        - components/**/*
+  script:
+    - git fetch --quiet origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - |
+      ko=0
+      for o in overlays/*/; do
+        outils/verifier-overlay.sh "${o%/}" "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" || ko=1
+      done
+      exit "$ko"

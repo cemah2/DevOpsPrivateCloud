@@ -1,0 +1,28 @@
+# plateforme/observabilite — requetes/E07.logql (M22-E07, SEC-2307) — requêtes d'audit
+# Même format que E04.logql : une requête par ligne ; « # locataire: X » vaut pour la suite.
+# Les champs verb, user, code, resource, object_ns, object_name sont des métadonnées structurées.
+
+# locataire: audit
+
+# A1 — Les dix utilisateurs les plus actifs en écriture sur 24 h (comptes de service compris).
+topk(10, sum by (user) (count_over_time({job="kubernetes-audit"} | verb=~"create|update|patch|delete|deletecollection" [24h])))
+
+# A2 — Les humains seulement (ni system:… ni comptes de service), par verbe.
+sum by (user, verb) (count_over_time({job="kubernetes-audit"} | verb=~"create|update|patch|delete" | user!~"system:.*" [24h]))
+
+# A3 — Les ouvertures de shell dans un pod (sous-ressource exec), avec qui et où.
+{job="kubernetes-audit"} | resource="pods" | json | objectRef_subresource="exec" | line_format "{{.user}} → {{.object_ns}}/{{.object_name}}"
+
+# A4 — Les refus d'autorisation (403) par utilisateur sur 24 h.
+sum by (user) (count_over_time({job="kubernetes-audit"} | code="403" [24h]))
+
+# A5 — Les lectures de Secrets par des humains (niveau Metadata : jamais le contenu).
+{job="kubernetes-audit"} | resource="secrets" | verb=~"get|list|watch" | user!~"system:.*"
+
+# A6 — L'histoire d'un objet (à adapter) : création, modifications, suppression, dans l'ordre.
+{job="kubernetes-audit"} | object_ns="wb-essais" | object_name="m22-e07-temoin" | verb=~"create|update|patch|delete"
+
+# locataire: plateforme
+
+# A7 — Les événements « Warning » du cluster sur l'heure, par espace et par raison.
+sum by (namespace, reason) (count_over_time({job="kubernetes-events"} | logfmt | type="Warning" [1h]))

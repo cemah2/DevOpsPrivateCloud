@@ -1,0 +1,23 @@
+# plateforme/observabilite — regles/enregistrement-lucas.yaml, branche revue-lucas (M21-E21)
+# Version corrigée. Supprimé : la règle « mediagenda_http_requests_total » (même nom que la
+# métrique brute : deux familles de séries homonymes, et une somme de COMPTEURS avant rate, qui
+# masque les remises à zéro) ; « taux_erreurs » (rate sur 30 s = une seule collecte : vide ;
+# nom hors convention). Le besoin de Lucas (erreurs par pod, pour Grafana) est couvert ici.
+# Groupe à 30 s (comme la collecte) : 5 s recalculait 6 fois la même valeur.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: enregistrement-lucas
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: lucas.enregistrement
+      interval: 30s
+      rules:
+        - record: namespace_pod:mediagenda_requetes_5xx:taux5m
+          expr: |
+            sum by (namespace, pod) (
+              rate(mediagenda_http_requests_total{route!~"/sante|/pret|/metrics", code=~"5.."}[5m])
+            )

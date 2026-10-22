@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# Cibles du job blackbox, groupe « {{ item.nom }} » (module {{ item.module }}) — relu à chaud.
+- targets:
+{% for c in item.cibles %}
+    - {{ c | to_json }}
+{% endfor %}
+  labels:
+    module: {{ item.module | to_json }}
+    groupe: {{ item.nom | to_json }}
+{% for cle, valeur in (item.etiquettes | default({})) | dictsort %}
+    {{ cle }}: {{ valeur | to_json }}
+{% endfor %}

@@ -1,0 +1,38 @@
+# plateforme/gitops — plateforme/argo-rollouts.yaml (M20-E15, PLAT-2115)
+# Argo Rollouts, premier service de plateforme géré par Argo CD (la couche de base reste sous
+# Helmfile). Deux sources : le chart recopié et signé dans Harbor par plateforme/charts-miroir (E13),
+# et les valeurs, versionnées ici (référence « values »).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argo-rollouts
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: plateforme
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: argo-rollouts
+      # Version EXACTE, celle de charts.yaml de plateforme/charts-miroir (Argo Rollouts 1.10.1).
+      targetRevision: 2.43.8
+      helm:
+        releaseName: argo-rollouts
+        valueFiles:
+          - $values/valeurs/argo-rollouts/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argo-rollouts
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Les CRD d'Argo Rollouts dépassent la taille de l'annotation last-applied-configuration
+      # (262 144 octets) : sans server-side apply, la synchronisation échoue (« metadata.annotations:
+      # Too long »).
+      - ServerSideApply=true
+      - CreateNamespace=false

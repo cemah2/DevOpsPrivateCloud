@@ -1,0 +1,52 @@
+# plateforme/observabilite — regles/supervision-temoin.yaml (M21-E28, PLAT-2228)
+# Le cluster surveille le témoin de mon01 (le témoin surveille le cluster : rôle supervision_temoin).
+# Gravité critique : un témoin aveugle ne se voit pas lui-même, et la panne suivante du cluster
+# passerait inaperçue. Testées par tests/supervision-temoin.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: supervision-temoin
+spec:
+  groups:
+    - name: supervision.temoin
+      rules:
+        - alert: TemoinInjoignable
+          expr: up{job="temoin-mon01"} == 0 or absent(up{job="temoin-mon01"})
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Le Prometheus témoin de mon01 ne répond plus au cluster"
+            description: "Plus personne ne surveille la supervision du cluster depuis l'extérieur (VM mon01, service prometheus, flux K8S_TRAV → mon01:9090). RB-215 §3."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+        - alert: TemoinSansAlertmanager
+          expr: prometheus_notifications_alertmanagers_discovered{job="temoin-mon01"} < 1
+          for: 10m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Le Prometheus témoin ne connaît plus aucun Alertmanager"
+            description: "Ses alertes (dont « supervision du cluster muette ») ne partiraient nulle part. RB-215 §3."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+        - alert: TemoinNotificationsEnEchec
+          expr: rate(prometheus_notifications_errors_total{job="temoin-mon01"}[10m]) > 0
+          for: 15m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Le Prometheus témoin n'arrive pas à remettre ses alertes à son Alertmanager"
+            description: "Erreurs d'envoi vers l'Alertmanager de mon01 depuis 15 min. RB-215 §3."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+        - alert: TemoinReglesEnEchec
+          expr: increase(prometheus_rule_evaluation_failures_total{job="temoin-mon01"}[15m]) > 0
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Des règles du Prometheus témoin échouent ({{ $labels.rule_group }})"
+            description: "Une règle qui échoue n'alerte plus. Voir /rules sur mon01:9090. RB-215 §3."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md

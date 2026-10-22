@@ -1,0 +1,17 @@
+<!-- docs/socle/matrice-flux.md (plateforme/medisphere) — EXTRAIT, lignes ajoutées en M19-E03.
+     Le fichier est généré depuis group_vars/role_routeur/pare_feu.yml (ms-matrice-flux) pour la partie
+     bordure ; la partie « flux internes à un VLAN » est tenue à la main. -->
+
+### Bordure (transit)
+
+| Source | Destination | Port | Motif | Réf. |
+|---|---|---|---|---|
+| `K8S_CP`, `K8S_TRAV` (10.10.40.51-53, .61-63) | `mon01` 10.10.20.19 | TCP 25 | k8s-par1 vers Mailpit (SMTP) : notifications d'Argo CD (M20), Alertmanager (M21) | M19-E03 |
+
+### Flux internes au VLAN 20 (pare-feu local de l'hôte destinataire)
+
+| Source | Destination | Port | Motif | Réf. |
+|---|---|---|---|---|
+| `git01` | `mon01` | TCP 25 | courriels de GitLab vers Mailpit (STARTTLS vérifié) | M19-E03 |
+| `ca01` | `mon01` | TCP 80 | défi ACME HTTP-01 (certificat de Mailpit) | M19-E03 |
+| MGMT, VPN (bastion) | `mon01` | TCP 25, 8025 | interface et API de Mailpit, essais SMTP (règle « bastion vers tout le lab » sur la bordure) | M19-E03 |

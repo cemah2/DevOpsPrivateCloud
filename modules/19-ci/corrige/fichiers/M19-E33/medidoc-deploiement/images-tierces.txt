@@ -1,0 +1,1 @@
+# medidoc/deploiement — images-tierces.txt (M19-E29, E33) : aucune image tierce dans MédiDoc.

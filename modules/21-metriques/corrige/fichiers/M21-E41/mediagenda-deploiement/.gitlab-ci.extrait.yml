@@ -1,0 +1,43 @@
+# mediagenda/deploiement — .gitlab-ci.yml : jobs ajoutés en M21-E41 (INC-4841) à la validation du
+# M20 (kustomize build, kubeconform, signatures). Les règles d'équipe passent désormais par
+# promtool, comme celles de la plateforme. Images tirées par les caches de Harbor.
+# À vérifier sur ton lab : si ton job de validation du M20 produit déjà le rendu des overlays en
+# artefact, fais dépendre « regles:extraire » de lui (needs) au lieu de « regles:rendre ».
+variables:
+  IMAGE_KUSTOMIZE: registry.par1.medisphere.internal/k8s/kustomize/kustomize:v5.8.0
+  IMAGE_YQ: registry.par1.medisphere.internal/dockerhub/mikefarah/yq:4.54.1
+  IMAGE_PROMETHEUS: registry.par1.medisphere.internal/quay/prometheus/prometheus:v3.15.1
+
+regles:rendre:
+  stage: valider
+  image:
+    name: $IMAGE_KUSTOMIZE
+    entrypoint: [""]
+  script:
+    - mkdir -p rendu
+    - for o in overlays/*/; do kustomize build "$o" > "rendu/$(basename "$o").yaml"; done
+  artifacts:
+    paths: [rendu/]
+    expire_in: 1 day
+
+regles:extraire:
+  stage: valider
+  needs: ["regles:rendre"]
+  image:
+    name: $IMAGE_YQ
+    entrypoint: [""]
+  script:
+    - sh outils/extraire-regles-rendues.sh rendu/*.yaml
+  artifacts:
+    paths: [build/regles/]
+    expire_in: 1 day
+
+regles:verifier:
+  stage: valider
+  needs: ["regles:extraire"]
+  image:
+    name: $IMAGE_PROMETHEUS
+    entrypoint: [""]
+  script:
+    - ls build/regles/*.yml >/dev/null 2>&1 || { echo "aucune règle d'équipe"; exit 0; }
+    - promtool check rules build/regles/*.yml

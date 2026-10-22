@@ -1,0 +1,71 @@
+---
+argument_specs:
+  main:
+    short_description: node_exporter amont en TLS (version 2, M21-E08).
+    description:
+      - Binaire amont épinglé par empreinte, utilisateur système dédié, unité systemd durcie.
+      - TLS par un certificat de step-ca (ACME), renouvelé par cert-renewer@node-exporter.
+      - Remplace le paquet Debian prometheus-node-exporter de la version 1 (M04-E34).
+    options:
+      node_exporter_version:
+        type: str
+        default: 1.12.1
+        description: Version amont.
+      node_exporter_sha256:
+        type: str
+        required: true
+        description: Empreinte sha256 de l'archive linux-amd64 de cette version.
+      node_exporter_url:
+        type: str
+        description: URL de l'archive amont.
+      node_exporter_cache_controleur:
+        type: path
+        description: Dossier du contrôleur où l'archive vérifiée est conservée.
+      node_exporter_dossier_installation:
+        type: path
+        default: /opt/node_exporter
+        description: Racine des versions installées (un sous-dossier par version).
+      node_exporter_port:
+        type: int
+        default: 9100
+        description: Port d'écoute (1024-65535).
+      node_exporter_adresse:
+        type: str
+        description: Adresse IPv4 d'écoute (0.0.0.0 seulement sur un hôte filtré par sa chaîne input).
+      node_exporter_tls:
+        type: bool
+        default: true
+        description: Servir /metrics en HTTPS (faux seulement pour les tests Molecule).
+      node_exporter_fqdn:
+        type: str
+        description: Nom du certificat, celui que Prometheus vise.
+      node_exporter_dossier_tls:
+        type: path
+        default: /etc/node_exporter/tls
+        description: Dossier du certificat et de la clé.
+      node_exporter_acme_avant_emission:
+        type: str
+        description: Commande qui libère le port 80 avant l'émission ACME (vide = rien).
+      node_exporter_acme_apres_emission:
+        type: str
+        description: Commande qui rend le port 80 après l'émission ACME (vide = rien).
+      node_exporter_acme_ecoute_http:
+        type: str
+        description: Adresse:port du serveur de défi de step quand un mandataire garde le port 80.
+      node_exporter_collecteurs_desactives:
+        type: list
+        elements: str
+        default: [infiniband, zfs, nfs, nfsd]
+        description: Collecteurs désactivés (--no-collector.<nom>).
+      node_exporter_unites_systemd:
+        type: list
+        elements: str
+        description: Unités systemd publiées (sans .service).
+      node_exporter_dossier_textfile:
+        type: path
+        default: /var/lib/prometheus/node-exporter
+        description: Dossier lu par le collecteur textfile.
+      node_exporter_site:
+        type: str
+        default: par1
+        description: Étiquette site de medisphere_info.

@@ -1,0 +1,38 @@
+---
+- name: Unités systemd
+  ansible.builtin.template:
+    src: "{{ item }}.service.j2"
+    dest: "/etc/systemd/system/{{ item }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ supervision_temoin_unites }}"
+  register: supervision_temoin_unites_posees
+
+- name: Relecture des unités par systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  # Pas un gestionnaire : la relecture doit précéder le démarrage des services, juste après.
+  when: supervision_temoin_unites_posees is changed  # noqa: no-handler
+
+- name: Redémarrage des services dont l'unité a changé
+  ansible.builtin.systemd_service:
+    name: "{{ item.item }}"
+    state: restarted
+  loop: "{{ supervision_temoin_unites_posees.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item is changed  # noqa: no-handler
+
+- name: Services actifs au démarrage
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: "{{ supervision_temoin_unites }}"
+
+- name: Redémarrage des composants dont la version a changé
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: restarted
+  loop: "{{ supervision_temoin_a_redemarrer | default([]) | unique }}"

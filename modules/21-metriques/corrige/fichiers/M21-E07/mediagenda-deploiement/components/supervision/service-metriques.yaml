@@ -1,0 +1,27 @@
+# Service de COLLECTE (headless : pas d'adresse virtuelle, la découverte de Prometheus lit
+# directement les points de terminaison, un par pod).
+# Pourquoi pas le Service « mediagenda » du chart ? En recette et en prod, Argo Rollouts (M20-E16)
+# ajoute à son sélecteur l'empreinte de la révision STABLE : les pods d'une révision canary n'y
+# figurent pas, ils seraient invisibles pour Prometheus pendant le canary (au moment même où
+# l'analyse de M21-E18 doit les mesurer). Et collecter aussi « mediagenda-canary » doublerait les
+# séries hors canary (les deux Services désignent alors les mêmes pods).
+# Ce Service-ci sélectionne l'API par les seules étiquettes du chart : stable et canary, une fois.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-metriques
+  labels:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/component: api
+    medisphere.internal/collecte: prometheus
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/component: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

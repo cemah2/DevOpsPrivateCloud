@@ -1,0 +1,14 @@
+# plateforme/ansible — roles/supervision_temoin/tasks/configuration.yml : tâche ajoutée en M21-E28.
+# EXTRAIT, à placer après la tâche « Règles du témoin » d'E11. Les deux autres ajouts d'E28 vont
+# dans les gabarits existants (prometheus.yml.j2 : deux jobs ; blackbox.yml.j2 : deux modules),
+# déjà validés par promtool et blackbox_exporter --config.check avant d'être posés.
+
+- name: Règles de surveillance du cluster (validées par promtool)
+  ansible.builtin.copy:
+    src: regles/supervision-cluster.yml
+    dest: "{{ supervision_temoin_dossier_config }}/regles/supervision-cluster.yml"
+    owner: root
+    group: prometheus
+    mode: "0640"
+    validate: /usr/local/bin/promtool check rules %s
+  notify: Recharger prometheus

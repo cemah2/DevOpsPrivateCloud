@@ -1,0 +1,39 @@
+# plateforme/observabilite — kps/values.yaml : changements de M21-E30 (PLAT-2230).
+# EXTRAIT. Chaque valeur vient d'une MESURE (requetes/E30.promql, docs/…/dimensionnement.md) :
+# remplace les nombres par les tiens. Ordre de grandeur du lab à la rédaction : ~150 000 séries
+# actives par réplica, ~5 000 échantillons/s, ~2,2 Gio de mémoire résidente au pic.
+prometheus:
+  prometheusSpec:
+    # Collecte : 30 s partout (défaut du chart, gardé). Les fenêtres rate()[…] des règles et des
+    # tableaux doivent couvrir au moins 4 intervalles (2 min) : ne pas descendre sous 15 s sans
+    # revoir toutes les règles et doubler le budget de séries × échantillons.
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # Rétention : 15 jours (PLAN), et une borne en taille sous la taille du volume (40 Gio) :
+    # la TSDB dépasse sa taille de blocs (WAL, bloc de tête, compaction en cours) : ~20 % de marge.
+    # Si la borne de taille est atteinte AVANT 15 jours, Prometheus supprime les blocs les plus
+    # anciens (alerte PrometheusRetentionParTaille) : le compartiment Thanos a déjà tout.
+    retention: 15d
+    retentionSize: 30GB
+    # Garde-fous de collecte, appliqués à TOUTES les cibles, même si un ServiceMonitor d'équipe
+    # demande plus (le plus petit gagne). Une cible qui dépasse est collectée en ÉCHEC (up=0) :
+    # c'est voulu, une explosion de cardinalité ne doit pas faire tomber Prometheus (M21-E38).
+    # Plus grosse cible mesurée : kube-state-metrics (~18 000 échantillons) ; marge × 2,5.
+    enforcedSampleLimit: 50000
+    # Nombre d'étiquettes par série (mesuré : 14 au plus, cAdvisor) et longueur d'une valeur.
+    enforcedLabelLimit: 40
+    enforcedLabelValueLengthLimit: 512
+    # Taille d'une réponse /metrics non compressée.
+    enforcedBodySizeLimit: 50MB
+    # Requêtes : une requête qui chargerait plus de 20 millions d'échantillons est refusée (défaut
+    # de Prometheus : 50 millions, trop pour 3 Gio de mémoire) ; 1 min au plus ; 10 en parallèle.
+    query:
+      maxSamples: 20000000
+      timeout: 1m
+      maxConcurrency: 10
+    # Mémoire : demande = pic mesuré (le planificateur réserve vraiment) ; limite = 1,5 × pic
+    # (compaction, redémarrage avec relecture du WAL, requête lourde). Au-delà : OOMKilled, et les
+    # DEUX réplicas tombent ensemble si c'est une requête qui les charge tous les deux.
+    resources:
+      requests: {cpu: 300m, memory: 2Gi}
+      limits: {memory: 3Gi}

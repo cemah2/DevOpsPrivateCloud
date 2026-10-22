@@ -1,0 +1,22 @@
+# mediagenda/api — pyproject.toml : EXTRAIT après M23-E04 (DEV-2404). Obtenu par :
+#   uv add "opentelemetry-sdk>=1.45.1,<2" "opentelemetry-exporter-otlp-proto-grpc>=1.45.1,<2" \
+#          "opentelemetry-instrumentation-fastapi>=0.66b1,<0.67" \
+#          "opentelemetry-instrumentation-psycopg>=0.66b1,<0.67" \
+#          "opentelemetry-instrumentation-redis>=0.66b1,<0.67"
+# uv réécrit pyproject.toml ET uv.lock (sdk 1.45.1, instrumentations 0.66b1, grpcio, protobuf…) : commite
+# les deux. Les instrumentations « 0.66b1 » vont avec le SDK 1.45 : on les monte ENSEMBLE.
+[project]
+dependencies = [
+    "fastapi>=0.142.4,<1",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45.1,<2",
+    "opentelemetry-instrumentation-fastapi>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-psycopg>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-redis>=0.66b1,<0.67",
+    "opentelemetry-sdk>=1.45.1,<2",
+    "prometheus-client>=0.26.0,<1",
+    "psycopg-pool>=3.3.3,<4",
+    "psycopg[binary]>=3.3.6,<4",
+    "redis>=8.1.0,<9",
+    "tzdata>=2026.5",
+    "uvicorn>=0.54.0,<1",
+]

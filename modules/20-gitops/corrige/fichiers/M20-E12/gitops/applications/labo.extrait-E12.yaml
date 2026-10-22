@@ -1,0 +1,26 @@
+# plateforme/gitops — applications/labo.yaml : AJOUTS de M20-E12 à l'Application d'E04-E06 (les autres
+# champs, dont source et destination, sont inchangés).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: labo
+  namespace: argocd
+spec:
+  # Le HPA « labo » écrit spec.replicas (gestionnaire de champs kube-controller-manager, sous-ressource
+  # scale) : Argo CD ne compare plus ce champ…
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: labo
+      jsonPointers:
+        - /spec/replicas
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
+      # … et ne le RÉÉCRIT plus lors d'une synchronisation (sans cette option, chaque synchronisation
+      # remettrait la valeur du dépôt, puis le HPA la corrigerait : un yo-yo de pods).
+      - RespectIgnoreDifferences=true

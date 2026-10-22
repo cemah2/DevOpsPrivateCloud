@@ -1,0 +1,22 @@
+# plateforme/k8s — espaces/ci-jobs/30-comptes-service.yaml (M19-E02)
+# Compte de service des pods de job (service_account = "ci-job", M19-E04). AUCUNE liaison RBAC :
+# un job n'a aucun droit sur l'API Kubernetes. Jeton non monté : même un droit accordé un jour
+# par erreur ne serait pas utilisable depuis un job sans changer aussi ce réglage.
+# Pas d'imagePullSecrets : les caches de Harbor sont publics (M13-E04) ; une image privée de
+# Harbor sera tirée avec les identifiants que le runner place lui-même dans le pod (Secret par job).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-job
+  namespace: ci-jobs
+  labels:
+    medisphere.internal/composant: ci
+automountServiceAccountToken: false
+---
+# Le compte « default » de l'espace ne sert à personne : sans jeton lui non plus.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: ci-jobs
+automountServiceAccountToken: false

@@ -1,0 +1,12 @@
+# {{ ansible_managed }}
+# /etc/node_exporter/web.yml — configuration web de node_exporter (exporter-toolkit), M21-E08.
+# Relue à chaque requête : un certificat renouvelé est servi sans redémarrage.
+# Vérification hors ligne : promtool check web-config web.yml
+{% if node_exporter_tls %}
+tls_server_config:
+  cert_file: {{ node_exporter_dossier_tls }}/node_exporter.crt
+  key_file: {{ node_exporter_dossier_tls }}/node_exporter.key
+  min_version: TLS12
+{% else %}
+# TLS désactivé (node_exporter_tls: false) : réservé aux tests Molecule.
+{% endif %}

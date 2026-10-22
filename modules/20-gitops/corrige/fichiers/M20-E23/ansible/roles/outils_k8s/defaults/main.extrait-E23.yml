@@ -1,0 +1,11 @@
+# plateforme/ansible — roles/outils_k8s/defaults/main.yml : AJOUT de M20-E23 (PLAT-2123), liste
+# outils_k8s_binaires (archives vérifiées par le fichier de sommes publié avec la version, M14-E05).
+# CLI de Flux, pour la comparaison du M20 ; retirée au mini-projet avec flux01 (ou gardée : elle ne
+# sert qu'en lecture et pour le bootstrap).
+outils_k8s_binaires:
+  # (entrées k9s, cilium, hubble, etcd inchangées)
+  - nom: flux
+    version: "2.9.6"
+    url: https://github.com/fluxcd/flux2/releases/download/v2.9.6/flux_2.9.6_linux_amd64.tar.gz
+    somme: https://github.com/fluxcd/flux2/releases/download/v2.9.6/flux_2.9.6_checksums.txt
+    fichiers: [flux]

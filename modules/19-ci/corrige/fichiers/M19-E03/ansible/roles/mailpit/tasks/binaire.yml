@@ -1,0 +1,46 @@
+---
+# Binaire de Mailpit : archive vérifiée par SHA-256 AVANT extraction, une version par dossier,
+# lien symbolique vers la version active (retour arrière = remettre l'ancienne version dans
+# l'inventaire : son dossier est encore là).
+
+- name: Dossier de la version
+  ansible.builtin.file:
+    path: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Archive téléchargée et vérifiée (get_url refuse un fichier dont l'empreinte diffère)
+  ansible.builtin.get_url:
+    url: "{{ mailpit_url }}"
+    dest: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}/mailpit-linux-amd64.tar.gz"
+    checksum: "sha256:{{ mailpit_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Binaire extrait
+  ansible.builtin.unarchive:
+    src: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}/mailpit-linux-amd64.tar.gz"
+    dest: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}"
+    remote_src: true
+    include: [mailpit]
+    creates: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}/mailpit"
+    owner: root
+    group: root
+
+- name: Binaire non modifiable par le service
+  ansible.builtin.file:
+    path: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}/mailpit"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Version active
+  ansible.builtin.file:
+    src: "{{ mailpit_dossier_versions }}/{{ mailpit_version }}/mailpit"
+    dest: "{{ mailpit_binaire }}"
+    state: link
+    force: true
+  notify: Redémarrer mailpit

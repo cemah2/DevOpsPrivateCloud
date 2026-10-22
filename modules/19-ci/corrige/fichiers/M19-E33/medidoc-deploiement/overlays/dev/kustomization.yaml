@@ -1,0 +1,22 @@
+# medidoc/deploiement — overlays/dev/kustomization.yaml (M19-E33, DEV-2033).
+# Espace medidoc-dev ; image PAR DIGEST, modifiée seulement par les MR de promotion (branche
+# promotion/dev-vX.Y.Z, jeton ci-promotion de ce dépôt) ; nom publié medidoc-dev.apps….
+# Application jusqu'au M20 (Argo CD) : depuis adm01,
+#   kubectl apply --server-side --field-manager=medidoc-deploiement -k overlays/dev
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: medidoc-dev
+resources:
+  - ../../base
+images:
+  - name: registry.par1.medisphere.internal/medisphere/medidoc
+    digest: sha256:<EMPREINTE-DE-LA-VERSION-PROMUE>
+patches:
+  - target:
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: medidoc
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: medidoc-dev.apps.par1.medisphere.internal

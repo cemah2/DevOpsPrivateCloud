@@ -1,0 +1,61 @@
+# plateforme/ci-templates — templates/securite/template.yml, version 2.1.0 (M19-E24, SEC-2024).
+# EXTRAIT : différences avec la v2.0.0 de M19-E10 (même fichier dans corrige/fichiers/M19-E10/).
+#   - trois entrées ajoutées à « spec » (runner protégé, chemins de la clé montée) ;
+#   - securite:signature tourne sur le runner protégé et lit la clé dans le fichier MONTÉ PAR LE
+#     RUNNER (plus de variable COSIGN_PRIVATE_KEY / COSIGN_PASSWORD) ;
+#   - securite:trivy, securite:sbom et securite:verification sont inchangés.
+# Pour un projet consommateur : passer de @2.0.0 à @2.1.0, rien d'autre.
+spec:
+  inputs:
+    # … entrées de la v2.0.0 inchangées (stage_analyse, stage, runner, severite_bloquante,
+    #   plateforme_analyse, image_outils, job_construction, job_publication) …
+    runner_protege:
+      description: "Étiquette du runner protégé, seul à détenir la clé de signature (M19-E24)"
+      default: protege
+    cle_cosign:
+      description: "Chemin de la clé Cosign montée par le runner protégé"
+      default: /run/secrets/medisphere/cosign/cosign.key
+    mot_de_passe_cosign:
+      description: "Chemin du mot de passe de la clé, monté par le runner protégé"
+      default: /run/secrets/medisphere/cosign/cosign.password
+---
+# … .securite-v2-base, .securite-v2-toujours, .securite-v2-publiee, securite:trivy, securite:sbom
+#   inchangés …
+
+securite:signature:
+  extends: [.securite-v2-base, .securite-v2-publiee]
+  # Remplace l'étiquette de .securite-v2-base : le runner k8s-par1-protege ne prend que les références
+  # protégées, et les règles .securite-v2-publiee n'en créent pas d'autres.
+  tags: ["$[[ inputs.runner_protege ]]"]
+  stage: $[[ inputs.stage ]]
+  interruptible: false
+  needs:
+    - job: "$[[ inputs.job_construction ]]"
+      artifacts: true
+    - job: "$[[ inputs.job_publication ]]"
+      artifacts: true
+  variables:
+    DOCKER_CONFIG: /tmp/auth-registre
+  script:
+    - echo "composant securite $[[ component.version ]] sur $CI_RUNNER_DESCRIPTION"
+    - case "${IMAGE_REF:-}" in *@sha256:*) ;; *) echo "IMAGE_REF doit désigner une empreinte (reçu « ${IMAGE_REF:-} »)"; exit 1 ;; esac
+    - |
+      if [ ! -r "$[[ inputs.cle_cosign ]]" ]; then
+        echo "clé de signature absente de $[[ inputs.cle_cosign ]] : ce job doit tourner sur le runner protégé"
+        exit 1
+      fi
+    - mkdir -p "$DOCKER_CONFIG" && chmod 700 "$DOCKER_CONFIG"
+    - printf '%s' "$HARBOR_ROBOT_TOKEN" | cosign login "${IMAGE_REF%%/*}" -u "$HARBOR_ROBOT_USER" --password-stdin > /dev/null
+    # Mot de passe lu dans le fichier monté, jamais affiché ni passé en argument (Cosign lit
+    # COSIGN_PASSWORD dans l'environnement).
+    - COSIGN_PASSWORD="$(cat "$[[ inputs.mot_de_passe_cosign ]]")"; export COSIGN_PASSWORD
+    # … boucle d'attente de l'analyse de Harbor de la v2.0.0, inchangée …
+    - cosign sign --key "$[[ inputs.cle_cosign ]]" --signing-config /etc/medisphere/signing-config.json "$IMAGE_REF"
+    - |
+      depot="${IMAGE_REF%@*}"; empreinte="${IMAGE_REF#*@}"
+      tar -xOf image.tar "blobs/sha256/${empreinte#sha256:}" > index-archive.json
+      for m in $(jq -r '.manifests[] | select((.platform.os // "unknown") != "unknown") | .digest' index-archive.json); do
+        cosign sign --key "$[[ inputs.cle_cosign ]]" --signing-config /etc/medisphere/signing-config.json "$depot@$m"
+      done
+  after_script:
+    - rm -rf /tmp/auth-registre

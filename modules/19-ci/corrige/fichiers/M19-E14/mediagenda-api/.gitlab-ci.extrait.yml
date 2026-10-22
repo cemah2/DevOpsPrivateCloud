@@ -1,0 +1,14 @@
+# mediagenda/api — .gitlab-ci.yml : EXTRAIT (M19-E14, DEV-2014). L'inclusion de « qualite » passe à
+# la version mineure qui sait lancer les tests d'intégration ; les tests de MédiAgenda lisent
+# MEDIAGENDA_TEST_DB_URL et MEDIAGENDA_TEST_VALKEY_URL (apps/mediagenda/tests/test_integration.py).
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.2.0
+    inputs:
+      paquet_python: mediagenda
+      integration: true
+      variable_postgresql: MEDIAGENDA_TEST_DB_URL
+      variable_valkey: MEDIAGENDA_TEST_VALKEY_URL
+      # Migrations par le point d'entrée du paquet (le test les rejoue sur un schéma vidé : on vérifie
+      # ici que la commande de production fonctionne sur une base neuve).
+      commande_preparation: MEDIAGENDA_DB_URL=$MEDIAGENDA_TEST_DB_URL uv run --no-sync mediagenda-migrate
+  # … construction-image, securite et release inchangés …

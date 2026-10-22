@@ -1,0 +1,16 @@
+# plateforme/ansible — roles/supervision_temoin/templates/blackbox.yml.j2 : module ajouté en M21-E36.
+# EXTRAIT, à insérer dans « modules: » du gabarit d'E11 (à côté de watchdog_cluster, M21-E28).
+# La sonde RÉUSSIT quand la vue globale répond ET qu'aucune alerte marquée relais="temoin" n'est
+# active dans le cluster ; elle ÉCHOUE sinon (alerte relayée active, ou vue globale muette : dans ce
+# second cas, SupervisionClusterComposantKO de M21-E28 dit lequel).
+  relais_cluster:
+    prober: http
+    timeout: 15s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp:
+        - '"status":"success"'
+      fail_if_body_matches_regexp:
+        - '"result":\[\{'

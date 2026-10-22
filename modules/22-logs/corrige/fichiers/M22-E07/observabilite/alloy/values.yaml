@@ -1,0 +1,105 @@
+# plateforme/observabilite — alloy/values.yaml (version M22-E07 ; créé en M22-E03, PLAT-2303)
+# Valeurs du chart grafana/alloy 1.14.1 (Alloy v1.21.1), recopié dans Harbor charts/.
+# Consommé par l'Application Argo CD « alloy » (espace journaux). La configuration Alloy est dans
+# alloy/config.alloy, transformée en ConfigMap « alloy-config » par alloy/kustomization.yaml ; le
+# conteneur config-reloader du chart la recharge à chaud quand elle change.
+
+crds:
+  create: false                 # CRD PodLogs (monitoring.grafana.com) : non utilisée
+
+image:
+  registry: docker.io           # tirée par le cache Harbor « dockerhub » (miroir containerd, M14-E19)
+  repository: grafana/alloy
+
+alloy:
+  configMap:
+    create: false
+    name: alloy-config
+    key: config.alloy
+  stabilityLevel: generally-available
+  # Clustering (M22-E07) : les pods du DaemonSet forment une grappe (port HTTP 12345, Service sans
+  # tête alloy-cluster créé par le chart). Seuls les composants qui le demandent (bloc clustering de
+  # loki.source.kubernetes_events) se répartissent le travail ; la lecture des fichiers reste locale.
+  clustering:
+    enabled: true
+  enableReporting: false        # pas de statistiques d'usage envoyées à Grafana Labs
+  # Positions de lecture (fichiers, journal) sur le DISQUE DU NŒUD : un pod recréé reprend là où le
+  # précédent s'était arrêté (ni trou, ni doublon). Dans /tmp (emptyDir), tout serait relu ou perdu.
+  storagePath: /var/lib/alloy/donnees
+  mounts:
+    varlog: true                # /var/log du nœud en lecture seule : pods, journal, audit (E07)
+    extra:
+      - name: etat
+        mountPath: /var/lib/alloy
+  extraEnv:
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+  # Lecture de fichiers de root (0640) : UID 0 nécessaire, mais aucune capacité, système de fichiers
+  # racine en lecture seule, pas d'escalade. Exception écrite à « restricted » (espace journaux).
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    runAsNonRoot: false
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ["ALL"]
+    seccompProfile:
+      type: RuntimeDefault
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+controller:
+  type: daemonset
+  priorityClassName: medisphere-critique
+  # Un agent de journaux tourne PARTOUT : nœuds de contrôle (taint du plan de contrôle) et nœud
+  # dédié à la base (taint dedie=bdd, M14-E14). Sans ces tolérances, ces nœuds sont aveugles.
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: dedie
+      operator: Equal
+      value: bdd
+      effect: NoSchedule
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  volumes:
+    extra:
+      - name: etat
+        hostPath:
+          path: /var/lib/alloy
+          type: DirectoryOrCreate
+
+# Droits minimaux : découvrir les pods (et leurs espaces). Le défaut du chart lit aussi les Secrets
+# et les ConfigMaps de tout le cluster : inutile ici, et refusé par la RSSI.
+rbac:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "namespaces"]
+      verbs: ["get", "list", "watch"]
+    # M22-E07 : loki.source.kubernetes_events lit les événements de tous les espaces.
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["get", "list", "watch"]
+  clusterRules:
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "watch"]
+
+service:
+  enabled: true                 # port 12345 : interface de débogage et métriques de l'agent
+
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    medisphere.internal/supervision: "oui"

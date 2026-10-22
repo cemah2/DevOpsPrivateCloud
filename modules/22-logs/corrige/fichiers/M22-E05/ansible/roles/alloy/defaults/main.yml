@@ -1,0 +1,30 @@
+---
+# Rôle alloy — agent Grafana Alloy sur les VMs Debian 13 du socle (M22-E05, PLAT-2305).
+# Lit le journal systemd de la VM et l'envoie à Loki (10.10.41.62:3100, locataire plateforme).
+# Binaire amont vérifié par la somme SHA-256 publiée avec la version (même modèle que node_exporter,
+# M21-E08) : dossier versionné /opt/alloy/<version>, lien /usr/local/bin/alloy (retour arrière =
+# changer la version). Le paquet .deb de apt.grafana.com est l'alternative (voir le corrigé).
+
+alloy_version: "1.21.1"
+alloy_archive_url: "https://github.com/grafana/alloy/releases/download/v{{ alloy_version }}/alloy-linux-amd64.zip"
+alloy_sommes_url: "https://github.com/grafana/alloy/releases/download/v{{ alloy_version }}/SHA256SUMS"
+alloy_dossier: /opt/alloy
+
+alloy_utilisateur: alloy
+# Lecture du journal systemd : groupes systemd-journal (journal) et adm (journaux des services).
+alloy_groupes: [systemd-journal, adm]
+alloy_etat: /var/lib/alloy
+alloy_ecoute: "127.0.0.1:12345"      # interface de débogage et métriques : locale seulement
+
+# Destination
+alloy_loki_url: "http://loki.apps.par1.medisphere.internal:3100/loki/api/v1/push"
+alloy_locataire: plateforme
+
+# Étiquettes (liste fermée de la plateforme : job, host, role, site)
+alloy_site: par1
+# Rôle = premier groupe d'inventaire « role_* » (étiquette Proxmox/NetBox role-<x>), sans le préfixe.
+alloy_role: "{{ group_names | select('match', '^role_') | sort | map('regex_replace', '^role_', '') | first | default('inconnu') }}"
+
+# Journal : ce qu'on lit au premier démarrage, et ce qu'on n'envoie jamais.
+alloy_journal_age_max: "12h"
+alloy_niveaux_ignores: [debug]

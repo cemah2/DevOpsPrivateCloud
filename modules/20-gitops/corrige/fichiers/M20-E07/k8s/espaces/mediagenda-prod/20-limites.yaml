@@ -1,0 +1,18 @@
+# plateforme/k8s — espaces/mediagenda-prod/20-limites.yaml (M20-E07, repris de M17-E09)
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-mediagenda
+  namespace: mediagenda-prod
+  labels:
+    medisphere.internal/environnement: prod
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        memory: 256Mi
+      max:
+        memory: 2Gi

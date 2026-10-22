@@ -1,0 +1,93 @@
+# Pipeline du futur service « rappels » — essai dans formation/ci-labo (Lucas Martin)
+# Ça marche ! (testé sur ma branche)
+
+image: python:3.13
+
+variables:
+  GIT_DEPTH: "0"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  HARBOR_USER: "robot$medisphere+ci"
+  HARBOR_PASSWORD: "Kx7pR2mWq9LzT4vB"
+  IMAGE: registry.par1.medisphere.internal/medisphere/rappels
+
+stages:
+  - build
+  - test
+  - securite
+  - deploy
+
+cache:
+  key: cache
+  paths:
+    - .venv/
+    - .cache/
+
+before_script:
+  - apt-get update && apt-get install -y curl git
+  - curl -LsSf https://astral.sh/uv/install.sh | sh
+  - export PATH="$HOME/.local/bin:$PATH"
+
+lint:
+  stage: test
+  script:
+    - uv sync
+    - uv run ruff check . || true
+  only:
+    - branches
+    - merge_requests
+
+tests:
+  stage: test
+  needs: [construire-image]
+  script:
+    - uv sync
+    - uv run pytest
+  artifacts:
+    paths:
+      - .pytest_cache/
+      - htmlcov/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+construire-image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  tags: [docker]
+  script:
+    - set -x
+    - docker login -u $HARBOR_USER -p $HARBOR_PASSWORD registry.par1.medisphere.internal
+    - docker build -t $IMAGE:latest -t $IMAGE:$CI_COMMIT_SHORT_SHA .
+    - docker push $IMAGE:latest
+    - docker push $IMAGE:$CI_COMMIT_SHORT_SHA
+  artifacts:
+    paths:
+      - dist/
+
+trivy:
+  stage: securite
+  image: aquasec/trivy:latest
+  allow_failure: true
+  script:
+    - trivy image --exit-code 1 --severity CRITICAL $IMAGE:latest
+
+gitleaks:
+  stage: securite
+  image: zricethezav/gitleaks:latest
+  allow_failure: true
+  script:
+    - gitleaks detect --source . --verbose
+
+deploy:
+  stage: deploy
+  needs: []
+  image: bitnami/kubectl:latest
+  script:
+    - echo "$KUBECONFIG_DEV" > kubeconfig
+    - kubectl --kubeconfig kubeconfig -n mediagenda-dev set image deployment/rappels rappels=$IMAGE:latest
+  except:
+    - tags
+  when: always

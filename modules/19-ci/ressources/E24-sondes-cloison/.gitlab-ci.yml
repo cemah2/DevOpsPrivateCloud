@@ -1,0 +1,64 @@
+# formation/ci-labo — pipeline de sondes du cloisonnement (M19-E24, SEC-2024).
+# Fourni : à copier tel quel dans la branche « sondes-cloison » de formation/ci-labo.
+#
+# Chaque sonde ESSAIE une ouverture de connexion TCP (bash /dev/tcp, sans outil réseau) et affiche
+# OUVERT ou FERMÉ ; aucune ne s'authentifie, n'envoie de donnée ni ne lit de secret. Le job ne
+# tombe jamais en échec à cause d'une sonde : c'est un relevé, à recopier dans
+# docs/livraison/ci/cloisonnement.md (tableau « avant », puis « après »).
+#
+# Adapte SONDE_PG si ton service PostgreSQL de mediagenda-dev porte un autre nom (M16/M17).
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "sondes-cloison"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+variables:
+  SONDE_PG: "mediagenda-db-rw.mediagenda-dev.svc.cluster.local:5432"
+  SONDE_DELAI: "3"
+
+.sondes:
+  image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+  script:
+    - |
+      sonde() {   # sonde LIBELLÉ HÔTE PORT
+        if timeout "$SONDE_DELAI" bash -c "exec 3<>/dev/tcp/$2/$3" 2>/dev/null; then r=OUVERT; else r=FERMÉ; fi
+        printf '%-40s %-45s %s\n' "$1" "$2:$3" "$r"
+      }
+      echo "=== Identité et privilèges du conteneur build ==="
+      id
+      grep -E '^(CapEff|CapBnd|NoNewPrivs|Seccomp):' /proc/self/status
+      if [ -e /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+        echo "jeton de compte de service : MONTÉ (contenu non affiché)"
+      else
+        echo "jeton de compte de service : absent"
+      fi
+      echo "racine du système de fichiers inscriptible : $( (touch /.essai-ecriture && rm -f /.essai-ecriture && echo oui) 2>/dev/null || echo non)"
+      echo
+      echo "=== Sondes réseau ==="
+      sonde "API Kubernetes (Service)"           kubernetes.default.svc.cluster.local 443
+      sonde "API Kubernetes (VIP)"               k8s-api.par1.medisphere.internal 8443
+      sonde "PostgreSQL de mediagenda-dev"       "${SONDE_PG%:*}" "${SONDE_PG##*:}"
+      sonde "NetBox (nbx01)"                     nbx01.par1.medisphere.internal 443
+      sonde "SSH dns01"                          dns01.par1.medisphere.internal 22
+      sonde "SSH git01"                          git01.par1.medisphere.internal 22
+      sonde "GitLab HTTPS (git01)"               git01.par1.medisphere.internal 443
+      sonde "Harbor (reg01)"                     registry.par1.medisphere.internal 443
+      sonde "S3 du cache (s3-01)"                s3-01.par1.medisphere.internal 8333
+      sonde "buildkitd"                          buildkitd.buildkit.svc.cluster.local 1234
+      sonde "Internet HTTPS (pypi.org)"          pypi.org 443
+      sonde "Internet HTTP (deb.debian.org)"     deb.debian.org 80
+      sonde "Mailpit SMTP (mon01)"               smtp.par1.medisphere.internal 25
+
+# Sur le runner ordinaire (toutes branches).
+sondes-k8s:
+  extends: .sondes
+  tags: [k8s]
+
+# Sur le runner protégé, à partir de E24 étape 6 : ne s'exécute que sur une référence protégée.
+# Sur la branche (non protégée) sondes-cloison, ce job reste en attente : c'est l'essai inverse (étape 8).
+sondes-protege:
+  extends: .sondes
+  tags: [protege]
+  rules:
+    - if: $SONDE_PROTEGE == "oui"

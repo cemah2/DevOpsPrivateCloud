@@ -1,0 +1,11 @@
+# plateforme/k8s — espaces/medidoc-recette/40-comptes-service.yaml (M20-E33), comme medidoc-dev (M14-E33).
+# « default » tire les images par le robot Harbor (Secret harbor-pull créé par secrets-k8s.sh,
+# composant medidoc-recette), sans jeton monté par défaut.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: medidoc-recette
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: harbor-pull

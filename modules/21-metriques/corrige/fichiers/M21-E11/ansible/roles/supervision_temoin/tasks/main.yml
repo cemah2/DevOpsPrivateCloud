@@ -1,0 +1,45 @@
+---
+- name: Refuser une version sans empreinte
+  ansible.builtin.assert:
+    that:
+      - supervision_temoin_prometheus_sha256 | length == 64
+      - supervision_temoin_alertmanager_sha256 | length == 64
+      - supervision_temoin_blackbox_sha256 | length == 64
+    fail_msg: "Empreinte SHA-256 manquante ou mal formée (relève-la dans sha256sums.txt de la version)."
+    quiet: true
+
+- name: Liste des services gérés
+  ansible.builtin.set_fact:
+    supervision_temoin_unites: "{{ ['prometheus', 'alertmanager', 'blackbox_exporter'] + (['pve-exporter'] if supervision_temoin_pve_active | bool else []) }}"
+
+- name: Utilisateurs et dossiers
+  ansible.builtin.import_tasks: utilisateurs.yml
+
+- name: Binaires amont vérifiés
+  ansible.builtin.include_tasks: binaire.yml
+  loop:
+    - {nom: prometheus, version: "{{ supervision_temoin_prometheus_version }}",
+       sha256: "{{ supervision_temoin_prometheus_sha256 }}", executables: [prometheus, promtool], unite: prometheus}
+    - {nom: alertmanager, version: "{{ supervision_temoin_alertmanager_version }}",
+       sha256: "{{ supervision_temoin_alertmanager_sha256 }}", executables: [alertmanager, amtool], unite: alertmanager}
+    - {nom: blackbox_exporter, version: "{{ supervision_temoin_blackbox_version }}",
+       sha256: "{{ supervision_temoin_blackbox_sha256 }}", executables: [blackbox_exporter], unite: blackbox_exporter}
+  loop_control:
+    loop_var: supervision_temoin_composant
+    label: "{{ supervision_temoin_composant.nom }} {{ supervision_temoin_composant.version }}"
+
+- name: Exportateur Proxmox VE (M21-E12)
+  ansible.builtin.import_tasks: pve_exporter.yml
+  when: supervision_temoin_pve_active | bool
+
+- name: Configurations validées
+  ansible.builtin.import_tasks: configuration.yml
+
+- name: Services
+  ansible.builtin.import_tasks: services.yml
+
+- name: Contrôles
+  ansible.builtin.import_tasks: verifications.yml
+  when:
+    - supervision_temoin_verifier | bool
+    - not ansible_check_mode

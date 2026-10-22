@@ -1,0 +1,66 @@
+# plateforme/gitops — plateforme/kube-prometheus-stack.yaml (M21-E02, PLAT-2202)
+# Pile de métriques du cluster : prometheus-operator, Prometheus, Alertmanager, kube-state-metrics,
+# node-exporter, Grafana. Gérée par l'Application racine (App of Apps, M20-E06), projet plateforme.
+# Deux sources (M20-E13) :
+#   1. le chart, recopié et signé dans Harbor par plateforme/charts-miroir (jamais tiré d'Internet) ;
+#   2. le dépôt plateforme/observabilite, qui ne sert QUE de référence « $values ».
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+  # PAS de finaliseur resources-finalizer.argocd.argoproj.io : supprimer cette Application par erreur
+  # ne doit pas supprimer en cascade les CRD de l'opérateur (et avec elles TOUS les ServiceMonitor,
+  # PrometheusRule… des équipes, dans tous les espaces) ni les volumes de Prometheus.
+  annotations:
+    medisphere.internal/ticket: "PLAT-2202"
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.11.0
+      helm:
+        # Nom de release court : préfixe des objets non couverts par fullnameOverride, étiquette
+        # « release » ; ne plus le changer une fois déployé (ce serait une autre release).
+        releaseName: kps
+        valueFiles:
+          - $values/kps/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: supervision
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Les CRD de l'opérateur dépassent la taille de l'annotation last-applied-configuration
+      # (262 144 octets) : l'application côté client échoue (« metadata.annotations: Too long »).
+      - ServerSideApply=true
+      # Les espaces supervision et supervision-noeuds sont décrits dans plateforme/k8s (espaces/).
+      - CreateNamespace=false
+      # Les champs ignorés ci-dessous le sont aussi à la synchronisation, pas seulement au diff.
+      - RespectIgnoreDifferences=true
+    # Premier déploiement : les PrometheusRule passent par le webhook de l'opérateur
+    # (failurePolicy: Fail) ; tant que l'opérateur n'est pas prêt, elles sont refusées. On réessaie.
+    retry:
+      limit: 5
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m
+  ignoreDifferences:
+    # caBundle injecté par cert-manager (cainjector) dans les webhooks de l'opérateur.
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: kps-admission
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: kps-admission
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle

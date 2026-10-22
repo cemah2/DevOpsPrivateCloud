@@ -1,0 +1,6 @@
+# alertmanager/routes-tests.txt — essais de routage joués par la CI (M21-E06/E07).
+# Format : <récepteur attendu> | <étiquettes de l'alerte>
+null            | alertname=Watchdog severity=none
+astreinte-mail  | alertname=KubePodCrashLooping severity=critical namespace=mediagenda-prod
+astreinte-mail  | alertname=MediagendaIndisponible gravite=critique equipe=mediagenda
+plateforme-mail | alertname=EssaiPLAT2206 gravite=avertissement equipe=plateforme

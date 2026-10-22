@@ -1,0 +1,32 @@
+# plateforme/k8s — composants/reseau/politiques/argocd-sauvegarde.yaml (M20-E28, PLAT-2128)
+# Pods du CronJob argocd-export : l'espace argocd est en refus par défaut (M20-E25). Le pod partage
+# un espace réseau entre ses deux conteneurs : l'API sert à « export », s3-01 à « envoi ».
+# Flux de bordure K8S_TRAV → s3-01:8333 : déjà ouvert (M14-E24/M16-E16).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: argocd-export
+  namespace: argocd
+spec:
+  description: "Sauvegarde d'Argo CD : API du cluster, s3-01 en 8333, DNS ; aucune entrée"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: argocd-export}
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports: [{port: "6443", protocol: TCP}]
+    - toFQDNs:
+        - matchName: s3-01.par1.medisphere.internal
+      toPorts:
+        - ports: [{port: "8333", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - matchPattern: "*"

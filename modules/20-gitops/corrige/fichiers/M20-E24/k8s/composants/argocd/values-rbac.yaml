@@ -1,0 +1,12 @@
+# plateforme/k8s — composants/argocd/values-rbac.yaml (M20-E24, SEC-2124)
+# Réglages d'argocd-rbac-cm. La politique elle-même (policy.csv) n'est PAS ici : elle est lue dans
+# releases/argocd/policy.csv par releases/argocd.yaml.gotmpl (une seule source, testée en CI).
+configs:
+  rbac:
+    # Aucun droit par défaut : un compte authentifié qui n'est cité nulle part ne voit rien.
+    # (Un rôle par défaut ne peut pas être restreint par un « deny » : documentation RBAC.)
+    policy.default: ""
+    # Correspondance par motifs (« * ») ; le mode regex est plus puissant et plus facile à rater.
+    policy.matchMode: glob
+    # Revendications OIDC lues pour les groupes à partir du SSO (M24) : « groups » de Keycloak.
+    scopes: "[groups]"

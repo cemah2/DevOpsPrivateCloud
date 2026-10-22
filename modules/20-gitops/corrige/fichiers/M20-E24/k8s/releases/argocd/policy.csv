@@ -1,0 +1,57 @@
+# plateforme/k8s — releases/argocd/policy.csv (M20-E24, SEC-2124)
+# Politique RBAC d'Argo CD : SEULE source de la clé policy.csv d'argocd-rbac-cm (injectée par
+# releases/argocd.yaml.gotmpl). Testée par outils/argocd-rbac-tests.sh (releases/argocd/rbac-tests.txt)
+# à chaque MR. policy.default est VIDE (composants/argocd/values-rbac.yaml) : un compte qui n'est cité
+# nulle part ici n'a AUCUN droit.
+#
+# Forme : p, <sujet>, <ressource>, <action>, <objet>, <effet>   et   g, <compte ou groupe>, <rôle>
+# Objet : <projet>/<application> pour applications, applicationsets, logs, exec ; nom du projet pour
+# projects ; URL du serveur pour clusters ; URL du dépôt pour repositories.
+# Comptes locaux (M20-E03) : pas de point dans un nom de compte local (accounts.<nom> d'argocd-cm est
+# découpé sur les points) ; <MOI> = ton nom GitLab, points remplacés par des tirets.
+# Une ligne vide ou commençant par « # » est ignorée par Argo CD.
+
+# --- Administration de la plateforme ------------------------------------------------------------
+# role:admin est le rôle intégré (assets/builtin-policy.csv) : tout, y compris clusters, dépôts,
+# projets et comptes. Deux personnes seulement ; le compte « admin » est désactivé (argocd-cm).
+g, role:plateforme-admin, role:admin
+g, <MOI>, role:plateforme-admin
+g, karim-benali, role:plateforme-admin
+
+# --- Lecture (support, astreinte, vérifications du workbook) --------------------------------------
+# Comme role:readonly, MAIS sans « logs, get » : les journaux des pods applicatifs peuvent contenir des
+# données de santé ; ils se lisent dans Loki (M22), avec ses propres droits par locataire.
+p, role:lecture, applications, get, */*, allow
+p, role:lecture, applicationsets, get, */*, allow
+p, role:lecture, projects, get, *, allow
+p, role:lecture, clusters, get, *, allow
+p, role:lecture, repositories, get, *, allow
+p, role:lecture, certificates, get, *, allow
+p, role:lecture, accounts, get, *, allow
+g, nadia-roussel, role:lecture
+g, ci-lecture, role:lecture
+
+# --- Équipe MédiAgenda -----------------------------------------------------------------------------
+# Tout voir dans le projet mediagenda ; synchroniser dev et recette ; piloter le canary de recette
+# (actions Argo Rollouts : resume, abort, retry, promote-full…) ; journaux de dev et de recette.
+# Production : lecture seule. Aucune suppression, aucun override, aucun terminal.
+p, role:mediagenda-equipe, projects, get, mediagenda, allow
+p, role:mediagenda-equipe, applications, get, mediagenda/*, allow
+p, role:mediagenda-equipe, applicationsets, get, mediagenda/*, allow
+p, role:mediagenda-equipe, applications, sync, mediagenda/mediagenda-dev, allow
+p, role:mediagenda-equipe, applications, sync, mediagenda/mediagenda-recette, allow
+p, role:mediagenda-equipe, applications, action/argoproj.io/Rollout/*, mediagenda/mediagenda-recette, allow
+p, role:mediagenda-equipe, logs, get, mediagenda/mediagenda-dev, allow
+p, role:mediagenda-equipe, logs, get, mediagenda/mediagenda-recette, allow
+# Garde-fous explicites : un « deny » l'emporte sur tout « allow », y compris sur un allow plus large
+# ajouté plus tard par erreur (ex. « sync, mediagenda/* »). Les tests vérifient qu'ils tiennent.
+p, role:mediagenda-equipe, applications, sync, mediagenda/mediagenda-prod, deny
+p, role:mediagenda-equipe, applications, action/*, mediagenda/mediagenda-prod, deny
+p, role:mediagenda-equipe, applications, override, */*, deny
+p, role:mediagenda-equipe, applications, delete, */*, deny
+p, role:mediagenda-equipe, exec, create, */*, deny
+g, julien-petit, role:mediagenda-equipe
+
+# --- Groupes du SSO (M24) ----------------------------------------------------------------------------
+# Rien ici avant Keycloak : les groupes medisphere:mediagenda-devs et medisphere:medidoc-devs sont
+# reliés aux rôles de projet « equipe » des AppProjects (plateforme/gitops, projets/).

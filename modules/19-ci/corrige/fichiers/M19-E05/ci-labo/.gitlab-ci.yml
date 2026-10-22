@@ -1,0 +1,76 @@
+# .gitlab-ci.yml — formation/ci-labo (M19-E05, PLAT-2005) : premier pipeline (E04) + job « anatomie ».
+#
+# Les jobs portent l'étiquette « k8s » : seul le runner k8s-par1 (exécuteur kubernetes) les prend.
+# Un job SANS étiquette resterait en attente (« pending ») : aucun runner de l'instance n'accepte
+# les jobs non étiquetés (run_untagged = false sur runner01, runner02 et k8s-par1). Correction
+# retenue : une étiquette par défaut pour tout le fichier, plutôt que d'ouvrir un runner aux jobs
+# non étiquetés (qui les prendrait tous, de tous les projets, sans que personne l'ait choisi).
+default:
+  tags: [k8s]
+
+# Image par défaut : celle du runner (debian:trixie-slim de Harbor, épinglée). Rien à déclarer.
+
+bonjour:
+  script:
+    # Attention : « : » suivi d'une espace dans un élément non entre guillemets ferait de la ligne
+    # une table YAML. Toute la commande est donc entre apostrophes.
+    - 'echo "pod : $HOSTNAME"'
+    - id
+    - 'echo "runner : $CI_RUNNER_DESCRIPTION (étiquettes $CI_RUNNER_TAGS)"'
+    - echo "projet $CI_PROJECT_PATH, pipeline $CI_PIPELINE_ID, source $CI_PIPELINE_SOURCE"
+    # Le compte de service ci-job n'a aucun droit ET son jeton n'est pas monté : le prouver.
+    - |
+      if [ -e /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+        echo "ANOMALIE : un jeton de compte de service est monté dans le pod du job" >&2
+        exit 1
+      fi
+      echo "aucun jeton de compte de service monté : correct"
+    # Version de git du helper : le build n'a pas besoin de git, le helper a cloné pour lui.
+    - ls -la "$CI_PROJECT_DIR"
+
+# Second job (étape 9 de l'énoncé) : sans « default: tags », il serait resté en attente.
+second:
+  script:
+    - echo "pris par $CI_RUNNER_DESCRIPTION grâce à l'étiquette par défaut"
+
+# M19-E05 : un job à disséquer. Il dort deux minutes pour laisser le temps de lire son pod
+# (kubectl -n ci-jobs get pod -l medisphere.internal/ci=job -o yaml), avec un service et des
+# ressources demandées par variables (dans les plafonds du runner : 4 CPU, 4 Gi).
+anatomie:
+  services:
+    # Un service = un conteneur de plus DANS le pod : il se joint par localhost (même espace de
+    # noms réseau), et aussi par son alias (le runner crée un Service Kubernetes à ce nom).
+    - name: registry.par1.medisphere.internal/dockerhub/valkey/valkey:8.1@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
+      alias: valkey
+  variables:
+    KUBERNETES_CPU_REQUEST: "500m"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "1Gi"
+  script:
+    - |
+      {
+        echo "== pod";            echo "$HOSTNAME"
+        echo "== identité";       id
+        echo "== limite mémoire du conteneur build (cgroup v2)"; cat /sys/fs/cgroup/memory.max
+        echo "== montages (hors /proc, /sys, /dev)"
+        grep -vE ' (/proc|/sys|/dev)' /proc/self/mounts
+        echo "== jeton de compte de service"
+        ls -la /var/run/secrets/kubernetes.io/serviceaccount 2>&1 || true
+        echo "== résolution DNS";  cat /etc/resolv.conf
+        echo "== variables CI_ et KUBERNETES_ (sans aucune valeur sensible)"
+        env | grep -E '^(CI_|KUBERNETES_)' | grep -vE 'TOKEN|PASSWORD|KEY|SECRET|AUTH' | sort
+      } > anatomie.txt
+    # Le service répond-il sur localhost ? Conversation dans un sous-shell : un « exec » de
+    # redirection qui échoue ne doit pas arrêter le script. Quelques essais : il démarre en parallèle.
+    - |
+      for i in $(seq 1 15); do
+        if reponse="$( (exec 3<>/dev/tcp/127.0.0.1/6379 && printf 'PING\r\n' >&3 && timeout 3 head -n 1 <&3) 2>/dev/null )"; then
+          echo "valkey (localhost:6379), essai $i : $reponse" | tee -a anatomie.txt
+          break
+        fi
+        sleep 2
+      done
+    - echo "pause de 120 s pour l'observation du pod" && sleep 120
+  artifacts:
+    paths: [anatomie.txt]
+    expire_in: 1 week

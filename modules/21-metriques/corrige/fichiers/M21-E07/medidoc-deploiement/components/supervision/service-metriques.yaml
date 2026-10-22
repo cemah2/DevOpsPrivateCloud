@@ -1,0 +1,18 @@
+# ⚠️ Sélecteur : les étiquettes des pods de MédiDoc dans TES manifestes (M15-E34, M19-E33) ;
+# vérifie-les (kubectl -n medidoc-dev get pods --show-labels) et adapte si besoin.
+apiVersion: v1
+kind: Service
+metadata:
+  name: medidoc-metriques
+  labels:
+    app.kubernetes.io/name: medidoc
+    medisphere.internal/collecte: prometheus
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: medidoc
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mediagenda
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  # job = valeur de cette étiquette du Service : job="mediagenda" (au lieu du nom du Service).
+  jobLabel: app.kubernetes.io/name
+  # Pas de namespaceSelector : le ServiceMonitor ne voit que les Services de son propre espace,
+  # celui de l'overlay. Une équipe ne collecte pas les espaces des autres.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      medisphere.internal/collecte: prometheus
+  endpoints:
+    # Port NOMMÉ (celui du Service) : un changement de numéro de port ne casse pas la collecte.
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        # Révision du pod (empreinte posée par Argo Rollouts sur ses ReplicaSets) : permet de
+        # comparer la révision canary à la stable (analyse Prometheus de M21-E18). Absente en dev
+        # (pas de Rollout) : l'étiquette n'est alors simplement pas créée.
+        - sourceLabels: [__meta_kubernetes_pod_label_rollouts_pod_template_hash]
+          targetLabel: rollouts_pod_template_hash

@@ -1,0 +1,31 @@
+# plateforme/observabilite — slo/sloth/mediagenda-disponibilite.sloth.yaml (M21-E27, PLAT-2227)
+# Le MÊME objectif que slo/mediagenda-disponibilite.yaml, écrit pour Sloth 0.16 (spécification
+# prometheus/v1), pour comparer les règles produites. NON appliqué (hors kustomization).
+#   sloth generate -i slo/sloth/mediagenda-disponibilite.sloth.yaml --default-slo-period=28d -o /tmp/sloth.yml
+#   promtool check rules /tmp/sloth.yml
+version: "prometheus/v1"
+service: "mediagenda"
+labels:
+  equipe: mediagenda
+slos:
+  - name: "disponibilite"
+    objective: 99.5
+    description: "API MédiAgenda (production) : requêtes servies sans erreur 5xx"
+    sli:
+      events:
+        # Sloth remplace {{.window}} par chaque fenêtre (5m, 30m, 1h, 2h, 6h, 1d, 3d, 28d).
+        error_query: sum(rate(mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics", code=~"5.."}[{{.window}}]))
+        total_query: sum(rate(mediagenda_http_requests_total{namespace="mediagenda-prod", route!~"/sante|/pret|/metrics"}[{{.window}}]))
+    alerting:
+      name: MediagendaBudgetErreurSloth
+      labels:
+        equipe: mediagenda
+      annotations:
+        runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-216-budget-erreur.md
+      # Sloth produit deux alertes : « page » (fenêtres rapides) et « ticket » (lentes).
+      page_alert:
+        labels:
+          gravite: critique
+      ticket_alert:
+        labels:
+          gravite: avertissement

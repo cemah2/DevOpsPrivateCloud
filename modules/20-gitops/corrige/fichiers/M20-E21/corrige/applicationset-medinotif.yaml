@@ -1,0 +1,52 @@
+# Environnements de MédiNotif (version corrigée de la revue M20-E21).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: medinotif
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    # Liste explicite : un dossier ajouté dans overlays/ ne devient pas un environnement.
+    - list:
+        elements:
+          - env: dev
+            auto: true
+          - env: prod
+            auto: false
+  syncPolicy:
+    applicationsSync: create-update
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "medinotif-{{ .env }}"
+      labels:
+        medisphere.internal/equipe: medinotif
+        medisphere.internal/environnement: "{{ .env }}"
+    spec:
+      project: medinotif
+      source:
+        repoURL: https://git01.par1.medisphere.internal/medinotif/deploiement.git
+        targetRevision: main
+        path: "overlays/{{ .env }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "medinotif-{{ .env }}"
+  templatePatch: |
+    spec:
+      syncPolicy:
+        {{- if .auto }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false
+        retry:
+          limit: 3
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

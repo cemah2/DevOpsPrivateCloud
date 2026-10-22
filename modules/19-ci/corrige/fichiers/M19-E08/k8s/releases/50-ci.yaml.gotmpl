@@ -1,0 +1,40 @@
+# Intégration continue (M19) : runners GitLab dans k8s-par1. PLAN §4.11.
+# M19-E04 : release gitlab-runner (runner d'instance « k8s-par1 ») ; M19-E08 : buildkitd.
+# Les exercices suivants ajoutent ici : gitlab-agent (M19-E18),
+# gitlab-runner-protege (M19-E24) ; sonarqube et jenkins (temporaires, M19-E16/E19).
+# Le jeton du runner et la racine MédiSphère sont des Secrets créés hors Git
+# (outils/secrets-k8s.sh gitlab-runner) : ils doivent exister AVANT le premier apply.
+bases:
+  - _communs.yaml
+---
+releases:
+  - name: gitlab-runner
+    namespace: gitlab-runner
+    chart: gitlab/gitlab-runner
+    # Chart 0.93.0 = GitLab Runner 19.4.0 : même mineure que GitLab (19.4.x). Monte avec GitLab
+    # (0.94.x pour 19.5, M19-E26), jamais avant.
+    version: 0.93.0
+    labels:
+      groupe: ci
+      composant: gitlab-runner
+    # Helm 4 : --rollback-on-failure (attend aussi que le Deployment soit prêt).
+    rollbackOnFailure: true
+    values:
+      - ../composants/gitlab-runner/values.yaml
+
+  # M19-E08 : démon BuildKit rootless partagé (chart local). Il crée des ClusterIssuer et des
+  # Certificate : cert-manager (releases/20-certificats-dns.yaml.gotmpl, M15) doit être installé.
+  # PAS de « needs: [cert-manager/cert-manager] » : chaque fichier de releases/ est un helmfile à
+  # part (helmfile.yaml les inclut par « helmfiles: »), et « needs » ne voit que les releases de son
+  # propre fichier (« depend(s) on an undefined release »). L'ordre est garanti par l'histoire du
+  # cluster (cert-manager depuis M15) ; une reconstruction applique les fichiers dans l'ordre des noms.
+  # Le rollback attend que buildkitd soit prêt, donc que le Secret buildkitd-serveur ait été émis.
+  - name: buildkitd
+    namespace: buildkit
+    chart: ../charts/buildkitd
+    labels:
+      groupe: ci
+      composant: buildkitd
+    rollbackOnFailure: true
+    values:
+      - ../composants/buildkitd/values.yaml

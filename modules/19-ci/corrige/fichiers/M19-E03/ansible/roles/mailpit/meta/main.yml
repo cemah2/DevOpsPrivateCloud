@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: mailpit
+  author: equipe-plateforme
+  description: Mailpit, messagerie de lab de MédiSphère (SMTP STARTTLS, interface HTTPS authentifiée)
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions: [trixie]
+dependencies: []

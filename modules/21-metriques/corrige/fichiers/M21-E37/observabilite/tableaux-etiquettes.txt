@@ -1,0 +1,14 @@
+namespace
+pod
+job
+instance
+service
+container
+node
+equipe
+environnement
+site
+role
+code
+methode
+le

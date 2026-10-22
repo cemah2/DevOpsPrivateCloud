@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: equipe-plateforme
+  description: Supervision témoin hors cluster (Prometheus LTS, Alertmanager, blackbox_exporter, pve-exporter)
+  company: MédiSphère
+  license: proprietary
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Debian
+      versions:
+        - trixie
+  galaxy_tags:
+    - prometheus
+    - supervision
+dependencies: []

@@ -1,0 +1,33 @@
+# plateforme/observabilite — scrape/federation-mon01.yaml (M21-E12, PLAT-2212)
+# Le Prometheus du cluster lit, sur le témoin de mon01, les SEULES séries des jobs qui ne peuvent
+# venir que de là : sondes vues de l'extérieur (blackbox), Proxmox VE (pve), node_exporter des
+# hyperviseurs (hyperviseurs). /federate renvoie la dernière valeur de chaque série choisie.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: federation-mon01
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: federation-mon01
+  scheme: HTTP
+  metricsPath: /federate
+  params:
+    "match[]":
+      - '{job=~"pve|hyperviseurs|blackbox"}'
+  # honorLabels : les séries gardent LEURS étiquettes job et instance (job="pve", instance="pve01"),
+  # au lieu de job="federation-mon01", instance="mon01…:9090" (les originales deviendraient
+  # exported_job et exported_instance, et aucune requête écrite pour le témoin ne marcherait).
+  honorLabels: true
+  # Même intervalle que le témoin (30 s) : un intervalle plus long que celui de la source fait
+  # sauter des échantillons, et un rate() calculé ici sur une fenêtre courte devient faux.
+  scrapeInterval: 30s
+  scrapeTimeout: 20s
+  staticConfigs:
+    - targets:
+        - mon01.par1.medisphere.internal:9090
+      labels:
+        equipe: plateforme
+        role: supervision-temoin
+  sampleLimit: 20000

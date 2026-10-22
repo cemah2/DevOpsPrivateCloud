@@ -1,0 +1,131 @@
+M22-E06 (DEV-2306) — MédiAgenda : identifiant de requête (request_id) dans les journaux.
+À appliquer dans un clone de mediagenda/api, sur une branche :  git apply --index request-id.patch
+- journal.py : variable de contexte request_id_courant et filtre FiltreRequete ;
+- app.py : le middleware reprend X-Request-ID s'il est sûr (sinon en crée un), le renvoie dans la
+  réponse et le pose pour toutes les lignes journalisées pendant la requête ;
+- tests : deux tests (identifiant présent sur la ligne d'accès ET sur la ligne métier ; valeur
+  reçue reprise ou remplacée).
+
+diff --git a/src/mediagenda/app.py b/src/mediagenda/app.py
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -3,7 +3,9 @@
+ from __future__ import annotations
+ 
+ import logging
++import re
+ import time
++import uuid
+ from collections.abc import AsyncIterator
+ from contextlib import asynccontextmanager
+ from datetime import date, datetime, timedelta
+@@ -17,10 +19,17 @@
+ from .cache import Cache, CacheValkey
+ from .config import Settings
+ from .depot import ConflitCreneau, Depot, DepotPostgres
++from .journal import FiltreRequete, request_id_courant
+ from .modeles import Creneaux, RendezVous, RendezVousCreation
+ 
+ journal = logging.getLogger("mediagenda")
+ journal_acces = logging.getLogger("mediagenda.acces")
++for _j in (journal, journal_acces):
++    _j.addFilter(FiltreRequete())
++
++# Identifiant de requête reçu (X-Request-ID d'un client ou d'un mandataire) : accepté seulement s'il
++# est court et sans caractère spécial, sinon remplacé (pas d'injection dans les journaux).
++_REQUEST_ID_VALIDE = re.compile(r"[A-Za-z0-9._-]{8,64}")
+ 
+ # Métriques Prometheus. Le libellé « route » est le modèle de chemin
+ # (/api/v1/rendez-vous/{rdv_id}), jamais le chemin réel : sinon chaque
+@@ -73,9 +82,13 @@
+     async def mesurer(request: Request, call_next):
+         debut = time.perf_counter()
+         code = 500
++        recu = request.headers.get("x-request-id", "")
++        rid = recu if _REQUEST_ID_VALIDE.fullmatch(recu) else uuid.uuid4().hex
++        jeton = request_id_courant.set(rid)
+         try:
+             reponse = await call_next(request)
+             code = reponse.status_code
++            reponse.headers["X-Request-ID"] = rid
+             return reponse
+         finally:
+             duree = time.perf_counter() - debut
+@@ -96,6 +109,7 @@
+                     "client": request.client.host if request.client else None,
+                 },
+             )
++            request_id_courant.reset(jeton)
+ 
+     @app.get("/sante")
+     def sante() -> dict[str, str]:
+diff --git a/src/mediagenda/journal.py b/src/mediagenda/journal.py
+--- a/src/mediagenda/journal.py
++++ b/src/mediagenda/journal.py
+@@ -9,8 +9,13 @@
+ import json
+ import logging
+ import sys
++from contextvars import ContextVar
+ from datetime import UTC, datetime
+ 
++# Identifiant de la requête HTTP en cours (posé par le middleware de app.py). Une variable de
++# contexte suit la requête jusque dans le fil d'exécution des points d'entrée synchrones.
++request_id_courant: ContextVar[str | None] = ContextVar("request_id", default=None)
++
+ # Attributs standard d'un LogRecord : tout ce qui n'est pas dedans a été passé
+ # par « extra=... » et part tel quel dans la ligne JSON.
+ # « color_message » : doublon colorisé ajouté par uvicorn, inutile en JSON.
+@@ -40,6 +45,16 @@
+         return json.dumps(ligne, ensure_ascii=False, default=str)
+ 
+ 
++class FiltreRequete(logging.Filter):
++    """Ajoute ``request_id`` à tout enregistrement émis pendant une requête HTTP."""
++
++    def filter(self, record: logging.LogRecord) -> bool:
++        rid = request_id_courant.get()
++        if rid is not None and not hasattr(record, "request_id"):
++            record.request_id = rid
++        return True
++
++
+ def configurer(niveau: str = "INFO", fmt: str = "json") -> None:
+     """Configure la racine des journaux (et ceux d'uvicorn) sur stdout."""
+     gestionnaire = logging.StreamHandler(sys.stdout)
+diff --git a/tests/test_api.py b/tests/test_api.py
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -130,6 +130,32 @@
+     assert "Jeanne" not in json.dumps(ligne)  # pas de donnée patient dans le journal
+ 
+ 
++def test_request_id_genere_et_journalise(client, caplog):
++    from mediagenda.journal import FormateurJson
++
++    with caplog.at_level(logging.INFO, logger="mediagenda"):
++        r = client.post("/api/v1/rendez-vous", json=RDV)
++    rid = r.headers["X-Request-ID"]
++    assert len(rid) == 32
++    lignes = [json.loads(FormateurJson().format(e)) for e in caplog.records]
++    # la ligne d'accès ET la ligne métier (« rendez-vous créé ») portent le même identifiant
++    assert {ligne["message"] for ligne in lignes if ligne.get("request_id") == rid} >= {
++        "requête",
++        "rendez-vous créé",
++    }
++
++
++def test_request_id_recu_conserve_ou_remplace(client):
++    assert (
++        client.get("/sante", headers={"X-Request-ID": "abc-12345678"}).headers["X-Request-ID"]
++        == "abc-12345678"
++    )
++    remplace = client.get("/sante", headers={"X-Request-ID": "x y {inject}"}).headers[
++        "X-Request-ID"
++    ]
++    assert remplace != "x y {inject}" and len(remplace) == 32
++
++
+ def test_arret_ferme_les_connexions(settings, depot, cache):
+     from fastapi.testclient import TestClient
+ 

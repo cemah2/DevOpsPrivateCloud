@@ -1,0 +1,51 @@
+# plateforme/observabilite — regles/collecte.yaml (M21-E35, INC-4835)
+# Deux angles morts révélés par la panne : une cible d'APPLICATION en échec (CibleInjoignable de
+# M21-E15 ne couvre que les VMs), et une cible DISPARUE (plus aucune série « up » : ni « up == 0 »
+# ni TargetDown ne peuvent la voir, puisqu'il n'y a plus rien à comparer).
+# L'étiquette de sélection est posée par la kustomization racine (M21-E07).
+# À ajouter à regles/kustomization.yaml (resources) ; tests : tests/collecte.test.yaml.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: collecte
+spec:
+  groups:
+    - name: collecte
+      rules:
+        # Application collectée mais qui ne répond plus à Prometheus. 5 min : un redéploiement
+        # (pods remplacés un par un) ne la déclenche pas.
+        - alert: ApplicationCibleEnEchec
+          expr: up{job=~"mediagenda|medidoc"} == 0
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "La cible {{ $labels.job }} {{ $labels.pod }} ({{ $labels.namespace }}) ne répond plus à Prometheus"
+            description: >-
+              Prometheus n'arrive plus à collecter {{ $labels.instance }} depuis 5 minutes. Cause
+              fréquente : politique réseau, sonde de l'application, délai de collecte. Les tableaux et
+              les analyses canary de cet environnement sont aveugles. RB-217 § « cible disparue ou muette ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-217-collecte-et-regles.md
+        # Job attendu qui n'a plus AUCUNE cible depuis 10 min. Une expression par job attendu :
+        # absent_over_time() ne renvoie une série que si le sélecteur ne correspond à rien, et ne
+        # garde que les étiquettes d'égalité du sélecteur (d'où job et namespace écrits en clair).
+        - alert: CibleDisparue
+          expr: |
+            absent_over_time(up{job="mediagenda", namespace="mediagenda-dev"}[10m])
+            or absent_over_time(up{job="mediagenda", namespace="mediagenda-recette"}[10m])
+            or absent_over_time(up{job="mediagenda", namespace="mediagenda-prod"}[10m])
+            or absent_over_time(up{job="medidoc", namespace="medidoc-dev"}[10m])
+            or absent_over_time(up{job="vms"}[10m])
+            or absent_over_time(up{job="node-exporter"}[10m])
+            or absent_over_time(up{job="federation-mon01"}[10m])
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "Plus aucune cible pour {{ $labels.job }} {{ $labels.namespace }} depuis 10 min"
+            description: >-
+              Prometheus ne découvre plus aucune cible pour ce job : ServiceMonitor non retenu (étiquette
+              de sélection), port nommé, ScrapeConfig ou fichier de cibles. Aucune autre alerte ne peut
+              le voir. RB-217 § « cible disparue ou muette ».
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-217-collecte-et-regles.md

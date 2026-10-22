@@ -1,0 +1,63 @@
+# formation/gitops-labo — agence/labo.yaml (M20-E26). Image tirée par le cache Harbor « dockerhub »
+# grâce au registries.yaml du rôle k3s (comme le service d'essai du M18-E03), épinglée par empreinte.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: labo
+  labels:
+    app.kubernetes.io/name: labo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: labo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: labo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: whoami
+          # traefik/whoami v1.11.0 (index multi-architecture, relevé le 22/10/2026).
+          image: docker.io/traefik/whoami:v1.11.0@sha256:200689790a0a0ea48ca45992e0450bc26ccab5307375b41c84dfc4f2475937ab
+          # Port non privilégié : l'image écoute en 80 par défaut, ce qui exige root.
+          args: ["--port", "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: labo
+  labels:
+    app.kubernetes.io/name: labo
+spec:
+  selector:
+    app.kubernetes.io/name: labo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

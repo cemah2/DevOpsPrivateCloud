@@ -1,0 +1,110 @@
+---
+# playbooks/supervision-cibles.yml — cibles node_exporter de Prometheus depuis NetBox (M21-E08).
+# NetBox est la source de vérité des VMs (M06) : la liste des cibles en DÉCOULE, elle ne s'écrit
+# pas à la main. Le playbook régénère scrape/vms.yaml dans une copie de travail de
+# plateforme/observabilite et, s'il a changé, pousse une branche avec une demande de fusion :
+# l'ajout ou le retrait d'une cible se RELIT, Argo CD l'applique après la fusion.
+# Usage (depuis adm01, NETBOX_TOKEN = jeton en lecture de svc-automatisation) :
+#   set -a; . ~/.config/workbook/netbox-ansible.env; set +a
+#   uv run ansible-playbook playbooks/supervision-cibles.yml
+#   uv run ansible-playbook playbooks/supervision-cibles.yml -e supervision_cibles_pousser=false  # sans MR
+- name: Cibles node_exporter des VMs (NetBox vers ScrapeConfig vms)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    supervision_netbox_url: https://nbx01.par1.medisphere.internal
+    supervision_netbox_jeton: "{{ lookup('ansible.builtin.env', 'NETBOX_TOKEN') }}"
+    # VMs supervisées par node_exporter : celles du socle, actives. (Les environnements de modules
+    # s'ajouteront par une autre étiquette, avec leur propre fichier.)
+    supervision_cibles_filtre: "tag=socle status=active"
+    supervision_cibles_domaine: par1.medisphere.internal
+    supervision_cibles_port: 9100
+    supervision_depot: "{{ lookup('ansible.builtin.env', 'HOME') }}/src/observabilite"
+    supervision_branche: maj/cibles-vms
+    supervision_cibles_pousser: true
+  tasks:
+    - name: Le jeton NetBox est fourni par l'environnement
+      ansible.builtin.assert:
+        that: supervision_netbox_jeton | length > 0
+        fail_msg: "NETBOX_TOKEN vide : charge ~/.config/workbook/netbox-ansible.env (set -a; . …; set +a)."
+        quiet: true
+
+    - name: Lire les VMs dans NetBox
+      ansible.builtin.set_fact:
+        _vms: >-
+          {{ query('netbox.netbox.nb_lookup', 'virtual-machines',
+                   api_endpoint=supervision_netbox_url, token=supervision_netbox_jeton,
+                   api_filter=supervision_cibles_filtre, validate_certs=true)
+             | map(attribute='value') | list }}
+
+    # Une cible par VM ; role = l'étiquette NetBox role-<rôle> (la première, sans le préfixe) ;
+    # site = le site NetBox (par1 à défaut).
+    - name: Construire la liste des cibles
+      ansible.builtin.set_fact:
+        _cibles: "{{ _cibles | default([]) + [_cible] }}"
+      vars:
+        _roles: "{{ item.tags | map(attribute='slug') | select('match', '^role-') | list }}"
+        _cible:
+          hote: "{{ item.name }}"
+          adresse: "{{ item.name }}.{{ supervision_cibles_domaine }}:{{ supervision_cibles_port }}"
+          role: "{{ (_roles | first | default('role-aucun')) | regex_replace('^role-', '') }}"
+          site: "{{ (item.site | default({}, true)).slug | default('par1', true) }}"
+      loop: "{{ _vms | sort(attribute='name') }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Garde-fou contre une liste vide ou tronquée (filtre erroné, NetBox injoignable)
+      ansible.builtin.assert:
+        that: _cibles | default([]) | length >= 10
+        fail_msg: "Seulement {{ _cibles | default([]) | length }} cible(s) : rien n'est écrit (le socle compte 15 VMs)."
+        quiet: true
+
+    # Le module git sait cloner et extraire, pas créer une branche, valider ni pousser avec des
+    # options de GitLab : commandes git explicites.
+    - name: Partir de main à jour  # noqa: command-instead-of-module
+      ansible.builtin.command:
+        cmd: "git -C {{ supervision_depot }} {{ item }}"
+      loop:
+        - fetch origin
+        - switch --force-create {{ supervision_branche }} origin/main
+      changed_when: false
+
+    - name: Écrire scrape/vms.yaml
+      ansible.builtin.template:
+        src: scrapeconfig-vms.yaml.j2
+        dest: "{{ supervision_depot }}/scrape/vms.yaml"
+        mode: "0644"
+      register: _vms_yaml
+
+    - name: Pousser une demande de fusion si la liste a changé
+      when: _vms_yaml is changed and supervision_cibles_pousser
+      block:
+        - name: Valider le fichier  # noqa: command-instead-of-module
+          ansible.builtin.command:
+            cmd: "git -C {{ supervision_depot }} {{ item }}"
+          loop:
+            - add scrape/vms.yaml
+            - commit -m "feat(scrape): cibles node_exporter des VMs régénérées depuis NetBox"
+          changed_when: true
+
+        # Options de poussée de GitLab : la MR est créée par la poussée elle-même.
+        - name: Pousser la branche et ouvrir la demande de fusion
+          ansible.builtin.command:
+            argv:
+              - git
+              - -C
+              - "{{ supervision_depot }}"
+              - push
+              - --force-with-lease
+              - -o
+              - merge_request.create
+              - -o
+              - merge_request.target=main
+              - -o
+              - merge_request.remove_source_branch
+              - -o
+              - "merge_request.title=Cibles node_exporter des VMs (NetBox)"
+              - origin
+              - "{{ supervision_branche }}"
+          changed_when: true

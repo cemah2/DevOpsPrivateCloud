@@ -1,0 +1,44 @@
+# requetes/E30.promql — mesures de capacité de Prometheus (M21-E30, PLAT-2230).
+# À lancer sur 10.10.41.60 (Thanos Query). Les métriques de Prometheus lui-même viennent du job
+# « kps-prometheus » (un résultat par réplica).
+
+# Q1. Séries actives (bloc de tête) par réplica.
+prometheus_tsdb_head_series{job="kps-prometheus"}
+
+# Q2. Échantillons ingérés par seconde, par réplica.
+rate(prometheus_tsdb_head_samples_appended_total{job="kps-prometheus"}[5m])
+
+# Q3. Octets par échantillon sur disque après compression (moyenne d'un jour de compactions).
+rate(prometheus_tsdb_compaction_chunk_size_bytes_sum{job="kps-prometheus"}[1d])
+  / rate(prometheus_tsdb_compaction_chunk_samples_sum{job="kps-prometheus"}[1d])
+
+# Q4. Mémoire résidente par série active (octets) : base du budget de séries.
+process_resident_memory_bytes{job="kps-prometheus"}
+  / on (pod) prometheus_tsdb_head_series{job="kps-prometheus"}
+
+# Q5. Pic de mémoire résidente sur 7 jours, par réplica.
+max_over_time(process_resident_memory_bytes{job="kps-prometheus"}[7d])
+
+# Q6. Espace disque projeté pour 15 jours de rétention (octets) : formule de la documentation de
+# Prometheus (durée × échantillons/s × octets/échantillon), hors WAL et marge.
+rate(prometheus_tsdb_head_samples_appended_total{job="kps-prometheus"}[1d]) * 15 * 86400
+  * on (pod) (
+    rate(prometheus_tsdb_compaction_chunk_size_bytes_sum{job="kps-prometheus"}[1d])
+      / rate(prometheus_tsdb_compaction_chunk_samples_sum{job="kps-prometheus"}[1d])
+  )
+
+# Q7. Taille actuelle des blocs persistés (octets), à comparer à retentionSize.
+prometheus_tsdb_storage_blocks_bytes{job="kps-prometheus"}
+
+# Q8. Les 10 cibles qui produisent le plus d'échantillons par collecte (base d'enforcedSampleLimit).
+topk(10, scrape_samples_post_metric_relabeling)
+
+# Q9. Les 10 métriques qui ont le plus de séries (requête lourde : une fois, pas dans un tableau).
+topk(10, count by (__name__) ({__name__=~".+"}))
+
+# Q10. Durée des collectes les plus lentes (à comparer au délai de collecte, 10 s par défaut).
+topk(5, scrape_duration_seconds)
+
+# Q11. Durée des requêtes au 99e centile, par étape (résumé, pas un histogramme : pas de
+# histogram_quantile ici).
+prometheus_engine_query_duration_seconds{job="kps-prometheus", quantile="0.99"}

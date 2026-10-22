@@ -1,0 +1,73 @@
+# requetes/E04.promql — PromQL sur MédiAgenda et le cluster (M21-E04, DEV-2204).
+# Une requête par question, blocs séparés par une ligne vide. Prérequis : M21-E07 (MédiAgenda
+# collecté, job="mediagenda") et du trafic (ressources/E04-trafic/trafic-mediagenda.sh).
+
+# Q1. Débit total de MédiAgenda en recette (requêtes par seconde, fenêtre de 5 min).
+sum(rate(mediagenda_http_requests_total{namespace="mediagenda-recette"}[5m]))
+
+# Q2. Le même débit, par route et par code de réponse.
+sum by (route, code) (rate(mediagenda_http_requests_total{namespace="mediagenda-recette"}[5m]))
+
+# Q3. Part des réponses 5xx, par environnement. « or … * 0 » : sans aucune série 5xx, le
+# numérateur serait VIDE et la division aussi ; on veut 0, pas « pas de données ».
+(
+  sum by (namespace) (rate(mediagenda_http_requests_total{code=~"5.."}[5m]))
+  or
+  sum by (namespace) (rate(mediagenda_http_requests_total[5m])) * 0
+)
+/
+sum by (namespace) (rate(mediagenda_http_requests_total[5m]))
+
+# Q4. Nombre de requêtes de la dernière heure en recette, par code (increase extrapole : le
+# résultat n'est pas forcément entier).
+sum by (code) (increase(mediagenda_http_requests_total{namespace="mediagenda-recette"}[1h]))
+
+# Q5. Latence au 95e centile par route, en recette (histogramme : on agrège les taux de chaque
+# compartiment en GARDANT « le », puis on calcule le quantile).
+histogram_quantile(0.95, sum by (le, route) (rate(mediagenda_http_request_duration_seconds_bucket{namespace="mediagenda-recette"}[5m])))
+
+# Q6. Latence moyenne en recette (somme des durées / nombre de requêtes).
+sum(rate(mediagenda_http_request_duration_seconds_sum{namespace="mediagenda-recette"}[5m]))
+/
+sum(rate(mediagenda_http_request_duration_seconds_count{namespace="mediagenda-recette"}[5m]))
+
+# Q7. Part des requêtes servies en moins de 250 ms (compartiment le="0.25" des bornes par défaut
+# du client Python), en recette.
+sum(rate(mediagenda_http_request_duration_seconds_bucket{namespace="mediagenda-recette", le="0.25"}[5m]))
+/
+sum(rate(mediagenda_http_request_duration_seconds_count{namespace="mediagenda-recette"}[5m]))
+
+# Q8. Taux de succès du cache des créneaux (hit / toutes les consultations), par environnement.
+sum by (namespace) (rate(mediagenda_cache_total{resultat="hit"}[5m]))
+/
+sum by (namespace) (rate(mediagenda_cache_total[5m]))
+
+# Q9. Les trois couples (environnement, route) les plus sollicités.
+topk(3, sum by (namespace, route) (rate(mediagenda_http_requests_total[5m])))
+
+# Q10. Pods de l'API collectés et joignables, par environnement.
+count by (namespace) (up{job="mediagenda"} == 1)
+
+# Q11. Une requête qui vaut 1 tant qu'AUCUNE cible MédiNotif n'est collectée (absent()).
+absent(up{job="medinotif"})
+
+# Q12. Évolution de la consommation CPU de chaque pod de l'API : maintenant moins il y a 10 min.
+rate(process_cpu_seconds_total{job="mediagenda"}[5m])
+-
+rate(process_cpu_seconds_total{job="mediagenda"}[5m] offset 10m)
+
+# Q13. Pic du débit total sur la dernière heure, mesuré minute par minute (sous-requête).
+max_over_time(sum(rate(mediagenda_http_requests_total[5m]))[1h:1m])
+
+# Q14. Mémoire de travail de chaque pod de l'API, avec le nœud qui le porte (jointure sur
+# kube_pod_info, étiquette « node » apportée par group_left).
+sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~"mediagenda-.*", container="api"})
+* on (namespace, pod) group_left (node)
+kube_pod_info{namespace=~"mediagenda-.*"}
+
+# Q15. Débit de MédiAgenda par nœud du cluster (même jointure, puis agrégation par nœud).
+sum by (node) (
+  rate(mediagenda_http_requests_total[5m])
+  * on (namespace, pod) group_left (node)
+  kube_pod_info{namespace=~"mediagenda-.*"}
+)

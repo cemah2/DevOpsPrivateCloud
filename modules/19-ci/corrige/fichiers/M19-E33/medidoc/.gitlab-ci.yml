@@ -1,0 +1,69 @@
+# medidoc/medidoc — .gitlab-ci.yml (M19-E33, DEV-2033). Remplace le pipeline v1 du M12/M13 (runner02).
+# Pipeline standard par composants (plateforme/ci-templates 2.2.0) + deux jobs propres à Go :
+#   qualite (Go)        : commitlint, go vet, tests JUnit (composant) ;
+#   go:race-couverture  : tests avec le détecteur de concurrence et couverture Cobertura (local : le
+#                         composant qualite ne le fait pas encore ; proposé en 2.3.0, voir corrigé) ;
+#   construction-image  : buildkitd distant, archive OCI + provenance, publication par digest ;
+#   securite            : Trivy, SBOM, provenance, signature et attestations sur le runner protégé ;
+#   promotion           : MR dans medidoc/deploiement (overlay dev, image par digest).
+# Aucun job sur runner02 (étiquette docker), aucun privilège.
+include:
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@2.2.0
+    inputs:
+      langage: go
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/construction-image@2.2.0
+    inputs:
+      image_nom: medisphere/medidoc
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/securite@2.2.0
+  - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@2.2.0
+    inputs:
+      projet_deploiement: medidoc/deploiement
+      image_nom: medisphere/medidoc
+
+stages: [lint, test, construction, analyse, publication, signature, promotion]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/
+  auto_cancel:
+    on_new_commit: interruptible
+
+go:race-couverture:
+  stage: test
+  tags: [k8s]
+  interruptible: true
+  image: registry.par1.medisphere.internal/dockerhub/library/golang:1.26-trixie@sha256:909771fef53e3dcb0950255f0c9a8b4728c3b841e61509c7b29b098de7ee02d4
+  needs: []
+  variables:
+    # Le détecteur de concurrence exige cgo (gcc est dans l'image trixie).
+    CGO_ENABLED: "1"
+    # GOPATH par défaut (/go) appartient à root dans l'image : les jobs tournent en UID 1000 (E24).
+    GOPATH: $CI_PROJECT_DIR/.go
+    GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+  cache:
+    key:
+      files: [go.sum]
+    paths: [.go/pkg/mod, .cache/go-build]
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - go test -race -covermode=atomic -coverprofile=couverture.out ./...
+    # Pourcentage total, lu par la regex « coverage » ci-dessous (affiché dans la MR).
+    - go tool cover -func=couverture.out | tail -n 1
+    # Cobertura pour la visualisation ligne à ligne dans la MR (outil épinglé, via le proxy Go).
+    - go run github.com/boumenot/gocover-cobertura@v1.4.0 < couverture.out > couverture.xml
+  coverage: '/^total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: couverture.xml

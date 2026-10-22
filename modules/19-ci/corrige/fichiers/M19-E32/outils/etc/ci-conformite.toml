@@ -1,0 +1,25 @@
+# plateforme/outils — etc/ci-conformite.toml (M19-E32, SEC-2032) : règles du contrôle de conformité.
+# Modifier ce fichier par MR (CODEOWNERS : Plateforme + RSSI). Les versions supportées ne sont PAS
+# dans le code : une nouvelle version du composant securite se déclare ici.
+
+[perimetre]
+groupes = ["mediagenda", "medidoc", "medinotif", "legacy"]
+# Projets qui ne construisent pas d'image : seules R1 et R4 s'appliquent.
+sans_image = ["mediagenda/deploiement", "medidoc/deploiement", "mediagenda/chart"]
+
+[composant_securite]
+# Chemin du composant, sans hôte ni version.
+chemin = "plateforme/ci-templates/securite"
+# Version minimale supportée (E24 : signature sur le runner protégé).
+version_minimale = "2.1.0"
+# Versions retirées malgré leur numéro (faille connue dans le composant, par exemple).
+versions_retirees = []
+
+[ticket]
+etiquette = "conformite-ci"
+titre = "[conformité CI] Le projet ne respecte pas le socle de sécurité"
+
+# Dérogations : projet → motif, échéance (AAAA-MM-JJ) et décideur. Un projet en dérogation est
+# signalé dans le rapport mais n'a pas de ticket tant que l'échéance n'est pas passée.
+[derogations]
+# "legacy/legacy-rdv" = { motif = "migration vers k8s au final F4", echeance = "2027-03-31", decideur = "sophie.laurent" }

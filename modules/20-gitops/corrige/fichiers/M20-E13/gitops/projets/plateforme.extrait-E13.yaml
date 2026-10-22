@@ -1,0 +1,7 @@
+# plateforme/gitops — projets/plateforme.yaml : AJOUT de M20-E13 à l'AppProject d'E07.
+# Un chart OCI se désigne, dans une Application, par repoURL = « registre/projet » sans « oci:// » :
+# c'est cette chaîne exacte que sourceRepos doit autoriser. Rien d'autre d'Internet.
+spec:
+  sourceRepos:
+    - https://git01.par1.medisphere.internal/plateforme/gitops.git
+    - registry.par1.medisphere.internal/charts

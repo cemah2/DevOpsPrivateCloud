@@ -1,0 +1,30 @@
+# composants/sonarqube/cluster-postgresql.yaml (M19-E16) — base CloudNativePG de SonarQube.
+# Une instance (essai, données jetables), PostgreSQL 18, ceph-rbd. L'opérateur crée le Secret
+# sonarqube-db-app (clés username, password, uri…) lu par le chart (jdbcOverwrite.jdbcSecretName).
+# Appliqué AVANT la release (kubectl apply --server-side -f), retiré au mini-projet avec l'espace.
+# Pas de sauvegarde Barman : SonarQube est à l'essai ; si l'ADR le garde, ajouter l'ObjectStore (M16-E19).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: sonarqube-db
+  namespace: sonarqube
+  labels:
+    medisphere.internal/temporaire: "oui"
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  bootstrap:
+    initdb:
+      database: sonarqube
+      owner: sonarqube
+      # SonarQube exige une base en UTF-8 (sinon refus au démarrage).
+      encoding: UTF8
+  storage:
+    size: 5Gi
+    storageClass: ceph-rbd
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 768Mi

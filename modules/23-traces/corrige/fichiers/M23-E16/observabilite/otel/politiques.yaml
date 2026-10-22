@@ -1,0 +1,97 @@
+# otel/politiques.yaml — CiliumNetworkPolicy de l'espace traces, version M23-E16 (SEC-2416). REMPLACE celle
+# de M23-E03 (mêmes noms) : l'entrée externe passe sur 14317/14318 et s'ouvre aux réseaux du lab (10.10.0.0/16,
+# PLAN §4.11), la passerelle accepte ses propres réplicas (renvoi par traceID), Pyroscope (M23-E14) est couvert.
+# Entrées seulement (les sorties sont documentées dans docs/observabilite/traces/capacite-securite.md, leur
+# filtrage arrive au M26). Une politique qui sélectionne un pod le fait passer en « refus par défaut » pour
+# l'entrée : tout ce qui n'est pas listé ici est refusé. Reporte chaque flux dans
+# docs/kubernetes/reseau/matrice-flux-cluster.md.
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: traces-passerelle
+  namespace: traces
+spec:
+  description: "otel-passerelle : agents du cluster (interne), réseaux du lab par 10.10.41.63 (externe), Prometheus"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: traces.otel-passerelle
+      app.kubernetes.io/component: opentelemetry-collector
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {app.kubernetes.io/instance: traces.otel-agent}
+        - matchLabels: {app.kubernetes.io/instance: traces.otel-passerelle}
+      toPorts:
+        - ports: [{port: "4317", protocol: TCP}, {port: "4318", protocol: TCP}]
+    - fromCIDR: [10.10.0.0/16]
+      toPorts:
+        - ports: [{port: "14317", protocol: TCP}, {port: "14318", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+      toPorts:
+        - ports: [{port: "8888", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: traces-agent
+  namespace: traces
+spec:
+  description: "otel-agent : applications instrumentées, Prometheus"
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/instance: traces.otel-agent
+      app.kubernetes.io/component: opentelemetry-collector
+  ingress:
+    - fromEndpoints:
+        - matchExpressions:
+            - key: k8s:io.kubernetes.pod.namespace
+              operator: In
+              values: [mediagenda-dev, mediagenda-recette, mediagenda-prod, medidoc-dev, medidoc-recette, wb-essais]
+      toPorts:
+        - ports: [{port: "4317", protocol: TCP}, {port: "4318", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+      toPorts:
+        - ports: [{port: "8888", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: traces-tempo
+  namespace: traces
+spec:
+  description: "Tempo : passerelle (OTLP), Grafana (requêtes), Prometheus (métriques)"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: tempo}
+  ingress:
+    - fromEndpoints:
+        - matchLabels: {app.kubernetes.io/instance: traces.otel-passerelle}
+      toPorts:
+        - ports: [{port: "4317", protocol: TCP}]
+    - fromEndpoints:
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: grafana}
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+      toPorts:
+        - ports: [{port: "3200", protocol: TCP}]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: traces-pyroscope
+  namespace: traces
+spec:
+  description: "Pyroscope : SDK de MédiAgenda (poussée), Alloy (pprof de MédiDoc), Grafana, Prometheus"
+  endpointSelector:
+    matchLabels: {app.kubernetes.io/name: pyroscope}
+  ingress:
+    - fromEndpoints:
+        - matchExpressions:
+            - key: k8s:io.kubernetes.pod.namespace
+              operator: In
+              values: [mediagenda-dev, mediagenda-recette, mediagenda-prod]
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: journaux, app.kubernetes.io/name: alloy}
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: grafana}
+        - matchLabels: {k8s:io.kubernetes.pod.namespace: supervision, app.kubernetes.io/name: prometheus}
+      toPorts:
+        - ports: [{port: "4040", protocol: TCP}]

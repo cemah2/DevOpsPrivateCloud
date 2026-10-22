@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+# Alertmanager TÉMOIN (M21-E11) : un seul récepteur, l'astreinte. Pas de grappe (un seul
+# Alertmanager témoin, --cluster.listen-address vide dans l'unité).
+global:
+  smtp_smarthost: {{ supervision_temoin_smtp_relais | to_json }}
+  smtp_from: {{ supervision_temoin_smtp_expediteur | to_json }}
+  smtp_hello: {{ (inventory_hostname ~ '.par1.medisphere.internal') | to_json }}
+  # STARTTLS exigé ; certificat de Mailpit vérifié par la racine MédiSphère du magasin système.
+  smtp_require_tls: true
+  resolve_timeout: 5m
+
+route:
+  receiver: astreinte-mail
+  group_by: [alertname, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: astreinte-mail
+    email_configs:
+      - to: {{ supervision_temoin_destinataire | to_json }}
+        send_resolved: true
+        headers:
+{% raw %}
+          Subject: '[témoin mon01] {{ .Status | toUpper }} {{ .CommonLabels.alertname }} ({{ .Alerts | len }})'
+{% endraw %}

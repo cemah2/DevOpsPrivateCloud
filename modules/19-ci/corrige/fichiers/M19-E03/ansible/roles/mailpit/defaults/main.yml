@@ -1,0 +1,50 @@
+---
+# Rôle mailpit — messagerie de LAB (M19-E03, PLAT-2003 / SEC-2003). PLAN §4.5 et §4.11.
+# Mailpit reçoit tout (SMTP), ne livre rien (aucun relais configuré), et présente les messages
+# dans une interface web et une API. Binaire Go unique, épinglé par empreinte.
+
+mailpit_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle mailpit).') | replace('\n', ' ') }}
+
+# --- Version (changer de version = changer ces DEUX variables, PLAN §6 : ≥ 1.31.6) ------------
+mailpit_version: "1.31.6"
+# SHA-256 de mailpit-linux-amd64.tar.gz de la version ci-dessus. Le projet ne publie pas de
+# fichier de sommes : l'empreinte est relevée une fois (téléchargement sur adm01, sha256sum,
+# comparaison avec une seconde source si possible), puis écrite ici par MR.
+mailpit_sha256: "10fa12ccc610f653d4ed4df848c1817f9935dcf4e9a6a458a19ab0fa02093f91"
+mailpit_url: "https://github.com/axllent/mailpit/releases/download/v{{ mailpit_version }}/mailpit-linux-amd64.tar.gz"
+mailpit_dossier_versions: /opt/mailpit
+mailpit_binaire: /usr/local/bin/mailpit
+
+# --- Compte et dossiers ------------------------------------------------------------------------
+mailpit_utilisateur: mailpit
+mailpit_groupe: mailpit
+mailpit_dossier_config: /etc/mailpit
+mailpit_dossier_donnees: /var/lib/mailpit
+
+# --- Écoutes ---------------------------------------------------------------------------------
+mailpit_smtp_ecoute: "0.0.0.0:25"
+mailpit_ui_ecoute: "0.0.0.0:8025"
+# STARTTLS obligatoire : un client qui n'annonce pas STARTTLS est refusé (SEC-2003).
+mailpit_smtp_starttls_obligatoire: true
+# Noms autorisés dans l'en-tête Host de l'interface (contre le rebinding DNS).
+mailpit_noms_autorises:
+  - "mon01.par1.medisphere.internal:8025"
+  - "smtp.par1.medisphere.internal:8025"
+
+# --- TLS (certificat posé par certificats_acme, id mailpit : host_vars/mon01/certificats.yml) --
+mailpit_tls_certificat: /etc/mailpit/tls/mailpit.crt
+mailpit_tls_cle: /etc/mailpit/tls/mailpit.key
+
+# --- Rétention ------------------------------------------------------------------------------
+mailpit_max_messages: 5000
+mailpit_max_age: 30d
+
+# --- Comptes de l'interface et de l'API (authentification basique) --------------------------
+# Liste de { nom, mot_de_passe } ; mots de passe en Vault critique (host_vars/mon01/vault.yml).
+# Mailpit n'a PAS de rôles : tout compte a tous les droits de l'API (lire, supprimer, étiqueter).
+mailpit_comptes: []
+
+# --- Divers ---------------------------------------------------------------------------------
+mailpit_label: "Messagerie du lab MédiSphère (PAR1)"
+mailpit_verifier: true

@@ -1,0 +1,6 @@
+# plateforme/gitops — projets/plateforme.yaml : AJOUT de M20-E19 à l'AppProject d'E07 (racine,
+# argo-rollouts, puis les services des M21-M23) : la plateforme apprend ses propres échecs.
+metadata:
+  annotations:
+    notifications.argoproj.io/subscribe.on-sync-failed.email: plateforme@medisphere.internal
+    notifications.argoproj.io/subscribe.on-health-degraded.email: astreinte@medisphere.internal

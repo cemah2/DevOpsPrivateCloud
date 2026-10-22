@@ -1,0 +1,8 @@
+# plateforme/observabilite — regles/kustomization.yaml (état après M21-E23 : saturation dans alertes-mediagenda.yaml)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - enregistrement-mediagenda.yaml   # E14
+  - enregistrement-medidoc.yaml      # E14
+  - alertes-mediagenda.yaml          # E15 (E23 y ajoute la saturation)
+  - alertes-socle.yaml               # E15

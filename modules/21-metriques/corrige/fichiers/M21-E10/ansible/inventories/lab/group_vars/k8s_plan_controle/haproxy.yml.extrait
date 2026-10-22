@@ -1,0 +1,18 @@
+# group_vars/k8s_plan_controle/haproxy.yml (plateforme/ansible) — EXTRAIT (M21-E10, PLAT-2210) :
+# section à AJOUTER à haproxy_sections des nœuds de contrôle (HAProxy de l'API, 8443 → 6443, M14).
+# Prometheus est sur le même VLAN que les nœuds de contrôle : selon le chemin choisi par Cilium,
+# la source vue est l'adresse du travailleur ou celle du pod (10.240.0.0/16). Les deux sont
+# autorisées ; vérifie chez toi laquelle apparaît (journal d'HAProxy si tu enlèves « no log »).
+# ⚠️ À vérifier sur ton lab : adresse source vue par HAProxy.
+haproxy_sections:
+  # … sections existantes (fe_api_kubernetes, be_api_kubernetes, M14-E03) …
+  - type: frontend
+    nom: fe_metriques
+    lignes:
+      - bind {{ ansible_host }}:8405
+      - mode http
+      - no log
+      - acl supervision src 10.10.40.61 10.10.40.62 10.10.40.63 10.240.0.0/16 10.10.10.10
+      - http-request deny deny_status 403 unless supervision
+      - http-request use-service prometheus-exporter if { path /metrics }
+      - http-request deny deny_status 404

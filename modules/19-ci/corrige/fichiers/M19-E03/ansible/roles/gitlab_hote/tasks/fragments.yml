@@ -1,0 +1,58 @@
+---
+# Fragments de configuration de GitLab (M19-E03, PLAT-2003).
+
+- name: Autorités supplémentaires dans /etc/gitlab/trusted-certs
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/gitlab/trusted-certs/{{ item | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ gitlab_hote_autorites }}"
+  notify: Reconfigurer GitLab
+
+- name: Dossier des fragments
+  ansible.builtin.file:
+    path: "{{ gitlab_hote_dossier_fragments }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: gitlab_hote_fragments | length > 0
+
+- name: Fragments
+  ansible.builtin.copy:
+    content: |
+      # {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible, rôle gitlab_hote).') }}
+      # Inclus par « from_file » à la fin de /etc/gitlab/gitlab.rb ; appliqué par gitlab-ctl reconfigure.
+      {{ item.value }}
+    dest: "{{ gitlab_hote_dossier_fragments }}/{{ item.key }}.rb"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ gitlab_hote_fragments | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Reconfigurer GitLab
+
+- name: Sauvegarde de gitlab.rb avant sa première modification par ce rôle
+  ansible.builtin.copy:
+    src: /etc/gitlab/gitlab.rb
+    dest: /etc/gitlab/gitlab.rb.avant-fragments
+    remote_src: true
+    force: false
+    owner: root
+    group: root
+    mode: "0600"
+  when: gitlab_hote_fragments | length > 0
+
+- name: Une ligne « from_file » par fragment, à la fin de gitlab.rb
+  ansible.builtin.lineinfile:
+    path: /etc/gitlab/gitlab.rb
+    line: 'from_file "{{ gitlab_hote_dossier_fragments }}/{{ item.key }}.rb"'
+    insertafter: EOF
+  loop: "{{ gitlab_hote_fragments | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Reconfigurer GitLab

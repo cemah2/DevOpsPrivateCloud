@@ -1,0 +1,52 @@
+# plateforme/observabilite/regles/traces-collectors.yaml (M23-E16) : alertes de la chaîne de traces.
+# Sélectionnée par l'opérateur grâce à l'étiquette medisphere.internal/supervision: "oui" (M21-E02).
+# Les noms de métriques du Collector n'ont pas de suffixe _total en 0.16x (exportateur Prometheus du SDK) :
+# l'expression accepte les deux formes.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: traces-collectors
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: traces-collectors
+      rules:
+        - alert: CollectorPerdDesSpans
+          expr: |
+            sum by (job, exporter) (rate({__name__=~"otelcol_exporter_send_failed_spans(_total)?|otelcol_exporter_enqueue_failed_spans(_total)?"}[5m])) > 0
+          for: 10m
+          labels: {gravite: critique, equipe: plateforme}
+          annotations:
+            resume: "Le Collector {{ $labels.job }} perd des spans (exportateur {{ $labels.exporter }})"
+            description: "Des spans sont abandonnées à l'envoi ou à la mise en file depuis 10 min : les traces sont incomplètes."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/traces/runbooks/RB-237-collector-perd-des-donnees.md"
+        - alert: CollectorRefuseDesSpans
+          expr: |
+            sum by (job) (rate({__name__=~"otelcol_receiver_refused_spans(_total)?|otelcol_processor_memory_limiter_refused_spans(_total)?"}[5m])) > 0
+          for: 10m
+          labels: {gravite: avertissement, equipe: plateforme}
+          annotations:
+            resume: "Le Collector {{ $labels.job }} refuse des spans à l'entrée"
+            description: "Refus du récepteur ou du memory_limiter : les émetteurs réessaient puis abandonnent."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/traces/runbooks/RB-237-collector-perd-des-donnees.md"
+        - alert: CollectorFileDAttentePleine
+          expr: |
+            max by (job, exporter) (otelcol_exporter_queue_size / otelcol_exporter_queue_capacity) > 0.8
+          for: 5m
+          labels: {gravite: avertissement, equipe: plateforme}
+          annotations:
+            resume: "File d'attente de l'exportateur {{ $labels.exporter }} pleine à plus de 80 %"
+            description: "La destination est lente ou indisponible ; au-delà de 100 %, les spans sont abandonnées."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/traces/runbooks/RB-237-collector-perd-des-donnees.md"
+        - alert: TracesAbsentes
+          expr: |
+            sum(rate({__name__=~"otelcol_receiver_accepted_spans(_total)?", job=~".*otel-passerelle.*"}[10m])) == 0
+              or absent({__name__=~"otelcol_receiver_accepted_spans(_total)?", job=~".*otel-passerelle.*"})
+          for: 15m
+          labels: {gravite: critique, equipe: plateforme}
+          annotations:
+            resume: "La passerelle de traces ne reçoit plus rien"
+            description: "Aucune span acceptée depuis 15 min : chaîne coupée en amont (applications, agents, réseau)."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/traces/runbooks/RB-235-plus-aucune-trace.md"

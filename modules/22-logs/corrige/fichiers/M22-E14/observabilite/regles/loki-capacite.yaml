@@ -1,0 +1,38 @@
+# plateforme/observabilite/regles/loki-capacite.yaml — M22-E14 (PLAT-2314)
+# Seuils = 50 % des limites max_global_streams_per_user de loki/values.yaml (M22-E13).
+# Toute modification d'une limite dans Loki se reporte ici ET dans docs/observabilite/journaux/performance.md.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki-capacite
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: loki-capacite
+      rules:
+        - alert: LokiFluxActifsEleves
+          # Une série par locataire ; le seuil dépend du locataire (limite / 2).
+          expr: |
+            sum by (tenant) (loki_ingester_memory_streams{tenant="plateforme"}) > 5000
+            or sum by (tenant) (loki_ingester_memory_streams{tenant=~"mediagenda|medidoc"}) > 1000
+            or sum by (tenant) (loki_ingester_memory_streams{tenant=~"audit|essai"}) > 250
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Loki : le locataire {{ $labels.tenant }} a {{ $value }} flux actifs (plus de la moitié de sa limite)"
+            description: "Cardinalité en hausse : une étiquette à forte variabilité a probablement été ajoutée (pod, identifiant). Au-delà de la limite, les NOUVEAUX flux sont refusés (429)."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-223-ingestion-refusee.md"
+        - alert: LokiEchantillonsRejetes
+          expr: sum by (tenant, reason) (rate(loki_discarded_samples_total[5m])) > 0
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Loki rejette des lignes du locataire {{ $labels.tenant }} (raison : {{ $labels.reason }})"
+            description: "{{ $value | humanize }} lignes/s rejetées depuis 10 min. rate_limited et stream_limit : limites de E13 ; too_far_behind et greater_than_max_sample_age : horodatages ; line_too_long : ligne > max_line_size."
+            runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/journaux/runbooks/RB-223-ingestion-refusee.md"

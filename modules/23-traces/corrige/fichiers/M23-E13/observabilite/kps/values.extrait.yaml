@@ -1,0 +1,11 @@
+# plateforme/observabilite/kps/values.yaml — ajouts de M23-E13 (kube-prometheus-stack 92.x).
+prometheus:
+  prometheusSpec:
+    # --web.enable-remote-write-receiver : /api/v1/write accepte des échantillons. Quiconque joint le port 9090
+    # d'un pod Prometheus peut alors ÉCRIRE : la CiliumNetworkPolicy ecriture-tempo.yaml ne laisse passer que Tempo.
+    enableRemoteWriteReceiver: true
+    # Exemplars (déjà activés en M23-E08 si tu l'as fait là) : stockage en mémoire, perdu au redémarrage.
+    enableFeatures:
+      - exemplar-storage
+    exemplars:
+      maxSize: 100000

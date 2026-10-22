@@ -1,0 +1,65 @@
+---
+# Téléchargement UNE fois sur le contrôleur, vérifié par empreinte (get_url refuse et supprime un
+# fichier dont l'empreinte diffère), puis copie et décompression sur l'hôte.
+- name: Dossier de cache du contrôleur
+  ansible.builtin.file:
+    path: "{{ node_exporter_cache_controleur }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  run_once: true
+  become: false
+
+- name: Archive amont vérifiée par empreinte (contrôleur)
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_url }}"
+    dest: "{{ node_exporter_cache_controleur }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    checksum: "sha256:{{ node_exporter_sha256 }}"
+    mode: "0644"
+  delegate_to: localhost
+  run_once: true
+  become: false
+
+- name: Utilisateur système dédié, sans shell ni répertoire personnel
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    home: /nonexistent
+
+- name: Dossier de la version
+  ansible.builtin.file:
+    path: "{{ node_exporter_dossier_installation }}/{{ node_exporter_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Une version par dossier : la précédente reste en place (retour arrière = changer la version et
+# rejouer, le lien symbolique bascule).
+- name: Décompresser l'archive sur l'hôte
+  ansible.builtin.unarchive:
+    src: "{{ node_exporter_cache_controleur }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "{{ node_exporter_dossier_installation }}/{{ node_exporter_version }}"
+    extra_opts: [--strip-components=1]
+    creates: "{{ node_exporter_dossier_installation }}/{{ node_exporter_version }}/node_exporter"
+    owner: root
+    group: root
+
+- name: Lien vers la version active
+  ansible.builtin.file:
+    src: "{{ node_exporter_dossier_installation }}/{{ node_exporter_version }}/node_exporter"
+    dest: /usr/local/bin/node_exporter
+    state: link
+    owner: root
+    group: root
+  notify: Redémarrer node_exporter
+
+- name: Dossier de configuration
+  ansible.builtin.file:
+    path: /etc/node_exporter
+    state: directory
+    owner: root
+    group: node_exporter
+    mode: "0750"

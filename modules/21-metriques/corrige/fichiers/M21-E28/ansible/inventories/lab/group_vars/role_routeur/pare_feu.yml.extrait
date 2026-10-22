@@ -1,0 +1,21 @@
+# group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — EXTRAIT (M21-E28, PLAT-2228) :
+# le témoin (mon01) interroge Thanos Query (10.10.41.60:9090) et sonde Alertmanager
+# (10.10.41.61:9093) du cluster. Flux prévu par PLAN §4.11 (« mon01 → 10.10.41.60-61 ») : s'il est
+# déjà dans ta matrice (E02 ou E11), ne le duplique pas. Une passerelle à la fois (--limit gw01,
+# vérification, puis gw02) ; retour arrière : git revert de la MR et même playbook.
+# Le sens inverse : K8S_TRAV → mon01:9090 (ScrapeConfig temoin-mon01) existe depuis M21-E12 ;
+# K8S_TRAV → mon01:9093 est NOUVEAU (Prometheus du cluster → Alertmanager témoin, chemin de secours).
+
+pare_feu_definitions:
+  # … définitions existantes (MON01 depuis M19/M21-E11) …
+  - {nom: LB_PROMETHEUS, valeur: "10.10.41.60", commentaire: "Thanos Query du cluster (prometheus.apps…), M21-E24"}
+  - {nom: LB_ALERTMANAGER, valeur: "10.10.41.61", commentaire: "Alertmanager du cluster (alertmanager.apps…), M21-E02"}
+
+pare_feu_transit:
+  # … règles existantes …
+  - {entree: $V_INFRA, source: $MON01, sortie: $V_K8S, destination: $LB_PROMETHEUS, proto: tcp, ports: 9090,
+     motif: "témoin : requête Watchdog et sondes /-/healthy, /-/ready de Thanos Query", ref: M21-E28}
+  - {entree: $V_INFRA, source: $MON01, sortie: $V_K8S, destination: $LB_ALERTMANAGER, proto: tcp, ports: 9093,
+     motif: "témoin : sondes /-/healthy, /-/ready d'Alertmanager", ref: M21-E28}
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: $MON01, proto: tcp, ports: 9093,
+     motif: "Prometheus du cluster → Alertmanager témoin (alertes Alertmanager*, chemin de secours)", ref: M21-E28}

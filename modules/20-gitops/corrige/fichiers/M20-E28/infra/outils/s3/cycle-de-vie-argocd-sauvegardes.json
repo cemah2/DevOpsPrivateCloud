@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "quotidien-35-jours",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "quotidien/" },
+      "Expiration": { "Days": 35 },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 7 }
+    }
+  ]
+}

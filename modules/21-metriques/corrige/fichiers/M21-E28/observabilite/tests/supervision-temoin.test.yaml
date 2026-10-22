@@ -1,0 +1,54 @@
+# plateforme/observabilite — tests/supervision-temoin.test.yaml (M21-E28, PLAT-2228)
+# promtool test rules tests/supervision-temoin.test.yaml (après outils/extraire-regles.sh, M21-E14)
+rule_files:
+  - ../build/regles/supervision-temoin.yml
+evaluation_interval: 1m
+
+tests:
+  # Témoin collecté puis injoignable.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="temoin-mon01", instance="mon01.par1.medisphere.internal:9090"}'
+        values: '1x5 0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: TemoinInjoignable
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: TemoinInjoignable
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: temoin-mon01, instance: "mon01.par1.medisphere.internal:9090"}
+            exp_annotations:
+              resume: "Le Prometheus témoin de mon01 ne répond plus au cluster"
+              description: "Plus personne ne surveille la supervision du cluster depuis l'extérieur (VM mon01, service prometheus, flux K8S_TRAV → mon01:9090). RB-215 §3."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+
+  # Jamais collecté (ScrapeConfig supprimée) : absent() prend le relais.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="autre"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: TemoinInjoignable
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: temoin-mon01}
+            exp_annotations:
+              resume: "Le Prometheus témoin de mon01 ne répond plus au cluster"
+              description: "Plus personne ne surveille la supervision du cluster depuis l'extérieur (VM mon01, service prometheus, flux K8S_TRAV → mon01:9090). RB-215 §3."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+
+  # Envois en échec.
+  - interval: 1m
+    input_series:
+      - series: 'prometheus_notifications_errors_total{job="temoin-mon01", instance="mon01.par1.medisphere.internal:9090", alertmanager="http://127.0.0.1:9093/api/v2/alerts"}'
+        values: '0x5 1+1x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: TemoinNotificationsEnEchec
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: temoin-mon01, instance: "mon01.par1.medisphere.internal:9090", alertmanager: "http://127.0.0.1:9093/api/v2/alerts"}
+            exp_annotations:
+              resume: "Le Prometheus témoin n'arrive pas à remettre ses alertes à son Alertmanager"
+              description: "Erreurs d'envoi vers l'Alertmanager de mon01 depuis 15 min. RB-215 §3."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md

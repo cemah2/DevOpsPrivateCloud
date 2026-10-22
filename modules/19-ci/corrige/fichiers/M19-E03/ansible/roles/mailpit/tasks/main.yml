@@ -1,0 +1,143 @@
+---
+# Rôle mailpit — point d'entrée (M19-E03).
+
+- name: Système pris en charge
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] == '13'
+    fail_msg: "{{ inventory_hostname }} : rôle mailpit écrit pour Debian 13 seulement."
+    quiet: true
+
+- name: Paramètres cohérents
+  ansible.builtin.assert:
+    that:
+      - mailpit_sha256 is match('^[0-9a-f]{64}$')
+      - mailpit_version is version('1.31.6', '>=')
+      - mailpit_comptes | length > 0
+      - mailpit_comptes | map(attribute='nom') | list | unique | length == mailpit_comptes | length
+    fail_msg: >-
+      Empreinte SHA-256 attendue (64 caractères hexadécimaux), version ≥ 1.31.6 (CVE de 2026,
+      PLAN §6), au moins un compte d'interface, noms uniques.
+    quiet: true
+
+- name: Paquets nécessaires (htpasswd côté Ansible, contrôles)
+  ansible.builtin.apt:
+    name: [python3-passlib, python3-bcrypt, swaks]
+    state: present
+    cache_valid_time: 3600
+
+- name: Groupe du service
+  ansible.builtin.group:
+    name: "{{ mailpit_groupe }}"
+    system: true
+
+- name: Utilisateur du service (sans shell, sans dossier personnel)
+  ansible.builtin.user:
+    name: "{{ mailpit_utilisateur }}"
+    group: "{{ mailpit_groupe }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+
+- name: Binaire épinglé par empreinte
+  ansible.builtin.import_tasks: binaire.yml
+
+- name: Dossiers de configuration (root, lisibles par le groupe du service)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ mailpit_groupe }}"
+    mode: "0750"
+  loop:
+    - "{{ mailpit_dossier_config }}"
+    - "{{ mailpit_tls_certificat | dirname }}"
+
+- name: Dossier des données (service seul)
+  ansible.builtin.file:
+    path: "{{ mailpit_dossier_donnees }}"
+    state: directory
+    owner: "{{ mailpit_utilisateur }}"
+    group: "{{ mailpit_groupe }}"
+    mode: "0700"
+
+- name: Comptes de l'interface (htpasswd, bcrypt ; mots de passe jamais affichés)
+  community.general.htpasswd:
+    path: "{{ mailpit_dossier_config }}/ui-auth"
+    name: "{{ item.nom }}"
+    password: "{{ item.mot_de_passe }}"
+    crypt_scheme: bcrypt
+    owner: root
+    group: "{{ mailpit_groupe }}"
+    mode: "0640"
+  loop: "{{ mailpit_comptes }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  no_log: true
+  notify: Redémarrer mailpit
+
+- name: Retirer les comptes qui ne sont plus dans l'inventaire
+  ansible.builtin.command:
+    argv: [awk, -F, ":", "{print $1}", "{{ mailpit_dossier_config }}/ui-auth"]
+  register: _mailpit_comptes_presents
+  changed_when: false
+  check_mode: false
+
+- name: Comptes en trop retirés
+  community.general.htpasswd:
+    path: "{{ mailpit_dossier_config }}/ui-auth"
+    name: "{{ item }}"
+    state: absent
+    owner: root
+    group: "{{ mailpit_groupe }}"
+    mode: "0640"
+  loop: "{{ _mailpit_comptes_presents.stdout_lines | difference(mailpit_comptes | map(attribute='nom') | list) }}"
+  notify: Redémarrer mailpit
+
+- name: Options du service (aucun secret)
+  ansible.builtin.template:
+    src: mailpit.env.j2
+    dest: "{{ mailpit_dossier_config }}/mailpit.env"
+    owner: root
+    group: "{{ mailpit_groupe }}"
+    mode: "0640"
+  notify: Redémarrer mailpit
+
+- name: Unité systemd durcie
+  ansible.builtin.template:
+    src: mailpit.service.j2
+    dest: /etc/systemd/system/mailpit.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Redémarrer mailpit
+
+- name: Le certificat TLS est en place (rôle certificats_acme, id mailpit)
+  ansible.builtin.stat:
+    path: "{{ mailpit_tls_cle }}"
+  register: _mailpit_cle
+
+- name: Pas de démarrage sans certificat
+  ansible.builtin.assert:
+    that: _mailpit_cle.stat.exists
+    fail_msg: >-
+      {{ mailpit_tls_cle }} absent : applique d'abord certificats_acme (playbooks/supervision.yml
+      le fait avant ce rôle).
+    quiet: true
+  when: not ansible_check_mode
+
+- name: Service actif au démarrage
+  ansible.builtin.systemd_service:
+    name: mailpit.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Appliquer les changements en attente avant les contrôles
+  ansible.builtin.meta: flush_handlers
+
+- name: Contrôles finaux
+  ansible.builtin.import_tasks: controles.yml
+  when: mailpit_verifier | bool and not ansible_check_mode

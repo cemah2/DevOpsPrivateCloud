@@ -1,0 +1,34 @@
+# mediagenda/deploiement — components/protection-donnees (M20-E41, INC-4741).
+# Ce qui porte des DONNÉES ne doit jamais disparaître par une synchronisation : ni par un élagage
+# (fichier retiré, renommé, déplacé), ni à la suppression de l'Application. Le component pose
+# l'annotation sur TOUS les objets de ces types que rend l'overlay, y compris ceux qu'on ajoutera
+# demain (un PVC d'exports, une seconde base) : la protection ne dépend plus d'une annotation
+# oubliée dans un fichier.
+#   Prune=false  : retiré de Git, l'objet est signalé (« requires pruning ») mais pas supprimé ;
+#   Delete=false : supprimer l'Application ne le supprime pas.
+# Supprimer une base ou un volume reste un geste humain, tracé par un ticket CHG, après sauvegarde.
+# À inclure dans les TROIS overlays, juste APRÈS « dependances » quand l'overlay l'utilise (un
+# correctif ne voit que les objets déjà rendus), en tête sinon ; toujours avant « migrations », qui
+# ajoute ses annotations de vague sans toucher à celle-ci.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+    patch: |-
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  - target:
+      kind: PersistentVolumeClaim
+    patch: |-
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: ignore
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false,Delete=false

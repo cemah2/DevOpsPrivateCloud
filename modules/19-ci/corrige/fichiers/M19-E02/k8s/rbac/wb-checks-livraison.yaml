@@ -1,0 +1,40 @@
+# plateforme/k8s — rbac/wb-checks-livraison.yaml (M19-E02, PLAN §4.11)
+# Lecture des objets de la chaîne de livraison pour les vérifications du workbook (lab/bin/check
+# 19 …, puis 20 …). Agrégée dans la ClusterRole wb-checks (M14-E06) par son étiquette.
+#
+# Plusieurs ressources sont DÉJÀ lisibles par wb-checks-base (pods, configmaps, resourcequotas…) :
+# on les redéclare pour que les vérifications des modules 19 et 20 ne dépendent pas du contenu de
+# la base, qui peut être réduite un jour (une règle de lecture en double ne coûte rien).
+# JAMAIS les Secrets : énumération explicite, aucun « * » sur le groupe cœur.
+# M20 ajoute ici les ressources d'Argo CD et d'Argo Rollouts (applications, applicationsets,
+# appprojects, rollouts, analysisruns).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-livraison
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, configmaps, resourcequotas, limitranges, serviceaccounts, services, events]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [cilium.io]
+    resources: [ciliumnetworkpolicies, ciliumclusterwidenetworkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings, clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch]
+  # Certificats du TLS mutuel de buildkitd (M19-E08) : objets cert-manager, pas leurs Secrets.
+  - apiGroups: [cert-manager.io]
+    resources: [certificates, issuers, clusterissuers, certificaterequests]
+    verbs: [get, list, watch]

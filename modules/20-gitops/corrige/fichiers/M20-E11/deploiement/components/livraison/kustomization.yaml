@@ -1,0 +1,52 @@
+# Component « livraison » (M17-E09 ; Job de migration en M20-E11) : la ConfigMap locale « livraison »
+# de chaque overlay donne la version LISIBLE livrée (étiquette vX.Y.Z, MEDIAGENDA_VERSION, étiquettes
+# app.kubernetes.io/version) et le nom publié ; elle n'est pas déployée (config.kubernetes.io/local-config).
+# À placer en DERNIER dans la liste « components ». Les transformateurs propres à l'overlay (images,
+# labels, patches) passent APRÈS les components : depuis M19-E17, l'« images: » de chaque overlay fixe
+# le DIGEST de l'image (promotion par MR) et l'emporte sur l'étiquette posée ici ; le digest et la
+# version de livraison.yaml sont promus ENSEMBLE (outils/promouvoir.sh, M20-E14).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+replacements:
+  - source:
+      kind: ConfigMap
+      name: livraison
+      fieldPath: data.version
+    targets:
+      - select:
+          kind: Deployment
+          name: mediagenda
+        fieldPaths:
+          - spec.template.spec.containers.[name=api].image
+        options:
+          # registre/dépôt:étiquette → on remplace ce qui suit le « : » (registre SANS numéro de port).
+          delimiter: ':'
+          index: 1
+      # Job de migration du component « migrations » (M20-E11) : même image que l'API, toujours.
+      # Le conteneur d'initialisation « migrations » n'existe plus (migrations.mode: none).
+      - select:
+          kind: Job
+          name: mediagenda-migrate
+        fieldPaths:
+          - spec.template.spec.containers.[name=migrate].image
+        options:
+          # registre/dépôt:étiquette → on remplace ce qui suit le « : » (registre SANS numéro de port).
+          delimiter: ':'
+          index: 1
+      - select:
+          kind: Deployment
+          name: mediagenda
+        fieldPaths:
+          - spec.template.spec.containers.[name=api].env.[name=MEDIAGENDA_VERSION].value
+          - metadata.labels.[app.kubernetes.io/version]
+          - spec.template.metadata.labels.[app.kubernetes.io/version]
+  - source:
+      kind: ConfigMap
+      name: livraison
+      fieldPath: data.nom-publie
+    targets:
+      - select:
+          kind: HTTPRoute
+          name: mediagenda
+        fieldPaths:
+          - spec.hostnames.0

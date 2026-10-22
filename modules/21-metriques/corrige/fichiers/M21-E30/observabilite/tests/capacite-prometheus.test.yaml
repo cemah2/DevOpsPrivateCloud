@@ -1,0 +1,58 @@
+# plateforme/observabilite — tests/capacite-prometheus.test.yaml (M21-E30, PLAT-2230)
+# promtool test rules tests/capacite-prometheus.test.yaml (après outils/extraire-regles.sh, M21-E14)
+rule_files:
+  - ../build/regles/capacite-prometheus.yml
+evaluation_interval: 1m
+
+tests:
+  # Séries : 230 000 (sous 80 % du budget) puis 260 000 pendant 40 min.
+  - interval: 1m
+    input_series:
+      - series: 'prometheus_tsdb_head_series{job="kps-prometheus", pod="prometheus-kps-0"}'
+        values: '230000x10 260000x40'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PrometheusSeriesProchesDuBudget
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: PrometheusSeriesProchesDuBudget
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: kps-prometheus, pod: prometheus-kps-0}
+            exp_annotations:
+              resume: "prometheus-kps-0 : 260k séries actives (budget 300 000)"
+              description: "Au-delà du budget, la mémoire dépasse la limite (OOMKilled). Chercher la cible responsable : topk(10, scrape_series_added) et la page TSDB status. Dimensionnement §5."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md
+
+  # Mémoire : 2,7 Gio pour 3 Gio de limite (90 %).
+  - interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="supervision", container="prometheus", pod="prometheus-kps-1"}'
+        values: '2899102924x30'
+      - series: 'kube_pod_container_resource_limits{namespace="supervision", container="prometheus", pod="prometheus-kps-1", resource="memory", unit="byte"}'
+        values: '3221225472x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: PrometheusMemoireProcheLimite
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, pod: prometheus-kps-1}
+            exp_annotations:
+              resume: "prometheus-kps-1 utilise 90% de sa limite mémoire"
+              description: "Risque d'OOMKilled (relecture du WAL au redémarrage encore plus gourmande). Séries en hausse ? Requête lourde ? Dimensionnement §3."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md
+
+  # Volume à 5 % libre.
+  - interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_available_bytes{namespace="supervision", persistentvolumeclaim="prometheus-kps-db-prometheus-kps-0"}'
+        values: '2147483648x20'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="supervision", persistentvolumeclaim="prometheus-kps-db-prometheus-kps-0"}'
+        values: '42949672960x20'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: PrometheusVolumePresquePlein
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, namespace: supervision, persistentvolumeclaim: prometheus-kps-db-prometheus-kps-0}
+            exp_annotations:
+              resume: "Le volume prometheus-kps-db-prometheus-kps-0 a moins de 10 % d'espace libre"
+              description: "Volume plein = plus d'écriture du WAL = plus de collecte ni d'alerte de ce réplica. Agrandir le PVC (ceph-rbd, M16) ou baisser retentionSize. Dimensionnement §4."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/dimensionnement.md

@@ -1,0 +1,41 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "adm01-essai"}},
+          {"key": "service.namespace", "value": {"stringValue": "medisphere"}},
+          {"key": "deployment.environment.name", "value": {"stringValue": "dev"}},
+          {"key": "host.name", "value": {"stringValue": "adm01"}}
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {"name": "workbook.m23", "version": "1.0.0"},
+          "spans": [
+            {
+              "traceId": "__TRACE_ID__",
+              "spanId": "__SPAN_RACINE__",
+              "name": "essai point d'entrée OTLP",
+              "kind": 1,
+              "startTimeUnixNano": "__DEBUT__",
+              "endTimeUnixNano": "__FIN__",
+              "attributes": [{"key": "workbook.exercice", "value": {"stringValue": "M23-E16"}}],
+              "status": {"code": 1}
+            },
+            {
+              "traceId": "__TRACE_ID__",
+              "spanId": "__SPAN_ENFANT__",
+              "parentSpanId": "__SPAN_RACINE__",
+              "name": "étape enfant",
+              "kind": 3,
+              "startTimeUnixNano": "__DEBUT_ENFANT__",
+              "endTimeUnixNano": "__FIN_ENFANT__",
+              "status": {"code": 0}
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

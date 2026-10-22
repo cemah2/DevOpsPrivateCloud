@@ -1,0 +1,32 @@
+# plateforme/gitops/plateforme/fluent-bit-opensearch.yaml — M22-E15, ESSAI TEMPORAIRE
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fluent-bit-opensearch
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    medisphere.internal/essai: m22-e15
+spec:
+  project: plateforme
+  sources:
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: fluent-bit
+      targetRevision: 0.58.3
+      helm:
+        releaseName: fluent-bit-opensearch
+        valueFiles:
+          - $values/fluent-bit-opensearch/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opensearch-essai # créé par l'Application opensearch-essai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

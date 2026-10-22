@@ -1,0 +1,21 @@
+# Point d'entrée OTLP hors cluster : 10.10.41.63, otlp.apps.par1.medisphere.internal (PLAN §4.11).
+# REMPLACE le Service LoadBalancer créé en M23-E02 (garde son nom s'il diffère) : les ports publiés restent
+# 4317 et 4318, mais ils visent désormais l'entrée « otlp/externe » de la passerelle (TLS + jeton).
+# externalTrafficPolicy: Local garde l'adresse source réelle : la CiliumNetworkPolicy peut filtrer par réseau.
+apiVersion: v1
+kind: Service
+metadata:
+  name: otlp-externe
+  namespace: traces
+  annotations:
+    lbipam.cilium.io/ips: "10.10.41.63"
+    external-dns.alpha.kubernetes.io/hostname: otlp.apps.par1.medisphere.internal
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/instance: traces.otel-passerelle
+    app.kubernetes.io/component: opentelemetry-collector
+  ports:
+    - {name: otlp-grpc, port: 4317, targetPort: 14317, protocol: TCP, appProtocol: grpc}
+    - {name: otlp-http, port: 4318, targetPort: 14318, protocol: TCP, appProtocol: http}

@@ -1,0 +1,6 @@
+---
+# group_vars/role_routeur/node_exporter.yml (M21-E08)
+# Les passerelles ont une adresse par VLAN et leur route par défaut sur le WAN : l'adresse par
+# défaut du rôle serait celle du LAN maison. Elles écoutent partout et filtrent 9100 dans leur
+# chaîne input (pare_feu_entree : K8S_TRAV et MGMT seulement).
+node_exporter_adresse: 0.0.0.0

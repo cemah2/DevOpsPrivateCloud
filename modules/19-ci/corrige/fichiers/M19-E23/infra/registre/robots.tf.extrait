@@ -1,0 +1,46 @@
+# registre/robots.tf (plateforme/infra, état « registre ») — EXTRAIT, M19-E23 (DEV-2023).
+# Ajouts : un mot de passe et un robot en LECTURE SEULE du cache de construction. Plan attendu : 2 to add.
+#
+# Pourquoi : les pipelines de MR ne voient pas les variables protégées du robot cache-buildkit (E08) :
+# ils construisaient sans cache de registre (≈ 100 s de plus). Ce robot ne fait que TIRER dans le
+# projet « plateforme » : une MR lit le cache de main sans pouvoir l'écrire (aucun empoisonnement
+# possible). Ses identifiants vont dans des variables d'instance NON protégées
+# BUILDKIT_CACHE_LECTURE_UTILISATEUR et BUILDKIT_CACHE_LECTURE_JETON (masquée) : n'importe quel job
+# peut donc lire le projet « plateforme » (images outillées, cache) — rien de secret n'y est rangé ;
+# exception inscrite au registre des secrets.
+
+resource "random_password" "robot_cache_buildkit_lecture" {
+  length      = 32
+  special     = false
+  min_upper   = 2
+  min_lower   = 2
+  min_numeric = 2
+}
+
+resource "harbor_robot_account" "cache_buildkit_lecture" {
+  name        = "cache-buildkit-lecture"
+  level       = "project"
+  description = "Lecture du cache de construction BuildKit (MR et branches non protégées) — M19-E23"
+  duration    = var.duree_robots_jours
+  secret      = random_password.robot_cache_buildkit_lecture.result
+
+  permissions {
+    kind      = "project"
+    namespace = harbor_project.projet["plateforme"].name
+    access {
+      resource = "repository"
+      action   = "pull"
+    }
+  }
+}
+
+output "robot_cache_buildkit_lecture" {
+  description = "Nom complet du robot de lecture du cache BuildKit."
+  value       = harbor_robot_account.cache_buildkit_lecture.full_name
+}
+
+output "robot_cache_buildkit_lecture_secret" {
+  description = "Secret du robot de lecture (variable d'instance BUILDKIT_CACHE_LECTURE_JETON, masquée, non protégée)."
+  value       = random_password.robot_cache_buildkit_lecture.result
+  sensitive   = true
+}

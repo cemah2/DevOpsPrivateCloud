@@ -1,0 +1,66 @@
+# mediagenda/deploiement — components/telemetrie (M23-E04, DEV-2404) — version M23-E09 (PLAT-2409)
+# Variables STANDARD d'OpenTelemetry pour le conteneur « api » (le code les lit, rien de propre à
+# MédiAgenda) et étiquette de sélection des politiques de télémétrie. À inclure dans les overlays dev
+# et recette (prod au mini-projet), AVANT ../../components/livraison, qui doit rester le dernier.
+# Le Rollout de recette et de prod référence le Deployment (workloadRef, M20-E16) : le patch du gabarit
+# du Deployment vaut pour lui.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      # Environnement lu sur l'étiquette posée par l'overlay (labels.includeTemplates) : un seul
+      # component pour dev, recette et prod.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MEDISPHERE_ENVIRONNEMENT
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['medisphere.internal/environnement']
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_SERVICE_NAME
+          value: mediagenda-api
+      # $(VAR) : substitution par Kubernetes d'une variable définie PLUS HAUT dans la liste.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_RESOURCE_ATTRIBUTES
+          value: service.namespace=medisphere,deployment.environment.name=$(MEDISPHERE_ENVIRONNEMENT)
+      # Agent Collector DU NŒUD : le Service créé par l'opérateur pour un daemonset a
+      # internalTrafficPolicy: Local. http:// = gRPC sans TLS (trafic interne au cluster).
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-agent-collector.traces.svc.cluster.local:4317
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_SAMPLER
+          value: parentbased_traceidratio
+      # M23-E09 : ratio EXPLICITE. 1.0 = tout émettre : l'échantillonnage en tête décide AVANT de savoir
+      # si la requête échouera ou sera lente ; c'est la passerelle (en queue) qui réduit le volume.
+      # parentbased_* : un appel reçu avec un traceparent suit la décision de l'appelant (traces entières).
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_TRACES_SAMPLER_ARG
+          value: "1.0"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_PROPAGATORS
+          value: tracecontext,baggage
+      # Conventions sémantiques STABLES (http.request.method, http.response.status_code, url.path,
+      # db.system.name, db.query.text…) au lieu des anciens noms : ceux qu'utilisent les requêtes
+      # TraceQL du workbook et le metrics-generator de Tempo.
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_SEMCONV_STABILITY_OPT_IN
+          value: http,database

@@ -1,0 +1,64 @@
+# plateforme/charts-miroir — .gitlab-ci.yml (M20-E13, PLAT-2113)
+# Recopie dans Harbor (projet « charts », OCI) les charts tiers listés dans charts.yaml, après contrôle
+# de leur empreinte, puis les signe par la clé MédiSphère.
+#   - MR et main : « lister » contrôle charts.yaml (runner k8s-par1, sans aucun secret) ;
+#   - main et pipeline PLANIFIÉ (hebdomadaire) : « recopier » et « signer », sur le runner protégé
+#     k8s-par1-protege (étiquette « protege », M19-E24), le seul à recevoir le robot d'écriture et la
+#     clé Cosign. La planification rejoue la liste : un chart effacé de Harbor par erreur revient, une
+#     signature manquante est ajoutée ; rien n'est republié (étiquettes immuables).
+# Images épinglées par digest, tirées par les caches Harbor.
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages: [verifier, recopier, signer]
+
+default:
+  interruptible: true
+
+lister:
+  stage: verifier
+  tags: [k8s]
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/mikefarah/yq:4.53.6@sha256:cfc4eee658595834ef304eadb0c3ea721f3b7cb6404ad8b7cb909cc5b5145b23
+    entrypoint: [""]
+  script:
+    - sh outils/lister.sh charts.yaml charts.tsv
+  artifacts:
+    paths: [charts.tsv]
+    expire_in: 1 day
+
+recopier:
+  stage: recopier
+  tags: [protege]
+  # Deux pipelines planifiés ne doivent pas pousser en même temps.
+  resource_group: charts-miroir
+  interruptible: false
+  needs: [lister]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/alpine/helm:4.3.0@sha256:a6cf54599ccb99d90cf0712b30f03fdb3cab062e6b94e0418cc4db7e8a1464b2
+    entrypoint: [""]
+  script:
+    - sh outils/recopier.sh charts.tsv
+  artifacts:
+    paths: [recopies.txt]
+    expire_in: 30 days
+
+signer:
+  stage: signer
+  tags: [protege]
+  resource_group: charts-miroir
+  interruptible: false
+  needs: [recopier]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"
+  # Image outillée du M13-E09 : remplace <EMPREINTE> par le digest publié dans ton Harbor.
+  image: registry.par1.medisphere.internal/plateforme/outils-supply-chain:1.0.0@sha256:<EMPREINTE>
+  script:
+    - bash outils/signer.sh

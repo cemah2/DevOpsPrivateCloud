@@ -1,0 +1,15 @@
+# flux01 — k3s mononœud de comparaison avec Flux (M20-E23, PLAT-2123). SQLite (kine) : pas de cluster-init.
+# Même rôle et mêmes miroirs (group_vars/role_k3s/k3s.yml, cache Harbor) qu'au M18.
+k3s_version: v1.36.5+k3s1
+k3s_role: server
+k3s_jeton: "{{ vault_k3s_jeton_flux01 }}"
+k3s_config:
+  write-kubeconfig-mode: "0600"
+  tls-san:
+    - flux01.par1.medisphere.internal
+  # 2 Go de mémoire : rien d'inutile (pas d'Ingress, pas de répartiteur, pas de metrics-server).
+  disable:
+    - traefik
+    - servicelb
+    - metrics-server
+  node-name: flux01

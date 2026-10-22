@@ -1,0 +1,35 @@
+# composants/reseau/politiques/collecte-prometheus.yaml — M21-E07 (DEV-2207)
+# Les espaces d'équipe sont en refus par défaut (M15-E17, M15-E34) : la collecte de Prometheus y
+# est un flux comme un autre, autorisé explicitement, par la PLATEFORME (les équipes n'écrivent pas
+# de politique réseau : liste noire de l'AppProject, M20-E07).
+# Une seule politique pour tous les espaces d'équipe (étiquette medisphere.internal/equipe) : un
+# nouvel espace d'équipe est collecté sans modification ici. Une AUTORISATION s'ajoute aux autres
+# (refus-par-defaut est levé pour ce seul flux) ; les cloisons isolement-* (refus explicites entre
+# espaces d'équipe, M15-E28) ne visent pas supervision, qui n'est pas un espace d'équipe.
+# Ports : 8000 (MédiAgenda), 8080 (MédiDoc), 9187 (exportateur de CloudNativePG).
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: collecte-prometheus
+spec:
+  description: "Collecte des métriques des espaces d'équipe par Prometheus (supervision/kps) — DEV-2207"
+  endpointSelector:
+    matchExpressions:
+      - key: io.cilium.k8s.namespace.labels.medisphere.internal/equipe
+        operator: Exists
+  # Cette politique AJOUTE une autorisation, elle ne doit faire passer aucun pod en refus par
+  # défaut (si un espace d'équipe n'avait pas encore son refus-par-defaut, il ne faut pas qu'une
+  # politique de collecte le ferme à tout le reste) : même réglage que les cloisons de M15-E28.
+  enableDefaultDeny:
+    ingress: false
+    egress: false
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports:
+            - {port: "8000", protocol: TCP}
+            - {port: "8080", protocol: TCP}
+            - {port: "9187", protocol: TCP}

@@ -1,0 +1,93 @@
+# M23-E07 — copie de MédiAgenda AUTO-INSTRUMENTÉE dans wb-essais (jamais en dev, recette ni prod).
+# Image SANS SDK (la dernière version d'avant M23-E04, ex. v1.0.0) : tout vient de l'opérateur.
+# Remplace <VERSION-SANS-TRACES> par cette étiquette. Pour l'étape « double instrumentation », change
+# l'image pour la version instrumentée de M23-E04 (ex. v1.1.0), sans rien changer d'autre.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda-auto
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/name: mediagenda-auto
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.internal/ticket: PLAT-2407
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: mediagenda-auto}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: mediagenda-auto, app.kubernetes.io/part-of: mediagenda}
+      annotations:
+        # L'annotation est lue À LA CRÉATION du pod par le webhook de l'opérateur : la poser sur un
+        # Deployment existant déclenche un redéploiement (nouveau gabarit), donc de nouveaux pods injectés.
+        instrumentation.opentelemetry.io/inject-python: "python-essai"
+        instrumentation.opentelemetry.io/container-names: "api"
+    spec:
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: migrations
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:<VERSION-SANS-TRACES>
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_MDP
+              valueFrom:
+                secretKeyRef: {name: postgresql-essai-auto, key: mot-de-passe}
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://mediagenda:$(MEDIAGENDA_DB_MDP)@postgresql-essai-auto:5432/mediagenda
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:<VERSION-SANS-TRACES>
+          ports:
+            - {name: http, containerPort: 8000}
+          env:
+            - name: MEDIAGENDA_DB_MDP
+              valueFrom:
+                secretKeyRef: {name: postgresql-essai-auto, key: mot-de-passe}
+            - name: MEDIAGENDA_DB_URL
+              value: postgresql://mediagenda:$(MEDIAGENDA_DB_MDP)@postgresql-essai-auto:5432/mediagenda
+            - name: MEDIAGENDA_VALKEY_URL
+              value: redis://valkey-essai-auto:6379/0
+            # Nom distinct de « mediagenda-api » : les traces de l'essai ne se mêlent pas à celles de dev.
+            - name: OTEL_SERVICE_NAME
+              value: mediagenda-essai-auto
+          readinessProbe:
+            httpGet: {path: /pret, port: http}
+          livenessProbe:
+            httpGet: {path: /sante, port: http}
+          # Plus large que dans les overlays : la mesure du surcoût est l'objet de l'essai.
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-auto
+  namespace: wb-essais
+spec:
+  selector: {app.kubernetes.io/name: mediagenda-auto}
+  ports:
+    - {name: http, port: 80, targetPort: http}

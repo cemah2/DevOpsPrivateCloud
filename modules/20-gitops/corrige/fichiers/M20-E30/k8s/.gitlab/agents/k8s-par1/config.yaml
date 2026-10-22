@@ -1,0 +1,11 @@
+# plateforme/k8s — .gitlab/agents/k8s-par1/config.yaml (M19-E18 ; RÉDUIT en M20-E30, SEC-2130).
+# Agent GitLab pour Kubernetes « k8s-par1 ». Depuis M20, les applications sont déployées par Argo CD
+# (pull) : la CI n'a plus aucun accès aux espaces applicatifs.
+# ci_access ne donne qu'un CONTEXTE kubectl aux jobs des projets listés ; ce qu'ils peuvent faire
+# dépend du RBAC du compte de service de l'agent (rbac/gitlab-agent.yaml) : edit dans wb-essais seulement.
+# Retirés en M20-E30 : le groupe mediagenda (job deployer-dev, déjà supprimé en M20-E08) et tout
+# accès MédiDoc.
+ci_access:
+  projects:
+    # Exercices de CI du M19 (déploiement d'essai dans wb-essais).
+    - id: formation/ci-labo

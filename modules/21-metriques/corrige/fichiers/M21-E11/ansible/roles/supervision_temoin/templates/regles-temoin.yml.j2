@@ -1,0 +1,50 @@
+# {{ ansible_managed }}
+# Règles du Prometheus témoin (M21-E11). Les modèles {{ '{{ $labels… }}' }} sont ceux de Prometheus.
+groups:
+  - name: temoin
+    rules:
+      - alert: SondeEnEchec
+        expr: probe_success{job="blackbox"} == 0
+        for: 5m
+        labels:
+          gravite: critique
+          equipe: plateforme
+{% raw %}
+        annotations:
+          resume: "Sonde {{ $labels.module }} en échec : {{ $labels.instance }}"
+          description: >-
+            La sonde {{ $labels.module }} vers {{ $labels.instance }} échoue depuis 5 minutes, vue
+            depuis mon01 (hors du cluster). Si toutes les sondes HTTPS de *.apps échouent ensemble,
+            regarde d'abord la Gateway gw-par1 et la bordure.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+{% endraw %}
+      - alert: CertificatEcheanceProche
+        expr: (probe_ssl_earliest_cert_expiry{job="blackbox"} - time()) < {{ supervision_temoin_seuil_certificat_jours | int }} * 86400
+        for: 1h
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+{% raw %}
+        annotations:
+          resume: "Certificat de {{ $labels.instance }} : échéance dans moins de 14 jours"
+          description: >-
+            Le certificat présenté par {{ $labels.instance }} expire le
+            {{ with printf "probe_ssl_earliest_cert_expiry{instance='%s'}" $labels.instance | query }}{{ . | first | value | humanizeTimestamp }}{{ end }}.
+            Les certificats ACME (step-ca) se renouvellent à 15 jours de l'échéance : un certificat
+            sous ce seuil n'a PAS été renouvelé.
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+{% endraw %}
+      - alert: CibleTemoinInjoignable
+        expr: up == 0
+        for: 5m
+        labels:
+          gravite: avertissement
+          equipe: plateforme
+{% raw %}
+        annotations:
+          resume: "Le témoin ne collecte plus {{ $labels.job }} sur {{ $labels.instance }}"
+          description: >-
+            La cible {{ $labels.instance }} du job {{ $labels.job }} ne répond plus au Prometheus
+            témoin depuis 5 minutes (exportateur arrêté, flux coupé, certificat refusé).
+          runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+{% endraw %}

@@ -1,0 +1,5 @@
+# À AJOUTER dans overlays/dev, overlays/recette et overlays/prod (kustomization.yaml), section
+# « components », AVANT ../../components/livraison (qui doit rester le dernier, M17-E09) :
+components:
+  - ../../components/supervision
+  # (puis les components existants, livraison en dernier)

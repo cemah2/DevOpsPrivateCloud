@@ -1,0 +1,22 @@
+# plateforme/k8s — espaces/ci-jobs/20-limites.yaml (M19-E02)
+# Valeurs par défaut des conteneurs qui n'en déclarent pas (conteneur init-permissions, services
+# d'un job, pod lancé à la main) : sans elles, le quota sur requests/limits ferait REFUSER le pod.
+# Le runner pose ses propres demandes et limites sur build et helper (M19-E04) ; « max » borne
+# aussi les surcharges KUBERNETES_* des jobs (le runner borne déjà à 4 CPU / 4 Gi).
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-ci
+  namespace: ci-jobs
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: "1"
+        memory: 1Gi
+      max:
+        cpu: "4"
+        memory: 4Gi

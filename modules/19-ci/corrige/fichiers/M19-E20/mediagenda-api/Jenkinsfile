@@ -1,0 +1,115 @@
+// Jenkinsfile — mediagenda/api, branche essai-jenkins (M19-E20, PLAT-2020).
+// Le même travail que les jobs qualite:lint, qualite:tests et image:construction du pipeline GitLab :
+// lint ruff, tests pytest (rapport JUnit), image construite par le démon buildkitd partagé (TLS mutuel),
+// SANS publication (Jenkins n'a pas de robot Harbor).
+// Agent : un pod éphémère de l'espace jenkins, trois conteneurs, compatible Pod Security « restricted ».
+pipeline {
+  agent {
+    kubernetes {
+      defaultContainer 'uv'
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    # Exigée par la politique d'entrée de buildkitd (comme les pods de job de ci-jobs).
+    medisphere.internal/ci: job
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: jnlp
+      image: registry.par1.medisphere.internal/dockerhub/jenkins/inbound-agent:3385.vf1123fb_515da_-1-jdk21@sha256:6dbeabd484bb3926293de0b337117f7ad8bb2c0ba1a425b3e34e3d3983b5e1f9
+      env:
+        - name: GIT_SSL_CAINFO
+          value: /etc/medisphere/ca/medisphere-root-ca.crt
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: 100m, memory: 256Mi}
+        limits: {memory: 512Mi}
+      volumeMounts:
+        - {name: racine, mountPath: /etc/medisphere/ca, readOnly: true}
+    - name: uv
+      image: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:a6aeb5c166af9f765f9c68e585b5a5148c28f3b8a362f90151cecea88b21a3e2
+      command: [sleep]
+      args: [infinity]
+      env:
+        - {name: HOME, value: /home/jenkins/agent}
+        - {name: UV_CACHE_DIR, value: /home/jenkins/agent/.cache/uv}
+        - {name: UV_PYTHON_DOWNLOADS, value: never}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: 250m, memory: 512Mi}
+        limits: {memory: 1Gi}
+    - name: buildkit
+      image: registry.par1.medisphere.internal/dockerhub/moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89
+      command: [sleep]
+      args: [infinity]
+      env:
+        - {name: BUILDKIT_HOST, value: "tcp://buildkitd.buildkit.svc.cluster.local:1234"}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities: {drop: [ALL]}
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {memory: 256Mi}
+      volumeMounts:
+        - {name: buildkit-client, mountPath: /etc/buildkit/client, readOnly: true}
+  volumes:
+    - name: racine
+      configMap: {name: medisphere-racine}
+    - name: buildkit-client
+      secret: {secretName: buildkit-client}
+'''
+    }
+  }
+  options {
+    timeout(time: 20, unit: 'MINUTES')
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+  stages {
+    stage('Lint') {
+      steps {
+        sh 'uv sync --locked'
+        sh 'uv run --no-sync ruff check . && uv run --no-sync ruff format --check .'
+      }
+    }
+    stage('Tests') {
+      steps {
+        sh 'uv run --no-sync pytest --junitxml=rapport-tests.xml'
+      }
+      post {
+        always { junit 'rapport-tests.xml' }
+      }
+    }
+    stage('Image') {
+      steps {
+        container('buildkit') {
+          // Même démon, même TLS mutuel que la CI GitLab ; archive OCI locale, jamais poussée.
+          sh '''
+            buildctl --addr "$BUILDKIT_HOST" --tlsdir /etc/buildkit/client build \
+              --frontend dockerfile.v0 --local context=. --local dockerfile=. \
+              --opt build-arg:VERSION="jenkins-${BUILD_NUMBER}" \
+              --output type=oci,dest=image.tar
+            ls -l image.tar
+          '''
+        }
+      }
+    }
+  }
+  post {
+    always { sh 'rm -f image.tar' }
+  }
+}

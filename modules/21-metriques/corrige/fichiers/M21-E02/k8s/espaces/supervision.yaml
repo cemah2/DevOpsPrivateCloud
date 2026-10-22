@@ -1,0 +1,26 @@
+# plateforme/k8s — espaces/supervision.yaml (M21-E02, PLAT-2202)
+# L'espace supervision existe depuis M15-E26 (il était déclaré dans rbac/supervision/supervision.yaml,
+# avec le compte ms-supervision) ; il rejoint espaces/ pour être appliqué par « task espaces » AVANT
+# toute synchronisation d'Argo CD (l'Application ne crée pas d'espace : CreateNamespace=false).
+# ⚠️ Retire le document « kind: Namespace » de rbac/supervision/supervision.yaml dans la même MR :
+# un objet décrit deux fois finit toujours par diverger.
+# - Pod Security « restricted » conservé : Prometheus, Alertmanager (pods de l'opérateur), opérateur,
+#   kube-state-metrics et Grafana le respectent (rendu du chart 92.11.0 vérifié, Grafana sans son
+#   conteneur init-chown-data). node-exporter va dans supervision-noeuds.
+# - exposition=oui : la HTTPRoute de Grafana doit être acceptée par gw-par1 (M15).
+# - PAS d'étiquette medisphere.internal/equipe : ce n'est pas un espace d'équipe.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: supervision
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    medisphere.internal/exposition: oui
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/ticket: "PLAT-2202"

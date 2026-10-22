@@ -1,0 +1,38 @@
+# plateforme/observabilite — grafana/sources-tempo.yaml (M23-E03, PLAT-2403)
+# Source de données Tempo, provisionnée par le « sidecar » de Grafana (kube-prometheus-stack, M21) : il lit
+# les ConfigMaps étiquetées grafana_datasource: "1" de l'espace supervision (même modèle que
+# sources-loki.yaml du M22). Ajoute ce fichier aux ressources de la kustomization racine de
+# plateforme/observabilite (Application « observabilite »).
+# UID STABLE « tempo » : les liens des autres sources (exemplars, champs dérivés de Loki, M23-E08) et les
+# tableaux de bord y font référence. M23-E08 ajoute les liens vers Loki ; M23-E13 et M23-E14, les liens
+# vers les métriques et les profils.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sources-tempo
+  namespace: supervision
+  labels:
+    grafana_datasource: "1"
+data:
+  sources-tempo.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.traces.svc.cluster.local:3200
+        editable: false
+        jsonData:
+          nodeGraph:
+            enabled: true
+          search:
+            hide: false
+          # Recherche d'une trace par identifiant : fenêtre autour de « maintenant » élargie (traces
+          # anciennes), Tempo cherchant sinon dans tout l'historique.
+          traceQuery:
+            timeShiftEnabled: true
+            spanStartTimeShift: "-30m"
+            spanEndTimeShift: "30m"
+          streamingEnabled:
+            search: true

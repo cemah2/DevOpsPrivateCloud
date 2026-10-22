@@ -1,0 +1,527 @@
+M23-E06 (DEV-2406) — MédiDoc : traces OpenTelemetry (SDK Go 1.47, otelhttp 0.72, otelaws 0.72).
+Base : medidoc/medidoc tel que livré (apps/medidoc). Sur une branche :
+  git apply --index traces.patch       (go.mod et go.sum compris : versions figées)
+  go vet ./... && go test ./...
+Équivalent pour les seules dépendances :
+  go get go.opentelemetry.io/otel@v1.47.0 go.opentelemetry.io/otel/sdk@v1.47.0 \
+    go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.47.0 \
+    go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.72.0 \
+    go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws@v0.72.0 \
+    go.opentelemetry.io/contrib/propagators/autoprop@v0.72.0 && go mod tidy
+- internal/telemetrie (nouveau) : fournisseur de traces, exportateur OTLP gRPC, propagateurs (OTEL_PROPAGATORS),
+  filtre des sondes ; tests (nom de span = motif de route, contexte W3C repris, aucune donnée de santé) ;
+- cmd/medidoc/main.go : traces démarrées avant le client S3, gestionnaire HTTP enveloppé par otelhttp,
+  dernières spans envoyées à l'arrêt ;
+- internal/stockage/client.go : une span par appel S3 (otelaws) ;
+- internal/serveur/serveur.go : attributs medidoc.document.id et medidoc.document.taille sur la span serveur.
+
+diff --git a/cmd/medidoc/main.go b/cmd/medidoc/main.go
+index 012d0ca..f0d5315 100644
+--- a/cmd/medidoc/main.go
++++ b/cmd/medidoc/main.go
+@@ -19,9 +19,12 @@ import (
+ 	"syscall"
+ 	"time"
+ 
++	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
++
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/config"
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/serveur"
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/telemetrie"
+ )
+ 
+ // version est fixée à la compilation (-ldflags "-X main.version=…").
+@@ -49,6 +52,20 @@ func lancer() error {
+ 	ctx, arreter := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+ 	defer arreter()
+ 
++	// Traces (M23-E06) : avant le client S3, que l'instrumentation AWS enveloppe.
++	arreterTraces, err := telemetrie.Demarrer(ctx, cfg.Version)
++	if err != nil {
++		return fmt.Errorf("traces : %w", err)
++	}
++	defer func() {
++		// Dernières spans envoyées après l'arrêt du serveur (5 s au plus).
++		fin, annulerFin := context.WithTimeout(context.Background(), 5*time.Second)
++		defer annulerFin()
++		if err := arreterTraces(fin); err != nil {
++			journal.Warn("envoi des dernières spans impossible", "erreur", err.Error())
++		}
++	}()
++
+ 	client, err := stockage.NouveauClient(ctx, stockage.ParamsClient{
+ 		Endpoint: cfg.Endpoint, Region: cfg.Region, CAFile: cfg.CAFile,
+ 	})
+@@ -58,8 +75,10 @@ func lancer() error {
+ 	srv := serveur.Nouveau(stockage.NouveauDepot(client, cfg.Bucket), cfg.MaxOctets, cfg.Version, journal)
+ 
+ 	httpSrv := &http.Server{
+-		Addr:              fmt.Sprintf(":%d", cfg.Port),
+-		Handler:           srv.Handler(),
++		Addr: fmt.Sprintf(":%d", cfg.Port),
++		// Une span serveur par requête, nommée d'après le motif de la route (« GET /documents/{id} »),
++		// contexte W3C lu dans les en-têtes entrants ; sondes et /metrics exclues.
++		Handler:           otelhttp.NewHandler(srv.Handler(), "medidoc", otelhttp.WithFilter(telemetrie.HorsSondes)),
+ 		ReadHeaderTimeout: 10 * time.Second,
+ 		ReadTimeout:       5 * time.Minute, // téléversements lents
+ 		WriteTimeout:      5 * time.Minute,
+diff --git a/go.mod b/go.mod
+index 7088af2..5a556d8 100644
+--- a/go.mod
++++ b/go.mod
+@@ -1,12 +1,19 @@
+ module git01.par1.medisphere.internal/medidoc/medidoc
+ 
+-go 1.26
++go 1.26.0
+ 
+ require (
+ 	github.com/aws/aws-sdk-go-v2 v1.47.1
+ 	github.com/aws/aws-sdk-go-v2/config v1.33.7
+ 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.1
+ 	github.com/prometheus/client_golang v1.24.1
++	go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws v0.72.0
++	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
++	go.opentelemetry.io/contrib/propagators/autoprop v0.72.0
++	go.opentelemetry.io/otel v1.47.0
++	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0
++	go.opentelemetry.io/otel/sdk v1.47.0
++	go.opentelemetry.io/otel/trace v1.47.0
+ )
+ 
+ require (
+@@ -16,21 +23,46 @@ require (
+ 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.4 // indirect
+ 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.4 // indirect
+ 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.4 // indirect
++	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.70.0 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.19 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.5 // indirect
++	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.4 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.4 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.4 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/signin v1.10.2 // indirect
++	github.com/aws/aws-sdk-go-v2/service/sns v1.47.2 // indirect
++	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.1 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.2 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.2 // indirect
+ 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.2 // indirect
+-	github.com/aws/smithy-go v1.28.1 // indirect
++	github.com/aws/smithy-go v1.28.2 // indirect
+ 	github.com/beorn7/perks v1.0.1 // indirect
++	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+ 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
++	github.com/felixge/httpsnoop v1.1.0 // indirect
++	github.com/go-logr/logr v1.4.4 // indirect
++	github.com/go-logr/stdr v1.2.2 // indirect
++	github.com/google/uuid v1.6.0 // indirect
++	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+ 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+ 	github.com/prometheus/client_model v0.6.2 // indirect
+ 	github.com/prometheus/common v0.70.1 // indirect
+ 	github.com/prometheus/procfs v0.21.1 // indirect
+-	golang.org/x/sys v0.47.0 // indirect
+-	google.golang.org/protobuf v1.36.11 // indirect
++	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
++	go.opentelemetry.io/contrib/propagators/aws v1.47.0 // indirect
++	go.opentelemetry.io/contrib/propagators/b3 v1.47.0 // indirect
++	go.opentelemetry.io/contrib/propagators/jaeger v1.47.0 // indirect
++	go.opentelemetry.io/contrib/propagators/ot v1.47.0 // indirect
++	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect
++	go.opentelemetry.io/otel/log v1.47.0 // indirect
++	go.opentelemetry.io/otel/metric v1.47.0 // indirect
++	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
++	go.uber.org/multierr v1.11.0 // indirect
++	golang.org/x/net v0.59.0 // indirect
++	golang.org/x/sys v0.48.0 // indirect
++	golang.org/x/text v0.42.0 // indirect
++	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
++	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
++	google.golang.org/grpc v1.83.2 // indirect
++	google.golang.org/protobuf v1.36.12 // indirect
+ )
+diff --git a/go.sum b/go.sum
+index 9d496ca..a6a86d8 100644
+--- a/go.sum
++++ b/go.sum
+@@ -14,42 +14,63 @@ github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.4 h1:dD4MR81I7YkpEBRk6UP
+ github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.4/go.mod h1:EcXV1kAFd5XwSkDHlj94gnF3q5CkJyYiIJfH8N0VmrE=
+ github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.4 h1:7Wo47d/xn/7KttCSBd8EGYeZ7ULRFRkUHr6vkZPBzVQ=
+ github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.4/go.mod h1:tDB2IVC1xC3vX8o+6uRlzhTxP3g1b77CZXFX/oD2FnQ=
++github.com/aws/aws-sdk-go-v2/service/dynamodb v1.70.0 h1:fgV0Q447Bgc0IPEf1dSl35bLoAxU5wqo2lRgRjJ+bUs=
++github.com/aws/aws-sdk-go-v2/service/dynamodb v1.70.0/go.mod h1:Gm+i2GlUsFNlzoBq8VXF44XHbKANn3tV8nYBBp3rN8Q=
+ github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.19 h1:bAdDl/HkGCcGPoe25ToSHEw23VIxt6CT5fLcg111BKg=
+ github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.19/go.mod h1:KaUzbLxv4CeSxh6ZCl9B4m7CuFenS8kUEaDs+f/DQr4=
+ github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.5 h1:/TYsZXdA8UTa+WCtCYSAJIr1vwl0+eho6TUgJGwFFO8=
+ github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.5/go.mod h1:qPqp1Uwd/BqdhPufv6oem9j5J7HNsgc2V22dUiDPn+s=
++github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.4 h1:6HvmOQ1rBRrZ4qPJSWxd5szPKUsngXCwSw+V3UaJHmw=
++github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.13.4/go.mod h1:zv2N29aiQUhG2XZNM9zgwCnAyVBdTBbcIpfNAlNmA20=
+ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.4 h1:29SvnfGhXjTl8ONxFwbj2rs6lbhiFXD2CgFQmbT/bXY=
+ github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.4/go.mod h1:wm04I5DMuNVvZHFe/dHnUxincvNbbK7AiNBbYsQivek=
+ github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.4 h1:pPiWfgeNxqluKEph7hvU88kuGKBPOWzO+Dk9t2zqqNs=
+ github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.4/go.mod h1:YlwGoIUDG/3kBQbdNOVs/xKZ9J01G8e/6D1mRBj9uTk=
++github.com/aws/aws-sdk-go-v2/service/route53 v1.70.1 h1:M30ocYvHPt4GiQH9KHG89/O/EKYpxT2bFwASOBmPtBw=
++github.com/aws/aws-sdk-go-v2/service/route53 v1.70.1/go.mod h1:120WTsKTWzoFwIpk9W1qJt7Uq51pRztY+pRcdLSiQxM=
+ github.com/aws/aws-sdk-go-v2/service/s3 v1.114.1 h1:9T6eO8/WXhij4PQaa2WaYsdekSCmT9Hw66Pw0S8do0Q=
+ github.com/aws/aws-sdk-go-v2/service/s3 v1.114.1/go.mod h1:9APRWGLFITKD+xzWSIyT9V7QV4bNlEuIieWlzXgGFlI=
+ github.com/aws/aws-sdk-go-v2/service/signin v1.10.2 h1:vrPP4O9VABnquYrDHfU+Fu0Fp6TuzaqPUu9Fh7VBBVY=
+ github.com/aws/aws-sdk-go-v2/service/signin v1.10.2/go.mod h1:xpo/geVldu8payT375WekctUzopG/hBU7miiqItMUlw=
++github.com/aws/aws-sdk-go-v2/service/sns v1.47.2 h1:hAqjMqf85Ht/P69qoLoXAmCjWFaq5e2n1dCEgobkvf8=
++github.com/aws/aws-sdk-go-v2/service/sns v1.47.2/go.mod h1:u1Rxkb4urNhfa5IAbBxPhNVsqWUkGku8IiZ5S5PFOFM=
++github.com/aws/aws-sdk-go-v2/service/sqs v1.52.1 h1:jBQM8NL0q3h0ZpHqo4TxOD9Ope96SlEF1Y6VLsF20nQ=
++github.com/aws/aws-sdk-go-v2/service/sqs v1.52.1/go.mod h1:+TDqZ1h8CLkW9ewfQkSPWHYRjm7/wDThKeDlR46qyvE=
+ github.com/aws/aws-sdk-go-v2/service/sso v1.38.2 h1:I8F/K5ahKJ4npqeGBBmMPftQy3/o1A55VRq2eUcP9Ts=
+ github.com/aws/aws-sdk-go-v2/service/sso v1.38.2/go.mod h1:rRD/dnm7q0HYE/I5TMaPgkWyyUGLcwuxHLABsLnQ3e0=
+ github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.2 h1:i5nn7Ri5CgFfNRzwlUiZOIIUA+5Vgg+unNEC0PzF1+s=
+ github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.2/go.mod h1:skwM/xsbR/1ReUTesv9BhpJp1VjajR7DWQnuVLwiXsQ=
+ github.com/aws/aws-sdk-go-v2/service/sts v1.51.2 h1:AWSPqynwEJV8J2pl/p7aizCf7a23/NGHR+rK/KLOxi4=
+ github.com/aws/aws-sdk-go-v2/service/sts v1.51.2/go.mod h1:26zA0GhDrLo+yiLI2yXWxqB1PdsShfLikoI7GOEgugM=
+-github.com/aws/smithy-go v1.28.1 h1:R/nXH00c8qcfCzQVELtRw+eLQWtzv+VAIEFJ1/xxXlQ=
+-github.com/aws/smithy-go v1.28.1/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqxX9i1Fc=
++github.com/aws/smithy-go v1.28.2 h1:myhcykQcatTul2B/zITjDk203G7t0awUAs1hVry5Bvg=
++github.com/aws/smithy-go v1.28.2/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqxX9i1Fc=
+ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
+ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
++github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
++github.com/cenkalti/backoff/v5 v5.0.3/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
+ github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
+ github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+-github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+-github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
++github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
++github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
++github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
++github.com/go-logr/logr v1.4.4 h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8=
++github.com/go-logr/logr v1.4.4/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
++github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
++github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
++github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
++github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=
+ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+ github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
++github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
++github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
++github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 h1:/Tnpcb2E0Pz/tN9s3bfEY2Q8ePCEX9iuS+cneUwncnw=
++github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0/go.mod h1:zOBXOsUaBSjKgmH4OGzV1esUpR3oUSCPYVd2cUBjKYY=
+ github.com/klauspost/compress v1.19.1 h1:VsB4HPswih7mmZ8WleSFQ75c/Ui1M4trX5oAsJnhSlk=
+ github.com/klauspost/compress v1.19.1/go.mod h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ=
+ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
+ github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
+ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
+ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
+-github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
+-github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+ github.com/prometheus/client_golang v1.24.1 h1:JnJkREXzWxUdCuPFpIWZiPispT9xVV59uiuyR2bPlnU=
+ github.com/prometheus/client_golang v1.24.1/go.mod h1:F+oSRECHg4sse5ucfYpYDeIv/hu68Zo0uoHKetWnzcE=
+ github.com/prometheus/client_model v0.6.2 h1:oBsgwpGs7iVziMvrGhE53c/GrLUsZdHnqNwqPLxwZyk=
+@@ -58,15 +79,63 @@ github.com/prometheus/common v0.70.1 h1:1HvjP4D5oL3t8RsPlwxA9onvvStjtIHYE5XuuwOi
+ github.com/prometheus/common v0.70.1/go.mod h1:VdFUQDMZK3VLkurFUVhia6uys/0suUp86TJz5qbJRhc=
+ github.com/prometheus/procfs v0.21.1 h1:GljZCt+zSTS+NZq88cyQ1LjZ+RCHp3uVuabBWA5+OJI=
+ github.com/prometheus/procfs v0.21.1/go.mod h1:aB55Cww9pdSJVHk0hUf0inxWyyjPogFIjmHKYgMKmtY=
+-github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
+-github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
++github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
++github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
++go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
++go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
++go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws v0.72.0 h1:ddEa1svIlpFtku1zdMRl7rAZ0NMlyO8QPnPfY5MQzpg=
++go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws v0.72.0/go.mod h1:GAscagS5fJwnTQpDHcz/hA9Iy4xUaVnRgwEyFMHJTHI=
++go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0 h1:LxwW/9ctSCv+QkE/cLR7M91ZIkXNMqJtEMi1vCw9U8s=
++go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0/go.mod h1:tOsftB4SslBwwErVEPaenU2RpThXWPIU8DoJHEC4dyw=
++go.opentelemetry.io/contrib/propagators/autoprop v0.72.0 h1:/Kv8DucXan87cGRpa3NeZtlk26kFahF2YrL6Sz3GFsI=
++go.opentelemetry.io/contrib/propagators/autoprop v0.72.0/go.mod h1:Qttdialu54uM051nRjcHgqPshuTi2YGZb/rruiNJ8zo=
++go.opentelemetry.io/contrib/propagators/aws v1.47.0 h1:n/2x/vQki1ojD7R2jYHdnNdI74Yx/OFdY4YXFFesm8M=
++go.opentelemetry.io/contrib/propagators/aws v1.47.0/go.mod h1:qz0eA26XfmJUDbcqCZrn2HJ5WIETXpcMfiKRAEHRvmQ=
++go.opentelemetry.io/contrib/propagators/b3 v1.47.0 h1:vlKDmtjhe1R0d7kdov/+KVTKWOKeGLyohB+iXoDPRMQ=
++go.opentelemetry.io/contrib/propagators/b3 v1.47.0/go.mod h1:0zRiXIfXU30PKYMsdbqYbGK8iHF8KqyPi0qdXT2wAuE=
++go.opentelemetry.io/contrib/propagators/jaeger v1.47.0 h1:2lDw6AKPV33/7Qw9oN5YdxuSJIlUz7q3tkfSlJX5rh0=
++go.opentelemetry.io/contrib/propagators/jaeger v1.47.0/go.mod h1:y1ORt/QAquBL+O3I06KE7iMENp9p05iBqaV4xNF3J7k=
++go.opentelemetry.io/contrib/propagators/ot v1.47.0 h1:nZUqh0/8CMRh7fQMfJl3HWFW92vqJ4FcTRQ7lrubOO4=
++go.opentelemetry.io/contrib/propagators/ot v1.47.0/go.mod h1:K3kUrioG2mDmYF2xaEbjASrL0Slv6b7deOeV/4QofgU=
++go.opentelemetry.io/otel v1.47.0 h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=
++go.opentelemetry.io/otel v1.47.0/go.mod h1:8wS9O2qfXrYrzp6hIF/HOYJJf/wIhFPhR2xLuP+iXQU=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 h1:julhjPeUH/q/7hinbSdDdqt5h7Zw9YWmRlWRhI0jd54=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0/go.mod h1:Ao2mz688LH/tFf0yMAenidq6k2YNSx6SIY2q6jDACck=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0 h1:UFpxOpYPmMNUtOWhdb+nC1WELIgVf8z9higURrbzYU4=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0/go.mod h1:YBGjxe3lt0jtXoEXxGrGhv/jM7oUBUDVK7zhAvNyEjc=
++go.opentelemetry.io/otel/log v1.47.0 h1:cOTS1CcLbSQeZKanGJ+0JpF/+t4PELi3O3bbl2lqCcI=
++go.opentelemetry.io/otel/log v1.47.0/go.mod h1:9byitSQ5pLC6PpqwGXjqdMKya6ZTswHRZh2vvXT33nw=
++go.opentelemetry.io/otel/metric v1.47.0 h1:4PptaldXx3Eat1XjMZ68pPJEs5wrhlemctZE9a3UdWY=
++go.opentelemetry.io/otel/metric v1.47.0/go.mod h1:ADGSXxRrXM6bjbvLo535EstVFlPpPYZm4LBKixjDHwU=
++go.opentelemetry.io/otel/sdk v1.47.0 h1:zWXEr4j2lFefG87TU6Yg8a7ngfohIKFZHKp0Hf5hC6I=
++go.opentelemetry.io/otel/sdk v1.47.0/go.mod h1:VUc24kiOeoGsxG8G9ULx3fWKvB7jMhnGE8Oi607lgR0=
++go.opentelemetry.io/otel/sdk/metric v1.47.0 h1:lfISg2j93VT6yqdk9OfUaZmw/GfcZqCCV3jdXtsPnKw=
++go.opentelemetry.io/otel/sdk/metric v1.47.0/go.mod h1:ypLp+mW1Nt2x+Szt3b5/i1syodyts49lMOwxpDI3VGw=
++go.opentelemetry.io/otel/trace v1.47.0 h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM=
++go.opentelemetry.io/otel/trace v1.47.0/go.mod h1:jNaSLa2PZEYFG6fRjJABAu+bw4FS08uDmPg28lTghu0=
++go.opentelemetry.io/proto/otlp v1.11.0 h1:5rrYs0Ykyj50sdU/JU0x8etU+LubXWb+gED6TbEdMIk=
++go.opentelemetry.io/proto/otlp v1.11.0/go.mod h1:SmVizdCOAm3XBtG1g1NnOdhW6jtddT72hLMhv8VwA8E=
+ go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
+ go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=
++go.uber.org/multierr v1.11.0 h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0=
++go.uber.org/multierr v1.11.0/go.mod h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN80Y=
+ go.yaml.in/yaml/v2 v2.4.4 h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=
+ go.yaml.in/yaml/v2 v2.4.4/go.mod h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ=
+-golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
+-golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
+-google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
+-google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
+-gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
+-gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
++go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
++go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
++golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=
++golang.org/x/net v0.59.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg=
++golang.org/x/sys v0.48.0 h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=
++golang.org/x/sys v0.48.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
++golang.org/x/text v0.42.0 h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=
++golang.org/x/text v0.42.0/go.mod h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E=
++gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
++gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
++google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc h1:rZHRz0ogq4Pid1IKtA/ivHi8XONVF5tqUQXA2TtgpkE=
++google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc/go.mod h1:K/n0XLazCJHjD73YuMyNJsN38BPPy1kfFnKxUXaThFU=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc h1:4bNTbnb44EqGVy9HaQxSY2jnafSUdgV3qHtedvNpDKg=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc/go.mod h1:OaIUM3+LpYcK2GXM4FTmhWoIq371Owdr+Cc7/BsYHHc=
++google.golang.org/grpc v1.83.2 h1:EManeRomTObA0BU7I8vXgg/78uE5MJ9M8B39EX2WscU=
++google.golang.org/grpc v1.83.2/go.mod h1:YPI1hK3kDked6iHvgX3tR0y+nX/qpMFKhPgFsokw1S8=
++google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=
++google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
+diff --git a/internal/serveur/serveur.go b/internal/serveur/serveur.go
+index c37dfdc..11739f2 100644
+--- a/internal/serveur/serveur.go
++++ b/internal/serveur/serveur.go
+@@ -19,6 +19,8 @@ import (
+ 	"github.com/prometheus/client_golang/prometheus"
+ 	"github.com/prometheus/client_golang/prometheus/collectors"
+ 	"github.com/prometheus/client_golang/prometheus/promhttp"
++	"go.opentelemetry.io/otel/attribute"
++	"go.opentelemetry.io/otel/trace"
+ 
+ 	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage"
+ )
+@@ -164,7 +166,11 @@ func (s *Serveur) deposer(w http.ResponseWriter, r *http.Request) {
+ 		ecrireErreur(w, http.StatusBadGateway, "stockage indisponible")
+ 		return
+ 	}
+-	// Ni nom de fichier ni patient dans le journal : données de santé.
++	// Ni nom de fichier ni patient dans le journal ni dans la trace : données de santé.
++	trace.SpanFromContext(r.Context()).SetAttributes(
++		attribute.String("medidoc.document.id", doc.ID),
++		attribute.Int64("medidoc.document.taille", doc.Taille),
++	)
+ 	s.journal.Info("document enregistré", "document_id", doc.ID, "taille", doc.Taille)
+ 	w.Header().Set("Location", "/documents/"+doc.ID)
+ 	ecrireJSON(w, http.StatusCreated, doc)
+diff --git a/internal/stockage/client.go b/internal/stockage/client.go
+index 3df8f25..4bf24a8 100644
+--- a/internal/stockage/client.go
++++ b/internal/stockage/client.go
+@@ -12,6 +12,7 @@ import (
+ 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
+ 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+ 	"github.com/aws/aws-sdk-go-v2/service/s3"
++	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
+ )
+ 
+ // ParamsClient : réglages de connexion au service S3.
+@@ -43,6 +44,9 @@ func NouveauClient(ctx context.Context, p ParamsClient) (*s3.Client, error) {
+ 	// On ne les envoie que lorsque l'opération l'exige.
+ 	cfg.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+ 	cfg.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
++	// Une span client par appel S3 (« S3.PutObject », attributs rpc.* et aws.*), fille de la span
++	// de la requête HTTP qui l'a provoqué (M23-E06). Ni clé d'objet ni métadonnée en attribut.
++	otelaws.AppendMiddlewares(&cfg.APIOptions)
+ 
+ 	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+ 		o.BaseEndpoint = aws.String(p.Endpoint)
+diff --git a/internal/telemetrie/telemetrie.go b/internal/telemetrie/telemetrie.go
+new file mode 100644
+index 0000000..1158fce
+--- /dev/null
++++ b/internal/telemetrie/telemetrie.go
+@@ -0,0 +1,81 @@
++// Package telemetrie installe les traces OpenTelemetry de MédiDoc (M23-E06).
++//
++// Tout se règle par les variables d'environnement STANDARD d'OpenTelemetry, posées par la
++// plateforme (composant kustomize « telemetrie » de medidoc/deploiement) :
++//
++//	OTEL_SERVICE_NAME            medidoc
++//	OTEL_RESOURCE_ATTRIBUTES     deployment.environment.name=…,service.namespace=medisphere
++//	OTEL_EXPORTER_OTLP_ENDPOINT  http://otel-agent-collector.traces.svc.cluster.local:4317 (gRPC sans TLS)
++//	OTEL_TRACES_SAMPLER(_ARG)    lus par le SDK (défaut : parentbased_always_on)
++//	OTEL_PROPAGATORS             lus par autoprop (défaut : tracecontext,baggage)
++//	OTEL_SDK_DISABLED=true       aucune trace
++//
++// Sans OTEL_EXPORTER_OTLP_ENDPOINT (poste de développement, tests), les spans existent (identifiants
++// disponibles pour les journaux) mais ne sont pas exportées.
++package telemetrie
++
++import (
++	"context"
++	"errors"
++	"net/http"
++	"os"
++	"strings"
++
++	"go.opentelemetry.io/contrib/propagators/autoprop"
++	"go.opentelemetry.io/otel"
++	"go.opentelemetry.io/otel/attribute"
++	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
++	"go.opentelemetry.io/otel/sdk/resource"
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++)
++
++// Arret vide les spans en attente et ferme l'exportateur.
++type Arret func(context.Context) error
++
++// Demarrer installe le fournisseur de traces et le propagateur globaux. À appeler une fois, au
++// démarrage, AVANT de créer le client S3 et le serveur HTTP.
++func Demarrer(ctx context.Context, version string) (Arret, error) {
++	rien := func(context.Context) error { return nil }
++	if strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true") {
++		return rien, nil
++	}
++	// Propagation W3C (traceparent, baggage) par défaut ; OTEL_PROPAGATORS peut la changer.
++	otel.SetTextMapPropagator(autoprop.NewTextMapPropagator())
++
++	// Ressource : OTEL_SERVICE_NAME et OTEL_RESOURCE_ATTRIBUTES (WithFromEnv), SDK, et la version
++	// livrée (la même que /healthz). Pas de semconv importé : une seule clé, écrite en clair.
++	res, err := resource.New(ctx,
++		resource.WithFromEnv(),
++		resource.WithTelemetrySDK(),
++		resource.WithAttributes(attribute.String("service.version", version)),
++	)
++	if err != nil && !errors.Is(err, resource.ErrPartialResource) {
++		return rien, err
++	}
++
++	opts := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
++	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" {
++		// Point d'accès, TLS (http:// = sans TLS), en-têtes et délais : variables OTEL_EXPORTER_OTLP_*.
++		// La connexion gRPC est paresseuse : un Collector absent au démarrage ne bloque rien.
++		exp, err := otlptracegrpc.New(ctx)
++		if err != nil {
++			return rien, err
++		}
++		// Envoi par lots en tâche de fond : une requête HTTP n'attend jamais le Collector.
++		opts = append(opts, sdktrace.WithBatcher(exp))
++	}
++	// L'échantillonneur n'est pas passé : le SDK lit OTEL_TRACES_SAMPLER et OTEL_TRACES_SAMPLER_ARG.
++	fournisseur := sdktrace.NewTracerProvider(opts...)
++	otel.SetTracerProvider(fournisseur)
++	return fournisseur.Shutdown, nil
++}
++
++// HorsSondes est le filtre de l'instrumentation HTTP : ni les sondes de Kubernetes ni la collecte
++// de Prometheus ne produisent de span (une requête toutes les quelques secondes, sans intérêt).
++func HorsSondes(r *http.Request) bool {
++	switch r.URL.Path {
++	case "/healthz", "/readyz", "/metrics":
++		return false
++	}
++	return true
++}
+diff --git a/internal/telemetrie/telemetrie_test.go b/internal/telemetrie/telemetrie_test.go
+new file mode 100644
+index 0000000..501ea0d
+--- /dev/null
++++ b/internal/telemetrie/telemetrie_test.go
+@@ -0,0 +1,97 @@
++package telemetrie_test
++
++import (
++	"bytes"
++	"io"
++	"log/slog"
++	"mime/multipart"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
++	"go.opentelemetry.io/otel/propagation"
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++	"go.opentelemetry.io/otel/sdk/trace/tracetest"
++
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/serveur"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/stockage/stockagetest"
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/telemetrie"
++)
++
++// serveurTrace monte le serveur comme main.go, avec un fournisseur de traces local qui enregistre
++// les spans en mémoire (pas de fournisseur global : les tests restent indépendants).
++func serveurTrace(t *testing.T) (*httptest.Server, *tracetest.SpanRecorder) {
++	t.Helper()
++	enreg := tracetest.NewSpanRecorder()
++	fournisseur := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(enreg))
++	log := slog.New(slog.NewJSONHandler(io.Discard, nil))
++	srv := serveur.Nouveau(stockage.NouveauDepot(stockagetest.Nouveau(), "medidoc-documents"), 1<<20, "1.2.3", log)
++	h := otelhttp.NewHandler(srv.Handler(), "medidoc",
++		otelhttp.WithFilter(telemetrie.HorsSondes),
++		otelhttp.WithTracerProvider(fournisseur),
++		otelhttp.WithPropagators(propagation.TraceContext{}),
++	)
++	ts := httptest.NewServer(h)
++	t.Cleanup(ts.Close)
++	return ts, enreg
++}
++
++func TestSondesNonTracees(t *testing.T) {
++	ts, enreg := serveurTrace(t)
++	for _, chemin := range []string{"/healthz", "/readyz", "/metrics"} {
++		r, err := http.Get(ts.URL + chemin)
++		if err != nil {
++			t.Fatal(err)
++		}
++		_ = r.Body.Close()
++	}
++	if n := len(enreg.Ended()); n != 0 {
++		t.Fatalf("les sondes ne doivent produire aucune span, %d obtenue(s)", n)
++	}
++}
++
++func TestSpanNommeeParLaRouteEtContexteRepris(t *testing.T) {
++	ts, enreg := serveurTrace(t)
++	var corps bytes.Buffer
++	mw := multipart.NewWriter(&corps)
++	_ = mw.WriteField("patient", "PAT-000123")
++	fw, _ := mw.CreateFormFile("fichier", "compte-rendu-échographie.pdf")
++	_, _ = fw.Write([]byte("%PDF-1.7 contenu"))
++	_ = mw.Close()
++	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/documents", &corps)
++	req.Header.Set("Content-Type", mw.FormDataContentType())
++	const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"
++	req.Header.Set("traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
++	r, err := http.DefaultClient.Do(req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	_ = r.Body.Close()
++	if r.StatusCode != http.StatusCreated {
++		t.Fatalf("code %d", r.StatusCode)
++	}
++
++	spans := enreg.Ended()
++	if len(spans) != 1 {
++		t.Fatalf("une span attendue, %d obtenue(s)", len(spans))
++	}
++	s := spans[0]
++	if s.Name() != "POST /documents" {
++		t.Errorf("nom de span %q, attendu « POST /documents »", s.Name())
++	}
++	if got := s.SpanContext().TraceID().String(); got != traceID {
++		t.Errorf("trace %s, attendue %s (contexte W3C non repris)", got, traceID)
++	}
++	if !s.Parent().IsRemote() {
++		t.Error("le parent devrait être distant (MédiAgenda)")
++	}
++	for _, kv := range s.Attributes() {
++		v := kv.Value.Emit()
++		if strings.Contains(v, "PAT-000123") || strings.Contains(v, "échographie") {
++			t.Errorf("donnée de santé dans l'attribut %s=%s", kv.Key, v)
++		}
++	}
++}

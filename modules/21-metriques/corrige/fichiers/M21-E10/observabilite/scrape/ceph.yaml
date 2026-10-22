@@ -1,0 +1,43 @@
+# plateforme/observabilite — scrape/ceph.yaml (M21-E10, PLAT-2210)
+# Module « prometheus » du mgr de ceph-par1 (Ceph Tentacle 20.2), port 9283, en HTTP.
+# Les trois mgr répondent : l'actif sert les métriques, les mgr en attente (standby_behaviour
+# « default ») répondent 200 avec un corps vide sur /metrics. Les trois cibles restent donc « up »
+# et ceph_* n'existe qu'une fois : c'est voulu (une alerte « cible injoignable » ne sonne pas à
+# chaque bascule du mgr actif).
+# Prometheus (pods sur les travailleurs) joint 10.10.30.51-53 par la carte eth1 des travailleurs
+# (VLAN 30), sans traverser la bordure : seul le pare-feu local des nœuds Ceph (firewalld) compte.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: ceph
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobName: ceph
+  scheme: HTTP
+  metricsPath: /metrics
+  # Documentation du module (section honor_labels) : les séries par démon portent leur propre
+  # étiquette « instance » (nom court de l'hôte du démon) ; sans honorLabels, Prometheus la
+  # renommerait en exported_instance et les séries changeraient d'instance à chaque bascule du mgr.
+  honorLabels: true
+  # Le module garde ses métriques en cache (mgr/prometheus/cache) et les recalcule toutes les
+  # 15 s : collecter plus souvent ne sert à rien.
+  scrapeInterval: 30s
+  scrapeTimeout: 20s
+  staticConfigs:
+    - targets:
+        - 10.10.30.51:9283
+        - 10.10.30.52:9283
+        - 10.10.30.53:9283
+      labels:
+        equipe: plateforme
+        role: ceph
+        grappe: ceph-par1
+  relabelings:
+    # Instance lisible (ceph01…) au lieu de l'adresse : celle des séries « up » et de la cible.
+    - sourceLabels: [__address__]
+      regex: 10\.10\.30\.5([1-3]):9283
+      targetLabel: instance
+      replacement: ceph0$1
+      action: replace

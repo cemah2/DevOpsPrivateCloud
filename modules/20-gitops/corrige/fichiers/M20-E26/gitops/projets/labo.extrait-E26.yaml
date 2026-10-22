@@ -1,0 +1,10 @@
+# plateforme/gitops — projets/labo.yaml : AJOUT de M20-E26 (PLAT-2126) à l'AppProject d'E07.
+# Le projet labo peut désormais déployer l'espace « agence » du cluster de l'agence LYO1, et RIEN
+# d'autre de ce cluster. Première barrière : l'AppProject (Argo CD refuse la synchronisation) ;
+# seconde barrière : les droits du compte argocd-gestion dans lyo-k3s01 (l'API de k3s refuse).
+spec:
+  destinations:
+    # (destination d'E07 inchangée : in-cluster, wb-essais)
+    - server: https://lyo-k3s01.par1.medisphere.internal:6443
+      namespace: agence
+  # clusterResourceWhitelist reste vide (E07) : aucun objet de cluster, nulle part.

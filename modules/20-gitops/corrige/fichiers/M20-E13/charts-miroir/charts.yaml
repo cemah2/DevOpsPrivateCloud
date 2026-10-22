@@ -1,0 +1,18 @@
+# plateforme/charts-miroir — charts.yaml (M20-E13, PLAT-2113) : charts Helm TIERS recopiés dans Harbor
+# (projet « charts », OCI) et signés par la clé MédiSphère. Argo CD ne tire JAMAIS un chart d'Internet :
+# il ne lit que oci://registry.par1.medisphere.internal/charts (PLAN §4.11).
+#
+# Une entrée = un chart à UNE version. Ajouter une version = une MR qui ajoute (ou modifie) une entrée :
+#   nom        nom du chart (et du dépôt OCI dans Harbor : charts/<nom>)
+#   depot      dépôt Helm amont (https://…) ou registre OCI amont (oci://…/<nom> complet)
+#   version    version EXACTE (pas d'intervalle)
+#   empreinte  SHA-256 de l'archive .tgz amont, relevée À LA MAIN dans l'index du dépôt (champ
+#              « digest ») ou par « helm pull » + sha256sum, et relue en MR : le pipeline refuse une
+#              archive dont l'empreinte diffère (dépôt amont compromis, version republiée).
+#   usage      qui s'en sert (relu à chaque montée de version)
+charts:
+  - nom: argo-rollouts
+    depot: https://argoproj.github.io/argo-helm
+    version: 2.43.8
+    empreinte: sha256:1c998ee3cd72a078ca73ba399644198fe8a446399b5fc5bbff94af5043a0747d
+    usage: "Argo Rollouts 1.10.1 (M20-E15), Application plateforme/gitops plateforme/argo-rollouts.yaml"

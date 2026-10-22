@@ -1,0 +1,44 @@
+# plateforme/k8s — rbac/wb-checks-livraison.yaml (M19-E02 ; étendue en M20-E03, PLAT-2103, et M20-E15, PLAT-2115)
+# Lecture seule des objets de la livraison pour le compte des vérifications du workbook
+# (wb-system/wb-checks, M14-E06). AGRÉGÉE au ClusterRole « wb-checks » par l'étiquette
+# workbook.medisphere.internal/checks=true : aucune liaison à écrire. Jamais de Secret.
+#
+# ⚠️ Les règles du M19 (bloc « M19-E02 » ci-dessous) sont celles de TON fichier : garde-les telles
+# quelles. M20-E03 n'ajoute que le bloc « M20-E03 » ; M20-E15 y ajoutera les objets d'Argo Rollouts.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-livraison
+  labels:
+    app.kubernetes.io/part-of: workbook
+    workbook.medisphere.internal/checks: "true"
+rules:
+  # --- M19-E02 : objets de gitlab-runner, ci-jobs, buildkit (dans tout le cluster) ---
+  - apiGroups: [""]
+    resources: [pods, configmaps, resourcequotas, limitranges, serviceaccounts]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [cilium.io]
+    resources: [ciliumnetworkpolicies]
+    verbs: [get, list, watch]
+  # --- M20-E03 : objets d'Argo CD ---
+  # Applications, ApplicationSets, AppProjects : spécification et statut (synchronisation, santé,
+  # historique). Ils ne contiennent aucun secret : les identifiants des dépôts et des clusters sont
+  # des Secrets (argocd.argoproj.io/secret-type), que wb-checks ne lit jamais.
+  - apiGroups: [argoproj.io]
+    resources: [applications, applicationsets, appprojects]
+    verbs: [get, list, watch]
+  # --- M20-E15 : objets d'Argo Rollouts ---
+  # Rollouts, analyses (gabarits, gabarits de cluster, exécutions) et expériences : spécification et
+  # statut, rien de secret.
+  - apiGroups: [argoproj.io]
+    resources: [rollouts, analysisruns, analysistemplates, clusteranalysistemplates, experiments]
+    verbs: [get, list, watch]

@@ -1,0 +1,10 @@
+# mediagenda/deploiement — overlays/dev/kustomization.yaml : AJOUTS de M23-E06 (le reste ne change pas).
+resources:
+  # … ressources existantes …
+  - sortie-medidoc.yaml
+configMapGenerator:
+  # Fusion dans la ConfigMap de paramètres de la base (M17-E09) : adresse de MédiDoc de dev.
+  - name: mediagenda-parametres
+    behavior: merge
+    literals:
+      - MEDIAGENDA_MEDIDOC_URL=http://medidoc.medidoc-dev.svc.cluster.local

@@ -1,0 +1,18 @@
+# plateforme/k8s — espaces/medidoc-recette/20-limites.yaml (M20-E33). Valeurs par défaut des conteneurs :
+# sans elles, un conteneur sans « resources » serait refusé par le quota sans message clair.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: limites-defaut
+  namespace: medidoc-recette
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        cpu: 500m
+        memory: 256Mi
+      max:
+        memory: 1Gi

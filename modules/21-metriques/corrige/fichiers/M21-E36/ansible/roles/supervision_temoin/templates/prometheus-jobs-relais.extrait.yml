@@ -1,0 +1,23 @@
+# plateforme/ansible — roles/supervision_temoin/templates/prometheus.yml.j2 : job ajouté en M21-E36.
+# EXTRAIT, à insérer dans « scrape_configs: » (après les jobs de M21-E28). Même technique que le
+# job watchdog-cluster : la requête PromQL est DÉJÀ encodée dans la cible (Prometheus l'encode une
+# fois de plus, blackbox la décode une fois).
+# Requête : ALERTS{alertstate="firing",relais="temoin"}
+  - job_name: relais-cluster
+    metrics_path: /probe
+    params:
+      module: [relais_cluster]
+    scrape_interval: 1m
+    scrape_timeout: 20s
+    static_configs:
+      - targets:
+          - "http://prometheus.apps.par1.medisphere.internal:9090/api/v1/query?query=ALERTS%7Balertstate%3D%22firing%22%2Crelais%3D%22temoin%22%7D"
+        labels:
+          cluster: k8s-par1
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: instance
+        replacement: k8s-par1
+      - target_label: __address__
+        replacement: "{{ supervision_temoin_blackbox_ecoute }}"

@@ -1,0 +1,29 @@
+# RabbitMQ de MédiNotif : l'opérateur et le cluster, chart + valeurs dans Git (Lucas)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rabbitmq-medinotif
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.bitnami.com/bitnami
+      chart: rabbitmq-cluster-operator
+      targetRevision: "*"
+      helm:
+        valueFiles:
+          - $valeurs/valeurs/rabbitmq/values.yaml
+        values: |
+          rabbitmqImage:
+            tag: latest
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: "*"
+  syncPolicy:
+    automated:
+      prune: true
+    syncOptions:
+      - CreateNamespace=true

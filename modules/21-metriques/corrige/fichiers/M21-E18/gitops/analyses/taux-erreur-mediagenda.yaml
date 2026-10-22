@@ -1,0 +1,69 @@
+# ClusterAnalysisTemplate taux-erreur-mediagenda (M21-E18, DEV-2218).
+# À ranger à côté de fumee-mediagenda et pret-mediagenda (M20-E18), dans le même dossier et la même
+# Application Argo CD que celles-ci (projet plateforme ; objet de portée cluster).
+#
+# Mesure la révision CANARY seulement : les séries de MédiAgenda portent l'étiquette
+# rollouts_pod_template_hash (réécriture du ServiceMonitor mediagenda, E07, qui collecte TOUS les
+# pods de l'API une seule fois par le Service mediagenda-metriques), et l'argument hash-canary
+# reçoit le hachage de la révision la plus récente (valueFrom.podTemplateHashValue: Latest).
+# Prometheus interne au cluster : Service kps-prometheus (ClusterIP) de l'espace supervision ; la
+# politique d'entrée prometheus-entree autorise l'espace argo-rollouts (kps/values.yaml, E18).
+apiVersion: argoproj.io/v1alpha1
+kind: ClusterAnalysisTemplate
+metadata:
+  name: taux-erreur-mediagenda
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  args:
+    - name: namespace
+    - name: hash-canary
+    # Seuils réglables par Rollout (prod plus stricte si besoin).
+    - name: seuil-erreurs
+      value: "0.05"
+    - name: seuil-p95
+      value: "0.5"
+  metrics:
+    # Part des 5xx de la révision canary sur 2 minutes. Sans trafic vers le canary, le dénominateur
+    # « > 0 » est vide : la requête renvoie un vecteur vide, la mesure est en ERREUR (pas en échec).
+    # consecutiveErrorLimit borne cette situation : un canary qui ne reçoit jamais de trafic n'est
+    # pas déclaré sain par défaut.
+    - name: taux-erreur
+      interval: 1m
+      initialDelay: 2m
+      failureLimit: 3
+      consecutiveErrorLimit: 4
+      successCondition: result[0] <= {{args.seuil-erreurs}}
+      failureCondition: result[0] > {{args.seuil-erreurs}}
+      provider:
+        prometheus:
+          address: http://kps-prometheus.supervision.svc.cluster.local:9090
+          timeout: 20
+          query: |
+            (
+              sum(rate(mediagenda_http_requests_total{namespace="{{args.namespace}}", rollouts_pod_template_hash="{{args.hash-canary}}", route!~"/sante|/pret|/metrics", code=~"5.."}[2m]))
+              or vector(0)
+            )
+            /
+            (
+              sum(rate(mediagenda_http_requests_total{namespace="{{args.namespace}}", rollouts_pod_template_hash="{{args.hash-canary}}", route!~"/sante|/pret|/metrics"}[2m]))
+              > 0
+            )
+    # 95e centile de la durée du canary. Sans trafic : NaN, considéré comme un succès (le taux
+    # d'erreurs, lui, ne l'accepte pas : voir ci-dessus).
+    - name: latence-p95
+      interval: 1m
+      initialDelay: 2m
+      failureLimit: 3
+      consecutiveErrorLimit: 4
+      successCondition: isNaN(result[0]) || result[0] <= {{args.seuil-p95}}
+      provider:
+        prometheus:
+          address: http://kps-prometheus.supervision.svc.cluster.local:9090
+          timeout: 20
+          query: |
+            histogram_quantile(0.95,
+              sum by (le) (
+                rate(mediagenda_http_request_duration_seconds_bucket{namespace="{{args.namespace}}", rollouts_pod_template_hash="{{args.hash-canary}}", route!~"/sante|/pret|/metrics"}[2m])
+              )
+            )

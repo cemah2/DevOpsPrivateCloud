@@ -1,0 +1,134 @@
+# CronJob argocd-export (M20-E28). Deux conteneurs, aucun image construite par nous :
+#   1. « export » (image d'Argo CD, même empreinte que la release) : argocd admin export, puis
+#      chiffrement GPG pour la clé publique de sauvegarde (gpg est dans l'image d'Argo CD) ; le clair
+#      n'existe qu'en mémoire (emptyDir en RAM) et est effacé avant la fin du conteneur ;
+#   2. « envoi » (rclone, cache Harbor « ghcr ») : envoi vers s3-01, puis relecture de la taille.
+# L'espace argocd est en Pod Security « restricted » : utilisateurs non root, aucune capacité.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: argocd-export
+  labels:
+    app.kubernetes.io/part-of: argocd-sauvegarde
+spec:
+  # Chaque nuit à 02:17, heure de Paris (minute décalée : pas tout le monde à :00).
+  schedule: "17 2 * * *"
+  timeZone: Europe/Paris
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 900
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: argocd-export
+            app.kubernetes.io/part-of: argocd-sauvegarde
+        spec:
+          serviceAccountName: argocd-export
+          restartPolicy: Never
+          priorityClassName: medisphere-critique
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumes:
+            - name: travail
+              emptyDir:
+                medium: Memory
+                sizeLimit: 64Mi
+            - name: cle
+              configMap:
+                name: argocd-sauvegarde-cle-publique
+            # Racine MédiSphère pour vérifier le certificat de s3-01 : celle qu'Argo CD connaît déjà
+            # (argocd-tls-certs-cm, entrée git01 posée en M20-E02), sans la recopier.
+            - name: racine
+              configMap:
+                name: argocd-tls-certs-cm
+                items:
+                  - key: git01.par1.medisphere.internal
+                    path: medisphere-root-ca.crt
+          initContainers:
+            - name: export
+              image: registry.par1.medisphere.internal/quay/argoproj/argocd:v3.5.5@sha256:13db7b10db23283b1b36f855046602e18539a8a8204c9f6f039e8896c8897518
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -Eeuo pipefail
+                  umask 077
+                  export HOME=/travail GNUPGHOME=/travail/gnupg
+                  mkdir -p "$GNUPGHOME"
+                  nom="argocd-export-$(date -u +%Y%m%dT%H%M%SZ).yaml.gpg"
+                  # Configuration Kubernetes : celle du pod (compte argocd-export).
+                  argocd admin export --namespace argocd -o /travail/export.yaml
+                  test -s /travail/export.yaml
+                  grep -q '^kind: Application$' /travail/export.yaml
+                  # --recipient-file : chiffre pour la clé du fichier, sans trousseau ni confiance.
+                  gpg --batch --yes --no-tty --recipient-file /cle/argocd-sauvegarde.pub.asc \
+                    --output "/travail/$nom" --encrypt /travail/export.yaml
+                  rm -f /travail/export.yaml
+                  rm -rf "$GNUPGHOME"
+                  chmod 0644 "/travail/$nom"
+                  printf '%s\n' "$nom" >/travail/nom
+                  echo "export chiffré : $nom ($(stat -c %s "/travail/$nom") octets)"
+              securityContext:
+                runAsUser: 999
+                runAsGroup: 999
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {memory: 256Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+                - {name: cle, mountPath: /cle, readOnly: true}
+          containers:
+            - name: envoi
+              image: registry.par1.medisphere.internal/ghcr/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  nom="$(cat /travail/nom)"
+                  rclone copyto "/travail/$nom" "sauvegardes:argocd-sauvegardes/quotidien/$nom"
+                  # Relecture : l'objet existe et a la taille du fichier local.
+                  attendu="$(stat -c %s "/travail/$nom")"
+                  obtenu="$(rclone size --json "sauvegardes:argocd-sauvegardes/quotidien/$nom" | sed -n 's/.*"bytes":\([0-9]*\).*/\1/p')"
+                  test "$attendu" = "$obtenu"
+                  echo "envoyé : argocd-sauvegardes/quotidien/$nom ($obtenu octets)"
+              env:
+                - {name: HOME, value: /travail}
+                - {name: RCLONE_CONFIG, value: /travail/rclone.conf}
+                # Remote « sauvegardes » décrit par l'environnement (aucun fichier de configuration).
+                - {name: RCLONE_CONFIG_SAUVEGARDES_TYPE, value: s3}
+                - {name: RCLONE_CONFIG_SAUVEGARDES_PROVIDER, value: Other}
+                - {name: RCLONE_CONFIG_SAUVEGARDES_ENDPOINT, value: "https://s3-01.par1.medisphere.internal:8333"}
+                - {name: RCLONE_CONFIG_SAUVEGARDES_FORCE_PATH_STYLE, value: "true"}
+                # Le compartiment existe (rôle seaweedfs) ; l'identité n'a pas le droit de le créer.
+                - {name: RCLONE_CONFIG_SAUVEGARDES_NO_CHECK_BUCKET, value: "true"}
+                - {name: RCLONE_CA_CERT, value: /racine/medisphere-root-ca.crt}
+                - name: RCLONE_CONFIG_SAUVEGARDES_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: {name: argocd-sauvegardes-s3, key: AWS_ACCESS_KEY_ID}
+                - name: RCLONE_CONFIG_SAUVEGARDES_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: {name: argocd-sauvegardes-s3, key: AWS_SECRET_ACCESS_KEY}
+              securityContext:
+                runAsUser: 65534
+                runAsGroup: 65534
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: {cpu: 50m, memory: 32Mi}
+                limits: {memory: 128Mi}
+              volumeMounts:
+                - {name: travail, mountPath: /travail}
+                - {name: racine, mountPath: /racine, readOnly: true}

@@ -1,0 +1,19 @@
+# plateforme/observabilite — loki/kustomization.yaml (M22-E02)
+# Troisième source de l'Application « loki » (path: loki) : ce que le chart ne fournit pas.
+# Les fichiers values.yaml et regles/ (M22-E08) sont à côté mais ne sont pas des ressources.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: journaux
+resources:
+  - manifestes/namespace.yaml
+  - manifestes/service-externe.yaml
+  - manifestes/politique-reseau.yaml
+configMapGenerator:
+  # Racine MédiSphère (certificat PUBLIC, versionnable) : copie de
+  # /usr/local/share/ca-certificates/medisphere-root-ca.crt de adm01 dans loki/racine/.
+  # Lue par Loki pour vérifier le certificat du RGW (http_config.ca_file).
+  - name: racine-medisphere
+    files:
+      - medisphere-root-ca.crt=racine/medisphere-root-ca.crt
+    options:
+      disableNameSuffixHash: true

@@ -1,0 +1,38 @@
+# plateforme/outils — .gitlab-ci.yml : ajout de M19-E32 (SEC-2032). Le reste du pipeline (tests,
+# paquet medictl, release) est inchangé.
+# Planification (Build → Pipeline schedules, ou API) : « ci-conformite », cron « 17 2 * * * »
+# (Europe/Paris), branche main, variable CONFORMITE=oui ; propriétaire : le compte technique
+# ci-conformite (un pipeline planifié s'exécute avec les droits de son propriétaire : jamais un humain
+# qui peut partir).
+# Jeton : CI_CONFORMITE_TOKEN, variable de PROJET de type fichier, protégée, masquée et cachée :
+# jeton personnel du compte technique « ci-conformite » (portée api, 90 jours, RB-196), Developer
+# sur les groupes mediagenda, medidoc, medinotif, legacy et rien d'autre.
+ci-conformite:
+  stage: test
+  tags: [k8s]                       # jamais le runner protégé : aucun besoin de la clé de signature
+  image: registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CONFORMITE == "oui"
+    - if: $CI_PIPELINE_SOURCE == "web" && $CONFORMITE == "oui"
+  variables:
+    GITLAB_TOKEN_FILE: $CI_CONFORMITE_TOKEN
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  script:
+    - python -m pip install --quiet --user "pyyaml==6.0.3"
+    - python bin/ms-ci-conformite --config etc/ci-conformite.toml
+  artifacts:
+    when: always
+    paths: [conformite.json, conformite.md]
+    expire_in: 90 days
+
+# Tests unitaires à chaque MR (les tests ne touchent pas au réseau).
+ci-conformite:tests:
+  stage: test
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/python:3.13-slim-trixie
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [bin/ms-ci-conformite, etc/ci-conformite.toml, tests/**/*]
+  script:
+    - python -m pip install --quiet --user "pyyaml==6.0.3" "pytest==9.1.1"
+    - python -m pytest -q tests/test_ci_conformite.py

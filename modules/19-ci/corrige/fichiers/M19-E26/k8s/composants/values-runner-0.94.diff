@@ -1,0 +1,18 @@
+# plateforme/k8s — composants/gitlab-runner/values.yaml et composants/gitlab-runner-protege/values.yaml
+# M19-E26 : le chart 0.94 renomme image.image en image.repository. L'ancienne clé est encore lue
+# (« DEPRECATED … kept for backward compatibility », values.yaml du chart 0.94.0) : on migre tout de
+# suite pour ne pas la perdre à une montée suivante. Rien d'autre ne change dans les values.
+--- a/composants/gitlab-runner/values.yaml
++++ b/composants/gitlab-runner/values.yaml
+@@
+ image:
+   registry: registry.par1.medisphere.internal
+-  image: gitlab/gitlab-org/gitlab-runner
++  repository: gitlab/gitlab-org/gitlab-runner
+--- a/composants/gitlab-runner-protege/values.yaml
++++ b/composants/gitlab-runner-protege/values.yaml
+@@
+ image:
+   registry: registry.par1.medisphere.internal
+-  image: gitlab/gitlab-org/gitlab-runner
++  repository: gitlab/gitlab-org/gitlab-runner

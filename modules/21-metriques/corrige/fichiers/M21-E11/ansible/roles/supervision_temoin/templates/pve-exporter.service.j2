@@ -1,0 +1,41 @@
+# {{ ansible_managed }}
+[Unit]
+Description=prometheus-pve-exporter du témoin (rôle supervision_temoin, M21-E12)
+Documentation=https://github.com/prometheus-pve/prometheus-pve-exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=pve-exporter
+Group=pve-exporter
+# requests n'utilise pas le magasin du système mais son propre paquet (certifi) : on lui désigne
+# celui du système, qui contient la racine de l'API de pve01. Jamais verify_ssl: false.
+Environment=REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ExecStart=/opt/pve-exporter/bin/pve_exporter \
+  --config.file {{ supervision_temoin_dossier_config }}/pve.yml \
+  --web.listen-address {{ supervision_temoin_pve_ecoute }}
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+CapabilityBoundingSet=
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

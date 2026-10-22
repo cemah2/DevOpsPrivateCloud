@@ -1,0 +1,4 @@
+# group_vars/role_k3s/vault-lab.yml (Vault « lab ») : AJOUT de M20-E26, AVANT chiffrement.
+#   uv run ansible-vault edit --vault-id lab@~/.config/workbook/ansible-vault.pass inventories/lab/group_vars/role_k3s/vault-lab.yml
+# Jeton du cluster k3s (au moins 32 caractères) : openssl rand -hex 32
+vault_k3s_jeton_lyo_k3s01: "<JETON-K3S-LYO-K3S01>"

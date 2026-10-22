@@ -1,0 +1,16 @@
+# plateforme/observabilite — kps/values.yaml, EXTRAIT (M21-E17, PLAT-2217) : à fusionner sous
+# grafana.sidecar (le chart active déjà le sidecar des tableaux avec l'étiquette
+# grafana_dashboard: "1" et searchNamespace: ALL).
+grafana:
+  sidecar:
+    dashboards:
+      # Annotation qui donne le sous-dossier d'écriture du fichier (donc le dossier Grafana).
+      folderAnnotation: grafana_folder
+      provider:
+        # Un sous-dossier = un dossier Grafana du même titre.
+        foldersFromFilesStructure: true
+        # Tableaux non modifiables depuis l'interface : Grafana refuse l'enregistrement d'un
+        # tableau provisionné ; on modifie le JSON, en MR.
+        allowUiUpdates: false
+        # Un fichier retiré du dépôt retire le tableau.
+        disableDelete: false

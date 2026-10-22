@@ -1,0 +1,20 @@
+# formation/gitops-labo — k8s/hpa.yaml (M20-E12, cible changée en M20-E15) : le HPA pilote
+# désormais le Rollout « labo » (qui expose la sous-ressource scale, comme un Deployment).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: labo
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: labo
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

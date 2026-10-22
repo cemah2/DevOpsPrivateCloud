@@ -1,0 +1,22 @@
+# medidoc/deploiement — components/profilage (M23-E14) : port pprof interne de MédiDoc.
+# Le port de conteneur est NOMMÉ « pprof » (c'est ce nom qu'Alloy sélectionne) et n'est ajouté à aucun Service.
+# Hypothèse : le Deployment s'appelle « medidoc » et son conteneur applicatif est le premier (index 0) ; adapte
+# la cible et l'index à ton dépôt de M19-E33.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+patches:
+  - target:
+      kind: Deployment
+      name: medidoc
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: MEDIDOC_PPROF_ADDR
+          value: ":6060"
+      - op: add
+        path: /spec/template/spec/containers/0/ports/-
+        value:
+          name: pprof
+          containerPort: 6060
+          protocol: TCP

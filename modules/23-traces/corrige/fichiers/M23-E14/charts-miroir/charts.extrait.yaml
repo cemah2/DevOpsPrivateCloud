@@ -1,0 +1,6 @@
+# plateforme/charts-miroir — entrée à ajouter à charts.yaml (M23-E14), au format de tes entrées de M20-E13
+# (dépôt amont, nom, version, empreinte vérifiée avant le « helm push » vers Harbor charts/ et la signature).
+- nom: pyroscope
+  depot: https://grafana.github.io/helm-charts
+  version: 2.4.1
+  # empreinte : celle que tu as relevée (helm pull … puis sha256sum) ; jamais recopiée d'un tutoriel

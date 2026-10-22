@@ -1,0 +1,14 @@
+# plateforme/k8s — composants/gitlab-agent/values.yaml (M19-E18), changement de M19-E26 (CHG-2026).
+# Agent 19.5 : gRPC natif vers KAS d'omnibus. Conditions (doc « Agent server », 19.5) : external_url
+# en HTTPS sans chemin relatif, NGINX d'omnibus qui termine TLS en HTTP/2 — c'est le cas de git01
+# (les travailleurs le joignent directement en 443, sans passer par lb01/lb02).
+# Retour arrière : remettre la ligne wss:// (historique Git) et « helmfile -l composant=gitlab-agent apply ».
+config:
+  # était : wss://git01.par1.medisphere.internal/-/kubernetes-agent/
+  kasAddress: grpcs://git01.par1.medisphere.internal
+  # Inchangés depuis E18 : Secret du jeton et racine MédiSphère pour vérifier le certificat de git01.
+  secretName: gitlab-agent-jeton
+  kasCaCert: |
+    -----BEGIN CERTIFICATE-----
+    <RACINE-MEDISPHERE (medisphere-root-ca.crt)>
+    -----END CERTIFICATE-----

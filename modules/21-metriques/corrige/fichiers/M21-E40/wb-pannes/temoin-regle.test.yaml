@@ -1,0 +1,31 @@
+# Tests de la règle témoin (promtool test rules temoin-regle.test.yaml), M21-E40, INC-4840.
+rule_files:
+  - temoin-regle.yml
+evaluation_interval: 30s
+tests:
+  - name: des pics de 45 s toutes les 3 min ne déclenchent rien
+    interval: 15s
+    input_series:
+      # 3 échantillons hauts (45 s), 9 bas (135 s) : un cycle de 3 min, répété 6 fois.
+      - series: 'temoin_file_attente{file="f1", pod="temoin-metriques-a"}'
+        values: '80x2 5x8 80x2 5x8 80x2 5x8 80x2 5x8 80x2 5x8 80x2 5x8'
+    alert_rule_test:
+      - eval_time: 17m
+        alertname: TemoinFileAttenteHaute
+        exp_alerts: []
+  - name: une file haute en continu sonne après 5 min et ne s'éteint pas sur un creux de 2 min
+    interval: 1m
+    input_series:
+      - series: 'temoin_file_attente{file="f1", pod="temoin-metriques-a"}'
+        values: '5x2 80x10 5x2 80x10'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: TemoinFileAttenteHaute
+        exp_alerts:
+          - exp_labels: {alertname: TemoinFileAttenteHaute, gravite: critique, equipe: plateforme, file: f1, pod: temoin-metriques-a}
+            exp_annotations: {resume: "File f1 du service de rappels témoin au-dessus de 50 depuis 5 min"}
+      - eval_time: 14m
+        alertname: TemoinFileAttenteHaute
+        exp_alerts:
+          - exp_labels: {alertname: TemoinFileAttenteHaute, gravite: critique, equipe: plateforme, file: f1, pod: temoin-metriques-a}
+            exp_annotations: {resume: "File f1 du service de rappels témoin au-dessus de 50 depuis 5 min"}

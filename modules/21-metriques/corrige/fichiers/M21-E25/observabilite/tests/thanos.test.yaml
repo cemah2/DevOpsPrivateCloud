@@ -1,0 +1,100 @@
+# plateforme/observabilite — tests/thanos.test.yaml (M21-E25, PLAT-2225)
+# promtool test rules tests/thanos.test.yaml (après outils/extraire-regles.sh, M21-E14)
+rule_files:
+  - ../build/regles/thanos.yml
+evaluation_interval: 1m
+
+tests:
+  # Deux Compactors : alerte critique après 5 min, pas avant.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="thanos-compactor", pod="thanos-compactor-0"}'
+        values: '1x20'
+      - series: 'up{job="thanos-compactor", pod="thanos-compactor-copie"}'
+        values: '_x5 1x15'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: ThanosCompacteursMultiples
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ThanosCompacteursMultiples
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme}
+            exp_annotations:
+              resume: "2 Compactors Thanos tournent en même temps sur thanos-k8s-par1"
+              description: "Deux Compactors sur le même compartiment compactent et suppriment les mêmes blocs : risque de perte de données. En arrêter un immédiatement (RB-214 §4)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+
+  # Compactor arrêté sur erreur.
+  - interval: 1m
+    input_series:
+      - series: 'thanos_compact_halted{job="thanos-compactor", pod="thanos-compactor-0"}'
+        values: '0x5 1x10'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ThanosCompacteurArrete
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: thanos-compactor, pod: thanos-compactor-0}
+            exp_annotations:
+              resume: "Le Compactor Thanos s'est arrêté (halted) sur une erreur"
+              description: "Plus aucune compaction, ni sous-échantillonnage, ni rétention : le compartiment grossit et les requêtes longues ralentissent. Cause dans les journaux du pod thanos-compactor-0 (RB-214 §3)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+
+  # Sidecar : un réplica envoie (un bloc toutes les 2 h : +1/120 par minute), l'autre plus rien depuis le début ;
+  # tous deux démarrés il y a longtemps (process_start_time_seconds = 0).
+  - interval: 1m
+    input_series:
+      - series: 'thanos_shipper_uploads_total{job="kps-thanos-discovery", pod="prometheus-kps-0"}'
+        values: '0+0.0083333x480'
+      - series: 'thanos_shipper_uploads_total{job="kps-thanos-discovery", pod="prometheus-kps-1"}'
+        values: '0x480'
+      - series: 'process_start_time_seconds{job="kps-thanos-discovery", pod="prometheus-kps-0"}'
+        values: '0x480'
+      - series: 'process_start_time_seconds{job="kps-thanos-discovery", pod="prometheus-kps-1"}'
+        values: '0x480'
+    alert_rule_test:
+      - eval_time: 7h
+        alertname: ThanosSidecarEnvoisArretes
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, job: kps-thanos-discovery, pod: prometheus-kps-1}
+            exp_annotations:
+              resume: "Le sidecar Thanos de prometheus-kps-1 n'a envoyé aucun bloc depuis 5 h"
+              description: "Les données de ce réplica ne partent plus vers le RGW ; marge : la rétention locale (15 j). RB-214 §2."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+
+  # Sidecar redémarré il y a 1 h : pas d'alerte, même sans envoi.
+  - interval: 1m
+    input_series:
+      - series: 'thanos_shipper_uploads_total{job="kps-thanos-discovery", pod="prometheus-kps-1"}'
+        values: '0x480'
+      - series: 'process_start_time_seconds{job="kps-thanos-discovery", pod="prometheus-kps-1"}'
+        values: '21600x480'
+    alert_rule_test:
+      - eval_time: 7h
+        alertname: ThanosSidecarEnvoisArretes
+        exp_alerts: []
+
+  # Query : un sidecar perdu, le Store perdu (série absente).
+  - interval: 1m
+    input_series:
+      - series: 'up{job="thanos-query", pod="thanos-query-a"}'
+        values: '1x30'
+      - series: 'thanos_store_nodes_grpc_connections{job="thanos-query", pod="thanos-query-a", store_type="sidecar", external_labels="{cluster=\"k8s-par1\"}"}'
+        values: '2x5 1x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ThanosQuerySidecarManquant
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, pod: thanos-query-a}
+            exp_annotations:
+              resume: "thanos-query-a ne voit que 1 sidecar(s) sur 2"
+              description: "Les données récentes d'un réplica ne sont plus lues (le dédoublonnage masque le trou). RB-214 §1."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+      - eval_time: 20m
+        alertname: ThanosQueryStoreManquant
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme, pod: thanos-query-a}
+            exp_annotations:
+              resume: "thanos-query-a ne voit plus le Store Gateway"
+              description: "Les requêtes au-delà de 15 jours rendent des données partielles ou vides. RB-214 §1."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md

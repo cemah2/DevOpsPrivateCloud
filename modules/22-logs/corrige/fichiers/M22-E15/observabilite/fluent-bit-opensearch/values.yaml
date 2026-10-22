@@ -1,0 +1,100 @@
+# plateforme/observabilite/fluent-bit-opensearch/values.yaml — M22-E15 (PLAT-2315), ESSAI TEMPORAIRE
+# Chart fluent/fluent-bit 0.58.3 (Fluent Bit 5.1) recopié dans Harbor charts/ ; Application
+# « fluent-bit-opensearch », espace opensearch-essai. Lit les journaux des pods MédiAgenda et les envoie
+# à OpenSearch en TLS vérifié avec le compte « fluentbit » (écriture sur journaux-* seulement).
+# Le mot de passe vient du Secret « opensearch-essai-fluentbit » (clé FLUENTBIT_MDP), créé hors Git
+# par secrets-k8s.sh (composant opensearch-essai) ; la CA vient du Secret de cert-manager.
+
+kind: DaemonSet
+
+testFramework:
+  enabled: false # pas de pod de test (image busybox:latest tirée d'Internet)
+
+image:
+  repository: registry.par1.medisphere.internal/dockerhub/fluent/fluent-bit
+  # tag : appVersion du chart (5.1.x)
+
+tolerations:
+  - operator: Exists # tous les nœuds, comme Alloy (seuls les travailleurs portent MédiAgenda, mais c'est le réflexe)
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+env:
+  - name: FLUENTBIT_MDP
+    valueFrom:
+      secretKeyRef:
+        name: opensearch-essai-fluentbit
+        key: FLUENTBIT_MDP
+
+extraVolumes:
+  - name: ca-essai
+    secret:
+      secretName: opensearch-essai-noeud
+      items:
+        - key: ca.crt
+          path: ca.crt
+extraVolumeMounts:
+  - name: ca-essai
+    mountPath: /fluent-bit/etc/ca
+    readOnly: true
+
+# containerd : pas de /var/lib/docker/containers ; seuls /var/log et machine-id sont utiles.
+daemonSetVolumes:
+  - name: varlog
+    hostPath:
+      path: /var/log
+  - name: etcmachineid
+    hostPath:
+      path: /etc/machine-id
+      type: File
+daemonSetVolumeMounts:
+  - name: varlog
+    mountPath: /var/log
+  - name: etcmachineid
+    mountPath: /etc/machine-id
+    readOnly: true
+
+config:
+  inputs: |
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*_mediagenda-*_*.log
+        multiline.parser  cri
+        Tag               kube.*
+        Mem_Buf_Limit     16MB
+        Skip_Long_Lines   On
+
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Merge_Log           On
+        Keep_Log            On
+        K8S-Logging.Parser  Off
+        K8S-Logging.Exclude Off
+        Labels              On
+        Annotations         Off
+
+  outputs: |
+    [OUTPUT]
+        Name                opensearch
+        Match               kube.*
+        Host                opensearch-essai-master.opensearch-essai.svc
+        Port                9200
+        HTTP_User           fluentbit
+        HTTP_Passwd         ${FLUENTBIT_MDP}
+        tls                 On
+        tls.verify          On
+        tls.ca_file         /fluent-bit/etc/ca/ca.crt
+        Logstash_Format     On
+        Logstash_Prefix     journaux
+        Logstash_DateFormat %Y.%m.%d
+        Suppress_Type_Name  On
+        Replace_Dots        On
+        Trace_Error         On
+        Retry_Limit         5

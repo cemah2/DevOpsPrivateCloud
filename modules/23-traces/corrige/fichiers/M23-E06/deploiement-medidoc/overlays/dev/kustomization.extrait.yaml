@@ -1,0 +1,12 @@
+# medidoc/deploiement — overlays/dev/kustomization.yaml : AJOUTS de M23-E06 (le reste ne change pas).
+resources:
+  # … ressources existantes …
+  - entree-mediagenda.yaml
+labels:
+  # Lue par le component telemetrie (deployment.environment.name). Jamais dans les sélecteurs.
+  - pairs:
+      medisphere.internal/environnement: dev
+    includeSelectors: false
+    includeTemplates: true
+components:
+  - ../../components/telemetrie

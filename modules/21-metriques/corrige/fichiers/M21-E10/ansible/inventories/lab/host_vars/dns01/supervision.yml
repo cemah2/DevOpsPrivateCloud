@@ -1,0 +1,15 @@
+---
+# host_vars/dns01/supervision.yml (plateforme/ansible) — M21-E10, PLAT-2210.
+# Primaire : le serveur web de l'API sert aussi /metrics. On AJOUTE les travailleurs aux clients
+# autorisés (la clé d'API reste exigée pour toute requête /api/…). La liste de group_vars/role_dns/
+# powerdns_auth.yml (M06-E06) est reprise ici et complétée : une variable d'hôte REMPLACE celle du
+# groupe (pas de fusion de listes). Si tu as ajouté d'autres clients depuis, reporte-les.
+powerdns_auth_api_autorises:
+  - 127.0.0.1
+  - 10.10.20.10        # dns01 lui-même (M06-E06)
+  - 10.10.10.10        # adm01 (M06-E06)
+  - 10.10.20.15        # runner01 (M06-E06 : OpenTofu, medictl dns sync)
+  - 10.10.40.61        # k8s-w01 : Prometheus (M21-E10)
+  - 10.10.40.62
+  - 10.10.40.63
+powerdns_recursor_webservice_adresse: 10.10.20.10

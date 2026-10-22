@@ -1,0 +1,136 @@
+M23-E08 (DEV-2408) — MédiAgenda : corrélation journaux ↔ traces ↔ métriques.
+Base : mediagenda/api après M23-E06. Sur une branche :  git apply --index correlation.patch
+- journal.py : trace_id et span_id (W3C, hexadécimal) sur chaque ligne JSON émise pendant une requête tracée ;
+- app.py : exemplar trace_id sur l'histogramme de durée ; /metrics négocie le format (OpenMetrics si demandé) ;
+- tests : identifiants dans le journal, exemplar présent en OpenMetrics et absent du format texte.
+
+diff --git a/src/mediagenda/app.py b/src/mediagenda/app.py
+index b62f2b8..c5ad611 100644
+--- a/src/mediagenda/app.py
++++ b/src/mediagenda/app.py
+@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse
+ from opentelemetry import trace
+ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+ from opentelemetry.trace import StatusCode
+-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
++from prometheus_client import REGISTRY, Counter, Histogram
++from prometheus_client.exposition import choose_encoder
+ from starlette.concurrency import run_in_threadpool
+ 
+ from .cache import Cache, CacheValkey
+@@ -128,7 +129,16 @@ def create_app(
+             duree = time.perf_counter() - debut
+             route = getattr(request.scope.get("route"), "path", "non-routee")
+             REQUETES.labels(request.method, route, str(code)).inc()
+-            DUREES.labels(request.method, route).observe(duree)
++            # Exemplar (M23-E08) : l'identifiant de la trace accompagne l'observation ; Grafana
++            # passe d'un point du graphe de latence à la trace. Seulement pour une trace gardée
++            # par l'échantillonnage en tête (sinon le lien mènerait à une trace inexistante).
++            contexte = trace.get_current_span().get_span_context()
++            exemplaire = (
++                {"trace_id": format(contexte.trace_id, "032x")}
++                if contexte.is_valid and contexte.trace_flags.sampled
++                else None
++            )
++            DUREES.labels(request.method, route).observe(duree, exemplar=exemplaire)
+             # Une ligne par requête. Jamais de donnée patient dans le journal (RGPD).
+             niveau = logging.DEBUG if route in ROUTES_SONDES else logging.INFO
+             journal_acces.log(
+@@ -173,8 +183,11 @@ def create_app(
+         )
+ 
+     @app.get("/metrics")
+-    def metrics() -> Response:
+-        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
++    def metrics(request: Request) -> Response:
++        # Les exemplars n'existent qu'au format OpenMetrics : on répond dans le format que demande
++        # Prometheus (en-tête Accept), et dans l'ancien format texte sinon (M23-E08).
++        encodeur, type_contenu = choose_encoder(request.headers.get("accept", ""))
++        return Response(encodeur(REGISTRY), headers={"Content-Type": type_contenu})
+ 
+     @app.get("/api/v1/rendez-vous")
+     def lister(request: Request, limite: int = Query(100, ge=1, le=1000)) -> list[RendezVous]:
+diff --git a/src/mediagenda/journal.py b/src/mediagenda/journal.py
+index 92d4ae5..972d89b 100644
+--- a/src/mediagenda/journal.py
++++ b/src/mediagenda/journal.py
+@@ -12,6 +12,8 @@ import sys
+ from contextvars import ContextVar
+ from datetime import UTC, datetime
+ 
++from opentelemetry import trace
++
+ # Identifiant de la requête HTTP en cours (posé par le middleware de app.py). Une variable de
+ # contexte suit la requête jusque dans le fil d'exécution des points d'entrée synchrones.
+ request_id_courant: ContextVar[str | None] = ContextVar("request_id", default=None)
+@@ -40,6 +42,12 @@ class FormateurJson(logging.Formatter):
+         for cle, valeur in vars(record).items():
+             if cle not in _ATTRIBUTS_STANDARD and not cle.startswith("_"):
+                 ligne[cle] = valeur
++        # Corrélation avec les traces (M23-E08) : identifiants W3C de la span courante, en
++        # hexadécimal minuscule (32 et 16 caractères), comme dans Tempo. Absents hors requête tracée.
++        contexte = trace.get_current_span().get_span_context()
++        if contexte.is_valid:
++            ligne["trace_id"] = format(contexte.trace_id, "032x")
++            ligne["span_id"] = format(contexte.span_id, "016x")
+         if record.exc_info:
+             ligne["exception"] = self.formatException(record.exc_info)
+         return json.dumps(ligne, ensure_ascii=False, default=str)
+diff --git a/tests/test_telemetrie.py b/tests/test_telemetrie.py
+index 9313f97..b6ab391 100644
+--- a/tests/test_telemetrie.py
++++ b/tests/test_telemetrie.py
+@@ -106,3 +106,53 @@ def test_traceparent_transmis_a_medidoc(settings, depot, cache, medidoc_simule,
+     # Même trace des deux côtés : MédiDoc reprendra ce contexte.
+     assert entete.split("-")[1] == format(serveur.context.trace_id, "032x")
+     assert "mediagenda.piece_jointe.deposer" in _par_nom(spans)
++
++
++def test_trace_id_dans_le_journal_et_exemplar(client, spans):
++    import json
++    import logging
++
++    from mediagenda.journal import FormateurJson
++
++    class Capture(logging.Handler):
++        """Formate AU MOMENT du log, comme le gestionnaire stdout de production."""
++
++        def __init__(self) -> None:
++            super().__init__(logging.INFO)
++            self.setFormatter(FormateurJson())
++            self.lignes: list[dict] = []
++
++        def emit(self, record: logging.LogRecord) -> None:
++            self.lignes.append(json.loads(self.format(record)))
++
++    capture = Capture()
++    journal_acces = logging.getLogger("mediagenda.acces")
++    journal_acces.addHandler(capture)
++    niveau = journal_acces.level
++    journal_acces.setLevel(logging.INFO)
++    try:
++        client.post("/api/v1/rendez-vous", json=RDV)
++    finally:
++        journal_acces.removeHandler(capture)
++        journal_acces.setLevel(niveau)
++    serveur = _par_nom(spans)["POST /api/v1/rendez-vous"]
++    trace_id = format(serveur.context.trace_id, "032x")
++    assert capture.lignes[-1]["trace_id"] == trace_id
++    assert len(capture.lignes[-1]["span_id"]) == 16
++
++    om = client.get("/metrics", headers={"Accept": "application/openmetrics-text; version=1.0.0"})
++    assert om.headers["content-type"].startswith("application/openmetrics-text")
++    assert f'# {{trace_id="{trace_id}"}}' in om.text
++    texte = client.get("/metrics")
++    assert texte.headers["content-type"].startswith("text/plain")
++    assert "trace_id" not in texte.text
++
++
++def test_pas_de_trace_id_hors_requete():
++    import json
++    import logging
++
++    from mediagenda.journal import FormateurJson
++
++    ligne = json.loads(FormateurJson().format(logging.makeLogRecord({"msg": "démarrage"})))
++    assert "trace_id" not in ligne

@@ -1,0 +1,7 @@
+# plateforme/observabilite — kustomization.yaml (racine) : ajout de M21-E24 (PLAT-2224).
+# EXTRAIT : seule la liste « resources » change (ajoute « thanos » à ce qui existe déjà chez toi).
+resources:
+  - regles
+  - scrape
+  # (… tableaux, ajoutés en E17 …)
+  - thanos

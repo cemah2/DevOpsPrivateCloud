@@ -1,0 +1,31 @@
+---
+# Rôle gitlab_hote (M04-E46, étendu en M19-E03) — l'HÔTE git01 autour de GitLab.
+# GitLab reste configuré par /etc/gitlab/gitlab.rb + gitlab-ctl reconfigure (module 01). Depuis
+# M19-E03, le rôle peut AJOUTER des fragments de configuration (fichiers Ruby inclus par
+# « from_file » à la fin de gitlab.rb) : il ne réécrit jamais gitlab.rb lui-même.
+
+# La montée de version de GitLab suit le chemin officiel (M01-E29) : jamais par un « apt upgrade ».
+gitlab_hote_paquet: gitlab-ce
+gitlab_hote_bloquer_paquet: true
+
+# Fichiers sensibles de /etc/gitlab (secrets d'application, clés de chiffrement des données)
+gitlab_hote_fichiers_secrets:
+  - /etc/gitlab/gitlab-secrets.json
+  - /etc/gitlab/gitlab.rb
+
+# Vérification de l'état de GitLab (lecture seule) à chaque passage
+gitlab_hote_verifier_services: true
+
+# --- M19-E03 : fragments de configuration ------------------------------------------------------
+# Dictionnaire nom → contenu Ruby (sans secret : un secret irait dans un fragment issu du Vault,
+# avec no_log). Chaque fragment devient /etc/gitlab/medisphere.d/<nom>.rb (root, 600) et une
+# ligne « from_file » à la FIN de gitlab.rb (ce qui suit dans gitlab.rb l'emporterait : rien ne
+# doit suivre ces lignes). Un changement de fragment déclenche « gitlab-ctl reconfigure ».
+gitlab_hote_fragments: {}
+gitlab_hote_dossier_fragments: /etc/gitlab/medisphere.d
+
+# Autorités supplémentaires connues de GitLab (copiées dans /etc/gitlab/trusted-certs/, liées dans
+# le magasin de certificats embarqué au prochain reconfigure) : la racine MédiSphère, pour
+# vérifier le certificat de Mailpit (STARTTLS), de Harbor, de s3-01…
+gitlab_hote_autorites:
+  - /usr/local/share/ca-certificates/medisphere-root-ca.crt

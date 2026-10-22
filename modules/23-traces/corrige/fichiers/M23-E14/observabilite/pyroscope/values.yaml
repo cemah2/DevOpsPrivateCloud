@@ -1,0 +1,69 @@
+# plateforme/observabilite/pyroscope/values.yaml (M23-E14) — chart grafana/pyroscope 2.4.x recopié dans Harbor
+# (charts-miroir), Application Argo CD « pyroscope », espace traces. Mode monolithique (un pod, tous les
+# composants), stockage v2 (segment-writer, metastore) : le stockage objet est OBLIGATOIRE depuis Pyroscope 2.
+pyroscope:
+  replicaCount: 1
+  image:
+    registry: registry.par1.medisphere.internal/dockerhub
+    repository: grafana/pyroscope
+    tag: "2.4.1"
+  extraArgs:
+    log.level: info               # le chart met « debug » par défaut
+    config.expand-env: "true"     # ${S3_CLE} et ${S3_SECRET} viennent du Secret pyroscope-objstore
+  extraEnvFrom:
+    - secretRef:
+        name: pyroscope-objstore  # hors Git : secrets-k8s.sh, composant « pyroscope » (clés S3_CLE, S3_SECRET)
+  extraEnvVars:
+    # Le client S3 de Pyroscope n'a pas d'option « fichier de CA » : on ajoute la racine MédiSphère aux
+    # répertoires de certificats que lit la bibliothèque TLS de Go.
+    SSL_CERT_DIR: /etc/ssl/certs:/etc/medisphere-ca
+  extraVolumes:
+    - name: racine-medisphere
+      configMap:
+        name: racine-medisphere   # créée par plateforme/k8s dans chaque espace qui parle au RGW (M16)
+  extraVolumeMounts:
+    - name: racine-medisphere
+      mountPath: /etc/medisphere-ca
+      readOnly: true
+  persistence:
+    enabled: true                 # données récentes et métastore (raft) : pas d'emptyDir
+    size: 10Gi
+    storageClassName: ceph-rbd
+  resources:
+    requests: {cpu: 200m, memory: 512Mi}
+    limits: {memory: 1Gi}
+  podSecurityContext:
+    fsGroup: 10001
+    runAsUser: 10001
+    runAsNonRoot: true
+    seccompProfile: {type: RuntimeDefault}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities: {drop: ["ALL"]}
+  structuredConfig:
+    storage:
+      backend: s3
+      s3:
+        endpoint: rgw.par1.medisphere.internal
+        bucket_name: pyroscope-k8s-par1
+        access_key_id: ${S3_CLE}
+        secret_access_key: ${S3_SECRET}
+        insecure: false
+        bucket_lookup_type: path
+    limits:
+      # Profils gardés 14 jours (même durée que les traces) ; à vérifier sur ta version : en stockage v2,
+      # c'est le nettoyage de l'index du métastore qui applique cette durée.
+      retention_period: 14d
+      ingestion_rate_mb: 4
+      max_profile_size_bytes: 4194304
+# Le chart embarque son propre Alloy pour profiler les pods annotés : on garde un seul collecteur, celui du M22.
+alloy:
+  enabled: false
+agent:
+  enabled: false
+minio:
+  enabled: false
+serviceMonitor:
+  enabled: true
+  labels:
+    medisphere.internal/supervision: "oui"

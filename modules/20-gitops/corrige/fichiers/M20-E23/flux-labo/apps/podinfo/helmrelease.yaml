@@ -1,0 +1,38 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 10m
+  chartRef:
+    kind: OCIRepository
+    name: podinfo
+  # Release installée dans l'espace podinfo ; son historique Helm y est rangé aussi.
+  targetNamespace: podinfo
+  storageNamespace: podinfo
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    replicaCount: 1
+    image:
+      # ghcr.io : miroir k3s vers le cache Harbor « ghcr ».
+      repository: ghcr.io/stefanprodan/podinfo
+      tag: 6.15.0
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi

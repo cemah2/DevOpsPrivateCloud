@@ -1,0 +1,11 @@
+# plateforme/observabilite — ajouts de M21-E28 (PLAT-2228) aux kustomization.yaml des dossiers.
+# EXTRAIT : ajoute chaque fichier à la liste « resources » de SON dossier.
+# regles/kustomization.yaml
+resources:
+  # (… règles existantes : thanos.yaml (E25) …)
+  - supervision-temoin.yaml
+---
+# scrape/kustomization.yaml
+resources:
+  # (… ScrapeConfig existantes : vms (E08), fédération de mon01 (E12) …)
+  - temoin-mon01.yaml

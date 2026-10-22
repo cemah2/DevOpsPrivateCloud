@@ -1,0 +1,62 @@
+# .gitlab-ci.yml — mediagenda/api (M13-E09, DEV-1409 ; construction par le démon BuildKit partagé de
+# k8s-par1 au M19-E08, PLAT-2008).
+# Gabarits partagés ÉPINGLÉS (étiquettes de plateforme/ci-templates ; Renovate propose les montées).
+# Une version vX.Y.Z = une étiquette Git posée par semantic-release sur main = une image publiée,
+# signée, attestée dans Harbor : registry.par1.medisphere.internal/medisphere/mediagenda-api:vX.Y.Z
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never                     # pas de doublon branche + MR
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+include:
+  - project: plateforme/ci-templates
+    # ÉTIQUETTE du dépôt de gabarits (pas la branche v1, qui avance seule). M19-E08 : la mineure qui
+    # sait utiliser le démon partagé (BUILDKIT_HOST), par exemple v1.5.0 si la précédente était v1.4.x.
+    ref: <VERSION-CI-TEMPLATES>
+    file:
+      - templates/qualite.yml         # pre-commit, commitlint, Gitleaks (M01), stage lint
+      - templates/release.yml         # semantic-release (M01), stage release
+      - templates/image.yml           # pour le job caché .hadolint (M12-E16, M12-E21), stage lint
+      - templates/supply-chain.yml    # M13-E09 (remplace .image-construction)
+
+variables:
+  SC_IMAGE_NOM: medisphere/mediagenda-api
+
+# Stages de templates/qualite.yml (lint, test, release) + ceux de la chaîne de livraison.
+stages:
+  - lint
+  - test
+  - construction
+  - analyse
+  - publication
+  - signature
+  - verification
+  - release
+
+tests:
+  stage: test
+  image: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:<EMPREINTE>
+  tags: [docker]
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: on_success
+  script:
+    - uv sync --locked
+    - uv run ruff check .
+    - uv run ruff format --check .
+    - uv run pytest
+
+hadolint:
+  extends: .hadolint
+
+# M19-E08 : la construction tourne sur le runner k8s-par1 (démon BuildKit partagé, TLS mutuel) ;
+# le reste de la chaîne (analyse, SBOM, publication, signature, vérification) reste sur runner02
+# (étiquette docker) jusqu'aux composants du palier 2 et au runner protégé (M19-E24).
+# « tags » remplace la valeur du gabarit (fusion des clés : la liste n'est pas concaténée).
+sc:construction:
+  tags: [k8s]

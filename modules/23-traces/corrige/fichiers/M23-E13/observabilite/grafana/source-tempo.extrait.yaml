@@ -1,0 +1,28 @@
+# Source Grafana « Tempo » (uid tempo) déclarée par le code dans la ConfigMap sources-tempo de l'espace supervision
+# (M23-E03, liens vers Loki en M23-E08) : clés à AJOUTER au jsonData existant en M23-E13 (serviceMap,
+# tracesToMetrics) et M23-E14 (tracesToProfiles). UID : prometheus (source Prometheus de kps, Thanos Query depuis
+# M21-E24) et pyroscope (sources-pyroscope.yaml de M23-E14).
+jsonData:
+  # Onglet « Service graph » d'Explore et vue « graphe de services » : séries traces_service_graph_* (E13).
+  serviceMap:
+    datasourceUid: prometheus
+  nodeGraph:
+    enabled: true
+  # Depuis une span : requêtes RED du service (séries traces_spanmetrics_*).
+  tracesToMetrics:
+    datasourceUid: prometheus
+    spanStartTimeShift: "-5m"
+    spanEndTimeShift: "5m"
+    tags:
+      - {key: service.name, value: service}
+    queries:
+      - name: "Taux de requêtes"
+        query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))'
+      - name: "Latence p95"
+        query: 'histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{$$__tags}[5m])))'
+  # Depuis une span : le profil de la même période et du même service (E14).
+  tracesToProfiles:
+    datasourceUid: pyroscope
+    tags:
+      - {key: service.name, value: service_name}
+    profileTypeId: "process_cpu:cpu:nanoseconds:cpu:nanoseconds"

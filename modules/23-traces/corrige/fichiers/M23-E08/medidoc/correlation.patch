@@ -1,0 +1,223 @@
+M23-E08 (DEV-2408) — MédiDoc : corrélation journaux ↔ traces ↔ métriques.
+Base : medidoc/medidoc après M23-E06. Sur une branche :  git apply --index correlation.patch && go vet ./... && go test ./...
+- internal/telemetrie/journal.go (nouveau) : enveloppe slog qui ajoute trace_id et span_id (W3C) aux lignes
+  écrites avec le contexte d'une requête ; test ;
+- cmd/medidoc/main.go : journal JSON enveloppé ;
+- internal/serveur/serveur.go : lignes de journal écrites avec le contexte de la requête (…Context),
+  exemplar trace_id sur l'histogramme de durée, OpenMetrics activé sur /metrics ; test de l'exemplar.
+
+diff --git a/cmd/medidoc/main.go b/cmd/medidoc/main.go
+index f0d5315..b287473 100644
+--- a/cmd/medidoc/main.go
++++ b/cmd/medidoc/main.go
+@@ -46,7 +46,9 @@ func lancer() error {
+ 	if cfg.Version == "" {
+ 		cfg.Version = version
+ 	}
+-	journal := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
++	// Journal JSON corrélé aux traces (M23-E08) : trace_id et span_id sur les lignes écrites avec
++	// le contexte d'une requête.
++	journal := slog.New(telemetrie.JournalCorrele{Handler: slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel})})
+ 	slog.SetDefault(journal)
+ 
+ 	ctx, arreter := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+diff --git a/internal/serveur/serveur.go b/internal/serveur/serveur.go
+index 11739f2..a24f430 100644
+--- a/internal/serveur/serveur.go
++++ b/internal/serveur/serveur.go
+@@ -76,7 +76,8 @@ func (s *Serveur) Handler() http.Handler {
+ 	mux := http.NewServeMux()
+ 	mux.HandleFunc("GET /healthz", s.healthz)
+ 	mux.HandleFunc("GET /readyz", s.readyz)
+-	mux.Handle("GET /metrics", promhttp.HandlerFor(s.registre, promhttp.HandlerOpts{}))
++	// OpenMetrics à la demande de Prometheus : seul format qui transporte les exemplars (M23-E08).
++	mux.Handle("GET /metrics", promhttp.HandlerFor(s.registre, promhttp.HandlerOpts{EnableOpenMetrics: true}))
+ 	mux.HandleFunc("POST /documents", s.deposer)
+ 	mux.HandleFunc("GET /documents", s.lister)
+ 	mux.HandleFunc("GET /documents/{id}", s.lire)
+@@ -93,7 +94,7 @@ func (s *Serveur) readyz(w http.ResponseWriter, r *http.Request) {
+ 	ctx, annuler := context.WithTimeout(r.Context(), 2*time.Second)
+ 	defer annuler()
+ 	if err := s.depot.Verifier(ctx); err != nil {
+-		s.journal.Warn("stockage indisponible", "erreur", err.Error())
++		s.journal.WarnContext(r.Context(), "stockage indisponible", "erreur", err.Error())
+ 		ecrireJSON(w, http.StatusServiceUnavailable, map[string]string{"statut": "pas-pret", "s3": "indisponible"})
+ 		return
+ 	}
+@@ -162,7 +163,7 @@ func (s *Serveur) deposer(w http.ResponseWriter, r *http.Request) {
+ 	doc.Taille = int64(len(contenu))
+ 
+ 	if err := s.depot.Enregistrer(r.Context(), doc, contenu); err != nil {
+-		s.journal.Error("échec d'enregistrement", "erreur", err.Error())
++		s.journal.ErrorContext(r.Context(), "échec d'enregistrement", "erreur", err.Error())
+ 		ecrireErreur(w, http.StatusBadGateway, "stockage indisponible")
+ 		return
+ 	}
+@@ -171,7 +172,7 @@ func (s *Serveur) deposer(w http.ResponseWriter, r *http.Request) {
+ 		attribute.String("medidoc.document.id", doc.ID),
+ 		attribute.Int64("medidoc.document.taille", doc.Taille),
+ 	)
+-	s.journal.Info("document enregistré", "document_id", doc.ID, "taille", doc.Taille)
++	s.journal.InfoContext(r.Context(), "document enregistré", "document_id", doc.ID, "taille", doc.Taille)
+ 	w.Header().Set("Location", "/documents/"+doc.ID)
+ 	ecrireJSON(w, http.StatusCreated, doc)
+ }
+@@ -189,7 +190,7 @@ func (s *Serveur) lire(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 	if err != nil {
+-		s.journal.Error("échec de lecture", "document_id", id, "erreur", err.Error())
++		s.journal.ErrorContext(r.Context(), "échec de lecture", "document_id", id, "erreur", err.Error())
+ 		ecrireErreur(w, http.StatusBadGateway, "stockage indisponible")
+ 		return
+ 	}
+@@ -209,7 +210,7 @@ func (s *Serveur) lire(w http.ResponseWriter, r *http.Request) {
+ 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": nom}))
+ 	w.Header().Set("X-Content-Type-Options", "nosniff")
+ 	if _, err := io.Copy(w, obj.Corps); err != nil {
+-		s.journal.Warn("envoi interrompu", "document_id", id, "erreur", err.Error())
++		s.journal.WarnContext(r.Context(), "envoi interrompu", "document_id", id, "erreur", err.Error())
+ 	}
+ }
+ 
+@@ -226,7 +227,7 @@ func (s *Serveur) lister(w http.ResponseWriter, r *http.Request) {
+ 	}
+ 	docs, err := s.depot.Lister(r.Context(), limite)
+ 	if err != nil {
+-		s.journal.Error("échec de la liste", "erreur", err.Error())
++		s.journal.ErrorContext(r.Context(), "échec de la liste", "erreur", err.Error())
+ 		ecrireErreur(w, http.StatusBadGateway, "stockage indisponible")
+ 		return
+ 	}
+@@ -256,7 +257,15 @@ func (s *Serveur) instrumenter(suivant http.Handler) http.Handler {
+ 			route = "non-routee"
+ 		}
+ 		s.requetes.WithLabelValues(r.Method, route, strconv.Itoa(rec.code)).Inc()
+-		s.durees.WithLabelValues(r.Method, route).Observe(duree.Seconds())
++		// Exemplar (M23-E08) : l'identifiant de la trace accompagne l'observation, si la trace est
++		// gardée par l'échantillonnage en tête (sinon le lien mènerait à une trace inexistante).
++		observateur := s.durees.WithLabelValues(r.Method, route)
++		if sc := trace.SpanContextFromContext(r.Context()); sc.IsSampled() {
++			observateur.(prometheus.ExemplarObserver).ObserveWithExemplar(duree.Seconds(),
++				prometheus.Labels{"trace_id": sc.TraceID().String()})
++		} else {
++			observateur.Observe(duree.Seconds())
++		}
+ 
+ 		niveau := slog.LevelInfo
+ 		if route == "GET /healthz" || route == "GET /readyz" || route == "GET /metrics" {
+diff --git a/internal/telemetrie/journal.go b/internal/telemetrie/journal.go
+new file mode 100644
+index 0000000..066f467
+--- /dev/null
++++ b/internal/telemetrie/journal.go
+@@ -0,0 +1,34 @@
++package telemetrie
++
++import (
++	"context"
++	"log/slog"
++
++	"go.opentelemetry.io/otel/trace"
++)
++
++// JournalCorrele enveloppe un gestionnaire slog : chaque ligne écrite AVEC un contexte qui porte une
++// span (s.journal.InfoContext(ctx, …), Log(ctx, …)) reçoit trace_id et span_id au format W3C
++// (hexadécimal, 32 et 16 caractères), les mêmes que dans Tempo (M23-E08).
++type JournalCorrele struct{ slog.Handler }
++
++// Handle ajoute les identifiants de la span courante puis délègue.
++func (j JournalCorrele) Handle(ctx context.Context, r slog.Record) error {
++	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
++		r.AddAttrs(
++			slog.String("trace_id", sc.TraceID().String()),
++			slog.String("span_id", sc.SpanID().String()),
++		)
++	}
++	return j.Handler.Handle(ctx, r)
++}
++
++// WithAttrs et WithGroup gardent l'enveloppe (sinon journal.With(…) la perdrait).
++func (j JournalCorrele) WithAttrs(a []slog.Attr) slog.Handler {
++	return JournalCorrele{j.Handler.WithAttrs(a)}
++}
++
++// WithGroup : voir WithAttrs.
++func (j JournalCorrele) WithGroup(nom string) slog.Handler {
++	return JournalCorrele{j.Handler.WithGroup(nom)}
++}
+diff --git a/internal/telemetrie/journal_test.go b/internal/telemetrie/journal_test.go
+new file mode 100644
+index 0000000..1f0a27b
+--- /dev/null
++++ b/internal/telemetrie/journal_test.go
+@@ -0,0 +1,36 @@
++package telemetrie_test
++
++import (
++	"bytes"
++	"context"
++	"encoding/json"
++	"log/slog"
++	"testing"
++
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++
++	"git01.par1.medisphere.internal/medidoc/medidoc/internal/telemetrie"
++)
++
++func TestJournalCorrele(t *testing.T) {
++	var sortie bytes.Buffer
++	journal := slog.New(telemetrie.JournalCorrele{Handler: slog.NewJSONHandler(&sortie, nil)}).With("composant", "essai")
++	ctx, span := sdktrace.NewTracerProvider().Tracer("essai").Start(context.Background(), "requête")
++	journal.InfoContext(ctx, "dans une requête")
++	span.End()
++	journal.Info("hors requête")
++
++	lignes := bytes.Split(bytes.TrimSpace(sortie.Bytes()), []byte("\n"))
++	var avec, sans map[string]any
++	_ = json.Unmarshal(lignes[0], &avec)
++	_ = json.Unmarshal(lignes[1], &sans)
++	if avec["trace_id"] != span.SpanContext().TraceID().String() || avec["span_id"] != span.SpanContext().SpanID().String() {
++		t.Errorf("trace_id/span_id absents ou faux : %v", avec)
++	}
++	if avec["composant"] != "essai" {
++		t.Error("With() a perdu l'enveloppe")
++	}
++	if _, ok := sans["trace_id"]; ok {
++		t.Error("trace_id hors requête")
++	}
++}
+diff --git a/internal/telemetrie/telemetrie_test.go b/internal/telemetrie/telemetrie_test.go
+index 501ea0d..e99f8d9 100644
+--- a/internal/telemetrie/telemetrie_test.go
++++ b/internal/telemetrie/telemetrie_test.go
+@@ -95,3 +95,28 @@ func TestSpanNommeeParLaRouteEtContexteRepris(t *testing.T) {
+ 		}
+ 	}
+ }
++
++func TestExemplarEnOpenMetrics(t *testing.T) {
++	ts, enreg := serveurTrace(t)
++	r, err := http.Get(ts.URL + "/documents")
++	if err != nil {
++		t.Fatal(err)
++	}
++	_ = r.Body.Close()
++	traceID := enreg.Ended()[0].SpanContext().TraceID().String()
++
++	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/metrics", nil)
++	req.Header.Set("Accept", "application/openmetrics-text; version=1.0.0")
++	r, err = http.DefaultClient.Do(req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	corps, _ := io.ReadAll(r.Body)
++	_ = r.Body.Close()
++	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/openmetrics-text") {
++		t.Fatalf("OpenMetrics attendu, reçu %q", r.Header.Get("Content-Type"))
++	}
++	if !strings.Contains(string(corps), `trace_id="`+traceID+`"`) {
++		t.Errorf("exemplar de la trace %s absent de /metrics", traceID)
++	}
++}

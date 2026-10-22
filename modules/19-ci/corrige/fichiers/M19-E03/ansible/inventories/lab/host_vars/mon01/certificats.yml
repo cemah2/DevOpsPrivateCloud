@@ -1,0 +1,16 @@
+---
+# host_vars/mon01/certificats.yml — certificat TLS de Mailpit par ACME (M19-E03, rôle certificats_acme).
+# Un seul certificat pour STARTTLS (port 25) et l'interface (8025) : mon01 et le nom de service smtp.
+# Défi HTTP-01 sur le port 80 de mon01 : rien n'y écoute (pas d'arrêt nécessaire) ; la règle
+# d'entrée locale ca01 → 80 est dans pare_feu_local.yml.
+# Mailpit ne relit pas son certificat à chaud : redémarrage (quelques secondes ; un client SMTP
+# réessaie, GitLab remet en file avec Sidekiq).
+certificats_acme_certificats:
+  - id: mailpit
+    noms:
+      - mon01.par1.medisphere.internal
+      - smtp.par1.medisphere.internal
+    certificat: /etc/mailpit/tls/mailpit.crt
+    cle: /etc/mailpit/tls/mailpit.key
+    groupe: mailpit
+    recharger: /usr/bin/systemctl try-restart mailpit.service

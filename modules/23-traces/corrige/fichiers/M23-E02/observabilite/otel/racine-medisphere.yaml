@@ -1,0 +1,14 @@
+# Racine publique de la PKI MédiSphère (M06), même ConfigMap que dans medidoc-dev (M15-E34) : Tempo
+# l'utilise pour vérifier le certificat du RGW (M23-E03). Ce n'est pas un secret : elle est versionnée.
+# Remplace le bloc ci-dessous par le contenu de /usr/local/share/ca-certificates/medisphere-root-ca.crt
+# (adm01) : « kubectl create configmap racine-medisphere --from-file=medisphere-root-ca.crt=… --dry-run=client -o yaml ».
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: racine-medisphere
+  namespace: traces
+data:
+  medisphere-root-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <CONTENU-DE-LA-RACINE-MEDISPHERE>
+    -----END CERTIFICATE-----

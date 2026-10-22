@@ -1,0 +1,39 @@
+# plateforme/k8s — releases/argocd.yaml.gotmpl (M20-E02, PLAT-2102)
+# Argo CD sous Helmfile, comme toute la couche de base du cluster (PLAN §4.11) : Argo CD gère les
+# applications et les services ajoutés après lui, jamais lui-même ni ce qui le fait tourner.
+# Usage (depuis adm01, clone ~/src/k8s) :
+#   helmfile -e par1 -l composant=argocd diff
+#   helmfile -e par1 -l composant=argocd apply
+# Constaté avec Helmfile 1.8.2 : la liste « repositories » de ce fichier REMPLACE celle de la base
+# (_communs.yaml) au lieu de s'y ajouter ; sans conséquence ici (seul le dépôt argo sert).
+bases:
+  - _communs.yaml
+---
+repositories:
+  - name: argo
+    url: https://argoproj.github.io/argo-helm
+
+releases:
+  - name: argocd
+    namespace: argocd
+    chart: argo/argo-cd
+    # Chart 10.10.5 = Argo CD v3.5.5 (appVersion). Toute montée : lire les notes de version du chart
+    # ET le guide de montée d'Argo CD (operator-manual/upgrading/), puis diff.
+    version: 10.10.5
+    labels:
+      groupe: livraison
+      composant: argocd
+    values:
+      - ../composants/argocd/values.yaml
+      - global:
+          domain: argocd.{{ .Values.domaineApps }}
+        configs:
+          tls:
+            # argocd-tls-certs-cm : une entrée par NOM D'HÔTE de dépôt, contenant la racine qui a
+            # signé son certificat. git01 (dépôts Git) dès maintenant ; registry (charts OCI de
+            # Harbor) préparé pour M20-E13. Certificat public : il peut être versionné.
+            certificates:
+              git01.par1.medisphere.internal: |
+                {{- readFile "../composants/argocd/medisphere-root-ca.crt" | nindent 16 }}
+              registry.par1.medisphere.internal: |
+                {{- readFile "../composants/argocd/medisphere-root-ca.crt" | nindent 16 }}

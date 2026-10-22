@@ -1,0 +1,6 @@
+# plateforme/observabilite — regles/kustomization.yaml (état après M21-E14 ; E15, E16, E23 ajoutent les leurs)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - enregistrement-mediagenda.yaml   # E14
+  - enregistrement-medidoc.yaml      # E14

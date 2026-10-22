@@ -1,0 +1,10 @@
+# roles/powerdns_auth/defaults/main.yml — EXTRAIT (M21-E10, PLAT-2210) : variables AJOUTÉES.
+# Serveur web pour les SEULES métriques sur un serveur sans API (le secondaire dns02, M06-E24) :
+# webserver=yes, api=no. Sur le primaire, le serveur web existe déjà (API) : /metrics y est servi,
+# et il suffit d'ajouter les travailleurs à powerdns_auth_api_autorises (l'API exige toujours
+# la clé : un travailleur sans clé reçoit 401).
+powerdns_auth_metriques_active: false
+powerdns_auth_metriques_adresse: 127.0.0.1
+powerdns_auth_metriques_port: 8081
+powerdns_auth_metriques_autorises:
+  - 127.0.0.1

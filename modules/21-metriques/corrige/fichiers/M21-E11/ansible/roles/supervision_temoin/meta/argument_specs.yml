@@ -1,0 +1,160 @@
+---
+argument_specs:
+  main:
+    short_description: Supervision témoin hors cluster (Prometheus LTS, Alertmanager, blackbox, pve-exporter)
+    description:
+      - Installe sur un hôte unique (mon01) un Prometheus, un Alertmanager et un blackbox_exporter
+        à partir des binaires amont vérifiés par empreinte, et facultativement prometheus-pve-exporter.
+      - Valide chaque configuration avant de la poser et recharge les services par signal.
+    options:
+      supervision_temoin_prometheus_version:
+        type: str
+        required: true
+        description: Version de Prometheus (ligne LTS 3.13).
+      supervision_temoin_prometheus_sha256:
+        type: str
+        required: true
+        description: Empreinte SHA-256 de l'archive linux-amd64 de cette version.
+      supervision_temoin_alertmanager_version:
+        type: str
+        required: true
+        description: Version d'Alertmanager.
+      supervision_temoin_alertmanager_sha256:
+        type: str
+        required: true
+        description: Empreinte SHA-256 de l'archive d'Alertmanager.
+      supervision_temoin_blackbox_version:
+        type: str
+        required: true
+        description: Version de blackbox_exporter.
+      supervision_temoin_blackbox_sha256:
+        type: str
+        required: true
+        description: Empreinte SHA-256 de l'archive de blackbox_exporter.
+      supervision_temoin_url_github:
+        type: str
+        default: https://github.com/prometheus
+        description: Base des URL de téléchargement.
+      supervision_temoin_dossier_logiciels:
+        type: path
+        default: /opt/supervision-temoin
+        description: Dossier des versions installées (une sous-arborescence par version).
+      supervision_temoin_dossier_config:
+        type: path
+        default: /etc/prometheus
+        description: Configuration de Prometheus, des règles, des cibles et des exportateurs.
+      supervision_temoin_dossier_donnees:
+        type: path
+        default: /var/lib/prometheus
+        description: Base de séries temporelles du témoin.
+      supervision_temoin_dossier_alertmanager:
+        type: path
+        default: /var/lib/alertmanager
+        description: Silences et journal des notifications d'Alertmanager.
+      supervision_temoin_racine_ca:
+        type: path
+        default: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+        description: Racine MédiSphère (sondes HTTPS, collecte TLS des hyperviseurs).
+      supervision_temoin_prometheus_ecoute:
+        type: str
+        default: 0.0.0.0:9090
+        description: Adresse d'écoute de Prometheus.
+      supervision_temoin_prometheus_url_externe:
+        type: str
+        default: http://mon01.par1.medisphere.internal:9090
+        description: URL externe (liens des alertes).
+      supervision_temoin_retention:
+        type: str
+        default: 30d
+        description: Rétention locale.
+      supervision_temoin_intervalle:
+        type: str
+        default: 30s
+        description: Intervalle de collecte et d'évaluation.
+      supervision_temoin_etiquettes_externes:
+        type: dict
+        default: {site: par1, prometheus: temoin}
+        description: Étiquettes externes du témoin.
+      supervision_temoin_alertmanager_ecoute:
+        type: str
+        default: 0.0.0.0:9093
+        description: Adresse d'écoute d'Alertmanager.
+      supervision_temoin_alertmanager_url_externe:
+        type: str
+        default: http://mon01.par1.medisphere.internal:9093
+        description: URL externe d'Alertmanager.
+      supervision_temoin_smtp_relais:
+        type: str
+        default: smtp.par1.medisphere.internal:25
+        description: Relais SMTP (Mailpit, STARTTLS).
+      supervision_temoin_smtp_expediteur:
+        type: str
+        default: supervision-temoin@medisphere.internal
+        description: Expéditeur des courriels.
+      supervision_temoin_destinataire:
+        type: str
+        default: astreinte@medisphere.internal
+        description: Destinataire unique des alertes du témoin.
+      supervision_temoin_blackbox_ecoute:
+        type: str
+        default: 127.0.0.1:9115
+        description: Adresse d'écoute de blackbox_exporter (locale seulement).
+      supervision_temoin_sondes:
+        type: list
+        elements: dict
+        default: []
+        description: Groupes de cibles du job blackbox (nom, module, cibles, etiquettes).
+      supervision_temoin_seuil_certificat_jours:
+        type: int
+        default: 14
+        description: Échéance de certificat qui déclenche l'alerte du témoin.
+      supervision_temoin_pve_active:
+        type: bool
+        default: false
+        description: Installe prometheus-pve-exporter et collecte les hyperviseurs (M21-E12).
+      supervision_temoin_pve_version:
+        type: str
+        default: 3.10.1
+        description: Version de prometheus-pve-exporter (PyPI).
+      supervision_temoin_pve_ecoute:
+        type: str
+        default: 127.0.0.1:9221
+        description: Adresse d'écoute de pve-exporter (locale seulement).
+      supervision_temoin_pve_cibles:
+        type: list
+        elements: dict
+        default: []
+        description: Nœuds Proxmox VE interrogés ({cible, instance}).
+      supervision_temoin_pve_utilisateur:
+        type: str
+        default: wb-supervision@pve
+        description: Utilisateur Proxmox du jeton.
+      supervision_temoin_pve_jeton_nom:
+        type: str
+        default: prometheus
+        description: Nom du jeton d'API.
+      supervision_temoin_pve_jeton_valeur:
+        type: str
+        default: ""
+        description: Secret du jeton (Vault critique).
+      supervision_temoin_pve_racine_source:
+        type: path
+        default: ""
+        description: Fichier local (sur le contrôleur Ansible) de la racine de l'API de pve01.
+      supervision_temoin_hyperviseurs:
+        type: list
+        elements: dict
+        default: []
+        description: node_exporter des hyperviseurs ({cible, instance, nom_tls}).
+      supervision_temoin_uv_version:
+        type: str
+        default: 0.13.5
+        description: Version de uv (environnement de pve-exporter).
+      supervision_temoin_uv_sha256:
+        type: str
+        default: f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f
+        description: Empreinte SHA-256 de l'archive de uv.
+      supervision_temoin_verifier:
+        type: bool
+        default: true
+        description: Contrôles HTTP locaux après application.

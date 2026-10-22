@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""plateforme/outils — bin/ms-ci-conformite (M19-E32, SEC-2032).
+
+Contrôle de conformité CI des projets applicatifs, sans les fonctions Ultimate de GitLab :
+pour chaque projet non archivé des groupes du périmètre (etc/ci-conformite.toml) :
+
+  R1  la configuration CI existe et est valide (GET /projects/:id/ci/lint) ;
+  R2  le composant « securite » est inclus PAR include: component (pas recopié) ;
+  R3  à une version supportée (≥ version minimale, hors versions retirées) ;
+  R4  le projet exige un pipeline réussi pour fusionner (only_allow_merge_if_pipeline_succeeds) ;
+  R5  aucun job du composant securite n'est rendu facultatif (allow_failure: true) par le projet.
+
+Pour chaque projet non conforme : un ticket étiqueté « conformite-ci » (un seul), créé ou mis à jour ;
+pour chaque projet redevenu conforme : son ticket est fermé avec un commentaire. Aucun ticket pour un
+projet conforme. Rapports : conformite.json et conformite.md dans le dossier courant.
+
+Usage :  ms-ci-conformite [--config etc/ci-conformite.toml] [--sans-tickets] [--strict]
+  --sans-tickets : n'écrit rien dans GitLab (essai) ;
+  --strict       : code de sortie 1 si un projet est non conforme (par défaut : 0, pour ne pas
+                   rendre rouge le pipeline planifié à cause des équipes).
+Jeton : fichier GITLAB_TOKEN_FILE (portée api, compte technique « ci-conformite »), jamais en argument.
+Dépendance : PyYAML (épinglé dans pyproject.toml) pour lire merged_yaml.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import ssl
+import sys
+import tomllib
+import urllib.error
+import urllib.parse
+import urllib.request
+
+import yaml
+
+RE_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+MARQUEUR = "<!-- ms-ci-conformite -->"
+
+
+def version(v: str) -> tuple[int, int, int] | None:
+    m = RE_VERSION.match(v or "")
+    return tuple(int(x) for x in m.groups()) if m else None  # type: ignore[return-value]
+
+
+class GitLab:
+    def __init__(self, url: str, jeton: str, ca: str | None, ecrire: bool) -> None:
+        self.api = url.rstrip("/") + "/api/v4/"
+        self.jeton = jeton
+        self.ecrire = ecrire
+        self.ctx = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
+
+    def _req(self, methode: str, chemin: str, params: dict | None = None, corps: dict | None = None):
+        url = self.api + chemin + ("?" + urllib.parse.urlencode(params) if params else "")
+        donnees = urllib.parse.urlencode(corps).encode() if corps else None
+        r = urllib.request.Request(url, data=donnees, method=methode, headers={"PRIVATE-TOKEN": self.jeton})
+        with urllib.request.urlopen(r, context=self.ctx, timeout=60) as rep:
+            return json.load(rep)
+
+    def get(self, chemin: str, **params):
+        return self._req("GET", chemin, params)
+
+    def pages(self, chemin: str, **params) -> list:
+        tout, page = [], 1
+        while True:
+            lot = self.get(chemin, per_page=100, page=page, **params)
+            tout += lot
+            if len(lot) < 100:
+                return tout
+            page += 1
+
+    def ecrit(self, methode: str, chemin: str, **corps):
+        if not self.ecrire:
+            print(f"(essai) {methode} {chemin}", file=sys.stderr)
+            return {}
+        return self._req(methode, chemin, corps=corps)
+
+
+def q(chemin: str) -> str:
+    return urllib.parse.quote(chemin, safe="")
+
+
+def evaluer(projet: dict, lint: dict | None, regles: dict) -> list[str]:
+    """Liste des écarts d'un projet (vide = conforme). Fonction pure : testée sans réseau."""
+    ecarts: list[str] = []
+    chemin_comp = regles["composant_securite"]["chemin"]
+    vmin = version(regles["composant_securite"]["version_minimale"])
+    retirees = {version(v) for v in regles["composant_securite"].get("versions_retirees", [])}
+
+    if lint is None:
+        return ["R1 : pas de configuration CI (.gitlab-ci.yml absent)"]
+    if not lint.get("valid"):
+        ecarts.append("R1 : configuration CI invalide : " + "; ".join(lint.get("errors", []))[:300])
+    if projet.get("path_with_namespace") in regles["perimetre"].get("sans_image", []):
+        if not projet.get("only_allow_merge_if_pipeline_succeeds"):
+            ecarts.append("R4 : la fusion n'exige pas un pipeline réussi")
+        return ecarts
+
+    comps = [i for i in lint.get("includes", []) if i.get("type") == "component"
+             and chemin_comp in (i.get("location") or "")]
+    if not comps:
+        fusion = lint.get("merged_yaml") or ""
+        if "securite:" in fusion:
+            ecarts.append("R2 : jobs securite:* présents mais composant non inclus (copie locale ?)")
+        else:
+            ecarts.append(f"R2 : composant {chemin_comp} non inclus")
+    else:
+        for i in comps:
+            v = i["location"].rsplit("@", 1)[-1] if "@" in i["location"] else ""
+            vv = version(v)
+            if vv is None:
+                ecarts.append(f"R3 : version « {v} » du composant non épinglée (attendu X.Y.Z ≥ {regles['composant_securite']['version_minimale']})")
+            elif vv < vmin or vv in retirees:
+                ecarts.append(f"R3 : composant securite en {v}, non supporté (minimum {regles['composant_securite']['version_minimale']})")
+
+    if not projet.get("only_allow_merge_if_pipeline_succeeds"):
+        ecarts.append("R4 : la fusion n'exige pas un pipeline réussi")
+
+    try:
+        fusion = yaml.safe_load(lint.get("merged_yaml") or "") or {}
+    except yaml.YAMLError:
+        fusion = {}
+    for nom, job in fusion.items() if isinstance(fusion, dict) else []:
+        if str(nom).startswith("securite:") and isinstance(job, dict) and job.get("allow_failure") is True:
+            ecarts.append(f"R5 : le job {nom} est rendu facultatif (allow_failure: true)")
+    return ecarts
+
+
+def corps_ticket(chemin: str, ecarts: list[str]) -> str:
+    lignes = "\n".join(f"- [ ] {e}" for e in ecarts)
+    return (f"{MARQUEUR}\nLe contrôle nocturne de conformité CI (SEC-2032) a trouvé ces écarts dans `{chemin}` :\n\n"
+            f"{lignes}\n\nRègles et dérogations : `docs/livraison/ci/conformite.md` (plateforme/medisphere). "
+            "Ce ticket se met à jour chaque nuit et se ferme seul quand le projet est conforme.")
+
+
+def traiter_tickets(gl: GitLab, projet: dict, ecarts: list[str], regles: dict) -> str:
+    etiquette = regles["ticket"]["etiquette"]
+    ouverts = gl.get(f"projects/{projet['id']}/issues", labels=etiquette, state="opened")
+    if ecarts:
+        if ouverts:
+            t = ouverts[0]
+            corps = corps_ticket(projet["path_with_namespace"], ecarts)
+            if t.get("description") != corps:
+                gl.ecrit("PUT", f"projects/{projet['id']}/issues/{t['iid']}", description=corps)
+                return f"ticket #{t['iid']} mis à jour"
+            return f"ticket #{t['iid']} inchangé"
+        t = gl.ecrit("POST", f"projects/{projet['id']}/issues", title=regles["ticket"]["titre"],
+                     labels=etiquette, description=corps_ticket(projet["path_with_namespace"], ecarts))
+        return f"ticket #{t.get('iid', '?')} ouvert"
+    for t in ouverts:
+        gl.ecrit("POST", f"projects/{projet['id']}/issues/{t['iid']}/notes",
+                 body="Le projet est de nouveau conforme au socle CI : fermeture automatique.")
+        gl.ecrit("PUT", f"projects/{projet['id']}/issues/{t['iid']}", state_event="close")
+    return f"{len(ouverts)} ticket(s) fermé(s)" if ouverts else "-"
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description="Contrôle de conformité CI (SEC-2032)")
+    p.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "..", "etc", "ci-conformite.toml"))
+    p.add_argument("--sans-tickets", action="store_true")
+    p.add_argument("--strict", action="store_true")
+    a = p.parse_args(argv)
+
+    with open(a.config, "rb") as f:
+        regles = tomllib.load(f)
+    with open(os.environ["GITLAB_TOKEN_FILE"], encoding="utf-8") as f:
+        jeton = f.read().strip()
+    gl = GitLab(os.environ.get("CI_SERVER_URL", "https://git01.par1.medisphere.internal"), jeton,
+                os.environ.get("MEDISPHERE_ROOT_CA"), ecrire=not a.sans_tickets)
+
+    derog = regles.get("derogations", {})
+    resultats = []
+    for g in regles["perimetre"]["groupes"]:
+        for pr in gl.pages(f"groups/{q(g)}/projects", include_subgroups="true", archived="false"):
+            try:
+                lint = gl.get(f"projects/{pr['id']}/ci/lint", include_jobs="false")
+            except urllib.error.HTTPError as e:
+                lint = None if e.code in (404, 422) else {"valid": False, "errors": [f"HTTP {e.code}"]}
+            ecarts = evaluer(pr, lint, regles)
+            d = derog.get(pr["path_with_namespace"])
+            action = "dérogation" if (ecarts and d) else traiter_tickets(gl, pr, ecarts, regles)
+            resultats.append({"projet": pr["path_with_namespace"], "conforme": not ecarts,
+                              "ecarts": ecarts, "derogation": d, "action": action})
+
+    with open("conformite.json", "w", encoding="utf-8") as f:
+        json.dump(resultats, f, indent=2, ensure_ascii=False)
+    with open("conformite.md", "w", encoding="utf-8") as f:
+        f.write("| Projet | Conforme | Écarts | Action |\n|---|---|---|---|\n")
+        for r in resultats:
+            f.write(f"| `{r['projet']}` | {'oui' if r['conforme'] else 'NON'} | {'<br>'.join(r['ecarts']) or '-'} | {r['action']} |\n")
+    non = [r for r in resultats if not r["conforme"]]
+    print(f"{len(resultats)} projets, {len(non)} non conformes", file=sys.stderr)
+    return 1 if (a.strict and non) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

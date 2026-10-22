@@ -1,0 +1,61 @@
+# plateforme/k8s — composants/argocd/values-ha.yaml (M20-E27, PLAT-2127)
+# Haute disponibilité et réactivité d'Argo CD. Chargé en dernier (releases/argocd.yaml.gotmpl).
+# Coût mesuré sur le lab : docs/livraison/gitops/performance.md (≈ +1,5 Go de demandes mémoire).
+#
+# Placement : l'anti-affinité « soft » par défaut du chart (global.affinity.podAntiAffinity) étale les
+# réplicas sur k8s-w01 et k8s-w02 (k8s-w03 porte le taint dedie=bdd:NoSchedule, M14-E14). On ne la
+# passe PAS en « hard » : pendant le drainage d'un des deux travailleurs, le réplica chassé ne
+# trouverait plus de place et resterait Pending jusqu'au retour du nœud.
+
+server:
+  replicas: 2
+  env:
+    # Divise entre les réplicas la limite de connexions simultanées (ARGOCD_MAX_CONCURRENT_LOGIN_REQUESTS_COUNT).
+    - name: ARGOCD_API_SERVER_REPLICAS
+      value: "2"
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+repoServer:
+  replicas: 2
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+controller:
+  # Deux partitions (shards). Le chart reporte la valeur dans ARGOCD_CONTROLLER_REPLICAS : les deux
+  # nombres ne peuvent pas diverger. Partition = CLUSTER (in-cluster, lyo-k3s01), pas Application.
+  # Placement de lyo-k3s01 forcé sur la partition 1 par le champ « shard » de son Secret de cluster
+  # (secrets-k8s.sh) : l'algorithme par défaut (legacy, empreinte de l'identifiant) pourrait mettre
+  # les deux clusters sur la partition 0.
+  replicas: 2
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+applicationSet:
+  # Élection d'un meneur : un seul réplica travaille, l'autre attend (reprise rapide).
+  replicas: 2
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+configs:
+  cm:
+    # Webhooks GitLab → Argo CD (M20-E27) : un « push » déclenche le rafraîchissement en quelques
+    # secondes. L'interrogation périodique ne sert plus que de filet (dépôts sans webhook, charts OCI,
+    # webhook perdu) : 5 min + jusqu'à 1 min de gigue au lieu de 2 + 1.
+    timeout.reconciliation: 300s
+    timeout.reconciliation.jitter: 60s
+  secret:
+    # Secret partagé des webhooks GitLab : la clé webhook.gitlab.secret d'argocd-secret contient une
+    # RÉFÉRENCE ($<Secret>:<clé>) vers le Secret argocd-webhook-gitlab (étiquette
+    # app.kubernetes.io/part-of: argocd), créé hors Git par secrets-k8s.sh (composant argocd). La
+    # référence n'a rien de secret ; la valeur reste dans le Vault.
+    gitlabSecret: "$argocd-webhook-gitlab:secret"
+
+# Redis : PAS de redis-ha (décision écrite dans performance.md). Redis n'est qu'un cache : sa perte
+# coûte un recalcul (quelques secondes à minutes), pas une donnée. redis-ha demande trois Redis +
+# Sentinel et trois HAProxy avec anti-affinité stricte (trois nœuds sans taint : nous en avons deux),
+# et des images (ecr-public.aws.com) hors des caches Harbor.

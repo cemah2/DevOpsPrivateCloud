@@ -1,0 +1,45 @@
+# plateforme/ansible — roles/supervision_temoin/files/regles/supervision-cluster.test.yml (M21-E28)
+# Joué par la CI de plateforme/ansible (et par Molecule si ton rôle en a) :
+#   promtool test rules roles/supervision_temoin/files/regles/supervision-cluster.test.yml
+rule_files:
+  - supervision-cluster.yml
+evaluation_interval: 1m
+
+tests:
+  # Watchdog présent 10 min, puis plus rien (Prometheus arrêté) : alerte après 5 min.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="watchdog-cluster", instance="k8s-par1"}'
+        values: '1x10 0x10'
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: SupervisionClusterMuette
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: SupervisionClusterMuette
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: watchdog-cluster, instance: k8s-par1}
+            exp_annotations:
+              resume: "La supervision du cluster k8s-par1 est muette : plus d'alerte Watchdog"
+              description: "Thanos Query (10.10.41.60) ne renvoie plus l'alerte Watchdog : Prometheus arrêté, règles non évaluées, sidecars ou Query en panne, ou cluster entier hors service. Aucune alerte du cluster n'est plus fiable. RB-215 §1."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md
+
+  # Alertmanager du cluster arrêté (l'essai d'E28) : Watchdog toujours là, sonde /-/healthy en échec.
+  - interval: 1m
+    input_series:
+      - series: 'probe_success{job="watchdog-cluster", instance="k8s-par1"}'
+        values: '1x20'
+      - series: 'probe_success{job="supervision-cluster", composant="alertmanager", instance="http://alertmanager.apps.par1.medisphere.internal:9093/-/healthy"}'
+        values: '1x5 0x15'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: SupervisionClusterMuette
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: SupervisionClusterComposantKO
+        exp_alerts:
+          - exp_labels: {gravite: critique, equipe: plateforme, job: supervision-cluster, composant: alertmanager, instance: "http://alertmanager.apps.par1.medisphere.internal:9093/-/healthy"}
+            exp_annotations:
+              resume: "alertmanager du cluster ne répond pas à http://alertmanager.apps.par1.medisphere.internal:9093/-/healthy"
+              description: "Sonde HTTP en échec depuis 5 min. Alertmanager arrêté = plus aucune notification du cluster ; Thanos Query arrêté = plus de lecture des métriques. RB-215 §2."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-215-supervision-muette.md

@@ -1,0 +1,11 @@
+# plateforme/observabilite — scrape/kustomization.yaml (état après M21-E12)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - vms.yaml               # E08
+  - ceph.yaml              # E10
+  - haproxy.yaml           # E10
+  - powerdns.yaml          # E10
+  - gitlab.yaml            # E10
+  - harbor.yaml            # E10
+  - federation-mon01.yaml  # E12

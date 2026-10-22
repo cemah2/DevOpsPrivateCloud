@@ -1,0 +1,13 @@
+# plateforme/gitops — projets/medidoc.yaml : AJOUT de M20-E29 (CHG-2129) à l'AppProject d'E07.
+# Même règle que mediagenda. MédiDoc n'a pas encore de production : la fenêtre est posée AVANT, pour
+# que la future Application medidoc-prod naisse déjà protégée.
+spec:
+  syncWindows:
+    - kind: deny
+      schedule: "0 16 * * 5"
+      duration: 64h
+      timeZone: Europe/Paris
+      applications:
+        - "*-prod"
+      manualSync: true
+      description: "CHG-2129 : pas de mise en production du vendredi 16h au lundi 8h (dérogation : astreinte, ticket INC)"

@@ -1,0 +1,132 @@
+# plateforme/ci-templates — composant « promotion » (nouvelle version mineure, M19-E17, PLAT-2017).
+# Sur une étiquette vX.Y.Z protégée : propose l'image EXACTE publiée et signée (IMAGE_REF, par
+# empreinte) à un overlay du dépôt de déploiement, par une MR. La CI propose, un Maintainer fusionne.
+# Utilisation (une inclusion par overlay) :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.4.0
+#       inputs: { overlay: dev, declenchement: on_success }
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/promotion@v2.4.0
+#       inputs: { overlay: recette, declenchement: manual }
+# Job : promouvoir-<overlay>. Branche promotion/<overlay>-vX.Y.Z, MR vers main, branche supprimée à
+# la fusion. Le job :
+#   - met à jour overlays/<overlay>/livraison.yaml (version) ET l'image par « kustomize edit set
+#     image <nom>=<nom>:vX.Y.Z@sha256:… » (les deux doivent dire la même version : garde-fou) ;
+#   - lance outils/verifier-livraison.sh du dépôt de déploiement avant de pousser ;
+#   - refuse proprement si la branche existe déjà (promotion déjà proposée).
+# Secret : DEPLOIEMENT_TOKEN, variable PROTÉGÉE et MASQUÉE du projet appelant = jeton de projet
+# « ci-promotion » du dépôt de déploiement (Developer, api + write_repository, avec expiration).
+# Il ne quitte jamais l'environnement du job : ni argument de commande, ni .git/config, ni artefact.
+spec:
+  description: "Promotion d'une image publiée (par empreinte) vers un overlay Kustomize, par merge request."
+  component: [version]
+  inputs:
+    overlay:
+      description: "Overlay cible dans le dépôt de déploiement"
+      options: [dev, recette, prod]
+    declenchement:
+      description: "on_success : MR ouverte automatiquement ; manual : sur action d'un humain"
+      options: [on_success, manual]
+      default: manual
+    projet_deploiement:
+      description: "Chemin GitLab du dépôt de déploiement"
+      default: mediagenda/deploiement
+      regex: ^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$
+    nom_image:
+      description: "Nom de l'image tel qu'il apparaît dans les manifestes (sans étiquette)"
+      default: registry.par1.medisphere.internal/medisphere/mediagenda-api
+      regex: ^registry\.par1\.medisphere\.internal/[a-z0-9._/-]+$
+    stage:
+      default: promotion
+    runner:
+      default: k8s
+    job_publication:
+      description: "Job qui exporte IMAGE_REF et IMAGE_ETIQUETTE (composant construction-image)"
+      default: "image:publication"
+    job_verification:
+      description: "Job à attendre s'il existe : la signature est vérifiée avant toute promotion"
+      default: "securite:verification"
+    image_k8s:
+      description: "Image avec git, kustomize, yq, kubectl, curl, jq — étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+---
+promouvoir-$[[ inputs.overlay ]]:
+  stage: $[[ inputs.stage ]]
+  tags: ["$[[ inputs.runner ]]"]
+  image:
+    name: $[[ inputs.image_k8s ]]
+    entrypoint: [""]
+  interruptible: false
+  rules:
+    - if: '"$[[ inputs.declenchement ]]" == "manual" && $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      # Un job manuel non fait ne doit pas laisser le pipeline de l'étiquette « bloqué ».
+      allow_failure: true
+    - if: '"$[[ inputs.declenchement ]]" == "on_success" && $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+  needs:
+    - job: "$[[ inputs.job_publication ]]"
+      artifacts: true
+    - job: "$[[ inputs.job_verification ]]"
+      artifacts: false
+      optional: true
+  # Deux promotions vers le même overlay ne se croisent pas.
+  resource_group: promotion-$[[ inputs.projet_deploiement ]]-$[[ inputs.overlay ]]
+  variables:
+    GIT_STRATEGY: none
+    PROMO_OVERLAY: $[[ inputs.overlay ]]
+    PROMO_PROJET: $[[ inputs.projet_deploiement ]]
+    PROMO_IMAGE: $[[ inputs.nom_image ]]
+    GIT_SSL_CAINFO: /etc/medisphere/ca/medisphere-root-ca.crt
+    HOME: /tmp/promotion
+  script:
+    - echo "composant promotion $[[ component.version ]] — $PROMO_PROJET overlays/$PROMO_OVERLAY"
+    - |
+      set -euo pipefail
+      test -n "${DEPLOIEMENT_TOKEN:-}" || { echo "DEPLOIEMENT_TOKEN absente (variable protégée et masquée du projet)"; exit 1; }
+      case "${IMAGE_REF:-}" in *@sha256:*) ;; *) echo "IMAGE_REF sans empreinte : « ${IMAGE_REF:-} »"; exit 1 ;; esac
+      VERSION="$CI_COMMIT_TAG"
+      EMPREINTE="${IMAGE_REF#*@}"
+      BRANCHE="promotion/$PROMO_OVERLAY-$VERSION"
+      PROJET_URI="$(printf '%s' "$PROMO_PROJET" | jq -sRr @uri)"
+      mkdir -p "$HOME" && cd "$HOME"
+      # Authentification Git par un assistant LU À L'EXÉCUTION dans l'environnement du job :
+      # rien n'est écrit dans .git/config ni sur la ligne de commande (ps).
+      export GIT_TERMINAL_PROMPT=0
+      AIDE='!f() { test "$1" = get || exit 0; echo username=ci-promotion; echo "password=${DEPLOIEMENT_TOKEN}"; }; f'
+      git() { command git -c credential.helper= -c "credential.helper=$AIDE" "$@"; }
+      URL="$CI_SERVER_URL/$PROMO_PROJET.git"
+      if git ls-remote --exit-code --heads "$URL" "$BRANCHE" > /dev/null; then
+        echo "La branche $BRANCHE existe déjà dans $PROMO_PROJET : promotion déjà proposée (voir ses MR)."
+        exit 1
+      fi
+      git clone --quiet --depth 1 --branch main "$URL" depot && cd depot
+      git switch --quiet -c "$BRANCHE"
+      (
+        cd "overlays/$PROMO_OVERLAY"
+        VERSION="$VERSION" yq -i '.data.version = strenv(VERSION)' livraison.yaml
+        kustomize edit set image "$PROMO_IMAGE=$PROMO_IMAGE:$VERSION@$EMPREINTE"
+      )
+      outils/verifier-livraison.sh "overlays/$PROMO_OVERLAY"
+      git diff --stat
+      git -c user.name="ci-promotion" -c user.email="ci-promotion@medisphere.internal" commit --quiet -a \
+        -m "chore($PROMO_OVERLAY): promouvoir ${PROMO_IMAGE##*/} $VERSION" \
+        -m "Image : $IMAGE_REF" -m "Pipeline : $CI_PIPELINE_URL"
+      git push --quiet "$URL" "HEAD:refs/heads/$BRANCHE"
+      # MR par l'API : jeton passé à curl par sa configuration lue sur l'entrée standard.
+      DESCRIPTION="$(printf '%s\n' \
+        "Promotion proposée par la CI de \`$CI_PROJECT_PATH\` (étiquette \`$VERSION\`)." "" \
+        "- Image : \`$IMAGE_REF\` (analysée, publiée, signée, vérifiée)" \
+        "- Pipeline : $CI_PIPELINE_URL" "" \
+        "Relire le rendu (\`kustomize build overlays/$PROMO_OVERLAY\`), puis fusionner (Maintainers).")"
+      printf 'header = "PRIVATE-TOKEN: %s"\n' "$DEPLOIEMENT_TOKEN" \
+        | curl -sSf --cacert "$GIT_SSL_CAINFO" -K - -o mr.json \
+            --data-urlencode "source_branch=$BRANCHE" \
+            --data-urlencode "target_branch=main" \
+            --data-urlencode "title=Promouvoir ${PROMO_IMAGE##*/} $VERSION en $PROMO_OVERLAY" \
+            --data-urlencode "description=$DESCRIPTION" \
+            --data-urlencode "remove_source_branch=true" \
+            --data-urlencode "labels=promotion,$PROMO_OVERLAY" \
+            "$CI_API_V4_URL/projects/$PROJET_URI/merge_requests"
+      echo "MR ouverte : $(jq -r .web_url mr.json)"
+  after_script:
+    - rm -rf /tmp/promotion

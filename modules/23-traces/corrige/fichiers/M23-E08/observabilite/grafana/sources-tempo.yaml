@@ -1,0 +1,50 @@
+# plateforme/observabilite — grafana/sources-tempo.yaml (M23-E03, liens ajoutés en M23-E08, DEV-2408)
+# Source Tempo provisionnée par le sidecar de Grafana (ConfigMap étiquetée grafana_datasource: "1",
+# espace supervision). UID STABLE « tempo ». M23-E13 et M23-E14 ajoutent serviceMap, tracesToMetrics
+# et tracesToProfiles à ce même jsonData.
+# « $$ » : échappement du « $ » (le provisionnement de Grafana remplace ${VAR} par l'environnement).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sources-tempo
+  namespace: supervision
+  labels:
+    grafana_datasource: "1"
+data:
+  sources-tempo.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: http://tempo.traces.svc.cluster.local:3200
+        editable: false
+        jsonData:
+          nodeGraph:
+            enabled: true
+          search:
+            hide: false
+          traceQuery:
+            timeShiftEnabled: true
+            spanStartTimeShift: "-30m"
+            spanEndTimeShift: "30m"
+          streamingEnabled:
+            search: true
+          # M23-E08 — Tempo → Loki : bouton « Logs for this span ». Locataire « mediagenda » (source
+          # loki-mediagenda) : c'est l'équipe d'astreinte de l'API. La requête générée filtre le flux de
+          # l'espace de la span (k8s.namespace.name, posé par k8sattributes → étiquette Loki « namespace »)
+          # et cherche l'identifiant de trace dans la ligne (filterByTraceID).
+          # Limite : une span de MédiDoc ouvre le locataire mediagenda (vide pour elle) ; voir le corrigé.
+          tracesToLogsV2:
+            datasourceUid: loki-mediagenda
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            tags:
+              - key: k8s.namespace.name
+                value: namespace
+            filterByTraceID: true
+            filterBySpanID: false
+          # Recherche de journaux depuis l'onglet de recherche de Tempo.
+          lokiSearch:
+            datasourceUid: loki-mediagenda

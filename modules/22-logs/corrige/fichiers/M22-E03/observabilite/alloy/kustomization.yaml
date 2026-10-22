@@ -1,0 +1,16 @@
+# plateforme/observabilite — alloy/kustomization.yaml (M22-E03)
+# Troisième source de l'Application « alloy » (path: alloy) : la configuration de l'agent.
+# Nom FIXE (sans suffixe d'empreinte) : c'est celui qu'attend le chart (alloy.configMap.name) ;
+# le config-reloader détecte le changement de contenu et recharge Alloy sans redémarrer le pod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: journaux
+configMapGenerator:
+  - name: alloy-config
+    files:
+      - config.alloy
+    options:
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/name: alloy
+        app.kubernetes.io/component: configuration

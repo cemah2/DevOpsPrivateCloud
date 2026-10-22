@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Prometheus témoin (rôle supervision_temoin, M21-E11)
+Documentation=https://prometheus.io/docs/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+ExecStart=/usr/local/bin/prometheus \
+  --config.file={{ supervision_temoin_dossier_config }}/prometheus.yml \
+  --storage.tsdb.path={{ supervision_temoin_dossier_donnees }}/data \
+  --storage.tsdb.retention.time={{ supervision_temoin_retention }} \
+  --web.listen-address={{ supervision_temoin_prometheus_ecoute }} \
+  --web.external-url={{ supervision_temoin_prometheus_url_externe }}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+# Témoin : sobre, et borné pour ne jamais priver Mailpit de mémoire (mon01 : 3 Go).
+MemoryMax=600M
+ReadWritePaths={{ supervision_temoin_dossier_donnees }}
+CapabilityBoundingSet=
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

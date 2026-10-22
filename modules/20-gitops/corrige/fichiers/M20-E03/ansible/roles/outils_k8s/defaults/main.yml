@@ -1,0 +1,59 @@
+---
+# Rôle outils_k8s — outils Kubernetes du poste d'administration adm01 (M14-E05, PLAN §4.10 ;
+# binaires nus et CLI argocd ajoutés en M20-E03, PLAT-2103).
+# kubectl (pkgs.k8s.io) et Helm 4 (dépôt APT de buildkite) en paquets épinglés ; k9s, cilium,
+# hubble, etcdctl/etcdutl en binaires amont vérifiés par la somme SHA-256 publiée avec la version,
+# installés dans /opt/outils_k8s/<outil>-<version>/ et liés dans /usr/local/bin (retour arrière =
+# changer la version). krew et ses greffons s'installent dans le compte de l'utilisateur (E06).
+
+outils_k8s_entete: >-
+  {{ ms_gere_par | default('Fichier géré par Ansible (projet plateforme/ansible).') | replace('\n', ' ') }}
+
+# kubectl : une mineure d'écart au plus avec le cluster (1.35 puis 1.36 après M14-E25).
+outils_k8s_kubectl_mineure: "1.36"
+outils_k8s_kubectl_version: "1.36.5-1.1"
+outils_k8s_kubernetes_cle_empreinte: DE15B14486CD377B9E876E1A234654DA9A296436
+
+# Helm 4 (simple installateur jusqu'au M17). Clé du dépôt relevée en M14-E05.
+outils_k8s_helm_depot_url: https://packages.buildkite.com/helm-linux/helm-debian/any/
+outils_k8s_helm_cle_url: https://packages.buildkite.com/helm-linux/helm-debian/gpgkey
+outils_k8s_helm_cle_empreinte: DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6
+outils_k8s_helm_version: "4.3.*"
+
+# Binaires amont : archive, somme publiée, chemin du binaire dans l'archive.
+outils_k8s_dossier: /opt/outils_k8s
+outils_k8s_binaires:
+  - nom: k9s
+    version: "0.51.0"
+    url: https://github.com/derailed/k9s/releases/download/v0.51.0/k9s_Linux_amd64.tar.gz
+    somme: https://github.com/derailed/k9s/releases/download/v0.51.0/checksums.sha256
+    fichiers: [k9s]
+  - nom: cilium
+    version: "0.20.1"
+    url: https://github.com/cilium/cilium-cli/releases/download/v0.20.1/cilium-linux-amd64.tar.gz
+    somme: https://github.com/cilium/cilium-cli/releases/download/v0.20.1/cilium-linux-amd64.tar.gz.sha256sum
+    fichiers: [cilium]
+  - nom: hubble
+    version: "1.20.2"
+    url: https://github.com/cilium/hubble/releases/download/v1.20.2/hubble-linux-amd64.tar.gz
+    somme: https://github.com/cilium/hubble/releases/download/v1.20.2/hubble-linux-amd64.tar.gz.sha256sum
+    fichiers: [hubble]
+  # etcdctl/etcdutl : MÊME version que l'etcd de kubeadm (1.35.9 : 3.6.6-0 ; 1.36 : 3.6.8, M14-E25).
+  - nom: etcd
+    # 3.6.8 depuis la montée de version du cluster (M14-E25).
+    version: "3.6.8"
+    url: https://github.com/etcd-io/etcd/releases/download/v3.6.8/etcd-v3.6.8-linux-amd64.tar.gz
+    somme: https://github.com/etcd-io/etcd/releases/download/v3.6.8/SHA256SUMS
+    fichiers: [etcd-v3.6.8-linux-amd64/etcdctl, etcd-v3.6.8-linux-amd64/etcdutl]
+
+# Binaires NUS (M20-E03) : le fichier publié EST l'exécutable (pas d'archive). Empreinte SHA-256
+# écrite ici (« sha256:<hex> », relevée dans le fichier de sommes de la version) : le module get_url
+# la vérifie avant d'installer. Installé dans /opt/outils_k8s/<nom>-<version>/<nom>, lien
+# /usr/local/bin/<nom>. Changer de version = changer version, url et somme ensemble.
+outils_k8s_binaires_nus:
+  # CLI d'Argo CD : MÊME version que le serveur (3.5.5, chart 10.10.5, M20-E02).
+  # Empreinte : ligne « argocd-linux-amd64 » de cli_checksums.txt de la v3.5.5.
+  - nom: argocd
+    version: "3.5.5"
+    url: https://github.com/argoproj/argo-cd/releases/download/v3.5.5/argocd-linux-amd64
+    somme: "sha256:c3ddfa606fc3e89ab14f55bda6600b207c355b028f8eaabe69b817a4c4621aba"

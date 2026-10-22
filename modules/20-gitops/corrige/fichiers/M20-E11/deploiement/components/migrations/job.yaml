@@ -1,0 +1,87 @@
+# Job de migration du schéma de MédiAgenda (M20-E11, DEV-2111), joué par Argo CD à CHAQUE
+# synchronisation, AVANT que la nouvelle version de l'API ne soit appliquée.
+#
+#   hook Sync + vague -1 : après la vague -3 (ConfigMaps, compte de service, politiques réseau) et la
+#   vague -2 (base CNPG et Valkey, attendues saines), avant la vague 0 (Deployment, Service, route).
+#   Pourquoi pas PreSync : la phase PreSync passe AVANT toutes les vagues ; sur un environnement neuf
+#   (dev reconstruit, nouvel environnement), la base n'existerait pas encore et le hook échouerait
+#   pour toujours (la base ne serait jamais créée : interblocage).
+#   BeforeHookCreation : l'ancien Job est supprimé juste avant d'en créer un nouveau ; le dernier Job
+#   (réussi OU en échec) reste lisible jusqu'à la synchronisation suivante.
+#
+# La commande est idempotente et prend un verrou consultatif PostgreSQL (apps/mediagenda/README.md) :
+# la rejouer sans nouvelle migration ne fait rien. L'image suit la version livrée : remplacements du
+# component « livraison » (étiquette) et « images: » des overlays (digest, M19-E17).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mediagenda-migrate
+  labels:
+    app.kubernetes.io/name: mediagenda
+    app.kubernetes.io/instance: mediagenda
+    app.kubernetes.io/component: migrations
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # Deux nouvelles tentatives au plus (une base qui redémarre), dix minutes en tout.
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        # name + instance : le pod reçoit les sorties de la NetworkPolicy « mediagenda » du chart
+        # (DNS, PostgreSQL 5432) et l'entrée de « mediagenda-acces-base » en recette. Le composant
+        # « migrations » l'exclut du Service, du PDB et de la CiliumNetworkPolicy de la Gateway, qui
+        # sélectionnent component=api.
+        app.kubernetes.io/name: mediagenda
+        app.kubernetes.io/instance: mediagenda
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      # Compte « default » sans jeton, comme le Job du chart : le compte « mediagenda » est en vague 0.
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: harbor-pull
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.0.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "mediagenda.migrate"]
+          env:
+            - name: MEDIAGENDA_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  # Secret créé par CloudNativePG pour le propriétaire de la base (M16).
+                  name: mediagenda-db-app
+                  key: uri
+            # Lue au démarrage par la configuration commune, même si la migration ne s'en sert pas.
+            - name: MEDIAGENDA_VALKEY_URL
+              value: "redis://valkey:6379/0"
+            - name: MEDIAGENDA_LOG_LEVEL
+              value: "INFO"
+            - name: MEDIAGENDA_LOG_FORMAT
+              value: "json"
+            - name: MEDIAGENDA_MIGRATIONS_DIR
+              value: "/app/migrations"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi

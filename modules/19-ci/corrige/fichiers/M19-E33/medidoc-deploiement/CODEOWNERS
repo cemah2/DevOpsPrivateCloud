@@ -1,0 +1,4 @@
+# medidoc/deploiement — CODEOWNERS (M19-E33). Approbation indicative en Free (non bloquante) ;
+# la protection réelle est la branche main protégée (fusion par les Maintainers).
+* @equipe-medidoc @karim.benali
+/images-tierces.txt @karim.benali @sophie.laurent

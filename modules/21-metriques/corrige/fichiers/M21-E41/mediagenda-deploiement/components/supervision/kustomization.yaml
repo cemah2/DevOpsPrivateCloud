@@ -1,0 +1,16 @@
+# mediagenda/deploiement — components/supervision (M21-E07, DEV-2207 ; M21-E41, INC-4841)
+# Ce que l'équipe MédiAgenda déclare pour être supervisée, pour chaque environnement qui inclut ce
+# component : Service de collecte, ServiceMonitor, PodMonitor (M21-E07) et règles d'équipe (E41).
+# M21-E41 : l'étiquette de sélection de Prometheus est posée sur TOUT le composant (comme à la racine
+# de plateforme/observabilite) : un objet ajouté plus tard ne peut plus l'oublier.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - service-metriques.yaml
+  - servicemonitor.yaml
+  - podmonitor-db.yaml
+  - regle-valkey.yaml
+labels:
+  - pairs:
+      medisphere.internal/supervision: "oui"
+    includeSelectors: false

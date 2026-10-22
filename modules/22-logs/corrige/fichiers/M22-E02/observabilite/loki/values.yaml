@@ -1,0 +1,152 @@
+# plateforme/observabilite — loki/values.yaml (M22-E02, PLAT-2302)
+# Valeurs du chart grafana-community/loki 19.0.3 (Loki 3.7.9), recopié dans Harbor charts/ par
+# plateforme/charts-miroir. Consommé par l'Application Argo CD « loki » (source $values).
+#
+# Choix structurants (détail dans le corrigé de M22-E02 et dans l'ADR-0220, M22-E17) :
+#   - mode Monolithic (un seul binaire, -target=all), UN réplica : le lab ingère quelques Go par jour ;
+#   - multi-locataire (auth_enabled: true) : chaque requête porte X-Scope-OrgID ;
+#   - index TSDB, schéma v13 (seul schéma qui porte les métadonnées structurées) ;
+#   - stockage objet : compartiment loki-k8s-par1 du RGW de ceph-par1 (utilisateur RGW « loki ») ;
+#     identifiants dans le Secret loki-objstore (hors Git, plateforme/k8s/outils/secrets-k8s.sh) ;
+#   - pas de passerelle nginx du chart, pas de memcached, pas de canari : un Service LoadBalancer à nous
+#     (loki/manifestes/service-externe.yaml) publie l'API sur 10.10.41.62:3100.
+
+deploymentMode: Monolithic
+
+loki:
+  # Image amont : le nœud la tire par le cache Harbor « dockerhub » (miroir containerd, M14-E19).
+  image:
+    registry: docker.io
+    repository: grafana/loki
+    tag: 3.7.9
+  auth_enabled: true
+
+  commonConfig:
+    path_prefix: /var/loki
+    replication_factor: 1
+
+  # Le chart écrit storage_config / common.storage à partir de ce bloc.
+  storage:
+    type: s3
+    bucketNames:
+      chunks: loki-k8s-par1
+    s3:
+      endpoint: https://rgw.par1.medisphere.internal
+      region: us-east-1                    # le RGW (zonegroup « default ») l'ignore ; le client S3 l'exige
+      s3ForcePathStyle: true               # pas d'adressage virtuel (pas de *.rgw… dans le DNS)
+      # Variables d'environnement développées par Loki (-config.expand-env=true, posé par le chart),
+      # injectées depuis le Secret loki-objstore (singleBinary.extraEnvFrom ci-dessous).
+      accessKeyId: ${LOKI_S3_ACCESS_KEY_ID}
+      secretAccessKey: ${LOKI_S3_SECRET_ACCESS_KEY}
+      insecure: false
+      http_config:
+        # Racine MédiSphère : le RGW présente un certificat step-ca (M08). Jamais insecure_skip_verify.
+        ca_file: /etc/loki/racine/medisphere-root-ca.crt
+
+  schemaConfig:
+    configs:
+      - from: "2026-10-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  ingester:
+    chunk_encoding: snappy
+    wal:
+      flush_on_shutdown: true
+
+  limits_config:
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+    max_cache_freshness_per_query: 10m
+    split_queries_by_interval: 15m
+    query_timeout: 300s
+    volume_enabled: true
+    allow_structured_metadata: true        # défaut de Loki 3, écrit pour être lu (M22-E06)
+    # Liste fermée d'étiquettes : Loki n'ajoute pas d'étiquette service_name déduite (défaut : la
+    # première trouvée parmi service, app, container, job…). Les tableaux et Logs Drilldown
+    # sélectionnent par « app » ou « namespace ».
+    discover_service_name: []
+    discover_log_levels: true              # niveau détecté rangé en métadonnée structurée (detected_level)
+
+  # Pas de ruler à ce stade (activé en M22-E08) : le chart n'écrit alors aucune configuration de
+  # ruler et Loki journalise « Ruler storage is not configured; ruler will not be started ».
+
+  analytics:
+    reporting_enabled: false               # pas de statistiques d'usage envoyées à Grafana Labs
+
+  server:
+    http_listen_port: 3100
+    grpc_listen_port: 9095
+    log_level: info
+    log_format: logfmt
+
+ruler:
+  enabled: false
+
+# Le conteneur « sidecar » du chart (k8s-sidecar) recopie les ConfigMaps de règles dans /rules. Par
+# défaut il est actif et le chart lui donne une ClusterRole qui LIT TOUS LES SECRETS DU CLUSTER :
+# coupé ici (pas de règles avant E08), et RBAC limité à l'espace journaux pour la suite.
+sidecar:
+  rules:
+    enabled: false
+rbac:
+  namespaced: true
+
+singleBinary:
+  replicas: 1
+  priorityClassName: medisphere-critique
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: ceph-rbd                 # WAL et index en cours ; les données durables sont dans S3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 2Gi                          # GOMEMLIMIT posé par le chart à 85 % de cette limite
+  extraEnvFrom:
+    - secretRef:
+        name: loki-objstore
+  extraVolumes:
+    - name: racine
+      configMap:
+        name: racine-medisphere
+  extraVolumeMounts:
+    - name: racine
+      mountPath: /etc/loki/racine
+      readOnly: true
+
+# Le chart ne crée que le Service ClusterIP « loki » (3100, 9095) et le Service sans tête ;
+# l'adresse 10.10.41.62 est portée par loki-externe (manifestes/), qui n'expose que 3100.
+gateway:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+minio:
+  enabled: false
+
+# Autres modes à zéro (le chart les ignore en Monolithic ; écrit pour lever toute ambiguïté).
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# Supervision par le Prometheus du cluster (M21) : sélection par l'étiquette commune.
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      medisphere.internal/supervision: "oui"

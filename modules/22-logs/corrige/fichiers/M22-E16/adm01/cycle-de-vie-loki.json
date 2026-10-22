@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "expirer-versions-non-courantes",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "" },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 7 },
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    }
+  ]
+}

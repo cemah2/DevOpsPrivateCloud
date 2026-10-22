@@ -1,0 +1,53 @@
+# plateforme/observabilite — tests/capacite-cardinalite.test.yaml (M21-E38)
+rule_files:
+  - ../build/regles/capacite-cardinalite.yml
+evaluation_interval: 30s
+tests:
+  - name: une cible qui crée 2 500 séries par collecte est désignée, une cible stable non
+    interval: 15s
+    input_series:
+      - series: 'scrape_series_added{namespace="wb-pannes", job="temoin-metriques", pod="temoin-metriques-1"}'
+        values: '0x20 2500x100'
+      - series: 'scrape_series_added{namespace="mediagenda-prod", job="mediagenda", pod="mediagenda-a"}'
+        values: '0x120'
+      # Un redéploiement : un pic isolé, puis plus rien.
+      - series: 'scrape_series_added{namespace="mediagenda-dev", job="mediagenda", pod="mediagenda-b"}'
+        values: '0x20 900 0x99'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: CibleTropDeSeriesNouvelles
+        exp_alerts:
+          - exp_labels:
+              alertname: CibleTropDeSeriesNouvelles
+              gravite: avertissement
+              equipe: plateforme
+              namespace: wb-pannes
+              job: temoin-metriques
+              pod: temoin-metriques-1
+            exp_annotations:
+              resume: "La cible temoin-metriques (wb-pannes/temoin-metriques-1) crée des séries à chaque collecte"
+              description: >-
+                Chaque collecte de cette cible ajoute au moins 100 séries nouvelles depuis 10 min : étiquette à valeurs non bornées. Contenir par metricRelabelings et sampleLimit sur son ServiceMonitor, puis prévenir l'équipe propriétaire. RB-219 § « Cardinalité ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md
+  - name: 333 séries créées par seconde déclenchent l'alerte de rythme
+    interval: 1m
+    input_series:
+      - series: 'prometheus_tsdb_head_series_created_total{job="kps-prometheus", pod="prometheus-kps-0"}'
+        values: '0+600x10 6000+20000x30'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PrometheusCreationSeriesRapide
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: PrometheusCreationSeriesRapide
+        exp_alerts:
+          - exp_labels:
+              alertname: PrometheusCreationSeriesRapide
+              gravite: avertissement
+              equipe: plateforme
+              pod: prometheus-kps-0
+            exp_annotations:
+              resume: "prometheus-kps-0 crée 333.3 séries par seconde"
+              description: >-
+                Le rythme de création de séries est très au-dessus de la normale : nouvelle étiquette à valeurs non bornées ou « churn ». Voir CibleTropDeSeriesNouvelles pour la cible en cause. RB-219 § « Cardinalité ».
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-219-cardinalite-et-historique.md

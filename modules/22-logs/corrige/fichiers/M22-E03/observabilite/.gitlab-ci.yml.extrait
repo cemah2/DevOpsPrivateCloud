@@ -1,0 +1,23 @@
+# À AJOUTER au .gitlab-ci.yml de plateforme/observabilite (pipeline créé en M21-E07) — M22-E03.
+# Chaque MR qui touche alloy/ fait vérifier la configuration par le binaire d'Alloy de la MÊME
+# version que le DaemonSet : format (fmt --test) puis composants, attributs et types (validate).
+# validate ne lit pas le cluster : NODE_NAME est fixé à une valeur factice pour sys.env().
+# Image amont par le cache Harbor « dockerhub » ; son point d'entrée est /bin/alloy : on le remplace.
+alloy-validation:
+  stage: test
+  image:
+    name: registry.par1.medisphere.internal/dockerhub/grafana/alloy:v1.21.1
+    entrypoint: [""]
+  tags: [k8s]
+  variables:
+    NODE_NAME: ci
+  rules:
+    - changes:
+        - alloy/**/*
+  script:
+    - for f in alloy/config.alloy alloy/revue-lucas/config.alloy; do
+        [ -f "$f" ] || continue;
+        echo "== $f";
+        /bin/alloy fmt --test "$f";
+        /bin/alloy validate "$f";
+      done

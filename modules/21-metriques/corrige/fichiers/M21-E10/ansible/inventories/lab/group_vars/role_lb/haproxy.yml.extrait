@@ -1,0 +1,21 @@
+# group_vars/role_lb/haproxy.yml (plateforme/ansible) — EXTRAIT (M21-E10, PLAT-2210) :
+# section à AJOUTER à la liste haproxy_sections existante (M07-E13), sans toucher aux autres.
+# Le rôle haproxy rend la section telle quelle, valide (haproxy -c) puis recharge sans coupure.
+#
+# - bind sur l'adresse DMZ de l'hôte (pas sur la VIP : chaque répartiteur est une cible, actif
+#   comme passif ; la VIP « bascule » et mélangerait les deux séries).
+# - deny AVANT use-service : sinon le service répond avant que l'ACL soit évaluée.
+# - Adresses autorisées : travailleurs de k8s-par1 (Prometheus, masqué derrière l'adresse du nœud
+#   en sortie du cluster) et adm01 (essais).
+haproxy_sections:
+  # … sections existantes (fe_web, be_gitlab…, M07) …
+  - type: frontend
+    nom: fe_metriques
+    lignes:
+      - bind {{ ansible_host }}:8405
+      - mode http
+      - no log
+      - acl supervision src 10.10.40.61 10.10.40.62 10.10.40.63 10.10.10.10
+      - http-request deny deny_status 403 unless supervision
+      - http-request use-service prometheus-exporter if { path /metrics }
+      - http-request deny deny_status 404

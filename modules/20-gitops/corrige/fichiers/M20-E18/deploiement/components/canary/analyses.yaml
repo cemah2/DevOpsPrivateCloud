@@ -1,0 +1,95 @@
+# Analyses du canary de MédiAgenda (M20-E18, DEV-2118). Gabarits de l'ÉQUIPE, dans son espace ; le
+# M21 ajoutera « taux-erreur-mediagenda » (Prometheus).
+#
+# fumee-mediagenda : tests de fumée, joués UNE fois, par un Job, contre le Service CANARY (les pods de
+# la nouvelle révision, et eux seuls) : /sante, /pret, puis la lecture des créneaux d'une date.
+# Image curl par le cache Harbor (Docker Hub), épinglée par digest (VAP medisphere-images, M14-E18).
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: fumee-mediagenda
+spec:
+  args:
+    - name: espace
+  metrics:
+    - name: fumee
+      # Un seul essai : le Job réussit (code 0) ou échoue.
+      count: 1
+      failureLimit: 0
+      provider:
+        job:
+          metadata:
+            labels:
+              app.kubernetes.io/name: mediagenda-fumee
+          spec:
+            backoffLimit: 0
+            activeDeadlineSeconds: 180
+            ttlSecondsAfterFinished: 3600
+            template:
+              metadata:
+                labels:
+                  # Sélectionné par la NetworkPolicy « mediagenda-analyses » (entrée vers l'API,
+                  # sortie DNS et API seulement).
+                  medisphere.internal/role: analyse
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                securityContext:
+                  runAsNonRoot: true
+                  # Utilisateur « curl_user » de l'image, en numérique (exigé par runAsNonRoot).
+                  runAsUser: 100
+                  seccompProfile:
+                    type: RuntimeDefault
+                containers:
+                  - name: fumee
+                    image: registry.par1.medisphere.internal/dockerhub/curlimages/curl:8.23.0@sha256:11e64e28c5f58c8d93ee95fcf22ac055f48b0bc440e0ce7d8013bbb5ad6aa8ac
+                    env:
+                      - name: CIBLE
+                        value: "http://mediagenda-canary.{{args.espace}}.svc.cluster.local"
+                    command: ["/bin/sh", "-c"]
+                    args:
+                      - |
+                        set -eu
+                        echo "tests de fumée sur $CIBLE"
+                        curl -fsS --max-time 5 --retry 3 --retry-all-errors "$CIBLE/sante"; echo
+                        curl -fsS --max-time 5 "$CIBLE/pret" | grep -q '"statut":"pret"'
+                        jour="$(date -u -d @$(( $(date -u +%s) + 86400 )) +%F)"
+                        curl -fsS --max-time 10 "$CIBLE/api/v1/creneaux?date=$jour" | grep -q .
+                        echo "fumée : OK"
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                        drop:
+                          - ALL
+                    resources:
+                      requests:
+                        cpu: 10m
+                        memory: 16Mi
+                      limits:
+                        memory: 32Mi
+---
+# pret-mediagenda : analyse de FOND pendant tout le canary. Le contrôleur d'Argo Rollouts (espace
+# argo-rollouts) appelle lui-même /pret du Service canary toutes les 20 s. Une réponse 200 dont le
+# statut n'est pas « pret » est une mesure en ÉCHEC ; un code HTTP hors 2xx ou un délai dépassé est
+# une ERREUR de mesure. Plus d'un échec (failureLimit: 1) ou plus de deux erreurs de suite
+# (consecutiveErrorLimit: 2) : l'analyse échoue et le Rollout est interrompu (poids remis à 0, pods
+# canary réduits). Les comparaisons sont strictes (« > »), d'où ces valeurs.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: pret-mediagenda
+spec:
+  args:
+    - name: espace
+  metrics:
+    - name: pret
+      interval: 20s
+      failureLimit: 1
+      consecutiveErrorLimit: 2
+      successCondition: result == "pret"
+      provider:
+        web:
+          url: "http://mediagenda-canary.{{args.espace}}.svc.cluster.local/pret"
+          timeoutSeconds: 5
+          jsonPath: "{$.statut}"

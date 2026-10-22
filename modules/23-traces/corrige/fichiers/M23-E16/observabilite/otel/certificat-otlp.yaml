@@ -1,0 +1,23 @@
+# Certificat du point d'entrée OTLP hors cluster (M23-E16). Émis par l'ACME de ca01 (ClusterIssuer du M15) :
+# défi DNS-01 obligatoire (otlp.apps… n'est pas servi par la Gateway, HTTP-01 impossible). Si ton
+# ClusterIssuer choisit son solveur par « selector », pose ici l'étiquette ou le nom de zone qu'il attend.
+# Durée : celle de l'émetteur (24 h par défaut chez step-ca) ; cert-manager renouvelle aux deux tiers, la
+# passerelle relit le fichier toutes les heures (reload_interval) : aucun redémarrage.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: otlp-externe
+  namespace: traces
+spec:
+  secretName: otlp-externe-tls
+  dnsNames:
+    - otlp.apps.par1.medisphere.internal
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  usages: [server auth, digital signature]
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: step-ca-acme

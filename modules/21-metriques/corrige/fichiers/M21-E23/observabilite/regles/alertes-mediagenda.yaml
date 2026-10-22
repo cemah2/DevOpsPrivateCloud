@@ -1,0 +1,157 @@
+# plateforme/observabilite — regles/alertes-mediagenda.yaml (M21-E15, PLAT-2215 ; saturation : M21-E23, INC-4823)
+# Alertes de MédiAgenda : sur les SYMPTÔMES vus par les centres de santé (erreurs, lenteur,
+# indisponibilité), à partir des séries enregistrées d'E14. Une seule alerte « cause »
+# (pods non prêts), en avertissement, sert surtout aux inhibitions d'E16.
+# Étiquettes : gravite (critique | avertissement | info), equipe. Annotations : resume,
+# description, runbook_url. Valeurs mesurées dans les ANNOTATIONS, jamais dans les étiquettes.
+# Fenêtres : 5 min = 10 collectes de 30 s (au moins 4 exigées).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertes-mediagenda
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: mediagenda.alertes
+      rules:
+        # --- Erreurs ---------------------------------------------------------------------------
+        # Production, plus de 5 % de 5xx : critique. Le « and » sur le débit (plus de 0,1 req/s,
+        # 6 par minute) empêche une erreur sur trois requêtes, à 4 h du matin, de réveiller.
+        - alert: MediagendaTauxErreurEleve
+          expr: |
+            environnement:mediagenda_requetes_5xx:ratio_taux5m{environnement="prod"} > 0.05
+            and on (equipe, environnement)
+            environnement:mediagenda_requetes:taux5m > 0.1
+          for: 10m
+          # Un taux qui oscille autour du seuil ferait résoudre puis relancer l'alerte (un courriel
+          # à chaque fois) : l'alerte reste active 10 min après le retour sous le seuil.
+          keep_firing_for: 10m
+          labels:
+            gravite: critique
+            equipe: mediagenda
+          annotations:
+            resume: "MédiAgenda {{ $labels.environnement }} : {{ $value | humanizePercentage }} de réponses en erreur"
+            description: >-
+              Plus de 5 % des requêtes de l'API MédiAgenda ({{ $labels.environnement }}) se terminent
+              en erreur 5xx depuis 10 minutes ({{ $value | humanizePercentage }} sur 5 min) : des
+              centres de santé ne peuvent pas prendre ou consulter de rendez-vous.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-211-mediagenda-erreurs.md
+        # Production entre 2 et 5 % (avertissement : on regarde pendant les heures ouvrées), et
+        # dev/recette au-delà de 5 %.
+        - alert: MediagendaTauxErreurEleve
+          expr: |
+            (
+              environnement:mediagenda_requetes_5xx:ratio_taux5m{environnement="prod"} > 0.02 <= 0.05
+              or
+              environnement:mediagenda_requetes_5xx:ratio_taux5m{environnement!="prod"} > 0.05
+            )
+            and on (equipe, environnement)
+            environnement:mediagenda_requetes:taux5m > 0.1
+          for: 10m
+          keep_firing_for: 10m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "MédiAgenda {{ $labels.environnement }} : {{ $value | humanizePercentage }} de réponses en erreur"
+            description: >-
+              Le taux d'erreurs 5xx de l'API MédiAgenda ({{ $labels.environnement }}) est de
+              {{ $value | humanizePercentage }} sur 5 min depuis 10 minutes.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-211-mediagenda-erreurs.md
+        # --- Durée -----------------------------------------------------------------------------
+        - alert: MediagendaLatenceElevee
+          expr: |
+            environnement:mediagenda_duree_requetes:p95_5m{environnement="prod"} > 0.3
+            and on (equipe, environnement)
+            environnement:mediagenda_requetes:taux5m > 0.1
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "MédiAgenda {{ $labels.environnement }} lent : p95 à {{ $value | humanizeDuration }}"
+            description: >-
+              5 % des requêtes de l'API MédiAgenda ({{ $labels.environnement }}) prennent plus de
+              {{ $value | humanizeDuration }} depuis 15 minutes (objectif : 300 ms).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-212-mediagenda-latence.md
+        # --- Disponibilité ---------------------------------------------------------------------
+        # Deux cas : les cibles existent mais ne répondent plus (up == 0), ou elles ont DISPARU
+        # (plus aucune série « up » : Deployment supprimé, moniteur cassé, politique réseau…).
+        # absent() garde les étiquettes d'égalité de son sélecteur : equipe et environnement.
+        - alert: MediagendaIndisponible
+          expr: |
+            sum by (equipe, environnement) (up{equipe="mediagenda", environnement="prod"}) == 0
+            or
+            absent(up{equipe="mediagenda", environnement="prod"})
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: mediagenda
+          annotations:
+            resume: "MédiAgenda prod : aucune instance de l'API ne répond à Prometheus"
+            description: >-
+              Aucune cible de l'API MédiAgenda de production n'est collectée avec succès depuis
+              5 minutes (instances arrêtées, ou supervision aveugle). Vérifie d'abord le service
+              vu de l'extérieur (sonde du témoin, https://mediagenda.apps.par1.medisphere.internal/pret).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+        # --- Cause (avertissement) : pods non prêts, avec le NŒUD (inhibition d'E16) -----------
+        # Pods en cours d'exécution mais non prêts ; les pods terminés (Jobs de migration) sont
+        # exclus par la phase. node vient de kube_pod_info (jointure « group_left », E04).
+        - alert: MediagendaPodsNonPrets
+          expr: |
+            label_replace(
+              sum by (namespace, node) (
+                (kube_pod_status_ready{condition="false", namespace=~"mediagenda-.+"} == 1)
+                * on (namespace, pod) group_left (node) kube_pod_info
+                and on (namespace, pod)
+                (kube_pod_status_phase{phase="Running"} == 1)
+              ),
+              "environnement", "$1", "namespace", "mediagenda-(.+)"
+            ) > 0
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "{{ $value }} pod(s) MédiAgenda non prêt(s) sur {{ $labels.node }} ({{ $labels.namespace }})"
+            description: >-
+              Des pods de {{ $labels.namespace }} tournent sur {{ $labels.node }} sans être prêts
+              depuis 15 minutes (sonde /pret en échec : PostgreSQL ou Valkey injoignables ?).
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+    # --- Saturation (M21-E23, INC-4823) ----------------------------------------------------------
+    # Ce qui a saturé pendant les tests de charge : le CPU de l'API, BRIDÉ par sa limite (500m
+    # posée par le LimitRange de l'espace), alors que la latence montait. Seul, le bridage n'est
+    # pas grave (une pointe brève) ; avec une latence au-dessus de l'objectif, il explique la
+    # lenteur et dit quoi faire (limite, réplicas). Avertissement : on agit aux heures ouvrées.
+    - name: mediagenda.saturation
+      rules:
+        - record: namespace_pod:mediagenda_cpu_bride:ratio5m
+          expr: |
+            sum by (namespace, pod) (
+              rate(container_cpu_cfs_throttled_periods_total{namespace=~"mediagenda-.+", container="api"}[5m])
+            )
+            /
+            sum by (namespace, pod) (
+              rate(container_cpu_cfs_periods_total{namespace=~"mediagenda-.+", container="api"}[5m])
+            )
+        - alert: MediagendaCpuBride
+          expr: |
+            namespace_pod:mediagenda_cpu_bride:ratio5m > 0.25
+            and on (namespace)
+            label_replace(
+              environnement:mediagenda_duree_requetes:p95_5m > 0.3,
+              "namespace", "mediagenda-$1", "environnement", "(.+)"
+            )
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: mediagenda
+          annotations:
+            resume: "{{ $labels.pod }} ({{ $labels.namespace }}) bridé par sa limite de CPU pendant que l'API ralentit"
+            description: >-
+              {{ $value | humanizePercentage }} des périodes d'ordonnancement de {{ $labels.pod }} sont
+              bridées par la limite de CPU depuis 15 minutes, et le p95 de l'API dépasse 300 ms.
+              Voir le journal INC-4823 : relever la limite, ou ajouter des réplicas.
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-212-mediagenda-latence.md

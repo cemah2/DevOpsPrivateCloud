@@ -1,0 +1,11 @@
+---
+# group_vars/role_dns/supervision.yml (plateforme/ansible) — M21-E10, PLAT-2210.
+# Métriques de PowerDNS pour Prometheus (travailleurs de k8s-par1) ; adm01 pour les essais.
+powerdns_recursor_webservice_active: true
+powerdns_recursor_webservice_port: 8082
+powerdns_recursor_webservice_autorises:
+  - 127.0.0.1
+  - 10.10.10.10
+  - 10.10.40.61
+  - 10.10.40.62
+  - 10.10.40.63

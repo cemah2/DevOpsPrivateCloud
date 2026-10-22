@@ -1,0 +1,29 @@
+# mediagenda/deploiement — components/dependances/postgresql.yaml
+# Base CloudNativePG de l'environnement (M17-E09). M20-E08 (PLAT-2108) ajoute les options de
+# synchronisation d'Argo CD : la base n'est JAMAIS supprimée par Argo CD, ni par un « prune » (fichier
+# retiré, renommé, déplacé par erreur), ni à la suppression de l'Application. Sans effet sur
+# l'opérateur CNPG (simple annotation de métadonnées). Supprimer une base reste un geste humain.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  instances: 1
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie
+  imagePullSecrets:
+    - name: harbor-pull
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+  storage:
+    size: 2Gi
+    storageClass: ceph-rbd
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

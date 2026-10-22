@@ -1,0 +1,8 @@
+# medidoc/deploiement — components/supervision (M21-E07, DEV-2207)
+# Même modèle que mediagenda/deploiement : Service de collecte sans adresse + ServiceMonitor
+# « medidoc » (job="medidoc"). À inclure dans chaque overlay (dev, recette).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - service-metriques.yaml
+  - servicemonitor.yaml

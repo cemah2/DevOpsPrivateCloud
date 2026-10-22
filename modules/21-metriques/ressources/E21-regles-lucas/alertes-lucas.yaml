@@ -1,0 +1,76 @@
+# regles/alertes-lucas.yaml — proposé par Lucas Martin (MR !14)
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alertes-lucas
+  namespace: supervision
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  groups:
+    - name: lucas.alertes
+      rules:
+        - alert: ApiErreurs
+          expr: |
+            sum(irate(mediagenda_http_requests_total{code=~"5.."}[1m]))
+            / sum(irate(mediagenda_http_requests_total[1m])) > 5
+          labels:
+            severity: page
+            valeur: "{{ $value }}"
+          annotations:
+            summary: "Erreurs sur l'API"
+            runbook_url: https://wiki.infoger.fr/runbooks/api-erreurs
+
+        - alert: ApiLente
+          expr: |
+            histogram_quantile(0.95,
+              sum by (route) (rate(mediagenda_http_request_duration_seconds_bucket[5m]))
+            ) > 0.3
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "API lente"
+            runbook_url: https://wiki.infoger.fr/runbooks/api-lente
+
+        - alert: PodRedemarre
+          expr: kube_pod_container_status_restarts_total{namespace=~"mediagenda-.*"} > 0
+          for: 1m
+          labels:
+            severity: page
+          annotations:
+            summary: "Le pod {{ $labels.pod }} a redémarré"
+
+        - alert: MediagendaDown
+          expr: up{job="mediagenda", namespace="mediagenda-prod"} == 0
+          for: 2m
+          labels:
+            severity: page
+          annotations:
+            summary: "MédiAgenda est down"
+
+        - alert: MemoireQuiBaisse
+          expr: rate(node_memory_MemAvailable_bytes{job="vms"}[5m]) < 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "La mémoire baisse sur {{ $labels.instance }}"
+
+        - alert: DisquePresquePlein
+          expr: node_filesystem_avail_bytes < 1000000000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disque presque plein sur {{ $labels.instance }} ({{ $labels.mountpoint }})"
+            runbook_url: https://wiki.infoger.fr/runbooks/disque
+
+        - alert: CpuEleve
+          expr: |
+            sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.9
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "CPU {{ $labels.cpu }} à {{ $value }} sur {{ $labels.instance }}"

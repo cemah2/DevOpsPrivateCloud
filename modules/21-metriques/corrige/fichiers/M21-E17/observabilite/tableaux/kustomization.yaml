@@ -1,0 +1,22 @@
+# plateforme/observabilite — tableaux/kustomization.yaml (M21-E17, PLAT-2217)
+# Une ConfigMap par tableau, générée à partir du fichier JSON :
+#   - étiquette grafana_dashboard: "1" : celle que cherche le sidecar de Grafana (valeurs du chart) ;
+#   - annotation grafana_folder : sous-dossier où le sidecar écrit le fichier, donc le dossier
+#     Grafana (provider.foldersFromFilesStructure) — même titre que le dossier créé par OpenTofu ;
+#   - pas de suffixe de hachage : le nom reste stable (un nom qui change à chaque modification
+#     ferait supprimer puis recréer la ConfigMap, et le tableau avec).
+# Espace : supervision (le sidecar cherche dans tous les espaces, mais les tableaux sont à la plateforme).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: supervision
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+    medisphere.internal/composant: tableaux
+configMapGenerator:
+  - name: tableau-mediagenda-apercu
+    files: [mediagenda/mediagenda-apercu.json]
+    options:
+      annotations:
+        grafana_folder: MédiAgenda

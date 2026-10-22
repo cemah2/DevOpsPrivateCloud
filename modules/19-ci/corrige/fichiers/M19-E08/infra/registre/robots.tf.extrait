@@ -1,0 +1,53 @@
+# registre/robots.tf (plateforme/infra, état « registre ») — EXTRAIT, M19-E08 (PLAT-2008).
+# Ajouts au fichier du M13-E03 : un mot de passe et un robot de plus. Plan attendu : 2 to add.
+#
+# Robot du cache de construction BuildKit (dépôt plateforme/cache-buildkit) : pousse et tire dans le
+# projet « plateforme » seulement. Utilisé par les jobs de construction des pipelines PROTÉGÉS
+# (variables d'instance de GitLab protégées : BUILDKIT_CACHE_UTILISATEUR, BUILDKIT_CACHE_JETON) ; le
+# démon buildkitd ne connaît aucun identifiant (il reçoit des jetons d'accès par la session du client).
+#
+# Limite assumée : un robot de projet Harbor porte sur TOUT le projet « plateforme » (pas sur un seul
+# dépôt) ; il pourrait donc aussi pousser plateforme/outils-supply-chain. Compensations : variables
+# protégées (seulement main et les étiquettes protégées), immuabilité des étiquettes de version du
+# projet (M13-E10), signature des images outillées (M13-E09). Un projet Harbor dédié au cache
+# (« cache-buildkit ») supprimerait cette limite : alternative discutée dans le corrigé.
+
+resource "random_password" "robot_cache_buildkit" {
+  length      = 32
+  special     = false
+  min_upper   = 2
+  min_lower   = 2
+  min_numeric = 2
+}
+
+resource "harbor_robot_account" "cache_buildkit" {
+  name        = "cache-buildkit"
+  level       = "project"
+  description = "Cache de construction BuildKit (plateforme/cache-buildkit), jobs protégés — M19-E08"
+  duration    = var.duree_robots_jours
+  secret      = random_password.robot_cache_buildkit.result
+
+  permissions {
+    kind      = "project"
+    namespace = harbor_project.projet["plateforme"].name
+    access {
+      resource = "repository"
+      action   = "pull"
+    }
+    access {
+      resource = "repository"
+      action   = "push"
+    }
+  }
+}
+
+output "robot_cache_buildkit" {
+  description = "Nom complet du robot du cache BuildKit (le secret se lit par « tofu output -raw robot_cache_buildkit_secret »)."
+  value       = harbor_robot_account.cache_buildkit.full_name
+}
+
+output "robot_cache_buildkit_secret" {
+  description = "Secret du robot du cache BuildKit (à recopier dans la variable d'instance BUILDKIT_CACHE_JETON)."
+  value       = random_password.robot_cache_buildkit.result
+  sensitive   = true
+}

@@ -1,0 +1,71 @@
+# plateforme/ci-templates — composant « deploiement » v2.0.0 (M19-E10, PLAT-2010).
+# Validation d'un dépôt de déploiement Kustomize (mediagenda/deploiement, M17) : chaque overlay doit
+# se rendre (kustomize build) et le rendu doit être valide pour Kubernetes 1.36 et pour les CRD
+# utilisées (kubeconform, schémas du catalogue datreeio pour Cilium, Gateway API, CloudNativePG…).
+# Utilisation :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/deploiement@v2.0.0
+#       inputs:
+#         overlays: [dev, recette, prod]
+# Job : deploiement:valider (artefact : les rendus, pour les relire dans la MR).
+# M19-E18 ajoute le job deployer-<environnement> (agent GitLab) ; M19-E29 la vérification des images.
+spec:
+  description: "Validation des overlays Kustomize d'un dépôt de déploiement : rendu et kubeconform (Kubernetes + CRD)."
+  component: [version]
+  inputs:
+    stage:
+      default: lint
+    runner:
+      default: k8s
+    repertoire:
+      description: "Racine du dépôt de déploiement (contient overlays/)"
+      default: "."
+      regex: ^[A-Za-z0-9._/-]+$
+    overlays:
+      description: "Overlays à valider (dossiers de overlays/)"
+      type: array
+      default: [dev, recette, prod]
+    version_kubernetes:
+      description: "Version de Kubernetes des schémas de kubeconform"
+      default: "1.36.0"
+      regex: ^1\.[0-9]+\.[0-9]+$
+    schemas_crd:
+      description: "Emplacement des schémas des CRD (gabarit kubeconform)"
+      default: "https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json"
+    image_k8s:
+      description: "Image avec kubectl, kustomize, kubeconform, git, curl, jq — étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/alpine/k8s:1.36.5@sha256:094adf64cdc4827377cdbe7ea5747472ce115f9fbc64a4e35970ec66777f9a00
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+---
+deploiement:valider:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image_k8s ]]
+    entrypoint: [""]
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  # Un job par overlay (« deploiement:valider: [dev] »…) : l'entrée de type array remplace une valeur
+  # entière, elle est donc interpolée comme une vraie liste YAML.
+  parallel:
+    matrix:
+      - OVERLAY: $[[ inputs.overlays ]]
+  script:
+    - echo "composant deploiement $[[ component.version ]] — overlays/$OVERLAY"
+    - kustomize version && kubeconform -v
+    - cd "$[[ inputs.repertoire ]]"
+    - test -d "overlays/$OVERLAY" || { echo "overlay absent : overlays/$OVERLAY"; exit 1; }
+    - mkdir -p rendus && kustomize build "overlays/$OVERLAY" > "rendus/$OVERLAY.yaml"
+    - >-
+      kubeconform -strict -summary -kubernetes-version "$[[ inputs.version_kubernetes ]]"
+      -schema-location default -schema-location '$[[ inputs.schemas_crd ]]'
+      "rendus/$OVERLAY.yaml"
+  artifacts:
+    when: always
+    paths:
+      - "$[[ inputs.repertoire ]]/rendus/"
+    expire_in: 1 week

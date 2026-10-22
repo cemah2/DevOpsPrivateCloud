@@ -1,0 +1,6 @@
+# terraform.tfvars — valeurs NON secrètes de l'environnement (copie ce fichier sans .exemple).
+noeud         = "<NOEUD>"
+cle_ssh_admin = "ssh-ed25519 <CLE-PUBLIQUE-ADM01> admin@adm01"
+
+# VMs allumées : E23 ["flux"] ; E26 ["lyo"] (ou ["flux", "lyo"] si la mémoire le permet) ; fin de module [].
+groupes = ["flux"]

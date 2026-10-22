@@ -1,0 +1,138 @@
+# plateforme/observabilite — tests/alertes-mediagenda.test.yaml (M21-E15, PLAT-2215)
+# promtool test rules tests/alertes-mediagenda.test.yaml   (après outils/extraire-regles.sh)
+# Chaque alerte : au moins un cas qui déclenche, un cas qui ne déclenche pas.
+# exp_alerts liste TOUTES les instances attendues à eval_time, avec toutes leurs étiquettes
+# (expression + règle) et les annotations rendues ; une alerte « pending » n'y figure pas.
+rule_files:
+  - ../build/regles/enregistrement-mediagenda.yml
+  - ../build/regles/alertes-mediagenda.yml
+evaluation_interval: 30s
+tests:
+  # 1. Production : 3 req/s dont 10 % d'erreurs depuis le début → critique après 10 min (+ 5 min
+  #    de fenêtre). Recette : 1 req/s, 10 % d'erreurs → avertissement.
+  - name: taux d'erreurs élevé en prod (critique) et en recette (avertissement)
+    interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",code="200"}'
+        values: '0+162x30'
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",code="500"}'
+        values: '0+18x30'
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="recette",route="/api/v1/creneaux",code="200"}'
+        values: '0+54x30'
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="recette",route="/api/v1/creneaux",code="503"}'
+        values: '0+6x30'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: MediagendaTauxErreurEleve
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: MediagendaTauxErreurEleve
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaTauxErreurEleve, equipe: mediagenda, environnement: prod, gravite: critique}
+            exp_annotations:
+              resume: "MédiAgenda prod : 10% de réponses en erreur"
+              description: "Plus de 5 % des requêtes de l'API MédiAgenda (prod) se terminent en erreur 5xx depuis 10 minutes (10% sur 5 min) : des centres de santé ne peuvent pas prendre ou consulter de rendez-vous."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-211-mediagenda-erreurs.md
+          - exp_labels: {alertname: MediagendaTauxErreurEleve, equipe: mediagenda, environnement: recette, gravite: avertissement}
+            exp_annotations:
+              resume: "MédiAgenda recette : 10% de réponses en erreur"
+              description: "Le taux d'erreurs 5xx de l'API MédiAgenda (recette) est de 10% sur 5 min depuis 10 minutes."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-211-mediagenda-erreurs.md
+
+  # 2. Faible trafic la nuit : 1 erreur sur 3 requêtes toutes les 5 minutes (33 % !), mais 0,01
+  #    req/s : pas d'alerte.
+  - name: faible trafic, aucune alerte malgré un ratio élevé
+    interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",code="200"}'
+        values: '0 0 0 0 0 2 2 2 2 2 4 4 4 4 4 6 6 6 6 6 8 8 8 8 8 10 10 10 10 10 12'
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",code="500"}'
+        values: '0 0 0 0 0 1 1 1 1 1 2 2 2 2 2 3 3 3 3 3 4 4 4 4 4 5 5 5 5 5 6'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: MediagendaTauxErreurEleve
+        exp_alerts: []
+
+  # 3. Latence : p95 ≈ 0,48 s en prod (0,25 + (0,95 - 0,5) / 0,4833 × 0,25) pendant 20 min → avertissement.
+  - name: latence élevée en prod
+    interval: 1m
+    input_series:
+      - series: 'mediagenda_http_requests_total{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",code="200"}'
+        values: '0+60x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",le="0.25"}'
+        values: '0+30x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",le="0.5"}'
+        values: '0+59x30'
+      - series: 'mediagenda_http_request_duration_seconds_bucket{equipe="mediagenda",environnement="prod",route="/api/v1/creneaux",le="+Inf"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MediagendaLatenceElevee
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: MediagendaLatenceElevee
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaLatenceElevee, equipe: mediagenda, environnement: prod, gravite: avertissement}
+            exp_annotations:
+              resume: "MédiAgenda prod lent : p95 à 482.8ms"
+              description: "5 % des requêtes de l'API MédiAgenda (prod) prennent plus de 482.8ms depuis 15 minutes (objectif : 300 ms)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-212-mediagenda-latence.md
+
+  # 4. Indisponibilité : les cibles répondent 10 min puis tombent (up = 0) ; plus tard, elles
+  #    disparaissent complètement (absent).
+  - name: indisponible (up à 0, puis cibles disparues)
+    interval: 1m
+    input_series:
+      - series: 'up{equipe="mediagenda",environnement="prod",pod="a"}'
+        values: '1x10 0x10 _x20'
+      - series: 'up{equipe="mediagenda",environnement="prod",pod="b"}'
+        values: '1x10 0x10 _x20'
+      - series: 'up{equipe="mediagenda",environnement="recette",pod="c"}'
+        values: '1x40'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: MediagendaIndisponible
+        exp_alerts: []
+      - eval_time: 17m
+        alertname: MediagendaIndisponible
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaIndisponible, equipe: mediagenda, environnement: prod, gravite: critique}
+            exp_annotations:
+              resume: "MédiAgenda prod : aucune instance de l'API ne répond à Prometheus"
+              description: "Aucune cible de l'API MédiAgenda de production n'est collectée avec succès depuis 5 minutes (instances arrêtées, ou supervision aveugle). Vérifie d'abord le service vu de l'extérieur (sonde du témoin, https://mediagenda.apps.par1.medisphere.internal/pret)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+      - eval_time: 38m
+        alertname: MediagendaIndisponible
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaIndisponible, equipe: mediagenda, environnement: prod, gravite: critique}
+            exp_annotations:
+              resume: "MédiAgenda prod : aucune instance de l'API ne répond à Prometheus"
+              description: "Aucune cible de l'API MédiAgenda de production n'est collectée avec succès depuis 5 minutes (instances arrêtées, ou supervision aveugle). Vérifie d'abord le service vu de l'extérieur (sonde du témoin, https://mediagenda.apps.par1.medisphere.internal/pret)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md
+
+  # 5. Pods non prêts : un pod Running non prêt sur k8s-w02 ; un pod de Job terminé (non prêt
+  #    mais Succeeded) ne compte pas.
+  - name: pods non prêts, par nœud
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_status_ready{namespace="mediagenda-prod",pod="mediagenda-1",condition="false"}'
+        values: '1x30'
+      - series: 'kube_pod_status_phase{namespace="mediagenda-prod",pod="mediagenda-1",phase="Running"}'
+        values: '1x30'
+      - series: 'kube_pod_info{namespace="mediagenda-prod",pod="mediagenda-1",node="k8s-w02"}'
+        values: '1x30'
+      - series: 'kube_pod_status_ready{namespace="mediagenda-prod",pod="mediagenda-migrate-x",condition="false"}'
+        values: '1x30'
+      - series: 'kube_pod_status_phase{namespace="mediagenda-prod",pod="mediagenda-migrate-x",phase="Running"}'
+        values: '0x30'
+      - series: 'kube_pod_info{namespace="mediagenda-prod",pod="mediagenda-migrate-x",node="k8s-w01"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: MediagendaPodsNonPrets
+        exp_alerts:
+          - exp_labels: {alertname: MediagendaPodsNonPrets, equipe: mediagenda, environnement: prod, gravite: avertissement, namespace: mediagenda-prod, node: k8s-w02}
+            exp_annotations:
+              resume: "1 pod(s) MédiAgenda non prêt(s) sur k8s-w02 (mediagenda-prod)"
+              description: "Des pods de mediagenda-prod tournent sur k8s-w02 sans être prêts depuis 15 minutes (sonde /pret en échec : PostgreSQL ou Valkey injoignables ?)."
+              runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-210-modele-runbook-alerte.md

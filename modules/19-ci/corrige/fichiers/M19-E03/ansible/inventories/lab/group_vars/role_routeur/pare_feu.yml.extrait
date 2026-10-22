@@ -1,0 +1,19 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M19-E03.
+# Matrice commune à gw01 et gw02. Une passerelle à la fois, en commençant par celle de SECOURS :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw02 --check --diff   (seules ces règles changent)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw02   puis   --limit gw01
+# Retour arrière : git revert de la MR, même playbook sur une passerelle puis l'autre.
+#
+# Ce qui ne figure PAS ici, parce que ça ne traverse pas la bordure :
+#   - git01 → mon01:25 (même VLAN 20) : filtré par pare_feu_local de mon01 ;
+#   - ca01 → mon01:80 (même VLAN 20) : idem ;
+#   - MGMT → mon01:8025 : la règle « bastion (MGMT) vers tout le lab » (M07-E30) le couvre déjà.
+#
+# 1) Définitions (section pare_feu_definitions, à côté de REG01 et des K8S_* du bloc C) :
+  - {nom: MON01, valeur: 10.10.20.19, commentaire: "mon01 : Mailpit (smtp.par1.medisphere.internal), supervision témoin au M21"}
+#
+# 2) Transit (section pare_feu_transit) :
+  - {entree: $V_K8S, source: [$K8S_CP, $K8S_TRAV], sortie: $V_INFRA, destination: $MON01, proto: tcp, ports: 25,
+     motif: "k8s-par1 vers Mailpit (SMTP) : notifications d'Argo CD (M20), Alertmanager (M21)", ref: M19-E03}
+#
+# Le flux des travailleurs vers git01:443 (runners) arrive en M19-E04.

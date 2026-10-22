@@ -1,0 +1,178 @@
+# plateforme/ci-templates — composant « qualite » v2.0.0 (M19-E10, PLAT-2010).
+# Messages de commit (commitlint), lint et tests d'un projet Python (uv, ruff, pytest) ou Go.
+# Utilisation :
+#   include:
+#     - component: $CI_SERVER_FQDN/plateforme/ci-templates/qualite@v2.0.0
+#       inputs:
+#         langage: python
+# Jobs : qualite:commitlint, qualite:lint, qualite:tests (rapport JUnit).
+# Exigences côté projet : Python → pyproject.toml + uv.lock, ruff et pytest dans le groupe « dev » ;
+# Go → go.mod. Aucun job sur les étiquettes (le pipeline de main a déjà tout vérifié).
+spec:
+  description: "Qualité d'un projet Python (uv, ruff, pytest) ou Go : commitlint, lint, tests avec rapport JUnit."
+  component: [version]
+  inputs:
+    langage:
+      description: "Langage du projet"
+      options: [python, go]
+      default: python
+    stage_lint:
+      description: "Stage des jobs commitlint et lint"
+      default: lint
+    stage_tests:
+      description: "Stage du job de tests"
+      default: test
+    runner:
+      description: "Étiquette du runner"
+      default: k8s
+    repertoire:
+      description: "Répertoire du projet dans le dépôt (relatif à la racine)"
+      default: "."
+      regex: ^[A-Za-z0-9._/-]+$
+    commitlint:
+      description: "Contrôler les messages de commit de la plage (MR ou push)"
+      type: boolean
+      default: true
+    image_python:
+      description: "Image des jobs Python (uv + Python), étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/ghcr/astral-sh/uv:0.12.23-python3.13-trixie-slim@sha256:a6aeb5c166af9f765f9c68e585b5a5148c28f3b8a362f90151cecea88b21a3e2
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_go:
+      description: "Image des jobs Go, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/library/golang:1.26-trixie@sha256:909771fef53e3dcb0950255f0c9a8b4728c3b841e61509c7b29b098de7ee02d4
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    image_commitlint:
+      description: "Image commitlint, étiquette ET empreinte"
+      default: registry.par1.medisphere.internal/dockerhub/commitlint/commitlint:21.2.3@sha256:33f225c84111a38ebac0c81fa21c488a79709b8a8e04056dfaaf4f80ef20be25
+      regex: ^registry\.par1\.medisphere\.internal/.+:[^:@]+@sha256:[a-f0-9]{64}$
+    options_pytest:
+      description: "Options supplémentaires de pytest (ex. -m 'not lent')"
+      default: ""
+---
+# --- Socle commun (caché, préfixé pour ne pas entrer en collision avec un job du projet) ---------
+.qualite-v2-base:
+  tags: ["$[[ inputs.runner ]]"]
+  interruptible: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+.qualite-v2-python:
+  extends: .qualite-v2-base
+  image: $[[ inputs.image_python ]]
+  variables:
+    UV_CACHE_DIR: $CI_PROJECT_DIR/.cache/uv
+    UV_LINK_MODE: copy
+    UV_PYTHON_DOWNLOADS: never
+  cache:
+    # Clé par branche : simple, mais froide à chaque nouvelle branche (M19-E23 fait mieux).
+    key: uv-$CI_COMMIT_REF_SLUG
+    paths: [.cache/uv]
+
+.qualite-v2-go:
+  extends: .qualite-v2-base
+  image: $[[ inputs.image_go ]]
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.cache/go
+    GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+    GOFLAGS: -mod=readonly
+  cache:
+    key: go-$CI_COMMIT_REF_SLUG
+    paths: [.cache/go/pkg/mod, .cache/go-build]
+
+# Plage de commits contrôlée (reprise du gabarit v1 de M01-E24). DEBUT vide = premier push.
+.qualite-v2-plage: &qualite-v2-plage |
+  DEBUT=""
+  if [ -n "${CI_MERGE_REQUEST_DIFF_BASE_SHA:-}" ]; then
+    DEBUT="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+  elif [ "${CI_COMMIT_BRANCH:-}" != "$CI_DEFAULT_BRANCH" ]; then
+    git fetch --quiet origin "$CI_DEFAULT_BRANCH"
+    DEBUT="$(git merge-base FETCH_HEAD "$CI_COMMIT_SHA")"
+  elif ! printf '%s' "${CI_COMMIT_BEFORE_SHA:-0}" | grep -Eq '^0+$' \
+       && git cat-file -e "${CI_COMMIT_BEFORE_SHA}^{commit}" 2>/dev/null; then
+    DEBUT="$CI_COMMIT_BEFORE_SHA"
+  fi
+  echo "Plage contrôlée : ${DEBUT:-<origine>}..${CI_COMMIT_SHA}"
+
+# --- Jobs ----------------------------------------------------------------------------------------
+qualite:commitlint:
+  extends: .qualite-v2-base
+  stage: $[[ inputs.stage_lint ]]
+  image:
+    name: $[[ inputs.image_commitlint ]]
+    entrypoint: [""]
+  needs: []
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: '"$[[ inputs.commitlint ]]" != "true"'
+      when: never
+    - !reference [.qualite-v2-base, rules]
+  script:
+    - commitlint --version
+    - *qualite-v2-plage
+    - |
+      if [ -n "$DEBUT" ]; then
+        commitlint --default-config --verbose --from "$DEBUT" --to "$CI_COMMIT_SHA"
+      else
+        commitlint --default-config --verbose --last
+      fi
+    # fixup!/squash!/amend! ignorés par commitlint : refusés ici (M01-E14).
+    - |
+      if [ -n "$DEBUT" ] && git log --format=%s "${DEBUT}..${CI_COMMIT_SHA}" | grep -E '^(fixup|squash|amend)!'; then
+        echo "Commits à intégrer avant fusion : git rebase -i --autosquash" >&2
+        exit 1
+      fi
+
+qualite:lint:
+  extends: .qualite-v2-$[[ inputs.langage ]]
+  stage: $[[ inputs.stage_lint ]]
+  needs: []
+  script:
+    - cd "$[[ inputs.repertoire ]]"
+    - echo "composant qualite $[[ component.version ]] — langage $[[ inputs.langage ]]"
+    - |
+      case "$[[ inputs.langage ]]" in
+        python)
+          uv sync --locked --only-group dev --no-install-project
+          uv run --no-sync ruff --version
+          # Rapport Code Quality (toujours écrit), puis le contrôle bloquant lisible dans le journal.
+          uv run --no-sync ruff check --exit-zero --output-format=gitlab --output-file=gl-code-quality.json .
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+          ;;
+        go)
+          test -z "$(gofmt -l . | tee /dev/stderr)" || { echo "fichiers non formatés (gofmt -l)"; exit 1; }
+          go vet ./...
+          ;;
+      esac
+  artifacts:
+    when: always
+    expire_in: 1 week
+    reports:
+      codequality: $[[ inputs.repertoire ]]/gl-code-quality.json
+
+qualite:tests:
+  extends: .qualite-v2-$[[ inputs.langage ]]
+  stage: $[[ inputs.stage_tests ]]
+  script:
+    - cd "$[[ inputs.repertoire ]]"
+    - |
+      case "$[[ inputs.langage ]]" in
+        python)
+          uv sync --locked
+          uv run --no-sync pytest --junitxml=rapport-tests.xml $[[ inputs.options_pytest ]]
+          ;;
+        go)
+          go run gotest.tools/gotestsum@v1.13.0 --junitfile rapport-tests.xml -- ./...
+          ;;
+      esac
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - "$[[ inputs.repertoire ]]/rapport-tests.xml"
+    reports:
+      junit: $[[ inputs.repertoire ]]/rapport-tests.xml

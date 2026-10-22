@@ -1,0 +1,28 @@
+# plateforme/gitops — applications/labo.yaml (M20-E06, PLAT-2106)
+# L'application d'essai « labo », créée par la CLI en M20-E04 et réglée en M20-E05 : même
+# spécification, désormais décrite dans Git (Argo CD adopte l'objet existant, sans le recréer).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: labo
+  namespace: argocd
+  # Application jetable : la supprimer (fichier retiré de Git) supprime aussi ses objets.
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Projet « default » jusqu'à M20-E07 (projet « labo »).
+  project: default
+  source:
+    repoURL: https://git01.par1.medisphere.internal/formation/gitops-labo.git
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wb-essais
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

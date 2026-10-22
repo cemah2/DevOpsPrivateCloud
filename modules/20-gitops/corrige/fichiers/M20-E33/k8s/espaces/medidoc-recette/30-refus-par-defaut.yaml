@@ -1,0 +1,11 @@
+# plateforme/k8s — espaces/medidoc-recette/30-refus-par-defaut.yaml (M20-E33).
+# Refus par défaut, entrée ET sortie : garde-fou de la PLATEFORME (l'AppProject medidoc met
+# NetworkPolicy en liste noire : l'équipe ne peut ni le créer ni le retirer par son dépôt).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: refus-par-defaut
+  namespace: medidoc-recette
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]

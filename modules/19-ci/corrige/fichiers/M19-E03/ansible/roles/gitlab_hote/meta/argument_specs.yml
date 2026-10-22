@@ -1,0 +1,28 @@
+---
+argument_specs:
+  main:
+    short_description: Hôte git01 autour de GitLab (paquet retenu, fichiers sensibles, fragments de configuration)
+    options:
+      gitlab_hote_paquet:
+        type: str
+        description: Paquet de GitLab.
+      gitlab_hote_bloquer_paquet:
+        type: bool
+        description: Retenir le paquet (apt-mark hold).
+      gitlab_hote_fichiers_secrets:
+        type: list
+        elements: path
+        description: Fichiers de /etc/gitlab lisibles par root seul.
+      gitlab_hote_verifier_services:
+        type: bool
+        description: Contrôler « gitlab-ctl status » à chaque passage.
+      gitlab_hote_fragments:
+        type: dict
+        description: Fragments Ruby (nom → contenu) inclus par from_file à la fin de gitlab.rb.
+      gitlab_hote_dossier_fragments:
+        type: path
+        description: Dossier des fragments.
+      gitlab_hote_autorites:
+        type: list
+        elements: path
+        description: Certificats d'autorité copiés dans /etc/gitlab/trusted-certs/.

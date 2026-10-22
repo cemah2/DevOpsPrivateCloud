@@ -1,0 +1,28 @@
+# Recette (mediagenda-recette) — M17-E09 ; Argo CD (Application mediagenda-recette) depuis M20-E10. Base PostgreSQL (mediagenda-db) et Valkey du M16, gérés
+# hors de ce dépôt ; ce qui est livré ici, c'est l'application.
+#   kubectl diff --server-side -k overlays/recette
+#   kubectl apply --server-side -k overlays/recette
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-recette
+resources:
+  - ../../base
+  - livraison.yaml
+  # Accès de nos pods à la base et à Valkey du M16 (gérés hors de ce dépôt), depuis M17-E04.
+  - acces-donnees.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: recette
+    # Jamais dans les sélecteurs : le sélecteur d'un Deployment est immuable.
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  # « migrations » (M20-E11) avant « livraison », qui fixe l'image de son Job ; « livraison » en
+  # dernier.
+  - ../../components/migrations
+  - ../../components/livraison

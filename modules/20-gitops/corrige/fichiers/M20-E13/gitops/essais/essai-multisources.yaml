@@ -1,0 +1,31 @@
+# plateforme/gitops — essais/essai-multisources.yaml (M20-E13) : Application d'ESSAI, jamais
+# synchronisée, créée à la main (argocd app create -f) puis supprimée. Le dossier essais/ n'est pas lu
+# par l'application racine.
+# Deux sources : le chart mediagenda publié et signé dans Harbor (OCI), et les valeurs, versionnées dans
+# Git (référence « values »). Sert à comparer le rendu d'Argo CD au rendu commité de mediagenda/deploiement.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: essai-multisources
+  namespace: argocd
+spec:
+  project: plateforme
+  sources:
+    # Chart OCI : repoURL SANS « oci:// » (dépôt de type helm, enableOCI) ; version exacte.
+    - repoURL: registry.par1.medisphere.internal/charts
+      chart: mediagenda
+      targetRevision: 0.5.0
+      helm:
+        releaseName: mediagenda
+        # $values = racine de la source qui porte « ref: values ».
+        valueFiles:
+          - $values/valeurs/essai-multisources/values.yaml
+    - repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+      targetRevision: main
+      ref: values
+  # Destination : le projet « plateforme » n'autorise que l'espace argocd (E07). Sans importance : cette
+  # Application n'est JAMAIS synchronisée (aucune politique automatique, et on ne lance pas de sync) ;
+  # on ne veut que son rendu (argocd app manifests).
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd

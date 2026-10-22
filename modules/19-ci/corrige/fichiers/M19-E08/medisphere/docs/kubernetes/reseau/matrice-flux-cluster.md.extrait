@@ -1,0 +1,9 @@
+<!-- docs/kubernetes/reseau/matrice-flux-cluster.md (plateforme/medisphere) — EXTRAIT, lignes ajoutées en M19-E08. -->
+
+| Source | Destination | Port | Politique | Motif | Réf. |
+|---|---|---|---|---|---|
+| pods de `ci-jobs` (étiquette `medisphere.internal/ci: job`) ; `ci-jobs-protege` au M19-E24 | `buildkit/buildkitd` | TCP 1234 (gRPC, TLS mutuel) | CiliumNetworkPolicy `buildkit/buildkitd` (entrée) | constructions d'images des jobs | M19-E08 |
+| `buildkit/buildkitd` | CoreDNS (`kube-system`, `k8s-app: kube-dns`) | 53 | `buildkit/buildkitd` (sortie, règle DNS) | résolution de Harbor et des index de paquets | M19-E08 |
+| `buildkit/buildkitd` | `reg01` 10.10.20.18 | TCP 443 | `buildkit/buildkitd` (sortie, `toCIDR`) | images de base (caches), cache en registre `plateforme/cache-buildkit` | M19-E08 |
+| `buildkit/buildkitd` | Internet hors réseaux privés | TCP 443 | `buildkit/buildkitd` (sortie, `toCIDRSet` sauf 10/8, 172.16/12, 192.168/16) | index de paquets des `RUN` (PyPI…) ; la bordure laisse sortir le VLAN 40 | M19-E08 |
+| tout le reste | `buildkit/buildkitd` | — | refusé (le pod est sélectionné en entrée) | — | M19-E08 |

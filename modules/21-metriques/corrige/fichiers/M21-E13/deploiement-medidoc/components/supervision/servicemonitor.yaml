@@ -1,0 +1,37 @@
+# medidoc/deploiement — components/supervision/servicemonitor.yaml (M21-E13, PLAT-2213)
+# ServiceMonitor « medidoc » d'E07, complété comme celui de MédiAgenda. MédiDoc étiquette ses
+# routes par le motif du routeur Go (« GET /healthz »).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: medidoc
+  labels:
+    medisphere.internal/supervision: "oui"
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: medidoc
+      medisphere.internal/collecte: prometheus
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - targetLabel: equipe
+          replacement: medidoc
+          action: replace
+        - sourceLabels: [__meta_kubernetes_namespace]
+          regex: medidoc-(.+)
+          targetLabel: environnement
+          replacement: $1
+          action: replace
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_app_kubernetes_io_(version|component)
+          replacement: $1
+      metricRelabelings:
+        - sourceLabels: [__name__, route]
+          separator: ";"
+          regex: "medidoc_http_request_duration_seconds_bucket;GET /(healthz|readyz|metrics)"
+          action: drop

@@ -1,0 +1,6 @@
+# alertmanager/inhibitions-tests.txt — joué par outils/tester-inhibitions.sh (M21-E36).
+# <inhibée|active> | <étiquettes de la cible> | <étiquettes de la source active en même temps>
+# Une critique n'est JAMAIS éteinte par une alerte moins grave, quelle que soit l'équipe.
+active  | alertname=EssaiCritique gravite=critique equipe=plateforme namespace=wb-pannes      | alertname=EssaiAvertissement gravite=avertissement equipe=plateforme namespace=wb-pannes
+# Le même problème en critique éteint son avertissement (même namespace et même alertname).
+inhibée | alertname=MediagendaLatenceElevee gravite=avertissement equipe=mediagenda namespace=mediagenda-prod | alertname=MediagendaLatenceElevee gravite=critique equipe=mediagenda namespace=mediagenda-prod

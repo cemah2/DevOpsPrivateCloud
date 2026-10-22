@@ -1,0 +1,9 @@
+apiVersion: v2
+name: buildkitd
+description: >-
+  Démon BuildKit rootless partagé de k8s-par1 (constructions d'images des jobs GitLab), TLS mutuel
+  par cert-manager, politique réseau Cilium. M19-E08, PLAN §4.11.
+type: application
+version: 0.1.0
+# Version de BuildKit déployée par défaut (values.yaml : image.version).
+appVersion: "v0.34.1"

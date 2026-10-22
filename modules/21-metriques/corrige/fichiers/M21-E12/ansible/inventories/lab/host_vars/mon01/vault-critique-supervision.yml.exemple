@@ -1,0 +1,7 @@
+---
+# host_vars/mon01/vault-critique-supervision.yml — MODÈLE (M21-E12). Le vrai fichier est chiffré
+# avec l'identité « critique » (M04) :
+#   uv run ansible-vault create --vault-id critique@outils/vault-pass-client.sh \
+#     inventories/lab/host_vars/mon01/vault-critique-supervision.yml
+# Valeur : le secret affiché UNE fois par « pveum user token add » (UUID).
+vault_supervision_pve_jeton: "00000000-0000-0000-0000-000000000000"

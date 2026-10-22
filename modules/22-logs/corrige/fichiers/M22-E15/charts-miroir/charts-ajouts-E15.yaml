@@ -1,0 +1,13 @@
+# Entrées à AJOUTER à la liste charts.yaml de plateforme/charts-miroir (M20-E13) pour M22-E15.
+# Empreintes : sha256 des archives publiées (identiques au champ « digest » des index Helm amont,
+# relevés le 2026-10-22). Le pipeline refuse une archive dont l'empreinte diffère.
+- nom: opensearch
+  depot: https://opensearch-project.github.io/helm-charts
+  version: 3.9.0
+  sha256: 4fd262e7e85130bd2167daea37d6335264a27f8e2ab7007e673cae4acbc59b1e
+  note: "M22-E15, essai temporaire : à retirer de la liste après l'essai si l'ADR-0220 écarte OpenSearch"
+- nom: fluent-bit
+  depot: https://fluent.github.io/helm-charts
+  version: 0.58.3
+  sha256: 99e025e461fa080e68dcfe65b8bc0bf64dd74d2c04b87cb910f9192fbf954f20
+  note: "M22-E10 et M22-E15 (Fluent Bit 5.1.3)"

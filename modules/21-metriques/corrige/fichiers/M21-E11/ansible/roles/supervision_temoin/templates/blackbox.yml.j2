@@ -1,0 +1,55 @@
+# {{ ansible_managed }}
+# Modules de blackbox_exporter du témoin (M21-E11).
+modules:
+  # HTTPS : 2xx après redirections, TLS obligatoire, vérifié par la racine MédiSphère ;
+  # probe_ssl_earliest_cert_expiry donne l'échéance du certificat.
+  https_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      fail_if_not_ssl: true
+      follow_redirects: true
+      tls_config:
+        ca_file: {{ supervision_temoin_racine_ca }}
+  # ICMP : exige CAP_NET_RAW (unité systemd) ou net.ipv4.ping_group_range.
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+  # DNS : SOA de la zone du site, demandé au récurseur ; réponse NOERROR avec un SOA attendu.
+  dns_soa:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: par1.medisphere.internal
+      query_type: SOA
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_rcodes: [NOERROR]
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - "par1\\.medisphere\\.internal\\.\\s+\\d+\\s+IN\\s+SOA"
+  # SMTP : bannière, EHLO, STARTTLS, puis EHLO chiffré (exemple officiel de blackbox_exporter,
+  # adapté à Mailpit qui n'annonce pas forcément AUTH).
+  smtp_starttls:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      tls_config:
+        ca_file: {{ supervision_temoin_racine_ca }}
+      query_response:
+        - expect: "^220 "
+        - send: "EHLO {{ inventory_hostname }}.par1.medisphere.internal\r"
+        - expect: "^250[ -]STARTTLS"
+        - send: "STARTTLS\r"
+        - expect: "^220"
+        - starttls: true
+        - send: "EHLO {{ inventory_hostname }}.par1.medisphere.internal\r"
+        - expect: "^250 "
+        - send: "QUIT\r"

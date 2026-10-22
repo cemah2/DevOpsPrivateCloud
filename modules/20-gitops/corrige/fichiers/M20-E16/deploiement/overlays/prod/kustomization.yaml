@@ -1,0 +1,48 @@
+# Production (mediagenda-prod) — M17-E09 ; Application mediagenda-prod (synchronisée À LA MAIN) depuis
+# M20-E10. L'espace, son quota et son LimitRange sont à la plateforme depuis M20-E07 (plateforme/k8s,
+# espaces/mediagenda-prod/) ; espace.yaml ne porte plus que le refus réseau par défaut.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-prod
+resources:
+  - espace.yaml
+  - ../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  - ../../components/dependances
+  - ../../components/haute-disponibilite
+  - ../../components/migrations
+  # Déploiement progressif par Argo Rollouts (M20-E16).
+  - ../../components/canary
+  - ../../components/livraison
+# Posé par outils/promouvoir.sh (M20-E14) avec livraison.yaml : garde TA valeur, ne recopie pas celle-ci.
+images:
+  - name: registry.par1.medisphere.internal/medisphere/mediagenda-api
+    newTag: <VERSION-PROMUE>
+    digest: sha256:<DIGEST-PROMU>
+patches:
+  # Rollout de prod (M20-E16) : trois pods, comme le Deployment (component « haute-disponibilite » :
+  # le transformateur « replicas » ne connaît pas le type Rollout), et une dernière marche sans durée :
+  # en prod, le passage à 100 % attend une promotion humaine (kubectl argo rollouts promote).
+  - target:
+      group: argoproj.io
+      kind: Rollout
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: add
+        path: /spec/strategy/canary/steps/-
+        value:
+          pause: {}

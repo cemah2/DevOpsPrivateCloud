@@ -1,0 +1,21 @@
+{# roles/powerdns_auth/templates/medisphere.conf.j2 — EXTRAIT (M21-E10) : le bloc « API HTTP » de
+   M06-E24 devient le suivant (la branche « api=no » gagne un serveur web de métriques facultatif). #}
+# --- API HTTP (le serveur web démarre avec api=yes) ---------------------------------------------
+{% if powerdns_auth_api_active %}
+api=yes
+api-key={{ powerdns_auth_cle_api }}
+webserver-address={{ powerdns_auth_api_adresse }}
+webserver-port={{ powerdns_auth_api_port }}
+webserver-allow-from={{ powerdns_auth_api_autorises | join(',') }}
+{% elif powerdns_auth_metriques_active %}
+# Pas d'API sur ce serveur (M06-E24) ; serveur web pour /metrics seulement (M21-E10).
+api=no
+webserver=yes
+webserver-address={{ powerdns_auth_metriques_adresse }}
+webserver-port={{ powerdns_auth_metriques_port }}
+webserver-allow-from={{ powerdns_auth_metriques_autorises | join(',') }}
+{% else %}
+# Pas d'API sur ce serveur (M06-E24) : surface d'attaque réduite, données reçues par AXFR.
+api=no
+webserver=no
+{% endif %}

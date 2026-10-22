@@ -1,0 +1,17 @@
+# À INTÉGRER dans group_vars/role_routeur/pare_feu.yml (plateforme/ansible) — M19-E04 (PLAT-2004).
+# Matrice commune à gw01 et gw02. Une passerelle à la fois, en commençant par celle de SECOURS :
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw02 --check --diff   (seule cette règle change)
+#   uv run ansible-playbook playbooks/routeurs.yml --limit gw02   puis   --limit gw01
+# Retour arrière : git revert de la MR, même playbook sur une passerelle puis l'autre.
+#
+# Transit (section pare_feu_transit ; GIT01 et K8S_TRAV sont déjà définis) :
+  # M19-E04 : le gestionnaire du runner (long polling, envoi des journaux) et le helper des jobs
+  # (clonage, artefacts) parlent à GitLab depuis les pods des travailleurs (masqués derrière
+  # l'adresse du nœud). Pas les nœuds de contrôle : aucun pod de CI n'y tourne. L'agent GitLab (E18)
+  # et Argo CD (M20) passeront par la même règle.
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $V_INFRA, destination: $GIT01, proto: tcp, ports: 443,
+     motif: "k8s-par1 (travailleurs) vers GitLab : runners, helper des jobs ; agent KAS (M19-E18), Argo CD (M20)", ref: M19-E04}
+#
+# Rien à ajouter pour le cache (K8S_TRAV → s3-01:8333, M15-E34) ni pour Harbor (VLAN 40 → reg01:443,
+# M13-E02). Pourquoi pas $NET_K8S : le VLAN 40 accueille d'autres clusters (M18) qui n'ont pas à
+# parler à la forge ; un travailleur ajouté s'ajoute à K8S_TRAV par MR.

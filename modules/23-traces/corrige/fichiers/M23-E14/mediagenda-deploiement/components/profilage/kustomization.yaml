@@ -1,0 +1,11 @@
+# mediagenda/deploiement — components/profilage (M23-E14) : adresse de Pyroscope pour le SDK Python.
+# Ajouté aux « components » des overlays dev, recette et prod, AVANT « livraison » (qui reste le dernier).
+# Passe par la ConfigMap générée « mediagenda-parametres » (déjà dans envFrom du conteneur api, base M17-E09) :
+# valable pour un Deployment comme pour un Rollout, et tout changement de valeur redéploie.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    literals:
+      - MEDIAGENDA_PYROSCOPE_URL=http://pyroscope.traces.svc.cluster.local:4040

@@ -1,0 +1,61 @@
+{{- $r := .Values.reseau -}}
+# Qui parle à buildkitd, et à qui buildkitd parle (M19-E08). Matrice : docs/kubernetes/reseau/
+# matrice-flux-cluster.md. Une politique qui sélectionne le pod en entrée ET en sortie : tout ce qui
+# n'est pas listé est refusé dans les deux sens.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: buildkitd
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "buildkitd.etiquettes" . | nindent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      {{- include "buildkitd.selecteur" . | nindent 6 }}
+  ingress:
+    # Les pods de job (étiquette posée par le runner) des espaces de jobs, sur le port gRPC seulement.
+    - fromEndpoints:
+        {{- range $r.espacesClients }}
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: {{ . }}
+            medisphere.internal/ci: job
+        {{- end }}
+      toPorts:
+        - ports:
+            - port: {{ .Values.service.port | quote }}
+              protocol: TCP
+  egress:
+    # Résolution DNS par CoreDNS (le démon résout Harbor et les index de paquets).
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
+    # Harbor : images de base, cache en registre.
+    - toCIDR:
+        - {{ $r.harbor }}
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- if $r.internet443 }}
+    # Index de paquets des RUN (PyPI, proxy.golang.org…) : Internet en 443, jamais les réseaux privés
+    # (le lab 10.10.0.0/16, PAR2, le cluster lui-même).
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            - 10.0.0.0/8
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+    {{- end }}

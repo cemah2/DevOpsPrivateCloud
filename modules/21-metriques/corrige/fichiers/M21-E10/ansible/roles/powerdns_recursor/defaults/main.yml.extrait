@@ -1,0 +1,9 @@
+# roles/powerdns_recursor/defaults/main.yml — EXTRAIT (M21-E10, PLAT-2210) : variables AJOUTÉES.
+# Webservice du Recursor 5.4 (section « webservice » de recursor.yml) : sert /metrics. Aucune
+# clé d'API n'est posée : l'API REST du Recursor reste inutilisable (401), seules les métriques
+# et la page d'accueil répondent, aux seules adresses de allow_from.
+powerdns_recursor_webservice_active: false
+powerdns_recursor_webservice_adresse: 127.0.0.1
+powerdns_recursor_webservice_port: 8082
+powerdns_recursor_webservice_autorises:
+  - 127.0.0.1

@@ -1,0 +1,30 @@
+# plateforme/gitops — racine/plateforme.yaml (M20-E15, PLAT-2115)
+# Application de groupe « plateforme » : une Application par service de plateforme, rangée dans le
+# dossier plateforme/ (argo-rollouts.yaml en E15 ; supervision, journaux, traces aux M21-M23). Même
+# construction que « applications » et « projets » (E06-E07) : non récursive, *.yaml seulement — les
+# valeurs des charts (dossier valeurs/) ne sont donc jamais appliquées comme des manifestes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plateforme
+  namespace: argocd
+  labels:
+    medisphere.internal/niveau: groupe
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/gitops.git
+    targetRevision: main
+    path: plateforme
+    directory:
+      include: "*.yaml"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

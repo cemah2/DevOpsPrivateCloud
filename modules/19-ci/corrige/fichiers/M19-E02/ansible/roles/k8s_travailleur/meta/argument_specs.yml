@@ -1,0 +1,37 @@
+---
+argument_specs:
+  main:
+    short_description: Joindre un travailleur kubeadm à k8s-par1 et régler ses paramètres noyau
+    options:
+      k8s_travailleur_adresse:
+        type: str
+        description: Adresse du nœud sur le VLAN 40 (node-ip).
+      k8s_travailleur_groupe_controle:
+        type: str
+        description: Groupe des nœuds de contrôle (création du jeton de jonction).
+      k8s_travailleur_api_nom:
+        type: str
+        description: Nom DNS du point d'accès de l'API.
+      k8s_travailleur_api_port:
+        type: int
+        description: Port du point d'accès (8443).
+      k8s_travailleur_socket_cri:
+        type: str
+        description: Socket CRI.
+      k8s_travailleur_dossier:
+        type: path
+        description: Dossier du fichier de jonction temporaire.
+      k8s_travailleur_jonction_auto:
+        type: bool
+        description: Joindre le nœud s'il n'est pas membre.
+      k8s_travailleur_jeton_duree:
+        type: str
+        description: Durée de vie du jeton d'amorçage.
+      k8s_travailleur_sysctl:
+        type: dict
+        description: >-
+          Paramètres noyau propres aux travailleurs (nom → valeur), écrits dans
+          k8s_travailleur_sysctl_fichier puis vérifiés (M19-E02 : vm.max_map_count).
+      k8s_travailleur_sysctl_fichier:
+        type: path
+        description: Fichier de /etc/sysctl.d/ des paramètres des travailleurs.

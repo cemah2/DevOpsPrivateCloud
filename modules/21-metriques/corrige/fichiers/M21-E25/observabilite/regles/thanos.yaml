@@ -1,0 +1,111 @@
+# plateforme/observabilite — regles/thanos.yaml (M21-E25, PLAT-2225)
+# Alertes sur la chaîne de conservation longue : sidecars → RGW → Compactor, Store, Query.
+# Inspirées des alertes d'exemple de Thanos 0.42 (examples/alerts), avec nos étiquettes (gravite,
+# equipe), nos annotations (resume, description, runbook_url) et nos noms de jobs.
+# Aucune n'est « critique » sauf deux Compactors à la fois (risque de PERTE de blocs) : un envoi en
+# retard ou une compaction arrêtée laisse 15 jours de marge (base locale de chaque Prometheus).
+# Testées par tests/thanos.test.yaml (promtool test rules).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: thanos
+spec:
+  groups:
+    - name: thanos.compactor
+      rules:
+        - alert: ThanosCompacteursMultiples
+          expr: sum(up{job="thanos-compactor"}) > 1
+          for: 5m
+          labels:
+            gravite: critique
+            equipe: plateforme
+          annotations:
+            resume: "{{ $value }} Compactors Thanos tournent en même temps sur thanos-k8s-par1"
+            description: "Deux Compactors sur le même compartiment compactent et suppriment les mêmes blocs : risque de perte de données. En arrêter un immédiatement (RB-214 §4)."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+        - alert: ThanosCompacteurArrete
+          expr: thanos_compact_halted{job="thanos-compactor"} == 1
+          for: 5m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le Compactor Thanos s'est arrêté (halted) sur une erreur"
+            description: "Plus aucune compaction, ni sous-échantillonnage, ni rétention : le compartiment grossit et les requêtes longues ralentissent. Cause dans les journaux du pod thanos-compactor-0 (RB-214 §3)."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+        - alert: ThanosCompacteurAbsent
+          expr: absent(up{job="thanos-compactor"} == 1)
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Aucun Compactor Thanos joignable depuis 15 minutes"
+            description: "Le pod thanos-compactor-0 ne tourne pas ou n'est plus collecté (RB-214 §3)."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+        - alert: ThanosCompacteurInactif
+          expr: (time() - max(max_over_time(thanos_objstore_bucket_last_successful_upload_time{job="thanos-compactor"}[24h]))) > 24 * 3600
+          for: 30m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le Compactor Thanos n'a rien écrit dans le compartiment depuis 24 h"
+            description: "Il tourne mais ne produit plus de bloc compacté ni sous-échantillonné (compartiment illisible, quota RGW atteint, volume de travail plein ?). RB-214 §3."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+    - name: thanos.sidecar
+      rules:
+        # Un bloc toutes les 2 h par réplica. Après un redémarrage, le compteur repart de zéro : on
+        # n'alerte que sur un sidecar qui tourne depuis plus de 5 h sans aucun envoi.
+        - alert: ThanosSidecarEnvoisArretes
+          expr: |
+            increase(thanos_shipper_uploads_total{job="kps-thanos-discovery"}[5h]) == 0
+              and on (pod)
+            (time() - process_start_time_seconds{job="kps-thanos-discovery"}) > 5 * 3600
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "Le sidecar Thanos de {{ $labels.pod }} n'a envoyé aucun bloc depuis 5 h"
+            description: "Les données de ce réplica ne partent plus vers le RGW ; marge : la rétention locale (15 j). RB-214 §2."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+        - alert: ThanosCompartimentEnEchec
+          expr: |
+            sum by (job, pod) (rate(thanos_objstore_bucket_operation_failures_total{job=~"kps-thanos-discovery|thanos-store|thanos-compactor"}[5m])) > 0
+          for: 15m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} échoue à lire ou écrire dans thanos-k8s-par1"
+            description: "Opérations S3 en échec depuis 15 min (identifiants, certificat, quota RGW, RGW indisponible). RB-214 §2."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+    - name: thanos.query
+      rules:
+        # Chaque Query doit voir 2 sidecars et 1 Store. Le « or … * 0 » fabrique une valeur 0 quand
+        # aucune connexion de ce type n'existe (la série disparaît au lieu de valoir 0).
+        - alert: ThanosQuerySidecarManquant
+          expr: |
+            (sum by (pod) (thanos_store_nodes_grpc_connections{job="thanos-query", store_type="sidecar"})
+              or sum by (pod) (up{job="thanos-query"}) * 0) < 2
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} ne voit que {{ $value }} sidecar(s) sur 2"
+            description: "Les données récentes d'un réplica ne sont plus lues (le dédoublonnage masque le trou). RB-214 §1."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md
+        - alert: ThanosQueryStoreManquant
+          expr: |
+            (sum by (pod) (thanos_store_nodes_grpc_connections{job="thanos-query", store_type="store"})
+              or sum by (pod) (up{job="thanos-query"}) * 0) < 1
+          for: 10m
+          labels:
+            gravite: avertissement
+            equipe: plateforme
+          annotations:
+            resume: "{{ $labels.pod }} ne voit plus le Store Gateway"
+            description: "Les requêtes au-delà de 15 jours rendent des données partielles ou vides. RB-214 §1."
+            runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/observabilite/metriques/runbooks/RB-214-thanos.md

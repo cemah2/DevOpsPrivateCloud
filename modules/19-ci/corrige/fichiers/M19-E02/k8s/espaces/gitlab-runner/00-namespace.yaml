@@ -1,0 +1,21 @@
+# plateforme/k8s — espaces/gitlab-runner/00-namespace.yaml (M19-E02, PLAT-2002)
+# Gestionnaire(s) des runners GitLab (release Helmfile gitlab-runner, M19-E04). Il ne fait
+# qu'interroger GitLab et créer des pods dans ci-jobs : « restricted » sans exception (le chart
+# fournit des contextes de sécurité compatibles, posés explicitement dans les valeurs).
+# Pas d'étiquette medisphere.internal/equipe : la VAP medisphere-images ne s'y applique pas, mais
+# les images de la release viennent quand même de Harbor (valeurs du chart).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitlab-runner
+  labels:
+    medisphere.internal/composant: ci
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+  annotations:
+    medisphere.internal/responsable: "<MOI>"
+    medisphere.internal/ticket: "PLAT-2002"

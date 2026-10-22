@@ -1,0 +1,28 @@
+# Component « canary » (M20-E16, DEV-2116 ; analyses M20-E18) : déploiement progressif de MédiAgenda par Argo Rollouts et
+# le greffon Gateway API (recette et prod ; jamais en dev, qui garde un déploiement direct).
+# À placer AVANT « livraison » dans la liste des components de l'overlay.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - rollout.yaml
+  - service-canary.yaml
+  # Analyses et leurs flux réseau (M20-E18).
+  - analyses.yaml
+  - reseau-analyses.yaml
+patches:
+  # La route de l'API reçoit les deux Services ; les poids sont ensuite l'affaire du greffon
+  # (Argo CD ignore /spec/rules/*/backendRefs/*/weight : ignoreDifferences d'E12). Au repos, 100/0.
+  - target:
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/backendRefs
+        value:
+          - name: mediagenda
+            port: 80
+            weight: 100
+          - name: mediagenda-canary
+            port: 80
+            weight: 0

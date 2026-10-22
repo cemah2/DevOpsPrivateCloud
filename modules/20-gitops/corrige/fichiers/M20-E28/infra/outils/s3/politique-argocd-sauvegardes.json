@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SauvegardesArgoCDNonEffacables",
+      "Effect": "Deny",
+      "Principal": { "AWS": ["arn:aws:iam::000000000000:user/argocd-sauvegardes"] },
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:PutBucketVersioning",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": ["arn:aws:s3:::argocd-sauvegardes", "arn:aws:s3:::argocd-sauvegardes/*"]
+    }
+  ]
+}

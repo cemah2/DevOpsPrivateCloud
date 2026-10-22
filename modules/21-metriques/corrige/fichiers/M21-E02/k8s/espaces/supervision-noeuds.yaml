@@ -1,0 +1,24 @@
+# plateforme/k8s — espaces/supervision-noeuds.yaml (M21-E02, PLAT-2202, exception SEC écrite)
+# Espace du seul DaemonSet node-exporter de kube-prometheus-stack (prometheus-node-exporter
+# .namespaceOverride). node-exporter lit /proc, /sys et la racine de l'hôte, dans les espaces de noms
+# réseau et PID de l'hôte : hostNetwork, hostPID et hostPath sont refusés par les profils
+# « baseline » et « restricted ». Plutôt que d'abaisser tout l'espace supervision (Grafana, Prometheus,
+# Alertmanager), on isole l'exception dans un espace qui ne contient que lui :
+#   - enforce: privileged (seul profil qui l'admet), mais audit et warn en restricted : tout
+#     nouvel objet posé ici par erreur laisse une trace dans le journal d'audit (M14-E27) ;
+#   - personne n'a de droit d'écriture ici hors Argo CD (projet plateforme) ;
+#   - le conteneur reste non-root, en lecture seule (valeurs par défaut du chart, vérifiées).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: supervision-noeuds
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+    medisphere.internal/role: plateforme
+    medisphere.internal/proprietaire: plateforme
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    medisphere.internal/ticket: "PLAT-2202"
+    medisphere.internal/exception-psa: "node-exporter : hostNetwork, hostPID, hostPath en lecture (ADR-0210)"

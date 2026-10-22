@@ -1,0 +1,18 @@
+# plateforme/gitops — valeurs/essai-multisources/values.yaml (M20-E13) : copie de
+# base/values-communes.yaml de mediagenda/deploiement (version M20-E11), pour comparer les deux rendus.
+medisphere:
+  environnement: recette
+replicaCount: 2
+migrations:
+  mode: none
+tests:
+  enabled: false
+postgresql:
+  cnpg:
+    enabled: false
+valkey:
+  enabled: false
+externalValkey:
+  url: redis://valkey:6379/0
+networkPolicy:
+  clusterPostgresqlExterne: mediagenda-db

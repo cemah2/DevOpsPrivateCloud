@@ -1,0 +1,26 @@
+# Sortie des applications vers l'agent de leur nœud (M23-E02). Les espaces applicatifs sont en refus par
+# défaut (M15) et la politique du chart de MédiAgenda ne laisse sortir que DNS, PostgreSQL et Valkey :
+# sans cette règle, les spans sont jetées en silence (l'exportateur réessaie, puis abandonne).
+# Politique de cluster portée par la plateforme (les AppProjects des équipes n'ont pas le droit d'écrire
+# des politiques réseau, M20-E07). enableDefaultDeny.egress: false : elle AJOUTE une sortie autorisée sans
+# faire passer en refus par défaut les pods qu'elle sélectionne et qui n'avaient pas de politique de sortie.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+  name: telemetrie-vers-otel-agent
+spec:
+  description: "Applications instrumentées → otel-agent (OTLP 4317 gRPC, 4318 HTTP)"
+  endpointSelector:
+    matchExpressions:
+      - key: k8s:io.kubernetes.pod.namespace
+        operator: In
+        values: [mediagenda-dev, mediagenda-recette, mediagenda-prod, medidoc-dev, medidoc-recette, wb-essais]
+  enableDefaultDeny:
+    egress: false
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: traces
+            app.kubernetes.io/instance: traces.otel-agent
+      toPorts:
+        - ports: [{port: "4317", protocol: TCP}, {port: "4318", protocol: TCP}]

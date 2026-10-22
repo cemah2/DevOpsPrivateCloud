@@ -1,0 +1,7 @@
+# plateforme/ansible — inventories/lab/host_vars/s3-01/vault.yml (EXTRAIT EN CLAIR, M19-E07)
+# Fichier réel chiffré (identité lab) : uv run ansible-vault edit inventories/lab/host_vars/s3-01/vault.yml
+# Clés générées comme au M05-E10 (openssl rand -hex 10 | tr a-f A-F ; openssl rand -base64 30),
+# recopiées dans ~/.config/workbook/s3-ci-cache.env (600), dans secrets/gitlab-runner.yml de
+# plateforme/k8s (Vault critique) et au registre des secrets.
+vault_seaweedfs_ci_cache_cle_acces: "<CLE-ACCES-CI-CACHE>"
+vault_seaweedfs_ci_cache_cle_secrete: "<CLE-SECRETE-CI-CACHE>"

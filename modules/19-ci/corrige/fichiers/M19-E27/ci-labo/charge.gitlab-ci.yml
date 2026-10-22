@@ -1,0 +1,18 @@
+# formation/ci-labo — essai de charge (M19-E27, PLAT-2027).
+# 20 jobs identiques d'une minute, lancés à la main (pipeline « web ») pour ne jamais partir seuls.
+# Demandes réalistes : celles d'un job de tests de MédiAgenda (256 Mio, 0,1 CPU réservés).
+# ⚠️ Vérifie avant : aucun composant temporaire (SonarQube, Jenkins) en marche, aucun pipeline
+# d'étiquette en cours ; garde « kubectl top nodes » ouvert.
+charge:
+  stage: test
+  tags: [k8s]
+  image: registry.par1.medisphere.internal/dockerhub/library/debian:trixie-slim
+  parallel: 20
+  variables:
+    GIT_STRATEGY: none
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web" && $ESSAI_CHARGE == "oui"
+  script:
+    - echo "job $CI_NODE_INDEX/$CI_NODE_TOTAL sur $CI_RUNNER_DESCRIPTION ($HOSTNAME)"
+    # Une minute de travail CPU léger (pas de sleep pur : on veut un pod réellement occupé).
+    - end=$((SECONDS + 60)); while (( SECONDS < end )); do sha256sum /etc/os-release > /dev/null; done

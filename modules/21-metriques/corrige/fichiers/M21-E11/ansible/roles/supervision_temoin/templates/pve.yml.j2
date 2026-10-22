@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+# Configuration de prometheus-pve-exporter (M21-E12). SECRET : 0600, utilisateur pve-exporter.
+# Jeton wb-supervision@pve!prometheus, séparation des privilèges, rôle PVEAuditor sur /.
+default:
+  user: {{ supervision_temoin_pve_utilisateur | to_json }}
+  token_name: {{ supervision_temoin_pve_jeton_nom | to_json }}
+  token_value: {{ supervision_temoin_pve_jeton_valeur | to_json }}
+  verify_ssl: true

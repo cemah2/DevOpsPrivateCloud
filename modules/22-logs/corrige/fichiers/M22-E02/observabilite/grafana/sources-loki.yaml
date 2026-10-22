@@ -1,0 +1,67 @@
+# plateforme/observabilite — grafana/sources-loki.yaml (M22-E02)
+# Quatre sources de données Loki, une par locataire, provisionnées par le « sidecar » de Grafana
+# (kube-prometheus-stack, M21) : il lit les ConfigMaps étiquetées grafana_datasource: "1" de
+# l'espace supervision. Ajoute ce fichier aux ressources de la kustomization racine de
+# plateforme/observabilite (Application « observabilite », espace supervision).
+# Le locataire est fixé par l'en-tête X-Scope-OrgID ; Grafana le range dans secureJsonData
+# (chiffré dans sa base) : il n'apparaît pas dans l'API pour un Viewer.
+# UID stables : les tableaux de bord et les règles y font référence (jamais le nom affiché).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sources-loki
+  namespace: supervision
+  labels:
+    grafana_datasource: "1"
+data:
+  sources-loki.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki — plateforme
+        uid: loki-plateforme
+        type: loki
+        access: proxy
+        url: http://loki.journaux.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          maxLines: 1000
+          timeout: 60
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: plateforme
+      - name: Loki — mediagenda
+        uid: loki-mediagenda
+        type: loki
+        access: proxy
+        url: http://loki.journaux.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          maxLines: 1000
+          timeout: 60
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: mediagenda
+      - name: Loki — medidoc
+        uid: loki-medidoc
+        type: loki
+        access: proxy
+        url: http://loki.journaux.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          maxLines: 1000
+          timeout: 60
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: medidoc
+      - name: Loki — audit
+        uid: loki-audit
+        type: loki
+        access: proxy
+        url: http://loki.journaux.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          maxLines: 1000
+          timeout: 60
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: audit

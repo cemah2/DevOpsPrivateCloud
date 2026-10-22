@@ -1,0 +1,5 @@
+---
+# host_vars/mon01/supervision_temoin_api_admin.yml (plateforme/ansible) — M21-E44, PLAT-2244.
+# OUVERT le temps de l'analyse de la TSDB du témoin, puis remis à false par une seconde MR (le
+# contrôle lab/bin/check 21 44 vérifie que l'API est refermée). Ne jamais appeler que « snapshot ».
+supervision_temoin_api_admin: false

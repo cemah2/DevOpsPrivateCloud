@@ -1,0 +1,88 @@
+# {{ ansible_managed }}
+# {{ supervision_temoin_dossier_config }}/prometheus.yml — Prometheus TÉMOIN de {{ inventory_hostname }}
+# (rôle supervision_temoin, M21-E11 ; jobs pve et hyperviseurs en M21-E12).
+# Il regarde le lab de l'EXTÉRIEUR du cluster ; le Prometheus du cluster fédère ses jobs
+# blackbox, pve et hyperviseurs (ScrapeConfig federation-mon01).
+global:
+  scrape_interval: {{ supervision_temoin_intervalle }}
+  evaluation_interval: {{ supervision_temoin_intervalle }}
+  external_labels:
+{% for cle, valeur in supervision_temoin_etiquettes_externes | dictsort %}
+    {{ cle }}: {{ valeur | to_json }}
+{% endfor %}
+
+rule_files:
+  - {{ supervision_temoin_dossier_config }}/regles/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["127.0.0.1:{{ supervision_temoin_alertmanager_ecoute.split(':')[-1] }}"]
+
+scrape_configs:
+  # --- Le témoin lui-même ----------------------------------------------------------------------
+  - job_name: prometheus-temoin
+    static_configs:
+      - targets: ["127.0.0.1:{{ supervision_temoin_prometheus_ecoute.split(':')[-1] }}"]
+        labels: {equipe: plateforme}
+  - job_name: alertmanager-temoin
+    static_configs:
+      - targets: ["127.0.0.1:{{ supervision_temoin_alertmanager_ecoute.split(':')[-1] }}"]
+        labels: {equipe: plateforme}
+  - job_name: blackbox-exporter
+    static_configs:
+      - targets: ["{{ supervision_temoin_blackbox_ecoute }}"]
+        labels: {equipe: plateforme}
+
+  # --- Sondes (multi-target exporter pattern) --------------------------------------------------
+  # Prometheus interroge blackbox_exporter ; la cible et le module passent en paramètres d'URL.
+  # Chaque fichier de cibles/ porte une étiquette « module » par groupe.
+  - job_name: blackbox
+    metrics_path: /probe
+    scrape_timeout: 15s
+    file_sd_configs:
+      - files:
+          - {{ supervision_temoin_dossier_config }}/cibles/blackbox-*.yml
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: {{ supervision_temoin_blackbox_ecoute }}
+{% if supervision_temoin_pve_active | bool %}
+
+  # --- Proxmox VE par pve-exporter (M21-E12) ---------------------------------------------------
+  - job_name: pve
+    metrics_path: /pve
+    params:
+      module: [default]
+      cluster: ["1"]
+      node: ["1"]
+    static_configs:
+{% for c in supervision_temoin_pve_cibles %}
+      - targets: ["{{ c.cible }}"]
+        labels: {equipe: plateforme, role: hyperviseur, noeud: {{ c.instance | to_json }}}
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [noeud]
+        target_label: instance
+      - target_label: __address__
+        replacement: {{ supervision_temoin_pve_ecoute }}
+
+  # --- node_exporter des hyperviseurs (rôle node_exporter, M21-E08), en TLS --------------------
+  - job_name: hyperviseurs
+    scheme: https
+    tls_config:
+      ca_file: {{ supervision_temoin_racine_ca }}
+    static_configs:
+{% for h in supervision_temoin_hyperviseurs %}
+      - targets: ["{{ h.cible }}"]
+        labels: {equipe: plateforme, role: hyperviseur, instance: {{ h.instance | to_json }}}
+{% endfor %}
+{% endif %}

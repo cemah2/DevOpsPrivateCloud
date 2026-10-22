@@ -1,0 +1,24 @@
+# plateforme/k8s — rbac/gitlab-agent.yaml (M19-E18 ; RÉDUIT en M20-E30, SEC-2130)
+# Droits du compte de service de l'agent GitLab k8s-par1 (espace gitlab-agent, release Helmfile
+# gitlab-agent, rbac.create: false dans ses valeurs : AUCUN ClusterRoleBinding cluster-admin du chart).
+# M20-E30 : le RoleBinding de mediagenda-dev est SUPPRIMÉ (pas seulement retiré de ce fichier :
+# « task appliquer » n'efface pas un objet qui disparaît du dépôt — kubectl delete explicite, tracé
+# dans le ticket SEC-2130). Seul reste wb-essais.
+# Nom du compte de service : celui de ta release (kubectl -n gitlab-agent get sa) ; « gitlab-agent » ici.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitlab-agent-edit
+  namespace: wb-essais
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+  annotations:
+    medisphere.internal/ticket: "SEC-2130"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: ServiceAccount
+    name: gitlab-agent
+    namespace: gitlab-agent

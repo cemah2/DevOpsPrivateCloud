@@ -1,0 +1,84 @@
+---
+# prometheus-pve-exporter (M21-E12) dans un environnement uv dédié, /opt/pve-exporter.
+- name: Refuser une installation sans jeton ni racine de pve01
+  ansible.builtin.assert:
+    that:
+      - supervision_temoin_pve_jeton_valeur | length > 0
+      - supervision_temoin_pve_racine_source | length > 0
+      - supervision_temoin_uv_sha256 | length == 64
+    fail_msg: "Jeton (Vault critique) ou racine de pve01 manquants."
+    quiet: true
+
+- name: Archive de uv vérifiée par empreinte
+  ansible.builtin.get_url:
+    url: "https://github.com/astral-sh/uv/releases/download/{{ supervision_temoin_uv_version }}/uv-x86_64-unknown-linux-gnu.tar.gz"
+    dest: "{{ supervision_temoin_dossier_logiciels }}/archives/uv-{{ supervision_temoin_uv_version }}.tar.gz"
+    checksum: "sha256:{{ supervision_temoin_uv_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dossier de uv
+  ansible.builtin.file:
+    path: "{{ supervision_temoin_dossier_logiciels }}/uv-{{ supervision_temoin_uv_version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Dépliage de uv
+  ansible.builtin.unarchive:
+    src: "{{ supervision_temoin_dossier_logiciels }}/archives/uv-{{ supervision_temoin_uv_version }}.tar.gz"
+    dest: "{{ supervision_temoin_dossier_logiciels }}/uv-{{ supervision_temoin_uv_version }}"
+    remote_src: true
+    extra_opts: [--strip-components=1]
+    creates: "{{ supervision_temoin_dossier_logiciels }}/uv-{{ supervision_temoin_uv_version }}/uv"
+
+- name: Environnement Python de pve-exporter (Python 3.13 de Debian)
+  ansible.builtin.command:
+    cmd: "{{ supervision_temoin_dossier_logiciels }}/uv-{{ supervision_temoin_uv_version }}/uv venv --python /usr/bin/python3 /opt/pve-exporter"
+    creates: /opt/pve-exporter/bin/python
+
+- name: Version installée de prometheus-pve-exporter
+  ansible.builtin.command:
+    cmd: /opt/pve-exporter/bin/python -c "import importlib.metadata as m; print(m.version('prometheus-pve-exporter'))"
+  register: supervision_temoin_pve_installee
+  changed_when: false
+  failed_when: false
+
+- name: Installation de prometheus-pve-exporter (version épinglée)
+  ansible.builtin.command:
+    cmd: >-
+      {{ supervision_temoin_dossier_logiciels }}/uv-{{ supervision_temoin_uv_version }}/uv pip install
+      --python /opt/pve-exporter/bin/python prometheus-pve-exporter=={{ supervision_temoin_pve_version }}
+  environment:
+    UV_NO_CACHE: "1"
+  when: supervision_temoin_pve_installee.stdout | trim != supervision_temoin_pve_version
+  changed_when: true
+  notify: Redémarrer pve-exporter
+
+- name: Racine de l'API de pve01
+  ansible.builtin.copy:
+    src: "{{ supervision_temoin_pve_racine_source }}"
+    dest: /usr/local/share/ca-certificates/pve01-root-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  register: supervision_temoin_pve_racine
+
+- name: Magasin de certificats du système
+  ansible.builtin.command:
+    cmd: update-ca-certificates
+  when: supervision_temoin_pve_racine is changed  # noqa: no-handler (avant le premier démarrage)
+  changed_when: true
+  notify: Redémarrer pve-exporter
+
+- name: Configuration de pve-exporter (jeton, fichier 0600 de l'utilisateur du service)
+  ansible.builtin.template:
+    src: pve.yml.j2
+    dest: "{{ supervision_temoin_dossier_config }}/pve.yml"
+    owner: pve-exporter
+    group: pve-exporter
+    mode: "0600"
+  no_log: true
+  notify: Redémarrer pve-exporter

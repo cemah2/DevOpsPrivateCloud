@@ -1,0 +1,28 @@
+# plateforme/gitops — plateforme/pyrra.yaml (M21-E26, PLAT-2226)
+# Pyrra (SLO) : CRD ServiceLevelObjective, opérateur et interface, décrits dans
+# plateforme/observabilite/pyrra/ (manifestes amont recopiés, pas de chart officiel).
+# Les SLO eux-mêmes (slo/) sont appliqués par l'Application « observabilite ».
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pyrra
+  namespace: argocd
+  # Pas de finaliseur : supprimer cette Application ne supprime pas la CRD (donc pas les SLO).
+  annotations:
+    medisphere.internal/ticket: "PLAT-2226"
+spec:
+  project: plateforme
+  source:
+    repoURL: https://git01.par1.medisphere.internal/plateforme/observabilite.git
+    targetRevision: main
+    path: pyrra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: supervision
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true
