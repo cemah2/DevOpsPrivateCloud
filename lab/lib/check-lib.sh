@@ -177,6 +177,65 @@ harbor_api() {
     "${WB_HARBOR_URL:-https://registry.par1.medisphere.internal}/api/v2.0/$1"
 }
 
+# --- Blocs D et E (PLAN §4.11) : toutes ces fonctions sont des GET en lecture seule ---
+
+# mailpit_api "chemin" — API de Mailpit sur mon01 (M19), compte en lecture des checks.
+#   Le fichier WB_MAILPIT_CHECKS_FILE contient MAILPIT_USER=... et MAILPIT_PASSWORD=...
+#   Exemple : mailpit_api "search?query=subject:Watchdog" | jq .messages_count
+mailpit_api() {
+  local f="${WB_MAILPIT_CHECKS_FILE:-$HOME/.config/workbook/mailpit-checks.env}" MAILPIT_USER="" MAILPIT_PASSWORD=""
+  [[ -r "$f" ]] || { echo "identifiants Mailpit des checks illisibles : $f" >&2; return 1; }
+  # shellcheck disable=SC1090
+  source "$f"
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'user = "%s:%s"\n' "$MAILPIT_USER" "$MAILPIT_PASSWORD") -H "Accept: application/json" \
+    "${WB_MAILPIT_URL:-https://mon01.par1.medisphere.internal:8025}/api/v1/$1"
+}
+
+# prom_api "chemin" — API HTTP de Prometheus (Thanos Query, vue globale) du cluster (M21).
+#   Exemple : prom_api "query?query=up%7Bjob%3D%22node%22%7D" | jq '.data.result | length'
+#   Pour une requête PromQL quelconque, préférer : prom_requete 'expression PromQL'
+prom_api() {
+  curl -sf --max-time "$WB_TIMEOUT" -H "Accept: application/json" \
+    "${WB_PROM_URL:-http://prometheus.apps.par1.medisphere.internal:9090}/api/v1/$1"
+}
+
+# prom_requete 'PromQL' — requête instantanée (encodage géré), renvoie le JSON de l'API.
+#   Exemple : prom_requete 'sum(up{job="node"} == 0)' | jq -r '.data.result[0].value[1] // "0"'
+prom_requete() {
+  curl -sf --max-time "$WB_TIMEOUT" -H "Accept: application/json" --data-urlencode "query=$1" \
+    "${WB_PROM_URL:-http://prometheus.apps.par1.medisphere.internal:9090}/api/v1/query"
+}
+
+# am_api "chemin" — API v2 d'Alertmanager du cluster (M21). Exemple : am_api "alerts?active=true"
+am_api() {
+  curl -sf --max-time "$WB_TIMEOUT" -H "Accept: application/json" \
+    "${WB_AM_URL:-http://alertmanager.apps.par1.medisphere.internal:9093}/api/v2/$1"
+}
+
+# grafana_api "chemin" — API HTTP de Grafana avec le jeton du compte de service Viewer des checks (M21).
+#   Exemple : grafana_api "search?query=MédiAgenda" | jq length
+grafana_api() {
+  local f="${WB_GRAFANA_TOKEN_FILE:-$HOME/.config/workbook/grafana-checks.token}"
+  [[ -r "$f" ]] || { echo "jeton Grafana des checks illisible : $f" >&2; return 1; }
+  curl -sf --max-time "$WB_TIMEOUT" -K <(printf 'header = "Authorization: Bearer %s"\n' "$(<"$f")") \
+    -H "Accept: application/json" "${WB_GRAFANA_URL:-https://grafana.apps.par1.medisphere.internal}/api/$1"
+}
+
+# loki_api "chemin" [locataire=plateforme] — API de requête de Loki (M22).
+#   Exemple : loki_api 'labels' mediagenda | jq '.data'
+#   Pour une requête LogQL, préférer : loki_requete '{namespace="mediagenda-prod"}' [locataire] [depuis=1h]
+loki_api() {
+  curl -sf --max-time "$WB_TIMEOUT" -H "X-Scope-OrgID: ${2:-plateforme}" -H "Accept: application/json" \
+    "${WB_LOKI_URL:-http://loki.apps.par1.medisphere.internal:3100}/loki/api/v1/$1"
+}
+
+# loki_requete 'LogQL' [locataire=plateforme] [depuis=1h] — requête sur une plage récente.
+loki_requete() {
+  curl -sf --max-time "$WB_TIMEOUT" -G -H "X-Scope-OrgID: ${2:-plateforme}" -H "Accept: application/json" \
+    --data-urlencode "query=$1" --data-urlencode "since=${3:-1h}" --data-urlencode "limit=100" \
+    "${WB_LOKI_URL:-http://loki.apps.par1.medisphere.internal:3100}/loki/api/v1/query_range"
+}
+
 # summary — affiche le bilan et renvoie 0 si aucun KO
 summary() {
   echo

@@ -34,8 +34,11 @@ Statuts : `à faire` · `rédigé` · `harmonisé` · `relu` · `validé apprena
 | 16 | Stockage et données Kubernetes | relu | 45 + mini-projet | 4 rédacteurs, harmonisation, relecture indépendante en 2 parties (~110 vérifications ; charts ceph-csi 3.18.1, Rook 1.21, Longhorn 1.13, Velero 12.2.1, CNPG 0.29.1 et plugin 0.8.1 rendus ; code de ceph-csi, CNPG, Velero lu au tag ; kube-apiserver 1.36.5 local pour les dry-run et la VAP ; fio et PostgreSQL 18). À confirmer sur le lab : krbd `ms_mode=secure`, masquage Cilium par `eth1`, nettoyage de Rook, Velero/Kopia sur SeaweedFS, PITR CNPG, instantané d'un volume chiffré |
 | 17 | Packaging | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~75 vérifications ; Helm 4.3.0, helm-unittest 37 tests, ct 3.15, Kustomize 5.8.2/5.8.1, Helmfile 1.8.1, Cosign 3.1.3, banc kube-apiserver 1.36 avec CRD Gateway API pour la reprise de la recette et les pannes). À confirmer sur le lab : reprise de la recette sans coupure, relais mTLS repointé, Harbor et charts OCI signés, HPA de E22 v3 |
 | 18 | Distributions et cycle de vie | relu | 24 + mini-projet | 2 rédacteurs, harmonisation, relecture indépendante (~57 vérifications ; talosctl 1.14.2, Image Factory, kind/k3d, dépôts RKE2 el10, code de CAPMOX 0.9.1 et image-builder v0.1.55 au tag, CAPO 0.15 en v1beta2). Durée 57-71 h, élevée pour un module secondaire (allègements proposés ci-dessous). À confirmer sur le lab : **compatibilité CAPMOX/Proxmox VE 9** (contrôle préalable et repli CAPD fournis), construction de l'image, pivot, montées Talos et SUC |
-| 19-20 | Bloc D | à faire | | |
-| 21-23 | Bloc E | à faire | | |
+| 19 | Intégration continue | en cours | 45 + mini-projet | Carte des exercices écrite |
+| 20 | GitOps et déploiement continu | en cours | 45 + mini-projet | Carte des exercices écrite |
+| 21 | Métriques et alerting | en cours | 45 + mini-projet | Carte des exercices écrite |
+| 22 | Journaux | en cours | 24 + mini-projet | Carte des exercices écrite |
+| 23 | Traces et profilage | en cours | 24 + mini-projet | Carte des exercices écrite |
 | 24-26 | Bloc F | à faire | | |
 | 27-29 | Bloc G | à faire | | |
 | F1-F7 | Finaux | à faire | | |
@@ -75,6 +78,7 @@ E14 → E20 et E15 → E22 sans détruire les bancs entre les deux ; restauratio
 | 2026-10-08 | 4 (bloc C) | Lancée par la tâche planifiée. Versions du bloc C figées (recherche web), décisions structurantes en PLAN §4.10 et journal, applications métier `apps/` (testées), cartes des exercices des modules 12 à 18 |
 
 | 2026-10-08/15 | 4 (bloc C) | Rédaction des modules 12 à 18 (25 rédacteurs sur des briefs et des fiches de module communs ; interruption par la limite hebdomadaire d'utilisation le 8, reprise le 15 sans perte, les rédacteurs interrompus ayant été relancés sur leur contexte), harmonisation (7 agents, décisions transverses : préfixe `medisphere.internal/`, `wb-checks` agrégée, `eth0`/`eth1`, port 5300, Service MédiAgenda en 80), relecture indépendante (11 relecteurs, ~600 vérifications sur la documentation et le code officiels ; défauts bloquants corrigés : exemption Cosign retirée de Harbor 2.15.3, signature des manifestes de plateforme, instantanés de volumes chiffrés, base visée par les restaurations CNPG, `--reset-values` de Cilium, témoins de pannes M15 qui ne toléraient pas `dedie=bdd`, reprise de la recette par le chart M17…). Corrections transverses : flux `s3-01` des travailleurs, `harbor_api` sans mot de passe en argument, `wb_k8s_restaurer` sans `replace --force`. 412 scripts du bloc : `bash -n` et `shellcheck -x` propres. Annexes, topologie, README, REPRISE mis à jour. **Bloc C terminé**, tâche planifiée créée pour lancer le bloc D+E |
+| 2026-10-22 | 5 (blocs D+E) | Lancée par la tâche planifiée. Versions des blocs D et E figées (recherche web, `annexes/versions-bloc-DE.md`), décisions structurantes en PLAN §4.11 et journal (`mon01`, travailleurs à 10 Go, Argo CD sous Helmfile, Thanos, Loki multi-locataire, Tempo 3), fonctions de check `mailpit_api`, `prom_api`, `prom_requete`, `am_api`, `grafana_api`, `loki_api`, `loki_requete`, cartes des exercices des modules 19 à 23 |
 
 ## Choix faits en l'absence de l'apprenant (bloc A)
 
