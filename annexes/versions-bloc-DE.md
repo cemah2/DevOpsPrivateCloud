@@ -6,7 +6,7 @@
 
 | Outil | Ce qui change pour toi |
 |---|---|
-| GitLab CE 19.4 → 19.5 | La 19.5.0 est sortie le 15/10/2026 (troisième jeudi du mois) ; la 19.4 n'est plus qu'en maintenance (dernière corrective 19.4.3). Le lab part de 19.4.x et monte en 19.5 au palier 3 du M19, runners et agent compris. En 19.5, les variables `CI_JOB_TAGS` et `CI_RUNNER_TAGS` encodent chaque étiquette en JSON : un script qui les découpe à la main doit être revu. |
+| GitLab CE 19.4 → 19.5 | La 19.5.0 est sortie le 15/10/2026 (troisième jeudi du mois) ; la 19.4 n'est plus qu'en maintenance (dernière corrective 19.4.3). Le lab part de 19.4.x et monte en 19.5 au palier 3 du M19, runners et agent compris. *(relecture)* `CI_JOB_TAGS` est déjà un tableau JSON depuis la 19.3 ; en 19.5 (MR !256718), c'est `CI_RUNNER_TAGS` qui passe à un encodage JSON strict : un script qui découpe ces variables à la main doit être revu (M19-E26). |
 | GitLab — fonctions par édition | **Free (CE)** : composants CI/CD, catalogue CI/CD de l'instance, `spec:inputs`, agent pour Kubernetes en *CI/CD workflow*. **Premium** : environnements protégés, approbations de déploiement (qui exigent des environnements protégés), usurpation d'identité (*impersonation*) de l'agent. Le workbook protège donc les déploiements par branches protégées, jobs manuels, variables protégées et `resource_group` (ADR-0051, reconduite). |
 | GitLab Runner 19.4 / 19.5 (chart 0.93 / 0.94) | Enregistrement par **jeton d'authentification `glrt-`** créé dans l'interface ou par l'API (`POST /user/runners`) ; l'ancien jeton d'enregistrement est « non recommandé » et peut être désactivé par l'administrateur (`410 Gone`). Exécuteur Kubernetes en 19.5 : message explicite quand le conteneur *helper* est tué par manque de mémoire, correction de la classe QoS `BestEffort` sur Kubernetes ≥ 1.34. Garde la même mineure que GitLab. |
 | Agent GitLab pour Kubernetes 19.5 | Connexion à KAS par défaut en **`grpcs://`** (au lieu de `wss://`) ; l'ancien mode fonctionne encore, la migration passe par `config.kasAddress` du chart. |
@@ -35,7 +35,7 @@
 | prometheus-operator 0.94 | `ScrapeConfig` et `AlertmanagerConfig` restent en **`v1alpha1`**, avec des validations de plus en plus strictes. 0.93 : `shards: 1` par défaut. 0.94 : RBAC sans verbes génériques. |
 | Alertmanager 0.34 | 0.33 : option `--auto-gomaxprocs` et métrique `alertmanager_marked_alerts` supprimées. 0.34 : nouvelles valeurs du label `reason` des échecs de notification. |
 | Grafana 13.2 | Le chart **déménage** : `grafana/grafana` est déprécié, utiliser `grafana-community/grafana` (14.x, `values.schema.json` strict). Grafana 13 : schéma de tableau de bord **v2** actif par défaut (migration à l'ouverture), Git Sync en GA, `/api` déprécié au profit de `/apis`, `grafana-cli` et `grafana-server` supprimés, Image Renderer supprimé. Chart distroless à système de fichiers en lecture seule : `GF_INSTALL_PLUGINS` et `GF_*__FILE` ne fonctionnent plus comme avant. |
-| Thanos 0.42 / Mimir 3 | Thanos 0.42 retire `--shipper.ignore-unequal-block-size`. **Mimir 3** passe à une ingestion par **Kafka** activée par défaut dans le chart 6.x (une dizaine de composants) : trop lourd pour le lab, d'où Thanos. **Bitnami** a retiré son catalogue d'images gratuites en 2025 : n'utilise ni ses charts ni ses images. |
+| Thanos 0.42 / Mimir 3 | Thanos 0.42 retire `--shipper.ignore-unequal-block-size` **de Receive seulement** *(relecture)* : le sidecar l'accepte toujours et prometheus-operator 0.94 l'utilise, avec la compaction « retardée » qu'il active pour Prometheus ≥ 3.9 (M21-E24). **Mimir 3** passe à une ingestion par **Kafka** activée par défaut dans le chart 6.x (une dizaine de composants) : trop lourd pour le lab, d'où Thanos. **Bitnami** a retiré son catalogue d'images gratuites en 2025 : n'utilise ni ses charts ni ses images. |
 | kube-state-metrics 2.20 | `kube_pod_status_reason` n'émet plus que la raison active : les requêtes en `== 0` sont à revoir. |
 | Pyrra 0.10 / Sloth 0.16 | Pyrra très actif mais **sans chart officiel** (manifestes amont ; le chart communautaire pointe sur une ancienne version). Sloth ralentit (dernière version en avril 2026) : utilisé en CLI pour comparer. |
 
@@ -60,3 +60,15 @@
 | Jaeger 2.22 | Jaeger v2 est construit sur le Collector OpenTelemetry ; **Jaeger v1 en fin de vie** (31/12/2025), `jaeger-operator` figé. |
 | Pyroscope 2.4 | La 2.0 passe au stockage v2 (*segment-writer*, *metastore*) avec **stockage objet requis**. |
 | Beyla / OBI | Beyla est une distribution d'OpenTelemetry eBPF Instrumentation (OBI 0.15, sans statut stable) : découverte seulement. |
+
+## Points établis à la rédaction et à la relecture
+
+| Outil | Ce qui change pour toi |
+|---|---|
+| Fournisseur OpenTofu `grafana/grafana` *(relecture)* | Dernière version publiée au 22/10/2026 : **4.50.0** (la 4.51 n'existe sur aucun registre) ; épingler `~> 4.50`. `grafana_organization` refuse les jetons de compte de service : il faut l'authentification basique d'un administrateur du serveur (M22-E16). |
+| Argo CD 3.5 — comptes locaux *(relecture)* | Les clés `accounts.<nom>` sont découpées sur les points : `karim.benali` devient le compte `karim` sans capacité. Noms à tirets (`karim-benali`) (M20-E03). |
+| GitLab Runner 19.4 — quota *(relecture)* | Un pod de job refusé par une ResourceQuota fait échouer le job aussitôt (`exceeded quota`) ; le runner ne réessaie que les erreurs réseau (M19-E05, E35). |
+| GitLab — composants CI/CD *(relecture)* | Avec des étiquettes `vX.Y.Z`, la référence exacte est `@vX.Y.Z` ; `@2` et `@2.0` passent par le catalogue ; `@2.0.0` échoue (M19-E10). |
+| Grafana Loki — Promtail | Jamais utilisé ; migration par `alloy convert`. |
+| Pyroscope 2.4 *(relecture)* | `bucket_lookup_type` attend `path-style` (et non `path` comme Thanos) (M23-E14). |
+

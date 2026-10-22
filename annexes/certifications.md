@@ -4,7 +4,7 @@
 >
 > Domaines relevés le 7 octobre 2026 sur les pages officielles des éditeurs (liens en fin de section). Ils changent régulièrement : vérifie la version en vigueur avant de t'inscrire. Les correspondances sont **indicatives** : un exercice « couvre » un domaine quand il y fait pratiquer un geste de l'examen, pas quand il en parle. Les examens pratiques (LFCS, RHCSA, RHCE, CKA) demandent en plus de la **vitesse** : refais les exercices `CHRONO` et les `BF` sans indice.
 
-État : **blocs A, B et C** (modules 00 à 18) renseignés ; blocs D à G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)).
+État : **blocs A à E** (modules 00 à 23) renseignés ; blocs F, G et finaux à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation.
 
 ## Vue d'ensemble
 
@@ -14,7 +14,7 @@
 | RHCSA — Red Hat Certified System Administrator (EX200, RHEL 10) | Red Hat | pratique | partielle : le workbook est surtout sur Debian, Rocky Linux 10 au M03 | §2 |
 | RHCE — Red Hat Certified Engineer (EX294) | Red Hat | pratique (Ansible) | large pour Ansible (M04, M06), appliqué à grande échelle au bloc B | §3 |
 | HashiCorp Terraform Associate (004) | HashiCorp | QCM | large pour les concepts, avec OpenTofu (M05) | §4 |
-| GitLab Certified Git Associate / CI/CD Associate | GitLab | QCM (+ lab pratique pour CI/CD) | Git et forge (M01), CI de base (bloc A), CI avancée au M19 | §5 |
+| GitLab Certified Git Associate / CI/CD Associate | GitLab | QCM (+ lab pratique pour CI/CD) | Git et forge (M01), CI de base (bloc A), CI avancée et runners Kubernetes (M19) | §5 |
 | COA — Certified OpenStack Administrator | OpenInfra Foundation | pratique, en ligne (3 h) | large (M10), sauf Swift | §6 |
 | CCNA (200-301) | Cisco | QCM et simulations | partielle : les concepts L2/L3 et FHRP (M07), sur Linux et non sur IOS | §7 |
 | Ceph : Red Hat Certified Specialist in Ceph Cloud Storage (EX260) | Red Hat | pratique | **examen retiré** ; programme couvert par M08 | §8 |
@@ -24,6 +24,10 @@
 | CKS — Certified Kubernetes Security Specialist (programme v1.34) | CNCF / Linux Foundation | pratique, en ligne (2 h) ; CKA en cours de validité exigée | **partielle** : chaîne d'approvisionnement (M12, M13), RBAC, admission, audit, chiffrement (M14), politiques réseau et chiffrement entre nœuds (M15) ; sécurité à l'exécution au bloc F | §11 |
 | KCNA et KCSA — Kubernetes and Cloud Native (Security) Associate | CNCF / Linux Foundation | QCM en ligne | KCNA : largement couvert par le bloc C ; KCSA : en partie (le reste au bloc F) | §12 |
 | DCA — Docker Certified Associate | Mirantis | QCM | partielle : M12, M13 ; Swarm et produits d'entreprise de Mirantis non couverts | §13 |
+| PCA — Prometheus Certified Associate | CNCF / Linux Foundation | QCM en ligne (90 min) | large (M21), notions d'observabilité complétées par M22 et M23 | §15 |
+| OTCA — OpenTelemetry Certified Associate | CNCF / Linux Foundation | QCM en ligne | large pour le Collector et les SDK (M23) | §16 |
+| CAPA — Certified Argo Project Associate | CNCF / Linux Foundation | QCM en ligne | Argo CD et Argo Rollouts (M20) ; **Argo Workflows et Argo Events non couverts** (près de la moitié de l'examen) | §17 |
+| CGOA — GitOps Certified Associate | CNCF / Linux Foundation | QCM en ligne | large (M20, avec Flux en comparaison) | §18 |
 
 ---
 
@@ -105,14 +109,19 @@ Source : [Terraform Associate (004), objectifs officiels](https://developer.hash
 
 GitLab ne publie pas de programme détaillé en accès libre (pages de GitLab University réservées aux inscrits) : les thèmes ci-dessous sont ceux des descriptions officielles. La CI/CD Associate comprend en plus un **lab pratique** noté par les équipes de GitLab.
 
-| Thème | Exercices du bloc A | Exercices du bloc B |
-|---|---|---|
-| Git : dépôts, commits, branches, fusion, rebase, historique, annulation | M01-E02, M01-E07, M01-E08, M01-E12, M01-E13, M01-E18, M01-E19, M01-E44, M01-E46 | — |
-| GitLab : groupes, projets, droits, branches protégées, merge requests et revue | M01-E05, M01-E06, M01-E10, M01-E11, M01-E20, M01-E21 | dépôt d'équipe en libre-service : M10-E31 |
-| CI/CD : `.gitlab-ci.yml`, stages, jobs, runners, variables protégées, artefacts, `include` | M01-E23, M01-E24, M01-E25, M02-E24, M03-E15, M04-E27, M05-E26 | validation et détection de dérive : M08-E23, M11-E06 ; invariants et déploiement tracé : M10-E46 ; pipeline de provisioning : M11-E15 |
-| CI/CD avancée : `rules`, `needs`, environnements, caches, runners Kubernetes | *module 19* | — |
+| Thème | Exercices du bloc A | Exercices du bloc B | Exercices du bloc D |
+|---|---|---|---|
+| Git : dépôts, commits, branches, fusion, rebase, historique, annulation | M01-E02, M01-E07, M01-E08, M01-E12, M01-E13, M01-E18, M01-E19, M01-E44, M01-E46 | — | — |
+| GitLab : groupes, projets, droits, branches protégées, merge requests et revue | M01-E05, M01-E06, M01-E10, M01-E11, M01-E20, M01-E21 | dépôt d'équipe en libre-service : M10-E31 | MR de promotion approuvées : M19-E17 ; montée de version de l'instance : M19-E26 |
+| CI/CD : `.gitlab-ci.yml`, stages, jobs, runners, variables protégées, artefacts, `include` | M01-E23, M01-E24, M01-E25, M02-E24, M03-E15, M04-E27, M05-E26 | validation et détection de dérive : M08-E23, M11-E06 ; invariants et déploiement tracé : M10-E46 ; pipeline de provisioning : M11-E15 | modèle d'exécution : M19-E05, M19-E09 ; variables, artefacts, rapports : M19-E07, M19-E13 ; services de job : M19-E14 ; secrets (`CI_JOB_TOKEN`, jetons d'identité) : M19-E25, M19-E40 |
+| CI/CD avancée : `rules`, `needs`, `workflow`, pipelines enfants et multi-projets, environnements, caches, composants CI/CD | — | — | `rules`, `needs`, `workflow` : M19-E06, M19-E21 · caches et environnements : M19-E07, M19-E23, M19-E38 · pipelines enfants et multi-projets : M19-E12 · composants et catalogue : M19-E10, M19-E11, M19-E32 · déploiement (agent pour Kubernetes) : M19-E18 |
+| Runners : enregistrement, étiquettes, exécuteurs, Kubernetes, capacité | `shell` : M01-E23 | — | M19-E04, M19-E24, M19-E27, M19-E35, M19-E36, M19-E42, M19-E44 |
+| Sécurité de la chaîne (SAST, détection de secrets, analyse de dépendances) | Gitleaks : M01-E16 | — | M19-E15, M19-E29 |
+| Chronométré, sans corrigé | — | — | M19-E34, M19-E43 |
 
-Sources : [GitLab Certified Git Associate](https://university.gitlab.com/courses/gitlab-with-git-essentials-certification-exam), [GitLab Certified CI/CD Associate](https://about.gitlab.com/services/education/gitlab-cicd-associate/).
+Le lab pratique de la CI/CD Associate se passe sur GitLab.com, avec les runners de l'instance : les runners auto-hébergés et l'exécuteur Kubernetes (M19-E04 à E05, E24, E27) vont au-delà. Les environnements protégés et les approbations de déploiement (édition Premium) ne sont pas pratiqués (ADR-0051).
+
+Sources : [GitLab Certified Git Associate](https://university.gitlab.com/courses/gitlab-with-git-essentials-certification-exam), [GitLab Certified CI/CD Associate](https://about.gitlab.com/services/education/gitlab-cicd-associate/), [examen CI/CD Associate (GitLab University)](https://university.gitlab.com/courses/gitlab-ci-cd-certification-exam).
 
 ## 6. COA — Certified OpenStack Administrator
 
@@ -251,7 +260,75 @@ Sources : [Mirantis, certifications](https://certification.mirantis.com/), [pré
 
 Le domaine *Operations Deployment* de la LFCS (§1) demande de savoir utiliser un **moteur de conteneurs** : lancer, inspecter, arrêter des conteneurs, gérer images, volumes et réseaux, et faire démarrer un conteneur avec le système. Le module 12 le couvre : M12-E03 (cycle de vie), M12-E04 (images), M12-E06 (Podman sans privilège), M12-E07 (volumes et réseaux), M12-E14 (Quadlet et systemd), M12-E18 (journaux, ressources, santé), M12-E35 à M12-E41 (pannes). Les certificats (*Essential Commands*) reviennent avec cert-manager : M15-E13, M15-E40. Swap, automontage, ACL et LDAP restent non pratiqués (LDAP au module 24).
 
-## 15. À compléter aux blocs suivants
+## 15. PCA — Prometheus Certified Associate
+
+QCM en ligne et surveillé de 90 minutes, sans manipulation. Le module 21 en couvre tout le programme, et au-delà (Thanos, Pyrra, supervision de la supervision, pannes) ; ce qui manque surtout pour l'examen, c'est la **lecture rapide de PromQL** et du format d'exposition : refais M21-E04, M21-E14 et M21-E45 sans indice, et lis les requêtes des alertes du chart kube-prometheus-stack.
+
+| Domaine (poids) | Compétences de l'examen | Exercices des blocs D et E |
+|---|---|---|
+| **Observability Concepts** (18 %) | métriques, journaux et événements, traces et spans ; *push* et *pull* ; découverte de services ; SLO, SLA, SLI | M21-E01, M21-E09 · *pull* et découverte : M21-E03, M21-E07, M21-E08 · SLI et SLO : M21-E26, M21-E27 · journaux : M22-E04 · traces et spans : M23-E05, M23-E24 |
+| **Prometheus Fundamentals** (20 %) | architecture ; configuration et collecte ; limites de Prometheus ; modèle de données et étiquettes ; format d'exposition | M21-E02, M21-E03, M21-E09 · collecte et relabeling : M21-E07, M21-E13 · limites (stockage local, haute disponibilité) : M21-E24, M21-E30 · stockage : M21-E44 |
+| **PromQL** (28 %) | sélection ; taux et dérivées ; agrégations dans le temps et par dimensions ; opérateurs binaires ; histogrammes ; métriques d'horodatage | M21-E04, M21-E14, M21-E23, M21-E45 · histogrammes et quantiles : M21-E19, M21-E26 · métriques d'horodatage : non pratiquées en tant que telles (révision personnelle) |
+| **Instrumentation and Exporters** (16 %) | bibliothèques clientes ; instrumentation ; exportateurs ; structure et nommage des métriques | ServiceMonitor et PodMonitor des applications : M21-E07 · exportateurs : M21-E08, M21-E10, M21-E11, M21-E12 · nommage et cardinalité : M21-E14 · exemplars depuis le code : M23-E08 |
+| **Alerting & Dashboarding** (18 %) | tableaux de bord ; règles d'alerte ; Alertmanager ; quand, quoi et pourquoi alerter | Grafana : M21-E05, M21-E17, M21-E19 · règles : M21-E15, M21-E21, M21-E41 · Alertmanager (routes, silences, inhibitions) : M21-E06, M21-E16, M21-E36, M21-E40 · politique d'alerte : M21-E32 |
+| Chronométré, sans corrigé | — | M21-E34, M21-E43 |
+
+Source : [page officielle de la PCA](https://training.linuxfoundation.org/certification/prometheus-certified-associate/) (Linux Foundation).
+
+## 16. OTCA — OpenTelemetry Certified Associate
+
+QCM en ligne et surveillé. Le module 23 pratique les quatre domaines, avec un parti pris : instrumentation **dans le code** (SDK Python et Go) avant l'auto-instrumentation, Collector piloté par l'opérateur. L'examen interroge plus largement l'API (types de métriques, *baggage*, journaux par l'API de *logs bridge*) et les autres langages : révise la spécification à part.
+
+| Domaine (poids) | Exercices du bloc E |
+|---|---|
+| **Fundamentals of Observability** (18 %) : signaux, corrélation, conventions sémantiques | M23-E01, M23-E08, M23-E13 ; métriques et journaux : M21, M22 |
+| **The OpenTelemetry API and SDK** (46 %) : traceurs, spans, attributs de ressource, propagation du contexte, exportateurs, échantillonnage en tête, auto-instrumentation | SDK Python : M23-E04 · SDK Go : M23-E06 · auto-instrumentation par l'opérateur : M23-E07 · propagation W3C : M23-E06, M23-E20, M23-E24 · échantillonnage : M23-E09 · conventions de MédiSphère : M23-E25 |
+| **The OpenTelemetry Collector** (26 %) : récepteurs, processeurs, exportateurs, pipelines, modes agent et passerelle, extensions | M23-E02, M23-E09 (échantillonnage en queue), M23-E10 (processeurs, masquage), M23-E11 (revue), M23-E16 (capacité, TLS, authentification) |
+| **Maintaining and Debugging Observability Pipelines** (10 %) : métriques internes du Collector, pertes, file d'attente, diagnostic | M23-E19, M23-E20, M23-E21, M23-E22, M23-E23, M23-E24 |
+
+Source : [annonce officielle de l'OTCA](https://training.linuxfoundation.org/blog/new-certification-opentelemetry-certified-associate-otca/) (Linux Foundation).
+
+## 17. CAPA — Certified Argo Project Associate (partiel)
+
+QCM en ligne et surveillé, sur les quatre projets Argo. Le workbook ne pratique que **Argo CD** et **Argo Rollouts** (M20) : **Argo Workflows** (36 %) et **Argo Events** (12 %) ne sont pas au programme (la CI de MédiSphère est GitLab CI, M19). Avec le seul bloc D, la CAPA se prépare donc pour moitié à côté.
+
+| Domaine (poids) | Exercices du bloc D | Non couvert |
+|---|---|---|
+| **Argo Workflows** (36 %) | — | modèles, DAG, artefacts, planification, intégration CI/CD : à réviser entièrement |
+| **Argo CD** (34 %) | installation et accès : M20-E02, M20-E03 · Applications, synchronisation, santé, dérive : M20-E04, M20-E05, M20-E06 · AppProjects, RBAC : M20-E07, M20-E24 · ApplicationSets : M20-E10, M20-E33 · vagues et hooks : M20-E11 · Helm, Kustomize, sources multiples : M20-E13 · notifications : M20-E19 · multi-cluster : M20-E26 · HA, sauvegarde, durcissement : M20-E25, M20-E27, M20-E28 · dépannage : M20-E35 à M20-E43 · architecture : M20-E44 | Dex et SSO (M24), extensions de l'interface, *Source Hydrator* |
+| **Argo Rollouts** (18 %) | canary : M20-E15, M20-E16 · blue/green : M20-E17 · analyses (Job, `web`) : M20-E18 · analyses par Prometheus : M21-E18 · panne : M20-E40 | *Experiments*, autres fournisseurs de trafic (Istio, NGINX) |
+| **Argo Events** (12 %) | — | sources, capteurs, déclencheurs : à réviser entièrement |
+
+Source : [page officielle de la CAPA](https://www.cncf.io/training/certification/capa/) (CNCF).
+
+## 18. CGOA — GitOps Certified Associate
+
+QCM en ligne et surveillé, sur les principes d'OpenGitOps plutôt que sur un outil. Le module 20 les pratique avec Argo CD et compare Flux (M20-E23) ; le questionnaire M20-E09 reprend les quatre principes. Jenkins X, cité par l'examen, n'est pas abordé.
+
+| Domaine (poids) | Exercices du bloc D |
+|---|---|
+| **GitOps Terminology** (20 %) : état désiré, réconciliation, dérive, source de vérité | M20-E01, M20-E05, M20-E09 |
+| **GitOps Principles** (30 %) : déclaratif, versionné et immuable, tiré automatiquement, réconcilié en continu | M20-E05 (auto-réparation), M20-E06 (racine), M20-E12 (ce qui reste hors Git), M20-E30 (la CI sans droits), M20-E39 |
+| **Related Practices** (16 %) : configuration et infrastructure *as code*, DevSecOps, CI/CD | CI et promotion par MR : M19-E17, M20-E14 · IaC : blocs A et B · sécurité : M20-E25 |
+| **GitOps Patterns** (20 %) : *App of Apps*, environnements, promotion, déploiements progressifs, multi-cluster | M20-E06, M20-E10, M20-E14, M20-E16, M20-E17, M20-E26, M20-E29 |
+| **Tooling** (14 %) : Argo CD, Flux, outils de rendu (Helm, Kustomize) | M20-E02, M20-E13, M20-E23 (Flux), M20-E31 (ADR comparatif) |
+
+Source : [page officielle de la CGOA](https://www.cncf.io/training/certification/cgoa/) (CNCF).
+
+## 19. Kubernetes : compléments des blocs D et E
+
+Les certifications Kubernetes (§9 à §12) gagnent quelques exercices avec les blocs D et E :
+
+| Certification | Domaine | Exercices des blocs D et E |
+|---|---|---|
+| **CKA** | Troubleshooting : consommation de ressources, journaux des conteneurs | M21-E20 (plan de contrôle, etcd, kubelet), M21-E23 (saturation), M22-E03, M22-E07 (audit de l'API), M22-E19 |
+| **CKAD** | Application Deployment : stratégies bleu/vert et canari ; Helm et Kustomize | M20-E15, M20-E16, M20-E17 ; M20-E13 |
+| **CKAD** | Application Observability and Maintenance : outils de surveillance, journaux, débogage | M21-E07, M22-E04, M22-E06, M23-E12 |
+| **KCNA** | Cloud Native Application Delivery (GitOps, CI/CD) ; Cloud Native Architecture (observabilité) | M19-E06, M19-E17, M20-E09, M20-E10 ; M21-E09, M22-E04, M23-E05 |
+| **CKS** | Supply Chain Security : connaître et sécuriser la chaîne CI/CD | M19-E15, M19-E24, M19-E25, M19-E29 |
+| **CKS** | Monitoring, Logging and Runtime Security : journaux d'audit | M22-E07, M22-E16 |
+
+## 20. À compléter aux blocs suivants
 
 | Certification | Domaines officiels | Bloc concerné |
 |---|---|---|
@@ -259,5 +336,4 @@ Le domaine *Operations Deployment* de la LFCS (§1) demande de savoir utiliser u
 | **CKS** (complément) | sécurité à l'exécution, AppArmor et seccomp dans les pods, conteneurs isolés, admission par politiques, CIS appliqué | F (24-26) |
 | **KCSA** (complément) | modèle de menaces, conformité | F, finaux F6 |
 | **LFCS** (compléments) | swap, automontage, ACL, LDAP | F (24) |
-| **GitLab CI/CD Associate** (complément) | `rules`, `needs`, environnements, runners Kubernetes | D (19) |
-| **Certified Argo Project Associate (CAPA)**, **Prometheus Certified Associate (PCA)**, **OpenTelemetry Certified Associate (OTCA)**, **Vault Associate** | à relever si pertinents | D, E, F |
+| **Vault Associate**, **Certified Backstage Associate (CBA)**, **Kyverno Certified Associate (KCA)** | à relever si pertinents | F, G |
