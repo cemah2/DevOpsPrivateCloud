@@ -240,7 +240,7 @@ _m29E23_defaire() {
         done < <(wb_kubectl -n "$_M29_CHAOS_NS" get "$t" -l "chaos-mesh.org/controlled-by in ($noeuds)" -o name 2>/dev/null | sed 's|.*/||')
       done
     fi
-    wb_kubectl -n "$_M29_CHAOS_NS" annotate workflow "$_E23_WF" experiment.chaos-mesh.org/pause=true --overwrite >/dev/null 2>&1 || true
+    # Un Workflow n'a pas de pause (Chaos Mesh 2.8) : on le supprime directement.
     wb_kubectl -n "$_M29_CHAOS_NS" delete workflow "$_E23_WF" --ignore-not-found --wait=false >/dev/null 2>&1 || true
     sleep 20
     for e in "${filles[@]}"; do

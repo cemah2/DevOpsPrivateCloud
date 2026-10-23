@@ -7,8 +7,9 @@
 #   -d  durée en secondes (défaut : 300)
 #   -c  requêtes en parallèle (défaut : 16)
 #   -m  lecture      : GET des créneaux et de la liste des rendez-vous (CPU de l'API)
-#       rendez-vous  : POST de rendez-vous FACTICES (« Essai-… »), chacun publie une demande de
-#                      notification (M27-E08) : remplit la file notifications de la recette
+#       rendez-vous  : POST de rendez-vous FACTICES (« Essai-… », rappel SMS vers un numéro factice),
+#                      chacun publie une demande de notification (M27-E08) : remplit la file
+#                      notifications de la recette
 # Refuse toute URL qui n'est pas celle d'un environnement dev ou recette (pas de charge en production).
 # Affiche à la fin le nombre de réponses par code HTTP.
 set -euo pipefail
@@ -24,7 +25,7 @@ while getopts ':u:d:c:m:h' opt; do
     d) duree="$OPTARG" ;;
     c) conc="$OPTARG" ;;
     m) mode="$OPTARG" ;;
-    h) sed -n '2,14p' "$0"; exit 0 ;;
+    h) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "option inconnue : -$OPTARG (voir -h)" >&2; exit 2 ;;
   esac
 done
@@ -61,7 +62,9 @@ requete() {
   else
     # Créneau factice, loin dans le futur, réparti pour limiter les conflits (409).
     jour=$(( (n % 28) + 1 )); heure=$(( 8 + (n / 28) % 4 )); minute=$(( (n / 112) % 2 * 30 ))
-    corps=$(printf '{"patient":"Essai-%d","praticien":"dr-essai-%d","debut":"2031-%02d-%02dT%02d:%02d:00+01:00","duree_minutes":30,"motif":"Essai de charge"}' \
+    # Rappel SMS factice (M27-E06) : sans canal de rappel (« aucun » par défaut), MédiAgenda ne
+    # publie AUCUNE demande de notification (M27-E08) et la file resterait vide.
+    corps=$(printf '{"patient":"Essai-%d","praticien":"dr-essai-%d","debut":"2031-%02d-%02dT%02d:%02d:00+01:00","duree_minutes":30,"motif":"Essai de charge","rappel":{"canal":"sms","contact":"+33600000000"}}' \
       "$n" "$(( (n / 224) % 50 ))" "$(( (n / 11200) % 12 + 1 ))" "$jour" "$heure" "$minute")
     curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 -H 'Content-Type: application/json' \
       -d "$corps" "$url/api/v1/rendez-vous"

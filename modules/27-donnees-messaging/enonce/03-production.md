@@ -68,7 +68,7 @@ Ce que les paliers 1 et 2 ont laissé, et que ce palier suppose. Si un nom diff�
 
 <details><summary>Indice 1</summary>
 
-Le paquet `postgresql-18` de Debian crée et démarre une grappe `18/main` : Patroni veut un répertoire de données qu'il initialise lui-même. `pg_dropcluster --stop 18 main` juste après l'installation, ou `create_main_cluster = false` dans `/etc/postgresql-common/createcluster.conf` **avant** l'installation. Patroni a besoin des binaires : `postgresql.bin_dir: /usr/lib/postgresql/18/bin`.
+Le paquet `postgresql-18` de Debian crée et démarre une grappe `18/main` : Patroni veut un répertoire de données qu'il initialise lui-même. `pg_dropcluster --stop 18 main` juste après l'installation, ou `create_main_cluster = false` dans un fichier de `/etc/postgresql-common/createcluster.d/` posé **avant** l'installation (un fichier « en plus », plutôt que `createcluster.conf` lui-même, que le paquet installe). Patroni a besoin des binaires : `postgresql.bin_dir: /usr/lib/postgresql/18/bin`.
 </details>
 
 <details><summary>Indice 2</summary>
@@ -177,7 +177,7 @@ Un cache plein n'est pas une panne avec `allkeys-lru` : c'est sa vie normale. Ce
 7. **Décision.** Écris `docs/donnees/montee-rabbitmq-4.4.md` : ce que la répétition a montré, la décision (appliquer ou rester en 4.3 jusqu'à une date), et, si tu appliques : MR sur `plateforme/donnees/rabbitmq/` en fenêtre annoncée (CHG-2815), export des définitions juste avant, suivi des files quorum pendant la montée, contrôle après.
 
 **Critères de réussite**
-- [ ] `mediagenda-db-secours` est un réplica autonome sain dans `mediagenda-secours`, alimenté par l'archive, sans archivage propre, avec un retard inférieur à 15 min ; une alerte le surveille.
+- [ ] `mediagenda-db-secours` est un réplica autonome sain dans `mediagenda-secours`, alimenté par l'archive, sans archivage propre, avec un retard inférieur à 15 min sur l'archive de la prod ; une alerte le surveille sans sonner quand la prod n'écrit rien.
 - [ ] Aucune copie d'essai ne reste dans `wb-essais` (ni `Cluster`, ni `RabbitmqCluster`, ni PVC).
 - [ ] Le CronJob d'export des définitions a réussi dans les dernières 26 h.
 - [ ] La grappe `messagerie/rabbitmq` tourne en 4.3.x **ou** 4.4.x, et `montee-rabbitmq-4.4.md` dit laquelle et pourquoi ; RB-275 contient le RPO mesuré.
@@ -191,7 +191,7 @@ Le plugin Barman Cloud lit l'archive sous `<destinationPath>/<serverName>/`. Le 
 
 <details><summary>Indice 2</summary>
 
-`kubectl cnpg status mediagenda-db-secours -n mediagenda-secours` montre le mode réplica et la source ; dans le pod, `SELECT pg_is_in_recovery(), pg_last_wal_replay_lsn(), pg_last_xact_replay_timestamp();`. Côté prod, `SELECT pg_current_wal_lsn(), now();`. Le paramètre `archive_timeout` vu dans `SHOW archive_timeout;` sur le primaire de la prod explique la plus grande partie du RPO.
+`kubectl cnpg status mediagenda-db-secours -n mediagenda-secours` montre le mode réplica et la source ; dans le pod, `SELECT pg_is_in_recovery(), pg_last_wal_replay_lsn(), pg_last_xact_replay_timestamp();`. Côté prod, `SELECT pg_current_wal_lsn(), now();`. Le paramètre `archive_timeout` vu dans `SHOW archive_timeout;` sur le primaire de la prod explique la plus grande partie du RPO. Méfie-toi de `cnpg_pg_replication_lag` sur ce réplica : sans récepteur de WAL, CNPG le calcule comme l'âge de la dernière transaction rejouée. Que vaut-il après une nuit sans rendez-vous en prod ? Ton alerte doit le comparer à une métrique d'archivage de la prod (`cnpg_pg_stat_archiver_*`).
 </details>
 
 <details><summary>Indice 3</summary>

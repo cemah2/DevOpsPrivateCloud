@@ -12,6 +12,14 @@
   hosts: pg_essai
   become: true
   tasks:
+    # Avant l'installation, postgresql-common n'existe pas encore : on crée le dossier inclus par son
+    # createcluster.conf (include_dir), sinon « copy » échoue (dossier parent absent).
+    - name: Dossier de configuration de postgresql-common (avant le paquet)
+      ansible.builtin.file:
+        path: /etc/postgresql-common/createcluster.d
+        state: directory
+        mode: "0755"
+
     - name: Pas de grappe « main » créée par le paquet PostgreSQL (Patroni initialise lui-même)
       ansible.builtin.copy:
         dest: /etc/postgresql-common/createcluster.d/00-patroni.conf

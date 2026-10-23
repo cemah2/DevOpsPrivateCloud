@@ -118,8 +118,9 @@ resume_E19() { echo "En recette, MédiNotif ne se réveille plus quand la file d
 symptome_E19() {
   wb_symptome "Ticket INC-5519 — De : Julien Petit" \
     "La mini-campagne de recette de 14 h n'est pas partie : la file « notifications » du vhost" \
-    "medinotif-recette grossit et MédiNotif ne bouge pas (zéro ou un pod, jamais plus). Rien n'a" \
-    "changé de notre côté. La prod a l'air normale. Vous pouvez regarder ? On recette demain matin." \
+    "medinotif-recette grossit et MédiNotif ne suit pas (il reste à zéro, ou à un ou deux pods quoi" \
+    "qu'il arrive). Rien n'a changé de notre côté. La prod a l'air normale. Vous pouvez regarder ?" \
+    "On recette demain matin." \
     "" \
     "Pour constater : modules/28-plateforme-dev/ressources/E13-campagne/campagne.sh 300" \
     "Temps cible : 30 min. Contrôle : lab/bin/check 28 19"

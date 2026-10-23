@@ -29,10 +29,10 @@ Portée `api` : `read_api` + `read_repository` ne suffisent pas pour créer un p
 Création (avec ton jeton d'administration, une fois) :
 
 ```
-admin@adm01:~$ curl -sS -H "PRIVATE-TOKEN: $(<~/.config/workbook/gitlab-admin.token)" -X POST \
+admin@adm01:~$ curl -sS -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<~/.config/workbook/gitlab-admin.token)") -X POST \
     "https://git01.par1.medisphere.internal/api/v4/service_accounts" \
     --data-urlencode "name=Portail Backstage" --data-urlencode "username=svc-portail" | jq '{id, username, external}'
-admin@adm01:~$ curl -sS -H "PRIVATE-TOKEN: $(<~/.config/workbook/gitlab-admin.token)" -X POST \
+admin@adm01:~$ curl -sS -K <(printf 'header = "PRIVATE-TOKEN: %s"\n' "$(<~/.config/workbook/gitlab-admin.token)") -X POST \
     "https://git01.par1.medisphere.internal/api/v4/users/<ID>/personal_access_tokens" \
     --data-urlencode "name=portail" --data-urlencode "scopes[]=api" --data-urlencode "expires_at=<AAAA-MM-JJ>" \
   | jq -r .token | bao kv patch kv/plateforme/portail gitlab_token=-

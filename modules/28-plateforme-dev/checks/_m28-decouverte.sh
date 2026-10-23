@@ -14,12 +14,13 @@
 #
 # Variables de lab/lab.env (facultatives) :
 #   WB_M28_S3_TECHDOCS   identité de lecture de portail-techdocs (défaut : ~/.config/workbook/s3-techdocs.env)
-#   WB_M28_PORTAIL_URL   adresse du portail (défaut : https://portail.apps.par1.medisphere.internal)
+#   WB_M28_PORTAIL_URL   adresse du portail (défaut : WB_BACKSTAGE_URL de la lib, sinon
+#                        https://portail.apps.par1.medisphere.internal)
 #   WB_S3_ENDPOINT       point d'accès de s3-01 (défaut : https://s3-01.par1.medisphere.internal:8333)
 
 # shellcheck disable=SC2034  # utilisées par les checks qui sourcent ce fichier
 {
-  _m28d_portail="${WB_M28_PORTAIL_URL:-https://portail.apps.par1.medisphere.internal}"
+  _m28d_portail="${WB_M28_PORTAIL_URL:-${WB_BACKSTAGE_URL:-https://portail.apps.par1.medisphere.internal}}"
   _m28d_s3_techdocs="${WB_M28_S3_TECHDOCS:-$HOME/.config/workbook/s3-techdocs.env}"
   _m28d_s3="${WB_S3_ENDPOINT:-https://s3-01.par1.medisphere.internal:8333}"
   _m28d_harbor_re='^registry\.par1\.medisphere\.internal/'

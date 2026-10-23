@@ -143,7 +143,11 @@ _e20_v2_defaire() {
     # Le message empoisonné, s'il est encore EN TÊTE (MédiNotif en attente de redémarrage), part au rebut :
     # rejet sans remise en file = dead-lettering (la file a un rebut, vérifié à l'injection).
     tete="$(m27_rmq_ctl rabbitmq-queues peek --vhost "$_M27_VHOST" "$_M27_FILE" 1 2>/dev/null | head -c 2000)" || tete=""
-    if grep -q '\[\[\[\[\[' <<<"$tete"; then
+    # « get » prend le premier message DISPONIBLE : seulement quand aucun consommateur ne tient de message
+    # (MédiNotif en attente de redémarrage), sinon on risquerait d'envoyer au rebut une vraie notification.
+    # Dans le cas contraire, la limite de livraison rétablie ci-dessus l'y enverra d'elle-même.
+    if grep -q '\[\[\[\[\[' <<<"$tete" &&
+      m27_rmq_file 2>/dev/null | jq -e '(.consumers // 1) == 0 and (.messages_unacknowledged // 1) == 0' >/dev/null 2>&1; then
       _e20_permission_temporaire poser || true
       m27_rmq POST "queues/$_M27_VHOST/$_M27_FILE/get" '{"count":1,"ackmode":"reject_requeue_false","encoding":"auto","truncate":64}' >/dev/null 2>&1 || true
       _e20_permission_temporaire retirer

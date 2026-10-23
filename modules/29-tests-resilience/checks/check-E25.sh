@@ -80,9 +80,14 @@ else
 fi
 check_cmd "aucune panne M29 encore marquée active (lab/bin/break)" _m29x_aucune_panne_active
 
-# Journée de jeu suivie d'effets.
-check_cmd "journée de jeu : au moins une action ouverte en E16, aucune encore ouverte" bash -c \
-  '[[ "$1" -ge 1 && "$2" == 0 ]]' _ "$(_m29p_issues "$_m29p_resilience" journee-de-jeu all)" "$(_m29p_issues "$_m29p_resilience" journee-de-jeu opened)"
+# Journée de jeu suivie d'effets : chaque action est close, ou reportée par une décision écrite (issue
+# restée ouverte avec l'étiquette « reportee » en plus de journee-de-jeu).
+_m29_e25_ouvertes_non_reportees() {
+  gitlab_api "projects/$(_m29p_enc "$_m29p_resilience")/issues?labels=journee-de-jeu&state=opened&not%5Blabels%5D=reportee&per_page=100" 2>/dev/null |
+    jq 'length' 2>/dev/null || echo 99
+}
+check_cmd "journée de jeu : au moins une action ouverte en E16, aucune ouverte sans être close ni reportée (étiquette reportee)" bash -c \
+  '[[ "$1" -ge 1 && "$2" == 0 ]]' _ "$(_m29p_issues "$_m29p_resilience" journee-de-jeu all)" "$(_m29_e25_ouvertes_non_reportees)"
 
 # --- 3. Documentation et étiquette ------------------------------------------------------------------
 check_cmd "strategie-tests.md à jour de la livraison (k6-operator, non-régression, journées de jeu, nettoyeur Terratest)" \

@@ -36,7 +36,11 @@ spec:
           args: [@ARGS@]
           env:
             - {name: PGHOST, value: "@HOTE@"}
-            - {name: PGSSLMODE, value: require}
+            # Certificat vérifié (règle 6 du module), sans le nom : le pooler présente le certificat
+            # serveur de la grappe, dont les noms ne couvrent pas le Service du pooler. verify-ca
+            # garde la vérification de la chaîne ; verify-full suffit pour le seul accès direct.
+            - {name: PGSSLMODE, value: verify-ca}
+            - {name: PGSSLROOTCERT, value: /etc/banc-ca/ca.crt}
             - name: PGUSER
               valueFrom: {secretKeyRef: {name: bench-essai-app, key: username}}
             - name: PGPASSWORD
@@ -50,3 +54,11 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: ca, mountPath: /etc/banc-ca, readOnly: true}
+      volumes:
+        # Seule la clé ca.crt du Secret de la CA de la grappe (il contient aussi la clé privée).
+        - name: ca
+          secret:
+            secretName: bench-essai-ca
+            items: [{key: ca.crt, path: ca.crt}]

@@ -2,7 +2,8 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: ${{ values.nom }}
-  description: ${{ values.description }}
+  # « dump » : chaîne JSON, donc YAML valide même si la description contient « : » ou « # ».
+  description: ${{ values.description | dump }}
   annotations:
     gitlab.com/project-slug: ${{ values.locataire }}/${{ values.nom }}
     backstage.io/kubernetes-id: ${{ values.nom }}

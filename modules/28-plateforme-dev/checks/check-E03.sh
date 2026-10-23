@@ -76,10 +76,12 @@ check_cmd "Application ${WB_M28_APP_MEDINOTIF_RECETTE:-medinotif-recette} : Sync
   _m28d_app_synced "${WB_M28_APP_MEDINOTIF_RECETTE:-medinotif-recette}"
 
 # --- 5. Il a vraiment travaillé -----------------------------------------------------------------------------
+# Le ServiceMonitor du chart n'a pas honorLabels : l'étiquette « namespace » exportée par KEDA devient
+# « exported_namespace » à la collecte (namespace = keda, espace de la cible).
 check_cmd "KEDA lit la file (keda_scaler_metrics_value présente pour medinotif-recette)" _m28d_prom_positif \
-  'count(keda_scaler_metrics_value{namespace="medinotif-recette", scaledObject="medinotif"})'
+  'count(keda_scaler_metrics_value{exported_namespace="medinotif-recette", scaledObject="medinotif"})'
 check_cmd "l'HPA de KEDA a demandé au moins 2 pods dans les dernières 24 h (essai de rafale)" _m28d_prom_positif \
   'max_over_time(kube_horizontalpodautoscaler_status_desired_replicas{namespace="medinotif-recette", horizontalpodautoscaler="keda-hpa-medinotif"}[24h]) >= 2'
 check_cmd "aucune erreur du scaler sur l'heure écoulée (keda_scaler_detail_errors_total)" _m28d_prom_nul \
-  'sum(increase(keda_scaler_detail_errors_total{namespace="medinotif-recette", scaledObject="medinotif"}[1h]))
-   or on() (0 * count(keda_scaler_metrics_value{namespace="medinotif-recette", scaledObject="medinotif"}))'
+  'sum(increase(keda_scaler_detail_errors_total{exported_namespace="medinotif-recette", scaledObject="medinotif"}[1h]))
+   or on() (0 * count(keda_scaler_metrics_value{exported_namespace="medinotif-recette", scaledObject="medinotif"}))'

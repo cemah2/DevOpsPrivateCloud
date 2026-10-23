@@ -22,5 +22,5 @@ if _m28p_api_repond; then
 else
   skip "APIService et KEDA" "l'API ne répond pas au compte des checks"
 fi
-check_cmd "sous-le-capot.md (main) : calcul de l'HPA, tolérance, stabilisation" _m28p_doc sous-le-capot 'ceil|⌈' 'tol[ée]rance' 'stabilisation'
+check_cmd "sous-le-capot.md (main) : calcul de l'HPA, tolérance, stabilisation" _m28p_doc sous-le-capot 'ceil|⌈' 'tol(é|É|e)rance' 'stabilisation'
 check_cmd "sous-le-capot.md : chemin de la métrique externe et webhooks de Capsule" _m28p_doc sous-le-capot 'external\.metrics' 'APIService' 'failurePolicy|Fail'

@@ -28,8 +28,11 @@ if _m27p_peut get objectstores.barmancloud.cnpg.io "$_m27p_secours"; then
 else
   skip "ObjectStore du secours sans politique de rétention" "objectstores.barmancloud.cnpg.io non lisible par wb-checks"
 fi
-check_cmd "réplica de secours collecté et en retard de moins de 15 min (cnpg_pg_replication_lag)" \
-  _m27p_prom_positif "max(cnpg_pg_replication_lag{namespace=\"$_m27p_secours\"}) < bool 900"
+# Retard mesuré par rapport à l'ARCHIVE de la prod : sur un réplica nourri par l'archive, le lag CNPG est
+# l'âge de la dernière transaction rejouée et grandit quand la prod n'écrit rien. On exige que la prod n'ait
+# rien archivé plus de 15 min après la dernière transaction rejouée par le secours (prod au repos : OK).
+check_cmd "réplica de secours collecté et en retard de moins de 15 min sur l'archive de la prod" \
+  _m27p_prom_positif "(max(cnpg_pg_stat_archiver_last_archived_time{namespace=\"$_m27p_prod\"}) - on () (time() - max(cnpg_pg_replication_lag{namespace=\"$_m27p_secours\"}))) < bool 900"
 check_cmd "une alerte surveille le retard du réplica de secours" _m27p_alerte_famille "$_m27p_secours"
 
 check_cmd "wb-essais : aucun Cluster CNPG d'essai restant (copie de production)" _m27p_absent clusters.postgresql.cnpg.io wb-essais

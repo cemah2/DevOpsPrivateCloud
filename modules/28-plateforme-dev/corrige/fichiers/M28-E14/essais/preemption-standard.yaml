@@ -1,14 +1,15 @@
-# Pod « standard » qui ne tient pas sur k8s-w01 sans déloger des pods « lot » (M28-E14, étape 5).
-# Remplace medisphere-standard par medisphere-lot pour la seconde partie de l'essai : il reste Pending
-# (preemptionPolicy: Never, et de toute façon aucune victime de priorité inférieure).
+# Pod « haute » qui ne tient pas sur k8s-w01 sans déloger des pods « essai-basse » (M28-E14, étape 5).
+# Il joue le rôle de medisphere-standard face à medisphere-lot (voir preemption.yaml : pourquoi des
+# classes d'essai négatives). Seconde partie de l'essai : remplace essai-haute par essai-basse ; le pod
+# reste Pending (preemptionPolicy: Never, et de toute façon aucune victime de priorité inférieure).
 apiVersion: v1
 kind: Pod
 metadata:
-  name: essai-standard
+  name: essai-haute
   namespace: wb-essais
-  labels: {app.kubernetes.io/name: essai-standard, medisphere.internal/equipe: plateforme}
+  labels: {app.kubernetes.io/name: essai-haute, medisphere.internal/equipe: plateforme}
 spec:
-  priorityClassName: medisphere-standard
+  priorityClassName: essai-haute
   nodeSelector: {kubernetes.io/hostname: k8s-w01}
   automountServiceAccountToken: false
   securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}

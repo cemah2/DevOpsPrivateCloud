@@ -74,3 +74,36 @@ tests:
               resume: "mediagenda-recette : aucun réplica connecté, écritures suspendues"
               description: "Le primaire de mediagenda-db (mediagenda-recette) n'a plus aucun réplica en réplication (réplication synchrone, dataDurability: required) : les validations attendent indéfiniment."
               runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#postgresqlsynchronesansreplica"
+  # 4. Réplica de secours (M27-E15) : son lag grandit (aucune transaction rejouée depuis t = 0).
+  #    a) prod au repos (dernier archivage à t = 100 s) : AUCUNE alerte, même à 30 min de « lag » ;
+  #    b) prod qui archive encore (t = 1000 s) : l'archive arrive et n'est pas rejouée → alerte.
+  - interval: 30s
+    input_series:
+      - series: 'cnpg_pg_replication_lag{namespace="mediagenda-secours", pod="mediagenda-db-secours-1"}'
+        values: '0+30x60'
+      - series: 'cnpg_pg_stat_archiver_last_archived_time{namespace="mediagenda-prod", pod="mediagenda-db-1"}'
+        values: '100x60'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: PostgresqlSecoursEnRetard
+        exp_alerts: []
+  - interval: 30s
+    input_series:
+      - series: 'cnpg_pg_replication_lag{namespace="mediagenda-secours", pod="mediagenda-db-secours-1"}'
+        values: '0+30x60'
+      - series: 'cnpg_pg_stat_archiver_last_archived_time{namespace="mediagenda-prod", pod="mediagenda-db-1"}'
+        values: '1000x60'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PostgresqlSecoursEnRetard
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: PostgresqlSecoursEnRetard
+        exp_alerts:
+          - exp_labels:
+              gravite: avertissement
+              equipe: plateforme
+            exp_annotations:
+              resume: "Réplica de secours en retard sur l'archive de la production (ou non collecté)"
+              description: "La production a archivé des WAL que mediagenda-db-secours n'a pas rejoués depuis plus de 10 min (valeur : 16m 40s ; 1 s = plus aucune métrique du secours) : le réplica ne lit plus l'archive (identité S3, réseau, pod arrêté). Le RPO de reprise s'allonge d'autant."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-275-reprise-secours.md"

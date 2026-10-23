@@ -7,7 +7,8 @@
 # Critère d'arrêt (automatique) : la vérification continue « surveillance » échoue 3 fois → le Workflow
 #   est INTERROMPU (abortWithStatusCheck) : les expériences en cours sont retirées.
 # Arrêt d'urgence : kubectl -n chaos-experiences annotate workflow m29-e13-degradation \
-#   experiment.chaos-mesh.org/pause=true   puis   kubectl delete -f ce fichier
+#   workflow.chaos-mesh.org/abort=true   (interruption ; ou kubectl delete -f ce fichier). Un Workflow
+#   n'a PAS de pause en Chaos Mesh 2.8 (experiment.chaos-mesh.org/pause y est ignorée).
 #
 # Règles du Workflow (Chaos Mesh 2.8) : la durée d'une étape de chaos se donne par « deadline » sur le
 # modèle ; une « duration » dans l'expérience embarquée est REFUSÉE par le webhook. Un Suspend attend

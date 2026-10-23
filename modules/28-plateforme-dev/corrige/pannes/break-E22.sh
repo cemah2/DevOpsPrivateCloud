@@ -4,8 +4,8 @@
 # break-E22.sh — M28-E22 « Panne : le portail ne crée plus de services ».
 #
 # Variantes (aucun secret n'est touché : le jeton de svc-portail reste valide) :
-#   1. droits de svc-portail réduits à Reporter (20) dans le groupe GitLab medidoc (ou, à défaut, le
-#      premier groupe d'équipe où il est au moins Developer) : publish:gitlab répond 403 ; ancien
+#   1. droits de svc-portail réduits à Reporter (20) dans le groupe GitLab medidoc (membre direct, au
+#      moins Developer ; sinon variante sans effet → la suivante) : publish:gitlab répond 403 ; ancien
 #      niveau mémorisé, remis à l'annulation si le niveau est encore 20 ;
 #   2. commit de Lucas dans plateforme/portail-modeles (modeles/nouveau-service/template.yaml) : la
 #      première action « publish:gitlab » renommée « publish:gitlab:projet » (action inexistante) ;
@@ -63,12 +63,10 @@ _m28E22_une() {
     1)
       id="$(_e22_id_svc)"
       [[ -n "$id" ]] || return 10
-      for g in medidoc mediagenda medinotif; do
-        niv="$(_e22_niveau "$g" "$id")"
-        if [[ "$niv" =~ ^[0-9]+$ ]] && ((niv >= 30)); then break; fi
-        niv=""
-      done
-      [[ -n "$niv" ]] || return 10
+      # Groupe medidoc seulement : le ticket parle de MédiDoc et l'essai se fait sur medidoc-essai-inc5522.
+      g=medidoc
+      niv="$(_e22_niveau "$g" "$id")"
+      [[ "$niv" =~ ^[0-9]+$ ]] && ((niv >= 30)) || return 10
       m28_poser E22 groupe "$g"
       m28_poser E22 id "$id"
       m28_poser E22 niveau-origine "$niv"
@@ -127,7 +125,7 @@ annuler_E22() {
   m28_journal E22 "annulation"
 }
 
-resume_E22() { echo "Le modèle « nouveau service » du portail échoue pour toutes les équipes."; }
+resume_E22() { echo "Le modèle « nouveau service » du portail échoue pour l'équipe MédiDoc."; }
 
 symptome_E22() {
   wb_symptome "Ticket INC-5522 — De : Julien Petit" \

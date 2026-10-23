@@ -101,18 +101,31 @@ spec:
               serveur depuis 2 min : requêtes ralenties. Voir SHOW POOLS (maxwait) et les transactions longues.
             runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-274-alertes-donnees.md#pgbouncerclientsenattente
         # M27-E15 : le réplica de secours ne reçoit que l'archive ; archive_timeout de CNPG = 5 min.
-        # Au-delà de deux intervalles (10 min) pendant 10 min, il décroche.
+        # PIÈGE : sur un réplica nourri par l'archive, cnpg_pg_replication_lag vaut « now() − dernière
+        # transaction rejouée » (pas de récepteur de WAL) : il GRANDIT quand la prod n'écrit rien (nuit,
+        # lab au repos) alors que le réplica est à jour. On compare donc à l'activité de la prod : le
+        # primaire de la prod a archivé un segment plus de 10 min (deux archive_timeout) APRÈS la
+        # dernière transaction rejouée par le secours = l'archive arrive et le secours ne la rejoue pas.
+        # max(lag) : l'instance la plus en retard (le primaire désigné, ou son réplica en cascade).
+        # absent() : plus rien n'est collecté dans l'espace de secours.
         - alert: PostgresqlSecoursEnRetard
-          expr: max by (namespace, pod) (cnpg_pg_replication_lag{namespace="mediagenda-secours"}) > 600
+          expr: |
+            (
+              max(cnpg_pg_stat_archiver_last_archived_time{namespace="mediagenda-prod"})
+              - on () (time() - max(cnpg_pg_replication_lag{namespace="mediagenda-secours"}))
+            ) > 600
+            or
+            absent(cnpg_pg_replication_lag{namespace="mediagenda-secours"})
           for: 10m
           labels:
             gravite: avertissement
             equipe: plateforme
           annotations:
-            resume: "Réplica de secours en retard de {{ $value | humanizeDuration }}"
+            resume: "Réplica de secours en retard sur l'archive de la production (ou non collecté)"
             description: >-
-              mediagenda-db-secours n'a rien rejoué depuis {{ $value | humanizeDuration }} : l'archive des WAL
-              de la production n'arrive plus, ou le réplica ne la lit plus. Le RPO de reprise s'allonge d'autant.
+              La production a archivé des WAL que mediagenda-db-secours n'a pas rejoués depuis plus de 10 min
+              (valeur : {{ $value | humanizeDuration }} ; 1 s = plus aucune métrique du secours) : le réplica
+              ne lit plus l'archive (identité S3, réseau, pod arrêté). Le RPO de reprise s'allonge d'autant.
             runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-275-reprise-secours.md
     # ------------------------------------------------------------------------------------------------
     - name: donnees.rabbitmq

@@ -13,4 +13,4 @@ check_cmd "ADR-0280 publié (main) : portail Backstage" _m28p_doc ADR-0280 'Back
 check_cmd "ADR-0280 : Capsule et vCluster comparés" _m28p_doc ADR-0280 'Capsule' 'vCluster'
 check_cmd "ADR-0280 : HPA, KEDA, VPA en recommandation" _m28p_doc ADR-0280 'HPA' 'KEDA' 'VPA'
 check_cmd "ADR-0280 : Crossplane et Tilt/Skaffold écartés" _m28p_doc ADR-0280 'Crossplane' 'Tilt|Skaffold'
-check_cmd "ADR-0280 : risques et révision" _m28p_doc ADR-0280 'risque' 'r[ée]vision'
+check_cmd "ADR-0280 : risques et révision" _m28p_doc ADR-0280 'risque' 'r(é|É|e)vision'

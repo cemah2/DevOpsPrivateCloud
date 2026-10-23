@@ -7,6 +7,14 @@
 plages_vmid:
   socle:
     - [1000, 1099]
+  # Module 05 : lab-m05 et recette-m05 partagent la plage du module (2050, 2054…).
+  envs/lab-m05:
+    - [2050, 2059]
+  envs/recette-m05:
+    - [2050, 2059]
+  # Module 06 : ipam01 (2063), stat01 (2069).
+  envs/lab-m06:
+    - [2060, 2069]
   # Cluster k8s-par1 (M14) : 2141-2147.
   envs/k8s:
     - [2140, 2149]
@@ -21,6 +29,26 @@ plages_vmid:
     - [2100, 2109]
   envs/provisioning:
     - [2110, 2119]
+  # Projets OpenStack (M10) : aucune VM Proxmox ; liste vide = toute VM Proxmox y est refusée.
+  envs/openstack-projets: []
+  # Module 15 : VM d'essai MetalLB (2151) ; le nom du dossier ne suit pas envs/mNN.
+  envs/m15-essai:
+    - [2150, 2159]
+  # Module 18 : banc 2181-2188 ET k3s HA jetable 5191-5193 (PLAN §4.6) : la règle générale ne suffit pas.
+  envs/m18:
+    - [2180, 2189]
+    - [5191, 5193]
   # Module 20 : lyo-k3s01 (2201) et flux01 (2202).
   envs/m20:
     - [2200, 2209]
+  # Invités du cluster imbriqué hv-par1 (M09-E18) : VMID du cluster hv, pas de pve01.
+  envs/hv-invites:
+    - [120, 139]
+
+# Conventions propres à un état qui ne vise PAS le pool « lab » de pve01 (pool.rego, etiquettes.rego).
+# envs/hv-invites : cluster imbriqué hv-par1, jeton limité au pool « recette » (SEC-1027), VMs
+# étiquetées « tofu » et « recette » (M09-E18). Toute autre exception passe par une MR relue.
+conventions_etat:
+  envs/hv-invites:
+    pool: recette
+    etiquettes: [recette]

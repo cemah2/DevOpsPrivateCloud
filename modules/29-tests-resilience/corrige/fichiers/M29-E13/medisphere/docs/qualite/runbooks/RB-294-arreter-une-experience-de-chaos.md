@@ -15,7 +15,7 @@ admin@adm01:~/src/resilience$ outils/chaos-arret.sh            # pause de tout c
 admin@adm01:~/src/resilience$ outils/chaos-arret.sh --supprimer # si l'on ne reprendra pas
 ```
 
-La **pause** (`experiment.chaos-mesh.org/pause=true`) fait passer la phase désirée de l'expérience à `Stop` : le contrôleur demande à chaque `chaos-daemon` de **retirer** la panne (règles `tc`, `iptables`/`ipset`, processus de stress). L'objet reste, on peut reprendre (`pause=false`). Sur un `Schedule`, la pause empêche les **nouvelles** exécutions ; les enfants déjà créés se mettent en pause chacun. Sur un `Workflow`, la pause suspend les nœuds en cours.
+La **pause** (`experiment.chaos-mesh.org/pause=true`) fait passer la phase désirée de l'expérience à `Stop` : le contrôleur demande à chaque `chaos-daemon` de **retirer** la panne (règles `tc`, `iptables`/`ipset`, processus de stress). L'objet reste, on peut reprendre (`pause=false`). Sur un `Schedule`, la pause empêche les **nouvelles** exécutions ; les enfants déjà créés se mettent en pause chacun. Un `Workflow` **n'a pas de pause** dans Chaos Mesh 2.8 (l'annotation est acceptée mais ignorée : il continue à créer ses étapes) : on l'**interrompt** par l'annotation `workflow.chaos-mesh.org/abort=true` (ses nœuds en cours sont terminés et suppriment leurs expériences ; l'objet reste pour l'analyse, condition `Accomplished`), ou on le **supprime** (ses nœuds et leurs expériences partent avec lui). `chaos-arret.sh` l'interrompt.
 
 La **suppression** fait la même chose, puis retire l'objet quand le finaliseur `chaos-mesh/records` est levé (toutes les pannes retirées). Supprime d'abord ce qui **crée** (`Schedule`, `Workflow`), puis les expériences : sinon un enfant revient au tick suivant.
 
@@ -26,7 +26,7 @@ admin@adm01:~$ kubectl -n chaos-experiences annotate networkchaos <nom> experime
 admin@adm01:~$ kubectl -n chaos-experiences delete networkchaos <nom>
 ```
 
-`container-kill` et `pod-kill` sont instantanés : la pause n'arrête que les **prochaines** actions (une expérience `pod-kill` avec durée tue aussi les pods qui la rejoignent pendant la durée : pause ou suppression).
+`container-kill` et `pod-kill` sont instantanés : la pause ne ressuscite rien, elle n'empêche que les **prochaines** actions (exécutions suivantes d'un `Schedule`, étapes suivantes d'un `Workflow`). Les cibles d'une expérience sont choisies **une fois**, à sa création : un pod apparu ensuite (remplaçant d'un pod tué, montée de l'HPA) n'est pas visé.
 
 ## 3. Vérifier que la panne est retirée
 

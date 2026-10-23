@@ -18,6 +18,8 @@
 5. Après : 1 000 + 1 000 messages retrouvés (`messages-essai.sh compter`) ; `autoEnableAllFeatureFlags` a activé les nouveaux *feature flags* de la 4.4 ; l'opérateur 2.23.1 ne signale aucune erreur (compatibilité non annoncée, constatée sur cet essai seulement).
 6. **Retour en 4.3.7** (image remise) : le nœud redémarré ne démarre plus (les *feature flags* de la 4.4 activés sont inconnus de la 4.3, et le stockage v2 des files classiques n'est pas relu) ; seule issue : supprimer la grappe et ses volumes. **Aller simple confirmé.**
 
+7. Notes de version de la 4.4.0 relues (ce que la grappe jetable ne montre pas) : nouveau format v2 (`.sqs`) du magasin de messages partagé des files classiques, « *a node with v2 files present cannot be downgraded to 4.3.x* » ; découverte OpenID Connect **plus stricte** (émetteur identique à `auth_oauth2.issuer`, points d'accès HTTPS) : à vérifier contre Keycloak avant la prod, la grappe jetable n'a pas d'OAuth ; `GET /api/auth/hash_password/…` remplacé par un `POST` (aucun usage chez nous) ; passage préalable par la 4.3.7 recommandé quand Erlang monte en même temps (déjà le cas).
+
 ## Décision et raisons
 
 - La répétition est **réussie** : la montée est techniquement possible sans perte.

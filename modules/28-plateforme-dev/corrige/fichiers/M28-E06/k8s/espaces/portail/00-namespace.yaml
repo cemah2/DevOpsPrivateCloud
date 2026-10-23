@@ -8,6 +8,9 @@ metadata:
     medisphere.internal/role: plateforme
     medisphere.internal/proprietaire: plateforme
     medisphere.internal/supervision-regles: "oui"
+    # HTTPRoute du portail acceptée par gw-par1 (allowedRoutes, M15-E12) : sans elle, la route
+    # reste « NotAllowedByListeners » et l'adresse publique ne répond pas.
+    medisphere.internal/exposition: oui
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/audit: restricted

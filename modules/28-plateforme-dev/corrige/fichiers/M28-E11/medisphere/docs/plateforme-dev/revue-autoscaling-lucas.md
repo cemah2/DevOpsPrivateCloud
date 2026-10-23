@@ -24,7 +24,7 @@
 | 18 | Tenant, `forceTenantPrefix: false` | noms d'espaces libres | majeur | le prestataire peut créer `mediagenda-recette2`, `monitoring`… : confusion, squat de noms | `forceTenantPrefix: true` |
 | 19 | Tenant, `serviceOptions.allowedServices` : `loadBalancer`, `nodePort`, `externalName` | exposition directe | bloquant | consommation d'adresses du pool `lb-par1`, ports ouverts sur les nœuds, `ExternalName` pour détourner du trafic interne | tout à `false` ; exposition par la Gateway |
 | 20 | Tenant, ni `storageClasses`, ni `preventDeletion`, ni options d'Argo CD | stockage libre ; Tenant supprimable | majeur | `ceph-rbd-retain` (volumes orphelins), `cephfs` ; un `kubectl delete tenant` supprimerait ses espaces | `storageClasses.allowed: [ceph-rbd]`, `preventDeletion: true`, `Prune=false,Delete=false` |
-| 21 | Tous, manifestes « appliqués » hors du chemin GitOps et un fichier unique « pour Argo CD » | pas de dépôt ni de MR propres ; objets de plateforme (Tenant) et d'équipe mélangés | mineur | personne ne sait qui possède quoi ; l'AppProject `medinotif` refuserait de toute façon un Secret géré par la plateforme | Tenant dans `plateforme/k8s/locataires/`, objets KEDA dans `medinotif/deploiement` |
+| 21 | Tous, manifestes « appliqués » hors du chemin GitOps et un fichier unique « pour Argo CD » | pas de dépôt ni de MR propres ; objets de plateforme (Tenant) et d'équipe mélangés | mineur | personne ne sait qui possède quoi ; le `Tenant` (objet de cluster) serait refusé par l'AppProject `medinotif` (`clusterResourceWhitelist: []`), et rien de technique n'y empêche un `Secret` en clair : c'est la règle « secrets par ESO » qui l'interdit | Tenant dans `plateforme/k8s/locataires/`, objets KEDA dans `medinotif/deploiement` |
 
 ## Synthèse pour Lucas
 

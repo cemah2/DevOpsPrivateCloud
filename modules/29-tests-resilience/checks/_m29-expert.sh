@@ -158,9 +158,10 @@ _m29x_aucun_netem_api() {
 }
 
 # _m29x_chaos_actifs — objets de chaos « actifs » : ni terminés, ni en pause (tableau JSON).
-#   Expérience : desiredPhase == Run. Schedule : non en pause. Workflow : non terminé et non en pause.
+#   Expérience : desiredPhase == Run. Schedule : non en pause. Workflow : non terminé (un Workflow n'a
+#   pas de pause en Chaos Mesh 2.8 : l'annotation ne compte pas pour lui).
 _m29x_chaos_actifs() {
-  _m29p_chaos_tous | jq '[.[] | select((.metadata.annotations["experiment.chaos-mesh.org/pause"] // "") != "true")
+  _m29p_chaos_tous | jq '[.[] | select(.kind == "Workflow" or (.metadata.annotations["experiment.chaos-mesh.org/pause"] // "") != "true")
     | select(
         (.kind == "Schedule")
         or (.kind == "Workflow" and (any(.status.conditions[]?; .type == "Accomplished" and .status == "True") | not))

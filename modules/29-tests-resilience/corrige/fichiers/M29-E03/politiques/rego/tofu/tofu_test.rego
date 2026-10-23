@@ -92,6 +92,23 @@ test_pool_autre_refuse if {
 }
 
 # --- Étiquettes -----------------------------------------------------------------------------
+test_conventions_etat_hv_invites if {
+	count(tofu.deny) == 0 with input as plan([cree("rec01", 130, "recette", ["recette", "tofu"])])
+		with data.contexte as {"etat": "envs/hv-invites"}
+}
+
+test_conventions_etat_pool_lab_refuse if {
+	some msg in tofu.deny with input as plan([cree("rec01", 130, "lab", ["recette", "tofu"])])
+		with data.contexte as {"etat": "envs/hv-invites"}
+	contains(msg, "au lieu de « recette »")
+}
+
+test_conventions_etat_etiquette_absente_refusee if {
+	some msg in tofu.deny with input as plan([cree("rec01", 130, "recette", ["tofu"])])
+		with data.contexte as {"etat": "envs/hv-invites"}
+	contains(msg, "étiquette « recette » absente")
+}
+
 test_etiquette_env_absente_refusee if {
 	some msg in tofu.deny with input as plan([cree("m29-a", 2291, "lab", ["env-m28"])])
 		with data.contexte as ctx_m29

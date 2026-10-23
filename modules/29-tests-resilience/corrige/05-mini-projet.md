@@ -64,7 +64,7 @@ admin@adm01:~$ kubectl annotate ns mediagenda-prod chaos-mesh.org/inject=enabled
 
 Explication à donner : **deux barrières indépendantes**. (1) La politique d'admission `medisphere-chaos-espaces` (M29-E09, liaison en `Deny`) refuse à la création toute expérience dont `selector.namespaces` sort de la liste fermée, et toute annotation `chaos-mesh.org/inject=enabled` hors de cette liste, administrateurs compris. (2) Si la première tombait (liaison repassée en `Warn`, exclusion trop large), le filtre d'espaces de Chaos Mesh (`enableFilterNamespace`, valeur dans Git) écarterait tout pod d'un espace non annoté : l'objet existerait, la condition `Selected` resterait à `False` avec un événement « no pod is selected », rien ne serait injecté. Les deux sont dans Git (valeurs de Chaos Mesh, `plateforme/k8s/admission/`), relus en MR, et vérifiés par `lab/bin/check 29 09`.
 
-*5. Journée de jeu suivie d'effets.* Chaque issue `journee-de-jeu` est fermée avec un commentaire qui pointe la preuve : MR fusionnée (alerte, `preStop`), règle chargée dans Prometheus, test ajouté ; ou reportée par une décision écrite (commentaire daté de Claire Morel) — dans ce cas l'issue reste ouverte et le check reste rouge : c'est voulu, on livre quand c'est **décidé**. L'action `/pret` : soit le correctif de M29-E23 est fusionné par l'équipe de Julien, soit sa décision écrite (avec échéance) est dans l'issue et l'issue est close par la plateforme avec lien vers le ticket `DEV-3013` qui la porte désormais.
+*5. Journée de jeu suivie d'effets.* Chaque issue `journee-de-jeu` est fermée avec un commentaire qui pointe la preuve : MR fusionnée (alerte, `preStop`), règle chargée dans Prometheus, test ajouté ; ou reportée par une décision écrite (commentaire daté de Claire Morel) — dans ce cas l'issue reste ouverte avec l'étiquette `reportee`, que le check accepte : on livre quand c'est **décidé**, et la décision se relit dans l'issue. L'action `/pret` : soit le correctif de M29-E23 est fusionné par l'équipe de Julien, soit sa décision écrite (avec échéance) est dans l'issue et l'issue est close par la plateforme avec lien vers le ticket `DEV-3013` qui la porte désormais.
 
 *6. Documentation.* `docs/qualite/` : `strategie-tests.md` (M29-E12, mis à jour : ce qui a été réellement livré et où — [extrait des modifications](fichiers/M29-E25/medisphere/docs/qualite/strategie-tests.extrait-E25.md) ; le check vérifie qu'elle cite k6-operator, la non-régression, les journées de jeu et le nettoyeur), ADR-0290, RB-290 à RB-297, rapport E15, journées de jeu, post-mortem INC-5623, `sous-le-capot-chaos-mesh.md`, et la note de livraison [`livraison-resilience-v1.md`](fichiers/M29-E25/medisphere/docs/qualite/livraison-resilience-v1.md).
 
@@ -80,7 +80,7 @@ admin@adm01:~/medisphere$ git tag -a resilience-v1 -m "Tests et résilience Méd
 
 **Alternatives**
 - Renovate pour garder la même version du composant `validation` partout (MR automatiques) : moins d'oublis, une MR par projet à relire.
-- Livrer avec une action de journée de jeu reportée et documentée, check rouge assumé : acceptable si Claire le décide et l'écrit ; le contrôle reste rouge pour le rappeler.
+- Livrer avec une action de journée de jeu reportée et documentée (étiquette `reportee`) : acceptable si Claire le décide et l'écrit ; poser l'étiquette sans décision écrite est une fraude au contrôle, que la revue de Nadia attrape.
 
 **Pièges classiques**
 - Supprimer les issues au lieu de les fermer avec une preuve.

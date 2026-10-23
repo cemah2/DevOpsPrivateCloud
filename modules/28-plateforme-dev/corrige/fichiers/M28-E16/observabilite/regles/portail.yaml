@@ -5,7 +5,10 @@
 #  - probe_success{job="blackbox-portail"} : sonde HTTPS du blackbox_exporter de mon01 (M21), cible
 #    https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness — à ajouter à la liste
 #    des sondes de mon01 (rôle Ansible) ; le Prometheus du cluster la reçoit par fédération.
-#  - cnpg_collector_last_available_backup_timestamp : exportateur des instances CNPG (PodMonitor, M27).
+#  - barman_cloud_cloudnative_pg_io_last_available_backup_timestamp : métrique du plugin Barman Cloud,
+#    servie par l'exportateur des instances CNPG (PodMonitor, M27). L'ancienne cnpg_collector_last_available_
+#    backup_timestamp (dépréciée) n'est pas alimentée par les sauvegardes « plugin » (doc du plugin 0.15,
+#    « Observability » et « Migration »). absent() : aucune valeur du tout = jamais sauvegardé ou plus collecté.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -29,7 +32,8 @@ spec:
             runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-284-portail-indisponible.md"
         - alert: PortailSauvegardeAncienne
           expr: >-
-            time() - max(cnpg_collector_last_available_backup_timestamp{namespace="portail"}) > 26 * 3600
+            time() - max(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="portail"}) > 26 * 3600
+            or absent(barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="portail"})
           for: 30m
           labels: {gravite: avertissement, equipe: plateforme}
           annotations:

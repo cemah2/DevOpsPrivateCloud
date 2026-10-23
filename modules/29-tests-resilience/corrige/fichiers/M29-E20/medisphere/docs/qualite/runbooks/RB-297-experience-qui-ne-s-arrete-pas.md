@@ -17,7 +17,7 @@ admin@adm01:~$ kubectl -n chaos-experiences get networkchaos <nom> -o jsonpath='
 | Constat | Cause | Arrêt à la racine |
 |---|---|---|
 | `ownerReferences` vers un `Schedule`, étiquette `managed-by: <schedule>` | un `Schedule` recrée un enfant à chaque tick (avec `Forbid`, dès que l'enfant précédent a disparu) | pause du **Schedule** (`experiment.chaos-mesh.org/pause=true`), puis suppression du Schedule (ses enfants partent avec lui) |
-| `ownerReferences` vers un `WorkflowNode`, étiquette `chaos-mesh.org/controlled-by` | un `Workflow` en cours | pause puis suppression du **Workflow** |
+| `ownerReferences` vers un `WorkflowNode`, étiquette `chaos-mesh.org/controlled-by` | un `Workflow` en cours | interruption (`workflow.chaos-mesh.org/abort=true`) ou suppression du **Workflow** : il n'a pas de pause en 2.8 (l'annotation de pause est ignorée) |
 | annotation de pause présente mais `status.experiment.desiredPhase: Run`, condition `Paused` à `False` | pause mal posée : mauvaise clé (`chaos-mesh.org/pause` au lieu de `experiment.chaos-mesh.org/pause`) ou mauvaise valeur (seul `"true"` compte) | vraie pause, puis suppression ; retirer la fausse annotation |
 | expérience dans un **autre espace** que `chaos-experiences` (`-A` !) | ne devrait pas exister : la VAP `medisphere-chaos-espaces` (M29-E09) la refuse ; si elle existe, la VAP a été contournée (liaison en `Warn`, exclusion trop large) | pause / suppression là où elle est ; incident de sécurité : qui, comment (ADR-0290) |
 

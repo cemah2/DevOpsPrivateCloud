@@ -10,7 +10,7 @@ tests:
         values: '2x5 0x15'
       - series: 'probe_success{job="blackbox-portail", instance="https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness"}'
         values: '1x20'
-      - series: 'cnpg_collector_last_available_backup_timestamp{namespace="portail", pod="portail-db-1"}'
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="portail", pod="portail-db-1"}'
         values: '0x200'
     alert_rule_test:
       - eval_time: 8m
@@ -23,4 +23,21 @@ tests:
             exp_annotations:
               resume: "Le portail développeurs est indisponible"
               description: "Aucun réplica prêt ou sonde HTTPS en échec depuis 5 min. Les applications tournent ; plus aucune création de service par le portail."
+              runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-284-portail-indisponible.md"
+  # Sauvegarde : dernière réussite à t = 0, plus rien ensuite → alerte après 26 h + 30 min.
+  - interval: 1m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="portail", pod="portail-db-1"}'
+        values: '0x1700'
+    alert_rule_test:
+      - eval_time: 25h
+        alertname: PortailSauvegardeAncienne
+        exp_alerts: []
+      - eval_time: 28h
+        alertname: PortailSauvegardeAncienne
+        exp_alerts:
+          - exp_labels: {gravite: avertissement, equipe: plateforme}
+            exp_annotations:
+              resume: "Dernière sauvegarde de portail-db vieille de plus de 26 h"
+              description: "La sauvegarde nocturne (ScheduledBackup portail-db-nuit) n'a pas abouti : kubectl -n portail get backups."
               runbook_url: "https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/plateforme-dev/runbooks/RB-284-portail-indisponible.md"

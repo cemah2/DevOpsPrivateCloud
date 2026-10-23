@@ -39,10 +39,10 @@ Rotation : nouvelle valeur dans le coffre ; ESO met le Secret à jour dans l'heu
 ```
 admin@adm01:~$ curl -s -o /dev/null -w '%{http_code}\n' https://portail.apps.par1.medisphere.internal/.backstage/health/v1/readiness
 200
-admin@adm01:~$ curl -s -H "Authorization: Bearer $(<~/.config/workbook/backstage-checks.token)" \
-    https://portail.apps.par1.medisphere.internal/api/catalog/entities?limit=1 | jq length
+admin@adm01:~$ curl -s -K <(printf 'header = "Authorization: Bearer %s"\n' "$(<~/.config/workbook/backstage-checks.token)") \
+    "https://portail.apps.par1.medisphere.internal/api/catalog/entities?limit=1" | jq length
 1
-admin@adm01:~$ curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(<~/.config/workbook/backstage-checks.token)" \
+admin@adm01:~$ curl -s -o /dev/null -w '%{http_code}\n' -K <(printf 'header = "Authorization: Bearer %s"\n' "$(<~/.config/workbook/backstage-checks.token)") \
     https://portail.apps.par1.medisphere.internal/api/scaffolder/v2/tasks
 403
 ```

@@ -48,4 +48,4 @@ check_cmd "plateforme/k8s : outils/recommandations-vpa.sh sur main" \
 check_cmd "plateforme/k8s : une MR de recommandations du VPA a été ouverte" _m28p_mr_existe plateforme/k8s 'vpa|recommandation'
 _m28_e14_tableau() { grafana_api "search?query=Capacit" 2>/dev/null | jq -e 'length >= 1' >/dev/null 2>&1; }
 check_cmd "Grafana : tableau « Capacité et locataires »" _m28_e14_tableau
-check_cmd "capacite.md (main) : bilan, budgets, priorités" _m28p_doc capacite 'budget' 'priorit' 'pr[ée]empt'
+check_cmd "capacite.md (main) : bilan, budgets, priorités" _m28p_doc capacite 'budget' 'priorit' 'pr(é|É|e)empt'

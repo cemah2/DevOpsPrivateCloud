@@ -34,8 +34,11 @@ _m29_e21_defer() {
   while IFS= read -r f; do
     [[ "$f" == vm-debian/test/*.go ]] || continue
     c="$(_m29p_fichier_main "$_m29_e21_tofu" "$f" 2>/dev/null)" || continue
-    awk '/(defer|t\.Cleanup\(func\(\)).*terraform\.Destroy/ && !a && !d { d = NR }
-         /terraform\.(InitAndApply|Apply)\(/ && !a { a = NR }
+    # « defer »/« t.Cleanup( » puis terraform.Destroy sur la même ligne ou dans les 5 suivantes
+    # (forme t.Cleanup(func() {⏎ terraform.Destroy(…) ⏎})).
+    awk '/(defer|\.Cleanup\()/ { o = NR }
+         /terraform\.DestroyE?\(/ && o && NR - o <= 5 && !a && !d { d = NR }
+         /terraform\.(InitAndApply|Apply)E?\(/ && !a { a = NR }
          END { exit !(d > 0 && a > 0 && d < a) }' <<<"$c" && return 0
   done < <(_m29p_arbre "$_m29_e21_tofu" vm-debian/test)
   return 1

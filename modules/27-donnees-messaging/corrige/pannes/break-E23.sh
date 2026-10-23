@@ -9,14 +9,20 @@
 #       permission s'applique. MédiAgenda publie sur l'échange « notifications » : ACCESS_REFUSED, la
 #       publication échoue, la requête réussit quand même (comportement voulu de M27-E08) : silencieux.
 #   L2. medinotif/deploiement, overlay recette : MédiNotif à zéro réplica (« en attendant KEDA »).
-#   L3. Topologie : la Policy de la file notifications reçoit max-length 20 et overflow drop-head
-#       (« protéger la mémoire du courtier ») : au-delà de 20 messages prêts, les plus anciens sont
-#       dead-letterés vers notifications.rebut (la file a un rebut : vérifié avant, sinon L3 n'est PAS posée,
-#       pour ne jamais perdre de message).
-# Ce que voit l'apprenant : rien ne part. Corriger L1 fait arriver les messages… qui s'entassent (L2) et
-# débordent au rebut (L3). Corriger L2 vide la file, mais les plus anciens sont au rebut : il faut les
-# rejouer. Aucune purge ; l'annulation défait les commits encore en place et laisse le contenu du rebut
-# (à rejouer par l'apprenant ; le nombre de messages au rebut avant l'injection est noté pour le check).
+#   L3. Topologie : la Policy de la file notifications reçoit message-ttl 60000 (« une notification de
+#       plus d'une minute est périmée ») : un message non consommé en 60 s EXPIRE et part au rebut
+#       (x-death reason « expired »). La stratégie de rebut reste celle de M27-E04 : dead-letter-strategy
+#       at-least-once avec overflow reject-publish (vérifiés avant ; sinon L3 n'est PAS posée). Le transfert
+#       vers notifications.rebut est donc confirmé : aucun message n'est perdu.
+#       Décision de relecture (bloc G) : PAS de max-length avec overflow drop-head. drop-head fait retomber le
+#       rebut en « au plus une fois », et passer overflow de reject-publish à drop-head SUPPRIME les messages
+#       dead-letterés pas encore confirmés (documentation des files quorum) : c'est un mode qui perd des
+#       messages, interdit par PLAN §4.13.
+# Ce que voit l'apprenant : rien ne part. Corriger L1 fait arriver les messages… qui ne restent pas dans la
+# file (L2 : personne ne consomme) et partent au rebut une minute plus tard (L3). Corriger L2 fait repartir
+# la consommation, mais ce qui a expiré est au rebut et la TTL reste un piège latent : il faut la retirer et
+# rejouer le rebut. Aucune purge ; l'annulation défait les commits encore en place et laisse le contenu du
+# rebut (à rejouer par l'apprenant ; le nombre de messages au rebut avant l'injection est noté pour le check).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -52,18 +58,25 @@ _e23_l2_vivant() { m27_deploiement_a "$_M27_NS_NOTIF" medinotif '.spec.replicas 
 _e23_l3() {
   local lieu q
   q="$(m27_rmq_file)" || return 1
-  if ! jq -e '(.arguments["x-dead-letter-exchange"] // .effective_policy_definition["dead-letter-exchange"] // "") != ""' <<<"$q" >/dev/null; then
-    m27_journal E23 "L3 non posée : la file n'a pas de rebut (des messages seraient perdus)"
+  # Rebut présent ET transfert confirmé (at-least-once, qui exige overflow reject-publish) ; aucune TTL ni
+  # limite posée en argument de file (une politique ne pourrait pas être annulée proprement).
+  if ! jq -e '(.arguments["x-dead-letter-exchange"] // .effective_policy_definition["dead-letter-exchange"] // "") != ""
+      and ((.arguments["x-dead-letter-strategy"] // .effective_policy_definition["dead-letter-strategy"] // "") == "at-least-once")
+      and ((.arguments["x-overflow"] // .effective_policy_definition["overflow"] // "") == "reject-publish")
+      and (.arguments["x-message-ttl"] == null)' <<<"$q" >/dev/null; then
+    m27_journal E23 "L3 non posée : rebut absent ou non « at-least-once » (des messages pourraient être perdus)"
     return 0
   fi
   lieu="$(m27_rmq_politique_trouver)" || { m27_journal E23 "L3 non posée : aucune Policy de la file dans la topologie"; return 0; }
   m27_rmq_modifier_doc E23 l3 "${lieu%%$'\t'*}" "${lieu##*$'\t'}" \
-    '.spec.definition["max-length"] = 20 | .spec.definition["overflow"] = "drop-head"' \
-    "topologie recette : longueur de file bornée (protection mémoire du courtier)" || return 1
+    '.spec.definition["message-ttl"] = 60000' \
+    "topologie recette : notifications périmées après une minute (pas d'envoi en retard)" || return 1
 }
 _e23_l3_vivant() {
-  [[ -d "$(m27_etat E23)/git-l3" ]] || return 0   # L3 non posée (pas de rebut ou pas de Policy)
-  m27_rmq_file 2>/dev/null | jq -e '.effective_policy_definition["max-length"] == 20' >/dev/null 2>&1
+  [[ -d "$(m27_etat E23)/git-l3" ]] || return 0   # L3 non posée (pas de rebut sûr ou pas de Policy)
+  m27_rmq_file 2>/dev/null | jq -e '.effective_policy_definition["message-ttl"] == 60000
+    and .effective_policy_definition["dead-letter-strategy"] == "at-least-once"
+    and .effective_policy_definition["overflow"] == "reject-publish"' >/dev/null 2>&1
 }
 
 _e23_tout_vivant() {
@@ -99,7 +112,7 @@ panne_E23_v1() {
   _e23_l3 || { annuler_E23; return 1; }
   m27_argo_rafraichir rabbitmq-topologie "$_M27_APP_NOTIF"
   m27_debut E23
-  m27_journal E23 "chaîne posée (L1 permission, L2 MédiNotif à zéro, L3 longueur bornée)"
+  m27_journal E23 "chaîne posée (L1 permission, L2 MédiNotif à zéro, L3 TTL d'une minute)"
   if ! m27_attendre 600 _e23_constat; then
     annuler_E23
     return 1

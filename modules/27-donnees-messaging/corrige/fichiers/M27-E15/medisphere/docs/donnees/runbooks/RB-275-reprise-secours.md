@@ -52,6 +52,7 @@ Il n'y en a pas : une fois promue, la copie est une base indépendante, l'ancien
 
 ## Le secours décroche (alerte PostgresqlSecoursEnRetard)
 
+0. Rappel : `now() - pg_last_xact_replay_timestamp()` (et `cnpg_pg_replication_lag` du secours) est l'âge de la dernière transaction **rejouée** ; il grandit aussi quand la prod n'écrit rien. L'alerte ne sonne que si la prod a archivé des WAL plus récents que ce que le secours a rejoué : c'est bien la lecture de l'archive qui est en cause.
 1. La prod archive-t-elle ? `kubectl -n mediagenda-prod get cluster mediagenda-db -o jsonpath='{.status.conditions[?(@.type=="ContinuousArchiving")]}'`.
 2. Le secours lit-il ? Journaux du pod (`kubectl -n mediagenda-secours logs mediagenda-db-secours-1 -c postgres | grep -i restore`), identité S3 (expirée, révoquée), flux vers `s3-01`.
 3. Un trou dans l'archive (segment manquant) ne se rattrape pas : reconstruire le secours depuis la dernière sauvegarde de base (supprimer et réappliquer le `Cluster` du secours — c'est une copie, pas la prod).

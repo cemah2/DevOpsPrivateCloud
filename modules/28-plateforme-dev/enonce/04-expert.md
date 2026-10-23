@@ -306,7 +306,7 @@ Endiguer, c'est souvent réduire l'effectif de la charge fautive à 0 (`kubectl 
 
 <details><summary>Indice 1</summary>
 
-`desiredReplicas = ceil[currentReplicas × (currentMetricValue / desiredMetricValue)]`, sauf si le rapport est dans la tolérance (0,1 par défaut) ; les pods pas encore prêts et ceux sans métrique sont comptés de façon conservatrice (à 0 % en montée, à 100 % en descente). En descente, l'HPA prend la recommandation **la plus haute** de la fenêtre de stabilisation.
+`desiredReplicas = ceil[currentReplicas × (currentMetricValue / desiredMetricValue)]`, sauf si le rapport est dans la tolérance (0,1 par défaut) ; les pods sans métrique sont comptés de façon conservatrice (à 100 % de la cible en descente, à 0 % en montée) et les pods pas encore prêts sont mis de côté, puis comptés à 0 % s'il s'agit de monter. En descente, l'HPA prend la recommandation **la plus haute** de la fenêtre de stabilisation.
 </details>
 
 <details><summary>Indice 2</summary>

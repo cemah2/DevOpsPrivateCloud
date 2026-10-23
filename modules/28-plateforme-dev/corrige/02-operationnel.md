@@ -31,7 +31,7 @@ Fichiers complets dans [`fichiers/`](fichiers/) : `portail/` reproduit `platefor
 2. **OIDC.** Client : [`clients-backstage.tf`](fichiers/M28-E06/identite/tofu/clients-backstage.tf) (même modèle que `grafana`, secret imposé). Backstage : [`modules/authOidcMedisphere.ts`](fichiers/M28-E06/portail/packages/backend/src/modules/authOidcMedisphere.ts) (fournisseur `oidc`, résolveur `preferred_username` → `User`), [`App.tsx`](fichiers/M28-E06/portail/packages/app/src/App.tsx) (API `auth.keycloak`, `SignInPage` à un seul fournisseur). Paquets : `yarn --cwd packages/backend add @backstage/backend-plugin-api @backstage/plugin-auth-backend-module-oidc-provider` ; `yarn --cwd packages/app add @backstage/core-app-api`.
 3. **La production.** [`app-config.production.yaml`](fichiers/M28-E06/portail/app-config.production.yaml).
 4. **L'image.** [`Dockerfile`](fichiers/M28-E06/portail/Dockerfile), [`.dockerignore`](fichiers/M28-E06/portail/.dockerignore), [`catalog-info.yaml`](fichiers/M28-E06/portail/catalog-info.yaml), [`.gitlab-ci.yml`](fichiers/M28-E06/portail/.gitlab-ci.yml). Utilisateur : `node` = UID 1000.
-5. **Base et secrets.** [`espaces/portail/`](fichiers/M28-E06/k8s/espaces/portail/) : `50-portail-db.yaml` (CNPG, `initdb` `portail`/`portail`), `40-externalsecret.yaml`, `10-racine-medisphere.yaml`, `20-reseau.yaml` ; politique OpenBao : [`eso-plateforme.extrait`](fichiers/M28-E06/secrets/politiques/eso-plateforme.extrait-M28-E06.hcl).
+5. **Base et secrets.** [`espaces/portail/`](fichiers/M28-E06/k8s/espaces/portail/) : `50-portail-db.yaml` (CNPG, `initdb` `portail`/`portail`), `40-externalsecret.yaml`, `10-racine-medisphere.yaml`, `20-reseau.yaml` ; politique OpenBao : [`eso-plateforme.extrait`](fichiers/M28-E06/secrets/politiques/eso-plateforme.extrait-M28-E06.hcl) ; espace `portail` ajouté aux conditions du ClusterSecretStore : [`clustersecretstore.extrait`](fichiers/M28-E06/gitops/manifestes/external-secrets/clustersecretstore.extrait-M28-E06.yaml).
    ```
    admin@adm01:~$ bao kv put kv/plateforme/portail oidc_client_secret="$(openssl rand -hex 32)" \
        session_secret="$(openssl rand -hex 32)" checks_token="$(openssl rand -hex 32)"
@@ -76,15 +76,15 @@ Deux réplicas, PDB, sauvegarde et archivage de `portail-db`, supervision et mon
 **Solution**
 
 1. **Comptes.** FreeIPA : [`comptes-systeme.extrait`](fichiers/M28-E07/identite/annuaire/comptes-systeme.extrait-M28-E07.yml). GitLab : commandes et appartenances dans [`catalogue.md`](fichiers/M28-E07/medisphere/docs/plateforme-dev/catalogue.md) ; `external: true` par défaut (19.5) : l'utilisateur ne voit que les projets dont il est membre — c'est une protection, d'où les appartenances explicites. Secrets : `bao kv patch kv/plateforme/portail gitlab_token=… ldap_mot_de_passe=…`.
-2. **Organisation** et 3. **découverte** : [`app-config.production.extrait-M28-E07`](fichiers/M28-E07/portail/app-config.production.extrait-M28-E07.yaml). Champ obligatoire absent : `spec.type` d'un `Group` (la correspondance par défaut lit `groupType`, inexistant dans FreeIPA) → `set: spec.type: equipe`.
+2. **Organisation** et 3. **découverte** : [`app-config.production.extrait-M28-E07`](fichiers/M28-E07/portail/app-config.production.extrait-M28-E07.yaml). Champ obligatoire non fourni : `spec.type` d'un `Group` (la correspondance par défaut lit `groupType`, inexistant dans FreeIPA ; le module pose alors `unknown`, valeur valide mais inutilisable pour filtrer ou afficher) → `set: spec.type: equipe`.
 4. **Entités** : [`mediagenda/api`](fichiers/M28-E07/mediagenda-api/catalog-info.yaml) (Component + API, avec [`outils/exporter_openapi.py`](fichiers/M28-E07/mediagenda-api/outils/exporter_openapi.py) et le [job de CI](fichiers/M28-E07/mediagenda-api/.gitlab-ci.extrait-M28-E07.yml) qui vérifie `openapi.json`), [`medidoc/medidoc`](fichiers/M28-E07/medidoc/catalog-info.yaml), [`medinotif/worker`](fichiers/M28-E07/medinotif-worker/catalog-info.yaml), [`plateforme/medisphere`](fichiers/M28-E07/medisphere/catalog-info.yaml) (Domain, Systems, Resources), `plateforme/portail` (E06). Choix pour l'API : un fichier versionné plutôt que l'URL `/openapi.json` d'un environnement (pas de dépendance à un environnement qui tourne, ni de flux du portail vers la Gateway, et le contrat se relit en MR).
 5. **Contrôle.**
    ```
-   admin@adm01:~$ T=$(<~/.config/workbook/backstage-checks.token)
-   admin@adm01:~$ curl -s -H "Authorization: Bearer $T" https://portail.apps.par1.medisphere.internal/api/catalog/entities/by-name/user/default/julien.petit \
+   admin@adm01:~$ jeton() { printf 'header = "Authorization: Bearer %s"\n' "$(<~/.config/workbook/backstage-checks.token)"; }   # jeton hors de la ligne de commande (ps)
+   admin@adm01:~$ curl -s -K <(jeton) https://portail.apps.par1.medisphere.internal/api/catalog/entities/by-name/user/default/julien.petit \
        | jq '[.relations[] | select(.type == "memberOf") | .targetRef]'
    [ "group:default/mediagenda" ]
-   admin@adm01:~$ curl -s -H "Authorization: Bearer $T" https://portail.apps.par1.medisphere.internal/api/catalog/entities/by-name/component/default/mediagenda-api | jq -r .spec.owner
+   admin@adm01:~$ curl -s -K <(jeton) https://portail.apps.par1.medisphere.internal/api/catalog/entities/by-name/component/default/mediagenda-api | jq -r .spec.owner
    group:default/mediagenda
    ```
    Essai d'usurpation : [`formation/catalogue-essai`](fichiers/M28-E07/formation-catalogue-essai/catalog-info.yaml) → erreur de traitement de l'emplacement (« … not allowed by the rules … »), aucun `Group` `mediagenda-bis`.
@@ -101,7 +101,7 @@ Deux mécanismes alimentent le catalogue. Les **fournisseurs** (LDAP) écrivent 
 
 **Pièges classiques**
 
-- Oublier `set: spec.type` : tous les groupes en erreur de validation, les `User` sans appartenance.
+- Oublier `set: spec.type` : tous les groupes de type `unknown` (code du module 1.56, `src/ldap/read.ts`) ; pas d'erreur, mais un type vide de sens dans les fiches et les filtres.
 - Filtrer les personnes sur `objectClass=person` sans exclure `nsAccountLock` : un ancien employé reste propriétaire et peut se connecter au portail tant que Keycloak l'accepte.
 - Importer `admins` ou `ipausers` : des groupes techniques deviennent « équipes ».
 - Un compte de service GitLab administrateur « pour aller vite ».
@@ -143,6 +143,7 @@ Le formulaire est un JSON Schema : les `dependencies` (`oneOf` sur l'équipe) im
 - Squelette qui ne passe pas Pod Security `restricted` ou sans `requests` : le premier déploiement échoue chez l'équipe, qui en déduit que le chemin balisé ne marche pas.
 - Oublier que l'AppProject de l'équipe doit autoriser le nouveau dépôt et le nouvel espace.
 - Un nom accepté par le formulaire mais pas par Capsule (préfixe) : l'espace serait refusé à la fusion.
+- Oublier que la découverte GitLab (E07) lira aussi le `catalog-info.yaml` du nouveau projet : `catalog:register` et le fournisseur produisent alors le même emplacement ; le catalogue garde la première version et journalise un conflit à la découverte suivante. Sans gravité, mais à savoir lire (ou retirer `catalog:register` et accepter jusqu'à 15 min d'attente). *(À vérifier sur ton lab.)*
 
 **En production chez MédiSphère**
 

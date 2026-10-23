@@ -10,6 +10,11 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: medinotif
+  # Minimum > 0 sans idleReplicaCount : KEDA ne fait pas d'activation, l'HPA décide seul (et KEDA réutilise
+  # les valeurs que l'HPA lui demande au lieu d'interroger les sources toutes les pollingInterval s).
+  # pollingInterval ne règle alors que le rafraîchissement des conditions et événements, cooldownPeriod
+  # ne sert à rien (le webhook de KEDA 2.21 l'écrit en avertissement) : on les garde pour garder le même
+  # fichier qu'en recette et le jour où la prod passerait à idleReplicaCount.
   pollingInterval: 15
   cooldownPeriod: 600
   minReplicaCount: 2

@@ -69,23 +69,24 @@ _m29E21_une() {
     2) tags="env-m29"; prot=0; onboot1=0 ;;
     3) tags="env-m29;terratest"; prot=1; onboot1=0 ;;
   esac
+  # Noms notés AVANT la création : si la seconde VM échoue, l'annulation retrouve la première.
+  m29_poser E21 vms "2298 $n1
+2299 $n2"
   wb_exec "$WB_PVE_HOST" V1=2298 V2=2299 N1="$n1" N2="$n2" TAGS="$tags" PROT="$prot" ONBOOT1="$onboot1" <<'EOF' || return 1
 for v in "$V1" "$V2"; do
   if qm status "$v" >/dev/null 2>&1; then echo "VM $v déjà présente" >&2; exit 1; fi
 done
 NOTE="Terratest M29-E08 (poste) : VM jetable, détruite par le test. Orpheline ? RB-293."
-qm create "$V1" --name "$N1" --memory 1024 --cores 1 --ostype l26 --net0 virtio,bridge=vsandbox \
-  --tags "$TAGS" --pool lab/terratest --onboot "$ONBOOT1" --protection "$PROT" --description "$NOTE" >/dev/null || exit 1
-journal "VM $V1 ($N1) créée (arrêtée, sans disque)"
-qm create "$V2" --name "$N2" --memory 1024 --cores 1 --ostype l26 --net0 virtio,bridge=vsandbox \
-  --tags "$TAGS" --pool lab/terratest --onboot 0 --protection "$PROT" --description "$NOTE" >/dev/null || exit 1
-journal "VM $V2 ($N2) créée (arrêtée, sans disque)"
-for v in "$V1" "$V2"; do
-  qm config "$v" | sed -n 's/^meta: .*ctime=\([0-9]*\).*/\1/p' > "$WB_DIR/$WB_EX.ctime-$v"
-done
+# creer VMID NOM ONBOOT — VM arrêtée sans disque ; date de création notée aussitôt (annulation).
+creer() {
+  qm create "$1" --name "$2" --memory 1024 --cores 1 --ostype l26 --net0 virtio,bridge=vsandbox \
+    --tags "$TAGS" --pool lab/terratest --onboot "$3" --protection "$PROT" --description "$NOTE" >/dev/null || return 1
+  qm config "$1" | sed -n 's/^meta: .*ctime=\([0-9]*\).*/\1/p' > "$WB_DIR/$WB_EX.ctime-$1"
+  journal "VM $1 ($2) créée (arrêtée, sans disque)"
+}
+creer "$V1" "$N1" "$ONBOOT1" || exit 1
+creer "$V2" "$N2" 0 || exit 1
 EOF
-  m29_poser E21 vms "2298 $n1
-2299 $n2"
   # Un état orphelin par test interrompu, là où CopyTerraformFolderToTemp laisse la copie du module.
   local dossiers="" v nom fixture
   for v in 2298 2299; do

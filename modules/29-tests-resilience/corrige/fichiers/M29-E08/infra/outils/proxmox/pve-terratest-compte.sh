@@ -86,7 +86,11 @@ acl() { # acl CHEMIN RÔLE : utilisateur ET jeton (privsep : le jeton n'a que l'
 
 # Sous-pool des VMs de test (dans lab). La plage 2290-2299 est imposée par le CODE du test (variable
 # validée de la configuration, choix d'un VMID libre), pas par Proxmox.
-existe "/pools/$POOL" || pveum pool add "$POOL" --comment "VMs jetables de Terratest (M29-E08) — RB-293"
+# Un identifiant de pool imbriqué contient « / » : « pvesh get /pools/lab/terratest » ne désigne pas ce
+# pool (l'API /pools/{poolid} est dépréciée depuis 8.1) ; on cherche dans la liste des pools.
+# (Sortie JSON compacte de pvesh : « "poolid":"lab/terratest" ».)
+pool_existe() { pvesh get /pools --output-format json | grep -qF "\"poolid\":\"$1\""; }
+pool_existe "$POOL" || pveum pool add "$POOL" --comment "VMs jetables de Terratest (M29-E08) — RB-293"
 acl "/pool/$POOL" WBTerratest
 for ((v = MODELE_DEBUT; v <= MODELE_FIN; v++)); do
   acl "/vms/$v" WBTerratestModele

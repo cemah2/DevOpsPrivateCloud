@@ -10,12 +10,12 @@
 | Rédaction | <MOI>, relu par Karim Benali et Nadia Roussel |
 
 ## Résumé
-Un traitement par lots de MédiDoc (`medidoc-indexation`), lancé à la main dans `medidoc-dev` avec des `requests` **à zéro**, après que les garde-fous de l'espace eurent été desserrés la veille (LimitRange supprimée, quota relevé), a occupé le CPU d'un travailleur que l'ordonnanceur croyait libre ; ses conteneurs ont été tués par manque de mémoire en boucle et la recette des autres équipes a ralenti.
+Un traitement par lots de MédiDoc (`medidoc-indexation`), lancé à la main dans `medidoc-dev` avec des `requests` **à zéro**, juste après que les garde-fous de l'espace eurent été desserrés (LimitRange supprimée, quota relevé), a occupé le CPU d'un travailleur que l'ordonnanceur croyait libre ; ses conteneurs ont été tués par manque de mémoire en boucle et la recette des autres équipes a ralenti.
 
 ## Chronologie
 | Heure | Événement |
 |---|---|
-| <J-1 17:40> | commit dans le dépôt du locataire : LimitRange de `medidoc-dev` retiré, quota relevé (« pour l'indexation ») |
+| <09:03> | commit de Lucas dans `plateforme/k8s` (`espaces/medidoc-dev/`) : LimitRange de `medidoc-dev` retirée, quota relevé (« pour le lot d'indexation »), appliqué au cluster |
 | <09:05> | lot `medidoc-indexation` créé à la main (`kubectl apply`), requests `0`, classe `medisphere-lot` |
 | <09:20> | alerte de capacité ; plaintes de lenteur en recette |
 | <09:32> | charge identifiée (tableau de capacité, `kubectl top`) |

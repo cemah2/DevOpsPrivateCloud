@@ -23,8 +23,12 @@ _m27_e23_permission() {
 }
 check_cmd "Permission déclarée de mediagenda-recette : écriture permise sur l'échange notifications" _m27_e23_permission
 check_cmd "notifications ($_m27p_vhost_recette) : consommée, moins de 20 messages prêts" _m27x_file_saine "$_m27p_vhost_recette"
-check_cmd "notifications ($_m27p_vhost_recette) : pas de longueur maximale qui ferait déborder la file au rebut" \
-  _m27p_file "$_m27p_vhost_recette" notifications '((.effective_policy_definition["max-length"] // .arguments["x-max-length"] // 1000000) | tonumber) >= 10000'
+check_cmd "notifications ($_m27p_vhost_recette) : ni durée de vie courte ni longueur maximale qui enverraient des demandes au rebut" \
+  _m27p_file "$_m27p_vhost_recette" notifications '((.effective_policy_definition["message-ttl"] // .arguments["x-message-ttl"] // 86400000) | tonumber) >= 3600000
+    and ((.effective_policy_definition["max-length"] // .arguments["x-max-length"] // 1000000) | tonumber) >= 10000'
+check_cmd "notifications ($_m27p_vhost_recette) : rebut « au moins une fois » (dead-letter-strategy at-least-once, overflow reject-publish)" \
+  _m27p_file "$_m27p_vhost_recette" notifications '(.arguments["x-dead-letter-strategy"] // .effective_policy_definition["dead-letter-strategy"] // "") == "at-least-once"
+    and (.arguments["x-overflow"] // .effective_policy_definition["overflow"] // "") == "reject-publish"'
 check_cmd "MédiNotif (recette) disponible" _m27x_medinotif_sain medinotif-recette
 _m27_e23_rebut() {
   local avant f="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/M27-E23/rebut-avant"

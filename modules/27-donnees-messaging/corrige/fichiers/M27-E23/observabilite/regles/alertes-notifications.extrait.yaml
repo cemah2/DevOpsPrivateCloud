@@ -29,5 +29,5 @@
             equipe: plateforme
           annotations:
             resume: "{{ $labels.vhost }} : {{ $value }} messages de plus au rebut en 30 min"
-            description: "Des demandes de notification partent au rebut ({{ $labels.vhost }}) : invalides, limite de livraison ou longueur de file. Regarder x-death."
+            description: "Des demandes de notification partent au rebut ({{ $labels.vhost }}) : invalides, limite de livraison, expiration ou longueur de file. Regarder x-death."
             runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/donnees/runbooks/RB-277-consommateur-arrete.md

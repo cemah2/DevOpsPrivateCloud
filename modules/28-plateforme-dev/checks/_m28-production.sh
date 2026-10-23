@@ -34,9 +34,10 @@ _m28p_so_ok() { _m28p_so "$1" | jq -e "$2" >/dev/null 2>&1; }
     and (.spec.advanced.horizontalPodAutoscalerConfig.behavior // null) != null'
 }
 
-# _m28p_pods_prio ESPACE SÉLECTEUR CLASSE — au moins un pod, et tous portent la classe.
+# _m28p_pods_prio ESPACE SÉLECTEUR CLASSE — au moins un pod en cours d'exécution, et tous ceux qui tournent
+# portent la classe (les pods terminés d'un Job de migration qui partagerait l'étiquette sont ignorés).
 _m28p_pods_prio() {
-  kube -n "$1" get pods -l "$2" -o json 2>/dev/null |
+  kube -n "$1" get pods -l "$2" --field-selector=status.phase=Running -o json 2>/dev/null |
     jq -e --arg c "$3" '(.items | length) > 0 and all(.items[]; .spec.priorityClassName == $c)' >/dev/null 2>&1
 }
 

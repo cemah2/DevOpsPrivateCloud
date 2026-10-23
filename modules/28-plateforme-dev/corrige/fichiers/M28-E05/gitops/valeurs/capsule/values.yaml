@@ -37,7 +37,8 @@ manager:
     # Un espace créé par une équipe porte le nom de son locataire en préfixe (« mediagenda-… ») :
     # l'appartenance se déduit du nom, pas d'étiquette à poser.
     forceTenantPrefix: true
-    # Une équipe ne doit pas pouvoir se faire passer pour une autre par le nom d'un espace.
+    # Noms d'espaces interdits aux utilisateurs Capsule (vide : le préfixe imposé suffit, une
+    # équipe ne peut créer que « <son-locataire>-… »).
     protectedNamespaceRegex: ""
     allowServiceAccountPromotion: false
 
@@ -52,8 +53,10 @@ global:
         # par empreinte. Vérifie que cette étiquette existe (Harbor, cache dockerhub).
         tag: "v1.36.5@sha256:<DIGEST-KUBECTL>"
 
-# Certificats des webhooks : générés par le contrôleur (défaut), renouvelés par lui.
-# (cert-manager possible par certManager.generateCertificates ; on garde le défaut documenté.)
+# Certificats des webhooks : par cert-manager (M15), défaut du chart 0.15.1
+# (certManager.generateCertificates: true → Issuer autosigné « capsule-webhook-selfsigned » et
+# Certificate « capsule-webhook-cert », caBundle injecté par l'annotation cert-manager.io/inject-ca-from
+# des webhooks dynamiques). Le contrôleur TLS de Capsule (tls.enableController) reste désactivé.
 
 # Supervision (M21) : ServiceMonitor du contrôleur avec l'étiquette de sélection.
 monitoring:

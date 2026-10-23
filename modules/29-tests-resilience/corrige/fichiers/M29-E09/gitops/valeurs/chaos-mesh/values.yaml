@@ -27,8 +27,8 @@ controllerManager:
     podFailure:
       # pod-failure remplace l'image des conteneurs visés par une image « pause » le temps de
       # l'expérience. Par défaut gcr.io/google-containers/pause:latest (Internet, étiquette flottante) :
-      # celle du cluster, par le cache k8s de Harbor (version de « kubeadm config images list »).
-      pauseImage: registry.par1.medisphere.internal/k8s/pause:3.10.1
+      # celle du cluster, par le cache k8s de Harbor (3.10.2 pour Kubernetes 1.36 : « kubeadm config images list »).
+      pauseImage: registry.par1.medisphere.internal/k8s/pause:3.10.2
   resources:
     requests:
       cpu: 25m

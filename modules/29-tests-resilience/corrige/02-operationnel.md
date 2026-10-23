@@ -89,7 +89,7 @@ admin@adm01:~$ ssh admin@mon01 'curl -s -o /dev/null -w "%{http_code}\n" http://
 200
 admin@adm01:~$ ssh admin@nbx01 'sudo systemctl stop alloy'; sleep 35
 admin@adm01:~$ ssh admin@mon01 'curl -s http://nbx01.par1.medisphere.internal:8099/healthz | jq ".summary"'
-{ "failed-count": 2, "summary-line": "Count: 14, Failed: 2, Skipped: 0, Duration: …", … }
+{ "failed-count": 3, "summary-line": "Count: 39, Failed: 3, Skipped: 1, Duration: …", … }
 admin@adm01:~$ ssh admin@nbx01 'sudo systemctl start alloy'
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/supervision-temoin.yml
 ```
@@ -136,7 +136,7 @@ La décision proposée (testinfra-goss.md) garde Testinfra et retire l'essai Gos
    root@pve01:~# pveum user token permissions wb-terratest@pve terratest --path /pool/lab
    root@pve01:~# pveum user token permissions wb-terratest@pve terratest --path /vms/1008
    ```
-   Le deuxième et le troisième ne doivent montrer aucun privilège d'écriture. Exemple du fichier d'environnement : [`adm01-pve-terratest.env.exemple`](fichiers/M29-E08/adm01-pve-terratest.env.exemple).
+   Le deuxième et le troisième ne doivent montrer aucun privilège d'écriture. Exemple du fichier d'environnement : [`adm01-pve-terratest.env.exemple`](fichiers/M29-E08/adm01-pve-terratest.env.exemple). Côté NetBox, ajoute les étiquettes `env-m29` et `terratest` à `outils/netbox/modele-medisphere.yml` et rejoue le script de modélisation (M06-E05) : `vm-debian` v2 étiquette l'objet VM de NetBox, et le compte d'automatisation n'a pas le droit de créer une étiquette (le premier `apply` échouerait).
 3. Test : [`tofu-modules/vm-debian/test/`](fichiers/M29-E08/tofu-modules/vm-debian/test/) — `go.mod`, `go.sum`, `doc.go`, `vm_debian_test.go` (`//go:build integration`, `TestVmDebian`), `apis_test.go` (petits clients de l'API Proxmox et de NetBox : VMID libre, ressource de la VM, adresses de l'agent, nombre d'adresses dans NetBox), configuration [`fixtures/vm/`](fichiers/M29-E08/tofu-modules/vm-debian/test/fixtures/vm/) (module `../../..`, sous-pool, `vsandbox`, étiquettes, variables validées, sans *backend*).
 4. Lancement :
    ```
@@ -288,8 +288,11 @@ La revue complète : [`politiques/rego/revue-lucas/REVUE.md`](fichiers/M29-E11/p
 
 Preuves rejouées :
 ```
-admin@adm01:~/src/politiques$ opa test rego/revue-lucas
-… rego_parse_error: `if` keyword is required before rule body
+admin@adm01:~$ L=~/DevOpsPrivateCloud/modules/29-tests-resilience/ressources/E11-lucas
+admin@adm01:~$ opa test "$L/politiques/rego/tofu"
+11 errors occurred during loading:
+…/garde-fous.rego:8: rego_parse_error: `if` keyword is required before rule body
+…/garde-fous.rego:8: rego_parse_error: `contains` keyword is required for partial set rules
 admin@adm01:~/src/politiques$ conftest test --namespace tofu -p /tmp/lucas-v1 --data /tmp/ctx.json rego/exemples/plan-socle-remplacement.json; echo rc=$?
 0 tests, 0 passed, 0 warnings, 0 failures, 0 exceptions
 rc=0

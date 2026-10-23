@@ -5,7 +5,9 @@
 # comparaison. AJOUTER aussi la destination medidoc-vc-essai à l'AppProject « plateforme » le temps
 # de l'essai (et la retirer avec ce fichier).
 # Finaliseur : supprimer ce fichier (élagage de l'Application de groupe « plateforme ») supprime
-# l'Application ET tous ses objets (StatefulSet, PVC du plan de contrôle, Services…).
+# l'Application ET tous les objets qu'elle suit (StatefulSet, Services, ClusterRole…). Le PVC du plan
+# de contrôle, lui, vient du volumeClaimTemplate (politique de rétention « Retain » par défaut du
+# chart 0.37.4) : il ne part qu'avec l'espace medidoc-vc-essai, supprimé ensuite par l'équipe.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

@@ -4,8 +4,8 @@
 # vérification HTTP qui interrompt tout si l'API ne répond plus (/sante, 6 échecs d'affilée : critère
 # d'arrêt global ; pas /pret, qui tombe dès que le cache manque : faiblesse connue, DEV-3013).
 # Hypothèses, mesures et critères : docs/qualite/journees-de-jeu/2026-10-29-dependances-recette.md.
-# Arrêt d'urgence : kubectl -n chaos-experiences annotate workflow jdj-2026-10-29 experiment.chaos-mesh.org/pause=true
-#                   (puis outils/chaos-arret.sh --supprimer)
+# Arrêt d'urgence : kubectl -n chaos-experiences annotate workflow jdj-2026-10-29 workflow.chaos-mesh.org/abort=true
+#                   (interruption : pas de pause de Workflow en Chaos Mesh 2.8), ou outils/chaos-arret.sh
 apiVersion: chaos-mesh.org/v1alpha1
 kind: Workflow
 metadata:

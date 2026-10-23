@@ -395,7 +395,9 @@ m27_rmq() {
   local m="$1" chemin="$2" corps="${3:-}" cfg
   cfg="$(_m27_rmq_cfg)" || { wb_avert "compte par défaut de RabbitMQ illisible (Secret $_M27_NS_MSG/rabbitmq-default-user)"; return 1; }
   if [[ -n "$corps" ]]; then
-    curl -sf --max-time 30 -X "$m" -H "Content-Type: application/json" --data-binary "$corps" \
+    # Corps par l'entrée standard : un argument de plus de 128 Kio (message de M27-E20, définitions)
+    # dépasserait la limite du noyau pour un seul argument (MAX_ARG_STRLEN) et curl ne partirait pas.
+    printf '%s' "$corps" | curl -sf --max-time 30 -X "$m" -H "Content-Type: application/json" --data-binary @- \
       -K <(printf '%s\n' "$cfg") "$_M27_RMQ_URL/api/$chemin"
   else
     curl -sf --max-time 30 -X "$m" -K <(printf '%s\n' "$cfg") -H "Accept: application/json" "$_M27_RMQ_URL/api/$chemin"

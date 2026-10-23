@@ -1,26 +1,55 @@
-# Essai de préemption (M28-E14, étape 5) — dans wb-essais SEULEMENT, puis supprimé.
-#   kubectl apply -f preemption.yaml                       # remplissage « lot » sur k8s-w01
+# Essai de préemption (M28-E14, étape 5) — dans wb-essais SEULEMENT, puis supprimé (classes comprises).
+#   kubectl apply -f preemption.yaml                       # deux classes d'essai + remplissage sur k8s-w01
 #   kubectl -n wb-essais get pods -o wide -w                # attendre que tout tienne (ou pas)
-#   kubectl apply -f preemption-standard.yaml               # le pod « standard » qui ne tient pas
+#   kubectl apply -f preemption-standard.yaml               # le pod « haute » qui ne tient pas
 #   kubectl -n wb-essais get events --field-selector reason=Preempted
 #   kubectl delete -f preemption-standard.yaml -f preemption.yaml
+#
+# ⚠️ Pourquoi pas medisphere-lot contre medisphere-standard ? L'ordonnanceur choisit ses victimes parmi
+# TOUS les pods de priorité inférieure du nœud, et rend leur place d'abord aux plus prioritaires : face à
+# un pod « standard » (10000), les pods « lot » (100) seraient épargnés et ce sont les composants de la
+# plateforme sans classe (priorité 0 : Argo CD, Kyverno, Prometheus… s'ils tournent sur k8s-w01) qui
+# seraient préemptés. C'est exactement le risque écrit dans capacite.md — on ne le démontre pas sur le lab.
+# Les deux classes d'essai sont NÉGATIVES : un pod « essai-haute » (-10) ne peut préempter que des pods de
+# priorité inférieure à -10, c'est-à-dire les seuls pods « essai-basse » de cet essai.
+#
 # Taille : 6 × 1 Gi de requests sur un nœud d'environ 9 Gi d'allouable, en plus de ce qui y tourne déjà :
 # ajuste « replicas » pour que le nœud soit plein (kubectl describe node k8s-w01 | grep -A8 Allocated).
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: essai-basse
+  labels: {medisphere.internal/essai: m28-e14}
+value: -100
+globalDefault: false
+preemptionPolicy: Never
+description: "ESSAI M28-E14 (wb-essais) : remplissage, ne préempte jamais. À supprimer après l'essai."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: essai-haute
+  labels: {medisphere.internal/essai: m28-e14}
+value: -10
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "ESSAI M28-E14 (wb-essais) : ne peut préempter que essai-basse. À supprimer après l'essai."
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: remplissage-lot
+  name: remplissage-essai
   namespace: wb-essais
-  labels: {app.kubernetes.io/name: remplissage-lot, medisphere.internal/equipe: plateforme}
+  labels: {app.kubernetes.io/name: remplissage-essai, medisphere.internal/equipe: plateforme}
 spec:
   replicas: 6
   selector:
-    matchLabels: {app.kubernetes.io/name: remplissage-lot}
+    matchLabels: {app.kubernetes.io/name: remplissage-essai}
   template:
     metadata:
-      labels: {app.kubernetes.io/name: remplissage-lot, medisphere.internal/equipe: plateforme}
+      labels: {app.kubernetes.io/name: remplissage-essai, medisphere.internal/equipe: plateforme}
     spec:
-      priorityClassName: medisphere-lot
+      priorityClassName: essai-basse
       nodeSelector: {kubernetes.io/hostname: k8s-w01}
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}

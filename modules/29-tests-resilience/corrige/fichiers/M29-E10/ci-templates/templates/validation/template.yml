@@ -217,6 +217,9 @@ validation:testinfra:
       when: manual
       allow_failure: true
   script:
+    # Le groupe « tests » (pytest-testinfra, pytest-xdist) n'est pas dans la synchronisation par défaut
+    # (.ansible ne fait que « uv sync --locked ») : sans cette ligne, pytest est introuvable.
+    - uv sync --locked --group tests
     - uv run pytest tests/infra --hosts="ansible://$[[ inputs.testinfra_hotes ]]"
         --ssh-identity-file="$ANSIBLE_PRIVATE_KEY_FILE" -n 4
   artifacts:

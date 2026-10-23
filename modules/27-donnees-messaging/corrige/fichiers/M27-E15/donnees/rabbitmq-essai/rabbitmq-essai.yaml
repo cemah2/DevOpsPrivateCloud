@@ -43,3 +43,7 @@ spec:
             securityContext:
               seccompProfile:
                 type: RuntimeDefault
+            # Le schéma de la CRD (Cluster Operator 2.23) exige « containers » dans ce gabarit partiel :
+            # sans lui, l'API refuse l'objet. Le nom suffit (fusion avec le conteneur de l'opérateur).
+            containers:
+              - name: rabbitmq

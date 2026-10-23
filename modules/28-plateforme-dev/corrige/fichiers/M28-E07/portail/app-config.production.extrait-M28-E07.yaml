@@ -95,7 +95,7 @@ catalog:
               description: description
               members: member
               memberOf: memberOf
-            # spec.type est OBLIGATOIRE pour une entité Group ; FreeIPA n'a pas d'attribut
-            # groupType (correspondance par défaut) : on le fixe.
+            # spec.type est obligatoire pour une entité Group ; FreeIPA n'a pas d'attribut groupType
+            # (correspondance par défaut) : le module mettrait « unknown ». On fixe un type parlant.
             set:
               spec.type: equipe

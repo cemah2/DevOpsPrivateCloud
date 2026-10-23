@@ -50,8 +50,9 @@ else
   skip "Applications, essais, locataires" "l'API ne répond pas au compte des checks"
 fi
 check_cmd "aucune panne M28 encore marquée active (lab/bin/break)" _m28x_aucune_panne_active
-_m28_e25_projet_absent() { gitlab_api "projects/medidoc%2Fmedidoc-chemin-balise" >/dev/null 2>&1 && return 1; return 0; }
-check_cmd "projet GitLab du service fictif medidoc-chemin-balise supprimé" _m28_e25_projet_absent
+_m28_e25_projet_absent() { gitlab_api "projects/medidoc%2F$1" >/dev/null 2>&1 && return 1; return 0; }
+check_cmd "projet GitLab du service fictif medidoc-chemin-balise supprimé" _m28_e25_projet_absent medidoc-chemin-balise
+check_cmd "projet GitLab medidoc-chemin-balise-deploiement supprimé" _m28_e25_projet_absent medidoc-chemin-balise-deploiement
 check_cmd "catalogue : plus d'entité medidoc-chemin-balise" _m28x_catalogue \
   'catalog/entities?filter=metadata.name=medidoc-chemin-balise' 'length == 0'
 check_cmd "catalogue : chaque Component a un propriétaire et sa documentation" _m28x_catalogue \

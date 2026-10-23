@@ -6,3 +6,9 @@
 path "kv/data/medinotif/prod/keda" {
   capabilities = ["read"]
 }
+
+# Compte d'essai campagne-recette (topologie/medinotif-recette/campagne.yaml) : même import dans
+# « messagerie ». À retirer avec le compte (quand les essais de charge passeront par k6, M29).
+path "kv/data/medinotif/recette/campagne" {
+  capabilities = ["read"]
+}
