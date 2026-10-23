@@ -3,7 +3,8 @@
 # shellcheck disable=SC2016  # filtres jq entre apostrophes
 #
 # check-E05.sh — M28-E05 : Capsule : un locataire par équipe
-# Lecture seule : Applications, contrôleur, CapsuleConfiguration, Tenant, Namespaces, ResourceQuotas
+# Lecture seule : Applications, contrôleur, CapsuleConfiguration, Tenant, GlobalTenantResource, Namespaces,
+# ResourceQuotas, LimitRanges
 # (kube) ; questions d'autorisation (SubjectAccessReview : rien n'est modifié) ; document (GitLab, GET).
 # Rejouable après les paliers 3 et 4 (seuls les invariants du modèle sont contrôlés).
 
@@ -61,7 +62,27 @@ done
 check_cmd "Application mediagenda-prod toujours Synced" _m28d_app_synced mediagenda-prod
 check_cmd "Application mediagenda-recette toujours Synced" _m28d_app_synced mediagenda-recette
 
-# --- 4. Droits de l'équipe -------------------------------------------------------------------------------------------
+# --- 4. LimitRange de la plateforme dans chaque espace des locataires ------------------------------------------------
+# Chaque espace qui porte capsule.clastix.io/tenant (environnements ET libre-service) a au moins une LimitRange
+# de type Container avec un minimum CPU et mémoire (une request déclarée nulle est refusée). Une LimitRange
+# sans « min » (valeurs par défaut seules) ne suffit pas.
+_m28d_e05_limites_partout() {
+  local ns n
+  ns="$(kube get namespaces -l capsule.clastix.io/tenant -o jsonpath='{.items[*].metadata.name}' 2>/dev/null)" || return 1
+  [[ -n "$ns" ]] || return 1
+  for n in $ns; do
+    kube -n "$n" get limitranges -o json 2>/dev/null | jq -e '
+      any(.items[].spec.limits[]?; .type == "Container" and (.min.cpu // null) != null and (.min.memory // null) != null)' \
+      >/dev/null 2>&1 || return 1
+  done
+}
+check_cmd "GlobalTenantResource limites-par-defaut prête (Ready)" _m28d_kq \
+  '[.status.conditions[]? | select(.type == "Ready")] | (length >= 1 and all(.[]; .status == "True"))' \
+  globaltenantresources.capsule.clastix.io limites-par-defaut
+check_cmd "chaque espace des locataires a une LimitRange avec un minimum CPU et mémoire par conteneur" \
+  _m28d_e05_limites_partout
+
+# --- 5. Droits de l'équipe -------------------------------------------------------------------------------------------
 check_cmd "oidc:mediagenda ne peut toujours PAS créer un Deployment dans mediagenda-prod" _m28d_ne_peut_pas \
   oidc:wb-checks-sonde oidc:mediagenda create deployments mediagenda-prod apps
 check_cmd "oidc:mediagenda ne peut PAS supprimer l'espace mediagenda-prod" _m28d_ne_peut_pas \

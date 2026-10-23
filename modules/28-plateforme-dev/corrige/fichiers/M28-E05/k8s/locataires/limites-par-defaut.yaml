@@ -1,0 +1,130 @@
+# plateforme/k8s — locataires/limites-par-defaut.yaml (M28-E05, PLAT-2905) — Application Argo CD « locataires ».
+# LimitRange garantie par la PLATEFORME dans TOUT espace d'un locataire (étiquette capsule.clastix.io/tenant),
+# y compris les espaces de libre-service qu'une équipe crée elle-même (aucun fichier à ajouter par espace).
+#
+# Mécanisme : réplication de Capsule 0.15 (GlobalTenantResource, capsule.clastix.io/v1beta2 ; champs vérifiés
+# dans la CRD du chart 0.15.1). Le champ « limitRanges » du Tenant est déprécié au profit des réplications.
+# Capsule (re)crée l'objet dans chaque espace sélectionné, le remet en état à chaque resyncPeriod, et le
+# protège par son webhook « replications » (policy.protect) : ni l'équipe (admin du libre-service) ni un
+# kubectl à la main ne peuvent le modifier ou le supprimer tant que Capsule le gère.
+#
+# Deux blocs, parce que Kubernetes applique TOUTES les LimitRange d'un espace et que des valeurs par défaut
+# venant de deux LimitRange sont imprévisibles (doc. Kubernetes « Limit Ranges ») :
+#   - libre-service (sans medisphere.internal/environnement) : valeurs par défaut + plancher + plafond ;
+#   - environnements (avec l'étiquette) : PLANCHER SEUL ; les valeurs par défaut restent celles de la
+#     LimitRange de l'espace (plateforme/k8s/espaces/<espace>/20-limites.yaml).
+# Le plancher (min) refuse à l'admission un conteneur qui DÉCLARE une request nulle ou ridicule ; les valeurs
+# par défaut, elles, ne s'appliquent qu'aux requests ABSENTES. Valeurs alignées sur celles de medinotif-* (M27).
+#
+# Exception à un espace : jamais à la main (protégé) ; par MR sur ce fichier (namespaceSelector), relue par
+# la Plateforme (CODEOWNERS).
+---
+# Identité empruntée par Capsule pour écrire les LimitRange (moindre privilège : rien d'autre). Sans
+# spec.serviceAccount, Capsule emprunte l'identité par défaut de sa configuration (impersonation du chart),
+# qui n'a pas ces droits.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: capsule-replications
+  namespace: capsule-system
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: capsule-replications-limitranges
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+rules:
+  - apiGroups: [""]
+    resources: [limitranges]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: capsule-replications-limitranges
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capsule-replications-limitranges
+subjects:
+  - kind: ServiceAccount
+    name: capsule-replications
+    namespace: capsule-system
+---
+apiVersion: capsule.clastix.io/v1beta2
+kind: GlobalTenantResource
+metadata:
+  name: limites-par-defaut
+  labels:
+    app.kubernetes.io/part-of: plateforme-k8s
+  annotations:
+    medisphere.internal/ticket: "PLAT-2905"
+spec:
+  # Tous les locataires de la plateforme (les trois Tenant portent cette étiquette ; RB-280 la pose sur
+  # tout nouveau locataire).
+  tenantSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: plateforme-k8s
+  # Un objet par espace sélectionné (défaut de la CRD, écrit pour être lu).
+  scope: Namespace
+  resyncPeriod: 60s
+  serviceAccount:
+    name: capsule-replications
+    namespace: capsule-system
+  resources:
+    # 1. Espaces de libre-service : valeurs par défaut (un pod sans requests reste comptable dans le budget
+    #    du locataire), plancher, plafond.
+    - namespaceSelector:
+        matchExpressions:
+          - key: medisphere.internal/environnement
+            operator: DoesNotExist
+      policy:
+        creation: Owner
+        deletion: Remove
+        protect: true
+      rawItems:
+        - apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: limites-locataire
+          spec:
+            limits:
+              - type: Container
+                min:
+                  cpu: 5m
+                  memory: 16Mi
+                defaultRequest:
+                  cpu: 50m
+                  memory: 64Mi
+                default:
+                  cpu: 500m
+                  memory: 256Mi
+                max:
+                  cpu: "2"
+                  memory: 2Gi
+    # 2. Environnements rattachés (dev, recette, prod, secours) : plancher seul, à côté de la LimitRange
+    #    de l'espace (qui garde ses valeurs par défaut et son plafond).
+    - namespaceSelector:
+        matchExpressions:
+          - key: medisphere.internal/environnement
+            operator: Exists
+      policy:
+        creation: Owner
+        deletion: Remove
+        protect: true
+      rawItems:
+        - apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: limites-locataire
+          spec:
+            limits:
+              - type: Container
+                min:
+                  cpu: 5m
+                  memory: 16Mi

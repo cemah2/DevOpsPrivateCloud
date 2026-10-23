@@ -274,26 +274,42 @@ Revue trimestrielle des recommandations (outil du palier 3), changements de `req
    medinotif    Active   2
    ```
    (Message exact du refus : à relever sur ton lab.)
-5. **Ce que Capsule a posé** :
+5. **Limites dans chaque espace** : [`locataires/limites-par-defaut.yaml`](fichiers/M28-E05/k8s/locataires/limites-par-defaut.yaml) (et sa ligne dans [`kustomization.yaml`](fichiers/M28-E05/k8s/locataires/kustomization.yaml)).
+   ```
+   admin@adm01:~$ kubectl get globaltenantresource limites-par-defaut
+   NAME                 ITEMS   READY   STATUS   AGE
+   limites-par-defaut   …       True    …        1m
+   admin@adm01:~$ kubectl get limitranges -A | grep -E 'limites-(locataire|defaut)'
+   admin@adm01:~$ kubectl -n mediagenda-dev delete limitrange limites-locataire --dry-run=server
+   ```
+   Lecture de la CRD (chart 0.15.1) : `scope` vaut `Namespace` par défaut (un objet par espace sélectionné ; `Tenant` en poserait un par locataire) ; `resyncPeriod` (60s) est obligatoire ; sans `namespaceSelector`, un bloc vise tous les espaces des locataires sélectionnés ; `policy` : `creation: Owner` (n'adopte pas un objet existant du même nom : erreur), `deletion: Remove` (objet supprimé quand Capsule cesse de le gérer : bloc retiré, espace qui ne correspond plus au sélecteur), `protect: true` (le webhook `replications.validating.projectcapsule.dev` refuse la modification ou la suppression de l'objet tant que Capsule le gère). Le refus du `delete --dry-run=server` est à relever sur ton lab. Kubernetes (*Limit Ranges*) : avec deux `LimitRange` qui portent des valeurs par défaut, celle qui s'applique n'est pas déterministe ; les `min` et `max` de toutes s'appliquent. D'où **deux blocs** : valeurs par défaut, plancher et plafond dans le libre-service ; **plancher seul** dans les environnements, qui gardent leur `LimitRange` d'espace.
+6. **Ce que Capsule a posé** :
    ```
    admin@adm01:~$ kubectl -n mediagenda-prod get rolebindings,resourcequotas -o name
    admin@adm01:~$ kubectl get ns mediagenda-prod -o jsonpath='{.metadata.labels}{"\n"}{.metadata.ownerReferences}{"\n"}'
    admin@adm01:~$ argocd app get mediagenda-prod --show-operation | head -5
    ```
    RoleBindings `capsule-mediagenda-…` (`view`) ; aucun quota ajouté dans les environnements (la règle `quota` ne vise que le libre-service) ; Application `Synced`. Orphelins : [extrait des AppProjects](fichiers/M28-E05/gitops/projets/applications.extrait-M28-E05.yaml).
-6. **Essai de Sophie** : résultats dans [`locataires.md`](fichiers/M28-E05/medisphere/docs/plateforme-dev/locataires.md) ; exemples :
+7. **Essai de Sophie** : résultats dans [`locataires.md`](fichiers/M28-E05/medisphere/docs/plateforme-dev/locataires.md) ; exemples :
    ```
    admin@adm01:~$ kubectl create namespace mediagenda-essai-julien --as=oidc:julien.petit --as-group=oidc:mediagenda
    admin@adm01:~$ kubectl create namespace essai-julien --as=oidc:julien.petit --as-group=oidc:mediagenda
    Error from server (Forbidden): admission webhook "…namespaces…" denied the request: The Namespace prefix used doesn't match any available Tenant
    admin@adm01:~$ kubectl auth can-i create deployments -n mediagenda-prod --as=oidc:julien.petit --as-group=oidc:mediagenda
    no
+   admin@adm01:~$ kubectl -n mediagenda-essai-julien run zero --image=<IMAGE-HARBOR> --dry-run=server \
+       --overrides='{"spec":{"containers":[{"name":"zero","image":"<IMAGE-HARBOR>","resources":{"requests":{"cpu":"0","memory":"0"},"limits":{"cpu":"100m","memory":"64Mi"}}}]}}' \
+       --as=oidc:julien.petit --as-group=oidc:mediagenda
+   Error from server (Forbidden): pods "zero" is forbidden: [minimum cpu usage per Container is 5m, but request is 0, minimum memory usage per Container is 16Mi, but request is 0]
    ```
-7. **Cohabitation** : [`locataires.md`](fichiers/M28-E05/medisphere/docs/plateforme-dev/locataires.md).
+   (`<IMAGE-HARBOR>` : n'importe quelle image de la plateforme, par exemple celle d'un témoin du M22. Selon l'ordre des contrôles d'admission, PSA ou Kyverno peuvent refuser d'abord si le pod d'essai ne respecte pas `restricted` : lis le message.)
+8. **Cohabitation** : [`locataires.md`](fichiers/M28-E05/medisphere/docs/plateforme-dev/locataires.md).
 
 **Explications**
 
 Capsule ajoute deux choses à Kubernetes : la notion de **propriété** (un espace appartient à un `Tenant` par une référence de propriétaire et une étiquette) et des **webhooks** qui font respecter les règles du locataire. Les droits viennent de RoleBindings qu'il pose et réconcilie dans chaque espace. Par défaut, chaque propriétaire reçoit `admin` partout : c'est pourquoi les propriétaires sont ici en `view` et que l'administration n'est donnée, par une règle, qu'aux espaces **sans** étiquette d'environnement — étiquette que l'équipe ne peut pas poser (`forbiddenLabels`). Le budget du libre-service est une `GlobalResourceQuota` (règle `quota`) : un quota agrégé, réparti en `ResourceQuota` dans chaque espace sélectionné ; Kubernetes applique tous les quotas d'un espace, donc il s'ajoute à ceux de la plateforme sans les remplacer.
+
+La `LimitRange` de la plateforme suit la même logique de propriété : c'est Capsule, pas l'équipe, qui la pose et la remet en état (toutes les `resyncPeriod`) dans chaque espace sélectionné, y compris un espace de libre-service créé à l'instant, sans fichier à ajouter. L'équipe, administratrice de son libre-service, ne peut ni la modifier ni la supprimer : la ClusterRole `admin` ne donne que la lecture des `limitranges`, et le webhook de protection des réplications (`policy.protect`) refuse toute modification qui ne vient pas de Capsule (vérifie sur ton lab ce qu'il répond à un administrateur : étape 5). Le **minimum** est ce qui compte : les valeurs par défaut ne s'appliquent qu'aux `requests` **absentes**, alors qu'un conteneur qui **déclare** une request nulle passe la politique Kyverno `exiger-limites` (M26, présence des clés) et ne réserve rien pour l'ordonnanceur ; le minimum le refuse à l'admission (M28-E23 montre ce qui arrive sans lui). Capsule emprunte l'identité de `capsule-replications` pour écrire : sans `spec.serviceAccount`, il prendrait l'identité par défaut de sa configuration (`impersonation`, `tenantDefaultServiceAccount: default` dans les valeurs du chart), qui n'a pas ce droit.
 
 La référence de propriétaire est la partie dangereuse : le ramasse-miettes supprime un objet dont le propriétaire a disparu. `preventDeletion` (webhook) et `Prune=false,Delete=false` (Argo CD) empêchent cette disparition ; le script refuse d'agir sans eux.
 
@@ -304,6 +320,7 @@ Cohabitation : Pod Security et Kyverno sont indépendants de Capsule (tous les c
 - **Espaces nommés + RBAC + quotas « à la main »** (ce qu'on faisait depuis M14) : suffisant sans libre-service ; Capsule apporte la création par l'équipe et l'agrégation.
 - **Hierarchical Namespaces (HNC)** : projet arrêté ; **Kiosk** : abandonné.
 - **Kyverno `GeneratingPolicy`** pour poser quotas et RoleBindings à la création d'un espace : possible, mais il faudrait réécrire la propriété, le préfixe et l'agrégation.
+- **Kyverno `GeneratingPolicy`** (`policies.kyverno.io/v1`, comme `networkpolicy-par-defaut` au M26) pour la `LimitRange` : possible (déclenchement sur `capsule.clastix.io/tenant`, `synchronize` pour la recréer), mais il faut `generateExisting` pour les espaces déjà rattachés, des droits supplémentaires pour le contrôleur d'arrière-plan de Kyverno, et rien n'empêche l'équipe de la supprimer entre deux synchronisations ; la réplication de Capsule sélectionne nativement les espaces d'un locataire et protège l'objet. Le champ `limitRanges` du `Tenant`, lui, est déprécié.
 - **Rattacher par un `Tenant` qui liste les espaces** : n'existe pas dans Capsule ; c'est l'espace qui pointe vers son locataire.
 
 **Pièges classiques**
@@ -314,6 +331,9 @@ Cohabitation : Pod Security et Kyverno sont indépendants de Capsule (tous les c
 - Mettre `oidc:plateforme-admins` dans `users` : la plateforme deviendrait soumise aux règles des locataires.
 - Ignorer la `failurePolicy: Fail` : Capsule indisponible = plus de pod créé dans les espaces rattachés, plus d'espace créé ni modifié dans tout le cluster.
 - Utiliser `spec.resourceQuotas` (déprécié) d'un exemple ancien.
+- Répliquer une `LimitRange` **avec valeurs par défaut** dans un espace qui a déjà la sienne : les valeurs par défaut appliquées deviennent imprévisibles.
+- Oublier `spec.serviceAccount` de la `GlobalTenantResource` : la réplication échoue faute de droits (`READY` à `False`, message dans le statut).
+- Retirer la `LimitRange` d'un espace « à la main » : la protection refuse ; une exception passe par une MR sur `limites-par-defaut.yaml` (et se voit dans l'historique).
 
 **En production chez MédiSphère**
 

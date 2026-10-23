@@ -6,8 +6,13 @@
 # Une seule variante, en deux temps :
 #   (a) commit de Lucas dans plateforme/k8s (fichiers d'espaces/ qui déclarent la LimitRange et le
 #       ResourceQuota de medidoc-dev) : LimitRange retirée, quota relevé (« pour le lot d'indexation ») ;
-#       l'état correspondant est appliqué dans le cluster, comme l'aurait fait « task espaces » suivi
-#       d'une suppression à la main (task espaces n'élague pas) : LimitRange supprimée, quota relevé ;
+#       dans le MÊME commit, medidoc-dev est exclu (NotIn sur kubernetes.io/metadata.name) des blocs de
+#       la GlobalTenantResource de locataires/ qui répliquent une LimitRange (plancher « limites-locataire »
+#       de M28-E05, protégé par Capsule : on ne le supprime jamais à la main, c'est Capsule qui le retire
+#       quand l'espace ne correspond plus, policy.deletion: Remove). L'état correspondant est appliqué dans
+#       le cluster, comme l'aurait fait « task espaces » suivi d'une suppression à la main (task espaces
+#       n'élague pas) : LimitRange de l'espace supprimée, quota relevé ; Argo CD (Application locataires)
+#       synchronise l'exclusion, et le script attend que medidoc-dev n'ait plus AUCUNE LimitRange ;
 #   (b) dans medidoc-dev uniquement, un Deployment « medidoc-indexation » de 2 réplicas qui DÉCLARE des
 #       requests à zéro (clés présentes : la ValidatingPolicy exiger-limites du M26 ne vérifie que leur
 #       présence) et des limites de 500m CPU / 256 Mi par conteneur : un conteneur boucle sur le CPU,
@@ -23,7 +28,8 @@
 #   - jamais *-prod, kube-system, kyverno, argocd ; aucun secret touché ; le locataire n'est pas modifié.
 # Annulation (ne défait jamais la réparation de l'apprenant) : Deployment supprimé s'il est encore celui
 # créé par la panne (même uid) ; LimitRange recréée seulement si elle manque ; quota remis seulement s'il
-# a encore les valeurs injectées ; commit inverse seulement pour les fichiers encore dans l'état injecté.
+# a encore les valeurs injectées ; commit inverse seulement pour les fichiers encore dans l'état injecté
+# (l'exclusion retirée, Capsule recrée le plancher dans medidoc-dev).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -38,6 +44,13 @@ _E23_PROJET=plateforme/k8s
 _E23_RELEVE='{"requests.cpu":"8","limits.cpu":"16","requests.memory":"16Gi","limits.memory":"32Gi","pods":"60"}'
 # Filtre yq : l'objet vise medidoc-dev (espace explicite, ou implicite dans espaces/medidoc-dev/).
 _E23_YQ_NS='((.metadata.namespace // "") == strenv(NS) or ((.metadata.namespace // "") == "" and strenv(DANS) == "oui"))'
+# Filtre yq : blocs (resources[]) d'une GlobalTenantResource qui répliquent une LimitRange.
+_E23_YQ_GTR_LR='select(.kind == "GlobalTenantResource") | .spec.resources[] | select(((.rawItems // []) | any_c(.kind == "LimitRange")) or ((.generators // []) | any_c((.template // "") | test("kind: *LimitRange"))))'
+# Marqueurs posés par Capsule sur les objets répliqués (matchConditions du webhook « replications »,
+# chart 0.15.1) : ces LimitRange-là ne sont jamais supprimées à la main (protégées).
+_E23_JQ_REPLIQUE='((.metadata.labels // {}) as $l | ($l["projectcapsule.dev/created-by"] == "replications"
+  or $l["projectcapsule.dev/managed-by"] == "replications" or $l["projectcapsule.dev/protected-by"] == "replications"
+  or $l["protection.projectcapsule.dev/replications"] == "true"))'
 
 # ---------------------------------------------------------------------------
 # État sain
@@ -95,7 +108,7 @@ _e23_libre() { [[ ! -e "$WB_ETAT_DIR/M28-$1" ]]; }
 # ---------------------------------------------------------------------------
 
 # _e23_fichiers — fichiers de plateforme/k8s (espaces/) qui déclarent une LimitRange ou un ResourceQuota
-# de medidoc-dev.
+# de medidoc-dev, puis fichiers de locataires/ dont une GlobalTenantResource réplique une LimitRange.
 _e23_fichiers() {
   local f dans n
   m28_git_chercher "$_E23_PROJET" 'kind: *(LimitRange|ResourceQuota)' espaces | while IFS= read -r f; do
@@ -105,15 +118,21 @@ _e23_fichiers() {
       NS="$_E23_NS" DANS="$dans" yq ea "[select((.kind == \"LimitRange\" or .kind == \"ResourceQuota\") and $_E23_YQ_NS)] | length" 2>/dev/null)" || n=0
     if [[ "$n" =~ ^[0-9]+$ ]] && ((n > 0)); then printf '%s\n' "$f"; fi
   done
+  m28_git_chercher "$_E23_PROJET" 'kind: *GlobalTenantResource' locataires | while IFS= read -r f; do
+    n="$(m28_git_lire "$_E23_PROJET" "$f" 2>/dev/null | yq ea "[$_E23_YQ_GTR_LR] | length" 2>/dev/null)" || n=0
+    if [[ "$n" =~ ^[0-9]+$ ]] && ((n > 0)); then printf '%s\n' "$f"; fi
+  done
 }
 
-# _e23_transformer CHEMIN — stdin → stdout : retire les LimitRange de medidoc-dev, relève ses quotas.
+# _e23_transformer CHEMIN — stdin → stdout : retire les LimitRange de medidoc-dev, relève ses quotas,
+# exclut medidoc-dev des blocs de GlobalTenantResource qui répliquent une LimitRange.
 _e23_transformer() {
   local dans=non
   [[ "$1" == espaces/"$_E23_NS"/* ]] && dans=oui
   NS="$_E23_NS" DANS="$dans" yq "select((.kind == \"LimitRange\" and $_E23_YQ_NS) | not)" |
     NS="$_E23_NS" DANS="$dans" RELEVE="$_E23_RELEVE" \
-      yq "(strenv(RELEVE) | from_json) as \$m | (select(.kind == \"ResourceQuota\" and $_E23_YQ_NS) | .spec.hard) |= with_entries(.value = (\$m[.key] // .value))"
+      yq "(strenv(RELEVE) | from_json) as \$m | (select(.kind == \"ResourceQuota\" and $_E23_YQ_NS) | .spec.hard) |= with_entries(.value = (\$m[.key] // .value))" |
+    NS="$_E23_NS" yq "($_E23_YQ_GTR_LR) |= (.namespaceSelector.matchExpressions = ((.namespaceSelector.matchExpressions // []) + [{\"key\": \"kubernetes.io/metadata.name\", \"operator\": \"NotIn\", \"values\": [strenv(NS)]}]))"
 }
 
 # _e23_vide FICHIER — le fichier ne contient plus aucun objet (seulement blancs, commentaires, « --- »).
@@ -173,8 +192,9 @@ _e23_git_injecter() {
   m28_poser E23 git-nb "$i"
   _e23_pousser "chore(medidoc-dev): LimitRange retirée et quota relevé pour le lot d'indexation (M28-E23)
 
-Le lot de vignettes de MédiDoc ne passait pas avec les valeurs par défaut. Appliqué avec
-task espaces. Je remettrai après la campagne. -- Lucas" "$actions" lucas || return 1
+Le lot de vignettes de MédiDoc ne passait pas avec les valeurs par défaut. medidoc-dev
+sorti des limites par défaut des locataires le temps du lot. Appliqué avec task espaces.
+Je remettrai après la campagne. -- Lucas" "$actions" lucas || return 1
   m28_journal E23 "commit de Lucas sur $_E23_PROJET ($i fichier(s))"
 }
 
@@ -223,16 +243,23 @@ _e23_git_annuler() {
 # Cluster : garde-fous de l'espace et charge
 # ---------------------------------------------------------------------------
 
-# _e23_garde_fous_retirer — sauvegarde puis supprime les LimitRange ; relève les quotas déclarés en Git.
+# _e23_garde_fous_retirer — sauvegarde puis supprime les LimitRange de l'espace (jamais celles que Capsule
+# réplique : Argo CD synchronise l'exclusion et Capsule les retire) ; relève les quotas déclarés en Git.
 _e23_garde_fous_retirer() {
   local d lr rq noms nb i f dans
   d="$(m28_etat E23)"
-  for lr in $(wb_kubectl -n "$_E23_NS" get limitranges -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+  for lr in $(wb_kubectl -n "$_E23_NS" get limitranges -o json 2>/dev/null |
+    jq -r "[.items[] | select($_E23_JQ_REPLIQUE | not) | .metadata.name] | .[]"); do
     wb_kubectl -n "$_E23_NS" get limitrange "$lr" -o json 2>/dev/null |
       jq 'del(.metadata.uid, .metadata.resourceVersion, .metadata.creationTimestamp, .metadata.managedFields, .metadata.generation, .status)' \
         >"$d/lr-$lr.json" || return 1
     chmod 600 "$d/lr-$lr.json"
-    wb_kubectl -n "$_E23_NS" delete limitrange "$lr" --wait=false >/dev/null || return 1
+    # Refus (objet protégé par un webhook, marqueur de réplication inattendu) : on n'insiste pas, l'attente
+    # ci-dessous décide si la panne est posée.
+    if ! wb_kubectl -n "$_E23_NS" delete limitrange "$lr" --wait=false >/dev/null 2>&1; then
+      rm -f -- "$d/lr-$lr.json"
+      m28_journal E23 "LimitRange $lr non supprimée (refusée) : laissée à Capsule"
+    fi
   done
   # Quotas : ceux que les fichiers de Git déclarent pour medidoc-dev (noms lus dans les originaux).
   noms=""
@@ -250,6 +277,17 @@ _e23_garde_fous_retirer() {
     wb_kubectl -n "$_E23_NS" patch resourcequota "$rq" --type=merge \
       -p "$(jq -c '{spec: {hard: .}}' "$d/rq-$rq.injecte")" >/dev/null || return 1
   done
+  # Plancher répliqué par Capsule (M28-E05) : retiré par Capsule après la synchronisation de l'exclusion.
+  m28_rafraichir locataires
+  if ! m28_attendre 300 _e23_sans_limitrange; then
+    wb_avert "$_E23_NS a encore une LimitRange après 5 min (Application locataires synchronisée ? réplication de Capsule ?)"
+    return 1
+  fi
+}
+
+# _e23_sans_limitrange — l'API répond et medidoc-dev n'a plus aucune LimitRange.
+_e23_sans_limitrange() {
+  wb_kubectl -n "$_E23_NS" get limitranges -o json 2>/dev/null | jq -e '.items | length == 0' >/dev/null 2>&1
 }
 
 _e23_garde_fous_rendre() {
@@ -388,6 +426,8 @@ annuler_E23() {
   _e23_arreter_charge || true
   _e23_garde_fous_rendre || true
   _e23_git_annuler || true
+  # Exclusion retirée de la GlobalTenantResource : Argo CD la resynchronise, Capsule recrée le plancher.
+  m28_rafraichir locataires
   m28_journal E23 "annulation"
 }
 

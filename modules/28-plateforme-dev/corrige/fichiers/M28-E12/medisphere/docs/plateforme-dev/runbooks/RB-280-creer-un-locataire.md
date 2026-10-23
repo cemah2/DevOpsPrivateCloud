@@ -26,7 +26,7 @@ Variables utilisées ci-dessous : `EQUIPE=<equipe>`.
 ## 3. Environnements
 
 5. MR `plateforme/k8s` : `espaces/$EQUIPE-dev/` (Namespace avec `capsule.clastix.io/tenant: $EQUIPE`, `medisphere.internal/environnement: dev`, Pod Security `restricted` ; ResourceQuota, LimitRange ; SecretStore `openbao`), puis `task espaces`, ajout de l'espace à `outils/rattacher-locataires.sh` et exécution.
-   **Vérifier** : `kubectl get tenant $EQUIPE -o jsonpath='{.status.namespaces}'` contient `$EQUIPE-dev` ; `kubectl auth can-i create deployments -n $EQUIPE-dev --as=oidc:<membre> --as-group=oidc:$EQUIPE` → `no` (livraison par Argo CD).
+   **Vérifier** : `kubectl get tenant $EQUIPE -o jsonpath='{.status.namespaces}'` contient `$EQUIPE-dev` ; `kubectl -n $EQUIPE-dev get limitrange limites-locataire` (plancher répliqué par la `GlobalTenantResource` `limites-par-defaut`, qui sélectionne le `Tenant` par son étiquette `app.kubernetes.io/part-of: plateforme-k8s`, reprise de `medidoc.yaml`) ; `kubectl auth can-i create deployments -n $EQUIPE-dev --as=oidc:<membre> --as-group=oidc:$EQUIPE` → `no` (livraison par Argo CD).
 
 ## 4. Livraison et coffre
 

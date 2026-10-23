@@ -29,6 +29,7 @@ Les équipes ne sont pas administratrices par défaut sur la production : Capsul
 - **Budget du libre-service** : une `GlobalResourceQuota` `<locataire>-libre-service` (règle `quota` du `Tenant`), répartie en `ResourceQuota` `capsule-global-quota-…` dans chaque espace de libre-service. `spec.resourceQuotas` (déprécié en 0.15) n'est pas utilisé.
 - **Classes de stockage** : `ceph-rbd` seule, et par défaut pour un PVC sans classe.
 - **Liaisons RBAC** dans chaque espace (`capsule-<locataire>-…`).
+- **`LimitRange` de la plateforme** dans **chaque** espace d'un locataire (`limites-locataire`, répliquée par la `GlobalTenantResource` `limites-par-defaut`, protégée) : minimum 5m / 16 Mi par conteneur partout ; dans le libre-service, en plus, valeurs par défaut (50m / 64 Mi demandés, 500m / 256 Mi de limites) et plafond (2 CPU / 2 Gi). Les environnements gardent leur `LimitRange` d'espace pour les valeurs par défaut (deux `LimitRange` avec valeurs par défaut = résultat imprévisible). Une exception passe par MR sur `plateforme/k8s/locataires/limites-par-defaut.yaml`.
 
 ## Ce que Capsule ne fait pas (ici)
 
@@ -44,6 +45,7 @@ Les équipes ne sont pas administratrices par défaut sur la production : Capsul
 | Kyverno (M26) | politiques de cluster | inchangé ; s'applique avant ou après Capsule selon l'ordre des webhooks, tous doivent accepter |
 | Quotas de la plateforme | `plateforme/k8s/espaces/<espace>/` | intacts sur les environnements ; Kubernetes applique **tous** les ResourceQuota d'un espace |
 | Budget du locataire | `GlobalResourceQuota` | libre-service seulement : un bac à sable ne peut pas affamer la production |
+| `LimitRange` | celle de l'espace (`plateforme/k8s/espaces/`) + `limites-locataire` (Capsule) | toutes s'appliquent : valeurs par défaut d'**une seule** source par espace, minimum et plafond de toutes ; une request déclarée nulle est refusée (Kyverno `exiger-limites` ne vérifie que sa présence) |
 | Argo CD | Applications des équipes | toujours `Synced` : Capsule ne contraint pas ses requêtes (pas un utilisateur Capsule) ; les objets posés par Capsule sont ignorés par la surveillance des orphelins (AppProjects) |
 
 ⚠️ **Dépendance forte.** Les webhooks de Capsule sont en `failurePolicy: Fail` : sur **tous** les objets d'espace des espaces rattachés (création, mise à jour) et sur **tous** les espaces du cluster (création, mise à jour, suppression). Capsule arrêté = plus de création de pod dans `mediagenda-prod`, plus de `task espaces`. Le contrôleur passe à deux réplicas et est supervisé au palier 3 (M28-E16 et E21).
@@ -58,10 +60,11 @@ Les équipes ne sont pas administratrices par défaut sur la production : Capsul
 | PVC `cephfs` dans `mediagenda-essai-julien` | refusé (classe non autorisée) |
 | `kubectl -n mediagenda-prod delete deploy mediagenda` | `forbidden` (RBAC : `view`) |
 | Création d'espaces au-delà de 7 | refusé (« Cannot exceed Namespace quota ») |
+| Pod aux requests `"0"` dans `mediagenda-essai-julien` | refusé (`LimitRanger` : « minimum cpu usage per Container is 5m, but request is 0 ») |
 | `kubectl delete namespace mediagenda-essai-julien` | supprimé |
 
 ## Retour arrière
 
 1. Pour chaque espace : retirer la référence de propriétaire et l'étiquette `capsule.clastix.io/tenant` (`kubectl patch namespace … '{"metadata":{"labels":{"capsule.clastix.io/tenant":null},"ownerReferences":[]}}'`), et l'étiquette de `plateforme/k8s/espaces/`.
-2. Seulement ensuite : retirer `preventDeletion`, puis les `Tenant`.
+2. Seulement ensuite : retirer `preventDeletion`, puis les `Tenant` (et `limites-par-defaut.yaml` : `deletion: Remove` retire les `limites-locataire` répliquées ; les environnements gardent leur `LimitRange` d'espace).
 3. Désinstaller Capsule (Application `capsule`) : ses *jobs* de suppression retirent ses webhooks.

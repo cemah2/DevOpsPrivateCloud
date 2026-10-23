@@ -134,7 +134,6 @@ Une synthèse pour se repérer ; les exercices approfondissent, la documentation
 Facultatives ; les valeurs par défaut conviennent :
 
 ```
-WB_M28_RABBITMQ_SVC=rabbitmq.messagerie.svc.cluster.local      # Service de la grappe RabbitMQ (M27)
 WB_M28_S3_TECHDOCS="$HOME/.config/workbook/s3-techdocs.env"    # identité de LECTURE du compartiment portail-techdocs (E10)
 WB_M28_PORTAIL_URL=https://portail.apps.par1.medisphere.internal
 WB_M28_APP_MEDINOTIF_RECETTE=medinotif-recette                  # Application Argo CD de MédiNotif en recette (ApplicationSet du M27)
