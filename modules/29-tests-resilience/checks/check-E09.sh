@@ -30,7 +30,7 @@ check_cmd "contrôleur prêt, image du cache Harbor" _m29d_json "$_m29o_e09_ctl"
   '(.status.readyReplicas // 0) >= 1 and all(.spec.template.spec.containers[]; .image | startswith("registry.par1.medisphere.internal/"))'
 _m29o_e09_ds="$(_m29d_k get daemonset -n chaos-mesh chaos-daemon -o json)"
 check_cmd "chaos-daemon : runtime containerd, un pod prêt par nœud" _m29d_json "$_m29o_e09_ds" \
-  '(.spec.template.spec.containers[0].args | index("containerd")) != null and .status.numberReady == .status.desiredNumberScheduled and .status.numberReady >= 1'
+  '(((.spec.template.spec.containers[0].command // []) + (.spec.template.spec.containers[0].args // [])) | index("containerd")) != null and .status.numberReady == .status.desiredNumberScheduled and .status.numberReady >= 1'
 check_cmd "pas de tableau de bord ni de serveur DNS de Chaos Mesh" _m29d_json \
   "$(_m29d_k get deployments -n chaos-mesh -o json)" '[.items[].metadata.name | select(test("dashboard|dns-server"))] | length == 0'
 

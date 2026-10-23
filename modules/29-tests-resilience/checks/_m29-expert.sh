@@ -44,19 +44,30 @@ if [[ -z "${_m29x_tmp:-}" ]]; then
 fi
 _m29x_tmpdir() { printf '%s\n' "$_m29x_tmp"; }
 
-# _m29x_rapatrier_rego — copie locale de rego/ de plateforme/politiques (main) ; affiche le dossier.
+# _m29x_rapatrier_rego [RÉF=main] — copie locale de rego/ de plateforme/politiques à la référence (main,
+# ou l'étiquette lue par la CI) ; affiche le dossier (un dossier par référence, gardé le temps du check).
 _m29x_rapatrier_rego() {
-  local d c
-  d="$(_m29x_tmpdir)/politiques"
+  local ref="${1:-main}" d c
+  d="$(_m29x_tmpdir)/politiques-${ref//\//_}"
   if [[ ! -d "$d/rego/tofu" ]]; then
     rm -rf -- "$d"
     while IFS= read -r c; do
       [[ "$c" == rego/* ]] || continue
       mkdir -p "$d/$(dirname "$c")"
-      _m29p_fichier_main "$_m29x_politiques" "$c" >"$d/$c" 2>/dev/null || return 1
-    done < <(_m29p_arbre "$_m29x_politiques" rego)
+      _m29p_fichier_main "$_m29x_politiques" "$c" "$ref" >"$d/$c" 2>/dev/null || return 1
+    done < <(_m29p_arbre "$_m29x_politiques" rego "$ref")
   fi
   [[ -d "$d/rego/tofu" ]] && printf '%s\n' "$d"
+}
+
+# _m29x_ref_ci — étiquette de plateforme/politiques que lit la CI de plateforme/infra (entrée
+# politiques_ref du composant validation, M29-E10 : « jamais une branche ») ; « main » si aucune.
+_m29x_ref_ci() {
+  local r
+  r="$(_m29p_fichier_main "$_m29x_infra" .gitlab-ci.yml 2>/dev/null |
+    yq -r '[.include[]? | select((.component // "") | test("/validation@")) | .inputs.politiques_ref // ""] | .[0] // ""' 2>/dev/null)" || r=""
+  [[ "$r" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || r=main
+  printf '%s\n' "$r"
 }
 
 # _m29x_args_conftest — arguments d'espaces de conftest de la CI de plateforme/infra (un par ligne).
@@ -83,7 +94,8 @@ _m29x_args_conftest() {
   done
 }
 
-# _m29x_plan_refuse — le plan de référence est refusé (au moins un FAIL) par rego/tofu de main avec
+# _m29x_plan_refuse [RÉF=main] — le plan de référence est refusé (au moins un FAIL) par rego/tofu de la
+# référence (main, ou l'étiquette lue par la CI) avec
 # les arguments de la CI : espaces, données rego/donnees ET contexte écrit par le job de plan
 # (.validation:conftest-plan, M29-E10). Sans le contexte, la règle « contexte absent » refuserait tout
 # plan et le contrôle ne prouverait rien.
@@ -91,7 +103,7 @@ _m29x_plan_refuse() {
   local d sortie rc=0 ctx
   local -a a donnees=()
   [[ -r "$_m29x_plan" ]] || return 1
-  d="$(_m29x_rapatrier_rego)" || return 1
+  d="$(_m29x_rapatrier_rego "${1:-main}")" || return 1
   mapfile -t a < <(_m29x_args_conftest)
   ctx="$(_m29x_tmpdir)/contexte-e19.json"
   jq -n --arg e "${WB_M29_E19_ETAT:-socle}" '{contexte: {etat: $e, etiquettes_mr: []}}' >"$ctx"

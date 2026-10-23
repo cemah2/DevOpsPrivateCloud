@@ -185,7 +185,14 @@ validation:rego:
     - |
       travail="$(mktemp -d)"
       tofu show -json plan.tfplan > "$travail/plan.json"
-      etiquettes="$(printf '%s' "${CI_MERGE_REQUEST_LABELS:-}" | jq -Rc 'split(",") | map(select(. != ""))')"
+      # Étiquettes de MR : elles n'existent que dans un pipeline de MR. Sur main, aucune étiquette, donc
+      # aucune destruction du socle autorisée (le plan de main est refusé) ; SEULE exception, un pipeline
+      # de main lancé à la main (Build > Pipelines > Run pipeline) avec ETIQUETTES_MR=destruction-autorisee
+      # après la fusion de la MR qui portait l'étiquette (« Minimum role to use pipeline variables » :
+      # Maintainer). Un push ne peut pas fournir cette variable.
+      brut="${CI_MERGE_REQUEST_LABELS:-}"
+      if [ -z "${CI_MERGE_REQUEST_IID:-}" ] && [ "$CI_PIPELINE_SOURCE" = "web" ]; then brut="${ETIQUETTES_MR:-}"; fi
+      etiquettes="$(printf '%s' "$brut" | jq -Rc 'split(",") | map(select(. != ""))')"
       jq -n --arg etat "$DOSSIER" --argjson e "$etiquettes" '{contexte: {etat: $etat, etiquettes_mr: $e}}' > "$travail/contexte.json"
       git clone -q --depth 1 --branch "$[[ inputs.politiques_ref ]]" \
         "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/plateforme/politiques.git" "$travail/politiques"

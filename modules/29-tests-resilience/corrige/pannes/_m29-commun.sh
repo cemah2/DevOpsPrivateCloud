@@ -14,7 +14,8 @@
 #   - une modification de dépôt est un COMMIT IDENTIFIABLE : auteur « Lucas Martin »
 #     (lucas.martin@medisphere.internal), marqueur « M29-EXX » ; l'annulation est un commit inverse,
 #     fait SEULEMENT si chaque fichier est encore exactement dans l'état injecté ; jamais de réécriture
-#     d'historique ; si main refuse la poussée directe, MR fusionnée après son pipeline ;
+#     d'historique ; si main refuse la poussée directe, MR fusionnée après son pipeline ; une étiquette
+#     publiée par une panne (E19) est retirée à l'annulation si plus aucun projet ne la lit ;
 #   - toute expérience de chaos posée par une panne a une durée (ou un deadline) et est supprimée par
 #     --annuler, qui vérifie ensuite sur le nœud qu'aucun qdisc netem ne reste sur les pods visés ;
 #   - état local de chaque panne : ~/.local/state/workbook/M29-EXX/ (700) sur adm01.
@@ -116,12 +117,13 @@ m29_git_lire() {
   m29_api GET "projects/$(m29_enc "$1")/repository/files/$(m29_enc "$2")/raw?ref=${3:-main}"
 }
 
-# m29_git_arbre PROJET [DOSSIER] — chemins des fichiers (récursif) sur main.
+# m29_git_arbre PROJET [DOSSIER] [RÉF=main] — chemins des fichiers (récursif) sur la référence.
 m29_git_arbre() {
-  local p page=1 r
+  local p page=1 r ref
   p="$(m29_enc "$1")"
+  ref="$(m29_enc "${3:-main}")"
   while ((page <= 10)); do
-    r="$(m29_api GET "projects/$p/repository/tree?ref=main&recursive=true&per_page=100&page=$page${2:+&path=$(m29_enc "$2")}" 2>/dev/null)" || return 0
+    r="$(m29_api GET "projects/$p/repository/tree?ref=$ref&recursive=true&per_page=100&page=$page${2:+&path=$(m29_enc "$2")}" 2>/dev/null)" || return 0
     jq -r '.[]? | select(.type == "blob") | .path' <<<"$r"
     (($(jq 'length' <<<"$r" 2>/dev/null || echo 0) < 100)) && return 0
     page=$((page + 1))
@@ -168,12 +170,14 @@ _m29_mr_fusionner() {
   return 1
 }
 
-# _m29_pousser PROJET "message" FICHIER_ACTIONS [lucas] — commit direct sur main si accepté, sinon
-# branche + MR fusionnée.
+# _m29_pousser PROJET "message" FICHIER_ACTIONS [lucas] [direct] — commit direct sur main si accepté,
+# sinon branche + MR fusionnée après son pipeline. Avec « direct » : pas de MR ; code 10 si main refuse
+# la poussée directe (variante dont le pipeline de MR échouerait de toute façon).
 _m29_pousser() {
-  local p="$1" msg="$2" actions="$3" qui="${4:-}" br sha
+  local p="$1" msg="$2" actions="$3" qui="${4:-}" mode="${5:-}" br sha
   sha="$(_m29_commit "$p" main "$msg" "$actions" "$qui" 2>/dev/null)" || sha=""
   [[ -n "$sha" ]] && return 0
+  [[ "$mode" == direct ]] && return 10
   br="${qui:-moi}/m29-$(date +%s)"
   m29_api POST "projects/$(m29_enc "$p")/repository/branches" \
     --data-urlencode "branch=$br" --data-urlencode "ref=main" >/dev/null || return 1
@@ -185,8 +189,10 @@ _m29_pousser() {
 # Préparation d'un commit de Lucas en plusieurs fichiers :
 #   m29_git_debut EXX PROJET
 #   m29_git_fichier EXX CHEMIN FICHIER_NEUF   (fichier existant modifié, ou nouveau fichier)
-#   m29_git_valider EXX "message"
+#   m29_git_valider EXX "message" [direct]   (« direct » : poussée directe sur main seulement, code 10 sinon)
 # L'original de chaque fichier est gardé (ou noté ABSENT) pour l'annulation.
+# EXX est la clé de l'état local : une panne qui modifie DEUX dépôts utilise deux clés (ex. E19 et
+# E19-infra), chacune avec son commit et son annulation.
 m29_git_debut() {
   local d
   d="$(m29_etat "$1")"
@@ -211,7 +217,7 @@ m29_git_fichier() {
   chmod 600 "$d/$n".*
 }
 m29_git_valider() {
-  local ex="$1" msg="$2" d p actions n=0 chemin action
+  local ex="$1" msg="$2" mode="${3:-}" d p actions n=0 chemin action rc=0
   d="$(m29_etat "$ex")/git"
   p="$(cat "$d/projet")"
   actions="$d/actions.json"
@@ -222,7 +228,8 @@ m29_git_valider() {
       "$actions" >"$actions.tmp" && mv "$actions.tmp" "$actions"
   done <"$d/liste"
   ((n > 0)) || return 10
-  _m29_pousser "$p" "$msg" "$actions" lucas || return 1
+  _m29_pousser "$p" "$msg" "$actions" lucas "$mode" || rc=$?
+  ((rc == 0)) || { ((rc == 10)) && return 10; return 1; }
   : >"$d/injecte"
   m29_journal "$ex" "commit de Lucas sur $p ($n fichier(s))"
 }
@@ -258,7 +265,7 @@ m29_git_annuler() {
       fi
       mv "$actions.tmp" "$actions"
     done <"$d/liste"
-    if _m29_pousser "$p" "Revert du commit de Lucas (lab/bin/break 29 ${ex#E} --annuler, M29-$ex)" "$actions"; then
+    if _m29_pousser "$p" "Revert du commit de Lucas (lab/bin/break 29 $(base="${ex%%-*}"; printf '%s' "${base#E}") --annuler, M29-$ex)" "$actions"; then
       m29_journal "$ex" "annulation : $p remis dans son état d'origine"
     else
       wb_avert "annulation du commit sur $p impossible : remets les fichiers à la main (copies : $d)"

@@ -8,10 +8,15 @@
 #      medinotif-recette, wb-essais) — pour TOUT LE MONDE, administrateurs compris : élargir la
 #      liste se fait par MR sur ce fichier, jamais par un « kubectl annotate » ;
 #   2. refuse un objet de chaos créé ailleurs que dans chaos-experiences ;
-#   3. refuse une expérience dont selector.namespaces sort de la liste fermée.
-# Le contrôleur de Chaos Mesh crée lui-même des objets internes (PodNetworkChaos, PodIOChaos,
-# PodHttpChaos dans l'espace des pods visés ; WorkflowNode ; expériences filles d'un Schedule) :
-# ses requêtes sont exclues (matchConditions), sinon il ne pourrait plus injecter.
+#   3. refuse une expérience dont le sélecteur (selector.namespaces, clés de selector.pods, et
+#      target.selector d'une NetworkChaos) sort de la liste fermée.
+# Le contrôleur de Chaos Mesh crée lui-même des objets INTERNES (PodNetworkChaos, PodIOChaos,
+# PodHttpChaos dans l'espace des pods visés ; WorkflowNode) : ces requêtes-là sont exclues
+# (matchConditions), sinon il ne pourrait plus injecter. Il n'est PAS exclu pour le reste : les
+# expériences qu'il crée pour un Schedule ou un Workflow (dans chaos-experiences) passent la règle 3.
+# C'est ce qui couvre les expériences embarquées (spec.podChaos d'un Schedule, templates d'un
+# Workflow) sans avoir à énumérer ici tous les types d'expériences : l'enfant qui viserait un espace
+# hors liste est refusé à sa création (le Schedule ou le Workflow l'affiche dans ses événements).
 # ⚠️ Avant [Deny] : « kubectl get ns -o json | jq » pour vérifier qu'aucun espace HORS liste n'a déjà
 # l'annotation (une mise à jour de cet espace serait refusée tant qu'on ne la retire pas).
 # ⚠️ Non testée en conditions réelles à la rédaction : passe d'abord par [Warn, Audit] (voir la liaison).
@@ -37,8 +42,10 @@ spec:
         operations: ["CREATE", "UPDATE"]
         resources: ["*"]
   matchConditions:
-    - name: hors-controleur-chaos-mesh
-      expression: "request.userInfo.username != 'system:serviceaccount:chaos-mesh:chaos-controller-manager'"
+    - name: hors-objets-internes-du-controleur
+      expression: >-
+        request.userInfo.username != 'system:serviceaccount:chaos-mesh:chaos-controller-manager' ||
+        !(request.resource.resource in ['podnetworkchaos', 'podiochaos', 'podhttpchaos', 'workflownodes'])
   variables:
     - name: autorises
       expression: "['mediagenda-recette', 'medinotif-recette', 'wb-essais']"
@@ -49,10 +56,21 @@ spec:
         variables.estEspace && has(object.metadata.annotations) &&
         'chaos-mesh.org/inject' in object.metadata.annotations &&
         object.metadata.annotations['chaos-mesh.org/inject'] == 'enabled'
-    - name: cibles
+    # Sélecteurs de l'objet : spec.selector (toutes les expériences qui visent des pods) et, pour une
+    # NetworkChaos seulement, spec.target.selector (l'autre extrémité ; spec.target d'une HTTPChaos
+    # est une chaîne : ne pas la lire).
+    - name: selecteurs
       expression: >-
-        !variables.estEspace && has(object.spec) && has(object.spec.selector) &&
-        has(object.spec.selector.namespaces) ? object.spec.selector.namespaces : []
+        variables.estEspace || !has(object.spec) ? [] :
+        (has(object.spec.selector) ? [object.spec.selector] : []) +
+        (request.resource.resource == 'networkchaos' && has(object.spec.target) &&
+         has(object.spec.target.selector) ? [object.spec.target.selector] : [])
+    # Espaces visés : selector.namespaces et les clés de selector.pods ({espace: [pods]}).
+    - name: ciblesAutorisees
+      expression: >-
+        variables.selecteurs.all(s,
+          (!has(s.namespaces) || s.namespaces.all(n, n in variables.autorises)) &&
+          (!has(s.pods) || s.pods.all(n, n in variables.autorises)))
   validations:
     - expression: "!variables.injectionDemandee || object.metadata.name in variables.autorises"
       messageExpression: >-
@@ -63,9 +81,10 @@ spec:
       messageExpression: >-
         'les objets de chaos se créent dans l\'espace chaos-experiences, pas dans ' + request.namespace
       reason: Forbidden
-    - expression: "variables.cibles.all(n, n in variables.autorises)"
+    - expression: "variables.ciblesAutorisees"
       messageExpression: >-
-        'expérience visant un espace non autorisé : ' + variables.cibles.filter(n, !(n in variables.autorises)).join(', ')
+        'expérience visant un espace hors de la liste (selector.namespaces, selector.pods ou target.selector ;
+        autorisés : ' + variables.autorises.join(', ') + ') — PLAT-3009'
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

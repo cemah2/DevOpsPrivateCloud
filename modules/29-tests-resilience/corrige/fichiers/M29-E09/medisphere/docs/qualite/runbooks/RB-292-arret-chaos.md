@@ -12,12 +12,13 @@
 
 ```
 admin@adm01:~$ kubectl -n chaos-experiences get podchaos,networkchaos,stresschaos,iochaos,timechaos,httpchaos,schedules,workflows
-admin@adm01:~$ for t in podchaos networkchaos stresschaos iochaos timechaos httpchaos schedules workflows; do
+admin@adm01:~$ kubectl -n chaos-experiences annotate workflows --all workflow.chaos-mesh.org/abort=true --overwrite
+admin@adm01:~$ for t in schedules podchaos networkchaos stresschaos iochaos timechaos httpchaos; do
     kubectl -n chaos-experiences annotate "$t" --all experiment.chaos-mesh.org/pause=true --overwrite
   done
 ```
 
-La pause fait **retirer** la panne par le contrôleur (le `chaos-daemon` du nœud défait ce qu'il a posé : règles `tc`, `iptables`, processus de stress ; les conteneurs remplacés par `pause` retrouvent leur image). Un `Schedule` en pause ne crée plus d'expérience.
+D'abord ce qui **crée** des expériences : un `Workflow` n'a pas de pause en 2.8 (l'annotation de pause est acceptée mais ignorée) ; on l'**interrompt** (`workflow.chaos-mesh.org/abort=true`). Un `Schedule` en pause ne crée plus d'expérience et met ses enfants en pause. La pause fait **retirer** la panne par le contrôleur (le `chaos-daemon` du nœud défait ce qu'il a posé : règles `tc`, `iptables`, processus de stress ; les conteneurs remplacés par `pause` retrouvent leur image).
 
 ## 2. Supprimer (définitif)
 
@@ -32,7 +33,7 @@ La suppression déclenche la même récupération (*finalizer* `chaos-mesh/recor
 | Quoi | Commande | Attendu |
 |---|---|---|
 | Objets | `kubectl -n chaos-experiences get podchaos,networkchaos,stresschaos,schedules,workflows` | aucun, ou tous en pause avec la condition `AllRecovered=True` |
-| Objets internes | `kubectl get podnetworkchaos,podiochaos,podhttpchaos -A` | aucun |
+| Objets internes | `kubectl get podnetworkchaos,podiochaos,podhttpchaos -A -o yaml` | aucun, ou des objets sans règle (`spec.tcs`, `spec.iptables`, `spec.ipsets` vides) : ils survivent à l'expérience |
 | Pods visés | `kubectl -n mediagenda-recette get pods` ; `kubectl -n mediagenda-recette describe pod <pod>` | images d'origine (pas `pause`), prêts |
 | Contrôleur | `kubectl -n chaos-mesh logs deploy/chaos-controller-manager --since=15m \| grep -i error` | pas d'erreur de récupération |
 | Service | sonde `/pret` de la recette, SLO de recette (Pyrra) | revenus à la normale |
@@ -41,8 +42,10 @@ Si un pod garde une panne réseau (latence, perte) malgré l'absence d'objet : s
 
 ## 4. Couper Chaos Mesh entièrement (dernier recours)
 
+Plus aucune expérience n'est appliquée **ni retirée** une fois le contrôleur arrêté : fais d'abord les § 1 à 3. Argo CD remettrait le réplica (auto-réparation) : désactive d'abord l'auto-synchronisation de l'Application `chaos-mesh` (interface d'Argo CD ou `argocd app set chaos-mesh --sync-policy none`), note-le dans le ticket, puis :
+
 ```
 admin@adm01:~$ kubectl -n chaos-mesh scale deploy/chaos-controller-manager --replicas=0
 ```
 
-Plus aucune expérience n'est appliquée **ni retirée** : fais d'abord les § 1 à 3. Argo CD remettra le réplica (auto-réparation) : désactive l'auto-synchronisation de l'Application `chaos-mesh` le temps de l'incident, et note-le dans le ticket.
+Retour à la normale : réactive l'auto-synchronisation (Argo CD remet le réplica).

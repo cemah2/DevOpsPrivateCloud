@@ -2,7 +2,8 @@
 # shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq et yq entre apostrophes
 # check-E19.sh — M29-E19 « Panne : un plan dangereux passe la CI » : le plan de référence est refusé par
-# les politiques de main avec les arguments de la CI de plateforme/infra ; paquets évalués ; aucun job de
+# les politiques de main ET par celles de l'étiquette que lit la CI de plateforme/infra (politiques_ref),
+# avec les arguments de cette CI ; paquets évalués ; aucun job de
 # validation en allow_failure ; test de non-régression sur un plan réel dans plateforme/politiques ;
 # panne close. Lecture seule (copie temporaire des politiques, conftest et opa en local).
 
@@ -12,7 +13,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/_m29-expert.sh"
 title "M29-E19 — Le plan dangereux est de nouveau refusé"
 require_cmd jq curl yq conftest opa
 
-check_cmd "plan de référence refusé par rego/tofu (main) avec les arguments du job de plan (espaces, données, contexte ${WB_M29_E19_ETAT:-socle})" _m29x_plan_refuse
+check_cmd "plan de référence refusé par rego/tofu (main) avec les arguments du job de plan (espaces, données, contexte ${WB_M29_E19_ETAT:-socle})" _m29x_plan_refuse main
+_m29_e19_ref="$(_m29x_ref_ci)"
+if [[ "$_m29_e19_ref" == main ]]; then
+  skip "politiques lues par la CI de $_m29x_infra" "aucune étiquette politiques_ref épinglée : la CI lit main"
+else
+  check_cmd "plan de référence refusé aussi par les politiques que lit la CI de $_m29x_infra (politiques_ref $_m29_e19_ref)" \
+    _m29x_plan_refuse "$_m29_e19_ref"
+fi
 check_cmd "tous les paquets des règles de rego/tofu sont dans les espaces évalués par la CI" _m29x_paquets_evalues
 # Racines explicites, comme le composant validation : « opa test rego » chargerait aussi les plans
 # d'exemple JSON de rego/exemples/ comme des données (conflit de fusion).

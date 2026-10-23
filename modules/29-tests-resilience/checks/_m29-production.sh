@@ -17,9 +17,9 @@ _m29p_recette=mediagenda-recette
 
 _m29p_enc() { jq -rn --arg s "$1" '$s|@uri'; }
 
-# _m29p_fichier_main PROJET CHEMIN — contenu du fichier sur main.
+# _m29p_fichier_main PROJET CHEMIN [RÉF=main] — contenu du fichier sur main (ou sur la référence).
 _m29p_fichier_main() {
-  gitlab_api "projects/$(_m29p_enc "$1")/repository/files/$(_m29p_enc "$2")/raw?ref=main"
+  gitlab_api "projects/$(_m29p_enc "$1")/repository/files/$(_m29p_enc "$2")/raw?ref=$(_m29p_enc "${3:-main}")"
 }
 
 # _m29p_fichier_contient PROJET CHEMIN REGEX… — le fichier existe sur main et contient chaque motif
@@ -32,12 +32,13 @@ _m29p_fichier_contient() {
   for m in "$@"; do grep -Eqi -- "$m" <<<"$c" || return 1; done
 }
 
-# _m29p_arbre PROJET [DOSSIER] — chemins des fichiers (récursif) sur main.
+# _m29p_arbre PROJET [DOSSIER] [RÉF=main] — chemins des fichiers (récursif) sur main (ou la référence).
 _m29p_arbre() {
-  local p page=1 r
+  local p page=1 r ref
   p="$(_m29p_enc "$1")"
+  ref="$(_m29p_enc "${3:-main}")"
   while ((page <= 10)); do
-    r="$(gitlab_api "projects/$p/repository/tree?ref=main&recursive=true&per_page=100&page=$page${2:+&path=$(_m29p_enc "$2")}" 2>/dev/null)" || return 0
+    r="$(gitlab_api "projects/$p/repository/tree?ref=$ref&recursive=true&per_page=100&page=$page${2:+&path=$(_m29p_enc "$2")}" 2>/dev/null)" || return 0
     jq -r '.[]? | select(.type == "blob") | .path' <<<"$r"
     (($(jq 'length' <<<"$r" 2>/dev/null || echo 0) < 100)) && return 0
     page=$((page + 1))

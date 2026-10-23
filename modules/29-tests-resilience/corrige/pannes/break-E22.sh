@@ -13,7 +13,8 @@
 #      MaxAuthTries 10), lu AVANT les fichiers des rôles : configuration effective changée. Le rôle ne
 #      gère pas les fichiers qui ne sont pas à lui : --check ne voit rien ;
 #   3. node_exporter : service arrêté et désactivé. Le rôle node_exporter le voit (--check).
-# Fichiers sauvegardés dans /var/lib/workbook/ de la VM ; l'annulation remet l'état d'origine.
+# Fichiers sauvegardés dans /var/lib/workbook/ de la VM ; l'annulation remet l'état d'origine si le
+# fichier est encore exactement dans l'état injecté (empreinte sha256), sinon elle respecte la réparation.
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -59,6 +60,7 @@ sed -i -E 's/^(server|pool) .*/server 10.10.20.254 iburst/' "$f"
 # commentaire laissé par « Lucas » : la trace existe
 sed -i '1i # Nouveau serveur de temps du site (test, Lucas)' "$f"
 touch -d '-9 hours' "$f"
+sha256sum "$f" > "$WB_DIR/$WB_EX.injecte"
 systemctl restart chrony
 journal "chrony : source remplacée par 10.10.20.254"
 EOF
@@ -71,6 +73,7 @@ printf '# Débogage du transfert de port pour la supervision (Lucas)\nX11Forward
 chmod 600 "$f"
 touch -d '-9 hours' "$f"
 if ! sshd -t; then rm -f "$f"; exit 1; fi
+sha256sum "$f" > "$WB_DIR/$WB_EX.injecte"
 systemctl reload ssh
 journal "sshd : $f ajouté"
 EOF
@@ -95,8 +98,22 @@ _m29E22_defaire() {
   local h
   h="$(_e22_hote)"
   [[ -n "$h" ]] || return 0
+  # Un fichier n'est remis que s'il est encore EXACTEMENT dans l'état injecté (empreinte notée à
+  # l'injection) : une réparation de l'apprenant (rôle Ansible rejoué, fichier retiré) n'est jamais défaite.
   wb_exec "$h" <<'EOF' || true
-restaurer_fichiers
+m="$WB_DIR/$WB_EX.manifeste"
+if [ -f "$WB_DIR/$WB_EX.injecte" ] && ! sha256sum -c --status "$WB_DIR/$WB_EX.injecte" 2>/dev/null; then
+  journal "annulation : fichier modifié ou retiré depuis la panne (réparation), laissé tel quel"
+  if [ -f "$m" ]; then
+    while IFS="$(printf '\t')" read -r src dst; do
+      if [ "$dst" != ABSENT ]; then rm -f "$dst"; fi
+    done < "$m"
+    rm -f "$m"
+  fi
+else
+  restaurer_fichiers
+fi
+rm -f "$WB_DIR/$WB_EX.injecte"
 if [ -f "$WB_DIR/$WB_EX.node_exporter-enabled" ]; then
   systemctl enable --now node_exporter >/dev/null 2>&1 || true
   rm -f "$WB_DIR/$WB_EX.node_exporter-enabled"

@@ -15,10 +15,18 @@ require_cmd kubectl jq curl yq
 if _m29p_api_repond; then
   check_cmd "mediagenda-db (recette) : 3 instances prêtes, phase saine" _m29p_kq \
     '.status.readyInstances == 3 and (.status.phase | test("healthy"; "i"))' -n "$_m29p_recette" clusters.postgresql.cnpg.io mediagenda-db
-  # Une bascule a eu lieu si le primaire actuel est en place depuis bien après la création du cluster.
-  check_cmd "mediagenda-db : le primaire a changé depuis la création (au moins une bascule)" _m29p_kq \
-    '((.status.currentPrimaryTimestamp // .metadata.creationTimestamp) | sub("\\.[0-9]+";"") | fromdateiso8601)
-       - (.metadata.creationTimestamp | fromdateiso8601) > 3600' -n "$_m29p_recette" clusters.postgresql.cnpg.io mediagenda-db
+  # Une bascule a eu lieu PENDANT le module 29 : le primaire actuel est en place depuis après la création
+  # de l'espace chaos-experiences (M29-E09). Comparer à la création du cluster ne suffirait pas : les
+  # bascules du M27 (switchover, nœud drainé) rendraient ce contrôle vert sans rien faire ici.
+  _m29_e15_bascule() {
+    local depuis
+    depuis="$(kube get namespace "$_m29p_chaos_ns" -o jsonpath='{.metadata.creationTimestamp}' 2>/dev/null)" || return 1
+    [[ -n "$depuis" ]] || return 1
+    kube get clusters.postgresql.cnpg.io mediagenda-db -n "$_m29p_recette" -o json 2>/dev/null |
+      jq -e --arg depuis "$depuis" '(.status.currentPrimaryTimestamp // "") != ""
+        and ((.status.currentPrimaryTimestamp | sub("\\.[0-9]+"; "") | fromdateiso8601) > ($depuis | fromdateiso8601))' >/dev/null 2>&1
+  }
+  check_cmd "mediagenda-db : le primaire a changé depuis le début du module (création de $_m29p_chaos_ns)" _m29_e15_bascule
   check_cmd "mediagenda-db : réplication synchrone demandée (≥ 1 réplique)" _m29p_kq \
     '((.spec.postgresql.synchronous.number // 0) >= 1) or ((.spec.minSyncReplicas // 0) >= 1)' \
     -n "$_m29p_recette" clusters.postgresql.cnpg.io mediagenda-db

@@ -3,7 +3,8 @@
 #
 # Rend, comme le ferait Argo CD, chaque Application de plateforme/ dont une source est un chart du
 # miroir Harbor (registry.par1.medisphere.internal/charts), avec ses fichiers de valeurs de CE dépôt
-# ($values/valeurs/<composant>/…), pour que kubeconform valide ce qui sera VRAIMENT appliqué.
+# ($values/valeurs/<composant>/…) et ses valeurs en ligne (helm.values, helm.valuesObject), pour que
+# kubeconform valide ce qui sera VRAIMENT appliqué.
 #   outils/rendre-charts.sh [DOSSIER_SORTIE]     (défaut : rendu) → rendu/<application>.yaml
 #
 # Variables :
@@ -72,8 +73,20 @@ for app in plateforme/*.yaml; do
       fi
     fi
   done < <(jq -r '.helm.valueFiles[]? // empty' <<<"$source")
+  # Valeurs en ligne de l'Application (après les fichiers, comme Argo CD : valuesObject l'emporte
+  # sur values). Les « parameters » (--set) ne sont pas rejoués ici : l'Application est signalée.
+  if jq -e '.helm.valuesObject // empty' <<<"$source" >/dev/null; then
+    jq '.helm.valuesObject' <<<"$source" >"$travail/$nom-en-ligne.json"
+    valeurs+=(-f "$travail/$nom-en-ligne.json")
+  elif jq -e '.helm.values // empty' <<<"$source" >/dev/null; then
+    jq -r '.helm.values' <<<"$source" >"$travail/$nom-en-ligne.yaml"
+    valeurs+=(-f "$travail/$nom-en-ligne.yaml")
+  fi
+  if jq -e '(.helm.parameters // []) | length > 0' <<<"$source" >/dev/null; then
+    manquant="helm.parameters (non rejoués par ce script)"
+  fi
   if [[ -n "$manquant" ]]; then
-    echo "$nom : valeurs $manquant d'un autre dépôt (fournis REF_${manquant%%/*}) : SAUTÉE" | tr -d '$' >&2
+    echo "$nom : $manquant introuvable ou non rejoué (fichier d'un autre dépôt : fournis REF_<ref>) : SAUTÉE" >&2
     sautees=$((sautees + 1))
     continue
   fi

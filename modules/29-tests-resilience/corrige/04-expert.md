@@ -8,7 +8,7 @@ Les scripts d'injection sont dans `corrige/pannes/` : `_m29-commun.sh` contient 
 
 > **Remarque sur les traces** : le commit porte l'auteur « Lucas Martin », mais c'est **ton** jeton d'administration qui l'a poussé (le *committer* et le journal d'audit de GitLab le montrent) ; les gestes sur le cluster sont faits avec ton kubeconfig. En production, ce serait l'identité de Lucas : c'est pour cela que chacun a un compte nominatif.
 
-**Validé hors du lab** : logique d'injection d'E19 (variantes 1 et 2) rejouée à l'harmonisation sur les politiques du corrigé de M29-E03 avec OPA 1.21.3 et conftest 0.71.1, contexte `socle` compris (`opa test rego/tofu rego/donnees` reste vert, 22/22 avec les politiques actuelles de M29-E03, le plan de référence n'est plus refusé ; variante 1 sans effet avec `--all-namespaces`) ; surcharge `allow_failure` de `.plan` (variante 3) et lecture de `!reference` par yq 4.47 ; conftest renvoie **0** et « 0 tests » quand l'espace demandé ne contient aucune règle (constaté) ; job de non-régression des plans rejoué localement ; correctif `/pret` de MédiAgenda (pytest : 28 tests réussis, `ruff check`, `ruff format --check`, `git apply --check` sur le code de référence) ; `chaos-daemon` : SIGKILL du `container-kill`, `iptables-legacy`, chaînes `CHAOS-INPUT/OUTPUT` et `TC-TABLES-*` avec `CLASSIFY`, arbre `prio`/`sfq`/`netem` pour une latence ciblée, `stress-ng` lancé par `nsexec` dans l'espace de PID puis rattaché au cgroup du conteneur (code de la 2.8.6) ; manifestes validés par kubeconform `-strict` ; `shellcheck -x` et `bash -n` sur tous les scripts.
+**Validé hors du lab** : logique d'injection d'E19 (variantes 1 et 2) rejouée à l'harmonisation sur les politiques du corrigé de M29-E03 avec OPA 1.21.3 et conftest 0.71.1, contexte `socle` compris (`opa test rego/tofu rego/donnees` reste vert, 24/24 avec les politiques actuelles de M29-E03, le plan de référence n'est plus refusé ; variante 1 sans effet avec `--all-namespaces`), puis rejouée de bout en bout à la relecture contre un faux GitLab (dépôts git locaux) : commit de Lucas, étiquette `v1.4.1`, montée de `politiques_ref` dans `plateforme/infra`, annulation par commits inverses et retrait de l'étiquette, réparation de l'apprenant respectée ; le job des exemples du composant (`tests_rego`) rejoué sur chaque variante : rouge en variante 1 (d'où la poussée directe), vert en variante 2 (exemples renommés aussi), et le job `non-regression-plans` d'E19 attrape la variante 2 ; surcharge `allow_failure` de `.plan` (variante 3) et lecture de `!reference` par yq 4.47 ; conftest renvoie **0** et « 0 tests » quand l'espace demandé ne contient aucune règle (constaté) ; job de non-régression des plans rejoué localement ; correctif `/pret` de MédiAgenda (pytest : 28 tests réussis, `ruff check`, `ruff format --check`, `git apply --check` sur le code de référence) ; `chaos-daemon` : SIGKILL du `container-kill`, `iptables-legacy`, chaînes `CHAOS-INPUT/OUTPUT` et `TC-TABLES-*` avec `CLASSIFY`, arbre `prio`/`sfq`/`netem` pour une latence ciblée, `stress-ng` lancé par `nsexec` dans l'espace de PID puis rattaché au cgroup du conteneur (code de la 2.8.6) ; manifestes validés par kubeconform `-strict` ; `shellcheck -x` et `bash -n` sur tous les scripts.
 
 **Points non testés en conditions réelles** (signale tes retours) :
 - délais entre un commit, la synchronisation d'Argo CD, le canary d'Argo Rollouts sur la recette (E23 attend jusqu'à 15 min) et la mise à l'échelle de l'HPA à une réplique (E23 v2, fenêtre de stabilisation) ;
@@ -26,14 +26,17 @@ Les scripts d'injection sont dans `corrige/pannes/` : `_m29-commun.sh` contient 
 
 *Symptômes* : le plan de référence n'est plus refusé « par la CI », sans que personne n'ait touché au plan.
 
-*Hypothèses, par étage* : (a) le job de validation ne compte plus (statut ignoré) ; (b) il tourne mais n'évalue pas les règles (espaces, chemin des politiques) ; (c) il évalue les règles mais elles ne se déclenchent plus (logique, chemin d'`input`) ; (d) le plan n'est pas celui qu'on croit.
+*Hypothèses, par étage* : (a) le job de validation ne compte plus (statut ignoré) ; (b) il tourne mais n'évalue pas les règles (espaces, chemin des politiques) ; (c) il évalue les règles mais elles ne se déclenchent plus (logique, chemin d'`input`) ; (d) le plan n'est pas celui qu'on croit ; (e) la CI ne lit pas les politiques qu'on croit (étiquette `politiques_ref`).
 
 *Commandes, dans l'ordre*
 
 ```
 admin@adm01:~/src/infra$ git log -3 --format='%h %an %ar %s' -- .gitlab-ci.yml
+admin@adm01:~/src/infra$ grep -n 'politiques_ref' .gitlab-ci.yml          # l'étiquette que la CI clone
+      politiques_ref: v1.4.1                                               ← v1, v2 : montée par Lucas (numéro selon tes étiquettes)
+admin@adm01:~/src/politiques$ git fetch --tags && git tag -n1 --sort=-v:refname | head -3
 admin@adm01:~/src/politiques$ git log -5 --format='%h %an %ar %s' -- rego/
-admin@adm01:~/src/politiques$ git pull && grep -rh '^package ' rego/tofu/ | sort | uniq -c
+admin@adm01:~/src/politiques$ git checkout -q v1.4.1 && grep -rh '^package ' rego/tofu/ | sort | uniq -c
 # Les arguments réels du job de plan (.validation:conftest-plan du composant, M29-E10) :
 admin@adm01:~/src/ci-templates$ grep -n -- '--namespace\|--all-namespaces\|--data\|conftest test' templates/validation/template.yml
 admin@adm01:~/src/politiques$ echo '{"contexte": {"etat": "socle", "etiquettes_mr": []}}' > /tmp/contexte-socle.json
@@ -46,7 +49,7 @@ admin@adm01:~/src/politiques$ opa eval -d rego/tofu -d rego/donnees -d /tmp/cont
 admin@adm01:~/src/politiques$ jq 'keys' <plan>                     # "resource_changes" … pas "resource_change"
 ```
 
-(Le nombre de « tests » dépend de tes règles ; ceux-ci sont ceux du corrigé de M29-E03. Sans `--data` du contexte, la règle « contexte absent » refuse le plan **à elle seule** : on croit le filet intact alors qu'aucune autre règle ne se déclenche.)
+(Le nombre de « tests » dépend de tes règles ; ceux-ci sont ceux du corrigé de M29-E03. Sans `--data` du contexte, la règle « contexte absent » refuse le plan **à elle seule** : on croit le filet intact alors qu'aucune autre règle ne se déclenche. Évalue les politiques **à l'étiquette** que lit la CI (`git checkout <politiques_ref>`), pas ta copie de travail ; reviens ensuite sur `main`.)
 
 Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `plateforme/infra` est « passed » avec des jobs `plan:*` orange (« allowed to fail ») dont le journal dit « Plan REFUSÉ par les politiques… » ; `conftest` en local refuse bien le plan.
 
@@ -54,20 +57,22 @@ Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `pla
 
 | Variante | Cause | Preuve |
 |---|---|---|
-| 1 | Commit de Lucas dans `plateforme/politiques` : le paquet des règles `rego/tofu/` renommé `brouillon.tofu` (règles **et** tests, `import data.tofu` compris). `opa test` reste vert ; le job de plan lance `conftest test --namespace tofu` : aucune règle dans cet espace, conftest réussit en silence (« 0 tests ») | `git log -p rego/`, `grep '^package'`, sortie « 0 tests » |
-| 2 | Commit de Lucas : `resource_changes` → `resource_change` dans les règles **et dans les entrées simulées des tests**. Les tests passent (ils fabriquent leur propre entrée) ; sur un vrai plan, `input.resource_change` n'existe pas : `some rc in input.resource_change` ne produit rien, aucune règle ne se déclenche | `git log -p`, `opa eval … 'data'` (ensembles `deny` vides), `jq 'keys'` |
+| 1 | Commit de Lucas poussé **directement** sur `main` de `plateforme/politiques` : le paquet des règles `rego/tofu/` renommé `brouillon.tofu` (règles **et** tests, `import data.tofu` compris), puis étiquette `v1.4.1` et commit de Lucas dans `plateforme/infra` qui monte `politiques_ref` en `v1.4.1`. `opa test` reste vert ; le job de plan lance `conftest test --namespace tofu` : aucune règle dans cet espace, conftest réussit en silence (« 0 tests »). Le pipeline de `main` des politiques est **rouge** depuis (le job des exemples du composant attend un refus de `plan-envs-m29-defauts.json`) : personne ne l'a regardé | `git log -p rego/`, `grep '^package'` à l'étiquette, sortie « 0 tests », pipeline rouge des politiques |
+| 2 | Commit de Lucas (poussé sur `main`, ou par une MR dont le pipeline est vert) : `resource_changes` → `resource_change` dans les règles, **dans les entrées simulées des tests et dans les plans d'exemple** de `rego/exemples/`, puis étiquette `v1.4.1` et montée de `politiques_ref` dans `plateforme/infra`. Les tests et les exemples passent (ils ne sont plus de vrais plans) ; sur un vrai plan, `input.resource_change` n'existe pas : `some rc in input.resource_change` ne produit rien, aucune règle ne se déclenche | `git log -p`, `opa eval … 'data'` (ensembles `deny` vides), `jq 'keys'` sur un vrai plan |
 | 3 | Commit de Lucas dans `plateforme/infra/.gitlab-ci.yml` : `allow_failure: true` ajouté au modèle caché `.plan` (M05), que tous les jobs `plan:*` étendent et qui appelle `!reference [.validation:conftest-plan, script]` (« le temps de corriger les faux positifs ») : le job de plan échoue sur le refus, le pipeline passe | `git log -p .gitlab-ci.yml`, jobs `plan:*` orange |
 
-*Correctif* : revert du commit fautif par MR (`git revert <sha>` dans le bon dépôt), puis vérification : le plan est refusé **avec les arguments de la CI**, `lab/bin/check 29 19`, `lab/bin/break 29 19 --annuler` pour clore.
+*Correctif* : revert du commit fautif par MR (`git revert <sha>`) dans **chaque** dépôt touché. Variantes 1 et 2 : le plus sûr est de défaire la montée de `politiques_ref` dans `plateforme/infra` (la CI relit aussitôt `v1.4.0`, saine), puis de défaire le commit de `plateforme/politiques` ; publier ensuite une étiquette corrigée (`v1.4.2`) si d'autres changements doivent sortir. On ne déplace jamais une étiquette publiée (`v1.4.1` reste fautive : ne plus la consommer). Puis vérification : le plan est refusé **avec les arguments et l'étiquette de la CI**, `lab/bin/check 29 19`, `lab/bin/break 29 19 --annuler` pour clore (il retire l'étiquette `v1.4.1` posée par la panne si plus aucun projet ne la lit).
 
 *Prévention* (fichiers dans [`fichiers/M29-E19/politiques/`](fichiers/M29-E19/politiques/)) :
 - plans de référence versionnés ([`tests/plans/`](fichiers/M29-E19/politiques/tests/plans/)) : un plan qui **doit** être refusé, un qui doit passer ;
 - job [`non-regression-plans`](fichiers/M29-E19/politiques/.gitlab-ci.extrait-E19.yml) : conftest avec **les mêmes arguments** que `.validation:conftest-plan` (`--namespace tofu`, `--data rego/donnees`, contexte `socle` versionné dans `tests/plans/contexte-socle.json`) ; échec si le plan dangereux n'est pas refusé (code 1 **et** au moins un `FAIL` : un code 2 d'erreur d'analyse ou un 127 « commande introuvable » ne sont pas des refus) ; échec si un paquet de règles n'est pas dans les espaces évalués (rend la variante 1 impossible) ; la variante 2 est attrapée parce que le plan est **réel** ;
 - [`CODEOWNERS`](fichiers/M29-E19/politiques/CODEOWNERS) sur `rego/tofu/`, `tests/plans/`, `.gitlab-ci.yml` — en GitLab Free, l'approbation obligatoire des propriétaires est Premium : le garde-fou réel reste « fusion réservée aux Maintainers » + ce job ;
+- une étiquette de `plateforme/politiques` ne se publie que sur un `main` au pipeline **vert** (job `non-regression-plans` compris), et une montée de `politiques_ref` dans un projet consommateur passe par une MR qui cite ce pipeline (variante 1 : l'étiquette a été posée sur un `main` rouge) ;
 - dans `plateforme/infra` : aucune surcharge `allow_failure` d'un job de validation ni de `.plan`/`plan:*` (le check le vérifie) ; une exception temporaire se fait par une règle `rules:` datée dans le composant, revue, pas par une surcharge silencieuse.
 
 **Pièges classiques**
-- Tester « avec sa commande habituelle » (`--all-namespaces`, sans le contexte, ou depuis un autre dossier) : on ne reproduit pas la CI.
+- Tester « avec sa commande habituelle » (`--all-namespaces`, sans le contexte, depuis un autre dossier, ou sur `main` alors que la CI lit une étiquette) : on ne reproduit pas la CI.
+- Corriger `main` des politiques et s'arrêter là : la CI de `plateforme/infra` lit toujours l'étiquette fautive tant que `politiques_ref` n'a pas changé.
 - Conclure « les tests passent, donc les règles marchent » : les tests unitaires ne voient que leur entrée.
 - Corriger en ajoutant `--all-namespaces` dans le composant sans comprendre : c'est un choix valable (un dossier qui ne contient que des règles actives), mais il change ce qui est évalué pour **tous** les projets ; décision écrite.
 - Laisser le job en `allow_failure` « temporairement » : une permission qui n'expire pas.
@@ -78,7 +83,7 @@ Variante 3 : dans GitLab, le dernier pipeline de la MR de démonstration de `pla
 
 **Démarche de diagnostic**
 
-*Symptômes* : recette lente (≈ +300 ms sur toutes les requêtes) alors que l'expérience est « supprimée » (v1), « en suppression » (v2) ou « en pause » (v3).
+*Symptômes* : recette lente (au moins +300 ms par appel : chaque paquet émis par l'API est retardé) alors que l'expérience est « supprimée » (v1), « en suppression » (v2) ou « en pause » (v3).
 
 *Hypothèses* : (a) quelque chose **recrée** l'expérience ; (b) quelque chose **empêche** son retrait ; (c) l'expérience n'est pas dans l'état qu'on croit (pause mal posée) ; (d) la lenteur ne vient pas du chaos.
 
@@ -109,7 +114,7 @@ qdisc netem 1: root refcnt 2 limit 1000 delay 300ms  20ms
 | Variante | Cause | Ce qui le prouve | Correctif |
 |---|---|---|---|
 | 1 | `Schedule` `controle-latence` (`*/5`, `Forbid`) qui embarque une latence de 90 min ; Lucas a supprimé l'**enfant**, le `Schedule` en a recréé un au tick suivant (`Forbid` n'empêche que le chevauchement) | `ownerReferences` et étiquette `managed-by: controle-latence` de l'enfant ; événements `Spawned` du Schedule | pause puis suppression du **Schedule** (ses enfants partent avec lui) |
-| 2 | Commit de Lucas dans `plateforme/gitops` (`valeurs/chaos-mesh/values.yaml`) : `chaosDaemon.socketPath: /run/containerd/containerd-ancien.sock` → le chart monte `/run/containerd` et passe `--runtime-socket-path /host-run/containerd-ancien.sock` : les daemons ne joignent plus containerd ; le retrait de l'expérience échoue, le finaliseur reste, le `netem` reste | arguments du DaemonSet, journaux du daemon, `git log -p valeurs/chaos-mesh/` | revert par MR, attendre les daemons prêts : le contrôleur réessaie, retire, lève le finaliseur — **sans** forçage |
+| 2 | Commit de Lucas dans `plateforme/gitops` (`valeurs/chaos-mesh/values.yaml`) : `chaosDaemon.socketPath: /run/containerd/containerd-ancien.sock` → le chart monte `/run/containerd` et passe `--runtime-socket-path /host-run/containerd-ancien.sock` : le nouveau daemon ne joint plus containerd et ne démarre pas. La mise à jour progressive du DaemonSet (`maxUnavailable: 1` par défaut) **s'arrête au premier pod** : un seul nœud a perdu son daemon, les autres tournent encore avec l'ancienne configuration. Le retrait réussit sur les pods des autres nœuds et échoue sur ceux de ce nœud : le finaliseur reste, le `netem` reste là seulement (une partie des requêtes est lente) | arguments du DaemonSet, `kubectl -n chaos-mesh get pods -l app.kubernetes.io/component=chaos-daemon -o wide` (un pod en échec, sur le nœud de l'API encore ralentie), journaux du daemon, `git log -p valeurs/chaos-mesh/` | revert par MR, attendre les daemons prêts : le contrôleur réessaie, retire, lève le finaliseur — **sans** forçage |
 | 3 | Lucas a « mis en pause » `diagnostic-reseau` avec l'annotation `chaos-mesh.org/pause: "true"` (le préfixe de l'annotation des **espaces**, `chaos-mesh.org/inject`) au lieu de `experiment.chaos-mesh.org/pause` : le contrôleur l'ignore, la phase désirée reste `Run` | annotations de l'objet, `status.experiment.desiredPhase: Run`, condition `Paused` à `False` | vraie pause (`experiment.chaos-mesh.org/pause=true`) puis suppression ; retirer la fausse annotation |
 
 *Correctif commun* : vérifier ensuite **sur le nœud** que chaque pod de l'API n'a plus de `netem`, puis la mesure (p95 < 250 ms). Si un `netem` reste sans aucune expérience vivante : retrait manuel (`nsenter … tc qdisc del dev eth0 root`, ou redémarrage du pod), et explication écrite.

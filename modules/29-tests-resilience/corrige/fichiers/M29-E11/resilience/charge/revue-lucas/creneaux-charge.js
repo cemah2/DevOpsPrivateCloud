@@ -2,8 +2,8 @@
 // Question du ticket : MédiAgenda tient-il 500 requêtes/s ? Réponse mesurable : un taux d'arrivée
 // fixé en ITÉRATIONS par seconde (une itération = 3 requêtes), des seuils = SLO, la recette seulement,
 // des données factices, et rien qui reste en base. Les numéros renvoient à REVUE.md.
-//   k6 run charge/revue-lucas/creneaux-charge.js                    (167 it/s ≈ 500 req/s)
-//   k6 run -e ITERATIONS_PAR_S=20 charge/revue-lucas/creneaux-charge.js   (montée prudente d'abord)
+//   k6 run charge/revue-lucas/creneaux-charge.js                          (défaut prudent : 20 it/s, RB-290)
+//   k6 run -e ITERATIONS_PAR_S=167 charge/revue-lucas/creneaux-charge.js  (≈ 500 req/s, annoncé, après la montée)
 import http from 'k6/http';
 import { check } from 'k6';
 import exec from 'k6/execution';
@@ -16,7 +16,9 @@ if (!/^https:\/\/mediagenda-(recette|dev)\.apps\.par1\.medisphere\.internal$|^ht
 
 // (11) 500 requêtes/s = ~167 itérations/s de 3 requêtes. Assez de VUs : débit × durée d'itération
 // (167 × 0,3 s ≈ 50) avec de la marge ; sinon k6 PERD des itérations (dropped_iterations).
-const RYTHME = parseInt(__ENV.ITERATIONS_PAR_S || '167', 10);
+// Défaut volontairement bas (RB-290 : paramètres prudents d'abord) ; le débit cible se demande
+// explicitement, une fois la montée faite et le test annoncé.
+const RYTHME = parseInt(__ENV.ITERATIONS_PAR_S || '20', 10);
 
 export const options = {
   // (13) Vérification TLS conservée : la racine MédiSphère est dans le magasin de adm01.

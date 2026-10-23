@@ -16,9 +16,9 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
   admin@adm01:~/DevOpsPrivateCloud$ lab/bin/break 29 19
   ```
   Le script tire une variante au hasard et n'affiche que le **symptôme**. Chaque panne a 2 à 3 variantes (`--variante N` force une variante sans dire laquelle est laquelle). Si une variante n'a pas d'effet sur ton lab (ta configuration diffère de celle du corrigé), le script en essaie une autre ; si aucune n'a d'effet, il remet tout en état et te dit quel prérequis manque. Une injection prend **de 1 à 15 minutes** : certaines passent par un commit, la synchronisation d'Argo CD, une mise à l'échelle par l'HPA, et le script attend de constater l'effet.
-- **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 29 19`) : il doit être vert. Le script refuse de casser un lab qui ne va pas bien.
+- **Avant d'injecter**, lance le contrôle de l'exercice (`lab/bin/check 29 19`) : il doit être vert, sauf les lignes qui portent sur ce que l'exercice te fait écrire ou ajouter (runbook, test de non-régression, nettoyeur planifié, post-mortem). Le script refuse de casser un lab qui ne va pas bien.
 - **Prérequis techniques** sur `adm01` : le jeton d'administration GitLab de M01 (`WB_GITLAB_ADMIN_TOKEN_FILE`, portée `api`) ; `yq` de mikefarah (v4) et `jq` (M02), `opa` 1.21 et `conftest` 0.71 (M29-E03), `kubectl` ; SSH vers les nœuds de `k8s-par1`, vers `pve01` (root) et vers les VMs du socle.
-- **Commits de Lucas.** Certaines pannes modifient un dépôt (`plateforme/politiques`, `plateforme/infra`, `plateforme/gitops`, `mediagenda/deploiement`) par un commit signé « Lucas Martin », avec le marqueur `M29-EXX` dans le message ; si `main` refuse la poussée directe, elles passent par une MR fusionnée par le script après son pipeline. C'est un vrai changement : il apparaît dans `git log`, dans Argo CD, dans le journal d'audit de GitLab. Corrige-le comme un vrai commit fautif (revert ou correction par MR).
+- **Commits de Lucas.** Certaines pannes modifient un dépôt (`plateforme/politiques`, `plateforme/infra`, `plateforme/gitops`, `mediagenda/deploiement`) par un commit signé « Lucas Martin », avec le marqueur `M29-EXX` dans le message ; si `main` refuse la poussée directe, elles passent par une MR fusionnée par le script après son pipeline. Une panne peut aussi publier une étiquette, comme le ferait un mainteneur. C'est un vrai changement : il apparaît dans `git log`, dans Argo CD, dans le journal d'audit de GitLab. Corrige-le comme un vrai commit fautif (revert ou correction par MR) ; une étiquette publiée ne se déplace pas.
 - **Ne lis pas** les scripts de `corrige/pannes/`, ni `/var/lib/workbook/` sur les hôtes, ni `~/.local/state/workbook/` sur `adm01`.
 - Une seule panne active à la fois par exercice. `lab/bin/break 29 19 --annuler` remet l'état sain (filet de sécurité, pas un correctif). **Quand tu as réparé**, lance aussi `--annuler` pour **clore** la panne : l'annulation ne défait jamais ta réparation (un fichier n'est remis que s'il est encore exactement dans l'état injecté), et une panne ouverte bloque l'astreinte M29-E23 et le mini-projet.
 - Les pannes n'agissent que sur : les dépôts cités plus haut ; les objets des espaces `chaos-experiences`, `mediagenda-recette`, `medinotif-recette` et `wb-essais` ; les pods de `chaos-mesh` (par leurs valeurs Git) ; les VM **2298-2299** du sous-pool `lab/terratest` sur `pve01` ; un fichier temporaire sur `adm01` ; une VM non critique du socle (`nbx01` ou `mon01`, par `WB_M29_E22_HOTES`) dont les fichiers modifiés sont sauvegardés. **Jamais** `*-prod`, `messagerie`, `kube-system`, `argocd`, `kyverno` ; aucune donnée détruite.
@@ -35,25 +35,25 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 > *(Le détail s'affiche à l'injection : un plan de référence qui détruit une VM du socle n'est plus refusé par la chaîne de validation de `plateforme/infra`.)*
 
 **Objectifs pédagogiques**
-- Remonter la chaîne de validation d'un plan OpenTofu : job de plan, composant `validation` (`.validation:conftest-plan`), arguments de `conftest` (`--policy`, `--namespace`, `--data`), paquets Rego, règles, tests.
+- Remonter la chaîne de validation d'un plan OpenTofu : job de plan, composant `validation` (`.validation:conftest-plan`), étiquette des politiques qu'il clone (`politiques_ref`), arguments de `conftest` (`--policy`, `--namespace`, `--data`), paquets Rego, règles, tests.
 - Distinguer « la règle n'est pas évaluée », « la règle est évaluée mais ne peut plus se déclencher » et « la règle refuse mais le pipeline ne s'arrête pas ».
 - Rendre ce type de régression **impossible à rater** : test de non-régression des politiques sur des plans réels.
 
-**Prérequis** : M29-E03, M29-E10 ; `lab/bin/check 29 19` vert avant l'injection.
+**Prérequis** : M29-E03, M29-E10 ; `lab/bin/check 29 19` vert avant l'injection (hors livrables de l'exercice).
 **Durée indicative** : 30 min (temps cible).
 
-**Contexte technique** : `ressources/E19-plan-dangereux/plan-dangereux.json` est la sortie `tofu show -json` d'un plan de `plateforme/infra` qui **supprime** la VM `nbx01` et crée une VM sans étiquette d'environnement ; les politiques de M29-E03 le refusaient (vérifie-le d'abord sur ton historique : `conftest test` à une date antérieure, ou le check de cet exercice). Le script vérifie, avant d'injecter, que ce plan est refusé avec **les arguments du job de plan** (espaces, `--data rego/donnees`, et le contexte que le job écrit, ici celui de l'état `socle` sans étiquette de MR) ; tu peux désigner un autre plan de référence par `WB_M29_E19_PLAN` et son état par `WB_M29_E19_ETAT`.
+**Contexte technique** : `ressources/E19-plan-dangereux/plan-dangereux.json` est la sortie `tofu show -json` d'un plan de `plateforme/infra` qui **supprime** la VM `nbx01` et crée une VM sans étiquette d'environnement ; les politiques de M29-E03 le refusaient (vérifie-le d'abord sur ton historique : `conftest test` à une date antérieure, ou le check de cet exercice). Rappel de M29-E10 : la CI de `plateforme/infra` ne lit pas `main` de `plateforme/politiques`, mais l'**étiquette** épinglée par l'entrée `politiques_ref` du composant. Le script vérifie, avant d'injecter, que ce plan est refusé par les politiques de `main` et par celles de cette étiquette, avec **les arguments du job de plan** (espaces, `--data rego/donnees`, et le contexte que le job écrit, ici celui de l'état `socle` sans étiquette de MR) ; tu peux désigner un autre plan de référence par `WB_M29_E19_PLAN` et son état par `WB_M29_E19_ETAT`.
 
 **Injection** : `lab/bin/break 29 19` (3 variantes).
 
 **Travail demandé**
-1. Reproduis : fais passer le plan de référence par **exactement** ce que fait la CI de `plateforme/infra` (mêmes politiques, mêmes arguments), pas par ta commande habituelle.
+1. Reproduis : fais passer le plan de référence par **exactement** ce que fait la CI de `plateforme/infra` (mêmes politiques, à la même étiquette, mêmes arguments), pas par ta commande habituelle.
 2. Situe l'étage : le job de validation tourne-t-il ? que dit son journal (combien de politiques, de règles évaluées, d'échecs) ? son statut compte-t-il pour le pipeline ? Les politiques de `main` refusent-elles le plan quand on les évalue toutes (`--all-namespaces`) ?
-3. Trouve la cause racine et son auteur (`git log -p` dans les dépôts concernés) ; corrige par MR.
+3. Trouve la cause racine et son auteur (`git log -p` dans les dépôts concernés, étiquettes de `plateforme/politiques`) ; corrige par MR, dans **chaque** dépôt touché.
 4. **Prévention** : ajoute à `plateforme/politiques` un test qui échoue si le plan de référence n'est plus refusé (le plan versionné à côté des tests, évalué en CI avec les arguments de production), et une règle de revue (`CODEOWNERS` ou approbation) sur les fichiers qui décident de ce que la CI bloque.
 
 **Critères de réussite**
-- [ ] Le plan de référence est de nouveau refusé par les politiques de `main`, avec les arguments de la CI de `plateforme/infra`.
+- [ ] Le plan de référence est de nouveau refusé par les politiques de `main` **et** par celles de l'étiquette que lit la CI de `plateforme/infra` (`politiques_ref`), avec les arguments de cette CI.
 - [ ] Aucun job de validation ni de plan de `plateforme/infra` n'est autorisé à échouer ; les paquets Rego de `rego/tofu/` sont dans les espaces évalués par la CI.
 - [ ] `plateforme/politiques` contient un test de non-régression sur un plan réel (fichier JSON versionné) ; la panne est close.
 
@@ -88,7 +88,7 @@ Un pipeline peut être vert avec un job rouge : `allow_failure`. Dans GitLab, le
 - Comprendre le cycle de vie d'une expérience (`desiredPhase`, enregistrements par conteneur, finaliseur `chaos-mesh/records`) et ce qui bloque sa suppression.
 - Retirer à la main, proprement, ce que le `chaos-daemon` n'a pas pu retirer, et le prouver sur le nœud.
 
-**Prérequis** : M29-E13 ; RB-294 ; `lab/bin/check 29 20` vert avant l'injection.
+**Prérequis** : M29-E13 ; RB-294 ; `lab/bin/check 29 20` vert avant l'injection (hors livrables de l'exercice).
 **Durée indicative** : 45 min (temps cible).
 
 **Contexte technique** : les expériences du lab vivent normalement dans `chaos-experiences`. Le `chaos-daemon` (DaemonSet de `chaos-mesh`) pose les règles dans l'espace réseau du pod visé ; son espace de travail sur le nœud est celui du runtime containerd (`/run/containerd/containerd.sock`). Sur les nœuds, `crictl` et `nsenter` sont disponibles avec `sudo`. La configuration de Chaos Mesh vit dans `plateforme/gitops/valeurs/chaos-mesh/values.yaml` (Application `chaos-mesh`).
@@ -141,7 +141,7 @@ Si le finaliseur ne part pas, c'est que le contrôleur n'arrive pas à faire ret
 - Comprendre pourquoi un test d'infrastructure laisse des restes (interruption, délai de `go test`, `defer` non exécuté, destruction en échec) et comment un état local orphelin aggrave le problème.
 - Nettoyer en sécurité, puis rendre la récidive improbable (code du test, délai, nettoyeur planifié).
 
-**Prérequis** : M29-E08 ; `lab/bin/check 29 21` vert avant l'injection.
+**Prérequis** : M29-E08 ; `lab/bin/check 29 21` vert avant l'injection (hors livrables de l'exercice).
 **Durée indicative** : 30 min (temps cible).
 
 **Contexte technique** : les VMs de Terratest sont en **2290-2299**, nommées `tt-<suffixe>`, étiquetées `env-m29` et `terratest`, dans le sous-pool Proxmox **`lab/terratest`**, avec une adresse allouée par NetBox (M29-E08). Terratest copie le module dans un répertoire temporaire (`test_structure.CopyTerraformFolderToTemp`) où vit l'état local du test (sous `test/fixtures/vm/` de la copie). Le budget mémoire du lab est serré (PLAN §3.3) : une VM oubliée et démarrée prend 1 Go à tout le monde.
@@ -187,7 +187,7 @@ Si le finaliseur ne part pas, c'est que le contrôleur n'arrive pas à faire ret
 - Corriger par Ansible (le rôle, l'inventaire) et non à la main, et vérifier l'idempotence.
 - Détecter plus tôt : Ansible en mode vérification planifié, tests ciblés, ce qu'un rôle doit gérer en entier (fichiers « de trop » compris).
 
-**Prérequis** : M29-E04, M29-E10 ; M04 (rôles `base`, `ssh_durci`), M21-E08 (rôle `node_exporter`), M26 (rôle `durcissement`) ; `lab/bin/check 29 22` vert avant l'injection.
+**Prérequis** : M29-E04, M29-E10 ; M04 (rôles `base`, `ssh_durci`), M21-E08 (rôle `node_exporter`), M26 (rôle `durcissement`) ; `lab/bin/check 29 22` vert avant l'injection (hors livrables de l'exercice).
 **Durée indicative** : 30 min (temps cible).
 
 **Contexte technique** : la VM visée est `nbx01` ou `mon01` (liste `WB_M29_E22_HOTES`). Le script vérifie, avant et après l'injection, le verdict de ta suite Testinfra sur cette VM par la commande `WB_M29_TESTINFRA_CMD` (défaut : la suite de `~/src/ansible/tests/infra` lancée depuis `adm01` sur l'hôte) : la panne n'est déclarée que si ta suite passe au rouge. Si aucune dérive n'est vue par ta suite, il te le dit : ta suite est trop pauvre, complète M29-E04 avant de revenir.
@@ -231,7 +231,7 @@ Un rôle qui pose **ses** fichiers ne voit pas un fichier **de plus** posé à c
 - Distinguer le déclencheur (l'expérience), le défaut latent introduit récemment (changement de configuration) et la faiblesse de conception qui les rend dangereux ensemble.
 - Rédiger un post-mortem sans reproche qui ouvre des actions sur le système, la détection et le processus.
 
-**Prérequis** : M29-E13 à M29-E16, M29-E20 ; M28-E02 (HPA), M14-E07 (sondes) ; `lab/bin/check 29 23` vert avant l'injection.
+**Prérequis** : M29-E13 à M29-E16, M29-E20 ; M28-E02 (HPA), M14-E07 (sondes) ; `lab/bin/check 29 23` vert avant l'injection (hors livrables de l'exercice).
 **Durée indicative** : 1 h 30 (temps cible : service rétabli en 15 min).
 
 **Contexte technique** : la journée de jeu automatique est un `Workflow` de `chaos-experiences` qui enchaîne des expériences courtes sur la recette ; chacune avait une hypothèse « aucun impact visible ». Les manifestes de MédiAgenda en recette viennent de `mediagenda/deploiement` (overlay `recette`), appliqués par Argo CD. Tu as les SLO de recette (E13), le tableau « Charge k6 » (E14), Loki et les événements du cluster.

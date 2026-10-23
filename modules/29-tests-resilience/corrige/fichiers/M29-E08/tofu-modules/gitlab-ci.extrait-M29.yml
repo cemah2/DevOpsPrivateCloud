@@ -6,6 +6,10 @@
 # pas empêcher la fusion) — la règle d'équipe est de le LANCER avant toute fusion qui change
 # la création de la VM (relu par Karim).
 #
+# ⚠️ Une variable PROTÉGÉE n'est transmise qu'aux pipelines d'une branche (ou étiquette) protégée : dans
+# un pipeline de MR, il faut que la branche SOURCE le soit. Les MR qui touchent vm-debian partent donc
+# d'une branche « vm-debian/<sujet> », motif protégé (Settings → Repository → Protected branches,
+# push et fusion : Developers + Maintainers) ; d'une autre branche, le job s'arrête au « test -n ».
 # Variables du projet, PROTÉGÉES et MASQUÉES (branches protégées seulement, comme plateforme/infra) :
 #   PROXMOX_VE_ENDPOINT          https://pve01.par1.medisphere.internal:8006/   (ou <IP-PVE01>)
 #   PROXMOX_VE_API_TOKEN         wb-terratest@pve!terratest=<SECRET>  (jamais celui de wb-tofu)

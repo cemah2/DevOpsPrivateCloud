@@ -152,7 +152,7 @@ La décision proposée (testinfra-goss.md) garde Testinfra et retire l'essai Gos
 - *Isolation* : nom `tt-` + `random.UniqueID()` en minuscules (6 caractères), premier VMID libre de 2290-2299 lu dans `/cluster/resources`, copie du module dans un dossier temporaire (`test_structure.CopyTerraformFolderToTemp`) : deux lancements ne partagent ni nom, ni VMID, ni état.
 - *`TerraformBinary: "tofu"`* : sans lui, Terratest prend `terraform` s'il est dans le `PATH` (un poste où les deux cohabitent testerait autre chose).
 - *Destruction garantie* : `t.Cleanup` enregistré **avant** `InitAndApply` ; les fonctions de nettoyage s'exécutent dans l'ordre inverse de leur enregistrement : d'abord `Destroy`, ensuite la vérification que rien ne reste.
-- *Les délais* : quand `go test -timeout` expire, le binaire **panique** et s'arrête **sans** exécuter `t.Cleanup` ni `defer` (vérifié). Le test borne donc ses attentes par une échéance interne, `t.Deadline()` moins 8 minutes (`margeDestruction`), et `cloud-init status --wait` par `timeout 600` ; `go test -timeout 35m` ; job `timeout: 40m` (le journal et le message de Go sont conservés). L'emboîtement protège des attentes sans fin ; il ne protège pas d'une création de VM qui bloque elle-même au-delà de l'échéance (fournisseur), d'où RB-293 et le nettoyage du palier 4.
+- *Les délais* : quand `go test -timeout` expire, le binaire **panique** et s'arrête **sans** exécuter `t.Cleanup` ni `defer` (vérifié). Le test borne donc ses attentes par une échéance interne, `t.Deadline()` moins 8 minutes (`margeDestruction`), et `cloud-init status --wait` par `timeout` (au plus 600 s, jamais au-delà de cette échéance) ; `go test -timeout 35m` ; job `timeout: 40m` (le journal et le message de Go sont conservés). L'emboîtement protège des attentes sans fin ; il ne protège pas d'une création de VM qui bloque elle-même au-delà de l'échéance (fournisseur), d'où RB-293 et le nettoyage du palier 4.
 - *L'identité* : Proxmox **supprime les ACL** posées sur `/vms/<vmid>` quand la VM est détruite (`remove_vm_access` dans `qemu-server`) ; des ACL par VMID disparaîtraient après le premier test. Un pool survit aux VMs, et une VM créée dans le pool hérite de ses droits ; le clonage vers un pool exige `VM.Allocate` sur ce pool et `VM.Clone` sur le modèle. Le sous-pool `lab/terratest` (pools imbriqués, PVE ≥ 8.1) reste dans le pool `lab`, donc dans le périmètre des droits de `wb-tofu` et des inventaires.
 - *Étiquette de construction* : sans `-tags integration`, `go test ./...` (ou un `go vet` d'outillage) ne compile même pas le test : aucune VM n'est créée par accident.
 
@@ -170,6 +170,7 @@ La décision proposée (testinfra-goss.md) garde Testinfra et retire l'essai Gos
 - Compter sur `go test -timeout` pour déclencher le nettoyage.
 - Un DHCP supposé : le module `vm-debian` v2 alloue l'adresse dans NetBox (M06) ; le test le vérifie et vérifie qu'elle est rendue.
 - Lancer deux tests en parallèle sans `resource_group` : deux VMs peuvent prendre le même VMID libre.
+- Lancer le job manuel dans une MR depuis une branche non protégée : les variables protégées (jeton Proxmox) ne sont pas transmises, le job échoue avant de créer quoi que ce soit. Branche source protégée par motif (`vm-debian/*`), ou lancement sur `main`.
 
 **En production chez MédiSphère**
 
@@ -188,7 +189,7 @@ Le test est lancé avant toute fusion qui change la création des VMs (règle d'
    ```
    Entrée du miroir : [`charts.yaml.extrait`](fichiers/M29-E09/charts-miroir/charts.yaml.extrait).
 2. Espaces et droits : [`k8s/espaces/chaos-mesh.yaml`](fichiers/M29-E09/k8s/espaces/chaos-mesh.yaml) (PSA `enforce: privileged`, `audit` et `warn` en `restricted` pour garder la trace) ; [`k8s/espaces/chaos-experiences/`](fichiers/M29-E09/k8s/espaces/chaos-experiences/) (`restricted`, `ResourceQuota` sur `count/podchaos.chaos-mesh.org`… et `pods: "0"`, ClusterRoles `chaos-experimentateur` et `chaos-lecteur` liées dans `chaos-experiences` **et** dans les trois espaces visables) ; [`k8s/rbac/wb-checks-services-m29.yaml`](fichiers/M29-E09/k8s/rbac/wb-checks-services-m29.yaml) (lecture de `chaos-mesh.org`, de `k6.io` et des politiques d'admission, agrégée à `wb-checks-services`).
-3. Politique : [`k8s/admission/50-chaos-espaces.yaml`](fichiers/M29-E09/k8s/admission/50-chaos-espaces.yaml) — `ValidatingAdmissionPolicy` en CEL : (1) annotation `chaos-mesh.org/inject=enabled` refusée sur tout espace hors de la liste ; (2) objet `chaos-mesh.org` refusé hors de `chaos-experiences` ; (3) `spec.selector.namespaces` (et celui des modèles de `Schedule`/`Workflow`) inclus dans la liste. `matchConditions` exclut le compte de service du contrôleur (`system:serviceaccount:chaos-mesh:chaos-controller-manager`), qui crée lui-même des objets internes (`PodNetworkChaos`…) dans les espaces visés. Liaison d'abord en `[Warn, Audit]`, puis `[Deny]`.
+3. Politique : [`k8s/admission/50-chaos-espaces.yaml`](fichiers/M29-E09/k8s/admission/50-chaos-espaces.yaml) — `ValidatingAdmissionPolicy` en CEL : (1) annotation `chaos-mesh.org/inject=enabled` refusée sur tout espace hors de la liste ; (2) objet `chaos-mesh.org` refusé hors de `chaos-experiences` ; (3) espaces visés inclus dans la liste : `spec.selector.namespaces`, les clés de `spec.selector.pods` (`{espace: [pods]}` vise un autre espace sans passer par `namespaces`) et, pour une `NetworkChaos`, `spec.target.selector` (l'autre extrémité). `matchConditions` n'exclut le compte de service du contrôleur (`system:serviceaccount:chaos-mesh:chaos-controller-manager`) que pour ses objets **internes** (`PodNetworkChaos`, `PodIOChaos`, `PodHttpChaos` créés dans les espaces visés, `WorkflowNode`) : les expériences qu'il crée pour un `Schedule` ou un `Workflow` passent la règle (3), ce qui couvre les expériences embarquées sans énumérer tous les types (`spec.podChaos`, `spec.networkChaos`… d'un `Schedule`). Logique CEL rejouée hors cluster (cel-go, 12 cas : annotation, espace, sélecteurs, enfant du contrôleur) ; non testée sur un kube-apiserver. Liaison d'abord en `[Warn, Audit]`, puis `[Deny]`.
 4. `hostPath` : [extrait](fichiers/M29-E09/k8s/admission/20-interdire-hostpath.extrait-M29.yaml) (`chaos-mesh: "/run/containerd,/sys,/lib/modules"`). Falco : [extrait](fichiers/M29-E09/politiques/falco/regles-medisphere.extrait-M29.yaml) (exception ajoutée aux règles observées, limitée à l'espace `chaos-mesh` et à l'image du cache Harbor). Registre : [extrait](fichiers/M29-E09/medisphere/docs/securite/durcissement/exceptions.extrait-M29.md) (EXC-K-005, EXC-K-006, EXC-D-002).
 5. Valeurs et Application : [`valeurs/chaos-mesh/values.yaml`](fichiers/M29-E09/gitops/valeurs/chaos-mesh/values.yaml), [`plateforme/chaos-mesh.yaml`](fichiers/M29-E09/gitops/plateforme/chaos-mesh.yaml) — filtre d'espaces, runtime `containerd` et son socket, images et image `pause` par Harbor, pas de tableau de bord (mais `securityMode: true`, qui garde le webhook de vérification des droits), pas de DNS, certificats des webhooks par cert-manager, `chaosdSecurityMode: false` ; dans l'Application : `ServerSideApply=true`, `CreateNamespace=false`, `ignoreDifferences` sur l'annotation `rollme` avec `RespectIgnoreDifferences=true`.
    ```
@@ -230,7 +231,8 @@ Les garde-fous sont **empilés** et indépendants : (1) le filtre d'espaces du c
 - Laisser l'annotation `rollme` sans `ignoreDifferences` : Argo CD voit l'Application désynchronisée en permanence et redémarre le contrôleur et les démons à chaque synchronisation.
 - `dashboard.create: false` en croyant que `securityMode` ne sert qu'au tableau de bord : c'est lui qui garde le webhook de vérification des droits.
 - Lier `chaos-experimentateur` dans `chaos-experiences` seulement : le webhook refuse les expériences (le demandeur n'a pas de droit dans l'espace visé).
-- Exclure **tous** les comptes de service de la VAP : un pipeline compromis pourrait annoter n'importe quel espace.
+- Exclure **tous** les comptes de service de la VAP : un pipeline compromis pourrait annoter n'importe quel espace. Exclure le contrôleur de Chaos Mesh **en entier** : les enfants d'un `Schedule` ou d'un `Workflow` échappent alors à la règle des cibles.
+- Ne contrôler que `selector.namespaces` : `selector.pods` et le `target` d'une `NetworkChaos` visent aussi des espaces.
 - Croire qu'une expérience qui ne sélectionne rien a été refusée : elle existe, elle attend.
 - Supprimer un objet de chaos et ne pas vérifier que la panne est retirée (finaliseur `chaos-mesh/records`, RB-292).
 
@@ -270,7 +272,7 @@ Le composant porte la **mécanique** ; les **données** (schémas, politiques) s
 - `-ignore-missing-schemas` remis « pour faire passer » une MR : la règle d'équipe est de régénérer le paquet.
 - Une image d'outils référencée par étiquette seule : elle peut changer sous le composant.
 - Publier le plan JSON en artefact « pour déboguer ».
-- `CI_MERGE_REQUEST_LABELS` lu dans un pipeline de branche : vide ; le contexte doit avoir un comportement défini (aucune étiquette = aucune destruction autorisée).
+- `CI_MERGE_REQUEST_LABELS` lu dans un pipeline de branche : vide ; le contexte doit avoir un comportement défini (aucune étiquette = aucune destruction autorisée). Conséquence à prévoir : l'apply de `main` utilise le plan de `main`, qui serait refusé même après une MR autorisée ; le modèle accepte donc, **seulement** dans un pipeline de `main` lancé à la main par un mainteneur, la variable `ETIQUETTES_MR=destruction-autorisee` (variables de pipeline réservées aux Maintainers).
 - Un composant qui référence `.socle` : erreur de configuration dans tout projet qui ne le définit pas.
 - Jetons de job non autorisés : téléchargement du paquet en 404/403 dans les consommateurs.
 
@@ -340,6 +342,7 @@ Refuser les MR avec une liste de commentaires, sans version corrigée : plus rap
 - Rejouer le script de Lucas sur la recette (ou pire, sans changer sa cible).
 - Supprimer `patients.csv` dans un nouveau commit et considérer l'affaire close : il reste dans l'historique et dans la MR.
 - Corriger en silence : Lucas refera les mêmes erreurs.
+- Fusionner `rego/revue-lucas/` sur `main` : ses règles sont dans le paquet `tofu`, comme celles de `rego/tofu/` ; chargées ensemble (`opa test rego/tofu rego/revue-lucas …`), elles se mélangent (constaté : un test de `rego/tofu` passe au rouge, la règle de pool de Lucas ne connaît pas `conventions_etat`). La branche sert à la comparaison, puis se ferme.
 
 **En production chez MédiSphère**
 

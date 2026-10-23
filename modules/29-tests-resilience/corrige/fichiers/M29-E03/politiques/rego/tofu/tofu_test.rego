@@ -149,6 +149,17 @@ remplacement_socle := vm(
 	attributs("dns02", 1018, "lab", ["role-dns", "socle"]),
 )
 
+# Même remplacement avec create_before_destroy : OpenTofu écrit ["create","delete"].
+remplacement_socle_cbd := object.union(remplacement_socle, {"change": {"actions": ["create", "delete"]}})
+
+# VM du socle dont l'étiquette « socle » a disparu : protégée quand même dans l'état socle.
+destruction_socle_sans_etiquette := vm(
+	"module.dns02.proxmox_virtual_environment_vm.vm",
+	["delete"],
+	attributs("dns02", 1008, "lab", ["role-dns"]),
+	null,
+)
+
 destruction_essai := vm(
 	"module.essai.proxmox_virtual_environment_vm.vm",
 	["delete"],
@@ -161,6 +172,19 @@ test_remplacement_socle_refuse_sans_etiquette if {
 		with data.contexte as ctx_socle
 		with data.plages_vmid as {"socle": [[1000, 1099]]}
 	contains(msg, "le plan remplace une VM du socle (dns02)")
+}
+
+test_remplacement_socle_cbd_refuse_sans_etiquette if {
+	some msg in tofu.deny with input as plan([remplacement_socle_cbd])
+		with data.contexte as ctx_socle
+		with data.plages_vmid as {"socle": [[1000, 1099]]}
+	contains(msg, "le plan remplace une VM du socle (dns02)")
+}
+
+test_destruction_etat_socle_sans_etiquette_refusee if {
+	some msg in tofu.deny with input as plan([destruction_socle_sans_etiquette])
+		with data.contexte as ctx_socle
+	contains(msg, "le plan détruit une VM du socle (dns02)")
 }
 
 test_remplacement_socle_autorise_par_etiquette if {

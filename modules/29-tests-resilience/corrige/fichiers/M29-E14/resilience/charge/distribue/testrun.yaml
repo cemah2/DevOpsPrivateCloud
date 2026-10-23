@@ -47,14 +47,21 @@ spec:
       # Racine MédiSphère pour vérifier le certificat de la Gateway (Go lit SSL_CERT_FILE).
       - name: SSL_CERT_FILE
         value: /etc/medisphere/ca/medisphere-root-ca.crt
+    # /tmp inscriptible : la racine du conteneur est en lecture seule, or l'initialiseur (qui hérite de
+    # ces réglages, volumes compris) écrit l'archive du script et son journal dans /tmp
+    # (« k6 archive -O /tmp/<script>.archived.tar », k6-operator 1.7) : sans ce volume, stage « error ».
     volumes:
       - name: racine
         configMap:
           name: medisphere-racine
+      - name: tmp
+        emptyDir: {sizeLimit: 64Mi}
     volumeMounts:
       - name: racine
         mountPath: /etc/medisphere/ca
         readOnly: true
+      - name: tmp
+        mountPath: /tmp
     resources:
       requests: {cpu: 500m, memory: 256Mi}
       limits: {cpu: "1", memory: 512Mi}

@@ -41,7 +41,7 @@ err="$(requete "sum(increase(mediagenda_http_requests_total{$F, code=~\"5..\"}[$
 rps="$(requete "sum(increase(k6_http_reqs_total{testid=\"$testid\"}[$D])) / $duree")"
 p95c="$(requete "max(max_over_time(k6_http_req_duration_p95{testid=\"$testid\", type=\"metier\"}[$D]))")"
 
-if [[ -z "$p95" || -z "$rps" || "$p95" == NaN ]]; then
+if [[ -z "$p95" || -z "$p99" || -z "$rps" || "$p95" == NaN || "$p99" == NaN ]]; then
   echo "Mesure impossible : pas de séries pour testid=$testid sur la fenêtre (TestRun en erreur ? écriture distante ?)" >&2
   exit 2
 fi

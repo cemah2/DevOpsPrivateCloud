@@ -22,7 +22,7 @@ check_cmd "vm-debian/test/go.sum versionné (dépendances vérifiées)" _m29d_ex
 _m29o_e08_go="$(for f in $(_m29d_arbre "$_M29O_P_MODULES" vm-debian/test | grep -E '\.go$' || true); do _m29d_contenu "$_M29O_P_MODULES" "$f"; done)"
 check_cmd "test : binaire tofu imposé (TerraformBinary), pas « terraform » trouvé par hasard" bash -c 'grep -Eq "TerraformBinary: *\"tofu\"" <<<"$1"' _ "$_m29o_e08_go"
 check_cmd "test : destruction garantie (defer ou t.Cleanup autour de terraform.Destroy)" bash -c '
-  grep -Eq "(defer|t\.Cleanup\(func\(\) *\{?) *terraform\.Destroy" <<<"$1"' _ "$_m29o_e08_go"
+  grep -Eq "defer +terraform\.Destroy" <<<"$1" || { grep -q "t\.Cleanup(" <<<"$1" && grep -q "terraform\.Destroy" <<<"$1"; }' _ "$_m29o_e08_go"
 check_cmd "test : VM nommée tt-<suffixe>, VMID 2290-2299" bash -c '
   grep -q "\"tt-\"" <<<"$1" && grep -q "2290" <<<"$1" && grep -q "2299" <<<"$1"' _ "$_m29o_e08_go"
 check_cmd "test : vérifie SSH (cloud-init), étiquettes et agent QEMU" bash -c '
@@ -33,7 +33,8 @@ check_cmd "test : étiquette de construction « integration » (go test ./… ne
 _m29o_e08_ci="$(_m29d_contenu "$_M29O_P_MODULES" .gitlab-ci.yml)"
 check_cmd "CI : job Terratest MANUEL, un seul à la fois (resource_group)" bash -c '
   grep -q "when: manual" <<<"$1" && grep -q "resource_group" <<<"$1" && grep -q -- "-tags integration" <<<"$1"' _ "$_m29o_e08_ci"
-check_cmd "un job Terratest a RÉUSSI ces 30 derniers jours" _m29d_job_reussi "$_M29O_P_MODULES" 'terratest' 30
+# Le job qui crée la VM (terratest:vm-debian), pas le job de compilation lancé à chaque MR.
+check_cmd "le job terratest:vm-debian a RÉUSSI ces 30 derniers jours" _m29d_job_reussi "$_M29O_P_MODULES" '^terratest:vm-debian$' 30
 
 # --- 3. Identité Proxmox dédiée et propreté ------------------------------------------------------------
 _m29o_e08_pools="$(_m29o_pve 'pvesh get /pools --output-format json')"
@@ -52,7 +53,7 @@ else
   _m29o_e08_orph="$(jq -r '[.[] | select((.vmid >= 2290 and .vmid <= 2299) or ((.tags // "") | test("terratest")))
       | "\(.vmid) \(.name)"] | join(", ")' <<<"${_m29o_e08_vms:-[]}" 2>/dev/null || true)"
   _m29o_e08_encours="$(gitlab_api "projects/$(_m29d_uri "$_M29O_P_MODULES")/jobs?scope%5B%5D=running&per_page=20" 2>/dev/null \
-    | jq -r 'any(.[]; .name | test("terratest"))' 2>/dev/null || echo false)"
+    | jq -r 'any(.[]; .name == "terratest:vm-debian")' 2>/dev/null || echo false)"
   if [[ "$_m29o_e08_encours" == "true" ]]; then
     skip "VMs de test restées dans Proxmox" "un job Terratest est EN COURS"
   else

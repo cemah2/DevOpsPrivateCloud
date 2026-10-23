@@ -131,7 +131,13 @@ func TestVmDebian(t *testing.T) {
 		retry.DoWithRetryContext(t, ctx, "connexion SSH", 30, 10*time.Second, func() (string, error) {
 			return "", ssh.CheckSshConnectionE(t, hote)
 		})
-		etat := ssh.CheckSshCommand(t, hote, "timeout 600 cloud-init status --wait")
+		// L'attente de cloud-init est bornée par ce qui reste avant l'échéance du test (ctx), sans
+		// dépasser 10 min : elle ne doit jamais mordre sur la marge de destruction.
+		attente := 600
+		if fin, ok := ctx.Deadline(); ok {
+			attente = max(1, min(attente, int(time.Until(fin).Seconds())))
+		}
+		etat := ssh.CheckSshCommand(t, hote, fmt.Sprintf("timeout %d cloud-init status --wait", attente))
 		assert.Contains(t, etat, "status: done")
 		assert.Equal(t, nom, strings.TrimSpace(ssh.CheckSshCommand(t, hote, "hostname")))
 		assert.Contains(t, ssh.CheckSshCommand(t, hote, "cat /etc/os-release"), `VERSION_ID="13"`)

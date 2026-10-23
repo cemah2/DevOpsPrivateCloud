@@ -42,21 +42,22 @@ admin@adm01:~$ kubectl -n chaos-mesh get deploy chaos-controller-manager -o json
 true
 ```
 
-Démonstration de Sophie (répétée avant, dans `chaos-experiences`, 10 s) :
+Démonstration de Sophie (répétée avant, **toujours** en `--dry-run=server` : l'admission est évaluée en entier, rien n'est créé). L'expérience choisie est la plus inoffensive possible (1 ms de latence, 10 s) : si une barrière était tombée et que le `--dry-run` était oublié, l'effet sur la prod resterait négligeable — on ne fait jamais cette démonstration avec un `pod-kill`.
 
 ```
 admin@adm01:~$ cat > /tmp/demo-prod.yaml <<'FIN'
 apiVersion: chaos-mesh.org/v1alpha1
-kind: PodChaos
+kind: NetworkChaos
 metadata: {name: demo-prod-refusee, namespace: chaos-experiences}
 spec:
-  action: pod-kill
+  action: delay
   mode: one
   selector: {namespaces: [mediagenda-prod]}
+  delay: {latency: 1ms}
   duration: 10s
 FIN
 admin@adm01:~$ kubectl apply --dry-run=server -f /tmp/demo-prod.yaml
-The podchaos "demo-prod-refusee" is invalid: : ValidatingAdmissionPolicy 'medisphere-chaos-espaces' with binding
+The networkchaos "demo-prod-refusee" is invalid: : ValidatingAdmissionPolicy 'medisphere-chaos-espaces' with binding
 'medisphere-chaos-espaces' denied request: expérience visant un espace non autorisé : mediagenda-prod      (texte exact selon la version)
 admin@adm01:~$ kubectl annotate ns mediagenda-prod chaos-mesh.org/inject=enabled --dry-run=server
 … denied request: annotation chaos-mesh.org/inject=enabled interdite sur l'espace mediagenda-prod …

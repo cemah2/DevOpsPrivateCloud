@@ -222,13 +222,13 @@ annuler_E20() {
 }
 
 resume_E20() {
-  echo "La recette de MédiAgenda reste lente (≈ 300 ms de plus) alors que l'expérience de chaos est censée être arrêtée."
+  echo "La recette de MédiAgenda reste lente (au moins 300 ms de plus par appel) alors que l'expérience de chaos est censée être arrêtée."
 }
 
 symptome_E20() {
   case "$WB_VAR" in
     1) wb_symptome "Ticket INC-5620 — De : Julien Petit" \
-         "La recette de MédiAgenda est lente depuis cette nuit (chaque appel prend 300 ms de plus)." \
+         "La recette de MédiAgenda est lente depuis cette nuit (chaque appel prend au moins 300 ms de plus)." \
          "Lucas m'a dit qu'il avait lancé une expérience de latence et qu'il l'avait SUPPRIMÉE hier" \
          "soir, et c'est vrai, je l'ai vue disparaître. Mais ça revient. On ne peut pas tester la" \
          "version de demain dans ces conditions." ;;
