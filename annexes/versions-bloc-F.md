@@ -41,7 +41,7 @@
 | Sealed Secrets 0.40.0 | Projet toujours maintenu, désormais sous `github.com/bitnami/sealed-secrets` (dépôt Helm `https://bitnami.github.io/sealed-secrets`). 0.40.0 (10/09/2026) ferme un **oracle de déchiffrement** sur `/v1/rotate`. Les images `docker.io/bitnami/sealed-secrets-controller` et `bitnami/sealed-secrets-kubeseal` continuent d'être publiées par le projet (et signées Cosign sur `ghcr.io/bitnami/sealed-secrets-controller`) : elles ne relèvent pas du catalogue Bitnami retiré en 2025. N'utilise pas le chart `bitnamicharts/sealed-secrets`. |
 | Plugin KMS v2 de Kubernetes | Aucun plugin KMS v2 maintenu pour **OpenBao** trouvé ; celui de HashiCorp (`vault-kube-kms`) exige Vault Enterprise et reste en bêta ; Trousseau (Ondat) est abandonné. Le chiffrement d'etcd du lab se fait donc par `EncryptionConfiguration` avec `aescbc`/`secretbox` et une clé gérée hors cluster, le KMS v2 étant présenté en fiche. |
 | ceph-csi 3.18 — KMS | Types `vault`, `vaulttokens`, `vaulttenantsa` (et `metadata`) présents dans les exemples 3.18. Ils parlent l'API Vault ; leur fonctionnement avec OpenBao n'est pas documenté par le projet *(non vérifié)*. |
-| Cosign 3.1.4 | 3.1.4 publiée le 20/10/2026. La clé `hashivault://` utilise l'API Transit de Vault ; aucune mention d'OpenBao dans la documentation KMS de Cosign *(non vérifié : à tester, `VAULT_ADDR` et `VAULT_TOKEN` pointant sur OpenBao)*. |
+| Cosign 3.1.4 | 3.1.4 publiée le 20/10/2026. *(relecture)* La clé `hashivault://` (API Transit de Vault) **fonctionne avec OpenBao** 2.6.4 et 2.7.1 : signature, attestation et vérification d'images et de blobs essayées ; Cosign lit `VAULT_ADDR`/`VAULT_TOKEN`, puis `BAO_ADDR`/`BAO_TOKEN`, puis `~/.vault-token`. Politique minimale : `read` sur `transit/keys/<clé>`, `update` sur `transit/sign/<clé>/sha2-256` (M25-E20). SOPS, lui, ne lit pas `BAO_TOKEN`. |
 | GitLab CI 19.5 et OpenBao | `id_tokens` est **Free** ; le mot-clé **`secrets:vault` est Premium/Ultimate**. En CE, le job présente lui-même son jeton à l'auth JWT d'OpenBao (`bao write auth/jwt/login role=… jwt=$ID_TOKEN`). |
 | Fournisseur OpenTofu `hashicorp/vault` 5.13.0 | 5.13.0 (14/10/2026), licence **MPL 2.0** (le fournisseur n'est pas sous BUSL). Aucun fournisseur `openbao/openbao` publié sur les registres Terraform ou OpenTofu : on utilise `hashicorp/vault` contre l'API OpenBao. |
 | Ansible `community.hashi_vault` 7.1.0 | Dernière version 7.1.0 ; pas de mention d'OpenBao dans sa documentation *(non vérifié : compatibilité API attendue, à tester sur les modules utilisés)*. |
@@ -84,3 +84,14 @@
 | Sealed Secrets et Bitnami | Projet maintenu (0.40.0) ; images publiées par le projet lui-même, hors catalogue Bitnami retiré. |
 | Kyverno CEL | Politiques CEL `policies.kyverno.io/v1` obligatoires pour tout exercice durable : `ClusterPolicy` disparaît en 1.20. |
 | kube-bench et 1.36 | Pas de référentiel 1.36 ; `--benchmark cis-1.12` forcé. |
+
+
+## Points établis pendant la rédaction et la relecture du bloc F
+
+| Outil | Ce qui change pour toi |
+|---|---|
+| Keycloak 26.7 / 26.8 | En 26.7.5, le rôle `view-clients` donne accès au secret de chaque client confidentiel (représentation du client et `…/client-secret`) : un compte de lecture comme `wb-checks` est donc sensible (M24-E05) ; la 26.8 restreint la lecture du secret à `manage-clients`, argument de la montée de version d'E33. Le fournisseur OpenTofu 5.10 refuse une clé RSA de 3072 bits (4096 retenu, E29). |
+| OpenBao 2.6 / 2.7 | `bao audit enable` est **refusé par l'API** depuis 2.4 : l'audit se déclare dans `openbao.hcl` (bloc `audit`, identique sur tous les nœuds, sinon le nœud qui devient actif rend la main). `disable_mlock` n'existe plus (avertissement « unknown field ») ; Vault 2.2 l'exige. `generate-root` passe par `sys/generate-root-token/*` (authentifié). Pas de *Seal HA* (fonction de Vault Enterprise). Les nœuds en attente servent les lectures. Une mise à jour d'un rôle `jwt` doit renvoyer `role_type` et `bound_claims_type`. |
+| Reloader (stakater) | Chart 2.2.18 (Reloader v1.4.22), retenu au M25-E15 pour redémarrer les charges quand ESO met à jour un Secret. |
+| falcosidekick | Le chart Falco 9.2.1 embarque le sous-chart 0.14.1 (application 2.31.1, image par défaut 2.32.0) ; la 2.35.0 est publiée (étiquette `stable` depuis le 31/08/2026). Le workbook force 2.31.1 ; la 2.35 est à évaluer à la prochaine révision. |
+| ComplianceAsCode 0.1.82 | Pas de produit Rocky dans l'archive amont : utiliser le paquet AppStream de Rocky 10 (`ssg-rl10-ds.xml`) ; le contenu RHEL 10 amont sort tout en `notapplicable` sur Rocky. Profils : `cis_level1_server` (Debian 13), `cis_server_l1` (Rocky ; `cis` seul = niveau 2), `anssi_bp28_intermediary`. |

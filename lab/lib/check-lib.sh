@@ -297,7 +297,8 @@ bao_api() {
     [[ -r "$f" ]] || { echo "identifiants OpenBao des checks illisibles : $f" >&2; return 1; }
     # shellcheck disable=SC1090
     source "$f"
-    _WB_BAO_JETON="$(jq -nc --arg r "$BAO_ROLE_ID" --arg s "$BAO_SECRET_ID" '{role_id: $r, secret_id: $s}' |
+    # identifiants passés par l'environnement de jq, jamais en argument (visibles par ps)
+    _WB_BAO_JETON="$(BAO_ROLE_ID="$BAO_ROLE_ID" BAO_SECRET_ID="$BAO_SECRET_ID" jq -nc '{role_id: env.BAO_ROLE_ID, secret_id: env.BAO_SECRET_ID}' |
       curl -sf --max-time "$WB_TIMEOUT" --data @- "$base/v1/auth/approle/login" | jq -r '.auth.client_token // empty')" || return 1
     [[ -n "$_WB_BAO_JETON" ]] || return 1
   fi
