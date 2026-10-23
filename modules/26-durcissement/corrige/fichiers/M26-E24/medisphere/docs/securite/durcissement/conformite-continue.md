@@ -11,8 +11,8 @@
 
 | Mesure | Outil | Référentiel | Profil |
 |---|---|---|---|
-| Configuration des hôtes Debian 13 | OpenSCAP 1.4 + ComplianceAsCode 0.1.82 (`ssg-debian13-ds.xml`) | CIS Debian 13 v1.0.0 niveau 1 serveur ; ANSSI-BP-028 intermédiaire | `cis_level1_server`, `anssi_bp28_intermediary`, **adaptés** par `/etc/durcissement/tailoring.xml` |
-| Configuration des hôtes Rocky 10 (`ipa01`, `ceph01-03`) | OpenSCAP 1.4 + `scap-security-guide` 0.1.82 d'AppStream | CIS RHEL 10 v1.0.1 niveau 1 serveur ; ANSSI-BP-028 intermédiaire | `cis_server_l1`, `anssi_bp28_intermediary`, adaptés |
+| Configuration des hôtes Debian 13 | OpenSCAP 1.4 + ComplianceAsCode 0.1.82 (`ssg-debian13-ds.xml`) | CIS Debian 13 v1.0.0 niveau 1 serveur ; ANSSI-BP-028 intermédiaire | `cis_level1_server`, `anssi_bp28_intermediary`, **adaptés** : profils `…_medisphere` de `/etc/medisphere/conformite/tailoring-{cis,anssi}.xml` |
+| Configuration des hôtes Rocky 10 (`ipa01`, `ceph01-03`) | OpenSCAP 1.4 + `scap-security-guide` 0.1.82 d'AppStream | CIS RHEL 10 v1.0.1 niveau 1 serveur ; ANSSI-BP-028 intermédiaire | `cis_server_l1`, `anssi_bp28_intermediary`, adaptés de la même façon |
 | Indice de durcissement | Lynis 3.1.7 | aucun (indice maison de Lynis) | — |
 
 Le **profil adapté** (*tailoring*) est généré par le rôle `durcissement` à partir de `durcissement_exceptions` : chaque exception signée du registre (`exceptions.md`) y désélectionne la règle concernée. Le score publié est donc « hors exceptions signées ». Les règles désélectionnées apparaissent dans l'ARF en `notselected`, ce qui permet de prouver à l'auditeur **lesquelles** ont été écartées, et pourquoi (registre).

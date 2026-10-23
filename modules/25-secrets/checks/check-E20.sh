@@ -10,8 +10,8 @@
 # mediagenda-api se vérifie avec la NOUVELLE clé publique.
 # Lecture seule : OpenBao (métadonnées de la clé, rôle), GitLab, Harbor en lecture (cosign verify).
 
-# shellcheck source=_m25-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel-c.sh"
+# shellcheck source=_m25-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel.sh"
 
 title "M25-E20 — Signer avec une clé qui ne sort jamais du coffre"
 require_cmd jq curl cosign

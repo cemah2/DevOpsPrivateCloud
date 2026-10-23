@@ -33,5 +33,5 @@ correctifs_origines_debian:
   - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
 
 # Dossier du collecteur textfile (rôle node_exporter, M21 ; monté dans node-exporter de kps, M26-E24).
-correctifs_textfile: /var/lib/prometheus/node-exporter
+correctifs_textfile: "{{ node_exporter_dossier_textfile | default('/var/lib/prometheus/node-exporter') }}"
 correctifs_etat_calendrier: "*-*-* 06:40:00"

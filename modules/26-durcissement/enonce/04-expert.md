@@ -43,7 +43,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 **Prérequis** : M26-E07, M26-E15, M26-E16, M26-E18 ; `lab/bin/check 26 35` vert avant l'injection.
 **Durée indicative** : 40 min (temps cible).
 
-**Contexte technique** : les politiques CEL de MédiSphère vivent dans `plateforme/politiques` (`kyverno/validation/`, `kyverno/generation/`), rendues par l'Application Argo CD `politiques`. Une `ValidatingPolicy` en `validationActions: [Deny]` **refuse** l'objet ; en `[Audit]` elle ne fait que rapporter. `failurePolicy: Fail` refuse une requête dont l'évaluation **échoue** (expression CEL qui référence un champ absent). Une `GeneratingPolicy` qui pose une politique réseau de refus par défaut sans autoriser le DNS ni la collecte des sondes laisse les pods démarrer puis échouer leurs `readinessProbe`.
+**Contexte technique** : les politiques CEL de MédiSphère vivent dans `plateforme/politiques` (`kyverno/validation/`, `kyverno/generation/`), rendues par l'Application Argo CD `politiques`. Une `ValidatingPolicy` en `validationActions: [Deny]` **refuse** l'objet ; en `[Audit]` elle ne fait que rapporter. `failurePolicy` décide de ce qui arrive quand la politique ne peut pas rendre de décision. Une `GeneratingPolicy` crée des objets (dont des politiques réseau) dans les espaces qu'elle vise.
 
 **Injection** : `lab/bin/break 26 35` (3 variantes).
 
@@ -55,7 +55,7 @@ La méthode reste celle des modules précédents : observer avant d'agir, formul
 5. Préviens : un test `kyverno test` dans `plateforme/politiques/kyverno/tests/` qui vérifie qu'une charge conforme de recette est **admise** et qu'une charge non conforme est **refusée** ; complète le runbook concerné.
 
 **Critères de réussite**
-- [ ] Une charge conforme est admise dans `mediagenda-recette` ; aucune `ValidatingPolicy` scopée recette n'est en `failurePolicy: Fail` avec une condition qui échoue ; aucun refus réseau total posé à la main n'y subsiste ; l'espace reste en PSA `restricted`.
+- [ ] Une charge conforme est admise **et devient prête** dans `mediagenda-recette` (synchronisation Argo CD réussie) ; l'espace reste en PSA `restricted` ; aucune politique n'a été retirée ni affaiblie pour y arriver.
 - [ ] Les rapports de politiques de recette n'ont plus de résultat `error` ; le pipeline de `plateforme/politiques` est vert ; ton journal cite le commit en cause.
 
 **Vérification** : `lab/bin/check 26 35`
@@ -67,7 +67,7 @@ Un échec de synchronisation Argo CD qui dit `denied the request` est un refus d
 
 <details><summary>Indice 2</summary>
 
-`kubectl get validatingpolicy <nom> -o yaml` : `spec.validationActions`, `spec.failurePolicy`, `spec.matchConditions`. Une `matchCondition` CEL qui évalue `object.spec.template.metadata.labels.absent` sur un objet qui n'a pas ce champ **échoue** ; avec `failurePolicy: Fail`, l'échec d'évaluation vaut refus.
+`kubectl get validatingpolicy <nom> -o yaml` : `spec.validationActions`, `spec.failurePolicy`, `spec.matchConditions`. Une expression CEL peut ne pas **pouvoir** s'évaluer sur l'objet reçu : que fait alors la politique, selon sa `failurePolicy` ? Rejoue l'expression sur ton manifeste (`kyverno apply`).
 </details>
 
 <details><summary>Indice 3</summary>
@@ -136,7 +136,7 @@ Un échec de synchronisation Argo CD qui dit `denied the request` est un refus d
 **Prérequis** : M26-E08, M26-E19, M26-E20 ; `lab/bin/check 26 37` vert avant l'injection.
 **Durée indicative** : 40 min (temps cible).
 
-**Contexte technique** : Falco 0.45 (pilote `modern_ebpf`) tourne en DaemonSet dans l'espace `falco`, piloté par les valeurs `falco/values.yaml` de `plateforme/politiques` ; les règles MédiSphère sont dans `falco/regles-medisphere.yaml` (montées en `customRules`). falcosidekick 2.31 envoie vers Alertmanager (`http://kps-alertmanager.supervision:9093`) et Loki (locataire `audit`, `service="falco"`). La clé `priority` de `falco.yaml` fixe la **priorité minimale** des règles chargées.
+**Contexte technique** : Falco 0.45 (pilote `modern_ebpf`) tourne en DaemonSet dans l'espace `falco`, piloté par les valeurs `valeurs/falco/values.yaml` de `plateforme/gitops` ; les règles MédiSphère sont dans `falco/regles-medisphere.yaml` de `plateforme/politiques` (clé `customRules`, troisième source de l'Application `falco`). falcosidekick 2.31 envoie vers Alertmanager (`http://kps-alertmanager.supervision:9093`) et Loki (locataire `audit`, `service="falco"`). La clé `priority` de `falco.yaml` fixe la **priorité minimale** des règles chargées.
 
 **Injection** : `lab/bin/break 26 37` (4 variantes).
 
@@ -272,7 +272,7 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 **Prérequis** : M26-E26, M26-E27 ; M15 (Cilium, Hubble) ; `lab/bin/check 26 40` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
 
-**Contexte technique** : le pare-feu d'hôte Cilium s'exprime par des `CiliumClusterwideNetworkPolicy` avec `nodeSelector` (`plateforme/k8s/cilium/hote/`), posées **un nœud à la fois** après une phase en `policyAuditMode`. Les flux à autoriser entre nœuds : kubelet 10250, santé Cilium 4240, WireGuard 51871/UDP, VXLAN 8472 (si tunnel), API 6443/8443, BGP 179. Une MTU incohérente fait tomber les gros paquets (les petits passent : symptôme intermittent).
+**Contexte technique** : le pare-feu d'hôte Cilium s'exprime par des `CiliumClusterwideNetworkPolicy` avec `nodeSelector` (`plateforme/k8s/composants/cilium/hote/` : `hote-commun`, `hote-plan-controle`, `hote-travailleurs`, qui sélectionnent les nœuds étiquetés `medisphere.internal/pare-feu-hote: "oui"`, M26-E27), posées **un nœud à la fois** après une phase en `policyAuditMode`. Les flux à autoriser entre nœuds : kubelet 10250, santé Cilium 4240, WireGuard 51871/UDP, VXLAN 8472 (si tunnel), API 6443/8443, BGP 179. Une MTU incohérente fait tomber les gros paquets (les petits passent : symptôme intermittent).
 
 > ⚠️ **Attention** : un seul nœud à la fois. Si tu repasses une politique de pare-feu d'hôte, remets d'abord le nœud en `policyAuditMode` (observe les refus `AUDIT`) avant d'appliquer. L'accès console Proxmox et l'agent QEMU restent ton recours.
 
@@ -281,7 +281,7 @@ Un service qui ne démarre pas « alors que les droits sont bons » : regarde **
 **Travail demandé**
 1. Identifie le nœud et le symptôme : `kubectl get nodes`, `hubble observe --verdict DROPPED --last 50`, `cilium-dbg status` (sur l'agent du nœud), `cilium encrypt status`.
 2. Classe : un **refus de pare-feu d'hôte** (une `CiliumClusterwideNetworkPolicy` oublie un flux : repasse le nœud en `policyAuditMode` et lis `hubble observe --verdict AUDIT`) ; un **filtrage nftables local** (`sudo nft list ruleset` sur le nœud, compteurs qui montent sur UDP 51871) ; une **MTU** incohérente (`ip link show eth0`, comparée aux autres nœuds).
-3. Trouve l'origine (politique posée à la main, table nftables, MTU changée) et corrige : complète la politique avec le flux manquant (par le code, `plateforme/k8s/cilium/hote/`), retire la table nftables qui n'a rien à faire là (et vérifie que le rôle ne la pose pas), rétablis la MTU cohérente.
+3. Trouve l'origine (politique posée à la main, table nftables, MTU changée) et corrige : complète la politique avec le flux manquant (par le code, `plateforme/k8s/composants/cilium/hote/` et `cluster/noeuds.yaml`), retire la table nftables qui n'a rien à faire là (et vérifie que le rôle ne la pose pas), rétablis la MTU cohérente.
 4. Vérifie : tous les nœuds `Ready`, `cilium encrypt status` cohérent, `cilium_unreachable_nodes == 0`, Hubble sans refus inattendu.
 5. Préviens : complète **RB-264** (pare-feu d'hôte : toujours passer par le mode audit, un nœud à la fois, flux à autoriser listés) ; une alerte sur `cilium_unreachable_nodes > 0`.
 
@@ -354,14 +354,14 @@ Une erreur **intermittente** (une fois sur trois) pointe vers **un** des trois k
 ### M26-E42 — Incident : un conteneur compromis  `BF` `★★★`
 
 > **Ticket INC-5342** — *De : Sophie Laurent* — priorité P1
-> Falco (ou Tetragon) remonte un comportement anormal dans un pod de `wb-pannes` : un processus `kdevtmpfsi`, la lecture du jeton de compte de service par un processus inattendu, une tentative de sortie vers une adresse interne, un binaire exécuté depuis `/tmp`. Traite-le comme une compromission.
+> Falco (ou Tetragon) remonte un comportement anormal dans un pod de `wb-pannes` : un processus `kdevtmpfsi`, la lecture du jeton de compte de service par un processus inattendu, une tentative de sortie vers une adresse inconnue, un binaire exécuté depuis `/tmp`. Traite-le comme une compromission.
 
 > **Note du workbook** : le pod est un **témoin strictement inoffensif**. Il ne mine rien, ne calcule rien, n'exfiltre rien : il **imite les signes** d'une compromission pour que tu t'entraînes à la réponse. Aucun vrai code malveillant n'est exécuté.
 
 **Objectifs pédagogiques**
 - Mener une réponse à incident sur un conteneur : **détecter** (Falco/Tetragon, journal d'audit), **isoler** (étiquette de quarantaine + `CiliumClusterwideNetworkPolicy`), **collecter** les preuves (conteneur éphémère `kubectl debug`, journaux, `checkpoint` si disponible, instantané), **éradiquer**, **rétablir**, **rédiger**.
 - Travailler sans détruire les preuves (ne pas supprimer le pod avant d'avoir collecté).
-- Écrire un runbook (RB-262) et un post-mortem.
+- Éprouver un runbook écrit à l'avance (RB-262, E33), le compléter, et rédiger un post-mortem.
 
 **Prérequis** : M26-E08, M26-E19, M26-E20, M26-E29, M26-E33 ; `lab/bin/check 26 42` vert avant l'injection.
 **Durée indicative** : 45 min (temps cible).
@@ -375,11 +375,11 @@ Une erreur **intermittente** (une fois sur trois) pointe vers **un** des trois k
 2. **Isole** sans tuer : étiquette le pod `medisphere.internal/quarantaine=oui` (la `CiliumClusterwideNetworkPolicy` `quarantaine` coupe son réseau) ; vérifie avec Hubble qu'il ne sort plus.
 3. **Collecte** : `kubectl debug` (conteneur éphémère) pour inspecter les processus et `/tmp` ; copie les journaux Falco/Tetragon/audit pertinents ; prends un instantané (description du pod, `kubectl get pod -o yaml`, liste des processus) ; dépose les preuves dans `s3-01/preuves` (empreintes `sha256`). **Ne supprime rien avant d'avoir collecté.**
 4. **Éradique** : supprime le Deployment `wb-mineur` **et** la persistance (CronJob `wb-persistance` s'il existe). Vérifie qu'aucun pod de l'incident ne subsiste.
-5. **Rétablis** et **rédige** : retire la quarantaine une fois l'espace sain ; écris **RB-262** (détection → isolement → collecte → éradication → rétablissement) et un journal d'incident `INC-5342`.
+5. **Rétablis** et **rédige** : retire la quarantaine une fois l'espace sain ; **complète RB-262** (écrit en E33) de ce que l'incident t'a appris (écarts entre le runbook et la réalité, retour d'expérience) ; rédige le journal et le post-mortem de `INC-5342`.
 
 **Critères de réussite**
 - [ ] Le Deployment `wb-mineur` et le CronJob `wb-persistance` sont supprimés ; aucun pod de l'incident ne subsiste ; la politique `quarantaine` existe (posée en E33).
-- [ ] RB-262 est rédigé et commité (les cinq étapes) ; un journal `INC-5342` est commité ; des preuves sont consignées (empreintes dans `s3-01/preuves`, référencées dans le journal).
+- [ ] RB-262 couvre les cinq étapes (détection → isolement → collecte → éradication → rétablissement) et porte le retour d'expérience de `INC-5342` ; le journal et le post-mortem `INC-5342` sont commités ; des preuves sont consignées (empreintes dans `s3-01/preuves`, référencées dans le journal).
 
 **Vérification** : `lab/bin/check 26 42`
 

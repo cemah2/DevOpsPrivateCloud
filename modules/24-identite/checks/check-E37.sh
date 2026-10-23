@@ -13,7 +13,7 @@
 # shellcheck source=_m24-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m24-expert.sh"
 
-title "M24-E37 — Les arrivants de l'annuaire existent dans Keycloak, avec leurs groupes"
+title "M24-E37 — Panne : les nouveaux arrivants n'existent pas"
 require_cmd jq curl ldapsearch ssh
 
 # --- 1. La fédération est celle du code ------------------------------------------------------------------

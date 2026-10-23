@@ -5,7 +5,7 @@
 # check-E34.sh — M25-E34 « Rotation d'urgence en temps limité » (CHRONO), à lancer à la fin.
 # Compare l'état final à l'état de départ relevé par « lab/bin/break 25 34 »
 # (~/.local/state/workbook/M25-E34/etat.json, gardé après l'annulation) :
-#   - nouvelle version de kv/plateforme/grafana/oidc et de kv/mediagenda/recette/valkey, écrite après T0 ;
+#   - nouvelle version de kv/plateforme/grafana/oidc et de kv/mediagenda/recette/harbor-pull, écrite après T0 ;
 #   - secret du client grafana régénéré dans Keycloak après T0 ;
 #   - les ExternalSecret qui lisent ces deux chemins se sont rafraîchis après la nouvelle version ;
 #   - pas plus d'une minute d'indisponibilité de Grafana (sonde du témoin) ni de la recette (5xx) ;
@@ -34,7 +34,7 @@ _m25_e34_fin="${_m25_e34_fin:-$(date +%s)}"
 _m25_e34_fenetre=$(( _m25_e34_fin - _m25_e34_t0 + 60 ))
 
 # --- Coffre : nouvelles versions après T0 -------------------------------------------------------------------
-for _m25_e34_c in grafana:plateforme/grafana/oidc valkey:mediagenda/recette/valkey; do
+for _m25_e34_c in grafana:plateforme/grafana/oidc harbor:mediagenda/recette/harbor-pull; do
   _m25_e34_cle="${_m25_e34_c%%:*}"; _m25_e34_kv="${_m25_e34_c#*:}"
   _m25_e34_avant="$(jq -r --arg k "$_m25_e34_cle" '.[$k].version' "$_m25_e34_etat" 2>/dev/null || echo 0)"
   check_cmd "kv/$_m25_e34_kv : nouvelle version écrite après T0 (version de départ : $_m25_e34_avant)" \
@@ -53,7 +53,7 @@ fi
 
 # --- ESO : les ExternalSecret qui lisent ces chemins se sont rafraîchis après T0 -------------------------------
 _m25_e34_es="$(kube get externalsecrets.external-secrets.io -A -o json 2>/dev/null || echo null)"
-for _m25_e34_kv in plateforme/grafana/oidc mediagenda/recette/valkey; do
+for _m25_e34_kv in plateforme/grafana/oidc mediagenda/recette/harbor-pull; do
   check_cmd "ExternalSecret lisant $_m25_e34_kv : rafraîchi après T0 et prêt" _m25p_jq "$_m25_e34_es" '
     [.items[] | select([.spec.data[]?.remoteRef.key, .spec.dataFrom[]?.extract.key] | map(select(. != null)) | any(contains($k)))]
     | length > 0 and all(
@@ -75,9 +75,9 @@ check_cmd "MédiAgenda recette : pas plus d'une minute à plus de 50 % d'erreurs
   _m25p_compare "${_m25_e34_recette:-}" '<=' 60
 
 # --- Journal ------------------------------------------------------------------------------------------------------
-_m25_e34_j="$(_m25p_doc_chemin "$_M25P_DOC" docs/kubernetes/journal '(m25-e34|inc-5234)[^/]*\.md$')"
+_m25_e34_j="$(_m25p_doc_chemin "$_M25P_DOC" docs/socle/journal 'INC-5234[^/]*\.md$')"
 if [[ -z "$_m25_e34_j" ]]; then
-  check_cmd "journal docs/kubernetes/journal/*M25-E34*inc-5234*.md sur main de $_M25P_DOC" false
+  check_cmd "journal docs/socle/journal/*INC-5234*.md sur main de $_M25P_DOC" false
 else
   _m25_e34_txt="$(_m25p_fichier "$_M25P_DOC" "$_m25_e34_j" || true)"
   check_output "journal : au moins cinq étapes horodatées" '^([5-9]|[1-9][0-9]+)$' \

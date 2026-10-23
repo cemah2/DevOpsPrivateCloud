@@ -9,8 +9,8 @@
 # saines (audit et plateforme), documentation des requêtes.
 # Lecture seule (sudo -n en consultation sur les nœuds, GET sur Loki).
 
-# shellcheck source=_m25-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel-c.sh"
+# shellcheck source=_m25-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel.sh"
 
 title "M25-E21 — Audit : qui a lu quel secret"
 require_cmd jq curl

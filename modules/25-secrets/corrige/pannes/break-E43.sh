@@ -21,8 +21,8 @@
 _WB_E43_DIR="$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=../../../../lab/lib/pannes-lib.sh disable=SC1091
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
-# shellcheck source=_m25-commun-b.sh
-source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun-b.sh"
+# shellcheck source=_m25-commun.sh
+source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun.sh"
 
 # shellcheck disable=SC2034  # lu par les scripts break-EXX.sh sourcés (ils ne définissent pas main)
 WB_PANNES_LIB=1
@@ -124,8 +124,8 @@ main() {
   echo "Injection en cours (trois pannes ; compte 5 à 15 minutes)…"
   WB_EX=M25-E43
   WB_VAR=0
-  m25b_grappe_saine || { echo "Coffre pas sain avant l'astreinte (un actif, deux en attente, kms01 descellé) : rien n'est cassé." >&2; return 1; }
-  m25b_jeton_charger || { echo "Jeton plateforme-admin requis (bao login -method=oidc) : rien n'est cassé." >&2; return 1; }
+  m25_grappe_saine || { echo "Coffre pas sain avant l'astreinte (un actif, deux en attente, kms01 descellé) : rien n'est cassé." >&2; return 1; }
+  m25_jeton_charger || { echo "Jeton plateforme-admin requis (bao login -method=oidc) : rien n'est cassé." >&2; return 1; }
   wb_marqueur_ecrire M25-E43 ""
 
   local -a choisies=() lignes=() vs

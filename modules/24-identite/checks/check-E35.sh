@@ -12,7 +12,7 @@
 # shellcheck source=_m24-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m24-expert.sh"
 
-title "M24-E35 — Plus personne n'entre dans Grafana"
+title "M24-E35 — Panne : plus personne n'entre dans Grafana"
 require_cmd jq curl
 
 _m24x_e35_rappel="${WB_GRAFANA_URL:-https://grafana.apps.par1.medisphere.internal}/login/generic_oauth"

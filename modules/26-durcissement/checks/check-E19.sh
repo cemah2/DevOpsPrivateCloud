@@ -9,8 +9,8 @@
 # l'Application qui les lit dans plateforme/politiques, la validation en CI, des événements de nos
 # règles dans Loki, une alerte arrivée par courriel, le runbook.
 
-# shellcheck source=_m26-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel-c.sh"
+# shellcheck source=_m26-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel.sh"
 
 title "M26-E19 — Falco : règles de MédiSphère et acheminement des alertes"
 require_cmd jq kubectl curl

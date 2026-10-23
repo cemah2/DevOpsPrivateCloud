@@ -28,13 +28,13 @@
         quiet: true
 
     - name: Redémarrage requis ? (Debian)
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
       ansible.builtin.stat:
         path: /run/reboot-required
       register: _reboot_debian
 
     - name: Redémarrage requis ? (Rocky)
-      when: ansible_os_family == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat'
       ansible.builtin.command: dnf -q needs-restarting -r
       register: _reboot_rocky
       changed_when: false
@@ -43,8 +43,8 @@
     - name: Décision
       ansible.builtin.set_fact:
         _a_redemarrer: >-
-          {{ (ansible_os_family == 'Debian' and _reboot_debian.stat.exists)
-             or (ansible_os_family == 'RedHat' and _reboot_rocky.rc == 1) }}
+          {{ (ansible_facts['os_family'] == 'Debian' and _reboot_debian.stat.exists)
+             or (ansible_facts['os_family'] == 'RedHat' and _reboot_rocky.rc == 1) }}
 
   tasks:
     - name: Hôte à redémarrer

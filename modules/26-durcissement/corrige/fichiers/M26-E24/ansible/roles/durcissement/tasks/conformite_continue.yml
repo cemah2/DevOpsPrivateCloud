@@ -15,7 +15,7 @@
   when: durcissement_conformite_continue_actif | bool
   block:
     - name: Dépôt CISOfy de Lynis (Debian)
-      when: ansible_os_family == 'Debian' and durcissement_conformite_lynis | bool
+      when: ansible_facts['os_family'] == 'Debian' and durcissement_conformite_lynis | bool
       ansible.builtin.deb822_repository:
         name: cisofy-lynis
         uris: "{{ durcissement_conformite_lynis_depot_debian }}"
@@ -25,7 +25,7 @@
         state: present
 
     - name: Outils d'analyse (Debian)
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
       ansible.builtin.apt:
         name: "{{ ['openscap-scanner', 'libxml2-utils', 'curl', 'gzip'] + (['lynis'] if durcissement_conformite_lynis | bool else []) }}"
         state: present
@@ -33,7 +33,7 @@
         cache_valid_time: 3600
 
     - name: Outils d'analyse (Rocky)
-      when: ansible_os_family == 'RedHat'
+      when: ansible_facts['os_family'] == 'RedHat'
       ansible.builtin.dnf:
         name: "{{ ['openscap-scanner', 'scap-security-guide', 'libxml2', 'curl', 'gzip'] + (['lynis'] if durcissement_conformite_lynis | bool else []) }}"
         state: present
@@ -43,19 +43,24 @@
         path: "{{ durcissement_conformite_datastream }}"
       register: durcissement_conformite_ds
 
-    - name: Arrêt si le contenu ComplianceAsCode manque (E10 doit être appliqué avant)
-      ansible.builtin.assert:
-        that: durcissement_conformite_ds.stat.exists
-        fail_msg: "{{ durcissement_conformite_datastream }} absent : le rôle (conformite.yml d'E10) doit déplier ComplianceAsCode d'abord."
-        quiet: true
+    - name: Profils adaptés d'E10 présents
+      ansible.builtin.stat:
+        path: "{{ durcissement_conformite_dossier }}/tailoring-{{ item.tailoring }}.xml"
+      loop: "{{ durcissement_conformite_referentiels }}"
+      loop_control:
+        label: "{{ item.tailoring }}"
+      register: durcissement_conformite_tailorings
 
-    - name: Dossier des paramètres
-      ansible.builtin.file:
-        path: /etc/conformite
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
+    # Le dossier /etc/medisphere/conformite (0750, root) est créé par conformite.yml d'E10.
+    - name: Arrêt si le contenu ComplianceAsCode ou un profil adapté manque (domaine conformite d'E10 d'abord)
+      ansible.builtin.assert:
+        that:
+          - durcissement_conformite_ds.stat.exists
+          - durcissement_conformite_tailorings.results | rejectattr('stat.exists') | list | length == 0
+        fail_msg: >-
+          {{ durcissement_conformite_datastream }} ou {{ durcissement_conformite_dossier }}/tailoring-*.xml
+          absent : appliquer d'abord le domaine conformite du rôle (--tags conformite).
+        quiet: true
 
     # Sur les nœuds de k8s-par1, le rôle node_exporter n'est pas appliqué : le dossier n'existe pas.
     - name: Dossier du collecteur textfile
@@ -69,7 +74,7 @@
     - name: Paramètres de l'analyse
       ansible.builtin.template:
         src: conformite.env.j2
-        dest: /etc/conformite/conformite.env
+        dest: "{{ durcissement_conformite_dossier }}/conformite.env"
         owner: root
         group: root
         mode: "0644"
@@ -77,7 +82,7 @@
     - name: Identifiants S3 (identité « conformite »)
       ansible.builtin.template:
         src: s3.env.j2
-        dest: /etc/conformite/s3.env
+        dest: "{{ durcissement_conformite_dossier }}/s3.env"
         owner: root
         group: root
         mode: "0600"

@@ -9,8 +9,8 @@
 # (future, ≤ 92 jours), conditionnée et justifiée ; plus aucun échec exiger-digest en production ;
 # métriques collectées, alertes chargées, tableau provisionné ; contrôle des exceptions en CI.
 
-# shellcheck source=_m26-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel-c.sh"
+# shellcheck source=_m26-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel.sh"
 
 title "M26-E18 — Exceptions et rapports de politiques"
 require_cmd jq kubectl curl

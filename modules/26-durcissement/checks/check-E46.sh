@@ -58,6 +58,11 @@ for ns in mediagenda-recette mediagenda-prod medidoc-recette; do
   check_cmd "espace $ns en PSA restricted" _e46_ns_restricted "$ns"
 done
 check_cmd "Kyverno : exiger-signature-medisphere en refus sur recette/prod" _e46_signature_deny
+_e46_exceptions_rangees() {
+  ! kube get policyexceptions.policies.kyverno.io -A -o json 2>/dev/null |
+    jq -e '[.items[]? | select(.metadata.namespace != "kyverno-exceptions")] | length > 0' >/dev/null 2>&1
+}
+check_cmd "Kyverno : exceptions rangées dans kyverno-exceptions seulement" _e46_exceptions_rangees
 check_cmd "Kyverno : registres-autorises en refus, sans exemption des administrateurs" _e46_registres_deny
 check_cmd "aucun espace applicatif en privileged" _e46_pas_privileged
 check_cmd "Application Argo CD « politiques » Synced/Healthy" _m26x_app_ok politiques
@@ -77,7 +82,12 @@ check_cmd "journaux de sécurité dans Loki (locataire audit)" _e46_loki_audit
 
 # --- 5. Chiffrement et kubelets ------------------------------------------------------------------------
 title "M26-E46 — 5/6 Chiffrement et kubelets"
-_e46_wireguard() { kube -n kube-system get configmap cilium-config -o jsonpath='{.data.enable-wireguard}' 2>/dev/null | grep -q true; }
+# WireGuard entre pods est actif depuis M15-E24 : seul encrypt-node (E26) prouve le travail du module.
+_e46_wireguard() {
+  local cm
+  cm="$(kube -n kube-system get configmap cilium-config -o json 2>/dev/null)" || return 1
+  jq -e '.data["enable-wireguard"] == "true" and .data["encrypt-node"] == "true"' <<<"$cm" >/dev/null
+}
 _e46_csr_ok() {
   _m26x_kq '[.items[]? | select(.spec.signerName == "kubernetes.io/kubelet-serving") | select((.status.conditions // []) | (any(.type == "Approved") | not))] | length == 0' \
     certificatesigningrequests.certificates.k8s.io
@@ -85,7 +95,12 @@ _e46_csr_ok() {
 _e46_noeuds_ready() {
   _m26x_kq '[.items[] | select((.status.conditions[] | select(.type == "Ready") | .status) != "True")] | length == 0' nodes
 }
-check_cmd "chiffrement WireGuard activé (cilium-config enable-wireguard)" _e46_wireguard
+check_cmd "WireGuard chiffre aussi le trafic des nœuds (cilium-config enable-wireguard et encrypt-node)" _e46_wireguard
+_e46_pare_feu_hote() {
+  [[ "$(kube -n kube-system get configmap cilium-config -o jsonpath='{.data.enable-host-firewall}' 2>/dev/null)" == true ]] &&
+    _m26x_kq '[.items[] | select(.metadata.labels["medisphere.internal/pare-feu-hote"] != "oui")] | length == 0' nodes
+}
+check_cmd "pare-feu d'hôte Cilium actif et tous les nœuds sélectionnés (medisphere.internal/pare-feu-hote)" _e46_pare_feu_hote
 check_cmd "aucune CSR de service de kubelet en attente" _e46_csr_ok
 check_cmd "tous les nœuds Ready" _e46_noeuds_ready
 

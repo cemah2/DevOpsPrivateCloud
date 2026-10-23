@@ -10,7 +10,7 @@ Les paliers 1 et 2 ont posé les briques : un rôle `durcissement` appliqué au 
 
 | Élément | Valeur |
 |---|---|
-| Conformité continue (E24) | Minuterie `conformite-analyse.timer` (dimanche 03:30, décalage aléatoire de 30 min), service `conformite-analyse.service`, script `/usr/local/sbin/conformite-analyse` posés par le rôle `durcissement` ; paramètres dans `/etc/conformite/conformite.env` (644), identifiants S3 dans `/etc/conformite/s3.env` (600, `root`) ; compartiment **`conformite`** de `s3-01` (`https://s3-01.par1.medisphere.internal:8333`), identité d'écriture **`conformite`** (VMs), identité de lecture **`conformite-lecture`** (`~/.config/workbook/s3-conformite.env` sur `adm01`) ; objets `AAAA-MM-JJ/<hôte>/…` |
+| Conformité continue (E24) | Minuterie `conformite-analyse.timer` (dimanche 03:30, décalage aléatoire de 30 min), service `conformite-analyse.service`, script `/usr/local/sbin/conformite-analyse` posés par le rôle `durcissement` ; paramètres dans `/etc/medisphere/conformite/conformite.env`, identifiants S3 dans `/etc/medisphere/conformite/s3.env` (600, `root`), à côté des profils adaptés `tailoring-{cis,anssi}.xml` et d'`exceptions.json` posés en E10 ; compartiment **`conformite`** de `s3-01` (`https://s3-01.par1.medisphere.internal:8333`), identité d'écriture **`conformite`** (VMs), identité de lecture **`conformite-lecture`** (`~/.config/workbook/s3-conformite.env` sur `adm01`) ; objets `AAAA-MM-JJ/<hôte>/…` |
 | Métriques de conformité | Fichier `conformite.prom` du collecteur *textfile* : `/var/lib/prometheus/node-exporter/` (rôle `node_exporter` du M21 sur les VMs ; même chemin monté dans le DaemonSet node-exporter de `kps` pour les nœuds de `k8s-par1`) ; séries `medisphere_conformite_score{referentiel}`, `medisphere_conformite_regles{referentiel,resultat}`, `medisphere_conformite_derniere_analyse_secondes{referentiel}`, `medisphere_lynis_indice` ; `referentiel` = `cis_l1_serveur` ou `anssi_intermediaire` ; règles `plateforme/observabilite/regles/conformite.yaml` (PrometheusRule `conformite`) |
 | Kubelets (E25) | `serverTLSBootstrap: true` depuis M14-E26 ; ajout de `seccompDefault: true` (`KubeletConfiguration` de `cluster/kubeadm-config.yaml`, ConfigMap `kube-system/kubelet-config`, playbook `playbooks/k8s-kubelet-config.yml`) ; **kubelet-csr-approver 1.2.15** (chart `kubelet-csr-approver` 1.2.15 recopié dans Harbor `charts/`, image `registry.par1.medisphere.internal/ghcr/postfinance/kubelet-csr-approver:v1.2.15`), Application Argo CD `kubelet-csr-approver`, espace `kubelet-csr-approver` |
 | Cilium (E26, E27) | 1.20, release Helmfile **`cilium`** (`releases/10-reseau.yaml.gotmpl`, values `composants/cilium/values.yaml`, `helmfile -e par1 -l composant=cilium diff/apply`) ; routage **tunnel VXLAN** (UDP 8472) ; WireGuard **entre pods** depuis M15-E24 (UDP 51871, interface `cilium_wg0`) ; `kubeProxyReplacement: true` ; mise à jour des agents un nœud à la fois (`updateStrategy.rollingUpdate.maxUnavailable: 1`) ; `rollOutCiliumPods: false` (redémarrage volontaire : `kubectl -n kube-system rollout restart ds/cilium`) |
@@ -46,7 +46,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 26 XX`). Variab
 
 **Contexte technique**
 - **Lecture** : `oscap xccdf eval --help` (options `--profile`, `--tailoring-file`, `--results-arf`, `--report`) et le [manuel d'OpenSCAP](https://static.open-scap.org/openscap-1.3/oscap_user_manual.html) (codes de sortie : 0 tout passe, 2 au moins une règle échoue, 1 erreur) ; [collecteur textfile de node_exporter](https://github.com/prometheus/node_exporter#textfile-collector) (écriture **atomique** : fichier temporaire puis renommage) ; `man systemd.timer` (`RandomizedDelaySec`, `Persistent`).
-- Le contenu ComplianceAsCode est déjà déplié par le rôle (`/usr/local/share/scap/ssg-0.1.82/`) avec le profil adapté généré à partir de `durcissement_exceptions` (E10). Les identifiants de profils et le nom du *datastream* Rocky sont ceux que tu as relevés en E04 et consignés dans `referentiels.md`.
+- Le contenu ComplianceAsCode est déjà en place (Debian : `/usr/local/share/scap/ssg-0.1.82/` ; Rocky : paquet `scap-security-guide`), avec les profils adaptés générés par le domaine `conformite` du rôle à partir des exceptions (E10) : `/etc/medisphere/conformite/tailoring-{cis,anssi}.xml`. Les identifiants de profils et le nom du *datastream* Rocky sont ceux que tu as relevés en E04 et consignés dans `referentiels.md`.
 - Une analyse CIS dure plusieurs minutes et occupe un cœur ; le rapport HTML pèse plusieurs mégaoctets (compresse-le). Vingt-cinq VMs et six nœuds sur un seul hyperviseur : un dimanche à 03:30 pile, tout le monde en même temps, c'est une crête de charge sur `pve01`.
 - Envoi vers `s3-01` **sans** AWS CLI sur les VMs : `curl --aws-sigv4 "aws:amz:us-east-1:s3"` (curl 8 de Debian 13 et Rocky 10), identifiants lus dans un fichier de configuration de curl (`-K`), jamais sur la ligne de commande. Les identités SeaweedFS se déclarent dans `host_vars/s3-01/seaweedfs.yml` (rôle `seaweedfs`, M05) : actions limitées à un compartiment (`Write:conformite`, `List:conformite`…).
 - Nœuds de `k8s-par1` : node_exporter y est le DaemonSet de `kps` (espace `supervision-noeuds`), pas le rôle du M21. Lis les clés `extraArgs` et `extraHostVolumeMounts` du sous-chart `prometheus-node-exporter` : remplacer `extraArgs` **remplace** la liste par défaut du chart.
@@ -57,7 +57,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 26 XX`). Variab
 **Travail demandé**
 1. **Conception.** Dans `docs/securite/durcissement/conformite-continue.md` : ce qui est mesuré (référentiels, profil adapté, Lynis), quand, où vont les résultats, combien de temps on les garde, qui peut les lire, quelles métriques, quelles alertes et leurs seuils. Réponds aussi : pourquoi un score qui ne bouge pas peut cacher une dérive ? Pourquoi garder l'ARF et pas seulement le score ?
 2. **Stockage.** Compartiment `conformite` (versionné) et identités `conformite` (écriture et listage) et `conformite-lecture` (lecture et listage) sur `s3-01`, secrets en Vault `critique` ; identifiants de lecture dans `~/.config/workbook/s3-conformite.env` (600).
-3. **Analyse.** Dans le rôle `durcissement` (fichier de tâches dédié, inclus par `main.yml`, activé par une variable) : paquets nécessaires, `/etc/conformite/` (paramètres et identifiants), le script `/usr/local/sbin/conformite-analyse` et ses unités systemd. Le script, pour chaque référentiel : `oscap xccdf eval` avec le profil adapté, ARF et rapport HTML compressés, envoi vers `conformite/<date>/<hôte>/`, métriques écrites atomiquement ; puis Lynis (indice) ; un code de sortie non nul si l'analyse elle-même a échoué (pas si des règles échouent). L'unité : priorité basse (processeur et disque), limites de ressources, journal dans journald.
+3. **Analyse.** Dans le rôle `durcissement` (fichier de tâches dédié, inclus par `main.yml`, activé par une variable) : paquets nécessaires, paramètres et identifiants dans `/etc/medisphere/conformite/`, le script `/usr/local/sbin/conformite-analyse` et ses unités systemd. Le script, pour chaque référentiel : `oscap xccdf eval` avec le profil adapté, ARF et rapport HTML compressés, envoi vers `conformite/<date>/<hôte>/`, métriques écrites atomiquement ; puis Lynis (indice) ; un code de sortie non nul si l'analyse elle-même a échoué (pas si des règles échouent). L'unité : priorité basse (processeur et disque), limites de ressources, journal dans journald.
 4. **Essai.** Sur `mon01` : `--check --diff`, application, lancement à la main (`systemctl start conformite-analyse.service`), durée, objets dans le compartiment, `curl` local sur node_exporter : les séries `medisphere_conformite_*` apparaissent.
 5. **Déploiement.** Par les vagues d'E14 (même inventaire), puis les nœuds de `k8s-par1` : le DaemonSet node-exporter de `kps` lit le même dossier (values dans `plateforme/observabilite`, MR). Vérifie dans Thanos Query qu'**aucune** VM du socle ni aucun nœud ne manque.
 6. **Alertes.** `regles/conformite.yaml` : au moins **`ConformiteDegradee`** (le score d'un hôte baisse de plus de 5 points en une semaine), **`ConformiteSousObjectif`** (score sous l'objectif fixé en E23, 85 % par défaut), **`ConformiteAnalyseAbsente`** (un hôte supervisé sans analyse depuis plus de 8 jours, y compris un hôte qui n'a **jamais** produit la métrique). Étiquettes `gravite`, `equipe` ; annotations avec `runbook_url`. Tests `promtool` (dont le cas « hôte jamais analysé »). Pipeline vert.
@@ -66,7 +66,7 @@ Les vérifications se lancent **depuis `adm01`** (`lab/bin/check 26 XX`). Variab
 **Critères de réussite**
 - [ ] `conformite-analyse.timer` est actif sur chaque VM du socle et chaque nœud de `k8s-par1`, avec un décalage aléatoire ; aucun hôte n'a d'analyse de plus de 8 jours.
 - [ ] Thanos Query renvoie `medisphere_conformite_score` pour les deux référentiels sur tous les hôtes supervisés (VMs du socle et nœuds) ; `medisphere_lynis_indice` aussi.
-- [ ] Le compartiment `conformite` contient, pour chaque hôte, un ARF et un rapport HTML de moins de 8 jours ; l'identité de lecture ne peut pas écrire ; `/etc/conformite/s3.env` est en 600 sur les VMs.
+- [ ] Le compartiment `conformite` contient, pour chaque hôte, un ARF et un rapport HTML de moins de 8 jours ; l'identité de lecture ne peut pas écrire ; `/etc/medisphere/conformite/s3.env` est en 600 sur les VMs.
 - [ ] Les trois alertes imposées sont chargées par Prometheus ; leurs tests sont dans `tests/` ; `conformite-continue.md` est sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 26 24`
@@ -454,7 +454,17 @@ Rédige `docs/securite/durcissement/adr/ADR-0260-durcissement-et-detection.md` (
 
 ### M26-E32 — Questions de production : sécurité  `Q` `★★★`
 
-> *De : Karim Benali* — Avant l'audit, je te pose les questions que l'auditeur ou un candidat senior devrait savoir traiter. Réponds sans relire le module, puis vérifie.
+> **Ticket SEC-2732** — *De : Karim Benali*
+> Avant l'audit, je te pose les questions que l'auditeur ou un candidat senior devrait savoir traiter. Réponds sans relire le module, puis vérifie.
+
+**Objectifs pédagogiques**
+- Raisonner en production sur les compromis de la sécurité : faux positifs, disponibilité, preuves, chaîne d'approvisionnement.
+- Argumenter une décision de sécurité comme devant un auditeur.
+
+**Prérequis** : M26-E24 à E31.
+**Durée indicative** : 1 h.
+
+**Questions**
 
 1. Falco produit 300 alertes par jour, dont 290 sont des faux positifs connus. Pourquoi est-ce un problème de **sécurité** et pas seulement de confort, et que fais-tu dans l'ordre ?
 2. Une règle Kyverno passée de `Audit` à `Deny` bloque un déploiement de production un vendredi soir. Quelles sont tes trois options, et laquelle choisis-tu selon la nature de la règle ?
@@ -471,7 +481,19 @@ Rédige `docs/securite/durcissement/adr/ADR-0260-durcissement-et-detection.md` (
 13. Pourquoi la détection d'un `kubectl exec` en production par le journal d'audit et par Falco n'est-elle pas redondante ?
 14. Quel est l'intérêt d'une analyse de conformité **hebdomadaire** plutôt que quotidienne ou mensuelle ? Qu'est-ce qui pourrait te faire changer de rythme ?
 
-**Durée indicative** : 1 h.
+**Critères de réussite**
+- [ ] Les 14 questions ont une réponse écrite et argumentée, avec pour chaque option écartée la raison de l'écarter.
+- [ ] Après correction, tes deux réponses les plus fragiles sont reprises avec la source (documentation, exercice du module) qui les corrige.
+
+<details><summary>Indice 1</summary>
+
+Pour 1, 2, 8 et 9 : pense en coût pour l'équipe d'astreinte et en trace pour l'auditeur (ADR-0260, RB-260, RB-261, registre des exceptions).
+</details>
+
+<details><summary>Indice 2</summary>
+
+Pour 3 à 7 et 10 à 14 : relis ce que mesure chaque outil (OpenSCAP, kube-bench, Falco, Tetragon, le journal d'audit) et ce qu'il ne voit pas ; pour la 6, suis le paquet depuis le pod jusqu'au port d'etcd.
+</details>
 
 ---
 
@@ -509,6 +531,16 @@ Rédige `docs/securite/durcissement/adr/ADR-0260-durcissement-et-detection.md` (
 - [ ] Aucun pod du cluster n'est resté en quarantaine après l'essai.
 
 **Vérification** : `lab/bin/check 26 33`
+
+<details><summary>Indice 1</summary>
+
+Avec Cilium, les autorisations de plusieurs politiques s'additionnent : une politique « vide » ne retire rien à ce qu'une autre autorise. Cherche dans la documentation des politiques de Cilium ce qui l'emporte sur une autorisation.
+</details>
+
+<details><summary>Indice 2</summary>
+
+Isoler un pod ne doit pas le faire redémarrer : demande-toi d'où viennent les sondes du kubelet, et ce qu'il advient de la mémoire du processus suspect si la sonde de vivacité échoue.
+</details>
 
 ---
 

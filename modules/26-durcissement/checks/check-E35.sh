@@ -25,9 +25,9 @@ _e35_rapports_sans_erreur() {
   _m26x_kq '[.items[]? | .results[]? | select(.result == "error")] | length == 0' policyreports.wgpolicyk8s.io -n mediagenda-recette
 }
 
-check_cmd "aucune ValidatingPolicy ne porte la garde trop large « exiger-change » ni « garde-recette »" _e35_pas_de_garde
-check_cmd "aucune ValidatingPolicy scopée recette n'est en failurePolicy: Fail" _e35_pas_de_fail_recette
-check_cmd "aucun refus réseau total posé à la main dans mediagenda-recette" _e35_pas_de_refus_total
+check_cmd "les politiques de validation n'ont plus de condition ajoutée par la panne" _e35_pas_de_garde
+check_cmd "aucune politique propre à la recette ne bloque quand elle ne peut pas décider" _e35_pas_de_fail_recette
+check_cmd "le réseau de mediagenda-recette n'a pas de politique ajoutée par la panne" _e35_pas_de_refus_total
 check_cmd "l'espace mediagenda-recette est bien en PSA restricted" _e35_recette_restricted
 check_cmd "les rapports de politiques de recette sont sans erreur d'évaluation" _e35_rapports_sans_erreur
 check_cmd "pipeline de main de plateforme/politiques vert" _m26x_pipeline_main_vert plateforme/politiques

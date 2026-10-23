@@ -12,7 +12,7 @@ require_cmd jq kubectl
 _e36_pas_exception_large() {
   ! kube get policyexceptions.policies.kyverno.io -A -o json 2>/dev/null |
     jq -e '[.items[]? | select((.spec.policyRefs[]?.name) == "registres-autorises")
-      | select((.spec.matchConditions // []) | any(.expression | test("namespace == .wb-pannes.")))] | length > 0' >/dev/null 2>&1
+      | select((.spec.matchConditions // []) | any(.expression | test("^\\s*object\\.metadata\\.namespace\\s*==\\s*.wb-pannes.\\s*$")))] | length > 0' >/dev/null 2>&1
 }
 _e36_pas_ns_privileged() {
   local ns
@@ -32,10 +32,10 @@ _e36_pas_violation_admise() {
       | .results[]? | select(.result == "fail" and (.properties.blocked // "true") == "false")] | length > 0' >/dev/null 2>&1
 }
 
-check_cmd "aucune PolicyException n'exempte tout l'espace wb-pannes de registres-autorises" _e36_pas_exception_large
+check_cmd "aucune exception Kyverno ne couvre un espace entier" _e36_pas_exception_large
 check_cmd "aucun espace applicatif n'est étiqueté pod-security enforce: privileged" _e36_pas_ns_privileged
-check_cmd "registres-autorises ne porte pas d'exclusion NotIn wb-pannes" _e36_registres_couvre
-check_cmd "aucune politique ne saute le groupe system:masters" _m26x_vp_sans_exemption_groupe
+check_cmd "registres-autorises couvre bien wb-pannes" _e36_registres_couvre
+check_cmd "les politiques s'appliquent à toutes les identités" _m26x_vp_sans_exemption_groupe
 check_cmd "aucune violation « admise » dans les rapports des espaces applicatifs" _e36_pas_violation_admise
 check_cmd "pipeline de main de plateforme/politiques vert" _m26x_pipeline_main_vert plateforme/politiques
 check_cmd "panne M26-E36 close" _m26x_aucune_panne_active E36

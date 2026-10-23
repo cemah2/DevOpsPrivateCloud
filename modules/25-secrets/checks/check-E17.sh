@@ -10,8 +10,8 @@
 # Lecture seule : OpenBao (wb-checks : métadonnées des clés, jamais de chiffrement ni de déchiffrement),
 # GitLab, fichier local.
 
-# shellcheck source=_m25-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel-c.sh"
+# shellcheck source=_m25-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel.sh"
 
 title "M25-E17 — Transit : le chiffrement comme service"
 require_cmd jq curl

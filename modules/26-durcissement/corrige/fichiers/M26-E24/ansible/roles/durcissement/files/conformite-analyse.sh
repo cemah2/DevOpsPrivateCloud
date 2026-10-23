@@ -2,28 +2,27 @@
 # =============================================================================
 # /usr/local/sbin/conformite-analyse — rôle durcissement (M26-E24, SEC-2724).
 # Analyse de conformité HEBDOMADAIRE de l'hôte, en LECTURE SEULE :
-#   1. pour chaque référentiel de CONFORMITE_REFERENTIELS : oscap xccdf eval (profil adapté par le
-#      fichier de tailoring du rôle, exceptions comprises), résultats ARF + rapport HTML compressés ;
+#   1. pour chaque référentiel de CONFORMITE_REFERENTIELS : oscap xccdf eval du profil adapté d'E10
+#      (<id>_medisphere de tailoring-<nom>.xml : exceptions désélectionnées), ARF + HTML compressés ;
 #   2. Lynis (indice de durcissement) ;
 #   3. envoi des résultats vers s3-01, compartiment « conformite », clé AAAA-MM-JJ/<hôte>/… ;
 #   4. métriques pour le collecteur textfile de node_exporter (écriture atomique).
 # Jamais de remédiation (aucune option --remediate) : ce script ne modifie que ses propres sorties.
 # Code de sortie : 0 si toutes les analyses ont tourné et ont été envoyées (même si des règles
 # échouent : c'est le résultat normal d'une mesure), 1 sinon (le service passe en échec, journald).
-# Paramètres : /etc/conformite/conformite.env (644) ; identifiants S3 : /etc/conformite/s3.env (600).
+# Paramètres : /etc/medisphere/conformite/conformite.env ; identifiants S3 : …/s3.env (600).
 # =============================================================================
 set -Eeuo pipefail
 umask 077
 
-PARAMS=/etc/conformite/conformite.env
-SECRETS=/etc/conformite/s3.env
+PARAMS=/etc/medisphere/conformite/conformite.env
+SECRETS=/etc/medisphere/conformite/s3.env
 [[ -r "$PARAMS" ]] || { echo "paramètres illisibles : $PARAMS" >&2; exit 1; }
 [[ -r "$SECRETS" ]] || { echo "identifiants S3 illisibles : $SECRETS" >&2; exit 1; }
 # shellcheck source=/dev/null
 . "$PARAMS"
 : "${CONFORMITE_DATASTREAM:?}" "${CONFORMITE_REFERENTIELS:?}" "${CONFORMITE_S3_URL:?}"
 : "${CONFORMITE_COMPARTIMENT:?}" "${CONFORMITE_TEXTFILE:?}"
-CONFORMITE_TAILORING="${CONFORMITE_TAILORING:-}"
 CONFORMITE_LYNIS="${CONFORMITE_LYNIS:-oui}"
 
 S3_CLE_ACCES="" S3_CLE_SECRETE=""
@@ -65,15 +64,20 @@ compter() {
 lignes_regles=""
 lignes_date=""
 
-for paire in $CONFORMITE_REFERENTIELS; do
-  ref="${paire%%=*}"
-  profil="${paire#*=}"
+for triplet in $CONFORMITE_REFERENTIELS; do
+  ref="${triplet%%:*}"
+  reste="${triplet#*:}"
+  profil="${reste%%:*}"
+  tailoring="${reste#*:}"
   arf="$travail/$ref-arf.xml"
   html="$travail/$ref-rapport.html"
-  args=(xccdf eval --profile "$profil" --results-arf "$arf" --report "$html")
-  if [[ -n "$CONFORMITE_TAILORING" && -r "$CONFORMITE_TAILORING" ]]; then
-    args+=(--tailoring-file "$CONFORMITE_TAILORING")
+  # Le profil <id>_medisphere n'existe que dans le tailoring : sans lui, pas de mesure honnête.
+  if [[ ! -r "$tailoring" ]]; then
+    echo "[$ref] profil adapté illisible : $tailoring" >&2
+    echec=1
+    continue
   fi
+  args=(xccdf eval --tailoring-file "$tailoring" --profile "$profil" --results-arf "$arf" --report "$html")
   debut="$(date +%s)"
   rc=0
   oscap "${args[@]}" "$CONFORMITE_DATASTREAM" >"$travail/$ref.log" 2>&1 || rc=$?

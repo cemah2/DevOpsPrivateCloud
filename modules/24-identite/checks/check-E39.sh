@@ -12,7 +12,7 @@
 # shellcheck source=_m24-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m24-expert.sh"
 
-title "M24-E39 — Les droits d'Argo CD suivent les groupes de l'annuaire"
+title "M24-E39 — Panne : les droits d'Argo CD sont faux"
 require_cmd jq curl kubectl
 
 # _m24x_e39_normaliser — politique Casbin sans commentaires, lignes vides ni espaces autour des virgules, triée.

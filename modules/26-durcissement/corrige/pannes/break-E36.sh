@@ -3,10 +3,11 @@
 # shellcheck disable=SC2016  # filtres yq/jq entre apostrophes
 # break-E36.sh — M26-E36 « Panne : un pod privilégié est passé »
 #
-# Une charge qui aurait dû être refusée est admise. Toutes les variantes passent par une MR de
-# lucas.martin et ne touchent jamais kube-system, kyverno, argocd ni cilium :
-#   1. une PolicyException (plateforme/politiques, kyverno/exceptions/) devenue trop large : elle exempte
-#      tout l'espace wb-pannes de la politique « registres-autorises » au lieu d'un seul pod ;
+# Une charge qui aurait dû être refusée est admise. Les variantes 2 à 4 passent par un commit de
+# lucas.martin ; la variante 1 est un objet posé à la main. Aucune ne touche kube-system, kyverno,
+# argocd ni cilium :
+#   1. une PolicyException posée à la main par Lucas dans kyverno-exceptions (le seul espace que Kyverno
+#      lit, E18), hors de Git : elle exempte tout l'espace wb-pannes de « registres-autorises » ;
 #   2. l'espace mediagenda-recette ré-étiqueté « pod-security.kubernetes.io/enforce: privileged »
 #      (plateforme/k8s, espaces/) : un pod privilégié y est admis ;
 #   3. le matchConstraints de « registres-autorises » exclut désormais wb-pannes (namespaceSelector NotIn) ;
@@ -20,6 +21,7 @@ source "$WB_ROOT/modules/26-durcissement/corrige/pannes/_m26-commun.sh"
 
 _E36_NS_IMG=wb-pannes        # espace où « registres-autorises » doit refuser une image non autorisée
 _E36_NS_PRIV=mediagenda-recette
+_E36_NS_EXC=kyverno-exceptions  # espace des PolicyException (features.policyExceptions.namespace, E18)
 
 # Pod dont l'image vient d'un registre non autorisé (refusé par registres-autorises, pas par PSA).
 _e36_pod_image() {
@@ -56,14 +58,14 @@ _e36_fichier_registres() {
   m26_git_trouver "$_M26_PROJ_POL" '.kind == "ValidatingPolicy" and (.metadata.name | test("registre"))' kyverno/validation
 }
 
-# v1 : PolicyException trop large (créée par MR ; sauvegarde = la retirer à l'annulation).
+# v1 : PolicyException trop large, posée à la main dans kyverno-exceptions (annulation = la retirer).
 _e36_exception_yaml() {
   cat <<'EOF'
 apiVersion: policies.kyverno.io/v1
 kind: PolicyException
 metadata:
   name: essai-lucas-wb-pannes
-  namespace: wb-pannes
+  namespace: kyverno-exceptions
 spec:
   policyRefs:
     - name: registres-autorises
@@ -102,7 +104,7 @@ _m26E36_une() {
   m26_ecrire E36 variante "$n"
   case "$n" in
     1)
-      m26_sauver_objet E36 policyexception essai-lucas-wb-pannes "$_E36_NS_IMG"
+      m26_sauver_objet E36 policyexception essai-lucas-wb-pannes "$_E36_NS_EXC"
       _e36_exception_yaml | wb_kubectl apply -f - >/dev/null || return 1
       ;;
     2)
@@ -127,7 +129,7 @@ _m26E36_une() {
 
 _e36_defaire() {
   case "$1" in
-    1) m26_restaurer_objet E36 policyexception essai-lucas-wb-pannes "$_E36_NS_IMG" ;;
+    1) m26_restaurer_objet E36 policyexception essai-lucas-wb-pannes "$_E36_NS_EXC" ;;
     2) m26_git_defaire E36 ns _e36_i2 "revert(espaces): recette en restricted (M26-E36, annulation)" ;;
     3) m26_git_defaire E36 pol _e36_i3 "revert(validation): registres-autorises couvre wb-pannes (M26-E36, annulation)" ;;
     4) m26_git_defaire E36 pol _e36_i4 "revert(validation): plus d'exemption des admins (M26-E36, annulation)" ;;

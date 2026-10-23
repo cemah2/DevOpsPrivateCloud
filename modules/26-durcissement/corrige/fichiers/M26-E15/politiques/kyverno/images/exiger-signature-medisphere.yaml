@@ -9,11 +9,12 @@
 # provenance est contrôlée par « registres-autorises » (E07) et par la politique de Harbor (M13-E14).
 #
 # Deux clés acceptées (période de recouvrement, ADR-0130 et M25-E20) :
-#   - cleHistorique : docs/registre/cosign.pub (clé du M13) ;
-#   - cleTransit    : clé publique de transit/cosign-medisphere (M25-E20), exportée par
-#                     « cosign public-key --key hashivault://cosign-medisphere ».
-# Si ton M25-E20 a gardé une seule clé, ne garde qu'un attesteur. Retirer une clé = MR relue par
-# Sophie Laurent (changement de sécurité), APRÈS re-signature de tout ce qui tourne.
+#   - cleTransit : clé de transit/cosign-medisphere d'OpenBao (M25-E20), la clé COURANTE ; sa partie
+#                  publique est docs/registre/cosign.pub depuis M25-E20 ;
+#   - cleM13     : ancienne clé du M13, docs/registre/cosign-m13.pub (renommée en M25-E20), gardée
+#                  le temps que tout ce qui tourne soit re-signé par la clé de transit.
+# Retirer cleM13 = MR relue par Sophie Laurent (changement de sécurité), APRÈS re-signature de tout
+# ce qui tourne (rapports de politiques sans échec avec la seule cleTransit, en Audit d'abord).
 #
 # Historique de mise en service (voir le corrigé) : Audit + Ignore sur mediagenda-recette, lecture
 # des rapports ; puis Deny + Fail sur recette ; puis production. État ci-dessous : final.
@@ -64,22 +65,22 @@ spec:
   credentials:
     secrets: [harbor-kyverno]
   attestors:
-    - name: cleHistorique
-      cosign:
-        key:
-          data: |
-            -----BEGIN PUBLIC KEY-----
-            <CONTENU-DE-docs/registre/cosign.pub>
-            -----END PUBLIC KEY-----
-        ctlog:
-          # Pas de Rekor dans le lab (signature par configuration sans service, M13-E07).
-          insecureIgnoreTlog: true
     - name: cleTransit
       cosign:
         key:
           data: |
             -----BEGIN PUBLIC KEY-----
-            <SORTIE-DE-cosign-public-key--key-hashivault://cosign-medisphere>
+            <CONTENU-DE-docs/registre/cosign.pub (clé de transit/cosign-medisphere, M25-E20)>
+            -----END PUBLIC KEY-----
+        ctlog:
+          # Pas de Rekor dans le lab (signature par configuration sans service, M13-E07).
+          insecureIgnoreTlog: true
+    - name: cleM13
+      cosign:
+        key:
+          data: |
+            -----BEGIN PUBLIC KEY-----
+            <CONTENU-DE-docs/registre/cosign-m13.pub>
             -----END PUBLIC KEY-----
         ctlog:
           insecureIgnoreTlog: true
@@ -90,15 +91,15 @@ spec:
   validations:
     - expression: >-
         images.containers.map(image,
-          verifyImageSignatures(image, [attestors.cleHistorique, attestors.cleTransit])).all(e, e > 0)
+          verifyImageSignatures(image, [attestors.cleTransit, attestors.cleM13])).all(e, e > 0)
       message: >-
         image MédiSphère sans signature valide d'une clé MédiSphère (cosign verify --key
         docs/registre/cosign.pub --insecure-ignore-tlog=true <image>@<condensé> pour diagnostiquer)
     - expression: >-
         images.initContainers.map(image,
-          verifyImageSignatures(image, [attestors.cleHistorique, attestors.cleTransit])).all(e, e > 0)
+          verifyImageSignatures(image, [attestors.cleTransit, attestors.cleM13])).all(e, e > 0)
       message: conteneur d'initialisation avec une image MédiSphère non signée par une clé MédiSphère
     - expression: >-
         images.containers.map(image,
-          verifyAttestationSignatures(image, attestations.sbom, [attestors.cleHistorique, attestors.cleTransit])).all(e, e > 0)
+          verifyAttestationSignatures(image, attestations.sbom, [attestors.cleTransit, attestors.cleM13])).all(e, e > 0)
       message: image MédiSphère sans attestation SBOM SPDX signée (chaîne de livraison, M13-E09)

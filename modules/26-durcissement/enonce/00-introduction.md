@@ -17,7 +17,7 @@ Lundi, 8 h 30. La lettre de mission de l'auditeur HDS est arrivée vendredi soir
 > 1. **CIS et ANSSI** comme référentiels, **mesurés chaque semaine**, appliqués par le code, avec des **exceptions écrites et signées** ;
 > 2. une **admission** qui refuse ce qui n'est pas conforme (privilèges, images non signées, pods sans limites) ;
 > 3. une **détection à l'exécution** qui alerte en minutes, et des règles qui savent aussi bloquer ;
-> 4. des nœuds qui se parlent **chiffré**, des hôtes **filtrés**, des kubelets dont on vérifie le certificat ;
+> 4. des nœuds qui se parlent **chiffré** (les pods le font depuis le M15, les nœuds eux-mêmes pas encore), des hôtes **filtrés**, des kubelets dont on vérifie le certificat ;
 > 5. une **réponse à incident** préparée et répétée.
 >
 > Nadia pose une condition, et je la fais mienne : **le durcissement ne casse pas l'astreinte**. On mesure avant d'agir, on essaie sur des VMs jetables, on applique par vagues, une passerelle et un nœud à la fois, avec un accès de secours ouvert. Les règles de la maison s'appliquent : Git et MR pour tout, Ansible pour les VMs, Argo CD pour le cluster, charts tiers par notre miroir, aucun secret en clair.
@@ -34,7 +34,7 @@ Lundi, 8 h 30. La lettre de mission de l'auditeur HDS est arrivée vendredi soir
 - un rôle Ansible **`durcissement`** (CIS niveau 1 serveur, ANSSI-BP-028 intermédiaire) appliqué à tout le socle par **vagues**, avec ses exceptions déclarées, et une analyse **OpenSCAP hebdomadaire** dont le score est supervisé ;
 - **Pod Security Admission** `restricted` imposé, **Kyverno 1.19** (politiques CEL : validation, signatures d'images, mutation, génération) et des politiques d'admission natives ;
 - **Falco 0.45** et **Tetragon 1.7** : détection, acheminement vers Alertmanager et Loki, blocage ciblé ;
-- **Cilium** : chiffrement WireGuard entre nœuds et pare-feu d'hôte ; kubelets à certificats de service vérifiés ;
+- **Cilium** : chiffrement WireGuard étendu au trafic des nœuds (`nodeEncryption` ; celui des pods l'est depuis M15-E24) et pare-feu d'hôte ; kubelets à certificats de service vérifiés ;
 - le projet **`plateforme/politiques`**, la documentation `docs/securite/durcissement/` (modèle de menace, référentiels, registre des exceptions, ADR-0260, runbooks RB-260 à RB-265).
 
 Le **palier 1** (ce fichier et `01-decouverte.md`) **mesure et observe** : Lynis et ssh-audit sur le socle, OpenSCAP sur deux VMs d'essai, kube-bench et kubescape sur `k8s-par1`, le modèle de menace, puis trois premiers dispositifs du cluster, choisis parce qu'ils se mettent en place **sans rien refuser** au départ : Pod Security en avertissement puis en application, Kyverno en audit, Falco en détection. Aucune VM du socle n'est modifiée dans ce palier : c'est le palier 2. Il s'ouvre et se ferme sur un questionnaire.

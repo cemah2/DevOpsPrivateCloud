@@ -10,7 +10,7 @@
 
 ## Contexte MédiSphère
 
-L'auditeur HDS vient dans six semaines. Il demandera un référentiel, la preuve qu'on le mesure, la liste des écarts acceptés et signés, et ce qui se passe quand un conteneur est compromis. Aujourd'hui, chaque VM a été « un peu durcie » par son module, le cluster accepte n'importe quel pod que l'API veut bien créer, rien ne regarde ce que font les processus, et les nœuds se parlent en clair. Sophie Laurent fixe le cap : **CIS et ANSSI comme référentiels, mesurés chaque semaine, appliqués par le code avec des exceptions écrites ; une admission qui refuse ce qui n'est pas conforme ; une détection à l'exécution qui alerte en minutes ; une réponse à incident répétée**. Nadia Roussel, elle, pose une condition : que le durcissement ne casse pas l'astreinte.
+L'auditeur HDS vient dans six semaines. Il demandera un référentiel, la preuve qu'on le mesure, la liste des écarts acceptés et signés, et ce qui se passe quand un conteneur est compromis. Aujourd'hui, chaque VM a été « un peu durcie » par son module, le cluster accepte n'importe quel pod que l'API veut bien créer, rien ne regarde ce que font les processus, et, si les pods se parlent chiffré depuis le M15, les nœuds eux-mêmes se parlent en clair. Sophie Laurent fixe le cap : **CIS et ANSSI comme référentiels, mesurés chaque semaine, appliqués par le code avec des exceptions écrites ; une admission qui refuse ce qui n'est pas conforme ; une détection à l'exécution qui alerte en minutes ; une réponse à incident répétée**. Nadia Roussel, elle, pose une condition : que le durcissement ne casse pas l'astreinte.
 
 ## Objectifs
 
@@ -19,7 +19,7 @@ L'auditeur HDS vient dans six semaines. Il demandera un référentiel, la preuve
 - durcir des hôtes Debian et Rocky par un rôle Ansible (SSH, PAM, sudo, noyau, auditd, AIDE, AppArmor, SELinux), par vagues et avec exceptions écrites ;
 - imposer Pod Security Admission, écrire des politiques Kyverno en CEL (validation, signatures d'images, mutation, génération) et des politiques d'admission natives ;
 - détecter à l'exécution avec Falco et Tetragon, et bloquer avec Tetragon ;
-- chiffrer le trafic entre nœuds et filtrer les hôtes avec Cilium, et sécuriser les kubelets ;
+- étendre le chiffrement WireGuard au trafic des nœuds, filtrer les hôtes avec Cilium, et sécuriser les kubelets ;
 - mener une réponse à incident sur un conteneur compromis ;
 - diagnostiquer ce que le durcissement casse.
 

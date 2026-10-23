@@ -4,9 +4,10 @@
 # break-E40.sh — M26-E40 « Panne : des nœuds ne se parlent plus »
 #
 # Sur UN SEUL travailleur (jamais un nœud de contrôle, jamais plus d'un nœud) :
-#   1. une CiliumClusterwideNetworkPolicy de pare-feu d'hôte, posée à la main avec un nodeSelector sur ce
-#      nœud, oublie un flux (santé Cilium 4240 entre nœuds) : le nœud devient « injoignable » pour les
-#      autres (cilium_unreachable_nodes) ;
+#   1. « essai d'une politique resserrée » : l'étiquette medisphere.internal/pare-feu-hote est retirée du
+#      nœud (les politiques hote-* d'E27 ne le sélectionnent plus) et une CiliumClusterwideNetworkPolicy
+#      posée à la main avec un nodeSelector sur ce nœud reprend leurs flux… sauf la santé Cilium (4240,
+#      ICMP) : le nœud devient « injoignable » pour les autres (cilium_unreachable_nodes) ;
 #   2. le pare-feu local (nftables) du nœud filtre le port WireGuard 51871/UDP : le chiffrement entre ce
 #      nœud et les autres ne s'établit plus ;
 #   3. la MTU de eth0 du nœud est incohérente (1400) : les gros paquets tombent (symptôme intermittent).
@@ -32,9 +33,10 @@ _e40_injecter() {
   m26_ecrire E40 variante "$n"
   case "$n" in
     1)
-      # Pare-feu d'hôte qui n'autorise plus la santé Cilium (4240) depuis les autres nœuds, sur CE nœud.
-      # Suppose hostFirewall activé (M26-E27) ; sinon la politique n'a pas d'effet d'hôte → sans effet.
-      wb_kubectl get ciliumclusterwidenetworkpolicies >/dev/null 2>&1 || return 10
+      # Exige le pare-feu d'hôte (E27) : sans lui, une politique de nœud n'a aucun effet.
+      [[ "$(wb_kubectl -n kube-system get configmap cilium-config -o jsonpath='{.data.enable-host-firewall}' 2>/dev/null)" == true ]] \
+        || return 10
+      m26_ecrire E40 etiquette "$(wb_kubectl get node "$_E40_NOEUD" -o jsonpath='{.metadata.labels.medisphere\.internal/pare-feu-hote}' 2>/dev/null)"
       m26_sauver_objet E40 ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai
       wb_kubectl apply -f - >/dev/null <<EOF || return 1
 apiVersion: cilium.io/v2
@@ -44,14 +46,27 @@ metadata:
   annotations: {medisphere.internal/auteur: lucas.martin, medisphere.internal/ticket: "PLAT-2740"}
   labels: {medisphere.internal/panne: M26-E40}
 spec:
-  description: "essai de pare-feu d'hote (oublie la sante Cilium 4240)"
+  description: "essai de pare-feu d'hote resserre (reprend hote-commun sans la sante Cilium 4240)"
   nodeSelector:
     matchLabels: {kubernetes.io/hostname: $_E40_NOEUD}
   ingress:
-    - fromEntities: [host, remote-node]
-      toPorts: [{ports: [{port: "10250", protocol: TCP}, {port: "4244", protocol: TCP}]}]
+    - fromEntities: [remote-node]
+      toPorts: [{ports: [{port: "8472", protocol: UDP}, {port: "51871", protocol: UDP}]}]
+    - fromEntities: [kube-apiserver]
+      toPorts: [{ports: [{port: "10250", protocol: TCP}]}]
+    - fromEndpoints: [{matchLabels: {k8s:io.kubernetes.pod.namespace: kube-system, k8s:app.kubernetes.io/name: metrics-server}}]
+      toPorts: [{ports: [{port: "10250", protocol: TCP}]}]
+    - fromEndpoints: [{matchLabels: {k8s:io.kubernetes.pod.namespace: supervision}}]
+      toPorts: [{ports: [{port: "9100", protocol: TCP}, {port: "9962", protocol: TCP}, {port: "10250", protocol: TCP}]}]
+    - fromEndpoints: [{matchLabels: {k8s:io.kubernetes.pod.namespace: kube-system, k8s:k8s-app: hubble-relay}}]
+      toPorts: [{ports: [{port: "4244", protocol: TCP}]}]
+    - fromCIDR: [10.10.10.0/24, 10.10.20.15/32]
+      toPorts: [{ports: [{port: "22", protocol: TCP}]}]
+    - fromCIDR: [10.10.40.2/32, 10.10.40.3/32]
+      toPorts: [{ports: [{port: "179", protocol: TCP}]}]
 EOF
-      m26_attendre 180 _e40_effet 1 || { _e40_defaire 1; return 10; }
+      wb_kubectl label node "$_E40_NOEUD" medisphere.internal/pare-feu-hote- >/dev/null 2>&1 || true
+      m26_attendre 240 _e40_effet 1 || { _e40_defaire 1; return 10; }
       ;;
     2)
       m26_hote_sain "$_E40_NOEUD" || return 10
@@ -81,7 +96,10 @@ EOF
 
 _e40_effet() {
   case "$1" in
-    1) wb_kubectl get ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai >/dev/null 2>&1 ;;
+    # Effet réel : un autre agent Cilium voit le nœud injoignable par la sonde de santé.
+    1) wb_kubectl get ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai >/dev/null 2>&1 \
+         && wb_kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-health status 2>/dev/null \
+            | grep -A3 "$_E40_NOEUD" | grep -qiE 'unreachable|connection refused|timeout|i/o' ;;
     2) m26_ssh "$_E40_NOEUD" 'nft list table inet wb_e40' >/dev/null 2>&1 ;;
     3) [[ "$(m26_ssh "$_E40_NOEUD" 'cat /sys/class/net/eth0/mtu' 2>/dev/null)" == 1400 ]] ;;
   esac
@@ -91,7 +109,15 @@ verifier_E40() { _e40_effet "$WB_VAR"; }
 
 _e40_defaire() {
   case "$1" in
-    1) m26_restaurer_objet E40 ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai ;;
+    1)
+      m26_restaurer_objet E40 ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai
+      # L'étiquette du nœud revient à sa valeur d'avant (gérée par cluster/noeuds.yaml, E27).
+      local e; e="$(m26_lire E40 etiquette)"
+      if [[ -n "$e" ]]; then
+        wb_kubectl label node "$_E40_NOEUD" "medisphere.internal/pare-feu-hote=$e" --overwrite >/dev/null 2>&1 || true
+      fi
+      m26_oublier E40 etiquette
+      ;;
     2)
       WB_EX=M26-E40 m26_wb_exec_invite "$_E40_NOEUD" >/dev/null <<'EOF' || wb_avert "annulation nftables incomplète sur le nœud"
 nft delete table inet wb_e40 2>/dev/null || true

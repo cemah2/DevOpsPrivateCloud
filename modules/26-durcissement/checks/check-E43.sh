@@ -32,7 +32,7 @@ check_output "post-mortem : extraits de diagnostic (kubectl, nft, oscap, amtool,
 check_cmd "post-mortem : aucun secret recopié" _e43_pm_sans_secret
 check_cmd "RB-265 (semaine avant l'audit) rédigé et commité" \
   _m26x_doc_commite "docs/securite/durcissement/runbooks/RB-265-*.md"
-check_cmd "dérive de conformité réparée : aucune VM ne ré-autorise PermitRootLogin yes" _e43_derive_reparee
+check_cmd "dérive de conformité réparée sur les VMs échantillonnées" _e43_derive_reparee
 check_cmd "aucune panne M26 encore marquée active" _e43_aucune_panne
 
 _m26_e43_dir="$(dirname "${BASH_SOURCE[0]}")"

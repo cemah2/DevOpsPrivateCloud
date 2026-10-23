@@ -28,8 +28,8 @@
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh disable=SC1091
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
-# shellcheck source=_m25-commun-b.sh
-source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun-b.sh"
+# shellcheck source=_m25-commun.sh
+source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun.sh"
 
 _E37_NS=mediagenda-recette
 _E37_ES=harbor-pull
@@ -45,7 +45,7 @@ _E37_T_CNP=ciliumnetworkpolicies.cilium.io
 
 _e37_ss() { wb_kubectl -n "$_E37_NS" get "$_E37_T_SS" "$_E37_SS" -o json 2>/dev/null; }
 _e37_es() { wb_kubectl -n "$_E37_NS" get "$_E37_T_ES" "$_E37_ES" -o json 2>/dev/null; }
-_e37_role() { m25b_api GET "auth/k8s-par1/role/$_E37_ROLE" 2>/dev/null; }
+_e37_role() { m25_api GET "auth/k8s-par1/role/$_E37_ROLE" 2>/dev/null; }
 
 # _e37_cond JSON True|False — condition Ready du statut (magasin ou ExternalSecret) à cette valeur.
 _e37_cond() { jq -e --arg s "$2" '[.status.conditions[]? | select(.type == "Ready" and .status == $s)] | length > 0' >/dev/null 2>&1 <<<"$1"; }
@@ -77,30 +77,30 @@ panne_E37_v1() {
     -p '{"spec":{"provider":{"vault":{"version":"v1"}}}}' >/dev/null || return 1
   sleep 5
   _e37_forcer || return 1
-  m25b_journal E37 "SecretStore $_E37_NS/$_E37_SS : version v1"
+  m25_journal E37 "SecretStore $_E37_NS/$_E37_SS : version v1"
 }
 
 panne_E37_v2() {
   local r a n=0
-  m25b_jeton_charger || return 1
+  m25_jeton_charger || return 1
   _e37_pret || return 1
   r="$(_e37_role)" || { wb_avert "rôle $_E37_ROLE illisible (jeton plateforme-admin ?)"; return 1; }
   jq -e --arg a "$_E37_AUD" '.data.audience == $a' >/dev/null 2>&1 <<<"$r" \
     || { wb_avert "audience du rôle $_E37_ROLE inattendue (M25-E13 fait ?) : rien n'est cassé"; return 1; }
-  m25b_ecrire_si_absent E37 audience "$_E37_AUD"
+  m25_ecrire_si_absent E37 audience "$_E37_AUD"
   jq -nc --arg a "$_E37_AUD_FAUSSE" '{audience: $a}' \
-    | m25b_api POST "auth/k8s-par1/role/$_E37_ROLE" - >/dev/null || return 1
+    | m25_api POST "auth/k8s-par1/role/$_E37_ROLE" - >/dev/null || return 1
   # Jetons d'ESO de ce rôle (en cache dans le contrôleur) : révoqués, ESO doit se reconnecter.
   while IFS= read -r a; do
     [[ -n "$a" ]] || continue
-    if jq -nc --arg a "$a" '{accessor: $a}' | m25b_api POST auth/token/lookup-accessor - 2>/dev/null \
+    if jq -nc --arg a "$a" '{accessor: $a}' | m25_api POST auth/token/lookup-accessor - 2>/dev/null \
       | jq -e --arg r "$_E37_ROLE" '.data.meta.role == $r' >/dev/null 2>&1; then
-      jq -nc --arg a "$a" '{accessor: $a}' | m25b_api POST auth/token/revoke-accessor - >/dev/null || true
+      jq -nc --arg a "$a" '{accessor: $a}' | m25_api POST auth/token/revoke-accessor - >/dev/null || true
       n=$((n + 1))
     fi
-  done < <(m25b_api GET 'auth/token/accessors?list=true' 2>/dev/null | jq -r '.data.keys[]? // empty' 2>/dev/null || true)
+  done < <(m25_api GET 'auth/token/accessors?list=true' 2>/dev/null | jq -r '.data.keys[]? // empty' 2>/dev/null || true)
   _e37_forcer || return 1
-  m25b_journal E37 "rôle $_E37_ROLE : audience $_E37_AUD_FAUSSE ; $n jeton(s) d'ESO révoqué(s)"
+  m25_journal E37 "rôle $_E37_ROLE : audience $_E37_AUD_FAUSSE ; $n jeton(s) d'ESO révoqué(s)"
 }
 
 panne_E37_v3() {
@@ -133,7 +133,7 @@ EOF
   sleep 5
   wb_kubectl -n external-secrets rollout status deployment/external-secrets --timeout=180s >/dev/null || return 1
   _e37_forcer || return 1
-  m25b_journal E37 "CNP external-secrets/$_E37_CNP (egressDeny 10.10.20.192/26:8200) ; contrôleur d'ESO recréé"
+  m25_journal E37 "CNP external-secrets/$_E37_CNP (egressDeny 10.10.20.192/26:8200) ; contrôleur d'ESO recréé"
 }
 
 panne_E37_v4() {
@@ -142,22 +142,22 @@ panne_E37_v4() {
   wb_kubectl -n "$_E37_NS" patch "$_E37_T_SS" "$_E37_SS" --type=merge -p \
     "$(jq -nc --arg sa "$_E37_SA_FAUX" '{spec: {provider: {vault: {auth: {kubernetes: {serviceAccountRef: {name: $sa}}}}}}}')" \
     >/dev/null || return 1
-  m25b_attendre 90 _e37_ss_en_erreur || true
+  m25_attendre 90 _e37_ss_en_erreur || true
   _e37_forcer || return 1
-  m25b_journal E37 "SecretStore $_E37_NS/$_E37_SS : compte de service $_E37_SA_FAUX (inexistant)"
+  m25_journal E37 "SecretStore $_E37_NS/$_E37_SS : compte de service $_E37_SA_FAUX (inexistant)"
 }
 
 verifier_E37() {
   local ss
   case "$WB_VAR" in
     1) ss="$(_e37_ss)" && jq -e '.spec.provider.vault.version == "v1"' >/dev/null 2>&1 <<<"$ss" ;;
-    2) m25b_jeton_charger && _e37_role | jq -e --arg a "$_E37_AUD_FAUSSE" '.data.audience == $a' >/dev/null 2>&1 ;;
+    2) m25_jeton_charger && _e37_role | jq -e --arg a "$_E37_AUD_FAUSSE" '.data.audience == $a' >/dev/null 2>&1 ;;
     3) wb_kubectl -n external-secrets get "$_E37_T_CNP" "$_E37_CNP" >/dev/null 2>&1 ;;
     4) ss="$(_e37_ss)" && jq -e --arg sa "$_E37_SA_FAUX" '.spec.provider.vault.auth.kubernetes.serviceAccountRef.name == $sa' >/dev/null 2>&1 <<<"$ss" ;;
     *) return 1 ;;
   esac || return 1
   # Le symptôme lui-même : l'ExternalSecret en SecretSyncedError (délais de connexion compris en v3).
-  m25b_attendre 360 _e37_es_en_erreur
+  m25_attendre 360 _e37_es_en_erreur
 }
 
 # _e37_revalider_magasin — fait revalider le magasin tout de suite (deux mises à jour de métadonnée ;
@@ -171,11 +171,11 @@ _e37_revalider_magasin() {
 annuler_E37() {
   local a
   # Rôle OpenBao (variante 2).
-  if m25b_existe E37 audience; then
-    a="$(m25b_lire E37 audience)"
-    if m25b_jeton_charger; then
-      if jq -nc --arg a "$a" '{audience: $a}' | m25b_api POST "auth/k8s-par1/role/$_E37_ROLE" - >/dev/null; then
-        m25b_oublier E37 audience
+  if m25_existe E37 audience; then
+    a="$(m25_lire E37 audience)"
+    if m25_jeton_charger; then
+      if jq -nc --arg a "$a" '{audience: $a}' | m25_api POST "auth/k8s-par1/role/$_E37_ROLE" - >/dev/null; then
+        m25_oublier E37 audience
       else
         wb_avert "audience du rôle $_E37_ROLE non restaurée (ou rejoue plateforme/secrets : tofu apply)"
       fi
@@ -189,8 +189,8 @@ annuler_E37() {
   _e37_revalider_magasin
   # Retrait de l'annotation posée par l'injection : nouvelle synchronisation.
   wb_kubectl -n "$_E37_NS" annotate "$_E37_T_ES" "$_E37_ES" force-sync- >/dev/null 2>&1 || true
-  m25b_attendre 120 _e37_es_pret || wb_avert "ExternalSecret $_E37_NS/$_E37_ES pas encore prêt : ESO réessaie seul (quelques minutes)"
-  m25b_journal E37 "annulation"
+  m25_attendre 120 _e37_es_pret || wb_avert "ExternalSecret $_E37_NS/$_E37_ES pas encore prêt : ESO réessaie seul (quelques minutes)"
+  m25_journal E37 "annulation"
 }
 
 symptome_E37() {

@@ -29,6 +29,7 @@ _M26_DIR="$(dirname "${BASH_SOURCE[0]}")"
 _M26_GL_URL="${WB_GITLAB_URL:-https://git01.par1.medisphere.internal}/api/v4"
 _M26_PROJ_POL="plateforme/politiques"
 _M26_PROJ_K8S="plateforme/k8s"
+_M26_PROJ_GITOPS="plateforme/gitops"   # valeurs des charts (valeurs/<composant>/values.yaml)
 _M26_NS_KYVERNO=kyverno
 _M26_NS_FALCO=falco
 _M26_NS_PANNES=wb-pannes

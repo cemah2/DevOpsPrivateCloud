@@ -12,7 +12,7 @@
 # shellcheck source=_m24-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m24-expert.sh"
 
-title "M24-E36 — kubectl accepte de nouveau les jetons"
+title "M24-E36 — Panne : kubectl refuse les jetons"
 require_cmd jq yq curl kubectl ssh
 
 # _m24x_e36_conforme JSON — l'entrée de l'émetteur du royaume est conforme à M24-E16.

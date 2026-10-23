@@ -19,7 +19,8 @@ spec:
     path: .
   destination:
     server: https://kubernetes.default.svc
-    # Les ValidatingPolicy sont sans espace ; les PolicyException (E18) iront dans kyverno.
+    # Les ValidatingPolicy sont sans espace ; les PolicyException (E18) vont dans kyverno-exceptions
+    # (espace fixé par kyverno/exceptions/kustomization.yaml, le seul que Kyverno lit).
     namespace: kyverno
   syncPolicy:
     automated:

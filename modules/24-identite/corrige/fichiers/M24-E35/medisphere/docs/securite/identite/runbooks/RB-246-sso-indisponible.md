@@ -2,6 +2,8 @@
 
 *Propriétaire : équipe Plateforme. Relu par : Nadia Roussel (support, astreinte), Sophie Laurent (RSSI). Commencé en M24-E35 (INC-5135), une section par panne du palier 4 (E35 à E42) ; annonce, arbre de décision complet et post-mortem en M24-E43. État : sections E35 à E39.*
 
+> Extrait du corrigé : état intermédiaire du runbook après M24-E39 (méthode et sections 1 à 5, identiques à la version finale). Version de référence, complète : `corrige/fichiers/M24-E43/medisphere/docs/securite/identite/runbooks/RB-246-sso-indisponible.md`.
+
 | | |
 |---|---|
 | Déclencheurs | ticket « je n'arrive plus à me connecter à… » ; alertes `KeycloakIndisponible`, `KeycloakEchecsConnexion`, `FederationLdapEnEchec`, `ClientSsoEnEchec`, `HorlogeDecalee`, `KubeApiJetonsOidcRefuses`, `ConfigurationArgoCDModifiee` |

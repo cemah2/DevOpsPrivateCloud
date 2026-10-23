@@ -55,7 +55,7 @@ _m26x_psa_enforce() { kube get namespace "$1" -o jsonpath='{.metadata.labels.pod
 # motif et n'est pas désactivée (pas de « enabled: false » attaché).
 _m26x_regle_falco_active() {
   kube -n "$_m26x_ns_falco" get configmap -o json 2>/dev/null |
-    jq -e --arg m "$1" '[.items[].data // {} | to_entries[] | .value | select(test($m))
+    jq -e --arg m "$1" '[.items[].data // {} | to_entries[] | .value | select(test($m; "i"))
       | select(test("enabled: *false") | not)] | length > 0' >/dev/null 2>&1
 }
 

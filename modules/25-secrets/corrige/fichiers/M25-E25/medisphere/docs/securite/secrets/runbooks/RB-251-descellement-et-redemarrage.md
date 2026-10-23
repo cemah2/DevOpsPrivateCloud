@@ -8,7 +8,7 @@
 - La grappe `vault01-03` est **auto-descellée** par le seal `transit` de `kms01` (clé `autodescellement-par1`). Un nœud qui démarre demande à `kms01` de déchiffrer sa clé racine. **Sans `kms01`, aucun nœud ne peut démarrer** ; ceux qui tournent continuent.
 - `kms01` est scellé par **Shamir** (5 parts, seuil 3 ; `secrets/kms01-init.yml`, Vault `critique`, dépositaires : `garde-des-parts.md`). Un redémarrage de `kms01` exige **trois dépositaires**.
 - Les parts de la grappe (`secrets/openbao-init.yml`) sont devenues des **clés de récupération** : elles ne descellent rien ; elles servent à `generate-root` (procédure `procedure-jeton-racine.md`) et à une migration inverse.
-- Jeton du seal : orphelin, périodique (7 jours), politique `kms-autodescellement`, dans `/etc/openbao/kms.env` (root, 600) de chaque nœud, source : `vault_openbao_kms_jeton` (Vault `critique`). Le serveur le renouvelle tant qu'il tourne. **Si toute la grappe reste arrêtée plus de 7 jours, le jeton a expiré** : voir §6.
+- Jeton du seal : orphelin, périodique (7 jours), politique `kms-autodescellement`, dans `/etc/openbao/kms.env` (root, 600) de chaque nœud, source : `vault_openbao_kms_jeton` (Vault `critique`). Le serveur le renouvelle tant qu'il tourne, grâce au droit `auth/token/renew-self` de la politique (le jeton n'a pas `default`) : `last_renewal_time` renseigné dans `bao token lookup -accessor` le prouve. **Si toute la grappe reste arrêtée plus de 7 jours, le jeton a expiré** : voir §6.
 - On ne supprime **jamais** `/var/lib/openbao` d'un nœud sans avoir lu §7.
 
 ## 2. Redémarrage normal (mise à jour du système, maintenance)

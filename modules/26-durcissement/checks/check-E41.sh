@@ -25,7 +25,7 @@ _e41_logs_ok() {
 }
 
 check_cmd "aucune CSR de service de kubelet (kubelet-serving) en attente" _e41_csr_ok
-check_cmd "l'approbateur couvre tous les nœuds (providerRegex large)" _e41_regex_large
+check_cmd "l'approbateur de CSR accepte les noms de tous les nœuds" _e41_regex_large
 _m26_e41_cp="${WB_M26_CP:-k8s-cp03}"
 if _m26x_ssh_ok "$_m26_e41_cp"; then
   check_ssh "$_m26_e41_cp : --kubelet-certificate-authority ne pointe pas vers la CA du front-proxy" "$_m26_e41_cp" \

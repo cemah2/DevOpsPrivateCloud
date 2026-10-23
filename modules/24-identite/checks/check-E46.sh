@@ -12,7 +12,7 @@
 # shellcheck source=_m24-expert-b.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m24-expert-b.sh"
 
-title "M24-E46 — L'identité de MédiSphère v1 : contrôle global"
+title "M24-E46 — Mini-projet : l'identité de MédiSphère v1 (contrôle global)"
 require_cmd jq curl ldapsearch kubectl
 
 # --- 1. Contrôles clés des paliers 1 à 3 ---------------------------------------------------------------

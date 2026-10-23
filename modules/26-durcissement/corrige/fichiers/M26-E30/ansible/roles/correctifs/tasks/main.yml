@@ -7,11 +7,11 @@
     name: "{{ item }}"
     state: stopped
     enabled: false
-  loop: "{{ ['apt-daily-upgrade.timer'] if ansible_os_family == 'Debian' else ['dnf-automatic.timer'] }}"
+  loop: "{{ ['apt-daily-upgrade.timer'] if ansible_facts['os_family'] == 'Debian' else ['dnf-automatic.timer'] }}"
   failed_when: false
 
 - name: Correctifs automatiques (Debian)
-  when: correctifs_auto | bool and ansible_os_family == 'Debian'
+  when: correctifs_auto | bool and ansible_facts['os_family'] == 'Debian'
   block:
     - name: Paquets
       ansible.builtin.apt:
@@ -44,7 +44,7 @@
         enabled: true
 
 - name: Correctifs automatiques (Rocky)
-  when: correctifs_auto | bool and ansible_os_family == 'RedHat'
+  when: correctifs_auto | bool and ansible_facts['os_family'] == 'RedHat'
   block:
     - name: Paquets
       ansible.builtin.dnf:

@@ -35,8 +35,8 @@ for _m26_e24_vm in "${_M26P_VMS[@]}"; do
     'systemctl is-enabled --quiet conformite-analyse.timer && systemctl is-active --quiet conformite-analyse.timer'
   check_ssh_output "$_m26_e24_vm : décalage aléatoire configuré" "$_m26_e24_vm" '^RandomizedDelayUSec=[1-9]' \
     'systemctl show conformite-analyse.timer -p RandomizedDelayUSec'
-  check_ssh_output "$_m26_e24_vm : /etc/conformite/s3.env en 600, propriétaire root" "$_m26_e24_vm" '^600 root$' \
-    'sudo -n stat -c "%a %U" /etc/conformite/s3.env'
+  check_ssh_output "$_m26_e24_vm : /etc/medisphere/conformite/s3.env en 600, propriétaire root" "$_m26_e24_vm" '^600 root$' \
+    'sudo -n stat -c "%a %U" /etc/medisphere/conformite/s3.env'
 done
 
 title "Compartiment conformite (s3-01, identité de lecture)"

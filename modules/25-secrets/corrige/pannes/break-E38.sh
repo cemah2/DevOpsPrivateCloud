@@ -25,13 +25,13 @@
 # politique supprimée, connexion vérifiée et, si OpenBao ne s'authentifie plus, reprise par le
 # superutilisateur de CNPG (mot de passe provisoire tiré dans PostgreSQL, passé à OpenBao par un tube,
 # puis rotate-root : plus personne ne le connaît), rafraîchissement forcé de l'ExternalSecret.
-# Accès : jeton plateforme-admin (voir _m25-commun-b.sh), kubeconfig d'administration (wb_kubectl :
+# Accès : jeton plateforme-admin (voir _m25-commun.sh), kubeconfig d'administration (wb_kubectl :
 # exec dans le primaire en superutilisateur local, annotation de l'ExternalSecret, politique réseau).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh disable=SC1091
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
-# shellcheck source=_m25-commun-b.sh
-source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun-b.sh"
+# shellcheck source=_m25-commun.sh
+source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun.sh"
 
 _E38_NS=mediagenda-recette
 _E38_CLUSTER=mediagenda-db
@@ -43,23 +43,23 @@ _E38_CNP=mediagenda-db-quarantaine
 _E38_MAX_TTL_COURT=600
 
 # --- Coffre ------------------------------------------------------------------------------------------
-_e38_role() { m25b_api GET "db-mediagenda/roles/$_E38_ROLE" 2>/dev/null || true; }
+_e38_role() { m25_api GET "db-mediagenda/roles/$_E38_ROLE" 2>/dev/null || true; }
 _e38_baux() {
-  m25b_api GET "sys/leases/lookup/$_E38_PREFIXE?list=true" 2>/dev/null | jq -r '.data.keys[]? // empty' 2>/dev/null || true
+  m25_api GET "sys/leases/lookup/$_E38_PREFIXE?list=true" 2>/dev/null | jq -r '.data.keys[]? // empty' 2>/dev/null || true
 }
 
 # _e38_essai_creds — demande un identifiant de recette et le révoque aussitôt. 0 si délivré ; sinon
 #   le message d'erreur d'OpenBao (jamais de valeur) sur la sortie standard.
 _e38_essai_creds() {
   local r l
-  if ! r="$(m25b_api GET "db-mediagenda/creds/$_E38_ROLE")"; then
+  if ! r="$(m25_api GET "db-mediagenda/creds/$_E38_ROLE")"; then
     jq -r '.errors[]? // empty' <<<"$r" 2>/dev/null || true
     return 1
   fi
   l="$(jq -r '.lease_id // empty' <<<"$r" 2>/dev/null || true)"
   r=""
   if [[ -n "$l" ]]; then
-    jq -nc --arg l "$l" '{lease_id: $l}' | m25b_api PUT sys/leases/revoke - >/dev/null || true
+    jq -nc --arg l "$l" '{lease_id: $l}' | m25_api PUT sys/leases/revoke - >/dev/null || true
   fi
   return 0
 }
@@ -101,21 +101,21 @@ _e38_rafraichir() {
 # _e38_pret — état d'entrée conforme à M25-E14/E15 ; sauvegarde des TTL du rôle (une seule fois).
 _e38_pret() {
   local r err
-  m25b_jeton_charger || return 1
+  m25_jeton_charger || return 1
   r="$(_e38_role)"
   jq -e '.data.db_name == "mediagenda-recette" and (.data.max_ttl // 0) > 1800' >/dev/null 2>&1 <<<"$r" \
     || { wb_avert "rôle $_E38_ROLE absent ou déjà raccourci (M25-E14 fait ? panne déjà là ?)"; return 1; }
   [[ -n "$(_e38_primaire)" ]] || { wb_avert "primaire du Cluster $_E38_CLUSTER introuvable dans $_E38_NS"; return 1; }
   _e38_es_pret || { wb_avert "ExternalSecret $_E38_ES pas Ready dans $_E38_NS (M25-E14/E15 faits ?)"; return 1; }
   err="$(_e38_essai_creds)" || { wb_avert "OpenBao ne délivre déjà plus d'identifiant de recette : $err"; return 1; }
-  m25b_ecrire_si_absent E38 role.json "$(jq -c '{default_ttl: .data.default_ttl, max_ttl: .data.max_ttl}' <<<"$r")"
+  m25_ecrire_si_absent E38 role.json "$(jq -c '{default_ttl: .data.default_ttl, max_ttl: .data.max_ttl}' <<<"$r")"
 }
 
 panne_E38_v1() {
   _e38_pret || return 1
   jq -nc --argjson t "$_E38_MAX_TTL_COURT" '{max_ttl: $t}' \
-    | m25b_api POST "db-mediagenda/roles/$_E38_ROLE" - >/dev/null || return 1
-  m25b_journal E38 "rôle $_E38_ROLE : max_ttl ramené à $_E38_MAX_TTL_COURT s"
+    | m25_api POST "db-mediagenda/roles/$_E38_ROLE" - >/dev/null || return 1
+  m25_journal E38 "rôle $_E38_ROLE : max_ttl ramené à $_E38_MAX_TTL_COURT s"
   _e38_rafraichir || wb_avert "rafraîchissement forcé de $_E38_ES impossible : la panne se verra au prochain cycle"
 }
 
@@ -124,15 +124,15 @@ panne_E38_v2() {
   _e38_pret || return 1
   b="$(_e38_baux)"
   [[ -n "$b" ]] || { wb_avert "aucun bail $_E38_ROLE actif : rien à révoquer (ESO tourne-t-il ?)"; return 1; }
-  m25b_ecrire E38 baux-revoques "$b"
-  if ! m25b_api PUT "sys/leases/revoke-prefix/$_E38_PREFIXE" >/dev/null 2>&1; then
+  m25_ecrire E38 baux-revoques "$b"
+  if ! m25_api PUT "sys/leases/revoke-prefix/$_E38_PREFIXE" >/dev/null 2>&1; then
     # Politique sans revoke-prefix (M25-E23 pas fait) : même « ménage », bail par bail.
     while IFS= read -r b; do
       [[ -n "$b" ]] || continue
-      jq -nc --arg l "$_E38_PREFIXE/$b" '{lease_id: $l}' | m25b_api PUT sys/leases/revoke - >/dev/null || return 1
-    done < <(m25b_lire E38 baux-revoques)
+      jq -nc --arg l "$_E38_PREFIXE/$b" '{lease_id: $l}' | m25_api PUT sys/leases/revoke - >/dev/null || return 1
+    done < <(m25_lire E38 baux-revoques)
   fi
-  m25b_journal E38 "baux de $_E38_PREFIXE révoqués ($(m25b_lire E38 baux-revoques | grep -c .) bail(s))"
+  m25_journal E38 "baux de $_E38_PREFIXE révoqués ($(m25_lire E38 baux-revoques | grep -c .) bail(s))"
 }
 
 panne_E38_v3() {
@@ -141,7 +141,7 @@ panne_E38_v3() {
     "DO \$\$ BEGIN EXECUTE format('ALTER ROLE openbao PASSWORD %L', encode(sha256((gen_random_uuid()::text || gen_random_uuid()::text)::bytea), 'hex')); END \$\$;" \
     | _e38_sql >/dev/null || return 1
   _e38_couper_sessions_openbao || true
-  m25b_journal E38 "mot de passe du rôle PostgreSQL openbao changé dans $_E38_NS, sessions coupées"
+  m25_journal E38 "mot de passe du rôle PostgreSQL openbao changé dans $_E38_NS, sessions coupées"
   _e38_rafraichir || true
 }
 
@@ -172,21 +172,21 @@ spec:
 EOF
   sleep 5
   _e38_couper_sessions_openbao || true
-  m25b_journal E38 "CiliumNetworkPolicy $_E38_CNP (ingressDeny 10.10.20.0/24:5432) créée, sessions d'openbao coupées"
+  m25_journal E38 "CiliumNetworkPolicy $_E38_CNP (ingressDeny 10.10.20.0/24:5432) créée, sessions d'openbao coupées"
   _e38_rafraichir || true
 }
 
 verifier_E38() {
   local err
-  m25b_jeton_charger || return 1
+  m25_jeton_charger || return 1
   case "$WB_VAR" in
     1) _e38_role | jq -e --argjson t "$_E38_MAX_TTL_COURT" '.data.max_ttl == $t' >/dev/null 2>&1 ;;
     2)
       local b
-      m25b_existe E38 baux-revoques || return 1
+      m25_existe E38 baux-revoques || return 1
       while IFS= read -r b; do
         [[ -z "$b" ]] || ! grep -qxF -- "$b" < <(_e38_baux) || return 1
-      done < <(m25b_lire E38 baux-revoques)
+      done < <(m25_lire E38 baux-revoques)
       ;;
     3) err="$(_e38_essai_creds)" && return 1; grep -qi 'password authentication failed' <<<"$err" ;;
     4)
@@ -208,7 +208,7 @@ _e38_reprendre_connexion() {
     return 0
   fi
   # Une rotation par OpenBao suffit si une connexion de son pool est encore ouverte.
-  m25b_api POST "db-mediagenda/rotate-root/$_E38_CONNEXION" >/dev/null 2>&1 && return 0
+  m25_api POST "db-mediagenda/rotate-root/$_E38_CONNEXION" >/dev/null 2>&1 && return 0
   mdp="$(_e38_sql <<'EOF'
 SELECT set_config('medisphere.mdp_openbao', encode(sha256((gen_random_uuid()::text || gen_random_uuid()::text)::bytea), 'hex'), false) \g /dev/null
 DO $$ BEGIN EXECUTE format('ALTER ROLE openbao PASSWORD %L', current_setting('medisphere.mdp_openbao')); END $$;
@@ -216,36 +216,36 @@ SELECT current_setting('medisphere.mdp_openbao');
 EOF
 )" || { wb_avert "mot de passe d'openbao non réinitialisé (primaire injoignable ?) : identifiants-dynamiques.md § 4"; return 0; }
   [[ "$mdp" =~ ^[0-9a-f]{64}$ ]] || { mdp=""; wb_avert "réinitialisation d'openbao : réponse inattendue de psql"; return 0; }
-  printf '{"password":"%s"}' "$mdp" | m25b_api POST "db-mediagenda/config/$_E38_CONNEXION" - >/dev/null \
+  printf '{"password":"%s"}' "$mdp" | m25_api POST "db-mediagenda/config/$_E38_CONNEXION" - >/dev/null \
     || wb_avert "nouveau mot de passe refusé par OpenBao (verify_connection) : identifiants-dynamiques.md § 4"
   mdp=""
-  m25b_api POST "db-mediagenda/rotate-root/$_E38_CONNEXION" >/dev/null \
+  m25_api POST "db-mediagenda/rotate-root/$_E38_CONNEXION" >/dev/null \
     || wb_avert "rotate-root de $_E38_CONNEXION en échec : à refaire (bao write -f db-mediagenda/rotate-root/$_E38_CONNEXION)"
-  m25b_journal E38 "annulation : connexion $_E38_CONNEXION reprise (mot de passe provisoire puis rotate-root)"
+  m25_journal E38 "annulation : connexion $_E38_CONNEXION reprise (mot de passe provisoire puis rotate-root)"
 }
 
 annuler_E38() {
   local t
   # 1. Politique réseau (sans jeton).
   wb_k8s_restaurer || wb_avert "politique $_E38_CNP non supprimée (kubectl -n $_E38_NS delete cnp $_E38_CNP)"
-  if ! m25b_jeton_charger; then
+  if ! m25_jeton_charger; then
     wb_avert "annulation incomplète sans jeton plateforme-admin : connecte-toi puis relance « lab/bin/break 25 38 --annuler »"
     return 0
   fi
   # 2. TTL du rôle (valeurs d'entrée = celles de plateforme/secrets : un tofu apply n'est pas défait).
-  t="$(m25b_lire E38 role.json)"
+  t="$(m25_lire E38 role.json)"
   if [[ -n "$t" ]] && ! _e38_role | jq -e --argjson t "$t" '.data.max_ttl == $t.max_ttl and .data.default_ttl == $t.default_ttl' >/dev/null 2>&1; then
-    printf '%s\n' "$t" | m25b_api POST "db-mediagenda/roles/$_E38_ROLE" - >/dev/null \
+    printf '%s\n' "$t" | m25_api POST "db-mediagenda/roles/$_E38_ROLE" - >/dev/null \
       || wb_avert "TTL du rôle $_E38_ROLE non restaurés (tofu apply de plateforme/secrets)"
   fi
   # 3. Connexion d'OpenBao à la base (variante 3 ; sans effet si elle marche).
   _e38_reprendre_connexion
   # 4. Identifiants neufs pour l'API (Reloader redémarre le Rollout).
   _e38_rafraichir || wb_avert "rafraîchissement de $_E38_ES impossible : attendre le cycle de 30 min"
-  m25b_attendre 90 _e38_es_pret || wb_avert "ExternalSecret $_E38_ES pas encore Ready : kubectl -n $_E38_NS describe es $_E38_ES"
-  m25b_journal E38 "annulation"
-  m25b_oublier E38 role.json
-  m25b_oublier E38 baux-revoques
+  m25_attendre 90 _e38_es_pret || wb_avert "ExternalSecret $_E38_ES pas encore Ready : kubectl -n $_E38_NS describe es $_E38_ES"
+  m25_journal E38 "annulation"
+  m25_oublier E38 role.json
+  m25_oublier E38 baux-revoques
 }
 
 symptome_E38() {

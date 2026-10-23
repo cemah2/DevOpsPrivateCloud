@@ -25,8 +25,8 @@
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh disable=SC1091
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
-# shellcheck source=_m25-commun-b.sh
-source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun-b.sh"
+# shellcheck source=_m25-commun.sh
+source "$WB_ROOT/modules/25-secrets/corrige/pannes/_m25-commun.sh"
 
 _E42_CLE=autodescellement-par1
 _E42_POL=kms-autodescellement
@@ -35,20 +35,20 @@ _E42_KMS_IP="${WB_M25_KMS_IP:-10.10.20.24}"
 
 _e42_pret() {
   local n
-  m25b_grappe_saine || { wb_avert "grappe pas saine (un actif, deux en attente, kms01 descellé) : rien n'est cassé"; return 1; }
-  n="$(m25b_lire E42 noeud)"
+  m25_grappe_saine || { wb_avert "grappe pas saine (un actif, deux en attente, kms01 descellé) : rien n'est cassé"; return 1; }
+  n="$(m25_lire E42 noeud)"
   if [[ -z "$n" ]]; then
-    n="$(m25b_en_attente_au_hasard)" || { wb_avert "aucun nœud en attente"; return 1; }
-    m25b_ecrire E42 noeud "$n"
+    n="$(m25_en_attente_au_hasard)" || { wb_avert "aucun nœud en attente"; return 1; }
+    m25_ecrire E42 noeud "$n"
   fi
-  m25b_ssh "$n" 'test -s /etc/openbao/kms.env && systemctl is-active --quiet openbao' >/dev/null 2>&1 \
+  m25_ssh "$n" 'test -s /etc/openbao/kms.env && systemctl is-active --quiet openbao' >/dev/null 2>&1 \
     || { wb_avert "$n : kms.env absent ou openbao inactif (M25-E25 fait ?)"; return 1; }
 }
 
 # _e42_jeton_annulation — crée (une fois) sur kms01 la politique et le jeton d'annulation.
 _e42_jeton_annulation() {
   local d f
-  d="$(m25b_etat E42)"
+  d="$(m25_etat E42)"
   f="$d/jeton-annulation"
   [[ -s "$f" ]] && return 0
   printf '%s\n' \
@@ -57,25 +57,25 @@ _e42_jeton_annulation() {
     "path \"transit/keys/$_E42_CLE\" {" '  capabilities = ["read"]' '}' \
     "path \"transit/keys/$_E42_CLE/config\" {" '  capabilities = ["update"]' '}' \
     "path \"sys/policies/acl/$_E42_POL_ANNUL\" {" '  capabilities = ["delete"]' '}' \
-    | jq -Rs '{policy: .}' | m25b_kms_api PUT "sys/policies/acl/$_E42_POL_ANNUL" - >/dev/null || return 1
+    | jq -Rs '{policy: .}' | m25_kms_api PUT "sys/policies/acl/$_E42_POL_ANNUL" - >/dev/null || return 1
   (umask 077 && jq -nc --arg p "$_E42_POL_ANNUL" '{policies: [$p], ttl: "72h", display_name: "wb-pannes-m25", no_parent: true}' \
-    | m25b_kms_api POST auth/token/create-orphan - | jq -r '.auth.client_token // empty' >"$f") || return 1
+    | m25_kms_api POST auth/token/create-orphan - | jq -r '.auth.client_token // empty' >"$f") || return 1
   [[ -s "$f" ]]
 }
 
 # _e42_redemarrer — redémarre le nœud choisi (en attente) et note l'heure.
 _e42_redemarrer() {
   local n
-  n="$(m25b_lire E42 noeud)"
-  m25b_redemarrer_noeud "$n" || return 1
-  m25b_journal E42 "$n redémarré"
+  n="$(m25_lire E42 noeud)"
+  m25_redemarrer_noeud "$n" || return 1
+  m25_journal E42 "$n redémarré"
 }
 
 panne_E42_v1() {
   local n
   _e42_pret || return 1
-  n="$(m25b_lire E42 noeud)"
-  m25b_exec "$n" >/dev/null <<'EOF' || return 1
+  n="$(m25_lire E42 noeud)"
+  m25_exec "$n" >/dev/null <<'EOF' || return 1
 f=/etc/openbao/kms.env
 sauver "$f"
 faux="s.$(head -c 64 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)"
@@ -89,39 +89,39 @@ EOF
 panne_E42_v2() {
   local p
   _e42_pret || return 1
-  m25b_kms_disponible || { wb_avert "BAO_KMS_TOKEN absent ou refusé par kms01 : variante 2 impossible"; return 1; }
-  p="$(m25b_kms_api GET "sys/policies/acl/$_E42_POL" | jq -r '.data.policy // empty')"
+  m25_kms_disponible || { wb_avert "BAO_KMS_TOKEN absent ou refusé par kms01 : variante 2 impossible"; return 1; }
+  p="$(m25_kms_api GET "sys/policies/acl/$_E42_POL" | jq -r '.data.policy // empty')"
   grep -qF "transit/decrypt/$_E42_CLE" <<<"$p" || { wb_avert "politique $_E42_POL de kms01 inattendue"; return 1; }
   _e42_jeton_annulation || { wb_avert "jeton d'annulation impossible à créer sur kms01"; return 1; }
-  m25b_ecrire_si_absent E42 politique-kms.hcl "$p"
+  m25_ecrire_si_absent E42 politique-kms.hcl "$p"
   # Retire le bloc decrypt (de sa ligne « path » jusqu'à l'accolade fermante, sur une ou plusieurs lignes).
   awk -v c="transit/decrypt/$_E42_CLE" 'index($0, c) {dedans = 1} dedans {if (index($0, "}")) dedans = 0; next} {print}' <<<"$p" \
     | sed '1i # Revue des droits (SEC-2642) : le coffre ne fait que chiffrer, « decrypt » retiré.' \
-    | jq -Rs '{policy: .}' | m25b_kms_api PUT "sys/policies/acl/$_E42_POL" - >/dev/null || return 1
-  m25b_journal E42 "kms01 : politique $_E42_POL sans decrypt"
+    | jq -Rs '{policy: .}' | m25_kms_api PUT "sys/policies/acl/$_E42_POL" - >/dev/null || return 1
+  m25_journal E42 "kms01 : politique $_E42_POL sans decrypt"
   _e42_redemarrer
 }
 
 panne_E42_v3() {
   local k dern
   _e42_pret || return 1
-  m25b_kms_disponible || { wb_avert "BAO_KMS_TOKEN absent ou refusé par kms01 : variante 3 impossible"; return 1; }
-  k="$(m25b_kms_api GET "transit/keys/$_E42_CLE")" || { wb_avert "clé $_E42_CLE illisible sur kms01"; return 1; }
+  m25_kms_disponible || { wb_avert "BAO_KMS_TOKEN absent ou refusé par kms01 : variante 3 impossible"; return 1; }
+  k="$(m25_kms_api GET "transit/keys/$_E42_CLE")" || { wb_avert "clé $_E42_CLE illisible sur kms01"; return 1; }
   _e42_jeton_annulation || { wb_avert "jeton d'annulation impossible à créer sur kms01"; return 1; }
-  m25b_ecrire_si_absent E42 min-dechiffrement "$(jq -r '.data.min_decryption_version' <<<"$k")"
-  m25b_kms_api POST "transit/keys/$_E42_CLE/rotate" >/dev/null || return 1
-  dern="$(m25b_kms_api GET "transit/keys/$_E42_CLE" | jq -r '.data.latest_version')"
+  m25_ecrire_si_absent E42 min-dechiffrement "$(jq -r '.data.min_decryption_version' <<<"$k")"
+  m25_kms_api POST "transit/keys/$_E42_CLE/rotate" >/dev/null || return 1
+  dern="$(m25_kms_api GET "transit/keys/$_E42_CLE" | jq -r '.data.latest_version')"
   jq -nc --argjson v "$dern" '{min_decryption_version: $v}' \
-    | m25b_kms_api POST "transit/keys/$_E42_CLE/config" - >/dev/null || return 1
-  m25b_journal E42 "kms01 : clé $_E42_CLE tournée (version $dern), min_decryption_version = $dern (rotation NON défaite)"
+    | m25_kms_api POST "transit/keys/$_E42_CLE/config" - >/dev/null || return 1
+  m25_journal E42 "kms01 : clé $_E42_CLE tournée (version $dern), min_decryption_version = $dern (rotation NON défaite)"
   _e42_redemarrer
 }
 
 panne_E42_v4() {
   local n
   _e42_pret || return 1
-  n="$(m25b_lire E42 noeud)"
-  m25b_exec "$n" IP_KMS="$_E42_KMS_IP" >/dev/null <<'EOF' || return 1
+  n="$(m25_lire E42 noeud)"
+  m25_exec "$n" IP_KMS="$_E42_KMS_IP" >/dev/null <<'EOF' || return 1
 command -v nft >/dev/null || exit 1
 nft add table inet durcissement_sortie
 nft 'add chain inet durcissement_sortie sortie { type filter hook output priority filter - 10 ; policy accept ; }'
@@ -134,67 +134,67 @@ EOF
 
 verifier_E42() {
   local n
-  n="$(m25b_lire E42 noeud)"
+  n="$(m25_lire E42 noeud)"
   [[ -n "$n" ]] || return 1
-  [[ "$(m25b_kms_code)" == 200 ]] || return 1
+  [[ "$(m25_kms_code)" == 200 ]] || return 1
   # Le nœud doit rester hors service (arrêté ou scellé) : 25 s après le redémarrage, puis contrôle.
   sleep 25
-  m25b_hors_service "$n" || return 1
+  m25_hors_service "$n" || return 1
   sleep 10
-  m25b_hors_service "$n"
+  m25_hors_service "$n"
 }
 
 annuler_E42() {
   local n f m
-  n="$(m25b_lire E42 noeud)"
-  f="$(m25b_etat E42)/jeton-annulation"
+  n="$(m25_lire E42 noeud)"
+  f="$(m25_etat E42)/jeton-annulation"
   # 1. kms01 (variantes 2 et 3) : avec le jeton d'annulation, sinon BAO_KMS_TOKEN.
-  if m25b_existe E42 politique-kms.hcl; then
+  if m25_existe E42 politique-kms.hcl; then
     if [[ -s "$f" ]]; then
-      m25b_lire E42 politique-kms.hcl | jq -Rs '{policy: .}' | m25b_kms_api_jeton "$f" PUT "sys/policies/acl/$_E42_POL" - >/dev/null \
+      m25_lire E42 politique-kms.hcl | jq -Rs '{policy: .}' | m25_kms_api_jeton "$f" PUT "sys/policies/acl/$_E42_POL" - >/dev/null \
         || wb_avert "politique $_E42_POL de kms01 non restaurée (jeton d'annulation expiré ?)"
     else
-      m25b_lire E42 politique-kms.hcl | jq -Rs '{policy: .}' | m25b_kms_api PUT "sys/policies/acl/$_E42_POL" - >/dev/null \
+      m25_lire E42 politique-kms.hcl | jq -Rs '{policy: .}' | m25_kms_api PUT "sys/policies/acl/$_E42_POL" - >/dev/null \
         || wb_avert "politique $_E42_POL de kms01 non restaurée : remets-la depuis kms01/kms-autodescellement.hcl"
     fi
   fi
-  m="$(m25b_lire E42 min-dechiffrement)"
+  m="$(m25_lire E42 min-dechiffrement)"
   if [[ -n "$m" ]]; then
     if [[ -s "$f" ]]; then
-      jq -nc --argjson v "$m" '{min_decryption_version: $v}' | m25b_kms_api_jeton "$f" POST "transit/keys/$_E42_CLE/config" - >/dev/null \
+      jq -nc --argjson v "$m" '{min_decryption_version: $v}' | m25_kms_api_jeton "$f" POST "transit/keys/$_E42_CLE/config" - >/dev/null \
         || wb_avert "min_decryption_version de $_E42_CLE non restaurée (valeur d'origine : $m)"
     else
-      jq -nc --argjson v "$m" '{min_decryption_version: $v}' | m25b_kms_api POST "transit/keys/$_E42_CLE/config" - >/dev/null \
+      jq -nc --argjson v "$m" '{min_decryption_version: $v}' | m25_kms_api POST "transit/keys/$_E42_CLE/config" - >/dev/null \
         || wb_avert "min_decryption_version de $_E42_CLE non restaurée (valeur d'origine : $m)"
     fi
   fi
   if [[ -s "$f" ]]; then
-    m25b_kms_api_jeton "$f" DELETE "sys/policies/acl/$_E42_POL_ANNUL" >/dev/null || true
-    m25b_kms_api_jeton "$f" POST auth/token/revoke-self >/dev/null || true
+    m25_kms_api_jeton "$f" DELETE "sys/policies/acl/$_E42_POL_ANNUL" >/dev/null || true
+    m25_kms_api_jeton "$f" POST auth/token/revoke-self >/dev/null || true
     rm -f -- "$f"
   fi
   # 2. Le nœud : fichiers restaurés, table nftables retirée.
   if [[ -n "$n" ]]; then
-    m25b_exec "$n" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur le nœud"
+    m25_exec "$n" >/dev/null <<'EOF' || wb_avert "annulation incomplète sur le nœud"
 restaurer_fichiers
 nft delete table inet durcissement_sortie 2>/dev/null || true
 journal "annulation : kms.env restauré, table durcissement_sortie retirée"
 EOF
-    m25b_relancer_si_besoin "$n"
+    m25_relancer_si_besoin "$n"
   fi
-  m25b_journal E42 "annulation ($n)"
-  m25b_oublier E42 noeud
-  m25b_oublier E42 politique-kms.hcl
-  m25b_oublier E42 min-dechiffrement
+  m25_journal E42 "annulation ($n)"
+  m25_oublier E42 noeud
+  m25_oublier E42 politique-kms.hcl
+  m25_oublier E42 min-dechiffrement
 }
 
 # e42_variantes — variantes possibles dans l'état du poste (sans BAO_KMS_TOKEN : 1 et 4 seulement).
 #   Sert à break-E43.sh ; le tirage de main() suit la même règle.
-e42_variantes() { if m25b_kms_disponible; then echo "1 2 3 4"; else echo "1 4"; fi; }
+e42_variantes() { if m25_kms_disponible; then echo "1 2 3 4"; else echo "1 4"; fi; }
 
 symptome_E42() {
   local n
-  n="$(m25b_lire E42 noeud)"
+  n="$(m25_lire E42 noeud)"
   wb_symptome "INC-5242 — De : Nadia Roussel — $n ne revient pas après un redémarrage" \
     "$n a été redémarré (mise à jour du noyau) et ne sert plus : alerte OpenBaoScelle, tolérance aux" \
     "pannes d'autopilot à zéro. Les deux autres nœuds servent. kms01 a l'air de répondre." \
@@ -202,13 +202,13 @@ symptome_E42() {
     "Temps cible : 45 min. Contrôle : lab/bin/check 25 42"
 }
 
-resume_E42() { echo "$(m25b_lire E42 noeud) ne se descelle plus après un redémarrage (auto-descellement)"; }
+resume_E42() { echo "$(m25_lire E42 noeud) ne se descelle plus après un redémarrage (auto-descellement)"; }
 
 if [[ -z "${WB_PANNES_LIB:-}" ]]; then
   main() {
     local a forcee=0
     for a in "$@"; do [[ "$a" == --variante* ]] && forcee=1; done
-    if ((forcee == 0)) && [[ " $* " != *" --annuler "* ]] && ! m25b_kms_disponible; then
+    if ((forcee == 0)) && [[ " $* " != *" --annuler "* ]] && ! m25_kms_disponible; then
       # Tirage restreint aux variantes sans kms01 : on force 1 ou 4.
       wb_main 25 E42 4 --variante $(( (RANDOM % 2) ? 4 : 1 )) "$@"
       return

@@ -11,7 +11,7 @@
 
 | Secret | Où il vit | Qui le lit | Comment il change |
 |---|---|---|---|
-| Secret d'un client confidentiel (`gitlab`, `grafana`, `argocd`, `harbor`, `proxmox`, `pbs`, `netbox`, `oauth2-proxy`, `step-ca`) | Vault `critique` `secrets/identite.yml` (`keycloak_secrets_clients.<client>`) ; côté Keycloak : généré puis rangé par `outils/ranger-secret-client.sh` (E11 à E18), ou **imposé** par `client_secret_wo` (à partir d'E29, client par client) ; côté service (Secret Kubernetes par `secrets-k8s.sh`, ou configuration Ansible/`gitlab.rb`) | le service, à l'échange du code | §2 |
+| Secret d'un client confidentiel (`gitlab`, `grafana`, `argocd`, `harbor`, `proxmox`, `pbs`, `netbox`, `oauth2-proxy`) | Vault `critique` `secrets/identite.yml` (`keycloak_secrets_clients.<client>`) ; côté Keycloak : généré puis rangé par `outils/ranger-secret-client.sh` (E11 à E18), ou **imposé** par `client_secret_wo` (à partir d'E29, client par client) ; côté service (Secret Kubernetes par `secrets-k8s.sh`, ou configuration Ansible/`gitlab.rb`) | le service, à l'échange du code | §2 |
 | Clés de signature du royaume (RS256) | base de Keycloak (`component_config`), publiques dans le JWKS | tous les services (vérification des jetons) | §3 |
 | Mot de passe de `svc-keycloak` (fédération) | Vault `critique` `annuaire/vault-critique.yml` → annuaire (job) et Keycloak (`bind_credential_wo`) | Keycloak, à chaque liaison | §4 |
 | Secret de `wb-checks`, de `svc-tofu-keycloak` | `~/.config/workbook/*.env`, variables protégées de CI | checks, pipeline | régénération dans la console (`Credentials` → *Regenerate*), puis fichier/variable ; pas de fenêtre visible par les utilisateurs |

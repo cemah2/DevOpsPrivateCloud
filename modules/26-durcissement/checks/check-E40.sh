@@ -17,7 +17,14 @@ _e40_unreachable_ok() {
   [[ -z "$v" ]] || [[ "${v%.*}" == 0 ]]
 }
 
+# Pare-feu d'hôte d'E27 : soit aucun nœud n'est étiqueté, soit tous le sont (un nœud retiré en douce
+# n'est plus filtré par les politiques hote-*).
+_e40_etiquette_coherente() {
+  _m26x_kq '[.items[].metadata.labels["medisphere.internal/pare-feu-hote"] // ""] | all(. == "oui") or all(. == "")' nodes
+}
+
 check_cmd "tous les nœuds sont Ready" _e40_noeuds_ready
+check_cmd "étiquette medisphere.internal/pare-feu-hote cohérente sur tous les nœuds (E27)" _e40_etiquette_coherente
 check_cmd "aucune CiliumClusterwideNetworkPolicy d'essai (M26-E40) ne reste" \
   _m26x_absent ciliumclusterwidenetworkpolicies wb-pare-feu-hote-essai
 _m26_e40_noeud="${WB_M26_NOEUD:-k8s-w03}"

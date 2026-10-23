@@ -9,8 +9,8 @@
 # bloquants et majeurs (privilèges, accès à l'hôte, secrets en clair, rôle à « * », réseau ouvert,
 # image flottante, root, ressources, exposition, espace default).
 
-# shellcheck source=_m26-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel-c.sh"
+# shellcheck source=_m26-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel.sh"
 
 title "M26-E22 — Revue : les manifestes et le Dockerfile du stagiaire"
 require_cmd yq jq

@@ -12,7 +12,7 @@
 # shellcheck source=_m24-expert.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_m24-expert.sh"
 
-title "M24-E38 — Horloges et durées des jetons justes"
+title "M24-E38 — Panne : « jeton expiré » à la première connexion"
 require_cmd jq curl ssh
 
 for _m24x_e38_h in "$_M24D_IDP" "${_M24X_CP[@]}"; do

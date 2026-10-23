@@ -17,7 +17,9 @@ Les sorties reproduites sont **représentatives** : noms de pods, adresses, horo
   - le nom exact des ConfigMaps de Falco (chart `falco` 9.2.1) et le champ `falcosidekick.config.alertmanager.hostport` : à confirmer sur ton rendu ;
   - pour E41, le chemin `/var/lib/kubelet/pki/kubelet-server-current.pem` et la relecture du certificat de service par le kubelet après redémarrage ;
   - pour E39 v2, le contexte SELinux attendu de la clé TLS de node_exporter sur Rocky 10 ;
-  - pour E40 v1, l'effet d'une `CiliumClusterwideNetworkPolicy` de pare-feu d'hôte exige que `hostFirewall.enabled: true` (M26-E27) ; sinon la variante est « sans effet » et le script en essaie une autre.
+  - pour E40 v1, la variante exige le pare-feu d'hôte (`enable-host-firewall`, M26-E27) : elle retire l'étiquette `medisphere.internal/pare-feu-hote` du nœud et constate l'effet par `cilium-health status` d'un autre agent (texte de sortie à confirmer) ; sans pare-feu d'hôte, elle se déclare « sans effet » ;
+  - pour E37 v3, la configuration de falcosidekick est lue dans son Secret (variables d'environnement) : nom et forme à confirmer sur le rendu du sous-chart 0.14.1 ;
+  - pour E42, le nom de processus `kdevtmpfsi` repose sur `exec -a` de l'`ash` de busybox 1.37 (copie de busybox lancée avec `argv[0]` = `sleep`) ; si ton busybox ne l'accepte pas, le témoin dort sous le nom `sleep` et le signe « binaire exécuté depuis /tmp » manque.
 - E44 : les identifiants et le nombre de programmes eBPF dépendent du noyau et des versions de Falco/Tetragon/Cilium ; le compte rendu relève **tes** chiffres.
 
 ---
@@ -109,7 +111,7 @@ admin@adm01:~$ kubectl get pods -A -o json | jq -r '.items[] | select(.spec.cont
 admin@adm01:~$ kubectl get policyexceptions.policies.kyverno.io -A -o yaml | yq '.items[].spec'
 ```
 
-Une exception `essai-lucas-wb-pannes` dont la `matchCondition` dit `object.metadata.namespace == 'wb-pannes'` exempte **tout** l'espace de `registres-autorises`. **Correctif** : la supprimer, ou la réduire à la charge réelle (par nom ou étiquette) avec une `expiresAt`. Voir [`fichiers/M26-E36/politiques/kyverno/exceptions/essai-outil-interne.yaml`](fichiers/M26-E36/politiques/kyverno/exceptions/essai-outil-interne.yaml) (exception **ciblée** et datée) et l'inscription au registre [`fichiers/M26-E36/medisphere/docs/securite/durcissement/exceptions.md`](fichiers/M26-E36/medisphere/docs/securite/durcissement/exceptions.md).
+Une exception `essai-lucas-wb-pannes` dont la `matchCondition` dit `object.metadata.namespace == 'wb-pannes'` exempte **tout** l'espace de `registres-autorises`. **Correctif** : la supprimer, ou la réduire à la charge réelle (par nom ou étiquette) avec une `expiresAt`. Voir [`fichiers/M26-E36/politiques/kyverno/exceptions/essai-outil-interne.yaml`](fichiers/M26-E36/politiques/kyverno/exceptions/essai-outil-interne.yaml) (exception **ciblée** et datée, au format d'E18), à ajouter à `kyverno/exceptions/kustomization.yaml` (espace `kyverno-exceptions`, E18), et sa ligne au registre d'E23 [`exceptions.extrait-M26-E36.md`](fichiers/M26-E36/medisphere/docs/securite/durcissement/exceptions.extrait-M26-E36.md).
 
 **Variante 2 — espace ré-étiqueté privileged.**
 
@@ -176,14 +178,14 @@ admin@adm01:~$ kubectl -n falco get ds falco -o jsonpath='{.spec.template.spec.n
 admin@adm01:~$ kubectl -n falco get pods -o wide   # aucun pod sur k8s-w0x
 ```
 
-Falco ne tourne plus que sur les nœuds de contrôle : rien ne voit les charges applicatives. **Correctif** : MR qui retire le `nodeSelector` de `falco/values.yaml`.
+Falco ne tourne plus que sur les nœuds de contrôle : rien ne voit les charges applicatives. **Correctif** : MR qui retire le `nodeSelector` de `valeurs/falco/values.yaml` (`plateforme/gitops`).
 
 **Variante 2 — règle désactivée par une surcharge.**
 
 ```
-admin@adm01:~$ kubectl -n falco get cm -o yaml | grep -A1 "Shell interactif"
-- rule: Shell interactif dans un conteneur applicatif
-  enabled: false
+admin@adm01:~$ kubectl -n falco get cm -o yaml | grep -i -A1 "shell interactif"
+    - rule: MédiSphère — shell interactif dans un conteneur applicatif
+      enabled: false
 ```
 
 Une surcharge `enabled: false` en fin de `regles-medisphere.yaml`. **Correctif** : MR qui la retire. Si le bruit était réel, la bonne réponse est une **exception par liste/macro** (exclure un conteneur légitime qui ouvre un shell), pas la désactivation de la règle.
@@ -191,8 +193,9 @@ Une surcharge `enabled: false` en fin de `regles-medisphere.yaml`. **Correctif**
 **Variante 3 — falcosidekick vers une mauvaise URL.**
 
 ```
-admin@adm01:~$ kubectl -n falco get deploy,cm -o yaml | grep -i hostport
-http://kps-alertmanager.supervision:9095
+admin@adm01:~/src/gitops$ yq '.falcosidekick.config.alertmanager.hostport' valeurs/falco/values.yaml
+http://kps-alertmanager.supervision.svc:9095
+admin@adm01:~$ kubectl -n falco logs deploy/falco-falcosidekick --since=15m | grep -i alertmanager   # erreurs de connexion
 ```
 
 Port 9095 au lieu de 9093 : les détections sont produites mais n'arrivent pas à Alertmanager. **Correctif** : MR qui remet `:9093`.
@@ -208,7 +211,7 @@ Les règles `notice`/`warning` (dont « shell interactif ») ne sont plus charg�
 
 **Clôture** : rejoue l'essai, l'alerte arrive dans Loki (`service="falco"`) et dans `astreinte@`, `lab/bin/check 26 37`, `--annuler`.
 
-**Prévention.** Deux alertes « méta » ([`fichiers/M26-E37/politiques/observabilite/regles/falco.yaml`](fichiers/M26-E37/politiques/observabilite/regles/falco.yaml)) : `FalcoCouvertureIncomplete` (agents prêts < nœuds) et `FalcoMuet` (aucun événement depuis N heures). RB-260 complété.
+**Prévention.** Deux alertes « méta » ([`fichiers/M26-E37/observabilite/regles/falco.yaml`](fichiers/M26-E37/observabilite/regles/falco.yaml)) : `FalcoCouvertureIncomplete` (agents prêts < nœuds) et `FalcoMuet` (aucun événement depuis N heures). RB-260 complété.
 
 **Explications.** Une détection passe par quatre maillons : l'agent sur le bon nœud, la règle chargée et active, la priorité qui la retient, l'acheminement. Un détecteur muet est pire qu'absent : il donne un faux sentiment de sécurité.
 
@@ -323,7 +326,7 @@ admin@adm01:~$ ssh mon01 'systemd-analyze security node_exporter; systemctl cat 
 ProtectSystem=strict
 ```
 
-Sans `ReadWritePaths`, le service ne peut plus écrire (collecteur *textfile*, fichiers d'état). **Correctif** : ajouter `ReadWritePaths=/var/lib/node_exporter` (ou le chemin réel) au drop-in, par le rôle.
+Sans `ReadWritePaths`, le service ne peut plus écrire (collecteur *textfile*, fichiers d'état). **Correctif** : ajouter `ReadWritePaths=/var/lib/prometheus/node-exporter` (dossier du collecteur *textfile*, M21) au drop-in, par le rôle.
 
 **Clôture** : service `active`, MAC toujours en place, `lab/bin/check 26 39`, `--annuler`.
 
@@ -364,7 +367,13 @@ NAME                       AGE
 wb-pare-feu-hote-essai     6m
 ```
 
-Une `CiliumClusterwideNetworkPolicy` avec `nodeSelector` sur `k8s-w03` autorise 10250 et 4244 mais **oublie** la santé 4240 : le nœud devient « injoignable » pour Cilium. **Démarche** : repasse d'abord le nœud en `policyAuditMode` et lis `hubble observe --verdict AUDIT` pour voir ce qui **serait** refusé ; puis **correctif** : retirer la politique d'essai (elle est hors Git) et, si un pare-feu d'hôte est voulu, le coder dans `plateforme/k8s/cilium/hote/` avec **tous** les flux (10250, 4240, 51871/UDP, 8472 si tunnel, 6443/8443, 179). Voir [`fichiers/M26-E40/k8s/cilium/hote/pare-feu-noeuds.yaml`](fichiers/M26-E40/k8s/cilium/hote/pare-feu-noeuds.yaml).
+```
+admin@adm01:~$ kubectl get nodes -L medisphere.internal/pare-feu-hote
+NAME       STATUS   …   PARE-FEU-HOTE
+k8s-w03    Ready    …                      # les autres nœuds : oui
+```
+
+Lucas a voulu « essayer une version resserrée » sur `k8s-w03` : il a retiré l'étiquette `medisphere.internal/pare-feu-hote` (les politiques `hote-*` d'E27 ne sélectionnent plus ce nœud) et posé à la main une `CiliumClusterwideNetworkPolicy` à `nodeSelector` `kubernetes.io/hostname: k8s-w03` qui reprend leurs flux… **sauf** la santé Cilium (4240/TCP et l'écho ICMP depuis `remote-node`/`health`). Dès qu'une politique d'hôte sélectionne un nœud, tout ce qu'elle n'autorise pas est refusé : les sondes de santé des autres agents échouent, le nœud devient « injoignable » (`cilium-health status`, `cilium_unreachable_nodes`). **Démarche** : `kubectl get ccnp` et `-L medisphere.internal/pare-feu-hote` montrent l'écart avec `plateforme/k8s` ; `hubble observe --verdict DROPPED --node k8s-w03 --port 4240` le confirme. **Correctif** : retirer la politique d'essai (hors Git) et remettre l'étiquette par `cluster/noeuds.yaml` (`task` d'E27, ou `kubectl label node k8s-w03 medisphere.internal/pare-feu-hote=oui` puis vérifier que Git dit la même chose) ; les flux de référence sont ceux de [`hote-commun.yaml`](fichiers/M26-E27/k8s/composants/cilium/hote/hote-commun.yaml) et [`hote-travailleurs.yaml`](fichiers/M26-E27/k8s/composants/cilium/hote/hote-travailleurs.yaml). Toute variante d'une politique d'hôte s'essaie d'abord en `policyAuditMode` sur un nœud (RB-264) ; retirer l'étiquette est un geste de **retour arrière** (étape 2 de RB-264 : le nœud n'est alors plus filtré du tout), pas un moyen d'essayer une autre politique.
 
 **Variante 2 — nftables local qui filtre WireGuard.**
 
@@ -446,7 +455,7 @@ Cet apiserver vérifie les kubelets avec la **mauvaise** CA : une requête sur t
 
 **Clôture** : plus de CSR `Pending`, `kubectl logs/exec` partout, `lab/bin/check 26 41`, `--annuler`.
 
-**Prévention.** Alerte sur une CSR `kubelet-serving` `Pending` depuis plus de N minutes ([`fichiers/M26-E41/politiques/observabilite/regles/kubelets.yaml`](fichiers/M26-E41/politiques/observabilite/regles/kubelets.yaml)) ; alerte sur l'expiration des certificats de service ; un seul nœud de contrôle modifié à la fois.
+**Prévention.** Alerte sur une CSR `kubelet-serving` `Pending` depuis plus de N minutes ([`fichiers/M26-E41/observabilite/regles/kubelets.yaml`](fichiers/M26-E41/observabilite/regles/kubelets.yaml)) ; alerte sur l'expiration des certificats de service ; un seul nœud de contrôle modifié à la fois.
 
 **Explications.** `kubectl logs/exec` ouvre une connexion TLS apiserver → kubelet 10250 ; l'apiserver vérifie le certificat **de service** du kubelet via `--kubelet-certificate-authority`. Sans certificat signé (CSR non approuvée), sans horloge juste, ou avec une mauvaise CA, la poignée de main échoue.
 
@@ -481,7 +490,7 @@ admin@adm01:~$ kubectl -n wb-pannes label pod <pod> medisphere.internal/quaranta
 admin@adm01:~$ hubble observe --namespace wb-pannes --pod <pod> --last 10   # plus de sortie
 ```
 
-La `CiliumClusterwideNetworkPolicy` `quarantaine` (posée en M26-E33, [`fichiers/M26-E42/k8s/cilium/hote/quarantaine.yaml`](fichiers/M26-E42/k8s/cilium/hote/quarantaine.yaml)) sélectionne `medisphere.internal/quarantaine: "oui"` et coupe entrée et sortie. On isole **avant** d'éradiquer, sinon une persistance relance le pod sur un autre.
+La `CiliumClusterwideNetworkPolicy` `quarantaine` (posée en M26-E33, [`fichiers/M26-E33/k8s/composants/reseau/politiques/quarantaine.yaml`](fichiers/M26-E33/k8s/composants/reseau/politiques/quarantaine.yaml)) sélectionne `medisphere.internal/quarantaine: "oui"` et coupe entrée et sortie. On isole **avant** d'éradiquer, sinon une persistance relance le pod sur un autre.
 
 **3. Collecter (avant de supprimer).**
 
@@ -506,7 +515,7 @@ admin@adm01:~$ kubectl -n wb-pannes get pods        # plus aucun pod de l'incide
 
 Les trois variantes : un mineur factice (processus qui dort) ; + une « exfiltration » factice (écriture locale jamais envoyée) ; + une persistance par `CronJob`. La persistance exige de supprimer **aussi** le CronJob, sinon le pod revient chaque minute.
 
-**5. Rétablir et rédiger.** Retire la quarantaine une fois l'espace sain ; écris **RB-262** ([`fichiers/M26-E42/medisphere/docs/securite/durcissement/runbooks/RB-262-reponse-incident-conteneur.md`](fichiers/M26-E42/medisphere/docs/securite/durcissement/runbooks/RB-262-reponse-incident-conteneur.md)) et un journal `INC-5342`.
+**5. Rétablir et rédiger.** Retire la quarantaine une fois l'espace sain ; complète **RB-262** (celui d'E33 : [`fichiers/M26-E33/…/RB-262-reponse-incident-conteneur.md`](fichiers/M26-E33/medisphere/docs/securite/durcissement/runbooks/RB-262-reponse-incident-conteneur.md)) avec les ajouts de l'incident ([`RB-262-reponse-incident-conteneur.extrait-M26-E42.md`](fichiers/M26-E42/medisphere/docs/securite/durcissement/runbooks/RB-262-reponse-incident-conteneur.extrait-M26-E42.md)) ; journal `docs/kubernetes/journal/AAAA-MM-JJ-INC-5342.md` et post-mortem `docs/kubernetes/post-mortems/AAAA-MM-JJ-INC-5342.md`.
 
 **Clôture** : `lab/bin/check 26 42`, `--annuler`.
 

@@ -4,8 +4,8 @@
 # break-E37.sh — M26-E37 « Panne : Falco est muet »
 #
 # Falco ne détecte (ou n'achemine) plus rien. Toutes les variantes passent par une MR de lucas.martin
-# dans plateforme/politiques (valeurs du chart falco/values.yaml, ou falco/regles-medisphere.yaml) et ne
-# touchent jamais kube-system, kyverno, argocd ni cilium :
+# (valeurs du chart : plateforme/gitops, valeurs/falco/values.yaml ; règles : plateforme/politiques,
+# falco/regles-medisphere.yaml, clé customRules) et ne touchent jamais kube-system, kyverno, argocd ni cilium :
 #   1. un nodeSelector ajouté au DaemonSet exclut les travailleurs : Falco ne tourne plus là où sont les
 #      charges applicatives ;
 #   2. une règle de MédiSphère désactivée par une surcharge (« - rule: … enabled: false ») ;
@@ -18,34 +18,31 @@ source "$WB_ROOT/lab/lib/pannes-lib.sh"
 # shellcheck source=_m26-commun.sh
 source "$WB_ROOT/modules/26-durcissement/corrige/pannes/_m26-commun.sh"
 
-_E37_VALEURS=falco/values.yaml
+_E37_VALEURS=valeurs/falco/values.yaml   # plateforme/gitops (M26-E08, E19)
 _E37_REGLES=falco/regles-medisphere.yaml
 
 _e37_t1() {
-  yq '.falco.nodeSelector = {"node-role.kubernetes.io/control-plane": ""}
-      | .falco.nodeSelector | head_comment = "PLAT-2737 (Lucas) : limiter Falco aux nœuds de contrôle (essai)"'
+  yq '.nodeSelector = {"node-role.kubernetes.io/control-plane": ""}
+      | .nodeSelector head_comment = "PLAT-2737 (Lucas) : limiter Falco aux nœuds de contrôle (essai)"'
 }
-_e37_i1() { yq 'del(.falco.nodeSelector)'; }
+_e37_i1() { yq 'del(.nodeSelector)'; }
 _e37_t3() {
-  yq '(.falcosidekick.config.alertmanager.hostport) = "http://kps-alertmanager.supervision:9095"'
+  yq '.falcosidekick.config.alertmanager.hostport |= sub(":9093$"; ":9095")'
 }
 _e37_i3() {
-  yq '(.falcosidekick.config.alertmanager.hostport) = "http://kps-alertmanager.supervision:9093"'
+  yq '.falcosidekick.config.alertmanager.hostport |= sub(":9095$"; ":9093")'
 }
-_e37_t4() { yq '.falco.falco.priority = "critical"'; }
-_e37_i4() { yq '.falco.falco.priority = "notice"'; }
-# v2 : désactiver une règle MédiSphère par une surcharge en fin de fichier de règles.
+_e37_t4() { yq '.falco.priority = "critical"'; }
+_e37_i4() { yq '.falco.priority = "notice"'; }
+# v2 : désactiver une règle MédiSphère par une surcharge ajoutée à la fin du bloc customRules.
+_E37_REGLE="MédiSphère — shell interactif dans un conteneur applicatif"
 _e37_t2() {
-  cat
-  cat <<'EOF'
-# PLAT-2737 (Lucas) : règle trop bruyante, désactivée le temps d'un réglage
-- rule: Shell interactif dans un conteneur applicatif
-  enabled: false
-EOF
+  R="$_E37_REGLE" yq '.customRules["regles-medisphere.yaml"] += "\n\n# PLAT-2737 (Lucas) : règle trop bruyante, désactivée le temps d un réglage\n- rule: " + strenv(R) + "\n  enabled: false"'
 }
 _e37_i2() {
-  grep -v -F 'PLAT-2737 (Lucas) : règle trop bruyante' | awk '
-    /^- rule: Shell interactif dans un conteneur applicatif$/ { buf=$0; getline n; if (n ~ /enabled: false/) { next } else { print buf; print n; next } }
+  grep -v -F 'PLAT-2737 (Lucas) : règle trop bruyante' | awk -v r="- rule: $_E37_REGLE" '
+    { t = $0; sub(/^[ ]+/, "", t) }
+    t == r { buf = $0; if ((getline n) > 0) { if (n ~ /^[ ]+enabled: false/) next; print buf; print n; next } }
     { print }'
 }
 
@@ -59,8 +56,10 @@ _e37_effet() {
       dispo="$(wb_kubectl get nodes -l '!node-role.kubernetes.io/control-plane' -o name 2>/dev/null | wc -l)"
       [[ -n "$prog" ]] && ((prog < dispo))
       ;;
-    2) _e37_falco_cm | jq -e '[.items[].data // {} | to_entries[] | .value | select(test("Shell interactif dans un conteneur applicatif") and test("enabled: *false"))] | length > 0' >/dev/null 2>&1 ;;
-    3) wb_kubectl -n "$_M26_NS_FALCO" get deploy,cm -o json 2>/dev/null | grep -q '9095' ;;
+    2) _e37_falco_cm | jq -e '[.items[].data // {} | to_entries[] | .value | select(test("shell interactif dans un conteneur applicatif"; "i") and test("enabled: *false"))] | length > 0' >/dev/null 2>&1 ;;
+    # La configuration de falcosidekick est dans un Secret (variables d'environnement) : on la décode.
+    3) wb_kubectl -n "$_M26_NS_FALCO" get secret -o json 2>/dev/null \
+         | jq -r '.items[].data // {} | .[] | @base64d' 2>/dev/null | grep -q 'kps-alertmanager.*:9095' ;;
     4) _e37_falco_cm | jq -e '[.items[].data["falco.yaml"] // "" | select(test("(?m)^priority: *critical"))] | length > 0' >/dev/null 2>&1 ;;
   esac
 }
@@ -69,10 +68,10 @@ _m26E37_une() {
   local n="$1"
   m26_ecrire E37 variante "$n"
   case "$n" in
-    1) m26_git_transformer E37 val "$_M26_PROJ_POL" "$_E37_VALEURS" "chore(falco): limiter aux nœuds de contrôle (M26-E37)" _e37_t1 || return ;;
+    1) m26_git_transformer E37 val "$_M26_PROJ_GITOPS" "$_E37_VALEURS" "chore(falco): limiter aux nœuds de contrôle (M26-E37)" _e37_t1 || return ;;
     2) m26_git_transformer E37 reg "$_M26_PROJ_POL" "$_E37_REGLES" "chore(falco): désactiver une règle bruyante (M26-E37)" _e37_t2 || return ;;
-    3) m26_git_transformer E37 val "$_M26_PROJ_POL" "$_E37_VALEURS" "fix(falco): corriger le port d'Alertmanager (M26-E37)" _e37_t3 || return ;;
-    4) m26_git_transformer E37 val "$_M26_PROJ_POL" "$_E37_VALEURS" "chore(falco): ne garder que les critiques (M26-E37)" _e37_t4 || return ;;
+    3) m26_git_transformer E37 val "$_M26_PROJ_GITOPS" "$_E37_VALEURS" "fix(falco): corriger le port d'Alertmanager (M26-E37)" _e37_t3 || return ;;
+    4) m26_git_transformer E37 val "$_M26_PROJ_GITOPS" "$_E37_VALEURS" "chore(falco): ne garder que les critiques (M26-E37)" _e37_t4 || return ;;
   esac
   m26_journal E37 "variante $n posée"
   m26_attendre 300 _e37_effet "$n" || { _e37_defaire "$n"; return 10; }

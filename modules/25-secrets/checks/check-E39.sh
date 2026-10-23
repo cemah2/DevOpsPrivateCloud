@@ -10,8 +10,8 @@
 # Lecture seule : sys/health et sys/leader sans jeton, AppRole wb-checks (Raft, autopilot : lectures
 # ajoutées au M25-E24), SSH en consultation (systemctl, nft list), GitLab en lecture.
 
-# shellcheck source=_m25-expert-b.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m25-expert-b.sh"
+# shellcheck source=_m25-expert.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m25-expert.sh"
 
 title "M25-E39 — Panne : la grappe n'a plus de leader"
 require_cmd curl jq
@@ -53,4 +53,4 @@ for _m25x_e39_n in "${_M25P_NOEUDS[@]}"; do
     'r="$(sudo -n nft list ruleset)" && [ -n "$r" ] && ! printf "%s\n" "$r" | grep -E "8201" | grep -Eq "(drop|reject)"'
 done
 
-check_cmd "journal de diagnostic INC-5239 sur main (plateforme/medisphere)" _m25y_journal INC-5239
+check_cmd "journal de diagnostic INC-5239 sur main (plateforme/medisphere)" _m25x_journal INC-5239

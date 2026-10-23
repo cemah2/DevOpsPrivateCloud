@@ -10,8 +10,8 @@
 # prochain redémarrage) ; que la MAP n'utilise pas namespaceObject dans ses matchConditions (elle ne
 # ferait rien) ; les fichiers sur main.
 
-# shellcheck source=_m26-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel-c.sh"
+# shellcheck source=_m26-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel.sh"
 
 title "M26-E17 — Politiques d'admission natives : ValidatingAdmissionPolicy et MutatingAdmissionPolicy"
 require_cmd jq kubectl curl

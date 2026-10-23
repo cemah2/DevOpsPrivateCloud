@@ -9,8 +9,8 @@
 # comparaison écrite.
 # Lecture seule : rien n'est déchiffré (le check n'a aucun droit sur la clé de transit).
 
-# shellcheck source=_m25-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel-c.sh"
+# shellcheck source=_m25-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel.sh"
 
 title "M25-E18 — Des secrets chiffrés dans Git : SOPS, age et transit"
 require_cmd jq yq curl

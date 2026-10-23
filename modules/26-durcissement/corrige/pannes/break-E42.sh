@@ -7,10 +7,11 @@
 # calcul, aucune sortie réelle. Un pod témoin de l'espace wb-pannes imite les SIGNES qu'un conteneur
 # compromis laisse, pour que l'apprenant les détecte (Falco/Tetragon), isole, collecte, éradique et
 # rétablisse. Ce que fait le témoin, et rien d'autre :
-#   - un processus au nom trompeur (« kdevtmpfsi », nom de mineur connu) qui ne fait que DORMIR en
-#     boucle : zéro calcul, zéro charge CPU ;
+#   - un processus au nom trompeur (« kdevtmpfsi », nom de mineur connu) : une copie de busybox lancée
+#     comme « sleep », qui ne fait que DORMIR en boucle : zéro calcul, zéro charge CPU ;
 #   - il lit son propre jeton de compte de service (cat … > /dev/null) : « lecture inattendue du jeton » ;
-#   - il tente une connexion TCP vers un « puits » interne qui NE RÉPOND PAS (nom qui ne résout pas) :
+#   - il tente une connexion TCP vers un « puits » qui NE RÉPOND PAS (192.0.2.10, réseau de documentation
+#     RFC 5737, jamais routé ; le refus réseau par défaut de wb-pannes la jette de toute façon) :
 #     la tentative échoue toujours, rien n'est exfiltré ;
 #   - il copie /bin/sleep dans /tmp et l'exécute de là : « binaire exécuté depuis /tmp ».
 # Variantes : 1) le mineur factice ; 2) + exfiltration factice (la boucle écrit dans /tmp et « tente »
@@ -34,13 +35,16 @@ TOKEN=/var/run/secrets/kubernetes.io/serviceaccount/token
 while true; do
   # Signe 1 : lecture inattendue du jeton de compte de service (jeté).
   cat "$TOKEN" >/dev/null 2>&1
-  # Signe 2 : tentative de connexion vers un puits interne qui ne répond pas (échoue toujours).
-  nc -w 2 -z puits-exfiltration.wb-pannes.svc.cluster.local 9999 >/dev/null 2>&1
+  # Signe 2 : tentative de connexion vers un puits qui ne répond pas (192.0.2.10, RFC 5737 : jamais
+  # routé ; échoue toujours). Une adresse plutôt qu'un nom : l'appel connect() a bien lieu (Falco, Tetragon).
+  nc -w 2 -z 192.0.2.10 9999 >/dev/null 2>&1
   if [ "${WB_EXFIL:-0}" = 1 ]; then
     date >> /tmp/.wb-depot-incident 2>/dev/null   # « collecte » factice locale, jamais envoyée
   fi
   # Signe 3 : exécution d'un binaire depuis /tmp, qui ne fait que dormir (zéro calcul).
-  exec -a kdevtmpfsi /tmp/kdevtmpfsi 30 2>/dev/null || sleep 30
+  # Le fichier s'appelle kdevtmpfsi (c'est ce nom que voient ps, Falco et Tetragon) ; argv[0] = « sleep »
+  # pour que busybox lance son applet sleep. Sous-shell : la boucle continue quoi qu'il arrive.
+  ( exec -a sleep /tmp/kdevtmpfsi 30 ) 2>/dev/null || sleep 30
 done
 SH
 
@@ -57,7 +61,7 @@ spec:
   replicas: 1
   selector: {matchLabels: {app.kubernetes.io/name: wb-mineur}}
   template:
-    metadata: {labels: {app.kubernetes.io/name: wb-mineur, medisphere.internal/equipe: plateforme}}
+    metadata: {labels: {app.kubernetes.io/name: wb-mineur, medisphere.internal/equipe: plateforme, medisphere.internal/panne: M26-E42}}
     spec:
       securityContext: {runAsNonRoot: true, runAsUser: 65534, runAsGroup: 65534, seccompProfile: {type: RuntimeDefault}}
       containers:
@@ -84,9 +88,10 @@ spec:
   schedule: "*/1 * * * *"
   concurrencyPolicy: Forbid
   jobTemplate:
+    metadata: {labels: {medisphere.internal/panne: M26-E42}}
     spec:
       template:
-        metadata: {labels: {app.kubernetes.io/name: wb-persistance, medisphere.internal/equipe: plateforme}}
+        metadata: {labels: {app.kubernetes.io/name: wb-persistance, medisphere.internal/equipe: plateforme, medisphere.internal/panne: M26-E42}}
         spec:
           restartPolicy: Never
           securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
@@ -136,9 +141,9 @@ symptome_E42() {
   wb_symptome "Ticket INC-5342 — De : Sophie Laurent (priorité P1)" \
     "Falco (ou Tetragon) remonte un comportement anormal dans un pod de wb-pannes : un processus" \
     "« kdevtmpfsi », la lecture du jeton de compte de service par un processus inattendu, une tentative" \
-    "de sortie vers une adresse interne, un binaire exécuté depuis /tmp. Traite-le comme une" \
+    "de sortie vers une adresse inconnue, un binaire exécuté depuis /tmp. Traite-le comme une" \
     "compromission : détecte, ISOLE (quarantaine), collecte les preuves, éradique, rétablis, puis" \
-    "rédige RB-262. (Le pod est un témoin strictement inoffensif : il ne mine rien, n'exfiltre rien.)" \
+    "complète RB-262 (E33). (Le pod est un témoin strictement inoffensif : il ne mine rien, n'exfiltre rien.)" \
     "" \
     "Temps cible : 45 min. Contrôle : lab/bin/check 26 42"
 }

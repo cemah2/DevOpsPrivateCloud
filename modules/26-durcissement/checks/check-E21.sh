@@ -9,8 +9,8 @@
 # outils/audit-charges-sures.sh) pour les pods EN SERVICE de mediagenda-* et medidoc-* ; aucun échec
 # dans leurs rapports Kyverno ; Pod Security restricted imposé ; norme et outil versionnés.
 
-# shellcheck source=_m26-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel-c.sh"
+# shellcheck source=_m26-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel.sh"
 
 title "M26-E21 — Des charges sûres par construction"
 require_cmd jq kubectl curl

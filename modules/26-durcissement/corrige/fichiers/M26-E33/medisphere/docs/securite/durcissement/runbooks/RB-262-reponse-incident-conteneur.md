@@ -9,7 +9,7 @@
 ## 0. Principes
 
 1. **Isoler sans détruire** : un pod supprimé, c'est la mémoire, les fichiers temporaires et les connexions perdus. On isole d'abord, on supprime en dernier.
-2. **Tracer chaque geste** : journal d'incident horodaté (`docs/securite/incidents/<AAAA-MM-JJ>-INC-NNNN.md`), qui a fait quoi, quand, avec quelle commande.
+2. **Tracer chaque geste** : journal d'incident horodaté (`docs/kubernetes/journal/<AAAA-MM-JJ>-INC-NNNN.md`, post-mortem dans `docs/kubernetes/post-mortems/`), qui a fait quoi, quand, avec quelle commande.
 3. **Ne rien installer dans le conteneur suspect** : on regarde de l'extérieur (kubelet, API, conteneur éphémère, nœud, journaux centraux).
 4. **Une preuve = un fichier + une empreinte SHA-256 + qui l'a collectée et quand**, déposée dans le compartiment `preuves` (versionné, identité sans suppression).
 

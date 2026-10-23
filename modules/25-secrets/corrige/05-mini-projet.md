@@ -6,7 +6,7 @@
 
 ### M25-E46 — Mini-projet : les secrets de MédiSphère v1
 
-Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, les points de contrôle de chaque étape, la préparation de la démonstration et la **grille de revue** de Claire, Karim, Sophie, Nadia et Julien. Fichiers : fiche de livraison [`secrets-v1.md`](fichiers/M25-E46/medisphere/docs/securite/secrets/secrets-v1.md), scénarios de [démonstration](fichiers/M25-E46/medisphere/docs/securite/secrets/demonstration-secrets-v1.md), forme finale de l'[inventaire](fichiers/M25-E46/medisphere/docs/securite/secrets/inventaire-secrets.md.extrait).
+Il n'y a pas de solution unique : ce corrigé donne un **plan de travail** éprouvé, les points de contrôle de chaque étape, la préparation de la démonstration et la **grille de revue** de Claire, Karim, Sophie, Nadia et Julien. Fichiers : politique [`wb-checks.hcl`](fichiers/M25-E46/secrets/politiques/wb-checks.hcl) dans sa version finale (fusion des extraits de E08, E10, E17, E24, E28, E41 et E44 : c'est celle que `plateforme/secrets` doit porter à l'étiquette `secrets-v1`) ; fiche de livraison [`secrets-v1.md`](fichiers/M25-E46/medisphere/docs/securite/secrets/secrets-v1.md), scénarios de [démonstration](fichiers/M25-E46/medisphere/docs/securite/secrets/demonstration-secrets-v1.md), forme finale de l'[inventaire](fichiers/M25-E46/medisphere/docs/securite/secrets/inventaire-secrets.md.extrait).
 
 **Solution**
 

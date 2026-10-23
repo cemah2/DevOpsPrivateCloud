@@ -9,8 +9,8 @@
 # blocage ; métriques collectées ; événements dans le locataire audit (dont un essai observer-exec) et
 # plus dans le locataire plateforme ; les requêtes de corrélation versionnées.
 
-# shellcheck source=_m26-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel-c.sh"
+# shellcheck source=_m26-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m26-operationnel.sh"
 
 title "M26-E20 — Tetragon : observer processus, fichiers et réseau"
 require_cmd jq kubectl curl

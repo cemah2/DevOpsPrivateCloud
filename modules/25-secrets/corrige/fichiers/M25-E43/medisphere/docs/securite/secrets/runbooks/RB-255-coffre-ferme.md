@@ -51,13 +51,22 @@ avant toute autre action.
 
 ## 4. Plus de leader
 
-- Compter les nœuds **vivants** : à trois, il en faut deux. Remettre en service le nœud arrêté
-  (`qm start`, puis `systemctl start openbao`) : la grappe réélit seule.
-- Un pair retiré de la configuration Raft (`list-peers` à deux) : le nœud retiré doit **rejoindre**
-  (`bao operator raft join` ou `retry_join` au démarrage) — jamais réinitialisé seul.
-- Horloges : `chronyc tracking` sur chaque nœud ; flux 8201 entre nœuds : `nft list ruleset`.
-- Dernier recours, perte définitive de deux nœuds : récupération par `peers.json` (documentation
-  *Raft — outage recovery*), **avec** Karim et un instantané récent vérifié ; jamais seul la nuit.
+- Compter les nœuds **vivants qui se parlent** sur le port de grappe 8201 : à trois électeurs, il en
+  faut deux. Ranger chaque nœud dans une case (journal d'`openbao`, erreurs vers les pairs) :
+  *arrêté* (`connection refused`, `systemctl status` : `inactive`) ou *vivant mais isolé*
+  (`i/o timeout`).
+- Nœud arrêté : `systemctl start openbao` (VM arrêtée : `qm start` d'abord) ; il se descelle seul par
+  `kms01` et la grappe réélit en quelques secondes.
+- Nœud isolé : `nft list ruleset` **complet** ; une table ou une règle hors de `filtre_local` ne vient
+  pas de Git → la noter au post-mortem, la retirer, puis rejouer `pare_feu_local`
+  (`playbooks/coffre.yml --check --diff` vide). Chercher la même chose sur les deux autres nœuds.
+- Un geste à la fois : après le premier, le service revient (VIP 200) ; `autopilot state` dit si la
+  **marge** est revenue (tolérance ≥ 1). Sinon, il reste un nœud à rendre.
+- Jamais `raft remove-peer` pour « fabriquer une majorité », jamais `operator init` ni effacement :
+  aucune donnée n'est perdue tant qu'on ne touche pas aux nœuds.
+- Dernier recours, perte **définitive** de deux nœuds : récupération par `peers.json` (documentation
+  *Raft — outage recovery*, fiche `maintenance-grappe.md`), **avec** Karim et un instantané récent
+  vérifié ; jamais seul la nuit.
 
 ## 5. L'auto-descellement échoue
 

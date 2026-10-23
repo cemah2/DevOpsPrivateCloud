@@ -14,7 +14,7 @@
   en refus sur recette/prod (signature, registres, digest, limites, étiquettes, identifiants URL,
   seccomp, NetworkPolicy par défaut) ; VAP/MAP natives en complément ; tests `kyverno test` en CI.
 - **Détection** : Falco (tous les nœuds) + Tetragon, acheminés vers Alertmanager et Loki (`audit`).
-- **Réseau** : chiffrement WireGuard entre nœuds ; pare-feu d'hôte Cilium (RB-264) ; quarantaine prête.
+- **Réseau** : chiffrement WireGuard du trafic des pods (M15) et des nœuds (`nodeEncryption`, E26) ; pare-feu d'hôte Cilium (RB-264) ; quarantaine prête.
 - **Kubelets** : certificats de service vérifiés, approbation par kubelet-csr-approver.
 - **Réponse à incident** : RB-262 répété ; preuves dans `s3-01/preuves`.
 

@@ -7,8 +7,8 @@
 # Applications, espaces, CRD, politique OpenBao d'essai, Secret en clair.
 # Lecture seule. Une absence se prouve par « NotFound » (un refus d'accès n'est pas une absence).
 
-# shellcheck source=_m25-operationnel-c.sh
-source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel-c.sh"
+# shellcheck source=_m25-operationnel.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_m25-operationnel.sh"
 
 title "M25-E19 — Comparer : Sealed Secrets et Secrets Store CSI"
 require_cmd jq yq kubectl curl
