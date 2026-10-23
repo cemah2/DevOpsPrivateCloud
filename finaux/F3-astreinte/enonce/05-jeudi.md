@@ -12,7 +12,7 @@ Deux pièges propres à la journée :
 
 ### F3-S10 — Jeudi : les secrets ne suivent plus  `BF` `★★★★`
 
-> **Incident INC-5910** — *De : Julien Petit, jeudi 9 h 40*
+> **Ticket INC-5910** — *De : Julien Petit, jeudi 9 h 40*
 > « En recette, Argo CD montre `mediagenda-recette` en *Degraded* à cause d'un `ExternalSecret`, et nos tests de bout en bout commencent à tomber avec `password authentication failed for user "v-…"`. Pas tout le temps, et de plus en plus. On n'a rien livré depuis hier. La prod a l'air d'aller, mais elle utilise le même coffre, non ? »
 
 **Objectifs pédagogiques**
@@ -35,13 +35,13 @@ Deux pièges propres à la journée :
 2. Diagnostique en partant du client : où la chaîne se coupe-t-elle ? Sépare l'état du coffre (grappe, nœuds) de l'état du **chemin** vers le coffre, et l'authentification de l'autorisation.
 3. Rétablis la recette **et** protège les autres environnements exposés à la même cause. Toute correction passe par le dépôt qui fait foi (`plateforme/secrets`, `plateforme/ansible`, `plateforme/k8s`) et sa CI ; un geste manuel urgent est permis s'il est consigné, puis rattrapé par le code.
 4. Vérifie que les identifiants se renouvellent de nouveau (un bail neuf, un `ExternalSecret` rafraîchi après ta réparation) et que l'API répond.
-5. **Prévention** : ce qui aurait détecté la cause avant Julien, et ce qui l'empêcherait (politique, alerte, procédure) ; au moins une action concrète, en MR ou en ticket `PLAT-33xx` daté.
+5. **Prévention** : ce qui aurait détecté la cause avant Julien, et ce qui l'empêcherait (politique, alerte, procédure) ; au moins une action concrète, en MR ou en ticket `PLAT-3310…` daté. Écris **RB-336** « Les secrets ne suivent plus » (`docs/exploitation/runbooks/`).
 
 **Critères de réussite**
 - [ ] La VIP du coffre répond (nœud actif, descellé) ; un seul nœud la porte ; un nœud actif et deux en attente.
 - [ ] Le rôle `eso-mediagenda-recette` et sa politique sont ceux de `plateforme/secrets` ; le magasin et les générateurs de `mediagenda-recette` visent la VIP.
 - [ ] L'`ExternalSecret` `mediagenda-db-api` est prêt et a été rafraîchi depuis moins d'un cycle ; `/pret` de la recette répond 200.
-- [ ] INC-5910 est ouvert, suivi (au moins deux messages d'état) et clos dans la main courante ; un courriel d'état au moins est parti.
+- [ ] INC-5910 est ouvert, suivi (au moins deux messages d'état) et clos dans la main courante ; un courriel d'état au moins est parti ; RB-336 est publié.
 
 **Vérification** : `lab/bin/check F3 10`
 
@@ -66,7 +66,7 @@ Sur les nœuds du coffre, la VIP est l'affaire de keepalived et d'un script de s
 
 ### F3-S11 — Jeudi : la moitié des noms ne répond plus  `BF` `★★★★`
 
-> **Incident INC-5911** — *De : Nadia Roussel, jeudi 14 h 05*
+> **Ticket INC-5911** — *De : Nadia Roussel, jeudi 14 h 05*
 > « La moitié des noms ne répond plus, et pas toujours les mêmes. » *(Le détail de ce que voient les utilisateurs s'affiche à l'injection.)*
 
 **Objectifs pédagogiques**
@@ -89,13 +89,13 @@ Sur les nœuds du coffre, la VIP est l'affaire de keepalived et d'un script de s
 2. Reproduis de façon déterministe : quels noms, quelles adresses, depuis quels clients, par quel récurseur, par quelle passerelle.
 3. Trouve la cause et corrige-la par le code (rôle et pipeline Ansible). Si un geste manuel est inévitable, écris pourquoi aucun rôle ne le couvre, et rattrape-le par un contrôle.
 4. Vérifie depuis au moins trois sources (`adm01`, `mon01`, un pod) et sur **les deux** exemplaires de chaque élément redondant.
-5. **Prévention** : une sonde ou une alerte qui aurait vu l'exemplaire malade, et un contrôle de dérive pour ce qui a été modifié hors du code.
+5. **Prévention** : une sonde ou une alerte qui aurait vu l'exemplaire malade, et un contrôle de dérive pour ce qui a été modifié hors du code (tickets `PLAT-3311…`). Écris **RB-337** « Une partie des noms ne répond plus » (`docs/exploitation/runbooks/`).
 
 **Critères de réussite**
 - [ ] `dns01` et `dns02` résolvent **et valident** (drapeau `ad`) les noms de `par1` et de `apps.par1`.
 - [ ] Sur `gw01` et `gw02`, toute route vers une adresse de service vient de BGP et ne passe que par des nœuds du cluster ; aucune règle de pare-feu ne jette le BGP des nœuds ; toutes les sessions BGP de Cilium sont établies.
 - [ ] Les adresses de service principales (Gateway, Prometheus, Alertmanager, Loki) répondent depuis `adm01`.
-- [ ] INC-5911 est ouvert, suivi (au moins deux messages d'état) et clos dans la main courante ; un courriel d'état au moins est parti.
+- [ ] INC-5911 est ouvert, suivi (au moins deux messages d'état) et clos dans la main courante ; un courriel d'état au moins est parti ; RB-337 est publié.
 
 **Vérification** : `lab/bin/check F3 11`
 

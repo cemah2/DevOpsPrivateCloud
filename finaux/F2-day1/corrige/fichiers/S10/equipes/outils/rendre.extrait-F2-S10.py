@@ -1,8 +1,8 @@
 # plateforme/equipes — outils/rendre.py : CHANGEMENTS de F2-S10 (SEC-3210). EXTRAIT : quatre ajouts au
-# générateur de S02 ; le reste est inchangé. Tests correspondants : tests/test_rendre.py (cas « prestataire
-# hébergé » : rendu de l'espace, refus d'un hébergement pour une équipe interne, refus d'un espace hors du
-# préfixe du locataire hôte). config/plateforme.yaml : ajouter « outils/gitlab-prestataires.d/ » aux
-# chemins possédés de la cible identite.
+# générateur de S02 ; le reste est inchangé. Tests correspondants : tests/test_rendre.extrait-F2-S10.py
+# (rendu de l'espace, refus d'un hébergement pour une équipe interne, refus d'un espace hors du préfixe du
+# locataire hôte), à ajouter à tests/test_rendre.py. config/plateforme.yaml : ajouter
+# « outils/gitlab-prestataires.d/ » aux chemins possédés de la cible identite.
 
 # 1. normaliser() — après « "kubernetes": k is not None, » :
 #        "hebergement": s.get("hebergement"),

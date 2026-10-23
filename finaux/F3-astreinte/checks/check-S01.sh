@@ -68,7 +68,7 @@ _f3s_doc_contient "$_f3d_s01_trousse" 'RB-240' "trousse : comptes de bris de gla
 _f3s_doc_contient "$_f3d_s01_trousse" '(bris de glace|RB-240).*20[0-9]{2}-[0-9]{2}-[0-9]{2}|20[0-9]{2}-[0-9]{2}-[0-9]{2}.*(bris de glace|RB-240)' \
   "trousse : date du dernier essai en lecture des comptes de bris de glace"
 _f3s_doc_contient "$_f3d_s01_trousse" 'watchdog|dead man' "trousse : vérification du dead man's switch de mon01"
-_f3s_doc_contient "$_f3d_s01_trousse" 'lab/bin/check F3 1|contr[ôo]le de sant[ée]' "trousse : contrôle de santé de début de journée"
+_f3s_doc_contient "$_f3d_s01_trousse" 'lab/bin/check F3 1|contr(ô|o)le de sant(é|e)' "trousse : contrôle de santé de début de journée"
 
 # --- 6. Main courante ouverte ---------------------------------------------------------------------------
 _f3d_s01_journal() { _f3s_arbre "$_f3s_doc/journal" | grep -Eq '/20[0-9]{2}-[0-9]{2}-[0-9]{2}\.md$'; }

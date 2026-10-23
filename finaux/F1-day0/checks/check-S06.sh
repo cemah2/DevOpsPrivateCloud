@@ -38,10 +38,14 @@ check_cmd "NetBox : plate-forme « $_f1_s06_profil » déclarée" \
   bash -c 'jq -e ".count == 1" <<<"$1" >/dev/null' _ "$(netbox_api "dcim/platforms/?slug=$_f1_s06_profil" 2>/dev/null)"
 
 # --- L'essai : servi par pxe01, installé, puis retiré -------------------------------------------
-check_cmd "$_f1_s06_pxe : le script iPXE de la machine d'essai ($_f1_s06_mac) a été servi (HTTP 200)" \
-  _f1p_hote "$_f1_s06_pxe" "zgrep -h 'GET /ipxe/mac-$_f1_s06_mac_tirets.ipxe' /var/log/nginx/pxe-acces.log* | grep -q '\" 200 '"
-check_cmd "$_f1_s06_pxe : le fichier de réponse de l'installation d'essai a été téléchargé (HTTP 200)" \
-  _f1p_hote "$_f1_s06_pxe" "zgrep -h 'GET /preseed/$_f1_s06_nom\\.' /var/log/nginx/pxe-acces.log* | grep -q '\" 200 '"
+if remote "$_f1_s06_pxe" true </dev/null >/dev/null 2>&1; then
+  check_cmd "$_f1_s06_pxe : le script iPXE de la machine d'essai ($_f1_s06_mac) a été servi (HTTP 200)" \
+    _f1p_hote "$_f1_s06_pxe" "zgrep -h 'GET /ipxe/mac-$_f1_s06_mac_tirets.ipxe' /var/log/nginx/pxe-acces.log* | grep -q '\" 200 '"
+  check_cmd "$_f1_s06_pxe : le fichier de réponse de l'installation d'essai a été téléchargé (HTTP 200)" \
+    _f1p_hote "$_f1_s06_pxe" "zgrep -h 'GET /preseed/$_f1_s06_nom\\.' /var/log/nginx/pxe-acces.log* | grep -q '\" 200 '"
+else
+  check_cmd "$_f1_s06_pxe joignable en SSH depuis adm01 (ses journaux d'accès prouvent l'essai : allume-la le temps du contrôle)" false
+fi
 # Absente = pve01 répond (liste des VMs lue) ET le VMID n'y figure pas : jamais « absente » par défaut.
 _f1_s06_vm_absente() {
   local l

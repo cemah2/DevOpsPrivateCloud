@@ -9,7 +9,7 @@
 # OpenBao par bao_api (métadonnées, jamais une valeur) et sys/health sans jeton, RabbitMQ par
 # rabbitmq_api (étiquette monitoring), Alertmanager en GET, dig, SSH « admin » sur les passerelles et
 # les nœuds du coffre (commandes de lecture : ip, nft list avec sudo -n), S3 en LISTE seulement
-# (compartiment preuves, identité de lecture), état local des pannes (~/.local/state/workbook/F3-SXX/)
+# (compartiment preuves, identité de dépôt du M26 en liste seulement), état local des pannes (~/.local/state/workbook/F3-SXX/)
 # en lecture.
 # Rappel : les checks tournent sous « set -euo pipefail » ; tout ce qui peut échouer est protégé.
 #
@@ -17,7 +17,8 @@
 #   WB_F3_RECETTE_URL            MédiAgenda de recette (https://mediagenda-recette.apps.par1.medisphere.internal)
 #   WB_F3_PASSERELLES            passerelles de bordure (« gw01 gw02 »)
 #   WB_F3_S11_CIBLES             « IP:port » joints depuis adm01 en S11 (Gateway, Prometheus, Alertmanager, Loki)
-#   WB_F3_S12_PREUVES_ENV        identité S3 de LECTURE du compartiment preuves (~/.config/workbook/s3-preuves-lecture.env)
+#   WB_F3_S12_PREUVES_ENV        identité S3 qui LISTE le compartiment preuves (~/.config/workbook/s3-preuves-depot.env,
+#                                celle de RB-262 / M26-E33 : écrire et lister, jamais supprimer ; le check ne fait que lister)
 #   WB_F3_S3_URL                 point d'accès S3 de s3-01 (https://s3-01.par1.medisphere.internal:8333)
 #   WB_F3_S13_SEUIL              messages en attente tolérés dans notifications (prod) après réparation (2000)
 #   WB_F3_PROJET_NOTIF           dépôt de déploiement de MédiNotif (medinotif/deploiement)
@@ -62,7 +63,11 @@ _f3f_secondes() {
 }
 
 # _f3f_code URL — code HTTP (000 si pas de réponse).
-_f3f_code() { curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" "$1" 2>/dev/null || echo 000; }
+_f3f_code() {
+  local c
+  c="$(curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" "$1" 2>/dev/null || true)"
+  echo "${c:-000}"
+}
 
 # _f3f_etat SXX CLÉ — valeur notée par l'injection (état local de la panne, lecture seule) ; vide sinon.
 _f3f_etat() {
@@ -72,6 +77,9 @@ _f3f_etat() {
 
 # _f3f_journal_cite INC 'regex' — une entrée de main courante de INC correspond à la regex (casse ignorée).
 _f3f_journal_cite() { _f3s_journal_lignes "$1" | grep -Eiq -- "$2"; }
+
+# _f3f_rb_present RB-NNN — un runbook docs/exploitation/runbooks/RB-NNN-*.md existe sur main.
+_f3f_rb_present() { _f3s_arbre "$_f3s_doc/runbooks" | grep -Eq "/$1([-_.].*)?\.md$"; }
 
 # ---------------------------------------------------------------------------------------------
 # GitLab (projets autres que plateforme/medisphere)
@@ -116,6 +124,8 @@ _f3f_ssh() { remote "$1" "$2" 2>/dev/null </dev/null || true; }
 
 # _f3f_bao_noeud HÔTE — code HTTP de /v1/sys/health du nœud (200 actif, 429 en attente).
 _f3f_bao_noeud() {
-  curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" \
-    "https://$1.par1.medisphere.internal:8200/v1/sys/health" 2>/dev/null || echo 000
+  local c
+  c="$(curl -s -o /dev/null -w '%{http_code}' --max-time "$WB_TIMEOUT" \
+    "https://$1.par1.medisphere.internal:8200/v1/sys/health" 2>/dev/null || true)"
+  echo "${c:-000}"
 }

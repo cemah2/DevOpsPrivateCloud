@@ -105,7 +105,7 @@ f=/etc/containerd/config.toml
 systemctl is-active --quiet containerd || exit 10
 systemctl show containerd -p KillMode | grep -q 'KillMode=process' || exit 10
 sauver "$f"
-printf '\n# Miroir interne pour les images de la plateforme (Lucas, PLAT-3306)\n[plugins."io.containerd.cri.v1.images".registry.mirrors."registry.par1.medisphere.internal"\n  endpoint = ["https://registry.par1.medisphere.internal"]\n' >> "$f"
+printf '\n# Miroir interne pour les images de la plateforme (Lucas, PLAT-3351)\n[plugins."io.containerd.cri.v1.images".registry.mirrors."registry.par1.medisphere.internal"\n  endpoint = ["https://registry.par1.medisphere.internal"]\n' >> "$f"
 cp "$f" "$WB_DIR/F3-S06.injecte-containerd"
 systemctl restart containerd >/dev/null 2>&1 || true
 journal "table de miroir mal fermée ajoutée à $f, containerd redémarré"

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq et yq entre apostrophes
 # break-S06.sh — F2-S06 : « les premiers pas qui coincent » (la recette de MédiVisio ne démarre plus).
 # ⚠️ CORRIGÉ : ce script révèle la panne. Lancé par « lab/bin/break F2 06 [--variante N] [--annuler] ».

@@ -58,7 +58,7 @@ fi
 
 # --- Documentation et étiquette -----------------------------------------------------------------------------
 check_cmd "docs/day0/recette-day0.md : contrôles, écarts légitimes, variables adaptées, décision" \
-  _f1c_doc '^recette-day0\.md$' 'lab/bin/check' '29 25' 'F1' '[ée]cart' 'variable|WB_'
+  _f1c_doc '^recette-day0\.md$' 'lab/bin/check' '29 25' 'F1' '(e|é)cart' 'variable|WB_'
 _f1_s14_tag() {
   gitlab_api "projects/$(_f1c_enc "$_f1c_projet_doc")/repository/tags/day0-v1" 2>/dev/null | jq -e '.name == "day0-v1"' >/dev/null 2>&1
 }

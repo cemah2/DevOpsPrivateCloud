@@ -21,7 +21,7 @@ spec:
   contact: julien.petit@medisphere.internal
   # Fin du contrat : expiration du principal Kerberos de chaque personne, des appartenances GitLab et
   # de la liaison RBAC. À adapter : trois mois après ta date de début.
-  expiration: <AAAA-MM-JJ-FIN-CONTRAT>
+  expiration: "<AAAA-MM-JJ-FIN-CONTRAT>"   # entre guillemets : une date YAML nue est lue comme une date
 
   personnes:
     - identifiant: marc.vidal
@@ -50,7 +50,7 @@ spec:
     locataire: mediagenda                 # le locataire hôte : Julien reste propriétaire de l'espace
     espace: mediagenda-axiomdev           # préfixe du locataire hôte + nom court du prestataire
     quota: {requests.cpu: "1", requests.memory: 2Gi, limits.memory: 3Gi, pods: "15", persistentvolumeclaims: "2", requests.storage: 10Gi}
-    role: prestataire-developpeur         # gabarit k8s/prestataire-role.yaml.j2 (ni Secrets, ni RBAC, ni exec)
+    role: prestataire-developpeur         # gabarit k8s/prestataire.yaml.j2 (ni Secrets, ni RBAC, ni exec)
     gitlab_projets:
       mediagenda/api: developer           # membre DIRECT, avec la date d'expiration, rien d'autre
 

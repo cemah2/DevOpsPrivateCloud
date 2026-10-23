@@ -1,4 +1,4 @@
-# data/deploiement — base/supervision.yaml (F2-S07, DEV-3207)
+# data/statistiques-deploiement — base/supervision.yaml (F2-S07, DEV-3207)
 # Collecte de la base Data par le Prometheus de la plateforme (sélecteur medisphere.internal/supervision,
 # M21) et requêtes PERSONNALISÉES de CloudNativePG qui décrivent l'extraction sans en lire le contenu :
 #   cnpg_stats_extraction_lignes               lignes du dernier chargement (journal stats.chargements)

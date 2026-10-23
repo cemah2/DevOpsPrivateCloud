@@ -11,18 +11,18 @@ title "F4-S14 — Revue des changements et décommissionnement"
 require_cmd jq curl ssh dig
 
 check_cmd "revue-trimestre.md sur main : changements, mesures, leçons, actions" \
-  _f4g_doc "$_f4g_doc_dir" '^revue-trimestre' 'CHG-3410' 'CHG-3413' 'mesur' 'le[cç]on|ce qui a' 'action'
+  _f4g_doc "$_f4g_doc_dir" '^revue-trimestre' 'CHG-3410' 'CHG-3413' 'mesur' 'le(c|ç)on|ce qui a' 'action'
 check_cmd "RB-347 sur main (décommissionnement : sauvegarde finale, effacement, preuves)" \
-  _f4g_doc "$_f4g_doc_dir/runbooks" '^RB-347' 'sauvegarde finale|finale' 'effac' 'preuve' 'prot[eé]g'
+  _f4g_doc "$_f4g_doc_dir/runbooks" '^RB-347' 'sauvegarde finale|finale' 'effac' 'preuve' 'prot(e|é)g'
 check_cmd "fiche CHG-3414 sur main (conservation, effacement)" \
   _f4g_doc "$_f4g_doc_dir/fiches" '^CHG-3414' 'conserv' 'effac'
 check_cmd "ADR-0340 sur main (options, décision)" \
-  _f4g_doc "$_f4g_doc_dir/adr" '^ADR-0340' 'option' 'd[ée]cision' 'cons[ée]quence'
+  _f4g_doc "$_f4g_doc_dir/adr" '^ADR-0340' 'option' 'd(é|e)cision' 'cons(é|e)quence'
 
 # VM 3401 : absente, ou arrêtée avec la décision écrite dans CHG-3414.
 _f4_s14_vm_ok() {
   ! _f4g_vm_existe 3401 && return 0
-  _f4g_vm_filtre 3401 '.status == "stopped"' && _f4g_doc "$_f4g_doc_dir/fiches" '^CHG-3414' 'arr[eê]t[ée]e'
+  _f4g_vm_filtre 3401 '.status == "stopped"' && _f4g_doc "$_f4g_doc_dir/fiches" '^CHG-3414' 'arr(e|ê)t(é|e)e'
 }
 check_cmd "VM 3401 (legacy-rdv01) supprimée de pve01 (ou arrêtée par décision écrite dans CHG-3414)" _f4_s14_vm_ok
 # Réponse du serveur exigée (NXDOMAIN, ou NOERROR sans réponse) : un DNS injoignable n'est pas un succès.

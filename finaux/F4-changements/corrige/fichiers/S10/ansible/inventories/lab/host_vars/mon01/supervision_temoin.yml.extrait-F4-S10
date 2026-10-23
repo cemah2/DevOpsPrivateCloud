@@ -1,0 +1,13 @@
+# host_vars/mon01/supervision_temoin.yml (plateforme/ansible) — EXTRAIT F4-S10 (CHG-3410) : groupe à
+# AJOUTER à supervision_temoin_sondes, après la vague 2 (publication de rdv par lb01/lb02). Il complète
+# la sonde de continuité de F4-S02 : même préfixe « continuite- », étiquette « service » lue par les
+# règles continuite.yml, le tableau « Changement en cours » et les checks du final.
+# La cible est le NOM DES CABINETS : la même sonde mesure la bascule de F4-S13 (vm → maintenance → k8s)
+# sans changement, et la page de maintenance (503) compte comme une interruption.
+  - nom: continuite-legacy-rdv
+    module: https_2xx
+    etiquettes: {equipe: plateforme, service: legacy-rdv, environnement: prod}
+    cibles:
+      # Page d'accueil : elle interroge la base (sur la VM, pas de page de santé ; /pret.php est refusé
+      # par les répartiteurs sur ce nom).
+      - https://rdv.par1.medisphere.internal/

@@ -1,0 +1,8 @@
+# data/statistiques-deploiement — overlays/traitements/ (F2-S07). Chemin lu par l'Application
+# data-statistiques-traitements que l'ApplicationSet « data » (rendu de plateforme/equipes, F2-S02) tire
+# de data/gitops, services/statistiques.yaml : dépôt <service>-deploiement, overlays/<environnement>.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: data-traitements
+resources:
+  - ../../base

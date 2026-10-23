@@ -71,4 +71,5 @@ check_cmd "ExternalSecret mediagenda-db-api (recette) Ready et rafraîchi depuis
 check_cmd "MédiAgenda recette : $_f3f_recette/pret répond 200" test "$(_f3f_code "$_f3f_recette/pret")" = 200
 
 # --- Trace -----------------------------------------------------------------------------------------------
+check_cmd "RB-336 publié (docs/exploitation/runbooks/)" _f3f_rb_present RB-336
 _f3s_trace INC-5910 2

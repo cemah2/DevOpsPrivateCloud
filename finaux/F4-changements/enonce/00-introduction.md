@@ -92,7 +92,8 @@ Arrêter `k8s-par1` arrête, **dans le lab**, MédiAgenda et les autres services
 | `ftp-part01` | VMID **3402**, **10.10.20.45** (`192.168.50.30`) | S09-S11 |
 | `stats01` | VMID **3403**, **10.10.20.46** (`192.168.50.40`) | S09-S11 |
 | Étiquette Proxmox des VMs du final | `env-f4` ; plage VMID 3400-3499 | S09-S14 |
-| Legacy-RDV sur Kubernetes | locataire Capsule `legacy`, espaces `legacy-rdv-recette`, `legacy-rdv-prod`, `legacy-rdv.apps.par1.medisphere.internal` ; mariadb-operator 26.6 dans `mariadb-system` | S12, S13 |
+| Nom de Legacy-RDV pour les cabinets | **`rdv.par1.medisphere.internal`** : VIP des répartiteurs `lb01`/`lb02` (10.10.70.200, terminaison TLS). Il ne change jamais : il sert `legacy-rdv01` à partir de S10, puis Legacy-RDV dans Kubernetes après la bascule (S13) | S10-S14 |
+| Legacy-RDV sur Kubernetes | locataire Capsule `legacy`, espaces `legacy-rdv-recette`, `legacy-rdv-prod`, dépôt `legacy/deploiement` ; routes **internes** de la Gateway `gw-par1` : `legacy-rdv-recette.apps.par1.medisphere.internal` et `legacy-rdv.apps.par1.medisphere.internal` (cette dernière est la cible des répartiteurs après la bascule ; les cabinets ne la voient jamais) ; mariadb-operator 26.6 dans `mariadb-system` | S12, S13 |
 | Instance témoin OpenStack | `sonde-fip01` (projet `plateforme`), IP flottante `<FIP-SONDE>` dans 10.10.52.200-249 | S08 |
 
 Versions cibles : [`annexes/versions-finaux-F1-F4.md`](../../../annexes/versions-finaux-F1-F4.md). Elles ont été relevées le 23/10/2026 ; tu feras F4 plus tard, et la règle est de viser **la mineure suivante, ou la dernière corrective, que toute la chaîne déclare compatible** — et de l'écrire dans la fiche. Au relevé :
@@ -103,7 +104,7 @@ Versions cibles : [`annexes/versions-finaux-F1-F4.md`](../../../annexes/versions
 | Cilium | 1.20.3 | dernière 1.20, puis 1.21.x | toujours **avant** Kubernetes |
 | Argo CD, Kyverno, CloudNativePG | 3.5.5, 1.19.2, 1.30.1 | 3.6, 1.20, 1.31 si publiées | Kyverno 1.20 supprime `ClusterPolicy`, CNPG 1.31 supprime `barmanObjectStore` |
 | Ceph | 20.2.4 | dernière corrective Tentacle (≥ 20.2.5) | à défaut : système Rocky Linux 10 des hôtes en roulement |
-| OpenStack / Kolla-Ansible | 2026.1 / 22.2.0 | 2026.2 / 23.x stable | Kolla 23 en version candidate au relevé : vérifie la stable |
+| OpenStack / Kolla-Ansible | 2026.1 / 22.2.0 | 2026.2 / 23.x stable | Kolla 23 en version candidate (23.0.0.0rc1) au relevé de l'annexe ; **23.0.0** publiée le 21/10/2026 (PyPI, ansible-core `>=2.20,<2.22`) : vérifie la dernière 23.x |
 | mariadb-operator / MariaDB | — | 26.6 / 11.8 | migration de Legacy-RDV (S12-S13) |
 
 ---
@@ -116,12 +117,14 @@ Versions cibles : [`annexes/versions-finaux-F1-F4.md`](../../../annexes/versions
 |---|---|
 | `docs/changements/processus.md` | processus de changement (S01) |
 | `docs/changements/fiches/modele.md` | modèle de fiche (S01) |
-| `docs/changements/fiches/CHG-34xx-<sujet>.md` | une fiche par changement (`xx` = numéro du scénario : CHG-3404 pour S04…) |
+| `docs/changements/fiches/CHG-34xx[-<sujet>].md` | une fiche par changement (`xx` = numéro du scénario : CHG-3404 pour S04… ; suffixe `-<sujet>` facultatif, les checks acceptent `CHG-3404.md` comme `CHG-3404-<sujet>.md`) |
 | `docs/changements/sonde-continuite.md` | la sonde (S02) |
 | `docs/changements/matrices/compatibilite-kubernetes-<mineure>.md` | matrice de compatibilité (S03) |
-| `docs/changements/runbooks/RB-340…` | runbooks du final (RB-340 sonde, RB-341 Kubernetes, RB-342 composants, RB-343 Ceph, RB-344 OpenStack ; la phase 3 continue la série) |
-| `docs/changements/post-mortems/INC-60xx-<sujet>.md` | post-mortems des pannes du final |
-| `docs/changements/adr/ADR-0340…` | décisions d'architecture du final |
+| `docs/changements/runbooks/RB-340…` | runbooks du final : RB-340 sonde, RB-341 Kubernetes, RB-342 composants, RB-343 Ceph, RB-344 OpenStack, RB-345 migration d'une VM VMware, RB-346 bascule de Legacy-RDV, RB-347 décommissionnement |
+| `docs/changements/post-mortems/INC-60xx-<sujet>.md` | post-mortems des pannes du final (INC-6006 en S06, INC-6011 en S11) |
+| `docs/changements/migration-vmware.md`, `inventaire-reel.csv` | plan de migration du VMware d'InfoGér (S09) |
+| `docs/changements/revue-trimestre.md` | revue des changements du trimestre (S14) |
+| `docs/changements/adr/ADR-0340…` | décisions d'architecture du final (ADR-0340 : avenir de Legacy-RDV, S14) |
 
 **Tickets** : `CHG-34xx`, `PLAT-34xx`, `INC-60xx` (`xx` = numéro du scénario).
 
@@ -152,8 +155,15 @@ Toutes facultatives : les défauts conviennent au lab. Pose-les seulement si tes
 | `WB_F4_KOLLA_SERIE` | `23` | S08 |
 | `WB_F4_OPENSTACK_SERIE` | `2026.2` | S08 |
 | `WB_F4_ANSIBLE_CORE_RE` | `^2\.(20\|21)\.` | S08 |
+| `WB_F4_STOCKAGE_EXPORT` | `hdd-bulk` | S09, S10 (stockage de `pve01` qui porte `import/infoger-export/`) |
+| `WB_F4_RDV_URL` | `https://rdv.par1.medisphere.internal` | S10, S13 (nom des cabinets) |
+| `WB_F4_LEGACY_RECETTE_URL` | `https://legacy-rdv-recette.apps.par1.medisphere.internal` | S12 |
+| `WB_F4_LEGACY_PROD_URL` | `https://legacy-rdv.apps.par1.medisphere.internal` | S13 |
+| `WB_F4_INFRA` | `$WB_SRC/infra` (`~/src/infra`) | S10 (clone de `plateforme/infra` pour le `tofu plan` en lecture) |
 
-Les checks relisent aussi `WB_PROM_URL`, `WB_GRAFANA_*`, `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_CEPH_ADMIN`, `WB_SRC`, `WB_OS_CLOUD`, `WB_TIMEOUT`, et la panne `WB_K8S_ADMIN_KUBECONFIG` et `WB_GITLAB_ADMIN_TOKEN_FILE`. Les phases 3 et 4 ajoutent leurs variables dans [`03-migrations.md`](03-migrations.md).
+Les checks relisent aussi `WB_PROM_URL`, `WB_GRAFANA_*`, `WB_GITLAB_*`, `WB_NETBOX_*`, `WB_K8S_KUBECONFIG`, `WB_CEPH_ADMIN`, `WB_PVE_HOST`, `WB_SRC`, `WB_OS_CLOUD`, `WB_TIMEOUT`, et les pannes `WB_K8S_ADMIN_KUBECONFIG` (S06), `WB_GITLAB_ADMIN_TOKEN_FILE` (S06) et `WB_PVE_HOST` (S11).
+
+**Outils sur `adm01`** pour les checks et les pannes du final : `curl`, `jq`, `yq` (v4, S02, S06), `kubectl` (compte `wb-checks`), `ssh` (vers `pve01` en root et vers `ceph01`), `dig` (paquet `bind9-dnsutils`, S10, S14) ; facultatifs, contrôle ignoré et dit ignoré s'ils manquent : client `openstack` et profil `medisphere-admin` dans `clouds.yaml` (S08), `tofu` et un clone à jour de `plateforme/infra` dans `~/src/infra` avec `outils/charger-acces.sh` (S10). Sur `pve01` : `libguestfs-tools` (fabrication et audit de l'export, S09 ; conversion, S10).
 
 ---
 

@@ -1,7 +1,8 @@
-# Corrigé — Final F3, phase 5 : jeudi
+# Final F3 — Corrigé de la phase 5 : jeudi
 
 > ⚠️ Corrigé : à n'ouvrir qu'après avoir cherché. Les heures des exemples sont celles d'une exécution type du lab (jeudi 2026-11-05) ; les tiennes viennent de ta main courante.
 
+**Validé hors du lab** : règles et tests `promtool` de [`reseau-bordure`](fichiers/S11/observabilite/regles/reseau-bordure.yaml) (Prometheus 3.5, `promtool test rules`) ; `shellcheck -x` et `bash -n` sur les scripts.
 **Non testé en conditions réelles** (à vérifier sur ton lab, retours bienvenus) : sorties exactes de `ip -j route` avec des groupes de prochains sauts (`nhid`) ; comportement de zebra (FRR 10.7) face à une route noyau plus prioritaire pour une /32 apprise en BGP ; délai réel de chute d'une session BGP filtrée avec le redémarrage gracieux de Cilium ; mise à jour partielle d'un rôle `kubernetes` d'OpenBao 2.7 (le script de panne renvoie tous les champs par prudence) ; nom et étiquettes de la métrique `cilium_bgp_control_plane_session_state` en Cilium 1.20.
 
 ---
@@ -48,7 +49,7 @@ Cause racine : keepalived arrêté sur le **nœud actif**. Par conception (M25-E
 admin@adm01:~$ bao read -format=json auth/k8s-par1/role/eso-mediagenda-recette | jq .data.token_policies
 [ "eso-mediagenda-recette-kv" ]
 admin@adm01:~$ bao policy read eso-mediagenda-recette-kv | head -3
-# eso-mediagenda-recette-kv — moindre privilège pour ESO en recette (PLAT-3310, F3-S10).
+# eso-mediagenda-recette-kv — moindre privilège pour ESO en recette (PLAT-3352, F3-S10).
 admin@adm01:~/src/secrets$ tofu -chdir=tofu plan
   # vault_kubernetes_auth_backend_role.eso_espace["mediagenda-recette"] will be updated in-place
       ~ token_policies = [ - "eso-mediagenda-recette-kv", + "eso-mediagenda-recette" ]
@@ -199,7 +200,7 @@ Le hachage ECMP (par défaut sur les adresses source et destination) envoie touj
 
 - **Début** — *[INC-5911] SEV2 — échecs intermittents de résolution / d'accès aux services* — « Depuis 14:00 environ, une partie des noms ou des adresses de services ne répond pas, selon le poste. Production concernée : oui (pods) / à préciser. Diagnostic en cours, exemplaire par exemplaire. Prochain point : 14:45. »
 - **Point d'étape** — « L'un des deux [récurseurs DNS | passerelles] est en cause, l'autre est sain ; correction par le code en cours, sans coupure prévue. Prochain point : 15:15. »
-- **Fin** — « Rétabli à 15:02, vérifié depuis trois sources et sur les deux exemplaires. Cause : modification hors du code de [ancre DNSSEC de dns02 | pare-feu de gw01 | table de routage de gw01]. Prévention : sondes par exemplaire, contrôle de dérive (PLAT-3311). »
+- **Fin** — « Rétabli à 14:28, vérifié à 14:35 depuis trois sources et sur les deux exemplaires. Cause : modification hors du code de [ancre DNSSEC de dns02 | pare-feu de gw01 | table de routage de gw01]. Prévention : sondes par exemplaire, contrôle de dérive (PLAT-3311). »
 
 #### Main courante (extrait type, variante 3)
 

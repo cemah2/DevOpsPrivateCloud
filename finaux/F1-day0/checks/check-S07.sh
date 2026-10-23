@@ -96,6 +96,6 @@ done
 
 # --- Documents ------------------------------------------------------------------------------------------------
 check_cmd "docs/day0/chronologie.md : gel, destruction, création des VMs, playbooks, amorçage, durées" \
-  _f1c_doc '^chronologie\.md$' 'gel' 'destruct|tofu' 'k8s-w03|usine|pxe' 'kubeadm|amor[cç]' '[0-9]{1,2}[:h][0-9]{2}'
+  _f1c_doc '^chronologie\.md$' 'gel' 'destruct|tofu' 'k8s-w03|usine|pxe' 'kubeadm|amor(ç|c)' '[0-9]{1,2}[:h][0-9]{2}'
 check_cmd "docs/day0/volumes-ancien-cluster.md : volumes orphelins de k8s-rbd, décision, purge réversible, revue" \
-  _f1c_doc '^volumes-ancien-cluster\.md$' 'k8s-rbd' 'csi-vol' 'd[ée]cision' 'trash|corbeille' '[0-9]{4}-[0-9]{2}-[0-9]{2}'
+  _f1c_doc '^volumes-ancien-cluster\.md$' 'k8s-rbd' 'csi-vol' 'd(e|é)cision' 'trash|corbeille' '[0-9]{4}-[0-9]{2}-[0-9]{2}'

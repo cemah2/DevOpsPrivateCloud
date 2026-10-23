@@ -64,9 +64,20 @@ def quantite(valeur: str | int) -> Decimal:
     return Decimal(m.group(1)) * SUFFIXES[m.group(2) or ""]
 
 
+class ChargeurTexteDates(yaml.SafeLoader):
+    """SafeLoader qui garde les dates en texte : « expiration: 2027-01-20 » (sans guillemets) donnerait
+    sinon un datetime.date, refusé par le schéma (chaîne AAAA-MM-JJ attendue)."""
+
+
+ChargeurTexteDates.yaml_implicit_resolvers = {
+    debut: [r for r in resolveurs if r[0] != "tag:yaml.org,2002:timestamp"]
+    for debut, resolveurs in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
+
 def lire_yaml(chemin: Path) -> dict:
     with chemin.open(encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+        return yaml.load(f, Loader=ChargeurTexteDates) or {}  # chargeur dérivé de SafeLoader
 
 
 def charger(racine: Path) -> tuple[dict, list[dict]]:

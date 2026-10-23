@@ -195,12 +195,12 @@ symptome_S11() {
          "stats01 ne revient pas depuis la maintenance de Lucas : plus de SSH, rien dans la supervision." \
          "La console de Proxmox affiche quelque chose à propos d'un « emergency mode » et attend qu'on" \
          "appuie sur Entrée, mais ça ne mène nulle part. Lucas dit qu'il a juste « appliqué le wiki" \
-         "d'InfoGér et mis le disque en virtio, comme c'est plus rapide »." ;;
+         "d'InfoGér et optimisé un peu la VM, rien de spécial »." ;;
     2) wb_symptome "Ticket INC-6011 — De : Nadia Roussel" \
          "Le laboratoire nous appelle : impossible de déposer leurs résultats depuis ce matin, la connexion" \
          "FTP n'aboutit pas. La VM ftp-part01 est bien démarrée dans Proxmox, Lucas dit même que « l'agent" \
-         "répond », mais plus rien ne passe par le réseau. Il a « stabilisé le nom de la carte » avant de" \
-         "refaire la carte réseau." ;;
+         "répond », mais plus rien ne passe par le réseau. Il a « suivi le wiki d'InfoGér pour le réseau »," \
+         "rien de spécial." ;;
     *) wb_symptome "Ticket INC-6011 — De : Nadia Roussel" \
          "stats01 ne redémarre pas depuis la maintenance de Lucas. Dans la console, un message dit qu'il" \
          "n'arrive pas à trouver un disque, puis une invite « (initramfs) ». Lucas a seulement « allégé le" \

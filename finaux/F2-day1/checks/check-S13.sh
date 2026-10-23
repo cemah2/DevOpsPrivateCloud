@@ -37,7 +37,7 @@ done
 
 # --- 3. Rapport, pannes, étiquette ---------------------------------------------------------------------
 check_cmd "rapport de recette docs/accueil/recette-day1.md (ms-verif-equipe pour chaque équipe, délais mesurés)" \
-  _f2b_doc_sections "$_f2b_doc_dir"/recette-day1.md 3 'ms-verif-equipe' "${_f2b_equipes[@]}" 'd[ée]lai'
+  _f2b_doc_sections "$_f2b_doc_dir"/recette-day1.md 3 'ms-verif-equipe' "${_f2b_equipes[@]}" 'd(e|é)lai'
 _s13_pannes() {
   local d="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/pannes-actives"
   [[ -z "$(find "$d" -maxdepth 1 -name 'F2-S*' 2>/dev/null)" ]]

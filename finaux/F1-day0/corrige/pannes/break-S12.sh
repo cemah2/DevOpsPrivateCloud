@@ -8,9 +8,10 @@
 #   1. CONFIANCE : la configuration de la méthode k8s-par1 d'OpenBao est réécrite avec l'autorité de
 #      l'ANCIEN cluster (version précédente de racine/k8s-par1-ca.crt dans l'historique de
 #      plateforme/secrets ; à défaut, une autorité « kubernetes » jetable, même effet). Les jetons
-#      d'OpenBao détenus par ESO (méthode k8s-par1) sont révoqués : ESO doit se reconnecter, la
-#      vérification TLS de l'appel TokenReview échoue, les ExternalSecrets passent en erreur à leur
-#      rafraîchissement (forcé sur mediagenda-recette/harbor-pull).
+#      d'OpenBao déjà délivrés ne sont PAS révoqués (leurs baux, dont les identifiants dynamiques de
+#      la production, restent valides) : ESO se connecte à chaque synchronisation, la vérification TLS
+#      de l'appel TokenReview échoue, les ExternalSecrets passent en erreur à leur rafraîchissement
+#      (forcé sur mediagenda-recette/harbor-pull seulement).
 #   2. PROPRIÉTÉ : dans la zone apps.par1.medisphere.internal, l'enregistrement TXT de propriété
 #      d'ExternalDNS du nom portail.apps… passe au propriétaire « k8s-par1-essai » et son A vise
 #      10.10.41.20 (plage des essais) : ExternalDNS (propriétaire k8s-par1) refuse de corriger un nom
@@ -171,7 +172,7 @@ _s12_ca_ancienne() {
 }
 
 _s12_v1() {
-  local cfg actuelle ca_pem n=0 a
+  local cfg actuelle ca_pem
   s12_bao_jeton || return 10
   cfg="$(_s12_bao GET auth/k8s-par1/config)" || { wb_avert "auth/k8s-par1/config illisible"; return 10; }
   actuelle="$(_s12_ca_cluster_pem | _s12_empreinte)"
@@ -191,17 +192,11 @@ _s12_v1() {
   [[ -n "$ca_pem" ]] || return 1
   jq -c --arg ca "$ca_pem" '.kubernetes_ca_cert = $ca' <<<"$(s12_lire v1-config.json)" | _s12_bao POST auth/k8s-par1/config - >/dev/null || return 1
   s12_ecrire v1-posee "$(_s12_empreinte <<<"$ca_pem")"
-  # Jetons d'OpenBao obtenus par la méthode k8s-par1 (ESO) : révoqués, ESO doit se reconnecter.
-  while IFS= read -r a; do
-    [[ -n "$a" ]] || continue
-    if jq -nc --arg a "$a" '{accessor: $a}' | _s12_bao POST auth/token/lookup-accessor - 2>/dev/null |
-      jq -e '.data.path == "auth/k8s-par1/login"' >/dev/null 2>&1; then
-      jq -nc --arg a "$a" '{accessor: $a}' | _s12_bao POST auth/token/revoke-accessor - >/dev/null || true
-      n=$((n + 1))
-    fi
-  done < <(_s12_bao LIST auth/token/accessors 2>/dev/null | jq -r '.data.keys[]? // empty' 2>/dev/null || true)
+  # Aucun jeton révoqué : révoquer les jetons de la méthode révoquerait aussi leurs baux (identifiants
+  # dynamiques des bases, production comprise). La synchronisation forcée d'un ExternalSecret de
+  # recette suffit : ESO se reconnecte à chaque synchronisation et la connexion échoue.
   _s12_forcer_es || return 1
-  s12_journal "auth/k8s-par1/config : autorité ancienne posée ; $n jeton(s) de la méthode révoqué(s)"
+  s12_journal "auth/k8s-par1/config : autorité ancienne posée ; synchronisation forcée de $_S12_ESPACE/$_S12_ES"
 }
 
 _s12_v1_verifier() {

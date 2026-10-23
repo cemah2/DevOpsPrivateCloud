@@ -44,7 +44,7 @@ spec:
   etat: active               # active | retiree (désactive, vide, retire les droits ; jamais les données)
   responsable: <identifiant> # doit figurer dans personnes
   contact: <equipe>@medisphere.internal   # alertes, équipe Grafana
-  expiration: AAAA-MM-JJ     # prestataire seulement (obligatoire) : fin des accès
+  expiration: "AAAA-MM-JJ"   # prestataire seulement (obligatoire) : fin des accès
   personnes:                 # identifiant, prenom, nom, courriel, titre, role (responsable|developpeur|lecteur),
     - …                      # etat (present|disabled), expiration (AAAA-MM-JJ, sinon celle de l'équipe)
   identite: {otp_obligatoire: false}      # vrai obligatoire pour un prestataire
@@ -60,6 +60,19 @@ spec:
   services: [<service>…]                  # rôles CI d'OpenBao (signature, promotion) par service
   observabilite: {grafana: {titre_dossier: <titre>}}
 ```
+
+### Évolutions du format après S02
+
+Le format v1 ci-dessus est celui que livre F2-S02. Il ne change ensuite que par **ajout** (jamais de renommage), avec schéma, générateur, gabarits et tests dans la même MR :
+
+| Scénario | Ajout | Effet du rendu | Fichiers du corrigé |
+|---|---|---|---|
+| F2-S07 (DEV-3207) | `spec.kubernetes.environnements.<env>.base_openbao: true` (facultatif, défaut `false`) | `services.loadbalancers: "1"` dans le `ResourceQuota` de l'espace (base jointe par OpenBao ; le Service lui-même reste à la plateforme) | `fichiers/S07/equipes/` |
+| F2-S10 (SEC-3210) | bloc `spec.hebergement` (prestataire seulement, exclut `kubernetes`) : `locataire`, `espace`, `quota`, `role` (`prestataire-developpeur` ou `prestataire-lecteur`), `gitlab_projets` (`<groupe>/<projet>: developer\|reporter`) | espace `<locataire>-<nom sans ext->` (gabarit `k8s/prestataire.yaml.j2`, **non** protégé de l'élagage), `identite/outils/gitlab-prestataires.d/equipes.yml` (job `gitlab:prestataires` de `plateforme/identite`) ; chemin possédé ajouté à `config/plateforme.yaml` | `fichiers/S10/equipes/` |
+
+Ce que le format ne dit pas (identifiants dynamiques d'une base d'équipe, politiques en plus d'un groupe) est déclaré par la plateforme à côté du rendu, dans `plateforme/secrets` (`tofu/equipes-complements.auto.tfvars`, F2-S07), jamais dans un fichier rendu.
+
+Les dates (`expiration`) s'écrivent entre guillemets ; `outils/rendre.py` lit de toute façon les dates YAML comme du texte.
 
 Règles vérifiées en plus du schéma (`outils/rendre.py`) : nom ni réservé ni préfixe d'une autre équipe ; responsable parmi les personnes ; une personne décrite à l'identique si elle est dans deux équipes ; environnements + libre-service tiennent dans le budget ; une production (`synchronisation: manuelle`) exige `medisphere-critique` ; un prestataire n'a pas de production ; `secrets.ecriture` et `services` exigent un bloc `kubernetes`.
 

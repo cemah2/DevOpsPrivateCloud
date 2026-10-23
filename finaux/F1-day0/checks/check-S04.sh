@@ -87,4 +87,4 @@ check_cmd "docs/day0/reference-avant.md : inventaire de référence (rendez-vous
 check_cmd "docs/day0/retour-arriere.md : restauration des six VMs depuis PBS, ordre de démarrage, vérifications" \
   _f1p_doc '^retour-arriere\.md$' 'PBS|pbs01' '2141' '2146' 'ordre|démarr' 'vérifi'
 check_cmd "fiche CHG-3104 publiée sous docs/day0 : critères de go/no-go, preuve de restauration ou de vérification PBS" \
-  _f1p_doc '^CHG-3104.*\.md$' 'no-go|no go' 'go' 'restaur|verif'
+  _f1p_doc '^CHG-3104.*\.md$' 'no-go|no go' 'go' 'restaur|v(e|é)rif'

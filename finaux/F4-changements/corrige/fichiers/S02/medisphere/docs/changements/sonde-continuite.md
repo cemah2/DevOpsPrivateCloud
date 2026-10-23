@@ -46,7 +46,8 @@ C'est une mesure **pessimiste** : un échantillon en erreur compte pour tout son
 | Montées dans le cluster (S04, S05) | 30 s | tout est redondant ; seuls des redémarrages de pods restent |
 | Ceph (S07) | 30 s | réplication 3, quorum de 3, RGW derrière une VIP |
 | OpenStack (S08), plan de données seulement | 60 s | un seul contrôleur et une seule passerelle réseau : redémarrage d'OVS |
-| Bascule de Legacy-RDV (S13) | 900 s (15 min) | coupure annoncée, gel en écriture |
+| Migration des VMs d'InfoGér (S10), Legacy-RDV en recette (S12), décommissionnement (S14) | 0 s | aucun service déjà sondé n'est touché ; les coupures annoncées des VMs migrées se relèvent à part dans la fiche |
+| Bascule de Legacy-RDV (S13) | 900 s (15 min) | coupure annoncée, gel en écriture ; groupe `continuite-legacy-rdv` (ajouté en S10) sur le nom des cabinets |
 
 ## 5. Ce que la sonde ne prouve pas
 

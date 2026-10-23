@@ -61,4 +61,4 @@ _s12_espace_absent() {
 check_cmd "espace $_f2b_ns_axiom retiré du cluster" _s12_espace_absent
 check_output "Kubernetes : aucune liaison RBAC restante pour AxiomDev" '^0$' _f2b_liaisons_hors "" "$_s12_re"
 check_cmd "preuve du départ : docs/accueil/departs/axiomdev.md (annuaire, GitLab, Keycloak, SSH, espace)" \
-  _f2b_doc_sections "$_f2b_doc_dir"/departs/axiomdev.md 4 'nsAccountLock|d[ée]sactiv' 'GitLab' 'Keycloak|session' 'SSH|16 h' "$_f2b_ns_axiom"
+  _f2b_doc_sections "$_f2b_doc_dir"/departs/axiomdev.md 4 'nsAccountLock|d(e|é)sactiv' 'GitLab' 'Keycloak|session' 'SSH|16 h' "$_f2b_ns_axiom"

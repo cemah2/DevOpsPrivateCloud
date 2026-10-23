@@ -17,15 +17,16 @@
 
 | Heure | Étape | Durée | dont attente | Remarque |
 |---|---|---|---|---|
-| <HH:MM> | Contrôle du filet (`lab/bin/check F1 04`) | | | vert, sauvegardes de moins de 24 h |
+| <HH:MM> | Contrôle du filet (`lab/bin/check F1 4`) | | | vert, sauvegardes de moins de 24 h |
 | <HH:MM> | Point Nadia : début du gel | — | — | centres prévenus |
 | <HH:MM> | **GESTE** Argo CD arrêté (contrôleurs à 0 réplique) | | | sinon l'auto-réparation de la recette remet des réplicas ; cluster détruit ensuite |
 | <HH:MM> | Écritures arrêtées (Rollouts `mediagenda` recette et prod à 0, `portail` à 0, CronJobs suspendus) | | | HPA inactif sur une cible à 0 |
 | <HH:MM> | Files `notifications` vidées par MédiNotif | | | 0 et 0 messages |
 | <HH:MM> | Compteurs du gel | | | rendez-vous prod <N>, recette <N> ; écart avec S04 : <N> rendez-vous pris entre S04 et le gel |
 | <HH:MM> | `pg_switch_wal()` + sauvegarde de base des trois bases | | | `…-gel-<horodatage>` completed |
-| <HH:MM> | **Point de non-retour** : `tofu apply` (remplacement des six VMs) | | | plan relu : 6 remplacements, rien d'autre |
-| <HH:MM> | Installation de `k8s-w03` par l'usine (PXE, profil `k8s-noeud`) puis passage sur le VLAN 40 | | | |
+| <HH:MM> | **Point de non-retour** : `tofu apply` (remplacement des cinq VMs clonées) | | | plan relu : 5 remplacements, rien d'autre |
+| <HH:MM> | Retrait de `k8s-w03` de `module.noeud` (`apply -destroy -target`) | | | plan relu : objets de `k8s-w03` seulement |
+| <HH:MM> | Installation de `k8s-w03` par l'usine (`noeuds_usine` installation, job `provisionner`, `noeuds_usine` service, `--apres-bascule`) | | | VLAN 60 puis VLAN 40 |
 | <HH:MM> | **GESTE** anciennes clés d'hôte SSH retirées de `~/.ssh/known_hosts` | | | clés d'hôte neuves, certificats SSH d'hôte pas encore posés |
 | <HH:MM> | Inscription FreeIPA nœud par nœud | | | ré-inscription forcée (hôtes déjà présents) |
 | <HH:MM> | `k8s-reconstruction.yml` : nœuds, durcissement, fichiers de l'API | | | |

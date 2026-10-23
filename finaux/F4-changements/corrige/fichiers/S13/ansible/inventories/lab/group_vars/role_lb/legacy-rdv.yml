@@ -22,7 +22,7 @@ legacy_rdv_backends:
   maintenance:
     - >-
       http-request return status 503 content-type "text/html; charset=utf-8"
-      string "<!DOCTYPE html><html lang=fr><meta charset=utf-8><title>Maintenance - MédiSphère RDV</title><h1>Maintenance programmée</h1><p>La prise de rendez-vous est en maintenance jusqu'à 07:30. Merci de réessayer dans quelques minutes.</p></html>"
+      string "<!DOCTYPE html><html lang=fr><meta charset=utf-8><title>Maintenance - MédiSphère RDV</title><h1>Maintenance programmée</h1><p>La prise de rendez-vous est en maintenance jusqu'à 08:30. Merci de réessayer dans quelques minutes.</p></html>"
       hdr Retry-After 900
   k8s:
     - option httpchk

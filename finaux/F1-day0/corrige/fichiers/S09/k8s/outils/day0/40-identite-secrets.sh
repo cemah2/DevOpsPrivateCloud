@@ -102,4 +102,4 @@ etape "$PHASE" "adoption des Secrets d'amorçage" adoption
 etape "$PHASE" "RBAC des personnes (oidc-*)" rbac_personnes
 etape "$PHASE" "kubeconfig personnel (OIDC, nouvelle autorité)" kubeconfig_personnel
 geste "$PHASE" "nouvel admin.conf rangé dans le Vault critique (bris de glace) ; ancien supprimé ; inventaire des secrets mis à jour"
-jalon "$PHASE" "identité et secrets raccrochés" "lab/bin/check F1 09"
+jalon "$PHASE" "identité et secrets raccrochés" "lab/bin/check F1 9"

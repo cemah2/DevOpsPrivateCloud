@@ -59,7 +59,7 @@ Trace sur `pxe01` : `/var/log/nginx/pxe-acces.log` (`GET /ipxe/mac-02-4d-53-60-3
 
 ## 6. Procédure prévue pour `k8s-w03` (phase 3, F1-S07)
 
-1. Cluster détruit (CHG-3107) ; VM 2146 n'existe plus.
+1. Cluster détruit (CHG-3107) : les cinq autres nœuds ont été remplacés (`-replace`), et `k8s-w03` a été **retiré** de `module.noeud` par un apply à part (`tofu apply -destroy -target='module.noeud["k8s-w03"]'`, plan relu : seuls la VM 2146 et les objets NetBox/DNS de `k8s-w03` disparaissent ; `outils/day0/20-noeuds.sh` de F1-S07 le fait). VM 2146 n'existe plus. Jamais les deux changements (retrait du clone, création par l'usine) dans le même apply.
 2. MR `plateforme/infra` : `noeuds_usine = { "k8s-w03" = "installation" }` ; plan relu (VM 2146 vide sur `vprov`, VM NetBox `planned`, deux adresses, DNS) ; apply.
 3. Pipeline de `plateforme/provisioning` : *Run pipeline*, `EQUIPEMENT=k8s-w03`, job `provisionner` : installation, extinction, NetBox `staged`, `pxe_action=local`, journal « bascule réseau attendue ».
 4. MR `plateforme/infra` : `noeuds_usine = { "k8s-w03" = "service" }` ; plan : modification **en place** (carte sur `vk8s`, carte de stockage ajoutée, démarrage sur disque, VM démarrée) ; apply.

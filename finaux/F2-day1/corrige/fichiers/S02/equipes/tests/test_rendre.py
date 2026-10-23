@@ -71,9 +71,10 @@ def test_rendu_complet_et_lisible(donnees, tmp_path):
     rendre.rendre_grafana(equipes, tmp_path)
     rendre.rendre_k8s_gitops(config, equipes, tmp_path)
     rendre.verifier_rendu(tmp_path)
-    # Chaque environnement a son espace, et chaque espace est rattaché à son locataire.
+    # Chaque environnement a son espace, et chaque espace est rattaché à son locataire (les équipes sans
+    # bloc kubernetes, comme un prestataire hébergé en F2-S10, n'ont pas d'environnement propre).
     for e in equipes:
-        for env in e["environnements"]:
+        for env in e.get("environnements", {}):
             ns = yaml.safe_load_all((tmp_path / f"k8s/equipes/{e['nom']}/espaces/{e['nom']}-{env}.yaml").read_text())
             namespace = next(o for o in ns if o and o["kind"] == "Namespace")
             assert namespace["metadata"]["labels"]["capsule.clastix.io/tenant"] == e["nom"]
@@ -103,3 +104,10 @@ def test_equipe_retiree_desactive_et_ne_rend_plus_de_droits(donnees, tmp_path):
     assert next(g for g in groupes if g["nom"] == "data")["membres"] == []
     assert "data" not in json.loads((tmp_path / "secrets/tofu/equipes.auto.tfvars.json").read_text())["equipes_en_code"]
     assert not (tmp_path / "k8s/equipes/data").exists()
+
+
+def test_dates_lues_en_texte(tmp_path):
+    # Une date YAML sans guillemets (expiration: 2027-01-20) reste une chaîne pour le schéma.
+    f = tmp_path / "e.yaml"
+    f.write_text("spec:\n  expiration: 2027-01-20\n", encoding="utf-8")
+    assert rendre.lire_yaml(f)["spec"]["expiration"] == "2027-01-20"

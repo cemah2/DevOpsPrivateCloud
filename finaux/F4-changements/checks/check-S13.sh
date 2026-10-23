@@ -36,7 +36,7 @@ fi
 
 # --- Référence, comptes ---------------------------------------------------------------------------------
 _f4_s13_ref="$(_f4g_doc_texte "$_f4g_doc_dir/fiches" '^CHG-3413' 2>/dev/null \
-  | sed -nE 's/.*[Rr][ée]f[ée]rence rendez-vous[^0-9]*([0-9]+).*/\1/p' | head -n 1 || true)"
+  | sed -nE 's/.*[Rr](é|e)f(é|e)rence rendez-vous[^0-9]*([0-9]+).*/\3/p' | head -n 1 || true)"
 check_cmd "fiche CHG-3413 sur main avec la ligne « Référence rendez-vous : <nombre> »" test -n "$_f4_s13_ref"
 if [[ -n "$_f4_s13_ref" && -n "$_f4_s13_n_vm" ]]; then
   check_cmd "legacy-rdv01 gelée : nombre de rendez-vous égal à la référence ($_f4_s13_ref)" test "$_f4_s13_n_vm" -eq "$_f4_s13_ref"

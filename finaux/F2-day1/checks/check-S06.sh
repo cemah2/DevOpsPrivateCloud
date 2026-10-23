@@ -43,8 +43,9 @@ check_cmd "Argo CD : l'Application de recette (depuis $_F2A_P_DEPLOIEMENT) est S
 check_cmd "medivisio-recette : tous les réplicas du Deployment $_F2A_DEPLOIEMENT à jour et prêts" _f2a_deploy_pret "$_f2a_s06_d" 1
 check_cmd "medivisio-recette : aucun ReplicaSet en échec de création (quota, admission)" _f2a_s06_rs_sains
 check_cmd "medivisio-recette : ExternalSecret(s) synchronisés, chemins kv/medivisio/recette/ seulement" _f2a_s06_es_sains
-check_cmd "medivisio-recette : image désignée par empreinte dans le Deployment ET dans l'overlay (Git)" \
-  bash -c '[[ "$1" == 0 && "$2" == 0 ]]' _ "$(_f2a_image_par_empreinte "$_f2a_s06_d"; echo $?)" "$(_f2a_s06_overlay_empreinte; echo $?)"
+# _f2a_s06_empreintes — empreinte dans le Deployment ET dans l'overlay (Git).
+_f2a_s06_empreintes() { _f2a_image_par_empreinte "$_f2a_s06_d" && _f2a_s06_overlay_empreinte; }
+check_cmd "medivisio-recette : image désignée par empreinte dans le Deployment ET dans l'overlay (Git)" _f2a_s06_empreintes
 check_cmd "$_F2A_URL_RECETTE/sante répond 200 depuis adm01" _f2a_url_200 "$_F2A_URL_RECETTE/sante"
 check_cmd "docs : journal de diagnostic F2-S06 (journal/…F2-S06…)" _f2a_doc 'F2-S06' "cause" "correct|correction"
 check_cmd "docs : RB-321 publié (premier déploiement bloqué)" _f2a_doc '^RB-321' "quota|kyverno|signature|externalsecret|secret"

@@ -6,7 +6,7 @@
 #   2. conteneur « depot » : dépose le fichier et son manifeste dans le compartiment data-extractions de
 #      s3-01, avec une identité qui ne sait QU'ÉCRIRE dans ce compartiment (ni lire, ni lister).
 # L'équipe Data n'a aucun chemin vers MédiAgenda : ni flux réseau, ni rôle PostgreSQL, ni secret. Elle
-# charge ce qu'on lui dépose (data/deploiement, chargement/). Le « sas » S3 est la frontière, et la
+# charge ce qu'on lui dépose (data/statistiques-deploiement, chargement/). Le « sas » S3 est la frontière, et la
 # décision de ce qui la franchit appartient au responsable de la donnée (Julien Petit) et à la RSSI.
 #
 # Appliqué comme le reste de l'espace (exception écrite du M27 : kubectl apply depuis adm01, relu par MR).

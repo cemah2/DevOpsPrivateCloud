@@ -20,7 +20,7 @@ Le cluster est revenu, les données aussi, et l'incident d'après-reconstruction
 **Durée indicative** : 3 à 4 h.
 
 **Contexte technique**
-- L'évolution est fournie : `ressources/S13/` contient la demande et le changement de code (modèle `Creneaux` et un test). Elle ne change ni le schéma de la base ni la configuration ; les réponses déjà en cache dans Valkey restent lisibles.
+- L'évolution est fournie : [`ressources/S13/`](../ressources/S13/) contient la demande et le changement de code (modèle `Creneaux` et un test). Elle ne change ni le schéma de la base ni la configuration ; les réponses déjà en cache dans Valkey restent lisibles.
 - Projets : `mediagenda/api` (code, CI, étiquettes `vX.Y.Z` par semantic-release), `mediagenda/deploiement` (overlays `dev`, `recette`, `prod`, image désignée par **condensé**) ; image `registry.par1.medisphere.internal/medisphere/mediagenda-api` ; production publiée sur `https://mediagenda.apps.par1.medisphere.internal` (`/sante` renvoie la version).
 - Production : Rollout `mediagenda` (espace `mediagenda-prod`, canary par poids des HTTPRoute sur `gw-par1`, analyses Prometheus), Application `mediagenda-prod` synchronisée **à la main**, HPA ; SLO `mediagenda-latence` (95 % < 250 ms) et `mediagenda-disponibilite` (99,5 %).
 - Le dépôt `apps/` du workbook n'est pas modifié : tu reportes l'évolution dans **ton** dépôt `mediagenda/api`.
@@ -73,7 +73,8 @@ L'analyse du canary compare des taux d'erreurs et des latences sur une fenêtre 
 **Durée indicative** : 3 à 6 h (selon ce que la recette trouve).
 
 **Contexte technique**
-- Contrôles d'entrée des finaux : `lab/bin/check 29 25`, `28 25`, `27 25`, `26 46`, `25 46`, `24 46` ; contrôles du final : `lab/bin/check F1 02`, `F1 05`, `F1 06` et `F1 07` à `F1 13`.
+- Contrôles d'entrée des finaux : `lab/bin/check 29 25`, `28 25`, `27 25`, `26 46`, `25 46`, `24 46` ; contrôles du final : `lab/bin/check F1 2`, `F1 5`, `F1 6` et `F1 7` à `F1 13` (liste réglable par `WB_F1_S14_CONTROLES`, avec une raison écrite).
+- `lab/bin/check F1 6` relit les journaux d'accès de `pxe01` : allume-la le temps de la recette. La rotation de Debian garde ces journaux 14 jours ; au-delà, retirer `F1 6` de la liste est une décision écrite dans `recette-day0.md`.
 - Sondes du socle sur `adm01` : `ms-verif-services` (M06-E29) et `ms-verif-sauvegardes` (M02).
 - Les contrôles des modules lisent parfois des éléments qui, légitimement, ont changé avec la reconstruction (dates de création, `serverName`, identifiants de ressources). Leurs variables `WB_*` de `lab/lab.env` permettent de les adapter, avec une raison écrite.
 

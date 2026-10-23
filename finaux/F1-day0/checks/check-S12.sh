@@ -65,6 +65,6 @@ check_cmd "journal de diagnostic docs/day0/journal/*INC-5712* (hypothèses, comm
 _f1_s12_pm() {
   local f
   f="$(_f1c_doc_chemin 'INC-5712' "$_f1c_doc/post-mortems")" || return 1
-  _f1c_contient "$(_f1c_fichier "$_f1c_projet_doc" "$f")" 'chronolog' 'impact' 'cause' 'd[ée]tect' '[0-9]{4}-[0-9]{2}-[0-9]{2}'
+  _f1c_contient "$(_f1c_fichier "$_f1c_projet_doc" "$f")" 'chronolog' 'impact' 'cause' 'd(e|é)tect' '[0-9]{4}-[0-9]{2}-[0-9]{2}'
 }
 check_cmd "post-mortem docs/day0/post-mortems/INC-5712*.md : chronologie, impact, cause, détection, actions datées" _f1_s12_pm

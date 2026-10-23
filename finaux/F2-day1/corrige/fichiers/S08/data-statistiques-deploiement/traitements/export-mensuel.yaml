@@ -1,4 +1,4 @@
-# data/deploiement — traitements/export-mensuel.yaml (F2-S08, PLAT-3208)
+# data/statistiques-deploiement — traitements/export-mensuel.yaml (F2-S08, PLAT-3208)
 # Le 2 de chaque mois : résultats agrégés du mois écoulé déposés dans s3://data-resultats (RGW de
 # ceph-par1), seule sortie de l'équipe Data vers la direction. Règle de diffusion (ADR-0327) : aucune
 # cellule de moins de 10 rendez-vous (les praticiens trop peu actifs sont regroupés en « autres »).

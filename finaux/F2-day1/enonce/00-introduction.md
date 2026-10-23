@@ -34,7 +34,7 @@ Lundi, 8 h 40. La reconstruction du Day 0 est derrière vous : `k8s-par1` est re
 | 4. Prestataire | [`04-prestataire.md`](04-prestataire.md) | S10 à S12 | comptes datés, OTP, accès limités à `mediagenda/api` et `mediagenda-axiomdev`, revue d'accès, départ |
 | 5. Recette | [`05-recette.md`](05-recette.md) | S13, S14 | outil `ms-verif-equipe`, étiquette **`day1-v1`**, retour d'expérience et feuille de route |
 
-Durée indicative : 40 à 55 heures, dont 14 à 18 pour la phase 1 (S02 est le plus long scénario du final) et 10 à 14 pour la phase 2.
+Durée indicative : 55 à 75 heures : 15 à 21 pour la phase 1 (S02 est le plus long scénario du final), 9 à 13 pour la phase 2, 15 à 21 pour la phase 3, 9 à 13 pour la phase 4, 6 à 8 pour la phase 5.
 
 ## Architecture visée en fin de phase 2
 
@@ -120,7 +120,7 @@ spec:
   etat: active                  # active | retiree
   responsable: <identifiant>    # une des personnes ci-dessous
   contact: <equipe>@medisphere.internal          # destinataire des alertes
-  expiration: AAAA-MM-JJ        # prestataire : obligatoire (fin des accès)
+  expiration: "AAAA-MM-JJ"      # prestataire : obligatoire (fin des accès) ; entre guillemets (YAML lit sinon une date)
   personnes:
     - identifiant: prenom.nom   # aussi : prenom, nom, courriel, titre
       role: responsable         # responsable | developpeur | lecteur
@@ -150,13 +150,16 @@ spec:
 
 Les équipes de ce final et leurs environnements : `medivisio` (`dev`, `recette`, `prod` → espaces `medivisio-dev`, `medivisio-recette`, `medivisio-prod`) ; `data` (`traitements` → `data-traitements`) ; `ext-axiomdev` (S10 : pas de locataire propre, un espace `mediagenda-axiomdev` dans le locataire `mediagenda`).
 
+Ce format est la **version 1**, celle que S02 livre. Il **évolue** deux fois pendant le final, toujours par ajout (un champ ajouté, jamais renommé), avec le schéma, le générateur et les tests : en S07, pour qu'un environnement d'équipe puisse porter une base jointe par OpenBao ; en S10, pour héberger un prestataire dans le locataire d'une autre équipe. Ces deux scénarios te le redemandent au bon moment.
+
 ## Faits techniques du final
 
 | Élément | Valeur |
 |---|---|
 | Versions | celles du bloc G et de F1 ([`annexes/versions-finaux-F1-F4.md`](../../../annexes/versions-finaux-F1-F4.md)) : F2 n'introduit aucun outil. Rappels utiles : Capsule 0.15 (`Tenant` `capsule.clastix.io/v1beta2`), Argo CD 3.5 (ApplicationSet, `goTemplate`), Backstage 1.56 (*scaffolder*), OpenBao 2.7 (fournisseur OpenTofu `hashicorp/vault ~> 5.13`), Keycloak 26.8 (`keycloak/keycloak ~> 5.10`), FreeIPA 4.13 (`freeipa.ansible_freeipa`), Grafana 13.2 (fournisseur 4.50.x), kube-prometheus-stack 92.x (Alertmanager 0.34), Pyrra 0.10, Kyverno 1.19 (politiques CEL), ESO 2.13 |
-| Projets GitLab nouveaux | `plateforme/equipes` (S02) ; groupes `medivisio`, `data` (S02) ; `medivisio/consultation` et `medivisio/consultation-deploiement` (S04, noms de référence) |
+| Projets GitLab nouveaux | `plateforme/equipes` (S02) ; groupes `medivisio`, `data` (S02) ; `medivisio/consultation` et `medivisio/consultation-deploiement` (S04, noms de référence) ; `data/statistiques-deploiement` (S07, dépôt de l'équipe Data) |
 | Espaces | `medivisio-dev`, `medivisio-recette`, `medivisio-prod` (locataire `medivisio`) ; `data-traitements` (locataire `data`) ; `mediagenda-axiomdev` (locataire `mediagenda`, S10) |
+| Adresse réservée | **10.10.41.66** : Service `LoadBalancer` de la base de l'équipe Data, joint par OpenBao depuis `vault01-03` (S07, modèle des 10.10.41.64-65 du M25) |
 | Adresses publiées (référence) | `https://consultation-dev.apps.par1.medisphere.internal`, `https://consultation-recette.apps.par1.medisphere.internal`, `https://consultation.apps.par1.medisphere.internal` (production) |
 | Coffre | `kv/<equipe>/<environnement>/<secret>` (convention du M25) ; MédiVisio : `kv/medivisio/<env>/consultation` |
 | Alertes | Mailpit : `medivisio@medisphere.internal`, `data@medisphere.internal` ; critiques aussi vers `astreinte@` (règle du M21) |
@@ -176,6 +179,7 @@ docs/accueil/
 ├── mesures/                     # S04, S05 (délais mesurés), S08 (refacturation)
 ├── journal/                     # journaux de diagnostic : AAAA-MM-JJ-F2-SXX-<sujet>.md
 ├── departs/                     # S12 (preuves de départ)
+├── recette-day1.md              # S13 (rapport de recette)
 ├── adr/                         # ADR-0320…
 ├── runbooks/                    # RB-320…
 └── retour-experience.md         # S14
@@ -185,21 +189,45 @@ docs/accueil/
 
 Facultatives ; les valeurs par défaut conviennent si tu gardes les noms de référence :
 
-```
-WB_F2_DOC=docs/accueil                                   # dossier de la documentation dans plateforme/medisphere
-WB_F2_PROJET_EQUIPES=plateforme/equipes                  # projet de l'équipe en code (S02)
-WB_F2_EQUIPES="medivisio data"                           # équipes vérifiées par check-S02
-WB_F2_PROJET_CODE=medivisio/consultation                 # projet du code de MédiVisio (S04)
-WB_F2_PROJET_DEPLOIEMENT=medivisio/consultation-deploiement
-WB_F2_COMPOSANT=medivisio-consultation                   # entité Component du catalogue
-WB_F2_IMAGE=medisphere/medivisio-consultation            # dépôt Harbor (projet/dépôt)
-WB_F2_DEPLOIEMENT=consultation                           # nom du Deployment dans medivisio-<env>
-WB_F2_URL_DEV=https://consultation-dev.apps.par1.medisphere.internal
-WB_F2_URL_RECETTE=https://consultation-recette.apps.par1.medisphere.internal
-WB_F2_URL_PROD=https://consultation.apps.par1.medisphere.internal
-```
+| Variable | Défaut | Utilisée par |
+|---|---|---|
+| `WB_F2_DOC` | `docs/accueil` | toutes : dossier de la documentation dans `plateforme/medisphere` |
+| `WB_F2_PROJET_DOC` | `plateforme/medisphere` | toutes : projet de la documentation |
+| `WB_F2_PROJET_EQUIPES` | `plateforme/equipes` | S02 : projet de l'équipe en code |
+| `WB_F2_EQUIPES` | `"medivisio data"` | S02, S08, S13 : équipes internes vérifiées |
+| `WB_F2_PROJET_CODE` | `medivisio/consultation` | S04, S05 : projet du code de MédiVisio |
+| `WB_F2_PROJET_DEPLOIEMENT` | `medivisio/consultation-deploiement` | S04 à S06 (et la panne de S06) |
+| `WB_F2_COMPOSANT` | `medivisio-consultation` | S04 : entité `Component` du catalogue |
+| `WB_F2_IMAGE` | `medisphere/medivisio-consultation` | S04 à S06 : dépôt Harbor (projet/dépôt) |
+| `WB_F2_DEPLOIEMENT` | `consultation` | S04 à S06 : nom du Deployment dans `medivisio-<env>` |
+| `WB_F2_URL_DEV` | `https://consultation-dev.apps.par1.medisphere.internal` | S04 |
+| `WB_F2_URL_RECETTE` | `https://consultation-recette.apps.par1.medisphere.internal` | S06 |
+| `WB_F2_URL_PROD` | `https://consultation.apps.par1.medisphere.internal` | S05 |
+| `WB_F2_DATA_NS` | `data-traitements` | S07, S08 : espace de l'équipe Data |
+| `WB_F2_DATA_CLUSTER` | `statistiques-db` | S07 : `Cluster` CloudNativePG de l'équipe Data |
+| `WB_F2_FRAICHEUR_S` | `129600` (36 h) | S07, S08 : âge maximal d'une sauvegarde, d'un chargement, d'un lot |
+| `WB_F2_TABLEAU_CONSOMMATION` | `plateforme-consommation-locataires` | S08 : UID du tableau Grafana |
+| `WB_F2_AXIOM_GROUPE` | `ext-axiomdev` | S10 à S12 : groupe du prestataire |
+| `WB_F2_AXIOM_PERSONNES` | `"marc.vidal yanis.perrin"` | S10 à S12 (et la panne de S11) |
+| `WB_F2_AXIOM_NS` | `mediagenda-axiomdev` | S10 à S12 : espace du prestataire |
+| `WB_F2_EXPIRATION_MAX_JOURS` | `100` | S10 : échéance maximale des accès du prestataire |
+| `WB_F2_PROJET_API` | `mediagenda/api` | S10, S11 : seul projet ouvert au prestataire |
+| `WB_F2_PROJET_IDENTITE` | `plateforme/identite` | S10, S11 : revue d'accès (`outils/revue-acces/modele.yml`) |
+| `WB_F2_PROJET_OUTILS` | `plateforme/outils` | S13 : projet de `ms-verif-equipe` |
+| `WB_F2_S13_SCENARIOS` | `"02 04 05 07 08 11 12"` | S13 : vérifications relancées par la recette |
+| `WB_F2_IPA_HOTE` | `ipa01` | panne de S11 : hôte de l'annuaire |
+| `WB_F2_CP1` | `k8s-cp01` | panne de S11 : nœud de contrôle (si `WB_K8S_ADMIN_KUBECONFIG` est vide) |
+| `WB_F2_S11_GROUPE_GITLAB` | `mediagenda` | panne de S11 : groupe GitLab visé |
+| `WB_F2_S11_GROUPE_IPA` | `mediagenda` | panne de S11 : groupe de l'annuaire visé |
 
-Les checks réutilisent `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_ARGOCD_*`, `WB_HARBOR_*`, `WB_GRAFANA_*`, `WB_AM_URL`, `WB_PROM_URL`, `WB_IPA_CHECKS_FILE`, `WB_OPENBAO_CHECKS_FILE`, `WB_KEYCLOAK_CHECKS_FILE`, `WB_BACKSTAGE_*` ; la panne de S06 lit `WB_GITLAB_ADMIN_TOKEN_FILE` et `WB_K8S_ADMIN_KUBECONFIG`.
+Les checks réutilisent `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_ARGOCD_*`, `WB_HARBOR_*`, `WB_GRAFANA_*`, `WB_AM_URL`, `WB_PROM_URL`, `WB_MAILPIT_*`, `WB_IPA_CHECKS_FILE`, `WB_IPA_BASE`, `WB_OPENBAO_CHECKS_FILE`, `WB_KEYCLOAK_CHECKS_FILE`, `WB_BACKSTAGE_*`, `WB_RACINE_PKI` ; les pannes de S06 et S11 lisent `WB_GITLAB_URL`, `WB_GITLAB_ADMIN_TOKEN_FILE` et `WB_K8S_ADMIN_KUBECONFIG`.
+
+### Outillage sur `adm01`
+
+En plus de ce que les blocs précédents ont installé (`kubectl` et ses greffons `kubelogin` et `cnpg`, `argocd`, `bao`, `glab`, `cosign`, `amtool`, `psql`, client `aws`, `jq`, `curl`, `ldapsearch`, `uv`) :
+- **`yq` de mikefarah (v4)** : la panne de S06 et l'outil de refacturation de S08 (`ms-showback`) ; le `yq` en Python (paquet Debian `yq`) ne convient pas ;
+- **`date` de GNU** (coreutils) : les checks de S10 calculent des échéances ;
+- pour la panne de S11 : SSH `admin` avec `sudo -n` vers `ipa01` et, si `WB_K8S_ADMIN_KUBECONFIG` n'est pas renseigné, vers `k8s-cp01` (`/etc/kubernetes/admin.conf`) ; le jeton d'administration GitLab (`WB_GITLAB_ADMIN_TOKEN_FILE`, portée `api`, M01).
 
 ---
 
@@ -209,7 +237,7 @@ Les checks réutilisent `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_ARGOCD_*`, `WB_H
 2. **Une seule source par équipe.** Après S02, une personne, un quota ou un droit d'équipe ne se change que dans `equipes/<equipe>.yaml`. Tu ne corriges jamais un fichier produit par ton mécanisme dans un dépôt cible.
 3. **Moindre privilège, des deux côtés.** Les équipes ne voient que leur périmètre ; ton mécanisme n'a pas une identité qui peut tout faire.
 4. **Les données de santé ne quittent pas la production.** Aucune personne de Data ni d'AxiomDev n'y accède ; tout ce qui en sort est pseudonymisé (phase 3).
-5. **Rien de destructif par un automate.** Un départ retire des droits ; supprimer un espace, un volume ou une base est un geste explicite, après sauvegarde vérifiée.
+5. **Rien de destructif par un automate.** Un départ retire des droits ; supprimer un espace, un volume ou une base est un geste explicite, après sauvegarde vérifiée. Seule exception, à décider et à écrire en S12 : un espace qui, par construction, ne contient rien qui doive survivre à son équipe.
 6. **Mesurer.** Délai d'accueil, délai jusqu'au premier déploiement, interventions de la Plateforme : notés au fil de l'eau (S04, S14 s'en servent).
 
 ## Indices, corrigé, vérifications

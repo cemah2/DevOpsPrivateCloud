@@ -5,7 +5,7 @@
 | **Type** | Workbook final (scénarios longs) |
 | **Profil de lab** | Profil de travail des blocs F et G (socle v5 + `ceph-par1` + `k8s-par1`, ≈ 111 Go) ; `pxe01` (2111, 1 Go) allumé pendant la phase 2 ; `k8s-par1` **détruit puis reconstruit** sur ses VMID d'origine (2141-2146) en phase 3 |
 | **Prérequis** | Blocs A à D (le code de tout ce qui est reconstruit) ; dans les faits, l'état de fin du bloc G : `lab/bin/check 29 25`, `28 25`, `27 25`, `26 46`, `25 46`, `24 46` verts |
-| **Durée indicative** | 45 à 60 heures (dont de longues attentes de construction) |
+| **Durée indicative** | 60 à 85 heures (dont de longues attentes de sauvegarde, d'installation et de construction) : phase 1 12 à 19 h, phase 2 11 à 15 h, phase 3 25 à 35 h, phase 4 10 à 16 h |
 
 ## Contexte MédiSphère
 

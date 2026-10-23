@@ -5,7 +5,7 @@
 | **Type** | Workbook final (scénarios longs) |
 | **Profil de lab** | Profil de travail des blocs F et G (≈ 111 Go) ; VMs migrées d'InfoGér `legacy-rdv01`, `ftp-part01`, `stats01` (3401-3403, ≤ 4 Go en tout) ; montée d'OpenStack (S08) **`k8s-par1` arrêté** : socle + `ceph-par1` + profil openstack (≈ 101 Go) |
 | **Prérequis** | F2 (`day1-v1`) ; M08 (Ceph), M10 (OpenStack), M09-E23 (import OVA), M12-E19 (image de Legacy-RDV), M14 (montée de Kubernetes), M16 (CephFS), M20 (GitOps), M29 (k6) |
-| **Durée indicative** | 50 à 65 heures |
+| **Durée indicative** | 65 à 80 heures |
 
 ## Contexte MédiSphère
 
@@ -49,10 +49,11 @@ Le trimestre des gros changements. Le contrat d'InfoGér s'arrête dans six sema
 | `legacy-rdv01` | 3401 | 10.10.20.44 (`192.168.50.21` chez InfoGér) | S10, décommissionnée en S14 |
 | `ftp-part01` | 3402 | 10.10.20.45 (`192.168.50.30`) | S10 |
 | `stats01` | 3403 | 10.10.20.46 (`192.168.50.40`) | S10 |
-| Legacy-RDV sur Kubernetes | locataire `legacy`, espaces `legacy-rdv-recette`, `legacy-rdv-prod` | `legacy-rdv.apps.par1.medisphere.internal` | S12, S13 |
+| Legacy-RDV publié aux cabinets | `rdv.par1.medisphere.internal` (VIP de `lb01`/`lb02`) : vers `legacy-rdv01` (S10), puis vers Kubernetes (S13) | 10.10.70.200 | S10, S13 |
+| Legacy-RDV sur Kubernetes | locataire `legacy`, espaces `legacy-rdv-recette`, `legacy-rdv-prod` | routes de la Gateway `legacy-rdv-recette.apps.par1.medisphere.internal`, `legacy-rdv.apps.par1.medisphere.internal` | S12, S13 |
 | mariadb-operator 26.6 | espace `mariadb-system` | — | S12 |
 
-L'export VMware est **simulé** : `ressources/F4-S09/` fabrique, sur `pve01`, les disques VMDK et les descripteurs OVF tels qu'InfoGér les aurait livrés (matériel VMware, `vmxnet3`, `pvscsi`, `open-vm-tools`, adresses d'InfoGér). Versions cibles : [`annexes/versions-finaux-F1-F4.md`](../../annexes/versions-finaux-F1-F4.md). Détails figés : [`PLAN.md`](../../PLAN.md) §4.14.
+L'export VMware est **simulé** : `ressources/S09/` fabrique, sur `pve01`, les disques VMDK et les descripteurs OVF tels qu'InfoGér les aurait livrés (matériel VMware, `vmxnet3`, `pvscsi`, `open-vm-tools`, adresses d'InfoGér). Versions cibles : [`annexes/versions-finaux-F1-F4.md`](../../annexes/versions-finaux-F1-F4.md). Détails figés : [`PLAN.md`](../../PLAN.md) §4.14.
 
 ## Fichiers
 

@@ -52,4 +52,5 @@ check_cmd "pods MédiNotif (prod) : aucun en CrashLoopBackOff" \
 # --- Trace -----------------------------------------------------------------------------------------------
 check_cmd "main courante : la non-perte des notifications est vérifiée et consignée (rebut, file, rejeu)" \
   _f3f_journal_cite INC-5913 'rebut|perte|perdu'
+check_cmd "RB-338 publié (docs/exploitation/runbooks/)" _f3f_rb_present RB-338
 _f3s_trace INC-5913 2

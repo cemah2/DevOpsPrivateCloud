@@ -1,4 +1,4 @@
-# data/deploiement — base/reseau.yaml (F2-S07, DEV-3207)
+# data/statistiques-deploiement — base/reseau.yaml (F2-S07, DEV-3207)
 # Refus par défaut dans data-traitements, puis seulement ce dont la base et les traitements ont besoin.
 # AUCUNE règle ne nomme un espace de MédiAgenda : l'extraction arrive par le sas S3 (s3-01).
 # L'entrée depuis vault01-03 (moteur db-data) est posée par la plateforme (60-openbao.yaml).

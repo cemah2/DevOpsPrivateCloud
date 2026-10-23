@@ -38,7 +38,7 @@ Ce final ne t'apprend rien de neuf : il te met en situation. Les incidents arriv
 | Vendredi | F3-S12 Alerte Falco en production · F3-S13 Les notifications s'accumulent | [`06-vendredi.md`](06-vendredi.md) |
 | Bilan | F3-S14 Post-mortem · F3-S15 Faire taire les alertes inutiles · F3-S16 Rapport de semaine et passation (`astreinte-v1`) | [`07-bilan.md`](07-bilan.md) |
 
-Les « jours » sont ceux du scénario, pas du calendrier : prends le temps qu'il faut entre deux incidents (35 à 50 heures en tout). Fais-les **dans l'ordre** : S04 suppose S03 clos, S14 et S16 s'appuient sur tout ce qui précède.
+Les « jours » sont ceux du scénario, pas du calendrier : prends le temps qu'il faut entre deux incidents (30 à 45 heures en tout, attentes des injections comprises). Fais-les **dans l'ordre** : S04 suppose S03 clos, S14 et S16 s'appuient sur tout ce qui précède.
 
 ---
 
@@ -62,23 +62,45 @@ Ce que la semaine mobilise (rien à installer, tout est là depuis les modules) 
 |---|---|---|
 | `WB_F3_DEPOT` | `plateforme/medisphere` | dépôt de la documentation lu par les checks |
 | `WB_F3_DOC` | `docs/exploitation` | dossier de l'exploitation |
-| `WB_F3_PROD_URL` / `WB_F3_RECETTE_URL` | `https://mediagenda.apps…` / `https://mediagenda-recette.apps…` | MédiAgenda publié |
+| `WB_F3_PROD_URL` | `https://mediagenda.apps.par1.medisphere.internal` | MédiAgenda publié (production) |
+| `WB_F3_RECETTE_URL` | `https://mediagenda-recette.apps.par1.medisphere.internal` | MédiAgenda publié (recette) |
 | `WB_F3_LATENCE_MAX` | `1.0` | médiane acceptable (s) d'une consultation de créneaux qui manque le cache |
-| `WB_F3_TEMOIN_URL` | `http://mon01.par1.medisphere.internal:9090` | Prometheus témoin |
+| `WB_F3_TEMOIN_URL` | `http://mon01.par1.medisphere.internal:9090` | Prometheus témoin de `mon01` |
 | `WB_F3_APPS_IGNOREES` | (vide) | regex des Applications Argo CD exclues du contrôle de santé (une Application que tu sais légitimement `OutOfSync`) |
 | `WB_F3_CEPH_TOLERES` | (vide) | regex de codes de santé Ceph tolérés (ex. `RECENT_CRASH` le temps de l'archiver) |
-| `WB_F3_CEPH_ADMIN` | `WB_CEPH_ADMIN` puis `ceph01` | nœud `_admin` de Ceph |
-| `WB_F3_VALKEY_MAXMEMORY_MIN` | `16777216` | plancher de `maxmemory` de Valkey en production |
-| `WB_F3_ACME_URL` | `https://ca01.par1.medisphere.internal/acme/acme/directory` | répertoire ACME attendu |
-| `WB_F3_DNS_PRIMAIRE` / `WB_F3_PASSERELLES` | `dns01` / `gw01 gw02` | autoritaire primaire, bordure |
-| `WB_F3_PROJET_OBSERVABILITE`, `WB_F3_FICHIER_KPS`, `WB_F3_FICHIER_ROUTES_TESTS` | `plateforme/observabilite`, `kps/values.yaml`, `alertmanager/routes-tests.txt` | configuration de l'alerte (M21) |
-| `WB_F3_PROJET_GITOPS`, `WB_F3_PROJET_DEPLOIEMENT`, `WB_F3_FICHIER_OVERLAY_RECETTE`, `WB_F3_PROJET_API`, `WB_F3_APP_RECETTE` | `plateforme/gitops`, `mediagenda/deploiement`, `overlays/recette/kustomization.yaml`, `mediagenda/api`, `mediagenda-recette` | chaîne de livraison (M19, M20) |
-| `WB_F3_S06_NOEUDS` | `WB_K8S_WORKERS` | travailleurs que l'incident de S06 peut toucher |
-| `WB_F3_S07_RESERVOIR` | `15:40 16:41 27:20 27:22 28:19` | réservoir de l'incident chronométré |
-| `WB_F3_S08_POOL`, `WB_F3_S08_CEPH_VMS` | `k8s-rbd`, `ceph01:2081 ceph02:2082 ceph03:2083` | stockage (M08, M16) |
-| `WB_F3_VALKEY_POD`, `WB_F3_VALKEY_ADMIN_USER`, `WB_F3_VALKEY_ADMIN_SECRET`, `WB_F3_VALKEY_ADMIN_CLE` | `valkey-0`, puis les valeurs `WB_M27_VALKEY_ADMIN_*` du M27 | compte d'administration de Valkey (injections) |
+| `WB_F3_CEPH_ADMIN` | `WB_CEPH_ADMIN`, sinon `ceph01` | nœud `_admin` de Ceph |
+| `WB_F3_VALKEY_MAXMEMORY_MIN` | `16777216` | plancher de `maxmemory` de Valkey en production (S03) |
+| `WB_F3_VALKEY_POD` | `valkey-0` | pod Valkey de production (injection S03) |
+| `WB_F3_VALKEY_ADMIN_USER`, `WB_F3_VALKEY_ADMIN_SECRET`, `WB_F3_VALKEY_ADMIN_CLE` | `WB_M27_VALKEY_ADMIN_*`, sinon `admin`, `valkey-admin`, `mot_de_passe` | compte d'administration de Valkey (injection S03, M27) |
+| `WB_F3_ACME_URL` | `https://ca01.par1.medisphere.internal/acme/acme/directory` | répertoire ACME attendu de `step-ca-acme` (S05) |
+| `WB_F3_DNS_PRIMAIRE` | `dns01` | autoritaire primaire (S05) |
+| `WB_F3_DNS02` | `dns02` | second récurseur (injection S11) |
+| `WB_F3_PASSERELLES` | `gw01 gw02` | passerelles de bordure (S05, S11) |
+| `WB_F3_PROJET_OBSERVABILITE` | `plateforme/observabilite` | configuration de l'alerte (S04, S15) |
+| `WB_F3_FICHIER_KPS` | `kps/values.yaml` | valeurs de kube-prometheus-stack (injection S04) |
+| `WB_F3_FICHIER_ROUTES_TESTS` | `alertmanager/routes-tests.txt` | essais de routage joués par la CI (S04) |
+| `WB_F3_PROJET_GITOPS` | `plateforme/gitops` | analyses des Rollouts (injection S09) |
+| `WB_F3_PROJET_DEPLOIEMENT` | `mediagenda/deploiement` | déploiement de MédiAgenda (S09) |
+| `WB_F3_FICHIER_OVERLAY_RECETTE` | `overlays/recette/kustomization.yaml` | overlay de recette (injection S09) |
+| `WB_F3_PROJET_API` | `mediagenda/api` | code de MédiAgenda (S09) |
+| `WB_F3_APP_RECETTE` | `mediagenda-recette` | Application Argo CD de la recette (S09) |
+| `WB_F3_S06_NOEUDS` | `WB_K8S_WORKERS`, sinon `k8s-w01 k8s-w02 k8s-w03` | travailleurs que l'incident de S06 peut toucher |
+| `WB_F3_S07_RESERVOIR` | `15:40 16:41 27:20 27:22 28:19` | réservoir de l'incident chronométré (`module:exercice`) |
+| `WB_F3_S08_POOL` | `k8s-rbd` | pool RBD du cluster (S08) |
+| `WB_F3_S08_CEPH_VMS` | `ceph01:2081 ceph02:2082 ceph03:2083` | VMs Ceph (`nom:VMID`, S08) |
+| `WB_F3_S11_NOM` | `git01.par1.medisphere.internal` | nom de contrôle des récurseurs (injection S11) |
+| `WB_F3_S11_SAUT_MORT` | `10.10.40.249` | adresse sans hôte du VLAN 40 (injection S11) |
+| `WB_F3_S11_CIBLES` | `10.10.41.10:443 10.10.41.60:9090 10.10.41.61:9093 10.10.41.62:3100` | adresses de service jointes depuis `adm01` (S11) |
+| `WB_F3_S12_IMAGE_DEBUG` | `registry.par1.medisphere.internal/dockerhub/library/busybox:1.37` | image du conteneur éphémère (injection S12) |
+| `WB_F3_S12_SELECTEUR_MEDIDOC` | `app.kubernetes.io/name=medidoc` | sélecteur des pods de MédiDoc en dev (injection S12) |
+| `WB_F3_S12_PREUVES_ENV` | `~/.config/workbook/s3-preuves-depot.env` | identité S3 du compartiment `preuves` (M26-E33) ; le check ne fait que lister |
+| `WB_F3_S3_URL` | `https://s3-01.par1.medisphere.internal:8333` | point d'accès S3 de `s3-01` (S12) |
+| `WB_F3_S13_DEBIT` | `110` | messages/s de la campagne factice (injection S13) |
+| `WB_F3_S13_DUREE` | `2700` | durée maximale (s) de la campagne factice (injection S13) |
+| `WB_F3_S13_SEUIL` | `2000` | messages en attente tolérés dans `notifications` (prod) après réparation (S13) |
+| `WB_F3_PROJET_NOTIF` | `medinotif/deploiement` | déploiement de MédiNotif (S13) |
 
-Les injections utilisent aussi ce que les modules ont déjà mis en place : `WB_GITLAB_ADMIN_TOKEN_FILE` (jeton d'administration GitLab, portée `api`), `WB_K8S_ADMIN_KUBECONFIG`, `WB_RACINE_PKI`, SSH `admin` + `sudo` vers les VMs et les nœuds, `root` vers `pve01`, `yq` (mikefarah) et `jq`, `bao` avec un jeton d'administration (`BAO_TOKEN` ou `~/.vault-token`, comme les pannes du M25), `amtool` (M21).
+**Outillage de `adm01`** (tout vient des modules ; vérifie-le en prenant l'astreinte, les injections refusent de partir s'il manque) : `kubectl` avec le kubeconfig d'administration (`WB_K8S_ADMIN_KUBECONFIG`) et kubelogin, `jq`, `yq` **de mikefarah (v4)**, `curl`, `ssh` (`admin` + `sudo` vers les VMs et les nœuds, `root` vers `pve01`), `dig` (S11), `amtool` (M21 : checks de S01 et S04), `bao` avec un jeton d'administration `plateforme-admin` (`BAO_TOKEN` ou `~/.vault-token`, comme les pannes du M25 ; injection S10), `aws` (CLI S3 : collecte et check de S12), `script` (paquet `util-linux` : terminal de l'injection S12), `timeout`, `base64`, `setsid` (coreutils et util-linux), `python3` (injection S13), le jeton d'administration GitLab `WB_GITLAB_ADMIN_TOKEN_FILE` (portée `api` : commits de Lucas et de Julien), la racine `WB_RACINE_PKI`, et le fichier d'identité **`~/.config/workbook/s3-preuves-depot.env`** du compartiment `preuves` (M26-E33, RB-262).
 
 ---
 
@@ -140,9 +162,9 @@ admin@adm01:~$ curl -sS --ssl-reqd --url smtp://smtp.par1.medisphere.internal:25
 
 Chaque message d'état envoyé a aussi son entrée `[état]` dans la main courante. Le **rythme** dépend de la gravité : c'est ta procédure (S02) qui le fixe, et tu t'y tiens.
 
-**Tickets d'action** : ce qui ne se règle pas pendant l'incident (prévention, dette) devient un ticket **`PLAT-33XX`** dans `plateforme/medisphere` (XX = numéro du scénario d'origine, suffixe `-a`, `-b`… si besoin), repris par le post-mortem (S14) et la passation (S16).
+**Tickets d'action** : ce qui ne se règle pas pendant l'incident (prévention, dette) devient un ticket **`PLAT-33XX`** dans `plateforme/medisphere` (XX = numéro du scénario d'origine, suffixe `-a`, `-b`… si besoin), repris par le post-mortem (S14) et la passation (S16). Les actions issues du post-mortem prennent **`PLAT-3371` et suivants** ; les numéros `PLAT-3350` à `PLAT-3369` sont déjà pris par des tickets antérieurs de l'équipe.
 
-**Runbooks** : les runbooks de l'exploitation sont numérotés **RB-330 et suivants**, sous `docs/exploitation/runbooks/` : RB-330 (MédiAgenda lent en production), RB-331 (une alerte n'est pas arrivée), RB-332 (certificats ACME non délivrés), RB-333 (nœud travailleur malade), RB-334 (stockage Ceph lent), RB-335 (livraison bloquée) ; les suivants sont pris par les incidents de jeudi et vendredi.
+**Runbooks** : les runbooks de l'exploitation sont numérotés **RB-330 et suivants**, sous `docs/exploitation/runbooks/` : RB-330 (MédiAgenda lent en production), RB-331 (une alerte n'est pas arrivée), RB-332 (certificats ACME non délivrés), RB-333 (nœud travailleur malade), RB-334 (stockage Ceph lent), RB-335 (livraison bloquée), RB-336 (les secrets ne suivent plus), RB-337 (une partie des noms ne répond plus), RB-338 (les notifications s'accumulent). Les incidents de sécurité suivent RB-262 (M26), sans nouveau runbook.
 
 ---
 

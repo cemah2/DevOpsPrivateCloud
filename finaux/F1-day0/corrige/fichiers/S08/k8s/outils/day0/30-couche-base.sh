@@ -123,4 +123,4 @@ geste "$PHASE" "CSR de service des kubelets approuvées par outils/approuver-csr
 etape "$PHASE" "kubelets et metrics-server" kubelets
 etape "$PHASE" "CI et Argo CD" ci_argocd
 etape "$PHASE" "pare-feu d'hôte, nœud par nœud" pare_feu_hote
-jalon "$PHASE" "couche de base terminée" "lab/bin/check F1 08 ; l'application racine n'est PAS créée (S10)"
+jalon "$PHASE" "couche de base terminée" "lab/bin/check F1 8 ; l'application racine n'est PAS créée (S10)"

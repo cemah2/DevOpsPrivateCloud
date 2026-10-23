@@ -1,4 +1,4 @@
-# data/deploiement — chargement/cronjob.yaml (F2-S07, DEV-3207, RB-327)
+# data/statistiques-deploiement — chargement/cronjob.yaml (F2-S07, DEV-3207, RB-327)
 # Chargement NOCTURNE de l'extraction pseudonymisée déposée par MédiAgenda dans le sas
 # s3://data-extractions/rendez-vous/AAAA-MM-JJ.csv.gz (+ manifeste .json) :
 #   1. « recuperation » : télécharge le fichier DU JOUR et son manifeste (identité en lecture seule sur

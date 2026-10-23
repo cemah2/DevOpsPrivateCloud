@@ -1,7 +1,8 @@
-# Corrigé — Final F3, phase 6 : vendredi
+# Final F3 — Corrigé de la phase 6 : vendredi
 
 > ⚠️ Corrigé : à n'ouvrir qu'après avoir cherché. Heures d'exemple : vendredi 2026-11-06.
 
+**Validé hors du lab** : règles et tests `promtool` de [`notifications-astreinte`](fichiers/S13/observabilite/regles/notifications-astreinte.yaml) (Prometheus 3.5, `promtool test rules`) ; `shellcheck -x` et `bash -n` sur les scripts, dont [`collecte-pod.sh`](fichiers/S12/outils/incident/collecte-pod.sh).
 **Non testé en conditions réelles** (à vérifier sur ton lab) : déclenchement exact de la règle « shell interactif » pour un conteneur éphémère (`kubectl debug -it`) selon la version des macros de Falco 0.45 ; comportement du Messaging Topology Operator 1.20 après un `rabbitmqctl clear_password` (il peut réconcilier l'utilisateur à sa prochaine resynchronisation et « réparer » seul la variante 1 de S13) ; débit réel de la campagne factice par l'API de gestion (dépend du poste `adm01` ; `WB_F3_S13_DEBIT` pour l'ajuster).
 
 ---
@@ -36,7 +37,7 @@ admin@adm01:~$ git -C ~/medisphere log --since=yesterday --oneline     # un chan
 
 Ce que l'on trouve, selon la variante : un shell interactif ouvert par `kubectl exec -it` (v1, v3) dans l'API de **recette** de MédiAgenda, ou par `kubectl debug -it` (v2 : conteneur éphémère `diag`, image busybox, ciblant MédiDoc en **dev** — l'image distroless n'a pas de shell, l'« intrus » en a apporté un) ; ensuite une boucle qui tente toutes les minutes une connexion vers 203.0.113.50:4444 (v1 : adresse externe, port typique d'un canal de commande), 198.51.100.23:6667 (v2) ou le coffre 10.10.20.200:8200 et l'API Kubernetes 10.10.40.200:8443 (v3 : reconnaissance interne). Hubble montre ces flux **jetés** par la politique de l'espace : rien n'est sorti. Le journal d'audit donne l'identité qui a demandé l'`exec` (dans le lab : celle de l'injection, ton compte ou `kubernetes-admin`) et l'adresse source (`adm01`).
 
-**Qualification : vrai positif**, jusqu'à preuve du contraire : aucun changement annoncé, aucune personne de l'équipe ne revendique l'action, comportement sans rapport avec l'application, connexions vers des destinations hors de la matrice. Le fait que l'identité soit celle d'un compte interne n'innocente rien : c'est la piste d'un **compte compromis** (ou d'un bris de glace utilisé hors procédure), à ajouter à l'escalade. Ce n'est **pas la production** (recette ou dev) : gravité SEV2 sécurité, pas SEV1, mais l'escalade à la RSSI reste obligatoire (RB-262).
+**Qualification : vrai positif**, jusqu'à preuve du contraire : aucun changement annoncé, aucune personne de l'équipe ne revendique l'action, comportement sans rapport avec l'application, connexions vers des destinations hors de la matrice. Le fait que l'identité soit celle d'un compte interne n'innocente rien : c'est la piste d'un **compte compromis** (ou d'un bris de glace utilisé hors procédure), à ajouter à l'escalade. Ce n'est **pas la production** (recette ou dev) : le titre du scénario et l'objet du transfert de Nadia (« Falco : shell en production ?! ») reprennent la façon dont l'alerte a été **perçue** ; établir l'environnement réel fait partie de la qualification, et le premier message d'état le rectifie. Gravité : SEV2 sécurité, pas SEV1 (aucune donnée de production exposée, rien n'est sorti), mais l'escalade à la RSSI reste obligatoire (RB-262), et un vrai positif en **production** aurait été SEV1 d'emblée (procédure S02).
 
 **2. Isoler.**
 
@@ -183,7 +184,7 @@ Une seule politique s'applique à une file : la plus prioritaire. `notifications
 
 - **Début (10:26)** — *[INC-5913] SEV2 — rappels SMS de production en retard* — « La file des notifications de production grossit depuis 10:00 environ pendant la campagne de rappels ; les SMS partent en retard, aucun n'est perdu. Diagnostic en cours. Support : répondre aux cabinets que les rappels arrivent avec retard. Prochain point : 10:50. »
 - **Point d'étape** — « Cause trouvée : l'ajustement automatique du nombre d'envois ne monte plus ([identifiants refusés | plafond modifié | message bloquant]). Correction en cours par le chemin normal ; retour à la normale estimé vers 11:15. »
-- **Fin** — « Rétabli à 10:58 ; file vide à 11:12 ; ≈ 9 800 rappels partis en retard (retard maximal 38 min), aucun perdu (vérifié). Prévention : alerte sur le retard des notifications (PLAT-3313). »
+- **Fin** — « Rétabli à 10:38 (effectif complet) ; file vide à 11:12 ; ≈ 9 800 rappels partis en retard (retard maximal 38 min), aucun perdu (vérifié). Prévention : alerte sur le retard des notifications (PLAT-3313). »
 
 #### Main courante (extrait type, variante 2)
 

@@ -1,0 +1,4 @@
+# data/gitops — services/statistiques.yaml (F2-S07, MR de Hugo Bernard). L'ApplicationSet « data » (rendu
+# de plateforme/equipes, F2-S02) en tire l'Application data-statistiques-traitements, synchronisée
+# automatiquement depuis data/statistiques-deploiement, overlays/traitements, dans data-traitements.
+service: statistiques

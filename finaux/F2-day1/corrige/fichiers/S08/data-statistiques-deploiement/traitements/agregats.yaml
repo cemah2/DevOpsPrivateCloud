@@ -1,4 +1,4 @@
-# data/deploiement — traitements/agregats.yaml (F2-S08, PLAT-3208)
+# data/statistiques-deploiement — traitements/agregats.yaml (F2-S08, PLAT-3208)
 # Agrégats quotidiens et mensuels, recalculés chaque nuit après le chargement (03:30) : tables
 # stats.activite_quotidienne et stats.activite_mensuelle (créées au premier passage, propriétaire
 # stats_ecriture : la session du compte dynamique prend ce rôle). Classe medisphere-lot : priorité basse,

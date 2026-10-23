@@ -9,7 +9,7 @@ prestataires:
   ext-axiomdev:
     responsable_interne: julien.petit
     contrat: SEC-3210
-    fin: "<DATE-FIN-CONTRAT>"
+    fin: "<AAAA-MM-JJ-FIN-CONTRAT>"
     gitlab:
       groupes: [ext-axiomdev]          # son groupe PROPRE (vide de projets MédiSphère) et AUCUN autre :
                                        # l'héritage ouvrirait tous les projets d'un groupe

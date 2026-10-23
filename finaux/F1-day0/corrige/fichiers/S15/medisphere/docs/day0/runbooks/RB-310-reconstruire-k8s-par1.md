@@ -12,7 +12,7 @@
 
 | Contrôle | Commande (sur `adm01`) | Attendu |
 |---|---|---|
-| Filet de moins de 24 h | `lab/bin/check F1 04` | vert (PBS `par1/k8s` des six VMs, etcd, Velero, CNPG, RabbitMQ, Argo CD) |
+| Filet de moins de 24 h | `lab/bin/check F1 4` | vert (PBS `par1/k8s` des six VMs, etcd, Velero, CNPG, RabbitMQ, Argo CD) |
 | Socle sain | `ms-verif-services`, `ms-verif-sauvegardes` | code 0 |
 | Coffre ouvert, session | `bao status`, `bao token lookup` | `Sealed false` ; politique `plateforme-admin` |
 | Dépôts à jour | `git -C ~/src/<projet> pull` pour infra, ansible, k8s, secrets, gitops, deploiement | `main` à jour, pipelines verts |
@@ -29,11 +29,15 @@ sauvegarde de base des trois bases **après** le gel.
 
 ## 2. Nœuds — `outils/day0/20-noeuds.sh` (référence <h:mm>) — ⚠️ POINT DE NON-RETOUR
 
-1. `tofu plan -replace` des six ressources VM de `envs/k8s` : **le plan ne doit supprimer que six
-   `proxmox_virtual_environment_vm`** (garde-fou du script) ; `apply`.
-2. `k8s-w03` par l'usine : VM vide en démarrage réseau (VLAN 60), installation par `pxe01` (profil
-   `k8s-noeud`), passage sur le VLAN 40 (procédure de F1-S06). Repli si l'usine est indisponible :
-   `DAY0_W03_SANS_USINE=oui` (clone, écart noté).
+1. `tofu plan -replace` des cinq ressources VM des nœuds clonés de `envs/k8s` (`k8s-cp01-03`,
+   `k8s-w01`, `k8s-w02`) : **le plan ne doit supprimer que cinq `proxmox_virtual_environment_vm`**
+   (garde-fou du script) ; `apply`.
+2. `k8s-w03` par l'usine, en deux temps (jamais dans le même apply) : retrait de `module.noeud["k8s-w03"]`
+   (`tofu apply -destroy -target`, plan limité aux objets de `k8s-w03`), puis `noeuds_usine =
+   { "k8s-w03" = "installation" }` (MR, apply), job `provisionner` (`EQUIPEMENT=k8s-w03`),
+   `noeuds_usine = { "k8s-w03" = "service" }` (MR, apply), `provisionner.py k8s-w03 --apres-bascule`
+   (procédure de F1-S06, `usine-k8s.md` §6). Repli si l'usine est indisponible :
+   `DAY0_W03_SANS_USINE=oui` (six clones remplacés, `noeuds_usine` vide, écart noté).
 3. Anciennes clés d'hôte retirées de `~/.ssh/known_hosts` ; SSH des six nœuds.
 4. `inscription-ipa.yml --limit <nœud>` un par un (ré-inscription forcée : l'hôte existe dans l'annuaire).
 5. `k8s-reconstruction.yml --limit k8s_par1 -e k8s_plan_controle_amorcage_auto=true` : nœuds,
@@ -43,7 +47,7 @@ sauvegarde de base des trois bases **après** le gel.
 
 **Points de contrôle** : `curl -k https://10.10.40.200:8443/livez` → `ok` ; un seul nœud porte
 10.10.40.200 ; `kubectl get nodes` : six nœuds `NotReady` (pas de CNI), version 1.36 ;
-`lab/bin/check F1 07`.
+`lab/bin/check F1 7`.
 
 ## 3. Couche de base — `outils/day0/30-couche-base.sh` (référence <h:mm>)
 
@@ -58,7 +62,7 @@ nœuds de contrôle un par un).
 naîtraient vides (`initdb`) avant leur récupération.
 **Points de contrôle** : six nœuds `Ready` ; `cilium bgp peers` : 12 sessions établies ;
 `kubectl -n passerelles get gateway gw-par1` `PROGRAMMED True` ; `kubectl get apiservice
-v1beta1.metrics.k8s.io` `True` ; `lab/bin/check F1 08`.
+v1beta1.metrics.k8s.io` `True` ; `lab/bin/check F1 8`.
 
 ## 4. Identité et secrets — `outils/day0/40-identite-secrets.sh` (référence <mm> min)
 
@@ -71,7 +75,7 @@ v1beta1.metrics.k8s.io` `True` ; `lab/bin/check F1 08`.
 6. Nouvel `admin.conf` (et `super-admin.conf`) dans le Vault `critique` ; inventaire des secrets.
 
 **Points de contrôle** : `outils/ca-k8s-par1.sh verifier` → deux OK ; tous les ExternalSecrets
-`Ready` ; `lab/bin/check F1 09`.
+`Ready` ; `lab/bin/check F1 9`.
 
 ## 5. Plateforme par Argo CD — `outils/day0/50-argocd.sh` (référence <mm> min)
 

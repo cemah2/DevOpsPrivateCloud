@@ -1,8 +1,9 @@
-# Corrigé — Final F3, phase 7 : bilan
+# Final F3 — Corrigé de la phase 7 : bilan
 
 > ⚠️ Corrigé : à n'ouvrir qu'après avoir cherché. Les trois livrables de référence sont des **exemples** : il en existe d'autres, et les tiens doivent porter tes chiffres, tes heures et tes décisions.
 
-**Non testé en conditions réelles** : les tests `promtool` de référence ont été écrits pour Prometheus 3.x et relus, mais pas exécutés lors de la rédaction (lance `promtool test rules` dans la CI de `plateforme/observabilite`, c'est précisément le critère) ; la configuration d'Alertmanager de l'extrait n'a pas été passée à `amtool check-config` (même remarque).
+**Validé hors du lab** : `promtool test rules` (Prometheus 3.5) passe sur les tests de référence de S11, S13 et S15 ; l'extrait de `kps/values.yaml` de S15, fusionné dans la configuration du corrigé de M21-E16, passe `amtool check-config` (Alertmanager 0.28) et les lignes ajoutées aux essais de routage donnent le récepteur attendu.
+**Non testé en conditions réelles** : l'effet des inhibitions sur l'Alertmanager du cluster (vérifie-le comme au point 3 de S15) ; le pipeline de `plateforme/observabilite` lui-même (c'est précisément le critère du check).
 
 ---
 

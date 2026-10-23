@@ -1,6 +1,6 @@
 # plateforme/k8s — espaces/legacy-rdv-prod/80-openbao.yaml (F4-S12, modèle de M25-E13 / M27-E04)
 # Compte « eso » sans jeton monté, SecretStore « openbao » lié au rôle eso-legacy-rdv-prod
-# (kv/legacy/prod/* seulement ; plateforme/secrets, tofu/legacy.tf).
+# (kv/legacy/prod/* seulement ; plateforme/secrets, tofu/eso-espaces.tf).
 apiVersion: v1
 kind: ServiceAccount
 metadata:

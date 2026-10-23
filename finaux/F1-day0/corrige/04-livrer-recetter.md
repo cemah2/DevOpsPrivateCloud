@@ -71,8 +71,8 @@ Le délai de bout en bout (fusion → 100 % du trafic) devient un indicateur DOR
 
 *1. Tri avant réparation.*
 ```
-admin@adm01:~/DevOpsPrivateCloud$ for c in "29 25" "28 25" "27 25" "26 46" "25 46" "24 46" "F1 02" "F1 05" "F1 06" \
-    "F1 07" "F1 08" "F1 09" "F1 10" "F1 11" "F1 12" "F1 13"; do echo "== $c"; lab/bin/check $c | grep -E '\[KO\]|Bilan'; done
+admin@adm01:~/DevOpsPrivateCloud$ for c in "29 25" "28 25" "27 25" "26 46" "25 46" "24 46" "F1 2" "F1 5" "F1 6" \
+    "F1 7" "F1 8" "F1 9" "F1 10" "F1 11" "F1 12" "F1 13"; do echo "== $c"; lab/bin/check $c | grep -E '\[KO\]|Bilan'; done
 admin@adm01:~$ /usr/local/bin/ms-verif-services --quiet; echo $?; /usr/local/bin/ms-verif-sauvegardes; echo $?
 ```
 Trois tas :
@@ -135,6 +135,10 @@ La liste de recette est rejouée chaque semaine par un pipeline planifié de `pl
 **Explications**
 
 Le rapport est la preuve que demandait Sophie au début du final : « on sait reconstruire, en tant de temps, avec ces limites ». Sa valeur tient à ce qu'il **compare** (estimation contre mesure) et à ce qu'il **avoue** (gestes manuels, surprises). Le runbook transforme une opération vécue par une personne en procédure pour une autre ; l'ADR transforme les constats en décision.
+
+**Alternatives**
+- Un rapport unique qui contient le runbook en annexe : un seul document pour l'auditeur, mais le runbook ne vit plus seul (il sera relu et rejoué sans le rapport).
+- Un runbook « exécutable » (les scripts `outils/day0/` appelés par un `Taskfile` ou un pipeline manuel, la page ne gardant que décisions et points de contrôle) : moins d'erreurs de copie, mais l'astreinte doit savoir lire les scripts quand ils échouent.
 
 **Pièges classiques**
 - Écrire le runbook comme un récit (« on a d'abord… ») au lieu d'une procédure à l'impératif avec points de contrôle.

@@ -63,7 +63,7 @@ Avec un vrai ESXi, on importe directement (stockage `esxi` de Proxmox), on fait 
 
 **Solution**
 
-Fichiers : [`S10/pve01/convertir-vm-infoger.sh`](fichiers/S10/pve01/convertir-vm-infoger.sh), [`S10/infra/envs/f4-infoger/`](fichiers/S10/infra/envs/f4-infoger/), [`S10/ansible/`](fichiers/S10/ansible/) (`playbooks/f4-infoger.yml`, `group_vars/env_f4/infoger.yml`, `group_vars/role_lb/legacy-rdv.yml` et extraits pour `haproxy.yml` et `certificats.yml`, gabarit nftables), [`S10/medisphere/docs/changements/runbooks/RB-345-migrer-vm-vmware.md`](fichiers/S10/medisphere/docs/changements/runbooks/RB-345-migrer-vm-vmware.md).
+Fichiers : [`S10/pve01/convertir-vm-infoger.sh`](fichiers/S10/pve01/convertir-vm-infoger.sh), [`S10/infra/envs/f4-infoger/`](fichiers/S10/infra/envs/f4-infoger/), [`S10/ansible/`](fichiers/S10/ansible/) (`playbooks/f4-infoger.yml`, `group_vars/env_f4/infoger.yml`, `group_vars/role_lb/legacy-rdv.yml` et extraits pour `haproxy.yml` et `certificats.yml`, groupe de sonde `continuite-legacy-rdv` de `mon01`, gabarit nftables), [`S10/medisphere/docs/changements/runbooks/RB-345-migrer-vm-vmware.md`](fichiers/S10/medisphere/docs/changements/runbooks/RB-345-migrer-vm-vmware.md).
 
 1. **Préparation** (MR avant la fenêtre) : flux de la matrice (répartiteurs → 10.10.20.44:80, MGMT → 10.10.20.45:21 et 40000-40100, `K8S_TRAV` → 9100 des trois VMs, `stats01` → `legacy-rdv01`:3306 dans le même VLAN : pare-feu local) ; code OpenTofu **sans** les blocs `import` (les VMs n'existent pas encore) ; publication de `rdv` prête mais non jouée.
 2. **Vague 1 — `ftp-part01`**, puis **vague 2 — `legacy-rdv01` et `stats01`**, une VM à la fois :
@@ -89,7 +89,7 @@ Fichiers : [`S10/pve01/convertir-vm-infoger.sh`](fichiers/S10/pve01/convertir-vm
        --comment "VMs migrées d'InfoGér (CHG-3410)"
    root@pve01:~# vzdump 3402 --storage pbs-par2 --mode snapshot
    ```
-   Sonde blackbox de `mon01` sur `https://rdv.par1.medisphere.internal/` et `tcp://10.10.20.45:21` (dans `plateforme/observabilite`, reprise par la sonde de continuité de S02).
+   Sonde de continuité : groupe **`continuite-legacy-rdv`** (étiquette `service: legacy-rdv`, cible `https://rdv.par1.medisphere.internal/`) ajouté à `host_vars/mon01/supervision_temoin.yml` de `plateforme/ansible` ([extrait](fichiers/S10/ansible/inventories/lab/host_vars/mon01/supervision_temoin.yml.extrait-F4-S10)), joué par le rôle `supervision_temoin` : c'est la même sonde qui mesurera la bascule (S13). Le port FTP se suit par `node_exporter` et `alloy` (le témoin du M21 n'a pas de module TCP : en ajouter un est une amélioration possible, pas un prérequis).
 8. **Preuves de service** : `curl -s https://rdv.par1.medisphere.internal/ | grep 'Rendez-vous'` ; un dépôt FTP de test en passif depuis `adm01` (`curl -T test.csv ftp://partenaire-labo@10.10.20.45/entrant/`, mot de passe du partenaire **réinitialisé** et transmis au partenaire par Nadia, ou compte de test temporaire supprimé ensuite) ; statistique lancée à la main sur `stats01` (`sudo /opt/stats/stats-rdv.sh`), fichier du jour non vide.
 
 **Explications**
@@ -145,6 +145,8 @@ Script : [`pannes/break-S11.sh`](pannes/break-S11.sh). Toutes les variantes pren
 - **Cause racine** : initramfs régénéré sans le pilote du contrôleur réel (une configuration pensée pour VMware : `MODULES=list` ou `MODULES=dep` généré sur l'ancien matériel produit le même effet).
 - **Correctif** : hors ligne (`virt-customize -a … --delete /etc/initramfs-tools/conf.d/zz-infoger-reduit.conf --run-command 'sed -i "/Wiki InfoGér/,\$d" /etc/initramfs-tools/modules' --run-command 'update-initramfs -u -k all'`) puis contrôle de `virtio_scsi` dans l'initramfs ; ou démarrage sur un autre noyau du menu GRUB s'il en reste un avec un ancien initramfs.
 - **Prévention** : toute régénération d'initramfs suivie d'un contrôle `lsinitramfs | grep virtio_scsi` (RB-345, rôle Ansible) ; jamais de `MODULES=dep` sur une VM qui peut changer de contrôleur.
+
+**Post-mortem** (toutes variantes) : `docs/changements/post-mortems/INC-6011-<sujet>.md`, même forme que INC-6006 (S06) : chronologie, hypothèses écartées et ce qui les a écartées, cause racine (mécanisme, pas « Lucas »), correction, prévention (contrôle de conformité de S10, RB-345 complété, consignes d'un tiers relues avant application). Une fois le check vert : `lab/bin/break F4 11 --annuler` pour supprimer l'instantané `avant_f4_s11`.
 
 **Explications**
 Un démarrage Linux est une chaîne : micrologiciel → chargeur → noyau → initramfs (pilotes, racine) → systemd (montages de `fstab`, réseau) → services. Chaque variante casse un maillon différent, avec un symptôme qui ne nomme pas la cause : la console série dit **où** on s'arrête, la comparaison de configuration (instantané, fichiers) dit **ce qui** a changé.

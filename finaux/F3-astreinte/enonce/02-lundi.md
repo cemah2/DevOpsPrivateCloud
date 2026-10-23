@@ -73,7 +73,7 @@ Le geste qui rétablit n'est pas toujours celui qui corrige. Un réglage fait «
 - Prouver la réparation par un essai **qui suit le vrai chemin**, et la protéger par la CI.
 
 **Prérequis** : F3-S03 **clos** ; M21 (règles de MédiAgenda, routes, silences, inhibitions, essais de routage en CI, témoin `mon01`).
-**Durée indicative** : 1 h 30 (temps cible).
+**Durée indicative** : 1 h 30 (temps cible) jusqu'à la réparation, puis 1 h pour la prévention, RB-331 et la trace.
 
 **Contexte technique**
 - Cet incident est **en chaîne** avec S03 : il s'injecte après la clôture de S03, mais pose l'état dans lequel était la chaîne d'alerte lundi matin. Tu enquêtes donc « après coup » sur un état toujours présent.

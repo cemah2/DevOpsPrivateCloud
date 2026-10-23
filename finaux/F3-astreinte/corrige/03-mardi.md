@@ -45,12 +45,12 @@
 - Essai depuis un travailleur (pod jetable de `wb-essais`, ou `ssh k8s-w01 curl -sv https://ca01.par1.medisphere.internal/health`) : délai dépassé. Sur la passerelle **maîtresse** (`ip -br a | grep 10.10.20.1` pour la savoir) :
   ```
   admin@gw01:~$ sudo nft -a list chain inet filter forward | head -5
-      ip saddr { 10.10.40.0/24, 10.240.0.0/16 } ip daddr 10.10.20.11 tcp dport 443 counter packets 42 bytes 2520 drop comment "PLAT-3305 durcissement provisoire" # handle 87
-  admin@gw01:~$ sudo nft -c -f /etc/nftables.conf && grep -c PLAT-3305 /etc/nftables.conf
+      ip saddr { 10.10.40.0/24, 10.240.0.0/16 } ip daddr 10.10.20.11 tcp dport 443 counter packets 42 bytes 2520 drop comment "PLAT-3350 durcissement provisoire" # handle 87
+  admin@gw01:~$ sudo nft -c -f /etc/nftables.conf && grep -c PLAT-3350 /etc/nftables.conf
   0
   ```
   La règle a été ajoutée **à chaud** (sur les deux passerelles) ; elle n'est pas dans `/etc/nftables.conf` ni dans la matrice des flux (`group_vars/role_routeur/pare_feu.yml`) : `ansible-playbook … --check --diff` ne la voit pas (le fichier n'a pas changé).
-- Correction par le code : remettre ce que décrit le code, une passerelle à la fois, la **secondaire** d'abord : `sudo systemctl reload nftables` (le fichier commence par `flush ruleset` et recharge la matrice écrite), puis la maîtresse ; vérifier la règle `VLAN 40 → ca01 443` de la matrice (M15) et ses compteurs. Si un durcissement était voulu (PLAT-3305 existe-t-il ?), il passe par une MR de la matrice des flux, revue.
+- Correction par le code : remettre ce que décrit le code, une passerelle à la fois, la **secondaire** d'abord : `sudo systemctl reload nftables` (le fichier commence par `flush ruleset` et recharge la matrice écrite), puis la maîtresse ; vérifier la règle `VLAN 40 → ca01 443` de la matrice (M15) et ses compteurs. Si un durcissement était voulu (PLAT-3350 existe-t-il ?), il passe par une MR de la matrice des flux, revue.
 - Prévention : un contrôle planifié qui compare `nft list ruleset` à la configuration écrite (empreinte) sur les passerelles, alerte en cas d'écart (ticket PLAT-3305-a) ; la répétition hebdomadaire devient une alerte (Pour aller plus loin).
 
 **Messages d'état types** (SEV3) : début « la plateforme ne peut plus délivrer de certificats ; aucun service touché aujourd'hui ; le certificat commun des services publiés échoit dans N jours ; prochain point HH:MM » ; fin « cause : <métadonnée DNS | adresse de l'émetteur | règle de pare-feu> modifiée à la main le <date> ; rétabli par la configuration du dépôt ; répétition délivrée à HH:MM ; prévention : <…> ».
@@ -110,7 +110,7 @@ Tout ce qui est décrit dans le code est **comparé** régulièrement à l'état
 
 - `systemctl status containerd` : `failed` ; `journalctl -u containerd -b | tail` : erreur de lecture de `/etc/containerd/config.toml` (table TOML non fermée) ; kubelet journalise `container runtime is down` / `connection refused` sur `/run/containerd/containerd.sock`.
 - Les conteneurs du nœud **tournent encore** (`ps -ef | grep containerd-shim`) : `KillMode=process` dans l'unité de containerd.io laisse vivre les *shims* ; c'est pour cela que les pods du nœud ont continué à répondre un moment. Mais sans runtime, plus rien ne démarre ni ne s'arrête, et le nœud est `NotReady`.
-- Fin du fichier : un bloc « Miroir interne pour les images de la plateforme (Lucas, PLAT-3306) ». Les miroirs du lab sont déjà configurés par `hosts.toml` (rôle `containerd`, M14) : ce bloc était inutile **et** invalide.
+- Fin du fichier : un bloc « Miroir interne pour les images de la plateforme (Lucas, PLAT-3351) ». Les miroirs du lab sont déjà configurés par `hosts.toml` (rôle `containerd`, M14) : ce bloc était inutile **et** invalide.
 - Correction : rôle `containerd` rejoué sur ce nœud (`--check --diff` puis application) ; containerd redémarre, reprend les conteneurs existants ; kubelet repasse `Ready`.
 
 **Pourquoi pas l'horloge** (Pour aller plus loin de l'énoncé) : une dérive d'horloge sur un travailleur casse, dans l'ordre, la validation TLS par le kubelet du certificat de l'API (s'il recule avant sa date de début), les tickets `cephx` des volumes RBD montés (E/S bloquées), les poignées de main WireGuard de Cilium (un horodatage plus ancien que le dernier vu est rejeté par les pairs comme un rejeu, **même après** correction de l'heure si elle a avancé), les jetons projetés. Elle se voit avant de casser par `node_timex_offset_seconds` et `node_timex_sync_status` (node_exporter) : alerte à 100 ms. L'injection ne la pratique pas : le retour arrière n'est pas sûr.

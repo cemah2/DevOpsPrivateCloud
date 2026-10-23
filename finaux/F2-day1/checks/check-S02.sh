@@ -56,7 +56,8 @@ _f2a_s02_role_eso() {  # ESPACE
   bao_api "auth/k8s-par1/role/eso-$1" 2>/dev/null |
     jq -e --arg n "$1" '.data.bound_service_account_namespaces == [$n] and .data.bound_service_account_names == ["eso"]' >/dev/null 2>&1
 }
-_f2a_s02_politiques_bornees() {  # EQUIPE — politiques du groupe externe : uniquement kv/<equipe>/ (hors ci/)
+_f2a_s02_politiques_bornees() {  # EQUIPE — politiques du groupe externe : kv/<equipe>/ (hors ci/) et, si l'équipe a une
+  # base jointe par OpenBao (S07), les identifiants dynamiques de son propre moteur db-<equipe>/creds/
   local e="$1" gb p texte chemins
   gb="$(bao_api "identity/group/name/$e" 2>/dev/null)" || return 1
   [[ -n "$(jq -r '.data.policies[]?' <<<"$gb")" ]] || return 1
@@ -66,7 +67,7 @@ _f2a_s02_politiques_bornees() {  # EQUIPE — politiques du groupe externe : uni
     chemins="$(grep -Eo 'path "[^"]+"' <<<"$texte" | sed 's/^path "//; s/"$//')"
     while IFS= read -r c; do
       [[ -z "$c" || "$c" == "sys/capabilities-self" ]] && continue
-      [[ "$c" =~ ^kv/(data|metadata|delete|undelete)/$e/ ]] || return 1
+      [[ "$c" =~ ^kv/(data|metadata|delete|undelete)/$e/ || "$c" =~ ^db-$e/creds/ ]] || return 1
       [[ "$c" =~ ^kv/[a-z]+/$e/ci(/|$) ]] && return 1
     done <<<"$chemins"
   done
@@ -87,7 +88,7 @@ check_cmd "projet GitLab $_F2A_P_EQUIPES" _f2a_projet_existe "$_F2A_P_EQUIPES"
 check_cmd "$_F2A_P_EQUIPES : CI définie (.gitlab-ci.yml sur main)" \
   _f2a_contient "$(_f2a_fichier "$_F2A_P_EQUIPES" .gitlab-ci.yml)" "stages|script"
 check_cmd "docs : capacite.md (allouable, requests réservées, budgets)" \
-  _f2a_contient "$(_f2a_fichier plateforme/medisphere "$_F2A_DOC/capacite.md")" "allouable" "request" "budget|quota"
+  _f2a_contient "$(_f2a_fichier "$_F2A_P_DOC" "$_F2A_DOC/capacite.md")" "allouable" "request" "budget|quota"
 check_cmd "docs : ADR-0320 publié (adr/ADR-0320-…)" _f2a_doc '^ADR-0320' "statut|status" "décision|decision"
 check_cmd "docs : RB-320 publié (accueillir, modifier, retirer)" _f2a_doc '^RB-320' "arriv|accueil" "départ|retir"
 
@@ -163,7 +164,7 @@ for _f2a_s02_e in $_F2A_EQUIPES; do
       and any(.spec.namespaceResourceBlacklist[]?; .kind == \"ResourceQuota\"))"
 
   # Coffre, portail, Grafana, alertes
-  check_cmd "coffre : groupe externe $_f2a_s02_e, politiques limitées à kv/$_f2a_s02_e/ (jamais ci/)" \
+  check_cmd "coffre : groupe externe $_f2a_s02_e, politiques limitées à kv/$_f2a_s02_e/ (jamais ci/) et à db-$_f2a_s02_e/creds/" \
     _f2a_s02_politiques_bornees "$_f2a_s02_e"
   check_cmd "portail : entité Group $_f2a_s02_e au catalogue, avec des membres" _f2a_s02_groupe_catalogue "$_f2a_s02_e"
   check_cmd "Grafana : dossier d'UID $_f2a_s02_e" _f2a_s02_dossier_grafana "$_f2a_s02_e"

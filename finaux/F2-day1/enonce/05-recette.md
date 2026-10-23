@@ -89,4 +89,9 @@ Rédige **`docs/accueil/retour-experience.md`** :
 Un comité de direction lit la première page : mets la conclusion et les trois décisions demandées en tête, les tableaux ensuite. Un délai sans cible ne dit rien ; une cible sans mesure non plus.
 </details>
 
+<details><summary>Indice 2</summary>
+
+Une feuille de route priorisée dit **comment** elle l'est : une règle simple (valeur pour les équipes × fréquence du problème ÷ effort) appliquée à chaque action, un responsable, un indicateur qui dira si l'action a marché. Les frictions que tu as notées au fil du final (mesures, journaux, tickets) sont la matière première ; une action qui ne répond à aucune friction mesurée doit se justifier autrement.
+</details>
+
 **Pour aller plus loin** (facultatif) : définir trois indicateurs suivis chaque mois (délai jusqu'au premier déploiement, tickets d'accueil par équipe, efficacité réservé/utilisé) et les mettre dans un tableau Grafana « plateforme comme produit ».

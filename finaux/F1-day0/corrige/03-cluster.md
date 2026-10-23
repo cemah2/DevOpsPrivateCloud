@@ -10,7 +10,7 @@ Les scénarios de cette phase sont des `LIBRE` : ce corrigé donne **une solutio
 
 **Points non testés en conditions réelles** (signale tes retours) :
 - l'enchaînement complet des scripts `outils/day0/` sur le lab (durées, attentes, ordre exact des releases de **ton** `releases/`) ;
-- `tofu plan -replace` sur les ressources VM du module `vm-noeud` (adresse exacte de la ressource dans le module : le script la cherche par `tofu state list`) ;
+- `tofu plan -replace` sur les ressources VM du module `vm-noeud` (adresse exacte de la ressource dans le module : le script la cherche par `tofu state list`) et `tofu plan -destroy -target='module.noeud["k8s-w03"]'` (le garde-fou du script refuse tout ce qui ne porte pas `"k8s-w03"` dans son adresse) ;
 - la ré-inscription FreeIPA d'un hôte déjà connu (variable de **ton** rôle `freeipa_client` pour forcer la jonction ; à défaut, `ipa host-disable` de l'ancien hôte avant) ;
 - les options `--method plugin --plugin-name` de `kubectl cnpg backup` 1.30 (vérifie `--help`) ;
 - `argocd app sync --resource` avec les noms de **tes** objets de la base de production ;
@@ -31,7 +31,7 @@ Fichiers : [`commun.sh`](fichiers/S07/k8s/outils/day0/commun.sh), [`10-gel.sh`](
 ```
 admin@adm01:~/src/k8s$ outils/day0/10-gel.sh
 ```
-- contrôle du filet par `lab/bin/check F1 04` (sauvegardes de moins de 24 h) ;
+- contrôle du filet par `lab/bin/check F1 4` (sauvegardes de moins de 24 h) ;
 - **Argo CD arrêté** (contrôleurs d'applications et d'ApplicationSets à 0) : sans cela, l'auto-réparation de `mediagenda-recette` remettrait les réplicas que tu viens d'enlever. Geste manuel, noté : le cluster est détruit ensuite, rien à remettre ;
 - Rollouts `mediagenda` à 0 en recette et en production (`kubectl scale rollout`, sous-ressource `scale` des Rollouts) : un HPA ne fait **rien** sur une cible à 0 réplique (condition `ScalingActive=False`, « scaling is disabled since the replica count of the target is zero ») ; `portail` à 0 ; CronJobs suspendus ;
 - files vidées **par MédiNotif** (qui tourne encore) : on attend `messages == 0` sur les deux vhosts, on ne purge jamais ;
@@ -43,9 +43,9 @@ admin@adm01:~/src/k8s$ outils/day0/10-gel.sh
 admin@adm01:~/src/k8s$ outils/day0/20-noeuds.sh
 ```
 - **point de non-retour** confirmé ;
-- `tofu plan -replace=<adresse>` des **six ressources VM** trouvées par `tofu state list` dans `envs/k8s`, avec un garde-fou : le plan ne doit rien supprimer d'autre que six `proxmox_virtual_environment_vm` (NetBox, DNS, réservations restent) ; `tofu apply` du plan enregistré. Un `tofu destroy` puis `apply` marcherait aussi, mais retirerait et recréerait les adresses NetBox et les enregistrements DNS (fenêtre où `k8s-cp01` ne se résout plus, NetBox qui change d'identifiants d'objets) ;
-- `k8s-w03` : la variable de F1-S06 décrit la VM vide en démarrage réseau sur le VLAN 60 ; `pxe01` l'installe (profil `k8s-noeud`), puis la seconde application de la variable la repasse sur le VLAN 40 (adresse 10.10.40.63) ;
-- **clés d'hôte SSH** : les VMs neuves ont des clés neuves, `~/.ssh/known_hosts` garde les anciennes (« REMOTE HOST IDENTIFICATION HAS CHANGED ») ; le certificat d'hôte signé par step-ca (M06-E19) n'est posé que plus tard. Geste manuel noté : `ssh-keygen -R` des noms, FQDN et adresses ;
+- `tofu plan -replace=<adresse>` des **cinq ressources VM** des nœuds clonés (`k8s-cp01-03`, `k8s-w01`, `k8s-w02`) trouvées par `tofu state list` dans `envs/k8s`, avec un garde-fou : le plan ne doit rien supprimer d'autre que cinq `proxmox_virtual_environment_vm` (NetBox, DNS, réservations restent) ; `tofu apply` du plan enregistré. Un `tofu destroy` puis `apply` marcherait aussi, mais retirerait et recréerait les adresses NetBox et les enregistrements DNS (fenêtre où `k8s-cp01` ne se résout plus, NetBox qui change d'identifiants d'objets) ;
+- `k8s-w03` change de **mode de création** (clone de `vm-noeud` → `usine.tf` de F1-S06). Comme l'écrit l'en-tête de `usine.tf`, jamais en une passe sur un nœud existant (même VMID, même adresse : « VM 2146 already exists »). D'abord un apply qui **retire** `module.noeud["k8s-w03"]` (`tofu plan -destroy -target='module.noeud["k8s-w03"]'`, garde-fou : uniquement des suppressions d'objets de `k8s-w03` : VM 2146, VM NetBox, adresses, DNS), puis la procédure de `usine-k8s.md` §6 : MR `noeuds_usine = { "k8s-w03" = "installation" }` et apply (VM vide sur `vprov`, démarrage réseau), job `provisionner` de `plateforme/provisioning` (`EQUIPEMENT=k8s-w03` : installation par `pxe01`, profil `k8s-noeud`), MR `noeuds_usine = { "k8s-w03" = "service" }` et apply (modification **en place** : carte sur `vk8s`, carte de stockage, démarrage sur disque, adresse 10.10.40.63), puis `uv run outils/provisionner.py k8s-w03 --apres-bascule` (clé d'hôte confirmée par l'agent QEMU, NetBox `active`). Le script attend la fin de ces étapes et vérifie la phase `service` dans `tofu output noeuds_usine` ;
+- **clés d'hôte SSH** : les VMs neuves ont des clés neuves, `~/.ssh/known_hosts` garde les anciennes (« REMOTE HOST IDENTIFICATION HAS CHANGED ») ; le certificat d'hôte signé par step-ca (M06-E19) n'est posé que plus tard. Geste manuel noté : `ssh-keygen -R` des noms, FQDN et adresses ; pour `k8s-w03`, la clé confirmée par l'agent QEMU (`~/.cache/provisionner/known_hosts-k8s-w03`) est reprise telle quelle ;
 - **inscription FreeIPA nœud par nœud** (`inscription-ipa.yml --limit <nœud>`, garde-fous du M24) : les hôtes **existent déjà** dans l'annuaire avec la clé de l'ancienne VM ; une jonction forcée (variable de jonction forcée de ton rôle `freeipa_client`, `ipaclient_force_join` si ton rôle s'appuie sur le rôle `ipaclient` d'ansible-freeipa) ou une désactivation préalable de l'hôte (`ipa host-disable k8s-w01.par1.medisphere.internal`) est nécessaire ;
 - `k8s-reconstruction.yml --limit k8s_par1 -e k8s_plan_controle_amorcage_auto=true` : nœuds (containerd, kubeadm), **durcissement** (vague 6, un nœud à la fois, avant kubeadm), **fichiers du serveur d'API** (audit, chiffrement, authentification structurée) **avant** l'amorçage — un kube-apiserver dont `--authentication-config` vise un fichier absent ne démarre pas —, VIP (keepalived + HAProxy), `kubeadm init` sur `k8s-cp01` seulement (premier du groupe, amorçage explicite), jonctions, instantanés etcd ;
 - `admin.conf` du nouveau cluster copié en 600 dans `~/.kube/admin-k8s-par1.conf` (contexte renommé `k8s-par1`) : c'est l'identité de la reconstruction jusqu'à S09 ;
@@ -55,13 +55,13 @@ admin@adm01:~/src/k8s$ outils/day0/20-noeuds.sh
 
 *4. Volumes orphelins.* `outils/volumes-orphelins.sh lister` après S08 (il compare les images `csi-vol-*` du pool `k8s-rbd` aux PV du cluster **actuel**) ; décision écrite dans `volumes-ancien-cluster.md` : rien n'est supprimé avant la recette + 30 jours, puis corbeille RBD datée (`rbd trash mv --expires-at`, restaurable par `rbd trash restore`), purge par un geste séparé et tracé.
 
-*5. Points de contrôle* : `curl -k https://10.10.40.200:8443/livez` → `ok` ; `kubectl --kubeconfig ~/.kube/admin-k8s-par1.conf get nodes` → six nœuds `NotReady` en v1.36.5 (pas encore de CNI) ; `lab/bin/check F1 07`.
+*5. Points de contrôle* : `curl -k https://10.10.40.200:8443/livez` → `ok` ; `kubectl --kubeconfig ~/.kube/admin-k8s-par1.conf get nodes` → six nœuds `NotReady` en v1.36.5 (pas encore de CNI) ; `lab/bin/check F1 7`.
 
 **Explications**
 
 - *Pourquoi un gel aussi strict ?* La reconstruction remet les bases par **rejeu d'archive** jusqu'au dernier WAL archivé. Toute écriture après le dernier segment archivé est perdue ; toute écriture entre la sauvegarde de S04 et la destruction n'est sauvée que si son WAL est archivé. `pg_switch_wal()` ferme le segment courant pour qu'il parte vers `s3-01` tout de suite (sinon, jusqu'à `archive_timeout`, 5 min chez CNPG). La sauvegarde de base **après** le gel raccourcit aussi le rejeu de S11.
 - *Pourquoi vider les files plutôt que les exporter ?* L'export des définitions (CronJob `export-definitions`) ne contient **pas** les messages. Un message en file au moment de la destruction est perdu (RB-275 §4). Laisser le consommateur finir est la seule façon de n'en perdre aucun ; MédiAgenda ne publie plus rien puisqu'il est à l'arrêt.
-- *Pourquoi `-replace` et pas `destroy` ?* Le module `vm-noeud` gère la VM et des objets annexes (adresse NetBox, enregistrement DNS selon ton module) : seule la VM doit mourir. `-replace` est aussi ce qu'a fait M14-E23 pour un travailleur.
+- *Pourquoi `-replace` et pas `destroy` ?* Le module `vm-noeud` gère la VM et des objets annexes (adresse NetBox, enregistrement DNS selon ton module) : seule la VM doit mourir. `-replace` est aussi ce qu'a fait M14-E23 pour un travailleur. `k8s-w03` est l'exception : ses objets **changent de propriétaire** (de `module.noeud` à `usine.tf`), ils sont donc retirés puis recréés, en deux applies pour qu'OpenTofu ne crée jamais la nouvelle VM 2146 avant d'avoir détruit l'ancienne.
 - *Ordre Ansible.* Les dépendances sont écrites dans les en-têtes des playbooks : fichiers de l'API avant toute (re)configuration du serveur d'API, VIP avant les jonctions, un nœud de contrôle à la fois (`serial: 1`, quorum etcd). Le durcissement **avant** kubeadm : ses exceptions pour les nœuds (sysctl, modules, swap, ports) sont éprouvées sur un nœud vide, pas découvertes sur un cluster en service.
 - *Ce qui ne revient pas ici.* Supervision et journaux des nœuds sont des DaemonSets (node-exporter de `kps`, Alloy) : ils reviennent en S10. La carte VLAN 30 (`k8s-reseau-stockage.yml`) attend un nœud `Ready` : S08.
 
@@ -75,7 +75,8 @@ admin@adm01:~/src/k8s$ outils/day0/20-noeuds.sh
 **Pièges classiques**
 - Lancer `task appliquer` de `plateforme/k8s` sur le cluster neuf : il applique **tout** `espaces/`, y compris `espaces/mediagenda-recette/50-mediagenda-db.yaml` et `espaces/portail/50-portail-db.yaml`. Dès que la CRD de CNPG existe (S08), une base **vide** (`initdb`) naît à la place de la recette, et tente d'archiver sous l'ancien `serverName` (le plugin l'arrête : « Expected empty archive »). Avant S11, on n'applique que des sous-ensembles choisis.
 - Détruire avant que la sauvegarde d'après le gel soit `completed` (ou avant que la file soit vide).
-- `tofu destroy` « pour aller plus vite » : NetBox et le DNS perdent les nœuds pendant la reconstruction, et l'usine (S06), qui lit NetBox, ne trouve plus `k8s-w03`.
+- `tofu destroy` « pour aller plus vite » : NetBox et le DNS perdent les nœuds pendant la reconstruction, l'inventaire `netbox-k8s.yml` ne voit plus rien, et les identifiants des objets NetBox changent.
+- Poser `noeuds_usine = { "k8s-w03" = "installation" }` **avant** d'avoir retiré le clone : un seul apply qui détruit `module.noeud["k8s-w03"]` et crée les ressources de l'usine, sans ordre entre elles (« VM 2146 already exists », adresse en double dans NetBox).
 - Garder l'ancien `admin.conf` : il ne vaut plus rien (autorité différente) ; un script qui l'utilise échoue en `x509`, parfois longtemps après.
 - Oublier le compte `wb-checks` : tous les checks suivants échouent sur « l'API ne répond pas au compte des checks » alors que le cluster va bien.
 - Supprimer les images RBD de l'ancien cluster pendant la fenêtre : le retour arrière par PBS en a besoin (les PV restaurés y renvoient).
@@ -117,7 +118,7 @@ Ordre réel (et pourquoi) :
 
 *Les certificats de kubelets.* Avec `serverTLSBootstrap: true` (M26-E25), chaque kubelet demande un certificat `kubernetes.io/kubelet-serving` que personne n'approuve tant que kubelet-csr-approver (Application d'Argo CD) n'est pas revenu. Symptômes : nœuds `Ready`, mais `kubectl logs`/`exec` échouent (« remote error: tls: internal error ») et metrics-server reste non prêt. L'outil refait à la main les contrôles de l'approbateur (demandeur `system:node:<nœud>` d'un des six nœuds, noms et adresses ⊂ nom court, FQDN, adresses du statut du nœud) et laisse en attente tout ce qui sort du cadre.
 
-*Points de contrôle* : `kubectl get nodes` (six `Ready`) ; `cilium bgp peers` (douze sessions établies) ; `kubectl -n passerelles get gateway gw-par1` (`PROGRAMMED True`, 10.10.41.10) ; `curl -sI https://argocd.apps.par1.medisphere.internal` ; `lab/bin/check F1 08`.
+*Points de contrôle* : `kubectl get nodes` (six `Ready`) ; `cilium bgp peers` (douze sessions établies) ; `kubectl -n passerelles get gateway gw-par1` (`PROGRAMMED True`, 10.10.41.10) ; `curl -sI https://argocd.apps.par1.medisphere.internal` ; `lab/bin/check F1 8`.
 
 **Explications**
 
@@ -323,7 +324,7 @@ admin@adm01:~$ kubectl get cm kube-root-ca.crt -o jsonpath='{.data.ca\.crt}' | o
                                                                                    ← deux empreintes différentes
 admin@adm01:~/src/secrets$ outils/ca-k8s-par1.sh verifier                          # le dépôt est juste, OpenBao non
 ```
-(`jwt=-` lit le jeton sur l'entrée standard : il n'apparaît pas dans `ps`.) Origine : journal d'audit d'OpenBao (Loki, locataire `audit`) : `{service="openbao"} |= "auth/k8s-par1/config"` → écriture `update` par une identité (la tienne : c'est ta session qui a servi à injecter), hors du pipeline. Pourquoi les ExternalSecrets tombent « un à un » : les jetons déjà délivrés restaient valides (15 min) ; à leur expiration ou révocation, chaque reconnexion échoue, au rythme des rafraîchissements.
+(`jwt=-` lit le jeton sur l'entrée standard : il n'apparaît pas dans `ps`.) Origine : journal d'audit d'OpenBao (Loki, locataire `audit`) : `{service="openbao"} |= "auth/k8s-par1/config"` → écriture `update` par une identité (la tienne : c'est ta session qui a servi à injecter), hors du pipeline. Pourquoi les ExternalSecrets tombent « un à un » : ESO se connecte à OpenBao à chaque synchronisation ; chacun échoue à son prochain rafraîchissement (la panne force celui de `harbor-pull` en recette), au rythme des `refreshInterval`. Les Secrets déjà écrits restent, et les identifiants dynamiques déjà délivrés restent valides jusqu'à la fin de leur bail (1 h) : c'est ce qui rend l'incident urgent, car la production manquerait ensuite d'identifiants de base.
 
 Variante 2 — le portail ne répond plus :
 ```

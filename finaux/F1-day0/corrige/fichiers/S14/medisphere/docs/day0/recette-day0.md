@@ -19,9 +19,9 @@
 | `lab/bin/check 26 46` | vert | | |
 | `lab/bin/check 25 46` | vert | | |
 | `lab/bin/check 24 46` | vert | | |
-| `lab/bin/check F1 02` | vert | | aucune dérive après la reconstruction |
-| `lab/bin/check F1 05`, `F1 06` | vert | | |
-| `lab/bin/check F1 07` à `F1 13` | vert | | |
+| `lab/bin/check F1 2` | vert | | aucune dérive après la reconstruction |
+| `lab/bin/check F1 5`, `F1 6` | vert | | |
+| `lab/bin/check F1 7` à `F1 13` | vert | | |
 | `ms-verif-services`, `ms-verif-sauvegardes` | vert | | |
 
 ## Écarts légitimes et leur traitement

@@ -1,4 +1,4 @@
-# data/deploiement — base/initialisation.yaml (F2-S07, DEV-3207)
+# data/statistiques-deploiement — base/initialisation.yaml (F2-S07, DEV-3207)
 # SQL joué UNE fois par CloudNativePG à la création de statistiques-db (postInitApplicationSQLRefs),
 # en superutilisateur, dans la base « statistiques ». Le modifier après coup ne rejoue rien : une
 # évolution du schéma passe par le traitement qui la porte (CREATE … IF NOT EXISTS) ou par un outil de

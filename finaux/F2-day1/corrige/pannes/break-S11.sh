@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck source-path=SCRIPTDIR
 # shellcheck disable=SC2016  # filtres jq et scripts distants entre apostrophes
 # break-S11.sh — F2-S11 « Panne : le prestataire voit trop de choses »
 #

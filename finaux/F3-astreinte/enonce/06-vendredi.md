@@ -8,7 +8,7 @@ Vendredi, dernier jour. Deux incidents qui mettent à l'épreuve autre chose que
 
 ### F3-S12 — Vendredi : alerte Falco en production  `BF` `★★★`
 
-> **Incident INC-5912** — *Alerte reçue sur `astreinte@`, vendredi 7 h 52*
+> **Ticket INC-5912** — *Alerte reçue sur `astreinte@`, vendredi 7 h 52*
 > Courriels d'Alertmanager `AlerteFalco` : un shell interactif dans un conteneur applicatif, puis des connexions sortantes vers un port non prévu, répétées chaque minute. Personne n'a annoncé d'intervention. Nadia transfère avec pour objet « Falco : shell en production ?! ». *(L'espace concerné s'affiche à l'injection : vérifier si c'est vraiment la production fait partie de la qualification.)*
 
 **Objectifs pédagogiques**
@@ -21,7 +21,7 @@ Vendredi, dernier jour. Deux incidents qui mettent à l'épreuve autre chose que
 
 **Contexte technique**
 - Politique de cluster `quarantaine` (CiliumClusterwideNetworkPolicy, M26-E33), posée à l'avance : elle s'applique à tout pod étiqueté `medisphere.internal/quarantaine=oui`. RB-262 décrit l'ordre des gestes.
-- Compartiment `preuves` de `s3-01` : identité `preuves-depot` (écrire, lister, jamais supprimer), identité `preuves-lecture` ; versionné. Fichiers d'identité dans `~/.config/workbook/` (M26).
+- Compartiment `preuves` de `s3-01` : identité `preuves-depot` (écrire, lister, jamais supprimer : fichier `~/.config/workbook/s3-preuves-depot.env` de RB-262, M26-E33), identité `preuves-lecture` (RSSI seulement) ; versionné ; point d'accès `https://s3-01.par1.medisphere.internal:8333`.
 - ⚠️ **Ne supprime pas le pod suspect, ne redémarre pas son conteneur, ne lance rien dedans** avant la fin de la collecte. Ne désactive ni ne modifie Falco, ses règles ou falcosidekick pour faire taire l'alerte. Un silence Alertmanager **ciblé et daté** sur le pod une fois isolé est permis (consigne-le).
 - Simulation : l'« attaque » est inoffensive (aucun binaire, aucune donnée lue ni envoyée, aucune sortie réelle) ; traite-la comme si elle ne l'était pas.
 
@@ -63,7 +63,7 @@ Sortir un pod de son contrôleur : retirer une étiquette du **sélecteur** du R
 
 ### F3-S13 — Vendredi : les notifications s'accumulent  `BF` `★★★`
 
-> **Incident INC-5913** — *De : Nadia Roussel, vendredi 10 h 20*
+> **Ticket INC-5913** — *De : Nadia Roussel, vendredi 10 h 20*
 > « Trois cabinets appellent : leurs patients n'ont pas reçu les SMS de rappel de ce matin. Dans l'interface de RabbitMQ, la file `notifications` de la prod grossit à vue d'œil. On a pourtant mis KEDA pour ça, non ? » (une campagne de rappels exceptionnelle est en cours)
 
 **Objectifs pédagogiques**
@@ -86,12 +86,12 @@ Sortir un pod de son contrôleur : retirer une étiquette du **sélecteur** du R
 2. Mesure : débit d'entrée, débit de sortie, nombre de consommateurs, effectif demandé et obtenu, état du ScaledObject ; déduis-en si l'autoscaling, la consommation ou la capacité est en cause.
 3. Corrige la cause par le chemin normal (dépôt et Argo CD, rotation d'identifiants par OpenBao, topologie déclarative) ; consigne tout écart trouvé hors du code et son auteur s'il est connu (journaux d'audit).
 4. Vérifie que la file redescend et estime l'heure à laquelle les rappels en retard seront tous partis ; vérifie qu'aucun message n'est perdu (rebut, compteurs de MédiNotif) et écris-le.
-5. **Prévention** : une alerte de symptôme (le client attend) plutôt que de cause, et ce qui aurait empêché l'écart (contrôle de dérive, procédure de rotation, politique).
+5. **Prévention** : une alerte de symptôme (le client attend) plutôt que de cause, et ce qui aurait empêché l'écart (contrôle de dérive, procédure de rotation, politique), en MR ou en tickets `PLAT-3313…`. Écris **RB-338** « Les notifications s'accumulent » (`docs/exploitation/runbooks/`).
 
 **Critères de réussite**
 - [ ] La file `notifications` (prod) a au moins deux consommateurs, sa politique effective est `notifications-rebut` (rebut et limite de livraison positifs) et elle se vide (moins de 2 000 messages, ou consommée plus vite qu'alimentée).
 - [ ] Le ScaledObject `medinotif` (prod) est prêt, hors repli, avec le maximum du dépôt ; MédiNotif a au moins deux pods disponibles, aucun en `CrashLoopBackOff`.
-- [ ] La main courante d'INC-5913 dit comment la non-perte des messages a été vérifiée ; l'incident est ouvert, suivi et clos ; un courriel d'état au moins est parti.
+- [ ] La main courante d'INC-5913 dit comment la non-perte des messages a été vérifiée ; l'incident est ouvert, suivi et clos ; un courriel d'état au moins est parti ; RB-338 est publié.
 
 **Vérification** : `lab/bin/check F3 13`
 

@@ -1,11 +1,10 @@
-# GÉNÉRÉ par plateforme/equipes (outils/rendre.py, F2-S10) — NE PAS MODIFIER ICI.
-# Accès DIRECTS de prestataires à des projets GitLab (jamais à un groupe), datés. Appliqué par le job
-# gitlab:prestataires de plateforme/identite (outils/gitlab-prestataire.sh). Une équipe retirée
-# disparaît de ce fichier : son départ (RB-329 § C, outils/depart-externe.sh) retire les appartenances.
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) — NE PAS MODIFIER ICI : MR sur plateforme/equipes.
 gitlab_prestataires:
-  - equipe: ext-axiomdev
-    groupe_propre: ext-axiomdev
-    expiration: <AAAA-MM-JJ-FIN-CONTRAT>
-    personnes: [marc.vidal, yanis.perrin]
-    projets:
-      mediagenda/api: developer
+- equipe: ext-axiomdev
+  groupe_propre: ext-axiomdev
+  expiration: '<AAAA-MM-JJ-FIN-CONTRAT>'
+  personnes:
+  - marc.vidal
+  - yanis.perrin
+  projets:
+    mediagenda/api: developer

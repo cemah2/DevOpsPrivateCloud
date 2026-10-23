@@ -54,8 +54,8 @@ Si `legacy-rdv01` change d'adresse avant `stats01` : la statistique de la nuit �
 
 | Vague | VMs | Pourquoi | Fenêtre |
 |---|---|---|---|
-| 1 | `ftp-part01` | indépendante, faible risque, valide la méthode (import, EFI, renommage d'interface, reprise de main) | mardi 12:30-13:30, partenaires prévenus J-7 (dépôts refusés pendant la fenêtre, à refaire après) |
-| 2 | `legacy-rdv01` **et** `stats01` | couplées (base, compte `stats`, nom) ; les cabinets ne travaillent pas le samedi matin | samedi 07:00-09:00, cabinets prévenus J-7 par Nadia (bandeau, courriel) |
+| 1 | `ftp-part01` | indépendante, faible risque, valide la méthode (import, EFI, renommage d'interface, reprise de main) | mardi 20:00-21:00 (fenêtre du mardi), partenaires prévenus J-7 (dépôts refusés pendant la fenêtre, à refaire après) |
+| 2 | `legacy-rdv01` **et** `stats01` | couplées (base, compte `stats`, nom) ; les cabinets ne travaillent pas le samedi matin | samedi 08:00-10:00 (fenêtre longue du samedi), cabinets prévenus J-7 par Nadia (bandeau, courriel) |
 
 Re-adressage : 192.168.50.21/.30/.40 → **10.10.20.44/.45/.46**, passerelle 10.10.20.1, résolveurs 10.10.20.10 et 10.10.20.16, domaine `par1.medisphere.internal`. Ce qui doit suivre dans les VMs : `/etc/network/interfaces` (et le nom `ens18`), `/etc/resolv.conf`, `/etc/hosts`, `pasv_address` de vsftpd, `host` de `/etc/stats/stats.cnf` (vers `legacy-rdv01.par1.medisphere.internal`), compte MariaDB `'stats'@'192.168.50.40'` → `'stats'@'10.10.20.46'`. Noms DNS et NetBox par OpenTofu (`envs/f4-infoger`). Nom des cabinets : `rdv.par1.medisphere.internal`, CNAME vers la VIP des répartiteurs, servi par `lb01`/`lb02` dès la vague 2.
 
@@ -65,7 +65,7 @@ Re-adressage : 192.168.50.21/.30/.40 → **10.10.20.44/.45/.46**, passerelle 10.
 **No-go** : une somme qui ne correspond pas, un incident en cours, la sonde rouge.
 **Succès** (observables) : agent QEMU qui répond, adresses et noms corrects, page d'accueil de Legacy-RDV par `rdv.par1.medisphere.internal`, dépôt FTP passif de test, statistique de la nuit non vide ; `tofu plan` vide.
 **Retour arrière** : VM importée arrêtée et supprimée (`qm destroy` après sauvegarde), ré-import depuis l'export intact (20 min par VM) ; publication de `rdv` retirée des répartiteurs (variable, 5 min). Point de non-retour : aucun, tant que l'export est intact et que Legacy-RDV n'a pas reçu d'écriture côté MédiSphère qui n'existe pas dans l'export — après la vague 2, les nouveaux rendez-vous rendent le retour vers l'export **destructeur** : le retour arrière devient « réparer en avant ».
-**Mesures** : sonde de Legacy-RDV par `rdv` (disponibilité, latence) et sondes TCP 21 de `ftp-part01`, relevées avant, pendant et après chaque vague, dans la fiche.
+**Mesures** : sonde de Legacy-RDV par `rdv` (disponibilité, latence) et dépôt FTP passif de test sur `ftp-part01`, relevés avant, pendant et après chaque vague, dans la fiche.
 
 ## 6. Ce qui ne migre pas tel quel
 

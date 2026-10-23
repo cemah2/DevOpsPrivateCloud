@@ -187,24 +187,54 @@ Ouvre `docs/day0/journal/<date>-ouverture.md` et notes-y l'heure de début : les
 
 ### Variables de `lab/lab.env`
 
-Toutes facultatives : les valeurs par défaut conviennent au lab de référence. Ne pose que ce qui diffère chez toi.
+Toutes facultatives : les valeurs par défaut conviennent au lab de référence. Ne pose que ce qui diffère chez toi, et note la raison (S14 te demandera la liste).
 
 | Variable | Défaut | Usage |
 |---|---|---|
-| `WB_F1_PROJET_DOC` | `plateforme/medisphere` | dépôt de la documentation lu par les checks |
-| `WB_F1_DOC` | `docs/day0` | dossier du final dans ce dépôt |
-| `WB_F1_JOURS` | `7` | fraîcheur exigée des contrôles de dérive (S02) |
+| `WB_F1_PROJET_DOC` | `plateforme/medisphere` | dépôt de la documentation lu par les checks (tous) |
+| `WB_F1_DOC` | `docs/day0` | dossier du final dans ce dépôt (tous) |
+| `WB_F1_JOURS` | `7` | fraîcheur exigée des contrôles de dérive et des plans (S02) |
 | `WB_F1_HEURES` | `24` | âge maximal des sauvegardes du filet (S04) |
-| `WB_F1_PBS_DATASTORE`, `WB_F1_PBS_NS` | `ds-lab`, `par1/k8s` | datastore et espace de noms PBS des nœuds (S04) |
-| `WB_F1_NOEUDS_VMID` | `2141 … 2146` | VMID des nœuds dont la sauvegarde est exigée (S04) |
+| `WB_F1_PBS_DATASTORE`, `WB_F1_PBS_NS` | `ds-lab`, `par1/k8s` | datastore et espace de noms PBS des nœuds (S04, S07) |
+| `WB_F1_NOEUDS_VMID` | `2141 2142 2143 2144 2145 2146` | VMID des nœuds de `k8s-par1` (S04, S07) |
 | `WB_F1_ETCD_UNITE`, `WB_F1_ETCD_HEURES` | `etcd-instantane.service`, `2` | unité d'instantané etcd des nœuds de contrôle et âge maximal (S04) |
+| `WB_F1_LB01`, `WB_F1_LB02`, `WB_F1_DNS02` | `lb01`, `lb02`, `dns02` | hôtes visés par la panne et le check de S03 |
+| `WB_F1_LB02_VMID` | `1011` | VMID de `lb02` (S03) |
 | `WB_F1_LB02_ETIQUETTES`, `WB_F1_LB02_ONBOOT` | `role-lb;socle`, `1` | configuration Proxmox attendue de `lb02` (S03) |
+| `WB_F1_VIP_LB` | `10.10.70.200` | VIP des répartiteurs (S03, S05) |
 | `WB_F1_DEBUT` | — | date de référence (époque Unix) qui remplace le premier commit de `reference-avant.md` (S05) : seulement en cas de reprise du final |
-| `WB_F1_ZONES` | zones `par1`, `par2` et inverses | zones comparées entre `dns01` et `dns02` (S05) |
+| `WB_F1_ZONES` | `par1.medisphere.internal par2.medisphere.internal 10.10.in-addr.arpa 20.10.in-addr.arpa` | zones comparées entre `dns01` et `dns02` (S05) |
 | `WB_F1_ESSAI_VMID`, `WB_F1_ESSAI_NOM`, `WB_F1_ESSAI_MAC` | `3101`, `f1-usine-essai`, `02:4d:53:60:31:01` | machine d'essai de l'usine (S06) |
 | `WB_F1_PXE`, `WB_F1_PROFIL` | `pxe01`, `k8s-noeud` | serveur de démarrage et nom du profil (S06) |
+| `WB_F1_K8S_VERSION` | `v1.36` | mineure attendue des nœuds reconstruits (S07) |
+| `WB_F1_NAISSANCE_JOURS` | `30` | âge maximal du cluster reconstruit (S07) |
+| `WB_F1_S10_ATTENTE` | `mediagenda-recette mediagenda-prod portail` | Applications qui peuvent attendre leurs données en S10 |
+| `WB_F1_SERVEURS_ANCIENS` | `mediagenda-db mediagenda-db-prod portail-db` | `serverName` d'archivage des anciennes bases, interdits aux bases reconstruites (S11) |
+| `WB_F1_PROD_URL` | `https://mediagenda.apps.par1.medisphere.internal` | MédiAgenda de production (S11, S13) |
+| `WB_F1_DNS_AUTORITE`, `WB_F1_DNS_PORT` | `10.10.20.10`, `5300` | DNS faisant autorité interrogé sans récursion (S12) |
+| `WB_F1_GATEWAY_IP` | `10.10.41.10` | adresse de `gw-par1` (S08, S12) |
+| `WB_F1_S12_NOM`, `WB_F1_S12_ADRESSE`, `WB_F1_S12_ESPACE` | `portail.apps.par1.medisphere.internal`, `10.10.41.20`, `mediagenda-recette` | cibles de la panne de S12 (à ne changer que si ton lab diffère du corrigé) |
+| `WB_F1_PROJET_API`, `WB_F1_PROJET_DEPLOIEMENT` | `mediagenda/api`, `mediagenda/deploiement` | projets de la livraison (S13) |
+| `WB_F1_HARBOR_DEPOT` | `medisphere/mediagenda-api` | dépôt Harbor de l'image livrée (S13) |
+| `WB_F1_S14_CONTROLES` | `29 25, 28 25, 27 25, 26 46, 25 46, 24 46, F1 02, F1 05, F1 06, F1 07, F1 08, F1 09, F1 10, F1 11, F1 12, F1 13` | contrôles rejoués par la recette (S14) ; toute réduction est une décision écrite |
 
-Les phases 3 et 4 en ajoutent quelques-unes, présentées là où elles servent. Les checks réutilisent aussi `WB_PVE_HOST`, `WB_PBS_HOST`, `WB_K8S_*`, `WB_GITLAB_*`, `WB_NETBOX_*`, `WB_PROM_URL`, `WB_IPA_*`.
+Les checks réutilisent aussi `WB_PVE_HOST`, `WB_PBS_HOST`, `WB_K8S_*` (dont `WB_K8S_CP` et `WB_K8S_ADMIN_KUBECONFIG`), `WB_GITLAB_*`, `WB_NETBOX_*`, `WB_PROM_URL`, `WB_IPA_*`, `WB_OPENBAO_URL`, `WB_TIMEOUT`.
+
+### Outillage sur `adm01`
+
+En plus de ce que les modules ont installé (`tofu`, `uv`, `ansible`, `task`, `helm`, `helmfile`, `kubectl`, `kubelogin`), le final suppose :
+
+| Outil | Pour quoi |
+|---|---|
+| `jq`, `yq` **de mikefarah (v4)**, `curl`, `dig`, `openssl`, `ssh`, `timeout` | checks et pannes (S03 et S12 refusent de s'injecter sans eux) |
+| `bao` (CLI OpenBao) et une session OIDC portant `plateforme-admin` | amorçage des secrets (S08), confiance d'OpenBao (S09), panne S12 (session valable au moins 20 min) |
+| greffon `kubectl cnpg` | gel et sauvegardes (S04, S07), récupération (S11) |
+| `velero` | sauvegarde complète du filet (S04), restauration d'appoint (S11) |
+| `argocd` (CLI, connexion SSO) | synchronisation sélective de la production (S11) |
+| `cilium` (CLI) | couche de base (S08) |
+| greffon `kubectl argo rollouts` | suivi du canary (S13) |
+| `age` et `etcdutl` | relecture d'un instantané etcd (S04, RB-141) |
+| `~/.config/workbook/powerdns-api.env` (M06-E14), `rabbitmq-checks.env` | panne S12, gel des files (S07) |
 
 ---
 
@@ -217,8 +247,10 @@ Les phases 3 et 4 en ajoutent quelques-unes, présentées là où elles servent.
 ## Ordre conseillé
 
 ```
-S01 ─ S02 ─ S03 ─ S04 (go/no-go)                         phase 1 : 10 à 14 h
-S05 (lb02, puis dns02) ─ S06 (usine)                     phase 2 : 10 à 14 h, dont des attentes d'installation
+S01 ─ S02 ─ S03 ─ S04 (go/no-go)                         phase 1 : 12 à 19 h
+S05 (lb02, puis dns02) ─ S06 (usine)                     phase 2 : 11 à 15 h, dont des attentes d'installation
+S07 ─ S08 ─ S09 ─ S10 ─ S11 ─ S12                        phase 3 : 25 à 35 h (fenêtre CHG-3107)
+S13 ─ S14 ─ S15                                          phase 4 : 10 à 16 h
 ```
 
 S03 se lance **après** S02 : la panne suppose un code et une réalité alignés (son contrôle préalable le vérifie). S04 se rejoue juste avant la fenêtre de la phase 3 : ses preuves ont moins de 24 h au moment du go, quitte à refaire les sauvegardes. S05 et S06 sont indépendants ; S06 doit être terminé avant S07.

@@ -1,4 +1,4 @@
-# data/deploiement — base/sauvegarde.yaml (F2-S07, DEV-3207)
+# data/statistiques-deploiement — base/sauvegarde.yaml (F2-S07, DEV-3207)
 # Sauvegardes de la base Data vers s3-01, compartiment cnpg-data (PROPRE à l'équipe : jamais
 # cnpg-k8s-par1, où une identité en écriture pourrait toucher l'archive de la production). Identité
 # SeaweedFS « cnpg-data » (Read, Write, List sur cnpg-data seulement), clés dans OpenBao

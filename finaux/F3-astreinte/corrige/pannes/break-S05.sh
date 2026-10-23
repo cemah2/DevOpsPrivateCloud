@@ -17,7 +17,7 @@
 #      Sans effet (variante suivante) si l'objet est réconcilié tout de suite par un outil.
 #   3. Bordure (gw01 ET gw02, quelle que soit la maîtresse) : règle nftables insérée À CHAUD en tête de
 #      la chaîne forward, qui jette 10.10.40.0/24 et 10.240.0.0/16 → 10.10.20.11:443 (commentaire
-#      « PLAT-3305 durcissement provisoire ») : plus aucun dialogue ACME depuis les travailleurs.
+#      « PLAT-3350 durcissement provisoire ») : plus aucun dialogue ACME depuis les travailleurs.
 #      /etc/nftables.conf n'est pas modifié. Annulation : suppression des seules règles qui portent ce
 #      commentaire (jamais par numéro seul : un rechargement renumérote).
 
@@ -33,7 +33,7 @@ _S05_ISSUER=step-ca-acme
 _S05_DNS="${WB_F3_DNS_PRIMAIRE:-dns01}"
 _S05_GW="${WB_F3_PASSERELLES:-gw01 gw02}"
 _S05_URL_FAUSSE="https://ca01.par1.medisphere.internal/acme/acme-v2/directory"
-_S05_COMMENTAIRE="PLAT-3305 durcissement provisoire"
+_S05_COMMENTAIRE="PLAT-3350 durcissement provisoire"
 
 _s05_issuer_pret() {
   wb_kubectl get clusterissuer "$_S05_ISSUER" -o json 2>/dev/null |

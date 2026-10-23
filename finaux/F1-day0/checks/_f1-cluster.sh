@@ -147,7 +147,7 @@ _f1c_naissance() {
 _f1c_naissance_iso() {
   local e
   e="$(_f1c_naissance)"
-  [[ -n "$e" ]] && date -u -d "@$e" +%Y-%m-%dT%H:%M:%SZ
+  if [[ -n "$e" ]]; then date -u -d "@$e" +%Y-%m-%dT%H:%M:%SZ; fi
 }
 
 # _f1c_deploiement_pret ESPACE NOM — Deployment avec toutes ses répliques disponibles (au moins une).

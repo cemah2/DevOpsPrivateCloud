@@ -35,7 +35,7 @@ Cette phase est la plus longue du final (25 à 35 heures, dont de longues attent
 - Faire passer un nœud par la chaîne NetBox → PXE → Ansible → cluster au milieu d'une reconstruction.
 - Mesurer chaque étape et décider du sort des données orphelines (volumes RBD de l'ancien cluster).
 
-**Prérequis** : F1-S04 (`lab/bin/check F1 04` vert **dans les 24 heures** qui précèdent la destruction) ; F1-S06 (profil `k8s-noeud` de l'usine, `k8s-w03` préparé) ; modules 14 (kubeadm, rôles, VIP, etcd), 16 (carte VLAN 30 des travailleurs), 19 (travailleurs à 10 Go), 24 (authentification structurée, inscription FreeIPA), 26 (durcissement, pare-feu d'hôte, kubelets), 27 (gel des files, sauvegardes CNPG).
+**Prérequis** : F1-S04 (`lab/bin/check F1 4` vert **dans les 24 heures** qui précèdent la destruction) ; F1-S06 (profil `k8s-noeud` de l'usine, `k8s-w03` préparé) ; modules 14 (kubeadm, rôles, VIP, etcd), 16 (carte VLAN 30 des travailleurs), 19 (travailleurs à 10 Go), 24 (authentification structurée, inscription FreeIPA), 26 (durcissement, pare-feu d'hôte, kubelets), 27 (gel des files, sauvegardes CNPG).
 **Durée indicative** : 8 à 12 h (dont 1 h de gel et 2 à 3 h d'attente d'installation).
 
 **Contexte technique**
@@ -67,7 +67,7 @@ Cette phase est la plus longue du final (25 à 35 heures, dont de longues attent
 - [ ] Les six nœuds sont inscrits dans FreeIPA et ont un score de conformité publié (fichier du collecteur textfile) ; l'instantané etcd horaire est actif sur les nœuds de contrôle.
 - [ ] `chronologie.md` et `volumes-ancien-cluster.md` sont publiés sur `main` de `plateforme/medisphere`.
 
-**Vérification** : `lab/bin/check F1 07`
+**Vérification** : `lab/bin/check F1 7`
 
 <details><summary>Indice 1</summary>
 
@@ -76,7 +76,7 @@ Pour le gel, demande-toi ce qui écrit encore : l'API de MédiAgenda (et son HPA
 
 <details><summary>Indice 2</summary>
 
-« Détruire et recréer » une VM sans toucher aux objets NetBox et DNS que le même module gère : regarde `tofu state list` et l'option de remplacement ciblé de `plan`/`apply` plutôt que `destroy`. Côté Ansible, relis l'en-tête de `k8s-api-fichiers.yml` et celle du rôle `k8s_plan_controle` : l'ordre y est écrit.
+« Détruire et recréer » une VM sans toucher aux objets NetBox et DNS que le même module gère : regarde la liste des ressources de l'état et l'option de remplacement ciblé du plan plutôt qu'une destruction. Pour `k8s-w03`, relis ce que ton code de F1-S06 dit du passage d'un nœud **existant** à l'usine. Côté Ansible, relis l'en-tête de `k8s-api-fichiers.yml` et celle du rôle `k8s_plan_controle` : l'ordre y est écrit.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -128,7 +128,7 @@ Les PV de `ceph-rbd` ont une politique `Delete`, mais personne ne les a supprim�
 - [ ] Les politiques d'hôte de Cilium existent et les six nœuds portent l'étiquette du pare-feu d'hôte.
 - [ ] Aucune base CNPG n'existe encore (ou alors déjà sur un amorçage par récupération).
 
-**Vérification** : `lab/bin/check F1 08`
+**Vérification** : `lab/bin/check F1 8`
 
 <details><summary>Indice 1</summary>
 
@@ -137,7 +137,7 @@ Lis les commentaires de tes fichiers `releases/` : certains disent pourquoi `nee
 
 <details><summary>Indice 2</summary>
 
-Sans certificat de service des kubelets, `kubectl logs`, `kubectl exec` et metrics-server échouent alors que les nœuds sont `Ready`. `kubectl get csr` montre des demandes `kubernetes.io/kubelet-serving` en attente. Que vérifie l'approbateur du M26 avant d'approuver ? Fais au moins la même chose.
+Sans certificat de service des kubelets, la lecture des journaux des pods, l'exécution dans un conteneur et metrics-server échouent alors que les nœuds sont `Ready`. La liste des demandes de certificat montre des demandes `kubernetes.io/kubelet-serving` en attente. Que vérifie l'approbateur du M26 avant d'approuver ? Fais au moins la même chose.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -187,16 +187,16 @@ Un ExternalSecret dont la cible est `creationPolicy: Owner` prend possession d'u
 - [ ] Les serveurs d'API utilisent l'authentification structurée ; les liaisons `oidc-*` existent et visent des groupes `oidc:` ; le client `kubernetes` de Keycloak est actif.
 - [ ] La politique `exiger-signature-medisphere` est prête dans le cluster (si Kyverno est déjà revenu ; sinon, elle le sera en S10).
 
-**Vérification** : `lab/bin/check F1 09`
+**Vérification** : `lab/bin/check F1 9`
 
 <details><summary>Indice 1</summary>
 
-Quand OpenBao reçoit une connexion de la méthode `k8s-par1`, il appelle l'API TokenReview **du cluster** en TLS. Avec quelle autorité vérifie-t-il le certificat de l'API ? Où cette autorité est-elle écrite dans `plateforme/secrets` ? `bao read auth/k8s-par1/config` (avec ta session) te montre ce qu'il croit.
+Quand OpenBao reçoit une connexion de la méthode `k8s-par1`, il appelle l'API TokenReview **du cluster** en TLS. Avec quelle autorité vérifie-t-il le certificat de l'API ? Où cette autorité est-elle écrite dans `plateforme/secrets` ? La configuration de la méthode, lue avec ta session, te montre ce qu'il croit.
 </details>
 
 <details><summary>Indice 2</summary>
 
-Pour prouver l'adoption : un Secret adopté porte une `ownerReference` vers son ExternalSecret ; un Secret d'amorçage resté orphelin porte encore ta marque et aucun propriétaire. Une seule commande `kubectl get secrets -A` avec un sélecteur d'étiquette et une sortie personnalisée suffit.
+Pour prouver l'adoption : un Secret adopté porte une `ownerReference` vers son ExternalSecret ; un Secret d'amorçage resté orphelin porte encore ta marque et aucun propriétaire. Une seule lecture des Secrets de tout le cluster, filtrée sur ta marque et avec une sortie personnalisée, suffit.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -336,11 +336,11 @@ Chaque cluster CNPG génère sa propre autorité à sa création. Qui, hors du c
 **Injection** : `lab/bin/break F1 12` (3 variantes, depuis `adm01`, à la racine de ta copie du workbook).
 
 **Règles de la panne**
-- Le script vérifie d'abord que le lab est sain ; il refuse sinon. Il tire une variante, la pose, **constate son effet** (jusqu'à 6 minutes) et n'affiche que le symptôme. Si une variante n'a pas d'effet sur ton lab, il en essaie une autre.
+- Le script vérifie d'abord que le lab est sain ; il refuse sinon. Il tire une variante, la pose, **constate son effet** (jusqu'à 6 minutes) et n'affiche que le symptôme. Si une variante ne peut pas s'appliquer à ton lab, il en essaie une autre ; si l'effet n'est pas constaté, il remet tout en état et le dit.
 - Prérequis sur `adm01` : `kubectl` avec un kubeconfig d'administration (`WB_K8S_ADMIN_KUBECONFIG`, par défaut `~/.kube/config` connecté), une session OpenBao portant `plateforme-admin` et valable au moins 20 minutes (`bao login -method=oidc`, ou `BAO_TOKEN`), le fichier `~/.config/workbook/powerdns-api.env` (M06-E14), `jq`, `yq`, `dig`, `openssl`.
 - Ne lis pas `corrige/pannes/`, ni `~/.local/state/workbook/F1-S12/`.
 - `lab/bin/break F1 12 --annuler` remet l'état sain (filet, pas correctif). Quand tu as réparé, lance-le aussi pour **clore** la panne : il ne défait jamais ta réparation.
-- La panne n'agit que sur : la configuration de la méthode `k8s-par1` d'OpenBao, des enregistrements de la zone `apps.par1.medisphere.internal`, un objet d'admission du cluster et un pod de `mediagenda-recette`. Jamais la production, jamais `kms01`, aucune donnée.
+- La panne n'agit que sur : la configuration de la méthode `k8s-par1` d'OpenBao, des enregistrements de la zone `apps.par1.medisphere.internal`, un objet d'admission du cluster et un pod de `mediagenda-recette`. Elle n'écrit rien dans la production, ne touche ni `kms01` ni aucune donnée. Mais une plateforme est un tout : si tu n'as pas de piste au bout d'**une heure**, lance `--annuler` (des secrets de production pourraient ne plus se renouveler) et reprends le diagnostic à froid avec une nouvelle injection.
 
 **Travail demandé**
 1. Ouvre un journal de diagnostic `docs/day0/journal/AAAA-MM-JJ-INC-5712.md` : heure, hypothèse, commande, résultat, conclusion.

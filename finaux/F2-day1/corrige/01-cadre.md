@@ -3,7 +3,7 @@
 > ⚠️ Corrigé — à lire après avoir cherché.
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
-- Le générateur de `plateforme/equipes` (`outils/rendre.py`, `capacite.py`) a été exécuté sur les deux fichiers d'équipe de référence : validation par le schéma JSON (draft 2020-12, `jsonschema` 4.26), contrôles de cohérence, rendu des 21 fichiers de [`rendu-exemple/`](fichiers/S02/rendu-exemple/) (tous relus comme YAML ou JSON), bilan de capacité ; 7 tests `pytest` verts ; `ruff check` et `ruff format --check` propres. Le CronJob de rattachement (script POSIX) passe `shellcheck -s sh`.
+- Le générateur de `plateforme/equipes` (`outils/rendre.py`, `capacite.py`) a été exécuté sur les deux fichiers d'équipe de référence : validation par le schéma JSON (draft 2020-12, `jsonschema` 4.26), contrôles de cohérence, rendu des 21 fichiers de [`rendu-exemple/`](fichiers/S02/rendu-exemple/) (tous relus comme YAML ou JSON), bilan de capacité ; 8 tests `pytest` verts ; `ruff check` et `ruff format --check` propres. Le CronJob de rattachement (script POSIX) passe `shellcheck -s sh`.
 - `freeipa.ansible_freeipa.ipauser` : paramètre `principalexpiration`, formats `AAAA-MM-JJ HH:MM:SSZ` (documentation du module).
 - Champs du `Tenant` Capsule 0.15 (`priorityClasses`, `storageClasses`, `rules[].quota`, `rules[].enforce`, `preventDeletion`, `forceTenantPrefix`, `additionalMetadataList`) et `GlobalTenantResource` : repris tels quels du M28 (vérifiés sur la CRD du chart 0.15.1 à la rédaction du module) ; ApplicationSet : `goTemplate`, `goTemplateOptions`, générateurs `matrix`, `git` (`files`), `list`, `templatePatch`, `syncPolicy.preserveResourcesOnDeletion` (documentation d'Argo CD) ; `applicationsSync` exige `--enable-policy-override` du contrôleur, d'où son absence.
 
@@ -101,7 +101,7 @@ Les pièces (toutes dans [`fichiers/S02/equipes/`](fichiers/S02/equipes/)) :
 
 | Fichier | Rôle |
 |---|---|
-| [`schema/equipe.schema.json`](fichiers/S02/equipes/schema/equipe.schema.json) | le contrat (format de l'introduction), règles prestataire comprises (`expiration`, OTP, compte externe) |
+| [`schema/equipe.schema.json`](fichiers/S02/equipes/schema/equipe.schema.json) | le contrat (format v1 de l'introduction), règles prestataire comprises (`expiration`, OTP, compte externe) ; étendu ensuite par S07 (`base_openbao`) et S10 (`hebergement`), voir [README](fichiers/S02/equipes/README.md) § Évolutions du format |
 | [`config/plateforme.yaml`](fichiers/S02/equipes/config/plateforme.yaml) | noms réservés, relevé de capacité et ratios, cibles et **chemins possédés**, comptes de service des groupes |
 | [`outils/rendre.py`](fichiers/S02/equipes/outils/rendre.py) | validation, contrôles (budget ≥ quotas, responsable, préfixes, `ci` réservé…), rendu |
 | [`gabarits/`](fichiers/S02/equipes/gabarits/) | `Tenant`, espace (Namespace + `ResourceQuota` + `LimitRange` + `SecretStore` + lecture de supervision + `AlertmanagerConfig`), cloison Cilium, AppProject, ApplicationSet, identifiants de dépôt, utilisateurs Capsule |

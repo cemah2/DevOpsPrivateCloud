@@ -5,7 +5,7 @@
 | **Type** | Workbook final (scénarios longs, incidents injectés) |
 | **Profil de lab** | Profil de travail des blocs F et G (socle v5 + `ceph-par1` + `k8s-par1`, ≈ 111 Go), sain au départ (`lab/bin/check F3 1`) |
 | **Prérequis** | F2 (`day1-v1`) ; tout le parcours (les incidents traversent les couches) |
-| **Durée indicative** | 35 à 50 heures |
+| **Durée indicative** | 30 à 45 heures (attentes des injections comprises) |
 
 ## Contexte MédiSphère
 

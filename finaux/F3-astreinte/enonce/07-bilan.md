@@ -54,7 +54,7 @@ Un « pourquoi » qui s'arrête à une personne (« parce que X a lancé la comm
 
 ### F3-S15 — Faire taire les alertes inutiles  `LIBRE` `★★★`
 
-> **Ticket PLAT-3315** — *De : Karim Benali*
+> **Ticket PLAT-3315** — *De : Nadia Roussel*
 > « J'ai lu ta main courante : tu as passé une partie de ta semaine à trier des courriels qui ne demandaient rien. La personne d'astreinte doit pouvoir faire confiance à chaque notification. Fais le ménage, mais je veux la preuve qu'on ne perd aucune couverture : une alerte qui doit sonner sonne toujours. »
 
 **Objectifs pédagogiques**

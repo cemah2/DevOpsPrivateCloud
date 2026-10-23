@@ -14,7 +14,7 @@
 #      l'heure) : c'est ce qui fait monter la gravité ;
 #   2. rôle eso-mediagenda-recette de la méthode k8s-par1 « restreint » à la main (dérive par rapport à
 #      plateforme/secrets) : ses token_policies passent de eso-mediagenda-recette à une nouvelle
-#      politique eso-mediagenda-recette-kv (KV seulement, « moindre privilège », PLAT-3310) : les
+#      politique eso-mediagenda-recette-kv (KV seulement, « moindre privilège », PLAT-3352) : les
 #      ExternalSecret KV marchent, les générateurs d'identifiants dynamiques reçoivent « permission
 #      denied » ;
 #   3. deux causes : le SecretStore « openbao » et les deux VaultDynamicSecret de mediagenda-recette
@@ -90,7 +90,7 @@ panne_S10_v2() {
     audience, alias_name_source, token_ttl, token_max_ttl, token_type, token_policies}' <<<"$r")"
   # Politique « KV seulement » : celle d'origine sans les blocs db-mediagenda (un bloc path = une
   # ligne d'ouverture jusqu'à l'accolade fermante en début de ligne).
-  awk 'BEGIN { print "# eso-mediagenda-recette-kv — moindre privilège pour ESO en recette (PLAT-3310, F3-S10)." }
+  awk 'BEGIN { print "# eso-mediagenda-recette-kv — moindre privilège pour ESO en recette (PLAT-3352, F3-S10)." }
        /^path "db-mediagenda\// { saute = 1 }
        !saute { print }
        saute && /^}/ { saute = 0 }' <<<"$p" | jq -Rs '{policy: .}' |

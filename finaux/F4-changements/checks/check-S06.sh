@@ -48,13 +48,15 @@ fi
 
 _f4_s06_depot="${WB_F4_PROJET_DEPLOIEMENT:-mediagenda/deploiement}"
 _f4_s06_apis_retirees() {
-  local f c
+  local f c n=0
   while IFS= read -r f; do
     [[ "$f" =~ \.ya?ml$ ]] || continue
     c="$(_f4m_fichier "$_f4_s06_depot" "$f" 2>/dev/null)" || continue
+    n=$((n + 1))
     grep -Eq '^apiVersion:[[:space:]]*(policy/v1beta1|autoscaling/v2beta[12]|batch/v1beta1|extensions/v1beta1|networking\.k8s\.io/v1beta1|flowcontrol\.apiserver\.k8s\.io/v1beta[123]|discovery\.k8s\.io/v1beta1|events\.k8s\.io/v1beta1)[[:space:]]*$' <<<"$c" && return 1
   done < <(_f4m_arbre "$_f4_s06_depot")
-  return 0
+  # Dépôt illisible ou vide : rien n'a été vérifié, ce n'est pas un succès.
+  ((n > 0))
 }
 check_cmd "$_f4_s06_depot (main) : aucun manifeste dans une version d'API retirée" _f4_s06_apis_retirees
 check_cmd "post-mortem INC-6006 publié : symptôme, cause, détection, prévention" \

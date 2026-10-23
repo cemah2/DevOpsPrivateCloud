@@ -17,4 +17,4 @@ check_cmd "la réponse motive le refus (HDS, RGPD, minimisation)" \
 check_cmd "la réponse propose l'alternative (extraction pseudonymisée, base Data)" \
   _f2b_doc "$_f2b_doc_dir"/reponses '^DEV-3209.*\.md$' 'pseudonym' 'statistiques|data-traitements'
 check_cmd "la réponse fixe les conditions d'un accès exceptionnel (durée, validation RSSI, traces)" \
-  _f2b_doc "$_f2b_doc_dir"/reponses '^DEV-3209.*\.md$' 'exceptionnel' 'dur[ée]e|expir' 'Sophie|RSSI' 'trac|journal|audit'
+  _f2b_doc "$_f2b_doc_dir"/reponses '^DEV-3209.*\.md$' 'exceptionnel' 'dur(e|é)e|expir' 'Sophie|RSSI' 'trac|journal|audit'

@@ -8,11 +8,12 @@
 # annuaire en LDAP (compte système wb-checks), OpenBao (AppRole wb-checks : métadonnées seulement),
 # Backstage (jeton du catalogue), Grafana (Viewer), Alertmanager (API v2), Harbor (robot en lecture).
 #
-# Variables (lab/lab.env, facultatives) : WB_F2_DOC, WB_F2_PROJET_EQUIPES, WB_F2_EQUIPES, WB_F2_PROJET_CODE,
+# Variables (lab/lab.env, facultatives) : WB_F2_DOC, WB_F2_PROJET_DOC, WB_F2_PROJET_EQUIPES, WB_F2_EQUIPES, WB_F2_PROJET_CODE,
 # WB_F2_PROJET_DEPLOIEMENT, WB_F2_COMPOSANT, WB_F2_IMAGE, WB_F2_DEPLOIEMENT, WB_F2_URL_DEV,
 # WB_F2_URL_RECETTE, WB_F2_URL_PROD ; et celles du bloc G (WB_GITLAB_*, WB_K8S_KUBECONFIG, …).
 
 _F2A_DOC="${WB_F2_DOC:-docs/accueil}"
+_F2A_P_DOC="${WB_F2_PROJET_DOC:-plateforme/medisphere}"
 _F2A_P_EQUIPES="${WB_F2_PROJET_EQUIPES:-plateforme/equipes}"
 _F2A_EQUIPES="${WB_F2_EQUIPES:-medivisio data}"
 _F2A_P_CODE="${WB_F2_PROJET_CODE:-medivisio/consultation}"
@@ -66,14 +67,14 @@ _f2a_doc() {
   shift
   while IFS= read -r f; do
     [[ -n "$f" && "${f##*/}" =~ $motif ]] || continue
-    _f2a_contient "$(_f2a_fichier plateforme/medisphere "$f")" "$@" && return 0
-  done < <(_f2a_arbre plateforme/medisphere "$_F2A_DOC")
+    _f2a_contient "$(_f2a_fichier "$_F2A_P_DOC" "$f")" "$@" && return 0
+  done < <(_f2a_arbre "$_F2A_P_DOC" "$_F2A_DOC")
   return 1
 }
 
 # _f2a_doc_present MOTIF_NOM — au moins un fichier de docs/accueil dont le nom correspond.
 _f2a_doc_present() {
-  _f2a_arbre plateforme/medisphere "$_F2A_DOC" | awk -F/ '{print $NF}' | grep -Eq -- "$1"
+  _f2a_arbre "$_F2A_P_DOC" "$_F2A_DOC" | awk -F/ '{print $NF}' | grep -Eq -- "$1"
 }
 
 # _f2a_projet_existe PROJET

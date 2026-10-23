@@ -1,4 +1,4 @@
-# data/deploiement — base/statistiques-db.yaml (F2-S07, DEV-3207)
+# data/statistiques-deploiement — base/statistiques-db.yaml (F2-S07, DEV-3207)
 # Base de l'équipe Data, déclarée PAR L'ÉQUIPE dans son dépôt et synchronisée par Argo CD (AppProject
 # « data », destination data-traitements). La plateforme impose, par admission (politique
 # cnpg-sauvegarde-obligatoire) : archivage par le plugin Barman Cloud, classe ceph-rbd, limites,

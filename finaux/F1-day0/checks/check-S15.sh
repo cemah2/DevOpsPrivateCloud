@@ -11,15 +11,15 @@ title "F1-S15 — Rapport de reconstruction et runbook Day 0"
 require_cmd curl jq
 
 check_cmd "docs/day0/rapport-reconstruction.md : durées mesurées, estimation de S01 et écart, gestes manuels et dette, actions datées" \
-  _f1c_doc '^rapport-reconstruction\.md$' 'dur[ée]e' 'estimation|estim[ée]' '[ée]cart' 'manuel' 'dette' '[0-9]{4}-[0-9]{2}-[0-9]{2}' '[0-9]+ ?(min|h)'
+  _f1c_doc '^rapport-reconstruction\.md$' 'dur(e|é)e' 'estimation|estim(e|é)' '(e|é)cart' 'manuel' 'dette' '[0-9]{4}-[0-9]{2}-[0-9]{2}' '[0-9]+ ?(min|h)'
 check_cmd "rapport : dépendances circulaires rencontrées et incident INC-5712" \
-  _f1c_doc '^rapport-reconstruction\.md$' 'circulaire|poule|amor[cç]age' 'INC-5712'
+  _f1c_doc '^rapport-reconstruction\.md$' 'circulaire|poule|amor(ç|c)age' 'INC-5712'
 check_cmd "runbook RB-310 (docs/day0/runbooks/) : VMID 2141-2146, VIP, playbooks, Helmfile, OpenBao, Argo CD, récupération CNPG, retour arrière" \
-  _f1c_doc '^RB-310' '2141' '2146' '10\.10\.40\.200' 'playbook|ansible' 'helmfile' 'openbao|k8s-par1' 'argo' 'recovery|r[ée]cup[ée]ration' 'retour arri[èe]re'
+  _f1c_doc '^RB-310' '2141' '2146' '10\.10\.40\.200' 'playbook|ansible' 'helmfile' 'openbao|k8s-par1' 'argo' 'recovery|r(e|é)cup(e|é)ration' 'retour arri(e|è)re'
 check_cmd "runbook RB-310 : points de contrôle et durées de référence" \
-  _f1c_doc '^RB-310' 'contr[ôo]le|v[ée]rifi' '[0-9]+ ?(min|h)'
+  _f1c_doc '^RB-310' 'contr(o|ô)le|v(e|é)rifi' '[0-9]+ ?(min|h)'
 check_cmd "ADR-0310 (docs/day0/adr/) : options comparées, décision, conséquences" \
-  _f1c_doc '^ADR-0310' 'option' 'd[ée]cision' 'cons[ée]quence'
+  _f1c_doc '^ADR-0310' 'option' 'd(e|é)cision' 'cons(e|é)quence'
 _f1_s15_rangement() {
   _f1c_doc_chemin '^RB-310' "$_f1c_doc/runbooks" >/dev/null && _f1c_doc_chemin '^ADR-0310' "$_f1c_doc/adr" >/dev/null
 }

@@ -28,7 +28,7 @@ Un seul ❌ = **no-go**, la fenêtre est reportée et S04 se rejoue.
 
 ## 2. Messages en file
 
-`notifications.rebut` (prod) : 3 messages, examinés avec Julien, perte acceptée (DEV-3104). `notifications` vide à 18 h (consommateurs à jour) ; MédiAgenda en maintenance : plus de publication pendant la fenêtre.
+`notifications.rebut` (prod) : 3 messages, examinés avec Julien, perte acceptée (accord écrit de Julien, joint à cette fiche). `notifications` vide à 18 h (consommateurs à jour) ; MédiAgenda en maintenance : plus de publication pendant la fenêtre.
 
 ## 3. Décision
 

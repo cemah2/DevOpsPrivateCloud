@@ -6,7 +6,7 @@
 # sorti de son contrôleur, plus derrière aucun Service), soit supprimé APRÈS le dépôt des preuves ; le
 # service de l'espace est rétabli ; des preuves avec leurs empreintes sont dans preuves/INC-5912/ ; la
 # main courante porte la qualification (décision) et l'escalade à la RSSI ; trace de l'incident.
-# Lecture seule : kube, état local de l'injection (lecture), S3 en liste (identité de lecture), GitLab.
+# Lecture seule : kube, état local de l'injection (lecture), S3 en liste (identité de dépôt du M26), GitLab.
 
 # shellcheck source=_f3-fin.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_f3-fin.sh"
@@ -27,24 +27,28 @@ check_cmd "politique de quarantaine intacte (sélecteur medisphere.internal/quar
     and any(.spec.egressDeny[]?; (.toEntities // []) | index("all") != null)'
 
 # --- Preuves ---------------------------------------------------------------------------------------------
-# _s12_preuves — liste récursive de s3://preuves/INC-5912/ avec l'identité de LECTURE (ou de dépôt).
+# _s12_preuves — liste récursive de s3://preuves/INC-5912/ avec l'identité de dépôt du M26 (RB-262 :
+#   écrire et lister, jamais supprimer) ; le check ne fait que LISTER.
+_s12_env="${WB_F3_S12_PREUVES_ENV:-$HOME/.config/workbook/s3-preuves-depot.env}"
 _s12_preuves() {
-  local f="${WB_F3_S12_PREUVES_ENV:-$HOME/.config/workbook/s3-preuves-lecture.env}"
-  [[ -r "$f" ]] || f="$HOME/.config/workbook/s3-preuves-depot.env"
-  [[ -r "$f" ]] || return 0
+  [[ -r "$_s12_env" ]] || return 0
   (
     set -a
     # shellcheck disable=SC1090
-    source "$f"
+    source "$_s12_env"
     set +a
     aws --endpoint-url "$_f3f_s3" s3 ls --recursive s3://preuves/INC-5912/ 2>/dev/null
   ) || true
 }
 _s12_liste="$(_s12_preuves)"
-check_cmd "preuves déposées dans s3://preuves/INC-5912/ (au moins trois pièces)" \
-  test "$(grep -c . <<<"$_s12_liste" || true)" -ge 3
-check_cmd "preuves accompagnées de leurs empreintes (SHA256SUMS ou *.sha256)" \
-  grep -Eiq '(SHA256SUMS|\.sha256)$' <<<"$_s12_liste"
+if [[ ! -r "$_s12_env" ]]; then
+  _ko "identité S3 du compartiment preuves illisible ($_s12_env, M26-E33) : impossible de lister les preuves"
+else
+  check_cmd "preuves déposées dans s3://preuves/INC-5912/ (au moins trois pièces)" \
+    test "$(grep -c . <<<"$_s12_liste" || true)" -ge 3
+  check_cmd "preuves accompagnées de leurs empreintes (SHA256SUMS ou *.sha256)" \
+    grep -Eiq '(SHA256SUMS|\.sha256)$' <<<"$_s12_liste"
+fi
 
 # --- Pod suspect -----------------------------------------------------------------------------------------
 _s12_ns="$(_f3f_etat S12 espace)"

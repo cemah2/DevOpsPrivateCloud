@@ -202,6 +202,12 @@ admin@adm01:~$ git -C ~/src/consultation-deploiement pull && git -C ~/src/consul
 
 Argo CD dit si l'état **déclaré** est appliqué, pas si l'état **voulu** est atteint : entre les deux, le contrôleur de Deployment, le ReplicaSet, l'admission (quota, Pod Security, Kyverno, Capsule) et le kubelet (Secrets, image) peuvent tous refuser. Chaque refus laisse sa trace à un endroit précis : condition du ReplicaSet et événement `FailedCreate` pour ce qui empêche la **création** ; événements du pod et statut de l'`ExternalSecret` pour ce qui empêche le **démarrage**. Dans un cadre multi-locataire, les trois causes sont des **protections qui fonctionnent** : le diagnostic se conclut par une explication à l'équipe, pas par un assouplissement.
 
+**Alternatives**
+
+- Corriger en relevant le quota (variante 1) par une MR sur `equipes/medivisio.yaml` : légitime **si** le besoin est réel et que le bilan de capacité le permet (la CI le recalcule) ; jamais pour faire passer un réglage arbitraire.
+- Laisser la signature non exigée en recette (variante 2) et ne contrôler qu'en production : la surprise arrive alors le jour de la mise en production, au pire moment.
+- Un secret « commun » réellement partagé (variante 3) : un chemin `kv/medivisio/commun/*` ajouté aux rôles `eso-medivisio-<env>` par l'équipe en code ; à décider explicitement (ADR), car il casse la cloison entre recette et production.
+
 **Pièges classiques**
 
 - S'arrêter à `Synced` et chercher côté Argo CD.

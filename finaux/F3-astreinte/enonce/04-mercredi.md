@@ -15,7 +15,7 @@ Deux incidents où le symptôme ment : « tout est lent » alors qu'une seule br
 - Rétablir sans perdre de PG ni de données, en sachant ce qu'on peut faire pendant que des écritures attendent.
 
 **Prérequis** : M08 (Ceph : santé, OSD, drapeaux, quotas, performances, RB-08x), M09 (limites de disques Proxmox), M16 (ceph-csi, `k8s-rbd`), M21 (alertes et tableaux Ceph) ; F3-S07 clos.
-**Durée indicative** : 1 h 30 (temps cible).
+**Durée indicative** : 1 h 30 (temps cible) jusqu'au rétablissement, puis 1 h pour la prévention, RB-334 et la trace.
 
 **Contexte technique**
 - `ceph-par1` : `ceph01-03` (VMID 2081-2083, Rocky Linux 10, cephadm, Tentacle 20.2), trois OSD par nœud (deux `ssd`, un `hdd`) ; commandes `ceph` sur le nœud `_admin` (`ceph01`, `sudo`). Les PVC de `k8s-par1` sont dans le pool `k8s-rbd` (StorageClass `ceph-rbd`) ; Thanos, Loki et Tempo écrivent dans le RGW.
@@ -64,7 +64,7 @@ Pour savoir qui a fait quoi : `ceph log last 200` et le journal d'audit du monit
 - Débloquer sans contourner les garde-fous (signature, analyse, GitOps) ni livrer à la main.
 
 **Prérequis** : M19 (CI, runner protégé `k8s-par1-protege`, signature), M20 (Argo CD, identifiants de dépôts, Rollouts, analyses), M21-E18 (analyse Prometheus du canary), M25 (ESO, OpenBao) ; F3-S08 clos.
-**Durée indicative** : 1 h (temps cible).
+**Durée indicative** : 1 h (temps cible) jusqu'à la livraison arrivée, puis 1 h pour la prévention, RB-335 et la trace.
 
 **Contexte technique**
 - Chaîne : `mediagenda/api` (CI : construction, analyse, **signature sur le runner protégé**, promotion par MR) → `mediagenda/deploiement` (overlays) → Application `mediagenda-recette` (synchronisation automatique) → Rollout `mediagenda` (canary par le plugin Gateway API, analyse d'arrière-plan `taux-erreur-mediagenda`, ClusterAnalysisTemplate de `plateforme/gitops`).

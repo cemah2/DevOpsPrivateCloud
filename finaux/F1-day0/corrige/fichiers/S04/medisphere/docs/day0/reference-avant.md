@@ -23,8 +23,25 @@
 
 | Mesure | Valeur | Comment |
 |---|---|---|
-| Messages de `notifications.rebut` (prod) | 3, examinés et **acceptés comme perdus** (accord de Julien, DEV-3104 du <date>) | les messages en file ne sont pas sauvegardés |
+| Messages de `notifications.rebut` (prod) | 3, examinés et **acceptés comme perdus** (accord de Julien, noté dans CHG-3104 le <date>) | les messages en file ne sont pas sauvegardés |
 | Dernière sauvegarde CNPG `completed` (prod, recette, portail) | `<nom>` à `<heure>` | `kubectl get backups.postgresql.cnpg.io -A` |
 | Sauvegarde Velero complète | `f1-avant-chg3107` `Completed` à `<heure>` | `velero backup describe` |
 | Instantané etcd téléchargé et déchiffré | `horaire/<horodatage>.db.age` → `etcdutl snapshot status` OK | RB-141 §3 |
 | Lisibilité PBS | VM 5311 restaurée depuis `k8s-cp01` (`--unique`, carte coupée), démarrée jusqu'à l'invite, détruite | durée de restauration : <N> min |
+
+## Gel (CHG-3107, F1-S07)
+
+> Ajouté pendant la fenêtre, après `outils/day0/10-gel.sh` (fichiers `~/day0/compteurs-gel.txt` et
+> `~/day0/files-gel.tsv`). C'est **cette** section, et non la photographie de la veille, que S11 compare
+> aux données remises.
+
+| Mesure | Au gel | Veille (ci-dessus) | Écart expliqué |
+|---|---|---|---|
+| Heure du gel | `<AAAA-MM-JJTHH:MM>` | — | — |
+| Rendez-vous (prod) | `<N>` | 1842 | `<N>` rendez-vous pris entre la photographie et le gel |
+| Rendez-vous (recette) | `<N>` | 12577 | tests nocturnes de la recette, par exemple |
+| Messages en file (medinotif-recette, medinotif-prod) | 0, 0 | 0, 0 | files vidées par MédiNotif, jamais purgées |
+| ExternalSecrets | `<N>` | 41 | |
+| Certificats (cert-manager) | `<N>` | 23 | |
+| Sauvegardes de base après le gel | `mediagenda-db-gel-<horodatage>` (recette, prod), `portail-db-gel-<horodatage>` : `completed` | — | dernier point de reprise, postérieur à la dernière écriture |
+| Topologie des files | `files-gel.tsv` (vhost, file, type, arguments) | — | comparée en S11 |

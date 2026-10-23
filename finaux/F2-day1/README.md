@@ -5,7 +5,7 @@
 | **Type** | Workbook final (scénarios longs) |
 | **Profil de lab** | Profil de travail des blocs F et G (socle v5 + `ceph-par1` + `k8s-par1`, ≈ 111 Go) ; rien en plus : les nouvelles équipes vivent dans les travailleurs (bilan de capacité en S02) |
 | **Prérequis** | F1 (`day0-v1`) ; blocs E et F (observabilité, identité, secrets, durcissement) ; M28 (Capsule, Backstage, modèle `nouveau-service`) |
-| **Durée indicative** | 40 à 55 heures |
+| **Durée indicative** | 55 à 75 heures |
 
 ## Contexte MédiSphère
 

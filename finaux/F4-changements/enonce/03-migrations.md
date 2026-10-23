@@ -8,14 +8,14 @@ Prérequis : phases 1 et 2 terminées ou décidées (`lab/bin/check F4 1` et `F4
 
 | Élément | Valeur |
 |---|---|
-| Processus | fiches `docs/changements/fiches/CHG-34xx.md` sur le modèle `docs/changements/fiches/modele.md` (F4-S01), sonde de continuité et tableau « changement en cours » (F4-S02) |
+| Processus | fiches `docs/changements/fiches/CHG-34xx[-<sujet>].md` sur le modèle `docs/changements/fiches/modele.md` (F4-S01), sonde de continuité et tableau « changement en cours » (F4-S02) |
 | Hôte d'import | `pve01` ; stockage des disques `local-nvme` ; pool `lab` ; VNet `vinfra` (VLAN 20) |
 | VMs d'InfoGér | `legacy-rdv01` **3401** → **10.10.20.44**, `ftp-part01` **3402** → **10.10.20.45**, `stats01` **3403** → **10.10.20.46** (adresses d'origine dans `192.168.50.0/24`, inexistant dans le lab) ; étiquettes `env-f4` et `role-<rôle>` |
 | Code | état OpenTofu **`envs/f4-infoger`** de `plateforme/infra` ; `plateforme/ansible` (inventaire NetBox, rôles `node_exporter`, `alloy`, `durcissement`) ; `plateforme/k8s`, `plateforme/gitops`, `plateforme/charts-miroir`, `plateforme/secrets`, `plateforme/politiques` |
 | Nom publié de Legacy-RDV | **`rdv.par1.medisphere.internal`** (VIP des répartiteurs `lb01`/`lb02`, 10.10.70.200) : c'est le nom des cabinets, il ne change jamais |
 | Legacy-RDV sur Kubernetes | locataire Capsule **`legacy`**, espaces **`legacy-rdv-recette`** et **`legacy-rdv-prod`**, dépôt de déploiement **`legacy/deploiement`**, noms internes `legacy-rdv-recette.apps.par1.medisphere.internal` et `legacy-rdv.apps.par1.medisphere.internal` |
 | Code de l'application | projet `legacy/legacy-rdv` (M12-E19 : image PHP 8.4 + Apache, `config.php` par l'environnement, `sante.php`) ; image `registry.par1.medisphere.internal/medisphere/legacy-rdv` (M13) |
-| Documentation | `docs/changements/` de `plateforme/medisphere` (fiches, `runbooks/` à partir de RB-345, `adr/`) ; journaux de diagnostic des VMs dans `docs/socle/journal/` |
+| Documentation | `docs/changements/` de `plateforme/medisphere` (fiches, `runbooks/` à partir de RB-345, `post-mortems/`, `adr/`) |
 
 **Variables de `lab/lab.env`** utilisées par les checks de cette phase (les défauts conviennent au lab) : `WB_F4_STOCKAGE_EXPORT` (`hdd-bulk`), `WB_F4_RDV_URL` (`https://rdv.par1.medisphere.internal`), `WB_F4_LEGACY_RECETTE_URL` (`https://legacy-rdv-recette.apps.par1.medisphere.internal`), `WB_F4_LEGACY_PROD_URL` (`https://legacy-rdv.apps.par1.medisphere.internal`), `WB_F4_INFRA` (`~/src/infra`).
 
@@ -133,6 +133,7 @@ Contraintes :
 - [ ] Legacy-RDV répond sur `http://legacy-rdv01.par1.medisphere.internal/` et sur `https://rdv.par1.medisphere.internal/` ; un dépôt FTP passif réussit sur `ftp-part01` ; `stats01` a produit un fichier de statistiques non vide depuis la migration.
 - [ ] `envs/f4-infoger` existe dans `plateforme/infra` avec des blocs `import` pour les trois VMs, et son `tofu plan` est vide.
 - [ ] Une sauvegarde de chaque VM existe sur `pbs-par2`.
+- [ ] Le témoin de `mon01` sonde Legacy-RDV par le nom des cabinets dans un groupe `continuite-*` étiqueté `service=legacy-rdv` (contrat de la sonde de F4-S02).
 
 **Vérification** : `lab/bin/check F4 10`
 
@@ -176,12 +177,12 @@ Pour l'état OpenTofu : un bloc `import { to = …, id = "<nœud>/<vmid>" }` par
 1. Diagnostique depuis la console de la VM et depuis `pve01` ; note chaque hypothèse et ce qui l'a confirmée ou écartée.
 2. Répare la VM sans la réinstaller, sans restaurer de sauvegarde et sans revenir à l'instantané de la panne.
 3. Rends la correction durable : ce qui doit changer dans le code (`envs/f4-infoger`, Ansible) ou dans RB-345 pour que ça ne se reproduise pas.
-4. Écris le journal `docs/socle/journal/AAAA-MM-JJ-INC-6011.md` : chronologie, cause, correction, prévention.
+4. Écris le post-mortem `docs/changements/post-mortems/INC-6011-<sujet>.md` : chronologie, hypothèses, cause, correction, prévention.
 
 **Critères de réussite**
 - [ ] La VM visée a redémarré **après** ta réparation, l'agent QEMU répond, elle est joignable à son adresse et son service (FTP ou statistiques) fonctionne.
 - [ ] La configuration Proxmox de la VM est de nouveau conforme aux standards (contrôleur, carte, `tofu plan` vide).
-- [ ] Le journal `INC-6011` est sur `main` de `plateforme/medisphere`.
+- [ ] Le post-mortem INC-6011 est sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check F4 11`
 

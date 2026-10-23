@@ -53,5 +53,5 @@ if _f4g_agent 3403; then
   check_cmd "stats01 : la base de Legacy-RDV est joignable avec le compte stats (lecture)" _f4g_invite 3403 \
     'mariadb --defaults-extra-file=/etc/stats/stats.cnf -N -B --connect-timeout=5 -e "SELECT 1" >/dev/null 2>&1 || ! test -f /etc/cron.d/stats-rdv'
 fi
-check_cmd "journal INC-6011 sur main (docs/socle/journal/) : cause et prévention" \
-  _f4g_doc docs/socle/journal 'INC-6011' 'cause' 'pr[ée]vention|ne se reproduise'
+check_cmd "post-mortem INC-6011 sur main ($_f4g_doc_dir/post-mortems/) : cause et prévention" \
+  _f4g_doc "$_f4g_doc_dir/post-mortems" '^INC-6011' 'cause' 'pr(é|e)vention|ne se reproduise'

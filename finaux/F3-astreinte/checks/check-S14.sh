@@ -21,7 +21,7 @@ else
   _s14_a() { grep -Eiq -- "$1" <<<"$_s14_c"; }
   _s14_n() { grep -Eio -- "$1" <<<"$_s14_c" | sort -u | grep -c . || true; }
   check_cmd "résumé et justification du choix de l'incident (gravité, impact)" _s14_a 'gravit|SEV[1-4]'
-  check_cmd "chronologie horodatée (au moins six instants HH:MM)" test "$(grep -Eoc '\b[0-2][0-9][:h][0-5][0-9]\b' <<<"$_s14_c" || true)" -ge 6
+  check_cmd "chronologie horodatée (au moins six instants HH:MM)" test "$(grep -Eo '\b[0-2][0-9][:h][0-5][0-9]\b' <<<"$_s14_c" | grep -c . || true)" -ge 6
   check_cmd "sources de la chronologie citées (Alertmanager, Loki, main courante)" _s14_a 'loki'
   check_cmd "impact chiffré (utilisateurs, durée, requêtes ou messages)" _s14_a 'impact'
   check_cmd "MTTA et MTTR mesurés" _s14_a 'MTTA'

@@ -15,7 +15,7 @@ Deux incidents de jour qui touchent la plateforme elle-même (la PKI, un nœud),
 - Mesurer l'urgence réelle (échéance des certificats en service) avant de décider de la gravité.
 
 **Prérequis** : M06 (step-ca, PowerDNS), M07 (pare-feu de la bordure), M15 (cert-manager, `step-ca-acme`, DNS-01 RFC 2136, RB-151) ; F3-S04 clos.
-**Durée indicative** : 1 h (temps cible).
+**Durée indicative** : 1 h (temps cible) jusqu'au rétablissement, puis 1 h pour la correction par le code, RB-332 et la trace.
 
 **Contexte technique**
 - ClusterIssuer `step-ca-acme` : répertoire `https://ca01.par1.medisphere.internal/acme/acme/directory` ; DNS-01 par RFC 2136 vers l'autoritaire `10.10.20.10:5300`, clé TSIG `certmanager-k8s` (Secret `cert-manager/tsig-certmanager-k8s`) pour la zone `apps.par1.medisphere.internal` ; HTTP-01 par `gw-par1` pour les autres noms.
@@ -63,7 +63,7 @@ Rejoue chaque dialogue depuis l'endroit d'où il part : un pod de `wb-essais` su
 - Vérifier l'impact sur les charges (StatefulSets, bases, réplicas) et la capacité restante du cluster.
 
 **Prérequis** : M14 (nœuds, kubelet, containerd, éviction, RB-14x), M16, M27 (bases et caches sur les nœuds) ; F3-S05 clos.
-**Durée indicative** : 1 h (temps cible).
+**Durée indicative** : 1 h (temps cible) jusqu'au rétablissement, puis 1 h pour la correction par le code, RB-333 et la trace.
 
 **Contexte technique**
 - Un seul travailleur est touché ; jamais un nœud de contrôle. L'injection choisit un travailleur qui ne porte ni le primaire de la base de production ni le Valkey de production, et vérifie qu'une sauvegarde récente de la base de production existe.

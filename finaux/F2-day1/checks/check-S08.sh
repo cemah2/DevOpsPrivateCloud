@@ -69,7 +69,7 @@ _s08_tableau() {
 }
 check_cmd "Grafana : tableau « $_f2b_tableau » (au moins trois requêtes sur les règles locataire:…)" _s08_tableau
 _s08_rapport() {
-  _f2b_doc "$_f2b_doc_dir"/mesures '^refacturation-[0-9]{4}-[0-9]{2}\.md$' "${_f2b_equipes[@]}" 'CPU' 'm[ée]moire' 'stockage'
+  _f2b_doc "$_f2b_doc_dir"/mesures '^refacturation-[0-9]{4}-[0-9]{2}\.md$' "${_f2b_equipes[@]}" 'CPU' 'm(e|é)moire' 'stockage'
 }
 check_cmd "rapport de refacturation docs/accueil/mesures/refacturation-AAAA-MM.md (locataires, CPU, mémoire, stockage)" _s08_rapport
 check_cmd "RB-328 : production du rapport mensuel (docs/accueil/runbooks)" \

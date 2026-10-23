@@ -4,7 +4,7 @@
 # Gel de la plateforme AVANT la destruction de k8s-par1. Lancé depuis adm01, dans ~/src/k8s, avec
 # l'ANCIEN cluster encore en service et ton contexte personnel (OIDC) ou admin.conf.
 #
-#   1. contrôle du filet (lab/bin/check F1 04 vert) ;
+#   1. contrôle du filet (lab/bin/check F1 4 vert) ;
 #   2. Argo CD arrêté (sinon l'auto-réparation remettrait des réplicas en recette) : geste noté ;
 #   3. écritures arrêtées : API MédiAgenda (Rollouts) recette et prod à 0, portail à 0, CronJobs des
 #      espaces applicatifs suspendus ; le HPA ne fait rien sur une cible à 0 réplica ;
@@ -30,7 +30,7 @@ outils_requis kubectl jq curl
 kubectl cnpg version >/dev/null || { echo "greffon kubectl cnpg absent" >&2; exit 1; }
 
 controle_filet() {
-  "$WB/lab/bin/check" F1 04
+  "$WB/lab/bin/check" F1 4
 }
 
 arreter_argocd() {

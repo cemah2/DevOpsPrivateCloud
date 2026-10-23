@@ -4,7 +4,7 @@
 
 Fichiers : [`fichiers/S10/`](fichiers/S10/), [`fichiers/S11/`](fichiers/S11/), [`fichiers/S12/`](fichiers/S12/) (`equipes/` = `plateforme/equipes`, `identite/` = `plateforme/identite`, `politiques/` = `plateforme/politiques`, `rendu-attendu/` = ce que le générateur doit produire dans les dépôts cibles). La panne : [`pannes/break-S11.sh`](pannes/break-S11.sh).
 
-**Validé hors du lab** : gabarit `prestataire.yaml.j2` rendu avec Jinja2 (mode strict) sur `ext-axiomdev.yaml` → [rendu attendu](fichiers/S10/rendu-attendu/k8s/equipes/ext-axiomdev/espaces/mediagenda-axiomdev.yaml), relu par `yaml.safe_load_all` ; filtres `jq` des checks (liaisons RBAC hors espace, rôle limité, règles HBAC) rejoués sur des objets de test ; déroulé de la panne (injection, bascule de la variante 2 sur la 1 quand l'admission refuse, annulation qui ne retire que ce qu'elle a posé) rejoué avec des API simulées ; `gitlab-prestataire.sh`, `depart-externe.sh` et la panne propres à `shellcheck`.
+**Validé hors du lab** : gabarit `prestataire.yaml.j2` rendu avec Jinja2 (mode strict) sur `ext-axiomdev.yaml` → [rendu attendu](fichiers/S10/rendu-attendu/k8s/equipes/ext-axiomdev/espaces/mediagenda-axiomdev.yaml), relu par `yaml.safe_load_all` ; extensions du format de S07 et S10 (schéma, `rendre.extrait`, gabarit) appliquées au générateur de S02 à l'harmonisation : `ext-axiomdev.yaml` valide, rendus de l'espace et de `gitlab-prestataires.d` identiques aux [rendus attendus](fichiers/S10/rendu-attendu/), tests de S02 toujours verts ; filtres `jq` des checks (liaisons RBAC hors espace, rôle limité, règles HBAC) rejoués sur des objets de test ; déroulé de la panne (injection, bascule de la variante 2 sur la 1 quand l'admission refuse, annulation qui ne retire que ce qu'elle a posé) rejoué avec des API simulées ; `gitlab-prestataire.sh`, `depart-externe.sh` et la panne propres à `shellcheck`.
 
 **Points non testés en conditions réelles** :
 - refus d'une liaison LDAP par Keycloak pour un principal expiré (comportement de `ipa-pwd-extop` depuis FreeIPA 4.0 ; à constater sur 4.13 avec une expiration mise au passé sur un compte d'essai) et lecture de `krbPrincipalExpiration` par le compte système `wb-checks` (ACI par défaut : si l'attribut n'est pas renvoyé, le check reste rouge — vérifie avec `ldapsearch` et, au besoin, une permission de lecture dédiée) ;
@@ -20,7 +20,7 @@ Fichiers : [`fichiers/S10/`](fichiers/S10/), [`fichiers/S11/`](fichiers/S11/), [
 
 *1. AxiomDev dans l'équipe en code.* Le format de S02 donne déjà à un prestataire : personnes datées (`expiration`, reportée sur chaque personne et posée en `principalexpiration` par `annuaire:appliquer`), OTP (`otp_obligatoire: true` → groupe ajouté aux porteurs du rôle `second-facteur-obligatoire`), comptes GitLab externes. Il manque l'**hébergement** : une extension du format, relue comme un changement de sécurité.
 - [`equipes/ext-axiomdev.yaml`](fichiers/S10/equipes/equipes/ext-axiomdev.yaml) : `type: prestataire`, date de fin, deux personnes en `@axiomdev.example`, contact interne Julien, `gitlab.groupe: ext-axiomdev` (groupe **propre**, vide de projets de MédiSphère), bloc `hebergement` ;
-- [schéma](fichiers/S10/equipes/schema/equipe.schema.extrait-F2-S10.json), [générateur](fichiers/S10/equipes/outils/rendre.extrait-F2-S10.py) (contrôles : prestataire seulement, pas de locataire propre, espace `<hôte>-<nom court>`, aucun projet `plateforme/*`), [gabarit](fichiers/S10/equipes/gabarits/k8s/prestataire.yaml.j2) (espace `dev` **non protégé de l'élagage**, quota, LimitRange, `Role` `prestataire-developpeur`, liaison au seul groupe) ;
+- [schéma](fichiers/S10/equipes/schema/equipe.schema.extrait-F2-S10.json), [générateur](fichiers/S10/equipes/outils/rendre.extrait-F2-S10.py) et ses [tests](fichiers/S10/equipes/tests/test_rendre.extrait-F2-S10.py) (contrôles : prestataire seulement, pas de locataire propre, espace `<hôte>-<nom court>`, aucun projet `plateforme/*`), [gabarit](fichiers/S10/equipes/gabarits/k8s/prestataire.yaml.j2) (espace `dev` **non protégé de l'élagage**, quota, LimitRange, `Role` `prestataire-developpeur`, liaison au seul groupe) ;
 - rendus attendus : [espace](fichiers/S10/rendu-attendu/k8s/equipes/ext-axiomdev/espaces/mediagenda-axiomdev.yaml), [accès GitLab](fichiers/S10/rendu-attendu/identite/outils/gitlab-prestataires.d/equipes.yml) ;
 - `CODEOWNERS` de `plateforme/equipes` : `equipes/ext-*.yaml @sophie.laurent` (approbation obligatoire si la règle de MR l'exige ; sinon, la relecture est écrite dans RB-320).
 
@@ -44,7 +44,7 @@ Première connexion de chaque personne (fenêtre privée) : enrôlement OTP impo
 
 *3. GitLab.* Job [`gitlab:prestataires`](fichiers/S10/identite/gitlab-ci.extrait-F2-S10.yml) de `plateforme/identite` (après `synchro:gitlab`), qui appelle [`gitlab-prestataire.sh`](fichiers/S10/identite/outils/gitlab-prestataire.sh) : utilisateurs marqués **externes**, membres **directs** de `mediagenda/api` en Developer avec `expires_at`, contrôle qu'aucun autre groupe que le leur n'apparaît dans leurs appartenances. `main` de `mediagenda/api` : *Allowed to push* et *Allowed to merge* = Maintainers (réglage du projet, M01). Les variables CI ne sont visibles qu'aux Maintainers, et les variables **protégées** ne sont pas exposées aux pipelines des branches de fonctionnalité d'AxiomDev.
 
-*4. Kubernetes.* L'espace est rendu dans `plateforme/k8s/equipes/ext-axiomdev/` et synchronisé par `equipes-k8s`. Vérification en administrateur, puis pour de vrai :
+*4. Kubernetes.* L'espace est rendu dans `plateforme/k8s/equipes/ext-axiomdev/` et synchronisé par `equipes-k8s` ; ses étiquettes (`capsule.clastix.io/tenant: mediagenda`, `environnement`, `origine: plateforme-equipes`) le font rattacher au `Tenant` `mediagenda` (protégé depuis le M28) par le CronJob de S02. Vérification en administrateur, puis pour de vrai :
 
 ```
 admin@adm01:~$ kubectl auth can-i --list -n mediagenda-axiomdev --as=oidc:yanis.perrin --as-group=oidc:ext-axiomdev
@@ -137,11 +137,25 @@ Puis la **source** : qui a posé le droit et quand. GitLab : en édition communa
 - `gitlab-prestataire.sh` échoue si une personne externe est membre d'un groupe autre que le sien ; `ms-verif-equipe ext-axiomdev` (S13) le signale chaque jour.
 - RB-329 § « le prestataire voit trop ».
 
+**Explications**
+- Un droit « voir » se lit dans trois plans qui ne se parlent pas : GitLab (appartenances directes **et héritées**), Kubernetes (liaisons RBAC d'espace et de cluster), annuaire (groupes, recopiés dans chaque jeton OIDC et, par la synchronisation, dans GitLab). Partir de la personne (ce qu'elle **est** : groupes, appartenances, liaisons) est plus court que partir de chaque ressource.
+- Les trois variantes sont des dérives **hors du code** : rien dans `plateforme/equipes` ne les a produites, donc rien ne les défait tant que l'outil qui gère la source n'est pas relancé (et la liaison de cluster n'a aucun outil). D'où la prévention en deux temps : l'admission rend la variante 2 impossible, la revue d'accès et `ms-verif-equipe` rendent les deux autres visibles le lendemain.
+- Dater l'exposition fait partie du correctif : HDS et le contrat demandent de savoir ce qui a pu être consulté, et depuis quand.
+
+**Alternatives**
+- Synchroniser l'annuaire et les groupes GitLab **en continu** (passage planifié de `annuaire:appliquer` et `synchro:gitlab`) : une dérive à la main est effacée en quelques heures, sans attendre la revue ; au prix d'appliquer sans relecture ce qui est déjà relu.
+- Interdire toute modification manuelle des groupes `ext-*` et `mediagenda` dans FreeIPA (permission retirée aux administrateurs du quotidien, compte de service seul) : plus robuste, mais un bris de glace en moins.
+- Un vCluster ou un cluster dédié pour le prestataire (S03) : la variante 2 n'aurait rien ouvert sur la production, les variantes 1 et 3 restent possibles.
+
 **Pièges classiques**
 - Regarder les **membres du projet** `mediagenda/api` : l'héritage ne s'y voit qu'avec « membres hérités » ; la vue utile est celle des appartenances **de la personne**.
 - Corriger l'annuaire et oublier les jetons déjà délivrés (et la synchronisation GitLab passée entre-temps).
 - Supprimer la liaison et ne pas chercher **qui** l'a posée : la même personne la reposera.
 - Retirer aussi le droit légitime (`prestataire-developpeur`, projet `api`) par excès de zèle : Julien perd une journée de son prestataire.
+
+**En production chez MédiSphère**
+
+La revue d'accès des groupes `ext-*` tourne chaque nuit et ouvre un ticket `SEC-` au premier écart ; les journaux d'audit de GitLab, de l'API Kubernetes et de Keycloak sont gardés un an dans le locataire `audit` de Loki, ce qui permet de dater une exposition ; toute exposition d'un prestataire est notifiée à son responsable interne et consignée au registre des incidents de sécurité, avec l'analyse de ce qui a pu être consulté.
 
 ---
 

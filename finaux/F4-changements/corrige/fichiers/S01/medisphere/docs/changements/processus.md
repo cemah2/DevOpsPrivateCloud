@@ -25,7 +25,7 @@ Un changement standard qui dépasse son objectif de mesure ou échoue repasse en
 
 ## 3. La fiche CHG
 
-Modèle : [`fiches/modele.md`](fiches/modele.md). Une fiche par changement, nommée `fiches/CHG-34xx-<sujet>.md`, ouverte par MR dans `plateforme/medisphere` **avant** la fenêtre et complétée après. L'en-tête YAML (catégorie, statut, décision, fenêtre, mesure) est lu par les outils : ne pas renommer ses clés.
+Modèle : [`fiches/modele.md`](fiches/modele.md). Une fiche par changement, nommée `fiches/CHG-34xx-<sujet>.md` (ou `fiches/CHG-34xx.md`), ouverte par MR dans `plateforme/medisphere` **avant** la fenêtre et complétée après. L'en-tête YAML (catégorie, statut, décision, fenêtre, mesure) est lu par les outils : ne pas renommer ses clés.
 
 Contenu obligatoire : risque, impact, fenêtre, préparation, étapes, critères de go/no-go et d'abandon, **retour arrière testé** (ou limite écrite), communication, **mesure de l'interruption** avant / pendant / après, journal, clôture.
 
@@ -67,8 +67,8 @@ Contrat d'InfoGér : fin dans six semaines. Ordre imposé par les dépendances :
 | S2 | CHG-3405 — composants de plateforme par GitOps | normal | jeudi 20 h-23 h | cluster | CHG-3404 |
 | S3 | CHG-3407 — Ceph sous charge | normal | mardi 20 h-23 h | stockage | CHG-3404 terminé |
 | S3 | CHG-3408 — OpenStack 2026.1 → 2026.2 (k8s-par1 arrêté) | normal | samedi 8 h-14 h | cloud | CHG-3407 |
-| S4 | CHG-3409 / CHG-3410 — plan et migration des VMs d'InfoGér | normal | samedi 8 h-14 h | virtualisation | CHG-3408 (mémoire rendue) |
-| S5 | CHG-3412 — Legacy-RDV en recette sur Kubernetes | standard (recette) | heures ouvrées | cluster | CHG-3410 |
+| S4 | CHG-3409 / CHG-3410 — plan et migration des VMs d'InfoGér | normal | mardi 20 h-21 h (vague 1), samedi 8 h-10 h (vague 2) | virtualisation | CHG-3408 (mémoire rendue) |
+| S5 | CHG-3412 — Legacy-RDV en recette sur Kubernetes (nouvel opérateur) | normal | heures ouvrées (recette seulement) | cluster | CHG-3410 |
 | S6 | CHG-3413 — bascule de production de Legacy-RDV ; **gel 48 h** | normal | samedi 8 h-10 h | applications | CHG-3412 |
 | S6 + 48 h | CHG-3414 — décommissionnement de `legacy-rdv01`, revue du trimestre | normal | mardi | virtualisation | fin du gel |
 

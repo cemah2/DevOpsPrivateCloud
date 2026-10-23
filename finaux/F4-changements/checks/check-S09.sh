@@ -19,7 +19,7 @@ fi
 
 check_cmd "docs/changements/migration-vmware.md sur main : inventaire, dépendance stats01 → legacy-rdv01, vagues, re-adressage, fenêtres, retour arrière" \
   _f4g_doc "$_f4g_doc_dir" '^migration-vmware\.md$' 'stats01' 'legacy-rdv01' 'ftp-part01' '3306|base de (donn|legacy)' \
-  'vague' '10\.10\.20\.44' '10\.10\.20\.45' '10\.10\.20\.46' 'fen[eê]tre' 'retour arri' 'manifeste|sha-?256'
+  'vague' '10\.10\.20\.44' '10\.10\.20\.45' '10\.10\.20\.46' 'fen(e|ê)tre' 'retour arri' 'manifeste|sha-?256'
 check_cmd "docs/changements/inventaire-reel.csv sur main (adresse réelle de stats01 découverte)" \
   _f4g_doc "$_f4g_doc_dir" '^inventaire-reel\.csv$' 'legacy-rdv01' 'ftp-part01' 'stats01' '192\.168\.50\.40'
 check_cmd "le mot de passe de 2014 de Legacy-RDV n'apparaît pas dans migration-vmware.md" \
@@ -27,4 +27,4 @@ check_cmd "le mot de passe de 2014 de Legacy-RDV n'apparaît pas dans migration-
 check_cmd "le mot de passe de 2014 de Legacy-RDV n'apparaît pas dans inventaire-reel.csv" \
   _f4g_doc_sans "$_f4g_doc_dir" '^inventaire-reel\.csv$' 'InfoGer2014!'
 check_cmd "fiche CHG-3410 (migration des VMs) sur main : risque, fenêtre, retour arrière" \
-  _f4g_doc "$_f4g_doc_dir/fiches" '^CHG-3410' 'risque' 'fen[eê]tre' 'retour arri'
+  _f4g_doc "$_f4g_doc_dir/fiches" '^CHG-3410' 'risque' 'fen(e|ê)tre' 'retour arri'

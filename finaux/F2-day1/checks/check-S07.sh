@@ -5,8 +5,8 @@
 # sain, archivé par le plugin Barman Cloud, sauvegarde de base récente ; sauvegarde imposée par une
 # politique d'admission ; extraction pseudonymisée chargée cette nuit (métriques publiées par la base
 # Data : nombre de lignes, âge du chargement, noms des colonnes), sans colonne identifiante ; aucune
-# liaison réseau, RBAC, ESO ni OpenBao entre Data et les bases de MédiAgenda.
-# Lecture seule : kube (wb-checks), Prometheus, OpenBao (métadonnées et texte des politiques).
+# liaison réseau, RBAC, ESO ni OpenBao entre Data et les bases de MédiAgenda ; ADR-0327 et RB-327 publiés.
+# Lecture seule : kube (wb-checks), Prometheus, OpenBao (métadonnées et texte des politiques), GitLab (GET).
 
 # shellcheck source=_f2-equipes.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_f2-equipes.sh"
@@ -134,3 +134,9 @@ case "$_s07_rc" in
     check_cmd "OpenBao : le groupe data obtient des identifiants dynamiques db-data, rien sous mediagenda" _s07_bao
     ;;
 esac
+
+# --- 5. Décision et procédure publiées ---------------------------------------------------------------
+check_cmd "ADR-0327 publié (docs/accueil/adr : décision sur le flux, pseudonymisation)" \
+  _f2b_doc "$_f2b_doc_dir"/adr '^ADR-0327' 'pseudonym' 'd(e|é)cision'
+check_cmd "RB-327 publié (docs/accueil/runbooks : retard, rotation, suspension)" \
+  _f2b_doc "$_f2b_doc_dir"/runbooks '^RB-327' 'retard' 'rotation' 'suspen'

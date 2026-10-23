@@ -184,7 +184,7 @@ root@pve01:~# qm stop 5311 && qm destroy 5311 --purge
 
 etcd : télécharger le dernier instantané horaire de `etcd-k8s-par1`, le déchiffrer avec la clé `age` (hors ligne), `etcdutl snapshot status` (RB-141 §3), puis **effacer** les copies locales. CNPG : `kubectl get clusters.postgresql.cnpg.io -n mediagenda-prod mediagenda-db -o jsonpath='{.status.lastArchivedWALTime}'` et le catalogue de l'objet de stockage (`barman-cloud-backup-list`, ou l'état du plugin) : la sauvegarde de base et le WAL jusqu'à maintenant.
 
-*3. Photographie* : [`photographie-donnees.sh`](fichiers/S04/k8s/outils/photographie-donnees.sh) (lecture seule, comptes et noms), complétée à la main : modèle [`reference-avant.md`](fichiers/S04/medisphere/docs/day0/reference-avant.md). S11 rejouera le même script après la reconstruction et comparera.
+*3. Photographie* : [`photographie-donnees.sh`](fichiers/S04/k8s/outils/photographie-donnees.sh) (lecture seule, comptes et noms), complétée à la main : modèle [`reference-avant.md`](fichiers/S04/medisphere/docs/day0/reference-avant.md). Pendant la fenêtre, `10-gel.sh` (S07) ajoute à ce document une section **« Gel »** (compteurs au moment du gel et écart expliqué avec la photographie de la veille) : c'est elle que S11 compare aux données remises, en rejouant le même script.
 
 *4. Retour arrière* : [`retour-arriere.md`](fichiers/S04/medisphere/docs/day0/retour-arriere.md). *5. Fiche* : [`CHG-3104-filet-et-go.md`](fichiers/S04/medisphere/docs/day0/changements/CHG-3104-filet-et-go.md).
 

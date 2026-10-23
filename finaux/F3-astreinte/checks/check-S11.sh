@@ -61,4 +61,5 @@ for _s11_c in "${_s11_cibles[@]}"; do
 done
 
 # --- Trace -----------------------------------------------------------------------------------------------
+check_cmd "RB-337 publié (docs/exploitation/runbooks/)" _f3f_rb_present RB-337
 _f3s_trace INC-5911 2

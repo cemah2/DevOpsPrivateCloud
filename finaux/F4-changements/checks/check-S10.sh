@@ -7,6 +7,9 @@
 
 # shellcheck source=_f4-migrations.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_f4-migrations.sh"
+# Sonde de continuité (contrat de F4-S02 : groupes « continuite-* » du témoin de mon01).
+# shellcheck source=_f4-montees.sh
+source "$(dirname "${BASH_SOURCE[0]}")/_f4-montees.sh"
 
 title "F4-S10 — Migrer les VMs d'InfoGér vers Proxmox VE"
 require_cmd jq curl ssh dig
@@ -41,6 +44,8 @@ done
 check_output "Legacy-RDV répond sur http://legacy-rdv01.par1.medisphere.internal/" 'Rendez-vous' \
   _f4g_get "http://legacy-rdv01.par1.medisphere.internal/"
 check_output "Legacy-RDV répond sur $_f4g_rdv/ (nom des cabinets, répartiteurs)" 'Rendez-vous' _f4g_get "$_f4g_rdv/"
+check_cmd "sonde de continuité de mon01 : un groupe continuite-* étiqueté service=legacy-rdv vise le nom des cabinets" \
+  _f4m_prom_non_vide temoin 'probe_success{job="blackbox", groupe=~"continuite-.+", service="legacy-rdv", instance=~"https://rdv\\.par1\\.medisphere\\.internal.*"}'
 check_port "ftp-part01 accepte les connexions FTP (21) depuis adm01" 10.10.20.45 21
 if _f4g_agent 3402; then
   check_cmd "ftp-part01 : vsftpd actif et adresse passive annoncée = 10.10.20.45 (ou non fixée)" _f4g_invite 3402 \
