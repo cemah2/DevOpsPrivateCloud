@@ -1,0 +1,38 @@
+# plateforme/politiques — kyverno/tests/recette-conforme/kyverno-test.yaml (M26-E35, INC-5335)
+# Test CLI « kyverno test » (job kyverno:tests, bloquant) : la charge type de mediagenda-recette, conforme,
+# est ADMISE par les deux politiques que la panne peut toucher (exiger-limites, en Deny depuis E16 ;
+# exiger-etiquettes, en [Audit, Warn] depuis E07), et une charge non conforme est REFUSÉE par chacune.
+# Les tests d'E07 et d'E16 vérifient déjà chaque règle isolément ; celui-ci fige le cas « une charge
+# normale de la recette passe » : une validation ou une matchCondition ajoutée qui la refuse (variantes
+# 1 et 2 de M26-E35) rend le pipeline rouge AVANT la fusion.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: recette-conforme
+policies:
+  - ../../validation/exiger-limites.yaml
+  - ../../validation/exiger-etiquettes.yaml
+resources:
+  - ressources.yaml
+variables: ../valeurs.yaml
+results:
+  - policy: exiger-limites
+    isValidatingPolicy: true
+    kind: Deployment
+    resources: [mediagenda-api-recette]
+    result: pass
+  - policy: exiger-etiquettes
+    isValidatingPolicy: true
+    kind: Deployment
+    resources: [mediagenda-api-recette]
+    result: pass
+  - policy: exiger-limites
+    isValidatingPolicy: true
+    kind: Deployment
+    resources: [recette-non-conforme]
+    result: fail
+  - policy: exiger-etiquettes
+    isValidatingPolicy: true
+    kind: Deployment
+    resources: [recette-non-conforme]
+    result: fail

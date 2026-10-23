@@ -698,7 +698,7 @@ Un compteur `background_scan` avance à **chaque** analyse de fond (par défaut 
 **Critères de réussite**
 - [ ] Un pod Falco prêt par nœud ; la ConfigMap `falco-rules` contient six règles « MédiSphère — » ; l'Application `falco` lit `plateforme/politiques`.
 - [ ] Le dernier pipeline de `main` de `plateforme/politiques` a passé `falco:valider`.
-- [ ] Loki (locataire `audit`) contient des événements de règles MédiSphère des sept derniers jours ; au moins une alerte `AlerteFalco` est arrivée dans Mailpit.
+- [ ] Loki (locataire `audit`) contient des événements de règles MédiSphère des 30 derniers jours (relancé plus tard, le check ignore ce contrôle et dit comment en régénérer) ; au moins une alerte `AlerteFalco` est arrivée dans Mailpit.
 - [ ] RB-260 est sur `main` de `plateforme/medisphere`.
 
 **Vérification** : `lab/bin/check 26 19`

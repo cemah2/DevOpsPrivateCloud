@@ -35,10 +35,24 @@ check_cmd "Application falco : lit plateforme/politiques et son fichier falco/re
 check_cmd "plateforme/politiques : un job falco:valider a réussi sur main" \
   _m26c_job_reussi "$_M26C_P_POLITIQUES" "falco:valider"
 
-check_cmd "Loki (audit) : événements de règles MédiSphère dans les 7 derniers jours" \
-  _m26c_loki_present '{service="falco", rule=~"MédiSphère.*"}' audit 168h
-check_cmd "Loki (audit) : Falco envoie toujours (au moins un événement dans les dernières 24 h)" \
-  _m26c_loki_present '{service="falco"}' audit 24h
+# Événements : présents = OK ; Loki répond mais rien dans la fenêtre (check relancé longtemps après
+# l'exercice, lab au repos) = IGNORÉ avec la marche à suivre pour en régénérer, jamais réussi ;
+# Loki illisible = KO. Les règles elles-mêmes sont contrôlées plus haut (ConfigMap falco-rules).
+_M26C_E19_REGEN="régénère : rejoue l'étape 6 d'E19 avec un pod d'essai de wb-essais (au moins le shell interactif : kubectl -n wb-essais exec -it <pod> -- sh), puis relance le check"
+_m26c_e19_evenements() {
+  local desc="$1" requete="$2" duree="$3" fenetre="$4"
+  if _m26c_loki_present "$requete" audit "$duree"; then
+    _ok "$desc"
+  elif _m26c_loki_absent "$requete" audit "$duree"; then
+    skip "$desc" "aucun événement dans $fenetre ; $_M26C_E19_REGEN"
+  else
+    _ko "$desc (Loki, locataire audit, ne répond pas)"
+  fi
+}
+_m26c_e19_evenements "Loki (audit) : événements de règles MédiSphère dans les 30 derniers jours" \
+  '{service="falco", rule=~"MédiSphère.*"}' 720h "les 30 derniers jours"
+_m26c_e19_evenements "Loki (audit) : Falco envoie toujours (au moins un événement dans les dernières 24 h)" \
+  '{service="falco"}' 24h "les dernières 24 h"
 
 check_cmd "Mailpit : au moins une alerte AlerteFalco reçue" _m26c_json \
   "$(mailpit_api "search?query=AlerteFalco" 2>/dev/null || true)" '(.messages_count // 0) >= 1'

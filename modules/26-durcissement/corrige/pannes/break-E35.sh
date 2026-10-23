@@ -5,7 +5,9 @@
 #
 # Toutes les variantes passent par une MR de lucas.martin dans plateforme/politiques ou plateforme/k8s,
 # et ne touchent QUE l'espace mediagenda-recette (jamais kube-system, kyverno, argocd, cilium ni la prod) :
-#   1. une ValidatingPolicy déjà en « Deny » qui couvre la recette (ex. exiger-etiquettes) reçoit une
+#   1. une ValidatingPolicy déjà en « Deny » qui couvre la recette (exiger-limites d'E16 dans l'état du
+#      palier 2 ; exiger-etiquettes seulement si elle a été passée en Deny, elle est en [Audit, Warn]
+#      depuis E07) reçoit une
 #      validation de trop, limitée par son expression à mediagenda-recette : « toute charge doit citer
 #      son ticket de changement » (annotation que les charges n'ont pas) ; toute charge de la recette est
 #      refusée (admission webhook denied the request). NB : une matchCondition n'aurait PAS cet effet
@@ -24,7 +26,8 @@ source "$WB_ROOT/modules/26-durcissement/corrige/pannes/_m26-commun.sh"
 
 _E35_NS=mediagenda-recette
 
-# ValidatingPolicy de plateforme/politiques déjà en « Deny » (étiquettes, limites ou registres).
+# ValidatingPolicy de plateforme/politiques déjà en « Deny » (étiquettes, limites ou registres) : en
+# pratique exiger-limites (E16) ; exiger-etiquettes et registres-autorises restent en audit (E07).
 _e35_fichier_etiquettes() {
   m26_git_trouver "$_M26_PROJ_POL" '.kind == "ValidatingPolicy" and (.metadata.name | test("etiquette|limites|registre"))
     and ((.spec.validationActions // []) | any_c(. == "Deny"))' kyverno/validation
@@ -110,7 +113,7 @@ EOF
 
 _e35_defaire() {
   case "$1" in
-    1) m26_git_defaire E35 pol _e35_i1 "revert(validation): retour en audit (M26-E35, annulation)" ;;
+    1) m26_git_defaire E35 pol _e35_i1 "revert(validation): validation SEC-2735 retirée (M26-E35, annulation)" ;;
     2) m26_git_defaire E35 pol _e35_i2 "revert(validation): garde recette retirée (M26-E35, annulation)"
        m26_oublier E35 fp-orig ;;
     3) m26_restaurer_objet E35 ciliumnetworkpolicies refus-total "$_E35_NS" ;;

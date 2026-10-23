@@ -47,23 +47,24 @@ Un message `admission webhook "validate.kyverno.svc" denied the request` (ou une
 ```
 admin@adm01:~$ kubectl -n mediagenda-recette apply --dry-run=server -f charge-conforme.yaml
 Error from server: admission webhook "…kyverno.svc…" denied the request: … SEC-2735 (Lucas) : toute charge de la recette doit citer son ticket de changement …
-admin@adm01:~$ kubectl get validatingpolicy exiger-etiquettes -o yaml | yq '.spec.validationActions, .spec.validations'
+admin@adm01:~$ kubectl get validatingpolicies.policies.kyverno.io -o custom-columns=NOM:.metadata.name,ACTIONS:.spec.validationActions
+admin@adm01:~$ kubectl get validatingpolicy exiger-limites -o yaml | yq '.spec.validationActions, .spec.validations'
 ```
 
-Le message du refus nomme la politique et cite la validation ajoutée : `object.metadata.namespace != "mediagenda-recette" || <annotation medisphere.internal/change présente>`. La politique était déjà en `Deny` sur recette et prod ; Lucas lui a ajouté une exigence (annotation de ticket de changement) qu'aucune charge ne remplit, limitée à la recette. `git log` de `plateforme/politiques` montre le commit `M26-E35` de `lucas.martin` (« refuser les charges sans ticket de changement »). **Correctif** : MR (`revert`) qui retire la validation ; si l'intention est bonne, elle se réintroduit plus tard dans une politique **à part**, en `Audit` d'abord (lecture des `PolicyReport`), avec un test `kyverno test`. [`fichiers/M26-E35/politiques/kyverno/validation/exiger-etiquettes.yaml`](fichiers/M26-E35/politiques/kyverno/validation/exiger-etiquettes.yaml) montre l'état sain.
+Le message du refus nomme la politique et cite la validation ajoutée : `object.metadata.namespace != "mediagenda-recette" || <annotation medisphere.internal/change présente>`. La panne vise une politique **déjà en `Deny`** sur les espaces d'équipe : dans l'état laissé par le palier 2, c'est `exiger-limites` (E16). `exiger-etiquettes` est restée en `[Audit, Warn]` depuis E07 (la décision de la passer en refus en recette et prod est une **proposition** de son README) : une validation ajoutée à une politique d'audit n'aurait produit qu'un avertissement et une ligne de `PolicyReport`, pas de refus. Si tu l'as déjà passée en `Deny`, la panne a pu tomber sur elle : la démarche est la même, le message nomme la bonne. Lucas a ajouté à la politique une exigence (annotation de ticket de changement) qu'aucune charge ne remplit, limitée à la recette. `git log` de `plateforme/politiques` montre le commit `M26-E35` de `lucas.martin` (« refuser les charges sans ticket de changement »). **Correctif** : MR (`revert`) qui retire la validation ; si l'intention est bonne, elle se réintroduit plus tard dans une politique **à part**, en `Audit` d'abord (lecture des `PolicyReport`), avec un test `kyverno test`. L'état sain est celui du corrigé d'E16 : [`exiger-limites.yaml`](fichiers/M26-E16/politiques/kyverno/validation/exiger-limites.yaml) (et, pour `exiger-etiquettes`, celui d'E07 : [`exiger-etiquettes.yaml`](fichiers/M26-E07/politiques/kyverno/validation/exiger-etiquettes.yaml)).
 
 À ne pas confondre : une **`matchCondition`** fausse ne refuse rien, elle fait **ignorer** la politique pour l'objet (c'est un filtre de portée, comme dans une `ValidatingAdmissionPolicy`). Mettre l'exigence dans une `matchCondition` aurait donc… retiré la politique des charges sans annotation.
 
 **Variante 2 — failurePolicy: Fail avec une condition CEL qui échoue.**
 
 ```
-admin@adm01:~$ kubectl get validatingpolicy exiger-etiquettes -o yaml | yq '.spec.failurePolicy, .spec.matchConditions'
+admin@adm01:~$ kubectl get validatingpolicy exiger-limites -o yaml | yq '.spec.failurePolicy, .spec.matchConditions'
 Fail
 - name: garde-recette
   expression: object.metadata.namespace != "mediagenda-recette" || object.spec.template.metadata.labels.absent == "oui"
 ```
 
-`failurePolicy: Fail` et une condition (`garde-recette`) qui, pour la seule recette (ailleurs, la partie gauche du `||` est vraie et CEL ne va pas plus loin), lit un champ qui n'existe pas : pour un pod, `object.spec.template` n'existe même pas, pour un Deployment la clé `absent` non plus. L'évaluation **échoue** ; en `Fail`, un échec d'évaluation d'une `matchCondition` vaut refus. **Correctif** : MR (`revert`) qui retire la condition et remet la `failurePolicy` d'origine (`Ignore` pour cette politique d'étiquettes). La leçon : `failurePolicy: Fail` est réservé aux politiques de **refus mûres et testées** (signature en prod), jamais à une politique dont l'expression peut échouer ; une expression défensive s'écrit avec `has()`.
+`failurePolicy: Fail` et une condition (`garde-recette`) qui, pour la seule recette (ailleurs, la partie gauche du `||` est vraie et CEL ne va pas plus loin), lit un champ qui n'existe pas : pour un pod, `object.spec.template` n'existe même pas, pour un Deployment la clé `absent` non plus. L'évaluation **échoue** ; en `Fail`, un échec d'évaluation d'une `matchCondition` vaut refus. **Correctif** : MR (`revert`) qui retire la condition et remet la `failurePolicy` d'origine (`Ignore` pour `exiger-limites`, règle d'hygiène, comme pour `exiger-etiquettes`). La leçon : `failurePolicy: Fail` est réservé aux politiques de **refus mûres et testées** (signature en prod), jamais à une politique dont l'expression peut échouer ; une expression défensive s'écrit avec `has()`.
 
 **Variante 3 — GeneratingPolicy qui pose un refus réseau total.**
 
@@ -82,7 +83,7 @@ Une `CiliumNetworkPolicy` `refus-total` (posée à la main, annotation `medisphe
 
 **Clôture commune** : charge conforme admise, pods `Ready`, `lab/bin/check 26 35`, puis `lab/bin/break 26 35 --annuler`.
 
-**Prévention.** Des tests `kyverno test` dans `plateforme/politiques/kyverno/tests/` : une charge conforme de recette **admise**, une charge non conforme **refusée** ([`fichiers/M26-E35/politiques/kyverno/tests/etiquettes.test.yaml`](fichiers/M26-E35/politiques/kyverno/tests/etiquettes.test.yaml)). Un passage obligatoire en `Audit` avant `Deny` (lire les `PolicyReport` quelques jours). `failurePolicy: Fail` seulement sur les politiques de refus mûres.
+**Prévention.** Des tests `kyverno test` dans `plateforme/politiques/kyverno/tests/` : une charge conforme de recette **admise**, une charge non conforme **refusée** ([`kyverno/tests/recette-conforme/`](fichiers/M26-E35/politiques/kyverno/tests/recette-conforme/kyverno-test.yaml), sur `exiger-limites` et `exiger-etiquettes`, avec les valeurs d'espaces d'E16). Les tests d'E07 et d'E16 auraient déjà dû rougir sur le commit de Lucas (`limites-ok` et `etiquette-correcte` sont des charges de recette) : un test ne protège que si le pipeline est **bloquant** pour la fusion (*Pipelines must succeed*) et si personne ne pousse directement sur `main`. Un passage obligatoire en `Audit` avant `Deny` (lire les `PolicyReport` quelques jours). `failurePolicy: Fail` seulement sur les politiques de refus mûres.
 
 **Explications.** Une `ValidatingPolicy` CEL s'exécute dans le contrôleur d'admission de Kyverno : `validationActions` décide (refuser, auditer, avertir), `matchConstraints` et `matchConditions` décident **de quoi** elle s'occupe, `failurePolicy` décide **en cas d'échec d'évaluation ou d'indisponibilité**. Une politique de génération, elle, crée des objets (ici une NetworkPolicy par espace) : une politique réseau de refus par défaut est saine **à condition** d'autoriser explicitement le DNS et les sondes, sinon elle rend les pods non prêts.
 

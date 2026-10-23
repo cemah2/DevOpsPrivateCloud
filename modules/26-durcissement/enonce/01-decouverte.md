@@ -568,7 +568,7 @@ Dans un test de la CLI, la politique ne voit pas de cluster : les étiquettes de
 
 **Critères de réussite**
 - [ ] L'Application `falco` est `Synced` et `Healthy` ; un pod `falco` prêt sur chacun des six nœuds, pilote `modern_ebpf`.
-- [ ] Loki (locataire `audit`) contient, sur les sept derniers jours, les événements « Terminal shell in container » et « Read sensitive file untrusted » étiquetés `service="falco"`.
+- [ ] Loki (locataire `audit`) contient, sur les 30 derniers jours, les événements « Terminal shell in container » et « Read sensitive file untrusted » étiquetés `service="falco"` (relancé plus tard, le check ignore ce contrôle et dit comment régénérer un événement d'essai).
 - [ ] falcosidekick a livré au moins une alerte à Alertmanager et des événements à Loki sans erreur (métriques `falcosecurity_falcosidekick_outputs_total`).
 - [ ] L'espace `falco` porte l'annotation `medisphere.internal/exception-psa` ; le pod `falco-essai` n'existe plus.
 

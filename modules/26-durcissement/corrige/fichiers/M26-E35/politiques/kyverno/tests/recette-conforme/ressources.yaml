@@ -1,0 +1,39 @@
+# Ressources du test recette-conforme (jamais appliquées : hors de kustomization.yaml).
+# Charge type de la recette : étiquette d'équipe, demandes et limite de mémoire, SANS annotation
+# particulière (aucune exigence non écrite dans les conventions ne doit la refuser).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mediagenda-api-recette
+  namespace: mediagenda-recette
+  labels:
+    medisphere.internal/equipe: mediagenda
+spec:
+  selector:
+    matchLabels: {app: mediagenda-api}
+  template:
+    metadata:
+      labels: {app: mediagenda-api, medisphere.internal/equipe: mediagenda}
+    spec:
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recette-non-conforme
+  namespace: mediagenda-recette
+spec:
+  selector:
+    matchLabels: {app: essai}
+  template:
+    metadata:
+      labels: {app: essai}
+    spec:
+      containers:
+        - name: api
+          image: registry.par1.medisphere.internal/medisphere/mediagenda-api:v1.4.0
