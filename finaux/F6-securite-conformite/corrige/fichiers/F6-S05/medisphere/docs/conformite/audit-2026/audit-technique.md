@@ -57,10 +57,10 @@
 
 | # | Constat | Gravité | Statut |
 |---|---|---|---|
-| K-1 | kube-bench 1.2.15 / 1.3.2 / 1.4.1 : `--profiling` non désactivé (API, contrôleur, ordonnanceur) | moyenne | vrai écart (M26 l'avait noté) → action A-5 |
+| K-1 | kube-bench (`cis-1.12`, numéros à relire dans ton rapport) : `--profiling` non désactivé (API, contrôleur, ordonnanceur) | moyenne | vrai écart (M26 l'avait noté) → action A-5 |
 | K-2 | kube-bench 1.1.12 : répertoire de données d'etcd propriété de `root` | — | **choix de kubeadm** (etcd en pod statique sous root) ; dit dans `mesure-k8s-par1.md` (M26-E05) |
 | K-3 | kube-bench 1.2.x : `--kubelet-certificate-authority` absent | moyenne | vrai écart (kubeadm ne le pose pas, M26) : action A-5 ; risque réduit par `serverTLSBootstrap` |
-| K-4 | kube-bench 4.2.x : contrôles de fichiers du kubelet « WARN » | — | faux positifs : chemins kubeadm différents des chemins attendus par le référentiel ; vérifiés à la main |
+| K-4 | kube-bench 4.1.x : contrôles de fichiers du kubelet « WARN » | — | faux positifs : chemins kubeadm différents des chemins attendus par le référentiel ; vérifiés à la main |
 | K-5 | kubescape : comptes de service avec jeton monté automatiquement | moyenne | vrai pour 4 charges de plateforme (Backstage, outils) → action A-7 |
 | K-6 | kubescape : conteneurs privilégiés ou avec capacités | — | **exceptions enregistrées** (`falco`, `tetragon`, `supervision-noeuds`, ceph-csi) ; vérifiées une à une contre le registre |
 | K-7 | kubescape : `ClusterRoleBinding` vers `cluster-admin` pour un compte de service applicatif | élevée | **trouvé et corrigé en S04** (ECA-361x) |

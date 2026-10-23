@@ -6,8 +6,13 @@
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
 - `break-S11.sh`, `ms-verifier-kit-forensique` : `bash -n` et `shellcheck -x` ;
-- logique de l'injection relue contre les règles Falco du M26 (shell interactif, lecture du jeton,
-  connexion sortante non prévue) et la politique de quarantaine (M26-E33) ;
+- logique de l'injection relue contre les règles Falco du M26 (shell interactif, connexion sortante non
+  prévue), les macros des règles par défaut de Falco (`open_read` exige une ouverture **réussie**,
+  `fd.num>=0` : une lecture d'un jeton absent ne déclenche rien ; `container_entrypoint`, `shell_procs`),
+  le code de falcosidekick (étiquettes `source="falco"`, `alertname` = nom de la règle, `k8s_ns_name`…)
+  et la politique de quarantaine (M26-E33) ;
+- pseudo-terminal de l'injection (`script -qec … </dev/null` sous `timeout`) et commande passée au
+  conteneur : rejoués localement avec un faux `kubectl` (util-linux 2.39) ;
 - manifestes (NetworkPolicy injectée, runbooks) : YAML/Markdown valides.
 
 **Points non testés en conditions réelles** : en fin de corrigé. Signale tes retours.
@@ -86,10 +91,17 @@ jour ; le contrôle du kit tourne en CI et alerte si une image d'outils ou une i
 > la **portée** diffère. Injection : [`pannes/break-S11.sh`](pannes/break-S11.sh).
 
 **Symptômes**
-Courriels d'Alertmanager (source `falco`) toutes les minutes pour `mediagenda-recette` : « shell
-interactif dans un conteneur applicatif », « lecture du jeton de compte de service », « connexion
-sortante vers un port non prévu » vers une adresse inconnue (`10.10.99.66:4444`). Aucune intervention
-annoncée.
+Courriels d'Alertmanager (source `falco`) pour `mediagenda-recette` : « MédiSphère — shell interactif
+dans un conteneur applicatif » (et la règle par défaut « Terminal shell in container », priorité
+`NOTICE`, si le seuil de falcosidekick la laisse passer), puis « MédiSphère — connexion sortante vers
+un port non prévu » vers une adresse inconnue (`10.10.99.66:4444`), répétée chaque minute (l'alerte
+reste active ; Alertmanager ne renvoie pas un courriel par connexion). Aucune intervention annoncée.
+**Pas** d'alerte « lecture du jeton de compte de service » : le shell a bien lancé
+`cat /var/run/secrets/kubernetes.io/serviceaccount/token`, mais l'API de MédiAgenda ne monte pas de
+jeton (norme « charge sûre » C6, `automountToken: false` du chart) ; l'ouverture échoue, et la macro
+`open_read` de Falco (comme la politique Tetragon `fichiers-sensibles`) ne voit que les lectures réussies.
+Seul l'événement `process_exec` de Tetragon (`cat` et son argument) trahit la tentative : la norme C6 a
+tenu, c'est un point « ce qui a marché » du post-mortem.
 
 **Hypothèses** (dans l'ordre où on les écarte)
 1. Faux positif — un développeur débogue en recette (un `exec` humain déclenche « shell interactif »).
@@ -106,23 +118,32 @@ admin@adm01:~$ kubectl -n mediagenda-recette get pod <POD> -o jsonpath='{.status
 *Qui a ouvert le shell, qui a appelé l'API* — journal d'audit de l'API (locataire `audit` de Loki) :
 ```logql
 {job="kubernetes-audit"} | json | objectRef_subresource="exec" | objectRef_name="<POD>"
-{job="kubernetes-audit"} | json | user_username=~"system:serviceaccount:mediagenda-recette:.*" | line_format "{{.verb}} {{.objectRef_resource}} {{.userAgent}} {{.sourceIPs}}"
+{job="kubernetes-audit"} | json qui="user.username", verbe="verb", ressource="objectRef.resource", sous="objectRef.subresource", outil="userAgent", ip="sourceIPs[0]", code="responseStatus.code" | qui=~"system:serviceaccount:mediagenda-recette:.*" | line_format "{{.verbe}} {{.ressource}} {{.code}} {{.outil}} {{.ip}}"
+{job="kubernetes-audit"} | json | objectRef_resource="serviceaccounts" | objectRef_subresource="token" | objectRef_namespace="mediagenda-recette"
 ```
-> Dans le lab, l'`exec` apparaît au nom de l'identité d'administration qui a lancé `lab/bin/break` (comme
-> en F6-S04) : en vrai, ce serait l'identité de l'attaquant ou celle qu'il a volée. Aucun ticket `CHG-`
-> ni `INC-` ne l'annonce → ce n'est pas une intervention légitime : vrai positif.
+(`| json` sans paramètre ignore les tableaux : `sourceIPs` s'extrait par `sourceIPs[0]`.)
+> Dans le lab, l'`exec` (et, en variante 1, l'émission du jeton `create serviceaccounts/token`) apparaît
+> au nom de l'identité d'administration qui a lancé `lab/bin/break` (comme en F6-S04) : elle joue
+> l'attaquant. En vrai, ce serait l'identité de l'attaquant ou celle qu'il a volée — et la question
+> suivante de l'enquête. Aucun ticket `CHG-` ni `INC-` ne l'annonce → ce n'est pas une intervention
+> légitime : vrai positif.
 - Si le **compte de service** de l'API (`system:serviceaccount:mediagenda-recette:…`) fait des requêtes
-  de reconnaissance (`selfsubjectrulesreviews` de `auth can-i --list`, `list pods`) avec un `userAgent`
-  **`kubectl/…`** (MédiAgenda n'utilise pas `kubectl`) et depuis une adresse qui n'est pas celle du pod
-  (`sourceIPs` : un nœud de contrôle, c'est-à-dire un appel entré par la VIP de l'API, venu de
-  l'extérieur du cluster) : son jeton est utilisé ailleurs que dans son pod → **vecteur 1** (jeton fuité).
+  de reconnaissance (`selfsubjectrulesreviews` de `auth can-i --list`, `list pods` refusé en `403`) avec
+  un `userAgent` **`kubectl/…`** (MédiAgenda n'utilise pas `kubectl`, et son pod ne monte même pas de
+  jeton) et depuis une adresse qui n'est pas celle d'un pod (`sourceIPs` : un nœud de contrôle, appel
+  entré par la VIP de l'API, venu de l'extérieur du cluster), précédées d'un `create serviceaccounts/token`
+  pour ce compte : un jeton a été **émis** pour le compte de l'application et utilisé hors du cluster →
+  **vecteur 1** (jeton fuité).
 *Ce qui a été lancé* — Falco et Tetragon :
 ```logql
-{service="falco", k8s_pod_name="<POD>"} | json
+{service="falco"} | json | output_fields_k8s_pod_name="<POD>"
 {service="tetragon"} | json | process_exec_process_pod_name="<POD>"
 ```
-Tetragon donne l'arbre : le `sh` a lu `/var/run/secrets/kubernetes.io/serviceaccount/token`, puis lancé
-une boucle `python3`.
+(`k8s_pod_name` n'est pas une étiquette de flux — liste fermée du M22 — mais un champ du JSON de Falco,
+sous `output_fields`.) Tetragon donne l'arbre : le `sh` a lancé `cat
+/var/run/secrets/kubernetes.io/serviceaccount/token` (en échec : pas de jeton monté), `base64`, puis une
+boucle `python3` détachée. (Un ou plusieurs `python3 -c` courts, sans terminal, juste après : c'est le
+script d'injection qui vérifie que la boucle tourne — artefact du lab, à noter comme tel.)
 *Où va la connexion, aboutit-elle* — Hubble (c'est ici que les deux vecteurs se séparent) :
 ```
 admin@adm01:~$ hubble observe --pod mediagenda-recette/<POD> --to-ip 10.10.99.66 --last 50
@@ -144,10 +165,12 @@ admin@adm01:~$ hubble observe --pod mediagenda-recette/<POD> --to-ip 10.10.99.66
   configuration persistée et du code : **vecteur 2** (règles de sortie trop larges, à deux couches).
 
 **Cause racine** (par variante)
-- **Variante 1 — jeton de compte de service fuité** : un jeton du compte de service de recette a été
-  lu dans le pod puis utilisé contre l'API (reconnaissance). La connexion sortante vers le C2 a été
-  jetée par le refus réseau par défaut. Portée : ce que le jeton ouvre (droits du compte de service),
-  **pas** de donnée sortie.
+- **Variante 1 — jeton de compte de service fuité** : la tentative de lecture du jeton dans le pod a
+  échoué (aucun jeton monté, C6), mais un jeton du compte de service de recette a été **émis**
+  (TokenRequest) puis utilisé depuis l'extérieur contre l'API (reconnaissance). La connexion sortante
+  vers le C2 a été jetée par le refus réseau par défaut. Portée : ce que le jeton ouvre (droits du compte
+  de service : ici presque rien, `get pods` refusé), **pas** de donnée sortie ; et l'identité qui a
+  émis le jeton, à instruire.
 - **Variante 2 — règles de sortie trop larges** : une NetworkPolicy oubliée (`legacy-sortie-large`)
   autorisait les pods d'API à sortir vers `10.10.99.0/24`, et une règle posée à chaud sur la bordure
   (`legacy-sortie-recette`) laissait passer jusqu'à `10.10.99.66:4444` ; la connexion vers le C2 a abouti
@@ -170,9 +193,10 @@ qualifier (`[décision]`), escalader à Sophie (RSSI) et Thomas (DPO), un courri
 
 **Prévention**
 - Variante 1 : retirer la capacité d'`exec` humain hors bris de glace **aussi** sur la recette
-  (`prod-gestes-interactifs` du F3 étendu) ; jeton de compte de service non monté quand inutile
-  (norme « charge sûre » C6, M26) ; alerte sur l'usage d'un jeton de compte de service contre l'API
-  depuis une adresse inhabituelle.
+  (`prod-gestes-interactifs` du F3 étendu) ; restreindre qui peut émettre un jeton
+  (`create serviceaccounts/token`) pour les comptes applicatifs ; alertes d'audit sur l'émission d'un
+  jeton pour un compte applicatif et sur l'usage d'un jeton de compte de service avec un `userAgent`
+  `kubectl` ou depuis une adresse hors des pods. La norme C6 (jeton non monté) a tenu : la garder.
 - Variante 2 : contrôle de dérive des NetworkPolicy (une règle de sortie large = une alerte) et de la
   bordure (ruleset actif ↔ configuration persistée : P-RES-01 et la métrique proposée en F6-S04) ; revue
   des politiques réseau à chaque MR ; refus par défaut vérifié par un test Hubble périodique.
@@ -188,12 +212,13 @@ qualifier (`[décision]`), escalader à Sophie (RSSI) et Thomas (DPO), un courri
 Fichiers : [`chronologie.md`](fichiers/F6-S12/medisphere/docs/securite/incidents/INC-6211/chronologie.md).
 
 1. **Chronologie** reconstruite avec des sources inaltérables (F6-S08) : première trace Falco → `exec`
-   dans l'audit de l'API (identité) → lecture du jeton (Tetragon) → boucle de connexion (Tetragon,
+   dans l'audit de l'API (identité) → tentative de lecture du jeton (Tetragon `process_exec`) → boucle de connexion (Tetragon,
    Hubble) → verdict réseau (Hubble) → journaux du C2 (`c2-simule01:/var/log/c2-simule.log`, relevés
    **avant** l'annulation) → isolement. Chaque ligne datée (UTC), sourcée, avec l'empreinte de la pièce
    dans `preuves-conformite/INC-6211/`.
-2. **Portée** : *établi* — un shell a été ouvert, le jeton a été lu, une connexion vers `10.10.99.66`
-   a été tentée. *Selon la variante* — vecteur 1 : usage du jeton contre l'API (audit), connexion
+2. **Portée** : *établi* — un shell a été ouvert, la lecture du jeton a été **tentée** (échec : aucun
+   jeton monté), une connexion vers `10.10.99.66` a été tentée. *Selon la variante* — vecteur 1 : un
+   jeton du compte a été émis puis utilisé contre l'API (audit), connexion
    **jetée** (Hubble `DROPPED`, C2 muet) → pas de sortie de données ; vecteur 2 : connexion **aboutie**
    (Hubble `FORWARDED`, C2 journalise) → canal ouvert, mais *non établi* qu'une donnée soit sortie
    (le C2 n'a reçu aucun octet utile ; l'injection n'envoie rien). *Non établi* dans les deux cas :
@@ -206,14 +231,18 @@ Fichiers : [`chronologie.md`](fichiers/F6-S12/medisphere/docs/securite/incidents
      *handle* (`nft delete rule inet filter forward handle <H>`, comme en F6-S04), vérifier le retour au
      refus par défaut (Hubble : la connexion repasse `DROPPED` ; compteurs de la bordure figés).
    - vecteur 1 : un jeton lié ne se révoque pas individuellement ; supprimer et recréer le compte de
-     service invalide **tous** ses jetons (nouvel UID), puis redémarrer proprement l'API de recette.
+     service invalide **tous** ses jetons (nouvel UID : le check le compare à celui noté à
+     l'injection), puis redémarrer proprement l'API de recette ; instruire l'identité qui a émis le
+     jeton (dans le lab : celle qui a lancé l'injection).
    Dans les deux cas : supprimer le pod suspect **après** la collecte et l'accord de la RSSI.
 4. **Rotation des secrets exposés** : jeton de compte de service, Secrets montés dans le pod,
    identifiants OpenBao lisibles depuis le pod — tournés ; trace dans la chronologie.
 5. **Retour** : Rollout `mediagenda` complet, plus de connexion vers le C2, aucune alerte Falco active
-   sur l'espace. Relever les journaux du C2 (`qm guest exec 3601 -- cat /var/log/c2-simule.log` depuis
-   `pve01`, empreinte dans la chronologie) **puis** `lab/bin/break F6 11 --annuler` (destruction du C2 ;
-   retrait de ce que l'injection a posé et que tu n'aurais pas déjà retiré).
+   sur l'espace (les alertes de falcosidekick sans échéance se résolvent d'elles-mêmes quelques minutes
+   après le dernier événement : `resolve_timeout` d'Alertmanager). Relever les journaux du C2
+   (`qm guest exec 3601 -- cat /var/log/c2-simule.log` depuis `pve01`, empreinte dans la chronologie)
+   **puis** `lab/bin/break F6 11 --annuler` (destruction du C2 ; retrait de ce que l'injection a posé et
+   que tu n'aurais pas déjà retiré ; l'état local garde le pod et le compte de service pour le check).
 
 **Explications**
 - L'archive d'audit inaltérable (F6-S08) est faite pour ce moment : la chronologie tient parce que ses
@@ -248,15 +277,25 @@ recette passe sous `prod-gestes-interactifs` (plus d'`exec` humain hors bris de 
 
 Fichiers : [`decision-notification.md`](fichiers/F6-S13/medisphere/docs/securite/incidents/INC-6211/decision-notification.md), [`registre-violations.md`](fichiers/F6-S13/medisphere/docs/securite/incidents/INC-6211/registre-violations.md), [`message-etat.md`](fichiers/F6-S13/medisphere/docs/securite/incidents/INC-6211/message-etat.md), [`post-mortem.md`](fichiers/F6-S13/medisphere/docs/securite/incidents/INC-6211/post-mortem.md).
 
+**D'abord le rôle.** Pour ses propres données (comptes du personnel, journaux d'administration, données
+fictives de sa recette), MédiSphère est **responsable de traitement** ; pour les données de patients
+qu'elle héberge et traite pour ses clients (production de MédiAgenda), elle est **sous-traitant**
+(art. 28). Le sous-traitant ne notifie pas la CNIL à la place de son client : il **notifie le
+responsable de traitement dans les meilleurs délais** après avoir pris connaissance de la violation
+(art. 33.2), et c'est le client qui décide de la notification CNIL (art. 33.1, 72 h) et de l'information
+des personnes (art. 34). La répartition exacte se lit dans les contrats (clause de sous-traitance,
+contrat HDS) : **à vérifier dans les contrats**, pas à supposer.
+
 **La décision, sur preuves de F6-S12.** Les données de `mediagenda-recette` sont fictives ou
 pseudonymisées (vérifié) ; aucun accès à la production n'est établi ; la connexion sortante n'a emporté
 aucune donnée (vecteur 1 : jetée ; vecteur 2 : aboutie mais aucun octet utile). Conclusion :
 - **Violation de données à caractère personnel** (RGPD art. 4.12) : **non** — aucune donnée personnelle
   réelle n'a été touchée (confidentialité, intégrité, disponibilité). La démonstration s'appuie sur la
   portée établie en F6-S12 (recette fictive, pas de prod, rien de sorti).
-- **CNIL (art. 33)** : pas de notification — pas de violation de données personnelles. Mais l'analyse et
-  la décision sont **inscrites au registre** (art. 33.5), car on a pris connaissance d'un événement et
-  on doit pouvoir montrer qu'on a tranché.
+- **CNIL (art. 33)** : pas de notification — pas de violation de données personnelles. L'art. 33.5
+  impose de documenter toute **violation** ; ici il n'y en a pas, mais l'analyse et la décision sont
+  inscrites au même registre (bonne pratique, recommandée par la CNIL) : on doit pouvoir montrer qu'on a
+  analysé et tranché.
 - **Personnes (art. 34)** : sans objet (pas de violation, pas de risque élevé).
 - **Clients HDS** : information **pour mémoire** au titre de la transparence contractuelle (un incident
   de sécurité a eu lieu en recette, sans impact sur leurs données), selon le contrat ; ce n'est pas une
@@ -266,8 +305,11 @@ aucune donnée (vecteur 1 : jetée ; vecteur 2 : aboutie mais aucun octet utile)
   signalement, arrêté du 30 octobre 2017 et textes postérieurs).
 
 Si les faits avaient différé (données réelles, accès prod, données sorties), la décision basculerait :
-le document contient donc aussi les **projets** de notification CNIL (champs du téléservice) et de
-notification client « pour mémoire », pour montrer qu'on sait les rédiger.
+données de patients des clients → **notification aux clients** sans délai (art. 33.2), qui notifient la
+CNIL ; données dont MédiSphère est responsable → notification CNIL dans les 72 h. Le document contient
+donc aussi les **projets** de ces notifications, construits sur le contenu minimal de l'art. 33.3
+(nature, catégories et nombre approximatif de personnes et d'enregistrements, contact du DPO,
+conséquences probables, mesures prises ou proposées), pour montrer qu'on sait les rédiger.
 
 **Registre des violations (art. 33.5)** : entrée datée — nature de l'incident, catégories et nombre
 approximatif de personnes et d'enregistrements concernés (ici : aucun réel), conséquences probables
@@ -296,6 +338,9 @@ actions datées (contrôle de dérive, `exec` hors bris de glace sur la recette,
 **Pièges classiques**
 - Confondre « alerte de sécurité » et « violation de données personnelles » : la première ne déclenche
   pas mécaniquement les secondes obligations.
+- Raisonner comme responsable de traitement pour des données dont MédiSphère est sous-traitant (et
+  « notifier la CNIL » à la place du client) : l'obligation du sous-traitant est d'alerter son client
+  sans délai (art. 33.2).
 - Oublier le registre quand on ne notifie pas (l'absence de trace = on ne peut pas prouver qu'on a
   décidé).
 - Affirmer sans démontrer (« pas de données touchées ») sans citer la portée de F6-S12.
@@ -325,4 +370,10 @@ DPO et la RSSI co-signent la décision ; le post-mortem est présenté à la rev
 - Variante 1 : `sourceIPs` de l'audit pour un appel fait depuis `adm01` à travers la VIP de l'API
   (HAProxy en mode TCP, sans protocole PROXY : l'adresse du nœud de contrôle qui relaie est attendue, à
   vérifier) ; le `userAgent` `kubectl/…` reste l'indice le plus net.
-- Signalement CERT Santé (art. L.1111-8-2) : **à vérifier sur Légifrance** (périmètre et circuit exacts).
+- Signalement CERT Santé (art. L.1111-8-2) : **à vérifier sur Légifrance** (périmètre et circuit exacts ;
+  l'ARS des Hauts-de-France le décrit comme un signalement « sans délai » des incidents significatifs ou
+  graves par les établissements, sur le portail national, transmis au CERT Santé et à l'ARS).
+- Répartition responsable / sous-traitant de MédiSphère selon ses contrats : à vérifier dans les
+  contrats (le corrigé suppose : sous-traitant pour les données de patients des clients).
+- Variante 1 : émission du jeton (`kubectl create token`) par le kubeconfig d'administration, et
+  `kubeconfig` à `tokenFile` utilisé pour les deux requêtes : relus, non rejoués sur le lab.

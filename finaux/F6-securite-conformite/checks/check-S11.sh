@@ -29,9 +29,14 @@ check_cmd "politique de quarantaine intacte (sélecteur medisphere.internal/quar
 # --- Pod suspect ------------------------------------------------------------------------------------
 _s11_ns="$(_f6i_etat espace 2>/dev/null || true)"
 _s11_pod="$(_f6i_etat pod 2>/dev/null || true)"
+_s11_annule="$(_f6i_etat annule 2>/dev/null || true)"
 if [[ -z "$_s11_pod" ]]; then
-  skip "pod suspect isolé (quarantaine, hors contrôleur, hors Service)" "injection close ou non lancée : rien dans l'état local"
-  skip "service de mediagenda-recette rétabli" "injection close ou non lancée"
+  skip "pod suspect isolé (quarantaine, hors contrôleur, hors Service)" "injection non lancée : rien dans l'état local (lab/bin/break F6 11)"
+  skip "service de mediagenda-recette rétabli" "injection non lancée"
+elif [[ -n "$_s11_annule" ]]; then
+  # Incident clos (injection annulée en fin de F6-S12) : le pod suspect a été éradiqué, c'est voulu.
+  skip "pod suspect isolé (quarantaine, hors contrôleur, hors Service)" "injection annulée le $_s11_annule : contrôle de l'éradication en F6-S12"
+  skip "service de mediagenda-recette rétabli" "injection annulée : contrôlé en F6-S12"
 else
   _s11_p="$(kube -n "$_s11_ns" get pod "$_s11_pod" -o json 2>/dev/null || true)"
   _s11_isole() {
@@ -64,4 +69,8 @@ _s11_courriel() {
   mailpit_api "search?query=$(jq -rn --arg s 'INC-6211' '$s|@uri')" 2>/dev/null \
     | jq -e '(.messages_count // 0) > 0' >/dev/null 2>&1
 }
-check_cmd "au moins un courriel d'état INC-6211 dans Mailpit" _s11_courriel
+if [[ -n "$_s11_annule" ]]; then
+  skip "courriel d'état INC-6211 dans Mailpit" "incident clos : Mailpit ne garde pas les courriels indéfiniment ; l'escalade est vérifiée dans le dossier"
+else
+  check_cmd "au moins un courriel d'état INC-6211 dans Mailpit" _s11_courriel
+fi

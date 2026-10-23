@@ -1,0 +1,40 @@
+# plateforme/observabilite — loki/manifestes/politique-reseau.yaml : EXTRAIT F6-S08 (SEC-3608).
+# À AJOUTER dans « ingress » de la CiliumNetworkPolicy loki-entree (M22-E16). Sans ces règles :
+#   - le CronJob journaux/audit-archive ne peut pas lire le locataire audit (seul Grafana a le droit de
+#     requête) : archiver-audit échoue sur « Loki ne répond pas » ;
+#   - les Alloy des deux hôtes physiques (pve01, pbs01) ne peuvent pas pousser (ni le LAN maison ni
+#     PAR2 ne sont dans les sources autorisées) ;
+#   - le collecteur audit-sources de ms-preuves (runner01, INFRA) ne peut que pousser, pas interroger.
+# Règles ajoutées À LA FIN de la liste « ingress » (indentation de la politique existante).
+# Adresses sources : celles que Loki VOIT (hubble observe --to-pod journaux/<pod loki> --port 3100 pendant
+# un premier essai), à reporter ici ; la bordure doit aussi laisser passer ces flux (pare_feu.yml de
+# plateforme/ansible : pve01 → K8S-LB 3100, hp01 par wg0 → K8S-LB 3100).
+
+    # F6-S08 : archive quotidienne — LECTURE seule de l'API de requête, rien d'autre.
+    - fromEndpoints:
+        - matchLabels:
+            io.kubernetes.pod.namespace: journaux
+            app.kubernetes.io/name: audit-archive
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: GET, path: "/loki/api/v1/query_range"}
+    # F6-S08 : Alloy de pve01 et de pbs01 (hp01) — ÉCRITURE seule.
+    - fromCIDR:
+        - <IP-SOURCE-PVE01>/32     # adresse de pve01 vue par Loki (LAN maison, ou passerelle si traduite)
+        - 10.20.10.10/32           # hp01 (pbs01) : source des flux vers PAR1 par wg0 (PLAN §4.3 bis)
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: POST, path: "/loki/api/v1/push"}
+    # F6-S08 : collecte des preuves (P-AUD-01, collecteur audit-sources, pipeline de plateforme/outils sur
+    # runner01) — LECTURE seule du nombre de lignes par source.
+    - fromCIDR:
+        - 10.10.20.15/32           # runner01
+      toPorts:
+        - ports: [{port: "3100", protocol: TCP}]
+          rules:
+            http:
+              - {method: GET, path: "/loki/api/v1/(query|query_range)"}

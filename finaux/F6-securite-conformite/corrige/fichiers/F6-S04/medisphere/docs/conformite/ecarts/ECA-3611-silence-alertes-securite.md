@@ -34,10 +34,10 @@ Un silence actif dans l'Alertmanager de `k8s-par1` (`alertmanager.apps.par1.medi
 **Mineure** (non-conformité ponctuelle : un processus de surveillance existe et fonctionne par ailleurs ; aucune alerte critique ne s'est produite pendant la période). Aurait été **majeure** si elle avait masqué un incident.
 
 ## Cause
-Un silence peut être posé par toute personne qui joint l'API d'Alertmanager (MGMT), sans durée maximale ni revue. L'essai de charge générait des alertes `AuditExecProduction` faussement positives (exécutions dans les pods par le scénario) : la règle aurait dû être corrigée, pas réduite au silence.
+Un silence peut être posé par toute personne qui joint l'API d'Alertmanager (MGMT), sans durée maximale ni revue. L'essai de charge de la recette générait des alertes `AlerteFalco` faussement positives (le scénario lançait un shell dans les pods de recette pour préparer ses données) : la règle ou le scénario auraient dû être corrigés, pas les alertes réduites au silence — et le silence, posé large, a aussi tu les alertes d'audit.
 
 ## Correction
-Silence expiré (`amtool silence expire <ID>`) le 2026-11-17 10:12 ; alertes de la nuit relues dans Loki (aucune action malveillante) ; règle `AuditExecProduction` corrigée pour exclure le compte de service de l'essai de charge (MR `plateforme/observabilite`).
+Silence expiré (`amtool silence expire <ID>`) le 2026-11-17 10:12 ; alertes de la nuit relues dans Loki (aucune action malveillante) ; scénario de l'essai de charge corrigé (données préparées par un Job, plus de shell dans les pods) et exception Falco étroite, datée, pour la période de l'essai (MR `plateforme/gitops`, valeurs de Falco).
 
 ## Action corrective (prévention)
 - Alerte `SilenceLong` : tout silence actif de plus de 24 h ou visant `AlerteFalco|Audit.*` déclenche une alerte vers `securite@` (règle Prometheus sur `alertmanager_silences{state="active"}` complétée par la preuve quotidienne P-SUP-01).

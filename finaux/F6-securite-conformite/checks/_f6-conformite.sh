@@ -204,11 +204,13 @@ _f6c_s3() { _f6c_s3_id "$_f6c_preuves_env" "$@"; }
 # _f6c_verrou — configuration du verrouillage d'objets du compartiment (JSON).
 _f6c_verrou() { _f6c_s3 s3api get-object-lock-configuration --bucket "$_f6c_bucket"; }
 
-# _f6c_dernier_lot — préfixe du lot de preuves le plus récent (lots/AAAA/MM/JJ/<LOT>), vide si aucun.
+# _f6c_dernier_lot [FRÉQUENCE] — préfixe du lot de preuves le plus récent (lots/AAAA/MM/JJ/<LOT>), vide
+# si aucun ; avec FRÉQUENCE (ex. quotidienne), seulement les lots <AAAAMMJJTHHMMSSZ>-<FRÉQUENCE>.
 _f6c_dernier_lot() {
   local mois
   for mois in "$(date -u +%Y/%m)" "$(date -u -d "$(date -u +%Y-%m-15) -1 month" +%Y/%m)"; do
-    _f6c_s3 s3 ls --recursive "s3://$_f6c_bucket/lots/$mois/" | awk '$4 ~ /\/lot\.json$/ { sub(/\/lot\.json$/, "", $4); print $4 }'
+    _f6c_s3 s3 ls --recursive "s3://$_f6c_bucket/lots/$mois/" |
+      awk -v f="${1:-}" '$4 ~ /\/lot\.json$/ { sub(/\/lot\.json$/, "", $4); if (f == "" || $4 ~ ("-" f "$")) print $4 }'
   done | sort | tail -n 1
 }
 

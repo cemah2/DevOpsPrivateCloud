@@ -80,7 +80,7 @@
 | 7.8 | Emplacement et protection du matériel | Oui | R, H (activité 2) | serveurs en baies fermées, alimentation redondée par le fournisseur | inventaire NetBox (emplacement) |
 | 7.9 | Sécurité des actifs hors des locaux | Oui | R : portables des administrateurs | chiffrement des disques des portables, aucune donnée de santé sur les postes | politique des postes |
 | 7.10 | Supports de stockage | Oui | R, H (activité 2) | disques chiffrés ou effacés avant sortie, inventaire des supports | procès-verbaux d'effacement |
-| 7.11 | Services généraux | Oui | R, H : électricité, climatisation (DataCampus) | engagements de disponibilité du fournisseur ; onduleur de baie | contrat DataCampus |
+| 7.11 | Services supports | Oui | R, H : électricité, climatisation (DataCampus) | engagements de disponibilité du fournisseur ; onduleur de baie | contrat DataCampus |
 | 7.12 | Sécurité du câblage | Oui | R : câblage de baie (MédiSphère) et du bâtiment (DataCampus) | câblage étiqueté, liens inter-sites chiffrés (WireGuard) | NetBox (câbles), matrice des flux |
 | 7.13 | Maintenance du matériel | Oui | R, H (activité 2) | contrats de maintenance, intervention sous escorte, disques conservés | contrats, fiches CHG |
 | 7.14 | Mise au rebut ou réutilisation sécurisée du matériel | Oui | R, H, L | effacement certifié ou destruction des disques, procès-verbal | procès-verbaux de destruction (ex. migration des photos de `hp01`, M00) |
@@ -131,7 +131,7 @@ Le référentiel HDS s'appuie sur la certification ISO/IEC 27001 du périmètre 
 | Exigence HDS (thème) | Ce qu'on démontre | Où |
 |---|---|---|
 | Périmètre et activités certifiées | activités 2 à 6 exercées, activité 1 couverte par un hébergeur certifié | `perimetre.md` § 1 |
-| **Localisation** des données dans l'EEE (souveraineté ; exigences 28 à 31 du référentiel, à relire dans le texte) | données et copies à PAR1 et PAR2 (France) | `perimetre.md` § 4, inventaire NetBox |
+| **Localisation** des données dans l'EEE (exigences dites « de souveraineté » ; numéros à relever dans le texte publié du référentiel) | données et copies à PAR1 et PAR2 (France) | `perimetre.md` § 4, inventaire NetBox |
 | **Transparence** : accès depuis un pays tiers, soumission à une loi extra-européenne, **cartographie des transferts publiée** | inventaire des fournisseurs et accès, publication | `transferts-hors-eee.md` ; **écart ECA-3606** |
 | **Contrat** d'hébergement (CSP, art. R.1111-11) : prestations, localisation, sous-traitants, réversibilité, information du client | contrat type revu par le DPO | modèle de contrat |
 | Information du client en cas d'**incident** | délai contractuel, procédure, modèles de message | RB-360 ; **écart ECA-3605** |

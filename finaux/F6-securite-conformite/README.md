@@ -52,7 +52,7 @@ Le certificat HDS de MédiSphère doit être renouvelé sous le nouveau référe
 | « C2 » simulé | `c2-simule01`, VMID 3601, VNet `vsandbox` (VLAN 99), port 4444 | 10.10.99.66 | S11, S12 |
 | Espace de l'incident | `mediagenda-recette` (jamais la production) | — | S11-S13 |
 
-L'incident est **simulé sans code malveillant** : le script d'injection rejoue des commandes ordinaires (shell, lecture d'un jeton, connexion sortante vers le « C2 » qui ne fait que journaliser, binaire factice). Versions et textes réglementaires : [`annexes/versions-finaux-F5-F7.md`](../../annexes/versions-finaux-F5-F7.md). Détails figés : [`PLAN.md`](../../PLAN.md) §4.15.
+L'incident est **simulé sans code malveillant** : le script d'injection rejoue des commandes ordinaires (shell, tentative de lecture d'un jeton, connexion sortante vers le « C2 » qui ne fait que journaliser, binaire factice). Versions et textes réglementaires : [`annexes/versions-finaux-F5-F7.md`](../../annexes/versions-finaux-F5-F7.md). Détails figés : [`PLAN.md`](../../PLAN.md) §4.15.
 
 ## Fichiers
 

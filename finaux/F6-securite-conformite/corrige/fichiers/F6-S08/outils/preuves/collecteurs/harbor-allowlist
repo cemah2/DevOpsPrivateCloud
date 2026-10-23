@@ -11,5 +11,6 @@ H="${HARBOR_URL:-https://registry.par1.medisphere.internal}"
 p="$(http_basique "$H/api/v2.0/projects?page_size=100" "$HARBOR_USER" "$HARBOR_PASSWORD")"
 entete_preuve | jq -S --argjson p "$p" --argjson n "$(date -u +%s)" '
   . + {exceptions: [$p[] | {projet: .name, cves: [(.cve_allowlist.items // [])[].cve_id] | sort,
-                           echeance: (.cve_allowlist.expires_at // null)}] | sort_by(.projet)}
+                           echeance: (.cve_allowlist.expires_at // null),
+                           liste_systeme: ((.metadata.reuse_sys_cve_allowlist // "false") == "true")}] | sort_by(.projet)}
   | . + {anomalies: [.exceptions[] | select((.cves | length) > 0 and (.echeance == null or .echeance < $n))]}'

@@ -38,7 +38,16 @@ else
                 and ((.status.conditions // []) | any(.type == "Ready" and .status == "True")))' \
     -n velero externalsecrets.external-secrets.io
 fi
-_s09_velero_code() { _f6c_arbre plateforme/k8s composants/velero | grep -q 'externalsecret'; }
+# Un fichier YAML de composants/velero/ déclare l'ExternalSecret (quel que soit son nom de fichier).
+_s09_velero_code() {
+  local f
+  while IFS= read -r f; do
+    [[ "$f" =~ \.ya?ml$ ]] || continue
+    _f6c_contient "$(_f6c_fichier plateforme/k8s "$f" 2>/dev/null || true)" \
+      'kind:[[:space:]]*ExternalSecret' 'velero-repo-credentials' && return 0
+  done < <(_f6c_arbre plateforme/k8s composants/velero)
+  return 1
+}
 check_cmd "plateforme/k8s (main) : l'ExternalSecret de Velero est versionné (composants/velero/)" _s09_velero_code
 
 # --- Écarts clos ------------------------------------------------------------------------------------

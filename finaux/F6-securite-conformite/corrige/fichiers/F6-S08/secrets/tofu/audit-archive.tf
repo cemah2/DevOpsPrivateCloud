@@ -44,3 +44,28 @@ resource "vault_policy" "audit_archive_verif" {
     }
   HCL
 }
+
+# Rôle JWT « ci-observabilite-archive » (méthode gitlab du M25-E10) : pipeline planifié archive:verifier
+# de plateforme/observabilite, branche main protégée seulement. Le projet doit figurer dans la variable
+# projets_gitlab (M25-E10) ; s'il n'y est pas, l'y ajouter dans la même MR.
+resource "vault_jwt_auth_backend_role" "ci_observabilite_archive" {
+  backend         = vault_jwt_auth_backend.gitlab.path
+  role_name       = "ci-observabilite-archive"
+  role_type       = "jwt"
+  bound_audiences = ["openbao.medisphere.internal"]
+
+  bound_claims_type = "string"
+  bound_claims = {
+    project_id    = tostring(var.projets_gitlab["plateforme/observabilite"])
+    ref           = "main"
+    ref_type      = "branch"
+    ref_protected = "true"
+  }
+  user_claim = "project_path"
+
+  token_type             = "service"
+  token_ttl              = 600
+  token_max_ttl          = 600
+  token_explicit_max_ttl = 600
+  token_policies         = [vault_policy.audit_archive_verif.name]
+}

@@ -23,13 +23,13 @@ Une seule réponse « oui » suffit pour que la ligne figure, avec ses garanties
 
 ## 3. Ce qui est dit aux clients
 
-- Les données de santé sont hébergées **exclusivement en France** (PAR1, PAR2) ; aucune copie hors EEE.
+- Les données de santé sont hébergées **exclusivement en France** (PAR1, PAR2) ; aucune copie des bases, documents ou sauvegardes hors EEE. Seule exception, décrite au point suivant : les rapports de remise des SMS de rappel (numéro de téléphone et statut d'envoi), traités aux États-Unis par un sous-traitant du prestataire SMS.
 - Deux prestataires peuvent être concernés par une loi extra-européenne : l'outil de tickets (aucune donnée de santé ne doit y figurer : règle et filtrage décrits) et le prestataire SMS (données minimisées, rapports de remise) ; risques et mesures décrits dans l'annexe « Sous-traitants » du contrat d'hébergement.
 - Aucun accès d'administration depuis un pays tiers.
 
 ## 4. Synthèse publiée (site de MédiSphère)
 
-> **Transferts de données hors de l'Espace économique européen** — MédiSphère héberge les données de santé de ses clients exclusivement dans ses deux sites en France. Aucune donnée de santé n'est transférée hors de l'EEE. Deux prestataires de MédiSphère appartiennent à des groupes soumis à une législation extra-européenne : notre outil de gestion des demandes du support (hébergé en Allemagne ; il ne doit contenir aucune donnée de santé) et notre prestataire d'envoi de SMS de rappel (hébergé en Irlande ; les messages ne contiennent ni spécialité ni motif). Aucun accès d'administration à la plateforme n'a lieu depuis un pays tiers. Mise à jour : 2026-11-27.
+> **Transferts de données hors de l'Espace économique européen** — MédiSphère héberge les données de santé de ses clients exclusivement dans ses deux sites en France. Les bases, documents et sauvegardes ne quittent pas l'EEE. Une seule information sort de l'EEE : le rapport de remise des SMS de rappel (numéro de téléphone et statut d'envoi), traité aux États-Unis par un sous-traitant de notre prestataire SMS, sous clauses contractuelles types ; nous avons demandé sa désactivation. Deux prestataires de MédiSphère appartiennent à des groupes soumis à une législation extra-européenne : notre outil de gestion des demandes du support (hébergé en Allemagne ; il ne doit contenir aucune donnée de santé) et notre prestataire d'envoi de SMS de rappel (hébergé en Irlande ; les messages ne contiennent ni spécialité ni motif). Aucun accès d'administration à la plateforme n'a lieu depuis un pays tiers. Mise à jour : 2026-11-27.
 
 ## 5. Révision
 

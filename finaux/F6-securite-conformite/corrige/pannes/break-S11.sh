@@ -10,15 +10,20 @@
 #   - crée la VM « C2 » c2-simule01 (VMID WB_F6_C2_VMID=3601) sur le VNet vsandbox (VLAN 99), 10.10.99.66,
 #     pool « lab », étiquette « env-f6 » : un simple écouteur TCP qui écrit « horodatage adresse_source » dans
 #     /var/log/c2-simule.log. Il ne répond rien, n'exécute rien, ne stocke rien d'autre ;
-#   - ouvre un shell INTERACTIF dans un conteneur de l'API de recette (règle Falco « shell interactif »)
-#     qui LIT le jeton de compte de service monté (règle « lecture du jeton ») — un simple « cat » ;
+#   - ouvre un shell INTERACTIF dans un conteneur de l'API de recette (règle Falco de MédiSphère « shell
+#     interactif dans un conteneur applicatif », M26-E19, et règle par défaut « Terminal shell in container »)
+#     qui TENTE de lire le jeton de compte de service — un simple « cat ». Le chart ne monte pas de jeton
+#     dans l'API (norme C6, automountToken: false) : la lecture échoue, et ni Falco (macro open_read : ouverture
+#     réussie seulement) ni Tetragon (fichiers-sensibles) ne la signalent ; seul l'événement process_exec de
+#     Tetragon (« cat » et son argument) la montre. C'est voulu : la norme C6 a tenu ;
 #   - laisse une boucle qui TENTE, toutes les 60 s pendant 6 h au plus, une connexion TCP vers
 #     c2-simule01:4444 (règle « connexion sortante vers un port non prévu »). Elle n'envoie aucun octet.
 # Deux VECTEURS (variantes), qui changent la PORTÉE, pas les gestes de confinement :
-#   1. jeton de compte de service fuité : le script fabrique un kubeconfig depuis un jeton du compte de
-#      service de recette et s'en sert pour DEUX appels de reconnaissance en LECTURE sur l'API
-#      (« auth can-i --list », « get pods ») — tracés dans le journal d'audit SOUS L'IDENTITÉ DU COMPTE
-#      DE SERVICE. Le refus réseau par défaut tient : la boucle vers le C2 est JETÉE (Hubble DROPPED,
+#   1. jeton de compte de service fuité : le script émet un jeton lié de 10 min du compte de service de
+#      recette (TokenRequest, tracé dans l'audit au nom de l'identité qui lance lab/bin/break : elle joue
+#      l'attaquant) et s'en sert depuis adm01 pour DEUX appels de reconnaissance en LECTURE sur l'API
+#      (« auth can-i --list », « get pods », ce dernier refusé) — tracés dans le journal d'audit SOUS
+#      L'IDENTITÉ DU COMPTE DE SERVICE, userAgent kubectl. Le refus réseau par défaut tient : la boucle vers le C2 est JETÉE (Hubble DROPPED,
 #      le C2 ne journalise rien). Enquête : le vecteur est le jeton, la connexion n'a pas abouti ;
 #   2. règles de sortie trop larges : le script ajoute dans mediagenda-recette une NetworkPolicy
 #      « legacy-sortie-large » (comme une vieille MR oubliée) qui autorise les pods d'API à sortir vers
@@ -29,10 +34,12 @@
 # Le pod visé n'est JAMAIS supprimé (ni par l'injection ni par l'annulation) : c'est la preuve. Rien ne
 # touche Falco, Tetragon, Loki ni le compartiment preuves-conformite. L'annulation détruit c2-simule01
 # (seulement si la VM porte bien ce nom), retire la NetworkPolicy et la règle de bordure ajoutées
-# (variante 2) et arrête la boucle ; elle ne supprime pas le pod suspect
-# (l'éradication est le geste de l'apprenant, après collecte et accord de la RSSI, F6-S12).
-# État local (lisible par le check) : ~/.local/state/workbook/F6-S11/{espace,pod,conteneur,cible,vecteur,c2,
-# redemarrages,bordure}.
+# (variante 2, sur les deux passerelles, que l'état local s'en souvienne ou non) et arrête la boucle ;
+# elle ne supprime pas le pod suspect (l'éradication est le geste de l'apprenant, après collecte et
+# accord de la RSSI, F6-S12). Espace refusé s'il ne se termine pas par « -recette » (jamais la production).
+# État local (lisible par les checks) : ~/.local/state/workbook/F6-S11/{espace,pod,conteneur,cible,vecteur,
+# c2,redemarrages,bordure,compte,compte-uid,annule}. L'annulation GARDE espace, pod, vecteur, compte et
+# compte-uid (le check S12 vérifie l'éradication après l'annulation) et écrit « annule » (date).
 
 # shellcheck source=../../../../lab/lib/pannes-lib.sh disable=SC1091
 source "$WB_ROOT/lab/lib/pannes-lib.sh"
@@ -83,7 +90,13 @@ PY
 _s11_refus() { echo "Injection refusée : $*." >&2; return 1; }
 
 _s11_sain() {
-  command -v jq >/dev/null 2>&1 || { _s11_refus "jq manquant sur ce poste"; return 1; }
+  # Garde-fou : la simulation ne touche qu'un espace de RECETTE (WB_F6_RECETTE_NS ne peut pas viser la prod).
+  [[ "$_S11_NS" == *-recette && "$_S11_NS" != *prod* ]] \
+    || { _s11_refus "espace $_S11_NS refusé : seul un espace « …-recette » est permis"; return 1; }
+  local outil
+  for outil in jq script timeout base64; do
+    command -v "$outil" >/dev/null 2>&1 || { _s11_refus "$outil manquant sur ce poste"; return 1; }
+  done
   local ds
   # Falco et Tetragon prêts sur tous les nœuds.
   for esp in falco tetragon; do
@@ -138,7 +151,7 @@ class H(socketserver.BaseRequestHandler):
     def handle(self):
         ip, port = self.client_address[:2]
         with open("/var/log/c2-simule.log", "a") as f:
-            f.write("%s %s:%s\n" % (datetime.datetime.utcnow().isoformat(), ip, port))
+            f.write("%s %s:%s\n" % (datetime.datetime.now(datetime.timezone.utc).isoformat(), ip, port))
 if __name__ == "__main__":
     srv = socketserver.ThreadingTCPServer(("0.0.0.0", $_S11_C2_PORT), H)
     srv.serve_forever()
@@ -165,17 +178,25 @@ _s11_detruire_c2() {
 # ---------------------------------------------------------------------------
 # Compromission dans le pod (commandes ordinaires, aucune donnée touchée)
 # ---------------------------------------------------------------------------
-# _s11_shell POD CONTENEUR — shell interactif, lecture du jeton, boucle vers le C2.
+# _s11_shell POD CONTENEUR — shell interactif, tentative de lecture du jeton, boucle vers le C2.
 _s11_shell() {
-  local pod="$1" c="$2" code
+  local pod="$1" c="$2" code b64 rc r=0
   code="${_S11_BOUCLE/__CIBLE__/$_S11_C2_IP}"
   code="${code/__PORT__/$_S11_C2_PORT}"
-  # Le shell interactif (pseudo-terminal fourni par « script ») lit le jeton puis lance la boucle.
-  timeout 60 script -qec "kubectl --kubeconfig $(printf '%q' "$_S11_KCFG") -n $_S11_NS exec -it $pod -c $c -- sh -c \
-'cat /var/run/secrets/kubernetes.io/serviceaccount/token >/dev/null 2>&1; \
-echo $(printf '%s' "$code" | base64 -w0) | base64 -d > /tmp/.sonde-maj.py 2>/dev/null \
-&& python3 /tmp/.sonde-maj.py || python3 -c \"\$(echo $(printf '%s' "$code" | base64 -w0) | base64 -d)\" sonde-maj; exit 0'" \
-    /dev/null >/dev/null 2>&1 || return 1
+  b64="$(printf '%s' "$code" | base64 -w0)"
+  # Commande du conteneur (sans apostrophe : elle est passée entre apostrophes) : tentative de lecture du
+  # jeton (absent, C6 : échec silencieux), puis la boucle, entrées-sorties DÉTACHÉES du terminal (sinon
+  # le processus resté en arrière-plan garde le terminal et l'exec ne se termine pas).
+  rc="cat /var/run/secrets/kubernetes.io/serviceaccount/token >/dev/null 2>&1; \
+echo $b64 | base64 -d > /tmp/.sonde-maj.py 2>/dev/null \
+&& python3 /tmp/.sonde-maj.py </dev/null >/dev/null 2>&1 \
+|| python3 -c \"\$(echo $b64 | base64 -d)\" sonde-maj </dev/null >/dev/null 2>&1; exit 0"
+  # Shell INTERACTIF : « script » fournit un pseudo-terminal à « kubectl exec -it » (Falco : proc.tty ≠ 0).
+  # Entrée de « script » = /dev/null : il ne touche pas au terminal de l'apprenant (sous « timeout », qui le
+  # met en arrière-plan, toucher au terminal le suspendrait). Code 124 (délai) : verifier_S11 tranche.
+  timeout 90 script -qec "kubectl --kubeconfig $(printf '%q' "$_S11_KCFG") -n $_S11_NS exec -it $pod -c $c -- sh -c '$rc'" \
+    /dev/null </dev/null >/dev/null 2>&1 || r=$?
+  ((r == 0 || r == 124))
 }
 
 # _s11_noter POD CONTENEUR VECTEUR — état local lu par les checks (dont les redémarrages au moment de
@@ -189,6 +210,7 @@ _s11_noter() {
   _s11_ecrire c2 "$_S11_C2_VMID"
   _s11_ecrire redemarrages "$(wb_kubectl -n "$_S11_NS" get pod "$1" -o json 2>/dev/null |
     jq '[.status.containerStatuses[]? | .restartCount] | add // 0' 2>/dev/null || echo 0)"
+  _s11_oublier annule
 }
 
 # Règle « oubliée » de la bordure (variante 2), posée à chaud sur chaque passerelle, absente de
@@ -227,26 +249,47 @@ panne_S11_v1() {
   sa="$(wb_kubectl -n "$_S11_NS" get pod "$pod" -o jsonpath='{.spec.serviceAccountName}' 2>/dev/null || true)"
   sa="${sa:-default}"
   _s11_creer_c2 || { _s11_detruire_c2; return 1; }
-  # Shell + lecture du jeton + boucle (jetée par le refus réseau par défaut : Hubble DROPPED).
+  # État noté AVANT le shell : en cas d'échec, l'annulation sait quel pod nettoyer (arrêt de la boucle).
+  _s11_noter "$pod" "$c" "jeton-compte-service ($sa)"
+  # Shell + tentative de lecture du jeton + boucle (jetée par le refus réseau par défaut : Hubble DROPPED).
   _s11_shell "$pod" "$c" || { _s11_detruire_c2; return 1; }
   # Usage du jeton « fuité » contre l'API, depuis adm01 (hors du cluster) : deux lectures tracées dans
   # l'audit sous l'identité du compte de service. Jeton lié de 10 min (le minimum accepté par l'API),
-  # jamais écrit ailleurs que dans un fichier temporaire 600 supprimé aussitôt ; TLS vérifié avec la CA
-  # du kubeconfig d'administration.
+  # écrit seulement dans un fichier 600 d'un dossier temporaire 700 (référencé par « tokenFile » : jamais
+  # sur une ligne de commande visible par ps), supprimé aussitôt ; TLS vérifié avec la CA du cluster.
+  local serveur ok_jeton=0
   kube="$(mktemp -d)"
   chmod 700 "$kube"
-  wb_kubectl config view --raw --minify -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' 2>/dev/null |
+  serveur="$(wb_kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+  wb_kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' 2>/dev/null |
     base64 -d >"$kube/ca.crt" 2>/dev/null || true
-  if [[ -s "$kube/ca.crt" ]] && wb_kubectl -n "$_S11_NS" create token "$sa" --duration=10m >"$kube/jeton" 2>/dev/null; then
+  if [[ -n "$serveur" && -s "$kube/ca.crt" ]] &&
+    (umask 077 && wb_kubectl -n "$_S11_NS" create token "$sa" --duration=10m >"$kube/jeton" 2>/dev/null) &&
+    [[ -s "$kube/jeton" ]]; then
+    cat >"$kube/config" <<EOK
+apiVersion: v1
+kind: Config
+clusters:
+  - name: k8s
+    cluster: {server: "$serveur", certificate-authority: "$kube/ca.crt"}
+users:
+  - name: fuite
+    user: {tokenFile: "$kube/jeton"}
+contexts:
+  - name: fuite
+    context: {cluster: k8s, user: fuite, namespace: "$_S11_NS"}
+current-context: fuite
+EOK
     for _s11_req in "auth can-i --list" "get pods"; do
       # shellcheck disable=SC2086  # la requête est découpée en mots volontairement
-      KUBECONFIG=/dev/null kubectl --server "$(wb_kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')" \
-        --certificate-authority "$kube/ca.crt" --token "$(cat "$kube/jeton")" \
-        -n "$_S11_NS" $_s11_req >/dev/null 2>&1 || true
+      KUBECONFIG="$kube/config" kubectl --request-timeout=20s $_s11_req >/dev/null 2>&1 || true
     done
+    ok_jeton=1
   fi
   rm -rf -- "$kube"
-  _s11_noter "$pod" "$c" "jeton-compte-service ($sa)"
+  ((ok_jeton)) || { _s11_refus "jeton du compte de service $sa impossible à émettre ou à utiliser (variante 1)"; return 1; }
+  _s11_ecrire compte "$sa"
+  _s11_ecrire compte-uid "$(wb_kubectl -n "$_S11_NS" get serviceaccount "$sa" -o jsonpath='{.metadata.uid}' 2>/dev/null || true)"
 }
 
 # Variante 2 : règles de sortie trop larges (vieille MR : NetworkPolicy + règle de bordure) vers le C2.
@@ -256,6 +299,7 @@ panne_S11_v2() {
   pod="$(_s11_pod)"; [[ -n "$pod" ]] || { _s11_refus "aucun pod d'API prêt"; return 1; }
   c="$(wb_kubectl -n "$_S11_NS" get pod "$pod" -o jsonpath='{.spec.containers[0].name}' 2>/dev/null || true)"
   [[ -n "$c" ]] || return 1
+  _s11_oublier compte; _s11_oublier compte-uid
   _s11_creer_c2 || { _s11_detruire_c2; return 1; }
   # NetworkPolicy trop large (étiquetée comme une vieille MR) : les pods d'API (déjà isolés en sortie par
   # la politique du chart, M17) peuvent en plus sortir vers 10.10.99.0/24. Elle ne sélectionne QUE les
@@ -288,13 +332,13 @@ EOF
     _s11_refus "règle de bordure impossible à poser (SSH admin et sudo vers $_S11_GW)"
     return 1
   fi
+  _s11_noter "$pod" "$c" "regles-sortie-trop-larges (legacy-sortie-large + bordure)"
   if ! _s11_shell "$pod" "$c"; then
     _s11_bordure_retirer
     wb_kubectl -n "$_S11_NS" delete networkpolicy legacy-sortie-large >/dev/null 2>&1 || true
     _s11_detruire_c2
     return 1
   fi
-  _s11_noter "$pod" "$c" "regles-sortie-trop-larges (legacy-sortie-large + bordure)"
 }
 
 # ---------------------------------------------------------------------------
@@ -347,21 +391,25 @@ for p in [x for x in os.listdir('/proc') if x.isdigit()]:
       wb_avert "pod suspect $ns/$pod laissé en quarantaine : supprime-le toi-même APRÈS le dépôt des preuves (RB-361)"
     fi
   fi
-  # Retrait des règles trop larges (variante 2 seulement ; sans effet si l'apprenant les a déjà retirées).
+  # Retrait des règles trop larges (posées en variante 2 ; sans effet si elles n'existent pas ou si
+  # l'apprenant les a déjà retirées). La bordure est nettoyée sur les deux passerelles même si l'état local
+  # a été perdu : la règle se reconnaît à son commentaire.
   wb_kubectl -n "$ns" delete networkpolicy -l wb-f6-s11=injection >/dev/null 2>&1 || true
-  [[ -z "$bordure" ]] || _s11_bordure_retirer "$bordure"
+  _s11_bordure_retirer "${bordure:-$_S11_GW}"
   # Destruction du C2.
   _s11_detruire_c2
-  _s11_oublier espace; _s11_oublier pod; _s11_oublier conteneur
-  _s11_oublier cible; _s11_oublier vecteur; _s11_oublier c2
+  # On garde espace, pod, vecteur, compte et compte-uid : le check S12 contrôle l'éradication APRÈS
+  # l'annulation (pod supprimé, compte de service recréé en variante 1).
+  _s11_oublier conteneur; _s11_oublier cible; _s11_oublier c2
   _s11_oublier redemarrages; _s11_oublier bordure
+  [[ -z "$pod" ]] || _s11_ecrire annule "$(date -u +%FT%TZ)"
 }
 
 symptome_S11() {
   wb_symptome "INC-6211 — Alerte Falco : activité anormale dans $_S11_NS" \
     "Courriels d'Alertmanager (source falco) pour l'espace $_S11_NS :" \
-    "shell interactif dans un conteneur de l'API, lecture du jeton de compte de service," \
-    "puis connexions sortantes répétées vers $(_s11_lire cible), chaque minute." \
+    "shell interactif dans un conteneur de l'API, puis connexions sortantes vers" \
+    "$(_s11_lire cible) qui se répètent chaque minute (pod : $(_s11_lire pod))." \
     "Personne n'a annoncé d'intervention." \
     "" \
     "Qualifie (vrai/faux positif), confine SANS détruire les preuves, préviens la RSSI et le DPO." \
@@ -369,7 +417,7 @@ symptome_S11() {
     "Temps cible : 60 min."
 }
 
-resume_S11() { echo "Alerte Falco : shell, lecture du jeton et connexions sortantes depuis un conteneur de mediagenda-recette"; }
+resume_S11() { echo "Alerte Falco : shell interactif et connexions sortantes depuis un conteneur de mediagenda-recette"; }
 
 if [[ -z "${WB_PANNES_LIB:-}" ]]; then
   main() { wb_main F6 S11 2 "$@"; }

@@ -10,22 +10,23 @@ Une preuve n'a de valeur que si l'on peut montrer **quand** elle a été produit
 - les preuves **techniques** sont produites **automatiquement** par `ms-preuves` (projet `plateforme/outils`), lancé par des pipelines planifiés : personne ne les fabrique à la main la veille d'un audit ;
 - chaque collecte forme un **lot** : les fichiers de preuve, leur journal, un `lot.json` (horodatage UTC, pipeline, commit de l'outil, empreinte du catalogue), un manifeste `MANIFESTE.sha256` **signé** par la clé `transit/preuves-conformite` d'OpenBao (Cosign) ;
 - le lot est déposé dans le compartiment RGW **`preuves-conformite`** (`https://rgw.par1.medisphere.internal`), créé avec le **verrouillage d'objets** : versionné, rétention par défaut en mode `COMPLIANCE` ;
-- les preuves **documentaires** (politiques, procédures, comptes rendus, rapports) vivent dans `plateforme/medisphere` : l'historique Git signé par MR relues est leur preuve d'existence et de date ; leur état à la date de l'audit est figé par l'étiquette posée à chaque audit.
+- les preuves **documentaires** (politiques, procédures, comptes rendus, rapports) vivent dans `plateforme/medisphere` : l'historique Git (MR relues et approuvées) est leur preuve d'existence et de date ; leur état à la date de l'audit est figé par l'étiquette posée à chaque audit.
 
 ## 2. Stockage et rétention
 
 | Élément | Valeur | Pourquoi |
 |---|---|---|
 | Compartiment | `preuves-conformite`, RGW de `ceph-par1` | stockage objet de la plateforme, déjà sauvegardé et supervisé |
-| Verrouillage | activé à la création ; versionnage automatique | ne s'ajoute pas après coup ; une écriture crée une version, n'écrase rien |
+| Verrouillage | activé à la création ; versionnage automatique, qui ne peut plus être suspendu | aucun objet n'a jamais existé sans protection ; une écriture crée une version, n'écrase rien |
 | Rétention par défaut | **COMPLIANCE 400 jours** (après une phase d'essai en GOVERNANCE 1 jour) | couvre l'année entre deux audits de surveillance, plus une marge pour l'audit lui-même ; en COMPLIANCE personne, administrateur compris, ne raccourcit ni ne supprime |
-| Identités | `preuves` (propriétaire, écriture par la collecte, quota 20 Go), `preuves-lecture` (lecture : auditeurs, contrôles) | séparation écriture / lecture ; personne n'a d'identité de suppression utile |
+| Identités | `preuves` (propriétaire, écriture par la collecte, quota 20 Go), `preuves-lecture` (lecture : auditeurs, contrôles) | séparation écriture / lecture ; en `COMPLIANCE`, aucune identité S3 ne peut supprimer une version avant l'échéance |
 | Chemin d'un lot | `lots/AAAA/MM/JJ/<AAAAMMJJTHHMMSSZ>-<fréquence>/` | tri chronologique, un lot = un dossier |
 | Clé de signature | `transit/preuves-conformite` (ECDSA P-256, non exportable) ; clé publique : [`cle-preuves.pub`](cle-preuves.pub) | distincte de la clé des images ; remise à l'auditeur |
 
 **Limites connues, écrites** :
 - Un administrateur de **Ceph** (accès à `radosgw-admin` ou aux pools) peut détruire des données sous le niveau S3 : le verrouillage protège contre les identités S3, pas contre la destruction du stockage. Compensation : la copie de `preuves-conformite` vers `s3-02` (PAR2, F5) et les sauvegardes de `ceph-par1` ; séparation des rôles (l'administration de Ceph n'est pas celle qui produit les preuves). *À confirmer sur le lab* : comportement de `radosgw-admin object rm` et de `bucket rm --purge-objects` sur un objet en COMPLIANCE.
-- La signature est faite **sans journal de transparence** (configuration de signature « sans service » de MédiSphère) : elle prouve **qui** a signé, pas **quand**. La date de confiance est celle du dépôt dans le compartiment verrouillé (date de dernière modification et échéance de rétention fixées par le serveur). Une autorité d'horodatage RFC 3161 est une amélioration notée au plan de remédiation.
+- La signature est faite **sans journal de transparence** (configuration de signature « sans service » de MédiSphère) : elle prouve **qui** a signé, pas **quand**. La date de confiance est celle du dépôt dans le compartiment verrouillé (date de dernière modification et échéance de rétention fixées par le serveur). Une autorité d'horodatage RFC 3161 est une amélioration envisagée.
+- La **rétention par défaut** est un réglage du compartiment : son propriétaire (`preuves`, l'identité de la collecte) peut la modifier, et un objet écrit en `GOVERNANCE` peut être supprimé par une identité qui a le droit de contournement (le propriétaire, dans RGW). Le mode et l'échéance de **chaque** objet sont donc relevés au dépôt (`DEPOT.json`), la rétention en cours est vérifiée chaque jour (`preuves:verification`) et le réglage `COMPLIANCE` du compartiment est contrôlé ; les objets déjà écrits en `COMPLIANCE` ne sont pas touchés par un changement de réglage.
 - Une preuve en **échec** de collecte est déposée quand même (lot « partiel ») : l'absence de preuve est un fait à conserver.
 
 ## 3. Preuves automatiques (collectées par `ms-preuves`)

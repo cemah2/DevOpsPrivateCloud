@@ -7,7 +7,7 @@
 ## Résumé
 
 Le 2027-01-20, une activité anormale a été détectée dans un conteneur de l'API de MédiAgenda en recette :
-shell interactif, lecture d'un jeton de compte de service, tentative de connexion sortante vers une
+shell interactif, tentative (échouée) de lecture d'un jeton de compte de service, tentative de connexion sortante vers une
 adresse non prévue. Confiné en 20 minutes, éradiqué, clos le jour même. Aucune donnée réelle touchée,
 aucun impact production.
 
@@ -29,9 +29,11 @@ Selon le vecteur observé :
   politique `legacy-sortie-large` (MR de mars 2026) autorisait la sortie vers un sous-réseau large ; elle
   a permis à la connexion sortante d'aboutir. Le mécanisme en défaut est l'absence de **contrôle de
   dérive** des politiques réseau et l'absence de revue de leur durée de vie.
-- *(ou)* **Un jeton de compte de service était monté sans besoin** et pouvait servir à interroger l'API.
-  Le mécanisme en défaut est le non-respect de la norme « charge sûre » C6 (jeton non monté) sur cette
-  charge.
+- *(ou)* **Un jeton du compte de service de l'application a pu être émis hors du pod et utilisé contre
+  l'API.** Le pod ne montait pas de jeton (norme C6 respectée : la lecture tentée dans le conteneur a
+  échoué) ; le mécanisme en défaut est ailleurs : le droit `create serviceaccounts/token` sur l'espace
+  n'est pas restreint, et aucune alerte ne signalait l'émission d'un jeton pour un compte applicatif ni
+  son usage depuis l'extérieur du cluster (`userAgent` `kubectl`).
 
 Facteur aggravant commun : l'`exec` interactif humain restait possible en recette (il ne l'est plus en
 production depuis le F3).
@@ -42,6 +44,7 @@ production depuis le F3).
 - Quarantaine réseau posée à l'avance (M26) : confinement immédiat sans redémarrer le conteneur.
 - Preuves inaltérables (archive d'audit F6-S08, compartiment verrouillé) : chronologie incontestable.
 - Procédure (RB-360/361) et kit vérifié (F6-S10) : pas d'improvisation.
+- Norme « charge sûre » C6 (M26) : pas de jeton monté dans l'API, la tentative de lecture a échoué.
 
 ## Ce qui a coûté
 
@@ -55,7 +58,7 @@ production depuis le F3).
 |---|---|---|---|
 | Contrôle de dérive des NetworkPolicy (sortie large = alerte) | règle réseau non vue | Karim | 2027-02-05 |
 | `exec` humain hors bris de glace interdit en recette (`prod-gestes-interactifs` étendu) | accès interactif | astreinte | 2027-01-29 |
-| Jeton de compte de service non monté quand inutile (norme C6) sur les API de recette | jeton réutilisable | Julien | 2027-02-10 |
+| Droit `create serviceaccounts/token` retiré des rôles humains sur les espaces applicatifs ; alerte d'audit sur l'émission d'un jeton pour un compte applicatif | jeton émis hors du pod | Julien | 2027-02-10 |
 | Règle Falco/Tetragon dédiée « reconnaissance API depuis un pod applicatif » | détection plus précoce | Sophie | 2027-02-12 |
 | Revue de la durée de vie des NetworkPolicy à chaque MR | règle oubliée | Karim | continu |
 

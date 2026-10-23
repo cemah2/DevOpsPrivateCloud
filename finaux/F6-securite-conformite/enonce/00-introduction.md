@@ -212,7 +212,7 @@ Variables de `lab/lab.env`, toutes facultatives (les défauts conviennent au lab
 
 Les checks relisent aussi `WB_GITLAB_*`, `WB_K8S_KUBECONFIG`, `WB_IPA_*`, `WB_AM_URL`, `WB_LOKI_URL`, `WB_GRAFANA_*`, `WB_MAILPIT_*`, `WB_PVE_HOST`, `WB_TIMEOUT` ; les pannes `WB_K8S_ADMIN_KUBECONFIG` et `WB_GITLAB_ADMIN_TOKEN_FILE`.
 
-**Outils sur `adm01`** : `curl`, `jq`, `yq` (mikefarah v4), `kubectl` (compte `wb-checks`), `aws` (AWS CLI v2), `ldapsearch`, `sha256sum`, `cosign` (vérification des signatures, facultatif : contrôle ignoré et dit ignoré s'il manque), `ssh` vers `gw01`/`gw02` (`sudo -n nft list`). Ceux de l'audit technique (S05) : `oscap` (sur les VM), `kube-bench` (Job), `kubescape`, `trivy`, `ssh-audit`, `lynis` — installés au M26.
+**Outils sur `adm01`** : `curl`, `jq`, `yq` (mikefarah v4), `kubectl` (compte `wb-checks`), `aws` (AWS CLI v2), `ldapsearch`, `sha256sum`, `cosign` (vérification des signatures, facultatif : contrôle ignoré et dit ignoré s'il manque), `ssh` vers `gw01`/`gw02` (`sudo -n nft list`, `sudo -n cat /etc/nftables.conf` : lecture seule). Ceux de l'audit technique (S05) : `oscap` (sur les VM), `kube-bench` (Job), `kubescape`, `trivy`, `ssh-audit`, `lynis` — installés au M26.
 
 ---
 

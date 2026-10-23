@@ -42,6 +42,8 @@ preuves:collecte:
       eval "$(bao kv get -format=json -mount=kv plateforme/preuves/lecture | jq -r '.data.data | to_entries[] | "export \(.key)=\(.value | @sh)"')"
       umask 077
       KUBECONFIG="$(mktemp)"; export KUBECONFIG
+      # Runner shell partagé : le kubeconfig et la clé SSH ne survivent jamais au job, même en échec.
+      trap 'rm -f -- "$KUBECONFIG" ~/.ssh/id_preuves_bordure' EXIT
       bao kv get -mount=kv -field=kubeconfig plateforme/preuves/kubernetes >"$KUBECONFIG"
       mkdir -p ~/.ssh && bao kv get -mount=kv -field=cle_privee plateforme/preuves/ssh-bordure >~/.ssh/id_preuves_bordure
       # Écriture S3 en DERNIER (seul ms-preuves deposer en a besoin, dans son propre environnement).
@@ -50,7 +52,6 @@ preuves:collecte:
       export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
       code=0
       bin/ms-preuves executer --frequence "$FREQUENCE" || code=$?
-      rm -f -- "$KUBECONFIG" ~/.ssh/id_preuves_bordure
       bao token revoke -self >/dev/null || true
       exit "$code"
   artifacts:

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Collecteur de test : preuve valide, mais un secret sur la sortie d'erreur (le journal doit être vidé).
+echo "connexion : password=tres-secret-journal" >&2
+printf '{"preuve":"%s","valeur":7}\n' "${MS_PREUVES_ID:-?}"

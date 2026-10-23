@@ -31,6 +31,7 @@ revue:acces:
       eval "$(bao kv get -format=json -mount=kv plateforme/preuves/lecture | jq -r '.data.data | to_entries[] | "export \(.key)=\(.value | @sh)"')"
       umask 077
       KUBECONFIG="$(mktemp)"; export KUBECONFIG
+      trap 'rm -f -- "$KUBECONFIG"' EXIT
       bao kv get -mount=kv -field=kubeconfig plateforme/preuves/kubernetes >"$KUBECONFIG"
       mois="$(date +%Y-%m)"
       mkdir -p revue
@@ -38,7 +39,6 @@ revue:acces:
       { printf '# Revue des accès — %s\n\n> Brouillon généré par ms-revue-acces (pipeline %s). Compléter les décisions, puis MR.\n\n' "$mois" "$CI_PIPELINE_URL"
         bin/ms-revue-acces || code=$?; } >"revue/$mois.md"
       bin/ms-revue-acces --json >"revue/$mois.json" || true
-      rm -f -- "$KUBECONFIG"
       bao token revoke -self >/dev/null || true
       exit "$code"
   allow_failure: {exit_codes: [1]}      # des comptes à traiter : c'est le résultat attendu d'une revue

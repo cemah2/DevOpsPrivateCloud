@@ -21,17 +21,39 @@ check_cmd "chronologie : portée (établi / non établi, aboutissement de la con
 # La politique réseau trop large injectée (variante 2) ne doit plus exister dans l'espace.
 _s12_ns="${_f6i_recette_ns}"
 _s12_np_absente() {
-  ! kube -n "$_s12_ns" get networkpolicy legacy-sortie-large >/dev/null 2>&1
+  local r
+  r="$(kube -n "$_s12_ns" get networkpolicy legacy-sortie-large -o name 2>&1)" && return 1
+  grep -qiE 'not ?found' <<<"$r"   # API injoignable ≠ politique absente
 }
 check_cmd "politique réseau trop large (legacy-sortie-large) retirée de $_s12_ns" _s12_np_absente
 
-# Le pod suspect noté par l'injection a été supprimé (éradication après collecte).
+# Le pod suspect noté par l'injection a été supprimé (éradication après collecte). L'annulation garde
+# l'espace, le pod, le vecteur et le compte de service dans l'état local pour ce contrôle.
 _s12_pod="$(_f6i_etat pod 2>/dev/null || true)"
+_s12_vecteur="$(_f6i_etat vecteur 2>/dev/null || true)"
 if [[ -z "$_s12_pod" ]]; then
-  skip "pod suspect éradiqué après collecte" "injection annulée ou non lancée : rien dans l'état local"
+  _ko "état local de l'injection absent (~/.local/state/workbook/F6-S11/) : lance F6-S11 (lab/bin/break F6 11) depuis ce poste"
 else
-  _s12_pod_absent() { ! kube -n "$_s12_ns" get pod "$_s12_pod" >/dev/null 2>&1; }
+  _s12_pod_absent() {
+    local r
+    r="$(kube -n "$_s12_ns" get pod "$_s12_pod" -o name 2>&1)" && return 1
+    grep -qiE 'not ?found' <<<"$r"
+  }
   check_cmd "pod suspect $_s12_ns/$_s12_pod supprimé (éradication après collecte)" _s12_pod_absent
+fi
+
+# Variante 1 (jeton de compte de service) : le compte a été supprimé et recréé (nouvel UID), ce qui
+# invalide tous les jetons émis pour l'ancien.
+if [[ "$_s12_vecteur" == jeton* ]]; then
+  _s12_sa="$(_f6i_etat compte 2>/dev/null || true)"
+  _s12_sa_uid="$(_f6i_etat compte-uid 2>/dev/null || true)"
+  _s12_sa_renouvele() {
+    local uid
+    [[ -n "$_s12_sa" && -n "$_s12_sa_uid" ]] || return 1
+    uid="$(kube -n "$_s12_ns" get serviceaccount "$_s12_sa" -o jsonpath='{.metadata.uid}' 2>/dev/null)" || return 1
+    [[ -n "$uid" && "$uid" != "$_s12_sa_uid" ]]
+  }
+  check_cmd "compte de service $_s12_ns/${_s12_sa:-?} renouvelé (nouvel UID : jetons de l'ancien invalidés)" _s12_sa_renouvele
 fi
 
 # La règle de bordure ajoutée avec cette politique (variante 2) ne doit plus être active : toute règle
@@ -49,8 +71,10 @@ done
 # --- Retour en service ------------------------------------------------------------------------------
 check_cmd "$_s12_ns saine : Rollout mediagenda complet, un pod d'API sain hors quarantaine" _f6c_recette_api_saine "$_s12_ns"
 
-# Le C2 n'existe plus (détruit à l'annulation) : plus de connexion possible.
+# Le C2 n'existe plus et l'injection est annulée (dernier geste de S12, après le relevé des journaux du C2).
 check_cmd "c2-simule01 (VMID $_f6i_c2_vmid) détruit : plus de destination de connexion" _f6i_c2_absent
+_s12_annulee() { [[ -n "$(_f6i_etat annule 2>/dev/null || true)" ]]; }
+check_cmd "injection annulée (lab/bin/break F6 11 --annuler, après le relevé des journaux du C2)" _s12_annulee
 
 # Aucune alerte Falco active sur l'espace de la recette.
 _s12_pas_alerte_falco() {

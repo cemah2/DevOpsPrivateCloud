@@ -47,13 +47,22 @@ aujourdhui="$(date -u +%s)"
 limite_preavis=$(( aujourdhui + PREAVIS * 86400 ))
 echec=0
 
-# 1. cve_allowlist du projet (métadonnées du projet Harbor).
-allowlist="$(harbor "projects/$PROJET" | jq -c '.cve_allowlist // {items: []}')" \
-  || { echo "KO : impossible de lire la cve_allowlist du projet $PROJET" >&2; exit 1; }
+# 1. cve_allowlist du projet (champ cve_allowlist de GET /projects/{nom}, Harbor 2.15). Si le projet
+#    réutilise la liste du SYSTÈME (metadata.reuse_sys_cve_allowlist = "true"), c'est elle qui s'applique :
+#    on lit alors GET /system/CVEAllowlist (lisible par tout utilisateur authentifié).
+projet_json="$(harbor "projects/$PROJET")" \
+  || { echo "KO : impossible de lire le projet $PROJET dans Harbor" >&2; exit 1; }
+if [[ "$(jq -r '.metadata.reuse_sys_cve_allowlist // "false"' <<<"$projet_json")" == "true" ]]; then
+  echo "info : $PROJET réutilise la cve_allowlist du système : c'est elle qui est contrôlée"
+  allowlist="$(harbor "system/CVEAllowlist" | jq -c '. // {items: []}')" \
+    || { echo "KO : impossible de lire la cve_allowlist du système" >&2; exit 1; }
+else
+  allowlist="$(jq -c '.cve_allowlist // {items: []}' <<<"$projet_json")"
+fi
 
 # Entrées Harbor : CVE de la liste, et la date d'expiration commune (secondes ; null = jamais).
 mapfile -t harbor_cves < <(jq -r '.items[]?.cve_id' <<<"$allowlist")
-exp="$(jq -r '.expires_at // "null"' <<<"$allowlist")"
+exp="$(jq -r 'if (.expires_at // 0) > 0 then .expires_at else "null" end' <<<"$allowlist")"
 if ((${#harbor_cves[@]} > 0)); then
   if [[ "$exp" == "null" || -z "$exp" ]]; then
     echo "KO : cve_allowlist de $PROJET sans date d'expiration (${#harbor_cves[@]} CVE autorisées sans fin)"

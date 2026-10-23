@@ -4,7 +4,7 @@ Thomas Renaud, le DPO, l'avait demandé pendant l'audit : « Que se passe-t-il s
 
 Prérequis de la phase : F6-S08 et F6-S09 terminés (traçabilité inaltérable et gestion des vulnérabilités en place : c'est ce qui rendra l'enquête possible).
 
-> **Simulation — à lire avant F6-S11** : l'incident est **entièrement inoffensif**. Le script d'injection ne contient **aucun code malveillant** : il rejoue des commandes ordinaires (un shell, la lecture d'un jeton de compte de service, des variables d'environnement, une connexion sortante) et crée un faux « centre de commande » `c2-simule01` qui ne fait que **journaliser** ce qu'il reçoit. Aucune donnée n'est lue ni envoyée, aucun binaire d'attaque n'existe. Traite-le comme si c'était réel.
+> **Simulation — à lire avant F6-S11** : l'incident est **entièrement inoffensif**. Le script d'injection ne contient **aucun code malveillant** : il rejoue des commandes ordinaires (un shell, une tentative de lecture du jeton de compte de service, une connexion sortante qui n'envoie aucun octet et, selon la variante, deux requêtes de lecture sur l'API ou des règles réseau trop larges) et crée un faux « centre de commande » `c2-simule01` qui ne fait que **journaliser** ce qu'il reçoit. Aucune donnée n'est lue ni envoyée, aucun binaire d'attaque n'existe. Traite-le comme si c'était réel.
 
 > **Rappel — journal et notifications** : chaque geste va dans le dossier d'incident `docs/securite/incidents/INC-6211/` (chronologie horodatée UTC : une entrée par événement avec son heure, son type et sa source — en lignes `- HH:MM INC-6211 [type] texte` comme la main courante du F3, ou en tableau) ; les preuves vont dans `preuves-conformite/INC-6211/` (collecte par la procédure, empreintes recopiées dans la chronologie). Types d'entrée : `[ouverture]`, `[état]`, `[décision]`, `[action]`, `[clôture]`.
 
@@ -38,7 +38,7 @@ Objectifs :
 2. **RB-361** « Forensique d'un conteneur » (`…/runbooks/RB-361-forensique-conteneur.md`) : l'ordre de collecte du plus volatil au plus durable, la capture de l'état vivant (point de contrôle **ou** copie), les empreintes, le dépôt dans `preuves-conformite`, et ce qu'on ne touche pas.
 3. **Kit** rangé et **vérifié** : le contrôle `ms-verifier-kit-forensique`, planifié, qui prouve que l'image d'outils existe et est signée, que l'identité de dépôt des preuves écrit (et ne peut pas supprimer ce qu'elle a écrit), que les modèles sont présents ; les comptes de bris de glace s'éprouvent à la main, en lecture, selon RB-240.
 4. **Capture éprouvée** sur un pod d'essai (point de contrôle si disponible, sinon copie), résultat écrit dans RB-361 (« à confirmer » résolu dans un sens ou l'autre).
-5. **Exercice de table** : scénario, déroulé, trous trouvés, actions (responsable, échéance), compte rendu dans `docs/securite/incidents/exercices/2026-exercice-table.md`.
+5. **Exercice de table** : scénario, déroulé, trous trouvés, actions (responsable, échéance), compte rendu dans `docs/securite/incidents/exercices/<AAAA-MM>-exercice-table.md`.
 6. **Fermer ECA-3605** : preuve de clôture au catalogue de `ms-preuves`, fiche close (en-tête : `clos-le`, `preuve:` = un lot déjà déposé).
 
 Contraintes :
@@ -74,7 +74,7 @@ Ne réécris pas RB-262 : il contient déjà l'isolement (quarantaine), l'ordre 
 ### F6-S11 — Panne : un conteneur compromis  `BF` `★★★★`
 
 > **Alerte reçue sur `securite@`, puis `astreinte@`** — *transférée par Nadia Roussel, objet « Falco : activité anormale en recette ?! »*
-> Courriels d'Alertmanager (source `falco`) pour l'espace `mediagenda-recette` : un shell ouvert dans un conteneur de l'API, la **lecture du jeton de compte de service**, puis des **connexions sortantes répétées** vers une adresse que personne ne reconnaît. Les courriels reviennent chaque minute. Aucune intervention n'a été annoncée. *(L'adresse de destination et le pod concerné s'affichent à l'injection ; vérifier qu'il s'agit bien de la recette et non d'une intervention légitime fait partie de la qualification.)*
+> Courriels d'Alertmanager (source `falco`) pour l'espace `mediagenda-recette` : un **shell interactif** ouvert dans un conteneur de l'API, puis des **connexions sortantes** vers une adresse que personne ne reconnaît. Les alertes restent actives : la connexion se répète chaque minute. Aucune intervention n'a été annoncée. *(L'adresse de destination et le pod concerné s'affichent à l'injection ; vérifier qu'il s'agit bien de la recette et non d'une intervention légitime fait partie de la qualification.)*
 
 **Objectifs pédagogiques**
 - **Détecter** une activité anormale par la chaîne Falco/Tetragon → Alertmanager → Mailpit et la croiser avec le journal d'audit.
@@ -109,12 +109,12 @@ Ne réécris pas RB-262 : il contient déjà l'isolement (quarantaine), l'ordre 
 
 <details><summary>Indice 1</summary>
 
-Trois sources, trois questions. Falco dit **ce qui** a été lancé (shell, lecture de jeton, connexion) ; le journal d'audit de l'API (locataire `audit`, `{job="kubernetes-audit"}`) dit **qui** a appelé l'API, avec quelle identité, quel outil (`userAgent`) et depuis où ; Tetragon et Hubble disent **où** les paquets sont allés et s'ils ont été jetés ou non. Une identité de compte de service qui appelle l'API depuis l'extérieur du cluster est un indice.
+Trois sources, trois questions. Falco dit **ce qui** a déclenché une règle (shell, connexion) et Tetragon **tout** ce qui a été exécuté, arguments compris (y compris ce qu'aucune règle Falco n'a signalé) ; le journal d'audit de l'API (locataire `audit`, `{job="kubernetes-audit"}`) dit **qui** a appelé l'API, avec quelle identité, quel outil (`userAgent`) et depuis où ; Tetragon et Hubble disent **où** les paquets sont allés et s'ils ont été jetés ou non. Une identité de compte de service qui appelle l'API depuis l'extérieur du cluster est un indice.
 </details>
 
 <details><summary>Indice 2</summary>
 
-Deux vecteurs possibles, qui changent la **portée**, pas les gestes de confinement : soit un jeton de compte de service a fuité et sert contre l'API, soit des **règles de sortie trop larges** (une vieille MR oubliée) ont laissé la connexion atteindre sa cible. Hubble te dit vite laquelle : la connexion vers le C2 est-elle `DROPPED` (refus par défaut tenu) ou `FORWARDED` (une politique l'autorise) ? Et si elle est autorisée dans le cluster, qu'est-ce qui la laisse passer ensuite ? La réponse oriente l'enquête de F6-S12.
+Deux vecteurs possibles, qui changent la **portée**, pas les gestes de confinement : soit un jeton du compte de service de l'application a fuité et sert contre l'API (le pod en monte-t-il seulement un ? regarde aussi qui a **émis** des jetons pour ce compte), soit des **règles de sortie trop larges** (une vieille MR oubliée) ont laissé la connexion atteindre sa cible. Hubble te dit vite laquelle : la connexion vers le C2 est-elle `DROPPED` (refus par défaut tenu) ou `FORWARDED` (une politique l'autorise) ? Et si elle est autorisée dans le cluster, qu'est-ce qui la laisse passer ensuite ? La réponse oriente l'enquête de F6-S12.
 </details>
 
 <details><summary>Indice 3</summary>
@@ -141,12 +141,12 @@ Confiner sans détruire : étiquette de quarantaine d'abord (la politique posée
 
 **Contexte technique**
 - Sources pour la chronologie : journal d'audit de l'API (locataire `audit`, `{job="kubernetes-audit"}`), événements Falco (locataire `audit`, envoyés par falcosidekick, M26) et Tetragon, flux Hubble, journaux de la bordure, et les **journaux du C2** `c2-simule01` (`/var/log/c2-simule.log` : ce qu'il a reçu, adresses source, horodatages) — lisibles sur la VM tant que l'injection n'est pas annulée.
-- Portée : le pod suspect avait-il un jeton de compte de service monté ? quels droits ? quels Secrets montés (quelles valeurs OpenBao) ? la connexion sortante a-t-elle **abouti** (Hubble : `FORWARDED`/`DROPPED`, journaux du C2) ? d'autres pods de la même image, du même compte ?
+- Portée : le pod suspect avait-il un jeton de compte de service monté ? un jeton de son compte a-t-il été émis et utilisé ailleurs ? quels droits ? quels Secrets montés ou variables d'environnement sensibles (quelles valeurs OpenBao) ? la connexion sortante a-t-elle **abouti** (Hubble : `FORWARDED`/`DROPPED`, journaux du C2) ? d'autres pods de la même image, du même compte ?
 - Éradication : supprimer le pod suspect **après** la collecte et l'accord de la RSSI ; corriger la **cause** (selon le vecteur observé) et pas seulement le symptôme ; tourner dans OpenBao ce que le pod a pu voir.
 - Retour : vérifier que le pod sain tourne, qu'aucune nouvelle alerte ne revient, que la connexion vers le C2 ne part plus.
 
 **Travail demandé**
-1. **Chronologie** (`INC-6211/chronologie.md`) : de la première trace à l'isolement, chaque événement daté (UTC), sourcé (quelle source le prouve), avec les empreintes des preuves dans `preuves-conformite/INC-6211/`.
+1. **Chronologie** (`INC-6211/chronologie.md`, la suite du journal ouvert en F6-S11) : de la première trace à l'isolement, chaque événement daté (UTC), sourcé (quelle source le prouve), avec les empreintes des preuves dans `preuves-conformite/INC-6211/`.
 2. **Portée** : écris ce qui est **établi** (jeton lu, connexion tentée/aboutie, données accessibles) et ce qui **ne l'est pas** (données effectivement lues ou sorties). Appuie-toi sur Hubble et les journaux du C2 pour trancher l'aboutissement.
 3. **Éradication de la cause** (pas du symptôme) : traite le vecteur réellement observé, partout où il existe (cluster, bordure, code). Supprime le pod suspect après la collecte.
 4. **Rotation des secrets exposés** : tout ce que le pod a pu lire (jeton de compte de service, Secrets montés, identifiants OpenBao) est renouvelé ; écris ce qui a été tourné et pourquoi.
@@ -156,11 +156,11 @@ Confiner sans détruire : étiquette de quarantaine d'abord (la politique posée
 **Critères de réussite**
 - [ ] `INC-6211/chronologie.md` est sur `main` : événements datés, sourcés, avec les empreintes des preuves.
 - [ ] La portée distingue l'établi du non établi, et tranche l'aboutissement de la connexion sortante (Hubble / journaux du C2).
-- [ ] La cause du vecteur observé est éradiquée (jeton et compte renouvelés, ou règles de sortie trop larges retirées du cluster **et** de la bordure) ; le pod suspect est supprimé après collecte.
+- [ ] La cause du vecteur observé est éradiquée (compte de service renouvelé, ce qui invalide ses jetons, ou règles de sortie trop larges retirées du cluster **et** de la bordure) ; le pod suspect est supprimé après collecte.
 - [ ] Les secrets exposés sont tournés (trace OpenBao / nouveaux identifiants).
 - [ ] La recette tourne (Rollout complet), aucune alerte Falco active sur l'espace, l'injection est annulée (`c2-simule01` détruite après relevé de ses journaux) ; consigné dans la chronologie.
 
-**Vérification** : `lab/bin/check F6 12`
+**Vérification** : `lab/bin/check F6 12` (après l'annulation : le check lit l'état local laissé par l'injection, lance-le depuis le poste qui l'a injectée).
 
 <details><summary>Indice 1</summary>
 
@@ -191,7 +191,7 @@ L'archive d'audit inaltérable de F6-S08 est faite pour ce moment : la chronolog
 
 **Contexte technique**
 - La décision se prend **sur les preuves de F6-S12** : données de recette fictives ou pseudonymisées ? accès à la production ? jeton/Secrets exposés donnant accès à des données réelles ? connexion sortante aboutie et données sorties, ou refusée ?
-- Repères réglementaires (dans l'annexe ; **vérifie sur Légifrance** ce qui n'y est pas établi) : RGPD art. 33 (notification CNIL **72 h** sauf risque improbable), art. 34 (information des personnes si risque élevé), art. 33.5 (registre des violations **dans tous les cas**) ; HDS v2 (information contractuelle des clients) ; code de la santé publique art. L.1111-8-2 (signalement d'incident grave, portail, CERT Santé — **texte et périmètre à vérifier sur Légifrance**).
+- Repères réglementaires (dans l'annexe ; **vérifie sur Légifrance** ce qui n'y est pas établi) : RGPD art. 33 (notification CNIL **72 h** sauf risque improbable, par le responsable de traitement ; obligations du sous-traitant envers lui), art. 34 (information des personnes si risque élevé), art. 33.5 (registre des violations **dans tous les cas**) ; HDS v2 (information contractuelle des clients) ; code de la santé publique art. L.1111-8-2 (signalement d'incident grave, portail, CERT Santé — **texte et périmètre à vérifier sur Légifrance**).
 - Une violation « évitée » ou « sans conséquence » se consigne quand même au registre (art. 33.5) : c'est la trace qui prouve qu'on a analysé et décidé.
 
 **Travail demandé**
@@ -223,7 +223,7 @@ La question n'est pas « y a-t-il eu une alerte ? » mais « des **données à c
 
 <details><summary>Indice 2</summary>
 
-Trois régimes distincts, trois destinataires : la **CNIL** (RGPD, si violation de données personnelles avec risque non improbable, 72 h), les **personnes** (art. 34, si risque élevé), les **clients** responsables de traitement (contrat HDS : ils doivent pouvoir faire leurs propres déclarations), et le **signalement** d'incident grave de sécurité d'un système d'information de santé (CERT Santé, art. L.1111-8-2 — périmètre exact **à vérifier sur Légifrance**). Un incident peut déclencher l'un sans les autres.
+Commence par le **rôle** de MédiSphère pour les données en cause : responsable de traitement (ses propres données) ou sous-traitant (les données de patients de ses clients, art. 28) ? Le RGPD ne donne pas les mêmes obligations aux deux (relis l'article 33 en entier, pas seulement son premier paragraphe). Ensuite, des régimes distincts : la **CNIL** (RGPD, si violation de données personnelles avec risque non improbable, 72 h), les **personnes** (art. 34, si risque élevé), les **clients** responsables de traitement (contrat HDS : ils doivent pouvoir faire leurs propres déclarations), et le **signalement** d'incident grave de sécurité d'un système d'information de santé (CERT Santé, art. L.1111-8-2 — périmètre exact **à vérifier sur Légifrance**). Un incident peut déclencher l'un sans les autres.
 </details>
 
 **Pour aller plus loin** (facultatif) : un modèle de notification CNIL réutilisable (champs du téléservice) ; un arbre de décision « faut-il notifier ? » versionné dans `docs/conformite/` ; la place de ce post-mortem dans la revue de suivi (F6-S14).

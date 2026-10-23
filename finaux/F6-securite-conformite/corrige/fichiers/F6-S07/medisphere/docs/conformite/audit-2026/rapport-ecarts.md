@@ -50,10 +50,10 @@ L'auditrice a signalé le 2026-11-17 des dérives postérieures à la revue des 
 
 | Écart | Dérive | Mesures | Clos le |
 |---|---|---|---|
-| ECA-3611 | silence de 60 jours sur les alertes de sécurité | 8.16, 5.25 | 2026-11-17 |
-| ECA-3612 | dérogation Kyverno sans échéance, hors registre (signature des images non exigée en recette) | 5.36, 8.19 | 2026-11-17 |
-| ECA-3613 | mot de passe en clair dans une ConfigMap de recette | 5.17, 8.24 | 2026-11-17 |
-| ECA-3614 | planification Velero de la recette suspendue | 8.13 | 2026-11-17 |
+| ECA-3611 | silence de 60 jours sur les alertes de sécurité | 8.16, 5.25 | 2026-11-18 |
+| ECA-3612 | dérogation Kyverno sans échéance, hors registre (signature des images non exigée en recette) | 5.36, 8.19 | 2026-11-18 |
+| ECA-3613 | mot de passe en clair dans une ConfigMap de recette | 5.17, 8.24 | 2026-11-18 |
+| ECA-3614 | planification Velero de la recette suspendue | 8.13 | 2026-11-18 |
 
 *(Exemple : ton lot dépend du tirage.)* **Enseignement** : chaque dérive était visible dans une preuve quotidienne **le lendemain**, mais personne ne comparait les lots ; une détection est ajoutée pour chacune (fiches).
 

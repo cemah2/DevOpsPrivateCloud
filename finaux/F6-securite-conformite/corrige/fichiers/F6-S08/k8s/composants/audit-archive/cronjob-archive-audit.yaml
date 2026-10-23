@@ -7,6 +7,8 @@
 # transit/sign/audit-archive seulement) avec un jeton projeté d'audience openbao.medisphere.internal ;
 # les clés S3 d'écriture (utilisateur RGW archive-audit) arrivent par ESO depuis
 # kv/plateforme/archive-audit/rgw-ecriture (ClusterSecretStore openbao, réservé aux espaces de plateforme).
+# Lecture de Loki : règle ajoutée à la politique loki-entree (politique-reseau.extrait-F6-S08.yaml de
+# plateforme/observabilite), sans quoi seul Grafana peut interroger Loki.
 # Le compartiment est créé À PART, verrouillage activé à la création (plateforme/ceph, rgw-preuves.sh) :
 # ce CronJob ne règle jamais le verrou, il vérifie que chaque objet déposé le porte.
 ---
@@ -48,8 +50,9 @@ metadata:
     app.kubernetes.io/name: audit-archive
     medisphere.internal/composant: conformite
 spec:
-  # 01:30 UTC : la veille est close dans Loki ; la collecte ms-preuves (P-AUD-02) passe après.
-  schedule: "30 1 * * *"
+  # 00:45 UTC : la veille est close dans Loki (marge pour les lignes en retard) ; la collecte quotidienne
+  # de ms-preuves (lots « …T0130…Z », P-AUD-02) passe 45 min après et trouve le manifeste de la veille.
+  schedule: "45 0 * * *"
   timeZone: "Etc/UTC"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 7
@@ -101,6 +104,8 @@ spec:
                 - name: BAO_JWT_FICHIER
                   value: "/var/run/secrets/openbao/token"
                 - name: TMPDIR
+                  value: "/tmp"
+                - name: HOME              # racine en lecture seule : l'AWS CLI écrit son cache sous $HOME
                   value: "/tmp"
               envFrom:
                 - secretRef:

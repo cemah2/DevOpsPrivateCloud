@@ -1,7 +1,10 @@
----
 # host_vars/pbs01/alloy.yml — F6-S08 (SEC-3608) : traces d'administration du PBS de hp01 (inventaire « pbs01 »,
-# et Proxmox VE de PAR2 si le F5 est fait) au locataire audit. proxmox-backup-proxy et proxmox-backup :
-# connexions, tâches (sauvegardes, restaurations, suppressions, vérifications) et leur auteur.
+# et Proxmox VE de PAR2 si le F5 est fait) au locataire audit.
+#   - PBS écrit ses connexions dans /var/log/proxmox-backup/api/auth.log (réussies et refusées) et chaque
+#     requête de l'API dans /var/log/proxmox-backup/api/access.log ; son journal systemd ne garde que les
+#     erreurs ; les journaux de tâches (sauvegardes, restaurations, suppressions, vérifications) restent
+#     dans /var/log/proxmox-backup/tasks/ (consultables par l'API, non collectés ici) ;
+#   - pvedaemon : seulement si Proxmox VE est installé à côté (F5) ; sinon la source reste vide.
 # ⚠️ hp01 : l'agent seulement. Ni le datastore ds-lab, ni la configuration de PBS, ni le réseau (vmbr0,
 # wg0) ne sont touchés ; si l'envoi vers Loki passe par wg0 (hp01 est sur le LAN), la règle de bordure
 # correspondante va dans group_vars/role_routeur/pare_feu.yml (flux hp01 → Loki 3100, locataire audit).
@@ -9,3 +12,8 @@ alloy_audit_unites:
   - {unite: proxmox-backup-proxy.service, service: proxmox}
   - {unite: proxmox-backup.service, service: proxmox}
   - {unite: pvedaemon.service, service: proxmox}
+alloy_audit_fichiers:
+  - {chemin: /var/log/proxmox-backup/api/auth.log, service: proxmox, fichier: pbs-auth}
+  - {chemin: /var/log/proxmox-backup/api/access.log, service: proxmox, fichier: pbs-acces}
+# Fichiers de PBS non lisibles par tous (droits exacts à relever sur hp01) : capacité de lecture seule.
+alloy_lecture_fichiers_proteges: true

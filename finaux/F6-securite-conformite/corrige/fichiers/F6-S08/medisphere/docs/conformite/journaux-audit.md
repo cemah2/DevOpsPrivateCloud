@@ -17,11 +17,11 @@ distinctes : Loki centralise, l'archive en verrouillage d'objets rend inaltérab
 | Source | Ce qui est tracé | Mécanisme natif | Sélecteur (locataire `audit`) | Depuis |
 |---|---|---|---|---|
 | Kubernetes | Appels à l'API (qui, quoi, quand, sur quel objet) | Politique d'audit de l'API, `/var/log/kubernetes/audit/audit.log` | `{job="kubernetes-audit"}` | M14, M22-E07 |
-| OpenBao | Requêtes et réponses (valeurs sensibles en HMAC) | Dispositif d'audit **déclaré** dans `openbao.hcl` (`fichier`, `/var/log/openbao/audit.log`) : l'API `sys/audit` refuse d'en activer un depuis OpenBao 2.4 | `{service="openbao"}` | M25-E21 |
+| OpenBao | Requêtes et réponses (valeurs sensibles en HMAC) | Dispositif d'audit **déclaré** dans `openbao.hcl` (`fichier`, `/var/log/openbao/audit.log`) : depuis OpenBao 2.3.2, l'API `sys/audit` refuse d'en créer un (sauf `unsafe_allow_api_audit_creation`, faux par défaut) | `{service="openbao"}` | M25-E21 |
 | Keycloak | Connexions, échecs, actions d'administration | Événements et événements d'administration, journal de `keycloak.service` | `{service="keycloak"}` | M24-E26 |
 | FreeIPA | Liaisons et recherches LDAP, tickets Kerberos, erreurs de l'API | 389-ds `access`, `krb5kdc.log`, `httpd/error_log` | `{service="freeipa"}` | M24-E26 |
 | GitLab | Événements d'audit (connexions, droits, jetons, comptes bloqués/débloqués) | `/var/log/gitlab/gitlab-rails/audit_json.log` (partiel en édition Free) | `{service="gitlab"}` | **F6-S08** |
-| Proxmox | Connexions, tâches et leur auteur, ACL (`pve01`, PBS de `hp01`) | journal de `pvedaemon`, `pveproxy`, `proxmox-backup(-proxy)` | `{service="proxmox"}` | **F6-S08** |
+| Proxmox | Connexions, tâches et leur auteur, requêtes de l'API (`pve01`, PBS de `hp01`) | journal de `pvedaemon` ; `/var/log/pveproxy/access.log` ; PBS : `/var/log/proxmox-backup/api/auth.log` et `access.log` | `{service="proxmox"}` | **F6-S08** |
 
 Toutes vont dans le **locataire `audit`** de Loki (`X-Scope-OrgID: audit`), par le rôle `alloy` de
 `plateforme/ansible` (variables `alloy_audit_unites`, `alloy_audit_fichiers`) ; étiquettes de la liste
@@ -32,8 +32,11 @@ pour les Secrets) et le HMAC d'OpenBao garantissent qu'**aucune valeur de secret
 
 Référence unique : `gw01`/`gw02` (chrony, M00), sur laquelle toutes les VMs et les deux hôtes physiques se
 synchronisent. Les sources lues dans journald gardent l'heure de journald ; les fichiers JSON sont datés
-par leur propre champ (`requestReceivedTimestamp` pour Kubernetes, `time` pour GitLab et OpenBao) par
-l'étape `stage.timestamp` d'Alloy, sinon Loki daterait à la lecture. Une ligne sans heure lisible garde
+par leur propre champ grâce à l'étape `stage.timestamp` d'Alloy (`requestReceivedTimestamp` pour
+Kubernetes, M22-E07 ; `time` pour GitLab, F6-S08), sinon Loki daterait à la lecture. Les autres fichiers
+(OpenBao, FreeIPA, journaux d'accès de Proxmox et de PBS) sont datés à la lecture, quelques secondes après
+l'écriture : écart connu, borné, écrit ici ; le champ `time` d'OpenBao pourra être déclaré de la même
+façon. Une ligne sans heure lisible garde
 l'heure de lecture (jamais une heure inventée). Un décalage d'horloge sur une source est lui-même alerté.
 
 ## 4. Archive inaltérable
@@ -62,7 +65,9 @@ C'est ce contrôle, et non Loki, qui prouve que rien n'a bougé.
 **Limites** (écrites, pas cachées) : l'archive prouve ce que Loki a **reçu** ; une source qui n'a rien
 émis (collecteur arrêté) laisse un trou, couvert par l'alerte « source d'audit muette » et la preuve
 P-AUD-01 ; l'administrateur de Ceph peut détruire le pool sous le RGW (même limite que
-`preuves-conformite`, `preuves.md`) ; GitLab Free ne journalise pas tous les événements d'audit.
+`preuves-conformite`, `preuves.md`) ; GitLab Free ne journalise pas tous les événements d'audit ;
+Proxmox VE n'a pas de journal d'audit dédié : un changement de droits apparaît comme une requête de l'API
+(qui, quand, quel chemin), pas comme un état avant/après — la revue des accès (P-IAM) compense.
 
 ## 6. Conservation et minimisation
 

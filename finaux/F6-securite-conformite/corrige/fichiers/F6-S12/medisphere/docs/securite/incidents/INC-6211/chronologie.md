@@ -10,12 +10,12 @@
 
 | HH:MM | Type | Événement | Source (preuve) |
 |---|---|---|---|
-| 07:52 | [ouverture] | Alerte Falco « shell interactif » puis « connexion sortante vers un port non prévu », espace `mediagenda-recette`, répétée chaque minute | Alertmanager, Mailpit (`falco.eml`) |
+| 07:52 | [ouverture] | Alerte Falco « shell interactif » puis « connexion sortante vers un port non prévu », espace `mediagenda-recette` (connexion répétée chaque minute) | Alertmanager, Mailpit (`falco.eml`) |
 | 07:55 | [état] | Courriel d'état n° 1 à Sophie, Thomas, Julien ; INC-6211 ouvert | `preuves-conformite/INC-6211/etat-1.eml` |
 | 07:58 | [décision] | Qualification : **vrai positif**. Pod `mediagenda-api-7c…-x`, nœud `k8s-w02`, image `…/medisphere/mediagenda-api@sha256:…`, shell ouvert à 07:50:12 | audit API (`audit-exec.json`), Falco (`falco.json`) |
-| 08:01 | [action] | Lecture de `/var/run/secrets/.../token` par le `sh` dans le conteneur (aucune autre lecture) | Tetragon (`tetragon.json`) |
+| 08:01 | [action] | Arbre des processus : le `sh` a lancé `cat /var/run/secrets/kubernetes.io/serviceaccount/token` — **en échec**, aucun jeton n'est monté (norme C6, `automountToken: false`), d'où l'absence d'alerte Falco « lecture du jeton » —, puis `base64` et une boucle `python3` détachée | Tetragon `process_exec` (`tetragon.json`), `pod.yaml` (pas de volume de jeton) |
 | 08:03 | [action] | Boucle `python3` → `10.10.99.66:4444` toutes les 60 s. Hubble : **FORWARDED** [vecteur 1 : **DROPPED**] | Hubble (`hubble.json`) |
-| 08:05 | [action] | Cause du passage : NetworkPolicy `legacy-sortie-large` (MR !218, mars 2026) autorise la sortie vers `10.10.99.0/24`, et la règle `legacy-sortie-recette` posée à chaud sur `gw01` et `gw02` (absente de `/etc/nftables.conf`) la laisse traverser la bordure [vecteur 1 : pas de règle ; le jeton a servi à `auth can-i --list` + `get pods` sous l'identité `system:serviceaccount:mediagenda-recette:mediagenda`, `userAgent` `kubectl/…`, entré par la VIP de l'API] | `netpol.yaml`, `nft-gw01.txt`, `nft-gw02.txt` [audit API] |
+| 08:05 | [action] | Cause du passage : NetworkPolicy `legacy-sortie-large` (MR !218, mars 2026) autorise la sortie vers `10.10.99.0/24`, et la règle `legacy-sortie-recette` posée à chaud sur `gw01` et `gw02` (absente de `/etc/nftables.conf`) la laisse traverser la bordure [vecteur 1 : pas de règle ; un jeton du compte `mediagenda` a été émis à 07:50 (`create serviceaccounts/token`, identité d'administration qui joue l'attaquant dans le lab) puis a servi à `auth can-i --list` + `get pods` (refusé, 403) sous l'identité `system:serviceaccount:mediagenda-recette:mediagenda`, `userAgent` `kubectl/…`, entré par la VIP de l'API] | `netpol.yaml`, `nft-gw01.txt`, `nft-gw02.txt` [audit API] |
 | 08:07 | [action] | Journaux du C2 `c2-simule01` relevés : connexions reçues depuis l'IP du pod, **aucun octet utile** [vecteur 1 : C2 muet] | `c2-simule.log` (`c2.log`) |
 | 08:10 | [action] | Confinement : étiquette `medisphere.internal/quarantaine=oui` ; `restartCount` inchangé (0) | `pod.yaml` |
 | 08:12 | [action] | Pod sorti du ReplicaSet du Rollout `mediagenda` (`app.kubernetes.io/component-`) ; un pod sain recréé ; recette rétablie | `kubectl get pods`, `rollout.yaml` |
@@ -28,10 +28,11 @@
 
 ## Portée
 
-- **Établi** : un shell a été ouvert dans un conteneur de l'API de recette ; le jeton de compte de
-  service monté a été lu ; une connexion vers `10.10.99.66:4444` a été **tentée** ; [vecteur 2 : elle a
+- **Établi** : un shell a été ouvert dans un conteneur de l'API de recette ; la lecture du jeton de
+  compte de service a été **tentée** et a échoué (aucun jeton monté) ; une connexion vers `10.10.99.66:4444` a été **tentée** ; [vecteur 2 : elle a
   **abouti** (Hubble FORWARDED, C2 journalise) par la politique `legacy-sortie-large` et la règle de bordure `legacy-sortie-recette`] ; [vecteur 1 : elle
-  a été **jetée** (Hubble DROPPED, C2 muet), le jeton a servi à une reconnaissance en lecture sur l'API].
+  a été **jetée** (Hubble DROPPED, C2 muet) ; un jeton du compte, émis hors du pod, a servi à une reconnaissance en lecture sur l'API].
+- **À instruire (vecteur 1)** : l'identité qui a émis le jeton (dans le lab, celle qui a lancé l'injection).
 - **Non établi / écarté** : aucune donnée de patient **réelle** touchée — `mediagenda-recette` ne contient
   que des données **fictives/pseudonymisées** (voir `docs/conformite/perimetre.md`) ; **aucun** accès à la
   production (le jeton et les droits sont bornés à l'espace de recette) ; **aucun** octet utile reçu par
@@ -45,7 +46,7 @@ Déposées dans `preuves-conformite/INC-6211/<horodatage>/`, verrouillage d'obje
 ## Cause et suites
 
 Cause (mécanisme) : [vecteur 2] deux règles de sortie temporaires jamais retirées (cluster et bordure),
-qu'aucun contrôle ne comparait à l'état déclaré ; [vecteur 1] un jeton de compte de service monté sans besoin, réutilisable contre l'API. Suites :
+qu'aucun contrôle ne comparait à l'état déclaré ; [vecteur 1] n'importe quelle identité autorisée à `create serviceaccounts/token` dans l'espace peut fabriquer un jeton du compte de l'application, utilisable hors du cluster, et aucune alerte ne voyait ni l'émission ni l'usage. Suites :
 contrôle de dérive des NetworkPolicy, `exec` humain hors bris de glace interdit sur la recette
-(`prod-gestes-interactifs` étendu), jetons non montés quand inutiles. Décision de notification et
+(`prod-gestes-interactifs` étendu), émission de jetons des comptes applicatifs restreinte et alertée. Décision de notification et
 post-mortem : F6-S13.

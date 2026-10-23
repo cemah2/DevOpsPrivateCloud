@@ -46,7 +46,9 @@ L2="$("$OUTIL" collecter --frequence hebdomadaire 2>/dev/null | tail -n 1)"
 vrai "collecteur en échec → statut echec, lot partiel" \
   jq -e '.resultat == "partiel" and (.preuves[] | select(.id == "P-TST-03") | .statut == "echec")' "$L2/lot.json"
 vrai "secret détecté → preuve refusée" jq -e '.preuves[] | select(.id == "P-TST-04") | .statut == "refusee"' "$L2/lot.json"
-if grep -rq 'tres-secret' "$L2"; then echo "ÉCHEC le secret est resté dans le lot"; echecs=$((echecs + 1)); else echo "ok    le secret n'est écrit nulle part dans le lot"; fi
+vrai "secret sur la sortie d'erreur → preuve gardée, journal vidé" \
+  jq -e '.preuves[] | select(.id == "P-TST-06") | .statut == "ok"' "$L2/lot.json"
+if grep -rq "tres-secret" "$L2"; then echo "ÉCHEC le secret est resté dans le lot"; echecs=$((echecs + 1)); else echo "ok    le secret n'est écrit nulle part dans le lot"; fi
 L3="$("$OUTIL" collecter --frequence mensuelle 2>/dev/null | tail -n 1)"
 vrai "collecteur absent → code 127, lot partiel" jq -e '.preuves[0].code == 127 and .resultat == "partiel"' "$L3/lot.json"
 

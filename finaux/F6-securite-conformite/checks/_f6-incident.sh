@@ -80,10 +80,17 @@ _f6i_archive_s3() { _f6c_s3_id "$_f6i_archive_env" "$@"; }
 # --- pve01 (lecture) -------------------------------------------------------------------------------
 
 # _f6i_c2_absent — le « C2 » simulé (VMID WB_F6_C2_VMID) n'existe plus sur pve01 (détruit par l'annulation).
-_f6i_c2_absent() { ! remote "$WB_PVE_HOST" "qm status $_f6i_c2_vmid" >/dev/null 2>&1; }
+# pve01 injoignable = échec (jamais « absent » par défaut).
+_f6i_c2_absent() {
+  local l
+  l="$(remote "$WB_PVE_HOST" "qm list" 2>/dev/null)" || return 1
+  [[ -n "$l" ]] || return 1
+  ! awk -v v="$_f6i_c2_vmid" '$1 == v { t = 1 } END { exit !t }' <<<"$l"
+}
 
 # --- État local de l'injection de S11 (lecture seule) ----------------------------------------------
 # L'injection écrit dans ~/.local/state/workbook/F6-S11/ (700) ; les checks le LISENT, jamais ne le modifient.
+# Après « --annuler », restent espace, pod, vecteur, compte, compte-uid et annule (date de l'annulation).
 
 _f6i_etat_dir="${XDG_STATE_HOME:-$HOME/.local/state}/workbook/F6-S11"
 _f6i_etat() {

@@ -1,10 +1,18 @@
----
 # host_vars/pve01/alloy.yml — F6-S08 (SEC-3608) : traces d'administration de Proxmox VE au locataire audit.
-# pvedaemon : connexions réussies et refusées (« successful auth », « authentication failure »), début et
-# fin de chaque tâche avec son auteur (« <utilisateur@royaume> starting task UPID:… »), changements d'ACL
-# par l'API ; pveproxy : requêtes de l'interface et de l'API. Horodatage : celui de journald (source).
+# Proxmox VE n'a pas de journal d'audit dédié ; on assemble ce qu'il émet nativement :
+#   - journal de pvedaemon : connexions réussies et refusées (« successful auth for user … »,
+#     « authentication failure; rhost=… user=… »), début et fin de chaque tâche avec son auteur
+#     (« <utilisateur@royaume> starting task UPID:… ») ;
+#   - /var/log/pveproxy/access.log : chaque requête de l'interface et de l'API (adresse, utilisateur,
+#     méthode, chemin, code), dont les modifications de droits (PUT /api2/json/access/acl) — la requête est
+#     tracée, pas le détail de l'ACL avant/après (limite écrite dans journaux-audit.md).
+# Horodatage : celui de journald (source) ; pour access.log, l'heure de lecture (quelques secondes).
 # pve01 est un hôte physique : le rôle alloy n'y installe que l'agent (aucun changement de réseau ni de
 # service Proxmox). Hôte ajouté au groupe « alloy » de l'inventaire (site.yml) par la même MR.
 alloy_audit_unites:
   - {unite: pvedaemon.service, service: proxmox}
   - {unite: pveproxy.service, service: proxmox}
+alloy_audit_fichiers:
+  - {chemin: /var/log/pveproxy/access.log, service: proxmox, fichier: pveproxy-acces}
+# access.log appartient à www-data, non lisible par tous : même capacité de lecture seule qu'ipa01 (M24-E26).
+alloy_lecture_fichiers_proteges: true

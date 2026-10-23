@@ -35,14 +35,17 @@ else
   _f6_s02_versions() { _f6c_s3 s3api get-bucket-versioning --bucket "$_f6c_bucket" | jq -e '.Status == "Enabled"' >/dev/null; }
   check_cmd "$_f6c_bucket : versionnage activé" _f6_s02_versions
 
-  _f6_s02_lot="$(_f6c_dernier_lot || true)"
+  # Le lot QUOTIDIEN le plus récent (un lot hebdomadaire ou mensuel a moins de preuves) ; à défaut, le
+  # plus récent tout court (le contrôle des huit preuves dira alors ce qui manque).
+  _f6_s02_lot="$(_f6c_dernier_lot quotidienne || true)"
+  [[ -n "$_f6_s02_lot" ]] || _f6_s02_lot="$(_f6c_dernier_lot || true)"
   _f6_s02_recent() {
     local l="${_f6_s02_lot##*/}" t
     [[ "$l" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z ]] || return 1
     t="$(date -u -d "${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}T${BASH_REMATCH[4]}:${BASH_REMATCH[5]}:${BASH_REMATCH[6]}Z" +%s)" || return 1
     (($(date +%s) - t <= _f6c_lot_age_max * 3600))
   }
-  check_cmd "un lot de preuves de moins de ${_f6c_lot_age_max} h est déposé (dernier : ${_f6_s02_lot:-aucun})" _f6_s02_recent
+  check_cmd "un lot quotidien de preuves de moins de ${_f6c_lot_age_max} h est déposé (dernier : ${_f6_s02_lot:-aucun})" _f6_s02_recent
 
   _f6_s02_tmp="$(mktemp -d)"
   trap 'rm -rf -- "$_f6_s02_tmp"' EXIT

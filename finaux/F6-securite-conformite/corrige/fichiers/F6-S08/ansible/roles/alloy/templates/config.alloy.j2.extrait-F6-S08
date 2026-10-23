@@ -2,6 +2,12 @@
 {# (M24-E26), REMPLACE le composant « loki.source.file "audit" » par ce qui suit. Les fichiers déclarés   #}
 {# avec un champ « horodatage » (nom du champ JSON qui porte l'heure de l'événement) sont datés à la      #}
 {# SOURCE ; sans ce champ, l'heure de lecture (quelques secondes de retard) reste, comme avant.            #}
+{# 0. Dans la boucle « for u in alloy_audit_unites » du M24-E26, le nom du composant devient unique par    #}
+{#    UNITÉ (et non plus par service) : pve01 et pbs01 déclarent plusieurs unités du même service        #}
+{#    « proxmox », et deux composants « loki.source.journal "audit_proxmox" » feraient refuser toute la  #}
+{#    configuration à Alloy (nom de composant en double). Remplacer la ligne d'ouverture par :            #}
+{#      loki.source.journal "audit_{{ u.unite | regex_replace('[^A-Za-z0-9_]', '_') }}" {                #}
+{# 1. Puis, dans le bloc des fichiers d'audit :                                                          #}
 loki.source.file "audit" {
 	targets    = local.file_match.audit.targets
 	forward_to = [loki.process.audit_fichiers.receiver]

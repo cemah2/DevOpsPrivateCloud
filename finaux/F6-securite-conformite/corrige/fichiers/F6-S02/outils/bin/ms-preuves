@@ -173,6 +173,11 @@ cmd_collecter() {
       : >"$dossier/$fichier"
       echo "REFUSÉE : la sortie ressemble à un secret ; rien n'est conservé (corrige le collecteur)" >>"$dossier/journal/$id.txt"
     fi
+    # Le journal (sortie d'erreur du collecteur) est déposé lui aussi : même garde-fou.
+    if contient_secret "$dossier/journal/$id.txt"; then
+      echo "journal vidé : la sortie d'erreur du collecteur ressemblait à un secret (corrige le collecteur)" >"$dossier/journal/$id.txt"
+      avert "$id ($coll) : journal vidé (secret probable sur la sortie d'erreur)"
+    fi
     printf 'code %s, durée %s s, statut %s\n' "$code" "$duree" "$statut" >>"$dossier/journal/$id.txt"
     if [[ "$statut" == ok ]]; then n_ok=$((n_ok + 1)); else n_ko=$((n_ko + 1)); avert "$id ($coll) : $statut (code $code)"; fi
     entrees="$(jq -c --arg id "$id" --arg t "$titre" --arg c "$coll" --arg f "$fichier" --argjson m "$mesures" \

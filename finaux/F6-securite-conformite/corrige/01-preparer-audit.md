@@ -3,7 +3,7 @@
 > ⚠️ Corrigé — à lire après avoir cherché. Les solutions des `LIBRE` sont **des** solutions de référence : d'autres sont valables, jugées sur les mêmes critères.
 
 **Validé hors du lab** (à la rédaction, 23/10/2026) :
-- `ms-preuves` : `bash -n`, `shellcheck -x`, et ses 28 tests ([`tests/ms-preuves/lancer.sh`](fichiers/F6-S02/outils/tests/ms-preuves/lancer.sh)) **verts** avec de faux `aws`, `cosign` et `yq` : collecte (succès, échec, collecteur absent, secret refusé et effacé), manifeste, refus de re-signer, refus de déposer sans verrou / sans rétention par défaut / objets sans rétention / deux fois, dépôt, vérification d'un lot local et d'un lot du compartiment, détection d'une preuve modifiée, d'un fichier ajouté et d'un manifeste réécrit ;
+- `ms-preuves` : `bash -n`, `shellcheck -x`, et ses 29 tests ([`tests/ms-preuves/lancer.sh`](fichiers/F6-S02/outils/tests/ms-preuves/lancer.sh)) **verts** avec de faux `aws`, `cosign` et `yq` : collecte (succès, échec, collecteur absent, secret refusé et effacé, secret sur la sortie d'erreur effacé du journal), manifeste, refus de re-signer, refus de déposer sans verrou / sans rétention par défaut / objets sans rétention / deux fois, dépôt, vérification d'un lot local et d'un lot du compartiment, détection d'une preuve modifiée, d'un fichier ajouté et d'un manifeste réécrit ;
 - `ms-revue-acces` : `bash -n`, `shellcheck -x`, 13 tests verts ([`tests/ms-revue-acces/lancer.sh`](fichiers/F6-S03/outils/tests/ms-revue-acces/lancer.sh)) avec de faux `ldapsearch`, `kubectl` et `yq` ;
 - collecteurs, `rgw-preuves.sh`, `preuves-pare-feu` : `shellcheck` ; la SoA de référence passe le contrôle de complétude du check (93 mesures) et le contrôle échoue bien sur une SoA privée d'une ligne ou d'une justification.
 
@@ -70,7 +70,7 @@ politique de lecture posée pour preuves-lecture
 {"Status":"Enabled", …}
 ```
 
-- `create-bucket --object-lock-enabled-for-bucket` envoie l'en-tête `x-amz-bucket-object-lock-enabled` ; sans lui, `put-object-lock-configuration` répond `409 InvalidBucketState` ([doc Ceph](https://docs.ceph.com/en/latest/radosgw/s3/bucketops/)) : on ne rattrape pas un compartiment créé sans verrou, on en crée un autre.
+- `create-bucket --object-lock-enabled-for-bucket` envoie l'en-tête `x-amz-bucket-object-lock-enabled` ; RGW active alors le versionnage, qui ne peut plus être suspendu. Sur un compartiment créé **sans** verrou, RGW 20.2 accepte `put-object-lock-configuration` seulement si le versionnage est déjà actif (sinon `409 InvalidBucketState`, code de `RGWPutBucketObjectLock` dans `rgw_op.cc` de la v20.2.0) ; on le demande quand même à la création, pour qu'aucun objet n'y ait jamais existé sans protection ([doc Ceph](https://docs.ceph.com/en/latest/radosgw/s3/bucketops/)).
 - Deux utilisateurs RGW : `preuves` (propriétaire, écriture, quota 20 Go, un seul compartiment) et `preuves-lecture` (aucun compartiment à lui, lecture par la **politique de compartiment** : objets, versions, rétentions, configuration du verrou).
 - Fichier des checks, sans afficher les clés :
   ```
@@ -171,7 +171,7 @@ Contrôle au lot suivant : `get-object-retention` d'un objet du lot → `"Mode":
 
 **Explications**
 - **Trois garanties distinctes.** *Qui* : la signature par une clé née dans le coffre, utilisable par un seul rôle (projet, branche protégée, runner). *Quoi* : les empreintes du manifeste. *Quand, et pas retouché depuis* : le dépôt dans un compartiment verrouillé — la date de dernière modification et l'échéance sont posées par le **serveur**, et la version ne peut plus changer. Une signature sans journal de transparence ne date rien : c'est le verrou qui date.
-- **`GOVERNANCE` et `COMPLIANCE`.** Les deux interdisent la suppression d'une version et le raccourcissement de la rétention ; `GOVERNANCE` laisse une porte (le droit de contournement, accordé de fait au propriétaire dans RGW), `COMPLIANCE` n'en laisse aucune. D'où l'ordre : essayer en `GOVERNANCE`, basculer quand on est sûr.
+- **`GOVERNANCE` et `COMPLIANCE`.** Les deux interdisent la suppression d'une version et le raccourcissement de la rétention ; `GOVERNANCE` laisse une porte (le droit de contournement `s3:BypassGovernanceRetention`, que RGW 20.2 rattache à la permission d'écriture de la liste de contrôle d'accès : le propriétaire l'a de fait), `COMPLIANCE` n'en laisse aucune. D'où l'ordre : essayer en `GOVERNANCE`, basculer quand on est sûr.
 - **Versionnage obligatoire** : une écriture sur une clé existante crée une version ; une suppression sans version crée un marqueur. Rien ne remplace une preuve déjà déposée.
 - **Lecture seule partout** : les collecteurs n'ont que des identités de lecture ; l'identité d'écriture S3 ne sert qu'à `deposer`, et le verrou l'empêche de détruire.
 
@@ -183,7 +183,7 @@ Contrôle au lot suivant : `get-object-retention` d'un objet du lot → `"Mode":
 - **Kyverno, OpenSCAP, Velero exposent déjà des rapports** : la preuve est la photographie datée et signée de ces rapports, pas un nouveau contrôle.
 
 **Pièges classiques**
-- Créer le compartiment sans verrou, « on l'activera après » : impossible ; recréer.
+- Créer le compartiment sans verrou, « on l'activera après » : les objets écrits avant l'activation n'ont aucune rétention, et un compartiment non versionné refuse l'activation (RGW 20.2) ; créer `preuves-conformite` verrouillé dès le départ.
 - Passer en `COMPLIANCE` avant d'avoir relu le contenu : un secret ou une donnée de santé déposés y restent jusqu'à l'échéance.
 - Oublier `Content-MD5` : S3 l'exige pour un objet soumis à rétention ; selon la version de RGW, le dépôt échoue ou non (on l'envoie toujours).
 - Faire confiance au verrou sans **vérifier** chaque objet après écriture : un compartiment mal réglé accepte des objets sans protection, en silence.
@@ -204,7 +204,7 @@ Réplication de `preuves-conformite` vers `s3-02` (PAR2) avec la même rétentio
 
 *1. Identités de revue.* Celles des checks suffisent pour l'annuaire, Keycloak (`view-users`), Kubernetes, OpenBao (à condition que la politique de lecture des métadonnées autorise `LIST` sur `auth/approle/role` et `auth/gitlab/role` : ajoute-le à la politique `wb-checks` ou crée une politique `revue-acces`), mais pas pour :
 - **Grafana** : la liste des utilisateurs de l'organisation (`/api/org/users`) et des comptes de service demande plus que le rôle Viewer : compte de service `revue-acces` dédié (rôle d'organisation **Admin**, jeton de 30 jours, déclaré au registre comme risque accepté : Grafana n'a pas de rôle « lecture des utilisateurs » dans l'édition libre) ;
-- **Harbor** : un robot **système** à permissions de lecture `user` et `robot` (à confirmer selon la version : liste des ressources proposées dans l'interface de création d'un robot système) ;
+- **Harbor** : un robot **système** avec les seules permissions `user` (list, read) et `robot` (list, read) — Harbor 2.15 les propose aux robots système (`src/common/rbac/const.go` de la v2.15.4, fournisseur « sans limite ») ;
 - **GitLab** : un jeton `read_api` d'**administrateur** (l'état des comptes et la dernière activité ne sont visibles qu'ainsi) ;
 - **Proxmox** : jeton d'API en rôle `PVEAuditor`.
 
@@ -264,10 +264,10 @@ Campagne mensuelle déclenchée par le pipeline, tickets `SEC-` ouverts automati
 
 Signale tes retours : ils corrigent le workbook.
 
-- **RGW et Object Lock** (Ceph 20.2) : comportement exact de `delete-object --bypass-governance-retention` pour le **propriétaire** sans politique explicite ; exigence de `Content-MD5` au dépôt ; prise en charge de `s3:BypassGovernanceRetention`, `s3:GetObjectRetention`, `s3:GetBucketObjectLockConfiguration` dans une **politique de compartiment** (la documentation de Ceph ne les liste pas explicitement) ; format de principal `arn:aws:iam:::user/preuves-lecture` ; `--max-buckets=-1` pour interdire toute création de compartiment.
+- **RGW et Object Lock** (Ceph 20.2) : vérifié dans le **code source** de la v20.2.0 (pas sur un lab) : actions `s3:BypassGovernanceRetention`, `s3:GetObjectRetention`, `s3:GetObjectLegalHold`, `s3:GetBucketObjectLockConfiguration`, `s3:ListBucketVersions` reconnues dans une politique de compartiment ; contournement de `GOVERNANCE` rattaché à la permission d'écriture (le propriétaire l'a) ; `max_buckets` négatif = création de compartiment refusée ; les en-têtes de rétention de `head-object` exigent `s3:GetObjectRetention`. À constater sur le lab : exigence de `Content-MD5` au dépôt, format de principal `arn:aws:iam:::user/preuves-lecture`.
 - **`radosgw-admin`** face à un objet en `COMPLIANCE` (`object rm`, `bucket rm --purge-objects`) : la limite écrite dans `preuves.md` suppose qu'un administrateur de Ceph peut détruire ; à constater sur un compartiment jetable, jamais sur `preuves-conformite`.
 - **Cosign 3 `sign-blob` / `verify-blob`** avec `hashivault://preuves-conformite` et la configuration de signature sans service : mêmes options qu'au M25-E20 (`--signing-config`, `--bundle`, `--insecure-ignore-tlog=true`), non rejouées avec une clé de preuves.
 - **Collecteurs** : champs exacts renvoyés par les API (Keycloak 26.8 `users?briefRepresentation=false` et `federationLink`, Harbor `scan_overview`, GitLab `two_factor_enabled` et `last_activity_on` pour un jeton d'administrateur, Proxmox `access/users?full=1` et `tokens`), non vérifiés sur le lab ; lecture de `nsAccountLock` et `krbPrincipalExpiration` par le compte système de lecture (ACI par défaut de FreeIPA).
 - **`preuves-pare-feu`** : la comparaison configuration persistée ↔ règles actives recharge `/etc/nftables.conf` dans un espace de noms réseau jetable (`unshare -n`) ; une règle qui cite une interface par **index** échouerait. La section « écart » dit alors qu'elle n'a pas pu comparer.
-- **Identités de revue** : rôle minimal d'un compte de service Grafana pour lister les utilisateurs de l'organisation ; permissions d'un robot **système** Harbor pour lister utilisateurs et robots (Harbor 2.15).
+- **Identités de revue** : rôle minimal d'un compte de service Grafana pour lister les utilisateurs de l'organisation ; robot **système** Harbor à permissions `user`/`robot` en lecture : présentes dans le code de la v2.15.4, interface et comportement de `GET /users` avec ce robot à constater sur le lab.
 - **Durées** des collectes (hebdomadaire ≈ 10 min estimées) et taille d'un lot (quelques Mo) : celles d'un lab de référence imaginé.

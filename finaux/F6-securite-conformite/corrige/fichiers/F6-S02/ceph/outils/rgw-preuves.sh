@@ -9,8 +9,9 @@
 #
 # creer      utilisateurs RGW « preuves » (propriétaire, écriture par la collecte) et « preuves-lecture »
 #            (auditeurs, contrôles), clés rangées dans OpenBao (kv/plateforme/preuves/rgw-ecriture et
-#            rgw-lecture), compartiment créé AVEC le verrouillage d'objets (impossible à ajouter après
-#            coup : la configuration est refusée par 409 InvalidBucketState), politique de compartiment
+#            rgw-lecture), compartiment créé AVEC le verrouillage d'objets (dès la création : aucun objet
+#            n'y existe jamais sans protection ; RGW 20.2 accepterait aussi de l'activer après coup sur un
+#            compartiment déjà versionné, jamais sur un compartiment non versionné), politique de compartiment
 #            qui donne la lecture à « preuves-lecture ». Rétention par défaut posée à GOVERNANCE 1 jour
 #            (phase d'essai). Idempotent : ne recrée ni utilisateur, ni clé, ni compartiment.
 # retention  pose la rétention PAR DÉFAUT des nouveaux objets (les objets déjà écrits gardent la leur).
@@ -45,7 +46,8 @@ bao token lookup >/dev/null 2>&1 || { echo "pas de jeton OpenBao valide : bao lo
 
 rgw() { ssh -n -o BatchMode=yes "$CEPH_ADMIN" sudo -n radosgw-admin "$@"; }
 
-# utilisateur UID CHEMIN_KV NOM — crée l'utilisateur une fois, clés envoyées directement à OpenBao.
+# utilisateur UID CHEMIN_KV NOM MAX_COMPARTIMENTS — crée l'utilisateur une fois, clés envoyées directement
+# à OpenBao (MAX_COMPARTIMENTS : -1 interdit toute création de compartiment, code de RGW 20.2).
 utilisateur() {
   if rgw user info --uid="$1" >/dev/null 2>&1; then
     echo "utilisateur RGW $1 : existe déjà (clés inchangées)"
@@ -87,7 +89,7 @@ case "$1" in
       echo "compartiment $COMPARTIMENT : existe déjà"
     else
       # Le verrouillage d'objets se demande À LA CRÉATION (en-tête x-amz-bucket-object-lock-enabled) ;
-      # RGW active alors le versionnage du compartiment.
+      # RGW active alors le versionnage du compartiment, qui ne peut plus être suspendu.
       ecr s3api create-bucket --bucket "$COMPARTIMENT" --object-lock-enabled-for-bucket >/dev/null
       echo "compartiment $COMPARTIMENT créé avec verrouillage d'objets"
       regle GOVERNANCE 1

@@ -1,6 +1,9 @@
 # plateforme/k8s — composants/velero/planifications.extrait-F6.yaml (F6-S09, SEC-3609, ferme ECA-3603)
 #
 # À FUSIONNER dans composants/velero/ (planifications du M16 ; même kustomization). Deux changements :
+# (avant d'exclure les Secrets, vérifier qu'aucun Secret lu par une application des espaces sauvegardés
+#  n'échappe à ESO — comparer « kubectl get secrets » et les ExternalSecret de chaque espace — : il serait
+#  perdu à la restauration ; les Secrets générés par CloudNativePG sont déjà écartés par le sélecteur)
 #
 # 1. La phrase du dépôt Kopia (données des volumes) ne vaut plus la phrase PAR DÉFAUT que Velero écrit à
 #    l'installation dans le Secret velero/velero-repo-credentials (clé repository-password) : elle vient
@@ -8,7 +11,9 @@
 #    ⚠️ La phrase est GLOBALE à tous les dépôts Kopia de Velero et un dépôt existant reste chiffré avec
 #    l'ancienne : on fait pointer l'emplacement de sauvegarde « s3-01 » vers un NOUVEAU préfixe (dans
 #    values.yaml du M16-E16 : « prefix: kopia-v2 » sous backupStorageLocation, donc de nouveaux dépôts
-#    initialisés avec la nouvelle phrase) ; l'ancien emplacement reste déclaré en LECTURE SEULE
+#    initialisés avec la nouvelle phrase ; les BackupRepository existants de « s3-01 » gardent l'adresse
+#    de l'ancien dépôt dans leur spec : les supprimer après le changement pour que Velero en crée de
+#    nouveaux, à confirmer sur le lab) ; l'ancien emplacement reste déclaré en LECTURE SEULE
 #    (« s3-01-avant », accessMode ReadOnly, sans préfixe) jusqu'à l'expiration des anciennes sauvegardes
 #    (14 jours). Pour restaurer l'une d'elles, il faut l'ancienne phrase : ESO suspendu et phrase par
 #    défaut remise le temps de la restauration (procédure dans docs/conformite/vulnerabilites.md).
@@ -36,27 +41,29 @@ spec:
         key: plateforme/velero/depot
         property: phrase
 ---
+# 2. Correctif des planifications EXISTANTES (M16-E16/E17 et M16-E46), à poser dans la kustomization de
+#    composants/velero/ (patches) — on n'ajoute PAS de nouvelle planification : medidoc-dev est déjà
+#    sauvegardé par recette-quotidienne. Les listes sont REMPLACÉES par un correctif : on recopie les
+#    exclusions déjà présentes et on ajoute « secrets ».
 apiVersion: velero.io/v1
 kind: Schedule
 metadata:
-  name: medidoc-dev-nuit
+  name: recette-quotidienne
   namespace: velero
-  labels:
-    medisphere.internal/composant: sauvegarde
-    medisphere.internal/sauvegarde: quotidienne
 spec:
-  schedule: "0 2 * * *"
-  paused: false                     # écrit explicitement : un « apply » le remet à faux (leçon de F6-S04)
   template:
-    includedNamespaces:
-      - medidoc-dev
     excludedResources:
+      - clusters.postgresql.cnpg.io
+      - backups.postgresql.cnpg.io
+      - scheduledbackups.postgresql.cnpg.io
       - secrets                     # recréés par ESO depuis OpenBao ; jamais en clair sur s3-01
-    snapshotVolumes: true
-    snapshotMoveData: true          # données des volumes copiées par Kopia dans le dépôt chiffré
-    defaultVolumesToFsBackup: false
-    labelSelector:
-      matchExpressions:
-        - key: cnpg.io/cluster
-          operator: DoesNotExist
-    ttl: 336h0m0s
+---
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: mediagenda-dev-quotidienne
+  namespace: velero
+spec:
+  template:
+    excludedResources:
+      - secrets

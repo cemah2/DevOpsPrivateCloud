@@ -23,6 +23,11 @@ perdus. On regarde de l'**extérieur** ; on ne lance rien dans le conteneur susp
 
 ## 2. Collecte (du plus volatil au plus durable)
 
+Sous Pod Security `restricted` (espaces applicatifs), le conteneur éphémère doit tourner **non root** ;
+pour lire `/proc/1/root` du conteneur cible, il lui faut en pratique le **même UID** que lui (10001 pour
+MédiAgenda) : fichier `--custom` de `kubectl debug` avec `securityContext.runAsUser`. À confirmer sur le
+lab (et écrire ici le résultat, comme pour le point de contrôle).
+
 | # | Pièce | Commande (lecture seule) |
 |---|---|---|
 | 1 | État du pod et du nœud | `kubectl -n $NS get pod $POD -o yaml > $D/pod.yaml` ; `kubectl get node <NŒUD> -o yaml > $D/noeud.yaml` |
@@ -36,14 +41,28 @@ perdus. On regarde de l'**extérieur** ; on ne lance rien dans le conteneur susp
 
 ### 2.1 Capture de l'état vivant
 
-**Point de contrôle (`ContainerCheckpoint`, KEP-2008)** — bêta, activé par défaut depuis 1.30, toujours
-bêta en 1.36. Exige que le runtime l'implémente (containerd 2.x + CRIU sur le nœud) :
+**Point de contrôle (`ContainerCheckpoint`, KEP-2008)** — bêta, activé par défaut depuis 1.30 (vérifier
+son stade dans la version du cluster). C'est une API du **kubelet** : `POST /checkpoint/<espace>/<pod>/<conteneur>`
+sur le port 10250 du nœud (paramètre facultatif `timeout`, 2 min par défaut), par un client autorisé sur
+la sous-ressource `nodes/checkpoint`. Exige que le runtime l'implémente (containerd 2.x + CRIU sur le
+nœud), sinon réponse `500` sans effet sur le conteneur. Par exemple, depuis un nœud de contrôle, avec le
+certificat client dont l'API server se sert pour parler aux kubelets :
 
 ```
-admin@adm01:~$ kubectl get --raw "/api/v1/nodes/<NŒUD>/proxy/checkpoint/$NS/$POD/$C"   # ou POST selon la version
+root@k8s-cp01:~# curl -sS -X POST --cacert /etc/kubernetes/pki/ca.crt \
+    --cert /etc/kubernetes/pki/apiserver-kubelet-client.crt \
+    --key /etc/kubernetes/pki/apiserver-kubelet-client.key \
+    "https://<NŒUD>:10250/checkpoint/$NS/$POD/$C"
 ```
 
-> **Résultat sur le lab (F6-S10)** : *à renseigner à l'exercice.* Si le runtime l'implémente, l'archive
+(Si le certificat de service du kubelet n'est pas signé par l'autorité du cluster — kubeadm sans
+`serverTLSBootstrap` —, `--cacert` échoue : vérifier l'empreinte du certificat présenté plutôt que de
+désactiver la vérification. Requête, droits et chemin de l'archive : à confirmer sur le lab.)
+
+> **Résultat sur le lab (F6-S10)** : capture éprouvée le `<AAAA-MM-JJ>` sur un pod d'essai de `wb-essais`
+> (sans redémarrage, `restartCount` inchangé) : `<point de contrôle obtenu : archive, taille, empreinte>`
+> **ou** `<500 du runtime : repli sur la copie §2.2, éprouvé>`. *(Le corrigé ne peut pas trancher pour ton
+> lab : écris ce que tu as observé.)* Si le runtime l'implémente, l'archive
 > est écrite sur le nœud dans `/var/lib/kubelet/checkpoints/` (lisible par root seulement) ; la copier
 > avec son empreinte. Si `500`/non implémenté : **replier sur la copie** (§2.2) et l'écrire ici.
 

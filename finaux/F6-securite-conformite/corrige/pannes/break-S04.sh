@@ -315,7 +315,9 @@ _s04_c6_effectif() {
 _s04_c7() {
   local corps id
   curl -sf --max-time 10 "$_S04_AM/api/v2/status" >/dev/null 2>&1 || return 10
-  corps="$(jq -nc --arg d "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg f "$(date -u -d '+60 days' +%Y-%m-%dT%H:%M:%SZ)" '{
+  # Début une minute dans le passé : un léger décalage d'horloge entre adm01 et Alertmanager ne laisse
+  # pas le silence « pending » (il ne serait pas constaté).
+  corps="$(jq -nc --arg d "$(date -u -d '-1 min' +%Y-%m-%dT%H:%M:%SZ)" --arg f "$(date -u -d '+60 days' +%Y-%m-%dT%H:%M:%SZ)" '{
     matchers: [{name: "alertname", value: "AlerteFalco|Audit.*", isRegex: true, isEqual: true}],
     startsAt: $d, endsAt: $f, createdBy: "lucas.martin",
     comment: "Trop de bruit pendant les essais de charge de la recette, je remets après."}')"
@@ -346,6 +348,25 @@ _s04_c7_defaire() {
 # Tirage, vérification, annulation
 # ---------------------------------------------------------------------------
 _s04_effectif() { "_s04_c${1}_effectif"; }
+
+# _s04_defaire_candidat N — défait UN candidat posé mais non constaté (il ne doit pas rester en plus du
+# lot annoncé). Candidats 3, 4, 6 : objet créé par l'injection, supprimé.
+_s04_defaire_candidat() {
+  case "$1" in
+    1) _s04_c1_defaire ;;
+    2) _s04_c2_defaire ;;
+    3) wb_kubectl -n "$_S04_NS_EXC" delete policyexceptions.policies.kyverno.io "$_S04_POLEX" --ignore-not-found >/dev/null; _s04_oublier c3 ;;
+    4) wb_kubectl -n "$_S04_NS" delete configmap "$_S04_CM" --ignore-not-found >/dev/null; _s04_oublier c4 ;;
+    5) _s04_c5_defaire ;;
+    6) wb_kubectl delete clusterrolebinding "$_S04_CRB" --ignore-not-found >/dev/null
+       wb_kubectl -n "$_S04_NS" delete serviceaccount "$_S04_SA" --ignore-not-found >/dev/null; _s04_oublier c6 ;;
+    7) # posé mais pas encore actif : on l'expire quand même (DELETE expire aussi un silence en attente)
+       local id
+       id="$(_s04_lire c7)"
+       [[ -z "$id" ]] || curl -sf --max-time 10 -X DELETE "$_S04_AM/api/v2/silence/$id" >/dev/null || wb_avert "silence $id à expirer"
+       _s04_oublier c7 ;;
+  esac
+}
 
 _s04_ordre() {
   if [[ -n "${WB_F6_S04_ECARTS:-}" ]]; then
@@ -379,7 +400,12 @@ panne_S04_v1() {
     "_s04_c$c" || rc=$?
     case "$rc" in
       0)
-        if _s04_effectif "$c"; then lot+=("$c"); else wb_avert "candidat $c posé mais non constaté : écarté"; fi
+        if _s04_effectif "$c"; then
+          lot+=("$c")
+        else
+          wb_avert "candidat $c posé mais non constaté : défait et écarté"
+          _s04_defaire_candidat "$c" || wb_avert "candidat $c : retrait à vérifier"
+        fi
         ;;
       10) ;;
       *)

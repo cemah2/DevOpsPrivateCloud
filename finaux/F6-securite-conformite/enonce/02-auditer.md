@@ -22,7 +22,7 @@ Prérequis de la phase : phase 1 terminée (SoA, `ms-preuves` en service, revue 
 **Durée indicative** : 3 h de recherche, plus la formalisation (1 h).
 
 **Contexte technique**
-- Le lab doit être sain avant l'injection : API de `k8s-par1` joignable, espaces `mediagenda-recette` et `kyverno-exceptions` présents, aucune injection précédente de ce scénario. L'injection ne touche ni la production, ni les données.
+- Le lab doit être sain avant l'injection : API de `k8s-par1` joignable, espaces `mediagenda-recette` et `kyverno-exceptions` présents, aucune injection précédente de ce scénario. L'injection ne modifie ni les applications de production, ni les données ; elle peut en revanche réduire ce que tu vois (c'est le principe d'une dérive), et chaque écart reste réversible.
 - Injection : `lab/bin/break F6 4` (depuis `adm01`). Elle pose **un lot d'écarts** tirés au hasard (le message d'Hélène en donne le **nombre**) ; `WB_F6_S04_NB` (3 à 7, défaut 4) règle leur nombre. Abandon : `lab/bin/break F6 4 --annuler` (ne défait que ce qui est encore dans l'état injecté).
 - Les écarts sont des **dérives récentes**, postérieures à ta revue des accès (S03) et aux premiers lots de preuves (S02).
 - Formalisation : une fiche `docs/conformite/ecarts/ECA-3611[-<sujet>].md`, `ECA-3612…`… par écart trouvé (en-tête YAML et sections : [`00-introduction.md`](00-introduction.md)).
