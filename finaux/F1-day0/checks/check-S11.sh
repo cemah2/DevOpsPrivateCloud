@@ -127,12 +127,14 @@ for _f1_s11_e in prod recette; do
 done
 
 # Contre-vérification par l'API publique de production (sans conserver aucune donnée : seul le
-# nombre d'éléments est lu), si la base a moins de 1000 rendez-vous (limite de la liste).
+# nombre d'éléments est lu), si la base a moins de 1000 rendez-vous (limite de la liste). Après la
+# réouverture, des rendez-vous se créent (et S14 rejoue ce check des jours plus tard) : on exige
+# « au moins autant qu'au gel », pas l'égalité.
 _f1_s11_api="$(curl -sf --max-time 10 "$_f1c_prod_url/api/v1/rendez-vous?limite=1000" 2>/dev/null | jq 'length' 2>/dev/null || true)"
 _f1_s11_doc_prod="$(grep -Ei 'rendez-vous.*\(prod\)|rendez-vous.*\bprod\b' <<<"$_f1_s11_doc" | head -n 1 | tr -d '  ' | grep -oE '[0-9]+' | sed -n 2p || true)"
 if [[ "$_f1_s11_api" =~ ^[0-9]+$ ]] && ((_f1_s11_api < 1000)); then
-  check_cmd "production : l'API compte $_f1_s11_api rendez-vous, comme donnees-apres.md (${_f1_s11_doc_prod:-?})" \
-    test "$_f1_s11_api" = "${_f1_s11_doc_prod:-x}"
+  check_cmd "production : l'API compte $_f1_s11_api rendez-vous, au moins autant que donnees-apres.md (${_f1_s11_doc_prod:-?})" \
+    bash -c '[[ "$2" =~ ^[0-9]+$ ]] && (( $1 >= $2 ))' _ "$_f1_s11_api" "${_f1_s11_doc_prod:-x}"
 else
   skip "comptage par l'API de production" "API injoignable ou 1000 rendez-vous et plus (limite de la liste)"
 fi

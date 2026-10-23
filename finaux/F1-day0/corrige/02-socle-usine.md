@@ -17,13 +17,13 @@ Fiche : [`CHG-3105-lb02-dns02.md`](fichiers/S05/medisphere/docs/day0/changements
 ```
 admin@adm01:~$ ssh lb01 'ip -4 -o addr show | grep 10.10.70.200'          # lb01 maître
 admin@adm01:~$ curl -fsS -o /dev/null -w '%{http_code}\n' https://sso.par1.medisphere.internal/realms/medisphere/.well-known/openid-configuration
-admin@adm01:~$ ssh ipa01 'kinit <MOI> && ipa host-disable lb02.par1.medisphere.internal'
+admin@adm01:~$ ssh -t ipa01 'kinit <MOI> && ipa host-disable lb02.par1.medisphere.internal'
 ```
 
 `ipa host-disable` révoque le *keytab* et les certificats de l'hôte, mais garde l'entrée, ses groupes d'hôtes et les règles HBAC qui la citent. C'est le geste qui permet la réinscription par le rôle, une fois celui-ci étendu (extrait : [`freeipa_client/tasks/main.yml.extrait`](fichiers/S05/ansible/roles/freeipa_client/tasks/main.yml.extrait)). `ipa host-del` marche aussi, mais il faut alors que le code de l'annuaire (`plateforme/identite/annuaire/`) déclare les appartenances de l'hôte, sinon elles sont perdues.
 
 *2. Destruction et création par le code : deux MR.* Extrait : [`repartiteurs.tf.extrait`](fichiers/S05/infra/socle/repartiteurs.tf.extrait).
-- MR 1 (branche protégée `conf/f1-s05-lb02-retrait`) : l'entrée `lb02` sort de `local.repartiteurs`. Le plan détruit la VM 1011, sa VM NetBox, son adresse, ses enregistrements DNS, et **rien d'autre**. La règle `destruction.rego` refuse le plan tant que l'étiquette de MR `destruction-autorisee` n'est pas posée : Karim (ou toi, Maintainer) la pose **après** avoir lu le plan. Apply manuel.
+- MR 1 (branche protégée `conf/f1-s05-lb02-retrait`) : l'entrée `lb02` sort de `local.repartiteurs`. Le plan détruit la VM 1011, sa VM NetBox, son adresse, ses enregistrements DNS, et **rien d'autre**. La règle `destruction.rego` refuse le plan tant que l'étiquette de MR `destruction-autorisee` n'est pas posée : Karim (ou toi, Maintainer) la pose **après** avoir lu le plan, puis relance le pipeline de la MR. Après la fusion, le pipeline de `main` déclenché par la poussée n'a **pas** d'étiquettes de MR : son plan est refusé, c'est voulu (M29-E10). Un Maintainer lance alors *Build → Pipelines → Run pipeline* sur `main` avec la variable `ETIQUETTES_MR=destruction-autorisee`, relit le plan de ce pipeline, puis lance l'apply manuel.
 - MR 2 : l'entrée revient. Le plan crée la VM (nouvelle instance cloud-init, donc nouvelles clés d'hôte SSH), l'adresse imposée 10.10.70.11, A et PTR. Apply.
 
 *3. Gestes listés* : `qm set 1011 --startup order=3` en root ; `ssh-keygen -R lb02 ; ssh-keygen -R lb02.par1.medisphere.internal ; ssh-keygen -R 10.10.70.11` sur `adm01` et `runner01` (si leur `known_hosts` contient des entrées nominatives en plus de la ligne `@cert-authority`).
@@ -98,7 +98,7 @@ root@pve01:~# pveum acl modify /vms/3101 --roles WBProvision --users wb-provisio
 root@pve01:~# pveum acl modify /vms/2146 --roles WBProvision --users wb-provision@pve --tokens 'wb-provision@pve!provision'
 ```
 
-Le jeton est à séparation des privilèges (M11) : sans ACL propre au jeton, il n'a aucun droit. Après l'essai : `pveum acl delete /vms/3101 --roles WBProvision --users wb-provision@pve --tokens 'wb-provision@pve!provision'`. Registre des secrets mis à jour (portée du jeton).
+Le jeton `provision` a été créé **sans** séparation des privilèges au M11 (`--privsep 0`) : il a exactement les droits du compte `wb-provision@pve`, et c'est l'ACL de l'**utilisateur** qui compte (la mention `--tokens` est sans effet tant que `privsep` vaut 0 ; elle devient nécessaire si tu passes le jeton en `--privsep 1`, ce qui serait plus sûr). Vérifie : `pveum user token list wb-provision@pve --output-format json`. Après l'essai : `pveum acl delete /vms/3101 --roles WBProvision --users wb-provision@pve --tokens 'wb-provision@pve!provision'`. Registre des secrets mis à jour (portée du jeton).
 
 *4. L'essai.* `plateforme/politiques` : plage de `envs/f1` ([`plages-vmid.yaml.extrait`](fichiers/S06/politiques/rego/donnees/plages-vmid.yaml.extrait)). `plateforme/infra` : nouvel état [`envs/f1/`](fichiers/S06/infra/envs/f1/) (`essai.tf`, `avec_essai = true` dans la MR). Le plan crée la VM 3101 (éteinte, vide, `vprov`, démarrage réseau), sa VM NetBox `planned` de plate-forme `k8s-noeud`, l'interface `ens18` avec sa MAC, 10.10.60.191 (service = provisioning) et le nom DNS. Puis :
 - le pipeline de `plateforme/provisioning` (job `deployer` sur `main`) rend la réservation Kea (fichier de variables à reporter dans `plateforme/ansible`, `kea_reservations_prov.yml`, comme au M11) et le script iPXE ;
@@ -130,7 +130,7 @@ Vérifications sur la machine (avec la clé confirmée) : voir `usine-k8s.md` §
 - Un preseed qui garde la recette `atomic` : un swap apparaît, le rôle le neutralise, mais le disque garde une partition inutile et le profil ne fait pas ce qu'il dit.
 - Configurer le réseau de service en `ifupdown` (`/etc/network/interfaces`) : les rôles des modules supposent netplan et `eth0` ; `k8s_reseau_stockage` écrit un fichier netplan pour `eth1`.
 - Oublier `--unique`… ici, l'inverse : recréer la VM d'essai avec une MAC aléatoire casse la réservation et le script iPXE.
-- Une ACL donnée à l'utilisateur `wb-provision@pve` seulement : le jeton à séparation des privilèges n'hérite de rien.
+- Une ACL donnée au **jeton** seulement : avec `--privsep 0` (M11), ce sont les droits de l'utilisateur qui s'appliquent, et l'orchestrateur reçoit un 403 sur la VM. À l'inverse, si le jeton est passé en `--privsep 1`, il faut les deux ACL (droits effectifs = intersection).
 - Activer `noeuds_usine` sur un nœud **existant** : création et destruction de ressources différentes avec le même VMID et la même adresse (VM 2146 « already exists », adresse en double dans NetBox) ; en phase 3, la VM a déjà été détruite.
 - Oublier la plage de `envs/f1` dans `plateforme/politiques` : le plan est refusé (comportement voulu) ; la contourner par une exception générale serait la vraie faute.
 - Laisser la VM d'essai, ou sa réservation Kea, après l'essai.

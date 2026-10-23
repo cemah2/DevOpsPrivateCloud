@@ -11,16 +11,27 @@
 # ⚠️ Comportement de « ipahost » (random + update_password: always sur une entrée existante) à
 # vérifier sur ta version de freeipa.ansible_freeipa (1.17.0 au M24) : lis le retour du module.
 
+# « ipa » exige un ticket Kerberos : on l'obtient avec le même mot de passe que le module ipahost
+# (lu sur l'entrée standard, jamais en argument), dans un cache PRIVÉ détruit à la fin.
+# Code 0 : entrée trouvée ; 2 : hôte inconnu ; autre (kinit refusé…) : traité comme « inconnu », ce
+# qui laisse ipahost refuser plus bas une entrée qui aurait encore un keytab (assert du M24-E19).
 - name: L'hôte est-il déjà connu de l'annuaire, et avec un keytab ?
-  ansible.builtin.command:
-    argv: [ipa, host-show, "{{ ansible_facts['fqdn'] }}"]
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      export KRB5CCNAME="FILE:/run/ansible-krb5cc-$$"
+      trap 'kdestroy -q 2>/dev/null; rm -f "/run/ansible-krb5cc-$$"' EXIT
+      kinit admin >/dev/null
+      ipa host-show "{{ ansible_facts['fqdn'] }}"
+    executable: /bin/bash
+    stdin: "{{ freeipa_client_admin_mot_de_passe }}"
   delegate_to: "{{ freeipa_client_hote_serveur }}"
   become: true
   register: _freeipa_client_entree
   changed_when: false
   failed_when: false
-  # « ipa » exige un ticket Kerberos d'administrateur sur ipa01 : le rôle freeipa_serveur en pose un
-  # pour le compte de service d'Ansible (M24) ; sinon, remplace par le module ipahost en lecture.
+  check_mode: false
+  no_log: true   # le module rejouerait stdin dans le journal en cas d'erreur
 
 - name: Refuser une entrée qui a encore un keytab (ancienne inscription active)
   ansible.builtin.assert:

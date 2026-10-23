@@ -57,7 +57,7 @@ La carte est revue à chaque nouvelle brique (critère de fin de projet), testé
 admin@adm01:~/src/infra$ . outils/charger-acces.sh
 admin@adm01:~/src/infra$ outils/derive.sh -r ~/f1/s02/rapports socle envs/k8s envs/ceph envs/provisioning registre; echo "code $?"
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/site.yml --check --diff | tee ~/f1/s02/ansible.txt
-admin@adm01:~/src/k8s$ helmfile diff --detailed-exitcode --suppress-secrets --context 3 --diff-args "--three-way-merge"; echo "code $?"
+admin@adm01:~/src/k8s$ helmfile -e par1 diff --detailed-exitcode --suppress-secrets --context 3 --diff-args "--three-way-merge"; echo "code $?"
 admin@adm01:~$ kubectl -n argocd get applications.argoproj.io -o custom-columns=NOM:.metadata.name,SYNC:.status.sync.status,SANTE:.status.health.status | grep -v 'Synced *Healthy'
 admin@adm01:~/src/identite$ tofu -chdir=tofu plan -detailed-exitcode -lock-timeout=10m; echo "code $?"
 admin@adm01:~/src/identite$ uv run ansible-playbook annuaire/annuaire.yml --check --diff
@@ -68,7 +68,7 @@ admin@adm01:~/src/ansible$ uv run ansible-inventory -i inventories/lab/proxmox.y
 
 (Les noms des fichiers d'inventaire et de `site.yml` sont ceux des corrigés du M04 et du M06 : garde les tiens.) Pour `identite` et `secrets`, depuis `adm01`, les accès s'obtiennent comme aux M24 et M25 (bris de glace documenté, ou jeton personnel) ; le reste se fait par la CI.
 
-⚠️ `--diff-args` de `helmfile diff` et le comportement de `--three-way-merge` avec Helm 4 en *server-side apply* : à vérifier sur ta version (`helmfile diff --help`, notes du M17). Le principe ne change pas : sans comparaison à l'état réel, une modification faite par `kubectl` sur un champ que le chart fixe reste invisible.
+⚠️ `--diff-args` de `helmfile diff` et le comportement de `--three-way-merge` avec Helm 4 en *server-side apply* : à vérifier sur ta version (`helmfile diff --help`, notes du M17). helm-diff 3.15 documente `--three-way-merge` (ou `HELM_DIFF_THREE_WAY_MERGE=true` dans l'environnement du job) et `--three-way-merge-mode` (`auto`, `server`, `client`) ; le mode `server` est le plus fidèle mais demande le droit `patch` (dry-run côté serveur). Le principe ne change pas : sans comparaison à l'état réel, une modification faite par `kubectl` sur un champ que le chart fixe reste invisible.
 
 *2. Décisions.* Une ligne par écart dans le compte rendu (modèle : [`derive-AAAA-MM-JJ.md`](fichiers/S02/medisphere/docs/day0/derive-AAAA-MM-JJ.md)). Règle de décision : **corrigé** quand l'écart est un accident ou un essai oublié ; **codifié** quand la réalité est meilleure que le code et que quelqu'un l'assume par écrit (raison, date). Dans le doute, corrigé : c'est le code qui est relu.
 
@@ -113,7 +113,7 @@ Détection nocturne sur chaque couche, ticket `derive` unique alimenté par tous
 admin@adm01:~/src/infra$ outils/derive.sh -r ~/f1/s03 socle; echo "code $?"; cat ~/f1/s03/derive.md
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/repartiteurs.yml --check --diff --limit lb02
 admin@adm01:~/src/ansible$ uv run ansible-playbook playbooks/site.yml --check --diff --limit 'lb02,dns02'
-admin@adm01:~/src/k8s$ helmfile diff --detailed-exitcode --context 3 --diff-args "--three-way-merge"
+admin@adm01:~/src/k8s$ helmfile -e par1 diff --detailed-exitcode --context 3 --diff-args "--three-way-merge"
 root@pve01:~# qm config 1011
 ```
 
@@ -134,7 +134,7 @@ Le piège de la troisième couche : un `helmfile diff` sans comparaison à l'ét
 *Correctif.* Par le code, couche par couche :
 - Proxmox : `apply` de l'état `socle` par le pipeline (le plan ramène `on_boot`, `tags` ou `protection` à la valeur du code). Pour `protection`, l'apply remet `false` ; si tu décides de **codifier** la protection (elle a du sens pour une VM du socle), le module `vm-debian` n'a pas de variable pour elle : c'est une MR sur `plateforme/tofu-modules`, puis S05 devra la lever par le code avant de détruire.
 - Fichier : rejouer le playbook (pipeline de `plateforme/ansible`) sur la VM concernée. Si la valeur à la main était meilleure (un `timeout client` de 5 s ne l'est pas : il coupe les clients lents et les connexions inactives, interfaces web et téléchargements compris), on la codifie dans les variables du groupe.
-- Cluster : `helmfile apply -l composant=<cert-manager|external-dns>` par la voie habituelle (MR vide ou job de `plateforme/k8s`), puis `helmfile diff` vide.
+- Cluster : `helmfile -e par1 -l composant=<cert-manager|external-dns> apply --diff-args "--three-way-merge"` par la voie habituelle (job de `plateforme/k8s`), puis `helmfile diff` (avec comparaison à l'état réel) vide. Sans `--three-way-merge`, `apply` calcule un diff **vide** et saute la release : rien n'est corrigé (`helmfile -e par1 -l … sync` force la mise à niveau). Avec Helm 4 en *server-side apply*, le champ modifié par `kubectl set resources` appartient désormais au gestionnaire `kubectl-set` : la mise à niveau peut échouer sur un **conflit** de propriété ; Helm ne l'écrase qu'avec `--force-conflicts` (désactivé par défaut, HIP-0023), à passer explicitement et à tracer. ⚠️ À vérifier sur ta version.
 
 *Prévention.* Le diff planifié de Helmfile doit comparer à l'état réel (S02) ; les droits d'écriture des humains sur la couche de base passent par le bris de glace ; l'interface Proxmox en lecture seule pour le compte personnel hors astreinte ; un journal d'astreinte qui exige de reporter toute action manuelle dans un ticket.
 
@@ -145,7 +145,7 @@ Trois couches, trois façons d'être invisible : une option de VM se voit seulem
 **Pièges classiques**
 - S'arrêter à `lb02` parce que le ticket le cite.
 - « Réparer » à la main (`qm set --onboot 1`, `vi haproxy.cfg`, `kubectl edit`) : la dérive disparaît, mais rien ne prouve que le code et la réalité concordent ; et le geste se répétera.
-- Lancer `--annuler` au lieu de réparer : il remet l'état d'avant la panne, pas la compréhension.
+- Lancer `--annuler` au lieu de réparer : il remet l'état d'avant la panne, pas la compréhension. Et si tu as **codifié** une valeur injectée (la protection de `lb02`, par exemple), ne lance pas `--annuler` : il remet la valeur d'origine de tout élément resté dans l'état injecté, ce qui recréerait une dérive. Dans ce cas, le check de S03 attend aussi la nouvelle valeur : pose `WB_F1_LB02_ETIQUETTES` / `WB_F1_LB02_ONBOOT` en conséquence (la protection, elle, est toujours contrôlée absente : la codifier est un choix que le check signale en rouge, à justifier dans le compte rendu).
 - Oublier d'écrire l'incident dans le compte rendu : c'est la preuve que la détection a (ou n'a pas) fonctionné.
 
 **En production chez MédiSphère**
@@ -157,7 +157,7 @@ Toute modification hors du code est un incident de conformité (INC) avec post-m
 
 **Solution de référence**
 
-*1. Sauvegardes de la veille* (après 16 h, pour que les preuves aient moins de 24 h au go de 18 h le lendemain au pire) :
+*1. Sauvegardes de la veille* (dans l'après-midi qui précède le go de 18 h, pour que les preuves aient moins de 24 h au moment du go ; si le go glisse, on les refait) :
 
 ```
 root@pve01:~# vzdump 2141 2142 2143 2144 2145 2146 --storage <STOCKAGE-PBS-K8S> --mode snapshot
@@ -174,8 +174,8 @@ admin@adm01:~$ kubectl -n argocd create job --from=cronjob/argocd-export argocd-
 *2. Lisibilité.*
 
 ```
-root@pve01:~# qmrestore <STOCKAGE-PBS-K8S>:backup/vm/2141/<HORODATAGE> 5311 --storage local-nvme --unique 1
-root@pve01:~# qm set 5311 --name f1-resto-cp01 --pool lab --tags env-f1 --onboot 0 --net0 "$(qm config 5311 | sed -n 's/^net0: //p'),link_down=1"
+root@pve01:~# qmrestore <STOCKAGE-PBS-K8S>:backup/vm/2141/<HORODATAGE> 5311 --storage local-nvme --unique 1 --pool lab
+root@pve01:~# qm set 5311 --name f1-resto-cp01 --tags env-f1 --onboot 0 --net0 "$(qm config 5311 | sed -n 's/^net0: //p'),link_down=1"
 root@pve01:~# qm start 5311 && qm terminal 5311        # jusqu'à l'invite de connexion, puis Ctrl+O
 root@pve01:~# qm stop 5311 && qm destroy 5311 --purge
 ```

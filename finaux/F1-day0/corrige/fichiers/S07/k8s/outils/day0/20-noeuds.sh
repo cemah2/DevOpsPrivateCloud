@@ -16,10 +16,14 @@
 #         « uv run outils/provisionner.py k8s-w03 --apres-bascule » (clé d'hôte confirmée) ;
 #   3. clés d'hôte SSH : les anciennes empreintes sont retirées de ~/.ssh/known_hosts (geste noté) ;
 #      celle de k8s-w03, confirmée par l'agent QEMU, est reprise du cache de provisionner.py ;
-#   4. Ansible (plateforme/ansible) : inscription FreeIPA nœud par nœud, puis
-#      playbooks/k8s-reconstruction.yml (durcissement, fichiers de l'API, amorçage explicite, etcd) ;
-#   5. admin.conf du NOUVEAU cluster récupéré (600) pour la suite de la reconstruction ;
-#   6. compte wb-checks et son kubeconfig recréés (pour lab/bin/check).
+#   4. annuaire : les six hôtes DÉSACTIVÉS dans FreeIPA (ipa host-disable, procédure de F1-S05 : le
+#      rôle freeipa_client refuse une entrée qui a encore un keytab), geste humain noté ; puis
+#      inscription nœud par nœud ;
+#   5. Ansible : playbooks/k8s-reconstruction.yml (nœuds, fichiers de l'API, amorçage explicite, etcd) ;
+#   6. admin.conf du NOUVEAU cluster récupéré (600) pour la suite de la reconstruction ;
+#   7. durcissement (vague 6, nœuds seulement) avec KUBECONFIG = ce nouvel admin.conf (ses pré-tâches
+#      font « kubectl drain » : impossible avant l'amorçage), puis première analyse de conformité ;
+#   8. compte wb-checks et son kubeconfig recréés (pour lab/bin/check).
 #
 # Relance : les deux étapes OpenTofu (remplacement, retrait de k8s-w03) laissent une marque
 # (~/day0/20-noeuds.vms, ~/day0/20-noeuds.retrait-w03) et ne se rejouent pas ; le reste est relançable.
@@ -141,8 +145,21 @@ ssh_ok() {
   done
 }
 
-# inscrire_ipa — un nœud à la fois (garde-fou du playbook) ; l'hôte existe déjà dans l'annuaire avec
-#   la clé de l'ancienne VM : ton rôle freeipa_client doit forcer la ré-inscription (corrigé F1-S07).
+# desactiver_ipa — geste humain (décision tracée, F1-S05) : les entrées des six hôtes existent avec le
+#   keytab des VMs détruites ; « ipa host-disable » révoque keytab et certificats et garde l'entrée, ses
+#   groupes d'hôtes et ses règles HBAC. Fait APRÈS la destruction : avant, un no-go laisserait des
+#   nœuds en service sans keytab. Le rôle freeipa_client (extrait F1-S05) refusera tout hôte oublié.
+desactiver_ipa() {
+  local n liste=""
+  for n in "${NOEUDS[@]}"; do liste+=" $n"; done
+  echo "Désactive les six hôtes dans l'annuaire (ta session Kerberos, mot de passe + OTP), par exemple :"
+  echo "  ssh -t ipa01 'kinit <MOI> && for h in$liste; do ipa host-disable \$h.par1.medisphere.internal; done'"
+  echo "(« This entry is already disabled » sur une relance n'est pas une erreur.) Puis appuie sur Entrée."
+  read -r _
+}
+
+# inscrire_ipa — un nœud à la fois (garde-fou du playbook) ; entrées désactivées juste avant, le rôle
+#   freeipa_client (version F1-S05) génère un nouveau mot de passe à usage unique pour chacune.
 inscrire_ipa() {
   local n
   for n in "${NOEUDS[@]}"; do
@@ -162,6 +179,22 @@ recuperer_admin_conf() {
   KUBECONFIG="$ADMIN_CONF.tmp" kubectl config rename-context "$(KUBECONFIG="$ADMIN_CONF.tmp" kubectl config current-context)" "$DAY0_CONTEXTE" >/dev/null
   mv "$ADMIN_CONF.tmp" "$ADMIN_CONF"
   KUBECONFIG="$ADMIN_CONF" kubectl --context "$DAY0_CONTEXTE" get --raw /readyz >/dev/null
+}
+
+# durcir — vague 6 limitée aux nœuds, un nœud à la fois (serial du playbook). KUBECONFIG = nouvel
+#   admin.conf : les pré-tâches drainent le nœud, les post-tâches le remettent en service.
+durcir() {
+  (cd "$ANSIBLE" && KUBECONFIG="$ADMIN_CONF" uv run ansible-playbook playbooks/durcissement.yml \
+    -e vague=6 --limit k8s_par1)
+}
+
+# conformite — première analyse sur chaque nœud (la minuterie hebdomadaire n'a pas encore tourné) :
+#   publie le fichier du collecteur textfile que lit le DaemonSet node-exporter (S10).
+conformite() {
+  local n
+  for n in "${NOEUDS[@]}"; do
+    ssh "$n" 'sudo systemctl start conformite-analyse.service'
+  done
 }
 
 recreer_wb_checks() {
@@ -196,8 +229,15 @@ etape "$PHASE" "installation de k8s-w03 par l'usine (F1-S06)" installer_w03
 geste "$PHASE" "anciennes clés d'hôte SSH des six nœuds retirées de ~/.ssh/known_hosts"
 etape "$PHASE" "clés d'hôte" oublier_cles_hote
 etape "$PHASE" "nœuds joignables en SSH" attendre 900 "SSH des six nœuds" ssh_ok
+if ! fait ipa-desactive; then
+  geste "$PHASE" "six hôtes désactivés dans FreeIPA (ipa host-disable, décision humaine, procédure F1-S05)"
+  etape "$PHASE" "hôtes désactivés dans l'annuaire" desactiver_ipa
+  marquer ipa-desactive
+fi
 etape "$PHASE" "inscription FreeIPA, nœud par nœud" inscrire_ipa
 etape "$PHASE" "Ansible : playbooks/k8s-reconstruction.yml (amorçage compris)" ansible_reconstruction
 etape "$PHASE" "admin.conf du nouveau cluster" recuperer_admin_conf
+etape "$PHASE" "durcissement des nœuds (vague 6)" durcir
+etape "$PHASE" "première analyse de conformité" conformite
 etape "$PHASE" "compte wb-checks et kubeconfig des checks" recreer_wb_checks
 jalon "$PHASE" "nœuds reconstruits" "utilise DAY0_KUBECONFIG=$ADMIN_CONF pour 30-couche-base.sh"

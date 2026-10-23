@@ -14,8 +14,8 @@
 #     2. dns02 : source NTP publique ajoutée dans /etc/chrony/chrony.conf (chrony redémarré ;
 #        la passerelle reste une source, rien ne se désynchronise).
 #   couche 3 (objet du cluster géré par Helmfile, hors GitOps) — N % 2 + 1 :
-#     1. cert-manager : limite mémoire du Deployment cert-manager relevée (kubectl set resources) ;
-#     2. external-dns : limite mémoire du Deployment external-dns relevée.
+#     1. cert-manager : limite mémoire du Deployment cert-manager changée (kubectl set resources) ;
+#     2. external-dns : limite mémoire du Deployment external-dns changée.
 #   Aucune de ces ressources n'est réconciliée par Argo CD (couche de base sous Helmfile, M20) :
 #   rien ne corrige seul la dérive. Aucune interruption de service (lb02 est BACKUP, dns02 garde sa
 #   source de temps, les Deployments font un déploiement progressif).
@@ -184,8 +184,9 @@ _s03_couche2_verifier() {
   local h
   h="$(_s03_lire couche2-hote)"
   case "$(_s03_lire couche2)" in
-    1) remote "$h" "grep -Eq '^[[:space:]]*timeout[[:space:]]+client[[:space:]]+5s' /etc/haproxy/haproxy.cfg" </dev/null ;;
-    2) remote "$h" "grep -q '^pool 2.debian.pool.ntp.org' /etc/chrony/chrony.conf" </dev/null ;;
+    # haproxy.cfg est en 0640 root:haproxy (rôle haproxy, M07) : lecture par sudo, comme les checks.
+    1) remote "$h" "sudo -n grep -Eq '^[[:space:]]*timeout[[:space:]]+client[[:space:]]+5s' /etc/haproxy/haproxy.cfg" </dev/null ;;
+    2) remote "$h" "sudo -n grep -q '^pool 2.debian.pool.ntp.org' /etc/chrony/chrony.conf" </dev/null ;;
     *) return 1 ;;
   esac
 }

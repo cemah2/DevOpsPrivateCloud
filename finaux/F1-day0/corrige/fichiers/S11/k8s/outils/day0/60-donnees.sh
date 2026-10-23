@@ -54,7 +54,10 @@ prod_base_seule() {
 }
 
 # compte ESPACE — rendez-vous dans la base de l'espace.
-compte() { kcnpg psql mediagenda-db -n "$1" -- -d mediagenda -Atc 'SELECT count(*) FROM rendez_vous;'; }
+compte() { kpsql mediagenda-db -n "$1" -- -d mediagenda -Atc 'SELECT count(*) FROM rendez_vous;'; }
+# NB : la recette (synchronisation automatique) tourne déjà sur sa base récupérée ; ses tâches
+#   planifiées et tests de charge sont revenus avec Git. Un écart en RECETTE s'explique d'abord par
+#   leurs écritures depuis la récupération (horodatage des lignes) avant de conclure à une perte.
 comparer() {
   local env gel apres ko=0
   for env in prod recette; do
@@ -72,7 +75,7 @@ autorites_openbao() {
     k -n "mediagenda-$env" get secret mediagenda-db-ca -o jsonpath='{.data.ca\.crt}' | base64 -d \
       >"$ANSIBLE/files/openbao/postgresql/mediagenda-$env-ca.crt"
   done
-  (cd "$ANSIBLE" && git switch -c "day0/autorites-cnpg-$(date +%Y%m%d)" &&
+  (cd "$ANSIBLE" && git switch -C "day0/autorites-cnpg-$(date +%Y%m%d)" &&
     git add files/openbao/postgresql/ &&
     git commit -m "fix(openbao): autorités des bases CNPG reconstruites (PLAT-3111, CHG-3107)" &&
     git push -u origin HEAD)
@@ -83,8 +86,8 @@ autorites_openbao() {
     uv run ansible-playbook playbooks/coffre.yml --limit role_coffre)
 }
 
-# sauvegarder ESPACE CLUSTER — sauvegarde de base immédiate, attente « completed ». Options du greffon
-#   cnpg 1.30 (--method plugin, --plugin-name) : à vérifier par « kubectl cnpg backup --help ».
+# sauvegarder ESPACE CLUSTER — sauvegarde de base immédiate, attente « completed » (greffon cnpg 1.30 :
+#   --method plugin exige --plugin-name).
 sauvegarder() {
   local nom
   nom="$2-day0-$(date +%Y%m%d%H%M)"

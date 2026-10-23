@@ -142,7 +142,7 @@ Sans certificat de service des kubelets, la lecture des journaux des pods, l'ex�
 
 <details><summary>Indice 3</summary>
 
-Un ExternalSecret dont la cible est `creationPolicy: Owner` prend possession d'un Secret existant **qui n'a pas de propriétaire** (c'est ainsi qu'ESO a repris les Secrets de `secrets-k8s.sh` au M25-E13). L'amorçage peut donc créer des Secrets de mêmes nom et clés que ceux que les ExternalSecrets produiront : ils seront adoptés, et leur marque disparaîtra si le modèle ne la repose pas.
+Un ExternalSecret dont la cible est `creationPolicy: Owner` prend possession d'un Secret existant **qui n'a pas de propriétaire** (c'est ainsi qu'ESO a repris les Secrets de `secrets-k8s.sh` au M25-E13). L'amorçage peut donc créer des Secrets de mêmes nom et clés que ceux que les ExternalSecrets produiront : ils seront adoptés. ESO ne retire que les étiquettes qu'il gère lui-même : ta marque, elle, reste jusqu'à ce que tu l'enlèves, une fois l'adoption prouvée.
 </details>
 
 **Pour aller plus loin** (facultatif) : mesure séparément l'attente « images » (premier tirage par le cache Harbor) et l'attente « contrôleurs » (webhooks prêts) : la première se réduit par un préchargement, la seconde seulement par un meilleur ordre.
@@ -340,7 +340,7 @@ Chaque cluster CNPG génère sa propre autorité à sa création. Qui, hors du c
 - Prérequis sur `adm01` : `kubectl` avec un kubeconfig d'administration (`WB_K8S_ADMIN_KUBECONFIG`, par défaut `~/.kube/config` connecté), une session OpenBao portant `plateforme-admin` et valable au moins 20 minutes (`bao login -method=oidc`, ou `BAO_TOKEN`), le fichier `~/.config/workbook/powerdns-api.env` (M06-E14), `jq`, `yq`, `dig`, `openssl`.
 - Ne lis pas `corrige/pannes/`, ni `~/.local/state/workbook/F1-S12/`.
 - `lab/bin/break F1 12 --annuler` remet l'état sain (filet, pas correctif). Quand tu as réparé, lance-le aussi pour **clore** la panne : il ne défait jamais ta réparation.
-- La panne n'agit que sur : la configuration de la méthode `k8s-par1` d'OpenBao, des enregistrements de la zone `apps.par1.medisphere.internal`, un objet d'admission du cluster et un pod de `mediagenda-recette`. Elle n'écrit rien dans la production, ne touche ni `kms01` ni aucune donnée. Mais une plateforme est un tout : si tu n'as pas de piste au bout d'**une heure**, lance `--annuler` (des secrets de production pourraient ne plus se renouveler) et reprends le diagnostic à froid avec une nouvelle injection.
+- La panne n'agit que sur : la configuration de la méthode `k8s-par1` d'OpenBao, des enregistrements de la zone `apps.par1.medisphere.internal`, un objet d'admission du cluster et un pod de `mediagenda-recette`. Elle n'écrit rien dans la production, ne touche ni `kms01` ni aucune donnée. Mais une plateforme est un tout : si tu n'as pas de piste au bout de **30 minutes**, lance `--annuler` (des secrets de production pourraient ne plus se renouveler) et reprends le diagnostic à froid avec une nouvelle injection.
 
 **Travail demandé**
 1. Ouvre un journal de diagnostic `docs/day0/journal/AAAA-MM-JJ-INC-5712.md` : heure, hypothèse, commande, résultat, conclusion.

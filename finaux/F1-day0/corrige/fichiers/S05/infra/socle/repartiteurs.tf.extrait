@@ -5,6 +5,8 @@
 # posée par un Maintainer APRÈS lecture du plan (règle destruction.rego de plateforme/politiques, M29) :
 #   le plan détruit module.repartiteur["lb02"] (VM 1011, VM NetBox, interface, adresse 10.10.70.11) et
 #   module.dns_repartiteur["lb02"] (A et PTR). Rien d'autre : ni lb01, ni la VIP, ni son nom.
+#   Après la fusion, le pipeline de main (poussée) n'a pas d'étiquettes de MR : son plan est refusé.
+#   Un Maintainer lance « Run pipeline » sur main avec ETIQUETTES_MR=destruction-autorisee (M29-E10).
 #   Si le job de plan porte encore le contrôle jq de M05-E46 (destruction d'un VMID 1000-1099 = échec),
 #   il refuse aussi : c'est voulu. Soit tu l'as remplacé au M29 par la règle conftest (vérifie), soit tu
 #   ajoutes au job la même dérogation par étiquette de MR — dans une MR séparée et relue, AVANT.

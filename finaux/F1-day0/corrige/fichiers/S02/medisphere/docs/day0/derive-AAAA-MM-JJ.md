@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | VMs (`socle`, `envs/k8s`, `envs/ceph`, `envs/provisioning`, `registre`, environnements vides) | `outils/derive.sh` : plan `-refresh-only` (dérive) puis plan ordinaire (écart de code) | pipeline planifié `PLANIF=derive` de `plateforme/infra`, jobs `derive:*` | artefacts `rapports/derive-*/derive.md`, ticket `derive` | oui (02 h 17), étendu aux nouveaux états |
 | Configuration des VMs | `ansible-playbook site.yml --check --diff` | pipeline planifié `PLANIF=derive` de `plateforme/ansible`, job `derive` | journal du job, rapport JUnit | oui (M04) |
-| Couche de base du cluster | `helmfile diff --detailed-exitcode --suppress-secrets --context 3` **avec** `--diff-args "--three-way-merge"` | pipeline planifié de `plateforme/k8s` (M17, palier 3) | journal du job | oui, option ajoutée |
+| Couche de base du cluster | `helmfile -e par1 diff --detailed-exitcode --suppress-secrets --context 3` **avec** `--diff-args "--three-way-merge"` | pipeline planifié de `plateforme/k8s` (M17, palier 3) | journal du job | oui, option ajoutée |
 | Plateforme et applications | état des Applications d'Argo CD (`argocd app list`, interface) | Argo CD en continu | interface, notifications Mailpit | continu |
 | Identité | plan de l'état `identite` ; `annuaire.yml --check --diff` | pipeline planifié `PLANIF=derive` de `plateforme/identite` (**nouveau**) | jobs `tofu:plan`, `derive:identite`, `annuaire:verifier` | oui (02 h 41) |
 | Coffre | plan de l'état `secrets` | pipeline planifié de `plateforme/secrets` (**nouveau**) | jobs `tofu:plan`, `derive:secrets` | oui (02 h 47) |
@@ -23,7 +23,7 @@
 |---|---|---|---|---|---|---|
 | 1 | VMs (`envs/k8s`) | `module.noeud["k8s-w02"].proxmox_virtual_environment_vm.vm` | `memory.dedicated` | redimensionnement à la main pendant l'incident du M28 | **corrigé** (retour à 10240 par apply, nœud drainé) | infra!<N> |
 | 2 | Configuration | `lb01` : `/etc/haproxy/haproxy.cfg` | `timeout server` | essai de l'astreinte non reporté | **codifié** (`haproxy_timeout_server` dans `group_vars/role_lb`, raison écrite) | ansible!<N> |
-| 3 | Couche de base | release `velero` | `schedules.quotidien.template.ttl` | `helm upgrade --reuse-values` lancé à la main | **corrigé** (`helmfile apply -l composant=velero`) | — (aucun code changé) |
+| 3 | Couche de base | release `velero` | `schedules.quotidien.template.ttl` | `helm upgrade --reuse-values` lancé à la main | **corrigé** (`helmfile -e par1 -l composant=velero apply --diff-args "--three-way-merge"`) | — (aucun code changé) |
 | 4 | Identité | `keycloak_openid_client.grafana` | `web_origins` | ajout dans la console d'administration | **codifié** | identite!<N> |
 | 5 | Inventaire | VM `m27-essai` (NetBox) | présente dans NetBox, absente de Proxmox | reste du M27 | **corrigé** (objet retiré par le code qui l'avait créé) | infra!<N> |
 

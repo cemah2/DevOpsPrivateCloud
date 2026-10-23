@@ -27,7 +27,7 @@ if [[ -n "$_f1_s01_chemin" ]]; then
     _f1p_contient "$_f1_s01_texte" 'GitLab' 'Harbor' 'Ansible Vault|vault-pass' 'ESO|External Secrets' 'k8s-par1'
   check_cmd "une section sur les secrets hors du code" _f1p_contient "$_f1_s01_texte" 'hors (du )?code|hors (de )?Git|hors ligne'
   check_cmd "les secrets d'amorçage sont recensés (parts Shamir de kms01, racine hors ligne, mots de passe des Vault Ansible, clés age, bris de glace, admin.conf)" \
-    _f1p_contient "$_f1_s01_texte" 'Shamir' 'kms01' 'racine' 'Ansible Vault|vault-pass|ansible-vault' '(^|[^a-z])age([^a-z]|$)' 'RB-240|bris de glace' 'admin\.conf'
+    _f1p_contient "$_f1_s01_texte" 'Shamir' 'kms01' 'racine' 'Ansible Vault|vault-pass|ansible-vault' 'clés? (`)?age([^a-z]|$)|`age`|age-keygen|\.age([^a-z]|$)' 'RB-240|bris de glace' 'admin\.conf'
   check_cmd "des durées estimées (minutes ou heures) par étape" \
     _f1p_contient "$_f1_s01_texte" '[0-9]+ ?(min|h|heures?|minutes?)([^a-z]|$)'
   check_cmd "aucun secret apparent dans la carte (clé privée, jeton glpat-, AGE-SECRET-KEY)" \

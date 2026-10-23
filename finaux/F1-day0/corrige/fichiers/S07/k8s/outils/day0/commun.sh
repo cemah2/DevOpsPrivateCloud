@@ -28,6 +28,10 @@ k() { kubectl --context "$DAY0_CONTEXTE" "$@"; }
 # kcnpg SOUS-COMMANDE ARGS… — greffon CloudNativePG. Un greffon kubectl n'accepte AUCUNE option avant
 # son nom (« flags cannot be placed before plugin name ») : le contexte vient après la sous-commande.
 kcnpg() { kubectl cnpg "$1" --context "$DAY0_CONTEXTE" "${@:2}"; }
+# kpsql CLUSTER -n ESPACE -- ARGS_PSQL… — requête NON interactive : le greffon alloue par défaut un TTY
+# et passe l'entrée standard (« kubectl exec -t -i ») ; lancé depuis un terminal, la sortie capturée
+# porterait des fins de ligne CRLF et psql lirait l'entrée du script.
+kpsql() { kcnpg psql --tty=false --stdin=false "$@"; }
 
 # jalon PHASE ÉTAPE ÉVÉNEMENT [DURÉE] — une ligne du journal de la fenêtre (et à l'écran).
 jalon() {

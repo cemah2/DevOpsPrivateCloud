@@ -39,11 +39,15 @@ sauvegarde de base des trois bases **après** le gel.
    (procédure de F1-S06, `usine-k8s.md` §6). Repli si l'usine est indisponible :
    `DAY0_W03_SANS_USINE=oui` (six clones remplacés, `noeuds_usine` vide, écart noté).
 3. Anciennes clés d'hôte retirées de `~/.ssh/known_hosts` ; SSH des six nœuds.
-4. `inscription-ipa.yml --limit <nœud>` un par un (ré-inscription forcée : l'hôte existe dans l'annuaire).
+4. Annuaire : `ipa host-disable <fqdn>` des six hôtes sur `ipa01` (geste humain, après la destruction),
+   puis `inscription-ipa.yml --limit <nœud>` un par un (le rôle refuse une entrée qui a encore un keytab).
 5. `k8s-reconstruction.yml --limit k8s_par1 -e k8s_plan_controle_amorcage_auto=true` : nœuds,
-   durcissement (vague 6), fichiers de l'API (audit, chiffrement, OIDC), VIP, `kubeadm init` sur
-   `k8s-cp01`, jonctions, instantanés etcd.
-6. `admin.conf` du nouveau cluster (`~/.kube/admin-k8s-par1.conf`, 600) ; `wb-checks` recréé.
+   fichiers de l'API (audit, chiffrement, OIDC), VIP, `kubeadm init` sur `k8s-cp01`, jonctions,
+   instantanés etcd.
+6. `admin.conf` du nouveau cluster (`~/.kube/admin-k8s-par1.conf`, 600).
+7. Durcissement **après** l'amorçage : `KUBECONFIG=~/.kube/admin-k8s-par1.conf … durcissement.yml
+   -e vague=6 --limit k8s_par1` (ses pré-tâches drainent chaque nœud : il faut l'API) ; première
+   analyse de conformité (`systemctl start conformite-analyse.service`) ; `wb-checks` recréé.
 
 **Points de contrôle** : `curl -k https://10.10.40.200:8443/livez` → `ok` ; un seul nœud porte
 10.10.40.200 ; `kubectl get nodes` : six nœuds `NotReady` (pas de CNI), version 1.36 ;
@@ -98,8 +102,8 @@ v1beta1.metrics.k8s.io` `True` ; `lab/bin/check F1 8`.
 7. Messagerie : topologie identique au gel, export des définitions.
 8. Synchronisation complète de la production = **réouverture**, annoncée par Nadia.
 
-**Points de contrôle** : `kubectl cnpg status` de chaque base (`Continuous Backup status` OK,
-`serverName` nouveau) ; `lab/bin/check F1 11`.
+**Points de contrôle** : chaque base `Cluster in healthy state`, condition `ContinuousArchiving` à
+`True`, `serverName` nouveau dans `.spec.plugins` ; `lab/bin/check F1 11`.
 
 ## 7. Après
 
@@ -116,6 +120,10 @@ v1beta1.metrics.k8s.io` `True` ; `lab/bin/check F1 8`.
   de réplicas), l'API, le portail et les CronJobs ; vérifier `/pret` ; fermer la fenêtre.
 - **Après** : `docs/day0/retour-arriere.md` : arrêt des VMs neuves, restauration PBS des six VMs
   (`par1/k8s`, sauvegardes du filet), démarrage nœuds de contrôle d'abord (un par un, quorum etcd),
-  puis travailleurs ; `admin.conf` d'avant (Vault `critique`, ancienne version) ; vérifications de
-  `retour-arriere.md`. ⚠️ Les bases restaurées par PBS sont celles **du filet** ; les écritures
-  postérieures (aucune si le gel a tenu) seraient perdues.
+  puis travailleurs ; `admin.conf` d'avant (Vault `critique`, ancienne version) ; si les hôtes ont
+  déjà été désactivés dans l'annuaire (§2.4), réinscription des six VMs restaurées
+  (`inscription-ipa.yml`, nœud par nœud) ; vérifications de `retour-arriere.md`. ⚠️ PBS ramène les
+  disques des nœuds, donc etcd **à l'état du filet** ; les volumes des bases sont les images RBD de
+  `ceph-par1`, jamais effacées : elles reviennent dans leur état de la destruction (gel tenu : aucune
+  écriture perdue). Les objets créés dans etcd après le filet (sauvegardes du gel, par exemple) n'y
+  sont plus, leurs données restent dans `s3-01`.

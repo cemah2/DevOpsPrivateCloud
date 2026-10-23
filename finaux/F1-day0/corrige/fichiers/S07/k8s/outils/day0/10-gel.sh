@@ -84,7 +84,7 @@ compter() {
   {
     printf 'gel du\t%s\n' "$(date -Is)"
     for ns in mediagenda-prod mediagenda-recette; do
-      n="$(kcnpg psql mediagenda-db -n "$ns" -- -d mediagenda -Atc 'SELECT count(*) FROM rendez_vous;')"
+      n="$(kpsql mediagenda-db -n "$ns" -- -d mediagenda -Atc 'SELECT count(*) FROM rendez_vous;')"
       printf 'rendez-vous (%s)\t%s\n' "${ns#mediagenda-}" "$n"
     done
     printf 'messages en file (medinotif-recette, medinotif-prod)\t%s, %s\n' \
@@ -102,7 +102,7 @@ sauvegarde_apres_gel() {
   local ns="${1%/*}" c="${1#*/}" base nom
   base=postgres
   [[ "$c" == portail-db ]] && base=portail
-  kcnpg psql "$c" -n "$ns" -- -d "$base" -Atc 'SELECT pg_switch_wal();' >/dev/null
+  kpsql "$c" -n "$ns" -- -d "$base" -Atc 'SELECT pg_switch_wal();' >/dev/null
   nom="$c-gel-$(date +%Y%m%d%H%M)"
   k apply -f - <<EOF
 apiVersion: postgresql.cnpg.io/v1

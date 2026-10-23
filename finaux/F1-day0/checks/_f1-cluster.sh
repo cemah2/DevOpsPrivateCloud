@@ -268,9 +268,12 @@ _f1c_hote_sortie() { remote "$1" "sudo -n bash -c $(printf '%q' "$2")" </dev/nul
 # _f1c_pve 'commande' — commande de lecture sur pve01 (root) ; sortie.
 _f1c_pve() { remote "$WB_PVE_HOST" "$1" </dev/null 2>/dev/null || true; }
 
-# _f1c_vm_ctime VMID — date de création de la VM (meta ctime de Proxmox), vide si inconnue.
-_f1c_vm_ctime() {
-  _f1c_pve "qm config $1" | sed -n 's/^meta: .*ctime=\([0-9][0-9]*\).*/\1/p' | head -n 1
+# _f1c_vm_destruction VMID — date (époque) de la DERNIÈRE destruction réussie de ce VMID (tâche
+# Proxmox « qmdestroy », dont l'identifiant est le VMID), vide si aucune. On ne lit pas « meta ctime » :
+# un clone (qm clone, fournisseur bpg) recopie la ligne meta du gabarit, donc la date du gabarit.
+_f1c_vm_destruction() {
+  _f1c_pve "pvesh get /nodes/\$(hostname -s)/tasks --vmid $1 --typefilter qmdestroy --source all --limit 200 --output-format json" \
+    | jq -r '[.[]? | select(.status == "OK") | .starttime] | max // empty' 2>/dev/null || true
 }
 
 # _f1c_pbs_dates VMID… — « VMID époque » pour CHAQUE instantané complet de ces VMs dans l'espace de
@@ -289,8 +292,8 @@ done'
   remote "$WB_PBS_HOST" "bash -c $(printf '%q' "$script") _ $(printf '%q ' "$ds" "$nsdir" "$@")" </dev/null 2>/dev/null || true
 }
 
-# _f1c_pbs_avant DATES VMID CTIME — un instantané de cette VM existe dans les 30 jours qui précèdent
-# CTIME (la VM actuelle a été créée APRÈS une sauvegarde récente de celle qu'elle remplace).
+# _f1c_pbs_avant DATES VMID DATE — un instantané de cette VM existe dans les 30 jours qui précèdent
+# DATE (destruction de l'ancienne VM : elle a été sauvegardée peu avant d'être détruite).
 _f1c_pbs_avant() {
   local dates="$1" v="$2" c="$3"
   [[ "$c" =~ ^[0-9]+$ ]] || return 1

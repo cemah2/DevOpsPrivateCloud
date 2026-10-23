@@ -4,9 +4,11 @@
 # check-S07.sh — F1-S07 « Détruire et reconstruire les nœuds de k8s-par1 ».
 # Lecture seule : qm config (pve01), arborescence du datastore PBS (pbs01), compte wb-checks,
 # commandes de consultation sur les nœuds (ip, klist, systemctl, test), documents sur main.
-# Preuve « non contournable » de la reconstruction : chaque VM 2141-2146 a été créée (meta ctime de
-# Proxmox) APRÈS un instantané PBS de l'ancienne VM de même VMID pris dans les 30 jours précédents,
-# et le cluster (espace kube-system) est né après ce même filet.
+# Preuve « non contournable » de la reconstruction : chaque VMID 2141-2146 a été DÉTRUIT (tâche
+# Proxmox qmdestroy réussie) après un instantané PBS de l'ancienne VM pris dans les 30 jours
+# précédents, la VM de même VMID tourne de nouveau, et le cluster (espace kube-system) est né après
+# la dernière de ces destructions. (La ligne « meta ctime » ne prouve rien : un clone recopie celle
+# du gabarit.)
 
 # shellcheck source=_f1-cluster.sh
 source "$(dirname "${BASH_SOURCE[0]}")/_f1-cluster.sh"
@@ -17,16 +19,16 @@ require_cmd kubectl jq curl ssh openssl
 # --- VMs : recréées après le filet ------------------------------------------------------------------
 _f1_s07_pbs="$(_f1c_pbs_dates "${_f1c_vmids[@]}")"
 check_cmd "datastore PBS lu sur $WB_PBS_HOST (instantanés de ${WB_F1_PBS_NS:-par1/k8s})" test -n "$_f1_s07_pbs"
-_f1_s07_ctime_min=""
+_f1_s07_destr_max=""
 for _f1_s07_i in "${!_f1c_vmids[@]}"; do
   _f1_s07_v="${_f1c_vmids[$_f1_s07_i]}"
   _f1_s07_n="${_f1c_noeuds[$_f1_s07_i]:-?}"
   check_ssh_output "VM $_f1_s07_v ($_f1_s07_n) existe et tourne" "$WB_PVE_HOST" '^status: running' "qm status $_f1_s07_v"
-  _f1_s07_c="$(_f1c_vm_ctime "$_f1_s07_v")"
-  check_cmd "VM $_f1_s07_v créée après une sauvegarde PBS récente de l'ancienne VM (création : ${_f1_s07_c:+$(date -d "@$_f1_s07_c" '+%F %R')})" \
-    _f1c_pbs_avant "$_f1_s07_pbs" "$_f1_s07_v" "${_f1_s07_c:-x}"
-  if [[ "$_f1_s07_c" =~ ^[0-9]+$ ]] && { [[ -z "$_f1_s07_ctime_min" ]] || ((_f1_s07_c < _f1_s07_ctime_min)); }; then
-    _f1_s07_ctime_min="$_f1_s07_c"
+  _f1_s07_d="$(_f1c_vm_destruction "$_f1_s07_v")"
+  check_cmd "VM $_f1_s07_v détruite puis recréée après une sauvegarde PBS récente de l'ancienne VM (destruction : ${_f1_s07_d:+$(date -d "@$_f1_s07_d" '+%F %R')})" \
+    _f1c_pbs_avant "$_f1_s07_pbs" "$_f1_s07_v" "${_f1_s07_d:-x}"
+  if [[ "$_f1_s07_d" =~ ^[0-9]+$ ]] && { [[ -z "$_f1_s07_destr_max" ]] || ((_f1_s07_d > _f1_s07_destr_max)); }; then
+    _f1_s07_destr_max="$_f1_s07_d"
   fi
 done
 
@@ -43,8 +45,8 @@ if _f1c_api_repond; then
   _f1_s07_ne="$(_f1c_naissance)"
   check_cmd "cluster né il y a moins de $_f1c_naissance_jours jours (espace kube-system : ${_f1_s07_ne:+$(date -d "@$_f1_s07_ne" '+%F %R')})" \
     bash -c '[[ "$1" =~ ^[0-9]+$ ]] && (( $(date +%s) - $1 < $2 * 86400 ))' _ "${_f1_s07_ne:-x}" "$_f1c_naissance_jours"
-  check_cmd "cluster né après la création des nouvelles VMs (pas un ancien cluster rattaché)" \
-    bash -c '[[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]] && (( $1 >= $2 ))' _ "${_f1_s07_ne:-x}" "${_f1_s07_ctime_min:-y}"
+  check_cmd "cluster né après la destruction des anciennes VMs (pas un ancien cluster rattaché)" \
+    bash -c '[[ "$1" =~ ^[0-9]+$ && "$2" =~ ^[0-9]+$ ]] && (( $1 >= $2 ))' _ "${_f1_s07_ne:-x}" "${_f1_s07_destr_max:-y}"
 
   _f1_s07_nodes="$(_f1c_kj nodes)"
   [[ -n "$_f1_s07_nodes" ]] || _f1_s07_nodes='{"items":[]}'

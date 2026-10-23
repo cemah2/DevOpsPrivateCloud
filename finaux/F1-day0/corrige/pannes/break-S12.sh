@@ -171,9 +171,29 @@ _s12_ca_ancienne() {
   rm -rf -- "$tmp"
 }
 
+# _s12_v1_marge — minutes avant la fin du bail des identifiants dynamiques de production les plus
+#   anciens (dernier rafraîchissement réussi des ExternalSecrets à générateur de mediagenda-prod + 1 h,
+#   bail de db-mediagenda, M25-E14). Lecture seule. « 999 » s'il n'y en a pas.
+_s12_v1_marge() {
+  local j premier
+  j="$(wb_kubectl -n mediagenda-prod get "$_S12_T_ES" -o json 2>/dev/null)" || { echo 0; return; }
+  premier="$(jq -r '[.items[] | select(any(.spec.dataFrom[]?; .sourceRef.generatorRef != null)) | .status.refreshTime // empty] | min // empty' <<<"$j" 2>/dev/null)"
+  if [[ -z "$premier" ]]; then echo 999; return; fi
+  premier="$(date -d "$premier" +%s 2>/dev/null)" || { echo 0; return; }
+  echo $(((premier + 3600 - $(date +%s)) / 60))
+}
+
 _s12_v1() {
-  local cfg actuelle ca_pem
+  local cfg actuelle ca_pem marge
   s12_bao_jeton || return 10
+  # Cette variante empêche AUSSI la production de renouveler ses identifiants de base (rafraîchis toutes
+  # les 30 min, bail d'une heure) : on ne la pose que s'il reste au moins 40 min de bail, pour que la
+  # règle « --annuler au bout de 30 min sans piste » de l'énoncé protège la production.
+  marge="$(_s12_v1_marge)"
+  if ((marge < 40)); then
+    s12_journal "variante 1 écartée : $marge min de bail restant aux identifiants de production"
+    return 10
+  fi
   cfg="$(_s12_bao GET auth/k8s-par1/config)" || { wb_avert "auth/k8s-par1/config illisible"; return 10; }
   actuelle="$(_s12_ca_cluster_pem | _s12_empreinte)"
   [[ -n "$actuelle" ]] || return 1
@@ -210,7 +230,7 @@ _s12_v1_annuler() {
   if ! s12_bao_jeton; then
     wb_avert "configuration de auth/k8s-par1 NON restaurée : connecte-toi (bao login -method=oidc) puis relance « lab/bin/break F1 12 --annuler »"
     wb_avert "(ou rejoue le pipeline de plateforme/secrets : il remet l'autorité de racine/k8s-par1-ca.crt)"
-    return 0
+    return 1
   fi
   # Une réparation de l'apprenant (pipeline rejoué, autorité actuelle) est respectée.
   if [[ "$(_s12_bao GET auth/k8s-par1/config | jq -r '.data.kubernetes_ca_cert // empty' | _s12_empreinte)" == "$(s12_lire v1-posee)" ]]; then
@@ -218,7 +238,7 @@ _s12_v1_annuler() {
       s12_journal "annulation : configuration de auth/k8s-par1 restaurée"
     else
       wb_avert "configuration de auth/k8s-par1 non restaurée : rejoue le pipeline de plateforme/secrets"
-      return 0
+      return 1
     fi
   fi
   s12_oublier v1-config.json
@@ -252,13 +272,15 @@ _s12_v2() {
   [[ "$(_s12_dig "$_S12_NOM" | sort -u | paste -sd, -)" == 10.10.41.10 ]] ||
     { wb_avert "$_S12_NOM ne vise pas 10.10.41.10 avant la panne : variante sans effet"; return 10; }
   rr="$(_s12_rrsets)" || return 1
-  txt="$(jq -c '[.[] | select(.type == "TXT" and any(.records[]; .content | test("heritage=external-dns") and test("external-dns/owner=k8s-par1([,\"]|$)")))] | first // empty' <<<"$rr")"
-  [[ -n "$txt" ]] || { wb_avert "aucun enregistrement de propriété k8s-par1 pour $_S12_NOM : variante sans effet"; return 10; }
+  # TOUS les TXT de propriété de k8s-par1 (nouveau format « a-<nom> » et ancien format au même nom,
+  # s'ils coexistent) : un seul TXT laissé à k8s-par1 suffirait à ExternalDNS pour reprendre le nom.
+  txt="$(jq -c '[.[] | select(.type == "TXT" and any(.records[]; .content | test("heritage=external-dns") and test("external-dns/owner=k8s-par1([,\"]|$)")))]' <<<"$rr")"
+  [[ "$(jq 'length' <<<"$txt")" -gt 0 ]] || { wb_avert "aucun enregistrement de propriété k8s-par1 pour $_S12_NOM : variante sans effet"; return 10; }
   s12_ecrire_si_absent v2-rrsets.json "$rr"
-  neuf="$(jq -c --arg ip "$_S12_ADRESSE" --arg n "$_S12_NOM." --argjson txt "$txt" '{rrsets: [
-      ($txt | .changetype = "REPLACE" | del(.comments)
-        | .records |= map(.content |= sub("external-dns/owner=k8s-par1(?<f>[,\"]|$)"; "external-dns/owner=k8s-par1-essai\(.f)"))),
-      {name: $n, type: "A", ttl: 60, changetype: "REPLACE", records: [{content: $ip, disabled: false}]}]}' <<<"{}")"
+  neuf="$(jq -c --arg ip "$_S12_ADRESSE" --arg n "$_S12_NOM." --argjson txt "$txt" '{rrsets: (
+      [$txt[] | .changetype = "REPLACE" | del(.comments)
+        | .records |= map(.content |= sub("external-dns/owner=k8s-par1(?<f>[,\"]|$)"; "external-dns/owner=k8s-par1-essai\(.f)"))]
+      + [{name: $n, type: "A", ttl: 60, changetype: "REPLACE", records: [{content: $ip, disabled: false}]}])}' <<<"{}")"
   _s12_pdns PATCH "zones/$_S12_ZONE." - <<<"$neuf" >/dev/null || return 1
   s12_journal "$_S12_NOM : TXT de propriété → k8s-par1-essai, A → $_S12_ADRESSE"
 }
@@ -282,6 +304,7 @@ _s12_v2_annuler() {
     s12_journal "annulation : RRsets de $_S12_NOM restaurés"
   else
     wb_avert "RRsets de $_S12_NOM non restaurés (API de PowerDNS) : sauvegarde gardée dans $(s12_etat)/v2-rrsets.json"
+    return 1
   fi
 }
 
@@ -332,6 +355,7 @@ EOF
   pod="$(wb_kubectl -n "$_S12_ESPACE" get pods -l "$_S12_API_SEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
   [[ -n "$pod" ]] || return 1
   s12_ecrire v3-pod "$pod"
+  s12_ecrire v3-attendu "$(_s12_api_pods_prets)"
   wb_kubectl -n "$_S12_ESPACE" delete pod "$pod" --wait=false >/dev/null || return 1
   s12_journal "webhook $_S12_VWC posé (Fail, service kyverno/kyverno-svc-ancien) ; pod $pod supprimé"
 }
@@ -347,8 +371,9 @@ _s12_v3_verifier() {
 
 _s12_v3_annuler() {
   # Restaure l'état sauvegardé : l'objet n'existait pas, il est supprimé (s'il l'est déjà, rien).
-  wb_k8s_restaurer || wb_avert "webhook $_S12_VWC non supprimé : voir ~/.local/state/workbook/k8s/F1-S12/"
+  wb_k8s_restaurer || { wb_avert "webhook $_S12_VWC non supprimé : voir ~/.local/state/workbook/k8s/F1-S12/"; return 1; }
   s12_oublier v3-pod
+  s12_oublier v3-attendu
 }
 
 # ---------------------------------------------------------------------------
@@ -402,15 +427,22 @@ verifier_S12() {
 }
 
 annuler_S12() {
-  local v
+  local v reste=0
   v="$(s12_lire variante)"
-  _s12_defaire
+  _s12_v1_annuler || reste=1
+  _s12_v2_annuler || reste=1
+  _s12_v3_annuler || reste=1
   # Retrait de l'annotation de synchronisation forcée (variante 1) : ESO resynchronise.
   wb_kubectl -n "$_S12_ESPACE" annotate "$_S12_T_ES" "$_S12_ES" force-sync- >/dev/null 2>&1 || true
   if [[ "$v" == 1 ]]; then
     _s12_forcer_es || true
     s12_attendre 180 _s12_es_pret || wb_avert "ExternalSecret $_S12_ESPACE/$_S12_ES pas encore prêt : ESO réessaie seul (quelques minutes)"
     wb_kubectl -n "$_S12_ESPACE" annotate "$_S12_T_ES" "$_S12_ES" force-sync- >/dev/null 2>&1 || true
+  fi
+  if ((reste)); then
+    # Code non nul : lab/bin/break (set -e) s'arrête AVANT d'effacer le marqueur de panne active.
+    wb_avert "annulation incomplète : la panne reste marquée active ; corrige la cause indiquée et relance --annuler"
+    return 1
   fi
   s12_oublier variante
   s12_journal "annulation"
@@ -437,8 +469,8 @@ symptome_S12() {
          "support : délai dépassé. Argo CD est tout vert, l'Application portail est Synced et Healthy," \
          "le pod tourne. Les autres sites *.apps répondent. Personne n'a touché au portail." ;;
     3) wb_symptome "INC-5712 — De : Julien Petit" \
-         "En recette, le Rollout de MédiAgenda est resté à 2 pods prêts sur 3 depuis tout à l'heure, et le" \
-         "troisième ne revient pas. Pas de CrashLoop, pas de Pending : il n'y a juste pas de pod." \
+         "En recette, le Rollout de MédiAgenda est resté à $(($(s12_lire v3-attendu) - 1)) pod(s) prêt(s) sur $(s12_lire v3-attendu) depuis tout à l'heure, et le" \
+         "dernier ne revient pas. Pas de CrashLoop, pas de Pending : il n'y a juste pas de pod." \
          "Les déploiements de recette de cet après-midi vont échouer si ça reste comme ça." ;;
   esac
   printf '  Temps cible : 45 min. Contrôle : lab/bin/check F1 12\n\n'

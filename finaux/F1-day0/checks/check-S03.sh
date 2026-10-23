@@ -49,10 +49,17 @@ check_cmd "$_f1_s03_dns02 : temps synchronisé, sources de temps conformes au r�
 if _f1p_api_repond; then
   _f1_s03_c3="$(_f1_s03_lire couche3)"
   _f1_s03_c3_val="$(_f1_s03_lire couche3-valeur)"
+  # Cible injectée (break-S03 : 1 = cert-manager, 2 = external-dns) : seule elle est comparée à la
+  # valeur injectée (l'autre Deployment peut avoir cette valeur dans son propre code).
+  case "$_f1_s03_c3" in
+    1) _f1_s03_c3_cible=cert-manager/cert-manager ;;
+    2) _f1_s03_c3_cible=external-dns/external-dns ;;
+    *) _f1_s03_c3_cible="" ;;
+  esac
   for _f1_s03_cible in cert-manager/cert-manager external-dns/external-dns; do
     _f1_s03_lim="$(kube -n "${_f1_s03_cible%/*}" get deployment "${_f1_s03_cible#*/}" \
       -o jsonpath='{.spec.template.spec.containers[0].resources.limits.memory}' 2>/dev/null)" || _f1_s03_lim="?"
-    if [[ -n "$_f1_s03_c3" && -n "$_f1_s03_c3_val" ]]; then
+    if [[ "$_f1_s03_cible" == "$_f1_s03_c3_cible" && -n "$_f1_s03_c3_val" ]]; then
       check_cmd "$_f1_s03_cible : spécification du Deployment conforme aux valeurs du Helmfile" \
         test "$_f1_s03_lim" != "$_f1_s03_c3_val" -a "$_f1_s03_lim" != "?"
     fi

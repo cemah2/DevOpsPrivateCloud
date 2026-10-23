@@ -253,7 +253,7 @@ S07 ─ S08 ─ S09 ─ S10 ─ S11 ─ S12                        phase 3 : 25 
 S13 ─ S14 ─ S15                                          phase 4 : 10 à 16 h
 ```
 
-S03 se lance **après** S02 : la panne suppose un code et une réalité alignés (son contrôle préalable le vérifie). S04 se rejoue juste avant la fenêtre de la phase 3 : ses preuves ont moins de 24 h au moment du go, quitte à refaire les sauvegardes. S05 et S06 sont indépendants ; S06 doit être terminé avant S07.
+S03 se lance **après** S02 : la panne suppose un code et une réalité alignés (son contrôle préalable vérifie seulement que les éléments qu'elle vise sont sains ; l'alignement, c'est `lab/bin/check F1 2` vert qui le prouve). S04 se rejoue juste avant la fenêtre de la phase 3 : ses preuves ont moins de 24 h au moment du go, quitte à refaire les sauvegardes. S05 et S06 sont indépendants ; S06 doit être terminé avant S07.
 
 ## Pour aller plus loin
 

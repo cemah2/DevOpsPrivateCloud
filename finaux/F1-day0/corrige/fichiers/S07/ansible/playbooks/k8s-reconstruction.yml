@@ -8,16 +8,19 @@
 #
 # Ordre et raisons :
 #   1. k8s-noeuds.yml        containerd et paquets kubeadm/kubelet (M14-E02) ;
-#   2. durcissement.yml      vague 6 limitée aux nœuds (M26), un nœud à la fois : AVANT kubeadm, pour que
-#                            les exceptions du durcissement (sysctl, modules, swap) soient éprouvées sur
-#                            un nœud neuf et non découvertes sur un cluster en service ;
-#   3. k8s-api-fichiers.yml  audit, chiffrement des Secrets, authentification structurée (M14-E27/E28,
+#   2. k8s-api-fichiers.yml  audit, chiffrement des Secrets, authentification structurée (M14-E27/E28,
 #                            M24-E16) : un serveur d'API dont une option vise un fichier absent ne démarre
 #                            pas, donc AVANT l'amorçage ;
-#   4. k8s-cluster.yml       VIP (keepalived + HAProxy), amorçage par k8s-cp01 (variable explicite),
+#   3. k8s-cluster.yml       VIP (keepalived + HAProxy), amorçage par k8s-cp01 (variable explicite),
 #                            jonction des deux autres nœuds de contrôle puis des travailleurs ;
-#   5. k8s-etcd-instantane.yml  instantané horaire chiffré vers s3-01 (M14-E24).
-# --limit k8s_par1 est OBLIGATOIRE : la vague 6 du durcissement contient aussi ceph01-03 et adm01.
+#   4. k8s-etcd-instantane.yml  instantané horaire chiffré vers s3-01 (M14-E24).
+# --limit k8s_par1 est OBLIGATOIRE (garde-fou ci-dessous).
+# Le DURCISSEMENT (durcissement.yml, vague 6) n'est PAS importé ici : pour les nœuds Kubernetes, ses
+# pré-tâches lancent « kubectl drain » (et ses post-tâches « uncordon ») avec le kubeconfig de la
+# personne qui lance ; avant l'amorçage il n'y a pas d'API, et l'ancien kubeconfig vise un cluster
+# détruit : le playbook échouerait sur le premier nœud. 20-noeuds.sh le lance APRÈS ce playbook, avec
+# KUBECONFIG = admin.conf du nouveau cluster (drain d'un nœud sans CNI : rien à évacuer, sans risque),
+# --limit k8s_par1 (la vague 6 contient aussi ceph01-03 et adm01).
 # L'inscription FreeIPA (inscription-ipa.yml) exige --limit et un nœud de contrôle à la fois : elle
 # est lancée nœud par nœud par 20-noeuds.sh, AVANT ce playbook (le client FreeIPA n'a besoin de rien
 # d'autre que du réseau et du DNS). La carte VLAN 30 des
@@ -41,11 +44,6 @@
 
 - name: Nœuds (containerd, kubeadm, kubelet)
   ansible.builtin.import_playbook: k8s-noeuds.yml
-
-- name: Durcissement des nœuds (vague 6, nœuds de k8s-par1 seulement)
-  ansible.builtin.import_playbook: durcissement.yml
-  vars:
-    vague: 6
 
 - name: Fichiers du serveur d'API (audit, chiffrement, OIDC)
   ansible.builtin.import_playbook: k8s-api-fichiers.yml

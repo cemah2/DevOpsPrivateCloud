@@ -28,10 +28,13 @@
 | <HH:MM> | Retrait de `k8s-w03` de `module.noeud` (`apply -destroy -target`) | | | plan relu : objets de `k8s-w03` seulement |
 | <HH:MM> | Installation de `k8s-w03` par l'usine (`noeuds_usine` installation, job `provisionner`, `noeuds_usine` service, `--apres-bascule`) | | | VLAN 60 puis VLAN 40 |
 | <HH:MM> | **GESTE** anciennes clés d'hôte SSH retirées de `~/.ssh/known_hosts` | | | clés d'hôte neuves, certificats SSH d'hôte pas encore posés |
-| <HH:MM> | Inscription FreeIPA nœud par nœud | | | ré-inscription forcée (hôtes déjà présents) |
-| <HH:MM> | `k8s-reconstruction.yml` : nœuds, durcissement, fichiers de l'API | | | |
+| <HH:MM> | Hôtes désactivés dans FreeIPA (`ipa host-disable`) | | | **geste manuel** (décision humaine, F1-S05) |
+| <HH:MM> | Inscription FreeIPA nœud par nœud | | | réinscription d'entrées désactivées |
+| <HH:MM> | `k8s-reconstruction.yml` : nœuds, fichiers de l'API | | | |
 | <HH:MM> | Amorçage (`kubeadm init` sur `k8s-cp01`) et jonctions | | | une seule VIP |
-| <HH:MM> | `admin.conf` du nouveau cluster, compte `wb-checks` recréé | | | ancien `admin.conf` invalide |
+| <HH:MM> | `admin.conf` du nouveau cluster | | | ancien `admin.conf` invalide |
+| <HH:MM> | Durcissement des nœuds (vague 6) et première analyse de conformité | | | un nœud à la fois |
+| <HH:MM> | Compte `wb-checks` recréé | | | |
 | <HH:MM> | Point Nadia : nœuds prêts | — | — | |
 
 ## Phase 3 — S08 à S11

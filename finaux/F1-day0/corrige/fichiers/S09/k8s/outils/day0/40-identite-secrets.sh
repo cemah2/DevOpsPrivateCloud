@@ -32,7 +32,10 @@ empreinte() { openssl x509 -noout -fingerprint -sha256 | sed 's/^.*=//'; }
 ca_cluster() { k -n default get configmap kube-root-ca.crt -o jsonpath='{.data.ca\.crt}'; }
 
 preparer_mr_secrets() {
-  (cd "$SECRETS" && git switch -c "day0/k8s-par1-ca-$(date +%Y%m%d)" && outils/ca-k8s-par1.sh ecrire &&
+  # Relance : si OpenBao utilise déjà l'autorité du cluster, la MR est faite et appliquée.
+  if openbao_a_jour; then echo "auth/k8s-par1 utilise déjà l'autorité du cluster : rien à préparer."; return 0; fi
+  (cd "$SECRETS" && git switch main && git pull --ff-only &&
+    git switch -C "day0/k8s-par1-ca-$(date +%Y%m%d)" && outils/ca-k8s-par1.sh ecrire &&
     git add racine/k8s-par1-ca.crt &&
     git commit -m "fix(k8s-par1): autorité du cluster reconstruit (SEC-3109, CHG-3107)" &&
     git push -u origin HEAD)
