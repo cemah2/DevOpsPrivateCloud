@@ -165,7 +165,7 @@ Pour un `Q`, chaque réponse est argumentée (pas seulement « réponse B »), a
 
 ## 7. Scripts de vérification
 
-- Un script par exercice vérifiable : `modules/NN-slug/checks/check-EXX.sh`. Les exercices `Q` et `RED` n'ont pas de script (auto-évaluation via le corrigé).
+- Un script par exercice vérifiable : `modules/NN-slug/checks/check-EXX.sh`. Les exercices `Q` et `RED` n'ont pas de script (auto-évaluation via le corrigé), sauf un `RED` dont le livrable est publié dans un dépôt : son check vérifie seulement la présence et le contenu minimal du document (sections, références attendues).
 - Lancement : `lab/bin/check <NN> <XX>` depuis `adm01` (le poste d'admin du lab), qui exécute le script avec la bibliothèque `lab/lib/check-lib.sh`.
 - Le script **n'affiche jamais la solution** ; il dit ce qui est OK/KO avec un message orienté symptôme (« la VM 1010 ne répond pas au ping depuis adm01 »), pas solution (« ajoute la route X »).
 - Il est **en lecture seule** : il ne modifie rien sur le lab.
