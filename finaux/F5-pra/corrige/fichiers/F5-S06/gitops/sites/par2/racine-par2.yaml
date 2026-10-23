@@ -1,0 +1,19 @@
+# plateforme/gitops — sites/par2/racine-par2.yaml (F5-S06, PLAT-3506) : application racine d'Argo CD de
+# k8s-par2. Elle ne lit QUE les miroirs de adm02 (aucune URL de PAR1) ; appliquée une fois depuis adm02
+# après l'installation d'Argo CD par Helmfile (environnement par2) et l'amorçage (repo-creds-miroirs-par2).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: racine-par2
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: ssh://miroir@adm02.par2.medisphere.internal/srv/miroirs/plateforme/gitops.git
+    targetRevision: main
+    path: sites/par2/applications
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated: {prune: false, selfHeal: true}

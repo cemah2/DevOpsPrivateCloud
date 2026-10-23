@@ -1,0 +1,40 @@
+# plateforme/observabilite — slo/ghsv-latence.yaml (F7-S10, PLAT-3710)
+# ENF-05 : 95 % des requêtes de l'API en moins de 300 ms sur le mois. L'histogramme de MédiAgenda
+# n'avait PAS de seau 0,3 s (seaux par défaut du client Python : … 0,25 ; 0,5 …) : le M21 mesurait à
+# 250 ms faute de mieux (DEV-2226). Correctif de mediagenda/api livré en F7-S10 (seaux explicites, dont
+# 0,3 et 1) : ce SLO mesure EXACTEMENT le seuil du contrat. Seau ajouté = nouvelle série, aucune
+# rupture pour les tableaux existants (le seau 0,25 reste).
+# Point de mesure : l'application (temps de traitement), pas « le point d'entrée du titulaire » que
+# cite ENF-05 : l'écart (Gateway, mandataire, TLS) est mesuré par la charge k6 de la recette et décrit
+# dans engagements.md ; s'il dépasse 20 ms au p95, ce SLO devient trompeur.
+# « Aucune requête au-delà d'une seconde » : impossible à garantir sur un centile ; proposition au
+# GHSV (R-10) : 99,9 % des requêtes sous 1 s, mesuré par le seau le="1" (règle du rapport mensuel).
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: ghsv-latence
+  labels:
+    pyrra.dev/equipe: ghsv
+    pyrra.dev/client: ghsv
+  annotations:
+    pyrra.dev/resume: "GHSV : l'API est trop lente (budget de latence à 300 ms consommé trop vite)"
+    pyrra.dev/description: "Trop de requêtes de l'API du GHSV au-delà de 300 ms pour l'objectif de 95 % sur 30 jours."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/capstone/runbooks/RB-374-rapport-mensuel-client.md
+spec:
+  description: "GHSV (prod) : requêtes de l'API servies en moins de 300 ms"
+  target: "95"
+  window: 30d
+  indicator:
+    latency:
+      success:
+        metric: mediagenda_http_request_duration_seconds_bucket{namespace="ghsv-prod", route=~"/api/v1/.*", le="0.3"}
+      total:
+        metric: mediagenda_http_request_duration_seconds_count{namespace="ghsv-prod", route=~"/api/v1/.*"}
+  alerting:
+    burnrates: true
+    absent: false
+    severities:
+      fastBurn: critique
+      mediumBurn: avertissement
+      slowBurn: avertissement
+      longTermBurn: avertissement

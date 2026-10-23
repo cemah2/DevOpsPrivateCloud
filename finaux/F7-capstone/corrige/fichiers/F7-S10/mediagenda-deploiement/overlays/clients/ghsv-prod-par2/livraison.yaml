@@ -1,0 +1,11 @@
+# mediagenda/deploiement — overlays/clients/ghsv-prod-par2/livraison.yaml (F7-S10)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livraison
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  # Même version que ghsv-prod (la promotion met à jour les deux dossiers dans la même MR).
+  version: <VERSION-PROMUE>
+  nom-publie: ghsv.apps.par2.medisphere.internal

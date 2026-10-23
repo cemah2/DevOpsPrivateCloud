@@ -1,0 +1,41 @@
+# plateforme/outils — ci/rapport-clients.yml (F7-S10, PLAT-3710), inclus par .gitlab-ci.yml.
+# Rapport mensuel des clients hébergés, produit le 1er du mois (pipeline PLANIFIÉ de plateforme/outils :
+# « 15 6 1 * * », fuseau Europe/Paris, variable RAPPORT_CLIENTS=oui) et publié par MR dans
+# plateforme/medisphere (docs/capstone/rapports/<client>-<AAAA-MM>.md), fusionnée automatiquement si
+# son pipeline réussit. EXP-03 du GHSV : remis avant le 10 ; la revue humaine (RB-374 §3) complète la
+# section 6 et transmet.
+#
+# Jeton : jeton d'accès du PROJET plateforme/medisphere « rapports-clients » (rôle Developer, portée
+# api, expiration 1 an), variable protégée et masquée RAPPORTS_JETON de plateforme/outils. Le runner
+# k8s-par1 joint Thanos Query (10.10.41.60:9090, CNP du M21 : ajoute l'espace ci-jobs si besoin).
+
+rapport:clients:
+  stage: deploy
+  image: ${OUTILS_IMAGE}   # image des outils ms-* (curl, jq, yq de mikefarah, git)
+  tags: [k8s]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $RAPPORT_CLIENTS == "oui"
+    - if: $CI_PIPELINE_SOURCE == "web" && $RAPPORT_CLIENTS == "oui"
+  variables:
+    MS_PROM_URL: http://prometheus.apps.par1.medisphere.internal:9090
+  script:
+    - |
+      set -euo pipefail
+      mois="$(TZ=Europe/Paris date -d "$(TZ=Europe/Paris date +%Y-%m-01) -1 month" +%Y-%m)"
+      git clone --depth 1 "https://oauth2:${RAPPORTS_JETON}@git01.par1.medisphere.internal/plateforme/medisphere.git" depot
+      branche="rapports/${mois}"
+      git -C depot switch -c "$branche"
+      mkdir -p depot/docs/capstone/rapports
+      for cfg in clients/*.yaml; do
+        client="$(basename "$cfg" .yaml)"
+        bin/ms-rapport-client -m "$mois" "$client" > "depot/docs/capstone/rapports/${client}-${mois}.md"
+      done
+      git -C depot add docs/capstone/rapports
+      git -C depot -c user.name="Rapports clients" -c user.email="plateforme@medisphere.internal" \
+        commit -m "docs(rapports): rapports mensuels des clients, ${mois}"
+      git -C depot push -o merge_request.create -o merge_request.target=main \
+        -o merge_request.merge_when_pipeline_succeeds -o merge_request.remove_source_branch origin "$branche"
+  artifacts:
+    paths:
+      - depot/docs/capstone/rapports/
+    expire_in: 30 days

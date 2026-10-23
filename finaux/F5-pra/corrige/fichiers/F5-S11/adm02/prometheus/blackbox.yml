@@ -1,0 +1,13 @@
+# /etc/prometheus/blackbox.yml — adm02 (F5-S11) : sonde HTTPS des noms globaux.
+# L'autorité « MédiSphère PAR2 Intermediate CA » est vérifiée par la racine MédiSphère installée sur adm02.
+modules:
+  http_2xx_medisphere:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: []        # vide = 2xx
+      preferred_ip_protocol: ip4
+      fail_if_not_ssl: true
+      tls_config:
+        ca_file: /usr/local/share/ca-certificates/medisphere-root-ca.crt

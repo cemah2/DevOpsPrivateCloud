@@ -1,0 +1,71 @@
+# plateforme/resilience — demonstration/testrun.yaml (F7-S11, PLAT-3711)
+# Charge de démonstration du GHSV (demo-ghsv.js), lancée pour la durée d'une démonstration ou d'une
+# journée de jeu depuis adm01 (instrument, pas état désiré : même exception que la sonde de continuité
+# du F4 et les expériences de chaos, ADR-0290). Mêmes réglages que le TestRun du F4-S02.
+#   admin@adm01:~/src/resilience$ kubectl -n k6 create configmap demo-ghsv --from-file=demonstration/demo-ghsv.js \
+#       --dry-run=client -o yaml | kubectl apply -f -
+#   admin@adm01:~/src/resilience$ sed "s/AAAAMMJJ/$(date +%Y%m%d)/" demonstration/testrun.yaml | kubectl apply -f -
+# Arrêt : kubectl -n k6 delete testrun demo-ghsv
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: demo-ghsv
+  namespace: k6
+  labels:
+    medisphere.internal/ticket: PLAT-3711
+    medisphere.internal/client: ghsv
+spec:
+  parallelism: 1
+  script:
+    configMap:
+      name: demo-ghsv
+      file: demo-ghsv.js
+  arguments: --tag testid=demo-ghsv-AAAAMMJJ --out experimental-prometheus-rw
+  cleanup: post
+  runner:
+    image: registry.par1.medisphere.internal/dockerhub/grafana/k6:1.8.2
+    env:
+      - {name: DUREE, value: "90m"}
+      - {name: TAUX, value: "4"}
+      - {name: CIBLE, value: https://ghsv.apps.par1.medisphere.internal}
+      - name: CLIENT_ID
+        valueFrom: {secretKeyRef: {name: demo-ghsv-dpi, key: client-id}}
+      - name: CLIENT_SECRET
+        valueFrom: {secretKeyRef: {name: demo-ghsv-dpi, key: client-secret}}
+      - name: K6_PROMETHEUS_RW_SERVER_URL
+        value: http://prometheus-kps-prometheus-0.prometheus-operated.supervision.svc.cluster.local:9090/api/v1/write
+      - {name: K6_PROMETHEUS_RW_TREND_STATS, value: "p(95),p(99),max"}
+      - {name: K6_PROMETHEUS_RW_PUSH_INTERVAL, value: "5s"}
+      - {name: SSL_CERT_FILE, value: /etc/medisphere/ca/medisphere-root-ca.crt}
+    volumes:
+      - name: racine
+        configMap: {name: medisphere-racine}
+      - name: tmp
+        emptyDir: {sizeLimit: 64Mi}
+    volumeMounts:
+      - {name: racine, mountPath: /etc/medisphere/ca, readOnly: true}
+      - {name: tmp, mountPath: /tmp}
+    resources:
+      requests: {cpu: 200m, memory: 128Mi}
+      limits: {cpu: "1", memory: 384Mi}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 12345
+      seccompProfile: {type: RuntimeDefault}
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: [ALL]}
+  starter:
+    image: registry.par1.medisphere.internal/ghcr/grafana/k6-operator:starter-v1.7.0
+    resources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 100m, memory: 64Mi}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      seccompProfile: {type: RuntimeDefault}
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities: {drop: [ALL]}

@@ -1,0 +1,19 @@
+# sites/par2/stockage — stockage LOCAL de k8s-par2 (F5-S06) : pas de Ceph à PAR2. Release Helmfile de
+# l'environnement par2 seulement (releases/35-stockage-local.yaml.gotmpl). local-path-provisioner
+# (Rancher, Apache 2.0) : volumes en répertoires du nœud (/opt/local-path-provisioner) ; aucune
+# réplication (un nœud) : la protection des données de la base est son archive (cnpg-k8s-par2).
+# ⚠️ Version et source du chart à relever et épingler au moment de la MR (dépôt du projet sur GitHub,
+# chart dans deploy/chart/local-path-provisioner) : non relevées par ce corrigé.
+{{- if .Values.composants.stockageLocal }}
+releases:
+  - name: local-path-provisioner
+    namespace: local-path-storage
+    chart: <SOURCE-DU-CHART-LOCAL-PATH-PROVISIONER>
+    version: <VERSION-ÉPINGLÉE>
+    labels: {groupe: stockage, composant: local-path}
+    values:
+      - storageClass:
+          name: local-path
+          defaultClass: true
+          reclaimPolicy: Retain
+{{- end }}

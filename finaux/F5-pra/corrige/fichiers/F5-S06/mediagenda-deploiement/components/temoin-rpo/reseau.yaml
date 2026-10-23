@@ -1,0 +1,40 @@
+# components/temoin-rpo/reseau.yaml — le témoin parle à l'API (Service mediagenda, port 80 → 8000) et au
+# DNS, rien d'autre ; l'API accepte le témoin. À fusionner avec les politiques de l'espace si elles sont
+# plus fines (refus par défaut de mediagenda-prod).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temoin-rpo-sortie
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: temoin-rpo}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: mediagenda}
+      ports:
+        - {protocol: TCP, port: 8000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mediagenda-depuis-temoin-rpo
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: mediagenda}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temoin-rpo}
+      ports:
+        - {protocol: TCP, port: 8000}

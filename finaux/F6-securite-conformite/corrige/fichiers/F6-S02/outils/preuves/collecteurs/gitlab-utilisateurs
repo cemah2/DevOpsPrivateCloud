@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# gitlab-utilisateurs — P-IAM-03 : comptes GitLab (état, administrateur, externe, robot, dernière activité,
+# second facteur, fournisseur d'identité). Identité : jeton read_api d'un administrateur (GITLAB_TOKEN).
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige GITLAB_TOKEN
+GL="${GITLAB_URL:-https://git01.par1.medisphere.internal}"
+tous="[]"
+for ((p = 1; p <= 20; p++)); do
+  page="$(http_jeton "$GL/api/v4/users?per_page=100&page=$p&order_by=id&sort=asc" "$GITLAB_TOKEN" 'PRIVATE-TOKEN:')"
+  [[ "$(jq 'length' <<<"$page")" -gt 0 ]] || break
+  tous="$(jq -c --argjson a "$tous" '$a + [.[] | {username, state, is_admin, external, bot,
+    two_factor_enabled, created_at, last_activity_on, current_sign_in_at,
+    identites: [.identities[]?.provider] | sort}]' <<<"$page")"
+done
+entete_preuve | jq -S --argjson u "$tous" '. + {utilisateurs: ($u | sort_by(.username)),
+  resume: {total: ($u | length), actifs: ([$u[] | select(.state == "active")] | length),
+           administrateurs: [$u[] | select(.is_admin == true and .state == "active") | .username]}}'

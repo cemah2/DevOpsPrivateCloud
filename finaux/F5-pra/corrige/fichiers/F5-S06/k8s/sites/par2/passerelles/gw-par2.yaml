@@ -1,0 +1,46 @@
+# sites/par2/passerelles/gw-par2.yaml — Gateway de PAR2 (F5-S06). Même rôle que gw-par1 (M15) : un
+# écouteur HTTPS par joker, certificat émis par l'autorité de PAR2, qui couvre AUSSI les noms globaux
+# (en PRA, mediagenda.medisphere.internal pointe ici).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: apps-par2
+  namespace: passerelles
+spec:
+  secretName: apps-par2
+  issuerRef: {kind: ClusterIssuer, name: medisphere-par2-ca}
+  duration: 720h
+  renewBefore: 360h
+  privateKey: {algorithm: ECDSA, size: 256, rotationPolicy: Always}
+  dnsNames:
+    - "*.apps.par2.medisphere.internal"
+    - mediagenda.medisphere.internal
+    - medidoc.medisphere.internal
+    - rdv.medisphere.internal
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gw-par2
+  namespace: passerelles
+  annotations:
+    lbipam.cilium.io/ips: "10.20.20.200"
+spec:
+  gatewayClassName: cilium
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - {kind: Secret, name: apps-par2}
+      allowedRoutes:
+        namespaces:
+          from: All          # comme gw-par1 (M15) : reprends la règle de TON gw-par1 si elle est plus stricte
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same

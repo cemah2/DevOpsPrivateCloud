@@ -1,0 +1,89 @@
+# plateforme/k8s — composants/audit-archive/cronjob-archive-audit.yaml (F6-S08, SEC-3608, ferme ECA-3601)
+#
+# Archive quotidienne du locataire « audit » de Loki vers le compartiment RGW archive-audit, en
+# verrouillage d'objets (COMPLIANCE, rétention 1 an), avec un manifeste signé par transit d'OpenBao.
+# Image par Harbor (chaîne d'approvisionnement), profil restricted, aucun jeton de compte de service
+# monté sauf besoin (ici : aucun appel à l'API Kubernetes). Secrets (S3 d'écriture, jeton transit)
+# fournis par ESO (M25). Le compartiment archive-audit est créé À PART, avec verrouillage activé dès le
+# départ (voir docs/conformite/journaux-audit.md) — un CronJob ne l'active pas après coup.
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: audit-archive
+  namespace: observabilite
+  labels:
+    medisphere.internal/composant: conformite
+spec:
+  schedule: "CRON_TZ=Europe/Paris 30 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: audit-archive
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: archive
+              image: registry.par1.medisphere.internal/medisphere/audit-archive:1.0.0
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: LOKI_URL
+                  value: "http://loki.apps.par1.medisphere.internal:3100"
+                - name: LOKI_TENANT
+                  value: "audit"
+                - name: RGW_URL
+                  value: "https://rgw.par1.medisphere.internal"
+                - name: ARCHIVE_BUCKET
+                  value: "archive-audit"
+                - name: RETENTION_JOURS
+                  value: "365"
+                - name: OBJECT_LOCK_MODE
+                  value: "COMPLIANCE"   # GOVERNANCE le temps d'éprouver, puis COMPLIANCE
+                - name: BAO_ADDR
+                  value: "https://openbao.par1.medisphere.internal:8200"
+                - name: TRANSIT_CLE
+                  value: "audit-archive"
+              envFrom:
+                - secretRef:
+                    name: audit-archive-s3        # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (écriture)
+                - secretRef:
+                    name: audit-archive-bao        # BAO_TOKEN (signature transit)
+              command: ["/usr/local/bin/archiver-audit"]
+              # archiver-audit : pour la veille,
+              #   1. query_range sur chaque job du locataire audit -> un .jsonl.gz par source ;
+              #   2. manifeste.json (periode, objets[{nom, sha256, lignes}]) ;
+              #   3. signe le condensat du manifeste par transit -> manifeste.sig ;
+              #   4. put-object --object-lock-mode $OBJECT_LOCK_MODE
+              #        --object-lock-retain-until-date <veille + RETENTION_JOURS> pour CHAQUE objet.
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi
+          volumes:
+            - name: tmp
+              emptyDir: {}

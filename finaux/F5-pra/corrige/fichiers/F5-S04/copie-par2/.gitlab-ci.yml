@@ -1,0 +1,22 @@
+# plateforme/copie-par2 — copie des images signées de Harbor vers reg02 (F5-S04, PLAT-3504).
+# Pipeline PLANIFIÉ (toutes les heures, à :20) et déclenché après chaque promotion en production.
+# Runner PROTÉGÉ (k8s-par1-protege, étiquette « protege ») : seul autorisé à voir les identifiants de
+# copie ; la copie ne signe rien (les signatures existent déjà) mais elle doit pouvoir les VÉRIFIER.
+include:
+  - component: git01.par1.medisphere.internal/plateforme/ci-templates/qualite@<VERSION-CI-TEMPLATES>
+
+stages: [qualite, copie]
+
+copie-vers-reg02:
+  stage: copie
+  image: registry.par1.medisphere.internal/plateforme/outils-supply-chain@<DIGEST-OUTILS-SUPPLY-CHAIN>
+  tags: [protege]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_REF_PROTECTED == "true"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" && $CI_COMMIT_REF_PROTECTED == "true"   # après une promotion
+    - if: $CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_REF_PROTECTED == "true"
+  # Variables protégées et masquées du projet : HARBOR_ROBOT_USER/PASSWORD (robot$medisphere+lecture-par2,
+  # lecture des projets medisphere et charts), REG02_USER/REG02_PASSWORD (compte « copie » de reg02).
+  script:
+    - outils/copier-images.sh liste-images.yaml
+  timeout: 45m

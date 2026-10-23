@@ -1,0 +1,20 @@
+# composants/cilium/values-par2.yaml — différences de PAR2 SEULEMENT (F5-S06). Le reste vient de
+# values.yaml, commun aux deux clusters. Documentation : docs.cilium.io « L2 Announcements / L2 Aware LB ».
+k8sServiceHost: k8s-api.par2.medisphere.internal
+k8sServicePort: 6443
+
+# Pas de routeur BGP à PAR2 : le plan de contrôle BGP est coupé, les adresses de LoadBalancer sont
+# annoncées par ARP sur vmbr2 (hp01 et les VMs de PAR2 sont sur le même segment).
+bgpControlPlane:
+  enabled: false
+l2announcements:
+  enabled: true
+# Les annonces L2 reposent sur des baux (Lease) de l'API : la documentation demande d'augmenter le débit
+# client de l'agent en conséquence (un service annoncé ≈ quelques requêtes par seconde).
+k8sClientRateLimit:
+  qps: 20
+  burst: 40
+
+# Un seul nœud : un seul opérateur.
+operator:
+  replicas: 1

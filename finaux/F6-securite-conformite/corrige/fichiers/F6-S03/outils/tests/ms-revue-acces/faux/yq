@@ -1,0 +1,6 @@
+#!/bin/bash
+# Faux yq (tests de ms-revue-acces) : les comptes déclarés, en JSON.
+cat <<'J'
+[{"systeme":"*","compte":"plateforme-admins|plateforme|securite","nature":"groupe-annuaire","proprietaire":"claire.morel"},
+ {"systeme":"argocd","compte":"ci-lecture","nature":"technique","proprietaire":"karim.benali"}]
+J

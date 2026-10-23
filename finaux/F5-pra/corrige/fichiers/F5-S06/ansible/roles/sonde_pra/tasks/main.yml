@@ -1,0 +1,82 @@
+---
+# sonde_pra — voir defaults/main.yml. Utilisateur système dédié, unité durcie, minuterie de 15 s.
+- name: Compte de la sonde
+  ansible.builtin.user:
+    name: ms-sonde-pra
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Dossier des mesures
+  ansible.builtin.file:
+    path: "{{ sonde_pra_dossier }}"
+    state: directory
+    owner: ms-sonde-pra
+    group: ms-sonde-pra
+    mode: "0755"
+
+- name: Script
+  ansible.builtin.copy:
+    src: ms-sonde-pra
+    dest: /usr/local/bin/ms-sonde-pra
+    mode: "0755"
+
+- name: Unités
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.nom }}"
+    mode: "0644"
+    content: "{{ item.contenu }}"
+  loop:
+    - nom: ms-sonde-pra.service
+      contenu: |
+        [Unit]
+        Description=Sonde utilisateur du PRA (F5-S06)
+        [Service]
+        Type=oneshot
+        User=ms-sonde-pra
+        Environment="SONDE_CIBLES={{ sonde_pra_cibles | join(' ') }}"
+        Environment=SONDE_DOSSIER={{ sonde_pra_dossier }}
+        Environment=SONDE_DELAI_S={{ sonde_pra_delai_s }}
+        ExecStart=/usr/local/bin/ms-sonde-pra
+        NoNewPrivileges=true
+        ProtectSystem=strict
+        ProtectHome=true
+        ReadWritePaths={{ sonde_pra_dossier }}
+        PrivateTmp=true
+    - nom: ms-sonde-pra.timer
+      contenu: |
+        [Unit]
+        Description=Sonde utilisateur du PRA toutes les 15 s (F5-S06)
+        [Timer]
+        OnBootSec=30s
+        OnUnitActiveSec=15s
+        AccuracySec=1s
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.nom }}"
+  notify: Relire systemd
+
+- name: Appliquer avant de démarrer
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie
+  ansible.builtin.systemd_service:
+    name: ms-sonde-pra.timer
+    enabled: true
+    state: started
+
+- name: Rotation du fichier de mesures (garder 60 jours, il sert aux rapports d'exercice)
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/ms-sonde-pra
+    mode: "0644"
+    content: |
+      {{ sonde_pra_dossier }}/mesures.csv {
+          weekly
+          rotate 9
+          compress
+          delaycompress
+          missingok
+          notifempty
+          copytruncate
+      }

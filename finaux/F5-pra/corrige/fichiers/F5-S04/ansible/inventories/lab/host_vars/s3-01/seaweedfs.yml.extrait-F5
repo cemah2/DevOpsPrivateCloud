@@ -1,0 +1,15 @@
+# host_vars/s3-01/seaweedfs.yml — EXTRAIT (F5-S04, CHG-3504) : s3-01 devient la SOURCE de filer.sync.
+# ⚠️ Changement de PRODUCTION (s3-01 porte l'état OpenTofu de tout le lab et les archives des bases) :
+#    redémarrage de weed en fenêtre, après sauvegarde PBS de s3-01 du jour vérifiée ; retour arrière :
+#    retirer ces trois variables et relancer le rôle (comportement du M05).
+seaweedfs_ecoute_interne: 0.0.0.0
+seaweedfs_securite:
+  ca: "{{ vault_seaweedfs_grpc_ca }}"
+  certificat: "{{ vault_seaweedfs_grpc_certificat }}"
+  cle: "{{ vault_seaweedfs_grpc_cle }}"
+  noms_autorises: [s3-01, s3-02]
+  jwt_filer: "{{ vault_seaweedfs_jwt_filer }}"
+
+# host_vars/s3-01/pare_feu_local.yml (rôle pare_feu_local, M06-E30) — à ajouter :
+#   - {source: 10.20.20.14, proto: tcp, ports: [8888, 18888], motif: "filer.sync de s3-02 (F5-S04)"}
+# et VÉRIFIER qu'aucune règle n'ouvre 9333, 19333, 8080, 18080 (master, volume) au réseau.

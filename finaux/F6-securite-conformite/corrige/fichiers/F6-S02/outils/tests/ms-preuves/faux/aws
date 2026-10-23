@@ -1,0 +1,62 @@
+#!/bin/bash
+# Faux aws (tests de ms-preuves) : un compartiment simulé dans le dossier FAUX_S3.
+#   FAUX_VERROU=aucun|sans-regle|governance  (défaut governance) : configuration du verrouillage.
+#   FAUX_S3_SANS_RETENTION=1                 : les objets déposés n'ont pas de rétention.
+set -euo pipefail
+racine="${FAUX_S3:?}"
+args=()
+while (($#)); do
+  case "$1" in
+    --endpoint-url) shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- "${args[@]}"
+service="$1" op="$2"; shift 2
+bucket="" key="" body="" prefix=""
+opt() {
+  while (($#)); do
+    case "$1" in
+      --bucket) bucket="$2"; shift 2 ;;
+      --key) key="$2"; shift 2 ;;
+      --body) body="$2"; shift 2 ;;
+      --prefix) prefix="$2"; shift 2 ;;
+      --version-id) shift 2 ;;
+      *) shift ;;
+    esac
+  done
+}
+retention() {
+  if [[ "${FAUX_S3_SANS_RETENTION:-0}" == 1 ]]; then echo '{"ContentLength":1}'; else
+    printf '{"ContentLength":1,"ObjectLockMode":"GOVERNANCE","ObjectLockRetainUntilDate":"%s"}\n' "$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%SZ)"; fi
+}
+case "$service $op" in
+  "s3api get-object-lock-configuration")
+    case "${FAUX_VERROU:-governance}" in
+      aucun) echo "An error occurred (ObjectLockConfigurationNotFoundError)" >&2; exit 254 ;;
+      sans-regle) echo '{"ObjectLockConfiguration":{"ObjectLockEnabled":"Enabled"}}' ;;
+      *) echo '{"ObjectLockConfiguration":{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":1}}}}' ;;
+    esac ;;
+  "s3api put-object")
+    opt "$@"
+    mkdir -p "$(dirname "$racine/$bucket/$key")"
+    cp "$body" "$racine/$bucket/$key"
+    echo '{"ETag":"\"x\"","VersionId":"v1"}' ;;
+  "s3api head-object")
+    opt "$@"
+    [[ -f "$racine/$bucket/$key" ]] || { echo "An error occurred (404)" >&2; exit 254; }
+    retention ;;
+  "s3api list-objects-v2")
+    opt "$@"
+    (cd "$racine/$bucket" && find "$prefix" -type f 2>/dev/null | sort | paste -sd '\t') || true ;;
+  "s3 cp")
+    pos=(); for a in "$@"; do [[ "$a" == --* ]] || pos+=("$a"); done
+    src="${pos[0]}"; dst="${pos[1]}"
+    src="${src#s3://}"
+    cp -r "$racine/$src/." "$dst" ;;
+  "s3 ls")
+    pos=(); for a in "$@"; do [[ "$a" == --* ]] || pos+=("$a"); done
+    src="${pos[0]#s3://}"
+    (cd "$racine" && find "$src" -type f | sort | while read -r f; do printf '2026-11-30 02:05:00 1 %s\n' "${f#*/}"; done) ;;
+  *) echo "faux aws : opération non simulée : $service $op" >&2; exit 2 ;;
+esac

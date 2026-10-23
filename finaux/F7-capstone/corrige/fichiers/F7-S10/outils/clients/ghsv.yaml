@@ -1,0 +1,26 @@
+# plateforme/outils — clients/ghsv.yaml (F7-S10, PLAT-3710 ; procédure RB-374)
+# Paramètres du rapport mensuel du client GHSV (ms-rapport-client). Une MR ici = un changement relu
+# (Nadia Roussel pour les maintenances, Claire Morel pour les objectifs).
+client: ghsv
+raison_sociale: Groupement hospitalier Seine-et-Vallées
+espace: ghsv-prod
+# Sondes externes qui font foi pour la disponibilité (ENF-03, EXP-07) : groupes du témoin de mon01.
+groupes_sondes: "client-ghsv.*"
+objectifs:
+  disponibilite: 99.9          # % mensuel, hors maintenances annoncées (ENF-03, ENF-04)
+  # Seuils en TEXTE : valeur exacte de l'étiquette « le » du seau (client Python : "0.3", "1.0").
+  latence_seuil_s: "0.3"       # ENF-05
+  latence_part: 95             # % des requêtes sous le seuil
+  latence_max_s: "1.0"         # ENF-05 reformulé (R-10) : 99,9 % des requêtes sous 1 s
+  latence_max_part: 99.9
+# Maintenances programmées : SEULES celles annoncées au moins 5 jours ouvrés avant (ENF-04) sont
+# retirées du calcul ; le rapport le vérifie (annonce ≤ debut − 5 jours ouvrés, fenêtre 22 h - 6 h,
+# 4 h au plus par mois en tout) et compte toute maintenance non conforme comme indisponibilité.
+# Heures en UTC, format ISO 8601. « annonce » = horodatage du message envoyé au GHSV (ticket commun).
+# Exemple d'entrée :
+  # - debut: "2027-04-13T21:00:00Z"     # 23 h, heure de Paris (été)
+  #   fin: "2027-04-13T22:30:00Z"
+  #   annonce: "2027-04-03T08:12:00Z"
+  #   changement: CHG-37xx
+  #   motif: "Montée corrective de Kubernetes (fenêtre du 13 avril)"
+maintenances: []

@@ -1,0 +1,8 @@
+# mediagenda/deploiement — components/donnees-demo (F7-S14, PLAT-3714)
+# Jeu de données FICTIF de la recette d'un client (ESC-13 : aucune donnée réelle en recette), rejoué
+# après chaque synchronisation : une recette reconstruite depuis le code retrouve ses données de
+# démonstration sans geste manuel. Inclus par overlays/clients/<client>-recette SEULEMENT (jamais prod).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - job.yaml

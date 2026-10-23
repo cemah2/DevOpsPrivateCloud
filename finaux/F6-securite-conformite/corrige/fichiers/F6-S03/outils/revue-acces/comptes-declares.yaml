@@ -1,0 +1,44 @@
+# plateforme/outils — revue-acces/comptes-declares.yaml (F6-S03, SEC-3603)
+# Comptes NON PERSONNELS déclarés, lus par ms-revue-acces. Tout compte d'un système qui n'est ni celui
+# d'une personne active de l'annuaire, ni déclaré ici, sort « a-justifier » de la revue.
+# Champs : systeme (ou « * »), compte (expression régulière ENTIÈRE, sans ^ ni $), nature
+# (technique | bris-de-glace | groupe-annuaire | banc-de-formation), proprietaire, justification.
+# Une ligne = une décision : MR relue par Sophie Laurent (RSSI). Pas de motif plus large que nécessaire.
+comptes:
+  # --- Groupes de l'annuaire (droits donnés par groupe, membres revus dans l'annuaire) ---
+  - systeme: "*"
+    compte: "plateforme-admins|plateforme|securite|support|direction|mediagenda|medidoc|medinotif|medivisio|data|legacy"
+    nature: groupe-annuaire
+    proprietaire: claire.morel
+    justification: "groupes de personnes de FreeIPA (M24, F2) ; les membres sont revus côté annuaire"
+  # --- Bris de glace ---
+  - {systeme: annuaire, compte: admin, nature: bris-de-glace, proprietaire: claire.morel,
+     justification: "administrateur FreeIPA ; mot de passe sous enveloppe (RB-24x), usage tracé"}
+  - {systeme: gitlab, compte: root, nature: bris-de-glace, proprietaire: claire.morel,
+     justification: "administrateur GitLab ; SSO hors service"}
+  - {systeme: proxmox, compte: "root@pam", nature: bris-de-glace, proprietaire: claire.morel,
+     justification: "administration de l'hôte ; SSO hors service"}
+  - {systeme: harbor, compte: admin, nature: bris-de-glace, proprietaire: karim.benali,
+     justification: "seul compte local permis par le mode OIDC de Harbor (M24)"}
+  - {systeme: grafana, compte: admin, nature: bris-de-glace, proprietaire: karim.benali,
+     justification: "administrateur local de Grafana ; SSO hors service"}
+  # --- Comptes techniques de la plateforme ---
+  - {systeme: keycloak, compte: "service-account-.+", nature: technique, proprietaire: karim.benali,
+     justification: "comptes de service des clients confidentiels du royaume (un par client, M24)"}
+  - {systeme: gitlab, compte: "svc-equipes|svc-portail", nature: technique, proprietaire: karim.benali,
+     justification: "comptes de service GitLab de l'équipe en code (F2) et du portail (M28)"}
+  - {systeme: gitlab, compte: "(project|group)_[0-9]+_bot_[0-9a-f]+", nature: technique, proprietaire: karim.benali,
+     justification: "utilisateurs des jetons d'accès de projet ou de groupe (déploiement, Argo CD, CI)"}
+  - {systeme: kubernetes, compte: "sa:kube-system/.+", nature: technique, proprietaire: karim.benali,
+     justification: "comptes de service du plan de contrôle"}
+  - {systeme: openbao, compte: "approle/role/(medictl|openbao-instantanes)", nature: technique, proprietaire: karim.benali,
+     justification: "outil medictl (M25) et instantanés Raft horaires"}
+  - {systeme: openbao, compte: "gitlab/role/ci-.+", nature: technique, proprietaire: karim.benali,
+     justification: "rôles JWT des pipelines (un par projet, + promotion, signature, preuves)"}
+  - {systeme: argocd, compte: ci-lecture, nature: technique, proprietaire: karim.benali,
+     justification: "lecture des Applications par la CI (jeton, M20)"}
+  - {systeme: harbor, compte: "robot\\$(medisphere|plateforme|bibliotheque)\\+.+", nature: technique, proprietaire: karim.benali,
+     justification: "robots de projet (CI, tirage par les nœuds) ; échéance revue à chaque revue"}
+  # --- Banc de formation (n'existent pas dans un MédiSphère réel ; identités en lecture des checks) ---
+  - {systeme: "*", compte: "(sa-[0-9]+-)?wb-.+|.*wb-checks.*|wb-.+@(pve|pbs)", nature: banc-de-formation, proprietaire: "<MOI>",
+     justification: "identités du workbook (vérifications, OpenTofu, Terratest, provisioning) ; hors périmètre réel"}

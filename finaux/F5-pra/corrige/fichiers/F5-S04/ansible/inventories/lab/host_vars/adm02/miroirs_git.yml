@@ -1,0 +1,8 @@
+---
+# host_vars/adm02/miroirs_git.yml (F5-S04). Clés publiques : pas des secrets ; jeton : Vault « critique ».
+miroirs_git_gitlab_jeton: "{{ vault_gitlab_miroirs_jeton }}"
+miroirs_git_cles_ecriture:
+  - {projet: plateforme/gitops, cle: "<CLE-PUBLIQUE-DU-MIROIR-GITLAB>"}
+  # … une ligne par projet de miroirs_git_projets (clé affichée par GitLab à la création du miroir) …
+miroirs_git_cles_lecture:
+  - {nom: argocd-k8s-par2, cle: "<CLE-PUBLIQUE-ARGOCD-K8S-PAR2>"}

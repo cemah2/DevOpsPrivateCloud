@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# changements-fiches — P-CHG-01 : fiches de changement (docs/changements/fiches/) avec leur décision et
+# leur date de dernière modification, lues dans plateforme/medisphere (API GitLab, jeton read_api).
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige GITLAB_TOKEN
+GL="${GITLAB_URL:-https://git01.par1.medisphere.internal}"
+P="$(enc "${MS_PREUVES_PROJET_DOC:-plateforme/medisphere}")"
+api() { http_jeton "$GL/api/v4/projects/$P/$1" "$GITLAB_TOKEN" 'PRIVATE-TOKEN:'; }
+fiches="$(api 'repository/tree?ref=main&path=docs/changements/fiches&per_page=100' | jq -r '.[] | select(.type == "blob") | .path')"
+res="[]"
+while IFS= read -r f; do
+  [[ -n "$f" && "${f##*/}" =~ ^CHG- ]] || continue
+  c="$(api "repository/files/$(enc "$f")/raw?ref=main")"
+  d="$(awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit } /^decision:/ { sub(/^decision:[[:space:]]*/, ""); print; exit }' <<<"$c")"
+  m="$(api "repository/commits?ref_name=main&path=$(enc "$f")&per_page=1" | jq -r '.[0].committed_date // empty')"
+  res="$(jq -c --arg f "$f" --arg d "$d" --arg m "$m" '. + [{fiche: $f, decision: $d, modifiee: $m}]' <<<"$res")"
+done <<<"$fiches"
+entete_preuve | jq -S --argjson r "$res" '. + {fiches: ($r | sort_by(.fiche))}'

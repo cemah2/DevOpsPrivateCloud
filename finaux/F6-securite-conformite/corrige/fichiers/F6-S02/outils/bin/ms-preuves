@@ -1,0 +1,392 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-preuves — collecte, empreinte, signature et dépôt inaltérable des preuves de conformité
+# (F6-S02, PLAT-3602 ; catalogue : docs/conformite/preuves.md de plateforme/medisphere)
+#
+# Usage : ms-preuves collecter [--catalogue FICHIER] [--frequence F] [--seulement ID[,ID…]] [--sortie DOSSIER]
+#         ms-preuves signer LOT
+#         ms-preuves deposer LOT
+#         ms-preuves executer [options de « collecter »]
+#         ms-preuves verifier LOT|s3://COMPARTIMENT/lots/…/LOT/ [--cle-publique FICHIER]
+#         ms-preuves lister [--depuis AAAA-MM-JJ]
+#
+# Un LOT est un dossier <sortie>/<AAAAMMJJTHHMMSSZ>-<fréquence>/ :
+#   preuves/<ID>.<format>      sortie de chaque collecteur (jamais de secret : contrôle avant écriture)
+#   journal/<ID>.txt           erreurs du collecteur (stderr), code, durée
+#   lot.json                   métadonnées : horodatage UTC, origine (hôte, pipeline, commit), preuves
+#                              (id, mesures ISO 27001, empreinte, statut), résultat complet|partiel
+#   MANIFESTE.sha256           empreintes SHA-256 de tous les fichiers ci-dessus (format sha256sum)
+#   MANIFESTE.sha256.sigstore.json   signature Cosign du manifeste (bundle), clé de transit OpenBao
+#
+# collecter  lance les collecteurs du catalogue (preuves/catalogue.yaml) de la fréquence demandée
+#            (quotidienne, hebdomadaire, mensuelle ou toutes ; défaut : quotidienne) ; un collecteur
+#            est un exécutable de preuves/collecteurs/ qui écrit la preuve sur sa sortie standard, en
+#            LECTURE SEULE. Un échec n'arrête pas le lot : il est noté (statut « echec ») et le lot est
+#            « partiel » — un échec de collecte est aussi un fait à conserver.
+# signer     écrit le manifeste et le signe (cosign sign-blob, clé MS_PREUVES_CLE, sans journal de
+#            transparence : configuration de signature de MédiSphère, comme au M25).
+# deposer   envoie le lot dans le compartiment verrouillé (préfixe lots/AAAA/MM/JJ/<LOT>/), APRÈS avoir
+#            vérifié que le compartiment a un verrouillage d'objets avec une rétention par défaut ;
+#            contrôle ensuite que chaque objet porte un mode et une échéance de rétention. Le bundle
+#            de signature est envoyé en dernier : un lot sans bundle est un lot incomplet.
+# executer   collecter, signer, deposer ; code 1 si le lot est partiel (après dépôt).
+# verifier   recalcule les empreintes, vérifie la signature (cosign verify-blob) et, pour un lot du
+#            compartiment, la rétention de chaque objet.
+# lister     liste les lots déposés (horodatage, fréquence, résultat).
+#
+# Variables (valeurs par défaut adaptées au lab) :
+#   MS_PREUVES_CATALOGUE       défaut : <outil>/../preuves/catalogue.yaml
+#   MS_PREUVES_COLLECTEURS     défaut : <outil>/../preuves/collecteurs
+#   MS_PREUVES_SORTIE          défaut : ${TMPDIR:-/tmp}/ms-preuves
+#   MS_PREUVES_DELAI           délai maximal d'un collecteur, en secondes (défaut 300)
+#   MS_PREUVES_RGW_URL         défaut : https://rgw.par1.medisphere.internal
+#   MS_PREUVES_COMPARTIMENT    défaut : preuves-conformite
+#   MS_PREUVES_CLE             défaut : hashivault://preuves-conformite (Cosign lit BAO_ADDR, BAO_TOKEN)
+#   MS_PREUVES_SIGNING_CONFIG  défaut : /etc/medisphere/signing-config.json (M13, sans service)
+#   MS_PREUVES_CLE_PUBLIQUE    clé publique pour « verifier » (défaut : <outil>/../preuves/preuves-conformite.pub)
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY   identité S3 (écriture : « preuves » ; lecture : « preuves-lecture »)
+# Les identités des collecteurs (IPA_*, KEYCLOAK_*, GITLAB_*, KUBECONFIG, BAO_*, PROM_URL,
+# ALERTMANAGER_URL, HARBOR_*, PVE_*) viennent de l'environnement (CI : OpenBao, jamais de fichier).
+#
+# Codes retour : 0 succès, 1 erreur ou lot partiel, 2 usage, 3 refus d'un garde-fou (compartiment non
+# verrouillé, secret détecté dans une preuve, lot déjà signé ou déposé).
+# =============================================================================
+set -euo pipefail
+
+MS_PROG=ms-preuves
+MS_PREUVES_VERSION=1.0.0
+ICI="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+
+CATALOGUE="${MS_PREUVES_CATALOGUE:-$ICI/../preuves/catalogue.yaml}"
+COLLECTEURS="${MS_PREUVES_COLLECTEURS:-$ICI/../preuves/collecteurs}"
+SORTIE="${MS_PREUVES_SORTIE:-${TMPDIR:-/tmp}/ms-preuves}"
+DELAI="${MS_PREUVES_DELAI:-300}"
+RGW="${MS_PREUVES_RGW_URL:-https://rgw.par1.medisphere.internal}"
+COMPARTIMENT="${MS_PREUVES_COMPARTIMENT:-preuves-conformite}"
+CLE="${MS_PREUVES_CLE:-hashivault://preuves-conformite}"
+SIGNING_CONFIG="${MS_PREUVES_SIGNING_CONFIG:-/etc/medisphere/signing-config.json}"
+CLE_PUBLIQUE="${MS_PREUVES_CLE_PUBLIQUE:-$ICI/../preuves/preuves-conformite.pub}"
+MANIFESTE=MANIFESTE.sha256
+BUNDLE=MANIFESTE.sha256.sigstore.json
+
+# RGW : pas de somme de contrôle CRC ajoutée d'office par l'AWS CLI v2 récente (non comprise par
+# toutes les versions de RGW) ; Content-MD5 est envoyé explicitement à chaque dépôt (Object Lock).
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
+export AWS_REQUEST_CHECKSUM_CALCULATION="${AWS_REQUEST_CHECKSUM_CALCULATION:-when_required}"
+export AWS_RESPONSE_CHECKSUM_VALIDATION="${AWS_RESPONSE_CHECKSUM_VALIDATION:-when_required}"
+
+# --- Journal (stderr ; stdout réservé aux données) ---------------------------------------------------
+log() { printf '%s %s[%d] %s %s\n' "$(date -Iseconds)" "$MS_PROG" "$$" "$1" "${*:2}" >&2; }
+info() { log INFO "$@"; }
+avert() { log AVERT "$@"; }
+die() {
+  log ERREUR "$1"
+  exit "${2:-1}"
+}
+usage() { sed -n 's/^# Usage : /Usage : /p; s/^#         ms-preuves/        ms-preuves/p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+besoin() {
+  local c manquants=()
+  for c in "$@"; do command -v -- "$c" >/dev/null 2>&1 || manquants+=("$c"); done
+  ((${#manquants[@]} == 0)) || die "commande(s) introuvable(s) : ${manquants[*]}"
+}
+s3() { aws --endpoint-url "$RGW" "$@"; }
+utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# --- Catalogue -----------------------------------------------------------------------------------------
+# catalogue_json — le catalogue en JSON (yq de mikefarah v4, comme ms-showback).
+catalogue_json() {
+  [[ -r "$CATALOGUE" ]] || die "catalogue illisible : $CATALOGUE"
+  yq -o=json '.' "$CATALOGUE" || die "catalogue invalide (yq de mikefarah v4 attendu) : $CATALOGUE"
+}
+
+# --- Garde-fou : aucune preuve ne doit contenir de secret -----------------------------------------------
+# Motifs volontairement larges : un faux positif arrête la collecte de CETTE preuve (statut « refusee »),
+# il ne fait jamais déposer un secret dans un compartiment qu'on ne pourra plus vider avant des années.
+contient_secret() {
+  local cles='(password|passwd|mot_de_passe|client_secret|secret_key|secret_access_key|private_token)'
+  grep -Eqi -- "-----BEGIN [A-Z ]*PRIVATE KEY-----|\"$cles\"[[:space:]]*:[[:space:]]*\"[^\"]{4,}\"|(^|[[:space:]])$cles=[^[:space:]]{4,}|://[^/:@[:space:]]+:[^@/[:space:]]+@|\\b(AKIA|ASIA)[A-Z0-9]{16}\\b|\\bglpat-[A-Za-z0-9_-]{20,}|\\bhvs\\.[A-Za-z0-9_-]{24,}" "$1"
+}
+
+# --- collecter ---------------------------------------------------------------------------------------
+cmd_collecter() {
+  local frequence=quotidienne seulement="" sortie="$SORTIE"
+  while (($#)); do
+    case "$1" in
+      --catalogue) (($# >= 2)) || usage; CATALOGUE="$2"; shift ;;
+      --frequence) (($# >= 2)) || usage; frequence="$2"; shift ;;
+      --seulement) (($# >= 2)) || usage; seulement=",$2,"; shift ;;
+      --sortie) (($# >= 2)) || usage; sortie="$2"; shift ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  [[ "$frequence" =~ ^(quotidienne|hebdomadaire|mensuelle|toutes)$ ]] || die "fréquence invalide : $frequence" 2
+  besoin jq yq sha256sum timeout
+
+  local cat lot dossier ids id titre coll fmt mesures fichier code debut duree statut n_ok=0 n_ko=0
+  cat="$(catalogue_json)"
+  ids="$(jq -r --arg f "$frequence" '.preuves[] | select($f == "toutes" or .frequence == $f) | .id' <<<"$cat")"
+  [[ -n "$ids" ]] || die "aucune preuve de fréquence « $frequence » dans $CATALOGUE"
+
+  lot="$(date -u +%Y%m%dT%H%M%SZ)-$frequence"
+  dossier="$sortie/$lot"
+  (umask 077 && mkdir -p "$dossier/preuves" "$dossier/journal") || die "impossible de créer $dossier"
+  info "lot $lot dans $dossier"
+
+  local entrees="[]" e
+  while IFS= read -r id; do
+    [[ -n "$id" ]] || continue
+    if [[ -n "$seulement" && "$seulement" != *",$id,"* ]]; then continue; fi
+    [[ "$id" =~ ^P-[A-Z]{2,4}-[0-9]{2}$ ]] || die "identifiant de preuve invalide dans le catalogue : $id"
+    e="$(jq -c --arg id "$id" '.preuves[] | select(.id == $id)' <<<"$cat")"
+    titre="$(jq -r '.titre' <<<"$e")"
+    coll="$(jq -r '.collecteur' <<<"$e")"
+    fmt="$(jq -r '.format // "txt"' <<<"$e")"
+    mesures="$(jq -c '.mesures // []' <<<"$e")"
+    [[ "$coll" =~ ^[a-z0-9-]+$ && "$fmt" =~ ^[a-z0-9]+$ ]] || die "collecteur ou format invalide pour $id"
+    fichier="preuves/$id.$fmt"
+    debut=$SECONDS
+    code=0
+    if [[ ! -x "$COLLECTEURS/$coll" ]]; then
+      echo "collecteur absent ou non exécutable : $COLLECTEURS/$coll" >"$dossier/journal/$id.txt"
+      : >"$dossier/$fichier"
+      code=127
+    else
+      MS_PREUVES_ID="$id" MS_PREUVES_LOT="$lot" timeout "$DELAI" "$COLLECTEURS/$coll" \
+        >"$dossier/$fichier" 2>"$dossier/journal/$id.txt" </dev/null || code=$?
+    fi
+    duree=$((SECONDS - debut))
+    statut=ok
+    if ((code != 0)); then
+      statut=echec
+    elif [[ ! -s "$dossier/$fichier" ]]; then
+      statut=echec
+      code=1
+      echo "sortie vide" >>"$dossier/journal/$id.txt"
+    elif [[ "$fmt" == json ]] && ! jq -e . "$dossier/$fichier" >/dev/null 2>&1; then
+      statut=echec
+      code=1
+      echo "sortie annoncée JSON mais invalide" >>"$dossier/journal/$id.txt"
+    elif contient_secret "$dossier/$fichier"; then
+      statut=refusee
+      code=3
+      : >"$dossier/$fichier"
+      echo "REFUSÉE : la sortie ressemble à un secret ; rien n'est conservé (corrige le collecteur)" >>"$dossier/journal/$id.txt"
+    fi
+    printf 'code %s, durée %s s, statut %s\n' "$code" "$duree" "$statut" >>"$dossier/journal/$id.txt"
+    if [[ "$statut" == ok ]]; then n_ok=$((n_ok + 1)); else n_ko=$((n_ko + 1)); avert "$id ($coll) : $statut (code $code)"; fi
+    entrees="$(jq -c --arg id "$id" --arg t "$titre" --arg c "$coll" --arg f "$fichier" --argjson m "$mesures" \
+      --arg s "$statut" --argjson code "$code" --argjson d "$duree" \
+      --argjson o "$(stat -c %s "$dossier/$fichier")" --arg h "$(sha256sum "$dossier/$fichier" | cut -d' ' -f1)" \
+      '. + [{id: $id, titre: $t, collecteur: $c, fichier: $f, mesures: $m, statut: $s, code: $code,
+             duree_s: $d, octets: $o, sha256: $h}]' <<<"$entrees")"
+  done <<<"$ids"
+  ((n_ok + n_ko > 0)) || die "aucune preuve sélectionnée (--seulement ?)" 2
+
+  jq -n --arg lot "$lot" --arg h "$(utc)" --arg f "$frequence" --arg v "$MS_PREUVES_VERSION" \
+    --arg hote "$(hostname -f 2>/dev/null || hostname)" --arg pipeline "${CI_PIPELINE_URL:-}" \
+    --arg commit "${CI_COMMIT_SHA:-}" --arg projet "${CI_PROJECT_PATH:-}" --arg job "${CI_JOB_URL:-}" \
+    --arg cat_sha "$(sha256sum "$CATALOGUE" | cut -d' ' -f1)" --argjson p "$entrees" \
+    --argjson ok "$n_ok" --argjson ko "$n_ko" \
+    '{lot: $lot, horodatage_utc: $h, frequence: $f,
+      outil: {nom: "ms-preuves", version: $v, catalogue_sha256: $cat_sha},
+      origine: {hote: $hote, projet: $projet, commit: $commit, pipeline: $pipeline, job: $job},
+      preuves: $p, compte: {ok: $ok, autres: $ko},
+      resultat: (if $ko == 0 then "complet" else "partiel" end)}' >"$dossier/lot.json"
+  info "collecte terminée : $n_ok preuve(s) ok, $n_ko autre(s)"
+  printf '%s\n' "$dossier"
+}
+
+# --- signer ------------------------------------------------------------------------------------------
+lot_valide() {
+  [[ -d "$1" && -f "$1/lot.json" && -d "$1/preuves" ]] || die "pas un lot : $1 (lot.json et preuves/ attendus)" 2
+}
+
+cmd_signer() {
+  (($# == 1)) || usage
+  local d="$1"
+  lot_valide "$d"
+  besoin cosign sha256sum
+  [[ ! -e "$d/$BUNDLE" ]] || die "lot déjà signé : $d/$BUNDLE (on ne re-signe pas un lot)" 3
+  (
+    cd "$d"
+    find preuves journal -type f -print0 | sort -z | xargs -0 -r sha256sum >"$MANIFESTE.tmp"
+    sha256sum lot.json >>"$MANIFESTE.tmp"
+    mv "$MANIFESTE.tmp" "$MANIFESTE"
+  ) || die "manifeste impossible à écrire dans $d"
+  # Sans journal de transparence (configuration « sans service » de MédiSphère, M13/M25) : la date de
+  # confiance est celle du dépôt dans le compartiment verrouillé (horodatage du serveur, versions).
+  cosign sign-blob --yes --key "$CLE" --signing-config "$SIGNING_CONFIG" \
+    --bundle "$d/$BUNDLE" "$d/$MANIFESTE" >/dev/null || die "signature refusée (clé $CLE : BAO_ADDR, BAO_TOKEN ?)"
+  info "lot signé : $d/$BUNDLE ($(wc -l <"$d/$MANIFESTE") fichier(s) au manifeste)"
+}
+
+# --- deposer -----------------------------------------------------------------------------------------
+verrou_ok() {
+  local c
+  c="$(s3 s3api get-object-lock-configuration --bucket "$COMPARTIMENT" 2>/dev/null)" ||
+    die "le compartiment $COMPARTIMENT n'a pas de verrouillage d'objets (ou il est injoignable) : dépôt refusé" 3
+  jq -e '.ObjectLockConfiguration.ObjectLockEnabled == "Enabled"
+         and (.ObjectLockConfiguration.Rule.DefaultRetention.Mode // "" | test("^(GOVERNANCE|COMPLIANCE)$"))' \
+    >/dev/null <<<"$c" ||
+    die "le compartiment $COMPARTIMENT n'a pas de rétention par défaut (mode et durée) : dépôt refusé" 3
+  jq -r '.ObjectLockConfiguration.Rule.DefaultRetention | "\(.Mode) \(.Days // "-") j \(.Years // "-") a"' <<<"$c"
+}
+
+cmd_deposer() {
+  (($# == 1)) || usage
+  local d="$1" lot prefixe regle f cle md5 v r n=0 resultat
+  lot_valide "$d"
+  [[ -f "$d/$MANIFESTE" && -f "$d/$BUNDLE" ]] || die "lot non signé : signe-le d'abord (ms-preuves signer $d)" 3
+  [[ ! -e "$d/DEPOT.json" ]] || die "lot déjà déposé : $d/DEPOT.json" 3
+  besoin aws jq openssl
+  lot="$(jq -r .lot "$d/lot.json")"
+  [[ "$lot" =~ ^[0-9]{8}T[0-9]{6}Z-[a-z]+$ ]] || die "nom de lot invalide dans lot.json : $lot"
+  prefixe="lots/${lot:0:4}/${lot:4:2}/${lot:6:2}/$lot"
+  regle="$(verrou_ok)" || exit $?
+  if s3 s3api head-object --bucket "$COMPARTIMENT" --key "$prefixe/lot.json" >/dev/null 2>&1; then
+    die "un lot $lot existe déjà dans s3://$COMPARTIMENT/$prefixe/ : rien n'est remplacé" 3
+  fi
+  info "dépôt dans s3://$COMPARTIMENT/$prefixe/ (rétention par défaut : $regle)"
+
+  local depots="[]"
+  # Ordre : preuves et journaux, puis lot.json et le manifeste, le bundle EN DERNIER.
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    cle="$prefixe/$f"
+    md5="$(openssl dgst -md5 -binary "$d/$f" | openssl base64)"
+    r="$(s3 s3api put-object --bucket "$COMPARTIMENT" --key "$cle" --body "$d/$f" --content-md5 "$md5" \
+      --metadata "lot=$lot" 2>&1)" || die "échec du dépôt de $f : $r"
+    v="$(jq -r '.VersionId // empty' <<<"$r" 2>/dev/null || true)"
+    r="$(s3 s3api head-object --bucket "$COMPARTIMENT" --key "$cle" ${v:+--version-id "$v"})" ||
+      die "objet déposé introuvable : $cle"
+    jq -e '(.ObjectLockMode // "") != "" and (.ObjectLockRetainUntilDate // "") != ""' >/dev/null <<<"$r" ||
+      die "objet déposé SANS rétention : $cle (verrouillage du compartiment à revoir)" 3
+    depots="$(jq -c --arg k "$cle" --arg v "$v" --argjson h "$r" \
+      '. + [{cle: $k, version: $v, mode: $h.ObjectLockMode, echeance: $h.ObjectLockRetainUntilDate}]' <<<"$depots")"
+    n=$((n + 1))
+  done < <(
+    cd "$d"
+    find preuves journal -type f | sort
+    printf '%s\n' lot.json "$MANIFESTE" "$BUNDLE"
+  )
+  jq -n --arg c "$COMPARTIMENT" --arg p "$prefixe" --arg h "$(utc)" --argjson o "$depots" \
+    '{compartiment: $c, prefixe: $p, depose_utc: $h, objets: $o}' >"$d/DEPOT.json"
+  resultat="$(jq -r .resultat "$d/lot.json")"
+  info "$n objet(s) déposé(s) et verrouillé(s) ; lot $resultat"
+  printf 's3://%s/%s/\n' "$COMPARTIMENT" "$prefixe"
+}
+
+# --- executer ------------------------------------------------------------------------------------------
+cmd_executer() {
+  local d
+  d="$(cmd_collecter "$@" | tail -n 1)" || exit $?
+  cmd_signer "$d"
+  cmd_deposer "$d"
+  [[ "$(jq -r .resultat "$d/lot.json")" == complet ]] || {
+    avert "lot partiel : au moins une preuve n'a pas été collectée (voir journal/ du lot)"
+    return 1
+  }
+}
+
+# --- verifier ----------------------------------------------------------------------------------------
+cmd_verifier() {
+  local cible="" pub="$CLE_PUBLIQUE" d prefixe="" k r echec=0
+  while (($#)); do
+    case "$1" in
+      --cle-publique) (($# >= 2)) || usage; pub="$2"; shift ;;
+      -*) usage ;;
+      *) [[ -z "$cible" ]] || usage; cible="$1" ;;
+    esac
+    shift
+  done
+  [[ -n "$cible" ]] || usage
+  besoin sha256sum cosign jq
+  [[ -r "$pub" ]] || die "clé publique illisible : $pub"
+  if [[ "$cible" == s3://* ]]; then
+    besoin aws
+    [[ "$cible" =~ ^s3://([^/]+)/(lots/[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9]{8}T[0-9]{6}Z-[a-z]+)/?$ ]] ||
+      die "adresse de lot attendue : s3://COMPARTIMENT/lots/AAAA/MM/JJ/<LOT>/" 2
+    COMPARTIMENT="${BASH_REMATCH[1]}"
+    prefixe="${BASH_REMATCH[2]}"
+    _MS_TMP="$(mktemp -d)"
+    trap 'rm -rf -- "$_MS_TMP"' EXIT
+    d="$_MS_TMP"
+    s3 s3 cp --recursive --only-show-errors "s3://$COMPARTIMENT/$prefixe/" "$d/" || die "téléchargement impossible : $cible"
+  else
+    d="$cible"
+  fi
+  lot_valide "$d"
+  [[ -f "$d/$MANIFESTE" && -f "$d/$BUNDLE" ]] || die "manifeste ou signature absents dans $d"
+
+  # 1. Chaque fichier du lot est au manifeste, et chaque empreinte est juste.
+  if (cd "$d" && sha256sum --quiet --strict -c "$MANIFESTE" >&2); then
+    info "empreintes : conformes ($(wc -l <"$d/$MANIFESTE") fichier(s))"
+  else
+    log ERREUR "empreintes : au moins un fichier modifié ou manquant"
+    echec=1
+  fi
+  local extra
+  extra="$(cd "$d" && comm -23 <(find preuves journal -type f | sort) <(awk '{ sub(/^\*/, "", $2); print $2 }' "$MANIFESTE" | sort))"
+  if [[ -n "$extra" ]]; then
+    log ERREUR "fichier(s) hors manifeste : $(tr '\n' ' ' <<<"$extra")"
+    echec=1
+  fi
+  # 2. Le manifeste est celui qui a été signé par la clé des preuves.
+  if cosign verify-blob --key "$pub" --insecure-ignore-tlog=true --bundle "$d/$BUNDLE" "$d/$MANIFESTE" >/dev/null 2>&1; then
+    info "signature : vérifiée (clé $pub)"
+  else
+    log ERREUR "signature : NON vérifiée (manifeste modifié, autre clé, ou bundle absent)"
+    echec=1
+  fi
+  # 3. Lot du compartiment : chaque objet porte une rétention encore valide.
+  if [[ -n "$prefixe" ]]; then
+    while IFS= read -r k; do
+      [[ -n "$k" ]] || continue
+      r="$(s3 s3api head-object --bucket "$COMPARTIMENT" --key "$k" 2>/dev/null)" || { log ERREUR "objet illisible : $k"; echec=1; continue; }
+      if ! jq -e --arg n "$(utc)" '(.ObjectLockMode // "") != "" and (.ObjectLockRetainUntilDate // "") > $n' >/dev/null <<<"$r"; then
+        log ERREUR "objet sans rétention en cours : $k"
+        echec=1
+      fi
+    done < <(s3 s3api list-objects-v2 --bucket "$COMPARTIMENT" --prefix "$prefixe/" --query 'Contents[].Key' --output text | tr '\t' '\n' | grep -v '^None$')
+    ((echec)) || info "rétention : en cours sur tous les objets du lot"
+  fi
+  jq -r '"lot \(.lot) — \(.resultat) — \(.compte.ok) preuve(s) ok, \(.compte.autres) autre(s) — collecté le \(.horodatage_utc)"' "$d/lot.json"
+  return "$echec"
+}
+
+# --- lister ------------------------------------------------------------------------------------------
+cmd_lister() {
+  local depuis=""
+  while (($#)); do
+    case "$1" in
+      --depuis) (($# >= 2)) || usage; depuis="$2"; shift ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  [[ -z "$depuis" || "$depuis" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "date invalide : $depuis (AAAA-MM-JJ)" 2
+  besoin aws
+  s3 s3 ls --recursive "s3://$COMPARTIMENT/lots/" |
+    awk -v d="${depuis//-/}" '$4 ~ /\/lot\.json$/ { n = split($4, p, "/"); l = p[n - 1];
+      if (d == "" || substr(l, 1, 8) >= d) print l "\ts3://'"$COMPARTIMENT"'/" substr($4, 1, length($4) - 8) }'
+}
+
+main() {
+  (($# >= 1)) || usage
+  local c="$1"
+  shift
+  case "$c" in
+    collecter) cmd_collecter "$@" ;;
+    signer) cmd_signer "$@" ;;
+    deposer) cmd_deposer "$@" ;;
+    executer) cmd_executer "$@" ;;
+    verifier) cmd_verifier "$@" ;;
+    lister) cmd_lister "$@" ;;
+    -h | --help | aide) usage ;;
+    --version) echo "ms-preuves $MS_PREUVES_VERSION" ;;
+    *) usage ;;
+  esac
+}
+
+main "$@"

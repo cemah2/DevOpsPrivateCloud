@@ -1,0 +1,58 @@
+# /etc/prometheus/regles-pra.yml — adm02 (F5-S11) : alertes minimales pendant un PRA.
+# Validation : promtool check rules /etc/prometheus/regles-pra.yml
+# F5-S14 ajoute le groupe « preparation-par2 » (âge du témoin, retard de réplication) : voir le fichier
+# de F5-S14, qui remplace celui-ci.
+groups:
+  - name: pra-mode-degrade
+    rules:
+      - alert: PraNomGlobalIndisponible
+        expr: probe_success{job="noms_globaux"} == 0
+        for: 3m
+        labels: {severite: critique}
+        annotations:
+          resume: "{{ $labels.instance }} ne répond plus en 2xx depuis 3 min"
+          runbook: docs/pra/runbooks/RB-350-bascule-par2.md
+
+      - alert: PraBaseInjoignable
+        expr: up{job="cnpg_par2"} == 0
+        for: 2m
+        labels: {severite: critique}
+        annotations:
+          resume: "exportateur de mediagenda-db-par2 injoignable : base arrêtée ou réseau"
+
+      - alert: PraArchivageWalEnEchec
+        expr: cnpg_pg_stat_archiver_seconds_since_last_archival > 600
+        for: 5m
+        labels: {severite: critique}
+        annotations:
+          resume: "mediagenda-db-par2 n'a rien archivé depuis {{ $value | humanizeDuration }} : le RPO de PAR2 s'allonge"
+
+      - alert: PraMemoireBasse
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: {severite: avertissement}
+        annotations:
+          resume: "{{ $labels.instance }} : moins de 10 % de mémoire disponible"
+
+      - alert: PraDisquePresquePlein
+        expr: >
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < 0.10
+        for: 10m
+        labels: {severite: critique}
+        annotations:
+          resume: "{{ $labels.instance }} {{ $labels.mountpoint }} : moins de 10 % libre"
+
+      - alert: PraHorlogeDecalee
+        expr: abs(node_timex_offset_seconds) > 1 or node_timex_sync_status == 0
+        for: 5m
+        labels: {severite: critique}
+        annotations:
+          resume: "{{ $labels.instance }} : horloge non synchronisée (S3 refuse au-delà de 15 min)"
+
+      - alert: PraCibleAbsente
+        expr: up{job="noeuds"} == 0
+        for: 5m
+        labels: {severite: avertissement}
+        annotations:
+          resume: "{{ $labels.instance }} ne répond plus à la supervision"

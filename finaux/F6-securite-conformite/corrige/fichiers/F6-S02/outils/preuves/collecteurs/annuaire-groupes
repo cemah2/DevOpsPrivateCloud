@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# annuaire-groupes — P-IAM-01 : comptes de personnes (état, expiration, groupes) et groupes de FreeIPA.
+# Identité : compte système de lecture (IPA_URL, IPA_BASE, IPA_BIND_DN, IPA_BIND_PASSWORD).
+# Sortie : LDIF trié (comptes, puis groupes). nsAccountLock: TRUE = compte désactivé.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige IPA_BIND_DN IPA_BIND_PASSWORD
+IPA_URL="${IPA_URL:-ldaps://ipa01.par1.medisphere.internal}"
+IPA_BASE="${IPA_BASE:-dc=par1,dc=medisphere,dc=internal}"
+
+ldap() {
+  ldapsearch -LLL -o ldif-wrap=no -o nettimeout="$DELAI_HTTP" -H "$IPA_URL" -D "$IPA_BIND_DN" \
+    -y <(printf '%s' "$IPA_BIND_PASSWORD") "$@"
+}
+echo "# P-IAM-01 — annuaire FreeIPA, collecté le $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "# --- comptes de personnes ---"
+ldap -b "cn=users,cn=accounts,$IPA_BASE" '(objectClass=person)' \
+  uid nsAccountLock krbPrincipalExpiration krbLastSuccessfulAuth memberOf | grep -v '^$' | sort
+echo "# --- groupes ---"
+ldap -b "cn=groups,cn=accounts,$IPA_BASE" '(objectClass=ipausergroup)' cn member | grep -v '^$' | sort

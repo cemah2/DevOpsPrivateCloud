@@ -1,0 +1,97 @@
+{
+  "$comment": "plateforme/equipes — schema/equipe.schema.json : EXTRAIT (F7-S07, PLAT-3707). Trois ajouts au schéma de F2 (S02, S07, S10), sans rien renommer : (1) « client » dans l'énumération spec.properties.type.enum ; (2) la propriété spec.properties.client ci-dessous ; (3) la règle ajoutée à spec.allOf (deux blocs « if/then » ci-dessous). Les autres types ne peuvent pas porter de bloc client ; un client doit avoir un bloc kubernetes et ne pas avoir de libre-service.",
+  "type_enum_apres": ["interne", "prestataire", "client"],
+  "client": {
+    "description": "F7-S07 — occupant externe sous contrat : instance dédiée d'une application de MédiSphère, adresses, identité fédérée, clés dédiées, réversibilité, site de secours.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["raison_sociale", "contrat", "application", "publication", "identite", "cles", "reversibilite", "pra"],
+    "properties": {
+      "raison_sociale": {"type": "string", "minLength": 3, "maxLength": 120},
+      "contrat": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reference", "debut", "fin", "reversibilite_jours"],
+        "properties": {
+          "reference": {"type": "string", "minLength": 3, "maxLength": 60},
+          "debut": {"type": "string", "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]$"},
+          "fin": {"type": "string", "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]$"},
+          "reversibilite_jours": {"type": "integer", "minimum": 1, "maximum": 180}
+        }
+      },
+      "application": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nom", "depot", "chemin", "titre_public"],
+        "properties": {
+          "nom": {"enum": ["mediagenda"]},
+          "depot": {"type": "string", "pattern": "^[a-z][a-z0-9-]+/[a-z0-9][a-z0-9._-]*$"},
+          "chemin": {"type": "string", "pattern": "^[a-z0-9][a-z0-9/_-]*[a-z0-9]$"},
+          "titre_public": {"type": "string", "minLength": 3, "maxLength": 80}
+        }
+      },
+      "publication": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recette", "prod", "agents_recette", "agents_prod", "global"],
+        "properties": {
+          "recette": {"type": "string", "pattern": "^[a-z0-9-]+\\.apps\\.par1\\.medisphere\\.internal$"},
+          "prod": {"type": "string", "pattern": "^[a-z0-9-]+\\.apps\\.par1\\.medisphere\\.internal$"},
+          "agents_recette": {"type": "string", "pattern": "^[a-z0-9-]+\\.apps\\.par1\\.medisphere\\.internal$"},
+          "agents_prod": {"type": "string", "pattern": "^[a-z0-9-]+\\.apps\\.par1\\.medisphere\\.internal$"},
+          "global": {"type": "string", "pattern": "^[a-z0-9-]+\\.medisphere\\.internal$"}
+        }
+      },
+      "identite": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fournisseur", "groupe_agents"],
+        "properties": {
+          "fournisseur": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,40}$"},
+          "groupe_agents": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,40}$"}
+        }
+      },
+      "cles": {
+        "description": "Noms courts des clés transit/<client>-<nom> d'OpenBao.",
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {"enum": ["exports", "signature", "sauvegardes", "donnees"]}
+      },
+      "reversibilite": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["compartiment", "quota"],
+        "properties": {
+          "compartiment": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,62}$"},
+          "quota": {"type": "string", "pattern": "^[0-9]+[KMGT]$"}
+        }
+      },
+      "pra": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["site_secours"],
+        "properties": {"site_secours": {"enum": ["par2"]}}
+      }
+    }
+  },
+  "allOf_ajouts": [
+    {
+      "if": {"properties": {"type": {"const": "client"}}},
+      "then": {
+        "required": ["client", "kubernetes"],
+        "properties": {
+          "kubernetes": {
+            "properties": {
+              "libre_service": {"properties": {"espaces": {"const": 0}}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"not": {"properties": {"type": {"const": "client"}}}},
+      "then": {"not": {"required": ["client"]}}
+    }
+  ]
+}

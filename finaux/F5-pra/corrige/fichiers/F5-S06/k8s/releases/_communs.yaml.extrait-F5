@@ -1,0 +1,15 @@
+# releases/_communs.yaml — EXTRAIT (F5-S06) : second environnement. Le contexte kubectl k8s-par2 vient de
+# admin.conf de k8s-par2 (enveloppe) sur adm02, ou d'un contexte OIDC le jour où l'identité existe à PAR2.
+environments:
+  par1:
+    kubeContext: k8s-par1
+    values:
+      - ../environnements/par1.yaml
+    missingFileHandler: Error
+  par2:
+    kubeContext: k8s-par2
+    values:
+      - ../environnements/par2.yaml
+    missingFileHandler: Error
+# Dépôts : à PAR2, les charts viennent de reg02 (copie signée de Harbor « charts/ ») quand ils y sont,
+# sinon des dépôts publics (Internet par hp01). Le jour J, aucun chart n'est tiré de PAR1.

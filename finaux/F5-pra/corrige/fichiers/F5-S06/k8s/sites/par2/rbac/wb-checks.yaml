@@ -1,0 +1,54 @@
+# sites/par2/rbac/wb-checks.yaml — compte des vérifications du workbook sur k8s-par2 (F5-S06), même
+# principe que k8s-par1 (M14-E06) : lecture, JAMAIS les Secrets. Kubeconfig à jeton lié (durée 90 j)
+# fabriqué par outils/amorcer-par2.sh → ~/.config/workbook/k8s-par2-checks.kubeconfig (WB_F5_KUBECONFIG_PAR2).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wb-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wb-checks
+  namespace: wb-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wb-checks-par2
+rules:
+  - apiGroups: [""]
+    resources: [nodes, namespaces, pods, services, endpoints, configmaps, events, persistentvolumeclaims, serviceaccounts]
+    verbs: [get, list, watch]
+  - apiGroups: [apps, batch]
+    resources: [deployments, statefulsets, daemonsets, replicasets, jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: [cilium.io]
+    resources: [ciliumloadbalancerippools, ciliuml2announcementpolicies, ciliumnetworkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [gateways, httproutes, gatewayclasses]
+    verbs: [get, list, watch]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates, clusterissuers, issuers, certificaterequests]
+    verbs: [get, list, watch]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters, poolers, backups, scheduledbackups]
+    verbs: [get, list, watch]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, list, watch]
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets, secretstores, clustersecretstores]
+    verbs: [get, list, watch]
+  - apiGroups: [argoproj.io]
+    resources: [applications, applicationsets, appprojects, rollouts]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wb-checks-par2
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: wb-checks-par2}
+subjects:
+  - {kind: ServiceAccount, name: wb-checks, namespace: wb-system}

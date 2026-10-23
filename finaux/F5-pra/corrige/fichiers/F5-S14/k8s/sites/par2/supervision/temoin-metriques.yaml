@@ -1,0 +1,38 @@
+# plateforme/k8s — sites/par2/supervision/temoin-metriques.yaml (F5-S14, PLAT-3530)
+# Requête de supervision personnalisée de CloudNativePG : l'exportateur de chaque instance de
+# mediagenda-db-par2 (réplique en veille, primaire en PRA) publie l'âge du dernier témoin PRA-TEMOIN
+# PRÉSENT DANS LA BASE DE PAR2 — c'est le RPO courant, mesuré de bout en bout (archivage de PAR1, copie
+# filer.sync, rejeu de la réplique). Nom de la métrique : préfixe de l'exportateur + nom de la requête +
+# nom de la colonne, soit cnpg_pra_temoin_age_secondes et cnpg_pra_temoin_derniere_heure.
+# Branché sur le Cluster par spec.monitoring.customQueriesConfigMap (fichier de site de PAR2 :
+# extrait ci-dessous). L'étiquette cnpg.io/reload fait relire la ConfigMap sans redémarrage.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pra-temoin-requetes
+  namespace: mediagenda-prod
+  labels:
+    cnpg.io/reload: ""
+data:
+  requetes.yaml: |
+    pra_temoin:
+      query: |
+        SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(cree_le))), 999999)::float8 AS age_secondes,
+               count(*) FILTER (WHERE cree_le > now() - interval '1 hour')::float8 AS derniere_heure
+          FROM rendez_vous
+         WHERE praticien = 'PRA-TEMOIN'
+      target_databases:
+        - mediagenda
+      metrics:
+        - age_secondes:
+            usage: GAUGE
+            description: "Âge (s) du dernier témoin PRA-TEMOIN présent dans la base (RPO courant à PAR2)"
+        - derniere_heure:
+            usage: GAUGE
+            description: "Nombre de témoins arrivés dans la dernière heure (60 attendus)"
+# Extrait du fichier de site du Cluster mediagenda-db-par2 :
+#   spec:
+#     monitoring:
+#       customQueriesConfigMap:
+#         - name: pra-temoin-requetes
+#           key: requetes.yaml

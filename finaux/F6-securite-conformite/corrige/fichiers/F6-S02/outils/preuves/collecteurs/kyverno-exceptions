@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# kyverno-exceptions — P-VUL-02 : dérogations aux politiques d'admission (PolicyException de l'espace
+# kyverno-exceptions) avec échéance, ticket et renvoi au registre EXC-… ; signale celles sans échéance.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KUBECONFIG
+e="$(kubectl --request-timeout="${DELAI_HTTP}s" -n kyverno-exceptions get policyexceptions.policies.kyverno.io -o json)"
+entete_preuve | jq -S --argjson e "$e" --arg n "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+  . + {exceptions: [$e.items[] | {nom: .metadata.name, politiques: [.spec.policyRefs[]?.name] | sort,
+        echeance: (.spec.expiresAt // null), ticket: (.spec.properties.ticket // null),
+        registre: (.spec.properties.registre // null),
+        au_registre: ((.metadata.labels // {})["medisphere.internal/registre-exceptions"] == "oui")}] | sort_by(.nom)}
+  | .anomalies = [.exceptions[] | select(.echeance == null or .echeance < $n or .au_registre == false or .registre == null) | .nom]'

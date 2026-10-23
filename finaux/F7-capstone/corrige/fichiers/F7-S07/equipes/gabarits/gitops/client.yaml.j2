@@ -1,0 +1,60 @@
+{#- gabarits/gitops/client.yaml.j2 — environnements d'un CLIENT (F7-S07). Rendu dans plateforme/gitops :
+    equipes/<client>/client.yaml. Variables : e (équipe normalisée), c (bloc client). -#}
+# GÉNÉRÉ par plateforme/equipes (outils/rendre.py) depuis equipes/{{ e.nom }}.yaml — NE PAS MODIFIER ICI.
+#
+# Une Application par environnement du client {{ e.nom }} ({{ c.raison_sociale }}), livrée depuis le dépôt
+# de l'application hébergée ({{ c.application.depot }}), dossier {{ c.application.chemin }}/{{ e.nom }}-<env>.
+# Même code et mêmes images signées que {{ c.application.nom }} : la version du client avance par la
+# promotion normale (MR approuvée), jamais par une branche du client.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: client-{{ e.nom }}
+  namespace: argocd
+  labels:
+    medisphere.internal/equipe: {{ e.nom }}
+    medisphere.internal/client: {{ e.nom }}
+    medisphere.internal/origine: plateforme-equipes
+  annotations:
+    medisphere.internal/ticket: "{{ e.ticket }}"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  # Une Application supprimée (environnement retiré du fichier) laisse ses objets en place : la fin
+  # d'un environnement de client passe par RB-371 (réversibilité, destruction prouvée), jamais par la CI.
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  generators:
+    - list:
+        elements:
+{%- for env, ce in e.environnements.items() %}
+          - environnement: {{ env }}
+            synchronisation: {{ ce.synchronisation }}
+{%- endfor %}
+  template:
+    metadata:
+      name: '{{ e.nom }}-{{ "{{" }} .environnement {{ "}}" }}'
+      labels:
+        medisphere.internal/equipe: {{ e.nom }}
+        medisphere.internal/client: {{ e.nom }}
+        medisphere.internal/environnement: '{{ "{{" }} .environnement {{ "}}" }}'
+    spec:
+      project: {{ e.nom }}
+      source:
+        repoURL: https://git01.par1.medisphere.internal/{{ c.application.depot }}.git
+        targetRevision: main
+        path: '{{ c.application.chemin }}/{{ e.nom }}-{{ "{{" }} .environnement {{ "}}" }}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ e.nom }}-{{ "{{" }} .environnement {{ "}}" }}'
+  templatePatch: |
+    spec:
+      syncPolicy:
+    {{ "{{-" }} if eq .synchronisation "automatique" {{ "}}" }}
+        automated:
+          prune: true
+          selfHeal: true
+    {{ "{{-" }} end {{ "}}" }}
+        syncOptions:
+          - ServerSideApply=true
+          - CreateNamespace=false

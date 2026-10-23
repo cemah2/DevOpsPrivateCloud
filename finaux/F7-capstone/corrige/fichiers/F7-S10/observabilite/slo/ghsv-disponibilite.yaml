@@ -1,0 +1,36 @@
+# plateforme/observabilite — slo/ghsv-disponibilite.yaml (F7-S10, PLAT-3710)
+# SLI côté SERVEUR : part des requêtes de prise de rendez-vous de l'instance de production du GHSV
+# servies sans erreur 5xx (compteur de l'application). Complète la sonde : il voit TOUTES les requêtes
+# réelles (le DPI, les agents), pas seulement celles de la sonde, mais rien de ce qui n'arrive pas à
+# l'API. Opérations de la prise de rendez-vous : créneaux, création, déplacement, annulation, liste.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: ghsv-disponibilite
+  labels:
+    pyrra.dev/equipe: ghsv
+    pyrra.dev/client: ghsv
+  annotations:
+    pyrra.dev/resume: "GHSV : l'API de prise de rendez-vous renvoie trop d'erreurs serveur"
+    pyrra.dev/description: "Taux de 5xx de l'API du GHSV au-delà de ce que permet 99,9 % sur 30 jours."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/capstone/runbooks/RB-374-rapport-mensuel-client.md
+spec:
+  description: "GHSV (prod) : requêtes de prise de rendez-vous servies sans erreur 5xx"
+  target: "99.9"
+  window: 30d
+  indicator:
+    ratio:
+      errors:
+        metric: mediagenda_http_requests_total{namespace="ghsv-prod", route=~"/api/v1/.*", code=~"5.."}
+      total:
+        metric: mediagenda_http_requests_total{namespace="ghsv-prod", route=~"/api/v1/.*"}
+  alerting:
+    burnrates: true
+    # L'absence de mesure est signalée par ghsv-disponibilite-sonde (absent) et par la supervision
+    # de l'application (cible de collecte absente).
+    absent: false
+    severities:
+      fastBurn: critique
+      mediumBurn: critique
+      slowBurn: avertissement
+      longTermBurn: avertissement

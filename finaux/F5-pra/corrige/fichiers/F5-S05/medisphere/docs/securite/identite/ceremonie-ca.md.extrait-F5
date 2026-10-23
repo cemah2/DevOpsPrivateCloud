@@ -1,0 +1,22 @@
+## Cérémonie du <AAAA-MM-JJ> — « MédiSphère PAR2 Intermediate CA » (F5-S05, PLAT-3505)
+
+> Section ajoutée au procès-verbal des cérémonies (`docs/securite/identite/ceremonie-ca.md`). Aucun
+> secret : empreintes, numéros de série et noms seulement.
+
+| | |
+|---|---|
+| Lieu, heure | bureau de Claire Morel, <HH:MM>-<HH:MM> |
+| Officiant (clavier) | <MOI> |
+| Témoin et gardienne de la phrase de passe de la racine | Sophie Laurent |
+| Témoin | Karim Benali |
+| Poste | `adm01`, session `admin`, `~/pki-racine` (700) ; aucun autre utilisateur connecté (`who`) |
+| CSR | `pki/medisphere-par2-intermediate-ca.csr` de `plateforme/ansible` (MR !<N>), produite sur **`adm02`** le <AAAA-MM-JJ> ; clé privée **jamais** à PAR1 (chiffrée dans `secrets/pki-par2.yml`, Ansible Vault « critique ») |
+| Sujet relu | `CN=MédiSphère PAR2 Intermediate CA` ; clé EC P-256 |
+| Commande | `DUREE_INTERMEDIAIRE=26280h ceremonie-pki.sh signer medisphere-par2-intermediate-ca.csr` (3 ans, `pathlen 0`) |
+| Résultat | numéro de série `<SÉRIE>` ; validité `<DÉBUT>` → `<FIN>` ; empreinte SHA-256 `<EMPREINTE-SHA256-DU-CERTIFICAT>` |
+| Contrôles | `step certificate verify … --roots medisphere-root-ca.crt` : OK ; `openssl x509 -ext basicConstraints` : `CA:TRUE, pathlen:0` ; journal de la racine (`journal-ceremonies.log`) : ligne ajoutée |
+| Publication | certificat (public) dans `docs/pra/pki/medisphere-par2-intermediate-ca.crt` de `plateforme/medisphere` et dans `pki/` de `plateforme/ansible` |
+| Après | `~/pki-racine` archivé (`ceremonie-pki.sh archiver`), copie de l'archive dans l'enveloppe (E5) ; phrase de passe rendue à Sophie |
+| Renouvellement | 6 mois avant `<FIN>` (calendrier des tests de reprise) |
+
+Signatures : <MOI>, Sophie Laurent, Karim Benali.

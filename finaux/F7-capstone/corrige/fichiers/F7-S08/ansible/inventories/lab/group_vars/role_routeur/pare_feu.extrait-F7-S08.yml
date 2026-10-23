@@ -1,0 +1,15 @@
+# plateforme/ansible — inventories/lab/group_vars/role_routeur/pare_feu.yml : EXTRAIT (F7-S08, PLAT-3708)
+# Flux ajouté à la liste des flux autorisés de la bordure (gw01/gw02), et sa ligne dans
+# docs/socle/matrice-flux.md. Reprends le FORMAT de ta liste (M00 → M26) : seuls les champs comptent.
+#
+# Le courtier d'identité (Keycloak sur idp01) appelle l'IdP du GHSV CÔTÉ SERVEUR : jeton (échange du
+# code), clés publiques (JWKS), userinfo. L'IdP simulé est publié, comme un IdP sur Internet, derrière
+# sso.par1.medisphere.internal (VIP de lb01/lb02). En production : idp01 → Internet (HTTPS) par le
+# mandataire sortant, vers le seul nom de l'IdP du GHSV.
+- nom: idp01-vers-sso-courtier
+  source: 10.10.20.30/32          # idp01 (VLAN 20)
+  destination: 10.10.70.200/32    # VIP lb01/lb02 (DMZ)
+  proto: tcp
+  ports: [443]
+  ticket: PLAT-3708
+  commentaire: "Courtier d'identité : appels serveur vers l'IdP du GHSV (jeton, JWKS, userinfo)"

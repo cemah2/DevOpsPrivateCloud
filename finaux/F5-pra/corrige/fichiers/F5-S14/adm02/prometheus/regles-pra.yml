@@ -1,0 +1,104 @@
+# /etc/prometheus/regles-pra.yml — adm02 (F5-S14, PLAT-3530) : remplace la version de F5-S11.
+# Deux groupes : « preparation-par2 » (temps normal : PAR2 est-il prêt à reprendre ?) et
+# « pra-mode-degrade » (pendant un PRA). Hors PRA, Alertmanager de adm02 relaie vers smtp.par1 (mon01) ;
+# en PRA, vers le Mailpit local (alertmanager.yml, deux variantes dans RB-350).
+# Validation : promtool check rules /etc/prometheus/regles-pra.yml ; essai : chaque alerte provoquée puis
+# résolue (calendrier-tests.md, test mensuel).
+groups:
+  - name: preparation-par2
+    rules:
+      - alert: PraTemoinEnRetard
+        expr: max(cnpg_pra_temoin_age_secondes{cluster="mediagenda-db-par2"}) > 900
+        for: 10m
+        labels: {severite: critique}
+        annotations:
+          resume: "le dernier témoin présent à PAR2 a {{ $value | humanizeDuration }} : un sinistre maintenant dépasserait le RPO de 15 min"
+          runbook: docs/pra/runbooks/RB-356-cluster-de-secours.md
+
+      - alert: PraTemoinAbsent
+        expr: absent(cnpg_pra_temoin_age_secondes{cluster="mediagenda-db-par2"})
+        for: 15m
+        labels: {severite: critique}
+        annotations:
+          resume: "plus de mesure de l'âge du témoin à PAR2 (exportateur, requête ou base arrêtés)"
+
+      - alert: PraReplicationEnRetard
+        expr: max(cnpg_pg_replication_lag{cluster="mediagenda-db-par2"}) > 600
+        for: 10m
+        labels: {severite: critique}
+        annotations:
+          resume: "la réplique de PAR2 n'a rien rejoué depuis {{ $value | humanizeDuration }}"
+
+      - alert: PraTemoinsManquants
+        expr: max(cnpg_pra_temoin_derniere_heure{cluster="mediagenda-db-par2"}) < 50
+        for: 30m
+        labels: {severite: avertissement}
+        annotations:
+          resume: "{{ $value }} témoins arrivés à PAR2 en une heure (60 attendus) : témoin de PAR1 ou réplication irréguliers"
+
+      - alert: PraPar2NonPret
+        expr: pra_par2_pret == 0
+        for: 30m
+        labels: {severite: critique}
+        annotations:
+          resume: "contrôle de préparation de PAR2 en échec (voir pra_preparation_ok)"
+
+      - alert: PraControlePreparationPerime
+        expr: time() - node_textfile_mtime_seconds{file=~".*pra-preparation.*"} > 93600
+        labels: {severite: avertissement}
+        annotations:
+          resume: "le contrôle de préparation de PAR2 n'a pas tourné depuis plus de 26 h"
+
+  - name: pra-mode-degrade
+    rules:
+      - alert: PraNomGlobalIndisponible
+        expr: probe_success{job="noms_globaux"} == 0
+        for: 3m
+        labels: {severite: critique}
+        annotations:
+          resume: "{{ $labels.instance }} ne répond plus en 2xx depuis 3 min"
+
+      - alert: PraBaseInjoignable
+        expr: up{job="cnpg_par2"} == 0
+        for: 2m
+        labels: {severite: critique}
+        annotations:
+          resume: "exportateur de mediagenda-db-par2 injoignable : base arrêtée ou réseau"
+
+      - alert: PraArchivageWalEnEchec
+        expr: cnpg_pg_stat_archiver_seconds_since_last_archival{cluster="mediagenda-db-par2"} > 600
+          and on() max(cnpg_pg_replication_in_recovery{cluster="mediagenda-db-par2"}) == 0
+        for: 5m
+        labels: {severite: critique}
+        annotations:
+          resume: "mediagenda-db-par2 (primaire) n'a rien archivé depuis {{ $value | humanizeDuration }}"
+
+      - alert: PraMemoireBasse
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: {severite: avertissement}
+        annotations:
+          resume: "{{ $labels.instance }} : moins de 10 % de mémoire disponible"
+
+      - alert: PraDisquePresquePlein
+        expr: >
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"} < 0.10
+        for: 10m
+        labels: {severite: critique}
+        annotations:
+          resume: "{{ $labels.instance }} {{ $labels.mountpoint }} : moins de 10 % libre"
+
+      - alert: PraHorlogeDecalee
+        expr: abs(node_timex_offset_seconds) > 1 or node_timex_sync_status == 0
+        for: 5m
+        labels: {severite: critique}
+        annotations:
+          resume: "{{ $labels.instance }} : horloge non synchronisée"
+
+      - alert: PraCibleAbsente
+        expr: up{job="noeuds"} == 0
+        for: 5m
+        labels: {severite: avertissement}
+        annotations:
+          resume: "{{ $labels.instance }} ne répond plus à la supervision"

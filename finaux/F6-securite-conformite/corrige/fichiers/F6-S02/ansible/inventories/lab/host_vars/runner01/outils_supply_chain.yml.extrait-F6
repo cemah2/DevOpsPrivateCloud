@@ -1,0 +1,8 @@
+# plateforme/ansible — inventories/lab/host_vars/runner01/outils_supply_chain.yml : EXTRAIT (F6-S02).
+# La collecte des preuves tourne sur runner01 (exécuteur shell) : elle y signe par Cosign (clé dans le
+# coffre) et lit les sources. Outils ajoutés à ceux déjà présents (conftest, OPA du M29) :
+#   - cosign : rôle outils_supply_chain (M13-E05, version et empreinte épinglées) ;
+#   - bao : rôle openbao_client (M25) ;
+#   - aws (AWS CLI v2), ldapsearch (ldap-utils), kubectl, yq de mikefarah : rôles d'outillage du poste
+#     d'administration (mêmes versions qu'adm01), appliqués à runner01.
+outils_supply_chain_outils: [cosign]

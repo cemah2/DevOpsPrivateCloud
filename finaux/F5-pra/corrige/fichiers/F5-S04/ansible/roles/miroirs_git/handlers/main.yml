@@ -1,0 +1,9 @@
+---
+- name: Recharger sshd
+  ansible.builtin.systemd_service:
+    name: ssh.service
+    state: reloaded
+
+- name: Relire systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true

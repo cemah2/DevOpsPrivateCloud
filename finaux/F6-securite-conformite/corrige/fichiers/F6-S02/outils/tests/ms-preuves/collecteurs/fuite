@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Collecteur de test : sortie qui contient un secret (doit être refusée et vidée).
+printf '{"client":"grafana","client_secret":"Zx9-tres-secret-42"}\n'

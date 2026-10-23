@@ -1,0 +1,10 @@
+---
+# plateforme/ansible — inventories/lab/group_vars/site_par2/temps.yml (F5-S10, INC-6110, PLAT-3532)
+# Source de temps des machines de PAR2 : la passerelle de PAR2 INFRA (hp01, chrony serveur pour
+# 10.20.20.0/24), JAMAIS celle de PAR1. Sans cette variable de site, ms_serveurs_ntp de group_vars/all
+# (10.10.20.1, PAR1) s'appliquait aussi à PAR2 : en temps normal, tout marchait (le tunnel wg0 porte NTP) ;
+# le jour où PAR1 disparaît, les VMs de PAR2 dérivent, et la première qui redémarre avec une horloge
+# matérielle fausse n'est plus jamais corrigée (S3 refuse les signatures à plus de 15 min).
+# Priorité : group_vars/site_par2 l'emporte sur group_vars/all (groupe plus spécifique).
+ms_serveurs_ntp:
+  - 10.20.20.1

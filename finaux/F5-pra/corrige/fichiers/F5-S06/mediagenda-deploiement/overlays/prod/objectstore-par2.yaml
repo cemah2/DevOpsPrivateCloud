@@ -1,0 +1,15 @@
+# mediagenda/deploiement — overlays/prod/objectstore-par2.yaml (F5-S06) : archive de PAR2 vue de PAR1, en
+# LECTURE (identité cnpg-par1-lecture de s3-02 : Read/List sur cnpg-k8s-par2 seulement ; ExternalSecret
+# cnpg-s3-par2 depuis kv/mediagenda/prod/cnpg-s3-par2). Pas de retentionPolicy (lecture seule).
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3-par2
+spec:
+  configuration:
+    destinationPath: s3://cnpg-k8s-par2/
+    endpointURL: https://s3-02.par2.medisphere.internal:8333
+    endpointCA: {name: medisphere-ca, key: ca.crt}
+    s3Credentials:
+      accessKeyId: {name: cnpg-s3-par2, key: ACCESS_KEY_ID}
+      secretAccessKey: {name: cnpg-s3-par2, key: ACCESS_SECRET_KEY}

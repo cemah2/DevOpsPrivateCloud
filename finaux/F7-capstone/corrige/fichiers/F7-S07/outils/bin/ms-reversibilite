@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-reversibilite — export de réversibilité d'un client hébergé, et son essai de relecture
+# (F7-S07, PLAT-3707 ; procédure RB-371 ; ERV-02, ERV-03 du marché GHSV)
+#
+# Usage : ms-reversibilite exporter CLIENT [ENV]
+#         ms-reversibilite relire CLIENT DOSSIER_DATE [--pg URL_POSTGRESQL]
+#         ms-reversibilite lister CLIENT
+#
+#   exporter  lit la base de l'instance <CLIENT>-<ENV> (prod par défaut) EN LECTURE, produit un
+#             export en format OUVERT (ADR-0374) : rendez-vous.jsonl et rendez-vous.csv (mêmes champs
+#             que l'API v1 du client), annexe technique (schéma SQL, une table = un CSV UTF-8 avec
+#             en-tête, dictionnaire des données), MANIFESTE.sha256, manifeste.json (empreintes et
+#             nombres d'enregistrements), LISEZMOI.md ; SIGNE le manifeste (transit/<CLIENT>-signature),
+#             chiffre l'archive avec une
+#             clé de données À USAGE UNIQUE enveloppée par transit/<CLIENT>-exports, et dépose
+#             l'archive chiffrée et l'enveloppe dans le compartiment <CLIENT>-reversibilite
+#             (s3://<CLIENT>-reversibilite/<AAAA-MM-JJTHHMMSSZ>/). Aucune donnée en clair ne touche
+#             un disque : le travail se fait dans /dev/shm, effacé à la sortie.
+#   relire    télécharge un export, ouvre l'enveloppe (droit <CLIENT>-dechiffrement : plateforme-
+#             admins), déchiffre, vérifie la signature du manifeste et chaque empreinte, relit chaque
+#             CSV (nombre de lignes) ; avec --pg, recharge tout dans une base PostgreSQL VIERGE
+#             (n'importe quelle version récente, sans outil de MédiSphère) et recompte.
+#   lister    liste les exports présents dans le compartiment.
+#
+# Prérequis sur adm01 : kubectl (contexte d'administration k8s-par1, KUBECONFIG), bao connecté
+# (bao login -method=oidc ; politiques <CLIENT>-reversibilite et, pour relire, <CLIENT>-dechiffrement),
+# aws, jq, openssl, tar, sha256sum, base64 ; psql pour --pg.
+# Variables : MS_RGW_URL (défaut https://rgw.par1.medisphere.internal), BAO_ADDR (défaut
+#   https://openbao.par1.medisphere.internal:8200), MS_CLUSTER_PG (défaut mediagenda-db),
+#   MS_BASE (défaut mediagenda).
+# Codes retour : 0 succès, 1 erreur, 2 usage.
+# =============================================================================
+set -euo pipefail
+
+RGW="${MS_RGW_URL:-https://rgw.par1.medisphere.internal}"
+export BAO_ADDR="${BAO_ADDR:-https://openbao.par1.medisphere.internal:8200}"
+GRAPPE="${MS_CLUSTER_PG:-mediagenda-db}"
+BASE="${MS_BASE:-mediagenda}"
+TRAVAIL=""
+
+usage() { sed -n 's/^# Usage : //p; s/^#         \(ms-.*\)/\1/p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+die() { printf 'ms-reversibilite : %s\n' "$1" >&2; exit "${2:-1}"; }
+info() { printf '== %s\n' "$*" >&2; }
+
+nettoyer() {
+  if [[ -n "$TRAVAIL" && -d "$TRAVAIL" ]]; then
+    find "$TRAVAIL" -type f -exec shred -u {} + 2>/dev/null || true
+    rm -rf -- "$TRAVAIL"
+  fi
+}
+trap nettoyer EXIT
+
+preparer() {
+  local c
+  for c in "$@"; do command -v "$c" >/dev/null 2>&1 || die "outil manquant : $c"; done
+  bao token lookup >/dev/null 2>&1 || die "pas de jeton OpenBao valide : bao login -method=oidc"
+  umask 077
+  [[ -d /dev/shm ]] || die "/dev/shm absent : refus de travailler sur disque"
+  TRAVAIL="$(mktemp -d -p /dev/shm ms-reversibilite.XXXXXX)"
+}
+
+client_valide() { [[ "$1" =~ ^[a-z][a-z0-9-]{1,18}[a-z0-9]$ ]] || die "nom de client invalide : $1" 2; }
+
+# s3 ARGS… — aws s3 avec les clés du compartiment du client, lues dans OpenBao (jamais affichées ni
+# sur une ligne de commande : passées par l'environnement du seul processus aws).
+s3() {
+  local json
+  json="$(bao kv get -format=json "kv/${CLIENT}/prod/s3-reversibilite")" || die "clés S3 illisibles (kv/${CLIENT}/prod/s3-reversibilite)"
+  AWS_ACCESS_KEY_ID="$(jq -r '.data.data.AWS_ACCESS_KEY_ID' <<<"$json")" \
+    AWS_SECRET_ACCESS_KEY="$(jq -r '.data.data.AWS_SECRET_ACCESS_KEY' <<<"$json")" \
+    aws --endpoint-url "$RGW" s3 "$@"
+}
+
+# psql_ro 'SQL' — requête dans la base du client, sur le PRIMAIRE, en transaction en lecture seule.
+psql_ro() {
+  kubectl -n "$ESPACE" exec "$POD" -c postgres -- \
+    psql -X -q -v ON_ERROR_STOP=1 -d "$BASE" -c "SET default_transaction_read_only = on;" -c "$1"
+}
+
+# psql_ro_lignes 'SELECT …' — résultat brut, une ligne par enregistrement (sans en-tête ni
+# alignement, sans l'échappement de COPY en format texte : sert au JSON Lines).
+psql_ro_lignes() {
+  kubectl -n "$ESPACE" exec "$POD" -c postgres -- \
+    psql -X -q -A -t -v ON_ERROR_STOP=1 -d "$BASE" -c "SET default_transaction_read_only = on;" -c "$1"
+}
+
+exporter() {
+  local env="${2:-prod}" date tables t n f cle json pt ct empreinte schema_version pg_version
+  CLIENT="$1"
+  client_valide "$CLIENT"
+  [[ "$env" =~ ^(prod|recette)$ ]] || die "environnement : prod ou recette" 2
+  preparer kubectl bao aws jq openssl tar sha256sum base64
+  ESPACE="${CLIENT}-${env}"
+  POD="$(kubectl -n "$ESPACE" get pods -l "cnpg.io/cluster=${GRAPPE},cnpg.io/instanceRole=primary" -o name | head -n 1)"
+  [[ -n "$POD" ]] || die "primaire CNPG introuvable dans $ESPACE"
+  date="$(date -u +%Y-%m-%dT%H%M%SZ)"
+  mkdir -p "$TRAVAIL/export/donnees-brutes"
+  info "schéma ($ESPACE, $POD)"
+  kubectl -n "$ESPACE" exec "$POD" -c postgres -- \
+    pg_dump -d "$BASE" --schema-only --no-owner --no-privileges --schema=public >"$TRAVAIL/export/schema.sql"
+  tables="$(psql_ro "COPY (SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1) TO STDOUT")"
+  [[ -n "$tables" ]] || die "aucune table dans $BASE"
+  printf '[]' >"$TRAVAIL/tables.json"
+  while IFS= read -r t; do
+    [[ "$t" =~ ^[a-z_][a-z0-9_]*$ ]] || die "nom de table inattendu : $t"
+    f="$TRAVAIL/export/donnees-brutes/$t.csv"
+    info "table $t"
+    psql_ro "COPY (SELECT * FROM public.\"$t\" ORDER BY 1) TO STDOUT WITH (FORMAT csv, HEADER true, ENCODING 'UTF8')" >"$f"
+    n=$(($(wc -l <"$f") - 1))
+    empreinte="$(sha256sum "$f" | cut -d' ' -f1)"
+    jq --arg t "$t" --argjson n "$n" --arg e "$empreinte" '. + [{table: $t, fichier: ("donnees-brutes/" + $t + ".csv"), lignes: $n, sha256: $e}]' \
+      "$TRAVAIL/tables.json" >"$TRAVAIL/tables.tmp" && mv "$TRAVAIL/tables.tmp" "$TRAVAIL/tables.json"
+  done <<<"$tables"
+  # Rendez-vous au format de l'API v1 du contrat (ADR-0374) : JSON Lines et CSV, dates ISO 8601 avec
+  # décalage (fuseau de la base : Europe/Paris).
+  info "rendez-vous au format de l'API (JSON Lines, CSV)"
+  psql_ro_lignes "SELECT json_build_object('id', id, 'patient', patient, 'praticien', praticien, 'debut', debut,
+      'duree_minutes', duree_minutes, 'motif', motif, 'rappel', json_build_object('canal', canal_rappel, 'contact', contact_rappel),
+      'cree_le', cree_le)::text FROM rendez_vous ORDER BY id" >"$TRAVAIL/export/rendez-vous.jsonl"
+  psql_ro "COPY (SELECT id, patient, praticien, debut, duree_minutes, motif, canal_rappel AS rappel_canal,
+      contact_rappel AS rappel_contact, cree_le FROM rendez_vous ORDER BY id) TO STDOUT WITH (FORMAT csv, HEADER true, ENCODING 'UTF8')" \
+    >"$TRAVAIL/export/rendez-vous.csv"
+  n="$(grep -c . "$TRAVAIL/export/rendez-vous.jsonl" || true)"
+  _attendu="$(jq -r '.[] | select(.table == "rendez_vous") | .lignes' "$TRAVAIL/tables.json")"
+  [[ "$n" == "$_attendu" ]] || die "rendez-vous.jsonl : $n enregistrements, $_attendu dans la table"
+  schema_version="$(psql_ro "COPY (SELECT coalesce(max(version), 'inconnue') FROM flyway_schema_history WHERE success) TO STDOUT" 2>/dev/null || echo inconnue)"
+  pg_version="$(psql_ro "COPY (SELECT current_setting('server_version')) TO STDOUT")"
+  # Dictionnaire des données (colonnes, types, nullabilité) : la notice de relecture.
+  psql_ro "COPY (SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position) TO STDOUT WITH (FORMAT csv, HEADER true)" \
+    >"$TRAVAIL/export/dictionnaire.csv"
+  jq -n --arg client "$CLIENT" --arg env "$env" --arg date "$date" --arg pg "$pg_version" \
+    --arg schema "$schema_version" --slurpfile tables "$TRAVAIL/tables.json" \
+    --arg s "$(sha256sum "$TRAVAIL/export/schema.sql" | cut -d' ' -f1)" \
+    --arg d "$(sha256sum "$TRAVAIL/export/dictionnaire.csv" | cut -d' ' -f1)" \
+    '{format: "medisphere-reversibilite/1", client: $client, environnement: $env, date_utc: $date,
+      postgresql: $pg, version_schema: $schema, encodage: "UTF-8", separateur: ",", fuseau_dates: "UTC (ISO 8601, décalage explicite)",
+      rendez_vous: {fichiers: ["rendez-vous.jsonl", "rendez-vous.csv"], enregistrements: ([$tables[0][] | select(.table == "rendez_vous") | .lignes][0])},
+      absents_de_la_preuve_de_concept: ["patients.jsonl", "pieces-jointes/", "journaux/"],
+      fichiers: ([{fichier: "schema.sql", sha256: $s}, {fichier: "dictionnaire.csv", sha256: $d}] + $tables[0])}' \
+    >"$TRAVAIL/export/manifeste.json"
+  info "signature du manifeste (transit/${CLIENT}-signature)"
+  bao write -field=signature "transit/sign/${CLIENT}-signature" \
+    input="$(base64 -w0 "$TRAVAIL/export/manifeste.json")" >"$TRAVAIL/export/manifeste.json.sig"
+  bao read -format=json "transit/keys/${CLIENT}-signature" |
+    jq -r '.data.keys | to_entries | max_by(.key | tonumber) | .value.public_key' >"$TRAVAIL/export/cle-publique-signature.b64"
+  lisezmoi >"$TRAVAIL/export/LISEZMOI.md"
+  # MANIFESTE.sha256 : empreinte de CHAQUE fichier (vérifiable par « sha256sum -c » partout).
+  (cd "$TRAVAIL/export" && find . -type f ! -name MANIFESTE.sha256 -printf '%P\n' | LC_ALL=C sort | xargs -d '\n' sha256sum) \
+    >"$TRAVAIL/MANIFESTE.sha256" && mv "$TRAVAIL/MANIFESTE.sha256" "$TRAVAIL/export/MANIFESTE.sha256"
+  tar -C "$TRAVAIL" -cf "$TRAVAIL/export.tar" export
+  info "chiffrement (clé de données à usage unique, enveloppée par transit/${CLIENT}-exports)"
+  json="$(bao write -format=json -f "transit/datakey/plaintext/${CLIENT}-exports")"
+  pt="$(jq -r '.data.plaintext' <<<"$json")"
+  ct="$(jq -r '.data.ciphertext' <<<"$json")"
+  [[ -n "$pt" && "$ct" == vault:v* ]] || die "clé de données non obtenue"
+  openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$TRAVAIL/export.tar" -out "$TRAVAIL/export.tar.enc" -pass fd:3 3<<<"$pt"
+  pt=""
+  printf '%s\n' "$ct" >"$TRAVAIL/export.cle-enveloppee"
+  empreinte="$(sha256sum "$TRAVAIL/export.tar.enc" | cut -d' ' -f1)"
+  printf '%s  export.tar.enc\n' "$empreinte" >"$TRAVAIL/export.tar.enc.sha256"
+  info "dépôt dans s3://${CLIENT}-reversibilite/${date}/"
+  for cle in export.tar.enc export.cle-enveloppee export.tar.enc.sha256; do
+    s3 cp --only-show-errors "$TRAVAIL/$cle" "s3://${CLIENT}-reversibilite/${date}/$cle"
+  done
+  s3 cp --only-show-errors "$TRAVAIL/export/manifeste.json" "s3://${CLIENT}-reversibilite/${date}/manifeste.json"
+  # Résumé (aucune donnée) : à recopier dans le compte rendu de l'essai et les preuves.
+  jq -n --arg d "$date" --arg e "$empreinte" --slurpfile t "$TRAVAIL/tables.json" \
+    '{export: $d, sha256_archive_chiffree: $e, tables: $t[0] | map({table, lignes})}'
+}
+
+lisezmoi() {
+  cat <<EOF
+# Export de réversibilité — ${CLIENT}
+
+Format ouvert, relisible sans aucun outil de MédiSphère :
+
+- \`rendez-vous.jsonl\` : un rendez-vous par ligne (JSON), mêmes champs que l'API de rendez-vous v1
+  (\`id\`, \`patient\`, \`praticien\`, \`debut\`, \`duree_minutes\`, \`motif\`, \`rappel\`, \`cree_le\`),
+  dates ISO 8601 avec décalage horaire ;
+- \`rendez-vous.csv\` : le même contenu à plat (RFC 4180, UTF-8, séparateur virgule, en-tête) ;
+- \`donnees-brutes/<table>.csv\`, \`schema.sql\`, \`dictionnaire.csv\` : annexe technique, copie exacte
+  des tables (dont le praticien technique PRA-TEMOIN du témoin de reprise) ;
+- \`MANIFESTE.sha256\` : empreinte de chaque fichier (\`sha256sum -c MANIFESTE.sha256\`) ;
+- \`manifeste.json\` : nombres d'enregistrements et empreintes ;
+- \`manifeste.json.sig\` : signature du manifeste (Ed25519, clé ${CLIENT}-signature de MédiSphère) ;
+  clé publique : \`cle-publique-signature.b64\` (base64).
+
+Relecture dans PostgreSQL (13 ou plus récent) : créer une base vide, charger \`schema.sql\`, puis
+pour chaque table : \`\\copy <table> FROM 'donnees-brutes/<table>.csv' WITH (FORMAT csv, HEADER true)\`.
+Relecture dans un tableur : ouvrir chaque CSV en UTF-8, séparateur virgule.
+EOF
+}
+
+relire() {
+  local dossier="$2" pg="" json pt t n attendu fichier
+  CLIENT="$1"
+  client_valide "$CLIENT"
+  shift 2
+  while (($#)); do
+    case "$1" in
+      --pg) (($# >= 2)) || usage; pg="$2"; shift ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  [[ "$dossier" =~ ^[0-9T:Z-]+$ ]] || die "dossier d'export invalide : $dossier" 2
+  preparer bao aws jq openssl tar sha256sum base64
+  for fichier in export.tar.enc export.cle-enveloppee export.tar.enc.sha256; do
+    s3 cp --only-show-errors "s3://${CLIENT}-reversibilite/${dossier}/$fichier" "$TRAVAIL/$fichier"
+  done
+  (cd "$TRAVAIL" && sha256sum -c --quiet export.tar.enc.sha256) || die "empreinte de l'archive chiffrée fausse"
+  info "ouverture de l'enveloppe (transit/${CLIENT}-exports, journalisée)"
+  json="$(bao write -format=json "transit/decrypt/${CLIENT}-exports" ciphertext="$(<"$TRAVAIL/export.cle-enveloppee")")" ||
+    die "déchiffrement refusé (politique ${CLIENT}-dechiffrement ?)"
+  pt="$(jq -r '.data.plaintext' <<<"$json")"
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$TRAVAIL/export.tar.enc" -out "$TRAVAIL/export.tar" -pass fd:3 3<<<"$pt"
+  pt=""
+  tar -C "$TRAVAIL" -xf "$TRAVAIL/export.tar"
+  info "signature du manifeste"
+  bao write -field=valid "transit/verify/${CLIENT}-signature" \
+    input="$(base64 -w0 "$TRAVAIL/export/manifeste.json")" signature="$(<"$TRAVAIL/export/manifeste.json.sig")" |
+    grep -qx true || die "signature du manifeste invalide"
+  info "empreintes et nombres de lignes"
+  jq -r '.fichiers[] | "\(.sha256)  \(.fichier)"' "$TRAVAIL/export/manifeste.json" >"$TRAVAIL/attendu.sha256"
+  (cd "$TRAVAIL/export" && sha256sum -c --quiet ../attendu.sha256 && sha256sum -c --quiet MANIFESTE.sha256) ||
+    die "empreinte d'un fichier fausse"
+  n="$(grep -c . "$TRAVAIL/export/rendez-vous.jsonl" || true)"
+  attendu="$(jq -r '.rendez_vous.enregistrements' "$TRAVAIL/export/manifeste.json")"
+  ((n == attendu)) || die "rendez-vous.jsonl : $n enregistrements, $attendu annoncés"
+  jq -e -s 'all(.[]; has("id") and has("debut") and has("rappel"))' "$TRAVAIL/export/rendez-vous.jsonl" >/dev/null ||
+    die "rendez-vous.jsonl : enregistrement illisible ou incomplet"
+  printf '%-30s %8d enregistrements  OK\n' "rendez-vous.jsonl" "$n"
+  while IFS=$'\t' read -r t attendu; do
+    n=$(($(wc -l <"$TRAVAIL/export/donnees-brutes/$t.csv") - 1))
+    ((n == attendu)) || die "table $t : $n lignes lues, $attendu attendues"
+    printf '%-30s %8d lignes  OK\n' "$t" "$n"
+  done < <(jq -r '.fichiers[] | select(.table) | [.table, .lignes] | @tsv' "$TRAVAIL/export/manifeste.json")
+  if [[ -n "$pg" ]]; then
+    command -v psql >/dev/null 2>&1 || die "psql absent"
+    info "rechargement dans une base vierge"
+    [[ "$(psql -X -At "$pg" -c "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")" == 0 ]] ||
+      die "la base cible n'est pas vierge : refus"
+    psql -X -q -v ON_ERROR_STOP=1 "$pg" -f "$TRAVAIL/export/schema.sql" >/dev/null
+    while IFS=$'\t' read -r t attendu; do
+      psql -X -q -v ON_ERROR_STOP=1 "$pg" -c "\\copy public.\"$t\" FROM '$TRAVAIL/export/donnees-brutes/$t.csv' WITH (FORMAT csv, HEADER true)"
+      n="$(psql -X -At "$pg" -c "SELECT count(*) FROM public.\"$t\"")"
+      ((n == attendu)) || die "table $t rechargée : $n lignes, $attendu attendues"
+      printf '%-30s %8d lignes rechargées  OK\n' "$t" "$n"
+    done < <(jq -r '.fichiers[] | select(.table) | [.table, .lignes] | @tsv' "$TRAVAIL/export/manifeste.json")
+  fi
+  info "relecture réussie : $dossier"
+}
+
+lister() {
+  CLIENT="$1"
+  client_valide "$CLIENT"
+  preparer bao aws jq
+  s3 ls "s3://${CLIENT}-reversibilite/"
+}
+
+main() {
+  (($# >= 1)) || usage
+  local action="$1"
+  shift
+  case "$action" in
+    exporter) (($# >= 1)) || usage; exporter "$@" ;;
+    relire) (($# >= 2)) || usage; relire "$@" ;;
+    lister) (($# == 1)) || usage; lister "$@" ;;
+    -h | --help) usage ;;
+    *) usage ;;
+  esac
+}
+
+CLIENT=""
+ESPACE=""
+POD=""
+main "$@"

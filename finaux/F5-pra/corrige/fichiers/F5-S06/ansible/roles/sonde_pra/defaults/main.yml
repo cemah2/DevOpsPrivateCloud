@@ -1,0 +1,11 @@
+---
+# Rôle sonde_pra (F5-S06) — sonde utilisateur du PRA sur adm02 : toutes les 15 s, interroge les noms
+# GLOBAUX comme un patient, et note le site qui répond (en-tête X-MediSphere-Site).
+# Sortie : /var/lib/ms-sonde-pra/mesures.csv — horodatage_utc,cible,code_http,latence_ms,site
+# (format lu par les checks de la phase 3 : RTO = première réponse 2xx servie par par2 − T0).
+sonde_pra_cibles:
+  - https://mediagenda.medisphere.internal/sante
+  - https://medidoc.medisphere.internal/readyz
+  - https://rdv.medisphere.internal/
+sonde_pra_dossier: /var/lib/ms-sonde-pra
+sonde_pra_delai_s: 10

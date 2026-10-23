@@ -1,0 +1,41 @@
+---
+# Rôle miroirs_git (F5-S04, PLAT-3504) — sur adm02 : dépôts nus qui reçoivent les « push mirrors » de
+# GitLab, et accès en LECTURE pour les consommateurs de PAR2 (Argo CD de k8s-par2).
+#   - compte « miroir » : shell git-shell (aucune commande hors Git), dossier /srv/miroirs ;
+#   - clés d'ÉCRITURE : une par miroir GitLab (GitLab en génère une par miroir SSH) ;
+#   - clés de LECTURE : commande forcée miroir-lecture (git-upload-pack sous /srv/miroirs seulement) ;
+#   - mesure de l'écart avec GitLab (pra-miroirs.timer) pour node_exporter.
+
+miroirs_git_utilisateur: miroir
+miroirs_git_racine: /srv/miroirs
+
+# Projets miroités (groupe/projet). Liste tirée de dependances.md (D20, D22) : de quoi reconstruire
+# PAR2, déployer les applications du périmètre et lire la documentation.
+miroirs_git_projets:
+  - plateforme/medisphere
+  - plateforme/infra
+  - plateforme/tofu-modules
+  - plateforme/ansible
+  - plateforme/k8s
+  - plateforme/gitops
+  - plateforme/secrets
+  - plateforme/donnees
+  - plateforme/politiques
+  - plateforme/ci-templates
+  - mediagenda/api
+  - mediagenda/deploiement
+  - medidoc/deploiement
+  - legacy/deploiement
+  - medinotif/deploiement
+
+# Clés publiques d'écriture (une par miroir GitLab : « Copy SSH public key » dans GitLab).
+miroirs_git_cles_ecriture: []
+#   - {projet: plateforme/gitops, cle: "ssh-ed25519 AAAA… gitlab-miroir-gitops"}
+# Clés publiques de lecture (Argo CD de k8s-par2, adm02 lui-même pour les clones de travail).
+miroirs_git_cles_lecture: []
+#   - {nom: argocd-k8s-par2, cle: "ssh-ed25519 AAAA… argocd-k8s-par2"}
+
+# Mesure de l'écart avec GitLab (jeton read_api, Vault « critique » : vault_gitlab_miroirs_jeton).
+miroirs_git_gitlab_url: https://git01.par1.medisphere.internal
+miroirs_git_gitlab_jeton: ""
+miroirs_git_textfile: /var/lib/prometheus/node-exporter

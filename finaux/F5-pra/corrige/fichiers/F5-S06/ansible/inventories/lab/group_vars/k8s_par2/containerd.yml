@@ -1,0 +1,15 @@
+---
+# group_vars/k8s_par2/containerd.yml — runtime de k8s-par2 (F5-S06).
+containerd_image_sandbox: "{{ k8s_image_pause }}"
+
+# Les manifestes gardent les références « registry.par1.medisphere.internal/medisphere/… » (même code) :
+# containerd les tire de reg02 (miroir), SANS repli vers Harbor (PAR1). Les images publiques viennent
+# d'Internet par hp01 (pas de cache Harbor à PAR2).
+# Identifiants : le Secret harbor-pull des espaces de PAR2 porte, pour l'hôte registry.par1…, le compte
+# « lecture » de reg02 (amorçage, RB-356 §2). ⚠️ À confirmer sur le lab : que containerd 2.3 transmette
+# au miroir les identifiants fournis par le kubelet pour l'hôte d'origine.
+containerd_miroirs:
+  - registre: registry.par1.medisphere.internal
+    miroir: https://reg02.par2.medisphere.internal
+    amont: ""            # pas de repli vers PAR1
+    override_path: false

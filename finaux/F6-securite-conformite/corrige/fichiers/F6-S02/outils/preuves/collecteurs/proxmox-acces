@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# proxmox-acces — P-IAM-05 : utilisateurs, groupes, jetons d'API et ACL de Proxmox VE (pve01).
+# Identité : jeton d'API en lecture (rôle PVEAuditor) : PVE_API_URL, PVE_TOKEN_ID, PVE_TOKEN_SECRET,
+# PVE_CACERT (facultatif). Format d'accès du M00-E17.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige PVE_API_URL PVE_TOKEN_ID PVE_TOKEN_SECRET
+pve() {
+  curl -sf --max-time "$DELAI_HTTP" ${PVE_CACERT:+--cacert "$PVE_CACERT"} \
+    -K <(printf 'header = "Authorization: PVEAPIToken=%s=%s"\n' "$PVE_TOKEN_ID" "$PVE_TOKEN_SECRET") \
+    "${PVE_API_URL%/}/api2/json$1" | jq '.data'
+}
+u="$(pve '/access/users?full=1')"
+g="$(pve /access/groups)"
+acl="$(pve /access/acl)"
+entete_preuve | jq -S --argjson u "$u" --argjson g "$g" --argjson acl "$acl" '
+  . + {utilisateurs: [$u[] | {userid, enable, expire, groups, tokens: [.tokens[]? | {tokenid, expire, privsep}]}] | sort_by(.userid),
+       groupes: [$g[] | {groupid, users}] | sort_by(.groupid),
+       acl: ($acl | sort_by(.path, .ugid))}'

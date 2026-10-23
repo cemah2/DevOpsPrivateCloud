@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# harbor-vulnerabilites — P-VUL-01 : pour chaque image EN SERVICE dans les espaces applicatifs (par
+# empreinte, imageID des conteneurs), le résumé de la dernière analyse de Harbor (Trivy).
+# Identités : KUBECONFIG (lecture des pods), HARBOR_USER / HARBOR_PASSWORD (robot en lecture d'artefacts).
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KUBECONFIG HARBOR_USER HARBOR_PASSWORD
+H="${HARBOR_URL:-https://registry.par1.medisphere.internal}"
+REGISTRE="${H#https://}"
+ESPACES="${MS_PREUVES_ESPACES:-^(mediagenda|medidoc|medinotif|legacy|medivisio|data)-}"
+images="$(kubectl --request-timeout="${DELAI_HTTP}s" get pods -A -o json | jq -r --arg r "$ESPACES" --arg reg "$REGISTRE/" '
+  [.items[] | select(.metadata.namespace | test($r)) | .metadata.namespace as $ns
+   | (.status.containerStatuses // [])[] | .imageID | sub("^docker-pullable://"; "")
+   | select(startswith($reg)) | {image: ., espace: $ns}]
+  | group_by(.image)[] | "\(.[0].image)\t\([.[].espace] | unique | join(","))"')"
+res="[]"
+while IFS=$'\t' read -r img espaces; do
+  [[ -n "$img" && "$img" == *@sha256:* ]] || continue
+  chemin="${img#"$REGISTRE"/}"
+  chemin="${chemin%@*}"
+  projet="${chemin%%/*}"
+  depot="${chemin#*/}"
+  depot="${depot//\//%252F}"      # nom de dépôt DOUBLEMENT encodé (API Harbor, M26-E30)
+  a="$(http_basique "$H/api/v2.0/projects/$(enc "$projet")/repositories/$depot/artifacts/${img#*@}?with_scan_overview=true" \
+    "$HARBOR_USER" "$HARBOR_PASSWORD" 2>/dev/null || echo '{}')"
+  res="$(jq -c --argjson a "$a" --arg i "$img" --arg e "$espaces" '. + [{image: $i, espaces: $e,
+    analyse: (($a.scan_overview // {}) | to_entries | map(.value) | first
+      | if . == null then null else {severite: .severity, fin: .end_time, resume: (.summary.summary // {})} end)}]' <<<"$res")"
+done <<<"$images"
+entete_preuve | jq -S --argjson r "$res" '. + {images: ($r | sort_by(.image)),
+  sans_analyse: [$r[] | select(.analyse == null) | .image],
+  critiques: [$r[] | select((.analyse.resume.Critical // 0) > 0) | {image, espaces, n: .analyse.resume.Critical}]}'

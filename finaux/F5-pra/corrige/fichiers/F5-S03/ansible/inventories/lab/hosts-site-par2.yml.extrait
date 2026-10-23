@@ -1,0 +1,38 @@
+# inventories/lab/ — EXTRAIT : groupe site_par2 (F5-S03 ; k8s_par2 en S06). Si ton inventaire par défaut
+# est NetBox (M06-E12), ce fichier statique complète l'inventaire (même dossier d'inventaire) : les VMs
+# de PAR2 ne sont pas sur pve01, l'inventaire Proxmox de pve01 ne les voit pas.
+# hp01 (nœud pbs01) n'est PAS dans site_par2 : il porte PBS, il a son propre playbook (site-par2.yml,
+# jeu « hôte ») et n'hérite d'aucune variable de groupe des VMs.
+all:
+  children:
+    hote_par2:
+      hosts:
+        pbs01:
+          ansible_host: 10.20.10.10
+          ansible_user: root
+    site_par2:
+      children:
+        role_dns_par2:
+          hosts:
+            dns03:
+              ansible_host: 10.20.20.11
+        role_s3_par2:
+          hosts:
+            s3-02:
+              ansible_host: 10.20.20.14
+        role_bastion_par2:
+          hosts:
+            adm02:
+              ansible_host: 10.20.20.10
+        role_registre_par2:
+          hosts:
+            reg02:
+              ansible_host: 10.20.20.18
+        role_coffre_par2:
+          hosts:
+            bao-par2:
+              ansible_host: 10.20.20.21
+        k8s_par2:
+          hosts:
+            k8s-par2-n01:
+              ansible_host: 10.20.20.50

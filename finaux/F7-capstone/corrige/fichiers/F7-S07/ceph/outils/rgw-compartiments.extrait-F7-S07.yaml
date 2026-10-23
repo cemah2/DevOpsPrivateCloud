@@ -1,0 +1,20 @@
+# plateforme/ceph — outils/rgw-compartiments.yaml : EXTRAIT (F7-S07, PLAT-3707). Ligne ajoutée à la
+# liste « compartiments » de F2-S08, appliquée par la même boucle (rgw-compartiment.sh, idempotent) :
+# utilisateur RGW dédié, un seul compartiment, quota, clés rangées dans OpenBao sans affichage.
+# Le compartiment des exports de réversibilité est sur le RGW (ceph-par1), pas sur s3-01 : il est
+# VERSIONNÉ (un export écrasé par erreur se retrouve), et il n'est PAS répliqué vers PAR2 par
+# filer.sync (s3-01 seulement) : la copie de PAR2 de l'export se fait, si le client la demande, par
+# le même mécanisme que les compartiments MédiDoc (rclone, F5-S04), décision écrite dans
+# locataire-ghsv.md.
+  - utilisateur: ghsv-reversibilite
+    compartiment: ghsv-reversibilite
+    quota: 20G
+    chemin_kv: ghsv/prod/s3-reversibilite
+    locataire: ghsv
+    ticket: PLAT-3707
+# Après la boucle, versionnage du compartiment (une fois), avec les clés du locataire :
+#   admin@adm01:~$ aws --endpoint-url https://rgw.par1.medisphere.internal s3api put-bucket-versioning \
+#       --bucket ghsv-reversibilite --versioning-configuration Status=Enabled
+# Et pour cnpg-ghsv (s3-01, SeaweedFS, comme cnpg-data de F2-S07) : identité « cnpg-ghsv » (Read,
+# Write, List sur ce compartiment), clés dans kv/ghsv/recette/cnpg-s3 et kv/ghsv/prod/cnpg-s3 ;
+# compartiment ajouté à la liste de filer.sync vers s3-02 (F5-S04).

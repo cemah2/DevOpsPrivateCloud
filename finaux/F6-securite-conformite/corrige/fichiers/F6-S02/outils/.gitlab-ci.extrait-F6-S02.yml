@@ -1,0 +1,84 @@
+# plateforme/outils — .gitlab-ci.yml : EXTRAIT, jobs ajoutés en F6-S02 (PLAT-3602).
+# La qualité (shellcheck, bash -n) vient du composant « qualite » de plateforme/ci-templates (M19).
+test:ms-preuves:
+  stage: test
+  tags: [shell, socle]            # runner01 : faux yq, cosign et aws fournis par le test
+  script:
+    - shellcheck -x bin/ms-preuves preuves/collecteurs/* tests/ms-preuves/lancer.sh
+    - bash -n bin/ms-preuves
+    - tests/ms-preuves/lancer.sh
+  rules:
+    - changes: [bin/ms-preuves, preuves/**/*, tests/ms-preuves/**/*, .gitlab-ci.yml]
+
+# Collecte planifiée des preuves (pipelines planifiés de plateforme/outils, branche main PROTÉGÉE) :
+#   « preuves-quotidiennes »   tous les jours 02:05   TACHE=preuves FREQUENCE=quotidienne
+#   « preuves-hebdomadaires »  dimanche 05:35         TACHE=preuves FREQUENCE=hebdomadaire
+#   « preuves-mensuelles »     le 1er à 06:05         TACHE=preuves FREQUENCE=mensuelle
+# (après l'analyse OpenSCAP du dimanche 03:30 du M26-E24 ; heure de Paris dans la planification).
+# Identités : UNE connexion au coffre par le jeton d'identité du job (rôle ci-preuves : branche main
+# protégée de plateforme/outils, runner01 seulement), qui donne la signature (transit/preuves-conformite)
+# et la lecture de kv/plateforme/preuves/* (écriture S3, identités de lecture des collecteurs, clé SSH
+# de la bordure). Aucune variable CI ne contient de secret.
+preuves:collecte:
+  stage: test
+  tags: [shell, socle]
+  resource_group: preuves          # jamais deux collectes en même temps
+  interruptible: false
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $TACHE == "preuves" && $CI_COMMIT_REF_PROTECTED == "true"'
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  variables:
+    BAO_ADDR: https://openbao.par1.medisphere.internal:8200
+    FREQUENCE: quotidienne
+    MS_PREUVES_SORTIE: $CI_PROJECT_DIR/lots
+  script:
+    - |
+      set -euo pipefail
+      BAO_TOKEN="$(printf '{"role":"ci-preuves","jwt":"%s"}' "$OPENBAO_ID_TOKEN" | bao write -field=token auth/gitlab/login -)"
+      export BAO_TOKEN
+      # Identités lues dans le coffre, exportées pour les collecteurs et ms-preuves : jamais affichées.
+      eval "$(bao kv get -format=json -mount=kv plateforme/preuves/lecture | jq -r '.data.data | to_entries[] | "export \(.key)=\(.value | @sh)"')"
+      umask 077
+      KUBECONFIG="$(mktemp)"; export KUBECONFIG
+      bao kv get -mount=kv -field=kubeconfig plateforme/preuves/kubernetes >"$KUBECONFIG"
+      mkdir -p ~/.ssh && bao kv get -mount=kv -field=cle_privee plateforme/preuves/ssh-bordure >~/.ssh/id_preuves_bordure
+      # Écriture S3 en DERNIER (seul ms-preuves deposer en a besoin, dans son propre environnement).
+      AWS_ACCESS_KEY_ID="$(bao kv get -mount=kv -field=AWS_ACCESS_KEY_ID plateforme/preuves/rgw-ecriture)"
+      AWS_SECRET_ACCESS_KEY="$(bao kv get -mount=kv -field=AWS_SECRET_ACCESS_KEY plateforme/preuves/rgw-ecriture)"
+      export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+      code=0
+      bin/ms-preuves executer --frequence "$FREQUENCE" || code=$?
+      rm -f -- "$KUBECONFIG" ~/.ssh/id_preuves_bordure
+      bao token revoke -self >/dev/null || true
+      exit "$code"
+  artifacts:
+    # Pour la lecture rapide dans GitLab seulement : la preuve, c'est le compartiment verrouillé.
+    when: always
+    expire_in: 7 days
+    paths: [lots/*/lot.json, lots/*/journal/, lots/*/DEPOT.json]
+
+# Contrôle d'intégrité quotidien (le lendemain) : le dernier lot déposé se vérifie (empreintes,
+# signature, rétention) avec l'identité de LECTURE ; un échec est une alerte (notification du pipeline).
+preuves:verification:
+  stage: test
+  tags: [shell, socle]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $TACHE == "preuves-verification" && $CI_COMMIT_REF_PROTECTED == "true"'
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  variables:
+    BAO_ADDR: https://openbao.par1.medisphere.internal:8200
+  script:
+    - |
+      set -euo pipefail
+      BAO_TOKEN="$(printf '{"role":"ci-preuves","jwt":"%s"}' "$OPENBAO_ID_TOKEN" | bao write -field=token auth/gitlab/login -)"
+      export BAO_TOKEN
+      AWS_ACCESS_KEY_ID="$(bao kv get -mount=kv -field=AWS_ACCESS_KEY_ID plateforme/preuves/rgw-lecture)"
+      AWS_SECRET_ACCESS_KEY="$(bao kv get -mount=kv -field=AWS_SECRET_ACCESS_KEY plateforme/preuves/rgw-lecture)"
+      export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+      dernier="$(bin/ms-preuves lister --depuis "$(date -d '2 days ago' +%F)" | sort | tail -n 1 | cut -f2)"
+      test -n "$dernier" || { echo "AUCUN lot déposé depuis deux jours"; exit 1; }
+      bin/ms-preuves verifier "$dernier"

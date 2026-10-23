@@ -1,0 +1,70 @@
+# mediagenda/api — ci/contrat.yml (F7-S09, DEV-3709), inclus par .gitlab-ci.yml :
+#   include:
+#     - local: ci/contrat.yml
+# Deux jobs, sur CHAQUE MR et sur main, AVANT toute construction d'image (étape « test ») ; tous deux
+# BLOQUANTS (pas d'allow_failure) : une MR qui casse le contrat d'un client ne fusionne pas (règle de
+# fusion « le pipeline doit réussir », M19). Ils tournent sur le runner k8s-par1 sans cluster ni base.
+#
+#   contrat:ghsv           les tests de contrat côté producteur (tests/test_contrat_ghsv.py) : chaque
+#                          opération du contrat existe, répond avec les codes promis, et ses corps
+#                          respectent les schémas du contrat ; empreinte du contrat vérifiée.
+#   contrat:compatibilite  comparaison des DEUX descriptions : celle du contrat (référence) et celle que
+#                          génère l'application. oasdiff signale toute rupture (opération ou champ
+#                          retiré, type changé, paramètre devenu obligatoire…). Complète le premier job :
+#                          il voit ce qu'aucun test n'a pensé à demander (un champ de réponse renommé).
+
+variables:
+  # Image d'oasdiff par le cache Harbor de Docker Hub (M13), par empreinte : à TA valeur.
+  OASDIFF_IMAGE: registry.par1.medisphere.internal/dockerhub/tufin/oasdiff:<VERSION>@sha256:<EMPREINTE>
+
+contrat:ghsv:
+  stage: test
+  image: ${PYTHON_IMAGE}   # image Python du job de tests existant (M19)
+  tags: [k8s]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - uv sync --locked
+    - uv run pytest -m contrat --junitxml=rapport-contrat.xml -q
+  artifacts:
+    when: always
+    reports:
+      junit: rapport-contrat.xml
+
+contrat:compatibilite:
+  stage: test
+  image: ${PYTHON_IMAGE}
+  tags: [k8s]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - uv sync --locked
+    # Description générée par l'application avec les réglages d'une instance de client.
+    - >
+      MEDIAGENDA_DB_URL=postgresql://inutilise MEDIAGENDA_VALKEY_URL=redis://inutilise
+      MEDIAGENDA_PORTEES=oui MEDIAGENDA_TITRE="API de rendez-vous du GHSV"
+      uv run python -c "import json; from mediagenda.app import create_app; from mediagenda.config import Settings;
+      print(json.dumps(create_app(Settings.depuis_env()).openapi()))" > openapi-genere.json
+  artifacts:
+    when: always
+    paths:
+      - openapi-genere.json
+
+# Deuxième temps du même contrôle, dans l'image d'oasdiff (le premier a produit openapi-genere.json).
+# Le contrat déclare « servers: https://{hote}/api/v1 » et des chemins relatifs (/creneaux) ; la
+# description générée a des chemins complets (/api/v1/creneaux) : --prefix-base aligne les deux.
+contrat:compatibilite:oasdiff:
+  stage: test
+  needs: ["contrat:compatibilite"]
+  image:
+    name: ${OASDIFF_IMAGE}
+    entrypoint: [""]
+  tags: [k8s]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    # Vérifie les options de TA version (oasdiff breaking --help) : --prefix-base et --fail-on.
+    - oasdiff breaking contrats/ghsv/api-rendez-vous-v1.yaml openapi-genere.json --prefix-base /api/v1 --fail-on ERR

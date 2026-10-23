@@ -1,0 +1,62 @@
+---
+# playbooks/site-par2.yml — site de repli PAR2 (F5-S03 à S06).
+# Lancé depuis adm01 (ou adm02 en PRA, sur le miroir de plateforme/ansible) :
+#   uv run ansible-playbook playbooks/site-par2.yml --limit pbs01 --diff        (hôte : après RB-353 §3)
+#   uv run ansible-playbook playbooks/site-par2.yml --limit site_par2 --diff    (VMs)
+# Les rôles des VMs sont CEUX DE PAR1 (même code) : base, chrony client, certificats ACME, node_exporter,
+# pare_feu_local, powerdns_auth/powerdns_recursor (dns03), seaweedfs (s3-02)…
+
+- name: hp01 — hyperviseur de PAR2 à côté de PBS
+  hosts: hote_par2
+  become: false
+  roles:
+    - hote_par2
+
+- name: VMs de PAR2 — socle commun
+  hosts: site_par2
+  become: true
+  roles:
+    - base
+    - pare_feu_local
+    - certificats_acme
+    - node_exporter
+
+- name: dns03 — DNS secondaire et récurseur de PAR2
+  hosts: role_dns_par2
+  become: true
+  roles:
+    - powerdns_auth
+    - powerdns_recursor
+
+- name: s3-02 — SeaweedFS de PAR2
+  hosts: role_s3_par2
+  become: true
+  roles:
+    - seaweedfs
+
+# --- Ajouts des scénarios suivants (même playbook) ---------------------------------------------------
+- name: s3-02 — réplication vers PAR2 et mesure des retards (F5-S04)
+  hosts: role_s3_par2
+  become: true
+  roles:
+    - replication_par2
+
+- name: adm02 — miroirs Git (F5-S04) et sonde utilisateur du PRA (F5-S06)
+  hosts: role_bastion_par2
+  become: true
+  roles:
+    - miroirs_git
+    - sonde_pra
+
+- name: reg02 — registre de PAR2 (F5-S04)
+  hosts: role_registre_par2
+  become: true
+  roles:
+    - docker_engine
+    - registre_travail
+
+- name: bao-par2 — coffre de secours, installé ARRÊTÉ (F5-S05)
+  hosts: role_coffre_par2
+  become: true
+  roles:
+    - openbao

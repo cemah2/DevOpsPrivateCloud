@@ -1,0 +1,20 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle replication_par2).') }}
+# Copie de medidoc-documents : RGW de ceph-par1 (lecture seule) → s3-02 (F5-S04). « sync » rend la
+# destination identique à la source, suppressions comprises ; le compartiment de s3-02 est VERSIONNÉ :
+# un objet supprimé à PAR1 reste récupérable à PAR2 sous forme de version (RB-354).
+# Configuration rclone par variables d'environnement (RCLONE_CONFIG_<DISTANT>_<CLÉ>), sans fichier.
+[Unit]
+Description=Copie de medidoc-documents (RGW -> s3-02)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/replication-par2/medidoc.env
+ExecStart=/usr/local/bin/rclone sync rgw:{{ replication_par2_rgw_compartiment }} par2:medidoc-documents \
+    --checksum --fast-list --transfers 4 --retries 3 --stats-one-line --stats-log-level NOTICE
+ExecStartPost=/usr/local/sbin/pra-marquer-reussite medidoc
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths={{ replication_par2_textfile }}
+PrivateTmp=true

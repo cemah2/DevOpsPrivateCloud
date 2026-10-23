@@ -1,0 +1,27 @@
+# mediagenda/deploiement — overlays/clients/ghsv-prod-par2/sauvegarde-par2.yaml (F7-S10, PLAT-3710)
+# Magasin d'archives vu de PAR2 : le compartiment cnpg-ghsv de s3-02 (copie de celui de s3-01 par
+# filer.sync, F5-S04). Identité SeaweedFS de s3-02 « cnpg-ghsv » ; clés dans bao-par2 (restauré pendant
+# un PRA) et, en veille, dans un Secret créé par l'amorçage de k8s-par2 (F5-S05 : enveloppe de reprise).
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-ghsv-par2
+spec:
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://cnpg-ghsv/
+    endpointURL: https://s3-02.par2.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-ghsv-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-ghsv-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+    data:
+      compression: gzip

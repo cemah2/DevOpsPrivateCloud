@@ -1,0 +1,122 @@
+# plateforme/equipes — equipes/ghsv.yaml (F7-S07, PLAT-3707 ; marché GHSV-DSI-2026-014)
+# Premier CLIENT décrit en code. Un client n'est pas une équipe interne :
+#   - ses « personnes » sont celles de MédiSphère qui répondent de lui (annuaire de MédiSphère) ; les
+#     agents du GHSV n'y figurent JAMAIS (ils arrivent par le courtier d'identité, F7-S08) ;
+#   - il n'écrit pas de code : son AppProject lit le dépôt de déploiement de l'application hébergée
+#     (mediagenda/deploiement, overlays/clients/ghsv-<env>), pas un groupe GitLab du client ;
+#   - il n'a pas de libre-service ;
+#   - il a un contrat (dates), des adresses, un fournisseur d'identité, des clés dédiées, une
+#     réversibilité et un site de secours : bloc « client » (schema/equipe.schema.json, F7-S07).
+# Relecteurs obligatoires : Plateforme ET Sophie Laurent (CODEOWNERS sur equipes/ghsv.yaml, comme
+# equipes/ext-*.yaml) ; Claire Morel pour le bloc « contrat ».
+apiVersion: equipes.medisphere.internal/v1
+kind: Equipe
+metadata:
+  nom: ghsv
+  ticket: PLAT-3707
+spec:
+  description: Client GHSV (prise de rendez-vous en marque blanche, marché GHSV-DSI-2026-014)
+  type: client
+  etat: active
+  # Celui qui répond du client côté technique (MédiAgenda) ; le support le seconde.
+  responsable: julien.petit
+  # Boîte interne du « compte » GHSV (alertes du locataire, équipe Grafana) ; Mailpit dans le lab.
+  contact: ghsv@medisphere.internal
+
+  personnes:
+    - identifiant: julien.petit
+      prenom: Julien
+      nom: Petit
+      courriel: julien.petit@medisphere.internal
+      titre: Lead dev MédiAgenda, référent technique du compte GHSV
+      role: responsable
+    - identifiant: nadia.roussel
+      prenom: Nadia
+      nom: Roussel
+      courriel: nadia.roussel@medisphere.internal
+      titre: Responsable support, référente exploitation du compte GHSV
+      role: lecteur
+
+  identite:
+    # Les personnes ci-dessus sont des internes (OTP selon les règles de leur propre groupe) ; les
+    # agents du GHSV ont la MFA de LEUR IdP (ESC-04, réponse R-16 du GHSV).
+    otp_obligatoire: false
+
+  gitlab:
+    # Groupe ghsv : pièces du compte qui ne sont pas du code de MédiSphère (contrat d'API reçu du
+    # GHSV, F7-S09). Le GHSV n'y a aucun compte.
+    groupe: ghsv
+
+  kubernetes:
+    environnements:
+      # Recette permanente (EXP-06), données fictives seulement (ESC-13).
+      recette:
+        quota: {requests.cpu: 600m, requests.memory: 1Gi, limits.memory: 2Gi, pods: "12", persistentvolumeclaims: "3", requests.storage: 8Gi}
+        signature_exigee: true
+        synchronisation: automatique
+        alertes: true
+      # Production de démonstration (données fictives) traitée comme une production : synchronisation
+      # manuelle, fenêtre de la maison (pas de mise en production du vendredi 16 h au lundi 8 h).
+      prod:
+        quota: {requests.cpu: "1", requests.memory: 1792Mi, limits.memory: 3Gi, pods: "16", persistentvolumeclaims: "4", requests.storage: 16Gi}
+        signature_exigee: true
+        synchronisation: manuelle
+        alertes: true
+    # Pas de libre-service pour un client (règle de rendre.py).
+    budget: {requests.cpu: 1600m, requests.memory: 2816Mi, limits.memory: 5Gi, pods: "28"}
+    classes_priorite:
+      autorisees: [medisphere-critique, medisphere-standard]
+      defaut: medisphere-standard
+    # Données de santé : volumes chiffrés (LUKS par ceph-csi, M16-E26). Première classe = classe par défaut.
+    classes_stockage: [ceph-rbd-chiffre, ceph-rbd]
+
+  secrets:
+    # kv/ghsv/<env>/* écrits par les personnes du compte (OIDC) : comptes de démonstration, paramètres.
+    ecriture: [recette, prod]
+
+  services: []
+
+  observabilite:
+    grafana:
+      titre_dossier: Client GHSV
+
+  # --- Bloc « client » (F7-S07) ------------------------------------------------------------------
+  client:
+    raison_sociale: Groupement hospitalier Seine-et-Vallées
+    contrat:
+      reference: GHSV-DSI-2026-014
+      debut: "2027-03-01"
+      fin: "2032-02-29"
+      # ERV-02 : export complet livré sous 30 jours ; ERV-04 : destruction sous 30 jours après validation.
+      reversibilite_jours: 30
+    application:
+      # Application hébergée et dépôt qui la déploie ; les environnements du client sont les dossiers
+      # <chemin>/<client>-<env> de ce dépôt (même code, mêmes images signées que MédiAgenda).
+      nom: mediagenda
+      depot: mediagenda/deploiement
+      chemin: overlays/clients
+      # Marque blanche (EF-01) : titre de la description OpenAPI servie par l'instance.
+      titre_public: API de rendez-vous du GHSV
+    publication:
+      # Noms du lab. En production : rendez-vous.ghsv.example (domaine du GHSV, EF-01), CNAME vers le
+      # nom global ; certificat publié par le titulaire (question Q-nn au GHSV : ACME ou leur PKI ?).
+      recette: ghsv-recette.apps.par1.medisphere.internal
+      prod: ghsv.apps.par1.medisphere.internal
+      agents_recette: ghsv-agents-recette.apps.par1.medisphere.internal
+      agents_prod: ghsv-agents.apps.par1.medisphere.internal
+      global: ghsv.medisphere.internal
+    identite:
+      # Fournisseur d'identité du royaume medisphere (F7-S08) et groupe Keycloak des agents. Jamais un
+      # groupe de l'annuaire, jamais le groupe « ghsv » ci-dessus.
+      fournisseur: ghsv-idp
+      groupe_agents: ghsv-agents
+    # Clés transit/ghsv-<nom> d'OpenBao (ESC-06), rendues dans plateforme/secrets :
+    #   exports     enveloppe des exports de réversibilité (clés de données à usage unique)
+    #   signature   signature des manifestes d'export (le GHSV vérifie l'origine avec la clé publique)
+    #   sauvegardes réservée au chiffrement côté serveur des sauvegardes du locataire (cible, F7-S07 §écarts)
+    cles: [exports, signature, sauvegardes]
+    reversibilite:
+      compartiment: ghsv-reversibilite
+      quota: 20G
+    pra:
+      site_secours: par2

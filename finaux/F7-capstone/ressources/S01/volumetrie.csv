@@ -1,0 +1,14 @@
+code_etablissement,nom,type,commune,praticiens_consultations,consultations_externes_2025,rdv_pris_en_ligne_2025,patients_actifs_24_mois,pieces_jointes_go_par_an_estime,outil_actuel,commentaire
+GHSV-01,Centre hospitalier de Vernaison,CH de référence,Vernaison,260,392000,61000,98500,452,plateforme actuelle,établissement support du groupement
+GHSV-02,Centre hospitalier de Saint-Aubin-sur-Seine,CH de référence,Saint-Aubin-sur-Seine,215,318000,49500,82100,371,plateforme actuelle,
+GHSV-03,Centre hospitalier des Deux-Vallées,CH de référence,Mérange,190,276000,38200,70400,322,plateforme actuelle,
+GHSV-04,Centre hospitalier de Corbel,CH de proximité,Corbel,72,121000,14800,33900,138,plateforme actuelle,
+GHSV-05,Centre hospitalier de Bréval-le-Pont,CH de proximité,Bréval-le-Pont,65,109000,13100,30200,124,plateforme actuelle,
+GHSV-06,Centre hospitalier de Montclar,CH de proximité,Montclar,58,98000,0,27600,110,formulaire de contact,
+GHSV-07,Centre hospitalier d'Essonville,CH de proximité,Essonville,61,104000,0,28700,118,formulaire de contact,
+GHSV-08,Centre hospitalier de Valmy-sur-Eure,CH de proximité,Valmy-sur-Eure,54,92000,0,25800,104,formulaire de contact,
+GHSV-09,SSR Les Coteaux,SSR,Mérange,31,64000,0,17100,72,formulaire de contact,
+GHSV-10,SSR du Val de Seine,SSR,Saint-Aubin-sur-Seine,28,59000,0,15600,66,formulaire de contact,
+GHSV-11,EHPAD Les Glycines,EHPAD (consultations externes),Corbel,9,38000,0,6900,43,téléphone seulement,
+GHSV-12,EHPAD Les Tilleuls,EHPAD (consultations externes),Montclar,7,129000,0,25500,80,téléphone seulement,hors DPI commun jusqu'en 2028
+TOTAL,Groupement hospitalier Seine-et-Vallées,,,1050,1800000,176600,400000,2000,,patients actifs dédoublonnés (un patient suivi dans plusieurs établissements compte une fois) ; pièces jointes : estimation de la DSI extrapolée de l'outil actuel ; croissance prévisionnelle des rendez-vous +6 % par an

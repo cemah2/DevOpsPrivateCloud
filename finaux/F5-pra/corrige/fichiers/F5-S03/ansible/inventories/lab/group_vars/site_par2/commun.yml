@@ -1,0 +1,26 @@
+---
+# group_vars/site_par2/commun.yml — faits partagés des VMs de PAR2 (F5-S03). PLAN §4.15.
+ansible_user: admin
+site: par2
+site_domaine: par2.medisphere.internal
+
+# Temps : la passerelle de PAR2 INFRA (hp01), qui garde une source Internet (rôle hote_par2).
+chrony_serveurs:
+  - 10.20.20.1
+
+# Résolution : dns03 (récurseur local) ; dns01 en secours tant que PAR1 existe.
+resolveurs:
+  - 10.20.20.11
+  - 10.10.20.10
+
+# Racine MédiSphère : la même qu'à PAR1 (certificat public, M06). L'autorité intermédiaire de PAR2
+# (S05) n'est qu'un émetteur de plus sous cette racine : rien à ajouter au magasin des VMs.
+ca_racine_fichier: /usr/local/share/ca-certificates/medisphere-root-ca.crt
+
+# Pare-feu local (rôle pare_feu_local, M06-E30) : SSH depuis MGMT de PAR1 (adm01, runner01), depuis
+# adm02 et depuis le VPN de secours ; supervision node_exporter depuis mon01 (S04) et adm02.
+pare_feu_local_ssh_sources:
+  - 10.10.10.10      # adm01
+  - 10.10.20.15      # runner01 (pipeline Ansible)
+  - 10.20.20.10      # adm02
+  - 10.255.3.0/24    # wg1 de hp01

@@ -1,0 +1,12 @@
+---
+# plateforme/ansible — inventories/lab/group_vars/site_par2/powerdns_recursor.yml, EXTRAIT (F5-S10,
+# INC-6110, PLAT-3532). Récurseur de dns03 : les zones internes sont relayées vers l'AUTORITAIRE LOCAL de
+# dns03 (secondaire en veille, natif pendant un PRA), jamais vers dns01/dns02 : sinon, sans PAR1, plus aucun
+# nom interne ne se résout à PAR2. Variables du rôle powerdns_recursor (M06-E07/E26) ; les autres valeurs
+# (écoute, clients autorisés, ancres DNSSEC) restent celles de ton S03.
+powerdns_recursor_zones_relayees:
+  - {zone: medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+  - {zone: par1.medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+  - {zone: par2.medisphere.internal, serveurs: ["127.0.0.1:5300"]}
+  - {zone: 10.10.in-addr.arpa, serveurs: ["127.0.0.1:5300"]}
+  - {zone: 20.10.in-addr.arpa, serveurs: ["127.0.0.1:5300"]}

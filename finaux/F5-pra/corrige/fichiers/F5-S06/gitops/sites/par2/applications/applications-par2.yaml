@@ -1,0 +1,33 @@
+# plateforme/gitops — sites/par2/applications/ (F5-S06) : ce qu'Argo CD de k8s-par2 déploie, depuis les
+# miroirs. Les AppProjects sont ceux de projets/ (même code), avec en plus les sources ssh://miroir@adm02.
+# Synchronisation MANUELLE pour les applications (veille : on ne veut pas qu'un commit à PAR1 change PAR2
+# sans contrôle ; en PRA, on synchronise vague par vague, RB-350).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: applications-par2
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - {nom: mediagenda-prod, projet: mediagenda, depot: mediagenda/deploiement, chemin: overlays/prod-par2, espace: mediagenda-prod}
+          - {nom: medidoc-recette, projet: medidoc, depot: medidoc/deploiement, chemin: overlays/recette-par2, espace: medidoc-recette}
+          - {nom: legacy-rdv-prod, projet: legacy, depot: legacy/deploiement, chemin: overlays/prod-par2, espace: legacy-rdv-prod}
+          - {nom: medinotif-prod, projet: medinotif, depot: medinotif/deploiement, chemin: overlays/prod-par2, espace: medinotif-prod}
+  template:
+    metadata:
+      name: "{{ .nom }}"
+      labels: {medisphere.internal/site: par2}
+    spec:
+      project: "{{ .projet }}"
+      source:
+        repoURL: "ssh://miroir@adm02.par2.medisphere.internal/srv/miroirs/{{ .depot }}.git"
+        targetRevision: main
+        path: "{{ .chemin }}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .espace }}"
+      syncPolicy:
+        syncOptions: [ServerSideApply=true]

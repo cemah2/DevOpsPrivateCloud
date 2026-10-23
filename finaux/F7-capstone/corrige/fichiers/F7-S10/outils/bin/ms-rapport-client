@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-rapport-client — rapport mensuel d'engagements de service d'un client hébergé
+# (F7-S10, PLAT-3710 ; procédure RB-374 ; EXP-03, ENF-03 à ENF-05 du marché GHSV)
+#
+# Usage : ms-rapport-client [-m|--mois AAAA-MM] [--partiel] [-c|--config FICHIER] CLIENT
+#
+# Mois CALENDAIRE de Paris (du 1er à 00:00 au 1er suivant à 00:00, heure de Paris). Par défaut : le
+# mois précédent. --partiel : le mois en cours, du 1er à maintenant (signalé dans le titre).
+# Lit clients/<CLIENT>.yaml (objectifs, sondes, maintenances annoncées) et Prometheus (Thanos Query :
+# données brutes 30 jours, M21). Écrit le rapport Markdown sur la sortie standard. AUCUN chiffre n'est
+# saisi à la main : chaque valeur a sa requête, recopiée en annexe du rapport (reproductible).
+#
+# Disponibilité (ENF-03) = part des sondes externes réussies (groupes « groupes_sondes » du témoin de
+# mon01, fédérés), sur le mois PRIVÉ des maintenances CONFORMES à ENF-04 (annoncées 5 jours ouvrés
+# avant, entre 22 h et 6 h heure de Paris, 4 h au plus par mois au total). Une maintenance non conforme
+# reste dans le calcul (c'est une indisponibilité).
+#
+# Variables : MS_PROM_URL (défaut http://prometheus.apps.par1.medisphere.internal:9090).
+# Outils : curl, jq, yq (mikefarah), date (GNU).
+# Codes retour : 0 succès, 1 erreur (Prometheus injoignable, aucune série), 2 usage.
+# =============================================================================
+set -euo pipefail
+
+PROM="${MS_PROM_URL:-http://prometheus.apps.par1.medisphere.internal:9090}"
+ICI="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# Requêtes posées (annexe du rapport). Un fichier, pas un tableau : scalaire() tourne dans « $(…) ».
+REQUETES="$(mktemp)"
+trap 'rm -f "$REQUETES"' EXIT
+
+usage() { sed -n 's/^# Usage : //p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+die() { printf 'ms-rapport-client : %s\n' "$1" >&2; exit "${2:-1}"; }
+
+# scalaire 'PromQL' INSTANT — première valeur (vide si aucune série) ; la requête est mémorisée.
+scalaire() {
+  local r
+  printf '%s\n' "$1" >>"$REQUETES"
+  r="$(curl -sf --max-time 60 --data-urlencode "query=$1" --data-urlencode "time=$2" "$PROM/api/v1/query")" ||
+    die "Prometheus injoignable ($PROM)"
+  jq -r '.data.result[0].value[1] // empty' <<<"$r"
+}
+
+# vecteur 'PromQL' INSTANT ÉTIQUETTE — lignes « étiquette<TAB>valeur ».
+vecteur() {
+  local r
+  printf '%s\n' "$1" >>"$REQUETES"
+  r="$(curl -sf --max-time 60 --data-urlencode "query=$1" --data-urlencode "time=$2" "$PROM/api/v1/query")" ||
+    die "Prometheus injoignable ($PROM)"
+  jq -r --arg e "$3" '.data.result[] | [(.metric[$e] // "?"), .value[1]] | @tsv' <<<"$r"
+}
+
+paris() { TZ=Europe/Paris date -d "@$1" "+${2:-%Y-%m-%d %H:%M}"; }
+
+# jours_ouvres DE A — jours ouvrés (lundi-vendredi, jours fériés NON retirés) strictement après DE
+# jusqu'à A inclus (dates de Paris).
+jours_ouvres() {
+  local j n=0 fin
+  j="$(TZ=Europe/Paris date -d "@$1" +%F)"
+  fin="$(TZ=Europe/Paris date -d "@$2" +%F)"
+  while [[ "$j" < "$fin" ]]; do
+    j="$(date -d "$j +1 day" +%F)"
+    (($(date -d "$j" +%u) <= 5)) && n=$((n + 1))
+  done
+  printf '%s\n' "$n"
+}
+
+# conforme DEBUT FIN ANNONCE (epoch) — fenêtre de nuit (22 h-6 h, Paris), annonce ≥ 5 jours ouvrés avant.
+conforme() {
+  local hd hf
+  hd=$((10#$(paris "$1" %H)))
+  hf=$((10#$(paris "$2" %H%M)))
+  ((hd >= 22 || hd < 6)) || return 1
+  ((hf <= 600 || hf >= 2200)) || return 1
+  (($2 - $1 <= 4 * 3600)) || return 1
+  (($(jours_ouvres "$3" "$1") >= 5))
+}
+
+main() {
+  local mois="" partiel=0 config="" client debut fin titre
+  while (($#)); do
+    case "$1" in
+      -m | --mois) (($# >= 2)) || usage; mois="$2"; shift ;;
+      -c | --config) (($# >= 2)) || usage; config="$2"; shift ;;
+      --partiel) partiel=1 ;;
+      -h | --help) usage ;;
+      -*) usage ;;
+      *) client="$1" ;;
+    esac
+    shift
+  done
+  [[ -n "${client:-}" && "$client" =~ ^[a-z][a-z0-9-]+$ ]] || usage
+  for c in curl jq yq date; do command -v "$c" >/dev/null 2>&1 || die "outil manquant : $c"; done
+  config="${config:-$ICI/../clients/$client.yaml}"
+  [[ -r "$config" ]] || die "configuration illisible : $config"
+  local cfg
+  cfg="$(yq -o=json '.' "$config")" || die "configuration illisible (yq de mikefarah attendu)"
+  local espace groupes obj_dispo seuil part maxs maxpart
+  espace="$(jq -r '.espace' <<<"$cfg")"
+  groupes="$(jq -r '.groupes_sondes' <<<"$cfg")"
+  obj_dispo="$(jq -r '.objectifs.disponibilite' <<<"$cfg")"
+  seuil="$(jq -r '.objectifs.latence_seuil_s' <<<"$cfg")"
+  part="$(jq -r '.objectifs.latence_part' <<<"$cfg")"
+  maxs="$(jq -r '.objectifs.latence_max_s' <<<"$cfg")"
+  maxpart="$(jq -r '.objectifs.latence_max_part' <<<"$cfg")"
+  [[ "$espace" =~ ^[a-z0-9-]+$ && "$groupes" =~ ^[a-z0-9.*|-]+$ ]] || die "espace ou groupes invalides dans $config"
+
+  [[ -n "$mois" ]] || mois="$(TZ=Europe/Paris date -d "$(TZ=Europe/Paris date +%Y-%m-01) -1 month" +%Y-%m)"
+  [[ "$mois" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || die "mois invalide : $mois (AAAA-MM)" 2
+  debut="$(TZ=Europe/Paris date -d "$mois-01 00:00" +%s)"
+  fin="$(TZ=Europe/Paris date -d "$mois-01 00:00 +1 month" +%s)"
+  titre="$mois"
+  if ((fin > $(date +%s))); then
+    ((partiel)) || die "le mois $mois n'est pas terminé (--partiel pour un rapport du 1er à maintenant)"
+    fin="$(date +%s)"
+    titre="$mois (PARTIEL, du 1er au $(paris "$fin"))"
+  fi
+  ((fin > debut)) || die "le mois $mois n'a pas commencé"
+
+  # --- Maintenances : conformes (retirées) et non conformes (comptées) ---------------------------
+  local lignes_maint="" exclues=() cumul=0 md mf ma ok
+  while IFS=$'\t' read -r md mf ma ch motif; do
+    [[ -n "$md" ]] || continue
+    md="$(date -d "$md" +%s)" mf="$(date -d "$mf" +%s)" ma="$(date -d "$ma" +%s)" || die "date illisible dans $config"
+    ((mf > debut && md < fin)) || continue
+    ok=non
+    if conforme "$md" "$mf" "$ma" && ((cumul + mf - md <= 4 * 3600)); then
+      ok=oui
+      cumul=$((cumul + mf - md))
+      exclues+=("$((md > debut ? md : debut)) $((mf < fin ? mf : fin))")
+    fi
+    lignes_maint+="| $(paris "$md") → $(paris "$mf" %H:%M) | $(paris "$ma") | $ch | $motif | $ok |"$'\n'
+  done < <(jq -r '.maintenances[]? | [.debut, .fin, .annonce, (.changement // "—"), (.motif // "—")] | @tsv' <<<"$cfg")
+
+  # --- Disponibilité : intervalles du mois privés des maintenances conformes ----------------------
+  local t="$debut" e s n succes=0 total=0 bornes
+  bornes="$(printf '%s\n' "${exclues[@]+"${exclues[@]}"}" | sort -n)"
+  local intervalles=()
+  while read -r s e; do
+    [[ -n "${s:-}" ]] || continue
+    ((s > t)) && intervalles+=("$t $s")
+    ((e > t)) && t="$e"
+  done <<<"$bornes"
+  ((fin > t)) && intervalles+=("$t $fin")
+  for iv in "${intervalles[@]}"; do
+    read -r s e <<<"$iv"
+    ((e - s >= 60)) || continue
+    n="$(scalaire "sum(count_over_time(probe_success{job=\"blackbox\", groupe=~\"$groupes\"}[$((e - s))s]))" "$e")"
+    [[ -n "$n" ]] || continue
+    total="$(awk -v a="$total" -v b="$n" 'BEGIN { printf "%.0f", a + b }')"
+    n="$(scalaire "sum(sum_over_time(probe_success{job=\"blackbox\", groupe=~\"$groupes\"}[$((e - s))s]))" "$e")"
+    succes="$(awk -v a="$succes" -v b="${n:-0}" 'BEGIN { printf "%.0f", a + b }')"
+  done
+  ((total > 0)) || die "aucune mesure de sonde ($groupes) sur $titre"
+  local dispo indispo_min budget_min
+  dispo="$(awk -v s="$succes" -v t="$total" 'BEGIN { printf "%.3f", 100 * s / t }')"
+  indispo_min="$(awk -v s="$succes" -v t="$total" -v d="$((fin - debut - cumul))" 'BEGIN { printf "%.1f", (1 - s / t) * d / 60 }')"
+  budget_min="$(awk -v o="$obj_dispo" -v d="$((fin - debut - cumul))" 'BEGIN { printf "%.1f", (1 - o / 100) * d / 60 }')"
+
+  # --- Disponibilité vue du serveur, latence, capacité (sur tout le mois) ------------------------
+  local d=$((fin - debut)) sel5xx tot lat lat1 rdv pointe base cpu cpuq mem memq
+  sel5xx="$(scalaire "sum(increase(mediagenda_http_requests_total{namespace=\"$espace\", route=~\"/api/v1/.*\", code=~\"5..\"}[${d}s]))" "$fin")"
+  tot="$(scalaire "sum(increase(mediagenda_http_requests_total{namespace=\"$espace\", route=~\"/api/v1/.*\"}[${d}s]))" "$fin")"
+  lat="$(scalaire "100 * sum(increase(mediagenda_http_request_duration_seconds_bucket{namespace=\"$espace\", route=~\"/api/v1/.*\", le=\"$seuil\"}[${d}s])) / sum(increase(mediagenda_http_request_duration_seconds_count{namespace=\"$espace\", route=~\"/api/v1/.*\"}[${d}s]))" "$fin")"
+  lat1="$(scalaire "100 * sum(increase(mediagenda_http_request_duration_seconds_bucket{namespace=\"$espace\", route=~\"/api/v1/.*\", le=\"$maxs\"}[${d}s])) / sum(increase(mediagenda_http_request_duration_seconds_count{namespace=\"$espace\", route=~\"/api/v1/.*\"}[${d}s]))" "$fin")"
+  rdv="$(scalaire "sum(increase(mediagenda_http_requests_total{namespace=\"$espace\", methode=\"POST\", route=\"/api/v1/rendez-vous\", code=\"201\"}[${d}s]))" "$fin")"
+  pointe="$(scalaire "max_over_time(sum(rate(mediagenda_http_requests_total{namespace=\"$espace\", route=~\"/api/v1/.*\"}[5m]))[${d}s:5m])" "$fin")"
+  base="$(scalaire "max(cnpg_pg_database_size_bytes{namespace=\"$espace\", datname=\"mediagenda\"}) / 2^30" "$fin")"
+  cpu="$(scalaire "max_over_time(sum(rate(container_cpu_usage_seconds_total{namespace=\"$espace\", container!=\"\"}[5m]))[${d}s:5m])" "$fin")"
+  cpuq="$(scalaire "max(kube_resourcequota{namespace=\"$espace\", resource=\"requests.cpu\", type=\"hard\"})" "$fin")"
+  mem="$(scalaire "max_over_time(sum(container_memory_working_set_bytes{namespace=\"$espace\", container!=\"\"})[${d}s:5m]) / 2^30" "$fin")"
+  memq="$(scalaire "max(kube_resourcequota{namespace=\"$espace\", resource=\"requests.memory\", type=\"hard\"}) / 2^30" "$fin")"
+  local alertes
+  alertes="$(vecteur "sum by (alertname) (count_over_time(ALERTS{alertstate=\"firing\", severity=~\"critique|critical\", namespace=\"$espace\"}[${d}s]) or count_over_time(ALERTS{alertstate=\"firing\", severity=~\"critique|critical\", client=\"$client\"}[${d}s]))" "$fin" alertname)"
+
+  f1() { awk -v x="${1:-}" 'BEGIN { if (x == "") print "non mesuré"; else printf "%.1f", x }'; }
+  f3() { awk -v x="${1:-}" 'BEGIN { if (x == "") print "non mesuré"; else printf "%.3f", x }'; }
+  f0() { awk -v x="${1:-}" 'BEGIN { if (x == "") print "non mesuré"; else printf "%.0f", x }'; }
+  verdict() { awk -v x="${1:-}" -v o="$2" 'BEGIN { if (x == "") print "—"; else if (x + 0 >= o + 0) print "tenu"; else print "**NON TENU**" }'; }
+
+  cat <<EOF
+# Rapport mensuel — $(jq -r '.raison_sociale' <<<"$cfg") — $titre
+
+> Généré par \`ms-rapport-client\` le $(paris "$(date +%s)") (heure de Paris). Aucun chiffre saisi à la main ; requêtes en annexe. Méthode : \`docs/capstone/engagements.md\`.
+
+## 1. Disponibilité de la prise de rendez-vous (ENF-03)
+
+| Indicateur | Mesure | Objectif | Verdict |
+|---|---|---|---|
+| Disponibilité vue par les sondes externes, hors maintenances conformes | $(f3 "$dispo") % | $obj_dispo % | $(verdict "$dispo" "$obj_dispo") |
+| Indisponibilité équivalente | $(f1 "$indispo_min") min | budget $(f1 "$budget_min") min | |
+| Sondes réalisées / réussies | $total / $succes | | |
+| Requêtes de l'API servies sans 5xx (vue du serveur) | $(awk -v e="${sel5xx:-}" -v t="${tot:-}" 'BEGIN { if (t == "" || t + 0 == 0) print "non mesuré"; else printf "%.3f %%", 100 * (1 - e / t) }') | $obj_dispo % | |
+
+## 2. Maintenances programmées (ENF-04)
+
+| Fenêtre (Paris) | Annonce | Changement | Motif | Conforme, retirée du calcul |
+|---|---|---|---|---|
+${lignes_maint:-| — | — | — | aucune maintenance ce mois | — |
+}
+Total retiré : $((cumul / 60)) min (plafond 240 min).
+
+## 3. Temps de réponse (ENF-05, mesurés par l'application)
+
+| Indicateur | Mesure | Objectif | Verdict |
+|---|---|---|---|
+| Requêtes de l'API sous ${seuil} s | $(f1 "$lat") % | $part % | $(verdict "$lat" "$part") |
+| Requêtes de l'API sous ${maxs} s | $(f3 "$lat1") % | $maxpart % (proposition R-10) | $(verdict "$lat1" "$maxpart") |
+
+## 4. Incidents
+
+Alertes critiques du locataire (minutes d'alerte active, à une évaluation par minute près) :
+
+| Alerte | Échantillons « firing » |
+|---|---|
+$(if [[ -n "$alertes" ]]; then while IFS=$'\t' read -r a v; do printf '| %s | %s |\n' "$a" "$(f0 "$v")"; done <<<"$alertes"; else echo "| aucune | — |"; fi)
+
+Fiches d'incident du mois : voir \`docs/exploitation/\` (incidents étiquetés « ghsv ») ; causes et actions dans le comité de suivi.
+
+## 5. Capacité (EXP-08)
+
+| Indicateur | Mesure |
+|---|---|
+| Rendez-vous créés par l'API | $(f0 "$rdv") |
+| Pointe de requêtes de l'API (moyenne sur 5 min) | $(f1 "$pointe") req/s |
+| Volume de la base | $(awk -v x="${base:-}" 'BEGIN { if (x == "") print "non mesuré"; else printf "%.2f Gio", x }') |
+| CPU consommé au plus fort / quota de requests | $(f3 "$cpu") / $(f3 "$cpuq") cœurs |
+| Mémoire au plus fort / quota de requests | $(awk -v x="${mem:-}" 'BEGIN { if (x == "") print "non mesuré"; else printf "%.2f", x }') / $(awk -v x="${memq:-}" 'BEGIN { if (x == "") print "non mesuré"; else printf "%.2f", x }') Gio |
+
+## 6. Sécurité, changements, actions
+
+Sections remplies par la revue mensuelle (RB-374 §3) à partir des sources citées : accès du personnel (revue des accès du F6), vulnérabilités (tableau \`f6-vulnerabilites\`), changements (MR de \`overlays/clients/$client-prod\`), actions en cours.
+
+## Annexe — requêtes (Thanos Query, évaluées à la fin de la période)
+
+\`\`\`promql
+$(sort -u "$REQUETES")
+\`\`\`
+EOF
+}
+
+main "$@"

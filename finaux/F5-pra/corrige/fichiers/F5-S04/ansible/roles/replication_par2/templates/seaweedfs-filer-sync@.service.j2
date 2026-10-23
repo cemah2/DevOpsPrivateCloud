@@ -1,0 +1,31 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle replication_par2).') }}
+# filer.sync ACTIF-PASSIF d'un compartiment de s3-01 vers s3-02 (F5-S04). Instance = nom du compartiment.
+#   -isActivePassive  : seules les modifications de A (s3-01) vont vers B (s3-02), jamais l'inverse ;
+#   -a.filerProxy     : les blocs passent par le filer de s3-01 : pas besoin de joindre ses volumes ;
+#   -a.security / -b.security : TLS mutuel gRPC et signature HTTP (security.toml de chaque côté).
+# Reprend à son dernier point de contrôle après un arrêt (wiki SeaweedFS). Réplique AUSSI les
+# suppressions : une copie, pas une sauvegarde (RB-354).
+[Unit]
+Description=filer.sync s3-01 -> s3-02 (compartiment %i)
+After=seaweedfs.service network-online.target
+Requires=seaweedfs.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ seaweedfs_utilisateur | default('seaweedfs') }}
+ExecStart=/usr/local/bin/weed filer.sync \
+    -a={{ replication_par2_filer_source }} -a.path=/buckets/%i \
+    -b={{ replication_par2_filer_local }} -b.path=/buckets/%i \
+    -isActivePassive -a.filerProxy \
+    -a.security={{ seaweedfs_config | default('/etc/seaweedfs') }}/security.toml \
+    -b.security={{ seaweedfs_config | default('/etc/seaweedfs') }}/security.toml
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

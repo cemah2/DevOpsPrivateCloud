@@ -1,0 +1,43 @@
+# sites/par2/mediagenda-prod/60-objectstores.yaml — archives lues et écrites à PAR2 (F5-S06).
+# Même point d'accès (s3-02), deux compartiments ; serverName JAMAIS ici (paramètre du plugin côté Cluster).
+# cnpg-s3-par1 : copie de l'archive de PAR1, en LECTURE (pas de retentionPolicy : elle effacerait dans la
+# copie, et filer.sync réécrirait… ou pas) ; l'identité cnpg-par2 n'y a de toute façon que Read/List.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3-par1
+  namespace: mediagenda-prod
+spec:
+  configuration:
+    destinationPath: s3://cnpg-k8s-par1/
+    endpointURL: https://s3-02.par2.medisphere.internal:8333
+    endpointCA: {name: medisphere-ca, key: ca.crt}
+    s3Credentials:
+      accessKeyId: {name: cnpg-s3-par2, key: ACCESS_KEY_ID}
+      secretAccessKey: {name: cnpg-s3-par2, key: ACCESS_SECRET_KEY}
+    wal:
+      maxParallel: 4
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-s3-par2
+  namespace: mediagenda-prod
+spec:
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: s3://cnpg-k8s-par2/
+    endpointURL: https://s3-02.par2.medisphere.internal:8333
+    endpointCA: {name: medisphere-ca, key: ca.crt}
+    s3Credentials:
+      accessKeyId: {name: cnpg-s3-par2, key: ACCESS_KEY_ID}
+      secretAccessKey: {name: cnpg-s3-par2, key: ACCESS_SECRET_KEY}
+    wal:
+      compression: gzip
+      maxParallel: 4
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 500m, memory: 256Mi}

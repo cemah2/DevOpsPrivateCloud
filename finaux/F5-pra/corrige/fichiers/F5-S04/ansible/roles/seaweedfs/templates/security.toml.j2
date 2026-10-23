@@ -1,0 +1,37 @@
+{# roles/seaweedfs/templates/security.toml.j2 (F5-S04). Format : « weed scaffold -config=security »
+   (wiki SeaweedFS « Security Configuration »). Vérifie les clés avec TA version de weed avant
+   déploiement : weed scaffold -config=security affiche le modèle de la version installée. #}
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle seaweedfs).') }}
+# TLS mutuel entre composants (gRPC) et signature des accès HTTP au filer (F5-S04, CHG-3504).
+
+[jwt.filer_signing]
+key = "{{ seaweedfs_securite.jwt_filer }}"
+
+[jwt.filer_signing.read]
+key = "{{ seaweedfs_securite.jwt_filer }}"
+
+[grpc]
+ca = "{{ seaweedfs_config }}/securite/ca.crt"
+
+[grpc.master]
+cert = "{{ seaweedfs_config }}/securite/hote.crt"
+key = "{{ seaweedfs_config }}/securite/hote.key"
+allowed_commonNames = "{{ seaweedfs_securite.noms_autorises | join(',') }}"
+
+[grpc.volume]
+cert = "{{ seaweedfs_config }}/securite/hote.crt"
+key = "{{ seaweedfs_config }}/securite/hote.key"
+allowed_commonNames = "{{ seaweedfs_securite.noms_autorises | join(',') }}"
+
+[grpc.filer]
+cert = "{{ seaweedfs_config }}/securite/hote.crt"
+key = "{{ seaweedfs_config }}/securite/hote.key"
+allowed_commonNames = "{{ seaweedfs_securite.noms_autorises | join(',') }}"
+
+[grpc.s3]
+cert = "{{ seaweedfs_config }}/securite/hote.crt"
+key = "{{ seaweedfs_config }}/securite/hote.key"
+
+[grpc.client]
+cert = "{{ seaweedfs_config }}/securite/hote.crt"
+key = "{{ seaweedfs_config }}/securite/hote.key"

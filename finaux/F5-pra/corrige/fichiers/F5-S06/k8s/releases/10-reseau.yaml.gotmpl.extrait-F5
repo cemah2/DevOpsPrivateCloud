@@ -1,0 +1,14 @@
+# releases/10-reseau.yaml.gotmpl — EXTRAIT (F5-S06) : valeurs communes + valeurs de SITE.
+releases:
+  - name: cilium
+    namespace: kube-system
+    chart: cilium/cilium
+    version: 1.20.3
+    labels:
+      groupe: reseau
+      composant: cilium
+    values:
+      - ../composants/cilium/values.yaml                  # communes (kubeProxyReplacement, Hubble, Gateway…)
+{{- if eq .Environment.Name "par2" }}
+      - {{ .Values.cilium.valeursSite }}                   # différences de PAR2 (L2, pas de BGP, API)
+{{- end }}

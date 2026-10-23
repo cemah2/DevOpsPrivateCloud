@@ -1,0 +1,15 @@
+# roles/seaweedfs/defaults/main.yml — EXTRAIT (F5-S04) : variables ajoutées (rétrocompatibles).
+
+# Adresse d'écoute de master, volume et filer (127.0.0.1 : rien n'est exposé, comportement du M05).
+seaweedfs_ecoute_interne: 127.0.0.1
+
+# security.toml (TLS mutuel gRPC, signature des accès HTTP au filer). Vide = pas de fichier (M05).
+# Clés et certificats PEM (Vault « critique ») d'une autorité DÉDIÉE à la réplication SeaweedFS
+# (« MédiSphère SeaweedFS réplication », créée par step sur adm01, hors de la PKI des services) :
+#   seaweedfs_securite:
+#     ca: "{{ vault_seaweedfs_grpc_ca }}"
+#     certificat: "{{ vault_seaweedfs_grpc_certificat }}"     # nom = l'hôte (s3-01, s3-02)
+#     cle: "{{ vault_seaweedfs_grpc_cle }}"
+#     noms_autorises: [s3-01, s3-02]                          # CN des certificats clients acceptés
+#     jwt_filer: "{{ vault_seaweedfs_jwt_filer }}"           # clé de signature des accès HTTP au filer
+seaweedfs_securite: {}

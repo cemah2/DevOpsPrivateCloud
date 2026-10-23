@@ -1,0 +1,116 @@
+# plateforme/outils — preuves/catalogue.yaml (F6-S02, PLAT-3602)
+# Catalogue des preuves COLLECTÉES AUTOMATIQUEMENT par ms-preuves. Le catalogue complet (preuves
+# automatiques ET preuves documentaires, propriétaire, conservation, qui les consulte) est
+# docs/conformite/preuves.md de plateforme/medisphere : chaque ligne ci-dessous y figure avec le même
+# identifiant. Ajouter une preuve = une MR ici (collecteur + ligne) ET là (catalogue documenté).
+#
+# Champs : id (P-<DOMAINE>-NN), titre, mesures (ISO/IEC 27001:2022, annexe A), hds (activités du
+# référentiel HDS concernées), frequence (quotidienne | hebdomadaire | mensuelle), collecteur
+# (exécutable de preuves/collecteurs/), format (extension du fichier de preuve ; json = vérifié).
+version: 1
+preuves:
+  - id: P-IAM-01
+    titre: Comptes de personnes et groupes de l'annuaire (FreeIPA)
+    mesures: ["5.16", "5.18", "6.5"]
+    hds: [5]
+    frequence: quotidienne
+    collecteur: annuaire-groupes
+    format: ldif
+  - id: P-IAM-02
+    titre: Réglages de sécurité, flux et clients du royaume Keycloak medisphere
+    mesures: ["5.17", "8.5"]
+    hds: [4, 5]
+    frequence: hebdomadaire
+    collecteur: keycloak-royaume
+    format: json
+  - id: P-IAM-03
+    titre: Comptes GitLab (état, administrateurs, externes, second facteur)
+    mesures: ["5.18", "8.2", "8.4"]
+    hds: [5]
+    frequence: quotidienne
+    collecteur: gitlab-utilisateurs
+    format: json
+  - id: P-IAM-04
+    titre: Liaisons RBAC de k8s-par1 (dont cluster-admin)
+    mesures: ["5.15", "8.2", "8.3"]
+    hds: [3, 4]
+    frequence: quotidienne
+    collecteur: k8s-rbac
+    format: json
+  - id: P-IAM-05
+    titre: Utilisateurs, jetons et ACL de Proxmox VE
+    mesures: ["5.18", "8.2"]
+    hds: [2, 3]
+    frequence: hebdomadaire
+    collecteur: proxmox-acces
+    format: json
+  - id: P-IAM-06
+    titre: État brut de la revue des accès mensuelle (ms-revue-acces)
+    mesures: ["5.18", "5.15", "6.5"]
+    hds: [5]
+    frequence: mensuelle
+    collecteur: revue-acces
+    format: json
+  - id: P-VUL-01
+    titre: Analyse de vulnérabilités des images en service (Harbor, Trivy)
+    mesures: ["8.8", "8.19"]
+    hds: [4]
+    frequence: hebdomadaire
+    collecteur: harbor-vulnerabilites
+    format: json
+  - id: P-VUL-02
+    titre: Dérogations aux politiques d'admission (PolicyException) et échéances
+    mesures: ["5.36", "8.8", "8.9"]
+    hds: [4]
+    frequence: quotidienne
+    collecteur: kyverno-exceptions
+    format: json
+  - id: P-SAV-01
+    titre: Planifications et sauvegardes Velero des 14 derniers jours
+    mesures: ["8.13"]
+    hds: [6]
+    frequence: quotidienne
+    collecteur: velero-sauvegardes
+    format: json
+  - id: P-SAV-02
+    titre: Sauvegardes et archivage continu des bases CloudNativePG
+    mesures: ["8.13", "8.14"]
+    hds: [6]
+    frequence: quotidienne
+    collecteur: cnpg-sauvegardes
+    format: json
+  - id: P-DUR-01
+    titre: Scores de conformité OpenSCAP (CIS, ANSSI) par hôte
+    mesures: ["8.9", "8.8"]
+    hds: [2, 3, 5]
+    frequence: hebdomadaire
+    collecteur: conformite-scores
+    format: json
+  - id: P-RES-01
+    titre: Règles actives du pare-feu de bordure et empreinte de la configuration persistée
+    mesures: ["8.20", "8.22", "8.9"]
+    hds: [2, 5]
+    frequence: quotidienne
+    collecteur: bordure-pare-feu
+    format: txt
+  - id: P-SEC-01
+    titre: Méthodes d'authentification, moteurs et politiques d'OpenBao
+    mesures: ["8.24", "5.17", "8.2"]
+    hds: [4, 5]
+    frequence: hebdomadaire
+    collecteur: openbao-config
+    format: json
+  - id: P-SUP-01
+    titre: Silences actifs et alertes en cours (Alertmanager)
+    mesures: ["8.16", "5.25"]
+    hds: [5]
+    frequence: quotidienne
+    collecteur: alertes-silences
+    format: json
+  - id: P-CHG-01
+    titre: Fiches de changement du mois et leurs décisions
+    mesures: ["8.32"]
+    hds: [5]
+    frequence: mensuelle
+    collecteur: changements-fiches
+    format: json

@@ -1,0 +1,384 @@
+openapi: 3.1.0
+# Annexe A1 du CCTP GHSV-DSI-2026-014 — Contrat d'interface de l'API de rendez-vous, version 1.
+# Document fictif (workbook MédiSphère). Rédigé par la DSI du GHSV à partir de l'API publique d'une
+# solution du marché ; le titulaire s'engage sur ce contrat (CCTP EF-05).
+info:
+  title: API de rendez-vous du GHSV
+  version: 1.0.0
+  summary: Échanges de rendez-vous entre le DPI du GHSV et la solution de prise de rendez-vous.
+  description: |
+    Contrat d'interface consommé par le dossier patient informatisé (DPI) du Groupement hospitalier
+    Seine-et-Vallées.
+
+    Conventions :
+    - toutes les dates et heures sont au format RFC 3339 **avec leur décalage horaire**
+      (`2027-03-08T09:00:00+01:00`) ; une date sans décalage est refusée (422) ;
+    - les créneaux durent 30 minutes, de 8 h à 12 h et de 14 h à 18 h, heure de Paris ;
+    - un praticien ne peut pas avoir deux rendez-vous qui commencent à la même heure (409) ;
+    - les erreurs ont un corps `Erreur` (champ `detail`) ;
+    - aucun champ n'est retiré ni renommé pendant la durée du marché ; des champs facultatifs
+      peuvent être ajoutés (le DPI ignore les champs qu'il ne connaît pas).
+
+    Authentification : le DPI obtient un jeton d'accès OAuth 2.0 par le flux « client credentials »
+    auprès du serveur d'autorisation désigné par le titulaire, et le présente dans l'en-tête
+    `Authorization: Bearer <jeton>`.
+  contact:
+    name: DSI du GHSV — pôle interopérabilité
+    email: interop@ghsv.example
+servers:
+  - url: https://{hote}/api/v1
+    description: Point d'entrée du titulaire (production ou recette)
+    variables:
+      hote:
+        default: rendez-vous.ghsv.example
+        enum:
+          - rendez-vous.ghsv.example
+          - rendez-vous-recette.ghsv.example
+        description: Nom publié par le titulaire sous le domaine du GHSV (CCTP EF-01, EXP-06).
+security:
+  - dpi: [rdv:lecture]
+tags:
+  - name: creneaux
+    description: Disponibilités des praticiens
+  - name: rendez-vous
+    description: Création, consultation, déplacement et annulation des rendez-vous
+paths:
+  /creneaux:
+    get:
+      tags: [creneaux]
+      operationId: listerCreneaux
+      summary: Créneaux libres d'un jour
+      description: Débuts des créneaux de 30 minutes encore libres pour un praticien (ou pour tous) un jour donné.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: Jour recherché (AAAA-MM-JJ).
+          schema:
+            type: string
+            format: date
+          example: "2027-03-08"
+        - name: praticien
+          in: query
+          required: false
+          description: Identifiant du praticien ; `tous` (défaut) pour l'ensemble des praticiens.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            default: tous
+          example: dr-lemaire
+      responses:
+        "200":
+          description: Créneaux libres
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Creneaux"
+        "401":
+          $ref: "#/components/responses/NonAuthentifie"
+        "422":
+          $ref: "#/components/responses/RequeteInvalide"
+  /rendez-vous:
+    get:
+      tags: [rendez-vous]
+      operationId: listerRendezVous
+      summary: Rendez-vous d'une période
+      description: |
+        Rendez-vous triés par date de début croissante. Le DPI l'appelle toutes les 5 minutes pour
+        rapprocher ses agendas, avec `praticien`, `du` et `au`.
+      parameters:
+        - name: praticien
+          in: query
+          required: false
+          description: Ne renvoie que les rendez-vous de ce praticien.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: du
+          in: query
+          required: false
+          description: Début de la période (inclus).
+          schema:
+            type: string
+            format: date-time
+        - name: au
+          in: query
+          required: false
+          description: Fin de la période (exclue).
+          schema:
+            type: string
+            format: date-time
+        - name: limite
+          in: query
+          required: false
+          description: Nombre maximal de rendez-vous renvoyés.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+      responses:
+        "200":
+          description: Liste des rendez-vous
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RendezVous"
+        "401":
+          $ref: "#/components/responses/NonAuthentifie"
+        "422":
+          $ref: "#/components/responses/RequeteInvalide"
+    post:
+      tags: [rendez-vous]
+      operationId: creerRendezVous
+      summary: Créer un rendez-vous
+      security:
+        - dpi: [rdv:ecriture]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RendezVousCreation"
+            example:
+              patient: Jeanne Exemple
+              praticien: dr-lemaire
+              debut: "2027-03-08T09:00:00+01:00"
+              duree_minutes: 30
+              motif: Consultation de suivi
+              rappel:
+                canal: sms
+                contact: "+33 6 00 00 00 00"
+      responses:
+        "201":
+          description: Rendez-vous créé (confirmé)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RendezVous"
+        "401":
+          $ref: "#/components/responses/NonAuthentifie"
+        "409":
+          $ref: "#/components/responses/Conflit"
+        "422":
+          $ref: "#/components/responses/RequeteInvalide"
+  /rendez-vous/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identifiant du rendez-vous, attribué par la solution.
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      tags: [rendez-vous]
+      operationId: obtenirRendezVous
+      summary: Détail d'un rendez-vous
+      responses:
+        "200":
+          description: Le rendez-vous
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RendezVous"
+        "401":
+          $ref: "#/components/responses/NonAuthentifie"
+        "404":
+          $ref: "#/components/responses/Introuvable"
+        "422":
+          $ref: "#/components/responses/RequeteInvalide"
+    patch:
+      tags: [rendez-vous]
+      operationId: deplacerRendezVous
+      summary: Déplacer un rendez-vous
+      description: |
+        Change l'heure de début (et éventuellement la durée) d'un rendez-vous existant, en conservant
+        son identifiant, le patient, le praticien, le motif et le choix de rappel. Opération atomique :
+        si le nouveau créneau est pris (409), le rendez-vous reste à son heure d'origine.
+      security:
+        - dpi: [rdv:ecriture]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Deplacement"
+            example:
+              debut: "2027-03-09T14:30:00+01:00"
+      responses:
+        "200":
+          description: Rendez-vous déplacé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RendezVous"
+        "401":
+          $ref: "#/components/responses/NonAuthentifie"
+        "404":
+          $ref: "#/components/responses/Introuvable"
+        "409":
+          $ref: "#/components/responses/Conflit"
+        "422":
+          $ref: "#/components/responses/RequeteInvalide"
+    delete:
+      tags: [rendez-vous]
+      operationId: annulerRendezVous
+      summary: Annuler un rendez-vous
+      security:
+        - dpi: [rdv:ecriture]
+      responses:
+        "204":
+          description: Rendez-vous annulé
+        "401":
+          $ref: "#/components/responses/NonAuthentifie"
+        "404":
+          $ref: "#/components/responses/Introuvable"
+        "422":
+          $ref: "#/components/responses/RequeteInvalide"
+components:
+  securitySchemes:
+    dpi:
+      type: oauth2
+      description: |
+        Jeton d'accès du DPI (flux « client credentials »). L'adresse du serveur d'autorisation
+        ci-dessous est un exemple : le titulaire communique la sienne à la notification.
+      flows:
+        clientCredentials:
+          tokenUrl: https://autorisation.titulaire.example/token
+          scopes:
+            rdv:lecture: Lire les créneaux et les rendez-vous
+            rdv:ecriture: Créer, déplacer et annuler des rendez-vous
+  responses:
+    NonAuthentifie:
+      description: Jeton absent, expiré ou invalide
+    Introuvable:
+      description: Rendez-vous introuvable
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Erreur"
+    Conflit:
+      description: Le praticien a déjà un rendez-vous qui commence à cette heure
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Erreur"
+    RequeteInvalide:
+      description: Paramètre ou corps invalide (champ manquant, date sans décalage horaire, valeur hors bornes)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Erreur"
+  schemas:
+    Rappel:
+      type: object
+      description: |
+        Choix du patient pour le rappel J-2 (CCTP EF-06). `aucun` : pas de rappel, pas de contact.
+        `sms` : numéro de téléphone obligatoire. `mail` : adresse de courriel obligatoire.
+      properties:
+        canal:
+          type: string
+          enum: [sms, mail, aucun]
+          default: aucun
+        contact:
+          type: [string, "null"]
+          maxLength: 254
+      required: [canal]
+    RendezVousCreation:
+      type: object
+      properties:
+        patient:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Nom du patient tel que connu du DPI.
+        praticien:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Identifiant du praticien.
+        debut:
+          type: string
+          format: date-time
+          description: Début du rendez-vous, avec décalage horaire.
+        duree_minutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+          default: 30
+        motif:
+          type: [string, "null"]
+          maxLength: 500
+        rappel:
+          $ref: "#/components/schemas/Rappel"
+      required: [patient, praticien, debut]
+    RendezVous:
+      allOf:
+        - $ref: "#/components/schemas/RendezVousCreation"
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              minimum: 1
+            cree_le:
+              type: string
+              format: date-time
+              description: Horodatage de création dans la solution.
+          required: [id, cree_le, duree_minutes, rappel]
+    Deplacement:
+      type: object
+      properties:
+        debut:
+          type: string
+          format: date-time
+        duree_minutes:
+          type: integer
+          minimum: 5
+          maximum: 240
+      required: [debut]
+    Creneaux:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        praticien:
+          type: string
+        fuseau:
+          type: string
+          description: Fuseau horaire des créneaux (IANA), `Europe/Paris`.
+        libres:
+          type: array
+          items:
+            type: string
+            format: date-time
+      required: [date, praticien, fuseau, libres]
+    DetailValidation:
+      type: object
+      properties:
+        loc:
+          type: array
+          items:
+            type: [string, integer]
+        msg:
+          type: string
+        type:
+          type: string
+      required: [loc, msg, type]
+    Erreur:
+      type: object
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                $ref: "#/components/schemas/DetailValidation"
+      required: [detail]

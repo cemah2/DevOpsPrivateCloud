@@ -1,0 +1,10 @@
+---
+# host_vars/s3-02/replication_par2.yml (F5-S04). Secrets dans host_vars/s3-02/vault-critique.yml.
+replication_par2_rgw_cle_acces: "{{ vault_rgw_medidoc_copie_par2_cle_acces }}"      # compte RGW medidoc-copie-par2 (lecture)
+replication_par2_rgw_cle_secrete: "{{ vault_rgw_medidoc_copie_par2_cle_secrete }}"
+replication_par2_s3_local_cle_acces: "{{ vault_seaweedfs_copie_medidoc_cle_acces }}"
+replication_par2_s3_local_cle_secrete: "{{ vault_seaweedfs_copie_medidoc_cle_secrete }}"
+replication_par2_mesure_cle_acces: "{{ vault_seaweedfs_wb_checks_cle_acces }}"
+replication_par2_mesure_cle_secrete: "{{ vault_seaweedfs_wb_checks_cle_secrete }}"
+replication_par2_rclone_version: "<VERSION-RCLONE>"        # dernière stable au moment de la MR (rclone.org/downloads)
+replication_par2_rclone_sha256: "<SHA256-DE-L-ARCHIVE>"    # SHA256SUMS signé publié avec la version

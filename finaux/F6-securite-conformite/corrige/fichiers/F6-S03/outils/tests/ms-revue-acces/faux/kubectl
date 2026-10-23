@@ -1,0 +1,16 @@
+#!/bin/bash
+# Faux kubectl (tests de ms-revue-acces) : liaisons RBAC et ConfigMaps d'Argo CD figées.
+case "$*" in
+  *"get clusterrolebindings,rolebindings"*) cat <<'J'
+{"items":[
+ {"metadata":{"name":"oidc-plateforme-admins"},"roleRef":{"name":"cluster-admin"},"subjects":[{"kind":"Group","name":"oidc:plateforme-admins"}]},
+ {"metadata":{"name":"lecture-yanis","namespace":"mediagenda-recette"},"roleRef":{"name":"view"},"subjects":[{"kind":"User","name":"oidc:yanis.perrin"}]},
+ {"metadata":{"name":"outil-diagnostic-temporaire"},"roleRef":{"name":"cluster-admin"},"subjects":[{"kind":"ServiceAccount","namespace":"mediagenda-recette","name":"outil-diagnostic"}]},
+ {"metadata":{"name":"karim-lecture"},"roleRef":{"name":"view"},"subjects":[{"kind":"User","name":"oidc:karim.benali"}]}
+]}
+J
+  ;;
+  *"get configmap argocd-cm"*) echo '{"data":{"accounts.ci-lecture":"apiKey","admin.enabled":"false"}}' ;;
+  *"get configmap argocd-rbac-cm"*) printf '%s\n' '{"data":{"policy.csv":"g, plateforme-admins, role:plateforme-admin\ng, ext-axiomdev, role:lecture\n"}}' ;;
+  *) exit 1 ;;
+esac

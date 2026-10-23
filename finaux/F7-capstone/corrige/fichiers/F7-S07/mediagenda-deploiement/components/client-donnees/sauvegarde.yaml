@@ -1,0 +1,51 @@
+# mediagenda/deploiement — components/client-donnees/sauvegarde.yaml (F7-S07, PLAT-3707)
+# Archivage continu et sauvegarde de base de la base du client vers s3-01, compartiment cnpg-ghsv
+# (identité SeaweedFS « cnpg-ghsv » : Read, Write, List sur ce seul compartiment ; clés dans OpenBao,
+# kv/ghsv/<env>/cnpg-s3, Secret par ESO). Le compartiment est répliqué vers s3-02 par filer.sync
+# (F5-S04 : liste des compartiments de sauvegarde à compléter), ce qui alimente la réplique de PAR2
+# (F7-S10). RPO de la reprise = archivage des WAL : archive_timeout de CloudNativePG (5 min par défaut)
+# et délai de filer.sync.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: cnpg-ghsv
+spec:
+  # 30 jours de restauration à un instant donné (comme la prod de MédiAgenda).
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: s3://cnpg-ghsv/
+    endpointURL: https://s3-01.par1.medisphere.internal:8333
+    endpointCA:
+      name: medisphere-ca
+      key: ca.crt
+    s3Credentials:
+      accessKeyId:
+        name: cnpg-ghsv-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: cnpg-ghsv-s3
+        key: ACCESS_SECRET_KEY
+    wal:
+      compression: gzip
+      maxParallel: 2
+    data:
+      compression: gzip
+  instanceSidecarConfiguration:
+    resources:
+      requests: {cpu: 20m, memory: 64Mi}
+      limits: {memory: 256Mi}
+---
+# Sauvegarde de base chaque nuit à 01:40 (six champs : secondes en tête).
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: mediagenda-db-nuit
+spec:
+  schedule: "0 40 1 * * *"
+  backupOwnerReference: self
+  immediate: true
+  cluster:
+    name: mediagenda-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

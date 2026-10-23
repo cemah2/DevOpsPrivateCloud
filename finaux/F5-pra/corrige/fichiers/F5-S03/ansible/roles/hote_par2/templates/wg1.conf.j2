@@ -1,0 +1,16 @@
+# {{ ansible_managed | default('Géré par Ansible') }} — rôle hote_par2 (F5-S03).
+# VPN d'administration de SECOURS de PAR2 (le VPN wg1 de PAR1 meurt avec PAR1). N'ouvre que PAR2 :
+# la chaîne forward de « inet par2 » ne laisse passer wg1 que vers PAR2 INFRA ; hp01 lui-même
+# (10.20.10.10 : PBS 8007, PVE 8006, SSH) est joignable directement.
+# Poste : Address = 10.255.3.2/32 ; AllowedIPs = 10.255.3.1/32, 10.20.0.0/16 ; Endpoint = <IP-HP01-LAN>:{{ hote_par2_wg1_port }}
+[Interface]
+Address = {{ hote_par2_wg1_adresse }}
+ListenPort = {{ hote_par2_wg1_port }}
+PrivateKey = {{ hote_par2_wg1_cle_privee }}
+{% for p in hote_par2_wg1_pairs %}
+
+[Peer]
+# {{ p.nom }}
+PublicKey = {{ p.cle_publique }}
+AllowedIPs = {{ p.allowed_ips }}
+{% endfor %}

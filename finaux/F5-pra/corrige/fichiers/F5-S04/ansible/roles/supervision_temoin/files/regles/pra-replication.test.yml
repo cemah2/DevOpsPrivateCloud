@@ -1,0 +1,23 @@
+# Tests promtool des règles pra-replication (F5-S04) : promtool test rules pra-replication.test.yml
+rule_files:
+  - pra-replication.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # WAL arrivé à t=0 (époque 0), puis plus rien : retard croissant.
+      - series: 'pra_replication_dernier_objet_horodatage_secondes{flux="wal-mediagenda", job="node-par2", instance="s3-02"}'
+        values: '0x30'
+      - series: 'up{job="node-par2", instance="s3-02"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: PraWalMediagendaEnRetard
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: PraWalMediagendaEnRetard
+        exp_alerts:
+          - exp_labels: {severity: critical, equipe: plateforme, flux: wal-mediagenda, job: node-par2, instance: s3-02}
+      - eval_time: 20m
+        alertname: PraExportateurPar2Muet
+        exp_alerts: []

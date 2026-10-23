@@ -1,0 +1,25 @@
+# /etc/systemd/system/mailpit.service — adm02 (F5-S11) : boîte de réception de secours de la cellule de
+# crise pendant un PRA (alertes d'Alertmanager, copies des messages d'état). Binaire /usr/local/bin/mailpit
+# (même version que celle de mon01, M19), vérifié par sa somme de contrôle avant installation.
+# SMTP en boucle locale seulement ; interface web sur l'adresse de adm02, protégée par un fichier
+# d'authentification (htpasswd) et filtrée par le pare-feu de adm02 (VPN de secours 10.255.3.0/24).
+[Unit]
+Description=Mailpit — boîte de réception de secours (PRA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mailpit
+Group=mailpit
+ExecStart=/usr/local/bin/mailpit --listen 10.20.20.10:8025 --smtp 127.0.0.1:1025 \
+  --database /var/lib/mailpit/mailpit.db --ui-auth-file /etc/mailpit/ui-auth
+StateDirectory=mailpit
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

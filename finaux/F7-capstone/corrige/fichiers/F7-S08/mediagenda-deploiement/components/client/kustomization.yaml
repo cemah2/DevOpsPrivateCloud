@@ -1,0 +1,40 @@
+# mediagenda/deploiement — components/client/kustomization.yaml (F7-S07, S08, S09 ; PLAT-3707/3708, DEV-3709)
+# Ce qui fait d'une instance de MédiAgenda l'instance d'un CLIENT :
+#   S07  marque blanche (MEDIAGENDA_TITRE, parametres.env de l'overlay) ;
+#   S08  accès des agents : OAuth2 Proxy « oauth2-proxy-agents » devant TOUTE l'API, publié sur le nom
+#        des agents, qui n'accepte que le groupe ghsv-agents (agents fédérés par le courtier) ;
+#   S09  accès du DPI : OAuth2 Proxy « oauth2-proxy-dpi » devant toute l'API sur le nom public, qui
+#        n'accepte que des jetons porteurs émis par le royaume medisphere pour l'audience ghsv-api ;
+#        (fichier oauth2-proxy-dpi.yaml : fichiers/F7-S09/) ;
+#   cloison : plus AUCUN accès direct de la Gateway à l'API (la politique du chart est retirée) ;
+#        l'API n'accepte que les deux mandataires (et la supervision).
+# Valeurs par défaut = RECETTE ; l'overlay de production les remplace (noms, chemins kv).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - oauth2-proxy-agents.yaml
+  - oauth2-proxy-dpi.yaml
+  - reseau.yaml
+patches:
+  # La Gateway ne joint plus l'API directement : la politique du chart l'autorisait.
+  - target:
+      group: cilium.io
+      kind: CiliumNetworkPolicy
+      name: mediagenda-depuis-gateway
+    patch: |-
+      $patch: delete
+      apiVersion: cilium.io/v2
+      kind: CiliumNetworkPolicy
+      metadata:
+        name: mediagenda-depuis-gateway
+  # La route publique (nom de livraison.yaml) mène au mandataire du DPI, plus au Service de l'API.
+  - target:
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/backendRefs
+        value:
+          - name: oauth2-proxy-dpi
+            port: 80

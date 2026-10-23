@@ -1,0 +1,9 @@
+# reg02 — mesure de l'âge de la dernière copie (F5-S04), pour PraImagesEnRetard.
+# Minuterie de 5 min sur reg02 (unité oneshot, même modèle que pra-retards de s3-02), qui lit la date
+# de modification du lien d'étiquette RÉÉCRIT à chaque passage (cosign copy --force de la dernière
+# version de mediagenda-api) dans le stockage de registry:3 :
+#   f=/opt/registre/donnees/docker/registry/v2/repositories/medisphere/mediagenda-api/_manifests/tags
+#   t=$(find "$f" -path '*/current/link' -printf '%T@\n' | sort -n | tail -n 1 | cut -d. -f1)
+#   printf '# TYPE pra_reg02_derniere_copie_secondes gauge\npra_reg02_derniere_copie_secondes %s\n' "$t" \
+#     > /var/lib/prometheus/node-exporter/pra_reg02.prom
+# (le chemin de données dépend de registre_travail_dossier : vérifie-le sur reg02).

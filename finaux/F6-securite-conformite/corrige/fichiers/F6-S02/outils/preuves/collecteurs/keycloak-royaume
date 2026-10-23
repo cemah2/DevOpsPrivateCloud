@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# keycloak-royaume — P-IAM-02 : réglages de sécurité du royaume medisphere (force brute, sessions, OTP),
+# flux d'authentification, clients (SANS leurs secrets), nombre d'utilisateurs.
+# Identité : client de compte de service du royaume medisphere (rôles view-realm, view-users,
+# view-clients) : KEYCLOAK_URL, KEYCLOAK_CLIENT_ID, KEYCLOAK_CLIENT_SECRET.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET
+KC="${KEYCLOAK_URL:-https://sso.par1.medisphere.internal}"
+R=medisphere
+jeton="$(curl -sf --max-time "$DELAI_HTTP" -K <(printf 'user = "%s:%s"\n' "$KEYCLOAK_CLIENT_ID" "$KEYCLOAK_CLIENT_SECRET") \
+  -d grant_type=client_credentials "$KC/realms/$R/protocol/openid-connect/token" | jq -r '.access_token // empty')"
+[[ -n "$jeton" ]] || { echo "jeton Keycloak refusé" >&2; exit 1; }
+api() { http_jeton "$KC/admin/realms/$R/$1" "$jeton"; }
+
+royaume="$(http_jeton "$KC/admin/realms/$R" "$jeton" | jq -S '{realm, enabled, sslRequired, bruteForceProtected,
+  failureFactor, permanentLockout, maxFailureWaitSeconds, ssoSessionIdleTimeout, ssoSessionMaxLifespan,
+  accessTokenLifespan, offlineSessionIdleTimeout, otpPolicyType, otpPolicyAlgorithm, otpPolicyDigits,
+  eventsEnabled, adminEventsEnabled, adminEventsDetailsEnabled, browserFlow, passwordPolicy}')"
+flux="$(api authentication/flows | jq -S '[.[] | {alias, builtIn, topLevel}] | sort_by(.alias)')"
+# Clients : jamais le champ « secret » (view-clients le renvoie : on ne garde que des champs choisis).
+clients="$(api 'clients?max=500' | jq -S '[.[] | {clientId, enabled, publicClient, bearerOnly,
+  standardFlowEnabled, directAccessGrantsEnabled, serviceAccountsEnabled, implicitFlowEnabled,
+  redirectUris: (.redirectUris // [] | sort)}] | sort_by(.clientId)')"
+n="$(api users/count)"
+entete_preuve | jq -S --argjson r "$royaume" --argjson f "$flux" --argjson c "$clients" --argjson n "$n" \
+  '. + {royaume: $r, flux: $f, clients: $c, utilisateurs: $n}'

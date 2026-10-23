@@ -1,0 +1,12 @@
+# mediagenda/deploiement — overlays/clients/ghsv-recette/livraison.yaml (F7-S07)
+# Version livrée en recette du client : la même que la recette de MédiAgenda (promotion automatique
+# par MR de ci-promotion, approuvée par Julien Petit), au moins 10 jours ouvrés avant ghsv-prod.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livraison
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  version: <VERSION-RECETTE>
+  nom-publie: ghsv-recette.apps.par1.medisphere.internal

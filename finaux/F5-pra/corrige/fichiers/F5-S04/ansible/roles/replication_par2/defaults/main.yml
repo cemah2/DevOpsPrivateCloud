@@ -1,0 +1,46 @@
+---
+# Rôle replication_par2 (F5-S04, PLAT-3504) — sur s3-02 : ce qui fait arriver les données à PAR2 et ce
+# qui mesure leur retard.
+#   1. filer.sync actif-passif, UNE unité par compartiment (seaweedfs-filer-sync@<compartiment>) ;
+#   2. copie de medidoc-documents depuis le RGW (rclone, minuterie medidoc-copie) ;
+#   3. mesure des retards côté DESTINATION (minuterie pra-retards) → collecteur textfile de node_exporter.
+# Prérequis : rôle seaweedfs avec seaweedfs_securite (security.toml, mêmes certificats que s3-01),
+# rôle node_exporter (collecteur textfile, M21/M26).
+
+# Filer de PAR1 (HTTP ; gRPC = port + 10000).
+replication_par2_filer_source: 10.10.20.14:8888
+replication_par2_filer_local: 127.0.0.1:8888
+
+# Compartiments répliqués : ce qui sert à une REPRISE (ADR-0350, minimisation). Pas ci-cache, pas
+# conformite (preuves d'audit : F6), pas data-extractions (données pseudonymisées, hors PRA v1).
+replication_par2_compartiments:
+  - cnpg-k8s-par1          # archives de WAL et sauvegardes de base (MédiAgenda, portail…)
+  - velero-k8s-par1        # sauvegardes Velero (pièces jointes de Legacy-RDV, objets non déclaratifs)
+  - etcd-k8s-par1          # instantanés etcd de k8s-par1 (reconstruction au retour)
+  - openbao-instantanes    # instantanés du coffre (bao-par2)
+  - argocd-sauvegardes     # export d'Argo CD
+  - identite-sauvegardes   # sauvegardes de Keycloak et FreeIPA (reconstruction au retour)
+  - mariadb-legacy-rdv     # sauvegardes de Legacy-RDV
+  - messagerie-definitions # définitions RabbitMQ
+  - tofu-state             # états OpenTofu de PAR1 (reconstruction de PAR1 au retour)
+
+# Copie de MédiDoc (RGW → s3-02).
+replication_par2_rgw_url: https://rgw.par1.medisphere.internal
+replication_par2_rgw_compartiment: medidoc-documents
+replication_par2_rgw_cle_acces: ""        # compte RGW en LECTURE seule (medidoc-copie-par2), Vault « critique »
+replication_par2_rgw_cle_secrete: ""
+replication_par2_s3_local_url: https://s3-02.par2.medisphere.internal:8333
+replication_par2_s3_local_cle_acces: ""   # identité copie-medidoc de s3-02
+replication_par2_s3_local_cle_secrete: ""
+replication_par2_medidoc_calendrier: "*:0/15"
+
+# Mesure des retards.
+replication_par2_serveur_prod: mediagenda-db-prod-day0
+replication_par2_retards_calendrier: "*:*:00"
+replication_par2_textfile: /var/lib/prometheus/node-exporter
+replication_par2_mesure_cle_acces: ""     # identité wb-checks de s3-02 (lecture, liste)
+replication_par2_mesure_cle_secrete: ""
+
+# rclone : binaire officiel épinglé (version ET empreinte, comme weed au M05).
+replication_par2_rclone_version: "<VERSION-RCLONE>"
+replication_par2_rclone_sha256: "<SHA256-DE-L-ARCHIVE>"

@@ -1,0 +1,110 @@
+---
+# replication_par2 — voir defaults/main.yml.
+
+- name: Garde-fou — uniquement sur s3-02
+  ansible.builtin.assert:
+    that: inventory_hostname == 's3-02'
+    fail_msg: "replication_par2 ne s'applique qu'à s3-02 (la réplication est tirée depuis PAR2)."
+
+- name: Dossier de configuration (600)
+  ansible.builtin.file:
+    path: /etc/replication-par2
+    state: directory
+    mode: "0700"
+
+- name: rclone (archive officielle épinglée)
+  ansible.builtin.get_url:
+    url: "https://downloads.rclone.org/v{{ replication_par2_rclone_version }}/rclone-v{{ replication_par2_rclone_version }}-linux-amd64.zip"
+    dest: "/var/cache/rclone-{{ replication_par2_rclone_version }}.zip"
+    checksum: "sha256:{{ replication_par2_rclone_sha256 }}"
+    mode: "0644"
+
+- name: Outils de décompression et jq
+  ansible.builtin.apt:
+    name: [unzip, jq]
+    state: present
+
+- name: Installer rclone
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      unzip -p /var/cache/rclone-{{ replication_par2_rclone_version }}.zip
+      'rclone-v{{ replication_par2_rclone_version }}-linux-amd64/rclone' > /usr/local/bin/rclone.nouveau &&
+      chmod 0755 /usr/local/bin/rclone.nouveau && mv /usr/local/bin/rclone.nouveau /usr/local/bin/rclone
+    executable: /bin/bash
+    creates: /usr/local/bin/rclone
+  # Changer de version : supprimer /usr/local/bin/rclone dans la même MR (sinon « creates » l'ignore).
+
+- name: Scripts de mesure
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/sbin/{{ item | regex_replace('\\.sh$', '') }}"
+    mode: "0755"
+  loop: [pra-retards.sh, pra-marquer-reussite]
+
+- name: Environnements (secrets, 600)
+  ansible.builtin.template:
+    src: "{{ item }}.env.j2"
+    dest: "/etc/replication-par2/{{ item }}.env"
+    mode: "0600"
+  loop: [medidoc, retards]
+  no_log: true
+
+- name: Unités systemd
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - seaweedfs-filer-sync@.service
+    - medidoc-copie.service
+    - medidoc-copie.timer
+  notify: Relire systemd
+
+- name: Unités de mesure des retards
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.nom }}"
+    mode: "0644"
+    content: "{{ item.contenu }}"
+  loop:
+    - nom: pra-retards.service
+      contenu: |
+        [Unit]
+        Description=Retards de réplication vus de PAR2 (F5-S04)
+        [Service]
+        Type=oneshot
+        EnvironmentFile=/etc/replication-par2/retards.env
+        ExecStart=/usr/local/sbin/pra-retards
+        NoNewPrivileges=true
+        ProtectSystem=strict
+        ReadWritePaths={{ replication_par2_textfile }}
+        PrivateTmp=true
+    - nom: pra-retards.timer
+      contenu: |
+        [Unit]
+        Description=Retards de réplication chaque minute (F5-S04)
+        [Timer]
+        OnCalendar={{ replication_par2_retards_calendrier }}
+        Persistent=true
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.nom }}"
+  notify: Relire systemd
+
+- name: Appliquer les unités avant de les démarrer
+  ansible.builtin.meta: flush_handlers
+
+- name: Un filer.sync par compartiment retenu
+  ansible.builtin.systemd_service:
+    name: "seaweedfs-filer-sync@{{ item }}.service"
+    enabled: true
+    state: started
+  loop: "{{ replication_par2_compartiments }}"
+
+- name: Minuteries
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: [medidoc-copie.timer, pra-retards.timer]

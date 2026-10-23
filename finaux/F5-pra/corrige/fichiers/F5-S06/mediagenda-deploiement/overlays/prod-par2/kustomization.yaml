@@ -1,0 +1,87 @@
+# mediagenda/deploiement — overlays/prod-par2 (F5-S06, PLAT-3506) : la PRODUCTION de MédiAgenda telle
+# qu'elle existe à PAR2. MÊME code que la prod (resources: ../prod) ; seules les différences de SITE :
+#   1. la base n'est pas ici (mediagenda-db-par2 vient de plateforme/k8s sites/par2, appliquée depuis
+#      adm02) : Cluster, ObjectStores et sauvegardes planifiées de PAR1 retirés, Pooler repointé ;
+#   2. veille : API et Valkey à 0 ; pas de HPA (minReplicas ≥ 1) ;
+#   3. routes : Gateway gw-par2, noms de PAR2 et nom global, repère X-MediSphere-Site: par2 ;
+#   4. témoin de RPO suspendu.
+# En PRA (RB-350 vague 4) : réplicas remis par un paramètre d'Argo CD (sans commit) ou par un commit sur le
+# miroir de adm02, devenu la forge du PRA.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mediagenda-prod
+resources:
+  - ../prod
+patches:
+  # 1. Base
+  - target: {group: postgresql.cnpg.io, kind: Cluster, name: mediagenda-db}
+    patch: |-
+      $patch: delete
+      apiVersion: postgresql.cnpg.io/v1
+      kind: Cluster
+      metadata: {name: mediagenda-db}
+  - target: {group: barmancloud.cnpg.io, kind: ObjectStore, name: cnpg-s3}
+    patch: |-
+      $patch: delete
+      apiVersion: barmancloud.cnpg.io/v1
+      kind: ObjectStore
+      metadata: {name: cnpg-s3}
+  - target: {group: barmancloud.cnpg.io, kind: ObjectStore, name: cnpg-s3-par2}
+    patch: |-
+      $patch: delete
+      apiVersion: barmancloud.cnpg.io/v1
+      kind: ObjectStore
+      metadata: {name: cnpg-s3-par2}
+  - target: {group: postgresql.cnpg.io, kind: Pooler, name: mediagenda-db-pooler-rw}
+    patch: |-
+      - op: replace
+        path: /spec/cluster/name
+        value: mediagenda-db-par2
+      - op: replace
+        path: /spec/instances
+        value: 1
+  # 2. Veille
+  - target: {group: autoscaling, kind: HorizontalPodAutoscaler, name: mediagenda}
+    patch: |-
+      $patch: delete
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata: {name: mediagenda}
+  - target: {group: argoproj.io, kind: Rollout, name: mediagenda}
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 0
+  - target: {group: apps, kind: StatefulSet, name: valkey}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  # 3. Routes
+  - target: {group: gateway.networking.k8s.io, kind: HTTPRoute, name: mediagenda}
+    patch: |-
+      - op: replace
+        path: /spec/parentRefs
+        value:
+          - {group: gateway.networking.k8s.io, kind: Gateway, name: gw-par2, namespace: passerelles}
+      - op: replace
+        path: /spec/hostnames
+        value: [mediagenda.apps.par2.medisphere.internal, mediagenda.medisphere.internal]
+      - op: replace
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - {name: X-MediSphere-Site, value: par2}
+  # 4. Témoin
+  - target: {group: batch, kind: CronJob, name: temoin-rpo}
+    patch: |-
+      - op: add
+        path: /spec/suspend
+        value: true
+# ⚠️ Les noms (Pooler, HTTPRoute, StatefulSet, ScheduledBackup éventuel à retirer aussi) sont ceux du chart
+# du M17 et de l'overlay de prod : lis TON rendu (kustomize build overlays/prod) et ajuste les cibles.
+# Le correctif « Rollout replicas 0 » et le retrait du HPA vont ENSEMBLE (sinon le HPA remonte au minimum).
+# Les analyses Prometheus du canary (M21) n'ont pas de Prometheus à PAR2 : en PRA, la promotion est
+# manuelle (RB-350, vague 4).

@@ -1,0 +1,12 @@
+{# roles/seaweedfs/templates/seaweedfs.service.j2 — EXTRAIT (F5-S04, CHG-3504) : deux lignes changent.
+   1. L'adresse d'écoute des composants internes devient une variable (127.0.0.1 par défaut : rien ne
+      change pour un hôte qui ne la règle pas) ; s3-01 la passe à 0.0.0.0 pour que filer.sync (s3-02)
+      joigne son filer. Le pare-feu local (pare_feu_local) n'ouvre 8888/18888 qu'à s3-02 ; master
+      (9333/19333) et volume (8080/18080) restent fermés au réseau.
+   2. -ip reste 127.0.0.1 : c'est l'adresse ANNONCÉE au master ; avec -a.filerProxy, filer.sync ne
+      contacte jamais les serveurs de volumes de s3-01.
+   La sécurité gRPC (TLS mutuel) et la signature des accès HTTP du filer viennent de
+   {{ seaweedfs_config }}/security.toml (templates/security.toml.j2), que weed lit au démarrage. #}
+ExecStart=/usr/local/bin/weed server \
+    -dir={{ seaweedfs_dossier }} \
+    -ip=127.0.0.1 -ip.bind={{ seaweedfs_ecoute_interne }} \

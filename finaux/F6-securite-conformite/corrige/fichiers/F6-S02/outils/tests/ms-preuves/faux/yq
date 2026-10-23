@@ -1,0 +1,3 @@
+#!/bin/bash
+# Faux yq (tests de ms-preuves) : renvoie la version JSON du catalogue de test (FAUX_CATALOGUE_JSON).
+cat "${FAUX_CATALOGUE_JSON:?}"

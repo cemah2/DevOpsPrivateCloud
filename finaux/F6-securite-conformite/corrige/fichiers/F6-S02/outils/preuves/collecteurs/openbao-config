@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# openbao-config — P-SEC-01 : méthodes d'authentification, moteurs de secrets et liste des politiques
+# d'OpenBao (métadonnées seulement, jamais de valeur). Identité : AppRole de métadonnées
+# (BAO_ADDR, BAO_ROLE_ID, BAO_SECRET_ID), politique identique à celle de wb-checks.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige BAO_ROLE_ID BAO_SECRET_ID
+B="${BAO_ADDR:-https://openbao.par1.medisphere.internal:8200}"
+jeton="$(BAO_ROLE_ID="$BAO_ROLE_ID" BAO_SECRET_ID="$BAO_SECRET_ID" jq -nc '{role_id: env.BAO_ROLE_ID, secret_id: env.BAO_SECRET_ID}' |
+  curl -sf --max-time "$DELAI_HTTP" --data @- "$B/v1/auth/approle/login" | jq -r '.auth.client_token // empty')"
+[[ -n "$jeton" ]] || { echo "connexion AppRole refusée" >&2; exit 1; }
+api() { http_jeton "$B/v1/$1" "$jeton" 'X-Vault-Token:'; }
+auth="$(api sys/auth | jq -S '.data | with_entries(.value |= {type, description, local})')"
+moteurs="$(api sys/mounts | jq -S '.data | with_entries(.value |= {type, description, options})')"
+politiques="$(curl -sf --max-time "$DELAI_HTTP" -X LIST -K <(printf 'header = "X-Vault-Token: %s"\n' "$jeton") \
+  "$B/v1/sys/policies/acl" | jq -S '.data.keys | sort')"
+sante="$(curl -s --max-time "$DELAI_HTTP" "$B/v1/sys/health" | jq -S '{initialized, sealed, standby, version, cluster_name}')"
+curl -sf --max-time 5 -X POST -K <(printf 'header = "X-Vault-Token: %s"\n' "$jeton") "$B/v1/auth/token/revoke-self" >/dev/null || true
+entete_preuve | jq -S --argjson a "$auth" --argjson m "$moteurs" --argjson p "$politiques" --argjson s "$sante" \
+  '. + {sante: $s, authentification: $a, moteurs: $m, politiques: $p}'

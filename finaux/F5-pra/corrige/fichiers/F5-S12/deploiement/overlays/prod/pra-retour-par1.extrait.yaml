@@ -1,0 +1,68 @@
+# mediagenda/deploiement — overlays/prod : EXTRAIT de la spécification du Cluster « mediagenda-db » de PAR1
+# pendant et après le retour (F5-S12, CHG-3512, RB-351). Les autres champs (instances, stockage, rôles,
+# Pooler, supervision…) sont ceux de ton overlay de prod ; seules les sections ci-dessous changent.
+# Trois états successifs, trois MR :
+#
+#   B3 — RECONSTRUCTION (le Cluster clôturé a été supprimé ; bootstrap n'est lu qu'à la création) :
+#        réplique de PAR2, rejoue l'archive cnpg-k8s-par2 ; archive SA copie sous un NOUVEAU serverName
+#        (mediagenda-db-prod-pra1) : mediagenda-db-prod-day0 contient l'histoire de l'ancien primaire
+#        divergent (le plugin refuserait d'y écrire : « Expected empty archive »).
+#   C4 — PROMOTION (une seule modification) : primary ET promotionToken ensemble ; le jeton est la valeur
+#        de .status.demotionToken de mediagenda-db-par2 après sa rétrogradation (C3). Ce n'est pas un
+#        secret (LSN, ligne temporelle, identifiant du système), mais il ne vaut que pour cette bascule.
+#   D1 — NETTOYAGE : promotionToken retiré (sans effet sur un cluster déjà promu).
+#
+# État B3 :
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  bootstrap:
+    recovery:
+      source: mediagenda-db-par2
+      database: mediagenda
+      owner: mediagenda
+  replica:
+    primary: mediagenda-db-par2
+    source: mediagenda-db-par2
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: mediagenda-db-prod-pra1
+  externalClusters:
+    - name: mediagenda-db
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3
+          serverName: mediagenda-db-prod-pra1
+    - name: mediagenda-db-par2
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3-par2
+          serverName: mediagenda-db-par2
+---
+# État C4 (seule la section replica change, dans le même commit) :
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  replica:
+    primary: mediagenda-db
+    source: mediagenda-db-par2
+    promotionToken: "<VALEUR DE .status.demotionToken DE mediagenda-db-par2>"
+---
+# État D1 (temps normal, après le retour) :
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+spec:
+  replica:
+    primary: mediagenda-db
+    source: mediagenda-db-par2

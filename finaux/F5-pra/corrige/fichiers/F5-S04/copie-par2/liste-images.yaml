@@ -1,0 +1,14 @@
+# plateforme/copie-par2 — dépôts copiés vers reg02 (F5-S04). Pour chacun : les N dernières versions
+# étiquetées v* (production et retour arrière possible), avec leurs signatures et référents.
+# Ce qui est DÉPLOYÉ en production est toujours parmi elles (promotion = dernière version) : le check
+# F5-S04 le vérifie par le digest des pods de mediagenda-prod.
+versions: 3
+depots:
+  - medisphere/mediagenda-api
+  - medisphere/mediagenda-migrations
+  - medisphere/medidoc
+  - medisphere/legacy-rdv
+  - medisphere/medinotif-worker
+  - plateforme/outils-supply-chain
+charts:
+  - charts/mediagenda

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# revue-acces — P-IAM-06 : résultat brut de la revue des accès outillée (ms-revue-acces, F6-S03), en JSON.
+# Le rapport rédigé (docs/conformite/revue-acces/AAAA-MM.md) est la preuve de la DÉCISION ; ce lot est
+# la preuve de l'ÉTAT au moment de la revue.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exec "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../bin/ms-revue-acces" --json

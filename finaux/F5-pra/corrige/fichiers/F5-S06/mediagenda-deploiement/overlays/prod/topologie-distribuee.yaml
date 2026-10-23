@@ -1,0 +1,33 @@
+# mediagenda/deploiement — overlays/prod/topologie-distribuee.yaml (F5-S06, CHG-3506)
+# Correctif JSON6902 du Cluster « mediagenda-db » de PRODUCTION (PAR1) : il entre dans la topologie
+# distribuée avec mediagenda-db-par2 (k8s-par2). Il reste PRIMAIRE (replica.primary = son propre nom) :
+# aucun redémarrage de PostgreSQL attendu ; à vérifier d'abord en recette, avec la sonde de continuité.
+#   - externalClusters : les DEUX archives, sous les noms des clusters (documentation 1.30) ;
+#       « mediagenda-db »      = la sienne (ObjectStore cnpg-s3, s3-01, serverName de prod) ;
+#       « mediagenda-db-par2 » = celle de PAR2 (ObjectStore cnpg-s3-par2 de cet espace, s3-02, LECTURE),
+#         lue seulement après une rétrogradation (retour, RB-351) : flux réseau vers s3-02 ouvert alors.
+#   - le correctif day0-recuperation.yaml (F1) a déjà posé /spec/externalClusters : on AJOUTE (« - »).
+# Retour arrière : retirer ce correctif de kustomization.yaml ; aucune donnée n'est touchée.
+- op: add
+  path: /spec/replica
+  value:
+    primary: mediagenda-db
+    source: mediagenda-db-par2
+- op: add
+  path: /spec/externalClusters/-
+  value:
+    name: mediagenda-db
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: cnpg-s3
+        serverName: mediagenda-db-prod-day0
+- op: add
+  path: /spec/externalClusters/-
+  value:
+    name: mediagenda-db-par2
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: cnpg-s3-par2
+        serverName: mediagenda-db-par2

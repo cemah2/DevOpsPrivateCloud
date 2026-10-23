@@ -1,0 +1,41 @@
+---
+# Rôle hote_par2 (F5-S03, CHG-3503) — hp01 devient l'hyperviseur du site de repli PAR2, À CÔTÉ de PBS.
+# Ce rôle NE FAIT PAS l'installation de Proxmox VE (geste unique, en fenêtre, après go/no-go : RB-353 §3).
+# Il configure ce qui vient ensuite, de façon idempotente :
+#   - stockage par2-vms (jeu ZFS avec quota, ou système de fichiers déjà monté) et pool par2 ;
+#   - pont vmbr2 (par l'API réseau de Proxmox VE, appliqué par ifupdown2) ;
+#   - routage et table nftables « inet par2 » (fichier et unité dédiés : jamais /etc/nftables.conf, dont le
+#     « flush ruleset » effacerait les règles des autres) ;
+#   - VPN de secours wg1 ;
+#   - chrony : sert PAR2 INFRA, garde une source hors de PAR1.
+# Il ne touche JAMAIS : /etc/proxmox-backup, le datastore ds-lab, vmbr0, vmbr1, wg0.
+
+hote_par2_noeud: pbs01
+hote_par2_pont: vmbr2
+hote_par2_adresse: 10.20.20.1/24
+hote_par2_reseau: 10.20.20.0/24
+hote_par2_interface_lan: vmbr0
+hote_par2_lan_maison: ""
+hote_par2_interface_s2s: wg0
+
+# Stockage : soit un jeu ZFS créé avec quota (hote_par2_zfs_jeu non vide), soit un chemin DÉJÀ monté sur
+# un système de fichiers séparé (volume logique, partition) préparé à la main et décrit dans RB-353.
+hote_par2_stockage: par2-vms
+hote_par2_stockage_chemin: /srv/par2-vms
+hote_par2_zfs_jeu: ""            # ex. rpool/par2-vms (si le disque de hp01 est en ZFS)
+hote_par2_zfs_quota: 400G
+
+hote_par2_pool: par2
+
+# Adresses jamais routées hors de PAR2 INFRA (F5-S05 : kms01 restauré).
+hote_par2_isoles:
+  - 10.20.20.24
+
+# VPN de secours
+hote_par2_wg1_adresse: 10.255.3.1/24
+hote_par2_wg1_port: 51823
+hote_par2_wg1_cle_privee: ""
+hote_par2_wg1_pairs: []
+
+# Temps
+hote_par2_ntp_sources: []

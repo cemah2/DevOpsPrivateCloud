@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# k8s-rbac — P-IAM-04 : liaisons RBAC de k8s-par1 (qui a quel rôle, où). Identité : KUBECONFIG d'un
+# compte de service en lecture (jamais les Secrets).
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KUBECONFIG
+k() { kubectl --request-timeout="${DELAI_HTTP}s" "$@"; }
+crb="$(k get clusterrolebindings -o json)"
+rb="$(k get rolebindings -A -o json)"
+entete_preuve | jq -S --argjson c "$crb" --argjson r "$rb" '
+  def ligne: {espace: (.metadata.namespace // "(cluster)"), liaison: .metadata.name, role: .roleRef.name,
+              sujets: [.subjects[]? | "\(.kind):\(if .namespace then .namespace + "/" else "" end)\(.name)"] | sort};
+  . + {liaisons: ([$c.items[], $r.items[]] | map(ligne) | sort_by(.espace, .liaison)),
+       cluster_admin: [$c.items[] | select(.roleRef.name == "cluster-admin") | ligne]}'

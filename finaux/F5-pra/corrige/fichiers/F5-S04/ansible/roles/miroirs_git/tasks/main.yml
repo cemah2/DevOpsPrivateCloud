@@ -1,0 +1,124 @@
+---
+# miroirs_git — voir defaults/main.yml.
+
+- name: Paquets
+  ansible.builtin.apt:
+    name: [git, jq, curl]
+    state: present
+
+- name: "Compte miroir (git-shell : aucune commande hors Git)"
+  ansible.builtin.user:
+    name: "{{ miroirs_git_utilisateur }}"
+    home: "{{ miroirs_git_racine }}"
+    shell: /usr/bin/git-shell
+    create_home: false
+    system: true
+
+- name: Racine des miroirs
+  ansible.builtin.file:
+    path: "{{ miroirs_git_racine }}"
+    state: directory
+    owner: "{{ miroirs_git_utilisateur }}"
+    group: "{{ miroirs_git_utilisateur }}"
+    mode: "0750"
+
+- name: Dossiers des groupes
+  ansible.builtin.file:
+    path: "{{ miroirs_git_racine }}/{{ item }}"
+    state: directory
+    owner: "{{ miroirs_git_utilisateur }}"
+    group: "{{ miroirs_git_utilisateur }}"
+    mode: "0750"
+  loop: "{{ miroirs_git_projets | map('dirname') | unique | list }}"
+
+- name: Dépôts nus (créés vides, remplis par la première poussée de GitLab)
+  ansible.builtin.command:
+    cmd: "git init --bare --initial-branch=main {{ miroirs_git_racine }}/{{ item }}.git"
+    creates: "{{ miroirs_git_racine }}/{{ item }}.git/HEAD"
+  become: true
+  become_user: "{{ miroirs_git_utilisateur }}"
+  loop: "{{ miroirs_git_projets }}"
+
+- name: Commande forcée de lecture
+  ansible.builtin.copy:
+    src: miroir-lecture
+    dest: /usr/local/bin/miroir-lecture
+    mode: "0755"
+
+- name: Clés autorisées du compte miroir (écriture GitLab, lecture consommateurs)
+  ansible.builtin.template:
+    src: authorized_keys.j2
+    dest: "/etc/ssh/miroir_authorized_keys"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: sshd lit les clés du compte miroir hors de son dossier (modifiable par lui sinon)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/50-miroir.conf
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle miroirs_git, F5-S04).
+      Match User {{ miroirs_git_utilisateur }}
+          AuthorizedKeysFile /etc/ssh/miroir_authorized_keys
+          AllowTcpForwarding no
+          X11Forwarding no
+          PermitTTY no
+    validate: /usr/sbin/sshd -t -f /etc/ssh/sshd_config -E /dev/null
+  notify: Recharger sshd
+
+- name: Script de mesure
+  ansible.builtin.copy:
+    src: pra-miroirs.sh
+    dest: /usr/local/sbin/pra-miroirs
+    mode: "0755"
+
+- name: Jeton GitLab de la mesure (read_api)
+  ansible.builtin.copy:
+    dest: /etc/pra-miroirs.token
+    content: "{{ miroirs_git_gitlab_jeton }}"
+    mode: "0600"
+  no_log: true
+
+- name: Unités de mesure
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.nom }}"
+    mode: "0644"
+    content: "{{ item.contenu }}"
+  loop:
+    - nom: pra-miroirs.service
+      contenu: |
+        [Unit]
+        Description=Écart entre les miroirs de adm02 et GitLab (F5-S04)
+        [Service]
+        Type=oneshot
+        Environment=MIROIRS_RACINE={{ miroirs_git_racine }}
+        Environment="MIROIRS_PROJETS={{ miroirs_git_projets | join(' ') }}"
+        Environment=GITLAB_URL={{ miroirs_git_gitlab_url }}
+        Environment=GITLAB_JETON_FICHIER=/etc/pra-miroirs.token
+        Environment=PRA_TEXTFILE={{ miroirs_git_textfile }}
+        Environment=GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=*
+        ExecStart=/usr/local/sbin/pra-miroirs
+        ProtectSystem=strict
+        ReadWritePaths={{ miroirs_git_textfile }}
+    - nom: pra-miroirs.timer
+      contenu: |
+        [Unit]
+        Description=Écart des miroirs toutes les 5 min (F5-S04)
+        [Timer]
+        OnCalendar=*:0/5
+        Persistent=true
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.nom }}"
+  notify: Relire systemd
+
+- name: Appliquer avant de démarrer
+  ansible.builtin.meta: flush_handlers
+
+- name: Minuterie de mesure
+  ansible.builtin.systemd_service:
+    name: pra-miroirs.timer
+    enabled: true
+    state: started

@@ -1,0 +1,61 @@
+# mediagenda/deploiement — overlays/clients/ghsv-recette/kustomization.yaml (F7-S07, PLAT-3707)
+# Recette PERMANENTE du client GHSV (EXP-06), données fictives seulement (ESC-13). Synchronisation
+# automatique (Application ghsv-recette). Mêmes components que ghsv-prod, une instance de chaque, sans
+# canary ni autoscaling (la recette sert aussi aux tests de contrat du DPI : stable avant tout).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ghsv-recette
+resources:
+  - ../../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: recette
+      medisphere.internal/client: ghsv
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  - ../../../components/client-donnees
+  - ../../../components/migrations
+  # Racine MédiSphère (ConfigMap racine-medisphere, M27-E07) : Valkey TLS, mandataires OAuth2 Proxy.
+  - ../../../components/racine-medisphere
+  - ../../../components/valkey
+  - ../../../components/supervision
+  - ../../../components/client
+  # Données de démonstration fictives, rejouées après chaque synchronisation (F7-S14, fichiers/F7-S14/).
+  - ../../../components/donnees-demo
+  - ../../../components/livraison
+patches:
+  # Une seule réplique de l'API en recette (quota ghsv-recette : 12 pods).
+  - target:
+      kind: Deployment
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  # Données du client : nom de serveur d'archive et chemin kv propres à l'environnement.
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      - op: replace
+        path: /spec/plugins/0/parameters/serverName
+        value: mediagenda-db-recette
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      name: cnpg-ghsv-s3
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: ghsv/recette/cnpg-s3
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: ghsv/recette/cnpg-s3

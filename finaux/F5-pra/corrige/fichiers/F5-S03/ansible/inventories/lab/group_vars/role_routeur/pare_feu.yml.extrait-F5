@@ -1,0 +1,42 @@
+# group_vars/role_routeur/pare_feu.yml — EXTRAIT (F5-S03 à S06 : CHG-3503, CHG-3504, CHG-3506).
+# Matrice commune à gw01 et gw02. Le tunnel accepte déjà 10.20.0.0/16 (AllowedIPs de gw01, M00-E21) :
+# rien à changer dans wg0 ; c'est ICI que se décide ce qui passe. Chaque ligne va aussi dans
+# docs/socle/matrice-flux.md. Le nom REG02 existe déjà (VM jetable du M13, 10.10.99.31) : d'où REG02_PAR2.
+pare_feu_definitions:
+  # … définitions existantes …
+  - {nom: PAR2_INFRA, valeur: 10.20.20.0/24, commentaire: "PAR2 INFRA (vmbr2 de hp01), F5-S03"}
+  - {nom: ADM02, valeur: 10.20.20.10}
+  - {nom: DNS03, valeur: 10.20.20.11}
+  - {nom: S3_02, valeur: 10.20.20.14}
+  - {nom: REG02_PAR2, valeur: 10.20.20.18}
+  - {nom: K8S_PAR2, valeur: 10.20.20.50}
+
+pare_feu_transit:
+  # … règles existantes (dont « bastion (MGMT) vers tout le lab et PAR2 » et le DNS de NETS_PAR2) …
+  # S03 — socle de PAR2
+  - {entree: $WG_S2S, source: $DNS03, sortie: $V_INFRA, destination: $DNS01, proto: tcp_udp, ports: 5300,
+     motif: "dns03 vers l'autoritaire de dns01 : AXFR signé TSIG", ref: F5-S03}
+  - {entree: $V_INFRA, source: $DNS01, sortie: $WG_S2S, destination: $DNS03, proto: tcp_udp, ports: 5300,
+     motif: "dns01 vers dns03 : NOTIFY", ref: F5-S03}
+  - {entree: $WG_S2S, source: $PAR2_INFRA, sortie: $V_INFRA, destination: $CA01, proto: tcp, ports: 443,
+     motif: "VMs de PAR2 vers ca01 : ACME", ref: F5-S03}
+  - {entree: $V_INFRA, source: $CA01, sortie: $WG_S2S, destination: $PAR2_INFRA, proto: tcp, ports: 80,
+     motif: "ca01 vers PAR2 : défi HTTP-01", ref: F5-S03}
+  - {entree: $V_INFRA, source: $RUNNER01, sortie: $WG_S2S, destination: $PAR2_INFRA, proto: tcp, ports: 22,
+     motif: "runner01 vers PAR2 : SSH (pipeline Ansible)", ref: F5-S03}
+  # S04 — données vers PAR2
+  - {entree: $WG_S2S, source: $S3_02, sortie: $V_INFRA, destination: $S3_01, proto: tcp, ports: [8888, 18888],
+     motif: "filer.sync (s3-02) vers le filer de s3-01, HTTP et gRPC (mTLS, security.toml)", ref: F5-S04}
+  - {entree: $WG_S2S, source: $S3_02, sortie: $V_STOPUB, destination: $RGW_VIP, proto: tcp, ports: 443,
+     motif: "copie de medidoc-documents (rclone, lecture seule)", ref: F5-S04}
+  - {entree: $V_INFRA, source: $GIT01, sortie: $WG_S2S, destination: $ADM02, proto: tcp, ports: 22,
+     motif: "push mirrors de GitLab vers adm02 (compte miroir)", ref: F5-S04}
+  - {entree: $V_K8S, source: $K8S_TRAV, sortie: $WG_S2S, destination: $REG02_PAR2, proto: tcp, ports: 443,
+     motif: "job cosign copy (runner protégé) vers reg02", ref: F5-S04}
+  - {entree: $V_INFRA, source: $MON01, sortie: $WG_S2S, destination: $PAR2_INFRA, proto: tcp, ports: 9100,
+     motif: "témoin de mon01 vers node_exporter de PAR2 (retards de réplication)", ref: F5-S04}
+  # S06 — cluster de secours
+  - {entree: $WG_S2S, source: $K8S_PAR2, sortie: $V_INFRA, destination: $OPENBAO, proto: tcp, ports: 8200,
+     motif: "ESO de k8s-par2 vers OpenBao de PAR1 (veille)", ref: F5-S06}
+  - {entree: $V_INFRA, source: $VAULT_NOEUDS, sortie: $WG_S2S, destination: $K8S_PAR2, proto: tcp, ports: 6443,
+     motif: "OpenBao vers l'API de k8s-par2 (TokenReview, méthode k8s-par2)", ref: F5-S06}

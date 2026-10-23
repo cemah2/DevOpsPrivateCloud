@@ -1,0 +1,9 @@
+---
+# Rôle preuves_bordure (F6-S02, PLAT-3602) — compte de LECTURE des règles du pare-feu de bordure pour
+# la collecte des preuves (ms-preuves, collecteur bordure-pare-feu). Appliqué aux passerelles
+# (groupe role_routeur), sur le modèle du rôle sonde_reseau (M07-E29).
+preuves_bordure_compte: preuves
+# Clé publique ed25519 du job de collecte (sa clé privée est dans OpenBao, kv/plateforme/preuves/ssh-bordure).
+preuves_bordure_cle_publique: ""
+# Adresses autorisées à se connecter : runner01 (job planifié) et adm01 (essais, revue).
+preuves_bordure_depuis: ["10.10.20.15", "10.10.10.10"]

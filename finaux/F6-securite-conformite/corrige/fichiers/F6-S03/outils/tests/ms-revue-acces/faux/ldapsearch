@@ -1,0 +1,22 @@
+#!/bin/bash
+# Faux ldapsearch (tests de ms-revue-acces) : quatre comptes de personnes.
+cat <<'LDIF'
+dn: uid=karim.benali,cn=users,cn=accounts,dc=par1,dc=medisphere,dc=internal
+uid: karim.benali
+memberOf: cn=ipausers,cn=groups,cn=accounts,dc=par1,dc=medisphere,dc=internal
+memberOf: cn=plateforme-admins,cn=groups,cn=accounts,dc=par1,dc=medisphere,dc=internal
+
+dn: uid=lucas.martin,cn=users,cn=accounts,dc=par1,dc=medisphere,dc=internal
+uid: lucas.martin
+memberOf: cn=plateforme,cn=groups,cn=accounts,dc=par1,dc=medisphere,dc=internal
+
+dn: uid=yanis.perrin,cn=users,cn=accounts,dc=par1,dc=medisphere,dc=internal
+uid: yanis.perrin
+nsAccountLock: TRUE
+krbPrincipalExpiration: 20260101000000Z
+
+dn: uid=marc.vidal,cn=users,cn=accounts,dc=par1,dc=medisphere,dc=internal
+uid: marc.vidal
+nsAccountLock: TRUE
+memberOf: cn=ext-axiomdev,cn=groups,cn=accounts,dc=par1,dc=medisphere,dc=internal
+LDIF

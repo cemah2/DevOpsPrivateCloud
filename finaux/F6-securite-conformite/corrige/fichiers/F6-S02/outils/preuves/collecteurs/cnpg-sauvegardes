@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# cnpg-sauvegardes — P-SAV-02 : bases CloudNativePG (point de restauration le plus ancien, dernière
+# sauvegarde réussie, archivage des WAL) et sauvegardes des 14 derniers jours.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KUBECONFIG
+k() { kubectl --request-timeout="${DELAI_HTTP}s" "$@"; }
+c="$(k get clusters.postgresql.cnpg.io -A -o json)"
+b="$(k get backups.postgresql.cnpg.io -A -o json)"
+entete_preuve | jq -S --argjson c "$c" --argjson b "$b" --arg depuis "$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)" '
+  . + {bases: [$c.items[] | {espace: .metadata.namespace, nom: .metadata.name, instances: .spec.instances,
+        pret: .status.readyInstances, premier_point: (.status.firstRecoverabilityPoint // null),
+        derniere_sauvegarde: (.status.lastSuccessfulBackup // null),
+        archivage: ([.status.conditions[]? | select(.type == "ContinuousArchiving") | .status][0] // null)}]
+        | sort_by(.espace, .nom),
+       sauvegardes: [$b.items[] | select((.status.startedAt // "") >= $depuis)
+        | {espace: .metadata.namespace, nom: .metadata.name, base: .spec.cluster.name, phase: .status.phase,
+           debut: .status.startedAt, fin: .status.stoppedAt}] | sort_by(.debut)}'

@@ -1,0 +1,29 @@
+---
+# host_vars/s3-02/seaweedfs.yml — SeaweedFS de PAR2 (F5-S03 ; identités de S04 et S06 ajoutées ensuite).
+# MÊME rôle que s3-01 (seaweedfs, M05-E10). Les identités S3 ne se répliquent pas (s3.json n'est pas une
+# donnée du filer) : elles sont déclarées ici, propres à PAR2.
+seaweedfs_disque: /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
+seaweedfs_s3_ecoute: 10.20.20.14
+seaweedfs_tls_certificat: "{{ vault_seaweedfs_tls_certificat }}"
+seaweedfs_tls_cle: "{{ vault_seaweedfs_tls_cle }}"
+
+seaweedfs_identites:
+  # OpenTofu de PAR2 : le seul compartiment de son état.
+  - nom: tofu-par2
+    cle_acces: "{{ vault_seaweedfs_tofu_par2_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_tofu_par2_cle_secrete }}"
+    actions: [Read:tofu-par2, Write:tofu-par2, List:tofu-par2]
+  # Vérifications du workbook (~/.config/workbook/s3-02-checks.env) : lecture et liste, partout.
+  - nom: wb-checks
+    cle_acces: "{{ vault_seaweedfs_wb_checks_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_wb_checks_cle_secrete }}"
+    actions: [Read, List]
+  # Bris de glace (enveloppe) : création de compartiments, restauration, incident.
+  - nom: admin-s3
+    cle_acces: "{{ vault_seaweedfs_admin_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_admin_cle_secrete }}"
+    actions: [Admin, Read, Write, List, Tagging]
+
+seaweedfs_compartiments:
+  - nom: tofu-par2
+    versionnage: true

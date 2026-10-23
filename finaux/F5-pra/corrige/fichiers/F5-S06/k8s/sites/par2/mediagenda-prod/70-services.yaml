@@ -1,0 +1,49 @@
+# sites/par2/mediagenda-prod/70-services.yaml — noms de Services attendus par MédiAgenda (F5-S06).
+# Les manifestes de l'application joignent « mediagenda-db-rw » (migrations) et « mediagenda-db-pooler-rw »
+# (API). La base de PAR2 s'appelle mediagenda-db-par2 : CloudNativePG crée mediagenda-db-par2-rw. Plutôt
+# que de modifier l'application, un Service de plus porte l'ANCIEN nom et vise le primaire de PAR2.
+# (Le Pooler mediagenda-db-pooler-rw est repointé vers mediagenda-db-par2 par l'overlay prod-par2.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-db-rw
+  namespace: mediagenda-prod
+  labels: {medisphere.internal/site: par2}
+spec:
+  selector:
+    cnpg.io/cluster: mediagenda-db-par2
+    cnpg.io/instanceRole: primary
+  ports:
+    - {name: postgres, port: 5432, targetPort: 5432, protocol: TCP}
+---
+# OpenBao de secours (bao-par2, VM) → base de PAR2, pour les identifiants dynamiques en PRA (moteur
+# db-mediagenda repointé, RB-355 §7). Adresse fixe du pool lb-par2. Filtrage : CiliumNetworkPolicy
+# ci-dessous (bao-par2 seulement).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-db-par2-openbao
+  namespace: mediagenda-prod
+  annotations:
+    lbipam.cilium.io/ips: "10.20.20.205"
+spec:
+  type: LoadBalancer
+  selector:
+    cnpg.io/cluster: mediagenda-db-par2
+    cnpg.io/instanceRole: primary
+  ports:
+    - {name: postgres, port: 5432, targetPort: 5432, protocol: TCP}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: base-par2-depuis-bao-par2
+  namespace: mediagenda-prod
+spec:
+  endpointSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db-par2
+  ingress:
+    - fromCIDR: [10.20.20.21/32]
+      toPorts:
+        - ports: [{port: "5432", protocol: TCP}]

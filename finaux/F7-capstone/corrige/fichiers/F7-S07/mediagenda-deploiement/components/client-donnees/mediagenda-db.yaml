@@ -1,0 +1,59 @@
+# mediagenda/deploiement — components/client-donnees/mediagenda-db.yaml (F7-S07, PLAT-3707)
+# Base PostgreSQL de l'instance d'un client. Modèles : components/dependances/postgresql.yaml (M17),
+# mediagenda-db de la prod (M27 : pooler, supervision) et statistiques-db (F2-S07 : archivage propre).
+#   - volume chiffré (ceph-rbd-chiffre, M16-E26) : données de santé ;
+#   - archivage des WAL et sauvegardes vers le compartiment PROPRE du client (cnpg-ghsv), jamais
+#     cnpg-k8s-par1 : la réversibilité et la destruction de fin de contrat se font par compartiment ;
+#   - superutilisateur désactivé ; propriétaire « mediagenda » (Secret mediagenda-db-app) ;
+#   - une instance (recette) ; deux en production (correctif de l'overlay ghsv-prod).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  description: "Base MédiAgenda d'un client hébergé (F7-S07)"
+  instances: 1
+  # Même image que les autres bases (cache Harbor ghcr), par empreinte : à TA valeur (M26-E21).
+  imageName: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+  imagePullSecrets:
+    - name: harbor-pull
+  priorityClassName: medisphere-critique
+  bootstrap:
+    initdb:
+      database: mediagenda
+      owner: mediagenda
+      encoding: UTF8
+  storage:
+    storageClass: ceph-rbd-chiffre
+    size: 4Gi
+  postgresql:
+    parameters:
+      shared_buffers: 96MB
+      max_connections: "60"
+      timezone: Europe/Paris
+      # ADR-0373 : un segment de WAL archivé au moins chaque minute (RPO technique ≤ 5 min avec la
+      # réplication vers s3-02 ; engagement 15 min). Coût : jusqu'à un segment de 16 Mo par minute
+      # (compressé) dans cnpg-ghsv, à suivre dans le rapport mensuel.
+      archive_timeout: 1min
+  resources:
+    requests: {cpu: 100m, memory: 384Mi}
+    limits: {memory: 640Mi}
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    tolerations:
+      - key: dedie
+        operator: Equal
+        value: bdd
+        effect: NoSchedule
+  enableSuperuserAccess: false
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-ghsv
+        # Nom de serveur par environnement : recette et production partagent le compartiment du
+        # client sans se mélanger (remplacé par l'overlay : mediagenda-db-<env>).
+        serverName: mediagenda-db

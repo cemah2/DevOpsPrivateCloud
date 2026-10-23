@@ -1,0 +1,48 @@
+scenario,poste,categorie,annee_1,annee_2,annee_3,annee_4,annee_5,total_5_ans,hypothese
+plateforme-medisphere,"Hyperviseurs PAR2 (3 x 35 000 EUR, part GHSV 50 %)",CAPEX,52500,0,0,0,0,52500,H-C01 H-C02
+plateforme-medisphere,"Réseau et pare-feu PAR2 (2 x 12 000 + 2 x 5 000 EUR, part 50 %)",CAPEX,17000,0,0,0,0,17000,H-C01 H-C02
+plateforme-medisphere,"Contrat de maintenance matériel PAR2 (8 %/an, part 50 %)",OPEX,0,5560,5560,5560,5560,22240,H-C01
+plateforme-medisphere,"Baie PAR2 (2 500 EUR/mois énergie comprise, part 50 %)",OPEX,15000,15000,15000,15000,15000,75000,H-C03
+plateforme-medisphere,Quote-part baies PAR1 (8 % de 2 x 3 000 EUR/mois),OPEX,5760,5760,5760,5760,5760,28800,H-C03 H-C07
+plateforme-medisphere,Quote-part amortissement matériel PAR1 (8 % de 6 x 35 000 EUR / 5 ans),OPEX,3360,3360,3360,3360,3360,16800,H-C07
+plateforme-medisphere,"Transit Internet et anti-DDoS PAR2 (1 200 EUR/mois, part 50 %)",OPEX,7200,7200,7200,7200,7200,36000,H-C03
+plateforme-medisphere,Option anti-DDoS renforcée PAR1 (500 EUR/mois),OPEX,6000,6000,6000,6000,6000,30000,H-C03
+plateforme-medisphere,"Seconde liaison inter-sites (1 500 EUR/mois, part 50 %)",OPEX,9000,9000,9000,9000,9000,45000,H-C03
+plateforme-medisphere,"DNS public (2 fournisseurs), sonde externe, copie hors site",OPEX,3000,3000,3000,3000,3000,15000,H-C03
+plateforme-medisphere,"Souscriptions Proxmox VE Standard PAR2 (3 sockets x 550 EUR, part 50 %)",OPEX,825,825,825,825,825,4125,H-C12
+plateforme-medisphere,"Certifications HDS et ISO 27001 (extension, surveillance : part)",OPEX,8000,8000,8000,8000,8000,40000,H-C06
+plateforme-medisphere,"Exploitation du service (1,2 ETP)",OPEX,114000,114000,114000,114000,114000,570000,H-C09
+plateforme-medisphere,"Astreinte (5 x 4 000 EUR/an, part 50 %)",OPEX,10000,10000,10000,10000,10000,50000,H-C09
+plateforme-medisphere,Projet de mise en service plateforme (120 j),OPEX,54000,0,0,0,0,54000,H-C08
+plateforme-medisphere,Formation et montée en compétences,OPEX,10000,0,0,0,0,10000,S06
+plateforme-medisphere,Quote-part plateforme mutualisée (8 % de 600 000 EUR/an),OPEX,48000,48000,48000,48000,48000,240000,H-C07
+plateforme-medisphere,"SMS de rappel (55 % des rendez-vous, 0,045 EUR par SMS)",OPEX,47223,50056,53060,56243,59618,266200,H-C04 R-05
+plateforme-medisphere,Test d'intrusion PASSI annuel,OPEX,12000,12000,12000,12000,12000,60000,H-C05
+plateforme-medisphere,"Développements MédiAgenda (173 j : S01 155 j, chiffrement 10 j, export 8 j)",OPEX,77850,0,0,0,0,77850,H-C08
+plateforme-medisphere,"Maintenance applicative et évolutions (0,3 ETP)",OPEX,28500,28500,28500,28500,28500,142500,H-C09
+plateforme-medisphere,Essais annuels de réversibilité (3 j) et export final (10 j),OPEX,1350,1350,1350,1350,5850,11250,ADR-0374
+cloud-public-hds,Infrastructure IaaS HDS deux régions (5 000 EUR/mois),OPEX,60000,60000,60000,60000,60000,300000,H-C10
+cloud-public-hds,Sortie de données et sauvegarde hors fournisseur,OPEX,3000,3000,3000,3000,3000,15000,H-C10
+cloud-public-hds,"Projet de construction sur le nuage (IaC, réseau, IAM, 60 j)",OPEX,27000,0,0,0,0,27000,H-C10
+cloud-public-hds,"Exploitation du service (1,0 ETP)",OPEX,95000,95000,95000,95000,95000,475000,H-C09
+cloud-public-hds,Astreinte (part),OPEX,10000,10000,10000,10000,10000,50000,H-C09
+cloud-public-hds,Certifications (activités 5 et 6 : part),OPEX,6000,6000,6000,6000,6000,30000,H-C06
+cloud-public-hds,Formation nuage public,OPEX,15000,0,0,0,0,15000,S06
+cloud-public-hds,Quote-part outils mutualisés (4 % de 600 000 EUR/an),OPEX,24000,24000,24000,24000,24000,120000,H-C07
+cloud-public-hds,"SMS de rappel (55 % des rendez-vous, 0,045 EUR par SMS)",OPEX,47223,50056,53060,56243,59618,266200,H-C04 R-05
+cloud-public-hds,Test d'intrusion PASSI annuel,OPEX,12000,12000,12000,12000,12000,60000,H-C05
+cloud-public-hds,"Développements MédiAgenda (173 j : S01 155 j, chiffrement 10 j, export 8 j)",OPEX,77850,0,0,0,0,77850,H-C08
+cloud-public-hds,"Maintenance applicative et évolutions (0,3 ETP)",OPEX,28500,28500,28500,28500,28500,142500,H-C09
+cloud-public-hds,Essais annuels de réversibilité (3 j) et export final (10 j),OPEX,1350,1350,1350,1350,5850,11250,ADR-0374
+infogerance-hds,"Hébergement et exploitation infogérés deux sites, 24/7 (9 000 EUR/mois)",OPEX,108000,108000,108000,108000,108000,540000,H-C11
+infogerance-hds,Frais de mise en service de l'infogérant,OPEX,25000,0,0,0,0,25000,H-C11
+infogerance-hds,"Support applicatif et pilotage de l'infogérant (0,6 ETP)",OPEX,57000,57000,57000,57000,57000,285000,H-C09
+infogerance-hds,Astreinte applicative (part),OPEX,5000,5000,5000,5000,5000,25000,H-C09
+infogerance-hds,Certifications (part),OPEX,3000,3000,3000,3000,3000,15000,H-C06
+infogerance-hds,Formation,OPEX,3000,0,0,0,0,3000,S06
+infogerance-hds,Quote-part outils mutualisés (2 % de 600 000 EUR/an),OPEX,12000,12000,12000,12000,12000,60000,H-C07
+infogerance-hds,"SMS de rappel (55 % des rendez-vous, 0,045 EUR par SMS)",OPEX,47223,50056,53060,56243,59618,266200,H-C04 R-05
+infogerance-hds,Test d'intrusion PASSI annuel,OPEX,12000,12000,12000,12000,12000,60000,H-C05
+infogerance-hds,"Développements MédiAgenda (173 j : S01 155 j, chiffrement 10 j, export 8 j)",OPEX,77850,0,0,0,0,77850,H-C08
+infogerance-hds,"Maintenance applicative et évolutions (0,3 ETP)",OPEX,28500,28500,28500,28500,28500,142500,H-C09
+infogerance-hds,Essais annuels de réversibilité (3 j) et export final (10 j),OPEX,1350,1350,1350,1350,5850,11250,ADR-0374

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# velero-sauvegardes — P-SAV-01 : planifications Velero (suspendues ?) et sauvegardes des 14 derniers jours.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+exige KUBECONFIG
+k() { kubectl --request-timeout="${DELAI_HTTP}s" -n velero "$@"; }
+s="$(k get schedules.velero.io -o json)"
+b="$(k get backups.velero.io -o json)"
+entete_preuve | jq -S --argjson s "$s" --argjson b "$b" --arg depuis "$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)" '
+  . + {planifications: [$s.items[] | {nom: .metadata.name, expression: .spec.schedule,
+        suspendue: (.spec.paused // false), derniere: (.status.lastBackup // null),
+        espaces: (.spec.template.includedNamespaces // [])}] | sort_by(.nom),
+       sauvegardes: [$b.items[] | select((.status.startTimestamp // "") >= $depuis)
+        | {nom: .metadata.name, planification: (.metadata.labels["velero.io/schedule-name"] // null),
+           phase: .status.phase, debut: .status.startTimestamp, fin: .status.completionTimestamp,
+           erreurs: (.status.errors // 0), avertissements: (.status.warnings // 0), expiration: .status.expiration}]
+        | sort_by(.debut)}'

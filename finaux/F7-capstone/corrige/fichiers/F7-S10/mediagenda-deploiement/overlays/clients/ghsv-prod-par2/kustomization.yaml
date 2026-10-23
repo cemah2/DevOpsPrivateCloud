@@ -1,0 +1,81 @@
+# mediagenda/deploiement — overlays/clients/ghsv-prod-par2/kustomization.yaml (F7-S10, PLAT-3710)
+# Instance de SECOURS du client GHSV dans k8s-par2 (F5 : cluster « tiède »). Lue par l'Argo CD de
+# k8s-par2 sur le MIROIR de adm02 (ssh://miroir@adm02.par2.medisphere.internal/srv/miroirs/mediagenda/
+# deploiement.git), comme MédiAgenda. Même code que ghsv-prod ; différences de SITE seulement :
+#   - base : réplique continue « mediagenda-db-par2 » en TOPOLOGIE DISTRIBUÉE (F5-S06), alimentée
+#     depuis s3-02 (cnpg-ghsv répliqué par filer.sync) ; promue par jeton pendant un PRA (RB-350) ;
+#   - API, mandataires et cache à 0 réplica en veille (mémoire de hp01) ;
+#   - témoin de RPO suspendu (le site passif n'écrit pas) ;
+#   - publication sur gw-par2 (noms *.apps.par2.medisphere.internal, repère X-MediSphere-Site: par2) ;
+#   - images tirées de reg02 (copie signée, F5-S04).
+# L'espace ghsv-prod de k8s-par2 vient du rendu de plateforme/equipes appliqué au cluster de secours
+# (inventaire k8s-par2, F5-S06) : ce dossier ne le crée pas.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ghsv-prod
+resources:
+  - ../../../base
+  - livraison.yaml
+  - mediagenda-db-par2.yaml
+  - sauvegarde-par2.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+      medisphere.internal/client: ghsv
+      medisphere.internal/site: par2
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - ../ghsv-prod/parametres.env
+components:
+  - ../../../components/migrations
+  - ../../../components/racine-medisphere
+  - ../../../components/valkey
+  - ../../../components/client
+  - ../../../components/temoin-rpo-client
+  # Différences de site de F5-S06 (gw-par2, reg02, repère X-MediSphere-Site) : reprends le nom du
+  # component de site de TON dépôt (celui qu'utilise l'overlay de PAR2 de MédiAgenda).
+  - ../../../components/site-par2
+  - ../../../components/livraison
+patches:
+  # Veille : rien ne tourne hors de la base.
+  - target: {kind: Deployment, name: mediagenda}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  - target: {kind: Deployment, name: oauth2-proxy-agents}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  - target: {kind: Deployment, name: oauth2-proxy-dpi}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  - target: {group: apps, kind: StatefulSet, name: valkey}
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 0
+  - target: {group: batch, kind: CronJob, name: temoin-rpo}
+    patch: |-
+      - op: replace
+        path: /spec/suspend
+        value: true
+  # La base du chart s'appelle mediagenda-db : à PAR2, c'est mediagenda-db-par2 (Secret
+  # mediagenda-db-par2-app). Les références de l'API, des migrations et du témoin suivent.
+  - target: {kind: Deployment, name: mediagenda}
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
+        value: mediagenda-db-par2-app
+  - target: {group: batch, kind: CronJob, name: temoin-rpo}
+    patch: |-
+      - op: replace
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
+        value: mediagenda-db-par2-app

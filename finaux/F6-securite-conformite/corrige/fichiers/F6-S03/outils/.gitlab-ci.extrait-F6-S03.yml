@@ -1,0 +1,48 @@
+# plateforme/outils — .gitlab-ci.yml : EXTRAIT, jobs ajoutés en F6-S03 (SEC-3603).
+test:ms-revue-acces:
+  stage: test
+  tags: [shell, socle]
+  script:
+    - shellcheck -x bin/ms-revue-acces tests/ms-revue-acces/lancer.sh
+    - bash -n bin/ms-revue-acces
+    - tests/ms-revue-acces/lancer.sh
+  rules:
+    - changes: [bin/ms-revue-acces, revue-acces/**/*, tests/ms-revue-acces/**/*, .gitlab-ci.yml]
+
+# Revue mensuelle (pipeline planifié « revue-acces », le 1er du mois à 07:05) : prépare le brouillon
+# docs/conformite/revue-acces/AAAA-MM.md (artefact) ; la REVUE elle-même (décisions, signatures) reste
+# humaine, par MR sur plateforme/medisphere. Même rôle de coffre que la collecte des preuves (ci-preuves,
+# lecture de kv/plateforme/preuves/lecture) ; l'état brut est aussi déposé par ms-preuves (P-IAM-06).
+revue:acces:
+  stage: test
+  tags: [shell, socle]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $TACHE == "revue-acces" && $CI_COMMIT_REF_PROTECTED == "true"'
+  id_tokens:
+    OPENBAO_ID_TOKEN:
+      aud: openbao.medisphere.internal
+  variables:
+    BAO_ADDR: https://openbao.par1.medisphere.internal:8200
+  script:
+    - |
+      set -euo pipefail
+      BAO_TOKEN="$(printf '{"role":"ci-preuves","jwt":"%s"}' "$OPENBAO_ID_TOKEN" | bao write -field=token auth/gitlab/login -)"
+      export BAO_TOKEN
+      eval "$(bao kv get -format=json -mount=kv plateforme/preuves/lecture | jq -r '.data.data | to_entries[] | "export \(.key)=\(.value | @sh)"')"
+      umask 077
+      KUBECONFIG="$(mktemp)"; export KUBECONFIG
+      bao kv get -mount=kv -field=kubeconfig plateforme/preuves/kubernetes >"$KUBECONFIG"
+      mois="$(date +%Y-%m)"
+      mkdir -p revue
+      code=0
+      { printf '# Revue des accès — %s\n\n> Brouillon généré par ms-revue-acces (pipeline %s). Compléter les décisions, puis MR.\n\n' "$mois" "$CI_PIPELINE_URL"
+        bin/ms-revue-acces || code=$?; } >"revue/$mois.md"
+      bin/ms-revue-acces --json >"revue/$mois.json" || true
+      rm -f -- "$KUBECONFIG"
+      bao token revoke -self >/dev/null || true
+      exit "$code"
+  allow_failure: {exit_codes: [1]}      # des comptes à traiter : c'est le résultat attendu d'une revue
+  artifacts:
+    when: always
+    expire_in: 60 days
+    paths: [revue/]

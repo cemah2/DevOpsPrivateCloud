@@ -1,0 +1,29 @@
+# mediagenda/deploiement — overlays/prod/kustomization.yaml : EXTRAIT (F5-S06, CHG-3506).
+components:
+  # … components existants …
+  - ../../components/temoin-rpo            # témoin de RPO (actif à PAR1)
+resources:
+  # … ressources existantes …
+  - objectstore-par2.yaml
+patches:
+  # … correctifs existants (day0-recuperation.yaml en premier : il crée /spec/externalClusters) …
+  - path: topologie-distribuee.yaml
+    target: {group: postgresql.cnpg.io, version: v1, kind: Cluster, name: mediagenda-db}
+  # Repère de site sur les routes de PAR1 (le chart ne le sait pas : correctif de l'overlay).
+  - target: {group: gateway.networking.k8s.io, kind: HTTPRoute}
+    patch: |-
+      - op: add
+        path: /spec/rules/0/filters
+        value:
+          - type: ResponseHeaderModifier
+            responseHeaderModifier:
+              set:
+                - {name: X-MediSphere-Site, value: par1}
+# Vérification hors ligne avant la MR :
+#   kustomize build overlays/prod | yq 'select(.kind == "Cluster") | .spec.replica, .spec.externalClusters'
+#   kustomize build overlays/prod | yq 'select(.kind == "HTTPRoute") | .spec.rules[].filters'
+# ⚠️ « add /spec/rules/0/filters » REMPLACE les filtres existants de la première règle s'il y en a : lis
+#    le rendu du chart ; s'il en a déjà, ajoute plutôt à « /spec/rules/0/filters/- ». Toutes les règles
+#    de la route doivent porter le repère (une règle par chemin dans certains charts).
+#    Le nom global mediagenda.medisphere.internal s'ajoute aux hostnames de la route par les valeurs de
+#    prod du chart : sans lui, gw-par1 ne sert pas le nom global.

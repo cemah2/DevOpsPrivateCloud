@@ -1,0 +1,6 @@
+# {{ ansible_managed | default('Géré par Ansible') }} — rôle hote_par2 (F5-S03).
+# Sources de temps de hp01 : celle de PAR1 (par wg0) ET des sources publiques (par le LAN), pour que
+# PAR2 garde l'heure quand PAR1 disparaît. chrony choisit la meilleure.
+{% for s in hote_par2_ntp_sources %}
+{{ s.type }} {{ s.adresse }} {{ s.options | default('iburst') }}
+{% endfor %}

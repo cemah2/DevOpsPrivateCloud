@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# conformite-scores — P-DUR-01 : scores OpenSCAP (CIS, ANSSI) de chaque hôte et date de la dernière
+# analyse (séries du M26-E24, collecteur textfile), lus dans Prometheus (Thanos Query, vue globale).
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+P="${PROM_URL:-http://prometheus.apps.par1.medisphere.internal:9090}"
+q() {
+  curl -sf --max-time "$DELAI_HTTP" --data-urlencode "query=$1" "$P/api/v1/query" |
+    jq -S '[.data.result[] | {instance: .metric.instance, referentiel: .metric.referentiel, valeur: (.value[1] | tonumber)}]
+           | sort_by(.instance, .referentiel)'
+}
+s="$(q medisphere_conformite_score)"
+a="$(q 'time() - medisphere_conformite_derniere_analyse_secondes')"
+[[ "$(jq length <<<"$s")" -gt 0 ]] || { echo "aucune série medisphere_conformite_score" >&2; exit 1; }
+entete_preuve | jq -S --argjson s "$s" --argjson a "$a" '. + {scores: $s, age_derniere_analyse_s: $a}'

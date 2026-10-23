@@ -1,0 +1,23 @@
+# sites/par2/reseau/lb-par2.yaml — LB IPAM et annonces L2 de k8s-par2 (F5-S06).
+# Pool lb-par2 : 10.20.20.200-239 (PLAN §4.15) ; .200 = gw-par2 ; .205 = base de secours pour OpenBao (PRA).
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lb-par2
+spec:
+  blocks:
+    - start: "10.20.20.200"
+      stop: "10.20.20.239"
+---
+# Annonce ARP des adresses de LoadBalancer sur l'interface du nœud (eth0, sur vmbr2).
+# Les Services en externalTrafficPolicy: Local sont incompatibles avec les annonces L2 (documentation) :
+# à PAR2, aucun Service n'en utilise.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: par2-infra
+spec:
+  interfaces:
+    - ^eth0$
+  loadBalancerIPs: true
+  externalIPs: false

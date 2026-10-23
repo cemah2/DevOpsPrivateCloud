@@ -1,0 +1,24 @@
+#!/bin/bash
+# Faux cosign (tests de ms-preuves) : « signe » en écrivant l'empreinte du fichier et l'empreinte de la
+# clé dans le bundle ; « vérifie » en recalculant. Assez pour éprouver la logique, rien de cryptographique.
+set -euo pipefail
+cmd="$1"; shift
+cle="" bundle="" fichier=""
+while (($#)); do
+  case "$1" in
+    --key) cle="$2"; shift 2 ;;
+    --bundle) bundle="$2"; shift 2 ;;
+    --signing-config) shift 2 ;;
+    --yes | --insecure-ignore-tlog=true) shift ;;
+    *) fichier="$1"; shift ;;
+  esac
+done
+case "$cmd" in
+  sign-blob)
+    [[ "${FAUX_COSIGN_REFUS:-0}" == 1 ]] && { echo "Error: permission denied" >&2; exit 1; }
+    printf '{"faux":true,"cle":"%s","empreinte":"%s"}\n' "faux-cle" "$(sha256sum "$fichier" | cut -d' ' -f1)" > "$bundle" ;;
+  verify-blob)
+    [[ -r "$cle" ]] || exit 1
+    jq -e --arg e "$(sha256sum "$fichier" | cut -d' ' -f1)" '.empreinte == $e' "$bundle" >/dev/null ;;
+  *) exit 1 ;;
+esac

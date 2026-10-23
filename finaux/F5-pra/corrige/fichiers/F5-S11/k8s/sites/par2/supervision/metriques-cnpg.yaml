@@ -1,0 +1,46 @@
+# plateforme/k8s — sites/par2/supervision/metriques-cnpg.yaml (F5-S11, PLAT-3511)
+# Fichier de SITE (PAR2 seulement) : publie l'exportateur de l'instance de mediagenda-db-par2 (port 9187)
+# au Prometheus minimal de adm02, faute de Prometheus dans k8s-par2 (mémoire du nœud, S01).
+#   - adresse fixe 10.20.20.210 du pool lb-par2, annoncée en L2 par Cilium ;
+#   - externalTrafficPolicy: Local : nœud unique, et l'adresse source (adm02) est conservée pour la
+#     politique réseau ci-dessous ;
+#   - seul adm02 (10.20.20.10) entre, et seulement sur 9187 (les métriques ne contiennent aucune donnée
+#     de patient, mais révèlent la charge et les noms des bases).
+# Appliqué avec la couche de base de PAR2 (Helmfile, environnement par2), pas par Argo CD.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mediagenda-db-par2-metriques
+  namespace: mediagenda-prod
+  labels:
+    app.kubernetes.io/part-of: supervision-par2
+  annotations:
+    lbipam.cilium.io/ips: "10.20.20.210"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    cnpg.io/cluster: mediagenda-db-par2
+  ports:
+    - name: metriques
+      port: 9187
+      targetPort: 9187
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: metriques-cnpg-depuis-adm02
+  namespace: mediagenda-prod
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: mediagenda-db-par2
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.20.20.10/32
+      ports:
+        - protocol: TCP
+          port: 9187

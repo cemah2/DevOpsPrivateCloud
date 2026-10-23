@@ -1,0 +1,11 @@
+# sites/par2/certificats/autorite-par2.yaml — émetteur des certificats de k8s-par2 (F5-S06) :
+# « MédiSphère PAR2 Intermediate CA » (cérémonie F5-S05). Le Secret medisphere-par2-ca (tls.crt = certificat
+# de l'intermédiaire + racine, tls.key = clé) est créé par outils/amorcer-par2.sh depuis Ansible Vault
+# « critique » (secrets/pki-par2.yml) : jamais dans Git, jamais à PAR1.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: medisphere-par2-ca
+spec:
+  ca:
+    secretName: medisphere-par2-ca

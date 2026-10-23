@@ -1,0 +1,6 @@
+# mediagenda/deploiement — components/temoin-rpo (F5-S06, PLAT-3506) : témoin de RPO du PRA.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - cronjob.yaml
+  - reseau.yaml

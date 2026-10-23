@@ -1,0 +1,14 @@
+# mediagenda/deploiement — overlays/clients/ghsv-prod/livraison.yaml (F7-S07)
+# Version livrée au client GHSV et nom publié. Promouvoir = recopier ici, par MR approuvée (Julien
+# Petit ou Karim Benali), la version validée dans overlays/clients/ghsv-recette depuis au moins 10 jours
+# ouvrés (EXP-06 du marché) : outils/promouvoir.sh --vers clients/ghsv-prod. Empreintes exigées en
+# production (Kyverno exiger-digest) : posées par l'outil de promotion comme pour overlays/prod.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livraison
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  version: <VERSION-PROMUE>
+  nom-publie: ghsv.apps.par1.medisphere.internal

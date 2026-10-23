@@ -1,0 +1,60 @@
+# components/temoin-rpo/cronjob.yaml — témoin de RPO (F5-S06). Chaque minute, un rendez-vous du praticien
+# technique « PRA-TEMOIN » est créé par l'API (le vrai chemin d'écriture : API → pooler → base), avec :
+#   - motif = horodatage UTC de l'écriture (ISO 8601), lisible par un humain ;
+#   - debut = l'instant d'écriture + 10 ans, à la minute : unique par minute (l'API refuse deux
+#     rendez-vous d'un même praticien à la même heure, 409) et hors de toute plage réelle de créneaux ;
+#   - cree_le (colonne de la base, DEFAULT now()) = horodatage du PRIMAIRE : c'est lui que mesure le RPO.
+# RPO = max(cree_le) des témoins à PAR1 au sinistre − max(cree_le) des témoins retrouvés à PAR2 (RB-356 §6).
+# Actif à PAR1, SUSPENDU à PAR2 (overlay prod-par2). Aucun patient réel ; ~1 440 lignes par jour
+# (purge : PLAT-3506-a, après l'exercice).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: temoin-rpo
+  labels:
+    app.kubernetes.io/name: temoin-rpo
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 50
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 45
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: temoin-rpo
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: temoin
+              image: registry.par1.medisphere.internal/dockerhub/curlimages/curl:8.17.0
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  maintenant=$(date -u +%s)
+                  horodatage=$(date -u -d "@$maintenant" +%Y-%m-%dT%H:%M:%SZ)
+                  debut=$(date -u -d "@$(( maintenant / 60 * 60 + 315360000 ))" +%Y-%m-%dT%H:%M:00+00:00)
+                  corps=$(printf '{"patient":"Témoin PRA","praticien":"PRA-TEMOIN","debut":"%s","duree_minutes":5,"motif":"%s"}' "$debut" "$horodatage")
+                  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST \
+                    -H 'Content-Type: application/json' -d "$corps" http://mediagenda/api/v1/rendez-vous)
+                  echo "temoin-rpo $horodatage HTTP $code"
+                  [ "$code" = 201 ]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {cpu: 100m, memory: 32Mi}

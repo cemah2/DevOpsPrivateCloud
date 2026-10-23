@@ -1,0 +1,184 @@
+---
+# hote_par2 — voir defaults/main.yml. Chaque bloc commence par un contrôle de LECTURE.
+
+- name: Garde-fou — on est bien sur hp01, PBS tourne et ds-lab existe
+  ansible.builtin.command: proxmox-backup-manager datastore list --output-format json
+  register: hote_par2_ds
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    hote_par2_ds.rc != 0 or
+    (hote_par2_ds.stdout | from_json | selectattr('name', 'equalto', 'ds-lab') | list | length) != 1
+
+- name: Garde-fou — Proxmox VE est installé (RB-353 §3 fait AVANT ce rôle)
+  ansible.builtin.command: pveversion
+  register: hote_par2_pve
+  changed_when: false
+  check_mode: false
+  failed_when: hote_par2_pve.rc != 0 or 'pve-manager/9.2' not in hote_par2_pve.stdout
+
+# --- Stockage et pool -----------------------------------------------------------------------------
+- name: Jeu ZFS de par2-vms avec quota (si ZFS)
+  when: hote_par2_zfs_jeu | length > 0
+  block:
+    - name: Lire le jeu ZFS
+      ansible.builtin.command: "zfs list -H -o name {{ hote_par2_zfs_jeu }}"
+      register: hote_par2_zfs
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: "Créer le jeu ZFS (quota ET refquota : les instantanés comptent aussi)"
+      ansible.builtin.command: >-
+        zfs create -o mountpoint={{ hote_par2_stockage_chemin }}
+        -o quota={{ hote_par2_zfs_quota }} -o refquota={{ hote_par2_zfs_quota }}
+        {{ hote_par2_zfs_jeu }}
+      when: hote_par2_zfs.rc != 0
+      changed_when: true
+
+    - name: Imposer le quota (jeu existant)
+      ansible.builtin.command: "zfs set quota={{ hote_par2_zfs_quota }} refquota={{ hote_par2_zfs_quota }} {{ hote_par2_zfs_jeu }}"
+      when: hote_par2_zfs.rc == 0
+      changed_when: false
+
+- name: Le chemin de par2-vms est un point de montage distinct (jamais le système de fichiers de ds-lab)
+  ansible.builtin.command: "findmnt -n -o TARGET --mountpoint {{ hote_par2_stockage_chemin }}"
+  changed_when: false
+  check_mode: false
+
+- name: Lire les stockages Proxmox
+  ansible.builtin.command: pvesh get /storage --output-format json
+  register: hote_par2_pvesm
+  changed_when: false
+  check_mode: false
+
+- name: Déclarer le stockage par2-vms (répertoire, disques et images seulement)
+  ansible.builtin.command: >-
+    pvesm add dir {{ hote_par2_stockage }} --path {{ hote_par2_stockage_chemin }}
+    --content images,iso,snippets --is_mountpoint yes
+  when: hote_par2_pvesm.stdout | from_json | selectattr('storage', 'equalto', hote_par2_stockage) | list | length == 0
+  changed_when: true
+
+- name: Lire les pools Proxmox
+  ansible.builtin.command: pvesh get /pools --output-format json
+  register: hote_par2_pools
+  changed_when: false
+  check_mode: false
+
+- name: Créer le pool par2
+  ansible.builtin.command: "pveum pool add {{ hote_par2_pool }} --comment 'Site de repli PAR2 (F5)'"
+  when: hote_par2_pools.stdout | from_json | selectattr('poolid', 'equalto', hote_par2_pool) | list | length == 0
+  changed_when: true
+
+# --- Pont vmbr2 -----------------------------------------------------------------------------------
+# Par l'API réseau de Proxmox VE (comme l'interface web) : la configuration est écrite dans
+# /etc/network/interfaces.new puis appliquée par ifupdown2 (ifreload). vmbr0, vmbr1 et wg0 ne changent
+# pas ; wg0, géré par wg-quick, n'est pas dans ce fichier et n'est pas touché par le rechargement.
+- name: Lire vmbr2
+  ansible.builtin.command: "pvesh get /nodes/{{ hote_par2_noeud }}/network/{{ hote_par2_pont }} --output-format json"
+  register: hote_par2_vmbr2
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Créer vmbr2 (pont sans port physique)
+  ansible.builtin.command: >-
+    pvesh create /nodes/{{ hote_par2_noeud }}/network --iface {{ hote_par2_pont }} --type bridge
+    --cidr {{ hote_par2_adresse }} --autostart 1
+    --comments 'PAR2 INFRA (F5-S03)'
+  when: hote_par2_vmbr2.rc != 0
+  register: hote_par2_vmbr2_cree
+  changed_when: true
+
+- name: Appliquer la configuration réseau (ifreload)
+  ansible.builtin.command: "pvesh set /nodes/{{ hote_par2_noeud }}/network"
+  when: hote_par2_vmbr2_cree is changed
+  changed_when: true
+
+# --- Routage et nftables ----------------------------------------------------------------------------
+- name: Routage IPv4
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: /etc/sysctl.d/90-par2.conf
+    sysctl_set: true
+
+- name: Dossier des règles de PAR2
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    mode: "0750"
+
+- name: Table inet par2 (fichier séparé)
+  ansible.builtin.template:
+    src: par2.nft.j2
+    dest: /etc/nftables.d/par2.nft
+    mode: "0640"
+    validate: nft -c -f %s
+  notify: Recharger nftables-par2
+
+- name: Unité qui charge la table inet par2 au démarrage (et seulement elle)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/nftables-par2.service
+    mode: "0644"
+    content: |
+      # Gérée par Ansible (rôle hote_par2, F5-S03). Charge /etc/nftables.d/par2.nft, qui commence par
+      # « destroy table inet par2 » : aucune autre table n'est touchée (pas de « flush ruleset »).
+      [Unit]
+      Description=Table nftables du site PAR2 (NAT et filtrage de PAR2 INFRA)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/nft -f /etc/nftables.d/par2.nft
+      ExecReload=/usr/sbin/nft -f /etc/nftables.d/par2.nft
+      ExecStop=/usr/sbin/nft destroy table inet par2
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Recharger nftables-par2
+
+- name: Activer nftables-par2
+  ansible.builtin.systemd_service:
+    name: nftables-par2.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# --- VPN de secours wg1 -----------------------------------------------------------------------------
+- name: WireGuard (outils)
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+
+- name: wg1.conf
+  ansible.builtin.template:
+    src: wg1.conf.j2
+    dest: /etc/wireguard/wg1.conf
+    mode: "0600"
+  notify: Redémarrer wg1
+
+- name: Activer wg1
+  ansible.builtin.systemd_service:
+    name: wg-quick@wg1.service
+    enabled: true
+    state: started
+
+# --- Temps ------------------------------------------------------------------------------------------
+- name: Sources de temps de hp01 (dont une hors de PAR1)
+  ansible.builtin.template:
+    src: par2.sources.j2
+    dest: /etc/chrony/sources.d/par2.sources
+    mode: "0644"
+  notify: Recharger les sources de chrony
+
+- name: chrony sert PAR2 INFRA
+  ansible.builtin.copy:
+    dest: /etc/chrony/conf.d/par2.conf
+    mode: "0644"
+    content: |
+      # Géré par Ansible (rôle hote_par2, F5-S03) : hp01 est le serveur de temps de PAR2 INFRA.
+      allow {{ hote_par2_reseau }}
+  notify: Redémarrer chrony

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Collecteur de test : preuve JSON stable.
+printf '{"preuve":"%s","valeur":42}\n' "${MS_PREUVES_ID:-?}"

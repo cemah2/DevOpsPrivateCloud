@@ -1,0 +1,75 @@
+# sites/par2/mediagenda-prod/50-mediagenda-db-par2.yaml — base de SECOURS de MédiAgenda (F5-S06, CHG-3506).
+# Topologie DISTRIBUÉE CloudNativePG 1.30 (cloudnative-pg.io/docs/1.30/replica_cluster) :
+#   - les deux clusters déclarent les DEUX archives dans externalClusters, sous les noms des clusters ;
+#   - replica.primary = mediagenda-db (PAR1) des deux côtés : ici, ce cluster est donc RÉPLICA et rejoue
+#     l'archive de « mediagenda-db » (copie sur s3-02, compartiment cnpg-k8s-par1, filer.sync) ;
+#   - bascule CONTRÔLÉE (PAR1 vivant) : rétrogradation de PAR1 → .status.demotionToken → ici primary +
+#     promotionToken DANS LA MÊME modification ; bascule SANS jeton (PAR1 perdu, RB-350) : primary seul,
+#     et l'ancien primaire de PAR1 devra être reconstruit (RB-351).
+# Appliqué depuis adm02 (kubectl apply --server-side), comme le réplica de secours du M27 : jamais
+# synchronisé ni supprimé par Argo CD (l'overlay prod-par2 retire le Cluster de l'application).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db-par2
+  namespace: mediagenda-prod
+  labels:
+    app.kubernetes.io/part-of: mediagenda
+    medisphere.internal/site: par2
+spec:
+  description: "Base de secours de MédiAgenda à PAR2 (topologie distribuée avec mediagenda-db, F5-S06)"
+  instances: 1
+  # MÊME image que la production (même majeure, même mineure) ; tirée d'Internet par hp01 (pas de cache
+  # Harbor à PAR2). Épingler par empreinte celle que montre la prod (kubectl get cluster -o jsonpath=…).
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-minimal-trixie
+
+  bootstrap:
+    recovery:
+      source: mediagenda-db
+      database: mediagenda
+      owner: mediagenda
+
+  replica:
+    primary: mediagenda-db
+    source: mediagenda-db
+
+  externalClusters:
+    - name: mediagenda-db
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3-par1
+          serverName: mediagenda-db-prod-day0      # nom d'archivage de la prod (F1) : vérifie le tien
+    - name: mediagenda-db-par2
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3-par2
+          serverName: mediagenda-db-par2
+
+  # Archive PROPRE à PAR2 (compartiment cnpg-k8s-par2 de s3-02). Pendant la veille, le primaire désigné
+  # du réplica y archive les WAL qu'il reçoit ; après une promotion, c'est l'archive de la nouvelle
+  # production, celle que PAR1 rejouera au retour (RB-351).
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: cnpg-s3-par2
+        serverName: mediagenda-db-par2
+
+  storage:
+    storageClass: local-path
+    size: 10Gi
+
+  # Valeurs au moins égales à celles du primaire (max_connections, max_worker_processes, max_wal_senders,
+  # max_prepared_transactions, max_locks_per_transaction) : sinon le réplica refuse de démarrer.
+  postgresql:
+    parameters:
+      max_connections: "100"
+      timezone: Europe/Paris
+
+  resources:
+    requests: {cpu: 50m, memory: 384Mi}
+    limits: {cpu: "1", memory: 768Mi}
+
+  enableSuperuserAccess: false

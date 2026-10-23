@@ -1,0 +1,155 @@
+# mediagenda/deploiement — components/client/oauth2-proxy-dpi.yaml (F7-S09, DEV-3709)
+# Accès du DPI du client à l'API du contrat, sur le nom PUBLIC (route « mediagenda » de livraison.yaml,
+# dont le component « client » change la destination vers ce mandataire).
+#   - le DPI présente un jeton porteur obtenu par « client credentials » auprès du royaume medisphere
+#     (client ghsv-dpi, tofu/clients-dpi-ghsv.tf) ; OAuth2 Proxy en vérifie la signature (JWKS de
+#     Keycloak), l'émetteur, l'expiration et l'AUDIENCE (ghsv-api) — skip_jwt_bearer_tokens ;
+#   - aucune session de navigateur : sans jeton, /api/ répond 401 (api_routes), jamais une redirection ;
+#   - les portées rdv:lecture / rdv:ecriture sont contrôlées par l'API (MEDIAGENDA_PORTEES=oui), qui
+#     reçoit le jeton tel quel ;
+#   - /pret et /openapi.json restent anonymes (sonde de mon01, description de l'API pour le DPI).
+# Le client « ghsv-api » est le client OIDC propre au mandataire (OAuth2 Proxy en exige un), sans flux
+# de navigateur utile ici.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oauth2-proxy-dpi
+data:
+  oauth2_proxy.cfg: |
+    provider = "keycloak-oidc"
+    oidc_issuer_url = "https://sso.par1.medisphere.internal/realms/medisphere"
+    provider_ca_files = ["/etc/medisphere-ca/medisphere-root-ca.crt"]
+    # Jetons porteurs acceptés : émetteur medisphere, audience ghsv-api (mappeur d'audience du client
+    # ghsv-dpi). Un jeton émis pour un autre client du royaume (Grafana, Argo CD…) est refusé.
+    skip_jwt_bearer_tokens = true
+    extra_jwt_issuers = ["https://sso.par1.medisphere.internal/realms/medisphere=ghsv-api"]
+    # Un compte de service n'a pas d'adresse : l'identifiant est preferred_username
+    # (« service-account-ghsv-dpi »). À vérifier avec ta version (corrigé, points non testés).
+    user_id_claim = "preferred_username"
+    email_domains = ["*"]
+    upstreams = ["http://mediagenda:80"]
+    skip_auth_routes = ["GET=^/pret$", "GET=^/openapi\\.json$"]
+    api_routes = ["^/api/"]
+    # Le jeton du DPI est transmis tel quel à l'API (en-tête Authorization d'origine).
+    pass_authorization_header = false
+    skip_provider_button = true
+    cookie_secure = true
+    cookie_httponly = true
+    cookie_samesite = "strict"
+    reverse_proxy = true
+    trusted_proxy_ips = ["10.240.0.0/16"]
+    real_client_ip_header = "X-Forwarded-For"
+    silence_ping_logging = true
+    metrics_address = "0.0.0.0:44180"
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: oauth2-proxy-dpi
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: openbao
+  target:
+    name: oauth2-proxy-dpi
+    creationPolicy: Owner
+  data:
+    - secretKey: client-id
+      remoteRef: {key: ghsv/recette/oauth2-proxy-dpi, property: client-id}
+    - secretKey: client-secret
+      remoteRef: {key: ghsv/recette/oauth2-proxy-dpi, property: client-secret}
+    - secretKey: cookie-secret
+      remoteRef: {key: ghsv/recette/oauth2-proxy-dpi, property: cookie-secret}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth2-proxy-dpi
+  labels:
+    app.kubernetes.io/name: oauth2-proxy
+    app.kubernetes.io/instance: oauth2-proxy-dpi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+      app.kubernetes.io/instance: oauth2-proxy-dpi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oauth2-proxy
+        app.kubernetes.io/instance: oauth2-proxy-dpi
+    spec:
+      automountServiceAccountToken: false
+      priorityClassName: medisphere-critique
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: oauth2-proxy
+          image: registry.par1.medisphere.internal/quay/oauth2-proxy/oauth2-proxy:v7.15.5@sha256:<EMPREINTE-OAUTH2-PROXY>
+          args:
+            - --config=/etc/oauth2-proxy/oauth2_proxy.cfg
+            - --http-address=0.0.0.0:4180
+          env:
+            # Jamais utilisée (aucune session de navigateur), mais exigée par la configuration.
+            - name: OAUTH2_PROXY_REDIRECT_URL
+              value: https://ghsv-recette.apps.par1.medisphere.internal/oauth2/callback
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: oauth2-proxy-dpi, key: client-id}}
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom: {secretKeyRef: {name: oauth2-proxy-dpi, key: client-secret}}
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom: {secretKeyRef: {name: oauth2-proxy-dpi, key: cookie-secret}}
+          ports:
+            - {name: http, containerPort: 4180}
+            - {name: metriques, containerPort: 44180}
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /ping, port: http}
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: configuration, mountPath: /etc/oauth2-proxy, readOnly: true}
+            - {name: racine-medisphere, mountPath: /etc/medisphere-ca, readOnly: true}
+      volumes:
+        - name: configuration
+          configMap: {name: oauth2-proxy-dpi}
+        - name: racine-medisphere
+          configMap: {name: racine-medisphere}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth2-proxy-dpi
+  labels:
+    app.kubernetes.io/name: oauth2-proxy
+    app.kubernetes.io/instance: oauth2-proxy-dpi
+spec:
+  selector:
+    app.kubernetes.io/name: oauth2-proxy
+    app.kubernetes.io/instance: oauth2-proxy-dpi
+  ports:
+    - {name: http, port: 80, targetPort: http}
+    - {name: metriques, port: 44180, targetPort: metriques}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: oauth2-proxy-dpi
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+      app.kubernetes.io/instance: oauth2-proxy-dpi

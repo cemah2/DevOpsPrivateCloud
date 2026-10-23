@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# pra-marquer-reussite FLUX — note l'heure de la dernière exécution RÉUSSIE d'une copie (F5-S04) :
+# pra_replication_derniere_reussite_secondes{flux="FLUX"} dans le collecteur textfile.
+set -euo pipefail
+flux="${1:?usage : $0 FLUX}"
+[[ "$flux" =~ ^[a-z0-9-]+$ ]] || { echo "flux invalide : $flux" >&2; exit 2; }
+dir="${PRA_TEXTFILE:-/var/lib/prometheus/node-exporter}"
+tmp="$(mktemp "$dir/.pra_reussite_$flux.XXXXXX")"
+{
+  echo "# TYPE pra_replication_derniere_reussite_secondes gauge"
+  printf 'pra_replication_derniere_reussite_secondes{flux="%s"} %s\n' "$flux" "$(date +%s)"
+} >"$tmp"
+chmod 0644 "$tmp"
+mv "$tmp" "$dir/pra_reussite_$flux.prom"

@@ -1,0 +1,26 @@
+---
+# host_vars/pbs01/hote_par2.yml — hp01 en hyperviseur de PAR2 (F5-S03, CHG-3503). Valeurs NON secrètes ;
+# secrets dans host_vars/pbs01/vault-critique.yml (clé privée de wg1, clé publique du poste).
+hote_par2_pont: vmbr2
+hote_par2_adresse: 10.20.20.1/24
+hote_par2_reseau: 10.20.20.0/24
+
+# Interface LAN de hp01 (sortie Internet de PAR2 INFRA). Lis-la sur hp01 (ip route get 1.1.1.1) : avec
+# le noyau 7.0 de PBS 4.2, les noms peuvent changer ; c'est le PONT du LAN qui porte l'adresse (vmbr0).
+hote_par2_interface_lan: vmbr0
+hote_par2_lan_maison: "<LAN-MAISON>"         # ex. 192.168.1.0/24 : PAR2 INFRA n'y a PAS accès
+
+# VPN de secours : n'ouvre que PAR2.
+hote_par2_wg1_adresse: 10.255.3.1/24
+hote_par2_wg1_port: 51823
+hote_par2_wg1_cle_privee: "{{ vault_hote_par2_wg1_cle_privee }}"
+hote_par2_wg1_pairs:
+  - nom: poste de <MOI>
+    cle_publique: "<CLE-PUBLIQUE-WG-DU-POSTE>"
+    allowed_ips: 10.255.3.2/32
+
+# Temps : hp01 sert PAR2 INFRA ; sources = la bordure de PAR1 par wg0 (comme avant) ET des serveurs publics par le
+# LAN (indépendance de PAR1). chrony choisit ; si wg0 tombe, il garde les sources publiques.
+hote_par2_ntp_sources:
+  - {type: server, adresse: 10.10.10.1, options: iburst}   # source PAR1 du M00-E31 (bordure, par wg0) : vérifie la tienne
+  - {type: pool, adresse: 2.debian.pool.ntp.org, options: iburst maxsources 2}

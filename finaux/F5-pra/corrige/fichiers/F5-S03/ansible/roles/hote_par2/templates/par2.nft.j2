@@ -1,0 +1,44 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed | default('Géré par Ansible') }} — rôle hote_par2 (F5-S03, CHG-3503).
+# Table du site PAR2 sur hp01. Elle ne filtre QUE le trafic TRANSITÉ par hp01 (chaîne forward) et
+# traduit la sortie Internet de PAR2 INFRA. Elle ne touche pas à l'entrée de hp01 (PBS, SSH, API) :
+# un filtrage d'entrée de hp01 est un autre changement, avec son propre retour arrière.
+# « destroy » (nftables ≥ 1.0.8, Debian 13) : supprime la table si elle existe, sans erreur sinon.
+destroy table inet par2
+
+table inet par2 {
+    define PAR2_INFRA = {{ hote_par2_reseau }}
+    define LAN_MAISON = {{ hote_par2_lan_maison }}
+
+    # Hôtes ISOLÉS : jamais routés hors de PAR2 INFRA, dans aucun sens (F5-S05). kms01 restauré (3501,
+    # 10.20.20.24) est une copie du service de descellement de PAR1 : il ne doit joindre ni PAR1
+    # (s3-01, ca01, Loki…), ni Internet. bao-par2 et adm02 le joignent sur vmbr2 (même segment, sans
+    # passer par hp01).
+    set isoles {
+        type ipv4_addr
+        elements = { {{ hote_par2_isoles | join(', ') }} }
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+        ip saddr @isoles counter drop comment "hôte isolé (bac à sable) : aucune sortie de PAR2 INFRA"
+        ip daddr @isoles counter drop comment "hôte isolé : aucune entrée depuis l'extérieur de PAR2 INFRA"
+
+        # PAR2 INFRA vers PAR1 par le tunnel (la bordure filtre à son tour, matrice des flux).
+        iifname "{{ hote_par2_pont }}" oifname "{{ hote_par2_interface_s2s }}" ip saddr $PAR2_INFRA accept
+        # PAR1 vers PAR2 INFRA (ce que la bordure laisse passer : adm01, mon01, git01, runner01, ca01…).
+        iifname "{{ hote_par2_interface_s2s }}" oifname "{{ hote_par2_pont }}" ip daddr $PAR2_INFRA accept
+        # VPN de secours : vers PAR2 INFRA seulement.
+        iifname "wg1" oifname "{{ hote_par2_pont }}" ip daddr $PAR2_INFRA accept
+        # PAR2 INFRA vers Internet, jamais vers le LAN maison.
+        iifname "{{ hote_par2_pont }}" oifname "{{ hote_par2_interface_lan }}" ip daddr $LAN_MAISON counter drop comment "PAR2 INFRA -> LAN maison interdit"
+        iifname "{{ hote_par2_pont }}" oifname "{{ hote_par2_interface_lan }}" accept
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "{{ hote_par2_interface_lan }}" ip saddr $PAR2_INFRA ip daddr != $LAN_MAISON masquerade
+    }
+}

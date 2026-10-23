@@ -1,0 +1,62 @@
+# /etc/prometheus/prometheus.yml — adm02 (F5-S11, PLAT-3511) : supervision MINIMALE de PAR2 pendant un PRA.
+# Paquets Debian 13 : prometheus, prometheus-alertmanager, prometheus-blackbox-exporter ; Mailpit (binaire).
+# Mémoire visée : ≈ 300 Mio pour l'ensemble (rétention 7 j : --storage.tsdb.retention.time=7d dans
+# /etc/default/prometheus). En veille (hors PRA), ce Prometheus tourne aussi : il porte les alertes de
+# préparation de PAR2 (F5-S14) et son Alertmanager relaie vers Mailpit de mon01 ; en PRA, vers le Mailpit local.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    site: par2
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["127.0.0.1:9093"]
+
+rule_files:
+  - /etc/prometheus/regles-pra.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["127.0.0.1:9090"]
+
+  # node_exporter (rôle node_exporter du M04) sur les VMs de PAR2, et sur hp01 si tu l'y as installé.
+  - job_name: noeuds
+    static_configs:
+      - targets:
+          - adm02.par2.medisphere.internal:9100
+          - dns03.par2.medisphere.internal:9100
+          - s3-02.par2.medisphere.internal:9100
+          - reg02.par2.medisphere.internal:9100
+          - k8s-par2-n01.par2.medisphere.internal:9100
+        labels:
+          site: par2
+
+  # Ce que voient les patients : les trois noms globaux, par la Gateway de PAR2.
+  - job_name: noms_globaux
+    metrics_path: /probe
+    params:
+      module: [http_2xx_medisphere]
+    static_configs:
+      - targets:
+          - https://mediagenda.medisphere.internal/sante
+          - https://medidoc.medisphere.internal/healthz
+          - https://rdv.medisphere.internal/
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  # Exportateur de l'instance de mediagenda-db-par2 (port 9187), publié par un Service LoadBalancer
+  # de k8s-par2 (k8s/sites/par2/supervision/metriques-cnpg.yaml), filtré sur adm02.
+  - job_name: cnpg_par2
+    static_configs:
+      - targets: ["10.20.20.210:9187"]
+        labels:
+          cluster: mediagenda-db-par2
+          namespace: mediagenda-prod

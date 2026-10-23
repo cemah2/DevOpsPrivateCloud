@@ -1,0 +1,38 @@
+# host_vars/s3-02/seaweedfs.yml — EXTRAIT (F5-S04) : identités et compartiments ajoutés à ceux de S03.
+# Les compartiments RÉPLIQUÉS (cnpg-k8s-par1, velero-k8s-par1, …) sont créés par filer.sync (dossiers
+# /buckets/<nom> du filer) : seuls ceux qui appartiennent à PAR2 sont créés par le rôle.
+seaweedfs_securite:
+  ca: "{{ vault_seaweedfs_grpc_ca }}"
+  certificat: "{{ vault_seaweedfs_grpc_certificat }}"      # CN s3-02
+  cle: "{{ vault_seaweedfs_grpc_cle }}"
+  noms_autorises: [s3-01, s3-02]
+  jwt_filer: "{{ vault_seaweedfs_jwt_filer }}"             # même clé que s3-01 (filer.sync signe les deux côtés)
+
+seaweedfs_identites:
+  # … tofu-par2, wb-checks, admin-s3 (S03) …
+  # CloudNativePG de k8s-par2 (S06) : LIT l'archive de PAR1, ÉCRIT la sienne.
+  - nom: cnpg-par2
+    cle_acces: "{{ vault_seaweedfs_cnpg_par2_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_cnpg_par2_cle_secrete }}"
+    actions: [Read:cnpg-k8s-par1, List:cnpg-k8s-par1, Read:cnpg-k8s-par2, Write:cnpg-k8s-par2, List:cnpg-k8s-par2]
+  # Copie de MédiDoc (minuterie de s3-02) : écrit la copie.
+  - nom: copie-medidoc
+    cle_acces: "{{ vault_seaweedfs_copie_medidoc_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_copie_medidoc_cle_secrete }}"
+    actions: [Read:medidoc-documents, Write:medidoc-documents, List:medidoc-documents]
+  # MédiDoc à PAR2 (PRA) : lit et écrit ses documents.
+  - nom: medidoc-par2
+    cle_acces: "{{ vault_seaweedfs_medidoc_par2_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_medidoc_par2_cle_secrete }}"
+    actions: [Read:medidoc-documents, Write:medidoc-documents, List:medidoc-documents]
+  # Velero et mariadb-operator à PAR2 (PRA) : lecture des sauvegardes de PAR1.
+  - nom: restauration-par2
+    cle_acces: "{{ vault_seaweedfs_restauration_par2_cle_acces }}"
+    cle_secrete: "{{ vault_seaweedfs_restauration_par2_cle_secrete }}"
+    actions: [Read:velero-k8s-par1, List:velero-k8s-par1, Read:mariadb-legacy-rdv, List:mariadb-legacy-rdv, Read:openbao-instantanes, List:openbao-instantanes]
+
+seaweedfs_compartiments:
+  - {nom: tofu-par2, versionnage: true}
+  - {nom: cnpg-k8s-par2, versionnage: true}
+  # Versionnée : une suppression à la source (rclone sync) laisse une version récupérable ici.
+  - {nom: medidoc-documents, versionnage: true}

@@ -1,0 +1,37 @@
+# plateforme/observabilite — slo/ghsv-disponibilite-sonde.yaml (F7-S10, PLAT-3710)
+# SLI CONTRACTUEL du GHSV (ENF-03, EXP-07) : part des sondes réussies vues de l'EXTÉRIEUR du cluster
+# (blackbox de mon01, groupes client-ghsv*, toutes les 30 s), fédérées dans le cluster (job blackbox).
+# Pourquoi la sonde et pas le compteur de l'application : une panne de la Gateway, du DNS, du réseau
+# ou des mandataires n'arrive jamais jusqu'à l'API ; son taux d'erreurs resterait à 0 % pendant que le
+# DPI ne passe plus. La sonde voit ce que voit le client.
+# Objectif : 99,9 % — fenêtre GLISSANTE de 30 j (Pyrra ne sait pas faire le mois calendaire, ni
+# retirer les maintenances annoncées : c'est le rapport mensuel qui le fait, ms-rapport-client). Le
+# budget glissant sert à piloter (alertes, décision de changement), pas à facturer.
+# Budget : 0,1 % de 30 j ≈ 43 min.
+apiVersion: pyrra.dev/v1alpha1
+kind: ServiceLevelObjective
+metadata:
+  name: ghsv-disponibilite-sonde
+  labels:
+    pyrra.dev/equipe: ghsv
+    pyrra.dev/client: ghsv
+  annotations:
+    pyrra.dev/resume: "GHSV : la prise de rendez-vous vue de l'extérieur consomme son budget trop vite"
+    pyrra.dev/description: "Sondes client-ghsv de mon01 en échec au-delà de ce que permet 99,9 % sur 30 jours."
+    pyrra.dev/runbook_url: https://git01.par1.medisphere.internal/plateforme/medisphere/-/blob/main/docs/capstone/runbooks/RB-374-rapport-mensuel-client.md
+spec:
+  description: "GHSV (prod) : prise de rendez-vous disponible vue par les sondes externes"
+  target: "99.9"
+  window: 30d
+  indicator:
+    bool_gauge:
+      metric: probe_success{job="blackbox", groupe=~"client-ghsv.*"}
+  alerting:
+    burnrates: true
+    absent: true
+    severities:
+      fastBurn: critique
+      mediumBurn: critique
+      slowBurn: avertissement
+      longTermBurn: avertissement
+      absent: critique

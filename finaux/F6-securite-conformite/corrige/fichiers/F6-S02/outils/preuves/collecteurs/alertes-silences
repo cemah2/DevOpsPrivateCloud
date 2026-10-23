@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# alertes-silences — P-SUP-01 : silences ACTIFS d'Alertmanager (qui, quoi, jusqu'à quand, pourquoi) et
+# alertes actives par nom. Un silence long sur une alerte de sécurité est un écart.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+A="${ALERTMANAGER_URL:-http://alertmanager.apps.par1.medisphere.internal:9093}"
+s="$(curl -sf --max-time "$DELAI_HTTP" "$A/api/v2/silences")"
+a="$(curl -sf --max-time "$DELAI_HTTP" "$A/api/v2/alerts?active=true&silenced=true&inhibited=true")"
+entete_preuve | jq -S --argjson s "$s" --argjson a "$a" '
+  . + {silences_actifs: [$s[] | select(.status.state == "active")
+        | {id, auteur: .createdBy, commentaire: .comment, debut: .startsAt, fin: .endsAt,
+           filtres: [.matchers[] | "\(.name)\(if .isEqual == false then "!" else "" end)\(if .isRegex then "=~" else "=" end)\(.value)"]}]
+        | sort_by(.debut),
+       alertes_actives: ([$a[] | .labels.alertname] | group_by(.) | map({alerte: .[0], n: length}))}'

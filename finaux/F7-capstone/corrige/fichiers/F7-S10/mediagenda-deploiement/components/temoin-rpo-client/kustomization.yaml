@@ -1,0 +1,9 @@
+# mediagenda/deploiement — components/temoin-rpo-client (F7-S10, PLAT-3710)
+# Témoin de RPO d'une instance de client, sur le modèle du témoin du F5 (cabinet technique PRA-TEMOIN),
+# mais écrit DIRECTEMENT dans la base (l'API du client exige un jeton : le témoin mesure la réplication
+# des données, pas l'API). Inclus par overlays/clients/<client>-prod (actif) et
+# overlays/clients/<client>-prod-par2 (suspendu : le site passif n'écrit pas).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - cronjob.yaml

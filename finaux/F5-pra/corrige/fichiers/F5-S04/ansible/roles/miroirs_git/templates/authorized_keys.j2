@@ -1,0 +1,10 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle miroirs_git).') }}
+# Compte miroir de adm02 (F5-S04). Shell : git-shell. « restrict » : ni redirection, ni terminal.
+# --- Écriture : un miroir GitLab par clé ---
+{% for c in miroirs_git_cles_ecriture %}
+restrict {{ c.cle }} miroir-gitlab:{{ c.projet }}
+{% endfor %}
+# --- Lecture seule (commande forcée) ---
+{% for c in miroirs_git_cles_lecture %}
+restrict,command="/usr/local/bin/miroir-lecture" {{ c.cle }} lecture:{{ c.nom }}
+{% endfor %}

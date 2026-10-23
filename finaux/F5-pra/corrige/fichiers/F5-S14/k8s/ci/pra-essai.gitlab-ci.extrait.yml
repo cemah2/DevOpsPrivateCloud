@@ -1,0 +1,30 @@
+# plateforme/k8s — EXTRAIT de .gitlab-ci.yml (F5-S14, PLAT-3538) : job du test de reprise trimestriel.
+# Ajouter le stage « pra » à la liste des stages du projet. Le job ne tourne que :
+#   - par le pipeline planifié « PRA — essai de reprise trimestriel » (variable PRA_ESSAI=1 posée sur la
+#     planification ; cron « 17 6 2 1,4,7,10 * », fuseau Europe/Paris, branche main protégée) ;
+#   - ou à la main, depuis l'interface (« Run pipeline » avec PRA_ESSAI=1).
+# Runner protégé (étiquette « protege », M19-E24) : seules les références protégées y accèdent, et les
+# variables protégées (identifiants du test) ne sont exposées qu'à elles.
+# Flux à ouvrir pour les pods de ci-jobs-protege (politique réseau et matrice des flux) : API de k8s-par2
+# (k8s-api.par2.medisphere.internal:6443), dns01 et dns03 (53), reg02 (443).
+# Image : l'image d'outils de la CI de plateforme/k8s (kubectl, jq, dig, curl), par son empreinte.
+pra:essai-reprise:
+  stage: pra
+  image: $IMAGE_OUTILS_K8S
+  tags: [protege]
+  rules:
+    - if: '$PRA_ESSAI == "1" && ($CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_REF_PROTECTED == "true"'
+  variables:
+    SERVEUR_SOURCE: mediagenda-db-prod-pra1
+    STOCKAGE: local-path
+    SEUIL_DUREE_S: "1800"
+    SEUIL_RPO_S: "900"
+  # KUBECONFIG (fichier), S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, CA_FICHIER (fichier), REG02_USER,
+  # REG02_PASSWORD, IMAGE_PROD : variables CI/CD du projet, protégées (et masquées pour les secrets).
+  script:
+    - outils/pra/essai-reprise.sh
+  timeout: 45m
+  artifacts:
+    when: always
+    paths: [resultat-essai.json]
+    expire_in: 400 days

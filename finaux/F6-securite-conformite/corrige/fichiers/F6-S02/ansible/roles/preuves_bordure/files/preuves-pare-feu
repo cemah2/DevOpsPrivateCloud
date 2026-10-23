@@ -1,0 +1,19 @@
+#!/bin/sh
+# preuves-pare-feu (rôle preuves_bordure, F6-S02) — LECTURE SEULE : empreinte de la configuration
+# persistée, règles actives (compteurs neutralisés pour une sortie stable), et écart entre les deux.
+set -eu
+echo "## configuration persistée"
+sha256sum /etc/nftables.conf
+echo "## règles actives"
+nft list ruleset | sed -E 's/counter packets [0-9]+ bytes [0-9]+/counter/'
+echo "## écart (règles actives absentes de la configuration persistée)"
+# On recharge la configuration dans un espace de noms réseau jetable pour comparer à l'identique.
+# Si « unshare » n'est pas permis, la section reste vide et le dit.
+if tmp="$(mktemp -d)" && unshare -n sh -c "nft -f /etc/nftables.conf && nft list ruleset" >"$tmp/persiste" 2>/dev/null; then
+  nft list ruleset | sed -E 's/counter packets [0-9]+ bytes [0-9]+/counter/' >"$tmp/actif"
+  sed -E 's/counter packets [0-9]+ bytes [0-9]+/counter/' "$tmp/persiste" >"$tmp/persiste.n"
+  diff "$tmp/persiste.n" "$tmp/actif" || true
+else
+  echo "(comparaison impossible sur cet hôte)"
+fi
+rm -rf "${tmp:-/nonexistent}"

@@ -1,0 +1,22 @@
+---
+# host_vars/bao-par2/openbao.yml — OpenBao de SECOURS de PAR2 (F5-S05, RB-355). Même rôle « openbao »
+# que vault01-03 (M25) et que bao-restauration (M25-E26) : nœud unique, pas de retry_join, pas de
+# keepalived. Il est INSTALLÉ et ARRÊTÉ en veille (rien dans /var/lib/openbao) ; en PRA, il est initialisé
+# puis reçoit le dernier instantané de la grappe (bao operator raft snapshot restore -force).
+# Descellement : transit vers kms01 RESTAURÉ (3501, 10.20.20.24), même clé autodescellement-par1 ; le
+# certificat de kms01 restauré porte le nom kms01.par1.medisphere.internal (sauvegarde PBS).
+openbao_version: "2.7.1"     # celle de la grappe au moment de l'instantané (montée en même temps qu'elle)
+openbao_sha256: "<SHA256-DU-PAQUET-2.7.1>"
+openbao_nom_grappe: bao-par2
+openbao_nom_service: "bao-par2.par2.medisphere.internal"
+openbao_raft_rejoindre: []
+openbao_seal_transit: true
+openbao_seal_transit_adresse: https://10.20.20.24:8200
+openbao_seal_transit_nom_tls: kms01.par1.medisphere.internal
+# Jeton PÉRIODIQUE (168 h) de la politique kms-autodescellement, LE MÊME que vault01-03 (Vault « critique »,
+# M25) : il existe dans la sauvegarde de kms01 et reste valable 168 h après son dernier renouvellement,
+# c'est-à-dire ≈ 7 jours après la sauvegarde PBS restaurée. Au-delà : jeton neuf créé sur kms01 restauré
+# avec un jeton racine régénéré (parts Shamir), RB-355 §5.
+openbao_seal_transit_jeton: "{{ vault_openbao_kms_jeton }}"
+# Pas de redémarrage automatique : le service reste ARRÊTÉ hors PRA (veille), démarré par RB-355.
+openbao_redemarrer: false

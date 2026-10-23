@@ -1,0 +1,5 @@
+# Copier en terraform.tfvars (non versionné si tu y mets autre chose que la clé publique).
+cle_ssh_admin = "ssh-ed25519 AAAA… admin-par2-bris-de-glace"
+# Amorçage (S03) : absentes = ["reg02", "k8s-par2-n01", "bao-par2"] ; S04 retire reg02, S05 bao-par2,
+# S06 k8s-par2-n01 ; état final : absentes = [].
+absentes = []

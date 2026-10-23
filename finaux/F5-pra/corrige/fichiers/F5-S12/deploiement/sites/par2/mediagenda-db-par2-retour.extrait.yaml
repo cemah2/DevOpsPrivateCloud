@@ -1,0 +1,33 @@
+# Fichier de site de PAR2 (miroir de mediagenda/deploiement sur adm02, lu par Argo CD de k8s-par2) :
+# EXTRAIT de la spécification du Cluster « mediagenda-db-par2 » pendant le retour (F5-S12, RB-351 §C3, D2).
+# L'emplacement exact est celui de ton fichier de site de S06 ; seules ces sections changent.
+#
+# Pendant le PRA (S09), PAR2 était primaire : replica.primary: mediagenda-db-par2 (promotion SANS jeton).
+#
+# C3 — RÉTROGRADATION de PAR2 : il suffit de désigner PAR1 comme primaire. PAR2 cesse d'écrire, archive
+# son dernier segment (« .partial ») dans cnpg-k8s-par2 et publie le jeton dans .status.demotionToken.
+# Dans le même commit, la source « mediagenda-db » lit la NOUVELLE archive de PAR1 (serverName
+# mediagenda-db-prod-pra1, copiée de s3-01 vers s3-02 par filer.sync) : c'est là que PAR2, devenu
+# réplique, trouvera les WAL de la nouvelle ligne temporelle de PAR1 après la promotion.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mediagenda-db-par2
+  namespace: mediagenda-prod
+spec:
+  replica:
+    primary: mediagenda-db
+    source: mediagenda-db
+  externalClusters:
+    - name: mediagenda-db
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3-par1           # ObjectStore de PAR2 qui lit la copie de cnpg-k8s-par1 (S06)
+          serverName: mediagenda-db-prod-pra1      # était mediagenda-db-prod-day0
+    - name: mediagenda-db-par2
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: cnpg-s3-par2           # ObjectStore de PAR2 qui écrit cnpg-k8s-par2 (S06)
+          serverName: mediagenda-db-par2

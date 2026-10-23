@@ -1,0 +1,13 @@
+# amorcage/backend-local.tf.exemple — AMORÇAGE de envs/par2 (RB-353 §5). NE JAMAIS COMMITER la copie.
+#   cp amorcage/backend-local.tf.exemple backend_override.tf     (« *_override.tf » est dans .gitignore)
+#   tofu init -reconfigure
+#   tofu apply -var 'absentes=["reg02","k8s-par2-n01","bao-par2"]'
+#   … Ansible : s3-02 (compartiment tofu-par2, identité tofu-par2) …
+#   rm backend_override.tf && tofu init -migrate-state      (répond « yes » : l'état part sur s3-02)
+#   shred -u terraform.tfstate terraform.tfstate.backup     (l'état local contient des valeurs sensibles)
+# Un fichier « _override » remplace le bloc backend de versions.tf (fusion des fichiers override d'OpenTofu).
+terraform {
+  backend "local" {
+    path = "terraform.tfstate"
+  }
+}

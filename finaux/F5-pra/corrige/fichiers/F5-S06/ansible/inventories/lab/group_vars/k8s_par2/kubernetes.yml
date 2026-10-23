@@ -1,0 +1,28 @@
+---
+# group_vars/k8s_par2/kubernetes.yml — faits du cluster de SECOURS k8s-par2 (F5-S06). Même structure et
+# mêmes rôles que group_vars/k8s_par1/kubernetes.yml (containerd, k8s_noeud, k8s_plan_controle) :
+# seules les valeurs du site changent. Versions : celles de k8s-par1 (montées ensemble, F4).
+k8s_cluster_nom: k8s-par2
+k8s_version: "1.36.5"
+k8s_paquet_revision: "1.1"
+k8s_image_pause: registry.k8s.io/pause:3.10.2
+k8s_socket_cri: unix:///run/containerd/containerd.sock
+
+# Nœud unique : pas de VIP ni de HAProxy ; le point d'accès est le nom du nœud (CNAME k8s-api.par2).
+# k8s_api_vip absent : le rôle k8s_plan_controle n'installe keepalived/HAProxy que s'il est défini
+# (à vérifier dans TON rôle : sinon, variable k8s_api_ha: false à ajouter au rôle, rétrocompatible).
+k8s_api_nom: k8s-api.par2.medisphere.internal
+k8s_api_port: 6443
+k8s_apiserver_port: 6443
+
+# Mêmes réseaux internes que k8s-par1 : les deux clusters ne se parlent jamais directement.
+k8s_reseau_pods: 10.240.0.0/16
+k8s_reseau_services: 10.96.0.0/16
+k8s_domaine_cluster: cluster.local
+k8s_interface: eth0
+
+# Plan de contrôle SANS taint : il porte les charges (nœud unique).
+k8s_plan_controle_sans_taint: true
+
+k8s_noeuds:
+  k8s-par2-n01: {ip: 10.20.20.50, role: plan-controle}

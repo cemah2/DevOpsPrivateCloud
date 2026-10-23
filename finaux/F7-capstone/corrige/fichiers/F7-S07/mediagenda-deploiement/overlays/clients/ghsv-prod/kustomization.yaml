@@ -1,0 +1,152 @@
+# mediagenda/deploiement — overlays/clients/ghsv-prod/kustomization.yaml (F7-S07, PLAT-3707)
+# Instance de MédiAgenda du client GHSV, production de démonstration (données fictives, traitée comme
+# une production). Livrée par l'Application ghsv-prod (ApplicationSet client-ghsv rendu par
+# plateforme/equipes, synchronisation MANUELLE, fenêtre de la maison).
+#
+# Même base et mêmes components que l'overlay prod de MédiAgenda, sauf :
+#   - « client-donnees » remplace la base gérée hors du dépôt : base CNPG PROPRE au client
+#     (mediagenda-db dans ghsv-prod : même nom que partout, donc mêmes Secrets mediagenda-db-app/-ca
+#     attendus par la base et par le Job de migrations), archivage dans un compartiment PROPRE
+#     (cnpg-ghsv), volume chiffré ;
+#   - pas de component « identifiants-dynamiques » (moteur db-mediagenda d'OpenBao : un Service
+#     LoadBalancer et une adresse 10.10.41.x par base, comme F2-S07) dans la preuve de concept : le
+#     propriétaire CNPG sert à l'API, écart écrit dans locataire-ghsv.md (cible : moteur db-ghsv) ;
+#   - « client » : marque blanche, publication des agents (OAuth2 Proxy, F7-S08), cloison réseau.
+# L'espace, son quota, son LimitRange et son SecretStore viennent de plateforme/k8s (rendu de
+# plateforme/equipes) : jamais ici.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ghsv-prod
+resources:
+  - ../../../base
+  - livraison.yaml
+labels:
+  - pairs:
+      medisphere.internal/environnement: prod
+      medisphere.internal/client: ghsv
+    includeSelectors: false
+    includeTemplates: true
+configMapGenerator:
+  - name: mediagenda-parametres
+    behavior: merge
+    envs:
+      - parametres.env
+components:
+  - ../../../components/client-donnees
+  - ../../../components/haute-disponibilite
+  - ../../../components/migrations
+  # Racine MédiSphère (ConfigMap racine-medisphere, M27-E07) : Valkey TLS, mandataires OAuth2 Proxy.
+  - ../../../components/racine-medisphere
+  - ../../../components/valkey
+  - ../../../components/canary
+  - ../../../components/autoscaling
+  - ../../../components/supervision
+  - ../../../components/client
+  # Témoin de RPO du client (F7-S10, fichiers/F7-S10/).
+  - ../../../components/temoin-rpo-client
+  # En dernier (règle du M17-E09) : version et nom publié viennent de livraison.yaml.
+  - ../../../components/livraison
+patches:
+  # Promotion humaine en production (comme overlays/prod, M20-E16 / M28-E02).
+  - target:
+      group: argoproj.io
+      kind: Rollout
+      name: mediagenda
+    patch: |-
+      - op: add
+        path: /spec/strategy/canary/steps/-
+        value:
+          pause: {}
+  # Budget du client (quota ghsv-prod : 16 pods) : 2 à 4 répliques de l'API.
+  - target:
+      group: autoscaling
+      kind: HorizontalPodAutoscaler
+      name: mediagenda
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 4
+  # Deux instances PostgreSQL en production (une seule en recette).
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      - op: replace
+        path: /spec/instances
+        value: 2
+  # Nom publié des agents (le component « client » le rend avec une valeur de recette).
+  - target:
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mediagenda-agents
+    patch: |-
+      - op: replace
+        path: /spec/hostnames
+        value: ["ghsv-agents.apps.par1.medisphere.internal"]
+  - target:
+      kind: Deployment
+      name: oauth2-proxy-agents
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: https://ghsv-agents.apps.par1.medisphere.internal/oauth2/callback
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      name: oauth2-proxy-agents
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: ghsv/prod/oauth2-proxy-agents
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: ghsv/prod/oauth2-proxy-agents
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: ghsv/prod/oauth2-proxy-agents
+  # Données du client : nom de serveur d'archive et chemin kv propres à l'environnement.
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: mediagenda-db
+    patch: |-
+      - op: replace
+        path: /spec/plugins/0/parameters/serverName
+        value: mediagenda-db-prod
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      name: cnpg-ghsv-s3
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: ghsv/prod/cnpg-s3
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: ghsv/prod/cnpg-s3
+  # Mandataire du DPI (F7-S09) : chemin kv et adresse de rappel de production.
+  - target:
+      group: external-secrets.io
+      kind: ExternalSecret
+      name: oauth2-proxy-dpi
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: ghsv/prod/oauth2-proxy-dpi
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: ghsv/prod/oauth2-proxy-dpi
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: ghsv/prod/oauth2-proxy-dpi
+  - target:
+      kind: Deployment
+      name: oauth2-proxy-dpi
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: https://ghsv.apps.par1.medisphere.internal/oauth2/callback

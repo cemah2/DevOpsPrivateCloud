@@ -1,0 +1,79 @@
+# mediagenda/deploiement — components/client/reseau.yaml (F7-S08, S09)
+# Cloison de l'instance d'un client (Cilium, comme le reste de la plateforme : la Gateway arrive avec
+# l'identité réservée « ingress », qu'une NetworkPolicy standard ne sait pas désigner).
+#   Gateway ──► mandataires (4180) ──► API (8000)
+# L'API ne reçoit plus rien de la Gateway en direct (politique du chart retirée par le component).
+# Les autres politiques de l'espace (base, cache, supervision, cloison du locataire) restent.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mandataires-depuis-gateway
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+  ingress:
+    - fromEntities: [ingress]
+      toPorts:
+        - ports: [{port: "4180", protocol: TCP}]
+---
+# Sorties des mandataires : DNS, Keycloak (VIP de lb01/lb02 : découverte OIDC, jetons, clés), l'API.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mandataires-sorties
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+  egress:
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s-app: kube-dns
+      toPorts:
+        - ports: [{port: "53", protocol: ANY}]
+    - toCIDR: [10.10.70.200/32]
+      toPorts:
+        - ports: [{port: "443", protocol: TCP}]
+    - toEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: mediagenda
+            app.kubernetes.io/component: api
+      toPorts:
+        - ports: [{port: "8000", protocol: TCP}]
+---
+# Entrée de l'API : les deux mandataires seulement (les sondes du kubelet ne passent pas par Cilium ;
+# la collecte de Prometheus a sa propre politique, component supervision).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mediagenda-depuis-mandataires
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mediagenda
+      app.kubernetes.io/component: api
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: oauth2-proxy
+      toPorts:
+        - ports: [{port: "8000", protocol: TCP}]
+---
+# Collecte des métriques des mandataires par Prometheus (espace supervision).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mandataires-depuis-supervision
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: oauth2-proxy
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: supervision
+            app.kubernetes.io/name: prometheus
+      toPorts:
+        - ports: [{port: "44180", protocol: TCP}]

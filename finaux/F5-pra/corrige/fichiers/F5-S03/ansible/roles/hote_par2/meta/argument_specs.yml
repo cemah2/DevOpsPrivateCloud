@@ -1,0 +1,24 @@
+---
+argument_specs:
+  main:
+    short_description: hp01 hyperviseur de PAR2 à côté de PBS (F5-S03)
+    options:
+      hote_par2_lan_maison:
+        type: str
+        required: true
+        description: Réseau du LAN maison (interdit à PAR2 INFRA).
+      hote_par2_wg1_cle_privee:
+        type: str
+        required: true
+        no_log: true
+        description: Clé privée WireGuard de wg1 (Ansible Vault « critique »).
+      hote_par2_wg1_pairs:
+        type: list
+        elements: dict
+        required: true
+        description: Pairs du VPN de secours (nom, cle_publique, allowed_ips).
+      hote_par2_ntp_sources:
+        type: list
+        elements: dict
+        required: true
+        description: Sources de temps de hp01 (au moins une hors de PAR1).

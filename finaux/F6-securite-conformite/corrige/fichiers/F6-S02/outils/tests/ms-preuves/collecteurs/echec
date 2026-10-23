@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Collecteur de test : identité absente.
+echo "identité ou adresse absente : KUBECONFIG" >&2
+exit 1

@@ -1,0 +1,14 @@
+# mediagenda/deploiement — components/client-donnees/kustomization.yaml (F7-S07, PLAT-3707)
+# Données d'une instance de MédiAgenda hébergée pour un CLIENT : base CNPG propre au client, archivée
+# dans un compartiment propre au client. Le même nom de grappe que partout (mediagenda-db) garde
+# valables la base (Secret mediagenda-db-app), le Job de migrations (mediagenda-db-rw, mediagenda-db-ca)
+# et les politiques réseau du chart ; l'espace (ghsv-*) fait la séparation.
+# Le nom du compartiment et du chemin kv sont propres au client : l'overlay les fixe (patches plus bas
+# dans ce component pour le GHSV — un second client copierait ce component, ou le paramétrerait par
+# « replacements » depuis une ConfigMap locale, comme « livraison »).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - mediagenda-db.yaml
+  - sauvegarde.yaml
+  - externalsecret-s3.yaml

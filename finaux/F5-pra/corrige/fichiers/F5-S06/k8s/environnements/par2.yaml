@@ -1,0 +1,18 @@
+# Valeurs de l'environnement par2 (cluster de SECOURS k8s-par2, F5-S06), lues dans les gabarits de
+# releases/. Même clés que environnements/par1.yaml : une différence de site = une valeur ici.
+cluster: k8s-par2
+site: par2
+domaineApps: apps.par2.medisphere.internal
+apiServeur:
+  hote: k8s-api.par2.medisphere.internal
+  port: 6443
+# Réseau : annonces L2 (pas de routeur BGP à PAR2), pool lb-par2.
+cilium:
+  valeursSite: ../composants/cilium/values-par2.yaml
+# Composants absents à PAR2 (mémoire, ADR-0350) : Velero en lecture seule seulement, pas de ceph-csi,
+# pas d'ExternalDNS (il écrirait dans dns01, à PAR1), pas de CI ni d'observabilité.
+composants:
+  cephCsi: false
+  externalDns: false
+  velero: lecture
+  stockageLocal: true

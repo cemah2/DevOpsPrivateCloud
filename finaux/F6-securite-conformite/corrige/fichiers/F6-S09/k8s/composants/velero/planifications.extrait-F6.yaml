@@ -1,0 +1,63 @@
+# plateforme/k8s — composants/velero/planifications.extrait-F6.yaml (F6-S09, SEC-3609, ferme ECA-3603)
+#
+# À FUSIONNER dans composants/velero/ (le fichier des planifications existe depuis le M16-E21). Ce qui
+# change au F6 : le dépôt de sauvegarde est CHIFFRÉ côté serveur (Kopia), la phrase de passe vient
+# d'OpenBao par ESO. Le stockage objet (velero-k8s-par1 sur s3-01) ne voit que du chiffré.
+#
+# ⚠️ Le champ du secret de dépôt dépend de Velero 1.18 : vérifier sur le lab (Points non testés). La
+# forme ci-dessous suit la convention « repo maintenance / backup repository config » de Velero + Kopia.
+---
+# Secret de la phrase de passe du dépôt Kopia, rempli par ESO depuis OpenBao (kv/velero/depot/phrase).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: velero-repo-credentials
+  namespace: velero
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: openbao
+    kind: ClusterSecretStore
+  target:
+    name: velero-repo-credentials
+    creationPolicy: Owner
+  data:
+    - secretKey: repository-password
+      remoteRef:
+        key: kv/data/velero/depot
+        property: phrase
+---
+# Configuration du dépôt : chiffrement activé, phrase lue dans le secret ci-dessus.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-repo-config
+  namespace: velero
+data:
+  # Velero lit la phrase de passe du dépôt Kopia dans le secret velero-repo-credentials
+  # (clé repository-password). Sans elle, le dépôt est en clair (état d'avant ECA-3603).
+  repository-maintenance-job: |
+    requests:
+      cpu: 100m
+      memory: 128Mi
+---
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: medidoc-dev-nuit
+  namespace: velero
+  labels:
+    medisphere.internal/composant: sauvegarde
+spec:
+  schedule: "CRON_TZ=Europe/Paris 0 3 * * *"
+  template:
+    includedNamespaces:
+      - medidoc-dev
+    snapshotVolumes: true
+    snapshotMoveData: true          # déplacement de données par Kopia -> dépôt chiffré
+    defaultVolumesToFsBackup: false
+    labelSelector:
+      matchExpressions:
+        - key: cnpg.io/cluster
+          operator: DoesNotExist
+    ttl: 336h0m0s

@@ -1,0 +1,40 @@
+# host_vars/mon01/supervision_temoin.yml (plateforme/ansible) — EXTRAIT F7-S10 (PLAT-3710) : groupes
+# AJOUTÉS à supervision_temoin_sondes. Ce sont les sondes « vues du client » du GHSV : leur part de
+# succès est l'indicateur de disponibilité du contrat (ENF-03, EXP-07), recopié par la fédération dans
+# le cluster (job blackbox), lu par Pyrra (slo/ghsv-disponibilite-sonde.yaml) et par le rapport mensuel
+# (ms-rapport-client). Le GHSV peut installer ses propres sondes (R-09) : les nôtres sont décrites
+# dans engagements.md pour que les deux mesures se comparent.
+  - nom: client-ghsv
+    module: https_2xx
+    etiquettes: {client: ghsv, equipe: ghsv, service: ghsv-api, environnement: prod}
+    cibles:
+      # Chemin complet : Gateway → oauth2-proxy-dpi (route anonyme /pret) → API → base et cache.
+      - https://ghsv.apps.par1.medisphere.internal/pret
+  - nom: client-ghsv-operation
+    module: https_2xx_ghsv_api
+    etiquettes: {client: ghsv, equipe: ghsv, service: ghsv-api, environnement: prod}
+    cibles:
+      # Une VRAIE opération du contrat, authentifiée comme le DPI (jeton « client credentials » du
+      # client ghsv-sonde, portée rdv:lecture seulement) : prouve aussi Keycloak et la vérification
+      # du jeton. Praticien et date fictifs : aucune donnée de patient lue.
+      - https://ghsv.apps.par1.medisphere.internal/api/v1/creneaux?date=2030-01-07&praticien=SONDE-MON01
+
+# Module blackbox ajouté à supervision_temoin_modules (fichier blackbox.yml du rôle, M21) : la
+# configuration HTTP de Prometheus sait obtenir elle-même un jeton OAuth 2.0 « client credentials »
+# (bloc oauth2 de http_client_config). Le secret du client ghsv-sonde vient de l'Ansible Vault
+# critique (puis OpenBao, M25), jamais du dépôt ; fichier lisible par blackbox seulement.
+supervision_temoin_modules_supplementaires:
+  https_2xx_ghsv_api:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp: ['"libres"']
+      tls_config:
+        ca_file: /etc/ssl/certs/ca-certificates.crt
+      oauth2:
+        client_id: ghsv-sonde
+        client_secret_file: /etc/prometheus/blackbox/ghsv-sonde.secret
+        token_url: https://sso.par1.medisphere.internal/realms/medisphere/protocol/openid-connect/token
+        scopes: [rdv:lecture]

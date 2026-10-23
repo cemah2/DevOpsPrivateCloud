@@ -1,0 +1,27 @@
+---
+# host_vars/dns03/powerdns_recursor.yml — récurseur de PAR2 (F5-S03). Les zones internes sont relayées à
+# l'autoritaire LOCAL d'abord (comme dns02, M06-E24) : en PRA, dns01 a disparu, et la délégation de
+# par1 dans la zone parente (NS dns01/dns02) n'est jamais suivie (zones relayées sans récursion).
+powerdns_recursor_ecoute:
+  - 127.0.0.1
+  - 10.20.20.11
+powerdns_recursor_autorises:
+  - 127.0.0.0/8
+  - 10.20.0.0/16      # PAR2
+  - 10.255.3.0/24     # VPN de secours
+  - 10.10.0.0/16      # PAR1 (contrôles depuis adm01)
+dns_relais_internes:
+  - 127.0.0.1:5300
+  - 10.10.20.10:5300
+powerdns_recursor_zones_relayees:
+  - {zone: medisphere.internal, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: par1.medisphere.internal, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: par2.medisphere.internal, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: 10.10.in-addr.arpa, serveurs: "{{ dns_relais_internes }}"}
+  - {zone: 20.10.in-addr.arpa, serveurs: "{{ dns_relais_internes }}"}
+# Récursion vers Internet : directe, par le NAT de hp01 (inet par2), pas par dns01.
+powerdns_recursor_amont: []
+# DNSSEC : même politique et même ancre positive de par1 que dns01/dns02 (variables de
+# group_vars/role_dns/ du M06-E26, à reprendre ici). ⚠️ En PRA de plus de deux semaines, les
+# signatures de par1 expirent (aucune clé à PAR2) : RB-350, annexe « PRA long ».
+powerdns_recursor_dnssec: validate

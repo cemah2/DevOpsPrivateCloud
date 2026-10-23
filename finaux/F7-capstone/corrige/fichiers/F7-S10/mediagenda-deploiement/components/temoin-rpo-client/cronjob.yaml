@@ -1,0 +1,64 @@
+# mediagenda/deploiement — components/temoin-rpo-client/cronjob.yaml (F7-S10, PLAT-3710)
+# Chaque minute, un rendez-vous du praticien technique « PRA-TEMOIN », début = minute courante (unique
+# par minute : l'index (praticien, debut) refuse un doublon), motif = horodatage UTC d'écriture.
+# RPO mesuré lors d'un essai ou d'un PRA = dernier témoin écrit à PAR1 − dernier témoin retrouvé à PAR2.
+# Les témoins de plus de 7 jours sont supprimés par le même Job. Données techniques, sans patient : elles
+# figurent dans l'export de réversibilité (praticien PRA-TEMOIN), ce que dit le compte rendu d'essai.
+# Réseau : la politique de la base (component client-donnees / politiques du chart) doit accepter les
+# pods « app.kubernetes.io/name: temoin-rpo » sur 5432, comme le Job de migrations.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: temoin-rpo
+  labels:
+    app.kubernetes.io/name: temoin-rpo
+    app.kubernetes.io/part-of: mediagenda
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  suspend: false
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 50
+      ttlSecondsAfterFinished: 300
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: temoin-rpo
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          priorityClassName: medisphere-standard
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 26
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: temoin
+              # Image PostgreSQL de la grappe (psql), par empreinte : même valeur que mediagenda-db.
+              image: registry.par1.medisphere.internal/ghcr/cloudnative-pg/postgresql:18.6-minimal-trixie@sha256:<EMPREINTE-POSTGRESQL>
+              command: ["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1"]
+              args:
+                - "$(MEDIAGENDA_DB_URL)"
+                - -c
+                - >-
+                  INSERT INTO rendez_vous (patient, praticien, debut, duree_minutes, motif, canal_rappel, contact_rappel)
+                  VALUES ('Témoin PRA', 'PRA-TEMOIN', date_trunc('minute', now()), 5,
+                  to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'aucun', NULL)
+                  ON CONFLICT DO NOTHING;
+                - -c
+                - DELETE FROM rendez_vous WHERE praticien = 'PRA-TEMOIN' AND debut < now() - interval '7 days';
+              env:
+                - name: MEDIAGENDA_DB_URL
+                  valueFrom:
+                    secretKeyRef: {name: mediagenda-db-app, key: uri}
+              resources:
+                requests: {cpu: 10m, memory: 16Mi}
+                limits: {memory: 64Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}

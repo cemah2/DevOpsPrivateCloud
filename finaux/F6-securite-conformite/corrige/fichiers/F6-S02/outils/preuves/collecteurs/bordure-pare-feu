@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+# bordure-pare-feu — P-RES-01 : règles nftables ACTIVES des deux passerelles et empreinte de la
+# configuration persistée (/etc/nftables.conf, rendue par le rôle de la bordure). Un écart entre les
+# deux (règle posée à chaud) se voit d'un lot à l'autre, et dans la preuve elle-même (section « écart »).
+# Identité : compte SSH « preuves » des passerelles (rôle preuves_bordure, F6-S02) : commande FORCÉE
+# (preuves-pare-feu, lecture seule, par sudo limité), connexion acceptée depuis runner01 seulement.
+# shellcheck source=_commun.sh
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_commun.sh"
+PASSERELLES="${MS_PREUVES_PASSERELLES:-gw01 gw02}"
+CLE_SSH="${MS_PREUVES_SSH_CLE:-$HOME/.ssh/id_preuves_bordure}"
+code=0
+for gw in $PASSERELLES; do
+  echo "### $gw — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  # La commande demandée est ignorée par le serveur (command= dans authorized_keys) : on n'en passe pas.
+  if ! ssh -n -T -o BatchMode=yes -o ConnectTimeout=10 -i "$CLE_SSH" "preuves@$gw"; then
+    echo "!!! $gw injoignable ou commande refusée" >&2
+    code=1
+  fi
+done
+exit "$code"

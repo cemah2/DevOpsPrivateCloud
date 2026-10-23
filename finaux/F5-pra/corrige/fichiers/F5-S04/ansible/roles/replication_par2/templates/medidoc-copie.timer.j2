@@ -1,0 +1,11 @@
+# {{ ms_gere_par | default('Fichier géré par Ansible (rôle replication_par2).') }}
+[Unit]
+Description=Copie de medidoc-documents toutes les 15 min (F5-S04)
+
+[Timer]
+OnCalendar={{ replication_par2_medidoc_calendrier }}
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

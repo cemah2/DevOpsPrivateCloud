@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Collecteur de test : preuve texte (règles fictives).
+printf 'table inet filter {\n  chain forward { policy drop; }\n}\n'

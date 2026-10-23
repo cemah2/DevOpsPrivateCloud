@@ -1,0 +1,16 @@
+---
+# host_vars/reg02/registre_travail.yml — reg02, registre de PAR2 (F5-S04). MÊME rôle que le registre
+# de travail du M12 (registre_travail : registry:3 par Docker Compose, TLS ACME, htpasswd) : pas de
+# nouveau code pour un registre en lecture.
+# ⚠️ Limite connue (rôle du M12) : AUCUN droit par dépôt, tout compte authentifié peut pousser. Le
+# filtrage se fait par le réseau (pare_feu_local : 443 ouvert seulement aux travailleurs de k8s-par1
+# pour la copie, à k8s-par2-n01 et adm02 pour la lecture) et par la séparation des comptes.
+# Mémoire : 0,5 Go (Docker + registry) : vérifie la consommation réelle après une semaine.
+registre_travail_nom: reg02.par2.medisphere.internal
+registre_travail_port: 443
+registre_travail_comptes:
+  copie: "{{ vault_reg02_mdp_copie }}"          # job cosign copy (runner protégé de k8s-par1)
+  lecture: "{{ vault_reg02_mdp_lecture }}"      # nœud de k8s-par2 (containerd), adm02
+  wb-checks: "{{ vault_reg02_mdp_wb_checks }}"  # vérifications du workbook (~/.config/workbook/reg02-checks.env)
+# Le ramasse-miettes ne doit jamais tourner pendant une copie : dimanche 4 h, la copie est horaire à :20.
+registre_travail_gc_calendrier: "Sun *-*-* 04:00:00"

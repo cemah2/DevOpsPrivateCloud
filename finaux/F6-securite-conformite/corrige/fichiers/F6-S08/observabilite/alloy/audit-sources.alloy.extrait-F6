@@ -1,0 +1,131 @@
+// plateforme/observabilite — alloy/audit-sources.alloy.extrait-F6 (F6-S08, SEC-3608)
+//
+// À FUSIONNER dans la configuration Alloy de chaque hôte concerné (conventions du M22 : une cible de
+// fichier par source, loki.process avec stage.timestamp et stage.tenant { value = "audit" }).
+// Ci-dessous les cibles AJOUTÉES par le F6 ; la cible Kubernetes (job="kubernetes-audit") existe déjà
+// (M22-E07). Chaque bloc va dans la configuration de l'hôte qui porte la source (vault01-03, idp01,
+// git01, pve01/pbs01, ipa01). Les horodatages viennent des champs natifs de chaque source ; à défaut,
+// l'heure de la ligne journald. Vérifier les chemins et formats exacts sur ta plateforme (Points non
+// testés).
+
+// --- OpenBao (vault01-03) : bao audit enable file file_path=/var/log/openbao/audit.log ---------------
+local.file_match "openbao_audit" {
+	path_targets = [{__path__ = "/var/log/openbao/audit.log", job = "openbao-audit", host = sys.env("HOSTNAME")}]
+}
+loki.source.file "openbao_audit" {
+	targets    = local.file_match.openbao_audit.targets
+	forward_to = [loki.process.openbao_audit.receiver]
+}
+loki.process "openbao_audit" {
+	// Format JSON d'OpenBao ; les valeurs sensibles sont déjà des HMAC (jamais en clair).
+	stage.json {
+		expressions = {"time" = "time", "type" = "type", "op" = "request.operation", "path" = "request.path"}
+	}
+	stage.timestamp {
+		source = "time"
+		format = "RFC3339Nano"
+	}
+	stage.structured_metadata {
+		values = {"op" = "", "path" = ""}
+	}
+	stage.tenant {
+		value = "audit"
+	}
+	forward_to = [loki.write.audit.receiver]
+}
+
+// --- Keycloak (idp01) : écouteur d'événements jboss-logging, événements admin + connexion ------------
+local.file_match "keycloak_audit" {
+	path_targets = [{__path__ = "/var/log/keycloak/events.log", job = "keycloak-audit", host = "idp01"}]
+}
+loki.source.file "keycloak_audit" {
+	targets    = local.file_match.keycloak_audit.targets
+	forward_to = [loki.process.keycloak_audit.receiver]
+}
+loki.process "keycloak_audit" {
+	stage.json {
+		expressions = {"ts" = "time", "type" = "type", "realm" = "realmName", "user" = "userId", "ip" = "ipAddress"}
+	}
+	stage.timestamp {
+		source   = "ts"
+		format   = "UnixMs"
+		fallback_formats = ["RFC3339Nano"]
+	}
+	stage.structured_metadata {
+		values = {"type" = "", "realm" = "", "user" = "", "ip" = ""}
+	}
+	stage.tenant {
+		value = "audit"
+	}
+	forward_to = [loki.write.audit.receiver]
+}
+
+// --- GitLab (git01) : audit_json.log de gitlab-rails -------------------------------------------------
+local.file_match "gitlab_audit" {
+	path_targets = [{__path__ = "/var/log/gitlab/gitlab-rails/audit_json.log", job = "gitlab-audit", host = "git01"}]
+}
+loki.source.file "gitlab_audit" {
+	targets    = local.file_match.gitlab_audit.targets
+	forward_to = [loki.process.gitlab_audit.receiver]
+}
+loki.process "gitlab_audit" {
+	stage.json {
+		expressions = {"ts" = "\"@timestamp\"", "auteur" = "author_name", "entite" = "entity_type", "action" = "custom_message"}
+	}
+	stage.timestamp {
+		source = "ts"
+		format = "RFC3339"
+	}
+	stage.structured_metadata {
+		values = {"auteur" = "", "entite" = "", "action" = ""}
+	}
+	stage.tenant {
+		value = "audit"
+	}
+	forward_to = [loki.write.audit.receiver]
+}
+
+// --- Proxmox (pve01, pbs01) : index des tâches + journald d'authentification -------------------------
+// Les tâches PVE sont indexées dans /var/log/pve/tasks/index ; les lignes d'authentification sont dans
+// journald (unité pveproxy / sshd). On lit l'index (une ligne par tâche : qui, quoi, résultat).
+local.file_match "proxmox_audit" {
+	path_targets = [{__path__ = "/var/log/pve/tasks/index", job = "proxmox-audit", host = sys.env("HOSTNAME")}]
+}
+loki.source.file "proxmox_audit" {
+	targets    = local.file_match.proxmox_audit.targets
+	forward_to = [loki.process.proxmox_audit.receiver]
+}
+loki.process "proxmox_audit" {
+	// Index PVE : « UPID:node:... <début-hex> <fin-hex> <statut> » ; on garde la ligne brute (l'UPID
+	// contient node, type de tâche, utilisateur). Le décodage fin se fait à la requête.
+	stage.tenant {
+		value = "audit"
+	}
+	forward_to = [loki.write.audit.receiver]
+}
+
+// --- FreeIPA (ipa01) : audit 389-ds + journal du KDC -------------------------------------------------
+local.file_match "freeipa_audit" {
+	path_targets = [
+		{__path__ = "/var/log/dirsrv/slapd-*/audit", job = "freeipa-audit", source = "ds", host = "ipa01"},
+		{__path__ = "/var/log/krb5kdc.log", job = "freeipa-audit", source = "kdc", host = "ipa01"},
+	]
+}
+loki.source.file "freeipa_audit" {
+	targets    = local.file_match.freeipa_audit.targets
+	forward_to = [loki.process.freeipa_audit.receiver]
+}
+loki.process "freeipa_audit" {
+	stage.tenant {
+		value = "audit"
+	}
+	forward_to = [loki.write.audit.receiver]
+}
+
+// --- Puits commun : écriture dans le locataire « audit » de Loki -------------------------------------
+loki.write "audit" {
+	endpoint {
+		url       = "http://loki.apps.par1.medisphere.internal:3100/loki/api/v1/push"
+		tenant_id = "audit"
+	}
+}

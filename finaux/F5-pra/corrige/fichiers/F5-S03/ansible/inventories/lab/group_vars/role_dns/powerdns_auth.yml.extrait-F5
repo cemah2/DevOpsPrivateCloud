@@ -1,0 +1,18 @@
+# group_vars/role_dns/powerdns_auth.yml — EXTRAIT (F5-S03, CHG-3503).
+# 1. Noms de service GLOBAUX dans la zone parente (générée par le rôle) : CNAME de TTL 60 s vers PAR1.
+#    En PRA, RB-350 (vague 5) les réécrit sur dns03 vers PAR2 ; au retour (RB-351), ce fichier fait foi.
+#    MédiDoc n'a pas d'espace de production dans le lab : son instance de référence est medidoc-recette.
+powerdns_auth_zones:
+  - nom: medisphere.internal
+    type: "{{ dns_type_zones }}"
+    enregistrements:
+      # … délégations et colle existantes (M06-E24), inchangées …
+      - {nom: mediagenda.medisphere.internal, type: CNAME, contenu: mediagenda.apps.par1.medisphere.internal., ttl: 60}
+      - {nom: medidoc.medisphere.internal, type: CNAME, contenu: medidoc-recette.apps.par1.medisphere.internal., ttl: 60}
+      - {nom: rdv.medisphere.internal, type: CNAME, contenu: rdv.par1.medisphere.internal., ttl: 60}
+  # … zones par1, par2, inverses : inchangées …
+
+# 2. host_vars/dns01/powerdns_auth.yml : dns03 reçoit les NOTIFY comme dns02.
+#    powerdns_auth_notifier:
+#      - 10.10.20.16:5300
+#      - 10.20.20.11:5300        # dns03 (PAR2), F5-S03

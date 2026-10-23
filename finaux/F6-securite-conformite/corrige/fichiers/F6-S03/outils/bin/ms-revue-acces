@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ms-revue-acces — revue des accès outillée, reproductible (F6-S03, SEC-3603 ; RB : docs/conformite/
+# revue-acces/README.md de plateforme/medisphere)
+#
+# Usage : ms-revue-acces [--json] [--declares FICHIER] [--ignorer SYSTÈME[,SYSTÈME…]]
+#
+# Relève, en LECTURE SEULE, les comptes et les droits de neuf systèmes et les confronte à la SOURCE DE
+# VÉRITÉ des personnes (l'annuaire FreeIPA : comptes actifs) et à la liste des comptes non personnels
+# DÉCLARÉS (revue-acces/comptes-declares.yaml : technique, bris de glace, banc de formation) :
+#   annuaire    personnes actives / désactivées ; désactivées encore membres de groupes ; principal
+#               Kerberos expiré sur un compte encore actif
+#   keycloak    utilisateurs du royaume medisphere (fédérés ou LOCAUX), activés
+#   gitlab      comptes actifs, administrateurs, externes
+#   proxmox     utilisateurs activés et jetons d'API de pve01
+#   kubernetes  sujets des liaisons RBAC (personnes et groupes oidc:, comptes de service à cluster-admin)
+#   openbao     rôles AppRole et rôles JWT (identités de machines)
+#   harbor      utilisateurs et robots
+#   argocd      comptes locaux activés et liaisons de groupes de la politique RBAC
+#   grafana     utilisateurs de l'organisation et comptes de service
+# Chaque compte reçoit un statut :
+#   personne       compte d'une personne ACTIVE de l'annuaire
+#   declare        compte non personnel déclaré (nature, propriétaire, justification dans le fichier)
+#   orphelin       compte d'une personne DÉSACTIVÉE ou ABSENTE de l'annuaire, encore actif ici
+#   a-justifier    compte inconnu (ni personne, ni déclaré)
+# Un système sans identité configurée est « NON-VERIFIE » (code 1), sauf s'il est cité dans --ignorer.
+#
+# Identités (lecture) : variables d'environnement (CI : OpenBao, kv/plateforme/preuves/lecture) ou
+# fichier MS_REVUE_ENV (défaut ~/.config/ms-outils/revue-acces.env, mode 600) :
+#   IPA_URL IPA_BASE IPA_BIND_DN IPA_BIND_PASSWORD · KEYCLOAK_URL KEYCLOAK_CLIENT_ID KEYCLOAK_CLIENT_SECRET
+#   GITLAB_URL GITLAB_TOKEN (read_api, administrateur) · PVE_API_URL PVE_TOKEN_ID PVE_TOKEN_SECRET [PVE_CACERT]
+#   KUBECONFIG (lecture des liaisons et des ConfigMaps d'argocd) · BAO_ADDR BAO_ROLE_ID BAO_SECRET_ID
+#   HARBOR_URL HARBOR_USER HARBOR_PASSWORD (robot système : lecture des utilisateurs et des robots)
+#   GRAFANA_URL GRAFANA_TOKEN (compte de service, lecture des utilisateurs de l'organisation)
+#
+# Sortie : Markdown (défaut, à coller dans docs/conformite/revue-acces/AAAA-MM.md) ou JSON (--json).
+# Codes retour : 0 aucun orphelin ni compte à justifier, 1 au moins un (ou un système non vérifié), 2 usage.
+# =============================================================================
+# shellcheck disable=SC2015  # « a X && a Y || { nv …; return 0; } » : voulu (une identité manque → non vérifié)
+set -euo pipefail
+
+MS_PROG=ms-revue-acces
+ICI="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+DECLARES="${MS_REVUE_DECLARES:-$ICI/../revue-acces/comptes-declares.yaml}"
+DELAI="${MS_REVUE_DELAI:-20}"
+IGNORER=","
+SYSTEMES=(annuaire keycloak gitlab proxmox kubernetes openbao harbor argocd grafana)
+
+usage() { sed -n 's/^# Usage : /Usage : /p' "${BASH_SOURCE[0]}" >&2; exit 2; }
+die() { printf '%s : %s\n' "$MS_PROG" "$1" >&2; exit "${2:-1}"; }
+a() { [[ -n "${!1:-}" ]]; }
+enc() { jq -rn --arg s "$1" '$s|@uri'; }
+get_jeton() { curl -sf --max-time "$DELAI" -H 'Accept: application/json' -K <(printf 'header = "%s %s"\n' "$3" "$2") "$1"; }
+get_basique() { curl -sf --max-time "$DELAI" -H 'Accept: application/json' -K <(printf 'user = "%s:%s"\n' "$2" "$3") "$1"; }
+
+# --- Résultats : une ligne JSON par compte, une par système non vérifié ---------------------------------
+COMPTES="$(mktemp)"
+trap 'rm -f -- "$COMPTES"' EXIT
+compte() { # compte SYSTÈME IDENTIFIANT TYPE(personne|machine|groupe) DROITS [ÉTAT]
+  jq -nc --arg s "$1" --arg c "$2" --arg t "$3" --arg d "$4" --arg e "${5:-actif}" \
+    '{systeme: $s, compte: $c, type: $t, droits: $d, etat: $e}' >>"$COMPTES"
+}
+declare -A NONVERIF=()
+nv() { NONVERIF[$1]="$2"; }
+
+# --- Collecte, système par système -------------------------------------------------------------------
+PERSONNES_ACTIVES=""     # identifiants actifs de l'annuaire, un par ligne
+PERSONNES_INACTIVES=""
+
+ldap() {
+  ldapsearch -LLL -o ldif-wrap=no -o nettimeout="$DELAI" -H "${IPA_URL:-ldaps://ipa01.par1.medisphere.internal}" \
+    -D "$IPA_BIND_DN" -y <(printf '%s' "$IPA_BIND_PASSWORD") "$@"
+}
+s_annuaire() {
+  a IPA_BIND_DN && a IPA_BIND_PASSWORD || { nv annuaire "identité de lecture absente (IPA_BIND_DN, IPA_BIND_PASSWORD)"; return 0; }
+  local base="${IPA_BASE:-dc=par1,dc=medisphere,dc=internal}" ldif uid lock exp groupes maintenant
+  ldif="$(ldap -b "cn=users,cn=accounts,$base" '(objectClass=person)' uid nsAccountLock krbPrincipalExpiration memberOf)" ||
+    { nv annuaire "recherche LDAP refusée"; return 0; }
+  maintenant="$(date -u +%Y%m%d%H%M%S)"
+  # Un bloc LDIF par compte (séparés par une ligne vide).
+  while IFS='|' read -r uid lock exp groupes; do
+    [[ -n "$uid" ]] || continue
+    if [[ "${lock,,}" == true ]]; then
+      PERSONNES_INACTIVES+="$uid"$'\n'
+      compte annuaire "$uid" personne "groupes: ${groupes:-aucun}" desactive
+    elif [[ -n "$exp" && "${exp:0:14}" < "$maintenant" ]]; then
+      PERSONNES_INACTIVES+="$uid"$'\n'
+      compte annuaire "$uid" personne "groupes: ${groupes:-aucun}" expire
+    else
+      PERSONNES_ACTIVES+="$uid"$'\n'
+      compte annuaire "$uid" personne "groupes: ${groupes:-aucun}"
+    fi
+  done < <(awk -v RS= -F'\n' '{ uid = lock = ech = g = ""
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^uid: /) uid = substr($i, 6)
+        else if (tolower($i) ~ /^nsaccountlock: /) lock = substr($i, 16)
+        else if (tolower($i) ~ /^krbprincipalexpiration: /) ech = substr($i, 25)
+        else if (tolower($i) ~ /^memberof: cn=/) { split(substr($i, 14), p, ","); if (p[1] != "ipausers") g = g (g ? "," : "") p[1] }
+      }
+      if (uid != "") printf "%s|%s|%s|%s\n", uid, lock, ech, g }' <<<"$ldif")
+}
+
+s_keycloak() {
+  a KEYCLOAK_CLIENT_ID && a KEYCLOAK_CLIENT_SECRET || { nv keycloak "client de lecture absent"; return 0; }
+  local kc="${KEYCLOAK_URL:-https://sso.par1.medisphere.internal}" j u
+  j="$(curl -sf --max-time "$DELAI" -K <(printf 'user = "%s:%s"\n' "$KEYCLOAK_CLIENT_ID" "$KEYCLOAK_CLIENT_SECRET") \
+    -d grant_type=client_credentials "$kc/realms/medisphere/protocol/openid-connect/token" | jq -r '.access_token // empty')" || j=""
+  [[ -n "$j" ]] || { nv keycloak "jeton refusé"; return 0; }
+  u="$(get_jeton "$kc/admin/realms/medisphere/users?max=2000&briefRepresentation=false" "$j" 'Authorization: Bearer')" ||
+    { nv keycloak "liste des utilisateurs refusée"; return 0; }
+  while IFS=$'\t' read -r nom type origine; do
+    compte keycloak "$nom" "$type" "$origine"
+  done < <(jq -r '.[] | select(.enabled == true)
+      | [.username, (if (.serviceAccountClientId // "") != "" or (.username | startswith("service-account-")) then "machine" else "personne" end),
+         (if .federationLink then "fédéré (annuaire)" else "LOCAL au royaume" end)] | @tsv' <<<"$u")
+}
+
+s_gitlab() {
+  a GITLAB_TOKEN || { nv gitlab "jeton absent"; return 0; }
+  local gl="${GITLAB_URL:-https://git01.par1.medisphere.internal}" p page
+  for ((p = 1; p <= 20; p++)); do
+    page="$(get_jeton "$gl/api/v4/users?active=true&per_page=100&page=$p" "$GITLAB_TOKEN" 'PRIVATE-TOKEN:')" ||
+      { nv gitlab "liste des utilisateurs refusée"; return 0; }
+    [[ "$(jq length <<<"$page")" -gt 0 ]] || break
+    while IFS=$'\t' read -r nom type droits; do
+      compte gitlab "$nom" "$type" "$droits"
+    done < <(jq -r '.[] | [.username, (if .bot then "machine" else "personne" end),
+        ([if .is_admin then "ADMINISTRATEUR" else empty end, if .external then "externe" else empty end,
+          "dernière activité \(.last_activity_on // "jamais")"] | join(", "))] | @tsv' <<<"$page")
+  done
+}
+
+s_proxmox() {
+  a PVE_API_URL && a PVE_TOKEN_ID && a PVE_TOKEN_SECRET || { nv proxmox "jeton d'API absent"; return 0; }
+  local u
+  u="$(curl -sf --max-time "$DELAI" ${PVE_CACERT:+--cacert "$PVE_CACERT"} \
+    -K <(printf 'header = "Authorization: PVEAPIToken=%s=%s"\n' "$PVE_TOKEN_ID" "$PVE_TOKEN_SECRET") \
+    "${PVE_API_URL%/}/api2/json/access/users?full=1" | jq '.data')" || { nv proxmox "API refusée"; return 0; }
+  while IFS=$'\t' read -r nom type droits; do
+    compte proxmox "$nom" "$type" "$droits"
+  done < <(jq -r '.[] | select((.enable // 1) == 1)
+      | [.userid, (if (.userid | test("@medisphere$")) then "personne" else "machine" end),
+         "groupes: \(.groups // "aucun"), jetons: \([.tokens[]?.tokenid] | join(",") | if . == "" then "aucun" else . end), expire: \(.expire // 0)"] | @tsv' <<<"$u")
+}
+
+s_kubernetes() {
+  a KUBECONFIG || { nv kubernetes "KUBECONFIG absent"; return 0; }
+  local j
+  j="$(kubectl --request-timeout="${DELAI}s" get clusterrolebindings,rolebindings -A -o json 2>/dev/null)" ||
+    { nv kubernetes "lecture des liaisons refusée"; return 0; }
+  while IFS=$'\t' read -r nom type droits; do
+    compte kubernetes "$nom" "$type" "$droits"
+  done < <(jq -r '[.items[] | . as $b | .subjects[]?
+      | select((.kind == "User" or .kind == "Group") and (.name | startswith("oidc:"))
+               or (.kind == "ServiceAccount" and $b.roleRef.name == "cluster-admin"))
+      | {n: (if .kind == "ServiceAccount" then "sa:\(.namespace)/\(.name)" else (.name | ltrimstr("oidc:")) end),
+         t: (if .kind == "User" then "personne" elif .kind == "Group" then "groupe" else "machine" end),
+         d: "\($b.roleRef.name) @ \($b.metadata.namespace // "cluster")"}]
+      | group_by(.n)[] | [.[0].n, .[0].t, ([.[].d] | unique | join("; "))] | @tsv' <<<"$j")
+}
+
+s_openbao() {
+  a BAO_ROLE_ID && a BAO_SECRET_ID || { nv openbao "AppRole de lecture absent"; return 0; }
+  local b="${BAO_ADDR:-https://openbao.par1.medisphere.internal:8200}" j l chemin
+  j="$(BAO_ROLE_ID="$BAO_ROLE_ID" BAO_SECRET_ID="$BAO_SECRET_ID" jq -nc '{role_id: env.BAO_ROLE_ID, secret_id: env.BAO_SECRET_ID}' |
+    curl -sf --max-time "$DELAI" --data @- "$b/v1/auth/approle/login" | jq -r '.auth.client_token // empty')" || j=""
+  [[ -n "$j" ]] || { nv openbao "connexion AppRole refusée"; return 0; }
+  # Les entités d'identité (OIDC) portent des noms générés : les personnes sont revues par l'annuaire et
+  # Keycloak ; ici, les identités de MACHINES (rôles AppRole et JWT).
+  for chemin in auth/approle/role auth/gitlab/role; do
+    l="$(curl -sf --max-time "$DELAI" -X LIST -K <(printf 'header = "X-Vault-Token: %s"\n' "$j") "$b/v1/$chemin" |
+      jq -r '.data.keys[]?')" || { nv openbao "liste $chemin refusée (politique de lecture des métadonnées ?)"; continue; }
+    while IFS= read -r n; do
+      [[ -n "$n" ]] || continue
+      compte openbao "${chemin#auth/}/$n" machine "rôle"
+    done <<<"$l"
+  done
+  curl -sf --max-time 5 -X POST -K <(printf 'header = "X-Vault-Token: %s"\n' "$j") "$b/v1/auth/token/revoke-self" >/dev/null || true
+}
+
+s_harbor() {
+  a HARBOR_USER && a HARBOR_PASSWORD || { nv harbor "robot de lecture absent"; return 0; }
+  local h="${HARBOR_URL:-https://registry.par1.medisphere.internal}" u r
+  u="$(get_basique "$h/api/v2.0/users?page_size=100" "$HARBOR_USER" "$HARBOR_PASSWORD")" || { nv harbor "liste des utilisateurs refusée"; return 0; }
+  r="$(get_basique "$h/api/v2.0/robots?page_size=100" "$HARBOR_USER" "$HARBOR_PASSWORD")" || { nv harbor "liste des robots refusée"; return 0; }
+  while IFS=$'\t' read -r nom type droits; do compte harbor "$nom" "$type" "$droits"; done < <(
+    jq -r '.[] | [.username, "personne", (if .sysadmin_flag then "ADMINISTRATEUR" else "utilisateur" end)] | @tsv' <<<"$u"
+    jq -r '.[] | select(.disable != true) | [.name, "machine", "niveau \(.level), expire \(if .expires_at == -1 then "JAMAIS" else (.expires_at | todate) end)"] | @tsv' <<<"$r")
+}
+
+s_argocd() {
+  a KUBECONFIG || { nv argocd "KUBECONFIG absent"; return 0; }
+  local cm rbac
+  cm="$(kubectl --request-timeout="${DELAI}s" -n argocd get configmap argocd-cm -o json 2>/dev/null)" || { nv argocd "argocd-cm illisible"; return 0; }
+  rbac="$(kubectl --request-timeout="${DELAI}s" -n argocd get configmap argocd-rbac-cm -o json 2>/dev/null)" || { nv argocd "argocd-rbac-cm illisible"; return 0; }
+  while IFS=$'\t' read -r nom type droits; do compte argocd "$nom" "$type" "$droits"; done < <(
+    jq -r '.data // {} | to_entries[] | select(.key | test("^accounts\\.[^.]+$")) | .key[9:] as $n
+      | [$n, "machine", "compte local : \(.value)"] | @tsv' <<<"$cm"
+    jq -r '.data // {} | [.["policy.csv"] // "", (to_entries[] | select(.key | startswith("policy.overlay")) | .value)] | join("\n")' <<<"$rbac" |
+      awk -F', *' '$1 == "g" { printf "%s\tgroupe\t%s\n", $2, $3 }')
+  jq -e '(.data["admin.enabled"] // "true") == "false"' >/dev/null <<<"$cm" || compte argocd admin machine "compte admin intégré ACTIVÉ"
+}
+
+s_grafana() {
+  a GRAFANA_TOKEN || { nv grafana "jeton absent"; return 0; }
+  local g="${GRAFANA_URL:-https://grafana.apps.par1.medisphere.internal}" u s
+  u="$(get_jeton "$g/api/org/users" "$GRAFANA_TOKEN" 'Authorization: Bearer')" || { nv grafana "liste des utilisateurs refusée (rôle du compte de service ?)"; return 0; }
+  s="$(get_jeton "$g/api/serviceaccounts/search?perpage=500" "$GRAFANA_TOKEN" 'Authorization: Bearer' || echo '{"serviceAccounts":[]}')"
+  while IFS=$'\t' read -r nom type droits; do compte grafana "$nom" "$type" "$droits"; done < <(
+    jq -r '.[] | [.login, "personne", "rôle \(.role), dernière connexion \(.lastSeenAt // "?")"] | @tsv' <<<"$u"
+    jq -r '.serviceAccounts[]? | select(.isDisabled != true) | [.login, "machine", "compte de service, rôle \(.role), \(.tokens) jeton(s)"] | @tsv' <<<"$s")
+}
+
+# --- Classement --------------------------------------------------------------------------------------
+classer() {
+  local declares="[]"
+  if [[ -r "$DECLARES" ]]; then
+    declares="$(yq -o=json '.comptes // []' "$DECLARES")" || die "fichier des comptes déclarés invalide : $DECLARES"
+  fi
+  jq -s --argjson d "$declares" \
+    --arg actifs "$PERSONNES_ACTIVES" --arg inactifs "$PERSONNES_INACTIVES" '
+    ($actifs | split("\n") | map(select(. != ""))) as $A
+    | ($inactifs | split("\n") | map(select(. != ""))) as $I
+    | def declare($s; $c): [$d[] | . as $e | select(($e.systeme == $s or $e.systeme == "*") and ($c | test("^(" + $e.compte + ")$")))][0];
+      def nom: (.compte | sub("@.*$"; "") | sub("^auth/[^/]+/role/"; ""));
+    map(. as $x | declare($x.systeme; $x.compte) as $dec
+      | if $x.systeme == "annuaire" then
+          .statut = (if $x.etat == "actif" then "personne"
+                     elif ($x.droits | test("groupes: aucun")) then "personne"
+                     else "orphelin" end)
+          | (if .statut == "orphelin" then .motif = "compte \($x.etat) encore membre de groupes" else . end)
+        elif $dec != null then .statut = "declare" | .nature = $dec.nature | .proprietaire = $dec.proprietaire
+        elif ($x.type == "personne" or $x.type == "groupe") and ((nom) as $n | $A | index($n)) != null then .statut = "personne"
+        elif $x.type == "groupe" then .statut = "a-justifier" | .motif = "groupe non déclaré"
+        elif ((nom) as $n | $I | index($n)) != null then .statut = "orphelin" | .motif = "personne désactivée dans l'"'"'annuaire"
+        elif $x.type == "personne" then .statut = "orphelin" | .motif = "personne absente de l'"'"'annuaire"
+        else .statut = "a-justifier" | .motif = "compte technique non déclaré" end)' "$COMPTES"
+}
+
+main() {
+  local json=0 s
+  while (($#)); do
+    case "$1" in
+      --json) json=1 ;;
+      --declares) (($# >= 2)) || usage; DECLARES="$2"; shift ;;
+      --ignorer) (($# >= 2)) || usage; IGNORER=",$2,"; shift ;;
+      -h | --help) usage ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  for s in jq yq curl; do command -v "$s" >/dev/null 2>&1 || die "outil manquant : $s"; done
+  local f="${MS_REVUE_ENV:-$HOME/.config/ms-outils/revue-acces.env}"
+  if [[ -r "$f" ]]; then
+    [[ "$(stat -c %a "$f")" == 600 ]] || die "$f doit être en mode 600 (il contient des secrets)"
+    set -a
+    # shellcheck source=/dev/null
+    source "$f"
+    set +a
+  fi
+  for s in "${SYSTEMES[@]}"; do
+    if [[ "$IGNORER" == *",$s,"* ]]; then nv "$s" "IGNORÉ (--ignorer)"; continue; fi
+    "s_$s"
+  done
+
+  local res nonverif="{}" k
+  res="$(classer)"
+  for k in "${!NONVERIF[@]}"; do nonverif="$(jq -c --arg k "$k" --arg v "${NONVERIF[$k]}" '. + {($k): $v}' <<<"$nonverif")"; done
+  res="$(jq -S --argjson nv "$nonverif" --arg h "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{
+      date_utc: $h, systemes_non_verifies: $nv,
+      resume: (group_by(.statut) | map({(.[0].statut): length}) | add // {}),
+      a_traiter: [.[] | select(.statut == "orphelin" or .statut == "a-justifier")] | sort_by(.statut, .systeme, .compte),
+      comptes: (. | sort_by(.systeme, .compte))}' <<<"$res")"
+
+  if ((json)); then
+    printf '%s\n' "$res"
+  else
+    jq -r '
+      "## Résultat outillé — \(.date_utc)\n",
+      "| Statut | Nombre |", "|---|---|", (.resume | to_entries[] | "| \(.key) | \(.value) |"), "",
+      (if (.systemes_non_verifies | length) > 0 then "**Systèmes non vérifiés** : " + ([.systemes_non_verifies | to_entries[] | "\(.key) (\(.value))"] | join(" ; ")) + "\n" else empty end),
+      "### À traiter (orphelins et comptes à justifier)\n",
+      "| Système | Compte | Type | Droits | Statut | Motif | Décision |", "|---|---|---|---|---|---|---|",
+      (.a_traiter[] | "| \(.systeme) | `\(.compte)` | \(.type) | \(.droits) | **\(.statut)** | \(.motif // "") | <à décider> |"),
+      "", "### Comptes non personnels déclarés\n",
+      "| Système | Compte | Nature | Propriétaire |", "|---|---|---|---|",
+      (.comptes[] | select(.statut == "declare") | "| \(.systeme) | `\(.compte)` | \(.nature) | \(.proprietaire) |")' <<<"$res"
+  fi
+  jq -e '(.a_traiter | length) == 0 and (.systemes_non_verifies | to_entries | all(.value | startswith("IGNORÉ")))' >/dev/null <<<"$res"
+}
+
+main "$@"

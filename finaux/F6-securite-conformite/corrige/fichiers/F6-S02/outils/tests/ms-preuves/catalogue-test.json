@@ -1,0 +1,7 @@
+{"version": 1, "preuves": [
+  {"id": "P-TST-01", "titre": "Preuve JSON valide", "mesures": ["5.18"], "frequence": "quotidienne", "collecteur": "ok-json", "format": "json"},
+  {"id": "P-TST-02", "titre": "Preuve texte valide", "mesures": ["8.20"], "frequence": "quotidienne", "collecteur": "ok-texte", "format": "txt"},
+  {"id": "P-TST-03", "titre": "Collecteur en échec", "mesures": ["8.13"], "frequence": "hebdomadaire", "collecteur": "echec", "format": "json"},
+  {"id": "P-TST-04", "titre": "Collecteur qui laisse fuir un secret", "mesures": ["8.24"], "frequence": "hebdomadaire", "collecteur": "fuite", "format": "json"},
+  {"id": "P-TST-05", "titre": "Collecteur absent", "mesures": ["8.16"], "frequence": "mensuelle", "collecteur": "absent", "format": "json"}
+]}

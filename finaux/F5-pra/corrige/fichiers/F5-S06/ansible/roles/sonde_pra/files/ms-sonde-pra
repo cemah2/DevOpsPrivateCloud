@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ms-sonde-pra — sonde utilisateur du PRA (F5-S06), lancée toutes les 15 s par ms-sonde-pra.timer sur adm02.
+# Une ligne par cible : horodatage_utc,cible,code_http,latence_ms,site
+#   code_http 000 = pas de réponse (DNS, réseau, TLS) ; site = valeur de X-MediSphere-Site, « - » si absente.
+# Les noms sont résolus par le récurseur de adm02 (dns03, puis dns01 tant que PAR1 existe) : la sonde voit
+# la bascule des CNAME comme un patient, TTL compris. TLS vérifié avec la racine MédiSphère du système.
+set -uo pipefail
+: "${SONDE_CIBLES:?}" "${SONDE_DOSSIER:?}"
+delai="${SONDE_DELAI_S:-10}"
+csv="$SONDE_DOSSIER/mesures.csv"
+[[ -s "$csv" ]] || echo "horodatage_utc,cible,code_http,latence_ms,site" >"$csv"
+for cible in $SONDE_CIBLES; do
+  horodatage="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  entetes="$(mktemp)"
+  sortie="$(curl -s -o /dev/null -D "$entetes" --max-time "$delai" -w '%{http_code} %{time_total}' "$cible" 2>/dev/null)" || true
+  code="${sortie%% *}"
+  latence="$(awk -v t="${sortie#* }" 'BEGIN { printf "%d", t * 1000 }')"
+  site="$(tr -d '\r' <"$entetes" | awk -F': *' 'tolower($1) == "x-medisphere-site" { v = $2 } END { print (v == "" ? "-" : v) }')"
+  rm -f "$entetes"
+  printf '%s,%s,%s,%s,%s\n' "$horodatage" "$cible" "${code:-000}" "${latence:-0}" "$site" >>"$csv"
+done

@@ -1,0 +1,17 @@
+#!/bin/sh
+# miroir-lecture — commande forcée des clés de LECTURE du compte miroir (F5-S04).
+# N'accepte que « git-upload-pack '<chemin sous /srv/miroirs>' » (clone et fetch) : ni écriture
+# (git-receive-pack), ni shell, ni chemin hors des miroirs.
+set -eu
+racine=/srv/miroirs
+cmd="${SSH_ORIGINAL_COMMAND:-}"
+case "$cmd" in
+  "git-upload-pack '$racine/"*".git'" | "git-upload-pack '$racine/"*".git/'") ;;
+  *) echo "miroir-lecture : refusé (lecture des miroirs seulement)" >&2; exit 1 ;;
+esac
+chemin="${cmd#git-upload-pack \'}"
+chemin="${chemin%\'}"
+case "$chemin" in
+  *..*) echo "miroir-lecture : chemin refusé" >&2; exit 1 ;;
+esac
+exec git-upload-pack "$chemin"

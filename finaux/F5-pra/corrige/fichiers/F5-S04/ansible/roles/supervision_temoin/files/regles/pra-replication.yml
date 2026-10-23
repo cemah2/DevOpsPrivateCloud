@@ -1,0 +1,52 @@
+# roles/supervision_temoin/files/regles/pra-replication.yml — retards de réplication vers PAR2
+# (F5-S04, PLAT-3504). Évaluées par le Prometheus TÉMOIN de mon01 (il collecte node_exporter de s3-02,
+# adm02 et reg02 par wg0 : job « node-par2 », à déclarer dans supervision_temoin_cibles).
+# Objectifs : RPO de objectifs.md (MédiAgenda 15 min, MédiDoc 1 h, coffre 1 h + copie).
+# Pendant un PRA, mon01 n'existe plus : ces alertes partent avec lui (supervision minimale de PAR2,
+# objectifs.md §4).
+groups:
+  - name: pra-replication
+    rules:
+      - alert: PraWalMediagendaEnRetard
+        expr: time() - pra_replication_dernier_objet_horodatage_secondes{flux="wal-mediagenda"} > 600
+        for: 5m
+        labels: {severity: critical, equipe: plateforme}
+        annotations:
+          summary: "Archive de MédiAgenda en retard à PAR2 ({{ $value | humanizeDuration }})"
+          description: "Le dernier WAL arrivé sur s3-02 dépasse 10 min : le RPO de 15 min n'est plus garanti. RB-354 §2."
+      - alert: PraMesureReplicationEnEchec
+        expr: pra_replication_mesure_reussie == 0
+        for: 15m
+        labels: {severity: warning, equipe: plateforme}
+        annotations:
+          summary: "Mesure de réplication impossible (flux {{ $labels.flux }})"
+      - alert: PraMedidocEnRetard
+        expr: time() - pra_replication_derniere_reussite_secondes{flux="medidoc"} > 3600
+        for: 5m
+        labels: {severity: warning, equipe: plateforme}
+        annotations:
+          summary: "Copie de MédiDoc vers PAR2 sans réussite depuis plus d'une heure"
+      - alert: PraCoffreEnRetard
+        expr: time() - pra_replication_dernier_objet_horodatage_secondes{flux="coffre"} > 7200
+        for: 10m
+        labels: {severity: warning, equipe: plateforme}
+        annotations:
+          summary: "Dernier instantané OpenBao à PAR2 de plus de 2 h"
+      - alert: PraMiroirEnEcart
+        expr: pra_miroir_ecart == 1 and (time() - pra_miroir_commit_gitlab_horodatage) > 3600
+        for: 10m
+        labels: {severity: warning, equipe: plateforme}
+        annotations:
+          summary: "Miroir de {{ $labels.projet }} sur adm02 en retard de plus d'une heure sur GitLab"
+      - alert: PraImagesEnRetard
+        expr: time() - pra_reg02_derniere_copie_secondes > 7200
+        for: 10m
+        labels: {severity: warning, equipe: plateforme}
+        annotations:
+          summary: "Aucune copie d'images vers reg02 depuis plus de 2 h"
+      - alert: PraExportateurPar2Muet
+        expr: up{job="node-par2"} == 0 or absent(up{job="node-par2"})
+        for: 10m
+        labels: {severity: critical, equipe: plateforme}
+        annotations:
+          summary: "Le témoin ne lit plus les mesures de PAR2 (wg0, hp01 ou VM arrêtée)"
