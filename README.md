@@ -16,7 +16,7 @@ Tu rejoins l'équipe Plateforme de **MédiSphère**, éditeur de logiciels de sa
 | `modules/NN-…/enonce/` | Les exercices, par palier (découverte → opérationnel → production → expert → mini-projet) |
 | `modules/NN-…/checks/` | Scripts de vérification : `lab/bin/check <module> <exercice>` |
 | `modules/NN-…/corrige/` | ⚠️ Corrigés détaillés et scripts de panne — à ouvrir après avoir cherché |
-| `finaux/` | Workbooks finaux multi-technologies (F1 à F4 produits, F5 à F7 à venir) |
+| `finaux/` | Workbooks finaux multi-technologies (F1 à F7 produits) |
 | `lab/` | Outillage commun du lab |
 | `annexes/` | Prérequis entre modules, correspondance avec les certifications, glossaire, versions et changements de comportement |
 
@@ -59,7 +59,7 @@ Voir [`AVANCEMENT.md`](AVANCEMENT.md). Les **blocs A** (fondations automatisées
 | 28 | [Plateforme développeurs](modules/28-plateforme-dev/README.md) | 24 + mini-projet |
 | 29 | [Tests et résilience](modules/29-tests-resilience/README.md) | 24 + mini-projet |
 
-Les applications métier de MédiSphère (MédiAgenda, MédiDoc, MédiNotif, Legacy-RDV) sont dans [`apps/`](apps/README.md) à partir du module 12. Les workbooks finaux sont dans [`finaux/`](finaux/) : [F1 Day 0](finaux/F1-day0/README.md), [F2 Day 1](finaux/F2-day1/README.md), [F3 semaine d'astreinte](finaux/F3-astreinte/README.md), [F4 changements majeurs](finaux/F4-changements/README.md) ; F5 à F7 sont produits ensuite.
+Les applications métier de MédiSphère (MédiAgenda, MédiDoc, MédiNotif, Legacy-RDV) sont dans [`apps/`](apps/README.md) à partir du module 12. Les workbooks finaux sont dans [`finaux/`](finaux/) : [F1 Day 0](finaux/F1-day0/README.md), [F2 Day 1](finaux/F2-day1/README.md), [F3 semaine d'astreinte](finaux/F3-astreinte/README.md), [F4 changements majeurs](finaux/F4-changements/README.md), [F5 PRA multi-site](finaux/F5-pra/README.md), [F6 sécurité et conformité](finaux/F6-securite-conformite/README.md), [F7 capstone](finaux/F7-capstone/README.md).
 
 Annexes :
 - [`annexes/prerequis.md`](annexes/prerequis.md) — graphe des dépendances entre modules, ce que chaque module suppose et laisse en place ;

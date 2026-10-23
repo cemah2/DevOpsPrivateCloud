@@ -4,7 +4,7 @@
 >
 > Domaines relevés le 7 octobre 2026 sur les pages officielles des éditeurs (liens en fin de section). Ils changent régulièrement : vérifie la version en vigueur avant de t'inscrire. Les correspondances sont **indicatives** : un exercice « couvre » un domaine quand il y fait pratiquer un geste de l'examen, pas quand il en parle. Les examens pratiques (LFCS, RHCSA, RHCE, CKA) demandent en plus de la **vitesse** : refais les exercices `CHRONO` et les `BF` sans indice.
 
-État : **blocs A à G** (modules 00 à 29) renseignés. Les finaux F1 à F4 ne visent aucun domaine d'examen nouveau : ils remobilisent les exercices cités ici en conditions de production (reconstruction, accueil d'équipes, astreinte, changements) ; F5 à F7 à compléter. Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation ; ceux du HashiCorp Vault Associate (003) le 23 octobre 2026 sur la page officielle de HashiCorp ; ceux des certifications du bloc G (CBA, CNPA, CNPE, Confluent, EDB) le 23 octobre 2026 sur les pages officielles de la Linux Foundation, de Confluent et d'EDB.
+État : **blocs A à G** (modules 00 à 29) renseignés. Les finaux F1 à F4 ne visent aucun domaine d'examen nouveau : ils remobilisent les exercices cités ici en conditions de production (reconstruction, accueil d'équipes, astreinte, changements). F5 à F7 ajoutent surtout des sujets **hors examens techniques** (continuité d'activité, système de management de la sécurité, protection des données, réponse à un appel d'offres), rattachés en culture aux certifications de personnes du domaine, et quelques gestes Kubernetes (§27). Domaines des certifications ajoutées au bloc B (COA, CCNA, Ceph) relevés le 8 octobre 2026 ; ceux des certifications Kubernetes (CKA, CKAD, CKS, KCNA, KCSA) le 15 octobre 2026 sur les programmes publiés par la CNCF ([cncf/curriculum](https://github.com/cncf/curriculum)) ; ceux des certifications des blocs D et E (PCA, OTCA, CAPA, CGOA) le 22 octobre 2026 sur les pages officielles de la CNCF et de la Linux Foundation ; ceux du HashiCorp Vault Associate (003) le 23 octobre 2026 sur la page officielle de HashiCorp ; ceux des certifications du bloc G (CBA, CNPA, CNPE, Confluent, EDB) le 23 octobre 2026 sur les pages officielles de la Linux Foundation, de Confluent et d'EDB.
 
 ## Vue d'ensemble
 
@@ -34,6 +34,7 @@
 | CCDAK et CCAAK — Confluent Certified Developer / Administrator for Apache Kafka | Confluent | QCM en ligne (90 min) | **faible** : Kafka n'est qu'un essai (M27-E09, E10) | §26 |
 | EDB : Essentials for CloudNativePG, Essentials / Advanced for PostgreSQL | EDB | examen associé à une formation EDB | partielle : CloudNativePG (M16, M27) ; l'administration de PostgreSQL elle-même n'est pas le sujet du workbook | §26 |
 | HashiCorp Certified: Vault Associate (003) | HashiCorp | QCM en ligne | **équivalence seulement** : le workbook pratique **OpenBao** (fork MPL 2.0 de Vault), pas Vault ; concepts, CLI et API quasi identiques, mais l'examen porte sur Vault et ses fonctions Enterprise/HCP (M25 ; Vault 2.2 en comparaison au M25-E30) | §22 |
+| ISO/IEC 27001 Lead Implementer / Lead Auditor ; continuité (ISO 22301, BCI, DRI) ; DPO | organismes de certification de personnes (PECB, BSI, AFNOR…), BCI, DRI, organismes agréés par la CNIL | selon l'organisme | **en culture seulement** : les scénarios des finaux F5 (PRA) et F6 (audit, incident, notifications) en font pratiquer les livrables, pas le programme | §27 |
 
 ---
 
@@ -338,7 +339,7 @@ Les certifications Kubernetes (§9 à §12) gagnent quelques exercices avec les 
 
 | Certification | Domaines officiels | Bloc concerné |
 |---|---|---|
-| **KCSA** (complément) | conformité (HDS, ISO 27001) | finaux F6 |
+| **KCSA** (complément) | conformité (HDS, ISO 27001) | fait aux finaux : §27 |
 | **LFCS** (compléments) | swap, automontage, ACL POSIX | non prévus (révision personnelle) |
 | **Kyverno Certified Associate (KCA)** | non relevé au bloc F : le M26 n'utilise que les politiques CEL de Kyverno 1.19 (`ClusterPolicy` dépréciée), à vérifier contre le programme de l'examen si l'apprenant le vise | — |
 
@@ -444,3 +445,22 @@ Sources : [CNPA (Linux Foundation)](https://training.linuxfoundation.org/certifi
 - **PostgreSQL et CloudNativePG** : EDB publie un catalogue d'examens, dont **EDB Essentials for CloudNativePG** (version 1.25, examen inclus dans la formation EDB du même nom : architecture, installation, configuration, sécurité et supervision, sauvegarde et restauration, réplication et haute disponibilité, montées de version) et **EDB Essentials / Advanced for PostgreSQL**. Le premier recoupe M16 (installation, sauvegardes Barman Cloud, PITR) et M27 (rôles et bases déclaratifs, *pooler*, switchover, fencing, réplica de secours, supervision, mise à jour mineure : M27-E02, M27-E14, M27-E15, M27-E24) ; la version de l'examen (1.25) est antérieure à celle du workbook (1.30). Les seconds portent sur l'administration de PostgreSQL elle-même, que le workbook ne traite que par CloudNativePG et Patroni (M27-E13). Sources : [catalogue des examens EDB](https://enterprisedb.com/training/certification-exams), [fiche EDB Essentials for CloudNativePG](https://www.enterprisedb.com/sites/default/files/pdf/EDB_Essentials_for_CloudNativePG_Datasheet.pdf).
 - **RabbitMQ** : aucune certification officielle relevée (l'éditeur propose des formations, pas d'examen).
 - **Sans certification** : OPA et Rego (aucune certification officielle de la CNCF ni du projet), k6, Chaos Mesh, LitmusChaos, Terratest, Testinfra, Goss, KEDA, Capsule, vCluster : le module 29 et le module 28 les pratiquent sans grille d'examen.
+
+## 27. Finaux F5 à F7 : continuité, conformité, incident et avant-vente
+
+Les finaux F5 à F7 ne visent aucun examen technique nouveau. Ils touchent en revanche des métiers qui ont leurs propres certifications **de personnes** : le workbook n'en suit pas les programmes (ils varient d'un organisme à l'autre et n'ont pas été relevés), il en fait pratiquer les livrables sur un cas réel. Ces correspondances sont donc **de culture**, à ne pas prendre pour une préparation.
+
+| Certification | Domaine (ou sujet) | Scénarios des finaux |
+|---|---|---|
+| **CKS** | Monitoring, Logging and Runtime Security : analyse comportementale ; phases d'une attaque ; immuabilité ; audit | détection Falco/Tetragon croisée avec l'audit de l'API, confinement sans détruire les preuves : F6-S11 · chronologie, portée, éradication : F6-S12 · capture d'un conteneur vivant (point de contrôle du kubelet) et ordre de collecte : F6-S10 |
+| **CKS** | Cluster Hardening : RBAC minimal, comptes de service | revue des accès (comptes orphelins, techniques, bris de glace) : F6-S03 · liaison `cluster-admin` oubliée, panne : F6-S04 |
+| **CKS** | Supply Chain Security : signer et valider ; analyse des images | images et signatures copiées vers le registre de PAR2 sans contourner la vérification : F5-S04 · délais de correction par criticité et exceptions à échéance : F6-S09 |
+| **CKA** | Cluster Architecture, Installation and Configuration : kubeadm ; Storage : classes de stockage | cluster de secours `k8s-par2` construit par kubeadm depuis le même code que `k8s-par1`, StorageClass `local-path` : F5-S06 |
+| **KCSA** | Compliance and Security Frameworks | référentiels HDS v2 et ISO/IEC 27001:2022, déclaration d'applicabilité : F6-S01 · preuves automatiques et inaltérables : F6-S02, F6-S08 · audit outillé (CIS, OpenSCAP, kube-bench) relié aux mesures : F6-S05 |
+| **CNPA, CNPE** | traces d'audit et conformité ; libre-service | archive d'audit inaltérable : F6-S08 · client hébergé « en code » par le même mécanisme que les équipes : F7-S07 · engagements de service mesurés et rapport mensuel : F7-S10 |
+| **ISO/IEC 27001 Lead Implementer** (culture) | mise en œuvre d'un SMSI | périmètre et SoA : F6-S01 · preuves : F6-S02 · plan de remédiation priorisé par le risque : F6-S07 · remédiation par le code : F6-S08, F6-S09 · état des preuves avant l'audit de suivi : F6-S14 |
+| **ISO/IEC 27001 Lead Auditor** (culture ; audit selon ISO 19011) | conduite d'un audit, entretiens, rapport | audit à blanc et écarts cachés : F6-S04 · audit technique : F6-S05 · entretien d'audit : F6-S06 · rapport d'écarts (majeure, mineure, observation) : F6-S07 · audit de suivi : F6-S14 |
+| **Continuité d'activité** (culture : ISO 22301 Lead Implementer, CBCI du BCI, CBCP du DRI) | analyse d'impact, stratégie de reprise, plan, exercice | BIA et objectifs RTO/RPO : F5-S01 · dépendances et ordre de redémarrage : F5-S02 · cellule de crise et runbook de bascule : F5-S07 · exercice réel chronométré : F5-S09 à F5-S12 · rapport d'exercice et calendrier des tests : F5-S13, F5-S14 |
+| **DPO** (culture : certification des compétences du DPO selon le référentiel de la CNIL) | violation de données, rôles responsable de traitement / sous-traitant | décision de notification (CNIL, clients, personnes, signalement santé) et registre des violations : F6-S13 |
+
+Le capstone F7 (réponse à un appel d'offres : CCTP, exigences chiffrées, architecture, coût complet, planning, soutenance) ne correspond à aucune certification relevée ; ses gestes techniques (fédération d'identité, tests de contrat, SLO, réversibilité, reprise sur PAR2) remobilisent les §9 à §12, §15 et §25.

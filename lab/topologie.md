@@ -213,6 +213,44 @@ Règle du PLAN §3.3 : le socle est permanent, **un seul profil lourd** tourne �
 | VMs migrées d'InfoGér | 3401 `legacy-rdv01` (10.10.20.44, décommissionnée en F4-S14), 3402 `ftp-part01` (10.10.20.45), 3403 `stats01` (10.10.20.46) ; MAC `BC:24:11:20:34:01..03` ; 3499 restauration d'essai | F4 |
 | Legacy-RDV | nom des cabinets `rdv.par1.medisphere.internal` (VIP de `lb01`/`lb02`), routes internes `legacy-rdv(-recette).apps.par1.medisphere.internal` ; mariadb-operator 26.6 (`mariadb-system`) | F4 |
 
+## Ajouts des finaux F5 à F7
+
+Le site **PAR2** devient un site de repli (F5) : `hp01` reste `pbs01` (PBS 4.2, datastore `ds-lab` intact) et reçoit Proxmox VE 9.2 à côté. Valeurs figées : [`PLAN.md`](../PLAN.md) §4.5, §4.6 et §4.15.
+
+```
+                 LAN maison
+                     │
+   hp01 = pbs01 (PBS 4.2 + Proxmox VE 9.2, nœud « pbs01 »)
+   ├─ vmbr1  10.20.10.10  (PAR2 MGMT, inchangé)
+   ├─ wg0    10.255.0.2   ⇄ gw01 (PAR1) — AllowedIPs étendus à 10.20.20.0/24
+   ├─ wg1    10.255.3.1/24, UDP 51823 — VPN d'administration de secours (ton poste : 10.255.3.2, n'ouvre que PAR2)
+   ├─ NAT de PAR2 vers Internet par le LAN de hp01 (table nftables « inet par2 », fichier séparé)
+   └─ vmbr2  10.20.20.1   PAR2 INFRA 10.20.20.0/24 (pool « par2 », stockage « par2-vms »)
+         ├─ adm02         1050  10.20.20.10
+         ├─ dns03         1051  10.20.20.11
+         ├─ s3-02         1052  10.20.20.14
+         ├─ reg02         1053  10.20.20.18
+         ├─ bao-par2      1055  10.20.20.21   (arrêté hors PRA)
+         ├─ kms01 restauré 3501 10.20.20.24   (pendant un PRA ou une répétition seulement)
+         ├─ k8s-par2-n01  1054  10.20.20.50   cluster « k8s-par2 »
+         └─ LB IPAM « lb-par2 » 10.20.20.200-239 (L2) : gw-par2 .200, mediagenda-db-par2-openbao .205, métriques CNPG .210
+```
+
+| Élément | Valeur | Final |
+|---|---|---|
+| Hyperviseur de PAR2 | `hp01`, nœud Proxmox `pbs01`, API `https://10.20.10.10:8006` ; pool `par2`, étiquette `site-par2`, stockage `par2-vms` (répertoire sur le HDD, place réservée) ; jeton OpenTofu `wb-tofu@pve!par2` ; état `envs/par2` dans `s3://tofu-par2/` de `s3-02` | F5 |
+| Réseau PAR2 INFRA | pont `vmbr2` sans port physique, **10.20.20.0/24**, passerelle **10.20.20.1** (`hp01`) ; routé vers PAR1 par `wg0`, vers Internet par le LAN de `hp01` (NAT `inet par2`) | F5 |
+| VPN d'administration de secours | `wg1` de `hp01`, **10.255.3.1/24**, UDP **51823**, poste 10.255.3.2 | F5 |
+| Hôtes permanents de PAR2 | 1050 `adm02` (.10), 1051 `dns03` (.11), 1052 `s3-02` (.14), 1053 `reg02` (.18), 1054 `k8s-par2-n01` (.50), 1055 `bao-par2` (.21, arrêté hors PRA) — tous en 10.20.20.0/24 | F5 |
+| `kms01` restauré | VMID **3501**, **10.20.20.24** : copie restaurée depuis PBS pendant un PRA ou une répétition, isolée, détruite après usage ; jamais deux `kms01` sur le même réseau | F5 |
+| `k8s-par2` | LB IPAM `lb-par2` **10.20.20.200-239** annoncé en L2 ; Gateway `gw-par2` **10.20.20.200** (`*.apps.par2.medisphere.internal`) ; **10.20.20.205** (Service `mediagenda-db-par2-openbao`, flux `bao-par2` → base de PAR2) ; **10.20.20.210** (métriques CNPG pour le Prometheus de `adm02`) | F5 |
+| Noms de service globaux | `mediagenda`, `medidoc`, `rdv.medisphere.internal` (CNAME, TTL 60 s) vers `….apps.par1…` en temps normal, `….apps.par2…` en PRA | F5 |
+| Sinistre simulé | isolement de PAR1 par les tables nftables `inet f5_sinistre` de `gw01`/`gw02` (coupe `wg0` vers PAR2 et le VPN `wg1` de PAR1) ; aucune VM arrêtée ; annulation depuis `pve01` | F5 |
+| « C2 » simulé | VMID **3601** `c2-simule01`, VNet `vsandbox` (VLAN 99), **10.10.99.66**, port 4444, 512 Mo ; ne fait que journaliser ; créée et détruite par l'injection de F6-S11 (temporaire) | F6 |
+| Compartiments RGW verrouillés | `preuves-conformite` et `archive-audit` sur `rgw.par1.medisphere.internal` (verrouillage d'objets `COMPLIANCE`) | F6 |
+| Client GHSV | locataire Capsule `ghsv` (`ghsv-recette`, `ghsv-prod`) ; `ghsv(-recette).apps.par1…`, `ghsv-agents(-recette).apps.par1…`, `ghsv.medisphere.internal` (CNAME TTL 60 s, vers PAR2 en PRA) ; royaume Keycloak `ghsv-idp` sur `idp01` ; **flux ajouté `idp01` → VIP 10.10.70.200:443** | F7 |
+| VMID du capstone | 3700-3799 réservés ; 3701 VM jetable de relecture de l'export de réversibilité (`vsandbox`) ; espace d'essai `ghsv-essai-reprise` dans `k8s-par2` | F7 |
+
 ## Qui gère quoi (fin du bloc G)
 
 | Couche | Outil | Où |

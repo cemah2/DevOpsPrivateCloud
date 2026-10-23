@@ -578,7 +578,7 @@ Les versions sont **figées au démarrage de chaque bloc** : la conversation qui
 | Référentiels de conformité (F6, F7) | HDS v2 (arrêté du 26/04/2024), ISO/IEC 27001:2022 | 2026-10 (finaux F5-F7) | Voir [`annexes/versions-finaux-F5-F7.md`](annexes/versions-finaux-F5-F7.md) |
 | *Autres outils* | *à fixer au démarrage de leur bloc* | | |
 
-Les **changements de comportement** de ces versions qui touchent les exercices (CONVENTIONS §11.9) sont détaillés dans [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md) [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md) , [`annexes/versions-bloc-C.md`](annexes/versions-bloc-C.md) , [`annexes/versions-bloc-DE.md`](annexes/versions-bloc-DE.md) [`annexes/versions-bloc-F.md`](annexes/versions-bloc-F.md) et [`annexes/versions-bloc-G.md`](annexes/versions-bloc-G.md).
+Les **changements de comportement** de ces versions qui touchent les exercices (CONVENTIONS §11.9) sont détaillés dans [`annexes/versions-bloc-A.md`](annexes/versions-bloc-A.md), [`annexes/versions-bloc-B.md`](annexes/versions-bloc-B.md), [`annexes/versions-bloc-C.md`](annexes/versions-bloc-C.md), [`annexes/versions-bloc-DE.md`](annexes/versions-bloc-DE.md), [`annexes/versions-bloc-F.md`](annexes/versions-bloc-F.md), [`annexes/versions-bloc-G.md`](annexes/versions-bloc-G.md), [`annexes/versions-finaux-F1-F4.md`](annexes/versions-finaux-F1-F4.md) et [`annexes/versions-finaux-F5-F7.md`](annexes/versions-finaux-F5-F7.md).
 
 ## 7. Conventions transverses
 
